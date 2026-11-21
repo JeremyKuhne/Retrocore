@@ -1,405 +1,595 @@
-X_CRPAS:
-    lda #$00                        ; $CBFD
-    sta OURCH                       ; $CBFF
-    lda MODE80                      ; $CC02
-    and #$20                        ; $CC05
-    bne X_CRRET                     ; $CC07
-    jsr X_LF                        ; $CC09
+; retrocore: style=strict
+;; The original IIe's 80-column control characters, $CBFD-$CDDA: the end of the carriage return, the cursor moves,
+;; normal and inverse, the control characters' handler table, the line feed and scrolling, the clearing, and 40 and
+;; 80 columns; then the full 80-column window and leaving the 80-column firmware.
 
-X_CRRET:
-    rts                             ; $CC0C
+; The masks <InverseMask> holds for the 80-column firmware.
 
-;; Puts the 80-column cursor at WNDTOP, column 0, and computes the base address.
-X_EM:
-    lda WNDTOP                      ; $CC0D
-    sta OURCV                       ; $CC0F
-    lda #$00                        ; $CC12
-    sta OURCH                       ; $CC14
-    jmp C8_BASCALC                  ; $CC17
+;; <InverseMask> for normal text: the 80-column firmware stores characters as they are.
+MASK_NORMAL = $FF
 
-;; Clears the whole window line at BASL/BASH, honoring inverse.
-;; Uses: A, Y
-X_SUB:
-    ldy WNDWDTH                     ; $CC1A
-    dey                             ; $CC1C
+;; <InverseMask> for inverse text: the 80-column firmware stores characters with bit 7 clear.
+MASK_INVERSE = $7F
 
-X_SUB80:
-    lda #' '                        ; $CC1D
+; The text screen's size.
 
-X_SUBLP:
-    jsr STORCHAR                    ; $CC1F
-    dey                             ; $CC22
-    bpl X_SUBLP                     ; $CC23
-    rts                             ; $CC25
+;; The columns of a 40-column line.
+COLUMNS_40 = 40
 
-;; Moves the cursor right; at the window's right edge does X_CR.
-X_FS:
-    inc OURCH                       ; $CC26
-    lda OURCH                       ; $CC29
-    cmp WNDWDTH                     ; $CC2C
-    bcc X_FSRET                     ; $CC2E
-    jsr X_CR                        ; $CC30
+;; The columns of an 80-column line.
+COLUMNS_80 = 80
 
-X_FSRET:
-    rts                             ; $CC33
+;; The lines of the text screen.
+SCREEN_LINES = 24
 
-;; Moves the cursor up a line, but not above WNDTOP.
-X_US:
-    dec OURCV                       ; $CC34
-    bmi X_US1                       ; $CC37
-    lda OURCV                       ; $CC39
-    cmp WNDTOP                      ; $CC3C
-    bcs X_US2                       ; $CC3E
+;; The text screen's last line.
+LAST_LINE = SCREEN_LINES - 1
 
-X_US1:
-    inc OURCV                       ; $CC40
-    beq X_USRET                     ; $CC43
+;; The first of the four text lines that mixed graphics leave showing below the graphics.
+MIXED_TEXT_TOP = 20
 
-X_US2:
-    jsr C8_BASCALC                  ; $CC45
+; Control: the end of the carriage return, and the cursor moves.
+.scope Control continued
 
-X_USRET:
-    rts                             ; $CC48
+;; <ScrollLines>'s direction in X, and the index of its <ScrollSteps> and <ScrollEdges> entries: down, toward
+;; the bottom of the window.
+SCROLL_DOWN = 0
 
-;; Control-N: normal video (clears mode bit 2, INVFLG = $FF).
-X_SO:
-    lda MODE80                      ; $CC49
-    and #$FB                        ; $CC4C
-    ldy #$FF                        ; $CC4E
-    bne STUFFINV                    ; $CC50
+;; <ScrollLines>'s direction in X: up, toward the top of the window.
+SCROLL_UP = 1
 
-;; Control-O: inverse video (sets mode bit 2, INVFLG = $7F).
-X_SI:
-    lda MODE80                      ; $CC52
-    ora #$04                        ; $CC55
-    ldy #$7F                        ; $CC57
+;; Finishes a carriage return: column 0, then a line feed unless the Pascal protocol is active.
+;;
+;; <Perform> runs into it from the code that clears the rest of the line during BASIC's input.
+;; Keeps: X
+;; Also: X_CRPAS (IIEROM82)
+.proc FinishReturn
+    lda #0
+    sta EightyColumns::CursorColumn
 
-;; Stores the mode byte and INVFLG.
-STUFFINV:
-    sta MODE80                      ; $CC59
-    sty INVFLG                      ; $CC5C
-    rts                             ; $CC5E
+    ; Pascal does its own line feeds.
+    lda EightyColumns::Mode
+    and #MODE_PASCAL
+    bne Done
+    jsr LineFeed
 
-;; The control characters' handlers, Control-G ($07) to Control-_ ($1F) in order; 0 means not handled.
-;; CTLADL ($CC5F) holds the low bytes and CTLADH ($CC78) the high bytes of each address minus one, read
-;; as CTLADL-7+Y and CTLADH-7+Y: CTLCHAR checks the high byte and CTLXFER returns to the handler.
-.set CTLCHARS, 0
+;; Also: X_CRRET (IIEROM82)
+Done:
+    rts
+.endproc
 
-.macro CONTROL handler
-    .ident(.sprintf("CTLAD_%d", CTLCHARS)) = handler - 1
-    .set CTLCHARS, CTLCHARS + 1
+;; Control-Y: moves the cursor to the window's top line, column 0, and computes the line's base.
+;; Out: A = 0
+;; Keeps: X, Y
+;; Also: X_EM (IIEROM82)
+.proc Home
+    lda WindowTop
+    sta EightyColumns::CursorLine
+    lda #0
+    sta EightyColumns::CursorColumn
+    jmp LineBase
+.endproc
+
+;; Control-Z: clears the cursor's line across the window, in the current video.
+;; Out: Y = $FF
+;; Keeps: X
+;; Also: X_SUB (IIEROM82)
+.proc ClearLine
+    ldy WindowWidth
+    dey
+
+;; Stores a blank from column Y down to column 0.
+;; In: Y = the column
+;; Also: X_SUB80 (IIEROM82)
+Blank:
+    lda #' '
+
+;; Also: X_SUBLP (IIEROM82)
+Loop:
+    jsr Screen::StoreCharacter
+    dey
+    bpl Loop
+    rts
+.endproc
+
+;; Control-\: moves the cursor right; at the window's right edge, does a <CarriageReturn at X_CR> instead.
+;; Keeps: X
+;; Also: X_FS (IIEROM82)
+.proc Right
+    inc EightyColumns::CursorColumn
+    lda EightyColumns::CursorColumn
+    cmp WindowWidth
+    bcc Done
+    jsr CarriageReturn
+
+;; Also: X_FSRET (IIEROM82)
+Done:
+    rts
+.endproc
+
+;; Control-_: moves the cursor up a line, but not above the window's top line.
+;; Keeps: X, Y
+;; Also: X_US (IIEROM82)
+.proc Up
+    dec EightyColumns::CursorLine
+    bmi AtTop
+    lda EightyColumns::CursorLine
+    cmp WindowTop
+    bcs SetBase
+
+;; Undoes the step: the cursor was on the window's top line. On line 0 the line's base is already right.
+;; Also: X_US1 (IIEROM82)
+AtTop:
+    inc EightyColumns::CursorLine
+    beq Done
+
+;; Also: X_US2 (IIEROM82)
+SetBase:
+    jsr LineBase
+
+;; Also: X_USRET (IIEROM82)
+Done:
+    rts
+.endproc
+
+;; Control-N: normal video: clears <MODE_INVERSE> and sets <InverseMask> to <MASK_NORMAL>.
+;; Keeps: X
+;; Also: X_SO (IIEROM82)
+.proc Normal
+    lda EightyColumns::Mode
+    and #MODE_INVERSE ^ $FF
+    ldy #MASK_NORMAL
+    bne StoreVideo                  ; always: the mask is not 0
+.endproc
+
+;; Control-O: inverse video: sets <MODE_INVERSE> and sets <InverseMask> to <MASK_INVERSE>.
+;; Keeps: X
+;; Also: X_SI (IIEROM82)
+.proc Inverse
+    lda EightyColumns::Mode
+    ora #MODE_INVERSE
+    ldy #MASK_INVERSE
+    ; Falls into StoreVideo.
+.endproc
+
+;; Stores the mode byte and the inverse mask.
+;; In: A = the mode, Y = the mask
+;; Keeps: A, X, Y
+;; Also: STUFFINV (IIEROM82)
+.proc StoreVideo
+    sta EightyColumns::Mode
+    sty InverseMask
+    rts
+.endproc
+
+;; The handlers <ControlHandler> and <NoControlHandler> have defined so far: at the end, the length of
+;; <HandlersLow> and <HandlersHigh>.
+.set HandlerCount, 0
+
+;; One control character's handler: CONTROL_HANDLER_n, the routine's address minus one, which <Control::Jump> pushes so
+;; that its RTS lands on the routine.
+;; Parameters:
+;;   code = the control character, with bit 7 clear: the next one after the last entry's, from Control-G
+;;   routine = the handler
+.macro ControlHandler code, routine
+    .assert code = CONTROL_G + HandlerCount, "Each handler sits at its control character's place."
+    .ident(.sprintf("CONTROL_HANDLER_%d", HandlerCount)) = routine - 1
+    .set HandlerCount, HandlerCount + 1
 .endmacro
 
-.macro NOCONTROL
-    .ident(.sprintf("CTLAD_%d", CTLCHARS)) = 0
-    .set CTLCHARS, CTLCHARS + 1
+;; A control character with no handler: its CONTROL_HANDLER_n is 0, whose high byte <Control::Perform> takes as none.
+.macro NoControlHandler
+    .ident(.sprintf("CONTROL_HANDLER_%d", HandlerCount)) = 0
+    .set HandlerCount, HandlerCount + 1
 .endmacro
 
-    CONTROL X_BELL                  ; Control-G: bell
-    CONTROL X_BS                    ; Control-H: left
-    NOCONTROL                       ; Control-I
-    CONTROL X_LF                    ; Control-J: line feed
-    CONTROL X_VT                    ; Control-K: clear to the end of the window
-    CONTROL X_FF                    ; Control-L: home and clear
-    CONTROL X_CR                    ; Control-M: carriage return
-    CONTROL X_SO                    ; Control-N: normal video
-    CONTROL X_SI                    ; Control-O: inverse video
-    NOCONTROL                       ; Control-P
-    CONTROL X_DC1                   ; Control-Q: 40 columns
-    CONTROL X_DC2                   ; Control-R: 80 columns
-    NOCONTROL                       ; Control-S
-    NOCONTROL                       ; Control-T
-    CONTROL X_NAK                   ; Control-U: quit the 80-column firmware
-    CONTROL SCROLLDN                ; Control-V: scroll down
-    CONTROL SCROLLUP                ; Control-W: scroll up
-    NOCONTROL                       ; Control-X
-    CONTROL X_EM                    ; Control-Y: home
-    CONTROL X_SUB                   ; Control-Z: clear the line
-    NOCONTROL                       ; Control-[
-    CONTROL X_FS                    ; Control-\: right
-    CONTROL X_GS                    ; Control-]: clear to the end of the line
-    NOCONTROL                       ; Control-^
-    CONTROL X_US                    ; Control-_: up
-.assert CTLCHARS = $1F - $07 + 1, "CTLADL and CTLADH cover Control-G to Control-_."
+    ; The handlers, Control-G to Control-_ in order.
+    ControlHandler CONTROL_G, Bell
+    ControlHandler CONTROL_H, Left
+    ; Control-I.
+    NoControlHandler
+    ControlHandler CONTROL_J, LineFeed
+    ControlHandler CONTROL_K, ClearToEndOfWindow
+    ControlHandler CONTROL_L, HomeAndClear
+    ControlHandler CONTROL_M, CarriageReturn
+    ControlHandler CONTROL_N, Normal
+    ControlHandler CONTROL_O, Inverse
+    ; Control-P.
+    NoControlHandler
+    ControlHandler CONTROL_Q, Columns40
+    ControlHandler CONTROL_R, Columns80
+    ; Control-S and Control-T.
+    NoControlHandler
+    NoControlHandler
+    ControlHandler CONTROL_U, Quit
+    ControlHandler CONTROL_V, ScrollDown
+    ControlHandler CONTROL_W, ScrollUp
+    ; Control-X.
+    NoControlHandler
+    ControlHandler CONTROL_Y, Home
+    ControlHandler CONTROL_Z, ClearLine
+    ; Control-[.
+    NoControlHandler
+    ControlHandler CONTROL_BACKSLASH, Right
+    ControlHandler CONTROL_RIGHT_BRACKET, ClearToEndOfLine
+    ; Control-^.
+    NoControlHandler
+    ControlHandler CONTROL_UNDERSCORE, Up
+.assert HandlerCount = CONTROL_UNDERSCORE - CONTROL_G + 1, "The tables cover Control-G to Control-_."
 
-CTLADL:
-.repeat CTLCHARS, index
-    .byte <.ident(.sprintf("CTLAD_%d", index))
+;; The low bytes of each control character's handler address minus one, Control-G to Control-_: <Perform> reads
+;; the entry for code Y at HandlersLow - <CONTROL_G> + Y.
+;; Also: CTLADL (IIEROM82)
+HandlersLow:
+.repeat HandlerCount, index
+    .byte <.ident(.sprintf("CONTROL_HANDLER_%d", index))
 .endrepeat
 
-CTLADH:
-.repeat CTLCHARS, index
-    .byte >.ident(.sprintf("CTLAD_%d", index))
+;; The high bytes of each control character's handler address minus one; 0 where the character has none.
+;; Also: CTLADH (IIEROM82)
+HandlersHigh:
+.repeat HandlerCount, index
+    .byte >.ident(.sprintf("CONTROL_HANDLER_%d", index))
 .endrepeat
 
-;; Line feed: moves the cursor down a line; at the bottom of the window scrolls up instead.
-X_LF:
-    inc OURCV                       ; $CC91
-    lda OURCV                       ; $CC94
-    cmp WNDBTM                      ; $CC97
-    bcs X_LF2                       ; $CC99
-    jmp X_LFRET                     ; $CC9B
-
-;; Line feed at the bottom: leaves the cursor on WNDBTM-1 and scrolls up.
-X_LF2:
-    ldy WNDBTM                      ; $CC9E
-    dey                             ; $CCA0
-    sty OURCV                       ; $CCA1
-
-;; Control-W: scrolls the window up one line and clears the bottom line. In 80 columns does main and
-;; auxiliary memory separately with WNDWDTH halved.
+;; Control-J, a line feed: moves the cursor down a line; on the window's bottom line, scrolls the window up instead.
 ;; Keeps: X
-;; Uses: A, Y, BASL/BASH, BAS2L/BAS2H
-SCROLLUP:
-    txa                             ; $CCA4
-    pha                             ; $CCA5
-    ldx #$01                        ; $CCA6
-    bne SCROLL1                     ; $CCA8
+;; Also: X_LF (IIEROM82)
+.proc LineFeed
+    inc EightyColumns::CursorLine
+    lda EightyColumns::CursorLine
+    cmp WindowBottom
+    bcs AtBottom
+    jmp ToLineBase
 
-;; Control-V: scrolls the window down one line and clears the top line.
+;; Puts the cursor back on the window's bottom line, then scrolls up.
+;; Also: X_LF2 (IIEROM82)
+AtBottom:
+    ldy WindowBottom
+    dey
+    sty EightyColumns::CursorLine
+    ; Falls into ScrollUp.
+.endproc
+
+;; Control-W: scrolls the window up a line and clears its bottom line.
 ;; Keeps: X
-SCROLLDN:
-    txa                             ; $CCAA
-    pha                             ; $CCAB
-    ldx #$00                        ; $CCAC
+;; Also: SCROLLUP (IIEROM82)
+.proc ScrollUp
+    txa
+    pha
+    ldx #SCROLL_UP
+    bne Scroll                      ; always: SCROLL_UP is not 0
+.endproc
 
-SCROLL1:
-    bit RD80VID                     ; $CCAE
-    bpl SCROLL2                     ; $CCB1
-    lda WNDWDTH                     ; $CCB3
-    pha                             ; $CCB5
-    lsr WNDWDTH                     ; $CCB6
+;; Control-V: scrolls the window down a line and clears its top line.
+;; Keeps: X
+;; Also: SCROLLDN (IIEROM82)
+.proc ScrollDown
+    txa
+    pha
+    ldx #SCROLL_DOWN
+    ; Falls into Scroll.
+.endproc
 
-SCROLL2:
-    jsr SCRLSUB                     ; $CCB8
-    bit RD80VID                     ; $CCBB
-    bpl X_SCRLRET                   ; $CCBE
-    php                             ; $CCC0
-    sei                             ; $CCC1
-    lda HISCR                       ; $CCC2
-    jsr SCRLSUB                     ; $CCC5
-    lda LOWSCR                      ; $CCC8
-    plp                             ; $CCCB
-    pla                             ; $CCCC
-    sta WNDWDTH                     ; $CCCD
-    bne X_SCRLRET                   ; $CCCF
+;; Scrolls the window a line, then goes to <FinishScroll>.
+;;
+;; In 80 columns, it scrolls main memory's half of each line and then auxiliary memory's, with <WindowWidth>
+;; halved while it does.
+;; X as the caller had it is on the stack, for <FinishScroll>.
+;; In: X = <SCROLL_UP> or <SCROLL_DOWN>
+;; Also: SCROLL1 (IIEROM82)
+.proc Scroll
+    bit Columns80State
+    bpl Lines
 
-;; Moves the window's lines in the currently selected text memory: up (X = 1) or down (X = 0), using
-;; WNDTAB for the starting edge and PLUSMINUS1 for the direction.
-SCRLSUB:
-    ldy WNDTAB,x                    ; $CCD1
-    lda a:LOC0,y                    ; $CCD4
-    cpx #$01                        ; $CCD7
-    bcs MSCRL0                      ; $CCD9
-    sbc #$00                        ; $CCDB
+    ; 80 columns: each half of a line is half as wide.
+    lda WindowWidth
+    pha
+    lsr WindowWidth
 
-MSCRL0:
-    pha                             ; $CCDD
-    jsr C8_BASCALC_1                ; $CCDE
+;; Scrolls main memory's half, the whole line in 40 columns.
+;; Also: SCROLL2 (IIEROM82)
+Lines:
+    jsr ScrollLines
+    bit Columns80State
+    bpl FinishScroll
 
-MSCRL1:
-    lda BASL                        ; $CCE1
-    sta BAS2L                       ; $CCE3
-    lda BASH                        ; $CCE5
-    sta BAS2H                       ; $CCE7
-    ldy WNDWDTH                     ; $CCE9
-    dey                             ; $CCEB
-    pla                             ; $CCEC
-    clc                             ; $CCED
-    adc PLUSMINUS1,x                ; $CCEE
-    cmp WNDTOP,x                    ; $CCF1
-    beq MSCRLRET                    ; $CCF3
-    pha                             ; $CCF5
-    jsr C8_BASCALC_1                ; $CCF6
+    ; Then auxiliary memory's half, with interrupts off while it is switched in.
+    php
+    sei
+    lda Page2On
+    jsr ScrollLines
+    lda Page2Off
+    plp
 
-MSCRL2:
-    lda (BASL),y                    ; $CCF9
-    sta (BAS2L),y                   ; $CCFB
-    dey                             ; $CCFD
-    bpl MSCRL2                      ; $CCFE
-    bmi MSCRL1                      ; $CD00
+    ; The width back.
+    pla
+    sta WindowWidth
+    bne FinishScroll                ; always: the width is not 0
+.endproc
 
-MSCRLRET:
-    cpx #$00                        ; $CD02
-    bne MSCRLRTS                    ; $CD04
-    jsr C8_BASCALC_1                ; $CD06
+;; Moves the window's lines a line up or down in the text memory switched in, from the edge <ScrollEdges> gives
+;; by the step <ScrollSteps> gives.
+;;
+;; Scrolling down copies one line more at the end, the window's top line into the one below it.
+;; In: X = <SCROLL_UP> or <SCROLL_DOWN>
+;; Keeps: X
+;; Also: SCRLSUB (IIEROM82)
+.proc ScrollLines
 
-ONEMORE:
-    lda (BASL),y                    ; $CD09
-    sta (BAS2L),y                   ; $CD0B
-    dey                             ; $CD0D
-    bpl ONEMORE                     ; $CD0E
+;; Page zero, which <ScrollEdges>' entries index.
+PageZero = SlotPointer
 
-MSCRLRTS:
-    rts                             ; $CD10
+    ldy ScrollEdges,x
+    lda a:PageZero,y
+    cpx #SCROLL_UP
+    bcs Start
 
-;; After a scroll: clears the line left empty (bottom for up, top for down), restores X and recomputes the
-;; base address for the cursor row.
-X_SCRLRET:
-    ldy WNDTOP,x                    ; $CD11
-    txa                             ; $CD13
-    beq X_SCRLRET2                  ; $CD14
-    dey                             ; $CD16
+    ; Down: from the line above the window's bottom (the carry is clear, so this takes one off).
+    sbc #0
 
-X_SCRLRET2:
-    tya                             ; $CD17
-    jsr C8_BASCALC_1                ; $CD18
-    pla                             ; $CD1B
-    tax                             ; $CD1C
-    jsr X_SUB                       ; $CD1D
+;; Also: MSCRL0 (IIEROM82)
+Start:
+    pha
+    jsr LineBase::Row
 
-X_LFRET:
-    jmp C8_BASCALC                  ; $CD20
+;; The line just computed is the next one copied into.
+;; Also: MSCRL1 (IIEROM82)
+NextLine:
+    lda TextBase
+    sta ScrollBase
+    lda TextBaseHigh
+    sta ScrollBaseHigh
+    ldy WindowWidth
+    dey
 
-;; Control-K: clears from the cursor to the end of the line and every line below it in the window.
-X_VT:
-    jsr X_GS                        ; $CD23
-    lda OURCV                       ; $CD26
-    pha                             ; $CD29
-    bpl X_VTNEXT                    ; $CD2A
+    ; The line copied from, until it is the window's edge: <WindowTop> going down, <WindowBottom> going up.
+    pla
+    clc
+    adc ScrollSteps,x
+    cmp WindowTop,x
+    beq LastLine
+    pha
+    jsr LineBase::Row
 
-X_VTLOOP:
-    jsr C8_BASCALC                  ; $CD2C
-    jsr X_SUB                       ; $CD2F
+;; Also: MSCRL2 (IIEROM82)
+CopyByte:
+    lda (TextBase),y
+    sta (ScrollBase),y
+    dey
+    bpl CopyByte
+    bmi NextLine                    ; always
 
-X_VTNEXT:
-    inc OURCV                       ; $CD32
-    lda OURCV                       ; $CD35
-    cmp WNDBTM                      ; $CD38
-    bcc X_VTLOOP                    ; $CD3A
-    pla                             ; $CD3C
-    sta OURCV                       ; $CD3D
-    bpl X_LFRET                     ; $CD40
+;; Going down, the window's top line is the last copied.
+;; Also: MSCRLRET (IIEROM82)
+LastLine:
+    cpx #SCROLL_DOWN
+    bne Done
+    jsr LineBase::Row
+
+;; Also: ONEMORE (IIEROM82)
+CopyLast:
+    lda (TextBase),y
+    sta (ScrollBase),y
+    dey
+    bpl CopyLast
+
+;; Also: MSCRLRTS (IIEROM82)
+Done:
+    rts
+.endproc
+
+;; Finishes a scroll: clears the line it left empty, the bottom line going up and the top line going down, puts X
+;; back, and computes the cursor line's base. Falls into <ToLineBase>.
+;; X as the caller of <ScrollUp> or <ScrollDown> had it is on the stack.
+;; In: X = <SCROLL_UP> or <SCROLL_DOWN>
+;; Also: X_SCRLRET (IIEROM82)
+.proc FinishScroll
+    ldy WindowTop,x
+    txa
+    beq ClearEmpty
+
+    ; Up: <WindowTop>,X was <WindowBottom>, the line below the window.
+    dey
+
+;; Also: X_SCRLRET2 (IIEROM82)
+ClearEmpty:
+    tya
+    jsr LineBase::Row
+    pla
+    tax
+    jsr ClearLine
+    ; Falls into ToLineBase.
+.endproc
+
+;; Computes the base of the cursor's line, the exit <LineFeed> and <ClearToEndOfWindow> branch to.
+;; Also: X_LFRET (IIEROM82)
+ToLineBase:
+    jmp LineBase
+
+;; Control-K: clears from the cursor to the end of its line, then each line below it in the window.
+;; Keeps: X
+;; Also: X_VT (IIEROM82)
+.proc ClearToEndOfWindow
+    jsr ClearToEndOfLine
+    lda EightyColumns::CursorLine
+    pha
+    bpl CheckLine                   ; always: the line is 0-23
+
+;; Also: X_VTLOOP (IIEROM82)
+NextLine:
+    jsr LineBase
+    jsr ClearLine
+
+;; Also: X_VTNEXT (IIEROM82)
+CheckLine:
+    inc EightyColumns::CursorLine
+    lda EightyColumns::CursorLine
+    cmp WindowBottom
+    bcc NextLine
+
+    ; The cursor's line back.
+    pla
+    sta EightyColumns::CursorLine
+    bpl ToLineBase                  ; always
+.endproc
 
 ;; Control-L: homes the cursor and clears the window.
-X_FF:
-    jsr X_EM                        ; $CD42
-    jmp X_VT                        ; $CD45
+;; Keeps: X
+;; Also: X_FF (IIEROM82)
+.proc HomeAndClear
+    jsr Home
+    jmp ClearToEndOfWindow
+.endproc
 
-;; Control-]: clears from the 80-column cursor to the end of the line.
-X_GS:
-    ldy OURCH                       ; $CD48
-    jmp X_GS2                       ; $CD4B
+;; Control-]: clears from the cursor to the end of its line.
+;; Out: Y = <WindowWidth>
+;; Keeps: X
+;; Also: X_GS (IIEROM82)
+.proc ClearToEndOfLine
+    ldy EightyColumns::CursorColumn
+    jmp ClearLineFrom::Check
+.endproc
 
-;; Stores spaces (honoring inverse) from column Y to the window's right edge.
-;; In: Y = column.
-;; Out: Y = WNDWDTH
-X_GSEOLZ:
-    lda #' '                        ; $CD4E
-    jsr STORCHAR                    ; $CD50
-    iny                             ; $CD53
+;; Stores blanks in the current video from column Y to the window's right edge.
+;;
+;; It stores the first blank before it compares, so it stores one at Y even when Y is at the edge or past it.
+;; In: Y = the column
+;; Out: Y = the column after the last blank, <WindowWidth> when Y was inside the window, carry = set
+;; Keeps: X
+;; Entry:
+;;   Check = stores nothing when Y is at the edge or past it: <ClearToEndOfLine> enters here
+;; Also: X_GSEOLZ (IIEROM82)
+.proc ClearLineFrom
+    lda #' '
+    jsr Screen::StoreCharacter
+    iny
 
-X_GS2:
-    cpy WNDWDTH                     ; $CD54
-    bcc X_GSEOLZ                    ; $CD56
-    rts                             ; $CD58
+;; Stores blanks from column Y to the window's right edge, but none when Y is at the edge or past it.
+;; In: Y = the column
+;; Also: X_GS2 (IIEROM82)
+Check:
+    cpy WindowWidth
+    bcc ClearLineFrom
+    rts
+.endproc
 
-;; Control-Q: sets a 40-column window (top 20 if graphics are on) and, if 80 columns was on, converts the
-;; screen with SCRN84.
-X_DC1:
-    lda #$00                        ; $CD59
-    sta WNDLFT                      ; $CD5B
-    bit RDTEXT                      ; $CD5D
-    bmi X_DC1B                      ; $CD60
-    lda #$14                        ; $CD62
+;; Control-Q: sets the full 40-column window, below the graphics when graphics are shown, and converts the screen
+;; with <Columns::To40> if 80 columns are on.
+;; Keeps: X
+;; Also: X_DC1 (IIEROM82)
+.proc Columns40
+    lda #0
+    sta WindowLeft
+    bit TextState
+    bmi SetTop
+    lda #MIXED_TEXT_TOP
 
-X_DC1B:
-    sta WNDTOP                      ; $CD64
-    lda #$18                        ; $CD66
-    sta WNDBTM                      ; $CD68
-    lda #$28                        ; $CD6A
-    sta WNDWDTH                     ; $CD6C
-    bit RD80VID                     ; $CD6E
-    bpl X_DC1RTS                    ; $CD71
-    jsr SCRN84                      ; $CD73
+;; Also: X_DC1B (IIEROM82)
+SetTop:
+    sta WindowTop
+    lda #SCREEN_LINES
+    sta WindowBottom
+    lda #COLUMNS_40
+    sta WindowWidth
+    bit Columns80State
+    bpl Done
+    jsr Columns::To40
 
-X_DC1RTS:
-    rts                             ; $CD76
+;; Also: X_DC1RTS (IIEROM82)
+Done:
+    rts
+.endproc
 
-;; Control-R: if a card answers, sets the 80x24 window (top 20 if graphics are on) and, unless 80STORE is
-;; already on, converts the screen with SCRN48.
-X_DC2:
-    jsr TESTCARD                    ; $CD77
-    bne X_NAKRET                    ; $CD7A
-    jsr FULL80                      ; $CD7C
-    bit RDTEXT                      ; $CD7F
-    bmi X_DC2B                      ; $CD82
-    lda #$14                        ; $CD84
-    sta WNDTOP                      ; $CD86
+;; Control-R: when auxiliary memory answers, sets the full 80-column window, below the graphics when graphics are
+;; shown, and converts the screen with <Columns::To80> unless 80STORE is already on.
+;; Keeps: X
+;; Also: X_DC2 (IIEROM82)
+.proc Columns80
+    jsr TestAuxMemory
+    bne Quit::Done
+    jsr FullWindow80
+    bit TextState
+    bmi CheckStore80
+    lda #MIXED_TEXT_TOP
+    sta WindowTop
 
-X_DC2B:
-    bit RD80STORE                   ; $CD88
-    bmi X_NAKRET                    ; $CD8B
-    jmp SCRN48                      ; $CD8D
+;; Converts the screen only while 80STORE is off.
+;; Also: X_DC2B (IIEROM82)
+CheckStore80:
+    bit Store80State
+    bmi Quit::Done
+    jmp Columns::To80
+.endproc
 
-;; Control-U output: quits the 80-column firmware (QUIT) unless in Pascal mode.
-X_NAK:
-    lda MODE80                      ; $CD90
-    and #$20                        ; $CD93
-    bne X_NAKRET                    ; $CD95
-    jsr QUIT                        ; $CD97
+;; Control-U: leaves the 80-column firmware with <QuitFirmware>, unless the Pascal protocol is active.
+;; Entry:
+;;   Done = the return <Columns80> shares
+;; Also: X_NAK (IIEROM82)
+.proc Quit
+    lda EightyColumns::Mode
+    and #MODE_PASCAL
+    bne Done
+    jsr QuitFirmware
 
-X_NAKRET:
-    rts                             ; $CD9A
+;; The return <Columns80> shares.
+;; Also: X_NAKRET (IIEROM82), X_DC2RET (IIEROM82)
+Done:
+    rts
+.endproc
 
-;; Sets the window to 80 columns by 24 lines from the top left.
-FULL80:
-    lda #$00                        ; $CD9B
-    sta WNDTOP                      ; $CD9D
-    sta WNDLFT                      ; $CD9F
-    lda #$50                        ; $CDA1
-    sta WNDWDTH                     ; $CDA3
-    lda #$18                        ; $CDA5
-    sta WNDBTM                      ; $CDA7
-    rts                             ; $CDA9
+.endscope
 
-;; Leaves the 80-column firmware: sets a full 40-column window, converts the screen to 40 columns if needed,
-;; puts the cursor at line 23, column 0, selects the primary character set, marks the firmware inactive
-;; ($04FB = $FF) and restores the Monitor's input and output hooks (SETVID, SETKBD).
-QUIT:
-    lda #$00                        ; $CDAA
-    sta WNDTOP                      ; $CDAC
-    sta WNDLFT                      ; $CDAE
-    lda #$18                        ; $CDB0
-    sta WNDBTM                      ; $CDB2
-    lda #$28                        ; $CDB4
-    sta WNDWDTH                     ; $CDB6
-    bit RD80VID                     ; $CDB8
-    bpl QUIT2                       ; $CDBB
-    jsr SCRN84                      ; $CDBD
+;; Sets the window to the whole 80-column screen: 80 columns by 24 lines from the top left.
+;;
+;; At $CD9B.
+;; Out: A = 24
+;; Keeps: X, Y
+;; Also: FULL80 (IIEROM82)
+.proc FullWindow80
+.assert * = $CD9B, "FullWindow80 must stay at $CD9B."
+    lda #0
+    sta WindowTop
+    sta WindowLeft
+    lda #COLUMNS_80
+    sta WindowWidth
+    lda #SCREEN_LINES
+    sta WindowBottom
+    rts
+.endproc
 
-QUIT2:
-    lda #$17                        ; $CDC0
-    sta OURCV                       ; $CDC2
-    jsr C8_BASCALC                  ; $CDC5
-    lda #$00                        ; $CDC8
-    sta OURCH                       ; $CDCA
-    sta CLRALTCHAR                  ; $CDCD
-    lda #$FF                        ; $CDD0
-    sta MODE80                      ; $CDD2
-    jsr SETVID                      ; $CDD5
-    jmp SETKBD                      ; $CDD8
+;; Leaves the 80-column firmware: the full 40-column window, the screen converted to 40 columns if 80 columns are
+;; on, the cursor on the last line at column 0, the primary character set, <MODE_INACTIVE>, and the Monitor's
+;; screen and keyboard hooks back.
+;;
+;; At $CDAA.
+;; Also: QUIT (IIEROM82)
+.proc QuitFirmware
+.assert * = $CDAA, "QuitFirmware must stay at $CDAA."
+    lda #0
+    sta WindowTop
+    sta WindowLeft
+    lda #SCREEN_LINES
+    sta WindowBottom
+    lda #COLUMNS_40
+    sta WindowWidth
+    bit Columns80State
+    bpl HomeBottom
+    jsr Columns::To40
 
-;; Converts the screen from 80 to 40 columns, keeping the left 40 columns, from line 23 up to line 0 (line
-;; 20 when graphics are on), then turns 80STORE and 80VID off. Keeps the 80-column cursor.
-;; Uses: BAS2L (the row counter)
-SCRN84:
-    lda OURCV                       ; $CDDB
-    pha                             ; $CDDE
-    lda OURCH                       ; $CDDF
-    pha                             ; $CDE2
-    lda #$17                        ; $CDE3
-    sta BAS2L                       ; $CDE5
-    sta SET80STORE                  ; $CDE7
+;; The cursor on the last line, at column 0.
+;; Also: QUIT2 (IIEROM82)
+HomeBottom:
+    lda #LAST_LINE
+    sta EightyColumns::CursorLine
+    jsr LineBase
+    lda #0
+    sta EightyColumns::CursorColumn
 
-SCR40:
-    lda BAS2L                       ; $CDEA
-    jsr C8_BASCALC_1                ; $CDEC
-    jsr ATEFOR                      ; $CDEF
-    dec BAS2L                       ; $CDF2
-    bmi SCR40RET                    ; $CDF4
-    bit RDTEXT                      ; $CDF6
-    bmi SCR40                       ; $CDF9
-    lda BAS2L                       ; $CDFB
-    cmp #$14                        ; $CDFD
-    bcs SCR40                       ; $CDFF
+    ; The primary character set, the firmware off, and the Monitor's hooks.
+    sta AlternateCharactersOff
+    lda #MODE_INACTIVE
+    sta EightyColumns::Mode
+    jsr SetScreen
+    jmp SetKeyboard
+.endproc

@@ -1,397 +1,673 @@
-SCR40RET:
-    sta KBD                         ; $CE01
-    sta CLR80VID                    ; $CE04
-    jmp SCR80RET_1                  ; $CE07
+; retrocore: style=strict
+;; The original IIe's 40/80-column conversion and screen access, $CDDB-$CFFF: the screen converted between 40 and 80
+;; columns, the cursor's column, reading and writing the screen at a column through 80STORE, the escape cursor, the
+;; Monitor copied into the language card, Pascal's setup, and the tables at the top of the ROM, which interleave the
+;; functions' handlers with the scrolling's steps and edges.
 
-;; Converts one line at BASL from 80 to 40 columns, working from column 39 down, interrupts off.
-ATEFOR:
-    php                             ; $CE0A
-    sei                             ; $CE0B
-    ldy #$28                        ; $CE0C
-    sty BAS2H                       ; $CE0E
-    bit LOWSCR                      ; $CE10
+; Screen characters.
 
-ATEFOR1:
-    jsr GET84                       ; $CE13
-    bit HISCR                       ; $CE16
-    jsr GET84                       ; $CE19
-    ldy BAS2H                       ; $CE1C
-    bne ATEFOR1                     ; $CE1E
-    plp                             ; $CE20
-    rts                             ; $CE21
+;; Bit 7 of a screen character: set for normal video, clear for inverse or flashing.
+NORMAL_BIT = $80
 
-;; Copies one 80-column character (column BAS2H-1, from the text page selected by the caller) to main
-;; memory column BAS2H-1, and decrements BAS2H.
-GET84:
-    dec BAS2H                       ; $CE22
-    lda BAS2H                       ; $CE24
-    lsr a                           ; $CE26
-    tay                             ; $CE27
-    lda (BASL),y                    ; $CE28
-    ldy BAS2H                       ; $CE2A
-    bit LOWSCR                      ; $CE2C
-    sta (BASL),y                    ; $CE2F
-    rts                             ; $CE31
+;; How near the window's right edge the 80-column cursor must be for <SetCursorColumn> to give the Monitor a
+;; column near 40 instead of 0.
+EDGE_COLUMNS = 8
 
-;; Converts the screen from 40 to 80 columns, from line 23 up to line 0 (line 20 when graphics are on), then
-;; turns 80VID on. The label SCR80RET_1 ($CE58) restores the saved cursor and recomputes the base address.
-SCRN48:
-    lda OURCV                       ; $CE32
-    pha                             ; $CE35
-    lda OURCH                       ; $CE36
-    pha                             ; $CE39
-    lda #$17                        ; $CE3A
-    sta BAS2L                       ; $CE3C
+; Memory.
 
-SCR80:
-    lda BAS2L                       ; $CE3E
-    jsr C8_BASCALC_1                ; $CE40
-    jsr FORATE                      ; $CE43
-    dec BAS2L                       ; $CE46
-    bmi SCR80RET                    ; $CE48
-    bit RDTEXT                      ; $CE4A
-    bmi SCR80                       ; $CE4D
-    lda BAS2L                       ; $CE4F
-    cmp #$14                        ; $CE51
-    bcs SCR80                       ; $CE53
+;; The page the Monitor's ROM starts at, $F800.
+MONITOR_ROM_PAGE = $F8
 
-SCR80RET:
-    sta SET80VID                    ; $CE55
+;; The 80-column firmware's 40/80-column conversion: the screen converted between 40 and 80 columns, a line at a
+;; time, when Control-Q or Control-R changes the width or the firmware quits.
+;;
+;; In 80 columns a line's even columns are in auxiliary memory and its odd ones in main memory, each half at byte
+;; column/2, so <Columns::To80> spreads each 40-column line over both halves and blanks columns 40-79 with
+;; <Columns::ClearRightHalf>, and <Columns::To40> gathers columns 0-39 back into main memory. Both end in
+;; <Columns::Finish>, which computes the cursor line's base.
+.scope Columns
 
-SCR80RET_1:
-    pla                             ; $CE58
-    sta OURCH                       ; $CE59
-    pla                             ; $CE5C
-    sta OURCV                       ; $CE5D
-    jmp C8_BASCALC                  ; $CE60
+;; The line <To40> and <To80> convert, from the last line up: <ScrollBase>, which they borrow.
+Line = ScrollBase
 
-;; Converts one line at BASL from 40 to 80 columns (even columns to auxiliary, odd to main memory), then
-;; blanks the right half of the line, interrupts off.
-FORATE:
-    php                             ; $CE63
-    sei                             ; $CE64
-    ldy #$00                        ; $CE65
-    sty BAS2H                       ; $CE67
-    sty SET80STORE                  ; $CE69
-    bit LOWSCR                      ; $CE6C
+;; The 80-column column the line conversions are at: <ScrollBaseHigh>, which they borrow.
+Column = ScrollBaseHigh
 
-FORATE1:
-    lda (BASL),y                    ; $CE6F
-    bit HISCR                       ; $CE71
-    jsr PUTCOL80                    ; $CE74
-    bit LOWSCR                      ; $CE77
-    lda (BASL),y                    ; $CE7A
-    jsr PUTCOL80                    ; $CE7C
-    cpy #$28                        ; $CE7F
-    bcc FORATE1                     ; $CE81
-    jsr CLRHALF                     ; $CE83
-    bit HISCR                       ; $CE86
-    jsr CLRHALF                     ; $CE89
-    bit LOWSCR                      ; $CE8C
-    plp                             ; $CE8F
-    rts                             ; $CE90
+;; Converts the screen from 80 to 40 columns, keeping each line's left 40 columns, then turns 80STORE and 80 columns
+;; off.
+;;
+;; It converts from the last line up to line 0, or to line 20 when graphics are shown, and puts the cursor
+;; back as it was.
+;; Keeps: X
+;; Also: SCRN84 (IIEROM82)
+.proc To40
 
-;; Fills bytes $14-$27 of the line at BASL with spaces (inverse spaces when INVFLG bit 7 is clear).
-CLRHALF:
-    ldy #$14                        ; $CE91
-    lda #' '                        ; $CE93
-    bit INVFLG                      ; $CE95
-    bmi CLRHALF2                    ; $CE97
-    and #$7F                        ; $CE99
+    ; The cursor, for <Finish>.
+    lda EightyColumns::CursorLine
+    pha
+    lda EightyColumns::CursorColumn
+    pha
 
-CLRHALF2:
-    sta (BASL),y                    ; $CE9B
-    iny                             ; $CE9D
-    cpy #$28                        ; $CE9E
-    bne CLRHALF2                    ; $CEA0
-    rts                             ; $CEA2
+    lda #LAST_LINE
+    sta Line
+    sta Store80On
 
-;; Stores A at (BASL),Y/2 and steps the column count in BAS2H.
-;; Out: Y = new BAS2H
-PUTCOL80:
-    pha                             ; $CEA3
-    tya                             ; $CEA4
-    lsr a                           ; $CEA5
-    tay                             ; $CEA6
-    pla                             ; $CEA7
-    sta (BASL),y                    ; $CEA8
-    inc BAS2H                       ; $CEAA
-    ldy BAS2H                       ; $CEAC
-    rts                             ; $CEAE
+;; Also: SCR40 (IIEROM82)
+NextLine:
+    lda Line
+    jsr LineBase::Row
+    jsr LineTo40
+    dec Line
+    bmi Done
+    bit TextState
+    bmi NextLine
+    lda Line
+    cmp #MIXED_TEXT_TOP
+    bcs NextLine
 
-;; Sets the 80-column cursor column from A and copies it to CH and $047B. In 80 columns CH is set to 0
-;; instead, or to 40 minus the remaining columns when fewer than 8 remain.
-;; In: A = column.
-;; Out: A = column
-SETCH:
-    sta OURCH                       ; $CEAF
-    sta CH                          ; $CEB2
-    sta OLDCH                       ; $CEB4
-    bit RD80VID                     ; $CEB7
-    bpl SETCHRTS                    ; $CEBA
-    lda #$00                        ; $CEBC
-    sta CH                          ; $CEBE
-    sta OLDCH                       ; $CEC0
-    lda WNDWDTH                     ; $CEC3
-    sec                             ; $CEC5
-    sbc OURCH                       ; $CEC6
-    cmp #$08                        ; $CEC9
-    bcs SETCHRTS                    ; $CECB
-    sta CH                          ; $CECD
-    lda #$28                        ; $CECF
-    sec                             ; $CED1
-    sbc CH                          ; $CED2
-    sta CH                          ; $CED4
-    sta OLDCH                       ; $CED6
+;; Turns 80STORE and 80 columns off, then goes to <Finish>.
+;; Also: SCR40RET (IIEROM82)
+Done:
+    sta Store80Off
+    sta Columns80Off
+    jmp Finish
+.endproc
 
-SETCHRTS:
-    lda OURCH                       ; $CED9
-    rts                             ; $CEDC
+;; Converts the line at <TextBase> from 80 to 40 columns, from column 39 down, with interrupts off.
+;; Keeps: X
+;; Also: ATEFOR (IIEROM82)
+.proc LineTo40
+    php
+    sei
+    ldy #COLUMNS_40
+    sty Column
+    bit Page2Off
 
-;; Inverts bit 7 of the character at the 80-column cursor (shows or hides the cursor).
-;; Keeps: A, Y
-INVERT:
-    pha                             ; $CEDD
-    tya                             ; $CEDE
-    pha                             ; $CEDF
-    ldy OURCH                       ; $CEE0
-    jsr PICK                        ; $CEE3
-    eor #$80                        ; $CEE6
-    bit SEV                         ; $CEE8 BIT SEV sets V: write
-    jsr SCREENIT                    ; $CEEB
-    pla                             ; $CEEE
-    tay                             ; $CEEF
-    pla                             ; $CEF0
-    rts                             ; $CEF1
+    ; An odd column from main memory, then the even one before it from auxiliary memory.
+;; Also: ATEFOR1 (IIEROM82)
+NextColumn:
+    jsr CopyColumnTo40
+    bit Page2On
+    jsr CopyColumnTo40
+    ldy Column
+    bne NextColumn
+    plp
+    rts
+.endproc
 
-;; Stores a character at column Y of the current line, clearing bit 7 when INVFLG selects inverse.
+;; Copies the 80-column character before <Column>, from the half of the line switched in, into main memory's
+;; 40-column line at the same column, and moves <Column> back to it.
+;;
+;; Column c's byte is at c/2 in its half, so the copy, working down, never overwrites a byte it has still to read.
+;; Out: Y = the new <Column>
+;; Keeps: X
+;; Also: GET84 (IIEROM82)
+.proc CopyColumnTo40
+    dec Column
+    lda Column
+    lsr a
+    tay
+    lda (TextBase),y
+    ldy Column
+    bit Page2Off
+    sta (TextBase),y
+    rts
+.endproc
+
+;; Converts the screen from 40 to 80 columns, then turns 80 columns on.
+;;
+;; It converts from the last line up to line 0, or to line 20 when graphics are shown, and puts the cursor
+;; back as it was.
+;; Keeps: X
+;; Also: SCRN48 (IIEROM82)
+.proc To80
+
+    ; The cursor, for <Finish>.
+    lda EightyColumns::CursorLine
+    pha
+    lda EightyColumns::CursorColumn
+    pha
+
+    lda #LAST_LINE
+    sta Line
+
+;; Also: SCR80 (IIEROM82)
+NextLine:
+    lda Line
+    jsr LineBase::Row
+    jsr LineTo80
+    dec Line
+    bmi Done
+    bit TextState
+    bmi NextLine
+    lda Line
+    cmp #MIXED_TEXT_TOP
+    bcs NextLine
+
+;; Turns 80 columns on.
+;; Also: SCR80RET (IIEROM82)
+Done:
+    sta Columns80On
+    ; Falls into Finish.
+.endproc
+
+;; Finishes a conversion: puts the cursor back from the stack, where <To40> and <To80> push its line, then its
+;; column, and computes its line's base.
+;; Keeps: X, Y
+;; Also: SCRNRET (IIEROM82)
+.proc Finish
+    pla
+    sta EightyColumns::CursorColumn
+    pla
+    sta EightyColumns::CursorLine
+    jmp LineBase
+.endproc
+
+;; Converts the line at <TextBase> from 40 to 80 columns, the even columns into auxiliary memory and the odd ones
+;; into main memory, then blanks the right half of the 80-column line, with interrupts off.
+;;
+;; Column c goes to byte c/2 of its half, so the conversion, working up, never overwrites a byte it has still to
+;; read.
+;; Keeps: X
+;; Also: FORATE (IIEROM82)
+.proc LineTo80
+    php
+    sei
+    ldy #0
+    sty Column
+    sty Store80On
+    bit Page2Off
+
+;; An even column into auxiliary memory, then the odd one after it into main memory.
+;; Also: FORATE1 (IIEROM82)
+NextColumn:
+    lda (TextBase),y
+    bit Page2On
+    jsr StoreColumn
+    bit Page2Off
+    lda (TextBase),y
+    jsr StoreColumn
+    cpy #COLUMNS_40
+    bcc NextColumn
+
+    ; Columns 40-79: the right half of each half.
+    jsr ClearRightHalf
+    bit Page2On
+    jsr ClearRightHalf
+    bit Page2Off
+    plp
+    rts
+.endproc
+
+;; Blanks bytes 20-39 of the line at <TextBase> in the half switched in, columns 40-79 of an 80-column line: normal
+;; blanks, or inverse ones when <InverseMask> says so.
+;; Keeps: X
+;; Also: CLRHALF (IIEROM82)
+.proc ClearRightHalf
+    ldy #COLUMNS_40 / 2
+    lda #' '
+    bit InverseMask
+    bmi Loop
+    and #MASK_INVERSE
+
+;; Also: CLRHALF2 (IIEROM82)
+Loop:
+    sta (TextBase),y
+    iny
+    cpy #COLUMNS_40
+    bne Loop
+    rts
+.endproc
+
+;; Stores a character at byte Y/2 of the line at <TextBase>, in the half switched in, and moves <Column> on.
+;; In: A = the character, Y = the 80-column column
+;; Out: Y = the new <Column>
+;; Keeps: A, X
+;; Also: PUTCOL80 (UNKN)
+.proc StoreColumn
+    pha
+    tya
+    lsr a
+    tay
+    pla
+    sta (TextBase),y
+    inc Column
+    ldy Column
+    rts
+.endproc
+
+.endscope
+
+;; Sets the 80-column firmware's cursor column, and the Monitor's <::CursorColumn> and
+;; <EightyColumns::LastCursorColumn> to go with it.
+;;
+;; At $CEAF. In 40 columns the Monitor's column is the same. In 80 columns it is 0, or, when fewer than
+;; <EDGE_COLUMNS> columns are left to the window's right edge, 40 less the columns left.
+;; In: A = the column
+;; Out: A = the column
+;; Keeps: X, Y
+;; Also: SETCH (IIEROM82)
+.proc SetCursorColumn
+.assert * = $CEAF, "SetCursorColumn must stay at $CEAF."
+    sta EightyColumns::CursorColumn
+    sta CursorColumn
+    sta EightyColumns::LastCursorColumn
+    bit Columns80State
+    bpl Done
+
+    ; 80 columns.
+    lda #0
+    sta CursorColumn
+    sta EightyColumns::LastCursorColumn
+    lda WindowWidth
+    sec
+    sbc EightyColumns::CursorColumn
+    cmp #EDGE_COLUMNS
+    bcs Done
+
+    ; Near the edge: 40 less the columns left.
+    sta CursorColumn
+    lda #COLUMNS_40
+    sec
+    sbc CursorColumn
+    sta CursorColumn
+    sta EightyColumns::LastCursorColumn
+
+;; Also: SETCHRTS (IIEROM82)
+Done:
+    lda EightyColumns::CursorColumn
+    rts
+.endproc
+
+;; The 80-column firmware's access to the text screen: reading and writing the character at a column of the line at
+;; <TextBase>, and the cursor drawn by flipping the character under it.
+;;
+;; In 80 columns an even column is in auxiliary memory, which <Page2On> switches in while 80STORE is on, and an odd
+;; one in main memory. <Screen::ReadCharacter> and <Screen::StoreCharacter> are the entries the rest of the firmware
+;; uses, and <Screen::OverflowByte> is the $60 that `bit` reads to set overflow. On the original IIe one routine
+;; reads or writes, by the overflow flag; on the Enhanced IIe, with MouseText off, the writes put inverse capitals
+;; where the alternate character set shows them, and the reads undo it.
+.scope Screen
+
+;; Page zero's $1F, where <Access> keeps the column it was given. IIEROM82's 80-column listing calls it YSAV1, a
+;; name left out of Also: because it is <SavedOutputY>'s.
+SavedColumn = $1F
+
+;; Flips bit 7 of the character at the cursor, which shows or hides the cursor.
+;; Keeps: A, X, Y
+;; Also: INVERT (IIEROM82)
+.proc InvertCursor
+    pha
+    tya
+    pha
+    ldy EightyColumns::CursorColumn
+    jsr ReadCharacter
+    eor #NORMAL_BIT
+    bit OverflowByte
+    jsr Access
+    pla
+    tay
+    pla
+    rts
+.endproc
+
+;; Stores a character at column Y of the cursor's line, with bit 7 flipped when <InverseMask> says inverse. Falls
+;; into <OverflowByte>.
+;; In: A = the character, Y = the column
+;; Out: overflow = set
+;; Keeps: A, X, Y
+;; Also: STORCHAR (IIEROM82)
+.proc StoreCharacter
+    pha
+    bit InverseMask
+    bmi Store
+    eor #NORMAL_BIT
+
+;; Writes the character: <OverflowByte> sets overflow for <Access>.
+;; Also: STOR2 (IIEROM82)
+Store:
+    bit OverflowByte
+    jsr Access
+    pla
+    ; Falls into OverflowByte.
+.endproc
+
+;; <StoreCharacter>'s RTS, $60, which `bit OverflowByte` reads to set overflow: <Access>'s write.
+;; Also: SEV (IIEROM82)
+OverflowByte:
+    rts
+
+;; Reads the character at column Y of the cursor's line.
+;; In: Y = the column
+;; Out: A = the character, overflow = clear
+;; Keeps: X, Y
+;; Also: PICK (IIEROM82)
+.proc ReadCharacter
+    clv
+    jsr Access
+    rts
+.endproc
+
+;; Reads or writes the character at column Y of the line at <TextBase>.
+;;
+;; In 80 columns the even columns are in auxiliary memory, which <Page2On> switches in while 80STORE is on, and the
+;; odd ones in main memory; interrupts are off while auxiliary memory may be in.
+;; In: Y = the column, overflow = set to write A, clear to read, A = the character to write
+;; Out: A = the character read; the character written when writing
+;; Keeps: X, Y, overflow
+;; Also: SCREENIT (IIEROM82)
+.proc Access
+    sty SavedColumn
+    pha
+    lda Columns80State
+    bpl Column40
+
+    ; 80 columns: byte Y/2, of the half the carry picks.
+    lda SavedColumn
+    lsr a
+    tay
+    bvs Write80
+    php
+    sei
+    lda Page2On
+    bcc Read80
+    lda Page2Off
+
+;; Reads the byte, then main memory back, and leaves the character on the stack.
+;; Also: C8_SCRN2 (UNKN), SCRN2 (IIEROM82)
+Read80:
+    lda (TextBase),y
+    tay
+    lda Page2Off
+    plp
+    pla
+    tya
+    pha
+    bvc Done                        ; always: the read left overflow clear
+
+;; Writes the byte in its half, then main memory back.
+;; Also: STOR80 (IIEROM82)
+Write80:
+    pla
+    pha
+    php
+    sei
+    pha
+    lda Page2On
+    bcc Write80Byte
+    lda Page2Off
+
+;; Also: SCRN3 (IIEROM82)
+Write80Byte:
+    pla
+    sta (TextBase),y
+    lda Page2Off
+    plp
+    bvs Done                        ; always: the write left overflow set
+
+;; 40 columns: byte Y.
+;; Also: SCRN40 (IIEROM82)
+Column40:
+    ldy SavedColumn
+    bvs Write40
+    pla
+    lda (TextBase),y
+    pha
+    bvc Done                        ; always: this is the read
+
+;; Also: STOR40 (IIEROM82)
+Write40:
+    pla
+    pha
+    sta (TextBase),y
+
+;; The character from the stack, and the column back.
+;; Also: STPKEXIT (IIEROM82)
+Done:
+    pla
+    ldy SavedColumn
+    rts
+.endproc
+
+;; Saves the character at the cursor in <EightyColumns::CurrentCharacter> and shows a "+" there in the opposite
+;; video: the escape mode's cursor.
+;; Keeps: A, X, Y
+;; Also: ESCON (IIEROM82)
+.proc ShowEscapeCursor
+    pha
+    tya
+    pha
+    ldy EightyColumns::CursorColumn
+    jsr ReadCharacter
+    sta EightyColumns::CurrentCharacter
+
+    ; The character's bit 7 flips the "+"'s.
+    and #NORMAL_BIT
+    eor #'+'
+    jmp RestoreCharacter::Store
+.endproc
+
+;; Puts the character saved in <EightyColumns::CurrentCharacter> back at the cursor.
+;; Keeps: A, X, Y
+;; Entry:
+;;   Store = writes A at column Y, with Y and A pushed: <ShowEscapeCursor> enters here
+;; Also: ESCOFF (IIEROM82)
+.proc RestoreCharacter
+    pha
+    tya
+    pha
+    ldy EightyColumns::CursorColumn
+    lda EightyColumns::CurrentCharacter
+
+;; Writes A at column Y, then takes Y and A back from the stack, where the caller pushed A, then Y.
+;; In: A = the character, Y = the column
+;; Also: ESCRET (IIEROM82)
+Store:
+    bit OverflowByte
+    jsr Access
+    pla
+    tay
+    pla
+    rts
+.endproc
+
+.endscope
+
+;; Copies the Monitor, $F800-$FFFF, from ROM into the language card's RAM, then puts back the bank and the memory
+;; it read.
+;;
+;; At $CF78. It reads the ROM while it writes the RAM, with interrupts off. It puts back bank 2 or bank 1, reading
+;; RAM or ROM as before, but not whether RAM could be written. It copies through <OutputHook>, whose low byte it
+;; puts back and whose high byte it leaves at $C3, slot 3's page.
 ;; Keeps: A
-;; In: A = character, Y = column
-STORCHAR:
-    pha                             ; $CEF2
-    bit INVFLG                      ; $CEF3
-    bmi STORCHAR_1                  ; $CEF5
-    eor #$80                        ; $CEF7
+;; Also: COPYROM (IIEROM82)
+.proc CopyMonitorToRam
+.assert * = $CF78, "CopyMonitorToRam must stay at $CF78."
+    pha
+    php
+    sei
 
-STORCHAR_1:
-    bit SEV                         ; $CEF9 BIT SEV sets V: write
-    jsr SCREENIT                    ; $CEFC
-    pla                             ; $CEFF
+    ; The bank and whether RAM was being read.
+    lda LanguageCardBank2State
+    pha
+    ldx LanguageCardRamState
 
-;; An RTS ($60), also used as a byte: BIT SEV sets V.
-SEV:
-    rts                             ; $CF00
+    ; ROM read, RAM written (two reads).
+    lda LanguageCardRomWriteBank2
+    lda LanguageCardRomWriteBank2
 
-;; Reads the character at column Y of the current line.
-;; In: Y = column.
-;; Out: A = character
-;; Keeps: Y
-PICK:
-    clv                             ; $CF01
-    jsr SCREENIT                    ; $CF02
-    rts                             ; $CF05
+    ; The pointer, from $F800.
+    ldy #0
+    lda #MONITOR_ROM_PAGE
+    sta OutputHookHigh
+    lda OutputHook
+    pha
+    lda #0
+    sta OutputHook
 
-;; Reads (V clear) or writes (V set) the screen byte at column Y. In 80 columns even columns are in
-;; auxiliary memory and odd in main, reached by PAGE2 with 80STORE on, with interrupts off.
-;; In: Y = column, A = character to write.
-;; Out: A = character (read) or kept (write).
-;; Keeps: Y
-;; Uses: $1F
-SCREENIT:
-    sty $1F                         ; $CF06
-    pha                             ; $CF08
-    lda RD80VID                     ; $CF09
-    bpl SCRN40                      ; $CF0C
-    lda $1F                         ; $CF0E
-    lsr a                           ; $CF10
-    tay                             ; $CF11
-    bvs STOR80                      ; $CF12
-    php                             ; $CF14
-    sei                             ; $CF15
-    lda HISCR                       ; $CF16 with 80STORE on, PAGE2 selects auxiliary text memory
-    bcc C8_SCRN2                    ; $CF19
-    lda LOWSCR                      ; $CF1B
+;; Also: COPYROM2 (IIEROM82)
+CopyByte:
+    lda (OutputHook),y
+    sta (OutputHook),y
+    iny
+    bne CopyByte
+    inc OutputHookHigh
+    bne CopyByte
 
-C8_SCRN2:
-    lda (BASL),y                    ; $CF1E
-    tay                             ; $CF20
-    lda LOWSCR                      ; $CF21
-    plp                             ; $CF24
-    pla                             ; $CF25
-    tya                             ; $CF26
-    pha                             ; $CF27
-    bvc STPKEXIT                    ; $CF28
+    ; The hook back, as slot 3's.
+    pla
+    sta OutputHook
+    lda #>BasicOutput
+    sta OutputHookHigh
 
-STOR80:
-    pla                             ; $CF2A
-    pha                             ; $CF2B
-    php                             ; $CF2C
-    sei                             ; $CF2D
-    pha                             ; $CF2E
-    lda HISCR                       ; $CF2F
-    bcc SCRN3                       ; $CF32
-    lda LOWSCR                      ; $CF34
+    ; The bank back: bank 2, RAM read.
+    pla
+    bpl Bank1
+    txa
+    bpl Bank2Rom
+    lda LanguageCardBank2ReadOnly
+    jmp Done
 
-SCRN3:
-    pla                             ; $CF37
-    sta (BASL),y                    ; $CF38
-    lda LOWSCR                      ; $CF3A
-    plp                             ; $CF3D
-    bvs STPKEXIT                    ; $CF3E
+;; Bank 2, ROM read.
+;; Also: LCB2ROM (IIEROM82)
+Bank2Rom:
+    lda LanguageCardRomWriteBank2
+    jmp Done
 
-SCRN40:
-    ldy $1F                         ; $CF40
-    bvs STOR40                      ; $CF42
-    pla                             ; $CF44
-    lda (BASL),y                    ; $CF45
-    pha                             ; $CF47
-    bvc STPKEXIT                    ; $CF48
+;; Bank 1, RAM read.
+;; Also: LCB1 (IIEROM82)
+Bank1:
+    txa
+    bpl Bank1Rom
+    lda LanguageCardBank1ReadOnly
+    jmp Done
 
-STOR40:
-    pla                             ; $CF4A
-    pha                             ; $CF4B
-    sta (BASL),y                    ; $CF4C
+;; Bank 1, ROM read.
+;; Also: LCB1ROM (IIEROM82)
+Bank1Rom:
+    lda LanguageCardRomWriteBank1
 
-STPKEXIT:
-    pla                             ; $CF4E
-    ldy $1F                         ; $CF4F
-    rts                             ; $CF51
+;; Also: COPYRET (IIEROM82)
+Done:
+    plp
+    pla
+    rts
+.endproc
 
-;; Saves the character at the cursor in $067B and shows a "+" cursor there in the opposite video.
-;; Keeps: A, Y
-ESCON:
-    pha                             ; $CF52
-    tya                             ; $CF53
-    pha                             ; $CF54
-    ldy OURCH                       ; $CF55
-    jsr PICK                        ; $CF58
-    sta CHAR                        ; $CF5B
-    and #$80                        ; $CF5E
-    eor #'+'                        ; $CF60 a "+" in the opposite video
-    jmp ESCRET                      ; $CF62
+; Pascal: the setup before each call.
+.scope Pascal continued
 
-;; Puts the character saved in $067B back at the cursor.
-;; Keeps: A, Y
-ESCOFF:
-    pha                             ; $CF65
-    tya                             ; $CF66
-    pha                             ; $CF67
-    ldy OURCH                       ; $CF68
-    lda CHAR                        ; $CF6B
+;; Sets up a Pascal call: the full 80-column window unless <MODE_TRANSPARENT> is set, <InverseMask> from
+;; <MODE_INVERSE>, and <TextBase> from <EightyColumns::SavedTextBase>.
+;; Keeps: X, Y
+;; Also: PSETUP (IIEROM82)
+.proc Setup
+    lda EightyColumns::Mode
+    and #MODE_TRANSPARENT
+    bne SetVideo
+    jsr FullWindow80
 
-ESCRET:
-    bit SEV                         ; $CF6E BIT SEV sets V: write
-    jsr SCREENIT                    ; $CF71
-    pla                             ; $CF74
-    tay                             ; $CF75
-    pla                             ; $CF76
-    rts                             ; $CF77
+;; Normal video, or inverse with <MODE_INVERSE>: <MASK_NORMAL> shifted right is <MASK_INVERSE>.
+;; Also: PSETUP2 (IIEROM82)
+SetVideo:
+    lda #MASK_NORMAL
+    sta InverseMask
+    lda EightyColumns::Mode
+    and #MODE_INVERSE
+    beq RestoreBase
+    lsr InverseMask
 
-;; Copies the ROM's $F800-$FFFF into language card RAM bank 2 (reading ROM, writing RAM), then restores the
-;; bank and ROM/RAM read selection. Interrupts off.
-;; Uses: CSWL/CSWH (the pointer; CSWH is left at $C3, CSWL restored), X, Y
-;; Keeps: A
-COPYROM:
-    pha                             ; $CF78
-    php                             ; $CF79
-    sei                             ; $CF7A
-    lda RDLCBNK2                    ; $CF7B
-    pha                             ; $CF7E
-    ldx RDLCRAM                     ; $CF7F
-    lda ROMIN                       ; $CF82
-    lda ROMIN                       ; $CF85
-    ldy #$00                        ; $CF88
-    lda #$F8                        ; $CF8A
-    sta CSWH                        ; $CF8C
-    lda CSWL                        ; $CF8E
-    pha                             ; $CF90
-    lda #$00                        ; $CF91
-    sta CSWL                        ; $CF93
+;; Also: PSETUPRET (IIEROM82)
+RestoreBase:
+    lda EightyColumns::SavedTextBase
+    sta TextBase
+    lda EightyColumns::SavedTextBaseHigh
+    sta TextBaseHigh
+    rts
+.endproc
 
-COPYROM2:
-    lda (CSWL),y                    ; $CF95
-    sta (CSWL),y                    ; $CF97
-    iny                             ; $CF99
-    bne COPYROM2                    ; $CF9A
-    inc CSWH                        ; $CF9C
-    bne COPYROM2                    ; $CF9E
-    pla                             ; $CFA0
-    sta CSWL                        ; $CFA1
-    lda #$C3                        ; $CFA3
-    sta CSWH                        ; $CFA5
-    pla                             ; $CFA7
-    bpl LCB1                        ; $CFA8
-    txa                             ; $CFAA
-    bpl LCB2ROM                     ; $CFAB
-    lda LCRAM2                      ; $CFAD
-    jmp COPYRET                     ; $CFB0
+.endscope
 
-;; Language card restore: bank 2, ROM read.
-LCB2ROM:
-    lda ROMIN                       ; $CFB3
-    jmp COPYRET                     ; $CFB6
+; Functions: the 40-column handlers' table, among Control's scrolling tables.
+.scope Functions continued
 
-;; Language card restore: bank 1, chosen by whether RAM was being read.
-LCB1:
-    txa                             ; $CFB9
-    bpl LCB1ROM                     ; $CFBA
-    lda LCRAM1                      ; $CFBC
-    jmp COPYRET                     ; $CFBF
+;; One entry of <Functions::Handlers40> or <Functions::Handlers80>: the low byte of a handler's address minus one,
+;; at its function's number. The dispatchers push page $C1, <DispatchFunction>'s, then the entry, and return into the
+;; handler.
+;; Parameters:
+;;   table = the table, <Functions::Handlers40> or <Functions::Handlers80>
+;;   number = the function's number, a FIRMWARE_ constant
+;;   handler = the routine, in page $C1 after its first byte
+.macro FunctionHandler table, number, handler
+    .assert * - table = number, "Each handler sits at its function's number."
+    .assert >(handler - 1) = >DispatchFunction, "A function handler must follow the first byte of page $C1."
+    .byte <(handler - 1)
+.endmacro
 
-;; Language card restore: bank 1, ROM read.
-LCB1ROM:
-    lda ROMIN1                      ; $CFC2
+;; The 40-column handlers of functions 0-5, which <Dispatch40> reads at Handlers40 + Y.
+;;
+;; Functions 6 and 7 never reach it, and function 8, <FIRMWARE_SET_WINDOW>, reads its entry from <Control::ScrollSteps>'
+;; third byte.
+;; Also: F_TABLE (IIEROM82)
+Handlers40:
+    FunctionHandler Handlers40, FIRMWARE_CLEAR_TO_END_OF_WINDOW, ClearToEndOfWindow40
+    FunctionHandler Handlers40, FIRMWARE_HOME, Home40
+    FunctionHandler Handlers40, FIRMWARE_SCROLL, Scroll40
+    FunctionHandler Handlers40, FIRMWARE_CLEAR_TO_END_OF_LINE, ClearToEndOfLine40
+    FunctionHandler Handlers40, FIRMWARE_CLEAR_LINE_FROM, ClearLineFrom40
+    FunctionHandler Handlers40, FIRMWARE_RESET, Reset
 
-COPYRET:
-    plp                             ; $CFC5
-    pla                             ; $CFC6
-    rts                             ; $CFC7
+.endscope
 
-;; Prepares a Pascal call: with mode bit 0 clear sets the full 80x24 window; sets INVFLG from mode bit 2
-;; and reloads BASL/BASH from $077B/$07FB.
-PSETUP:
-    lda MODE80                      ; $CFC8
-    and #$01                        ; $CFCB
-    bne PSETUP2                     ; $CFCD
-    jsr FULL80                      ; $CFCF
+; Control: the scrolling's steps, whose third byte is the 40-column handler of function 8.
+.scope Control continued
 
-PSETUP2:
-    lda #$FF                        ; $CFD2
-    sta INVFLG                      ; $CFD4
-    lda MODE80                      ; $CFD6
-    and #$04                        ; $CFD9
-    beq PSETUPRET                   ; $CFDB
+;; The line step for each direction of <ScrollLines>: -1 for <SCROLL_DOWN>, +1 for <SCROLL_UP>.
+;;
+;; Its third byte is <Functions::Handlers40>' entry for function 8, <FIRMWARE_SET_WINDOW>, as functions 6 and 7
+;; never read theirs.
+;; Also: PLUSMINUS1 (IIEROM82)
+ScrollSteps:
+    .byte <-1, 1
+.assert * - ScrollSteps = SCROLL_UP + 1, "One step for each direction."
+    FunctionHandler Functions::Handlers40, FIRMWARE_SET_WINDOW, Functions::SetWindow40
 
-;; Sets INVFLG to inverse ($7F), then reloads BASL/BASH.
-PSETUP2_1:
-    lsr INVFLG                      ; $CFDD
+.endscope
 
-PSETUPRET:
-    lda OLDBASL                     ; $CFDF
-    sta BASL                        ; $CFE2
-    lda OLDBASH                     ; $CFE4
-    sta BASH                        ; $CFE7
-    rts                             ; $CFE9
+; Functions: the 80-column handlers' table, between Control's scrolling tables.
+.scope Functions continued
 
-;; Low bytes minus one of the 40-column functions 0-5; B_OLDFUNC pushes page $C1 and returns to them.
-F_TABLE:
-    .lobytes F_CLREOP-1, F_HOME-1, F_SCROLL-1, F_CLREOL-1, F_CLEOLZ-1, B_RESET-1 ; $CFEA
-.assert (>(F_CLREOP-1) = $C1) && (>(B_RESET-1) = $C1), "The 40-column functions must follow the first byte of page $C1."
+;; The 80-column handlers of functions 0-5, which <Dispatch80> reads at Handlers80 + Y.
+;;
+;; Functions 6 and 7 never reach it, and function 8, <FIRMWARE_SET_WINDOW>, reads its entry from <Control::ScrollEdges>'
+;; third byte.
+;; Also: B_TABLE (IIEROM82)
+Handlers80:
+    FunctionHandler Handlers80, FIRMWARE_CLEAR_TO_END_OF_WINDOW, ClearToEndOfWindow80
+    FunctionHandler Handlers80, FIRMWARE_HOME, Home80
+    FunctionHandler Handlers80, FIRMWARE_SCROLL, Scroll80
+    FunctionHandler Handlers80, FIRMWARE_CLEAR_TO_END_OF_LINE, ClearToEndOfLine80
+    FunctionHandler Handlers80, FIRMWARE_CLEAR_LINE_FROM, ClearLineFrom80
+    FunctionHandler Handlers80, FIRMWARE_RESET, Reset
 
-;; Line steps for SCRLSUB: -1 (down), +1 (up). Nothing reads the third byte.
-PLUSMINUS1:
-    .byte $FF, $01, $89             ; $CFF0
+.endscope
 
-;; Low bytes minus one of the 80-column functions 0-5; B_FUNC1 pushes page $C1 and returns to them.
-B_TABLE:
-    .lobytes B_CLREOP-1, B_HOME-1, B_SCROLL-1, B_CLREOL-1, B_CLEOLZ-1, B_RESET-1 ; $CFF3
-.assert (>(B_SCROLL-1) = $C1) && (>(B_HOME-1) = $C1), "The 80-column functions must follow the first byte of page $C1."
+; Control: the scrolling's edges, whose third byte is the 80-column handler of function 8.
+.scope Control continued
 
-;; Page-zero addresses of the starting edge for SCRLSUB: WNDBTM (down), WNDTOP (up). Nothing reads the
-;; rest.
-WNDTAB:
-    .byte WNDBTM, WNDTOP            ; $CFF9
-    .byte $E6, $00, $00, $00        ; $CFFB
+;; The page-zero address of the edge each direction of <ScrollLines> starts from: <WindowBottom> for
+;; <SCROLL_DOWN>, <WindowTop> for <SCROLL_UP>.
+;;
+;; Its third byte is <Functions::Handlers80>' entry for function 8, <FIRMWARE_SET_WINDOW>, as functions 6 and 7
+;; never read theirs. Nothing reads the three bytes after it.
+;; Also: WNDTAB (IIEROM82)
+ScrollEdges:
+    .byte WindowBottom, WindowTop
+.assert * - ScrollEdges = SCROLL_UP + 1, "One edge for each direction."
+    FunctionHandler Functions::Handlers80, FIRMWARE_SET_WINDOW, Functions::SetWindow80
+    .byte 0, 0, 0
 
-; The last byte, at CLRROM: reading it ($C336) releases the $C800 ROMs.
-    .byte $00                       ; $CFFF
+.endscope
+
+    ; The ROM's last byte, at $CFFF, where <ExpansionRomOff> reads release the slots' $C800 ROMs.
+    .byte 0

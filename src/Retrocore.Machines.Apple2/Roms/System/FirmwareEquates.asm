@@ -31,12 +31,13 @@ CV = $25
 ;; Also: OLDCH (IIEROM82, IIETRM85)
 LastCursorColumn = $047B
 
-;; The 80-column firmware's mode bits; $FF while the firmware is not active.
+;; The 80-column firmware's mode bits; <MODE_INACTIVE> while the firmware is not active.
 ;;
-;; The bits differ between the models. On the original IIe: bit 0 interrupts allowed, 1 Pascal 1.0, 2 inverse, 3 a
-;; GOTOXY pending, 4 inside quotes, 5 Pascal, 6 inside BASIC's input, 7 uppercase input. On the Enhanced IIe: bit 0
-;; MouseText off, 2 inverse, 3 escape mode or a GOTOXY pending, 4 the cursor hidden, 5 control characters disabled, 7
-;; Pascal. Apple calls it MODE (IIEROM82, IIETRM85); that name is left out here, since it is <CommandMode>'s.
+;; The bits differ between the models: the MODE_ constants below name them. On the original IIe: bit 0 interrupts
+;; allowed (or, for Pascal, transparent), 1 Pascal 1.0, 2 inverse, 3 a GOTOXY pending, 4 inside quotes, 5 Pascal, 6
+;; inside BASIC's input, 7 uppercase input. On the Enhanced IIe: bit 0 MouseText off, 1 Pascal 1.0, 2 inverse, 3
+;; escape mode or a GOTOXY pending, 4 the cursor hidden, 5 control characters disabled, 7 Pascal. Apple calls it MODE
+;; (IIEROM82, IIETRM85); that name is left out here, since it is <CommandMode>'s.
 ;; Also: MODE80 (UNKN)
 Mode = $04FB
 
@@ -69,6 +70,97 @@ SavedTextBase = $077B
 SavedTextBaseHigh = $07FB
 
 .endscope
+
+; The bits of <EightyColumns::Mode>. ENHANCED picks the model's set; a program that includes this file without it
+; gets only MODE_INACTIVE.
+
+;; <EightyColumns::Mode> while the 80-column firmware is not active.
+MODE_INACTIVE = $FF
+
+.ifdef ENHANCED
+.if ENHANCED
+
+;; The Enhanced IIe's mode bit 0: MouseText off, so that inverse capitals written as $40-$5F show as inverse capitals
+;; with the alternate character set. Control-X sets it and Control-[ clears it.
+;; Also: M_MOUSE (IIETRM85)
+MODE_MOUSETEXT_OFF = %00000001
+
+;; The Enhanced IIe's mode bit 1: Pascal 1.0, which <Pascal::Init10> starts.
+;; Also: M_PAS1_0 (IIETRM85)
+MODE_PASCAL10 = %00000010
+
+;; The Enhanced IIe's mode bit 2: Pascal's text is inverse.
+;; Also: M_VMODE (IIETRM85)
+MODE_INVERSE = %00000100
+
+;; The Enhanced IIe's mode bit 3 while BASIC calls the firmware: the key being read may start an escape sequence, and
+;; control characters are not printed. <CharacterIo::Enter> sets it for a key read that allows them, and printing a
+;; character clears it.
+;; Also: M_CTL (IIETRM85)
+MODE_ESCAPES = %00001000
+
+;; The Enhanced IIe's mode bit 3 in Pascal: <Pascal::Write> has started a GOTOXY and waits for its column and line.
+;; Also: M_GOXY (IIETRM85)
+MODE_GOTOXY = %00001000
+
+;; The Enhanced IIe's mode bit 4: Pascal's cursor is hidden (Control-F; Control-E shows it).
+;; Also: M_CURSOR (IIETRM85)
+MODE_CURSOR_OFF = %00010000
+
+;; The Enhanced IIe's mode bit 5: the control characters are off, but for those with
+;; <Control::RUNS_WHEN_DISABLED> (escape Control-D; escape Control-E turns them on). Apple's listing gives the bit no
+;; name ("Don't print controls").
+MODE_CONTROLS_OFF = %00100000
+
+;; The Enhanced IIe's mode bit 7: the firmware is Pascal's.
+;; Also: M_PASCAL (IIETRM85)
+MODE_PASCAL = %10000000
+
+.else
+
+;; The original IIe's mode bit 0 while BASIC calls the firmware: the caller had interrupts enabled, which
+;; <CharacterIo::Enter> records on every call, so <LineBase> lets them in while the firmware works.
+;; Also: M_IRQ (IIEROM82)
+MODE_INTERRUPTS = %00000001
+
+;; The original IIe's mode bit 0 in Pascal: transparent mode, which keeps the window a program set; <Pascal::Write>
+;; stops at the window's right edge instead of wrapping.
+;; Also: M_TRANS (IIEROM82)
+MODE_TRANSPARENT = %00000001
+
+;; The original IIe's mode bit 1: Pascal 1.0, which <Pascal::Init10> starts.
+;; Also: M_PAS1_0 (IIEROM82)
+MODE_PASCAL10 = %00000010
+
+;; The original IIe's mode bit 2: Pascal's text is inverse.
+;; Also: M_VMODE (IIEROM82)
+MODE_INVERSE = %00000100
+
+;; The original IIe's mode bit 3: <Pascal::Write> has started a GOTOXY and waits for its column and line.
+;; Also: M_GOXY (IIEROM82)
+MODE_GOTOXY = %00001000
+
+;; The original IIe's mode bit 4: the line being typed is inside quotes, so <CharacterIo::FinishKey> leaves its case
+;; alone.
+;; Also: M_LIT (IIEROM82)
+MODE_QUOTES = %00010000
+
+;; The original IIe's mode bit 5: the firmware is Pascal's.
+;; Also: M_PASCAL (IIEROM82)
+MODE_PASCAL = %00100000
+
+;; The original IIe's mode bit 6: the firmware is reading a key for BASIC's input, so a return clears the rest of its
+;; line.
+;; Also: M_BINPUT (IIEROM82)
+MODE_INPUT = %01000000
+
+;; The original IIe's mode bit 7: lowercase keys are typed as uppercase outside quotes; escape R sets it and escape T
+;; clears it.
+;; Also: M_ESCR (IIEROM82)
+MODE_UPPERCASE = %10000000
+
+.endif
+.endif
 
 ; The control codes, with bit 7 clear, as the 80-column firmware's control characters and Pascal take them.
 

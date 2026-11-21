@@ -1,652 +1,934 @@
-;; Checksum byte: the self-test expects the sum of $C100-$DFFF, excluding this byte, to equal it.
-CHECKSUM:
-    .byte $1B                       ; $C400
+; retrocore: style=strict
+;; The original IIe's built-in self-test, $C400-$C7FF: <RomChecksum>, the checksum byte at $C400, then the
+;; self-test itself, which checks the MMU's and the IOU's switches, sums the ROMs, tests the RAM and prints the
+;; location of a failing chip.
 
-;; Built-in self-test, from B_RESETX with Solid-Apple held. Resets the stack, sends output to COUT1, homes the
-;; screen, then checks the MMU status flags ($C011-$C018) against MMUFLAGS and toggles each MMU switch and
-;; reads it back, then does the same for the IOU flags ($C01A-$C01F, IOUFLAGS) and switches. Any error prints
-;; a header once and the failing flag number (FLAGERR) and the test hangs; otherwise ROM checksums follow.
-;; Uses: $04..$0A, all
+;; The byte that <SelfTest::ChecksumLow> compares the sum of $C100-$DFFF with, this byte left out.
 ;;
-;; Never returns.
-SELFTEST:
-    lda BUTN0                       ; $C401
-    sta $05                         ; $C404 Open-Apple also held makes the RAM test click the speaker
-    ldx #$FF                        ; $C406
-    txs                             ; $C408
-    lda #<COUT1                     ; $C409
-    sta CSWL                        ; $C40B
-    lda #>COUT1                     ; $C40D
-    sta CSWH                        ; $C40F
-    lda LCROM                       ; $C411
-    jsr HOME                        ; $C414
-    lda #$00                        ; $C417
-    sta $09                         ; $C419
-    sta $0A                         ; $C41B
-    sta $08                         ; $C41D
-    tax                             ; $C41F
-
-SELFTEST_1:
-    lda RDLCBNK2,x                  ; $C420
-    eor MMUFLAGS,x                  ; $C423
-    bpl SELFTEST_2                  ; $C426
-    jsr FLAGERR                     ; $C428
-
-SELFTEST_2:
-    inx                             ; $C42B
-    cpx #$08                        ; $C42C
-    bne SELFTEST_1                  ; $C42E
-    sta LCBANK1                     ; $C430
-    bit RDLCBNK2                    ; $C433
-    sta LCBANK2                     ; $C436
-    bpl SELFTEST_3                  ; $C439
-    jsr FLAGERR                     ; $C43B
-
-SELFTEST_3:
-    inx                             ; $C43E
-    sta LCRAM2                      ; $C43F
-    bit RDLCRAM                     ; $C442
-    sta LCROM                       ; $C445
-    bmi SELFTEST_4                  ; $C448
-    jsr FLAGERR                     ; $C44A
-
-SELFTEST_4:
-    inx                             ; $C44D
-    sta RDCARDRAM                   ; $C44E
-    bit RDRAMRD                     ; $C451
-    sta RDMAINRAM                   ; $C454
-    bmi SELFTEST_5                  ; $C457
-    jsr FLAGERR                     ; $C459
-
-SELFTEST_5:
-    inx                             ; $C45C
-    sta WRCARDRAM                   ; $C45D
-    bit RDRAMWRT                    ; $C460
-    sta WRMAINRAM                   ; $C463
-    bmi SELFTEST_6                  ; $C466
-    jsr FLAGERR                     ; $C468
-
-SELFTEST_6:
-    inx                             ; $C46B
-    sta SETALTZP                    ; $C46C
-    bit RDALTZP                     ; $C46F
-    sta SETSTDZP                    ; $C472
-    bmi SELFTEST_7                  ; $C475
-    jsr FLAGERR                     ; $C477
-
-SELFTEST_7:
-    inx                             ; $C47A
-    sta SETSLOTC3ROM                ; $C47B
-    bit RDC3ROM                     ; $C47E
-    sta SETINTC3ROM                 ; $C481
-    bmi SELFTEST_8                  ; $C484
-    jsr FLAGERR                     ; $C486
-
-SELFTEST_8:
-    inx                             ; $C489
-    sta SET80STORE                  ; $C48A
-    bit RD80STORE                   ; $C48D
-    sta KBD                         ; $C490
-    bmi SELFTEST_9                  ; $C493
-    jsr FLAGERR                     ; $C495
-
-SELFTEST_9:
-    jsr CROUT                       ; $C498
-    ldx #$00                        ; $C49B
-    lda #$FF                        ; $C49D
-    sta $08                         ; $C49F
-
-SELFTEST_10:
-    lda RDTEXT,x                    ; $C4A1
-    eor IOUFLAGS,x                  ; $C4A4
-    bpl SELFTEST_11                 ; $C4A7
-    jsr FLAGERR                     ; $C4A9
-
-SELFTEST_11:
-    inx                             ; $C4AC
-    cpx #$06                        ; $C4AD
-    bne SELFTEST_10                 ; $C4AF
-    sta SET80VID                    ; $C4B1
-    bit RD80VID                     ; $C4B4
-    sta CLR80VID                    ; $C4B7
-    bmi SELFTEST_12                 ; $C4BA
-    jsr FLAGERR                     ; $C4BC
-
-SELFTEST_12:
-    inx                             ; $C4BF
-    sta SETALTCHAR                  ; $C4C0
-    bit RDALTCHAR                   ; $C4C3
-    sta CLRALTCHAR                  ; $C4C6
-    bmi SELFTEST_13                 ; $C4C9
-    jsr FLAGERR                     ; $C4CB
-
-SELFTEST_13:
-    inx                             ; $C4CE
-    sta TXTCLR                      ; $C4CF
-    bit RDTEXT                      ; $C4D2
-    sta TXTSET                      ; $C4D5
-    bpl SELFTEST_14                 ; $C4D8
-    jsr FLAGERR                     ; $C4DA
-
-SELFTEST_14:
-    inx                             ; $C4DD
-    sta HISCR                       ; $C4DE
-    bit RDPAGE2                     ; $C4E1
-    sta LOWSCR                      ; $C4E4
-    bmi SELFTEST_15                 ; $C4E7
-    jsr FLAGERR                     ; $C4E9
-
-SELFTEST_15:
-    inx                             ; $C4EC
-    sta MIXSET                      ; $C4ED
-    bit RDMIXED                     ; $C4F0
-    sta MIXCLR                      ; $C4F3
-    bmi SELFTEST_16                 ; $C4F6
-    jsr FLAGERR                     ; $C4F8
-
-SELFTEST_16:
-    inx                             ; $C4FB
-    sta HIRES                       ; $C4FC
-    bit RDHIRES                     ; $C4FF
-    sta LORES                       ; $C502
-    bmi SELFTEST_17                 ; $C505
-    jsr FLAGERR                     ; $C507
-
-SELFTEST_17:
-    lda $09                         ; $C50A
-    ora $0A                         ; $C50C
-    beq ROMSUM1                     ; $C50E
-
-SELFTEST_18:
-    jmp SELFTEST_18                 ; $C510
-
-;; Reports a failed switch flag: prints "MMU FLAG E4:" (while $08 = 0) or "IOU FLAG E5:" once, then the flag
-;; number in hex and a space.
-;; In: X = flag number, $08 = 0 for MMU, nonzero for IOU.
-;; Out: $09/$0A = set to mark the error
-;; Keeps: X
-FLAGERR:
-    stx $04                         ; $C513
-    lda $08                         ; $C515
-    bne FLAGERR_1                   ; $C517
-    lda $09                         ; $C519
-    bne FLAGERR_2                   ; $C51B
-    ldx #MSGMMU - TESTMSGS          ; $C51D
-    jsr TESTMSG                     ; $C51F
-    inc $09                         ; $C522
-    bne FLAGERR_2                   ; $C524
-
-FLAGERR_1:
-    lda $0A                         ; $C526
-    bne FLAGERR_2                   ; $C528
-    ldx #MSGIOU - TESTMSGS          ; $C52A
-    jsr TESTMSG                     ; $C52C
-    inc $0A                         ; $C52F
-
-FLAGERR_2:
-    lda $04                         ; $C531
-    jsr PRHEX                       ; $C533
-    lda #' '                        ; $C536
-    jsr COUT1                       ; $C538
-    lda $04                         ; $C53B
-    tax                             ; $C53D
-    rts                             ; $C53E
-
-;; First ROM checksum: adds $C100-$DFFF (skipping $C400) and compares with $C400. On a mismatch prints
-;; "ROM:E8" and hangs.
-;; Uses: LOC0/LOC1, A, X, Y.
-ROMSUM1:
-    lda #$C1                        ; $C53F
-    sta LOC1                        ; $C541
-    lda #$00                        ; $C543
-    sta LOC0                        ; $C545
-    tay                             ; $C547
-
-ROMSUM1_1:
-    clc                             ; $C548
-    adc (LOC0),y                    ; $C549
-    iny                             ; $C54B
-    bne ROMSUM1_1                   ; $C54C
-    inc LOC1                        ; $C54E
-    ldx LOC1                        ; $C550
-    cpx #$C4                        ; $C552
-    bne ROMSUM1_2                   ; $C554
-    iny                             ; $C556
-    bne ROMSUM1_1                   ; $C557
-
-ROMSUM1_2:
-    cpx #$E0                        ; $C559
-    beq ROMSUM1_3                   ; $C55B
-    bne ROMSUM1_1                   ; $C55D
-
-ROMSUM1_3:
-    cmp CHECKSUM                    ; $C55F
-    beq ROMSUM2                     ; $C562
-    ldx #MSGROM1 - TESTMSGS         ; $C564
-    jsr TESTMSG                     ; $C566
-
-ROMSUM1_4:
-    jmp ROMSUM1_4                   ; $C569
-
-;; Second ROM checksum: adds $E000-$FFFF (skipping $F7FF) and compares with $F7FF. On a mismatch prints
-;; "ROM:E10" and hangs.
-ROMSUM2:
-    ldy #$00                        ; $C56C
-    tya                             ; $C56E
-
-ROMSUM2_1:
-    clc                             ; $C56F
-    adc (LOC0),y                    ; $C570
-    iny                             ; $C572
-    beq ROMSUM2_2                   ; $C573
-    cpy #$FF                        ; $C575
-    bne ROMSUM2_1                   ; $C577
-    ldx LOC1                        ; $C579
-    cpx #$F7                        ; $C57B
-    bne ROMSUM2_1                   ; $C57D
-    iny                             ; $C57F
-
-ROMSUM2_2:
-    inc LOC1                        ; $C580
-    bne ROMSUM2_1                   ; $C582
-    cmp $F7FF                       ; $C584
-    beq RAMTEST                     ; $C587
-    ldx #MSGROM2 - TESTMSGS         ; $C589
-    jsr TESTMSG                     ; $C58B
-
-ROMSUM2_3:
-    jmp ROMSUM2_3                   ; $C58E
-
-;; RAM test, shown on the hi-res screen: fills $0006-$BFFF, $D000-$DFFF in both language card banks and
-;; $E000-$FFFF with 0, then makes passes upward and downward that check each byte holds the expected value
-;; and replace it with its complement. Clicks the speaker per page when $05 bit 7 is set.
-;; Uses: LOC0/LOC1 (the pointer), $02 (the expected value), $03 (lower limit), $04 (read/write marker), X
-RAMTEST:
-    lda TXTCLR                      ; $C591
-    lda HIRES                       ; $C594
-    lda MIXCLR                      ; $C597
-    lda LCBANK2                     ; $C59A
-    lda LCBANK2                     ; $C59D
-    lda #$01                        ; $C5A0
-    sta $04                         ; $C5A2
-    lda #$FF                        ; $C5A4
-    sta $03                         ; $C5A6
-    lda #$00                        ; $C5A8
-    tax                             ; $C5AA
-    sta LOC0                        ; $C5AB
-    sta LOC1                        ; $C5AD
-    ldy #$06                        ; $C5AF
-
-RAMTEST_1:
-    sta (LOC0),y                    ; $C5B1
-    iny                             ; $C5B3
-    bne RAMTEST_1                   ; $C5B4
-    bit $05                         ; $C5B6
-    bpl RAMTEST_2                   ; $C5B8
-    sta SPKR                        ; $C5BA
-
-RAMTEST_2:
-    inc LOC1                        ; $C5BD
-    beq RAMTEST_6                   ; $C5BF
-    lda LOC1                        ; $C5C1
-    cmp #$C0                        ; $C5C3
-    bne RAMTEST_3                   ; $C5C5
-    lda #$D0                        ; $C5C7
-    sta LOC1                        ; $C5C9
-    bmi RAMTEST_5                   ; $C5CB
-
-RAMTEST_3:
-    cmp #$E0                        ; $C5CD
-    bne RAMTEST_5                   ; $C5CF
-    bit RDLCBNK2                    ; $C5D1
-    bpl RAMTEST_4                   ; $C5D4
-    lda LCBANK1                     ; $C5D6
-    lda LCBANK1                     ; $C5D9
-    lda #$D0                        ; $C5DC
-    sta LOC1                        ; $C5DE
-    bmi RAMTEST_5                   ; $C5E0
-
-RAMTEST_4:
-    lda LCBANK2                     ; $C5E2
-    lda LCBANK2                     ; $C5E5
-
-RAMTEST_5:
-    txa                             ; $C5E8
-    beq RAMTEST_1                   ; $C5E9
-
-RAMTEST_6:
-    sta $02                         ; $C5EB
-    eor #$FF                        ; $C5ED
-    tax                             ; $C5EF
-
-RAMTEST_7:
-    lda #$00                        ; $C5F0
-    sta LOC1                        ; $C5F2
-    ldy #$06                        ; $C5F4
-
-RAMTEST_8:
-    bit $05                         ; $C5F6
-    bpl RAMTEST_9                   ; $C5F8
-    sta SPKR                        ; $C5FA
-
-RAMTEST_9:
-    dec $04                         ; $C5FD
-    lda (LOC0),y                    ; $C5FF
-    cmp $02                         ; $C601
-    beq RAMUP                       ; $C603
-    jmp RAMFAIL                     ; $C605
-
-;; RAM test, upward pass: writes the complement, verifies it and advances, switching language card banks at
-;; $D000/$E000.
-RAMUP:
-    inc $04                         ; $C608
-    txa                             ; $C60A
-    sta (LOC0),y                    ; $C60B
-    cmp (LOC0),y                    ; $C60D
-    beq RAMUPNEXT                   ; $C60F
-    jmp RAMFAIL                     ; $C611
-
-;; RAM test, upward pass: next byte or page.
-RAMUPNEXT:
-    iny                             ; $C614
-    bne RAMTEST_8                   ; $C615
-    inc LOC1                        ; $C617
-    beq RAMDOWN                     ; $C619
-    lda LOC1                        ; $C61B
-    cmp #$C0                        ; $C61D
-    bne RAMUPNEXT_1                 ; $C61F
-    lda #$D0                        ; $C621
-    sta LOC1                        ; $C623
-    bmi RAMTEST_8                   ; $C625
-
-RAMUPNEXT_1:
-    cmp #$E0                        ; $C627
-    bne RAMTEST_8                   ; $C629
-    bit RDLCBNK2                    ; $C62B
-    bpl RAMUPNEXT_2                 ; $C62E
-    lda LCBANK1                     ; $C630
-    lda LCBANK1                     ; $C633
-    lda #$D0                        ; $C636
-    sta LOC1                        ; $C638
-    bmi RAMTEST_8                   ; $C63A
-
-RAMUPNEXT_2:
-    lda LCBANK2                     ; $C63C
-    lda LCBANK2                     ; $C63F
-    jmp RAMTEST_8                   ; $C642
-
-;; RAM test: start of the downward pass, with the expected value swapped for its complement.
-RAMDOWN:
-    sta $02                         ; $C645
-    eor #$FF                        ; $C647
-    tax                             ; $C649
-    beq RAMTEST_7                   ; $C64A
-
-RAMDOWN_1:
-    lda #$FF                        ; $C64C
-    sta LOC1                        ; $C64E
-    tay                             ; $C650
-
-RAMDOWN_2:
-    bit $05                         ; $C651
-    bpl RAMDOWN_3                   ; $C653
-    sta SPKR                        ; $C655
-
-RAMDOWN_3:
-    dec $04                         ; $C658
-    lda (LOC0),y                    ; $C65A
-    cmp $02                         ; $C65C
-    bne RAMFAIL                     ; $C65E
-    inc $04                         ; $C660
-    txa                             ; $C662
-    sta (LOC0),y                    ; $C663
-    cmp (LOC0),y                    ; $C665
-    bne RAMFAIL                     ; $C667
-    dey                             ; $C669
-    cpy $03                         ; $C66A
-    bne RAMDOWN_2                   ; $C66C
-    dec LOC1                        ; $C66E
-    lda LOC1                        ; $C670
-    cmp #$FF                        ; $C672
-    beq RAMDOWN_7                   ; $C674
-    cmp #$CF                        ; $C676
-    bne RAMDOWN_5                   ; $C678
-    bit RDLCBNK2                    ; $C67A
-    bpl RAMDOWN_4                   ; $C67D
-    lda LCBANK1                     ; $C67F
-    lda LCBANK1                     ; $C682
-    lda #$DF                        ; $C685
-    sta LOC1                        ; $C687
-    bmi RAMDOWN_2                   ; $C689
-
-RAMDOWN_4:
-    lda LCBANK2                     ; $C68B
-    lda LCBANK2                     ; $C68E
-    lda #$BF                        ; $C691
-    sta LOC1                        ; $C693
-    bmi RAMDOWN_2                   ; $C695
-
-RAMDOWN_5:
-    cmp #$00                        ; $C697
-    beq RAMDOWN_6                   ; $C699
-    bne RAMDOWN_2                   ; $C69B
-
-RAMDOWN_6:
-    lda #$06                        ; $C69D
-    sta $03                         ; $C69F
-    bne RAMDOWN_2                   ; $C6A1
-
-RAMDOWN_7:
-    txa                             ; $C6A3
-    beq TESTPASS                    ; $C6A4
-    sta $02                         ; $C6A6
-    sta $03                         ; $C6A8
-    eor #$FF                        ; $C6AA
-    tax                             ; $C6AC
-    beq RAMDOWN_1                   ; $C6AD
-
-;; RAM test failure: switches language card ROM back in, resets the text screen and prints "RAM:",
-;; then works out which bits failed (RAMBITS). $04 tells whether the bad byte was found on the read (0)
-;; or on the write-back check (1).
-RAMFAIL:
-    lda LCROM                       ; $C6AF
-    jsr TESTSCRN                    ; $C6B2
-    lda TXTSET                      ; $C6B5
-    ldx #MSGRAM - TESTMSGS          ; $C6B8
-    jsr TESTMSG                     ; $C6BA
-    lda $04                         ; $C6BD
-    beq RAMBITS                     ; $C6BF
-    lda $02                         ; $C6C1
-    eor #$FF                        ; $C6C3
-    eor (LOC0),y                    ; $C6C5
-    sta $06                         ; $C6C7
-    jmp RAMBITS_1                   ; $C6C9
-
-;; RAM test failure, part two: XORs the expected value with the byte read to find the bad bits ($06), then
-;; prints a chip location ("F13" for bit 7 down to "F6" for bit 0) for each, and hangs.
-RAMBITS:
-    lda $02                         ; $C6CC
-    eor (LOC0),y                    ; $C6CE
-    sta $06                         ; $C6D0
-
-RAMBITS_1:
-    lda $06                         ; $C6D2
-    asl a                           ; $C6D4
-    bcc RAMBITS_2                   ; $C6D5
-    ldx #MSGF13 - TESTMSGS          ; $C6D7
-    jsr TESTMSG                     ; $C6D9
-
-RAMBITS_2:
-    asl a                           ; $C6DC
-    bcc RAMBITS_3                   ; $C6DD
-    ldx #MSGF12 - TESTMSGS          ; $C6DF
-    jsr TESTMSG                     ; $C6E1
-
-RAMBITS_3:
-    asl a                           ; $C6E4
-    bcc RAMBITS_4                   ; $C6E5
-    ldx #MSGF11 - TESTMSGS          ; $C6E7
-    jsr TESTMSG                     ; $C6E9
-
-RAMBITS_4:
-    asl a                           ; $C6EC
-    bcc RAMBITS_5                   ; $C6ED
-    ldx #MSGF10 - TESTMSGS          ; $C6EF
-    jsr TESTMSG                     ; $C6F1
-
-RAMBITS_5:
-    asl a                           ; $C6F4
-    bcc RAMBITS_6                   ; $C6F5
-    ldx #MSGF9 - TESTMSGS           ; $C6F7
-    jsr TESTMSG                     ; $C6F9
-
-RAMBITS_6:
-    asl a                           ; $C6FC
-    bcc RAMBITS_7                   ; $C6FD
-    ldx #MSGF8 - TESTMSGS           ; $C6FF
-    jsr TESTMSG                     ; $C701
-
-RAMBITS_7:
-    asl a                           ; $C704
-    bcc RAMBITS_8                   ; $C705
-    ldx #MSGF7 - TESTMSGS           ; $C707
-    jsr TESTMSG                     ; $C709
-
-RAMBITS_8:
-    asl a                           ; $C70C
-    bcc RAMBITS_9                   ; $C70D
-    ldx #MSGF6 - TESTMSGS           ; $C70F
-    jsr TESTMSG                     ; $C711
-
-RAMBITS_9:
-    jmp RAMBITS_9                   ; $C714
-
-;; All tests passed: restores the text screen. If both Apple keys are still held, runs TESTLOOP; otherwise
-;; prints "KERNEL OK" and hangs.
-TESTPASS:
-    lda LCROM                       ; $C717
-    jsr TESTSCRN                    ; $C71A
-    lda TXTSET                      ; $C71D
-    lda BUTN0                       ; $C720
-    and BUTN1                       ; $C723
-    bmi TESTLOOP                    ; $C726
-    ldx #MSGOK - TESTMSGS           ; $C728
-    jsr TESTMSG                     ; $C72A
-
-TESTPASS_1:
-    jmp TESTPASS_1                  ; $C72D
-
-;; Copies the 53-byte program at LOOPCODE to $0100 and runs it.
-TESTLOOP:
-    ldx #$00                        ; $C730
-
-TESTLOOP_1:
-    lda LOOPCODE,x                  ; $C732
-    sta $0100,x                     ; $C735
-    inx                             ; $C738
-    cpx #LOOPCODEEND - LOOPCODE     ; $C739
-    bne TESTLOOP_1                  ; $C73B
-    jmp $0100                       ; $C73D
-
-;; Prints the zero-terminated message at TESTMSGS+X through COUT1.
-;; In: X = offset of the message
-;; Keeps: A (via $07)
-;; Out: X = the offset of the terminator
-TESTMSG:
-    sta $07                         ; $C740
-
-TESTMSG_1:
-    lda TESTMSGS,x                  ; $C742
-    beq TESTMSG_2                   ; $C745
-    jsr COUT1                       ; $C747
-    inx                             ; $C74A
-    bne TESTMSG_1                   ; $C74B
-
-TESTMSG_2:
-    lda $07                         ; $C74D
-    rts                             ; $C74F
-
-;; Self-test messages for TESTMSG, each ended by $00 and found by its offset from TESTMSGS. The RAM chip
-;; locations run from F13 (bit 7) down to F6 (bit 0).
-TESTMSGS:
-MSGROM1:
-    .byte "ROM:E8", KEY_CR, 0       ; $C750
-MSGROM2:
-    .byte "ROM:E10", KEY_CR, 0      ; $C758
-MSGRAM:
-    .byte "RAM:", 0                 ; $C761
-MSGOK:
-    .byte "KERNEL OK", 0            ; $C766
-MSGF13:
-    .byte "F13 ", 0                 ; $C770
-MSGF12:
-    .byte "F12 ", 0                 ; $C775
-MSGF11:
-    .byte "F11 ", 0                 ; $C77A
-MSGF10:
-    .byte "F10 ", 0                 ; $C77F
-MSGF9:
-    .byte "F9 ", 0                  ; $C784
-MSGF8:
-    .byte "F8 ", 0                  ; $C788
-MSGF7:
-    .byte "F7 ", 0                  ; $C78C
-MSGF6:
-    .byte "F6 ", 0                  ; $C790
-MSGMMU:
-    .byte "MMU FLAG E4:", 0         ; $C794
-MSGIOU:
-    .byte "IOU FLAG E5:", 0         ; $C7A1
-
-;; Code copied to $0100 by TESTLOOP and run there: selects slot ROMs, reads and rewrites every byte from
-;; $C090 to $CFFF, reads $C079 down to $C001, switches internal ROM and text back in and restarts SELFTEST
-;; at $C401. It is assembled here; it has only relative branches and no absolute references to itself,
-;; so it runs the same at $0100.
-LOOPCODE:
-    sta SETSLOTCXROM                ; $C7AE
-    sta CLRROM                      ; $C7B1
-    ldy #$00                        ; $C7B4
-    lda #$C0                        ; $C7B6
-    sta LOC1                        ; $C7B8
-    lda #$00                        ; $C7BA
-    sta LOC0                        ; $C7BC
-    ldy #$90                        ; $C7BE
-
-LOOPCODE_1:
-    lda (LOC0),y                    ; $C7C0
-    sta (LOC0),y                    ; $C7C2
-    iny                             ; $C7C4
-    bne LOOPCODE_1                  ; $C7C5
-    inc LOC1                        ; $C7C7
-    lda LOC1                        ; $C7C9
-    cmp #$D0                        ; $C7CB
-    bne LOOPCODE_1                  ; $C7CD
-    lda #$C0                        ; $C7CF
-    sta LOC1                        ; $C7D1
-    ldy #$79                        ; $C7D3
-
-LOOPCODE_2:
-    lda (LOC0),y                    ; $C7D5
-    dey                             ; $C7D7
-    bne LOOPCODE_2                  ; $C7D8
-    sta SETINTCXROM                 ; $C7DA
-    sta TXTSET                      ; $C7DD
-    jmp SELFTEST                    ; $C7E0
-LOOPCODEEND:
-
-;; Resets the text screen for the self-test: INIT, normal video (INVFLG = $FF) and HOME.
-TESTSCRN:
-    jsr INIT                        ; $C7E3
-    lda #$FF                        ; $C7E6
-    sta INVFLG                      ; $C7E8
-    jsr HOME                        ; $C7EA
-    rts                             ; $C7ED
-
-;; Expected MMU flag states for $C011-$C018 (bit 7): bank 2 and internal $CX ROM on, the rest off.
-MMUFLAGS:
-    .byte $80, $00, $00, $00, $80, $00, $00, $00 ; $C7EE
-
-;; Expected IOU flag states for $C01A-$C01F (bit 7): text on, the rest off.
-IOUFLAGS:
-    .byte $80, $00, $00, $00, $00, $00 ; $C7F6
-    .byte $00, $00, $00, $00        ; $C7FC
+;; At $C400.
+;; Also: CHECKSUM (UNKN)
+RomChecksum:
+.assert * = $C400, "RomChecksum must stay at $C400."
+    .byte $1B
+
+;; The built-in self-test, which the firmware's reset function runs when Solid-Apple is held at reset; it destroys
+;; memory and never returns.
+;;
+;; <SelfTest::Run> starts it. On the original IIe, $C401-$C7FF, it checks the MMU's and the IOU's switches, sums the two
+;; ROMs, then <SelfTest::RamTest> tests the RAM, printing the location of a failing chip; with both Apple keys held,
+;; <SelfTest::Passed> runs it again through the stack page. On the Enhanced IIe, $C600-$C7FF, it tests page zero, then
+;; <SelfTest::RamTest> the main and auxiliary RAM and the soft switches, showing a failure or "System OK" in the middle
+;; of the text screen; with both Apple keys held, <SelfTest::Passed> runs it again.
+.scope SelfTest
+
+; The switch checks.
+
+;; The stack pointer of an empty stack, which <Run> starts with.
+STACK_TOP = $FF
+
+;; How many MMU flags <Run> compares with <MmuStates>: $C011-$C018.
+MMU_STATES = 8
+
+;; How many IOU flags <Run> compares with <IouStates>: $C01A-$C01F.
+IOU_STATES = 6
+
+;; A flag that is on: bit 7 of its status read is set.
+FLAG_ON = $80
+
+;; A flag that is off: bit 7 of its status read is clear.
+FLAG_OFF = $00
+
+;; <Chip>'s value while <Run> checks the IOU's flags; 0 is the MMU's.
+CHIP_IOU = $FF
+
+; The checksums.
+
+;; The first page of the ROM that <ChecksumLow> sums.
+LOW_ROM_FIRST_PAGE = $C1
+
+;; The page after the last that <ChecksumLow> sums, where <ChecksumHigh> goes on.
+LOW_ROM_END_PAGE = $E0
+
+;; The byte of the $E000-$FFFF ROM that <ChecksumHigh> compares that ROM's sum with, this byte left out: the last
+;; byte of AppleSoft, below the Monitor.
+HighRomChecksum = $F7FF
+
+; The RAM test.
+
+;; The first byte the RAM test fills and checks: $0000-$0005 hold the test's own variables.
+FIRST_RAM_BYTE = 6
+
+;; The first page of the I/O space, $C000-$CFFF, which the RAM test skips.
+IO_PAGE = $C0
+
+;; The first page of the language card's two banks, $D000-$DFFF.
+LANGUAGE_CARD_PAGE = $D0
+
+;; The first page of the language card's RAM above the banks, $E000-$FFFF.
+HIGH_RAM_PAGE = $E0
+
+;; The last page of memory, where the downward passes start, and the page number a pass below page zero wraps
+;; round to.
+LAST_PAGE = $FF
+
+;; <LowerLimit>'s value for checking a whole page, down to offset 0.
+WHOLE_PAGE_LIMIT = $FF
+
+; The messages.
+
+;; <InverseMask>'s value for normal video.
+NORMAL_VIDEO = $FF
+
+; The loop through the stack page.
+
+;; The 6502's stack page, where <RunFromStack> copies <StackLoop> to run it.
+StackPage = $0100
+
+;; The low byte of $C090, slot 1's device space, where <StackLoop> starts reading and rewriting the slots.
+FIRST_SLOT_BYTE = $90
+
+;; The low byte of the last soft switch <StackLoop> reads, $C079, going down to $C001.
+LAST_SWITCH_READ = $79
+
+; Page zero.
+
+;; The self-test's pointer into the memory it sums or tests, a scoped name for <SlotPointer>.
+Pointer = SlotPointer
+
+;; The pointer's high byte, the page, a scoped name for <LOC1>.
+PointerHigh = LOC1
+
+;; The value the RAM test expects each byte to hold on this pass; X holds its complement, which it writes.
+Expected = $02
+
+;; Where <RamTest>'s downward passes stop in a page: the offset below the last byte they check.
+;;
+;; It is <WHOLE_PAGE_LIMIT> for every page but page zero, where it is <FIRST_RAM_BYTE>, so the downward passes check
+;; page zero only down to $0007.
+LowerLimit = $03
+
+;; <FlagError>'s copy of the flag number, while it prints.
+FlagNumber = $04
+
+;; Whether the RAM test failed on the read of a byte (0) or on the check of the complement it wrote (1).
+;;
+;; <RamTest> keeps it in <FlagNumber>'s byte, which <FlagError> no longer needs, and <RamFailed> reads it.
+WriteCheck = FlagNumber
+
+;; <Button0> as <Run> found it: bit 7 set, Open-Apple held, makes the RAM test click the speaker.
+Clicks = $05
+
+;; The bits that failed, set for each bad bit, which <RamFailed> prints a chip location for.
+BadBits = $06
+
+;; A, kept by <PrintMessage> while it prints.
+MessageSavedA = $07
+
+;; Which chip's flags <Run> is checking: 0 for the MMU's, <CHIP_IOU> for the IOU's.
+Chip = $08
+
+;; Not 0 once an MMU flag has failed: <FlagError> has printed the MMU's heading.
+MmuFailed = $09
+
+;; Not 0 once an IOU flag has failed: <FlagError> has printed the IOU's heading.
+IouFailed = $0A
+
+;; Runs the original IIe's self-test, which never returns: the MMU's and the IOU's switches, then <ChecksumLow>,
+;; <ChecksumHigh>, <RamTest> and <Passed>.
+;;
+;; At $C401. <Functions::ResetFirmware> comes here when Solid-Apple is held at reset, and <StackLoop> to run the test
+;; again. It resets the stack, sends output to <ScreenOut>, selects the language card's ROM and clears the screen. Each
+;; MMU flag, $C011-$C018, is compared with <MmuStates>; then each MMU switch is changed and changed back, and its flag
+;; must follow. The IOU's flags, $C01A-$C01F, and switches follow, against <IouStates>. <FlagError> prints each failure;
+;; after all the checks, any failure hangs the test, and otherwise <ChecksumLow> follows.
+;; Also: SELFTEST (UNKN)
+.proc Run
+.assert * = $C401, "SelfTest::Run must stay at $C401."
+    ; Open-Apple, held with Solid-Apple, makes the RAM test click the speaker.
+    lda Button0
+    sta Clicks
+
+    ; An empty stack, output to the screen, the language card's ROM and a clear screen.
+    ldx #STACK_TOP
+    txs
+    lda #<ScreenOut
+    sta OutputHook
+    lda #>ScreenOut
+    sta OutputHookHigh
+    lda LanguageCardRomOnly
+    jsr Home
+
+    ; No failures yet, and the MMU's flags from flag 0.
+    lda #0
+    sta MmuFailed
+    sta IouFailed
+    sta Chip
+    tax
+
+    ; Flags 0-7: each MMU flag against its state in MmuStates.
+CheckMmuFlag:
+    lda LanguageCardBank2State,x
+    eor MmuStates,x
+    bpl NextMmuFlag
+    jsr FlagError
+NextMmuFlag:
+    inx
+    cpx #MMU_STATES
+    bne CheckMmuFlag
+
+    ; Flag 8: with bank 1 selected, bank 2's flag must read off.
+    sta LanguageCardBank1ReadWrite
+    bit LanguageCardBank2State
+    sta LanguageCardBank2ReadWrite
+    bpl LanguageCardRam
+    jsr FlagError
+
+    ; Flag 9: the language card's RAM read on, its flag must read on; then the ROM again.
+LanguageCardRam:
+    inx
+    sta LanguageCardBank2ReadOnly
+    bit LanguageCardRamState
+    sta LanguageCardRomOnly
+    bmi AuxRead
+    jsr FlagError
+
+    ; Flag 10: RAMRD.
+AuxRead:
+    inx
+    sta AuxReadOn
+    bit AuxReadState
+    sta AuxReadOff
+    bmi AuxWrite
+    jsr FlagError
+
+    ; Flag 11: RAMWRT.
+AuxWrite:
+    inx
+    sta AuxWriteOn
+    bit AuxWriteState
+    sta AuxWriteOff
+    bmi AuxZeroPage
+    jsr FlagError
+
+    ; Flag 12: ALTZP.
+AuxZeroPage:
+    inx
+    sta AuxZeroPageOn
+    bit AuxZeroPageState
+    sta AuxZeroPageOff
+    bmi SlotC3Rom
+    jsr FlagError
+
+    ; Flag 13: SLOTC3ROM.
+SlotC3Rom:
+    inx
+    sta SlotC3RomOn
+    bit SlotC3RomState
+    sta SlotC3RomOff
+    bmi Store80
+    jsr FlagError
+
+    ; Flag 14: 80STORE.
+Store80:
+    inx
+    sta Store80On
+    bit Store80State
+    sta Store80Off
+    bmi IouFlags
+    jsr FlagError
+
+    ; The IOU's flags, on a new line, from flag 0.
+IouFlags:
+    jsr PrintReturn
+    ldx #0
+    lda #CHIP_IOU
+    sta Chip
+
+    ; Flags 0-5: each IOU flag against its state in IouStates.
+CheckIouFlag:
+    lda TextState,x
+    eor IouStates,x
+    bpl NextIouFlag
+    jsr FlagError
+NextIouFlag:
+    inx
+    cpx #IOU_STATES
+    bne CheckIouFlag
+
+    ; Flag 6: 80COL.
+    sta Columns80On
+    bit Columns80State
+    sta Columns80Off
+    bmi AlternateCharacters
+    jsr FlagError
+
+    ; Flag 7: ALTCHAR.
+AlternateCharacters:
+    inx
+    sta AlternateCharactersOn
+    bit AlternateCharactersState
+    sta AlternateCharactersOff
+    bmi Text
+    jsr FlagError
+
+    ; Flag 8: with graphics on, TEXT must read off.
+Text:
+    inx
+    sta TextOff
+    bit TextState
+    sta TextOn
+    bpl Page2
+    jsr FlagError
+
+    ; Flag 9: PAGE2.
+Page2:
+    inx
+    sta Page2On
+    bit Page2State
+    sta Page2Off
+    bmi Mixed
+    jsr FlagError
+
+    ; Flag 10: MIXED.
+Mixed:
+    inx
+    sta MixedOn
+    bit MixedState
+    sta MixedOff
+    bmi HiRes
+    jsr FlagError
+
+    ; Flag 11: HIRES.
+HiRes:
+    inx
+    sta HiResOn
+    bit HiResState
+    sta HiResOff
+    bmi CheckErrors
+    jsr FlagError
+
+    ; On to the checksums when no flag failed; otherwise the test stops here.
+CheckErrors:
+    lda MmuFailed
+    ora IouFailed
+    beq ChecksumLow
+Hang:
+    jmp Hang
+.endproc
+
+;; Prints a failing flag's number: first, once for each chip, "MMU FLAG E4:" (<MmuFlagText>) or "IOU FLAG E5:"
+;; (<IouFlagText>), then the number as a hexadecimal digit and a space.
+;; In: X = the flag's number, Chip = which chip's flags, 0 for the MMU's
+;; Out: A = the flag's number, MmuFailed/IouFailed = not 0 for the chip whose flag failed
+;; Keeps: X, Y
+;; Also: FLAGERR (UNKN)
+.proc FlagError
+    stx FlagNumber
+
+    ; The chip's heading, unless one of its flags has failed already.
+    lda Chip
+    bne Iou
+    lda MmuFailed
+    bne PrintNumber
+    ldx #MmuFlagText - Messages
+    jsr PrintMessage
+    inc MmuFailed
+    bne PrintNumber
+Iou:
+    lda IouFailed
+    bne PrintNumber
+    ldx #IouFlagText - Messages
+    jsr PrintMessage
+    inc IouFailed
+
+    ; The number and a space, and X back.
+PrintNumber:
+    lda FlagNumber
+    jsr PrintHexDigit
+    lda #' '
+    jsr ScreenOut
+    lda FlagNumber
+    tax
+    rts
+.endproc
+
+;; Sums the ROM from $C100 to $DFFF, <RomChecksum> left out, and compares the sum with it; on a mismatch
+;; prints "ROM:E8" (<RomLowText>) and hangs, otherwise goes on to <ChecksumHigh>.
+;;
+;; The bytes are added with the carry clear each time, so the sum is modulo 256. $D000-$DFFF are read from ROM,
+;; which <Run> selected. It leaves <Pointer>/<PointerHigh> at $E000 for <ChecksumHigh>.
+;; Also: ROMSUM1 (UNKN)
+.proc ChecksumLow
+    lda #LOW_ROM_FIRST_PAGE
+    sta PointerHigh
+    lda #0
+    sta Pointer
+    tay
+
+    ; A page; page $C4 starts at its second byte, leaving RomChecksum out.
+AddPage:
+    clc
+    adc (Pointer),y
+    iny
+    bne AddPage
+    inc PointerHigh
+    ldx PointerHigh
+    cpx #>RomChecksum
+    bne CheckEnd
+    iny
+    bne AddPage
+
+    ; Up to the end of $DFFF.
+CheckEnd:
+    cpx #LOW_ROM_END_PAGE
+    beq Compare
+    bne AddPage
+
+    ; The sum against RomChecksum.
+Compare:
+    cmp RomChecksum
+    beq ChecksumHigh
+    ldx #RomLowText - Messages
+    jsr PrintMessage
+Hang:
+    jmp Hang
+.endproc
+
+;; Sums the ROM from $E000 to $FFFF, <HighRomChecksum> left out, and compares the sum with it; on a
+;; mismatch prints "ROM:E10" (<RomHighText>) and hangs, otherwise goes on to <RamTest>.
+;;
+;; It goes on from where <ChecksumLow> left <Pointer>/<PointerHigh>, $E000, and adds as <ChecksumLow> does.
+;; Also: ROMSUM2 (UNKN)
+.proc ChecksumHigh
+    ldy #0
+    tya
+
+    ; A byte, skipping the last byte of page $F7.
+AddByte:
+    clc
+    adc (Pointer),y
+    iny
+    beq NextPage
+    cpy #<HighRomChecksum
+    bne AddByte
+    ldx PointerHigh
+    cpx #>HighRomChecksum
+    bne AddByte
+    iny
+
+    ; The next page, up to the end of $FFFF; then the sum against HighRomChecksum.
+NextPage:
+    inc PointerHigh
+    bne AddByte
+    cmp HighRomChecksum
+    beq RamTest
+    ldx #RomHighText - Messages
+    jsr PrintMessage
+Hang:
+    jmp Hang
+.endproc
+
+;; Tests the RAM on the hi-res screen: fills it with 0, then makes four passes that check each byte holds the
+;; value expected and write its complement, two upward from $0006 and two downward from $FFFF.
+;;
+;; The RAM is $0006-$BFFF, the language card's $D000-$DFFF in bank 2 and then in bank 1, and $E000-$FFFF; each pass
+;; tests bank 2's $D000-$DFFF before bank 1's. The hi-res screen shows $2000-$3FFF as it is tested. With
+;; <Clicks> bit 7 set, the speaker clicks once a page while the RAM is filled and once a byte on the passes. A
+;; byte that fails goes to <RamFailed>, with <Expected>, <WriteCheck> and <Pointer>/<PointerHigh> + Y saying which;
+;; after the four passes, <Passed>. The downward passes check page zero only down to $0007, so only the upward
+;; passes check $0006 (<LowerLimit>).
+;; Also: RAMTEST (UNKN)
+.proc RamTest
+    ; The hi-res screen, and bank 2 of the language card, read and written.
+    lda TextOff
+    lda HiResOn
+    lda MixedOff
+    lda LanguageCardBank2ReadWrite
+    lda LanguageCardBank2ReadWrite
+
+    ; From $0006, filling with X, 0.
+    lda #1
+    sta WriteCheck
+    lda #WHOLE_PAGE_LIMIT
+    sta LowerLimit
+    lda #0
+    tax
+    sta Pointer
+    sta PointerHigh
+    ldy #FIRST_RAM_BYTE
+
+    ; A page, and a click.
+Fill:
+    sta (Pointer),y
+    iny
+    bne Fill
+    bit Clicks
+    bpl NextFillPage
+    sta Speaker
+
+    ; The next page: $C0 becomes $D0, and $E0 the first time becomes $D0 again in bank 1.
+NextFillPage:
+    inc PointerHigh
+    beq StartPasses
+    lda PointerHigh
+    cmp #IO_PAGE
+    bne FillLanguageCard
+    lda #LANGUAGE_CARD_PAGE
+    sta PointerHigh
+    bmi FillMore
+FillLanguageCard:
+    cmp #HIGH_RAM_PAGE
+    bne FillMore
+    bit LanguageCardBank2State
+    bpl FillBank2
+    lda LanguageCardBank1ReadWrite
+    lda LanguageCardBank1ReadWrite
+    lda #LANGUAGE_CARD_PAGE
+    sta PointerHigh
+    bmi FillMore
+
+    ; After bank 1's $D000-$DFFF, bank 2 again for $E000-$FFFF.
+FillBank2:
+    lda LanguageCardBank2ReadWrite
+    lda LanguageCardBank2ReadWrite
+FillMore:
+    txa
+    beq Fill
+
+    ; The first pass expects A, 0, and writes its complement.
+StartPasses:
+    sta Expected
+    eor #$FF
+    tax
+
+    ; An upward pass, from $0006.
+UpPass:
+    lda #0
+    sta PointerHigh
+    ldy #FIRST_RAM_BYTE
+
+    ; A byte, and a click.
+UpByte:
+    bit Clicks
+    bpl CheckUp
+    sta Speaker
+
+    ; The byte must hold the value expected.
+CheckUp:
+    dec WriteCheck
+    lda (Pointer),y
+    cmp Expected
+    beq WriteUp
+    jmp RamFailed
+
+    ; Then it must hold its complement, written.
+;; The upward pass's write of the complement, which it then checks.
+;; Also: RAMUP (UNKN)
+WriteUp:
+    inc WriteCheck
+    txa
+    sta (Pointer),y
+    cmp (Pointer),y
+    beq NextUp
+    jmp RamFailed
+
+    ; The next byte or page, through the language card's banks as the fill went.
+;; The upward pass's next byte or page.
+;; Also: RAMUPNEXT (UNKN)
+NextUp:
+    iny
+    bne UpByte
+    inc PointerHigh
+    beq Down
+    lda PointerHigh
+    cmp #IO_PAGE
+    bne UpLanguageCard
+    lda #LANGUAGE_CARD_PAGE
+    sta PointerHigh
+    bmi UpByte
+UpLanguageCard:
+    cmp #HIGH_RAM_PAGE
+    bne UpByte
+    bit LanguageCardBank2State
+    bpl UpBank2
+    lda LanguageCardBank1ReadWrite
+    lda LanguageCardBank1ReadWrite
+    lda #LANGUAGE_CARD_PAGE
+    sta PointerHigh
+    bmi UpByte
+UpBank2:
+    lda LanguageCardBank2ReadWrite
+    lda LanguageCardBank2ReadWrite
+    jmp UpByte
+
+    ; After an upward pass, A is the value it wrote, which the next pass expects. After the first, X is 0 and a
+    ; second upward pass follows; after the second, the downward passes.
+;; The end of an upward pass: the value written becomes the value expected.
+;; Also: RAMDOWN (UNKN)
+Down:
+    sta Expected
+    eor #$FF
+    tax
+    beq UpPass
+
+    ; A downward pass, from $FFFF.
+DownPass:
+    lda #LAST_PAGE
+    sta PointerHigh
+    tay
+
+    ; A byte, and a click.
+DownByte:
+    bit Clicks
+    bpl CheckDown
+    sta Speaker
+
+    ; The byte must hold the value expected, then its complement, written.
+CheckDown:
+    dec WriteCheck
+    lda (Pointer),y
+    cmp Expected
+    bne RamFailed
+    inc WriteCheck
+    txa
+    sta (Pointer),y
+    cmp (Pointer),y
+    bne RamFailed
+
+    ; The next byte down, to LowerLimit.
+    dey
+    cpy LowerLimit
+    bne DownByte
+
+    ; The next page down: below $D0 the first time, bank 1's $DF; the second time, bank 2 and $BF.
+    dec PointerHigh
+    lda PointerHigh
+    cmp #LAST_PAGE
+    beq NextPattern
+    cmp #LANGUAGE_CARD_PAGE - 1
+    bne CheckPageZero
+    bit LanguageCardBank2State
+    bpl DownBank2
+    lda LanguageCardBank1ReadWrite
+    lda LanguageCardBank1ReadWrite
+    lda #HIGH_RAM_PAGE - 1
+    sta PointerHigh
+    bmi DownByte
+DownBank2:
+    lda LanguageCardBank2ReadWrite
+    lda LanguageCardBank2ReadWrite
+    lda #IO_PAGE - 1
+    sta PointerHigh
+    bmi DownByte
+
+    ; Page zero stops at FIRST_RAM_BYTE, which leaves $0006 itself unchecked.
+CheckPageZero:
+    cmp #0
+    beq PageZeroLimit
+    bne DownByte
+PageZeroLimit:
+    lda #FIRST_RAM_BYTE
+    sta LowerLimit
+    bne DownByte
+
+    ; After a downward pass that wrote 0, both are done; after the first, which wrote $FF, the second expects
+    ; $FF, checking whole pages again.
+NextPattern:
+    txa
+    beq Passed
+    sta Expected
+    sta LowerLimit
+    eor #$FF
+    tax
+    ; Always taken: X is 0.
+    beq DownPass
+.endproc
+
+;; Reports a failing byte of RAM and hangs: switches the language card's ROM back in, resets the text screen,
+;; prints "RAM:" (<RamText>), then the location of the chip of each bad bit, from "F13" (<ChipF13Text>) for bit 7
+;; down to "F6" (<ChipF6Text>) for bit 0.
+;;
+;; <WriteCheck> says which value the byte failed: 0, the one read, against <Expected>; 1, the complement written
+;; back. The bad bits are that value exclusive-ored with the byte at <Pointer>/<PointerHigh> + Y. But Y no longer
+;; holds the failing byte's offset by then: <ResetScreen> calls <Home>, which passes the firmware its function number
+;; in Y. So the bits printed are those of another byte of the failing page, read from ROM for a page from $D000 up.
+;; In: Y = the failing byte's offset, carry and the rest as <RamTest> leaves them
+;; Also: RAMFAIL (UNKN)
+.proc RamFailed
+    lda LanguageCardRomOnly
+    jsr ResetScreen
+    lda TextOn
+    ldx #RamText - Messages
+    jsr PrintMessage
+
+    ; The bad bits, against the value written back.
+    lda WriteCheck
+    beq BadBitsOnRead
+    lda Expected
+    eor #$FF
+    eor (Pointer),y
+    sta BadBits
+    jmp PrintBits
+
+    ; Or against the value expected.
+;; The bad bits when the byte failed as it was read.
+;; Also: RAMBITS (UNKN)
+BadBitsOnRead:
+    lda Expected
+    eor (Pointer),y
+    sta BadBits
+
+    ; A chip for each bad bit, from bit 7 down; PrintMessage keeps A.
+PrintBits:
+    lda BadBits
+    asl a
+    bcc Bit6
+    ldx #ChipF13Text - Messages
+    jsr PrintMessage
+Bit6:
+    asl a
+    bcc Bit5
+    ldx #ChipF12Text - Messages
+    jsr PrintMessage
+Bit5:
+    asl a
+    bcc Bit4
+    ldx #ChipF11Text - Messages
+    jsr PrintMessage
+Bit4:
+    asl a
+    bcc Bit3
+    ldx #ChipF10Text - Messages
+    jsr PrintMessage
+Bit3:
+    asl a
+    bcc Bit2
+    ldx #ChipF9Text - Messages
+    jsr PrintMessage
+Bit2:
+    asl a
+    bcc Bit1
+    ldx #ChipF8Text - Messages
+    jsr PrintMessage
+Bit1:
+    asl a
+    bcc Bit0
+    ldx #ChipF7Text - Messages
+    jsr PrintMessage
+Bit0:
+    asl a
+    bcc Hang
+    ldx #ChipF6Text - Messages
+    jsr PrintMessage
+Hang:
+    jmp Hang
+.endproc
+
+;; Ends a self-test that passed: switches the language card's ROM back in and resets the text screen; with both
+;; Apple keys still held runs the test again through <RunFromStack>, otherwise prints "KERNEL OK"
+;; (<KernelOkText>) and hangs.
+;; Also: TESTPASS (UNKN)
+.proc Passed
+    lda LanguageCardRomOnly
+    jsr ResetScreen
+    lda TextOn
+
+    ; Both Apple keys: again.
+    lda Button0
+    and Button1
+    bmi RunFromStack
+    ldx #KernelOkText - Messages
+    jsr PrintMessage
+Hang:
+    jmp Hang
+.endproc
+
+;; Copies <StackLoop> to the stack page, <StackPage>, and runs it there.
+;; Also: TESTLOOP (UNKN)
+.proc RunFromStack
+    ldx #0
+CopyByte:
+    lda StackLoop,x
+    sta StackPage,x
+    inx
+    cpx #.sizeof(StackLoop)
+    bne CopyByte
+    jmp StackPage
+.endproc
+
+;; Prints the message at <Messages> + X, which ends with a 0, through <ScreenOut>.
+;; In: X = the message's offset from <Messages>
+;; Out: X = the offset of the 0 that ends it
+;; Keeps: A, Y
+;; Also: TESTMSG (UNKN)
+.proc PrintMessage
+    sta MessageSavedA
+NextCharacter:
+    lda Messages,x
+    beq Done
+    jsr ScreenOut
+    inx
+    bne NextCharacter
+Done:
+    lda MessageSavedA
+    rts
+.endproc
+
+;; The self-test's messages, each ended by a 0, which <PrintMessage> finds by their offsets from here.
+;; Also: TESTMSGS (UNKN)
+Messages:
+;; "ROM:E8" and a Return: the sum of $C100-$DFFF is wrong.
+;; Also: MSGROM1 (UNKN)
+RomLowText:
+    .byte "ROM:E8", KEY_RETURN, 0
+
+;; "ROM:E10" and a Return: the sum of $E000-$FFFF is wrong.
+;; Also: MSGROM2 (UNKN)
+RomHighText:
+    .byte "ROM:E10", KEY_RETURN, 0
+
+;; "RAM:", before the chips of a RAM failure.
+;; Also: MSGRAM (UNKN)
+RamText:
+    .byte "RAM:", 0
+
+;; "KERNEL OK", when the self-test passes.
+;; Also: MSGOK (UNKN)
+KernelOkText:
+    .byte "KERNEL OK", 0
+
+;; "F13 ", the RAM chip of bit 7.
+;; Also: MSGF13 (UNKN)
+ChipF13Text:
+    .byte "F13 ", 0
+
+;; "F12 ", the RAM chip of bit 6.
+;; Also: MSGF12 (UNKN)
+ChipF12Text:
+    .byte "F12 ", 0
+
+;; "F11 ", the RAM chip of bit 5.
+;; Also: MSGF11 (UNKN)
+ChipF11Text:
+    .byte "F11 ", 0
+
+;; "F10 ", the RAM chip of bit 4.
+;; Also: MSGF10 (UNKN)
+ChipF10Text:
+    .byte "F10 ", 0
+
+;; "F9 ", the RAM chip of bit 3.
+;; Also: MSGF9 (UNKN)
+ChipF9Text:
+    .byte "F9 ", 0
+
+;; "F8 ", the RAM chip of bit 2.
+;; Also: MSGF8 (UNKN)
+ChipF8Text:
+    .byte "F8 ", 0
+
+;; "F7 ", the RAM chip of bit 1.
+;; Also: MSGF7 (UNKN)
+ChipF7Text:
+    .byte "F7 ", 0
+
+;; "F6 ", the RAM chip of bit 0.
+;; Also: MSGF6 (UNKN)
+ChipF6Text:
+    .byte "F6 ", 0
+
+;; "MMU FLAG E4:", the heading of the MMU's failing flags.
+;; Also: MSGMMU (UNKN)
+MmuFlagText:
+    .byte "MMU FLAG E4:", 0
+
+;; "IOU FLAG E5:", the heading of the IOU's failing flags.
+;; Also: MSGIOU (UNKN)
+IouFlagText:
+    .byte "IOU FLAG E5:", 0
+
+;; Exercises the slot ROMs and soft switches, then runs the self-test again: code that <RunFromStack> copies to
+;; <StackPage> and runs there.
+;;
+;; It selects the slot ROMs at $C100-$CFFF and frees the $C800 space (<ExpansionRomOff>), reads and rewrites every byte
+;; from $C090 to $CFFF, reads $C079 down to $C001, then selects the internal ROM and text again and jumps to <Run>. It
+;; is assembled here, but its branches are relative and its one jump goes to <Run>, so it runs the same at $0100.
+;; Also: LOOPCODE (UNKN)
+.proc StackLoop
+    sta InternalCxRomOff
+    sta ExpansionRomOff
+
+    ; From $C090; Y is set twice, and the first is not used.
+    ldy #0
+    lda #IO_PAGE
+    sta PointerHigh
+    lda #0
+    sta Pointer
+    ldy #FIRST_SLOT_BYTE
+
+    ; Each byte read and written back, to the end of $CFFF.
+TouchSlotRoms:
+    lda (Pointer),y
+    sta (Pointer),y
+    iny
+    bne TouchSlotRoms
+    inc PointerHigh
+    lda PointerHigh
+    cmp #LANGUAGE_CARD_PAGE
+    bne TouchSlotRoms
+
+    ; The soft switches read from $C079 down to $C001.
+    lda #IO_PAGE
+    sta PointerHigh
+    ldy #LAST_SWITCH_READ
+ReadSwitches:
+    lda (Pointer),y
+    dey
+    bne ReadSwitches
+
+    ; The internal ROM and text, and the test again.
+    sta InternalCxRomOn
+    sta TextOn
+    jmp Run
+.endproc
+
+;; Resets the text screen for a message: <InitDisplay>, normal video in <InverseMask>, and <Home>.
+;; Also: TESTSCRN (UNKN)
+.proc ResetScreen
+    jsr InitDisplay
+    lda #NORMAL_VIDEO
+    sta InverseMask
+    jsr Home
+    rts
+.endproc
+
+;; The state each MMU flag, $C011-$C018, must have when <Run> starts: bank 2 and the internal $Cx ROM on, the rest
+;; off.
+;; Also: MMUFLAGS (UNKN)
+MmuStates:
+    .byte FLAG_ON                   ; LanguageCardBank2State
+    .byte FLAG_OFF                  ; LanguageCardRamState
+    .byte FLAG_OFF                  ; AuxReadState
+    .byte FLAG_OFF                  ; AuxWriteState
+    .byte FLAG_ON                   ; InternalCxRomState
+    .byte FLAG_OFF                  ; AuxZeroPageState
+    .byte FLAG_OFF                  ; SlotC3RomState
+    .byte FLAG_OFF                  ; Store80State
+.assert * - MmuStates = MMU_STATES, "A state for each MMU flag."
+
+;; The state each IOU flag, $C01A-$C01F, must have when <Run> checks them: text on, the rest off.
+;; Also: IOUFLAGS (UNKN)
+IouStates:
+    .byte FLAG_ON                   ; TextState
+    .byte FLAG_OFF                  ; MixedState
+    .byte FLAG_OFF                  ; Page2State
+    .byte FLAG_OFF                  ; HiResState
+    .byte FLAG_OFF                  ; AlternateCharactersState
+    .byte FLAG_OFF                  ; Columns80State
+.assert * - IouStates = IOU_STATES, "A state for each IOU flag."
+
+    ; The ROM's last four bytes, unused.
+    .res 4, 0
+.assert * = $C800, "The self-test ends at the end of $C7FF."
+
+.endscope

@@ -1,29 +1,25 @@
+; retrocore: style=strict
 ;; APPLE IIE INTERNAL FIRMWARE ($C100-$CFFF), ORIGINAL IIE
 ;;
-;; Layout of the original IIe's internal $C100-$CFFF ROM:
-;;   $C100-$C2FF  Screen and keyboard helpers for the Monitor. The Monitor's switch routine at $FBB4 saves P,
-;;                sets SETINTCXROM and jumps to $C100 with a function number in Y: 0 CLREOP, 1 HOME, 2 SCROLL,
-;;                3 CLREOL, 4 CLREOLZ, 5 reset, 6 KEYIN (blinking cursor), 7 escape-key translation. Functions
-;;                0-5 have a 40-column and an 80-column version. All return through F_RETURN ($FD29/$FD2C), which
-;;                switches slot ROMs back in unless internal ROM was already in.
-;;   $C300-$C3FF  Slot-3 entry points: BASICINT ($C300, PR#3), BASICIN ($C305) and BASICOUT ($C307) for the
-;;                KSW/CSW hooks; the Pascal 1.1 ID bytes and PASCALOFS offsets to JPINIT/JPREAD/JPWRITE/
-;;                JPSTAT; AUXMOVE and XFER for main/auxiliary memory. Running from $C3xx selects the internal
-;;                $C800 ROM; BASICINT/IN/OUT also read $CFFF so no peripheral card's $C800 ROM stays selected.
-;;   $C400-$C7FF  Built-in self-test, entered from the reset function when Solid-Apple (BUTN1) is held: MMU and
-;;                IOU switch checks, ROM checksums, a RAM test, and a message on failure.
-;;   $C800-$CFFF  The body of the 80-column firmware: output, input with escape-mode cursor moves, control
-;;                characters, 40/80 conversion, Pascal I/O, and the low-level screen access through 80STORE.
-;; The 80-column firmware keeps its state in slot 3's screen holes: $047B last CH it set, $04FB mode
-;; flags ($FF = firmware inactive; bit 7 uppercase input, 6 in BASICIN, 5 Pascal, 4 inside quotes, 3 GOTOXY
-;; pending, 2 inverse, 0 interrupts allowed), $057B 80-column cursor column, $05FB cursor row, $067B
-;; current character, $06FB GOTOXY column, $077B/$07FB saved BASL/BASH. $0478 is scratch.
+;; The original IIe's internal $C100-$CFFF ROM, which assembles byte-identically from these files, in address order:
 ;;
-;; Assembles byte-identically to the internal $C100-$CFFF ROM: the 80-column firmware in slot three's
-;; space and $C800, and the routines the Monitor calls with internal ROM switched in. Names are Apple's
-;; documented entry points; other labels are named after the routine they are in.
-;; It includes IIeEquates.asm (the IIe's page zero, soft switches and keys), MonitorEntries.asm (the Monitor's
-;; entry points) and FirmwareEquates.asm (the equates both firmware models share).
+;; - Firmware.Original/Functions.asm, $C100-$C2FF: the screen and keyboard functions the Monitor calls through
+;;   <Monitor:CallFirmware>, with the internal ROM switched in and a function number in Y (FirmwareFunctions.asm):
+;;   0 clear to the end of the window, 1 home, 2 scroll, 3 clear to the end of the line, 4 the same from a column,
+;;   5 reset, 6 read a key with the cursor, 7 translate an escape key, 8 set the window. Functions 0-5 and 8 have a
+;;   40-column and an 80-column handler; every function returns through <Functions::Return>.
+;; - Firmware.Original/SlotEntry.asm, $C300-$C3FF: slot 3's entry points, <BasicInitialize> (`PR#3`), <BasicInput>
+;;   and <BasicOutput>; the Pascal 1.1 signature and <PascalOffsets>; <AuxMove> and <AuxTransfer>.
+;; - Firmware.Original/SelfTest.asm, $C400-$C7FF: the built-in self-test, which the reset function runs when
+;;   Solid-Apple is held.
+;; - Firmware.Original/EightyColumnsEntry.asm, EightyColumnsControl.asm, EightyColumnsScreen.asm and
+;;   EightyColumnsMode.asm, $C800-$CFFF: the 80-column firmware: BASIC's output and input with the escape keys, the
+;;   control characters, Pascal's protocol, the 40/80-column conversion, and the screen access through 80STORE.
+;;
+;; The 80-column firmware keeps its state in slot 3's screen holes (<EightyColumns>), with the mode bits
+;; FirmwareEquates.asm names, and uses <FirmwareScratch> as scratch. The files include IIeEquates.asm (the IIe's
+;; page zero, soft switches and keys), MonitorEntries.asm (the Monitor's entry points), FirmwareEquates.asm (the
+;; equates both firmware models share) and FirmwareFunctions.asm (the function numbers).
 ;;
 ;; Maintained by hand. The SystemSourceTests digests check that it assembles byte-identically.
 
@@ -34,33 +30,33 @@
 .charmap character, character | $80
 .endrepeat
 
+; The model, on which FirmwareEquates.asm's mode bits and FirmwareFunctions.asm's function numbers depend: the SDK
+; predefines ENHANCED, and this is the default.
+.ifndef ENHANCED
+ENHANCED = 0
+.endif
+.assert .not ENHANCED, "Firmware.Original.asm is the original IIe's firmware."
+
 ; The IIe's page zero, soft switches and keys, the Monitor's entry points, and the equates both firmware models share.
 .include "IIeEquates.asm"
 .include "MonitorEntries.asm"
 .include "FirmwareEquates.asm"
 
-; The firmware's function numbers, which depend on the model: the SDK predefines ENHANCED, and this is the default.
-.ifndef ENHANCED
-ENHANCED = 0
-.endif
-.assert .not ENHANCED, "Firmware.Original.asm is the original IIe's firmware."
+; The firmware's function numbers, which depend on the model.
 .include "FirmwareFunctions.asm"
 
 ; A screen hole only this model's firmware uses.
-TEMP1 = $0478                       ;; 80-column firmware: scratch (slot-3 screen hole)
+
+;; Slot 3's screen hole the original IIe's 80-column firmware uses as scratch: the saved status of a function's caller
+;; (<Functions::Prepare80>), the character under the cursor (<Functions::GetKey>), and the code <Control::Perform>
+;; performs.
+;; Also: TEMP1 (IIEROM82)
+FirmwareScratch = $0478
 
 ; The expansion ROM switch, a label in the Enhanced IIe's firmware, so not in IIeEquates.asm.
-;; Inherit: <Monitor:CLRROM>
-CLRROM = $CFFF
 
-; More characters with bit 7 set. CTLCHAR and Pascal take control characters with bit 7 clear, written KEY_x & $7F.
-KEY_FF = $8C                        ;; Control-L: home and clear
-KEY_CTRL_Q = $91                    ;; 40 columns
-KEY_CTRL_R = $92                    ;; 80 columns
-KEY_FS = $9C                        ;; Control-\: cursor right
-KEY_GS = $9D                        ;; Control-]: clear to the end of the line
-KEY_GOTOXY = $9E                    ;; Control-^: Pascal's GOTOXY
-KEY_US = $9F                        ;; Control-_: cursor up
+;; Inherit: <Monitor:ExpansionRomOff>
+ExpansionRomOff = $CFFF
 
 .org $C100
 

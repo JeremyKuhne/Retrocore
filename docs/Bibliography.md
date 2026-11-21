@@ -15,4 +15,6 @@ workspace adds documents of its own, or replaces a key, with the same columns.
 | PA1 | Programmer's Aid #1 | 1978 | Apple Computer | <https://archive.org/details/programmers-aid-1> |
 | DOS33 | DOS 3.3 source listing | July 1983 | Apple Computer | |
 | IBSM | Annotated listing of Integer BASIC, by Paul R. Santa-Maria | | | |
+| IIEROM82 | Apple IIe Reference Manual Addendum: Monitor ROM Listings, For //e Only | 1982 | Apple Computer | <https://archive.org/details/Reference_Manual_Addendum_Monitor_ROM_Listings> |
+| IIETRM85 | Apple IIe Technical Reference Manual | 1985 | Addison-Wesley | <https://archive.org/details/a2etrm> |
 | UNKN | Unclear where this originated: a name no listed document gives | | | |

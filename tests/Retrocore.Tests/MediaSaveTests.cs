@@ -267,7 +267,8 @@ public sealed class MediaSaveTests
         ThreadPool.GetMaxThreads(out int workers, out int completions);
         ThreadPool.GetMinThreads(out int least, out _);
         ThreadPool.SetMaxThreads(least, completions).Should().BeTrue();
-        using ManualResetEventSlim release = new();
+        // Not disposed: work still waiting when this test ends must find it set, not disposed.
+        ManualResetEventSlim release = new();
         int queued = least * 2;
         int done = 0;
         for (int i = 0; i < queued; i++)
@@ -308,13 +309,21 @@ public sealed class MediaSaveTests
         Apple2FloppyDrive two = Drive(second, "disk2");
         Until(() => { }, () => Source(one)?.Bool("stale") == false && Source(two)?.Bool("stale") == false);
 
-        using ManualResetEventSlim release = new();
-        void Held() => release.Wait(TimeSpan.FromSeconds(30));
+        // Not disposed: the event may still call the handler after it is removed, with the handlers it had.
+        ManualResetEventSlim release = new();
+        ManualResetEventSlim held = new();
+        void Held()
+        {
+            held.Set();
+            release.Wait(TimeSpan.FromSeconds(30));
+        }
+
         MediaActions.SourcesChanged += Held;
         try
         {
             byte[] outside = new byte[35 * 4096];
             Until(() => File.WriteAllBytes(first, outside), () => Source(one)?.Bool("stale") == true);
+            held.Wait(TimeSpan.FromSeconds(10)).Should().BeTrue("the first image's change is being told");
             Until(() => File.WriteAllBytes(second, outside), () => Source(two)?.Bool("stale") == true);
         }
         finally

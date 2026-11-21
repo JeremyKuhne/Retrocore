@@ -34,8 +34,13 @@ public sealed class StyleLintTests
             .proc PrintReturn
                 lda #RETURN
 
-                ; Then print it.
+                ; Then print it, by a jump where the build allows.
+            .if RETURN = $8D
                 jmp Print
+            .else
+                jsr Print
+                rts
+            .endif
             .endproc
 
             ;; Prints a character.
@@ -124,7 +129,7 @@ public sealed class StyleLintTests
 
     /// <summary>
     ///  Prose that names a documented definition without linking it is reported; links, code spans, entry names,
-    ///  instructions and a capitalized word starting a sentence are not.
+    ///  instructions, a capitalized word starting a sentence and a historical name (from an Also: section) are not.
     /// </summary>
     [TestMethod]
     public void UnlinkedNamesAreReported()
@@ -135,6 +140,7 @@ public sealed class StyleLintTests
 
             ;; Prints a character.
             ;; In: A = the character
+            ;; Also: OUT (TEST)
             .proc Print
                 rts
             .endproc
@@ -144,7 +150,7 @@ public sealed class StyleLintTests
                 rts
             .endproc
 
-            ;; Prints a line with Print, then `Print` and <Print> again. Table it is.
+            ;; Prints a line with Print, then `Print` and <Print> again. Table it is. The listing called it OUT.
             ;; In: A = the line, LDA = an instruction
             ;; Errors: Table = not a link
             .proc PrintTable
@@ -153,8 +159,8 @@ public sealed class StyleLintTests
             """;
 
         Problems(text).Should().BeEquivalentTo(
-            "11: Link PrintTable as <PrintTable>: it names a documented definition.",
-            "16: Link Print as <Print>: it names a documented definition.");
+            "12: Link PrintTable as <PrintTable>: it names a documented definition.",
+            "17: Link Print as <Print>: it names a documented definition.");
     }
 
     // The problems the editor reports for one strict file, as "line: message" with 1-based lines.

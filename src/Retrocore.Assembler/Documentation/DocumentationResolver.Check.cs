@@ -413,6 +413,10 @@ public sealed partial class DocumentationResolver
                     continue;
                 }
 
+                // A historical name, found through an Also: section, is history or a plain word in prose ("the listing
+                // calls it RESET", "starts BASIC"), not the current name left unlinked.
+                if (LastName(target.Name) != LastName(name)) { continue; }
+
                 if (reported.Add($"{line}:{name}"))
                 {
                     warn($"Link {name} as <{name}>: it names a documented definition.", line);

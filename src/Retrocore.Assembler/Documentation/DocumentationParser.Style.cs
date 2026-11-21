@@ -146,6 +146,14 @@ public static partial class DocumentationParser
         if (next >= lines.Length) { return; }
         HashSet<int> allowed = [Indentation(lines[next])];
         string code = Split(lines[next]).Code.Trim();
+
+        // Before a conditional directive, the comment may also describe the code the condition chooses: the first line
+        // after the directives that is not one.
+        if (IsConditionalDirective(code) && CodeAfterConditionals(lines, next) is int chosen)
+        {
+            allowed.Add(Indentation(lines[chosen]));
+        }
+
         if (IsLabelOnly(code) && next + 1 < lines.Length && Split(lines[next + 1]).Code.Trim().Length != 0)
         {
             allowed.Add(Indentation(lines[next + 1]));
@@ -224,6 +232,25 @@ public static partial class DocumentationParser
         int end = start + 1;
         while (end < text.Length && (char.IsAsciiLetterOrDigit(text[end]) || text[end] == '_')) { end++; }
         return end - start;
+    }
+
+    private static bool IsConditionalDirective(string code)
+    {
+        string directive = Directive(code);
+        return directive.StartsWith(".if", StringComparison.Ordinal) || directive is ".else" or ".elseif" or ".endif";
+    }
+
+    // The first line of code after a run of conditional directives, or null.
+    private static int? CodeAfterConditionals(string[] lines, int start)
+    {
+        for (int index = start; index < lines.Length; index++)
+        {
+            string code = Split(lines[index]).Code.Trim();
+            if (code.Length == 0) { return null; }
+            if (!IsConditionalDirective(code)) { return index; }
+        }
+
+        return null;
     }
 
     private static int Indentation(string line)

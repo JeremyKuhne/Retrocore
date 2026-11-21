@@ -360,12 +360,18 @@ public sealed partial class DocumentationResolver
                 warn($"Also: {also.Name} is also a definition, which code reaches instead of {topic.Name}.", section.Line);
             }
             else if (Current.Topics.FirstOrDefault(other => !ReferenceEquals(other, topic)
+                && !OtherBuild(topic, other)
                 && DocumentationAlso.Of(other.Sections).Any(name => name.Name == also.Name)) is { } other)
             {
                 warn($"Also: {other.Name} has the historical name {also.Name} too.", section.Line);
             }
         }
     }
+
+    // Whether two definitions are in different builds: in branches of conditional assembly with different conditions,
+    // as one model's routine and another's are. Each build has only one, so they can share a historical name.
+    private static bool OtherBuild(DocumentationTopic topic, DocumentationTopic other) =>
+        topic.Condition is { } condition && other.Condition is { } otherCondition && condition != otherCondition;
 
     private static string LastName(string name)
     {

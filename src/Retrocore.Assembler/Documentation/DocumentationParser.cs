@@ -28,7 +28,16 @@ public static partial class DocumentationParser
     /// <param name="text">The source text.</param>
     /// <param name="path">The source path, recorded in comments and diagnostics.</param>
     /// <returns>The comments and any placement problems.</returns>
-    public static DocumentationFile Parse(string text, string path)
+    public static DocumentationFile Parse(string text, string path) => Parse(text, path, style: true);
+
+    /// <summary>
+    ///  Parses a source file's documentation comments, optionally without the style checks.
+    /// </summary>
+    /// <param name="text">The source text.</param>
+    /// <param name="path">The source path, recorded in comments and diagnostics.</param>
+    /// <param name="style">Whether to check a strict source against the style guide.</param>
+    /// <returns>The comments and any placement problems.</returns>
+    internal static DocumentationFile Parse(string text, string path, bool style)
     {
         string[] lines = text.Replace("\r\n", "\n").Split('\n');
         HashSet<string> dataMacros = DataMacros(lines);
@@ -176,7 +185,7 @@ public static partial class DocumentationParser
         }
 
         bool strict = IsStrict(text);
-        if (strict) { Style(lines, path, diagnostics); }
+        if (strict && style) { Style(lines, path, diagnostics); }
         return new(path, comments, diagnostics) { Strict = strict };
     }
 

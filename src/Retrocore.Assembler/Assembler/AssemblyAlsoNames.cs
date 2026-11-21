@@ -27,14 +27,10 @@ internal sealed class AssemblyAlsoNames
         HashSet<string> seen = [with(StringComparer.Ordinal)];
         foreach (AssemblySource source in sources)
         {
-            // Only a source that has the heading needs its documentation parsed.
-            if (!seen.Add(source.Path)
-                || source.Text.IndexOf("Also:", StringComparison.OrdinalIgnoreCase) < 0)
-            {
-                continue;
-            }
-
-            foreach (DocumentationComment comment in DocumentationParser.Parse(source.Text, source.Path).Comments)
+            // Only a source with the heading on a ;; line needs its documentation parsed, and without the style
+            // checks, which the assembly does not need.
+            if (!seen.Add(source.Path) || !HasHeading(source.Text)) { continue; }
+            foreach (DocumentationComment comment in DocumentationParser.Parse(source.Text, source.Path, style: false).Comments)
             {
                 if (comment.Keyword is not null) { continue; }
                 string[] also = [.. DocumentationAlso.Of(comment.Sections).Select(item => item.Name)];
@@ -45,6 +41,30 @@ internal sealed class AssemblyAlsoNames
         }
 
         return names is null ? null : new(names);
+    }
+
+    /// <summary>
+    ///  Gets the historical names a definition's <c>Also:</c> section gives it.
+    /// </summary>
+    /// <param name="path">The definition's source path.</param>
+    /// <param name="line">The definition's zero-based line.</param>
+    /// <returns>The names, or none.</returns>
+    internal IReadOnlyList<string> Of(string path, int line) =>
+        _names.TryGetValue((path, line), out string[]? names) ? names : [];
+
+    // Whether a source has a line that starts ;; Also: in any case.
+    private static bool HasHeading(string text)
+    {
+        int at = 0;
+        while ((at = text.IndexOf("Also:", at, StringComparison.OrdinalIgnoreCase)) >= 0)
+        {
+            int start = text.LastIndexOf('\n', Math.Max(at - 1, 0)) + 1;
+            ReadOnlySpan<char> before = text.AsSpan(start, at - start).Trim();
+            if (before.Length >= 2 && before.StartsWith(";;".AsSpan()) && before[2..].Trim().IsEmpty) { return true; }
+            at += 5;
+        }
+
+        return false;
     }
 
     /// <summary>

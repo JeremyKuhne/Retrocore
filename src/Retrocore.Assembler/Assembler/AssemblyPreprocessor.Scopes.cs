@@ -104,12 +104,13 @@ internal sealed partial class AssemblyPreprocessor
             prefix = previous < 0 ? "" : prefix[..previous];
         }
 
-        return name;
+        // A name no symbol has may be a definition's historical name.
+        return separator < 0 && HistoricalTarget(name) is { } target ? target : name;
     }
 
     private string ConstantExpression(string text)
     {
-        if (_constantScope.Length == 0 && text.IndexOfAny('@', ':') < 0) { return text; }
+        if (_constantScope.Length == 0 && _historicalNames is null && text.IndexOfAny('@', ':') < 0) { return text; }
         StringBuilder? result = null;
         int copied = 0;
         AssemblyNameReferences references = new(text.AsMemory());

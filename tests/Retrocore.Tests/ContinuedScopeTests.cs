@@ -126,6 +126,17 @@ public sealed class ContinuedScopeTests
         file.Comments.Select(comment => comment.Name).Should().Equal("Commands", "Commands::List");
     }
 
+    /// <summary>
+    ///  A label on a continuation is reported as a label, not as a missing scope.
+    /// </summary>
+    [TestMethod]
+    public void LabelsOnContinuationsAreReported()
+    {
+        Assemble(".scope A\n.endscope\nHere: .scope A continued\n.endscope\n").Diagnostics
+            .Select(diagnostic => diagnostic.Message).Should().Contain(
+                "A scope requires an unqualified name; .proc requires a name and neither takes a label.");
+    }
+
     private static AssemblyResult Assemble(string text) =>
         new NativeAssembler().Assemble(
             new AssemblySource(".cpu Mos6502\n" + text, "test.asm"),

@@ -52,6 +52,22 @@ internal sealed partial class AssemblyPreprocessor
 
     private bool TestCondition(string operation, string operand, AssemblyLocation location, AssemblyDialect dialect)
     {
+        _nameAmbiguity = null;
+        bool result = TestConditionText(operation, operand, location, dialect);
+
+        // A historical name that two definitions give is an error where a condition tests it, as in code.
+        if (_nameAmbiguity is { } ambiguity)
+        {
+            Error(ambiguity, location);
+            _nameAmbiguity = null;
+            return false;
+        }
+
+        return result;
+    }
+
+    private bool TestConditionText(string operation, string operand, AssemblyLocation location, AssemblyDialect dialect)
+    {
         // Native sources share ca65's extra conditions; .ifdef keeps its native meaning (macros count).
         bool shared = dialect == AssemblyDialect.Ca65
             || (dialect == AssemblyDialect.Native && operation is not (".IFDEF" or ".IFNDEF" or ".IFBLANK"));

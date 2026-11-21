@@ -184,7 +184,12 @@ internal sealed partial class LanguageWorkspace
         {
             foreach (string name in set.AlsoNames)
             {
-                if (analysis.Definitions.Any(site => site.Name == name)) { continue; }
+                // A name some symbol has, in any scope, may be what the code there means, so it gets no quick fix.
+                if (analysis.Definitions.Any(site => site.Name == name || site.Name.EndsWith($"::{name}", StringComparison.Ordinal)))
+                {
+                    continue;
+                }
+
                 IReadOnlyList<DocumentationTopic> topics = set.FindAlso(name);
                 string? replacement = topics.Count == 1 ? topics[0].Name : null;
                 current[name] = current.TryGetValue(name, out string? earlier) && earlier != replacement ? null : replacement;
@@ -195,10 +200,22 @@ internal sealed partial class LanguageWorkspace
         foreach (string member in analysis.Members)
         {
             string[] lines = analysis.LinesOf(member);
+            bool inMacro = false;
             for (int line = 0; line < lines.Length; line++)
             {
                 int comment = SourceText.CommentStart(lines[line]);
                 string code = comment < 0 ? lines[line] : lines[line][..comment];
+
+                // A macro's body names its parameters, which may share a historical name.
+                string directive = code.TrimStart();
+                if (directive.StartsWith(".macro", StringComparison.OrdinalIgnoreCase)) { inMacro = true; }
+                if (directive.StartsWith(".endmacro", StringComparison.OrdinalIgnoreCase))
+                {
+                    inMacro = false;
+                    continue;
+                }
+
+                if (inMacro) { continue; }
                 foreach ((int start, string name) in Words(code))
                 {
                     if (!current.TryGetValue(name, out string? replacement) || replacement is null) { continue; }

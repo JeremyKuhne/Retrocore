@@ -26,48 +26,6 @@ COMMAND_PAIR_STEP = $100 - 3
 FIRST_SLOT_PAGE = SLOT_ROM_PAGE + 1
 
 .if MONITOR = MONITOR_IIE
-
-; The internal firmware's functions: the number in Y when the Monitor calls <CallFirmware>. The two IIe models
-; number them differently.
-.if ENHANCED
-
-;; The firmware function that prints a character in 80 columns.
-FIRMWARE_OUTPUT = $00
-
-;; The firmware function that sets <TextBase>/<TextBaseHigh> for a line, as <SetLineBase> does.
-FIRMWARE_LINE_BASE = $04
-
-;; The firmware function that clears the window and homes the cursor, as <Home> does.
-FIRMWARE_HOME = $05
-
-;; The firmware function that scrolls the window up a line, as <Scroll> does.
-FIRMWARE_SCROLL = $06
-
-;; The firmware function that clears from the cursor to the end of the line, as <ClearToEndOfLine> does.
-FIRMWARE_CLEAR_TO_END_OF_LINE = $07
-
-;; The firmware function that clears from a column to the end of the line, as <ClearLineFrom> does.
-FIRMWARE_CLEAR_LINE_FROM = $08
-
-;; The firmware function that clears from the cursor to the end of the window, as <ClearToEndOfWindow> does.
-FIRMWARE_CLEAR_TO_END_OF_WINDOW = $0A
-.else
-
-;; The firmware function that clears from the cursor to the end of the window, as <ClearToEndOfWindow> does.
-FIRMWARE_CLEAR_TO_END_OF_WINDOW = $00
-
-;; The firmware function that clears the window and homes the cursor, as <Home> does.
-FIRMWARE_HOME = $01
-
-;; The firmware function that scrolls the window up a line, as <Scroll> does.
-FIRMWARE_SCROLL = $02
-
-;; The firmware function that clears from the cursor to the end of the line, as <ClearToEndOfLine> does.
-FIRMWARE_CLEAR_TO_END_OF_LINE = $03
-
-;; The firmware function that clears from a column to the end of the line, as <ClearLineFrom> does.
-FIRMWARE_CLEAR_LINE_FROM = $04
-.endif
 .assert FIRMWARE_CLEAR_LINE_FROM = FIRMWARE_CLEAR_TO_END_OF_LINE + 1, "ClearLineFrom counts on this."
 .endif
 
@@ -502,6 +460,7 @@ NextLine:
 ;; interrupt code calls it.
 ;;
 ;; At $FC74.
+;; Also: IRQUSER (IIETRM85)
 .proc CallUserIrq
 .assert * = $FC74, "CallUserIrq must stay at $FC74."
     sta InternalCxRomOff
@@ -509,9 +468,10 @@ NextLine:
 .endproc
 
 ;; After the user's interrupt handler, selects again the $C800 ROM of the slot <ExpansionRomSlot> names, then goes on
-;; in the firmware's interrupt code (<IRQRESTORE>).
+;; in the firmware's interrupt code (<RestoreInterruptedState>).
 ;;
 ;; At $FC7A. The firmware jumps here with the saved <ExpansionRomSlot> on the stack.
+;; Also: IRQDONE2 (IIETRM85)
 .proc SelectInterruptRom
 .assert * = $FC7A, "SelectInterruptRom must stay at $FC7A."
     pla
@@ -521,7 +481,7 @@ NextLine:
 
     ; A slot's page: releasing every $C800 ROM, then reading the slot's page, selects the slot's. LOC1 is
     ; pointed at the page for the read, and put back.
-    sta CLRROM
+    sta ExpansionRomOff
     ldy #0
     ldx LOC1
     sta LOC1
@@ -532,7 +492,7 @@ NextLine:
 ;; Also: IRQNOSLT (IIETRM85)
 NoSlot:
     sta InternalCxRomOn
-    jmp IRQRESTORE
+    jmp RestoreInterruptedState
 .endproc
 
 ;; The printable path of <ScreenOut>: applies <InverseMask> to a printable character, then prints it.
@@ -574,7 +534,7 @@ ToFirmware:
 ;; At $FC75. The firmware's keyboard wait calls it when its caller had interrupts enabled. With 80STORE on,
 ;; page one is displayed meanwhile (page two would switch the screen's memory to the auxiliary bank).
 ;; Keeps: A, X, Y
-;; Also: VIDSYNC (UNKN)
+;; Also: VIDSYNC (UNKN), SNIFFIRQ (IIEROM82)
 .proc RestoreAfterFirmware
 .assert * = $FC75, "RestoreAfterFirmware must stay at $FC75."
     ; The carry = 80STORE on, then negative = page two displayed; both saved.

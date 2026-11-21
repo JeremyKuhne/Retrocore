@@ -39,6 +39,13 @@
 .include "MonitorEntries.asm"
 .include "FirmwareEquates.asm"
 
+; The firmware's function numbers, which depend on the model: the SDK predefines ENHANCED, and this is the default.
+.ifndef ENHANCED
+ENHANCED = 0
+.endif
+.assert .not ENHANCED, "Firmware.Original.asm is the original IIe's firmware."
+.include "FirmwareFunctions.asm"
+
 ; A screen hole only this model's firmware uses.
 TEMP1 = $0478                       ;; 80-column firmware: scratch (slot-3 screen hole)
 

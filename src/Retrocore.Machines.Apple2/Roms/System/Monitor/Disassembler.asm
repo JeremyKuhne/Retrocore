@@ -46,9 +46,6 @@ HASH_STEPS = 3
 ;; 32 or above.
 HASH_GROUP_BIT = $20
 
-;; The Enhanced IIe's internal firmware function that finishes <Decode>: the operand's length and the mnemonic hash.
-FIRMWARE_DECODE = $10
-
 ; Printing an instruction.
 
 ;; The most bytes an instruction has: <PrintInstruction> leaves room for them all.
@@ -213,11 +210,12 @@ HashNext:
 ;; at $C307.
 ;;
 ;; At $F8B7, which the internal firmware's <Firmware:SLOT3CHECK> calls; only the Enhanced IIe has it. It
-;; switches the slots' ROMs in, compares <BASICIN> and the byte two after it with the $38 and $18 of the sec and clc
+;; switches the slots' ROMs in, compares <BasicInput> and the byte two after it with the $38 and $18 of the sec and clc
 ;; that start the Monitor's <ClearToEndOfLine> and <ClearLineFrom>, and switches the internal ROM back. Why it compares
 ;; more than once is not in the code: presumably so that a slot whose reads float does not match by chance.
 ;; In: Y = the times to compare (0 for 256)
 ;; Out: zero = set when every comparison matched, and Y = 0 then
+;; Also: TSTROM (IIETRM85)
 .proc CompareSlot3Rom
 .assert * = $F8B7, "CompareSlot3Rom must stay at $F8B7, where the firmware calls it."
     sta InternalCxRomOff
@@ -226,7 +224,7 @@ HashNext:
 Repeat:
     ldx #2
 NextByte:
-    lda BASICIN,x
+    lda BasicInput,x
     cmp ClearToEndOfLine,x
     bne Done
     dex

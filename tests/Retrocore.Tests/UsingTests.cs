@@ -168,6 +168,92 @@ public sealed class UsingTests
     }
 
     /// <summary>
+    ///  Files a macro includes, one call after another, are separate files: one's <c>.using</c> does not reach the
+    ///  next.
+    /// </summary>
+    [TestMethod]
+    public void MacroIncludesAreSeparateFiles()
+    {
+        string folder = Directory.CreateTempSubdirectory("retrocore-using").FullName;
+        try
+        {
+            File.WriteAllText(Path.Join(folder, "Columns.asm"), EightyColumns);
+            File.WriteAllText(Path.Join(folder, "Uses.asm"), ".using EightyColumns\n    lda Mode\n");
+            File.WriteAllText(Path.Join(folder, "Plain.asm"), "    lda Mode\n");
+            IncludeAssemble(folder, """
+                .include "Columns.asm"
+                .macro Include file
+                .include file
+                .endmacro
+                Include "Uses.asm"
+                Include "Plain.asm"
+
+                """).Should().ContainSingle().Which.Location?.Path.Should().EndWith("Plain.asm");
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    /// <summary>
+    ///  A statement with no location, as a programmatic project may hold, keeps the file-level <c>.using</c> around it.
+    /// </summary>
+    [TestMethod]
+    public void StatementsWithoutLocationsStayInTheirFile()
+    {
+        AssemblyOptions options = new(ProcessorVariant.Mos6502, origin: 0x1300, imageSize: 0x100);
+        AssemblyParseResult parsed = NativeAssembler.Parse(
+            [new AssemblySource(".cpu Mos6502\n" + EightyColumns + ".using EightyColumns\n    nop\n    lda Mode\n", "test.asm")],
+            options);
+
+        parsed.Project.Statements.Single(statement => statement.Operation == "nop").Location = null;
+        new NativeAssembler().Assemble(parsed.Project, options).Diagnostics.Should().BeEmpty();
+    }
+
+    /// <summary>
+    ///  A <c>.using</c> in a <c>.repeat</c> is used if any expansion used it, and is not reported as unnecessary.
+    /// </summary>
+    [TestMethod]
+    public void RepeatedUsingsAreUsedOnce()
+    {
+        AssemblyResult result = Assemble(EightyColumns + ".repeat 2\n.using EightyColumns\n.endrepeat\n    lda Mode\n");
+        result.Diagnostics.Should().BeEmpty();
+        result.Information.Should().BeEmpty();
+    }
+
+    /// <summary>
+    ///  <c>.sizeof</c> takes a scope's or <c>.proc</c>'s plain name through <c>.using</c>, as other references do.
+    /// </summary>
+    [TestMethod]
+    public void SizeofFindsUsedProcedures()
+    {
+        AssemblyResult result = Assemble("""
+            .scope Video
+            .proc Clear
+                nop
+                rts
+            .endproc
+            .endscope
+            .using Video
+                lda #.sizeof(Clear)
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+        result.Sections[0].Bytes.Span[2..4].ToArray().Should().Equal(0xA9, 2);
+    }
+
+    /// <summary>
+    ///  Exports are unchanged: <c>.export</c> of a plain name does not reach into a used scope.
+    /// </summary>
+    [TestMethod]
+    public void ExportsDoNotLookInUsedScopes()
+    {
+        Messages(Assemble(EightyColumns + ".using EightyColumns\n.export Mode\n    lda Mode\n")).Should()
+            .ContainSingle().Which.Should().Contain("Mode");
+    }
+
+    /// <summary>
     ///  Two used scopes that define a name: an error naming both, only where that name is used.
     /// </summary>
     [TestMethod]
@@ -522,6 +608,86 @@ public sealed class UsingTests
 
             SymbolReferences.Find("CursorColumn", [site], [analysis], sdk: [], includeDeclaration: false)
                 .Select(reference => reference.Line).Should().Equal(8);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
+    ///  The editor applies the <c>.using</c> lines the assembler took: not one in an <c>.if</c> branch it skipped, nor
+    ///  one in a macro's body where the macro is defined.
+    /// </summary>
+    [TestMethod]
+    public void TheEditorUsesAssembledUsings()
+    {
+        string directory = Directory.CreateTempSubdirectory("retrocore-using").FullName;
+        try
+        {
+            string main = Path.Join(directory, "main.asm");
+            File.WriteAllText(main, """
+                .scope A
+                N = 1
+                .endscope
+                .scope B
+                N = 2
+                .endscope
+                .macro UseB
+                .using B
+                .endmacro
+                ON = 1
+                .if ON
+                .using A
+                .else
+                .using B
+                .endif
+                    lda #N
+
+                """);
+
+            SourceAnalysis analysis = SourceAnalysis.Assemble(main, _ => null);
+            analysis.Result.Diagnostics.Should().BeEmpty();
+            analysis.Find("N", main, line: 15).Should().ContainSingle().Which.Name.Should().Be("A::N");
+            analysis.UsedNames(main, line: 10).Should().BeEmpty("the macro's .using is not in effect where it is defined");
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
+    ///  Completion offers a used scope's name only where it binds to that definition: not one an enclosing scope's own
+    ///  name shadows, nor one two used scopes define.
+    /// </summary>
+    [TestMethod]
+    public void CompletionOffersOnlyBindingNames()
+    {
+        string directory = Directory.CreateTempSubdirectory("retrocore-using").FullName;
+        try
+        {
+            string main = Path.Join(directory, "main.asm");
+            File.WriteAllText(main, """
+                .scope A
+                Shared = 1
+                Mode = 2
+                OnlyA = 3
+                .endscope
+                .scope B
+                Shared = 4
+                .endscope
+                .proc Show
+                Mode = 5
+                    .using A, B
+                    rts
+                .endproc
+
+                """);
+
+            SourceAnalysis analysis = SourceAnalysis.Assemble(main, _ => null);
+            analysis.Result.Diagnostics.Should().BeEmpty();
+            analysis.UsedNames(main, line: 11).Select(used => used.Name).Should().Equal("OnlyA");
         }
         finally
         {

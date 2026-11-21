@@ -28,7 +28,16 @@ public static partial class DocumentationParser
     /// <param name="text">The source text.</param>
     /// <param name="path">The source path, recorded in comments and diagnostics.</param>
     /// <returns>The comments and any placement problems.</returns>
-    public static DocumentationFile Parse(string text, string path)
+    public static DocumentationFile Parse(string text, string path) => Parse(text, path, assembledUsing: null);
+
+    /// <summary>
+    ///  Parses a source file's documentation comments, applying only the <c>.using</c> lines the assembler assembled.
+    /// </summary>
+    /// <param name="text">The source text.</param>
+    /// <param name="path">The source path, recorded in comments and diagnostics.</param>
+    /// <param name="assembledUsing">Whether a line's <c>.using</c> was assembled, or null when unknown.</param>
+    /// <returns>The comments and any placement problems.</returns>
+    public static DocumentationFile Parse(string text, string path, Func<int, bool>? assembledUsing)
     {
         string[] lines = text.Replace("\r\n", "\n").Split('\n');
         HashSet<string> dataMacros = DataMacros(lines);
@@ -172,7 +181,7 @@ public static partial class DocumentationParser
             else
             {
                 Container(containers, trimmed);
-                tracker.Advance(trimmed);
+                tracker.Advance(trimmed, assembledUsing?.Invoke(index) ?? true);
             }
 
             index++;
@@ -189,7 +198,16 @@ public static partial class DocumentationParser
     /// </summary>
     /// <param name="lines">The source's lines.</param>
     /// <returns>For each line, the scope it is in and the <c>.using</c> directives in effect on it.</returns>
-    public static IReadOnlyList<DocumentationScopes> ScopesByLine(IReadOnlyList<string> lines)
+    public static IReadOnlyList<DocumentationScopes> ScopesByLine(IReadOnlyList<string> lines) =>
+        ScopesByLine(lines, assembledUsing: null);
+
+    /// <summary>
+    ///  Follows a source's scopes and the <c>.using</c> directives the assembler assembled.
+    /// </summary>
+    /// <param name="lines">The source's lines.</param>
+    /// <param name="assembledUsing">Whether a line's <c>.using</c> was assembled, or null when unknown.</param>
+    /// <returns>For each line, the scope it is in and the <c>.using</c> directives in effect on it.</returns>
+    public static IReadOnlyList<DocumentationScopes> ScopesByLine(IReadOnlyList<string> lines, Func<int, bool>? assembledUsing)
     {
         ScopeTracker tracker = new();
         DocumentationScopes[] result = new DocumentationScopes[lines.Count];
@@ -197,7 +215,10 @@ public static partial class DocumentationParser
         {
             result[index] = tracker.Current;
             string trimmed = Split(lines[index]).Code.Trim();
-            if (trimmed.Length != 0 && !IsConditional(trimmed)) { tracker.Advance(trimmed); }
+            if (trimmed.Length != 0 && !IsConditional(trimmed))
+            {
+                tracker.Advance(trimmed, assembledUsing?.Invoke(index) ?? true);
+            }
         }
 
         return result;

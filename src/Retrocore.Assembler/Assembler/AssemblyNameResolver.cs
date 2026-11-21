@@ -159,17 +159,29 @@ internal sealed partial class AssemblyNameResolver
         string file = "";
         AssemblyLocation? lastFrom = null;
         string? lastPath = null;
+        bool tracksFiles = false;
+        foreach (AssemblyStatement statement in _source.Statements)
+        {
+            if (statement.Kind == AssemblyStatementKind.Using)
+            {
+                tracksFiles = true;
+                break;
+            }
+        }
 
         for (int index = 0; index < _source.Statements.Count; index++)
         {
             _cancellation.ThrowIfCancellationRequested();
             AssemblyStatement node = _source.Statements[index];
-            // A statement in the same file as the last has the same include chain, or none at the same path.
+            // A statement in the same file as the last has the same include chain, or none at the same path. One with
+            // no location, which a programmatic project may hold, stays in the file it is among.
             AssemblyLocation? from = node.Location?.ExpandedFrom;
-            if (!ReferenceEquals(from, lastFrom) || (from is null && !string.Equals(node.Location?.Path, lastPath, StringComparison.Ordinal)))
+            if (tracksFiles
+                && node.Location is not null
+                && (!ReferenceEquals(from, lastFrom) || (from is null && !string.Equals(node.Location.Path, lastPath, StringComparison.Ordinal))))
             {
                 lastFrom = from;
-                lastPath = node.Location?.Path;
+                lastPath = node.Location.Path;
                 string key = FileKey(node.Location);
                 if (key != file)
                 {
@@ -402,7 +414,7 @@ internal sealed partial class AssemblyNameResolver
                     {
                         if (!AssemblySyntax.IsPlainIdentifier(name.Span)) { continue; }
                         string exported = name.ToString();
-                        Exports.TryAdd(exported, ResolveName(exported, _sites[index], index));
+                        Exports.TryAdd(exported, ResolveName(exported, _sites[index], index, usings: false));
                     }
                 }
                 catch (AssemblyError error)
@@ -454,7 +466,7 @@ internal sealed partial class AssemblyNameResolver
         _ => false
     };
 
-    private string ResolveName(string name, Site site, int index)
+    private string ResolveName(string name, Site site, int index, bool usings = true)
     {
         if (name.StartsWith("::", StringComparison.Ordinal)) { return name[2..]; }
         if (name[0] == '@') { return QualifyCheap(site.CheapPrefix, name); }
@@ -468,7 +480,7 @@ internal sealed partial class AssemblyNameResolver
                 if (scope.Definitions.Contains(name)) { return scope.Qualify(name); }
             }
 
-            return site.Usings is null ? name : FindUsed(name, site, index) ?? name;
+            return !usings || site.Usings is null ? name : FindUsed(name, site, index) ?? name;
         }
 
         // As in ca65, a qualifying scope binds to one already opened at this point, so a later inner namespace
@@ -553,10 +565,13 @@ internal sealed partial class AssemblyNameResolver
                 const string SizeSuffix = "::__retro_size";
                 string scopedName = ResolveName(sizeName + SizeSuffix, site, index);
                 scopedName = scopedName[..^SizeSuffix.Length];
-                if (!_sizes.TryGetValue(scopedName, out string? size))
+
+                // A scope or .proc that a .using makes reachable by its plain name has its size too.
+                string label;
+                if (!_sizes.TryGetValue(scopedName, out string? size)
+                    && !_sizes.TryGetValue(label = ResolveName(sizeName, site, index), out size))
                 {
                     // As in ca65, a label's size is that of the statement on its own line.
-                    string label = ResolveName(sizeName, site, index);
                     if (!_labelLines.TryGetValue(label, out int line))
                     {
                         _errors.Add(new(index, $"Unknown size of '{sizeName}' in .sizeof."));

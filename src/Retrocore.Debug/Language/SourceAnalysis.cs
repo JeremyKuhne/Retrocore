@@ -22,6 +22,7 @@ internal sealed partial class SourceAnalysis
     private readonly Dictionary<string, IReadOnlyList<DocumentationScopes>> _scopes = [with(StringComparer.OrdinalIgnoreCase)];
     private HashSet<string>? _scopeNames;
     private readonly Dictionary<string, (string Path, int Line)> _includedFrom = [with(StringComparer.OrdinalIgnoreCase)];
+    private readonly Dictionary<string, HashSet<int>> _usingLines = [with(StringComparer.OrdinalIgnoreCase)];
     private DocumentationSet? _documentation;
 
     private SourceAnalysis(
@@ -54,6 +55,17 @@ internal sealed partial class SourceAnalysis
             if (!location.IsMacroExpansion && location.ExpandedFrom is { Path.Length: > 0 } from)
             {
                 _includedFrom.TryAdd(path, (Path.GetFullPath(from.Path), from.Line));
+            }
+
+            // The .using lines the assembler took, so a branch of an .if it skipped does not count.
+            if (!location.IsMacroExpansion)
+            {
+                if (!_usingLines.TryGetValue(path, out HashSet<int>? usingLines))
+                {
+                    _usingLines[path] = usingLines = [];
+                }
+
+                if (statement.Kind == AssemblyStatementKind.Using) { usingLines.Add(location.Line); }
             }
 
             if (!result.Success && statement.Kind is AssemblyStatementKind.Procedure or AssemblyStatementKind.Scope)
@@ -168,7 +180,7 @@ internal sealed partial class SourceAnalysis
     internal DocumentationSet Documentation => _documentation ??= DocumentationSet.Create(
         _lines.Keys
             .OrderBy(path => string.Equals(path, Root, StringComparison.OrdinalIgnoreCase) ? 0 : 1)
-            .Select(path => DocumentationParser.Parse(string.Join("\n", _lines[path]), path)),
+            .Select(path => DocumentationParser.Parse(string.Join("\n", _lines[path]), path, AssembledUsing(path))),
         Symbols(),
         ModuleOf(Root),
         ModelOf(Root),
@@ -327,7 +339,7 @@ internal sealed partial class SourceAnalysis
     /// </summary>
     /// <param name="path">The full path.</param>
     /// <param name="line">The zero-based line.</param>
-    /// <returns>Each name as code there can write it, and its definition, innermost directive first.</returns>
+    /// <returns>Each name code there can write that binds to its definition, innermost directive first.</returns>
     internal IEnumerable<(string Name, SymbolSite Site)> UsedNames(string path, int line)
     {
         foreach (DocumentationUsing directive in ScopesAt(path, line).Usings)
@@ -337,11 +349,20 @@ internal sealed partial class SourceAnalysis
                 string prefix = $"{scope}::";
                 foreach (SymbolSite site in Definitions)
                 {
-                    if (site.Name.Length > prefix.Length
-                        && site.Name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
-                        && site.Name.IndexOf("::", prefix.Length, StringComparison.Ordinal) < 0)
+                    if (site.Name.Length <= prefix.Length
+                        || !site.Name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+                        || site.Name.IndexOf("::", prefix.Length, StringComparison.Ordinal) >= 0)
                     {
-                        yield return (site.Name[prefix.Length..], site);
+                        continue;
+                    }
+
+                    // Only where the plain name binds to this definition: not one an enclosing scope's own name
+                    // shadows, nor one two used scopes define, which code must qualify.
+                    string name = site.Name[prefix.Length..];
+                    if (Bound(name, path, line) is { Count: > 0 } bound
+                        && bound.All(found => string.Equals(found.Name, site.Name, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        yield return (name, site);
                     }
                 }
             }
@@ -355,7 +376,7 @@ internal sealed partial class SourceAnalysis
     {
         if (!_scopes.TryGetValue(path, out IReadOnlyList<DocumentationScopes>? lines))
         {
-            lines = DocumentationParser.ScopesByLine(LinesOf(path));
+            lines = DocumentationParser.ScopesByLine(LinesOf(path), AssembledUsing(path));
 
             // Includes are textual: a file included inside a .scope or .proc is in that scope, though the
             // including file's .using directives do not reach it.
@@ -372,6 +393,10 @@ internal sealed partial class SourceAnalysis
 
         return (uint)line < (uint)lines.Count ? lines[line] : DocumentationScopes.Root;
     }
+
+    // Whether the .using on a line of a file was assembled, or null when the assembly reached none of the file.
+    private Func<int, bool>? AssembledUsing(string path) =>
+        _usingLines.TryGetValue(path, out HashSet<int>? lines) ? lines.Contains : null;
 
     private static string Qualify(string scope, string name) => name.Length == 0 ? scope : $"{scope}::{name}";
 

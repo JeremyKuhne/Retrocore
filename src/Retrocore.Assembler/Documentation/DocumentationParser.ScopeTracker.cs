@@ -16,6 +16,7 @@ public static partial class DocumentationParser
         private readonly List<bool> _named = [];
         private readonly List<(int Depth, DocumentationUsing Using)> _usings = [];
         private DocumentationScopes? _current;
+        private int _macros;
 
         /// <summary>
         ///  Gets the names of the open named scopes, outermost first.
@@ -33,9 +34,24 @@ public static partial class DocumentationParser
         ///  Follows one line's code.
         /// </summary>
         /// <param name="code">The trimmed code, without its comment.</param>
-        internal void Advance(string code)
+        /// <param name="assembled">For a <c>.using</c> line, whether it was assembled; true when not known.</param>
+        internal void Advance(string code, bool assembled = true)
         {
             string word = FirstWord(code).ToLowerInvariant();
+
+            // A .using in a macro's body applies where the macro is invoked, not where it is defined.
+            if (word == ".macro")
+            {
+                _macros++;
+                return;
+            }
+
+            if (word == ".endmacro")
+            {
+                if (_macros != 0) { _macros--; }
+                return;
+            }
+
             int length = IdentifierLength(code);
             if (length != 0 && code.Length > length && code[length] == ':')
             {
@@ -60,7 +76,7 @@ public static partial class DocumentationParser
                 _usings.RemoveAll(item => item.Depth > _named.Count);
                 _current = null;
             }
-            else if (word == ".using")
+            else if (word == ".using" && _macros == 0 && assembled)
             {
                 string[] names = [.. code[word.Length..].Split(',').Select(name => name.Trim()).Where(name => name.Length != 0)];
                 if (names.Length != 0)

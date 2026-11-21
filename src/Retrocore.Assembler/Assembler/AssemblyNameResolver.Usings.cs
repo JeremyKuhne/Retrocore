@@ -129,15 +129,33 @@ internal sealed partial class AssemblyNameResolver
     /// <returns>The notes, or null when there are none.</returns>
     private List<AssemblyDiagnostic>? UnusedUsings()
     {
-        List<AssemblyDiagnostic>? notes = null;
+        // Each expansion of a macro or .repeat that holds a .using is its own directive; the source line is used if
+        // any of them gave the code a name.
+        HashSet<(string? Path, int Line, int Column, int At)> used = [];
         foreach (Using directive in _usings)
         {
+            AssemblyLocation? location = _source.Statements[directive.Index].Location;
             for (int at = 0; at < directive.Names.Length; at++)
             {
-                if (directive.Targets[at] is null || directive.Used[at]) { continue; }
+                if (directive.Used[at])
+                {
+                    used.Add((location?.Path, location?.Line ?? directive.Index, location?.Column ?? 0, at));
+                }
+            }
+        }
+
+        List<AssemblyDiagnostic>? notes = null;
+        HashSet<(string? Path, int Line, int Column, int At)> reported = [];
+        foreach (Using directive in _usings)
+        {
+            AssemblyLocation? location = _source.Statements[directive.Index].Location;
+            for (int at = 0; at < directive.Names.Length; at++)
+            {
+                (string? Path, int Line, int Column, int At) source = (location?.Path, location?.Line ?? directive.Index, location?.Column ?? 0, at);
+                if (directive.Targets[at] is null || used.Contains(source) || !reported.Add(source)) { continue; }
                 (notes ??= []).Add(new(
                     $"Nothing uses a name from {directive.Names[at]} through this .using; it is unnecessary.",
-                    _source.Statements[directive.Index].Location,
+                    location,
                     directive.Index));
             }
         }
@@ -181,24 +199,40 @@ internal sealed partial class AssemblyNameResolver
     }
 
     /// <summary>
-    ///  Identifies the file a statement is in: the top-level source it came from, then the chain of <c>.include</c>
-    ///  lines that brought it in, looking through macro expansions to where they were invoked.
+    ///  Identifies the file a statement is in: the top-level source it came from, then each <c>.include</c> that
+    ///  brought it in, with the macro invocations that led to that include and the file it included.
     /// </summary>
     /// <param name="location">The statement's location.</param>
     /// <returns>The key, which starts with the key of every file that includes this one.</returns>
-    private static string FileKey(AssemblyLocation? location)
+    private static string FileKey(AssemblyLocation location)
     {
-        if (location is null) { return ""; }
-        List<string> segments = [];
+        // The links from the statement outward: each a macro expansion's invocation or an include's line.
+        List<(bool Macro, AssemblyLocation From, AssemblyLocation Inner)> links = [];
         AssemblyLocation current = location;
         for (; current.ExpandedFrom is { } from; current = from)
         {
-            if (!current.IsMacroExpansion) { segments.Add($"{from.Path}:{from.Line}|"); }
+            links.Add((current.IsMacroExpansion, from, current));
         }
 
-        // The outermost location is in a top-level source, so separate sources are separate files.
-        segments.Add($"{current.Path}|");
-        segments.Reverse();
-        return string.Concat(segments);
+        // The outermost location is in a top-level source, so separate sources are separate files. Two includes
+        // from one macro body line differ by the invocations before them and by the files they include; the
+        // invocations after the last include are inside the file, so they do not change it.
+        List<string> parts = [current.Path, "|"];
+        int kept = parts.Count;
+        for (int at = links.Count - 1; at >= 0; at--)
+        {
+            (bool macro, AssemblyLocation from, AssemblyLocation inner) = links[at];
+            parts.Add($"{from.Path}:{from.Line}");
+            if (macro)
+            {
+                parts.Add(",");
+                continue;
+            }
+
+            parts.Add($">{inner.Path}|");
+            kept = parts.Count;
+        }
+
+        return string.Concat(parts.Take(kept));
     }
 }

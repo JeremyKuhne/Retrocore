@@ -325,6 +325,86 @@ public sealed class HistoricalNameTests
     }
 
     /// <summary>
+    ///  Conditionals see a <c>.proc</c>'s old name, as code does.
+    /// </summary>
+    [TestMethod]
+    public void ConditionsSeeOldNamesOfProcedures()
+    {
+        AssemblyResult result = Assemble("""
+            ;; Reads a key.
+            ;; Also: RDKEY (TEST)
+            .proc ReadKey
+                rts
+            .endproc
+            .ifdef RDKEY
+                lda #1
+            .else
+                lda #2
+            .endif
+                jsr RDKEY
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+        result.Sections[0].Bytes.Span[..6].ToArray().Should().Equal(0x60, 0xA9, 1, 0x20, 0x00, 0x10);
+    }
+
+    /// <summary>
+    ///  Conditionals see the old names an included source in another dialect gives, as code does.
+    /// </summary>
+    [TestMethod]
+    public void ConditionsSeeOldNamesInOtherDialects()
+    {
+        string folder = Directory.CreateTempSubdirectory("retrocore-also").FullName;
+        try
+        {
+            File.WriteAllText(
+                Path.Join(folder, "Lib.s"),
+                "; retrocore: dialect=ca65\n;; Prints a character.\n;; Also: COUT (TEST)\nCharacterOut = $FDED\n");
+
+            string main = Path.Join(folder, "Main.asm");
+            string text = ".include \"Lib.s\"\n.ifdef COUT\n    lda #1\n.else\n    lda #2\n.endif\n    jsr COUT\n";
+            File.WriteAllText(main, text);
+            AssemblyResult result = new NativeAssembler().Assemble(
+                new AssemblySource(text, main),
+                new AssemblyOptions(ProcessorVariant.Mos6502, origin: 0x1000, imageSize: 0x100)
+                {
+                    SourceResolver = new FileAssemblySourceResolver()
+                });
+
+            result.Diagnostics.Should().BeEmpty();
+            // The ca65 source brings its segments; the code is in CODE.
+            result.Sections.Single(section => section.Name == "CODE").Bytes.Span[..5].ToArray().Should().Equal(0xA9, 1, 0x20, 0xED, 0xFD);
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    /// <summary>
+    ///  A label at the start of a <c>.proc</c> is inside it, not another name of the routine.
+    /// </summary>
+    [TestMethod]
+    public void LabelsInProceduresAreNotTheirNames()
+    {
+        DocumentationSet set = Set("""
+            ;; Counts down.
+            ;; Keeps: Y
+            .proc Foo
+            Loop:
+                dex
+                bne Loop
+                rts
+            .endproc
+            Loop:
+                rts
+            """);
+
+        Required(set.Find("Foo")).EntryLabels.Should().BeEmpty();
+        set.FindRoutine("Loop").Should().BeNull();
+    }
+
+    /// <summary>
     ///  An <c>Also:</c> on a <c>.scope</c> gives it no address: the old name stays unresolved.
     /// </summary>
     [TestMethod]

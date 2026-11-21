@@ -86,7 +86,8 @@ internal sealed partial class SourceAnalysis
                     }
                 }
 
-                scopes.Add(name);
+                // A continued piece goes on with the scope of that name.
+                scopes.Add(AssemblySyntax.ContinuedScope(name) ?? name);
             }
             else if (!result.Success
                 && statement.Kind is AssemblyStatementKind.EndProcedure or AssemblyStatementKind.EndScope

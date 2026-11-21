@@ -332,6 +332,51 @@ public sealed class UsingTests
     }
 
     /// <summary>
+    ///  A <c>.using</c> whose name only a conditional tests is used, so it is not reported as unnecessary.
+    /// </summary>
+    [TestMethod]
+    public void ConditionsUseUsings()
+    {
+        AssemblyResult result = Assemble("""
+            .scope Settings
+            WIDE = 1
+            .endscope
+            .using Settings
+            .if WIDE
+                nop
+            .endif
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+        result.Information.Should().BeEmpty();
+    }
+
+    /// <summary>
+    ///  A constant made from a name two used scopes define has no value for conditionals, and the code's use is an
+    ///  error.
+    /// </summary>
+    [TestMethod]
+    public void AmbiguousConstantsHaveNoValue()
+    {
+        const string Scopes = """
+            .scope First
+            Shared = 1
+            .endscope
+            .scope Second
+            Shared = 0
+            .endscope
+            .using First, Second
+            Value = Shared + 1
+
+            """;
+
+        Messages(Assemble(Scopes + ".if Value\n    nop\n.endif\n")).Should().Equal(
+            "Conditional requires a constant known at this point in source order.");
+
+        Messages(Assemble(Scopes + "    lda #Value\n")).Should().Equal("'Shared' is in both First and Second; qualify it.");
+    }
+
+    /// <summary>
     ///  A documentation link in a comment inside a <c>.using</c>'s extent resolves as the code there would.
     /// </summary>
     [TestMethod]

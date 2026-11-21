@@ -34,7 +34,7 @@ internal static class DirectiveDocs
         [".global"] = "Exports names as `.export` does, ignoring any that are never defined.",
         [".scope"] = "Opens a namespace: `.scope [Name]` through `.endscope`; members are `Name::member`. `.scope Name continued` goes on with one opened earlier.",
         [".endscope"] = "Ends a `.scope`.",
-        [".using"] = "Makes scopes' names usable unqualified from the next line to the end of the enclosing `.scope`, `.proc` or file: `.using Scope[, Scope ...]`. A name the enclosing scopes define wins; one two used scopes define must be qualified.",
+        [".using"] = "Makes scopes' names usable unqualified from the next line to the end of the enclosing `.scope`, `.proc` or file: `.using Scope[, Scope ...]`. A name the enclosing scopes define wins; a name that two scopes of one `.using` define must be qualified.",
         [".proc"] = "Opens a namespace and defines its name as the address of its first statement: `.proc Name` through `.endproc`.",
         [".endproc"] = "Ends a `.proc`.",
         [".include"] = "Includes a file: `\"path\"` relative to this file, then include paths; `<path>` from SDK paths.",

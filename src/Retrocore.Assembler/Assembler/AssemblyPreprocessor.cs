@@ -655,6 +655,7 @@ internal sealed partial class AssemblyPreprocessor
             return;
         }
 
+        _usingAmbiguity = null;
         try
         {
             // Without scopes or local names the operand's own characters are the expression.
@@ -664,7 +665,14 @@ internal sealed partial class AssemblyPreprocessor
                 : ConstantExpression(node.Operand.Text).AsMemory();
 
             ExpressionEvaluator evaluator = new(expression, _constants, address: 0, line: 0);
-            if (evaluator.TryEvaluate(out long value) && !evaluator.ReadsAddress)
+
+            // A name two used scopes define has no one value; the resolver reports it where the code uses it.
+            if (_usingAmbiguity is not null)
+            {
+                _usingAmbiguity = null;
+                _constants.Unset(name);
+            }
+            else if (evaluator.TryEvaluate(out long value) && !evaluator.ReadsAddress)
             {
                 _constants.SetValue(name, value);
             }

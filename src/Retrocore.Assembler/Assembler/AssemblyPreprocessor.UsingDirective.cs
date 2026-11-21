@@ -12,7 +12,8 @@ internal sealed partial class AssemblyPreprocessor
     /// <param name="next">The directive in effect before this one, or null.</param>
     /// <param name="scope">The qualified scope the directive is in.</param>
     /// <param name="names">The scope names as written.</param>
-    private sealed class UsingDirective(UsingDirective? next, string scope, string[] names)
+    /// <param name="statement">The directive's statement.</param>
+    private sealed class UsingDirective(UsingDirective? next, string scope, string[] names, AssemblyStatement statement)
     {
         /// <summary>
         ///  Gets the directive in effect before this one, which is searched after it.
@@ -28,5 +29,10 @@ internal sealed partial class AssemblyPreprocessor
         ///  Gets the scope names as written.
         /// </summary>
         internal string[] Names { get; } = names;
+
+        /// <summary>
+        ///  Gets the directive's statement, by which the resolver learns which operands conditionals used.
+        /// </summary>
+        internal AssemblyStatement Statement { get; } = statement;
     }
 }

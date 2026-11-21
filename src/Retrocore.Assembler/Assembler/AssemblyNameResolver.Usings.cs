@@ -107,8 +107,13 @@ internal sealed partial class AssemblyNameResolver
         _usings = usings;
         foreach (Using directive in usings)
         {
+            // A conditional that tested a name through the directive used it, though the resolver never sees it.
+            HashSet<int>? conditional = null;
+            _source.UsedUsings?.TryGetValue(_source.Statements[directive.Index], out conditional);
             for (int at = 0; at < directive.Names.Length; at++)
             {
+                if (conditional?.Contains(at) == true) { directive.Used[at] = true; }
+
                 directive.Targets[at] = FindScope(directive.Names[at], directive.Scope, directive.Index);
                 if (directive.Targets[at] is null)
                 {

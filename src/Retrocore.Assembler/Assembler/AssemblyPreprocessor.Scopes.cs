@@ -42,7 +42,7 @@ internal sealed partial class AssemblyPreprocessor
                         names.Add(name.ToString());
                     }
 
-                    _constantUsings = new(_constantUsings, _constantScope, [.. names]);
+                    _constantUsings = new(_constantUsings, _constantScope, [.. names], node);
                 }
                 catch (AssemblyError)
                 {
@@ -141,11 +141,19 @@ internal sealed partial class AssemblyPreprocessor
         {
             string? found = null;
             string? foundScope = null;
-            foreach (string scopeName in directive.Names)
+            for (int at = 0; at < directive.Names.Length; at++)
             {
+                string scopeName = directive.Names[at];
                 if (UsedScope(scopeName, directive.Scope) is not { } scope) { continue; }
                 string candidate = ConstantQualified(scope, name);
                 if (!_defined.Contains(candidate)) { continue; }
+                _project.UsedUsings ??= [];
+                if (!_project.UsedUsings.TryGetValue(directive.Statement, out HashSet<int>? used))
+                {
+                    _project.UsedUsings[directive.Statement] = used = [];
+                }
+
+                used.Add(at);
                 if (found is null)
                 {
                     found = candidate;

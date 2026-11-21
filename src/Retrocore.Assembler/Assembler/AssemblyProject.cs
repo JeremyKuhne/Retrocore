@@ -75,4 +75,10 @@ public sealed class AssemblyProject
     ///  Gets or sets the in-memory Merlin output name.
     /// </summary>
     internal string? MerlinOutput { get; set; }
+
+    /// <summary>
+    ///  Gets or sets, for each <c>.using</c> statement, the operands whose scopes gave a conditional a name while
+    ///  preprocessing, so the resolver does not report them as unnecessary.
+    /// </summary>
+    internal Dictionary<AssemblyStatement, HashSet<int>>? UsedUsings { get; set; }
 }

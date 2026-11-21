@@ -230,7 +230,17 @@ public sealed partial class DocumentationResolver
     /// <param name="from">The topic the link is in.</param>
     /// <param name="target">The target as written.</param>
     /// <returns>What it resolved to.</returns>
-    public DocumentationTarget Resolve(DocumentationTopic from, string target)
+    public DocumentationTarget Resolve(DocumentationTopic from, string target) => Resolve(from, target, comment: null);
+
+    /// <summary>
+    ///  Resolves a link target written in one of a topic's comments, by the <c>.using</c> directives in effect at that
+    ///  comment; a topic documented in two <c>.if</c> branches has a comment, and directives, for each.
+    /// </summary>
+    /// <param name="from">The topic the link is in.</param>
+    /// <param name="target">The target as written.</param>
+    /// <param name="comment">The comment the link is in, or null for the topic's first.</param>
+    /// <returns>What it resolved to.</returns>
+    public DocumentationTarget Resolve(DocumentationTopic from, string target, DocumentationComment? comment)
     {
         string text = target.Trim();
         bool web = text.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
@@ -275,11 +285,11 @@ public sealed partial class DocumentationResolver
             text = text[(colon + 1)..];
         }
 
-        DocumentationTarget result = Lookup(from, text, module, model);
+        DocumentationTarget result = Lookup(from, text, module, model, comment);
         return section is null ? result : result with { Section = section };
     }
 
-    private DocumentationTarget Lookup(DocumentationTopic from, string name, string? module, string? model)
+    private DocumentationTarget Lookup(DocumentationTopic from, string name, string? module, string? model, DocumentationComment? comment)
     {
         if (name.Length == 0) { return new(DocumentationTargetKind.Unresolved, name); }
         IEnumerable<DocumentationSet> sets = Sets(module, model);
@@ -313,7 +323,7 @@ public sealed partial class DocumentationResolver
                 if (Match(Current, candidate, also: false) is { } match) { return match; }
             }
 
-            if (Used(from, name) is { } used) { return used; }
+            if (Used(comment ?? (from.Comments.Count == 0 ? null : from.Primary), name) is { } used) { return used; }
             if (Also(Current, name.StartsWith("::", StringComparison.Ordinal) ? name[2..] : name) is { } also)
             {
                 return also;
@@ -366,12 +376,12 @@ public sealed partial class DocumentationResolver
         return also.Count > 1 ? new(DocumentationTargetKind.Ambiguous, name) : null;
     }
 
-    // A plain name in the scopes the .using directives in effect at the topic name, innermost directive first; a
+    // A plain name in the scopes the .using directives in effect at the comment name, innermost directive first; a
     // name two scopes of one directive define is ambiguous.
-    private DocumentationTarget? Used(DocumentationTopic from, string name)
+    private DocumentationTarget? Used(DocumentationComment? at, string name)
     {
-        if (name.Contains("::", StringComparison.Ordinal) || from.Comments.Count == 0) { return null; }
-        foreach (DocumentationUsing directive in from.Primary.Usings)
+        if (name.Contains("::", StringComparison.Ordinal) || at is null) { return null; }
+        foreach (DocumentationUsing directive in at.Usings)
         {
             List<DocumentationTarget> matches = [];
             foreach (string scope in directive.Targets(Current.IsScope).Distinct(StringComparer.Ordinal))

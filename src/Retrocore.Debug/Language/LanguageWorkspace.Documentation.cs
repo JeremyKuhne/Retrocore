@@ -199,9 +199,15 @@ internal sealed partial class LanguageWorkspace
             {
                 int comment = SourceText.CommentStart(lines[line]);
                 string code = comment < 0 ? lines[line] : lines[line][..comment];
+
+                // A .using line names scopes, not symbols.
+                if (code.TrimStart().StartsWith(".using", StringComparison.OrdinalIgnoreCase)) { continue; }
                 foreach ((int start, string name) in Words(code))
                 {
                     if (!current.TryGetValue(name, out string? replacement) || replacement is null) { continue; }
+
+                    // A name the line's scopes or .using directives define binds there, not to the historical name.
+                    if (analysis.Bound(name, member, line) is not null) { continue; }
                     if (!byFile.TryGetValue(member, out List<Diagnostic>? list)) { byFile[member] = list = []; }
                     list.Add(new Diagnostic
                     {

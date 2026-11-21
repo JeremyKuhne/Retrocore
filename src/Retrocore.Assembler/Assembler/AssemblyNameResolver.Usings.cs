@@ -181,22 +181,24 @@ internal sealed partial class AssemblyNameResolver
     }
 
     /// <summary>
-    ///  Identifies the file a statement is in by the chain of <c>.include</c> lines that brought it in, looking
-    ///  through macro expansions to where they were invoked; a top-level file's statements give "".
+    ///  Identifies the file a statement is in: the top-level source it came from, then the chain of <c>.include</c>
+    ///  lines that brought it in, looking through macro expansions to where they were invoked.
     /// </summary>
     /// <param name="location">The statement's location.</param>
-    /// <returns>The include chain.</returns>
+    /// <returns>The key, which starts with the key of every file that includes this one.</returns>
     private static string FileKey(AssemblyLocation? location)
     {
-        if (location?.ExpandedFrom is null) { return ""; }
-        System.Text.StringBuilder? key = null;
-        for (AssemblyLocation current = location; current.ExpandedFrom is { } from; current = from)
+        if (location is null) { return ""; }
+        List<string> segments = [];
+        AssemblyLocation current = location;
+        for (; current.ExpandedFrom is { } from; current = from)
         {
-            if (current.IsMacroExpansion) { continue; }
-            key ??= new();
-            key.Insert(0, $"{from.Path}:{from.Line}|");
+            if (!current.IsMacroExpansion) { segments.Add($"{from.Path}:{from.Line}|"); }
         }
 
-        return key?.ToString() ?? "";
+        // The outermost location is in a top-level source, so separate sources are separate files.
+        segments.Add($"{current.Path}|");
+        segments.Reverse();
+        return string.Concat(segments);
     }
 }

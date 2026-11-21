@@ -58,6 +58,9 @@ internal sealed partial class AssemblyPreprocessor
         foreach (AssemblySource source in sources)
         {
             ArgumentNullException.ThrowIfNull(source);
+
+            // A file-level .using ends with its file, so it does not reach the next top-level source.
+            processor._constantUsings = null;
             processor.ProcessSource(
                 source,
                 options.Dialect,

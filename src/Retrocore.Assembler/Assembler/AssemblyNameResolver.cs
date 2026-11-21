@@ -158,14 +158,18 @@ internal sealed partial class AssemblyNameResolver
         Stack<(string Key, Using? Usings)> files = [];
         string file = "";
         AssemblyLocation? lastFrom = null;
+        string? lastPath = null;
 
         for (int index = 0; index < _source.Statements.Count; index++)
         {
             _cancellation.ThrowIfCancellationRequested();
             AssemblyStatement node = _source.Statements[index];
-            if (!ReferenceEquals(node.Location?.ExpandedFrom, lastFrom))
+            // A statement in the same file as the last has the same include chain, or none at the same path.
+            AssemblyLocation? from = node.Location?.ExpandedFrom;
+            if (!ReferenceEquals(from, lastFrom) || (from is null && !string.Equals(node.Location?.Path, lastPath, StringComparison.Ordinal)))
             {
-                lastFrom = node.Location?.ExpandedFrom;
+                lastFrom = from;
+                lastPath = node.Location?.Path;
                 string key = FileKey(node.Location);
                 if (key != file)
                 {

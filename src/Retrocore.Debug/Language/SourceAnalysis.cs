@@ -275,14 +275,25 @@ internal sealed partial class SourceAnalysis
     /// <param name="line">The zero-based line it is used on.</param>
     /// <param name="macro10">Whether the reference uses MACRO-10, or null for the root's dialect.</param>
     /// <returns>The definitions; several when two used scopes define the name.</returns>
-    internal IReadOnlyList<SymbolSite> Find(string name, string path, int line, bool? macro10 = null)
+    internal IReadOnlyList<SymbolSite> Find(string name, string path, int line, bool? macro10 = null) =>
+        Bound(name, path, line) ?? Find(name, macro10);
+
+    /// <summary>
+    ///  Finds the definition a plain name used on a line binds to by the assembler's scope rules alone: the scopes
+    ///  that contain the line, innermost first, the root, then the scopes the <c>.using</c> directives in effect name.
+    /// </summary>
+    /// <param name="name">The plain name.</param>
+    /// <param name="path">The full path of the file it is used in.</param>
+    /// <param name="line">The zero-based line it is used on.</param>
+    /// <returns>The definitions, or null when the name binds to none of them, as a historical name does not.</returns>
+    internal IReadOnlyList<SymbolSite>? Bound(string name, string path, int line)
     {
-        DocumentationScopes scopes = ScopesAt(path, line);
-        if (name.Contains("::", StringComparison.Ordinal) || (scopes.Scope.Length == 0 && scopes.Usings.Count == 0))
+        if (name.Contains("::", StringComparison.Ordinal))
         {
-            return Find(name, macro10);
+            return _definitions.GetValueOrDefault(name.TrimStart(':'));
         }
 
+        DocumentationScopes scopes = ScopesAt(path, line);
         for (string scope = scopes.Scope; scope.Length != 0; scope = Parent(scope))
         {
             if (_definitions.TryGetValue($"{scope}::{name}", out List<SymbolSite>? sites)) { return sites; }
@@ -301,7 +312,7 @@ internal sealed partial class SourceAnalysis
             if (used.Count != 0) { return used; }
         }
 
-        return Find(name, macro10);
+        return null;
     }
 
     /// <summary>

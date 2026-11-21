@@ -152,6 +152,22 @@ public sealed class UsingTests
     }
 
     /// <summary>
+    ///  A file-level <c>.using</c> ends with its top-level source: the next source assembled with it does not see it.
+    /// </summary>
+    [TestMethod]
+    public void UsingEndsWithItsTopLevelSource()
+    {
+        AssemblyResult result = new NativeAssembler().Assemble(
+            [
+                new AssemblySource(".cpu Mos6502\n.scope A\nV = 1\n.endscope\n.using A\n    lda #V\n", "first.asm"),
+                new AssemblySource("    lda #V\n", "second.asm")
+            ],
+            new AssemblyOptions(ProcessorVariant.Mos6502, origin: 0x1300, imageSize: 0x100));
+
+        result.Diagnostics.Should().ContainSingle().Which.Location?.Path.Should().Be("second.asm");
+    }
+
+    /// <summary>
     ///  Two used scopes that define a name: an error naming both, only where that name is used.
     /// </summary>
     [TestMethod]
@@ -401,6 +417,73 @@ public sealed class UsingTests
         DocumentationTopic move = set.Find("Move") ?? throw new AssertFailedException("No Move topic.");
         resolver.Resolve(move, "CursorColumn").Topic?.Name.Should().Be("EightyColumns::CursorColumn");
         resolver.Check().Should().BeEmpty();
+    }
+
+    /// <summary>
+    ///  A topic documented in two <c>.if</c> branches resolves each comment's links by the <c>.using</c> directives in
+    ///  effect at that comment, not the first comment's.
+    /// </summary>
+    [TestMethod]
+    public void LinksUseTheirOwnCommentsUsings()
+    {
+        string text = """
+            .scope A
+            ;; A value.
+            X = 1
+            .endscope
+
+            .scope B
+            ;; Another value.
+            Y = 2
+            .endscope
+
+            ENHANCED = 1
+            .using A
+            .if ENHANCED
+            ;; Uses <X>.
+            Thing:
+                rts
+            .else
+            .using B
+            ;; Uses <Y>.
+            Thing:
+                rts
+            .endif
+            """;
+
+        DocumentationSet set = DocumentationSet.Create([DocumentationParser.Parse(text, "test.asm")], Assemble(text));
+        new DocumentationResolver(set).Check().Should().BeEmpty();
+    }
+
+    /// <summary>
+    ///  The editor's scope-rule lookup, which decides whether a word is a historical name, finds a name a
+    ///  <c>.using</c> supplies, so that use is not offered a historical name's quick fix.
+    /// </summary>
+    [TestMethod]
+    public void UsedNamesAreNotHistoricalNames()
+    {
+        string directory = Directory.CreateTempSubdirectory("retrocore-using").FullName;
+        try
+        {
+            string main = Path.Join(directory, "main.asm");
+            File.WriteAllText(main, """
+                .scope Other
+                COUT = 1
+                .endscope
+                .using Other
+                    lda #COUT
+
+                """);
+
+            SourceAnalysis analysis = SourceAnalysis.Assemble(main, _ => null);
+            analysis.Result.Diagnostics.Should().BeEmpty();
+            (analysis.Bound("COUT", main, line: 4) ?? []).Select(site => site.Name).Should().Equal("Other::COUT");
+            analysis.Bound("COUT", main, line: 0).Should().BeNull();
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
     }
 
     /// <summary>

@@ -72,12 +72,15 @@ OPERAND_POSITION = 3
 
 ;; The operand format of the instruction being decoded, which <PrintInstruction> shifts left as it prints it: the
 ;; lo-res routines' <MASK>.
+;; Also: FORMAT (A2RM78, A2RM79, IIEROM82, IIETRM85)
 FormatBits = MASK
 
 ;; The high byte of the packed mnemonic while <PrintInstruction> unpacks it: the lo-res lines' <H2>.
+;; Also: LMNEM (A2RM78, A2RM79, IIEROM82, IIETRM85)
 MnemonicHigh = H2
 
 ;; The low byte of the packed mnemonic while <PrintInstruction> unpacks it: the lo-res lines' <V2>.
+;; Also: RMNEM (A2RM78, A2RM79, IIEROM82, IIETRM85)
 MnemonicLow = V2
 
 ;; Prints the address of the instruction at <PCL>/<PCH>, then decodes its opcode.

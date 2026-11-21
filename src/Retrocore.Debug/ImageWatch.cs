@@ -2,11 +2,13 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
+using System.Diagnostics;
+
 namespace Retrocore.Debug;
 
 /// <summary>
 ///  One image's watch: a watcher on the folder of the path a disk was read from, one on the file that path leads to
-///  when it is a link, and the timer that checks the image once their events settle.
+///  when it is a link, and when the image is next checked, once their events settle.
 /// </summary>
 /// <remarks>
 ///  <para>
@@ -14,16 +16,15 @@ namespace Retrocore.Debug;
 ///   failed (a folder deleted and made again, the system out of watches), moves the target's watcher when a link on
 ///   the way now leads elsewhere, and checks the image when what it finds of the file (where the path leads, its
 ///   length, when it was written and its attributes) differs from the last sweep, which no event may have told.
-///   Nothing here throws to the timers that call it.
+///   Nothing here throws to the <see cref="ImageWatcher"/> thread that sweeps and checks it.
 ///  </para>
 /// </remarks>
 internal sealed class ImageWatch
 {
     // How long after the last event the image is checked.
-    private const int SettleMilliseconds = 200;
+    private static readonly long s_settleTicks = Stopwatch.Frequency / 5;
 
     private readonly Lock _lock = new();
-    private readonly Timer _settle;
     private readonly Func<string, bool> _changed;
     private FileSystemWatcher? _watcher;
     private FileSystemWatcher? _targetWatcher;
@@ -31,6 +32,9 @@ internal sealed class ImageWatch
     private string? _signature;
     private volatile bool _failed;
     private bool _closed;
+
+    // When the image is next checked, as a Stopwatch timestamp, or 0 for no check waiting.
+    private long _settleAt;
 
     /// <summary>
     ///  Starts watching an image.
@@ -43,7 +47,6 @@ internal sealed class ImageWatch
     {
         Path = path;
         _changed = changed;
-        _settle = new(_ => Settled());
         Sweep(check: false);
     }
 
@@ -97,15 +100,36 @@ internal sealed class ImageWatch
             _closed = true;
             _watcher?.Dispose();
             _targetWatcher?.Dispose();
-            _settle.Dispose();
+            Volatile.Write(ref _settleAt, 0);
         }
     }
 
-    // The image is checked once its events settle, after the watch is made whole and the file noted, so the next
-    // sweep does not check it again; a check that could not read the file forgets it, so the next sweep tries again.
-    private void Settled()
+    /// <summary>
+    ///  Gets when the image is next checked, as a <see cref="Stopwatch"/> timestamp, or 0 when no check is waiting.
+    /// </summary>
+    internal long SettleAt => Volatile.Read(ref _settleAt);
+
+    /// <summary>
+    ///  Checks the image if its events have settled by now.
+    /// </summary>
+    /// <param name="now">The time, as a <see cref="Stopwatch"/> timestamp.</param>
+    /// <remarks>
+    ///  <para>
+    ///   The image is checked after the watch is made whole and the file noted, so the next sweep does not check it
+    ///   again; a check that could not read the file forgets it, so the next sweep tries again. An event during the
+    ///   check checks it again once that event settles.
+    ///  </para>
+    /// </remarks>
+    internal void SettleIfDue(long now)
     {
+        long due = Volatile.Read(ref _settleAt);
+        if (due == 0 || due > now || Interlocked.CompareExchange(ref _settleAt, 0, due) != due) { return; }
         Sweep(check: false);
+        lock (_lock)
+        {
+            if (_closed) { return; }
+        }
+
         if (_changed(Path)) { return; }
         lock (_lock) { _signature = null; }
     }
@@ -115,14 +139,8 @@ internal sealed class ImageWatch
     /// </summary>
     internal void Poke()
     {
-        try
-        {
-            _settle.Change(SettleMilliseconds, Timeout.Infinite);
-        }
-        catch (ObjectDisposedException)
-        {
-            // No disk comes from the image any more.
-        }
+        Volatile.Write(ref _settleAt, Math.Max(Stopwatch.GetTimestamp() + s_settleTicks, 1));
+        ImageWatcher.Wake();
     }
 
     // Where the path leads, every link followed, or the path itself when that cannot be told.

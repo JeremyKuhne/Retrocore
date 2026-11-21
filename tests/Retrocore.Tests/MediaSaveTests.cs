@@ -251,6 +251,50 @@ public sealed class MediaSaveTests
     }
 
     /// <summary>
+    ///  An image is still watched while every thread of the thread pool is busy and work waits behind them, as when a
+    ///  full test run fills the machine: the watch keeps its own time, not the pool's.
+    /// </summary>
+    [TestMethod]
+    [DoNotParallelize]
+    public void ImageIsWatchedWhileThePoolIsBusy()
+    {
+        (string image, _) = Image("busy.dsk");
+        Apple2FloppyDrive drive = Drive(image);
+        Until(() => { }, () => Source(drive)?.Bool("stale") == false);
+
+        // A pool that adds no threads, as one whose work keeps finishing does not, and work holding each of them until
+        // let go, so anything else queued waits.
+        ThreadPool.GetMaxThreads(out int workers, out int completions);
+        ThreadPool.GetMinThreads(out int least, out _);
+        ThreadPool.SetMaxThreads(least, completions).Should().BeTrue();
+        using ManualResetEventSlim release = new();
+        int queued = least * 2;
+        int done = 0;
+        for (int i = 0; i < queued; i++)
+        {
+            ThreadPool.UnsafeQueueUserWorkItem(
+                _ =>
+                {
+                    release.Wait(TimeSpan.FromSeconds(30));
+                    Interlocked.Increment(ref done);
+                },
+                state: null);
+        }
+
+        try
+        {
+            byte[] outside = new byte[35 * 4096];
+            Until(() => File.WriteAllBytes(image, outside), () => Source(drive)?.Bool("stale") == true);
+        }
+        finally
+        {
+            release.Set();
+            ThreadPool.SetMaxThreads(workers, completions);
+            SpinWait.SpinUntil(() => Volatile.Read(ref done) == queued, TimeSpan.FromSeconds(30));
+        }
+    }
+
+    /// <summary>
     ///  A format that cannot hold all of the disk answers with what it would lose and writes nothing; accepted, it
     ///  saves and the disk stays changed.
     /// </summary>

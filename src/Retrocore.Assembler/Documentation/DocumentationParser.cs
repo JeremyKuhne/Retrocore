@@ -257,7 +257,11 @@ public static partial class DocumentationParser
         List<string> aliases = [];
         if (kind == DocumentationKind.Routine)
         {
-            kind = LabelKind(lines, target, definition.Rest, dataMacros, aliases) ? DocumentationKind.Table : DocumentationKind.Routine;
+            // A label after a .proc line is inside the procedure, not another name stacked on it.
+            bool procedure = Split(lines[target]).Code.TrimStart().StartsWith(".proc", StringComparison.OrdinalIgnoreCase);
+            kind = LabelKind(lines, target, definition.Rest, dataMacros, procedure ? [] : aliases)
+                ? DocumentationKind.Table
+                : DocumentationKind.Routine;
         }
 
         (string summary, List<string> remarks, List<DocumentationSection> sections) = Body(body);

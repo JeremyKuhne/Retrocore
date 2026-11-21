@@ -137,6 +137,41 @@ public sealed class ContinuedScopeTests
                 "A scope requires an unqualified name; .proc requires a name and neither takes a label.");
     }
 
+    /// <summary>
+    ///  The editor keeps a continued piece's names in its scope even while the source does not assemble.
+    /// </summary>
+    [TestMethod]
+    public void TheEditorFollowsPiecesOfAFailedAssembly()
+    {
+        string directory = Directory.CreateTempSubdirectory("retrocore-continued").FullName;
+        try
+        {
+            string main = Path.Join(directory, "main.asm");
+            File.WriteAllText(main, """
+                .scope Commands
+                .proc Go
+                    rts
+                .endproc
+                .endscope
+                .scope Commands continued
+                .proc List
+                    rts
+                .endproc
+                .endscope
+                    lda #Undefined1
+
+                """);
+
+            Retrocore.Debug.Language.SourceAnalysis analysis = Retrocore.Debug.Language.SourceAnalysis.Assemble(main, _ => null);
+            analysis.Result.Success.Should().BeFalse();
+            analysis.Find("Commands::List").Should().NotBeEmpty();
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
     private static AssemblyResult Assemble(string text) =>
         new NativeAssembler().Assemble(
             new AssemblySource(".cpu Mos6502\n" + text, "test.asm"),

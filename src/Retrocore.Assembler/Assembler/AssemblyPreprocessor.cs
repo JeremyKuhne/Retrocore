@@ -268,7 +268,9 @@ internal sealed partial class AssemblyPreprocessor
         _cancellation.ThrowIfCancellationRequested();
         AssemblyDialect dialect = explicitDialect ?? Pragma(source) ?? source.Dialect ?? inherited;
         if (dialect == AssemblyDialect.Merlin) { CollectMerlinEquates(source); }
-        if (dialect == AssemblyDialect.Native) { ReadHistoricalNames(source); }
+
+        // The assembler gives definitions their Also: names in every dialect, so conditionals see them in every one.
+        ReadHistoricalNames(source);
 
         if (dialect is not (AssemblyDialect.Native or AssemblyDialect.Ca65 or AssemblyDialect.Merlin or AssemblyDialect.Macro10))
         {

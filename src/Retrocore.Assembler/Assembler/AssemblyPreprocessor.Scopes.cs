@@ -56,6 +56,7 @@ internal sealed partial class AssemblyPreprocessor
             if (node.Kind == AssemblyStatementKind.Procedure)
             {
                 if (_defined.Add(qualified)) { _constantCheap = qualified; }
+                RecordHistoricalNames(node, qualified);
                 _constants.Unset(qualified);
             }
 

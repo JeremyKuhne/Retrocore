@@ -190,6 +190,28 @@ public sealed class StyleLintTests
         Problems(text).Should().BeEquivalentTo("13: Put the label @again on its own line.");
     }
 
+    /// <summary>
+    ///  A word that looks like a one-letter prefix and four hex letters (LACED, DECAF) is not an address name; one
+    ///  with a digit (LF8C2) is.
+    /// </summary>
+    [TestMethod]
+    public void WordsAreNotAddressNames()
+    {
+        string text = Pragma + """
+            .cpu Mos6502
+            .org $0300
+
+            ;; Laced, as a word.
+            LACED = 1
+
+            ;; An address as a name.
+            LF8C2 = 2
+            """;
+
+        Problems(text).Where(problem => problem.Contains("only an address", StringComparison.Ordinal)).Should()
+            .ContainSingle().Which.Should().Contain("LF8C2");
+    }
+
     // The problems the editor reports for one strict file, as "line: message" with 1-based lines.
     private static List<string> Problems(string text)
     {

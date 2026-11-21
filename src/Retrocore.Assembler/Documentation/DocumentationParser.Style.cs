@@ -232,8 +232,13 @@ public static partial class DocumentationParser
         {
             if (!rest.StartsWith(prefix, StringComparison.Ordinal)) { continue; }
             string address = rest[prefix.Length..];
-            if (address.StartsWith('_')) { address = address[1..]; }
-            if (address.Length == 4 && address.All(Uri.IsHexDigit)) { return true; }
+            bool separated = address.StartsWith('_');
+            if (separated) { address = address[1..]; }
+
+            // A one-letter prefix before four hex letters can be a word (LACED, DECAF): without the separator, an
+            // address has a digit.
+            bool word = prefix.Length == 1 && !separated && !address.Any(char.IsAsciiDigit);
+            if (address.Length == 4 && address.All(Uri.IsHexDigit) && !word) { return true; }
         }
 
         return false;

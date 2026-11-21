@@ -322,7 +322,7 @@ public class SdkDocumentationTests
         List<DocumentationSet> sets = Sets();
         DocumentationSet monitor = sets.Single(set => set.Module == "Monitor");
         monitor.Topics.Count(topic => topic.Kind == DocumentationKind.Routine).Should().BeGreaterThan(100);
-        DocumentationTopic plot = monitor.Find("PLOT") ?? throw new AssertFailedException("PLOT is not documented.");
+        DocumentationTopic plot = monitor.Find("LowRes::Plot") ?? throw new AssertFailedException("LowRes::Plot is not documented.");
         plot.Summary.Should().StartWith("Plots one lo-res block");
         plot.Value.Should().Be(0xF800);
 

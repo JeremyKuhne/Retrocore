@@ -150,7 +150,9 @@ public sealed class SystemSourceTests
         position.Should().NotBeNull();
         SourceLine line = position?.Chain[0] ?? throw new AssertFailedException("No source for COUT.");
         line.Path.Should().StartWith(Path.Join(Path.GetDirectoryName(Path.GetFullPath(s_monitor)), "Monitor"));
-        File.ReadAllLines(line.Path)[line.Line - 2].Should().Be("COUT:");
+        string[] lines = File.ReadAllLines(line.Path);
+        lines[line.Line - 2].Should().StartWith(".assert * = $FDED");
+        lines[line.Line - 3].Should().Be(".proc CharacterOut");
 
         // Language-card RAM at $F800 is someone else's code.
         bus.Read(0xC080);

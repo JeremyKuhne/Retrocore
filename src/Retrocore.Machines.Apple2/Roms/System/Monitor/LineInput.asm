@@ -1,132 +1,291 @@
-; GETLN's echo of a character that is not a carriage return: prints it, handles backspace and
-; Control-X (cancel), and beeps near the end of the 248-byte buffer.
+; retrocore: style=strict
+;; Line input, $FD3D-$FDA2: reading a line into the input buffer with its editing keys, and printing a Return or an
+;; address.
+
+; Line input.
+
+;; The position in <IN> from which each character typed rings the bell: 248, eight before the buffer's end.
+INPUT_WARNING = $F8
+
+;; The <INVFLG> mask for normal video: every bit kept.
+NORMAL_VIDEO = $FF
+
+;; The mask the original IIe's <GetLine> applies where the Apple II's apply <UPPERCASE_MASK>: every bit, so
+;; lowercase stays.
+KEEP_CASE_MASK = $FF
 .if ENHANCED
 
-PICKFIX:
-    ldy #$0F                        ; $FD3D
-    jsr GOTOCX                      ; $FD3F
-    ldy CH                          ; $FD42
-    sta IN,x                        ; $FD44
-
-NOTCR_1:
-    jsr COUT                        ; $FD47
-    nop                             ; $FD4A
-.else
-
-NOTCR:
-    lda INVFLG                      ; $FD3D
-    pha                             ; $FD3F
-    lda #$FF                        ; $FD40
+;; The internal firmware's function that gets the character under the 80-column cursor, with its high bit set.
+FIRMWARE_CHARACTER_UNDER_CURSOR = $0F
 .endif
-.if MONITOR = MONITOR_IIE
-    nop                             ; $FD4B original $FD42
-    nop                             ; $FD4C original $FD43
-.else
-    sta INVFLG                      ; $FD42 the Apple II's echo is always in normal video
-.endif
-    lda IN,x                        ; $FD4D original $FD44
-.if .not ENHANCED
 
-NOTCR_1:
-    jsr COUT                        ; $FD47
-    pla                             ; $FD4A
-    sta INVFLG                      ; $FD4B
-    lda IN,x                        ; $FD4D
-.endif
-    cmp #KEY_BS                     ; $FD50
-    beq BCKSPC                      ; $FD52
-    cmp #KEY_CTRL_X                 ; $FD54
-    beq CANCEL                      ; $FD56
-    cpx #$F8                        ; $FD58
-    bcc NOTCR1                      ; $FD5A
-    jsr BELL                        ; $FD5C
+;; The parts of <GetLine> that handle a character once it is in the buffer: echoing it, its editing keys,
+;; and cancelling the line.
+.scope LineInput
+.if ENHANCED
 
-NOTCR1:
-    inx                             ; $FD5F
-    bne NXTCHAR                     ; $FD60
-
-;; Cancels the input line: prints a backslash and starts again.
-CANCEL:
-    lda #'\'                        ; $FD62
-    jsr COUT                        ; $FD64
-
-;; GETLN after a carriage return.
-GETLNZ:
-    jsr CROUT                       ; $FD67
-
-;; Reads a line of input into IN ($0200) after printing the prompt character in PROMPT.
-;; Backspace deletes a character, Control-X cancels the line, and the right arrow (Control-U) copies
-;; the character under the cursor.
+;; Control-U in 80 columns: has the internal firmware get the character under the cursor, stores it in the
+;; line, then echoes it.
 ;;
-;; The Apple II's Monitors store lowercase letters as capitals, and echo the line in normal video
-;; whatever INVFLG holds.
-;; Out: X = length; the line ends with a carriage return at IN,X
-GETLN:
-    lda PROMPT                      ; $FD6A
-    jsr COUT                        ; $FD6C
+;; At $FD3D.
+;; In: X = the position in <IN>
+;; Also: PICKFIX (IIETRM85)
+.proc PickUnderCursor
+.assert * = $FD3D, "LineInput::PickUnderCursor must stay at $FD3D."
+    ldy #FIRMWARE_CHARACTER_UNDER_CURSOR
+    jsr CallFirmware
+    ldy CH
+    sta IN,x
+    ; Falls into Echo.
+.endproc
 
-;; GETLN without printing the prompt.
-GETLN_1:
-    ldx #$01                        ; $FD6F
+;; Echoes a character typed into the line, other than Return, then performs the backspace key and Control-X, and
+;; rings the bell near the buffer's end.
+;;
+;; At $FD47. The 256th character cancels the line.
+;; In: X = the character's position in <IN>
+;; Also: NOTCR (A2RM78, A2RM79, IIEROM82, IIETRM85)
+.proc Echo
+.assert * = $FD47, "LineInput::Echo must stay at $FD47."
+    jsr CharacterOut
 
-BCKSPC:
-    txa                             ; $FD71
-    beq GETLNZ                      ; $FD72
-    dex                             ; $FD74
+    ; In place of the other builds' INVFLG save and restore.
+    nop
+    nop
+    nop
 
-;; Reads the next character of an input line; Control-U takes the character under the cursor.
-NXTCHAR:
-    jsr RDCHAR                      ; $FD75
-    cmp #KEY_RIGHT                  ; $FD78
-.if ENHANCED
-    bne ADDINP                      ; $FD7A
+    ; The editing keys.
+    lda IN,x
+    cmp #KEY_BS
+    beq GetLine::Backspace
+    cmp #KEY_CTRL_X
+    beq Cancel
+
+    ; The bell from INPUT_WARNING on.
+    cpx #INPUT_WARNING
+    bcc Next
+    jsr Beep
+
+;; Goes on with the next position; past the buffer's end, falls into <Cancel>.
+;; Also: NOTCR1 (A2RM79, IIETRM85)
+Next:
+    inx
+    bne GetLine::NextCharacter
+    ; Falls into Cancel.
+.endproc
 .else
-    bne CAPTST                      ; $FD7A
-.endif
-    lda (BASL),y                    ; $FD7C
-.if ENHANCED
-    bit RD80VID                     ; $FD7E
-    bmi PICKFIX                     ; $FD81
-    nop                             ; $FD83
-.else
 
-CAPTST:
-    cmp #'a' - 1                    ; $FD7E lowercase passes unchanged
-    bcc ADDINP                      ; $FD80
+;; Echoes a character typed into the line, other than Return, then performs the backspace key and Control-X, and
+;; rings the bell near the buffer's end.
+;;
+;; At $FD3D. The Apple II's Monitors echo in normal video, whatever <INVFLG> holds, and restore it; the
+;; original IIe keeps the save and restore but echoes with <INVFLG> as it is. The 256th character cancels the
+;; line.
+;; In: X = the character's position in <IN>
+;; Also: NOTCR (A2RM78, A2RM79, IIEROM82, IIETRM85)
+.proc Echo
+.assert * = $FD3D, "LineInput::Echo must stay at $FD3D."
+    lda INVFLG
+    pha
+    lda #NORMAL_VIDEO
 .if MONITOR = MONITOR_IIE
-    and #$FF                        ; $FD82
+    nop
+    nop
 .else
-    and #$DF                        ; $FD82 the Apple II's Monitors make it uppercase
+    sta INVFLG
 .endif
+    lda IN,x
+    jsr CharacterOut
+    pla
+    sta INVFLG
+
+    ; The editing keys.
+    lda IN,x
+    cmp #KEY_BS
+    beq GetLine::Backspace
+    cmp #KEY_CTRL_X
+    beq Cancel
+
+    ; The bell from INPUT_WARNING on.
+    cpx #INPUT_WARNING
+    bcc Next
+    jsr Beep
+
+;; Goes on with the next position; past the buffer's end, falls into <Cancel>.
+;; Also: NOTCR1 (A2RM79, IIETRM85)
+Next:
+    inx
+    bne GetLine::NextCharacter
+    ; Falls into Cancel.
+.endproc
 .endif
 
-;; Stores a character in the input line and handles it (NOTCR) unless it is a carriage return.
-ADDINP:
-    sta IN,x                        ; $FD84
-    cmp #KEY_CR                     ; $FD87
+;; Cancels the input line: prints a backslash and starts again on a new line.
+;;
+;; At $FD62.
+;; Also: CANCEL (A2RM78, A2RM79, IIEROM82, IIETRM85)
+.proc Cancel
+.assert * = $FD62, "LineInput::Cancel must stay at $FD62."
+    lda #'\'
+    jsr CharacterOut
+    ; Falls into GetLineAfterReturn.
+.endproc
+
+.endscope
+
+;; Prints a Return, then reads a line as <GetLine> does.
+;;
+;; At $FD67.
+;; Out: X = the line's length, IN,X = the Return that ends it
+;; Also: GETLNZ (A2RM78, A2RM79, IIEROM82, IIETRM85)
+.proc GetLineAfterReturn
+.assert * = $FD67, "GetLineAfterReturn must stay at $FD67."
+    jsr PrintReturn
+    ; Falls into GetLine.
+.endproc
 .if ENHANCED
-    bne NOTCR_1                     ; $FD89
+
+;; Reads a line into <IN> after printing the prompt character in <PROMPT>.
+;;
+;; At $FD6A. Backspace deletes a character, Control-X cancels the line, and the right arrow (Control-U) takes
+;; the character under the cursor. Lowercase stays lowercase.
+;; Out: X = the line's length, IN,X = the Return that ends it
+;; Also: GETLN (A2RM78, A2RM79, IIEROM82, IIETRM85)
+.proc GetLine
+.assert * = $FD6A, "GetLine must stay at $FD6A."
+    lda PROMPT
+    jsr CharacterOut
+
+;; Reads a line without printing the prompt.
+;; Out: X = the line's length, IN,X = the Return that ends it
+;; Also: GETLN1 (A2RM79, IIETRM85)
+NoPrompt:
+.assert * = $FD6F, "GetLine::NoPrompt must stay at $FD6F."
+    ldx #1
+
+;; Takes back a character; at the line's start, starts the line again. <LineInput::Echo> enters here.
+;; Also: BCKSPC (A2RM78, A2RM79, IIEROM82, IIETRM85)
+Backspace:
+    txa
+    beq GetLineAfterReturn
+    dex
+
+;; Reads the next character; Control-U takes the one under the cursor.
+;; Also: NXTCHAR (A2RM78, A2RM79, IIEROM82, IIETRM85)
+NextCharacter:
+    jsr ReadCharacter
+    cmp #KEY_RIGHT
+    bne Store
+    lda (BASL),y
+    bit RD80VID
+    bmi LineInput::PickUnderCursor
+    nop
+
+;; Stores the character in the line, and echoes it unless it is a Return.
+;; Also: ADDINP (A2RM78, A2RM79, IIEROM82, IIETRM85)
+Store:
+    sta IN,x
+    cmp #KEY_CR
+    bne LineInput::Echo
+    ; Falls into ClearAndPrintReturn.
+.endproc
 .else
-    bne NOTCR                       ; $FD89
+
+;; Reads a line into <IN> after printing the prompt character in <PROMPT>.
+;;
+;; At $FD6A. Backspace deletes a character, Control-X cancels the line, and the right arrow (Control-U) takes
+;; the character under the cursor. The Apple II's Monitors store lowercase letters as capitals; the original
+;; IIe keeps them.
+;; Out: X = the line's length, IN,X = the Return that ends it
+;; Also: GETLN (A2RM78, A2RM79, IIEROM82, IIETRM85)
+.proc GetLine
+.assert * = $FD6A, "GetLine must stay at $FD6A."
+    lda PROMPT
+    jsr CharacterOut
+
+;; Reads a line without printing the prompt.
+;; Out: X = the line's length, IN,X = the Return that ends it
+;; Also: GETLN1 (A2RM79, IIETRM85)
+NoPrompt:
+.assert * = $FD6F, "GetLine::NoPrompt must stay at $FD6F."
+    ldx #1
+
+;; Takes back a character; at the line's start, starts the line again. <LineInput::Echo> enters here.
+;; Also: BCKSPC (A2RM78, A2RM79, IIEROM82, IIETRM85)
+Backspace:
+    txa
+    beq GetLineAfterReturn
+    dex
+
+;; Reads the next character; Control-U takes the one under the cursor.
+;; Also: NXTCHAR (A2RM78, A2RM79, IIEROM82, IIETRM85)
+NextCharacter:
+    jsr ReadCharacter
+    cmp #KEY_RIGHT
+    bne Uppercase
+    lda (BASL),y
+
+;; On the Apple II's Monitors, makes a lowercase letter a capital: everything from the character before "a" up
+;; has bit 5 cleared. The original IIe's mask keeps it.
+;; Also: CAPTST (A2RM78, A2RM79, IIEROM82)
+Uppercase:
+    cmp #'a' - 1
+    bcc Store
+.if MONITOR = MONITOR_IIE
+    and #KEEP_CASE_MASK
+.else
+    and #UPPERCASE_MASK
 .endif
 
-;; Clears the rest of the line, then prints a carriage return.
-CROUT1:
-    jsr CLREOL                      ; $FD8B
+;; Stores the character in the line, and echoes it unless it is a Return.
+;; Also: ADDINP (A2RM78, A2RM79, IIEROM82, IIETRM85)
+Store:
+    sta IN,x
+    cmp #KEY_CR
+    bne LineInput::Echo
+    ; Falls into ClearAndPrintReturn.
+.endproc
+.endif
 
-;; Prints a carriage return.
-CROUT:
-    lda #KEY_CR                     ; $FD8E
-    bne COUT                        ; $FD90
+;; Clears the rest of the line, then prints a Return.
+;;
+;; At $FD8B.
+;; Also: CROUT1 (A2RM79, IIETRM85)
+.proc ClearAndPrintReturn
+.assert * = $FD8B, "ClearAndPrintReturn must stay at $FD8B."
+    jsr ClearToEndOfLine
+    ; Falls into PrintReturn.
+.endproc
 
-;; Prints a carriage return, then A1 as "AAAA-".
-PRA1:
-    ldy A1H                         ; $FD92
-    ldx A1L                         ; $FD94
+;; Prints a Return.
+;;
+;; At $FD8E.
+;; Also: CROUT (A2RM78, A2RM79, IIEROM82, IIETRM85)
+.proc PrintReturn
+.assert * = $FD8E, "PrintReturn must stay at $FD8E."
+    lda #KEY_CR
+    bne CharacterOut
+.endproc
 
-PRYX2:
-    jsr CROUT                       ; $FD96
-    jsr PRNTYX                      ; $FD99
-    ldy #$00                        ; $FD9C
-    lda #'-'                        ; $FD9E
-    jmp COUT                        ; $FDA0
+;; Prints a Return, then <A1L>/<A1H> as "AAAA-".
+;;
+;; At $FD92.
+;; Also: PRA1 (A2RM78, A2RM79, IIEROM82)
+.proc PrintAddress
+.assert * = $FD92, "PrintAddress must stay at $FD92."
+    ldy A1H
+    ldx A1L
+
+;; Prints a Return, then Y and X as "YYXX-".
+;; In: Y = the high byte, X = the low byte
+;; Also: PRYX2 (A2RM78, A2RM79, IIEROM82, IIETRM85)
+YX:
+.assert * = $FD96, "PrintAddress::YX must stay at $FD96."
+    jsr PrintReturn
+    jsr PrintYX
+
+    ; Y = 0 for the caller, then the dash.
+    ldy #0
+    lda #'-'
+    jmp CharacterOut
+.endproc

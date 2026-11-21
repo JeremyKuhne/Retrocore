@@ -1,395 +1,761 @@
+; retrocore: style=strict
+;; The text screen's output, $FBC1-$FCA7: line base addresses, the bell, the cursor moves, the escape commands,
+;; clearing and scrolling, and on the IIe the glue around the internal firmware that does much of it.
+
+; The text screen's layout.
+
+;; A text line's bits 1 and 2, once bit 0 is shifted out: which page of the screen's four the line is in.
+TEXT_LINE_PAGE_BITS = %00000011
+
+;; A text line's bits 3 and 4: which third of the screen the line is in, each third $28 bytes on from the last.
+TEXT_LINE_THIRD_BITS = %00011000
+
+;; What an odd text line adds to its base address: it is in the second half of its page.
+TEXT_ODD_LINE = $80
+
+; The bell.
+
+;; The delay count before the bell's tone, about 11 ms.
+BELL_PAUSE = $40
+
+;; The delay count between the speaker's toggles, about 0.5 ms, a tone of about 1 kHz.
+BELL_HALF_CYCLE = $0C
+
+;; How many times the bell toggles the speaker: 192, about 0.1 seconds of tone.
+BELL_TOGGLES = $C0
+
+; Escape commands.
+
+;; Added with the carry set, takes 2 off the command: each step of <Escape::Command> checks two more letters.
+COMMAND_PAIR_STEP = $100 - 3
+
+; Slots.
+
+;; The page of slot 1's ROM, the lowest page <MSLOT> can name a slot by.
+FIRST_SLOT_PAGE = $C1
+
+.if MONITOR = MONITOR_IIE
+
+; The internal firmware's functions: the number in Y when the Monitor calls <GOTOCX>. The two IIe models
+; number them differently.
+.if ENHANCED
+
+;; The firmware function that prints a character in 80 columns.
+FIRMWARE_OUTPUT = $00
+
+;; The firmware function that sets <BASL>/<BASH> for a line, as <SetLineBase> does.
+FIRMWARE_LINE_BASE = $04
+
+;; The firmware function that clears the window and homes the cursor, as <Home> does.
+FIRMWARE_HOME = $05
+
+;; The firmware function that scrolls the window up a line, as <Scroll> does.
+FIRMWARE_SCROLL = $06
+
+;; The firmware function that clears from the cursor to the end of the line, as <ClearToEndOfLine> does.
+FIRMWARE_CLEAR_TO_END_OF_LINE = $07
+
+;; The firmware function that clears from a column to the end of the line, as <ClearLineFrom> does.
+FIRMWARE_CLEAR_LINE_FROM = $08
+
+;; The firmware function that clears from the cursor to the end of the window, as <ClearToEndOfWindow> does.
+FIRMWARE_CLEAR_TO_END_OF_WINDOW = $0A
+.else
+
+;; The firmware function that clears from the cursor to the end of the window, as <ClearToEndOfWindow> does.
+FIRMWARE_CLEAR_TO_END_OF_WINDOW = $00
+
+;; The firmware function that clears the window and homes the cursor, as <Home> does.
+FIRMWARE_HOME = $01
+
+;; The firmware function that scrolls the window up a line, as <Scroll> does.
+FIRMWARE_SCROLL = $02
+
+;; The firmware function that clears from the cursor to the end of the line, as <ClearToEndOfLine> does.
+FIRMWARE_CLEAR_TO_END_OF_LINE = $03
+
+;; The firmware function that clears from a column to the end of the line, as <ClearLineFrom> does.
+FIRMWARE_CLEAR_LINE_FROM = $04
+.endif
+.assert FIRMWARE_CLEAR_LINE_FROM = FIRMWARE_CLEAR_TO_END_OF_LINE + 1, "ClearLineFrom counts on this."
+.endif
+
 ;; Computes a text line's base address on page one.
-;; In: A = line (0-23)
-;; Out: BASL/BASH
+;;
+;; At $FBC1.
+;; In: A = the line, 0-23
+;; Out: BASL/BASH = the line's address, A = its low byte, carry = clear
 ;; Keeps: X, Y
-BASCALC:
-    pha                             ; $FBC1
-    lsr a                           ; $FBC2
-    and #$03                        ; $FBC3
-    ora #$04                        ; $FBC5
-    sta BASH                        ; $FBC7
-    pla                             ; $FBC9
-    and #$18                        ; $FBCA
-    bcc BASCLC2                     ; $FBCC
-    adc #$7F                        ; $FBCE
+;; Also: BASCALC (A2RM78, A2RM79, IIEROM82, IIETRM85)
+.proc BaseAddress
+.assert * = $FBC1, "BaseAddress must stay at $FBC1."
+    pha
 
-BASCLC2:
-    sta BASL                        ; $FBD0
-    asl a                           ; $FBD2
-    asl a                           ; $FBD3
-    ora BASL                        ; $FBD4
-    sta BASL                        ; $FBD6
-    rts                             ; $FBD8
+    ; The high byte: page one's, plus the line's page.
+    lsr a
+    and #TEXT_LINE_PAGE_BITS
+    ora #>LINE1
+    sta BASH
 
-;; Rings the bell when A is Control-G ($87): about 0.1 seconds at roughly 1 kHz. VIDOUT sends other
-;; control characters here too, and they are ignored.
-;; Uses A, Y.
-BELL1:
-    cmp #KEY_BELL                   ; $FBD9
-    bne RTS2B                       ; $FBDB
-    lda #$40                        ; $FBDD from here the bell rings whatever A holds
-    jsr WAIT                        ; $FBDF
-    ldy #$C0                        ; $FBE2
+    ; The low byte: $80 for an odd line (bit 0, now in the carry), plus $28 for each third.
+    pla
+    and #TEXT_LINE_THIRD_BITS
+    bcc StoreLow
+    ; The carry is set, so this adds TEXT_ODD_LINE.
+    adc #TEXT_ODD_LINE - 1
 
-BELL2:
-    lda #$0C                        ; $FBE4
-    jsr WAIT                        ; $FBE6
-    lda SPKR                        ; $FBE9
-    dey                             ; $FBEC
-    bne BELL2                       ; $FBED
+    ; Times five for the third's $28: the value, plus itself shifted left twice.
+;; Stores the low byte and multiplies its third by five.
+;; Also: BASCLC2 (A2RM79, IIEROM82, IIETRM85)
+StoreLow:
+    sta BASL
+    asl a
+    asl a
+    ora BASL
+    sta BASL
+    rts
+.endproc
 
-RTS2B:
-    rts                             ; $FBEF
+;; Rings the bell when A is Control-G: about 0.1 seconds at about 1 kHz.
+;;
+;; At $FBD9. <ScreenOutDirect> sends every control character it does not perform here, and the others are
+;; ignored.
+;; In: A = the character
+;; Keeps: X
+;; Also: BELL1 (A2RM78, A2RM79, IIEROM82, IIETRM85)
+.proc RingBell
+.assert * = $FBD9, "RingBell must stay at $FBD9."
+    cmp #KEY_BELL
+    bne Done
 
-;; Stores a printable character at the cursor, then advances the cursor (ADVANCE).
-STORADV:
-    ldy CH                          ; $FBF0
-    sta (BASL),y                    ; $FBF2
+    ; From here the bell rings whatever A held: a pause, then the tone.
+    lda #BELL_PAUSE
+    jsr Delay
+    ldy #BELL_TOGGLES
 
-;; Moves the cursor right; at the window's right edge, starts a new line (CR).
-ADVANCE:
-    inc CH                          ; $FBF4
-    lda CH                          ; $FBF6
-    cmp WNDWDTH                     ; $FBF8
-    bcs CR                          ; $FBFA
+;; Toggles the speaker once.
+;; Also: BELL2 (A2RM78, A2RM79, IIEROM82, IIETRM85)
+Cycle:
+    lda #BELL_HALF_CYCLE
+    jsr Delay
+    lda SPKR
+    dey
+    bne Cycle
 
-RTS3:
-    rts                             ; $FBFC
+;; Also: RTS2B (A2RM78, A2RM79, IIEROM82, IIETRM85)
+Done:
+    rts
+.endproc
 
-;; The screen's character output: prints A at the cursor, or performs carriage return, line feed,
-;; backspace or bell.
-;; In: A = character with the high bit set
-VIDOUT:
-    cmp #' '                        ; $FBFD
-    bcs STORADV                     ; $FBFF
-    tay                             ; $FC01
-    bpl STORADV                     ; $FC02
-    cmp #KEY_CR                     ; $FC04
-    beq CR                          ; $FC06
-    cmp #KEY_LF                     ; $FC08
-    beq LF                          ; $FC0A
-    cmp #KEY_BS                     ; $FC0C
-    bne BELL1                       ; $FC0E
+;; Stores a character at the cursor, then moves the cursor right.
+;;
+;; At $FBF0.
+;; In: A = the character, as the screen shows it
+;; Also: STORADV (A2RM79, IIEROM82, IIETRM85)
+.proc StoreAndAdvance
+.assert * = $FBF0, "StoreAndAdvance must stay at $FBF0."
+    ldy CH
+    sta (BASL),y
+    ; Falls into AdvanceCursor.
+.endproc
+
+;; Moves the cursor right; at the window's right edge, starts a new line.
+;;
+;; At $FBF4.
+;; Also: ADVANCE (A2RM78, A2RM79, IIEROM82, IIETRM85)
+.proc AdvanceCursor
+.assert * = $FBF4, "AdvanceCursor must stay at $FBF4."
+    inc CH
+    lda CH
+    cmp WNDWDTH
+    bcs CarriageReturn
+
+;; The return that <Backspace>, and on the Enhanced IIe <CursorUp> and <Escape::Command>, share.
+;; Also: RTS3 (A2RM78, A2RM79, IIEROM82, IIETRM85)
+Done:
+    rts
+.endproc
+
+;; Prints a character at the cursor, or performs Return, line feed, backspace or the bell.
+;;
+;; At $FBFD. Characters below $80 are stored as they are (inverse and flashing); other control characters
+;; go to <RingBell>, which ignores all but Control-G.
+;; In: A = the character
+;; Also: VIDOUT (A2RM78, A2RM79, IIEROM82, IIETRM85)
+.proc ScreenOutDirect
+.assert * = $FBFD, "ScreenOutDirect must stay at $FBFD."
+    ; Printable characters, and those below $80, go on the screen.
+    cmp #' '
+    bcs StoreAndAdvance
+    tay
+    bpl StoreAndAdvance
+
+    ; The control characters.
+    cmp #KEY_CR
+    beq CarriageReturn
+    cmp #KEY_LF
+    beq LineFeed
+    cmp #KEY_BS
+    bne RingBell
+    ; Falls into Backspace.
+.endproc
 
 ;; Moves the cursor left; at the window's left edge, to the end of the line above.
-BS:
-    dec CH                          ; $FC10
-    bpl RTS3                        ; $FC12
-    lda WNDWDTH                     ; $FC14
-    sta CH                          ; $FC16
-    dec CH                          ; $FC18
+;;
+;; At $FC10.
+;; Also: BS (A2RM78, A2RM79, IIEROM82, IIETRM85)
+.proc Backspace
+.assert * = $FC10, "Backspace must stay at $FC10."
+    dec CH
+    bpl AdvanceCursor::Done
+
+    ; The window's last column, on the line above.
+    lda WNDWDTH
+    sta CH
+    dec CH
+    ; Falls into CursorUp.
+.endproc
 
 ;; Moves the cursor up a line unless it is on the window's top line.
-UP:
-    lda WNDTOP                      ; $FC1A
-    cmp CV                          ; $FC1C
-.if ENHANCED
-    bcs RTS3                        ; $FC1E
-.else
-    bcs RTS4                        ; $FC1E
-.endif
-    dec CV                          ; $FC20
-
-;; Sets BASL/BASH for the cursor's line, CV.
-VTAB:
-    lda CV                          ; $FC22
-
-;; Sets BASL/BASH for a line, offset by the window's left edge.
-;; In: A = line
-;; The Enhanced IIe asks the internal firmware (function 4), which knows the 80-column layout.
-VTABZ:
-.if ENHANCED
-    sta BASL                        ; $FC24
-    tya                             ; $FC26
-    ldy #$04                        ; $FC27
-.else
-    jsr BASCALC                     ; $FC24
-    adc WNDLFT                      ; $FC27
-.endif
-
-VTABZ_1:
-.if ENHANCED
-    bne GOTOCX                      ; $FC29
-    .byte $00                       ; $FC2B unused
-.else
-    sta BASL                        ; $FC29
-
-RTS4:
-    rts                             ; $FC2B
-.endif
-
-;; Performs an escape command: @ clears the window (HOME), A/B/C/D move the cursor right, left,
-;; down and up, E clears to the end of the line, F to the end of the window.
-;; In: A = command character
-ESC1:
-    eor #'@'                        ; $FC2C
-    beq HOME                        ; $FC2E
-    adc #$FD                        ; $FC30
-    bcc ADVANCE                     ; $FC32
-    beq BS                          ; $FC34
-    adc #$FD                        ; $FC36
-    bcc LF                          ; $FC38
-    beq UP                          ; $FC3A
-    adc #$FD                        ; $FC3C
-    bcc CLREOL                      ; $FC3E
-.if ENHANCED
-    bne RTS3                        ; $FC40
-.else
-    bne RTS4                        ; $FC40
-.endif
-
-;; Clears from the cursor to the end of the window.
 ;;
-;; The Apple II's Monitors clear the window here themselves, a line at a time from the cursor's line
-;; down (CLREOLZ), then set BASL/BASH for the cursor's line again (VTAB).
-CLREOP:
+;; At $FC1A.
+;; Also: UP (A2RM78, A2RM79, IIEROM82, IIETRM85)
+.proc CursorUp
+.assert * = $FC1A, "CursorUp must stay at $FC1A."
+    lda WNDTOP
+    cmp CV
+.if ENHANCED
+    bcs AdvanceCursor::Done
+.else
+    bcs SetLineBase::Done
+.endif
+    dec CV
+    ; Falls into VerticalTab.
+.endproc
+
+;; Sets <BASL>/<BASH> for the cursor's line, <CV>.
+;;
+;; At $FC22.
+;; Also: VTAB (A2RM78, A2RM79, IIEROM82, IIETRM85)
+.proc VerticalTab
+.assert * = $FC22, "VerticalTab must stay at $FC22."
+    lda CV
+    ; Falls into SetLineBase.
+.endproc
+
+.if ENHANCED
+
+;; Sets <BASL>/<BASH> for a line, offset by the window's left edge.
+;;
+;; At $FC24. The Enhanced IIe has the internal firmware compute it (function 4), for 40 or 80 columns.
+;; In: A = the line
+;; Out: BASL/BASH
+;; Also: VTABZ (A2RM78, A2RM79, IIEROM82, IIETRM85)
+.proc SetLineBase
+.assert * = $FC24, "SetLineBase must stay at $FC24."
+    ; The firmware takes the line in BASL and the caller's Y in A.
+    sta BASL
+    tya
+    ldy #FIRMWARE_LINE_BASE
+
+;; Goes to the firmware function in Y; <ClearToEndOfWindow> and <Scroll> branch here too.
+ToFirmware:
+    bne CallFirmware
+
+    ; Unused.
+    .byte $00
+.endproc
+.else
+
+;; Sets <BASL>/<BASH> for a line, offset by the window's left edge.
+;;
+;; At $FC24.
+;; In: A = the line
+;; Out: BASL/BASH, A = the low byte
+;; Keeps: X, Y
+;; Also: VTABZ (A2RM78, A2RM79, IIEROM82, IIETRM85)
+.proc SetLineBase
+.assert * = $FC24, "SetLineBase must stay at $FC24."
+    ; BaseAddress returns with the carry clear.
+    jsr BaseAddress
+    adc WNDLFT
+    sta BASL
+
+;; The return that <CursorUp> and <Escape::Command> share.
+;; Also: RTS4 (A2RM78, A2RM79, IIEROM82)
+Done:
+    rts
+.endproc
+.endif
+
+; The Apple II Monitor has no earlier piece of Escape, so the scope opens here, empty, in its build; every build
+; then continues it.
+.if MONITOR = MONITOR_II
+
+;; Escape mode: the keys typed after the Escape key, which move the cursor and clear the screen.
+.scope Escape
+.endscope
+.endif
+
+; Escape: the commands, @ and A-F.
+.scope Escape continued
+
+;; Performs an escape command: @ clears the window (<Home>), A, B, C and D move the cursor right, left, down
+;; and up, E clears to the end of the line and F to the end of the window. Other keys do nothing.
+;;
+;; At $FC2C.
+;; In: A = the key, carry = set
+;; Also: ESC1 (A2RM78, IIEROM82, IIETRM85)
+.proc Command
+.assert * = $FC2C, "Escape::Command must stay at $FC2C."
+    eor #'@'
+    beq Home
+
+    ; A and B: each step takes 2 off, so the first letter is below 0 and the second 0.
+    adc #COMMAND_PAIR_STEP
+    bcc AdvanceCursor
+    beq Backspace
+
+    ; C and D.
+    adc #COMMAND_PAIR_STEP
+    bcc LineFeed
+    beq CursorUp
+
+    ; E and F; F falls into ClearToEndOfWindow.
+    adc #COMMAND_PAIR_STEP
+    bcc ClearToEndOfLine
+.if ENHANCED
+    bne AdvanceCursor::Done
+.else
+    bne SetLineBase::Done
+.endif
+.endproc
+
+.endscope
 .if MONITOR = MONITOR_IIE
 .if ENHANCED
-    ldy #$0A                        ; $FC42
-    bne VTABZ_1                     ; $FC44
 
-CLREOP_1:
-    bit RD80VID                     ; $FC46
-    bpl CLREOP_2                    ; $FC49
-.endif
-    ldy #$00                        ; $FC4B original $FC42
-.if ENHANCED
-    beq HOME_1                      ; $FC4D
+;; Clears from the cursor to the end of the window, through the internal firmware.
+;;
+;; At $FC42.
+;; Also: CLREOP (A2RM78, A2RM79, IIEROM82, IIETRM85)
+.proc ClearToEndOfWindow
+.assert * = $FC42, "ClearToEndOfWindow must stay at $FC42."
+    ldy #FIRMWARE_CLEAR_TO_END_OF_WINDOW
+    bne SetLineBase::ToFirmware
+.endproc
+
+;; Prints a character on the screen: in 80 columns through the internal firmware, otherwise with the
+;; Control-S pause (<ScreenOutPausing>). The end of <ScreenOutNoInverse>.
+;;
+;; At $FC46.
+;; In: A = the character as given, Y = the character to print, YSAV1 = the caller's Y
+;; Out: Y = YSAV1
+.proc ScreenOutByWidth
+.assert * = $FC46, "ScreenOutByWidth must stay at $FC46."
+    bit RD80VID
+    bpl FortyColumns
+
+    ; 80 columns: the firmware prints A.
+    ldy #FIRMWARE_OUTPUT
+    beq Home::ToFirmware
+
+;; Prints Y's character with the Control-S pause, then restores the caller's Y.
+FortyColumns:
+    tya
+    pha
+    jsr ScreenOutPausing
+    pla
+    ldy YSAV1
+    rts
+.endproc
+
+;; Clears the window and puts the cursor at its top left, through the internal firmware.
+;;
+;; At $FC58.
+;; Also: HOME (A2RM78, A2RM79, IIEROM82, IIETRM85)
+.proc Home
+.assert * = $FC58, "Home must stay at $FC58."
+    ldy #FIRMWARE_HOME
+
+;; Goes to the firmware function in Y; <ScreenOutByWidth> branches here too.
+ToFirmware:
+    jmp CallFirmware
+
+    ; Unused.
+    .byte $53, $5C, $5C, $00, $00
+.endproc
 .else
-    beq XGOTOCX                     ; $FC44
 
-CLREOP_1:
-    .byte "(C) 1981-"               ; $FC46 unused bytes holding a copyright notice
+;; Clears from the cursor to the end of the window, through the internal firmware.
+;;
+;; At $FC42.
+;; Also: CLREOP (A2RM78, A2RM79, IIEROM82, IIETRM85)
+.proc ClearToEndOfWindow
+.assert * = $FC42, "ClearToEndOfWindow must stay at $FC42."
+    ldy #FIRMWARE_CLEAR_TO_END_OF_WINDOW
+    beq Scroll::ToFirmware
+
+    ; Unused bytes, holding the copyright notice.
+    .byte "(C) 1981-82, APPLE"
+.endproc
+
+;; Clears the window and puts the cursor at its top left, through the internal firmware.
+;;
+;; At $FC58.
+;; Also: HOME (A2RM78, A2RM79, IIEROM82, IIETRM85)
+.proc Home
+.assert * = $FC58, "Home must stay at $FC58."
+    ldy #FIRMWARE_HOME
+    bne Scroll::ToFirmware
+
+    ; Unused bytes, going on with the copyright notice's name.
+    .byte "RICK A"
+.endproc
 .endif
-
-CLREOP_2:
-.if ENHANCED
-    tya                             ; $FC4F
-    pha                             ; $FC50
-    jsr VIDWAIT                     ; $FC51
-    pla                             ; $FC54
-    ldy YSAV1                       ; $FC55
-    rts                             ; $FC57
 .else
-    .byte "82, APPLE"               ; $FC4F
-.endif
-.else
-    ldy CH                          ; $FC42 the first line clears from the cursor
-    lda CV                          ; $FC44
 
-CLEOP1:
-    pha                             ; $FC46
-    jsr VTABZ                       ; $FC47
-    jsr CLREOLZ                     ; $FC4A returns with the carry set
-    ldy #$00                        ; $FC4D the other lines clear from column 0
-    pla                             ; $FC4F
-    adc #$00                        ; $FC50 the next line (plus the carry)
-    cmp WNDBTM                      ; $FC52
-    bcc CLEOP1                      ; $FC54
-    bcs VTAB                        ; $FC56
-.endif
+;; Clears from the cursor to the end of the window, a line at a time, then sets <BASL>/<BASH> for the
+;; cursor's line again.
+;;
+;; At $FC42.
+;; Keeps: X
+;; Also: CLREOP (A2RM78, A2RM79, IIEROM82, IIETRM85)
+.proc ClearToEndOfWindow
+.assert * = $FC42, "ClearToEndOfWindow must stay at $FC42."
+    ; The first line clears from the cursor.
+    ldy CH
+    lda CV
+
+;; Clears line A from column Y, then the lines below it from column 0; <Home> enters here.
+;; In: A = the line, Y = the column
+;; Also: CLEOP1 (A2RM78, A2RM79, IIEROM82, IIETRM85)
+NextLine:
+    pha
+    jsr SetLineBase
+    ; ClearLineFrom returns with the carry set.
+    jsr ClearLineFrom
+    ldy #0
+    pla
+    ; The next line: the carry adds the one.
+    adc #0
+    cmp WNDBTM
+    bcc NextLine
+    bcs VerticalTab
+.endproc
 
 ;; Clears the window and puts the cursor at its top left.
 ;;
-;; The Apple II's Monitors move the cursor to the window's top line, column 0, and clear from there
-;; in CLREOP.
-HOME:
+;; At $FC58.
+;; Keeps: X
+;; Also: HOME (A2RM78, A2RM79, IIEROM82, IIETRM85)
+.proc Home
+.assert * = $FC58, "Home must stay at $FC58."
+    lda WNDTOP
+    sta CV
+    ldy #0
+    sty CH
+    beq ClearToEndOfWindow::NextLine
+.endproc
+.endif
+
+;; Moves the cursor to the start of the next line.
+;;
+;; At $FC62.
+;; Also: CR (A2RM78, A2RM79, IIEROM82, IIETRM85)
+.proc CarriageReturn
+.assert * = $FC62, "CarriageReturn must stay at $FC62."
+    lda #0
+    sta CH
+    ; Falls into LineFeed.
+.endproc
+
+;; Moves the cursor down a line, scrolling the window at its bottom.
+;;
+;; At $FC66.
+;; Also: LF (A2RM78, A2RM79, IIEROM82, IIETRM85)
+.proc LineFeed
+.assert * = $FC66, "LineFeed must stay at $FC66."
+    inc CV
+    lda CV
+    cmp WNDBTM
+    bcc SetLineBase
+
+    ; The bottom line: the cursor stays on it.
+    dec CV
+    ; Falls into Scroll.
+.endproc
 .if MONITOR = MONITOR_IIE
 .if ENHANCED
-    ldy #$05                        ; $FC58
-.else
-    ldy #$01                        ; $FC58
-.endif
 
-HOME_1:
-.if ENHANCED
-    jmp GOTOCX                      ; $FC5A
-    .byte $53, $5C, $5C, $00, $00   ; $FC5D
+;; Scrolls the text window up one line and clears the bottom line, through the internal firmware.
+;;
+;; At $FC70.
+;; Also: SCROLL (A2RM78, A2RM79, IIEROM82, IIETRM85)
+.proc Scroll
+.assert * = $FC70, "Scroll must stay at $FC70."
+    ldy #FIRMWARE_SCROLL
+    bne SetLineBase::ToFirmware
+.endproc
+
+;; Runs the user's interrupt handler: switches slot ROM in and jumps through <IRQLOC>. The firmware's
+;; interrupt code calls it.
+;;
+;; At $FC74.
+.proc CallUserIrq
+.assert * = $FC74, "CallUserIrq must stay at $FC74."
+    sta SETSLOTCXROM
+    jmp (IRQLOC)
+.endproc
+
+;; After the user's interrupt handler, selects again the $C800 ROM of the slot <MSLOT> names, then goes on
+;; in the firmware's interrupt code (<IRQRESTORE>).
+;;
+;; At $FC7A. The firmware jumps here with the saved <MSLOT> on the stack.
+.proc SelectInterruptRom
+.assert * = $FC7A, "SelectInterruptRom must stay at $FC7A."
+    pla
+    sta MSLOT
+    cmp #FIRST_SLOT_PAGE
+    bcc NoSlot
+
+    ; A slot's page: releasing every $C800 ROM, then reading the slot's page, selects the slot's. LOC1 is
+    ; pointed at the page for the read, and put back.
+    sta CLRROM
+    ldy #0
+    ldx LOC1
+    sta LOC1
+    lda (LOC0),y
+    stx LOC1
+
+;; Switches internal ROM back in and goes on in the firmware.
+;; Also: IRQNOSLT (IIETRM85)
+NoSlot:
+    sta SETINTCXROM
+    jmp IRQRESTORE
+.endproc
+
+;; The printable path of <ScreenOut>: applies <INVFLG> to a printable character, then prints it.
+;;
+;; At $FC95.
+;; In: A = the character, carry = clear for a control character; the character pushed
+;; Also: DOCOUT1 (IIETRM85)
+.proc ApplyInverse
+.assert * = $FC95, "ApplyInverse must stay at $FC95."
+    bcc Print
+    and INVFLG
+
+;; Prints it, its push already done.
+;; Also: DOCOUT2 (IIETRM85)
+Print:
+    jmp ScreenOutNoInverse::Pushed
+.endproc
 .else
-    bne XGOTOCX                     ; $FC5A
-    .byte "RICK A"                  ; $FC5C
+
+;; Scrolls the text window up one line and clears the bottom line, through the internal firmware.
+;;
+;; At $FC70.
+;; Also: SCROLL (A2RM78, A2RM79, IIEROM82, IIETRM85)
+.proc Scroll
+.assert * = $FC70, "Scroll must stay at $FC70."
+    ldy #FIRMWARE_SCROLL
+
+;; Goes to the firmware function in Y, for the screen routines around it.
+;; Also: XGOTOCX (IIEROM82)
+ToFirmware:
+    jmp CallFirmware
+.endproc
+
+;; Lets a pending interrupt run with slot ROM switched in, from inside the internal firmware, then restores
+;; the ROM and the displayed page.
+;;
+;; At $FC75. The firmware's keyboard wait calls it when its caller had interrupts enabled. With 80STORE on,
+;; page one is displayed meanwhile (page two would switch the screen's memory to the auxiliary bank).
+;; Keeps: A, X, Y
+;; Also: VIDSYNC (UNKN)
+.proc RestoreAfterFirmware
+.assert * = $FC75, "RestoreAfterFirmware must stay at $FC75."
+    ; The carry = 80STORE on, then negative = page two displayed; both saved.
+    pha
+    lda RD80STORE
+    asl a
+    pla
+    bit RDPAGE2
+    php
+    bcc SelectSlotRom
+    sta LOWSCR
+
+;; Notes whether internal ROM was in, switches slot ROM in and lets an interrupt in.
+;; Also: RDCX (IIEROM82)
+SelectSlotRom:
+    bit RDCXROM
+    sta SETSLOTCXROM
+    cli
+    sei
+    bpl RestorePage
+    sta SETINTCXROM
+
+;; Pulls the saved flags and displays page two again if it was displayed under 80STORE.
+;; Also: ISSLOTS (IIEROM82)
+RestorePage:
+    plp
+    bcc Done
+    bpl Done
+    bit HISCR
+
+;; Also: ISPAGE1 (IIEROM82)
+Done:
+    rts
+
+    ; Unused.
+    .byte $EA, $EA
+.endproc
 .endif
 .else
-    lda WNDTOP                      ; $FC58
-    sta CV                          ; $FC5A
-    ldy #$00                        ; $FC5C
-    sty CH                          ; $FC5E
-    beq CLEOP1                      ; $FC60
-.endif
-
-;; Carriage return: moves the cursor to the start of the next line (LF).
-CR:
-    lda #$00                        ; $FC62
-    sta CH                          ; $FC64
-
-;; Line feed: moves the cursor down a line, scrolling the window at the bottom.
-LF:
-    inc CV                          ; $FC66
-    lda CV                          ; $FC68
-    cmp WNDBTM                      ; $FC6A
-    bcc VTABZ                       ; $FC6C
-    dec CV                          ; $FC6E
 
 ;; Scrolls the text window up one line and clears the bottom line.
 ;;
-;; The Apple II's Monitors scroll here themselves: from the window's top line down, each line gets a
-;; copy of the one below it, from the right edge of the window to the left. The bottom line is then
-;; cleared and BASL/BASH set for the cursor's line again (VTAB).
-SCROLL:
+;; At $FC70. From the window's top line down, each line gets a copy of the one below it, from the window's
+;; right edge to its left; then the bottom line is cleared and <BASL>/<BASH> set for the cursor's line again.
+;; Keeps: X
+;; Also: SCROLL (A2RM78, A2RM79, IIEROM82, IIETRM85)
+.proc Scroll
+.assert * = $FC70, "Scroll must stay at $FC70."
+    ; The stack holds the line being read.
+    lda WNDTOP
+    pha
+    jsr SetLineBase
+
+;; The line just read becomes the one to fill, and the next line down the one to read.
+;; Also: SCRL1 (A2RM78, A2RM79, IIEROM82, IIETRM85)
+NextLine:
+    lda BASL
+    sta BAS2L
+    lda BASH
+    sta BAS2H
+    ldy WNDWDTH
+    dey
+    pla
+    adc #1
+    cmp WNDBTM
+    bcs ClearBottom
+    pha
+    jsr SetLineBase
+
+;; Copies a character up a line.
+;; Also: SCRL2 (A2RM78, A2RM79, IIEROM82, IIETRM85)
+CopyCharacter:
+    lda (BASL),y
+    sta (BAS2L),y
+    dey
+    bpl CopyCharacter
+    bmi NextLine
+
+;; Clears the bottom line, which BASL/BASH still hold.
+;; Also: SCRL3 (A2RM78, A2RM79, IIEROM82, IIETRM85)
+ClearBottom:
+    ldy #0
+    ; ClearLineFrom returns with the carry set.
+    jsr ClearLineFrom
+    bcs VerticalTab
+.endproc
+.endif
 .if MONITOR = MONITOR_IIE
 .if ENHANCED
-    ldy #$06                        ; $FC70
-    bne VTABZ_1                     ; $FC72
 
-XGOTOCX_1:
-    sta SETSLOTCXROM                ; $FC74
-    jmp (IRQLOC)                    ; $FC77
-.else
-    ldy #$02                        ; $FC70
+;; Clears from the cursor to the end of the line, through the internal firmware.
+;;
+;; At $FC9C. With the carry set, it goes on past <ClearLineFrom>'s first byte.
+;; Also: CLREOL (A2RM78, A2RM79, IIEROM82, IIETRM85)
+.proc ClearToEndOfLine
+.assert * = $FC9C, "ClearToEndOfLine must stay at $FC9C."
+    sec
+    ; A bcc, never taken: it skips ClearLineFrom's clc.
+    .byte $90
+.endproc
 
-XGOTOCX:
-    jmp GOTOCX                      ; $FC72
+;; Clears a line from a column to its end, through the internal firmware.
+;;
+;; At $FC9E.
+;; In: Y = the column, BASL/BASH = the line
+;; Also: CLREOLZ (IIEROM82, IIETRM85), CLEOLZ (A2RM78, A2RM79)
+.proc ClearLineFrom
+.assert * = $FC9E, "ClearLineFrom must stay at $FC9E."
+    clc
 
-;; Original IIe: returning from the internal firmware. Restores page one when 80STORE is on and page
-;; two was displayed, briefly enables interrupts with slot ROM switched in so a pending interrupt can
-;; run, and restores the saved ROM selection and display page.
-;; Enhanced IIe: these bytes select a slot's $C800 ROM (MSLOT) for the interrupt handler, then continue
-;; in the internal firmware at $C47C.
-VIDSYNC:
-    pha                             ; $FC75
-    lda RD80STORE                   ; $FC76
-    asl a                           ; $FC79
-.endif
-
-VIDSYNC_1:
-    pla                             ; $FC7A
-.if ENHANCED
-    sta MSLOT                       ; $FC7B
-    cmp #$C1                        ; $FC7E
-    bcc IRQNOSLT                    ; $FC80
-    sta CLRROM                      ; $FC82
-    ldy #$00                        ; $FC85
-    ldx LOC1                        ; $FC87
-    sta LOC1                        ; $FC89
-    lda (LOC0),y                    ; $FC8B
-    stx LOC1                        ; $FC8D
-
-;; Enhanced IIe: switches internal ROM back in and continues in the firmware's interrupt code (IRQRESTORE).
-IRQNOSLT:
-.else
-    bit RDPAGE2                     ; $FC7B
-    php                             ; $FC7E
-    bcc RDCX                        ; $FC7F
-    sta LOWSCR                      ; $FC81
-
-RDCX:
-    bit RDCXROM                     ; $FC84
-    sta SETSLOTCXROM                ; $FC87
-    cli                             ; $FC8A
-    sei                             ; $FC8B
-    bpl ISSLOTS                     ; $FC8C
-.endif
-    sta SETINTCXROM                 ; $FC8F original $FC8E
-.if ENHANCED
-    jmp IRQRESTORE                  ; $FC92
-
-;; Enhanced IIe: COUT1's printable-character path: applies INVFLG and prints the character (COUTZ).
-DOCOUT1:
-    bcc DOCOUT2                     ; $FC95
-    and INVFLG                      ; $FC97
-
-DOCOUT2:
-    jmp COUTZ_1                     ; $FC99
+    ; The firmware takes the column from BAS2L. ClearToEndOfLine (the carry set) is the function before.
+    sty BAS2L
+    ldy #FIRMWARE_CLEAR_TO_END_OF_LINE
+    bcs KeyboardIn::ToFirmware
+    iny
+    bne KeyboardIn::ToFirmware
+.endproc
 .else
 
-;; Original IIe: restores the saved status and, when page two was displayed, switches back to it.
-ISSLOTS:
-    plp                             ; $FC91
-    bcc ISPAGE1                     ; $FC92
-    bpl ISPAGE1                     ; $FC94
-    bit HISCR                       ; $FC96
+;; Clears from the cursor to the end of the line, through the internal firmware.
+;;
+;; At $FC9C. With the carry clear, it goes on past <ClearLineFrom>'s first byte.
+;; Also: CLREOL (A2RM78, A2RM79, IIEROM82, IIETRM85)
+.proc ClearToEndOfLine
+.assert * = $FC9C, "ClearToEndOfLine must stay at $FC9C."
+    clc
+    ; A bcs, never taken: it skips ClearLineFrom's sec.
+    .byte $B0
+.endproc
 
-ISPAGE1:
-    rts                             ; $FC99
-    .byte $EA, $EA                  ; $FC9A
+;; Clears a line from a column to its end, through the internal firmware.
+;;
+;; At $FC9E.
+;; In: Y = the column, BASL/BASH = the line
+;; Also: CLREOLZ (IIEROM82, IIETRM85), CLEOLZ (A2RM78, A2RM79)
+.proc ClearLineFrom
+.assert * = $FC9E, "ClearLineFrom must stay at $FC9E."
+
+;; The page-zero byte the original IIe's firmware takes the column from.
+Column = $1F
+
+    sec
+
+    ; ClearToEndOfLine (the carry clear) is the function before.
+    sty Column
+    ldy #FIRMWARE_CLEAR_TO_END_OF_LINE
+    bcc Scroll::ToFirmware
+    iny
+    bne Scroll::ToFirmware
+.endproc
 .endif
 .else
-    lda WNDTOP                      ; $FC70
-    pha                             ; $FC72 the line number being filled
-    jsr VTABZ                       ; $FC73
-
-SCRL1:
-    lda BASL                        ; $FC76 the line just read becomes the one to fill
-    sta BAS2L                       ; $FC78
-    lda BASH                        ; $FC7A
-    sta BAS2H                       ; $FC7C
-    ldy WNDWDTH                     ; $FC7E
-    dey                             ; $FC80
-    pla                             ; $FC81
-    adc #$01                        ; $FC82 the next line down
-    cmp WNDBTM                      ; $FC84
-    bcs SCRL3                       ; $FC86
-    pha                             ; $FC88
-    jsr VTABZ                       ; $FC89
-
-SCRL2:
-    lda (BASL),y                    ; $FC8C
-    sta (BAS2L),y                   ; $FC8E
-    dey                             ; $FC90
-    bpl SCRL2                       ; $FC91
-    bmi SCRL1                       ; $FC93
-
-SCRL3:
-    ldy #$00                        ; $FC95
-    jsr CLREOLZ                     ; $FC97 BASL/BASH still hold the bottom line; returns with the carry set
-    bcs VTAB                        ; $FC9A
-.endif
 
 ;; Clears from the cursor to the end of the line.
-CLREOL:
-.if MONITOR = MONITOR_IIE
-.if ENHANCED
-    sec                             ; $FC9C
-    .byte $90                       ; $FC9D bcc: skips the next byte
-.else
-    clc                             ; $FC9C
-    .byte $B0                       ; $FC9D bcs: skips the next byte
-.endif
-.else
-    ldy CH                          ; $FC9C
-.endif
-
-;; Clears a line from a column to its end.
 ;;
-;; The Apple II's Monitors store blanks here themselves, up to the window's width, and return with the
-;; carry set. Their listings call it CLEOLZ.
-;; In: Y = column; BASL/BASH = the line
-CLREOLZ:
-.if MONITOR = MONITOR_IIE
-.if ENHANCED
-    clc                             ; $FC9E
-    sty BAS2L                       ; $FC9F
-    ldy #$07                        ; $FCA1
-    bcs KEYIN_1                     ; $FCA3
-.else
-    sec                             ; $FC9E
-    sty $1F                         ; $FC9F
-    ldy #$03                        ; $FCA1
-    bcc XGOTOCX                     ; $FCA3
-.endif
-    iny                             ; $FCA5
-.if ENHANCED
-    bne KEYIN_1                     ; $FCA6
-.else
-    bne XGOTOCX                     ; $FCA6
-.endif
-.else
-    lda #' '                        ; $FC9E
+;; At $FC9C.
+;; Out: carry = set
+;; Keeps: X
+;; Also: CLREOL (A2RM78, A2RM79, IIEROM82, IIETRM85)
+.proc ClearToEndOfLine
+.assert * = $FC9C, "ClearToEndOfLine must stay at $FC9C."
+    ldy CH
+    ; Falls into ClearLineFrom.
+.endproc
 
-CLEOL2:
-    sta (BASL),y                    ; $FCA0
-    iny                             ; $FCA1
-    cpy WNDWDTH                     ; $FCA3
-    bcc CLEOL2                      ; $FCA5
-    rts                             ; $FCA7
+;; Clears a line from a column to the window's right edge.
+;;
+;; At $FC9E.
+;; In: Y = the column, BASL/BASH = the line
+;; Out: carry = set
+;; Keeps: X
+;; Also: CLREOLZ (IIEROM82, IIETRM85), CLEOLZ (A2RM78, A2RM79)
+.proc ClearLineFrom
+.assert * = $FC9E, "ClearLineFrom must stay at $FC9E."
+    lda #' '
+
+;; Stores one blank.
+;; Also: CLEOL2 (A2RM78, A2RM79, IIEROM82, IIETRM85)
+Loop:
+    sta (BASL),y
+    iny
+    cpy WNDWDTH
+    bcc Loop
+    rts
+.endproc
 .endif

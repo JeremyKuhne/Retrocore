@@ -1,155 +1,319 @@
-;; Delays.
-;; In: A = count
-;; Takes about (26 + 27A + 5A^2) / 2 microseconds.
-;; Out: A = 0.
-WAIT:
-    sec                             ; $FCA8
+; retrocore: style=strict
+;; The delay and range-stepping routines and the cassette's bit-level code, $FCA8-$FD0B. The Enhanced IIe keeps
+;; only a stub of the cassette code here, which calls the internal firmware's, and uses the rest of the space for
+;; its mini-assembler's entries and the command line's uppercase conversion.
 
-WAIT2:
-    pha                             ; $FCA9
+; Text.
 
-WAIT3:
-    sbc #$01                        ; $FCAA
-    bne WAIT3                       ; $FCAC
-    pla                             ; $FCAE
-    sbc #$01                        ; $FCAF
-    bne WAIT2                       ; $FCB1
-    rts                             ; $FCB3
+;; The mask that turns a lowercase letter into uppercase: it clears bit 5.
+UPPERCASE_MASK = %11011111
+.if .not ENHANCED
 
-;; Increments A4, then does NXTA1 (used by MOVE to step source and destination together).
-NXTA4:
-    inc A4L                         ; $FCB4
-    bne NXTA1                       ; $FCB6
-    inc A4H                         ; $FCB8
+; Cassette timing: delay counts, each a loop of 5 cycles.
 
-;; Compares A1 with A2, then increments A1.
-;; Out:   carry = set when A1 was at or past A2 (the range is finished)
-NXTA1:
-    lda A1L                         ; $FCBA
-    cmp A2L                         ; $FCBC
-    lda A1H                         ; $FCBE
-    sbc A2H                         ; $FCC0
-    inc A1L                         ; $FCC2
-    bne RTS4B                       ; $FCC4
-    inc A1H                         ; $FCC6
+;; <Cassette::WriteHalfCycle>'s count for a half cycle of the header tone. The carry is set while it is written,
+;; which adds <ONE_DELAY>, so the tone is lower than a 1 bit's.
+HEADER_DELAY = $4B
 
-RTS4B:
-    rts                             ; $FCC8
+;; The count for the first half cycle of the sync bit, shorter than a 0 bit's.
+SYNC_DELAY = $21
 
-;; Writes a cassette header tone.
-;; Original IIe: a tone of A times 256 half cycles, then the sync bit.
-;; Enhanced IIe: the cassette routines live in internal ROM; this calls them there.
-HEADR:
-.if ENHANCED
-    sta SETINTCXROM                 ; $FCC9
-    jsr TAPEHEADR                   ; $FCCC
-    jmp SLOTRTS                     ; $FCCF
-.else
-    ldy #$4B                        ; $FCC9
-    jsr ZERDLY                      ; $FCCB
-    bne HEADR                       ; $FCCE
-    adc #$FE                        ; $FCD0
+;; The count a 1 bit's half cycle adds to a 0 bit's.
+ONE_DELAY = $32
+
+;; The count <Cassette::WriteHalfCycle> leaves in Y for the next half cycle; callers adjust it for the time
+;; their own code takes.
+NEXT_HALF_CYCLE_DELAY = $2C
+
+;; The count <Cassette::ReadByte> starts each of its bits after the first at.
+READ_BIT_START = $3A
+
+;; The count at which <Cassette::ReadHalfCycle> tells a 1 from a 0: a bit long enough to count Y down past 0
+;; leaves it at this or above.
+READ_ONE_THRESHOLD = $80
+
+;; How many bits <Cassette::ReadByte> reads.
+BITS_PER_BYTE = 8
 .endif
 
-HEADR_1:
+;; Waits about (26 + 27A + 5A^2) / 2 microseconds.
+;;
+;; At $FCA8.
+;; In: A = the count, 1-255, or 0 for 256
+;; Out: A = 0, carry = set
+;; Keeps: X, Y
+;; Also: WAIT (A2RM78, A2RM79, IIEROM82, IIETRM85)
+.proc Delay
+.assert * = $FCA8, "Delay must stay at $FCA8."
+    sec
+
+;; Counts A down once for each time the inner loop runs.
+;; Also: WAIT2 (A2RM78, A2RM79, IIEROM82, IIETRM85)
+Outer:
+    pha
+
+;; Counts down from the outer count.
+;; Also: WAIT3 (A2RM78, IIEROM82, IIETRM85)
+Inner:
+    sbc #1
+    bne Inner
+    pla
+    sbc #1
+    bne Outer
+    rts
+.endproc
+
+;; Steps <A4L>/<A4H> as well as A1, for the commands that copy or compare one range with another.
+;;
+;; At $FCB4.
+;; Out: carry = set when A1 was at or past A2, the range finished
+;; Keeps: X, Y
+;; Also: NXTA4 (A2RM78, A2RM79, IIEROM82, IIETRM85)
+.proc NextInRangeAndTarget
+.assert * = $FCB4, "NextInRangeAndTarget must stay at $FCB4."
+    inc A4L
+    bne NextInRange
+    inc A4H
+    ; Falls into NextInRange.
+.endproc
+
+;; Compares <A1L>/<A1H> with <A2L>/<A2H>, then steps A1.
+;;
+;; At $FCBA.
+;; Out: carry = set when A1 was at or past A2, the range finished
+;; Keeps: X, Y
+;; Also: NXTA1 (A2RM78, A2RM79, IIEROM82, IIETRM85)
+.proc NextInRange
+.assert * = $FCBA, "NextInRange must stay at $FCBA."
+    lda A1L
+    cmp A2L
+    lda A1H
+    sbc A2H
+    inc A1L
+    bne Done
+    inc A1H
+
+;; Also: RTS4B (A2RM78, A2RM79, IIEROM82, IIETRM85)
+Done:
+    rts
+.endproc
 .if ENHANCED
-    sta SETSLOTCXROM                ; $FCD2
-    jsr PRBL2                       ; $FCD5
-    lda #'^'                        ; $FCD8
-    jsr COUT                        ; $FCDA
-    jsr BELL                        ; $FCDD
-    jmp RDBYT2_1                    ; $FCE0
+
+;; The cassette routines. The Enhanced IIe keeps them in its internal firmware, and only this stub here.
+.scope Cassette
+
+;; Writes a cassette header tone, through the internal firmware's <TAPEHEADR>.
+;;
+;; At $FCC9.
+;; In: A = the tone's length, in 256 half cycles
+;; Also: HEADR (A2RM78, A2RM79, IIEROM82, IIETRM85)
+.proc WriteHeader
+.assert * = $FCC9, "Cassette::WriteHeader must stay at $FCC9."
+    sta SETINTCXROM
+    jsr TAPEHEADR
+    jmp SelectSlotRom
+.endproc
+
+.endscope
+
+;; The entries the internal firmware's mini-assembler jumps to by address, which reach the Monitor's
+;; disassembler and line input.
+.scope MiniAssembler
+
+;; Shows where the line went wrong: X blanks, a caret and the bell, then reads the line again.
+;;
+;; At $FCD2.
+;; In: X = how many blanks, to put the caret under the error
+.proc ShowError
+.assert * = $FCD2, "MiniAssembler::ShowError must stay at $FCD2."
+    sta SETSLOTCXROM
+    jsr PrintBlanks
+    lda #'^'
+    jsr CharacterOut
+    jsr Beep
+    jmp ReadLine
+.endproc
+
+;; Shows the instruction just assembled, moves PC past it, then reads the next line.
+;;
+;; At $FCE3.
+.proc ShowInstruction
+.assert * = $FCE3, "MiniAssembler::ShowInstruction must stay at $FCE3."
+    sta SETSLOTCXROM
+    jsr Disassembler::PrintInstruction
+    jsr NextInstruction
+    sty PCH
+    sta PCL
+    ; Falls into ReadLine.
+.endproc
+
+;; Prompts with "!", reads a line, and has the firmware's <MINILINE> assemble it.
+;;
+;; At $FCF0.
+.proc ReadLine
+.assert * = $FCF0, "MiniAssembler::ReadLine must stay at $FCF0."
+    lda #'!'
+    sta PROMPT
+    jsr GetLineAfterReturn
+    sta SETINTCXROM
+    jmp MINILINE
+.endproc
+
+.endscope
+
+;; Takes the next character of the input line, made uppercase.
+;;
+;; At $FCFD.
+;; In: Y = its position in <IN>
+;; Out: A = the character, Y = the next position
+;; Keeps: X
+;; Also: UPMON (IIETRM85)
+.proc NextInputCharacter
+.assert * = $FCFD, "NextInputCharacter must stay at $FCFD."
+    lda IN,y
+    iny
+
+    ; a-z become A-Z.
+    cmp #'a'
+    bcc Done
+    cmp #'z' + 1
+    bcs Done
+    and #UPPERCASE_MASK
+Done:
+    rts
+.endproc
 .else
-    bcs HEADR                       ; $FCD2
-    ldy #$21                        ; $FCD4
 
-WRBIT:
-    jsr ZERDLY                      ; $FCD6
-    iny                             ; $FCD9
-    iny                             ; $FCDA
+;; The cassette's bit-level routines: tones and bits written as timed half cycles, bits read by timing the
+;; transitions between them. <WriteCassette> and <ReadCassette> call them.
+.scope Cassette
 
-ZERDLY:
-    dey                             ; $FCDB
-    bne ZERDLY                      ; $FCDC
-    bcc WRTAPE                      ; $FCDE
-    ldy #$32                        ; $FCE0
+;; Writes a cassette header tone, then the sync bit.
+;;
+;; At $FCC9.
+;; In: A = the tone's length, about A x 256 half cycles; carry = set (clear makes it 256 fewer)
+;; Also: HEADR (A2RM78, A2RM79, IIEROM82, IIETRM85)
+.proc WriteHeader
+.assert * = $FCC9, "Cassette::WriteHeader must stay at $FCC9."
+    ; WriteHalfCycle counts X down: 256 half cycles a round.
+    ldy #HEADER_DELAY
+    jsr WriteHalfCycle
+    bne WriteHeader
 
-ONEDLY:
-    dey                             ; $FCE2
+    ; With the carry set, takes one off A, until it passes 0 and clears the carry.
+    adc #$100 - 2
+    bcs WriteHeader
+
+    ; The sync bit: a 0 with a shorter first half.
+    ldy #SYNC_DELAY
+    ; Falls into WriteBit.
+.endproc
+
+;; Writes a bit as two half cycles.
+;;
+;; At $FCD6.
+;; In: carry = the bit, Y = the first half cycle's count
+;; Out: Y = <NEXT_HALF_CYCLE_DELAY>, X = two less, zero = X reached 0
+;; Keeps: A, carry
+;; Also: WRBIT (A2RM78, A2RM79, IIEROM82)
+.proc WriteBit
+.assert * = $FCD6, "Cassette::WriteBit must stay at $FCD6."
+    jsr WriteHalfCycle
+
+    ; The second half: a little longer, for the time this takes.
+    iny
+    iny
+    ; Falls into WriteHalfCycle.
+.endproc
+
+;; Waits a half cycle, longer for a 1, then toggles the cassette output.
+;;
+;; At $FCDB.
+;; In: carry = the bit, Y = the count
+;; Out: Y = <NEXT_HALF_CYCLE_DELAY>, X = one less, zero = X reached 0
+;; Keeps: A, carry
+;; Also: ZERDLY (A2RM78, A2RM79, IIEROM82)
+.proc WriteHalfCycle
+.assert * = $FCDB, "Cassette::WriteHalfCycle must stay at $FCDB."
+    dey
+    bne WriteHalfCycle
+    bcc Toggle
+
+    ; A 1 takes longer.
+    ldy #ONE_DELAY
+
+;; The extra wait for a 1.
+;; Also: ONEDLY (A2RM78, A2RM79, IIEROM82)
+OneDelay:
+    dey
+    bne OneDelay
+
+;; Toggles the output by reading <TAPEOUT>, and counts the half cycle in X.
+;; Also: WRTAPE (A2RM78, A2RM79, IIEROM82)
+Toggle:
+    ldy TAPEOUT
+    ldy #NEXT_HALF_CYCLE_DELAY
+    dex
+    rts
+.endproc
+
+;; Reads a byte from the cassette, high bit first.
+;;
+;; At $FCEC.
+;; In: Y = the first bit's starting count
+;; Out: A = the byte, X = 0
+;; Also: RDBYTE (A2RM78, A2RM79, IIEROM82)
+.proc ReadByte
+.assert * = $FCEC, "Cassette::ReadByte must stay at $FCEC."
+    ldx #BITS_PER_BYTE
+
+;; Reads a bit and shifts it in.
+;; Also: RDBYT2 (A2RM78, A2RM79, IIEROM82)
+NextBit:
+    pha
+    jsr ReadBit
+    pla
+    rol a
+    ldy #READ_BIT_START
+    dex
+    bne NextBit
+    rts
+.endproc
+
+;; Reads a bit by timing two transitions of the cassette input.
+;;
+;; At $FCFA. <LENGTH> holds the input's last level; the Apple II's listings call it LASTIN here.
+;; In: Y = the starting count
+;; Out: carry = the bit: set for a 1, whose half cycles count Y down past 0
+;; Keeps: X
+;; Also: RD2BIT (A2RM78, A2RM79, IIEROM82)
+.proc ReadBit
+.assert * = $FCFA, "Cassette::ReadBit must stay at $FCFA."
+    jsr ReadHalfCycle
+    ; Falls into ReadHalfCycle.
+.endproc
+
+;; Waits for the next transition of the cassette input, counting Y down meanwhile.
+;;
+;; At $FCFD.
+;; In: Y = the count so far
+;; Out: Y = the count, carry = set when it is <READ_ONE_THRESHOLD> or above
+;; Keeps: X
+;; Also: RDBIT (A2RM78, A2RM79, IIEROM82)
+.proc ReadHalfCycle
+.assert * = $FCFD, "Cassette::ReadHalfCycle must stay at $FCFD."
+    ; Until the input's level differs from the last one.
+    dey
+    lda TAPEIN
+    eor LENGTH
+    bpl ReadHalfCycle
+
+    ; The new level is the last one now.
+    eor LENGTH
+    sta LENGTH
+    cpy #READ_ONE_THRESHOLD
+    rts
+.endproc
+
+.endscope
 .endif
-
-ONEDLY_1:
-.if ENHANCED
-    sta SETSLOTCXROM                ; $FCE3
-    jsr INSTDSP                     ; $FCE6
-    jsr PCADJ                       ; $FCE9
-.else
-    bne ONEDLY                      ; $FCE3
-
-WRTAPE:
-    ldy TAPEOUT                     ; $FCE5
-    ldy #$2C                        ; $FCE8
-    dex                             ; $FCEA
-    rts                             ; $FCEB
-.endif
-
-; Original IIe: reads one byte from the cassette.
-; Out: A = the byte.
-; The Enhanced IIe uses these bytes for its command line (input of the mini-assembler and the
-; uppercase conversion of Monitor input).
-.if ENHANCED
-    sty PCH                         ; $FCEC
-    sta PCL                         ; $FCEE
-
-RDBYT2_1:
-    lda #'!'                        ; $FCF0
-    sta PROMPT                      ; $FCF2
-    jsr GETLNZ                      ; $FCF4
-    sta SETINTCXROM                 ; $FCF7
-.else
-
-RDBYTE:
-    ldx #$08                        ; $FCEC
-
-RDBYT2:
-    pha                             ; $FCEE
-    jsr RD2BIT                      ; $FCEF
-    pla                             ; $FCF2
-    rol a                           ; $FCF3
-    ldy #$3A                        ; $FCF4
-    dex                             ; $FCF6
-    bne RDBYT2                      ; $FCF7
-    rts                             ; $FCF9
-.endif
-
-; Original IIe: reads a cassette bit as the time between two transitions.
-; Out: carry = the bit.
-; The Apple II's Monitors read cassette bits the same way; their listings call LENGTH LASTIN here.
-.if ENHANCED
-    jmp MINILINE                    ; $FCFA
-
-UPMON:
-    lda IN,y                        ; $FCFD
-    iny                             ; $FD00
-    cmp #'a'                        ; $FD01
-    bcc RDBIT_1                     ; $FD03
-    cmp #'z' + 1                    ; $FD05
-    bcs RDBIT_1                     ; $FD07
-    and #$DF                        ; $FD09 to uppercase
-.else
-
-RD2BIT:
-    jsr RDBIT                       ; $FCFA
-
-RDBIT:
-    dey                             ; $FCFD
-    lda TAPEIN                      ; $FCFE
-    eor LENGTH                      ; $FD01
-    bpl RDBIT                       ; $FD03
-    eor LENGTH                      ; $FD05
-    sta LENGTH                      ; $FD07
-    cpy #$80                        ; $FD09
-.endif
-
-RDBIT_1:
-    rts                             ; $FD0B

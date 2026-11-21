@@ -103,6 +103,8 @@ internal sealed partial class DebugSession
     private ulong _typingDue;
     private readonly Dictionary<(string Path, int Line), ulong> _lineCycles = [];
     private (string Path, int Line)? _cycleSource;
+    private bool _cycleChangesOnly;
+    private bool _sourceCyclesDirty = true;
 
     // The cycles run on the current line since they were last added to its count, and whether the line was entered
     // since then, so its count starts over. Counting here and adding once per instruction keeps the dictionary, and
@@ -163,6 +165,7 @@ internal sealed partial class DebugSession
         transport.On("retro/breakpoints", args => Reply(() => BreakpointList(args)));
         transport.On("retro/memoryBanks", _ => Reply(MemoryBankList));
         transport.On("retro/memory/read", args => Reply(() => ReadMemoryRange(args)));
+        transport.On("retro/memory/unsubscribe", args => Reply(() => UnsubscribeMemory(args)));
         transport.On("retro/memory/labels", args => Reply(() => MemoryLabels(args)));
         transport.On("retro/memory/listing", args => Reply(() => MemoryListing(args)));
         transport.On("retro/memory/mark", args => Reply(() => MemoryMark(args)));
@@ -357,6 +360,12 @@ internal sealed partial class DebugSession
 
         transport.On("retro/cycles", args => Reply(() =>
         {
+            if (args.Bool("changesOnly") is { } changesOnly)
+            {
+                _cycleChangesOnly = changesOnly;
+                _sourceCyclesDirty = true;
+            }
+
             if (args.Bool("clear") == true)
             {
                 _lineCycles.Clear();
@@ -364,6 +373,7 @@ internal sealed partial class DebugSession
                 _lineEntered = false;
                 _callCycles.Clear();
                 _contracts?.Clear();
+                _sourceCyclesDirty = true;
             }
 
             return SourceCycles();
@@ -763,6 +773,7 @@ internal sealed partial class DebugSession
         // retro/device and retro/hardware answer media's outcomes (saved, changed, conflict, losses, readOnly) to a
         // client that sends supportsRetrocoreMedia, as the media persistence plan has them.
         ["supportsRetrocoreMedia"] = 1,
+        ["supportsRetrocoreMemorySubscriptions"] = true,
         ["supportsConditionalBreakpoints"] = true,
         ["supportsHitConditionalBreakpoints"] = true,
         ["supportsLogPoints"] = true,
@@ -893,6 +904,7 @@ internal sealed partial class DebugSession
         _basicEnded = false;
         _lineCycles.Clear();
         _callCycles.Clear();
+        _sourceCyclesDirty = true;
         _contracts?.Clear();
         _cycleSource = null;
         _pendingLineCycles = 0;
@@ -1716,7 +1728,7 @@ internal sealed partial class DebugSession
         // Call cycles and contracts follow the machine's CPU, whose routines the SDK documents.
         if (!machineCpu) { return true; }
         (ushort Target, int Length)? call = Target.CallAt(before.ProgramCounter);
-        _callCycles.Observe(before.ProgramCounter, call?.Length, before.StackPointer, Target.CycleCount, _cycleSource);
+        _sourceCyclesDirty |= _callCycles.Observe(before.ProgramCounter, call?.Length, before.StackPointer, Target.CycleCount, _cycleSource);
         if (_contracts?.Observe(before, call, Target.Peek) is { Count: > 0 } broken)
         {
             foreach (string message in broken)
@@ -1840,7 +1852,7 @@ internal sealed partial class DebugSession
                             Measure();
                             NotifyFrame(running: true);
                             if (Target.TakeAudio() is { } audio) { Notify("retro/audio", audio); }
-                            Notify("retro/cycles", SourceCycles());
+                            NotifySourceCycles();
                             NotifyStatus();
                             NotifyRunningMemory();
                             frameTime = Stopwatch.GetTimestamp();
@@ -2071,7 +2083,7 @@ internal sealed partial class DebugSession
         });
 
         NotifyFrame(running: false);
-        Notify("retro/cycles", SourceCycles());
+        NotifySourceCycles(force: true);
         NotifyStatus();
         NotifyMemory();
     }
@@ -2122,6 +2134,7 @@ internal sealed partial class DebugSession
         {
             ref ulong count = ref CollectionsMarshal.GetValueRefOrAddDefault(_lineCycles, source, out _);
             count = _lineEntered ? _pendingLineCycles : count + _pendingLineCycles;
+            _sourceCyclesDirty = true;
         }
 
         _pendingLineCycles = 0;
@@ -2132,6 +2145,15 @@ internal sealed partial class DebugSession
     {
         FlushLineCycles();
         return SourceCyclesJson();
+    }
+
+    private void NotifySourceCycles(bool force = false)
+    {
+        FlushLineCycles();
+        if (_cycleChangesOnly && !force && !_sourceCyclesDirty) { return; }
+
+        Notify("retro/cycles", SourceCyclesJson());
+        _sourceCyclesDirty = false;
     }
 
     private JsonObject SourceCyclesJson() => new JsonObject

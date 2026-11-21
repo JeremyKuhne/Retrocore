@@ -909,10 +909,12 @@ function wantListing() {
     const key = start + ":" + end + ":" + generation + ":" + writes + ":" + marks + ":" + breakpointChanges + ":" + labels.length + ":" + forcedStarts.size;
     if (key === listingKey) return;
     listingKey = key;
-    void loadListing(start, Math.min(0x1000, end - start + 1), key);
+    if (!listingBusy) void loadListing(start, Math.min(0x1000, end - start + 1), key);
 }
 
+let listingBusy = false;
 async function loadListing(start, count, key) {
+    listingBusy = true;
     try {
         const result = await request({ type: "listing", address: start, count, starts: Array.from(forcedStarts) });
         if (key !== listingKey) return;
@@ -926,6 +928,12 @@ async function loadListing(start, count, key) {
         if (key !== listingKey) return;
         listingLines = [];
         listingError = String(error.message || error);
+    } finally {
+        listingBusy = false;
+        if (key !== listingKey) {
+            listingKey = "";
+            wantListing();
+        }
     }
     showListingLines();
 }
@@ -1534,22 +1542,29 @@ function closeMenu() {
 // What the debugger says about the cursor's address: its region and where in it, what the memory map does with it,
 // the label it is in with its documentation, and its source line. Asked for again when the cursor, memory, the
 // marks or the stop change.
-let inspected = null, inspectKey = "";
+let inspected = null, inspectKey = "", inspectBusy = false;
 
 function wantInspection() {
     if (ended) return;
     const key = cursor + ":" + generation + ":" + writes + ":" + marks + ":" + Array.from(forcedStarts).join(",");
     if (key === inspectKey) return;
     inspectKey = key;
-    void loadInspection(cursor, key);
+    if (!inspectBusy) void loadInspection(cursor, key);
 }
 
 async function loadInspection(address, key) {
+    inspectBusy = true;
     let result = null;
     try {
         result = await request({ type: "inspect", address, starts: Array.from(forcedStarts) });
     } catch {
         // The inspector shows what the page knows without it.
+    } finally {
+        inspectBusy = false;
+        if (key !== inspectKey) {
+            inspectKey = "";
+            wantInspection();
+        }
     }
     if (key !== inspectKey) return;
     inspected = result;

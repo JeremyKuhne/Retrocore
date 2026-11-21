@@ -378,7 +378,7 @@ test("a frame without pixels keeps the last picture, which is decoded into one k
     window.dispatch("message", { data: frame() });
     window.dispatch("message", { data: frame(Uint8Array.of(9, 9, 9, 255, 8, 8, 8, 255)) });
     assert.deepEqual(screen.context.put.map(data => [...data]), [
-        [1, 2, 3, 255, 4, 5, 6, 255], [1, 2, 3, 255, 4, 5, 6, 255], [9, 9, 9, 255, 8, 8, 8, 255]
+        [1, 2, 3, 255, 4, 5, 6, 255], [9, 9, 9, 255, 8, 8, 8, 255]
     ]);
     assert.equal(screen.context.created.length, 1, "the image is made once and kept");
     assert.deepEqual([screen.width, screen.height], [2, 1]);
@@ -386,7 +386,18 @@ test("a frame without pixels keeps the last picture, which is decoded into one k
     // A picture of the wrong size is reported, not drawn.
     window.dispatch("message", { data: frame(Uint8Array.of(1, 2, 3, 4)) });
     assert.deepEqual(posted.splice(0), [{ error: "Incorrect RGBA frame size from the debug host." }]);
-    assert.equal(screen.context.put.length, 3);
+    assert.equal(screen.context.put.length, 2);
+});
+
+test("resuming without new pixels clears the stopped beam overlay once", () => {
+    const { screen, window, byId } = loadPanel();
+    (byId.get("overlay") as Element & { checked: boolean }).checked = true;
+    const video = { width: 2, height: 1, pixelFormat: "rgba", pixels: "AAAAAAAAAAA=", beam: { scanline: 0, column: 30 } };
+    window.dispatch("message", { data: { machine: "apple2", rows: [""], running: false, video } });
+    const withoutPixels = { width: 2, height: 1, pixelFormat: "rgba", beam: video.beam };
+    window.dispatch("message", { data: { machine: "apple2", rows: [""], running: true, video: withoutPixels } });
+    window.dispatch("message", { data: { machine: "apple2", rows: [""], running: true, video: withoutPixels } });
+    assert.equal(screen.context.put.length, 2);
 });
 
 test("the screen keeps the machine's keys from VS Code, and lets the debugger's and the Command Palette's through", () => {

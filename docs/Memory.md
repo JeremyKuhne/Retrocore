@@ -295,11 +295,12 @@ place, which **Open in Retrocore Memory** shows on, and `retro/memory/variable` 
 `evaluate` result has its `memoryReference` except in the `watch`, `hover` and `variables` contexts; Retrocore
 Memory evaluates with the context `retrocore`.
 
-Retrocore Memory uses five more requests:
+Retrocore Memory uses these requests:
 
 | Request | Returns |
 | --- | --- |
 | `retro/memory/read` | For a `memoryReference`, `offset` and `count`, all `count` bytes in `data`, reading past unreadable bytes, which read as zero. `unreadable` lists their runs as `{ offset, count }`, so a bank shows where it is inside the CPU's 64K, and `readOnly` the runs a write cannot reach now. Memory events track its reads as they do `readMemory`'s. |
+| `retro/memory/unsubscribe` | Removes the reads associated with a `subscriber` supplied to `retro/memory/read`, without removing other subscribers or standard DAP reads. |
 | `retro/memory/labels` | For a `memoryReference`, the labels in its space as `{ address, name }`, from the debug modules that apply at each address now, then the equates its CPU's instructions address memory through, from the modules whose code is installed: in the bank its area is in, so a ROM's while RAM is mapped over it, but not a card's firmware without the card. |
 | `retro/memory/listing` | For a `memoryReference`, `address` and `count` of bytes, the `lines` of instructions and data from the nearest known instruction start at or before `address`, which `starts` adds to (a start in `starts` or a label up to 4096 bytes back still counts, and a start in `starts` decodes an instruction even in data): each line's `address`, `size`, `text`, `kind` (`code`, `data` or `unknown`), whether that kind is analysis's `guess` where no source describes the bytes, `label`, the `target` its operand names (a restart's implied address; for a 6809 direct-page operand, in the page DP holds at the stop, and none in another CPU's memory), the source `path` and `line`, the hints file's `comment` on the line's bytes, with `comments` giving each one's `address` and `text` (a comment starts a data line), and the ids of the `breakpoints` that stop at its address, a bank's only in that bank's listing, or null. |
 | `retro/memory/mark` | For a `memoryReference` and `address`, one of `kind` (`code`, `data` or `clear`, for `count` bytes), `name` or `comment`, an empty one taking it away; writes the launch's hints file as it is now and answers its `path`, or, where the launch has no file, `needsFile` until a request names one as `hints`; it also answers the `address` and `count` of the bytes the mark covers, a code mark's being its instruction's. The file is written beside the old and then takes its place, and one whose parts are not the shapes the disassembler takes is refused. |
@@ -314,10 +315,14 @@ Retrocore Memory uses five more requests:
 | `retro/memory/variable` | For a `variablesReference` and a variable's `name` in it, the `memoryReference` VS Code was not sent. An error for a variable that holds no address. |
 | `retro/memory/characters` | The machine's character set as its screen shows it now: each character's `width` and `height`, every code's rows in `glyphs` (one byte a row, leftmost pixel in bit 7), the other phase of flashing characters in `flashed`, and in `text` the character each code shows, NUL for graphics. Empty for a machine the debugger cannot draw. |
 
-The debugger keeps, for each reference a view has read, the range read and a hash of its bytes. After each stop,
-every eighth running frame and each `writeMemory`, it sends a `memory` event for each view whose bytes have
-changed, naming the view's reference exactly, as VS Code requires, with offset 0 and the end of the range read as
-its count. The view that wrote is not told. A `writeMemory` also
+The debugger keeps the disjoint ranges each view has read and a hash of their bytes. Retrocore Memory supplies an
+editor-specific `subscriber` with each `retro/memory/read`, and unsubscribes it when the editor closes. Reads without
+a subscriber, including standard `readMemory` reads, are tracked separately. The `initialize` capability
+`supportsRetrocoreMemorySubscriptions` advertises this support. Unscoped DAP reader references use a 32-entry
+least-recently used limit; live editor subscriptions remain until their editor closes. After each stop, every eighth running
+frame and each `writeMemory`, the debugger sends a `memory` event for each reference whose tracked bytes have
+changed, with offset 0 and the end of the changed view's last range as its count, as VS Code requires. The view
+that wrote is not told. A `writeMemory` also
 sends `invalidated` for the variables. A `retro/hardware` change or `retro/reset` while stopped sends the same
 `memory` events and then `invalidated` for everything, which Retrocore Memory and the Machine view take as the
 sign to read their labels and banks again.

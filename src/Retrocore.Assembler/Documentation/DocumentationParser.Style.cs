@@ -35,19 +35,15 @@ public static partial class DocumentationParser
     /// </summary>
     /// <param name="text">The source text.</param>
     /// <returns>Whether it is checked.</returns>
-    public static bool IsStrict(string text)
-    {
-        int end = text.IndexOfAny(['\r', '\n']);
-        string first = (end < 0 ? text : text[..end]).Trim();
-        return first.StartsWith("; retrocore:", StringComparison.OrdinalIgnoreCase) && first["; retrocore:".Length..]
-            .Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries)
-            .Any(word => word.Equals("style=strict", StringComparison.OrdinalIgnoreCase));
-    }
+    public static bool IsStrict(string text) => ReadPragma(text)?.Strict == true;
 
     // The style guide's line rules (docs/AssemblyStyle.md): layout, labels, names and plain text.
     private static void Style(string[] lines, string path, List<DocumentationDiagnostic> diagnostics)
     {
-        void Warn(string message, int line) => diagnostics.Add(new(message, path, line, DocumentationSeverity.Warning));
+        void Warn(string rule, string message, int line, string? name = null)
+        {
+            diagnostics.Add(new(message, path, line, DocumentationSeverity.Warning, rule) { Name = name });
+        }
 
         bool inMacro = false;
         int macroDepth = 0;
@@ -55,10 +51,17 @@ public static partial class DocumentationParser
         for (int index = 1; index < lines.Length; index++)
         {
             string line = lines[index];
-            if (line.Length > StyleLineLength) { Warn($"Line is over {StyleLineLength} columns.", index); }
+            if (line.Length > StyleLineLength)
+            {
+                Warn(DocumentationRules.LineLength, $"Line is over {StyleLineLength} columns.", index);
+            }
+
             if (line.Any(character => character > '\x7F'))
             {
-                Warn("Write plain ASCII: 'times' rather than a multiplication sign, '-' rather than a dash.", index);
+                Warn(
+                    DocumentationRules.Ascii,
+                    "Write plain ASCII: 'times' rather than a multiplication sign, '-' rather than a dash.",
+                    index);
             }
 
             (string code, string? comment) = Split(line);
@@ -66,19 +69,23 @@ public static partial class DocumentationParser
             int indent = code.Length - code.TrimStart().Length;
             if (trimmed.Length == 0)
             {
-                if (comment is not null) { CommentIndent(lines, index, indent, inMacro, Warn); }
+                if (comment is not null && CommentIndent(lines, index, indent, inMacro) is { } misplaced)
+                {
+                    Warn(DocumentationRules.CommentIndent, misplaced, index);
+                }
+
                 continue;
             }
 
             if (comment is not null && comment.StartsWith(Marker, StringComparison.Ordinal))
             {
-                Warn("Put ;; documentation above the definition, not after it.", index);
+                Warn(DocumentationRules.TrailingDoc, "Put ;; documentation above the definition, not after it.", index);
             }
 
             // A label with code after it is one problem, not also the code's indentation.
             if (LabelWithCode(trimmed) is { } labeled)
             {
-                Warn($"Put the label {labeled} on its own line.", index);
+                Warn(DocumentationRules.LabelAlone, $"Put the label {labeled} on its own line.", index, labeled);
                 continue;
             }
 
@@ -86,7 +93,7 @@ public static partial class DocumentationParser
 
             if (defined is not null && IsAddressName(defined))
             {
-                Warn($"Name {defined} for what it is: a name that is only an address says nothing.", index);
+                Warn(DocumentationRules.AddressName, $"Name {defined} for what it is: a name that is only an address says nothing.", index, defined);
             }
 
             string directive = Directive(trimmed);
@@ -100,7 +107,7 @@ public static partial class DocumentationParser
                 bool label = IsLabelOnly(trimmed);
                 if (indent != expected && !(label && indent == 0))
                 {
-                    Warn($"Indent this line of the macro {expected} columns.", index);
+                    Warn(DocumentationRules.Indent, $"Indent this line of the macro {expected} columns.", index);
                 }
 
                 if (directive is ".repeat" or ".else" or ".elseif" || directive.StartsWith(".if", StringComparison.Ordinal))
@@ -123,28 +130,34 @@ public static partial class DocumentationParser
             // A cheap-local or anonymous label is a label too, though it defines no name of its own.
             if (s_blockDirectives.Contains(directive) || (defined is not null || IsLabelOnly(trimmed)) && !inMembers)
             {
-                if (indent != 0) { Warn("Put definitions, labels and block directives at column 0.", index); }
+                if (indent != 0)
+                {
+                    Warn(DocumentationRules.ColumnZero, "Put definitions, labels and block directives at column 0.", index);
+                }
             }
             else if (inMembers || directive.Length == 0 || s_dataDirectives.Contains(directive))
             {
-                if (indent != StyleIndent) { Warn($"Indent instructions and data {StyleIndent} columns.", index); }
+                if (indent != StyleIndent)
+                {
+                    Warn(DocumentationRules.Indent, $"Indent instructions and data {StyleIndent} columns.", index);
+                }
             }
         }
     }
 
     // A comment line is indented like the code it describes: the next line of code, the line after a label, or,
-    // before the end of a block, the code it follows.
-    private static void CommentIndent(string[] lines, int index, int indent, bool inMacro, Action<string, int> warn)
+    // before the end of a block, the code it follows. Gets the warning when it is not, or null.
+    private static string? CommentIndent(string[] lines, int index, int indent, bool inMacro)
     {
         int next = index + 1;
         while (next < lines.Length && Split(lines[next]).Code.Trim().Length == 0)
         {
             // A blank line ends what the comment describes.
-            if (lines[next].Trim().Length == 0) { return; }
+            if (lines[next].Trim().Length == 0) { return null; }
             next++;
         }
 
-        if (next >= lines.Length) { return; }
+        if (next >= lines.Length) { return null; }
         HashSet<int> allowed = [Indentation(lines[next])];
         string code = Split(lines[next]).Code.Trim();
 
@@ -170,11 +183,14 @@ public static partial class DocumentationParser
             }
         }
 
-        if (inMacro && allowed.Count == 0) { return; }
+        if (inMacro && allowed.Count == 0) { return null; }
         if (!allowed.Contains(indent))
         {
-            warn($"Indent this comment like the code it describes ({string.Join(" or ", allowed.OrderBy(column => column))} columns).", index);
+            string columns = string.Join(" or ", allowed.OrderBy(column => column));
+            return $"Indent this comment like the code it describes ({columns} columns).";
         }
+
+        return null;
     }
 
     // The name a line defines: a block's (.proc Name), a constant's (Name = value) or a label's (Name:).

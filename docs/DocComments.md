@@ -384,6 +384,38 @@ broken link.
   - that every exported symbol is documented, by its own comment or as an `Entry:` (or stacked label) of a
     documented routine.
 
+  Each diagnostic names its rule, by an ID the editor shows as the diagnostic's code and messages printed outside
+  the editor end with in brackets (`Line is over 120 columns. [line-length]`):
+
+  | ID | What it reports |
+  | --- | --- |
+  | `line-length` | A line over 120 columns. |
+  | `ascii` | A character outside plain ASCII. |
+  | `trailing-doc` | A trailing `;;` comment, which goes above the definition instead. |
+  | `label-alone` | A label sharing its line with code. |
+  | `address-name` | A name that is only an address, such as `L_F8C2`. |
+  | `column-zero` | A definition, label or block directive not at column 0. |
+  | `indent` | Instructions and data not 4 columns in; a macro's body not one level in per block. |
+  | `comment-indent` | A comment not indented like the code it describes. |
+  | `unlinked-name` | Prose naming a documented definition without a link. |
+  | `link` | A link to no definition, file or address. |
+  | `ambiguous-link` | A link that names definitions in more than one place. |
+  | `also` | Every `Also:` problem: its form, its bibliography keys, a name already taken. |
+  | `sections` | The sections' form: `Entry:`, `Members:`, `Parameters:`, `Inherit:`, `Include:`, `Flags:`, register lists, `name = meaning` entries, `{name}` references. |
+  | `historical-name` | Information on a use of an old name in code, with its quick fix. |
+  | `deprecated` | A use of a definition with a `Deprecated:` section. |
+  | `undocumented-export` | An exported symbol with no `;;` documentation. |
+  | `placement` | A `;;` block that documents nothing it can (section 1.2): errors only. |
+  | `exclusion` | A problem with an exclusion itself: an unknown ID, a misplaced one, or one that turns nothing off. |
+
+  The IDs are a public contract: a rule may be split, with its old ID still covering both, but not renamed.
+
+  An `ignore=` exclusion (AssemblyStyle.md, [Turning a rule off](AssemblyStyle.md#turning-a-rule-off)) turns a
+  rule off for a file, a line of code or a `;;` block, and `unlinked-name`, `link`, `ambiguous-link`,
+  `address-name`, `label-alone`, `historical-name` and `deprecated` can be narrowed to names
+  (`ignore=link:Nowhere`); another rule with a name is an error. Errors can't be ignored, so naming `placement` or
+  `exclusion` is an error. An unknown ID is a warning, and an exclusion that turns nothing off is information.
+
 ## 6. Open questions
 
 - **Automatic linking.** Linking bare names that match symbols, without angle brackets, would suit the
@@ -396,7 +428,8 @@ broken link.
 | Parser and model (`;;` blocks, sections, links) | `src/Retrocore.Assembler/Documentation/DocumentationParser*.cs`, `DocumentationComment`, `DocumentationSection`, `DocumentationText` |
 | Topics with assembly values, `.if` merging | `DocumentationSet`, `DocumentationTopic` |
 | Links, `Inherit:`, `Include:`, the lint | `DocumentationResolver*.cs` |
-| Hover, completion, editor diagnostics | `src/Retrocore.Debug/Language/DocumentationMarkdown.cs`, `LanguageWorkspace.Documentation.cs` |
+| Rule IDs and exclusions | `DocumentationRules`, `DocumentationParser.Exclusions.cs`, `DocumentationExclusions` (the one filter the editor and the tests use) |
+| Hover, completion, editor diagnostics | `src/Retrocore.Debug/Language/DocumentationMarkdown.cs`, `LanguageWorkspace.Documentation.cs`, `LintEditor.cs` (rule codes, exclusion quick fixes, rule completion and hover) |
 | `Keeps:`/`Uses:` checks and the Variables scope | `src/Retrocore.Debug/DebugContracts.cs`, `DebugSession.cs` |
 | C# summaries for exports | `src/Retrocore.Generators/ExportDocumentation.cs` |
 | Highlighting | `extension/scripts/generate-grammar.mjs` (`comment.line.documentation.retrocore`) |

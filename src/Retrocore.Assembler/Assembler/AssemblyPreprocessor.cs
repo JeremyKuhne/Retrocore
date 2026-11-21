@@ -221,8 +221,12 @@ internal sealed partial class AssemblyPreprocessor
     {
         if (!HasPragma(text)) { return null; }
         int end = text.IndexOfAny(['\r', '\n']);
-        string first = (end < 0 ? text : text[..end]).Trim();
-        foreach (string word in first["; retrocore:".Length..].Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries))
+        string first = (end < 0 ? text : text[..end]).Trim()["; retrocore:".Length..];
+
+        // An exclusion's reason, after " -- ", is prose for reviewers, not words.
+        int reason = first.IndexOf(" -- ", StringComparison.Ordinal);
+        if (reason >= 0) { first = first[..reason]; }
+        foreach (string word in first.Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries))
         {
             int separator = word.IndexOf('=');
             if (separator > 0 && word[..separator].Equals(key, StringComparison.OrdinalIgnoreCase))
@@ -248,7 +252,10 @@ internal sealed partial class AssemblyPreprocessor
         ReadOnlySpan<char> first = source.Text;
         int end = first.IndexOfAny('\r', '\n');
         first = (end < 0 ? first : first[..end]).Trim();
-        if (PragmaValue(source.Text, "dialect") is null && PragmaValue(source.Text, "style") is not null)
+
+        // The documentation lint's words (style=, ignore=) need no dialect.
+        bool lint = PragmaValue(source.Text, "style") is not null || PragmaValue(source.Text, "ignore") is not null;
+        if (PragmaValue(source.Text, "dialect") is null && lint)
         {
             return null;
         }

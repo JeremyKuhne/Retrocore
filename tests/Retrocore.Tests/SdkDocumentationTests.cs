@@ -36,8 +36,8 @@ public class SdkDocumentationTests
                 isDirective: name => DirectiveDocs.Describe(name) is not null,
                 isInstruction: InstructionDocs.IsMnemonic);
 
-            problems.AddRange(resolver.Check().Select(problem =>
-                $"{Path.GetFileName(problem.Path)}:{problem.Line + 1}: {problem.Message}"));
+            problems.AddRange(resolver.Lint().Select(problem =>
+                $"{Path.GetFileName(problem.Path)}:{problem.Line + 1}: {problem.Text}"));
         }
 
         problems.Should().BeEmpty($"the lint found:{Environment.NewLine}{string.Join(Environment.NewLine, problems)}");
@@ -177,9 +177,9 @@ public class SdkDocumentationTests
 
         string root = Path.GetFullPath(analysis.Root);
         string folder = Path.GetDirectoryName(root) ?? "";
-        return resolver.Check()
+        return resolver.Lint()
             .Where(problem => Path.GetFullPath(problem.Path) == root || SourceIncludes.RootOf(Path.GetFullPath(problem.Path)) == root)
-            .Select(problem => $"{label} {Path.GetRelativePath(folder, problem.Path)}:{problem.Line + 1}: {problem.Message}");
+            .Select(problem => $"{label} {Path.GetRelativePath(folder, problem.Path)}:{problem.Line + 1}: {problem.Text}");
     }
 
     private static string RepositoryRoot()
@@ -272,7 +272,7 @@ public class SdkDocumentationTests
             isDirective: name => DirectiveDocs.Describe(name) is not null,
             isInstruction: InstructionDocs.IsMnemonic);
 
-        return resolver.Check().Select(problem => $"{copy} {Path.GetFileName(problem.Path)}:{problem.Line + 1}: {problem.Message}");
+        return resolver.Lint().Select(problem => $"{copy} {Path.GetFileName(problem.Path)}:{problem.Line + 1}: {problem.Text}");
     }
 
     /// <summary>
@@ -296,9 +296,9 @@ public class SdkDocumentationTests
             isDirective: name => DirectiveDocs.Describe(name) is not null,
             isInstruction: InstructionDocs.IsMnemonic);
 
-        List<string> problems = [.. resolver.Check()
+        List<string> problems = [.. resolver.Lint()
             .Where(problem => Path.GetFileName(problem.Path) == "Monitor.asm")
-            .Select(problem => $"{Path.GetFileName(problem.Path)}:{problem.Line + 1}: {problem.Message}")];
+            .Select(problem => $"{Path.GetFileName(problem.Path)}:{problem.Line + 1}: {problem.Text}")];
 
         problems.Should().BeEmpty($"the lint found:{Environment.NewLine}{string.Join(Environment.NewLine, problems)}");
     }

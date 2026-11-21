@@ -41,7 +41,11 @@ internal sealed class CompletionHandler
         string[] lines = _workspace.LinesOf(path);
         int line = request.Position.Line;
         string before = line < lines.Length ? lines[line][..Math.Min(request.Position.Character, lines[line].Length)] : "";
-        if (SourceText.CommentStart(before) >= 0) { return Task.FromResult(new List<CompletionItem>()); }
+        if (SourceText.CommentStart(before) >= 0)
+        {
+            // In a comment, only an exclusion's rules complete.
+            return Task.FromResult(LintEditor.Complete(before) ?? []);
+        }
 
         SourceAnalysis? analysis = _workspace.AnalysisOf(path);
         List<CompletionItem> items = [];

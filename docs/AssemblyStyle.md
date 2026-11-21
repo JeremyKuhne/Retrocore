@@ -26,6 +26,43 @@ The editor's lint then reports, as warnings, what can be checked mechanically:
 - prose in a `;;` comment that names a documented definition without linking it;
 - non-ASCII characters, and lines over 120 columns.
 
+Each warning ends with its rule's ID, such as `[line-length]`, and the editor shows the ID as the diagnostic's
+code. [DocComments.md](DocComments.md#5-checked-contracts), section 5, lists the IDs.
+
+### Turning a rule off
+
+When one rule doesn't fit one place, such as a data table whose columns read best past 120 columns or a word that
+is also a documented name, an exclusion turns that rule off there and nowhere else. It is the `ignore=` word of a
+`; retrocore:` pragma, with a comma-separated list of rule IDs; a rule that reports a name can be narrowed to names
+with a colon and `|`, as `ignore=unlinked-name:Run|Stop`. It goes in one of three places:
+
+- on the first line, after the other words, for the whole file (not the files it includes):
+  `; retrocore: style=strict ignore=unlinked-name:Pascal`;
+- as a line of code's own trailing plain `;` comment, for that line;
+- on a plain comment line directly above a `;;` block, for that block's lines only, not the code below the
+  definition. The block stays directly above its definition, so the exclusion goes above the block.
+
+```asm
+; retrocore: ignore=unlinked-name:Run -- Run is the verb here
+;; Starts the test, so that the suite can Run to its end.
+.proc RunTest
+    rts
+.endproc
+
+;; Runs.
+.proc Run
+    rts
+.endproc
+```
+
+Bending the source to the rule is usually better: reach for an exclusion only where following the rule would make
+the source harder to read, or misquote a listing. Give the reason after ` -- `, for the reviewer; the tools ignore it.
+The editor's quick fix on a warning writes the exclusion, and completes the rule IDs after `ignore=`.
+
+Only warnings and information can be turned off: errors, such as a `;;` block that documents nothing, can't. An
+unknown rule ID is a warning, and an exclusion that turns nothing off is information, so it doesn't outlive its
+reason. The words change nothing the source assembles to.
+
 The rest of this guide (what to name things, what deserves a constant, what a comment should say) is for the
 author and the reviewer. The pragma changes nothing the source assembles to. Every `asm` example here assembles and passes the editor's lint (`NativeAssemblyDocsTests`
 checks both).

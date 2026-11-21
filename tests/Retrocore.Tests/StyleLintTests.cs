@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
+using System.Text.Json.Nodes;
 using Retrocore.Assembler;
+using Retrocore.Debug.Language;
 using Retrocore.Documentation;
 using NativeAssembler = Retrocore.Assembler.Assembler;
 
@@ -212,14 +214,392 @@ public sealed class StyleLintTests
             .ContainSingle().Which.Should().Contain("LF8C2");
     }
 
-    // The problems the editor reports for one strict file, as "line: message" with 1-based lines.
-    private static List<string> Problems(string text)
+    /// <summary>
+    ///  The rules are the spec's, and each diagnostic the parser and resolver produce carries one of them.
+    /// </summary>
+    [TestMethod]
+    public void EveryDiagnosticHasARuleFromTheTable()
+    {
+        DocumentationRules.All.Select(rule => rule.Id).Should().Equal(
+            "line-length", "ascii", "trailing-doc", "label-alone", "address-name", "column-zero", "indent",
+            "comment-indent", "unlinked-name", "link", "ambiguous-link", "also", "sections", "historical-name",
+            "deprecated", "undocumented-export", "placement", "exclusion");
+
+        DocumentationRules.All.Where(rule => !rule.Ignorable).Select(rule => rule.Id).Should().Equal("placement", "exclusion");
+
+        string text = Pragma + $"""
+            .cpu Mos6502
+            .org $0300
+            RETURN = $8D ;; trailing
+            Start: lda #RETURN
+            ;; A routine, with <Nowhere>.
+            ;; In: Q = a register no CPU has
+            ;; Also: BAD FORM
+            L_F8C2:
+                rts
+            ;; Ends with a dash — here.
+            Value = 1
+            ;; {new string('x', 120)}
+            Other = 2
+            lda #0
+                Indented = 3
+                ; a misplaced heading
+            .proc Proc
+                ldx #0
+              ; also misplaced
+                rts
+            .endproc
+            ;; A macro.
+            .macro Bad
+            .byte 0
+            .endmacro
+            ;; Documents nothing.
+
+            ; retrocore: ignore=nothing-at-all
+            """;
+
+        List<DocumentationDiagnostic> diagnostics = Lint(text);
+        diagnostics.Should().NotBeEmpty();
+        diagnostics.Should().AllSatisfy(diagnostic => DocumentationRules.Find(diagnostic.Rule).Should().NotBeNull(diagnostic.Message));
+        Rules(text).Should().BeEquivalentTo(
+            "4: trailing-doc",
+            "5: label-alone Start",
+            "6: link Nowhere",
+            "7: sections",
+            "8: also",
+            "9: address-name L_F8C2",
+            "11: ascii",
+            "13: line-length",
+            "15: indent",
+            "16: column-zero",
+            "17: comment-indent",
+            "20: comment-indent",
+            "25: indent",
+            "27: placement",
+            "29: exclusion");
+
+        diagnostics.First(diagnostic => diagnostic.Rule == "line-length").Text.Should().Be("Line is over 120 columns. [line-length]");
+    }
+
+    /// <summary>
+    ///  An exclusion on the first line turns a rule off in the whole file, and the other rules stay on.
+    /// </summary>
+    [TestMethod]
+    public void AFileExclusionIgnoresItsRuleInTheFile()
+    {
+        string text = $"""
+            ; retrocore: style=strict ignore=line-length -- the table lines up with the listing
+            .cpu Mos6502
+            .org $0300
+            ;; {new string('x', 120)}
+            Value = 1
+                .byte 0 ; {new string('x', 120)}
+            Start: lda #0
+            """;
+
+        Rules(text).Should().BeEquivalentTo("7: label-alone Start");
+    }
+
+    /// <summary>
+    ///  A file exclusion needs no style=strict: it turns off the rules that run without it too.
+    /// </summary>
+    [TestMethod]
+    public void AFileExclusionNeedsNoStyle()
+    {
+        string text = """
+            ; retrocore: ignore=link
+            .cpu Mos6502
+            .org $0300
+            ;; Calls <Nowhere>.
+            Start:
+                rts
+            """;
+
+        Rules(text).Should().BeEmpty();
+        Rules(text[(text.IndexOf('\n') + 1)..]).Should().BeEquivalentTo("3: link Nowhere");
+    }
+
+    /// <summary>
+    ///  A line's own trailing pragma turns a rule off on that line only.
+    /// </summary>
+    [TestMethod]
+    public void ALineExclusionIgnoresOnlyItsLine()
+    {
+        string data = string.Join(", ", Enumerable.Repeat("$C1", 26));
+        string text = Pragma + $"""
+            .cpu Mos6502
+            .org $0300
+            ;; The table.
+            Table:
+                .byte {data} ; retrocore: ignore=line-length -- the listing's columns
+                .byte {data}
+            """;
+
+        Rules(text).Should().BeEquivalentTo("7: line-length");
+    }
+
+    /// <summary>
+    ///  A pragma line above a ;; block turns a rule off for that block, not for the definition's code below it or
+    ///  another block.
+    /// </summary>
+    [TestMethod]
+    public void ACommentExclusionIgnoresOnlyItsBlock()
+    {
+        string text = Pragma + $"""
+            .cpu Mos6502
+            .org $0300
+
+            ;; Runs.
+            .proc Run
+                rts
+            .endproc
+
+            ; retrocore: ignore=unlinked-name:Run,line-length -- Run is the verb here
+            ;; Start makes Run go.
+            ;; {new string('x', 120)}
+            .proc Start
+                lda #0 ; {new string('x', 120)}
+                rts
+            .endproc
+
+            ;; Stop makes Run halt.
+            .proc Stop
+                rts
+            .endproc
+            """;
+
+        Rules(text).Should().BeEquivalentTo("14: line-length", "18: unlinked-name Run");
+    }
+
+    /// <summary>
+    ///  Narrowing a rule to names turns it off for those names only, and a name on a rule that reports none is an
+    ///  error.
+    /// </summary>
+    [TestMethod]
+    public void NarrowingByNameIgnoresOnlyThoseNames()
+    {
+        string text = Pragma + """
+            .cpu Mos6502
+            .org $0300
+
+            ;; Prints.
+            .proc Print
+                rts
+            .endproc
+
+            ;; Clears.
+            .proc Clear
+                rts
+            .endproc
+
+            ; retrocore: ignore=unlinked-name:Print|Home
+            ;; Uses Print and Clear.
+            .proc Both
+                rts
+            .endproc
+            """;
+
+        Rules(text).Should().BeEquivalentTo("16: unlinked-name Clear", "15: exclusion unlinked-name:Home");
+        string named = text.Replace("unlinked-name:Print|Home", "unlinked-name:Print,line-length:Wide", StringComparison.Ordinal);
+        Lint(named).Should().ContainSingle(diagnostic => diagnostic.Rule == "exclusion")
+            .Which.Should().Match<DocumentationDiagnostic>(diagnostic =>
+                diagnostic.Message == "line-length takes no names." && diagnostic.Severity == DocumentationSeverity.Error);
+    }
+
+    /// <summary>
+    ///  An unknown rule warns, an exclusion that turns nothing off is information, and errors can't be ignored:
+    ///  naming a rule of errors only is an error, and a file exclusion of it leaves the errors.
+    /// </summary>
+    [TestMethod]
+    public void ExclusionsReportTheirOwnProblems()
+    {
+        string body = """
+            .cpu Mos6502
+            .org $0300
+            ;; Documents nothing.
+
+            Start:
+                rts
+            """;
+
+        List<DocumentationDiagnostic> unknown = Lint("; retrocore: ignore=line-lenght\n" + body);
+        unknown.Should().ContainSingle(diagnostic => diagnostic.Rule == "exclusion")
+            .Which.Should().Match<DocumentationDiagnostic>(diagnostic =>
+                diagnostic.Message == "No lint rule named 'line-lenght'." && diagnostic.Severity == DocumentationSeverity.Warning);
+
+        List<DocumentationDiagnostic> unused = Lint("; retrocore: ignore=ascii\n" + body);
+        unused.Should().ContainSingle(diagnostic => diagnostic.Rule == "exclusion")
+            .Which.Should().Match<DocumentationDiagnostic>(diagnostic =>
+                diagnostic.Message == "Nothing here breaks ascii; remove the exclusion."
+                    && diagnostic.Severity == DocumentationSeverity.Information
+                    && diagnostic.Line == 0);
+
+        List<DocumentationDiagnostic> errors = Lint("; retrocore: ignore=placement,exclusion\n" + body);
+        errors.Where(diagnostic => diagnostic.Rule == "exclusion").Select(diagnostic => (diagnostic.Message, diagnostic.Severity))
+            .Should().BeEquivalentTo([
+                ("placement reports only errors, which can't be ignored.", DocumentationSeverity.Error),
+                ("exclusion can't be ignored.", DocumentationSeverity.Error)]);
+
+        errors.Should().ContainSingle(diagnostic => diagnostic.Rule == "placement")
+            .Which.Severity.Should().Be(DocumentationSeverity.Error);
+
+        // An exclusion that is on neither a line of code nor above a ;; block applies nowhere.
+        Rules(Pragma + "Start:\n    ; retrocore: ignore=ascii\n    rts\n").Should().BeEquivalentTo("3: exclusion");
+    }
+
+    /// <summary>
+    ///  The assembler accepts the exclusion words on the first line, with or without a dialect, and they change no
+    ///  bytes.
+    /// </summary>
+    [TestMethod]
+    public void TheAssemblerAcceptsExclusions()
+    {
+        const string Body = ".cpu Mos6502\n.org $0300\nStart:\n    lda #1 ; retrocore: ignore=line-length\n    rts\n";
+        byte[] expected = Assemble(Body).Sections[0].Bytes.ToArray();
+        foreach (string pragma in new[]
+        {
+            "; retrocore: ignore=line-length -- the reason, with = and words\n",
+            "; retrocore: dialect=native ignore=unlinked-name:Run|Stop\n",
+            "; retrocore: style=strict ignore=line-length,ascii\n"
+        })
+        {
+            AssemblyResult result = Assemble(pragma + Body);
+            result.Diagnostics.Should().BeEmpty(pragma);
+            result.Sections[0].Bytes.ToArray().Should().Equal(expected, pragma);
+        }
+    }
+
+    /// <summary>
+    ///  The editor shows the rule as the diagnostic's code, and its quick fixes write the exclusion for the line, the
+    ///  comment or the file.
+    /// </summary>
+    [TestMethod]
+    public void TheEditorShowsTheRuleAndFixesIt()
+    {
+        string data = string.Join(", ", Enumerable.Repeat("$C1", 26));
+        string text = Pragma + $"""
+            .cpu Mos6502
+            .org $0300
+
+            ;; Calls <Nowhere>.
+            Table:
+                .byte {data}
+            """;
+
+        List<Diagnostic> diagnostics = [.. Lint(text).Select(diagnostic =>
+            LintEditor.ToDiagnostic(diagnostic, new LspRange(diagnostic.Line, 0, diagnostic.Line, 0), replacement: null))];
+
+        diagnostics.Select(diagnostic => (diagnostic.Range.Start.Line, diagnostic.Code, diagnostic.Severity)).Should().BeEquivalentTo([
+            (4, "link", DiagnosticSeverity.Warning),
+            (6, "line-length", DiagnosticSeverity.Warning)]);
+
+        Diagnostic link = diagnostics.Single(diagnostic => diagnostic.Code == "link");
+        Required(link.Data?["name"]).GetValue<string>().Should().Be("Nowhere");
+        string[] lines = text.Split('\n');
+        const string Uri = "file:///test.asm";
+        JsonArray actions = LintEditor.Actions(Uri, lines, [.. diagnostics.Select(diagnostic => (JsonNode)diagnostic.ToJson())]);
+        Fixes(actions, Uri, lines).Should().BeEquivalentTo(
+            "Ignore link:Nowhere for this comment: " + Join([.. lines[..4], "; retrocore: ignore=link:Nowhere", .. lines[4..]]),
+            "Ignore link:Nowhere in this file: " + Join(["; retrocore: style=strict ignore=link:Nowhere", .. lines[1..]]),
+            "Ignore line-length on this line: " + Join([.. lines[..6], lines[6] + " ; retrocore: ignore=line-length", .. lines[7..]]),
+            "Ignore line-length in this file: " + Join(["; retrocore: style=strict ignore=line-length", .. lines[1..]]));
+
+        // The fixes' exclusions turn the diagnostics off.
+        Lint(Join([.. lines[..4], "; retrocore: ignore=link:Nowhere", .. lines[4..]])).Select(diagnostic => diagnostic.Rule)
+            .Should().Equal("line-length");
+
+        // An existing pragma takes the rule into its list, before the reason.
+        string[] excluded = ["; retrocore: ignore=ascii -- why", "Start:", "    lda #0 ; retrocore: ignore=ascii"];
+        Apply(excluded, [LintEditor.File(excluded, "line-length")])[0].Should().Be("; retrocore: ignore=ascii,line-length -- why");
+        Apply(excluded, [Required(LintEditor.Here(excluded, 2, "indent")).Edit])[2]
+            .Should().Be("    lda #0 ; retrocore: ignore=ascii,indent");
+
+        // A line whose own comment is not a pragma has no room for one, and errors get no exclusion.
+        LintEditor.Here(["", "    lda #0 ; the count"], 1, "indent").Should().BeNull();
+        JsonObject error = new()
+        {
+            ["range"] = new LspRange(1, 0, 1, 0).ToJson(),
+            ["severity"] = 1,
+            ["code"] = "placement"
+        };
+
+        LintEditor.Actions(Uri, lines, [error]).Should().BeEmpty();
+    }
+
+    /// <summary>
+    ///  The editor completes rule IDs after ignore= and a comma, not after a colon's names or outside a pragma, and
+    ///  describes the rule under the cursor.
+    /// </summary>
+    [TestMethod]
+    public void TheEditorCompletesAndDescribesRules()
+    {
+        Required(LintEditor.Complete("; retrocore: style=strict ignore=")).Select(item => item.Label)
+            .Should().Contain(["line-length", "unlinked-name", "historical-name"]).And.NotContain(["placement", "exclusion"]);
+
+        LintEditor.Complete("    lda #0 ; retrocore: ignore=line-length,un").Should().NotBeNull();
+        LintEditor.Complete("; retrocore: ignore=unlinked-name:").Should().BeNull();
+        LintEditor.Complete("; retrocore: style=strict").Should().BeNull();
+        LintEditor.Complete("; ignore=").Should().BeNull();
+        LintEditor.Complete("; retrocore: ignore=line-length -- ").Should().BeNull();
+
+        const string Line = "; retrocore: ignore=line-length,unlinked-name:Run -- why";
+        (DocumentationRule rule, int start) = Required(LintEditor.RuleAt(Line, Line.IndexOf("length", StringComparison.Ordinal)));
+        rule.Id.Should().Be("line-length");
+        start.Should().Be(Line.IndexOf("line-length", StringComparison.Ordinal));
+        Required(LintEditor.RuleAt(Line, Line.IndexOf("unlinked", StringComparison.Ordinal))).Rule.Id.Should().Be("unlinked-name");
+        LintEditor.RuleAt(Line, Line.IndexOf("Run", StringComparison.Ordinal)).Should().BeNull();
+        LintEditor.RuleAt("; line-length", 4).Should().BeNull();
+    }
+
+    // Each quick fix as its title and the text its edits make.
+    private static List<string> Fixes(JsonArray actions, string uri, string[] lines) =>
+        [.. actions.Select(action =>
+        {
+            JsonArray edits = Required(action?["edit"]?["changes"]?[uri]?.AsArray());
+            return $"{Required(action?["title"]).GetValue<string>()}: {Join(Apply(lines, [.. edits.Select(edit => Required(edit).AsObject())]))}";
+        })];
+
+    private static string Join(string[] lines) => string.Join('\n', lines);
+
+    // Applies insertions, the only edits the quick fixes make, to lines.
+    private static string[] Apply(string[] lines, JsonObject[] edits)
+    {
+        string text = Join(lines);
+        foreach ((int line, int character, string inserted) in edits
+            .Select(edit => (
+                Required(edit["range"]?["start"]?["line"]).GetValue<int>(),
+                Required(edit["range"]?["start"]?["character"]).GetValue<int>(),
+                Required(edit["newText"]).GetValue<string>()))
+            .OrderByDescending(edit => (edit.Item1, edit.Item2)))
+        {
+            text = text.Insert(lines.Take(line).Sum(each => each.Length + 1) + character, inserted);
+        }
+
+        return text.Split('\n');
+    }
+
+    private static T Required<T>(T? value) where T : class =>
+        value ?? throw new InvalidOperationException("A value was expected.");
+
+    private static T Required<T>(T? value) where T : struct =>
+        value ?? throw new InvalidOperationException("A value was expected.");
+
+    // The lint as the editor and the tests run it, exclusions applied.
+    private static List<DocumentationDiagnostic> Lint(string text)
     {
         DocumentationFile file = DocumentationParser.Parse(text, "test.asm");
         DocumentationSet set = DocumentationSet.Create([file], Assemble(text));
         DocumentationResolver resolver = new(set, isInstruction: name => name.Equals("LDA", StringComparison.OrdinalIgnoreCase));
-        return [.. resolver.Check().Select(diagnostic => $"{diagnostic.Line + 1}: {diagnostic.Message}")];
+        return resolver.Lint();
     }
+
+    // The rules of the problems in a file, as "line: rule name" with 1-based lines.
+    private static List<string> Rules(string text) =>
+        [.. Lint(text).Select(diagnostic => $"{diagnostic.Line + 1}: {diagnostic.Rule} {diagnostic.Name}".TrimEnd())];
+
+    // The problems the editor reports for one strict file, as "line: message" with 1-based lines.
+    private static List<string> Problems(string text) =>
+        [.. Lint(text).Select(diagnostic => $"{diagnostic.Line + 1}: {diagnostic.Message}")];
 
     private static AssemblyResult Assemble(string text) =>
         new NativeAssembler().Assemble(

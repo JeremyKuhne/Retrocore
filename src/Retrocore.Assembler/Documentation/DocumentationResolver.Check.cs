@@ -17,6 +17,15 @@ public sealed partial class DocumentationResolver
         [.. CpuCatalog.InstructionSets.Values.Select(set => set.Description).Distinct().Select(DocumentationCpu.For)];
 
     /// <summary>
+    ///  Lints the current documentation: <see cref="Check"/>'s problems and any others found in its files, such as
+    ///  the editor's, less what the files' <c>ignore=</c> exclusions turn off (see <see cref="DocumentationExclusions"/>).
+    /// </summary>
+    /// <param name="others">More problems in the current documentation's files, filtered with the rest.</param>
+    /// <returns>The problems that remain, with information on each exclusion that turns nothing off.</returns>
+    public List<DocumentationDiagnostic> Lint(IEnumerable<DocumentationDiagnostic>? others = null) =>
+        DocumentationExclusions.Apply(others is null ? Check() : [.. Check(), .. others], Current.Files);
+
+    /// <summary>
     ///  Checks the current documentation: placement, sections, references, links, inheritance and includes.
     /// </summary>
     /// <returns>The problems, the parser's included.</returns>
@@ -37,7 +46,12 @@ public sealed partial class DocumentationResolver
             bool parsed = Current.Files.Any(file => SamePath(file.Path, path));
             if (parsed && Current.FindRoutine(name) is null)
             {
-                diagnostics.Add(new($"Exported '{name}' has no ;; documentation.", path, line, DocumentationSeverity.Warning));
+                diagnostics.Add(new(
+                    $"Exported '{name}' has no ;; documentation.",
+                    path,
+                    line,
+                    DocumentationSeverity.Warning,
+                    DocumentationRules.UndocumentedExport));
             }
         }
 
@@ -53,8 +67,12 @@ public sealed partial class DocumentationResolver
 
     private void CheckTopic(DocumentationTopic topic, List<DocumentationDiagnostic> diagnostics)
     {
-        void Warn(string message, int line) =>
-            diagnostics.Add(new(message, topic.Path, line, DocumentationSeverity.Warning));
+        void Warn(string rule, string message, int line, string? name = null)
+        {
+            diagnostics.Add(new(message, topic.Path, line, DocumentationSeverity.Warning, rule) { Name = name });
+        }
+
+        void Section(string message, int line) => Warn(DocumentationRules.Sections, message, line);
 
         if (topic.Section("Inherit") is { } inherit)
         {
@@ -66,7 +84,7 @@ public sealed partial class DocumentationResolver
                     ? $"Inherit: no documented definition named '{links[0].Target}'."
                     : $"Inherit: '{topic.Name}' is not an entry of a documented routine; name the topic to inherit.";
 
-                Warn(message, inherit.Line);
+                Section(message, inherit.Line);
             }
             else if (Cycles(topic))
             {
@@ -74,18 +92,19 @@ public sealed partial class DocumentationResolver
                     $"Inherit: '{topic.Name}' inherits from itself.",
                     topic.Path,
                     inherit.Line,
-                    DocumentationSeverity.Error));
+                    DocumentationSeverity.Error,
+                    DocumentationRules.Sections));
             }
 
             foreach (string item in inherit.Items.Where(item => !DocumentationSections.IsKnown(item)))
             {
-                Warn($"Inherit: '{item}' is not a section.", inherit.Line);
+                Section($"Inherit: '{item}' is not a section.", inherit.Line);
             }
         }
 
         if (topic.Section("Include") is { } include && Included(topic, include) is null)
         {
-            Warn($"Include: '{include.Text}' names no file or topic that exists.", include.Line);
+            Section($"Include: '{include.Text}' names no file or topic that exists.", include.Line);
         }
 
         DocumentationTopic effective = Effective(topic);
@@ -97,7 +116,7 @@ public sealed partial class DocumentationResolver
         // In a file that follows the style guide, every documented definition the prose names is a link.
         if (Current.Files.FirstOrDefault(file => SamePath(file.Path, topic.Path)) is { Strict: true })
         {
-            CheckUnlinked(topic, entries, Warn);
+            CheckUnlinked(topic, entries, (message, line, name) => Warn(DocumentationRules.UnlinkedName, message, line, name));
         }
 
         // Links and {references} anywhere in the topic's own text.
@@ -108,11 +127,15 @@ public sealed partial class DocumentationResolver
                 DocumentationTarget target = Resolve(topic, link.Target, comment);
                 if (target.Kind == DocumentationTargetKind.Unresolved)
                 {
-                    Warn($"No definition, file or address named '{link.Target}'.", line);
+                    Warn(DocumentationRules.Link, $"No definition, file or address named '{link.Target}'.", line, link.Target);
                 }
                 else if (target.Kind == DocumentationTargetKind.Ambiguous)
                 {
-                    Warn($"'{link.Target}' names definitions in more than one place; qualify it with a module or model.", line);
+                    Warn(
+                        DocumentationRules.AmbiguousLink,
+                        $"'{link.Target}' names definitions in more than one place; qualify it with a module or model.",
+                        line,
+                        link.Target);
                 }
             }
 
@@ -120,18 +143,22 @@ public sealed partial class DocumentationResolver
             {
                 if (!entries.Contains(name))
                 {
-                    Warn($"{{{name}}} is not an entry of this topic's In, Out, Flags or Parameters.", line);
+                    Section($"{{{name}}} is not an entry of this topic's In, Out, Flags or Parameters.", line);
                 }
             }
         }
 
         foreach (DocumentationSection section in topic.Sections)
         {
-            CheckSection(topic, section, Warn);
+            CheckSection(topic, section, Section, (message, line) => Warn(DocumentationRules.Also, message, line));
         }
     }
 
-    private void CheckSection(DocumentationTopic topic, DocumentationSection section, Action<string, int> warn)
+    private void CheckSection(
+        DocumentationTopic topic,
+        DocumentationSection section,
+        Action<string, int> warn,
+        Action<string, int> also)
     {
         switch (section.Name)
         {
@@ -177,7 +204,7 @@ public sealed partial class DocumentationResolver
 
                 break;
             case "Also":
-                CheckAlso(topic, section, warn);
+                CheckAlso(topic, section, also);
                 break;
             case "Entry":
                 foreach (DocumentationEntry entry in section.Entries)
@@ -397,7 +424,7 @@ public sealed partial class DocumentationResolver
     [GeneratedRegex("<[^>]*>|`[^`]*`|\\{[^}]*\\}|\"[^\"]*\"", RegexOptions.CultureInvariant)]
     private static partial Regex NotProse();
 
-    private void CheckUnlinked(DocumentationTopic topic, HashSet<string> entries, Action<string, int> warn)
+    private void CheckUnlinked(DocumentationTopic topic, HashSet<string> entries, Action<string, int, string> warn)
     {
         HashSet<string> reported = [with(StringComparer.Ordinal)];
         foreach ((string text, int line, DocumentationComment comment) in Prose(topic))
@@ -432,7 +459,7 @@ public sealed partial class DocumentationResolver
 
                 if (reported.Add($"{line}:{name}"))
                 {
-                    warn($"Link {name} as <{name}>: it names a documented definition.", line);
+                    warn($"Link {name} as <{name}>: it names a documented definition.", line, name);
                 }
             }
         }

@@ -46,6 +46,19 @@ internal sealed class HoverHandler
         string[] lines = _workspace.LinesOf(path);
         int line = request.Position.Line;
         Hover? none = null;
+        if (line < lines.Length && LintEditor.RuleAt(lines[line], request.Position.Character) is { } excluded)
+        {
+            return Task.FromResult<Hover?>(new Hover
+            {
+                Contents = new MarkupContent
+                {
+                    Kind = MarkupKind.Markdown,
+                    Value = $"**{excluded.Rule.Id}** (lint rule): {excluded.Rule.Description}"
+                },
+                Range = new LspRange(line, excluded.Start, line, excluded.Start + excluded.Rule.Id.Length)
+            });
+        }
+
         if (line >= lines.Length || SourceText.WordAt(lines[line], request.Position.Character) is not { } word)
         {
             return Task.FromResult(none);

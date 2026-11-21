@@ -4,19 +4,19 @@
 
 ; Page zero not in IIeEquates.asm, because DOS has names of its own spelled the same. The firmware inherits these.
 
-;; The high byte of the pointer at <LOC0>.
+;; The high byte of the pointer at <SlotPointer>.
 ;;
 ;; <Startup::PowerUp> counts it down from $C7 to $C1 as it tries each slot. On the Enhanced IIe, the interrupt return
 ;; code in the bytes the original IIe's <RestoreAfterFirmware> uses points it briefly at a slot's $Cn00 page to select
 ;; that slot's $C800 ROM, then restores it.
-;; See: <LOC0>, <MSLOT>
+;; See: <SlotPointer>, <ExpansionRomSlot>
 LOC1 = $01
 
 ;; The cursor's line on the screen, 0-23.
 ;;
 ;; It counts from the top of the screen, not of the window. <VerticalTabTo>, <CursorUp> and <LineFeed> change it, and
-;; <VerticalTab> sets <BASL>/<BASH> for it. The 80-column firmware keeps a copy in <Firmware:OURCV>.
-;; See: <CH>, <BASL>, <WNDTOP>, <WNDBTM>, <VerticalTab>
+;; <VerticalTab> sets <TextBase>/<TextBaseHigh> for it. The 80-column firmware keeps a copy in <Firmware:OURCV>.
+;; See: <CursorColumn>, <TextBase>, <WindowTop>, <WindowBottom>, <VerticalTab>
 CV = $25
 
 ; The internal firmware's entries, and CLRROM, a label in the Enhanced IIe's firmware.

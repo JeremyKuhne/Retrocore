@@ -150,7 +150,7 @@ public sealed class DisassembleCommandTests
             string output = Path.Join(directory, "MasterCreate.asm");
             string[] args = ["--disk", disk, "--file", "MASTER CREATE", output, "--dos", "3.3-1980", "--sdk-roms", s_inputs];
             DisassembleCommand.Run(args).Should().Be(0);
-            File.ReadAllText(output).Should().Contain("JSR GETLN").And.Contain("STA PWREDUP");
+            File.ReadAllText(output).Should().Contain("JSR GetLine").And.Contain("STA SoftEntryCheck");
         }
         finally
         {

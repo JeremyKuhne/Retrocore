@@ -20,41 +20,42 @@ LIST_LENGTH = 20
 ;; <CommandLine> reads each number and the character after it with <ReadHexNumber>, finds the character in
 ;; <Commands::Keys>, and runs its handler through <Commands::RunCommand>. A handler is entered with:
 ;;
-;; - A = <MODE>, the command that was waiting for this number (".", ":", "+" or "-"), or 0 for none, and the
+;; - A = <CommandMode>, the command that was waiting for this number (".", ":", "+" or "-"), or 0 for none, and the
 ;;   byte itself cleared;
 ;; - X = 1 when a number came before the command character, 0 when none did;
 ;; - Y = 0;
-;; - <A1L>/<A1H> and <A3L>/<A3H> = the last number typed with no command waiting, the first of a range, and
-;;   <A2L>/<A2H> = the last number typed.
+;; - <Address1>/<Address1High> and <Address3>/<Address3High> = the last number typed with no command waiting, the first
+;;   of a range, and
+;;   <Address2>/<Address2High> = the last number typed.
 ;;
 ;; The scope is in nine pieces, because the Monitor's documented routines sit between its parts at fixed
 ;; addresses. Each handler's address minus one must be in page $FE, after its first byte (<Commands::Routines>).
 .scope Commands
 
 ;; Examines memory from A1 to the end of its line of 8 bytes: a carriage return alone after another command.
-;; In: A1L/A1H = the first address, Y = 0
-;; Out: A1L/A1H = the address after the last byte shown
+;; In: Address1/Address1High = the first address, Y = 0
+;; Out: Address1/Address1High = the address after the last byte shown
 ;; Entry:
 ;;   Range = examines memory from A1 to A2, 8 bytes a line: a carriage return, "AAAA-" and the bytes, each after a blank
 ;; Also: XAM8 (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc ExamineLine
     ; The line ends at A1's last address with the same high bits.
-    lda A1L
+    lda Address1
     ora #BYTES_PER_LINE - 1
-    sta A2L
-    lda A1H
-    sta A2H
+    sta Address2
+    lda Address1High
+    sta Address2High
 
 ;; Starts a new line, printing its address, when A1 is at a multiple of 8.
 ;; Also: MOD8CHK (A2RM79, IIEROM82, IIETRM85)
 CheckLineStart:
-    lda A1L
+    lda Address1
     and #BYTES_PER_LINE - 1
     bne PrintByte
 
 ;; Examines memory from A1 to A2, 8 bytes a line: a carriage return, "AAAA-" and the bytes, each after a blank.
-;; In: A1L/A1H = the first address, A2L/A2H = the last, Y = 0
-;; Out: A1L/A1H = the address after A2
+;; In: Address1/Address1High = the first address, Address2/Address2High = the last, Y = 0
+;; Out: Address1/Address1High = the address after A2
 ;; Also: XAM (A2RM78, A2RM79, IIEROM82, IIETRM85)
 Range:
     jsr PrintAddress
@@ -64,7 +65,7 @@ Range:
 PrintByte:
     lda #' '
     jsr CharacterOut
-    lda (A1L),y
+    lda (Address1),y
     jsr PrintHexByte
     jsr NextInRange
     bcc CheckLineStart
@@ -76,12 +77,13 @@ Done:
 .endproc
 
 ;; The ".", "+" and "-" commands, run by the number after them: "." examines A1 to A2, and "+" and "-" print
-;; <A1L> plus or minus <A2L> as "=xx".
+;; <Address1> plus or minus <Address2> as "=xx".
 ;;
 ;; <Commands::Blank> comes here when a blank or carriage return ends the number, and the waiting command is not
 ;; ":". A
 ;; number with no command waiting comes here too, and with A1 = A2 shows its one byte.
-;; In: A = the waiting command, or 0 for none, A1L/A1H = the first number, A2L/A2H = the second, Y = 0
+;; In: A = the waiting command, or 0 for none, Address1/Address1High = the first number, Address2/Address2High = the
+;;     second, Y = 0
 ;; Also: XAMPM (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc ExamineOrCalculate
     ; Bit 0 is clear for "." ($AE) and 0: examine.
@@ -92,14 +94,14 @@ Done:
     ; complement a subtraction.
     lsr a
     lsr a
-    lda A2L
+    lda Address2
     bcc Add
     eor #$FF
 
-;; Adds <A1L> to <A2L>, or to its complement for "-", and prints "=" and the result.
+;; Adds <Address1> to <Address2>, or to its complement for "-", and prints "=" and the result.
 ;; Also: ADD (A2RM78, A2RM79, IIEROM82, IIETRM85)
 Add:
-    adc A1L
+    adc Address1
     pha
     lda #'='
     jsr CharacterOut
@@ -153,19 +155,19 @@ Unmasked:
     ; Falls into CharacterOut.
 .endproc
 
-;; Prints a character through the output hook, <CSWL>/<CSWH>: on the screen through <ScreenOut>, or to the routine
-;; a program or `PR#` set.
+;; Prints a character through the output hook, <OutputHook>/<OutputHookHigh>: on the screen through <ScreenOut>, or to
+;; the routine a program or `PR#` set.
 ;;
 ;; At $FDED.
 ;; In: A = the character, with its high bit set
 ;; Also: COUT (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc CharacterOut
 .assert * = $FDED, "CharacterOut must stay at $FDED."
-    jmp (CSWL)
+    jmp (OutputHook)
 .endproc
 .if ENHANCED
 
-;; The screen's output routine, the output hook's default: prints a character, applying <INVFLG> to a printable
+;; The screen's output routine, the output hook's default: prints a character, applying <InverseMask> to a printable
 ;; one.
 ;;
 ;; At $FDF0. A character below $A0, a control character, is printed as it is. In 80 columns the
@@ -182,7 +184,7 @@ Unmasked:
     jmp ApplyInverse
 .endproc
 
-;; Prints a character on the screen as it is, without <INVFLG>.
+;; Prints a character on the screen as it is, without <InverseMask>.
 ;;
 ;; At $FDF6. In 80 columns the firmware prints it; in 40 columns <ScreenOutPausing at ScreenOutPausing>
 ;; does, with the Control-S pause.
@@ -197,11 +199,11 @@ Unmasked:
 
 ;; Prints a character, with the one for 80 columns already pushed.
 ;;
-;; <ApplyInverse at ApplyInverse> comes here with the character as given pushed and A = the character with <INVFLG>
+;; <ApplyInverse at ApplyInverse> comes here with the character as given pushed and A = the character with <InverseMask>
 ;; applied. <ScreenOutByWidth at ScreenOutByWidth@Enhanced> prints the pushed one in 80 columns, and A in 40.
 ;; In: A = the character for 40 columns, with the one for 80 columns on the stack
 Pushed:
-    sty YSAV1
+    sty SavedOutputY
     tay
     pla
     jmp ScreenOutByWidth
@@ -211,23 +213,23 @@ Pushed:
 .endproc
 .else
 
-;; The screen's output routine, the output hook's default: prints a character, applying <INVFLG> to a printable
+;; The screen's output routine, the output hook's default: prints a character, applying <InverseMask> to a printable
 ;; one.
 ;;
 ;; At $FDF0. A character below $A0, a control character, is printed as it is.
 ;; In: A = the character, with its high bit set
-;; Out: A = the character as printed, with <INVFLG> applied when printable
+;; Out: A = the character as printed, with <InverseMask> applied when printable
 ;; Keeps: Y
 ;; Also: COUT1 (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc ScreenOut
 .assert * = $FDF0, "ScreenOut must stay at $FDF0."
     cmp #' '
     bcc ScreenOutNoInverse
-    and INVFLG
+    and InverseMask
     ; Falls into ScreenOutNoInverse.
 .endproc
 
-;; Prints a character on the screen as it is, without <INVFLG>.
+;; Prints a character on the screen as it is, without <InverseMask>.
 ;;
 ;; At $FDF6. The Apple II Monitor prints with <ScreenOutDirect at ScreenOutDirect>; the others with
 ;; <ScreenOutPausing at ScreenOutPausing>, which adds the Control-S pause.
@@ -236,7 +238,7 @@ Pushed:
 ;; Also: COUTZ (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc ScreenOutNoInverse
 .assert * = $FDF6, "ScreenOutNoInverse must stay at $FDF6."
-    sty YSAV1
+    sty SavedOutputY
     pha
 .if MONITOR = MONITOR_II
     jsr ScreenOutDirect
@@ -244,7 +246,7 @@ Pushed:
     jsr ScreenOutPausing
 .endif
     pla
-    ldy YSAV1
+    ldy SavedOutputY
     rts
 .endproc
 .endif
@@ -255,12 +257,12 @@ Pushed:
 ;; A carriage return: alone on its line, examines the next line of 8 bytes; otherwise ends a number as a blank does.
 ;;
 ;; $FE00 in every build, which Integer `BASIC` calls. <Commands::Return> calls it. A carriage return is alone when
-;; it is the line's first character, so that <YSAV>, the index after it, counts down to 0.
+;; it is the line's first character, so that <CommandPosition>, the index after it, counts down to 0.
 ;; In: A = the waiting command, or 0, X = 1 after a number, 0 when none, Y = 0
 ;; Also: BL1 (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc ExamineNextOrBlank
 .assert * = $FE00, "ExamineNextOrBlank must stay at $FE00, where Integer BASIC calls it."
-    dec YSAV
+    dec CommandPosition
     beq ExamineLine
     ; Falls into Blank.
 .endproc
@@ -280,15 +282,15 @@ Pushed:
     bne ExamineOrCalculate
 
 ;; Stores A2L at A3 and steps A3 to the next byte, keeping ":" waiting.
-;; In: A = ":", A2L = the byte, A3L/A3H = where, Y = 0
+;; In: A = ":", Address2 = the byte, Address3/Address3High = where, Y = 0
 ;; Also: STOR (A2RM78, A2RM79, IIEROM82, IIETRM85)
 Store:
-    sta MODE
-    lda A2L
-    sta (A3L),y
-    inc A3L
+    sta CommandMode
+    lda Address2
+    sta (Address3),y
+    inc Address3
     bne Done
-    inc A3H
+    inc Address3High
 
 ;; The return.
 ;; Also: RTS5 (A2RM78, A2RM79, IIEROM82, IIETRM85)
@@ -296,22 +298,22 @@ Done:
     rts
 .endproc
 
-;; ".", ":", "+" and "-": waits for the next number, setting <MODE> to the command character.
+;; ".", ":", "+" and "-": waits for the next number, setting <CommandMode> to the command character.
 ;;
 ;; Its rts, at $FE1F, is one the Disk 3.5 firmware calls as a routine that does nothing on the IIe.
 ;; Entry:
-;;   FromA = sets <MODE> to A
+;;   FromA = sets <CommandMode> to A
 ;; Also: SETMODE (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc SetMode
     ; The command character is the one before IN,YSAV.
-    ldy YSAV
-    lda IN - 1,y
+    ldy CommandPosition
+    lda InputBuffer - 1,y
 
-;; Sets <MODE> to A.
+;; Sets <CommandMode> to A.
 ;; In: A = the command, or 0 for none
 ;; Also: SETMDZ (A2RM78, A2RM79, IIEROM82, IIETRM85)
 FromA:
-    sta MODE
+    sta CommandMode
     rts
 .endproc
 
@@ -328,9 +330,9 @@ FromA:
 ;; Out: X = $FF
 ;; Also: LT2 (A2RM78, A2RM79, IIEROM82, IIETRM85)
 Copy:
-    lda A2L,x
-    sta A4L,x
-    sta A5L,x
+    lda Address2,x
+    sta Address4,x
+    sta Address5,x
     dex
     bpl Copy
     rts
@@ -342,13 +344,14 @@ Copy:
 ;;
 ;; At $FE2C. It copies upward a byte at a time, so a destination inside the source and above its
 ;; start repeats the source's first bytes: 301<300.3FEM fills $301-$3FF with the byte at $300.
-;; In: A1L/A1H = the first address, A2L/A2H = the last, A4L/A4H = the destination, Y = 0
-;; Out: A1L/A1H = the address after A2, A4L/A4H = the address after the last copied
+;; In: Address1/Address1High = the first address, Address2/Address2High = the last, Address4/Address4High = the
+;;     destination, Y = 0
+;; Out: Address1/Address1High = the address after A2, Address4/Address4High = the address after the last copied
 ;; Also: MOVE (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc MoveMemory
 .assert * = $FE2C, "MoveMemory must stay at $FE2C."
-    lda (A1L),y
-    sta (A4L),y
+    lda (Address1),y
+    sta (Address4),y
     jsr NextInRangeAndTarget
     bcc MoveMemory
     rts
@@ -357,24 +360,25 @@ Copy:
 ;; V: compares the bytes from A1 to A2 with those from A4 on, printing each difference as "AAAA-xx (yy)".
 ;;
 ;; At $FE36. AAAA is the address in A1's range, xx its byte and yy the byte at A4.
-;; In: A1L/A1H = the first address, A2L/A2H = the last, A4L/A4H = the other range, Y = 0
-;; Out: A1L/A1H = the address after A2
+;; In: Address1/Address1High = the first address, Address2/Address2High = the last, Address4/Address4High = the other
+;;     range, Y = 0
+;; Out: Address1/Address1High = the address after A2
 ;; Also: VFY (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc VerifyMemory
 .assert * = $FE36, "VerifyMemory must stay at $FE36."
-    lda (A1L),y
-    cmp (A4L),y
+    lda (Address1),y
+    cmp (Address4),y
     beq Next
 
     ; A difference.
     jsr PrintAddress
-    lda (A1L),y
+    lda (Address1),y
     jsr PrintHexByte
     lda #' '
     jsr CharacterOut
     lda #'('
     jsr CharacterOut
-    lda (A4L),y
+    lda (Address4),y
     jsr PrintHexByte
     lda #')'
     jsr CharacterOut
@@ -391,8 +395,8 @@ Continue:
 ;; L: disassembles 20 instructions, from A1 when the command gave an address, or else from PC.
 ;;
 ;; At $FE5E.
-;; In: X = 1 when the command gave an address, 0 when not, A1L/A1H = the address
-;; Out: PCL/PCH = the address after the last instruction
+;; In: X = 1 when the command gave an address, 0 when not, Address1/Address1High = the address
+;; Out: ProgramCounter/ProgramCounterHigh = the address after the last instruction
 ;; Also: LIST (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc ListInstructions
 .assert * = $FE5E, "ListInstructions must stay at $FE5E."
@@ -405,8 +409,8 @@ Next:
     pha
     jsr Disassembler::PrintInstruction
     jsr NextInstruction
-    sta PCL
-    sty PCH
+    sta ProgramCounter
+    sty ProgramCounterHigh
     pla
     sec
     sbc #1

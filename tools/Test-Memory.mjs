@@ -253,10 +253,10 @@ try {
         await read(`0x${(0x7000 + index).toString(16)}`, 1);
     }
     drop("memory");
-    await write("6100", [saved[0] ^ 0xFF]);
+    await write("6100", [savedBytes[0] ^ 0xFF]);
     assert.ok(queued("memory").some(body => body.memoryReference === "0x6100"),
         "adding unscoped references does not evict live editor subscriptions");
-    await write("6100", [saved[0]]);
+    await write("6100", [savedBytes[0]]);
     for (let index = 0; index < 33; index++) {
         await request("retro/memory/unsubscribe", { subscriber: `live-${index}` });
     }

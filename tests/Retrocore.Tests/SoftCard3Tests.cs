@@ -143,6 +143,31 @@ public sealed class SoftCard3Tests
     }
 
     /// <summary>
+    ///  A reset while stopped mid-cycle finishes the cycle first, so the machine is where a reset between whole
+    ///  cycles leaves it, and the next cycle starts afresh.
+    /// </summary>
+    [TestMethod]
+    public void ResetMidCycleFinishesTheCycle()
+    {
+        Apple3Machine byCycle = SwitchingMachine(out SoftCard3 cycleCard);
+        Apple3Machine byTState = SwitchingMachine(out SoftCard3 tStateCard);
+        while (!(tStateCard.OwnsBus && byTState.MidCycle)) { byTState.StepTState(); }
+        byCycle.Run(byTState.Cycles + 1 - byCycle.Cycles);
+
+        byTState.Reset();
+        byCycle.Reset();
+        byTState.MidCycle.Should().BeFalse();
+        byTState.Cycles.Should().Be(byCycle.Cycles);
+        byTState.Time.Should().Be(byCycle.Time);
+        tStateCard.Processor.Registers.Should().Be(cycleCard.Processor.Registers);
+
+        byTState.Run(1_000);
+        byCycle.Run(1_000);
+        byTState.Processor.Registers.Should().Be(byCycle.Processor.Registers);
+        tStateCard.Processor.Registers.Should().Be(cycleCard.Processor.Registers);
+    }
+
+    /// <summary>
     ///  A card taken out mid-cycle runs no more of the cycle's T-states, and the cycle finishes.
     /// </summary>
     [TestMethod]

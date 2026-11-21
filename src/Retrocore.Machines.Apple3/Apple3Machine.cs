@@ -182,10 +182,12 @@ public sealed class Apple3Machine : IMachine
     }
 
     /// <summary>
-    ///  Resets the processor and the devices a reset reaches, keeping RAM and the VIAs, as CONTROL-RESET does.
+    ///  Resets the processor and the devices a reset reaches, keeping RAM and the VIAs, as CONTROL-RESET does. A cycle
+    ///  <see cref="StepTState"/> stopped in the middle of finishes first, as a reset comes between cycles.
     /// </summary>
     public void Reset()
     {
+        while (_tStateCard is { } card) { RunTState(card); }
         Bus.ResetDevices();
         Processor.Reset();
     }

@@ -263,6 +263,27 @@ public sealed class Apple2SoftCardTests
     }
 
     /// <summary>
+    ///  A reset while stopped mid-cycle runs the cycle's second T-state first, so no T-state of it runs after the reset.
+    /// </summary>
+    [TestMethod]
+    public void ResetMidCycleFinishesTheCycle()
+    {
+        Apple2Machine machine = Machine(Apple2Model.IIPlus);
+        SoftCard card = machine.Bus.InstallSoftCard(slot: 4);
+        Load(machine, 0x1000, [0x18, 0xFE]);    // jr $
+        Start(machine);
+        machine.Run(100);
+        machine.StepTState();
+        machine.MidCycle.Should().BeTrue();
+        ulong z80 = card.Processor.CycleCount;
+
+        machine.Reset();
+        machine.MidCycle.Should().BeFalse();
+        card.Processor.CycleCount.Should().Be(z80 + 1);
+        card.Running.Should().BeFalse();
+    }
+
+    /// <summary>
     ///  On the IIe the Z80's accesses go through the memory switches: with RAMWRT set from the Z80, its write lands in
     ///  auxiliary RAM. With INTCXROM set, the card's page is the firmware's and a write there does not switch.
     /// </summary>

@@ -38,6 +38,13 @@
 .include "MonitorEntries.asm"
 .include "FirmwareEquates.asm"
 
+; The firmware's function numbers, which depend on the model: the SDK predefines ENHANCED, and this is the default.
+.ifndef ENHANCED
+ENHANCED = 1
+.endif
+.assert ENHANCED, "Firmware.Enhanced.asm is the Enhanced IIe's firmware."
+.include "FirmwareFunctions.asm"
+
 ; AppleSoft's page zero, for the cassette and SHLOAD/STORE/RECALL helpers.
 ;; Applesoft's line number, which the cassette helper borrows for a length: of a shape table, or of an array.
 ;;
@@ -90,31 +97,34 @@ SHAPEPTR = $E8
 ;; Inherit: <Monitor:GETNUM>
 GETNUM = $FFA7
 
-; Control codes with bit 7 clear, as DOCTRL and the Pascal entries take them.
-CTRL_D = $04                        ;; Control-D: ESC Control-D disables control characters ($04FB bit 5)
-CTRL_E = $05                        ;; Control-E: Pascal shows the cursor; ESC Control-E enables control characters
-CTRL_F = $06                        ;; Control-F: Pascal hides the cursor
-CTRL_G = $07                        ;; Control-G: bell
-CTRL_H = $08                        ;; Control-H: cursor left (backspace)
-CTRL_J = $0A                        ;; Control-J: cursor down (line feed)
-CTRL_K = $0B                        ;; Control-K: clear to the end of the screen
-CTRL_L = $0C                        ;; Control-L: clear the screen
-CTRL_M = $0D                        ;; Control-M: return
-CTRL_N = $0E                        ;; Control-N: normal text
-CTRL_O = $0F                        ;; Control-O: inverse text
-CTRL_Q = $11                        ;; Control-Q: 40 columns; ESC Control-Q quits the 80-column firmware
-CTRL_R = $12                        ;; Control-R: 80 columns
-CTRL_U = $15                        ;; Control-U: quit the 80-column firmware
-CTRL_V = $16                        ;; Control-V: scroll down
-CTRL_W = $17                        ;; Control-W: scroll up
-CTRL_X = $18                        ;; Control-X: MouseText off
-CTRL_Y = $19                        ;; Control-Y: home the cursor
-CTRL_Z = $1A                        ;; Control-Z: clear the line
-CTRL_ESC = $1B                      ;; Escape as a control code: MouseText on
-CTRL_BACKSLASH = $1C                ;; Control-\: cursor right
-CTRL_RBRACKET = $1D                 ;; Control-]: clear to the end of the line
-CTRL_CARET = $1E                    ;; Pascal GOTOXY
-CTRL_UNDERSCORE = $1F               ;; Control-_: cursor up
+; The control codes with bit 7 clear, which DOCTRL and the Pascal entries take, are FirmwareEquates.asm's CONTROL_x,
+; with this source's CTRL_x names as their historical names. The control-character table passes the codes to
+; .sprintf, which needs a value known at that point, as a historical name is not; until the table uses the new
+; names, these .defines stand for them.
+.define CTRL_D CONTROL_D
+.define CTRL_E CONTROL_E
+.define CTRL_F CONTROL_F
+.define CTRL_G CONTROL_G
+.define CTRL_H CONTROL_H
+.define CTRL_J CONTROL_J
+.define CTRL_K CONTROL_K
+.define CTRL_L CONTROL_L
+.define CTRL_M CONTROL_M
+.define CTRL_N CONTROL_N
+.define CTRL_O CONTROL_O
+.define CTRL_Q CONTROL_Q
+.define CTRL_R CONTROL_R
+.define CTRL_U CONTROL_U
+.define CTRL_V CONTROL_V
+.define CTRL_W CONTROL_W
+.define CTRL_X CONTROL_X
+.define CTRL_Y CONTROL_Y
+.define CTRL_Z CONTROL_Z
+.define CTRL_ESC CONTROL_ESCAPE
+.define CTRL_BACKSLASH CONTROL_BACKSLASH
+.define CTRL_RBRACKET CONTROL_RIGHT_BRACKET
+.define CTRL_CARET CONTROL_CARET
+.define CTRL_UNDERSCORE CONTROL_UNDERSCORE
 
 .org $C100
 

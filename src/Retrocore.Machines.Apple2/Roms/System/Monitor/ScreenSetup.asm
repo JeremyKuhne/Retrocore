@@ -13,19 +13,6 @@ SCREEN_LINES = 24
 ;; The first text line in mixed graphics, below the lo-res graphics' 40 rows.
 MIXED_TEXT_TOP = 20
 
-; The internal firmware's functions.
-.if ENHANCED
-
-;; The internal firmware's function that sets the window's width and bottom for 40 or 80 columns and moves the
-;; cursor to the bottom line: $0C on the Enhanced IIe.
-FIRMWARE_SET_WINDOW = $0C
-.else
-
-;; The internal firmware's function that sets the window's width and bottom for 40 or 80 columns and moves the
-;; cursor to the bottom line: 8 on the original IIe.
-FIRMWARE_SET_WINDOW = $08
-.endif
-
 ;; Sets text mode with a full window, and the lo-res and page-one switches for later graphics; clears STATUS.
 ;;
 ;; At $FB2F.

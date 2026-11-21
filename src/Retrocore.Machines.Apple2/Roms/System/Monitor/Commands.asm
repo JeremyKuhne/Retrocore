@@ -18,14 +18,6 @@ SLOT_NUMBER_MASK = $0F
 ;; Added to a slot number to make the high byte of its ROM's page, $Cn00.
 SLOT_ROM_PAGE = $C0
 
-; The internal firmware's functions, the numbers in Y for <GOTOCX>.
-
-;; Runs the mini-assembler for a line: the Enhanced IIe's "!" command.
-FIRMWARE_MINI_ASSEMBLER = $0D
-
-;; Finishes a hook that <SetHook> stored: the Enhanced IIe's page for slot 0, and the 80-column firmware's hooks.
-FIRMWARE_SET_HOOK = $0E
-
 ; Cassette lengths and timing. A header tone is a count of 256 half cycles of about 650 microseconds. The other
 ; values are Y's starting count for the next bit's timing, which differs from the count between bits within a
 ; byte to make up for the instructions that run between bytes.
@@ -387,12 +379,13 @@ ChecksumFix:
 ;; was in before the call; <WriteHeader at Cassette::WriteHeader> does too.
 ;; Entry:
 ;;   Done = the return, which the firmware jumps to at $FEC8
-;; Also: SLOTRTS (UNKN)
+;; Also: SLOTRTS (UNKN), FUNCEXIT (IIETRM85), RETCX1 (IIETRM85)
 .proc SelectSlotRom
 .assert * = $FEC5, "SelectSlotRom must stay at $FEC5, where the firmware returns through it."
     sta InternalCxRomOff
 
 ;; The return, which the firmware jumps to at $FEC8.
+;; Also: RETCX2 (IIETRM85)
 Done:
 .assert * = $FEC8, "SelectSlotRom::Done must stay at $FEC8, where the firmware jumps to it."
     rts
@@ -423,9 +416,9 @@ Done:
 .assert * = $FECD, "WriteCassette must stay at $FECD."
     lda #WRITE_HEADER_LENGTH
     sta InternalCxRomOn
-    jsr WRITETAPE
+    jsr WriteCassetteData
 
-    ; WRITETAPE returns with zero set, so this always beeps.
+    ; WriteCassetteData returns with zero set, so this always beeps.
     beq ReadCassette::Finish
 .endproc
 
@@ -492,7 +485,7 @@ Next:
 .proc ReadCassette
 .assert * = $FEFD, "ReadCassette must stay at $FEFD."
     sta InternalCxRomOn
-    jsr READTAPE
+    jsr ReadCassetteData
 
 ;; Switches slot ROM back in and reports: <Beep> when zero is set, or <PrintError>.
 ;; In: zero = set when the checksum matched
@@ -517,7 +510,7 @@ TitleEnhanced:
 ;; $FF13 on the Enhanced IIe, which the firmware's mini-assembler calls.
 ;; In: Y = the index in <InputBuffer>
 ;; Out: A = the character, Y = the index after it
-;; Also: SKIPBLNK (UNKN)
+;; Also: SKIPBLNK (UNKN), NNBL (IIETRM85)
 .proc SkipBlanks
 .assert * = $FF13, "SkipBlanks must stay at $FF13, where the Enhanced IIe's firmware calls it."
     jsr NextInputCharacter
@@ -722,11 +715,12 @@ Done:
 
 ;; Saves A, X, Y, P and S, then clears decimal mode.
 ;;
-;; At $FF4A. Its rts, at $FF58, is the one other sources call as a routine that does nothing.
+;; At $FF4A. Its rts, at $FF58, is <SaveRegisters::Return>, which other sources call as a routine that does nothing.
 ;; Out: SavedA = A, SavedX = X, SavedY = Y, SavedStatus = P, SavedStackPointer = S
 ;; Keeps: Y
 ;; Entry:
 ;;   ExceptA = saves X, Y, P and S, then clears decimal mode
+;;   Return = returns: a routine that does nothing
 ;; Also: SAVE (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc SaveRegisters
 .assert * = $FF4A, "SaveRegisters must stay at $FF4A."
@@ -743,5 +737,14 @@ ExceptA:
     tsx
     stx SavedStackPointer
     cld
+
+;; Returns: a routine that does nothing.
+;;
+;; At $FF58. Programs and cards point a vector here, or call it, when there is nothing to do; and since the rts is
+;; $60, which has bit 6 set, BIT on it sets overflow.
+;; Keeps: A, X, Y
+;; Also: IORTS (IIEROM82)
+Return:
+.assert * = $FF58, "SaveRegisters::Return must stay at $FF58."
     rts
 .endproc

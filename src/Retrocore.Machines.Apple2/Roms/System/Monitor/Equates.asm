@@ -15,40 +15,53 @@ LOC1 = $01
 ;; The cursor's line on the screen, 0-23.
 ;;
 ;; It counts from the top of the screen, not of the window. <VerticalTabTo>, <CursorUp> and <LineFeed> change it, and
-;; <VerticalTab> sets <TextBase>/<TextBaseHigh> for it. The 80-column firmware keeps a copy in <Firmware:OURCV>.
+;; <VerticalTab> sets <TextBase>/<TextBaseHigh> for it. The 80-column firmware keeps a copy in
+;; <Firmware:EightyColumns::CursorLine>.
 ;; See: <CursorColumn>, <TextBase>, <WindowTop>, <WindowBottom>, <VerticalTab>
 CV = $25
 
-; The internal firmware's entries, and CLRROM, a label in the Enhanced IIe's firmware.
+; The internal firmware's entries, and the expansion ROM switch, a label in the Enhanced IIe's firmware. Each is named
+; for what the firmware does there, the name its routine there takes when the firmware is converted.
 
-;; The internal firmware's dispatcher, which runs the function whose number is in Y; the original IIe's <CallFirmware>
-;; jumps here.
-B_FUNC = $C100
+;; The internal firmware's dispatcher, which runs the function whose number is in Y; the original IIe's
+;; <CallFirmware> jumps here.
+;; Also: B_FUNC (IIEROM82, IIETRM85)
+DispatchFunction = $C100
 
 ;; Slot 3's input entry in the internal firmware's 80-column code; <CompareSlot3Rom> compares its bytes.
-BASICIN = $C305
+;; Also: BASICIN (IIEROM82, IIETRM85)
+BasicInput = $C305
 
 ;; The Enhanced IIe firmware's interrupt handler, which the Enhanced IIe's interrupt vector points to.
-IRQHANDLER = $C3FA
+;;
+;; Apple's listing calls it IRQ, a name left out of Also: because <Interrupt> has it.
+;; Also: IRQHANDLER (UNKN)
+HandleInterrupt = $C3FA
 
 ;; Where the Enhanced IIe firmware's interrupt code goes on once the Monitor has selected the interrupted slot's
 ;; $C800 ROM again.
-IRQRESTORE = $C47C
+;; Also: IRQRESTORE (UNKN), IRQFIX (IIETRM85)
+RestoreInterruptedState = $C47C
 
 ;; The Enhanced IIe firmware's cassette header routine, which the Monitor's <Cassette::WriteHeader> stub calls.
-TAPEHEADR = $C567
+;; Also: TAPEHEADR (UNKN), XHEADER (IIETRM85)
+WriteCassetteHeader = $C567
 
 ;; The Enhanced IIe firmware's cassette write, which the Monitor's W command (<WriteCassette>) calls.
-WRITETAPE = $C5AA
+;; Also: WRITETAPE (UNKN), WRITE2 (IIETRM85)
+WriteCassetteData = $C5AA
 
 ;; The Enhanced IIe firmware's cassette read, which the Monitor's R command (<ReadCassette>) calls.
-READTAPE = $C5D1
+;; Also: READTAPE (UNKN), XREAD (IIETRM85)
+ReadCassetteData = $C5D1
 
 ;; The Enhanced IIe firmware's mini-assembler, which assembles each line read at its "!" prompt.
-MINILINE = $CF9C
+;; Also: MINILINE (UNKN), DOINST (IIETRM85)
+AssembleLine = $CF9C
 
 ;; Releases the $C800 expansion ROM: reading or writing it deselects every slot's.
-CLRROM = $CFFF
+;; Also: CLRROM (A2RM79, IIEROM82, IIETRM85)
+ExpansionRomOff = $CFFF
 
 ; BASIC's entries.
 

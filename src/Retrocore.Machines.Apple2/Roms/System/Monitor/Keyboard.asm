@@ -10,29 +10,6 @@ CHARACTER_BITS = %00111111
 
 ;; The bit that makes a screen character, with its high bit clear, flash.
 FLASHING = %01000000
-.if MONITOR = MONITOR_IIE
-
-; The internal firmware's functions: the number in Y when the Monitor calls <GOTOCX>. The two IIe models
-; number them differently.
-.if ENHANCED
-
-;; The firmware function that translates a key read in escape mode.
-FIRMWARE_ESCAPE_KEY = $01
-
-;; The firmware function that waits for a key, as <KeyboardIn> does.
-FIRMWARE_KEYBOARD_IN = $03
-
-;; The firmware function that shows the cursor, in 40 or 80 columns, before <ReadKey> reads a key.
-FIRMWARE_READ_KEY = $0B
-.else
-
-;; The firmware function that waits for a key, as <KeyboardIn> does.
-FIRMWARE_KEYBOARD_IN = $06
-
-;; The firmware function that translates a key read in escape mode.
-FIRMWARE_ESCAPE_KEY = $07
-.endif
-.endif
 .if ENHANCED
 
 ;; Reads a key through the input hook, <InputHook>, with the cursor shown.
@@ -151,7 +128,7 @@ ToFirmware:
 ;; At $FD29.
 ;; Entry:
 ;;   PullStatus = returns with the saved status, the ROM left as it is; the firmware jumps here too
-;; Also: SLOTRTN (UNKN)
+;; Also: SLOTRTN (UNKN), FUNCEXIT (IIEROM82)
 .proc SlotRomReturn
 .assert * = $FD29, "SlotRomReturn must stay at $FD29."
     sta InternalCxRomOff

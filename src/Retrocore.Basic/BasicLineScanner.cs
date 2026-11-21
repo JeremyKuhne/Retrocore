@@ -584,11 +584,13 @@ internal sealed class BasicLineScanner
     }
 
     // Whether what follows a BBC name where a statement starts makes it an assignment's target: =, an array's
-    // subscripts, or an indirection, as in A=1, A(1)=1 and A?1=1.
+    // subscripts, or an indirection, as in A=1, A(1)=1 and A?1=1. FIND_VARIABLE reads the (, ? or ! straight after the
+    // name, so only = may come after spaces: HOME ?0=1 stops with Mistake.
     private bool Assigned(int index)
     {
+        if (index < _bytes.Length && _bytes[index] is (byte)'(' or (byte)'?' or (byte)'!') { return true; }
         while (index < _bytes.Length && _bytes[index] == ' ') { index++; }
-        return index < _bytes.Length && _bytes[index] is (byte)'=' or (byte)'(' or (byte)'?' or (byte)'!';
+        return index < _bytes.Length && _bytes[index] == '=';
     }
 
     // One character in BBC BASIC's assembler, as ASSEMBLER_NEXT_STATEMENT and ASSEMBLE_INSTRUCTION read it; false when

@@ -1235,7 +1235,8 @@ internal sealed class BbcBasicExpression
 
     private static FormatException DivisionByZero() => new("Division by zero.");
 
-    private int Word(int address) => _memory.Read(address) | (_memory.Read(address + 1) << 8);
+    // Two bytes, lowest first; the second wraps from &FFFF to 0, as the 6502's indexed reads do.
+    private int Word(int address) => _memory.Read(address) | (_memory.Read((address + 1) & 0xFFFF) << 8);
 
     private bool Next(char character) => _at + 1 < _bytes.Length && _bytes[_at + 1] == character;
 

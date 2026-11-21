@@ -158,6 +158,7 @@ function grammar(dialect, name, words, { names = "[A-Za-z][0-9]*[$%!#]?", ignore
     const lineNumber = { name: `entity.name.label.line-number.${scope}` };
     const mnemonicName = { name: `keyword.other.mnemonic.${scope}` };
     const register = { name: `variable.language.register.${scope}` };
+    const skipped = { name: `comment.line.assembler.${scope}` };
     const assembler = mnemonic === null ? null : {
         begin: "\\[",
         beginCaptures: { "0": { name: `punctuation.section.assembler.begin.${scope}` } },
@@ -170,12 +171,14 @@ function grammar(dialect, name, words, { names = "[A-Za-z][0-9]*[$%!#]?", ignore
                 match: `${assemblyStart}(\\.)(${names})(?:\\s*(${mnemonic}))?`,
                 captures: { "1": lineNumber, "2": { name: `punctuation.definition.label.${scope}` }, "3": { name: `entity.name.label.${scope}` }, "4": mnemonicName }
             },
+            // The assembler takes an operand starting with A as the accumulator, and X or Y after a comma as the
+            // register, and skips the rest of the statement, as it does after any operand: ASL ADDR is ASL A.
             {
-                match: `${assemblyStart}(?:(?i:(ASL|LSR|ROL|ROR))\\s*(A)(?![A-Za-z0-9_\`])|(${mnemonic}))`,
-                captures: { "1": lineNumber, "2": mnemonicName, "3": register, "4": mnemonicName }
+                match: `${assemblyStart}(?:(?i:(ASL|LSR|ROL|ROR))\\s*(A)([^:]*)|(${mnemonic}))`,
+                captures: { "1": lineNumber, "2": mnemonicName, "3": register, "4": skipped, "5": mnemonicName }
             },
             { match: "^\\s*(\\d+)", captures: { "1": lineNumber } },
-            { match: "(?<=,)\\s*([XY])(?![A-Za-z0-9_`])", captures: { "1": register } },
+            { match: "(?<=,)\\s*([XY])(\\)?)([^:]*)", captures: { "1": register, "3": skipped } },
             ...statements.filter(pattern => pattern.include !== "#remark" && pattern.include !== "#data" && !(pattern.name ?? "").startsWith("string.unquoted.command"))
         ]
     };

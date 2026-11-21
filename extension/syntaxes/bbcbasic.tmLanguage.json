@@ -515,7 +515,7 @@
           }
         },
         {
-          "match": "(?:^\\s*(\\d+)\\s*|^\\s*|(?<=[\\[:])\\s*)(?:(?i:(ASL|LSR|ROL|ROR))\\s*(A)(?![A-Za-z0-9_`])|((?i:EQU[BWDS]|BRK|CLC|CLD|CLI|CLV|DEX|DEY|INX|INY|NOP|PHA|PHP|PLA|PLP|RTI|RTS|SEC|SED|SEI|TAX|TAY|TSX|TXA|TXS|TYA|BCC|BCS|BEQ|BMI|BNE|BPL|BVC|BVS|AND|EOR|ORA|ADC|CMP|LDA|SBC|ASL|LSR|ROL|ROR|DEC|INC|CPX|CPY|BIT|JMP|JSR|LDX|LDY|STA|STX|STY|OPT)(?![A-Za-z0-9_`])))",
+          "match": "(?:^\\s*(\\d+)\\s*|^\\s*|(?<=[\\[:])\\s*)(?:(?i:(ASL|LSR|ROL|ROR))\\s*(A)([^:]*)|((?i:EQU[BWDS]|BRK|CLC|CLD|CLI|CLV|DEX|DEY|INX|INY|NOP|PHA|PHP|PLA|PLP|RTI|RTS|SEC|SED|SEI|TAX|TAY|TSX|TXA|TXS|TYA|BCC|BCS|BEQ|BMI|BNE|BPL|BVC|BVS|AND|EOR|ORA|ADC|CMP|LDA|SBC|ASL|LSR|ROL|ROR|DEC|INC|CPX|CPY|BIT|JMP|JSR|LDX|LDY|STA|STX|STY|OPT)(?![A-Za-z0-9_`])))",
           "captures": {
             "1": {
               "name": "entity.name.label.line-number.retrocore-bbcbasic"
@@ -527,6 +527,9 @@
               "name": "variable.language.register.retrocore-bbcbasic"
             },
             "4": {
+              "name": "comment.line.assembler.retrocore-bbcbasic"
+            },
+            "5": {
               "name": "keyword.other.mnemonic.retrocore-bbcbasic"
             }
           }
@@ -540,10 +543,13 @@
           }
         },
         {
-          "match": "(?<=,)\\s*([XY])(?![A-Za-z0-9_`])",
+          "match": "(?<=,)\\s*([XY])(\\)?)([^:]*)",
           "captures": {
             "1": {
               "name": "variable.language.register.retrocore-bbcbasic"
+            },
+            "3": {
+              "name": "comment.line.assembler.retrocore-bbcbasic"
             }
           }
         },

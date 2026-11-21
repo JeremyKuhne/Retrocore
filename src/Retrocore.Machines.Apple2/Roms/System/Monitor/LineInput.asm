@@ -13,11 +13,6 @@ NORMAL_VIDEO = $FF
 ;; The mask the original IIe's <GetLine> applies where the Apple II's apply <UPPERCASE_MASK>: every bit, so
 ;; lowercase stays.
 KEEP_CASE_MASK = $FF
-.if ENHANCED
-
-;; The internal firmware's function that gets the character under the 80-column cursor, with its high bit set.
-FIRMWARE_CHARACTER_UNDER_CURSOR = $0F
-.endif
 
 ;; The parts of <GetLine> that handle a character once it is in the buffer: echoing it, its editing keys,
 ;; and cancelling the line.

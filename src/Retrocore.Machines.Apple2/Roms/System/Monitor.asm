@@ -93,6 +93,11 @@ ENHANCED = 0
 ; The Monitor's own page zero, the firmware's entries and the build's other names.
 .include "Monitor/Equates.asm"
 
+; The internal firmware's function numbers, which the IIe's Monitor passes in Y; shared with the firmware.
+.if MONITOR = MONITOR_IIE
+.include "FirmwareFunctions.asm"
+.endif
+
 .org $F800
 
 .include "Monitor/LowRes.asm"

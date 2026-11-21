@@ -69,17 +69,6 @@ SIGNATURE_LAST = 5
 ;; $Cn07, so the Autostart Monitor and the original IIe compare four bytes.
 SIGNATURE_LAST = 7
 .endif
-
-; The internal firmware's functions.
-.if ENHANCED
-
-;; The internal firmware's function that resets its state on a reset: 9 on the Enhanced IIe.
-FIRMWARE_RESET = $09
-.else
-
-;; The internal firmware's function that resets its state on a reset: 5 on the original IIe.
-FIRMWARE_RESET = $05
-.endif
 .endif
 .if MONITOR = MONITOR_II
 
@@ -196,7 +185,7 @@ StoreByte:
 
 ;; The Monitor's interrupt entry: saves A in <SavedA> and goes to the internal firmware's interrupt handler.
 ;;
-;; At $FA40. The 6502's IRQ vector points at the firmware's handler, <IRQHANDLER>, so only code that jumps here by
+;; At $FA40. The 6502's IRQ vector points at the firmware's handler, <HandleInterrupt>, so only code that jumps here by
 ;; address comes this way. The firmware handles BRK and hands it back at <BreakFromFirmware>.
 ;; In: A = the interrupted program's A
 ;; Also: IRQ (A2RM78, A2RM79, IIEROM82, IIETRM85)
@@ -204,7 +193,7 @@ StoreByte:
     .assert * = $FA40, "Interrupt must stay at $FA40."
     sta SavedA
     lda SavedA
-    jmp IRQHANDLER
+    jmp HandleInterrupt
 .endproc
 
 ;; The internal firmware's way back to the Monitor for a BRK: switches slot ROM in, saves A in <SavedA> and
@@ -212,6 +201,7 @@ StoreByte:
 ;;
 ;; At $FA47, which the firmware jumps to.
 ;; In: A = the program's A, the stack as the BRK left it
+;; Also: NEWBREAK (IIETRM85)
 .proc BreakFromFirmware
     .assert * = $FA47, "BreakFromFirmware is at $FA47."
     sta InternalCxRomOff
@@ -457,7 +447,7 @@ Annunciators:
 .endif
 
     ; No $C800 ROM, and no key waiting.
-    lda CLRROM
+    lda ExpansionRomOff
     bit KeyboardStrobe
 
 ;; Beeps, then warm-starts through <SoftEntryVector> when <SoftEntryCheck> matches it, or powers up.

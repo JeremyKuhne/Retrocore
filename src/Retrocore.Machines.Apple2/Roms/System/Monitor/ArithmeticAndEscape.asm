@@ -388,7 +388,7 @@ Print:
 ;;
 ;; At $FBB3. Programs read the same address on the Apple II: the Autostart Monitor has $EA here, followed by
 ;; unused $EA bytes up to $FBC0, and the Apple II Monitor $38, a SEC in <Arithmetic::MakePositive>.
-;; Also: VERSION (A2RM78, IIEROM82, IIETRM85)
+;; Also: VERSION (A2RM78, IIEROM82, IIETRM85), F8VERSION (IIEROM82, IIETRM85)
 ModelId:
 .assert * = $FBB3, "ModelId must stay at $FBB3."
 .if MONITOR = MONITOR_AUTOSTART
@@ -399,7 +399,7 @@ ModelId:
     .byte MODEL_ID_IIE
 
 ;; Calls the internal firmware: saves whether slot ROM or internal ROM was selected at $C100-$CFFF, switches
-;; internal ROM in and jumps to the firmware's dispatcher at <B_FUNC>, which performs the function in Y and
+;; internal ROM in and jumps to the firmware's dispatcher at <DispatchFunction>, which performs the function in Y and
 ;; switches back.
 ;;
 ;; At $FBB4. The original IIe also saves the interrupt state and disables interrupts first.
@@ -416,7 +416,7 @@ ModelId:
     bit InternalCxRomState
     php
     sta InternalCxRomOn
-    jmp B_FUNC
+    jmp DispatchFunction
 .if ENHANCED
 
     ; Two unused bytes, then the byte at $FBC0 that tells the Enhanced IIe from the original.

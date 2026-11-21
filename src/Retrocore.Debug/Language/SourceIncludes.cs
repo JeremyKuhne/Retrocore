@@ -106,7 +106,8 @@ internal static partial class SourceIncludes
         return current;
     }
 
-    // The sources in a file's folder and in the folders beside it, its own folder first, each by name descending.
+    // The sources in a file's folder, in the folders beside it and in the folder above, its own folder first, each by
+    // name descending. A module's parts may be in a folder of their own, included from the one above.
     private static List<string> Neighbors(string path)
     {
         string? directory = Path.GetDirectoryName(path);
@@ -116,7 +117,8 @@ internal static partial class SourceIncludes
         {
             folders = folders.Concat(Directory.EnumerateDirectories(parent, "*", s_searchOne)
                 .Where(folder => !string.Equals(Path.GetFullPath(folder), Path.GetFullPath(directory), StringComparison.OrdinalIgnoreCase))
-                .Order(StringComparer.OrdinalIgnoreCase));
+                .Order(StringComparer.OrdinalIgnoreCase))
+                .Append(parent);
         }
 
         return [.. folders.SelectMany(folder => Directory.EnumerateFiles(folder, "*", s_searchOne)

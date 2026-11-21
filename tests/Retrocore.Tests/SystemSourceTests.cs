@@ -149,8 +149,8 @@ public sealed class SystemSourceTests
         DebugPosition? position = debug.Position(new Apple2TestMemory(bus), 0xFDED);
         position.Should().NotBeNull();
         SourceLine line = position?.Chain[0] ?? throw new AssertFailedException("No source for COUT.");
-        line.Path.Should().Be(Path.GetFullPath(s_monitor));
-        File.ReadAllLines(s_monitor)[line.Line - 2].Should().Be("COUT:");
+        line.Path.Should().StartWith(Path.Join(Path.GetDirectoryName(Path.GetFullPath(s_monitor)), "Monitor"));
+        File.ReadAllLines(line.Path)[line.Line - 2].Should().Be("COUT:");
 
         // Language-card RAM at $F800 is someone else's code.
         bus.Read(0xC080);

@@ -80,7 +80,7 @@ internal static partial class MachineSymbols
             {
                 if (symbol.Location is not { } location || symbol.Value is < 0 or > 0xFFFF) { continue; }
                 if (!Identifier().IsMatch(symbol.Name) || InnerLabel().IsMatch(symbol.Name)) { continue; }
-                string file = Path.GetFileName(location.Path);
+                string file = ModuleFile(location.Path);
                 int rank = Rank(file);
 
                 // Programs reuse BASIC's and DOS's page-zero storage for their own, so only the Monitor's and the
@@ -103,6 +103,21 @@ internal static partial class MachineSymbols
         }
 
         return names;
+    }
+
+    // The file a definition is from, as a module: a part in a folder beside the module's main file, such as
+    // Monitor/Screen.asm beside Monitor.asm, is from the main file.
+    private static string ModuleFile(string path)
+    {
+        string? folder = Path.GetDirectoryName(path);
+        string? parent = folder is null ? null : Path.GetDirectoryName(folder);
+        if (folder is not null && parent is not null)
+        {
+            string main = $"{Path.GetFileName(folder)}.asm";
+            if (File.Exists(Path.Join(parent, main))) { return main; }
+        }
+
+        return Path.GetFileName(path);
     }
 
     // Which names win at a shared address: the Monitor's, the hardware's, the firmware's, BASIC's, then DOS's.

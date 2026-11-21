@@ -214,6 +214,63 @@ public sealed class HistoricalNameTests
         Required(bibliography.Find("A2RM78")).Title.Should().Be("Apple II Reference Manual");
     }
 
+    /// <summary>
+    ///  Conditional assembly sees a historical name as code does, for a definition earlier in the source; an old name
+    ///  two definitions give is an error where a condition tests it.
+    /// </summary>
+    [TestMethod]
+    public void ConditionsSeeOldNames()
+    {
+        AssemblyResult result = Assemble("""
+            ;; Prints a character.
+            ;; Also: COUT (TEST)
+            CharacterOut = $FDED
+            .ifdef COUT
+            .if COUT = $FDED
+                nop
+            .endif
+            .endif
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+        result.Sections[0].Bytes.Span[0].Should().Be(0xEA);
+
+        Assemble("""
+            ;; One.
+            ;; Also: COUT (TEST)
+            First = 1
+            ;; Two.
+            ;; Also: COUT (TEST)
+            Second = 2
+            .ifdef COUT
+                nop
+            .endif
+            """).Diagnostics.Select(diagnostic => diagnostic.Message).Should().Equal(
+            "'COUT' is a historical name of First and Second: use one of those.");
+    }
+
+    /// <summary>
+    ///  Two definitions in different branches of conditional assembly may share an old name: each build has one.
+    /// </summary>
+    [TestMethod]
+    public void BuildVariantsShareOldNames()
+    {
+        DocumentationSet set = Set("""
+            .ifdef ENHANCED
+            ;; Prints a character.
+            ;; Also: COUT (TEST)
+            FirstOut = $FDED
+            .else
+            ;; Prints a character.
+            ;; Also: COUT (TEST)
+            SecondOut = $FDF0
+            .endif
+            """);
+
+        DocumentationResolver resolver = new(set) { Bibliography = DocumentationBibliography.Parse(Bibliography) };
+        resolver.Check().Should().BeEmpty();
+    }
+
     private const string Bibliography = """
         | Key | Title | Year | Publisher | Link |
         | --- | --- | --- | --- | --- |

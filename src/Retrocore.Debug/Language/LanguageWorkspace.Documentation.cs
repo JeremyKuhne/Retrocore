@@ -184,7 +184,9 @@ internal sealed partial class LanguageWorkspace
         {
             foreach (string name in set.AlsoNames)
             {
+                // A name a root symbol has is never historical; one a scope defines is checked at each use, below.
                 if (analysis.Definitions.Any(site => site.Name == name)) { continue; }
+
                 IReadOnlyList<DocumentationTopic> topics = set.FindAlso(name);
                 string? replacement = topics.Count == 1 ? topics[0].Name : null;
                 current[name] = current.TryGetValue(name, out string? earlier) && earlier != replacement ? null : replacement;
@@ -195,10 +197,22 @@ internal sealed partial class LanguageWorkspace
         foreach (string member in analysis.Members)
         {
             string[] lines = analysis.LinesOf(member);
+            bool inMacro = false;
             for (int line = 0; line < lines.Length; line++)
             {
                 int comment = SourceText.CommentStart(lines[line]);
                 string code = comment < 0 ? lines[line] : lines[line][..comment];
+
+                // A macro's body names its parameters, which may share a historical name.
+                string directive = code.TrimStart();
+                if (directive.StartsWith(".macro", StringComparison.OrdinalIgnoreCase)) { inMacro = true; }
+                if (directive.StartsWith(".endmacro", StringComparison.OrdinalIgnoreCase))
+                {
+                    inMacro = false;
+                    continue;
+                }
+
+                if (inMacro) { continue; }
 
                 // A .using line names scopes, not symbols.
                 if (code.TrimStart().StartsWith(".using", StringComparison.OrdinalIgnoreCase)) { continue; }

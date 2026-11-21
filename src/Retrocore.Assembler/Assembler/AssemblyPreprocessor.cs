@@ -271,6 +271,7 @@ internal sealed partial class AssemblyPreprocessor
         _cancellation.ThrowIfCancellationRequested();
         AssemblyDialect dialect = explicitDialect ?? Pragma(source) ?? source.Dialect ?? inherited;
         if (dialect == AssemblyDialect.Merlin) { CollectMerlinEquates(source); }
+        if (dialect == AssemblyDialect.Native) { ReadHistoricalNames(source); }
 
         if (dialect is not (AssemblyDialect.Native or AssemblyDialect.Ca65 or AssemblyDialect.Merlin or AssemblyDialect.Macro10))
         {
@@ -652,27 +653,29 @@ internal sealed partial class AssemblyPreprocessor
 
         // As in ca65, the first definition of an ordinary symbol starts a cheap-local context.
         if (_defined.Add(name) && !cheap) { _constantCheap = name; }
+        if (!cheap) { RecordHistoricalNames(node, name); }
         if (node.Kind is not (AssemblyStatementKind.Constant or AssemblyStatementKind.Variable))
         {
             _constants.Unset(name);
             return;
         }
 
-        _usingAmbiguity = null;
+        _nameAmbiguity = null;
         try
         {
             // Without scopes or local names the operand's own characters are the expression.
             ReadOnlyMemory<char> operand = node.Operand.Memory;
-            ReadOnlyMemory<char> expression = _constantScope.Length == 0 && _constantUsings is null && operand.Span.IndexOfAny('@', ':') < 0
+            bool plain = _constantScope.Length == 0 && _constantUsings is null && _historicalNames is null;
+            ReadOnlyMemory<char> expression = plain && operand.Span.IndexOfAny('@', ':') < 0
                 ? operand
                 : ConstantExpression(node.Operand.Text).AsMemory();
 
             ExpressionEvaluator evaluator = new(expression, _constants, address: 0, line: 0);
 
-            // A name two used scopes define has no one value; the resolver reports it where the code uses it.
-            if (_usingAmbiguity is not null)
+            // A name that two definitions could mean has no one value; the resolver reports it where code uses it.
+            if (_nameAmbiguity is not null)
             {
-                _usingAmbiguity = null;
+                _nameAmbiguity = null;
                 _constants.Unset(name);
             }
             else if (evaluator.TryEvaluate(out long value) && !evaluator.ReadsAddress)

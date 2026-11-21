@@ -52,14 +52,14 @@ internal sealed partial class AssemblyPreprocessor
 
     private bool TestCondition(string operation, string operand, AssemblyLocation location, AssemblyDialect dialect)
     {
-        _usingAmbiguity = null;
+        _nameAmbiguity = null;
         bool result = TestConditionText(operation, operand, location, dialect);
 
-        // A name that two scopes a .using names define is an error where a condition tests it, as in code.
-        if (_usingAmbiguity is { } ambiguity)
+        // A name that two definitions could mean (two used scopes, or two definitions giving a historical name) is an error where a condition tests it, as in code.
+        if (_nameAmbiguity is { } ambiguity)
         {
             Error(ambiguity, location);
-            _usingAmbiguity = null;
+            _nameAmbiguity = null;
             return false;
         }
 

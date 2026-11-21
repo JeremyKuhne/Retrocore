@@ -120,7 +120,8 @@ public static partial class DocumentationParser
             if (directive is ".struct" or ".enum") { inMembers = true; }
             if (directive is ".endstruct" or ".endenum") { inMembers = false; }
 
-            if (s_blockDirectives.Contains(directive) || defined is not null && !inMembers)
+            // A cheap-local or anonymous label is a label too, though it defines no name of its own.
+            if (s_blockDirectives.Contains(directive) || (defined is not null || IsLabelOnly(trimmed)) && !inMembers)
             {
                 if (indent != 0) { Warn("Put definitions, labels and block directives at column 0.", index); }
             }
@@ -198,16 +199,29 @@ public static partial class DocumentationParser
     // A label followed by code on the same line, such as "Loop: lda (Pointer),y": the label, or null.
     private static string? LabelWithCode(string code)
     {
-        int end = IdentifierLength(code, 0);
-        if (end == 0 || end >= code.Length || code[end] != ':') { return null; }
+        int end = LabelLength(code);
+        if (end < 0 || end >= code.Length || code[end] != ':' || (end == 0 && code.StartsWith("::", StringComparison.Ordinal)))
+        {
+            return null;
+        }
+
         string rest = code[(end + 1)..];
-        return rest.Length != 0 && rest[0] != ':' && rest.Trim().Length != 0 ? code[..end] : null;
+        return rest.Length != 0 && rest[0] != ':' && rest.Trim().Length != 0 ? code[..(end == 0 ? 1 : end)] : null;
     }
 
     private static bool IsLabelOnly(string code)
     {
-        int end = IdentifierLength(code, 0);
-        return end != 0 && end == code.Length - 1 && code[end] == ':';
+        // An anonymous label is a ':' alone.
+        int end = LabelLength(code);
+        return end >= 0 && end == code.Length - 1 && code[end] == ':';
+    }
+
+    // The length of a label's name at a line's start: an ordinary or cheap-local (@) name, or 0 for an anonymous ':'.
+    private static int LabelLength(string code)
+    {
+        if (!code.StartsWith('@')) { return IdentifierLength(code, 0); }
+        int length = IdentifierLength(code, 1);
+        return length == 0 ? -1 : length + 1;
     }
 
     // Whether a name is only an address, as a disassembler makes it.

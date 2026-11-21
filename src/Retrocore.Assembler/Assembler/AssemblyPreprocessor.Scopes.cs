@@ -17,7 +17,6 @@ internal sealed partial class AssemblyPreprocessor
     private AssemblyDialect? _constantDialect;
     private readonly List<(string Scope, AssemblyStatementKind Kind, UsingDirective? Usings)> _constantScopes = [];
     private UsingDirective? _constantUsings;
-    private string? _usingAmbiguity;
     private readonly HashSet<string> _constantNamespaces = [with(StringComparer.Ordinal)];
 
     /// <summary>
@@ -130,8 +129,15 @@ internal sealed partial class AssemblyPreprocessor
             prefix = previous < 0 ? "" : prefix[..previous];
         }
 
-        // Then the scopes the .using directives in effect name.
-        return separator >= 0 || _constantUsings is null || _defined.Contains(name) ? name : UsedName(name) ?? name;
+        // Then the scopes the .using directives in effect name, then historical names.
+        return separator >= 0 || _defined.Contains(name) ? name : UnscopedName(name);
+    }
+
+    // A plain name no enclosing scope defines: one a .using in effect gives, or a historical name.
+    private string UnscopedName(string name)
+    {
+        string? used = _constantUsings is null ? null : UsedName(name);
+        return used ?? HistoricalTarget(name) ?? name;
     }
 
     // A plain name defined so far in a scope that a .using in effect names, innermost directive first.
@@ -161,7 +167,7 @@ internal sealed partial class AssemblyPreprocessor
                 }
                 else if (found != candidate)
                 {
-                    _usingAmbiguity = $"'{name}' is in both {foundScope} and {scopeName}; qualify it.";
+                    _nameAmbiguity = $"'{name}' is in both {foundScope} and {scopeName}; qualify it.";
                     break;
                 }
             }
@@ -194,7 +200,8 @@ internal sealed partial class AssemblyPreprocessor
 
     private string ConstantExpression(string text)
     {
-        if (_constantScope.Length == 0 && _constantUsings is null && text.IndexOfAny('@', ':') < 0) { return text; }
+        bool plain = _constantScope.Length == 0 && _constantUsings is null && _historicalNames is null;
+        if (plain && text.IndexOfAny('@', ':') < 0) { return text; }
         StringBuilder? result = null;
         int copied = 0;
         AssemblyNameReferences references = new(text.AsMemory());

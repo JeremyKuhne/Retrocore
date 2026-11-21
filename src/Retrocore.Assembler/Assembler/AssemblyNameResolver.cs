@@ -241,7 +241,11 @@ internal sealed partial class AssemblyNameResolver
                         || !scope.Children.TryGetValue(continuedName, out Scope? continued)
                         || continued.Procedure)
                     {
-                        _errors.Add(new(index, $"No .scope {continuedName} here to continue: it must be opened earlier, in the same scope."));
+                        string message = node.Label is not null
+                            ? "A scope requires an unqualified name; .proc requires a name and neither takes a label."
+                            : $"No .scope {continuedName} here to continue: it must be opened earlier, in the same scope.";
+
+                        _errors.Add(new(index, message));
                         _definitions[index] = scope.Qualify($"{_privatePrefix}continued_{index}");
                         scope = new(scope, $"{_privatePrefix}continued_{index}", index, procedure: false);
                         scopeUsings.Push(usings);

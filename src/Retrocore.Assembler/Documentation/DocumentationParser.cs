@@ -37,7 +37,18 @@ public static partial class DocumentationParser
     /// <param name="path">The source path, recorded in comments and diagnostics.</param>
     /// <param name="assembledUsing">Whether a line's <c>.using</c> was assembled, or null when unknown.</param>
     /// <returns>The comments and any placement problems.</returns>
-    public static DocumentationFile Parse(string text, string path, Func<int, bool>? assembledUsing)
+    public static DocumentationFile Parse(string text, string path, Func<int, bool>? assembledUsing) =>
+        Parse(text, path, assembledUsing, style: true);
+
+    /// <summary>
+    ///  Parses a source file's documentation comments, optionally without the style checks.
+    /// </summary>
+    /// <param name="text">The source text.</param>
+    /// <param name="path">The source path, recorded in comments and diagnostics.</param>
+    /// <param name="assembledUsing">Whether a line's <c>.using</c> was assembled, or null when unknown.</param>
+    /// <param name="style">Whether to check a strict source against the style guide.</param>
+    /// <returns>The comments and any placement problems.</returns>
+    internal static DocumentationFile Parse(string text, string path, Func<int, bool>? assembledUsing, bool style)
     {
         string[] lines = text.Replace("\r\n", "\n").Split('\n');
         HashSet<string> dataMacros = DataMacros(lines);
@@ -188,7 +199,7 @@ public static partial class DocumentationParser
         }
 
         bool strict = IsStrict(text);
-        if (strict) { Style(lines, path, diagnostics); }
+        if (strict && style) { Style(lines, path, diagnostics); }
         return new(path, comments, diagnostics) { Strict = strict };
     }
 

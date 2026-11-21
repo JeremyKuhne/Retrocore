@@ -163,6 +163,33 @@ public sealed class StyleLintTests
             "17: Link Print as <Print>: it names a documented definition.");
     }
 
+    /// <summary>
+    ///  Cheap-local and anonymous labels are labels: alone at column 0 they are clean, and with code after them
+    ///  they belong on their own line.
+    /// </summary>
+    [TestMethod]
+    public void LocalAndAnonymousLabelsAreLabels()
+    {
+        string text = Pragma + """
+            .cpu Mos6502
+            .org $0300
+
+            ;; Counts X down to zero.
+            .proc CountDown
+            @loop:
+                dex
+                bne @loop
+            :
+                dex
+                bne :-
+            @again: dex
+                rts
+            .endproc
+            """;
+
+        Problems(text).Should().BeEquivalentTo("13: Put the label @again on its own line.");
+    }
+
     // The problems the editor reports for one strict file, as "line: message" with 1-based lines.
     private static List<string> Problems(string text)
     {

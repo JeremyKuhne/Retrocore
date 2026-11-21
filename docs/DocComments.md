@@ -239,7 +239,13 @@ CharacterOut = $FDED
 - **The assembler** reads `Also:` sections and resolves an old name to its definition wherever no symbol has
   that name, so a listing typed in from a book (`jsr COUT`) assembles. A definition of the same name wins. An
   old name that two definitions in the assembly give is an error where code uses it, naming both. Old names are
-  plain: `Monitor::RDKEY` does not reach `Monitor::ReadKey`'s `RDKEY`.
+  plain: `Monitor::RDKEY` does not reach `Monitor::ReadKey`'s `RDKEY`. Conditional assembly sees old names as
+  code does, for definitions earlier in the source (`.ifdef COUT`, `.if COUT = $FDED`).
+- **What can have one:** a label, constant or `.proc` entry, outside a macro's body. An `Also:` on a `.scope`
+  does not name the scope (`OLD::Member` does not resolve), one inside a macro's body is ignored, and `.sizeof`
+  takes only a `.proc`'s current name. An old name for a `.set` variable is the value it had where it was
+  documented, not where code uses it. Two definitions in different branches of conditional assembly (one
+  model's routine and another's) can share an old name: each build has only one of them.
 - **The editor** treats an old name as its definition: hover (which says it is a historical name), go to
   definition, and links (`<COUT>`). Completion matches old names too, so typing `COUT` offers `CharacterOut`,
   and workspace symbol search finds `CharacterOut (COUT)`. Each use in code gets an information message, with a

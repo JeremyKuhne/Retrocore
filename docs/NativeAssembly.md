@@ -43,7 +43,9 @@ Native is the default. A file's first line can name its dialect explicitly:
 ; retrocore: dialect=native
 ```
 
-The other values are `ca65`, `merlin` and `macro10`. An `.include` can also name the dialect of the file it
+The other values are `ca65`, `merlin` and `macro10`. The same line can also opt the file in to the
+[style guide's](AssemblyStyle.md) checks with `style=strict`, alone or after the dialect:
+`; retrocore: dialect=native style=strict`. An `.include` can also name the dialect of the file it
 includes (see [Includes](#includes)). In VS Code, a file whose language is `retrocore-asm` is native unless its
 first line says otherwise.
 
@@ -185,6 +187,45 @@ The rules follow ca65:
 
 A `.scope` or `.proc` line cannot carry a label.
 
+#### Continued scopes
+
+`.scope Name continued` goes on with a scope opened and closed earlier in the same enclosing scope, for a family
+whose code is spread among other code, as in a ROM whose routines sit at fixed addresses. The pieces are one
+scope: a name defined in any piece is visible in all of them, `Name::Member` reaches it from outside, and a name
+defined in two pieces is a duplicate. A plain second `.scope Name` is still an error, and a `.proc` cannot be
+continued. A scope in pieces has no one size, so `.sizeof` refuses it. Retrocore's own syntax: ca65 has no
+equivalent.
+
+```asm
+.cpu Mos6502
+.org $0300
+
+;; The Monitor's commands.
+.scope Commands
+
+;; Starts a program.
+.proc Go
+    jmp List
+.endproc
+
+.endscope
+
+;; Code between the pieces.
+.proc Other
+    rts
+.endproc
+
+; Commands: the listing command, after the other code.
+.scope Commands continued
+
+;; Lists memory.
+.proc List
+    jmp Go
+.endproc
+
+.endscope
+```
+
 ### Cheap local labels
 
 A name starting with `@` belongs to the stretch of source since the last ordinary symbol was defined, so the
@@ -216,6 +257,25 @@ those before.
 
 A word in a register's place in an operand is the register, even when a symbol has that name: with `X = $12`,
 `lda X,x` loads from `$12` indexed by X.
+
+### Historical names
+
+A `;; Also:` section gives a definition its historical names ([DocComments.md](DocComments.md), section 2.4).
+Where no symbol has such a name, it resolves to the definition, so code written with the old name assembles:
+
+```asm
+.cpu Mos6502
+.org $0300
+    jsr COUT                    ; assembles as jsr CharacterOut
+    rts
+
+;; Prints a character through the output hook.
+;; In: A = the character, with its high bit set
+;; Also: COUT (A2RM78)
+CharacterOut = $FDED
+```
+
+A symbol of the same name wins. An old name that two definitions give is an error where code uses it.
 
 ## Data
 

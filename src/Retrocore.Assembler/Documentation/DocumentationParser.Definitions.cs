@@ -40,9 +40,14 @@ public static partial class DocumentationParser
                 case ".struct":
                 case ".union":
                     return name.Length == 0 ? null : new(name, DocumentationKind.Struct, "", []);
+                case ".scope" when after.Equals("continued", StringComparison.OrdinalIgnoreCase):
+                    return null;
                 case ".scope":
-                case ".proc":
                     return name.Length == 0 ? null : new(name, DocumentationKind.Scope, "", []);
+
+                // A .proc is a routine: its name is the address of its first statement.
+                case ".proc":
+                    return name.Length == 0 ? null : new(name, DocumentationKind.Routine, "", []);
                 case ".define":
                     int open = rest.IndexOf('(');
                     string defined = open < 0 ? name : rest[..open].Trim();

@@ -131,6 +131,7 @@ internal static partial class AssemblyCompiler
             throw new AssemblyError(line: 0, $"Unknown CPU '{options.Cpu}'.");
         }
 
+        AssemblyAlsoNames? alsoNames = AssemblyAlsoNames.Collect(project.Sources);
         bool declaredCpu = false;
         List<InstructionSet>? cpuSettings = null;
         byte cpuIndex = 0;
@@ -172,7 +173,8 @@ internal static partial class AssemblyCompiler
                     label = symbols.DeclareVersion(label);
                 }
 
-                symbols.Declare(label);
+                int labelId = symbols.Declare(label);
+                alsoNames?.Apply(node, labelId, symbols);
             }
 
             ReadOnlySpan<char> mnemonic = node.OperationMemory.Span;

@@ -135,6 +135,7 @@
     <Compile Include="..\..\src\Retrocore.Debug\Language\SourceAnalysis.cs" Link="Language\SourceAnalysis.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\Language\SourceText.cs" Link="Language\SourceText.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\Language\SourceIncludes.cs" Link="Language\SourceIncludes.cs" />
+    <Compile Include="..\..\src\Retrocore.Debug\Language\SourceBibliography.cs" Link="Language\SourceBibliography.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\Language\SymbolSite.cs" Link="Language\SymbolSite.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\Language\SymbolSiteKind.cs" Link="Language\SymbolSiteKind.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\Language\SymbolReferences.cs" Link="Language\SymbolReferences.cs" />
@@ -180,6 +181,7 @@
     <None Include="..\..\src\Retrocore.Machines.Acorn\Roms\Dnfs\*.asm" Link="Inputs\Acorn\Dnfs\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\src\Retrocore.Machines.Commodore\Roms\**\*.asm;..\..\src\Retrocore.Machines.Commodore\Roms\**\*.mac" Link="Inputs\Pet\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\docs\NativeAssembly.md" Link="Inputs\Docs\NativeAssembly.md" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\docs\AssemblyStyle.md" Link="Inputs\Docs\AssemblyStyle.md" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\.claude\skills\retrocore-native-assembly\*.md" Link="Inputs\Docs\Skill\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\sample\iie\main.s" Link="Inputs\IIe\main.s" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\sample\iie\link.cfg" Link="Inputs\IIe\link.cfg" CopyToOutputDirectory="PreserveNewest" />

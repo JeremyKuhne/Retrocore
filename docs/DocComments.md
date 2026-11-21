@@ -159,6 +159,7 @@ Both forms parse to the same sections, so every tool treats them alike.
 | `Example:` | `<example>` | Text and code blocks | |
 | `See:` (or `See also:`) | `<seealso>` | A comma list of links | Every link resolves |
 | `Deprecated:` | `[Obsolete]` | Why, and what to use instead | Callers get a warning |
+| `Also:` | | Historical names, each with the documents that give it: `COUT (A2RM78)` (section 2.4) | Keys are in the bibliography; uses get a quick fix |
 | `Inherit:` | `<inheritdoc>` | See section 3 | Target resolves; no cycles |
 | `Include:` | `<include>` | See section 3 | File and topic exist |
 
@@ -217,6 +218,38 @@ Two additions:
 - A **register or parameter reference** in braces, such as `{A}`, refers to an entry of the routine's own
   `In:`, `Out:` or `Parameters:` section. This is the equivalent of `<paramref>`. The tools check the name,
   and the reference renders in code style.
+
+### 2.4 Historical names
+
+A definition whose name differs from the one a manual, listing or other source gave it keeps the old name in an
+`Also:` section. A name from a document is never dropped: it is either the definition's name or in its `Also:`.
+
+```asm
+;; Prints a character through the output hook.
+;; In: A = the character, with its high bit set
+;; Also: COUT (A2RM78)
+CharacterOut = $FDED
+```
+
+- **Items** are comma-separated: the name, then in parentheses the keys of the documents that use it, from
+  the bibliography (`COUT (A2RM78, A2RM79)`). A definition may have several names.
+- **The bibliography** is the table in [Bibliography.md](Bibliography.md), which the SDK ships. A
+  `Bibliography.md` in a source's folder, or any folder above it, adds documents of its own or replaces a key.
+  Hover shows each key's title, publisher and year.
+- **The assembler** reads `Also:` sections and resolves an old name to its definition wherever no symbol has
+  that name, so a listing typed in from a book (`jsr COUT`) assembles. A definition of the same name wins. An
+  old name that two definitions in the assembly give is an error where code uses it, naming both. Old names are
+  plain: `Monitor::RDKEY` does not reach `Monitor::ReadKey`'s `RDKEY`. Conditional assembly sees old names as
+  code does, for definitions earlier in the source (`.ifdef COUT`, `.if COUT = $FDED`).
+- **What can have one:** a label, constant or `.proc` entry, outside a macro's body. An `Also:` on a `.scope`
+  does not name the scope (`OLD::Member` does not resolve), one inside a macro's body is ignored, and `.sizeof`
+  takes only a `.proc`'s current name. An old name for a `.set` variable is the value it had where it was
+  documented, not where code uses it. Two definitions in different branches of conditional assembly (one
+  model's routine and another's) can share an old name: each build has only one of them.
+- **The editor** treats an old name as its definition: hover (which says it is a historical name), go to
+  definition, and links (`<COUT>`). Completion matches old names too, so typing `COUT` offers `CharacterOut`,
+  and workspace symbol search finds `CharacterOut (COUT)`. Each use in code gets an information message, with a
+  quick fix that writes the current name.
 
 ## 3. Inheriting and including documentation
 
@@ -299,6 +332,9 @@ A plain `NAME` is looked up in this order. The first match wins.
    and slot ROMs on the Apple II, or the Model I's ROMs), using the build for the topic's model.
 5. Macros and `.define`s, then directives and instructions.
 
+At each step, a name that is no definition's but is a historical name in an `Also:` section (section 2.4)
+reaches that definition.
+
 If a step finds the name in more than one place, the link is **ambiguous**. Examples are a name defined in
 both firmware sources, or in both branches of an `.if` with different meanings. The lint reports it, the
 link renders to the first match, and the author qualifies it (`Monitor:`, `@Enhanced`).
@@ -337,6 +373,11 @@ broken link.
   - that `Entry:` labels lie inside the routine;
   - that each `;;` block sits directly above a definition it can document (section 1.2);
   - uses of a definition with a `Deprecated:` section, at each use;
+  - `Also:` items: their form, that their keys are in the bibliography, and that an old name is not also a
+    definition or another definition's old name; and, as information with a quick fix, each use of an old
+    name in code;
+  - in a source whose first line is `; retrocore: style=strict`, the style guide's checks
+    ([AssemblyStyle.md](AssemblyStyle.md)), unlinked names of documented definitions in prose among them;
   - that every exported symbol is documented, by its own comment or as an `Entry:` (or stacked label) of a
     documented routine.
 

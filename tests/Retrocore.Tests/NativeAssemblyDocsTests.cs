@@ -3,6 +3,7 @@
 // See LICENSE file in the project root for full license information
 
 using Retrocore.Assembler;
+using Retrocore.Documentation;
 using NativeAssembler = Retrocore.Assembler.Assembler;
 
 namespace Retrocore.Tests;
@@ -20,6 +21,7 @@ public class NativeAssemblyDocsTests
     /// <param name="file">The document, under the test's <c>Inputs\Docs</c>.</param>
     [TestMethod]
     [DataRow("NativeAssembly.md")]
+    [DataRow("AssemblyStyle.md")]
     [DataRow("Skill/examples.md")]
     public void ExamplesAssemble(string file)
     {
@@ -38,6 +40,38 @@ public class NativeAssemblyDocsTests
             {
                 failures.Add($"{file} line {line}: {string.Join("; ", result.Diagnostics.Select(diagnostic => diagnostic.Message))}");
             }
+        }
+
+        failures.Should().BeEmpty();
+    }
+
+    /// <summary>
+    ///  The style guide's and the skill's examples also pass the documentation lint and the style checks, as the
+    ///  editor runs them on one file.
+    /// </summary>
+    /// <param name="file">The document, under the test's <c>Inputs\Docs</c>.</param>
+    [TestMethod]
+    [DataRow("AssemblyStyle.md")]
+    [DataRow("Skill/examples.md")]
+    public void ExamplesPassTheLint(string file)
+    {
+        string path = Path.Join(AppContext.BaseDirectory, "Inputs", "Docs", file);
+        List<string> failures = [];
+        foreach ((int line, string example) in Examples(File.ReadAllLines(path)))
+        {
+            // The examples follow the style guide, so they are checked as a source that opts in to it.
+            string name = $"{file}:{line}";
+            string source = $"; retrocore: style=strict\n{example}";
+            AssemblyResult result = new NativeAssembler().Assemble(
+                new AssemblySource(source, name),
+                new AssemblyOptions("Mos6502", 0, 0x8000));
+
+            DocumentationFile documentation = DocumentationParser.Parse(source, name);
+            DocumentationSet set = DocumentationSet.Create([documentation], result);
+            failures.AddRange(documentation.Diagnostics
+                .Select(diagnostic => diagnostic.Message)
+                .Concat(new DocumentationResolver(set).Check().Select(diagnostic => diagnostic.Message))
+                .Select(message => $"{name}: {message}"));
         }
 
         failures.Should().BeEmpty();

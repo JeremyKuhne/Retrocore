@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
+using System.Text.Json.Nodes;
 using Retrocore.Documentation;
 
 namespace Retrocore.Debug.Language;
@@ -24,7 +25,10 @@ internal sealed partial class LanguageWorkspace
         isDirective: name => DirectiveDocs.Describe(name) is not null,
         isInstruction: InstructionDocs.IsMnemonic,
         readText: path => OpenText(path) ?? (File.Exists(path) ? File.ReadAllText(path) : null),
-        root: RepositoryRoot(analysis.Root));
+        root: RepositoryRoot(analysis.Root))
+    {
+        Bibliography = SourceBibliography.For(analysis.Root, analysis.Members)
+    };
 
     /// <summary>
     ///  Finds the documentation of a definition.
@@ -105,6 +109,8 @@ internal sealed partial class LanguageWorkspace
             Add(Path.GetFullPath(diagnostic.Path), diagnostic.Line, diagnostic.Message, severity);
         }
 
+        HistoricalNames(analysis, byFile);
+
         // Code that uses a deprecated definition, here or in the SDK, gets a warning at each use.
         List<DocumentationTopic> deprecated = [.. SdkAnalyses().Append(analysis)
             .SelectMany(source => source.Documentation.Topics)
@@ -132,6 +138,103 @@ internal sealed partial class LanguageWorkspace
         }
 
         return byFile;
+    }
+
+    /// <summary>
+    ///  The diagnostic code of a use of a historical name, which the quick fix replaces with the current name.
+    /// </summary>
+    internal const string HistoricalNameCode = "retrocore.historicalName";
+
+    // Code written with a historical name gets an information message at each use, which a quick fix replaces with
+    // the definition's current name. A name that two definitions give is the assembler's error instead.
+    private void HistoricalNames(SourceAnalysis analysis, Dictionary<string, List<Diagnostic>> byFile)
+    {
+        Dictionary<string, string?> current = [with(StringComparer.Ordinal)];
+        foreach (DocumentationSet set in analysis.OtherModules(SdkAnalyses()).Select(sdk => sdk.Documentation).Prepend(analysis.Documentation))
+        {
+            foreach (string name in set.AlsoNames)
+            {
+                // A name some symbol has, in any scope, may be what the code there means, so it gets no quick fix.
+                if (analysis.Definitions.Any(site => site.Name == name || site.Name.EndsWith($"::{name}", StringComparison.Ordinal)))
+                {
+                    continue;
+                }
+
+                IReadOnlyList<DocumentationTopic> topics = set.FindAlso(name);
+                string? replacement = topics.Count == 1 ? topics[0].Name : null;
+                current[name] = current.TryGetValue(name, out string? earlier) && earlier != replacement ? null : replacement;
+            }
+        }
+
+        if (current.Count == 0) { return; }
+        foreach (string member in analysis.Members)
+        {
+            string[] lines = analysis.LinesOf(member);
+            bool inMacro = false;
+            for (int line = 0; line < lines.Length; line++)
+            {
+                int comment = SourceText.CommentStart(lines[line]);
+                string code = comment < 0 ? lines[line] : lines[line][..comment];
+
+                // A macro's body names its parameters, which may share a historical name.
+                string directive = code.TrimStart();
+                if (directive.StartsWith(".macro", StringComparison.OrdinalIgnoreCase)) { inMacro = true; }
+                if (directive.StartsWith(".endmacro", StringComparison.OrdinalIgnoreCase))
+                {
+                    inMacro = false;
+                    continue;
+                }
+
+                if (inMacro) { continue; }
+                foreach ((int start, string name) in Words(code))
+                {
+                    if (!current.TryGetValue(name, out string? replacement) || replacement is null) { continue; }
+                    if (!byFile.TryGetValue(member, out List<Diagnostic>? list)) { byFile[member] = list = []; }
+                    list.Add(new Diagnostic
+                    {
+                        Range = new LspRange(line, start, line, start + name.Length),
+                        Severity = DiagnosticSeverity.Information,
+                        Code = HistoricalNameCode,
+                        Source = "retrocore docs",
+                        Message = $"{name} is a historical name of {replacement}.",
+                        Data = new JsonObject { ["replacement"] = replacement }
+                    });
+                }
+            }
+        }
+    }
+
+    // The names in a line of code, with their columns, but not a label the line defines at its start.
+    private static IEnumerable<(int Start, string Name)> Words(string code)
+    {
+        int index = 0;
+        while (index < code.Length)
+        {
+            if (code[index] is '"' or '\'')
+            {
+                // Skip a quoted string or character.
+                char quote = code[index];
+                int close = code.IndexOf(quote, index + 1);
+                index = close < 0 ? code.Length : close + 1;
+                continue;
+            }
+
+            if (!SourceText.IsNameCharacter(code[index]) || (index > 0 && SourceText.IsNameCharacter(code[index - 1])))
+            {
+                index++;
+                continue;
+            }
+
+            int end = index;
+            while (end < code.Length && SourceText.IsNameCharacter(code[end])) { end++; }
+            bool qualified = index >= 2 && code[index - 1] == ':' && code[index - 2] == ':';
+            if (index != 0 && !qualified && !char.IsAsciiDigit(code[index]) && code[index - 1] != '$')
+            {
+                yield return (index, code[index..end]);
+            }
+
+            index = end;
+        }
     }
 
     // Whether code uses a name as a whole word in an operand or operation (not as the label it defines).

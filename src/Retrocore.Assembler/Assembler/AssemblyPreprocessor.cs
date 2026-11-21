@@ -95,7 +95,13 @@ internal sealed partial class AssemblyPreprocessor
             ReadOnlySpan<char> first = source.Text;
             int end = first.IndexOfAny('\r', '\n');
             first = (end < 0 ? first : first[..end]).Trim();
-            return !string.Equals(PragmaValue(source.Text, "dialect"), "native", StringComparison.OrdinalIgnoreCase);
+
+            // A pragma that only opts in to the style checks selects no dialect.
+            string? dialect = PragmaValue(source.Text, "dialect");
+            if (dialect is not null || PragmaValue(source.Text, "style") is null)
+            {
+                return !string.Equals(dialect, "native", StringComparison.OrdinalIgnoreCase);
+            }
         }
 
         return (source.Dialect ?? options?.Dialect ?? AssemblyDialect.Native) != AssemblyDialect.Native;
@@ -235,6 +241,11 @@ internal sealed partial class AssemblyPreprocessor
         ReadOnlySpan<char> first = source.Text;
         int end = first.IndexOfAny('\r', '\n');
         first = (end < 0 ? first : first[..end]).Trim();
+        if (PragmaValue(source.Text, "dialect") is null && PragmaValue(source.Text, "style") is not null)
+        {
+            return null;
+        }
+
         if (PragmaValue(source.Text, "dialect") is { } name
             && Enum.TryParse(name, ignoreCase: true, out AssemblyDialect dialect)
             && Enum.IsDefined(dialect))
@@ -257,6 +268,9 @@ internal sealed partial class AssemblyPreprocessor
         _cancellation.ThrowIfCancellationRequested();
         AssemblyDialect dialect = explicitDialect ?? Pragma(source) ?? source.Dialect ?? inherited;
         if (dialect == AssemblyDialect.Merlin) { CollectMerlinEquates(source); }
+
+        // The assembler gives definitions their Also: names in every dialect, so conditionals see them in every one.
+        ReadHistoricalNames(source);
 
         if (dialect is not (AssemblyDialect.Native or AssemblyDialect.Ca65 or AssemblyDialect.Merlin or AssemblyDialect.Macro10))
         {
@@ -638,6 +652,7 @@ internal sealed partial class AssemblyPreprocessor
 
         // As in ca65, the first definition of an ordinary symbol starts a cheap-local context.
         if (_defined.Add(name) && !cheap) { _constantCheap = name; }
+        string? snapshot = cheap ? null : RecordHistoricalNames(node, name);
         if (node.Kind is not (AssemblyStatementKind.Constant or AssemblyStatementKind.Variable))
         {
             _constants.Unset(name);
@@ -648,7 +663,7 @@ internal sealed partial class AssemblyPreprocessor
         {
             // Without scopes or local names the operand's own characters are the expression.
             ReadOnlyMemory<char> operand = node.Operand.Memory;
-            ReadOnlyMemory<char> expression = _constantScope.Length == 0 && operand.Span.IndexOfAny('@', ':') < 0
+            ReadOnlyMemory<char> expression = _constantScope.Length == 0 && _historicalNames is null && operand.Span.IndexOfAny('@', ':') < 0
                 ? operand
                 : ConstantExpression(node.Operand.Text).AsMemory();
 
@@ -656,6 +671,9 @@ internal sealed partial class AssemblyPreprocessor
             if (evaluator.TryEvaluate(out long value) && !evaluator.ReadsAddress)
             {
                 _constants.SetValue(name, value);
+
+                // A .set variable's old name keeps the value it had here, as the assembler's alias does.
+                if (snapshot is not null) { _constants.SetValue(snapshot, value); }
             }
             else
             {

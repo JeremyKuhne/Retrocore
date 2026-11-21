@@ -75,7 +75,12 @@ internal sealed class HoverHandler
         }
         else if (sites.Count != 0)
         {
-            parts.Add(Describe(sites[0]));
+            // An old name found its definition through an Also: section: say so, so the new name is learned.
+            string name = sites[0].Name;
+            bool historical = !name.Equals(word.Word, StringComparison.OrdinalIgnoreCase) && IsAlso(sites[0], word.Word);
+            parts.Add(historical
+                ? $"`{word.Word}` is a historical name of `{name}`.\n\n{Describe(sites[0])}"
+                : Describe(sites[0]));
         }
         else if (word.Word.StartsWith('.') && DirectiveDocs.Describe(word.Word) is { } directive)
         {
@@ -117,6 +122,13 @@ internal sealed class HoverHandler
             Contents = new MarkupContent { Kind = MarkupKind.Markdown, Value = DocumentationCpu.Describe(word, flag) },
             Range = new LspRange(line, start, line, start + word.Length)
         };
+    }
+
+    // Whether a name is one of the definition's historical names.
+    private bool IsAlso(SymbolSite site, string name)
+    {
+        if (_workspace.TopicOf(site) is not { } documented) { return false; }
+        return DocumentationAlso.Of(documented.Topic.Sections).Any(also => also.Name == name);
     }
 
     private string Describe(SymbolSite site)

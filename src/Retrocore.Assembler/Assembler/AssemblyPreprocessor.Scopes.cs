@@ -30,6 +30,13 @@ internal sealed partial class AssemblyPreprocessor
         if (node.Kind is AssemblyStatementKind.Procedure or AssemblyStatementKind.Scope)
         {
             string name = node.Operand.Text.Trim();
+
+            // A continued scope has the same names as where it was first opened.
+            if (node.Kind == AssemblyStatementKind.Scope && AssemblySyntax.ContinuedScope(name) is { } continued)
+            {
+                name = continued;
+            }
+
             bool invalidName = name.Length == 0
                 ? node.Kind == AssemblyStatementKind.Procedure : !AssemblySyntax.IsPlainIdentifier(name);
 
@@ -49,6 +56,7 @@ internal sealed partial class AssemblyPreprocessor
             if (node.Kind == AssemblyStatementKind.Procedure)
             {
                 if (_defined.Add(qualified)) { _constantCheap = qualified; }
+                RecordHistoricalNames(node, qualified);
                 _constants.Unset(qualified);
             }
 
@@ -97,12 +105,13 @@ internal sealed partial class AssemblyPreprocessor
             prefix = previous < 0 ? "" : prefix[..previous];
         }
 
-        return name;
+        // A name no symbol has may be a definition's historical name.
+        return separator < 0 && HistoricalTarget(name) is { } target ? target : name;
     }
 
     private string ConstantExpression(string text)
     {
-        if (_constantScope.Length == 0 && text.IndexOfAny('@', ':') < 0) { return text; }
+        if (_constantScope.Length == 0 && _historicalNames is null && text.IndexOfAny('@', ':') < 0) { return text; }
         StringBuilder? result = null;
         int copied = 0;
         AssemblyNameReferences references = new(text.AsMemory());

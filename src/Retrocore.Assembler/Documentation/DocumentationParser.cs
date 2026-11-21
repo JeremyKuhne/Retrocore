@@ -28,7 +28,16 @@ public static partial class DocumentationParser
     /// <param name="text">The source text.</param>
     /// <param name="path">The source path, recorded in comments and diagnostics.</param>
     /// <returns>The comments and any placement problems.</returns>
-    public static DocumentationFile Parse(string text, string path)
+    public static DocumentationFile Parse(string text, string path) => Parse(text, path, style: true);
+
+    /// <summary>
+    ///  Parses a source file's documentation comments, optionally without the style checks.
+    /// </summary>
+    /// <param name="text">The source text.</param>
+    /// <param name="path">The source path, recorded in comments and diagnostics.</param>
+    /// <param name="style">Whether to check a strict source against the style guide.</param>
+    /// <returns>The comments and any placement problems.</returns>
+    internal static DocumentationFile Parse(string text, string path, bool style)
     {
         string[] lines = text.Replace("\r\n", "\n").Split('\n');
         HashSet<string> dataMacros = DataMacros(lines);
@@ -101,6 +110,18 @@ public static partial class DocumentationParser
                     continue;
                 }
 
+                // A continued scope is documented where it first opens.
+                if (IsContinuedScope(nextCode))
+                {
+                    diagnostics.Add(new(
+                        "Document a scope where it first opens; give a continued piece a plain ; comment.",
+                        path,
+                        start,
+                        DocumentationSeverity.Error));
+
+                    continue;
+                }
+
                 if (Qualify(Define(nextCode, containers), scopes) is not { } definition)
                 {
                     diagnostics.Add(new(
@@ -163,7 +184,9 @@ public static partial class DocumentationParser
             index++;
         }
 
-        return new(path, comments, diagnostics);
+        bool strict = IsStrict(text);
+        if (strict && style) { Style(lines, path, diagnostics); }
+        return new(path, comments, diagnostics) { Strict = strict };
     }
 
     /// <summary>
@@ -234,7 +257,11 @@ public static partial class DocumentationParser
         List<string> aliases = [];
         if (kind == DocumentationKind.Routine)
         {
-            kind = LabelKind(lines, target, definition.Rest, dataMacros, aliases) ? DocumentationKind.Table : DocumentationKind.Routine;
+            // A label after a .proc line is inside the procedure, not another name stacked on it.
+            bool procedure = Split(lines[target]).Code.TrimStart().StartsWith(".proc", StringComparison.OrdinalIgnoreCase);
+            kind = LabelKind(lines, target, definition.Rest, dataMacros, procedure ? [] : aliases)
+                ? DocumentationKind.Table
+                : DocumentationKind.Routine;
         }
 
         (string summary, List<string> remarks, List<DocumentationSection> sections) = Body(body);
@@ -359,6 +386,15 @@ public static partial class DocumentationParser
         }
 
         return members;
+    }
+
+    // Whether a line is ".scope Name continued", which goes on with a scope opened earlier.
+    private static bool IsContinuedScope(string code)
+    {
+        string[] words = code.Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries);
+        return words.Length == 3
+            && words[0].Equals(".scope", StringComparison.OrdinalIgnoreCase)
+            && words[2].Equals("continued", StringComparison.OrdinalIgnoreCase);
     }
 
     // Names inside .proc and .scope are qualified by them, as the assembler qualifies their symbols.

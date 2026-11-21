@@ -42,6 +42,11 @@ internal sealed partial class AssemblyNameResolver
         internal bool Contiguous { get; set; } = true;
 
         /// <summary>
+        ///  Gets or sets how many times <c>.scope Name continued</c> has reopened the scope.
+        /// </summary>
+        internal int Pieces { get; set; }
+
+        /// <summary>
         ///  Gets names declared anywhere in this scope.
         /// </summary>
         internal HashSet<string> Definitions { get; } = [with(StringComparer.Ordinal)];

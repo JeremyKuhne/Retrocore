@@ -106,7 +106,10 @@ The assembler reads four dialects:
 `;;` comments document routines, constants, structures, and tables in any dialect. The language server renders
 them in hovers and completions and checks their links and register lists; the debugger shows routine parameters in
 the Variables view and verifies `Keeps:` and `Uses:` contracts when calls return; and the source generator copies
-summaries into generated C# XML documentation ([DocComments.md](docs/DocComments.md)).
+summaries into generated C# XML documentation ([DocComments.md](docs/DocComments.md)). A definition's `Also:`
+section keeps the names manuals and listings gave it, so code written with them still assembles and the editor
+offers the current name. Sources maintained by hand follow [the assembly style guide](docs/AssemblyStyle.md),
+which the SDK's ROM sources are being converted to.
 
 In VS Code, assembly files get syntax highlighting, live diagnostics as you type, go to definition, find all
 references, hovers (instruction summaries, flags, addressing modes, cycle counts, and emitted bytes),

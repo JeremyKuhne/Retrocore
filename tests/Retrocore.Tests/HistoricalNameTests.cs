@@ -181,6 +181,37 @@ public sealed class HistoricalNameTests
     }
 
     /// <summary>
+    ///  Two models may give one old name to different code: only the build's own definition counts, so a link
+    ///  resolves to it, and the two are not reported as sharing the name.
+    /// </summary>
+    [TestMethod]
+    public void OldNamesOfOtherBuildsDontCount()
+    {
+        DocumentationSet set = Set("""
+            ENHANCED = 1
+            .if ENHANCED
+            ;; Selects the slot's ROM.
+            ;; Also: SLOTRTS (TEST)
+            SelectSlotRom:
+                rts
+            .else
+            ;; Text that runs as code.
+            ;; Also: SLOTRTS (TEST)
+            UserText:
+                rts
+            .endif
+
+            ;; Returns through <SLOTRTS>.
+            Echo:
+                rts
+            """);
+
+        DocumentationResolver resolver = new(set);
+        resolver.Resolve(Required(set.Find("Echo")), "SLOTRTS").Topic?.Name.Should().Be("SelectSlotRom");
+        resolver.Check().Should().BeEmpty();
+    }
+
+    /// <summary>
     ///  The lint checks each <c>Also:</c> item's form, its documents and its name.
     /// </summary>
     [TestMethod]

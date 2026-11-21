@@ -360,6 +360,7 @@ public sealed partial class DocumentationResolver
                 warn($"Also: {also.Name} is also a definition, which code reaches instead of {topic.Name}.", section.Line);
             }
             else if (Current.Topics.FirstOrDefault(other => !ReferenceEquals(other, topic)
+                && !OtherBuilds(other)
                 && DocumentationAlso.Of(other.Sections).Any(name => name.Name == also.Name)) is { } other)
             {
                 warn($"Also: {other.Name} has the historical name {also.Name} too.", section.Line);

@@ -360,6 +360,7 @@ ChecksumFix:
 ;; The key table's last Control-Y entry, left from the S command, points here and wins, since <CommandLine>
 ;; searches from the end. $C2 $F2 is a two-byte NOP, an undocumented opcode of the NMOS 6502, and $F9 $E1 $EE is
 ;; SBC $EEE1,Y, which changes A and the flags; nothing else changes.
+;; Also: SLOTRTS (UNKN)
 .proc UserText
     .byte "Bryan"
     ; Falls into User.

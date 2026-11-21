@@ -134,8 +134,8 @@ Title:
 ;;
 ;; In the Autostart and IIe Monitors it is in five pieces: <Escape::CursorKeyCommands> here, the cursor-key loop
 ;; (<Escape::Perform>, <Escape::CursorKey>, <Escape::NextKey>), the commands (<Escape::Command>), the IIe's key reader
-;; (<Escape::ReadKey>), and the escape sequence's start (<Escape::Sequence>). The Apple II Monitor has only the commands
-;; and the escape sequence's start.
+;; (<Escape::ReadEscapeKey>), and the escape sequence's start (<Escape::Sequence>). The Apple II Monitor has only the
+;; commands and the escape sequence's start.
 .scope Escape
 
 ;; The cursor commands of the escape-mode keys I, J, K and M, for <Escape::CursorKey>: D (up), B (left),

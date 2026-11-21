@@ -238,8 +238,20 @@ public sealed class DocumentationSet
     /// </summary>
     /// <param name="name">The historical name, such as <c>COUT</c>.</param>
     /// <returns>The topics, in source order; usually none or one.</returns>
-    public IReadOnlyList<DocumentationTopic> FindAlso(string name) =>
-        AlsoIndex().TryGetValue(name, out List<DocumentationTopic>? found) ? found : [];
+    /// <remarks>
+    ///  <para>
+    ///   Definitions in branches of an <c>.if</c> that this build leaves out don't count: two models may give the same
+    ///   old name to different code (the original and Enhanced IIe's SLOTRTS), and only this build's one is meant.
+    ///   Without the assembly's symbols, every definition counts.
+    ///  </para>
+    /// </remarks>
+    public IReadOnlyList<DocumentationTopic> FindAlso(string name)
+    {
+        if (!AlsoIndex().TryGetValue(name, out List<DocumentationTopic>? found)) { return []; }
+        if (_symbols.Count == 0 || found.Count < 2) { return found; }
+        List<DocumentationTopic> built = [.. found.Where(topic => Defines(topic.Name))];
+        return built.Count == 0 ? found : built;
+    }
 
     /// <summary>
     ///  Gets every historical name the topics give.

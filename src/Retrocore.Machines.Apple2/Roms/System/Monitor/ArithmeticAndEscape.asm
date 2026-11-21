@@ -348,8 +348,8 @@ Print:
 ;; Performs a cursor key's command, reads the next key, and goes on in escape mode (<Escape::NextKey>).
 ;;
 ;; The keys I, J, K and M become the commands D, B, A and C (<Escape::CursorKeyCommands>). The IIe reads the next key
-;; with <Escape::ReadKey>, the Autostart Monitor with <ReadKey>. The Apple II Monitor has no escape keys I, J, K and M:
-;; its <Escape::Sequence> hands every key to <Escape::Command>.
+;; with <Escape::ReadEscapeKey>, the Autostart Monitor with <ReadKey>. The Apple II Monitor has no escape keys I, J, K
+;; and M: its <Escape::Sequence> hands every key to <Escape::Command>.
 ;; In: A = I, J, K or M
 ;; Also: ESCNOW (A2RM79, IIETRM85)
 .proc CursorKey
@@ -359,7 +359,7 @@ Print:
 .if MONITOR = MONITOR_IIE
 
     ; The next key; then falls into NextKey.
-    jsr Escape::ReadKey
+    jsr Escape::ReadEscapeKey
 .else
 
     ; The next key; then falls into NextKey.

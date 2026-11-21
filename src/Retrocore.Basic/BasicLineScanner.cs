@@ -550,6 +550,15 @@ internal sealed class BasicLineScanner
                 before.Start,
                 found.End));
         }
+        else if (Business && GluedWord(index, sites) is { } glued)
+        {
+            diagnostics.Add(new(
+                _line,
+                BasicSeverity.Warning,
+                $"BASIC reads {found.Text} as the variable {letters}{suffix}: {glued.TrimEnd('(')} needs a separator, such as a space, before it.",
+                found.Start,
+                found.End));
+        }
         else if (_foreign.Contains(letters) && suffix.Length == 0 && !Bbc)
         {
             diagnostics.Add(new(
@@ -671,6 +680,43 @@ internal sealed class BasicLineScanner
         || (Business && value == '&');
 
     private bool Business => _dialect == BasicDialect.BusinessBasic;
+
+    // The reserved word CRUNCH would take where a Business BASIC name starts, but for the number that runs into it, as
+    // in IF A=1THEN 20: it takes a word only with a separator before it, and a digit is none, so the word is part of
+    // the name. Null when the name follows something else or no word would be taken there. The line's number counts
+    // as a separator, as in 10PRINT.
+    private string? GluedWord(int index, List<BasicSite> sites)
+    {
+        int column = Column(index);
+        if (column == 0 || !(char.IsAsciiDigit(_text[column - 1]) || _text[column - 1] == '.')) { return null; }
+        bool afterLineNumber = sites.Any(site => site.Kind == BasicSiteKind.LineNumber && site.Line == _line && site.End == column);
+        if (afterLineNumber) { return null; }
+
+        // As CRUNCH searches: the first word of either list, in order, that the text spells, with a separator after
+        // it unless it ends in one, as TAB( does, or is EXFN., EXFN%. or FN, which a name follows directly.
+        return _dialect.AllKeywords.FirstOrDefault(word => word.Length > 0
+            && char.IsAsciiLetter(word[0])
+            && Spells(column, word, out int end)
+            && (end >= _text.Length || Separates(_text[end]) || Separates(word[^1]) || word is "EXFN." or "EXFN%." or "FN"));
+    }
+
+    // Whether the line's text spells a word from a column, in either case, as CRUNCH matches it, passing spaces inside
+    // it; end is the column past the word.
+    private bool Spells(int column, string word, out int end)
+    {
+        end = column;
+        foreach (char letter in word)
+        {
+            while (end < _text.Length && _text[end] == ' ') { end++; }
+            if (end >= _text.Length || char.ToUpperInvariant(_text[end]) != letter) { return false; }
+            end++;
+        }
+
+        return true;
+    }
+
+    // CKSEP: anything but a letter, a digit or a period separates Business BASIC's words.
+    private static bool Separates(char character) => !(char.IsAsciiLetterOrDigit(character) || character == '.');
 
     private bool Bbc => _dialect is BbcBasicDialect;
 

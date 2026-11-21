@@ -155,6 +155,34 @@ public sealed class BasicSourceTests
     }
 
     /// <summary>
+    ///  Business BASIC takes a word only with a separator before it, so a number that runs into one makes the word
+    ///  part of a name, which is warned about; a word straight after the line's number is still a word, and a name that
+    ///  would not be the word anyway, such as TAB9 without TAB('s bracket or THENX, is not warned about.
+    /// </summary>
+    [TestMethod]
+    public void BusinessBasicWarnsOfAWordANumberRunsInto()
+    {
+        const string Program = """
+            10 IF A=1THEN 20
+            20 FOR I=1TO 9: X=2.5TIME$
+            30TOTAL=1: Y=3*TOTAL: Z=4 THEN.X
+            40 X=1TAB9: Y=1ABS (2): Z=1THENX
+            """;
+
+        BasicSource source = BasicSource.Analyze(Program, BasicDialect.BusinessBasic);
+        source.Diagnostics.Select(diagnostic => $"{diagnostic.Line}: {diagnostic.Message}").Should().Equal(
+            "0: BASIC reads THEN 20 as the variable THEN20: THEN needs a separator, such as a space, before it.",
+            "1: BASIC reads TO 9 as the variable TO9: TO needs a separator, such as a space, before it.",
+            "1: BASIC reads TIME$ as the variable TIME$: TIME$ needs a separator, such as a space, before it.",
+            "3: BASIC reads ABS as the variable ABS: ABS needs a separator, such as a space, before it.");
+
+        // AppleSoft finds THEN wherever it is spelled, so the same line is a jump there.
+        BasicSource appleSoft = BasicSource.Analyze("10 IF A=1THEN 20\n20 END\n", BasicDialect.AppleSoft);
+        appleSoft.Diagnostics.Should().BeEmpty();
+        Lines(appleSoft).Should().Equal("0:20");
+    }
+
+    /// <summary>
     ///  Integer BASIC has one variable for a name: A and A(3) are one array, and A$ and A$(2,5) one string.
     /// </summary>
     [TestMethod]

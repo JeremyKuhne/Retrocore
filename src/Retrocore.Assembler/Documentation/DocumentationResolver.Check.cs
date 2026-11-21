@@ -368,10 +368,17 @@ public sealed partial class DocumentationResolver
         }
     }
 
-    // Whether two definitions are in different builds: in branches of conditional assembly with different conditions,
-    // as one model's routine and another's are. Each build has only one, so they can share a historical name.
-    private static bool OtherBuild(DocumentationTopic topic, DocumentationTopic other) =>
-        topic.Condition is { } condition && other.Condition is { } otherCondition && condition != otherCondition;
+    // Whether two definitions are in different builds: in opposite branches of conditional assembly, as one model's
+    // routine and another's are (one's condition holds a test the other's negates). Each build has only one of them,
+    // so they can share a historical name. Conditions that could both hold are not different builds.
+    private static bool OtherBuild(DocumentationTopic topic, DocumentationTopic other)
+    {
+        if (topic.Condition is not { } condition || other.Condition is not { } otherCondition) { return false; }
+        string[] terms = condition.Split(" and ");
+        string[] otherTerms = otherCondition.Split(" and ");
+        return terms.Any(term => otherTerms.Contains($"not {term}") || term.StartsWith("not ", StringComparison.Ordinal)
+            && otherTerms.Contains(term[4..]));
+    }
 
     private static string LastName(string name)
     {

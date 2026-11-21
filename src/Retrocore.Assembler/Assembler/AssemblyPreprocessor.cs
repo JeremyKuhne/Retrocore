@@ -653,7 +653,7 @@ internal sealed partial class AssemblyPreprocessor
 
         // As in ca65, the first definition of an ordinary symbol starts a cheap-local context.
         if (_defined.Add(name) && !cheap) { _constantCheap = name; }
-        if (!cheap) { RecordHistoricalNames(node, name); }
+        string? snapshot = cheap ? null : RecordHistoricalNames(node, name);
         if (node.Kind is not (AssemblyStatementKind.Constant or AssemblyStatementKind.Variable))
         {
             _constants.Unset(name);
@@ -681,6 +681,9 @@ internal sealed partial class AssemblyPreprocessor
             else if (evaluator.TryEvaluate(out long value) && !evaluator.ReadsAddress)
             {
                 _constants.SetValue(name, value);
+
+                // A .set variable's old name keeps the value it had here, as the assembler's alias does.
+                if (snapshot is not null) { _constants.SetValue(snapshot, value); }
             }
             else
             {

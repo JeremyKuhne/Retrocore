@@ -252,6 +252,52 @@ public sealed class HistoricalNameTests
     }
 
     /// <summary>
+    ///  A <c>.set</c> variable's old name keeps the value documented, in conditionals as in code, after the variable
+    ///  is set again.
+    /// </summary>
+    [TestMethod]
+    public void OldNamesOfVariablesKeepTheirValue()
+    {
+        AssemblyResult result = Assemble("""
+            ;; The first width.
+            ;; Also: OLD (TEST)
+            Width .set 1
+            Width .set 2
+            .if OLD = 1
+                lda #OLD
+            .endif
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+        result.Sections[0].Bytes.Span[..2].ToArray().Should().Equal(0xA9, 1);
+    }
+
+    /// <summary>
+    ///  Definitions under conditions that could both hold are not different builds: sharing an old name is reported.
+    /// </summary>
+    [TestMethod]
+    public void IndependentConditionsDoNotShareOldNames()
+    {
+        DocumentationSet set = Set("""
+            FIRST = 1
+            SECOND = 1
+            .if FIRST
+            ;; Prints a character.
+            ;; Also: COUT (TEST)
+            FirstOut = $FDED
+            .endif
+            .if SECOND
+            ;; Prints a character.
+            ;; Also: COUT (TEST)
+            SecondOut = $FDF0
+            .endif
+            """);
+
+        DocumentationResolver resolver = new(set) { Bibliography = DocumentationBibliography.Parse(Bibliography) };
+        resolver.Check().Select(diagnostic => diagnostic.Message).Should().Contain(message => message.Contains("has the historical name COUT too"));
+    }
+
+    /// <summary>
     ///  An <c>Also:</c> on a <c>.scope</c> gives it no address: the old name stays unresolved.
     /// </summary>
     [TestMethod]

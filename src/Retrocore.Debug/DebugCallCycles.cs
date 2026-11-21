@@ -51,8 +51,13 @@ internal sealed class DebugCallCycles
             _pending.RemoveAt(_pending.Count - 1);
             if (stack == callStack && pc == returnAddress)
             {
-                _last[caller] = cycles - start;
-                changed = true;
+                ulong duration = cycles - start;
+                if (!_last.TryGetValue(caller, out ulong previous) || previous != duration)
+                {
+                    _last[caller] = duration;
+                    changed = true;
+                }
+
                 break;
             }
         }

@@ -2125,9 +2125,10 @@ internal sealed partial class DebugSession
     {
         if (_cycleSource is { } source && (_pendingLineCycles != 0 || _lineEntered))
         {
-            ref ulong count = ref CollectionsMarshal.GetValueRefOrAddDefault(_lineCycles, source, out _);
-            count = _lineEntered ? _pendingLineCycles : count + _pendingLineCycles;
-            _sourceCyclesDirty = true;
+            ref ulong count = ref CollectionsMarshal.GetValueRefOrAddDefault(_lineCycles, source, out bool exists);
+            ulong updated = _lineEntered ? _pendingLineCycles : count + _pendingLineCycles;
+            _sourceCyclesDirty |= !exists || count != updated;
+            count = updated;
         }
 
         _pendingLineCycles = 0;

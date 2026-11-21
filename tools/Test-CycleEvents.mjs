@@ -49,3 +49,74 @@ try {
     dap.close();
     unlinkSync(program);
 }
+
+const source = join(root, "artifacts", `cycle-events-${process.pid}.asm`);
+const sourceLines = [
+    ".cpu Z80", ".org $7000", "start:", "    CALL sub", "    JR start",
+    ";; Executes one of two equal-time branches, with an optional longer return.", "sub:",
+    "    LD A,[choice]", "    OR A", "    JP Z,zero", "    INC BC", "    JP finish",
+    "zero:", "    INC DE", "    JP finish", "finish:", "    LD A,[choice]", "    CP 2",
+    "    RET NZ", "    NOP", "    RET", "choice:", "    .byte 0", ""
+];
+writeFileSync(source, sourceLines.join("\n"), { flag: "wx" });
+const callLine = sourceLines.indexOf("    CALL sub") + 1;
+const alternateLine = sourceLines.indexOf("    INC BC") + 1;
+const mapped = startDap(root);
+const mappedTimeout = setTimeout(() => mapped.fail(new Error("Mapped cycle event test timed out.")), 30000);
+try {
+    await mapped.request("initialize", { adapterID: "retrocore" });
+    await mapped.request("launch", {
+        machine: "trs80-model1", sdkRoms: join(root, "src", "Retrocore.Machines.Trs80", "Roms"),
+        source, stopOnEntry: true, speed: "max"
+    });
+    const entry = mapped.event("stopped");
+    await mapped.request("configurationDone");
+    assert.equal((await entry).reason, "entry");
+    await mapped.request("retro/cycles", { changesOnly: true });
+    await mapped.request("continue", { threadId: 1 });
+    await new Promise(resolve => setTimeout(resolve, 500));
+    mapped.events.length = 0;
+    await new Promise(resolve => setTimeout(resolve, 700));
+    const frames = mapped.events.filter(event => event.event === "retro/frame").length;
+    const updates = mapped.events.filter(event => event.event === "retro/cycles");
+    const current = await mapped.request("retro/cycles");
+    const call = current.calls.find(row => row.path === source && row.line === callLine);
+    assert.ok(current.lines.length >= 5 && call?.cycles > 0, "the loop records its source lines and call");
+    assert.ok(frames >= 8, "the running loop produces frames");
+    assert.ok(updates.length < frames / 2, `unchanged cycle counts suppress most updates (${updates.length} updates, ${frames} frames)`);
+
+    const pause = async () => {
+        const stopped = mapped.event("stopped");
+        await mapped.request("pause", { threadId: 1 });
+        await stopped;
+    };
+    const choose = value => mapped.request("writeMemory", {
+        memoryReference: "choice", data: Buffer.from([value]).toString("base64")
+    });
+    await pause();
+    await choose(1);
+    mapped.events.length = 0;
+    await mapped.request("continue", { threadId: 1 });
+    await new Promise(resolve => setTimeout(resolve, 400));
+    const changed = await mapped.request("retro/cycles");
+    assert.equal(changed.calls.find(row => row.path === source && row.line === callLine)?.cycles, call.cycles);
+    assert.ok(mapped.events.some(event => event.event === "retro/cycles"
+        && event.body.lines.some(row => row.path === source && row.line === alternateLine && row.cycles === 6)
+        && event.body.calls.some(row => row.path === source && row.line === callLine && row.cycles === call.cycles)),
+    "a new line count sends an update even when the call count is unchanged");
+
+    await pause();
+    await choose(2);
+    mapped.events.length = 0;
+    await mapped.request("continue", { threadId: 1 });
+    await new Promise(resolve => setTimeout(resolve, 400));
+    assert.ok(mapped.events.some(event => event.event === "retro/cycles"
+        && event.body.calls.some(row => row.path === source && row.line === callLine && row.cycles > call.cycles)),
+    "a changed call count sends an update");
+    await mapped.request("disconnect");
+    console.log(`Mapped cycle event integration passed (${updates.length} updates / ${frames} frames).`);
+} finally {
+    clearTimeout(mappedTimeout);
+    mapped.close();
+    unlinkSync(source);
+}

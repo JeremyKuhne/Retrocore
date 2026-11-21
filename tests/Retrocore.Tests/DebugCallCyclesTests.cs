@@ -50,6 +50,24 @@ public class DebugCallCyclesTests
         calls.Last[Line(0x2004)].Should().Be(12UL);
     }
 
+    /// <summary>
+    ///  Only a new or changed completed call reports a changed cycle count.
+    /// </summary>
+    [TestMethod]
+    public void RepeatedCallsReportOnlyChangedCounts()
+    {
+        DebugCallCycles calls = new();
+        (string Path, int Line) caller = Line(0x2000);
+
+        calls.Observe(0x2000, 3, 0xFD, 100, caller).Should().BeFalse();
+        calls.Observe(0x2003, callLength: null, 0xFD, 100, line: null).Should().BeTrue();
+        calls.Observe(0x2000, 3, 0xFD, 200, caller).Should().BeFalse();
+        calls.Observe(0x2003, callLength: null, 0xFD, 200, line: null).Should().BeFalse();
+        calls.Observe(0x2000, 3, 0xFD, 300, caller).Should().BeFalse();
+        calls.Observe(0x2003, callLength: null, 0xFD, 312, line: null).Should().BeTrue();
+        calls.Last[caller].Should().Be(12UL);
+    }
+
     private static (string Path, int Line) Line(ushort address) => ("test", address);
 
     private static DebugCallCycles Run(Apple2Machine machine, int instructions)

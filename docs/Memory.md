@@ -319,8 +319,11 @@ The debugger keeps the disjoint ranges each view has read and a hash of their by
 editor-specific `subscriber` with each `retro/memory/read`, and unsubscribes it when the editor closes. Reads without
 a subscriber, including standard `readMemory` reads, are tracked separately. The `initialize` capability
 `supportsRetrocoreMemorySubscriptions` advertises this support. Unscoped DAP reader references use a 32-entry
-least-recently used limit; live editor subscriptions remain until their editor closes. After each stop, every eighth running
-frame and each `writeMemory`, the debugger sends a `memory` event for each reference whose tracked bytes have
+least-recently used limit; live editor subscriptions remain until their editor closes. Each editor's ranges include
+all the pages it has cached, including pages scrolled out of view, so changes to those pages still invalidate the
+cache. Scrolling through the whole space or searching all of RAM can therefore leave the whole space tracked and
+hashed until the editor closes. After each stop, every eighth running frame and each `writeMemory`, the debugger
+sends a `memory` event for each reference whose tracked bytes have
 changed, with offset 0 and the end of the changed view's last range as its count, as VS Code requires. The view
 that wrote is not told. A `writeMemory` also
 sends `invalidated` for the variables. A `retro/hardware` change or `retro/reset` while stopped sends the same

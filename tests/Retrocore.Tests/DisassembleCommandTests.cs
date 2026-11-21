@@ -75,8 +75,8 @@ public sealed class DisassembleCommandTests
 
             DisassembleCommand.Run([input, output, "--origin", "$0800", "--hints", hints, "--sdk-roms", s_inputs]).Should().Be(0);
             string source = File.ReadAllText(output);
-            source.Should().Contain("; From Monitor.asm.").And.Contain("HOME = $FC58").And.Contain("COUT = $FDED");
-            source.Should().Contain("JSR HOME").And.Contain("JSR COUT").And.Contain("PrintLoop:").And.Contain("LDA Message,X");
+            source.Should().Contain("; From Monitor.asm.").And.Contain("Home = $FC58").And.Contain("CharacterOut = $FDED");
+            source.Should().Contain("JSR Home").And.Contain("JSR CharacterOut").And.Contain("PrintLoop:").And.Contain("LDA Message,X");
             source.Should().Contain("; Prints the message.");
         }
         finally

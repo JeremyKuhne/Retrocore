@@ -78,7 +78,9 @@ The scripts need `gh`. Where it is not available, do the same steps with the Git
   and some tools; accept either.
 - **`review-state.sh`:** read the PR's head commit; list every page of its reviews and find Copilot's newest, noting
   whether its commit is the head; read that review's body; list every page of unresolved review threads, each with
-  all its comments, and treat a thread as unanswered unless its latest comment is yours; list the head's check runs.
+  its comments (the script reads a thread's first 100 and reports when there are more: then page the thread's
+  comments, or open it, before judging it), and treat a thread as unanswered unless its latest comment is yours;
+  list the head's check runs.
 - **`resolve-answered.sh`:** resolve an unresolved thread only if its latest comment is yours, by the thread's node ID.
 - **Re-requesting:** request a Copilot review on the PR.
 - **`wait-review.sh`:** wait for a review whose author is Copilot and whose commit is the head you pushed. Where the

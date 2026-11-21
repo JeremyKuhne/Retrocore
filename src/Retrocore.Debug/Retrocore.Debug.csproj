@@ -36,6 +36,8 @@
     <None Include="..\Retrocore.Machines.Apple2\Roms\AppleSoft\*" Link="Sdk\Roms\AppleSoft\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\Retrocore.Machines.Apple2\Roms\System\*.asm" Link="Sdk\Roms\System\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\Retrocore.Machines.Apple2\Roms\System\Monitor\*.asm" Link="Sdk\Roms\System\Monitor\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\Retrocore.Machines.Apple2\Roms\System\Firmware.Original\*.asm" Link="Sdk\Roms\System\Firmware.Original\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\Retrocore.Machines.Apple2\Roms\System\Firmware.Enhanced\*.asm" Link="Sdk\Roms\System\Firmware.Enhanced\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\Retrocore.Machines.Apple2\Roms\DiskII\*" Link="Sdk\Roms\DiskII\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\Retrocore.Machines.Apple2\Roms\Dos\*.asm" Link="Sdk\Roms\Dos\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\Retrocore.Machines.Apple2\Roms\IntegerBasic\*.asm" Link="Sdk\Roms\IntegerBasic\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />

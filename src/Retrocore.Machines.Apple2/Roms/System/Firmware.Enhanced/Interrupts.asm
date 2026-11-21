@@ -1,424 +1,753 @@
-;; IRQ and BRK entry, reached from the Monitor's IRQ ($FA44). Sets SETINTCXROM (code continues at
-;; $C400 in internal ROM), reserves three stack bytes, saves X and Y, and builds a state byte while
-;; switching to a known state: bit 0 internal $CX ROM was on; bit 6 80STORE and PAGE2 were on (sets
-;; LOWSCR); bit 5 RAMRD aux and bit 4 RAMWRT aux (both set to main); bits 3-1 language card RAM read
-;; ($0C bank 1, $0A bank 2; ROMIN is then selected); bit 7 alternate zero page (saves SP in $0101,
-;; loads the main SP from $0100, SETSTDZP). A BRK (B flag) leaves the state in A5L, restores the
-;; registers and goes to the Monitor's $FA47; an IRQ goes to IRQCALL.
-;; In: A = the interrupted program's A (the Monitor's IRQ reloads it from A5H)
-;; Uses: A5L, $0100/$0101
-IRQHANDLER:
-    bit RDCXROM                     ; $C3FA
-    sta SETINTCXROM                 ; $C3FD execution continues in internal ROM at $C400
-    cld                             ; $C400
-    sec                             ; $C401
-    bmi IRQHANDLER_1                ; $C402
-    clc                             ; $C404
+; retrocore: style=strict
+;; The Enhanced IIe's internal firmware from $C3FA to $C5FF: the interrupt and BRK handler, which saves the memory
+;; state and switches to main memory and ROM, the code that puts the state back after the user's handler, the line
+;; assembler's operand parser, AppleSoft's SHLOAD, STORE and RECALL helper, and the cassette routines that the
+;; Monitor's header, W and R call.
 
-IRQHANDLER_1:
-    pha                             ; $C405
-    pha                             ; $C406
-    pha                             ; $C407
-    txa                             ; $C408
-    tsx                             ; $C409
-    inx                             ; $C40A
-    inx                             ; $C40B
-    inx                             ; $C40C
-    inx                             ; $C40D
-    pha                             ; $C40E
-    tya                             ; $C40F
-    pha                             ; $C410
-    lda $0100,x                     ; $C411 P pushed by the interrupt: B flag selects BRK
-    and #$10                        ; $C414
-    tay                             ; $C416
-    lda RD80STORE                   ; $C417
-    and RDPAGE2                     ; $C41A
-    and #$80                        ; $C41D
-    beq IRQHANDLER_2                ; $C41F
-    lda #$20                        ; $C421
-    sta LOWSCR                      ; $C423
+; The Monitor's and AppleSoft's entries this code jumps to, not in MonitorEntries.asm.
 
-IRQHANDLER_2:
-    rol a                           ; $C426
-    bit RDRAMRD                     ; $C427
-    bpl IRQHANDLER_3                ; $C42A
-    sta RDMAINRAM                   ; $C42C
-    ora #$20                        ; $C42F
+;; Inherit: <Monitor:BreakFromFirmware>
+BreakFromFirmware = $FA47
 
-IRQHANDLER_3:
-    bit RDRAMWRT                    ; $C431
-    bpl IRQHANDLER_4                ; $C434
-    sta WRMAINRAM                   ; $C436
-    ora #$10                        ; $C439
+;; Inherit: <Monitor:CallUserIrq>
+CallUserIrq = $FC74
 
-IRQHANDLER_4:
-    bit RDLCRAM                     ; $C43B
-    bpl IRQHANDLER_6                ; $C43E
-    ora #$0C                        ; $C440
-    bit RDLCBNK2                    ; $C442
-    bpl IRQHANDLER_5                ; $C445
-    eor #$06                        ; $C447
+;; AppleSoft's routine that points <HIGHDS> at an array's data, past its header: two bytes for each dimension, A of
+;; them, and five more.
+;; In: A = the array's dimensions, LOWTR = the array
+;; See: <AppleSoft:FMAPT1>
+FMAPT1 = $E0EF
 
-IRQHANDLER_5:
-    sta ROMIN                       ; $C449
+; The stack.
 
-IRQHANDLER_6:
-    bit RDALTZP                     ; $C44C
-    bpl IRQHANDLER_7                ; $C44F
-    tsx                             ; $C451
-    stx $0101                       ; $C452
-    ldx $0100                       ; $C455
-    txs                             ; $C458
-    sta SETSTDZP                    ; $C459
-    ora #$80                        ; $C45C
+;; The 6502's stack page.
+Stack = $0100
 
-IRQHANDLER_7:
-    dey                             ; $C45E
-    bmi IRQCALL                     ; $C45F
-    sta A5L                         ; $C461
-    pla                             ; $C463
-    tay                             ; $C464
-    pla                             ; $C465
-    tax                             ; $C466
-    pla                             ; $C467
-    pla                             ; $C468
-    pla                             ; $C469
-    jmp $FA47                       ; $C46A
+;; While a program runs with the auxiliary zero page and stack, the auxiliary stack page's first byte holds main's
+;; stack pointer: the IIe's convention, which <HandleInterrupt> follows.
+;; See: <AuxStackPointer>
+MainStackPointer = $0100
 
-;; IRQ path: pushes the state byte and MSLOT, then a fake interrupt frame returning to $C3F4, and
-;; goes to the Monitor's $FC74 (SETSLOTCXROM, jmp (IRQLOC)). The handler's RTI lands at $C3F4, which
-;; selects ROMIN and goes to the Monitor's $FC7A to restore MSLOT's $C800 ROM and come back to
-;; IRQRESTORE.
-IRQCALL:
-    pha                             ; $C46D
-    lda MSLOT                       ; $C46E
-    pha                             ; $C471
-    lda #>IRQRETURN                 ; $C472
-    pha                             ; $C474
-    lda #<IRQRETURN                 ; $C475
-    pha                             ; $C477
-    php                             ; $C478
-    jmp $FC74                       ; $C479
+;; Where <HandleInterrupt> keeps the auxiliary stack pointer, in the auxiliary stack page, while it runs on main's.
+;; See: <MainStackPointer>
+AuxStackPointer = $0101
 
-;; Undoes IRQHANDLER's state byte: restores the alternate zero page and its SP, touches the soft
-;; switches in IRQSWITCHES for each set bit (page 2, RAMRD, RAMWRT, language card bank and RAM), then
-;; writes a four-byte routine (sta $C006 or $C007; rti) just below the stack pointer, makes the
-;; reserved stack bytes an address that returns into it, pulls X and A, and returns: the stub
-;; restores the $CX ROM setting and does the RTI.
-;; Uses: $0101 (the stack page below SP)
-IRQRESTORE:
-    lda ROMIN                       ; $C47C
-    pla                             ; $C47F
-    bpl IRQRESTORE_1                ; $C480
-    sta SETALTZP                    ; $C482
-    ldx $0101                       ; $C485
-    txs                             ; $C488
+; The status register and the soft switches.
 
-IRQRESTORE_1:
-    ldy #$06                        ; $C489
+;; The status register's break bit, as an interrupt pushes it: set for a BRK, clear for an IRQ.
+BREAK_FLAG = $10
 
-IRQRESTORE_2:
-    bpl IRQRESTORE_4                ; $C48B
+;; Bit 7 of a soft switch's state read: set while the switch is on.
+SWITCH_ON = $80
 
-;; Part of IRQRESTORE's bit loop: touches the soft switch for a set state bit (ldx IRQSWITCHES,y; inc KBD,x).
-IRQRESTORE_3:
-    ldx IRQSWITCHES,y               ; $C48D
-    inc KBD,x                       ; $C490
+; The memory state <HandleInterrupt> builds and <RestoreInterruptedState> puts back, a bit for each switch it changed.
 
-;; Part of IRQRESTORE's bit loop, not a separate routine.
-IRQRESTORE_4:
-    dey                             ; $C493
-    bmi IRQRESTORE_5                ; $C494
-    asl a                           ; $C496
-    bne IRQRESTORE_2                ; $C497
+;; The internal $C100-$CFFF ROM was in (INTCXROM on).
+STATE_INTERNAL_CX_ROM = $01
 
-IRQRESTORE_5:
-    asl a                           ; $C499
-    asl a                           ; $C49A
-    pla                             ; $C49B
-    tay                             ; $C49C
-    tsx                             ; $C49D
-    lda #$40                        ; $C49E builds "sta $C00x / rti" below the stack: rti
-    pha                             ; $C4A0
-    lda #>SETSLOTCXROM              ; $C4A1
-    pha                             ; $C4A3
-    lda #<SETSLOTCXROM              ; $C4A4 SETSLOTCXROM, or SETINTCXROM with carry set
-    adc #$00                        ; $C4A6
-    pha                             ; $C4A8
-    lda #$8D                        ; $C4A9 sta absolute
-    pha                             ; $C4AB
-    txs                             ; $C4AC
-    txa                             ; $C4AD
-    adc #$03                        ; $C4AE
-    tax                             ; $C4B0
-    sec                             ; $C4B1
-    sbc #$07                        ; $C4B2
-    sta $0100,x                     ; $C4B4
-    inx                             ; $C4B7
-    lda #$01                        ; $C4B8
-    sta $0100,x                     ; $C4BA
-    pla                             ; $C4BD
-    tax                             ; $C4BE
-    pla                             ; $C4BF
-    rts                             ; $C4C0
+;; Language card RAM bank 2 was read: bits 3 and 1, which touch <LanguageCardBank1ReadWrite>, then
+;; <LanguageCardBank2ReadWrite>.
+STATE_LANGUAGE_CARD_BANK2 = $0A
 
-;; Soft switch offsets from $C000 that IRQRESTORE touches (inc KBD,x), indexed by state bit - 1: bits
-;; 1-3 the language card (bank 2 RAM sets bits 3 and 1, bank 1 bits 3 and 2), bit 4 RAMWRT aux, bit 5
-;; RAMRD aux, bit 6 page 2. The last entry is unused.
-IRQSWITCHES:
-    .byte <LCBANK2, <LCBANK1, <LCBANK1, <WRCARDRAM, <RDCARDRAM, <HISCR, $00 ; $C4C1
+;; Language card RAM bank 1 was read: bits 3 and 2, which touch <LanguageCardBank1ReadWrite> twice.
+STATE_LANGUAGE_CARD_BANK1 = $0C
 
-;; Mini-assembler operand parser: for X down to 0 compares the input (via the Monitor's $FF13) with
-;; the CHAR1/CHAR2 address-mode characters and shifts a match bit into A5L; at X = 3 reads a number
-;; with GETNUM into A2 and sets YSAV1 (one higher when A2H is nonzero).
-;; In: X = 5 (from MINIPARSE), Y = input index
-;; Out: A5L = mode bits, A2 = operand, YSAV1, Y advanced
-;; Uses: YSAV, A1H
-MINIOPND:
-    jsr SKIPBLNK                    ; $C4C8
-    sty YSAV                        ; $C4CB
-    cmp CHAR1,x                     ; $C4CD
-    bne MINIOPND_1                  ; $C4D0
-    jsr SKIPBLNK                    ; $C4D2
-    cmp CHAR2,x                     ; $C4D5
-    beq MINIOPND_3                  ; $C4D8
-    lda CHAR2,x                     ; $C4DA
-    beq MINIOPND_2                  ; $C4DD
-    cmp #'$'                        ; $C4DF
-    beq MINIOPND_2                  ; $C4E1
-    ldy YSAV                        ; $C4E3
+;; Writes went to auxiliary memory (RAMWRT on).
+STATE_AUX_WRITE = $10
 
-MINIOPND_1:
-    clc                             ; $C4E5
+;; Reads came from auxiliary memory (RAMRD on).
+STATE_AUX_READ = $20
 
-MINIOPND_2:
-    dey                             ; $C4E6
+;; 80STORE and PAGE2 were both on, so the auxiliary text page was mapped in.
+STATE_PAGE2 = $40
 
-MINIOPND_3:
-    rol A5L                         ; $C4E7
-    cpx #$03                        ; $C4E9
-    bne MINIOPND_5                  ; $C4EB
-    jsr GETNUM                      ; $C4ED
-    lda A2H                         ; $C4F0
-    beq MINIOPND_4                  ; $C4F2
-    inx                             ; $C4F4
+;; The auxiliary zero page and stack were in (ALTZP on).
+STATE_AUX_ZERO_PAGE = $80
 
-MINIOPND_4:
-    stx YSAV1                       ; $C4F5
-    ldx #$03                        ; $C4F7
-    dey                             ; $C4F9
+;; The state bits that each name a switch in <InterruptSwitches>: 6 down to 1.
+STATE_SWITCH_BITS = 6
 
-MINIOPND_5:
-    stx A1H                         ; $C4FA
-    dex                             ; $C4FC
-    bpl MINIOPND                    ; $C4FD
-    rts                             ; $C4FF
+; The code <RestoreInterruptedState> builds below the stack: sta to a $CX ROM switch, then rti.
 
-;; AppleSoft cassette helper (from AppleSoft's $F777 with internal ROM switched in).
-;; Carry set (SHLOAD): reads the two-byte length into LINNUM with READTAPE, then if the table fits
-;; below HIMEM (MEMSIZ) and above STREND continues at TAPESHLOAD; otherwise returns carry set
-;; (AppleSoft reports out of memory).
-;; Carry clear (STORE/RECALL): continues at TAPEARRAY.
-;; Out:   carry = clear on success
-BASTAPE:
-    bcc TAPEARRAY                   ; $C500
-    lda #$00                        ; $C502
-    sta A1H                         ; $C504
-    sta A2H                         ; $C506
-    ldy #LINNUM                     ; $C508
-    sty A1L                         ; $C50A
-    iny                             ; $C50C
-    sty A2L                         ; $C50D
-    jsr READTAPE                    ; $C50F
-    clc                             ; $C512
-    lda MEMSIZ                      ; $C513
-    tax                             ; $C515
-    dex                             ; $C516
-    stx A2L                         ; $C517
-    sbc LINNUM                      ; $C519
-    pha                             ; $C51B
-    lda MEMSIZ+1                    ; $C51C
-    tay                             ; $C51E
-    inx                             ; $C51F
-    bne BASTAPE_1                   ; $C520
-    dey                             ; $C522
+;; The opcode of rti.
+OPCODE_RTI = $40
 
-BASTAPE_1:
-    sty A2H                         ; $C523
-    sbc LINNUM+1                    ; $C525
-    cmp STREND+1                    ; $C527
-    bcc BASTAPE_2                   ; $C529
-    bne TAPESHLOAD                  ; $C52B
+;; The opcode of sta with an absolute address.
+OPCODE_STA_ABSOLUTE = $8D
 
-BASTAPE_2:
-    sec                             ; $C52D
-    rts                             ; $C52E
+;; The code's length.
+RETURN_CODE_SIZE = 4
 
-;; SHLOAD: sets HIMEM, FRETOP, the shape table pointer (SHAPEPTR) and A1 to HIMEM - length,
-;; then reads the table from tape (READTAPE's entry at $C5D6 with a short header).
-TAPESHLOAD:
-    sta MEMSIZ+1                    ; $C52F
-    sta FRETOP+1                    ; $C531
-    sta A1H                         ; $C533
-    sta SHAPEPTR+1                  ; $C535
-    pla                             ; $C537
-    sta SHAPEPTR                    ; $C538
-    sta MEMSIZ                      ; $C53A
-    sta FRETOP                      ; $C53C
-    sta A1L                         ; $C53E
-    jsr RDTAPE2BIT                  ; $C540
-    lda #$03                        ; $C543
-    jsr READTAPE_1                  ; $C545
-    clc                             ; $C548
-    rts                             ; $C549
+;; From the stack pointer, once Y is pulled, to the reserved bytes that become the return address into the code: past
+;; the saved X and A.
+RETURN_ADDRESS_OFFSET = 3
 
-;; STORE/RECALL: A2 = LOWTR + LINNUM, calls AppleSoft's $E0EF with the array header's byte 4, and
-;; copies HIGHDS into A1 for the Monitor's WRITE or READ that follows.
-TAPEARRAY:
-    lda LOWTR                       ; $C54A
-    adc LINNUM                      ; $C54C
-    sta A2L                         ; $C54E
-    lda LOWTR+1                     ; $C550
-    adc LINNUM+1                    ; $C552
-    sta A2H                         ; $C554
-    ldy #$04                        ; $C556
-    lda (LOWTR),y                   ; $C558
-    jsr $E0EF                       ; $C55A
-    lda HIGHDS                      ; $C55D
-    sta A1L                         ; $C55F
-    lda HIGHDS+1                    ; $C561
-    sta A1H                         ; $C563
-    clc                             ; $C565
-    rts                             ; $C566
+; The line assembler.
 
-;; Cassette header tone (the Monitor's HEADR calls it): toggles TAPEOUT in timed loops; $C574 writes
-;; one bit (carry selects the length).
-;; In: A = header length, X
-;; Uses: Y, TAPEOUT
-TAPEHEADR:
-    ldy #$4B                        ; $C567
-    jsr TAPEHEADR_2                 ; $C569
-    bne TAPEHEADR                   ; $C56C
-    adc #$FE                        ; $C56E
-    bcs TAPEHEADR                   ; $C570
-    ldy #$21                        ; $C572
+;; The format position at which <LineAssembler::ParseOperand> reads the operand's number: the characters of positions
+;; 5 down to this one come before it, those of 2 down to 0 after it.
+OPERAND_NUMBER_POSITION = 3
 
-TAPEHEADR_1:
-    jsr TAPEHEADR_2                 ; $C574 write one bit (carry = bit)
-    iny                             ; $C577
-    iny                             ; $C578
+; AppleSoft's arrays and shape tables on cassette.
 
-TAPEHEADR_2:
-    dey                             ; $C579
-    bne TAPEHEADR_2                 ; $C57A
-    bcc TAPEHEADR_4                 ; $C57C
-    ldy #$32                        ; $C57E
+;; The offset in an AppleSoft array's header of its number of dimensions.
+ARRAY_DIMENSIONS = 4
 
-TAPEHEADR_3:
-    dey                             ; $C580
-    bne TAPEHEADR_3                 ; $C581
+;; How long SHLOAD lets the header play, as a header length, once it hears the tape.
+SHAPE_HEADER_DELAY = 3
 
-TAPEHEADR_4:
-    ldy TAPEOUT                     ; $C583
-    ldy #$2C                        ; $C586
-    dex                             ; $C588
-    rts                             ; $C589
+; Cassette timing: delay counts, each a loop of 5 cycles, as the Monitor's own cassette code has them.
 
-;; Reads 8 bits from tape into A, one RDTAPE2BIT per bit.
-;; Out: A = byte
-RDTAPEBYTE:
-    ldx #$08                        ; $C58A
+;; <WriteCassetteHeader>'s count for a half cycle of the header tone. The carry is set while it is written, which adds
+;; <ONE_DELAY>, so the tone is lower than a 1 bit's.
+HEADER_DELAY = $4B
 
-RDTAPEBYTE_1:
-    pha                             ; $C58C
-    jsr RDTAPE2BIT                  ; $C58D
-    pla                             ; $C590
-    rol a                           ; $C591
-    ldy #$3A                        ; $C592
-    dex                             ; $C594
-    bne RDTAPEBYTE_1                ; $C595
-    rts                             ; $C597
+;; The count for the first half cycle of the sync bit, shorter than a 0 bit's.
+SYNC_DELAY = $21
 
-;; Waits for two TAPEIN level changes; $C59B waits for one. LENGTH holds the last level; Y counts down
-;; during the wait.
-;; Out:   carry = the bit, from cpy #$80 on the elapsed time
-;; Uses: LENGTH, Y
-RDTAPE2BIT:
-    jsr RDTAPE2BIT_1                ; $C598
+;; The count a 1 bit's half cycle adds to a 0 bit's.
+ONE_DELAY = $32
 
-RDTAPE2BIT_1:
-    dey                             ; $C59B one level change
-    lda TAPEIN                      ; $C59C
-    eor LENGTH                      ; $C59F
-    bpl RDTAPE2BIT_1                ; $C5A1
-    eor LENGTH                      ; $C5A3
-    sta LENGTH                      ; $C5A5
-    cpy #$80                        ; $C5A7
-    rts                             ; $C5A9
+;; The count <WriteCassetteHeader>'s half cycle leaves in Y for the next one; callers adjust it for the time their own
+;; code takes.
+NEXT_HALF_CYCLE_DELAY = $2C
 
-;; Cassette write (the Monitor's WRITE): header, then A1..A2 a byte at a time with a running exclusive
-;; or, then that checksum; $C5C8 writes the byte in A.
-;; In: A1/A2, A = header length
-;; Out:   zero = set at the end
-WRITETAPE:
-    jsr TAPEHEADR                   ; $C5AA
-    ldy #$27                        ; $C5AD
+;; The count <ReadCassetteByte> starts each of its bits after the first at.
+READ_BIT_START = $3A
 
-WRITETAPE_1:
-    ldx #$00                        ; $C5AF
-    eor (A1L,x)                     ; $C5B1
-    pha                             ; $C5B3
-    lda (A1L,x)                     ; $C5B4
-    jsr WRITETAPE_2                 ; $C5B6
-    jsr NXTA1                       ; $C5B9
-    ldy #$1D                        ; $C5BC
-    pla                             ; $C5BE
-    bcc WRITETAPE_1                 ; $C5BF
-    ldy #$22                        ; $C5C1
-    jsr WRITETAPE_2                 ; $C5C3
-    beq WRITETAPE_4                 ; $C5C6
+;; The count at which <ReadCassetteBit::Transition> tells a 1 from a 0: a bit long enough to count Y down past 0
+;; leaves it at this or above.
+READ_ONE_THRESHOLD = $80
 
-WRITETAPE_2:
-    ldx #$10                        ; $C5C8 write one byte
+;; How many bits <ReadCassetteByte> reads.
+BITS_PER_BYTE = 8
 
-WRITETAPE_3:
-    asl a                           ; $C5CA
-    jsr TAPEHEADR_1                 ; $C5CB
-    bne WRITETAPE_3                 ; $C5CE
+;; The header tone's length <ReadCassetteData> lets play once it hears the tape: about 3.5 seconds.
+READ_HEADER_DELAY = $16
 
-WRITETAPE_4:
-    rts                             ; $C5D0
+;; The count before the first data byte <WriteCassetteData> writes.
+WRITE_FIRST_COUNT = $27
 
-;; Cassette read (the Monitor's READ): finds the header and sync, reads bytes into A1..A2, then reads
-;; the checksum byte and compares it with the running exclusive or in MASK. $C5D6 starts with a given
-;; header length in A (used by SHLOAD).
-;; In: A1/A2
-;; Out:   zero = set when the checksum matches
-;; Uses: MASK, LENGTH, A1
-READTAPE:
-    jsr RDTAPE2BIT                  ; $C5D1
-    lda #$16                        ; $C5D4
+;; The count before each later data byte.
+WRITE_NEXT_COUNT = $1D
 
-READTAPE_1:
-    jsr TAPEHEADR                   ; $C5D6
-    sta MASK                        ; $C5D9
-    jsr RDTAPE2BIT                  ; $C5DB
+;; The count before the checksum byte.
+WRITE_CHECKSUM_COUNT = $22
 
-READTAPE_2:
-    ldy #$24                        ; $C5DE
-    jsr RDTAPE2BIT_1                ; $C5E0
-    bcs READTAPE_2                  ; $C5E3
-    jsr RDTAPE2BIT_1                ; $C5E5
-    ldy #$3B                        ; $C5E8
+;; The half cycles <WriteCassetteData> writes for a byte: two for each bit, each counting X down once.
+HALF_CYCLES_PER_BYTE = 16
 
-READTAPE_3:
-    jsr RDTAPEBYTE                  ; $C5EA
-    sta (A1L,x)                     ; $C5ED
-    eor MASK                        ; $C5EF
-    sta MASK                        ; $C5F1
-    jsr NXTA1                       ; $C5F3
-    ldy #$35                        ; $C5F6
-    bcc READTAPE_3                  ; $C5F8
-    jsr RDTAPEBYTE                  ; $C5FA
-    cmp MASK                        ; $C5FD
-    rts                             ; $C5FF
+;; The count that tells the sync bit from the header: a half cycle that ends before the bit reader counts Y down past
+;; 0 from here is the sync bit's, and the header's are longer.
+READ_SYNC_COUNT = $24
+
+;; The count before the first data byte <ReadCassetteData> reads.
+READ_FIRST_COUNT = $3B
+
+;; The count before each later byte.
+READ_NEXT_COUNT = $35
+
+;; The IRQ and BRK handler: switches to the internal ROM, main memory and the language card's ROM, keeping what it
+;; changed in a state byte, then hands a BRK to the Monitor and an IRQ to the user's handler.
+;;
+;; At $C3FA, where the 6502's IRQ vector at $FFFE points (<Monitor:IrqVector>); the Monitor's <Monitor:Interrupt> at
+;; $FA40 jumps here too, from $FA44, for code that calls it by address. A card in slot 3 whose ROM is in must have
+;; the first two instructions here, as at <InterruptReturn>; the code goes on at $C400 in the internal ROM.
+;;
+;; It reserves three stack bytes, where <RestoreInterruptedState> later puts A and its return address, and saves X
+;; and Y. The state byte has <STATE_INTERNAL_CX_ROM>, <STATE_PAGE2> (and selects page 1), <STATE_AUX_READ> and
+;; <STATE_AUX_WRITE> (and selects main memory), <STATE_LANGUAGE_CARD_BANK1> or <STATE_LANGUAGE_CARD_BANK2> (and
+;; selects the ROM), and <STATE_AUX_ZERO_PAGE>: then it keeps the auxiliary stack pointer in <AuxStackPointer>, takes
+;; main's from <MainStackPointer> and selects the main zero page and stack.
+;;
+;; A BRK leaves the state byte in <Address5>, pulls the registers back and goes on at the Monitor's
+;; <BreakFromFirmware>. With the auxiliary zero page on, the registers and the BRK's frame are on the auxiliary
+;; stack, but this path pulls them from main's. An IRQ pushes the state byte and <ExpansionRomSlot>, and a frame that
+;; returns to <InterruptReturn>, and goes to the user's handler through the Monitor's <CallUserIrq>. Apple's listing
+;; calls it IRQ, a name left out of Also: because the Monitor's <Monitor:Interrupt> has it.
+;; In: A = the interrupted program's A, the stack as the interrupt left it
+;; Also: IRQHANDLER (UNKN)
+.proc HandleInterrupt
+.assert * = $C3FA, "HandleInterrupt must stay at $C3FA, where the IRQ vector points."
+    bit InternalCxRomState
+    sta InternalCxRomOn
+
+;; The code goes on here in the internal ROM. The carry keeps whether it was in already.
+;; Also: NEWIRQ (IIETRM85)
+InternalRom:
+.assert * = $C400, "HandleInterrupt must go on at $C400, the internal ROM's first byte after slot 3's page."
+    cld
+    sec
+    bmi SaveXY
+    clc
+
+;; Reserves the three bytes and saves X and Y, then takes the break bit from the pushed status into Y.
+;; Also: IRQINTCX (IIETRM85)
+SaveXY:
+    pha
+    pha
+    pha
+    txa
+    tsx
+    inx
+    inx
+    inx
+    inx
+    pha
+    tya
+    pha
+    lda Stack,x
+    and #BREAK_FLAG
+    tay
+
+    ; 80STORE with PAGE2: page 1, and the bit before it is shifted into place.
+    lda Store80State
+    and Page2State
+    and #SWITCH_ON
+    beq AuxRead
+    lda #STATE_PAGE2 >> 1
+    sta Page2Off
+
+;; Shifts in the carry, the internal ROM's bit; then RAMRD: main memory read.
+;; Also: IRQ2 (IIETRM85)
+AuxRead:
+    rol a
+    bit AuxReadState
+    bpl AuxWrite
+    sta AuxReadOff
+    ora #STATE_AUX_READ
+
+;; RAMWRT: main memory written.
+;; Also: IRQ3 (IIETRM85)
+AuxWrite:
+    bit AuxWriteState
+    bpl LanguageCard
+    sta AuxWriteOff
+    ora #STATE_AUX_WRITE
+
+;; The language card's RAM read, and which bank.
+;; Also: IRQ4 (IIETRM85), IRQ5 (IIETRM85)
+LanguageCard:
+    bit LanguageCardRamState
+    bpl AuxZeroPage
+    ora #STATE_LANGUAGE_CARD_BANK1
+    bit LanguageCardBank2State
+    bpl SelectRom
+    eor #STATE_LANGUAGE_CARD_BANK1 ^ STATE_LANGUAGE_CARD_BANK2
+
+;; Selects the ROM for reading. A store leaves the RAM's write enabling as it was (Apple's listing).
+;; Also: IRQ6 (IIETRM85)
+SelectRom:
+    sta LanguageCardRomWriteBank2
+
+;; ALTZP: the main zero page and stack, keeping the auxiliary stack pointer.
+;; Also: IRQ7 (IIETRM85)
+AuxZeroPage:
+    bit AuxZeroPageState
+    bpl BreakOrIrq
+    tsx
+    stx AuxStackPointer
+    ldx MainStackPointer
+    txs
+    sta AuxZeroPageOff
+    ora #STATE_AUX_ZERO_PAGE
+
+;; A BRK: the state in <Address5>, the registers back, and the Monitor's break handling.
+;; Also: IRQ8 (IIETRM85)
+BreakOrIrq:
+    dey
+    bmi CallUser
+    sta Address5
+    pla
+    tay
+    pla
+    tax
+    pla
+    pla
+    pla
+    jmp BreakFromFirmware
+
+;; An IRQ: the state and the slot whose $C800 ROM was in, then a frame for the user's rti, which returns to
+;; <InterruptReturn>.
+;; Also: IRQCALL (UNKN), IRQ9 (IIETRM85)
+CallUser:
+    pha
+    lda ExpansionRomSlot
+    pha
+    lda #>InterruptReturn
+    pha
+    lda #<InterruptReturn
+    pha
+    php
+    jmp CallUserIrq
+.endproc
+
+;; Puts back the memory state <HandleInterrupt> saved, after the user's interrupt handler, and returns from the
+;; interrupt.
+;;
+;; At $C47C, where the Monitor's <SelectInterruptRom> goes on once it has selected the interrupted slot's $C800 ROM
+;; again. It reads <LanguageCardRomWriteBank2> to select the ROM (Apple's listing: it must be a read, so that the
+;; RAM's write enabling stays as it was), then pulls the state byte. For <STATE_AUX_ZERO_PAGE> it selects the
+;; auxiliary zero page and stack and takes the stack pointer from <AuxStackPointer>; for each other set bit from 6 to
+;; 1 it touches the switch <InterruptSwitches> names with an inc, which reads it twice, as the language card's write
+;; enabling needs, and then writes it, so that it works for the switches set by a write too. Last, it builds a sta to
+;; <InternalCxRomOff> or <InternalCxRomOn>, then an rti, just below the stack, makes the reserved bytes a return
+;; address into it, pulls X and A and returns there.
+;; Also: IRQRESTORE (UNKN), IRQFIX (IIETRM85)
+.proc RestoreInterruptedState
+.assert * = $C47C, "RestoreInterruptedState must stay at $C47C."
+    lda LanguageCardRomWriteBank2
+    pla
+    bpl Switches
+
+    ; The auxiliary zero page and its stack.
+    sta AuxZeroPageOn
+    ldx AuxStackPointer
+    txs
+
+;; The switches, from bit 6 down.
+;; Also: IRQDN1 (IIETRM85)
+Switches:
+    ldy #STATE_SWITCH_BITS
+
+;; Touches the switch for a set bit, which is in the negative flag.
+;; Also: IRQDN2 (IIETRM85)
+NextBit:
+    bpl CountBit
+    ldx InterruptSwitches,y
+    inc Keyboard,x
+
+;; The next bit, until all six are done or none is left.
+;; Also: IRQDN3 (IIETRM85)
+CountBit:
+    dey
+    bmi BuildReturn
+    asl a
+    bne NextBit
+
+;; Takes the internal ROM's bit into the carry, pulls Y and builds the code below the stack: sta $C006 or, with the
+;; carry, $C007, then rti.
+;; Also: IRQDN4 (IIETRM85)
+BuildReturn:
+    asl a
+    asl a
+    pla
+    tay
+    tsx
+    lda #OPCODE_RTI
+    pha
+    lda #>InternalCxRomOff
+    pha
+    lda #<InternalCxRomOff
+    adc #0
+    pha
+    lda #OPCODE_STA_ABSOLUTE
+    pha
+    txs
+
+    ; The reserved bytes past X and A: the code's address less one.
+    txa
+    adc #RETURN_ADDRESS_OFFSET
+    tax
+    sec
+    sbc #RETURN_ADDRESS_OFFSET + RETURN_CODE_SIZE
+    sta Stack,x
+    inx
+    lda #>Stack
+    sta Stack,x
+
+    ; X and A back; the return runs the code, whose rti returns from the interrupt.
+    pla
+    tax
+    pla
+    rts
+.endproc
+
+;; The soft switches, as offsets from $C000, that <RestoreInterruptedState> touches for state bits 1 to 6, in that
+;; order: bit 1 <LanguageCardBank2ReadWrite>, bits 2 and 3 <LanguageCardBank1ReadWrite>, bit 4 <AuxWriteOn>, bit 5
+;; <AuxReadOn> and bit 6 <Page2On>. The last byte is not used.
+;; Also: IRQSWITCHES (UNKN), IRQTBLE (IIETRM85)
+InterruptSwitches:
+    .byte <LanguageCardBank2ReadWrite, <LanguageCardBank1ReadWrite, <LanguageCardBank1ReadWrite, <AuxWriteOn
+    .byte <AuxReadOn, <Page2On, $00
+.assert * - InterruptSwitches = STATE_SWITCH_BITS + 1, "A switch for each state bit, then the unused byte."
+
+;; The internals of the Enhanced IIe's mini-assembler, which <AssembleLine> runs for each line the Monitor reads at its
+;; "!" prompt: the line's address and mnemonic, its operand, the search for the opcode, the branch offsets, and
+;; storing the instruction.
+;;
+;; Its first piece, <LineAssembler::ParseOperand>, is at $C4C8, among the interrupt code; the rest is at $CF3A-$CFFE.
+;; Not the Monitor's <Monitor:MiniAssembler>, which holds the entries this code jumps back to.
+.scope LineAssembler
+
+;; The operand's format as the line assembler builds it: <ParseOperand>'s match bits, one for each format position,
+;; which <CheckFormat> combines with <OperandBytes>. <Address5>'s byte.
+Format = Address5
+
+;; The operand's length in bytes, 0 to 2, as <ParseOperand> reads it. <SavedOutputY>'s byte.
+OperandBytes = SavedOutputY
+
+;; Parses an instruction's operand: for each format position from X down to 0, shifts into <Format> whether the
+;; input has that position's characters, and reads the operand's number in between.
+;;
+;; A position matches when the input's next characters, blanks skipped, are its <FormatCharacter1> and
+;; <FormatCharacter2>; a position whose second character is "$" or none matches the first alone. At
+;; <OPERAND_NUMBER_POSITION> it reads the number with the Monitor's <ReadHexNumber> into A2 and sets <OperandBytes>: 0
+;; for none, 1, or 2 when A2's high byte is not 0. <Parse> calls it with X = 5.
+;; In: X = the format position to start at, Y = the index in <InputBuffer>
+;; Out: Format = the match bits, OperandBytes = the operand's length, Address2/Address2High = the number, Y = the index
+;;     after the operand, X = $FF
+;; Uses: CommandPosition, Address1High
+;; Also: MINIOPND (UNKN), AMOD1 (IIETRM85)
+.proc ParseOperand
+    ; The position's first character, then its second.
+    jsr SkipBlanks
+    sty CommandPosition
+    cmp FormatCharacter1,x
+    bne NoMatch
+    jsr SkipBlanks
+    cmp FormatCharacter2,x
+    beq ShiftBit
+
+    ; A "$" or no second character: a match on the first, the second not taken.
+    lda FormatCharacter2,x
+    beq Back
+    cmp #'$'
+    beq Back
+    ldy CommandPosition
+
+;; No match: the input from before the first character again.
+;; Also: AMOD2 (IIETRM85)
+NoMatch:
+    clc
+
+;; Also: AMOD4 (IIETRM85)
+Back:
+    dey
+
+;; Shifts the match into <Format>; at <OPERAND_NUMBER_POSITION>, reads the number.
+;; Also: AMOD3 (IIETRM85)
+ShiftBit:
+    rol Format
+    cpx #OPERAND_NUMBER_POSITION
+    bne NextMode
+    jsr ReadHexNumber
+    lda Address2High
+    beq StoreCount
+    inx
+
+;; Also: AMOD5 (IIETRM85)
+StoreCount:
+    stx OperandBytes
+    ldx #OPERAND_NUMBER_POSITION
+    dey
+
+;; Also: AMOD6 (IIETRM85)
+NextMode:
+    stx Address1High
+    dex
+    bpl ParseOperand
+    rts
+.endproc
+
+.endscope
+
+;; AppleSoft's cassette helper for SHLOAD, STORE and RECALL, which AppleSoft's $F775 (SHLOAD, carry set) and $F777
+;; (STORE and RECALL, carry clear) call with the internal ROM switched in.
+;;
+;; At $C500. For SHLOAD it reads the shape table's two-byte length into <LINNUM> and, when the table fits between
+;; <STREND> and HIMEM (<MEMSIZ>), loads it just below HIMEM (<AppleSoftCassette::ShapeTable>); otherwise it returns
+;; carry set, and AppleSoft reports that memory is full. The fit is checked on the high bytes only: the table must
+;; start in a page above <STREND>'s. For STORE and RECALL it sets A1 and A2 to the array's data
+;; (<AppleSoftCassette::ArrayBlock>), which AppleSoft then writes or reads with the Monitor.
+;; In: carry = set for SHLOAD, clear for STORE and RECALL, LOWTR = the array, LINNUM = its size less one (STORE and
+;;     RECALL)
+;; Out: carry = set when the shape table does not fit
+;; Also: BASTAPE (UNKN)
+.proc AppleSoftCassette
+.assert * = $C500, "AppleSoftCassette must stay at $C500, where AppleSoft calls it."
+    bcc ArrayBlock
+
+    ; SHLOAD: the length, two bytes, into LINNUM.
+    lda #0
+    sta Address1High
+    sta Address2High
+    ldy #LINNUM
+    sty Address1
+    iny
+    sty Address2
+    jsr ReadCassetteData
+
+    ; A2 = HIMEM less one, the table's end; A and the stack = HIMEM less the length, its start.
+    clc
+    lda MEMSIZ
+    tax
+    dex
+    stx Address2
+    sbc LINNUM
+    pha
+    lda MEMSIZ+1
+    tay
+    inx
+    bne StoreEnd
+    dey
+
+    ; A2's high byte; the start's must be above STREND's.
+StoreEnd:
+    sty Address2High
+    sbc LINNUM+1
+    cmp STREND+1
+    bcc OutOfMemory
+    bne ShapeTable
+
+    ; Too long: carry set.
+OutOfMemory:
+    sec
+    rts
+
+;; Lowers HIMEM and <FRETOP> to the table's start, points <SHPTBL> and A1 there, and reads the table from tape.
+;;
+;; The read's checksum is not looked at: it returns carry clear in any case.
+;; In: A = the start's high byte, the stack = its low byte
+;; Also: TAPESHLOAD (UNKN)
+ShapeTable:
+    sta MEMSIZ+1
+    sta FRETOP+1
+    sta Address1High
+    sta SHPTBL+1
+    pla
+    sta SHPTBL
+    sta MEMSIZ
+    sta FRETOP
+    sta Address1
+    jsr ReadCassetteBit
+    lda #SHAPE_HEADER_DELAY
+    jsr ReadCassetteData::WithHeader
+    clc
+    rts
+
+;; STORE and RECALL: A2 = <LOWTR> + <LINNUM>, the array's last byte, and A1 = the start of its data, which
+;; AppleSoft's <FMAPT1> leaves in <HIGHDS>.
+;; In: carry = clear
+;; Also: TAPEARRAY (UNKN)
+ArrayBlock:
+    lda LOWTR
+    adc LINNUM
+    sta Address2
+    lda LOWTR+1
+    adc LINNUM+1
+    sta Address2High
+    ldy #ARRAY_DIMENSIONS
+    lda (LOWTR),y
+    jsr FMAPT1
+    lda HIGHDS
+    sta Address1
+    lda HIGHDS+1
+    sta Address1High
+    clc
+    rts
+.endproc
+
+;; Writes a cassette header tone, then the sync bit.
+;;
+;; At $C567, which the Monitor's <Monitor:Cassette::WriteHeader> calls; <ReadCassetteData> calls it to wait out the
+;; header, since it toggles <CassetteOut> in timed loops. It and its entries are the same as the original IIe
+;; Monitor's.
+;; In: A = the tone's length, about A x 256 half cycles; carry = set (clear makes it 256 fewer)
+;; Entry:
+;;   WriteBit = writes one bit
+;; Also: TAPEHEADR (UNKN)
+.proc WriteCassetteHeader
+.assert * = $C567, "WriteCassetteHeader must stay at $C567."
+    ; Wait counts X down: 256 half cycles a round.
+    ldy #HEADER_DELAY
+    jsr Wait
+    bne WriteCassetteHeader
+
+    ; With the carry set, takes one off A, until it passes 0 and clears the carry.
+    adc #$100 - 2
+    bcs WriteCassetteHeader
+
+    ; The sync bit: a 0 with a shorter first half.
+    ldy #SYNC_DELAY
+
+;; Writes a bit as two half cycles.
+;; In: carry = the bit, Y = the first half cycle's count
+;; Out: Y = <NEXT_HALF_CYCLE_DELAY>, X = two less, zero = X reached 0
+;; Keeps: A, carry
+WriteBit:
+    jsr Wait
+
+    ; The second half: a little longer, for the time this takes.
+    iny
+    iny
+
+    ; Waits a half cycle, longer for a 1, then toggles the output.
+Wait:
+    dey
+    bne Wait
+    bcc Toggle
+
+    ; A 1 takes longer.
+    ldy #ONE_DELAY
+LongHalf:
+    dey
+    bne LongHalf
+
+    ; Toggles the output by reading CassetteOut, and counts the half cycle in X.
+Toggle:
+    ldy CassetteOut
+    ldy #NEXT_HALF_CYCLE_DELAY
+    dex
+    rts
+.endproc
+
+;; Reads a byte from the cassette, high bit first.
+;; In: Y = the first bit's starting count
+;; Out: A = the byte, X = 0
+.proc ReadCassetteByte
+    ldx #BITS_PER_BYTE
+
+    ; Reads a bit and shifts it in.
+NextBit:
+    pha
+    jsr ReadCassetteBit
+    pla
+    rol a
+    ldy #READ_BIT_START
+    dex
+    bne NextBit
+    rts
+.endproc
+
+;; Reads a bit by timing two transitions of the cassette input.
+;;
+;; <ReadCassetteBit::LastLevel> holds the input's last level.
+;; In: Y = the starting count
+;; Out: carry = the bit: set for a 1, whose half cycles count Y down past 0
+;; Keeps: X
+;; Entry:
+;;   Transition = waits for one transition
+;; Also: RDTAPE2BIT (UNKN)
+.proc ReadCassetteBit
+
+;; The tape input's last level, which <Transition> compares the input with: <OperandLength>'s byte.
+LastLevel = OperandLength
+    jsr Transition
+    ; Falls into Transition.
+
+;; Waits for the next transition of the cassette input, counting Y down meanwhile.
+;; In: Y = the count so far
+;; Out: Y = the count, carry = set when it is <READ_ONE_THRESHOLD> or above
+;; Keeps: X
+Transition:
+    ; Until the input's level differs from the last one.
+    dey
+    lda CassetteIn
+    eor LastLevel
+    bpl Transition
+
+    ; The new level is the last one now.
+    eor LastLevel
+    sta LastLevel
+    cpy #READ_ONE_THRESHOLD
+    rts
+.endproc
+
+;; Writes the bytes from A1 to A2 to the cassette after a header tone, then their checksum, the exclusive or of them
+;; all with $FF.
+;;
+;; At $C5AA, which the Monitor's W command (<Monitor:WriteCassette>) calls.
+;; In: A = the header's length, Address1/Address1High = the first address, Address2/Address2High = the last
+;; Out: X = 0, zero = set
+;; Also: WRITETAPE (UNKN)
+.proc WriteCassetteData
+.assert * = $C5AA, "WriteCassetteData must stay at $C5AA."
+    jsr WriteCassetteHeader
+
+    ; WriteCassetteHeader leaves A at $FF, where the checksum starts.
+    ldy #WRITE_FIRST_COUNT
+
+    ; Writes the byte at A1, keeping the checksum on the stack, and steps A1 to the next until it passes A2.
+NextByte:
+    ldx #0
+    eor (Address1,x)
+    pha
+    lda (Address1,x)
+    jsr WriteByte
+    jsr NextInRange
+    ldy #WRITE_NEXT_COUNT
+    pla
+    bcc NextByte
+
+    ; Then the checksum.
+    ldy #WRITE_CHECKSUM_COUNT
+    jsr WriteByte
+    beq Done
+
+;; Writes the 8 bits of A, high bit first.
+;; In: A = the byte, Y = the count for the first bit
+;; Out: X = 0, zero = set
+WriteByte:
+    ldx #HALF_CYCLES_PER_BYTE
+
+    ; Writes one bit, from the carry.
+NextBit:
+    asl a
+    jsr WriteCassetteHeader::WriteBit
+    bne NextBit
+Done:
+    rts
+.endproc
+
+;; Reads the bytes from A1 to A2 from the cassette, then the checksum byte, and compares it with theirs.
+;;
+;; At $C5D1, which the Monitor's R command (<Monitor:ReadCassette>) calls. It waits for the tape's tone, lets the
+;; header play, finds the sync bit and reads the bytes, keeping the exclusive or of them all with $FF in
+;; <ReadCassetteData::Checksum>.
+;; In: Address1/Address1High = the first address, Address2/Address2High = the last
+;; Out: zero = set when the checksum matches, X = 0
+;; Entry:
+;;   WithHeader = lets a header of A's length play, for <AppleSoftCassette::ShapeTable>
+;; Also: READTAPE (UNKN)
+.proc ReadCassetteData
+.assert * = $C5D1, "ReadCassetteData must stay at $C5D1."
+
+;; The checksum of the bytes read: <PlotMask>'s byte.
+Checksum = PlotMask
+    jsr ReadCassetteBit
+    lda #READ_HEADER_DELAY
+
+;; Lets the header play for A, then reads.
+;; In: A = the header's length to wait out
+WithHeader:
+    jsr WriteCassetteHeader
+
+    ; WriteCassetteHeader leaves A at $FF, where the checksum starts.
+    sta Checksum
+    jsr ReadCassetteBit
+
+    ; Waits out the header's half cycles for the shorter one of the sync bit.
+FindSync:
+    ldy #READ_SYNC_COUNT
+    jsr ReadCassetteBit::Transition
+    bcs FindSync
+    jsr ReadCassetteBit::Transition
+    ldy #READ_FIRST_COUNT
+
+    ; Reads a byte into A1, keeping the checksum, and steps A1 to the next until it passes A2.
+NextByte:
+    jsr ReadCassetteByte
+    ; ReadCassetteByte leaves X at 0.
+    sta (Address1,x)
+    eor Checksum
+    sta Checksum
+    jsr NextInRange
+    ldy #READ_NEXT_COUNT
+    bcc NextByte
+
+    ; Then the checksum byte.
+    jsr ReadCassetteByte
+    cmp Checksum
+    rts
+.endproc

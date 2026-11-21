@@ -1,369 +1,593 @@
-;; A fixed entry at the start of the $C800 ROM: jumps to C9PASINIT.
-C8ENTRY:
-    jmp C9PASINIT                   ; $C800
+; retrocore: style=strict
+;; The 80-column firmware's $C800-$C9EF, Enhanced IIe: Pascal 1.0's hooks at $C800, $C84D and $C9AA, starting the
+;; firmware for BASIC, the keyboard wait, BASIC's character input and output through slot 3 (printing, reading keys
+;; with escape mode), the auxiliary RAM test, the letters the arrow keys become, and Pascal's init and read.
 
-;; PR#3 initialization: LCMONCOPY, sets CSW/KSW to $C307/$C305, a full 40-column window (WNDTOP 20
-;; in mixed graphics), $04FB = 1; with auxiliary text memory doubles WNDWDTH and sets 80STORE and
-;; 80VID. Then SETALTCHAR, clears the screen and prints the character that came with the call.
-;; In: $067B = character; Y and X pushed by C3ENTRY
-C3INIT:
-    jsr LCMONCOPY                   ; $C803
-    jsr SETC3HOOKS                  ; $C806
-    jsr SET40COL_4                  ; $C809
-    lda #$01                        ; $C80C
-    sta MODE80                      ; $C80E
-    jsr AUXPRESENT                  ; $C811
-    bne C3INIT_1                    ; $C814
-    asl WNDWDTH                     ; $C816
-    sta SET80STORE                  ; $C818
-    sta SET80VID                    ; $C81B
+; Characters.
 
-C3INIT_1:
-    sta SETALTCHAR                  ; $C81E
-    jsr CLRSCRN80                   ; $C821
-    ldy OURCH                       ; $C824
-    jmp CHARIO80_3                  ; $C827
+;; A character's bits without its high bit: the code a control character or Pascal has.
+ASCII_BITS = %01111111
 
-;; CSW = $C307 (BASICOUT), KSW = $C305 (BASICIN).
-SETC3HOOKS:
-    lda #<BASICOUT                  ; $C82A
-    sta CSWL                        ; $C82C
-    lda #>BASICOUT                  ; $C82E
-    sta CSWH                        ; $C830
+;; A character's high bit, which the screen and the keyboard set on normal text.
+TEXT_HIGH_BIT = %10000000
 
-SETC3HOOKS_1:
-    lda #<BASICIN                   ; $C832
-    sta KSWL                        ; $C834
-    lda #>BASICIN                   ; $C836
-    sta KSWH                        ; $C838
-    rts                             ; $C83A
+; Pascal.
 
-;; Waits for a key while counting RNDL/RNDH, then clears the strobe.
-;; Out: A = key
-;; The bytes after it ($C84D) hold jmp $C350 (Pascal read).
-GETKEYRND:
-    inc RNDL                        ; $C83B
-    bne GETKEYRND_1                 ; $C83D
-    inc RNDH                        ; $C83F
+;; The error <Pascal::Init> returns in X when the IIe has no auxiliary memory.
+PASCAL_NO_DEVICE = 9
 
-GETKEYRND_1:
-    lda KBD                         ; $C841
-    bpl GETKEYRND                   ; $C844
-    sta KBDSTRB                     ; $C846
-    rts                             ; $C849
-    .byte $00, $00, $00             ; $C84A
+;; What <Pascal::Read> returns in X for Pascal 1.0, slot 3's page, where Pascal 1.1 gets 0.
+PASCAL10_READ_X = $C3
 
-;; A fixed entry: jumps to PASREAD (apparently an older Pascal read entry).
-C8PASREAD:
-    jmp PASREAD                     ; $C84D
+; The auxiliary RAM test.
 
-;; Adopts CH into $057B when CH differs from $047B (the value the firmware last stored), copies CV to
-;; $05FB, and resets $057B to 0 if it is not inside the window.
-;; Out: Y = $057B
-SYNCCH:
-    lda CV                          ; $C850
-    sta OURCV                       ; $C852
-    ldy CH                          ; $C855
-    cpy OLDCH                       ; $C857
-    beq SYNCCH_1                    ; $C85A
-    sty OURCH                       ; $C85C
+;; The byte <TestAuxRam> writes to auxiliary memory.
+AUX_RAM_TEST_BYTE = $EE
 
-SYNCCH_1:
-    lda WNDWDTH                     ; $C85F
-    clc                             ; $C861
-    sbc OURCH                       ; $C862
-    bcs SYNCCH_2                    ; $C865
-    ldy #$00                        ; $C867
-    sty OURCH                       ; $C869
+;; The auxiliary byte <TestAuxRam> writes and reads back.
+AuxRamTestByte = $0C00
 
-SYNCCH_2:
-    ldy OURCH                       ; $C86C
-    rts                             ; $C86F
+;; The other auxiliary byte <TestAuxRam> writes, 1K below <AuxRamTestByte>.
+AuxRamTestOtherByte = $0800
 
-;; 80-column character I/O. $C870 (function 0): output, restoring Y from YSAV1. $C874: input (carry
-;; set). Both save A in $067B and push Y and X; $C87C picks input (INPUT80) or output by carry.
-;; Output: after SYNCCH, a CR with ctrl-S waiting pauses until another key (ctrl-C is left in the
-;; keyboard); control characters go to DOCTRL, others to PRINT80.
-;; In: A = character; carry selects input at $C87C
-;; Out: A = $067B (the character or key); X and Y restored
-CHARIO80:
-    ldy YSAV1                       ; $C870
-    clc                             ; $C872
-    .byte $B0                       ; $C873 bcs: skips the next byte
+; The macro that builds the escape-mode tables.
 
-CHARIO80_1:
-    sec                             ; $C874 input entry
-    sta CHAR                        ; $C875
-    tya                             ; $C878
-    pha                             ; $C879
-    txa                             ; $C87A
-    pha                             ; $C87B
-
-CHARIO80_2:
-    bcs INPUT80                     ; $C87C carry set = input
-
-CHARIO80_3:
-    jsr SYNCCH                      ; $C87E output entry used by C3INIT
-    lda CHAR                        ; $C881
-    cmp #KEY_CR                     ; $C884
-    bne CHARIO80_5                  ; $C886
-    ldx KBD                         ; $C888
-    bpl CHARIO80_5                  ; $C88B
-    cpx #KEY_CTRL_S                 ; $C88D
-    bne CHARIO80_5                  ; $C88F
-    bit KBDSTRB                     ; $C891
-
-CHARIO80_4:
-    ldx KBD                         ; $C894
-    bpl CHARIO80_4                  ; $C897
-    cpx #KEY_CTRL_C                 ; $C899
-    beq CHARIO80_5                  ; $C89B
-    bit KBDSTRB                     ; $C89D
-
-CHARIO80_5:
-    and #$7F                        ; $C8A0
-    cmp #$20                        ; $C8A2 control characters are below $20
-    bcs PRINT80                     ; $C8A4
-    jsr DOCTRL                      ; $C8A6
-    jmp PRINT80_1                   ; $C8A9
-
-;; Stores $067B at column $057B (through PUTINV), advances $057B and wraps with CR80 at WNDWDTH.
-;; $C8BD clears $04FB bit 3; $C8C5 sets CH (and $047B) to $057B, or to 0 when 80VID is on, then
-;; restores X and Y and returns $067B in A.
-PRINT80:
-    lda CHAR                        ; $C8AC
-    jsr PUTINV                      ; $C8AF
-    iny                             ; $C8B2
-    sty OURCH                       ; $C8B3
-    cpy WNDWDTH                     ; $C8B6
-    bcc PRINT80_1                   ; $C8B8
-    jsr CR80                        ; $C8BA
-
-PRINT80_1:
-    lda MODE80                      ; $C8BD
-    and #$F7                        ; $C8C0
-    sta MODE80                      ; $C8C2
-
-PRINT80_2:
-    lda OURCH                       ; $C8C5 common return: update CH, restore X/Y
-    bit RD80VID                     ; $C8C8
-    bpl PRINT80_3                   ; $C8CB
-    lda #$00                        ; $C8CD
-
-PRINT80_3:
-    sta CH                          ; $C8CF
-    sta OLDCH                       ; $C8D1
-    pla                             ; $C8D4
-    tax                             ; $C8D5
-    pla                             ; $C8D6
-    tay                             ; $C8D7
-    lda CHAR                        ; $C8D8
-    rts                             ; $C8DB
-
-;; 80-column key input: writes $067B back at (BASL),CH, then shows the cursor (FLIPCURSOR) while
-;; waiting. Without $04FB bit 3 the key is returned as is. With it: CR clears bit 3, ctrl-U returns the
-;; character under the cursor, and ESC enters escape mode: shows ESCCURSOR, upshifts the next key and
-;; looks it up in ESCKEYS; a match runs the control code from ESCCODES (through DOCTRL), staying in
-;; escape mode when that byte has bit 7 set. ESC ctrl-Q quits 80 columns (QUIT80) and returns ctrl-X;
-;; ESC ctrl-E and ctrl-D clear and set $04FB bit 5.
-;; Out: A = key (via PRINT80's return)
-;; Uses: $067B, $04FB, $057B
-INPUT80:
-    ldy CH                          ; $C8DC
-    lda CHAR                        ; $C8DE
-    sta (BASL),y                    ; $C8E1
-    jsr SYNCCH                      ; $C8E3
-
-INPUT80_1:
-    jsr FLIPCURSOR_1                ; $C8E6
-    jsr GETKEYRND                   ; $C8E9
-    sta CHAR                        ; $C8EC
-    jsr FLIPCURSOR_1                ; $C8EF
-    tay                             ; $C8F2
-    lda MODE80                      ; $C8F3
-    and #$08                        ; $C8F6
-    beq PRINT80_2                   ; $C8F8
-    cpy #KEY_CR                     ; $C8FA
-    bne INPUT80_2                   ; $C8FC
-    lda MODE80                      ; $C8FE
-    and #$F7                        ; $C901
-    sta MODE80                      ; $C903
-
-INPUT80_2:
-    cpy #KEY_ESC                    ; $C906
-    beq INPUT80_3                   ; $C908
-    cpy #KEY_RIGHT                  ; $C90A
-    bne PRINT80_2                   ; $C90C
-    ldy OURCH                       ; $C90E
-    jsr GETSCRCHAR                  ; $C911
-    ora #$80                        ; $C914
-    sta CHAR                        ; $C916
-    bne PRINT80_2                   ; $C919
-
-INPUT80_3:
-    jsr ESCCURSOR                   ; $C91B
-    jsr GETKEYRND                   ; $C91E
-    jsr RESTCHAR                    ; $C921
-    jsr UPSHIFT                     ; $C924
-    and #$7F                        ; $C927
-    ldy #ESCAPE_COUNT - 1           ; $C929
-
-INPUT80_4:
-    cmp ESCKEYS,y                   ; $C92B
-    beq INPUT80_5                   ; $C92E
-    dey                             ; $C930
-    bpl INPUT80_4                   ; $C931
-    bmi INPUT80_6                   ; $C933
-
-INPUT80_5:
-    lda ESCCODES,y                  ; $C935
-    and #$7F                        ; $C938
-    jsr DOCTRL_1                    ; $C93A
-    lda ESCCODES,y                  ; $C93D
-    bmi INPUT80_3                   ; $C940
-    bpl INPUT80_1                   ; $C942
-
-INPUT80_6:
-    tay                             ; $C944
-    lda MODE80                      ; $C945
-    cpy #CTRL_Q                     ; $C948
-    bne INPUT80_7                   ; $C94A
-    jsr QUIT80                      ; $C94C
-    lda #KEY_CTRL_X                 ; $C94F
-    sta CHAR                        ; $C951
-    jmp PRINT80_2                   ; $C954
-
-;; ESC ctrl-E: clears $04FB bit 5 (control characters enabled again).
-INPUT80_7:
-    cpy #CTRL_E                     ; $C957
-    bne INPUT80_10                  ; $C959
-    and #$DF                        ; $C95B
-
-INPUT80_8:
-    sta MODE80                      ; $C95D
-
-INPUT80_9:
-    jmp INPUT80_1                   ; $C960
-
-;; ESC ctrl-D: sets $04FB bit 5 (control characters disabled). Other keys return to input.
-INPUT80_10:
-    cpy #CTRL_D                     ; $C963
-    bne INPUT80_9                   ; $C965
-    ora #$20                        ; $C967
-    bne INPUT80_8                   ; $C969
-
-;; Escape mode's tables: each escape key (upshifted, bit 7 clear) and the control code it runs.
-;; ESCAPE_STAY on a code keeps escape mode on after it.
-ESCAPE_STAY = $80
-.set ESCAPES, 0
-
-.macro ESCAPE key, code
-    .ident(.sprintf("ESCAPE_KEY_%d", ESCAPES)) = (key) & $7F
-    .ident(.sprintf("ESCAPE_CODE_%d", ESCAPES)) = code
-    .set ESCAPES, ESCAPES + 1
+;; One escape-mode key and the control code it performs, for <CharacterIo::EscapeKeys> and
+;; <CharacterIo::EscapeCodes>.
+;; Parameters:
+;;   key = the key, as typed: its high bit is cleared
+;;   code = the control code, with <CharacterIo::ESCAPE_STAY> to stay in escape mode after it
+.macro EscapeEntry key, code
+    .ident(.sprintf("ESCAPE_KEY_%d", ESCAPE_ENTRIES)) = (key) & ASCII_BITS
+    .ident(.sprintf("ESCAPE_CODE_%d", ESCAPE_ENTRIES)) = code
+    .set ESCAPE_ENTRIES, ESCAPE_ENTRIES + 1
 .endmacro
 
-    ESCAPE '@', CTRL_L                              ; clear the screen
-    ESCAPE 'A', CTRL_BACKSLASH                      ; right
-    ESCAPE 'B', CTRL_H                              ; left
-    ESCAPE 'C', CTRL_J                              ; down
-    ESCAPE 'D', CTRL_UNDERSCORE                     ; up
-    ESCAPE 'E', CTRL_RBRACKET                       ; clear to the end of the line
-    ESCAPE 'F', CTRL_K                              ; clear to the end of the screen
-    ESCAPE 'I', CTRL_UNDERSCORE | ESCAPE_STAY       ; up
-    ESCAPE 'J', CTRL_H | ESCAPE_STAY                ; left
-    ESCAPE 'K', CTRL_BACKSLASH | ESCAPE_STAY        ; right
-    ESCAPE 'M', CTRL_J | ESCAPE_STAY                ; down
-    ESCAPE '4', CTRL_Q                              ; 40 columns
-    ESCAPE '8', CTRL_R                              ; 80 columns
-    ESCAPE KEY_BS, CTRL_H | ESCAPE_STAY             ; the left arrow
-    ESCAPE KEY_LF, CTRL_J | ESCAPE_STAY             ; the down arrow
-    ESCAPE KEY_CTRL_K, CTRL_UNDERSCORE | ESCAPE_STAY ; the up arrow
-    ESCAPE KEY_RIGHT, CTRL_BACKSLASH | ESCAPE_STAY  ; the right arrow
-ESCAPE_COUNT = ESCAPES
+; Pascal: Pascal 1.0's init hook, at the start of the $C800 ROM.
+.scope Pascal continued
 
-ESCCODES:
-.repeat ESCAPES, index
+;; Pascal 1.0's init hook: goes to <Pascal::Init10>.
+;;
+;; At $C800. Apple's listing says the three hooks at $C800, $C84D and $C9AA are only used by Pascal 1.0.
+;; Also: C8ENTRY (UNKN)
+.proc Init10Entry
+.assert * = $C800, "Pascal::Init10Entry must stay at $C800."
+    jmp Init10
+.endproc
+
+.endscope
+
+; CharacterIo: starting the firmware for BASIC.
+.scope CharacterIo continued
+
+;; Starts the firmware for BASIC, for `PR#3`: the Monitor in the language card made the IIe's, the hooks, the
+;; 40-column window and the mode; with auxiliary memory, 80 columns. Then the alternate characters, the window homed
+;; and cleared, and the character printed.
+;;
+;; <CharacterIo::Enter at C3ENTRY> jumps here, with the caller's Y and X on the stack.
+;; In: EightyColumns::CurrentCharacter = the character to print once started
+;; Also: C3INIT (UNKN), BASICINIT (IIETRM85)
+.proc Initialize
+    jsr CopyMonitorToRam
+    jsr SetSlot3Hooks
+    jsr Control::Window40
+    lda #MODE_MOUSETEXT_OFF
+    sta EightyColumns::Mode
+
+    ; 80 columns with auxiliary memory: the window twice as wide, 80STORE and 80VID on.
+    jsr TestAuxMemory
+    bne Clear
+    asl WindowWidth
+    sta Store80On
+    sta Columns80On
+
+;; Turns the alternate characters on and clears the window, then prints the character.
+;; Also: CLEARIT (IIETRM85)
+Clear:
+    sta AlternateCharactersOn
+    jsr Control::HomeAndClear
+    ldy EightyColumns::CursorColumn
+    jmp Print
+.endproc
+
+.endscope
+
+;; Points the output hook at <BasicOutput at BASICOUT> and the input hook at <BasicInput at BASICIN>.
+;; Keeps: X, Y
+;; Entry:
+;;   Input = points only the input hook; <Functions::Slot3Input at CXPORTC3> jumps here
+;; Also: SETC3HOOKS (UNKN), C3HOOKS (IIETRM85)
+.proc SetSlot3Hooks
+    lda #<BasicOutput
+    sta OutputHook
+    lda #>BasicOutput
+    sta OutputHookHigh
+
+;; Points the input hook at <BasicInput at BASICIN>.
+;; Also: C3IN (IIETRM85)
+Input:
+    lda #<BasicInput
+    sta InputHook
+    lda #>BasicInput
+    sta InputHookHigh
+    rts
+.endproc
+
+;; Waits for a key, counting <RandomSeed>/<RandomSeedHigh> up meanwhile, then clears the keyboard strobe.
+;; Out: A = the key, with its high bit set
+;; Keeps: X, Y
+;; Also: GETKEYRND (UNKN), GETKEY (IIETRM85)
+.proc WaitForKey
+    inc RandomSeed
+    bne Poll
+    inc RandomSeedHigh
+
+;; Reads the keyboard.
+;; Also: GETK2 (IIETRM85)
+Poll:
+    lda Keyboard
+    bpl WaitForKey
+    sta KeyboardStrobe
+    rts
+
+    ; Unused, up to Pascal 1.0's read hook.
+    .byte $00, $00, $00
+.endproc
+
+; Pascal: Pascal 1.0's read hook.
+.scope Pascal continued
+
+;; Pascal 1.0's read hook: goes to <Pascal::ReadEntry at PASREAD>.
+;;
+;; At $C84D.
+;; Also: C8PASREAD (UNKN)
+.proc Read10Entry
+.assert * = $C84D, "Pascal::Read10Entry must stay at $C84D."
+    jmp ReadEntry
+.endproc
+
+.endscope
+
+;; Brings the firmware's cursor up to date with the Monitor's: the line from <Monitor:CV>, the column from
+;; <CursorColumn> unless it is the one the firmware stored last, and the column 0 when it is outside the window.
+;; Out: Y = <EightyColumns::CursorColumn>
+;; Keeps: X
+;; Also: SYNCCH (UNKN), CSETUP (IIETRM85)
+.proc SyncCursor
+    lda CV
+    sta EightyColumns::CursorLine
+    ldy CursorColumn
+    cpy EightyColumns::LastCursorColumn
+    beq CheckColumn
+    sty EightyColumns::CursorColumn
+
+;; The column 0 unless it is inside the window.
+;; Also: CS2 (IIETRM85)
+CheckColumn:
+    lda WindowWidth
+    clc
+    sbc EightyColumns::CursorColumn
+    bcs Done
+    ldy #0
+    sty EightyColumns::CursorColumn
+
+    ; Y = the column.
+Done:
+    ldy EightyColumns::CursorColumn
+    rts
+.endproc
+
+; CharacterIo: BASIC's input and output.
+.scope CharacterIo continued
+
+;; The 80-column output, function 0 (<FIRMWARE_OUTPUT>): prints the character in A, with Y back from
+;; <SavedOutputY>, as <CharacterIo::InputKey> does.
+;; In: A = the character
+;; Out: A = the character
+;; Also: CHARIO80 (UNKN), BOUT (IIETRM85)
+.proc Output
+    ldy SavedOutputY
+    clc
+    ; A bcs, never taken: it skips InputKey's sec.
+    .byte $B0
+    ; Falls into InputKey.
+.endproc
+
+;; Reads a key for the Monitor's <KeyboardIn> with 80VID on: saves the character, Y and X, then
+;; <CharacterIo::InputOrOutput> with the carry set.
+;; In: A = the character under the cursor
+;; Out: A = the key
+;; Also: BIN (IIETRM85)
+.proc InputKey
+    sec
+    sta EightyColumns::CurrentCharacter
+    tya
+    pha
+    txa
+    pha
+    ; Falls into InputOrOutput.
+.endproc
+
+;; The shared path of the hooks and the functions: <CharacterIo::Input> with the carry set, else
+;; <CharacterIo::Print>.
+;;
+;; <CharacterIo::Enter at C3ENTRY> jumps here, with the caller's Y and X on the stack.
+;; Also: C8BASIC (IIETRM85)
+.proc InputOrOutput
+    bcs Input
+    ; Falls into Print.
+.endproc
+
+;; Prints <EightyColumns::CurrentCharacter>: performs a control character, unless they are off, or displays any
+;; other.
+;;
+;; A return while Control-S waits in the keyboard pauses until another key; a Control-C is left in the keyboard
+;; for BASIC to find. <CharacterIo::Initialize> jumps here.
+;; Also: BPRINT (IIETRM85)
+.proc Print
+    jsr SyncCursor
+
+    ; A return with Control-S typed: wait for the next key.
+    lda EightyColumns::CurrentCharacter
+    cmp #KEY_RETURN
+    bne NoWait
+    ldx Keyboard
+    bpl NoWait
+    cpx #KEY_CONTROL_S
+    bne NoWait
+    bit KeyboardStrobe
+
+;; Waits for the key after Control-S, and clears it unless it is Control-C.
+;; Also: KBDWAIT (IIETRM85)
+WaitForResume:
+    ldx Keyboard
+    bpl WaitForResume
+    cpx #KEY_CONTROL_C
+    beq NoWait
+    bit KeyboardStrobe
+
+;; Performs a control character, below the space, or displays any other.
+;; Also: NOWAIT (IIETRM85)
+NoWait:
+    and #ASCII_BITS
+    cmp #' ' & ASCII_BITS
+    bcs Display
+    jsr Control::PerformUnlessDisabled
+    jmp EndOutput
+.endproc
+
+;; Displays <EightyColumns::CurrentCharacter> at the cursor, in the current video, and moves the cursor right,
+;; starting a new line (<Control::CarriageReturn>) at the window's right edge.
+;; In: Y = <EightyColumns::CursorColumn>
+;; Also: PRINT80 (UNKN), BPNCTL (IIETRM85)
+.proc Display
+    lda EightyColumns::CurrentCharacter
+    jsr Screen::StoreCharacter
+    iny
+    sty EightyColumns::CursorColumn
+    cpy WindowWidth
+    bcc EndOutput
+    jsr Control::CarriageReturn
+    ; Falls into EndOutput.
+.endproc
+
+;; Ends an output: clears <MODE_ESCAPES>.
+;; Also: CTLON (IIETRM85)
+.proc EndOutput
+    lda EightyColumns::Mode
+    and #<~MODE_ESCAPES
+    sta EightyColumns::Mode
+    ; Falls into Finish.
+.endproc
+
+;; The common exit of BASIC's input and output: the Monitor's <CursorColumn> and the firmware's last from the
+;; firmware's column, or 0 in 80 columns; the caller's X and Y back, and A = <EightyColumns::CurrentCharacter>.
+;; Out: A = the character or key, X and Y = the caller's
+;; Also: BIORET (IIETRM85)
+.proc Finish
+    lda EightyColumns::CursorColumn
+    bit Columns80State
+    bpl StoreColumn
+    lda #0
+
+;; Stores the column in <CursorColumn> and <EightyColumns::LastCursorColumn>, then returns.
+;; Also: SETALL (IIETRM85)
+StoreColumn:
+    sta CursorColumn
+    sta EightyColumns::LastCursorColumn
+    pla
+    tax
+    pla
+    tay
+    lda EightyColumns::CurrentCharacter
+    rts
+.endproc
+
+;; BASIC's input: puts back the character the Monitor's cursor replaced, then reads a key with the cursor shown.
+;;
+;; Without <MODE_ESCAPES> the key is returned as it is. With it, a return clears the bit, the right arrow
+;; (Control-U) returns the character under the cursor, and the escape key enters <CharacterIo::EscapeMode>.
+;; In: EightyColumns::CurrentCharacter = the character under the Monitor's cursor
+;; Entry:
+;;   NextKey = reads the next key; <CharacterIo::EscapeMode> returns here
+;; Also: INPUT80 (UNKN), BINPUT (IIETRM85)
+.proc Input
+    ldy CursorColumn
+    lda EightyColumns::CurrentCharacter
+    sta (TextBase),y
+    jsr SyncCursor
+
+;; Reads a key, with the cursor shown while it waits.
+;; Also: B_INPUT (IIETRM85)
+NextKey:
+    jsr Screen::InvertCursor
+    jsr WaitForKey
+    sta EightyColumns::CurrentCharacter
+    jsr Screen::InvertCursor
+    tay
+    lda EightyColumns::Mode
+    and #MODE_ESCAPES
+    beq Finish
+    cpy #KEY_RETURN
+    bne NotReturn
+    lda EightyColumns::Mode
+    and #<~MODE_ESCAPES
+    sta EightyColumns::Mode
+
+;; The escape key enters escape mode; the right arrow takes the character under the cursor.
+;; Also: NOTACR (IIETRM85)
+NotReturn:
+    cpy #KEY_ESCAPE
+    beq EscapeMode
+    cpy #KEY_RIGHT_ARROW
+    bne Finish
+    ldy EightyColumns::CursorColumn
+    jsr Screen::ReadCharacter
+    ora #TEXT_HIGH_BIT
+    sta EightyColumns::CurrentCharacter
+    ; Always: the high bit is set.
+    bne Finish
+.endproc
+
+;; Escape mode: shows the escape cursor, reads a key, makes it uppercase and performs its code from
+;; <CharacterIo::EscapeCodes>, staying in escape mode when the code has <CharacterIo::ESCAPE_STAY>.
+;;
+;; Of the keys not in <CharacterIo::EscapeKeys>, Control-Q quits the firmware and returns Control-X as the key,
+;; Control-E and Control-D turn the control characters on and off (<MODE_CONTROLS_OFF>), and any other ends escape
+;; mode.
+;; Also: ESCAPING (IIETRM85)
+.proc EscapeMode
+    jsr Screen::ShowEscapeCursor
+    jsr WaitForKey
+    jsr Screen::RestoreCharacter
+    jsr Upshift
+    and #ASCII_BITS
+    ldy #ESCAPE_COUNT - 1
+
+;; Compares the key with one entry, from the end.
+;; Also: ESC2 (IIETRM85)
+Compare:
+    cmp EscapeKeys,y
+    beq Perform
+    dey
+    bpl Compare
+    bmi Special
+
+;; Performs the entry's code, then stays in escape mode or reads the next key.
+;; Also: ESC3 (IIETRM85)
+Perform:
+    lda EscapeCodes,y
+    and #ASCII_BITS
+    jsr Control::Perform
+    lda EscapeCodes,y
+    bmi EscapeMode
+    bpl Input::NextKey
+
+;; Control-Q: quits the firmware, and returns Control-X as the key.
+;; Also: ESCSPEC (IIETRM85)
+Special:
+    tay
+    lda EightyColumns::Mode
+    cpy #CONTROL_Q
+    bne ControlsOn
+    jsr Control::Quit
+    lda #KEY_CONTROL_X
+    sta EightyColumns::CurrentCharacter
+    jmp Finish
+
+;; Control-E: turns the control characters on.
+;; Also: ESCSP1 (IIETRM85)
+ControlsOn:
+    cpy #CONTROL_E
+    bne ControlsOff
+    and #<~MODE_CONTROLS_OFF
+
+;; Stores the mode.
+;; Also: ESCSP2 (IIETRM85)
+StoreMode:
+    sta EightyColumns::Mode
+
+;; Leaves escape mode for the next key.
+;; Also: ESCSP3 (IIETRM85)
+Done:
+    jmp Input::NextKey
+
+;; Control-D: turns the control characters off; any other key just leaves escape mode.
+;; Also: ESCSP4 (IIETRM85)
+ControlsOff:
+    cpy #CONTROL_D
+    bne Done
+    ora #MODE_CONTROLS_OFF
+    ; Always: the mode is not 0 now.
+    bne StoreMode
+.endproc
+
+; The escape-mode keys and their codes.
+
+;; On a code in <CharacterIo::EscapeCodes>: escape mode goes on after it.
+ESCAPE_STAY = $80
+
+;; The escape keys <EscapeEntry> has added so far.
+.set ESCAPE_ENTRIES, 0
+
+    EscapeEntry '@', CONTROL_L                                  ; home and clear the window
+    EscapeEntry 'A', CONTROL_BACKSLASH                          ; right
+    EscapeEntry 'B', CONTROL_H                                  ; left
+    EscapeEntry 'C', CONTROL_J                                  ; down
+    EscapeEntry 'D', CONTROL_UNDERSCORE                         ; up
+    EscapeEntry 'E', CONTROL_RIGHT_BRACKET                      ; clear to the end of the line
+    EscapeEntry 'F', CONTROL_K                                  ; clear to the end of the window
+    EscapeEntry 'I', CONTROL_UNDERSCORE | ESCAPE_STAY           ; up
+    EscapeEntry 'J', CONTROL_H | ESCAPE_STAY                    ; left
+    EscapeEntry 'K', CONTROL_BACKSLASH | ESCAPE_STAY            ; right
+    EscapeEntry 'M', CONTROL_J | ESCAPE_STAY                    ; down
+    EscapeEntry '4', CONTROL_Q                                  ; 40 columns
+    EscapeEntry '8', CONTROL_R                                  ; 80 columns
+    EscapeEntry KEY_BACKSPACE, CONTROL_H | ESCAPE_STAY          ; the left arrow
+    EscapeEntry KEY_LINE_FEED, CONTROL_J | ESCAPE_STAY          ; the down arrow
+    EscapeEntry KEY_CONTROL_K, CONTROL_UNDERSCORE | ESCAPE_STAY ; the up arrow
+    EscapeEntry KEY_RIGHT_ARROW, CONTROL_BACKSLASH | ESCAPE_STAY ; the right arrow
+
+;; How many escape keys there are: the length of <CharacterIo::EscapeKeys> and <CharacterIo::EscapeCodes>.
+;; Also: ESCNUM (IIETRM85)
+ESCAPE_COUNT = ESCAPE_ENTRIES
+
+;; The control code each of <CharacterIo::EscapeKeys> performs, with <CharacterIo::ESCAPE_STAY>.
+;; Also: ESCCODES (UNKN), ESCCHAR (IIETRM85)
+EscapeCodes:
+.repeat ESCAPE_ENTRIES, index
     .byte .ident(.sprintf("ESCAPE_CODE_%d", index))
 .endrepeat
 
-ESCKEYS:
-.repeat ESCAPES, index
+;; The escape-mode keys, with their high bits clear, which <CharacterIo::EscapeMode> looks up.
+;; Also: ESCKEYS (UNKN), ESCTAB (IIETRM85)
+EscapeKeys:
+.repeat ESCAPE_ENTRIES, index
     .byte .ident(.sprintf("ESCAPE_KEY_%d", index))
 .endrepeat
 
-;; Unless RAMRD already reads aux, writes $EE to aux $0C00 and $0800 (leaving RAMRD/RAMWRT on aux)
-;; and compares $0C00.
-;; Out:   zero = set when aux memory holds the value
-AUXRAMTEST:
-    bit RDRAMRD                     ; $C98D
-    bmi AUXRAMTEST_1                ; $C990
-    lda #$EE                        ; $C992
-    sta WRCARDRAM                   ; $C994
-    sta RDCARDRAM                   ; $C997
-    sta $0C00                       ; $C99A
-    sta $0800                       ; $C99D
-    cmp $0C00                       ; $C9A0
+.endscope
 
-AUXRAMTEST_1:
-    rts                             ; $C9A3
+;; Tests auxiliary RAM, unless auxiliary memory is already read: writes <AUX_RAM_TEST_BYTE> to auxiliary
+;; <AuxRamTestByte> and <AuxRamTestOtherByte>, leaving auxiliary memory read and written, and compares the first.
+;;
+;; <SelfTest::RamTest at RAMTEST> calls it.
+;; Out: zero = set when the byte held; when auxiliary memory was already read, nothing is written and zero is what
+;;   BIT left
+;; Keeps: X, Y
+;; Also: AUXRAMTEST (UNKN), STAUX (IIETRM85)
+.proc TestAuxRam
+    bit AuxReadState
+    bmi Done
+    lda #AUX_RAM_TEST_BYTE
+    sta AuxWriteOn
+    sta AuxReadOn
+    sta AuxRamTestByte
+    sta AuxRamTestOtherByte
+    cmp AuxRamTestByte
 
-;; The letters J, K, M, I that function 1 substitutes for the arrow keys in ARROWKEYS.
-ARROWLETTERS:
-    .byte "JKMI"                    ; $C9A4
-.assert * - ARROWLETTERS = ARROWS, "Each arrow key needs a letter."
-    .byte $00, $00                  ; $C9A8
+;; Returns.
+;; Also: XSTAUX (IIETRM85)
+Done:
+    rts
+.endproc
 
-;; A fixed entry: writes the current character ($067B) through PASWRITE (apparently an older Pascal
-;; write entry).
-C9ENTRY:
-    lda CHAR                        ; $C9AA
-    jmp PASWRITE                    ; $C9AD
+; Functions: the letters the arrow keys become, among the 80-column firmware.
+.scope Functions continued
 
-;; Reached from C8ENTRY; appears to be an older Pascal initialization entry.
-C9PASINIT:
-    lda #$83                        ; $C9B0
-    bne C9PASINIT_2                 ; $C9B2
+;; The letters J, K, M and I that <Functions::EscapeKey at CXESCKEY> makes of the arrow keys in
+;; <Functions::ArrowKeys at ARROWKEYS>.
+;; Also: ARROWLETTERS (UNKN), ESCOUT (IIETRM85)
+ArrowLetters:
+    .byte "JKMI"
+.assert * - ArrowLetters = ARROW_COUNT, "Each arrow key needs a letter."
 
-;; Pascal init (mode $81, or $83 from C9PASINIT): without auxiliary text memory returns X = 9. Otherwise
-;; $04FB = mode, 80STORE, 80VID and ALTCHAR on, PASRESTORE, clear screen, then PASPUTCHAR's tail
-;; (save BASL/BASH, show cursor, X = 0).
-;; Out: X = result
-C9PASINIT_1:
-    lda #$81                        ; $C9B4
+    ; Unused, up to Pascal 1.0's write hook.
+    .byte $00, $00
 
-C9PASINIT_2:
-    pha                             ; $C9B6
-    jsr AUXPRESENT                  ; $C9B7
-    beq C9PASINIT_3                 ; $C9BA
-    pla                             ; $C9BC
-    ldx #$09                        ; $C9BD
-    rts                             ; $C9BF
+.endscope
 
-;; Pascal init with auxiliary memory present (see C9PASINIT_1).
-C9PASINIT_3:
-    pla                             ; $C9C0
-    sta MODE80                      ; $C9C1
-    sta SET80STORE                  ; $C9C4
-    sta SET80VID                    ; $C9C7
-    sta SETALTCHAR                  ; $C9CA
-    jsr PASRESTORE                  ; $C9CD
-    jsr CLRSCRN80                   ; $C9D0
-    jmp PASPUTCHAR_2                ; $C9D3
+; Pascal: Pascal 1.0's write hook, init and read.
+.scope Pascal continued
 
-;; Pascal read: PASRESTORE, waits for a key, strips bit 7 and keeps it in $067B.
-;; Out: A = key, X = 0 (or $C3 when $04FB bit 1 is set)
-PASGETKEY:
-    jsr PASRESTORE                  ; $C9D6
-    jsr GETKEYRND                   ; $C9D9
-    and #$7F                        ; $C9DC
-    sta CHAR                        ; $C9DE
-    ldx #$00                        ; $C9E1
-    lda MODE80                      ; $C9E3
-    and #$02                        ; $C9E6
-    beq PASGETKEY_1                 ; $C9E8
-    ldx #$C3                        ; $C9EA
+;; Pascal 1.0's write hook: writes <EightyColumns::CurrentCharacter> through <Pascal::WriteEntry at PASWRITE>.
+;;
+;; At $C9AA.
+;; Also: C9ENTRY (UNKN)
+.proc Write10Entry
+.assert * = $C9AA, "Pascal::Write10Entry must stay at $C9AA."
+    lda EightyColumns::CurrentCharacter
+    jmp WriteEntry
+.endproc
 
-PASGETKEY_1:
-    lda CHAR                        ; $C9EC
-    rts                             ; $C9EF
+;; Starts the firmware for Pascal 1.0: as <Pascal::Init>, with <MODE_PASCAL10> too.
+;;
+;; <Pascal::Init10Entry> jumps here.
+;; Out: X = 0, or <PASCAL_NO_DEVICE> without auxiliary memory
+;; Also: C9PASINIT (UNKN), PINIT1_0 (IIETRM85)
+.proc Init10
+    lda #MODE_PASCAL | MODE_PASCAL10 | MODE_MOUSETEXT_OFF
+    ; Always: the mode is not 0.
+    bne Init::SetMode
+.endproc
+
+;; Starts the firmware for Pascal: with auxiliary memory, the mode, 80 columns, the alternate characters, Pascal's
+;; video and the window cleared, then the cursor shown.
+;;
+;; <Pascal::InitEntry at PASINIT> jumps here.
+;; Out: X = 0, or <PASCAL_NO_DEVICE> without auxiliary memory
+;; Entry:
+;;   SetMode = starts with the mode in A; <Pascal::Init10> branches here
+;; Also: PINIT (IIETRM85)
+.proc Init
+    lda #MODE_PASCAL | MODE_MOUSETEXT_OFF
+
+;; Starts with the mode in A, unless there is no auxiliary memory.
+;; Also: PINIT2 (IIETRM85)
+SetMode:
+    pha
+    jsr TestAuxMemory
+    beq CardPresent
+    pla
+    ldx #PASCAL_NO_DEVICE
+    rts
+
+;; Auxiliary memory answered: the mode, 80 columns and the window cleared, then the cursor shown through
+;; <Pascal::Write::SaveBase>.
+;; Also: PIGOOD (IIETRM85)
+CardPresent:
+    pla
+    sta EightyColumns::Mode
+    sta Store80On
+    sta Columns80On
+    sta AlternateCharactersOn
+    jsr Setup
+    jsr Control::HomeAndClear
+    jmp Write::SaveBase
+.endproc
+
+;; Pascal's read: waits for a key and returns it with its high bit clear.
+;;
+;; <Pascal::ReadEntry at PASREAD> jumps here.
+;; Out: A = <EightyColumns::CurrentCharacter> = the key, with its high bit clear; X = 0, or <PASCAL10_READ_X> for
+;;   Pascal 1.0
+;; Also: PASGETKEY (UNKN), PREAD (IIETRM85)
+.proc Read
+    jsr Setup
+    jsr WaitForKey
+    and #ASCII_BITS
+    sta EightyColumns::CurrentCharacter
+    ldx #0
+    lda EightyColumns::Mode
+    and #MODE_PASCAL10
+    beq Done
+    ldx #PASCAL10_READ_X
+
+;; Returns the key.
+;; Also: PREADRET2 (IIETRM85)
+Done:
+    lda EightyColumns::CurrentCharacter
+    rts
+.endproc
+
+.endscope

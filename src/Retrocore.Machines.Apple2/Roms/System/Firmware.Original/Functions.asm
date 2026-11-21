@@ -1,431 +1,681 @@
-;; Entry from the Monitor's switch routine at $FBB4 (internal ROM already switched in). Selects a function by Y.
-;; In: Y = function number (0-7), A = character for functions 6 and 7; the stack holds the caller's P and a
-;;      second P whose N bit is the RDCXROM state on entry.
-;; Y=6 goes to B_KEYIN, Y=7 to B_ESCFIX; others continue at B_FUNCNK/B_FUNCNE.
-B_FUNC:
-    cpy #$06                        ; $C100
-    bne B_FUNCNK                    ; $C102
-    jmp B_KEYIN                     ; $C104
+; retrocore: style=strict
+;; The original IIe's firmware functions, $C100-$C2FF: <DispatchFunction>, which the Monitor's <Monitor:CallFirmware>
+;; jumps to with a function number in Y, and the handlers it reaches: the screen functions in their 40- and 80-column
+;; versions, the reset function, the key wait and the escape-key translation, with the exit they share.
 
-;; Function 7 test: sends Y=7 to B_ESCFIX, everything else on to B_FUNCNE.
-B_FUNCNK:
-    cpy #$07                        ; $C107
-    bne B_FUNCNE                    ; $C109
-    jmp B_ESCFIX                    ; $C10B
+;; Performs the firmware function in Y for the Monitor: the original IIe's dispatcher.
+;;
+;; At $C100, where <Monitor:CallFirmware> jumps with the internal ROM switched in and interrupts disabled. Functions
+;; 6 (<Functions::GetKey>) and 7 (<Functions::EscapeKey>) have one version. The screen functions, 0-5 and 8, have a
+;; 40-column version, through <Functions::Dispatch40>, and an 80-column one, through <Functions::Prepare80>: the
+;; 80-column one when <TestAuxMemory> finds auxiliary memory and <EightyColumns::Mode> has none of
+;; <Functions::HANDLERS40_MODE_BITS> set, which is when the 80-column firmware is active and neither working for Pascal
+;; nor waiting for a GOTOXY. Every function leaves through <Functions::Return>. The stack holds the caller's status and,
+;; above it, a status whose negative flag is <InternalCxRomState> from before the call.
+;; In: Y = the function number, A = the character under the cursor (function 6) or the key (function 7)
+;; Also: B_FUNC (IIEROM82, IIETRM85)
+.proc DispatchFunction
+.assert * = $C100, "DispatchFunction must stay at $C100."
+    cpy #FIRMWARE_KEYBOARD_IN
+    bne NotGetKey
+    jmp Functions::GetKey
 
-;; Chooses the 40- or 80-column version of functions 0-5: when an 80-column card answers (TESTCARD) and
-;; mode bits 5 and 3 of $04FB are clear, goes to B_FUNC0, otherwise B_OLDFUNC.
-;; Uses: A, Y (restored for the dispatch)
-B_FUNCNE:
-    tya                             ; $C10E
-    pha                             ; $C10F
-    jsr TESTCARD                    ; $C110
-    bne B_OLDFUNC                   ; $C113
-    lda MODE80                      ; $C115
-    and #$28                        ; $C118
-    bne B_OLDFUNC                   ; $C11A
-    jmp B_FUNC0                     ; $C11C
+;; Y is not the key wait's number: tests for the escape-key function's.
+;; Also: B_FUNCNK (IIEROM82)
+NotGetKey:
+    cpy #FIRMWARE_ESCAPE_KEY
+    bne ChooseWidth
+    jmp Functions::EscapeKey
 
-;; Dispatches functions 0-5 to their 40-column versions through F_TABLE by pushing $C1 and the table byte
-;; and executing RTS.
-B_OLDFUNC:
-    pla                             ; $C11F
-    tay                             ; $C120
-    lda #$C1                        ; $C121 the page of F_TABLE's functions
-    pha                             ; $C123
-    lda F_TABLE,y                   ; $C124
-    pha                             ; $C127
-    rts                             ; $C128
+;; A screen function: the 80-column version with an 80-column card and the firmware ready for it, else the 40-column
+;; one.
+;; Also: B_FUNCNE (IIEROM82)
+ChooseWidth:
+    ; The function number is kept on the stack, since TESTCARD uses Y.
+    tya
+    pha
+    jsr TestAuxMemory
+    bne Functions::Dispatch40
+    lda EightyColumns::Mode
+    and #Functions::HANDLERS40_MODE_BITS
+    bne Functions::Dispatch40
+    jmp Functions::Prepare80
+.endproc
 
-;; Function 0, 40 columns: clears from CH to the end of the line and then every line down to WNDBTM.
-;; Uses: A, Y, BASL/BASH (left at CV's line by VTAB)
-F_CLREOP:
-    ldy CH                          ; $C129
-    lda CV                          ; $C12B
+;; The handlers of the firmware's functions, which <DispatchFunction> performs for the Monitor by the number in Y
+;; (FirmwareFunctions.asm's FIRMWARE_ constants), and the exits they share.
+;;
+;; The dispatcher reaches most handlers by RTS through a table of their addresses minus one, so each of them starts in
+;; page $C1, after its first byte. A screen function has two handlers: a 40-column one, and an 80-column one that runs
+;; while the 80-column firmware is active. Every function leaves through <Functions::Return>, which puts the ROM back
+;; as <Monitor:CallFirmware> found it.
+.scope Functions
 
-CLEOP1:
-    pha                             ; $C12D
-    jsr VTABZ                       ; $C12E
-    jsr X_CLEOLZ                    ; $C131
-    ldy #$00                        ; $C134
-    pla                             ; $C136
-    adc #$00                        ; $C137 carry is set by X_CLEOLZ, so this adds one
-    cmp WNDBTM                      ; $C139
-    bcc CLEOP1                      ; $C13B
-    jsr VTAB                        ; $C13D
-    jmp F_RETURN                    ; $C140
+; The handlers.
 
-;; Function 1, 40 columns: moves the cursor to WNDTOP, column 0, and clears the window from there down.
-;; Out: CV = WNDTOP, CH = 0
-F_HOME:
-    lda WNDTOP                      ; $C143
-    sta CV                          ; $C145
-    ldy #$00                        ; $C147
-    sty CH                          ; $C149
-    beq CLEOP1                      ; $C14B
+;; The page every handler is in: <Dispatch40> and <Dispatch80> push it as the high byte of the handler's address minus
+;; one.
+HANDLER_PAGE = $C1
 
-;; Function 2, 40 columns: copies each window line up one line, from WNDTOP+1 to WNDBTM-1, then blanks the
-;; bottom line. Reached only through F_TABLE; nothing branches here.
-;; Uses: A, Y, BASL/BASH, BAS2L/BAS2H
-F_SCROLL:
-    lda WNDTOP                      ; $C14D
-    pha                             ; $C14F
-    jsr VTABZ                       ; $C150
+;; The bits of <EightyColumns::Mode> that send the screen functions to their 40-column versions even with an 80-column
+;; card: bit 5, Pascal's, and bit 3, a GOTOXY waiting for its column and line. Both are set while the firmware is
+;; inactive ($FF).
+HANDLERS40_MODE_BITS = $28
 
-SCRL1:
-    lda BASL                        ; $C153
-    sta BAS2L                       ; $C155
-    lda BASH                        ; $C157
-    sta BAS2H                       ; $C159
-    ldy WNDWDTH                     ; $C15B
-    dey                             ; $C15D
-    pla                             ; $C15E
-    adc #$01                        ; $C15F
-    cmp WNDBTM                      ; $C161
-    bcs SCRL3                       ; $C163
-    pha                             ; $C165
-    jsr VTABZ                       ; $C166
+; The window.
 
-SCRL2:
-    lda (BASL),y                    ; $C169
-    sta (BAS2L),y                   ; $C16B
-    dey                             ; $C16D
-    bpl SCRL2                       ; $C16E
-    bmi SCRL1                       ; $C170
+;; The window's width in 40 columns.
+WIDTH_40 = 40
 
-SCRL3:
-    ldy #$00                        ; $C172
-    jsr X_CLEOLZ                    ; $C174
-    jsr VTAB                        ; $C177
-    jmp F_RETURN                    ; $C17A
+;; The window's width in 80 columns.
+WIDTH_80 = 80
 
-;; Function 3, 40 columns: stores spaces ($A0) from CH to the window's right edge.
-;; Uses: A, Y
-;; The bytes at $C18A-$C19B (set a 40-wide window to line 23) are not reached by any code in this ROM.
-F_CLREOL:
-    ldy CH                          ; $C17D
-    lda #' '                        ; $C17F
+;; The line below the full window: the screen's 24 lines.
+FULL_WINDOW_BOTTOM = 24
 
-CLEOL2:
-    sta (BASL),y                    ; $C181
-    iny                             ; $C183
-    cpy WNDWDTH                     ; $C184
-    bcc CLEOL2                      ; $C186
-    bcs F_GORET                     ; $C188
+;; The screen's last line, where <SetWindow40> and <SetWindowWidth> put the cursor.
+LAST_LINE = FULL_WINDOW_BOTTOM - 1
 
-F_SETWND:
-    lda #$28                        ; $C18A
-    sta WNDWDTH                     ; $C18C
-    lda #$18                        ; $C18E
-    sta WNDBTM                      ; $C190
-    lda #$17                        ; $C192
-    sta CV                          ; $C194
-    jsr VTAB                        ; $C196
-    jmp F_RETURN                    ; $C199
+; The key wait.
 
-;; Function 4 (CLREOLZ), 40 columns: clears from the column the Monitor saved in $1F to the end of the
-;; line (X_CLEOLZ), then exits through F_GORET.
-F_CLEOLZ:
-    ldy $1F                         ; $C19C
-    jsr X_CLEOLZ                    ; $C19E
+;; The block <GetKey> shows for the cursor, alternating with the character under it.
+CURSOR_BLOCK = $FF
 
-;; Exit used by functions 3 and 4: jumps to F_RETURN.
-F_GORET:
-    jmp F_RETURN                    ; $C1A1
+;; How long <PollKeyboard> polls when it lets interrupts in on every poll, in 256s of polls.
+POLLS_WITH_INTERRUPTS = $0C
 
-;; Dispatches functions 0-5 to their 80-column versions. Clears mode bit 0, then sets it if the Monitor's
-;; caller had interrupts enabled (I clear in the first P on the stack). Copies CV to $05FB, computes the
-;; base address, and if CH differs from the value the firmware last left in it ($047B), or 80 columns is
-;; off, takes CH as the new 80-column cursor column ($057B). Then dispatches through B_TABLE via RTS.
-;; Uses: A, Y, $0478 (scratch for the saved P)
-B_FUNC0:
-    pla                             ; $C1A4
-    tay                             ; $C1A5
-    lda MODE80                      ; $C1A6
-    and #$FE                        ; $C1A9
-    sta MODE80                      ; $C1AB
-    pla                             ; $C1AE
-    sta TEMP1                       ; $C1AF
-    pla                             ; $C1B2
-    pha                             ; $C1B3
-    lsr a                           ; $C1B4
-    lsr a                           ; $C1B5
-    lsr a                           ; $C1B6
-    lda TEMP1                       ; $C1B7
-    pha                             ; $C1BA
-    bcs NOI                         ; $C1BB
-    lda MODE80                      ; $C1BD
-    ora #$01                        ; $C1C0
-    sta MODE80                      ; $C1C2
+;; How long <PollKeyboard> polls otherwise, in 256s of polls.
+POLLS_WITHOUT_INTERRUPTS = $31
 
-NOI:
-    lda CV                          ; $C1C5
-    sta OURCV                       ; $C1C7
-    jmp B_VECTOR                    ; $C1CA
+; The reset.
 
-;; Function 2, 80 columns: scrolls the window up one line (SCROLLUP).
-B_SCROLL:
-    jsr SCROLLUP                    ; $C1CD
-    jmp F_RETURN                    ; $C1D0
+;; Where <ResetFirmware> starts spoiling memory: the offset of the first of the two bytes it changes in page
+;; <SPOIL_FIRST_PAGE>. The offset goes down one a page, so page 3's bytes are $03F3 and $03F4.
+SPOIL_FIRST_OFFSET = $B0
 
-;; Function 3, 80 columns: clears from the 80-column cursor to the end of the line (X_GS).
-B_CLREOL:
-    jsr X_GS                        ; $C1D3
-    jmp F_RETURN                    ; $C1D6
+;; The highest page <ResetFirmware> spoils.
+SPOIL_FIRST_PAGE = $BF
 
-;; Function 4, 80 columns: clears from column $1F (Y saved there by the Monitor's CLREOLZ) to the end of the
-;; line.
-B_CLEOLZ:
-    ldy $1F                         ; $C1D9
-    jsr X_GSEOLZ                    ; $C1DB
-    jmp F_RETURN                    ; $C1DE
+;; The page below the last one <ResetFirmware> spoils.
+SPOIL_END_PAGE = $01
 
-;; Function 0, 80 columns: clears from the cursor to the end of the window (X_VT).
-B_CLREOP:
-    jsr X_VT                        ; $C1E1
-    jmp F_RETURN                    ; $C1E4
+; The escape key.
 
-;; Jumps to B_SETWNDX. Neither dispatch table nor any branch in this ROM refers to it.
-B_SETWND:
-    jmp B_SETWNDX                   ; $C1E7
+;; The bit that a lowercase letter has and its uppercase letter lacks.
+LOWERCASE_BIT = $20
 
-;; Function 5 (the Monitor's RESET), reached through both dispatch tables: jumps to B_RESETX.
-B_RESET:
-    jmp B_RESETX                    ; $C1EA
+; The Monitor's arguments.
 
-;; Function 1, 80 columns: homes the cursor and clears the window (X_FF), then copies the new cursor
-;; to CH, $047B and CV and recomputes the base address.
-;; The label B_VECTOR ($C1FF) is the continuation of B_FUNC0.
-B_HOME:
-    jsr X_FF                        ; $C1ED
-    lda OURCH                       ; $C1F0
-    sta CH                          ; $C1F3
-    sta OLDCH                       ; $C1F5
-    lda OURCV                       ; $C1F8
-    sta CV                          ; $C1FB
-    bpl GOBACK                      ; $C1FD
+;; The page-zero byte the Monitor's <ClearLineFrom at Monitor:ClearLineFrom> leaves the column in, on the original IIe.
+PassedColumn = $1F
 
-B_VECTOR:
-    jsr C8_BASCALC                  ; $C1FF
-    lda CH                          ; $C202
-    bit RD80VID                     ; $C204
-    bpl B_GETCH                     ; $C207
-    cmp OLDCH                       ; $C209
-    beq B_FUNC1                     ; $C20C
+; The function numbers the dispatcher takes apart. Handlers40 and Handlers80 hold the screen functions by number,
+; six entries each; function 8 reads past them, into the tables that follow (see <SetWindow40>).
+.assert FIRMWARE_KEYBOARD_IN = 6 && FIRMWARE_ESCAPE_KEY = 7, "DispatchFunction tests for 6 and 7."
+.assert FIRMWARE_RESET = 5, "Both handler tables end with Reset."
 
-B_GETCH:
-    sta OURCH                       ; $C20E
+;; Runs a screen function's 40-column version through <Handlers40>.
+;;
+;; The function number is on the stack, above the two statuses <Monitor:CallFirmware> pushed. The table holds the
+;; handler's address minus one, so the RTS lands on it.
+;; Also: B_OLDFUNC (IIEROM82)
+.proc Dispatch40
+    pla
+    tay
+    lda #HANDLER_PAGE
+    pha
+    lda Handlers40,y
+    pha
+    rts
+.endproc
 
-B_FUNC1:
-    lda #$C1                        ; $C211 the page of B_TABLE's functions
-    pha                             ; $C213
-    lda B_TABLE,y                   ; $C214
-    pha                             ; $C217
-    rts                             ; $C218
+;; Function 0, 40 columns: clears from the cursor to the end of the window.
+;;
+;; Clears from <CursorColumn> to the end of the line, then every line below it to the window's bottom.
+;; Out: TextBase/TextBaseHigh = the cursor line's base address
+;; Entry:
+;;   FromLine = clears from column Y of line A down; <Home40> branches here
+;; Also: F_CLREOP (IIEROM82)
+.proc ClearToEndOfWindow40
+    ldy CursorColumn
+    lda CV
 
-;; Sets the window to full width (80 if 80VID is on, else 40) and bottom 24, puts the cursor on line 23
-;; ($05FB and CV), computes the base address and exits through F_RETURN. Only reached from $C1E7.
-B_SETWNDX:
-    lda #$50                        ; $C219
-    bit RD80VID                     ; $C21B
-    bmi B_SETWND2                   ; $C21E
-    lsr a                           ; $C220
+;; Clears from column Y of line A to the end of the window.
+;; Also: CLEOP1 (IIEROM82)
+FromLine:
+    pha
+    jsr SetLineBase
+    jsr ClearColumns40
+    ldy #0
+    pla
+    ; ClearColumns40 leaves the carry set, so this adds one.
+    adc #0
+    cmp WindowBottom
+    bcc FromLine
 
-B_SETWND2:
-    sta WNDWDTH                     ; $C221
-    lda #$18                        ; $C223
-    sta WNDBTM                      ; $C225
-    lda #$17                        ; $C227
-    sta OURCV                       ; $C229
-    sta CV                          ; $C22C
+    ; The cursor line's base again.
+    jsr VerticalTab
+    jmp Return
+.endproc
 
-GOBACK:
-    jsr C8_BASCALC                  ; $C22E
-    jmp F_RETURN                    ; $C231
+;; Function 1, 40 columns: moves the cursor to the window's top left and clears the window.
+;; Out: CV = <WindowTop>, CursorColumn = 0
+;; Also: F_HOME (IIEROM82)
+.proc Home40
+    lda WindowTop
+    sta CV
+    ldy #0
+    sty CursorColumn
+    beq ClearToEndOfWindow40::FromLine
+.endproc
 
-;; Function 5, called by the Monitor's RESET. Marks the 80-column firmware inactive ($04FB = $FF) and turns
-;; annunciators 2 and 3 on (<CLRAN2> and <CLRAN3>, despite their names). With Solid-Apple (BUTN1) held, runs
-;; SELFTEST. With only Open-Apple (BUTN0) held, stores page numbers into two bytes of every page from $BF down
-;; to $02 (offsets $B0 descending by two per page), so a program in memory will not survive the reset. Then
-;; RESETRET.
-;; Uses: A, Y, A1L/A1H
-B_RESETX:
-    lda #$FF                        ; $C234
-    sta MODE80                      ; $C236
-    lda CLRAN2                      ; $C239
-    lda CLRAN3                      ; $C23C
-    lda BUTN1                       ; $C23F
-    bmi DIAGS                       ; $C242
-    lda BUTN0                       ; $C244
-    bpl RESETRET                    ; $C247
-    ldy #$B0                        ; $C249
-    lda #$00                        ; $C24B
-    sta A1L                         ; $C24D
-    lda #$BF                        ; $C24F
-    sec                             ; $C251
+;; Function 2, 40 columns: scrolls the window up a line.
+;;
+;; Copies each line of the window to the line above it, from the second line down, then clears the bottom line.
+;; Also: F_SCROLL (IIEROM82)
+.proc Scroll40
+    lda WindowTop
+    pha
+    jsr SetLineBase
 
-BLAST:
-    sta A1H                         ; $C252
-    sta (A1L),y                     ; $C254
-    dey                             ; $C256
-    sta (A1L),y                     ; $C257
-    sbc #$01                        ; $C259
-    cmp #$01                        ; $C25B
-    bne BLAST                       ; $C25D
-    beq RESETRET                    ; $C25F
+;; Makes the line just copied the destination, and the next line the source.
+;; Also: SCRL1 (IIEROM82)
+NextLine:
+    lda TextBase
+    sta ScrollBase
+    lda TextBaseHigh
+    sta ScrollBaseHigh
+    ldy WindowWidth
+    dey
+    pla
+    ; The carry is clear, from SetLineBase or the line count's compare.
+    adc #1
+    cmp WindowBottom
+    bcs ClearBottom
+    pha
+    jsr SetLineBase
 
-DIAGS:
-    jmp SELFTEST                    ; $C261
+;; Copies the line, right to left.
+;; Also: SCRL2 (IIEROM82)
+CopyByte:
+    lda (TextBase),y
+    sta (ScrollBase),y
+    dey
+    bpl CopyByte
+    bmi NextLine
 
-;; End of the reset function: when no 80-column card answers (TESTCARD), selects slot 3's own ROM
-;; (SETSLOTC3ROM). Exits through F_RETURN.
-RESETRET:
-    jsr TESTCARD                    ; $C264
-    beq GORETN                      ; $C267
-    sta SETSLOTC3ROM                ; $C269
-    bne GORETN                      ; $C26C
+;; Clears the bottom line, then sets the cursor line's base again.
+;; Also: SCRL3 (IIEROM82)
+ClearBottom:
+    ldy #0
+    jsr ClearColumns40
+    jsr VerticalTab
+    jmp Return
+.endproc
 
-;; Function 7, called by the Monitor after reading a key in escape mode: clears bit 5 (lowercase to
-;; uppercase) and turns the arrow keys left, right, down and up ($88, $95, $8A, $8B) into J, K, M and I.
-;; In: A = key.
-;; Out: A = translated key.
-;; Uses: Y
-B_ESCFIX:
-    and #$DF                        ; $C26E
-    ldy #$03                        ; $C270
+;; Function 3, 40 columns: clears from the cursor to the end of the line.
+;; Also: F_CLREOL (IIEROM82)
+.proc ClearToEndOfLine40
+    ldy CursorColumn
+    lda #' '
 
-B_ESCFIX2:
-    cmp ESCIN,y                     ; $C272
-    bne B_ESCFIX3                   ; $C275
-    lda ESCOUT,y                    ; $C277
+;; Stores a space in each column up to the window's right edge.
+;; Also: CLEOL2 (IIEROM82)
+NextColumn:
+    sta (TextBase),y
+    iny
+    cpy WindowWidth
+    bcc NextColumn
+    bcs ClearDone
+.endproc
 
-B_ESCFIX3:
-    dey                             ; $C27A
-    bpl B_ESCFIX2                   ; $C27B
+;; Function 8, 40 columns: makes the window full width and 24 lines deep, and moves the cursor to the last line.
+;;
+;; The Monitor's <SetWindow> has set the window's top and left. Nothing branches here, but <Dispatch40> reaches it for
+;; function 8: <Handlers40> holds functions 0-5 only, and its ninth byte is <Control::ScrollSteps>'s third, $89, this
+;; routine's address minus one.
+;; Out: WindowWidth, WindowBottom, CV = the last line, TextBase/TextBaseHigh = its base address
+;; Also: F_SETWND (IIEROM82)
+.proc SetWindow40
+    lda #WIDTH_40
+    sta WindowWidth
+    lda #FULL_WINDOW_BOTTOM
+    sta WindowBottom
+    lda #LAST_LINE
+    sta CV
+    jsr VerticalTab
+    jmp Return
+.endproc
 
-GORETN:
-    jmp F_RETURN                    ; $C27D
+;; Function 4, 40 columns: clears from the column the Monitor left in <PassedColumn> to the end of the line.
+;; Also: F_CLEOLZ (IIEROM82)
+.proc ClearLineFrom40
+    ldy PassedColumn
+    jsr ClearColumns40
+    ; Falls into ClearDone.
+.endproc
 
-;; Arrow-key codes looked up by B_ESCFIX: left, right, down, up.
-ESCIN:
-    .byte KEY_BS, KEY_RIGHT, KEY_LF, KEY_CTRL_K ; $C280
+;; The exit <ClearToEndOfLine40> branches to and <ClearLineFrom40> falls into.
+;; Also: F_GORET (IIEROM82)
+ClearDone:
+    jmp Return
 
-;; Letters B_ESCFIX substitutes for ESCIN's keys: J, K, M, I.
-ESCOUT:
-    .byte "JKMI"                    ; $C284
+;; Prepares the 80-column firmware for a screen function, then runs the function's 80-column version.
+;;
+;; Mode bit 0, <MODE_INTERRUPTS>, gets the interrupt state of the Monitor's caller: set when its status, the lower of
+;; the two <Monitor:CallFirmware> pushed, had interrupts enabled. <CV> becomes the firmware's cursor line.
+;; Also: B_FUNC0 (IIEROM82)
+.proc Prepare80
 
-;; Function 6, the original Monitor's KEYIN: waits for a key while alternating the screen byte at CH between
-;; $FF and the original character. If the caller had interrupts enabled, the wait loop calls the Monitor's
-;; $FC75 so interrupts can be serviced (V set as the flag). Stirs RNDL/RNDH while waiting.
-;; In: A = character under the cursor.
-;; Out: A = key (bit 7 set); keyboard strobe cleared
-;; Uses: Y, $0478 (saved character)
+;; The status that says whether internal ROM was in before the call, set aside while the caller's status is read.
+SavedStatus = FirmwareScratch
+
+    ; The function number back, then mode bit 0 clear.
+    pla
+    tay
+    lda EightyColumns::Mode
+    and #<~MODE_INTERRUPTS
+    sta EightyColumns::Mode
+
+    ; The caller's status, put back under the other: three shifts move its interrupt flag, bit 2, into the carry.
+    pla
+    sta SavedStatus
+    pla
+    pha
+    lsr a
+    lsr a
+    lsr a
+    lda SavedStatus
+    pha
+    bcs CopyLine
+    lda EightyColumns::Mode
+    ora #MODE_INTERRUPTS
+    sta EightyColumns::Mode
+
+;; The cursor line, then the dispatch.
+;; Also: NOI (IIEROM82)
+CopyLine:
+    lda CV
+    sta EightyColumns::CursorLine
+    jmp Dispatch80
+.endproc
+
+;; Function 2, 80 columns: scrolls the window up a line.
+;; Also: B_SCROLL (IIEROM82)
+.proc Scroll80
+    jsr Control::ScrollUp
+    jmp Return
+.endproc
+
+;; Function 3, 80 columns: clears from the cursor to the end of the line.
+;; Also: B_CLREOL (IIEROM82)
+.proc ClearToEndOfLine80
+    jsr Control::ClearToEndOfLine
+    jmp Return
+.endproc
+
+;; Function 4, 80 columns: clears from the column the Monitor left in <PassedColumn> to the end of the line.
+;; Also: B_CLEOLZ (IIEROM82)
+.proc ClearLineFrom80
+    ldy PassedColumn
+    jsr Control::ClearLineFrom
+    jmp Return
+.endproc
+
+;; Function 0, 80 columns: clears from the cursor to the end of the window.
+;; Also: B_CLREOP (IIEROM82)
+.proc ClearToEndOfWindow80
+    jsr Control::ClearToEndOfWindow
+    jmp Return
+.endproc
+
+;; Function 8, 80 columns: goes on in <SetWindowWidth>.
+;;
+;; Nothing branches here, but <Dispatch80> reaches it for function 8: <Handlers80> holds functions 0-5 only, and its
+;; ninth byte is <Control::ScrollEdges>'s third, $E6, this routine's address minus one.
+;; Also: B_SETWND (IIEROM82)
+.proc SetWindow80
+    jmp SetWindowWidth
+.endproc
+
+;; Function 5, which the Monitor's reset calls, in both tables: goes on in <ResetFirmware>.
+;; Also: B_RESET (IIEROM82)
+.proc Reset
+    jmp ResetFirmware
+.endproc
+
+;; Function 1, 80 columns: moves the cursor to the window's top left and clears the window.
+;;
+;; Then gives the Monitor the firmware's cursor: its column in <CursorColumn> and
+;; <EightyColumns::LastCursorColumn>, its line in <CV> and the line's base address.
+;; Also: B_HOME (IIEROM82)
+.proc Home80
+    jsr Control::HomeAndClear
+    lda EightyColumns::CursorColumn
+    sta CursorColumn
+    sta EightyColumns::LastCursorColumn
+    lda EightyColumns::CursorLine
+    sta CV
+    ; Always: the line is 0-23.
+    bpl BaseAndReturn
+.endproc
+
+;; Runs a screen function's 80-column version through <Handlers80>, after <Prepare80>.
+;;
+;; Sets the cursor line's base address. <CursorColumn> becomes the firmware's column when 80 columns are off, or when it
+;; differs from the column the firmware last gave it, which means a program moved the cursor.
+;; In: Y = the function number
+;; Also: B_VECTOR (IIEROM82)
+.proc Dispatch80
+    jsr LineBase
+    lda CursorColumn
+    bit Columns80State
+    bpl AdoptColumn
+    cmp EightyColumns::LastCursorColumn
+    beq ByTable
+
+;; Takes <CursorColumn> as the firmware's column.
+;; Also: B_GETCH (IIEROM82)
+AdoptColumn:
+    sta EightyColumns::CursorColumn
+
+;; Runs the handler: the table holds its address minus one, so the RTS lands on it.
+;; Also: B_FUNC1 (IIEROM82)
+ByTable:
+    lda #HANDLER_PAGE
+    pha
+    lda Handlers80,y
+    pha
+    rts
+.endproc
+
+;; Makes the window full width, 80 columns or 40 as the display is, and 24 lines deep, and moves the cursor to the
+;; last line, for function 8 in 80 columns.
+;; Out: WindowWidth, WindowBottom, CV = the last line, TextBase/TextBaseHigh = its base address
+;; Also: B_SETWNDX (IIEROM82)
+.proc SetWindowWidth
+    lda #WIDTH_80
+    bit Columns80State
+    bmi StoreWidth
+    ; Half: 40.
+    lsr a
+
+;; Stores the width, the bottom and the cursor line.
+;; Also: B_SETWND2 (IIEROM82)
+StoreWidth:
+    sta WindowWidth
+    lda #FULL_WINDOW_BOTTOM
+    sta WindowBottom
+    lda #LAST_LINE
+    sta EightyColumns::CursorLine
+    sta CV
+    ; Falls into BaseAndReturn.
+.endproc
+
+;; Sets the firmware's cursor line's base address, then returns: <Home80> branches here and <SetWindowWidth> falls in.
+;; Also: GOBACK (IIEROM82)
+BaseAndReturn:
+    jsr LineBase
+    jmp Return
+
+;; Resets the 80-column firmware, for the Monitor's reset.
+;;
+;; Marks the firmware inactive and switches annunciators 2 and 3 on. With Solid-Apple (<Button1>) held, runs the
+;; self-test. With Open-Apple (<Button0>) held, it spoils memory first: two bytes of every page from $BF down to $02 get
+;; the page's number, the offset going down one a page from $B0, so that page 3's are <SoftEntryVector>'s high byte and
+;; <SoftEntryCheck>, and the Monitor's reset starts afresh instead of returning to a program. Then, when <TestAuxMemory>
+;; finds no auxiliary memory, slot 3's own ROM is switched in.
+;; Also: B_RESETX (IIEROM82)
+.proc ResetFirmware
+    lda #MODE_INACTIVE
+    sta EightyColumns::Mode
+    lda Annunciator2On
+    lda Annunciator3On
+    lda Button1
+    bmi ToSelfTest
+    lda Button0
+    bpl ChooseSlot3Rom
+
+    ; Open-Apple: from the top page down.
+    ldy #SPOIL_FIRST_OFFSET
+    lda #0
+    sta Address1
+    lda #SPOIL_FIRST_PAGE
+    sec
+
+;; Stores the page's number in two bytes of it, the second one lower.
+;; Also: BLAST (IIEROM82)
+SpoilPage:
+    sta Address1High
+    sta (Address1),y
+    dey
+    sta (Address1),y
+    sbc #1
+    cmp #SPOIL_END_PAGE
+    bne SpoilPage
+    beq ChooseSlot3Rom
+
+;; Solid-Apple: the self-test.
+;; Also: DIAGS (IIEROM82)
+ToSelfTest:
+    jmp SelfTest::Run
+
+;; Switches slot 3's own ROM in when <TestAuxMemory> finds no auxiliary memory, then returns.
+;; Also: RESETRET (IIEROM82)
+ChooseSlot3Rom:
+    jsr TestAuxMemory
+    beq ToReturn
+    sta SlotC3RomOn
+    ; Always: TESTCARD's result was not zero.
+    bne ToReturn
+.endproc
+
+;; Function 7, which the Monitor calls after reading a key in escape mode: makes a letter uppercase, and the arrow keys
+;; I, J, K and M.
+;;
+;; Clears bit 5 of any key, not only a letter's; then left, right, down and up (<ArrowKeys>) become J, K, M and I
+;; (<ArrowLetters>).
+;; In: A = the key
+;; Out: A = the key, translated
+;; Also: B_ESCFIX (IIEROM82)
+.proc EscapeKey
+    and #<~LOWERCASE_BIT
+    ldy #ARROW_COUNT - 1
+
+;; Compares the key with an arrow key, and takes its letter when they match.
+;; Also: B_ESCFIX2 (IIEROM82)
+Compare:
+    cmp ArrowKeys,y
+    bne Next
+    lda ArrowLetters,y
+
+;; The next arrow key, down to the first.
+;; Also: B_ESCFIX3 (IIEROM82)
+Next:
+    dey
+    bpl Compare
+    ; Falls into ToReturn.
+.endproc
+
+;; Returns: <ResetFirmware> branches here and <EscapeKey> falls in.
+;; Also: GORETN (IIEROM82)
+ToReturn:
+    jmp Return
+
+;; The arrow keys <EscapeKey> translates: left, right, down and up.
+;; Also: ESCIN (IIEROM82)
+ArrowKeys:
+    .byte KEY_BACKSPACE, KEY_RIGHT_ARROW, KEY_LINE_FEED, KEY_CONTROL_K
+
+;; The arrow keys in <ArrowKeys> and <ArrowLetters>.
+ARROW_COUNT = * - ArrowKeys
+
+;; The letters <EscapeKey> makes the arrow keys: J, K, M and I.
+;; Also: ESCOUT (IIEROM82)
+ArrowLetters:
+    .byte "JKMI"
+.assert * - ArrowLetters = ARROW_COUNT, "A letter for each arrow key."
+
+;; Function 6, the original IIe's <KeyboardIn>: waits for a key with a blinking cursor, then clears the keyboard
+;; strobe.
+;;
+;; The cursor is a block, <CURSOR_BLOCK>, that alternates with the character under it, which is put back once the key
+;; comes. <PollKeyboard> counts <RandomSeed>/<RandomSeedHigh> while it waits. When the Monitor's caller had
+;; interrupts enabled (its status is the lower of the two <Monitor:CallFirmware> pushed), <PollKeyboard> has
+;; <RestoreAfterFirmware> let them in on every poll, and polls fewer times for each half of the blink.
+;; In: A = the character under the cursor
+;; Out: A = the key, with its high bit set
 ;; Keeps: X
-B_KEYIN:
-    sta TEMP1                       ; $C288
-    pla                             ; $C28B
-    tay                             ; $C28C
-    pla                             ; $C28D
-    pha                             ; $C28E
-    ror a                           ; $C28F
-    ror a                           ; $C290
-    ror a                           ; $C291
-    tya                             ; $C292
-    pha                             ; $C293
-    txa                             ; $C294
-    pha                             ; $C295
-    clv                             ; $C296
-    bcs B_KEYIN2                    ; $C297
-    bit SEV                         ; $C299 BIT SEV sets V
+;; Also: B_KEYIN (IIEROM82)
+.proc GetKey
 
-B_KEYIN2:
-    lda #$FF                        ; $C29C
-    ldy CH                          ; $C29E
-    sta (BASL),y                    ; $C2A0
-    jsr KEYDLY                      ; $C2A2
-    bcs GOTKEY                      ; $C2A5
-    lda TEMP1                       ; $C2A7
-    ldy CH                          ; $C2AA
-    sta (BASL),y                    ; $C2AC
-    jsr KEYDLY                      ; $C2AE
-    bcs GOTKEY                      ; $C2B1
-    bcc B_KEYIN2                    ; $C2B3
+;; The character under the cursor.
+Character = FirmwareScratch
 
-GOTKEY:
-    lda TEMP1                       ; $C2B5
-    ldy CH                          ; $C2B8
-    sta (BASL),y                    ; $C2BA
-    pla                             ; $C2BC
-    tax                             ; $C2BD
-    lda KBD                         ; $C2BE
-    sta KBDSTRB                     ; $C2C1
-    bmi F_RETURN                    ; $C2C4
+    ; The caller's status, put back under the other: three shifts move its interrupt flag into the carry.
+    sta Character
+    pla
+    tay
+    pla
+    pha
+    ror a
+    ror a
+    ror a
+    tya
+    pha
+    txa
+    pha
 
-;; Subroutine of B_KEYIN: polls the keyboard for a fixed time ($0C00 loops with interrupt windows, $3100
-;; without), stirring RNDL/RNDH.
-;; In:    overflow = set to call $FC75 each loop
-;; Out:   A = the last keyboard read: the key, with bit 7 set, when one is waiting,
-;;          carry = set if a key is waiting, clear on timeout
-;; Uses:  X, Y
-KEYDLY:
-    ldx #$0C                        ; $C2C6
-    bvs IK1                         ; $C2C8
-    ldx #$31                        ; $C2CA
+    ; Overflow set: interrupts were enabled, so PollKeyboard lets them in. SEV is an RTS, whose bit 6 BIT copies.
+    clv
+    bcs Blink
+    bit Screen::OverflowByte
 
-IK1:
-    ldy #$00                        ; $C2CC
+;; Shows the block and waits, then the character and waits, until a key comes.
+;; Also: B_KEYIN2 (IIEROM82)
+Blink:
+    lda #CURSOR_BLOCK
+    ldy CursorColumn
+    sta (TextBase),y
+    jsr PollKeyboard
+    bcs GotKey
+    lda Character
+    ldy CursorColumn
+    sta (TextBase),y
+    jsr PollKeyboard
+    bcs GotKey
+    bcc Blink
 
-IK2:
-    bvc IK2A                        ; $C2CE
-    php                             ; $C2D0
-    jsr VIDSYNC                     ; $C2D1
-    plp                             ; $C2D4
+;; Puts the character back, then reads the key and clears the strobe.
+;; Also: GOTKEY (IIEROM82)
+GotKey:
+    lda Character
+    ldy CursorColumn
+    sta (TextBase),y
+    pla
+    tax
+    lda Keyboard
+    sta KeyboardStrobe
+    ; Always: the key has its high bit set.
+    bmi Return
+.endproc
 
-IK2A:
-    inc RNDL                        ; $C2D5
-    bne IK3                         ; $C2D7
-    inc RNDH                        ; $C2D9
+;; Polls the keyboard for one half of <GetKey>'s blink, counting <RandomSeed>/<RandomSeedHigh>.
+;;
+;; With overflow set it calls <RestoreAfterFirmware> on every poll, to let interrupts in, and polls
+;; <POLLS_WITH_INTERRUPTS> times 256; otherwise <POLLS_WITHOUT_INTERRUPTS> times 256.
+;; In: overflow = set to let interrupts in
+;; Out: A = the last read of <Keyboard>, the key with its high bit set when one is waiting, carry = set when a key is
+;;      waiting, clear when the time ran out
+;; Keeps: overflow
+;; Also: KEYDLY (IIEROM82)
+.proc PollKeyboard
+    ldx #POLLS_WITH_INTERRUPTS
+    bvs Outer
+    ldx #POLLS_WITHOUT_INTERRUPTS
 
-IK3:
-    lda KBD                         ; $C2DB
-    bmi KDRETY                      ; $C2DE
-    dey                             ; $C2E0
-    bne IK2                         ; $C2E1
-    dex                             ; $C2E3
-    bne IK1                         ; $C2E4
+;; 256 polls.
+;; Also: IK1 (IIEROM82)
+Outer:
+    ldy #0
 
-KDRETN:
-    clc                             ; $C2E6
-    bcc KDRET                       ; $C2E7
+;; One poll, letting interrupts in first with overflow set.
+;; Also: IK2 (IIEROM82)
+Inner:
+    bvc StirSeed
+    php
+    jsr RestoreAfterFirmware
+    plp
 
-KDRETY:
-    sec                             ; $C2E9
+;; Counts the random seed.
+;; Also: IK2A (IIEROM82)
+StirSeed:
+    inc RandomSeed
+    bne ReadKeyboard
+    inc RandomSeedHigh
 
-KDRET:
-    rts                             ; $C2EA
+;; Reads the keyboard.
+;; Also: IK3 (IIEROM82)
+ReadKeyboard:
+    lda Keyboard
+    bmi KeyWaiting
+    dey
+    bne Inner
+    dex
+    bne Outer
 
-;; Common exit for the $C100 functions: pulls the second P and, if internal $CX ROM was not in on entry,
-;; jumps to the Monitor's $FD29 (SETSLOTCXROM, PLP, RTS); otherwise to $FD2C (PLP, RTS).
-F_RETURN:
-    plp                             ; $C2EB
-    bmi F_RET1                      ; $C2EC
-    jmp SLOTRTN                     ; $C2EE
+;; No key: carry clear. Nothing branches here.
+;; Also: KDRETN (IIEROM82)
+NoKey:
+    clc
+    bcc Done
 
-;; Exit when internal ROM was already in: jumps to $FD2C, which restores P and returns.
-F_RET1:
-    jmp SLOTRTN + 3                 ; $C2F1 past SLOTRTN's SETSLOTCXROM: PLP and RTS
+;; A key: carry set.
+;; Also: KDRETY (IIEROM82)
+KeyWaiting:
+    sec
 
-;; Stores spaces ($A0) at (BASL),Y from Y up to WNDWDTH-1.
-;; In: Y = first column.
-;; Out: Y = WNDWDTH, carry set.
-;; Uses: A
-X_CLEOLZ:
-    lda #' '                        ; $C2F4
+;; Returns.
+;; Also: KDRET (IIEROM82)
+Done:
+    rts
+.endproc
 
-X_CLEOL2:
-    sta (BASL),y                    ; $C2F6
-    iny                             ; $C2F8
-    cpy WNDWDTH                     ; $C2F9
-    bcc X_CLEOL2                    ; $C2FB
-    rts                             ; $C2FD
-    .byte $00, $00                  ; $C2FE
+;; The exit every function leaves through: pulls the status <Monitor:CallFirmware> pushed last, and returns through
+;; <SlotRomReturn>, which switches slot ROM in, unless internal ROM was in before the call.
+;; Also: F_RETURN (IIEROM82)
+.proc Return
+    plp
+    bmi ReturnInternal
+    jmp SlotRomReturn
+.endproc
+
+;; The exit when internal ROM was in before the call: returns through <SlotRomReturn> past its switch, at
+;; <Monitor:SlotRomReturn::PullStatus>, leaving the ROM as it is.
+;; Also: F_RET1 (IIEROM82)
+ReturnInternal:
+    ; SlotRomReturn's first instruction, sta InternalCxRomOff, is three bytes.
+    jmp SlotRomReturn + 3
+
+;; Clears a line of the 40-column screen from a column to the window's right edge.
+;; In: Y = the column, TextBase/TextBaseHigh = the line
+;; Out: A = a space, Y = <WindowWidth> when the column was inside the window, carry = set
+;; Keeps: X
+;; Also: X_CLEOLZ (IIEROM82)
+.proc ClearColumns40
+    lda #' '
+
+;; Stores a space in each column.
+;; Also: X_CLEOL2 (IIEROM82)
+NextColumn:
+    sta (TextBase),y
+    iny
+    cpy WindowWidth
+    bcc NextColumn
+    rts
+.endproc
+
+    ; Unused.
+    .res 2, 0
+
+.endscope

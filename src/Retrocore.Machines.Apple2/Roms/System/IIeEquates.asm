@@ -507,10 +507,10 @@ Store80Off = $C000
 ;; With 80STORE on, <Page2On> maps auxiliary memory at $0400-$07FF and <Page2Off> main memory, and while hi-res
 ;; graphics are on (<HiResOn>), at $2000-$3FFF too; <AuxReadOff> and its partners then leave those pages alone. The
 ;; 80-column firmware turns it on to reach the even columns, which are in auxiliary memory. <Store80Off> turns it
-;; off, and <Store80State> reports it. Apple's listings call it SET80COL, a name left out of Also: because the
-;; Enhanced IIe's firmware has a label of that name, its Control-R routine.
+;; off, and <Store80State> reports it. The Enhanced IIe's firmware source called its Control-R routine SET80COL
+;; before; that is <Firmware:Control::Columns80@Enhanced>.
 ;; See: <Store80Off>, <Store80State>, <Page2On>, <Page2Off>
-;; Also: SET80STORE (UNKN)
+;; Also: SET80COL (IIEROM82, IIETRM85), SET80STORE (UNKN)
 Store80On = $C001
 
 ;; Writing it turns RAMRD off: reads from $0200-$BFFF come from main memory.
@@ -963,8 +963,9 @@ PaddleTrigger = $C070
 ;; Reading it maps language card RAM bank 2 at $D000-$FFFF for reading, with writes off.
 ;;
 ;; <LanguageCardBank2ReadWrite> also write-enables the bank when read twice, and <LanguageCardBank1ReadOnly> maps
-;; bank 1. The original IIe's <Firmware:COPYROM> reads it to put back a bank 2 RAM it found selected.
-;; See: <LanguageCardBank2ReadWrite>, <LanguageCardBank1ReadOnly>, <Firmware:COPYROM>, <LanguageCardRamState>
+;; bank 1. The original IIe's <Firmware:CopyMonitorToRam@Original> reads it to put back a bank 2 RAM it found selected.
+;; See: <LanguageCardBank2ReadWrite>, <LanguageCardBank1ReadOnly>, <Firmware:CopyMonitorToRam@Original>,
+;;     <LanguageCardRamState>
 ;; Also: LCRAM2 (UNKN)
 LanguageCardBank2ReadOnly = $C080
 
@@ -996,16 +997,17 @@ LanguageCardBank2ReadWrite = $C083
 ;; Reading it maps language card RAM bank 1 at $D000-$FFFF for reading, with writes off.
 ;;
 ;; <LanguageCardBank1ReadWrite> also write-enables the bank when read twice, and <LanguageCardBank2ReadOnly> maps
-;; bank 2. The original IIe's <Firmware:COPYROM> reads it to put back a bank 1 RAM it found selected.
-;; See: <LanguageCardBank1ReadWrite>, <LanguageCardBank2ReadOnly>, <Firmware:COPYROM>, <LanguageCardBank2State>
+;; bank 2. The original IIe's <Firmware:CopyMonitorToRam@Original> reads it to put back a bank 1 RAM it found selected.
+;; See: <LanguageCardBank1ReadWrite>, <LanguageCardBank2ReadOnly>, <Firmware:CopyMonitorToRam@Original>,
+;;     <LanguageCardBank2State>
 ;; Also: LCRAM1 (UNKN)
 LanguageCardBank1ReadOnly = $C088
 
 ;; Reading it maps ROM at $D000-$FFFF and selects bank 1; reading it twice in a row also write-enables bank 1.
 ;;
-;; <LanguageCardRomWriteBank2> does the same with bank 2. The original IIe's <Firmware:COPYROM> reads it once to
-;; put back ROM with bank 1 selected.
-;; See: <LanguageCardRomWriteBank2>, <LanguageCardBank1ReadOnly>, <Firmware:COPYROM>
+;; <LanguageCardRomWriteBank2> does the same with bank 2. The original IIe's <Firmware:CopyMonitorToRam@Original> reads
+;; it once to put back ROM with bank 1 selected.
+;; See: <LanguageCardRomWriteBank2>, <LanguageCardBank1ReadOnly>, <Firmware:CopyMonitorToRam@Original>
 ;; Also: ROMIN1 (UNKN)
 LanguageCardRomWriteBank1 = $C089
 

@@ -15,7 +15,9 @@ internal sealed partial class AssemblyPreprocessor
     private string _constantCheap = "";
     private int _constantContexts;
     private AssemblyDialect? _constantDialect;
-    private readonly List<(string Scope, AssemblyStatementKind Kind)> _constantScopes = [];
+    private readonly List<(string Scope, AssemblyStatementKind Kind, UsingDirective? Usings)> _constantScopes = [];
+    private UsingDirective? _constantUsings;
+    private string? _usingAmbiguity;
     private readonly HashSet<string> _constantNamespaces = [with(StringComparer.Ordinal)];
 
     /// <summary>
@@ -27,6 +29,29 @@ internal sealed partial class AssemblyPreprocessor
     {
         if (_constantDialect is { } dialect && dialect != node.Dialect) { _constantCheap = FreshCheapContext(); }
         _constantDialect = node.Dialect;
+        if (node.Kind == AssemblyStatementKind.Using)
+        {
+            // The resolver reports a malformed directive; one that is well formed applies from the next line.
+            if (node.Dialect == AssemblyDialect.Native && node.Label is null && !node.Operand.Memory.Span.Trim().IsEmpty)
+            {
+                try
+                {
+                    List<string> names = [];
+                    foreach (ReadOnlyMemory<char> name in new AssemblyOperands(node.Operand.Memory, 0))
+                    {
+                        names.Add(name.ToString());
+                    }
+
+                    _constantUsings = new(_constantUsings, _constantScope, [.. names]);
+                }
+                catch (AssemblyError)
+                {
+                }
+            }
+
+            return true;
+        }
+
         if (node.Kind is AssemblyStatementKind.Procedure or AssemblyStatementKind.Scope)
         {
             string name = node.Operand.Text.Trim();
@@ -43,7 +68,7 @@ internal sealed partial class AssemblyPreprocessor
             // An invalid opening still pairs with its terminator, so the enclosing scope is kept.
             if (node.Label is not null || invalidName)
             {
-                _constantScopes.Add((_constantScope, node.Kind));
+                _constantScopes.Add((_constantScope, node.Kind, _constantUsings));
                 return true;
             }
 
@@ -59,7 +84,7 @@ internal sealed partial class AssemblyPreprocessor
                 _constants.Unset(qualified);
             }
 
-            _constantScopes.Add((_constantScope, node.Kind));
+            _constantScopes.Add((_constantScope, node.Kind, _constantUsings));
             _constantScope = qualified;
             _constantNamespaces.Add(qualified);
             return true;
@@ -68,10 +93,11 @@ internal sealed partial class AssemblyPreprocessor
         if (node.Kind is not (AssemblyStatementKind.EndScope or AssemblyStatementKind.EndProcedure)) { return false; }
         if (_constantScopes.Count != 0)
         {
-            (string parent, AssemblyStatementKind kind) = _constantScopes[^1];
+            (string parent, AssemblyStatementKind kind, UsingDirective? usings) = _constantScopes[^1];
             if ((node.Kind == AssemblyStatementKind.EndProcedure) == (kind == AssemblyStatementKind.Procedure))
             {
                 _constantScope = parent;
+                _constantUsings = usings;
                 _constantCheap = FreshCheapContext();
                 _constantScopes.RemoveAt(_constantScopes.Count - 1);
             }
@@ -104,12 +130,63 @@ internal sealed partial class AssemblyPreprocessor
             prefix = previous < 0 ? "" : prefix[..previous];
         }
 
-        return name;
+        // Then the scopes the .using directives in effect name.
+        return separator >= 0 || _constantUsings is null || _defined.Contains(name) ? name : UsedName(name) ?? name;
+    }
+
+    // A plain name defined so far in a scope that a .using in effect names, innermost directive first.
+    private string? UsedName(string name)
+    {
+        for (UsingDirective? directive = _constantUsings; directive is not null; directive = directive.Next)
+        {
+            string? found = null;
+            string? foundScope = null;
+            foreach (string scopeName in directive.Names)
+            {
+                if (UsedScope(scopeName, directive.Scope) is not { } scope) { continue; }
+                string candidate = ConstantQualified(scope, name);
+                if (!_defined.Contains(candidate)) { continue; }
+                if (found is null)
+                {
+                    found = candidate;
+                    foundScope = scopeName;
+                }
+                else if (found != candidate)
+                {
+                    _usingAmbiguity = $"'{name}' is in both {foundScope} and {scopeName}; qualify it.";
+                    break;
+                }
+            }
+
+            if (found is not null) { return found; }
+        }
+
+        return null;
+    }
+
+    // The qualified name of the scope a .using operand names, among the scopes opened so far.
+    private string? UsedScope(string name, string from)
+    {
+        if (name.StartsWith("::", StringComparison.Ordinal)) { return name[2..]; }
+        int separator = name.IndexOf("::", StringComparison.Ordinal);
+        string first = separator < 0 ? name : name[..separator];
+        string prefix = from;
+        while (true)
+        {
+            if (_constantNamespaces.Contains(ConstantQualified(prefix, first)))
+            {
+                return ConstantQualified(prefix, name);
+            }
+
+            if (prefix.Length == 0) { return null; }
+            int previous = prefix.LastIndexOf("::", StringComparison.Ordinal);
+            prefix = previous < 0 ? "" : prefix[..previous];
+        }
     }
 
     private string ConstantExpression(string text)
     {
-        if (_constantScope.Length == 0 && text.IndexOfAny('@', ':') < 0) { return text; }
+        if (_constantScope.Length == 0 && _constantUsings is null && text.IndexOfAny('@', ':') < 0) { return text; }
         StringBuilder? result = null;
         int copied = 0;
         AssemblyNameReferences references = new(text.AsMemory());

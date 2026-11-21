@@ -260,7 +260,7 @@ internal static class LanguageHost
 
         SourceAnalysis? analysis = workspace.AnalysisOf(path);
         bool macro10 = analysis?.UsesMacro10(path) ?? SourceText.Macro10Dialect(path, lines) == true;
-        if (analysis?.Find(word.Word, macro10) is { Count: > 0 } sites) { return sites; }
+        if (analysis?.Find(word.Word, path, position.Line, macro10) is { Count: > 0 } sites) { return sites; }
 
         // A local label: the nearest line in this file that defines it.
         if (SourceText.LocalDefinition(lines, word.Word, position.Line) is { } local)

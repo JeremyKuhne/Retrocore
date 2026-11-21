@@ -304,12 +304,19 @@ public sealed partial class DocumentationResolver
             }
         }
 
-        // The assembler's scope rules, from the topic's scope outward.
+        // The assembler's scope rules, from the topic's scope outward, then the scopes the .using directives in
+        // effect at the topic name, then historical names.
         if (module is null && SetsFor(model).Contains(Current))
         {
             foreach (string candidate in Scoped(from.Name, name))
             {
-                if (Match(Current, candidate) is { } match) { return match; }
+                if (Match(Current, candidate, also: false) is { } match) { return match; }
+            }
+
+            if (Used(from, name) is { } used) { return used; }
+            if (Also(Current, name.StartsWith("::", StringComparison.Ordinal) ? name[2..] : name) is { } also)
+            {
+                return also;
             }
         }
 
@@ -340,7 +347,7 @@ public sealed partial class DocumentationResolver
             ? (Path.GetFileName(topic.Path).ToUpperInvariant(), topic.Line, target.Value)
             : ("", -1, target.Value);
 
-    private static DocumentationTarget? Match(DocumentationSet set, string name)
+    private static DocumentationTarget? Match(DocumentationSet set, string name, bool also = true)
     {
         if (set.Find(name) is { } topic) { return Found(topic); }
         if (set.Symbols.TryGetValue(name, out long value))
@@ -348,10 +355,33 @@ public sealed partial class DocumentationResolver
             return new(DocumentationTargetKind.Symbol, name) { Set = set, Value = value };
         }
 
-        // A historical name reaches the definition that gives it in an Also: section.
+        return also ? Also(set, name) : null;
+    }
+
+    // A historical name reaches the definition that gives it in an Also: section.
+    private static DocumentationTarget? Also(DocumentationSet set, string name)
+    {
         IReadOnlyList<DocumentationTopic> also = set.FindAlso(name);
         if (also.Count == 1) { return Found(also[0]); }
-        if (also.Count > 1) { return new(DocumentationTargetKind.Ambiguous, name); }
+        return also.Count > 1 ? new(DocumentationTargetKind.Ambiguous, name) : null;
+    }
+
+    // A plain name in the scopes the .using directives in effect at the topic name, innermost directive first; a
+    // name two scopes of one directive define is ambiguous.
+    private DocumentationTarget? Used(DocumentationTopic from, string name)
+    {
+        if (name.Contains("::", StringComparison.Ordinal) || from.Comments.Count == 0) { return null; }
+        foreach (DocumentationUsing directive in from.Primary.Usings)
+        {
+            List<DocumentationTarget> matches = [];
+            foreach (string scope in directive.Targets(Current.IsScope).Distinct(StringComparer.Ordinal))
+            {
+                if (Match(Current, $"{scope}::{name}", also: false) is { } match) { matches.Add(match); }
+            }
+
+            if (matches.Count == 1) { return matches[0]; }
+            if (matches.Count > 1) { return new(DocumentationTargetKind.Ambiguous, name); }
+        }
 
         return null;
     }

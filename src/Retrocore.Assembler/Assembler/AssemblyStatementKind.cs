@@ -117,5 +117,10 @@ public enum AssemblyStatementKind : byte
     /// <summary>
     ///  Closes .scope.
     /// </summary>
-    EndScope
+    EndScope,
+
+    /// <summary>
+    ///  A .using that makes the named scopes' names usable unqualified to the end of the enclosing scope or file.
+    /// </summary>
+    Using
 }

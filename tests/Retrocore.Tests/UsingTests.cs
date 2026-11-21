@@ -1,0 +1,446 @@
+// Copyright (c) 2025 Jeremy W Kuhne
+// SPDX-License-Identifier: MIT
+// See LICENSE file in the project root for full license information
+
+using Retrocore.Assembler;
+using Retrocore.Debug.Language;
+using Retrocore.Documentation;
+using NativeAssembler = Retrocore.Assembler.Assembler;
+
+namespace Retrocore.Tests;
+
+/// <summary>
+///  <c>.using</c>, which makes scopes' names usable without their <c>Scope::</c> prefix to the end of the enclosing
+///  scope or file (docs/NativeAssembly.md, "Using a scope's names").
+/// </summary>
+[TestClass]
+public sealed class UsingTests
+{
+    private const string EightyColumns = """
+        .scope EightyColumns
+        CursorColumn = $57B
+        Mode = $4FB
+        .endscope
+
+        """;
+
+    /// <summary>
+    ///  A name is found through <c>.using</c>; the same name defined in the enclosing scope wins; a qualified name is
+    ///  not affected.
+    /// </summary>
+    [TestMethod]
+    public void NamesResolveThroughUsing()
+    {
+        AssemblyResult result = Assemble(EightyColumns + """
+            .proc Show
+                .using EightyColumns
+                lda CursorColumn
+                lda Mode
+                lda EightyColumns::Mode
+                rts
+            Mode = $10
+            .endproc
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+        result.Sections[0].Bytes.Span[..9].ToArray().Should().Equal(0xAD, 0x7B, 0x05, 0xA5, 0x10, 0xAD, 0xFB, 0x04, 0x60);
+    }
+
+    /// <summary>
+    ///  A source rewritten from qualified names to <c>.using</c> assembles to the same bytes.
+    /// </summary>
+    [TestMethod]
+    public void UsingKeepsTheBytes()
+    {
+        AssemblyResult qualified = Assemble(EightyColumns + """
+            .proc Show
+                lda EightyColumns::CursorColumn
+                sta EightyColumns::Mode
+                rts
+            .endproc
+            """);
+
+        AssemblyResult used = Assemble(EightyColumns + """
+            .proc Show
+                .using EightyColumns
+                lda CursorColumn
+                sta Mode
+                rts
+            .endproc
+            """);
+
+        qualified.Diagnostics.Should().BeEmpty();
+        used.Diagnostics.Should().BeEmpty();
+        used.Sections[0].Bytes.ToArray().Should().Equal(qualified.Sections[0].Bytes.ToArray());
+        used.Symbols.Should().BeEquivalentTo(qualified.Symbols);
+    }
+
+    /// <summary>
+    ///  A <c>.using</c> ends with the <c>.proc</c> or <c>.scope</c> that contains it, and does not apply before its
+    ///  own line.
+    /// </summary>
+    [TestMethod]
+    public void UsingEndsWithItsScope()
+    {
+        AssemblyResult result = Assemble(EightyColumns + """
+            .proc Show
+                .using EightyColumns
+                lda Mode
+            .endproc
+                lda Mode
+            """);
+
+        Messages(result).Should().ContainSingle().Which.Should().Contain("Mode");
+
+        result = Assemble(EightyColumns + """
+            .proc Show
+                lda Mode
+                .using EightyColumns
+            .endproc
+            """);
+
+        Messages(result).Should().ContainSingle().Which.Should().Contain("Mode");
+    }
+
+    /// <summary>
+    ///  At file level, a <c>.using</c> applies to the end of the file, inside the scopes that follow it.
+    /// </summary>
+    [TestMethod]
+    public void FileLevelUsingAppliesToTheFile()
+    {
+        AssemblyResult result = Assemble(EightyColumns + """
+            .using EightyColumns
+                lda Mode
+            .proc Show
+                lda CursorColumn
+                rts
+            .endproc
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+        result.Sections[0].Bytes.Span[..6].ToArray().Should().Equal(0xAD, 0xFB, 0x04, 0xAD, 0x7B, 0x05);
+    }
+
+    /// <summary>
+    ///  A <c>.using</c> does not reach into an included file, and an included file's does not leak out of it.
+    /// </summary>
+    [TestMethod]
+    public void UsingStaysInItsFile()
+    {
+        string folder = Directory.CreateTempSubdirectory("retrocore-using").FullName;
+        try
+        {
+            File.WriteAllText(Path.Join(folder, "Columns.asm"), EightyColumns);
+            File.WriteAllText(Path.Join(folder, "Uses.asm"), ".using EightyColumns\n    lda Mode\n");
+            File.WriteAllText(Path.Join(folder, "Plain.asm"), "    lda Mode\n");
+
+            // The included file's own .using works in it, and is gone after it.
+            IncludeAssemble(folder, ".include \"Columns.asm\"\n.include \"Uses.asm\"\n    lda Mode\n").Should()
+                .ContainSingle().Which.Location?.Path.Should().EndWith("Main.asm");
+
+            // The including file's .using does not reach into the included file, but applies again after it.
+            IncludeAssemble(folder, ".include \"Columns.asm\"\n.using EightyColumns\n.include \"Plain.asm\"\n    lda Mode\n").Should()
+                .ContainSingle().Which.Location?.Path.Should().EndWith("Plain.asm");
+
+            IncludeAssemble(folder, ".include \"Columns.asm\"\n.include \"Uses.asm\"\n.using EightyColumns\n    lda Mode\n").Should()
+                .BeEmpty();
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    /// <summary>
+    ///  Two used scopes that define a name: an error naming both, only where that name is used.
+    /// </summary>
+    [TestMethod]
+    public void AmbiguousNamesAreErrorsWhereUsed()
+    {
+        const string Scopes = """
+            .scope First
+            Shared = 1
+            OnlyFirst = 2
+            .endscope
+            .scope Second
+            Shared = 3
+            .endscope
+
+            """;
+
+        Assemble(Scopes + ".using First, Second\n    lda #OnlyFirst\n").Diagnostics.Should().BeEmpty();
+        Messages(Assemble(Scopes + ".using First, Second\n    lda #Shared\n")).Should().Equal(
+            "'Shared' is in both First and Second; qualify it.");
+
+        // Separate directives are separate steps: the later, innermost one wins.
+        AssemblyResult result = Assemble(Scopes + ".using First\n.using Second\n    lda #Shared\n");
+        result.Diagnostics.Should().BeEmpty();
+        result.Sections[0].Bytes.Span[..2].ToArray().Should().Equal(0xA9, 3);
+    }
+
+    /// <summary>
+    ///  A <c>.using</c> of an unknown scope is an error; of one defined later in the source, it works; qualified
+    ///  and absolute scope names work.
+    /// </summary>
+    [TestMethod]
+    public void UsingNamesScopes()
+    {
+        Messages(Assemble(".using Nowhere\n    rts\n")).Should().Equal("No scope named 'Nowhere' for .using.");
+
+        AssemblyResult later = Assemble(".using EightyColumns\n    lda Mode\n" + EightyColumns);
+        later.Diagnostics.Should().BeEmpty();
+        later.Sections[0].Bytes.Span[..3].ToArray().Should().Equal(0xAD, 0xFB, 0x04);
+
+        AssemblyResult nested = Assemble("""
+            .scope Firmware
+            .scope Columns
+            Mode = $4FB
+            .endscope
+            .endscope
+            .proc A
+                .using Firmware::Columns
+                lda Mode
+            .endproc
+            .proc B
+                .using ::Firmware::Columns
+                lda Mode
+            .endproc
+            """);
+
+        nested.Diagnostics.Should().BeEmpty();
+        nested.Sections[0].Bytes.Span[..6].ToArray().Should().Equal(0xAD, 0xFB, 0x04, 0xAD, 0xFB, 0x04);
+    }
+
+    /// <summary>
+    ///  A <c>.using</c> line takes scope names and no label, and only in the native dialect.
+    /// </summary>
+    [TestMethod]
+    public void MalformedUsingsAreErrors()
+    {
+        Messages(Assemble(EightyColumns + "Here: .using EightyColumns\n")).Should().Equal("A .using line cannot carry a label.");
+        Messages(Assemble(".using\n")).Should().Equal(".using requires one or more scope names.");
+        Messages(Assemble(EightyColumns + ".using EightyColumns + 1\n")).Should().Equal(
+            ".using requires scope names; 'EightyColumns + 1' is not one.");
+
+        AssemblyResult ca65 = new NativeAssembler().Assemble(
+            new AssemblySource("; retrocore: dialect=ca65\n.scope A\nB = 1\n.endscope\n.using A\n", "test.s"),
+            new AssemblyOptions(ProcessorVariant.Mos6502, origin: 0x1300, imageSize: 0x100));
+
+        ca65.Success.Should().BeFalse("ca65 has no .using");
+    }
+
+    /// <summary>
+    ///  Definitions after a <c>.using</c> are in the current scope, not the used one.
+    /// </summary>
+    [TestMethod]
+    public void DefinitionsStayInTheirScope()
+    {
+        AssemblyResult result = Assemble(EightyColumns + """
+            .proc Show
+                .using EightyColumns
+            Width = 80
+                lda #Width
+                rts
+            .endproc
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+        result.Symbols.Should().ContainKey("Show::Width").And.NotContainKey("EightyColumns::Width");
+    }
+
+    /// <summary>
+    ///  Inside a continued scope's piece, a <c>.using</c> applies to that piece only.
+    /// </summary>
+    [TestMethod]
+    public void UsingInAPieceAppliesToThePiece()
+    {
+        AssemblyResult result = Assemble(EightyColumns + """
+            .scope Commands
+            Go:
+                rts
+            .endscope
+            .scope Commands continued
+                .using EightyColumns
+                lda Mode
+            .endscope
+            .scope Commands continued
+                lda Mode
+            .endscope
+            """);
+
+        Messages(result).Should().ContainSingle().Which.Should().Contain("Mode");
+    }
+
+    /// <summary>
+    ///  Conditional assembly sees a name found through <c>.using</c>, as code does.
+    /// </summary>
+    [TestMethod]
+    public void ConditionsSeeUsedNames()
+    {
+        AssemblyResult result = Assemble("""
+            .scope Settings
+            WIDE = 1
+            .endscope
+            .proc Show
+                .using Settings
+            .ifdef WIDE
+            .if WIDE
+                lda #80
+            .endif
+            .endif
+            COLUMNS = WIDE + 1
+                lda #COLUMNS
+                rts
+            .endproc
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+        result.Sections[0].Bytes.Span[..5].ToArray().Should().Equal(0xA9, 80, 0xA9, 2, 0x60);
+
+        Messages(Assemble("""
+            .scope First
+            WIDE = 1
+            .endscope
+            .scope Second
+            WIDE = 0
+            .endscope
+            .using First, Second
+            .if WIDE
+                nop
+            .endif
+            """)).Should().Equal("'WIDE' is in both First and Second; qualify it.");
+    }
+
+    /// <summary>
+    ///  A <c>.using</c> whose scope gives the code no name is not an error, but is reported as unnecessary.
+    /// </summary>
+    [TestMethod]
+    public void UnusedUsingsAreInformation()
+    {
+        AssemblyResult result = Assemble(EightyColumns + """
+            .scope Other
+            Thing = 1
+            .endscope
+            .using EightyColumns, Other
+                lda Mode
+                lda Other::Thing
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+        result.Information.Select(note => note.Message).Should().Equal(
+            "Nothing uses a name from Other through this .using; it is unnecessary.");
+    }
+
+    /// <summary>
+    ///  A documentation link in a comment inside a <c>.using</c>'s extent resolves as the code there would.
+    /// </summary>
+    [TestMethod]
+    public void LinksResolveThroughUsing()
+    {
+        string text = """
+            .scope EightyColumns
+            ;; The cursor's column.
+            CursorColumn = $57B
+            .endscope
+
+            .using EightyColumns
+
+            ;; Moves to <CursorColumn>.
+            Move:
+                lda CursorColumn
+                rts
+            """;
+
+        DocumentationSet set = DocumentationSet.Create([DocumentationParser.Parse(text, "test.asm")], Assemble(text));
+        DocumentationResolver resolver = new(set);
+        DocumentationTopic move = set.Find("Move") ?? throw new AssertFailedException("No Move topic.");
+        resolver.Resolve(move, "CursorColumn").Topic?.Name.Should().Be("EightyColumns::CursorColumn");
+        resolver.Check().Should().BeEmpty();
+    }
+
+    /// <summary>
+    ///  Hover, go to definition and find references find a name through <c>.using</c> where the code uses it.
+    /// </summary>
+    [TestMethod]
+    public void TheEditorFindsUsedNames()
+    {
+        string directory = Directory.CreateTempSubdirectory("retrocore-using").FullName;
+        try
+        {
+            string main = Path.Join(directory, "main.asm");
+            File.WriteAllText(main, """
+                .scope EightyColumns
+                CursorColumn = $57B
+                .endscope
+                .scope Other
+                CursorColumn = $57C
+                .endscope
+                .proc Show
+                    .using EightyColumns
+                    lda CursorColumn
+                    rts
+                .endproc
+
+                """);
+
+            SourceAnalysis analysis = SourceAnalysis.Assemble(main, _ => null);
+            analysis.Result.Diagnostics.Should().BeEmpty();
+            SymbolSite site = analysis.Find("CursorColumn", main, line: 8).Should().ContainSingle().Subject;
+            site.Name.Should().Be("EightyColumns::CursorColumn");
+            site.Line.Should().Be(1);
+
+            analysis.UsedNames(main, line: 8).Select(used => used.Name).Should().Equal("CursorColumn");
+            analysis.UsedNames(main, line: 3).Should().BeEmpty();
+
+            SymbolReferences.Find("CursorColumn", [site], [analysis], sdk: [], includeDeclaration: false)
+                .Select(reference => reference.Line).Should().Equal(8);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
+    ///  The doc parser records the <c>.using</c> directives in effect at each line, ending with their scope.
+    /// </summary>
+    [TestMethod]
+    public void ScopesByLineFollowUsings()
+    {
+        IReadOnlyList<DocumentationScopes> scopes = DocumentationParser.ScopesByLine(
+        [
+            ".using A",
+            ".proc P",
+            "    .using B, C",
+            "    nop",
+            ".endproc",
+            "    nop"
+        ]);
+
+        scopes[0].Usings.Should().BeEmpty();
+        scopes[2].Scope.Should().Be("P");
+        scopes[2].Usings.Select(item => string.Join(",", item.Names)).Should().Equal("A");
+        scopes[3].Usings.Select(item => string.Join(",", item.Names)).Should().Equal("B,C", "A");
+        scopes[3].Usings[0].Scope.Should().Be("P");
+        scopes[5].Usings.Select(item => string.Join(",", item.Names)).Should().Equal("A");
+    }
+
+    private static List<string> Messages(AssemblyResult result) => [.. result.Diagnostics.Select(diagnostic => diagnostic.Message)];
+
+    private static IReadOnlyList<AssemblyDiagnostic> IncludeAssemble(string folder, string text)
+    {
+        string main = Path.Join(folder, "Main.asm");
+        File.WriteAllText(main, text);
+        return new NativeAssembler().Assemble(
+            new AssemblySource(".cpu Mos6502\n" + text, main),
+            new AssemblyOptions(ProcessorVariant.Mos6502, origin: 0x1300, imageSize: 0x100)
+            {
+                SourceResolver = new FileAssemblySourceResolver()
+            }).Diagnostics;
+    }
+
+    private static AssemblyResult Assemble(string text) =>
+        new NativeAssembler().Assemble(
+            new AssemblySource(".cpu Mos6502\n" + text, "test.asm"),
+            new AssemblyOptions(ProcessorVariant.Mos6502, origin: 0x1300, imageSize: 0x100));
+}

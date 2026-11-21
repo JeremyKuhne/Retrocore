@@ -65,7 +65,9 @@ internal sealed class CompletionHandler
         }
         else if (analysis is not null)
         {
-            items.AddRange(Names(analysis, macros: false, Summaries(analysis)));
+            Dictionary<string, string> summaries = Summaries(analysis);
+            items.AddRange(Names(analysis, macros: false, summaries));
+            items.AddRange(UsedNames(analysis, path, line, summaries));
         }
 
         return Task.FromResult(items);
@@ -104,6 +106,28 @@ internal sealed class CompletionHandler
                     ? new MarkupContent { Kind = MarkupKind.Markdown, Value = summary }
                     : null
             });
+
+    // The names the .using directives in effect make usable unqualified, listed after the other names.
+    private static IEnumerable<CompletionItem> UsedNames(SourceAnalysis analysis, string path, int line, Dictionary<string, string> summaries)
+    {
+        HashSet<string> seen = [with(StringComparer.OrdinalIgnoreCase)];
+        foreach ((string name, SymbolSite site) in analysis.UsedNames(path, line))
+        {
+            if (site.Kind == SymbolSiteKind.Macro || !seen.Add(name)) { continue; }
+            MarkupContent? documentation = summaries.TryGetValue(site.Name, out string? summary)
+                ? new MarkupContent { Kind = MarkupKind.Markdown, Value = summary }
+                : null;
+
+            yield return new CompletionItem
+            {
+                Label = name,
+                Kind = site.Kind == SymbolSiteKind.Constant ? CompletionItemKind.Constant : CompletionItemKind.Reference,
+                Detail = $"{Detail(site, AlsoNames(analysis, site.Name))}, {site.Name}",
+                SortText = $"~{name}",
+                Documentation = documentation
+            };
+        }
+    }
 
     // The value, and the historical names typing finds the definition by: "$FDED, also COUT".
     private static string Detail(SymbolSite site, string also)

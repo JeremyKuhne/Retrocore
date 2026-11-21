@@ -659,7 +659,7 @@ internal sealed partial class AssemblyPreprocessor
         {
             // Without scopes or local names the operand's own characters are the expression.
             ReadOnlyMemory<char> operand = node.Operand.Memory;
-            ReadOnlyMemory<char> expression = _constantScope.Length == 0 && operand.Span.IndexOfAny('@', ':') < 0
+            ReadOnlyMemory<char> expression = _constantScope.Length == 0 && _constantUsings is null && operand.Span.IndexOfAny('@', ':') < 0
                 ? operand
                 : ConstantExpression(node.Operand.Text).AsMemory();
 

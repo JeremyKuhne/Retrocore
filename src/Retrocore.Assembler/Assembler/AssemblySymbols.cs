@@ -122,7 +122,7 @@ internal sealed class AssemblySymbols : IEqualityComparer<ReadOnlyMemory<char>>
     /// <param name="id">The definition's ID.</param>
     internal void AddAlias(string name, int id)
     {
-        _aliases ??= new(this);
+        _aliases ??= [with(this)];
         ReadOnlyMemory<char> key = name.AsMemory();
         if (!_aliases.TryGetValue(key, out int existing))
         {
@@ -131,7 +131,7 @@ internal sealed class AssemblySymbols : IEqualityComparer<ReadOnlyMemory<char>>
         }
 
         if (existing == id) { return; }
-        _ambiguous ??= new(StringComparer.Ordinal);
+        _ambiguous ??= [with(StringComparer.Ordinal)];
         if (!_ambiguous.TryGetValue(name, out List<string>? targets))
         {
             targets = [_names[existing]];

@@ -30,6 +30,13 @@ internal sealed partial class AssemblyPreprocessor
         if (node.Kind is AssemblyStatementKind.Procedure or AssemblyStatementKind.Scope)
         {
             string name = node.Operand.Text.Trim();
+
+            // A continued scope has the same names as where it was first opened.
+            if (node.Kind == AssemblyStatementKind.Scope && AssemblySyntax.ContinuedScope(name) is { } continued)
+            {
+                name = continued;
+            }
+
             bool invalidName = name.Length == 0
                 ? node.Kind == AssemblyStatementKind.Procedure : !AssemblySyntax.IsPlainIdentifier(name);
 

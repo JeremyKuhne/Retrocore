@@ -187,6 +187,45 @@ The rules follow ca65:
 
 A `.scope` or `.proc` line cannot carry a label.
 
+#### Continued scopes
+
+`.scope Name continued` goes on with a scope opened and closed earlier in the same enclosing scope, for a family
+whose code is spread among other code, as in a ROM whose routines sit at fixed addresses. The pieces are one
+scope: a name defined in any piece is visible in all of them, `Name::Member` reaches it from outside, and a name
+defined in two pieces is a duplicate. A plain second `.scope Name` is still an error, and a `.proc` cannot be
+continued. A scope in pieces has no one size, so `.sizeof` refuses it. Retrocore's own syntax: ca65 has no
+equivalent.
+
+```asm
+.cpu Mos6502
+.org $0300
+
+;; The Monitor's commands.
+.scope Commands
+
+;; Starts a program.
+.proc Go
+    jmp List
+.endproc
+
+.endscope
+
+;; Code between the pieces.
+.proc Other
+    rts
+.endproc
+
+; Commands: the listing command, after the other code.
+.scope Commands continued
+
+;; Lists memory.
+.proc List
+    jmp Go
+.endproc
+
+.endscope
+```
+
 ### Cheap local labels
 
 A name starting with `@` belongs to the stretch of source since the last ordinary symbol was defined, so the

@@ -1,367 +1,563 @@
-;; Clears mode bit 4 (leaving a quoted string).
-B_CANLIT:
-    lda MODE80                      ; $CA02
-    and #$EF                        ; $CA05
-    sta MODE80                      ; $CA07
+; retrocore: style=strict
+;; The 80-column firmware's $CA00-$CBFF, original IIe: the end of reading a key for BASIC, Pascal's init, read and
+;; write, the keyboard wait, the card test and the line base, and the first control characters: performing one,
+;; the bell, the cursor left and the start of the carriage return.
 
-B_FIXCHR:
-    lda MODE80                      ; $CA0A
-    and #$80                        ; $CA0D
-    beq B_INRET                     ; $CA0F
-    lda MODE80                      ; $CA11
-    and #$10                        ; $CA14
-    bne B_INRET                     ; $CA16
-    lda CHAR                        ; $CA18
-    cmp #'`'                        ; $CA1B above it: lowercase
-    bcc B_INRET                     ; $CA1D
-    and #$DF                        ; $CA1F
-    sta CHAR                        ; $CA21
+; CharacterIo: the end of finishing a key, which EightyColumnsEntry.asm starts.
 
-B_INRET:
-    jmp BIORET                      ; $CA24
+;; Leaves quotes: clears <MODE_QUOTES>.
+;; Also: B_CANLIT (IIEROM82)
+LeaveQuotes:
+    lda EightyColumns::Mode
+    and #<~MODE_QUOTES
+    sta EightyColumns::Mode
 
-;; Reads the character before the cursor (moving left and back right).
-;; Out:   $0478 = the character, zero = set if it is a quote ($A2), or if the cursor is at the top left
+;; Makes a lowercase key uppercase while <MODE_UPPERCASE> is set and the line is outside quotes.
+;; Also: B_FIXCHR (IIEROM82)
+Upshift:
+    lda EightyColumns::Mode
+    and #MODE_UPPERCASE
+    beq Done
+    lda EightyColumns::Mode
+    and #MODE_QUOTES
+    bne Done
+    lda EightyColumns::CurrentCharacter
+    ; From the backquote up: lowercase.
+    cmp #'`'
+    bcc Done
+    and #UPPERCASE_MASK
+    sta EightyColumns::CurrentCharacter
+
+;; Returns the key through <CharacterIo::Finish>.
+;; Also: B_INRET (IIEROM82)
+Done:
+    jmp Finish
+.endproc
+
+;; Reads the character left of the cursor, moving the cursor left and back.
+;; Out: FirmwareScratch = the character, with its high bit set; zero = set when it is a quote, or when the
+;;   cursor is at the screen's top left, where nothing is read
 ;; Keeps: Y
-GETPRIOR:
-    lda OURCV                       ; $CA27
-    ora OURCH                       ; $CA2A
-    beq GPX                         ; $CA2D
-    tya                             ; $CA2F
-    pha                             ; $CA30
-    jsr X_BS                        ; $CA31
-    ldy OURCH                       ; $CA34
-    jsr PICK                        ; $CA37
-    ora #$80                        ; $CA3A
-    sta TEMP1                       ; $CA3C
-    jsr X_FS                        ; $CA3F
-    pla                             ; $CA42
-    tay                             ; $CA43
-    lda TEMP1                       ; $CA44
-    cmp #'"'                        ; $CA47
+;; Also: GETPRIOR (IIEROM82)
+.proc CharacterBefore
+    lda EightyColumns::CursorLine
+    ora EightyColumns::CursorColumn
+    beq Done
+    tya
+    pha
+    jsr Control::Left
+    ldy EightyColumns::CursorColumn
+    jsr Screen::ReadCharacter
+    ora #TEXT_HIGH_BIT
+    sta FirmwareScratch
+    jsr Control::Right
+    pla
+    tay
+    lda FirmwareScratch
+    cmp #'"'
 
-GPX:
-    rts                             ; $CA49
+;; Returns.
+;; Also: GPX (IIEROM82)
+Done:
+    rts
+.endproc
 
-;; Sets the mode byte to $22 and continues as PINIT. Reached from the JMP at $C800.
-PINIT1_0:
-    lda #$22                        ; $CA4A
-    jmp PINIT2                      ; $CA4C
+.endscope
 
-;; Pascal init: sets the mode byte to $20 (or $22 from $CA4A), the full 80x24 window and inverse state.
-;; With no 80-column card returns X = 9; otherwise turns on 80STORE, 80VID and the alternate character
-;; set, homes and clears the screen, shows the cursor and returns X = 0.
-PINIT:
-    lda #$20                        ; $CA4F
+; Pascal.
 
-PINIT2:
-    sta MODE80                      ; $CA51
-    jsr FULL80                      ; $CA54
-    jsr PSETUP                      ; $CA57
-    jsr TESTCARD                    ; $CA5A
-    beq PIGOOD                      ; $CA5D
-    ldx #$09                        ; $CA5F
-    rts                             ; $CA61
+;; The error <Pascal::Init> returns in X when no 80-column card answers.
+PASCAL_NO_DEVICE = 9
 
-;; Pascal init with a card present: switches 80 columns on and clears the screen.
-PIGOOD:
-    sta SET80STORE                  ; $CA62
-    sta SET80VID                    ; $CA65
-    sta SETALTCHAR                  ; $CA68
-    jsr X_FF                        ; $CA6B
-    jsr INVERT                      ; $CA6E
-    ldx #$00                        ; $CA71
-    rts                             ; $CA73
+;; What Pascal's GOTOXY adds to its column and line: they arrive as characters from the space up.
+GOTOXY_BIAS = ' ' & ASCII_BITS
 
-;; Pascal read: waits for a key and returns it with bit 7 clear.
-;; Out: A = key (also in $067B); X = 0, or $C3 when mode bit 1 is set
-C8_PREAD:
-    jsr PSETUP                      ; $CA74
-    jsr GETKEY80                    ; $CA77
-    and #$7F                        ; $CA7A
-    sta CHAR                        ; $CA7C
-    ldx #$00                        ; $CA7F
-    lda MODE80                      ; $CA81
-    and #$02                        ; $CA84
-    beq PREADRET2                   ; $CA86
-    ldx #$C3                        ; $CA88
+;; <EightyColumns::GotoXYColumn> while <Pascal::Write> waits for a GOTOXY's column.
+GOTOXY_WAITING = $FF
 
-PREADRET2:
-    lda CHAR                        ; $CA8A
-    rts                             ; $CA8D
+; The card test.
 
-;; Pascal write: hides the cursor, handles the character, shows the cursor.
-;; In: A = character.
+;; The byte <TestAuxMemory> writes to auxiliary memory and reads back.
+AUX_TEST_BYTE = $88
+
+; The text screen's layout.
+
+;; A text line's bits 1 and 2, once bit 0 is shifted out: which page of the screen's four the line is in.
+TEXT_LINE_PAGE_BITS = %00000011
+
+;; A text line's bits 3 and 4: which third of the screen the line is in, each third $28 bytes on from the last.
+TEXT_LINE_THIRD_BITS = %00011000
+
+;; What an odd text line adds to its base address: it is in the second half of its page.
+TEXT_ODD_LINE = $80
+
+; The bell.
+
+;; The delay count before the bell's tone.
+BELL_PAUSE = $40
+
+;; The delay count between the speaker's toggles.
+BELL_HALF_CYCLE = $0C
+
+;; How many times the bell toggles the speaker.
+BELL_TOGGLES = $C0
+
+; Pascal: init, read and write.
+.scope Pascal continued
+
+;; Starts the firmware for Pascal 1.0: as <Pascal::Init>, with <MODE_PASCAL10> too.
+;;
+;; <Pascal::Init10Entry> jumps here.
+;; Also: PINIT1_0 (IIEROM82)
+.proc Init10
+    lda #MODE_PASCAL | MODE_PASCAL10
+    jmp Init::SetMode
+.endproc
+
+;; Starts the firmware for Pascal: the mode, the full 80-by-24 window and Pascal's video; with an 80-column card,
+;; 80 columns, the alternate characters, the window cleared and the cursor shown.
+;;
+;; <Pascal::InitEntry at JPINIT> jumps here.
+;; Out: X = 0, or <PASCAL_NO_DEVICE> when no card answers
+;; Entry:
+;;   SetMode = starts with the mode in A; <Pascal::Init10> jumps here
+;; Also: PINIT (IIEROM82)
+.proc Init
+    lda #MODE_PASCAL
+
+;; Stores the mode from A, then starts.
+;; Also: PINIT2 (IIEROM82)
+SetMode:
+    sta EightyColumns::Mode
+    jsr FullWindow80
+    jsr Setup
+    jsr TestAuxMemory
+    beq CardPresent
+    ldx #PASCAL_NO_DEVICE
+    rts
+
+;; A card answered: 80 columns, the window cleared and the cursor shown.
+;; Also: PIGOOD (UNKN)
+CardPresent:
+    sta Store80On
+    sta Columns80On
+    sta AlternateCharactersOn
+    jsr Control::HomeAndClear
+    jsr Screen::InvertCursor
+    ldx #0
+    rts
+.endproc
+
+;; Pascal's read: waits for a key and returns it with its high bit clear.
+;;
+;; <Pascal::ReadEntry at JPREAD> jumps here.
+;; Out: A = <EightyColumns::CurrentCharacter> = the key, with its high bit clear; X = 0, or <PASCAL10_READ_X> for
+;;   Pascal 1.0
+;; Also: C8_PREAD (UNKN), PREAD (IIEROM82)
+.proc Read
+    jsr Setup
+    jsr WaitForKey
+    and #ASCII_BITS
+    sta EightyColumns::CurrentCharacter
+    ldx #0
+    lda EightyColumns::Mode
+    and #MODE_PASCAL10
+    beq Done
+    ldx #PASCAL10_READ_X
+
+;; Returns the key.
+;; Also: PREADRET2 (IIEROM82)
+Done:
+    lda EightyColumns::CurrentCharacter
+    rts
+.endproc
+
+;; Pascal's write: with the cursor hidden meanwhile, takes a GOTOXY's column or line, performs a control character
+;; or displays any other.
+;;
+;; Control-^ starts a GOTOXY: the next two characters, less <GOTOXY_BIAS>, are its column and line. A displayed
+;; character moves the cursor right; at the window's right edge it stays on the last column while
+;; <MODE_INTERRUPTS> is set, else goes to the next line. <Pascal::WriteEntry at JPWRITE> jumps here.
+;; In: A = the character
 ;; Out: X = 0
-;; $1E starts GOTOXY: the next two characters minus 32 are the column ($06FB) and row. Other control
-;; characters go to CTLCHAR; printable ones are stored with bit 7 set and advance the cursor, which
-;; stays on the last column when mode bit 0 is set, else wraps with a carriage return and line feed.
-PWRITE:
-    sta CHAR                        ; $CA8E
-    jsr PSETUP                      ; $CA91
-    jsr INVERT                      ; $CA94
-    lda MODE80                      ; $CA97
-    and #$08                        ; $CA9A
-    beq PWRITE3                     ; $CA9C
+;; Also: PWRITE (IIEROM82)
+.proc Write
+    sta EightyColumns::CurrentCharacter
+    jsr Setup
+    jsr Screen::InvertCursor
+    lda EightyColumns::Mode
+    and #MODE_GOTOXY
+    beq NotGotoXY
 
-PWRITE2:
-    lda XCOORD                      ; $CA9E
-    bpl GETY                        ; $CAA1
-    lda CHAR                        ; $CAA3
-    sec                             ; $CAA6
-    sbc #$20                        ; $CAA7
-    sta XCOORD                      ; $CAA9
-    jmp PWRITERET                   ; $CAAC
+;; A GOTOXY's next character: its column first.
+;; Also: PWRITE2 (IIEROM82)
+GotoXY:
+    lda EightyColumns::GotoXYColumn
+    bpl Row
+    lda EightyColumns::CurrentCharacter
+    sec
+    sbc #GOTOXY_BIAS
+    sta EightyColumns::GotoXYColumn
+    jmp Done
 
-;; GOTOXY, second byte: sets the row from the character and the column from $06FB, clears mode bit 3.
-GETY:
-    lda CHAR                        ; $CAAF
-    sec                             ; $CAB2
-    sbc #$20                        ; $CAB3
-    sta OURCV                       ; $CAB5
-    jsr C8_BASCALC                  ; $CAB8
-    lda XCOORD                      ; $CABB
-    sta OURCH                       ; $CABE
-    lda MODE80                      ; $CAC1
-    and #$F7                        ; $CAC4
-    sta MODE80                      ; $CAC6
-    bne PWRITERET                   ; $CAC9
+;; The GOTOXY's line, then the cursor moved to it and the column, ending the GOTOXY.
+;; Also: GETY (IIEROM82)
+Row:
+    lda EightyColumns::CurrentCharacter
+    sec
+    sbc #GOTOXY_BIAS
+    sta EightyColumns::CursorLine
+    jsr LineBase
+    lda EightyColumns::GotoXYColumn
+    sta EightyColumns::CursorColumn
+    lda EightyColumns::Mode
+    and #<~MODE_GOTOXY
+    sta EightyColumns::Mode
+    ; Always: the mode has MODE_PASCAL.
+    bne Done
 
-PWRITE3:
-    lda CHAR                        ; $CACB
-    cmp #KEY_GOTOXY & $7F           ; $CACE
-    beq STARTXY                     ; $CAD0
-    cmp #' ' & $7F                  ; $CAD2 below the space: a control character
-    bcs PWRITE4                     ; $CAD4
-    jsr CTLCHAR                     ; $CAD6
-    jmp PWRITERET                   ; $CAD9
+;; Not in a GOTOXY: Control-^ starts one, another control character is performed, and any other is displayed.
+;; Also: PWRITE3 (IIEROM82)
+NotGotoXY:
+    lda EightyColumns::CurrentCharacter
+    cmp #CONTROL_CARET
+    beq StartGotoXY
+    cmp #' ' & ASCII_BITS
+    bcs Printable
+    jsr Control::Perform
+    jmp Done
 
-;; Control-^ ($1E): sets mode bit 3 and marks the column byte ($06FB = $FF) as not yet received.
-;; PWRITE4 ($CAEB) displays a printable character and PWRITERET ($CB0F) is the common exit.
-STARTXY:
-    lda MODE80                      ; $CADC
-    ora #$08                        ; $CADF
-    sta MODE80                      ; $CAE1
-    lda #$FF                        ; $CAE4
-    sta XCOORD                      ; $CAE6
-    bmi PWRITERET                   ; $CAE9
+;; Control-^: sets <MODE_GOTOXY>, with the column not yet received.
+;; Also: STARTXY (IIEROM82)
+StartGotoXY:
+    lda EightyColumns::Mode
+    ora #MODE_GOTOXY
+    sta EightyColumns::Mode
+    lda #GOTOXY_WAITING
+    sta EightyColumns::GotoXYColumn
+    bmi Done
 
-PWRITE4:
-    ora #$80                        ; $CAEB
-    ldy OURCH                       ; $CAED
-    jsr STORCHAR                    ; $CAF0
-    inc OURCH                       ; $CAF3
-    lda OURCH                       ; $CAF6
-    cmp WNDWDTH                     ; $CAF9
-    bcc PWRITERET                   ; $CAFB
-    lda MODE80                      ; $CAFD
-    and #$01                        ; $CB00
-    beq PWWRAP                      ; $CB02
-    dec OURCH                       ; $CB04
-    bne PWRITERET                   ; $CB07
+;; Displays the character, in normal video, and moves the cursor right.
+;; Also: PWRITE4 (IIEROM82)
+Printable:
+    ora #TEXT_HIGH_BIT
+    ldy EightyColumns::CursorColumn
+    jsr Screen::StoreCharacter
+    inc EightyColumns::CursorColumn
+    lda EightyColumns::CursorColumn
+    cmp WindowWidth
+    bcc Done
+    lda EightyColumns::Mode
+    and #MODE_INTERRUPTS
+    beq Wrap
+    dec EightyColumns::CursorColumn
+    ; Always: the window is wider than one column.
+    bne Done
 
-PWWRAP:
-    jsr X_CR                        ; $CB09
-    jsr X_LF                        ; $CB0C
+;; At the window's right edge: a return and a line feed.
+;; Also: PWWRAP (IIEROM82)
+Wrap:
+    jsr Control::CarriageReturn
+    jsr Control::LineFeed
 
-PWRITERET:
-    jsr INVERT                      ; $CB0F
-    ldx #$00                        ; $CB12
-    rts                             ; $CB14
+;; Shows the cursor again.
+;; Also: PWRITERET (IIEROM82)
+Done:
+    jsr Screen::InvertCursor
+    ldx #0
+    rts
+.endproc
 
-;; Waits for a key, stirring RNDL/RNDH, and clears the keyboard strobe.
-;; Out: A = key (bit 7 set)
-GETKEY80:
-    inc RNDL                        ; $CB15
-    bne GETK2                       ; $CB17
-    inc RNDH                        ; $CB19
+.endscope
 
-GETK2:
-    lda KBD                         ; $CB1B
-    bpl GETKEY80                    ; $CB1E
-    sta KBDSTRB                     ; $CB20
-    rts                             ; $CB23
+;; Waits for a key, counting <RandomSeed>/<RandomSeedHigh> up meanwhile, then clears the keyboard strobe.
+;; Out: A = the key, with its high bit set
+;; Keeps: X, Y
+;; Also: GETKEY80 (UNKN), GETKEY (IIEROM82)
+.proc WaitForKey
+    inc RandomSeed
+    bne Poll
+    inc RandomSeedHigh
 
-;; Tests for an 80-column card: with interrupts off, turns 80STORE and PAGE2 on, writes $88 to $0400 in
-;; auxiliary memory, reads it back and restores the byte, PAGE2 and 80STORE.
-;; Out:   A = $88 if the card answered, zero = set if the card answered
-;; Uses:  A, Y
-TESTCARD:
-    lda RDPAGE2                     ; $CB24
-    asl a                           ; $CB27
-    lda #$88                        ; $CB28
-    bit RD80STORE                   ; $CB2A
-    sta SET80STORE                  ; $CB2D
-    php                             ; $CB30
-    sei                             ; $CB31
-    php                             ; $CB32
-    sta HISCR                       ; $CB33
-    ldy LINE1                       ; $CB36
-    sta LINE1                       ; $CB39
-    lda LINE1                       ; $CB3C
-    sty LINE1                       ; $CB3F
-    plp                             ; $CB42
-    bcs STAY2                       ; $CB43
-    sta LOWSCR                      ; $CB45
+;; Reads the keyboard.
+;; Also: GETK2 (IIEROM82)
+Poll:
+    lda Keyboard
+    bpl WaitForKey
+    sta KeyboardStrobe
+    rts
+.endproc
 
-STAY2:
-    bmi STAY80                      ; $CB48
-    sta KBD                         ; $CB4A
+;; Tests for an 80-column card: with interrupts off, writes <AUX_TEST_BYTE> to <TextPage1>'s first byte in
+;; auxiliary memory, through 80STORE and PAGE2, and reads it back, then restores the byte, PAGE2, 80STORE and the
+;; interrupt flag.
+;; Out: A = the byte read back; zero = set when it is <AUX_TEST_BYTE>, a card answered
+;; Keeps: X
+;; Also: TESTCARD (IIEROM82)
+.proc TestAuxMemory
+    ; PAGE2's state in the carry, 80STORE's in negative, both saved.
+    lda Page2State
+    asl a
+    lda #AUX_TEST_BYTE
+    bit Store80State
+    sta Store80On
+    php
+    sei
+    php
 
-STAY80:
-    plp                             ; $CB4D
+    ; The test, with page two selecting the auxiliary text page.
+    sta Page2On
+    ldy TextPage1
+    sta TextPage1
+    lda TextPage1
+    sty TextPage1
 
-TESTFAIL:
-    cmp #$88                        ; $CB4E
-    rts                             ; $CB50
+    ; PAGE2 off unless it was on.
+    plp
+    bcs Restore80Store
+    sta Page2Off
 
-;; Computes BASL/BASH for a text row and saves them in $077B/$07FB. WNDLFT is added halved in 80 columns.
-;; If mode bit 0 is set and bit 5 clear, calls the Monitor's $FC75 to let interrupts in.
-;; In:    $05FB = the row
-;; Entry: C8_BASCALC_1 = takes the row in A
-;; Keeps: A
-C8_BASCALC:
-    clc                             ; $CB51
-    bcc BSCLC1                      ; $CB52
+;; 80STORE off unless it was on.
+;; Also: STAY2 (IIEROM82)
+Restore80Store:
+    bmi RestoreInterrupts
+    sta Store80Off
 
-C8_BASCALC_1:
-    sec                             ; $CB54
+;; The interrupt flag back.
+;; Also: STAY80 (IIEROM82)
+RestoreInterrupts:
+    plp
 
-BSCLC1:
-    pha                             ; $CB55
-    bcs BSCLC1A                     ; $CB56
-    lda OURCV                       ; $CB58
+;; Compares the byte read back with the one written.
+;; Also: TESTFAIL (IIEROM82)
+Compare:
+    cmp #AUX_TEST_BYTE
+    rts
+.endproc
 
-BSCLC1A:
-    pha                             ; $CB5B
-    lsr a                           ; $CB5C
-    and #$03                        ; $CB5D
-    ora #$04                        ; $CB5F
-    sta BASH                        ; $CB61
-    sta OLDBASH                     ; $CB63
-    pla                             ; $CB66
-    and #$18                        ; $CB67
-    bcc BSCLC2                      ; $CB69
-    adc #$7F                        ; $CB6B
+;; Sets <TextBase>/<TextBaseHigh>, and their copies <EightyColumns::SavedTextBase>/
+;; <EightyColumns::SavedTextBaseHigh>, to the firmware's line's address plus the window's left edge, which counts
+;; half in 80 columns.
+;;
+;; When the caller of the BASIC entries allowed interrupts (<MODE_INTERRUPTS>), outside Pascal, it then calls
+;; <RestoreAfterFirmware> to let them in.
+;; In: EightyColumns::CursorLine = the line
+;; Keeps: A, X, Y
+;; Entry:
+;;   Row = takes the line in A
+;; Also: C8_BASCALC (UNKN), BASCALC (IIEROM82)
+.proc LineBase
+    clc
+    bcc Calculate
 
-BSCLC2:
-    sta BASL                        ; $CB6D
-    asl a                           ; $CB6F
-    asl a                           ; $CB70
-    ora BASL                        ; $CB71
-    sta BASL                        ; $CB73
-    lda WNDLFT                      ; $CB75
-    php                             ; $CB77
-    bit RD80VID                     ; $CB78
-    bpl BASCLC3                     ; $CB7B
-    lsr a                           ; $CB7D
+;; The same for the line in A.
+;; Also: BASCALC2 (IIEROM82)
+Row:
+    sec
 
-BASCLC3:
-    plp                             ; $CB7E
-    adc BASL                        ; $CB7F
-    sta BASL                        ; $CB81
-    sta OLDBASL                     ; $CB83
-    lda MODE80                      ; $CB86
-    and #$01                        ; $CB89
-    beq BASCLCX                     ; $CB8B
-    lda MODE80                      ; $CB8D
-    and #$20                        ; $CB90
-    bne BASCLCX                     ; $CB92
-    jsr VIDSYNC                     ; $CB94
+;; Picks the line: A with the carry set, the firmware's otherwise.
+;; Also: BSCLC1 (IIEROM82)
+Calculate:
+    pha
+    bcs FromA
+    lda EightyColumns::CursorLine
 
-BASCLCX:
-    pla                             ; $CB97
-    rts                             ; $CB98
+;; The high byte: page one's, plus the line's page.
+;; Also: BSCLC1A (IIEROM82)
+FromA:
+    pha
+    lsr a
+    and #TEXT_LINE_PAGE_BITS
+    ora #>TextPage1
+    sta TextBaseHigh
+    sta EightyColumns::SavedTextBaseHigh
 
-;; Performs a control character at the 80-column cursor.
-;; In: A = character ($00-$1F).
-;; Out:   carry = clear if handled, set if not
+    ; The low byte: $80 for an odd line (bit 0, now in the carry), plus $28 for each third.
+    pla
+    and #TEXT_LINE_THIRD_BITS
+    bcc StoreLow
+    ; The carry is set, so this adds TEXT_ODD_LINE.
+    adc #TEXT_ODD_LINE - 1
+
+;; Stores the low byte and multiplies its third by five.
+;; Also: BSCLC2 (IIEROM82)
+StoreLow:
+    sta TextBase
+    asl a
+    asl a
+    ora TextBase
+    sta TextBase
+
+    ; The window's left edge, halved in 80 columns, with the carry kept for the add.
+    lda WindowLeft
+    php
+    bit Columns80State
+    bpl AddLeft
+    lsr a
+
+;; Adds the left edge, then lets interrupts in when the caller allowed them, outside Pascal.
+;; Also: BASCLC3 (IIEROM82)
+AddLeft:
+    plp
+    adc TextBase
+    sta TextBase
+    sta EightyColumns::SavedTextBase
+    lda EightyColumns::Mode
+    and #MODE_INTERRUPTS
+    beq Done
+    lda EightyColumns::Mode
+    and #MODE_PASCAL
+    bne Done
+    jsr RestoreAfterFirmware
+
+;; A back.
+;; Also: BASCLCX (IIEROM82)
+Done:
+    pla
+    rts
+.endproc
+
+;; The control characters the 80-column firmware performs, $00-$1F with bit 7 clear: <Control::Perform> runs a
+;; code's handler through the tables <Control::HandlersLow> and <Control::HandlersHigh> (the handler's address minus
+;; one, split into its low byte and its page), and the handlers move the cursor, ring the bell, clear, scroll, set the
+;; video and the 40 or 80 columns, and quit the firmware.
+;;
+;; BASIC's output, Pascal's write and escape mode perform their codes here. Other code calls many handlers directly,
+;; as the 80-column functions call <Control::ScrollUp> and <Control::ClearToEndOfLine>. On the Enhanced IIe,
+;; <Control::PerformUnlessDisabled> skips the codes without <Control::RUNS_WHEN_DISABLED> while escape mode or
+;; escape Control-D turns them off, and Control-E, Control-F, Control-X and Control-[ show and hide Pascal's cursor
+;; and turn MouseText off and on.
+.scope Control
+
+;; Performs a control character at the firmware's cursor, through its handler in <HandlersLow at CTLADL> and
+;; <HandlersHigh at CTLADH>.
+;;
+;; Control-G to Control-_ have entries; a 0 in <HandlersHigh> means no handler. A code above $1F reads past the
+;; tables.
+;; In: A = the code, $00-$1F
+;; Out: carry = clear when a handler ran, set when the code has none
 ;; Keeps: A, Y
-;; Uses: $0478
-CTLCHAR:
-    sta TEMP1                       ; $CB99
-    pha                             ; $CB9C
-    tya                             ; $CB9D
-    pha                             ; $CB9E
-    ldy TEMP1                       ; $CB9F
-    cpy #KEY_BELL & $7F             ; $CBA2 Control-G, the first in CTLADL and CTLADH
-    bcc CTLCHARX                    ; $CBA4
-    lda CTLADH-7,y                  ; $CBA6 Y = 7-$1F: Control-G to Control-_
-    bne CTLGO                       ; $CBA9
+;; Also: CTLCHAR (IIEROM82)
+.proc Perform
+    sta FirmwareScratch
+    pha
+    tya
+    pha
+    ldy FirmwareScratch
+    cpy #CONTROL_G
+    bcc NotHandled
+    lda HandlersHigh - CONTROL_G,y
+    bne Handle
 
-CTLCHARX:
-    sec                             ; $CBAB
-    bcs CTLRET                      ; $CBAC
+;; No handler: the carry set.
+;; Also: CTLCHARX (IIEROM82)
+NotHandled:
+    sec
+    bcs Done
 
-CTLGO:
-    jsr CTLXFER                     ; $CBAE
-    clc                             ; $CBB1
+;; Runs the handler, then the carry clear.
+;; Also: CTLGO (IIEROM82)
+Handle:
+    jsr Jump
+    clc
 
-CTLRET:
-    pla                             ; $CBB2
-    tay                             ; $CBB3
-    pla                             ; $CBB4
-    rts                             ; $CBB5
+;; Y and A back.
+;; Also: CTLRET (IIEROM82)
+Done:
+    pla
+    tay
+    pla
+    rts
+.endproc
 
-;; Jumps (by RTS) to the handler for control character Y: the caller has pushed the high byte from
-;; CTLADH, this pushes the low byte from CTLADL.
-CTLXFER:
-    pha                             ; $CBB6
-    lda CTLADL-7,y                  ; $CBB7 Y = 7-$1F
-    pha                             ; $CBBA
-    rts                             ; $CBBB
+;; Goes to the handler of control character Y: pushes its page from A and its low byte minus one from
+;; <HandlersLow at CTLADL>, and returns into it.
+;; In: A = the handler's page, Y = the code
+;; Also: CTLXFER (IIEROM82)
+.proc Jump
+    pha
+    lda HandlersLow - CONTROL_G,y
+    pha
+    rts
+.endproc
 
-;; Control-G: rings the bell. Pauses, then toggles the speaker 192 times.
-X_BELL:
-    lda #$40                        ; $CBBC
-    jsr C8_WAIT                     ; $CBBE
-    ldy #$C0                        ; $CBC1
+;; Control-G: rings the bell, a pause and then <BELL_TOGGLES> toggles of the speaker.
+;; Keeps: X
+;; Also: X_BELL (IIEROM82)
+.proc Bell
+    lda #BELL_PAUSE
+    jsr Pause
+    ldy #BELL_TOGGLES
 
-C8_BELL2:
-    lda #$0C                        ; $CBC3
-    jsr C8_WAIT                     ; $CBC5
-    lda SPKR                        ; $CBC8
-    dey                             ; $CBCB
-    bne C8_BELL2                    ; $CBCC
-    rts                             ; $CBCE
+;; Toggles the speaker once.
+;; Also: C8_BELL2 (UNKN), BELL2 (IIEROM82)
+Click:
+    lda #BELL_HALF_CYCLE
+    jsr Pause
+    lda Speaker
+    dey
+    bne Click
+    rts
+.endproc
 
-;; A delay, a copy of the Monitor's WAIT.
-;; In: A = count
-C8_WAIT:
-    sec                             ; $CBCF
+;; Waits, as long as the Monitor's <Delay> does for the same A, of which it is a copy.
+;;
+;; Apple's listing calls it WAIT, the Monitor's name for <Delay>.
+;; In: A = the count
+;; Out: A = 0
+;; Keeps: X, Y
+;; Also: C8_WAIT (UNKN)
+.proc Pause
+    sec
 
-C8_WAIT2:
-    pha                             ; $CBD0
+;; The outer count.
+;; Also: C8_WAIT2 (UNKN), WAIT2 (IIEROM82)
+Outer:
+    pha
 
-C8_WAIT3:
-    sbc #$01                        ; $CBD1
-    bne C8_WAIT3                    ; $CBD3
-    pla                             ; $CBD5
-    sbc #$01                        ; $CBD6
-    bne C8_WAIT2                    ; $CBD8
-    rts                             ; $CBDA
+;; The inner count.
+;; Also: C8_WAIT3 (UNKN), WAIT3 (IIEROM82)
+Inner:
+    sbc #1
+    bne Inner
+    pla
+    sbc #1
+    bne Outer
+    rts
+.endproc
 
-;; Moves the cursor left; from column 0 goes to the end of the previous line (X_US).
-X_BS:
-    dec OURCH                       ; $CBDB
-    bpl BSDONE                      ; $CBDE
-    lda WNDWDTH                     ; $CBE0
+;; Control-H: moves the cursor left; from the first column, to the last of the line above.
+;; Also: X_BS (IIEROM82)
+.proc Left
+    dec EightyColumns::CursorColumn
+    bpl Done
+    lda WindowWidth
 
-BS40:
-    sta OURCH                       ; $CBE2
-    dec OURCH                       ; $CBE5
-    jsr X_US                        ; $CBE8
+;; The last column of the line above.
+;; Also: BS40 (IIEROM82)
+PreviousLine:
+    sta EightyColumns::CursorColumn
+    dec EightyColumns::CursorColumn
+    jsr Up
 
-BSDONE:
-    rts                             ; $CBEB
+;; Returns.
+;; Also: BSDONE (IIEROM82)
+Done:
+    rts
+.endproc
 
-;; Carriage return: in BASIC input (mode bit 6, not Pascal) clears to the end of the line first. Sets the
-;; column to 0 and, outside Pascal mode, does a line feed.
-X_CR:
-    lda MODE80                      ; $CBEC
-    and #$20                        ; $CBEF
-    bne X_CRPAS                     ; $CBF1
-    lda MODE80                      ; $CBF3
-    and #$40                        ; $CBF6
-    beq X_CRPAS                     ; $CBF8
-    jsr X_GS                        ; $CBFA
+;; Control-M: a carriage return. While BASIC's input reads a line (<MODE_INPUT>, outside Pascal), it clears the rest
+;; of the line first; then the cursor goes to the first column and, outside Pascal, down a line.
+;; Also: X_CR (IIEROM82)
+.proc CarriageReturn
+    lda EightyColumns::Mode
+    and #MODE_PASCAL
+    bne FinishReturn
+    lda EightyColumns::Mode
+    and #MODE_INPUT
+    beq FinishReturn
+    jsr ClearToEndOfLine
+    ; Falls into FinishReturn, the rest of the routine, at the start of EightyColumnsScreen.asm.
+.endproc
+
+.endscope

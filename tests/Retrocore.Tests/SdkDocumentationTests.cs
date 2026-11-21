@@ -335,14 +335,14 @@ public class SdkDocumentationTests
     }
 
     /// <summary>
-    ///  An entry inside a routine with its own <c>;;</c> block has its own contract: FLIPCURSOR overwrites A with its
-    ///  cursor-off test and keeps only Y, while FLIPCURSOR_1, past that test, keeps A and Y.
+    ///  A routine that falls into another has its own contract: Screen::FlipCursor overwrites A with its cursor-off
+    ///  test and keeps only Y, while Screen::InvertCursor, which it falls into, keeps A and Y.
     /// </summary>
     [TestMethod]
-    public void InnerEntryHasItsOwnContract()
+    public void FallThroughRoutineHasItsOwnContract()
     {
         List<DocumentationSet> sets = Sets();
-        DocumentationSet firmware = sets.Single(set => set.Module == "Firmware" && set.Find("FLIPCURSOR") is not null);
+        DocumentationSet firmware = sets.Single(set => set.Find("Screen::FlipCursor") is not null);
         Dictionary<ushort, DebugContract> contracts = DebugContracts.Build(
             new DocumentationResolver(firmware, sets),
             "Enhanced",

@@ -1,439 +1,697 @@
-;; Pascal write: PASRESTORE, then: a GOTOXY coordinate if $04FB bit 3 is set (PASGOTOXY); a control
-;; character through DOCTRL ($1E starts GOTOXY); otherwise stores the character at $057B (normal unless
-;; INVFLG says inverse), advances and wraps with LF80. Ends by saving BASL/BASH in $077B/$07FB and
-;; showing the cursor.
-;; In: A = character
-;; Out: X = 0
-;; Uses: $057B, $05FB, $06FB, $077B, $07FB, $04FB
-PASPUTCHAR:
-    and #$7F                        ; $C9F0
-    tax                             ; $C9F2
-    jsr PASRESTORE                  ; $C9F3
-    lda #$08                        ; $C9F6
-    bit MODE80                      ; $C9F8
-    bne PASGOTOXY                   ; $C9FB
-    txa                             ; $C9FD
-    bit PASPUTCHAR_4                ; $C9FE
-    beq PASGOTOXY_1                 ; $CA01
-    ldy OURCH                       ; $CA03
-    bit INVFLG                      ; $CA06
-    bpl PASPUTCHAR_1                ; $CA08
-    ora #$80                        ; $CA0A
+; retrocore: style=strict
+;; The 80-column firmware's $C9F0-$CBEA, Enhanced IIe: Pascal's write and GOTOXY, the disassembler's mnemonic index,
+;; the slot 3 card and auxiliary memory tests, a text row's base address, and the control characters: performing
+;; one, the handlers up to the line feed, and their tables.
 
-PASPUTCHAR_1:
-    jsr PUTSCRCHAR                  ; $CA0C
-    iny                             ; $CA0F
-    sty OURCH                       ; $CA10
-    cpy WNDWDTH                     ; $CA13
-    bcc PASPUTCHAR_2                ; $CA15
-    lda #$00                        ; $CA17
-    sta OURCH                       ; $CA19
-    jsr LF80                        ; $CA1C
+; Pascal.
 
-PASPUTCHAR_2:
-    lda BASL                        ; $CA1F save base address and show cursor
-    sta OLDBASL                     ; $CA21
-    lda BASH                        ; $CA24
-    sta OLDBASH                     ; $CA26
+;; What Pascal's GOTOXY adds to its column and line: they arrive as characters from the space up.
+GOTOXY_BIAS = ' ' & ASCII_BITS
 
-PASPUTCHAR_3:
-    jsr FLIPCURSOR                  ; $CA29
-    ldx #$00                        ; $CA2C
+;; <EightyColumns::GotoXYColumn> while <Pascal::GotoXY> waits for a GOTOXY's column.
+GOTOXY_WAITING = $FF
 
-PASPUTCHAR_4:
-    rts                             ; $CA2E
+; The disassembler's mnemonic hash, as the Monitor's.
 
-;; Pascal GOTOXY coordinate: the first byte after $1E (minus $20) goes to $06FB, the second becomes CV;
-;; then $057B = $06FB and $04FB bit 3 is cleared. PASGOTOXY_1 ($CA53) handles other control characters.
-;; In: X = character
-PASGOTOXY:
-    jsr FLIPCURSOR                  ; $CA2F
-    txa                             ; $CA32
-    sec                             ; $CA33
-    sbc #$20                        ; $CA34
-    bit XCOORD                      ; $CA36
-    bmi PASGOTOXY_3                 ; $CA39
-    sta OURCV                       ; $CA3B
-    sta CV                          ; $CA3E
-    jsr ROWBASE                     ; $CA40
-    lda XCOORD                      ; $CA43
-    sta OURCH                       ; $CA46
-    lda #$F7                        ; $CA49
-    and MODE80                      ; $CA4B
-    sta MODE80                      ; $CA4E
-    bne PASPUTCHAR_2                ; $CA51
+;; TXA, TXS, TAX, TSX, DEX and NOP, and the opcodes $DA and $FA, as the Monitor's group bits keep them: they skip the
+;; mnemonic hash's first step.
+TXA_GROUP = $8A
 
-PASGOTOXY_1:
-    jsr FLIPCURSOR                  ; $CA53 control characters
-    txa                             ; $CA56
-    cmp #CTRL_CARET                 ; $CA57 GOTOXY
-    beq PASGOTOXY_2                 ; $CA59
-    jsr DOCTRL_1                    ; $CA5B
-    jmp PASPUTCHAR_2                ; $CA5E
+;; The steps of the mnemonic hash, one for each of the opcode's bits 0-2.
+HASH_STEPS = 3
 
-; Pascal ctrl-^ (GOTOXY): sets $04FB bit 3 and $06FB = $FF to wait for the X coordinate.
+;; The bit the mnemonic hash sets as it shifts, once the opcode's first 1 bit has shifted out.
+HASH_GROUP_BIT = $20
 
-PASGOTOXY_2:
-    lda #$08                        ; $CA61
-    ora MODE80                      ; $CA63
-    sta MODE80                      ; $CA66
-    lda #$FF                        ; $CA69
+; The card tests.
 
-PASGOTOXY_3:
-    sta XCOORD                      ; $CA6B
-    jmp PASPUTCHAR_3                ; $CA6E
+;; Inherit: <Monitor:CompareSlot3Rom>
+CompareSlot3Rom = $F8B7
 
-;; Disassembler: turns a masked opcode into a mnemonic index by shifting (the second half of the
-;; Monitor's INSDS2 work).
-;; In: A = opcode and $8F, BAS2L = opcode
-;; Out: A = mnemonic index
-MNEMINDEX:
-    tax                             ; $CA71
-    lda BAS2L                       ; $CA72
-    ldy #$03                        ; $CA74
-    cpx #$8A                        ; $CA76
-    beq MNEMINDEX_3                 ; $CA78
+;; The byte <TestAuxMemory> writes to auxiliary memory and reads back.
+AUX_TEST_BYTE = $88
 
-MNEMINDEX_1:
-    lsr a                           ; $CA7A
-    bcc MNEMINDEX_3                 ; $CA7B
-    lsr a                           ; $CA7D
+; The text screen's layout.
 
-MNEMINDEX_2:
-    lsr a                           ; $CA7E
-    ora #$20                        ; $CA7F
-    dey                             ; $CA81
-    bne MNEMINDEX_2                 ; $CA82
-    iny                             ; $CA84
+;; A text line's bits 1 and 2, once bit 0 is shifted out: which page of the screen's four the line is in.
+TEXT_LINE_PAGE_BITS = %00000011
 
-MNEMINDEX_3:
-    dey                             ; $CA85
-    bne MNEMINDEX_1                 ; $CA86
-    rts                             ; $CA88
+;; A text line's bits 3 and 4: which third of the screen the line is in, each third $28 bytes on from the last.
+TEXT_LINE_THIRD_BITS = %00011000
 
-;; Calls the Monitor's $F8B7, which compares slot 3's $C305/$C307 bytes with $38/$18 (repeated Y times).
-;; On a match returns with Z clear; otherwise returns AUXPRESENT's result.
-;; Out:   zero = set to use the internal $C3 ROM
-SLOT3CHECK:
-    jsr $F8B7                       ; $CA89
-    bne AUXPRESENT                  ; $CA8C
-    iny                             ; $CA8E
-    rts                             ; $CA8F
+;; What an odd text line adds to its base address: it is in the second half of its page.
+TEXT_ODD_LINE = $80
 
-;; Tests for auxiliary text memory: with 80STORE and HISCR writes $88 to $0400, reads it back and
-;; restores the old byte, PAGE2 and 80STORE.
-;; Out:   zero = set when aux memory kept the value
-AUXPRESENT:
-    lda RDPAGE2                     ; $CA90
-    asl a                           ; $CA93
-    lda #$88                        ; $CA94
-    bit RD80STORE                   ; $CA96
-    sta SET80STORE                  ; $CA99
-    php                             ; $CA9C
-    sta HISCR                       ; $CA9D
-    ldy LINE1                       ; $CAA0
-    sta LINE1                       ; $CAA3
-    lda LINE1                       ; $CAA6
-    sty LINE1                       ; $CAA9
-    plp                             ; $CAAC
-    bcs AUXPRESENT_1                ; $CAAD
-    sta LOWSCR                      ; $CAAF
+; The video and the bell.
 
-AUXPRESENT_1:
-    bmi AUXPRESENT_2                ; $CAB2
-    sta KBD                         ; $CAB4
+;; <InverseMask> for normal text.
+TEXT_NORMAL = $FF
 
-AUXPRESENT_2:
-    cmp #$88                        ; $CAB7
-    rts                             ; $CAB9
+;; <InverseMask> for inverse text in 80 columns: the alternate characters' inverse codes have bit 7 clear.
+TEXT_INVERSE = $7F
 
-;; Text base address of row A in BASL/BASH (no window offset).
-;; In: A = row
-;; Out:   BASL/BASH = the line's base address, carry = clear
-ROWBASE:
-    pha                             ; $CABA
-    lsr a                           ; $CABB
-    and #$03                        ; $CABC
-    ora #$04                        ; $CABE
-    sta BASH                        ; $CAC0
-    pla                             ; $CAC2
-    and #$18                        ; $CAC3
-    bcc ROWBASE_1                   ; $CAC5
-    adc #$7F                        ; $CAC7
+;; The delay count before the bell's tone.
+BELL_PAUSE = $40
 
-ROWBASE_1:
-    sta BASL                        ; $CAC9
-    asl a                           ; $CACB
-    asl a                           ; $CACC
-    ora BASL                        ; $CACD
-    sta BASL                        ; $CACF
-    rts                             ; $CAD1
+;; The delay count between the speaker's toggles.
+BELL_HALF_CYCLE = $0C
 
-;; Runs the control character in A through CTRLPAGE and CTRLLOW. $CAD2 (V set) is for BASIC output:
-;; codes without CTRL_ALWAYS are skipped when $04FB bit 3 or 5 is set. $CAD6 (V clear) always runs
-;; them.
-;; In: A = control code ($05-$1F have handlers)
-;; Out:   carry = clear when handled, set when ignored
-;; Keeps: A, Y
-;; Uses: $077B
-DOCTRL:
-    bit DOCTRL_6                    ; $CAD2 the bit of an rts opcode sets V
-    .byte $50                       ; $CAD5 bvc: skips the next byte
+;; How many times the bell toggles the speaker.
+BELL_TOGGLES = $C0
 
-DOCTRL_1:
-    clv                             ; $CAD6 entry with V clear
-    sta OLDBASL                     ; $CAD7
-    pha                             ; $CADA
-    tya                             ; $CADB
-    pha                             ; $CADC
-    ldy OLDBASL                     ; $CADD
-    cpy #CTRL_FIRST                 ; $CAE0
-    bcc DOCTRL_2                    ; $CAE2
-    lda CTRLPAGE,y                  ; $CAE4
-    beq DOCTRL_2                    ; $CAE7
-    bvc DOCTRL_4                    ; $CAE9
-    bmi DOCTRL_4                    ; $CAEB
-    sta OLDBASL                     ; $CAED
-    lda MODE80                      ; $CAF0
-    and #$28                        ; $CAF3
-    beq DOCTRL_3                    ; $CAF5
+; The macros that build the control characters' handler tables.
 
-DOCTRL_2:
-    sec                             ; $CAF7
-    bcs DOCTRL_5                    ; $CAF8
-
-DOCTRL_3:
-    lda OLDBASL                     ; $CAFA
-
-DOCTRL_4:
-    ora #$80                        ; $CAFD
-    jsr CTRLJUMP                    ; $CAFF
-    clc                             ; $CB02
-
-DOCTRL_5:
-    pla                             ; $CB03
-    tay                             ; $CB04
-    pla                             ; $CB05
-
-DOCTRL_6:
-    rts                             ; $CB06
-
-;; Pushes A (handler page) and the handler's low byte from CTRLLOW, and returns into the handler.
-;; In: A = handler high byte, Y = control code (CTRL_FIRST or more)
-CTRLJUMP:
-    pha                             ; $CB07
-    lda CTRLLOW - CTRL_FIRST,y      ; $CB08
-    pha                             ; $CB0B
-    rts                             ; $CB0C
-
-;; Ctrl-E: in Pascal mode clears $04FB bit 4 (cursor shown).
-CURSORON:
-    lda MODE80                      ; $CB0D
-    bpl CURSORON_2                  ; $CB10
-    and #$EF                        ; $CB12
-
-CURSORON_1:
-    sta MODE80                      ; $CB14
-
-CURSORON_2:
-    rts                             ; $CB17
-
-;; Ctrl-F: in Pascal mode sets $04FB bit 4 (cursor hidden).
-CURSOROFF:
-    lda MODE80                      ; $CB18
-    bpl CURSORON_2                  ; $CB1B
-    ora #$10                        ; $CB1D
-    bne CURSORON_1                  ; $CB1F
-
-;; Ctrl-G: a beep made of DELAYA pauses and SPKR toggles.
-BELL80:
-    lda #$40                        ; $CB21
-    jsr DELAYA                      ; $CB23
-    ldy #$C0                        ; $CB26
-
-BELL80_1:
-    lda #$0C                        ; $CB28
-    jsr DELAYA                      ; $CB2A
-    lda SPKR                        ; $CB2D
-    dey                             ; $CB30
-    bne BELL80_1                    ; $CB31
-    rts                             ; $CB33
-
-;; Delay loop of about A*A iterations.
-;; In: A = count
-;; Out: A = 0
-DELAYA:
-    sec                             ; $CB34
-
-DELAYA_1:
-    pha                             ; $CB35
-
-DELAYA_2:
-    sbc #$01                        ; $CB36
-    bne DELAYA_2                    ; $CB38
-    pla                             ; $CB3A
-    sbc #$01                        ; $CB3B
-    bne DELAYA_1                    ; $CB3D
-    rts                             ; $CB3F
-
-;; Ctrl-H: moves $057B left, wrapping to the end of the previous line (UP80).
-BACKSPC80:
-    dec OURCH                       ; $CB40
-    bpl BACKSPC80_1                 ; $CB43
-    lda WNDWDTH                     ; $CB45
-    sta OURCH                       ; $CB47
-    dec OURCH                       ; $CB4A
-    jsr UP80                        ; $CB4D
-
-BACKSPC80_1:
-    rts                             ; $CB50
-
-;; Ctrl-M: $057B = 0, then LF80 unless in Pascal mode.
-CR80:
-    lda #$00                        ; $CB51
-    sta OURCH                       ; $CB53
-    lda MODE80                      ; $CB56
-    bmi CR80_1                      ; $CB59
-    jsr LF80                        ; $CB5B
-
-CR80_1:
-    rts                             ; $CB5E
-
-;; Ctrl-Y: CV = WNDTOP, $057B = 0, VTAB80.
-HOMECURSOR:
-    lda WNDTOP                      ; $CB5F
-    sta CV                          ; $CB61
-    lda #$00                        ; $CB63
-    sta OURCH                       ; $CB65
-    jmp VTAB80                      ; $CB68
-
-;; Ctrl-\: moves $057B right, wrapping with CR80.
-FWDSPACE80:
-    inc OURCH                       ; $CB6B
-    lda OURCH                       ; $CB6E
-    cmp WNDWDTH                     ; $CB71
-    bcc FWDSPACE80_1                ; $CB73
-    jsr CR80                        ; $CB75
-
-FWDSPACE80_1:
-    rts                             ; $CB78
-
-;; Ctrl-_: moves CV up one unless already at WNDTOP, then VTAB80.
-UP80:
-    lda WNDTOP                      ; $CB79
-    cmp CV                          ; $CB7B
-    bcs SETINVFLG_1                 ; $CB7D
-    dec CV                          ; $CB7F
-    jmp VTAB80                      ; $CB81
-
-;; Ctrl-N: INVFLG = $FF (and clears $04FB bit 2 in Pascal mode). INVERSE80 is ctrl-O: INVFLG = $7F
-;; (and sets bit 2 in Pascal mode).
-NORMAL80:
-    lda MODE80                      ; $CB84
-    bpl NORMAL80_1                  ; $CB87
-    and #$FB                        ; $CB89
-
-NORMAL80_1:
-    ldy #$FF                        ; $CB8B
-    bne SETINVFLG                   ; $CB8D
-
-INVERSE80:
-    lda MODE80                      ; $CB8F
-    bpl INVERSE80_1                 ; $CB92
-    ora #$04                        ; $CB94
-
-INVERSE80_1:
-    ldy #$7F                        ; $CB96
-
-SETINVFLG:
-    sta MODE80                      ; $CB98
-    sty INVFLG                      ; $CB9B
-
-;; Return used by UP80.
-SETINVFLG_1:
-    rts                             ; $CB9D
-
-;; The control character handlers, for DOCTRL. Each handler's address-1 is split: the low byte in
-;; CTRLLOW, the page in CTRLPAGE with bit 7 replaced by CTRL_ALWAYS (run even while $04FB disables
-;; control characters); a zero page byte means no handler. Codes below CTRL_FIRST have none, so
-;; CTRLPAGE's first entries are never read, and the end of CTRLLOW overlaps them.
-CTRL_FIRST = CTRL_E
-CTRL_ALWAYS = $80                   ;; CTRLPAGE flag: the handler runs even while control characters are disabled
-
-.macro CTRL code, handler, flags
+;; One control code's handler, for <Control::HandlersLow> and <Control::HandlersHigh>: its address minus one, split
+;; into a low byte and a page whose bit 7 is replaced by the flags.
+;; Parameters:
+;;   code = the control code
+;;   handler = the routine, in a page from $80 up
+;;   flags = <Control::RUNS_WHEN_DISABLED>, or 0
+.macro ControlHandler code, handler, flags
     .assert >(handler - 1) >= $80, "A control handler's page must have bit 7 set."
-    .ident(.sprintf("CTRL_LOW_%d", code)) = <(handler - 1)
-    .ident(.sprintf("CTRL_PAGE_%d", code)) = (>(handler - 1) & $7F) | flags
+    .ident(.sprintf("CONTROL_LOW_%d", code)) = <(handler - 1)
+    .ident(.sprintf("CONTROL_HIGH_%d", code)) = (>(handler - 1) & $7F) | flags
 .endmacro
 
-.macro NOCTRL code
-    .ident(.sprintf("CTRL_LOW_%d", code)) = 0
-    .ident(.sprintf("CTRL_PAGE_%d", code)) = 0
+;; A control code without a handler.
+;; Parameters:
+;;   code = the control code
+.macro NoControlHandler code
+    .ident(.sprintf("CONTROL_LOW_%d", code)) = 0
+    .ident(.sprintf("CONTROL_HIGH_%d", code)) = 0
 .endmacro
 
-    CTRL CTRL_E, CURSORON, 0                        ; Pascal: show the cursor
-    CTRL CTRL_F, CURSOROFF, 0                       ; Pascal: hide the cursor
-    CTRL CTRL_G, BELL80, CTRL_ALWAYS                ; bell
-    CTRL CTRL_H, BACKSPC80, CTRL_ALWAYS             ; left
-    NOCTRL $09
-    CTRL CTRL_J, LF80, CTRL_ALWAYS                  ; down (line feed)
-    CTRL CTRL_K, CLREOP80, 0                        ; clear to the end of the screen
-    CTRL CTRL_L, CLRSCRN80, 0                       ; clear the screen
-    CTRL CTRL_M, CR80, CTRL_ALWAYS                  ; return
-    CTRL CTRL_N, NORMAL80, 0                        ; normal text
-    CTRL CTRL_O, INVERSE80, 0                       ; inverse text
-    NOCTRL $10
-    CTRL CTRL_Q, SET40COL, 0                        ; 40 columns
-    CTRL CTRL_R, SET80COL, 0                        ; 80 columns
-    NOCTRL $13
-    NOCTRL $14
-    CTRL CTRL_U, QUIT80, 0                          ; quit the 80-column firmware
-    CTRL CTRL_V, SCROLLDN80, 0                      ; scroll down
-    CTRL CTRL_W, SCROLLUP80, 0                      ; scroll up
-    CTRL CTRL_X, MTEXTOFF, 0                        ; MouseText off
-    CTRL CTRL_Y, HOMECURSOR, 0                      ; home the cursor
-    CTRL CTRL_Z, CLRLINE80, 0                       ; clear the line
-    CTRL CTRL_ESC, MTEXTON, 0                       ; MouseText on
-    CTRL CTRL_BACKSLASH, FWDSPACE80, 0              ; right
-    CTRL CTRL_RBRACKET, CLREOL80, 0                 ; clear to the end of the line
-    NOCTRL CTRL_CARET
-    CTRL CTRL_UNDERSCORE, UP80, 0                   ; up
+; Pascal: write and GOTOXY.
+.scope Pascal continued
 
-;; Low bytes for codes CTRL_FIRST up; the last CTRL_FIRST of them are the start of CTRLPAGE.
-CTRLLOW:
-.repeat 32 - 2 * CTRL_FIRST, index
-    .byte .ident(.sprintf("CTRL_LOW_%d", CTRL_FIRST + index))
-.endrepeat
+;; Pascal's write: takes a GOTOXY's column or line, performs a control character, or displays any other and moves
+;; the cursor right, to the next line at the window's right edge. Then the line's base is saved and the cursor shown.
+;;
+;; <Pascal::WriteEntry at PASWRITE> jumps here.
+;; In: A = the character
+;; Out: X = 0
+;; Entry:
+;;   SaveBase = saves <TextBase>/<TextBaseHigh>, then shows the cursor; <Pascal::GotoXY>, <Pascal::WriteControl> and
+;;     <Pascal::Init> go here
+;;   ShowCursor = shows the cursor, X = 0; <Pascal::StoreGotoColumn> goes here
+;; Also: PASPUTCHAR (UNKN), PWRITE (IIETRM85)
+.proc Write
+    and #ASCII_BITS
+    tax
+    jsr Setup
+    lda #MODE_GOTOXY
+    bit EightyColumns::Mode
+    bne GotoXY
 
-;; Pages for codes 0-31.
-CTRLPAGE:
-.repeat CTRL_FIRST, index
-    .byte .ident(.sprintf("CTRL_LOW_%d", 32 - CTRL_FIRST + index))
-.endrepeat
-.repeat 32 - CTRL_FIRST, index
-    .byte .ident(.sprintf("CTRL_PAGE_%d", CTRL_FIRST + index))
-.endrepeat
+    ; A control character has neither bit 5 nor bit 6, as RangeMask's $60 tests.
+    txa
+    bit RangeMask
+    beq WriteControl
 
-;; Ctrl-V: scrolls the window down a line.
-SCROLLDN80:
-    ldy #$00                        ; $CBD4
-    beq SCROLL80_2                  ; $CBD6
+    ; Any other character, in Pascal's video.
+    ldy EightyColumns::CursorColumn
+    bit InverseMask
+    bpl Store
+    ora #TEXT_HIGH_BIT
 
-;; Ctrl-J: moves CV down (and $05FB); at WNDBTM scrolls with SCROLL80.
-LF80:
-    inc CV                          ; $CBD8
-    lda CV                          ; $CBDA
-    sta OURCV                       ; $CBDC
-    cmp WNDBTM                      ; $CBDF
-    bcs SCROLL80                    ; $CBE1
-    jmp VTAB80_1                    ; $CBE3
+;; Stores the character and moves the cursor right, to the next line at the window's right edge.
+;; Also: PWRI (IIETRM85)
+Store:
+    jsr Screen::WriteCharacter
+    iny
+    sty EightyColumns::CursorColumn
+    cpy WindowWidth
+    bcc SaveBase
+    lda #0
+    sta EightyColumns::CursorColumn
+    jsr Control::LineFeed
 
-;; LF80 at the bottom: backs CV and $05FB up one, then scrolls up. SCROLLUP80 (Y = 1, ctrl-W) scrolls
-;; the window up, SCROLL80_2 with Y = 0 (from SCROLLDN80, ctrl-V) scrolls it down: each line is copied
-;; from its neighbor, with 80VID the aux half (HISCR) and main half are copied separately (WNDWDTH is
-;; temporarily halved, adjusted for an odd WNDLFT), then the new line is cleared and BASL recomputed.
+;; Saves <TextBase>/<TextBaseHigh> for the next call, then shows the cursor.
+;; Also: DOBASL (IIETRM85)
+SaveBase:
+    lda TextBase
+    sta EightyColumns::SavedTextBase
+    lda TextBaseHigh
+    sta EightyColumns::SavedTextBaseHigh
+
+;; Shows the cursor and returns X = 0.
+;; Also: PWRITERET (IIETRM85)
+ShowCursor:
+    jsr Screen::FlipCursor
+    ldx #0
+
+;; The return, whose opcode, $60, is the mask the control character test uses.
+;; Also: PRTS (IIETRM85)
+RangeMask:
+    rts
+.endproc
+
+;; A GOTOXY's next character, less <GOTOXY_BIAS>: its column first, then its line, which moves the cursor and ends
+;; the GOTOXY.
+;; In: X = the character
+;; Also: PASGOTOXY (UNKN), GETX (IIETRM85)
+.proc GotoXY
+    jsr Screen::FlipCursor
+    txa
+    sec
+    sbc #GOTOXY_BIAS
+    bit EightyColumns::GotoXYColumn
+    bmi StoreGotoColumn
+
+    ; The line: the cursor moves to it and the column.
+    sta EightyColumns::CursorLine
+    sta CV
+    jsr RowBase
+    lda EightyColumns::GotoXYColumn
+    sta EightyColumns::CursorColumn
+    lda #<~MODE_GOTOXY
+    and EightyColumns::Mode
+    sta EightyColumns::Mode
+    ; Always: the mode has MODE_PASCAL.
+    bne Write::SaveBase
+.endproc
+
+;; Pascal's control characters: Control-^ starts a GOTOXY; any other is performed.
+;; In: X = the code
+;; Also: PCTL (IIETRM85)
+.proc WriteControl
+    jsr Screen::FlipCursor
+    txa
+    cmp #CONTROL_CARET
+    beq StartGotoXY
+    jsr Control::Perform
+    jmp Write::SaveBase
+
+;; Control-^: sets <MODE_GOTOXY>, with the column not yet received.
+;; Also: STARTXY (IIETRM85)
+StartGotoXY:
+    lda #MODE_GOTOXY
+    ora EightyColumns::Mode
+    sta EightyColumns::Mode
+    lda #GOTOXY_WAITING
+    ; Falls into StoreGotoColumn.
+.endproc
+
+;; Stores A as the GOTOXY's column, then shows the cursor. <Pascal::GotoXY> branches here.
+;; Also: PSETX (IIETRM85)
+StoreGotoColumn:
+    sta EightyColumns::GotoXYColumn
+    jmp Write::ShowCursor
+
+.endscope
+
+;; Finishes decoding an opcode for the Monitor's disassembler: its mnemonic's index, by the mnemonic hash the other
+;; Monitors compute themselves.
+;;
+;; <Functions::Decode at CXINSDS2> jumps here.
+;; In: A = the opcode and the Monitor's group bits ($8F), ScrollBase = the opcode
+;; Out: A = the mnemonic's index
+;; Also: MNEMINDEX (UNKN), DOMN (IIETRM85)
+.proc MnemonicIndex
+    tax
+    lda ScrollBase
+    ldy #HASH_STEPS
+    cpx #TXA_GROUP
+    beq HashNext
+
+;; One step of the mnemonic hash: shifts out the next of the opcode's bits 0-2, until one is 1.
+HashStep:
+    lsr a
+    bcc HashNext
+    lsr a
+
+;; Shifts A right, setting <HASH_GROUP_BIT>, once for this step and each step left, then ends the hash.
+;; Also: MNNDX2 (IIETRM85)
+HashShift:
+    lsr a
+    ora #HASH_GROUP_BIT
+    dey
+    bne HashShift
+    iny
+
+;; Counts the steps down.
+;; Also: MNNDX3 (IIETRM85)
+HashNext:
+    dey
+    bne HashStep
+    rts
+.endproc
+
+;; Decides whether slot 3's own ROM is used: a card in slot 3 whose ROM has the Pascal 1.1 bytes (by
+;; <CompareSlot3Rom>) keeps its ROM; otherwise the internal ROM is used when auxiliary memory answers.
+;;
+;; The reset function calls it.
+;; Out: zero = set to use the internal slot 3 ROM
+;; Also: SLOT3CHECK (UNKN), TSTROMCRD (IIETRM85)
+.proc TestSlot3Card
+    jsr CompareSlot3Rom
+    bne TestAuxMemory
+    ; A card with the bytes: Y is 0, and 1 clears zero.
+    iny
+    rts
+.endproc
+
+;; Tests for auxiliary memory: writes <AUX_TEST_BYTE> to <TextPage1>'s first byte in auxiliary memory, through
+;; 80STORE and PAGE2, and reads it back, then restores the byte, PAGE2 and 80STORE.
+;; Out: A = the byte read back; zero = set when it is <AUX_TEST_BYTE>, auxiliary memory answered
 ;; Keeps: X
-;; Uses: BAS2L/BAS2H, $077B (direction), WNDWDTH (restored)
-SCROLL80:
-    dec OURCV                       ; $CBE6
-    dec CV                          ; $CBE9
+;; Also: AUXPRESENT (UNKN), TESTCARD (IIETRM85)
+.proc TestAuxMemory
+    ; PAGE2's state in the carry, 80STORE's in negative, both saved.
+    lda Page2State
+    asl a
+    lda #AUX_TEST_BYTE
+    bit Store80State
+    sta Store80On
+    php
+
+    ; The test, with page two selecting the auxiliary text page.
+    sta Page2On
+    ldy TextPage1
+    sta TextPage1
+    lda TextPage1
+    sty TextPage1
+
+    ; PAGE2 off unless it was on.
+    plp
+    bcs Restore80Store
+    sta Page2Off
+
+;; 80STORE off unless it was on.
+;; Also: STAY2 (IIETRM85)
+Restore80Store:
+    bmi Compare
+    sta Store80Off
+
+;; Compares the byte read back with the one written.
+;; Also: STAY80 (IIETRM85)
+Compare:
+    cmp #AUX_TEST_BYTE
+    rts
+.endproc
+
+;; Sets <TextBase>/<TextBaseHigh> to a text row's address on page one, without the window.
+;; In: A = the row, 0-23
+;; Out: A = the address's low byte, carry = clear
+;; Keeps: X, Y
+;; Also: ROWBASE (UNKN), BASCALC (IIETRM85)
+.proc RowBase
+    ; The high byte: page one's, plus the row's page.
+    pha
+    lsr a
+    and #TEXT_LINE_PAGE_BITS
+    ora #>TextPage1
+    sta TextBaseHigh
+
+    ; The low byte: $80 for an odd row (bit 0, now in the carry), plus $28 for each third.
+    pla
+    and #TEXT_LINE_THIRD_BITS
+    bcc StoreLow
+    ; The carry is set, so this adds TEXT_ODD_LINE.
+    adc #TEXT_ODD_LINE - 1
+
+;; Stores the low byte and multiplies its third by five.
+;; Also: BSCLC2 (IIETRM85)
+StoreLow:
+    sta TextBase
+    asl a
+    asl a
+    ora TextBase
+    sta TextBase
+    rts
+.endproc
+
+;; The control characters the 80-column firmware performs, $00-$1F with bit 7 clear: <Control::Perform> runs a
+;; code's handler through the tables <Control::HandlersLow> and <Control::HandlersHigh> (the handler's address minus
+;; one, split into its low byte and its page), and the handlers move the cursor, ring the bell, clear, scroll, set the
+;; video and the 40 or 80 columns, and quit the firmware.
+;;
+;; BASIC's output, Pascal's write and escape mode perform their codes here. Other code calls many handlers directly,
+;; as the 80-column functions call <Control::ScrollUp> and <Control::ClearToEndOfLine>. On the Enhanced IIe,
+;; <Control::PerformUnlessDisabled> skips the codes without <Control::RUNS_WHEN_DISABLED> while escape mode or
+;; escape Control-D turns them off, and Control-E, Control-F, Control-X and Control-[ show and hide Pascal's cursor
+;; and turn MouseText off and on.
+.scope Control
+
+;; The first control code with a handler, Control-E: <Control::HandlersLow> starts there.
+;; Also: CTRL_FIRST (UNKN)
+FIRST_CODE = CONTROL_E
+
+;; How many control codes there are, $00-$1F.
+CODE_COUNT = 32
+
+;; In <Control::HandlersHigh>: the handler runs even while <MODE_CONTROLS_OFF> or <MODE_ESCAPES> turns the control
+;; characters off. It takes the place of the handler's page's bit 7.
+;; Also: CTRL_ALWAYS (UNKN)
+RUNS_WHEN_DISABLED = $80
+
+;; Performs a control character for BASIC's output: as <Control::Perform>, but while <MODE_CONTROLS_OFF> or
+;; <MODE_ESCAPES> is set only the codes with <Control::RUNS_WHEN_DISABLED>.
+;; In: A = the code, $00-$1F
+;; Out: carry = clear when a handler ran, set when the code has none or is off
+;; Keeps: A, Y
+;; Also: DOCTRL (UNKN), CTLCHAR0 (IIETRM85)
+.proc PerformUnlessDisabled
+    ; Overflow set: the mode decides.
+    bit OverflowByte
+    ; A bvc, never taken: it skips Perform's clv.
+    .byte $50
+    ; Falls into Perform.
+.endproc
+
+;; Performs a control character at the firmware's cursor, through its handler in <Control::HandlersLow> and
+;; <Control::HandlersHigh>; a 0 in <Control::HandlersHigh> means no handler.
+;; In: A = the code, $00-$1F
+;; Out: carry = clear when a handler ran, set when the code has none
+;; Keeps: A, Y
+;; Also: CTLCHAR (IIETRM85)
+.proc Perform
+
+;; The code, then the handler's page while the mode is checked: <EightyColumns::SavedTextBase>, borrowed.
+Code = EightyColumns::SavedTextBase
+
+    clv
+    sta Code
+    pha
+    tya
+    pha
+    ldy Code
+    cpy #FIRST_CODE
+    bcc NotHandled
+    lda HandlersHigh,y
+    beq NotHandled
+
+    ; Overflow clear, or a code that always runs: the handler; otherwise only when the mode allows.
+    bvc Handle
+    bmi Handle
+    sta Code
+    lda EightyColumns::Mode
+    and #MODE_ESCAPES | MODE_CONTROLS_OFF
+    beq Reload
+
+;; No handler, or the control characters are off: the carry set.
+;; Also: CTLCHARX (IIETRM85)
+NotHandled:
+    sec
+    bcs Done
+
+    ; The page back.
+Reload:
+    lda Code
+
+;; Runs the handler, with its page's bit 7 back, then the carry clear.
+;; Also: CTLGO (IIETRM85)
+Handle:
+    ora #RUNS_WHEN_DISABLED
+    jsr Jump
+    clc
+
+;; Y and A back.
+;; Also: CTLRET (IIETRM85)
+Done:
+    pla
+    tay
+    pla
+    ; Falls into OverflowByte, Perform's return.
+.endproc
+
+;; The return of <Control::Perform>, whose opcode, $60, has bit 6 set: BIT on it sets overflow.
+;; Also: SEV1 (IIETRM85)
+OverflowByte:
+    rts
+
+;; Goes to the handler of control code Y: pushes its page from A and its low byte minus one from
+;; <Control::HandlersLow>, and returns into it.
+;; In: A = the handler's page, Y = the code, <Control::FIRST_CODE> or above
+;; Also: CTRLJUMP (UNKN), CTLXFER (IIETRM85)
+.proc Jump
+    pha
+    lda HandlersLow - FIRST_CODE,y
+    pha
+    rts
+.endproc
+
+;; Control-E: shows Pascal's cursor, clearing <MODE_CURSOR_OFF>; outside Pascal it does nothing.
+;; Keeps: X, Y
+;; Entry:
+;;   StoreMode = stores A as the mode; <Control::CursorOff> branches here
+;;   Done = returns; <Control::CursorOff> branches here
+;; Also: CURSORON (UNKN), X_CUR_ON (IIETRM85)
+.proc CursorOn
+    lda EightyColumns::Mode
+    bpl Done
+    and #<~MODE_CURSOR_OFF
+
+;; Stores A as the mode.
+StoreMode:
+    sta EightyColumns::Mode
+
+;; Returns.
+;; Also: CURON_X (IIETRM85)
+Done:
+    rts
+.endproc
+
+;; Control-F: hides Pascal's cursor, setting <MODE_CURSOR_OFF>; outside Pascal it does nothing.
+;; Keeps: X, Y
+;; Also: CURSOROFF (UNKN), X_CUR_OFF (IIETRM85)
+.proc CursorOff
+    lda EightyColumns::Mode
+    bpl CursorOn::Done
+    ora #MODE_CURSOR_OFF
+    ; Always: the mode is not 0 now.
+    bne CursorOn::StoreMode
+.endproc
+
+;; Control-G: rings the bell, a pause and then <BELL_TOGGLES> toggles of the speaker.
+;; Keeps: X
+;; Also: BELL80 (UNKN), X_BELL (IIETRM85)
+.proc Bell
+    lda #BELL_PAUSE
+    jsr Pause
+    ldy #BELL_TOGGLES
+
+;; Toggles the speaker once.
+;; Also: BELL2 (IIETRM85)
+Click:
+    lda #BELL_HALF_CYCLE
+    jsr Pause
+    lda Speaker
+    dey
+    bne Click
+    rts
+.endproc
+
+;; Waits, as long as the Monitor's <Delay> does for the same A, of which it is a copy.
+;;
+;; Apple's listing calls it WAIT, the Monitor's name for <Delay>.
+;; In: A = the count
+;; Out: A = 0
+;; Keeps: X, Y
+;; Also: DELAYA (UNKN)
+.proc Pause
+    sec
+
+;; The outer count.
+;; Also: WAIT2 (IIETRM85)
+Outer:
+    pha
+
+;; The inner count.
+;; Also: WAIT3 (IIETRM85)
+Inner:
+    sbc #1
+    bne Inner
+    pla
+    sbc #1
+    bne Outer
+    rts
+.endproc
+
+;; Control-H: moves the cursor left; from the first column, to the last of the line above.
+;; Also: BACKSPC80 (UNKN), X_BS (IIETRM85)
+.proc Left
+    dec EightyColumns::CursorColumn
+    bpl Done
+    lda WindowWidth
+    sta EightyColumns::CursorColumn
+    dec EightyColumns::CursorColumn
+    jsr Up
+
+;; Returns.
+;; Also: BSDONE (IIETRM85)
+Done:
+    rts
+.endproc
+
+;; Control-M: a carriage return: the cursor to the first column and, outside Pascal, down a line.
+;; Also: CR80 (UNKN), X_CR (IIETRM85)
+.proc CarriageReturn
+    lda #0
+    sta EightyColumns::CursorColumn
+    lda EightyColumns::Mode
+    bmi Done
+    jsr LineFeed
+
+    ; Returns.
+Done:
+    rts
+.endproc
+
+;; Control-Y: homes the cursor, to the window's top line and the first column.
+;; Also: HOMECURSOR (UNKN), X_EM (IIETRM85)
+.proc Home
+    lda WindowTop
+    sta CV
+    lda #0
+    sta EightyColumns::CursorColumn
+    jmp LineBase
+.endproc
+
+;; Control-\: moves the cursor right, to the next line at the window's right edge.
+;; Also: FWDSPACE80 (UNKN), X_FS (IIETRM85)
+.proc Right
+    inc EightyColumns::CursorColumn
+    lda EightyColumns::CursorColumn
+    cmp WindowWidth
+    bcc Done
+    jsr CarriageReturn
+
+    ; Returns.
+Done:
+    rts
+.endproc
+
+;; Control-_: moves the cursor up a line, unless it is on the window's top line.
+;; Also: UP80 (UNKN), X_US (IIETRM85)
+.proc Up
+    lda WindowTop
+    cmp CV
+    bcs StoreVideo::Done
+    dec CV
+    jmp LineBase
+.endproc
+
+;; Control-N: normal text, and in Pascal <MODE_INVERSE> cleared.
+;; Keeps: X
+;; Also: NORMAL80 (UNKN), X_SO (IIETRM85)
+.proc Normal
+    lda EightyColumns::Mode
+    bpl SetNormal
+    and #<~MODE_INVERSE
+
+;; The normal mask.
+;; Also: X_SO1 (IIETRM85)
+SetNormal:
+    ldy #TEXT_NORMAL
+    ; Always: the mask is not 0.
+    bne StoreVideo
+.endproc
+
+;; Control-O: inverse text, and in Pascal <MODE_INVERSE> set.
+;; Keeps: X
+;; Also: INVERSE80 (UNKN), X_SI (IIETRM85)
+.proc Inverse
+    lda EightyColumns::Mode
+    bpl SetInverse
+    ora #MODE_INVERSE
+
+;; The inverse mask.
+;; Also: X_SI1 (IIETRM85)
+SetInverse:
+    ldy #TEXT_INVERSE
+    ; Falls into StoreVideo.
+.endproc
+
+;; Stores the mode and <InverseMask>.
+;; In: A = the mode, Y = the mask
+;; Keeps: X
+;; Entry:
+;;   Done = returns; <Control::Up> branches here
+;; Also: SETINVFLG (UNKN), STUFFINV (IIETRM85)
+.proc StoreVideo
+    sta EightyColumns::Mode
+    sty InverseMask
+
+;; Returns.
+Done:
+    rts
+.endproc
+
+; The handler tables.
+
+    ControlHandler CONTROL_E, CursorOn, 0                           ; Pascal: show the cursor
+    ControlHandler CONTROL_F, CursorOff, 0                          ; Pascal: hide the cursor
+    ControlHandler CONTROL_G, Bell, RUNS_WHEN_DISABLED              ; bell
+    ControlHandler CONTROL_H, Left, RUNS_WHEN_DISABLED              ; left
+    NoControlHandler $09
+    ControlHandler CONTROL_J, LineFeed, RUNS_WHEN_DISABLED          ; down (line feed)
+    ControlHandler CONTROL_K, ClearToEndOfWindow, 0                           ; clear to the end of the window
+    ControlHandler CONTROL_L, HomeAndClear, 0                          ; home and clear the window
+    ControlHandler CONTROL_M, CarriageReturn, RUNS_WHEN_DISABLED    ; return
+    ControlHandler CONTROL_N, Normal, 0                             ; normal text
+    ControlHandler CONTROL_O, Inverse, 0                            ; inverse text
+    NoControlHandler $10
+    ControlHandler CONTROL_Q, Columns40, 0                           ; 40 columns
+    ControlHandler CONTROL_R, Columns80, 0                           ; 80 columns
+    NoControlHandler $13
+    NoControlHandler $14
+    ControlHandler CONTROL_U, Quit, 0                             ; quit the 80-column firmware
+    ControlHandler CONTROL_V, ScrollDown, 0                         ; scroll down
+    ControlHandler CONTROL_W, ScrollUp, 0                         ; scroll up
+    ControlHandler CONTROL_X, MouseTextOff, 0                           ; MouseText off
+    ControlHandler CONTROL_Y, Home, 0                               ; home the cursor
+    ControlHandler CONTROL_Z, ClearLine, 0                          ; clear the line
+    ControlHandler CONTROL_ESCAPE, MouseTextOn, 0                       ; MouseText on
+    ControlHandler CONTROL_BACKSLASH, Right, 0                      ; right
+    ControlHandler CONTROL_RIGHT_BRACKET, ClearToEndOfLine, 0               ; clear to the end of the line
+    NoControlHandler CONTROL_CARET
+    ControlHandler CONTROL_UNDERSCORE, Up, 0                        ; up
+
+;; The handlers' low bytes, less one, from <Control::FIRST_CODE>. The last five of them, the low bytes for
+;; Control-[ to Control-_, are <Control::HandlersHigh>' first bytes.
+;; Also: CTRLLOW (UNKN), CTLADL (IIETRM85)
+HandlersLow:
+.repeat CODE_COUNT - 2 * FIRST_CODE, index
+    .byte .ident(.sprintf("CONTROL_LOW_%d", FIRST_CODE + index))
+.endrepeat
+
+;; The handlers' pages, with <Control::RUNS_WHEN_DISABLED> for bit 7, for codes $00-$1F; 0 means no handler. The
+;; first <Control::FIRST_CODE> bytes, for codes without handlers, are never read as pages: they end
+;; <Control::HandlersLow>.
+;; Also: CTRLPAGE (UNKN), CTLADH (IIETRM85)
+HandlersHigh:
+.repeat FIRST_CODE, index
+    .byte .ident(.sprintf("CONTROL_LOW_%d", CODE_COUNT - FIRST_CODE + index))
+.endrepeat
+.repeat CODE_COUNT - FIRST_CODE, index
+    .byte .ident(.sprintf("CONTROL_HIGH_%d", FIRST_CODE + index))
+.endrepeat
+
+;; Control-V: scrolls the window down a line.
+;; Also: SCROLLDN80 (UNKN), SCROLLDN (IIETRM85)
+.proc ScrollDown
+    ; Y = 0: down. Always: Y is 0.
+    ldy #0
+    beq Scroll
+.endproc
+
+;; Control-J: moves the cursor down a line, scrolling the window up from its bottom line.
+;; Also: LF80 (UNKN), X_LF (IIETRM85)
+.proc LineFeed
+    inc CV
+    lda CV
+    sta EightyColumns::CursorLine
+    cmp WindowBottom
+    bcs AtBottom
+    jmp LineBase::Row
+
+;; Below the window: back to its bottom line, then the window scrolled up.
+;; Also: SCROLL80 (UNKN), X_LF2 (IIETRM85)
+AtBottom:
+    dec EightyColumns::CursorLine
+    dec CV
+    ; Falls into SCROLLUP80, Control::ScrollUp, at the start of EightyColumnsScreen.asm.
+.endproc
+
+.endscope

@@ -430,7 +430,10 @@ public sealed partial class DocumentationResolver
                     continue;
                 }
 
-                if (ReferenceEquals(target, topic) || target.Kind is DocumentationKind.File or DocumentationKind.Topic)
+                // A scope's name is often a plain word too ("Pascal's cursor", "Control-E"), so prose may use it
+                // without a link.
+                if (ReferenceEquals(target, topic)
+                    || target.Kind is DocumentationKind.File or DocumentationKind.Topic or DocumentationKind.Scope)
                 {
                     continue;
                 }

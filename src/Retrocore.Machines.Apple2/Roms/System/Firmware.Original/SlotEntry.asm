@@ -1,200 +1,365 @@
-;; BASICINT, the PR#3 entry: sets V (the byte at $FF58 is an RTS) and enters the common BASIC entry, which
-;; initializes the 80-column firmware and then prints A.
-BASICINT:
-    bit IORTS                       ; $C300
-    bvs BASICENT                    ; $C303
+; retrocore: style=strict
+;; Slot 3's page of the original IIe's internal firmware, $C300-$C3FF: the entries for `PR#3` and the BASIC hooks, the
+;; Pascal 1.1 table and its four entries, the 128K routines AUXMOVE and XFER, and the common entry that claims the
+;; $C800 ROM for the rest of the 80-column firmware.
 
-;; BASICIN, the input hook (KSW): carry set, V clear. The SEC here and the CLC at $C307 are also the $38 and
-;; $18 bytes a Pascal 1.1 card is identified by.
-BASICIN:
-    sec                             ; $C305
-    .byte $90                       ; $C306 bcc: skips the next byte
+; Opcodes.
 
-;; BASICOUT, the output hook (CSW): carry clear, V clear.
-BASICOUT:
-    clc                             ; $C307
-    clv                             ; $C308
-    bvc BASICENT                    ; $C309
+;; The opcode of bcc, which <BasicInput> uses as a byte that skips the next one: with the carry set, the branch is not
+;; taken, and the byte after it is its offset.
+OPCODE_BCC = $90
 
-;; Pascal 1.1 firmware ID: $01 marks the protocol, $88 is the device signature byte.
-PASCALID:
-    .byte $01, $88                  ; $C30B
+; The Pascal 1.1 firmware protocol.
 
-;; Pascal 1.1 entry offsets into page $C3: init $C34B, read $C351, write $C357, status $C35D.
-PASCALOFS:
-    .byte <JPINIT, <JPREAD, <JPWRITE, <JPSTAT ; $C30D
+;; The protocol's generic signature byte, at $C30B: the card follows the Pascal 1.1 firmware protocol.
+PASCAL_GENERIC_SIGNATURE = $01
 
-;; AUXMOVE: copies memory between main and auxiliary RAM (C3_MOVE).
-AUXMOVE:
-    jmp C3_MOVE                     ; $C311
+;; The device signature byte, at $C30C: $8x is an 80-column card.
+PASCAL_DEVICE_SIGNATURE = $88
 
-;; XFER: transfers control to an address in main or auxiliary memory (C3_XFER).
-XFER:
-    jmp C3_XFER                     ; $C314
+; Slot 3 and the mode bits.
 
-;; Common entry for BASICINT, BASICIN and BASICOUT. Saves A in $067B and pushes A, Y, X and P. Sets mode
-;; bit 0 if the caller had interrupts enabled. Copies CV to $05FB and sets MSLOT to $C3. V set goes to
-;; BASICINIT, otherwise to the shared input/output path at C8BASIC (carry set = input).
-;; In: A = character, C/V as set by the entry
-BASICENT:
-    sta CHAR                        ; $C317
-    pha                             ; $C31A
-    tya                             ; $C31B
-    pha                             ; $C31C
-    txa                             ; $C31D
-    pha                             ; $C31E
-    php                             ; $C31F
-    lda MODE80                      ; $C320
-    and #$FE                        ; $C323
-    sta MODE80                      ; $C325
-    pla                             ; $C328
-    pha                             ; $C329
-    and #$04                        ; $C32A
-    bne BASICENT2                   ; $C32C
-    lda MODE80                      ; $C32E
-    ora #$01                        ; $C331
-    sta MODE80                      ; $C333
+;; The high byte of slot 3's ROM page, which <ExpansionRomSlot> holds while the firmware's $C800 ROM is in.
+SLOT3_ROM_PAGE = $C3
 
-BASICENT2:
-    lda CLRROM                      ; $C336 reading $CFFF releases every $C800 ROM; the next fetch from $C3xx selects the internal one again
-    lda CV                          ; $C339
-    sta OURCV                       ; $C33B
-    jsr SETC8                       ; $C33E
-    plp                             ; $C341
-    php                             ; $C342
-    bvs JBASINIT                    ; $C343
-    jmp C8BASIC                     ; $C345
+;; The status register's interrupt disable bit, as the caller's flags are pushed.
+INTERRUPT_DISABLE_FLAG = $04
 
-;; Path for BASICINT: jumps to BASICINIT.
-JBASINIT:
-    jmp BASICINIT                   ; $C348
+; The 128K routines.
 
-;; Pascal init entry (offset $4B): sets MSLOT and jumps to PINIT.
-JPINIT:
-    jsr SETC8                       ; $C34B
-    jmp PINIT                       ; $C34E
+;; The address <AuxTransfer> jumps to.
+;; See: <TransferAddressHigh>
+TransferAddress = $03ED
 
-;; Pascal read entry (offset $51): sets MSLOT and jumps to C8_PREAD.
-JPREAD:
-    jsr SETC8                       ; $C351
-    jmp C8_PREAD                    ; $C354
+;; The high byte of <TransferAddress>.
+TransferAddressHigh = $03EE
 
-;; Pascal write entry (offset $57): sets MSLOT and jumps to PWRITE.
-JPWRITE:
-    jsr SETC8                       ; $C357
-    jmp PWRITE                      ; $C35A
+;; `PR#3`'s entry: sets V, which makes the common entry initialize the 80-column firmware before printing A.
+;;
+;; At $C300. V comes from bit on the Monitor's rts at $FF58 (<SaveRegisters::Return>), whose $60 has bit 6 set.
+;; In: A = the character to print
+;; Also: BASICINT (IIEROM82, IIETRM85)
+.proc BasicInitialize
+.assert * = $C300, "BasicInitialize must stay at $C300."
+    bit SaveRegisters::Return
+    bvs CharacterIo::Enter
+.endproc
 
-;; Pascal status entry (offset $5D): sets MSLOT and jumps to PSTATUS.
-JPSTAT:
-    jsr SETC8                       ; $C35D
-    jmp PSTATUS                     ; $C360
+;; The input hook's entry, which the Monitor's input hook reaches after `IN#3` or `PR#3`: carry set, V clear.
+;;
+;; At $C305. Its sec ($38), and the clc ($18) of <BasicOutput> at $C307, are two of the bytes a Pascal 1.1 card is
+;; recognized by.
+;; In: A = the character under the cursor
+;; Out: A = the key
+;; Also: BASICIN (IIEROM82, IIETRM85)
+.proc BasicInput
+.assert * = $C305, "BasicInput must stay at $C305."
+    sec
+    ; Falls into BasicOutput past its clc, which this bcc takes as its offset.
+    .byte OPCODE_BCC
+.endproc
 
-;; Body of AUXMOVE: copies A1L/A1H through A2L/A2H to A4L/A4H. Carry set copies main to auxiliary memory
-;; (reads main, writes card), carry clear copies auxiliary to main. Restores RAMRD and RAMWRT afterwards.
-;; In: A1 = source start, A2 = source end, A4 = destination, carry = direction
-;; Out: A1 = A2+1, A4 advanced past the copy
-;; Keeps: A, Y
-C3_MOVE:
-    pha                             ; $C363
-    tya                             ; $C364
-    pha                             ; $C365
-    lda RDRAMRD                     ; $C366
-    pha                             ; $C369
-    lda RDRAMWRT                    ; $C36A
-    pha                             ; $C36D
-    bcc MOVEC2M                     ; $C36E
-    sta RDMAINRAM                   ; $C370
-    sta WRCARDRAM                   ; $C373
-    bcs MOVESTRT                    ; $C376
+;; The output hook's entry, which the Monitor's output hook reaches after `PR#3`: carry clear, V clear.
+;;
+;; At $C307.
+;; In: A = the character to print
+;; Also: BASICOUT (IIEROM82, IIETRM85)
+.proc BasicOutput
+.assert * = $C307, "BasicOutput must stay at $C307."
+    clc
+    clv
+    bvc CharacterIo::Enter
+.endproc
 
-MOVEC2M:
-    sta WRMAINRAM                   ; $C378
-    sta RDCARDRAM                   ; $C37B
+;; The Pascal 1.1 firmware protocol's signature: the generic byte, then the device's.
+;;
+;; At $C30B. With the $38 at $C305 and the $18 at $C307, it tells Pascal that slot 3 holds an 80-column card.
+;; Also: PASCALID (UNKN)
+PascalSignature:
+.assert * = $C30B, "PascalSignature must stay at $C30B."
+    .byte PASCAL_GENERIC_SIGNATURE, PASCAL_DEVICE_SIGNATURE
 
-MOVESTRT:
-    ldy #$00                        ; $C37E
+;; The Pascal 1.1 protocol's entries, as offsets in page $C3: init, read, write and status.
+;;
+;; At $C30D.
+;; Also: PASCALOFS (UNKN)
+PascalOffsets:
+.assert * = $C30D, "PascalOffsets must stay at $C30D."
+    .byte <Pascal::InitEntry, <Pascal::ReadEntry, <Pascal::WriteEntry, <Pascal::StatusEntry
 
-MOVELOOP:
-    lda (A1L),y                     ; $C380
-    sta (A4L),y                     ; $C382
-    inc A4L                         ; $C384
-    bne C3_NXTA1                    ; $C386
-    inc A4H                         ; $C388
+;; Copies memory between main and auxiliary RAM (<CopyMainAux>).
+;;
+;; At $C311.
+;; In: Address1/Address1High = the first address, Address2/Address2High = the last, Address4/Address4High = the
+;;     destination, carry = set to copy main to auxiliary memory, clear for auxiliary to main
+;; Out: Address1/Address1High = the address after A2, Address4/Address4High = the address after the copy
+;; Keeps: A, X, Y
+;; Also: AUXMOVE (IIETRM85)
+.proc AuxMove
+.assert * = $C311, "AuxMove must stay at $C311."
+    jmp CopyMainAux
+.endproc
 
-C3_NXTA1:
-    lda A1L                         ; $C38A
-    cmp A2L                         ; $C38C
-    lda A1H                         ; $C38E
-    sbc A2H                         ; $C390
-    inc A1L                         ; $C392
-    bne C01                         ; $C394
-    inc A1H                         ; $C396
+;; Jumps to <TransferAddress> in main or auxiliary memory (<JumpMainAux>).
+;;
+;; At $C314.
+;; In: carry = set to run in auxiliary memory, clear for main, overflow = set for the auxiliary zero page and stack,
+;;     clear for main's
+;; Also: XFER (IIETRM85)
+.proc AuxTransfer
+.assert * = $C314, "AuxTransfer must stay at $C314."
+    jmp JumpMainAux
+.endproc
 
-C01:
-    bcc MOVELOOP                    ; $C398
-    sta WRMAINRAM                   ; $C39A
-    pla                             ; $C39D
-    bpl C03                         ; $C39E
-    sta WRCARDRAM                   ; $C3A0
+;; BASIC's character input and output through slot 3: the common entry of <BasicInitialize>, <BasicInput> and
+;; <BasicOutput>, the firmware's initialization, printing with the control characters, and input with the cursor and
+;; the escape sequences.
+;;
+;; Its first piece, <CharacterIo::Enter>, is in slot 3's page at $C317, where the BASIC entries reach it; the rest is
+;; in the $C800 ROM that Enter claims.
+.scope CharacterIo
 
-C03:
-    sta RDMAINRAM                   ; $C3A3
-    pla                             ; $C3A6
-    bpl MOVERET                     ; $C3A7
-    sta RDCARDRAM                   ; $C3A9
+;; The entry <BasicInitialize>, <BasicInput> and <BasicOutput> share: saves the registers and claims the $C800 ROM,
+;; then initializes the firmware (V set) or goes on to input (carry set) or output.
+;;
+;; It saves A in <EightyColumns::CurrentCharacter> and pushes A, Y, X and P, sets <EightyColumns::Mode>'s
+;; <MODE_INTERRUPTS> when the caller had interrupts enabled, and copies <CV> to <EightyColumns::CursorLine>. The pushed
+;; P keeps the carry and V for <InputOrOutput> and <Initialize>, which run from the $C800 ROM.
+;; In: A = the character, carry and overflow = as the entry set them
+;; Also: BASICENT (IIEROM82)
+.proc Enter
+    sta EightyColumns::CurrentCharacter
+    pha
+    tya
+    pha
+    txa
+    pha
+    php
 
-MOVERET:
-    pla                             ; $C3AC
-    tay                             ; $C3AD
-    pla                             ; $C3AE
-    rts                             ; $C3AF
+    ; The mode's interrupt bit from the caller's flags.
+    lda EightyColumns::Mode
+    and #~MODE_INTERRUPTS & $FF
+    sta EightyColumns::Mode
+    pla
+    pha
+    and #INTERRUPT_DISABLE_FLAG
+    bne ClaimRom
+    lda EightyColumns::Mode
+    ora #MODE_INTERRUPTS
+    sta EightyColumns::Mode
 
-;; Body of XFER: jumps to the address in $03ED/$03EE with main (carry clear) or auxiliary (carry set) memory
-;; selected for reading and writing, and the standard (V clear) or alternate (V set) zero page and stack.
-;; Keeps: A
-C3_XFER:
-    pha                             ; $C3B0
-    lda $03ED                       ; $C3B1 the address is pushed and pulled back so it is stored again into the newly selected bank
-    pha                             ; $C3B4
-    lda $03EE                       ; $C3B5
-    pha                             ; $C3B8
-    bcc XFERC2M                     ; $C3B9
-    sta RDCARDRAM                   ; $C3BB
-    sta WRCARDRAM                   ; $C3BE
-    bvc XFERSZP                     ; $C3C1
-    bvs XFERAZP                     ; $C3C3
+;; Releases every slot's $C800 ROM, so that the next fetch from page $C3 selects the internal one, takes the cursor's
+;; line and records the claim.
+;; Also: BASICENT2 (IIEROM82)
+ClaimRom:
+    lda ExpansionRomOff
+    lda CV
+    sta EightyColumns::CursorLine
+    jsr ClaimExpansionRom
 
-XFERC2M:
-    sta RDMAINRAM                   ; $C3C5
-    sta WRMAINRAM                   ; $C3C8
-    bvc XFERSZP                     ; $C3CB
+    ; V set initializes; otherwise the carry picks input or output.
+    plp
+    php
+    bvs ToInitialize
+    jmp InputOrOutput
 
-XFERAZP:
-    pla                             ; $C3CD
-    sta $03EE                       ; $C3CE
-    pla                             ; $C3D1
-    sta $03ED                       ; $C3D2
-    pla                             ; $C3D5
-    sta SETALTZP                    ; $C3D6
-    jmp ($03ED)                     ; $C3D9
+;; Initializes the firmware, after `PR#3`.
+;; Also: JBASINIT (IIEROM82)
+ToInitialize:
+    jmp Initialize
+.endproc
 
-;; XFER with V clear: rewrites $03ED/$03EE, selects the standard zero page and stack and jumps.
-XFERSZP:
-    pla                             ; $C3DC
-    sta $03EE                       ; $C3DD
-    pla                             ; $C3E0
-    sta $03ED                       ; $C3E1
-    pla                             ; $C3E4
-    sta SETSTDZP                    ; $C3E5
-    jmp ($03ED)                     ; $C3E8
+.endscope
 
-;; Stores $C3 in MSLOT so interrupt handlers know whose $C800 ROM is selected.
-;; Keeps: A
-SETC8:
-    pha                             ; $C3EB
-    lda #$C3                        ; $C3EC
-    sta MSLOT                       ; $C3EE
-    pla                             ; $C3F1
-    rts                             ; $C3F2
-    .byte $00, $00, $00, $00, $00, $00, $00, $00 ; $C3F3
-    .byte $00, $00, $00, $00, $00   ; $C3FB
+;; The Pascal 1.1 firmware protocol's routines: the four entries <PascalOffsets> points to (init, read, write and
+;; status), the routines they run in the $C800 ROM, and Pascal 1.0's hooks at fixed addresses there.
+;;
+;; The entries are in slot 3's page, from $C34B on the original IIe and $C34A on the Enhanced IIe; each but the
+;; Enhanced IIe's status entry claims the $C800 ROM (<ClaimExpansionRom>) before going on there.
+.scope Pascal
+
+;; Pascal's init entry: claims the $C800 ROM, then runs <Init>.
+;;
+;; At $C34B.
+;; Also: JPINIT (IIEROM82)
+.proc InitEntry
+    jsr ClaimExpansionRom
+    jmp Init
+.endproc
+
+;; Pascal's read entry: claims the $C800 ROM, then runs <Read>.
+;;
+;; At $C351.
+;; Also: JPREAD (IIEROM82)
+.proc ReadEntry
+    jsr ClaimExpansionRom
+    jmp Read
+.endproc
+
+;; Pascal's write entry: claims the $C800 ROM, then runs <Write>.
+;;
+;; At $C357.
+;; Also: JPWRITE (IIEROM82)
+.proc WriteEntry
+    jsr ClaimExpansionRom
+    jmp Write
+.endproc
+
+;; Pascal's status entry: claims the $C800 ROM, then runs <Status>.
+;;
+;; At $C35D.
+;; Also: JPSTAT (IIEROM82)
+.proc StatusEntry
+    jsr ClaimExpansionRom
+    jmp Status
+.endproc
+
+.endscope
+
+;; Copies the bytes from A1 to A2 to A4, from main memory to auxiliary memory or back, for <AuxMove>.
+;;
+;; RAMRD and RAMWRT switch $0200-$BFFF, so the ranges lie there. Both switches are put back as they were. Apple's
+;; listing calls it MOVE, a name left out of Also: because the Monitor's <MoveMemory> has it.
+;; In: Address1/Address1High = the first address, Address2/Address2High = the last, Address4/Address4High = the
+;;     destination, carry = set to copy main to auxiliary memory, clear for auxiliary to main
+;; Out: Address1/Address1High = the address after A2, Address4/Address4High = the address after the copy
+;; Keeps: A, X, Y
+;; Also: C3_MOVE (UNKN)
+.proc CopyMainAux
+    pha
+    tya
+    pha
+    lda AuxReadState
+    pha
+    lda AuxWriteState
+    pha
+
+    ; Carry set: reads main, writes auxiliary.
+    bcc AuxToMain
+    sta AuxReadOff
+    sta AuxWriteOn
+    bcs Start
+
+;; Carry clear: reads auxiliary, writes main.
+;; Also: MOVEC2M (IIEROM82)
+AuxToMain:
+    sta AuxWriteOff
+    sta AuxReadOn
+
+;; Also: MOVESTRT (IIEROM82)
+Start:
+    ldy #0
+
+;; Copies a byte and steps A4.
+;; Also: MOVELOOP (IIEROM82)
+Loop:
+    lda (Address1),y
+    sta (Address4),y
+    inc Address4
+    bne NextSource
+    inc Address4High
+
+;; Compares A1 with A2, then steps A1. Apple's listing calls it NXTA1, a name left out of Also: because the
+;; Monitor's <NextInRange> has it.
+;; Also: C3_NXTA1 (UNKN)
+NextSource:
+    lda Address1
+    cmp Address2
+    lda Address1High
+    sbc Address2High
+    inc Address1
+    bne CheckEnd
+    inc Address1High
+
+;; Goes on until A1 was A2, then puts RAMWRT back.
+;; Also: C01 (IIEROM82)
+CheckEnd:
+    bcc Loop
+    sta AuxWriteOff
+    pla
+    bpl RestoreRead
+    sta AuxWriteOn
+
+;; Puts RAMRD back.
+;; Also: C03 (IIEROM82)
+RestoreRead:
+    sta AuxReadOff
+    pla
+    bpl Done
+    sta AuxReadOn
+
+;; Also: MOVERET (IIEROM82)
+Done:
+    pla
+    tay
+    pla
+    rts
+.endproc
+
+;; Jumps to <TransferAddress> with main or auxiliary memory read and written, and the main or auxiliary zero page
+;; and stack, for <AuxTransfer>.
+;;
+;; The address is pushed and stored again once the memory is switched, so that the bank the jump reads it from holds
+;; it. A, X and Y reach the target as they were. Apple's listing calls it XFER, a name left out of Also: because
+;; <AuxTransfer> has it.
+;; In: TransferAddress/TransferAddressHigh = the target, carry = set to run in auxiliary memory, clear for main,
+;;     overflow = set for the auxiliary zero page and stack, clear for main's
+;; Also: C3_XFER (UNKN)
+.proc JumpMainAux
+    pha
+    lda TransferAddress
+    pha
+    lda TransferAddressHigh
+    pha
+
+    ; Carry set: auxiliary memory, then the zero page by V.
+    bcc Main
+    sta AuxReadOn
+    sta AuxWriteOn
+    bvc MainZeroPage
+    bvs AuxZeroPage
+
+;; Carry clear: main memory, then the zero page by V.
+;; Also: XFERC2M (IIEROM82)
+Main:
+    sta AuxReadOff
+    sta AuxWriteOff
+    bvc MainZeroPage
+
+;; V set: stores the address in this bank, then jumps with the auxiliary zero page and stack.
+;; Also: XFERAZP (IIEROM82)
+AuxZeroPage:
+    pla
+    sta TransferAddressHigh
+    pla
+    sta TransferAddress
+    pla
+    sta AuxZeroPageOn
+    jmp (TransferAddress)
+
+;; V clear: stores the address in this bank, then jumps with the main zero page and stack.
+;; Also: XFERSZP (IIEROM82)
+MainZeroPage:
+    pla
+    sta TransferAddressHigh
+    pla
+    sta TransferAddress
+    pla
+    sta AuxZeroPageOff
+    jmp (TransferAddress)
+.endproc
+
+;; Records in <ExpansionRomSlot> that the internal $C800 ROM is in, so that interrupt code knows whose ROM to select
+;; again.
+;; Keeps: A, X, Y
+;; Also: SETC8 (IIEROM82)
+.proc ClaimExpansionRom
+    pha
+    lda #SLOT3_ROM_PAGE
+    sta ExpansionRomSlot
+    pla
+    rts
+.endproc
+
+    ; The rest of the page is unused.
+    .res $C400 - *

@@ -107,11 +107,11 @@ public static class DocumentationRules
     [
         new(LineLength, "A line is at most 120 columns.", TakesNames: false, Ignorable: true),
         new(Ascii, "Comments and strings are plain ASCII: 'times' rather than a multiplication sign, '-' rather than a dash.", TakesNames: false, Ignorable: true),
-        new(TrailingDoc, "`;;` documentation goes above the definition, not after it.", TakesNames: false, Ignorable: true),
+        new(TrailingDoc, "`;;` documentation goes above the definition, not after it; a type's member may have a trailing `;;`.", TakesNames: false, Ignorable: true),
         new(LabelAlone, "A label is on its own line. Narrow it to labels: `label-alone:Loop`.", TakesNames: true, Ignorable: true),
         new(AddressName, "A definition is named for what it is, not for its address (`L_F8C2`). Narrow it to names: `address-name:L_F8C2`.", TakesNames: true, Ignorable: true),
         new(ColumnZero, "Definitions, labels and block directives are at column 0.", TakesNames: false, Ignorable: true),
-        new(Indent, "Instructions and data are indented 4 columns, and a macro's body one level per block.", TakesNames: false, Ignorable: true),
+        new(Indent, "Instructions and data are indented 4 columns, a macro's body one level per block, and a type's members one level per type.", TakesNames: false, Ignorable: true),
         new(CommentIndent, "A comment line is indented like the code it describes.", TakesNames: false, Ignorable: true),
         new(UnlinkedName, "Prose that names a documented definition links it as `<Name>`. Narrow it to names: `unlinked-name:Run`.", TakesNames: true, Ignorable: true),
         new(Link, "A `<link>` names a definition, file or address. Narrow it to targets: `link:Name`.", TakesNames: true, Ignorable: true),

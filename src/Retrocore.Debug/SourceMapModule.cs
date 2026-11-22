@@ -140,6 +140,7 @@ internal sealed partial class SourceMapModule : IDebugModule
         foreach (KeyValuePair<string, string> alias in result.SymbolAliases) { sourceNames[alias.Value] = alias.Key; }
 
         List<(string Name, long Value)> labels = [];
+        List<(string Name, long Value)> plain = [];
         foreach (AssemblySymbol symbol in result.SymbolDefinitions)
         {
             string name = sourceNames.TryGetValue(symbol.Name, out string? source) ? source : symbol.Name;
@@ -149,9 +150,20 @@ internal sealed partial class SourceMapModule : IDebugModule
             long value = symbol.IsConstant ? symbol.Value : symbol.Value + relocation;
             _symbols[name] = value;
             int separator = name.LastIndexOf("::", StringComparison.Ordinal);
-            if (separator >= 0) { _symbols.TryAdd(name[(separator + 2)..], value); }
+            if (separator >= 0) { plain.Add((name[(separator + 2)..], value)); }
             if (!symbol.IsConstant) { labels.Add((name, value)); }
         }
+
+        // A historical name, from an Also: section, resolves where no symbol has the name, as it does in code: before
+        // a scoped symbol's plain name, which code outside the scope does not reach.
+        foreach ((string name, AssemblySymbol symbol) in result.HistoricalNames)
+        {
+            // The target may be inside an anonymous scope, whose private name it carries; old names never reach a
+            // scope's hidden labels.
+            _symbols.TryAdd(name, symbol.IsConstant ? symbol.Value : symbol.Value + relocation);
+        }
+
+        foreach ((string name, long value) in plain) { _symbols.TryAdd(name, value); }
 
         _labels = [.. labels.OrderBy(label => label.Value).ThenBy(label => label.Name, StringComparer.Ordinal)];
         _addressConstants = AddressConstantsOf(result, sourceNames, relocation);

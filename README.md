@@ -371,6 +371,7 @@ Design notes for upcoming work live in [`docs/backlog`](docs/backlog):
 - [choosing and starting a machine, next round](docs/backlog/MachineLaunch.md);
 - [CPU core and machine loop speed](docs/backlog/CoreOptimization.md), including what .NET 11 might offer;
 - [exporting HTML documentation from `;;` comments](docs/backlog/DocExport.md);
+- [documented struct, union and enum members](docs/backlog/MemberDocumentation.md), with historical names;
 - [`.using`, names from another scope without qualifying them](docs/backlog/Using.md);
 - [lint exclusions](docs/backlog/LintExclusions.md): rule IDs, and ignoring a rule for a line, a comment or a file;
 - [the media library and explorers](docs/backlog/Media.md);

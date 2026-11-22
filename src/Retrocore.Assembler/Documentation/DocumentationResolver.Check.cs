@@ -258,6 +258,11 @@ public sealed partial class DocumentationResolver
                     {
                         warn($"Members: '{entry.Name}' is not a member of {topic.Name}.", entry.Line);
                     }
+                    else if (DocumentedMember(topic, entry.Name))
+                    {
+                        // A member with a block or trailing comment of its own is documented there.
+                        warn($"{entry.Name} has its own documentation; remove it from Members:", entry.Line);
+                    }
                 }
 
                 break;
@@ -379,10 +384,39 @@ public sealed partial class DocumentationResolver
         }
     }
 
+    // The type's other member of a name, qualified, or null.
+    private string? SiblingMember(DocumentationTopic member, string name)
+    {
+        int separator = member.Name.LastIndexOf("::", StringComparison.Ordinal);
+        if (separator <= 0) { return null; }
+        string sibling = $"{member.Name[..separator]}::{name}";
+        return sibling != member.Name && Current.Defines(sibling) ? sibling : null;
+    }
+
+    // Whether a type's member, named in any case, has a topic of its own.
+    private bool DocumentedMember(DocumentationTopic topic, string name)
+    {
+        string? member = topic.Primary.Members.FirstOrDefault(item => item.Equals(name, StringComparison.OrdinalIgnoreCase));
+        return member is not null && Current.Find($"{topic.Name}::{member}") is not null;
+    }
+
     private void CheckAlso(DocumentationTopic topic, DocumentationSection section, Action<string, int> warn)
     {
+        // A scope or a named type has no address or value for an old name to reach: its members do.
+        if (topic.Kind is DocumentationKind.Scope or DocumentationKind.Struct or DocumentationKind.Enum)
+        {
+            warn($"Also: {topic.Name} is a scope or type, which an old name cannot reach; give old names to its members.", section.Line);
+            return;
+        }
+
         foreach (string item in section.Items)
         {
+            if (item.Contains("::", StringComparison.Ordinal))
+            {
+                warn($"Also: a historical name is a plain name, as a listing wrote it, not '{item}'.", section.Line);
+                continue;
+            }
+
             if (DocumentationAlso.Parse(item) is not { } also)
             {
                 warn($"Also: write a historical name and the documents that give it, as 'COUT (A2RM)', not '{item}'.", section.Line);
@@ -402,13 +436,18 @@ public sealed partial class DocumentationResolver
                 }
             }
 
-            if (also.Name == LastName(topic.Name))
+            // A member's own name does not reach it outside its type, so it may be the member's old name too.
+            if (also.Name == (topic.Kind == DocumentationKind.Member ? topic.Name : LastName(topic.Name)))
             {
                 warn($"Also: {also.Name} is already the definition's name.", section.Line);
             }
             else if (Current.Defines(also.Name))
             {
                 warn($"Also: {also.Name} is also a definition, which code reaches instead of {topic.Name}.", section.Line);
+            }
+            else if (topic.Kind == DocumentationKind.Member && SiblingMember(topic, also.Name) is { } sibling)
+            {
+                warn($"Also: {also.Name} is also {sibling}, a member of the same type, which it would not mean.", section.Line);
             }
             else if (Current.Topics.FirstOrDefault(other => !ReferenceEquals(other, topic)
                 && !OtherBuild(topic, other)

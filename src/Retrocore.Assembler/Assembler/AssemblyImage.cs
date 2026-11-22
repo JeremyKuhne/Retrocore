@@ -45,6 +45,11 @@ internal sealed class AssemblyImage
     internal IReadOnlyList<InstructionSet> InstructionSets { get; init; } = [];
 
     /// <summary>
+    ///  Gets the definitions the historical names that <c>Also:</c> sections give reach, or null when there are none.
+    /// </summary>
+    internal Dictionary<string, AssemblySymbol>? HistoricalNames { get; init; }
+
+    /// <summary>
     ///  Gets all resolved labels and constants.
     /// </summary>
     internal Dictionary<string, long> Symbols { get; }

@@ -253,6 +253,9 @@ public sealed class DocumentationSet
             Dictionary<string, List<DocumentationTopic>> also = [with(StringComparer.Ordinal)];
             foreach (DocumentationTopic topic in _ordered)
             {
+                // A scope or a named type has nothing for an old name to reach, as in the assembler.
+                bool scope = topic.Kind is DocumentationKind.Scope or DocumentationKind.Struct or DocumentationKind.Enum;
+                if (scope) { continue; }
                 foreach (DocumentationAlso item in DocumentationAlso.Of(topic.Sections))
                 {
                     if (!also.TryGetValue(item.Name, out List<DocumentationTopic>? topics))

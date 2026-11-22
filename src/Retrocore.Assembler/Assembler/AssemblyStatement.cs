@@ -111,4 +111,9 @@ public sealed class AssemblyStatement
     ///  Gets or sets the defining dialect, used to delimit local-label contexts in composed sources.
     /// </summary>
     public AssemblyDialect Dialect { get; set; }
+
+    /// <summary>
+    ///  Gets whether the statement is a <c>.scope</c> line lowered to the scope's hidden start label.
+    /// </summary>
+    internal bool OpensScope { get; init; }
 }

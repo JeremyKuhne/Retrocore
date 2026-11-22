@@ -237,7 +237,8 @@ after it to the end of the `.scope` or `.proc` that contains it, or to the end o
 not reach into an included file, an included file's `.using` does not leak out of it, and one in a continued
 scope's piece applies to that piece only. There is no `.endusing`: a stretch that needs one is a scope.
 
-Each operand names an existing scope or `.proc`, defined before or after the directive, as code at that point
+Each operand names an existing scope or `.proc` (a named `.struct`, `.union` or `.enum` is a scope too, so
+`.using Iob` reaches `Iob`'s members), defined before or after the directive, as code at that point
 would write it: plain (`Columns`), qualified (`Firmware::Columns`) or absolute (`::Columns`), resolved as a
 qualified name's first part is. A plain name then resolves in this order:
 
@@ -734,6 +735,53 @@ a structure reserves room for one or more.
 Origin: .tag Point
 Size = .sizeof(Point)          ; 4
         .byte Point::row, Color::GREEN   ; 2, 5
+```
+
+**Names inside a type.** A named type is a scope, so its members are `Type::MEMBER`. An anonymous `.union` or
+`.struct` inside a named type opens no scope of its own: its members are the named type's, at offsets that go on
+from the members before it. A named type nested in another is a scope inside its parent's: its members are
+`Outer::Inner::MEMBER`, at offsets from the nested type's own start, and it takes its size in the parent. A field
+reserved with `.tag Type` is the containing type's member, the size of the tagged type; the tagged type's fields
+keep their own names, so an offset inside it is a sum (`Record::WHERE + Pair::HIGH`).
+
+```asm
+.struct Pair
+    LOW .byte
+    HIGH .byte
+.endstruct
+
+.struct Record
+    FIRST .byte                 ; Record::FIRST = 0
+    .union
+        CHOICE .word            ; Record::CHOICE = 1
+        OTHER .byte             ; Record::OTHER = 1
+    .endunion
+    WHERE .tag Pair             ; Record::WHERE = 3
+    .struct Inner
+        DEEP .byte              ; Record::Inner::DEEP = 0, from Inner's start
+    .endstruct
+.endstruct
+
+        .byte Record::WHERE + Pair::HIGH, Record::Inner::DEEP, .sizeof(Record)   ; 4, 0, 6
+```
+
+**Documented members.** Each member can have a `;;` block of its own, with every section a
+[documentation comment](#documentation-comments) can have. Its `Also:` section gives it the names a manual or
+listing used ([DocComments.md](DocComments.md), section 2.4), and code written with one assembles against the
+member wherever no symbol has that name:
+
+```asm
+;; The start of RWTS's I/O block.
+.struct Iob
+    ;; The table's type, always 1.
+    ;; Also: IBTYPE (DOS33)
+    TYPE .byte
+    ;; The slot, times 16.
+    ;; Also: IBSLOT (DOS33)
+    SLOT .byte
+.endstruct
+
+        lda #IBSLOT             ; 1, as lda #Iob::SLOT
 ```
 
 ## Character maps

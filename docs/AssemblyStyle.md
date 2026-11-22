@@ -17,10 +17,11 @@ A source opts in to the style checks with a pragma on its first line:
 
 The editor's lint then reports, as warnings, what can be checked mechanically:
 
-- a trailing `;;` comment;
+- a trailing `;;` comment, except on a member of a `.struct`, `.union` or `.enum`;
 - a label sharing its line with code;
 - a name that is only an address (`L_F8C2`, `SUB_D253`);
 - definitions, labels and block directives not at column 0, and instructions and data not four spaces in;
+- a type's members not one level in, and a nested type's members not one more;
 - a comment not indented like the code it describes;
 - a macro body not indented one level in, with a `.repeat` or `.if` body one more;
 - prose in a `;;` comment that names a documented definition without linking it;
@@ -200,7 +201,8 @@ Done:
   `ROUTINE_1`, and never a name that is only an address (`L_F8C2`, `SUB_D253`). A label nothing refers to is
   dropped.
 - **Case:** PascalCase for routines, labels, variables and tables; UPPER_SNAKE_CASE for constants. Macros are
-  PascalCase.
+  PascalCase. Types (`.struct`, `.union`, `.enum`) are PascalCase, and their fields and members are
+  UPPER_SNAKE_CASE: they are offsets and values, which is to say constants (`Iob::TRACK`, `Command::READ`).
 - **Name things after what the code does**, not after a guess, and not after a manual unless the code shows
   the manual's name fits.
 - **Historical names are kept.** A name from a manual or listing that the definition no longer has goes in its
@@ -220,10 +222,60 @@ Done:
   `RECORD_SIZE = 2 + NAME_LENGTH`.
 - **Groups** have a plain `;` heading, and each constant its own `;;` above it.
 
+## Structures and enumerations
+
+- **A data layout is a `.struct`**: a parameter list, a control block, a directory entry. Code reaches its fields
+  as offsets (`ldy #Iob::TRACK`), never as bare numbers. Overlapping fields go in a `.union`, and a set of codes
+  is an `.enum` or a group of prefixed constants.
+- **Members are indented one level**, and a nested type's members one more, with the nested type's own lines at
+  its parent's member level.
+- **Each member is documented.** A member with more to say than a few words, or with a historical name, gets a
+  `;;` block above it, like any definition; one that needs only a few words gets a trailing `;;` comment. A type
+  whose members are all plain may list them in its own block's `Members:` section instead. A member has one of
+  these, never two.
+
+```asm
+;; The first fields of RWTS's I/O block, which a caller fills in before calling RWTS.
+.struct Iob
+    ;; The table's type, always 1.
+    ;; Also: IBTYPE (DOS33)
+    TYPE .byte
+    ;; The slot, times 16.
+    ;; Also: IBSLOT (DOS33)
+    SLOT .byte
+    ;; The drive, 1 or 2.
+    ;; Also: IBDRVN (DOS33)
+    DRIVE .byte
+    ;; The volume expected, where 0 matches any.
+    ;; Also: IBVOL (DOS33)
+    VOLUME .byte
+    ;; The track, 0 to 34.
+    ;; Also: IBTRK (DOS33)
+    TRACK .byte
+    SECTOR .byte ;; The sector.
+.endstruct
+
+;; The address of the I/O block RWTS is working on.
+IobPointer = $48
+
+.org $0300
+
+;; Reads the track the I/O block at <IobPointer> names.
+;; Out: A = the track
+.proc GetTrack
+    ldy #Iob::TRACK
+    lda (IobPointer),y
+    rts
+.endproc
+```
+
+Code typed in from a listing (`ldy #IBTRK`) assembles to the same bytes, and the editor offers `Iob::TRACK`.
+
 ## Documentation
 
 - **A `;;` block above every definition:** each `.proc`, `.scope`, macro, constant, variable and table. Never a
-  trailing `;;`: it does not fit beside most definitions, so none has one.
+  trailing `;;`, except on a member of a type (see [Structures and enumerations](#structures-and-enumerations)):
+  it does not fit beside most definitions, so none has one.
 - **A `;;` block documents only the definition below it.** A heading over a group is a plain `;` comment.
 - **Routines:** a one-sentence summary, then `In:`, `Out:` and `Keeps:` as they apply. Entries are
   `name = meaning`; flags are words (`carry = set on an error`), never `C` or `Z`.
@@ -241,7 +293,8 @@ Done:
 
 - **Indentation:** directives that open and close blocks (`.proc`, `.scope`, `.macro`), definitions and labels
   are at column 0; instructions and data are four spaces in. The blocks show the nesting, so a `.proc` inside a
-  `.scope` is not indented further. Inside a macro, a `.repeat` or `.if` body is one more level in.
+  `.scope` is not indented further. A type's members are one level in, and a nested type's one more. Inside a
+  macro, a `.repeat` or `.if` body is one more level in.
 - **Mnemonics and registers are lowercase.**
 - **Steps:** inside a routine, each logical step starts with a blank line and a short `;` heading at the code's
   indentation, as in `PrintHex` above.

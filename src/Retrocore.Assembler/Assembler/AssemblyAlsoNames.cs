@@ -33,8 +33,9 @@ internal sealed class AssemblyAlsoNames
             foreach (DocumentationComment comment in DocumentationParser.Parse(source.Text, source.Path, assembled: null, style: false).Comments)
             {
                 // A scope has no address of its own: its line is lowered to a hidden start label, which an old name
-                // must not reach.
-                if (comment.Keyword is not null || comment.Kind == DocumentationKind.Scope) { continue; }
+                // must not reach. A named type is a scope too.
+                bool scope = comment.Kind is DocumentationKind.Scope or DocumentationKind.Struct or DocumentationKind.Enum;
+                if (comment.Keyword is not null || scope) { continue; }
                 string[] also = [.. DocumentationAlso.Of(comment.Sections).Select(item => item.Name)];
                 if (also.Length == 0) { continue; }
                 names ??= [];
@@ -78,6 +79,10 @@ internal sealed class AssemblyAlsoNames
     internal void Apply(AssemblyStatement node, int id, AssemblySymbols symbols)
     {
         if (node.Location is not { IsMacroExpansion: false } location) { return; }
+
+        // A member that names a nested type ("INNER .struct Inner") shares its line with the type's .scope, whose
+        // hidden start label the member's old names must not reach.
+        if (node.Kind == AssemblyStatementKind.Scope || node.OpensScope) { return; }
         if (!_names.TryGetValue((location.Path, location.Line), out string[]? names)) { return; }
         foreach (string name in names) { symbols.AddAlias(name, id); }
     }

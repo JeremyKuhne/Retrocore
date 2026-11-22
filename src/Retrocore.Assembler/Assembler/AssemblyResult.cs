@@ -21,6 +21,7 @@ public sealed class AssemblyResult
         Sections = Array.AsReadOnly(image.Sections);
         Symbols = new ReadOnlyDictionary<string, long>(image.Symbols);
         Exports = new ReadOnlyDictionary<string, long>(image.Exports);
+        HistoricalNames = HistoricalNamesOf(image);
         Files = image.Files is { } files ? new ReadOnlyDictionary<string, ReadOnlyMemory<byte>>(files) : EmptyFiles;
         SymbolAliases = image.Project.SymbolAliases is { } aliases
             ? new ReadOnlyDictionary<string, string>(new Dictionary<string, string>(aliases, StringComparer.Ordinal))
@@ -71,6 +72,7 @@ public sealed class AssemblyResult
         SourceMap = Array.AsReadOnly(Array.Empty<AssemblySourceMapEntry>());
         Symbols = new ReadOnlyDictionary<string, long>(new Dictionary<string, long>());
         Exports = Symbols;
+        HistoricalNames = EmptyHistoricalNames;
         SymbolDefinitions = Array.AsReadOnly(Array.Empty<AssemblySymbol>());
         Files = EmptyFiles;
         SymbolAliases = EmptyAliases;
@@ -100,6 +102,20 @@ public sealed class AssemblyResult
     ///  Gets explicitly exported symbols.
     /// </summary>
     public IReadOnlyDictionary<string, long> Exports { get; }
+
+    /// <summary>
+    ///  Gets the definitions that the historical names in <c>;; Also:</c> sections reach, by historical name, each
+    ///  with the value the name has; a name two definitions give is not here.
+    /// </summary>
+    public IReadOnlyDictionary<string, AssemblySymbol> HistoricalNames { get; }
+
+    private static IReadOnlyDictionary<string, AssemblySymbol> EmptyHistoricalNames { get; } =
+        new ReadOnlyDictionary<string, AssemblySymbol>(new Dictionary<string, AssemblySymbol>());
+
+    private static IReadOnlyDictionary<string, AssemblySymbol> HistoricalNamesOf(AssemblyImage image) =>
+        image.HistoricalNames is null
+            ? EmptyHistoricalNames
+            : new ReadOnlyDictionary<string, AssemblySymbol>(image.HistoricalNames);
 
     /// <summary>
     ///  Gets immutable output/source mappings.

@@ -49,7 +49,8 @@ most often missed:
 - **Structure:** each routine is a `.proc`, and a family that shares code or entries is a `.scope`. Labels go
   on their own line at column 0 with names for what happens there (`NextRow`, `NotFound`), never `ROUTINE_1` or
   an address (`L_F8C2`); drop a label nothing refers to.
-- **Names:** PascalCase for routines, labels, variables, tables and macros; UPPER_SNAKE_CASE for constants.
+- **Names:** PascalCase for routines, labels, variables, tables, macros and types; UPPER_SNAKE_CASE for constants,
+  and for struct and union fields and enum members, which are offsets and values.
   Name things after what the code does. In the SDK's ROM sources, names follow the original documentation:
   Apple's for the IIe; the documented ROM calls and Microsoft's BASIC names for Level II; Li-Chen Wang's Tiny
   BASIC names for Level I; for the PET's editors and kernals, Commodore's names from its 1979 BASIC 4 kernal
@@ -60,8 +61,8 @@ most often missed:
   bibliography before citing it.
 - **Constants:** every value that means something gets one (unit numbers, offsets, masks, counts, control
   codes); 0 for clearing and 1 or 2 for stepping a pointer stay numbers.
-- **Documentation:** a `;;` block **above** every definition (never a trailing `;;`); it documents only the
-  definition below it, so a group heading is a plain `;` comment. Routines get a summary, then `In:`, `Out:`
+- **Documentation:** a `;;` block **above** every definition (never a trailing `;;`, except on a type's member);
+  it documents only the definition below it, so a group heading is a plain `;` comment. Routines get a summary, then `In:`, `Out:`
   and `Keeps:`; macros get `Parameters:`. [DocComments.md](../../../docs/DocComments.md) has the format.
 - **`Keeps:`** lists only what the routine really preserves, from its code and everything it calls: the
   debugger checks it when the routine returns.
@@ -70,8 +71,13 @@ most often missed:
   for Return`. Never `C`, `Z` or `NZ` for a flag: on the Z80 `C` is the register. There is no `Flags:` section.
 - **Links:** write `<Name>`, `<Scope::Name>` or `<text at Target>` for every documented definition a comment
   names. The names before `=` in `In:`/`Out:` entries are not links; an unresolved link is a lint error.
+- **Data layouts** are `.struct`s, and each member is documented: a `;;` block above it when it has more to say
+  than a few words or a historical name (`;; Also: IBCMD (DOS33)` reaches `Iob::COMMAND`), a trailing `;;`
+  otherwise, or the type's `Members:` when all its members are plain; never two of these. A member's topic and
+  the quick fix use its qualified name; an anonymous `.union`'s members are the enclosing type's.
 - **Layout:** instructions four spaces in; each logical step a blank line and a short `;` heading at the code's
-  indentation; comments indented like their code; macro bodies one level in.
+  indentation; comments indented like their code; macro bodies one level in; a type's members one level in, a
+  nested type's one more.
 - **Data:** tables through macros, with `.assert` where an entry's position matters; text as `.byte "TEXT"`;
   empty storage as `.res`.
 

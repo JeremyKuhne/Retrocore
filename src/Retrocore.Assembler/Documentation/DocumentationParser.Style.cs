@@ -26,7 +26,14 @@ public static partial class DocumentationParser
     // The directives that open or close a routine, family or macro, which sit at column 0.
     private static readonly string[] s_blockDirectives =
     [
-        ".proc", ".endproc", ".scope", ".endscope", ".macro", ".endmacro", ".struct", ".endstruct", ".enum", ".endenum"
+        ".proc", ".endproc", ".scope", ".endscope", ".macro", ".endmacro", ".struct", ".endstruct", ".union", ".endunion",
+        ".enum", ".endenum"
+    ];
+
+    // The lines that end a block, before which a comment may describe the code it follows.
+    private static readonly string[] s_blockEnds =
+    [
+        ".endproc", ".endscope", ".endmacro", ".endrepeat", ".endif", ".else", ".endstruct", ".endunion", ".endenum"
     ];
 
     /// <summary>
@@ -47,7 +54,9 @@ public static partial class DocumentationParser
 
         bool inMacro = false;
         int macroDepth = 0;
-        bool inMembers = false;
+
+        // How many types are open: a type's members are one level in, and each nested type's one more.
+        int typeDepth = 0;
         for (int index = 1; index < lines.Length; index++)
         {
             string line = lines[index];
@@ -77,7 +86,12 @@ public static partial class DocumentationParser
                 continue;
             }
 
-            if (comment is not null && comment.StartsWith(Marker, StringComparison.Ordinal))
+            // A member of a type may have a trailing ;; comment instead of a block above it; a type's own lines may not.
+            // A member that opens a nested type ("NEST .struct Named") is a member line too; a directive such as .org
+            // is not a member.
+            (string? typeMember, string typeDirective, _) = TypeLine(trimmed);
+            bool memberLine = typeDepth != 0 && (typeMember is not null || typeDirective.Length == 0 && !trimmed.StartsWith('.'));
+            if (comment is not null && comment.StartsWith(Marker, StringComparison.Ordinal) && !memberLine)
             {
                 Warn(DocumentationRules.TrailingDoc, "Put ;; documentation above the definition, not after it.", index);
             }
@@ -124,24 +138,37 @@ public static partial class DocumentationParser
                 macroDepth = 0;
             }
 
-            if (directive is ".struct" or ".enum") { inMembers = true; }
-            if (directive is ".endstruct" or ".endenum") { inMembers = false; }
+            // Inside a type, each member is one level in, and a nested type's .struct or .union line is at its
+            // parent's member level, with its own members one more.
+            bool opens = typeDirective is ".struct" or ".union" or ".enum";
+            bool closes = typeDirective is ".endstruct" or ".endunion" or ".endenum";
+            if (closes && typeDepth != 0) { typeDepth--; }
+            if (typeDepth != 0)
+            {
+                int expected = StyleIndent * typeDepth;
+                if (indent != expected)
+                {
+                    Warn(DocumentationRules.Indent, $"Indent this line {expected} columns: a type's members one level in, a nested type's one more.", index);
+                }
+            }
 
             // A cheap-local or anonymous label is a label too, though it defines no name of its own.
-            if (s_blockDirectives.Contains(directive) || (defined is not null || IsLabelOnly(trimmed)) && !inMembers)
+            else if (s_blockDirectives.Contains(directive) || defined is not null || IsLabelOnly(trimmed))
             {
                 if (indent != 0)
                 {
                     Warn(DocumentationRules.ColumnZero, "Put definitions, labels and block directives at column 0.", index);
                 }
             }
-            else if (inMembers || directive.Length == 0 || s_dataDirectives.Contains(directive))
+            else if (directive.Length == 0 || s_dataDirectives.Contains(directive))
             {
                 if (indent != StyleIndent)
                 {
                     Warn(DocumentationRules.Indent, $"Indent instructions and data {StyleIndent} columns.", index);
                 }
             }
+
+            if (opens) { typeDepth++; }
         }
     }
 
@@ -173,7 +200,7 @@ public static partial class DocumentationParser
             allowed.Add(Indentation(lines[next + 1]));
         }
 
-        if (Directive(code) is ".endproc" or ".endscope" or ".endmacro" or ".endrepeat" or ".endif" or ".else")
+        if (s_blockEnds.Contains(Directive(code)))
         {
             for (int previous = index - 1; previous >= 0; previous--)
             {
@@ -197,7 +224,7 @@ public static partial class DocumentationParser
     private static string? DefinedName(string code)
     {
         string directive = Directive(code);
-        if (directive is ".proc" or ".scope" or ".macro" or ".struct" or ".enum")
+        if (directive is ".proc" or ".scope" or ".macro" or ".struct" or ".union" or ".enum")
         {
             string rest = code[directive.Length..].TrimStart();
             int length = IdentifierLength(rest, 0);

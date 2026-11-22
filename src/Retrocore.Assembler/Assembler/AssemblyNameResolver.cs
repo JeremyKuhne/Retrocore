@@ -421,6 +421,7 @@ internal sealed partial class AssemblyNameResolver
             AssemblyStatementKind kind = node.Kind;
             ReadOnlyMemory<char> operation = node.OperationMemory;
             AssemblyOperand operand = node.Operand;
+            bool opensScope = false;
             if (kind == AssemblyStatementKind.Cpu)
             {
                 if (AssemblyCompiler.TryCpu(operand.Text, sets, out InstructionSet? selected))
@@ -430,6 +431,7 @@ internal sealed partial class AssemblyNameResolver
             }
             else if (IsScopeDirective(kind) || kind == AssemblyStatementKind.Using)
             {
+                opensScope = kind == AssemblyStatementKind.Scope;
                 kind = AssemblyStatementKind.Label;
                 operation = default;
                 operand = s_emptyOperand;
@@ -459,7 +461,8 @@ internal sealed partial class AssemblyNameResolver
             {
                 Location = node.Location,
                 WidthPolicy = node.WidthPolicy,
-                Dialect = node.Dialect
+                Dialect = node.Dialect,
+                OpensScope = opensScope
             });
         }
 

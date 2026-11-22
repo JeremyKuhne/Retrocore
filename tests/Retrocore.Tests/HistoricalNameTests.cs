@@ -13,7 +13,7 @@ namespace Retrocore.Tests;
 ///  language server all accept for the definition (docs/DocComments.md, section 2.4).
 /// </summary>
 [TestClass]
-public sealed class HistoricalNameTests
+public sealed partial class HistoricalNameTests
 {
     private const string Library = """
         ;; Prints a character.

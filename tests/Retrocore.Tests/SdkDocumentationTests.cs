@@ -61,10 +61,13 @@ public class SdkDocumentationTests
         {
             foreach (string folder in s_sdkFolders)
             {
-                foreach (string file in Directory.EnumerateFiles(Path.Join(s_inputs, folder)))
+                // A module's parts may be in a folder of their own, as the Monitor's are.
+                string source = Path.Join(s_inputs, folder);
+                foreach (string file in Directory.EnumerateFiles(source, "*", SearchOption.AllDirectories))
                 {
-                    Directory.CreateDirectory(Path.Join(repository, folder));
-                    File.Copy(file, Path.Join(repository, folder, Path.GetFileName(file)));
+                    string copy = Path.Join(repository, folder, Path.GetRelativePath(source, file));
+                    Directory.CreateDirectory(Path.GetDirectoryName(copy) ?? repository);
+                    File.Copy(file, copy);
                 }
             }
 

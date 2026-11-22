@@ -303,7 +303,7 @@ internal sealed partial class SourceAnalysis
         if (scoped.Count != 0) { return scoped; }
 
         // A historical name finds the definition whose Also: section gives it.
-        return [.. Documentation.FindAlso(name)
+        return [.. Documentation.FindAlso(name, thisBuild: true)
             .Where(topic => topic.Name != name)
             .SelectMany(topic => Find(topic.Name))
             .Distinct()];

@@ -470,6 +470,29 @@ public sealed partial class LanguageAnalysisTests
     }
 
     /// <summary>
+    ///  A module's part in a folder of its own, included from the module's main file in the folder above, is
+    ///  analyzed through that main file.
+    /// </summary>
+    [TestMethod]
+    public void PartsInAModuleFolderAreAnalyzedThroughTheMainFile()
+    {
+        string folder = Directory.CreateTempSubdirectory("retrocore-parts").FullName;
+        try
+        {
+            string root = Path.Join(folder, "Monitor.asm");
+            File.WriteAllText(root, ".include \"Monitor/Screen.asm\"\n");
+            string part = Path.Join(Directory.CreateDirectory(Path.Join(folder, "Monitor")).FullName, "Screen.asm");
+            File.WriteAllText(part, "    rts\n");
+
+            SourceIncludes.RootOf(part).Should().Be(root);
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    /// <summary>
     ///  A folder beside a source that is deleted, or replaced by a file, after it was listed, as a build or a cleanup
     ///  can do while the language server looks for the source's root, has no sources rather than failing the
     ///  search; the root is still found through the folders that remain.

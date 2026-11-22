@@ -237,9 +237,38 @@ public sealed class DocumentationSet
     ///  Finds the topics that give a historical name in their <c>Also:</c> sections.
     /// </summary>
     /// <param name="name">The historical name, such as <c>COUT</c>.</param>
+    /// <param name="thisBuild">
+    ///  Whether only the definitions this set's assembly assembles count. Two models may give the same old name to
+    ///  different code (the original and Enhanced IIe's SLOTRTS), and within its own build a source means its own
+    ///  one; a set used as another module, assembled for its default build, says nothing about the caller's build.
+    /// </param>
     /// <returns>The topics, in source order; usually none or one.</returns>
-    public IReadOnlyList<DocumentationTopic> FindAlso(string name) =>
-        AlsoIndex().TryGetValue(name, out List<DocumentationTopic>? found) ? found : [];
+    /// <remarks>
+    ///  <para>
+    ///   With <paramref name="thisBuild"/>, a label or equate in a branch of an <c>.if</c> the build leaves out doesn't
+    ///   count; macros, scopes and types, which are no symbols, always do. Without the assembly's symbols, every
+    ///   definition counts.
+    ///  </para>
+    /// </remarks>
+    public IReadOnlyList<DocumentationTopic> FindAlso(string name, bool thisBuild = false)
+    {
+        if (!AlsoIndex().TryGetValue(name, out List<DocumentationTopic>? found)) { return []; }
+        if (!thisBuild || found.Count < 2) { return found; }
+        List<DocumentationTopic> built = [.. found.Where(Assembles)];
+        return built.Count == 0 ? found : built;
+    }
+
+    /// <summary>
+    ///  Gets whether a topic's definition is in this set's assembly: false only for a label or equate the assembly
+    ///  leaves out, in a branch of an <c>.if</c> its build does not take.
+    /// </summary>
+    /// <param name="topic">The topic.</param>
+    /// <returns>Whether it is assembled, or can't be told apart.</returns>
+    public bool Assembles(DocumentationTopic topic) =>
+        _symbols.Count == 0
+            || topic.Kind is not (DocumentationKind.Routine or DocumentationKind.Table or DocumentationKind.Constant or DocumentationKind.Variable)
+            || topic.Value is not null
+            || Defines(topic.Name);
 
     /// <summary>
     ///  Gets every historical name the topics give.
@@ -275,12 +304,26 @@ public sealed class DocumentationSet
     }
 
     /// <summary>
+    ///  Gets the symbol an <c>Entry:</c> label names: the routine's own local when the routine is a <c>.proc</c>
+    ///  that defines one (<c>Plot::SameRow</c> for <c>SameRow</c> in <c>Plot</c>), otherwise the label as written.
+    /// </summary>
+    /// <param name="routine">The routine whose comment lists the entry.</param>
+    /// <param name="label">The label as written.</param>
+    /// <returns>The symbol's name.</returns>
+    public string EntrySymbol(DocumentationTopic routine, string label)
+    {
+        string local = $"{routine.Name}::{label}";
+        return _symbols.ContainsKey(local) || _topics.ContainsKey(local) ? local : label;
+    }
+
+    /// <summary>
     ///  Finds the topic of a label documented as an entry into a routine, or the routine itself.
     /// </summary>
     /// <param name="name">The label.</param>
     /// <returns>The routine's topic, or null.</returns>
     public DocumentationTopic? FindRoutine(string name) =>
-        Find(name) ?? _ordered.FirstOrDefault(topic => topic.EntryLabels.Contains(name, StringComparer.Ordinal));
+        Find(name) ?? _ordered.FirstOrDefault(topic =>
+            topic.EntryLabels.Any(label => label == name || EntrySymbol(topic, label) == name));
 
     /// <summary>
     ///  Finds the documented label at an address.

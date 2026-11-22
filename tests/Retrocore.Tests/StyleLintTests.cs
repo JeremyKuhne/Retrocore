@@ -131,7 +131,8 @@ public sealed class StyleLintTests
 
     /// <summary>
     ///  Prose that names a documented definition without linking it is reported; links, code spans, entry names,
-    ///  instructions, a capitalized word starting a sentence and a historical name (from an Also: section) are not.
+    ///  instructions, a capitalized word starting a sentence, a scope's name and a historical name (from an Also: section)
+    ///  are not.
     /// </summary>
     [TestMethod]
     public void UnlinkedNamesAreReported()
@@ -152,7 +153,12 @@ public sealed class StyleLintTests
                 rts
             .endproc
 
+            ;; Code that runs under Pascal.
+            .scope Pascal
+            .endscope
+
             ;; Prints a line with Print, then `Print` and <Print> again. Table it is. The listing called it OUT.
+            ;; It runs under Pascal's rules: a scope's name in prose is a plain word.
             ;; In: A = the line, LDA = an instruction
             ;; Errors: Table = not a link
             .proc PrintTable
@@ -162,7 +168,7 @@ public sealed class StyleLintTests
 
         Problems(text).Should().BeEquivalentTo(
             "12: Link PrintTable as <PrintTable>: it names a documented definition.",
-            "17: Link Print as <Print>: it names a documented definition.");
+            "21: Link Print as <Print>: it names a documented definition.");
     }
 
     /// <summary>

@@ -24,7 +24,8 @@ The editor's lint then reports, as warnings, what can be checked mechanically:
 - a type's members not one level in, and a nested type's members not one more;
 - a comment not indented like the code it describes;
 - a macro body not indented one level in, with a `.repeat` or `.if` body one more;
-- prose in a `;;` comment that names a documented definition without linking it;
+- prose in a `;;` comment that names a documented definition without linking it (other than a scope, whose name is
+  often a plain word too);
 - non-ASCII characters, and lines over 120 columns.
 
 Each warning ends with its rule's ID, such as `[line-length]`, and the editor shows the ID as the diagnostic's
@@ -284,7 +285,8 @@ Code typed in from a listing (`ldy #IBTRK`) assembles to the same bytes, and the
 - **Macros** have `Parameters:`.
 - **Link every documented definition a comment names:** `<CharacterOut>`, `<Cursor::Store>`, or
   `<text at Target>` when the text differs (`<UNITCLEAR at UnitIo::Clear>`). The names before `=` in `In:` and
-  `Out:` entries are not links.
+  `Out:` entries are not links. A scope's name may stay plain, as a scope is often named for a plain word
+  ("Pascal's cursor" beside the `Pascal` scope); link it when the comment means the scope.
 - **Say what the code does, accurately.** Check every claim against the code. Leave out comments that restate a
   name, describe a definition that is not there, or hedge without saying what is uncertain and why.
 - **Plain ASCII**, and lines of at most 120 columns.

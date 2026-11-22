@@ -67,11 +67,17 @@ public sealed partial class DocumentationResolver
     public static string? ModelOf(string? condition)
     {
         if (condition is null) { return null; }
-        bool model = condition.Contains("ENHANCED", StringComparison.OrdinalIgnoreCase)
-            || condition.Contains("ENHNCD", StringComparison.OrdinalIgnoreCase);
 
-        if (!model) { return null; }
-        return condition.StartsWith("not ", StringComparison.OrdinalIgnoreCase) ? "Original" : "Enhanced";
+        // In a joined condition ("MONITOR = MONITOR_IIE and not ENHANCED") the part that names the switch decides.
+        foreach (string part in condition.Split(" and ", StringSplitOptions.TrimEntries))
+        {
+            bool model = part.Contains("ENHANCED", StringComparison.OrdinalIgnoreCase)
+                || part.Contains("ENHNCD", StringComparison.OrdinalIgnoreCase);
+
+            if (model) { return part.StartsWith("not ", StringComparison.OrdinalIgnoreCase) ? "Original" : "Enhanced"; }
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -139,9 +145,16 @@ public sealed partial class DocumentationResolver
         return all;
     }
 
-    // A parenthesized group, or a comparison running to the next &&, || or closing parenthesis.
+    // A parenthesized group, a negated test (.not, or ! in the dialects that have it), or a comparison running to the
+    // next &&, || or closing parenthesis.
     private static bool? Test(string text, ref int at, Func<string, long?> symbol)
     {
+        while (at < text.Length && text[at] == ' ') { at++; }
+        if (Take(text, ref at, ".not ") || (Ahead(text, at, "!") && !Ahead(text, at, "!=") && Take(text, ref at, "!")))
+        {
+            return Test(text, ref at, symbol) is { } inner ? !inner : null;
+        }
+
         if (Take(text, ref at, "("))
         {
             bool? group = Either(text, ref at, symbol);
@@ -357,7 +370,7 @@ public sealed partial class DocumentationResolver
             ? (Path.GetFileName(topic.Path).ToUpperInvariant(), topic.Line, target.Value)
             : ("", -1, target.Value);
 
-    private static DocumentationTarget? Match(DocumentationSet set, string name, bool also = true)
+    private DocumentationTarget? Match(DocumentationSet set, string name, bool also = true)
     {
         if (set.Find(name) is { } topic) { return Found(topic); }
         if (set.Symbols.TryGetValue(name, out long value))
@@ -368,10 +381,11 @@ public sealed partial class DocumentationResolver
         return also ? Also(set, name) : null;
     }
 
-    // A historical name reaches the definition that gives it in an Also: section.
-    private static DocumentationTarget? Also(DocumentationSet set, string name)
+    // A historical name reaches the definition that gives it in an Also: section: in the set being checked, the one its
+    // build assembles; in another module, any of its builds', so a name two of them give is ambiguous.
+    private DocumentationTarget? Also(DocumentationSet set, string name)
     {
-        IReadOnlyList<DocumentationTopic> also = set.FindAlso(name);
+        IReadOnlyList<DocumentationTopic> also = set.FindAlso(name, thisBuild: ReferenceEquals(set, Current));
         if (also.Count == 1) { return Found(also[0]); }
         return also.Count > 1 ? new(DocumentationTargetKind.Ambiguous, name) : null;
     }

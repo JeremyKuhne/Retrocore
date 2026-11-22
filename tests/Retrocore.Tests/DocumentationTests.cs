@@ -227,6 +227,9 @@ public class DocumentationTests
         topic.SectionsNamed("Out").Should().ContainSingle().Which.Condition.Should().BeNull();
         topic.SectionsNamed("Keeps").Select(section => section.Condition).Should().Equal("ENHANCED", "not ENHANCED");
         DocumentationResolver.ModelOf("not ENHANCED").Should().Be("Original");
+        DocumentationResolver.ModelOf("MONITOR = MONITOR_IIE and not ENHANCED").Should().Be("Original");
+        DocumentationResolver.ModelOf("MONITOR = MONITOR_IIE and ENHANCED").Should().Be("Enhanced");
+        DocumentationResolver.ModelOf("MONITOR = MONITOR_II").Should().BeNull();
         topic.Value.Should().Be(0x1000);
     }
 
@@ -539,6 +542,115 @@ public class DocumentationTests
 
         new DocumentationResolver(set).Check().Select(diagnostic => (diagnostic.Message, diagnostic.Line)).Should().Equal(
             ("Exported 'Bare' has no ;; documentation.", 7));
+    }
+
+    /// <summary>
+    ///  An Entry: label of a .proc names its own local, even when the local has a ;; block of its own and other
+    ///  documented locals come before it.
+    /// </summary>
+    [TestMethod]
+    public void ProcEntriesAreItsLocals()
+    {
+        DocumentationSet set = Set("""
+            .cpu Mos6502
+            ;; Plots a block.
+            ;; Entry:
+            ;;   SameRow = plots in the row already set up
+            ;;   Done = returns
+            .proc Plot
+                lsr a
+            ;; Stores the mask.
+            Mask:
+                sta $2E
+            ;; Plots in the row already set up.
+            SameRow:
+                lda $30
+            Done:
+                rts
+            .endproc
+
+            ;; The next routine.
+            .proc Other
+                rts
+            .endproc
+            """);
+
+        new DocumentationResolver(set).Check().Should().BeEmpty();
+        Required(set.FindRoutine("Plot::SameRow")).Name.Should().Be("Plot::SameRow");
+        Required(set.FindRoutine("Plot::Done")).Name.Should().Be("Plot");
+
+        // A routine written once per build lists each build's entries; only the assembled build's are checked.
+        DocumentationSet builds = Set("""
+            .cpu Mos6502
+            WIDE = 1
+            .if WIDE
+            ;; Scrolls, wide.
+            ;; Entry:
+            ;;   Wide = the wide loop
+            .proc Scroll
+            Wide:
+                rts
+            .endproc
+            .else
+            ;; Scrolls, narrow.
+            ;; Entry:
+            ;;   Narrow = the narrow loop
+            .proc Scroll
+            Narrow:
+                rts
+            .endproc
+            .endif
+            """);
+
+        new DocumentationResolver(builds).Check().Should().BeEmpty();
+    }
+
+    /// <summary>
+    ///  A routine's Entry: section under a condition the build doesn't take is not checked, for the conditions the
+    ///  assembler writes: a negated test (<c>.not</c>) joined to another, and <c>.ifdef</c>.
+    /// </summary>
+    [TestMethod]
+    public void EntriesOfOtherBuildsAreNotChecked()
+    {
+        foreach (string text in (string[])[
+            """
+            .cpu Mos6502
+            WIDE = 1
+            FAST = 1
+            .if WIDE && .not FAST
+            ;; Scrolls, slowly.
+            ;; Entry:
+            ;;   Slow = the slow loop
+            .proc Scroll
+            Slow:
+                rts
+            .endproc
+            .else
+            ;; Scrolls.
+            .proc Scroll
+                rts
+            .endproc
+            .endif
+            """,
+            """
+            .cpu Mos6502
+            .ifdef NARROW
+            ;; Scrolls, narrow.
+            ;; Entry:
+            ;;   Narrow = the narrow loop
+            .proc Scroll
+            Narrow:
+                rts
+            .endproc
+            .endif
+            ;; The next routine.
+            .proc Other
+                rts
+            .endproc
+            """])
+        {
+            new DocumentationResolver(Set(text)).Check().Should().BeEmpty(text);
+        }
     }
 
     private static T Required<T>(T? value) where T : class =>

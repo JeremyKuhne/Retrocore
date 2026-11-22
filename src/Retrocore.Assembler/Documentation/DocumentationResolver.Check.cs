@@ -83,11 +83,7 @@ public sealed partial class DocumentationResolver
     }
 
     // Whether a topic documents a label or equate this assembly does not define: one in an .if branch it left out.
-    private bool OtherBuilds(DocumentationTopic topic) =>
-        topic.Kind is DocumentationKind.Routine or DocumentationKind.Table or DocumentationKind.Constant or DocumentationKind.Variable
-            && Current.Symbols.Count != 0
-            && topic.Value is null
-            && !Current.Defines(topic.Name);
+    private bool OtherBuilds(DocumentationTopic topic) => !Current.Assembles(topic);
 
     private void CheckTopic(DocumentationTopic topic, List<DocumentationDiagnostic> diagnostics)
     {
@@ -231,6 +227,8 @@ public sealed partial class DocumentationResolver
                 CheckAlso(topic, section, also);
                 break;
             case "Entry":
+                // A routine written once per build lists each build's entries under its own condition.
+                if (!InThisBuild(section.Condition)) { break; }
                 foreach (DocumentationEntry entry in section.Entries)
                 {
                     if (!InsideRoutine(topic, entry.Name))
@@ -330,16 +328,42 @@ public sealed partial class DocumentationResolver
         return $"{section}: '{name}' is not a register, flag or symbol.";
     }
 
-    // An entry label must lie between the routine's address and the next documented routine.
+    // Whether a section's .if condition holds for the build the documentation's symbols come from: each part of it
+    // ("MONITOR = MONITOR_IIE and not ENHANCED") is evaluated from those symbols, and an .ifdef's "defined NAME" by
+    // whether they have the name, as they are the whole build's. A part they can't decide holds.
+    private bool InThisBuild(string? condition)
+    {
+        if (condition is null || Current.Symbols.Count == 0) { return true; }
+        long? Symbol(string name) => Current.Symbols.TryGetValue(name, out long value) ? value : null;
+        foreach (string part in condition.Split(" and ", StringSplitOptions.TrimEntries))
+        {
+            bool not = part.StartsWith("not ", StringComparison.OrdinalIgnoreCase);
+            string test = not ? part[4..].Trim() : part;
+            bool? holds = Holds(test, Symbol);
+            if (test.StartsWith("defined ", StringComparison.Ordinal))
+            {
+                holds = Current.Defines(test["defined ".Length..].Trim());
+            }
+
+            if (holds == not) { return false; }
+        }
+
+        return true;
+    }
+
+    // Whether an Entry: label is in the routine: from its address up to the next documented routine that is neither
+    // one of its entries nor one of its own locals (a .proc's labels may have their own ;; blocks).
     private bool InsideRoutine(DocumentationTopic topic, string label)
     {
-        if (!Current.Symbols.TryGetValue(label, out long address)) { return false; }
+        if (!Current.Symbols.TryGetValue(Current.EntrySymbol(topic, label), out long address)) { return false; }
         if (topic.Value is not { } start) { return true; }
+        HashSet<string> entries = [.. topic.EntryLabels.Select(entry => Current.EntrySymbol(topic, entry))];
+        string local = $"{topic.Name}::";
         long next = long.MaxValue;
         foreach (DocumentationTopic other in Current.Topics)
         {
-            bool entry = topic.EntryLabels.Contains(other.Name, StringComparer.Ordinal);
-            if (!entry && other.Kind == DocumentationKind.Routine && other.Value is { } value && value > start && value < next)
+            bool inside = entries.Contains(other.Name) || other.Name.StartsWith(local, StringComparison.Ordinal);
+            if (!inside && other.Kind == DocumentationKind.Routine && other.Value is { } value && value > start && value < next)
             {
                 next = value;
             }
@@ -451,6 +475,7 @@ public sealed partial class DocumentationResolver
             }
             else if (Current.Topics.FirstOrDefault(other => !ReferenceEquals(other, topic)
                 && !OtherBuild(topic, other)
+                && !OtherBuilds(other)
                 && DocumentationAlso.Of(other.Sections).Any(name => name.Name == also.Name)) is { } other)
             {
                 warn($"Also: {other.Name} has the historical name {also.Name} too.", section.Line);
@@ -511,7 +536,10 @@ public sealed partial class DocumentationResolver
                     continue;
                 }
 
-                if (ReferenceEquals(target, topic) || target.Kind is DocumentationKind.File or DocumentationKind.Topic)
+                // A scope's name is often a plain word too ("Pascal's cursor", "Control-E"), so prose may use it
+                // without a link.
+                if (ReferenceEquals(target, topic)
+                    || target.Kind is DocumentationKind.File or DocumentationKind.Topic or DocumentationKind.Scope)
                 {
                     continue;
                 }

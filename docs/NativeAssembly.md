@@ -233,7 +233,8 @@ after it to the end of the `.scope` or `.proc` that contains it, or to the end o
 not reach into an included file, an included file's `.using` does not leak out of it, and one in a continued
 scope's piece applies to that piece only. There is no `.endusing`: a stretch that needs one is a scope.
 
-Each operand names an existing scope or `.proc`, defined before or after the directive, as code at that point
+Each operand names an existing scope or `.proc` (a named `.struct`, `.union` or `.enum` is a scope too, so
+`.using Iob` reaches `Iob`'s members), defined before or after the directive, as code at that point
 would write it: plain (`Columns`), qualified (`Firmware::Columns`) or absolute (`::Columns`), resolved as a
 qualified name's first part is. A plain name then resolves in this order:
 

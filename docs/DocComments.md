@@ -263,7 +263,10 @@ CharacterOut = $FDED
   have members of the same name (`Iob::VOLUME`, `FileParameters::VOLUME`), but not the same old name, as for any
   two definitions. The quick fix writes the qualified name, since a member's own name does not resolve outside
   its type unless a `.using` names the type.
-- **The debugger** resolves an old name in a watch or expression to its definition's value.
+- **The debugger** resolves an old name in a watch or expression to its definition's value. A watch has no place
+  in the source, so no `.using` applies to it: an old name wins over a scoped member's plain name there.
+- **A `.using`** comes before old names: where `.using Iob` is in effect, `VOLUME` is `Iob::VOLUME` even if
+  another definition gives `VOLUME` as an old name, and nothing reports that the old name is shadowed there.
 - **The editor** treats an old name as its definition: hover (which says it is a historical name), go to
   definition, and links (`<COUT>`). Completion matches old names too, so typing `COUT` offers `CharacterOut`,
   and workspace symbol search finds `CharacterOut (COUT)`. Each use in code gets an information message, with a

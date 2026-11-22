@@ -61,9 +61,12 @@ public sealed partial class LanguageAnalysisTests
         {
             string text = MemberProbe.ReplaceLineEndings("\n");
             string[] lines = text.Split('\n');
-            string path = Path.GetFullPath(Path.Join(folder, "Probe.asm"));
+            // The editor reads the folders beside a source's, so the probe gets a folder of its own inside the
+            // temporary one, away from other tests' temporary folders, which come and go while it runs.
+            string probe = Directory.CreateDirectory(Path.Join(folder, "probe")).FullName;
+            string path = Path.GetFullPath(Path.Join(probe, "Probe.asm"));
             File.WriteAllText(path, text);
-            File.WriteAllText(Path.Join(folder, "Bibliography.md"), MemberBibliography);
+            File.WriteAllText(Path.Join(probe, "Bibliography.md"), MemberBibliography);
             RecordingLanguageClient client = new();
             LanguageWorkspace workspace = new(client);
             workspace.Update(path, text);
@@ -83,7 +86,12 @@ public sealed partial class LanguageAnalysisTests
             LspParams at = Request(uri, use, column + 1);
 
             // The only problem is the hint on the old name, and its quick fix writes the qualified name.
-            List<Diagnostic> published = await client.Wait(uri, diagnostics => diagnostics.Count != 0);
+            // The workspace can publish an earlier set first (the assembly's, before the documentation's), so wait for
+            // the one that holds the hint; a wrong extra problem then times out and fails below.
+            List<Diagnostic> published = await client.Wait(
+                uri,
+                diagnostics => diagnostics.Count == 1 && diagnostics[0].Code == LanguageWorkspace.HistoricalNameCode);
+
             Diagnostic hint = published.Should().ContainSingle().Which;
             hint.Code.Should().Be(LanguageWorkspace.HistoricalNameCode);
             hint.Message.Should().Be("IBCMD is a historical name of Iob::COMMAND.");

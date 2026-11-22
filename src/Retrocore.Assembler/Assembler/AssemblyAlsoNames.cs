@@ -12,9 +12,6 @@ namespace Retrocore.Assembler;
 /// </summary>
 internal sealed class AssemblyAlsoNames
 {
-    // The hidden label a scope's line is lowered to, the last part of its qualified name.
-    private const string HiddenScope = "__retro_scope_start";
-
     private readonly Dictionary<(string Path, int Line), string[]> _names;
 
     private AssemblyAlsoNames(Dictionary<(string Path, int Line), string[]> names) => _names = names;
@@ -83,10 +80,9 @@ internal sealed class AssemblyAlsoNames
     {
         if (node.Location is not { IsMacroExpansion: false } location) { return; }
 
-        // A member that names a nested type ("INNER .struct Inner") shares its line with the type's hidden scope
-        // label, which the member's old names must not reach.
-        string label = node.Label ?? "";
-        if (label == HiddenScope || label.EndsWith($"::{HiddenScope}", StringComparison.Ordinal)) { return; }
+        // A member that names a nested type ("INNER .struct Inner") shares its line with the type's .scope, whose
+        // hidden start label the member's old names must not reach.
+        if (node.Kind == AssemblyStatementKind.Scope || node.OpensScope) { return; }
         if (!_names.TryGetValue((location.Path, location.Line), out string[]? names)) { return; }
         foreach (string name in names) { symbols.AddAlias(name, id); }
     }

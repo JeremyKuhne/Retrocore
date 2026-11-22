@@ -454,6 +454,10 @@ public sealed partial class HistoricalNameTests
         result.Sections[0].Bytes.Span[..2].ToArray().Should().Equal(0xA9, 1);
         result.HistoricalNames.Keys.Should().Equal("OINNER");
         Required(Set(text).Find("Outer")).Primary.Members.Should().Equal("FIRST", "INNER", "Named");
+
+        // The editor and links do not reach a type by its Also: either.
+        Set(text).FindAlso("OLDIN").Should().BeEmpty();
+        Required(Set(text).FindAlso("OINNER").SingleOrDefault()).Name.Should().Be("Outer::INNER");
         new DocumentationResolver(Set(text)).Check().Select(diagnostic => diagnostic.Message).Should().Equal(
             "Also: Outer::Named is a scope or type, which an old name cannot reach; give old names to its members.");
 
@@ -518,6 +522,25 @@ public sealed partial class HistoricalNameTests
 
         result.Diagnostics.Should().BeEmpty();
         result.Sections[0].Bytes.Span[..6].ToArray().Should().Equal(0x4C, 0x03, 0x10, 0xA9, 7, 0x60);
+    }
+
+    /// <summary>
+    ///  A definition whose own name looks like a hidden scope label keeps its old names: only a type's .scope
+    ///  statement is passed over.
+    /// </summary>
+    [TestMethod]
+    public void NamesLikeHiddenLabelsKeepOldNames()
+    {
+        AssemblyResult result = Assemble("""
+                lda #OLDREAL
+                rts
+            ;; A constant with a reserved-looking name.
+            ;; Also: OLDREAL (TEST)
+            __retro_scope_start = 5
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+        result.Sections[0].Bytes.Span[..2].ToArray().Should().Equal(0xA9, 5);
     }
 
     // The probes set their own origin.

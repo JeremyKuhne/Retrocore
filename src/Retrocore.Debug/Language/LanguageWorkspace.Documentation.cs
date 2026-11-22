@@ -211,8 +211,11 @@ internal sealed partial class LanguageWorkspace
         string replacement)
     {
         if (analysis.BoundThroughUsing(name, member, line) is not { } used) { return null; }
-        string[] names = [.. used.Select(site => site.Name).Distinct(StringComparer.Ordinal)];
-        if (names.Length != 1 || names[0] == replacement) { return null; }
+
+        // MACRO-10 matches names in any case, as the assembler does.
+        StringComparer comparer = analysis.UsesMacro10(member) ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+        string[] names = [.. used.Select(site => site.Name).Distinct(comparer)];
+        if (names.Length != 1 || comparer.Equals(names[0], replacement)) { return null; }
         DocumentationDiagnostic diagnostic = new(
             $"{name} is a historical name of {replacement}, but the .using in effect here makes it {names[0]}.",
             member,

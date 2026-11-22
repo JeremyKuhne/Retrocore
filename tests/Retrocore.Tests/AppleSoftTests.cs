@@ -74,6 +74,11 @@ public sealed class AppleSoftTests
             native.Symbols.Should().ContainKey(label.Name);
             native.Symbols[label.Name].Should().Be(label.Value, $"the legacy entry point {label.Name} must stay at its ROM address");
         }
+
+        foreach (string name in (string[])["REALIO", "INTPRC", "ADDPRC", "LNGERR", "TIME", "EXTIO", "DISKO"])
+        {
+            native.Symbols[name].Should().Be(legacy.Symbols[name], $"{name} must match the Microsoft build");
+        }
     }
 
     /// <summary>
@@ -156,6 +161,7 @@ public sealed class AppleSoftTests
 
         foreach ((string name, string definition, string invocation) in ((string, string, string)[])
             [
+                ("PRINT", "MsBasic.Print.asm", "AppleSoft.Print.asm"),
                 ("FADDH", "MsBasic.AdditionCore.asm", "MsBasic.FloatingPoint.asm"),
                 ("FADD", "MsBasic.AdditionCore.asm", "MsBasic.FloatingPoint.asm"),
                 ("LOG", "MsBasic.Logarithm.asm", "MsBasic.FloatArithmetic.asm"),

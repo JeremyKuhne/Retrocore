@@ -1,8 +1,8 @@
 ;; APPLESOFT: BUILD CONSTANTS, WORKSPACE AND MACHINE ADDRESSES
 ;;
-;; These equates name existing RAM and ROM locations; they allocate no workspace. The configuration symbols
-;; retain the intermediate assignments of the Microsoft expansion. Some shared modules use them, but changing
-;; them alone does not regenerate the whole listing. <ROMLOC> and <RAMLOC> are build history, not runtime limits.
+;; These equates name existing RAM and ROM locations; they allocate no workspace. Some shared modules use the
+;; configuration symbols, but changing them alone does not regenerate the whole listing. <ROMLOC> and <RAMLOC>
+;; describe the original build, not runtime limits.
 ;;
 ;; The two-byte pointers <TXTTAB>, <VARTAB>, <ARYTAB> and <STREND> delimit the program, simple variables,
 ;; arrays and free memory in ascending order. Strings occupy the high end of memory down to <FRETOP>, below
@@ -11,46 +11,32 @@
 
 .org $0000
 
-; Microsoft build configuration; .set assignments retain their original order.
+; Final Microsoft build configuration.
 REALIO = $04                        ;; Microsoft build target: 4 selects Apple II I/O
-INTPRC = $01                        ;; Microsoft build switch for integer arrays
-ADDPRC = $01                        ;; Microsoft build switch for the extra mantissa byte
-LNGERR = $01                        ;; Microsoft build switch for full error messages
-TIME = $00                          ;; Microsoft build switch for clock support
-EXTIO = $00                         ;; Microsoft build switch for external channel I/O
-DISKO = $00                         ;; Microsoft build switch for disk commands
-NULCMD .set $01                     ;; Microsoft build switch for the NULL command
-GETCMD .set $01                     ;; Microsoft build switch for the GET command
-RORSW .set $01                      ;; Microsoft build switch for the hardware rotate instruction
+.include "../Microsoft6502Basic/MsBasic.Switches.asm"
+
+NULCMD = $00                        ;; Microsoft build switch for the NULL command
+GETCMD = $01                        ;; Microsoft build switch for the GET command
+RORSW = $01                         ;; Microsoft build switch for the hardware rotate instruction
 ROMSW = $01                         ;; Microsoft build switch for ROM-resident BASIC
 CLMWID = $0E                        ;; Microsoft build's print-zone width
 LONGI = $01                         ;; Microsoft build switch for long initialization
-STKEND .set $01FF                   ;; Microsoft build's upper stack limit
-BUFPAG .set $00                     ;; Microsoft build's input buffer page
-LINLEN .set $48                     ;; Microsoft build's terminal line width
-BUFLEN .set $48                     ;; Microsoft build's input buffer length
-ROMLOC .set $2000                   ;; Microsoft build's ROM origin
-KIMROM .set $01                     ;; Microsoft build switch for KIM ROM
-KIMROM .set $00                     ;; Microsoft build switch for KIM ROM
-RAMLOC .set $4000                   ;; Microsoft build's RAM origin
-RORSW .set $01                      ;; Microsoft build switch for the hardware rotate instruction
-NULCMD .set $00                     ;; Microsoft build switch for the NULL command
-GETCMD .set $01                     ;; Microsoft build switch for the GET command
+STKEND = $01FB                      ;; Microsoft build's upper stack limit
+BUFPAG = $02                        ;; Microsoft build's input buffer page
+LINLEN = $28                        ;; Microsoft build's terminal line width
+BUFLEN = $F0                        ;; Microsoft build's input buffer length
+ROMLOC = $D000                      ;; Microsoft build's ROM origin
+KIMROM = $00                        ;; Microsoft build switch for KIM ROM
+RAMLOC = $2A00                      ;; Microsoft build's RAM origin
+
 CQINLN = $FD67                      ;; Monitor line-input entry used by the Microsoft build
 CQPRMP = $33                        ;; Monitor prompt character location
 CQINCH = $FD0C                      ;; Monitor character-input entry
 CQCOUT = $FECD                      ;; Monitor cassette-write entry in the Microsoft build
 CQCSIN = $FEFD                      ;; Monitor cassette-read entry in the Microsoft build
-BUFPAG .set $02                     ;; Microsoft build's input buffer page
 BUF = $0200                         ;; line input and tokenization buffer in page two
-ROMLOC .set $D000                   ;; Microsoft build's ROM origin
-RAMLOC .set $2A00                   ;; Microsoft build's RAM origin
 OUTCH = $FDED                       ;; Monitor character-output entry
 CZGETL = $FD0C                      ;; Monitor character-input entry used by GET
-LINLEN .set $28                     ;; Microsoft build's terminal line width
-BUFLEN .set $F0                     ;; Microsoft build's input buffer length
-RORSW .set $01                      ;; Microsoft build switch for the hardware rotate instruction
-STKEND .set $01FB                   ;; Microsoft build's upper stack limit
 NUMLEV = $17                        ;; generic Microsoft stack reserve in two-byte levels; Apple uses a different reserve in <GETSTK>
 STRSIZ = $03                        ;; bytes in a string descriptor
 NUMTMP = $03                        ;; number of temporary string descriptors

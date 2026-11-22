@@ -191,7 +191,7 @@ public sealed class PetSharedFloatAssemblyTests
 
     private static (AssemblyResult Legacy, AssemblyResult Native) Assemble(PetModel model, bool original)
     {
-        AssemblyResult legacy = PetSdkModules.AssembleBasic(s_pet, model, original);
+        AssemblyResult legacy = PetLegacyBasic.Assemble(s_pet, model, original);
         int start = checked((int)legacy.Symbols["FADDH"]);
         int end = checked((int)legacy.Symbols["INITAT"]);
 

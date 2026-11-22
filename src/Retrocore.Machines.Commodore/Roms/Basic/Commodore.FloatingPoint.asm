@@ -1,7 +1,7 @@
 ;; COMMODORE BASIC FLOATING-POINT PACKAGE
 ;;
 ;; This module emits the contiguous math package from the addition entries through the arctangent table. Its caller
-;; supplies the origin and external symbols, and adds the shared Microsoft6502Basic directory to IncludePaths.
+;; supplies the origin and external symbols. The shared sources ship beside the PET source folder.
 ;; The shared macros document the five-byte arithmetic, conversions, constants and transcendental routines.
 ;; BASIC 1 selects an earlier exponent limit and a different output threshold, BASIC 2 includes a hidden WAIT message,
 ;; and BASIC 4 includes a checksum and patch space before decimal output.
@@ -17,16 +17,16 @@
 ; WAIT_EASTER_EGG: 1 to include BASIC 2's hidden WAIT routine and its encoded bytes.
 ; BASIC4_OUTPUT_PADDING: 1 to include BASIC 4's checksum and patch space before <INPRT>.
 
-.include "MsBasic.AdditionCore.asm"
-.include "MsBasic.FloatConstants.asm"
-.include "MsBasic.Logarithm.asm"
-.include "MsBasic.ArithmeticCore.asm"
-.include "MsBasic.MovementCore.asm"
-.include "MsBasic.ConversionCore.asm"
-.include "MsBasic.DecimalInputCore.asm"
-.include "MsBasic.OutputCore.asm"
-.include "MsBasic.TranscendentalCore.asm"
-.include "MsBasic.RandomCore.asm"
+.include "../../Microsoft6502Basic/MsBasic.AdditionCore.asm"
+.include "../../Microsoft6502Basic/MsBasic.FloatConstants.asm"
+.include "../../Microsoft6502Basic/MsBasic.Logarithm.asm"
+.include "../../Microsoft6502Basic/MsBasic.ArithmeticCore.asm"
+.include "../../Microsoft6502Basic/MsBasic.MovementCore.asm"
+.include "../../Microsoft6502Basic/MsBasic.ConversionCore.asm"
+.include "../../Microsoft6502Basic/MsBasic.DecimalInputCore.asm"
+.include "../../Microsoft6502Basic/MsBasic.OutputCore.asm"
+.include "../../Microsoft6502Basic/MsBasic.TranscendentalCore.asm"
+.include "../../Microsoft6502Basic/MsBasic.RandomCore.asm"
 
 .assert SHORT_FMUL_ZERO = 0 || SHORT_FMUL_ZERO = 1, "SHORT_FMUL_ZERO is 0 or 1."
 .assert EARLY_FIN_LIMIT = 0 || EARLY_FIN_LIMIT = 1, "EARLY_FIN_LIMIT is 0 or 1."

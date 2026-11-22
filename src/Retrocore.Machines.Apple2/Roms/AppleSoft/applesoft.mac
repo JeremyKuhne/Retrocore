@@ -1,4 +1,4 @@
-; retrocore: dialect=macro10 overlay=../Microsoft6502Basic/m6502.asm sha256=F3EC99C91DEDB8EB3441DED866F45797BB3E03ED26567A253E24CECF23CD63AC
+; retrocore: dialect=macro10 overlay=../../../Retrocore.Basic/Roms/Microsoft6502Basic/m6502.asm sha256=F3EC99C91DEDB8EB3441DED866F45797BB3E03ED26567A253E24CECF23CD63AC
 ; AppleSoft II for the Apple IIe and II Plus: Apple's changes to Microsoft BASIC 1.1 (m6502.asm), maintained by hand.
 ;@INSERT BEFORE 11
 IFNDEF  ENHNCD,<ENHNCD==1>      ;1 FOR THE ENHANCED IIE (342-0303/0304), 0 FOR THE ORIGINAL (342-0134/0135).

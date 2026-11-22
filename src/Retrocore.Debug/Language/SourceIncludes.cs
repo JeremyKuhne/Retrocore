@@ -53,7 +53,7 @@ internal static partial class SourceIncludes
 
         foreach (Match match in Include().Matches(text))
         {
-            if (Named(path, match.Groups["file"].Value) is { } file) { yield return file; }
+            if (Resolve(path, match.Groups["file"].Value) is { } file) { yield return file; }
         }
 
         // An overlay's first line names the base it edits.
@@ -62,10 +62,24 @@ internal static partial class SourceIncludes
         Match overlay = Overlay().Match(first);
         if (overlay.Success
             && first.Contains("retrocore:", StringComparison.Ordinal)
-            && Named(path, overlay.Groups["file"].Value) is { } overlaid)
+            && Resolve(path, overlay.Groups["file"].Value) is { } overlaid)
         {
             yield return overlaid;
         }
+    }
+
+    // The file a source names, or where the shared BASIC sources keep it when that is elsewhere: in the repository
+    // they are in Retrocore.Basic, and in the SDK beside the machines' sources. Null for a name no path can hold.
+    private static string? Resolve(string fromPath, string request)
+    {
+        if (Named(fromPath, request) is not { } direct) { return null; }
+        if (File.Exists(direct)) { return direct; }
+        foreach (string fallback in OverlayBaseResolver.Fallbacks(fromPath, request, OverlayBaseResolver.SdkFallback))
+        {
+            if (File.Exists(fallback)) { return fallback; }
+        }
+
+        return direct;
     }
 
     /// <summary>
@@ -79,7 +93,7 @@ internal static partial class SourceIncludes
         for (int line = 0; line < lines.Count; line++)
         {
             if (Include().Match(lines[line]) is not { Success: true } match) { continue; }
-            if (Named(path, match.Groups["file"].Value) is { } file) { yield return (line, file); }
+            if (Resolve(path, match.Groups["file"].Value) is { } file) { yield return (line, file); }
         }
     }
 
@@ -118,12 +132,14 @@ internal static partial class SourceIncludes
 
     /// <summary>
     ///  Gets the root to analyze a file through: the outermost source that includes it, found in its own folder
-    ///  and the folders beside it, or the file itself when nothing includes it.
+    ///  and the folders beside it, or the file itself when nothing includes it. The repository's shared BASIC
+    ///  sources also search the other projects' ROM sources.
     /// </summary>
     /// <remarks>
     ///  <para>
-    ///   When several sources include the file, the one whose name sorts last is used, so the later of two
-    ///   versions (<c>Dos33.asm</c> over <c>Dos32.asm</c>, <c>Boot16.asm</c> over <c>Boot13.asm</c>) wins.
+    ///   The file's own folder is searched first, then neighboring folders; candidates within a folder are
+    ///   searched by descending name, so the later of two versions (<c>Dos33.asm</c> over <c>Dos32.asm</c>,
+    ///   <c>Boot16.asm</c> over <c>Boot13.asm</c>) wins. Shared BASIC also searches the other ROM projects.
     ///  </para>
     /// </remarks>
     /// <param name="path">The file's full path.</param>
@@ -172,6 +188,44 @@ internal static partial class SourceIncludes
 
         // SourcesIn finds nothing in the folder above if it went away too.
         folders.Add(parent);
+        folders.AddRange(OtherRomFolders(directory));
+        return folders;
+    }
+
+    // The repository's shared BASIC, Retrocore.Basic/Roms/Microsoft6502Basic, is included by the other projects'
+    // ROM sources (AppleSoft, PET BASIC): their Roms folders and every folder within them, project by project.
+    private static List<string> OtherRomFolders(string directory)
+    {
+        string? roms = Path.GetDirectoryName(directory);
+        string? project = roms is null ? null : Path.GetDirectoryName(roms);
+        string? sources = project is null ? null : Path.GetDirectoryName(project);
+        if (!Path.GetFileName(directory).Equals("Microsoft6502Basic", StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(Path.GetFileName(roms), "Roms", StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(Path.GetFileName(project), "Retrocore.Basic", StringComparison.OrdinalIgnoreCase)
+            || sources is null)
+        {
+            return [];
+        }
+
+        List<string> folders = [];
+        try
+        {
+            foreach (string other in Directory.EnumerateDirectories(sources, "Retrocore.*", s_searchOne)
+                .Order(StringComparer.OrdinalIgnoreCase))
+            {
+                if (string.Equals(other, project, StringComparison.OrdinalIgnoreCase)) { continue; }
+                string otherRoms = Path.Join(other, "Roms");
+                if (!Directory.Exists(otherRoms)) { continue; }
+                folders.Add(otherRoms);
+                folders.AddRange(Directory.EnumerateDirectories(otherRoms, "*", s_searchAll)
+                    .Order(StringComparer.OrdinalIgnoreCase));
+            }
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            // A project went away, or became unreadable, while it was listed; the folders found so far are searched.
+        }
+
         return folders;
     }
 

@@ -217,9 +217,12 @@ MAME 0.289 is already in the cache. Its `pet` driver is the trace oracle, and VI
 
 **Built 2026-11-16.** Phase 3 is done.
 
+The SDK now defaults to the native `Basic1.asm`, `Basic2.asm` and `Basic4.asm` roots; the overlays below remain
+available with `basicSource: "macro10"`.
+
 - **The sources** are in `src/Retrocore.Machines.Commodore/Roms`:
-  - `Basic/Basic1.mac` and `Basic/Basic2.mac`, MACRO-10 overlays on `m6502.asm`, named by its path in the Apple II
-    project.
+  - `Basic/Basic1.mac` and `Basic/Basic2.mac`, MACRO-10 overlays on `m6502.asm`, now named by its path in the shared
+    BASIC project.
   - `Basic1/` and `Basic2/`, each with `Editor1.asm`/`Editor2.asm` and `Kernal1.asm`/`Kernal2.asm`, an `Equates.asm`
     of page zero, pages 2-3 and constants, and entries files so each module names the other's routines.
   - `PetEquates.asm` for the hardware.

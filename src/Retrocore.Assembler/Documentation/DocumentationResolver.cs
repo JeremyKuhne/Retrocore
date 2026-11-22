@@ -230,7 +230,17 @@ public sealed partial class DocumentationResolver
     /// <param name="from">The topic the link is in.</param>
     /// <param name="target">The target as written.</param>
     /// <returns>What it resolved to.</returns>
-    public DocumentationTarget Resolve(DocumentationTopic from, string target)
+    public DocumentationTarget Resolve(DocumentationTopic from, string target) => Resolve(from, target, comment: null);
+
+    /// <summary>
+    ///  Resolves a link target written in one of a topic's comments, by the <c>.using</c> directives in effect at that
+    ///  comment; a topic documented in two <c>.if</c> branches has a comment, and directives, for each.
+    /// </summary>
+    /// <param name="from">The topic the link is in.</param>
+    /// <param name="target">The target as written.</param>
+    /// <param name="comment">The comment the link is in, or null for the topic's first.</param>
+    /// <returns>What it resolved to.</returns>
+    public DocumentationTarget Resolve(DocumentationTopic from, string target, DocumentationComment? comment)
     {
         string text = target.Trim();
         bool web = text.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
@@ -275,11 +285,11 @@ public sealed partial class DocumentationResolver
             text = text[(colon + 1)..];
         }
 
-        DocumentationTarget result = Lookup(from, text, module, model);
+        DocumentationTarget result = Lookup(from, text, module, model, comment);
         return section is null ? result : result with { Section = section };
     }
 
-    private DocumentationTarget Lookup(DocumentationTopic from, string name, string? module, string? model)
+    private DocumentationTarget Lookup(DocumentationTopic from, string name, string? module, string? model, DocumentationComment? comment)
     {
         if (name.Length == 0) { return new(DocumentationTargetKind.Unresolved, name); }
         IEnumerable<DocumentationSet> sets = Sets(module, model);
@@ -304,12 +314,19 @@ public sealed partial class DocumentationResolver
             }
         }
 
-        // The assembler's scope rules, from the topic's scope outward.
+        // The assembler's scope rules, from the topic's scope outward, then the scopes the .using directives in
+        // effect at the topic name, then historical names.
         if (module is null && SetsFor(model).Contains(Current))
         {
             foreach (string candidate in Scoped(from.Name, name))
             {
-                if (Match(Current, candidate) is { } match) { return match; }
+                if (Match(Current, candidate, also: false) is { } match) { return match; }
+            }
+
+            if (Used(comment ?? (from.Comments.Count == 0 ? null : from.Primary), name) is { } used) { return used; }
+            if (Also(Current, name.StartsWith("::", StringComparison.Ordinal) ? name[2..] : name) is { } also)
+            {
+                return also;
             }
         }
 
@@ -340,7 +357,7 @@ public sealed partial class DocumentationResolver
             ? (Path.GetFileName(topic.Path).ToUpperInvariant(), topic.Line, target.Value)
             : ("", -1, target.Value);
 
-    private static DocumentationTarget? Match(DocumentationSet set, string name)
+    private static DocumentationTarget? Match(DocumentationSet set, string name, bool also = true)
     {
         if (set.Find(name) is { } topic) { return Found(topic); }
         if (set.Symbols.TryGetValue(name, out long value))
@@ -348,10 +365,41 @@ public sealed partial class DocumentationResolver
             return new(DocumentationTargetKind.Symbol, name) { Set = set, Value = value };
         }
 
-        // A historical name reaches the definition that gives it in an Also: section.
+        return also ? Also(set, name) : null;
+    }
+
+    // A historical name reaches the definition that gives it in an Also: section.
+    private static DocumentationTarget? Also(DocumentationSet set, string name)
+    {
         IReadOnlyList<DocumentationTopic> also = set.FindAlso(name);
         if (also.Count == 1) { return Found(also[0]); }
-        if (also.Count > 1) { return new(DocumentationTargetKind.Ambiguous, name); }
+        return also.Count > 1 ? new(DocumentationTargetKind.Ambiguous, name) : null;
+    }
+
+    // A plain name in the scopes the .using directives in effect at the comment name, innermost directive first; a
+    // name two scopes of one directive define is ambiguous.
+    private DocumentationTarget? Used(DocumentationComment? at, string name)
+    {
+        if (name.Contains("::", StringComparison.Ordinal) || at is null) { return null; }
+        foreach (DocumentationUsing directive in at.Usings)
+        {
+            List<DocumentationTarget> matches = [];
+            // As in the assembler, a scope already opened before the directive binds first: one documented earlier in
+            // the comment's file. An undocumented scope's opening is not known, so it can only bind second.
+            bool OpenedBefore(string scope)
+            {
+                if (directive.Line < 0 || Current.Find(scope) is not { } opened) { return false; }
+                return string.Equals(opened.Path, at.Path, StringComparison.OrdinalIgnoreCase) && opened.Line < directive.Line;
+            }
+
+            foreach (string scope in directive.Targets(Current.IsScope, OpenedBefore).Distinct(StringComparer.Ordinal))
+            {
+                if (Match(Current, $"{scope}::{name}", also: false) is { } match) { matches.Add(match); }
+            }
+
+            if (matches.Count == 1) { return matches[0]; }
+            if (matches.Count > 1) { return new(DocumentationTargetKind.Ambiguous, name); }
+        }
 
         return null;
     }

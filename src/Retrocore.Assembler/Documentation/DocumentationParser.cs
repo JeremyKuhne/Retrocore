@@ -28,16 +28,27 @@ public static partial class DocumentationParser
     /// <param name="text">The source text.</param>
     /// <param name="path">The source path, recorded in comments and diagnostics.</param>
     /// <returns>The comments and any placement problems.</returns>
-    public static DocumentationFile Parse(string text, string path) => Parse(text, path, style: true);
+    public static DocumentationFile Parse(string text, string path) => Parse(text, path, assembled: null);
+
+    /// <summary>
+    ///  Parses a source file's documentation comments, applying only the <c>.using</c> lines the assembler assembled.
+    /// </summary>
+    /// <param name="text">The source text.</param>
+    /// <param name="path">The source path, recorded in comments and diagnostics.</param>
+    /// <param name="assembled">What the assembler took from the file, or null when not known.</param>
+    /// <returns>The comments and any placement problems.</returns>
+    public static DocumentationFile Parse(string text, string path, DocumentationAssembled? assembled) =>
+        Parse(text, path, assembled, style: true);
 
     /// <summary>
     ///  Parses a source file's documentation comments, optionally without the style checks.
     /// </summary>
     /// <param name="text">The source text.</param>
     /// <param name="path">The source path, recorded in comments and diagnostics.</param>
+    /// <param name="assembled">What the assembler took from the file, or null when not known.</param>
     /// <param name="style">Whether to check a strict source against the style guide.</param>
     /// <returns>The comments and any placement problems.</returns>
-    internal static DocumentationFile Parse(string text, string path, bool style)
+    internal static DocumentationFile Parse(string text, string path, DocumentationAssembled? assembled, bool style)
     {
         string[] lines = text.Replace("\r\n", "\n").Split('\n');
         HashSet<string> dataMacros = DataMacros(lines);
@@ -45,7 +56,8 @@ public static partial class DocumentationParser
         List<DocumentationDiagnostic> diagnostics = [];
         List<(string Text, bool Not)> conditions = [];
         List<string?> containers = [];
-        List<string> scopes = [];
+        ScopeTracker tracker = new();
+        List<string> scopes = tracker.Scopes;
         bool codeSeen = false;
         int index = 0;
         while (index < lines.Length)
@@ -80,7 +92,8 @@ public static partial class DocumentationParser
                         keyword.Title,
                         DocumentationKind.Topic,
                         [.. body.Skip(1)],
-                        keyword.Keyword));
+                        keyword.Keyword,
+                        tracker.Current.Usings));
 
                     continue;
                 }
@@ -94,7 +107,8 @@ public static partial class DocumentationParser
                         System.IO.Path.GetFileName(path),
                         DocumentationKind.File,
                         body,
-                        keyword: null));
+                        keyword: null,
+                        tracker.Current.Usings));
 
                     continue;
                 }
@@ -147,7 +161,7 @@ public static partial class DocumentationParser
                     continue;
                 }
 
-                comments.Add(Documented(path, lines, start, index, definition, body, conditions, dataMacros, isTrailing: false));
+                comments.Add(Documented(path, lines, start, index, definition, body, conditions, dataMacros, isTrailing: false, tracker.Current.Usings));
                 continue;
             }
 
@@ -159,7 +173,7 @@ public static partial class DocumentationParser
                 if (Qualify(Define(code, containers), scopes) is { } definition)
                 {
                     List<(int, string)> body = [(index, Strip(comment))];
-                    comments.Add(Documented(path, lines, index, index, definition, body, conditions, dataMacros, isTrailing: true));
+                    comments.Add(Documented(path, lines, index, index, definition, body, conditions, dataMacros, isTrailing: true, tracker.Current.Usings));
                 }
                 else
                 {
@@ -178,7 +192,7 @@ public static partial class DocumentationParser
             else
             {
                 Container(containers, trimmed);
-                Scope(scopes, trimmed);
+                tracker.Advance(trimmed, index, assembled);
             }
 
             index++;
@@ -187,6 +201,38 @@ public static partial class DocumentationParser
         bool strict = IsStrict(text);
         if (strict && style) { Style(lines, path, diagnostics); }
         return new(path, comments, diagnostics) { Strict = strict };
+    }
+
+    /// <summary>
+    ///  Follows a source's scopes and <c>.using</c> directives, so a name on a line can be looked up as the assembler
+    ///  would look it up there.
+    /// </summary>
+    /// <param name="lines">The source's lines.</param>
+    /// <returns>For each line, the scope it is in and the <c>.using</c> directives in effect on it.</returns>
+    public static IReadOnlyList<DocumentationScopes> ScopesByLine(IReadOnlyList<string> lines) =>
+        ScopesByLine(lines, assembled: null);
+
+    /// <summary>
+    ///  Follows a source's scopes and the <c>.using</c> directives the assembler assembled.
+    /// </summary>
+    /// <param name="lines">The source's lines.</param>
+    /// <param name="assembled">What the assembler took from the file, or null when not known.</param>
+    /// <returns>For each line, the scope it is in and the <c>.using</c> directives in effect on it.</returns>
+    public static IReadOnlyList<DocumentationScopes> ScopesByLine(IReadOnlyList<string> lines, DocumentationAssembled? assembled)
+    {
+        ScopeTracker tracker = new();
+        DocumentationScopes[] result = new DocumentationScopes[lines.Count];
+        for (int index = 0; index < lines.Count; index++)
+        {
+            result[index] = tracker.Current;
+            string trimmed = Split(lines[index]).Code.Trim();
+            if (trimmed.Length != 0 && !IsConditional(trimmed))
+            {
+                tracker.Advance(trimmed, index, assembled);
+            }
+        }
+
+        return result;
     }
 
     /// <summary>
@@ -213,7 +259,7 @@ public static partial class DocumentationParser
 
             if (current is { } open)
             {
-                topics.Add(Comment(path, open.Line, open.Line, open.Title, DocumentationKind.Topic, body, open.Keyword));
+                topics.Add(Comment(path, open.Line, open.Line, open.Title, DocumentationKind.Topic, body, open.Keyword, usings: []));
             }
 
             body = [];
@@ -251,7 +297,8 @@ public static partial class DocumentationParser
         List<(int Line, string Text)> body,
         List<(string Text, bool Not)> conditions,
         HashSet<string> dataMacros,
-        bool isTrailing)
+        bool isTrailing,
+        IReadOnlyList<DocumentationUsing> usings)
     {
         DocumentationKind kind = definition.Kind;
         List<string> aliases = [];
@@ -279,7 +326,8 @@ public static partial class DocumentationParser
             Parameters = definition.Parameters,
             Members = kind is DocumentationKind.Enum or DocumentationKind.Struct ? Members(lines, target) : [],
             Condition = ConditionText(conditions),
-            IsTrailing = isTrailing
+            IsTrailing = isTrailing,
+            Usings = usings
         };
     }
 
@@ -290,7 +338,8 @@ public static partial class DocumentationParser
         string name,
         DocumentationKind kind,
         List<(int Line, string Text)> body,
-        string? keyword)
+        string? keyword,
+        IReadOnlyList<DocumentationUsing> usings)
     {
         (string summary, List<string> remarks, List<DocumentationSection> sections) = Body(body);
         return new DocumentationComment
@@ -303,7 +352,8 @@ public static partial class DocumentationParser
             Keyword = keyword,
             Summary = summary,
             Remarks = remarks,
-            Sections = sections
+            Sections = sections,
+            Usings = usings
         };
     }
 
@@ -402,28 +452,6 @@ public static partial class DocumentationParser
         definition is null || scopes.Count == 0 || definition.Kind is DocumentationKind.Macro or DocumentationKind.Definition
             ? definition
             : definition with { Name = $"{string.Join("::", scopes)}::{definition.Name}" };
-
-    private static void Scope(List<string> scopes, string code)
-    {
-        string word = FirstWord(code).ToLowerInvariant();
-        int length = IdentifierLength(code);
-        if (length != 0 && code.Length > length && code[length] == ':')
-        {
-            // A label may precede .proc on the same line.
-            word = FirstWord(code[(length + 1)..].TrimStart(':').Trim()).ToLowerInvariant();
-            code = code[(length + 1)..].TrimStart(':').Trim();
-        }
-
-        if (word is ".proc" or ".scope")
-        {
-            string name = FirstWord(code[word.Length..].Trim());
-            if (name.Length != 0) { scopes.Add(name); }
-        }
-        else if (word is ".endproc" or ".endscope" && scopes.Count != 0)
-        {
-            scopes.RemoveAt(scopes.Count - 1);
-        }
-    }
 
     private static void Container(List<string?> containers, string code)
     {

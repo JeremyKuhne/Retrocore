@@ -134,7 +134,7 @@ internal static partial class SymbolReferences
         IReadOnlyList<SymbolSite> targets)
     {
         bool macro10 = analysis.UsesMacro10(where.Path);
-        IReadOnlyList<SymbolSite> sites = analysis.Find(token, macro10);
+        IReadOnlyList<SymbolSite> sites = analysis.Find(token, where.Path, where.Line, macro10);
         if (sites.Count == 0 && SourceText.LocalDefinition(lines, token, where.Line) is { } local)
         {
             sites = [local with { Path = where.Path }];

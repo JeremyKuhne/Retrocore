@@ -4,6 +4,7 @@
 
 using Retrocore.Assembler;
 using Retrocore.Documentation;
+using System.Collections.Concurrent;
 using System.Text.RegularExpressions;
 
 namespace Retrocore.Debug.Language;
@@ -19,6 +20,19 @@ internal sealed partial class SourceAnalysis
     private readonly Dictionary<string, AssemblyDialect> _dialects = [with(StringComparer.OrdinalIgnoreCase)];
     private readonly Dictionary<string, string[]> _lines = [with(StringComparer.OrdinalIgnoreCase)];
     private readonly Func<string, string?> _text;
+
+    // Filled lazily, and language requests run in parallel: a cache entry is computed whole and then published.
+    private readonly ConcurrentDictionary<string, IReadOnlyList<IReadOnlyList<DocumentationScopes>>> _scopes = new(StringComparer.OrdinalIgnoreCase);
+    private HashSet<string>? _scopeNames;
+    private readonly Dictionary<string, List<(string Path, int Line)>> _includedFrom = [with(StringComparer.OrdinalIgnoreCase)];
+    private readonly Dictionary<string, HashSet<int>> _usingLines = [with(StringComparer.OrdinalIgnoreCase)];
+    private readonly Dictionary<string, Dictionary<int, List<string[]>>> _invokedUsings = [with(StringComparer.OrdinalIgnoreCase)];
+    // Keyed by the upper-cased path, as the other path-keyed maps here compare paths without case.
+    private readonly Dictionary<(string Path, int Line), int> _usingOrder = [];
+    private readonly Dictionary<string, int> _scopeOpened = [with(StringComparer.OrdinalIgnoreCase)];
+
+    // Definitions found only in the text, such as in a branch the assembly skipped.
+    private readonly HashSet<SymbolSite> _textOnly = [];
     private DocumentationSet? _documentation;
 
     private SourceAnalysis(
@@ -38,13 +52,56 @@ internal sealed partial class SourceAnalysis
         }
 
         List<string> scopes = [];
-        foreach (AssemblyStatement statement in project.Statements)
+        List<string?> opened = [];
+        for (int index = 0; index < project.Statements.Count; index++)
         {
+            AssemblyStatement statement = project.Statements[index];
+            RecordScopeOrder(statement, index, opened);
             if (statement.Location is not { Path.Length: > 0 } location) { continue; }
             string path = Path.GetFullPath(location.Path);
             if (_lines.ContainsKey(path))
             {
                 _dialects.TryAdd(path, statement.Dialect);
+            }
+
+            // An included file is inside the scopes around its .include line.
+            if (!location.IsMacroExpansion && location.ExpandedFrom is { Path.Length: > 0 } include)
+            {
+                // An .include in a macro's body is in the scope where the macro is invoked.
+                AssemblyLocation from = include;
+                while (from.IsMacroExpansion && from.ExpandedFrom is { Path.Length: > 0 } invocation)
+                {
+                    from = invocation;
+                }
+
+
+                if (!_includedFrom.TryGetValue(path, out List<(string Path, int Line)>? sites))
+                {
+                    _includedFrom[path] = sites = [];
+                }
+
+                (string Path, int Line) site = (Path.GetFullPath(from.Path), from.Line);
+                if (!sites.Contains(site)) { sites.Add(site); }
+            }
+
+            // The .using lines the assembler took, so a branch of an .if it skipped does not count.
+            if (!location.IsMacroExpansion)
+            {
+                if (!_usingLines.TryGetValue(path, out HashSet<int>? usingLines))
+                {
+                    _usingLines[path] = usingLines = [];
+                }
+
+                // Only a .using the assembler accepts: native, without a label, and naming scopes.
+                if (statement.Kind == AssemblyStatementKind.Using && AssemblyNameResolver.ReadUsingNames(statement, out _) is not null)
+                {
+                    usingLines.Add(location.Line);
+                    _usingOrder.TryAdd((path.ToUpperInvariant(), location.Line), index);
+                }
+            }
+            else if (statement.Kind == AssemblyStatementKind.Using && AssemblyNameResolver.ReadUsingNames(statement, out _) is { } names)
+            {
+                RecordInvokedUsing(location, names, index);
             }
 
             if (!result.Success && statement.Kind is AssemblyStatementKind.Procedure or AssemblyStatementKind.Scope)
@@ -79,6 +136,7 @@ internal sealed partial class SourceAnalysis
         // The assembler knows native names; show the spelling the source used.
         Dictionary<string, string> spelling = [with(StringComparer.Ordinal)];
         foreach (KeyValuePair<string, string> alias in result.SymbolAliases) { spelling[alias.Value] = alias.Key; }
+        HashSet<(string Path, int Line)> assembled = [];
         foreach (AssemblySymbol symbol in result.SymbolDefinitions)
         {
             if (symbol.Location is not { } location || location.Path.Length == 0) { continue; }
@@ -100,6 +158,7 @@ internal sealed partial class SourceAnalysis
             }
 
             Add(new(name, path, location.Line, column, kind, symbol.Value, sourceLength));
+            assembled.Add((path.ToUpperInvariant(), location.Line));
         }
 
         // Macros and .defines are expanded before assembly, so find their definitions in the text; so are the
@@ -121,13 +180,19 @@ internal sealed partial class SourceAnalysis
                 match = TextDefinition().Match(lines[line]);
                 bool bare = match.Success && !match.Groups["colon"].Success && !match.Groups["equate"].Success;
                 bool instruction = bare && InstructionDocs.IsMnemonic(match.Groups["name"].Value);
-                if (match.Success && !instruction && !_definitions.ContainsKey(match.Groups["name"].Value))
+                // A line the assembler defined a name on has it already, qualified by its scope.
+                if (match.Success
+                    && !instruction
+                    && !_definitions.ContainsKey(match.Groups["name"].Value)
+                    && !assembled.Contains((path.ToUpperInvariant(), line)))
                 {
                     bool constant = match.Groups["equate"].Success;
                     SymbolSiteKind kind = constant ? SymbolSiteKind.Constant : SymbolSiteKind.Label;
                     string name = match.Groups["name"].Value;
                     long? value = result.Symbols.TryGetValue(name, out long known) ? known : null;
-                    Add(new(name, path, line, Column: 0, kind, value));
+                    SymbolSite site = new(name, path, line, Column: 0, kind, value);
+                    _textOnly.Add(site);
+                    Add(site);
                 }
             }
         }
@@ -154,7 +219,7 @@ internal sealed partial class SourceAnalysis
     internal DocumentationSet Documentation => _documentation ??= DocumentationSet.Create(
         _lines.Keys
             .OrderBy(path => string.Equals(path, Root, StringComparison.OrdinalIgnoreCase) ? 0 : 1)
-            .Select(path => DocumentationParser.Parse(string.Join("\n", _lines[path]), path)),
+            .Select(path => DocumentationParser.Parse(string.Join("\n", _lines[path]), path, AssembledUsing(path))),
         Symbols(),
         ModuleOf(Root),
         ModelOf(Root),
@@ -256,6 +321,248 @@ internal sealed partial class SourceAnalysis
         bool? declared = SourceText.Macro10Dialect(path, lines);
         if (declared is not null) { return declared.Value; }
         return !path.Equals(Root, StringComparison.OrdinalIgnoreCase) && UsesMacro10(Root);
+    }
+
+    /// <summary>
+    ///  Finds where a name used on a line is defined, looking a plain name up as the assembler does there: in the
+    ///  scopes that contain the line, innermost first, then in the scopes the <c>.using</c> directives in effect
+    ///  name, then as <see cref="Find(string, bool?)"/> does.
+    /// </summary>
+    /// <param name="name">The name as written.</param>
+    /// <param name="path">The full path of the file it is used in.</param>
+    /// <param name="line">The zero-based line it is used on.</param>
+    /// <param name="macro10">Whether the reference uses MACRO-10, or null for the root's dialect.</param>
+    /// <returns>The definitions; several when two used scopes define the name.</returns>
+    internal IReadOnlyList<SymbolSite> Find(string name, string path, int line, bool? macro10 = null) =>
+        Bound(name, path, line) ?? Find(name, macro10);
+
+    /// <summary>
+    ///  Finds the definition a plain name used on a line binds to by the assembler's scope rules alone: the scopes
+    ///  that contain the line, innermost first, the root, then the scopes the <c>.using</c> directives in effect name.
+    /// </summary>
+    /// <param name="name">The plain name.</param>
+    /// <param name="path">The full path of the file it is used in.</param>
+    /// <param name="line">The zero-based line it is used on.</param>
+    /// <returns>
+    ///  The definitions, or null when the name binds to none of them, as a historical name does not, or is a cheap
+    ///  local or unnamed label, which scopes do not name.
+    /// </returns>
+    internal IReadOnlyList<SymbolSite>? Bound(string name, string path, int line)
+    {
+        // A cheap local belongs to the label before it, and an unnamed label to its position, not to a scope.
+        if (name.StartsWith('@') || name.StartsWith(':')) { return null; }
+
+        if (name.Contains("::", StringComparison.Ordinal))
+        {
+            return _definitions.GetValueOrDefault(name.TrimStart(':'));
+        }
+
+        // A file included in several places binds a name in each; all of them are what the line may mean.
+        // The native dialect's names match case, as the assembler matches them; MACRO-10's do not.
+        bool exact = !UsesMacro10(path);
+        IReadOnlyList<DocumentationScopes> contexts = ScopesAt(path, line);
+        if (contexts.Count == 1) { return Bound(name, path, contexts[0], exact); }
+        List<SymbolSite> all = [.. contexts.SelectMany(scopes => Bound(name, path, scopes, exact) ?? []).Distinct()];
+        return all.Count == 0 ? null : all;
+    }
+
+    private List<SymbolSite>? Bound(string name, string path, DocumentationScopes scopes, bool exact)
+    {
+        for (string scope = scopes.Scope; scope.Length != 0; scope = Parent(scope))
+        {
+            if (Defined($"{scope}::{name}", exact) is { } sites) { return sites; }
+        }
+
+        if (Defined(name, exact) is { } root) { return root; }
+        foreach (DocumentationUsing directive in scopes.Usings)
+        {
+            List<SymbolSite> used =
+            [
+                .. directive.Targets(IsScope, OpenedBefore(path, directive))
+                    .Distinct(StringComparer.Ordinal)
+                    .SelectMany(scope => Defined($"{scope}::{name}", exact) ?? [])
+            ];
+
+            if (used.Count != 0) { return used; }
+        }
+
+        return null;
+    }
+
+    // The definitions of a qualified name, matching case when exact. After a successful assembly, only those it
+    // made: a name the text alone defines, as in a skipped .if branch, is not one the assembler bound.
+    private List<SymbolSite>? Defined(string name, bool exact)
+    {
+        if (!_definitions.TryGetValue(name, out List<SymbolSite>? sites)) { return null; }
+        bool success = Result.Success;
+        List<SymbolSite> matching =
+        [
+            .. sites.Where(site => (!exact || string.Equals(site.Name, name, StringComparison.Ordinal))
+                && !(success && _textOnly.Contains(site)))
+        ];
+
+        return matching.Count == 0 ? null : matching;
+    }
+
+    /// <summary>
+    ///  Gets the names the <c>.using</c> directives in effect on a line make usable unqualified there.
+    /// </summary>
+    /// <param name="path">The full path.</param>
+    /// <param name="line">The zero-based line.</param>
+    /// <returns>Each name code there can write that binds to its definition, innermost directive first.</returns>
+    internal IEnumerable<(string Name, SymbolSite Site)> UsedNames(string path, int line)
+    {
+        foreach (DocumentationUsing directive in ScopesAt(path, line).SelectMany(scopes => scopes.Usings).Distinct())
+        {
+            foreach (string scope in directive.Targets(IsScope, OpenedBefore(path, directive)).Distinct(StringComparer.Ordinal))
+            {
+                string prefix = $"{scope}::";
+                foreach (SymbolSite site in Definitions)
+                {
+                    if (site.Name.Length <= prefix.Length
+                        || !site.Name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+                        || site.Name.IndexOf("::", prefix.Length, StringComparison.Ordinal) >= 0)
+                    {
+                        continue;
+                    }
+
+                    // Only where the plain name binds to this definition: not one an enclosing scope's own name
+                    // shadows, nor one two used scopes define, which code must qualify.
+                    string name = site.Name[prefix.Length..];
+                    if (Bound(name, path, line) is { Count: > 0 } bound
+                        && bound.All(found => string.Equals(found.Name, site.Name, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        yield return (name, site);
+                    }
+                }
+            }
+        }
+    }
+
+    // The scope a line is in and the .using directives in effect on it: one for each distinct scope the file is
+    // included in.
+    private IReadOnlyList<DocumentationScopes> ScopesAt(string path, int line) => ScopesAt(path, line, depth: 0);
+
+    private IReadOnlyList<DocumentationScopes> ScopesAt(string path, int line, int depth)
+    {
+        if (!_scopes.TryGetValue(path, out IReadOnlyList<IReadOnlyList<DocumentationScopes>>? contexts))
+        {
+            IReadOnlyList<DocumentationScopes> lines = DocumentationParser.ScopesByLine(LinesOf(path), AssembledUsing(path));
+
+            // Includes are textual: a file included inside a .scope or .proc is in that scope, though the
+            // including file's .using directives do not reach it. A file included in several scopes is in each.
+            const int MaximumIncludeDepth = 32;
+            List<string> outers = depth < MaximumIncludeDepth && _includedFrom.TryGetValue(path, out List<(string Path, int Line)>? sites)
+                ? [.. sites.SelectMany(site => ScopesAt(site.Path, site.Line, depth + 1)).Select(scopes => scopes.Scope).Distinct(StringComparer.OrdinalIgnoreCase)]
+                : [""];
+
+            contexts = [.. outers.Select(outer => outer.Length == 0
+                ? lines
+                : (IReadOnlyList<DocumentationScopes>)[.. lines.Select(scopes => Within(outer, scopes))])];
+
+            contexts = _scopes.GetOrAdd(path, contexts);
+        }
+
+        return [.. contexts.Select(lines => (uint)line < (uint)lines.Count ? lines[line] : DocumentationScopes.Root)];
+    }
+
+    // What the assembler took from a file: its .using lines, and those its macro invocations produced; null when
+    // the assembly reached none of the file.
+    private DocumentationAssembled? AssembledUsing(string path)
+    {
+        // A successful assembly says exactly which it took, for a file it never reached too.
+        if (Result.Success) { return DocumentationAssembled.From(Result, path); }
+        if (!_usingLines.TryGetValue(path, out HashSet<int>? lines)) { return null; }
+        Dictionary<int, List<string[]>>? invoked = _invokedUsings.GetValueOrDefault(path);
+        return new(lines.Contains, line => invoked is not null && invoked.TryGetValue(line, out List<string[]>? names) ? names : []);
+    }
+
+    // Records a .using a macro expansion produced, at the line of the outermost invocation, where it applies from.
+    private void RecordInvokedUsing(AssemblyLocation location, string[] names, int index)
+    {
+        AssemblyLocation invocation = location;
+        while (invocation.IsMacroExpansion && invocation.ExpandedFrom is { } from) { invocation = from; }
+        if (invocation.IsMacroExpansion || invocation.Path.Length == 0) { return; }
+        string path = Path.GetFullPath(invocation.Path);
+        if (!_invokedUsings.TryGetValue(path, out Dictionary<int, List<string[]>>? lines))
+        {
+            _invokedUsings[path] = lines = [];
+        }
+
+        if (!lines.TryGetValue(invocation.Line, out List<string[]>? list)) { lines[invocation.Line] = list = []; }
+        list.Add(names);
+        _usingOrder.TryAdd((path.ToUpperInvariant(), invocation.Line), index);
+    }
+
+    // Records where each scope is first opened in the assembled statements, so a .using operand binds, as the
+    // assembler binds it, to a scope opened before the directive when there is one.
+    private void RecordScopeOrder(AssemblyStatement statement, int index, List<string?> opened)
+    {
+        if (statement.Kind is AssemblyStatementKind.Procedure or AssemblyStatementKind.Scope)
+        {
+            string name = statement.Operand.Text.Trim();
+            name = AssemblySyntax.ContinuedScope(name) ?? name;
+            if (name.Length == 0)
+            {
+                opened.Add(item: null);
+                return;
+            }
+
+            string qualified = string.Join("::", opened.OfType<string>().Append(name));
+            _scopeOpened.TryAdd(qualified, index);
+            opened.Add(name);
+        }
+        else if (statement.Kind is AssemblyStatementKind.EndProcedure or AssemblyStatementKind.EndScope && opened.Count != 0)
+        {
+            opened.RemoveAt(opened.Count - 1);
+        }
+    }
+
+    // Whether a scope is first opened before the .using on a line of a file, or null when that is not known.
+    private Func<string, bool>? OpenedBefore(string path, DocumentationUsing directive) =>
+        _usingOrder.TryGetValue((path.ToUpperInvariant(), directive.Line), out int at)
+            ? scope => _scopeOpened.TryGetValue(scope, out int open) && open < at
+            : null;
+
+    private static string Qualify(string scope, string name) => name.Length == 0 ? scope : $"{scope}::{name}";
+
+    // A line's scopes in a file included inside the scope outer.
+    private static DocumentationScopes Within(string outer, DocumentationScopes scopes)
+    {
+        List<DocumentationUsing> usings = [];
+        foreach (DocumentationUsing directive in scopes.Usings)
+        {
+            usings.Add(new(Qualify(outer, directive.Scope), directive.Names, directive.Line));
+        }
+
+        return new(Qualify(outer, scopes.Scope), usings);
+    }
+
+    // Whether a qualified name is a scope that some definition is in.
+    private bool IsScope(string name)
+    {
+        HashSet<string>? names = Volatile.Read(ref _scopeNames);
+        if (names is null)
+        {
+            // Built whole before it is published, so a parallel request never sees part of it.
+            names = [with(StringComparer.OrdinalIgnoreCase)];
+            foreach (string definition in _definitions.Keys)
+            {
+                for (string scope = Parent(definition); scope.Length != 0 && names.Add(scope); scope = Parent(scope))
+                {
+                }
+            }
+
+            names = Interlocked.CompareExchange(ref _scopeNames, names, comparand: null) ?? names;
+        }
+
+        return names.Contains(name);
+    }
+
+    private static string Parent(string name)
+    {
+        int separator = name.LastIndexOf("::", StringComparison.Ordinal);
+        return separator < 0 ? "" : name[..separator];
     }
 
     /// <summary>

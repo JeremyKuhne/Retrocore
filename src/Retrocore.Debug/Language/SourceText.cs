@@ -205,4 +205,94 @@ internal static class SourceText
         bool previous = index > 0 && line[index - 1] == ':';
         return next || previous;
     }
+
+    /// <summary>
+    ///  Finds the names code uses that could be historical names, with their lines and columns.
+    /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   Skips a macro's body, which names its parameters; a <c>.using</c> line, which names scopes; and the body of
+    ///   a <c>.struct</c>, <c>.union</c> or <c>.enum</c>, whose names are the type's own members.
+    ///  </para>
+    /// </remarks>
+    /// <param name="lines">The lines of a source file.</param>
+    /// <returns>Each candidate name with its zero-based line and column.</returns>
+    internal static IEnumerable<(int Line, int Start, string Name)> CodeNames(string[] lines)
+    {
+        bool inMacro = false;
+        int types = 0;
+        for (int line = 0; line < lines.Length; line++)
+        {
+            int comment = CommentStart(lines[line]);
+            string code = comment < 0 ? lines[line] : lines[line][..comment];
+            string directive = code.TrimStart();
+            if (directive.StartsWith(".macro", StringComparison.OrdinalIgnoreCase)) { inMacro = true; }
+            if (directive.StartsWith(".endmacro", StringComparison.OrdinalIgnoreCase))
+            {
+                inMacro = false;
+                continue;
+            }
+
+            if (inMacro || directive.StartsWith(".using", StringComparison.OrdinalIgnoreCase)) { continue; }
+            string operation = TypeDirective(directive);
+            if (operation is ".struct" or ".union" or ".enum")
+            {
+                types++;
+                continue;
+            }
+
+            if (operation is ".endstruct" or ".endunion" or ".endenum")
+            {
+                types = Math.Max(0, types - 1);
+                continue;
+            }
+
+            if (types != 0) { continue; }
+            foreach ((int start, string name) in Words(code)) { yield return (line, start, name); }
+        }
+    }
+
+    // The type directive a line holds, lower-cased, after any label: ".struct" for "Point .struct" or ".struct Point".
+    private static string TypeDirective(string directive)
+    {
+        foreach (string word in directive.Split(separator: (char[]?)null, 3, StringSplitOptions.RemoveEmptyEntries).Take(2))
+        {
+            if (word.StartsWith('.')) { return word.ToLowerInvariant(); }
+        }
+
+        return "";
+    }
+
+    // The names in a line of code, with their columns, but not a label the line defines at its start.
+    private static IEnumerable<(int Start, string Name)> Words(string code)
+    {
+        int index = 0;
+        while (index < code.Length)
+        {
+            if (code[index] is '"' or '\'')
+            {
+                // Skip a quoted string or character.
+                char quote = code[index];
+                int close = code.IndexOf(quote, index + 1);
+                index = close < 0 ? code.Length : close + 1;
+                continue;
+            }
+
+            if (!IsNameCharacter(code[index]) || (index > 0 && IsNameCharacter(code[index - 1])))
+            {
+                index++;
+                continue;
+            }
+
+            int end = index;
+            while (end < code.Length && IsNameCharacter(code[end])) { end++; }
+            bool qualified = index >= 2 && code[index - 1] == ':' && code[index - 2] == ':';
+            if (index != 0 && !qualified && !char.IsAsciiDigit(code[index]) && code[index - 1] != '$')
+            {
+                yield return (index, code[index..end]);
+            }
+
+            index = end;
+        }
+    }
 }

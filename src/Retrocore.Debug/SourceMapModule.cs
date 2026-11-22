@@ -312,7 +312,8 @@ internal sealed partial class SourceMapModule : IDebugModule
         DebugDocumentation.Parse(_result.SourceMap
             .SelectMany(entry => Levels(entry.Location))
             .Where(path => path.Length != 0)
-            .Select(Path.GetFullPath)),
+            .Select(Path.GetFullPath),
+            _result),
         _result,
         relocation: _relocation);
 

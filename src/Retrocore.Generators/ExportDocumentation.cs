@@ -22,7 +22,7 @@ internal static class ExportDocumentation
     internal static Dictionary<string, string> Summaries(string text, string path, AssemblyResult rom)
     {
         Dictionary<string, string> summaries = [with(StringComparer.Ordinal)];
-        DocumentationSet set = DocumentationSet.Create([DocumentationParser.Parse(text, path)], rom);
+        DocumentationSet set = DocumentationSet.Create([DocumentationParser.Parse(text, path, DocumentationAssembled.From(rom, path))], rom);
         foreach (string name in rom.Exports.Keys)
         {
             if ((set.Find(name) ?? set.FindRoutine(name)) is not { } topic) { continue; }

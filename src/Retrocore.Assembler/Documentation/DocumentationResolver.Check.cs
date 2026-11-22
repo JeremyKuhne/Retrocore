@@ -101,11 +101,11 @@ public sealed partial class DocumentationResolver
         }
 
         // Links and {references} anywhere in the topic's own text.
-        foreach ((string text, int line) in Texts(topic))
+        foreach ((string text, int line, DocumentationComment comment) in Texts(topic))
         {
             foreach (DocumentationLink link in DocumentationText.Links(text))
             {
-                DocumentationTarget target = Resolve(topic, link.Target);
+                DocumentationTarget target = Resolve(topic, link.Target, comment);
                 if (target.Kind == DocumentationTargetKind.Unresolved)
                 {
                     Warn($"No definition, file or address named '{link.Target}'.", line);
@@ -309,19 +309,19 @@ public sealed partial class DocumentationResolver
         string.Equals(Path.GetFullPath(a), Path.GetFullPath(b), StringComparison.OrdinalIgnoreCase);
 
     // Every piece of a topic's own text, with the line it is on.
-    private static IEnumerable<(string Text, int Line)> Texts(DocumentationTopic topic)
+    private static IEnumerable<(string Text, int Line, DocumentationComment Comment)> Texts(DocumentationTopic topic)
     {
         foreach (DocumentationComment comment in topic.Comments)
         {
-            if (comment.Summary.Length != 0) { yield return (comment.Summary, comment.Line); }
-            foreach (string remark in comment.Remarks) { yield return (remark, comment.Line); }
+            if (comment.Summary.Length != 0) { yield return (comment.Summary, comment.Line, comment); }
+            foreach (string remark in comment.Remarks) { yield return (remark, comment.Line, comment); }
             foreach (DocumentationSection section in comment.Sections)
             {
                 if (section.Name is "Inherit" or "Include") { continue; }
                 int offset = 0;
                 foreach (string line in section.Lines)
                 {
-                    yield return (line, section.Line + offset);
+                    yield return (line, section.Line + offset, comment);
                     offset++;
                 }
             }
@@ -400,7 +400,7 @@ public sealed partial class DocumentationResolver
     private void CheckUnlinked(DocumentationTopic topic, HashSet<string> entries, Action<string, int> warn)
     {
         HashSet<string> reported = [with(StringComparer.Ordinal)];
-        foreach ((string text, int line) in Prose(topic))
+        foreach ((string text, int line, DocumentationComment comment) in Prose(topic))
         {
             string prose = NotProse().Replace(text, " ");
             foreach (Match word in ProseName().Matches(prose))
@@ -415,7 +415,7 @@ public sealed partial class DocumentationResolver
                 // is more likely English than a name.
                 if (_isInstruction(name) || (StartsSentence(prose, word.Index) && IsPlainWord(name))) { continue; }
 
-                DocumentationTarget resolved = Resolve(topic, name);
+                DocumentationTarget resolved = Resolve(topic, name, comment);
                 if (resolved.Kind != DocumentationTargetKind.Topic || resolved.Topic is not DocumentationTopic target)
                 {
                     continue;
@@ -449,24 +449,27 @@ public sealed partial class DocumentationResolver
         char.IsAsciiLetterUpper(name[0]) && name.Skip(1).All(char.IsAsciiLetterLower);
 
     // A topic's prose: its summary, remarks, entries' meanings and free-text sections, not names in lists.
-    private static IEnumerable<(string Text, int Line)> Prose(DocumentationTopic topic)
+    private static IEnumerable<(string Text, int Line, DocumentationComment Comment)> Prose(DocumentationTopic topic)
     {
         foreach (DocumentationComment comment in topic.Comments)
         {
-            if (comment.Summary.Length != 0) { yield return (comment.Summary, comment.Line); }
-            foreach (string remark in comment.Remarks) { yield return (remark, comment.Line); }
+            if (comment.Summary.Length != 0) { yield return (comment.Summary, comment.Line, comment); }
+            foreach (string remark in comment.Remarks) { yield return (remark, comment.Line, comment); }
             foreach (DocumentationSection section in comment.Sections)
             {
                 if (section.Entries.Count != 0)
                 {
-                    foreach (DocumentationEntry entry in section.Entries) { yield return (entry.Meaning, entry.Line); }
+                    foreach (DocumentationEntry entry in section.Entries)
+                    {
+                        yield return (entry.Meaning, entry.Line, comment);
+                    }
                 }
                 else if (section.Name is "Deprecated" || !section.IsKnown)
                 {
                     int offset = 0;
                     foreach (string line in section.Lines)
                     {
-                        yield return (line, section.Line + offset);
+                        yield return (line, section.Line + offset, comment);
                         offset++;
                     }
                 }

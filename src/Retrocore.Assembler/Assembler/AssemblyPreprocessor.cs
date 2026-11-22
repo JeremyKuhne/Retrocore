@@ -58,6 +58,10 @@ internal sealed partial class AssemblyPreprocessor
         foreach (AssemblySource source in sources)
         {
             ArgumentNullException.ThrowIfNull(source);
+
+            // A file-level .using ends with its file, so it does not reach the next top-level source.
+            processor._constantUsings = null;
+            processor.MarkFile(enter: true);
             processor.ProcessSource(
                 source,
                 options.Dialect,
@@ -65,6 +69,8 @@ internal sealed partial class AssemblyPreprocessor
                 explicitDialect: null,
                 depth: 1,
                 macroDepth: 0);
+
+            processor.MarkFile(enter: false);
 
             if (processor._stopped) { break; }
         }
@@ -78,6 +84,7 @@ internal sealed partial class AssemblyPreprocessor
         }
 
         AssemblyProject project = processor._project;
+        if (project.FileMarks is not null) { project.FileMarkStatements = [.. project.Statements]; }
         foreach (AssemblySource source in processor._sources) { project.Sources.Add(source); }
         return new(project, [.. processor._diagnostics.OrderBy(item => item.Order).Select(item => item.Diagnostic)]);
     }
@@ -659,16 +666,25 @@ internal sealed partial class AssemblyPreprocessor
             return;
         }
 
+        _nameAmbiguity = null;
         try
         {
             // Without scopes or local names the operand's own characters are the expression.
             ReadOnlyMemory<char> operand = node.Operand.Memory;
-            ReadOnlyMemory<char> expression = _constantScope.Length == 0 && _historicalNames is null && operand.Span.IndexOfAny('@', ':') < 0
+            bool plain = _constantScope.Length == 0 && _constantUsings is null && _historicalNames is null;
+            ReadOnlyMemory<char> expression = plain && operand.Span.IndexOfAny('@', ':') < 0
                 ? operand
                 : ConstantExpression(node.Operand.Text).AsMemory();
 
             ExpressionEvaluator evaluator = new(expression, _constants, address: 0, line: 0);
-            if (evaluator.TryEvaluate(out long value) && !evaluator.ReadsAddress)
+
+            // A name that two definitions could mean has no one value; the resolver reports it where code uses it.
+            if (_nameAmbiguity is not null)
+            {
+                _nameAmbiguity = null;
+                _constants.Unset(name);
+            }
+            else if (evaluator.TryEvaluate(out long value) && !evaluator.ReadsAddress)
             {
                 _constants.SetValue(name, value);
 
@@ -700,9 +716,19 @@ internal sealed partial class AssemblyPreprocessor
     private bool Constant(string text, AssemblyLocation location, out long value, string purpose = "Conditional")
     {
         value = 0;
+        _nameAmbiguity = null;
         try
         {
             ExpressionEvaluator evaluator = new(ConstantExpression(text).AsMemory(), _constants, address: 0, line: 0);
+
+            // A name that two definitions could mean has no one value, for a .repeat count or an .incbin range.
+            if (_nameAmbiguity is { } ambiguity)
+            {
+                _nameAmbiguity = null;
+                Error(ambiguity, location);
+                return false;
+            }
+
             if (evaluator.TryEvaluate(out value) && !evaluator.ReadsAddress) { return true; }
             Error($"{purpose} requires a constant known at this point in source order.", location);
         }

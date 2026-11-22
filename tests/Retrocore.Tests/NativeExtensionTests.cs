@@ -242,6 +242,73 @@ public class NativeExtensionTests
     }
 
     /// <summary>
+    ///  A procedure or scope whose code is not one run of addresses has no one size: a <c>.logicalorg</c> in it, or a
+    ///  storage map across one of its ends, is refused wherever its size is used.
+    /// </summary>
+    /// <param name="body">The procedure's body and what follows it, up to the use of its size.</param>
+    /// <param name="use">The statement that uses its size.</param>
+    [TestMethod]
+    [DataRow("nop\n.logicalorg $0300\nnop\n.endproc", ".byte .sizeof(Block)")]
+    [DataRow("nop\n.dum $80\nZero: .res 4\n.endproc\n.dend", ".byte .sizeof(Block)")]
+    [DataRow("nop\n.dum $80\nZero: .res 4\n.endproc\n.dend", "SIZE = .sizeof(Block)\n.byte SIZE")]
+    [DataRow("nop\n.dum $80\nZero: .res 4\n.endproc\n.dend", ".assert .sizeof(Block) = 1")]
+    public void SizesNeedOneRunOfAddresses(string body, string use)
+    {
+        Assemble($".proc Block\n{body}\n{use}").Diagnostics.Select(diagnostic => diagnostic.Message)
+            .Should().Contain(".sizeof requires a contiguous scope or procedure: no section or .logicalorg changes, no storage map across its ends, and not a continued scope.");
+    }
+
+    /// <summary>
+    ///  A storage map that a procedure opened outside it ends inside it leaves the procedure without one size.
+    /// </summary>
+    [TestMethod]
+    public void AStorageMapEndingInsideAProcedureLeavesItWithoutASize()
+    {
+        Assemble(".dum $80\n.proc Block\nZero: .res 4\n.dend\nnop\n.endproc\n.byte .sizeof(Block)")
+            .Diagnostics.Select(diagnostic => diagnostic.Message)
+            .Should().Equal(".sizeof requires a contiguous scope or procedure: no section or .logicalorg changes, no storage map across its ends, and not a continued scope.");
+    }
+
+    /// <summary>
+    ///  An <c>.org</c> only moves forward, filling the gap, so like <c>.align</c> it leaves a procedure one run of
+    ///  addresses whose size counts the fill. A storage map wholly inside a procedure adds nothing to its size, even
+    ///  with an <c>.org</c> placing its fields, and a scope wholly inside a storage map has the size of the storage
+    ///  it lays out.
+    /// </summary>
+    [TestMethod]
+    public void OriginsAndStorageMapsWhollyInsideKeepSizes()
+    {
+        AssemblyResult result = Assemble("""
+            .proc Filled
+            nop
+            .org $1004
+            nop
+            .endproc
+            .proc Block
+            nop
+            .dum $80
+            Zero: .res 2
+            .org $90
+            Later: .res 1
+            .dend
+            nop
+            .endproc
+            .dum $A0
+            .scope Variables
+            Pointer: .res 2
+            .org $A4
+            Count: .res 1
+            .endscope
+            .dend
+            .byte .sizeof(Filled), .sizeof(Block), .sizeof(Variables), <Block::Later
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+        result.Sections[0].Bytes.Span[..11].ToArray().Should().Equal(
+            0xEA, 0, 0, 0, 0xEA, 0xEA, 0xEA, 5, 2, 5, 0x90);
+    }
+
+    /// <summary>
     ///  A table can be built from definitions named by computed identifiers, as the Monitor's disassembler does.
     /// </summary>
     [TestMethod]

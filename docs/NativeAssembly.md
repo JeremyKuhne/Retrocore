@@ -839,9 +839,14 @@ everywhere, conditional assembly included. The size of a `.proc`, a `.scope` or 
 only once it is assembled, as is that of a structure defined later. That `.sizeof` works wherever a value can
 wait for layout: in data, operands, `.assert`, and an equate, before or after what it names. Conditional
 assembly, `.repeat` counts and `.incbin` ranges are decided first, so they report such a size, directly or through
-an equate, as not yet known; `.ifconst`, `.ifnconst` and `.const` report it too rather than call it unknown. A
-continued scope is still refused. ca65 refuses `.sizeof` of anything defined later; Retrocore accepts it in both
-dialects.
+an equate, as not yet known; `.ifconst`, `.ifnconst` and `.const` report it too rather than call it unknown.
+ca65 refuses `.sizeof` of anything defined later; Retrocore accepts it in both dialects.
+
+A `.proc` or `.scope` has a size only when its code is one run of addresses. `.sizeof` refuses one that changes
+section or holds a `.logicalorg`, and a continued scope. It also refuses one whose start or end falls inside a
+`.dum` storage map that the other end is outside. An `.org` only moves forward, filling the gap, so like `.align`
+it keeps one run, and the size counts the fill. A storage map wholly inside a procedure adds nothing to its size,
+and a scope wholly inside a storage map has the size of the storage it lays out.
 
 ```asm
 .cpu Mos6502

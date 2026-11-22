@@ -204,6 +204,10 @@ internal sealed partial class AssemblyNameResolver
         string cheap = "";
         string FreshContext() => $"{_privatePrefix}cheap_{++contexts}";
 
+        // The scope a .dum opened in, while its storage map is open. A scope whose end falls in a map it opened,
+        // or that a map opened outside ends inside, has its ends in two address spaces, so it has no one size.
+        Scope? dummy = null;
+
         // A .using applies to the end of its scope, or of its file at file level: each scope opened, and each
         // file included, starts from the directives in effect where it opens and gives them back where it ends.
         Using? usings = null;
@@ -238,12 +242,26 @@ internal sealed partial class AssemblyNameResolver
                 }
             }
 
+            // An .org only moves forward, filling the gap, so like .align it keeps one run of addresses.
             if (node.Kind is AssemblyStatementKind.Section or AssemblyStatementKind.LogicalOrigin)
             {
                 for (Scope? enclosing = scope; enclosing is not null; enclosing = enclosing.Parent)
                 {
                     enclosing.Contiguous = false;
                 }
+            }
+            else if (node.Kind == AssemblyStatementKind.DummyStart)
+            {
+                dummy = scope;
+            }
+            else if (node.Kind == AssemblyStatementKind.DummyEnd && dummy is not null)
+            {
+                for (Scope? enclosing = scope; enclosing is not null && !Encloses(enclosing, dummy); enclosing = enclosing.Parent)
+                {
+                    enclosing.Contiguous = false;
+                }
+
+                dummy = null;
             }
 
             if (index != 0 && node.Dialect != dialect)
@@ -347,6 +365,8 @@ internal sealed partial class AssemblyNameResolver
                     {
                         _errors.Add(new(index, "A scope terminator takes no operand or label."));
                     }
+
+                    if (dummy is not null && Encloses(scope, dummy)) { scope.Contiguous = false; }
 
                     // Each later piece of a continued scope ends with its own label.
                     string end = scope.Qualify(scope.Pieces == 0 ? $"{_privatePrefix}end" : $"{_privatePrefix}end_{index}");
@@ -511,6 +531,17 @@ internal sealed partial class AssemblyNameResolver
         _ => false
     };
 
+    // Whether a scope is another or one of its parents.
+    private static bool Encloses(Scope outer, Scope inner)
+    {
+        for (Scope? scope = inner; scope is not null; scope = scope.Parent)
+        {
+            if (scope == outer) { return true; }
+        }
+
+        return false;
+    }
+
     private static string QualifyCheap(string prefix, string name) => prefix.Length == 0 ? name : $"{prefix}::{name}";
 
     private static bool IsScopeDirective(AssemblyStatementKind kind) => kind switch
@@ -642,7 +673,7 @@ internal sealed partial class AssemblyNameResolver
 
                 if (size.Length == 0)
                 {
-                    _errors.Add(new(index, ".sizeof requires a contiguous scope or procedure: no section or origin changes, and not a continued scope."));
+                    _errors.Add(new(index, ".sizeof requires a contiguous scope or procedure: no section or .logicalorg changes, no storage map across its ends, and not a continued scope."));
                     continue;
                 }
 

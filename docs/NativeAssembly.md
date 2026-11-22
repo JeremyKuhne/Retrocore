@@ -246,10 +246,11 @@ qualified name's first part is. A plain name then resolves in this order:
 
 So a `.using` only lets an otherwise unresolved name be found; it never changes what a resolving name means.
 Qualified names, cheap locals and anonymous labels are not affected, and neither are definitions: a label defined
-after `.using A` is in the current scope, not in `A`, and `.export` and `.global` do not reach into a used scope. Conditional assembly sees the same names as code. A
-`.using` that names no scope is an error; one whose scopes give the code no name is not, but the editor shows it
-as unnecessary. A `.using` line cannot carry a label. Retrocore's own syntax, in the native dialect only: ca65 has
-no equivalent.
+after `.using A` is in the current scope, not in `A`, and `.export` and `.global` do not reach into a used scope.
+Conditional assembly sees the same names as code. A `.using` that names no scope is an error; one whose scopes give
+the code no name is not, but the editor shows it as unnecessary (code and conditionals count as uses; a `;;` link
+does not). A `.using` line cannot carry a label. Retrocore's own syntax, in the native dialect only: ca65 has no
+equivalent.
 
 ```asm
 .cpu Mos6502

@@ -384,7 +384,15 @@ public sealed partial class DocumentationResolver
         foreach (DocumentationUsing directive in at.Usings)
         {
             List<DocumentationTarget> matches = [];
-            foreach (string scope in directive.Targets(Current.IsScope).Distinct(StringComparer.Ordinal))
+            // As in the assembler, a scope already opened before the directive binds first: one documented earlier in
+            // the comment's file. An undocumented scope's opening is not known, so it can only bind second.
+            bool OpenedBefore(string scope)
+            {
+                if (directive.Line < 0 || Current.Find(scope) is not { } opened) { return false; }
+                return string.Equals(opened.Path, at.Path, StringComparison.OrdinalIgnoreCase) && opened.Line < directive.Line;
+            }
+
+            foreach (string scope in directive.Targets(Current.IsScope, OpenedBefore).Distinct(StringComparer.Ordinal))
             {
                 if (Match(Current, $"{scope}::{name}", also: false) is { } match) { matches.Add(match); }
             }

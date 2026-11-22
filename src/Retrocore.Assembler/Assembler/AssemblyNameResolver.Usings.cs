@@ -185,12 +185,40 @@ internal sealed partial class AssemblyNameResolver
                 }
                 else if (!ReferenceEquals(found, target))
                 {
-                    _errors.Add(new(index, $"'{name}' is in both {foundName} and {directive.Names[at]}; qualify it."));
+                    // Once per statement, however often the name is used in it.
+                    if (_ambiguous.Add((index, name)))
+                    {
+                        _errors.Add(new(index, $"'{name}' is in both {foundName} and {directive.Names[at]}; qualify it."));
+                    }
+
                     break;
                 }
             }
 
             if (found is not null) { return found.Qualify(name); }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    ///  Finds a scope a <c>.using</c> in effect makes reachable by its plain name, for <c>.sizeof</c>.
+    /// </summary>
+    /// <param name="name">The plain scope name.</param>
+    /// <param name="site">Where it is used.</param>
+    /// <returns>The scope's qualified name, or null when no used scope has a scope of that name.</returns>
+    private static string? FindUsedScope(string name, Site site)
+    {
+        for (Using? directive = site.Usings; directive is not null; directive = directive.Next)
+        {
+            for (int at = 0; at < directive.Targets.Length; at++)
+            {
+                if (directive.Targets[at] is { } target && target.Children.TryGetValue(name, out Scope? child))
+                {
+                    directive.Used[at] = true;
+                    return child.Prefix;
+                }
+            }
         }
 
         return null;

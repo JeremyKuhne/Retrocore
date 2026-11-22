@@ -24,6 +24,7 @@ internal sealed partial class AssemblyNameResolver
     private Dictionary<string, int>? _labelSizes;
     private CancellationToken _cancellation;
     private List<Using> _usings = [];
+    private readonly HashSet<(int Index, string Name)> _ambiguous = [];
 
     private AssemblyNameResolver(AssemblyProject source, List<AssemblyError> errors, CancellationToken cancellation)
     {
@@ -573,7 +574,8 @@ internal sealed partial class AssemblyNameResolver
                 // A scope or .proc that a .using makes reachable by its plain name has its size too.
                 string label;
                 if (!_sizes.TryGetValue(scopedName, out string? size)
-                    && !_sizes.TryGetValue(label = ResolveName(sizeName, site, index), out size))
+                    && !_sizes.TryGetValue(label = ResolveName(sizeName, site, index), out size)
+                    && !(FindUsedScope(sizeName, site) is { } used && _sizes.TryGetValue(used, out size)))
                 {
                     // As in ca65, a label's size is that of the statement on its own line.
                     if (!_labelLines.TryGetValue(label, out int line))

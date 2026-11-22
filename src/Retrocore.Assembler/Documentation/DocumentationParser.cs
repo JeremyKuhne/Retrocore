@@ -28,27 +28,27 @@ public static partial class DocumentationParser
     /// <param name="text">The source text.</param>
     /// <param name="path">The source path, recorded in comments and diagnostics.</param>
     /// <returns>The comments and any placement problems.</returns>
-    public static DocumentationFile Parse(string text, string path) => Parse(text, path, assembledUsing: null);
+    public static DocumentationFile Parse(string text, string path) => Parse(text, path, assembled: null);
 
     /// <summary>
     ///  Parses a source file's documentation comments, applying only the <c>.using</c> lines the assembler assembled.
     /// </summary>
     /// <param name="text">The source text.</param>
     /// <param name="path">The source path, recorded in comments and diagnostics.</param>
-    /// <param name="assembledUsing">Whether a line's <c>.using</c> was assembled, or null when unknown.</param>
+    /// <param name="assembled">What the assembler took from the file, or null when not known.</param>
     /// <returns>The comments and any placement problems.</returns>
-    public static DocumentationFile Parse(string text, string path, Func<int, bool>? assembledUsing) =>
-        Parse(text, path, assembledUsing, style: true);
+    public static DocumentationFile Parse(string text, string path, DocumentationAssembled? assembled) =>
+        Parse(text, path, assembled, style: true);
 
     /// <summary>
     ///  Parses a source file's documentation comments, optionally without the style checks.
     /// </summary>
     /// <param name="text">The source text.</param>
     /// <param name="path">The source path, recorded in comments and diagnostics.</param>
-    /// <param name="assembledUsing">Whether a line's <c>.using</c> was assembled, or null when unknown.</param>
+    /// <param name="assembled">What the assembler took from the file, or null when not known.</param>
     /// <param name="style">Whether to check a strict source against the style guide.</param>
     /// <returns>The comments and any placement problems.</returns>
-    internal static DocumentationFile Parse(string text, string path, Func<int, bool>? assembledUsing, bool style)
+    internal static DocumentationFile Parse(string text, string path, DocumentationAssembled? assembled, bool style)
     {
         string[] lines = text.Replace("\r\n", "\n").Split('\n');
         HashSet<string> dataMacros = DataMacros(lines);
@@ -192,7 +192,7 @@ public static partial class DocumentationParser
             else
             {
                 Container(containers, trimmed);
-                tracker.Advance(trimmed, assembledUsing?.Invoke(index) ?? true);
+                tracker.Advance(trimmed, index, assembled);
             }
 
             index++;
@@ -210,15 +210,15 @@ public static partial class DocumentationParser
     /// <param name="lines">The source's lines.</param>
     /// <returns>For each line, the scope it is in and the <c>.using</c> directives in effect on it.</returns>
     public static IReadOnlyList<DocumentationScopes> ScopesByLine(IReadOnlyList<string> lines) =>
-        ScopesByLine(lines, assembledUsing: null);
+        ScopesByLine(lines, assembled: null);
 
     /// <summary>
     ///  Follows a source's scopes and the <c>.using</c> directives the assembler assembled.
     /// </summary>
     /// <param name="lines">The source's lines.</param>
-    /// <param name="assembledUsing">Whether a line's <c>.using</c> was assembled, or null when unknown.</param>
+    /// <param name="assembled">What the assembler took from the file, or null when not known.</param>
     /// <returns>For each line, the scope it is in and the <c>.using</c> directives in effect on it.</returns>
-    public static IReadOnlyList<DocumentationScopes> ScopesByLine(IReadOnlyList<string> lines, Func<int, bool>? assembledUsing)
+    public static IReadOnlyList<DocumentationScopes> ScopesByLine(IReadOnlyList<string> lines, DocumentationAssembled? assembled)
     {
         ScopeTracker tracker = new();
         DocumentationScopes[] result = new DocumentationScopes[lines.Count];
@@ -228,7 +228,7 @@ public static partial class DocumentationParser
             string trimmed = Split(lines[index]).Code.Trim();
             if (trimmed.Length != 0 && !IsConditional(trimmed))
             {
-                tracker.Advance(trimmed, assembledUsing?.Invoke(index) ?? true);
+                tracker.Advance(trimmed, index, assembled);
             }
         }
 

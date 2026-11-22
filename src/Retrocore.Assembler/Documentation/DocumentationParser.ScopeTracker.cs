@@ -34,8 +34,24 @@ public static partial class DocumentationParser
         ///  Follows one line's code.
         /// </summary>
         /// <param name="code">The trimmed code, without its comment.</param>
-        /// <param name="assembled">For a <c>.using</c> line, whether it was assembled; true when not known.</param>
-        internal void Advance(string code, bool assembled = true)
+        /// <param name="line">The line's zero-based number.</param>
+        /// <param name="assembled">What the assembler took from the file, or null when not known.</param>
+        internal void Advance(string code, int line, DocumentationAssembled? assembled)
+        {
+            AdvanceCode(code, line, assembled?.UsingAssembled(line) ?? true);
+
+            // A macro invoked on the line may itself have given a .using, which applies from the next line.
+            if (assembled is not null && _macros == 0)
+            {
+                foreach (string[] names in assembled.InvokedUsings(line))
+                {
+                    _usings.Add((_named.Count, new(string.Join("::", Scopes), names, line)));
+                    _current = null;
+                }
+            }
+        }
+
+        private void AdvanceCode(string code, int line, bool assembled)
         {
             string word = FirstWord(code).ToLowerInvariant();
 
@@ -81,7 +97,7 @@ public static partial class DocumentationParser
                 string[] names = [.. code[word.Length..].Split(',').Select(name => name.Trim()).Where(name => name.Length != 0)];
                 if (names.Length != 0)
                 {
-                    _usings.Add((_named.Count, new(string.Join("::", Scopes), names)));
+                    _usings.Add((_named.Count, new(string.Join("::", Scopes), names, line)));
                     _current = null;
                 }
             }

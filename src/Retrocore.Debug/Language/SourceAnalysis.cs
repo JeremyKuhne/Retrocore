@@ -23,6 +23,9 @@ internal sealed partial class SourceAnalysis
     private HashSet<string>? _scopeNames;
     private readonly Dictionary<string, List<(string Path, int Line)>> _includedFrom = [with(StringComparer.OrdinalIgnoreCase)];
     private readonly Dictionary<string, HashSet<int>> _usingLines = [with(StringComparer.OrdinalIgnoreCase)];
+    private readonly Dictionary<string, Dictionary<int, List<string[]>>> _invokedUsings = [with(StringComparer.OrdinalIgnoreCase)];
+    private readonly Dictionary<(string Path, int Line), int> _usingOrder = [];
+    private readonly Dictionary<string, int> _scopeOpened = [with(StringComparer.OrdinalIgnoreCase)];
     private DocumentationSet? _documentation;
 
     private SourceAnalysis(
@@ -42,8 +45,11 @@ internal sealed partial class SourceAnalysis
         }
 
         List<string> scopes = [];
-        foreach (AssemblyStatement statement in project.Statements)
+        List<string?> opened = [];
+        for (int index = 0; index < project.Statements.Count; index++)
         {
+            AssemblyStatement statement = project.Statements[index];
+            RecordScopeOrder(statement, index, opened);
             if (statement.Location is not { Path.Length: > 0 } location) { continue; }
             string path = Path.GetFullPath(location.Path);
             if (_lines.ContainsKey(path))
@@ -83,7 +89,12 @@ internal sealed partial class SourceAnalysis
                 if (statement.Kind == AssemblyStatementKind.Using && AssemblyNameResolver.ReadUsingNames(statement, out _) is not null)
                 {
                     usingLines.Add(location.Line);
+                    _usingOrder.TryAdd((path, location.Line), index);
                 }
+            }
+            else if (statement.Kind == AssemblyStatementKind.Using && AssemblyNameResolver.ReadUsingNames(statement, out _) is { } names)
+            {
+                RecordInvokedUsing(location, names, index);
             }
 
             if (!result.Success && statement.Kind is AssemblyStatementKind.Procedure or AssemblyStatementKind.Scope)
@@ -333,12 +344,12 @@ internal sealed partial class SourceAnalysis
 
         // A file included in several places binds a name in each; all of them are what the line may mean.
         IReadOnlyList<DocumentationScopes> contexts = ScopesAt(path, line);
-        if (contexts.Count == 1) { return Bound(name, contexts[0]); }
-        List<SymbolSite> all = [.. contexts.SelectMany(scopes => Bound(name, scopes) ?? []).Distinct()];
+        if (contexts.Count == 1) { return Bound(name, path, contexts[0]); }
+        List<SymbolSite> all = [.. contexts.SelectMany(scopes => Bound(name, path, scopes) ?? []).Distinct()];
         return all.Count == 0 ? null : all;
     }
 
-    private List<SymbolSite>? Bound(string name, DocumentationScopes scopes)
+    private List<SymbolSite>? Bound(string name, string path, DocumentationScopes scopes)
     {
         for (string scope = scopes.Scope; scope.Length != 0; scope = Parent(scope))
         {
@@ -350,7 +361,7 @@ internal sealed partial class SourceAnalysis
         {
             List<SymbolSite> used =
             [
-                .. directive.Targets(IsScope)
+                .. directive.Targets(IsScope, OpenedBefore(path, directive))
                     .Distinct(StringComparer.OrdinalIgnoreCase)
                     .SelectMany(scope => _definitions.TryGetValue($"{scope}::{name}", out List<SymbolSite>? found) ? found : [])
             ];
@@ -371,7 +382,7 @@ internal sealed partial class SourceAnalysis
     {
         foreach (DocumentationUsing directive in ScopesAt(path, line).SelectMany(scopes => scopes.Usings).Distinct())
         {
-            foreach (string scope in directive.Targets(IsScope).Distinct(StringComparer.OrdinalIgnoreCase))
+            foreach (string scope in directive.Targets(IsScope, OpenedBefore(path, directive)).Distinct(StringComparer.OrdinalIgnoreCase))
             {
                 string prefix = $"{scope}::";
                 foreach (SymbolSite site in Definitions)
@@ -423,16 +434,73 @@ internal sealed partial class SourceAnalysis
         return [.. contexts.Select(lines => (uint)line < (uint)lines.Count ? lines[line] : DocumentationScopes.Root)];
     }
 
-    // Whether the .using on a line of a file was assembled, or null when the assembly reached none of the file.
-    private Func<int, bool>? AssembledUsing(string path) =>
-        _usingLines.TryGetValue(path, out HashSet<int>? lines) ? lines.Contains : null;
+    // What the assembler took from a file: its .using lines, and those its macro invocations produced; null when
+    // the assembly reached none of the file.
+    private DocumentationAssembled? AssembledUsing(string path)
+    {
+        if (!_usingLines.TryGetValue(path, out HashSet<int>? lines)) { return null; }
+        Dictionary<int, List<string[]>>? invoked = _invokedUsings.GetValueOrDefault(path);
+        return new(lines.Contains, line => invoked is not null && invoked.TryGetValue(line, out List<string[]>? names) ? names : []);
+    }
+
+    // Records a .using a macro expansion produced, at the line of the outermost invocation, where it applies from.
+    private void RecordInvokedUsing(AssemblyLocation location, string[] names, int index)
+    {
+        AssemblyLocation invocation = location;
+        while (invocation.IsMacroExpansion && invocation.ExpandedFrom is { } from) { invocation = from; }
+        if (invocation.IsMacroExpansion || invocation.Path.Length == 0) { return; }
+        string path = Path.GetFullPath(invocation.Path);
+        if (!_invokedUsings.TryGetValue(path, out Dictionary<int, List<string[]>>? lines))
+        {
+            _invokedUsings[path] = lines = [];
+        }
+
+        if (!lines.TryGetValue(invocation.Line, out List<string[]>? list)) { lines[invocation.Line] = list = []; }
+        list.Add(names);
+        _usingOrder.TryAdd((path, invocation.Line), index);
+    }
+
+    // Records where each scope is first opened in the assembled statements, so a .using operand binds, as the
+    // assembler binds it, to a scope opened before the directive when there is one.
+    private void RecordScopeOrder(AssemblyStatement statement, int index, List<string?> opened)
+    {
+        if (statement.Kind is AssemblyStatementKind.Procedure or AssemblyStatementKind.Scope)
+        {
+            string name = statement.Operand.Text.Trim();
+            name = AssemblySyntax.ContinuedScope(name) ?? name;
+            if (name.Length == 0)
+            {
+                opened.Add(item: null);
+                return;
+            }
+
+            string qualified = string.Join("::", opened.OfType<string>().Append(name));
+            _scopeOpened.TryAdd(qualified, index);
+            opened.Add(name);
+        }
+        else if (statement.Kind is AssemblyStatementKind.EndProcedure or AssemblyStatementKind.EndScope && opened.Count != 0)
+        {
+            opened.RemoveAt(opened.Count - 1);
+        }
+    }
+
+    // Whether a scope is first opened before the .using on a line of a file, or null when that is not known.
+    private Func<string, bool>? OpenedBefore(string path, DocumentationUsing directive) =>
+        _usingOrder.TryGetValue((path, directive.Line), out int at)
+            ? scope => _scopeOpened.TryGetValue(scope, out int open) && open < at
+            : null;
 
     private static string Qualify(string scope, string name) => name.Length == 0 ? scope : $"{scope}::{name}";
 
     // A line's scopes in a file included inside the scope outer.
     private static DocumentationScopes Within(string outer, DocumentationScopes scopes)
     {
-        DocumentationUsing[] usings = [.. scopes.Usings.Select(directive => new DocumentationUsing(Qualify(outer, directive.Scope), directive.Names))];
+        List<DocumentationUsing> usings = [];
+        foreach (DocumentationUsing directive in scopes.Usings)
+        {
+            usings.Add(new(Qualify(outer, directive.Scope), directive.Names, directive.Line));
+        }
+
         return new(Qualify(outer, scopes.Scope), usings);
     }
 

@@ -832,6 +832,120 @@ public sealed class UsingTests
     }
 
     /// <summary>
+    ///  The editor binds a <c>.using</c> operand as the assembler does: to a scope already opened before the
+    ///  directive, not to a same-named scope opened later in the enclosing one.
+    /// </summary>
+    [TestMethod]
+    public void TheEditorBindsOperandsToEarlierScopes()
+    {
+        string directory = Directory.CreateTempSubdirectory("retrocore-using").FullName;
+        try
+        {
+            string main = Path.Join(directory, "main.asm");
+            File.WriteAllText(main, """
+                .scope A
+                N = 1
+                .endscope
+                .proc P
+                    .using A
+                    lda #N
+                .scope A
+                N = 2
+                .endscope
+                .endproc
+
+                """);
+
+            SourceAnalysis analysis = SourceAnalysis.Assemble(main, _ => null);
+            analysis.Result.Diagnostics.Should().BeEmpty();
+            analysis.Result.Sections[0].Bytes.Span[..2].ToArray().Should().Equal(0xA9, 1);
+            analysis.Find("N", main, line: 5).Select(site => site.Name).Should().Equal("A::N");
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
+    ///  A <c>.using</c> a macro gives applies, in the editor as in the assembler, from the line that invokes it.
+    /// </summary>
+    [TestMethod]
+    public void TheEditorFollowsUsingsFromMacros()
+    {
+        string directory = Directory.CreateTempSubdirectory("retrocore-using").FullName;
+        try
+        {
+            string main = Path.Join(directory, "main.asm");
+            File.WriteAllText(main, """
+                .scope A
+                X = $10
+                .endscope
+                .scope B
+                X = $20
+                .endscope
+                .macro UseA
+                .using A
+                .endmacro
+                .proc P
+                    UseA
+                    lda X
+                    rts
+                .endproc
+
+                """);
+
+            SourceAnalysis analysis = SourceAnalysis.Assemble(main, _ => null);
+            analysis.Result.Diagnostics.Should().BeEmpty();
+            analysis.Find("X", main, line: 11).Select(site => site.Name).Should().Equal("A::X");
+            analysis.UsedNames(main, line: 11).Select(used => used.Name).Should().Contain("X");
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
+    ///  <c>.sizeof</c> takes a <c>.scope</c>'s plain name through <c>.using</c>, as well as a <c>.proc</c>'s.
+    /// </summary>
+    [TestMethod]
+    public void SizeofFindsUsedScopes()
+    {
+        AssemblyResult result = Assemble("""
+            .scope A
+            .scope C
+                nop
+                nop
+            .endscope
+            .endscope
+            .using A
+                lda #.sizeof(C)
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+        result.Sections[0].Bytes.Span[2..4].ToArray().Should().Equal(0xA9, 2);
+    }
+
+    /// <summary>
+    ///  A name two used scopes define is reported once for a statement, however often the statement uses it.
+    /// </summary>
+    [TestMethod]
+    public void AmbiguityIsReportedOncePerStatement()
+    {
+        Messages(Assemble("""
+            .scope A
+            N = 1
+            .endscope
+            .scope B
+            N = 2
+            .endscope
+            .using A, B
+                lda #N+N
+            """)).Should().Equal("'N' is in both A and B; qualify it.");
+    }
+
+    /// <summary>
     ///  A file a macro includes is in the scope where the macro is invoked, as the assembler binds it.
     /// </summary>
     [TestMethod]

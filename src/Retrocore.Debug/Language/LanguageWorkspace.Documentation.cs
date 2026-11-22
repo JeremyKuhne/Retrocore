@@ -86,14 +86,15 @@ internal sealed partial class LanguageWorkspace
     /// </summary>
     private Dictionary<string, List<Diagnostic>> DocumentationDiagnostics(SourceAnalysis analysis)
     {
-        Dictionary<DocumentationDiagnostic, string> replacements = [];
+        Dictionary<DocumentationDiagnostic, (string Name, string? Alternative)> replacements = [];
         List<DocumentationDiagnostic> own = [.. Deprecated(analysis), .. HistoricalNames(analysis, replacements)];
         Dictionary<string, List<Diagnostic>> byFile = [with(StringComparer.OrdinalIgnoreCase)];
         foreach (DocumentationDiagnostic diagnostic in ResolverFor(analysis).Lint(own, DocumentationRules.EditorRules))
         {
             string path = Path.GetFullPath(diagnostic.Path);
             if (!byFile.TryGetValue(path, out List<Diagnostic>? list)) { byFile[path] = list = []; }
-            list.Add(LintEditor.ToDiagnostic(diagnostic, LineRange(path, diagnostic.Line, 0), replacements.GetValueOrDefault(diagnostic)));
+            (string Name, string? Alternative)? fix = replacements.TryGetValue(diagnostic, out var found) ? found : null;
+            list.Add(LintEditor.ToDiagnostic(diagnostic, LineRange(path, diagnostic.Line, 0), fix?.Name, fix?.Alternative));
         }
 
         return byFile;
@@ -137,8 +138,12 @@ internal sealed partial class LanguageWorkspace
     }
 
     // Code written with a historical name gets an information message at each use, which a quick fix replaces with
-    // the definition's current name. A name that two definitions give is the assembler's error instead.
-    private List<DocumentationDiagnostic> HistoricalNames(SourceAnalysis analysis, Dictionary<DocumentationDiagnostic, string> replacements)
+    // the definition's current name. A name that two definitions give is the assembler's error instead. Where a
+    // .using makes the name mean another definition, the use gets a warning, since code typed in from a listing
+    // would mean the old name's definition; its quick fixes write either name.
+    private List<DocumentationDiagnostic> HistoricalNames(
+        SourceAnalysis analysis,
+        Dictionary<DocumentationDiagnostic, (string Name, string? Alternative)> replacements)
     {
         List<DocumentationDiagnostic> diagnostics = [];
         Dictionary<string, string?> current = [with(StringComparer.Ordinal)];
@@ -162,8 +167,19 @@ internal sealed partial class LanguageWorkspace
             {
                 if (!current.TryGetValue(name, out string? replacement) || replacement is null) { continue; }
 
-                // A name the line's scopes or .using directives define binds there, not to the historical name.
-                if (analysis.Bound(name, member, line) is not null) { continue; }
+                // A name the line's scopes or .using directives define binds there, not to the historical name; a
+                // .using that does so is reported, as the code may mean the old name.
+                if (analysis.Bound(name, member, line) is not null)
+                {
+                    if (Shadowed(analysis, name, member, line, start, replacement) is { } shadowed)
+                    {
+                        diagnostics.Add(shadowed.Diagnostic);
+                        replacements[shadowed.Diagnostic] = (shadowed.Used, replacement);
+                    }
+
+                    continue;
+                }
+
                 DocumentationDiagnostic diagnostic = new(
                     $"{name} is a historical name of {replacement}.",
                     member,
@@ -177,11 +193,39 @@ internal sealed partial class LanguageWorkspace
                 };
 
                 diagnostics.Add(diagnostic);
-                replacements[diagnostic] = replacement;
+                replacements[diagnostic] = (replacement, null);
             }
         }
 
         return diagnostics;
+    }
+
+    // The warning for a historical name that a .using brings to another definition at a use, and that definition's
+    // name; null when the code's own scopes bind it, or the .using reaches more than one definition.
+    private static (DocumentationDiagnostic Diagnostic, string Used)? Shadowed(
+        SourceAnalysis analysis,
+        string name,
+        string member,
+        int line,
+        int start,
+        string replacement)
+    {
+        if (analysis.BoundThroughUsing(name, member, line) is not { } used) { return null; }
+        string[] names = [.. used.Select(site => site.Name).Distinct(StringComparer.Ordinal)];
+        if (names.Length != 1 || names[0] == replacement) { return null; }
+        DocumentationDiagnostic diagnostic = new(
+            $"{name} is a historical name of {replacement}, but the .using in effect here makes it {names[0]}.",
+            member,
+            line,
+            DocumentationSeverity.Warning,
+            DocumentationRules.UsingShadow)
+        {
+            Name = name,
+            Column = start,
+            Length = name.Length
+        };
+
+        return (diagnostic, names[0]);
     }
 
     // Whether code uses a name as a whole word in an operand or operation (not as the label it defines).

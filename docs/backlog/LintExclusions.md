@@ -35,6 +35,7 @@ outside the editor (the tests, a command-line lint) end with it in brackets:
 | `sections` | The section-form messages: `Entry:`, `Members:`, `Parameters:`, `Inherit:`, `Include:`, `Flags:`, register lists, `name = meaning` entries, `{name}` references. |
 | `historical-name` | The editor's information on a use of an old name in code (the quick fix stays). |
 | `deprecated` | A use of a definition with a `Deprecated:` section. |
+| `using-shadow` | A use of an old name that a `.using` makes mean another definition (added after this spec). |
 | `undocumented-export` | Exported 'X' has no ;; documentation. |
 | `placement` | The `;;` placement errors of `DocumentationParser.cs` (errors only, so never ignorable). |
 | `exclusion` | Problems with an exclusion itself: unknown ID, misplaced, unused (never ignorable). |

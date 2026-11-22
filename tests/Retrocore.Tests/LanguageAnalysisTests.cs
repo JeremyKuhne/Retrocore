@@ -470,9 +470,9 @@ public sealed partial class LanguageAnalysisTests
     }
 
     /// <summary>
-    ///  A folder beside a source that is deleted after it was listed, as a build or a cleanup can do while the
-    ///  language server looks for the source's root, has no sources rather than failing the search; the root is
-    ///  still found through the folders that remain.
+    ///  A folder beside a source that is deleted, or replaced by a file, after it was listed, as a build or a cleanup
+    ///  can do while the language server looks for the source's root, has no sources rather than failing the
+    ///  search; the root is still found through the folders that remain.
     /// </summary>
     [TestMethod]
     public void VanishedFoldersDoNotStopTheRootSearch()
@@ -488,11 +488,16 @@ public sealed partial class LanguageAnalysisTests
             File.WriteAllText(included, "    rts\n");
             File.WriteAllText(root, ".include \"../lib/Library.asm\"\n");
 
-            // The folders as they were listed, one of which is deleted before its files are read.
-            List<string> listed = [library, gone, program];
+            // The folders as they were listed: one is deleted before its files are read, and another is replaced by a
+            // file of the same name.
+            string replaced = Directory.CreateDirectory(Path.Join(folder, "replaced")).FullName;
+            List<string> listed = [library, gone, replaced, program];
             Directory.Delete(gone);
+            Directory.Delete(replaced);
+            File.WriteAllText(replaced, "");
 
             SourceIncludes.SourcesIn(gone).Should().BeEmpty();
+            SourceIncludes.SourcesIn(replaced).Should().BeEmpty();
             SourceIncludes.RootOf(included, listed).Should().Be(root);
             SourceIncludes.RootOf(included).Should().Be(root);
         }

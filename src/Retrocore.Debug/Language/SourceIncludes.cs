@@ -127,9 +127,9 @@ internal static partial class SourceIncludes
                 .Where(folder => !string.Equals(Path.GetFullPath(folder), Path.GetFullPath(directory), StringComparison.OrdinalIgnoreCase))
                 .Order(StringComparer.OrdinalIgnoreCase));
         }
-        catch (DirectoryNotFoundException)
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
-            // The parent went away while it was listed; the file's own folder is still searched.
+            // The parent went away, or became unreadable, while it was listed; the file's own folder is still searched.
         }
 
         return folders;
@@ -145,7 +145,7 @@ internal static partial class SourceIncludes
     ///  </para>
     /// </remarks>
     /// <param name="folder">The folder.</param>
-    /// <returns>The sources' full paths; none when the folder no longer exists.</returns>
+    /// <returns>The sources' full paths; none when the folder no longer exists or can't be read.</returns>
     internal static List<string> SourcesIn(string folder)
     {
         try
@@ -155,8 +155,10 @@ internal static partial class SourceIncludes
                 .Select(Path.GetFullPath)
                 .OrderDescending(StringComparer.OrdinalIgnoreCase)];
         }
-        catch (DirectoryNotFoundException)
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
+            // Deleted, or replaced by a file (DirectoryNotFoundException on Linux, an IOException on Windows), or made
+            // unreadable.
             return [];
         }
     }

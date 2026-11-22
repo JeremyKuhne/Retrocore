@@ -228,7 +228,9 @@ test("retrocore pragma words and an exclusion's rule IDs have their own scopes",
 });
 
 test("Merlin pragma with the lint's words still selects Merlin", () => {
-    for (const pragma of ["; retrocore: dialect=merlin ignore=line-length", "; retrocore: style=strict dialect=merlin"]) {
+    // The tools split a reason only at " -- ", so a tab around the dashes leaves the dialect a word.
+    for (const pragma of ["; retrocore: dialect=merlin ignore=line-length", "; retrocore: style=strict dialect=merlin",
+        "; retrocore: ignore=indent\t--\tdialect=merlin"]) {
         const state = grammar.tokenizeLine(pragma, INITIAL).ruleStack;
         const line = "Entry   LDA #1";
         const result = grammar.tokenizeLine(line, state);

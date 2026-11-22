@@ -212,10 +212,10 @@ internal sealed partial class LanguageWorkspace
     {
         if (analysis.BoundThroughUsing(name, member, line) is not { } used) { return null; }
 
-        // MACRO-10 matches names in any case, as the assembler does.
-        StringComparer comparer = analysis.UsesMacro10(member) ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
-        string[] names = [.. used.Select(site => site.Name).Distinct(comparer)];
-        if (names.Length != 1 || comparer.Equals(names[0], replacement)) { return null; }
+        // A .using is native syntax only, and does not reach into an included file, so the names compare as the
+        // native dialect's do: case matters.
+        string[] names = [.. used.Select(site => site.Name).Distinct(StringComparer.Ordinal)];
+        if (names.Length != 1 || names[0] == replacement) { return null; }
         DocumentationDiagnostic diagnostic = new(
             $"{name} is a historical name of {replacement}, but the .using in effect here makes it {names[0]}.",
             member,

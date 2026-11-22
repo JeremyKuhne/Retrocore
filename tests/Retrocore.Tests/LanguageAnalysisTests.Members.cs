@@ -137,12 +137,20 @@ public sealed partial class LanguageAnalysisTests
     private const string ShadowProbe = """
         ;; An I/O block.
         .struct Iob
-            ;; The block's type.
+            ;; The block's type, which a listing also calls TYPE.
+            ;; Also: TYPE (A2RM78)
             TYPE .byte
             ;; The command.
             ;; Also: IBCMD (A2RM78)
             COMMAND .byte
         .endstruct
+
+        ;; Uses an old name that the .using here brings to the old name's own definition.
+        .proc Agreeing
+        .using Iob
+            lda #TYPE
+            rts
+        .endproc
 
         ;; Another block, with a field of the same spelling.
         .struct Other
@@ -170,7 +178,7 @@ public sealed partial class LanguageAnalysisTests
     /// <summary>
     ///  A historical name that a <c>.using</c> makes mean another definition gets a <c>using-shadow</c> warning where
     ///  code uses it, with quick fixes that write either name; elsewhere it is an ordinary historical name, and a
-    ///  qualified name is neither.
+    ///  qualified name is neither. A <c>.using</c> that brings the old name to its own definition is not reported.
     /// </summary>
     /// <returns>The test.</returns>
     [TestMethod]

@@ -11,7 +11,11 @@ namespace Retrocore.Documentation;
 /// </summary>
 /// <param name="UsingAssembled">Whether the <c>.using</c> on a zero-based line was assembled.</param>
 /// <param name="InvokedUsings">The names of each <c>.using</c> a macro invoked on a line produced.</param>
-public sealed record DocumentationAssembled(Func<int, bool> UsingAssembled, Func<int, IReadOnlyList<string[]>> InvokedUsings)
+/// <param name="LineUsings">The names of each <c>.using</c> assembled from a line, as a <c>.define</c> gives.</param>
+public sealed record DocumentationAssembled(
+    Func<int, bool> UsingAssembled,
+    Func<int, IReadOnlyList<string[]>> InvokedUsings,
+    Func<int, IReadOnlyList<string[]>>? LineUsings = null)
 {
     /// <summary>
     ///  Gets what an assembly took from one of its sources.
@@ -25,6 +29,7 @@ public sealed record DocumentationAssembled(Func<int, bool> UsingAssembled, Func
         string full = Path.GetFullPath(path);
         HashSet<int> lines = [];
         Dictionary<int, List<string[]>> invoked = [];
+        Dictionary<int, List<string[]>> written = [];
         foreach (AssemblyUsing directive in result.Usings)
         {
             if (directive.Location is not { } location) { continue; }
@@ -37,16 +42,24 @@ public sealed record DocumentationAssembled(Func<int, bool> UsingAssembled, Func
                 continue;
             }
 
+            Dictionary<int, List<string[]>> target = invoked;
             if (ReferenceEquals(at, location))
             {
                 lines.Add(at.Line);
+                target = written;
+            }
+            else if (!directive.AtInvocation)
+            {
                 continue;
             }
 
-            if (!invoked.TryGetValue(at.Line, out List<string[]>? names)) { invoked[at.Line] = names = []; }
+            if (!target.TryGetValue(at.Line, out List<string[]>? names)) { target[at.Line] = names = []; }
             names.Add([.. directive.Names]);
         }
 
-        return new(lines.Contains, line => invoked.TryGetValue(line, out List<string[]>? names) ? names : []);
+        return new(
+            lines.Contains,
+            line => invoked.TryGetValue(line, out List<string[]>? names) ? names : [],
+            line => written.TryGetValue(line, out List<string[]>? names) ? names : []);
     }
 }

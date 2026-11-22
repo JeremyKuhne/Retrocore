@@ -80,6 +80,7 @@ internal sealed partial class AssemblyPreprocessor
 
         // A .using does not reach into an included file, and an included file's does not leak out of it.
         UsingDirective? usings = _constantUsings;
+        int depth = _constantScopes.Count;
         _constantUsings = null;
         MarkFile(enter: true);
         try
@@ -89,7 +90,9 @@ internal sealed partial class AssemblyPreprocessor
         finally
         {
             MarkFile(enter: false);
-            _constantUsings = usings;
+
+            // A file that closed scopes it did not open has already given back their .using directives.
+            if (_constantScopes.Count >= depth) { _constantUsings = usings; }
         }
     }
 

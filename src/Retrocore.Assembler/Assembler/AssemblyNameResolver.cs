@@ -121,8 +121,32 @@ internal sealed partial class AssemblyNameResolver
         image.Project = _source;
         image.SymbolExports = new(Exports.Values, StringComparer.Ordinal);
         image.Information = UnusedUsings();
-        image.Usings = _usings.Count == 0 ? null : [.. _usings.Select(directive => new AssemblyUsing(_source.Statements[directive.Index].Location, directive.Names))];
+        image.Usings = _usings.Count == 0 ? null : [.. _usings.Select(Published)];
     }
+
+    // A .using as the result reports it; one a macro gives inside a scope the same expansion opens ends with that
+    // scope, so it does not apply from the invoking line.
+    private AssemblyUsing Published(Using directive)
+    {
+        AssemblyLocation? location = _source.Statements[directive.Index].Location;
+        bool atInvocation = true;
+        AssemblyLocation? opening = directive.Scope.Opening < 0 ? null : _source.Statements[directive.Scope.Opening].Location;
+        if (location is { IsMacroExpansion: true } && opening is { IsMacroExpansion: true })
+        {
+            atInvocation = !SameLocation(Invocation(opening), Invocation(location));
+        }
+
+        return new(location, directive.Names, atInvocation);
+    }
+
+    private static AssemblyLocation Invocation(AssemblyLocation location)
+    {
+        while (location.IsMacroExpansion && location.ExpandedFrom is { } from) { location = from; }
+        return location;
+    }
+
+    private static bool SameLocation(AssemblyLocation first, AssemblyLocation second) =>
+        first.Line == second.Line && first.Column == second.Column && string.Equals(first.Path, second.Path, StringComparison.Ordinal);
 
     private static bool Mentions(AssemblyProject source, string prefix)
     {
@@ -157,7 +181,7 @@ internal sealed partial class AssemblyNameResolver
         Using? usings = null;
         List<Using> directives = [];
         Stack<Using?> scopeUsings = [];
-        Stack<Using?> files = [];
+        Stack<(Using? Usings, int Depth)> files = [];
         List<(int Index, bool Enter)> marks = _source.FileMarks ?? [];
         int mark = 0;
 
@@ -171,12 +195,14 @@ internal sealed partial class AssemblyNameResolver
             {
                 if (marks[mark].Enter)
                 {
-                    files.Push(usings);
+                    files.Push((usings, scopeUsings.Count));
                     usings = null;
                 }
                 else if (files.Count != 0)
                 {
-                    usings = files.Pop();
+                    // A file that closed scopes it did not open has already given back their .using directives.
+                    (Using? saved, int depth) = files.Pop();
+                    if (scopeUsings.Count >= depth) { usings = saved; }
                 }
             }
 

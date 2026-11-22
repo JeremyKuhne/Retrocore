@@ -9,4 +9,5 @@ namespace Retrocore.Assembler;
 /// </summary>
 /// <param name="Location">The directive's location; within a macro's expansion, from its invocation.</param>
 /// <param name="Names">The scope names as written.</param>
-public sealed record AssemblyUsing(AssemblyLocation? Location, IReadOnlyList<string> Names);
+/// <param name="AtInvocation">For one a macro gives, whether it is at the expansion's top level.</param>
+public sealed record AssemblyUsing(AssemblyLocation? Location, IReadOnlyList<string> Names, bool AtInvocation = true);

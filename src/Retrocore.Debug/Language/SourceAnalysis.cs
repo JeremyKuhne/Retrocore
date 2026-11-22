@@ -365,7 +365,7 @@ internal sealed partial class SourceAnalysis
             List<SymbolSite> used =
             [
                 .. directive.Targets(IsScope, OpenedBefore(path, directive))
-                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .Distinct(StringComparer.Ordinal)
                     .SelectMany(scope => Defined($"{scope}::{name}", exact) ?? [])
             ];
 
@@ -394,7 +394,7 @@ internal sealed partial class SourceAnalysis
     {
         foreach (DocumentationUsing directive in ScopesAt(path, line).SelectMany(scopes => scopes.Usings).Distinct())
         {
-            foreach (string scope in directive.Targets(IsScope, OpenedBefore(path, directive)).Distinct(StringComparer.OrdinalIgnoreCase))
+            foreach (string scope in directive.Targets(IsScope, OpenedBefore(path, directive)).Distinct(StringComparer.Ordinal))
             {
                 string prefix = $"{scope}::";
                 foreach (SymbolSite site in Definitions)
@@ -450,6 +450,8 @@ internal sealed partial class SourceAnalysis
     // the assembly reached none of the file.
     private DocumentationAssembled? AssembledUsing(string path)
     {
+        // A successful assembly says exactly which it took, for a file it never reached too.
+        if (Result.Success) { return DocumentationAssembled.From(Result, path); }
         if (!_usingLines.TryGetValue(path, out HashSet<int>? lines)) { return null; }
         Dictionary<int, List<string[]>>? invoked = _invokedUsings.GetValueOrDefault(path);
         return new(lines.Contains, line => invoked is not null && invoked.TryGetValue(line, out List<string[]>? names) ? names : []);

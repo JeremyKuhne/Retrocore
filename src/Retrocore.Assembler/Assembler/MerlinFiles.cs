@@ -87,7 +87,11 @@ internal static class MerlinFiles
             LinkerSymbols = source.LinkerSymbols,
             LabelSizes = source.LabelSizes,
             SymbolAliases = source.SymbolAliases,
-            MerlinOutput = source.MerlinOutput
+            MerlinOutput = source.MerlinOutput,
+
+            // Statements keep their order, so .using file extents and conditional uses carry over.
+            FileMarks = source.FileMarks,
+            UsedUsings = source.UsedUsings
         };
 
         foreach (AssemblySource document in source.Sources) { project.Sources.Add(document); }

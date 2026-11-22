@@ -40,10 +40,13 @@ public static partial class DocumentationParser
         {
             AdvanceCode(code, line, assembled?.UsingAssembled(line) ?? true);
 
-            // A macro invoked on the line may itself have given a .using, which applies from the next line.
+            // A macro invoked on the line may itself have given a .using, and a .define may have expanded to one,
+            // which apply from the next line.
             if (assembled is not null && _macros == 0)
             {
-                foreach (string[] names in assembled.InvokedUsings(line))
+                bool written = FirstWord(code).Equals(".using", StringComparison.OrdinalIgnoreCase);
+                IEnumerable<string[]> expanded = written || assembled.LineUsings is null ? [] : assembled.LineUsings(line);
+                foreach (string[] names in assembled.InvokedUsings(line).Concat(expanded))
                 {
                     _usings.Add((_named.Count, new(string.Join("::", Scopes), names, line)));
                     _current = null;

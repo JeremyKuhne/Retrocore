@@ -832,6 +832,142 @@ public sealed class UsingTests
     }
 
     /// <summary>
+    ///  A build that goes through the linker keeps the <c>.using</c> file extents and the uses conditionals make.
+    /// </summary>
+    [TestMethod]
+    public void LinkedBuildsKeepUsingExtents()
+    {
+        AssemblyOptions options = new(ProcessorVariant.Mos6502, origin: 0x1300, imageSize: 0x100)
+        {
+            LinkerConfiguration = new("MEMORY{RAM:start=$1300,size=$100;}SEGMENTS{CODE:load=RAM,type=ro;}", "link.cfg")
+        };
+
+        AssemblyResult roots = new NativeAssembler().Assemble(
+            [
+                new AssemblySource(".cpu Mos6502\n.scope A\nV = 1\n.endscope\n.using A\n    lda #V\n", "first.asm"),
+                new AssemblySource("    lda #V\n", "second.asm")
+            ],
+            options);
+
+        roots.Diagnostics.Should().ContainSingle().Which.Location?.Path.Should().Be("second.asm");
+
+        AssemblyResult conditional = new NativeAssembler().Assemble(
+            new AssemblySource(".cpu Mos6502\n.scope S\nW = 1\n.endscope\n.using S\n.if W\n    nop\n.endif\n", "test.asm"),
+            options);
+
+        conditional.Diagnostics.Should().BeEmpty();
+        conditional.Information.Should().BeEmpty();
+    }
+
+    /// <summary>
+    ///  An included file that closes the scope it was included in also ends that scope's <c>.using</c>.
+    /// </summary>
+    [TestMethod]
+    public void IncludesThatCloseScopesEndTheirUsings()
+    {
+        string folder = Directory.CreateTempSubdirectory("retrocore-using").FullName;
+        try
+        {
+            File.WriteAllText(Path.Join(folder, "Close.asm"), ".endproc\n");
+            IncludeAssemble(folder, EightyColumns + ".proc P\n.using EightyColumns\n.include \"Close.asm\"\n    lda Mode\n")
+                .Should().ContainSingle().Which.Message.Should().Contain("Mode");
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    /// <summary>
+    ///  In the editor, a <c>.using</c> inside a scope a macro's expansion opens ends with that scope; one a
+    ///  <c>.define</c> gives applies from its line; and used scopes whose names differ by case are both searched.
+    /// </summary>
+    [TestMethod]
+    public void TheEditorFollowsExpandedUsings()
+    {
+        string directory = Directory.CreateTempSubdirectory("retrocore-using").FullName;
+        try
+        {
+            string main = Path.Join(directory, "main.asm");
+            File.WriteAllText(main, """
+                .scope A
+                X = $10
+                .endscope
+                .scope a
+                Y = $20
+                .endscope
+                .macro Define
+                .proc Inner
+                .using A
+                    lda X
+                .endproc
+                .endmacro
+                .define USE .using A, a
+                .proc P
+                    Define
+                    rts
+                .endproc
+                .proc Q
+                    USE
+                    lda X
+                    lda Y
+                .endproc
+
+                """);
+
+            SourceAnalysis analysis = SourceAnalysis.Assemble(main, _ => null);
+            analysis.Result.Diagnostics.Should().BeEmpty();
+            analysis.Bound("X", main, line: 15).Should().BeNull("the macro's .using ended with the scope it opened");
+            (analysis.Bound("X", main, line: 19) ?? []).Select(site => site.Name).Should().Equal("A::X");
+            (analysis.Bound("Y", main, line: 20) ?? []).Select(site => site.Name).Should().Equal("a::Y");
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
+    ///  A member file whose <c>.using</c> the assembly never reached (all of it in a skipped <c>.if</c>) does not
+    ///  lend that <c>.using</c> to its doc links.
+    /// </summary>
+    [TestMethod]
+    public void UnreachedFilesLendNoUsings()
+    {
+        string directory = Directory.CreateTempSubdirectory("retrocore-using").FullName;
+        try
+        {
+            string main = Path.Join(directory, "main.asm");
+            File.WriteAllText(Path.Join(directory, "part.asm"), """
+                .if 0
+                .scope A
+                ;; The value.
+                N = 1
+                .endscope
+                .proc P
+                .using A
+
+                ;; Uses <N>.
+                Load:
+                    rts
+                .endproc
+                .endif
+
+                """);
+
+            File.WriteAllText(main, ".include \"part.asm\"\n    rts\n");
+            SourceAnalysis analysis = SourceAnalysis.Assemble(main, _ => null);
+            analysis.Result.Diagnostics.Should().BeEmpty();
+            DocumentationTopic load = analysis.Documentation.Find("P::Load") ?? throw new AssertFailedException("No Load topic.");
+            new DocumentationResolver(analysis.Documentation).Resolve(load, "N").Kind.Should().Be(DocumentationTargetKind.Unresolved);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
     ///  Each <c>.repeat</c> iteration of an <c>.include</c> is its own file: one iteration's <c>.using</c> does not reach
     ///  the next.
     /// </summary>

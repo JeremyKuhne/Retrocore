@@ -120,7 +120,8 @@ internal static class SourceText
             string text = lines[index].TrimStart();
             if (text.StartsWith(';'))
             {
-                above.Insert(0, text.TrimStart(';').Trim());
+                // A pragma, such as an exclusion above a ;; block, is for the tools, not the reader.
+                if (!IsPragma(text)) { above.Insert(0, text.TrimStart(';').Trim()); }
                 continue;
             }
 
@@ -143,10 +144,15 @@ internal static class SourceText
         int at = CommentStart(line);
         if (at <= 0) { return ""; }
 
-        // An address comment alone, as the SDK's ROM sources put on each line, says nothing the hover does not.
+        // An address comment alone, as the SDK's ROM sources put on each line, says nothing the hover does not, and a
+        // pragma is for the tools.
         string text = line[(at + 1)..].Trim();
-        return text.Length == 5 && text[0] == '$' ? "" : text;
+        return (text.Length == 5 && text[0] == '$') || IsPragma(line[at..]) ? "" : text;
     }
+
+    // Whether a comment is a "; retrocore:" pragma.
+    private static bool IsPragma(string comment) =>
+        comment.TrimStart().StartsWith("; retrocore:", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     ///  Gets where a line's comment starts, or -1.

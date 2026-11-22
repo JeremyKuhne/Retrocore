@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-using System.Text.Json.Nodes;
 using Retrocore.Documentation;
 
 namespace Retrocore.Debug.Language;
@@ -81,42 +80,33 @@ internal sealed partial class LanguageWorkspace
     private static string FileLink(string path, int line) => $"{new Uri(path).AbsoluteUri}#L{line + 1}";
 
     /// <summary>
-    ///  Gets the documentation problems of an analysis as editor diagnostics, by file: the lint, and uses of
-    ///  deprecated definitions.
+    ///  Gets the documentation problems of an analysis as editor diagnostics, by file: the lint, uses of deprecated
+    ///  definitions and of historical names, less what the files' <c>ignore=</c> exclusions turn off. Each carries
+    ///  its rule's ID as its code.
     /// </summary>
     private Dictionary<string, List<Diagnostic>> DocumentationDiagnostics(SourceAnalysis analysis)
     {
+        Dictionary<DocumentationDiagnostic, string> replacements = [];
+        List<DocumentationDiagnostic> own = [.. Deprecated(analysis), .. HistoricalNames(analysis, replacements)];
         Dictionary<string, List<Diagnostic>> byFile = [with(StringComparer.OrdinalIgnoreCase)];
-        void Add(string path, int line, string message, DiagnosticSeverity severity)
+        foreach (DocumentationDiagnostic diagnostic in ResolverFor(analysis).Lint(own, DocumentationRules.EditorRules))
         {
+            string path = Path.GetFullPath(diagnostic.Path);
             if (!byFile.TryGetValue(path, out List<Diagnostic>? list)) { byFile[path] = list = []; }
-            list.Add(new Diagnostic
-            {
-                Range = LineRange(path, line, 0),
-                Severity = severity,
-                Source = "retrocore docs",
-                Message = message
-            });
+            list.Add(LintEditor.ToDiagnostic(diagnostic, LineRange(path, diagnostic.Line, 0), replacements.GetValueOrDefault(diagnostic)));
         }
 
-        DocumentationResolver resolver = ResolverFor(analysis);
-        foreach (DocumentationDiagnostic diagnostic in resolver.Check())
-        {
-            DiagnosticSeverity severity = diagnostic.Severity == DocumentationSeverity.Error
-                ? DiagnosticSeverity.Error
-                : DiagnosticSeverity.Warning;
+        return byFile;
+    }
 
-            Add(Path.GetFullPath(diagnostic.Path), diagnostic.Line, diagnostic.Message, severity);
-        }
-
-        HistoricalNames(analysis, byFile);
-
-        // Code that uses a deprecated definition, here or in the SDK, gets a warning at each use.
+    // Code that uses a deprecated definition, here or in the SDK, gets a warning at each use.
+    private IEnumerable<DocumentationDiagnostic> Deprecated(SourceAnalysis analysis)
+    {
         List<DocumentationTopic> deprecated = [.. SdkAnalyses().Append(analysis)
             .SelectMany(source => source.Documentation.Topics)
             .Where(topic => topic.Section("Deprecated") is not null)];
 
-        if (deprecated.Count == 0) { return byFile; }
+        if (deprecated.Count == 0) { yield break; }
         foreach (string member in analysis.Members)
         {
             string[] lines = analysis.LinesOf(member);
@@ -131,24 +121,26 @@ internal sealed partial class LanguageWorkspace
                     if (!definition && Mentions(code, name))
                     {
                         string reason = topic.Section("Deprecated")?.Text ?? "";
-                        Add(member, line, $"{name} is deprecated. {reason}".Trim(), DiagnosticSeverity.Warning);
+                        yield return new(
+                            $"{name} is deprecated. {reason}".Trim(),
+                            member,
+                            line,
+                            DocumentationSeverity.Warning,
+                            DocumentationRules.Deprecated)
+                        {
+                            Name = name
+                        };
                     }
                 }
             }
         }
-
-        return byFile;
     }
-
-    /// <summary>
-    ///  The diagnostic code of a use of a historical name, which the quick fix replaces with the current name.
-    /// </summary>
-    internal const string HistoricalNameCode = "retrocore.historicalName";
 
     // Code written with a historical name gets an information message at each use, which a quick fix replaces with
     // the definition's current name. A name that two definitions give is the assembler's error instead.
-    private void HistoricalNames(SourceAnalysis analysis, Dictionary<string, List<Diagnostic>> byFile)
+    private List<DocumentationDiagnostic> HistoricalNames(SourceAnalysis analysis, Dictionary<DocumentationDiagnostic, string> replacements)
     {
+        List<DocumentationDiagnostic> diagnostics = [];
         Dictionary<string, string?> current = [with(StringComparer.Ordinal)];
         foreach (DocumentationSet set in analysis.OtherModules(SdkAnalyses()).Select(sdk => sdk.Documentation).Prepend(analysis.Documentation))
         {
@@ -163,7 +155,7 @@ internal sealed partial class LanguageWorkspace
             }
         }
 
-        if (current.Count == 0) { return; }
+        if (current.Count == 0) { return diagnostics; }
         foreach (string member in analysis.Members)
         {
             foreach ((int line, int start, string name) in SourceText.CodeNames(analysis.LinesOf(member)))
@@ -172,18 +164,24 @@ internal sealed partial class LanguageWorkspace
 
                 // A name the line's scopes or .using directives define binds there, not to the historical name.
                 if (analysis.Bound(name, member, line) is not null) { continue; }
-                if (!byFile.TryGetValue(member, out List<Diagnostic>? list)) { byFile[member] = list = []; }
-                list.Add(new Diagnostic
+                DocumentationDiagnostic diagnostic = new(
+                    $"{name} is a historical name of {replacement}.",
+                    member,
+                    line,
+                    DocumentationSeverity.Information,
+                    DocumentationRules.HistoricalName)
                 {
-                    Range = new LspRange(line, start, line, start + name.Length),
-                    Severity = DiagnosticSeverity.Information,
-                    Code = HistoricalNameCode,
-                    Source = "retrocore docs",
-                    Message = $"{name} is a historical name of {replacement}.",
-                    Data = new JsonObject { ["replacement"] = replacement }
-                });
+                    Name = name,
+                    Column = start,
+                    Length = name.Length
+                };
+
+                diagnostics.Add(diagnostic);
+                replacements[diagnostic] = replacement;
             }
         }
+
+        return diagnostics;
     }
 
     // Whether code uses a name as a whole word in an operand or operation (not as the label it defines).

@@ -373,6 +373,7 @@ Design notes for upcoming work live in [`docs/backlog`](docs/backlog):
 - [exporting HTML documentation from `;;` comments](docs/backlog/DocExport.md);
 - [documented struct, union and enum members](docs/backlog/MemberDocumentation.md), with historical names;
 - [`.using`, names from another scope without qualifying them](docs/backlog/Using.md);
+- [lint exclusions](docs/backlog/LintExclusions.md): rule IDs, and ignoring a rule for a line, a comment or a file;
 - [the media library and explorers](docs/backlog/Media.md);
 - [saving media back to images](docs/backlog/MediaPersistence.md): changed disks and tapes on every machine;
 - [machine files, data folders and libraries](docs/backlog/MachineFiles.md), shared by VS Code and the standalone emulator;

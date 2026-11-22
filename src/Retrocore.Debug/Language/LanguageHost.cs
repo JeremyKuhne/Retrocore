@@ -118,6 +118,7 @@ internal static partial class LanguageHost
         CompletionHandler completion = new(workspace, basic);
         DocumentSymbolHandler documentSymbols = new(workspace, basic);
         WorkspaceSymbolHandler workspaceSymbols = new(workspace);
+        CodeActionHandler codeActions = new(workspace, basic);
 
         server.OnRequest("initialize", _ => Capabilities());
         server.OnRequest("shutdown", (JsonObject? _) => (JsonNode?)null);
@@ -141,7 +142,7 @@ internal static partial class LanguageHost
             "workspace/symbol",
             parameters => Answer(workspaceSymbols.Handle, parameters, symbols => Array(symbols, symbol => symbol.ToJson())));
 
-        server.OnRequest("textDocument/codeAction", CodeActionHandler.Handle);
+        server.OnRequest("textDocument/codeAction", codeActions.Handle);
         server.OnRequest("retrocore/basic/renumber", parameters => BasicFiles.Renumber(parameters ?? []));
         server.OnRequest("retrocore/basic/list", parameters => BasicFiles.List(parameters ?? []));
         server.OnRequest("retrocore/basic/store", parameters => BasicFiles.Store(parameters ?? []));
@@ -188,7 +189,7 @@ internal static partial class LanguageHost
             ["hoverProvider"] = true,
             ["completionProvider"] = new JsonObject
             {
-                ["triggerCharacters"] = new JsonArray("."),
+                ["triggerCharacters"] = new JsonArray(".", "=", ","),
                 ["resolveProvider"] = false
             },
             ["documentSymbolProvider"] = true,

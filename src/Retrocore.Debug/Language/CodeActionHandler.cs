@@ -9,42 +9,39 @@ namespace Retrocore.Debug.Language;
 /// <summary>
 ///  Answers <c>textDocument/codeAction</c>: quick fixes for the diagnostics the client sends back.
 /// </summary>
-internal static class CodeActionHandler
+internal sealed class CodeActionHandler
 {
+    private readonly LanguageWorkspace _workspace;
+    private readonly BasicDocuments _basic;
+
     /// <summary>
-    ///  Gets the quick fixes for a request: for each use of a historical name, one that writes the current name.
+    ///  Creates the handler.
+    /// </summary>
+    /// <param name="workspace">The workspace, for the document's lines.</param>
+    /// <param name="basic">The open BASIC documents, which have no assembly quick fixes.</param>
+    public CodeActionHandler(LanguageWorkspace workspace, BasicDocuments basic)
+    {
+        _workspace = workspace;
+        _basic = basic;
+    }
+
+    /// <summary>
+    ///  Gets the quick fixes for a request (see <see cref="LintEditor.Actions"/>).
     /// </summary>
     /// <param name="parameters">The request's params: the document, the range and the diagnostics there.</param>
     /// <returns>The code actions.</returns>
-    internal static JsonNode? Handle(JsonObject? parameters)
+    internal JsonNode? Handle(JsonObject? parameters)
     {
-        JsonArray actions = [];
-        if (parameters?["textDocument"]?["uri"]?.GetValue<string>() is not { } uri) { return actions; }
-        if (parameters["context"]?["diagnostics"] is not JsonArray diagnostics) { return actions; }
-        foreach (JsonNode? node in diagnostics)
+        if (parameters?["textDocument"]?["uri"]?.GetValue<string>() is not { } uri) { return new JsonArray(); }
+        if (parameters["context"]?["diagnostics"] is not JsonArray diagnostics) { return new JsonArray(); }
+
+        // A BASIC document, or one that is not a file (such as a machine's program), has no lint to fix.
+        DocumentUri document = new(uri);
+        if (_basic.Get(document) is not null || !Uri.TryCreate(uri, UriKind.Absolute, out Uri? parsed) || !parsed.IsFile)
         {
-            if (node is not JsonObject diagnostic
-                || diagnostic["code"]?.GetValue<string>() != LanguageWorkspace.HistoricalNameCode
-                || diagnostic["data"]?["replacement"]?.GetValue<string>() is not { } replacement
-                || diagnostic["range"] is not JsonObject range)
-            {
-                continue;
-            }
-
-            JsonObject edit = new() { ["range"] = range.DeepClone(), ["newText"] = replacement };
-            JsonObject changes = new() { [uri] = new JsonArray(edit) };
-            JsonObject action = new()
-            {
-                ["title"] = $"Use {replacement}",
-                ["kind"] = "quickfix",
-                ["isPreferred"] = true,
-                ["diagnostics"] = new JsonArray(diagnostic.DeepClone()),
-                ["edit"] = new JsonObject { ["changes"] = changes }
-            };
-
-            actions.Add((JsonNode)action);
+            return new JsonArray();
         }
 
-        return actions;
+        return LintEditor.Actions(uri, _workspace.LinesOf(LanguageHost.PathOf(document)), diagnostics);
     }
 }

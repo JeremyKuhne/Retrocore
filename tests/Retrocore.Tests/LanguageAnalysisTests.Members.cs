@@ -4,6 +4,7 @@
 
 using System.Text.Json.Nodes;
 using Retrocore.Debug.Language;
+using Retrocore.Documentation;
 
 namespace Retrocore.Tests;
 
@@ -90,19 +91,23 @@ public sealed partial class LanguageAnalysisTests
             // the one that holds the hint; a wrong extra problem then times out and fails below.
             List<Diagnostic> published = await client.Wait(
                 uri,
-                diagnostics => diagnostics.Count == 1 && diagnostics[0].Code == LanguageWorkspace.HistoricalNameCode);
+                diagnostics => diagnostics.Count == 1 && diagnostics[0].Code == DocumentationRules.HistoricalName);
 
             Diagnostic hint = published.Should().ContainSingle().Which;
-            hint.Code.Should().Be(LanguageWorkspace.HistoricalNameCode);
+            hint.Code.Should().Be(DocumentationRules.HistoricalName);
             hint.Message.Should().Be("IBCMD is a historical name of Iob::COMMAND.");
             hint.Range.Start.Should().Be(new Position(use, column));
-            JsonNode? actions = CodeActionHandler.Handle(new JsonObject
+            JsonNode? actions = new CodeActionHandler(workspace, new BasicDocuments(client)).Handle(new JsonObject
             {
                 ["textDocument"] = new JsonObject { ["uri"] = uri.Text },
                 ["context"] = new JsonObject { ["diagnostics"] = new JsonArray(hint.ToJson()) }
             });
 
-            JsonNode? edit = actions?[0]?["edit"]?["changes"]?[uri.Text]?[0];
+            // Beside the fix, the lint offers exclusions that ignore the rule; the fix is the one that uses the name.
+            JsonNode? fix = (actions as JsonArray)?.FirstOrDefault(
+                action => action?["title"]?.GetValue<string>() == "Use Iob::COMMAND");
+
+            JsonNode? edit = fix?["edit"]?["changes"]?[uri.Text]?[0];
             (edit?["newText"]?.GetValue<string>()).Should().Be("Iob::COMMAND");
 
             Hover? hover = await new HoverHandler(workspace, new BasicDocuments(client)).Handle(at);

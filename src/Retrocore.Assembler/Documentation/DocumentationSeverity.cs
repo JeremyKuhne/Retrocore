@@ -17,5 +17,10 @@ public enum DocumentationSeverity
     /// <summary>
     ///  The documentation is malformed, such as a comment that documents nothing.
     /// </summary>
-    Error
+    Error,
+
+    /// <summary>
+    ///  Something worth knowing, such as an exclusion that turns nothing off.
+    /// </summary>
+    Information
 }

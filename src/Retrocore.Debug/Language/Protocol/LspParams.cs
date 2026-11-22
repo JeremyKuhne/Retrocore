@@ -24,6 +24,11 @@ internal sealed record LspParams(
     IReadOnlyList<string> ContentChanges)
 {
     /// <summary>
+    ///  Gets the character whose typing asked for completion, or null when it was asked for otherwise.
+    /// </summary>
+    public string? TriggerCharacter { get; init; }
+
+    /// <summary>
     ///  Reads the params.
     /// </summary>
     /// <param name="parameters">The params, or null.</param>
@@ -47,6 +52,9 @@ internal sealed record LspParams(
             Position.From(parameters?["position"]),
             new ReferenceContext(parameters.Object("context").Bool("includeDeclaration") ?? false),
             parameters.String("query") ?? "",
-            changes);
+            changes)
+        {
+            TriggerCharacter = parameters.Object("context").String("triggerCharacter")
+        };
     }
 }

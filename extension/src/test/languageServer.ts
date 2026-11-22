@@ -68,6 +68,41 @@ export async function testLanguageServer(root: string): Promise<void> {
         "vscode.executeHoverProvider", document.uri, new vscode.Position(3, document.lineAt(3).text.indexOf("negative") + 2));
     assert.match(text(flag[0]), /^\*\*negative \(N\) flag\*\*: Set when a result's bit 7 is 1/);
 
+    // A lint diagnostic carries its rule as its code; the quick fix writes the exclusion, which turns it off; and
+    // the rule IDs complete after ignore= and describe themselves on hover.
+    const lintPath = path.join(folder, "lint.retrocore.asm");
+    const wide = "    .byte " + Array(26).fill("$C1").join(", ");
+    fs.writeFileSync(lintPath, `; retrocore: style=strict\n.org $6000\n;; A table.\nTable:\n${wide}\n`);
+    const lint = await vscode.workspace.openTextDocument(vscode.Uri.file(lintPath));
+    await vscode.window.showTextDocument(lint);
+    const long = await until("line-length diagnostic", () =>
+        vscode.languages.getDiagnostics(lint.uri).find(diagnostic => diagnostic.range.start.line === 4));
+    assert.equal(typeof long.code === "object" ? long.code.value : long.code, "line-length");
+    const actions = await vscode.commands.executeCommand<vscode.CodeAction[]>(
+        "vscode.executeCodeActionProvider", lint.uri, long.range, vscode.CodeActionKind.QuickFix.value);
+    const fix = actions.find(action => action.title === "Ignore line-length on this line");
+    assert.ok(fix?.edit, `Expected the line's quick fix, got ${actions.map(action => action.title).join(", ")}`);
+    assert.ok(actions.some(action => action.title === "Ignore line-length in this file"));
+    assert.ok(await vscode.workspace.applyEdit(fix.edit));
+    assert.equal(lint.lineAt(4).text, `${wide} ; retrocore: ignore=line-length`);
+    await until("the exclusion to turn the diagnostic off", () =>
+        vscode.languages.getDiagnostics(lint.uri).some(diagnostic => diagnostic.range.start.line === 4) ? undefined : true);
+
+    const typed = lint.lineAt(4).text.indexOf("ignore=") + "ignore=line-l".length;
+    const completions = await vscode.commands.executeCommand<vscode.CompletionList>(
+        "vscode.executeCompletionItemProvider", lint.uri, new vscode.Position(4, typed));
+    const rule = completions.items.find(item => item.label === "line-length");
+    assert.ok(rule, "Rule IDs complete after ignore=.");
+    const replaced = rule.range instanceof vscode.Range ? rule.range : rule.range?.replacing;
+    assert.equal(replaced?.start.character, lint.lineAt(4).text.indexOf("line-length"), "A completion replaces the whole rule typed.");
+    assert.ok(!completions.items.some(item => item.label === "lda"), "Only rules complete in an exclusion.");
+    const ruleHover = await vscode.commands.executeCommand<vscode.Hover[]>(
+        "vscode.executeHoverProvider", lint.uri, new vscode.Position(4, typed));
+    assert.match(text(ruleHover[0]), /^\*\*line-length\*\* \(lint rule\): A line is at most 120 columns/);
+    assert.ok(await lint.save());
+    await vscode.commands.executeCommand("workbench.action.closeActiveEditor");
+    await vscode.window.showTextDocument(document);
+
     const lda = await vscode.commands.executeCommand<vscode.Hover[]>(
         "vscode.executeHoverProvider", document.uri, new vscode.Position(6, 5));
     assert.match(text(lda[0]), /Loads A from memory/);

@@ -1,73 +1,98 @@
-;; DOS 3.2 RWTS: REBUILD A SECTOR FROM 5-AND-3 VALUES
+; retrocore: style=strict
+;; DOS 3.2 RWTS: the postnibble routine, which rebuilds a sector from 5-and-3 values ($B9C1-$BA1D where DOS runs)
 ;;
-;; POSTNB13 turns the values READ13 read into NBUF1 and NBUF2 back into the sector's 256 bytes, in the caller's
-;; buffer: the reverse of PRENIB13 (PreNibble32.asm). Runs at $B9C1-$BA1D where DOS runs. BOOT 1 has its own copy
-;; of this code (BootLoader32.asm), for the values the ROM's reader leaves.
+;; <DiskII::PostNibble> turns the values <DiskII::ReadDataField> read into <DiskII::HighBits> and
+;; <DiskII::LowBits> back into the sector's 256 bytes, in the caller's buffer: the reverse of
+;; <DiskII::PreNibble> (PreNibble32.asm). `BOOT 1` has its own copy of this code, <Boot::Stage1::PostNibble>
+;; (BootLoader32.asm), for the values the 13-sector ROM's reader leaves.
 
-;; Rebuilds the 256 bytes at BUF from NBUF1 and NBUF2.
+; DiskII: the postnibble routine.
+.scope DiskII continued
+
+;; Rebuilds the 256 bytes at <SectorBuffer> from <HighBits> and <LowBits>.
 ;;
-;; READ13 leaves every value shifted left three places, so an NBUF1 value is a byte's top five bits in place,
-;; and an NBUF2 value shifted right three places is the five bits PRENIB13 made: a byte's low three bits, then
-;; a bit of the group's fourth byte and a bit of its fifth. GROUP3 and GROUP4 gather those, a bit from each of
-;; the group's three NBUF2 values. The groups come in the order PRENIB13 made them, X from 50 down to 0.
-;; In:    SectorBuffer = the address of the buffer, NBUF1 and NBUF2 from READ13
-;; Out:   (SectorBuffer) = the 256 bytes
-;; Uses:  A, X, Y, GROUP3, GROUP4
-POSTNB13:
-    ldx #$32
+;; At $B9C1 where DOS runs. <ReadDataField> leaves every value shifted left three places, so a <HighBits> value is
+;; a byte's top five bits in place, and a <LowBits> value shifted right three places is the five bits <PreNibble>
+;; made: a byte's low three bits, then a bit of the group's fourth byte and a bit of its fifth.
+;; <PostNibble::FourthBits> and <PostNibble::FifthBits> gather those, a bit from each of the group's three <LowBits>
+;; values. The groups come in the order <PreNibble> made them, X from 50 down to 0.
+;; In: SectorBuffer = the address of the buffer, <HighBits> and LowBits = the values from <ReadDataField>
+;; Out: (SectorBuffer) = the 256 bytes
+;; Also: POSTNIB (DOS31)
+.proc PostNibble
+
+;; The low bits of a group's fourth byte, gathered from the group's three <LowBits> values.
+FourthBits = LowResBase
+
+;; The low bits of a group's fifth byte, gathered likewise.
+FifthBits = LowResBaseHigh
+
+    ldx #GROUP_COUNT - 1
     ldy #0
-POST1:
-    lda NBUF2,x
+;; One group of five bytes, from place X of each run, into the buffer from its start up.
+;; Also: POST1 (DOS33), POSTNB1 (DOS31)
+Loop:
+
+    ; The first byte: its low bits from the first run's value, which also holds a bit of the fifth byte and one of
+    ; the fourth.
+    lda LowBits,x
     lsr a
     lsr a
     lsr a
-    sta GROUP4                      ; bit 0: the fifth byte's bit 2
+    sta FifthBits                   ; bit 0: the fifth byte's bit 2
     lsr a
-    sta GROUP3                      ; bit 0: the fourth byte's bit 2
+    sta FourthBits                  ; bit 0: the fourth byte's bit 2
     lsr a
-    ora NBUF1,x
+    ora HighBits,x
     sta (SectorBuffer),y
     iny
-    lda NBUF2+$33,x
+
+    ; The second and third bytes likewise, from the second and third runs.
+    lda LowBits + GROUP_COUNT,x
     lsr a
     lsr a
     lsr a
     lsr a
-    rol GROUP4
+    rol FifthBits
     lsr a
-    rol GROUP3
-    ora NBUF1+$33,x
+    rol FourthBits
+    ora HighBits + GROUP_COUNT,x
     sta (SectorBuffer),y
     iny
-    lda NBUF2+$66,x
+    lda LowBits + 2 * GROUP_COUNT,x
     lsr a
     lsr a
     lsr a
     lsr a
-    rol GROUP4
+    rol FifthBits
     lsr a
-    rol GROUP3
-    ora NBUF1+$66,x
+    rol FourthBits
+    ora HighBits + 2 * GROUP_COUNT,x
     sta (SectorBuffer),y
     iny
-    lda GROUP3
-    and #7
-    ora NBUF1+$99,x
+
+    ; The fourth and fifth bytes, from the bits gathered.
+    lda FourthBits
+    and #LOW_BITS_MASK
+    ora HighBits + 3 * GROUP_COUNT,x
     sta (SectorBuffer),y
     iny
-    lda GROUP4
-    and #7
-    ora NBUF1+$CC,x
+    lda FifthBits
+    and #LOW_BITS_MASK
+    ora HighBits + 4 * GROUP_COUNT,x
     sta (SectorBuffer),y
     iny
     dex
-    bpl POST1
+    bpl Loop
 
-; The last byte.
-    lda NBUF2+$99
+    ; The last byte.
+    lda LowBits + 3 * GROUP_COUNT
     lsr a
     lsr a
     lsr a
-    ora NBUF1+$FF
+    ora HighBits + 5 * GROUP_COUNT
     sta (SectorBuffer),y
     rts
+.endproc
+
+.endscope

@@ -1,174 +1,233 @@
-;; DOS 3.2 RWTS: FORMAT A DISK
+; retrocore: style=strict
+;; DOS 3.2 RWTS: the formatter ($BE9C-$BFDB where DOS runs)
 ;;
-;; DSKFORM formats all 35 tracks for INIT, which RWTS reaches with command 4 (Rwts32.asm). Each track gets 13
-;; address fields with self-sync bytes between them, but no data fields: where each sector's data field will
-;; be, it writes $FF nibbles, and WRITE13 writes the data field the first time the sector is written. INIT
-;; then writes DOS, the VTOC and the catalog. Runs at $BE9C-$BFD4 where DOS runs; DOS 3.3's formatter, in a
-;; module of its own, writes data fields and checks every sector. docs/DiskII.md explains the fields and
-;; self-sync bytes.
+;; <Formatter::Format> formats all 35 tracks for INIT, which RWTS reaches with <RWTS_FORMAT> (Rwts32.asm). Each
+;; track gets 13 address fields with self-sync bytes between them, but no data fields: where each sector's data
+;; field will be, it writes $FF nibbles, and <DiskII::WriteDataField> writes the data field the first time the
+;; sector is written. INIT then writes DOS, the VTOC and the catalog. DOS 3.3's formatter, in a module of its own,
+;; writes data fields and checks every sector. After the formatter come the 4-and-4 writer it uses, a piece of the
+;; DiskII scope, and a few bytes of code nothing calls. docs/DiskII.md explains the fields and self-sync bytes.
 
-;; Formats the disk in the IOB's drive with volume NVOL, track 0 to track 34, and returns through RWTS's exits.
+;; The formatter, which RWTS runs for <RWTS_FORMAT>: it writes every track's address fields (DOS 3.2's writes no
+;; data fields) and checks that each track reads back.
+.scope Formatter
+
+;; How many self-sync bytes come before each address field: 80 on track 0, 2 more on each track after, and one
+;; less each time a track is formatted again.
+GapLength = SavedY
+
+;; Formats the disk in the IOB's drive with volume <FormatVolume>, track 0 to track 34, and returns through RWTS's
+;; exits, <Rwts::Succeed> and <Rwts::Fail>.
 ;;
-;; It moves the head to track 0 by seeking from half-track 128, far enough out to stop against track 0 from
-;; anywhere. Each track starts with about ten thousand self-sync bytes, more than a turn of the disk, which
-;; erase it; the end of that run is the start of the track. Then come the sectors in the order 0, 10, 7, 4, 1,
-;; 11, 8, 5, 2, 12, 9, 6, 3, each three less than the one before, modulo 13: for each, GAPLEN self-sync
-;; bytes, an address field and $FF nibbles where the data field goes.
+;; At $BE9C where DOS runs. It moves the head to track 0 by seeking from half-track 128, far enough out to stop
+;; against track 0 from anywhere. Each track starts with about ten thousand self-sync bytes, more than a turn of
+;; the disk, which erase it; the end of that run is the start of the track. Then come the sectors in the order 0,
+;; 10, 7, 4, 1, 11, 8, 5, 2, 12, 9, 6, 3, each three less than the one before, modulo 13: for each,
+;; <Formatter::GapLength> self-sync bytes, an address field and $FF nibbles where the data field goes.
 ;;
-;; After the track it waits, reads an address field, and expects sector 0, the first one written. If it finds
-;; no address field or another sector's, it formats the track again with GAPLEN one less. It starts with GAPLEN
-;; at 80 and adds 2 for each track after the first. It also uses SEEK's variables.
-;; In:    X = slot * 16, FormatVolume = the volume, the drive running
-;; Out:   carry = clear (ALLDONE)
-;; Errors: carry set with IBDERR if the disk is write-protected (found after the first track) or GAPLEN would
-;;   fall below 16
-;; Uses:  A, Y, FormatTrack, FormatSector, GAPLEN, GAPCNT, FormatMask
-DSKFORM:
-    lda #$80
+;; After the track it waits, reads an address field, and expects sector 0, the first one written. If it finds no
+;; address field or another sector's, it formats the track again with the gaps one byte shorter. It starts with
+;; gaps of 80 and adds 2 for each track after the first.
+;; In: X = slot * 16, FormatVolume = the volume, the drive running
+;; Out: carry = clear (<Rwts::Succeed>)
+;; Errors: carry = set with <RWTS_DRIVE_ERROR> if the disk is write-protected (found after the first track) or the
+;;   gaps would fall below 16
+;; Also: DSKFORM (DOS33)
+.proc Format
+
+;; The runs of $FF nibbles left in a sector's data area.
+GapCount = SavedX
+
+;; The half-track the head is taken to be on before the first seek: 128, beyond any track.
+START_HALF_TRACK = $80
+
+;; The self-sync bytes before each address field on track 0.
+FIRST_GAP = 80
+
+;; The shortest gap: a track that fails to read back with a shorter one fails the format.
+SHORTEST_GAP = 16
+
+;; One more than the runs of 256 self-sync bytes that erase a track after the first gap's worth: 38 runs.
+ERASE_RUNS = $27
+
+;; The $FF nibbles where a sector's data field goes, before a last run of 256: 173 in all with it, 429.
+DATA_AREA_FIRST = $AD
+
+;; The runs of $FF nibbles in a data area, the first <DATA_AREA_FIRST> long and the second 256.
+DATA_AREA_RUNS = 2
+
+;; The sectors on a track.
+SECTOR_COUNT = 13
+
+;; What each sector's number adds, modulo <SECTOR_COUNT>, to the one before it: 10, that is three less.
+SECTOR_STEP = 10
+
+;; The tracks on a disk.
+TRACK_COUNT = 35
+
+    ; Track 0, from beyond the last track.
+    lda #START_HALF_TRACK
     sta CurrentTrack
     lda #0
     sta FormatTrack
-    jsr SEEK
-    lda #$AA
+    jsr DiskII::MoveHead
+    lda #DiskII::ODD_BITS
     sta FormatMask
-    ldy #$50                        ; GAPLEN: 80 self-sync bytes before each address field
-
-;; Formats track TRK, then the tracks after it.
-;; In:    Y = GAPLEN, the head on track FormatTrack
-FORMTRK:
-    sty GAPLEN
-    lda #$27                        ; after the first Y bytes, 38 runs of 256
+    ldy #FIRST_GAP
+;; Formats track <FormatTrack>, then the tracks after it.
+;; In: Y = the gap's length, the head on the track
+;; Also: FORMTRK (DOS33)
+NextTrack:
+    sty GapLength
+    lda #ERASE_RUNS
     sta FormatSector
+
+    ; Write mode, $FF in the latch.
     lda LoadLatch,x
     lda ReadMode,x
-    lda #$FF
-    sta WriteMode,x                       ; write mode, $FF in the latch
+    lda #DiskII::SELF_SYNC
+    sta WriteMode,x
     cmp DataLatch,x
     bit $00                         ; timing
 
-; The self-sync bytes that erase the track: $FF every 36 cycles, which writes it with one 0 bit after it. NSECT
-; counts the runs of 256 down to 0, the first sector's number. The BCS is always taken: no byte is above $FF.
-FERASE:
+    ; The self-sync bytes that erase the track: $FF every 36 cycles, which writes it with one 0 bit after it.
+    ; FormatSector counts the runs of 256 down to 0, the first sector's number. The bcs is always taken: no byte is
+    ; above $FF.
+;; Counts a byte of the run.
+Erase:
     dey
-    beq FERASE3
+    beq EraseRun
     pha
     pla
     nop
-FERASE2:
+;; Stores a self-sync byte; the way into each run of 256.
+EraseByte:
     pha
     pla
     nop
     nop
     sta LoadLatch,x
     cmp DataLatch,x
-    bcs FERASE                      ; always
-FERASE3:
+    bcs Erase                       ; always
+;; A run done: counts it.
+EraseRun:
     dec FormatSector
-    bne FERASE2
+    bne EraseByte
 
-; Each sector: GAPLEN self-sync bytes, 36 cycles apart, then its address field.
-    ldy GAPLEN
+    ; Each sector: GapLength self-sync bytes, 36 cycles apart, then its address field.
+    ldy GapLength
     nop
     nop
-    bne FSYNC2                      ; always
-FSYNC:
+    bne FirstGapByte                ; always
+;; The delay before each self-sync byte but the first.
+NextGapByte:
     pha
     pla
     pha
     pla
     cmp ($00,x)                     ; timing: 6 cycles
-FSYNC2:
+;; The way in for a gap's first byte, 2 cycles into the delay.
+FirstGapByte:
     nop
-FSYNC3:
+;; Stores a self-sync byte; each later sector comes back here from <Format::WrapSector>.
+StoreGapByte:
     sta LoadLatch,x
     cmp DataLatch,x
     dey
-    bne FSYNC
+    bne NextGapByte
 
-; The address field: D5 AA B5, the volume, track, sector and their checksum in 4-and-4, and DE AA EB, each
-; nibble 32 cycles after the one before.
-    lda #$D5
-    jsr WNIBLA
-    lda #$AA
-    jsr WNIBLB2
-    lda #$B5
-    jsr WNIBLB2
+    ; The address field: D5 AA B5, the volume, track, sector and their checksum in 4-and-4, and DE AA EB, each
+    ; nibble 32 cycles after the one before, and a last $FF.
+    lda #DiskII::PROLOGUE_FIRST
+    jsr DiskII::WriteFieldNibble
+    lda #DiskII::PROLOGUE_SECOND
+    jsr DiskII::WriteFieldNibble::Shorter
+    lda #DiskII::ADDRESS_MARK
+    jsr DiskII::WriteFieldNibble::Shorter
     lda FormatVolume
-    jsr WBYTE
+    jsr DiskII::WriteFourAndFour
     lda FormatTrack
-    jsr WBYTE
+    jsr DiskII::WriteFourAndFour
     lda FormatSector
-    jsr WBYTE
+    jsr DiskII::WriteFourAndFour
     lda FormatVolume
     eor FormatTrack
-    eor FormatSector                       ; the checksum, written as WBYTE would, inline
+    eor FormatSector                ; the checksum, written as WriteFourAndFour would, inline
     pha
     lsr a
     ora FormatMask
     sta LoadLatch,x
     cmp DataLatch,x
     pla
-    ora #$AA
-    jsr WNIBLA
-    lda #$DE
-    jsr WNIBLB2
-    lda #$AA
-    jsr WNIBLB2
-    lda #$EB
-    jsr WNIBLB2
-    lda #$FF
-    jsr WNIBLB2
+    ora #DiskII::ODD_BITS
+    jsr DiskII::WriteFieldNibble
+    lda #DiskII::EPILOGUE_FIRST
+    jsr DiskII::WriteFieldNibble::Shorter
+    lda #DiskII::EPILOGUE_SECOND
+    jsr DiskII::WriteFieldNibble::Shorter
+    lda #DiskII::EPILOGUE_THIRD
+    jsr DiskII::WriteFieldNibble::Shorter
+    lda #DiskII::SELF_SYNC
+    jsr DiskII::WriteFieldNibble::Shorter
 
-; Where the data field goes: $FF nibbles, 32 cycles apart, $AD then 256 of them.
-    ldy #2
-    sty GAPCNT
-    ldy #$AD
-    bne FDATA2                      ; always
-FDATA:
+    ; Where the data field goes: $FF nibbles, 32 cycles apart, 173 then 256 of them.
+    ldy #DATA_AREA_RUNS
+    sty GapCount
+    ldy #DATA_AREA_FIRST
+    bne StoreDataNibble             ; always
+;; Counts a nibble of the run.
+NextDataNibble:
     dey
-    beq FDATA3
+    beq DataRun
     pha
     pla
     nop
-FDATA2:
+;; Stores a $FF nibble; the way in.
+StoreDataNibble:
     pha
     pla
     sta LoadLatch,x
     cmp DataLatch,x
-    bcs FDATA                       ; always
-FDATA3:
-    dec GAPCNT
-    bne FDATA2
-    ldy GAPLEN
+    bcs NextDataNibble              ; always
+;; A run done: counts it.
+DataRun:
+    dec GapCount
+    bne StoreDataNibble
+    ldy GapLength
     clc
     bit $00                         ; timing
     sta LoadLatch,x
     lda DataLatch,x
 
-; The next sector: NSECT + 10, less 13 if that is 13 or more. Reaching 13 exactly means sector 3, the last,
-; is done. The carry is clear, so the SBC subtracts 13.
+    ; The next sector: FormatSector + 10, less 13 if that is 13 or more. Reaching 13 exactly means sector 3, the
+    ; last, is done. The carry is clear, so the sbc subtracts 13.
     lda FormatSector
-    adc #$0A
+    adc #SECTOR_STEP
     sta FormatSector
-    sbc #$0C
-    beq FTRKEND
-    bcs FNEXT
-    .byte $2C                       ; BIT absolute: skips the STA, keeping NSECT + 10
-FNEXT:
+    sbc #SECTOR_COUNT - 1
+    beq TrackWritten
+    bcs WrapSector
+    .byte $2C                       ; bit absolute: skips the sta, keeping FormatSector + 10
+;; Stores the sector number less 13, and goes on to the gap before it.
+WrapSector:
     sta FormatSector
-    lda #$FF
-    jmp FSYNC3
+    lda #DiskII::SELF_SYNC
+    jmp StoreGapByte
 
-; The track is written. Back to read mode; if the disk is write-protected, that is an error now.
-FTRKEND:
+    ; The track is written. Back to read mode; if the disk is write-protected, that is an error now.
+;; Read mode, and the write-protect test.
+TrackWritten:
     pha
     pla
-    ldy GAPLEN
+    ldy GapLength
     lda LoadLatch,x
     lda ReadMode,x
-    bmi FERR
+    bmi Failed
     dey
-FWAIT:
+
+    ; GapLength - 1 passes of 26 cycles before reading back.
+;; One pass of the pause.
+Pause:
     pha
     pla
     nop
@@ -177,47 +236,63 @@ FWAIT:
     pha
     pla
     dey
-    bne FWAIT
+    bne Pause
 
-; The first address field read must be sector 0's.
-    jsr RDADR13
-    bcs FSHORTER
-    lda SECT
-    beq FNEXTTRK
-FSHORTER:
-    ldy GAPLEN
+    ; The first address field read must be sector 0's.
+    jsr DiskII::ReadAddressField
+    bcs ShorterGaps
+    lda FoundSector
+    beq AdvanceTrack
+;; The track again, with gaps one byte shorter, unless they are too short already.
+ShorterGaps:
+    ldy GapLength
     dey
-    cpy #$10
-    bcc FERR
-    jmp FORMTRK
+    cpy #SHORTEST_GAP
+    bcc Failed
+    jmp NextTrack
 
-; On to the next track, with two more self-sync bytes in each gap.
-FNEXTTRK:
+    ; On to the next track, with two more self-sync bytes in each gap.
+;; The next track, if there is one.
+AdvanceTrack:
     inc FormatTrack
     lda FormatTrack
-    cmp #$23
-    bcs FDONE                       ; all 35 done
+    cmp #TRACK_COUNT
+    bcs Finish                      ; all 35 done
     asl a                           ; the half-track
-    jsr SEEK
-    ldy GAPLEN
+    jsr DiskII::MoveHead
+    ldy GapLength
     iny
     iny
-    sty GAPLEN
-    jmp FORMTRK
-FERR:
+    sty GapLength
+    jmp NextTrack
+;; The disk is write-protected, or a track won't read back: a drive error.
+Failed:
     lda #RWTS_DRIVE_ERROR
-    jmp HNDLERR
-FDONE:
-    jmp ALLDONE
+    jmp Rwts::Fail
+;; All tracks formatted.
+Finish:
+    jmp Rwts::Succeed
+.endproc
+
+.endscope
+
+; DiskII: the 4-and-4 writer and the nibble writer for address fields, which DOS 3.3 keeps with its other
+; low-level routines.
+.scope DiskII continued
+
+;; The bits that make the first nibble of a 4-and-4 pair from a byte shifted right, and the second from the byte:
+;; every other bit set.
+ODD_BITS = $AA
 
 ;; Writes the byte in A as two 4-and-4 nibbles, its odd bits then its even bits, 32 cycles apart.
 ;;
-;; The first nibble is the byte shifted right with every other bit set, through AA, the zero-page byte that
-;; holds $AA: an `ORA zp` takes the 3 cycles the timing needs where `ORA #$AA` takes 2.
-;; In:    A = the byte, X = slot * 16, FormatMask = $AA, the card in write mode
-;; Uses:  A
+;; At $BFBB where DOS runs. The first nibble is the byte shifted right with every other bit set, through
+;; <FormatMask>, the zero-page byte that holds $AA: an `ora` zero page takes the 3 cycles the timing needs where
+;; `ora #$AA` takes 2.
+;; In: A = the byte, X = slot * 16, FormatMask = $AA, the card in write mode
 ;; Keeps: X, Y
-WBYTE:
+;; Also: WBYTE (DOS33)
+.proc WriteFourAndFour
     pha
     lsr a
     ora FormatMask
@@ -225,28 +300,47 @@ WBYTE:
     cmp DataLatch,x
     pla
     cmp ($00,x)                     ; timing: 6 cycles
-    ora #$AA
+    ora #ODD_BITS
+    ; Falls into WriteFieldNibble.
+.endproc
 
-;; Writes the nibble in A, 32 cycles after the last store when the caller's code between them is an
-;; `LDA #nibble` and a JSR to WNIBLB2.
-;; In:    A = the nibble, X = slot * 16, the card in write mode
+;; Writes the nibble in A, 32 cycles after the last store when the caller's code between them is an `lda #nibble`
+;; and a `jsr` to <WriteFieldNibble::Shorter>.
+;;
+;; At $BFCA where DOS runs.
+;; In: A = the nibble, X = slot * 16, the card in write mode
 ;; Keeps: A, X, Y
-;; Entry: WNIBLB2 = 2 cycles less delay
-WNIBLA:
+;; Entry: Shorter = 2 cycles less delay
+;; Also: WNIBLA (DOS33)
+.proc WriteFieldNibble
     nop
-WNIBLB2:
+;; Also: WNIBLB2 (DOS33)
+Shorter:
     pha
     pla
     nop
     sta LoadLatch,x
     cmp DataLatch,x
     rts
+.endproc
 
-; Unused: nothing calls this code. With X = $FF it goes on to EPOS, the POSITION command (MiscCommands.asm);
-; otherwise it returns.
-CHKPOSITION:
+.endscope
+
+; Formatter: a few bytes nothing calls.
+.scope Formatter continued
+
+;; Code nothing calls: with X = $FF it goes on to the POSITION command's handler, <Commands::Position>; otherwise it
+;; returns.
+;;
+;; At $BFD5 where DOS runs.
+;; In: X = $FF to go on
+.proc LeftoverPositionCheck
     inx
-    beq CHKPOSITION_1
+    beq ToPosition
     rts
-CHKPOSITION_1:
-    jmp EPOS
+;; Jumps on to POSITION.
+ToPosition:
+    jmp Commands::Position
+.endproc
+
+.endscope

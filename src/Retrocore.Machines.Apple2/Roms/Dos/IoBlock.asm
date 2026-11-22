@@ -1,7 +1,7 @@
-; retrocore: style=strict ignore=unlinked-name:RWTS -- the disk layer's name in prose; linked where it means the routine
+; retrocore: style=strict
 ;; DOS 3.3 and 3.2: the IOB, the DCT and the track/sector list
 ;;
-;; The layouts the disk routines and the file manager share: the IOB, the block a caller fills in to ask <RWTS>
+;; The layouts the disk routines and the file manager share: the IOB, the block a caller fills in to ask <Rwts>
 ;; ("read or write a track and sector") for one disk access; the DCT, the table that describes the drive; and the
 ;; track/sector list, the sectors that say where a file's data is on the disk. Each is a struct, for programs that
 ;; reach a block through a pointer, and DOS's own IOB and DCT are labeled bytes tied to the structs by the asserts
@@ -13,10 +13,10 @@
 
 ; RWTS's I/O block.
 
-;; The layout of an IOB, the I/O block that says what <RWTS> is to do (19 bytes).
+;; The layout of an IOB, the I/O block that says what <Rwts> is to do (19 bytes).
 ;;
-;; The caller fills it in and calls <RWTS> with its address in A (high) and Y (low), through the vector at $03D9 or
-;; DOS's <DISKIO>. RWTS reads the request through a pointer and writes back the return code, the volume found and
+;; The caller fills it in and calls <Rwts> with its address in A (high) and Y (low), through the vector at $03D9 or
+;; DOS's <CallRwts>. RWTS reads the request through a pointer and writes back the return code, the volume found and
 ;; the slot and drive it used. DOS's own IOB is <DosIob>.
 .struct Iob
     ;; The IOB's type, always 1. Nothing reads it.
@@ -29,7 +29,7 @@
     VOLUME .byte
     ;; The track, 0 to 34.
     TRACK .byte
-    ;; The sector. In DOS 3.3, 0 to 15 as DOS numbers them, which the interleave table <INTRLEAV> turns into the
+    ;; The sector. In DOS 3.3, 0 to 15 as DOS numbers them, which the interleave table <PhysicalSectors> turns into the
     ;; number on the disk; in DOS 3.2, 0 to 12, the number on the disk.
     SECTOR .byte
     ;; The address of the drive's DCT, laid out as <DeviceTable>.
@@ -107,7 +107,7 @@ RWTS_FORMAT_ERROR = 8
 
 ; The device characteristics table.
 
-;; The layout of a DCT, the device characteristics table that describes a drive to <RWTS> (4 bytes).
+;; The layout of a DCT, the device characteristics table that describes a drive to <Rwts> (4 bytes).
 ;;
 ;; The IOB points at it (<Iob::DEVICE_TABLE>). DOS's own, for the Disk II, is <DosDeviceTable>.
 .struct DeviceTable

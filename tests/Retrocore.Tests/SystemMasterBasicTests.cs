@@ -51,7 +51,8 @@ public class SystemMasterBasicTests
             .Should().Be("B6B6978F771F9F4233B367F2643692E6FD998FDB1D9E03C81BF2D411E6BA4EC5");
 
         DocumentationSet docs = DocumentationSet.Create([DocumentationParser.Parse(source, path)], result);
-        new DocumentationResolver(docs).Check().Should().BeEmpty();
+        // Its links reach the SDK's modules (the Monitor's, DOS's), as in the editor.
+        new DocumentationResolver(docs, SdkDocumentationTests.Sets()).Check().Should().BeEmpty();
     }
 
     /// <summary>

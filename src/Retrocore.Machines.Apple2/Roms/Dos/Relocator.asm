@@ -1,328 +1,410 @@
-;; DOS 3.3 AND 3.2: THE MASTER'S RELOCATOR (RELOCTR)
+; retrocore: style=strict
+;; DOS 3.3 and 3.2: the master's relocator, which moves DOS to the top of memory
 ;;
-;; Only a System Master has this: the MASTER = 1 build puts it at $1B00-$1CFF, with DOS after it at
-;; $1D00-$3FFF, $8000 below where DOS runs on a 48K machine. BOOT 2 loads all of that and jumps to DOSREL
-;; here. The relocator finds how much memory the machine has, adjusts every address inside DOS for the place
-;; DOS will run, the top of memory, and copies DOS there, so one master boots whatever the memory size.
-;; Disks that INIT writes don't need it: they get the copy of DOS already running, which loads straight to its
-;; place.
+;; Only a System Master has this: the MASTER = 1 build puts it at $1B00-$1CFF, with DOS after it at $1D00-$3FFF,
+;; $8000 below where DOS runs on a 48K machine. `BOOT 2` loads all of that and jumps to <RelocateDos> here. The
+;; relocator finds how much memory the machine has, adjusts every address inside DOS for the place DOS will run,
+;; the top of memory, and copies DOS there, so one master boots whatever the memory size. Disks that INIT writes
+;; don't need it: they get the copy of DOS already running, which loads straight to its place. Apple's listing
+;; calls this module RELOCTR.
 ;;
-;; The boot chain, with the master's addresses:
+;; The boot chain, with the master's addresses (docs/Dos.md tells it in full):
 ;;
-;; - BOOT 0, the Disk II ROM, reads track 0 sector 0 to $0800 and runs it (docs/DiskII.md, Boot16.asm).
-;;   DOS 3.2's ROM reads it to $0300 (Boot13.asm).
-;; - BOOT 1, that sector (the TRK0LDR page of BootLoader.asm), reads the rest of track 0's first ten sectors
-;;   to $3600-$3FFF and jumps to $3700. DOS 3.2's (BootLoader32.asm) reads all ten.
-;; - BOOT 2 (DOSLODR) reads the rest of DOS, $1B00-$35FF, from tracks 0 to 2 and ends at DOSREL.
-;; - This code moves DOS up and starts it at DBINIT, its cold start.
+;; - `BOOT 0`, the Disk II ROM, reads track 0 sector 0 to $0800 and runs it (docs/DiskII.md, Boot16.asm). DOS 3.2's
+;;   ROM reads it to $0300 (Boot13.asm).
+;; - `BOOT 1`, that sector (the first page of BootLoader.asm), reads the rest of track 0's first ten sectors to
+;;   $3600-$3FFF and jumps to $3700. DOS 3.2's (BootLoader32.asm) reads all ten.
+;; - `BOOT 2` reads the rest of DOS, $1B00-$35FF, from tracks 0 to 2 and ends at <RelocateDos>.
+;; - This code moves DOS up and starts it at <ColdStart>.
 ;;
-;; DOS needs two kinds of fixing. Tables of addresses are listed in ADRTAB; ranges of code, whose three-byte
-;; instructions may hold addresses, are listed in CDETAB. Only addresses inside DOS change. The relocator is
-;; not itself moved, so its own addresses are those of the master image.
+;; DOS needs two kinds of fixing. Tables of addresses are listed in <Relocator::AddressRanges>; ranges of code,
+;; whose three-byte instructions may hold addresses, are listed in <Relocator::CodeRanges>. Only addresses inside
+;; DOS change. The relocator is not itself moved, so its own addresses are those of the master image. The ranges'
+;; edges are labels named for what each range holds, ending in Start for its first byte and End for the byte after
+;; it, or Last for its last byte where Apple's listing marks that instead:
+;;
+;; - <InterpreterAddressesStart> to <InterpreterAddressesEnd> (DosInit.asm): DOS's table of its own addresses.
+;; - <FileManagerAddressesStart> to <FileManagerAddressesEnd> (FileManagerEntry.asm): the file manager's.
+;; - <InterpreterCodeStart> to <InterpreterCodeEnd>: the command interpreter's code, from DosInit.asm to
+;;   CommandTables.asm.
+;; - <FileManagerCodeStart> to <FileManagerCodeEnd>: the file manager's code.
+;; - <BootCodeStart> to <BootCodeEnd>: `BOOT 2` and the patches in the boot loader's pages.
+;; - <EmptyCodeStart> to <EmptyCodeEnd>: DOS 3.2's empty range before its boot page.
+;; - <WriteAddressCodeStart> to <WriteAddressCodeEnd> (DOS 3.3): the formatter's address field writer.
+;; - <LowLevelCodeStart> to <LowLevelCodeEnd>: RWTS's nibble, read, write and seek routines.
+;; - <RwtsPatchCodeStart> to <RwtsPatchCodeEnd> (the 1983 DOS 3.3): the patches after <DiskII::Wait>.
+;; - <RwtsCodeStart> to <RwtsCodeEnd> in DOS 3.3: RWTS itself and the formatter. In DOS 3.2 the range runs to
+;;   <RwtsCodeLast>, the last byte of DOS, since its patches at the top of DOS come right after the formatter.
+;; - <TopPatchCodeStart> to <TopPatchCodeLast> (DOS 3.3): the patches at the top of DOS (DosPatches.asm).
 
-;; The first bytes of the master image: a jump to DOS's cold start where the image holds it. DOS's ASTART
-;; names this address until the relocator changes it.
-BEGIN:
-    jmp DBINIT
+; The tables' layout.
 
-;; Moves DOS to the top of memory and starts it there. BOOT 2 jumps here through DI3.
+;; One entry of the relocator's tables: a range of memory, from its first byte up to the byte after its last.
+.struct RelocationRange
+    START .word ;; the range's first byte
+    END .word ;; the byte after the range, where the relocator stops
+.endstruct
+
+;; One entry of <Relocator::AddressRanges> or <Relocator::CodeRanges>.
+;; Parameters: first = the range's first byte, after = the byte after its last, where the relocator stops
+.macro Range first, after
+    .word first, after
+.endmacro
+
+;; The first bytes of the master image: a jump to DOS's cold start where the image holds it.
 ;;
-;; First it finds the highest page of RAM: from $BF00 down, it tests each page's first byte by exclusive-oring
-;; it with 0 to 255 in turn, comparing each result with what the same arithmetic gives on a copy of the byte.
-;; Memory passes all 256; the byte ends where it began, since the 256 values exclusive-ored together give 0.
-;; Where nothing answers, or a ROM does, a comparison fails and the page below is tried.
-;; It doesn't return: it ends at DOS's cold start.
-DOSREL:
-DR0:
+;; At $1B00, the start of the master image (<MASTER_ORIGIN>). `BOOT 2` reads DOS to here, and <RelocateDos> jumps
+;; here to start DOS where it is when there is nowhere higher to move it. DOS's <WriteStartAddress>, where INIT
+;; writes from, names this address until the relocator changes it.
+;; Also: BEGIN (DOS33, DOS31)
+.proc ImageStart
+    jmp ColdStart
+.endproc
+
+;; Moves DOS to the top of memory, adjusting its addresses, and starts it there. `BOOT 2` jumps here through
+;; <Boot::StartDos::ToDos>.
+;;
+;; At $1B03. First it finds the highest page of RAM: from $BF00 down, it tests each page's first byte by
+;; exclusive-oring it with 0 to 255 in turn, comparing each result with what the same arithmetic gives on a copy
+;; of the byte. Memory passes all 256; the byte ends where it began, since the 256 values exclusive-ored together
+;; give 0. Where nothing answers, or a ROM does, a comparison fails and the page below is tried.
+;;
+;; It doesn't return: it ends at DOS's cold start, <ColdStart>, in the moved copy.
+;; Also: DOSREL (DOS33, DOS31), DR0 (DOS33, DOS31)
+.proc RelocateDos
+.assert * = ImageStart + 3, "RelocateDos follows ImageStart's JMP, at $1B03."
+    .using Relocator
 
 ;; The relocator's copy of the byte under test while it looks for the top of RAM.
 ;;
-;; <DOSREL> exclusive-ors the byte at the top of each page with each value from 0 to 255 in turn and does the
-;; same to this copy; the page is RAM only if the two always agree. It shares $26 with RWTS's temporaries.
-;; See: <DOSREL>, <WorkPointer>
-LOC1 = $26
+;; It exclusive-ors the byte at the top of each page with each value from 0 to 255 in turn and does the same to
+;; this copy; the page is RAM only if the two always agree. Apple's listing calls it LOC1, a name the Monitor
+;; gives another byte.
+TestCopy = LowResBase
+
+;; Where the code-range pass keeps its place in <Relocator::CodeRanges> while <DecodeOpcode> uses X.
+RangeIndex = FileManager::Scratch1
+
+    ; From the page at $BF00 down. X stays 0, so (WorkPointer,x) is the byte WorkPointer points at.
     lda #$BF
     sta WorkPointer+1
-    ldx #0                          ; X stays 0: (ZPGWRK,x) is the byte at ZPGWRK
+    ldx #0
     stx WorkPointer
-DR0A:
+
+;; Also: DR0A (DOS33)
+TestPage:
     ldy #0
-DR1B:
+
+;; Also: DR1B (DOS33, DOS31)
+LoadTestByte:
     lda (WorkPointer,x)
-    sta LOC1
-DR1:
+    sta TestCopy
+
+;; Also: DR1 (DOS33, DOS31)
+TestValue:
     tya
-    eor LOC1
-    sta LOC1
+    eor TestCopy
+    sta TestCopy
     tya
     eor (WorkPointer,x)
     sta (WorkPointer,x)
-    cmp LOC1
-    bne DR1A                        ; it didn't hold the value: not RAM
+    cmp TestCopy
+    bne NotRam                      ; it didn't hold the value: not RAM
     iny
-    bne DR1
-    beq DR2                         ; always: all 256 passed, Y = 0
-DR1A:
-    dec WorkPointer+1
-    bne DR0A
+    bne TestValue
+    beq CheckMirror                 ; always: all 256 passed, Y = 0
 
-; Some memory answers at two addresses 8K apart, so the page found may be the same RAM as the page 8K below it
-; (bit 5 of the page number clear). The same test again, now writing below and reading at the page found: if
-; every write shows up there, the two are one, and the top of memory is the lower page. Y is 0.
-DR2:
+;; Also: DR1A (DOS33, DOS31)
+NotRam:
+    dec WorkPointer+1
+    bne TestPage
+
+; Some memory answers at two addresses 8K apart, so the page found may be the same RAM as the page 8K below it (bit
+; 5 of the page number clear). The same test again, now writing below and reading at the page found: if every write
+; shows up there, the two are one, and the top of memory is the lower page. Y is 0.
+
+;; Also: DR2 (DOS33, DOS31)
+CheckMirror:
     lda WorkPointer+1
     and #$DF
     sta FilePointer+1
     stx FilePointer
     lda (FilePointer,x)
     pha                             ; the lower page's byte, to put back
-    sta LOC1
-DR2A:
+    sta TestCopy
+
+;; Also: DR2A (DOS33)
+MirrorValue:
     tya
-    eor LOC1
-    sta LOC1
+    eor TestCopy
+    sta TestCopy
     tya
     eor (WorkPointer,x)
     sta (FilePointer,x)
-    cmp LOC1
-    bne DR2B                        ; separate memory
+    cmp TestCopy
+    bne Separate                    ; separate memory
     iny
-    bne DR2A
-    ldy FilePointer+1                    ; one and the same: the byte is back as it was, by the same arithmetic
+    bne MirrorValue
+    ldy FilePointer+1               ; one and the same: the byte is back as it was, by the same arithmetic
     pla
-    jmp DR2C
-DR2B:
+    jmp SetPages
+
+;; Also: DR2B (DOS33)
+Separate:
     pla
     sta (FilePointer,x)
     ldy WorkPointer+1
 
-; Y is the top page of RAM. DOS ends just above it (NEPAGE), starts DOSLNG pages lower (NSPAGE), and moves by
-; DELTA pages. With RAM to $3FFF DELTA is 0: DOS is already in place and starts where it is.
-DR2C:
+; Y is the top page of RAM. DOS ends just above it (NewEndPage), starts DosPages pages lower (NewFirstPage), and
+; moves by PageOffset pages. With RAM to $3FFF PageOffset is 0: DOS is already in place and starts where it is.
+
+;; Also: DR2C (DOS33)
+SetPages:
     iny
-    sty a:NEPAGE
+    sty a:NewEndPage
     sec
     tya
-    sbc a:DOSLNG
-    sta a:NSPAGE
+    sbc a:DosPages
+    sta a:NewFirstPage
     sec
-    sbc a:RSPAGE
-    beq BEGIN
-    sta a:DELTA
+    sbc a:FirstPage
+    beq ImageStart
+    sta a:PageOffset
 
-; Two fixes before the general ones. ASTART, which INIT uses as the first page of DOS to write to a disk,
-; names BEGIN, the relocator; it is pointed at START instead. And DI3, the JMP at the end of BOOT 2, is
-; pointed at DBINIT, so a disk INIT writes from the moved DOS boots straight into DOS. Both are in ranges the
-; next two passes adjust.
-    lda a:RSPAGE
-    sta a:ASTART+1
-    lda #>(DBINIT)
-    sta a:DI3+2
-    lda #<(DBINIT)
-    sta a:DI3+1
+    ; Two fixes before the general ones. WriteStartAddress, which INIT uses as the first page of DOS to write to a
+    ; disk, names ImageStart, the relocator; it is pointed at DosStart instead. And DI3, the JMP at the end of BOOT
+    ; 2, is pointed at ColdStart, so a disk INIT writes from the moved DOS boots straight into DOS. Both are in
+    ; ranges the next two passes adjust.
+    lda a:FirstPage
+    sta a:WriteStartAddress+1
+    lda #>ColdStart
+    sta a:Boot::StartDos::ToDos+2
+    lda #<ColdStart
+    sta a:Boot::StartDos::ToDos+1
 
-; Adjusts the address tables. Each ADRTAB entry is a range of two-byte addresses, start to end (the end not
-; included); DELTA is added to each one's high byte. Y and ZPGWRK + 1 are the pointer, ZPGWRK staying 0.
+    ; Adjusts the address tables. Each AddressRanges entry is a range of two-byte addresses; PageOffset is added to
+    ; each one's high byte. Y and WorkPointer + 1 are the pointer, WorkPointer staying 0. The entries start after
+    ; the table's count byte.
     ldx #0
     stx WorkPointer
-DR3:
-    lda a:ADRTAB+1,x
+
+;; Also: DR3 (DOS33, DOS31)
+NextAddressRange:
+    lda a:AddressRanges+1+RelocationRange::START,x
     tay
-    lda a:ADRTAB+2,x
+    lda a:AddressRanges+1+RelocationRange::START+1,x
     sta WorkPointer+1
-    jmp DR5                         ; step to the first address's high byte
-DR4:
+    jmp NextAddress                 ; step to the first address's high byte
+
+;; Also: DR4 (DOS33, DOS31)
+AdjustAddress:
     clc
     lda (WorkPointer),y
-    adc a:DELTA
+    adc a:PageOffset
     sta (WorkPointer),y
     iny
-    bne DR5
+    bne NextAddress
     inc WorkPointer+1
-DR5:
+
+;; Also: DR5 (DOS33, DOS31)
+NextAddress:
     iny
-    bne DR6
+    bne CheckRangeEnd
     inc WorkPointer+1
-DR6:
+
+;; Also: DR6 (DOS33, DOS31)
+CheckRangeEnd:
     lda WorkPointer+1
-    cmp a:ADRTAB+4,x
-    bcc DR4
+    cmp a:AddressRanges+1+RelocationRange::END+1,x
+    bcc AdjustAddress
     tya
-    cmp a:ADRTAB+3,x
-    bcc DR4
+    cmp a:AddressRanges+1+RelocationRange::END,x
+    bcc AdjustAddress
     txa
     clc
-    adc #4
+    adc #.sizeof(RelocationRange)
     tax
-    cpx a:ADRTAB
-    bcc DR3
+    cpx a:AddressRanges
+    bcc NextAddressRange
 
-; Adjusts the code. Each CDETAB entry is a range of instructions, walked one at a time with the Monitor's
-; INSDS2, which gives each opcode's length. In a three-byte instruction whose operand's high byte is a page of
-; DOS (RSPAGE to REPAGE), DELTA is added to it. The ranges must hold only code, or the walk falls out of step.
+    ; Adjusts the code. Each CodeRanges entry is a range of instructions, walked one at a time with the Monitor's
+    ; DecodeOpcode, which gives each opcode's length. In a three-byte instruction whose operand's high byte is a
+    ; page of DOS (FirstPage up to EndPage), PageOffset is added to it. The ranges must hold only code, or the
+    ; walk falls out of step.
     ldx #0
-DR7:
-    stx a:TEMP1                     ; INSDS2 changes X
-    lda a:CDETAB+1,x
+
+;; Also: DR7 (DOS33, DOS31)
+NextCodeRange:
+    stx a:RangeIndex                ; DecodeOpcode changes X
+    lda a:CodeRanges+1+RelocationRange::START,x
     sta WorkPointer
-    lda a:CDETAB+2,x
+    lda a:CodeRanges+1+RelocationRange::START+1,x
     sta WorkPointer+1
-DR8:
+
+;; Also: DR8 (DOS33, DOS31)
+NextInstruction:
     ldx #0
     lda (WorkPointer,x)
     jsr DecodeOpcode
-    ldy LENGTH
+    ldy OperandLength
     cpy #2
-    bne DR9                         ; not three bytes long
+    bne SkipInstruction             ; not three bytes long
     lda (WorkPointer),y
-    cmp a:RSPAGE
-    bcc DR9
-    cmp a:REPAGE
-    bcs DR9
-    adc a:DELTA                     ; the carry is clear: the BCS wasn't taken
+    cmp a:FirstPage
+    bcc SkipInstruction
+    cmp a:EndPage
+    bcs SkipInstruction
+    adc a:PageOffset                ; the carry is clear: the BCS wasn't taken
     sta (WorkPointer),y
-DR9:
-    sec                             ; past the instruction: LENGTH + 1 bytes
-    lda LENGTH
+
+;; Also: DR9 (DOS33, DOS31)
+SkipInstruction:
+    sec                             ; past the instruction: OperandLength + 1 bytes
+    lda OperandLength
     adc WorkPointer
     sta WorkPointer
     lda #0
     adc WorkPointer+1
     sta WorkPointer+1
-    ldx a:TEMP1
-    cmp a:CDETAB+4,x
-    bcc DR8
+    ldx a:RangeIndex
+    cmp a:CodeRanges+1+RelocationRange::END+1,x
+    bcc NextInstruction
     lda WorkPointer
-    cmp a:CDETAB+3,x
-    bcc DR8
+    cmp a:CodeRanges+1+RelocationRange::END,x
+    bcc NextInstruction
     txa
     clc
-    adc #4
+    adc #.sizeof(RelocationRange)
     tax
-    cpx a:CDETAB
-    bcc DR7
+    cpx a:CodeRanges
+    bcc NextCodeRange
 
-; Copies DOS, now fixed, to its new place, a page at a time from the top page down: DPGCNT pages, from the
-; page holding ENDOFDOS - $80 (DOS's last) to the page below NEPAGE. The new place is higher, so working down
-; never overwrites a page before it is copied.
-    lda #>(ENDOFDOS-$80)
+    ; Copies DOS, now fixed, to its new place, a page at a time from the top page down: PagesToCopy pages, from the
+    ; page holding DOS's last byte to the page below NewEndPage. The new place is higher, so working down never
+    ; overwrites a page before it is copied.
+    lda #>(DosEnd-$80)
     sta WorkPointer+1
-    ldy a:NEPAGE
+    ldy a:NewEndPage
     dey
     sty FilePointer+1
     lda #0
     sta WorkPointer
     sta FilePointer
     tay
-DR10:
+
+;; Also: DR10 (DOS33, DOS31)
+CopyByte:
     lda (WorkPointer),y
     sta (FilePointer),y
     iny
-    bne DR10
-    dec a:DPGCNT
-    beq DR11
+    bne CopyByte
+    dec a:PagesToCopy
+    beq StartDos
     dec WorkPointer+1
     dec FilePointer+1
-    bne DR10
+    bne CopyByte
 
-; Starts DOS. DBVECT + 3 is a JMP DBINIT in the old copy of DOS, still in memory; its address was adjusted
-; with the rest, so it goes to the cold start in the new copy.
-DR11:
-    jmp DBVECT+3
+; Starts DOS. The second JMP of VectorImage, a JMP to ColdStart, is still in the old copy of DOS; its address was
+; adjusted with the rest, so it goes to the cold start in the new copy.
 
-;; The address tables to adjust: a count of bytes used (four per entry), then the entries, each the start and
-;; the end (not included) of a run of two-byte addresses. Only the high bytes change. The tables of DosInit.asm
-;; between EAT1 and SC1 hold addresses outside DOS too, so only the entries that point into DOS are listed.
-ADRTAB:
-    .byte 9*4
-    .word SAT1                      ; DosInit's table of DOS addresses, START to the command handlers
-    .word EAT1
-    .word RUN                       ; the RUN entry of the active BASIC's vector
-    .word RUN+2
-    .word IBVT+2                    ; RUN in Integer BASIC's
-    .word IBVT+4
-    .word AS1VT                     ; CHAIN and RUN in ROM Applesoft's
-    .word AS1VT+4
-    .word AS2VT                     ; CHAIN and RUN in RAM Applesoft's
-    .word AS2VT+4
-    .word AS2VT+6                   ; its cold start, DBINIT
-    .word AS2VT+8
-    .word SAT2                      ; the file manager's tables
-    .word EAT2
-    .word BAIOB                     ; BOOT 2's pointers to the IOB and the boot page
-    .word ADOSLD+2
-    .word DosIob::DeviceTable                    ; the IOB's pointer to the DCT
-    .word DosIob::DeviceTable+2
-    .byte 0, 0, 0, 0                ; room for three more entries
-    .byte 0, 0, 0, 0
-    .byte 0, 0, 0, 0
+;; Also: DR11 (DOS33, DOS31)
+StartDos:
+    jmp VectorImage+DosColdStartJump-DosWarmStartJump
+.endproc
 
-;; The code ranges to adjust: a count of bytes used (four per entry), then the entries, each the start and end
-;; of a run of instructions. DOS 3.2's RWTS is laid out differently, and it has no patch area: its table has
-;; six entries and room for one more.
-CDETAB:
+;; ;; The master's relocator's tables and variables: the ranges of DOS it adjusts and the pages it moves DOS between.
+;; ;;
+;; ;; Only the System Master has them, at $1B00-$1CFF with <RelocateDos>, which uses them to move DOS to the top of
+;; ;; memory. <Relocator::AddressRanges> lists DOS's tables of addresses and <Relocator::CodeRanges> its code, each
+;; ;; range a <RelocationRange>.
+.scope Relocator
+
+;; The address tables to adjust: a count of bytes used, then <RelocationRange> entries, each a run of two-byte
+;; addresses whose high bytes change.
+;;
+;; The BASIC vectors in DosInit.asm, between <InterpreterAddressesEnd> and <InterpreterCodeStart>, hold addresses
+;; outside DOS too, so only the entries that point into DOS are listed. The table has room for three more.
+;; Also: ADRTAB (DOS33, DOS31)
+AddressRanges:
+    .byte 9*.sizeof(RelocationRange)
+    Range InterpreterAddressesStart, InterpreterAddressesEnd
+    Range BasicRun, BasicRun+2
+    Range IntegerVector+BasicRun-BasicVector, IntegerVector+BasicError-BasicVector
+    Range RomAppleSoftVector, RomAppleSoftVector+BasicError-BasicVector
+    Range RamAppleSoftVector, RamAppleSoftVector+BasicError-BasicVector
+    Range RamAppleSoftVector+BasicColdStart-BasicVector, RamAppleSoftVector+BasicWarmStart-BasicVector
+    Range FileManagerAddressesStart, FileManagerAddressesEnd                ; the file manager's tables
+    Range Boot::IobAddress, Boot::Stage1Address+2           ; `BOOT 2`'s pointers to the IOB and the boot page
+    Range DosIob::DeviceTable, DosIob::DeviceTable+2
+    .res 3*.sizeof(RelocationRange), 0
+
+;; The code ranges to adjust: a count of bytes used, then <RelocationRange> entries, each a run of instructions.
+;;
+;; DOS 3.2's RWTS is laid out differently, and it has no patch areas: its table has six entries and room for one
+;; more. The 1980 DOS 3.3 has no patch area after <DiskII::Wait>.
+;; Also: CDETAB (DOS33, DOS31)
+CodeRanges:
 .if DOS32
-    .byte 6*4
-    .word SC1                       ; the command interpreter, from DBINIT
-    .word EC1
-    .word SC2                       ; the file manager
-    .word EC2
-    .word SC3                       ; BOOT 2 and its helpers
-    .word EC3
-    .word SC4                       ; an empty range, just before the boot page
-    .word EC4
-    .word LowLevelCodeStart                      ; RWTS's low-level routines
-    .word AEC1
-    .word ASC2                      ; RWTS, the formatter and the patches at the top of DOS
-    .word AEC2
-    .byte 0, 0, 0, 0                ; room for one more entry
+    .byte 6*.sizeof(RelocationRange)
+    Range InterpreterCodeStart, InterpreterCodeEnd
+    Range FileManagerCodeStart, FileManagerCodeEnd                  ; the file manager
+    Range BootCodeStart, BootCodeEnd                  ; `BOOT 2` and its helpers
+    Range EmptyCodeStart, EmptyCodeEnd                  ; an empty range, just before the boot page
+    Range LowLevelCodeStart, DiskII::Wait::LowLevelCodeEnd ; RWTS's low-level routines
+    Range RwtsCodeStart, RwtsCodeLast        ; RWTS, the formatter and the patches at the top of DOS
+    .res .sizeof(RelocationRange), 0
 .else
-.if DOS33B
-    .byte 8*4
+.if REVISION_B
+    .byte 8*.sizeof(RelocationRange)
 .else
-    .byte 7*4                       ; no patch area in 1980
+    .byte 7*.sizeof(RelocationRange)
 .endif
-    .word SC1                       ; the command interpreter, from DBINIT
-    .word EC1
-    .word SC2                       ; the file manager
-    .word EC2
-    .word SC3                       ; the patches and BOOT 2 in the boot loader's pages
-    .word EC3
-    .word SWADR1                    ; RWTS, in pieces between its tables
-    .word EWADR1
-    .word LowLevelCodeStart
-    .word AEC1
-.if DOS33B
-    .word PSC1                      ; the 1983 patch area after MSWAIT
-    .word PEC1
+    Range InterpreterCodeStart, InterpreterCodeEnd
+    Range FileManagerCodeStart, FileManagerCodeEnd                  ; the file manager
+    Range BootCodeStart, BootCodeEnd                  ; the patches and `BOOT 2` in the boot loader's pages
+    Range WriteAddressCodeStart, WriteAddressCodeEnd            ; RWTS, in pieces between its tables
+    Range LowLevelCodeStart, LowLevelCodeEnd
+.if REVISION_B
+    Range RwtsPatchCodeStart, RwtsPatchCodeEnd                ; the 1983 patch area after MSWAIT
 .endif
-    .word ASC2
-    .word AEC2
-    .word SDP1                      ; the patches at the top of DOS
-    .word EDP1
+    Range RwtsCodeStart, RwtsCodeEnd
+    Range TopPatchCodeStart, TopPatchCodeLast
 .endif
 
 ;; DOS's first page in the master image.
-RSPAGE:
-    .byte >(START)
+;; Also: RSPAGE (DOS33, DOS31)
+FirstPage:
+    .byte >DosStart
+
 ;; The page just after DOS in the master image.
-REPAGE:
-    .byte >(ENDOFDOS)
+;; Also: REPAGE (DOS33, DOS31)
+EndPage:
+    .byte >DosEnd
+
 ;; DOS's first page once moved.
-NSPAGE:
+;; Also: NSPAGE (DOS33, DOS31)
+NewFirstPage:
     Leftover $00, $1D, $00
+
 ;; The page just after DOS once moved.
-NEPAGE:
+;; Also: NEPAGE (DOS33, DOS31)
+NewEndPage:
     Leftover $00, $40, $00
+
 ;; DOS's length in pages.
-DOSLNG:
-    .byte >(ENDOFDOS-START)
+;; Also: DOSLNG (DOS33, DOS31)
+DosPages:
+    .byte >(DosEnd-DosStart)
+
 ;; How many pages DOS moves up.
-DELTA:
+;; Also: DELTA (DOS33, DOS31)
+PageOffset:
     .byte 0
+
 ;; Pages left to copy.
-DPGCNT:
-    .byte >(ENDOFDOS-START)
+;; Also: DPGCNT (DOS33, DOS31)
+PagesToCopy:
+    .byte >(DosEnd-DosStart)
 .if DOS32 = 0 && YEAR = 1983
     ; leftover: the rest of the page holds whatever was in memory when the master was written
     .byte $FC, $FD, $FD, $FD, $FC, $FD, $FC, $FC, $FC, $FE, $FE, $FC, $FE, $FC, $FC, $FD
@@ -345,4 +427,6 @@ DPGCNT:
     .byte $D3, $8A, $30, $D0, $A6, $1C, $A6, $1B, $A6, $1A, $80, $1A, $65, $5E, $85, $5E
     .byte $90, $02, $E6
 .endif
-    .assert <* = 0
+.assert <* = 0, "The relocator fills its two pages."
+
+.endscope

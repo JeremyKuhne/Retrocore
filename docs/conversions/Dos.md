@@ -87,6 +87,29 @@ boot loader and formatter. Also converted with it: `Software/MasterCreate.asm`, 
 - P19. BTEMP is `Boot::JumpVector`; DOS 3.2's buffers cite the 1978 NBUF6 and NBUF1.
 - P20. DOS 3.2's dead CHKPOSITION is `Formatter::LeftoverPositionCheck`.
 
+## Settled during the conversion
+
+- Apple's names for the IOB's and the parameter list's bytes (IBTRK, CCBREQ ...) are on DOS's labeled copies
+  (`DosIob::Track`, `DosFileParameters::Request`), which DOS's code uses as addresses; one old name belongs to one
+  definition, so the structs' fields carry none. The track/sector list's fields, which nothing labels, carry them.
+- Error 2 is `ERROR_RANGE` (its message is RANGE ERROR, and the scanner gives it for numbers too); the message
+  offsets take the errors' suffixes (`MESSAGE_RANGE`). The DCT's bit 0 is `WHOLE_TRACKS`: "phases per track" was
+  wrong.
+- Names that would have shadowed another definition were changed: DCBIO is `FileManager::AccessDisk` (not
+  `CallRwts`), INITZ `FinishStart::ClearAndResume` (not `ClearStates`), CONWAIT `Rwts::DelayLoop` and the
+  formatter's waits `Pause` (not `Delay`, the Monitor's), SD1 `Rwts::Drive2` (not `SelectDrive2`, the switch),
+  GETNUM `Scanner::ParseNumber` (beside `Scanner::ReadNumber`), BOOT 1's B1READ `Stage1::JumpThroughVector`.
+- The relocator's ranges: InterpreterAddresses, InterpreterCode, FileManagerAddresses, FileManagerCode, BootCode,
+  EmptyCode (DOS 3.2), WriteAddressCode, LowLevelCode, RwtsPatchCode (PSC1/PEC1), RwtsCode, TopPatchCode, each
+  `Start` and `End` (or `Last` for Apple's `* - 1` markers).
+- The Boot13 programs are the SDK's own copies: their names follow DOS's, with no `Also:`.
+- Found in the conversion and documented, not changed: a file of type A passes LOAD's BASIC check
+  and then matches neither BASIC; a program calling the file manager with X = 0 gets INIT's create rule, so LOCK
+  or DELETE of a missing file creates it; the formatter returns the wrong code after 47 failed tries for sector 0;
+  the APPEND fix is mostly in the 1980 DOS already (only MOVEOF and FIXIT2 are 1983).
+- Two assembler limits worked around: `.sizeof` of a `.proc` in an equate, and a forward `.sizeof` of a struct
+  (which assembles as 0); sizes there are numbers with an `.assert`.
+
 ## For the conversion
 
 - Comments found wrong in drafting (CREFLG is tested; a record length of 0 means 256; the success exit reloads A;

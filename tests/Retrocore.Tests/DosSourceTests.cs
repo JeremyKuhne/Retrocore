@@ -100,7 +100,7 @@ public sealed class DosSourceTests
             machine.Bus.Write((ushort)(SdkModules.DosOrigin + offset), dos[offset]);
         }
 
-        AssertMapped(machine, "RDADR16", "ReadAddressSeek.asm");
+        AssertMapped(machine, "DiskII::ReadAddressField", "ReadAddressSeek.asm", "RDADR16");
     }
 
     /// <summary>
@@ -123,16 +123,19 @@ public sealed class DosSourceTests
         }
 
         HasPrompt(machine).Should().BeTrue("DOS loaded and AppleSoft is waiting at its prompt");
-        AssertMapped(machine, "RDADR16", "ReadAddressSeek.asm");
-        AssertMapped(machine, "DOSENT", "FileManagerEntry.asm");
+        AssertMapped(machine, "DiskII::ReadAddressField", "ReadAddressSeek.asm", "RDADR16");
+        AssertMapped(machine, "CallFileManager::ForDos", "FileManagerEntry.asm", "DOSENT");
     }
 
-    // Asserts that a DOS label resolves where DOS runs and maps to its line in the named source.
-    private static void AssertMapped(Apple2Machine machine, string label, string file)
+    // Asserts that a DOS label resolves where DOS runs, maps to its definition in the named source, and is reached by
+    // Apple's name for it too.
+    private static void AssertMapped(Apple2Machine machine, string label, string file, string appleName)
     {
+        string name = label[(label.LastIndexOf(':') + 1)..];
         DebugInfo debug = new();
         SdkModules.AddTo(debug, Apple2Model.IIeEnhanced, s_inputs);
         long address = debug.Resolve(label);
+        debug.Resolve(appleName).Should().Be(address, $"{appleName} is {label}'s historical name");
         address.Should().BeInRange(SdkModules.DosOrigin, SdkModules.DosOrigin + SdkModules.DosSize - 1);
 
         DebugPosition? position = debug.Position(new Apple2TestMemory(machine.Bus), (ushort)address);
@@ -140,9 +143,10 @@ public sealed class DosSourceTests
         line.Path.Should().Be(Path.GetFullPath(SdkModules.DosPath(file, s_inputs)));
         File.ReadAllLines(line.Path)
             .Take(line.Line)
-            .Last(text => text.Length > 1 && text[^1] == ':' && text[..^1].All(char.IsAsciiLetterOrDigit))
+            .Last(text => text.Length > 1 && (text[^1] == ':' && text[..^1].All(char.IsAsciiLetterOrDigit)
+                || text.StartsWith(".proc ", StringComparison.Ordinal)))
             .Should()
-            .Be($"{label}:");
+            .BeOneOf($"{name}:", $".proc {name}");
     }
 
     // A System Master's image, or inconclusive.

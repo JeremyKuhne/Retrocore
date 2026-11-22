@@ -1,319 +1,485 @@
-;; DOS 3.3 AND 3.2 FILE MANAGER: LOCK, POSITION, VERIFY, DELETE AND CATALOG (FDELCAT)
+; retrocore: style=strict ignore=unlinked-name:LOCK -- commands, RWTS and Apple's names in prose
+;; DOS 3.3 and 3.2 file manager: LOCK, UNLOCK, POSITION, VERIFY, DELETE and CATALOG, and the work area's copies
 ;;
-;; The file manager's requests that work on a file as a whole, LOCK and UNLOCK, POSITION, VERIFY, DELETE and
-;; CATALOG, which DOSENT (FileManagerEntry.asm) reaches through CMDVT, and the two routines that move a
-;; file's work area between the file's buffer and FCB, CLCFCB at every entry and RTNFCB at every exit. Where
-;; DOS runs, the module occupies $ACEF-$AE8D.
+;; Apple's FDELCAT module, at $ACEF-$AE8D where DOS runs: the file manager's requests that work on a file as a
+;; whole, which <CallFileManager::ForDos> reaches through <FileManager::RequestHandlers>, and the two routines that
+;; move a file's work area between the file's DOS buffer and <FileManager::FileControlBlock>:
+;; <FileManager::LoadWorkArea> at every entry and <FileManager::SaveWorkArea> at every exit.
 ;;
-;; A catalog entry has the track and sector of the file's first track/sector list at +0 and +1, the type at
-;; +2 with bit 7 set when the file is locked, the name at +3 to +32 and the length in sectors at +33 and +34
-;; (see FileOpenCloseReadWrite.asm). docs/Dos.md describes the catalog and the track/sector lists.
+;; A catalog entry is laid out as <CatalogEntry>: the track and sector of the file's first track/sector list, the
+;; type with <FILE_LOCKED> set when the file is locked, the name and the length in sectors. docs/Dos.md describes
+;; the catalog and the track/sector lists.
 
-;; The LOCK request: sets bit 7 of the file's type in its catalog entry, which stops WRITE, RENAME and
+; The file manager: locking, positioning, verifying, deleting, the catalog, and the work area.
+.scope FileManager continued
+
+;; The lines CATALOG prints before it first waits for a key, the heading's among them.
+CATALOG_FIRST_PAGE_LINES = 22
+
+;; The lines CATALOG prints before each later wait.
+CATALOG_PAGE_LINES = 21
+
+;; <DosFileParameters::Volume>'s value for any volume, which <FileControlBlock::VolumeComplement> holds
+;; complemented.
+ANY_VOLUME = 0
+
+;; The LOCK request: sets <FILE_LOCKED> in the type in the file's catalog entry, which stops WRITE, RENAME and
 ;; DELETE.
-;; In:    DosFileParameters::Name = address of the name, and the disk as for OPEN
-;; Out:   DosFileParameters::ReturnCode = 0
-;; Errors: those of DOPEN
-FLOCK:
-    lda #$80                        ; the bit to leave in the type
-    sta a:TEMP3
-    bne LCKGO                       ; always
-;; The UNLOCK request: clears bit 7 of the file's type in its catalog entry.
-;; In:    DosFileParameters::Name = address of the name, and the disk as for OPEN
-;; Out:   DosFileParameters::ReturnCode = 0
-;; Errors: those of DOPEN
-FUNLCK:
-    lda #00
-    sta a:TEMP3
-; Both: DOPEN leaves the entry's catalog sector in VOLDIR and its offset in TEMP1.
-LCKGO:
-    jsr DOPEN
-    ldx a:TEMP1
-    lda a:VDFILE+2,x
-    and #$7F
-    ora a:TEMP3
-    sta a:VDFILE+2,x
-    jsr WRVDIR
-GOGOOD:
-    jmp GOODIO
+;;
+;; The errors of <OpenFile> leave the file manager.
+;; In: DosFileParameters::Name = the address of the name, and the disk, as for <OpenFile>
+;; Out: DosFileParameters::ReturnCode = 0
+;; Also: FLOCK (DOS33, DOS31)
+.proc Lock
+    lda #FILE_LOCKED
+    sta Scratch3
+    bne ChangeLock                  ; always
+.endproc
 
-;; The POSITION request: sets the file's position from the record number and byte offset, ready for the
-;; next READ or WRITE. Nothing is read from the disk until then.
-;; In:    DosFileParameters::Record = record number, DosFileParameters::ByteOffset = byte offset into the record
-;; Out:   DosFileParameters::ReturnCode = 0
-FPOSTN:
-    jsr LOCSEC
-    jmp GOODIO
+;; The UNLOCK request: clears <FILE_LOCKED> in the type in the file's catalog entry.
+;;
+;; The errors of <OpenFile> leave the file manager.
+;; In: DosFileParameters::Name = the address of the name, and the disk, as for <OpenFile>
+;; Out: DosFileParameters::ReturnCode = 0
+;; Also: FUNLCK (DOS33, DOS31)
+.proc Unlock
+    lda #0
+    sta Scratch3
+    ; Falls into ChangeLock.
+.endproc
+
+;; Gives the file's type the lock bit in <Scratch3>, for <Lock> and <Unlock>, and writes the catalog sector back.
+;;
+;; <OpenFile> leaves the entry's catalog sector in <CatalogBuffer> and its offset in <Scratch1>.
+;; In: Scratch3 = <FILE_LOCKED> or 0, DosFileParameters::Name = the address of the name, and the disk
+;; Out: DosFileParameters::ReturnCode = 0
+;; Also: LCKGO (DOS33, DOS31)
+.proc ChangeLock
+    jsr OpenFile
+    ldx Scratch1
+    lda CatalogBuffer::Entries + CatalogEntry::TYPE,x
+    and #<~FILE_LOCKED
+    ora Scratch3
+    sta CatalogBuffer::Entries + CatalogEntry::TYPE,x
+    jsr WriteCatalogSector
+    ; Falls into ToSucceed.
+.endproc
+
+;; Goes on to <Succeed>: the end of <ChangeLock>, which <Verify> branches to.
+;; Also: GOGOOD (DOS33)
+ToSucceed:
+    jmp Succeed
+
+;; The POSITION request: sets the file's position from the record number and the byte offset, ready for the next
+;; READ or WRITE. Nothing is read from the disk until then.
+;; In: DosFileParameters::Record = the record number, DosFileParameters::ByteOffset = the byte in the record
+;; Out: DosFileParameters::ReturnCode = 0
+;; Also: FPOSTN (DOS33, DOS31)
+.proc Position
+    jsr SetPosition
+    jmp Succeed
+.endproc
 
 ;; The VERIFY request: reads every data sector of the file, to show that each can be read.
 ;;
-;; It steps the work area's relative sector, DCBCRS, from the file's first sector and lets LOCNXB read each
-;; one, until LOCNXB finds a sector the track/sector lists don't name: the end of the file, or the first gap
-;; in a random-access file.
-;; In:    DosFileParameters::Name = address of the name, and the disk as for OPEN
-;; Out:   DosFileParameters::ReturnCode = 0
-;; Errors: those of DOPEN, and the disk errors of DCBIO
-FVAR:
-    jsr DOPEN
-VAR1:
-    jsr LOCNXB
-    bcs GOGOOD                      ; past the last sector
-    inc a:DCBCRS
-    bne VAR1
-    inc a:DCBCRS+1
-    jmp VAR1
+;; It steps <FileControlBlock::PositionSector> from the file's first sector and lets <LocateNextByte> read each
+;; one, until a sector the track/sector lists don't name: the end of the file, or the first gap in a random-access
+;; file. The errors of <OpenFile>, and disk errors (<AccessDisk>), leave the file manager.
+;; In: DosFileParameters::Name = the address of the name, and the disk, as for <OpenFile>
+;; Out: DosFileParameters::ReturnCode = 0
+;; Also: FVAR (DOS33, DOS31)
+.proc Verify
+    jsr OpenFile
+
+;; Reads the next sector, until one is not in the file.
+;; Also: VAR1 (DOS33, DOS31)
+NextSector:
+    jsr LocateNextByte
+    bcs ToSucceed
+    inc FileControlBlock::PositionSector
+    bne NextSector
+    inc FileControlBlock::PositionSector + 1
+    jmp NextSector
+.endproc
 
 ;; The DELETE request: removes a file from the catalog and gives its sectors back to the VTOC.
 ;;
-;; The catalog entry is marked deleted with $FF in its track byte, and the track it held is kept in the
-;; last character of the name (+32). Then each track/sector list is read in turn: every data sector it
-;; names, and the list's own sector, are marked free in the VTOC in memory, which is written once at the
-;; end.
-;; In:    DosFileParameters::Name = address of the name, and the disk as for OPEN
-;; Out:   DosFileParameters::ReturnCode = 0
-;; Errors: 10 when the file is locked, those of DOPEN, and the disk errors of DCBIO
-FDEL:
-    jsr DOPEN
-FD2:
-    ldx a:TEMP1
-    lda a:VDFILE+2,x
-    bpl FD3
-    jmp ERRR10                      ; locked
-FD3:
-    ldx a:TEMP1
-    lda a:VDFILE,x                  ; the first track/sector list's track...
-    sta a:DCBFDT
-    sta a:VDFILE+32,x               ; ...kept over the name's last character
-    lda #$FF                        ; deleted
-    sta a:VDFILE,x
-    ldy a:VDFILE+1,x
-    sty a:DCBFDS
-    jsr WRVDIR
-    clc                             ; the first list, then (carry set) each next one
-FD4:
-    jsr RDFDIR
-    bcs FD7                         ; no more lists
-    jsr MVFCBD                      ; ZPGFCB = the list
-    ldy #TrackSectorList::PAIRS                      ; its first track/sector pair
-FD5:
-    sty a:TEMP1
-    lda (FilePointer),y                  ; the track: 0 for no sector, so skip it, and skip one of $80 or more
-    bmi FD6
-    beq FD6
+;; The catalog entry is marked deleted, <ENTRY_DELETED> in its track byte, and the track it held is kept in the
+;; name's last character. Then each track/sector list is read in turn: every data sector it names, and the list's
+;; own sector, are marked free in the VTOC in memory, which is written once at the end. A locked file is refused with
+;; <ERROR_FILE_LOCKED>; the errors of <OpenFile>, and disk errors (<AccessDisk>), leave the file manager.
+;; In: DosFileParameters::Name = the address of the name, and the disk, as for <OpenFile>
+;; Out: DosFileParameters::ReturnCode = 0
+;; Also: FDEL (DOS33, DOS31)
+.proc Delete
+    jsr OpenFile
+
+;; Refuses a locked file.
+;; Also: FD2 (DOS33, DOS31)
+CheckLocked:
+    ldx Scratch1
+    lda CatalogBuffer::Entries + CatalogEntry::TYPE,x
+    bpl MarkDeleted
+    jmp FileLocked
+
+;; Marks the entry deleted, keeping the first list's track over the name's last character, and writes the catalog
+;; sector.
+;; Also: FD3 (DOS33, DOS31)
+MarkDeleted:
+    ldx Scratch1
+    lda CatalogBuffer::Entries + CatalogEntry::LIST_TRACK,x
+    sta FileControlBlock::FirstListTrack
+    sta CatalogBuffer::Entries + CatalogEntry::NAME + CATALOG_NAME_LENGTH - 1,x
+    lda #ENTRY_DELETED
+    sta CatalogBuffer::Entries + CatalogEntry::LIST_TRACK,x
+    ldy CatalogBuffer::Entries + CatalogEntry::LIST_SECTOR,x
+    sty FileControlBlock::FirstListSector
+    jsr WriteCatalogSector
+
+    ; The first list, then (carry set) each next one.
+    clc
+
+;; Reads the next track/sector list, and frees the sectors it names.
+;; Also: FD4 (DOS33, DOS31)
+NextList:
+    jsr ReadList
+    bcs Finish
+    jsr PointAtListBuffer
+    ldy #TrackSectorList::PAIRS
+
+;; Frees the pair's sector, unless its track is 0 (no sector) or $80 or more.
+;; Also: FD5 (DOS33, DOS31)
+NextPair:
+    sty Scratch1
+    lda (FilePointer),y
+    bmi SkipPair
+    beq SkipPair
     pha
     iny
     lda (FilePointer),y
     tay
     pla
-    jsr FDSUB
-FD6:
-    ldy a:TEMP1
-    iny
-    iny
-    bne FD5                         ; until Y wraps past the last pair
-    lda a:DCBCDT                    ; then the list's own sector
-    ldy a:DCBCDS
-    jsr FDSUB
-    sec
-    bcs FD4                         ; always
-FD7:
-    jsr WRVTOC
-    jmp GOODIO
+    jsr FreeSector
 
+;; Steps to the next pair, until Y wraps past the last.
+;; Also: FD6 (DOS33, DOS31)
+SkipPair:
+    ldy Scratch1
+    iny
+    iny
+    bne NextPair
+
+    ; Then the list's own sector.
+    lda FileControlBlock::ListTrack
+    ldy FileControlBlock::ListSector
+    jsr FreeSector
+    sec
+    bcs NextList                    ; always
+
+;; Writes the VTOC, with every sector freed, once the last list is done.
+;; Also: FD7 (DOS33, DOS31)
+Finish:
+    jsr WriteVtoc
+    jmp Succeed
+.endproc
+
+.if DOS32
 ;; Marks one sector free in the VTOC in memory.
 ;;
-;; FRESEC builds the sector's bit in the work area's four-byte map at DCBABM and merges it into the track's
-;; entry in the VTOC; FDSUB then clears the map, with DCBALS and DCBATK, so the next sector starts from
-;; nothing. All four bytes are cleared, as many as a track of 32 sectors would need; DOS 3.2 clears two, enough
-;; for a track of 13 sectors.
-;; In:    A = track, Y = sector
-;; Uses:  A, X, Y, FileManager::FileControlBlock::ReservedSector, FileManager::FileControlBlock::ReservedTrack, FileManager::FileControlBlock::ReservedMap
-FDSUB:
-    sec                             ; the bit FRESEC shifts in: free
-    jsr FRESEC
+;; <MergeFreeMap> builds the sector's bit in <FileControlBlock::ReservedMap> and merges it into the track's map in
+;; the VTOC; then the reservation is cleared, with <FileControlBlock::ReservedSector> and
+;; <FileControlBlock::ReservedTrack>, so the next sector starts from nothing. DOS 3.2 clears the first two map bytes,
+;; enough for its tracks of 13 sectors.
+;; In: A = the track, Y = the sector
+;; Also: FDSUB (DOS33, DOS31)
+.proc FreeSector
+    sec
+    jsr MergeFreeMap
+
+    ; Clear the reservation.
     lda #0
-.if DOS32
-    ldx #3
-.else
-    ldx #5
-.endif
-FDS1:
-    sta a:DCBALS,x
+    ldx #FileControlBlock::ReservedMap + 1 - FileControlBlock::ReservedSector
+
+;; Clears a byte of the reservation, the last first.
+;; Also: FDS1 (DOS33, DOS31)
+ClearMap:
+    sta FileControlBlock::ReservedSector,x
     dex
-    bpl FDS1
+    bpl ClearMap
     rts
+.endproc
+.else
+;; Marks one sector free in the VTOC in memory.
+;;
+;; <MergeFreeMap> builds the sector's bit in <FileControlBlock::ReservedMap> and merges it into the track's map in
+;; the VTOC; then the reservation is cleared, with <FileControlBlock::ReservedSector> and
+;; <FileControlBlock::ReservedTrack>, so the next sector starts from nothing. All four map bytes are cleared, as many
+;; as a track of 32 sectors would need.
+;; In: A = the track, Y = the sector
+;; Also: FDSUB (DOS33, DOS31)
+.proc FreeSector
+    sec
+    jsr MergeFreeMap
+
+    ; Clear the reservation.
+    lda #0
+    ldx #FileControlBlock::ReservedMap + FREE_MAP_BYTES_PER_TRACK - 1 - FileControlBlock::ReservedSector
+
+;; Clears a byte of the reservation, the last first.
+;; Also: FDS1 (DOS33, DOS31)
+ClearMap:
+    sta FileControlBlock::ReservedSector,x
+    dex
+    bpl ClearMap
+    rts
+.endproc
+.endif
 
 ;; The CATALOG request: prints the disk's volume number and a line for each file in the catalog.
 ;;
-;; Each line is a "*" for a locked file or a space, the type's letter, the length in sectors as three
-;; digits, and the name. Output goes through COUT, and so through CSW, and PRCR waits for a key each time a
-;; screenful has been printed. The volume asked for is set to 0, any, and the number printed is the one RWTS
-;; found on the disk.
-;; In:    DosFileParameters::Drive, DosFileParameters::Slot = the disk
-;; Out:   DosFileParameters::ReturnCode = 0, DosFileParameters::Volume = the disk's volume number
-;; Errors: the disk errors of DCBIO
-;; Uses:  A, X, Y, ParsedNumber, FileManager::Scratch1, FileManager::Scratch2, FileManager::VtocBuffer, FileManager::CatalogBuffer
-RDIR:
-    jsr DCBSUP
-    lda #$FF                        ; any volume (DCBVOL is complemented)
-    sta a:DCBVOL
-    jsr RDVTOC                      ; for the catalog's first track and sector
-    lda #22                         ; lines before the first pause
-    sta a:TEMP2
-    jsr PRCR
-    jsr PRCR
-    ldx #FileManager::VOLUME_MESSAGE_LAST                        ; "DISK VOLUME ", stored backward
-RD0:
-    lda a:VOLMES,x
+;; Each line is a "*" for a locked file or a space, the type's letter, the length in sectors as three digits, and
+;; the name. Output goes through <CharacterOut>, and so through DOS's output hook, and <NewLine> waits for a key each
+;; time a screenful has been printed. The volume asked for is set to any, and the number printed is the one RWTS
+;; found on the disk. Disk errors leave the file manager (<AccessDisk>).
+;; In: DosFileParameters::Drive, DosFileParameters::Slot = the disk
+;; Out: DosFileParameters::ReturnCode = 0, DosFileParameters::Volume = the disk's volume number
+;; Also: RDIR (DOS33, DOS31)
+.proc Catalog
+    jsr SetUpWorkArea
+    lda #ANY_VOLUME ^ $FF
+    sta FileControlBlock::VolumeComplement
+
+    ; The VTOC, for the catalog's first track and sector.
+    jsr ReadVtoc
+    lda #CATALOG_FIRST_PAGE_LINES
+    sta Scratch2
+
+    ; The heading: "DISK VOLUME", stored backward, and the volume number.
+    jsr NewLine
+    jsr NewLine
+    ldx #VOLUME_MESSAGE_LAST
+
+;; Prints the heading's characters, from the last stored.
+;; Also: RD0 (DOS33, DOS31)
+PrintHeading:
+    lda VolumeMessage,x
     jsr CharacterOut
     dex
-    bpl RD0
-    stx ParsedNumber+1                      ; $FF, but PRNUM doesn't look at the high byte
-    lda a:IBSMOD                    ; the volume RWTS read from the disk
+    bpl PrintHeading
+
+    ; X is $FF, but PrintNumber looks only at the low byte. The volume is the one RWTS read from the disk.
+    stx ParsedNumber + 1
+    lda DosIob::VolumeFound
     sta ParsedNumber
-    jsr PRNUM
-    jsr PRCR
-    jsr PRCR
-    clc                             ; the first catalog sector, then each next one
-; Each catalog sector.
-RD1:
-    jsr RDVDIR
-    bcs RD5                         ; no more sectors
+    jsr PrintNumber
+    jsr NewLine
+    jsr NewLine
+
+    ; The first catalog sector, then each next one.
+    clc
+
+;; Reads the next catalog sector.
+;; Also: RD1 (DOS33, DOS31)
+NextCatalogSector:
+    jsr ReadCatalogSector
+    bcs Done
     ldx #0
-; Each entry.
-RD2:
-    stx a:TEMP1
-    lda a:VDFILE,x
-    beq RD5                         ; never used: the end of the catalog
-    bmi RD4                         ; deleted
-    ldy #$A0                        ; a space, or a "*" when locked
-    lda a:VDFILE+2,x
-    bpl RD2A
-    ldy #'*'+$80
-RD2A:
+
+;; Stops at an entry never used, the end of the catalog, and skips a deleted one.
+;; Also: RD2 (DOS33, DOS31)
+ShowEntry:
+    stx Scratch1
+    lda CatalogBuffer::Entries + CatalogEntry::LIST_TRACK,x
+    beq Done
+    bmi SkipEntry
+
+    ; A "*" when locked, or a space.
+    ldy #' ' | $80
+    lda CatalogBuffer::Entries + CatalogEntry::TYPE,x
+    bpl PrintLock
+    ldy #'*' | $80
+
+;; Prints the lock's character.
+;; Also: RD2A (DOS33, DOS31)
+PrintLock:
     tya
     jsr CharacterOut
-; The type's letter. The type has one bit set, or none for a text file: find the highest of bits 6 to 0, as
-; Y = 7 to 1, and print FTTAB,Y: B A R S B A I, or T when no bit is set (Y = 0).
-    lda a:VDFILE+2,x
-    and #$7F
+
+    ; The type's letter. A type has one bit set, or none for a text file: find the highest of bits 6 to 0, as Y = 7
+    ; to 1, and print TypeLetters,Y, or T when no bit is set (Y = 0).
+    lda CatalogBuffer::Entries + CatalogEntry::TYPE,x
+    and #<~FILE_LOCKED
     ldy #7
-    asl a                           ; drop bit 7
-RD2B:
     asl a
-    bcs RD2C
+
+;; Shifts the type left until its highest bit leaves.
+;; Also: RD2B (DOS33, DOS31)
+FindTypeBit:
+    asl a
+    bcs PrintType
     dey
-    bne RD2B
-RD2C:
-    lda a:FTTAB,y
+    bne FindTypeBit
+
+;; Prints the type's letter, then the length in sectors.
+;; Also: RD2C (DOS33, DOS31)
+PrintType:
+    lda TypeLetters,y
     jsr CharacterOut
-    lda #$A0
+    lda #' ' | $80
     jsr CharacterOut
-    lda a:VDFILE+33,x
+
+    ; Three digits: a length of 256 or more is shown less a multiple of 256.
+    lda CatalogBuffer::Entries + CatalogEntry::LENGTH,x
     sta ParsedNumber
-    lda a:VDFILE+34,x
-    sta ParsedNumber+1
-    jsr PRNUM                       ; three digits: a length of 256 or more is shown less 256s
-    lda #$A0
+    lda CatalogBuffer::Entries + CatalogEntry::LENGTH + 1,x
+    sta ParsedNumber + 1
+    jsr PrintNumber
+    lda #' ' | $80
     jsr CharacterOut
-    inx                             ; to the name
+
+    ; X to the name.
     inx
     inx
-    ldy #29
-RD3:
-    lda a:VDFILE,x
+    inx
+    ldy #CATALOG_NAME_LENGTH - 1
+
+;; Prints the name's characters.
+;; Also: RD3 (DOS33, DOS31)
+PrintName:
+    lda CatalogBuffer::Entries,x
     jsr CharacterOut
     inx
     dey
-    bpl RD3
-RD3A:
-    jsr PRCR
-RD4:
-    jsr VDINC                       ; X = the next entry, carry set past the sector's last
-    bcc RD2
-    bcs RD1
-RD5:
-    jmp GOODIO
+    bpl PrintName
+
+;; Ends the line. Nothing refers to Apple's label.
+;; Also: RD3A (DOS33, DOS31)
+EndLine:
+    jsr NewLine
+
+;; Steps to the next entry, or the next sector after the last.
+;; Also: RD4 (DOS33, DOS31)
+SkipEntry:
+    jsr StepEntry
+    bcc ShowEntry
+    bcs NextCatalogSector
+
+;; Succeeds.
+;; Also: RD5 (DOS33, DOS31)
+Done:
+    jmp Succeed
+.endproc
 
 ;; Prints a carriage return for CATALOG, and waits for a key when the screen is full.
 ;;
-;; TEMP2 counts the lines left: 22 for the first screen, which holds the heading, then 21.
-;; Uses:  A, FileManager::Scratch2
-PRCR:
-    lda #$8D
+;; <Scratch2> counts the lines left: <CATALOG_FIRST_PAGE_LINES> for the first screen, which holds the heading, then
+;; <CATALOG_PAGE_LINES>.
+;; In: Scratch2 = the lines left on the screen
+;; Out: Scratch2 = the lines left after this one
+;; Also: PRCR (DOS33, DOS31)
+.proc NewLine
+    lda #KEY_RETURN
     jsr CharacterOut
-    dec a:TEMP2
-    bne PRCR1
+    dec Scratch2
+    bne Done
     jsr ReadKey
-    lda #21
-    sta a:TEMP2
-PRCR1:
-    rts
+    lda #CATALOG_PAGE_LINES
+    sta Scratch2
 
-;; Prints the low byte of CNUM as three decimal digits, with leading zeros.
+;; The return.
+;; Also: PRCR1 (DOS33, DOS31)
+Done:
+    rts
+.endproc
+
+;; Prints the low byte of <ParsedNumber> as three decimal digits, with leading zeros.
 ;;
-;; Each digit is counted by subtracting its power of ten, from CVTAB, until the low byte is less than it.
-;; Only the low byte is compared, so a number of 256 or more prints as itself less a multiple of 256.
-;; In:    ParsedNumber = the number
-;; Uses:  A, Y, ParsedNumber
-PRNUM:
-    ldy #2                          ; hundreds, tens, ones
-PRN1:
-    lda #0                          ; the digit, kept on the stack
+;; Each digit is counted by subtracting its power of ten, from <PowersOfTen>, while the low byte is not less than
+;; it. Only the low byte is compared, so a number of 256 or more prints as itself less a multiple of 256.
+;; In: ParsedNumber = the number
+;; Out: ParsedNumber = what is left after the digits
+;; Also: PRNUM (DOS33, DOS31)
+.proc PrintNumber
+    ; Hundreds, tens and ones: the index of each digit's power of ten.
+    ldy #2
+
+;; Starts a digit, kept on the stack, at 0.
+;; Also: PRN1 (DOS33, DOS31)
+NextDigit:
+    lda #0
     pha
-PRN2:
+
+;; Subtracts the digit's power of ten while it fits, counting.
+;; Also: PRN2 (DOS33, DOS31)
+Subtract:
     lda ParsedNumber
-    cmp a:CVTAB,y
-    bcc PRN3
-    sbc a:CVTAB,y
+    cmp PowersOfTen,y
+    bcc PrintDigit
+    sbc PowersOfTen,y
     sta ParsedNumber
-    lda ParsedNumber+1
+    lda ParsedNumber + 1
     sbc #0
-    sta ParsedNumber+1
+    sta ParsedNumber + 1
+
+    ; The carry is set here: one more.
     pla
-    adc #0                          ; the carry is set here: one more
+    adc #0
     pha
-    jmp PRN2
-PRN3:
+    jmp Subtract
+
+;; Prints the digit, "0" to "9".
+;; Also: PRN3 (DOS33, DOS31)
+PrintDigit:
     pla
-    ora #$B0                        ; the digit "0" to "9"
+    ora #'0' | $80
     jsr CharacterOut
     dey
-    bpl PRN1
+    bpl NextDigit
     rts
+.endproc
 
-;; Copies the open file's work area from its buffer into FCB, and clears CCBSTA.
+;; Copies the open file's work area from its DOS buffer into <FileControlBlock>, and clears the return code.
 ;;
-;; DOSENT calls it at every entry, so CCBFCB must point at a 45-byte work area for every request, even those
-;; that use no file.
-;; In:    DosFileParameters::WorkArea = address of the file's work area
-;; Out:   carry = clear, DosFileParameters::ReturnCode = 0, FilePointer = DosFileParameters::WorkArea
-;; Uses:  A, X, Y
-CLCFCB:
-    jsr MVFCBP
+;; <CallFileManager::ForDos> calls it at every entry, so <DosFileParameters::WorkArea> must point at a 45-byte work
+;; area for every request, even those that use no file.
+;; In: DosFileParameters::WorkArea = the address of the file's work area
+;; Out: carry = clear, DosFileParameters::ReturnCode = 0, FilePointer = the work area
+;; Also: CLCFCB (DOS33, DOS31)
+.proc LoadWorkArea
+    jsr PointAtWorkArea
     ldy #0
-    sty a:CCBSTA
-CF3:
+    sty DosFileParameters::ReturnCode
+
+;; Copies a byte.
+;; Also: CF3 (DOS33, DOS31)
+CopyByte:
     lda (FilePointer),y
-    sta a:FCB,y
+    sta FileControlBlock,y
     iny
     cpy #FILE_CONTROL_SIZE
-    bne CF3
+    bne CopyByte
     clc
     rts
+.endproc
 
-;; Copies FCB back into the open file's work area, keeping the file manager's state for the next request.
-;; RETURN calls it on every exit.
-;; In:    DosFileParameters::WorkArea = address of the file's work area
-;; Out:   FilePointer = DosFileParameters::WorkArea
-;; Uses:  A, X, Y
-RTNFCB:
-    jsr MVFCBP
+;; Copies <FileControlBlock> back into the open file's work area, keeping the file manager's state for the next
+;; request. <Leave> calls it on every exit.
+;; In: DosFileParameters::WorkArea = the address of the file's work area
+;; Out: FilePointer = the work area
+;; Also: RTNFCB (DOS33, DOS31)
+.proc SaveWorkArea
+    jsr PointAtWorkArea
     ldy #0
-RF1:
-    lda a:FCB,y
+
+;; Copies a byte.
+;; Also: RF1 (DOS33, DOS31)
+CopyByte:
+    lda FileControlBlock,y
     sta (FilePointer),y
     iny
     cpy #FILE_CONTROL_SIZE
-    bne RF1
+    bne CopyByte
     rts
+.endproc
+
+.endscope

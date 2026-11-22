@@ -37,7 +37,7 @@ MnemonicsLeft = $F9C0
 MnemonicsRight = $FA00
 
 ;; Inherit: <Monitor:InitDisplay>
-;; Also: INIT (A2RM78, A2RM79, IIEROM82, IIETRM85)
+;; Also: INIT (A2RM78, A2RM79, IIEROM82, IIETRM85), MONINIT (DOS33)
 InitDisplay = $FB2F
 
 ;; Inherit: <Monitor:ModelId>

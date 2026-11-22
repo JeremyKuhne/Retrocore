@@ -7,7 +7,6 @@ using Retrocore.Documentation;
 using Retrocore.Isa;
 using Retrocore.Machines.Devices;
 using System.Diagnostics;
-using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
@@ -96,14 +95,14 @@ internal sealed partial class DebugSession
     // Pasted keys still to type, on a machine with a typing pace, and the cycle the next may go at.
     private readonly Queue<int> _typing = new();
     private ulong _typingDue;
-    private readonly Dictionary<(string Path, int Line), ulong> _lineCycles = [];
+    private readonly DebugLineCycles _lineCycles = new();
     private (string Path, int Line)? _cycleSource;
     private bool _cycleChangesOnly;
     private bool _sourceCyclesDirty = true;
 
     // The cycles run on the current line since they were last added to its count, and whether the line was entered
-    // since then, so its count starts over. Counting here and adding once per instruction keeps the dictionary, and
-    // hashing the line's path, off every cycle, which cost running at max three quarters of its speed.
+    // since then, so its count starts over. Counting here keeps the dictionary, and hashing the line's path, off
+    // every cycle.
     private ulong _pendingLineCycles;
 
     // The requests waiting for the lock running holds.
@@ -1708,15 +1707,18 @@ internal sealed partial class DebugSession
             ObservePascal(before.ProgramCounter);
         }
 
-        FlushLineCycles();
-        (string Path, int Line)? previous = _cycleSource;
-        _cycleSource = _debug.Position(cpu, before.ProgramCounter)?.Chain[0] is { } line
+        (string Path, int Line)? next = _debug.Position(cpu, before.ProgramCounter)?.Chain[0] is { } line
             ? (line.Path, line.Line)
             : null;
 
         // Each line shows its latest run: entering it again starts its count over, while consecutive
         // instructions on one line (a macro, or several statements) add up.
-        _lineEntered = _cycleSource is { } entered && entered != previous;
+        if (next != _cycleSource)
+        {
+            FlushLineCycles();
+            _cycleSource = next;
+            _lineEntered = next is not null;
+        }
 
         // Call cycles and contracts follow the machine's CPU, whose routines the SDK documents.
         if (!machineCpu) { return true; }
@@ -2125,10 +2127,7 @@ internal sealed partial class DebugSession
     {
         if (_cycleSource is { } source && (_pendingLineCycles != 0 || _lineEntered))
         {
-            ref ulong count = ref CollectionsMarshal.GetValueRefOrAddDefault(_lineCycles, source, out bool exists);
-            ulong updated = _lineEntered ? _pendingLineCycles : count + _pendingLineCycles;
-            _sourceCyclesDirty |= !exists || count != updated;
-            count = updated;
+            _lineCycles.Update(source, _pendingLineCycles, _lineEntered, _cycleChangesOnly && !_sourceCyclesDirty);
         }
 
         _pendingLineCycles = 0;
@@ -2144,15 +2143,16 @@ internal sealed partial class DebugSession
     private void NotifySourceCycles(bool force = false)
     {
         FlushLineCycles();
-        if (_cycleChangesOnly && !force && !_sourceCyclesDirty) { return; }
+        if (_cycleChangesOnly && !force && !_sourceCyclesDirty && !_lineCycles.Changed) { return; }
 
         Notify("retro/cycles", SourceCyclesJson());
         _sourceCyclesDirty = false;
+        _lineCycles.Sent();
     }
 
     private JsonObject SourceCyclesJson() => new JsonObject
     {
-        ["lines"] = _lineCycles.OrderBy(pair => pair.Key.Path, StringComparer.OrdinalIgnoreCase).ThenBy(pair => pair.Key.Line)
+        ["lines"] = _lineCycles.Last.OrderBy(pair => pair.Key.Path, StringComparer.OrdinalIgnoreCase).ThenBy(pair => pair.Key.Line)
             .Select(pair => new JsonObject
             {
                 ["path"] = pair.Key.Path,

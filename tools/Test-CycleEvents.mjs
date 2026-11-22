@@ -52,7 +52,8 @@ try {
 
 const source = join(root, "artifacts", `cycle-events-${process.pid}.asm`);
 const sourceLines = [
-    ".cpu Z80", ".org $7000", "start:", "    CALL sub", "    JR start",
+    ".cpu Z80", ".macro pair", "    .repeat 2", "        JR Z,*+2", "    .endrepeat", ".endmacro",
+    ".org $7000", "start:", "    LD A,[choice]", "    OR A", "    pair", "    CALL sub", "    JR start",
     ";; Executes one of two equal-time branches, with an optional longer return.", "sub:",
     "    LD A,[choice]", "    OR A", "    JP Z,zero", "    INC BC", "    JP finish",
     "zero:", "    INC DE", "    JP finish", "finish:", "    LD A,[choice]", "    CP 2",
@@ -61,6 +62,7 @@ const sourceLines = [
 writeFileSync(source, sourceLines.join("\n"), { flag: "wx" });
 const callLine = sourceLines.indexOf("    CALL sub") + 1;
 const alternateLine = sourceLines.indexOf("    INC BC") + 1;
+const pairLine = sourceLines.indexOf("        JR Z,*+2") + 1;
 const mapped = startDap(root);
 const mappedTimeout = setTimeout(() => mapped.fail(new Error("Mapped cycle event test timed out.")), 30000);
 try {
@@ -73,6 +75,20 @@ try {
     await mapped.request("configurationDone");
     assert.equal((await entry).reason, "entry");
     await mapped.request("retro/cycles", { changesOnly: true });
+
+    const step = async () => {
+        const stopped = mapped.event("stopped");
+        await mapped.request("next", { threadId: 1, granularity: "instruction" });
+        await stopped;
+        return mapped.request("retro/cycles");
+    };
+    const pairCycles = snapshot => snapshot.lines.find(row => row.path === source && row.line === pairLine)?.cycles;
+    await step();
+    await step();
+    assert.equal(pairCycles(await step()), 12, "a stop after the first instruction reports its partial line count");
+    assert.equal(pairCycles(await step()), 24, "a stop after the second instruction reports the whole line count");
+    assert.deepEqual((await mapped.request("retro/cycles", { clear: true })).lines, [], "clearing at a line boundary removes its counts");
+
     await mapped.request("continue", { threadId: 1 });
     await new Promise(resolve => setTimeout(resolve, 500));
     mapped.events.length = 0;
@@ -82,6 +98,7 @@ try {
     const current = await mapped.request("retro/cycles");
     const call = current.calls.find(row => row.path === source && row.line === callLine);
     assert.ok(current.lines.length >= 5 && call?.cycles > 0, "the loop records its source lines and call");
+    assert.ok(pairCycles(current) > 0, "the repeated macro line is mapped");
     assert.ok(frames >= 8, "the running loop produces frames");
     assert.ok(updates.length < frames / 2, `unchanged cycle counts suppress most updates (${updates.length} updates, ${frames} frames)`);
 
@@ -101,9 +118,10 @@ try {
     const changed = await mapped.request("retro/cycles");
     assert.equal(changed.calls.find(row => row.path === source && row.line === callLine)?.cycles, call.cycles);
     assert.ok(mapped.events.some(event => event.event === "retro/cycles"
+        && pairCycles(event.body) === 14
         && event.body.lines.some(row => row.path === source && row.line === alternateLine && row.cycles === 6)
         && event.body.calls.some(row => row.path === source && row.line === callLine && row.cycles === call.cycles)),
-    "a new line count sends an update even when the call count is unchanged");
+    "changed and new line counts send an update even when the call count is unchanged");
 
     await pause();
     await choose(2);

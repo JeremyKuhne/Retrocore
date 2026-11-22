@@ -313,6 +313,7 @@ public sealed class StyleLintTests
 
             ;; A type.
             .struct Marked
+                .org 4 ;; Not a member either.
                 .union ;; Not a member.
                     ;; A member.
                     MEMBER .byte
@@ -327,7 +328,9 @@ public sealed class StyleLintTests
             "18: Put definitions, labels and block directives at column 0.",
             "21: Put definitions, labels and block directives at column 0.",
             "25: Put ;; documentation above the definition, not after it.",
-            "25: A trailing documentation comment must follow a definition, such as a constant or member.");
+            "25: A trailing documentation comment must follow a definition, such as a constant or member.",
+            "26: Put ;; documentation above the definition, not after it.",
+            "26: A trailing documentation comment must follow a definition, such as a constant or member.");
     }
 
     // The problems the editor reports for one strict file, as "line: message" with 1-based lines.

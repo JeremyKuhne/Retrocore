@@ -80,9 +80,10 @@ public static partial class DocumentationParser
             }
 
             // A member of a type may have a trailing ;; comment instead of a block above it; a type's own lines may not.
-            // A member that opens a nested type ("NEST .struct Named") is a member line too.
+            // A member that opens a nested type ("NEST .struct Named") is a member line too; a directive such as .org
+            // is not a member.
             (string? typeMember, string typeDirective, _) = TypeLine(trimmed);
-            bool memberLine = typeDepth != 0 && (typeDirective.Length == 0 || typeMember is not null);
+            bool memberLine = typeDepth != 0 && (typeMember is not null || typeDirective.Length == 0 && !trimmed.StartsWith('.'));
             if (comment is not null && comment.StartsWith(Marker, StringComparison.Ordinal) && !memberLine)
             {
                 Warn("Put ;; documentation above the definition, not after it.", index);

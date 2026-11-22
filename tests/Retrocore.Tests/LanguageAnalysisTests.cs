@@ -470,6 +470,39 @@ public sealed partial class LanguageAnalysisTests
     }
 
     /// <summary>
+    ///  A folder beside a source that is deleted after it was listed, as a build or a cleanup can do while the
+    ///  language server looks for the source's root, has no sources rather than failing the search; the root is
+    ///  still found through the folders that remain.
+    /// </summary>
+    [TestMethod]
+    public void VanishedFoldersDoNotStopTheRootSearch()
+    {
+        string folder = Directory.CreateTempSubdirectory("retrocore-roots").FullName;
+        try
+        {
+            string library = Directory.CreateDirectory(Path.Join(folder, "lib")).FullName;
+            string program = Directory.CreateDirectory(Path.Join(folder, "program")).FullName;
+            string gone = Directory.CreateDirectory(Path.Join(folder, "gone")).FullName;
+            string included = Path.Join(library, "Library.asm");
+            string root = Path.Join(program, "Main.asm");
+            File.WriteAllText(included, "    rts\n");
+            File.WriteAllText(root, ".include \"../lib/Library.asm\"\n");
+
+            // The folders as they were listed, one of which is deleted before its files are read.
+            List<string> listed = [library, gone, program];
+            Directory.Delete(gone);
+
+            SourceIncludes.SourcesIn(gone).Should().BeEmpty();
+            SourceIncludes.RootOf(included, listed).Should().Be(root);
+            SourceIncludes.RootOf(included).Should().Be(root);
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    /// <summary>
     ///  The name under the cursor includes scope qualifiers and cheap locals, but not a label's colon.
     /// </summary>
     /// <param name="line">The line.</param>

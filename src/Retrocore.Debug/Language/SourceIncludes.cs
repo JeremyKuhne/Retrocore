@@ -91,9 +91,17 @@ internal static partial class SourceIncludes
     /// </remarks>
     /// <param name="path">The file's full path.</param>
     /// <returns>The root's full path.</returns>
-    internal static string RootOf(string path)
+    internal static string RootOf(string path) => RootOf(path, NeighborFolders(path));
+
+    /// <summary>
+    ///  Gets the root to analyze a file through, searching the given folders' sources.
+    /// </summary>
+    /// <param name="path">The file's full path.</param>
+    /// <param name="folders">The folders to search, its own first; one that no longer exists is skipped.</param>
+    /// <returns>The root's full path.</returns>
+    internal static string RootOf(string path, IEnumerable<string> folders)
     {
-        List<string> candidates = Neighbors(path);
+        List<string> candidates = [.. folders.SelectMany(SourcesIn)];
         HashSet<string> seen = [with(StringComparer.OrdinalIgnoreCase), path];
         string current = path;
         while (candidates.FirstOrDefault(candidate =>
@@ -106,23 +114,51 @@ internal static partial class SourceIncludes
         return current;
     }
 
-    // The sources in a file's folder and in the folders beside it, its own folder first, each by name descending.
-    private static List<string> Neighbors(string path)
+    // A file's folder and the folders beside it, its own first, the others by name.
+    private static List<string> NeighborFolders(string path)
     {
         string? directory = Path.GetDirectoryName(path);
         if (directory is null || !Directory.Exists(directory)) { return []; }
-        IEnumerable<string> folders = [directory];
-        if (Path.GetDirectoryName(directory) is { } parent && Directory.Exists(parent))
+        List<string> folders = [directory];
+        if (Path.GetDirectoryName(directory) is not { } parent) { return folders; }
+        try
         {
-            folders = folders.Concat(Directory.EnumerateDirectories(parent, "*", s_searchOne)
+            folders.AddRange(Directory.EnumerateDirectories(parent, "*", s_searchOne)
                 .Where(folder => !string.Equals(Path.GetFullPath(folder), Path.GetFullPath(directory), StringComparison.OrdinalIgnoreCase))
                 .Order(StringComparer.OrdinalIgnoreCase));
         }
+        catch (DirectoryNotFoundException)
+        {
+            // The parent went away while it was listed; the file's own folder is still searched.
+        }
 
-        return [.. folders.SelectMany(folder => Directory.EnumerateFiles(folder, "*", s_searchOne)
-            .Where(IsAssemblySource)
-            .Select(Path.GetFullPath)
-            .OrderDescending(StringComparer.OrdinalIgnoreCase))];
+        return folders;
+    }
+
+    /// <summary>
+    ///  Gets the assembly sources directly in a folder, by name descending.
+    /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   A folder can be deleted after it is listed and before it is read, by a build or a cleanup beside the
+    ///   sources; it then has no sources, rather than failing the analysis of the file being edited.
+    ///  </para>
+    /// </remarks>
+    /// <param name="folder">The folder.</param>
+    /// <returns>The sources' full paths; none when the folder no longer exists.</returns>
+    internal static List<string> SourcesIn(string folder)
+    {
+        try
+        {
+            return [.. Directory.EnumerateFiles(folder, "*", s_searchOne)
+                .Where(IsAssemblySource)
+                .Select(Path.GetFullPath)
+                .OrderDescending(StringComparer.OrdinalIgnoreCase)];
+        }
+        catch (DirectoryNotFoundException)
+        {
+            return [];
+        }
     }
 
     [GeneratedRegex(@"^[ \t]*(?:[A-Za-z_@][\w@]*:?[ \t]+)?\.include[ \t]+""(?<file>[^""]+)""", RegexOptions.Multiline | RegexOptions.IgnoreCase)]

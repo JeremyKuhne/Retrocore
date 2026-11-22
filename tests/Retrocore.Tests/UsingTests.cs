@@ -858,6 +858,83 @@ public sealed class UsingTests
     }
 
     /// <summary>
+    ///  In the editor, a root name only a skipped conditional branch defines does not hide the name a
+    ///  <c>.using</c> brings in, as it does not in the assembler.
+    /// </summary>
+    [TestMethod]
+    public void TheEditorIgnoresSkippedDefinitionsWhenBinding()
+    {
+        string directory = Directory.CreateTempSubdirectory("retrocore-using").FullName;
+        try
+        {
+            string main = Path.Join(directory, "main.asm");
+            File.WriteAllText(main, """
+                .scope A
+                V = 5
+                .endscope
+                .if 0
+                V = 9
+                .endif
+                .proc P
+                    .using A
+                    lda #V
+                    rts
+                .endproc
+
+                """);
+
+            SourceAnalysis analysis = SourceAnalysis.Assemble(main, _ => null);
+            analysis.Result.Diagnostics.Should().BeEmpty();
+            (analysis.Bound("V", main, line: 8) ?? []).Select(site => site.Name).Should().Equal("A::V");
+            analysis.UsedNames(main, line: 8).Select(used => used.Name).Should().Contain("V");
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
+    ///  The editor binds a used name the same way when many requests reach a fresh analysis at once.
+    /// </summary>
+    [TestMethod]
+    public void TheEditorBindsUsedNamesFromParallelRequests()
+    {
+        // Language requests run in parallel on one analysis, and the first ones fill its scope caches.
+        string directory = Directory.CreateTempSubdirectory("retrocore-using").FullName;
+        try
+        {
+            string main = Path.Join(directory, "main.asm");
+            List<string> parts = [];
+            for (int part = 0; part < 40; part++)
+            {
+                string path = Path.Join(directory, $"p{part}.asm");
+                File.WriteAllText(path, $".proc P{part}\n.using E\n    lda Col\n.endproc\n");
+                parts.Add(path);
+            }
+
+            File.WriteAllText(main, ".scope E\nCol = 1\n.endscope\n" + string.Concat(parts.Select(path => $".include \"{Path.GetFileName(path)}\"\n")));
+            for (int round = 0; round < 20; round++)
+            {
+                SourceAnalysis analysis = SourceAnalysis.Assemble(main, _ => null);
+                analysis.Result.Diagnostics.Should().BeEmpty();
+                string?[] bound = new string?[parts.Count * 2];
+                Parallel.For(0, bound.Length, at =>
+                {
+                    IReadOnlyList<SymbolSite>? sites = analysis.Bound("Col", parts[at % parts.Count], line: 2);
+                    bound[at] = sites is [{ } site] ? site.Name : null;
+                });
+
+                bound.Should().AllBe("E::Col");
+            }
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
     ///  In the editor, a macro's <c>.using</c> lasts as long as it does in the assembler: past the invocation when
     ///  the scope it is in closes outside the macro, and not when the macro closes it, a continued piece included.
     /// </summary>

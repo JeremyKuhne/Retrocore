@@ -4,6 +4,7 @@
 
 using Retrocore.Assembler;
 using Retrocore.Documentation;
+using System.Collections.Concurrent;
 using System.Text.RegularExpressions;
 
 namespace Retrocore.Debug.Language;
@@ -19,7 +20,9 @@ internal sealed partial class SourceAnalysis
     private readonly Dictionary<string, AssemblyDialect> _dialects = [with(StringComparer.OrdinalIgnoreCase)];
     private readonly Dictionary<string, string[]> _lines = [with(StringComparer.OrdinalIgnoreCase)];
     private readonly Func<string, string?> _text;
-    private readonly Dictionary<string, IReadOnlyList<IReadOnlyList<DocumentationScopes>>> _scopes = [with(StringComparer.OrdinalIgnoreCase)];
+
+    // Filled lazily, and language requests run in parallel: a cache entry is computed whole and then published.
+    private readonly ConcurrentDictionary<string, IReadOnlyList<IReadOnlyList<DocumentationScopes>>> _scopes = new(StringComparer.OrdinalIgnoreCase);
     private HashSet<string>? _scopeNames;
     private readonly Dictionary<string, List<(string Path, int Line)>> _includedFrom = [with(StringComparer.OrdinalIgnoreCase)];
     private readonly Dictionary<string, HashSet<int>> _usingLines = [with(StringComparer.OrdinalIgnoreCase)];
@@ -27,6 +30,9 @@ internal sealed partial class SourceAnalysis
     // Keyed by the upper-cased path, as the other path-keyed maps here compare paths without case.
     private readonly Dictionary<(string Path, int Line), int> _usingOrder = [];
     private readonly Dictionary<string, int> _scopeOpened = [with(StringComparer.OrdinalIgnoreCase)];
+
+    // Definitions found only in the text, such as in a branch the assembly skipped.
+    private readonly HashSet<SymbolSite> _textOnly = [];
     private DocumentationSet? _documentation;
 
     private SourceAnalysis(
@@ -184,7 +190,9 @@ internal sealed partial class SourceAnalysis
                     SymbolSiteKind kind = constant ? SymbolSiteKind.Constant : SymbolSiteKind.Label;
                     string name = match.Groups["name"].Value;
                     long? value = result.Symbols.TryGetValue(name, out long known) ? known : null;
-                    Add(new(name, path, line, Column: 0, kind, value));
+                    SymbolSite site = new(name, path, line, Column: 0, kind, value);
+                    _textOnly.Add(site);
+                    Add(site);
                 }
             }
         }
@@ -375,12 +383,18 @@ internal sealed partial class SourceAnalysis
         return null;
     }
 
-    // The definitions of a qualified name, matching case when exact.
+    // The definitions of a qualified name, matching case when exact. After a successful assembly, only those it
+    // made: a name the text alone defines, as in a skipped .if branch, is not one the assembler bound.
     private List<SymbolSite>? Defined(string name, bool exact)
     {
         if (!_definitions.TryGetValue(name, out List<SymbolSite>? sites)) { return null; }
-        if (!exact) { return sites; }
-        List<SymbolSite> matching = [.. sites.Where(site => string.Equals(site.Name, name, StringComparison.Ordinal))];
+        bool success = Result.Success;
+        List<SymbolSite> matching =
+        [
+            .. sites.Where(site => (!exact || string.Equals(site.Name, name, StringComparison.Ordinal))
+                && !(success && _textOnly.Contains(site)))
+        ];
+
         return matching.Count == 0 ? null : matching;
     }
 
@@ -440,7 +454,7 @@ internal sealed partial class SourceAnalysis
                 ? lines
                 : (IReadOnlyList<DocumentationScopes>)[.. lines.Select(scopes => Within(outer, scopes))])];
 
-            _scopes[path] = contexts;
+            contexts = _scopes.GetOrAdd(path, contexts);
         }
 
         return [.. contexts.Select(lines => (uint)line < (uint)lines.Count ? lines[line] : DocumentationScopes.Root)];
@@ -521,18 +535,22 @@ internal sealed partial class SourceAnalysis
     // Whether a qualified name is a scope that some definition is in.
     private bool IsScope(string name)
     {
-        if (_scopeNames is null)
+        HashSet<string>? names = Volatile.Read(ref _scopeNames);
+        if (names is null)
         {
-            _scopeNames = [with(StringComparer.OrdinalIgnoreCase)];
+            // Built whole before it is published, so a parallel request never sees part of it.
+            names = [with(StringComparer.OrdinalIgnoreCase)];
             foreach (string definition in _definitions.Keys)
             {
-                for (string scope = Parent(definition); scope.Length != 0 && _scopeNames.Add(scope); scope = Parent(scope))
+                for (string scope = Parent(definition); scope.Length != 0 && names.Add(scope); scope = Parent(scope))
                 {
                 }
             }
+
+            names = Interlocked.CompareExchange(ref _scopeNames, names, comparand: null) ?? names;
         }
 
-        return _scopeNames.Contains(name);
+        return names.Contains(name);
     }
 
     private static string Parent(string name)

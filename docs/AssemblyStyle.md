@@ -4,6 +4,13 @@ How Retrocore's assembly sources are written: the SDK's ROM sources, the samples
 hand. The goal is source a person can read, debug and change: structure that shows how the code works, names that
 say what things are, and documentation the tools can check.
 
+The reader it is written for knows programming and today's tools but not the old machine: names say what things
+are in full words, comments explain the machine and link the docs that explain its concepts, and the names the
+original manuals and listings used stay attached as historical names (`Also:`), so a reader coming from those
+documents still lands on the right definition. Success is a source that is easy to debug and to build new software
+on with modern tools, and that makes disassemblies of old programs, which name what they use by these sources'
+names, easy to follow. [ConvertingSources.md](ConvertingSources.md) says more, and how a source is converted.
+
 [NativeAssembly.md](NativeAssembly.md) is the dialect and [DocComments.md](DocComments.md) the `;;` format. This
 guide is how to use them.
 

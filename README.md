@@ -109,7 +109,9 @@ the Variables view and verifies `Keeps:` and `Uses:` contracts when calls return
 summaries into generated C# XML documentation ([DocComments.md](docs/DocComments.md)). A definition's `Also:`
 section keeps the names manuals and listings gave it, so code written with them still assembles and the editor
 offers the current name. Sources maintained by hand follow [the assembly style guide](docs/AssemblyStyle.md),
-which the SDK's ROM sources are being converted to.
+which the SDK's ROM sources are being converted to: they are written for developers new to the old machines, with
+the old names kept as a bridge to the original documents. [ConvertingSources.md](docs/ConvertingSources.md) is
+why and how, and [the conversion logs](docs/conversions/README.md) record what was decided for each source.
 
 In VS Code, assembly files get syntax highlighting, live diagnostics as you type, go to definition, find all
 references, hovers (instruction summaries, flags, addressing modes, cycle counts, and emitted bytes),

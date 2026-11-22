@@ -13,7 +13,8 @@ workspace adds documents of its own, or replaces a key, with the same columns.
 | A2RM78 | Apple II Reference Manual | 1978 | Apple Computer | <https://archive.org/details/Apple_II_Redbook> |
 | A2RM79 | Apple II Reference Manual | 1979 | Apple Computer | |
 | PA1 | Programmer's Aid #1 | 1978 | Apple Computer | <https://archive.org/details/programmers-aid-1> |
-| DOS33 | DOS 3.3 source listing | July 1983 | Apple Computer | |
+| DOS31 | Apple II DOS source listings (Shepardson Microsystems' DOS and Wozniak and Wigginton's read/write routines), as the Computer History Museum released them | 1978 | Apple Computer | <https://computerhistory.org/blog/apple-ii-dos-source-code/> |
+| DOS33 | DOS 3.3 C source listing | July 1983 | Apple Computer | <https://elite.bbcelite.com/pdfs/apple2_SRC_DOS33C_1983.pdf> |
 | IBSM | Annotated listing of Integer BASIC, by Paul R. Santa-Maria | | | |
 | IIEROM82 | Apple IIe Reference Manual Addendum: Monitor ROM Listings, For //e Only | 1982 | Apple Computer | <https://archive.org/details/Reference_Manual_Addendum_Monitor_ROM_Listings> |
 | IIETRM85 | Apple IIe Technical Reference Manual | 1985 | Addison-Wesley | <https://archive.org/details/a2etrm> |

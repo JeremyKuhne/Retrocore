@@ -83,6 +83,11 @@ most often missed:
 
 ## Converting a source to the style
 
+Read [ConvertingSources.md](../../../docs/ConvertingSources.md) first: who the sources are for (developers new to
+the old machines, with the old names kept as a bridge), the method (inventory, citations, a rename table the owner
+reviews, conversion, verification) and the rules learned so far. The [conversion logs](../../../docs/conversions/README.md)
+are the precedents: follow a settled rule rather than deciding it again.
+
 For a disassembly, an old-style SDK source, or anything maintained by hand that does not follow the guide yet:
 
 1. **Propose the names first.** For each file, list old name, new name and why, and get them reviewed before

@@ -392,7 +392,7 @@
       ]
     },
     "merlin": {
-      "begin": "\\A[ \\t]*; (?i:retrocore:(?:(?![ \\t]* -- )[ \\t]+[^\\s]+)*?[ \\t]*dialect=merlin)(?=[ \\t]|$).*$",
+      "begin": "\\A[ \\t]*; (?i:retrocore:)(?![ \\t]* -- )[ \\t]*(?:[^\\s]+(?![ \\t]* -- )[ \\t]+)*?(?i:dialect=merlin)(?=[ \\t]|$).*$",
       "beginCaptures": {
         "0": {
           "patterns": [

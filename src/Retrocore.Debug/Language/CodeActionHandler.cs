@@ -12,12 +12,18 @@ namespace Retrocore.Debug.Language;
 internal sealed class CodeActionHandler
 {
     private readonly LanguageWorkspace _workspace;
+    private readonly BasicDocuments _basic;
 
     /// <summary>
     ///  Creates the handler.
     /// </summary>
     /// <param name="workspace">The workspace, for the document's lines.</param>
-    public CodeActionHandler(LanguageWorkspace workspace) => _workspace = workspace;
+    /// <param name="basic">The open BASIC documents, which have no assembly quick fixes.</param>
+    public CodeActionHandler(LanguageWorkspace workspace, BasicDocuments basic)
+    {
+        _workspace = workspace;
+        _basic = basic;
+    }
 
     /// <summary>
     ///  Gets the quick fixes for a request (see <see cref="LintEditor.Actions"/>).
@@ -28,6 +34,14 @@ internal sealed class CodeActionHandler
     {
         if (parameters?["textDocument"]?["uri"]?.GetValue<string>() is not { } uri) { return new JsonArray(); }
         if (parameters["context"]?["diagnostics"] is not JsonArray diagnostics) { return new JsonArray(); }
-        return LintEditor.Actions(uri, _workspace.LinesOf(LanguageHost.PathOf(new DocumentUri(uri))), diagnostics);
+
+        // A BASIC document, or one that is not a file (such as a machine's program), has no lint to fix.
+        DocumentUri document = new(uri);
+        if (_basic.Get(document) is not null || !Uri.TryCreate(uri, UriKind.Absolute, out Uri? parsed) || !parsed.IsFile)
+        {
+            return new JsonArray();
+        }
+
+        return LintEditor.Actions(uri, _workspace.LinesOf(LanguageHost.PathOf(document)), diagnostics);
     }
 }

@@ -114,7 +114,7 @@ internal static class LanguageHost
         CompletionHandler completion = new(workspace, basic);
         DocumentSymbolHandler documentSymbols = new(workspace, basic);
         WorkspaceSymbolHandler workspaceSymbols = new(workspace);
-        CodeActionHandler codeActions = new(workspace);
+        CodeActionHandler codeActions = new(workspace, basic);
 
         server.OnRequest("initialize", _ => Capabilities());
         server.OnRequest("shutdown", (JsonObject? _) => (JsonNode?)null);

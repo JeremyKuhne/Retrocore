@@ -90,6 +90,7 @@
     <Compile Include="..\..\src\Retrocore.Debug\I8080CallStack.cs" Link="I8080CallStack.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\DebugCallStack.cs" Link="DebugCallStack.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\DebugCallCycles.cs" Link="DebugCallCycles.cs" />
+    <Compile Include="..\..\src\Retrocore.Debug\DebugLineCycles.cs" Link="DebugLineCycles.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\DebugContract.cs" Link="DebugContract.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\DebugContracts.cs" Link="DebugContracts.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\DebugDocumentation.cs" Link="DebugDocumentation.cs" />

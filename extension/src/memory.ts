@@ -260,6 +260,7 @@ async function toggleBreakpoint(session: vscode.DebugSession, bank: string | nul
 export function registerMemory(context: vscode.ExtensionContext): void {
     // Sessions by id, since a memory URI names its session and VS Code lists only the active one.
     const sessions = new Map<string, vscode.DebugSession>();
+    const subscriptionSessions = new Set<string>();
     const editors = new Set<MemoryEditor>();
     // Posts a message to the other editors showing the same session's same space as an editor.
     const others = (editor: MemoryEditor, body: Record<string, unknown>): void => {
@@ -296,6 +297,7 @@ export function registerMemory(context: vscode.ExtensionContext): void {
     const restarted = new Set<string>();
     context.subscriptions.push(vscode.debug.onDidTerminateDebugSession(session => {
         sessions.delete(session.id);
+        subscriptionSessions.delete(session.id);
         for (const editor of editors) {
             if (editor.session.id === session.id) void editor.panel.webview.postMessage({ type: "ended" });
         }
@@ -325,6 +327,12 @@ export function registerMemory(context: vscode.ExtensionContext): void {
                 },
                 onDidSendMessage(sent: unknown) {
                     if (typeof sent !== "object" || sent === null) return;
+                    if ("command" in sent && sent.command === "initialize" && "body" in sent
+                        && typeof sent.body === "object" && sent.body !== null
+                        && "supportsRetrocoreMemorySubscriptions" in sent.body
+                        && sent.body.supportsRetrocoreMemorySubscriptions === true) {
+                        subscriptionSessions.add(session.id);
+                    }
 
                     // A restarted session is ready for its editors once the debugger has its configuration.
                     if ("command" in sent && sent.command === "configurationDone" && restarted.delete(session.id)) {
@@ -419,6 +427,8 @@ export function registerMemory(context: vscode.ExtensionContext): void {
             }
 
             const base = bankBase(start.bank);
+            const subscriber = subscriptionSessions.has(session.id) ? randomBytes(16).toString("hex") : undefined;
+            let disposed = false;
             let ready!: () => void;
             const editor: MemoryEditor = {
                 session, reference: base, panel, tests: new Map(),
@@ -432,8 +442,13 @@ export function registerMemory(context: vscode.ExtensionContext): void {
             lastEditor = editor;
             panel.onDidChangeViewState(() => { if (panel.active) lastEditor = editor; });
             panel.onDidDispose(() => {
+                disposed = true;
                 editors.delete(editor);
                 if (lastEditor === editor) lastEditor = undefined;
+                if (subscriber !== undefined && sessions.has(session.id)) {
+                    void session.customRequest("retro/memory/unsubscribe", { subscriber })
+                        .then(undefined, error => console.warn(`Retrocore: could not unsubscribe the closing memory editor: ${message(error)}`));
+                }
             });
             const icons = vscode.Uri.joinPath(context.extensionUri, "media", "codicons");
             panel.webview.options = { enableScripts: true, localResourceRoots: [icons] };
@@ -457,7 +472,7 @@ export function registerMemory(context: vscode.ExtensionContext): void {
                 try {
                     switch (received.type) {
                         case "read":
-                            await reply(await session.customRequest("retro/memory/read", { memoryReference: base, offset: received.offset, count: received.count }));
+                            await reply(await session.customRequest("retro/memory/read", { memoryReference: base, offset: received.offset, count: received.count, subscriber }));
                             break;
                         case "banks": {
                             // The other banks this editor's bytes can be compared with, read now, as a card can go in.
@@ -495,7 +510,8 @@ export function registerMemory(context: vscode.ExtensionContext): void {
                             const reference = String(received.reference);
                             const { banks } = await session.customRequest("retro/memoryBanks") as { banks: MemoryBank[] };
                             if (!banks.some(item => bankBase(item.name) === reference)) throw new Error(`The machine has no memory bank at ${reference} now.`);
-                            await reply(await session.customRequest("retro/memory/read", { memoryReference: reference, offset: received.offset, count: received.count }));
+                            if (disposed) break;
+                            await reply(await session.customRequest("retro/memory/read", { memoryReference: reference, offset: received.offset, count: received.count, subscriber }));
                             break;
                         }
                         case "labels":

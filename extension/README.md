@@ -752,6 +752,9 @@ call line, as AppleSoft does, since MACRO-10 sources define instructions as macr
 
 While debugging, the gutter shows the CPU cycles of each source line's latest
 run. Consecutive instructions on one line, such as a macro's, add up.
+The extension asks for full cycle snapshots only when their lines or calls change;
+stops always send a full snapshot. `changesOnly` changes the cycle-event stream
+for the whole debug session, so it affects every consumer of that session's events.
 
 A `JSR` line also shows its latest call's cycles after the line's text, for
 example `⤷ 17c`. That count covers the `JSR`, the subroutine with any calls it
@@ -1552,6 +1555,7 @@ npm ci
 npm run compile
 npm run test:grammar
 npm run test:language
+npm run test:memory-integration
 ```
 
 `compile` regenerates [the TextMate grammar](syntaxes/retrocore.tmLanguage.json)
@@ -1566,6 +1570,9 @@ to test scopes, not a JavaScript approximation of the patterns.
 language registration/detection without a debug session, word selection,
 comment toggling and bracket navigation. It needs VS Code but no ROMs or .NET
 build. Set `RETROCORE_VSCODE` to override the test host executable path.
+
+`test:memory-integration` uses the isolated VS Code host and a Release debug host to check cycle subscriptions and
+multiple memory-editor subscriptions; it needs the SDK ROM sources but no external ROMs.
 
 `npm test` builds and runs both tokenization and the full debugger integration
 tests, which include booting the Model I to Level II's READY. The full integration suite also needs

@@ -17,12 +17,14 @@ async function main(): Promise<void> {
         extensionDevelopmentPath: extension,
         extensionTestsPath: path.join(__dirname, "suite.js"),
         extensionTestsEnv: {
-            RETROCORE_TEST_LANGUAGE_ONLY: process.argv.includes("--language-only") ? "1" : "0"
+            RETROCORE_TEST_LANGUAGE_ONLY: process.argv.includes("--language-only") ? "1" : "0",
+            RETROCORE_TEST_MEMORY_ONLY: process.argv.includes("--memory-only") ? "1" : "0"
         },
         launchArgs: [
             workspace, "--user-data-dir", path.join(profile, "profile"),
             "--extensions-dir", path.join(profile, "extensions"),
-            "--skip-welcome", "--skip-release-notes", "--disable-workspace-trust", "--disable-extensions"
+            "--skip-welcome", "--skip-release-notes", "--disable-workspace-trust", "--disable-extensions",
+            ...(process.argv.includes("--memory-only") ? ["--disable-telemetry"] : [])
         ]
     });
 }

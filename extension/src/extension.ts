@@ -20,6 +20,7 @@ import { registerBasic } from "./basic";
 import { registerBasicLanguage } from "./basicLanguage";
 import { panelKeyCode, webviewHtml } from "./display";
 import { PictureCache } from "./pictures";
+import { groupCycleLines, type CycleLine } from "./cycles";
 
 export function activate(context: vscode.ExtensionContext): void {
     void startLanguageClient(context);
@@ -49,6 +50,7 @@ export function activate(context: vscode.ExtensionContext): void {
     };
     context.subscriptions.push(basic.onDidChange(showBasicButton));
     const pictures = new PictureCache();
+    const cycleSessions = new Set<string>();
     let cycleLines: CycleLine[] = [];
     let callLines: CycleLine[] = [];
     const cycleDecorations = new Map<number, vscode.TextEditorDecorationType>();
@@ -60,7 +62,8 @@ export function activate(context: vscode.ExtensionContext): void {
         for (const decoration of cycleDecorations.values()) decoration.dispose();
     } });
     const annotate = (): void => {
-        const counts = new Set(cycleLines.map(line => line.cycles));
+        const grouped = groupCycleLines(cycleLines);
+        const counts = new Set(Array.from(grouped.values()).flatMap(lines => Array.from(lines.keys())));
         for (const [count, decoration] of cycleDecorations) {
             if (!counts.has(count)) { decoration.dispose(); cycleDecorations.delete(count); }
         }
@@ -74,9 +77,10 @@ export function activate(context: vscode.ExtensionContext): void {
             }
         }
         for (const editor of vscode.window.visibleTextEditors) {
+            const lines = grouped.get(editor.document.uri.fsPath.toLowerCase());
             for (const [count, decoration] of cycleDecorations) {
-                editor.setDecorations(decoration, cycleLines
-                .filter(line => line.cycles === count && line.path.toLowerCase() === editor.document.uri.fsPath.toLowerCase() && line.line <= editor.document.lineCount)
+                editor.setDecorations(decoration, (lines?.get(count) ?? [])
+                .filter(line => line.line <= editor.document.lineCount)
                 // Only the gutter shows the count: text inserted in the line would shift the source, and VS Code
                 // attaches a decoration's hover to line text, never to its gutter icon.
                 .map((line): vscode.DecorationOptions => ({ range: new vscode.Range(line.line - 1, 0, line.line - 1, 0) })));
@@ -117,6 +121,7 @@ export function activate(context: vscode.ExtensionContext): void {
         panel !== undefined && displaySession === undefined ? endedSession?.name : undefined));
     context.subscriptions.push(vscode.window.onDidChangeVisibleTextEditors(annotate));
     context.subscriptions.push(vscode.debug.onDidTerminateDebugSession(session => {
+        cycleSessions.delete(session.id);
         if (displaySession?.id === session.id) {
             displaySession = undefined;
             endedSession = { name: session.name, configuration: session.configuration, folder: session.workspaceFolder };
@@ -220,6 +225,10 @@ export function activate(context: vscode.ExtensionContext): void {
                         return;
                     }
                     if (message.event !== "retro/frame") return;
+                    if (!cycleSessions.has(session.id)) {
+                        cycleSessions.add(session.id);
+                        void session.customRequest("retro/cycles", { changesOnly: true }).then(undefined, showError);
+                    }
                     if (displaySession !== session) pictures.reset();
                     displaySession = session;
                     endedSession = undefined;
@@ -340,8 +349,6 @@ export function activate(context: vscode.ExtensionContext): void {
         }
     }));
 }
-
-interface CycleLine { path: string; line: number; cycles: number; }
 
 /** The prefix of an Apple session's own requests: apple3 for the Apple III, apple2 for the II family. */
 // The display's title for a PET model.

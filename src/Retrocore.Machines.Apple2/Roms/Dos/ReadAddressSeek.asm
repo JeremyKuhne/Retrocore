@@ -18,7 +18,7 @@
 ;; the CMP that matched the 96, and after that by each ROL, which shifts out the nibble's top bit, always 1. The
 ;; wait loops and the delays between reads follow the same rules as READ16's.
 ;; In:    X = slot * 16, the card in read mode
-;; Out:   carry clear, CSSTV = the checksum, CSSTV+1 = the sector, CSSTV+2 = the track, CSSTV+3 = the volume,
+;; Out:   carry clear, AddressField = the checksum, AddressField+1 = the sector, AddressField+2 = the track, AddressField+3 = the volume,
 ;;   A = $AA, Y = 0
 ;; Errors: carry set if no address field is found, or its checksum or epilogue is wrong
 ;; Uses:  A, Y, COUNT, LAST, CSUM
@@ -32,20 +32,20 @@ RDASYN:
     inc COUNT
     beq RDERR                       ; the count ran out
 RDA1:
-    lda Q6L,x
+    lda DataLatch,x
     bpl RDA1
 RDASN1:
     cmp #$D5
     bne RDASYN
     nop                             ; timing: too soon, the next read would see the D5 again
 RDA2:
-    lda Q6L,x
+    lda DataLatch,x
     bpl RDA2
     cmp #$AA
     bne RDASN1                      ; not D5 AA, but this nibble may be a D5
     ldy #$3                         ; four bytes, stored from CSSTV+3 down; also the delay
 RDA3:
-    lda Q6L,x
+    lda DataLatch,x
     bpl RDA3
     cmp #$96
     bne RDASN1
@@ -53,15 +53,15 @@ RDA3:
 RDAFLD:
     sta CSUM
 RDA4:
-    lda Q6L,x
+    lda DataLatch,x
     bpl RDA4
     rol a                           ; the odd bits, in place, with 1s between them
     sta LAST
 RDA5:
-    lda Q6L,x
+    lda DataLatch,x
     bpl RDA5
     and LAST                        ; and the even bits: the byte
-    sta CSSTV,y
+    sta AddressField,y
     eor CSUM
     dey
     bpl RDAFLD
@@ -69,13 +69,13 @@ RDA5:
     bne RDERR
 ; The epilogue: DE AA. The EB that ends it is not checked.
 RDA6:
-    lda Q6L,x
+    lda DataLatch,x
     bpl RDA6
     cmp #$DE
     bne RDERR
     nop                             ; timing, as after the D5
 RDA7:
-    lda Q6L,x
+    lda DataLatch,x
     bpl RDA7
     cmp #$AA
     bne RDERR
@@ -93,30 +93,30 @@ RDEXIT:
 ;; the head speeds up and slows down. At the end SEEK waits 25.6 milliseconds for the head to settle and turns
 ;; the last phase off. MSWAIT adds the time spent waiting to MONTIMEL/MONTIMEH, the count RWTS uses to know
 ;; when a motor it started is up to speed.
-;; In:    A = the half-track to go to, X = slot * 16, CURTRK = the half-track the head is on
-;; Out:   CURTRK = TRKN = the new half-track, all phases off (unless the head was already there)
-;; Uses:  A, Y, TRKCNT, PRIOR, TRKN, SLOTTEMP, MONTIMEL, MONTIMEH
+;; In:    A = the half-track to go to, X = slot * 16, CurrentTrack = the half-track the head is on
+;; Out:   CurrentTrack = TargetHalfTrack = the new half-track, all phases off (unless the head was already there)
+;; Uses:  A, Y, TRKCNT, PRIOR, TargetHalfTrack, SLOTTEMP, MotorTime, MotorTimeHigh
 ;; Keeps: X
 SEEK:
     stx SLOTTEMP
-    sta TRKN
-    cmp CURTRK
+    sta TargetHalfTrack
+    cmp CurrentTrack
     beq SEEKRTS                     ; already there
     lda #$0
     sta TRKCNT
 SEEK2:
-    lda CURTRK
+    lda CurrentTrack
     sta PRIOR                       ; the half-track being left
     sec
-    sbc TRKN
+    sbc TargetHalfTrack
     beq SEEKEND                     ; arrived
     bcs OUT
     eor #$FF                        ; in: A = half-tracks still to go after this step
-    inc CURTRK
+    inc CurrentTrack
     bcc MINTST                      ; always
 OUT:
     adc #$FE                        ; out: A - 1 (the carry is set), half-tracks still to go after this step
-    dec CURTRK
+    dec CurrentTrack
 MINTST:
     cmp TRKCNT
     bcc MAXTST
@@ -145,18 +145,18 @@ SEEKEND:
 ;;
 ;; The phase's switches are PHASEOFF + phase * 2 (off) and the address after (on), so the phase number shifted
 ;; left with the carry coming in as bit 0 picks the switch.
-;; In:    carry = set for on, clear for off, CURTRK = the half-track, SLOTTEMP = slot * 16
+;; In:    carry = set for on, clear for off, CurrentTrack = the half-track, SLOTTEMP = slot * 16
 ;; Out:   X = SLOTTEMP
 ;; Uses:  A
 ;; Entry: CLRPHASE = for half-track A rather than CURTRK
 SETPHASE:
-    lda CURTRK
+    lda CurrentTrack
 CLRPHASE:
     and #3                          ; the phase
     rol a                           ; times 2, plus the carry: on or off
     ora SLOTTEMP
     tax
-    lda PHASEOFF,x
+    lda Phase0Off,x
     ldx SLOTTEMP
 SEEKRTS:
     rts

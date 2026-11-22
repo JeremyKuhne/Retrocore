@@ -70,7 +70,7 @@ CHIN2:
 
 ;; Calls the real input routine, whose address SVREGS has put back in INSW.
 GETIN:
-    jmp (INSW)
+    jmp (InputHook)
 
 ;; DOS's output hook: CSW points here, so the Monitor's COUT comes here for every character printed.
 ;;
@@ -99,7 +99,7 @@ CHROUT:
 ;; that called COUT or RDKEY whatever DOS has pushed in between. With the real routines back in OUTSW and INSW,
 ;; what DOS prints or reads while it works does not come back into DOS.
 ;; In:    A, X, Y = the caller's registers
-;; Out:   SVA/SVX/SVY = A, X and Y, SVSTK = the stack pointer before the JSR here, OUTSW/INSW = SVOUTS/SVINS
+;; Out:   SVA/SVX/SVY = A, X and Y, SVSTK = the stack pointer before the JSR here, OutputHook/InputHook = SVOUTS/SVINS
 ;; Uses:  A, X
 ;; Entry: SVRGSA = saves all but A
 SVREGS:
@@ -114,7 +114,7 @@ SVRGSA:
     ldx #3
 SVRB:
     lda a:SVOUTS,x                  ; SVOUTS and SVINS lie in the same order as OUTSW and INSW
-    sta OUTSW,x
+    sta OutputHook,x
     dex
     bpl SVRB
     rts
@@ -152,7 +152,7 @@ COS01:
 COS1:
     ldx a:LBUFD
 COS1A:
-    sta LBUFF,x
+    sta InputBuffer,x
     inx
     stx a:LBUFD
     cmp #$8D
@@ -243,11 +243,11 @@ COS7:
 ;; one, a return at $0200 with X = 0, so that GETLN hands BASIC a blank line instead of the DOS command.
 ;; In:    SVA = the return that ended the line
 CERTN:
-    lda LBUFF
+    lda InputBuffer
     cmp a:CCHAR
     beq CMDRTN
     lda #$8D
-    sta LBUFF
+    sta InputBuffer
     ldx #0
     stx a:SVX                       ; GETLN's line length on return
 ;; The ways out of DOS from an output state. Each prints the character in SVA only if its MON option is on
@@ -292,7 +292,7 @@ LDREGS:
 
 ;; Calls the real output routine, whose address SVREGS has put back in OUTSW.
 ORTN1:
-    jmp (OUTSW)
+    jmp (OutputHook)
 
 ;; Prints a return through the real output routine.
 ;; Uses:  A

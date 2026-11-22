@@ -190,7 +190,7 @@ PrintMessage_Next:
     lda (Pointer),y
     pha
     ora #$80                        ; the Monitor expects characters with bit 7 set
-    jsr PRINT
+    jsr CharacterOut
     pla
     bmi PrintMessage_Done           ; bit 7 in the stored character marks the end
     inc Pointer
@@ -214,7 +214,7 @@ PrintName:
     lda #HighSpace
     ldx #0
 PrintName_Next:
-    jsr PRINT
+    jsr CharacterOut
     cpx #NameLength
     beq PrintName_Done
     lda NameBuffer,x
@@ -222,7 +222,7 @@ PrintName_Next:
     bne PrintName_Next
 PrintName_Done:
     lda #KEY_CR
-    jmp PRINT
+    jmp CharacterOut
 
 ;; Connects the Monitor directly to the screen and keyboard, and sets the input prompt to a bell.
 ConnectConsole:
@@ -241,7 +241,7 @@ ConnectConsole:
 ;; Waits for Return or Escape, ignoring other keys.
 ;; Out: carry = clear for Return, set for Escape
 WaitForReturnOrEscape:
-    jsr GETKEY
+    jsr ReadKey
     cmp #KEY_CR
     beq WaitForReturnOrEscape_Return
     cmp #KEY_ESC

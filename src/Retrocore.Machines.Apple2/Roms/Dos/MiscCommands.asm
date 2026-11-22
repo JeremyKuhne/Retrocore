@@ -37,7 +37,7 @@ EREAD:
 ;;
 ;; R and B are passed straight to the file manager's POSITION call, so they count from the start of the file:
 ;; records of the length given when the file was opened.
-;; Out:   ZPGWRK = the file's buffer, whose work areas are in the parameter list
+;; Out:   WorkPointer = the file's buffer, whose work areas are in the parameter list
 RWPOSN:
     jsr FILSRC
     bcc RWP1
@@ -56,7 +56,7 @@ RWP2A:
     dex
     bpl RWP2A
 RWP3:
-    lda #CRQPOS
+    lda #REQUEST_POSITION
     sta a:CCBREQ
     jsr DOSGO
 RWPR:
@@ -79,7 +79,7 @@ DFVOL:
 EINITA:
     lda ASTART+1
     sta a:CCBBSA
-    lda #CRQFMT
+    lda #REQUEST_INIT
     jsr OPEN
     jmp ESAVE
 
@@ -88,7 +88,7 @@ EINITA:
 ;; CATALOG takes no file name, so the buffer OPEN lends to the file manager is never claimed. The volume the
 ;; file manager found is stored in CV.
 ECAT:
-    lda #CRQDIR
+    lda #REQUEST_CATALOG
     jsr OPEN
     lda a:CCBVOL
     sta a:CV
@@ -104,7 +104,7 @@ ECAT:
 ;;
 ;; LD1 (LoadSave.asm) comes here to switch to Applesoft for a program of that type.
 EAS:
-    lda #ATSTV
+    lda #APPLESOFT_ID
     jsr SWTST
     beq GOINIT
     lda #0
@@ -130,7 +130,7 @@ EAS2:
 ;; Errors: LANGUAGE NOT AVAILABLE if Integer BASIC is in neither the ROM nor the language card
 ;; Entry: GOINIT = starts DOS with whichever BASIC $E000 now shows
 EINT:
-    lda #ITSTV
+    lda #INTEGER_BASIC_ID
     jsr SWTST
     beq GOINT
     lda #1
@@ -151,13 +151,13 @@ GOINIT:
 ;; Out:   zero = set if found, with the memory it was found in selected
 ;; Keeps: A, X, Y
 SWTST:
-    cmp AITSTL
+    cmp RomBasicId
     beq SWTR
     sta $C080
-    cmp AITSTL
+    cmp RomBasicId
     beq SWTR
     sta $C081
-    cmp AITSTL
+    cmp RomBasicId
 SWTR:
     rts
 
@@ -213,15 +213,15 @@ EX2:
 ;;
 ;; If BASIC is no longer running a program, the WRITE has ended: the file is closed, the input and output
 ;; states are cleared, and the character is dropped.
-;; In:    SVA = the character; ZPGWRK = the file's buffer, its work areas in the parameter list
+;; In:    SVA = the character; WorkPointer = the file's buffer, its work areas in the parameter list
 OCTD:
     jsr TSTRUN
     bcs ICFDB
     lda a:SVA
     sta a:CCBDAT
-    lda #CRQWR
+    lda #REQUEST_WRITE
     sta a:CCBREQ
-    lda #CRMNBT
+    lda #TRANSFER_NEXT_BYTE
     sta a:CCBRQM
     jmp DOSGO
 
@@ -235,7 +235,7 @@ OCTD:
 ;; A lowercase character ($E0 and up) is passed with bit 7 off, which the Monitor's GETLN on the II and II Plus
 ;; would otherwise turn into a capital. On the next call, ICFD sets bit 7 again on the previous character in
 ;; the input line LBUFF, using SVX, GETLN's index into it.
-;; In:    ZPGWRK = the file's buffer, its work areas in the parameter list
+;; In:    WorkPointer = the file's buffer, its work areas in the parameter list
 ;; Entry: ICFD3 = with A = the output state to set (3 for EXEC)
 ;; Errors: END OF DATA at the end of the file, outside EXEC
 ICFD:
@@ -252,7 +252,7 @@ ICFD2:
     cmp a:OSTATE
     beq EX2                         ; EXEC: return to the input hook, which reads the keyboard
 ICFD4:
-    lda #CREEOF
+    lda #ERROR_END_OF_DATA
     jmp ERROR
 ICFD1:
     cmp #$E0
@@ -263,9 +263,9 @@ ICFNLC:
     ldx a:SVX
     beq ICFD0                       ; nothing in the line yet
     dex
-    lda LBUFF,x
+    lda InputBuffer,x
     ora #$80
-    sta LBUFF,x
+    sta InputBuffer,x
 ICFD0:
     jmp ORTN
 
@@ -316,12 +316,12 @@ NXTEXC:
     bne ICFD3
 
 ;; Reads the next byte of the open file.
-;; In:    CCBFCB/CCBDBP/CCBSBP = the file's work areas, in the parameter list
+;; In:    DosFileParameters::WorkArea/DosFileParameters::ListBuffer/DosFileParameters::DataBuffer = the file's work areas, in the parameter list
 ;; Out:   A = the byte, zero = set if it is 0, which a text file ends with and DOSGO gives at the end of the data
 RBYTE:
-    lda #CRQRD
+    lda #REQUEST_READ
     sta a:CCBREQ
-    lda #CRMNBT
+    lda #TRANSFER_NEXT_BYTE
     sta a:CCBRQM
     jsr DOSGO
     lda a:CCBDAT
@@ -331,7 +331,7 @@ RBYTE:
 ;; Keeps: X, Y
 MVEFTA:
     lda a:EFTABA+1
-    sta ZPGWRK+1
+    sta WorkPointer+1
     lda a:EFTABA
-    sta ZPGWRK
+    sta WorkPointer
     rts

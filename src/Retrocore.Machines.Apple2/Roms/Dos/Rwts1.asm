@@ -35,35 +35,6 @@
 ;; The start of the relocator's range ASC2 to AEC2, RWTS proper and the formatter ($BD00-$BFA7).
 ASC2:
 
-;; Reading it, plus slot * 16, turns off the motor of the card's selected drive.
-;;
-;; The Disk II keeps the motor running for about a second after this, so a call that follows soon finds it
-;; still turning. RWTS reads it when it finishes (<HNDLERR>), and the formatter when it is done. <MOTORON>
-;; turns the motor on.
-;; See: <MOTORON>, <DRV1EN>, <DRV2EN>, <RWTS>
-MOTOROFF = $C088
-
-;; Reading it, plus slot * 16, turns on the motor of the card's selected drive.
-;;
-;; <RWTS> reads it on each call, after checking whether the motor was already turning; if it was not, it waits
-;; for the motor to come up to speed (<MONTIME>). <DRV1EN> and <DRV2EN> choose the drive, and <MOTOROFF> turns
-;; the motor off.
-;; See: <MOTOROFF>, <DRV1EN>, <DRV2EN>, <MONTIME>
-MOTORON = $C089
-
-;; Reading it, plus slot * 16, selects drive 1 of the card.
-;;
-;; <RWTS> reads it, or <DRV2EN>, by the IOB's drive number, and notes the choice in <DRIVNO>. While the motor is
-;; on (<MOTORON>), the selected drive runs.
-;; See: <DRV2EN>, <DRIVNO>, <MOTORON>
-DRV1EN = $C08A
-
-;; Reading it, plus slot * 16, selects drive 2 of the card.
-;;
-;; <RWTS> reads it, or <DRV1EN>, by the IOB's drive number, and notes the choice in <DRIVNO>.
-;; See: <DRV1EN>, <DRIVNO>, <MOTORON>
-DRV2EN = $C08B
-
 DRV1TRK = $478                      ;; plus the slot: the half-track drive 1 of that slot's card is on
 DRV2TRK = $4F8                      ;; plus the slot: the half-track drive 2 is on
 
@@ -81,10 +52,10 @@ IOBPH = $49
 
 SLOT = $5F8                         ;; slot * 16 for this call
 
-;; Where <RWTS> copies the IOB's two pointers, bytes 06-09: the DCT pointer here (<DEVCTBL>), the buffer at <BUF>.
+;; Where <RWTS> copies the IOB's two pointers, bytes 06-09: the DCT pointer here (<DEVCTBL>), the buffer at <SectorBuffer>.
 ;;
 ;; The four bytes $3C-$3F take both pointers in one loop (<PTRMOV>).
-;; See: <DEVCTBL>, <BUF>, <IOBPL>
+;; See: <DEVCTBL>, <SectorBuffer>, <IOBPL>
 PTRSDEST = $3C
 
 ;; The pointer to the DCT, the device characteristics table that the IOB names (2 bytes).
@@ -98,37 +69,37 @@ DEVCTBL = PTRSDEST
 ;;
 ;; <RWTS> rotates the drive number's bit 0 into it when it selects the drive. <MYSEEK> tests it to keep each
 ;; drive's current track in its own screen hole, <DRV1TRK> or <DRV2TRK>.
-;; See: <DRV1EN>, <DRV2EN>, <MYSEEK>, <DRV1TRK>
+;; See: <SelectDrive1>, <SelectDrive2>, <MYSEEK>, <DRV1TRK>
 DRIVNO = $35
 
-;; The motor-on count, <MONTIMEL> and <MONTIMEH>: it counts up to 0 in steps of 100 microseconds.
+;; The motor-on count, <MotorTime> and <MotorTimeHigh>: it counts up to 0 in steps of 100 microseconds.
 ;;
 ;; <RWTS> sets its high byte from DCT byte 03 ($D8 for the Disk II) when it starts. If the motor was off, it
 ;; waits after the seek until the count reaches 0, calling <MSWAIT>, which adds to the count; a motor started
 ;; this way runs about a second before RWTS reads or writes.
-;; See: <MONTIMEL>, <MONTIMEH>, <MSWAIT>, <DEVCTBL>
+;; See: <MotorTime>, <MotorTimeHigh>, <MSWAIT>, <DEVCTBL>
 MONTIME = $46
 
-;; The sector number in the address field just read, <CSSTV>'s second byte.
+;; The sector number in the address field just read, <AddressField>'s second byte.
 ;;
 ;; RWTS compares it with the IOB's sector, turned into the sector number on the disk through <INTRLEAV>, to
 ;; find the sector it wants.
-;; See: <CSSTV>, <TRACK>, <VOLUME>
-SECT = CSSTV+1
+;; See: <AddressField>, <TRACK>, <VOLUME>
+SECT = AddressField+1
 
-;; The track number in the address field just read, <CSSTV>'s third byte.
+;; The track number in the address field just read, <AddressField>'s third byte.
 ;;
 ;; RWTS compares it with the track it sought (<RDRIGHT>): when they differ, it notes where the head really is and
 ;; seeks again.
-;; See: <CSSTV>, <SECT>, <VOLUME>
-TRACK = CSSTV+2
+;; See: <AddressField>, <SECT>, <VOLUME>
+TRACK = AddressField+2
 
-;; The volume number in the address field just read, <CSSTV>'s fourth byte.
+;; The volume number in the address field just read, <AddressField>'s fourth byte.
 ;;
 ;; RWTS returns it in IOB byte 0E and, unless the IOB's volume is 0 (any volume), fails with a volume mismatch
 ;; when they differ.
-;; See: <CSSTV>, <SECT>, <TRACK>
-VOLUME = CSSTV+3
+;; See: <AddressField>, <SECT>, <TRACK>
+VOLUME = AddressField+3
 
 MAXSEEKS = 4                        ;; address fields from a wrong track before recalibrating (3 new seeks)
 SEEKCNT = $4F8                      ;; seeks left before recalibrating (slot 0's DRV2TRK byte)
@@ -178,8 +149,8 @@ TL12 = TL11+TD                      ;; where the average of wrong sectors is sho
 ;;
 ;; The second part is TRYTRK (Rwts2.asm). The flags RWTS pushes after testing the motor (Z set if it was off)
 ;; stay on the stack until the seek is done. RWTS uses much of zero page $26-$49 and the screen holes.
-;; In:    A/Y = the IOB's address (high/low), the IOB filled in for the command
-;; Out:   carry clear, IOB 0E = the volume found (read, write), IOB 0F/10 = this slot and drive, X = slot * 16,
+;; In:    A/Y = the DosIob's address (high/low), the DosIob filled in for the command
+;; Out:   carry clear, DosIob 0E = the volume found (read, write), DosIob 0F/10 = this slot and drive, X = slot * 16,
 ;;   the motor off
 ;; Errors: carry set and the code in IOB 0D: $10 write-protected, $20 wrong volume, $40 drive error,
 ;;   8 format failed
@@ -210,12 +181,12 @@ RWTS:
     pla
     pha
     sta (IOBPL),y                   ; the new slot becomes the last one used
-    lda Q7L,x                       ; read mode
+    lda ReadMode,x                       ; read mode
 STILLON:
     ldy #$08
-    lda Q6L,x
+    lda DataLatch,x
 NOTSURE:
-    cmp Q6L,x
+    cmp DataLatch,x
     bne STILLON                     ; it changed: still turning
     dey
     bne NOTSURE
@@ -223,23 +194,23 @@ NOTSURE:
     tax                             ; the new slot
 ; Is this slot's motor turning? Read the latch twice about 20 cycles apart, up to eight times; a change means yes.
 SAMESLOT:
-    lda Q7L,x                       ; read mode
-    lda Q6L,x
+    lda ReadMode,x                       ; read mode
+    lda DataLatch,x
     ldy #8
 CHKIFON:
-    lda Q6L,x
+    lda DataLatch,x
     pha                             ; delay, for the data to change
     pla
     pha
     pla
     stx SLOT
-    cmp Q6L,x
+    cmp DataLatch,x
     bne ITISON
     dey
     bne CHKIFON
 ITISON:
     php                             ; Z clear if the motor was turning
-    lda MOTORON,x
+    lda MotorOn,x
 ; Copy the DCT and buffer pointers (IOB 06-09) to DEVCTBL and BUF in zero page.
     ldy #6
 PTRMOV:
@@ -263,10 +234,10 @@ PTRMOV:
 OK:
     ror a                           ; bit 0 of the drive number: 1 for drive 1
     bcc SD1
-    lda DRV1EN,x
+    lda SelectDrive1,x
     bcs DRVSEL                      ; always
 SD1:
-    lda DRV2EN,x
+    lda SelectDrive2,x
 DRVSEL:
     ror DRIVNO                      ; bit 7 set for drive 1
 ; If the motor was off, wait before moving the head: seven MSWAITs, the first as long as the byte the

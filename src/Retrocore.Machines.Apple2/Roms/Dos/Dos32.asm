@@ -61,6 +61,11 @@ DIAGMODE = 0                        ;; 1 builds a diagnostic RWTS without the fo
 DOS33B = 0                          ;; 1 includes DOS 3.3's 1982 "revision B" patches (Apple's)
 ULC = 0                             ;; 1 builds the lowercase-input patch (Apple's)
 
+; SHIM (removed at integration): opens the file manager's scope empty, so that every module's piece of it can be
+; written as .scope FileManager continued.
+.scope FileManager
+.endscope
+
 .include "Equates.asm"
 
 .if MASTER

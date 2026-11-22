@@ -49,7 +49,7 @@ ASTART:
 
 ;; The file manager's parameter list.
 CCBADR:
-    .word CCB
+    .word DosFileParameters
 
 ;; The output routine for each state of DOS's output intercept, 0 to 6, each less one: CHROUT pushes the
 ;; address and returns to it, and RTS adds the one back.
@@ -111,8 +111,8 @@ GO:
 CONT:
     .word IBCONT
 ASEQ:
-    LEFTOVER $00, $F2, $00
-    LEFTOVER $00, $D4, $00
+    Leftover $00, $F2, $00
+    Leftover $00, $D4, $00
 
 ;; The vector for Integer BASIC. It is two bytes shorter than the others: Integer BASIC leaves ASEQ alone.
 IBVT:
@@ -161,8 +161,8 @@ DBINIT:
     sta a:CS
     lda a:IBDRVN
     sta a:CD
-    lda AITSTL
-    eor #ITSTV
+    lda RomBasicId
+    eor #INTEGER_BASIC_ID
     bne IAS1                        ; not Integer BASIC: Applesoft
     sta a:ASIBSW                    ; A = 0
     ldx #IBVTL
@@ -195,12 +195,12 @@ INITAA:
 DBRST:
     lda a:ASIBSW
     bne INITA1
-    lda #ITSTV                      ; Integer BASIC
+    lda #INTEGER_BASIC_ID                      ; Integer BASIC
     bne INITA2
 INITA1:
     asl a
     bpl INITA3                      ; $80, Applesoft in RAM: no ROM to select
-    lda #ATSTV
+    lda #APPLESOFT_ID
 INITA2:
     jsr SWTST
 INITA3:
@@ -260,7 +260,7 @@ INITD:
     jsr MVEFTA
     pla
     ldy #0
-    sta (ZPGWRK),y
+    sta (WorkPointer),y
 INITZ:
     jsr CLRSTS
     lda a:CMDNO
@@ -275,11 +275,11 @@ INITE:
     dex
     bpl INITE
     lda a:DBVECT+2
-    sta ZRSET+1
+    sta SoftEntryVector+1
     eor #$A5
-    sta PWCNST
+    sta SoftEntryCheck
     lda a:DBVECT+1
-    sta ZRSET
+    sta SoftEntryVector
     lda #6                          ; RUN
     bne INITF1
 INITF:
@@ -325,10 +325,10 @@ IOBLDR:
     jmp MVCSW
     nop
     nop
-    jmp MONBRK
-    jmp MONRST
+    jmp ShowBreak
+    jmp EnterMonitor
     jmp IORTS
-    jmp MONRST
-    jmp MONRST
-    .word MONRST
+    jmp EnterMonitor
+    jmp EnterMonitor
+    .word EnterMonitor
 IFBL = *-IFB-1                      ;; the table's length less one: the last index to copy

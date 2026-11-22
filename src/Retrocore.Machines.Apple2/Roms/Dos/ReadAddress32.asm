@@ -16,7 +16,7 @@
 ;; set, gives `b7 1 b5 1 b3 1 b1 1`, and ANDing the second leaves the byte. The carry is set the first time by
 ;; the CMP that matched the B5, and after that by each ROL, which shifts out the nibble's top bit, always 1.
 ;; In:    X = slot * 16, the card in read mode
-;; Out:   carry clear, CSSTV = the checksum, CSSTV+1 = the sector, CSSTV+2 = the track, CSSTV+3 = the volume,
+;; Out:   carry clear, AddressField = the checksum, AddressField+1 = the sector, AddressField+2 = the track, AddressField+3 = the volume,
 ;;   A = $AA, Y = 0
 ;; Errors: carry set if no address field is found, or its checksum or epilogue is wrong
 ;; Uses:  A, Y, COUNT, LAST, CSUM
@@ -30,20 +30,20 @@ RDASYN:
     inc COUNT
     beq RDERR                       ; the count ran out
 RDA1:
-    lda Q6L,x
+    lda DataLatch,x
     bpl RDA1
 RDASN1:
     cmp #$D5
     bne RDASYN
     nop                             ; timing: too soon, the next read would see the D5 again
 RDA2:
-    lda Q6L,x
+    lda DataLatch,x
     bpl RDA2
     cmp #$AA
     bne RDASN1                      ; not D5 AA, but this nibble may be a D5
     ldy #$3                         ; four bytes, stored from CSSTV+3 down
 RDA3:
-    lda Q6L,x
+    lda DataLatch,x
     bpl RDA3
     cmp #$B5
     bne RDASN1
@@ -51,15 +51,15 @@ RDA3:
 RDAFLD:
     sta CSUM
 RDA4:
-    lda Q6L,x
+    lda DataLatch,x
     bpl RDA4
     rol a                           ; the odd bits, in place, with 1s between them
     sta LAST
 RDA5:
-    lda Q6L,x
+    lda DataLatch,x
     bpl RDA5
     and LAST                        ; and the even bits: the byte
-    sta CSSTV,y
+    sta AddressField,y
     eor CSUM
     dey
     bpl RDAFLD
@@ -68,13 +68,13 @@ RDA5:
 
 ; The epilogue: DE AA. The EB that ends it is not checked.
 RDA6:
-    lda Q6L,x
+    lda DataLatch,x
     bpl RDA6
     cmp #$DE
     bne RDERR
     nop                             ; timing, as after the D5
 RDA7:
-    lda Q6L,x
+    lda DataLatch,x
     bpl RDA7
     cmp #$AA
     bne RDERR

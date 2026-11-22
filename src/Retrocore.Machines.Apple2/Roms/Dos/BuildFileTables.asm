@@ -23,51 +23,51 @@
 ;;
 ;; Any file open in a buffer is forgotten, which is why EMAXF closes all files first.
 ;; In:    CNFTBS = the number of buffers, 1-16; ASIBSW = 0 if Integer BASIC is active, else Applesoft
-;; Out:   ZPGWRK = the last buffer's header; Integer BASIC's HIMEM ($4C) and program start ($CA), or Applesoft's
+;; Out:   WorkPointer = the last buffer's header; Integer BASIC's HIMEM ($4C) and program start ($CA), or Applesoft's
 ;;        HIMEM ($73) and string space ($6F), = the last buffer's data sector buffer
 ;; Uses:  A, X, Y, TEMP1A
 BLDFTB:
     sec
     lda FTAB
-    sta ZPGWRK
+    sta WorkPointer
     lda FTAB+1
-    sta ZPGWRK+1                    ; the first header
+    sta WorkPointer+1                    ; the first header
     lda a:CNFTBS
     sta a:TEMP1A                    ; buffers still to build
 BFT1:
     ldy #0
     tya
-    sta (ZPGWRK),y                  ; name's first byte 0: free
+    sta (WorkPointer),y                  ; name's first byte 0: free
     ; The three pointers, at header bytes 30-35. The low byte is the same in all three: each part is 256 bytes
     ; below the last, after the work area, so the high byte drops by one each time.
     ldy #30
     sec
-    lda ZPGWRK
-    sbc #FCBLEN
-    sta (ZPGWRK),y                  ; the work area: the header less 45
+    lda WorkPointer
+    sbc #FILE_CONTROL_SIZE
+    sta (WorkPointer),y                  ; the work area: the header less 45
     pha
-    lda ZPGWRK+1
+    lda WorkPointer+1
     sbc #0
     iny
-    sta (ZPGWRK),y
+    sta (WorkPointer),y
     tax
     dex
     pla
     pha
     iny
-    sta (ZPGWRK),y                  ; the track/sector list buffer: 256 below the work area
+    sta (WorkPointer),y                  ; the track/sector list buffer: 256 below the work area
     txa
     iny
-    sta (ZPGWRK),y
+    sta (WorkPointer),y
     tax
     dex
     pla
     pha
     iny
-    sta (ZPGWRK),y                  ; the data buffer: 256 below that
+    sta (WorkPointer),y                  ; the data buffer: 256 below that
     iny
     txa
-    sta (ZPGWRK),y
+    sta (WorkPointer),y
     dec a:TEMP1A
     beq BFT2
     ; The next header is 38 bytes below the data buffer: link to it and go on there.
@@ -76,23 +76,23 @@ BFT1:
     sec
     sbc #38
     iny
-    sta (ZPGWRK),y
+    sta (WorkPointer),y
     pha
     txa
     sbc #0
     iny
-    sta (ZPGWRK),y
-    sta ZPGWRK+1
+    sta (WorkPointer),y
+    sta WorkPointer+1
     pla
-    sta ZPGWRK
+    sta WorkPointer
     jmp BFT1
 BFT2:
     pha                             ; the data buffer's address, low byte below, high byte on top
     lda #0
     iny
-    sta (ZPGWRK),y                  ; the last link is $0000
+    sta (WorkPointer),y                  ; the last link is $0000
     iny
-    sta (ZPGWRK),y
+    sta (WorkPointer),y
     lda a:ASIBSW
     beq BFTIB
     pla
@@ -120,26 +120,26 @@ BFTIB:
 ;; Uses:  A
 ;; Entry: MVOSW = the output hook only
 MVCSW:
-    lda INSW+1
+    lda InputHook+1
     cmp CINA+1
     beq MVOSW
     sta a:SVINS+1
-    lda INSW
+    lda InputHook
     sta a:SVINS
     lda CINA
-    sta INSW
+    sta InputHook
     lda CINA+1
-    sta INSW+1
+    sta InputHook+1
 MVOSW:
-    lda OUTSW+1
+    lda OutputHook+1
     cmp COUTA+1
     beq MVSRTN
     sta a:SVOUTS+1
-    lda OUTSW
+    lda OutputHook
     sta a:SVOUTS
     lda COUTA
-    sta OUTSW
+    sta OutputHook
     lda COUTA+1
-    sta OUTSW+1
+    sta OutputHook+1
 MVSRTN:
     rts

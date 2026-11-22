@@ -331,7 +331,7 @@ Done:
     jmp SetSlot3Hooks::Input
 .endproc
 
-;; Function $0B, 40 columns: shows the cursor before the Monitor's <ReadKey> reads a key, by making the character under
+;; Function $0B, 40 columns: shows the cursor before <Monitor:ReadKey> reads a key, by making the character under
 ;; it flash.
 ;; Out: A = the character under the cursor, as it was
 ;; Also: RDKEY40 (UNKN), F_RDKEY (IIETRM85)

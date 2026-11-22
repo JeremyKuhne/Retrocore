@@ -12,8 +12,8 @@
 ;; Byte n is NBUF1 + n shifted left twice, with the low two bits from NBUF2 + $55 - (n mod $56). Each byte
 ;; shifts two bits out of the bottom of its NBUF2 entry, low bit first, so the pair PRENIB16 stored swapped
 ;; comes back in order; three bytes take their bits from each entry in turn, and NBUF2 is left shifted away.
-;; In:    BUF = the buffer, T0 = the number of bytes (0 = 256), NBUF1 and NBUF2 = the values from READ16
-;; Out:   the bytes at BUF, Y = T0
+;; In:    SectorBuffer = the buffer, RebuildCount = the number of bytes (0 = 256), NBUF1 and NBUF2 = the values from READ16
+;; Out:   the bytes at SectorBuffer, Y = RebuildCount
 ;; Uses:  A, X, NBUF2
 POSTNB16:
     ldy #0                          ; Y: the byte, counting up
@@ -27,9 +27,9 @@ POST2:
     rol a
     lsr a:NBUF2,x
     rol a
-    sta (BUF),y
+    sta (SectorBuffer),y
     iny
-    cpy T0
+    cpy RebuildCount
     bne POST2
     rts
 ;; Reads the data field that follows the address field just read into NBUF1 and NBUF2, as six-bit values.
@@ -59,20 +59,20 @@ RSYNC:
     dey
     beq RDERR
 READ1:
-    lda Q6L,x
+    lda DataLatch,x
     bpl READ1
 RSYNC1:
     eor #$D5
     bne RSYNC
     nop                             ; timing: too soon, the next read would see the D5 again
 READ2:
-    lda Q6L,x
+    lda DataLatch,x
     bpl READ2
     cmp #$AA
     bne RSYNC1                      ; not D5 AA, but this nibble may be a D5
     ldy #$56                        ; NBUF2's size, and the same delay as the NOP
 READ3:
-    lda Q6L,x
+    lda DataLatch,x
     bpl READ3
     cmp #$AD
     bne RSYNC1
@@ -82,7 +82,7 @@ RDATA1:
     dey
     sty IDX
 READ4:
-    ldy Q6L,x
+    ldy DataLatch,x
     bpl READ4
     eor a:DNIBL,y                   ; DNIBL starts a page, so this never crosses one
     ldy IDX
@@ -92,7 +92,7 @@ READ4:
 RDATA2:
     sty IDX
 READ5:
-    ldy Q6L,x
+    ldy DataLatch,x
     bpl READ5
     eor a:DNIBL,y
     ldy IDX
@@ -101,19 +101,19 @@ READ5:
     bne RDATA2
 ; The checksum nibble decodes to the last value read.
 READ6:
-    ldy Q6L,x
+    ldy DataLatch,x
     bpl READ6
     cmp a:DNIBL,y
     bne RDERR
 ; The epilogue: DE AA. The EB that ends it is not checked.
 READ7:
-    lda Q6L,x
+    lda DataLatch,x
     bpl READ7
     cmp #$DE
     bne RDERR
     nop                             ; timing, as after the D5
 READ8:
-    lda Q6L,x
+    lda DataLatch,x
     bpl READ8
     cmp #$AA
     beq RDEXIT

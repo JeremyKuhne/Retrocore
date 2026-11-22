@@ -10,8 +10,8 @@
 ;; and an NBUF2 value shifted right three places is the five bits PRENIB13 made: a byte's low three bits, then
 ;; a bit of the group's fourth byte and a bit of its fifth. GROUP3 and GROUP4 gather those, a bit from each of
 ;; the group's three NBUF2 values. The groups come in the order PRENIB13 made them, X from 50 down to 0.
-;; In:    BUF = the address of the buffer, NBUF1 and NBUF2 from READ13
-;; Out:   (BUF) = the 256 bytes
+;; In:    SectorBuffer = the address of the buffer, NBUF1 and NBUF2 from READ13
+;; Out:   (SectorBuffer) = the 256 bytes
 ;; Uses:  A, X, Y, GROUP3, GROUP4
 POSTNB13:
     ldx #$32
@@ -26,7 +26,7 @@ POST1:
     sta GROUP3                      ; bit 0: the fourth byte's bit 2
     lsr a
     ora NBUF1,x
-    sta (BUF),y
+    sta (SectorBuffer),y
     iny
     lda NBUF2+$33,x
     lsr a
@@ -37,7 +37,7 @@ POST1:
     lsr a
     rol GROUP3
     ora NBUF1+$33,x
-    sta (BUF),y
+    sta (SectorBuffer),y
     iny
     lda NBUF2+$66,x
     lsr a
@@ -48,17 +48,17 @@ POST1:
     lsr a
     rol GROUP3
     ora NBUF1+$66,x
-    sta (BUF),y
+    sta (SectorBuffer),y
     iny
     lda GROUP3
     and #7
     ora NBUF1+$99,x
-    sta (BUF),y
+    sta (SectorBuffer),y
     iny
     lda GROUP4
     and #7
     ora NBUF1+$CC,x
-    sta (BUF),y
+    sta (SectorBuffer),y
     iny
     dex
     bpl POST1
@@ -69,5 +69,5 @@ POST1:
     lsr a
     lsr a
     ora NBUF1+$FF
-    sta (BUF),y
+    sta (SectorBuffer),y
     rts

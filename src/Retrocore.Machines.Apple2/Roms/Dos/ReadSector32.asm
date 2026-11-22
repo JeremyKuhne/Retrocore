@@ -22,20 +22,20 @@ RSYNC:
     dey
     beq RDERR
 READ1:
-    lda Q6L,x
+    lda DataLatch,x
     bpl READ1
 RSYNC1:
     eor #$D5
     bne RSYNC
     nop                             ; timing: too soon, the next read would see the D5 again
 READ2:
-    lda Q6L,x
+    lda DataLatch,x
     bpl READ2
     cmp #$AA
     bne RSYNC1                      ; not D5 AA, but this nibble may be a D5
     ldy #$9A                        ; NBUF2's length
 READ3:
-    lda Q6L,x
+    lda DataLatch,x
     bpl READ3
     cmp #$AD
     bne RSYNC1
@@ -46,7 +46,7 @@ RDATA1:
     dey
     sty IDX
 READ4:
-    ldy Q6L,x
+    ldy DataLatch,x
     bpl READ4
     eor DNIBL,y
     ldy IDX
@@ -57,7 +57,7 @@ READ4:
 RDATA2:
     sty IDX
 READ5:
-    ldy Q6L,x
+    ldy DataLatch,x
     bpl READ5
     eor DNIBL,y
     ldy IDX
@@ -67,18 +67,18 @@ READ5:
 
 ; The checksum nibble's value must equal the last value read.
 READ6:
-    ldy Q6L,x
+    ldy DataLatch,x
     bpl READ6
     cmp DNIBL,y
     bne RDERR
 READ7:
-    lda Q6L,x
+    lda DataLatch,x
     bpl READ7
     cmp #$DE
     bne RDERR
     nop
 READ8:
-    lda Q6L,x
+    lda DataLatch,x
     bpl READ8
     cmp #$AA
     beq RDEXIT

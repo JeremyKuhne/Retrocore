@@ -20,13 +20,13 @@
 ;; the other handlers; docs/Dos.md describes the command interpreter as a whole.
 
 ;; Reads the next character of the command line and steps past it, unless it is the carriage return.
-;; In:    LBUFD = index of the character in LBUFF
+;; In:    LBUFD = index of the character in InputBuffer
 ;; Out:   A = the character; Z set if it is a comma or the carriage return; LBUFD past it unless a return
 ;; Uses:  X
 ;; Keeps: Y
 GNXTC:
     ldx a:LBUFD
-    lda LBUFF,x
+    lda InputBuffer,x
     cmp #$8D                        ; the line ends in a carriage return: stay on it
     beq GNXTCR
     inx
@@ -51,7 +51,7 @@ GNBC:
 ;; Keeps: X
 CLRCCB:
     lda #0
-    ldy #CCBLEN
+    ldy #FILE_PARAMETERS_SIZE
 CLC1:
     sta a:CCB-1,y
     dey
@@ -64,12 +64,12 @@ CLC1:
 ;; gives 0. In decimal, a carry out of the final addition counts as too large, but bits lost from the
 ;; multiplications are not caught; in hex, digits beyond four simply push the first ones out.
 ;; In:    LBUFD = index of the first character
-;; Out:   carry clear, CNUM and X = the low byte, A = the high byte; carry set if a character is not a digit
-;; Uses:  A, X, Y, CNUM, LBUFD
+;; Out:   carry clear, ParsedNumber and X = the low byte, A = the high byte; carry set if a character is not a digit
+;; Uses:  A, X, Y, ParsedNumber, LBUFD
 GETNUM:
     lda #0
-    sta CNUM
-    sta CNUM+1
+    sta ParsedNumber
+    sta ParsedNumber+1
     jsr GNBC
     php                             ; keep GNBC's Z (comma or return) past the test for "$"
     cmp #$A4
@@ -80,8 +80,8 @@ GN2:
     jsr GNBC
 GN2A:
     bne GN3
-    ldx CNUM
-    lda CNUM+1
+    ldx ParsedNumber
+    lda ParsedNumber+1
     clc
     rts
 ; A decimal digit: CNUM = CNUM * 10 + digit, made as CNUM * 2 + digit (kept in Y,X) plus CNUM * 8.
@@ -92,19 +92,19 @@ GN3:
     cmp #10
     bcs GN4
     jsr GN5                         ; CNUM * 2
-    adc CNUM
+    adc ParsedNumber
     tax
     lda #0
-    adc CNUM+1
+    adc ParsedNumber+1
     tay
     jsr GN5
     jsr GN5                         ; CNUM * 8
     txa
-    adc CNUM
-    sta CNUM
+    adc ParsedNumber
+    sta ParsedNumber
     tya
-    adc CNUM+1
-    sta CNUM+1
+    adc ParsedNumber+1
+    sta ParsedNumber+1
     bcc GN2
 GN4:
     sec
@@ -114,8 +114,8 @@ GN4:
 ;; Out:   carry = the bit shifted out of the top
 ;; Keeps: A, X, Y
 GN5:
-    asl CNUM
-    rol CNUM+1
+    asl ParsedNumber
+    rol ParsedNumber+1
     rts
 
 ; A "$" came first: the digits that follow are hexadecimal, 0-9 and A-F.
@@ -139,8 +139,8 @@ HN2:
     jsr GN5                         ; CNUM * 16
     dex
     bne HN2
-    ora CNUM
-    sta CNUM
+    ora ParsedNumber
+    sta ParsedNumber
     jmp HN0
 
 ;; PR#: sends output to the slot the scanner left in CNUM (0-7), through the Monitor's OUTPORT ($FE95).
@@ -149,15 +149,15 @@ HN2:
 ;; back), so the Monitor changes the device DOS passes characters on to. When DOS leaves, MVCSW saves the new
 ;; routine and puts DOS's own hooks back in front of it.
 EPR:
-    lda CNUM
-    jmp OUTPRT
+    lda ParsedNumber
+    jmp SetOutput
 
 ;; IN#: takes input from the slot the scanner left in CNUM (0-7), through the Monitor's INPORT ($FE8B).
 ;;
 ;; As with PR#, the Monitor changes the routine that DOS's input hook passes on to.
 EIN:
-    lda CNUM
-    jmp INPRT
+    lda ParsedNumber
+    jmp SetInput
 
 ;; MON: turns on the echo of commands (C), disk input (I) or disk output (O) given in IMBITS.
 ;; In:    IMBITS = MC ($40), MI ($20) and MO ($10) for the C, I and O given
@@ -190,7 +190,7 @@ ENM1:
 EMAXF:
     lda #0
     sta a:ESTATE                    ; no EXEC, so that CLALL closes its file as well
-    lda CNUM
+    lda ParsedNumber
     pha
     jsr CLALL
     pla
@@ -202,17 +202,17 @@ EMAXF:
 ;; Like LOCK, UNLOCK, VERIFY and RENAME, DELETE goes through OPEN, which claims a buffer for the file manager
 ;; to work in. The file manager is not called to close it; the buffer is simply marked free again.
 EDEL:
-    lda #CRQDEL
+    lda #REQUEST_DELETE
     jsr OPEN
     jsr FILSRC                      ; find the buffer holding the name
     ldy #0
     tya
-    sta (ZPGWRK),y                  ; and free it
+    sta (WorkPointer),y                  ; and free it
     rts
 
 ;; LOCK: has the file manager lock the file named in FNAME1, then closes it.
 ELOCK:
-    lda #CRQLCK
+    lda #REQUEST_LOCK
     bne ELGO
 
 ;; UNLOCK: has the file manager unlock the file named in FNAME1, then closes it.
@@ -220,7 +220,7 @@ ELOCK:
 ;; ELGO, shared with LOCK and VERIFY, makes the call through OPEN with the opcode in A and then closes the
 ;; file, giving the buffer back.
 EUNLK:
-    lda #CRQUNL
+    lda #REQUEST_UNLOCK
 ELGO:
     jsr OPEN
     jmp ECLOSE
@@ -229,7 +229,7 @@ ELGO:
 ;;
 ;; SAVE and BSAVE end here too (VPATCH), to check what they wrote; not in DOS 3.2, which has no VPATCH.
 EVAR:
-    lda #CRQVAR
+    lda #REQUEST_VERIFY
     bne ELGO
 
 ;; RENAME: has the file manager rename the file named in FNAME1 to the name in FNAME2, then closes it.
@@ -241,7 +241,7 @@ EREN:
     sta a:CCBFN2
     lda FN2ADR+1
     sta a:CCBFN2+1
-    lda #CRQRNM
+    lda #REQUEST_RENAME
     sta a:TEMP1A
     jsr EO3
     jmp ECLOSE
@@ -277,7 +277,7 @@ EOPEN:
 ;; Whether a missing file is created depends on the command: the file manager checks CREFLG in the command's
 ;; CMDSTB entry (CommandTables.asm).
 EOPN1:
-    lda #CRQOPN
+    lda #REQUEST_OPEN
 
 ;; Makes file manager call A for the file named in FNAME1 in a free DOS buffer: the common code of the
 ;; handlers that work on a named file, and of CATALOG and INIT.
@@ -286,8 +286,8 @@ EOPN1:
 ;; parameter list (record length, then volume, drive, slot and name address in OPNSUP) and calls the file
 ;; manager. The buffer stays claimed; CLOSE gives it back. A command without a file name has a 0 for the
 ;; first character of FNAME1, so the buffer is lent to the call without being claimed.
-;; In:    A = file manager opcode (CRQOPN, CRQDEL, ...); FNAME1, CV, CD, CS and CL as the scanner left them
-;; Out:   ZPGWRK = the buffer; CFTABA = the same
+;; In:    A = file manager opcode (REQUEST_OPEN, REQUEST_DELETE, ...); FNAME1, CV, CD, CS and CL as the scanner left them
+;; Out:   WorkPointer = the buffer; CFTABA = the same
 ;; Errors: NO BUFFERS AVAILABLE when every buffer is in use; any file manager error, through DOSGO
 ;; Entry: EO3 = with the opcode already in TEMP1A and parameter bytes 2-3 already set (RENAME)
 OPEN:
@@ -306,13 +306,13 @@ EO1:
 EO3:
     jsr ECLOSE                      ; also leaves CNUM = a free buffer, from FILSRC
 EO4:
-    lda CNUM+1
+    lda ParsedNumber+1
     bne EO5
     jmp ENFA
 EO5:
-    sta ZPGWRK+1
-    lda CNUM
-    sta ZPGWRK
+    sta WorkPointer+1
+    lda ParsedNumber
+    sta WorkPointer
 EO6:
     jsr MVFN1                       ; the name claims the buffer
     jsr MVBUFP                      ; its three work areas go in the parameter list
@@ -325,7 +325,7 @@ EO6:
 ;;
 ;; The search starts over after each close, so it closes every buffer that holds the name. When none is left,
 ;; FILSRC has also left the address of a free buffer, if any, in CNUM, which OPEN relies on.
-;; Out:   CNUM = a free buffer (high byte 0 if none), when a name was given
+;; Out:   ParsedNumber = a free buffer (high byte 0 if none), when a name was given
 ECLOSE:
     lda a:FNAME1
     cmp #$A0
@@ -339,7 +339,7 @@ ECLOSE:
 ;;
 ;; If the buffer is the EXEC file's, EXEC stops. The name is cleared before the call, so the buffer is free
 ;; even if the file manager fails.
-;; In:    ZPGWRK = the buffer
+;; In:    WorkPointer = the buffer
 CLOSE:
     jsr TSTEXC                      ; Z set if this is EXEC's buffer
     bne CLX
@@ -348,9 +348,9 @@ CLOSE:
 CLX:
     ldy #0
     tya
-    sta (ZPGWRK),y
+    sta (WorkPointer),y
     jsr MVBUFP
-    lda #CRQCLS
+    lda #REQUEST_CLOSE
     sta a:CCBREQ
     jmp DOSGO
 

@@ -62,9 +62,9 @@ PTRSDEST = $3C                      ;; where the IOB's DCT and buffer pointers a
 DEVCTBL = PTRSDEST                  ;; the DCT's address, 2 bytes
 DRIVNO = $35                        ;; bit 7 set for drive 1, clear for drive 2
 MONTIME = $46                       ;; the motor-on count, counting up to 0, 2 bytes
-SECT = CSSTV+1                      ;; the sector in the address field just read
-TRACK = CSSTV+2                     ;; the track in the address field just read
-VOLUME = CSSTV+3                    ;; the volume in the address field just read
+SECT = AddressField+1                      ;; the sector in the address field just read
+TRACK = AddressField+2                     ;; the track in the address field just read
+VOLUME = AddressField+3                    ;; the volume in the address field just read
 MAXSEEKS = 4                        ;; address fields from a wrong track before recalibrating
 SEEKCNT = $4F8                      ;; seeks left before recalibrating (slot 0's DRV2TRK byte)
 RETRYCNT = $578                     ;; address fields left to read before giving up on the track
@@ -199,30 +199,30 @@ TitleText:
 ;; Each step turns on the next half-track's phase, waits ONTABLE's time, turns off the phase it left and waits
 ;; OFFTABLE's time, both indexed by the smaller of the half-tracks moved so far and those still to go, at most
 ;; 11, so the head speeds up and slows down. At the end it waits 25.6 milliseconds and leaves the last phase on.
-;; In:    A = the half-track to go to, X = slot * 16, CURTRK = the half-track the head is on
-;; Out:   CURTRK = TRKN = the new half-track
-;; Uses:  A, Y, TRKCNT, PRIOR, TRKN, SLOTTEMP, MONTIMEL, MONTIMEH
+;; In:    A = the half-track to go to, X = slot * 16, CurrentTrack = the half-track the head is on
+;; Out:   CurrentTrack = TargetHalfTrack = the new half-track
+;; Uses:  A, Y, TRKCNT, PRIOR, TargetHalfTrack, SLOTTEMP, MotorTime, MotorTimeHigh
 ;; Keeps: X
 SEEK:
     stx SLOTTEMP
-    sta TRKN
-    cmp CURTRK
+    sta TargetHalfTrack
+    cmp CurrentTrack
     beq SEEKRTS                     ; already there
     lda #0
     sta TRKCNT
 SEEK2:
-    lda CURTRK
+    lda CurrentTrack
     sta PRIOR                       ; the half-track being left
     sec
-    sbc TRKN
+    sbc TargetHalfTrack
     beq SEEKEND                     ; arrived
     bcs OUT
     eor #$FF                        ; in: A = half-tracks still to go after this step
-    inc CURTRK
+    inc CurrentTrack
     bcc MINTST                      ; always
 OUT:
     adc #$FE                        ; out: A - 1 (the carry is set), half-tracks still to go after this step
-    dec CURTRK
+    dec CurrentTrack
 MINTST:
     cmp TRKCNT
     bcc MAXTST
@@ -253,13 +253,13 @@ SEEKEND:
 ;; Out:   X = SLOTTEMP
 ;; Uses:  A
 SETPHASE:
-    lda CURTRK
+    lda CurrentTrack
 CLRPHASE:
     and #3                          ; the phase
     rol a                           ; times 2, plus the carry: on or off
     ora SLOTTEMP
     tax
-    lda PHASEOFF,x
+    lda Phase0Off,x
     ldx SLOTTEMP
 SEEKRTS:
     rts
@@ -267,16 +267,16 @@ SEEKRTS:
 ;; Waits about A times 100 microseconds (A = 0 waits 256 times), adding A to the motor-on count.
 ;; In:    A = the time, in hundreds of microseconds
 ;; Out:   A = 0, X = 0
-;; Uses:  MONTIMEL, MONTIMEH
+;; Uses:  MotorTime, MotorTimeHigh
 ;; Keeps: Y
 MSWAIT:
     ldx #$11
 MSW1:
     dex
     bne MSW1                        ; 17 passes, 84 cycles
-    inc MONTIMEL
+    inc MotorTime
     bne MSW2
-    inc MONTIMEH
+    inc MotorTimeHigh
 MSW2:
     sec
     sbc #1
@@ -346,8 +346,8 @@ NIBL:
 ;; the latch once more to see whether this slot's motor is turning, and turns it on either way; a motor counts
 ;; as off if the drive is not the one used last. If it was off, it waits seven MSWAITs before the seek and,
 ;; after it, until the motor-on count reaches zero, without DOS 3.3's check that the count is already past it.
-;; In:    A/Y = the IOB's address (high/low), the IOB filled in for the command
-;; Out:   carry clear, IOB 0E = the volume found (read, write), IOB 0F/10 = this slot and drive, X = slot * 16,
+;; In:    A/Y = the DosIob's address (high/low), the DosIob filled in for the command
+;; Out:   carry clear, DosIob 0E = the volume found (read, write), DosIob 0F/10 = this slot and drive, X = slot * 16,
 ;;   the motor off
 ;; Errors: carry set and the code in IOB 0D: $10 write-protected, $20 wrong volume, $40 drive error
 ;; Uses:  A, Y, $26..$4B (in part)
@@ -374,12 +374,12 @@ RWTS:
     pla
     pha
     sta (IOBPL),y                   ; the new slot becomes the last one used
-    lda Q7L,x                       ; read mode
+    lda ReadMode,x                       ; read mode
 STILLON:
     ldy #8
-    lda Q6L,x
+    lda DataLatch,x
 NOTSURE:
-    cmp Q6L,x
+    cmp DataLatch,x
     bne STILLON                     ; it changed: still turning
     dey
     bne NOTSURE
@@ -388,13 +388,13 @@ NOTSURE:
 
 ; Is this slot's motor turning? One read of the latch against the one before it.
 SAMESLOT:
-    lda Q7L,x                       ; read mode
-    lda Q6L,x
-    lda Q6L,x
+    lda ReadMode,x                       ; read mode
+    lda DataLatch,x
+    lda DataLatch,x
     pha                             ; delay, for the data to change
     pla
     stx SLOT
-    cmp Q6L,x
+    cmp DataLatch,x
     php                             ; Z clear if the motor was turning
     lda MOTORON,x
 
@@ -487,7 +487,7 @@ TRYADR2:
 ; seek to track 0 steps out far enough to stop against track 0 whatever the head's real place, then it seeks
 ; the track again. The second time this happens, it's a drive error.
 RECAL:
-    lda CURTRK
+    lda CurrentTrack
     pha
     lda #$60
     jsr SETTRK
@@ -506,9 +506,9 @@ RESEEK:
 ; the one read, and it seeks again, up to SEEKCNT times before recalibrating.
 RDRIGHT:
     ldy TRACK
-    cpy CURTRK
+    cpy CurrentTrack
     beq RTTRK
-    lda CURTRK
+    lda CurrentTrack
     pha
     tya
     jsr SETTRK
@@ -527,7 +527,7 @@ GALLDONE:
 FORMDSK:
     ldy #3
     lda (IOBPL),y
-    sta NVOL                        ; the volume to write
+    sta FormatVolume                        ; the volume to write
     jmp DSKFORM
 
 ; The right track. The volume found goes to IOB 0E; it must match the one asked for, unless that is 0.
@@ -582,8 +582,8 @@ WRIT:
 ;; Moves the IOB's drive's head to track A. A drive whose DCT byte 1 has bit 0 set takes two half-track steps a
 ;; track, so the track is doubled for SEEK and CURTRK halved after.
 ;; In:    A = the track, X = slot * 16, DRIVNO
-;; Out:   CURTRK = the track, the drive's screen hole = its half-track
-;; Uses:  A, Y, TRACK, TRKCNT, PRIOR, TRKN, SLOTTEMP, MONTIMEL, MONTIMEH
+;; Out:   CurrentTrack = the track, the drive's screen hole = its half-track
+;; Uses:  A, Y, TRACK, TRKCNT, PRIOR, TargetHalfTrack, SLOTTEMP, MotorTime, MotorTimeHigh
 ;; Keeps: X
 MYSEEK:
     pha
@@ -594,7 +594,7 @@ MYSEEK:
     bcc MYSEEK2
     asl a
     jsr MYSEEK2
-    lsr CURTRK
+    lsr CurrentTrack
     rts
 
 ; Like DOS 3.3's, and unlike DOS 3.2's, it doesn't turn the phases off first; it holds the track in TRACK, as
@@ -607,7 +607,7 @@ MYSEEK2:
     bmi WASD0
     lda DRV2TRK,y
 WASD0:
-    sta CURTRK
+    sta CurrentTrack
     lda TRACK
     bit DRIVNO
     bmi ISDRV1
@@ -634,7 +634,7 @@ XTOY:
 
 ;; Records that the IOB's drive's head is on track A, as a half-track in the drive's screen hole.
 ;; In:    A = the track, X = slot * 16
-;; Out:   DRIVNO = the IOB's drive
+;; Out:   DRIVNO = the DosIob's drive
 ;; Uses:  A, Y
 ;; Keeps: X
 SETTRK:
@@ -663,31 +663,31 @@ SETRTS:
 ;; 7, 4, 1, 11, 8, 5, 2, 12, 9, 6, 3, each with GAPLEN self-sync bytes, an address field and $FF nibbles where
 ;; the data field goes. After the track it waits, reads an address field, and expects sector 0; if not, it
 ;; formats the track again with GAPLEN one less. GAPLEN starts at 80 and grows by 2 a track.
-;; In:    X = slot * 16, NVOL = the volume, the drive running
+;; In:    X = slot * 16, FormatVolume = the volume, the drive running
 ;; Out:   carry = clear (ALLDONE)
 ;; Errors: carry set with IBDERR if the disk is write-protected or GAPLEN would fall below 16
-;; Uses:  A, Y, TRK, NSECT, GAPLEN, GAPCNT, AA
+;; Uses:  A, Y, FormatTrack, FormatSector, GAPLEN, GAPCNT, FormatMask
 DSKFORM:
     lda #$80
-    sta CURTRK
+    sta CurrentTrack
     lda #0
-    sta TRK
+    sta FormatTrack
     jsr SEEK
     lda #$AA
-    sta AA
+    sta FormatMask
     ldy #$50                        ; GAPLEN: 80 self-sync bytes before each address field
 
 ;; Formats track TRK, then the tracks after it.
-;; In:    Y = GAPLEN, the head on track TRK
+;; In:    Y = GAPLEN, the head on track FormatTrack
 FORMTRK:
     sty GAPLEN
     lda #$27                        ; after the first Y bytes, 38 runs of 256
-    sta NSECT
-    lda Q6H,x
-    lda Q7L,x
+    sta FormatSector
+    lda LoadLatch,x
+    lda ReadMode,x
     lda #$FF
-    sta Q7H,x                       ; write mode, $FF in the latch
-    cmp Q6L,x
+    sta WriteMode,x                       ; write mode, $FF in the latch
+    cmp DataLatch,x
     bit $00                         ; timing
 
 ; The self-sync bytes that erase the track: $FF every 36 cycles. The BCS is always taken.
@@ -702,11 +702,11 @@ FERASE2:
     pla
     nop
     nop
-    sta Q6H,x
-    cmp Q6L,x
+    sta LoadLatch,x
+    cmp DataLatch,x
     bcs FERASE                      ; always
 FERASE3:
-    dec NSECT
+    dec FormatSector
     bne FERASE2
 
 ; Each sector: GAPLEN self-sync bytes, 36 cycles apart, then its address field.
@@ -723,8 +723,8 @@ FSYNC:
 FSYNC2:
     nop
 FSYNC3:
-    sta Q6H,x
-    cmp Q6L,x
+    sta LoadLatch,x
+    cmp DataLatch,x
     dey
     bne FSYNC
 
@@ -735,20 +735,20 @@ FSYNC3:
     jsr WNIBLB2
     lda #$B5
     jsr WNIBLB2
-    lda NVOL
+    lda FormatVolume
     jsr WBYTE
-    lda TRK
+    lda FormatTrack
     jsr WBYTE
-    lda NSECT
+    lda FormatSector
     jsr WBYTE
-    lda NVOL
-    eor TRK
-    eor NSECT                       ; the checksum, written as WBYTE would, inline
+    lda FormatVolume
+    eor FormatTrack
+    eor FormatSector                       ; the checksum, written as WBYTE would, inline
     pha
     lsr a
-    ora AA
-    sta Q6H,x
-    cmp Q6L,x
+    ora FormatMask
+    sta LoadLatch,x
+    cmp DataLatch,x
     pla
     ora #$AA
     jsr WNIBLA
@@ -775,8 +775,8 @@ FDATA:
 FDATA2:
     pha
     pla
-    sta Q6H,x
-    cmp Q6L,x
+    sta LoadLatch,x
+    cmp DataLatch,x
     bcs FDATA                       ; always
 FDATA3:
     dec GAPCNT
@@ -784,20 +784,20 @@ FDATA3:
     ldy GAPLEN
     clc
     bit $00                         ; timing
-    sta Q6H,x
-    lda Q6L,x
+    sta LoadLatch,x
+    lda DataLatch,x
 
 ; The next sector: NSECT + 10, less 13 if that is 13 or more. Reaching 13 exactly means sector 3, the last,
 ; is done. The carry is clear, so the SBC subtracts 13.
-    lda NSECT
+    lda FormatSector
     adc #$0A
-    sta NSECT
+    sta FormatSector
     sbc #$0C
     beq FTRKEND
     bcs FNEXT
     .byte $2C                       ; BIT absolute: skips the STA, keeping NSECT + 10
 FNEXT:
-    sta NSECT
+    sta FormatSector
     lda #$FF
     jmp FSYNC3
 
@@ -806,8 +806,8 @@ FTRKEND:
     pha
     pla
     ldy GAPLEN
-    lda Q6H,x
-    lda Q7L,x
+    lda LoadLatch,x
+    lda ReadMode,x
     bmi FERR
     dey
 
@@ -836,8 +836,8 @@ FSHORTER:
 
 ; On to the next track, with two more self-sync bytes in each gap.
 FNEXTTRK:
-    inc TRK
-    lda TRK
+    inc FormatTrack
+    lda FormatTrack
     cmp #$23
     bcs FDONE                       ; all 35 done
     asl a                           ; the half-track
@@ -857,15 +857,15 @@ FDONE:
 ;;
 ;; The first nibble is the byte shifted right with every other bit set, through AA, the zero-page byte that
 ;; holds $AA: an `ORA zp` takes the 3 cycles the timing needs where `ORA #$AA` takes 2.
-;; In:    A = the byte, X = slot * 16, AA = $AA, the card in write mode
+;; In:    A = the byte, X = slot * 16, FormatMask = $AA, the card in write mode
 ;; Uses:  A
 ;; Keeps: X, Y
 WBYTE:
     pha
     lsr a
-    ora AA
-    sta Q6H,x
-    cmp Q6L,x
+    ora FormatMask
+    sta LoadLatch,x
+    cmp DataLatch,x
     pla
     cmp ($00,x)                     ; timing: 6 cycles
     ora #$AA
@@ -881,8 +881,8 @@ WNIBLB2:
     pha
     pla
     nop
-    sta Q6H,x
-    cmp Q6L,x
+    sta LoadLatch,x
+    cmp DataLatch,x
     rts
 
 ; Zeros to the end of the file.

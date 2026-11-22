@@ -23,23 +23,23 @@ NSYNC = $45
 ;; track 0. For each track it seeks, writes and checks the track (WTRACK16), then finds sector 0 and reads it
 ;; once more: so every track's writing starts a fixed time after sector 0 of the track before has passed. It also
 ;; uses what the routines it calls use.
-;; In:    X = slot * 16, IOB 03 = the volume, the drive running
-;; Out:   carry = clear on success, with the motor off and IOB 0D not written
+;; In:    X = slot * 16, DosIob 03 = the volume, the drive running
+;; Out:   carry = clear on success, with the motor off and DosIob 0D not written
 ;; Errors: carry set and IOB 0D = 8 when a track cannot be written or checked; if sector 0 cannot then be found,
 ;;   IOB 0D gets whatever A holds (see FINDS0)
-;; Uses:  A, Y, NVOL, AA, TRK, NSECT, NSYNC, RETRYCNT, NBUF1, NBUF2, FOUND
+;; Uses:  A, Y, FormatVolume, FormatMask, FormatTrack, FormatSector, NSYNC, RETRYCNT, NBUF1, NBUF2, FOUND
 DSKFORM:
 ; The diagnostic build leaves the formatter out; DSKFORM is then the address of INTRLEAV.
 .if DIAGMODE
 .else
     ldy #3
     lda (IOBPL),y                   ; IOB 03: the volume
-    sta NVOL
+    sta FormatVolume
     lda #$AA
-    sta AA                          ; for WADR16's timing
+    sta FormatMask                          ; for WADR16's timing
     ldy #$56
     lda #0
-    sta TRK
+    sta FormatTrack
 ; Every sector is written as 256 zeros: clear NBUF2 and NBUF1.
 CLRNBUF2:
     sta NBUF2-1,y
@@ -54,7 +54,7 @@ CLRNBUF1:
     lda #$28
     sta NSYNC                       ; 40 self-sync nibbles between sectors, to start with
 FORMTRK:
-    lda TRK
+    lda FormatTrack
     jsr MYSEEK
     jsr WTRACK16
 FORMERR1:
@@ -74,8 +74,8 @@ FINDS0:
     bne FINDS0
     jsr READ16
     bcs FINDS0
-    inc TRK
-    lda TRK
+    inc FormatTrack
+    lda FormatTrack
     cmp #$23                        ; 35 tracks
     bcc FORMTRK
     clc
@@ -85,21 +85,21 @@ FORMERR:
     sta (IOBPL),y                   ; IOB 0D: the return code
     sec
 FORMDONE:
-    lda MOTOROFF,x
+    lda MotorOff,x
     rts
 ;; Writes the 16 sectors of track TRK, then checks them (VTRACK); rewrites the track until it checks or cannot be
 ;; fixed.
 ;;
 ;; Sector 0 comes after 129 self-sync nibbles and the others after NSYNC + 1. Each sector is an address field
 ;; and a data field from NBUF1 and NBUF2. It also uses what the routines it calls use.
-;; In:    X = slot * 16, TRK, NVOL, NSYNC, AA = $AA, NBUF1 and NBUF2 = the data, the head on the track
+;; In:    X = slot * 16, FormatTrack, FormatVolume, NSYNC, FormatMask = $AA, NBUF1 and NBUF2 = the data, the head on the track
 ;; Out:   carry = clear if the track was written and checked
 ;; Errors: carry set if the disk is write-protected or the track would not check
-;; Uses:  A, Y, NSECT, NSYNC, RETRYCNT, FOUND, CSSTV
+;; Uses:  A, Y, FormatSector, NSYNC, RETRYCNT, FOUND, AddressField
 ;; Keeps: X
 WTRACK16:
     lda #0
-    sta NSECT
+    sta FormatSector
     ldy #128
     bne WSECT0                      ; always
 WSECT:
@@ -109,8 +109,8 @@ WSECT0:
     bcs WEXIT2                      ; write-protected
     jsr WRITE16
     bcs WEXIT2
-    inc NSECT
-    lda NSECT
+    inc FormatSector
+    lda FormatSector
     cmp #$10
     bcc WSECT
 ;; Checks the track just written: the first address field to pass must be sector 0's, and all 16 sectors must
@@ -123,12 +123,12 @@ WSECT0:
 ;;
 ;; To rewrite a track, it waits for sector 15 to pass and branches back to WTRACK16, so the new sector 0 starts
 ;; just after the old sector 15's data field.
-;; In:    X = slot * 16, TRK, NSYNC
+;; In:    X = slot * 16, FormatTrack, NSYNC
 ;; Out:   carry = clear if the track checked
 ;; Errors: carry set if it did not and could not be rewritten
 VTRACK:
     ldy #$F
-    sty NSECT                       ; sectors still to find, less 1
+    sty FormatSector                       ; sectors still to find, less 1
     lda #$30
     sta RETRYCNT
 CLRFOUND:
@@ -192,9 +192,9 @@ SECTOK:
     bmi VERR1                       ; found already
     lda #$FF
     sta a:FOUND,y
-    dec NSECT
+    dec FormatSector
     bpl VSECT
-    lda TRK
+    lda FormatTrack
     bne WEXIT1
     lda NSYNC
     cmp #$10

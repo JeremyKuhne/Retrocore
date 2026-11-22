@@ -126,7 +126,7 @@ EIBSV:
 ;; A new file is created with type A, if the command allows creating one; an existing file must already
 ;; have it, the lock bit aside.
 ;; In:    A = file type: 0 text, 1 Integer BASIC, 2 Applesoft, 4 binary
-;; Out:   ZPGWRK = the file's buffer
+;; Out:   WorkPointer = the file's buffer
 ;; Errors: FILE TYPE MISMATCH, after closing the file
 SV1:
 SV1A:
@@ -142,14 +142,14 @@ SV1A:
 ;; CCBBLN's high byte is parameter byte 7, the file type, no longer needed once the file is open; the
 ;; second write reads the high byte back from there.
 ;; In:    Y = low byte, A = high byte; the file open, its buffer in the parameter list
-;; Out:   CCBREQ = CRQWR, ready for SV3
+;; Out:   DosFileParameters::Request = REQUEST_WRITE, ready for SV3
 SV2:
     sty a:CCBBLN
     sty a:CCBDAT
     sta a:CCBBLN+1
-    lda #CRQWR
+    lda #REQUEST_WRITE
     sta a:CCBREQ
-    lda #CRMNBT
+    lda #TRANSFER_NEXT_BYTE
     sta a:CCBRQM
     jsr DOSGO
     lda a:CCBBLN+1
@@ -165,7 +165,7 @@ SV2:
 SV3:
     sty a:CCBBBA
     sta a:CCBBBA+1
-    lda #CRMNBL
+    lda #TRANSFER_NEXT_RANGE
 .if DOS32
     sta a:CCBRQM
 .else
@@ -258,7 +258,7 @@ LD3:
 ;;
 ;; The value is an address for a binary file's first two bytes, a length otherwise; it goes in CCBBLN either
 ;; way, and BLOAD's second call replaces the address with the length.
-;; Out:   A = low byte, Y = high byte; CCBREQ = CRQRD and CCBRQM = CRMNBL, ready for LD3
+;; Out:   A = low byte, Y = high byte; DosFileParameters::Request = REQUEST_READ and DosFileParameters::Transfer = TRANSFER_NEXT_RANGE, ready for LD3
 LD2:
     lda SVBLA
     sta a:CCBBBA
@@ -268,9 +268,9 @@ LD2:
     sta a:CCBBLN+1
     lda #2
     sta a:CCBBLN
-    lda #CRQRD
+    lda #REQUEST_READ
     sta a:CCBREQ
-    lda #CRMNBL
+    lda #TRANSFER_NEXT_RANGE
     sta a:CCBRQM
     jsr DOSGO
     lda a:SVBL+1
@@ -292,7 +292,7 @@ MFULL:
 ;; finishes starting DOS (INITC in DosInit.asm), sees SVCMD and runs the command again. For Applesoft the file
 ;; name is copied to FNAME2 as well: if Applesoft has to be loaded into RAM, loading the APPLESOFT file
 ;; replaces FNAME1, and INITC copies the name back.
-;; In:    A = the type of the active BASIC: 1 Integer BASIC, 2 Applesoft; CCBFUC = the file's type
+;; In:    A = the type of the active BASIC: 1 Integer BASIC, 2 Applesoft; DosFileParameters::FileType = the file's type
 LD1:
     cmp a:CCBFUC
     beq LD1C

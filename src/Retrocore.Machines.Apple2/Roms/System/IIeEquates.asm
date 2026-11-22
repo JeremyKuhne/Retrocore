@@ -228,7 +228,7 @@ SavedOutputY = $35
 ;; <Monitor:ScreenOut>, the screen, and <Monitor:SetOutput>, which the Monitor's Control-P command uses, at a slot's
 ;; $Cn00. DOS keeps the hook pointed at itself (<Dos33:OUTSW>) and passes characters on.
 ;; See: <Monitor:CharacterOut>, <Monitor:SetScreen>, <Monitor:SetOutput>, <InputHook>, <OutputHookHigh>
-;; Also: CSWL (A2RM78, A2RM79, IIEROM82, IIETRM85)
+;; Also: CSWL (A2RM78, A2RM79, IIEROM82, IIETRM85), OUTSW (DOS33, DOS31)
 OutputHook = $36
 
 ;; The high byte of the output hook at <OutputHook>.
@@ -245,7 +245,7 @@ OutputHookHigh = $37
 ;; <Monitor:KeyboardIn>, the keyboard, and <Monitor:SetInput> at a slot's $Cn00. DOS keeps the hook pointed at itself
 ;; (<Dos33:INSW>) and passes keys on.
 ;; See: <Monitor:ReadKey>, <Monitor:SetKeyboard>, <Monitor:SetInput>, <OutputHook>, <InputHookHigh>
-;; Also: KSWL (A2RM78, A2RM79, IIEROM82, IIETRM85)
+;; Also: KSWL (A2RM78, A2RM79, IIEROM82, IIETRM85), INSW (DOS33, DOS31)
 InputHook = $38
 
 ;; The high byte of the input hook at <InputHook>.
@@ -409,7 +409,7 @@ RandomSeedHigh = $4F
 ;; <Monitor:GetLine> stores each character typed here, ending the line with a carriage return, and the Monitor's
 ;; command line reads its commands from it.
 ;; See: <Monitor:GetLine>, <CommandPosition>
-;; Also: IN (A2RM78, A2RM79, IIEROM82, IIETRM85)
+;; Also: IN (A2RM78, A2RM79, IIEROM82, IIETRM85), LBUFF (DOS33, DOS31)
 InputBuffer = $0200
 
 ;; The address <Monitor:Break> jumps through once it has saved the registers: the BRK handler.
@@ -426,7 +426,7 @@ BreakVector = $03F0
 ;; <Monitor:Startup::PowerUp> points it at <Monitor:BasicColdStart>, and the first reset after that at
 ;; <Monitor:BasicWarmStart>, so later resets keep the program.
 ;; See: <SoftEntryCheck>, <Monitor:Startup::Reset>, <Monitor:ValidateSoftEntry>
-;; Also: SOFTEV (A2RM79, IIEROM82, IIETRM85)
+;; Also: SOFTEV (A2RM79, IIEROM82, IIETRM85), ZRSET (DOS33)
 SoftEntryVector = $03F2
 
 ;; The byte that shows <SoftEntryVector> is valid: its high byte exclusive-ored with $A5.
@@ -434,7 +434,7 @@ SoftEntryVector = $03F2
 ;; <Monitor:ValidateSoftEntry> sets it for the vector's current value, so a program that changes the vector calls it.
 ;; A check byte that does not match makes <Monitor:Startup::Reset> power up instead.
 ;; See: <SoftEntryVector>, <Monitor:ValidateSoftEntry>, <Monitor:Startup::Reset>
-;; Also: PWREDUP (A2RM79, IIEROM82, IIETRM85)
+;; Also: PWREDUP (A2RM79, IIEROM82, IIETRM85), PWCNST (DOS33)
 SoftEntryCheck = $03F4
 
 ;; A JMP instruction, placed by a program, that the Monitor's Control-Y command runs.

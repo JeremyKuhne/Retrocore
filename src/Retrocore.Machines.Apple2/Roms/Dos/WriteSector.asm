@@ -26,16 +26,16 @@ WRITE16:
     sec                             ; the error, in case of write protection
     stx SLOTZ
     stx SLOTABS
-    lda Q6H,x                       ; Q6 on, Q7 off: sense write protect...
-    lda Q7L,x                       ; ...and read it in the latch's top bit
+    lda LoadLatch,x                       ; Q6 on, Q7 off: sense write protect...
+    lda ReadMode,x                       ; ...and read it in the latch's top bit
     bmi WEXIT
     lda a:NBUF2
     sta WTEMP                       ; NBUF2's first value, for a 3-cycle load later
     lda #$FF
 ; The first self-sync nibble: with Q6 still on, turning Q7 on enters load mode and the STA's $FF is loaded.
 ; From here on every cycle counts.
-    sta Q7H,x
-    ora Q6L,x                       ; shift mode: writing
+    sta WriteMode,x
+    ora DataLatch,x                       ; shift mode: writing
     pha                             ; delay
     pla
     nop
@@ -68,8 +68,8 @@ WDATA1:
     tax
     lda a:NIBL,x
     ldx SLOTZ
-    sta Q6H,x
-    lda Q6L,x
+    sta LoadLatch,x
+    lda DataLatch,x
     dey
     bne WDATA0
 ; The 256 values of NBUF1, from the first up. The loop is the same length as the one above, 32 cycles: its EOR
@@ -81,8 +81,8 @@ WDATA2:
     tax
     lda a:NIBL,x
     ldx SLOTABS
-    sta Q6H,x
-    lda Q6L,x
+    sta LoadLatch,x
+    lda DataLatch,x
     lda a:NBUF1,y                   ; the value just written, for the next
     iny
     bne WDATA2
@@ -102,9 +102,9 @@ WDATA2:
     jsr WNIBL9
     lda #$FF
     jsr WNIBL9                      ; WNIBL9 also cleared the carry: success
-    lda Q7L,x                       ; Q7 off: out of write mode
+    lda ReadMode,x                       ; Q7 off: out of write mode
 WEXIT:
-    lda Q6L,x                       ; Q6 off: read mode
+    lda DataLatch,x                       ; Q6 off: read mode
     rts
 ;; Writes the nibble in A to the disk, after a delay that keeps the stores 32 cycles apart.
 ;;
@@ -123,6 +123,6 @@ WNIBL7:
     pha                             ; delay
     pla
 WNIBL:
-    sta Q6H,x                       ; load the nibble
-    ora Q6L,x                       ; and shift it out
+    sta LoadLatch,x                       ; load the nibble
+    ora DataLatch,x                       ; and shift it out
     rts

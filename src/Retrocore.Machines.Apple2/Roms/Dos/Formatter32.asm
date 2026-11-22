@@ -18,32 +18,32 @@
 ;; After the track it waits, reads an address field, and expects sector 0, the first one written. If it finds
 ;; no address field or another sector's, it formats the track again with GAPLEN one less. It starts with GAPLEN
 ;; at 80 and adds 2 for each track after the first. It also uses SEEK's variables.
-;; In:    X = slot * 16, NVOL = the volume, the drive running
+;; In:    X = slot * 16, FormatVolume = the volume, the drive running
 ;; Out:   carry = clear (ALLDONE)
 ;; Errors: carry set with IBDERR if the disk is write-protected (found after the first track) or GAPLEN would
 ;;   fall below 16
-;; Uses:  A, Y, TRK, NSECT, GAPLEN, GAPCNT, AA
+;; Uses:  A, Y, FormatTrack, FormatSector, GAPLEN, GAPCNT, FormatMask
 DSKFORM:
     lda #$80
-    sta CURTRK
+    sta CurrentTrack
     lda #0
-    sta TRK
+    sta FormatTrack
     jsr SEEK
     lda #$AA
-    sta AA
+    sta FormatMask
     ldy #$50                        ; GAPLEN: 80 self-sync bytes before each address field
 
 ;; Formats track TRK, then the tracks after it.
-;; In:    Y = GAPLEN, the head on track TRK
+;; In:    Y = GAPLEN, the head on track FormatTrack
 FORMTRK:
     sty GAPLEN
     lda #$27                        ; after the first Y bytes, 38 runs of 256
-    sta NSECT
-    lda Q6H,x
-    lda Q7L,x
+    sta FormatSector
+    lda LoadLatch,x
+    lda ReadMode,x
     lda #$FF
-    sta Q7H,x                       ; write mode, $FF in the latch
-    cmp Q6L,x
+    sta WriteMode,x                       ; write mode, $FF in the latch
+    cmp DataLatch,x
     bit $00                         ; timing
 
 ; The self-sync bytes that erase the track: $FF every 36 cycles, which writes it with one 0 bit after it. NSECT
@@ -59,11 +59,11 @@ FERASE2:
     pla
     nop
     nop
-    sta Q6H,x
-    cmp Q6L,x
+    sta LoadLatch,x
+    cmp DataLatch,x
     bcs FERASE                      ; always
 FERASE3:
-    dec NSECT
+    dec FormatSector
     bne FERASE2
 
 ; Each sector: GAPLEN self-sync bytes, 36 cycles apart, then its address field.
@@ -80,8 +80,8 @@ FSYNC:
 FSYNC2:
     nop
 FSYNC3:
-    sta Q6H,x
-    cmp Q6L,x
+    sta LoadLatch,x
+    cmp DataLatch,x
     dey
     bne FSYNC
 
@@ -93,20 +93,20 @@ FSYNC3:
     jsr WNIBLB2
     lda #$B5
     jsr WNIBLB2
-    lda NVOL
+    lda FormatVolume
     jsr WBYTE
-    lda TRK
+    lda FormatTrack
     jsr WBYTE
-    lda NSECT
+    lda FormatSector
     jsr WBYTE
-    lda NVOL
-    eor TRK
-    eor NSECT                       ; the checksum, written as WBYTE would, inline
+    lda FormatVolume
+    eor FormatTrack
+    eor FormatSector                       ; the checksum, written as WBYTE would, inline
     pha
     lsr a
-    ora AA
-    sta Q6H,x
-    cmp Q6L,x
+    ora FormatMask
+    sta LoadLatch,x
+    cmp DataLatch,x
     pla
     ora #$AA
     jsr WNIBLA
@@ -133,8 +133,8 @@ FDATA:
 FDATA2:
     pha
     pla
-    sta Q6H,x
-    cmp Q6L,x
+    sta LoadLatch,x
+    cmp DataLatch,x
     bcs FDATA                       ; always
 FDATA3:
     dec GAPCNT
@@ -142,20 +142,20 @@ FDATA3:
     ldy GAPLEN
     clc
     bit $00                         ; timing
-    sta Q6H,x
-    lda Q6L,x
+    sta LoadLatch,x
+    lda DataLatch,x
 
 ; The next sector: NSECT + 10, less 13 if that is 13 or more. Reaching 13 exactly means sector 3, the last,
 ; is done. The carry is clear, so the SBC subtracts 13.
-    lda NSECT
+    lda FormatSector
     adc #$0A
-    sta NSECT
+    sta FormatSector
     sbc #$0C
     beq FTRKEND
     bcs FNEXT
     .byte $2C                       ; BIT absolute: skips the STA, keeping NSECT + 10
 FNEXT:
-    sta NSECT
+    sta FormatSector
     lda #$FF
     jmp FSYNC3
 
@@ -164,8 +164,8 @@ FTRKEND:
     pha
     pla
     ldy GAPLEN
-    lda Q6H,x
-    lda Q7L,x
+    lda LoadLatch,x
+    lda ReadMode,x
     bmi FERR
     dey
 FWAIT:
@@ -193,8 +193,8 @@ FSHORTER:
 
 ; On to the next track, with two more self-sync bytes in each gap.
 FNEXTTRK:
-    inc TRK
-    lda TRK
+    inc FormatTrack
+    lda FormatTrack
     cmp #$23
     bcs FDONE                       ; all 35 done
     asl a                           ; the half-track
@@ -205,7 +205,7 @@ FNEXTTRK:
     sty GAPLEN
     jmp FORMTRK
 FERR:
-    lda #IBDERR
+    lda #RWTS_DRIVE_ERROR
     jmp HNDLERR
 FDONE:
     jmp ALLDONE
@@ -214,15 +214,15 @@ FDONE:
 ;;
 ;; The first nibble is the byte shifted right with every other bit set, through AA, the zero-page byte that
 ;; holds $AA: an `ORA zp` takes the 3 cycles the timing needs where `ORA #$AA` takes 2.
-;; In:    A = the byte, X = slot * 16, AA = $AA, the card in write mode
+;; In:    A = the byte, X = slot * 16, FormatMask = $AA, the card in write mode
 ;; Uses:  A
 ;; Keeps: X, Y
 WBYTE:
     pha
     lsr a
-    ora AA
-    sta Q6H,x
-    cmp Q6L,x
+    ora FormatMask
+    sta LoadLatch,x
+    cmp DataLatch,x
     pla
     cmp ($00,x)                     ; timing: 6 cycles
     ora #$AA
@@ -238,8 +238,8 @@ WNIBLB2:
     pha
     pla
     nop
-    sta Q6H,x
-    cmp Q6L,x
+    sta LoadLatch,x
+    cmp DataLatch,x
     rts
 
 ; Unused: nothing calls this code. With X = $FF it goes on to EPOS, the POSITION command (MiscCommands.asm);

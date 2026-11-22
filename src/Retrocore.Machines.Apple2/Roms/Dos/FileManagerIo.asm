@@ -24,14 +24,14 @@
 ;; number of tracks and sectors and the rest of the header come from that buffer. The catalog is track 17's
 ;; sectors 15 down to 1 (12 down to 1 in DOS 3.2), each linked to the one below and the last to nothing; sector
 ;; 0 is the VTOC.
-;; In:    CCBBSA = the first page of the DOS image to write, CCBVOL = the volume number, CCBDRV, CCBSLT =
+;; In:    DosFileParameters::ImagePage = the first page of the DOS image to write, DosFileParameters::Volume = the volume number, DosFileParameters::Drive, DosFileParameters::Slot =
 ;;          the disk
-;; Out:   CCBSTA = 0
+;; Out:   DosFileParameters::ReturnCode = 0
 ;; Errors: the disk errors of DCBIO
-;; Uses:  A, X, Y, VTOC, VOLDIR
+;; Uses:  A, X, Y, FileManager::VtocBuffer, FileManager::CatalogBuffer
 FFMT:
     jsr DCBSUP
-    lda #IBFMT                      ; format every track
+    lda #RWTS_FORMAT                      ; format every track
     jsr DCBIO2
     lda a:DCBVOL
     eor #$FF
@@ -40,7 +40,7 @@ FFMT:
     sta a:VALCA1                    ; to it
     lda #1                          ; and moves up the track numbers
     sta a:VALCA2
-    ldx #VSECAL-VTOC                ; zero the bit map, to the end of the sector: every sector in use
+    ldx #FileManager::VtocBuffer::FreeSectors-FileManager::VtocBuffer                ; zero the bit map, to the end of the sector: every sector in use
     lda #0
 NT1:
     sta a:VTOC,x
@@ -85,7 +85,7 @@ NT7:
     sty a:VDLSEC
     iny                             ; write the sector above the one it links to
     sty a:IBSECT
-    lda #IBCWTS
+    lda #RWTS_WRITE
     jsr DCBIO2                      ; (DCBIO2 leaves IBTRK and IBSECT as they are)
     ldy a:VDLSEC
     dey
@@ -100,8 +100,8 @@ NT8:
 
 ;; Points ZPGFCB at one of the open file's buffers, from the parameter list: the work area (MVFCBP), the
 ;; track/sector list sector (MVFCBD) or the data sector (MVFCBS).
-;; In:    CCBFCB, CCBDBP, CCBSBP = the buffers' addresses
-;; Out:   ZPGFCB = the buffer
+;; In:    DosFileParameters::WorkArea, DosFileParameters::ListBuffer, DosFileParameters::DataBuffer = the buffers' addresses
+;; Out:   FilePointer = the buffer
 ;; Uses:  A, X
 ;; Keeps: Y
 ;; Entry: MVFCBD = the track/sector list buffer, MVFCBS = the data buffer, MVF1 = X = the field's offset
@@ -116,13 +116,13 @@ MVFCBS:
     ldx #4                          ; CCBSBP
 MVF1:
     lda a:CFCBAD,x
-    sta ZPGFCB
+    sta FilePointer
     lda a:CFCBAD+1,x
-    sta ZPGFCB+1
+    sta FilePointer+1
     rts
 
 ;; Writes the data buffer to its sector if it has changed (bit 6 of DCBWRF), and marks it written.
-;; Out:   DCBWRF = bit 6 clear
+;; Out:   FileManager::FileControlBlock::WriteFlags = bit 6 clear
 ;; Errors: the disk errors of DCBIO
 ;; Uses:  A, X, Y
 ;; Entry: WRSGO = writes it whether changed or not
@@ -132,7 +132,7 @@ WRSECT:
     rts
 WRSGO:
     jsr MVSBA
-    lda #IBCWTS
+    lda #RWTS_WRITE
     jsr DCBIO
     lda #$BF
     and a:DCBWRF
@@ -141,7 +141,7 @@ WRSGO:
 
 ;; Writes the track/sector list buffer to its sector if it has changed (bit 7 of DCBWRF), and marks it
 ;; written.
-;; Out:   DCBWRF = bit 7 clear
+;; Out:   FileManager::FileControlBlock::WriteFlags = bit 7 clear
 ;; Errors: the disk errors of DCBIO
 ;; Uses:  A, X, Y
 ;; Entry: WRFDGO = writes it whether changed or not
@@ -151,7 +151,7 @@ WRFDIR:
     rts
 WRFDGO:
     jsr MVFDBA
-    lda #IBCWTS
+    lda #RWTS_WRITE
     jsr DCBIO
     lda #$7F
     and a:DCBWRF
@@ -159,7 +159,7 @@ WRFDGO:
     rts
 
 ;; Points RWTS's buffer at the track/sector list buffer, and gets the current list's track and sector.
-;; Out:   IBBUFP = CCBDBP, X = DCBCDT, the track, Y = DCBCDS, the sector
+;; Out:   DosIob::Buffer = DosFileParameters::ListBuffer, X = FileManager::FileControlBlock::ListTrack, the track, Y = FileManager::FileControlBlock::ListSector, the sector
 ;; Uses:  A
 MVFDBA:
     lda a:CFCBDR
@@ -177,9 +177,9 @@ MVFDBA:
 ;; WRITE, a sector is allocated for one: the old list is linked to it and written, and the new one, empty
 ;; but for the relative sector its first pair stands for, is written to the disk. Either way the work area
 ;; learns the range of relative sectors the list covers.
-;; In:    carry = clear for the first list, DCBFDT/DCBFDS; set for the one the current list links to
-;; Out:   carry = clear, ZPGFCB = the list buffer, DCBCDT/DCBCDS = its track and sector, DCBDFS = the relative
-;;          sector of its first pair, DCBDNF = one past its last
+;; In:    carry = clear for the first list, FileManager::FileControlBlock::FirstListTrack/FileManager::FileControlBlock::FirstListSector; set for the one the current list links to
+;; Out:   carry = clear, FilePointer = the list buffer, FileManager::FileControlBlock::ListTrack/FileManager::FileControlBlock::ListSector = its track and sector, FileManager::FileControlBlock::ListFirstSector = the relative
+;;          sector of its first pair, FileManager::FileControlBlock::ListEndSector = one past its last
 ;; Errors: carry = set when there is no next list and the request is not WRITE; 9 when the disk is full; the
 ;;          disk errors of DCBIO
 ;; Uses:  A, X, Y
@@ -194,60 +194,60 @@ RDFDIR:
     ldy a:DCBFDS
     jmp RFDIO1
 RFDNXT:
-    ldy #FDLTRK
-    lda (ZPGFCB),y
+    ldy #TrackSectorList::NEXT_TRACK
+    lda (FilePointer),y
     beq RFDNL                       ; no link: this was the last list
     tax
     iny
-    lda (ZPGFCB),y
+    lda (FilePointer),y
     tay
     jmp RFDIO1
 RFDNL:
     lda a:CCBREQ
-    cmp #CRQWR
+    cmp #REQUEST_WRITE
     beq RFDNL1
     sec
     rts
 ; Writing past the last list: add one.
 RFDNL1:
     jsr GETSEC                      ; A = sector, DCBATK = track
-    ldy #FDLSEC
-    sta (ZPGFCB),y                  ; link the old list to it
+    ldy #TrackSectorList::NEXT_SECTOR
+    sta (FilePointer),y                  ; link the old list to it
     pha
     dey
     lda a:DCBATK
-    sta (ZPGFCB),y
+    sta (FilePointer),y
     pha
     jsr WRFDGO                      ; write the old list
     jsr CLRSEC                      ; and start the new one empty
-    ldy #FDFRS
+    ldy #TrackSectorList::FIRST_SECTOR
     lda a:DCBDNF                    ; its first pair follows the old list's last
-    sta (ZPGFCB),y
+    sta (FilePointer),y
     iny
     lda a:DCBDNF+1
-    sta (ZPGFCB),y
+    sta (FilePointer),y
     pla
     tax
     pla
     tay
-    lda #IBCWTS
+    lda #RWTS_WRITE
     bne RFDIO2                      ; always
 RFDIO1:
-    lda #IBCRTS
+    lda #RWTS_READ
 RFDIO2:
     stx a:DCBCDT
     sty a:DCBCDS
     jsr DCBIO
 ; The relative sectors this list covers: DCBDFS up to DCBDNF, DCBDMS (122) further on.
 RDFDC:
-    ldy #FDFRS
-    lda (ZPGFCB),y
+    ldy #TrackSectorList::FIRST_SECTOR
+    lda (FilePointer),y
     sta a:DCBDFS
     clc
     adc a:DCBDMS
     sta a:DCBDNF
     iny
-    lda (ZPGFCB),y
+    lda (FilePointer),y
     sta a:DCBDFS+1
     adc a:DCBDMS+1
     sta a:DCBDNF+1
@@ -255,16 +255,16 @@ RDFDC:
     rts
 
 ;; Reads the data sector at DCBTRK and DCBSEC into the file's data buffer.
-;; In:    DCBTRK, DCBSEC = the sector
+;; In:    FileManager::FileControlBlock::DataTrack, FileManager::FileControlBlock::DataSector = the sector
 ;; Errors: the disk errors of DCBIO
 ;; Uses:  A, X, Y
 RDSECT:
     jsr MVSBA
-    lda #IBCRTS
+    lda #RWTS_READ
     jmp DCBIO
 
 ;; Points RWTS's buffer at the data buffer, and gets the data sector's track and sector.
-;; Out:   IBBUFP = CCBSBP, X = DCBTRK, the track, Y = DCBSEC, the sector
+;; Out:   DosIob::Buffer = DosFileParameters::DataBuffer, X = FileManager::FileControlBlock::DataTrack, the track, Y = FileManager::FileControlBlock::DataSector, the sector
 ;; Uses:  A
 ;; Entry: MSB1 = A/Y = the buffer's address (high/low) instead; not used
 MVSBA:

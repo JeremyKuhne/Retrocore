@@ -211,6 +211,29 @@ test("ca65 SDK type, text and conditional directives have directive scopes", () 
     }
 });
 
+test("retrocore pragma words and an exclusion's rule IDs have their own scopes", () => {
+    const pragma = "; retrocore: style=strict ignore=line-length,unlinked-name:Run|Stop -- the reason";
+    assertScope(pragma, "retrocore:", "keyword.other.pragma.retrocore");
+    assertScope(pragma, "style", "keyword.other.pragma.retrocore");
+    assertScope(pragma, "ignore", "keyword.other.pragma.retrocore");
+    assertScope(pragma, "line-length", "constant.other.pragma.retrocore");
+    assertScope(pragma, "unlinked-name", "constant.other.pragma.retrocore");
+    assertScope(pragma, "the reason", scope.comment);
+    assertScope("    lda #0 ; retrocore: ignore=indent", "indent", "constant.other.pragma.retrocore");
+    assertScope("    lda #0 ; retrocore: ignore=indent", "lda", scope.opcode);
+    assertScope("; a plain comment", "plain", scope.comment);
+});
+
+test("Merlin pragma with the lint's words still selects Merlin", () => {
+    for (const pragma of ["; retrocore: dialect=merlin ignore=line-length", "; retrocore: style=strict dialect=merlin"]) {
+        const state = grammar.tokenizeLine(pragma, INITIAL).ruleStack;
+        const line = "Entry   LDA #1";
+        const result = grammar.tokenizeLine(line, state);
+        const token = result.tokens.find(item => item.startIndex === 0);
+        assert.ok(token?.scopes.includes(scope.label), `${pragma}: expected a Merlin label, got ${token?.scopes.join(" ")}`);
+    }
+});
+
 test("Merlin pragma selects column-zero labels and undotted directive scopes", () => {
     const state = grammar.tokenizeLine("; retrocore: dialect=merlin", INITIAL).ruleStack;
     for (const [line, value, expected] of [

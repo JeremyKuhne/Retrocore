@@ -18,12 +18,36 @@ public sealed partial class DocumentationResolver
 
     /// <summary>
     ///  Lints the current documentation: <see cref="Check"/>'s problems and any others found in its files, such as
-    ///  the editor's, less what the files' <c>ignore=</c> exclusions turn off (see <see cref="DocumentationExclusions"/>).
+    ///  the editor's, less what the files' <c>ignore=</c> exclusions turn off (see
+    ///  <see cref="DocumentationExclusions"/>).
     /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   An exclusion that turns nothing off is reported only where the lint could have found something for it: not
+    ///   for a rule only the editor runs (<see cref="DocumentationRules.EditorRules"/>) unless its problems are among
+    ///   <paramref name="others"/>, and not for a <c>;;</c> block of a definition another build assembles, which this
+    ///   one doesn't check.
+    ///  </para>
+    /// </remarks>
     /// <param name="others">More problems in the current documentation's files, filtered with the rest.</param>
+    /// <param name="otherRules">The rules that produced <paramref name="others"/>, found or not.</param>
     /// <returns>The problems that remain, with information on each exclusion that turns nothing off.</returns>
-    public List<DocumentationDiagnostic> Lint(IEnumerable<DocumentationDiagnostic>? others = null) =>
-        DocumentationExclusions.Apply(others is null ? Check() : [.. Check(), .. others], Current.Files);
+    public List<DocumentationDiagnostic> Lint(
+        IEnumerable<DocumentationDiagnostic>? others = null,
+        IEnumerable<string>? otherRules = null)
+    {
+        HashSet<string> run = [with(StringComparer.Ordinal), .. otherRules ?? []];
+        List<DocumentationComment> skipped = [.. Current.Topics.Where(OtherBuilds).SelectMany(topic => topic.Comments)];
+        bool Checked(DocumentationExclusion exclusion) =>
+            (!DocumentationRules.EditorRules.Contains(exclusion.Rule) || run.Contains(exclusion.Rule))
+                && !(exclusion.Scope == DocumentationExclusionScope.Comment && skipped.Any(comment =>
+                    SamePath(comment.Path, exclusion.Path)
+                        && comment.Line <= exclusion.LastLine
+                        && exclusion.FirstLine <= comment.TargetLine));
+
+        List<DocumentationDiagnostic> diagnostics = others is null ? Check() : [.. Check(), .. others];
+        return DocumentationExclusions.Apply(diagnostics, Current.Files, Checked);
+    }
 
     /// <summary>
     ///  Checks the current documentation: placement, sections, references, links, inheritance and includes.

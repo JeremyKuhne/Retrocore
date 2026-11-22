@@ -17,6 +17,14 @@ public static partial class DocumentationParser
         return DocumentationPragma.Read(end < 0 ? text : text[..end]);
     }
 
+    /// <summary>
+    ///  Gets where a line's comment starts, as the lint reads it: semicolons in strings and character literals
+    ///  such as <c>';'</c> are not comments, and an apostrophe elsewhere is not a quote.
+    /// </summary>
+    /// <param name="line">The line.</param>
+    /// <returns>The semicolon's index, or -1.</returns>
+    public static int CommentStart(string line) => Split(line).Comment is { } comment ? line.Length - comment.Length : -1;
+
     // The exclusions of a file: its first line's, each line of code's own trailing pragma, and each pragma comment
     // line directly above a ;; block. Each ignore= item is checked, and one that can't apply is a diagnostic instead.
     private static List<DocumentationExclusion> Exclusions(string[] lines, string path, List<DocumentationDiagnostic> diagnostics)
@@ -63,13 +71,20 @@ public static partial class DocumentationParser
                 continue;
             }
 
-            if (pragma.Ignores.Count == 0 && !first)
+            if (pragma.EmptyIgnore)
             {
                 Problem("ignore= names no rule.", index, DocumentationSeverity.Warning);
             }
 
-            foreach ((string id, IReadOnlyList<string> names) in pragma.Ignores)
+            HashSet<string> seen = [with(StringComparer.Ordinal)];
+            foreach ((string id, IReadOnlyList<string> names, bool narrowed) in pragma.Ignores)
             {
+                if (narrowed && names.Count == 0)
+                {
+                    Problem($"{id}: names no name; write the names after the colon, or leave the colon out.", index, DocumentationSeverity.Warning);
+                    continue;
+                }
+
                 if (DocumentationRules.Find(id) is not { } rule)
                 {
                     Problem($"No lint rule named '{id}'.", index, DocumentationSeverity.Warning);
@@ -92,13 +107,13 @@ public static partial class DocumentationParser
                     continue;
                 }
 
-                if (names.Count == 0)
+                // Each rule, or rule and name, is one exclusion however often it is written.
+                foreach (string? name in names.Count == 0 ? [null] : names.Cast<string?>())
                 {
-                    exclusions.Add(new(path, index, scope, from, last, rule.Id, Name: null));
-                }
-                else
-                {
-                    exclusions.AddRange(names.Distinct(StringComparer.Ordinal).Select(name => new DocumentationExclusion(path, index, scope, from, last, rule.Id, name)));
+                    if (seen.Add(name is null ? rule.Id : $"{rule.Id}:{name}"))
+                    {
+                        exclusions.Add(new(path, index, scope, from, last, rule.Id, name));
+                    }
                 }
             }
         }

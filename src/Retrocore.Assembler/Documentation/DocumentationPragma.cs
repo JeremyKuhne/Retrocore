@@ -9,9 +9,19 @@ namespace Retrocore.Documentation;
 ///  <c>ignore=</c> with the rules to turn off. Text after <c> -- </c> is the reason, which the tools ignore.
 /// </summary>
 /// <param name="Strict">Whether it has <c>style=strict</c>.</param>
-/// <param name="Ignores">Each rule an <c>ignore=</c> names, with the names it is narrowed to (none for all).</param>
-public sealed record DocumentationPragma(bool Strict, IReadOnlyList<(string Rule, IReadOnlyList<string> Names)> Ignores)
+/// <param name="Ignores">
+///  Each rule an <c>ignore=</c> names, with the names it is narrowed to (none for all) and whether a colon was written
+///  to narrow it.
+/// </param>
+public sealed record DocumentationPragma(
+    bool Strict,
+    IReadOnlyList<(string Rule, IReadOnlyList<string> Names, bool Narrowed)> Ignores)
 {
+    /// <summary>
+    ///  Gets whether an <c>ignore=</c> word names no rule at all.
+    /// </summary>
+    public bool EmptyIgnore { get; init; }
+
     /// <summary>
     ///  The words that start a pragma comment.
     /// </summary>
@@ -37,7 +47,8 @@ public sealed record DocumentationPragma(bool Strict, IReadOnlyList<(string Rule
         string text = comment.Trim();
         if (!text.StartsWith(Prefix, StringComparison.OrdinalIgnoreCase)) { return null; }
         bool strict = false;
-        List<(string, IReadOnlyList<string>)> ignores = [];
+        bool empty = false;
+        List<(string, IReadOnlyList<string>, bool)> ignores = [];
         foreach (string word in Words(text))
         {
             if (word.Equals("style=strict", StringComparison.OrdinalIgnoreCase))
@@ -46,6 +57,7 @@ public sealed record DocumentationPragma(bool Strict, IReadOnlyList<(string Rule
             }
             else if (word.StartsWith(IgnoreWord, StringComparison.OrdinalIgnoreCase))
             {
+                if (word.Length == IgnoreWord.Length) { empty = true; }
                 foreach (string item in word[IgnoreWord.Length..].Split([','], StringSplitOptions.RemoveEmptyEntries))
                 {
                     int colon = item.IndexOf(':');
@@ -54,12 +66,12 @@ public sealed record DocumentationPragma(bool Strict, IReadOnlyList<(string Rule
                         ? []
                         : item[(colon + 1)..].Split(['|'], StringSplitOptions.RemoveEmptyEntries);
 
-                    ignores.Add((rule, names));
+                    ignores.Add((rule, names, colon >= 0));
                 }
             }
         }
 
-        return new(strict, ignores);
+        return new(strict, ignores) { EmptyIgnore = empty };
     }
 
     /// <summary>

@@ -279,6 +279,28 @@ public sealed class StyleLintTests
             "29: exclusion");
 
         diagnostics.First(diagnostic => diagnostic.Rule == "line-length").Text.Should().Be("Line is over 120 columns. [line-length]");
+
+        // The rules of names: an unlinked documented name, and an export without documentation.
+        string names = Pragma + """
+            .cpu Mos6502
+            .org $0300
+            .export Hidden
+
+            ;; Prints.
+            .proc Print
+                rts
+            .endproc
+
+            ;; Calls Print.
+            .proc Caller
+                rts
+            .endproc
+
+            Hidden:
+                rts
+            """;
+
+        Rules(names).Should().BeEquivalentTo("11: unlinked-name Print", "16: undocumented-export");
     }
 
     /// <summary>
@@ -533,14 +555,18 @@ public sealed class StyleLintTests
     [TestMethod]
     public void TheEditorCompletesAndDescribesRules()
     {
-        Required(LintEditor.Complete("; retrocore: style=strict ignore=")).Select(item => item.Label)
+        Required(LintEditor.Complete("; retrocore: style=strict ignore=", 0)).Select(item => item.Label)
             .Should().Contain(["line-length", "unlinked-name", "historical-name"]).And.NotContain(["placement", "exclusion"]);
 
-        LintEditor.Complete("    lda #0 ; retrocore: ignore=line-length,un").Should().NotBeNull();
-        LintEditor.Complete("; retrocore: ignore=unlinked-name:").Should().BeNull();
-        LintEditor.Complete("; retrocore: style=strict").Should().BeNull();
-        LintEditor.Complete("; ignore=").Should().BeNull();
-        LintEditor.Complete("; retrocore: ignore=line-length -- ").Should().BeNull();
+        LintEditor.Complete("    lda #0 ; retrocore: ignore=line-length,un", 0).Should().NotBeNull();
+        LintEditor.Complete("; retrocore: ignore=unlinked-name:", 0).Should().BeNull();
+        LintEditor.Complete("; retrocore: style=strict", 0).Should().BeNull();
+        LintEditor.Complete("; ignore=", 0).Should().BeNull();
+        LintEditor.Complete("; retrocore: ignore=line-length -- ", 0).Should().BeNull();
+
+        // A completion replaces the whole rule typed so far, hyphen and all.
+        const string Typed = "; retrocore: ignore=ascii,line-l";
+        Required(LintEditor.Complete(Typed, 3)).Should().AllSatisfy(item => item.Range.Should().Be(new LspRange(3, Typed.Length - 6, 3, Typed.Length)));
 
         const string Line = "; retrocore: ignore=line-length,unlinked-name:Run -- why";
         (DocumentationRule rule, int start) = Required(LintEditor.RuleAt(Line, Line.IndexOf("length", StringComparison.Ordinal)));
@@ -549,6 +575,108 @@ public sealed class StyleLintTests
         Required(LintEditor.RuleAt(Line, Line.IndexOf("unlinked", StringComparison.Ordinal))).Rule.Id.Should().Be("unlinked-name");
         LintEditor.RuleAt(Line, Line.IndexOf("Run", StringComparison.Ordinal)).Should().BeNull();
         LintEditor.RuleAt("; line-length", 4).Should().BeNull();
+    }
+
+    /// <summary>
+    ///  A quick fix for a name the pragma's words can't hold ignores the whole rule; one on a line whose string holds
+    ///  an apostrophe goes on the line's own comment as the lint reads it; and a historical name's fix still writes
+    ///  the current name.
+    /// </summary>
+    [TestMethod]
+    public void TheEditorsFixesFitThePragma()
+    {
+        string text = Pragma + """
+            .cpu Mos6502
+            .org $0300
+
+            ;; Calls <see above>.
+            Table:
+                .byte 0
+            """;
+
+        List<DocumentationDiagnostic> lint = Lint(text);
+        DocumentationDiagnostic link = lint.Single(diagnostic => diagnostic.Rule == "link");
+        link.Name.Should().Be("see above");
+        string[] lines = text.Split('\n');
+        JsonArray actions = LintEditor.Actions(
+            "file:///test.asm",
+            lines,
+            [(JsonNode)LintEditor.ToDiagnostic(link, new LspRange(link.Line, 0, link.Line, 0), replacement: null).ToJson()]);
+
+        List<string> fixes = Fixes(actions, "file:///test.asm", lines);
+        fixes.Should().HaveCount(2).And.AllSatisfy(fix => fix.Should().StartWith("Ignore link "));
+        Lint(fixes[0][(fixes[0].IndexOf(": ", StringComparison.Ordinal) + 2)..]).Should().BeEmpty();
+
+        // The apostrophe in "Don't" is not a quote, so the line's comment is its own and has no room for a pragma.
+        string[] quoted = ["", "    .byte \"Don't\", 0 ; the message"];
+        LintEditor.Here(quoted, 1, "indent").Should().BeNull();
+        string[] pragma = ["", "    .byte \"Don't\", 0 ; retrocore: ignore=ascii"];
+        Apply(pragma, [Required(LintEditor.Here(pragma, 1, "indent")).Edit])[1].Should().EndWith("ignore=ascii,indent");
+
+        JsonObject historical = new()
+        {
+            ["range"] = new LspRange(1, 8, 1, 12).ToJson(),
+            ["severity"] = 3,
+            ["code"] = "historical-name",
+            ["data"] = new JsonObject { ["name"] = "COUT", ["replacement"] = "Output" }
+        };
+
+        string[] code = ["", "    jsr COUT"];
+        JsonArray historicalFixes = LintEditor.Actions("file:///test.asm", code, [historical]);
+        Fixes(historicalFixes, "file:///test.asm", code).Should().Equal(
+            "Use Output: \n    jsr Output",
+            "Ignore historical-name:COUT on this line: \n    jsr COUT ; retrocore: ignore=historical-name:COUT",
+            "Ignore historical-name:COUT in this file: ; retrocore: ignore=historical-name:COUT\n\n    jsr COUT");
+    }
+
+    /// <summary>
+    ///  An exclusion's own mistakes are reported once each: a colon with no names, an empty list on the first line,
+    ///  and a rule written twice.
+    /// </summary>
+    [TestMethod]
+    public void ExclusionMistakesAreReported()
+    {
+        const string Body = ".cpu Mos6502\n.org $0300\nStart:\n    rts\n";
+        Lint("; retrocore: ignore=line-length:\n" + Body).Should().ContainSingle()
+            .Which.Message.Should().Be("line-length: names no name; write the names after the colon, or leave the colon out.");
+
+        Lint("; retrocore: ignore=\n" + Body).Should().ContainSingle().Which.Message.Should().Be("ignore= names no rule.");
+        Lint("; retrocore: ignore=ascii,ascii\n" + Body).Should().ContainSingle()
+            .Which.Message.Should().Be("Nothing here breaks ascii; remove the exclusion.");
+    }
+
+    /// <summary>
+    ///  An exclusion is reported unused only where the lint could have used it: not for a rule only the editor runs
+    ///  when its problems aren't passed in, and not for a block of a definition another build assembles.
+    /// </summary>
+    [TestMethod]
+    public void UnusedIsOnlyReportedWhereTheLintLooked()
+    {
+        const string Body = ".cpu Mos6502\n.org $0300\nStart:\n    rts\n";
+        Lint("; retrocore: ignore=historical-name:COUT,deprecated\n" + Body).Should().BeEmpty();
+        DocumentationFile file = DocumentationParser.Parse("; retrocore: ignore=historical-name:COUT\n" + Body, "test.asm");
+        DocumentationResolver resolver = new(DocumentationSet.Create([file], Assemble("; retrocore: ignore=historical-name:COUT\n" + Body)));
+        resolver.Lint([], DocumentationRules.EditorRules).Should().ContainSingle()
+            .Which.Message.Should().Be("Nothing here breaks historical-name:COUT; remove the exclusion.");
+
+        string text = Pragma + """
+            .cpu Mos6502
+            .org $0300
+
+            ;; Runs.
+            .proc Run
+                rts
+            .endproc
+
+            .if 0
+            ; retrocore: ignore=unlinked-name:Run
+            ;; Makes Run go.
+            Other:
+                rts
+            .endif
+            """;
+
+        Lint(text).Should().BeEmpty();
     }
 
     // Each quick fix as its title and the text its edits make.
@@ -561,18 +689,19 @@ public sealed class StyleLintTests
 
     private static string Join(string[] lines) => string.Join('\n', lines);
 
-    // Applies insertions, the only edits the quick fixes make, to lines.
+    // Applies the quick fixes' edits, each within one line, to lines.
     private static string[] Apply(string[] lines, JsonObject[] edits)
     {
         string text = Join(lines);
-        foreach ((int line, int character, string inserted) in edits
-            .Select(edit => (
-                Required(edit["range"]?["start"]?["line"]).GetValue<int>(),
-                Required(edit["range"]?["start"]?["character"]).GetValue<int>(),
-                Required(edit["newText"]).GetValue<string>()))
-            .OrderByDescending(edit => (edit.Item1, edit.Item2)))
+        int Offset(JsonNode? position) =>
+            lines.Take(Required(position?["line"]).GetValue<int>()).Sum(each => each.Length + 1)
+                + Required(position?["character"]).GetValue<int>();
+
+        foreach ((int start, int end, string inserted) in edits
+            .Select(edit => (Offset(edit["range"]?["start"]), Offset(edit["range"]?["end"]), Required(edit["newText"]).GetValue<string>()))
+            .OrderByDescending(edit => edit.Item1))
         {
-            text = text.Insert(lines.Take(line).Sum(each => each.Length + 1) + character, inserted);
+            text = text.Remove(start, end - start).Insert(start, inserted);
         }
 
         return text.Split('\n');

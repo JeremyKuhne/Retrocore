@@ -42,6 +42,11 @@ internal sealed class CompletionItem
     public string? FilterText { get; init; }
 
     /// <summary>
+    ///  Gets the range the item replaces, for text the editor's words don't cover, such as a hyphenated rule ID.
+    /// </summary>
+    public LspRange? Range { get; init; }
+
+    /// <summary>
     ///  Writes the completion.
     /// </summary>
     /// <returns>Its JSON, without the properties it lacks.</returns>
@@ -52,6 +57,11 @@ internal sealed class CompletionItem
         if (Documentation is not null) { item["documentation"] = Documentation.ToJson(); }
         if (SortText is not null) { item["sortText"] = SortText; }
         if (FilterText is not null) { item["filterText"] = FilterText; }
+        if (Range is not null)
+        {
+            item["textEdit"] = new JsonObject { ["range"] = Range.ToJson(), ["newText"] = Label };
+        }
+
         return item;
     }
 }

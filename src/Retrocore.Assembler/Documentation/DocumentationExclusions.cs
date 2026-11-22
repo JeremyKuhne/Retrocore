@@ -16,8 +16,15 @@ public static class DocumentationExclusions
     /// </summary>
     /// <param name="diagnostics">Every diagnostic of the files, from the parser, the resolver and the editor.</param>
     /// <param name="files">The files, whose exclusions apply to their own diagnostics.</param>
+    /// <param name="isChecked">
+    ///  Whether the diagnostics include every problem an exclusion could cover, so one that covers nothing is reported;
+    ///  null for all of them.
+    /// </param>
     /// <returns>The diagnostics that remain.</returns>
-    public static List<DocumentationDiagnostic> Apply(IEnumerable<DocumentationDiagnostic> diagnostics, IEnumerable<DocumentationFile> files)
+    public static List<DocumentationDiagnostic> Apply(
+        IEnumerable<DocumentationDiagnostic> diagnostics,
+        IEnumerable<DocumentationFile> files,
+        Func<DocumentationExclusion, bool>? isChecked = null)
     {
         Dictionary<string, IReadOnlyList<DocumentationExclusion>> byPath = [with(StringComparer.OrdinalIgnoreCase)];
         foreach (DocumentationFile file in files)
@@ -54,7 +61,7 @@ public static class DocumentationExclusions
         // An exclusion that outlives its reason is removed, so it says so.
         foreach (DocumentationExclusion exclusion in byPath.Values.SelectMany(exclusions => exclusions))
         {
-            if (used.Contains(exclusion)) { continue; }
+            if (used.Contains(exclusion) || isChecked?.Invoke(exclusion) == false) { continue; }
             kept.Add(new(
                 $"Nothing here breaks {exclusion.Written}; remove the exclusion.",
                 exclusion.Path,

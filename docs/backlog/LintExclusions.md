@@ -36,6 +36,8 @@ outside the editor (the tests, a command-line lint) end with it in brackets:
 | `historical-name` | The editor's information on a use of an old name in code (the quick fix stays). |
 | `deprecated` | A use of a definition with a `Deprecated:` section. |
 | `undocumented-export` | Exported 'X' has no ;; documentation. |
+| `placement` | The `;;` placement errors of `DocumentationParser.cs` (errors only, so never ignorable). |
+| `exclusion` | Problems with an exclusion itself: unknown ID, misplaced, unused (never ignorable). |
 
 The IDs are a public contract once released: a rule can be split (an old ID then still covers both), but not
 renamed. `DocumentationDiagnostic` gains a `Rule` property, and each `warn`/`diagnostics.Add` call site passes its

@@ -89,7 +89,7 @@ internal sealed partial class LanguageWorkspace
         Dictionary<DocumentationDiagnostic, string> replacements = [];
         List<DocumentationDiagnostic> own = [.. Deprecated(analysis), .. HistoricalNames(analysis, replacements)];
         Dictionary<string, List<Diagnostic>> byFile = [with(StringComparer.OrdinalIgnoreCase)];
-        foreach (DocumentationDiagnostic diagnostic in ResolverFor(analysis).Lint(own))
+        foreach (DocumentationDiagnostic diagnostic in ResolverFor(analysis).Lint(own, DocumentationRules.EditorRules))
         {
             string path = Path.GetFullPath(diagnostic.Path);
             if (!byFile.TryGetValue(path, out List<Diagnostic>? list)) { byFile[path] = list = []; }

@@ -103,9 +103,10 @@ internal sealed partial class AssemblyPreprocessor
             int end = first.IndexOfAny('\r', '\n');
             first = (end < 0 ? first : first[..end]).Trim();
 
-            // A pragma that only opts in to the style checks selects no dialect.
+            // A pragma with only the documentation lint's words (style=, ignore=) selects no dialect.
             string? dialect = PragmaValue(source.Text, "dialect");
-            if (dialect is not null || PragmaValue(source.Text, "style") is null)
+            bool lint = PragmaValue(source.Text, "style") is not null || PragmaValue(source.Text, "ignore") is not null;
+            if (dialect is not null || !lint)
             {
                 return !string.Equals(dialect, "native", StringComparison.OrdinalIgnoreCase);
             }

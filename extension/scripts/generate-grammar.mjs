@@ -285,7 +285,8 @@ const grammar = {
             ]
         },
         merlin: {
-            begin: "\\A[ \\t]*;[ \\t]*(?i:retrocore:[ \\t]*dialect=merlin)[ \\t]*$",
+            // The pragma may carry the documentation lint's words too, before or after the dialect.
+            begin: "\\A[ \\t]*;[ \\t]*(?i:retrocore:(?:[ \\t]+[^\\s]+)*?[ \\t]*dialect=merlin)(?=[ \\t]|$).*$",
             beginCaptures: { "0": { name: "comment.line.semicolon.retrocore" } },
             end: "(?!)",
             patterns: [
@@ -404,6 +405,29 @@ const grammar = {
                         { match: "<(?![\\s=\\d])[^<>]+>", name: "markup.underline.link.retrocore" },
                         { match: "\\{[\\w@.:]+\\}", name: "variable.parameter.documentation.retrocore" },
                         { match: "`[^`]*`", name: "markup.inline.raw.retrocore" }
+                    ]
+                },
+                {
+                    // A "; retrocore:" pragma (docs/NativeAssembly.md): its words, and an exclusion's rule IDs. The
+                    // reason after " -- " stays a plain comment.
+                    begin: "(;)[ \\t]*((?i:retrocore:))",
+                    beginCaptures: {
+                        "1": { name: "punctuation.definition.comment.retrocore" },
+                        "2": { name: "keyword.other.pragma.retrocore" }
+                    },
+                    end: "$",
+                    name: "comment.line.pragma.retrocore",
+                    patterns: [
+                        { match: "[ \\t]--[ \\t].*$", name: "comment.line.semicolon.retrocore" },
+                        {
+                            match: "(?<![\\w-])((?i:dialect|style|overlay|ignore))(=)",
+                            captures: {
+                                "1": { name: "keyword.other.pragma.retrocore" },
+                                "2": { name: "keyword.operator.assignment.retrocore" }
+                            }
+                        },
+                        { match: "(?<=[=,])[a-z]+(?:-[a-z]+)*", name: "constant.other.pragma.retrocore" },
+                        { match: "[:|,]", name: "punctuation.separator.pragma.retrocore" }
                     ]
                 },
                 {

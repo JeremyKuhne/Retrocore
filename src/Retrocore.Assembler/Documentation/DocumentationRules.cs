@@ -125,6 +125,12 @@ public static class DocumentationRules
         new(Exclusion, "An `ignore=` exclusion names known rules and turns something off. Its diagnostics can't be ignored.", TakesNames: false, Ignorable: false)
     ];
 
+    /// <summary>
+    ///  Gets the rules only the editor runs, on code rather than documentation: a caller of
+    ///  <c>DocumentationResolver.Lint</c> passes their problems in.
+    /// </summary>
+    public static IReadOnlyCollection<string> EditorRules { get; } = [HistoricalName, Deprecated];
+
     private static readonly Dictionary<string, DocumentationRule> s_byId = All.ToDictionary(rule => rule.Id, StringComparer.Ordinal);
 
     /// <summary>

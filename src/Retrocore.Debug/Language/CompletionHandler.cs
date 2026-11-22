@@ -41,10 +41,13 @@ internal sealed class CompletionHandler
         string[] lines = _workspace.LinesOf(path);
         int line = request.Position.Line;
         string before = line < lines.Length ? lines[line][..Math.Min(request.Position.Character, lines[line].Length)] : "";
-        if (SourceText.CommentStart(before) >= 0)
+        List<CompletionItem>? rules = LintEditor.Complete(before, line);
+        if (rules is not null) { return Task.FromResult(rules); }
+
+        // In a comment, only an exclusion's rules complete; and the characters that ask for them ask for nothing else.
+        if (SourceText.CommentStart(before) >= 0 || request.TriggerCharacter is "=" or ",")
         {
-            // In a comment, only an exclusion's rules complete.
-            return Task.FromResult(LintEditor.Complete(before) ?? []);
+            return Task.FromResult(new List<CompletionItem>());
         }
 
         SourceAnalysis? analysis = _workspace.AnalysisOf(path);

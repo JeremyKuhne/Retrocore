@@ -414,7 +414,9 @@ broken link.
   rule off for a file, a line of code or a `;;` block, and `unlinked-name`, `link`, `ambiguous-link`,
   `address-name`, `label-alone`, `historical-name` and `deprecated` can be narrowed to names
   (`ignore=link:Nowhere`); another rule with a name is an error. Errors can't be ignored, so naming `placement` or
-  `exclusion` is an error. An unknown ID is a warning, and an exclusion that turns nothing off is information.
+  `exclusion` is an error. An unknown ID is a warning, and an exclusion that turns nothing off is information. That is reported
+  only where the lint looked: `historical-name` and `deprecated` run in the editor alone, and a `;;` block of a
+  definition another build assembles is checked by that build.
 
 ## 6. Open questions
 
@@ -432,7 +434,7 @@ broken link.
 | Hover, completion, editor diagnostics | `src/Retrocore.Debug/Language/DocumentationMarkdown.cs`, `LanguageWorkspace.Documentation.cs`, `LintEditor.cs` (rule codes, exclusion quick fixes, rule completion and hover) |
 | `Keeps:`/`Uses:` checks and the Variables scope | `src/Retrocore.Debug/DebugContracts.cs`, `DebugSession.cs` |
 | C# summaries for exports | `src/Retrocore.Generators/ExportDocumentation.cs` |
-| Highlighting | `extension/scripts/generate-grammar.mjs` (`comment.line.documentation.retrocore`) |
+| Highlighting | `extension/scripts/generate-grammar.mjs` (`comment.line.documentation.retrocore`, and `comment.line.pragma.retrocore` for `; retrocore:` words and rule IDs) |
 
 The SDK's ROM sources use the format, and `SdkDocumentationTests` keeps them free of lint problems. Its
 `EveryRepositorySourceIsCleanInTheEditor` lints every assembly source under `src` and `sample` as the editor reads

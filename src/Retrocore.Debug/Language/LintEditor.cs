@@ -69,7 +69,14 @@ internal static class LintEditor
             // Errors can't be ignored (DiagnosticSeverity.Error is 1).
             bool error = diagnostic["severity"] is JsonValue severity && severity.TryGetValue(out int level) && level == 1;
             if (error || code is null || DocumentationRules.Find(code) is not { Ignorable: true } rule) { continue; }
+
+            // A name the pragma's words can't hold, such as a link target with a space, leaves the rule whole.
             string? name = rule.TakesNames ? diagnostic["data"]?["name"]?.GetValue<string>() : null;
+            if (name is not null && name.Any(character => char.IsWhiteSpace(character) || character is ',' or '|'))
+            {
+                name = null;
+            }
+
             string item = name is null ? rule.Id : $"{rule.Id}:{name}";
             int line = range["start"]?["line"]?.GetValue<int>() ?? 0;
             if (Here(lines, line, item) is { } here)
@@ -118,7 +125,7 @@ internal static class LintEditor
             // Line 0's pragma is the file's.
             if (start == 0) { return null; }
             string above = lines[start - 1];
-            int comment = SourceText.CommentStart(above);
+            int comment = DocumentationParser.CommentStart(above);
             if (start - 1 != 0 && comment >= 0 && above[..comment].Trim().Length == 0 && DocumentationPragma.HasIgnore(above[comment..]))
             {
                 return ("for this comment", Extend(above, start - 1, comment, item));
@@ -128,7 +135,7 @@ internal static class LintEditor
             return ("for this comment", Insert(start, 0, $"{indent}{DocumentationPragma.Prefix} {DocumentationPragma.IgnoreWord}{item}\n"));
         }
 
-        int at = SourceText.CommentStart(text);
+        int at = DocumentationParser.CommentStart(text);
         string code = at < 0 ? text : text[..at];
         if (code.Trim().Length == 0) { return null; }
         if (at < 0)
@@ -149,7 +156,7 @@ internal static class LintEditor
     internal static JsonObject File(string[] lines, string item)
     {
         string first = lines.Length == 0 ? "" : lines[0];
-        int at = SourceText.CommentStart(first);
+        int at = DocumentationParser.CommentStart(first);
         return at >= 0 && first[..at].Trim().Length == 0 && DocumentationPragma.Read(first[at..]) is not null
             ? Extend(first, 0, at, item)
             : Insert(0, 0, $"{DocumentationPragma.Prefix} {DocumentationPragma.IgnoreWord}{item}\n");
@@ -159,19 +166,25 @@ internal static class LintEditor
     ///  Gets the rule IDs to complete where the cursor is after <c>ignore=</c> or a comma in a pragma comment.
     /// </summary>
     /// <param name="before">The line up to the cursor.</param>
+    /// <param name="line">The cursor's zero-based line, for the range each completion replaces.</param>
     /// <returns>The completions, or null when the cursor is not in an exclusion's list of rules.</returns>
-    internal static List<CompletionItem>? Complete(string before)
+    internal static List<CompletionItem>? Complete(string before, int line)
     {
         if (RuleListStart(before) is not int start) { return null; }
 
         // Past a colon come names, not rules.
-        if (before[start..].Split(',')[^1].Contains(':', StringComparison.Ordinal)) { return null; }
+        string typed = before[start..].Split(',')[^1];
+        if (typed.Contains(':', StringComparison.Ordinal)) { return null; }
+
+        // The editor's words stop at a hyphen, so each item replaces the whole of the rule typed so far.
+        LspRange range = new(line, before.Length - typed.Length, line, before.Length);
         return [.. DocumentationRules.All.Where(rule => rule.Ignorable).Select(rule => new CompletionItem
         {
             Label = rule.Id,
             Kind = CompletionItemKind.Keyword,
             Detail = "lint rule",
-            Documentation = new MarkupContent { Kind = MarkupKind.Markdown, Value = rule.Description }
+            Documentation = new MarkupContent { Kind = MarkupKind.Markdown, Value = rule.Description },
+            Range = range
         })];
     }
 
@@ -200,7 +213,7 @@ internal static class LintEditor
     // Where the list of rules starts when text ends inside one, after "ignore=" in a "; retrocore:" comment.
     private static int? RuleListStart(string before)
     {
-        int at = SourceText.CommentStart(before);
+        int at = DocumentationParser.CommentStart(before);
         if (at < 0) { return null; }
         string comment = before[at..];
         if (!comment.StartsWith(DocumentationPragma.Prefix, StringComparison.OrdinalIgnoreCase)) { return null; }

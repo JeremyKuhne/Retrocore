@@ -43,8 +43,8 @@ internal sealed class WorkspaceSourceResolver : IAssemblySourceResolver, IAssemb
             return true;
         }
 
-        // A BASIC overlay's base, where the shipped SDK keeps it rather than where the overlay names it.
-        if (OverlayBaseResolver.Fallback(request, OverlayBaseResolver.SdkFallback) is { } fallback)
+        // Shared BASIC sources can be in a different location in the repository and the SDK.
+        foreach (string fallback in OverlayBaseResolver.Fallbacks(fromPath, request, OverlayBaseResolver.SdkFallback))
         {
             if (_openText(fallback) is { } open)
             {

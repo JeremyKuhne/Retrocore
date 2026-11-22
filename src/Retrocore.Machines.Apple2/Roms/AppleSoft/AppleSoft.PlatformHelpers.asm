@@ -10,7 +10,7 @@
 ;; Loads a shape table from cassette.
 ;;
 ;; The enhanced IIe delegates to the internal slot 5 ROM; earlier models read the length, reserve memory below
-;; <MEMSIZ>, then read the table. The enhanced entry sets carry to select SHLOAD before entering <CALLC5>.
+;; <MEMSIZ>, then read the table. The enhanced entry sets carry to select <SHLOAD> before entering <CALLC5>.
 SHLOAD:
 .if ENHNCD
     sec

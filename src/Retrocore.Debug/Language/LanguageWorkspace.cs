@@ -13,8 +13,8 @@ namespace Retrocore.Debug.Language;
 /// <remarks>
 ///  <para>
 ///   Each file is assembled as a root unless a root already assembled includes it (or, for a MACRO-10 base,
-///   an overlay beside it names it), in which case the root is assembled instead. Open documents override disk
-///   for every include.
+///   an overlay names it), in which case the root is assembled instead. Open documents override disk for every
+///   include.
 ///  </para>
 /// </remarks>
 internal sealed partial class LanguageWorkspace

@@ -26,6 +26,12 @@ LINPRT:
     ldx #$90
     sec
     jsr FLOATC
+
+;; Prints <FAC> as a decimal number through <FOUT> and <STROUT>.
+;;
+;; Also:
+;;   AppleSoft: `PRNTFAC`, Apple Technical Information Library article 79, Device I/O Routines.
+LINPRT_FOUT:
     jsr FOUT
 
 ;; Prints the string addressed by Y:A through <STROUT>.

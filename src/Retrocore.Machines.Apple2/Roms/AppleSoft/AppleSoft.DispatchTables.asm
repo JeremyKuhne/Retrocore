@@ -106,41 +106,10 @@ FUNDSP:
     .word RIGHT                     ; RIGHT$
     .word MID                       ; MID$
 
-;; Operator precedence bytes and handler addresses, in the order of tokens + through OR.
-;;
-;; Each entry is one precedence byte followed by a little-endian handler address minus one. The evaluator
-;; stacks that address for RTS dispatch. Higher precedence binds more tightly; the following entries provide
-;; unary negation, NOT and the shared relational handler.
-OPTAB:
-    .byte $79
-    .word FADDT - 1
-    .byte $79
-    .word FSUBT - 1
-    .byte $7B
-    .word FMULTT - 1
-    .byte $7B
-    .word FDIVT - 1
-    .byte $7D
-    .word FPWRT - 1
-    .byte $50
-    .word OROP1 - 1
-    .byte $46
-    .word OROP - 1
+.include "../Microsoft6502Basic/MsBasic.OperatorTable.asm"
+; AppleSoft puts power below negation, gives NOT unary precedence, and dispatches AND to <OROP1>.
+    OPERATOR_TABLE 1, 1, OROP1
 
-;; Precedence and handler address minus one for unary negation.
-NEGTAB:
-    .byte $7F
-    .word NEGOP - 1
-
-;; Precedence and handler address minus one for NOT.
-NOTTAB:
-    .byte $7F
-    .word NOTOP - 1
-
-;; Precedence and handler address minus one for relational comparisons.
-PTDORL:
-    .byte $64
-    .word DOREL - 1
 ;; Assembly-time counter retained from the Microsoft table definitions, not a runtime location.
 ;;
 ;; It tracks token values while defining <RESLST>, then byte offsets into <ERRTAB>.

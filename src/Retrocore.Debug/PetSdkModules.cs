@@ -13,8 +13,8 @@ namespace Retrocore.Debug;
 /// </summary>
 /// <remarks>
 ///  <para>
-///   BASIC is a MACRO-10 overlay on Microsoft's <c>m6502.asm</c>, which lives in the shared
-///   <c>Microsoft6502Basic</c> source folder.
+///   BASIC uses the documented native modules by default. The selectable MACRO-10 overlays use Microsoft's
+///   <c>m6502.asm</c> from the shared <c>Roms/Microsoft6502Basic</c> folder.
 ///  </para>
 /// </remarks>
 internal static class PetSdkModules
@@ -79,7 +79,7 @@ internal static class PetSdkModules
     internal static int Version(PetModel model) => model.BasicVersion();
 
     /// <summary>
-    ///  Assembles a model's BASIC.
+    ///  Assembles a model's BASIC from the selected native listing or MACRO-10 overlay.
     /// </summary>
     /// <param name="directory">The PET sources' directory.</param>
     /// <param name="model">The model.</param>
@@ -87,11 +87,16 @@ internal static class PetSdkModules
     ///  The original chip rather than its revision: BASIC 1's 901447-01 rather than -09, or BASIC 4's 901465-19
     ///  rather than -23.
     /// </param>
+    /// <param name="source">The listing to assemble; the native listing is the default.</param>
     /// <returns>The assembly of the whole address space; <see cref="BasicImage"/> takes the ROM from it.</returns>
     /// <exception cref="InvalidDataException">The source has errors.</exception>
-    internal static AssemblyResult AssembleBasic(string directory, PetModel model, bool original = false)
+    internal static AssemblyResult AssembleBasic(
+        string directory,
+        PetModel model,
+        bool original = false,
+        BasicSourceKind source = BasicSourceKind.Native)
     {
-        string path = Path.GetFullPath(Path.Join(directory, "Basic", BasicFile(model)));
+        string path = Path.GetFullPath(Path.Join(directory, "Basic", BasicFile(model, source)));
         Dictionary<string, long> symbols = [];
         if (Version(model) != 2) { symbols["REVISD"] = original ? 0 : 1; }
         AssemblyOptions options = new(ProcessorVariant.Mos6502, 0, 0x10000)
@@ -104,11 +109,22 @@ internal static class PetSdkModules
     }
 
     /// <summary>
-    ///  Gets the file of a model's BASIC overlay.
+    ///  Gets the file of a model's selected BASIC source.
     /// </summary>
     /// <param name="model">The model.</param>
-    /// <returns><c>Basic1.mac</c>, <c>Basic2.mac</c> or <c>Basic4.mac</c>.</returns>
-    internal static string BasicFile(PetModel model) => $"Basic{Version(model)}.mac";
+    /// <param name="source">The native listing or MACRO-10 overlay.</param>
+    /// <returns>The BASIC source file name.</returns>
+    internal static string BasicFile(PetModel model, BasicSourceKind source = BasicSourceKind.Native)
+    {
+        string extension = source switch
+        {
+            BasicSourceKind.Native => "asm",
+            BasicSourceKind.Macro10 => "mac",
+            _ => throw new ArgumentOutOfRangeException(nameof(source))
+        };
+
+        return $"Basic{Version(model)}.{extension}";
+    }
 
     /// <summary>
     ///  Takes BASIC's ROM, <c>$C000-$DFFF</c> or BASIC 4's <c>$B000-$DFFF</c>, from its assembly.
@@ -193,13 +209,18 @@ internal static class PetSdkModules
     /// <param name="original">
     ///  The original BASIC chip rather than its revision: BASIC 1's 901447-01 or BASIC 4's 901465-19.
     /// </param>
+    /// <param name="basicSource">The BASIC listing to assemble.</param>
     /// <returns>The ROMs.</returns>
     /// <exception cref="InvalidDataException">A source has errors.</exception>
-    internal static PetRoms BuildRoms(PetModel model, string? directory = null, bool original = false)
+    internal static PetRoms BuildRoms(
+        PetModel model,
+        string? directory = null,
+        bool original = false,
+        BasicSourceKind basicSource = BasicSourceKind.Native)
     {
         string roms = directory ?? RomDirectory;
         byte[] image = new byte[0x10000 - PetRoms.Base];
-        AssemblyResult basic = AssembleBasic(roms, model, original);
+        AssemblyResult basic = AssembleBasic(roms, model, original, basicSource);
         BasicImage(basic, model).Span.CopyTo(image.AsSpan(BasicOrigin(model) - PetRoms.Base));
         EditorImage(basic, AssembleEditor(roms, model), model).CopyTo(image.AsSpan(EditorOrigin - PetRoms.Base));
         AssembleKernal(roms, model).Sections[0].Bytes.Span.CopyTo(image.AsSpan(KernalOrigin - PetRoms.Base));

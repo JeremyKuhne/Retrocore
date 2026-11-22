@@ -64,7 +64,7 @@ public sealed class OverlayBaseResolverTests
     }
 
     /// <summary>
-    ///  Only the base falls back, by its file name; any other source not found stays not found.
+    ///  An arbitrary missing source does not fall back; the base is resolved by its file name.
     /// </summary>
     [TestMethod]
     public void OnlyTheBaseFallsBack()

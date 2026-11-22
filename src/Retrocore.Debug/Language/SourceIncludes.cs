@@ -37,7 +37,6 @@ internal static partial class SourceIncludes
     /// <returns>The full paths of the files it names.</returns>
     internal static IEnumerable<string> IncludesOf(string path)
     {
-        string directory = Path.GetDirectoryName(path) ?? "";
         string text;
         try
         {
@@ -50,7 +49,7 @@ internal static partial class SourceIncludes
 
         foreach (Match match in Include().Matches(text))
         {
-            yield return Path.GetFullPath(Path.Join(directory, match.Groups["file"].Value));
+            yield return Resolve(path, match.Groups["file"].Value);
         }
 
         // An overlay's first line names the base it edits.
@@ -59,8 +58,20 @@ internal static partial class SourceIncludes
         Match overlay = Overlay().Match(first);
         if (overlay.Success && first.Contains("retrocore:", StringComparison.Ordinal))
         {
-            yield return Path.GetFullPath(Path.Join(directory, overlay.Groups["file"].Value));
+            yield return Resolve(path, overlay.Groups["file"].Value);
         }
+    }
+
+    private static string Resolve(string fromPath, string request)
+    {
+        string direct = LanguagePaths.Resolve(fromPath, request);
+        if (File.Exists(direct)) { return direct; }
+        foreach (string fallback in OverlayBaseResolver.Fallbacks(fromPath, request, OverlayBaseResolver.SdkFallback))
+        {
+            if (File.Exists(fallback)) { return fallback; }
+        }
+
+        return direct;
     }
 
     /// <summary>
@@ -81,12 +92,14 @@ internal static partial class SourceIncludes
 
     /// <summary>
     ///  Gets the root to analyze a file through: the outermost source that includes it, found in its own folder
-    ///  and the folders beside it, or the file itself when nothing includes it.
+    ///  and the folders beside it, or the file itself when nothing includes it. The repository's shared BASIC
+    ///  sources also search the other projects' ROM sources.
     /// </summary>
     /// <remarks>
     ///  <para>
-    ///   When several sources include the file, the one whose name sorts last is used, so the later of two
-    ///   versions (<c>Dos33.asm</c> over <c>Dos32.asm</c>, <c>Boot16.asm</c> over <c>Boot13.asm</c>) wins.
+    ///   The file's own folder is searched first, then neighboring folders; candidates within a folder are
+    ///   searched by descending name, so the later of two versions (<c>Dos33.asm</c> over <c>Dos32.asm</c>,
+    ///   <c>Boot16.asm</c> over <c>Boot13.asm</c>) wins. Shared BASIC also searches the other ROM projects.
     ///  </para>
     /// </remarks>
     /// <param name="path">The file's full path.</param>
@@ -119,10 +132,33 @@ internal static partial class SourceIncludes
                 .Order(StringComparer.OrdinalIgnoreCase));
         }
 
-        return [.. folders.SelectMany(folder => Directory.EnumerateFiles(folder, "*", s_searchOne)
+        List<string> files = [.. folders.SelectMany(folder => Directory.EnumerateFiles(folder, "*", s_searchOne)
             .Where(IsAssemblySource)
             .Select(Path.GetFullPath)
             .OrderDescending(StringComparer.OrdinalIgnoreCase))];
+
+        string? roms = Path.GetDirectoryName(directory);
+        string? project = roms is null ? null : Path.GetDirectoryName(roms);
+        string? sources = project is null ? null : Path.GetDirectoryName(project);
+        if (Path.GetFileName(directory).Equals("Microsoft6502Basic", StringComparison.OrdinalIgnoreCase)
+            && string.Equals(Path.GetFileName(roms), "Roms", StringComparison.OrdinalIgnoreCase)
+            && string.Equals(Path.GetFileName(project), "Retrocore.Basic", StringComparison.OrdinalIgnoreCase)
+            && sources is not null)
+        {
+            foreach (string other in Directory.EnumerateDirectories(sources, "Retrocore.*", s_searchOne)
+                .Order(StringComparer.OrdinalIgnoreCase))
+            {
+                if (string.Equals(other, project, StringComparison.OrdinalIgnoreCase)) { continue; }
+                string otherRoms = Path.Join(other, "Roms");
+                if (!Directory.Exists(otherRoms)) { continue; }
+                files.AddRange(Directory.EnumerateFiles(otherRoms, "*", s_searchAll)
+                    .Where(IsAssemblySource)
+                    .Select(Path.GetFullPath)
+                    .OrderDescending(StringComparer.OrdinalIgnoreCase));
+            }
+        }
+
+        return files;
     }
 
     [GeneratedRegex(@"^[ \t]*(?:[A-Za-z_@][\w@]*:?[ \t]+)?\.include[ \t]+""(?<file>[^""]+)""", RegexOptions.Multiline | RegexOptions.IgnoreCase)]

@@ -3,43 +3,14 @@
 ;; PRINT formats expressions, while the shared string and character output routines serve
 ;; error reporting, listing and other statements.
 
-;; Prints a string expression and continues the PRINT statement.
-STRDON:
-    jsr STRPRT
-NEWCHR:
-    jsr CHRGOT
+.include "../Microsoft6502Basic/MsBasic.Print.asm"
 
-;; PRINT: prints expressions, handling comma zones, semicolons, TAB and SPC.
-;; See: <STRPRT>, <FOUT>, <COMPRT>
-PRINT:
-    beq CRDO
-PRINTC:
-    beq PRTRTS
-    cmp #TABTK
 .if ENHNCD
-    beq TABER
+    PRINT_CORE TABER, 1, 1, 0
 .else
-    beq LINCH1
+    PRINT_CORE LINCH1, 1, 1, 0
 .endif
-    cmp #SPCTK
-    clc
-.if ENHNCD
-    beq TABER
-.else
-    beq LINCH1
-.endif
-    cmp #','
-    clc
-    beq COMPRT
-    cmp #';'
-    beq NOTABR
-    jsr FRMEVL
-    bit VALTYP
-    bmi STRDON
-    jsr FOUT
-    jsr STRLIT
 NCMPOS = $0E
-    jmp STRDON
 
 ;; Prints a carriage return, then complements A for the callers that test the result.
 CRDO:
@@ -122,28 +93,7 @@ NOTABR:
 XSPAC1:
     jsr OUTSPC
     bne XSPAC2
-;; Prints the zero-terminated string at A (low) and Y (high).
-;; See: <STRLIT>, <STRPRT>
-STROUT:
-    jsr STRLIT
-
-;; Prints the string whose descriptor is addressed by <FACMO>, releasing the temporary if applicable.
-;; See: <FREFAC>, <OUTDO>
-STRPRT:
-    jsr FREFAC
-    tax
-    ldy #$00
-    inx
-STRPR2:
-    dex
-    beq PRTRTS
-    lda (INDEX),y
-    jsr OUTDO
-    iny
-    cmp #$0D
-    bne STRPR2
-    jsr CRFIN
-    jmp STRPR2
+.include "../Microsoft6502Basic/MsBasic.StringOutput.asm"
 ;; Prints a space.
 OUTSPC:
     lda #' '

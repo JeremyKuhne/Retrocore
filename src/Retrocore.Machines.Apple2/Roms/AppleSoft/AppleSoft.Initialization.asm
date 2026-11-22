@@ -6,36 +6,14 @@
 
 ;; Group: Cold start
 
-;; Template for the character-fetch code copied to <CHRGET> in page zero.
-;;
-;; The absolute operand at <CHZGOT> becomes <TXTPTR> in the copy. The following five bytes initialize <RNDX>.
-;; Entry: CHZGOT = fetches the current character without advancing the pointer
-;; Out: carry = clear for a digit and set for a nondigit, zero = set for a null character
-INITAT:
-    inc TXTPTR
-    bne CHZGOT
-    inc TXTPTR+1
-
-CHZGOT:
-    lda $EA60                       ; copied operand becomes TXTPTR
-    cmp #':'
-    bcs CHZRTS
-    cmp #' '
-    beq INITAT
-    sec
-    sbc #'0'
-    sec
-    sbc #$D0
-
-CHZRTS:
-    rts
-    .byte $80, $4F, $C7, $52, $58
+    CHARACTER_READER $58
 
 ;; Cold-starts Applesoft, initializes its workspace and enters <MAIN>.
 ;;
-;; It installs the restart and USR vectors, copies <INITAT> and the initial random value to page zero, probes RAM
-;; by complementing and restoring a byte on each page, rounds the upper limit down to a 4 KB boundary, initializes
-;; the program at $0800 and resets the interpreter. The probe stops at the first location that fails either test.
+;; It installs the restart and USR vectors, copies <INITAT> and four bytes of the initial random value to page
+;; zero, probes RAM by complementing and restoring a byte on each page, rounds the upper limit down to a 4 KB
+;; boundary, initializes the program at $0800 and resets the interpreter. The probe stops at the first location
+;; that fails either test.
 INIT:
     ldx #$FF
     stx CURLIN+1

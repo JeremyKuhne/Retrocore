@@ -1,4 +1,4 @@
-; retrocore: dialect=macro10 overlay=../../../Retrocore.Machines.Apple2/Roms/Microsoft6502Basic/m6502.asm sha256=F3EC99C91DEDB8EB3441DED866F45797BB3E03ED26567A253E24CECF23CD63AC
+; retrocore: dialect=macro10 overlay=../../../Retrocore.Basic/Roms/Microsoft6502Basic/m6502.asm sha256=F3EC99C91DEDB8EB3441DED866F45797BB3E03ED26567A253E24CECF23CD63AC
 ; Commodore BASIC 1 for the PET 2001: Commodore's changes to Microsoft's 6502 BASIC (m6502.asm), maintained by hand.
 ; It assembles byte-identically to the BASIC 1 ROMs at $C000-$DFFF: 901447-09 (REVISD=1, the default) or 901447-01
 ; (REVISD=0) at $C000, then 901447-02, -03 and -04. The base's REALIO=3 build is Commodore's later BASIC; BASIC 1 is

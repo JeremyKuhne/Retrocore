@@ -41,6 +41,8 @@
     <ProjectReference Include="..\..\src\Retrocore.Cpu.M6809\Retrocore.Cpu.M6809.csproj" />
     <ProjectReference Include="..\..\tools\DosDisk\DosDisk.csproj" />
     <ProjectReference Include="..\..\src\Retrocore.Generators\Retrocore.Generators.csproj" Aliases="Generator" />
+    <!-- Exercise the host's actual SDK output as well as the linked test inputs. -->
+    <ProjectReference Include="..\..\src\Retrocore.Debug\Retrocore.Debug.csproj" ReferenceOutputAssembly="false" />
     <Compile Include="..\Retrocore.Perf\RamBus.cs" Link="RamBus.cs" />
     <Compile Include="..\Retrocore.Perf\CpuWorkload.cs" Link="CpuWorkload.cs" />
     <Compile Include="..\Retrocore.Perf\SystemRomWorkload.cs" Link="SystemRomWorkload.cs" />
@@ -131,6 +133,7 @@
     <Compile Include="..\..\src\Retrocore.Debug\BbcSdkModules.cs" Link="BbcSdkModules.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\PetSdkModules.cs" Link="PetSdkModules.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\OverlayBaseResolver.cs" Link="OverlayBaseResolver.cs" />
+    <Compile Include="..\..\src\Retrocore.Debug\SourceBuild.cs" Link="SourceBuild.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\DefineArgument.cs" Link="DefineArgument.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\Coco3Assembly.cs" Link="Coco3Assembly.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\Language\SourceAnalysis.cs" Link="Language\SourceAnalysis.cs" />
@@ -140,6 +143,8 @@
     <Compile Include="..\..\src\Retrocore.Debug\Language\SymbolSiteKind.cs" Link="Language\SymbolSiteKind.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\Language\SymbolReferences.cs" Link="Language\SymbolReferences.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\Language\WorkspaceSourceResolver.cs" Link="Language\WorkspaceSourceResolver.cs" />
+    <Compile Include="..\..\src\Retrocore.Debug\Language\LanguageWorkspace.cs" Link="Language\LanguageWorkspace.cs" />
+    <Compile Include="..\..\src\Retrocore.Debug\Language\LanguageWorkspace.Documentation.cs" Link="Language\LanguageWorkspace.Documentation.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\Language\LanguagePaths.cs" Link="Language\LanguagePaths.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\Language\InstructionDocs.cs" Link="Language\InstructionDocs.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\Language\InstructionDocs.M6809.cs" Link="Language\InstructionDocs.M6809.cs" />
@@ -150,7 +155,7 @@
     <None Include="..\..\src\Retrocore.Pascal\Pcode.asm" Link="Inputs\Pcode.asm" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\src\Retrocore.Machines.Apple2\Roms\*.rom.asm" Link="Inputs\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\src\Retrocore.Machines.Apple2\Roms\AppleSoft\*" Link="Inputs\AppleSoft\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="..\..\src\Retrocore.Machines.Apple2\Roms\Microsoft6502Basic\*" Link="Inputs\Microsoft6502Basic\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\src\Retrocore.Basic\Roms\Microsoft6502Basic\*" Link="Inputs\Microsoft6502Basic\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\src\Retrocore.Machines.Apple2\Roms\System\*.asm" Link="Inputs\System\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\src\Retrocore.Machines.Apple2\Roms\DiskII\*" Link="Inputs\DiskII\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\src\Retrocore.Machines.Apple2\Roms\Mouse\*.asm" Link="Inputs\Mouse\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />

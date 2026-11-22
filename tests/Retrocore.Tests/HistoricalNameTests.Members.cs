@@ -260,7 +260,7 @@ public sealed partial class HistoricalNameTests
                 ;; Also: COMMAND (TEST), Other (TEST), IBCMD (NOPE), PLAIN
                 COMMAND .byte
                 ;; The volume.
-                ;; Also: OLDVOL (TEST), SHARED (TEST)
+                ;; Also: OLDVOL (TEST), SHARED (TEST), COMMAND (TEST), Iob::VOL (TEST)
                 VOLUME .byte
             .endstruct
 
@@ -284,7 +284,10 @@ public sealed partial class HistoricalNameTests
             "Also: FileParameters::VOLUME has the historical name OLDVOL too.",
             "Also: Constant has the historical name SHARED too.",
             "Also: Iob::VOLUME has the historical name OLDVOL too.",
-            "Also: Iob::VOLUME has the historical name SHARED too.");
+            "Also: Iob::VOLUME has the historical name SHARED too.",
+            "Also: COMMAND is also Iob::COMMAND, a member of the same type, which it would not mean.",
+            "Also: Iob::VOLUME has the historical name COMMAND too.",
+            "Also: a historical name is a plain name, as a listing wrote it, not 'Iob::VOL (TEST)'.");
     }
 
     /// <summary>
@@ -522,6 +525,33 @@ public sealed partial class HistoricalNameTests
 
         result.Diagnostics.Should().BeEmpty();
         result.Sections[0].Bytes.Span[..6].ToArray().Should().Equal(0x4C, 0x03, 0x10, 0xA9, 7, 0x60);
+    }
+
+    /// <summary>
+    ///  The debugger resolves the old names of definitions inside an anonymous scope.
+    /// </summary>
+    [TestMethod]
+    public void TheDebuggerResolvesOldNamesInAnonymousScopes()
+    {
+        AssemblyResult result = Assemble("""
+                rts
+            .scope
+            ;; Inner.
+            ;; Also: OLDX (TEST)
+            Inner:
+                rts
+            ;; A constant.
+            ;; Also: OLDK (TEST)
+            KONST = 7
+            .endscope
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+        SourceMapModule module = new(result, area: null);
+        module.TryResolve("OLDX", out long inner).Should().BeTrue();
+        inner.Should().Be(0x1001);
+        module.TryResolve("OLDK", out long constant).Should().BeTrue();
+        constant.Should().Be(7);
     }
 
     /// <summary>

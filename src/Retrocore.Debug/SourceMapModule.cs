@@ -158,7 +158,8 @@ internal sealed partial class SourceMapModule : IDebugModule
         // a scoped symbol's plain name, which code outside the scope does not reach.
         foreach ((string name, AssemblySymbol symbol) in result.HistoricalNames)
         {
-            if (s_internalMarkers.Any(marker => symbol.Name.Contains(marker, StringComparison.Ordinal))) { continue; }
+            // The target may be inside an anonymous scope, whose private name it carries; old names never reach a
+            // scope's hidden labels.
             _symbols.TryAdd(name, symbol.IsConstant ? symbol.Value : symbol.Value + relocation);
         }
 

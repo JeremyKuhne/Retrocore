@@ -333,6 +333,15 @@ public sealed partial class DocumentationResolver
         }
     }
 
+    // The type's other member of a name, qualified, or null.
+    private string? SiblingMember(DocumentationTopic member, string name)
+    {
+        int separator = member.Name.LastIndexOf("::", StringComparison.Ordinal);
+        if (separator <= 0) { return null; }
+        string sibling = $"{member.Name[..separator]}::{name}";
+        return sibling != member.Name && Current.Defines(sibling) ? sibling : null;
+    }
+
     // Whether a type's member, named in any case, has a topic of its own.
     private bool DocumentedMember(DocumentationTopic topic, string name)
     {
@@ -351,6 +360,12 @@ public sealed partial class DocumentationResolver
 
         foreach (string item in section.Items)
         {
+            if (item.Contains("::", StringComparison.Ordinal))
+            {
+                warn($"Also: a historical name is a plain name, as a listing wrote it, not '{item}'.", section.Line);
+                continue;
+            }
+
             if (DocumentationAlso.Parse(item) is not { } also)
             {
                 warn($"Also: write a historical name and the documents that give it, as 'COUT (A2RM)', not '{item}'.", section.Line);
@@ -378,6 +393,10 @@ public sealed partial class DocumentationResolver
             else if (Current.Defines(also.Name))
             {
                 warn($"Also: {also.Name} is also a definition, which code reaches instead of {topic.Name}.", section.Line);
+            }
+            else if (topic.Kind == DocumentationKind.Member && SiblingMember(topic, also.Name) is { } sibling)
+            {
+                warn($"Also: {also.Name} is also {sibling}, a member of the same type, which it would not mean.", section.Line);
             }
             else if (Current.Topics.FirstOrDefault(other => !ReferenceEquals(other, topic)
                 && !OtherBuild(topic, other)

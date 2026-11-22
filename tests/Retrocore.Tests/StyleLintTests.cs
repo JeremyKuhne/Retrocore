@@ -240,6 +240,10 @@ public sealed class StyleLintTests
                     ;; The status, after it.
                     STATUS .byte
                 .endunion
+                NEST .struct Nested ;; A nested part, documented by its member.
+                    ;; Its byte.
+                    BYTE .byte
+                .endstruct
                 ;; Where.
                 WHERE .tag Pair
                 ;; A nested type.

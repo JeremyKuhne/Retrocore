@@ -99,10 +99,6 @@ internal sealed partial class AssemblyPreprocessor
     {
         if (HasPragma(source.Text))
         {
-            ReadOnlySpan<char> first = source.Text;
-            int end = first.IndexOfAny('\r', '\n');
-            first = (end < 0 ? first : first[..end]).Trim();
-
             // A pragma with only the documentation lint's words (style=, ignore=) selects no dialect.
             string? dialect = PragmaValue(source.Text, "dialect");
             bool lint = PragmaValue(source.Text, "style") is not null || PragmaValue(source.Text, "ignore") is not null;
@@ -250,9 +246,6 @@ internal sealed partial class AssemblyPreprocessor
     private AssemblyDialect? Pragma(AssemblySource source)
     {
         if (!HasPragma(source.Text)) { return null; }
-        ReadOnlySpan<char> first = source.Text;
-        int end = first.IndexOfAny('\r', '\n');
-        first = (end < 0 ? first : first[..end]).Trim();
 
         // The documentation lint's words (style=, ignore=) need no dialect.
         bool lint = PragmaValue(source.Text, "style") is not null || PragmaValue(source.Text, "ignore") is not null;

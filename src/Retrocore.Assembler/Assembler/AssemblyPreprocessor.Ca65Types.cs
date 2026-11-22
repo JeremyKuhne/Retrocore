@@ -71,6 +71,7 @@ internal sealed partial class AssemblyPreprocessor
             if (frame.Name.Length != 0)
             {
                 if (!state.Sizes.TryAdd(frame.Qualified, size)) { throw new AssemblyError(0, "Duplicate type size."); }
+                (_project.TypeSizes ??= [with(StringComparer.Ordinal)])[frame.Qualified] = size;
                 Emit(line, ".endscope");
             }
 

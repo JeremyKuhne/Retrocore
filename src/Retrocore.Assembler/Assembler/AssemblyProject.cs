@@ -67,6 +67,12 @@ public sealed class AssemblyProject
     internal Dictionary<string, int>? LabelSizes { get; set; }
 
     /// <summary>
+    ///  Gets or sets the sizes of named structures and unions, keyed by qualified name, for <c>.sizeof</c> of one
+    ///  defined later in source: its scope holds only constants, so it has no laid-out size.
+    /// </summary>
+    internal Dictionary<string, long>? TypeSizes { get; set; }
+
+    /// <summary>
     ///  Gets or sets Merlin source-name aliases without exposing mutable preprocessing state.
     /// </summary>
     internal Dictionary<string, string>? SymbolAliases { get; set; }

@@ -10,6 +10,9 @@ internal sealed partial class AssemblyPreprocessor
     {
         operand = ExpandCa65Functions(ExpandCa65Definitions(operand), expression: true);
         if (operation == ".IFNBLANK") { return !string.IsNullOrWhiteSpace(operand); }
+
+        // A size known only once the program is laid out is neither known now nor unknown for good.
+        if (operation is ".IFCONST" or ".IFNCONST" && AwaitsLayoutSize(operand)) { throw UnknownCondition(); }
         if (operation == ".IFCONST") { return Ca65TryValue(operand) is not null; }
         if (operation == ".IFNCONST") { return Ca65TryValue(operand) is null; }
         if (operation.StartsWith(".IFP", StringComparison.Ordinal))
@@ -45,13 +48,14 @@ internal sealed partial class AssemblyPreprocessor
             ? null
             : Ca65Truth(Ca65CharacterExpression(operand));
 
-        return truth
-            ?? throw new AssemblyError(
-                0,
-                _nativeSyntax
-                    ? "Conditional requires a constant known at this point in source order."
-                    : "ca65 directive requires a constant known at this point.");
+        return truth ?? throw UnknownCondition();
     }
+
+    private AssemblyError UnknownCondition() => new(
+        0,
+        _nativeSyntax
+            ? "Conditional requires a constant known at this point in source order."
+            : "ca65 directive requires a constant known at this point.");
 
     /// <summary>
     ///  Evaluates a condition, deciding a logical operator from one known operand when another is unknown.

@@ -22,6 +22,9 @@ internal sealed partial class AssemblyPreprocessor
     private readonly Func<string, bool> _isMacro;
     private readonly AssemblySymbols _constants = new();
     private readonly HashSet<string> _defined = [with(StringComparer.Ordinal)];
+
+    // Constants whose value is a size known only once the program is laid out; see AwaitsLayoutSize.
+    private HashSet<string>? _layoutSizes;
     private readonly HashSet<string> _activeIncludes = [with(
         Path.DirectorySeparatorChar == '\\' ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal)];
     private int _visited;
@@ -664,16 +667,21 @@ internal sealed partial class AssemblyPreprocessor
         if (node.Kind is not (AssemblyStatementKind.Constant or AssemblyStatementKind.Variable))
         {
             _constants.Unset(name);
+            _layoutSizes?.Remove(name);
             return;
         }
 
-        // A scope's or procedure's size is known only once it is assembled, so an equate of one has no value yet;
-        // the resolver lowers its .sizeof as it does in data, and the compiler evaluates it.
-        if (AssemblyNameResolver.HasSizeReference(node.Operand.Memory))
+        // A scope's or procedure's size is known only once it is assembled, so an equate of one, directly or through
+        // another such equate, has no value yet; the resolver lowers its .sizeof as it does in data, and the compiler
+        // evaluates it. The name is remembered so that .ifconst and .const refuse it rather than call it unknown.
+        if (AwaitsLayoutSize(node.Operand.Text))
         {
             _constants.Unset(name);
+            (_layoutSizes ??= [with(StringComparer.Ordinal)]).Add(name);
             return;
         }
+
+        _layoutSizes?.Remove(name);
 
         _nameAmbiguity = null;
         try

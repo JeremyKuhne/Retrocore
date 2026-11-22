@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
+using System.Globalization;
 using Retrocore.Isa;
 
 namespace Retrocore.Assembler;
@@ -351,7 +352,10 @@ internal sealed partial class AssemblyNameResolver
                     string end = scope.Qualify(scope.Pieces == 0 ? $"{_privatePrefix}end" : $"{_privatePrefix}end_{index}");
                     string start = scope.Procedure ? scope.Prefix : scope.Qualify($"{_privatePrefix}start");
                     _definitions[index] = end;
-                    _sizes[scope.Prefix] = scope.Contiguous ? $"({end}-{start})" : "";
+                    // A structure's scope holds only constants; its size is the one the preprocessor gave the type.
+                    _sizes[scope.Prefix] = _source.TypeSizes?.TryGetValue(scope.Prefix, out long typeSize) == true
+                        ? typeSize.ToString(CultureInfo.InvariantCulture)
+                        : scope.Contiguous ? $"({end}-{start})" : "";
 
                     scope = scope.Parent;
                     cheap = FreshContext();

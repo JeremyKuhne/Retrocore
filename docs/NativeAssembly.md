@@ -834,11 +834,13 @@ Larger = .max(3, 7)             ; 7
 `.lobyte`, `.hibyte` and `.bankbyte` are part of [expressions](#operators) rather than functions, so they
 also work with values not yet known.
 
-A structure's size is known as soon as the structure is defined, but the size of a `.proc`, a `.scope` or a
-labeled statement is known only once it is assembled. That `.sizeof` works wherever a value can wait for
-layout: in data, operands, `.assert`, and an equate, before or after the procedure or scope it names. It cannot
-decide conditional assembly, which runs first, either directly or through such an equate. A continued scope is
-still refused.
+A structure's or union's size is known as soon as it is defined, so after its definition `.sizeof` of it works
+everywhere, conditional assembly included. The size of a `.proc`, a `.scope` or a labeled statement is known
+only once it is assembled, as is that of a structure defined later. That `.sizeof` works wherever a value can
+wait for layout: in data, operands, `.assert`, and an equate, before or after what it names. Conditional
+assembly, `.repeat` counts and `.incbin` ranges are decided first, so they report such a size, directly or through
+an equate, as not yet known; `.ifconst`, `.ifnconst` and `.const` report it too rather than call it unknown. A
+continued scope is still refused. ca65 refuses `.sizeof` of anything defined later.
 
 ```asm
 .cpu Mos6502

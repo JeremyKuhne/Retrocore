@@ -62,14 +62,17 @@ public class NativeExtensionTests
     }
 
     /// <summary>
-    ///  An equate can name the size of a structure, and of a procedure or a scope before or after it, as data can,
-    ///  though a procedure's or scope's size is known only once it is assembled.
+    ///  An equate can name the size of a structure, a procedure or a scope, before or after it, as data can, though
+    ///  a procedure's or scope's size is known only once it is assembled.
     /// </summary>
     /// <param name="text">The source.</param>
     /// <param name="expected">The leading output bytes.</param>
     [TestMethod]
     [DataRow(
         ".struct Point\nx .byte\ny .word\n.endstruct\nSIZE = .sizeof(Point)\n.byte SIZE",
+        new byte[] { 3 })]
+    [DataRow(
+        "SIZE = .sizeof(Point)\n.struct Point\nx .byte\ny .word\n.endstruct\n.byte SIZE",
         new byte[] { 3 })]
     [DataRow(
         ".proc Block\n.res 3, $EA\n.endproc\n.byte .sizeof(Block)\nSIZE = .sizeof(Block)\n.byte SIZE",
@@ -94,20 +97,97 @@ public class NativeExtensionTests
     }
 
     /// <summary>
-    ///  Conditional assembly runs before a procedure is assembled, so its size, directly or through an equate, is not
-    ///  yet known there.
+    ///  Data can name the size of a structure or union defined later, including one nested in a scope, rather than
+    ///  the empty layout of the scope that holds its fields.
     /// </summary>
-    /// <param name="condition">The condition.</param>
     [TestMethod]
-    [DataRow(".sizeof(Block) = 2")]
-    [DataRow("SIZE = 2")]
-    public void ConditionsCannotUseAProcedureSize(string condition)
+    public void DataNamesSizesOfLaterTypes()
     {
-        AssemblyResult result = Assemble(
-            $".proc Block\nnop\nnop\n.endproc\nSIZE = .sizeof(Block)\n.if {condition}\n.byte 1\n.endif");
+        AssemblyResult result = Assemble("""
+            .byte .sizeof(Point), .sizeof(Outer::Pair), .sizeof(Either)
+            .struct Point
+            x .byte
+            y .word
+            .endstruct
+            .scope Outer
+            .struct Pair
+            first .dword
+            second .tag Point
+            .endstruct
+            .endscope
+            .union Either
+            narrow .word
+            wide .dword
+            .endunion
+            .byte .sizeof(Point), .sizeof(Outer::Pair), .sizeof(Either)
+            """);
 
-        result.Diagnostics.Select(diagnostic => diagnostic.Message).Should().Equal(
-            "Conditional requires a constant known at this point in source order.");
+        result.Diagnostics.Should().BeEmpty();
+        result.Sections[0].Bytes.Span[..6].ToArray().Should().Equal(3, 7, 4, 3, 7, 4);
+    }
+
+    /// <summary>
+    ///  Conditional assembly runs before a procedure is assembled, so its size, directly or through an equate, is not
+    ///  yet known there, and neither is it unknown for good: <c>.ifconst</c> refuses it rather than choose a branch.
+    /// </summary>
+    /// <param name="condition">The conditional directive and its operand.</param>
+    /// <param name="ca65">Whether the source is in the ca65 dialect.</param>
+    /// <param name="message">The error it reports.</param>
+    [TestMethod]
+    [DataRow(".if .sizeof(Block) = 2", false, "Conditional requires a constant known at this point in source order.")]
+    [DataRow(".if SIZE = 2", false, "Conditional requires a constant known at this point in source order.")]
+    [DataRow(".ifconst SIZE", false, "Conditional requires a constant known at this point in source order.")]
+    [DataRow(".ifnconst NEXT", false, "Conditional requires a constant known at this point in source order.")]
+    [DataRow(".ifconst .sizeof(Block)", false, "Conditional requires a constant known at this point in source order.")]
+    [DataRow(".ifconst SIZE", true, "ca65 directive requires a constant known at this point.")]
+    public void ConditionsCannotUseAProcedureSize(string condition, bool ca65, string message)
+    {
+        AssemblyResult result = new NativeAssembler().Assemble(
+            new AssemblySource(
+                $".proc Block\nnop\nnop\n.endproc\nSIZE = .sizeof(Block)\nNEXT = SIZE + 1\n{condition}\n.byte 1\n.endif",
+                "main.asm"),
+            new AssemblyOptions(ProcessorVariant.Mos6502, origin: 0x1000, imageSize: 32)
+            {
+                Dialect = ca65 ? AssemblyDialect.Ca65 : AssemblyDialect.Native
+            });
+
+        result.Diagnostics.Select(diagnostic => diagnostic.Message).Should().Equal(message);
+    }
+
+    /// <summary>
+    ///  <c>.const</c> refuses a procedure's size, directly or through an equate, rather than call it unknown.
+    /// </summary>
+    /// <param name="operand">The <c>.const</c> operand.</param>
+    [TestMethod]
+    [DataRow(".sizeof(Block)")]
+    [DataRow("NEXT")]
+    public void ConstRefusesAProcedureSize(string operand)
+    {
+        Assemble($".proc Block\nnop\n.endproc\nSIZE = .sizeof(Block)\nNEXT = SIZE + 1\n.byte .const({operand})")
+            .Diagnostics.Select(diagnostic => diagnostic.Message)
+            .Should().Equal(".const cannot test a size known only once the program is laid out.");
+    }
+
+    /// <summary>
+    ///  A variable given a procedure's size and then an ordinary value is a known constant again.
+    /// </summary>
+    [TestMethod]
+    public void AVariableReassignedFromASizeIsKnownAgain()
+    {
+        AssemblyResult result = Assemble("""
+            .proc Block
+            nop
+            .endproc
+            V .set .sizeof(Block)
+            .byte V
+            V .set 7
+            .ifconst V
+            .byte V, .const(V)
+            .endif
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+        result.Sections[0].Bytes.Span[..4].ToArray().Should().Equal(0xEA, 1, 7, 1);
     }
 
     /// <summary>

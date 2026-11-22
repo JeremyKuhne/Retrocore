@@ -667,6 +667,14 @@ internal sealed partial class AssemblyPreprocessor
             return;
         }
 
+        // A scope's or procedure's size is known only once it is assembled, so an equate of one has no value yet;
+        // the resolver lowers its .sizeof as it does in data, and the compiler evaluates it.
+        if (AssemblyNameResolver.HasSizeReference(node.Operand.Memory))
+        {
+            _constants.Unset(name);
+            return;
+        }
+
         _nameAmbiguity = null;
         try
         {
@@ -717,6 +725,14 @@ internal sealed partial class AssemblyPreprocessor
     private bool Constant(string text, AssemblyLocation location, out long value, string purpose = "Conditional")
     {
         value = 0;
+
+        // A scope's or procedure's size is known only once it is assembled.
+        if (AssemblyNameResolver.HasSizeReference(text.AsMemory()))
+        {
+            Error($"{purpose} requires a constant known at this point in source order.", location);
+            return false;
+        }
+
         _nameAmbiguity = null;
         try
         {

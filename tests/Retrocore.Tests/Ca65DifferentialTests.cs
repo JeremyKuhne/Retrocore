@@ -233,6 +233,18 @@ public class Ca65DifferentialTests
         Other=4
         .byte Other, Other::Value
         """)]
+    [DataRow("""
+        .proc Block
+        .res 3, $EA
+        .endproc
+        .scope Table
+        First: .byte 1
+        Second: .word 2
+        .endscope
+        BlockSize = .sizeof(Block)
+        TableSize = .sizeof(Table) + 1
+        .byte .sizeof(Block), BlockSize, TableSize
+        """)]
     public void NativeScopesMatchCa65(string body)
     {
         Ca65Toolchain tools = Ca65Toolchain.Require();

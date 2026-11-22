@@ -62,6 +62,55 @@ public class NativeExtensionTests
     }
 
     /// <summary>
+    ///  An equate can name the size of a structure, and of a procedure or a scope before or after it, as data can,
+    ///  though a procedure's or scope's size is known only once it is assembled.
+    /// </summary>
+    /// <param name="text">The source.</param>
+    /// <param name="expected">The leading output bytes.</param>
+    [TestMethod]
+    [DataRow(
+        ".struct Point\nx .byte\ny .word\n.endstruct\nSIZE = .sizeof(Point)\n.byte SIZE",
+        new byte[] { 3 })]
+    [DataRow(
+        ".proc Block\n.res 3, $EA\n.endproc\n.byte .sizeof(Block)\nSIZE = .sizeof(Block)\n.byte SIZE",
+        new byte[] { 0xEA, 0xEA, 0xEA, 3, 3 })]
+    [DataRow(
+        "SIZE = .sizeof(Block)\n.proc Block\n.res 3, $EA\n.endproc\n.byte SIZE",
+        new byte[] { 0xEA, 0xEA, 0xEA, 3 })]
+    [DataRow(
+        ".scope Table\nFirst: .byte 1\nSecond: .word 2\n.endscope\nSIZE = .sizeof(Table) * 2 + 1\n.byte SIZE",
+        new byte[] { 1, 2, 0, 7 })]
+    [DataRow(
+        "SIZE = .sizeof(Table)\n.scope Table\nFirst: .byte 1\nSecond: .word 2\n.endscope\n.byte SIZE",
+        new byte[] { 1, 2, 0, 3 })]
+    [DataRow(
+        ".scope Outer\nSIZE = .sizeof(Inner)\n.proc Inner\nnop\nnop\n.endproc\n.endscope\n.byte Outer::SIZE",
+        new byte[] { 0xEA, 0xEA, 2 })]
+    public void EquatesNameSizes(string text, byte[] expected)
+    {
+        AssemblyResult result = Assemble(text);
+        result.Diagnostics.Should().BeEmpty();
+        result.Sections[0].Bytes.Span[..expected.Length].ToArray().Should().Equal(expected);
+    }
+
+    /// <summary>
+    ///  Conditional assembly runs before a procedure is assembled, so its size, directly or through an equate, is not
+    ///  yet known there.
+    /// </summary>
+    /// <param name="condition">The condition.</param>
+    [TestMethod]
+    [DataRow(".sizeof(Block) = 2")]
+    [DataRow("SIZE = 2")]
+    public void ConditionsCannotUseAProcedureSize(string condition)
+    {
+        AssemblyResult result = Assemble(
+            $".proc Block\nnop\nnop\n.endproc\nSIZE = .sizeof(Block)\n.if {condition}\n.byte 1\n.endif");
+
+        result.Diagnostics.Select(diagnostic => diagnostic.Message).Should().Equal(
+            "Conditional requires a constant known at this point in source order.");
+    }
+
+    /// <summary>
     ///  A table can be built from definitions named by computed identifiers, as the Monitor's disassembler does.
     /// </summary>
     [TestMethod]

@@ -62,6 +62,24 @@ internal sealed partial class AssemblyNameResolver
 
     private static readonly AssemblyOperand s_emptyOperand = new("");
 
+    /// <summary>
+    ///  Determines whether an operand uses <c>.sizeof</c> of a name the preprocessor left for the resolver: a scope,
+    ///  a procedure or a label, whose size is known only once the program is assembled.
+    /// </summary>
+    /// <param name="text">The operand text.</param>
+    /// <returns>Whether the operand contains a <c>.sizeof</c> reference.</returns>
+    internal static bool HasSizeReference(ReadOnlyMemory<char> text)
+    {
+        if (text.Span.IndexOf('.') < 0) { return false; }
+        AssemblyNameReferences references = new(text);
+        while (references.MoveNext())
+        {
+            if (references.Current.Span.Equals(".sizeof", StringComparison.OrdinalIgnoreCase)) { return true; }
+        }
+
+        return false;
+    }
+
     private static bool HasScopedReference(ReadOnlyMemory<char> text)
     {
         AssemblyNameReferences references = new(text);

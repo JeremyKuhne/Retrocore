@@ -38,14 +38,19 @@ internal sealed partial class AssemblyPreprocessor
             return operation == ".IFDEF" ? defined : !defined;
         }
 
-        return operation == ".IFBLANK"
-            ? string.IsNullOrWhiteSpace(operand)
-            : Ca65Truth(Ca65CharacterExpression(operand))
-                ?? throw new AssemblyError(
-                    0,
-                    _nativeSyntax
-                        ? "Conditional requires a constant known at this point in source order."
-                        : "ca65 directive requires a constant known at this point.");
+        if (operation == ".IFBLANK") { return string.IsNullOrWhiteSpace(operand); }
+
+        // A .sizeof left for the resolver names a scope or procedure, whose size is known only once it is assembled.
+        bool? truth = AssemblyNameResolver.HasSizeReference(operand.AsMemory())
+            ? null
+            : Ca65Truth(Ca65CharacterExpression(operand));
+
+        return truth
+            ?? throw new AssemblyError(
+                0,
+                _nativeSyntax
+                    ? "Conditional requires a constant known at this point in source order."
+                    : "ca65 directive requires a constant known at this point.");
     }
 
     /// <summary>

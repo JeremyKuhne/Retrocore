@@ -240,7 +240,8 @@ test("Merlin pragma with the lint's words still selects Merlin", () => {
 });
 
 test("A Merlin dialect the tools don't read selects nothing", () => {
-    for (const pragma of ["; retrocore: ignore=indent -- not dialect=merlin", ";retrocore: dialect=merlin", ";   retrocore: dialect=merlin"]) {
+    for (const pragma of ["; retrocore: ignore=indent -- not dialect=merlin", ";retrocore: dialect=merlin", ";   retrocore: dialect=merlin",
+        "; retrocore: ignore=indent  --  dialect=merlin", "; retrocore: ignore=indent\t -- dialect=merlin"]) {
         const state = grammar.tokenizeLine(pragma, INITIAL).ruleStack;
         const token = grammar.tokenizeLine("Entry   LDA #1", state).tokens.find(item => item.startIndex === 0);
         assert.ok(!token?.scopes.includes(scope.label), `${pragma}: expected no Merlin label, got ${token?.scopes.join(" ")}`);

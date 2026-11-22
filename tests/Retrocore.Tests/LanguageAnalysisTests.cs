@@ -498,6 +498,10 @@ public sealed partial class LanguageAnalysisTests
 
             SourceIncludes.SourcesIn(gone).Should().BeEmpty();
             SourceIncludes.SourcesIn(replaced).Should().BeEmpty();
+
+            // A source listed and then replaced by a folder of the same name includes nothing.
+            string folderNamedLikeASource = Directory.CreateDirectory(Path.Join(folder, "Other.asm")).FullName;
+            SourceIncludes.IncludesOf(folderNamedLikeASource).Should().BeEmpty();
             SourceIncludes.RootOf(included, listed).Should().Be(root);
             SourceIncludes.RootOf(included).Should().Be(root);
         }

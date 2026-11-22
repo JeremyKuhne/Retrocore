@@ -43,8 +43,10 @@ internal static partial class SourceIncludes
         {
             text = File.ReadAllText(path);
         }
-        catch (IOException)
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
+            // Gone (FileNotFoundException), unreadable, or replaced by a folder after it was listed, which Linux
+            // reports as an UnauthorizedAccessException: it includes nothing.
             yield break;
         }
 
@@ -157,7 +159,7 @@ internal static partial class SourceIncludes
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
-            // Deleted, or replaced by a file (DirectoryNotFoundException on Linux, an IOException on Windows), or made
+            // Deleted or replaced by a file, an IOException (on Linux, DirectoryNotFoundException for both), or made
             // unreadable.
             return [];
         }

@@ -68,10 +68,7 @@ public class NativeAssemblyDocsTests
 
             DocumentationFile documentation = DocumentationParser.Parse(source, name);
             DocumentationSet set = DocumentationSet.Create([documentation], result);
-            failures.AddRange(documentation.Diagnostics
-                .Select(diagnostic => diagnostic.Message)
-                .Concat(new DocumentationResolver(set).Check().Select(diagnostic => diagnostic.Message))
-                .Select(message => $"{name}: {message}"));
+            failures.AddRange(new DocumentationResolver(set).Lint().Select(diagnostic => $"{name}: {diagnostic.Text}"));
         }
 
         failures.Should().BeEmpty();

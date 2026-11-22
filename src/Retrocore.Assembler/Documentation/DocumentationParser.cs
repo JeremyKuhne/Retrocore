@@ -119,7 +119,8 @@ public static partial class DocumentationParser
                         "A documentation comment must be directly above the definition it documents.",
                         path,
                         start,
-                        DocumentationSeverity.Error));
+                        DocumentationSeverity.Error,
+                        DocumentationRules.Placement));
 
                     continue;
                 }
@@ -131,7 +132,8 @@ public static partial class DocumentationParser
                         "Document a scope where it first opens; give a continued piece a plain ; comment.",
                         path,
                         start,
-                        DocumentationSeverity.Error));
+                        DocumentationSeverity.Error,
+                        DocumentationRules.Placement));
 
                     continue;
                 }
@@ -142,7 +144,8 @@ public static partial class DocumentationParser
                         "A documentation comment must document a label, constant, macro or other definition.",
                         path,
                         start,
-                        DocumentationSeverity.Error));
+                        DocumentationSeverity.Error,
+                        DocumentationRules.Placement));
 
                     continue;
                 }
@@ -156,7 +159,8 @@ public static partial class DocumentationParser
                             + "comment; write a heading above a group as a plain ; comment.",
                         path,
                         start,
-                        DocumentationSeverity.Error));
+                        DocumentationSeverity.Error,
+                        DocumentationRules.Placement));
 
                     continue;
                 }
@@ -181,7 +185,8 @@ public static partial class DocumentationParser
                         "A trailing documentation comment must follow a definition, such as a constant or member.",
                         path,
                         index,
-                        DocumentationSeverity.Error));
+                        DocumentationSeverity.Error,
+                        DocumentationRules.Placement));
                 }
             }
 
@@ -200,7 +205,10 @@ public static partial class DocumentationParser
 
         bool strict = IsStrict(text);
         if (strict && style) { Style(lines, path, diagnostics); }
-        return new(path, comments, diagnostics) { Strict = strict };
+
+        // Without the style checks this is not the lint, so there is nothing for exclusions to apply to.
+        List<DocumentationExclusion> exclusions = style ? Exclusions(lines, path, diagnostics) : [];
+        return new(path, comments, diagnostics) { Strict = strict, Exclusions = exclusions };
     }
 
     /// <summary>

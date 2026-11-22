@@ -19,4 +19,9 @@ public sealed record DocumentationFile(
     ///  Gets whether the file opts in to the style guide's checks (<c>; retrocore: style=strict</c>).
     /// </summary>
     public bool Strict { get; init; }
+
+    /// <summary>
+    ///  Gets the rules the file's <c>ignore=</c> pragmas turn off, and where.
+    /// </summary>
+    public IReadOnlyList<DocumentationExclusion> Exclusions { get; init; } = [];
 }

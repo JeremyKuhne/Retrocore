@@ -392,10 +392,14 @@
       ]
     },
     "merlin": {
-      "begin": "\\A[ \\t]*;[ \\t]*(?i:retrocore:[ \\t]*dialect=merlin)[ \\t]*$",
+      "begin": "\\A[ \\t]*; (?i:retrocore:)(?![ \\t]* -- )[ \\t]*(?:[^\\s]+(?![ \\t]* -- )[ \\t]+)*?(?i:dialect=merlin)(?=[ \\t]|$).*$",
       "beginCaptures": {
         "0": {
-          "name": "comment.line.semicolon.retrocore"
+          "patterns": [
+            {
+              "include": "#comments"
+            }
+          ]
         }
       },
       "end": "(?!)",
@@ -942,6 +946,44 @@
             {
               "match": "`[^`]*`",
               "name": "markup.inline.raw.retrocore"
+            }
+          ]
+        },
+        {
+          "begin": "(;) ((?i:retrocore:))",
+          "beginCaptures": {
+            "1": {
+              "name": "punctuation.definition.comment.retrocore"
+            },
+            "2": {
+              "name": "keyword.other.pragma.retrocore"
+            }
+          },
+          "end": "$",
+          "name": "comment.line.pragma.retrocore",
+          "patterns": [
+            {
+              "match": " -- .*$",
+              "name": "comment.line.semicolon.retrocore"
+            },
+            {
+              "match": "(?<![\\w-])((?i:dialect|style|overlay|ignore))(=)",
+              "captures": {
+                "1": {
+                  "name": "keyword.other.pragma.retrocore"
+                },
+                "2": {
+                  "name": "keyword.operator.assignment.retrocore"
+                }
+              }
+            },
+            {
+              "match": "(?<=[=,])[a-z]+(?:-[a-z]+)*",
+              "name": "constant.other.pragma.retrocore"
+            },
+            {
+              "match": "[:|,]",
+              "name": "punctuation.separator.pragma.retrocore"
             }
           ]
         },

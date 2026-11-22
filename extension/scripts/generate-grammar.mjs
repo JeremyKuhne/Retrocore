@@ -285,8 +285,10 @@ const grammar = {
             ]
         },
         merlin: {
-            begin: "\\A[ \\t]*;[ \\t]*(?i:retrocore:[ \\t]*dialect=merlin)[ \\t]*$",
-            beginCaptures: { "0": { name: "comment.line.semicolon.retrocore" } },
+            // Spaced as the tools read it, the pragma may carry the documentation lint's words too, before or after the dialect:
+            // whole words separated by whitespace, up to a " -- " reason.
+            begin: "\\A[ \\t]*; (?i:retrocore:)(?![ \\t]* -- )[ \\t]*(?:[^\\s]+(?![ \\t]* -- )[ \\t]+)*?(?i:dialect=merlin)(?=[ \\t]|$).*$",
+            beginCaptures: { "0": { patterns: [{ include: "#comments" }] } },
             end: "(?!)",
             patterns: [
                 { match: "^[*;].*$", name: "comment.line.semicolon.retrocore" },
@@ -404,6 +406,29 @@ const grammar = {
                         { match: "<(?![\\s=\\d])[^<>]+>", name: "markup.underline.link.retrocore" },
                         { match: "\\{[\\w@.:]+\\}", name: "variable.parameter.documentation.retrocore" },
                         { match: "`[^`]*`", name: "markup.inline.raw.retrocore" }
+                    ]
+                },
+                {
+                    // A "; retrocore:" pragma (docs/NativeAssembly.md), spaced as the tools read it: its words, and an exclusion's rule IDs. The
+                    // reason after " -- " stays a plain comment.
+                    begin: "(;) ((?i:retrocore:))",
+                    beginCaptures: {
+                        "1": { name: "punctuation.definition.comment.retrocore" },
+                        "2": { name: "keyword.other.pragma.retrocore" }
+                    },
+                    end: "$",
+                    name: "comment.line.pragma.retrocore",
+                    patterns: [
+                        { match: " -- .*$", name: "comment.line.semicolon.retrocore" },
+                        {
+                            match: "(?<![\\w-])((?i:dialect|style|overlay|ignore))(=)",
+                            captures: {
+                                "1": { name: "keyword.other.pragma.retrocore" },
+                                "2": { name: "keyword.operator.assignment.retrocore" }
+                            }
+                        },
+                        { match: "(?<=[=,])[a-z]+(?:-[a-z]+)*", name: "constant.other.pragma.retrocore" },
+                        { match: "[:|,]", name: "punctuation.separator.pragma.retrocore" }
                     ]
                 },
                 {

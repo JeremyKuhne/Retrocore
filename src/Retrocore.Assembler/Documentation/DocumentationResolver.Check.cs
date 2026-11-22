@@ -207,7 +207,7 @@ public sealed partial class DocumentationResolver
                     {
                         warn($"Members: '{entry.Name}' is not a member of {topic.Name}.", entry.Line);
                     }
-                    else if (Current.Find($"{topic.Name}::{entry.Name}") is not null)
+                    else if (DocumentedMember(topic, entry.Name))
                     {
                         // A member with a block or trailing comment of its own is documented there.
                         warn($"{entry.Name} has its own documentation; remove it from Members:", entry.Line);
@@ -331,6 +331,13 @@ public sealed partial class DocumentationResolver
                 }
             }
         }
+    }
+
+    // Whether a type's member, named in any case, has a topic of its own.
+    private bool DocumentedMember(DocumentationTopic topic, string name)
+    {
+        string? member = topic.Primary.Members.FirstOrDefault(item => item.Equals(name, StringComparison.OrdinalIgnoreCase));
+        return member is not null && Current.Find($"{topic.Name}::{member}") is not null;
     }
 
     private void CheckAlso(DocumentationTopic topic, DocumentationSection section, Action<string, int> warn)

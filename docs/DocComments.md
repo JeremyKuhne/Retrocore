@@ -250,7 +250,8 @@ CharacterOut = $FDED
   code does, for definitions earlier in the source (`.ifdef COUT`, `.if COUT = $FDED`).
 - **What can have one:** a label, constant or `.proc` entry, or a member of a `.struct`, `.union` or `.enum`,
   outside a macro's body. An `Also:` on a `.scope`
-  does not name the scope (`OLD::Member` does not resolve), one inside a macro's body is ignored, and `.sizeof`
+  or a named `.struct`, `.union` or `.enum` does not name it (`OLD::Member` does not resolve), though one on a
+  member that opens a nested type (`INNER .struct Inner`) names the member, one inside a macro's body is ignored, and `.sizeof`
   takes only a `.proc`'s current name. An old name for a `.set` variable is the value it had where it was
   documented, not where code uses it. Two definitions in different branches of conditional assembly (one
   model's routine and another's) can share an old name: each build has only one of them.

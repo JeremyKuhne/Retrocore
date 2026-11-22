@@ -132,6 +132,9 @@ internal static partial class AssemblyCompiler
         }
 
         AssemblyAlsoNames? alsoNames = AssemblyAlsoNames.Collect(project.Sources);
+
+        // Each .set assignment's statement, by its version's name, for the historical names a version has.
+        Dictionary<string, AssemblyStatement>? versions = null;
         bool declaredCpu = false;
         List<InstructionSet>? cpuSettings = null;
         byte cpuIndex = 0;
@@ -171,6 +174,8 @@ internal static partial class AssemblyCompiler
                 if (variable && previous is null or { Kind: AssemblyStatementKind.Variable })
                 {
                     label = symbols.DeclareVersion(label);
+                    versions ??= [with(StringComparer.Ordinal)];
+                    versions[label] = node;
                 }
 
                 int labelId = symbols.Declare(label);
@@ -505,19 +510,23 @@ internal static partial class AssemblyCompiler
         return new(output, exported, symbols.Snapshot(), declared, statements, statementCount, project)
         {
             InstructionSets = cpuSettings is null ? [codes] : [.. cpuSettings],
-            HistoricalNames = HistoricalNames(symbols, declared)
+            HistoricalNames = HistoricalNames(symbols, declared, versions)
         };
     }
 
     // Each historical name's definition, with the value the name has, or null when no definition has one.
     private static Dictionary<string, AssemblySymbol>? HistoricalNames(
         AssemblySymbols symbols,
-        Dictionary<string, AssemblyStatement> declared)
+        Dictionary<string, AssemblyStatement> declared,
+        Dictionary<string, AssemblyStatement>? versions)
     {
         Dictionary<string, AssemblySymbol>? names = null;
-        foreach ((string name, string target, long value) in symbols.HistoricalSnapshot())
+        foreach ((string name, string target, string version, long value) in symbols.HistoricalSnapshot())
         {
-            if (!declared.TryGetValue(target, out AssemblyStatement? definition)) { continue; }
+            // A .set variable's old name is the version where it was documented.
+            AssemblyStatement? definition = null;
+            bool found = versions?.TryGetValue(version, out definition) == true || declared.TryGetValue(target, out definition);
+            if (!found || definition is null) { continue; }
             bool constant = definition.Kind is AssemblyStatementKind.Constant or AssemblyStatementKind.Variable;
             names ??= [with(StringComparer.Ordinal)];
             names[name] = new(target, value, constant, exported: false, definition.Location);

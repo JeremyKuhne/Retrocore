@@ -88,10 +88,10 @@ public sealed partial class LanguageAnalysisTests
             });
 
             JsonNode? edit = actions?[0]?["edit"]?["changes"]?[uri.Text]?[0];
-            edit?["newText"]?.GetValue<string>().Should().Be("Iob::COMMAND");
+            (edit?["newText"]?.GetValue<string>()).Should().Be("Iob::COMMAND");
 
             Hover? hover = await new HoverHandler(workspace, new BasicDocuments(client)).Handle(at);
-            hover?.Contents.Value.Should().Contain("`IBCMD` is a historical name of `Iob::COMMAND`.");
+            (hover?.Contents.Value).Should().Contain("`IBCMD` is a historical name of `Iob::COMMAND`.");
 
             List<CompletionItem> completions = await new CompletionHandler(workspace, new BasicDocuments(client))
                 .Handle(Request(uri, use, column));

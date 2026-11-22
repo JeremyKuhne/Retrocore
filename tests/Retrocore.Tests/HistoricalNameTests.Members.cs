@@ -99,8 +99,8 @@ public sealed partial class HistoricalNameTests
 
         DocumentationResolver resolver = new(set) { Bibliography = DocumentationBibliography.Parse(Bibliography) };
         DocumentationTopic echo = Required(set.Find("Echo"));
-        resolver.Resolve(echo, "IBCMD").Topic?.Name.Should().Be("Iob::COMMAND");
-        resolver.Resolve(echo, "IBCRTS").Topic?.Name.Should().Be("Command::READ");
+        Required(resolver.Resolve(echo, "IBCMD").Topic).Name.Should().Be("Iob::COMMAND");
+        Required(resolver.Resolve(echo, "IBCRTS").Topic).Name.Should().Be("Command::READ");
         resolver.Check().Should().BeEmpty();
     }
 
@@ -123,8 +123,8 @@ public sealed partial class HistoricalNameTests
 
         DocumentationResolver resolver = new(set) { Bibliography = DocumentationBibliography.Parse(Bibliography) };
         DocumentationTopic echo = Required(set.Find("Echo"));
-        resolver.Resolve(echo, "IBSTAT").Topic?.Name.Should().Be("Iob::STATUS");
-        resolver.Resolve(echo, "Iob::COMMAND").Topic?.Name.Should().Be("Iob::COMMAND");
+        Required(resolver.Resolve(echo, "IBSTAT").Topic).Name.Should().Be("Iob::STATUS");
+        Required(resolver.Resolve(echo, "Iob::COMMAND").Topic).Name.Should().Be("Iob::COMMAND");
         resolver.Check().Should().BeEmpty();
     }
 
@@ -300,7 +300,7 @@ public sealed partial class HistoricalNameTests
             ;;   TYPE = the type
             ;;   COMMAND = the command
             ;;   VOLUME = the volume
-            ;;   STATUS = the status
+            ;;   status = the status
             .struct Iob
                 ;; The type, documented here.
                 TYPE .byte
@@ -316,7 +316,7 @@ public sealed partial class HistoricalNameTests
         new DocumentationResolver(set).Check().Select(diagnostic => diagnostic.Message).Should().BeEquivalentTo(
             "TYPE has its own documentation; remove it from Members:",
             "COMMAND has its own documentation; remove it from Members:",
-            "STATUS has its own documentation; remove it from Members:");
+            "status has its own documentation; remove it from Members:");
 
         DocumentationParser.Parse("""
             ;; A block.
@@ -368,6 +368,100 @@ public sealed partial class HistoricalNameTests
         module.TryResolve("IBSTAT", out long old).Should().BeTrue();
         old.Should().Be(1);
         module.TryResolve("IBCRTS", out _).Should().BeFalse();
+    }
+
+    /// <summary>
+    ///  The debugger resolves a label's and a <c>.set</c> variable's old names, the variable's to the value it had
+    ///  where it was documented, and an old name ahead of a scoped member's plain name, as code does; a name two
+    ///  definitions give resolves to neither.
+    /// </summary>
+    [TestMethod]
+    public void TheDebuggerResolvesOldNamesAsCodeDoes()
+    {
+        AssemblyResult result = Assemble("""
+                lda #STATUS
+                rts
+            ;; Prints.
+            ;; Also: COUT (TEST)
+            Print:
+                rts
+            ;; A count.
+            ;; Also: OLDCOUNT (TEST)
+            Counter .set 3
+            Counter .set 4
+            ;; An error code.
+            ;; Also: STATUS (TEST), SHARED (TEST)
+            ErrorCode = 9
+            ;; Another.
+            ;; Also: SHARED (TEST)
+            Other = 8
+
+            ;; A block.
+            .struct Iob
+                ;; The type.
+                TYPE .byte
+                ;; The status.
+                STATUS .byte
+            .endstruct
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+        result.Sections[0].Bytes.Span[..2].ToArray().Should().Equal(0xA9, 9);
+        result.HistoricalNames["OLDCOUNT"].Location?.Line.Should().Be(8);
+
+        SourceMapModule module = new(result, area: null);
+        module.TryResolve("COUT", out long print).Should().BeTrue();
+        print.Should().Be(0x1003);
+        module.TryResolve("OLDCOUNT", out long count).Should().BeTrue();
+        count.Should().Be(3);
+        module.TryResolve("STATUS", out long status).Should().BeTrue();
+        status.Should().Be(9);
+        module.TryResolve("SHARED", out _).Should().BeFalse();
+    }
+
+    /// <summary>
+    ///  A member that opens a nested type (<c>INNER .struct Inner</c>) takes its old names; a named type's own
+    ///  <c>Also:</c> names nothing, as a scope's does, and its hidden scope label is never published.
+    /// </summary>
+    [TestMethod]
+    public void TypesHaveNoOldNamesButTheirMembersDo()
+    {
+        AssemblyResult result = Assemble("""
+                lda #OINNER
+                rts
+
+            ;; An outer type.
+            .struct Outer
+                ;; The first byte.
+                FIRST .byte
+                ;; The nested part.
+                ;; Also: OINNER (TEST)
+                INNER .struct Inner
+                    ;; Deep inside it.
+                    DEEP .byte
+                .endstruct
+                ;; A nested type of its own.
+                ;; Also: OLDIN (TEST)
+                .struct Named
+                    ;; Its byte.
+                    BYTE .byte
+                .endstruct
+            .endstruct
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+        result.Sections[0].Bytes.Span[..2].ToArray().Should().Equal(0xA9, 1);
+        result.HistoricalNames.Keys.Should().Equal("OINNER");
+
+        Assemble("""
+            ;; A type.
+            ;; Also: OLDTYPE (TEST)
+            .struct Named
+                ;; Its byte.
+                BYTE .byte
+            .endstruct
+                lda #OLDTYPE
+            """).Diagnostics.Should().ContainSingle().Which.Message.Should().Contain("OLDTYPE");
     }
 
     // The probes set their own origin.

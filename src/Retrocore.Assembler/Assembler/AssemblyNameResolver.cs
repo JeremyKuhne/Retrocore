@@ -353,9 +353,12 @@ internal sealed partial class AssemblyNameResolver
                     string start = scope.Procedure ? scope.Prefix : scope.Qualify($"{_privatePrefix}start");
                     _definitions[index] = end;
                     // A structure's scope holds only constants; its size is the one the preprocessor gave the type.
-                    _sizes[scope.Prefix] = _source.TypeSizes?.TryGetValue(scope.Prefix, out long typeSize) == true
-                        ? typeSize.ToString(CultureInfo.InvariantCulture)
-                        : scope.Contiguous ? $"({end}-{start})" : "";
+                    // A structure's scope continued with code is in pieces like any other.
+                    _sizes[scope.Prefix] = !scope.Contiguous
+                        ? ""
+                        : _source.Statements[scope.Opening].TypeSize is { } typeSize
+                            ? typeSize.ToString(CultureInfo.InvariantCulture)
+                            : $"({end}-{start})";
 
                     scope = scope.Parent;
                     cheap = FreshContext();

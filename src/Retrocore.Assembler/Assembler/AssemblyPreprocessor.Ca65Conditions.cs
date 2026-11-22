@@ -43,10 +43,9 @@ internal sealed partial class AssemblyPreprocessor
 
         if (operation == ".IFBLANK") { return string.IsNullOrWhiteSpace(operand); }
 
-        // A .sizeof left for the resolver names a scope or procedure, whose size is known only once it is assembled.
-        bool? truth = AssemblyNameResolver.HasSizeReference(operand.AsMemory())
-            ? null
-            : Ca65Truth(Ca65CharacterExpression(operand));
+        // A size known only once the program is laid out, directly or through an equate, decides nothing here,
+        // even beside an operand that would decide a logical operator.
+        bool? truth = AwaitsLayoutSize(operand) ? null : Ca65Truth(Ca65CharacterExpression(operand));
 
         return truth ?? throw UnknownCondition();
     }

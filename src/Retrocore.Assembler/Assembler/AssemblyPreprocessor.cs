@@ -677,7 +677,11 @@ internal sealed partial class AssemblyPreprocessor
         if (AwaitsLayoutSize(node.Operand.Text))
         {
             _constants.Unset(name);
-            (_layoutSizes ??= [with(StringComparer.Ordinal)]).Add(name);
+            _layoutSizes ??= [with(StringComparer.Ordinal)];
+            _layoutSizes.Add(name);
+
+            // A .set variable's old name keeps the size it had here, so it waits for layout too.
+            if (snapshot is not null) { _layoutSizes.Add(snapshot); }
             return;
         }
 
@@ -735,7 +739,7 @@ internal sealed partial class AssemblyPreprocessor
         value = 0;
 
         // A scope's or procedure's size is known only once it is assembled.
-        if (AssemblyNameResolver.HasSizeReference(text.AsMemory()))
+        if (AwaitsLayoutSize(text))
         {
             Error($"{purpose} requires a constant known at this point in source order.", location);
             return false;

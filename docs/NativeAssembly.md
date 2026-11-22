@@ -840,7 +840,8 @@ only once it is assembled, as is that of a structure defined later. That `.sizeo
 wait for layout: in data, operands, `.assert`, and an equate, before or after what it names. Conditional
 assembly, `.repeat` counts and `.incbin` ranges are decided first, so they report such a size, directly or through
 an equate, as not yet known; `.ifconst`, `.ifnconst` and `.const` report it too rather than call it unknown. A
-continued scope is still refused. ca65 refuses `.sizeof` of anything defined later.
+continued scope is still refused. ca65 refuses `.sizeof` of anything defined later; Retrocore accepts it in both
+dialects.
 
 ```asm
 .cpu Mos6502

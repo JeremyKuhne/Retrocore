@@ -43,10 +43,12 @@ internal sealed partial class AssemblyPreprocessor
             }
 
             string qualified = ConstantQualified(_constantScope, name);
+            int emitted = _project.Statements.Count;
             if (name.Length != 0) { Emit(line, $".scope {name}"); }
             state.Types.Add(new(operation, name, qualified, name.Length == 0 ? start : 0, line.Location)
             {
-                Member = memberKey
+                Member = memberKey,
+                Scope = _project.Statements.Count > emitted ? _project.Statements[emitted] : null
             });
 
             return true;
@@ -71,7 +73,7 @@ internal sealed partial class AssemblyPreprocessor
             if (frame.Name.Length != 0)
             {
                 if (!state.Sizes.TryAdd(frame.Qualified, size)) { throw new AssemblyError(0, "Duplicate type size."); }
-                (_project.TypeSizes ??= [with(StringComparer.Ordinal)])[frame.Qualified] = size;
+                if (frame.Kind != ".ENUM" && frame.Scope is { } scope) { scope.TypeSize = size; }
                 Emit(line, ".endscope");
             }
 

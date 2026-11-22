@@ -86,7 +86,6 @@ internal static class MerlinFiles
             MemoryRegions = source.MemoryRegions,
             LinkerSymbols = source.LinkerSymbols,
             LabelSizes = source.LabelSizes,
-            TypeSizes = source.TypeSizes,
             SymbolAliases = source.SymbolAliases,
             MerlinOutput = source.MerlinOutput,
 

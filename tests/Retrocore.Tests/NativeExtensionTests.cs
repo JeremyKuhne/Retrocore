@@ -127,6 +127,30 @@ public class NativeExtensionTests
     }
 
     /// <summary>
+    ///  A structure defined later has its size inside an anonymous scope, and in the ca65 dialect, whose statements
+    ///  go through the linker.
+    /// </summary>
+    /// <param name="text">The source.</param>
+    /// <param name="ca65">Whether the source is in the ca65 dialect.</param>
+    [TestMethod]
+    [DataRow(".scope\n.byte .sizeof(Point)\n.struct Point\nfirst .byte\nsecond .word\n.endstruct\n.endscope", false)]
+    [DataRow(".scope\n.scope Inner\n.byte .sizeof(Point)\n.struct Point\nfirst .byte\nsecond .word\n.endstruct\n.endscope\n.endscope", false)]
+    [DataRow(".byte .sizeof(Point)\n.struct Point\nfirst .byte\nsecond .word\n.endstruct", true)]
+    public void LaterTypesHaveTheirSizeInEveryLayout(string text, bool ca65)
+    {
+        AssemblyResult result = new NativeAssembler().Assemble(
+            new AssemblySource(text, "main.asm"),
+            new AssemblyOptions(ProcessorVariant.Mos6502, origin: 0x1000, imageSize: 32)
+            {
+                Dialect = ca65 ? AssemblyDialect.Ca65 : AssemblyDialect.Native
+            });
+
+        result.Diagnostics.Should().BeEmpty();
+        ReadOnlySpan<byte> bytes = ca65 ? result.Files["output.bin"].Span : result.Sections[0].Bytes.Span;
+        bytes[0].Should().Be(3);
+    }
+
+    /// <summary>
     ///  Conditional assembly runs before a procedure is assembled, so its size, directly or through an equate, is not
     ///  yet known there, and neither is it unknown for good: <c>.ifconst</c> refuses it rather than choose a branch.
     /// </summary>
@@ -140,6 +164,8 @@ public class NativeExtensionTests
     [DataRow(".ifnconst NEXT", false, "Conditional requires a constant known at this point in source order.")]
     [DataRow(".ifconst .sizeof(Block)", false, "Conditional requires a constant known at this point in source order.")]
     [DataRow(".ifconst SIZE", true, "ca65 directive requires a constant known at this point.")]
+    [DataRow(".if 1 || .sizeof(Block) = 2", false, "Conditional requires a constant known at this point in source order.")]
+    [DataRow(".if 1 || NEXT = 2", false, "Conditional requires a constant known at this point in source order.")]
     public void ConditionsCannotUseAProcedureSize(string condition, bool ca65, string message)
     {
         AssemblyResult result = new NativeAssembler().Assemble(
@@ -152,6 +178,31 @@ public class NativeExtensionTests
             });
 
         result.Diagnostics.Select(diagnostic => diagnostic.Message).Should().Equal(message);
+    }
+
+    /// <summary>
+    ///  A variable's historical name keeps the procedure size it had when it was documented, so <c>.ifconst</c>
+    ///  refuses it too.
+    /// </summary>
+    [TestMethod]
+    public void AHistoricalNameOfAProcedureSizeIsNotYetKnown()
+    {
+        AssemblyResult result = Assemble("""
+            .proc Block
+            nop
+            nop
+            .endproc
+            ;; The width.
+            ;; Also: OLD (TEST)
+            Width .set .sizeof(Block)
+            Width .set 9
+            .ifconst OLD
+            .byte 1
+            .endif
+            """);
+
+        result.Diagnostics.Select(diagnostic => diagnostic.Message).Should().Equal(
+            "Conditional requires a constant known at this point in source order.");
     }
 
     /// <summary>

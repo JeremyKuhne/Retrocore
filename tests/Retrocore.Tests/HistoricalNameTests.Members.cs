@@ -528,6 +528,37 @@ public sealed partial class HistoricalNameTests
     }
 
     /// <summary>
+    ///  Where a <c>.using</c> names a type, a member's plain name reaches it, ahead of another definition's old name
+    ///  of the same spelling; a member's own old name still reaches it.
+    /// </summary>
+    [TestMethod]
+    public void UsingATypeReachesItsMembersFirst()
+    {
+        AssemblyResult result = Assemble("""
+            .using Iob
+                lda #STATUS
+                lda #IBCMD
+                rts
+
+            ;; An error code.
+            ;; Also: STATUS (TEST)
+            ErrorCode = 9
+
+            ;; A block.
+            .struct Iob
+                ;; The command.
+                ;; Also: IBCMD (TEST)
+                COMMAND .byte
+                ;; The status.
+                STATUS .byte
+            .endstruct
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+        result.Sections[0].Bytes.Span[..4].ToArray().Should().Equal(0xA9, 1, 0xA9, 0);
+    }
+
+    /// <summary>
     ///  The debugger resolves the old names of definitions inside an anonymous scope.
     /// </summary>
     [TestMethod]

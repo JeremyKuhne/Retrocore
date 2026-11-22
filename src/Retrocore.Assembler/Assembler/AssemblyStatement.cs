@@ -116,4 +116,10 @@ public sealed class AssemblyStatement
     ///  Gets whether the statement is a <c>.scope</c> line lowered to the scope's hidden start label.
     /// </summary>
     internal bool OpensScope { get; init; }
+
+    /// <summary>
+    ///  Gets or sets the size of the structure or union whose fields a <c>.scope</c> line opens, for <c>.sizeof</c> of
+    ///  one defined later in source: the scope holds only constants, so it has no laid-out size.
+    /// </summary>
+    internal long? TypeSize { get; set; }
 }

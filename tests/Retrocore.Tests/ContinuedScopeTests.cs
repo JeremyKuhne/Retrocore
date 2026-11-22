@@ -96,6 +96,8 @@ public sealed class ContinuedScopeTests
     [DataRow(".scope A\nX:\n    rts\n.endscope\n.scope A continued\nX:\n    rts\n.endscope\n", "Duplicate symbol 'A::X'.")]
     [DataRow(".scope A\n.endscope\n.scope A\n.endscope\n", "Duplicate scope 'A'.")]
     [DataRow(".scope A\n    rts\n.endscope\n.scope A continued\n    rts\n.endscope\n    lda #.sizeof(A)\n", ".sizeof requires a contiguous scope or procedure: no section or origin changes, and not a continued scope.")]
+    [DataRow(".scope A\n    rts\n.endscope\n.scope A continued\n    rts\n.endscope\nSIZE = .sizeof(A)\n    lda #SIZE\n", ".sizeof requires a contiguous scope or procedure: no section or origin changes, and not a continued scope.")]
+    [DataRow(".byte .sizeof(Point)\n.struct Point\nfirst .byte\n.endstruct\n.scope Point continued\n    rts\n.endscope\n", ".sizeof requires a contiguous scope or procedure: no section or origin changes, and not a continued scope.")]
     public void MistakesAreReported(string text, string message)
     {
         Assemble(text).Diagnostics.Select(diagnostic => diagnostic.Message).Should().Contain(message);

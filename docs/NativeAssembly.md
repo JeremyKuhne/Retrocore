@@ -197,7 +197,7 @@ A `.scope` or `.proc` line cannot carry a label.
 whose code is spread among other code, as in a ROM whose routines sit at fixed addresses. The pieces are one
 scope: a name defined in any piece is visible in all of them, `Name::Member` reaches it from outside, and a name
 defined in two pieces is a duplicate. A plain second `.scope Name` is still an error, and a `.proc` cannot be
-continued. A scope in pieces has no one size, so `.sizeof` refuses it. Retrocore's own syntax: ca65 has no
+continued. A scope in pieces has no one size, so `.sizeof` refuses it, in an equate as anywhere else. Retrocore's own syntax: ca65 has no
 equivalent.
 
 ```asm
@@ -833,6 +833,27 @@ Larger = .max(3, 7)             ; 7
 
 `.lobyte`, `.hibyte` and `.bankbyte` are part of [expressions](#operators) rather than functions, so they
 also work with values not yet known.
+
+A structure's or union's size is known as soon as it is defined, so after its definition `.sizeof` of it works
+everywhere, conditional assembly included. The size of a `.proc`, a `.scope` or a labeled statement is known
+only once it is assembled, as is that of a structure defined later. That `.sizeof` works wherever a value can
+wait for layout: in data, operands, `.assert`, and an equate, before or after what it names. Conditional
+assembly, `.repeat` counts and `.incbin` ranges are decided first, so they report such a size, directly or through
+an equate, as not yet known; `.ifconst`, `.ifnconst` and `.const` report it too rather than call it unknown. A
+continued scope is still refused. ca65 refuses `.sizeof` of anything defined later; Retrocore accepts it in both
+dialects.
+
+```asm
+.cpu Mos6502
+.org $0300
+FILE_CONTROL_SIZE = .sizeof(FileControl)   ; 3, before the procedure
+.proc FileControl
+Opcode:   .byte 0
+Buffer:   .word 0
+.endproc
+        .byte FILE_CONTROL_SIZE
+        .assert FILE_CONTROL_SIZE = 3
+```
 
 ## Includes
 

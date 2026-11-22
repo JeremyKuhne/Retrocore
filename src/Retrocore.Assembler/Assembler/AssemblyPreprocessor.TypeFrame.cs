@@ -32,6 +32,11 @@ internal sealed partial class AssemblyPreprocessor
         internal string Qualified { get; } = qualified;
 
         /// <summary>
+        ///  Gets or sets the <c>.scope</c> statement that holds a named type's fields.
+        /// </summary>
+        internal AssemblyStatement? Scope { get; set; }
+
+        /// <summary>
         ///  Gets the initial offset.
         /// </summary>
         internal long Start { get; } = start;

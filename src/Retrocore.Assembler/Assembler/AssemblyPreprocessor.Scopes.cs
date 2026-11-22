@@ -199,6 +199,27 @@ internal sealed partial class AssemblyPreprocessor
         }
     }
 
+    /// <summary>
+    ///  Determines whether an expression uses a size known only once the program is laid out: a <c>.sizeof</c> the
+    ///  preprocessor left for the resolver, or a constant defined by one.
+    /// </summary>
+    /// <param name="text">The expression.</param>
+    /// <returns>Whether the expression's value waits for layout.</returns>
+    private bool AwaitsLayoutSize(string text)
+    {
+        if (AssemblyNameResolver.HasSizeReference(text.AsMemory())) { return true; }
+        if (_layoutSizes is null) { return false; }
+        AssemblyNameReferences references = new(text.AsMemory());
+        while (references.MoveNext())
+        {
+            ReadOnlySpan<char> token = references.Current.Span;
+            if (token[0] is '.' or ':' && !token.StartsWith("::", StringComparison.Ordinal)) { continue; }
+            if (_layoutSizes.Contains(ConstantName(references.Current.ToString()))) { return true; }
+        }
+
+        return false;
+    }
+
     private string ConstantExpression(string text)
     {
         bool plain = _constantScope.Length == 0 && _constantUsings is null && _historicalNames is null;

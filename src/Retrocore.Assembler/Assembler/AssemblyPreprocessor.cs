@@ -22,6 +22,9 @@ internal sealed partial class AssemblyPreprocessor
     private readonly Func<string, bool> _isMacro;
     private readonly AssemblySymbols _constants = new();
     private readonly HashSet<string> _defined = [with(StringComparer.Ordinal)];
+
+    // Constants whose value is a size known only once the program is laid out; see AwaitsLayoutSize.
+    private HashSet<string>? _layoutSizes;
     private readonly HashSet<string> _activeIncludes = [with(
         Path.DirectorySeparatorChar == '\\' ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal)];
     private int _visited;
@@ -664,8 +667,25 @@ internal sealed partial class AssemblyPreprocessor
         if (node.Kind is not (AssemblyStatementKind.Constant or AssemblyStatementKind.Variable))
         {
             _constants.Unset(name);
+            _layoutSizes?.Remove(name);
             return;
         }
+
+        // A scope's or procedure's size is known only once it is assembled, so an equate of one, directly or through
+        // another such equate, has no value yet; the resolver lowers its .sizeof as it does in data, and the compiler
+        // evaluates it. The name is remembered so that .ifconst and .const refuse it rather than call it unknown.
+        if (AwaitsLayoutSize(node.Operand.Text))
+        {
+            _constants.Unset(name);
+            _layoutSizes ??= [with(StringComparer.Ordinal)];
+            _layoutSizes.Add(name);
+
+            // A .set variable's old name keeps the size it had here, so it waits for layout too.
+            if (snapshot is not null) { _layoutSizes.Add(snapshot); }
+            return;
+        }
+
+        _layoutSizes?.Remove(name);
 
         _nameAmbiguity = null;
         try
@@ -717,6 +737,14 @@ internal sealed partial class AssemblyPreprocessor
     private bool Constant(string text, AssemblyLocation location, out long value, string purpose = "Conditional")
     {
         value = 0;
+
+        // A scope's or procedure's size is known only once it is assembled.
+        if (AwaitsLayoutSize(text))
+        {
+            Error($"{purpose} requires a constant known at this point in source order.", location);
+            return false;
+        }
+
         _nameAmbiguity = null;
         try
         {

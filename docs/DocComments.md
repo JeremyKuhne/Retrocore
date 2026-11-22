@@ -67,7 +67,8 @@ Rules:
   documents it, with every section a definition can have, `Also:` among them. Its topic has the name the
   assembler gives the member: the type's (`Iob::COMMAND`), the members of an anonymous `.union` or `.struct`
   inside a named type being the named type's, and those of a named nested type being in its scope too
-  (`Outer::Inner::FIELD`).
+  (`Outer::Inner::FIELD`). A block above a member that opens a nested type (`INNER .struct Inner`) documents the
+  member, `Outer::INNER`; the nested type has no topic of its own.
 - **Headings over a group** are plain `;` comments. A `;;` block above a definition that has its own trailing
   `;;` comment is a lint error, because it reads as the group's heading but would document only the first
   definition:
@@ -250,8 +251,9 @@ CharacterOut = $FDED
   code does, for definitions earlier in the source (`.ifdef COUT`, `.if COUT = $FDED`).
 - **What can have one:** a label, constant or `.proc` entry, or a member of a `.struct`, `.union` or `.enum`,
   outside a macro's body. An `Also:` on a `.scope`
-  or a named `.struct`, `.union` or `.enum` does not name it (`OLD::Member` does not resolve), though one on a
-  member that opens a nested type (`INNER .struct Inner`) names the member, one inside a macro's body is ignored, and `.sizeof`
+  or a named `.struct`, `.union` or `.enum` is a lint error and names nothing (`OLD::Member` does not resolve);
+  one on a member that opens a nested type (`INNER .struct Inner`) names the member. A member's own name may be
+  its old name too (`;; Also: COMMAND (DOS33)` on `Iob::COMMAND`), since it does not resolve outside its type. one inside a macro's body is ignored, and `.sizeof`
   takes only a `.proc`'s current name. An old name for a `.set` variable is the value it had where it was
   documented, not where code uses it. Two definitions in different branches of conditional assembly (one
   model's routine and another's) can share an old name: each build has only one of them.

@@ -342,6 +342,13 @@ public sealed partial class DocumentationResolver
 
     private void CheckAlso(DocumentationTopic topic, DocumentationSection section, Action<string, int> warn)
     {
+        // A scope or a named type has no address or value for an old name to reach: its members do.
+        if (topic.Kind is DocumentationKind.Scope or DocumentationKind.Struct or DocumentationKind.Enum)
+        {
+            warn($"Also: {topic.Name} is a scope or type, which an old name cannot reach; give old names to its members.", section.Line);
+            return;
+        }
+
         foreach (string item in section.Items)
         {
             if (DocumentationAlso.Parse(item) is not { } also)
@@ -363,7 +370,8 @@ public sealed partial class DocumentationResolver
                 }
             }
 
-            if (also.Name == LastName(topic.Name))
+            // A member's own name does not reach it outside its type, so it may be the member's old name too.
+            if (also.Name == (topic.Kind == DocumentationKind.Member ? topic.Name : LastName(topic.Name)))
             {
                 warn($"Also: {also.Name} is already the definition's name.", section.Line);
             }

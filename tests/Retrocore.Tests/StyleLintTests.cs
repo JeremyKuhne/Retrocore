@@ -246,7 +246,9 @@ public sealed class StyleLintTests
                 .struct Inner
                     ;; Inside it.
                     DEEP .byte
+                    ; More fields go here.
                 .endstruct
+                ; Reserved.
             .endstruct
 
             ;; The commands.
@@ -296,6 +298,14 @@ public sealed class StyleLintTests
                 ;; One.
                 ONE .byte
                 .endunion
+
+            ;; A type.
+            .struct Marked
+                .union ;; Not a member.
+                    ;; A member.
+                    MEMBER .byte
+                .endunion
+            .endstruct
             """;
 
         Problems(text).Should().BeEquivalentTo(
@@ -303,7 +313,9 @@ public sealed class StyleLintTests
             "11: Indent this line 8 columns: a type's members one level in, a nested type's one more.",
             "14: Indent this line 4 columns: a type's members one level in, a nested type's one more.",
             "18: Put definitions, labels and block directives at column 0.",
-            "21: Put definitions, labels and block directives at column 0.");
+            "21: Put definitions, labels and block directives at column 0.",
+            "25: Put ;; documentation above the definition, not after it.",
+            "25: A trailing documentation comment must follow a definition, such as a constant or member.");
     }
 
     // The problems the editor reports for one strict file, as "line: message" with 1-based lines.

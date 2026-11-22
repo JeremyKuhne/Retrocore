@@ -685,7 +685,8 @@ Size = .sizeof(Point)          ; 4
 `.struct` inside a named type opens no scope of its own: its members are the named type's, at offsets that go on
 from the members before it. A named type nested in another is a scope inside its parent's: its members are
 `Outer::Inner::MEMBER`, at offsets from the nested type's own start, and it takes its size in the parent. A field
-reserved with `.tag Type` is the containing type's member, and the tagged type's fields are added to it.
+reserved with `.tag Type` is the containing type's member, the size of the tagged type; the tagged type's fields
+keep their own names, so an offset inside it is a sum (`Record::WHERE + Pair::HIGH`).
 
 ```asm
 .struct Pair

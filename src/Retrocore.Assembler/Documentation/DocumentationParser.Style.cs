@@ -30,6 +30,12 @@ public static partial class DocumentationParser
         ".enum", ".endenum"
     ];
 
+    // The lines that end a block, before which a comment may describe the code it follows.
+    private static readonly string[] s_blockEnds =
+    [
+        ".endproc", ".endscope", ".endmacro", ".endrepeat", ".endif", ".else", ".endstruct", ".endunion", ".endenum"
+    ];
+
     /// <summary>
     ///  Gets whether a source opts in to the style guide's checks, with <c>; retrocore: style=strict</c> on its
     ///  first line.
@@ -73,9 +79,9 @@ public static partial class DocumentationParser
                 continue;
             }
 
-            // A member of a type may have a trailing ;; comment instead of a block above it.
+            // A member of a type may have a trailing ;; comment instead of a block above it; a type's own lines may not.
             (_, string typeDirective, _) = TypeLine(trimmed);
-            if (comment is not null && comment.StartsWith(Marker, StringComparison.Ordinal) && typeDepth == 0)
+            if (comment is not null && comment.StartsWith(Marker, StringComparison.Ordinal) && (typeDepth == 0 || typeDirective.Length != 0))
             {
                 Warn("Put ;; documentation above the definition, not after it.", index);
             }
@@ -178,7 +184,7 @@ public static partial class DocumentationParser
             allowed.Add(Indentation(lines[next + 1]));
         }
 
-        if (Directive(code) is ".endproc" or ".endscope" or ".endmacro" or ".endrepeat" or ".endif" or ".else")
+        if (s_blockEnds.Contains(Directive(code)))
         {
             for (int previous = index - 1; previous >= 0; previous--)
             {

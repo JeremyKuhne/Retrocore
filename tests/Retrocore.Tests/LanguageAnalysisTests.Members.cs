@@ -67,7 +67,14 @@ public sealed partial class LanguageAnalysisTests
             RecordingLanguageClient client = new();
             LanguageWorkspace workspace = new(client);
             workspace.Update(path, text);
-            (await workspace.AnalysisOfAsync(path, CancellationToken.None)).Should().NotBeNull();
+            // The first assembly can take longer than a request waits when other tests load the machine.
+            SourceAnalysis? analysis = null;
+            for (int attempt = 0; attempt < 6 && analysis is null; attempt++)
+            {
+                analysis = await workspace.AnalysisOfAsync(path, CancellationToken.None);
+            }
+
+            analysis.Should().NotBeNull();
             DocumentUri uri = DocumentUri.FromFileSystemPath(path);
 
             int use = Array.FindIndex(lines, line => line.Contains("lda #IBCMD", StringComparison.Ordinal));

@@ -238,9 +238,10 @@ public sealed partial class HistoricalNameTests
     }
 
     /// <summary>
-    ///  A member's block gets the checks any definition's does: the <c>Also:</c> form and documents, its own name,
-    ///  another definition's name, and an old name another member or definition has too. Members of the same plain
-    ///  name in two types do not clash.
+    ///  A member's block gets the checks any definition's does: the <c>Also:</c> form and documents, another
+    ///  definition's name, and an old name another member or definition has too. A member's own plain name may be
+    ///  its old name, since it does not resolve outside the type, and members of the same plain name in two types do
+    ///  not clash.
     /// </summary>
     [TestMethod]
     public void MembersAlsoSectionsAreChecked()
@@ -277,7 +278,6 @@ public sealed partial class HistoricalNameTests
 
         DocumentationResolver resolver = new(set) { Bibliography = DocumentationBibliography.Parse(Bibliography) };
         resolver.Check().Select(diagnostic => diagnostic.Message).Should().BeEquivalentTo(
-            "Also: COMMAND is already the definition's name.",
             "Also: Other is also a definition, which code reaches instead of Iob::COMMAND.",
             "Also: no document 'NOPE' in the bibliography.",
             "Also: say which document PLAIN comes from, as 'PLAIN (A2RM)'.",
@@ -426,7 +426,7 @@ public sealed partial class HistoricalNameTests
     [TestMethod]
     public void TypesHaveNoOldNamesButTheirMembersDo()
     {
-        AssemblyResult result = Assemble("""
+        const string text = """
                 lda #OINNER
                 rts
 
@@ -447,11 +447,15 @@ public sealed partial class HistoricalNameTests
                     BYTE .byte
                 .endstruct
             .endstruct
-            """);
+            """;
 
+        AssemblyResult result = Assemble(text);
         result.Diagnostics.Should().BeEmpty();
         result.Sections[0].Bytes.Span[..2].ToArray().Should().Equal(0xA9, 1);
         result.HistoricalNames.Keys.Should().Equal("OINNER");
+        Required(Set(text).Find("Outer")).Primary.Members.Should().Equal("FIRST", "INNER", "Named");
+        new DocumentationResolver(Set(text)).Check().Select(diagnostic => diagnostic.Message).Should().Equal(
+            "Also: Outer::Named is a scope or type, which an old name cannot reach; give old names to its members.");
 
         Assemble("""
             ;; A type.
@@ -462,6 +466,58 @@ public sealed partial class HistoricalNameTests
             .endstruct
                 lda #OLDTYPE
             """).Diagnostics.Should().ContainSingle().Which.Message.Should().Contain("OLDTYPE");
+    }
+
+    /// <summary>
+    ///  A member's own plain name may be its old name, which code outside the type reaches it by.
+    /// </summary>
+    [TestMethod]
+    public void MembersOwnNamesCanBeOldNames()
+    {
+        const string text = """
+                lda #COMMAND
+                rts
+
+            ;; A block.
+            .struct Iob
+                ;; The type.
+                TYPE .byte
+                ;; The command.
+                ;; Also: COMMAND (TEST)
+                COMMAND .byte
+            .endstruct
+            """;
+
+        AssemblyResult result = Assemble(text);
+        result.Diagnostics.Should().BeEmpty();
+        result.Sections[0].Bytes.Span[..2].ToArray().Should().Equal(0xA9, 1);
+        DocumentationSet set = Set(text);
+        DocumentationResolver resolver = new(set) { Bibliography = DocumentationBibliography.Parse(Bibliography) };
+        resolver.Check().Should().BeEmpty();
+    }
+
+    /// <summary>
+    ///  Definitions inside an anonymous scope keep their old names: only a type's hidden scope label is passed over.
+    /// </summary>
+    [TestMethod]
+    public void AnonymousScopesKeepOldNames()
+    {
+        AssemblyResult result = Assemble("""
+                jmp OLDX
+            .scope
+            ;; Inner.
+            ;; Also: OLDX (TEST)
+            Inner:
+                lda #OLDK
+                rts
+            ;; A constant.
+            ;; Also: OLDK (TEST)
+            KONST = 7
+            .endscope
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+        result.Sections[0].Bytes.Span[..6].ToArray().Should().Equal(0x4C, 0x03, 0x10, 0xA9, 7, 0x60);
     }
 
     // The probes set their own origin.

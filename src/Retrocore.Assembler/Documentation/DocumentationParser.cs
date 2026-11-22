@@ -361,7 +361,8 @@ public static partial class DocumentationParser
     }
 
     // A type's members: its own, and those of the anonymous types nested in it, which the assembler puts in the
-    // type's scope. A named nested type is a member, and its own members are in its scope.
+    // type's scope. A named nested type is a member (by its member's name when one opens it), and its own members are
+    // in its scope.
     private static List<string> Members(string[] lines, int target)
     {
         List<string> members = [];
@@ -385,7 +386,7 @@ public static partial class DocumentationParser
             if (word is ".enum" or ".struct" or ".union")
             {
                 if (direct && member is not null) { members.Add(member); }
-                if (direct && name.Length != 0) { members.Add(name); }
+                if (direct && member is null && name.Length != 0) { members.Add(name); }
                 nested.Add(name.Length != 0);
                 if (name.Length != 0) { named++; }
                 continue;

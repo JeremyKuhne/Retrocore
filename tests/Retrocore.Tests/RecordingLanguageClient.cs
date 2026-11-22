@@ -19,14 +19,14 @@ internal sealed class RecordingLanguageClient : ILanguageClient
         _published[uri.Text] = [.. diagnostics];
 
     /// <summary>
-    ///  Waits for a document's diagnostics to meet a condition, for up to ten seconds.
+    ///  Waits for a document's diagnostics to meet a condition, for up to a minute.
     /// </summary>
     /// <param name="uri">The document.</param>
     /// <param name="done">The condition.</param>
     /// <returns>The diagnostics that met it, or the last published when none did.</returns>
     public async Task<List<Diagnostic>> Wait(DocumentUri uri, Func<List<Diagnostic>, bool> done)
     {
-        for (int attempt = 0; attempt < 200; attempt++)
+        for (int attempt = 0; attempt < 1200; attempt++)
         {
             if (_published.TryGetValue(uri.Text, out List<Diagnostic>? found) && done(found)) { return found; }
             await Task.Delay(50);

@@ -166,77 +166,23 @@ internal sealed partial class LanguageWorkspace
         if (current.Count == 0) { return; }
         foreach (string member in analysis.Members)
         {
-            string[] lines = analysis.LinesOf(member);
-            bool inMacro = false;
-            for (int line = 0; line < lines.Length; line++)
+            foreach ((int line, int start, string name) in SourceText.CodeNames(analysis.LinesOf(member)))
             {
-                int comment = SourceText.CommentStart(lines[line]);
-                string code = comment < 0 ? lines[line] : lines[line][..comment];
+                if (!current.TryGetValue(name, out string? replacement) || replacement is null) { continue; }
 
-                // A macro's body names its parameters, which may share a historical name.
-                string directive = code.TrimStart();
-                if (directive.StartsWith(".macro", StringComparison.OrdinalIgnoreCase)) { inMacro = true; }
-                if (directive.StartsWith(".endmacro", StringComparison.OrdinalIgnoreCase))
+                // A name the line's scopes or .using directives define binds there, not to the historical name.
+                if (analysis.Bound(name, member, line) is not null) { continue; }
+                if (!byFile.TryGetValue(member, out List<Diagnostic>? list)) { byFile[member] = list = []; }
+                list.Add(new Diagnostic
                 {
-                    inMacro = false;
-                    continue;
-                }
-
-                if (inMacro) { continue; }
-
-                // A .using line names scopes, not symbols.
-                if (code.TrimStart().StartsWith(".using", StringComparison.OrdinalIgnoreCase)) { continue; }
-                foreach ((int start, string name) in Words(code))
-                {
-                    if (!current.TryGetValue(name, out string? replacement) || replacement is null) { continue; }
-
-                    // A name the line's scopes or .using directives define binds there, not to the historical name.
-                    if (analysis.Bound(name, member, line) is not null) { continue; }
-                    if (!byFile.TryGetValue(member, out List<Diagnostic>? list)) { byFile[member] = list = []; }
-                    list.Add(new Diagnostic
-                    {
-                        Range = new LspRange(line, start, line, start + name.Length),
-                        Severity = DiagnosticSeverity.Information,
-                        Code = HistoricalNameCode,
-                        Source = "retrocore docs",
-                        Message = $"{name} is a historical name of {replacement}.",
-                        Data = new JsonObject { ["replacement"] = replacement }
-                    });
-                }
+                    Range = new LspRange(line, start, line, start + name.Length),
+                    Severity = DiagnosticSeverity.Information,
+                    Code = HistoricalNameCode,
+                    Source = "retrocore docs",
+                    Message = $"{name} is a historical name of {replacement}.",
+                    Data = new JsonObject { ["replacement"] = replacement }
+                });
             }
-        }
-    }
-
-    // The names in a line of code, with their columns, but not a label the line defines at its start.
-    private static IEnumerable<(int Start, string Name)> Words(string code)
-    {
-        int index = 0;
-        while (index < code.Length)
-        {
-            if (code[index] is '"' or '\'')
-            {
-                // Skip a quoted string or character.
-                char quote = code[index];
-                int close = code.IndexOf(quote, index + 1);
-                index = close < 0 ? code.Length : close + 1;
-                continue;
-            }
-
-            if (!SourceText.IsNameCharacter(code[index]) || (index > 0 && SourceText.IsNameCharacter(code[index - 1])))
-            {
-                index++;
-                continue;
-            }
-
-            int end = index;
-            while (end < code.Length && SourceText.IsNameCharacter(code[end])) { end++; }
-            bool qualified = index >= 2 && code[index - 1] == ':' && code[index - 2] == ':';
-            if (index != 0 && !qualified && !char.IsAsciiDigit(code[index]) && code[index - 1] != '$')
-            {
-                yield return (index, code[index..end]);
-            }
-
-            index = end;
         }
     }
 

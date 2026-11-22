@@ -190,6 +190,7 @@ internal sealed partial class AssemblyPreprocessor
         {
             long? found = null;
             string? foundScope = null;
+            string? foundType = null;
             for (int at = 0; at < directive.Names.Length; at++)
             {
                 if ((directive.Bound[at] ?? UsedScope(directive.Names[at], directive.Scope)) is not { } scope
@@ -199,12 +200,14 @@ internal sealed partial class AssemblyPreprocessor
                 }
 
                 MarkUsed(directive, at);
+                string type = ConstantQualified(scope, name);
                 if (found is null)
                 {
                     found = size;
                     foundScope = directive.Names[at];
+                    foundType = type;
                 }
-                else
+                else if (!string.Equals(foundType, type, StringComparison.Ordinal))
                 {
                     _nameAmbiguity = $"'{name}' is in both {foundScope} and {directive.Names[at]}; qualify it.";
                     return null;

@@ -858,6 +858,50 @@ public sealed class UsingTests
     }
 
     /// <summary>
+    ///  Two spellings of one scope in a <c>.using</c> name one type, so a condition on its size is not ambiguous.
+    /// </summary>
+    [TestMethod]
+    public void OneScopeSpelledTwiceGivesOneType()
+    {
+        AssemblyResult result = Assemble("""
+            .scope A
+            .struct T
+                X .byte
+                Y .byte
+            .endstruct
+            .endscope
+            .using A, ::A
+            .if .sizeof(T) = 2
+                nop
+            .endif
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+        result.Sections[0].Bytes.Span[..1].ToArray().Should().Equal(0xEA);
+    }
+
+    /// <summary>
+    ///  The historical-name hint does not look in a type's body, whose names are the type's own members.
+    /// </summary>
+    [TestMethod]
+    public void TypeMembersAreNotHistoricalNames()
+    {
+        string[] lines =
+        [
+            "Thing = 1",
+            ".struct Point",
+            "    Width .byte",
+            ".endstruct",
+            ".enum Color",
+            "    Black",
+            ".endenum",
+            "    lda #Width"
+        ];
+
+        SourceText.CodeNames(lines).Should().Equal([(7, 4, "lda"), (7, 9, "Width")]);
+    }
+
+    /// <summary>
     ///  In the editor, a root name only a skipped conditional branch defines does not hide the name a
     ///  <c>.using</c> brings in, as it does not in the assembler.
     /// </summary>

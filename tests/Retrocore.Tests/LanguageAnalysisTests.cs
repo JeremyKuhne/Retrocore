@@ -470,6 +470,48 @@ public sealed partial class LanguageAnalysisTests
     }
 
     /// <summary>
+    ///  A folder beside a source that is deleted, or replaced by a file, after it was listed, as a build or a cleanup
+    ///  can do while the language server looks for the source's root, has no sources rather than failing the
+    ///  search; the root is still found through the folders that remain.
+    /// </summary>
+    [TestMethod]
+    public void VanishedFoldersDoNotStopTheRootSearch()
+    {
+        string folder = Directory.CreateTempSubdirectory("retrocore-roots").FullName;
+        try
+        {
+            string library = Directory.CreateDirectory(Path.Join(folder, "lib")).FullName;
+            string program = Directory.CreateDirectory(Path.Join(folder, "program")).FullName;
+            string gone = Directory.CreateDirectory(Path.Join(folder, "gone")).FullName;
+            string included = Path.Join(library, "Library.asm");
+            string root = Path.Join(program, "Main.asm");
+            File.WriteAllText(included, "    rts\n");
+            File.WriteAllText(root, ".include \"../lib/Library.asm\"\n");
+
+            // The folders as they were listed: one is deleted before its files are read, and another is replaced by a
+            // file of the same name.
+            string replaced = Directory.CreateDirectory(Path.Join(folder, "replaced")).FullName;
+            List<string> listed = [library, gone, replaced, program];
+            Directory.Delete(gone);
+            Directory.Delete(replaced);
+            File.WriteAllText(replaced, "");
+
+            SourceIncludes.SourcesIn(gone).Should().BeEmpty();
+            SourceIncludes.SourcesIn(replaced).Should().BeEmpty();
+
+            // A source listed and then replaced by a folder of the same name includes nothing.
+            string folderNamedLikeASource = Directory.CreateDirectory(Path.Join(folder, "Other.asm")).FullName;
+            SourceIncludes.IncludesOf(folderNamedLikeASource).Should().BeEmpty();
+            SourceIncludes.RootOf(included, listed).Should().Be(root);
+            SourceIncludes.RootOf(included).Should().Be(root);
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    /// <summary>
     ///  The name under the cursor includes scope qualifiers and cheap locals, but not a label's colon.
     /// </summary>
     /// <param name="line">The line.</param>

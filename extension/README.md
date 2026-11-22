@@ -31,8 +31,8 @@ settings automatically.
 MACRO-10 sources, including the retained AppleSoft source (`m6502.asm` and
 its `applesoft.mac` overlay), can use **MACRO-10 Assembly** (`retrocore-macro10`)
 instead: it is the same assembly language, highlighting and language server,
-with its own red `MAC` file icon. AppleSoft's SDK default is the native,
-documented listing; set `basicSource` to `macro10` in an Apple II launch to
+with its own red `MAC` file icon. AppleSoft and PET BASIC default to native,
+documented listings; set `basicSource` to `macro10` in an Apple II or PET launch to
 build and debug with the MACRO-10 source. The BASIC
 languages show a green `BAS` icon. Language icons appear only where your file
 icon theme has none of its own for the file.
@@ -218,8 +218,10 @@ includes and macros:
   the host, so `COUT` finds the Monitor's.
 
 Each file is assembled as its own root unless an assembly already analysed
-includes it; a MACRO-10 base such as `m6502.asm` is analysed through the overlay
-beside it that names it. If the root has a same-named `.cfg` beside it, the server
+includes it; a MACRO-10 base such as `m6502.asm` is analysed through an overlay
+that names it. The shared Microsoft BASIC sources in `src/Retrocore.Basic/Roms`
+are found from the machine ROM roots across projects, as they are from the SDK's
+sibling folders. If the root has a same-named `.cfg` beside it, the server
 uses that linker configuration when assembling and reanalyzes on open-document
 edits and watched workspace file changes (subject to `files.watcherExclude`).
 This is an editor-only convenience: CLI builds and debug launches require an
@@ -595,6 +597,12 @@ in an Apple II launch to assemble and debug Microsoft's `m6502.asm` (MIT, with i
 `LICENSE` in `Microsoft6502Basic`) plus `applesoft.mac`, Apple's changes as an overlay. `AppleSoftTests` pin
 the II Plus and both IIe ROMs by digest, and compare against your dumps when
 `RETROCORE_IIE_ROMS` is set.
+
+The shared sources live in `src/Retrocore.Basic/Roms/Microsoft6502Basic` in the
+repository and `Sdk/Roms/Microsoft6502Basic` when shipped. The debug host resolves
+both layouts, including when assembling a repository source directly; see the
+[shared-source README](../src/Retrocore.Basic/Roms/Microsoft6502Basic/README.md)
+for using the plain file resolver on the repository's native root.
 
 With the Monitor, the internal firmware and the video ROM
 (`Roms/System/CharacterGenerator.asm`, the font for either model, MouseText included),
@@ -1106,11 +1114,12 @@ by:
   its own DOS 2.0 and controller ROMs, MAME's `c4040` set, and a 2040 DOS 1.2, its
   `c2040` set, from `driveRomDirectory`, else `romDirectory` or `RETROCORE_PET_ROMS`.
 
-BASIC, the screen editor and the kernal are the SDK sources `Basic1.mac`,
-`Basic2.mac` and `Basic4.mac`, `Editor1.asm`, `Editor2.asm` and `Editor4.asm`, and
+BASIC, the screen editor and the kernal are the SDK sources `Basic1.asm`,
+`Basic2.asm` and `Basic4.asm`, `Editor1.asm`, `Editor2.asm` and `Editor4.asm`, and
 `Kernal1.asm`, `Kernal2.asm` and `Kernal4.asm`, which assemble byte-identically to the
 chips, so the PET needs no external files, and debugging steps into the sources as ROM
-modules. Dumps from `romDirectory` or `RETROCORE_PET_ROMS`, MAME's `pet2001`,
+modules. `basicSource: "macro10"` instead selects the original Microsoft source with the
+PET's `Basic1.mac`, `Basic2.mac` or `Basic4.mac` overlay. Dumps from `romDirectory` or `RETROCORE_PET_ROMS`, MAME's `pet2001`,
 `pet2001n`, `pet4016` and `pet4032b` chips, in the folder or its folder for the set,
 replace the sources' ROMs when given.
 

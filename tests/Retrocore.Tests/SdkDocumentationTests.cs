@@ -8,6 +8,7 @@ using Retrocore.Debug;
 using Retrocore.Debug.Language;
 using Retrocore.Documentation;
 using Retrocore.Machines.Apple2;
+using Retrocore.Machines.Commodore;
 
 namespace Retrocore.Tests;
 
@@ -71,6 +72,33 @@ public class SdkDocumentationTests
 
         var problems = resolver.Check();
         problems.Should().BeEmpty($"AppleSoft documentation must resolve for {model}");
+    }
+
+    /// <summary>
+    ///  Each native PET BASIC listing resolves its documentation against its own build.
+    /// </summary>
+    /// <param name="model">The PET model.</param>
+    /// <param name="original">Whether BASIC 1 or 4 uses its original first chip.</param>
+    [TestMethod]
+    [DataRow(PetModel.Pet2001, false)]
+    [DataRow(PetModel.Pet2001, true)]
+    [DataRow(PetModel.Pet2001Basic2, false)]
+    [DataRow(PetModel.Pet4032, false)]
+    [DataRow(PetModel.Pet4032, true)]
+    public void PetBasicDocumentationIsClean(PetModel model, bool original)
+    {
+        AssemblyResult result = PetSdkModules.AssembleBasic(
+            Path.Join(s_inputs, "Pet"), model, original, BasicSourceKind.Native);
+
+        DocumentationSet basic = Set(result, "PetBasic");
+        DocumentationResolver resolver = new(
+            basic,
+            isDirective: name => DirectiveDocs.Describe(name) is not null,
+            isInstruction: InstructionDocs.IsMnemonic);
+
+        var problems = resolver.Check();
+        problems.Should().BeEmpty(string.Join(Environment.NewLine, problems.Select(problem =>
+            $"{Path.GetFileName(problem.Path)}:{problem.Line + 1}: {problem.Message}")));
     }
 
     /// <summary>
@@ -157,11 +185,31 @@ public class SdkDocumentationTests
     public void EveryRepositorySourceIsCleanInTheEditor()
     {
         string repository = RepositoryRoot();
-        Dictionary<string, List<SourceAnalysis>> projects = [];
-        foreach (string project in Directory.EnumerateDirectories(Path.Join(repository, "src")))
+        string src = Path.Join(repository, "src");
+        string[] projectFolders = [.. Directory.EnumerateDirectories(src)];
+        Dictionary<string, HashSet<string>> projectRoots = [];
+        foreach (string project in projectFolders)
         {
-            projects[Path.GetFileName(project)] = [.. Sources(project).Select(file => SourceAnalysis.Assemble(file, _ => null))];
+            projectRoots[Path.GetFileName(project)] = [with(StringComparer.OrdinalIgnoreCase)];
         }
+
+        foreach (string project in projectFolders)
+        {
+            foreach (string root in Sources(project))
+            {
+                string owner = Path.GetRelativePath(src, root).Split(Path.DirectorySeparatorChar)[0];
+                if (!projectRoots.TryGetValue(owner, out HashSet<string>? roots))
+                {
+                    roots = projectRoots[Path.GetFileName(project)];
+                }
+
+                roots.Add(root);
+            }
+        }
+
+        Dictionary<string, List<SourceAnalysis>> projects = projectRoots.ToDictionary(
+            pair => pair.Key,
+            pair => pair.Value.Select(file => SourceAnalysis.Assemble(file, _ => null)).ToList());
 
         List<string> problems = [];
         foreach ((string name, List<SourceAnalysis> sources) in projects)
@@ -202,6 +250,15 @@ public class SdkDocumentationTests
         string obj = $"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}";
         List<string> roots = [.. SourceIncludes.Roots(folder)
             .Where(file => !file.Contains(bin, StringComparison.Ordinal) && !file.Contains(obj, StringComparison.Ordinal))];
+
+        // The shared BASIC files are included by roots in other projects; lint them in those assemblies.
+        if (Path.GetFileName(folder).Equals("Retrocore.Basic", StringComparison.OrdinalIgnoreCase))
+        {
+            string shared = Path.GetFullPath(Path.Join(folder, "Roms", "Microsoft6502Basic"));
+            roots = [.. roots.Select(file => string.Equals(Path.GetDirectoryName(file), shared, StringComparison.OrdinalIgnoreCase)
+                ? SourceIncludes.RootOf(file)
+                : file).Distinct(StringComparer.OrdinalIgnoreCase)];
+        }
 
         foreach (string name in s_includedRoots)
         {

@@ -174,6 +174,10 @@ MUL10R:
     rts
 
 ;; Packed floating-point constant ten.
+;;
+;; Also:
+;;   PET BASIC 4: `TENC`, Commodore 1979 source, code19.
+;;   PET BASIC 1/2: `TENC`, Hoffmann-Vetter reconstructions, code19.
 TENZC:
     .byte $84, $20, $00, $00, $00
 

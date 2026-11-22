@@ -22,8 +22,8 @@
 ;; boundaries: routines share entries and scratch locations across modules. The last module also reserves
 ;; $F800-$F863 for the Monitor; those bytes are outside the $D000-$F7FF Applesoft ROM.
 ;;
-;; ENHNCD selects the enhanced IIe changes when 1 (the default); APLPLS selects the II Plus final ROM byte
-;; when 1 (default 0). Set APLPLS only with ENHNCD = 0.
+;; <ENHNCD> selects the enhanced IIe changes when 1 (the default); <APLPLS> selects the II Plus final ROM byte
+;; when 1 (default 0). Set <APLPLS> only with <ENHNCD> = 0.
 
 .cpu Mos6502
 
@@ -35,6 +35,11 @@ APLPLS = 0                          ;; 1 for the II Plus ROM, with ENHNCD = 0
 .endif
 
 .include "AppleSoft.Equates.asm"
+; This root composes its I/O explicitly; the legacy values do not retarget it.
+.assert TIME = 0, "AppleSoft requires TIME = 0."
+.assert EXTIO = 0, "AppleSoft requires EXTIO = 0."
+.assert DISKO = 0, "AppleSoft requires DISKO = 0."
+.include "../Microsoft6502Basic/MsBasic.CharacterReader.asm"
 .include "AppleSoft.DispatchTables.asm"
 .include "AppleSoft.MemoryManagement.asm"
 .include "AppleSoft.ErrorAndInput.asm"
@@ -45,7 +50,7 @@ APLPLS = 0                          ;; 1 for the II Plus ROM, with ENHNCD = 0
 .include "AppleSoft.InputOutput.asm"
 .include "AppleSoft.Expressions.asm"
 .include "AppleSoft.Arrays.asm"
-.include "AppleSoft.IntegerArithmetic.asm"
+.include "../Microsoft6502Basic/MsBasic.ArrayMultiplication.asm"
 .include "AppleSoft.Functions.asm"
 .include "AppleSoft.Strings.asm"
 .include "AppleSoft.NumericConversion.asm"
@@ -54,6 +59,8 @@ APLPLS = 0                          ;; 1 for the II Plus ROM, with ENHNCD = 0
 .include "../Microsoft6502Basic/MsBasic.FloatMovement.asm"
 .include "../Microsoft6502Basic/MsBasic.FloatConversion.asm"
 .include "../Microsoft6502Basic/MsBasic.FloatOutput.asm"
+.include "AppleSoft.FloatAliases.asm"
+.include "AppleSoft.InterpreterAliases.asm"
 .include "../Microsoft6502Basic/MsBasic.Transcendental.asm"
 .include "AppleSoft.Initialization.asm"
 .include "AppleSoft.AppleCommands.asm"

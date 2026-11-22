@@ -147,7 +147,7 @@ export async function run(): Promise<void> {
         for (const character of "PRINT 1\r") await boot.customRequest("retro/key", { code: character.charCodeAt(0) });
         assert.equal(await stop(), "function breakpoint");
         const print = await boot.customRequest("stackTrace", { threadId: 1 });
-        assert.equal(path.basename(print.stackFrames[0].source.path), "AppleSoft.Print.asm");
+        assert.equal(path.basename(print.stackFrames[0].source.path), "MsBasic.Print.asm");
         assert.equal(print.stackFrames[0].name, "PRINT");
 
         // RESET's "jsr SETNORM" returned by then: JSR 6, LDY # 2, STY zp 3, RTS 6.

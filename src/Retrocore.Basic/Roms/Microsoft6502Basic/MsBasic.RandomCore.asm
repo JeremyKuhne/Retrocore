@@ -7,10 +7,18 @@
 ;; Multiplier for <RND>, stored as four bytes followed by the first byte of <RADDZC>.
 ;;
 ;; The five-byte operands intentionally overlap; <RADDZC>'s fifth byte is the opcode at <RND>.
+;;
+;; Also:
+;;   PET BASIC 4: `RMULC`, Commodore 1979 source, code25.
+;;   PET BASIC 1/2: `RMULC`, Hoffmann-Vetter reconstructions, code25.
 RMULZC:
     .byte $98, $35, $44, $7A
 
 ;; Addend for <RND>: four bytes followed by the first instruction byte at <RND>.
+;;
+;; Also:
+;;   PET BASIC 4: `RADDC`, Commodore 1979 source, code25.
+;;   PET BASIC 1/2: `RADDC`, Hoffmann-Vetter reconstructions, code25.
 RADDZC:
     .byte $68, $28, $B1, $46
 

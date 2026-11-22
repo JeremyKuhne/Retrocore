@@ -3,6 +3,8 @@
 ;; Error reporting and the command loop, line editing and tokenization, program-line search and insertion,
 ;; and the NEW and CLEAR paths. Statement execution continues in <NEWSTT>.
 
+.include "../Microsoft6502Basic/MsBasic.CommandCore.asm"
+
 ;; Reports an OUT OF MEMORY error.
 OMERR:
     ldx #ERROM
@@ -26,19 +28,7 @@ GETERR:
     inx
     pla
     bpl GETERR
-TYPERR:
-    jsr STKINI
-    lda #<ERR
-    ldy #>ERR
-
-;; Prints the zero-terminated message at A/Y and, in program mode, the current line number.
-;; See: <ERROR>, <STOP>
-ERRFIN:
-    jsr STROUT
-    ldy CURLIN+1
-    iny
-    beq READY
-    jsr INPRT
+    BASIC_ERROR_FINISH
 READY:
 ;; Prompts for a command, executing a direct statement or inserting or deleting a numbered line.
 ;;
@@ -65,53 +55,7 @@ READY1:
     stx VARTAB
     ldx PRGEND+1
     stx VARTAB+1
-MAIN1:
-    jsr LINGET
-    jsr CRUNCH
-    sty COUNT
-    jsr FNDLIN
-    bcc NODEL
-    ldy #$01
-    lda (LOWTR),y
-    sta INDEX+1
-    lda VARTAB
-    sta INDEX
-    lda LOWTR+1
-    sta INDEX2+1
-    lda LOWTR
-    dey
-    sbc (LOWTR),y
-    clc
-    adc VARTAB
-    sta VARTAB
-    sta INDEX2
-    lda VARTAB+1
-    adc #$FF
-    sta VARTAB+1
-    sbc LOWTR+1
-    tax
-    sec
-    lda LOWTR
-    sbc VARTAB
-    tay
-    bcs QDECT1
-    inx
-    dec INDEX2+1
-QDECT1:
-    clc
-    adc INDEX
-    bcc MLOOP
-    dec INDEX+1
-    clc
-MLOOP:
-    lda (INDEX),y
-    sta (INDEX2),y
-    iny
-    bne MLOOP
-    inc INDEX+1
-    inc INDEX2+1
-    dex
-    bne MLOOP
+    BASIC_DELETE_OLD_LINE INDEX
 NODEL:
     lda BUF
     beq FINI
@@ -168,24 +112,7 @@ CHEAD:
     sta PRGEND+1
     jmp MAIN
 CHEAD1:
-    ldy #$04
-CZLOOP:
-    iny
-    lda (INDEX),y
-    bne CZLOOP
-    iny
-    tya
-    adc INDEX
-    tax
-    ldy #$00
-    sta (INDEX),y
-    lda INDEX+1
-    adc #$00
-    iny
-    sta (INDEX),y
-    stx INDEX
-    sta INDEX+1
-    bcc CHEAD
+    BASIC_LINK_LINE 0
 
 ;; Reads a line through the Monitor without printing a prompt character.
 ;;
@@ -317,40 +244,7 @@ RESPU1:
     cmp #'O'
     beq NTHIS
     lda #ATTK
-GETBPT:
-    ldy BUFPTR
-STUFFH:
-    inx
-    iny
-    sta BUF-5,y
-    lda BUF-5,y
-    beq CRDONE
-    sec
-    sbc #':'
-    beq COLIS
-    cmp #(DATATK-':')
-    bne NODATT
-COLIS:
-    sta DORES
-NODATT:
-    sec
-    sbc #(REMTK-':')
-    bne KLOOP
-    sta ENDCHR
-STR1:
-.if ENHNCD
-    jsr UPCASE
-.else
-    lda BUF,x
-.endif
-    beq STUFFH
-    cmp ENDCHR
-    beq STUFFH
-STRNG:
-    iny
-    sta BUF-5,y
-    inx
-    bne STR1
+    BASIC_TOKEN_STORE BUF, ENHNCD
 NTHIS:
     ldx TXTPTR
     inc COUNT
@@ -379,119 +273,9 @@ CRDONE:
 LISTRT:
     rts
 
-;; Finds the stored program line equal to or immediately after <LINNUM>.
-;; In: LINNUM = line number to find
-;; Out: LOWTR = link field of the matching or following line or the end marker, carry = set for an exact match
-;; Entry: FNDLNC = searches from the line at A (low) and X (high)
-FNDLIN:
-    lda TXTTAB
-    ldx TXTTAB+1
-FNDLNC:
-    ldy #$01
-    sta LOWTR
-    stx LOWTR+1
-    lda (LOWTR),y
-    beq FLINRT
-    iny
-    iny
-    lda LINNUM+1
-    cmp (LOWTR),y
-    bcc FLNRTS
-    beq FNDLO1
-    dey
-    bne AFFRTS
-FNDLO1:
-    lda LINNUM
-    dey
-    cmp (LOWTR),y
-    bcc FLNRTS
-    beq FLNRTS
-AFFRTS:
-    dey
-    lda (LOWTR),y
-    tax
-    dey
-    lda (LOWTR),y
-    bcs FNDLNC
-FLINRT:
-    clc
-FLNRTS:
-    rts
-
-;; NEW: discards the program and falls into the variable and stack reset.
-;; See: <CLEAR>, <SCRTCH>
-NEW:
-SCRATH:
-    bne FLNRTS
-SCRTCH:
-    lda #$00
-    sta LOCK
-    tay
-    sta (TXTTAB),y
-    iny
-    sta (TXTTAB),y
-    lda TXTTAB
-    adc #$02
-    sta VARTAB
-    sta PRGEND
-    lda TXTTAB+1
-    adc #$00
-    sta VARTAB+1
-    sta PRGEND+1
-
-;; Resets the text pointer to before the program and clears variables and execution state.
-;; See: <STXTPT>, <CLEARC>
-RUNC:
-    jsr STXTPT
-    lda #$00
-;; CLEAR: discards variables, restores DATA and clears the execution stack, retaining program text.
-;; See: <CLEARC>, <STKINI>
-CLEAR:
-    bne STKRTS
-
-;; Resets string, variable and array storage, then falls into the DATA and stack reset.
-CLEARC:
-    lda MEMSIZ
-    ldy MEMSIZ+1
-    sta FRETOP
-    sty FRETOP+1
-    lda VARTAB
-    ldy VARTAB+1
-    sta ARYTAB
-    sty ARYTAB+1
-    sta STREND
-    sty STREND+1
-FLOAD:
-    jsr RESTOR
-
-;; Resets the stack while preserving the return address, frees string temporaries and disables CONT.
-;;
-;; FOR and GOSUB contexts are discarded and <SUBFLG> is cleared.
-;; See: <FNDFOR>, <CONT>
-STKINI:
-    ldx #TEMPST
-    stx TEMPPT
-    pla
-    tay
-    pla
-    ldx #$F8
-    txs
-    pha
-    tya
-    pha
-    lda #$00
-    sta OLDTXT+1
-    sta SUBFLG
-STKRTS:
-    rts
-
-;; Sets <TXTPTR> to one byte before <TXTTAB>.
-STXTPT:
-    clc
-    lda TXTTAB
-    adc #$FF
-    sta TXTPTR
-    lda TXTTAB+1
-    adc #$FF
-    sta TXTPTR+1
-    rts
+.include "../Microsoft6502Basic/MsBasic.LineSearch.asm"
+.include "../Microsoft6502Basic/MsBasic.ProgramReset.asm"
+    PROGRAM_RESET 1, 1, 1, 0, 1
+    CLEAR_STATEMENT STKRTS
+    CLEAR_STORAGE 0, 0
+    EXECUTION_RESET 0, 0, $F8

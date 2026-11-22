@@ -160,7 +160,7 @@ FLASH:
 ;; Group: Memory limits, error trapping and editing
 
 ;; Implements HIMEM: sets <MEMSIZ> and <FRETOP> to the requested address.
-;; Errors: out of memory if the address is below STREND
+;; Errors: out of memory if the address is below <STREND>
 HIMEM:
     jsr FRMNUM
     jsr GETADR
@@ -183,7 +183,7 @@ HIMEM2:
     rts
 
 ;; Implements LOMEM: sets <VARTAB> and clears variables.
-;; Errors: out of memory if the address is below VARTAB or at or above MEMSIZ
+;; Errors: out of memory if the address is below <VARTAB> or at or above <MEMSIZ>
 LOMEM:
     jsr FRMNUM
     jsr GETADR

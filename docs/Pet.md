@@ -138,18 +138,19 @@ Every ROM the PET runs is an SDK source, maintained by hand and byte-identical t
 
 | Source | Builds |
 | --- | --- |
-| [`Basic/Basic1.mac`](../src/Retrocore.Machines.Commodore/Roms/Basic/Basic1.mac) | BASIC 1, `$C000-$E1E0` and a patch at `$E7F3`: 901447-01 to -04 and the start of -05. `REVISD` picks the first chip, 1 for the revised 901447-09 (the default), 0 for the original 901447-01. |
-| [`Basic/Basic2.mac`](../src/Retrocore.Machines.Commodore/Roms/Basic/Basic2.mac) | BASIC 2, `$C000-$E1DD`: 901465-01 and -02 and the start of 901447-24. |
+| [`Basic/Basic1.asm`](../src/Retrocore.Machines.Commodore/Roms/Basic/Basic1.asm), [`Basic1.mac`](../src/Retrocore.Machines.Commodore/Roms/Basic/Basic1.mac) | BASIC 1, `$C000-$E1E0` and a patch at `$E7F3`: 901447-01 to -04 and the start of -05. `REVISD` picks the first chip, 1 for the revised 901447-09 (the default), 0 for the original 901447-01. |
+| [`Basic/Basic2.asm`](../src/Retrocore.Machines.Commodore/Roms/Basic/Basic2.asm), [`Basic2.mac`](../src/Retrocore.Machines.Commodore/Roms/Basic/Basic2.mac) | BASIC 2, `$C000-$E1DD`: 901465-01 and -02 and the start of 901447-24. |
 | [`Basic1/Editor1.asm`](../src/Retrocore.Machines.Commodore/Roms/Basic1/Editor1.asm), [`Basic1/Kernal1.asm`](../src/Retrocore.Machines.Commodore/Roms/Basic1/Kernal1.asm) | BASIC 1's screen editor (the rest of 901447-05) and kernal (901447-06 and -07). |
 | [`Basic2/Editor2.asm`](../src/Retrocore.Machines.Commodore/Roms/Basic2/Editor2.asm), [`Basic2/Kernal2.asm`](../src/Retrocore.Machines.Commodore/Roms/Basic2/Kernal2.asm) | BASIC 2's screen editor (the rest of 901447-24) and kernal (901465-03), with the machine-language monitor. |
-| [`Basic/Basic4.mac`](../src/Retrocore.Machines.Commodore/Roms/Basic/Basic4.mac) | BASIC 4, `$B000-$DFFF`, with the machine-language monitor and the disk commands' code: 901465-23 (or, with `REVISD` 0, the original 901465-19), -20 and -21. |
+| [`Basic/Basic4.asm`](../src/Retrocore.Machines.Commodore/Roms/Basic/Basic4.asm), [`Basic4.mac`](../src/Retrocore.Machines.Commodore/Roms/Basic/Basic4.mac) | BASIC 4, `$B000-$DFFF`, with the machine-language monitor and the disk commands' code: 901465-23 (or, with `REVISD` 0, the original 901465-19), -20 and -21. |
 | [`Basic4/Editor4.asm`](../src/Retrocore.Machines.Commodore/Roms/Basic4/Editor4.asm), [`Basic4/Kernal4.asm`](../src/Retrocore.Machines.Commodore/Roms/Basic4/Kernal4.asm) | BASIC 4's screen editors, `BUSINESS` 0 for the graphics keyboard's 901447-29 and 1 for the business keyboard's 901474-02, and kernal (901465-22), whose jump table at `$FF93` leads to the disk commands. |
 | [`CharacterGenerator.asm`](../src/Retrocore.Machines.Commodore/Roms/CharacterGenerator.asm) | The character ROMs: `ORIGINAL` 1 for the 2001's 901447-08, 0 for the 2001-N's 901447-10. |
 
-**BASIC** is currently built from the PET MACRO-10 overlays on Microsoft's
-[`m6502.asm`](../src/Retrocore.Machines.Apple2/Roms/Microsoft6502Basic/m6502.asm). The shared native Microsoft source
-is being extracted; AppleSoft already selects its native listing by default and retains its overlay as an option.
-BASIC 2 is that source's own Commodore build (`REALIO` 3) with three changes: long error messages,
+**BASIC** uses the native roots above by default. They compose the shared
+[Microsoft 6502 BASIC modules](../src/Retrocore.Basic/Roms/Microsoft6502Basic/README.md) with Commodore-specific
+modules. Set `basicSource` to `macro10` to build and debug the PET overlays on Microsoft's original
+[`m6502.asm`](../src/Retrocore.Basic/Roms/Microsoft6502Basic/m6502.asm) instead. BASIC 2 is that source's own
+Commodore build (`REALIO` 3) with three changes: long error messages,
 a spare byte in NEWSTT, and PEEK reading BASIC's own ROM. BASIC 1 is an earlier Microsoft version: another page-zero
 layout, no GO or NULL keyword, the code from before the fixes in the source's change log, and Commodore's patches into
 the editor's chip. The revised first chip fixes STKINI, which in the original stored a return address before moving
@@ -212,6 +213,7 @@ The options are:
 - `model`: `pet2001` (BASIC 1, a white screen), `pet2001-basic2` (the default, a green screen), `pet4032` or
   `pet4032-business`;
 - `basicRevision`: `revised` (the default) or `original`, BASIC 1's first chip or BASIC 4's `$B000` chip;
+- `basicSource`: `native` (the default) or `macro10`, for both the ROM build and debugger source map;
 - `ramKilobytes`: 4, 8, 16 or 32; 8 by default, or 32 on a 4032 (16 makes it a 4016);
 - `sdkRoms`: the folder of the ROM sources, such as the repository's, so breakpoints set there bind;
 - `snow`: on by default on the 2001, off on the others;

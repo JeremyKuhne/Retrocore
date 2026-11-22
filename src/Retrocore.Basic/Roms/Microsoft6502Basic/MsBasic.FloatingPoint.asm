@@ -23,7 +23,7 @@
 
     ADD_ENTRIES
 
-; The WAIT statement's exit alias refers back to <STORDO> in AppleSoft.NumericConversion.asm.
+; The WAIT statement's exit alias refers back to <STORDO> in MsBasic.MemoryAccess.asm.
 ZSTORD = STORDO
 
     ADD_AND_NORMALIZE

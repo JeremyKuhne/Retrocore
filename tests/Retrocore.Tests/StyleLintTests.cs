@@ -206,10 +206,18 @@ public sealed class StyleLintTests
 
             ;; An address as a name.
             LF8C2 = 2
+
+            ;; A union named for an address.
+            .union L_F8C3
+                ;; One.
+                ONE .byte
+            .endunion
             """;
 
         Problems(text).Where(problem => problem.Contains("only an address", StringComparison.Ordinal)).Should()
-            .ContainSingle().Which.Should().Contain("LF8C2");
+            .BeEquivalentTo(
+                "9: Name LF8C2 for what it is: a name that is only an address says nothing.",
+                "12: Name L_F8C3 for what it is: a name that is only an address says nothing.");
     }
 
     /// <summary>

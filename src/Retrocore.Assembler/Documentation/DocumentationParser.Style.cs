@@ -207,7 +207,7 @@ public static partial class DocumentationParser
     private static string? DefinedName(string code)
     {
         string directive = Directive(code);
-        if (directive is ".proc" or ".scope" or ".macro" or ".struct" or ".enum")
+        if (directive is ".proc" or ".scope" or ".macro" or ".struct" or ".union" or ".enum")
         {
             string rest = code[directive.Length..].TrimStart();
             int length = IdentifierLength(rest, 0);

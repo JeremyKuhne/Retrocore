@@ -207,6 +207,11 @@ public sealed partial class DocumentationResolver
                     {
                         warn($"Members: '{entry.Name}' is not a member of {topic.Name}.", entry.Line);
                     }
+                    else if (Current.Find($"{topic.Name}::{entry.Name}") is not null)
+                    {
+                        // A member with a block or trailing comment of its own is documented there.
+                        warn($"{entry.Name} has its own documentation; remove it from Members:", entry.Line);
+                    }
                 }
 
                 break;

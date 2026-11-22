@@ -26,7 +26,8 @@ public static partial class DocumentationParser
     // The directives that open or close a routine, family or macro, which sit at column 0.
     private static readonly string[] s_blockDirectives =
     [
-        ".proc", ".endproc", ".scope", ".endscope", ".macro", ".endmacro", ".struct", ".endstruct", ".enum", ".endenum"
+        ".proc", ".endproc", ".scope", ".endscope", ".macro", ".endmacro", ".struct", ".endstruct", ".union", ".endunion",
+        ".enum", ".endenum"
     ];
 
     /// <summary>
@@ -51,7 +52,9 @@ public static partial class DocumentationParser
 
         bool inMacro = false;
         int macroDepth = 0;
-        bool inMembers = false;
+
+        // How many types are open: a type's members are one level in, and each nested type's one more.
+        int typeDepth = 0;
         for (int index = 1; index < lines.Length; index++)
         {
             string line = lines[index];
@@ -70,7 +73,9 @@ public static partial class DocumentationParser
                 continue;
             }
 
-            if (comment is not null && comment.StartsWith(Marker, StringComparison.Ordinal))
+            // A member of a type may have a trailing ;; comment instead of a block above it.
+            (_, string typeDirective, _) = TypeLine(trimmed);
+            if (comment is not null && comment.StartsWith(Marker, StringComparison.Ordinal) && typeDepth == 0)
             {
                 Warn("Put ;; documentation above the definition, not after it.", index);
             }
@@ -117,18 +122,31 @@ public static partial class DocumentationParser
                 macroDepth = 0;
             }
 
-            if (directive is ".struct" or ".enum") { inMembers = true; }
-            if (directive is ".endstruct" or ".endenum") { inMembers = false; }
+            // Inside a type, each member is one level in, and a nested type's .struct or .union line is at its
+            // parent's member level, with its own members one more.
+            bool opens = typeDirective is ".struct" or ".union" or ".enum";
+            bool closes = typeDirective is ".endstruct" or ".endunion" or ".endenum";
+            if (closes && typeDepth != 0) { typeDepth--; }
+            if (typeDepth != 0)
+            {
+                int expected = StyleIndent * typeDepth;
+                if (indent != expected)
+                {
+                    Warn($"Indent this line {expected} columns: a type's members one level in, a nested type's one more.", index);
+                }
+            }
 
             // A cheap-local or anonymous label is a label too, though it defines no name of its own.
-            if (s_blockDirectives.Contains(directive) || (defined is not null || IsLabelOnly(trimmed)) && !inMembers)
+            else if (s_blockDirectives.Contains(directive) || defined is not null || IsLabelOnly(trimmed))
             {
                 if (indent != 0) { Warn("Put definitions, labels and block directives at column 0.", index); }
             }
-            else if (inMembers || directive.Length == 0 || s_dataDirectives.Contains(directive))
+            else if (directive.Length == 0 || s_dataDirectives.Contains(directive))
             {
                 if (indent != StyleIndent) { Warn($"Indent instructions and data {StyleIndent} columns.", index); }
             }
+
+            if (opens) { typeDepth++; }
         }
     }
 

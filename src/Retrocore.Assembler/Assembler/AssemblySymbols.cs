@@ -272,6 +272,25 @@ internal sealed class AssemblySymbols : IEqualityComparer<ReadOnlyMemory<char>>
     }
 
     /// <summary>
+    ///  Lists the historical names that reach one resolved definition each.
+    /// </summary>
+    /// <returns>
+    ///  Each name, the definition's name (a <c>.set</c> variable's own, for the version an old name holds) and the
+    ///  value the name has.
+    /// </returns>
+    internal IEnumerable<(string Name, string Target, long Value)> HistoricalSnapshot()
+    {
+        if (_aliases is null) { yield break; }
+        foreach (KeyValuePair<ReadOnlyMemory<char>, int> alias in _aliases)
+        {
+            int id = alias.Value;
+            if (id < 0 || id >= _known.Length || !_known[id]) { continue; }
+            int target = _versions is not null && _versions.TryGetValue(id, out int variable) ? variable : id;
+            yield return (alias.Key.ToString(), _names[target], _values[id]);
+        }
+    }
+
+    /// <summary>
     ///  Creates the owned, ordinal-keyed public result dictionary once layout is complete.
     /// </summary>
     /// <returns>The resolved symbols, in the order they first resolved.</returns>

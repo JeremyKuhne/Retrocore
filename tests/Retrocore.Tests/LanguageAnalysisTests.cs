@@ -10,7 +10,7 @@ namespace Retrocore.Tests;
 ///  Verifies the language server's analysis: definitions, comments, names under the cursor and instruction help.
 /// </summary>
 [TestClass]
-public sealed class LanguageAnalysisTests
+public sealed partial class LanguageAnalysisTests
 {
     private const string Equates = """
         ; Keyboard data, bit 7 set when a key is waiting.

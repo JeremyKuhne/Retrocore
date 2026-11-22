@@ -212,6 +212,100 @@ public sealed class StyleLintTests
             .ContainSingle().Which.Should().Contain("LF8C2");
     }
 
+    /// <summary>
+    ///  Inside a type, members are one level in and a nested type's members one more, with the nested type's own
+    ///  lines at its parent's member level; a member's block sits at its indentation, and a member may have a
+    ///  trailing <c>;;</c> comment instead.
+    /// </summary>
+    [TestMethod]
+    public void NestedTypesAreIndentedByLevel()
+    {
+        string text = Pragma + """
+            .cpu Mos6502
+            .org $0300
+
+            ;; A pair.
+            .struct Pair
+                LOW .byte ;; The low byte.
+                HIGH .byte ;; The high byte.
+            .endstruct
+
+            ;; An I/O block.
+            .struct Iob
+                ;; The block's type.
+                TYPE .byte
+                .union
+                    ;; The command, before the call.
+                    COMMAND .byte
+                    ;; The status, after it.
+                    STATUS .byte
+                .endunion
+                ;; Where.
+                WHERE .tag Pair
+                ;; A nested type.
+                .struct Inner
+                    ;; Inside it.
+                    DEEP .byte
+                .endstruct
+            .endstruct
+
+            ;; The commands.
+            .enum Command
+                SEEK ;; Seek only.
+                ;; Read.
+                READ
+            .endenum
+
+            ;; A union at the top.
+            .union Either
+                ;; One.
+                ONE .byte
+                ;; Two.
+                TWO .word
+            .endunion
+            """;
+
+        Problems(text).Should().BeEmpty();
+        Assemble(text).Diagnostics.Should().BeEmpty();
+    }
+
+    /// <summary>
+    ///  A type's lines indented for the wrong level are reported, and so are their comments.
+    /// </summary>
+    [TestMethod]
+    public void NestedTypesIndentedWronglyAreReported()
+    {
+        string text = Pragma + """
+            .cpu Mos6502
+            .org $0300
+
+            ;; An I/O block.
+            .struct Iob
+              ;; The block's type.
+              TYPE .byte
+                .union
+                ;; The command.
+                COMMAND .byte
+                    ;; The status.
+                    STATUS .byte
+                    .endunion
+            .endstruct
+
+                ;; A union.
+                .union Either
+                ;; One.
+                ONE .byte
+                .endunion
+            """;
+
+        Problems(text).Should().BeEquivalentTo(
+            "8: Indent this line 4 columns: a type's members one level in, a nested type's one more.",
+            "11: Indent this line 8 columns: a type's members one level in, a nested type's one more.",
+            "14: Indent this line 4 columns: a type's members one level in, a nested type's one more.",
+            "18: Put definitions, labels and block directives at column 0.",
+            "21: Put definitions, labels and block directives at column 0.");
+    }
+
     // The problems the editor reports for one strict file, as "line: message" with 1-based lines.
     private static List<string> Problems(string text)
     {

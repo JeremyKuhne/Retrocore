@@ -51,6 +51,7 @@ documented is also a lint error.
 | `.set NAME, value` | Variable | First value |
 | `.macro NAME params` | Macro | Parameter list |
 | `.enum`, `.struct`, `.union` | Enum, Struct | Members and their values or offsets |
+| A member of a `.struct`, `.union` or `.enum` | Member | Its offset or value, named as the assembler names it (`Iob::COMMAND`) |
 | `.scope`, `.proc` | Scope | Members |
 | `.define NAME` | Definition | Parameter list |
 
@@ -60,7 +61,13 @@ Rules:
   `Entry:` below), unless they have their own comment.
 - **Trailing comments** document the definition on their own line when they start with `;;`: a constant in
   an equate list, or a member of an `.enum` or `.struct`. For example, `KEY_CR = $8D ;; Control-M, Return`.
-  The SDK sources' trailing address comments (`; $F800`) stay ordinary comments.
+  The SDK sources' trailing address comments (`; $F800`) stay ordinary comments. A member may have a trailing
+  `;;` comment or a `;;` block above it, not both.
+- **Members** of a `.struct`, `.union` or `.enum` are definitions like any other: a `;;` block above one
+  documents it, with every section a definition can have, `Also:` among them. Its topic has the name the
+  assembler gives the member: the type's (`Iob::COMMAND`), the members of an anonymous `.union` or `.struct`
+  inside a named type being the named type's, and those of a named nested type being in its scope too
+  (`Outer::Inner::FIELD`).
 - **Headings over a group** are plain `;` comments. A `;;` block above a definition that has its own trailing
   `;;` comment is a lint error, because it reads as the group's heading but would document only the first
   definition:
@@ -155,7 +162,7 @@ Both forms parse to the same sections, so every tool treats them alike.
 | `Stack:` | | Bytes of stack used, including calls | |
 | `Model:` | | `Original`, `Enhanced`, or both (on IIe sources) | Generated from `.if` when omitted |
 | `Parameters:` | `<param>`, `<typeparam>` | Macro and `.define` parameters | Names must match the signature |
-| `Members:` | | Enum or struct members not documented with trailing comments | Names must be members |
+| `Members:` | | Enum or struct members documented by neither a block nor a trailing comment | Names must be members without documentation of their own |
 | `Example:` | `<example>` | Text and code blocks | |
 | `See:` (or `See also:`) | `<seealso>` | A comma list of links | Every link resolves |
 | `Deprecated:` | `[Obsolete]` | Why, and what to use instead | Callers get a warning |
@@ -241,11 +248,18 @@ CharacterOut = $FDED
   old name that two definitions in the assembly give is an error where code uses it, naming both. Old names are
   plain: `Monitor::RDKEY` does not reach `Monitor::ReadKey`'s `RDKEY`. Conditional assembly sees old names as
   code does, for definitions earlier in the source (`.ifdef COUT`, `.if COUT = $FDED`).
-- **What can have one:** a label, constant or `.proc` entry, outside a macro's body. An `Also:` on a `.scope`
+- **What can have one:** a label, constant or `.proc` entry, or a member of a `.struct`, `.union` or `.enum`,
+  outside a macro's body. An `Also:` on a `.scope`
   does not name the scope (`OLD::Member` does not resolve), one inside a macro's body is ignored, and `.sizeof`
   takes only a `.proc`'s current name. An old name for a `.set` variable is the value it had where it was
   documented, not where code uses it. Two definitions in different branches of conditional assembly (one
   model's routine and another's) can share an old name: each build has only one of them.
+- **Members:** a member's old name reaches the qualified member: `;; Also: IBCMD (DOS33)` above `COMMAND .byte`
+  in `.struct Iob` makes `lda #IBCMD` assemble as `lda #Iob::COMMAND`, and `<IBCMD>` link to it. Two types may
+  have members of the same name (`Iob::VOLUME`, `FileParameters::VOLUME`), but not the same old name, as for any
+  two definitions. The quick fix writes the qualified name, since a member's own name does not resolve outside
+  its type.
+- **The debugger** resolves an old name in a watch or expression to its definition's value.
 - **The editor** treats an old name as its definition: hover (which says it is a historical name), go to
   definition, and links (`<COUT>`). Completion matches old names too, so typing `COUT` offers `CharacterOut`,
   and workspace symbol search finds `CharacterOut (COUT)`. Each use in code gets an information message, with a

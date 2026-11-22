@@ -360,32 +360,62 @@ public static partial class DocumentationParser
         return macros;
     }
 
+    // A type's members: its own, and those of the anonymous types nested in it, which the assembler puts in the
+    // type's scope. A named nested type is a member, and its own members are in its scope.
     private static List<string> Members(string[] lines, int target)
     {
         List<string> members = [];
-        int depth = 0;
+
+        // For each nested type open, whether it is named, and how many are.
+        List<bool> nested = [];
+        int named = 0;
         for (int index = target + 1; index < lines.Length; index++)
         {
             string code = Split(lines[index]).Code.Trim();
-            string word = FirstWord(code).ToLowerInvariant();
+            (string? member, string word, string name) = TypeLine(code);
+            bool direct = named == 0;
             if (word is ".endenum" or ".endstruct" or ".endunion")
             {
-                if (depth == 0) { break; }
-                depth--;
+                if (nested.Count == 0) { break; }
+                if (nested[^1]) { named--; }
+                nested.RemoveAt(nested.Count - 1);
                 continue;
             }
 
             if (word is ".enum" or ".struct" or ".union")
             {
-                depth++;
+                if (direct && member is not null) { members.Add(member); }
+                if (direct && name.Length != 0) { members.Add(name); }
+                nested.Add(name.Length != 0);
+                if (name.Length != 0) { named++; }
                 continue;
             }
 
             int length = IdentifierLength(code);
-            if (depth == 0 && length != 0 && !code.StartsWith('.')) { members.Add(code[..length]); }
+            if (direct && length != 0 && !code.StartsWith('.')) { members.Add(code[..length]); }
         }
 
         return members;
+    }
+
+    // A line's type directive, in lower case, with the member it may name first ("WHERE .struct") and the type's name
+    // after it; the directive is empty on any other line.
+    private static (string? Member, string Directive, string Name) TypeLine(string code)
+    {
+        string first = FirstWord(code);
+        string? member = null;
+        string rest = code[first.Length..].Trim();
+        if (!first.StartsWith('.') && IdentifierLength(first) == first.Length && rest.StartsWith('.'))
+        {
+            member = first;
+            first = FirstWord(rest);
+            rest = rest[first.Length..].Trim();
+        }
+
+        string word = first.ToLowerInvariant();
+        return word is ".enum" or ".struct" or ".union" or ".endenum" or ".endstruct" or ".endunion"
+            ? (member, word, FirstWord(rest))
+            : (null, "", "");
     }
 
     // Whether a line is ".scope Name continued", which goes on with a scope opened earlier.
@@ -427,10 +457,9 @@ public static partial class DocumentationParser
 
     private static void Container(List<string?> containers, string code)
     {
-        string word = FirstWord(code).ToLowerInvariant();
+        (_, string word, string name) = TypeLine(code);
         if (word is ".enum" or ".struct" or ".union")
         {
-            string name = FirstWord(code[word.Length..].Trim());
             containers.Add(name.Length == 0 ? null : name);
         }
         else if (word is ".endenum" or ".endstruct" or ".endunion" && containers.Count != 0)

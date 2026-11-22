@@ -23,7 +23,13 @@ public static partial class DocumentationParser
         string text = code.TrimStart();
         if (text.Length == 0) { return null; }
         bool columnZero = !char.IsWhiteSpace(code[0]);
-        string? container = containers.Count == 0 ? null : containers[^1];
+
+        // A member belongs to every named type around it, as the assembler scopes it: a named type opens a scope, and
+        // an anonymous .struct or .union opens none, so its members are the enclosing type's.
+        bool inType = containers.Count != 0;
+        string joined = string.Join("::", containers.OfType<string>());
+        string? container = joined.Length == 0 ? null : joined;
+        string Nested(string name) => container is null ? name : $"{container}::{name}";
         string first = FirstWord(text);
         string rest = text[first.Length..].Trim();
         if (first.StartsWith('.'))
@@ -36,10 +42,10 @@ public static partial class DocumentationParser
                 case ".mac":
                     return name.Length == 0 ? null : new(name, DocumentationKind.Macro, "", Words(after));
                 case ".enum":
-                    return name.Length == 0 ? null : new(name, DocumentationKind.Enum, "", []);
+                    return name.Length == 0 ? null : new(Nested(name), DocumentationKind.Enum, "", []);
                 case ".struct":
                 case ".union":
-                    return name.Length == 0 ? null : new(name, DocumentationKind.Struct, "", []);
+                    return name.Length == 0 ? null : new(Nested(name), DocumentationKind.Struct, "", []);
                 case ".scope" when after.Equals("continued", StringComparison.OrdinalIgnoreCase):
                     return null;
                 case ".scope":
@@ -83,13 +89,13 @@ public static partial class DocumentationParser
         string spaced = tail.TrimStart();
         if (spaced.StartsWith('=') || spaced.StartsWith(":=", StringComparison.Ordinal))
         {
-            return new(qualified, container is null ? DocumentationKind.Constant : DocumentationKind.Member, "", []);
+            return new(qualified, inType ? DocumentationKind.Member : DocumentationKind.Constant, "", []);
         }
 
         string word = FirstWord(spaced);
         if (word.Equals(".equ", StringComparison.OrdinalIgnoreCase) || word.Equals("EQU", StringComparison.OrdinalIgnoreCase))
         {
-            return new(qualified, container is null ? DocumentationKind.Constant : DocumentationKind.Member, "", []);
+            return new(qualified, inType ? DocumentationKind.Member : DocumentationKind.Constant, "", []);
         }
 
         if (word.Equals(".set", StringComparison.OrdinalIgnoreCase))
@@ -97,7 +103,7 @@ public static partial class DocumentationParser
             return new(qualified, DocumentationKind.Variable, "", []);
         }
 
-        if (containers.Count != 0 && (spaced.Length == 0 || spaced.StartsWith('.')))
+        if (inType && (spaced.Length == 0 || spaced.StartsWith('.')))
         {
             // An enumeration member, or a structure field such as "x .byte".
             return new(qualified, DocumentationKind.Member, "", []);

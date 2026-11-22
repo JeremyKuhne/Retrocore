@@ -10,7 +10,7 @@ namespace Retrocore.Debug.Language;
 /// <summary>
 ///  Runs the retrocore language server over standard input and output, and holds what its handlers share.
 /// </summary>
-internal static class LanguageHost
+internal static partial class LanguageHost
 {
     /// <summary>
     ///  The VS Code language the server serves.
@@ -98,6 +98,10 @@ internal static class LanguageHost
         or PetBasicId
         or BasicId;
 
+    // Serves the requests about a machine that is off (LanguageHost.Machine.cs), which the language server's tests
+    // leave out with the debug targets they need.
+    static partial void ServeMachine(JsonRpcServer server);
+
     /// <summary>
     ///  Serves until the client disconnects.
     /// </summary>
@@ -143,8 +147,7 @@ internal static class LanguageHost
         server.OnRequest("retrocore/basic/store", parameters => BasicFiles.Store(parameters ?? []));
 
         // A machine set up while it is off, for the Machine and Drives views with no debug session.
-        server.OnRequest("retrocore/machine/describe", parameters => OffMachine.Describe(parameters ?? []));
-        server.OnRequest("retrocore/machine/change", parameters => OffMachine.Change(parameters ?? []));
+        ServeMachine(server);
 
         // The recovery journals of sessions that did not end cleanly, and what a person decides for one.
         server.OnRequest("retrocore/recovery/list", parameters => new JsonObject

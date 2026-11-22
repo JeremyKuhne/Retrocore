@@ -78,7 +78,8 @@
     <Compile Include="..\..\src\Retrocore.Debug\DebugScreens.cs" Link="DebugScreens.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\MessageFraming.cs" Link="MessageFraming.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\Language\Protocol\*.cs" Link="Language\Protocol\%(Filename)%(Extension)" />
-    <Compile Include="..\..\src\Retrocore.Debug\Language\JsonRpcServer.cs" Link="Language\JsonRpcServer.cs" />
+    <!-- The language server's sources, but not its requests about a machine that is off, which need the debug targets. -->
+    <Compile Include="..\..\src\Retrocore.Debug\Language\*.cs" Exclude="..\..\src\Retrocore.Debug\Language\LanguageHost.Machine.cs" Link="Language\%(Filename)%(Extension)" />
     <Compile Include="..\..\src\Retrocore.Debug\IDebugMemory.cs" Link="IDebugMemory.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\IDebugCallStack.cs" Link="IDebugCallStack.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\DebugFrame.cs" Link="DebugFrame.cs" />
@@ -133,20 +134,6 @@
     <Compile Include="..\..\src\Retrocore.Debug\OverlayBaseResolver.cs" Link="OverlayBaseResolver.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\DefineArgument.cs" Link="DefineArgument.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\Coco3Assembly.cs" Link="Coco3Assembly.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\Language\SourceAnalysis.cs" Link="Language\SourceAnalysis.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\Language\SourceText.cs" Link="Language\SourceText.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\Language\SourceIncludes.cs" Link="Language\SourceIncludes.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\Language\SourceBibliography.cs" Link="Language\SourceBibliography.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\Language\SymbolSite.cs" Link="Language\SymbolSite.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\Language\SymbolSiteKind.cs" Link="Language\SymbolSiteKind.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\Language\SymbolReferences.cs" Link="Language\SymbolReferences.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\Language\WorkspaceSourceResolver.cs" Link="Language\WorkspaceSourceResolver.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\Language\LanguagePaths.cs" Link="Language\LanguagePaths.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\Language\InstructionDocs.cs" Link="Language\InstructionDocs.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\Language\InstructionDocs.M6809.cs" Link="Language\InstructionDocs.M6809.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\Language\InstructionDocs.Z80.cs" Link="Language\InstructionDocs.Z80.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\Language\InstructionDocs.I8080.cs" Link="Language\InstructionDocs.I8080.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\Language\DirectiveDocs.cs" Link="Language\DirectiveDocs.cs" />
     <None Include="..\..\src\Retrocore.Cpu.M6502\OpcodeTables.txt" Link="Inputs\OpcodeTables.txt" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\src\Retrocore.Pascal\Pcode.asm" Link="Inputs\Pcode.asm" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\src\Retrocore.Machines.Apple2\Roms\*.rom.asm" Link="Inputs\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />

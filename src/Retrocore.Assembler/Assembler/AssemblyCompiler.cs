@@ -504,8 +504,26 @@ internal static partial class AssemblyCompiler
 
         return new(output, exported, symbols.Snapshot(), declared, statements, statementCount, project)
         {
-            InstructionSets = cpuSettings is null ? [codes] : [.. cpuSettings]
+            InstructionSets = cpuSettings is null ? [codes] : [.. cpuSettings],
+            HistoricalNames = HistoricalNames(symbols, declared)
         };
+    }
+
+    // Each historical name's definition, with the value the name has, or null when no definition has one.
+    private static Dictionary<string, AssemblySymbol>? HistoricalNames(
+        AssemblySymbols symbols,
+        Dictionary<string, AssemblyStatement> declared)
+    {
+        Dictionary<string, AssemblySymbol>? names = null;
+        foreach ((string name, string target, long value) in symbols.HistoricalSnapshot())
+        {
+            if (!declared.TryGetValue(target, out AssemblyStatement? definition)) { continue; }
+            bool constant = definition.Kind is AssemblyStatementKind.Constant or AssemblyStatementKind.Variable;
+            names ??= [with(StringComparer.Ordinal)];
+            names[name] = new(target, value, constant, exported: false, definition.Location);
+        }
+
+        return names;
     }
 
     /// <summary>

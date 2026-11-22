@@ -153,6 +153,12 @@ internal sealed partial class SourceMapModule : IDebugModule
             if (!symbol.IsConstant) { labels.Add((name, value)); }
         }
 
+        // A historical name, from an Also: section, resolves where no symbol has the name, as it does in code.
+        foreach ((string name, AssemblySymbol symbol) in result.HistoricalNames)
+        {
+            _symbols.TryAdd(name, symbol.IsConstant ? symbol.Value : symbol.Value + relocation);
+        }
+
         _labels = [.. labels.OrderBy(label => label.Value).ThenBy(label => label.Name, StringComparer.Ordinal)];
         _addressConstants = AddressConstantsOf(result, sourceNames, relocation);
     }

@@ -1,4 +1,4 @@
-; retrocore: style=strict ignore=unlinked-name:PR|RWTS|MULT|INPRT|OUTPRT|INSDS2 -- a command, the disk layer, X7 prose
+; retrocore: style=strict ignore=unlinked-name:PR|MULT -- a command, the disk layer, X7 prose
 ;; DOS 3.3 and 3.2: the Apple II addresses DOS uses, and the macros its modules share
 ;;
 ;; The Monitor routines, zero-page locations, BASIC entry points and BASIC variables that DOS uses but does not own:
@@ -45,33 +45,9 @@
 ;; Places a string's characters with bit 7 of the last one set, so that code walking a list of words can tell where
 ;; each ends; the other characters keep bit 7 clear.
 ;;
-;; Apple's listing writes these strings with <DCI>, the directive of its EDASM assembler.
+;; Apple's listing writes these strings with <MarkedText>, the directive of its EDASM assembler.
 ;; Parameters: text = the string
 .macro MarkedText text
-    .repeat .strlen(text) - 1, I
-        .byte .strat(text, I)
-    .endrepeat
-    .byte .strat(text, .strlen(text) - 1) | $80
-.endmacro
-
-; SHIM (removed at integration): the macros' old names, for the modules not yet converted.
-
-;; The old name of <Leftover>, for the modules not yet converted.
-;; Parameters: y1983 = the byte in the 1983 build, y1980 = the byte in the 1980 build, y32 = the byte in the DOS 3.2
-;;   build
-.macro LEFTOVER y1983, y1980, y32
-    .if DOS32
-        .byte y32
-    .elseif YEAR = 1983
-        .byte y1983
-    .else
-        .byte y1980
-    .endif
-.endmacro
-
-;; The old name of <MarkedText>, for the modules not yet converted.
-;; Parameters: text = the string
-.macro DCI text
     .repeat .strlen(text) - 1, I
         .byte .strat(text, I)
     .endrepeat
@@ -121,43 +97,32 @@ SetOutput = $FE95
 ;; <Monitor:Disassembler::Decode>.
 DecodeOpcode = $F88E
 
-; SHIM (removed at integration): DOS's names for these three, which are not their historical names (the Monitor
-; gives them to other addresses), for the modules not yet converted.
-
-;; DOS's name for <SetInput>.
-INPRT = SetInput
-
-;; DOS's name for <SetOutput>.
-OUTPRT = SetOutput
-
-;; DOS's name for <DecodeOpcode>.
-INSDS2 = DecodeOpcode
-
 ; DOS's purposes for the Monitor's general zero-page pointers.
 
 ;; DOS's general pointer (2 bytes), most often at the header of the file buffer being worked on.
 ;;
-;; <BLDFTB> builds the chain of file buffers through it, and <TSINIT> and <TSNXT> walk the chain, as <FILSRC> does
-;; to find a file's buffer. The relocator, <RelocateDos at DOSREL>, uses it to step through DOS's code.
-;; See: <FilePointer>, <BLDFTB>, <FILSRC>, <TSNXT>
+;; <FileBuffers::Build> builds the chain of file buffers through it, and <FileBuffers::First> and <FileBuffers::Next>
+;; walk the chain, as <FileBuffers::Find> does to find a file's buffer. The relocator, <RelocateDos at DOSREL>, uses it
+;; to step through DOS's code.
+;; See: <FilePointer>, <FileBuffers::Build>, <FileBuffers::Find>, <FileBuffers::Next>
 ;; Also: ZPGWRK (DOS33, DOS31)
 WorkPointer = Address3
 
 ;; DOS's second pointer (2 bytes), usually at one of an open file's buffers.
 ;;
-;; The file manager points it at the file's work area, its track/sector list or its data sector (<MVFCBP>,
-;; <MVFCBD>, <MVFCBS>) and reads and writes the buffer through it. The relocator, <RelocateDos at DOSREL>, and the
-;; boot loader use it as a pointer too.
-;; See: <WorkPointer>, <MVFCBP>
+;; The file manager points it at the file's work area, its track/sector list or its data sector
+;; (<FileManager::PointAtWorkArea>, <FileManager::PointAtListBuffer>, <FileManager::PointAtDataBuffer>) and reads and
+;; writes the buffer through it. The relocator, <RelocateDos at DOSREL>, and the boot loader use it as a pointer too.
+;; See: <WorkPointer>, <FileManager::PointAtWorkArea>
 ;; Also: ZPGFCB (DOS33, DOS31)
 FilePointer = Address4
 
 ;; A number from a command (2 bytes): the value of a decimal or hexadecimal parameter, or a count to print.
 ;;
-;; <GETNUM> converts a parameter into it, and the commands that take a number, such as MAXFILES, PR# and IN#, read
-;; it there. <FILSRC> also leaves the lowest free file buffer in it, and the catalog prints volume numbers and file
-;; sizes from it through <PRNUM>.
-;; See: <GETNUM>, <FILSRC>, <PRNUM>
+;; <Scanner::ParseNumber> converts a parameter into it, and the commands that take a number, such as MAXFILES, PR# and
+;; IN#, read it there. <FileBuffers::Find> also leaves the lowest free file buffer in it, and the catalog prints volume
+;; numbers and file sizes from it through <FileManager::PrintNumber>.
+;; See: <Scanner::ParseNumber>, <FileBuffers::Find>, <FileManager::PrintNumber>
 ;; Also: CNUM (DOS33, DOS31)
 ParsedNumber = Address5
 
@@ -168,22 +133,23 @@ IBCHN = $E836
 
 ;; Integer BASIC's LOMEM, the bottom of its variables (2 bytes).
 ;;
-;; <IBRUN> sets the end of the variables, <IBSOV>, back to it to clear them, and loading a program (<ELOAD>) checks
-;; that the program stays above it.
-;; See: <IBSOV>, <IBHMEM>, <IBSOP>, <IBRUN>
+;; <Commands::IntegerRun> sets the end of the variables, <IBSOV>, back to it to clear them, and loading a program
+;; (<Commands::Load>) checks that the program stays above it.
+;; See: <IBSOV>, <IBHMEM>, <IBSOP>, <Commands::IntegerRun>
 IBLMEM = $4A
 
 ;; Integer BASIC's HIMEM, the top of the memory it may use (2 bytes).
 ;;
-;; <BLDFTB> sets it, and <IBSOP>, just below DOS's file buffers. SAVE (<ESAVE>) writes the program from <IBSOP> up
-;; to it, and loading a program places it to end there.
-;; See: <IBSOP>, <IBLMEM>, <BLDFTB>
+;; <FileBuffers::Build> sets it, and <IBSOP>, just below DOS's file buffers. SAVE (<Commands::Save>) writes the program
+;; from <IBSOP> up to it, and loading a program places it to end there.
+;; See: <IBSOP>, <IBLMEM>, <FileBuffers::Build>
 IBHMEM = $4C
 
 ;; The start of Integer BASIC's program (2 bytes), which grows down from HIMEM, <IBHMEM>.
 ;;
-;; <BLDFTB> sets it to HIMEM, an empty program, and loading a program sets it to HIMEM less the program's length.
-;; See: <IBHMEM>, <IBLMEM>, <ESAVE>, <ELOAD>
+;; <FileBuffers::Build> sets it to HIMEM, an empty program, and loading a program sets it to HIMEM less the program's
+;; length.
+;; See: <IBHMEM>, <IBLMEM>, <Commands::Save>, <Commands::Load>
 IBSOP = $CA
 
 ;; Integer BASIC's error entry, just after its message is printed, where DOS goes to report a failed command.
@@ -197,17 +163,17 @@ IBCONT = $E003
 
 ;; The end of Integer BASIC's variables (2 bytes), which grow up from LOMEM, <IBLMEM>.
 ;;
-;; <IBRUN> sets it to LOMEM, clearing the variables, before it starts a program.
-;; See: <IBLMEM>, <IBRUN>
+;; <Commands::IntegerRun> sets it to LOMEM, clearing the variables, before it starts a program.
+;; See: <IBLMEM>, <Commands::IntegerRun>
 IBSOV = $CC
 
 ; Applesoft.
 
 ;; Applesoft's <TXTTAB>, the start of the program, normally $0801 (2 bytes).
 ;;
-;; SAVE (<ESAVE>) writes the program from it up to <ASEOP>, and loading a program places it there and sets <ASEOP>
-;; and <ASEOP2> to its end.
-;; See: <AppleSoft:TXTTAB>, <ASEOP>, <ASEOP2>, <ELOAD>
+;; SAVE (<Commands::Save>) writes the program from it up to <ASEOP>, and loading a program places it there and sets
+;; <ASEOP> and <ASEOP2> to its end.
+;; See: <AppleSoft:TXTTAB>, <ASEOP>, <ASEOP2>, <Commands::Load>
 ASSOP = $67
 
 ;; Applesoft's <PRGEND>, the end of the program (2 bytes).
@@ -224,27 +190,28 @@ ASEOP2 = $69
 
 ;; Applesoft's MEMSIZ, HIMEM, the top of the memory it may use (2 bytes).
 ;;
-;; <BLDFTB> sets it, and <ASHM2>, just below DOS's file buffers, and loading a program checks that it ends below it.
-;; See: <AppleSoft:MEMSIZ>, <ASHM2>, <BLDFTB>
+;; <FileBuffers::Build> sets it, and <ASHM2>, just below DOS's file buffers, and loading a program checks that it ends
+;; below it.
+;; See: <AppleSoft:MEMSIZ>, <ASHM2>, <FileBuffers::Build>
 ASHM1 = $73
 
 ;; Applesoft's FRETOP, the bottom of the strings, which grow down from HIMEM (2 bytes).
 ;;
-;; <BLDFTB> sets it to HIMEM, <ASHM1>, which clears the strings.
-;; See: <AppleSoft:FRETOP>, <ASHM1>, <BLDFTB>
+;; <FileBuffers::Build> sets it to HIMEM, <ASHM1>, which clears the strings.
+;; See: <AppleSoft:FRETOP>, <ASHM1>, <FileBuffers::Build>
 ASHM2 = $6F
 
 ;; Applesoft's <LOCK> flag: bit 7 set when the program is run-only.
 ;;
-;; SAVE (<ESAVE>) refuses such a program, with PROGRAM TOO LARGE.
-;; See: <AppleSoft:LOCK>, <ESAVE>
+;; SAVE (<Commands::Save>) refuses such a program, with PROGRAM TOO LARGE.
+;; See: <AppleSoft:LOCK>, <Commands::Save>
 ASRNX = $D6
 
 ;; Applesoft's <ERRFLG>: bit 7 set while an ONERR GOTO is in force.
 ;;
-;; DOS's <ERROR> prints no message while it is set, so that the program's handler deals with the error. <ASRUN1>
-;; and <ASRUN2> clear it when DOS starts a program.
-;; See: <AppleSoft:ERRFLG>, <ERROR>, <ASRUN1>
+;; DOS's <Errors::Report> prints no message while it is set, so that the program's handler deals with the error.
+;; <Commands::ApplesoftRomRun> and <Commands::ApplesoftRamRun> clear it when DOS starts a program.
+;; See: <AppleSoft:ERRFLG>, <Errors::Report>, <Commands::ApplesoftRomRun>
 ASONERR = $D8
 
 ;; ROM Applesoft's error entry, where DOS goes to report a failed command.

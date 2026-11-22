@@ -1,108 +1,183 @@
-;; DOS 3.2 RWTS: WRITE A DATA FIELD
+; retrocore: style=strict
+;; DOS 3.2 RWTS: the data field writer ($B86A-$B8FC where DOS runs)
 ;;
-;; WRITE13 writes the data field of the sector whose address field has just passed the head: self-sync bytes,
-;; the prologue D5 AA AD, the 410 nibbles PRENIB13 prepared, a checksum nibble and the epilogue DE AA EB. Runs
-;; at $B86A-$B8FC where DOS runs. docs/DiskII.md explains the data field and writing.
+;; <DiskII::WriteDataField> writes the data field of the sector whose address field has just passed the head:
+;; self-sync bytes, the prologue D5 AA AD, the 410 nibbles <DiskII::PreNibble> prepared, a checksum nibble and the
+;; epilogue DE AA EB. docs/DiskII.md explains the data field and writing.
 
-;; Writes NBUF2 and NBUF1 as a data field, in the 32-cycle rhythm the drive needs.
+; DiskII: the data field writer and the nibble writer it calls.
+.scope DiskII continued
+
+; The marks that start and end a field. Both kinds of field start D5 AA, a pair that never occurs inside one;
+; the third nibble says which kind it is.
+
+;; The first nibble of every field's prologue.
+PROLOGUE_FIRST = $D5
+
+;; The second nibble of every field's prologue.
+PROLOGUE_SECOND = $AA
+
+;; The third nibble of an address field's prologue.
+ADDRESS_MARK = $B5
+
+;; The third nibble of a data field's prologue.
+DATA_MARK = $AD
+
+;; The first nibble of every field's epilogue.
+EPILOGUE_FIRST = $DE
+
+;; The second nibble of every field's epilogue.
+EPILOGUE_SECOND = $AA
+
+;; The third nibble of every field's epilogue, which the readers never check.
+EPILOGUE_THIRD = $EB
+
+;; A self-sync byte: $FF written with a 0 bit after it, so that a reader that starts anywhere falls into step.
+SELF_SYNC = $FF
+
+;; Writes <HighBits> and <LowBits> as a data field, in the 32-cycle rhythm the drive needs.
 ;;
-;; Each value goes out exclusive-ored with the one before it, through NIBL, which turns a five-bit value into
-;; a nibble; the last value written is the checksum. NBUF2 goes first, from its last value down to its first,
-;; then NBUF1 from its first value up. Between the stores to Q6H the loops take exactly 32 cycles, counting
-;; SLOTZ's 3-cycle load in one loop and SLOTABS's 4-cycle load in the other. The ten self-sync bytes before the
-;; prologue are $FF stored every 36 cycles, which writes a ninth bit, a 0, after each: the sync pattern of
-;; 13-sector disks.
-;; In:    X = slot * 16, NBUF1 and NBUF2 from PRENIB13, the drive running, the card in read mode
-;; Out:   carry = clear, with the card back in read mode
-;; Errors: carry set if the disk is write-protected; nothing is written
-;; Uses:  A, Y, WTEMP, SLOTZ, SLOTABS
+;; At $B86A where DOS runs. Each value goes out exclusive-ored with the one before it, through
+;; <WriteTranslate>, which turns a five-bit value into a nibble; the last value written is the checksum. <LowBits>
+;; goes first, from its last value down to its first, then <HighBits> from its first value up. Between the stores
+;; to <LoadLatch> the loops take exactly 32 cycles, counting <WriteDataField::ZeroPageSlot>'s 3-cycle load in one
+;; loop and <WriteDataField::AbsoluteSlot>'s 4-cycle load in the other. The 11 self-sync bytes before the prologue
+;; (the first stored as the card goes into write mode, then 10 more) are $FF stored every 36 cycles, which writes
+;; a ninth bit, a 0, after each: the sync pattern of 13-sector disks.
+;; In: X = slot * 16, <HighBits> and <LowBits> from <PreNibble>, the drive running, the card in read mode
+;; Out: carry = clear, with the card back in read mode
+;; Errors: carry = set if the disk is write-protected; nothing is written
 ;; Keeps: X
-WRITE13:
+;; Also: WRITE (DOS31)
+.proc WriteDataField
+
+;; <LowBits>' first value, kept in zero page so that the loops can load it in 3 cycles where they change over.
+;; Also: WTEMP (DOS33, DOS31)
+FirstValue = LowResBase
+
+;; The slot times 16, in zero page so that the first loop can load it in 3 cycles.
+;; Also: SLOTZ (DOS33, DOS31)
+ZeroPageSlot = LowResBaseHigh
+
+;; The slot times 16 again, outside zero page (slot 0's screen-hole byte at $0678), so that the second loop can
+;; load it in 4 cycles.
+;; Also: SLOTABS (DOS33, DOS31)
+AbsoluteSlot = $0678
+
+;; The self-sync bytes after the first.
+MORE_SYNC_BYTES = 10
+
+    ; Is the disk write-protected? Load mode, then read mode, puts the write-protect switch in bit 7.
     sec                             ; the result if the disk is protected
     lda LoadLatch,x
-    lda ReadMode,x                       ; sense write protect: bit 7 set if protected
-    bmi WEXIT
-    stx SLOTZ
-    stx SLOTABS
-    lda NBUF2
-    sta WTEMP                       ; for a 3-cycle load where the loops change over
-    lda #$FF
-    sta WriteMode,x                       ; write mode, $FF in the latch
+    lda ReadMode,x
+    bmi ToReadMode
+    stx ZeroPageSlot
+    stx AbsoluteSlot
+    lda LowBits
+    sta FirstValue
+
+    ; Into write mode with $FF in the latch: the first self-sync byte. Then 10 more, 36 cycles apart.
+    lda #SELF_SYNC
+    sta WriteMode,x
     ora DataLatch,x
     pha
     pla
     nop
-    ldy #$0A
-WSYNC:
-    ora WTEMP                       ; A stays $FF; a 3-cycle delay
-    jsr WNIBL7
+    ldy #MORE_SYNC_BYTES
+;; One more self-sync byte.
+;; Also: WSYNC (DOS33, DOS31)
+SyncLoop:
+    ora FirstValue                  ; A stays $FF; a 3-cycle delay
+    jsr WriteNibble::KeepCarry
     dey
-    bne WSYNC
-    lda #$D5
-    jsr WNIBL9
-    lda #$AA
-    jsr WNIBL9
-    lda #$AD
-    jsr WNIBL9
+    bne SyncLoop
 
-; NBUF2, from its 154th value down. A is 0, the value before the first.
+    ; The prologue.
+    lda #PROLOGUE_FIRST
+    jsr WriteNibble
+    lda #PROLOGUE_SECOND
+    jsr WriteNibble
+    lda #DATA_MARK
+    jsr WriteNibble
+
+    ; LowBits, from its 154th value down. A is 0, the value before the first.
     tya
-    ldy #$9A
-    bne WDATA1                      ; always
-WDATA0:
-    lda NBUF2,y
-WDATA1:
-    eor NBUF2-1,y
+    ldy #LOW_BITS_SIZE
+    bne LowBitsFirst                ; always
+;; Loads the <LowBits> value just written, for the next exclusive-or.
+;; Also: WDATA0 (DOS33, DOS31)
+LowBitsLoop:
+    lda LowBits,y
+;; Exclusive-ors A with the next value down, translates it and writes it.
+;; Also: WDATA1 (DOS33, DOS31)
+LowBitsFirst:
+    eor LowBits - 1,y
     tax
-    lda NIBL,x
-    ldx SLOTZ
+    lda WriteTranslate,x
+    ldx ZeroPageSlot
     sta LoadLatch,x
     lda DataLatch,x
     dey
-    bne WDATA0
+    bne LowBitsLoop
 
-; NBUF1, from its first value up. A is NBUF2's first value, WTEMP's copy.
-    lda WTEMP
+    ; HighBits, from its first value up. A is LowBits' first value, FirstValue's copy.
+    lda FirstValue
     nop
-WDATA2:
-    eor NBUF1,y
+;; One <HighBits> value.
+;; Also: WDATA2 (DOS33, DOS31)
+HighBitsLoop:
+    eor HighBits,y
     tax
-    lda NIBL,x
-    ldx SLOTABS
+    lda WriteTranslate,x
+    ldx AbsoluteSlot
     sta LoadLatch,x
     lda DataLatch,x
-    lda NBUF1,y
+    lda HighBits,y
     iny
-    bne WDATA2
+    bne HighBitsLoop
 
-; The checksum, NBUF1's last value, then the epilogue.
+    ; The checksum, HighBits' last value, then the epilogue.
     tax
-    lda NIBL,x
-    ldx SLOTZ
-    jsr WNIBL
-    lda #$DE
-    jsr WNIBL9
-    lda #$AA
-    jsr WNIBL9
-    lda #$EB
-    jsr WNIBL9
-    lda ReadMode,x                       ; back to read mode
-WEXIT:
+    lda WriteTranslate,x
+    ldx ZeroPageSlot
+    jsr WriteNibble::Now
+    lda #EPILOGUE_FIRST
+    jsr WriteNibble
+    lda #EPILOGUE_SECOND
+    jsr WriteNibble
+    lda #EPILOGUE_THIRD
+    jsr WriteNibble
+    lda ReadMode,x
+;; Turns Q6 off, leaving the card in read mode, and returns; also the write-protect exit.
+;; Also: WEXIT (DOS33, DOS31)
+ToReadMode:
     lda DataLatch,x
     rts
+.endproc
 
-;; Writes the nibble in A, the store 32 cycles after the store before it when the caller's code between the
-;; two calls is an `LDA #nibble` and a JSR to WNIBL9.
-;; In:    A = the nibble, X = slot * 16, the card in write mode
-;; Out:   carry = clear at WNIBL9
+;; Writes the nibble in A, the store 32 cycles after the store before it when the caller's code between the two
+;; calls is an `lda #nibble` and a `jsr` to this routine.
+;;
+;; At $B8F3 where DOS runs. The `ora` that shifts the nibble out leaves A changed.
+;; In: A = the nibble, X = slot * 16, the card in write mode
+;; Out: carry = clear (KeepCarry and Now leave it as it was)
 ;; Keeps: X, Y
-;; Entry: WNIBL7 = 2 cycles less delay, keeping the carry; WNIBL = no delay
-WNIBL9:
+;; Entry:
+;;   KeepCarry = 2 cycles less delay, keeping the carry
+;;   Now = no delay
+;; Also: WNIBL9 (DOS33, DOS31)
+.proc WriteNibble
     clc
-WNIBL7:
+;; Also: WNIBL7 (DOS33, DOS31)
+KeepCarry:
     pha
     pla
-WNIBL:
+;; Also: WNIBL (DOS33, DOS31)
+Now:
     sta LoadLatch,x
     ora DataLatch,x
     rts
+.endproc
+
+.endscope

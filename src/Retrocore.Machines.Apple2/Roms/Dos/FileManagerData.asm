@@ -1,4 +1,4 @@
-; retrocore: style=strict ignore=unlinked-name:RWTS|OPEN|CLOSE|LOCK|ERROR|SYNTAX|VOLUME -- commands, messages, RWTS
+; retrocore: style=strict ignore=unlinked-name:LOCK -- commands, messages, RWTS
 ;; DOS 3.3 and 3.2 file manager: the parameter list, the VTOC and catalog buffers and the file control block
 ;;
 ;; The file manager's data and the layouts it works with: the parameter list through which a program or DOS's
@@ -8,10 +8,11 @@
 ;; manager's work cells and CATALOG's tables. docs/Dos.md explains the VTOC, the catalog, track/sector lists and the
 ;; file manager's calls; the track/sector list's layout is in IoBlock.asm.
 ;;
-;; Where DOS runs, the data is at $B397-$B5FD, just below the boot loader's page at $B600: the work cells and
-;; tables from $B397, the VTOC buffer at $B3BB, the catalog buffer at $B4BB, the parameter list at $B5BB and the
-;; file control block at $B5D1. Each open file keeps its own copy of the file control block in its DOS buffer (its
-;; work area): <CLCFCB> copies it in when a request starts and <RTNFCB> copies it back when it ends.
+;; Where DOS runs, the data is at $B397-$B5FD, just below the boot loader's page at $B600: the work cells and tables
+;; from $B397, the VTOC buffer at $B3BB, the catalog buffer at $B4BB, the parameter list at $B5BB and the file control
+;; block at $B5D1. Each open file keeps its own copy of the file control block in its DOS buffer (its work area):
+;; <FileManager::LoadWorkArea> copies it in when a request starts and <FileManager::SaveWorkArea> copies it back when it
+;; ends.
 ;;
 ;; Where Apple's source only reserves space (.res) or skips to the end of a buffer (.org), each master holds whatever
 ;; was in memory when its DOS image was saved; the master's VTOC and catalog buffers, parameter list and file control
@@ -388,12 +389,12 @@ WRITTEN = RWTS_WRITE
 ; The file manager's work cells and CATALOG's tables, at $B397 where DOS runs.
 .scope FileManager continued
 
-;; The track of the catalog sector in <CatalogBuffer>, where <WRVDIR> writes it back.
+;; The track of the catalog sector in <CatalogBuffer>, where <FileManager::WriteCatalogSector> writes it back.
 ;; Also: CVDTRK (DOS33, DOS31)
 CurrentCatalogTrack:
     Leftover $00, $11, $00
 
-;; The sector of the catalog sector in <CatalogBuffer>, where <WRVDIR> writes it back.
+;; The sector of the catalog sector in <CatalogBuffer>, where <FileManager::WriteCatalogSector> writes it back.
 ;; Also: CVDSEC (DOS33, DOS31)
 CurrentCatalogSector:
     Leftover $00, $0D, $00
@@ -403,23 +404,26 @@ CurrentCatalogSector:
 CurrentParameters:
     .byte 0, 0
 
-;; The stack pointer when the file manager was entered (<DOSENT>); <RETURN> restores it to leave from any depth.
+;; The stack pointer when the file manager was entered (<CallFileManager::ForDos>); <FileManager::Leave> restores it to
+;; leave from any depth.
 ;; Also: ENTSTK (DOS33, DOS31)
 EntryStack:
     Leftover $00, $F5, $F5
 
-;; Scratch: the offset of the catalog entry being looked at (<FNDFIL>, OPEN, DELETE, LOCK, RENAME, CATALOG),
-;; DELETE's index into the track/sector list, and the relocator's saved X.
+;; Scratch: the offset of the catalog entry being looked at (<FileManager::FindFile>, OPEN, DELETE, LOCK, RENAME,
+;;     CATALOG), DELETE's index into the track/sector list, and the relocator's saved X.
 ;; Also: TEMP1 (DOS33, DOS31)
 Scratch1:
     Leftover $00, $23, $00
 
-;; Scratch: <FNDFIL>'s pass (1, then 0), <GNWSEC>'s saved index, the lines left on CATALOG's screen.
+;; Scratch: <FileManager::FindFile>'s pass (1, then 0), <FileManager::AllocateDataSector>'s saved index, the lines left
+;;     on CATALOG's screen.
 ;; Also: TEMP2 (DOS33, DOS31)
 Scratch2:
     Leftover $00, $01, $00
 
-;; Scratch: <GETSEC>'s search state (1 once it has turned round at track 0); the lock bit for LOCK and UNLOCK.
+;; Scratch: <FileManager::AllocateSector>'s search state (1 once it has turned round at track 0); the lock bit for LOCK
+;;     and UNLOCK.
 ;; Also: TEMP3 (DOS33, DOS31)
 Scratch3:
     .byte 0
@@ -429,9 +433,9 @@ Scratch3:
 BootSlot:
     .byte 0
 
-;; The free-sector map of an empty track, last byte first: INIT (<FFMT>) copies it into each track of the VTOC's
-;; map from the end, giving $FF $FF $00 $00 (sectors 15 to 0 free) for every track but 0 to 2 (DOS) and 17 (the
-;; VTOC and catalog). DOS 3.2's is that of a 13-sector track, $FF $F8 $00 $00.
+;; The free-sector map of an empty track, last byte first: INIT (<FileManager::InitDisk>) copies it into each track of
+;; the VTOC's map from the end, giving $FF $FF $00 $00 (sectors 15 to 0 free) for every track but 0 to 2 (DOS) and 17
+;; (the VTOC and catalog). DOS 3.2's is that of a 13-sector track, $FF $F8 $00 $00.
 ;; Also: ALC10S (DOS33, DOS31)
 EmptyTrackMap:
 .if DOS32
@@ -440,7 +444,7 @@ EmptyTrackMap:
     .byte 0, 0, $FF, $FF
 .endif
 
-;; The powers of ten CATALOG's <PRNUM> divides by, used from 100 down, to print a three-digit number.
+;; The powers of ten CATALOG's <FileManager::PrintNumber> divides by, used from 100 down, to print a three-digit number.
 ;; Also: CVTAB (DOS33, DOS31)
 PowersOfTen:
     .byte 1, 10, 100
@@ -462,12 +466,13 @@ VolumeMessage:
 ;; Also: VML (DOS33, DOS31)
 VOLUME_MESSAGE_LAST = * - VolumeMessage - 1
 
-;; The VTOC buffer, laid out as <Vtoc>: one sector, read from and written to track 17 sector 0 (<RDVTOC>,
-;; <WRVTOC>).
+;; The VTOC buffer, laid out as <Vtoc>: one sector, read from and written to track 17 sector 0 (<FileManager::ReadVtoc>,
+;; <FileManager::WriteVtoc>).
 ;;
-;; At $B3BB where DOS runs. The values assembled here are those of an empty 35-track disk. INIT (<FFMT>) sets the
-;; volume number, the allocation fields and the bit map, zeroing everything from <VtocBuffer::FreeSectors> on,
-;; then writes the buffer as the new disk's VTOC; the other fields go out as the buffer holds them at the time.
+;; At $B3BB where DOS runs. The values assembled here are those of an empty 35-track disk. INIT
+;; (<FileManager::InitDisk>) sets the volume number, the allocation fields and the bit map, zeroing everything from
+;; <VtocBuffer::FreeSectors> on, then writes the buffer as the new disk's VTOC; the other fields go out as the buffer
+;; holds them at the time.
 ;; Also: VTOC (DOS33, DOS31)
 .proc VtocBuffer
 ;; <Vtoc::DOS_TYPE>: 4, or 2 in DOS 3.2.
@@ -552,7 +557,8 @@ SectorsPerTrack:
 ;; Also: VSECLN (DOS33, DOS31)
 BytesPerSector:
     .word SECTOR_SIZE
-;; <Vtoc::FREE_SECTORS>. <GETSEC>, <FRETRK> and <FRESEC> read and change it.
+;; <Vtoc::FREE_SECTORS>. <FileManager::AllocateSector>, <FileManager::ReleaseTrack> and <FileManager::MergeFreeMap> read
+;; and change it.
 ;; Also: VSECAL (DOS33, DOS31)
 FreeSectors:
 ; leftover: .org VTOC+256 (the rest of the VTOC buffer)
@@ -603,7 +609,8 @@ FreeSectors:
 .endif
 .endproc
 
-;; The catalog buffer, laid out as <CatalogSector>: one catalog sector (<RDVDIR>, <WRVDIR>).
+;; The catalog buffer, laid out as <CatalogSector>: one catalog sector (<FileManager::ReadCatalogSector>,
+;; <FileManager::WriteCatalogSector>).
 ;;
 ;; At $B4BB where DOS runs. INIT zeroes it before it writes the catalog.
 ;; Also: VOLDIR (DOS33, DOS31)
@@ -686,10 +693,11 @@ End:
 .endscope
 
 ;; DOS's own parameter list, laid out as <FileParameters>, which the command interpreter fills in to call the file
-;; manager (<DOSENT>).
+;; manager (<CallFileManager::ForDos>).
 ;;
-;; At $B5BB where DOS runs; the vector at $03DC, <LocateParameterList at CCBLDR>, gives its address. <CLRCCB>
-;; clears it before each command. Several labels share a byte, as the struct's fields overlap.
+;; At $B5BB where DOS runs; the vector at $03DC, <LocateParameterList at CCBLDR>, gives its address.
+;; <Scanner::ClearParameterList> clears it before each command. Several labels share a byte, as the struct's fields
+;; overlap.
 ;; Also: CCB (DOS33, DOS31)
 .proc DosFileParameters
 .assert MASTER || * = $B5BB, "DOS's parameter list is at $B5BB where DOS runs."
@@ -766,8 +774,9 @@ ReturnCode:
 ReturnModifier:
     ; leftover: .res 1
     Leftover $FD, $00, $00
-;; <FileParameters::WORK_AREA>. <MVFCBP>, <MVFCBD> and <MVFCBS> reach the three buffer addresses as WorkArea + 0,
-;; 2 and 4, so the three stay in this order.
+;; <FileParameters::WORK_AREA>. <FileManager::PointAtWorkArea>, <FileManager::PointAtListBuffer> and
+;; <FileManager::PointAtDataBuffer> reach the three buffer addresses as WorkArea + 0, 2 and 4, so the three stay in this
+;; order.
 ;; Also: CCBFCB (DOS33, DOS31), CFCBAD (DOS33, DOS31)
 WorkArea:
     ; leftover: .res 2
@@ -800,10 +809,11 @@ Spare:
 
 ;; The file control block: the 45 bytes that describe the open file while a request runs.
 ;;
-;; <CLCFCB> copies the file's work area here when a request starts, and <RTNFCB> copies it back when it ends, so a
-;; file's state lives in its DOS buffer between requests. OPEN (<DCBSUP>) clears it and fills it in. Apple's names
-;; for its fields start with DCB, "data control block": the DCB is the whole of it. The pairs of bytes hold a low
-;; byte, then a high byte. A relative sector counts the file's sectors from 0 at its start.
+;; <FileManager::LoadWorkArea> copies the file's work area here when a request starts, and <FileManager::SaveWorkArea>
+;; copies it back when it ends, so a file's state lives in its DOS buffer between requests. OPEN
+;; (<FileManager::SetUpWorkArea>) clears it and fills it in. Apple's names for its fields start with DCB, "data control
+;; block": the DCB is the whole of it. The pairs of bytes hold a low byte, then a high byte. A relative sector counts
+;; the file's sectors from 0 at its start.
 ;; Also: FCB (DOS33), FCBB (DOS31), FCBDCB (DOS33, DOS31)
 .proc FileControlBlock
 ;; Byte 0: the track of the file's first track/sector list.
@@ -912,13 +922,13 @@ PositionRecordByte:
     ; leftover: .res 2
     Leftover $FC, $00, $00
     Leftover $FF, $00, $00
-;; Bytes $1D-$1E: the file's length in sectors, as in its catalog entry; <GETSEC> adds to it.
+;; Bytes $1D-$1E: the file's length in sectors, as in its catalog entry; <FileManager::AllocateSector> adds to it.
 ;; Also: DCBNSA (DOS33, DOS31)
 SectorCount:
     ; leftover: .res 2
     Leftover $FC, $00, $00
     Leftover $FC, $00, $00
-;; Byte $1F: the reserved track's sector count-down for <GETSEC>: the last sector number it tried.
+;; Byte $1F: the reserved track's sector count-down for <FileManager::AllocateSector>: the last sector number it tried.
 ;; Also: DCBALS (DOS33, DOS31)
 ReservedSector:
     ; leftover: .res 1
@@ -928,7 +938,8 @@ ReservedSector:
 ReservedTrack:
     ; leftover: .res 1
     Leftover $FC, $00, $00
-;; Bytes $21-$24: the reserved track's free-sector map, shifted left once for each sector <GETSEC> tried.
+;; Bytes $21-$24: the reserved track's free-sector map, shifted left once for each sector <FileManager::AllocateSector>
+;; tried.
 ;; Also: DCBABM (DOS33, DOS31)
 ReservedMap:
     ; leftover: .res 4
@@ -951,7 +962,8 @@ SlotTimes16:
 Drive:
     ; leftover: .res 1
     Leftover $FC, $01, $01
-;; Byte $28: the volume number, complemented; <DCBIO> complements it back for RWTS, and the boot loader reads it.
+;; Byte $28: the volume number, complemented; <FileManager::AccessDisk> complements it back for RWTS, and the boot
+;; loader reads it.
 ;; Also: DCBVOL (DOS33, DOS31)
 VolumeComplement:
     ; leftover: .res 1
@@ -974,7 +986,7 @@ Spare:
 
 ; The sizes.
 
-;; The size of a parameter list, 22: what <CLRCCB> clears.
+;; The size of a parameter list, 22: what <Scanner::ClearParameterList> clears.
 ;; Also: CCBLEN (DOS33, DOS31)
 FILE_PARAMETERS_SIZE = .sizeof(FileParameters)
 
@@ -986,7 +998,7 @@ FILE_CONTROL_SIZE = 45
 ;; Also: VDLEN (DOS33, DOS31)
 CATALOG_SECTOR_SIZE = .sizeof(CatalogSector)
 
-;; The size of a catalog sector's file entries, 245: seven of 35 bytes. <FNDFIL> stops there.
+;; The size of a catalog sector's file entries, 245: seven of 35 bytes. <FileManager::FindFile> stops there.
 ;; Also: VDFLEN (DOS33, DOS31)
 CATALOG_ENTRIES_SIZE = CATALOG_ENTRY_COUNT * .sizeof(CatalogEntry)
 

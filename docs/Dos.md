@@ -29,23 +29,23 @@ relocates debugs at the source's lines. The debugger maps both years' running bu
 Monitor and hardware addresses where DOS uses the SDK's shared names (`PROMPT`, `HOME`, `IORTS`) come from
 [`IIeEquates.asm`](../src/Retrocore.Machines.Apple2/Roms/System/IIeEquates.asm) and
 [`MonitorEntries.asm`](../src/Retrocore.Machines.Apple2/Roms/System/MonitorEntries.asm), included by
-`Equates.asm`; addresses where DOS uses its own names (`OUTSW` for the output hook) live in `Equates.asm`.
+`Equates.asm`; addresses where DOS uses its own names (`OutputHook` (`OUTSW`) for the output hook) live in `Equates.asm`.
 
 The two years differ in Apple's 1982 "revision B" patches, which the 1980 DOS lacks. Apple's source already
-has a switch for them, `DOS33B`: off, it builds the 1980 code exactly. The revision changes three things: how
-APPEND finds the end of a file (`MOVEOF`, and `FIXIT2` at the end of the `EOFFIX` patch, which in the 1980
+has a switch for them, `REVISION_B` (`DOS33B`): off, it builds the 1980 code exactly. The revision changes three things: how
+APPEND finds the end of a file (`AppendFix::ClearUnlessAppend` (`MOVEOF`), and `AppendFix::Finish` (`FIXIT2`) at the end of the `AppendFix::EndOfData` (`EOFFIX`) patch, which in the 1980
 DOS returns straight to POSITION's call), a carry left set when the file manager computes a record's place in
-a file (`LOCSEC`), and turning off the IIe's 80-column display after booting (`OFF80`). The 1983 DOS keeps the
-extra code in a patch area after `MSWAIT`; the 1980 DOS has leftover bytes there instead.
+a file (`FileManager::SetPosition` (`LOCSEC`)), and turning off the IIe's 80-column display after booting (`TurnOff80Columns` (`OFF80`)). The 1983 DOS keeps the
+extra code in a patch area after `DiskII::Wait` (`MSWAIT`); the 1980 DOS has leftover bytes there instead.
 
 Two details keep each image exact:
 
 - **Leftover bytes.** Where DOS reserves storage, such as its VTOC and catalog buffers, a master holds whatever
   was in memory when it was written: parts of an old VTOC, catalog entries, the end of a previous program. The
   sources keep these bytes as data, marked "leftover", in place of the reserved space; where the two masters
-  differ, small ones use the `LEFTOVER` macro (the 1983 byte, then the 1980 byte) and larger ones `.if`.
-- **One patch differs from the listing.** The listing puts a patch, `FIXIT2`, in the boot loader's page; the
-  680-0210-A master has a shorter version of it in the patch area after `MSWAIT` ($BA84). The sources follow
+  differ, small ones use the `Leftover` (`LEFTOVER`) macro (the 1983 byte, then the 1980 byte) and larger ones `.if`.
+- **One patch differs from the listing.** The listing puts a patch, `AppendFix::Finish` (`FIXIT2`), in the boot loader's page; the
+  680-0210-A master has a shorter version of it in the patch area after `DiskII::Wait` (`MSWAIT`) ($BA84). The sources follow
   the master.
 
 
@@ -146,13 +146,13 @@ debugger maps the running build.
 
 The two versions share one copy of the relocator, the command interpreter, the file manager and RWTS's
 equates and patches: each root sets `DOS32`, and the few places they differ are `.if DOS32` blocks.
-`LEFTOVER` takes three bytes, one for each master (1983, 1980, then DOS 3.2). The boot loader and RWTS are
+`Leftover` (`LEFTOVER`) takes three bytes, one for each master (1983, 1980, then DOS 3.2). The boot loader and RWTS are
 too different to share, so DOS 3.2 has its own, in the modules whose names end in `32` (`BootLoader32.asm`,
 `Rwts32.asm` and so on).
 
 The command interpreter and file manager are the 1980 DOS 3.3's, at the same addresses, apart from the disk's
 geometry (13 sectors, the catalog in sectors 12 to 1) and three places DOS 3.3 later changed: the end of APPEND,
-SAVE and BSAVE without DOS 3.3's verify, and DOSGO's handling of END OF DATA, which DOS 3.3's `EOFFIX` patch
+SAVE and BSAVE without DOS 3.3's verify, and DOSGO's handling of END OF DATA, which DOS 3.3's `AppendFix::EndOfData` (`EOFFIX`) patch
 changes. The rest differs:
 
 - **Booting.** The 13-sector boot ROM decodes the boot sector only partly, in the order the nibbles arrive, so
@@ -200,16 +200,16 @@ Documenting the source turned up a few things DOS does that its manuals don't sa
 happens in the source:
 
 - **Block writes write one byte more than asked.** The file manager writes a byte before it counts one off
-  (`WNXBLK`, `DTBLN`), so a block write of n bytes writes n + 1, while a block read reads n. SAVE and BSAVE
+  (`FileManager::WriteNextRange` (`WNXBLK`), `FileManager::CountDownRange` (`DTBLN`)), so a block write of n bytes writes n + 1, while a block read reads n. SAVE and BSAVE
   pass the full length, so every binary and BASIC file holds one byte more than its recorded length.
-- **CATALOG shows sizes modulo 256.** `PRNUM` prints only the low byte of the sector count, so a file of 300
+- **CATALOG shows sizes modulo 256.** `FileManager::PrintNumber` (`PRNUM`) prints only the low byte of the sector count, so a file of 300
   sectors shows as 044.
-- **INIT keeps part of the last VTOC.** `FFMT` rebuilds only the free-sector map, so a new disk's other VTOC
+- **INIT keeps part of the last VTOC.** `FileManager::InitDisk` (`FFMT`) rebuilds only the free-sector map, so a new disk's other VTOC
   fields come from the last VTOC DOS read, or from DOS's built-in copy if it read none.
-- **Track 0 is never freed.** `FRESEC` and DELETE skip it; DOS keeps tracks 0 to 2 for itself anyway.
-- **INIT doesn't check writing DOS.** `BOOTIO` returns the status of its last sector only, and the caller
+- **Track 0 is never freed.** `FileManager::MergeFreeMap` (`FRESEC`) and DELETE skip it; DOS keeps tracks 0 to 2 for itself anyway.
+- **INIT doesn't check writing DOS.** `Boot::TransferPages` (`BOOTIO`) returns the status of its last sector only, and the caller
   ignores even that, so a disk error while INIT writes tracks 0 to 2 goes unreported.
-- **RWTS leaves a stray return code.** On success `ALLDONE` stores whatever is in A as the IOB's return code;
+- **RWTS leaves a stray return code.** On success `Rwts::Succeed` (`ALLDONE`) stores whatever is in A as the IOB's return code;
   only the carry says whether the call worked, which is what the file manager checks.
 - **The relocator's walk depends on data's values.** The relocator steps through DOS's code instruction by
   instruction to find addresses, and a few data bytes lie inside those ranges. They happen to decode as

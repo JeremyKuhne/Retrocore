@@ -158,9 +158,9 @@ PlotMask = $2E
 ;; <Monitor:NextInstruction> use it to print the bytes and step to the next instruction. The cassette routines keep
 ;; the last input level here while they read a bit.
 ;;
-;; On the Enhanced IIe, the internal firmware's <Firmware:CXINSDS2> sets it for <Monitor:Disassembler::Decode>, and
-;; its <Firmware:RDTAPE2BIT> keeps the cassette input level. DOS's relocator, <Dos33:DOSREL>, calls <Dos33:INSDS2> on
-;; each instruction and reads the instruction's length here to step to the next.
+;; On the Enhanced IIe, the internal firmware's <Firmware:CXINSDS2> sets it for <Monitor:Disassembler::Decode>, and its
+;; <Firmware:RDTAPE2BIT> keeps the cassette input level. DOS's relocator, <Dos33:RelocateDos>, calls
+;; <Dos33:DecodeOpcode> on each instruction and reads the instruction's length here to step to the next.
 ;; See: <Monitor:Disassembler::Decode>, <Monitor:NextInstruction>, <ProgramCounter>, <PlotMask>
 ;; Also: LENGTH (A2RM78, A2RM79, IIEROM82, IIETRM85)
 OperandLength = $2F
@@ -198,12 +198,13 @@ InverseMask = $32
 ;; The character <Monitor:GetLine> prints before it reads a line.
 ;;
 ;; The Monitor sets "*" (<Monitor:CommandLine>), and the Enhanced IIe's mini-assembler "!". Applesoft sets "]" and
-;; Integer `BASIC` ">". DOS watches its output for this character to spot an input line (<Dos33:COS0>), and
-;; <Dos33:TSTRUN> takes "]" to mean that Applesoft is not running a program.
+;; Integer `BASIC` ">". DOS watches its output for this character to spot an input line (<Dos33:Output::LineStart>), and
+;; <Dos33:TestProgramRunning> takes "]" to mean that Applesoft is not running a program.
 ;;
-;; DOS changes it too: its command scanner (<Dos33:SYN1>) stores a value other than "]" for RUN, and <Dos33:ASRUN1>
-;; and <Dos33:ASRUN2> store 0, so that <Dos33:TSTRUN> sees a program running.
-;; See: <Monitor:GetLine>, <Monitor:CommandLine>, <Dos33:TSTRUN>
+;; DOS changes it too: its command scanner (<Dos33:Scanner::ReadOperands::CheckRun>) stores a value other than "]" for
+;; RUN, and <Dos33:Commands::ApplesoftRomRun> and <Dos33:Commands::ApplesoftRamRun> store 0, so that
+;; <Dos33:TestProgramRunning> sees a program running.
+;; See: <Monitor:GetLine>, <Monitor:CommandLine>, <Dos33:TestProgramRunning>
 ;; Also: PROMPT (A2RM78, A2RM79, IIEROM82, IIETRM85)
 PromptCharacter = $33
 
@@ -228,7 +229,7 @@ SavedOutputY = $35
 ;;
 ;; <Monitor:CharacterOut> jumps through <OutputHook>/<OutputHookHigh>. <Monitor:SetScreen> points it at
 ;; <Monitor:ScreenOut>, the screen, and <Monitor:SetOutput>, which the Monitor's Control-P command uses, at a slot's
-;; $Cn00. DOS keeps the hook pointed at itself (<Dos33:OUTSW>) and passes characters on.
+;; $Cn00. DOS keeps the hook pointed at its own <Dos33:OutputHandler> and passes characters on.
 ;; See: <Monitor:CharacterOut>, <Monitor:SetScreen>, <Monitor:SetOutput>, <InputHook>, <OutputHookHigh>
 ;; Also: CSWL (A2RM78, A2RM79, IIEROM82, IIETRM85), OUTSW (DOS33, DOS31)
 OutputHook = $36
@@ -246,7 +247,7 @@ OutputHookHigh = $37
 ;;
 ;; <Monitor:ReadKey> jumps through <InputHook>/<InputHookHigh>. <Monitor:SetKeyboard> points it at
 ;; <Monitor:KeyboardIn>, the keyboard, and <Monitor:SetInput> at a slot's $Cn00. DOS keeps the hook pointed at itself
-;; (<Dos33:INSW>) and passes keys on.
+;; (<Dos33:InputHandler>) and passes keys on.
 ;; See: <Monitor:ReadKey>, <Monitor:SetKeyboard>, <Monitor:SetInput>, <OutputHook>, <InputHookHigh>
 ;; Also: KSWL (A2RM78, A2RM79, IIEROM82, IIETRM85), INSW (DOS33, DOS31)
 InputHook = $38

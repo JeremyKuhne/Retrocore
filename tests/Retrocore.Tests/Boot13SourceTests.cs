@@ -44,7 +44,8 @@ public sealed class Boot13SourceTests
         Convert.ToHexString(SHA256.HashData(result.Sections[0].Bytes.Span)).Should().Be(digest);
 
         DocumentationSet docs = DocumentationSet.Create([DocumentationParser.Parse(source, path)], result);
-        new DocumentationResolver(docs).Check().Should().BeEmpty();
+        // Its links reach the SDK's modules (the Monitor's, DOS's), as in the editor.
+        new DocumentationResolver(docs, SdkDocumentationTests.Sets()).Check().Should().BeEmpty();
     }
 
     /// <summary>

@@ -6,10 +6,6 @@ original documents. The rules a converted source follows are in [AssemblyStyle.m
 why, and how the work is done. The decisions behind each converted source are logged in [conversions](conversions),
 one log per source, which comes to main with that source.
 
-The examples (`CharacterOut`, `CallFileManager`, `TextOn` ...) are names from the Monitor, IIeEquates, the IIe
-firmware and DOS as converted. Those conversions come to main one source at a time, so until each lands, its
-examples are not in main's sources.
-
 ## Why: the audience and what success looks like
 
 Retrocore's goal is a modern development experience on retro computers. Its sources are being written for a developer
@@ -101,8 +97,7 @@ Convert a routine or two at a time, assembling and comparing every build after e
 
 ## Naming rules learned so far
 
-These were settled converting the Monitor, IIeEquates, the IIe firmware and DOS; each source's log, which comes
-to main with the source, says where each was decided.
+These held across the Monitor, IIeEquates, the IIe firmware and DOS; the logs say where each was decided.
 
 - **Rename everything to the style**, even an Apple name that already reads well (`HOME` becomes `Home`), so a
   source reads one way; the old name goes in `Also:`. Names a source defines for another source not yet converted

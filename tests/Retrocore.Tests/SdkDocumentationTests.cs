@@ -518,7 +518,11 @@ public class SdkDocumentationTests
         }
     }
 
-    private static List<DocumentationSet> Sets()
+    /// <summary>
+    ///  The SDK's modules' documentation, as the editor sees it, for checking a source whose links reach into them.
+    /// </summary>
+    /// <returns>A set per module.</returns>
+    internal static List<DocumentationSet> Sets()
     {
         List<DocumentationSet> sets = [];
         foreach ((string file, int origin, int size, Apple2Model model, string module) in (

@@ -1,335 +1,467 @@
-;; DOS 3.3 AND 3.2 FILE MANAGER: DISK I/O AND THE NEXT BYTE OF A FILE (FLOCNXB)
+; retrocore: style=strict
+;; DOS 3.3 and 3.2 file manager: the VTOC and catalog sectors, the calls to RWTS, and the next byte of a file
 ;;
-;; The file manager's lower half, part one. It reads and writes the VTOC and catalog sectors, turns a request
-;; for a sector into a call to RWTS (DCBIO, which also turns RWTS's errors into the file manager's), and finds
-;; the byte at a file's current position: LOCNXB brings in the right track/sector list and data sector, and
-;; allocates new ones when a write runs past the end of the file. Small helpers advance the position and walk
-;; a caller's buffer for block transfers.
+;; Apple's FLOCNXB module, at $AFF7-$B1C8 where DOS runs: the file manager's lower half, part one. It reads and
+;; writes the VTOC and the catalog sectors, turns a request for a sector into a call to RWTS (<FileManager::AccessDisk>,
+;; which also turns RWTS's errors into the file manager's), and finds the byte at a file's position:
+;; <FileManager::LocateNextByte> brings in the right track/sector list and data sector, and allocates new ones when a
+;; write runs past the end of the file. Small helpers advance the position and walk a caller's range of bytes.
 ;;
-;; Where DOS runs, this is $AFF7-$B1C8. The requests that call it (OPEN, READ, WRITE and the rest) are in
-;; FileOpenCloseReadWrite.asm and FileDeleteCatalog.asm; reading and writing the track/sector list and data
-;; sector buffers is in FileManagerIo.asm; sector allocation, the catalog search and the exits (GOODIO,
-;; ERRORB) are in FileLocateSector.asm; the buffers and the file control block are in FileManagerData.asm.
-;; docs/Dos.md describes the VTOC, the catalog and track/sector lists.
+;; The requests that call it are in FileOpenCloseReadWrite.asm and FileDeleteCatalog.asm; reading and writing the
+;; track/sector list and data sector buffers is in FileManagerIo.asm; sector allocation, the catalog search and the
+;; exits are in FileLocateSector.asm; the buffers and the file control block are in FileManagerData.asm. docs/Dos.md
+;; describes the VTOC, the catalog and track/sector lists.
 
-;; Reads the VTOC, track DCBVTN sector 0, into the VTOC buffer.
-;; In:    FileManager::FileControlBlock::VtocTrack = the FileManager::VtocBuffer's track (17), FileManager::FileControlBlock::SlotTimes16/FileManager::FileControlBlock::Drive/FileManager::FileControlBlock::VolumeComplement = the disk
-;; Out:   FileManager::VtocBuffer..VTOC+$FF = the sector
-;; Errors: does not return on a disk error; DCBIO leaves the file manager through ERRORB
-;; Uses:  A, X, Y
-;; See:   <DCBIO>
-RDVTOC:
-    lda #RWTS_READ
-    bne VTIO                        ; always taken
-;; Writes the VTOC buffer back to track DCBVTN sector 0.
-;; In:    FileManager::FileControlBlock::VtocTrack = the FileManager::VtocBuffer's track (17), FileManager::FileControlBlock::SlotTimes16/FileManager::FileControlBlock::Drive/FileManager::FileControlBlock::VolumeComplement = the disk
-;; Errors: does not return on a disk error; DCBIO leaves the file manager through ERRORB
-;; Uses:  A, X, Y
-;; Entry: VTIO = the read or write, with the RWTS command in A
-WRVTOC:
-    lda #RWTS_WRITE
-VTIO:
-    ldy AVTOC
-    sty a:IBBUFP
-    ldy AVTOC+1
-    sty a:IBBUFP+1
-    ldx a:DCBVTN
-    ldy #0
-    jmp DCBIO
-;; Reads a catalog sector into the catalog buffer: the first one, or the one after the sector in the buffer.
+; The file manager: the VTOC, the catalog, RWTS, and the position.
+.scope FileManager continued
+
+;; <Iob::TYPE>'s value, which every IOB holds.
+IOB_TYPE = 1
+
+;; Reads the VTOC, track <FileControlBlock::VtocTrack> sector 0, into <VtocBuffer>.
 ;;
-;; The VTOC must be in its buffer for the first sector, since it holds where the catalog starts. Each catalog
-;; sector holds the track and sector of the next in its bytes 1 and 2 (VDLTRK, VDLSEC); a zero track ends the
-;; chain.
-;; In:    carry = clear for the first catalog sector, set for the next one
-;; Out:   carry clear and the sector in FileManager::CatalogBuffer, FileManager::CurrentCatalogTrack/FileManager::CurrentCatalogSector = where it came from;
-;;   carry set when there is no next sector (the buffer is unchanged)
-;; Errors: does not return on a disk error; DCBIO leaves the file manager through ERRORB
-;; Uses:  A, X, Y
-RDVDIR:
-    php
-    jsr MVVDBA
-    plp
-    bcs RVDA
-RVDC:
-    ldy a:VDIRSC
-    ldx a:VDIRTK
-    bne RVDGO                       ; always taken: the catalog is never on track 0
-RVDA:
-    ldx a:VDLTRK
-    bne RDVC
-    sec                             ; no link: the end of the catalog
-    rts
-RDVC:
-    ldy a:VDLSEC
-RVDGO:
-    stx a:CVDTRK                    ; remember the sector, for WRVDIR
-    sty a:CVDSEC
+;; Disk errors leave the file manager (<AccessDisk>).
+;; In: FileControlBlock::VtocTrack = the VTOC's track,
+;;   FileControlBlock::SlotTimes16/FileControlBlock::Drive/FileControlBlock::VolumeComplement = the disk
+;; Out: VtocBuffer = the VTOC
+;; Also: RDVTOC (DOS33, DOS31)
+.proc ReadVtoc
     lda #RWTS_READ
-    jsr DCBIO
+    bne TransferVtoc                ; always
+.endproc
+
+;; Writes <VtocBuffer> back to track <FileControlBlock::VtocTrack> sector 0.
+;;
+;; Disk errors leave the file manager (<AccessDisk>).
+;; In: VtocBuffer = the VTOC, FileControlBlock::VtocTrack = its track,
+;;   FileControlBlock::SlotTimes16/FileControlBlock::Drive/FileControlBlock::VolumeComplement = the disk
+;; Also: WRVTOC (DOS33, DOS31)
+.proc WriteVtoc
+    lda #RWTS_WRITE
+    ; Falls into TransferVtoc.
+.endproc
+
+;; Reads or writes <VtocBuffer>, at track <FileControlBlock::VtocTrack> sector 0.
+;;
+;; Disk errors leave the file manager (<AccessDisk>).
+;; In: A = <RWTS_READ> or <RWTS_WRITE>, FileControlBlock::VtocTrack = the VTOC's track, and the disk
+;; Also: VTIO (DOS33, DOS31)
+.proc TransferVtoc
+    ldy VtocAddress
+    sty DosIob::Buffer
+    ldy VtocAddress + 1
+    sty DosIob::Buffer + 1
+    ldx FileControlBlock::VtocTrack
+    ldy #0
+    jmp AccessDisk
+.endproc
+
+;; Reads a catalog sector into <CatalogBuffer>: the first one, or the one after the sector in the buffer.
+;;
+;; The VTOC must be in its buffer for the first sector, since it says where the catalog starts. Each catalog sector
+;; holds the track and sector of the next (<CatalogBuffer::NextTrack>, <CatalogBuffer::NextSector>); a track of 0
+;; ends the chain. Disk errors leave the file manager (<AccessDisk>).
+;; In: carry = clear for the first catalog sector, set for the next one
+;; Out: carry = clear, CatalogBuffer = the sector, CurrentCatalogTrack/CurrentCatalogSector = where it came from;
+;;   carry = set when there is no next sector, with the buffer unchanged
+;; Also: RDVDIR (DOS33, DOS31)
+.proc ReadCatalogSector
+    php
+    jsr SetCatalogBuffer
+    plp
+    bcs Next
+
+;; The first sector, where the VTOC says. The branch is always taken for a valid VTOC, whose catalog is never on
+;; track 0; with track 0 there it falls into <Next> and follows the buffer's old link. Nothing refers to Apple's label.
+;; Also: RVDC (DOS33, DOS31)
+First:
+    ldy VtocBuffer::CatalogSector
+    ldx VtocBuffer::CatalogTrack
+    bne ReadIt
+
+;; The sector the one in the buffer links to; track 0 is the end of the catalog.
+;; Also: RVDA (DOS33, DOS31)
+Next:
+    ldx CatalogBuffer::NextTrack
+    bne Linked
+    sec
+    rts
+
+;; Takes the linked sector.
+;; Also: RDVC (DOS33, DOS31)
+Linked:
+    ldy CatalogBuffer::NextSector
+
+;; Reads track X, sector Y, remembering where for <WriteCatalogSector>.
+;; Also: RVDGO (DOS33, DOS31)
+ReadIt:
+    stx CurrentCatalogTrack
+    sty CurrentCatalogSector
+    lda #RWTS_READ
+    jsr AccessDisk
     clc
     rts
-;; Writes the catalog buffer back to the sector it was read from.
-;; In:    FileManager::CatalogBuffer = the catalog sector, FileManager::CurrentCatalogTrack/FileManager::CurrentCatalogSector = where it came from
-;; Errors: does not return on a disk error; DCBIO leaves the file manager through ERRORB
-;; Uses:  A, X, Y
-WRVDIR:
-    jsr MVVDBA
-    ldx a:CVDTRK
-    ldy a:CVDSEC
+.endproc
+
+;; Writes <CatalogBuffer> back to the sector it was read from.
+;;
+;; Disk errors leave the file manager (<AccessDisk>).
+;; In: CatalogBuffer = the catalog sector, CurrentCatalogTrack/CurrentCatalogSector = where it came from
+;; Also: WRVDIR (DOS33, DOS31)
+.proc WriteCatalogSector
+    jsr SetCatalogBuffer
+    ldx CurrentCatalogTrack
+    ldy CurrentCatalogSector
     lda #RWTS_WRITE
-    jmp DCBIO
-;; Points RWTS's buffer pointer at the catalog buffer, VOLDIR.
-;; Out:   DosIob::Buffer = FileManager::CatalogBuffer
-;; Uses:  A
-MVVDBA:
-    lda AVOLDR
-    sta a:IBBUFP
-    lda AVOLDR+1
-    sta a:IBBUFP+1
+    jmp AccessDisk
+.endproc
+
+;; Points RWTS's buffer at <CatalogBuffer>.
+;; Out: DosIob::Buffer = <CatalogBuffer>
+;; Keeps: X, Y
+;; Also: MVVDBA (DOS33, DOS31)
+.proc SetCatalogBuffer
+    lda CatalogBufferAddress
+    sta DosIob::Buffer
+    lda CatalogBufferAddress + 1
+    sta DosIob::Buffer + 1
     rts
+.endproc
+
 ;; Reads, writes or formats through RWTS, for the slot, drive and volume in the file control block.
 ;;
-;; Fills in the rest of the IOB from the FCB and calls DISKIO. A write also sets bit 1 ($02, the value of
-;; IBCWTS) in DCBWRF, which tells CLOSE the disk was changed and the catalog's sector count needs updating.
-;; The caller sets the buffer, IBBUFP, first.
+;; Fills in the rest of <DosIob> from the file control block and calls <CallRwts>; the caller sets the buffer,
+;; <DosIob::Buffer>, first. A write also sets <WRITTEN> in <FileControlBlock::WriteFlags>, which tells CLOSE that the
+;; disk has changed and the catalog's sector count needs updating: it ORs in the command, <RWTS_WRITE>, which is the
+;; same bit. The volume is kept complemented (<SetUpWorkArea> stores it that way) and complemented back here, so RWTS
+;; gets the volume the caller asked for, 0 meaning any.
 ;;
-;; DCBVOL holds the volume number complemented (DCBSUP stores it that way); it is complemented back here, so
-;; IBVOL gets the volume the caller asked for, 0 meaning any.
-;; In:    A = the RWTS command (RWTS_READ, RWTS_WRITE, RWTS_FORMAT), X = track, Y = sector, DosIob::Buffer = the buffer
-;; Out:   DosFileParameters::Volume = the volume number RWTS found on the disk, DosIob::Volume = $FF
-;; Errors: does not return on failure: leaves the file manager through ERRORB with CREVMM (volume mismatch),
-;;   CREPRO (write protected) or CREIOE (any other error)
-;; Uses:  A, X, Y
-;; Entry: DCBIO2 = IBTRK and IBSECT already set
-DCBIO:
-    stx a:IBTRK
-    sty a:IBSECT
-DCBIO2:
-    sta a:IBCMD
+;; It does not return on an error: it leaves the file manager through <Fail> with <ERROR_VOLUME_MISMATCH>,
+;; <ERROR_WRITE_PROTECTED> or, for any other error, <ERROR_IO>.
+;; In: A = the RWTS command, <RWTS_READ>, <RWTS_WRITE> or <RWTS_FORMAT>, X = the track, Y = the sector, DosIob::Buffer =
+;;   the buffer
+;; Out: DosFileParameters::Volume = the volume RWTS found on the disk, DosIob::Volume = $FF
+;; Entry:
+;;   Preset = with the track and sector already in <DosIob::Track> and <DosIob::Sector>
+;; Also: DCBIO (DOS33, DOS31)
+.proc AccessDisk
+    stx DosIob::Track
+    sty DosIob::Sector
+
+;; Calls RWTS with the track and sector already in <DosIob>; <InitDisk> calls it.
+;; In: A = the RWTS command, DosIob::Track/DosIob::Sector = the sector, DosIob::Buffer = the buffer
+;; Also: DCBIO2 (DOS33, DOS31)
+Preset:
+    sta DosIob::Command
     cmp #RWTS_WRITE
-    bne DCBIO1
-    ora a:DCBWRF                    ; a write: set bit 1 of DCBWRF
-    sta a:DCBWRF
-DCBIO1:
-    lda a:DCBVOL
+    bne SetDisk
+
+    ; A write: A is RWTS_WRITE, the same bit as WRITTEN.
+    ora FileControlBlock::WriteFlags
+    sta FileControlBlock::WriteFlags
+
+;; Fills in the disk and the length, and calls RWTS.
+;; Also: DCBIO1 (DOS33, DOS31)
+SetDisk:
+    lda FileControlBlock::VolumeComplement
     eor #$FF
-    sta a:IBVOL
-    lda a:DCBSLT
-    sta a:IBSLOT
-    lda a:DCBDRV
-    sta a:IBDRVN
-    lda a:DCBSDL
-    sta a:IBDLEN
-    lda a:DCBSDL+1
-    sta a:IBDLEN+1
-    lda #1
-    sta a:IBTYPE
-    ldy AIOB
-    lda AIOB+1
-    jsr DISKIO
-    lda a:IBSMOD                    ; the volume RWTS found, for the caller (CATALOG prints it)
-    sta a:CCBVOL
+    sta DosIob::Volume
+    lda FileControlBlock::SlotTimes16
+    sta DosIob::SlotTimes16
+    lda FileControlBlock::Drive
+    sta DosIob::Drive
+    lda FileControlBlock::SectorLength
+    sta DosIob::DataLength
+    lda FileControlBlock::SectorLength + 1
+    sta DosIob::DataLength + 1
+    lda #IOB_TYPE
+    sta DosIob::Type
+    ldy IobAddress
+    lda IobAddress + 1
+    jsr CallRwts
+
+    ; The volume RWTS found, for the caller (CATALOG prints it).
+    lda DosIob::VolumeFound
+    sta DosFileParameters::Volume
     lda #$FF
-    sta a:IBVOL
-    bcs BADIO
+    sta DosIob::Volume
+    bcs DiskError
     rts
-; Turns RWTS's status into a file manager return code and leaves.
-BADIO:
-    lda a:IBSTAT
+
+;; Turns RWTS's error into a file manager return code, and leaves.
+;; Also: BADIO (DOS33, DOS31)
+DiskError:
+    lda DosIob::ReturnCode
     ldy #ERROR_VOLUME_MISMATCH
     cmp #RWTS_VOLUME_MISMATCH
-    beq BD2
+    beq ToFail
     ldy #ERROR_WRITE_PROTECTED
     cmp #RWTS_WRITE_PROTECTED
-    beq BD2
+    beq ToFail
     ldy #ERROR_IO
-BD2:
+
+;; Leaves with the code in Y.
+;; Also: BD2 (DOS33, DOS31)
+ToFail:
     tya
-    jmp ERRORB
-;; Makes the byte at the file's current position addressable, bringing its sector into the data buffer.
+    jmp Fail
+.endproc
+
+;; Brings the byte at the file's position into reach, reading its sector into the data buffer.
 ;;
-;; The position is a relative sector (DCBCRS, counting from 0 at the start of the file) and a byte in it
-;; (DCBCSB). If that sector is already in the buffer (DCBCMS), nothing is read. Otherwise the buffer is written
-;; back if it was changed, and the track/sector list that covers the sector is found: each list covers DCBDMS
-;; (122) sectors, from DCBDFS up to but not including DCBDNF. A sector before the list in memory makes RDFDIR
-;; start again from the file's first list; one after it follows the chain. The sector's track and sector are
-;; then taken from the list. A zero track means the sector was never written: a read ends there (end of
-;; file), while a write allocates a new sector for it (GNWSEC), and RDFDIR likewise adds a new list when a
-;; write runs past the last one.
-;; In:    FileManager::FileControlBlock::PositionSector = the relative sector, FileManager::FileControlBlock::PositionByte = the byte in it, DosFileParameters::Request = the request (REQUEST_WRITE allocates)
-;; Out:   carry clear, FilePointer = the data sector buffer and Y = the byte's offset in it;
-;;   carry set when reading past the end of the file
-;; Errors: does not return on a disk error or a full disk
-;; Uses:  A, X, Y
-;; See:   <RDFDIR>, <LOCSEC>
-LOCNXB:
-    lda a:DCBCRS
-    cmp a:DCBCMS
-    bne LNB1
-    lda a:DCBCRS+1
-    cmp a:DCBCMS+1
-    beq LNB8                        ; the sector is already in the buffer
-LNB1:
-    jsr WRSECT                      ; write the old one back if it was changed
-; Is the sector covered by the track/sector list in memory? It must not be below DCBDFS...
-LNB2:
-    lda a:DCBCRS+1
-    cmp a:DCBDFS+1
-    bcc LNB4
-    bne LNB3
-    lda a:DCBCRS
-    cmp a:DCBDFS
-    bcc LNB4                        ; below: carry clear, so RDFDIR goes back to the first list
-; ...and must be below DCBDNF.
-LNB3:
-    lda a:DCBCRS+1
-    cmp a:DCBDNF+1
-    bcc LNB6
-    bne LNB4
-    lda a:DCBCRS
-    cmp a:DCBDNF
-    bcc LNB6
-; Here carry is clear to read the file's first list, set to read the next one.
-LNB4:
-    jsr RDFDIR
-    bcc LNB2                        ; check the list just read
-    rts                             ; no more lists: the end of the file
-; Y = the offset of the sector's pair in the list: (DCBCRS - DCBDFS) * 2 + FDENT. The difference is under 122,
-; so only the low bytes matter, and the ASL leaves carry clear for the ADC.
-LNB6:
+;; The position is a relative sector (<FileControlBlock::PositionSector>, counting from 0 at the start of the file)
+;; and a byte in it (<FileControlBlock::PositionByte>). If that sector is already in the buffer
+;; (<FileControlBlock::DataRelativeSector>), nothing is read. Otherwise the buffer is written back if it has changed,
+;; and the track/sector list that covers the sector is found: each list covers <FileControlBlock::PairsPerList> (122)
+;; sectors, from <FileControlBlock::ListFirstSector> up to but not including <FileControlBlock::ListEndSector>. A
+;; sector before the list in memory makes <ReadList> start again from the file's first list; one after it follows
+;; the chain. The sector's track and sector are then taken from the list. A track of 0 means the sector was never
+;; written: a read ends there, at the end of the file, while a write allocates a new sector for it
+;; (<AllocateDataSector>), and <ReadList> likewise adds a new list when a write runs past the last one. A full disk
+;; and disk errors leave the file manager.
+;; In: FileControlBlock::PositionSector = the relative sector, FileControlBlock::PositionByte = the byte in it,
+;;   DosFileParameters::Request = the request, where <REQUEST_WRITE> allocates
+;; Out: carry = clear, FilePointer = the data buffer, Y = the byte's offset in it; carry = set at the end of the
+;;   file, when not writing
+;; Also: LOCNXB (DOS33, DOS31)
+.proc LocateNextByte
+    lda FileControlBlock::PositionSector
+    cmp FileControlBlock::DataRelativeSector
+    bne ChangeSector
+    lda FileControlBlock::PositionSector + 1
+    cmp FileControlBlock::DataRelativeSector + 1
+    beq PointAtByte
+
+;; Another sector: writes the old one back if it has changed.
+;; Also: LNB1 (DOS33, DOS31)
+ChangeSector:
+    jsr WriteDataIfChanged
+
+;; Whether the list in memory covers the sector: it must not be below the list's first sector (carry clear, so
+;; <ReadList> goes back to the first list)...
+;; Also: LNB2 (DOS33, DOS31)
+CheckLow:
+    lda FileControlBlock::PositionSector + 1
+    cmp FileControlBlock::ListFirstSector + 1
+    bcc OtherList
+    bne CheckHigh
+    lda FileControlBlock::PositionSector
+    cmp FileControlBlock::ListFirstSector
+    bcc OtherList
+
+;; ...and must be below the list's end (carry set, so <ReadList> reads the next list).
+;; Also: LNB3 (DOS33, DOS31)
+CheckHigh:
+    lda FileControlBlock::PositionSector + 1
+    cmp FileControlBlock::ListEndSector + 1
+    bcc FindPair
+    bne OtherList
+    lda FileControlBlock::PositionSector
+    cmp FileControlBlock::ListEndSector
+    bcc FindPair
+
+;; Reads the file's first list (carry clear) or the next one (carry set), and checks it; no more lists is the end
+;; of the file.
+;; Also: LNB4 (DOS33, DOS31)
+OtherList:
+    jsr ReadList
+    bcc CheckLow
+    rts
+
+;; Finds the sector's pair in the list: (PositionSector - ListFirstSector) * 2 + <TrackSectorList::PAIRS>. The
+;; difference is under 122, so only the low bytes matter, and the ASL leaves the carry clear for the ADC.
+;; Also: LNB6 (DOS33, DOS31)
+FindPair:
     sec
-    lda a:DCBCRS
-    sbc a:DCBDFS
+    lda FileControlBlock::PositionSector
+    sbc FileControlBlock::ListFirstSector
     asl a
     adc #TrackSectorList::PAIRS
     tay
-    jsr MVFCBD
-    lda (FilePointer),y                  ; the sector's track
-    bne LNB7
-    lda a:CCBREQ                    ; none: allocate one if writing, else it is the end of the file
+    jsr PointAtListBuffer
+
+    ; The sector's track. None: allocate one if writing, else it is the end of the file.
+    lda (FilePointer),y
+    bne ReadSector
+    lda DosFileParameters::Request
     cmp #REQUEST_WRITE
-    beq LNB7A
+    beq Allocate
     sec
     rts
-LNB7A:
-    jsr GNWSEC
-    jmp LNBCON
-LNB7:
-    sta a:DCBTRK
+
+;; Allocates a sector for the write.
+;; Also: LNB7A (DOS33, DOS31)
+Allocate:
+    jsr AllocateDataSector
+    jmp Remember
+
+;; Reads the sector the pair names.
+;; Also: LNB7 (DOS33, DOS31)
+ReadSector:
+    sta FileControlBlock::DataTrack
     iny
     lda (FilePointer),y
-    sta a:DCBSEC
-    jsr RDSECT
-LNBCON:
-    lda a:DCBCRS                    ; this relative sector is now the one in the buffer
-    sta a:DCBCMS
-    lda a:DCBCRS+1
-    sta a:DCBCMS+1
-LNB8:
-    jsr MVFCBS
-    ldy a:DCBCSB
+    sta FileControlBlock::DataSector
+    jsr ReadData
+
+;; Records the relative sector as the one in the buffer.
+;; Also: LNBCON (DOS33, DOS31)
+Remember:
+    lda FileControlBlock::PositionSector
+    sta FileControlBlock::DataRelativeSector
+    lda FileControlBlock::PositionSector + 1
+    sta FileControlBlock::DataRelativeSector + 1
+
+;; Points at the byte: the data buffer, and Y = the byte in it.
+;; Also: LNB8 (DOS33, DOS31)
+PointAtByte:
+    jsr PointAtDataBuffer
+    ldy FileControlBlock::PositionByte
     clc
     rts
-;; Allocates a new data sector for the track/sector list entry at Y and gives the file an empty buffer for it.
+.endproc
+
+;; Allocates a new data sector for the track/sector pair at Y, and gives the file an empty buffer for it.
 ;;
-;; Records the new track and sector in the list and in DCBTRK/DCBSEC, clears the data buffer, and marks both
-;; the list ($80) and the data sector ($40) in DCBWRF as needing to be written.
-;; In:    Y = the offset of the entry in the track/sector list buffer, FilePointer = that buffer
-;; Out:   FilePointer = the data sector buffer, all zeros
-;; Errors: does not return on a disk error or a full disk
-;; Uses:  A, X, Y, FileManager::Scratch2
-;; See:   <GETSEC>
-GNWSEC:
-    sty a:TEMP2
-    jsr GETSEC                      ; A = the sector, DCBATK = its track
-    ldy a:TEMP2
+;; Records the new track and sector in the list and in <FileControlBlock::DataTrack> and
+;; <FileControlBlock::DataSector>, clears the data buffer, and marks both the list and the data sector to be written
+;; (<WRITE_LIST>, <WRITE_DATA>). A full disk and disk errors leave the file manager (<AllocateSector>).
+;; In: Y = the pair's offset in the list buffer, FilePointer = the list buffer
+;; Out: FilePointer = the data buffer, all zeros
+;; Also: GNWSEC (DOS33, DOS31)
+.proc AllocateDataSector
+    sty Scratch2
+    jsr AllocateSector
+
+    ; The pair: the sector, then the track.
+    ldy Scratch2
     iny
     sta (FilePointer),y
-    sta a:DCBSEC
+    sta FileControlBlock::DataSector
     dey
-    lda a:DCBATK
+    lda FileControlBlock::ReservedTrack
     sta (FilePointer),y
-    sta a:DCBTRK
-    jsr MVFCBS
-    jsr CLRSEC
-    lda #$C0
-    ora a:DCBWRF
-    sta a:DCBWRF
+    sta FileControlBlock::DataTrack
+
+    ; An empty data sector, and both buffers changed.
+    jsr PointAtDataBuffer
+    jsr ClearSector
+    lda #WRITE_LIST | WRITE_DATA
+    ora FileControlBlock::WriteFlags
+    sta FileControlBlock::WriteFlags
     rts
-;; Reports the position of the byte just transferred and advances the position in the record by one.
+.endproc
+
+;; Reports the position of the byte just moved, then advances the position in the record by one byte.
 ;;
-;; Copies the current record and byte in it (DCBCRR, DCBCRB) to the parameter list (CCBRRN, CCBBYT), so the
-;; caller sees where the byte it read or wrote was. Then counts the byte; reaching the record length (DCBRCL)
-;; starts the next record at byte 0. INCSCB advances the sector position to match.
-;; Out:   DosFileParameters::Record/DosFileParameters::ByteOffset = the old position, FileManager::FileControlBlock::PositionRecord/FileManager::FileControlBlock::PositionRecordByte = the new one
-;; Uses:  X, Y
-INCRRB:
-    ldx a:DCBCRR
-    stx a:CCBRRN
-    ldx a:DCBCRR+1
-    stx a:CCBRRN+1
-    ldx a:DCBCRB
-    ldy a:DCBCRB+1
-    stx a:CCBBYT
-    sty a:CCBBYT+1
-    inx                             ; YX = the byte in the record, plus 1
-    bne INCR1
+;; Copies the record and the byte in it (<FileControlBlock::PositionRecord>, <FileControlBlock::PositionRecordByte>)
+;; to the parameter list, so the caller sees where the byte it read or wrote was. Then counts the byte; reaching the
+;; record length (<FileControlBlock::RecordLength>) starts the next record at byte 0. <AdvanceSectorByte> advances
+;; the sector position to match.
+;; Out: DosFileParameters::Record/DosFileParameters::ByteOffset = the old position,
+;;   FileControlBlock::PositionRecord/FileControlBlock::PositionRecordByte = the new one
+;; Keeps: A
+;; Also: INCRRB (DOS33, DOS31)
+.proc AdvanceRecordByte
+    ldx FileControlBlock::PositionRecord
+    stx DosFileParameters::Record
+    ldx FileControlBlock::PositionRecord + 1
+    stx DosFileParameters::Record + 1
+    ldx FileControlBlock::PositionRecordByte
+    ldy FileControlBlock::PositionRecordByte + 1
+    stx DosFileParameters::ByteOffset
+    sty DosFileParameters::ByteOffset + 1
+
+    ; YX = the byte in the record, plus 1.
+    inx
+    bne CheckRecordEnd
     iny
-INCR1:
-    cpy a:DCBRCL+1
-    bne INCR2
-    cpx a:DCBRCL
-    bne INCR2
-    ldx #0                          ; the end of the record: byte 0 of the next
+
+;; At the record length: byte 0 of the next record.
+;; Also: INCR1 (DOS33, DOS31)
+CheckRecordEnd:
+    cpy FileControlBlock::RecordLength + 1
+    bne Store
+    cpx FileControlBlock::RecordLength
+    bne Store
+    ldx #0
     ldy #0
-    inc a:DCBCRR
-    bne INCR2
-    inc a:DCBCRR+1
-INCR2:
-    stx a:DCBCRB
-    sty a:DCBCRB+1
+    inc FileControlBlock::PositionRecord
+    bne Store
+    inc FileControlBlock::PositionRecord + 1
+
+;; Stores the byte in the record.
+;; Also: INCR2 (DOS33, DOS31)
+Store:
+    stx FileControlBlock::PositionRecordByte
+    sty FileControlBlock::PositionRecordByte + 1
     rts
-;; Advances the file position by one byte: the next byte of the sector, or the first of the next sector.
-;; Out:   FileManager::FileControlBlock::PositionByte = the byte in the sector, FileManager::FileControlBlock::PositionSector = the relative sector
-INCSCB:
-    inc a:DCBCSB
-    bne INCS2
-    inc a:DCBCRS
-    bne INCS2
-    inc a:DCBCRS+1
-INCS2:
+.endproc
+
+;; Advances the file's position by one byte: the next byte of the sector, or the first of the next sector.
+;; Out: FileControlBlock::PositionByte = the byte in the sector, FileControlBlock::PositionSector = the relative
+;;   sector
+;; Keeps: A, X, Y
+;; Also: INCSCB (DOS33, DOS31)
+.proc AdvanceSectorByte
+    inc FileControlBlock::PositionByte
+    bne Done
+    inc FileControlBlock::PositionSector
+    bne Done
+    inc FileControlBlock::PositionSector + 1
+
+;; The return.
+;; Also: INCS2 (DOS33, DOS31)
+Done:
     rts
-;; Points ZPGFCB at the next byte of the caller's buffer for a block transfer, and advances the pointer.
-;; In:    DosFileParameters::RangeAddress = the next byte of the caller's buffer
-;; Out:   FilePointer = that byte's address, DosFileParameters::RangeAddress = the one after it
-;; Uses:  X, Y
-MIBDA:
-    ldy a:CCBBBA
-    ldx a:CCBBBA+1
+.endproc
+
+;; Points <FilePointer> at the next byte of the caller's range, and advances <DosFileParameters::RangeAddress>.
+;; In: DosFileParameters::RangeAddress = the next byte of the caller's range
+;; Out: FilePointer = that byte's address, DosFileParameters::RangeAddress = the one after it
+;; Keeps: A
+;; Also: MIBDA (DOS33, DOS31)
+.proc NextRangeByte
+    ldy DosFileParameters::RangeAddress
+    ldx DosFileParameters::RangeAddress + 1
     sty FilePointer
-    stx FilePointer+1
-    inc a:CCBBBA
-    bne MIB1
-    inc a:CCBBBA+1
-MIB1:
+    stx FilePointer + 1
+    inc DosFileParameters::RangeAddress
+    bne Done
+    inc DosFileParameters::RangeAddress + 1
+
+;; The return.
+;; Also: MIB1 (DOS33, DOS31)
+Done:
     rts
-;; Counts down a block transfer's length, and ends the request when it was already zero.
+.endproc
+
+;; Counts down a range transfer's length, and ends the request when it was already 0.
 ;;
-;; While CCBBLN is not zero it is decremented and DTBLN returns; when it is zero, DTBLN does not return but
-;; jumps to GOODIO, leaving the file manager. READ calls it before each byte and WRITE after each, so a block
-;; read of length n transfers n bytes and a block write n + 1.
-;; In:    DosFileParameters::RangeLength = the bytes left
-;; Out:   DosFileParameters::RangeLength = one fewer
-;; Uses:  X, Y
-DTBLN:
-    ldy a:CCBBLN
-    bne DTB1
-    ldx a:CCBBLN+1
-    beq DTB2
-    dec a:CCBBLN+1
-DTB1:
-    dec a:CCBBLN
+;; While <DosFileParameters::RangeLength> is not 0 it is decremented and the routine returns; when it is 0, it goes
+;; on to <Succeed>, leaving the file manager. READ calls it before each byte and WRITE after each, so a range of n
+;; bytes reads n and writes n + 1.
+;; In: DosFileParameters::RangeLength = the bytes left
+;; Out: DosFileParameters::RangeLength = one fewer
+;; Keeps: A
+;; Also: DTBLN (DOS33, DOS31)
+.proc CountDownRange
+    ldy DosFileParameters::RangeLength
+    bne CountLow
+    ldx DosFileParameters::RangeLength + 1
+    beq Finished
+    dec DosFileParameters::RangeLength + 1
+
+;; Decrements the low byte.
+;; Also: DTB1 (DOS33, DOS31)
+CountLow:
+    dec DosFileParameters::RangeLength
     rts
-DTB2:
-    jmp GOODIO                      ; the block is done
+
+;; The range is done.
+;; Also: DTB2 (DOS33, DOS31)
+Finished:
+    jmp Succeed
+.endproc
+
+.endscope

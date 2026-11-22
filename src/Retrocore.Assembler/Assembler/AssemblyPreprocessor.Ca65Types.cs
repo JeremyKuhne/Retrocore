@@ -133,6 +133,7 @@ internal sealed partial class AssemblyPreprocessor
         {
             if (args.Count is < 1 or > 2 || Ca65Size(args[0]) is not { } typeSize)
             {
+                ThrowNameAmbiguity();
                 throw new AssemblyError(0, ".tag requires a known type and optional count.");
             }
 
@@ -173,9 +174,60 @@ internal sealed partial class AssemblyPreprocessor
         while (true)
         {
             if (Ca65.Sizes.TryGetValue(ConstantQualified(scope, name), out long size)) { return size; }
-            if (scope.Length == 0) { return null; }
+            if (scope.Length == 0) { break; }
             int separator = scope.LastIndexOf("::", StringComparison.Ordinal);
             scope = separator < 0 ? "" : scope[..separator];
+        }
+
+        // Then a type in a scope a .using in effect names, as for any plain name.
+        return name.Contains("::", StringComparison.Ordinal) ? null : UsedTypeSize(name);
+    }
+
+    // The size of a type a .using in effect makes reachable by its plain name, innermost directive first; a type two
+    // scopes of one directive define has no one size.
+    private long? UsedTypeSize(string name)
+    {
+        for (UsingDirective? directive = _constantUsings; directive is not null; directive = directive.Next)
+        {
+            long? found = null;
+            string? foundScope = null;
+            string? foundType = null;
+            for (int at = 0; at < directive.Names.Length; at++)
+            {
+                if ((directive.Bound[at] ?? UsedScope(directive.Names[at], directive.Scope)) is not { } scope
+                    || !Ca65.Sizes.TryGetValue(ConstantQualified(scope, name), out long size))
+                {
+                    continue;
+                }
+
+                MarkUsed(directive, at);
+                string type = ConstantQualified(scope, name);
+                if (found is null)
+                {
+                    found = size;
+                    foundScope = directive.Names[at];
+                    foundType = type;
+                }
+                else if (!string.Equals(foundType, type, StringComparison.Ordinal))
+                {
+                    _nameAmbiguity = $"'{name}' is in both {foundScope} and {directive.Names[at]}; qualify it.";
+                    return null;
+                }
+            }
+
+            if (found is not null) { return found; }
+        }
+
+        return null;
+    }
+
+    // Reports a name found ambiguous since it was last cleared, as an error on the line.
+    private void ThrowNameAmbiguity()
+    {
+        if (_nameAmbiguity is { } ambiguity)
+        {
+            _nameAmbiguity = null;
+            throw new AssemblyError(0, ambiguity);
         }
     }
 

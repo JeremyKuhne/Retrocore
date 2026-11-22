@@ -114,6 +114,10 @@ The rest of this guide is the rules this follows.
 - **A family spread through the code** is one scope in pieces: `.scope Name continued` goes on with it. Use it
   only where the layout forces it, as in a ROM whose routines sit at fixed addresses. The `;;` comment goes on
   the first opening; each later piece starts with a plain `;` comment saying which part it is.
+- **`.using Scope`** where a routine uses several of another scope's names, rather than repeating its prefix:
+  `.using Columns` then `lda CursorColumn`, not `lda Columns::CursorColumn` throughout. Put it at the top of the
+  `.proc` or `.scope` that needs it; a file-level one reaches the whole file, so keep it to one scope the whole
+  file works on. Qualify a single use instead.
 - **Falling into the next routine** is said in a step comment (`; Falls into PrintDigit.`), as above.
 
 ```asm

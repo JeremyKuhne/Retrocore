@@ -30,7 +30,7 @@ internal sealed class AssemblyAlsoNames
             // Only a source with the heading on a ;; line needs its documentation parsed, and without the style
             // checks, which the assembly does not need.
             if (!seen.Add(source.Path) || !HasHeading(source.Text)) { continue; }
-            foreach (DocumentationComment comment in DocumentationParser.Parse(source.Text, source.Path, style: false).Comments)
+            foreach (DocumentationComment comment in DocumentationParser.Parse(source.Text, source.Path, assembled: null, style: false).Comments)
             {
                 // A scope has no address of its own: its line is lowered to a hidden start label, which an old name
                 // must not reach. A named type is a scope too.

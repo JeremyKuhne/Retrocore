@@ -75,7 +75,7 @@ test("native directives, processor names and ROM declarations have dedicated sco
         "cpu", "rom", "equ", "set", "byte", "word", "dword", "res", "org",
         "logicalorg", "align", "dum", "dend", "checksum", "assert", "export", "hiascii", "section",
         "include", "incbin", "macro", "endmacro", "local", "exitmacro", "if", "elseif", "else", "endif",
-        "ifdef", "ifndef", "ifblank", "repeat", "endrepeat", "proc", "endproc", "scope", "endscope"
+        "ifdef", "ifndef", "ifblank", "repeat", "endrepeat", "proc", "endproc", "scope", "endscope", "using"
     ]) {
         assertScope(`  .${directive} operand`, "." + directive, scope.directive);
         assertScope(`Here: .${directive.toUpperCase()} operand`, "." + directive.toUpperCase(), scope.directive);

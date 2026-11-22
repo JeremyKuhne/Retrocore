@@ -47,6 +47,27 @@ internal sealed class Diagnostic
     public JsonObject? Data { get; init; }
 
     /// <summary>
+    ///  Gets whether the diagnostic marks code that is not needed, which an editor fades.
+    /// </summary>
+    public bool IsUnnecessary { get; init; }
+
+    /// <summary>
+    ///  Makes an information diagnostic that marks its code as unnecessary.
+    /// </summary>
+    /// <returns>The diagnostic.</returns>
+    public Diagnostic Unnecessary() => new()
+    {
+        Range = Range,
+        Severity = DiagnosticSeverity.Information,
+        Code = Code,
+        Source = Source,
+        Message = Message,
+        RelatedInformation = RelatedInformation,
+        Data = Data,
+        IsUnnecessary = true
+    };
+
+    /// <summary>
     ///  Writes the diagnostic.
     /// </summary>
     /// <returns>Its JSON, without the properties it lacks.</returns>
@@ -62,6 +83,9 @@ internal sealed class Diagnostic
         if (Code is not null) { diagnostic["code"] = Code; }
         if (Source is not null) { diagnostic["source"] = Source; }
         if (Data is not null) { diagnostic["data"] = Data.DeepClone(); }
+
+        // DiagnosticTag.Unnecessary.
+        if (IsUnnecessary) { diagnostic["tags"] = new JsonArray(1); }
         if (RelatedInformation is not null)
         {
             diagnostic["relatedInformation"] = RelatedInformation.Select(item => (JsonNode?)item.ToJson()).ToJsonArray();

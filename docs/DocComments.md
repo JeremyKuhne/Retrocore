@@ -343,6 +343,9 @@ A plain `NAME` is looked up in this order. The first match wins.
 
 1. The comment's own `{parameters}` and section entries, when written `{NAME}` (section 2.3).
 2. The assembler's scope rules, from the scope the definition is in, outward to the file's root.
+   Then the scopes named by the `.using` directives in effect at the comment, innermost directive first, as
+   code there would find them ([NativeAssembly.md](NativeAssembly.md), "Using a scope's names"); a name two
+   scopes of one directive define is ambiguous.
 3. The rest of the current assembly: other files included or composed into it, such as `m6502.asm` under
    `applesoft.mac`.
 4. The other SDK modules for the same machine (such as the Monitor, firmware, AppleSoft, Integer BASIC, DOS

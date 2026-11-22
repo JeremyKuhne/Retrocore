@@ -226,6 +226,57 @@ equivalent.
 .endscope
 ```
 
+#### Using a scope's names
+
+`.using Scope[, Scope ...]` makes the named scopes' names usable without their `Scope::` prefix, from the line
+after it to the end of the `.scope` or `.proc` that contains it, or to the end of its file at file level. It does
+not reach into an included file, an included file's `.using` does not leak out of it, and one in a continued
+scope's piece applies to that piece only. There is no `.endusing`: a stretch that needs one is a scope.
+
+Each operand names an existing scope or `.proc`, defined before or after the directive, as code at that point
+would write it: plain (`Columns`), qualified (`Firmware::Columns`) or absolute (`::Columns`), resolved as a
+qualified name's first part is. A plain name then resolves in this order:
+
+1. The scopes that contain the use, innermost first, as without `.using`: a name the code's own scopes define
+   wins, even later in the source.
+2. The scopes the `.using` directives in effect name, the innermost (latest) directive first. One directive's
+   scopes are searched together: a name two of them define is an error where it is used, "'N' is in both A and
+   B; qualify it".
+3. [Historical names](#historical-names).
+
+So a `.using` only lets an otherwise unresolved name be found; it never changes what a resolving name means.
+Qualified names, cheap locals and anonymous labels are not affected, and neither are definitions: a label defined
+after `.using A` is in the current scope, not in `A`, and `.export` and `.global` do not reach into a used scope.
+Conditional assembly sees the same names as code. A `.using` that names no scope is an error; one whose scopes give
+the code no name is not, but the editor shows it as unnecessary (code and conditionals count as uses; a `;;` link
+does not). A `.using` line cannot carry a label. Retrocore's own syntax, in the native dialect only: ca65 has no
+equivalent.
+
+```asm
+.cpu Mos6502
+.org $0300
+
+;; The 80-column firmware's state.
+.scope Columns
+
+;; The cursor's column.
+CursorColumn = $057B
+
+;; The display mode.
+Mode = $04FB
+
+.endscope
+
+;; Moves the cursor to the left edge.
+.proc Home
+    .using Columns
+    lda #0
+    sta CursorColumn            ; Columns::CursorColumn
+    lda Mode
+    rts
+.endproc
+```
+
 ### Cheap local labels
 
 A name starting with `@` belongs to the stretch of source since the last ordinary symbol was defined, so the
@@ -914,6 +965,7 @@ the assembler would encode differently export as `.byte`.
 | `.section` | [Layout](#layout-and-sections) |
 | `.set` | [Symbols](#constants-variables-and-labels) |
 | `.struct`, `.endstruct`, `.union`, `.endunion`, `.tag` | [Structures](#structures-and-enumerations) |
+| `.using` | [Using a scope's names](#using-a-scopes-names) |
 | `.word` | [Data](#data) |
 
 ca65's `.debuginfo`, `.list`, `.smart` and `.feature ubiquitous_idents` are accepted and ignored, so shared

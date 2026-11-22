@@ -396,6 +396,7 @@ public sealed partial class Assembler
                 6 when operation.Equals(".DWORD", StringComparison.OrdinalIgnoreCase) => AssemblyStatementKind.Data,
                 6 when operation.Equals(".ALIGN", StringComparison.OrdinalIgnoreCase) => AssemblyStatementKind.Align,
                 6 when operation.Equals(".SCOPE", StringComparison.OrdinalIgnoreCase) => AssemblyStatementKind.Scope,
+                6 when operation.Equals(".USING", StringComparison.OrdinalIgnoreCase) => AssemblyStatementKind.Using,
                 7 when operation.Equals(".ASSERT", StringComparison.OrdinalIgnoreCase) => AssemblyStatementKind.Assertion,
                 8 when operation.Equals(".FARADDR", StringComparison.OrdinalIgnoreCase) => AssemblyStatementKind.Data,
                 7 when operation.Equals(".EXPORT", StringComparison.OrdinalIgnoreCase)

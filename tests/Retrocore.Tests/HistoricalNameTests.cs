@@ -247,6 +247,41 @@ public sealed partial class HistoricalNameTests
     }
 
     /// <summary>
+    ///  A routine documented in both branches gives each build's old names in that branch's section: one the other
+    ///  branch's section gives is not this build's, so it neither resolves to the routine nor counts as shared with
+    ///  this build's definition of it.
+    /// </summary>
+    [TestMethod]
+    public void AlsoSectionsOfOtherBuildsDontCount()
+    {
+        DocumentationSet set = Set("""
+            ENHANCED = 1
+            .if ENHANCED
+            ;; Reads a key.
+            ReadKey:
+                rts
+            ;; Waits for a key.
+            ;; Also: OLDKEY (TEST)
+            WaitKey:
+                rts
+            .else
+            ;; Reads a key.
+            ;; Also: OLDKEY (TEST)
+            ReadKey:
+                rts
+            .endif
+
+            ;; Echoes <OLDKEY>.
+            Echo:
+                rts
+            """);
+
+        DocumentationResolver resolver = new(set);
+        Required(resolver.Resolve(Required(set.Find("Echo")), "OLDKEY").Topic).Name.Should().Be("WaitKey");
+        resolver.Check().Should().BeEmpty();
+    }
+
+    /// <summary>
     ///  Another module is assembled for its default build, which says nothing about the build of the source that
     ///  links into it: an old name two of its builds give is ambiguous there, not its default build's.
     /// </summary>

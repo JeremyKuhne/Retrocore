@@ -246,17 +246,30 @@ public sealed class DocumentationSet
     /// <remarks>
     ///  <para>
     ///   With <paramref name="thisBuild"/>, a label or equate in a branch of an <c>.if</c> the build leaves out doesn't
-    ///   count; macros, scopes and types, which are no symbols, always do. Without the assembly's symbols, every
-    ///   definition counts.
+    ///   count, nor does an <c>Also:</c> section of such a branch when both branches document the definition; macros,
+    ///   scopes and types, which are no symbols, always count. This only chooses among definitions: a name only an
+    ///   omitted one gives still finds it, as a plain name of a definition the build leaves out still does. Without
+    ///   the assembly's symbols, every definition counts.
     ///  </para>
     /// </remarks>
     public IReadOnlyList<DocumentationTopic> FindAlso(string name, bool thisBuild = false)
     {
         if (!AlsoIndex().TryGetValue(name, out List<DocumentationTopic>? found)) { return []; }
         if (!thisBuild || found.Count < 2) { return found; }
-        List<DocumentationTopic> built = [.. found.Where(Assembles)];
+        List<DocumentationTopic> built = [.. found.Where(topic => Assembles(topic) && Gives(topic, name, thisBuild: true))];
         return built.Count == 0 ? found : built;
     }
+
+    /// <summary>
+    ///  Gets whether a topic gives a historical name in an <c>Also:</c> section.
+    /// </summary>
+    /// <param name="topic">The topic.</param>
+    /// <param name="name">The historical name.</param>
+    /// <param name="thisBuild">Whether only its sections in this set's build count, as the assembler's do.</param>
+    /// <returns>Whether it gives the name.</returns>
+    public bool Gives(DocumentationTopic topic, string name, bool thisBuild = false) =>
+        DocumentationAlso.Of(topic.Sections.Where(section => !thisBuild || DocumentationConditions.InBuild(section.Condition, _symbols)))
+            .Any(also => also.Name == name);
 
     /// <summary>
     ///  Gets whether a topic's definition is in this set's assembly: false only for a label or equate the assembly

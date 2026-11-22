@@ -224,6 +224,8 @@ public sealed partial class DocumentationResolver
 
                 break;
             case "Also":
+                // A routine written once per build gives each build's old names under its own condition.
+                if (!InThisBuild(section.Condition)) { break; }
                 CheckAlso(topic, section, also);
                 break;
             case "Entry":
@@ -328,28 +330,8 @@ public sealed partial class DocumentationResolver
         return $"{section}: '{name}' is not a register, flag or symbol.";
     }
 
-    // Whether a section's .if condition holds for the build the documentation's symbols come from: each part of it
-    // ("MONITOR = MONITOR_IIE and not ENHANCED") is evaluated from those symbols, and an .ifdef's "defined NAME" by
-    // whether they have the name, as they are the whole build's. A part they can't decide holds.
-    private bool InThisBuild(string? condition)
-    {
-        if (condition is null || Current.Symbols.Count == 0) { return true; }
-        long? Symbol(string name) => Current.Symbols.TryGetValue(name, out long value) ? value : null;
-        foreach (string part in condition.Split(" and ", StringSplitOptions.TrimEntries))
-        {
-            bool not = part.StartsWith("not ", StringComparison.OrdinalIgnoreCase);
-            string test = not ? part[4..].Trim() : part;
-            bool? holds = Holds(test, Symbol);
-            if (test.StartsWith("defined ", StringComparison.Ordinal))
-            {
-                holds = Current.Defines(test["defined ".Length..].Trim());
-            }
-
-            if (holds == not) { return false; }
-        }
-
-        return true;
-    }
+    // Whether a section's .if condition holds for the build the documentation's symbols come from.
+    private bool InThisBuild(string? condition) => DocumentationConditions.InBuild(condition, Current.Symbols);
 
     // Whether an Entry: label is in the routine: from its address up to the next documented routine that is neither
     // one of its entries nor one of its own locals (a .proc's labels may have their own ;; blocks).
@@ -476,7 +458,7 @@ public sealed partial class DocumentationResolver
             else if (Current.Topics.FirstOrDefault(other => !ReferenceEquals(other, topic)
                 && !OtherBuild(topic, other)
                 && !OtherBuilds(other)
-                && DocumentationAlso.Of(other.Sections).Any(name => name.Name == also.Name)) is { } other)
+                && Current.Gives(other, also.Name, thisBuild: true)) is { } other)
             {
                 warn($"Also: {other.Name} has the historical name {also.Name} too.", section.Line);
             }

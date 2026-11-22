@@ -121,6 +121,7 @@ internal sealed partial class AssemblyNameResolver
         image.Project = _source;
         image.SymbolExports = new(Exports.Values, StringComparer.Ordinal);
         image.Information = UnusedUsings();
+        image.Usings = _usings.Count == 0 ? null : [.. _usings.Select(directive => new AssemblyUsing(_source.Statements[directive.Index].Location, directive.Names))];
     }
 
     private static bool Mentions(AssemblyProject source, string prefix)
@@ -156,48 +157,26 @@ internal sealed partial class AssemblyNameResolver
         Using? usings = null;
         List<Using> directives = [];
         Stack<Using?> scopeUsings = [];
-        Stack<(string Key, Using? Usings)> files = [];
-        string file = "";
-        AssemblyLocation? lastFrom = null;
-        string? lastPath = null;
-        bool tracksFiles = false;
-        foreach (AssemblyStatement statement in _source.Statements)
-        {
-            if (statement.Kind == AssemblyStatementKind.Using)
-            {
-                tracksFiles = true;
-                break;
-            }
-        }
+        Stack<Using?> files = [];
+        List<(int Index, bool Enter)> marks = _source.FileMarks ?? [];
+        int mark = 0;
 
         for (int index = 0; index < _source.Statements.Count; index++)
         {
             _cancellation.ThrowIfCancellationRequested();
             AssemblyStatement node = _source.Statements[index];
-            // A statement in the same file as the last has the same include chain, or none at the same path. One with
-            // no location, which a programmatic project may hold, stays in the file it is among.
-            AssemblyLocation? from = node.Location?.ExpandedFrom;
-            if (tracksFiles
-                && node.Location is not null
-                && (!ReferenceEquals(from, lastFrom) || (from is null && !string.Equals(node.Location.Path, lastPath, StringComparison.Ordinal))))
+            // Each file the preprocessor read, top-level or included, starts with no .using and gives back the
+            // ones in effect where it was included when it ends.
+            for (; mark < marks.Count && marks[mark].Index <= index; mark++)
             {
-                lastFrom = from;
-                lastPath = node.Location.Path;
-                string key = FileKey(node.Location);
-                if (key != file)
+                if (marks[mark].Enter)
                 {
-                    // Leave the files this statement is not in, then enter the one it is in.
-                    while (files.Count != 0 && !key.StartsWith(file, StringComparison.Ordinal))
-                    {
-                        (file, usings) = files.Pop();
-                    }
-
-                    if (key != file)
-                    {
-                        files.Push((file, usings));
-                        file = key;
-                        usings = null;
-                    }
+                    files.Push(usings);
+                    usings = null;
+                }
+                else if (files.Count != 0)
+                {
+                    usings = files.Pop();
                 }
             }
 
@@ -571,21 +550,22 @@ internal sealed partial class AssemblyNameResolver
                 string scopedName = ResolveName(sizeName + SizeSuffix, site, index);
                 scopedName = scopedName[..^SizeSuffix.Length];
 
-                // A scope or .proc that a .using makes reachable by its plain name has its size too.
+                // As in ca65, a label's size is that of the statement on its own line. A label the enclosing scopes
+                // define wins over a scope a .using makes reachable by its plain name, which has its size too.
                 string label;
                 if (!_sizes.TryGetValue(scopedName, out string? size)
-                    && !_sizes.TryGetValue(label = ResolveName(sizeName, site, index), out size)
-                    && !(FindUsedScope(sizeName, site) is { } used && _sizes.TryGetValue(used, out size)))
+                    && !_sizes.TryGetValue(label = ResolveName(sizeName, site, index), out size))
                 {
-                    // As in ca65, a label's size is that of the statement on its own line.
-                    if (!_labelLines.TryGetValue(label, out int line))
+                    if (_labelLines.TryGetValue(label, out int line))
+                    {
+                        size = $"{label}::{_privatePrefix}size";
+                        (_labelSizes ??= [with(StringComparer.Ordinal)])[size] = line;
+                    }
+                    else if (FindUsedScope(sizeName, site, index) is not { } used || !_sizes.TryGetValue(used, out size))
                     {
                         _errors.Add(new(index, $"Unknown size of '{sizeName}' in .sizeof."));
                         continue;
                     }
-
-                    size = $"{label}::{_privatePrefix}size";
-                    (_labelSizes ??= [with(StringComparer.Ordinal)])[size] = line;
                 }
 
                 if (size.Length == 0)

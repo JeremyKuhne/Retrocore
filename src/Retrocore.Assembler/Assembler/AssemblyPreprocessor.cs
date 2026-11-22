@@ -61,6 +61,7 @@ internal sealed partial class AssemblyPreprocessor
 
             // A file-level .using ends with its file, so it does not reach the next top-level source.
             processor._constantUsings = null;
+            processor.MarkFile(enter: true);
             processor.ProcessSource(
                 source,
                 options.Dialect,
@@ -68,6 +69,8 @@ internal sealed partial class AssemblyPreprocessor
                 explicitDialect: null,
                 depth: 1,
                 macroDepth: 0);
+
+            processor.MarkFile(enter: false);
 
             if (processor._stopped) { break; }
         }

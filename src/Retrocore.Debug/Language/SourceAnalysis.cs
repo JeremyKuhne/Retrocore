@@ -24,6 +24,7 @@ internal sealed partial class SourceAnalysis
     private readonly Dictionary<string, List<(string Path, int Line)>> _includedFrom = [with(StringComparer.OrdinalIgnoreCase)];
     private readonly Dictionary<string, HashSet<int>> _usingLines = [with(StringComparer.OrdinalIgnoreCase)];
     private readonly Dictionary<string, Dictionary<int, List<string[]>>> _invokedUsings = [with(StringComparer.OrdinalIgnoreCase)];
+    // Keyed by the upper-cased path, as the other path-keyed maps here compare paths without case.
     private readonly Dictionary<(string Path, int Line), int> _usingOrder = [];
     private readonly Dictionary<string, int> _scopeOpened = [with(StringComparer.OrdinalIgnoreCase)];
     private DocumentationSet? _documentation;
@@ -89,7 +90,7 @@ internal sealed partial class SourceAnalysis
                 if (statement.Kind == AssemblyStatementKind.Using && AssemblyNameResolver.ReadUsingNames(statement, out _) is not null)
                 {
                     usingLines.Add(location.Line);
-                    _usingOrder.TryAdd((path, location.Line), index);
+                    _usingOrder.TryAdd((path.ToUpperInvariant(), location.Line), index);
                 }
             }
             else if (statement.Kind == AssemblyStatementKind.Using && AssemblyNameResolver.ReadUsingNames(statement, out _) is { } names)
@@ -343,33 +344,44 @@ internal sealed partial class SourceAnalysis
         }
 
         // A file included in several places binds a name in each; all of them are what the line may mean.
+        // The native dialect's names match case, as the assembler matches them; MACRO-10's do not.
+        bool exact = !UsesMacro10(path);
         IReadOnlyList<DocumentationScopes> contexts = ScopesAt(path, line);
-        if (contexts.Count == 1) { return Bound(name, path, contexts[0]); }
-        List<SymbolSite> all = [.. contexts.SelectMany(scopes => Bound(name, path, scopes) ?? []).Distinct()];
+        if (contexts.Count == 1) { return Bound(name, path, contexts[0], exact); }
+        List<SymbolSite> all = [.. contexts.SelectMany(scopes => Bound(name, path, scopes, exact) ?? []).Distinct()];
         return all.Count == 0 ? null : all;
     }
 
-    private List<SymbolSite>? Bound(string name, string path, DocumentationScopes scopes)
+    private List<SymbolSite>? Bound(string name, string path, DocumentationScopes scopes, bool exact)
     {
         for (string scope = scopes.Scope; scope.Length != 0; scope = Parent(scope))
         {
-            if (_definitions.TryGetValue($"{scope}::{name}", out List<SymbolSite>? sites)) { return sites; }
+            if (Defined($"{scope}::{name}", exact) is { } sites) { return sites; }
         }
 
-        if (_definitions.TryGetValue(name, out List<SymbolSite>? root)) { return root; }
+        if (Defined(name, exact) is { } root) { return root; }
         foreach (DocumentationUsing directive in scopes.Usings)
         {
             List<SymbolSite> used =
             [
                 .. directive.Targets(IsScope, OpenedBefore(path, directive))
                     .Distinct(StringComparer.OrdinalIgnoreCase)
-                    .SelectMany(scope => _definitions.TryGetValue($"{scope}::{name}", out List<SymbolSite>? found) ? found : [])
+                    .SelectMany(scope => Defined($"{scope}::{name}", exact) ?? [])
             ];
 
             if (used.Count != 0) { return used; }
         }
 
         return null;
+    }
+
+    // The definitions of a qualified name, matching case when exact.
+    private List<SymbolSite>? Defined(string name, bool exact)
+    {
+        if (!_definitions.TryGetValue(name, out List<SymbolSite>? sites)) { return null; }
+        if (!exact) { return sites; }
+        List<SymbolSite> matching = [.. sites.Where(site => string.Equals(site.Name, name, StringComparison.Ordinal))];
+        return matching.Count == 0 ? null : matching;
     }
 
     /// <summary>
@@ -457,7 +469,7 @@ internal sealed partial class SourceAnalysis
 
         if (!lines.TryGetValue(invocation.Line, out List<string[]>? list)) { lines[invocation.Line] = list = []; }
         list.Add(names);
-        _usingOrder.TryAdd((path, invocation.Line), index);
+        _usingOrder.TryAdd((path.ToUpperInvariant(), invocation.Line), index);
     }
 
     // Records where each scope is first opened in the assembled statements, so a .using operand binds, as the
@@ -486,7 +498,7 @@ internal sealed partial class SourceAnalysis
 
     // Whether a scope is first opened before the .using on a line of a file, or null when that is not known.
     private Func<string, bool>? OpenedBefore(string path, DocumentationUsing directive) =>
-        _usingOrder.TryGetValue((path, directive.Line), out int at)
+        _usingOrder.TryGetValue((path.ToUpperInvariant(), directive.Line), out int at)
             ? scope => _scopeOpened.TryGetValue(scope, out int open) && open < at
             : null;
 

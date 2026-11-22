@@ -32,6 +32,7 @@ internal sealed partial class AssemblyNameResolver
         if (node.Dialect != AssemblyDialect.Native) { error = ".using is only in the native dialect."; }
         else if (node.Label is not null) { error = "A .using line cannot carry a label."; }
         else if (node.Operand.Memory.Span.Trim().IsEmpty) { error = ".using requires one or more scope names."; }
+
         if (error is not null) { return null; }
         List<string> names = [];
         try
@@ -207,58 +208,34 @@ internal sealed partial class AssemblyNameResolver
     /// <param name="name">The plain scope name.</param>
     /// <param name="site">Where it is used.</param>
     /// <returns>The scope's qualified name, or null when no used scope has a scope of that name.</returns>
-    private static string? FindUsedScope(string name, Site site)
+    private string? FindUsedScope(string name, Site site, int index)
     {
         for (Using? directive = site.Usings; directive is not null; directive = directive.Next)
         {
+            Scope? found = null;
+            string? foundName = null;
             for (int at = 0; at < directive.Targets.Length; at++)
             {
-                if (directive.Targets[at] is { } target && target.Children.TryGetValue(name, out Scope? child))
+                if (directive.Targets[at] is not { } target || !target.Children.TryGetValue(name, out Scope? child))
                 {
-                    directive.Used[at] = true;
-                    return child.Prefix;
+                    continue;
+                }
+
+                directive.Used[at] = true;
+                if (found is null)
+                {
+                    found = child;
+                    foundName = directive.Names[at];
+                }
+                else if (!ReferenceEquals(found, child) && _ambiguous.Add((index, name)))
+                {
+                    _errors.Add(new(index, $"'{name}' is in both {foundName} and {directive.Names[at]}; qualify it."));
                 }
             }
+
+            if (found is not null) { return found.Prefix; }
         }
 
         return null;
-    }
-
-    /// <summary>
-    ///  Identifies the file a statement is in: the top-level source it came from, then each <c>.include</c> that
-    ///  brought it in, with the macro invocations that led to that include and the file it included.
-    /// </summary>
-    /// <param name="location">The statement's location.</param>
-    /// <returns>The key, which starts with the key of every file that includes this one.</returns>
-    private static string FileKey(AssemblyLocation location)
-    {
-        // The links from the statement outward: each a macro expansion's invocation or an include's line.
-        List<(bool Macro, AssemblyLocation From, AssemblyLocation Inner)> links = [];
-        AssemblyLocation current = location;
-        for (; current.ExpandedFrom is { } from; current = from)
-        {
-            links.Add((current.IsMacroExpansion, from, current));
-        }
-
-        // The outermost location is in a top-level source, so separate sources are separate files. Two includes
-        // from one macro body line differ by the invocations before them and by the files they include; the
-        // invocations after the last include are inside the file, so they do not change it.
-        List<string> parts = [current.Path, "|"];
-        int kept = parts.Count;
-        for (int at = links.Count - 1; at >= 0; at--)
-        {
-            (bool macro, AssemblyLocation from, AssemblyLocation inner) = links[at];
-            parts.Add($"{from.Path}:{from.Line}");
-            if (macro)
-            {
-                parts.Add(",");
-                continue;
-            }
-
-            parts.Add($">{inner.Path}|");
-            kept = parts.Count;
-        }
-
-        return string.Concat(parts.Take(kept));
     }
 }

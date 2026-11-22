@@ -80,6 +80,11 @@ internal sealed class AssemblyImage
     internal List<AssemblyDiagnostic>? Information { get; set; }
 
     /// <summary>
+    ///  Gets or sets the <c>.using</c> directives the assembly took.
+    /// </summary>
+    internal List<AssemblyUsing>? Usings { get; set; }
+
+    /// <summary>
     ///  Gets the assembled sections in declaration order, the options' section first.
     /// </summary>
     internal AssemblySection[] Sections { get; }

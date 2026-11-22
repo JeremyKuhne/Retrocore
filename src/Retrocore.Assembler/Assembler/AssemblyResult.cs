@@ -42,6 +42,7 @@ public sealed class AssemblyResult
         SymbolDefinitions = Array.AsReadOnly(symbols);
         Diagnostics = [];
         Information = image.Information is { } information ? information.AsReadOnly() : [];
+        Usings = image.Usings is { } usings ? usings.AsReadOnly() : [];
         // Copy final values rather than retaining editable nodes or pass state for later model edits to change.
         AssemblySourceMapEntry[] mappings = new AssemblySourceMapEntry[image.StatementCount];
         for (int index = 0; index < mappings.Length; index++)
@@ -65,6 +66,7 @@ public sealed class AssemblyResult
     {
         Diagnostics = Array.AsReadOnly(diagnostics);
         Information = [];
+        Usings = [];
         Sections = Array.AsReadOnly(Array.Empty<AssemblySection>());
         SourceMap = Array.AsReadOnly(Array.Empty<AssemblySourceMapEntry>());
         Symbols = new ReadOnlyDictionary<string, long>(new Dictionary<string, long>());
@@ -114,6 +116,11 @@ public sealed class AssemblyResult
     ///  code no name, which an editor shows as unnecessary.
     /// </summary>
     public IReadOnlyList<AssemblyDiagnostic> Information { get; }
+
+    /// <summary>
+    ///  Gets the <c>.using</c> directives a successful assembly took, so documentation follows the same ones.
+    /// </summary>
+    public IReadOnlyList<AssemblyUsing> Usings { get; }
 
     private static IReadOnlyDictionary<string, ReadOnlyMemory<byte>> EmptyFiles { get; } =
         new ReadOnlyDictionary<string, ReadOnlyMemory<byte>>(new Dictionary<string, ReadOnlyMemory<byte>>());

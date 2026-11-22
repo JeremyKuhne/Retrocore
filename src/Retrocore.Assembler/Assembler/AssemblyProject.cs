@@ -81,4 +81,11 @@ public sealed class AssemblyProject
     ///  preprocessing, so the resolver does not report them as unnecessary.
     /// </summary>
     internal Dictionary<AssemblyStatement, HashSet<int>>? UsedUsings { get; set; }
+
+    /// <summary>
+    ///  Gets or sets where each source file's statements start and end, as the preprocessor read them: a top-level
+    ///  source or one <c>.include</c> of a file, by the index of its first statement and of the one after its last.
+    ///  A <c>.using</c> at a file's level ends with its file.
+    /// </summary>
+    internal List<(int Index, bool Enter)>? FileMarks { get; set; }
 }

@@ -832,6 +832,158 @@ public sealed class UsingTests
     }
 
     /// <summary>
+    ///  Each <c>.repeat</c> iteration of an <c>.include</c> is its own file: one iteration's <c>.using</c> does not reach
+    ///  the next.
+    /// </summary>
+    [TestMethod]
+    public void RepeatedIncludesAreSeparateFiles()
+    {
+        string folder = Directory.CreateTempSubdirectory("retrocore-using").FullName;
+        try
+        {
+            File.WriteAllText(Path.Join(folder, "Part.asm"), "    lda X\n.using S\n");
+            IncludeAssemble(folder, ".scope S\nX = 1\n.endscope\n.repeat 2\n.include \"Part.asm\"\n.endrepeat\n")
+                .Select(diagnostic => Path.GetFileName(diagnostic.Location?.Path)).Should().Equal("Part.asm", "Part.asm");
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    /// <summary>
+    ///  Documentation parsed with the assembly follows the <c>.using</c> lines it took: not one in a skipped
+    ///  <c>.if</c> branch, and one a macro invocation gives from that line. The debugger and the generator parse so.
+    /// </summary>
+    [TestMethod]
+    public void DocumentationFollowsTheAssembly()
+    {
+        const string Scope = """
+            .scope EightyColumns
+            ;; The cursor's column.
+            CursorColumn = $57B
+            .endscope
+
+            """;
+
+        const string Skipped = "ON = 0\n.if ON\n.using EightyColumns\n.endif\n\n;; Moves to <CursorColumn>.\nMove:\n    rts\n";
+        const string Invoked = ".macro UseColumns\n.using EightyColumns\n.endmacro\n    UseColumns\n\n;; Moves to <CursorColumn>.\nMove:\n    rts\n";
+        Unresolved(Scope + Skipped).Should().ContainSingle();
+        Unresolved(Scope + Invoked).Should().BeEmpty();
+
+        static List<string> Unresolved(string text)
+        {
+            AssemblyResult result = Assemble(text);
+            result.Diagnostics.Should().BeEmpty();
+            DocumentationFile file = DocumentationParser.Parse(".cpu Mos6502\n" + text, "test.asm", DocumentationAssembled.From(result, "test.asm"));
+            DocumentationSet set = DocumentationSet.Create([file], result);
+            return [.. new DocumentationResolver(set).Check().Select(diagnostic => diagnostic.Message).Where(message => message.Contains("CursorColumn"))];
+        }
+    }
+
+    /// <summary>
+    ///  Conditionals bind a <c>.using</c> operand at the directive, as code does: to the scope opened before it, not a
+    ///  same-named one opened after it.
+    /// </summary>
+    [TestMethod]
+    public void ConditionsBindOperandsAtTheDirective()
+    {
+        AssemblyResult result = Assemble("""
+            .scope T
+            X = 1
+            .endscope
+            .scope S
+            .using T
+            .scope T
+            X = 2
+            .endscope
+            .if X = 1
+                lda #1
+            .else
+                lda #2
+            .endif
+                lda X
+            .endscope
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+        result.Sections[0].Bytes.Span[..4].ToArray().Should().Equal(0xA9, 1, 0xA5, 1);
+    }
+
+    /// <summary>
+    ///  <c>.sizeof</c> of a label the enclosing scopes define is that label's, not a used scope's of the same name; a
+    ///  scope name two used scopes share is an error.
+    /// </summary>
+    [TestMethod]
+    public void SizeofPrefersLocalLabelsAndReportsAmbiguity()
+    {
+        AssemblyResult local = Assemble("""
+            .scope V
+            .proc Name
+                nop
+                nop
+                nop
+                rts
+            .endproc
+            .endscope
+            .proc P
+                .using V
+            Name: nop
+                lda #.sizeof(Name)
+            .endproc
+            """);
+
+        local.Diagnostics.Should().BeEmpty();
+        local.Sections[0].Bytes.Span[5..7].ToArray().Should().Equal(0xA9, 1);
+
+        Messages(Assemble("""
+            .scope A
+            .scope Inner
+                nop
+            .endscope
+            .endscope
+            .scope B
+            .scope Inner
+                nop
+            .endscope
+            .endscope
+            .using A, B
+                lda #.sizeof(Inner)
+            """)).Should().Equal("'Inner' is in both A and B; qualify it.");
+    }
+
+    /// <summary>
+    ///  The editor matches a native name's case, as the assembler does, before the used scopes.
+    /// </summary>
+    [TestMethod]
+    public void TheEditorMatchesCase()
+    {
+        string directory = Directory.CreateTempSubdirectory("retrocore-using").FullName;
+        try
+        {
+            string main = Path.Join(directory, "main.asm");
+            File.WriteAllText(main, ".scope E\nMode = 1\n.endscope\nmode = 2\n.proc P\n    .using E\n    lda #Mode\n    rts\n.endproc\n");
+            SourceAnalysis analysis = SourceAnalysis.Assemble(main, _ => null);
+            analysis.Result.Diagnostics.Should().BeEmpty();
+            analysis.Find("Mode", main, line: 6).Select(site => site.Name).Should().Equal("E::Mode");
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
+    ///  An empty operand in a <c>.using</c> list is an error of its own, not a missing scope.
+    /// </summary>
+    [TestMethod]
+    public void EmptyOperandsAreErrors()
+    {
+        Messages(Assemble(".scope A\n.endscope\n.scope B\n.endscope\n.using A,,B\n")).Should().Equal(
+            "Empty or unbalanced directive operands.");
+    }
+
+    /// <summary>
     ///  The editor binds a <c>.using</c> operand as the assembler does: to a scope already opened before the
     ///  directive, not to a same-named scope opened later in the enclosing one.
     /// </summary>

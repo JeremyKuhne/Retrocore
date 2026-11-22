@@ -34,5 +34,11 @@ internal sealed partial class AssemblyPreprocessor
         ///  Gets the directive's statement, by which the resolver learns which operands conditionals used.
         /// </summary>
         internal AssemblyStatement Statement { get; } = statement;
+
+        /// <summary>
+        ///  Gets the qualified scope each name bound to at the directive, as the resolver binds it to a scope opened
+        ///  before it; null for a name no scope opened so far has, which binds where it is first used.
+        /// </summary>
+        internal string?[] Bound { get; } = new string?[names.Length];
     }
 }

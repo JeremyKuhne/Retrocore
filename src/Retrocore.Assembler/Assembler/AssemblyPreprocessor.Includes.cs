@@ -81,15 +81,20 @@ internal sealed partial class AssemblyPreprocessor
         // A .using does not reach into an included file, and an included file's does not leak out of it.
         UsingDirective? usings = _constantUsings;
         _constantUsings = null;
+        MarkFile(enter: true);
         try
         {
             return ProcessSource(resolved, line.Dialect, line.Location, selected, includeDepth + 1, macroDepth);
         }
         finally
         {
+            MarkFile(enter: false);
             _constantUsings = usings;
         }
     }
+
+    // Marks where a source file's statements start or end, for the resolver's .using extents.
+    private void MarkFile(bool enter) => (_project.FileMarks ??= []).Add((_project.Statements.Count, enter));
 
     private void IncludeBinary(string operand, Line line)
     {

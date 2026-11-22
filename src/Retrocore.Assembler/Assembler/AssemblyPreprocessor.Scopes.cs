@@ -34,6 +34,10 @@ internal sealed partial class AssemblyPreprocessor
             if (AssemblyNameResolver.ReadUsingNames(node, out _) is { } names)
             {
                 _constantUsings = new(_constantUsings, _constantScope, names, node);
+                for (int at = 0; at < names.Length; at++)
+                {
+                    _constantUsings.Bound[at] = UsedScope(names[at], _constantScope);
+                }
             }
 
             return true;
@@ -119,7 +123,9 @@ internal sealed partial class AssemblyPreprocessor
         }
 
         // Then the scopes the .using directives in effect name, then historical names.
-        return separator >= 0 || _defined.Contains(name) ? name : UnscopedName(name);
+        // A source with neither .using nor historical names needs no further lookup.
+        bool plain = separator >= 0 || (_constantUsings is null && _historicalNames is null);
+        return plain || _defined.Contains(name) ? name : UnscopedName(name);
     }
 
     // A plain name no enclosing scope defines: one a .using in effect gives, or a historical name.
@@ -139,7 +145,7 @@ internal sealed partial class AssemblyPreprocessor
             for (int at = 0; at < directive.Names.Length; at++)
             {
                 string scopeName = directive.Names[at];
-                if (UsedScope(scopeName, directive.Scope) is not { } scope) { continue; }
+                if ((directive.Bound[at] ?? UsedScope(scopeName, directive.Scope)) is not { } scope) { continue; }
                 string candidate = ConstantQualified(scope, name);
                 if (!_defined.Contains(candidate)) { continue; }
                 _project.UsedUsings ??= [];

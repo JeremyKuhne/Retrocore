@@ -8,6 +8,19 @@ internal sealed partial class AssemblyPreprocessor
 {
     private bool ConditionalDirective(string operation, string operand, AssemblyLocation location, int floor, AssemblyDialect dialect)
     {
+        try
+        {
+            return ConditionalDirectiveText(operation, operand, location, floor, dialect);
+        }
+        finally
+        {
+            // An ambiguity the line's expansion found is for this line's condition only.
+            _conditionAmbiguity = null;
+        }
+    }
+
+    private bool ConditionalDirectiveText(string operation, string operand, AssemblyLocation location, int floor, AssemblyDialect dialect)
+    {
         if (operation is ".IF" or ".IFDEF" or ".IFNDEF" or ".IFBLANK"
             || (dialect is AssemblyDialect.Ca65 or AssemblyDialect.Native && IsCa65Condition(operation)))
         {
@@ -54,6 +67,7 @@ internal sealed partial class AssemblyPreprocessor
     {
         _nameAmbiguity = null;
         bool result = TestConditionText(operation, operand, location, dialect);
+        _nameAmbiguity ??= _conditionAmbiguity;
 
         // A name that two definitions could mean (two used scopes, or two definitions giving a historical name) is an error where a condition tests it, as in code.
         if (_nameAmbiguity is { } ambiguity)

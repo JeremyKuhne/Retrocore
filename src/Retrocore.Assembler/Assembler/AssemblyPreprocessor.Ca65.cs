@@ -41,10 +41,21 @@ internal sealed partial class AssemblyPreprocessor
         original = new(text, original.Location, original.Dialect);
         if (Ca65Definition(original, active)) { return true; }
         if (!active) { return false; }
+        _nameAmbiguity = null;
         original = new(ExpandCa65Functions(ExpandCa65Definitions(AssemblySyntax.AsString(text))), original.Location, original.Dialect);
         text = original.Text;
         Split(text.Span, out ReadOnlySpan<char> label, out ReadOnlySpan<char> op, out ReadOnlySpan<char> operand);
         string operation = op.ToString().ToUpperInvariant();
+
+        // A function such as .defined or .sizeof of a name two used scopes define has no one answer: an error on
+        // the line, or for a condition, where it is tested, so that the condition still opens.
+        if (operation is ".IF" or ".ELSEIF" || IsCa65Condition(operation))
+        {
+            _conditionAmbiguity = _nameAmbiguity;
+            _nameAmbiguity = null;
+        }
+
+        ThrowNameAmbiguity();
         if (operation == ".CHARMAP")
         {
             List<string> args = Ca65Frontend.Split(operand.ToString());
@@ -90,6 +101,7 @@ internal sealed partial class AssemblyPreprocessor
             long? knownSize = args.Count is 1 or 2 ? Ca65Size(args[0]) : null;
             if (knownSize is not { } size)
             {
+                ThrowNameAmbiguity();
                 throw new AssemblyError(0, ".tag requires a known type.");
             }
 

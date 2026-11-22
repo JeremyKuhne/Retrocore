@@ -238,4 +238,31 @@ internal sealed partial class AssemblyNameResolver
 
         return null;
     }
+
+    // Where each file starts and ends now. Statements added or removed since the marks were recorded move them: a
+    // mark stays with the statement it was at, or, when that one is gone, with the next one that remains.
+    private List<(int Index, bool Enter)> FileMarks()
+    {
+        if (_source.FileMarks is not { } marks) { return []; }
+        if (_source.FileMarkStatements is not { } recorded) { return marks; }
+        IList<AssemblyStatement> statements = _source.Statements;
+        bool unchanged = recorded.Length == statements.Count;
+        for (int index = 0; unchanged && index < recorded.Length; index++)
+        {
+            unchanged = ReferenceEquals(recorded[index], statements[index]);
+        }
+
+        if (unchanged) { return marks; }
+        // A statement compares by reference.
+        Dictionary<AssemblyStatement, int> now = [];
+        for (int index = 0; index < statements.Count; index++) { now.TryAdd(statements[index], index); }
+        int[] next = new int[recorded.Length + 1];
+        next[recorded.Length] = statements.Count;
+        for (int index = recorded.Length - 1; index >= 0; index--)
+        {
+            next[index] = now.TryGetValue(recorded[index], out int at) ? at : next[index + 1];
+        }
+
+        return [.. marks.Select(mark => (next[Math.Min(mark.Index, recorded.Length)], mark.Enter)).OrderBy(mark => mark.Item1)];
+    }
 }

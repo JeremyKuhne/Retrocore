@@ -212,6 +212,42 @@ public sealed class UsingTests
     }
 
     /// <summary>
+    ///  A statement added to a parsed project does not move a file-level <c>.using</c> out of its file.
+    /// </summary>
+    [TestMethod]
+    public void AddedStatementsKeepFileLevelUsings()
+    {
+        AssemblyOptions options = new(ProcessorVariant.Mos6502, origin: 0x1300, imageSize: 0x100);
+        AssemblyParseResult parsed = NativeAssembler.Parse(
+            [
+                new AssemblySource(".scope A\nV = 1\n.endscope\n.using A\n    lda #V\n", "first.asm"),
+                new AssemblySource("    nop\n", "second.asm")
+            ],
+            options);
+
+        parsed.Project.Statements.Insert(1, new(AssemblyStatementKind.Instruction, "NOP", AssemblyOperand.Value(new(""))));
+        new NativeAssembler().Assemble(parsed.Project, options).Diagnostics.Should().BeEmpty();
+    }
+
+    /// <summary>
+    ///  A statement removed from a parsed project does not carry a file-level <c>.using</c> into the next file.
+    /// </summary>
+    [TestMethod]
+    public void RemovedStatementsKeepFileLevelUsingsInTheirFile()
+    {
+        AssemblyOptions options = new(ProcessorVariant.Mos6502, origin: 0x1300, imageSize: 0x100);
+        AssemblyParseResult parsed = NativeAssembler.Parse(
+            [
+                new AssemblySource(".scope A\nV = 1\n.endscope\n    nop\n.using A\n", "first.asm"),
+                new AssemblySource("    lda #V\n", "second.asm")
+            ],
+            options);
+
+        parsed.Project.Statements.Remove(parsed.Project.Statements.First(statement => statement.Operation == "nop"));
+        new NativeAssembler().Assemble(parsed.Project, options).Diagnostics.Should().NotBeEmpty();
+    }
+
+    /// <summary>
     ///  A <c>.using</c> in a <c>.repeat</c> is used if any expansion used it, and is not reported as unnecessary.
     /// </summary>
     [TestMethod]
@@ -855,6 +891,84 @@ public sealed class UsingTests
 
         result.Diagnostics.Should().BeEmpty();
         result.Sections[0].Bytes.Span[..3].ToArray().Should().Equal(0xA9, 3, 0xEA);
+    }
+
+    /// <summary>
+    ///  In the editor, a cheap local binds to the one after the label before it, not to the first in its scope.
+    /// </summary>
+    [TestMethod]
+    public void TheEditorFindsCheapLocalsByTheirLabel()
+    {
+        string directory = Directory.CreateTempSubdirectory("retrocore-using").FullName;
+        try
+        {
+            string main = Path.Join(directory, "main.asm");
+            File.WriteAllText(main, """
+                .proc P
+                    ldx #0
+                @loop: dex
+                    bne @loop
+                Inner:
+                @loop: dey
+                    bne @loop
+                    rts
+                .endproc
+
+                """);
+
+            SourceAnalysis analysis = SourceAnalysis.Assemble(main, _ => null);
+            analysis.Result.Diagnostics.Should().BeEmpty();
+            analysis.Bound("@loop", main, line: 6).Should().BeNull();
+            analysis.Find("@loop", main, line: 6, macro10: false).Select(site => site.Line).Should().Contain(5);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
+    ///  A function the preprocessor answers, such as <c>.defined</c> or <c>.sizeof</c>, of a name two used scopes
+    ///  define is the ambiguity error, as the name is in code.
+    /// </summary>
+    /// <param name="use">The lines that use the name.</param>
+    [TestMethod]
+    [DataRow(".if .defined(N)\n    nop\n.endif\n")]
+    [DataRow(".if .const(N)\n    nop\n.endif\n")]
+    [DataRow("    .byte .defined(N)\n")]
+    public void AmbiguousNamesInFunctionsAreErrors(string use)
+    {
+        AssemblyResult result = Assemble(".scope A\nN = 1\n.endscope\n.scope B\nN = 2\n.endscope\n.using A, B\n" + use);
+        result.Diagnostics.Select(diagnostic => diagnostic.Message).Should().Equal("'N' is in both A and B; qualify it.");
+    }
+
+    /// <summary>
+    ///  A type two used scopes define is the ambiguity error where <c>.tag</c> or <c>.sizeof</c> names it.
+    /// </summary>
+    /// <param name="use">The lines that use the type.</param>
+    [TestMethod]
+    [DataRow("Buf: .tag T\n")]
+    [DataRow("    lda #.sizeof(T)\n")]
+    [DataRow(".struct U\n    t .tag T\n.endstruct\n")]
+    public void AmbiguousTypesAreErrors(string use)
+    {
+        AssemblyResult result = Assemble("""
+            .scope A
+            .struct T
+                x .byte
+            .endstruct
+            .endscope
+            .scope B
+            .struct T
+                x .byte
+                y .byte
+            .endstruct
+            .endscope
+            .using A, B
+
+            """ + use);
+
+        result.Diagnostics.Select(diagnostic => diagnostic.Message).Should().Equal("'T' is in both A and B; qualify it.");
     }
 
     /// <summary>

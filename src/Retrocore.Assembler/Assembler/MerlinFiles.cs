@@ -111,6 +111,9 @@ internal static class MerlinFiles
             } : node);
         }
 
+        // One statement for each of the source's, in order, so the file marks fall where they did.
+        if (project.FileMarks is not null) { project.FileMarkStatements = [.. project.Statements]; }
+
         return project;
     }
 

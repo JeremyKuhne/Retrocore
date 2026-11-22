@@ -84,6 +84,7 @@ internal sealed partial class AssemblyPreprocessor
         }
 
         AssemblyProject project = processor._project;
+        if (project.FileMarks is not null) { project.FileMarkStatements = [.. project.Statements]; }
         foreach (AssemblySource source in processor._sources) { project.Sources.Add(source); }
         return new(project, [.. processor._diagnostics.OrderBy(item => item.Order).Select(item => item.Diagnostic)]);
     }

@@ -88,4 +88,10 @@ public sealed class AssemblyProject
     ///  A <c>.using</c> at a file's level ends with its file.
     /// </summary>
     internal List<(int Index, bool Enter)>? FileMarks { get; set; }
+
+    /// <summary>
+    ///  Gets or sets the statements as they were when <see cref="FileMarks"/> was recorded, so that marks can follow
+    ///  their statements when statements are added or removed afterward.
+    /// </summary>
+    internal AssemblyStatement[]? FileMarkStatements { get; set; }
 }

@@ -343,9 +343,15 @@ internal sealed partial class SourceAnalysis
     /// <param name="name">The plain name.</param>
     /// <param name="path">The full path of the file it is used in.</param>
     /// <param name="line">The zero-based line it is used on.</param>
-    /// <returns>The definitions, or null when the name binds to none of them, as a historical name does not.</returns>
+    /// <returns>
+    ///  The definitions, or null when the name binds to none of them, as a historical name does not, or is a cheap
+    ///  local or unnamed label, which scopes do not name.
+    /// </returns>
     internal IReadOnlyList<SymbolSite>? Bound(string name, string path, int line)
     {
+        // A cheap local belongs to the label before it, and an unnamed label to its position, not to a scope.
+        if (name.StartsWith('@') || name.StartsWith(':')) { return null; }
+
         if (name.Contains("::", StringComparison.Ordinal))
         {
             return _definitions.GetValueOrDefault(name.TrimStart(':'));

@@ -15,6 +15,9 @@ internal sealed partial class AssemblyPreprocessor
     // A historical name that two definitions give, found while evaluating a condition; reported by TestCondition.
     private string? _nameAmbiguity;
 
+    // An ambiguity found expanding a condition's line, reported where the condition is tested.
+    private string? _conditionAmbiguity;
+
     /// <summary>
     ///  Reads a source's <c>Also:</c> sections the first time it is processed.
     /// </summary>

@@ -133,6 +133,7 @@ internal sealed partial class AssemblyPreprocessor
         {
             if (args.Count is < 1 or > 2 || Ca65Size(args[0]) is not { } typeSize)
             {
+                ThrowNameAmbiguity();
                 throw new AssemblyError(0, ".tag requires a known type and optional count.");
             }
 
@@ -218,6 +219,16 @@ internal sealed partial class AssemblyPreprocessor
         }
 
         return null;
+    }
+
+    // Reports a name found ambiguous since it was last cleared, as an error on the line.
+    private void ThrowNameAmbiguity()
+    {
+        if (_nameAmbiguity is { } ambiguity)
+        {
+            _nameAmbiguity = null;
+            throw new AssemblyError(0, ambiguity);
+        }
     }
 
     private long Ca65Value(string text) => Ca65TryValue(text)

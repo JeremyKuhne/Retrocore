@@ -191,7 +191,7 @@ internal sealed partial class AssemblyNameResolver
         List<Using> directives = [];
         Stack<Using?> scopeUsings = [];
         Stack<(Using? Usings, int Depth)> files = [];
-        List<(int Index, bool Enter)> marks = _source.FileMarks ?? [];
+        List<(int Index, bool Enter)> marks = FileMarks();
         int mark = 0;
 
         for (int index = 0; index < _source.Statements.Count; index++)

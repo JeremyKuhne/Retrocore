@@ -141,6 +141,9 @@ internal sealed partial class AssemblyLinker
             project.Statements.Add(node);
         }
 
+        // One statement for each of the source's, in order, so the file marks fall where they did.
+        if (project.FileMarks is not null) { project.FileMarkStatements = [.. project.Statements]; }
+
         if (source.DeclaredSections is { Count: > 0 })
         {
             throw linker.Failure("A linker configuration cannot be combined with native section definitions.");

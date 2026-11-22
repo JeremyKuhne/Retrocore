@@ -287,7 +287,7 @@ const grammar = {
         merlin: {
             // Spaced as the tools read it, the pragma may carry the documentation lint's words too, before or after the dialect.
             begin: "\\A[ \\t]*; (?i:retrocore:(?:(?![ \\t]* -- )[ \\t]+[^\\s]+)*?[ \\t]*dialect=merlin)(?=[ \\t]|$).*$",
-            beginCaptures: { "0": { name: "comment.line.semicolon.retrocore" } },
+            beginCaptures: { "0": { patterns: [{ include: "#comments" }] } },
             end: "(?!)",
             patterns: [
                 { match: "^[*;].*$", name: "comment.line.semicolon.retrocore" },

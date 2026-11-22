@@ -395,7 +395,11 @@
       "begin": "\\A[ \\t]*; (?i:retrocore:(?:(?![ \\t]* -- )[ \\t]+[^\\s]+)*?[ \\t]*dialect=merlin)(?=[ \\t]|$).*$",
       "beginCaptures": {
         "0": {
-          "name": "comment.line.semicolon.retrocore"
+          "patterns": [
+            {
+              "include": "#comments"
+            }
+          ]
         }
       },
       "end": "(?!)",

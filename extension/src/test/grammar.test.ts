@@ -239,6 +239,17 @@ test("Merlin pragma with the lint's words still selects Merlin", () => {
     }
 });
 
+test("Merlin pragma's own words have the pragma scopes", () => {
+    const pragma = "; retrocore: dialect=merlin ignore=line-length -- the reason";
+    const found = grammar.tokenizeLine(pragma, INITIAL).tokens;
+    for (const [value, expected] of [["dialect", "keyword.other.pragma.retrocore"], ["line-length", "constant.other.pragma.retrocore"],
+        ["the reason", scope.comment]]) {
+        const start = pragma.indexOf(value);
+        const token = found.find(item => item.startIndex <= start && item.endIndex > start);
+        assert.ok(token?.scopes.includes(expected), `${value}: expected ${expected}, got ${token?.scopes.join(" ")}`);
+    }
+});
+
 test("A Merlin dialect the tools don't read selects nothing", () => {
     for (const pragma of ["; retrocore: ignore=indent -- not dialect=merlin", ";retrocore: dialect=merlin", ";   retrocore: dialect=merlin",
         "; retrocore: ignore=indent  --  dialect=merlin", "; retrocore: ignore=indent\t -- dialect=merlin"]) {

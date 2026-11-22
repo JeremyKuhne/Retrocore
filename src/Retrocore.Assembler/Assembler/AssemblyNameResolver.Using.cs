@@ -44,5 +44,10 @@ internal sealed partial class AssemblyNameResolver
         ///  Gets whether each name's scope gave the code a name, so a <c>.using</c> that gives none can be reported.
         /// </summary>
         internal bool[] Used { get; } = new bool[names.Length];
+
+        /// <summary>
+        ///  Gets or sets the statement where the directive's extent ends, or -1 when it lasts to the end.
+        /// </summary>
+        internal int End { get; set; } = -1;
     }
 }

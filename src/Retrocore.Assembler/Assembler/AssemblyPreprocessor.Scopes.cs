@@ -148,13 +148,7 @@ internal sealed partial class AssemblyPreprocessor
                 if ((directive.Bound[at] ?? UsedScope(scopeName, directive.Scope)) is not { } scope) { continue; }
                 string candidate = ConstantQualified(scope, name);
                 if (!_defined.Contains(candidate)) { continue; }
-                _project.UsedUsings ??= [];
-                if (!_project.UsedUsings.TryGetValue(directive.Statement, out HashSet<int>? used))
-                {
-                    _project.UsedUsings[directive.Statement] = used = [];
-                }
-
-                used.Add(at);
+                MarkUsed(directive, at);
                 if (found is null)
                 {
                     found = candidate;
@@ -171,6 +165,18 @@ internal sealed partial class AssemblyPreprocessor
         }
 
         return null;
+    }
+
+    // Records that a conditional used a .using operand, so the resolver does not report it as unnecessary.
+    private void MarkUsed(UsingDirective directive, int at)
+    {
+        _project.UsedUsings ??= [];
+        if (!_project.UsedUsings.TryGetValue(directive.Statement, out HashSet<int>? used))
+        {
+            _project.UsedUsings[directive.Statement] = used = [];
+        }
+
+        used.Add(at);
     }
 
     // The qualified name of the scope a .using operand names, among the scopes opened so far.

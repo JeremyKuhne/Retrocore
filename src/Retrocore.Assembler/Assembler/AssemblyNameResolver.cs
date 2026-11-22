@@ -124,16 +124,25 @@ internal sealed partial class AssemblyNameResolver
         image.Usings = _usings.Count == 0 ? null : [.. _usings.Select(Published)];
     }
 
-    // A .using as the result reports it; one a macro gives inside a scope the same expansion opens ends with that
-    // scope, so it does not apply from the invoking line.
+    // The directives from one in effect down to, but not including, the one in effect again, end at a statement.
+    private static void EndUsings(Using? from, Using? to, int index)
+    {
+        for (Using? directive = from; directive is not null && !ReferenceEquals(directive, to); directive = directive.Next)
+        {
+            if (directive.End < 0) { directive.End = index; }
+        }
+    }
+
+    // A .using as the result reports it. One a macro gives applies from the invoking line unless its extent ends
+    // inside the same expansion, as when the expansion opens and closes the scope it is in.
     private AssemblyUsing Published(Using directive)
     {
         AssemblyLocation? location = _source.Statements[directive.Index].Location;
         bool atInvocation = true;
-        AssemblyLocation? opening = directive.Scope.Opening < 0 ? null : _source.Statements[directive.Scope.Opening].Location;
-        if (location is { IsMacroExpansion: true } && opening is { IsMacroExpansion: true })
+        AssemblyLocation? end = directive.End < 0 ? null : _source.Statements[directive.End].Location;
+        if (location is { IsMacroExpansion: true } && end is { IsMacroExpansion: true })
         {
-            atInvocation = !SameLocation(Invocation(opening), Invocation(location));
+            atInvocation = !SameLocation(Invocation(end), Invocation(location));
         }
 
         return new(location, directive.Names, atInvocation);
@@ -202,7 +211,11 @@ internal sealed partial class AssemblyNameResolver
                 {
                     // A file that closed scopes it did not open has already given back their .using directives.
                     (Using? saved, int depth) = files.Pop();
-                    if (scopeUsings.Count >= depth) { usings = saved; }
+                    if (scopeUsings.Count >= depth)
+                    {
+                        EndUsings(usings, saved, index);
+                        usings = saved;
+                    }
                 }
             }
 
@@ -324,7 +337,12 @@ internal sealed partial class AssemblyNameResolver
 
                     scope = scope.Parent;
                     cheap = FreshContext();
-                    if (scopeUsings.Count != 0) { usings = scopeUsings.Pop(); }
+                    if (scopeUsings.Count != 0)
+                    {
+                        Using? restored = scopeUsings.Pop();
+                        EndUsings(usings, restored, index);
+                        usings = restored;
+                    }
                 }
 
                 continue;

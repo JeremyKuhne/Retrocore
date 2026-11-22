@@ -38,15 +38,16 @@ public static partial class DocumentationParser
         /// <param name="assembled">What the assembler took from the file, or null when not known.</param>
         internal void Advance(string code, int line, DocumentationAssembled? assembled)
         {
-            AdvanceCode(code, line, assembled?.UsingAssembled(line) ?? true);
+            // With the names the assembler took from each line, those stand for the line's text, which a .define may
+            // have changed or given; without them, the text is read.
+            bool namesKnown = assembled?.LineUsings is not null;
+            AdvanceCode(code, line, !namesKnown && (assembled?.UsingAssembled(line) ?? true));
 
-            // A macro invoked on the line may itself have given a .using, and a .define may have expanded to one,
-            // which apply from the next line.
+            // A macro invoked on the line may itself have given a .using, which applies from the next line.
             if (assembled is not null && _macros == 0)
             {
-                bool written = FirstWord(code).Equals(".using", StringComparison.OrdinalIgnoreCase);
-                IEnumerable<string[]> expanded = written || assembled.LineUsings is null ? [] : assembled.LineUsings(line);
-                foreach (string[] names in assembled.InvokedUsings(line).Concat(expanded))
+                IEnumerable<string[]> written = assembled.LineUsings is { } lineUsings ? lineUsings(line) : [];
+                foreach (string[] names in written.Concat(assembled.InvokedUsings(line)))
                 {
                     _usings.Add((_named.Count, new(string.Join("::", Scopes), names, line)));
                     _current = null;

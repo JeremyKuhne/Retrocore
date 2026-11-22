@@ -832,6 +832,115 @@ public sealed class UsingTests
     }
 
     /// <summary>
+    ///  A <c>.struct</c> a used scope defines is a type by its plain name: <c>.sizeof</c>, <c>.tag</c> and a condition
+    ///  on its size all find it.
+    /// </summary>
+    [TestMethod]
+    public void UsedStructsAreTypes()
+    {
+        AssemblyResult result = Assemble("""
+            .scope A
+            .struct S
+                a .byte
+                b .word
+            .endstruct
+            .endscope
+            .using A
+                lda #.sizeof(S)
+            .if .sizeof(S) = 3
+                nop
+            .endif
+            Buffer: .tag S
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+        result.Sections[0].Bytes.Span[..3].ToArray().Should().Equal(0xA9, 3, 0xEA);
+    }
+
+    /// <summary>
+    ///  In the editor, a macro's <c>.using</c> lasts as long as it does in the assembler: past the invocation when
+    ///  the scope it is in closes outside the macro, and not when the macro closes it, a continued piece included.
+    /// </summary>
+    [TestMethod]
+    public void TheEditorFollowsMacroUsingExtents()
+    {
+        string directory = Directory.CreateTempSubdirectory("retrocore-using").FullName;
+        try
+        {
+            string main = Path.Join(directory, "main.asm");
+            File.WriteAllText(main, """
+                .scope A
+                X = 1
+                .endscope
+                .scope S
+                .endscope
+                .macro Open
+                .scope T
+                .using A
+                .endmacro
+                .macro Piece
+                .scope S continued
+                .using A
+                .endscope
+                .endmacro
+                    Open
+                    .byte X
+                .endscope
+                    Piece
+                    nop
+
+                """);
+
+            SourceAnalysis analysis = SourceAnalysis.Assemble(main, _ => null);
+            analysis.Result.Diagnostics.Should().BeEmpty();
+            (analysis.Bound("X", main, line: 15) ?? []).Select(site => site.Name).Should().Equal("A::X");
+            analysis.Bound("X", main, line: 19).Should().BeNull("the piece's .using ended inside the macro");
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
+    ///  A <c>.using</c> whose operand a <c>.define</c> gives names that scope in the editor and doc links, as in the
+    ///  assembler.
+    /// </summary>
+    [TestMethod]
+    public void DefinedOperandsNameTheirScope()
+    {
+        string directory = Directory.CreateTempSubdirectory("retrocore-using").FullName;
+        try
+        {
+            string main = Path.Join(directory, "main.asm");
+            File.WriteAllText(main, """
+                .scope A
+                ;; The value.
+                V = $10
+                .endscope
+                .define Short A
+                .using Short
+
+                ;; Uses <V>.
+                Load:
+                    lda V
+                    rts
+
+                """);
+
+            SourceAnalysis analysis = SourceAnalysis.Assemble(main, _ => null);
+            analysis.Result.Diagnostics.Should().BeEmpty();
+            (analysis.Bound("V", main, line: 9) ?? []).Select(site => site.Name).Should().Equal("A::V");
+            DocumentationTopic load = analysis.Documentation.Find("Load") ?? throw new AssertFailedException("No Load topic.");
+            new DocumentationResolver(analysis.Documentation).Resolve(load, "V").Topic?.Name.Should().Be("A::V");
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
     ///  A build that goes through the linker keeps the <c>.using</c> file extents and the uses conditionals make.
     /// </summary>
     [TestMethod]

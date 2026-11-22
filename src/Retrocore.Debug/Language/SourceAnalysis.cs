@@ -52,8 +52,16 @@ internal sealed partial class SourceAnalysis
             }
 
             // An included file is inside the scopes around its .include line.
-            if (!location.IsMacroExpansion && location.ExpandedFrom is { Path.Length: > 0 } from)
+            if (!location.IsMacroExpansion && location.ExpandedFrom is { Path.Length: > 0 } include)
             {
+                // An .include in a macro's body is in the scope where the macro is invoked.
+                AssemblyLocation from = include;
+                while (from.IsMacroExpansion && from.ExpandedFrom is { Path.Length: > 0 } invocation)
+                {
+                    from = invocation;
+                }
+
+
                 if (!_includedFrom.TryGetValue(path, out List<(string Path, int Line)>? sites))
                 {
                     _includedFrom[path] = sites = [];
@@ -71,8 +79,8 @@ internal sealed partial class SourceAnalysis
                     _usingLines[path] = usingLines = [];
                 }
 
-                // The assembler takes .using only in the native dialect and without a label.
-                if (statement is { Kind: AssemblyStatementKind.Using, Dialect: AssemblyDialect.Native, Label: null })
+                // Only a .using the assembler accepts: native, without a label, and naming scopes.
+                if (statement.Kind == AssemblyStatementKind.Using && AssemblyNameResolver.ReadUsingNames(statement, out _) is not null)
                 {
                     usingLines.Add(location.Line);
                 }

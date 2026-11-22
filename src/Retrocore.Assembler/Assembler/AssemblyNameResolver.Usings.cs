@@ -14,46 +14,44 @@ internal sealed partial class AssemblyNameResolver
     /// <returns>The names as written, or null for a line in error.</returns>
     private string[]? UsingNames(AssemblyStatement node, int index)
     {
-        if (node.Dialect != AssemblyDialect.Native)
-        {
-            _errors.Add(new(index, ".using is only in the native dialect."));
-            return null;
-        }
+        string[]? names = ReadUsingNames(node, out string? error);
+        if (error is not null) { _errors.Add(new(index, error)); }
+        return names;
+    }
 
-        if (node.Label is not null)
-        {
-            _errors.Add(new(index, "A .using line cannot carry a label."));
-            return null;
-        }
-
-        if (node.Operand.Memory.Span.Trim().IsEmpty)
-        {
-            _errors.Add(new(index, ".using requires one or more scope names."));
-            return null;
-        }
-
+    /// <summary>
+    ///  Reads a <c>.using</c> line's scope names as the resolver accepts them, so the preprocessor and the editor
+    ///  follow the same lines it does.
+    /// </summary>
+    /// <param name="node">The directive.</param>
+    /// <param name="error">Why the line is not a <c>.using</c> the resolver accepts, or null.</param>
+    /// <returns>The names as written, or null for a line in error.</returns>
+    internal static string[]? ReadUsingNames(AssemblyStatement node, out string? error)
+    {
+        error = null;
+        if (node.Dialect != AssemblyDialect.Native) { error = ".using is only in the native dialect."; }
+        else if (node.Label is not null) { error = "A .using line cannot carry a label."; }
+        else if (node.Operand.Memory.Span.Trim().IsEmpty) { error = ".using requires one or more scope names."; }
+        if (error is not null) { return null; }
         List<string> names = [];
         try
         {
-            foreach (ReadOnlyMemory<char> operand in new AssemblyOperands(node.Operand.Memory, index))
+            foreach (ReadOnlyMemory<char> operand in new AssemblyOperands(node.Operand.Memory, 0))
             {
                 string name = operand.ToString();
                 if (name.StartsWith("::", StringComparison.Ordinal)) { name = name[2..]; }
-                foreach (string part in name.Split("::"))
+                if (name.Split("::").Any(part => !AssemblySyntax.IsPlainIdentifier(part.AsSpan())))
                 {
-                    if (!AssemblySyntax.IsPlainIdentifier(part.AsSpan()))
-                    {
-                        _errors.Add(new(index, $".using requires scope names; '{operand}' is not one."));
-                        return null;
-                    }
+                    error = $".using requires scope names; '{operand}' is not one.";
+                    return null;
                 }
 
                 names.Add(operand.ToString());
             }
         }
-        catch (AssemblyError error)
+        catch (AssemblyError failure)
         {
-            _errors.Add(error);
+            error = failure.Message;
             return null;
         }
 

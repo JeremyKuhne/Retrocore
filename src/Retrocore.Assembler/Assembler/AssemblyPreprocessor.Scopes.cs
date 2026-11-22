@@ -30,22 +30,10 @@ internal sealed partial class AssemblyPreprocessor
         _constantDialect = node.Dialect;
         if (node.Kind == AssemblyStatementKind.Using)
         {
-            // The resolver reports a malformed directive; one that is well formed applies from the next line.
-            if (node.Dialect == AssemblyDialect.Native && node.Label is null && !node.Operand.Memory.Span.Trim().IsEmpty)
+            // The resolver reports a malformed directive; one it accepts applies from the next line.
+            if (AssemblyNameResolver.ReadUsingNames(node, out _) is { } names)
             {
-                try
-                {
-                    List<string> names = [];
-                    foreach (ReadOnlyMemory<char> name in new AssemblyOperands(node.Operand.Memory, 0))
-                    {
-                        names.Add(name.ToString());
-                    }
-
-                    _constantUsings = new(_constantUsings, _constantScope, [.. names], node);
-                }
-                catch (AssemblyError)
-                {
-                }
+                _constantUsings = new(_constantUsings, _constantScope, names, node);
             }
 
             return true;

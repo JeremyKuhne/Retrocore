@@ -832,6 +832,82 @@ public sealed class UsingTests
     }
 
     /// <summary>
+    ///  A file a macro includes is in the scope where the macro is invoked, as the assembler binds it.
+    /// </summary>
+    [TestMethod]
+    public void FilesIncludedByMacrosAreInTheInvokersScope()
+    {
+        string directory = Directory.CreateTempSubdirectory("retrocore-using").FullName;
+        try
+        {
+            string main = Path.Join(directory, "main.asm");
+            string part = Path.Join(directory, "part.asm");
+            File.WriteAllText(part, "    lda Value\n");
+            File.WriteAllText(main, """
+                .macro IncludePart
+                .include "part.asm"
+                .endmacro
+                Value = 1
+                .scope Outer
+                Value = 2
+                    IncludePart
+                .endscope
+
+                """);
+
+            SourceAnalysis analysis = SourceAnalysis.Assemble(main, _ => null);
+            analysis.Result.Diagnostics.Should().BeEmpty();
+            analysis.Find("Value", part, line: 0).Select(site => site.Name).Should().Equal("Outer::Value");
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
+    ///  The editor ignores a malformed <c>.using</c>, which the assembler rejects.
+    /// </summary>
+    [TestMethod]
+    public void TheEditorIgnoresMalformedUsings()
+    {
+        string directory = Directory.CreateTempSubdirectory("retrocore-using").FullName;
+        try
+        {
+            string main = Path.Join(directory, "main.asm");
+            File.WriteAllText(main, ".scope A\n.proc Show\n    rts\n.endproc\n.endscope\n.using A, 1 + 2\n    jsr Show\n");
+            SourceAnalysis analysis = SourceAnalysis.Assemble(main, _ => null);
+            analysis.Result.Success.Should().BeFalse();
+            analysis.Find("A::Show").Should().NotBeEmpty();
+            analysis.Bound("Show", main, line: 6).Should().BeNull();
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
+    ///  A <c>.repeat</c> count made from a name two used scopes define is an error, not the first scope's value.
+    /// </summary>
+    [TestMethod]
+    public void AmbiguousRepeatCountsAreErrors()
+    {
+        Messages(Assemble("""
+            .scope First
+            N = 1
+            .endscope
+            .scope Second
+            N = 2
+            .endscope
+            .using First, Second
+            .repeat N
+                nop
+            .endrepeat
+            """)).Should().Contain("'N' is in both First and Second; qualify it.");
+    }
+
+    /// <summary>
     ///  The editor ignores a <c>.using</c> in another dialect, which the assembler rejects.
     /// </summary>
     [TestMethod]

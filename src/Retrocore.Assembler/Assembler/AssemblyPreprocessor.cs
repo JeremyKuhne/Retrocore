@@ -712,9 +712,19 @@ internal sealed partial class AssemblyPreprocessor
     private bool Constant(string text, AssemblyLocation location, out long value, string purpose = "Conditional")
     {
         value = 0;
+        _nameAmbiguity = null;
         try
         {
             ExpressionEvaluator evaluator = new(ConstantExpression(text).AsMemory(), _constants, address: 0, line: 0);
+
+            // A name that two definitions could mean has no one value, for a .repeat count or an .incbin range.
+            if (_nameAmbiguity is { } ambiguity)
+            {
+                _nameAmbiguity = null;
+                Error(ambiguity, location);
+                return false;
+            }
+
             if (evaluator.TryEvaluate(out value) && !evaluator.ReadsAddress) { return true; }
             Error($"{purpose} requires a constant known at this point in source order.", location);
         }

@@ -370,6 +370,7 @@ Design notes for upcoming work live in [`docs/backlog`](docs/backlog):
 - [debugging BASIC programs](docs/backlog/BasicDebugging.md): Level I BASIC and disk-image import/export;
 - [choosing and starting a machine, next round](docs/backlog/MachineLaunch.md);
 - [CPU core and machine loop speed](docs/backlog/CoreOptimization.md), including what .NET 11 might offer;
+- [cheaper running memory events](docs/backlog/MemoryDirtyTracking.md): measured, and not worth dirty-page tracking yet;
 - [exporting HTML documentation from `;;` comments](docs/backlog/DocExport.md);
 - [the media library and explorers](docs/backlog/Media.md);
 - [saving media back to images](docs/backlog/MediaPersistence.md): changed disks and tapes on every machine;

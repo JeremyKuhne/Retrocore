@@ -286,7 +286,7 @@ const grammar = {
         },
         merlin: {
             // The pragma may carry the documentation lint's words too, before or after the dialect.
-            begin: "\\A[ \\t]*;[ \\t]*(?i:retrocore:(?:[ \\t]+[^\\s]+)*?[ \\t]*dialect=merlin)(?=[ \\t]|$).*$",
+            begin: "\\A[ \\t]*;[ \\t]*(?i:retrocore:(?:[ \\t]+(?!--(?:[ \\t]|$))[^\\s]+)*?[ \\t]*dialect=merlin)(?=[ \\t]|$).*$",
             beginCaptures: { "0": { name: "comment.line.semicolon.retrocore" } },
             end: "(?!)",
             patterns: [
@@ -408,9 +408,9 @@ const grammar = {
                     ]
                 },
                 {
-                    // A "; retrocore:" pragma (docs/NativeAssembly.md): its words, and an exclusion's rule IDs. The
+                    // A "; retrocore:" pragma (docs/NativeAssembly.md), spaced as the tools read it: its words, and an exclusion's rule IDs. The
                     // reason after " -- " stays a plain comment.
-                    begin: "(;)[ \\t]*((?i:retrocore:))",
+                    begin: "(;) ((?i:retrocore:))",
                     beginCaptures: {
                         "1": { name: "punctuation.definition.comment.retrocore" },
                         "2": { name: "keyword.other.pragma.retrocore" }

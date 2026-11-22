@@ -392,7 +392,7 @@
       ]
     },
     "merlin": {
-      "begin": "\\A[ \\t]*;[ \\t]*(?i:retrocore:(?:[ \\t]+[^\\s]+)*?[ \\t]*dialect=merlin)(?=[ \\t]|$).*$",
+      "begin": "\\A[ \\t]*;[ \\t]*(?i:retrocore:(?:[ \\t]+(?!--(?:[ \\t]|$))[^\\s]+)*?[ \\t]*dialect=merlin)(?=[ \\t]|$).*$",
       "beginCaptures": {
         "0": {
           "name": "comment.line.semicolon.retrocore"
@@ -946,7 +946,7 @@
           ]
         },
         {
-          "begin": "(;)[ \\t]*((?i:retrocore:))",
+          "begin": "(;) ((?i:retrocore:))",
           "beginCaptures": {
             "1": {
               "name": "punctuation.definition.comment.retrocore"

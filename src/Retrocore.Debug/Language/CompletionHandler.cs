@@ -32,8 +32,11 @@ internal sealed class CompletionHandler
     /// <returns>The completions.</returns>
     public Task<List<CompletionItem>> Handle(LspParams request)
     {
+        // = and , ask only for an exclusion's rules, which BASIC has none of.
+        bool ruleTrigger = request.TriggerCharacter is "=" or ",";
         if (_basic.Get(request.TextDocument.Uri) is { } basic)
         {
+            if (ruleTrigger) { return Task.FromResult(new List<CompletionItem>()); }
             return Task.FromResult(BasicFeatures.Complete(basic, request.Position));
         }
 
@@ -45,7 +48,7 @@ internal sealed class CompletionHandler
         if (rules is not null) { return Task.FromResult(rules); }
 
         // In a comment, only an exclusion's rules complete; and the characters that ask for them ask for nothing else.
-        if (SourceText.CommentStart(before) >= 0 || request.TriggerCharacter is "=" or ",")
+        if (SourceText.CommentStart(before) >= 0 || ruleTrigger)
         {
             return Task.FromResult(new List<CompletionItem>());
         }

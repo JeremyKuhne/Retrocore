@@ -131,6 +131,12 @@ public static class DocumentationRules
     /// </summary>
     public static IReadOnlyCollection<string> EditorRules { get; } = [HistoricalName, Deprecated];
 
+    /// <summary>
+    ///  Gets the rules the resolver checks in each topic's <c>;;</c> blocks, and so only in the build that assembles
+    ///  the topic's definition.
+    /// </summary>
+    public static IReadOnlyCollection<string> TopicRules { get; } = [UnlinkedName, Link, AmbiguousLink, Also, Sections];
+
     private static readonly Dictionary<string, DocumentationRule> s_byId = All.ToDictionary(rule => rule.Id, StringComparer.Ordinal);
 
     /// <summary>

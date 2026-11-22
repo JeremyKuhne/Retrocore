@@ -222,6 +222,9 @@ test("retrocore pragma words and an exclusion's rule IDs have their own scopes",
     assertScope("    lda #0 ; retrocore: ignore=indent", "indent", "constant.other.pragma.retrocore");
     assertScope("    lda #0 ; retrocore: ignore=indent", "lda", scope.opcode);
     assertScope("; a plain comment", "plain", scope.comment);
+    // Only "; retrocore:" is a pragma to the tools, so other spacing stays a plain comment.
+    assertScope(";retrocore: ignore=indent", "indent", scope.comment);
+    assert.ok(!tokens(";retrocore: ignore=indent").some(token => token.scopes.includes("constant.other.pragma.retrocore")));
 });
 
 test("Merlin pragma with the lint's words still selects Merlin", () => {
@@ -232,6 +235,12 @@ test("Merlin pragma with the lint's words still selects Merlin", () => {
         const token = result.tokens.find(item => item.startIndex === 0);
         assert.ok(token?.scopes.includes(scope.label), `${pragma}: expected a Merlin label, got ${token?.scopes.join(" ")}`);
     }
+});
+
+test("A Merlin dialect in an exclusion's reason selects nothing", () => {
+    const state = grammar.tokenizeLine("; retrocore: ignore=indent -- not dialect=merlin", INITIAL).ruleStack;
+    const token = grammar.tokenizeLine("Entry   LDA #1", state).tokens.find(item => item.startIndex === 0);
+    assert.ok(!token?.scopes.includes(scope.label), `expected no Merlin label, got ${token?.scopes.join(" ")}`);
 });
 
 test("Merlin pragma selects column-zero labels and undotted directive scopes", () => {

@@ -25,8 +25,8 @@ public sealed partial class DocumentationResolver
     ///  <para>
     ///   An exclusion that turns nothing off is reported only where the lint could have found something for it: not
     ///   for a rule only the editor runs (<see cref="DocumentationRules.EditorRules"/>) unless its problems are among
-    ///   <paramref name="others"/>, and not for a <c>;;</c> block of a definition another build assembles, which this
-    ///   one doesn't check.
+    ///   <paramref name="others"/>, and not for a rule of <c>;;</c> blocks (<see cref="DocumentationRules.TopicRules"/>)
+    ///   whose range holds a block of a definition another build assembles, which this one doesn't check.
     ///  </para>
     /// </remarks>
     /// <param name="others">More problems in the current documentation's files, filtered with the rest.</param>
@@ -40,7 +40,7 @@ public sealed partial class DocumentationResolver
         List<DocumentationComment> skipped = [.. Current.Topics.Where(OtherBuilds).SelectMany(topic => topic.Comments)];
         bool Checked(DocumentationExclusion exclusion) =>
             (!DocumentationRules.EditorRules.Contains(exclusion.Rule) || run.Contains(exclusion.Rule))
-                && !(exclusion.Scope == DocumentationExclusionScope.Comment && skipped.Any(comment =>
+                && !(DocumentationRules.TopicRules.Contains(exclusion.Rule) && skipped.Any(comment =>
                     SamePath(comment.Path, exclusion.Path)
                         && comment.Line <= exclusion.LastLine
                         && exclusion.FirstLine <= comment.TargetLine));

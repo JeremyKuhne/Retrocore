@@ -677,6 +677,15 @@ public sealed class StyleLintTests
             """;
 
         Lint(text).Should().BeEmpty();
+
+        // The same for the whole file: the build that assembles Other uses the exclusion.
+        string wide = text.Replace("; retrocore: ignore=unlinked-name:Run\n", "", StringComparison.Ordinal)
+            .Replace(Pragma, "; retrocore: style=strict ignore=unlinked-name:Run\n", StringComparison.Ordinal);
+
+        Lint(wide).Should().BeEmpty();
+        Lint(wide.Replace(".if 0", ".if 1", StringComparison.Ordinal)).Should().BeEmpty();
+        Lint(wide.Replace("Makes Run go", "Makes it go", StringComparison.Ordinal).Replace(".if 0", ".if 1", StringComparison.Ordinal))
+            .Should().ContainSingle().Which.Message.Should().Be("Nothing here breaks unlinked-name:Run; remove the exclusion.");
     }
 
     // Each quick fix as its title and the text its edits make.

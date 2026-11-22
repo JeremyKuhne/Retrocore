@@ -254,8 +254,8 @@ CharacterOut = $FDED
   names nothing (`OLD::Member` does not resolve); one on a member that opens a nested type (`INNER .struct Inner`)
   names the member. A member's own name may be its old name too (`;; Also: COMMAND (DOS33)` on `Iob::COMMAND`),
   since it does not resolve outside its type; two types that both do that for the same name clash, as any shared
-  old name does. An `Also:` inside a macro's body is ignored, and `.sizeof` takes only a `.proc`'s current name. An old name for a `.set` variable is the value it had where it was
-  documented, not where code uses it. Two definitions in different branches of conditional assembly (one
+  old name does. An `Also:` inside a macro's body is ignored, and `.sizeof` takes only a `.proc`'s current name.
+  An old name for a `.set` variable is the value it had where it was documented, not where code uses it. Two definitions in different branches of conditional assembly (one
   model's routine and another's) can share an old name: each build has only one of them.
 - **Members:** a member's old name reaches the qualified member: `;; Also: IBCMD (DOS33)` above `COMMAND .byte`
   in `.struct Iob` makes `lda #IBCMD` assemble as `lda #Iob::COMMAND`, and `<IBCMD>` link to it. Two types may

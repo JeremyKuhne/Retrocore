@@ -536,6 +536,17 @@ public sealed class StyleLintTests
         Apply(excluded, [Required(LintEditor.Here(excluded, 2, "indent")).Edit])[2]
             .Should().Be("    lda #0 ; retrocore: ignore=ascii,indent");
 
+        // Code on the first line takes its own trailing pragma, which the parser reads for that line alone; a ;; block
+        // there has no line above it for one.
+        string[] first = ["    jsr COUT", "    rts"];
+        string[] fixedFirst = Apply(first, [Required(LintEditor.Here(first, 0, "historical-name:COUT")).Edit]);
+        fixedFirst[0].Should().Be("    jsr COUT ; retrocore: ignore=historical-name:COUT");
+        DocumentationParser.Parse(Join(fixedFirst), "test.asm").Exclusions.Should().ContainSingle()
+            .Which.Should().Match<DocumentationExclusion>(exclusion =>
+                exclusion.Scope == DocumentationExclusionScope.Line && exclusion.FirstLine == 0 && exclusion.LastLine == 0);
+
+        LintEditor.Here([";; The file.", "Start:"], 0, "link").Should().BeNull();
+
         // A line whose own comment is not a pragma has no room for one, and errors get no exclusion.
         LintEditor.Here(["", "    lda #0 ; the count"], 1, "indent").Should().BeNull();
         JsonObject error = new()

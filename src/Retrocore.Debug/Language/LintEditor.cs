@@ -115,7 +115,7 @@ internal static class LintEditor
     /// <returns>Where it applies ("on this line" or "for this comment") and the edit, or null.</returns>
     internal static (string Where, JsonObject Edit)? Here(string[] lines, int line, string item)
     {
-        if (line <= 0 || line >= lines.Length) { return null; }
+        if (line < 0 || line >= lines.Length) { return null; }
         string text = lines[line];
         if (text.TrimStart().StartsWith(";;", StringComparison.Ordinal))
         {

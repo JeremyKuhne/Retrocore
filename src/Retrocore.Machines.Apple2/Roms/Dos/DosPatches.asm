@@ -55,11 +55,11 @@ CLRSTS1:
 ;; itself. ERRORA then leaves the file manager with the error.
 ERROR9X:
     jsr RTNFCB
-    ldx ENTSTK
+    ldx FileManager::EntryStack
     txs
     jsr CLALL
     tsx
-    stx ENTSTK
+    stx FileManager::EntryStack
     lda #9
     jmp ERRORA
 

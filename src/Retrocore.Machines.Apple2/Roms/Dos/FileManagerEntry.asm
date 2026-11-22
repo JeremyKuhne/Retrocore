@@ -35,8 +35,8 @@
 
 ;; Address of the DOS file buffer of the file a command is working on.
 CFTABA:
-    LEFTOVER $00, $2D, $2D
-    LEFTOVER $00, $18, $18
+    Leftover $00, $2D, $2D
+    Leftover $00, $18, $18
 ;; DOS's input state: 0 normally, nonzero while DOS supplies input itself, as 1 while READ takes it from a
 ;; file and $C0 while FP loads the RAM Applesoft.
 ISTATE:
@@ -46,33 +46,33 @@ OSTATE:
     .byte 0
 ;; The output hook (CSW) DOS took over: where characters go once DOS has looked at them.
 SVOUTS:
-    LEFTOVER $00, $F0, $F0
-    LEFTOVER $00, $FD, $FD
+    Leftover $00, $F0, $F0
+    Leftover $00, $FD, $FD
 ;; The input hook (KSW) DOS took over, likewise. SVREGS copies SVOUTS and SVINS back into CSW and KSW.
 SVINS:
-    LEFTOVER $00, $1B, $1B
-    LEFTOVER $00, $FD, $FD
+    Leftover $00, $1B, $1B
+    Leftover $00, $FD, $FD
 ;; The number of file buffers DOS has, as MAXFILES set it.
 CNFTBS:
-    LEFTOVER $00, $03, $03
+    Leftover $00, $03, $03
 ;; A default of 3 file buffers that nothing reads; DFNFTS is the one DOS uses.
 DFNFTB:
     .byte 3
 ;; The stack pointer when DOS's hooks were entered, as SVREGS computed it.
 SVSTK:
-    LEFTOVER $00, $FB, $FB
+    Leftover $00, $FB, $FB
 ;; X when DOS's hooks were entered.
 SVX:
-    LEFTOVER $00, $0D, $0A
+    Leftover $00, $0D, $0A
 ;; Y when DOS's hooks were entered.
 SVY:
-    LEFTOVER $00, $28, $28
+    Leftover $00, $28, $28
 ;; A when DOS's hooks were entered: the character being read or written.
 SVA:
-    LEFTOVER $00, $8D, $8D
+    Leftover $00, $8D, $8D
 ;; Index into the input line while a command is scanned.
 LBUFD:
-    LEFTOVER $00, $0D, $0A
+    Leftover $00, $0D, $0A
 ;; The MON flags: which of commands, input and output DOS echoes to the screen.
 MONMOD:
     .byte 0
@@ -84,20 +84,20 @@ CMDNO:
     .byte $00
 ;; Where LOAD and BLOAD read each two-byte field at the start of a file, its address or length.
 SVBL:
-    LEFTOVER $00, $85, $00
-    LEFTOVER $00, $03, $00
+    Leftover $00, $85, $00
+    Leftover $00, $03, $00
 ;; A command to carry out after the language changes (a CMDNO), or 0.
 SVCMD:
     .byte 0
 ;; Scratch for the command interpreter.
 TEMP1A:
-    LEFTOVER $00, $0B, $0B
+    Leftover $00, $0B, $0B
 ;; Scratch for the command scanner.
 TEMP2A:
-    LEFTOVER $00, $01, $00
+    Leftover $00, $01, $00
 ;; Which keywords the command line gave, one bit each.
 INOPTS:
-    LEFTOVER $00, $20, $00
+    Leftover $00, $20, $00
 ;; The keyword values, from the command line or defaulted, two bytes each: V, D, S, L, R, B and A. The
 ;; command scanner stores each into CUROPT indexed by keyword.
 CUROPT:
@@ -106,12 +106,12 @@ CV:
     .word 0
 ;; The D keyword: drive number.
 CD:
-    LEFTOVER $00, $01, $01
-    LEFTOVER $00, $00, $00
+    Leftover $00, $01, $01
+    Leftover $00, $00, $00
 ;; The S keyword: slot number.
 CS:
-    LEFTOVER $00, $06, $06
-    LEFTOVER $00, $00, $00
+    Leftover $00, $06, $06
+    Leftover $00, $00, $00
 ;; The L keyword: length, or record length for OPEN.
 CL:
     .word 1
@@ -123,8 +123,8 @@ CB:
     .word 0
 ;; The A keyword: address.
 CA:
-    LEFTOVER $00, $00, $00
-    LEFTOVER $00, $03, $00
+    Leftover $00, $00, $00
+    Leftover $00, $03, $00
 ;; The letters C, I and O given with MON or NOMON, one bit each.
 IMBITS:
     .byte 0
@@ -168,13 +168,13 @@ FASBL = *-FASB                      ;; the name's length, 9
 SAT2:
 ;; Address of the RWTS parameter list, IOB, which DCBIO fills in for every disk access.
 AIOB:
-    .word IOB
+    .word DosIob
 ;; Address of the buffer holding the VTOC (volume table of contents) of the disk in use.
 AVTOC:
-    .word VTOC
+    .word FileManager::VtocBuffer
 ;; Address of the buffer holding the catalog sector in use.
 AVOLDR:
-    .word VOLDIR
+    .word FileManager::CatalogBuffer
 ;; One past the last byte of DOS, $C000 where DOS runs; nothing in DOS reads it.
 AEND:
     .word ENDOFDOS
@@ -226,8 +226,8 @@ SC2:
 ;; X says whether a missing file may be created: USERENT sets CMDNO as if the command were INIT (X = 0,
 ;; create) or LOAD (otherwise, don't), which is what DOPEN looks at. A created file is still reported with
 ;; code 6, file not found, but with the carry clear. The parameter list is always CCB; A and Y are not used.
-;; In:    X = 0 to allow creating a file, CCB = the request
-;; Out:   CCBSTA = the result, and the fields each request returns
+;; In:    X = 0 to allow creating a file, DosFileParameters = the request
+;; Out:   DosFileParameters::ReturnCode = the result, and the fields each request returns
 ;; Errors: carry = set when CCBSTA holds an error code
 ;; Uses:  A, X, Y, CMDNO
 ;; Entry: DOSENT = DOS's own entry, keeping CMDNO, the command being carried out
@@ -244,7 +244,7 @@ DOSENT:
     stx a:ENTSTK                    ; returns to the caller, however deep it has gone
     jsr CLCFCB                      ; bring in the file's work area, and clear CCBSTA
     lda a:CCBREQ
-    cmp #CRQMAX
+    cmp #REQUEST_COUNT
     bcs ERR2
     asl a
     tax

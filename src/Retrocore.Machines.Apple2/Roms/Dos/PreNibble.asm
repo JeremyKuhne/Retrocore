@@ -17,7 +17,7 @@
 ;; The first loop takes the bytes from byte 1 downwards (1, 0, $FF, ... 2), rotating each one's low bits into
 ;; NBUF2 + X as X counts up from 0 to $55 three times over: 258 passes, so bytes 1 and 0 go round twice. ROL
 ;; leaves the bits that were in the NBUF2 entry before above the six it fills, and the second loop clears them.
-;; In:    BUF = the address of the 256 bytes to write
+;; In:    SectorBuffer = the address of the 256 bytes to write
 ;; Out:   NBUF1 = 256 six-bit values, NBUF2 = 86 six-bit values
 ;; Uses:  A, X, Y
 PRENIB16:
@@ -25,7 +25,7 @@ PRENIB16:
     ldy #2                          ; Y: the buffer index, counting down from byte 1
 PRENIB1:
     dey
-    lda (BUF),y
+    lda (SectorBuffer),y
     lsr a                           ; bit 0 into NBUF2's entry...
     rol a:NBUF2,x
     lsr a                           ; ...then bit 1, so the pair arrives swapped

@@ -18,7 +18,7 @@
 ;;
 ;; The flags pushed after reading the command (carry set to read, clear to write) stay on the stack until the
 ;; sector is found; GOTSECT pulls them. Its results are as for RWTS.
-;; In:    X = slot * 16, the IOB as for RWTS, the drive running on the track
+;; In:    X = slot * 16, the DosIob as for RWTS, the drive running on the track
 TRYTRK:
     ldy #$0C
     lda (IOBPL),y                   ; IOB 0C: the command
@@ -64,7 +64,7 @@ TRYADR2:
 ; Out of tries: recalibrate. Pretend the head is at half-track $C0, more than the disk has, and seek to track 0:
 ; the head steps out until it stops against track 0, wherever it was. Then seek to the track again.
 RECAL:
-    lda CURTRK
+    lda CurrentTrack
     pha                             ; the track wanted
     lda #$60
     jsr SETTRK
@@ -81,9 +81,9 @@ RESEEK:
 ; An address field was read: is it from the track wanted? If not, note where the head really is and seek again.
 RDRIGHT:
     ldy TRACK
-    cpy CURTRK
+    cpy CurrentTrack
     beq RTTRK
-    lda CURTRK
+    lda CurrentTrack
     pha                             ; the track wanted
     tya
     jsr SETTRK                      ; the track the head is really on
@@ -93,7 +93,7 @@ RDRIGHT:
     beq RECAL                       ; always
 DRVERR:
     pla                             ; drop the track wanted
-    lda #IBDERR
+    lda #RWTS_DRIVE_ERROR
 JMPTO1:
     plp                             ; drop the read/write flags
     jmp HNDLERR
@@ -113,7 +113,7 @@ RTTRK:
     beq CORRECTVOL
     cmp VOLUME
     beq CORRECTVOL
-    lda #IBVMME
+    lda #RWTS_VOLUME_MISMATCH
     bne JMPTO1                      ; always
 ; Is it the sector wanted? IOB 05 is DOS's sector number; INTRLEAV gives the number in the address field.
 CORRECTVOL:
@@ -168,7 +168,7 @@ GOODREAD:
 .endif
     plp
     ldx #0
-    stx T0                          ; all 256 bytes
+    stx RebuildCount                          ; all 256 bytes
 .if DIAGMODE
     lda #TC11
     sta TL11
@@ -186,7 +186,7 @@ GOODREAD:
 ;; skips the SEC, changing only N, V and Z. ALLDONE stores whatever A holds, which is 0 only for a seek: after a
 ;; read it is the sector's last byte, after a write a byte read from the card. The file manager reads IOB 0D
 ;; only when the carry is set.
-;; In:    A = the return code, X = slot * 16, IOBPL/IOBPH = the IOB
+;; In:    A = the return code, X = slot * 16, IOBPL/IOBPH = the DosIob
 ;; Out:   carry = clear from ALLDONE, set from HNDLERR
 ;; Entry: HNDLERR = the error exit
 ALLDONE:
@@ -196,7 +196,7 @@ HNDLERR:
     sec
     ldy #$0D
     sta (IOBPL),y                   ; IOB 0D: the return code
-    lda MOTOROFF,x
+    lda MotorOff,x
 ; The diagnostic build shows LCOUNT / SCOUNT, the average number of wrong sectors before the right one, as a
 ; hex digit, and clears the ^.
 .if DIAGMODE
@@ -233,16 +233,16 @@ WRIT:
     sta TL8
 .endif
     bcc ALLDONE
-    lda #IBWPER
+    lda #RWTS_WRITE_PROTECTED
     bcs HNDLERR                     ; always
 ;; Moves the head of the selected drive to track A, and records it as that drive's position.
 ;;
 ;; When bit 0 of DCT 01 is set, as for the Disk II, a track is two half-tracks: MYSEEK doubles A, seeks, and
 ;; halves CURTRK again, so that CURTRK is the track number. Otherwise A goes to SEEK as it is. It also uses what
 ;; SEEK uses.
-;; In:    A = the track, X = slot * 16, DRIVNO = the drive, DEVCTBL = the DCT
-;; Out:   CURTRK = the track, DRV1TRK or DRV2TRK + slot = its half-track
-;; Uses:  A, Y, TRKN
+;; In:    A = the track, X = slot * 16, DRIVNO = the drive, DEVCTBL = the DosDeviceTable
+;; Out:   CurrentTrack = the track, DRV1TRK or DRV2TRK + slot = its half-track
+;; Uses:  A, Y, TargetHalfTrack
 ;; Keeps: X
 MYSEEK:
     pha
@@ -257,7 +257,7 @@ MYSEEK:
     bcc MYSEEK2
     asl a                           ; the track's half-track
     jsr MYSEEK2
-    lsr CURTRK                      ; back to a track
+    lsr CurrentTrack                      ; back to a track
 .if DIAGMODE
     lda #SP
     sta TL3
@@ -267,19 +267,19 @@ MYSEEK:
 ;;
 ;; It also uses what SEEK uses.
 ;; In:    A = the half-track, X = slot * 16, DRIVNO = the drive
-;; Out:   CURTRK = A, DRV1TRK or DRV2TRK + slot = A
-;; Uses:  A, Y, TRKN
+;; Out:   CurrentTrack = A, DRV1TRK or DRV2TRK + slot = A
+;; Uses:  A, Y, TargetHalfTrack
 ;; Keeps: X
 MYSEEK2:
-    sta TRKN
+    sta TargetHalfTrack
     jsr XTOY
     lda DRV1TRK,y
     bit DRIVNO
     bmi WASD0                       ; drive 1
     lda DRV2TRK,y
 WASD0:
-    sta CURTRK                      ; where the head is now
-    lda TRKN
+    sta CurrentTrack                      ; where the head is now
+    lda TargetHalfTrack
     bit DRIVNO
     bmi ISDRV1
     sta DRV2TRK,y                   ; where it will be
@@ -304,7 +304,7 @@ XTOY:
 ;; DRV2TRK + slot.
 ;;
 ;; It also sets DRIVNO from IOB 02.
-;; In:    A = the track, X = slot * 16, IOBPL/IOBPH = the IOB
+;; In:    A = the track, X = slot * 16, IOBPL/IOBPH = the DosIob
 ;; Out:   DRIVNO = bit 7 set for drive 1
 ;; Uses:  A, Y
 ;; Keeps: X

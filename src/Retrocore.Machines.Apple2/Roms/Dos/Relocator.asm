@@ -39,42 +39,42 @@ DR0:
 ;;
 ;; <DOSREL> exclusive-ors the byte at the top of each page with each value from 0 to 255 in turn and does the
 ;; same to this copy; the page is RAM only if the two always agree. It shares $26 with RWTS's temporaries.
-;; See: <DOSREL>, <ZPGWRK>
+;; See: <DOSREL>, <WorkPointer>
 LOC1 = $26
     lda #$BF
-    sta ZPGWRK+1
+    sta WorkPointer+1
     ldx #0                          ; X stays 0: (ZPGWRK,x) is the byte at ZPGWRK
-    stx ZPGWRK
+    stx WorkPointer
 DR0A:
     ldy #0
 DR1B:
-    lda (ZPGWRK,x)
+    lda (WorkPointer,x)
     sta LOC1
 DR1:
     tya
     eor LOC1
     sta LOC1
     tya
-    eor (ZPGWRK,x)
-    sta (ZPGWRK,x)
+    eor (WorkPointer,x)
+    sta (WorkPointer,x)
     cmp LOC1
     bne DR1A                        ; it didn't hold the value: not RAM
     iny
     bne DR1
     beq DR2                         ; always: all 256 passed, Y = 0
 DR1A:
-    dec ZPGWRK+1
+    dec WorkPointer+1
     bne DR0A
 
 ; Some memory answers at two addresses 8K apart, so the page found may be the same RAM as the page 8K below it
 ; (bit 5 of the page number clear). The same test again, now writing below and reading at the page found: if
 ; every write shows up there, the two are one, and the top of memory is the lower page. Y is 0.
 DR2:
-    lda ZPGWRK+1
+    lda WorkPointer+1
     and #$DF
-    sta ZPGFCB+1
-    stx ZPGFCB
-    lda (ZPGFCB,x)
+    sta FilePointer+1
+    stx FilePointer
+    lda (FilePointer,x)
     pha                             ; the lower page's byte, to put back
     sta LOC1
 DR2A:
@@ -82,19 +82,19 @@ DR2A:
     eor LOC1
     sta LOC1
     tya
-    eor (ZPGWRK,x)
-    sta (ZPGFCB,x)
+    eor (WorkPointer,x)
+    sta (FilePointer,x)
     cmp LOC1
     bne DR2B                        ; separate memory
     iny
     bne DR2A
-    ldy ZPGFCB+1                    ; one and the same: the byte is back as it was, by the same arithmetic
+    ldy FilePointer+1                    ; one and the same: the byte is back as it was, by the same arithmetic
     pla
     jmp DR2C
 DR2B:
     pla
-    sta (ZPGFCB,x)
-    ldy ZPGWRK+1
+    sta (FilePointer,x)
+    ldy WorkPointer+1
 
 ; Y is the top page of RAM. DOS ends just above it (NEPAGE), starts DOSLNG pages lower (NSPAGE), and moves by
 ; DELTA pages. With RAM to $3FFF DELTA is 0: DOS is already in place and starts where it is.
@@ -124,27 +124,27 @@ DR2C:
 ; Adjusts the address tables. Each ADRTAB entry is a range of two-byte addresses, start to end (the end not
 ; included); DELTA is added to each one's high byte. Y and ZPGWRK + 1 are the pointer, ZPGWRK staying 0.
     ldx #0
-    stx ZPGWRK
+    stx WorkPointer
 DR3:
     lda a:ADRTAB+1,x
     tay
     lda a:ADRTAB+2,x
-    sta ZPGWRK+1
+    sta WorkPointer+1
     jmp DR5                         ; step to the first address's high byte
 DR4:
     clc
-    lda (ZPGWRK),y
+    lda (WorkPointer),y
     adc a:DELTA
-    sta (ZPGWRK),y
+    sta (WorkPointer),y
     iny
     bne DR5
-    inc ZPGWRK+1
+    inc WorkPointer+1
 DR5:
     iny
     bne DR6
-    inc ZPGWRK+1
+    inc WorkPointer+1
 DR6:
-    lda ZPGWRK+1
+    lda WorkPointer+1
     cmp a:ADRTAB+4,x
     bcc DR4
     tya
@@ -164,35 +164,35 @@ DR6:
 DR7:
     stx a:TEMP1                     ; INSDS2 changes X
     lda a:CDETAB+1,x
-    sta ZPGWRK
+    sta WorkPointer
     lda a:CDETAB+2,x
-    sta ZPGWRK+1
+    sta WorkPointer+1
 DR8:
     ldx #0
-    lda (ZPGWRK,x)
-    jsr INSDS2
+    lda (WorkPointer,x)
+    jsr DecodeOpcode
     ldy LENGTH
     cpy #2
     bne DR9                         ; not three bytes long
-    lda (ZPGWRK),y
+    lda (WorkPointer),y
     cmp a:RSPAGE
     bcc DR9
     cmp a:REPAGE
     bcs DR9
     adc a:DELTA                     ; the carry is clear: the BCS wasn't taken
-    sta (ZPGWRK),y
+    sta (WorkPointer),y
 DR9:
     sec                             ; past the instruction: LENGTH + 1 bytes
     lda LENGTH
-    adc ZPGWRK
-    sta ZPGWRK
+    adc WorkPointer
+    sta WorkPointer
     lda #0
-    adc ZPGWRK+1
-    sta ZPGWRK+1
+    adc WorkPointer+1
+    sta WorkPointer+1
     ldx a:TEMP1
     cmp a:CDETAB+4,x
     bcc DR8
-    lda ZPGWRK
+    lda WorkPointer
     cmp a:CDETAB+3,x
     bcc DR8
     txa
@@ -206,23 +206,23 @@ DR9:
 ; page holding ENDOFDOS - $80 (DOS's last) to the page below NEPAGE. The new place is higher, so working down
 ; never overwrites a page before it is copied.
     lda #>(ENDOFDOS-$80)
-    sta ZPGWRK+1
+    sta WorkPointer+1
     ldy a:NEPAGE
     dey
-    sty ZPGFCB+1
+    sty FilePointer+1
     lda #0
-    sta ZPGWRK
-    sta ZPGFCB
+    sta WorkPointer
+    sta FilePointer
     tay
 DR10:
-    lda (ZPGWRK),y
-    sta (ZPGFCB),y
+    lda (WorkPointer),y
+    sta (FilePointer),y
     iny
     bne DR10
     dec a:DPGCNT
     beq DR11
-    dec ZPGWRK+1
-    dec ZPGFCB+1
+    dec WorkPointer+1
+    dec FilePointer+1
     bne DR10
 
 ; Starts DOS. DBVECT + 3 is a JMP DBINIT in the old copy of DOS, still in memory; its address was adjusted
@@ -251,8 +251,8 @@ ADRTAB:
     .word EAT2
     .word BAIOB                     ; BOOT 2's pointers to the IOB and the boot page
     .word ADOSLD+2
-    .word IBDCTP                    ; the IOB's pointer to the DCT
-    .word IBDCTP+2
+    .word DosIob::DeviceTable                    ; the IOB's pointer to the DCT
+    .word DosIob::DeviceTable+2
     .byte 0, 0, 0, 0                ; room for three more entries
     .byte 0, 0, 0, 0
     .byte 0, 0, 0, 0
@@ -271,7 +271,7 @@ CDETAB:
     .word EC3
     .word SC4                       ; an empty range, just before the boot page
     .word EC4
-    .word ASC1                      ; RWTS's low-level routines
+    .word LowLevelCodeStart                      ; RWTS's low-level routines
     .word AEC1
     .word ASC2                      ; RWTS, the formatter and the patches at the top of DOS
     .word AEC2
@@ -290,7 +290,7 @@ CDETAB:
     .word EC3
     .word SWADR1                    ; RWTS, in pieces between its tables
     .word EWADR1
-    .word ASC1
+    .word LowLevelCodeStart
     .word AEC1
 .if DOS33B
     .word PSC1                      ; the 1983 patch area after MSWAIT
@@ -310,10 +310,10 @@ REPAGE:
     .byte >(ENDOFDOS)
 ;; DOS's first page once moved.
 NSPAGE:
-    LEFTOVER $00, $1D, $00
+    Leftover $00, $1D, $00
 ;; The page just after DOS once moved.
 NEPAGE:
-    LEFTOVER $00, $40, $00
+    Leftover $00, $40, $00
 ;; DOS's length in pages.
 DOSLNG:
     .byte >(ENDOFDOS-START)

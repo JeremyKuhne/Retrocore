@@ -19,8 +19,8 @@
 ;; helpers, the IOB and DCT that DOS passes to RWTS, and the layout of a track/sector list sector.
 
     ; leftover: the end of the page before, which Apple's source fills to the page boundary
-    LEFTOVER $FD, $00
-    LEFTOVER $FE, $00
+    Leftover $FD, $00
+    Leftover $FE, $00
     .assert <* = 0
 
 ;; BOOT 1: the boot sector, track 0 sector 0, which BOOT 0 loads at $0800 and enters at $0801. DOS keeps this
@@ -137,9 +137,9 @@ CLOSFILE:
     lda #0
     tay
     sta EOFFLAG
-    sta (ZPGWRK),y                  ; a buffer whose name starts with 0 is free
+    sta (WorkPointer),y                  ; a buffer whose name starts with 0 is free
 NOTFOUND:
-    lda CCBSTA
+    lda DosFileParameters::ReturnCode
     jmp ERROR
 
 ;; The end of APPEND, once it has read to the end of the file: if EOFFLAG is set, moves the record number in
@@ -147,9 +147,9 @@ NOTFOUND:
 BUMPER:
     lda EOFFLAG
     beq GOBACK
-    inc CCBRRN
+    inc DosFileParameters::Record
     bne GOBACK
-    inc CCBRRN+1
+    inc DosFileParameters::Record+1
 GOBACK:
     lda #0
     sta EOFFLAG
@@ -165,7 +165,7 @@ GOBACK:
 ;; The end of SAVE and BSAVE: writes the file through DOSGO, closes it, and then checks it as VERIFY does.
 ;; In:    A = the request modifier to store in the parameter list
 VPATCH:
-    sta CCBRQM
+    sta DosFileParameters::Transfer
     jsr DOSGO
     jsr ECLOSE
     jmp EVAR
@@ -177,15 +177,15 @@ VPATCH:
 EOFFIX:
     ldy #$13
 CHKFILE:
-    lda (ZPGFCB),y
+    lda (FilePointer),y
     bne FIXIT
     iny
     cpy #$17
     bne CHKFILE
     ldy #$19
 MOVE:
-    lda (ZPGFCB),y
-    sta CCBRRN-$19,y
+    lda (FilePointer),y
+    sta DosFileParameters::Record-$19,y
     iny
     cpy #$1D
     bne MOVE
@@ -201,12 +201,12 @@ FIXIT:
 .if ULC
 UPRCASE:
 LUP1:
-    lda LBUFF,x
+    lda InputBuffer,x
     cmp #'"'+$80
     bne CHK4UC
 LUP2:
     inx
-    lda LBUFF,x
+    lda InputBuffer,x
     cmp #'"'+$80
     beq NEXTCHR
     cmp #$8D
@@ -219,7 +219,7 @@ CHK4UC:
     cmp #$E0
     bcc CHK4CR
     and #$DF
-    sta LBUFF,x
+    sta InputBuffer,x
 CHK4CR:
     cmp #$8D
     beq ULFINI
@@ -282,7 +282,7 @@ DOSLODR:
     ldy a:ADOSLD+1
     dey
     sty a:IBBUFP+1                  ; the page below TRK0LDR first
-    lda #IBCRTS
+    lda #RWTS_READ
     sta a:IBCMD
     txa
     lsr a
@@ -370,8 +370,8 @@ BIO1:
     rts
 
 ;; Calls RWTS with interrupts off: RWTS's timing can't be interrupted. DOS's $3D9 entry comes here.
-;; In:    A = the IOB's address's high byte, Y = its low byte
-;; Out:   carry = clear if the call succeeded, set if not (the error in the IOB's IBSTAT)
+;; In:    A = the DosIob's address's high byte, Y = its low byte
+;; Out:   carry = clear if the call succeeded, set if not (the error in the DosIob's DosIob::ReturnCode)
 DISKIO:
     php
     sei
@@ -390,11 +390,11 @@ DSKERR:
 ;; Prepares the IOB for WBOOT: the buffer at the page in CCBBSA (DOS's first page, which INIT takes from
 ;; ASTART), and the volume from DCBVOL, which holds it inverted.
 DLDSUP:
-    lda CCBBSA
+    lda DosFileParameters::ImagePage
     sta a:IBBUFP+1
     lda #0
     sta a:IBBUFP
-    lda DCBVOL
+    lda FileManager::FileControlBlock::VolumeComplement
     eor #$FF
     sta a:IBVOL
     rts
@@ -405,7 +405,7 @@ CLRSEC:
     lda #0
     tay
 CS1:
-    sta (ZPGFCB),y
+    sta (FilePointer),y
     iny
     bne CS1
     rts
@@ -419,7 +419,7 @@ NDPGS:
 
 ;; Pages left for BOOTIO to read or write.
 BRWCNT:
-    LEFTOVER $00, $02
+    Leftover $00, $02
 
 ; Two bytes no code reads: $0A (10) and $1B (27).
     .byte $0A
@@ -427,86 +427,11 @@ BRWCNT:
 
 ;; The IOB's address, for BOOTIO.
 BAIOB:
-    .word IOB
+    .word DosIob
 
 ;; The address of the boot page, TRK0LDR: BOOT 2 loads DOS below it and WBOOT writes from it.
 ADOSLD:
     .word TRK0LDR
 
-;; The IOB, the parameter list for a call to RWTS: DOS's own, which BOOT 2, the file manager and INIT fill in.
-;; Beneath Apple DOS chapter 6 describes it field by field.
-IOB:
-IBTYPE:
-    .byte 1                         ; the IOB's type, always 1
-IBSLOT:
-    .byte 6*16                      ; slot * 16
-IBDRVN:
-    .byte 1                         ; drive, 1 or 2
-IBVOL:
-    .byte $00                       ; the volume expected, 0 for any
-IBTRK:
-    .byte 0                         ; track, 0 to 34
-IBSECT:
-    LEFTOVER $00, $01               ; sector, 0 to 15 (logical)
-IBDCTP:
-    .word DCT                       ; the address of the drive's DCT
-IBBUFP:
-    LEFTOVER $00, $00               ; the address of the 256-byte buffer
-    LEFTOVER $00, $37
-IBDLEN:
-    LEFTOVER $00, $00               ; data length
-    LEFTOVER $01, $00
-IBCMD:
-    LEFTOVER $00, $02               ; the command
-IBCNUL = 0                          ;; command: seek only
-IBCRTS = 1                          ;; command: read a sector
-IBCWTS = 2                          ;; command: write a sector
-IBFMT = 4                           ;; command: format the disk
-IBBOOT = 8                          ;; command: write the boot tracks; no code here uses it
-IBSTAT:
-    LEFTOVER $00, $07               ; the error, when RWTS returns with the carry set
-IBRERR = $80                        ;; error: a sector couldn't be read
-IBDERR = $40                        ;; error: the drive failed
-IBVMME = $20                        ;; error: the disk's volume isn't the one expected
-IBWPER = $10                        ;; error: the disk is write-protected
-IBSMOD:
-    LEFTOVER $00, $FE               ; the volume RWTS found
-IBPSLT:
-    .byte 6*16                      ; the slot * 16 of the previous call
-IBPDRV:
-    .byte 1                         ; the drive of the previous call
-IBSPAR:
-    .res 2,0                        ; spare
-
-;; The DCT, the device characteristics table: device type 0, one phase per track, and the motor-on time
-;; ($D8EF, low byte first).
-DCT:
-    .byte 0, 1, $EF, $D8
+.include "IoBlock.asm"
     .res 1,0                        ; unused, the page's last byte
-
-.dum 0
-
-;; The layout of a track/sector list sector, which Apple's names call a file directory: offsets into it.
-;; Bytes 1 and 2 link to the next such sector, bytes 5 and 6 give the file's sector number of the first pair
-;; here, and the track and sector pairs start at FDENT. Code reads the fields with Y = an offset.
-FILDIR:
-FDUCDE:
-    .res 1
-FDLTRK:
-    .res 1
-FDLSEC:
-    .res 1
-FDNSA:
-    .res 1
-FDLSDL:
-    .res 1
-FDFRS:
-    .res 2
-FDSPAR:
-    .res 5
-FDENT:
-    .res 1
-FDTRK = 0                           ;; in a pair: the track
-FDSEC = 1                           ;; in a pair: the sector
-FDLAST = FILDIR+256                 ;; the end of the sector
-.dend

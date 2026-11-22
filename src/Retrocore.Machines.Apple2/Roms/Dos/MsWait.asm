@@ -14,25 +14,25 @@
 
 ; Three bytes of padding put MSWAIT at the start of a page, so that the branch in its timed loop never crosses a
 ; page boundary, which would add a cycle to every pass.
-    LEFTOVER $00, $AA
-    LEFTOVER $00, $A0
-    LEFTOVER $00, $A0
+    Leftover $00, $AA
+    Leftover $00, $A0
+    Leftover $00, $A0
 ;; Waits A times about 100 microseconds (256 times when A is 0), adding 1 to MONTIMEL/MONTIMEH for each.
 ;;
 ;; Each pass takes 101 cycles: the loop on X takes 84, and the count and the test the rest. RWTS counts the
 ;; motor's start-up time in MONTIMEL/MONTIMEH, so every wait during a seek counts toward it.
 ;; In:    A = the number of 100-microsecond waits (0 = 256)
 ;; Out:   A = 0, X = 0, carry set
-;; Uses:  MONTIMEL, MONTIMEH
+;; Uses:  MotorTime, MotorTimeHigh
 ;; Keeps: Y
 MSWAIT:
     ldx #$11
 MSW1:
     dex
     bne MSW1                        ; 17 passes, 84 cycles
-    inc MONTIMEL
+    inc MotorTime
     bne MSW2
-    inc MONTIMEH
+    inc MotorTimeHigh
 MSW2:
     sec
     sbc #$1
@@ -128,13 +128,13 @@ OFF80:
 ;; advanced, into the low bytes of DCBCSB and DCBCRR. GOODIO (FileLocateSector.asm) reloads the stack pointer
 ;; from ENTSTK before its RTS; saving S there first means the RTS returns as one from APPEND's EAPND would. It
 ;; also uses what GOODIO uses.
-;; Uses:  A, X, DCBCSB, DCBCRR, ENTSTK
+;; Uses:  A, X, FileManager::FileControlBlock::PositionByte, FileManager::FileControlBlock::PositionRecord, FileManager::EntryStack
 FIXIT2:
-    lda CCBRLN
-    sta DCBCSB
-    sta DCBCRR
+    lda DosFileParameters::RecordLength
+    sta FileManager::FileControlBlock::PositionByte
+    sta FileManager::FileControlBlock::PositionRecord
     tsx
-    stx ENTSTK
+    stx FileManager::EntryStack
     jmp GOODIO
 ; The end of the patch code for the relocator. Zeros fill the page up to DNIBL + $96, where the table starts.
 PEC1:

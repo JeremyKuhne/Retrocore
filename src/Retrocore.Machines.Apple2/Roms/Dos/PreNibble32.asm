@@ -12,28 +12,28 @@
 ;; the low bits of the group's first three bytes, then, two places up, a bit of the fourth byte and a bit of the
 ;; fifth, so that each holds five bits. The last byte's top five bits are NBUF1's last value and its low three
 ;; bits NBUF2's.
-;; In:    BUF = the address of the sector's 256 bytes
+;; In:    SectorBuffer = the address of the sector's 256 bytes
 ;; Out:   NBUF1 = 256 values, NBUF2 = 154 values, each 0 to 31
 ;; Uses:  A, X, Y, GROUP0, GROUP1, GROUP2
 PRENIB13:
     ldx #$32
     ldy #0
 PRENIB1:
-    lda (BUF),y
+    lda (SectorBuffer),y
     sta GROUP0
     lsr a
     lsr a
     lsr a
     sta NBUF1,x
     iny
-    lda (BUF),y
+    lda (SectorBuffer),y
     sta GROUP1
     lsr a
     lsr a
     lsr a
     sta NBUF1+$33,x
     iny
-    lda (BUF),y
+    lda (SectorBuffer),y
     sta GROUP2
     lsr a
     lsr a
@@ -42,7 +42,7 @@ PRENIB1:
     iny
 
 ; The fourth byte: bits 0, 1 and 2 to the ends of GROUP2, GROUP1 and GROUP0, which then hold four bits.
-    lda (BUF),y
+    lda (SectorBuffer),y
     lsr a
     rol GROUP2
     lsr a
@@ -53,7 +53,7 @@ PRENIB1:
     iny
 
 ; The fifth byte: bits 0 and 1 to GROUP2 and GROUP1 here, and bit 2, left in the carry, to GROUP0 below.
-    lda (BUF),y
+    lda (SectorBuffer),y
     lsr a
     rol GROUP2
     lsr a
@@ -75,7 +75,7 @@ PRENIB1:
     bpl PRENIB1
 
 ; The last byte, Y = 255.
-    lda (BUF),y
+    lda (SectorBuffer),y
     tax
     and #7
     sta NBUF2+$99

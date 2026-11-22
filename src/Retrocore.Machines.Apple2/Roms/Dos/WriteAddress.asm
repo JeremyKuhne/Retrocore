@@ -18,8 +18,8 @@
 ;; bits; the ORA with the odd bits uses AA, the zero-page byte that holds $AA, because it takes the 3 cycles
 ;; the timing needs where `ORA #$AA` takes 2. The code leaves write mode 16 cycles after storing the EB, so only
 ;; about half of it reaches the disk; RDADR16 checks only the DE AA.
-;; In:    X = slot * 16, Y = one less than the self-sync nibbles to write (0 counts as 256), NVOL, TRK, NSECT,
-;;   AA = $AA, the drive running, the card in read mode
+;; In:    X = slot * 16, Y = one less than the self-sync nibbles to write (0 counts as 256), FormatVolume, FormatTrack, FormatSector,
+;;   FormatMask = $AA, the drive running, the card in read mode
 ;; Out:   carry clear, Y = 0, the card back in read mode
 ;; Errors: carry set if the disk is write-protected; nothing is written
 ;; Uses:  A, Y
@@ -27,20 +27,20 @@
 SWADR1:
 WADR16:
     sec                             ; the error, in case of write protection
-    lda Q6H,x                       ; sense write protect...
-    lda Q7L,x                       ; ...in the latch's top bit
+    lda LoadLatch,x                       ; sense write protect...
+    lda ReadMode,x                       ; ...in the latch's top bit
     bmi WADRTS
     lda #$FF
-    sta Q7H,x                       ; Q6 still on: load mode, and the first self-sync nibble
-    cmp Q6L,x                       ; shift mode: writing
+    sta WriteMode,x                       ; Q6 still on: load mode, and the first self-sync nibble
+    cmp DataLatch,x                       ; shift mode: writing
     pha                             ; delay
     pla
 ; One self-sync nibble each pass, 40 cycles; the two calls to an RTS are 12 cycles of delay each.
 WSYNC1:
     jsr WADRTS1
     jsr WADRTS1
-    sta Q6H,x
-    cmp Q6L,x
+    sta LoadLatch,x
+    cmp DataLatch,x
     nop
     dey
     bne WSYNC1
@@ -53,20 +53,20 @@ WSYNC1:
     jsr WNIBLB2
 ; The volume, track and sector, then the checksum, written here as WBYTE would, the two EORs taking the 6
 ; cycles of the JSR.
-    lda NVOL
+    lda FormatVolume
     jsr WBYTE
-    lda TRK
+    lda FormatTrack
     jsr WBYTE
-    lda NSECT
+    lda FormatSector
     jsr WBYTE
-    lda NVOL
-    eor TRK
-    eor NSECT
+    lda FormatVolume
+    eor FormatTrack
+    eor FormatSector
     pha
     lsr a
-    ora AA                          ; the odd bits
-    sta Q6H,x
-    lda Q6L,x
+    ora FormatMask                          ; the odd bits
+    sta LoadLatch,x
+    lda DataLatch,x
     pla
     ora #$AA                        ; the even bits
     jsr WNIBLA
@@ -79,22 +79,22 @@ WSYNC1:
     jsr WNIBLB2
     clc                             ; success
 WADRTS:
-    lda Q7L,x                       ; out of write mode
-    lda Q6L,x                       ; read mode
+    lda ReadMode,x                       ; out of write mode
+    lda DataLatch,x                       ; read mode
 WADRTS1:
     rts
 ;; Writes the byte in A as two 4-and-4 nibbles, its odd bits then its even bits, 32 cycles apart.
 ;;
 ;; From a store in the caller's last call to the first store here, through `LDA zp`, takes 32 cycles.
-;; In:    A = the byte, X = slot * 16, AA = $AA, the card in write mode
+;; In:    A = the byte, X = slot * 16, FormatMask = $AA, the card in write mode
 ;; Uses:  A
 ;; Keeps: X, Y
 WBYTE:
     pha
     lsr a
-    ora AA                          ; 1 b7 1 b5 1 b3 1 b1
-    sta Q6H,x
-    cmp Q6L,x
+    ora FormatMask                          ; 1 b7 1 b5 1 b3 1 b1
+    sta LoadLatch,x
+    cmp DataLatch,x
     pla
     nop                             ; delay
     nop
@@ -115,8 +115,8 @@ WNIBLB2:
     pha                             ; delay
     pla
 WRNIBL:
-    sta Q6H,x                       ; load the nibble
-    cmp Q6L,x                       ; and shift it out
+    sta LoadLatch,x                       ; load the nibble
+    cmp DataLatch,x                       ; and shift it out
     rts
 EWADR1:
 ; The end of the relocator's range SWADR1 to EWADR1. Zeros fill the rest of the page.

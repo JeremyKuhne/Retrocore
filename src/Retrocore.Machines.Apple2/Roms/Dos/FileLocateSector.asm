@@ -19,18 +19,18 @@
 ;; the name into it in the buffer only; DOPEN decides whether to create the file and write the sector.
 ;;
 ;; DCBVDR counts the catalog sectors read, 1 for the first, so that CLOSE can read the entry's sector again.
-;; In:    CCBFN1 = the address of the name, 30 characters padded with spaces
-;; Out:   carry clear when found, set when a free entry now holds the name; either way X = TEMP1 = the
-;;   entry's offset in VDFILE, VOLDIR = its catalog sector and DCBVDR = that sector's place in the chain
+;; In:    DosFileParameters::Name = the address of the name, 30 characters padded with spaces
+;; Out:   carry clear when found, set when a free entry now holds the name; either way X = FileManager::Scratch1 = the
+;;   entry's offset in FileManager::CatalogBuffer::Entries, FileManager::CatalogBuffer = its catalog sector and FileManager::FileControlBlock::EntryCatalogSector = that sector's place in the chain
 ;; Errors: does not return when the catalog has no free entry (ERROR9, DISK FULL) or on a disk error
-;; Uses:  A, X, Y, ZPGFCB, TEMP1, TEMP2
+;; Uses:  A, X, Y, FilePointer, FileManager::Scratch1, FileManager::Scratch2
 ;; See:   <DOPEN>
 FNDFIL:
     jsr RDVTOC
     lda a:CCBFN1
-    sta ZPGFCB
+    sta FilePointer
     lda a:CCBFN1+1
-    sta ZPGFCB+1
+    sta FilePointer+1
     lda #1                          ; the first pass
 FF1:
     sta a:TEMP2                     ; A = 1 for the first pass, 0 for the second
@@ -53,7 +53,7 @@ FF3:
     inx
 FF4:
     inx
-    lda (ZPGFCB),y
+    lda (FilePointer),y
     cmp a:VDFILE,x
     bne FF5
     iny
@@ -78,8 +78,8 @@ FF7:
 ;; Copies a file name into a catalog entry in the catalog buffer.
 ;;
 ;; FNDFIL falls into it to claim a free entry; RENAME calls it to put the new name in the file's entry.
-;; In:    X = TEMP1 = the entry's offset in VDFILE, ZPGFCB = the address of the 30-character name
-;; Out:   carry set, X = TEMP1
+;; In:    X = FileManager::Scratch1 = the entry's offset in FileManager::CatalogBuffer::Entries, FilePointer = the address of the 30-character name
+;; Out:   carry set, X = FileManager::Scratch1
 ;; Uses:  A, Y
 MVFN:
     ldy #0
@@ -87,7 +87,7 @@ MVFN:
     inx
 FF8:
     inx
-    lda (ZPGFCB),y
+    lda (FilePointer),y
     sta a:VDFILE,x
     iny
     cpy #30
@@ -96,7 +96,7 @@ FF8:
     sec
     rts
 ;; Steps to the next of the seven 35-byte file entries in the catalog sector.
-;; In:    TEMP1 = the offset of the current entry in VDFILE
+;; In:    FileManager::Scratch1 = the offset of the current entry in FileManager::CatalogBuffer::Entries
 ;; Out:   X = the offset of the next entry, carry set when there is none in this sector
 ;; Uses:  A
 VDINC:
@@ -104,7 +104,7 @@ VDINC:
     lda a:TEMP1
     adc #35
     tax
-    cpx #VDFLEN
+    cpx #CATALOG_ENTRIES_SIZE
     rts
 ; The end of the catalog: after the first pass, start the second; after the second, the catalog is full.
 FF4A:
@@ -128,10 +128,10 @@ FF4A:
 ;; catalog on track 17. Running off the last track turns it round to go down from track 16; reaching track 0
 ;; turns it round to go up from track 18. Reaching track 0 a second time means every track has been looked
 ;; at, and the disk is full. Tracks 0 and 17 are never reserved.
-;; In:    DCBATK = the reserved track, or 0 for none, DCBALS/DCBABM = what is left of it
-;; Out:   A = the sector, DCBATK = its track, DCBNSA = one more sector in the file
+;; In:    FileManager::FileControlBlock::ReservedTrack = the reserved track, or 0 for none, FileManager::FileControlBlock::ReservedSector/FileManager::FileControlBlock::ReservedMap = what is left of it
+;; Out:   A = the sector, FileManager::FileControlBlock::ReservedTrack = its track, FileManager::FileControlBlock::SectorCount = one more sector in the file
 ;; Errors: does not return when the disk is full (ERROR9) or on a disk error
-;; Uses:  A, X, Y, TEMP3
+;; Uses:  A, X, Y, FileManager::Scratch3
 GETSEC:
     lda a:DCBATK
     beq GSS1                        ; no track reserved yet
@@ -208,8 +208,8 @@ ERR9:
 ;; Gives the sectors the file did not use on its reserved track back to the VTOC, and writes the VTOC.
 ;;
 ;; CLOSE calls it. The reservation is dropped (DCBATK = 0), so the next write reserves a track again.
-;; In:    DCBATK = the reserved track, or 0 for none (then nothing happens), DCBALS/DCBABM = what is left of it
-;; Out:   DCBATK = 0
+;; In:    FileManager::FileControlBlock::ReservedTrack = the reserved track, or 0 for none (then nothing happens), FileManager::FileControlBlock::ReservedSector/FileManager::FileControlBlock::ReservedMap = what is left of it
+;; Out:   FileManager::FileControlBlock::ReservedTrack = 0
 ;; Errors: does not return on a disk error
 ;; Uses:  A, X, Y
 ;; See:   <GETSEC>, <FRESEC>
@@ -237,8 +237,8 @@ FT1:
 ;;
 ;; The map is then ORed into the track's bit map in the VTOC buffer; the caller writes the VTOC. Track 0, the
 ;; DOS image, is never changed.
-;; In:    A = the track, Y = the sector, carry = the first bit to shift in, DCBABM = the map
-;; Out:   VSECAL = the track's bit map, updated
+;; In:    A = the track, Y = the sector, carry = the first bit to shift in, FileManager::FileControlBlock::ReservedMap = the map
+;; Out:   FileManager::VtocBuffer::FreeSectors = the track's bit map, updated
 ;; Uses:  A, X, Y
 FRESEC:
 FS1:
@@ -277,9 +277,9 @@ FS4:
 ;; with a record length of 1, any position past $7FFF. It also carries into DCBCRS+1 with a branch, which
 ;; leaves room for the CLC; two zero bytes pad it to the old length, so nothing after it moves. DOS 3.2, which
 ;; came before the revision, lacks the CLC too.
-;; In:    CCBRRN = the record number, CCBBYT = the byte offset, DCBRCL = the record length
-;; Out:   DCBCRS = the relative sector, DCBCSB = the byte in it, DCBCRR = the record number,
-;;   DCBCRB = the byte offset
+;; In:    DosFileParameters::Record = the record number, DosFileParameters::ByteOffset = the byte offset, FileManager::FileControlBlock::RecordLength = the record length
+;; Out:   FileManager::FileControlBlock::PositionSector = the relative sector, FileManager::FileControlBlock::PositionByte = the byte in it, FileManager::FileControlBlock::PositionRecord = the record number,
+;;   FileManager::FileControlBlock::PositionRecordByte = the byte offset
 ;; Uses:  A, X, Y
 LOCSEC:
     lda a:CCBRRN
@@ -340,27 +340,27 @@ DONTINC:
 
 ;; Leaves the file manager with return code 1, CREFUN: LANGUAGE NOT AVAILABLE in DOS's messages.
 ERROR1:
-    lda #CREFUN
+    lda #ERROR_LANGUAGE_NOT_AVAILABLE
     bne ERRORA
 ;; Leaves the file manager with return code 2, CRERR: the request code is out of range.
 ERROR2:
-    lda #CRERR
+    lda #ERROR_RANGE
     bne ERRORA
 ;; Leaves the file manager with return code 3, CREMRE: the READ or WRITE subcode is out of range.
 ERROR3:
-    lda #CREMRE
+    lda #ERROR_TRANSFER_RANGE
     bne ERRORA
 ;; Leaves the file manager with return code 4, CREPRO: WRITE PROTECTED.
 ERROR4:
-    lda #CREPRO
+    lda #ERROR_WRITE_PROTECTED
     bne ERRORA
 ;; Leaves the file manager with return code 5, CREEOF: END OF DATA.
 ERROR5:
-    lda #CREEOF
+    lda #ERROR_END_OF_DATA
     bne ERRORA
 ;; Leaves the file manager with return code 6, CREFNF: FILE NOT FOUND.
 ERROR6:
-    lda #CREFNF
+    lda #ERROR_FILE_NOT_FOUND
     bne ERRORA
 ;; Leaves the file manager with return code 9, DISK FULL, through ERROR9X, which first closes the open files.
 ;;
@@ -371,13 +371,13 @@ ERROR9:
     nop
 ;; Leaves the file manager with return code 10, CREFLK: FILE LOCKED.
 ERRR10:
-    lda #CREFLK
+    lda #ERROR_FILE_LOCKED
     bne ERRORA
 ;; Ends a file manager request successfully: returns to the file manager's caller with carry clear.
 ;;
 ;; The return code is whatever is already in CCBSTA: 0, which the entry sets, or CREFNF from DOPEN when it
 ;; has just created the file.
-;; Out:   A = CCBSTA, carry = clear
+;; Out:   A = DosFileParameters::ReturnCode, carry = clear
 GOODIO:
     lda a:CCBSTA
     clc
@@ -390,7 +390,7 @@ GOODIO:
 ;; where the Monitor keeps the processor status that its G command loads, so it is cleared rather than left
 ;; holding part of an address.
 ;; In:    A = the return code
-;; Out:   CCBSTA = A, carry = set
+;; Out:   DosFileParameters::ReturnCode = A, carry = set
 ;; Entry: ERRORB = the same, RETURN = with carry already set or clear
 ERRORA:
 ERRORB:

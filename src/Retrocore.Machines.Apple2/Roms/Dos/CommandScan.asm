@@ -29,7 +29,7 @@
 ;;
 ;; It does not return: it leaves through CMDGO and CERTN, an error (ERROR), or PRRTN for a line that is not a
 ;; command.
-;; In:    LBUFF = the line, ending in a return; it may start with Control-D (CCHAR)
+;; In:    InputBuffer = the line, ending in a return; it may start with Control-D (CCHAR)
 SCNCMD:
 .if ULC
     ; The lowercase build: UPRCASE (BootLoader.asm) raises letters outside quotes to capitals and returns with
@@ -46,7 +46,7 @@ SC0:
     inc a:CMDNO
     ldx #0                          ; sets Z: matches so far
     php
-    lda LBUFF,x
+    lda InputBuffer,x
     cmp a:CCHAR
     bne SC0A
     inx                             ; skip the Control-D
@@ -70,12 +70,12 @@ SC1A:
 ;; Command not found. A typed line goes to BASIC; a Control-D line is a syntax error, except a Control-D alone,
 ;; which does nothing.
 CNF:
-    lda LBUFF
+    lda InputBuffer
     cmp a:CCHAR
     beq CNF1
     jmp PRRTN                       ; typed: print the return and let BASIC have the line
 CNF1:
-    lda LBUFF+1
+    lda InputBuffer+1
     cmp #$8D
     bne CSERR
     jsr CLRSTS
@@ -261,18 +261,18 @@ SP4:
     asl a
     asl a
     tay
-    lda CNUM+1
+    lda ParsedNumber+1
     bne SP5                         ; 256 or more: above every lowest value
-    lda CNUM
+    lda ParsedNumber
     cmp a:OPTAB3,y
     bcc SERR3
-    lda CNUM+1
+    lda ParsedNumber+1
 SP5:
     cmp a:OPTAB3+3,y
     bcc SP6
 SERR3A:
     bne SERR3
-    lda CNUM
+    lda ParsedNumber
     cmp a:OPTAB3+2,y
     bcc SP6
     bne SERR3A
@@ -282,9 +282,9 @@ SP6:
     tya
     lsr a
     tay                             ; the option's number * 2 indexes CUROPT
-    lda CNUM+1
+    lda ParsedNumber+1
     sta a:CUROPT+1,y
-    lda CNUM
+    lda ParsedNumber
     sta a:CUROPT,y
 SP7:
     jmp SP1

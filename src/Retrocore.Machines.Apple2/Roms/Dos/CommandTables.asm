@@ -15,34 +15,34 @@
 ;; Entry: EC1 = the end of the first stretch of code the relocator adjusts (SC1 to EC1, Relocator.asm)
 EC1:
 CMDNTB:
-    DCI "INIT"
-    DCI "LOAD"
-    DCI "SAVE"
-    DCI "RUN"
-    DCI "CHAIN"
-    DCI "DELETE"
-    DCI "LOCK"
-    DCI "UNLOCK"
-    DCI "CLOSE"
-    DCI "READ"
-    DCI "EXEC"
-    DCI "WRITE"
-    DCI "POSITION"
-    DCI "OPEN"
-    DCI "APPEND"
-    DCI "RENAME"
-    DCI "CATALOG"
-    DCI "MON"
-    DCI "NOMON"
-    DCI "PR#"
-    DCI "IN#"
-    DCI "MAXFILES"
-    DCI "FP"
-    DCI "INT"
-    DCI "BSAVE"
-    DCI "BLOAD"
-    DCI "BRUN"
-    DCI "VERIFY"
+    MarkedText "INIT"
+    MarkedText "LOAD"
+    MarkedText "SAVE"
+    MarkedText "RUN"
+    MarkedText "CHAIN"
+    MarkedText "DELETE"
+    MarkedText "LOCK"
+    MarkedText "UNLOCK"
+    MarkedText "CLOSE"
+    MarkedText "READ"
+    MarkedText "EXEC"
+    MarkedText "WRITE"
+    MarkedText "POSITION"
+    MarkedText "OPEN"
+    MarkedText "APPEND"
+    MarkedText "RENAME"
+    MarkedText "CATALOG"
+    MarkedText "MON"
+    MarkedText "NOMON"
+    MarkedText "PR#"
+    MarkedText "IN#"
+    MarkedText "MAXFILES"
+    MarkedText "FP"
+    MarkedText "INT"
+    MarkedText "BSAVE"
+    MarkedText "BLOAD"
+    MarkedText "BRUN"
+    MarkedText "VERIFY"
     .byte 0
 
 ; The first byte of a command's CMDSTB entry: its operands.
@@ -139,34 +139,34 @@ OPTAB3:
 EMSG:
     .byte $0D, $07, $8D
 EM1 = *-EMSG                        ;; 1
-    DCI "LANGUAGE NOT AVAILABLE"
+    MarkedText "LANGUAGE NOT AVAILABLE"
 EM2 = *-EMSG                        ;; 2: the command scanner's out-of-range number
 EM3 = *-EMSG                        ;; 3: shares error 2's text
-    DCI "RANGE ERROR"
+    MarkedText "RANGE ERROR"
 EM4 = *-EMSG                        ;; 4
-    DCI "WRITE PROTECTED"
+    MarkedText "WRITE PROTECTED"
 EM5 = *-EMSG                        ;; 5
-    DCI "END OF DATA"
+    MarkedText "END OF DATA"
 EM6 = *-EMSG                        ;; 6
-    DCI "FILE NOT FOUND"
+    MarkedText "FILE NOT FOUND"
 EM7 = *-EMSG                        ;; 7
-    DCI "VOLUME MISMATCH"
+    MarkedText "VOLUME MISMATCH"
 EM8 = *-EMSG                        ;; 8
-    DCI "I/O ERROR"
+    MarkedText "I/O ERROR"
 EM9 = *-EMSG                        ;; 9
-    DCI "DISK FULL"
+    MarkedText "DISK FULL"
 EM10 = *-EMSG                       ;; 10
-    DCI "FILE LOCKED"
+    MarkedText "FILE LOCKED"
 EM11 = *-EMSG                       ;; 11: ESYNTX
-    DCI "SYNTAX ERROR"
+    MarkedText "SYNTAX ERROR"
 EM12 = *-EMSG                       ;; 12: ENFA
-    DCI "NO BUFFERS AVAILABLE"
+    MarkedText "NO BUFFERS AVAILABLE"
 EM13 = *-EMSG                       ;; 13: ETYP, ERNU1
-    DCI "FILE TYPE MISMATCH"
+    MarkedText "FILE TYPE MISMATCH"
 EM14 = *-EMSG                       ;; 14: MFERR
-    DCI "PROGRAM TOO LARGE"
+    MarkedText "PROGRAM TOO LARGE"
 EM15 = *-EMSG                       ;; 15: a run-only command in direct mode
-    DCI "NOT DIRECT COMMAND"
+    MarkedText "NOT DIRECT COMMAND"
     .byte $8D                       ; never printed: EMPR stops at the D above
 
 ;; Each error number's message, as its offset in EMSG; entry 0 is the return, bell, return.

@@ -243,11 +243,11 @@ BSECTR = $3D
 ;; See: <BSLOT>, <BREAD>, <B1READ>
 BTEMP = $3E
 
-;; The pointer to the page <B1DECODE> puts the decoded sector in, the same bytes as <ZPGWRK> (2 bytes).
+;; The pointer to the page <B1DECODE> puts the decoded sector in, the same bytes as <WorkPointer> (2 bytes).
 ;;
 ;; BOOT 1 starts it at <BGRSPG>'s page and moves it up a page after each sector.
-;; See: <B1DECODE>, <BGRSPG>, <ZPGWRK>
-BDEST = ZPGWRK
+;; See: <B1DECODE>, <BGRSPG>, <WorkPointer>
+BDEST = WorkPointer
 
 BREAD = $5D                         ;; READ's offset in the ROM's page: READ is at $Cn5D
 BLOWS = $0800                       ;; the 154 values READ reads first, each holding three bytes' low bits
@@ -434,7 +434,7 @@ SC3:
     sta a:IBSECT
     lda a:LDPAGE
     sta a:IBBUFP+1
-    lda #IBCRTS
+    lda #RWTS_READ
     sta a:IBCMD
     txa
     lsr a
@@ -488,7 +488,7 @@ WBOOT:
     sta a:LDSECT
     lda #9 << 3                     ; 9 as BOOT 1 sees it, in the byte's top five bits
     sta a:GRPGC
-    lda #IBCWTS
+    lda #RWTS_WRITE
     sta a:IBCMD
     jsr BOOTIO
     lda a:LDPAGE
@@ -519,8 +519,8 @@ BIO1:
     rts
 
 ;; Calls RWTS with interrupts off: RWTS's timing can't be interrupted. DOS's $3D9 entry comes here.
-;; In:    A = the IOB's address's high byte, Y = its low byte
-;; Out:   carry = clear if the call succeeded, set if not (the error in the IOB's IBSTAT)
+;; In:    A = the DosIob's address's high byte, Y = its low byte
+;; Out:   carry = clear if the call succeeded, set if not (the error in the DosIob's DosIob::ReturnCode)
 DISKIO:
     php
     sei
@@ -539,11 +539,11 @@ DSKERR:
 ;; Prepares the IOB for WBOOT: the buffer at the page in CCBBSA (DOS's first page, which INIT takes from
 ;; ASTART), and the volume from DCBVOL, which holds it inverted.
 DLDSUP:
-    lda CCBBSA
+    lda DosFileParameters::ImagePage
     sta a:IBBUFP+1
     lda #0
     sta a:IBBUFP
-    lda DCBVOL
+    lda FileManager::FileControlBlock::VolumeComplement
     eor #$FF
     sta a:IBVOL
     rts
@@ -554,7 +554,7 @@ CLRSEC:
     lda #0
     tay
 CS1:
-    sta (ZPGFCB),y
+    sta (FilePointer),y
     iny
     bne CS1
     rts
@@ -581,83 +581,11 @@ LDPAGE:
 
 ;; The IOB's address, for BOOTIO.
 BAIOB:
-    .word IOB
+    .word DosIob
 
 ;; The address of the boot page, TRK0LDR: BOOT 2 loads DOS below it and WBOOT writes from it.
 ADOSLD:
     .word TRK0LDR
 
-;; The IOB, the parameter list for a call to RWTS: DOS's own, which BOOT 2, the file manager and INIT fill in.
-;; Beneath Apple DOS chapter 6 describes it field by field.
-IOB:
-IBTYPE:
-    .byte 1                         ; the IOB's type, always 1
-IBSLOT:
-    .byte 6*16                      ; slot * 16
-IBDRVN:
-    .byte 1                         ; drive, 1 or 2
-IBVOL:
-    .byte $00                       ; the volume expected, 0 for any
-IBTRK:
-    .byte 0                         ; track, 0 to 34
-IBSECT:
-    .byte $01                       ; sector, 0 to 12; leftover
-IBDCTP:
-    .word DCT                       ; the address of the drive's DCT
-IBBUFP:
-    .byte $00, $37                  ; the address of the 256-byte buffer; leftover
-IBDLEN:
-    .byte $00, $00                  ; data length; leftover
-IBCMD:
-    .byte $02                       ; the command; leftover
-IBCNUL = 0                          ;; command: seek only
-IBCRTS = 1                          ;; command: read a sector
-IBCWTS = 2                          ;; command: write a sector
-IBFMT = 4                           ;; command: format the disk
-IBSTAT:
-    .byte $07                       ; the error, when RWTS returns with the carry set; leftover
-IBRERR = $80                        ;; error: a sector couldn't be read
-IBDERR = $40                        ;; error: the drive failed
-IBVMME = $20                        ;; error: the disk's volume isn't the one expected
-IBWPER = $10                        ;; error: the disk is write-protected
-IBSMOD:
-    .byte $FE                       ; the volume RWTS found; leftover
-IBPSLT:
-    .byte 6*16                      ; the slot * 16 of the previous call
-IBPDRV:
-    .byte 1                         ; the drive of the previous call
-IBSPAR:
-    .res 2,0                        ; spare
-
-;; The DCT, the device characteristics table: device type 0, one phase per track, and the motor-on time
-;; ($D8EF, low byte first).
-DCT:
-    .byte 0, 1, $EF, $D8
+.include "IoBlock.asm"
     .res 1,0                        ; unused, the page's last byte
-
-.dum 0
-
-;; The layout of a track/sector list sector, which Apple's names call a file directory: offsets into it.
-;; Bytes 1 and 2 link to the next such sector, bytes 5 and 6 give the file's sector number of the first pair
-;; here, and the track and sector pairs start at FDENT. Code reads the fields with Y = an offset.
-FILDIR:
-FDUCDE:
-    .res 1
-FDLTRK:
-    .res 1
-FDLSEC:
-    .res 1
-FDNSA:
-    .res 1
-FDLSDL:
-    .res 1
-FDFRS:
-    .res 2
-FDSPAR:
-    .res 5
-FDENT:
-    .res 1
-FDTRK = 0                           ;; in a pair: the track
-FDSEC = 1                           ;; in a pair: the sector
-FDLAST = FILDIR+256                 ;; the end of the sector
-.dend

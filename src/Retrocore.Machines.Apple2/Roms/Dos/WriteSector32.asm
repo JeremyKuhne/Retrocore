@@ -19,16 +19,16 @@
 ;; Keeps: X
 WRITE13:
     sec                             ; the result if the disk is protected
-    lda Q6H,x
-    lda Q7L,x                       ; sense write protect: bit 7 set if protected
+    lda LoadLatch,x
+    lda ReadMode,x                       ; sense write protect: bit 7 set if protected
     bmi WEXIT
     stx SLOTZ
     stx SLOTABS
     lda NBUF2
     sta WTEMP                       ; for a 3-cycle load where the loops change over
     lda #$FF
-    sta Q7H,x                       ; write mode, $FF in the latch
-    ora Q6L,x
+    sta WriteMode,x                       ; write mode, $FF in the latch
+    ora DataLatch,x
     pha
     pla
     nop
@@ -56,8 +56,8 @@ WDATA1:
     tax
     lda NIBL,x
     ldx SLOTZ
-    sta Q6H,x
-    lda Q6L,x
+    sta LoadLatch,x
+    lda DataLatch,x
     dey
     bne WDATA0
 
@@ -69,8 +69,8 @@ WDATA2:
     tax
     lda NIBL,x
     ldx SLOTABS
-    sta Q6H,x
-    lda Q6L,x
+    sta LoadLatch,x
+    lda DataLatch,x
     lda NBUF1,y
     iny
     bne WDATA2
@@ -86,9 +86,9 @@ WDATA2:
     jsr WNIBL9
     lda #$EB
     jsr WNIBL9
-    lda Q7L,x                       ; back to read mode
+    lda ReadMode,x                       ; back to read mode
 WEXIT:
-    lda Q6L,x
+    lda DataLatch,x
     rts
 
 ;; Writes the nibble in A, the store 32 cycles after the store before it when the caller's code between the
@@ -103,6 +103,6 @@ WNIBL7:
     pha
     pla
 WNIBL:
-    sta Q6H,x
-    ora Q6L,x
+    sta LoadLatch,x
+    ora DataLatch,x
     rts

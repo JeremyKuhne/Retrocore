@@ -14,30 +14,30 @@
 ;; the head speeds up and slows down. At the end SEEK waits 25.5 milliseconds for the head to settle, leaving
 ;; the last phase on; MYSEEK (Rwts32.asm) turns the phases off before the next seek. MSWAIT adds the time spent
 ;; waiting to MONTIMEL/MONTIMEH, the count RWTS uses to know when a motor it started is up to speed.
-;; In:    A = the half-track to go to, X = slot * 16, CURTRK = the half-track the head is on
-;; Out:   CURTRK = TRKN = the new half-track
-;; Uses:  A, Y, TRKCNT, PRIOR, TRKN, SLOTTEMP, MONTIMEL, MONTIMEH
+;; In:    A = the half-track to go to, X = slot * 16, CurrentTrack = the half-track the head is on
+;; Out:   CurrentTrack = TargetHalfTrack = the new half-track
+;; Uses:  A, Y, TRKCNT, PRIOR, TargetHalfTrack, SLOTTEMP, MotorTime, MotorTimeHigh
 ;; Keeps: X
 SEEK:
-    sta TRKN
-    cmp CURTRK
+    sta TargetHalfTrack
+    cmp CurrentTrack
     beq SEEKRTS                     ; already there
     stx SLOTTEMP
     lda #$0
     sta TRKCNT
 SEEK2:
-    lda CURTRK
+    lda CurrentTrack
     sta PRIOR                       ; the half-track being left
     sec
-    sbc TRKN
+    sbc TargetHalfTrack
     beq SEEKEND                     ; arrived
     bcs OUT
     eor #$FF                        ; in: A = half-tracks still to go after this step
-    inc CURTRK
+    inc CurrentTrack
     bcc MINTST                      ; always
 OUT:
     adc #$FE                        ; out: A - 1 (the carry is set), half-tracks still to go after this step
-    dec CURTRK
+    dec CurrentTrack
 MINTST:
     cmp TRKCNT
     bcc MAXTST
@@ -50,12 +50,12 @@ STEP:
     tay
 
 ; The phase's switches are PHASEOFF + phase * 2 (off) and the address after (on).
-    lda CURTRK
+    lda CurrentTrack
     and #3
     asl a
     ora SLOTTEMP
     tax
-    lda PHASEON,x                   ; the new half-track's phase on
+    lda Phase0On,x                   ; the new half-track's phase on
     lda ONTABLE,y
     jsr MSWAIT
     lda PRIOR
@@ -63,7 +63,7 @@ STEP:
     asl a
     ora SLOTTEMP
     tax
-    lda PHASEOFF,x                  ; the old one's off
+    lda Phase0Off,x                  ; the old one's off
     lda OFFTABLE,y
     jsr MSWAIT
     inc TRKCNT
@@ -80,16 +80,16 @@ SEEKRTS:
 ;; Each pass of the outer loop takes 101 cycles, about 100 microseconds at the Apple II's 1.02 MHz.
 ;; In:    A = the time, in hundreds of microseconds
 ;; Out:   A = 0, X = 0
-;; Uses:  MONTIMEL, MONTIMEH
+;; Uses:  MotorTime, MotorTimeHigh
 ;; Keeps: Y
 MSWAIT:
     ldx #$11
 MSW1:
     dex
     bne MSW1
-    inc MONTIMEL
+    inc MotorTime
     bne MSW2
-    inc MONTIMEH
+    inc MotorTimeHigh
 MSW2:
     sec
     sbc #$1

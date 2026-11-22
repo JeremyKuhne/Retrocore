@@ -19,9 +19,9 @@ internal sealed partial class SourceAnalysis
     private readonly Dictionary<string, AssemblyDialect> _dialects = [with(StringComparer.OrdinalIgnoreCase)];
     private readonly Dictionary<string, string[]> _lines = [with(StringComparer.OrdinalIgnoreCase)];
     private readonly Func<string, string?> _text;
-    private readonly Dictionary<string, IReadOnlyList<DocumentationScopes>> _scopes = [with(StringComparer.OrdinalIgnoreCase)];
+    private readonly Dictionary<string, IReadOnlyList<IReadOnlyList<DocumentationScopes>>> _scopes = [with(StringComparer.OrdinalIgnoreCase)];
     private HashSet<string>? _scopeNames;
-    private readonly Dictionary<string, (string Path, int Line)> _includedFrom = [with(StringComparer.OrdinalIgnoreCase)];
+    private readonly Dictionary<string, List<(string Path, int Line)>> _includedFrom = [with(StringComparer.OrdinalIgnoreCase)];
     private readonly Dictionary<string, HashSet<int>> _usingLines = [with(StringComparer.OrdinalIgnoreCase)];
     private DocumentationSet? _documentation;
 
@@ -54,7 +54,13 @@ internal sealed partial class SourceAnalysis
             // An included file is inside the scopes around its .include line.
             if (!location.IsMacroExpansion && location.ExpandedFrom is { Path.Length: > 0 } from)
             {
-                _includedFrom.TryAdd(path, (Path.GetFullPath(from.Path), from.Line));
+                if (!_includedFrom.TryGetValue(path, out List<(string Path, int Line)>? sites))
+                {
+                    _includedFrom[path] = sites = [];
+                }
+
+                (string Path, int Line) site = (Path.GetFullPath(from.Path), from.Line);
+                if (!sites.Contains(site)) { sites.Add(site); }
             }
 
             // The .using lines the assembler took, so a branch of an .if it skipped does not count.
@@ -65,7 +71,11 @@ internal sealed partial class SourceAnalysis
                     _usingLines[path] = usingLines = [];
                 }
 
-                if (statement.Kind == AssemblyStatementKind.Using) { usingLines.Add(location.Line); }
+                // The assembler takes .using only in the native dialect and without a label.
+                if (statement is { Kind: AssemblyStatementKind.Using, Dialect: AssemblyDialect.Native, Label: null })
+                {
+                    usingLines.Add(location.Line);
+                }
             }
 
             if (!result.Success && statement.Kind is AssemblyStatementKind.Procedure or AssemblyStatementKind.Scope)
@@ -313,7 +323,15 @@ internal sealed partial class SourceAnalysis
             return _definitions.GetValueOrDefault(name.TrimStart(':'));
         }
 
-        DocumentationScopes scopes = ScopesAt(path, line);
+        // A file included in several places binds a name in each; all of them are what the line may mean.
+        IReadOnlyList<DocumentationScopes> contexts = ScopesAt(path, line);
+        if (contexts.Count == 1) { return Bound(name, contexts[0]); }
+        List<SymbolSite> all = [.. contexts.SelectMany(scopes => Bound(name, scopes) ?? []).Distinct()];
+        return all.Count == 0 ? null : all;
+    }
+
+    private List<SymbolSite>? Bound(string name, DocumentationScopes scopes)
+    {
         for (string scope = scopes.Scope; scope.Length != 0; scope = Parent(scope))
         {
             if (_definitions.TryGetValue($"{scope}::{name}", out List<SymbolSite>? sites)) { return sites; }
@@ -343,7 +361,7 @@ internal sealed partial class SourceAnalysis
     /// <returns>Each name code there can write that binds to its definition, innermost directive first.</returns>
     internal IEnumerable<(string Name, SymbolSite Site)> UsedNames(string path, int line)
     {
-        foreach (DocumentationUsing directive in ScopesAt(path, line).Usings)
+        foreach (DocumentationUsing directive in ScopesAt(path, line).SelectMany(scopes => scopes.Usings).Distinct())
         {
             foreach (string scope in directive.Targets(IsScope).Distinct(StringComparer.OrdinalIgnoreCase))
             {
@@ -370,29 +388,31 @@ internal sealed partial class SourceAnalysis
         }
     }
 
-    // The scope a line is in and the .using directives in effect on it.
-    private DocumentationScopes ScopesAt(string path, int line) => ScopesAt(path, line, depth: 0);
+    // The scope a line is in and the .using directives in effect on it: one for each distinct scope the file is
+    // included in.
+    private IReadOnlyList<DocumentationScopes> ScopesAt(string path, int line) => ScopesAt(path, line, depth: 0);
 
-    private DocumentationScopes ScopesAt(string path, int line, int depth)
+    private IReadOnlyList<DocumentationScopes> ScopesAt(string path, int line, int depth)
     {
-        if (!_scopes.TryGetValue(path, out IReadOnlyList<DocumentationScopes>? lines))
+        if (!_scopes.TryGetValue(path, out IReadOnlyList<IReadOnlyList<DocumentationScopes>>? contexts))
         {
-            lines = DocumentationParser.ScopesByLine(LinesOf(path), AssembledUsing(path));
+            IReadOnlyList<DocumentationScopes> lines = DocumentationParser.ScopesByLine(LinesOf(path), AssembledUsing(path));
 
             // Includes are textual: a file included inside a .scope or .proc is in that scope, though the
-            // including file's .using directives do not reach it.
+            // including file's .using directives do not reach it. A file included in several scopes is in each.
             const int MaximumIncludeDepth = 32;
-            if (depth < MaximumIncludeDepth
-                && _includedFrom.TryGetValue(path, out (string Path, int Line) site)
-                && ScopesAt(site.Path, site.Line, depth + 1).Scope is { Length: > 0 } outer)
-            {
-                lines = [.. lines.Select(scopes => Within(outer, scopes))];
-            }
+            List<string> outers = depth < MaximumIncludeDepth && _includedFrom.TryGetValue(path, out List<(string Path, int Line)>? sites)
+                ? [.. sites.SelectMany(site => ScopesAt(site.Path, site.Line, depth + 1)).Select(scopes => scopes.Scope).Distinct(StringComparer.OrdinalIgnoreCase)]
+                : [""];
 
-            _scopes[path] = lines;
+            contexts = [.. outers.Select(outer => outer.Length == 0
+                ? lines
+                : (IReadOnlyList<DocumentationScopes>)[.. lines.Select(scopes => Within(outer, scopes))])];
+
+            _scopes[path] = contexts;
         }
 
-        return (uint)line < (uint)lines.Count ? lines[line] : DocumentationScopes.Root;
+        return [.. contexts.Select(lines => (uint)line < (uint)lines.Count ? lines[line] : DocumentationScopes.Root)];
     }
 
     // Whether the .using on a line of a file was assembled, or null when the assembly reached none of the file.

@@ -798,6 +798,61 @@ public sealed class UsingTests
     }
 
     /// <summary>
+    ///  A file included in two scopes is in each, so the editor finds a name there in both, as the assembler binds it.
+    /// </summary>
+    [TestMethod]
+    public void FilesIncludedTwiceAreInBothScopes()
+    {
+        string directory = Directory.CreateTempSubdirectory("retrocore-using").FullName;
+        try
+        {
+            string main = Path.Join(directory, "main.asm");
+            string part = Path.Join(directory, "part.asm");
+            File.WriteAllText(part, "    lda Value\n");
+            File.WriteAllText(main, """
+                .scope A
+                Value = 1
+                .include "part.asm"
+                .endscope
+                .scope B
+                Value = 2
+                .include "part.asm"
+                .endscope
+
+                """);
+
+            SourceAnalysis analysis = SourceAnalysis.Assemble(main, _ => null);
+            analysis.Result.Diagnostics.Should().BeEmpty();
+            analysis.Find("Value", part, line: 0).Select(site => site.Name).Should().BeEquivalentTo("A::Value", "B::Value");
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
+    ///  The editor ignores a <c>.using</c> in another dialect, which the assembler rejects.
+    /// </summary>
+    [TestMethod]
+    public void TheEditorIgnoresUsingsInOtherDialects()
+    {
+        string directory = Directory.CreateTempSubdirectory("retrocore-using").FullName;
+        try
+        {
+            string main = Path.Join(directory, "main.s");
+            File.WriteAllText(main, "; retrocore: dialect=ca65\n.scope A\n.proc Show\n    rts\n.endproc\n.endscope\n.using A\n    jsr Show\n");
+            SourceAnalysis analysis = SourceAnalysis.Assemble(main, _ => null);
+            analysis.Find("A::Show").Should().NotBeEmpty();
+            analysis.Bound("Show", main, line: 7).Should().BeNull();
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
     ///  The doc parser records the <c>.using</c> directives in effect at each line, ending with their scope.
     /// </summary>
     [TestMethod]

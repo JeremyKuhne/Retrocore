@@ -11,7 +11,7 @@
 ;; Evaluates an expression with operator precedence.
 ;;
 ;; Each pending operation has its dispatch address, unpacked operand and precedence on the stack. A
-;; relational mask also records the operand type so <DOREL> can compare either numbers or strings.
+;; relational mask also records the operand type so <ApplyRelation> can compare either numbers or strings.
 ;; In: TXTPTR = first character of the expression
 ;; Out: FAC = numeric result or string descriptor pointer, VALTYP = result type, TXTPTR = terminating character
 FRMEVL:

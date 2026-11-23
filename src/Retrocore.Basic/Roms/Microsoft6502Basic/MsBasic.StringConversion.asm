@@ -9,7 +9,7 @@
 
 ;; Converts numeric <FAC> to a decimal string in a temporary descriptor.
 ;;
-;; It enters <FOUTC> with Y = 0 so the result starts at <LOFBUF>. AppleSoft omits the leading
+;; It enters <Float::FormatFacAtOffset> with Y = 0 so the result starts at <LOFBUF>. AppleSoft omits the leading
 ;; blank on a nonnegative value; PET BASIC retains it. A negative sign is emitted when bit 7 of
 ;; <FACSGN> is set, even when the exponent is zero. One caller return address is discarded before
 ;; continuing at <TIMSTR>.

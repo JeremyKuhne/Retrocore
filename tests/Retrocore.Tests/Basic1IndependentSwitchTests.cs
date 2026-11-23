@@ -37,7 +37,7 @@ public sealed class Basic1IndependentSwitchTests
         {
             ["REVISD"] = original ? 0 : 1,
             ["RETURN_LOW_FOR_POINTER"] = searchLow,
-            ["PRECISE_FOUT_LIMIT"] = precise
+            ["PRECISE_OUTPUT_LIMIT"] = precise
         }));
 
         RecordingBus bus = BusFor(image);
@@ -172,7 +172,7 @@ public sealed class Basic1IndependentSwitchTests
     [TestMethod]
     public void LengthChangingChoiceIsRejectedByTheRootLayout()
     {
-        AssemblyResult image = Assemble(new() { ["SHORT_FMUL_ZERO"] = 0 });
+        AssemblyResult image = Assemble(new() { ["SHORT_MULTIPLY_ZERO"] = 0 });
         image.Success.Should().BeFalse();
         image.Diagnostics.Select(diagnostic => diagnostic.Message)
             .Should().Contain(message => message.Contains("BASIC 1's main editor spill must end at $E1E0"));

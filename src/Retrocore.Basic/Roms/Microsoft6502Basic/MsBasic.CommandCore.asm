@@ -13,7 +13,7 @@ TYPERR:
 
 ;; Prints the message at A/Y and the current line number unless execution is direct.
 ;; In: A = message address low byte, Y = message address high byte
-;; See: <ERROR>, <STOP>, <STROUT>, <INPRT>, <READY>
+;; See: <ERROR>, <STOP>, <STROUT>, <Float::PrintInLineNumber>, <READY>
 ERRFIN:
     jsr STROUT
     ldy CURLIN+1

@@ -25,6 +25,7 @@
 REALIO = 3
 .include "../../Microsoft6502Basic/MsBasic.Switches.asm"
 .include "../../Microsoft6502Basic/MsBasic.Layouts.asm"
+.include "../../Microsoft6502Basic/MsBasic.Families.asm"
 
 .ifndef INPUT_BUFFER_PAGE
 ;; Input buffer page: 0 for page zero or 2 for page two.
@@ -118,7 +119,7 @@ STACK_END = $01FB
 .assert INPUT_BUFFER_PAGE = 0 || INPUT_BUFFER_PAGE = 2, "INPUT_BUFFER_PAGE is 0 or 2."
 .assert INPUT_BUFFER_LENGTH > 0 && INPUT_BUFFER_LENGTH <= 255, "INPUT_BUFFER_LENGTH is 1 through 255."
 .assert NULL_COMMAND = 0 || NULL_COMMAND = 1, "NULL_COMMAND is 0 or 1."
-.assert INTPRC = 1 && ADDPRC = 1, "The PET workspace uses integer arrays and five-byte floats."
+.assert INTEGER_VARIABLES = 1 && ADDITIONAL_PRECISION = 1, "The PET workspace uses integer arrays and five-byte floats."
 .assert STACK_END >= $0100 && STACK_END <= $01FF, "STACK_END is in page one."
 .assert STACK_LEVELS > 0, "STACK_LEVELS is positive."
 .assert TERMINAL_FIRST = 0 || TERMINAL_FIRST = 1, "TERMINAL_FIRST is 0 or 1."

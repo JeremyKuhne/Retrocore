@@ -16,7 +16,7 @@
     .assert fullDescriptorPointer = 0 || fullDescriptorPointer = 1, "fullDescriptorPointer must be 0 or 1."
     .assert patchedArrayStep = 0 || patchedArrayStep = 1, "patchedArrayStep must be 0 or 1."
     .assert subtractDescriptorOffset = 0 || subtractDescriptorOffset = 1, "subtractDescriptorOffset must be 0 or 1."
-    .assert ADDPRC = 1 && INTPRC = 1 && STRSIZ = 3, "This collector requires five-byte floats and three-byte string descriptors."
+    .assert ADDITIONAL_PRECISION = 1 && INTEGER_VARIABLES = 1 && STRSIZ = 3, "This collector requires five-byte floats and three-byte string descriptors."
 
 ;; Compacts live strings toward <MEMSIZ>, updating the descriptors that refer to them.
 ;;
@@ -61,7 +61,7 @@ TVAR:
     beq TVAR
 
 SVARS:
-    lda #<(6+ADDPRC)
+    lda #<(6+ADDITIONAL_PRECISION)
     sta FOUR6
     lda VARTAB
     ldx VARTAB+1

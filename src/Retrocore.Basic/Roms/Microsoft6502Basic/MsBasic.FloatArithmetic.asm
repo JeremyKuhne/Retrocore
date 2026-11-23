@@ -1,10 +1,11 @@
+; retrocore: style=strict
 ; Derived from Microsoft's BASIC for 6502 (m6502.asm, MIT license; see LICENSE in this folder).
 
-;; MICROSOFT 6502 BASIC LOGARITHM, MULTIPLICATION AND DIVISION
+;; MICROSOFT 6502 BASIC: LOGARITHM, MULTIPLICATION AND DIVISION
 ;;
-;; The logarithm constants precede the arithmetic routines in ROM. <LOG> reduces its argument and evaluates a
-;; polynomial; multiplication and division form a mantissa in <RESHO> through <RESLO> and normalize it into <FAC>.
-;; Packed operands are five bytes in the format described in MsBasic.FloatingPoint.asm.
+;; The logarithm constants precede the arithmetic routines in ROM. <Functions::Log> reduces its argument and
+;; evaluates a polynomial; multiplication and division form a mantissa in <Result1> through <Result4> and normalize it
+;; into <Fac>. Packed operands are five bytes in the format described in MsBasic.FloatingPoint.asm.
 ;;
 ;; This shared module follows MsBasic.FloatingPoint.asm.
 
@@ -12,6 +13,6 @@
 .include "MsBasic.Logarithm.asm"
 .include "MsBasic.ArithmeticCore.asm"
 
-    LOG_CONSTANTS
-    LOG_ROUTINE
-    FLOAT_ARITHMETIC 0
+    LogarithmConstants
+    LogarithmRoutine
+    FloatArithmetic 0

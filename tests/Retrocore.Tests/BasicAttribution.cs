@@ -92,14 +92,20 @@ internal static partial class BasicAttribution
 
     /// <summary>
     ///  Asserts that a vendor's name for shared code is no historical name of a shared definition, which would make it
-    ///  resolve in every vendor's builds.
+    ///  resolve in every vendor's builds: it may be a historical name only of a definition outside the shared modules,
+    ///  the vendor's alias in its historical-names file.
     /// </summary>
     /// <param name="result">A build.</param>
     /// <param name="docs">The build's documentation.</param>
     /// <param name="name">The vendor's name.</param>
     internal static void AssertNotShared(AssemblyResult result, DocumentationSet docs, string name)
     {
-        result.HistoricalNames.Should().NotContainKey(name, $"{name} must resolve only through its vendor's alias");
+        if (result.HistoricalNames.TryGetValue(name, out AssemblySymbol? definition))
+        {
+            IsSharedPath(definition.Location?.Path).Should().BeFalse(
+                $"{name} must resolve only through its vendor's alias, not {definition.Name}");
+        }
+
         foreach (DocumentationTopic topic in docs.Topics.Where(IsShared))
         {
             DocumentationAlso.Of(topic.Sections).Select(also => also.Name)
@@ -150,11 +156,10 @@ internal static partial class BasicAttribution
     }
 
     // Whether a definition is documented in the shared Microsoft modules.
-    private static bool IsShared(DocumentationTopic topic)
-    {
-        string shared = $"{Path.DirectorySeparatorChar}Microsoft6502Basic{Path.DirectorySeparatorChar}";
-        return topic.Comments.Any(comment => comment.Path.Contains(shared, StringComparison.OrdinalIgnoreCase));
-    }
+    private static bool IsShared(DocumentationTopic topic) => topic.Comments.Any(comment => IsSharedPath(comment.Path));
+
+    private static bool IsSharedPath(string? path) =>
+        path?.Contains($"{Path.DirectorySeparatorChar}Microsoft6502Basic{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase) == true;
 
     private static DocumentationBibliography ReadBibliography()
     {

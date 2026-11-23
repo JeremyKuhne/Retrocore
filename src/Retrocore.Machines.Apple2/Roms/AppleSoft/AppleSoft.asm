@@ -34,6 +34,9 @@
 .assert .not .defined(NULCMD), "AppleSoft fixes NULL_COMMAND; NULCMD cannot be predefined."
 .assert .not .defined(NUMLEV), "AppleSoft fixes STACK_LEVELS; NUMLEV cannot be predefined."
 .assert .not .defined(STKEND), "AppleSoft fixes STACK_END; STKEND cannot be predefined."
+.assert .not .defined(INTPRC), "AppleSoft fixes INTEGER_VARIABLES; INTPRC cannot be predefined."
+.assert .not .defined(ADDPRC), "AppleSoft fixes ADDITIONAL_PRECISION; ADDPRC cannot be predefined."
+.assert .not .defined(LNGERR), "AppleSoft fixes LONG_ERRORS; LNGERR cannot be predefined."
 
 .ifndef ENHNCD
 ENHNCD = 1                          ;; 1 for the enhanced IIe ROM
@@ -67,7 +70,7 @@ APLPLS = 0                          ;; 1 for the II Plus ROM, with ENHNCD = 0
 .include "../Microsoft6502Basic/MsBasic.FloatMovement.asm"
 .include "../Microsoft6502Basic/MsBasic.FloatConversion.asm"
 .include "../Microsoft6502Basic/MsBasic.FloatOutput.asm"
-.include "AppleSoft.FloatAliases.asm"
+.include "AppleSoft.HistoricalNames.asm"
 .include "AppleSoft.InterpreterAliases.asm"
 .include "../Microsoft6502Basic/MsBasic.Transcendental.asm"
 .include "AppleSoft.Initialization.asm"

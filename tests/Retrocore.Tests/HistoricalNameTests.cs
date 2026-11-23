@@ -442,6 +442,40 @@ public sealed partial class HistoricalNameTests
     }
 
     /// <summary>
+    ///  A definition a build leaves out may give an old name the build defines elsewhere: the clash matters only in a
+    ///  build that has both.
+    /// </summary>
+    /// <param name="leftOut">Whether the build leaves the documented definition out.</param>
+    [TestMethod]
+    [DataRow(data: true)]
+    [DataRow(data: false)]
+    public void AlsoOfALeftOutDefinitionMayBeDefinedElsewhere(bool leftOut)
+    {
+        DocumentationSet set = Set($$"""
+            .if {{(leftOut ? 0 : 1)}}
+            ;; Three zero bytes.
+            ;; Also: ZERO (TEST)
+            ZeroValue = $1234
+            .endif
+
+            ;; The zero bytes another part keeps.
+            ZERO = $5678
+            """);
+
+        DocumentationResolver resolver = new(set) { Bibliography = DocumentationBibliography.Parse(Bibliography) };
+        string[] messages = [.. resolver.Check().Select(diagnostic => diagnostic.Message)];
+        string clash = "Also: ZERO is also a definition, which code reaches instead of ZeroValue.";
+        if (leftOut)
+        {
+            messages.Should().NotContain(clash);
+        }
+        else
+        {
+            messages.Should().Contain(clash);
+        }
+    }
+
+    /// <summary>
     ///  An included library's own <c>Bibliography.md</c> serves its <c>Also:</c> entries, as well as the root's.
     /// </summary>
     [TestMethod]

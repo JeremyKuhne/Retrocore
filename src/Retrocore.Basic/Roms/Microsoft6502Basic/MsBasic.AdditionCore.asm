@@ -1,317 +1,430 @@
+; retrocore: style=strict
 ; Derived from Microsoft's BASIC for 6502 (m6502.asm, MIT license; see LICENSE in this folder).
 
+.include "MsBasic.Families.asm"
+
 ;; Emits the addition and subtraction entries that can precede platform-specific code.
-.macro ADD_ENTRIES
+.macro AdditionEntries
 
-;; Adds one half to <FAC>.
-;; See: <FADD>, <FHALF>
-FADDH:
-    lda #<FHALF
-    ldy #>FHALF
-    jmp FADD
+    .scope Float continued
 
-;; Subtracts <FAC> from a packed number, leaving the result in <FAC>.
-;; In: A = low byte of packed operand address, Y = high byte of packed operand address
-;; Entry: FSUBT = subtracts <FAC> from the unpacked argument accumulator
-FSUB:
-    jsr CONUPK
+    ;; Adds one half to <Fac>.
+    ;; See: <Float::AddPacked>, <Float::Half>
+    ;; Also: FADDH (M6502, ASTIL, AS82, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    .proc AddHalf
+    lda #<Half
+    ldy #>Half
+    jmp AddPacked
+    .endproc
 
-FSUBT:
-    lda FACSGN
+    ;; Subtracts <Fac> from a packed number, leaving the result in <Fac>.
+    ;; In: A = low byte of packed operand address, Y = high byte of packed operand address
+    ;; Also: FSUB (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    .proc SubtractFromPacked
+    jsr LoadArg
+    ; Falls into SubtractFromArg.
+    .endproc
+
+    ;; Subtracts <Fac> from the unpacked argument accumulator.
+    ;; Also: FSUBT (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    .proc SubtractFromArg
+    lda FacSign
     eor #$FF
-    sta FACSGN
-    eor ARGSGN
-    sta ARISGN
-    lda FACEXP
-    jmp FADDT
+    sta FacSign
+    eor ArgSign
+    sta ResultSign
+    lda FacExponent
+    jmp AddArg
+    .endproc
+    .endscope
 
 .endmacro
 
 ;; Emits floating-point addition, normalization and shifting for five-byte precision.
-.macro ADD_AND_NORMALIZE
+.macro AddAndNormalize
 
-FADD5:
-    jsr SHIFTR
-    bcc FADD4
+    .scope Float continued
 
-;; Adds a packed number to <FAC>, leaving the result in <FAC>.
-;;
-;; The smaller mantissa is shifted to align exponents; equal signs add and opposite signs subtract. The result
-;; is normalized, with low shifted bits retained in <FACOV>.
-;; In: A = low byte of packed operand address, Y = high byte of packed operand address
-;; Entry: FADDT = adds the unpacked argument accumulator to <FAC>, with zero set from <FACEXP> and <ARISGN>
-;;   already set
-;; See: <CONUPK>, <NORMAL>
-FADD:
-    jsr CONUPK
+    ;; The unshifted operand's extension byte while two numbers are added: <Float::AddArg> saves <FacExtension> here,
+    ;; <Float::AlignAndAdd> clears it when <Fac> is the one shifted, and <Float::AddMantissas> adds it in. The byte is
+    ;; <FunctionJumpHigh>, which Microsoft's source names OLDOV here too.
+    UnshiftedExtension = FunctionJumpHigh
 
-FADDT:
+    ;; Shifts the smaller operand right through <Float::ShiftRight> (eight bits or more), then joins
+    ;; <Float::AlignAndAdd::Combine>.
+    ;; Also: FADD5 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    .proc ShiftAndAdd
+    jsr ShiftRight
+    bcc AlignAndAdd::Combine
+    .endproc
+
+    ;; Adds a packed number to <Fac>, leaving the result in <Fac>.
+    ;;
+    ;; The smaller mantissa is shifted to align exponents; equal signs add and opposite signs subtract. The result
+    ;; is normalized, with low shifted bits retained in <FacExtension>.
+    ;; In: A = low byte of packed operand address, Y = high byte of packed operand address
+    ;; See: <Float::LoadArg>, <Float::Normalize>
+    ;; Also: FADD (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    .proc AddPacked
+    jsr LoadArg
+    ; Falls into AddArg.
+    .endproc
+
+    ;; Adds the unpacked argument accumulator to <Fac>, with zero set from <FacExponent> and <ResultSign> already set.
+    ;; Also: FADDT (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    .proc AddArg
     bne *+5                         ; skip the three-byte jump when FAC is nonzero
-    jmp MOVFA
-    ldx FACOV
-    stx OLDOV
-    ldx #ARGEXP
-    lda ARGEXP
+    jmp CopyArgToFac
+    ldx FacExtension
+    stx UnshiftedExtension
+    ldx #ArgExponent
+    lda ArgExponent
+    ; Falls into AlignAndAdd.
+    .endproc
 
-;; Aligns and adds <FAC> and the argument accumulator using A as the exponent of the second operand.
-;;
-;; <MUL10> uses this entry after setting up the operands and their common sign.
-FADDC:
+    ;; Aligns and adds <Fac> and the argument accumulator using A as the exponent of the second operand.
+    ;;
+    ;; <Float::MultiplyByTen> uses this entry after setting up the operands and their common sign.
+    ;; Entry:
+    ;;   Combine = Tests <ResultSign>: equal signs go to <Float::AddMantissas>, opposite signs subtract
+    ;; Also: FADDC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    .proc AlignAndAdd
     tay
     beq ZERRTS
     sec
-    sbc FACEXP
-    beq FADD4
-    bcc FADDA                       ; the argument accumulator has the smaller exponent
-    sty FACEXP
-    ldy ARGSGN
-    sty FACSGN
+    sbc FacExponent
+    beq Combine
+    bcc ArgSmaller                       ; the argument accumulator has the smaller exponent
+    sty FacExponent
+    ldy ArgSign
+    sty FacSign
     eor #$FF
     adc #$00
     ldy #$00
-    sty OLDOV
-    ldx #FAC
-    bne FADD1
+    sty UnshiftedExtension
+    ldx #Fac
+    bne Align
 
-FADDA:
+;; Arg has the smaller exponent: clears <FacExtension>, which takes Arg's shifted-out bits.
+;; Also: FADDA (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+ArgSmaller:
     ldy #$00
-    sty FACOV
+    sty FacExtension
 
-FADD1:
+;; A shift of eight bits or more goes to <Float::ShiftAndAdd>; a shorter one shifts the operand at X through
+;; <Float::ShiftRight::ShiftLow>.
+;; Also: FADD1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+Align:
     cmp #$F9                        ; a shift of eight or more starts with whole bytes
-    bmi FADD5
+    bmi ShiftAndAdd
     tay
-    lda FACOV
+    lda FacExtension
     lsr 1,x
-    jsr ROLSHF
+    jsr ShiftRight::ShiftLow
 
-;; Adds or subtracts aligned mantissas according to <ARISGN>.
-FADD4:
-    bit ARISGN
-    bpl FADD2
+;; Adds or subtracts aligned mantissas according to <ResultSign>.
+;; Also: FADD4 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+Combine:
+    bit ResultSign
+    bpl AddMantissas
 
 ; Opposite signs: subtract the smaller magnitude from the larger.
-FADD3:
-    ldy #FACEXP
-    cpx #ARGEXP
-    beq SUBIT
-    ldy #ARGEXP
+;; Picks Y as the operand that was not shifted, so the shifted one (X) is subtracted from it.
+;; Also: FADD3 (M6502)
+OppositeSigns:
+    ldy #FacExponent
+    cpx #ArgExponent
+    beq Subtract
+    ldy #ArgExponent
 
-SUBIT:
+;; Subtracts the operand at X from the one at Y, guard bytes first, into <Fac>'s mantissa; falls into
+;; <Float::NormalizeSigned>.
+;; Also: SUBIT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+Subtract:
     sec
     eor #$FF
-    adc OLDOV
-    sta FACOV
+    adc UnshiftedExtension
+    sta FacExtension
     lda 4,y
     sbc 4,x
-    sta FACLO
+    sta FacMantissa4
     lda 3,y
     sbc 3,x
-    sta FACMO
+    sta FacMantissa3
     lda 2,y
     sbc 2,x
-    sta FACMOH
+    sta FacMantissa2
     lda 1,y
     sbc 1,x
-    sta FACHO
+    sta FacMantissa1
+    .endproc
 
-;; Normalizes <FAC>, negating its mantissa and sign first if carry is clear.
-;; In: carry = clear to negate <FAC> before normalization
-;; See: <NORMAL>, <NEGFAC>
-FADFLT:
-    bcs NORMAL
-    jsr NEGFAC
+    ;; Normalizes <Fac>, negating its mantissa and sign first if carry is clear.
+    ;; In: carry = clear to negate <Fac> before normalization
+    ;; See: <Float::Normalize>, <Float::Complement>
+    ;; Also: FADFLT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    .proc NormalizeSigned
+    bcs Normalize
+    jsr Complement
+    .endproc
 
-;; Normalizes <FAC> after addition, multiplication or division.
-;;
-;; Whole zero bytes are shifted first, then individual bits. An exponent underflow produces zero;
-;; a carry out of addition shifts the result right and increments the exponent.
-;; See: <ZEROFC>, <RNDSHF>
-NORMAL:
+    ;; Normalizes <Fac> after addition, multiplication or division.
+    ;;
+    ;; Whole zero bytes are shifted first, then individual bits. An exponent underflow produces zero;
+    ;; a carry out of addition shifts the result right and increments the exponent.
+    ;; See: <Float::SetZero>, <Float::ShiftInCarry>
+    ;; Also: NORMAL (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    .proc Normalize
     ldy #$00
     tya
     clc
 
-NORM3:
-    ldx FACHO
-    bne NORM1
+;; While the top mantissa byte is zero, moves each byte up one and counts 8 in A; four zero bytes fall into
+;; <Float::SetZero>.
+;; Also: NORM3 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+ShiftBytes:
+    ldx FacMantissa1
+    bne NormalizeBits::Test
     ; Move whole zero bytes out of the high end before shifting individual bits.
-    ldx FACMOH
-    stx FACHO
-    ldx FACMO
-    stx FACMOH
-    ldx FACLO
-    stx FACMO
-    ldx FACOV
-    stx FACLO
-    sty FACOV
+    ldx FacMantissa2
+    stx FacMantissa1
+    ldx FacMantissa3
+    stx FacMantissa2
+    ldx FacMantissa4
+    stx FacMantissa3
+    ldx FacExtension
+    stx FacMantissa4
+    sty FacExtension
     adc #$08
     cmp #$20
-    bne NORM3
+    bne ShiftBytes
+    .endproc
 
-;; Sets the <FAC> exponent and sign to zero; its mantissa need not be cleared.
-;; Entry: ZEROF1 = stores A in the exponent and sign, ZEROML = stores A in the sign only
-ZEROFC:
+    ;; Sets the <Fac> exponent and sign to zero; its mantissa need not be cleared.
+    ;; Also: ZEROFC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    .proc SetZero
     lda #$00
+    .endproc
 
-ZEROF1:
-    sta FACEXP
+    ;; Stores A in the exponent and sign.
+    ;; Also: ZEROF1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    .proc SetExponentAndSign
+    sta FacExponent
+    ; Falls into SetSign.
+    .endproc
 
-ZEROML:
-    sta FACSGN
+    ;; Stores A in the sign only.
+    ;; Also: ZEROML (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    .proc SetSign
+    sta FacSign
     rts
+    .endproc
 
-FADD2:
+    ;; Equal signs: adds Arg's mantissa and the saved guard byte to <Fac>'s, then goes to
+    ;; <Float::NormalizeBits::CheckCarry>.
+    ;; Also: FADD2 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    .proc AddMantissas
     ; Equal signs: add the mantissas and their low guard bits.
-    adc OLDOV
-    sta FACOV
-    lda FACLO
-    adc ARGLO
-    sta FACLO
-    lda FACMO
-    adc ARGMO
-    sta FACMO
-    lda FACMOH
-    adc ARGMOH
-    sta FACMOH
-    lda FACHO
-    adc ARGHO
-    sta FACHO
-    jmp SQUEEZ
+    adc UnshiftedExtension
+    sta FacExtension
+    lda FacMantissa4
+    adc ArgMantissa4
+    sta FacMantissa4
+    lda FacMantissa3
+    adc ArgMantissa3
+    sta FacMantissa3
+    lda FacMantissa2
+    adc ArgMantissa2
+    sta FacMantissa2
+    lda FacMantissa1
+    adc ArgMantissa1
+    sta FacMantissa1
+    jmp NormalizeBits::CheckCarry
+    .endproc
 
-NORM2:
+    ;; The bit loop: adds 1 to the shift count and shifts <Fac> (and <FacExtension>) left one bit.
+    ;; Entry:
+    ;;   Test = Loops until <Fac>'s top bit is set, then subtracts the count from <FacExponent>; underflow goes to
+    ;;     <Float::SetZero>
+    ;;   CheckCarry = A carry out of the addition (carry set) falls into <Float::ShiftInCarry>; none returns
+    ;; Also: NORM2 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    .proc NormalizeBits
     adc #$01
-    asl FACOV
-    rol FACLO
-    rol FACMO
-    rol FACMOH
-    rol FACHO
+    asl FacExtension
+    rol FacMantissa4
+    rol FacMantissa3
+    rol FacMantissa2
+    rol FacMantissa1
 
-NORM1:
-    bpl NORM2
+;; Loops until <Fac>'s top bit is set, then subtracts the count from <FacExponent>; underflow goes to
+;; <Float::SetZero>.
+;; Also: NORM1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+Test:
+    bpl NormalizeBits
     sec
-    sbc FACEXP
-    bcs ZEROFC
+    sbc FacExponent
+    bcs SetZero
     eor #$FF
     adc #$01
-    sta FACEXP
+    sta FacExponent
 
-SQUEEZ:
-    bcc RNDRTS
+;; A carry out of the addition (carry set) falls into <Float::ShiftInCarry>; none returns.
+;; Also: SQUEEZ (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+CheckCarry:
+    bcc ShiftInCarry::Done
+    .endproc
 
-;; Shifts <FAC> right after a mantissa carry and increments its exponent.
-;; Errors: overflow = jumps to <OVERR> if the exponent wraps
-RNDSHF:
-    inc FACEXP
-    beq OVERR
-    ror FACHO
-    ror FACMOH
-    ror FACMO
-    ror FACLO
-    ror FACOV
+    ;; Shifts <Fac> right after a mantissa carry and increments its exponent.
+    ;; Errors: overflow = jumps to <Float::OverflowError> if the exponent wraps
+    ;; Entry:
+    ;;   Done = The shared rts
+    ;; Also: RNDSHF (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    .proc ShiftInCarry
+    inc FacExponent
+    beq OverflowError
+    ror FacMantissa1
+    ror FacMantissa2
+    ror FacMantissa3
+    ror FacMantissa4
+    ror FacExtension
 
-RNDRTS:
+;; The shared rts.
+;; Also: RNDRTS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+Done:
     rts
+    .endproc
 
-;; Complements the <FAC> sign and negates its mantissa and rounding byte.
-;; Entry: NEGFCH = negates only the mantissa and rounding byte
-NEGFAC:
-    lda FACSGN
+    ;; Complements the <Fac> sign and negates its mantissa and rounding byte.
+    ;; Also: NEGFAC (M6502, AS82, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    .proc Complement
+    lda FacSign
     eor #$FF
-    sta FACSGN
+    sta FacSign
+    .endproc
 
-NEGFCH:
-    lda FACHO
+    ;; Negates only the mantissa and rounding byte.
+    ;; Also: NEGFCH (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    .proc ComplementMantissa
+    lda FacMantissa1
     eor #$FF
-    sta FACHO
-    lda FACMOH
+    sta FacMantissa1
+    lda FacMantissa2
     eor #$FF
-    sta FACMOH
-    lda FACMO
+    sta FacMantissa2
+    lda FacMantissa3
     eor #$FF
-    sta FACMO
-    lda FACLO
+    sta FacMantissa3
+    lda FacMantissa4
     eor #$FF
-    sta FACLO
-    lda FACOV
+    sta FacMantissa4
+    lda FacExtension
     eor #$FF
-    sta FACOV
-    inc FACOV
-    bne INCFRT
+    sta FacExtension
+    inc FacExtension
+    bne IncrementMantissa::Done
+    .endproc
 
-;; Increments the <FAC> mantissa, propagating a carry from its low byte.
-;; See: <ROUND>
-INCFAC:
-    inc FACLO
-    bne INCFRT
-    inc FACMO
-    bne INCFRT
-    inc FACMOH
-    bne INCFRT
-    inc FACHO
+    ;; Increments the <Fac> mantissa, propagating a carry from its low byte.
+    ;; Entry:
+    ;;   Done = The shared rts
+    ;; See: <Float::Round>
+    ;; Also: INCFAC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    .proc IncrementMantissa
+    inc FacMantissa4
+    bne Done
+    inc FacMantissa3
+    bne Done
+    inc FacMantissa2
+    bne Done
+    inc FacMantissa1
 
-INCFRT:
+;; The shared rts.
+;; Also: INCFRT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+Done:
     rts
+    .endproc
 
-;; Reports the floating-point overflow error through <ERROR>.
-OVERR:
-    ldx #ERROV
+    ;; Reports the floating-point overflow error through <ERROR>.
+    ;; Also: OVERR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    .proc OverflowError
+    ldx #ERROR_OVERFLOW
     jmp ERROR
 
-; Mantissa negation, overflow, and the shared arithmetic shifter.
+    ; Mantissa negation, overflow, and the shared arithmetic shifter.
+    .endproc
 
-;; Shifts the multiplication result right by a byte, then continues through <SHIFTR>.
-MULSHF:
-    ldx #(RESHO-1)
+    ;; Shifts the multiplication result right by a byte, then continues through <Float::ShiftRight>.
+    ;; Also: MULSHF (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    .proc ShiftProductByte
+    ldx #(Result1-1)
+    .endproc
 
-SHFTR2:
+    ;; Moves the four bytes at X+1..X+4 down a byte, the low one into <FacExtension>, filling the top from Bits; falls
+    ;; into <Float::ShiftRight>.
+    ;; Also: SHFTR2 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    .proc ShiftRightByte
     ldy 4,x
-    sty FACOV
+    sty FacExtension
     ldy 3,x
     sty 4,x
     ldy 2,x
     sty 3,x
     ldy 1,x
     sty 2,x
-    ldy BITS
+    ldy ShiftFill
     sty 1,x
+    .endproc
 
-;; Shifts the four bytes at X+1 through X+4 right by the negative count in A.
-;;
-;; Whole-byte shifts fill from <BITS>; bit shifts preserve the high byte's sign and shift low bits into A.
-;; In: X = byte before the high byte, A = negative shift count, carry = clear
-;; Out: A = shifted-out low bits, carry = clear
-;; Entry: ROLSHF = rotates the lower three bytes and A with the carry supplied by the caller
-SHIFTR:
+    ;; Shifts the four bytes at X+1 through X+4 right by the negative count in A.
+    ;;
+    ;; Whole-byte shifts fill from <ShiftFill>; bit shifts preserve the high byte's sign and shift low bits into A.
+    ;; In: X = byte before the high byte, A = negative shift count, carry = clear
+    ;; Out: A = shifted-out low bits, carry = clear
+    ;; Entry:
+    ;;   ShiftLow = rotates the lower three bytes and A with the carry supplied by the caller
+    ;; Also: SHIFTR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    .proc ShiftRight
     adc #$08
-    bmi SHFTR2
-    beq SHFTR2
+    bmi ShiftRightByte
+    beq ShiftRightByte
     sbc #$08
     tay
-    lda FACOV
-    bcs SHFTRT
+    lda FacExtension
+    bcs Done
 
-SHFTR3:
+;; Copies the top byte's bit 7 into carry so the rotate keeps the sign.
+;; Also: SHFTR3 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+NextBit:
     asl 1,x
-    bcc SHFTR4
+    bcc ShiftHigh
     inc 1,x
 
-SHFTR4:
+;; Rotates the top byte right twice, the first to place the copied sign bit, the second to shift.
+;; Also: SHFTR4 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+ShiftHigh:
     ror 1,x
     ror 1,x
 
-ROLSHF:
+;; Rotates the lower three bytes and A with the carry supplied by the caller.
+;; Also: ROLSHF (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+ShiftLow:
     ror 2,x
     ror 3,x
     ror 4,x
     ror a
 
-SHFTR7:
+;; Counts one bit up toward zero and loops while bits remain.
+;; Also: SHFTR7 (M6502)
+Count:
     iny
-    bne SHFTR3
+    bne NextBit
 
-SHFTRT:
+;; Clears carry and returns.
+;; Also: SHFTRT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+Done:
     clc
     rts
+    .endproc
+    .endscope
 
 .endmacro

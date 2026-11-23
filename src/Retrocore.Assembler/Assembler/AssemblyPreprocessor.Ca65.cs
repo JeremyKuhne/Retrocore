@@ -49,6 +49,11 @@ internal sealed partial class AssemblyPreprocessor
         _nameAmbiguity = null;
         original = new(ExpandCa65Functions(ExpandCa65Definitions(AssemblySyntax.AsString(text))), original.Location, original.Dialect);
         text = original.Text;
+
+        // A label before a conditional directive that a definition spells belongs to the label, as on the directive
+        // written out.
+        Split(text.Span, out _, out ReadOnlySpan<char> expandedOperation, out _);
+        if (IsConditionalDirective(expandedOperation)) { DirectiveLabel(ref original, ref text); }
         Split(text.Span, out ReadOnlySpan<char> label, out ReadOnlySpan<char> op, out ReadOnlySpan<char> operand);
         string operation = op.ToString().ToUpperInvariant();
 
@@ -142,9 +147,11 @@ internal sealed partial class AssemblyPreprocessor
     private void InactiveDefinedConditional(ref Line original, ref ReadOnlyMemory<char> text, ReadOnlySpan<char> operation)
     {
         // Only a definition in the operation's place can make the line a conditional directive.
-        if (_ca65State is not { Defines.Count: > 0 } state || operation.IsEmpty) { return; }
-        if ((state.DefineLengths & LengthBit(operation.Length)) == 0) { return; }
-        if (!state.Defines.ContainsKey(operation.ToString())) { return; }
+        // A definition with parameters may be called with its arguments in parentheses, as IFX(1).
+        ReadOnlySpan<char> name = operation[..AssemblySyntax.IdentifierLength(operation)];
+        if (_ca65State is not { Defines.Count: > 0 } state || name.IsEmpty) { return; }
+        if ((state.DefineLengths & LengthBit(name.Length)) == 0) { return; }
+        if (!state.Defines.ContainsKey(name.ToString())) { return; }
         string expanded;
         try
         {

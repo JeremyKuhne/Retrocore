@@ -7,17 +7,20 @@
 
     CharacterReader $58
 
+;; Where a program starts: the zero before its first line; the first line follows it at $0801.
+PROGRAM_ORIGIN = $0800
+
 ;; Cold-starts AppleSoft, initializes its workspace and enters <CommandLoop>.
 ;;
 ;; It installs the restart and `USR` vectors, copies <CharacterReaderTemplate> and four bytes of the initial random
 ;; value to page zero, probes RAM by complementing and restoring a byte on each page, rounds the upper limit down to a 4
-;; KB boundary, initializes the program at $0800 and resets the interpreter. The probe stops at the first location that
-;; fails either test.
+;; KB boundary, initializes the program at <PROGRAM_ORIGIN> and resets the interpreter. The probe stops at the first
+;; location that fails either test.
 ;; Also: INIT (M6502)
 .proc ColdStart
     ldx #$FF
     stx CurrentLine+1
-    ldx #$FB
+    ldx #<STACK_END
     txs
     lda #<ColdStart
     ldy #>ColdStart
@@ -35,7 +38,7 @@
     ldy #>IllegalQuantityError
     sta UserVector+1
     sty UserVector+2
-    ldx #$1C                        ; the reader and the four bytes of the random seed after it
+    ldx #<(RandomValue+4-GetNextCharacter)
 
 ;; Copies the character reader and the random seed to page zero.
 ;; Also: MOVCHG (M6502)
@@ -58,8 +61,8 @@ CopyCharacterReader:
     sta BUF-4
     ldx #TemporaryDescriptors
     stx NextTemporary
-    lda #0
-    ldy #8
+    lda #<PROGRAM_ORIGIN
+    ldy #>PROGRAM_ORIGIN
     sta LineNumber
     sty LineNumber+1
     ldy #0
@@ -88,8 +91,8 @@ FoundMemoryTop:
     sta MemoryTop+1
     sty StringsBottom
     sta StringsBottom+1
-    ldx #0
-    ldy #8
+    ldx #<PROGRAM_ORIGIN
+    ldy #>PROGRAM_ORIGIN
     stx ProgramStart
     sty ProgramStart+1
     ldy #0

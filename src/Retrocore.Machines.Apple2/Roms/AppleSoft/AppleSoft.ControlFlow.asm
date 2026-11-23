@@ -106,8 +106,7 @@ ToEndOfProgram:
 ;; In: A = the statement's first character, zero = set at the end of the statement, carry = set unless it is a digit
 ;;   (as <GetNextCharacter> leaves it)
 ;; Entry:
-;;   WithToken = subtracts <TOKEN_END> from A (carry set) and dispatches; the shared `ON` and IF code enters here with
-;;     a token
+;;   WithToken = subtracts <TOKEN_END> from A (carry set) and dispatches; the shared `ON` enters here with a token
 ;; Also: GONE3 (M6502)
 .proc DispatchStatement
     beq Statements::Restore::Done

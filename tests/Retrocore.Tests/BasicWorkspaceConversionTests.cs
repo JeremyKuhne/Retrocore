@@ -118,8 +118,12 @@ public sealed class BasicWorkspaceConversionTests
         // A shared module gives some names in one vendor's builds that the other vendor's own files give (LINCHK:
         // the PET's number item, AppleSoft's comma code); each is both vendors' name.
         string[] sharedFiles = Directory.GetFiles(SharedFolder, "MsBasic.*.asm");
-        petNames.UnionWith(OldNames(pet, sharedFiles).Intersect(appleNames));
-        appleNames.UnionWith(OldNames(apple, sharedFiles).Intersect(petNames));
+        IEnumerable<string> petShared = OldNames(pet, sharedFiles).Intersect(appleNames);
+        IEnumerable<string> appleShared = OldNames(apple, sharedFiles).Intersect(petNames);
+        string[] bothVendors = [.. petShared.Union(appleShared)];
+        bothVendors.Should().BeEquivalentTo(["LINCHK"], "no other name is given this way");
+        petNames.UnionWith(bothVendors);
+        appleNames.UnionWith(bothVendors);
 
         foreach (string name in appleNames.Except(petNames))
         {

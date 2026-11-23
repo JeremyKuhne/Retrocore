@@ -1084,23 +1084,39 @@ Decisions and how the table was applied:
   own `.proc` (Commodore's `EvaluateVariableBody` and `EvaluateVariable`), or a per-build label carries the old
   names.
 - I8. New constants: AppleSoft's `CONTROL_C` and `KEYBOARD_CONTROL_C`, and Commodore's `CARRIAGE_RETURN`,
-  `LINE_FEED`, `CURSOR_RIGHT`, `CURSOR_LEFT` and `DELETE_CHARACTER`. `*+5` branches in the statement fetch are the
-  labels `ReadLine` and `StoreLink`.
+  `LINE_FEED`, `CURSOR_RIGHT`, `CURSOR_LEFT` and `DELETE_CHARACTER`. Two `*+5` branches are labels: `ReadLine` in
+  the statement fetch and `StoreLink` in the command loop's link pass.
 - I9. Part F's names stay as they are in the code: BASIC 4's trampoline ISVAR (the shared evaluator still branches
-  to ISVAR), and BASIC 1's GETDTL, INPSTP, INPNUL, TISTR, TINUM and INCTRM. `StopEmptyInput` is BASIC 4's own
-  INPSTP, under `.if localStopLabel`.
+  to ISVAR), BASIC 1's GETDTL, INPSTP, TISTR, TINUM and INCTRM, and the revised BASIC 4's INPNUL. `StopEmptyInput`
+  is BASIC 4's own INPSTP, under `.if localStopLabel`.
 - I10. The C# debug hosts are unchanged: their old names resolve through `SymbolsWithHistoricalNames`.
 - I11. Tests and their helpers:
-  - `BasicNames.CurrentNamesOf` takes the names in `VendorLabelNames` last; a per-build name gives way to another
-    definition's.
+  - `BasicNames.CurrentNamesOf` takes the names in `VendorLabelNames` last, and such a name gives way to any other
+    old name of the same current name. Another per-build name still gives way only to one that names a single
+    definition, apart from NTHIS1 and NTHIS2, which the vendors give one step apart (`ShiftedNames`).
+  - `BasicNames.CurrentLabel` labels a test's own definition by its current names alone. Defining the old name too
+    would be a second definition of a name a source's `Also:` gives; the rename gate found this in the composed
+    PET source.
   - The standalone PET sources predefine `BasicNames.ScopedNames` in `PetNativeEquatesTests.Assemble` (and no longer
     a second time in the array test), and the GET test includes `MsBasic.VariableInput.asm` for `INPUT_MODE_GET`.
   - The rename gate renames `ReservedWords` (both dispatch tables) and LASTWR: the interpreter files are converted,
     and LASTWR is the only plain label left that both vendors' unconverted files define.
   - `VendorOldNamesResolveOnlyInTheirVendorsBuilds` reads the interpreter files too, and counts a name a shared
-    module gives in one vendor's builds as that vendor's where the other's own files give it (LINCHK).
-  - `BasicSharedFloatAliasesTests` allows BASIC 4's own ON.
+    module gives in one vendor's builds as that vendor's where the other's own files give it. It pins that set to
+    LINCHK.
+  - `BasicSharedFloatAliasesTests` allows BASIC 4's own ON, and checks that it is the overlay's ON, not
+    `Statements::On`.
+  - `BasicInterpreterConversionTests` is new: in each of the eight builds, every old name the fourteen files give
+    that the MACRO-10 overlay defines reaches its value, and every definition reaches the overlay by a name, apart
+    from the new constants, the two `*+5` labels, `PrintTabOrSpace`, whose old names are on its per-build label
+    (I3), and `PrintSpace::CursorRight`, whose CRTSKP the overlay does not define in BASIC 1.
+    Each old name cites its vendor's documents (for Commodore, the BASIC 4 kernal listings too, as the workspace's
+    do), all in the bibliography.
   - `BasicInterpreterRoutineTests` is new (below).
+
+Checked: the full suite, the rename gate, the lint tests and `BasicInterpreterConversionTests`. The suite has
+3,987 passed, none failed and 665 skipped; the skipped tests are the ROM-dump comparisons, which need dumps that
+are not here.
 
 `BasicInterpreterRoutineTests` runs these routines in the enhanced IIe's AppleSoft and PET BASIC 4 and checks
 their `Out:` values:

@@ -62,6 +62,12 @@ internal static partial class BasicNames
     internal static string[] VendorLabelNames { get; } = ["GETRTS", "ON"];
 
     /// <summary>
+    ///  Gets the old names that the two vendors give to neighboring definitions, one step apart: AppleSoft's NTHIS2 is
+    ///  the PET's NTHIS1 (<c>Tokenize::SkipWord</c>), and AppleSoft's NTHIS3 the PET's NTHIS2 (Basic.md, C).
+    /// </summary>
+    internal static string[] ShiftedNames { get; } = ["NTHIS1", "NTHIS2"];
+
+    /// <summary>
     ///  Gets whether a build defines a name as a label of a vendor's own code, in the folder of the vendor's historical
     ///  names but outside them, as it does the <see cref="VendorLabelNames"/>.
     /// </summary>

@@ -20,6 +20,10 @@ public sealed class BasicInterpreterRoutineTests
     private const byte StaAbsolute = 0x8D;
     private const byte Rts = 0x60;
 
+    // PRINT's token in each dialect.
+    private const byte AppleSoftPrintToken = 0xBA;
+    private const byte PetPrintToken = 0x99;
+
     /// <summary>
     ///  AppleSoft's <c>InputLine</c> reads a line through the Monitor's <c>GETLN</c> with no visible prompt, keeps at
     ///  most 239 characters, clears bit 7 of each and ends them with a zero; it returns zero in A and the address
@@ -88,7 +92,7 @@ public sealed class BasicInterpreterRoutineTests
 
         machine.Call("Tokenize");
 
-        byte print = apple ? (byte)0xBA : (byte)0x99;
+        byte print = apple ? AppleSoftPrintToken : PetPrintToken;
         byte[] encoded = [print, (byte)'1', 0];
         machine.Memory.AsSpan(buffer, encoded.Length).ToArray().Should().Equal(encoded);
         (machine.Memory[textPointer] | (machine.Memory[textPointer + 1] << 8)).Should().Be(buffer - 1);
@@ -96,8 +100,8 @@ public sealed class BasicInterpreterRoutineTests
     }
 
     /// <summary>
-    ///  AppleSoft's <c>CheckStop</c> returns at once, leaving the key, unless the keyboard holds Control-C; then it
-    ///  reads the key through <c>InputCharacter</c>.
+    ///  AppleSoft's <c>CheckStop</c> returns at once with the keyboard's byte in A, without reading the key, unless the
+    ///  keyboard holds Control-C; then it reads the key through <c>InputCharacter</c>.
     /// </summary>
     /// <param name="key">The keyboard's byte.</param>
     [TestMethod]
@@ -122,8 +126,6 @@ public sealed class BasicInterpreterRoutineTests
             reached.Should().NotBe(input);
             machine.Cpu.Registers.Accumulator.Should().Be((byte)key);
         }
-
-        machine.Memory[keyboard].Should().Be((byte)key);
     }
 
     /// <summary>

@@ -24,11 +24,12 @@ namespace Retrocore.Tests;
 [TestClass]
 public sealed class BasicSharedAliasConsistencyTests
 {
-    private static readonly string s_inputs = Path.GetFullPath(Path.Join(AppContext.BaseDirectory, "Inputs"));
-    private static readonly string s_apple = Path.Join(s_inputs, "AppleSoft");
-    private static readonly string s_pet = Path.Join(s_inputs, "Pet");
-    private static readonly string s_petBasic = Path.Join(s_pet, "Basic");
-    private static readonly string s_shared = Path.Join(s_inputs, "Microsoft6502Basic");
+    // The sources, from BasicNames.Inputs on each use, so the rename gate can run these tests on its copy.
+    private static string Inputs => Path.GetFullPath(BasicNames.Inputs);
+    private static string Apple => Path.Join(Inputs, "AppleSoft");
+    private static string Pet => Path.Join(Inputs, "Pet");
+    private static string PetBasic => Path.Join(Pet, "Basic");
+    private static string Shared => Path.Join(Inputs, "Microsoft6502Basic");
 
     /// <summary>
     ///  All AppleSoft models and PET revisions include their own aliases, each citing the documents that give it in
@@ -38,18 +39,18 @@ public sealed class BasicSharedAliasConsistencyTests
     [TestMethod]
     public void NativeRootsExposeOnlyTheirDocumentedAliases()
     {
-        string[] appleFiles = AliasFiles(s_apple, "AppleSoft");
-        string[] petFiles = AliasFiles(s_petBasic, "Commodore");
+        string[] appleFiles = AliasFiles(Apple, "AppleSoft");
+        string[] petFiles = AliasFiles(PetBasic, "Commodore");
         List<NativeRoot> roots = [];
         foreach (Apple2Model model in (Apple2Model[])[Apple2Model.IIPlus, Apple2Model.IIe, Apple2Model.IIeEnhanced])
         {
             roots.Add((
                 Name: $"AppleSoft {model}",
                 Apple: true,
-                Directory: s_apple,
+                Directory: Apple,
                 AliasFiles: appleFiles,
                 Keys: ["ASTIL"],
-                Result: SdkModules.AssembleAppleSoft(Path.Join(s_apple, "AppleSoft.asm"), model)));
+                Result: SdkModules.AssembleAppleSoft(Path.Join(Apple, "AppleSoft.asm"), model)));
         }
 
         foreach ((PetModel model, bool original) in ((PetModel, bool)[])
@@ -64,17 +65,17 @@ public sealed class BasicSharedAliasConsistencyTests
             roots.Add((
                 Name: $"PET BASIC {model.BasicVersion()}, original={original}",
                 Apple: false,
-                Directory: s_petBasic,
+                Directory: PetBasic,
                 AliasFiles: petFiles,
                 Keys: BasicAttribution.PetKeys(model, original),
-                Result: PetSdkModules.AssembleBasic(s_pet, model, original, BasicSourceKind.Native)));
+                Result: PetSdkModules.AssembleBasic(Pet, model, original, BasicSourceKind.Native)));
         }
 
         (NativeRoot Root, Alias[] Aliases)[] audits =
             [.. roots.Select(root => (Root: root, Aliases: ReadAliases(root)))];
 
         HashSet<string> sharedSymbols = roots.SelectMany(root => root.Result.SymbolDefinitions)
-            .Where(symbol => IsWithin(symbol.Location?.Path, s_shared))
+            .Where(symbol => IsWithin(symbol.Location?.Path, Shared))
             .Select(symbol => symbol.Name)
             .ToHashSet(StringComparer.Ordinal);
 
@@ -118,7 +119,7 @@ public sealed class BasicSharedAliasConsistencyTests
             HashSet<string> ownNames = aliases.Select(alias => alias.Name).ToHashSet(StringComparer.Ordinal);
             foreach (string name in (root.Apple ? petNames : appleNames).Where(name => !ownNames.Contains(name)))
             {
-                root.Result.Symbols.Should().NotContainKey(name, $"{root.Name} must not expose the other platform's alias");
+                root.Result.HasSymbol(name).Should().BeFalse($"{root.Name} must not expose the other platform's alias");
             }
 
             DocumentationSet docs = Documents(root.Result);
@@ -158,7 +159,7 @@ public sealed class BasicSharedAliasConsistencyTests
             TARGET = $1234
             """;
 
-        DocumentationFile file = DocumentationParser.Parse(source, Path.Join(s_petBasic, "CitationFixture.asm"));
+        DocumentationFile file = DocumentationParser.Parse(source, Path.Join(PetBasic, "CitationFixture.asm"));
         DocumentationComment comment = file.Comments.Single(comment => comment.Name == "ALIAS");
         comment.Remarks.Should().NotBeEmpty("the fixture's citation must be a remark");
 
@@ -213,12 +214,12 @@ public sealed class BasicSharedAliasConsistencyTests
             ;; A shared routine.
             ;;
             ;; {text}
-            TARGET:
+            Target:
                 rts
             """;
 
-        DocumentationFile file = DocumentationParser.Parse(source, Path.Join(s_shared, "AttributionFixture.asm"));
-        DocumentationComment comment = file.Comments.Single(comment => comment.Name == "TARGET");
+        DocumentationFile file = DocumentationParser.Parse(source, Path.Join(Shared, "AttributionFixture.asm"));
+        DocumentationComment comment = file.Comments.Single(comment => comment.Name == "Target");
         comment.Remarks.Should().NotBeEmpty("the fixture's attribution must be a remark");
         BasicAttribution.Has(comment.Remarks, "ALIAS", "AppleSoft").Should().Be(expected);
     }
@@ -231,31 +232,31 @@ public sealed class BasicSharedAliasConsistencyTests
     {
         string source = """
             ;; A platform-only routine.
-            LOCAL:
+            Local:
                 rts
             SCALAR = $1234                  ;; A constant, not a routine.
             """;
 
-        string path = Path.Join(s_petBasic, "VendorOnlyFixture.asm");
+        string path = Path.Join(PetBasic, "VendorOnlyFixture.asm");
         AssemblyResult result = new Retrocore.Assembler.Assembler().Assemble(
             new AssemblySource(source, path), new AssemblyOptions(ProcessorVariant.Mos6502, 0x1000, 0x100));
 
         result.Success.Should().BeTrue();
         DocumentationSet docs = DocumentationSet.Create([DocumentationParser.Parse(source, path)], result);
-        AssemblySymbol local = Symbol(result, "LOCAL", "fixture");
-        DocumentationTopic? topic = docs.FindRoutine("LOCAL");
-        DocumentationComment? active = ActiveComment(result, topic, "LOCAL");
+        AssemblySymbol local = Symbol(result, "Local", "fixture");
+        DocumentationTopic? topic = docs.FindRoutineTopic("Local");
+        DocumentationComment? active = ActiveComment(result, topic, "Local");
         HashSet<string> none = [with(StringComparer.Ordinal)];
-        HashSet<string> present = [with(StringComparer.Ordinal), "LOCAL"];
+        HashSet<string> present = [with(StringComparer.Ordinal), "Local"];
 
-        IsVendorOnly(local, topic, active, s_petBasic, none, none).Should().BeTrue();
-        IsVendorOnly(local, topic, active, s_petBasic, present, none).Should().BeFalse();
-        IsVendorOnly(local, topic, active, s_petBasic, none, present).Should().BeFalse();
-        IsVendorOnly(local, topic, active: null, s_petBasic, none, none).Should().BeFalse();
+        IsVendorOnly(local, topic, active, PetBasic, none, none).Should().BeTrue();
+        IsVendorOnly(local, topic, active, PetBasic, present, none).Should().BeFalse();
+        IsVendorOnly(local, topic, active, PetBasic, none, present).Should().BeFalse();
+        IsVendorOnly(local, topic, active: null, PetBasic, none, none).Should().BeFalse();
 
         AssemblySymbol scalar = Symbol(result, "SCALAR", "fixture");
-        DocumentationTopic? scalarTopic = docs.FindRoutine("SCALAR");
-        IsVendorOnly(scalar, scalarTopic, ActiveComment(result, scalarTopic, "SCALAR"), s_petBasic, none, none)
+        DocumentationTopic? scalarTopic = docs.FindRoutineTopic("SCALAR");
+        IsVendorOnly(scalar, scalarTopic, ActiveComment(result, scalarTopic, "SCALAR"), PetBasic, none, none)
             .Should().BeFalse();
     }
 
@@ -283,7 +284,10 @@ public sealed class BasicSharedAliasConsistencyTests
 
             AssemblyParseResult parsed = Retrocore.Assembler.Assembler.Parse(
                 new AssemblySource(File.ReadAllText(path), path),
-                new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000) { PredefinedSymbols = context });
+                new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
+                {
+                    PredefinedSymbols = BasicNames.WithCurrentNames(context)
+                });
 
             parsed.Success.Should().BeTrue(string.Join(Environment.NewLine, parsed.Diagnostics.Select(diagnostic =>
                 $"{diagnostic.Location?.Path}:{diagnostic.Location?.Line + 1}: {diagnostic.Message}")));
@@ -320,7 +324,7 @@ public sealed class BasicSharedAliasConsistencyTests
         definition.Location?.Line.Should().Be(alias.Line);
         definition.Value.Should().Be(directTarget.Value, $"{alias.Name} must alias {alias.Target}");
 
-        DocumentationTopic aliasTopic = docs.Find(alias.Name)
+        DocumentationTopic aliasTopic = docs.FindTopic(alias.Name)
             ?? throw new AssertFailedException($"{root.Name}: {alias.Name} has no alias documentation.");
 
         aliasTopic.Comments.Any(comment =>
@@ -332,16 +336,17 @@ public sealed class BasicSharedAliasConsistencyTests
         aliasTopic.Value.Should().Be(definition.Value);
         BasicAttribution.AssertCites(aliasTopic, root.Keys);
 
-        string targetName = UltimateTarget(alias, aliases);
-        AssemblySymbol target = Symbol(root.Result, targetName, $"{root.Name}: {alias.Name}'s target");
-        DocumentationTopic? topic = docs.FindRoutine(targetName);
+        // The target by the name it has now, which the alias may give by an old one.
+        AssemblySymbol target = Symbol(root.Result, UltimateTarget(alias, aliases), $"{root.Name}: {alias.Name}'s target");
+        string targetName = target.Name;
+        DocumentationTopic? topic = docs.FindRoutineTopic(targetName);
         DocumentationComment? active = ActiveComment(root.Result, topic, targetName);
         bool shared = sharedSymbols.Contains(targetName)
-            || topic?.Comments.Any(comment => IsWithin(comment.Path, s_shared)) == true;
+            || topic?.Comments.Any(comment => IsWithin(comment.Path, Shared)) == true;
 
         if (shared)
         {
-            if (active is null || !IsWithin(active.Path, s_shared))
+            if (active is null || !IsWithin(active.Path, Shared))
             {
                 throw new AssertFailedException($"{root.Name}: {alias.Name}'s shared target {targetName} has no active shared documentation.");
             }
@@ -371,7 +376,7 @@ public sealed class BasicSharedAliasConsistencyTests
     private static DocumentationComment? ActiveComment(AssemblyResult result, DocumentationTopic? topic, string entry)
     {
         if (topic is null) { return null; }
-        AssemblySymbol? definition = result.SymbolDefinitions.FirstOrDefault(symbol => symbol.Name == topic.Name);
+        AssemblySymbol? definition = result.FindDefinition(topic.Name);
         if (definition?.Location is not { } location) { return null; }
         foreach (DocumentationComment comment in topic.Comments)
         {
@@ -412,7 +417,7 @@ public sealed class BasicSharedAliasConsistencyTests
     }
 
     private static AssemblySymbol Symbol(AssemblyResult result, string name, string context) =>
-        result.SymbolDefinitions.FirstOrDefault(symbol => symbol.Name == name)
+        result.FindDefinition(name)
             ?? throw new AssertFailedException($"{context}: symbol '{name}' is not defined.");
 
     private static bool SameFile(string? left, string right) =>

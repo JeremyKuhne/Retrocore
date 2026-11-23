@@ -685,6 +685,30 @@ Model = 2
 .endif
 ```
 
+The assembly reports the lines it skipped, per file it opened (`AssemblyResult.SkippedLines`, also on a failed
+result and on `AssemblyParseResult`), which the documentation tools and the editor use to know which branch is in
+the build:
+
+- A line is assembled if any pass over it took it, so a file included twice, with a branch taken in one place and
+  not the other, has both branches assembled. A file only a skipped branch includes is never opened and has no
+  lines in the report.
+- A conditional directive's own line goes with the branch around the whole conditional, except that a label on it
+  (`Done: .endif`) is defined only when the branch it closes was taken, and its line goes with the label. Inside a
+  skipped branch, nested conditionals are skipped whole.
+- Each expansion of a macro is a pass over its body, so a body line is assembled where some expansion took it: a
+  branch no expansion took, and the body of a macro never invoked, are skipped. The `.macro` and `.endmacro` lines
+  go with the definition. A `.repeat` body is likewise assembled where an iteration took it, so one repeated no
+  times is skipped.
+- Branches are chosen while the source is expanded, so an error found once code is laid out (an undefined name, a
+  branch out of range) leaves the report whole. After an error found while expanding (a line that doesn't parse
+  counts), every line decided from that error on, or never reached, is undecided rather than skipped. A line
+  skipped before the error stays skipped only in a root source outside a macro's body: the error may have
+  prevented a later inclusion or expansion that would take it. Every line not assembled when expansion stops at
+  its line limit is undecided too.
+- A MACRO-10 source's conditionals are expanded with the rest of its text, so its lines its expander didn't pass on
+  are undecided, and every line of one whose expansion reported an error. A source without preprocessing directives
+  has no conditionals: its lines are assembled but for those that didn't parse, which are undecided.
+
 ## Repeats
 
 `.repeat count[, counter]` ... `.endrepeat` repeats its block. The count must be known at that point, and the

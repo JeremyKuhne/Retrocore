@@ -60,5 +60,10 @@ internal sealed partial class AssemblyPreprocessor
         ///  Gets the opening location.
         /// </summary>
         internal AssemblyLocation Opening { get; } = opening;
+
+        /// <summary>
+        ///  Gets or sets the expansion position of the opening, where an unterminated type's error belongs.
+        /// </summary>
+        internal int Order { get; init; }
     }
 }

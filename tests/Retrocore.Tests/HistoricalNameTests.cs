@@ -349,6 +349,140 @@ public sealed partial class HistoricalNameTests
     }
 
     /// <summary>
+    ///  Topics that are no symbols (a structure, a scope, a macro) documented once per branch follow the branch the
+    ///  assembly took, as labels do: an <c>.ifdef</c> of a macro defined after it is not taken, so its sections are
+    ///  another build's, and an old name only they give is not this build's.
+    /// </summary>
+    [TestMethod]
+    public void TopicsThatAreNoSymbolsFollowTheBranchTheAssemblyTook()
+    {
+        DocumentationSet set = Set("""
+            .ifdef WIDE
+            ;; A screen cell.
+            ;; Keeps: X
+            .struct Cell
+            Left .byte
+            Right .byte
+            .endstruct
+            ;; The screen.
+            ;; Keeps: X
+            .scope Screen
+            .endscope
+            ;; Prints a byte.
+            ;; Also: PRBYTE (TEST)
+            .macro PrintByte
+            .endmacro
+            .else
+            ;; A screen cell.
+            ;; Keeps: Y
+            .struct Cell
+            Only .byte
+            .endstruct
+            ;; The screen.
+            ;; Keeps: Y
+            .scope Screen
+            .endscope
+            ;; Prints a byte.
+            .macro PrintByte
+            .endmacro
+            .endif
+            .macro WIDE
+            .endmacro
+
+            ;; Prints a byte, the routine.
+            ;; Also: PRBYTE (TEST)
+            PrintByteRoutine:
+                rts
+            """);
+
+        foreach (string name in (string[])["Cell", "Screen"])
+        {
+            DocumentationTopic topic = Required(set.Find(name));
+            List<DocumentationSection> keeps = [.. topic.Sections.Where(section => section.Name == "Keeps")];
+            keeps.Should().HaveCount(2, name);
+            keeps.Single(section => set.InBuild(topic, section)).Text.Should().Be("Y", name);
+        }
+
+        set.FindAlso("PRBYTE", thisBuild: true).Should().ContainSingle().Which.Name.Should().Be("PrintByteRoutine");
+    }
+
+    /// <summary>
+    ///  A definition documented once per branch of an <c>.if</c> inside a macro's body follows the branch its
+    ///  expansions took, so an old name only the other branch gives is not this build's.
+    /// </summary>
+    [TestMethod]
+    public void AlsoSectionsInMacroBodiesFollowTheExpansions()
+    {
+        DocumentationSet set = Set("""
+            .macro Entry wide
+            .if wide
+            ;; Starts.
+            ;; Also: OLDSTART (TEST)
+            Start:
+                rts
+            .else
+            ;; Starts.
+            Start:
+                rts
+            .endif
+            .endmacro
+            Entry 0
+
+            ;; Starts, the other way.
+            ;; Also: OLDSTART (TEST)
+            OtherStart:
+                rts
+            """);
+
+        DocumentationTopic start = Required(set.Find("Start"));
+        set.Gives(start, "OLDSTART", thisBuild: true).Should().BeFalse();
+        set.FindAlso("OLDSTART", thisBuild: true).Should().ContainSingle().Which.Name.Should().Be("OtherStart");
+    }
+
+    /// <summary>
+    ///  A file the assembly never opened has nothing in its build: a definition of any kind documented in it under a
+    ///  condition is not this build's, though its condition text would hold, also after an error found once code is
+    ///  laid out. After an error in expansion the assembly may have refused or never reached the file, so the
+    ///  condition decides.
+    /// </summary>
+    [TestMethod]
+    public void SectionsOfFilesTheAssemblyNeverOpenedArentInTheBuild()
+    {
+        string unopened = """
+            .ifndef WIDE
+            ;; A screen cell.
+            ;; Keeps: X
+            .struct Cell
+            Left .byte
+            .endstruct
+            .else
+            ;; A screen cell.
+            ;; Keeps: Y
+            .struct Cell
+            Only .byte
+            .endstruct
+            .endif
+            """;
+
+        foreach ((string program, bool inBuild) in ((string, bool)[])[
+            ("Start:\n    rts\n", false),
+            ("Start:\n    jmp Nowhere\n", false),
+            ("Start:\n    .bogus\n", true),
+            (".if 1\nStart:\n.endif\n    .bogus\n", true)
+        ])
+        {
+            DocumentationSet set = DocumentationSet.Create(
+                [DocumentationParser.Parse(program, "test.asm"), DocumentationParser.Parse(unopened, "unopened.asm")],
+                Assemble(program));
+
+            DocumentationTopic cell = Required(set.Find("Cell"));
+            DocumentationSection keeps = cell.Sections.First(section => section.Name == "Keeps" && section.Text == "X");
+            keeps.Condition.Should().NotBeNull();
+            set.InBuild(cell, keeps).Should().Be(inBuild, program);
+        }
+    }
+
+    /// <summary>
     ///  Another module is assembled for its default build, which says nothing about the build of the source that
     ///  links into it: an old name two of its builds give is ambiguous there, not its default build's.
     /// </summary>

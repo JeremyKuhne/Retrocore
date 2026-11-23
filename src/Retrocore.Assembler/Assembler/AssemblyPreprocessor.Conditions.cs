@@ -26,6 +26,7 @@ internal sealed partial class AssemblyPreprocessor
         {
             bool parent = _conditions.Count == 0 || _conditions[^1].Active;
             bool active = parent && TestCondition(operation, operand, location, dialect);
+            if (parent) { MarkLine(location, assembled: true); }
             _conditions.Add(new(location, parent, active, _visited));
             return true;
         }
@@ -38,6 +39,10 @@ internal sealed partial class AssemblyPreprocessor
         }
 
         Conditional current = _conditions[^1];
+
+        // A closing or continuing directive belongs to the branch around the whole conditional, unless it carries a
+        // label, which is defined only when the branch it closes was taken.
+        if (current.Parent && !_labeledDirective) { MarkLine(location, assembled: true); }
         if (operation == ".ENDIF")
         {
             if (operand.Length != 0) { Error(".endif takes no operand.", location); }

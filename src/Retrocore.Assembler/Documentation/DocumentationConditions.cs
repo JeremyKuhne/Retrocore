@@ -7,6 +7,13 @@ namespace Retrocore.Documentation;
 /// <summary>
 ///  Evaluates the <c>.if</c> conditions documentation sections are written under, from a build's symbols.
 /// </summary>
+/// <remarks>
+///  <para>
+///   This approximates the assembler, which decides each condition in source order. It is the answer only where no
+///   assembly reports which lines it skipped (documentation from a debug file) or the report leaves a line
+///   undecided; see <see cref="DocumentationSet.InBuild"/>.
+///  </para>
+/// </remarks>
 internal static class DocumentationConditions
 {
     /// <summary>

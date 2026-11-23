@@ -79,6 +79,19 @@ public sealed class AssemblyResult
     }
 
     /// <summary>
+    ///  Gets the lines conditional assembly skipped in each file the assembly opened, also when it failed; null for a
+    ///  project not made by parsing.
+    /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   Branches are chosen while sources are expanded, so this is the expansion's report even when assembly
+    ///   failed later; see <see cref="AssemblySkippedLines"/> for what an expansion error leaves undecided. A parsed
+    ///   project whose statements were edited before assembling keeps the report of the source it was parsed from.
+    ///  </para>
+    /// </remarks>
+    public AssemblySkippedLines? SkippedLines { get; internal init; }
+
+    /// <summary>
     ///  Gets whether valid bytes were emitted.
     /// </summary>
     public bool Success => Diagnostics.Count == 0;

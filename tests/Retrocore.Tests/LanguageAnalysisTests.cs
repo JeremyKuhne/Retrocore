@@ -483,6 +483,60 @@ public sealed partial class LanguageAnalysisTests
     }
 
     /// <summary>
+    ///  The editor's documentation follows the branch the assembly took even while the assembly has an error, when
+    ///  the error comes after the branch was chosen: one in expansion, or one found only when code is laid out.
+    /// </summary>
+    [TestMethod]
+    public void DocumentationFollowsTheBranchTheAssemblyTookDespiteALaterError()
+    {
+        string directory = Directory.CreateTempSubdirectory().FullName;
+        try
+        {
+            foreach (string error in (string[])[".bogus", "    jmp Nowhere"])
+            {
+                string main = Path.Join(directory, "main.asm");
+                File.WriteAllText(main, $$"""
+                    .cpu Mos6502
+                    .org $6000
+                    .ifdef WIDE
+                    ;; Scrolls, wide.
+                    ;; Entry:
+                    ;;   Wide = the wide loop
+                    .proc Scroll
+                    Wide:
+                        rts
+                    .endproc
+                    .else
+                    ;; Scrolls, narrow.
+                    ;; Entry:
+                    ;;   Narrow = the narrow loop
+                    .proc Scroll
+                    Narrow:
+                        rts
+                    .endproc
+                    .endif
+                    .macro WIDE
+                    .endmacro
+                    {{error}}
+                    """);
+
+                SourceAnalysis analysis = SourceAnalysis.Assemble(main, _ => null);
+
+                analysis.Result.Success.Should().BeFalse(error);
+                DocumentationSet set = analysis.Documentation;
+                if (set.Find("Scroll") is not { } scroll) { throw new AssertFailedException("Expected Scroll."); }
+                scroll.Sections.Where(section => section.Name == "Entry" && set.InBuild(scroll, section))
+                    .Should().ContainSingle(error)
+                    .Which.Text.Should().Contain("Narrow", error);
+            }
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
     ///  A <c>.define</c> in an included file is found from its uses, with its documentation, even when its name
     ///  is also a mnemonic.
     /// </summary>

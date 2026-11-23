@@ -83,10 +83,17 @@ internal sealed partial class AssemblyPreprocessor
         processor.FinishMacro10();
         if (processor._ca65State is { } ca65)
         {
-            foreach (TypeFrame type in ca65.Types) { processor.Error("Unterminated ca65 type.", type.Opening); }
+            foreach (TypeFrame type in ca65.Types)
+            {
+                processor.Error("Unterminated ca65 type.", type.Opening);
+
+                // The lines after an unclosed type were read as its members, so what was chosen from there is suspect.
+                processor._untrustedFrom = Math.Min(processor._untrustedFrom, type.Order);
+            }
         }
 
         AssemblyProject project = processor._project;
+        project.SkippedLines = processor.SkippedLines();
         if (project.FileMarks is not null) { project.FileMarkStatements = [.. project.Statements]; }
         foreach (AssemblySource source in processor._sources) { project.Sources.Add(source); }
         return new(project, [.. processor._diagnostics.OrderBy(item => item.Order).Select(item => item.Diagnostic)]);
@@ -305,6 +312,7 @@ internal sealed partial class AssemblyPreprocessor
         _sources.Add(source);
         if (dialect == AssemblyDialect.Macro10)
         {
+            OpenOpaqueLines(source);
             ProcessMacro10(source, parent);
             if (identity.Length != 0) { _activeIncludes.Remove(identity); }
             return false;
@@ -318,6 +326,8 @@ internal sealed partial class AssemblyPreprocessor
         {
             lines.Add(new(line, new(source.Path, number++, expandedFrom: parent), dialect));
         }
+
+        OpenLines(source.Path, number, included: parent is not null);
 
         // As in ca65, conditionals are balanced per file: an include cannot close its includer's block.
         int floor = _conditions.Count;
@@ -345,6 +355,10 @@ internal sealed partial class AssemblyPreprocessor
                 _stopped = true;
                 break;
             }
+
+            // A conditional directive's own line counts with the branch around it, which it marks itself.
+            MarkLine(original.Location, _conditions.Count == 0 || _conditions[^1].Active);
+            _labeledDirective = false;
 
             ReadOnlyMemory<char> text = original.Dialect == AssemblyDialect.Merlin
                 ? original.Text
@@ -461,8 +475,11 @@ internal sealed partial class AssemblyPreprocessor
             if (directive == ".MACRO")
             {
                 IReadOnlyList<Line>? body = Capture(lines, ref index, ".MACRO", ".ENDMACRO", original.Location);
+
+                // The body's lines are marked by the expansions that take them; the closing line is the definition's.
                 if (body is not null)
                 {
+                    MarkLine(lines[index].Location, assembled: true);
                     DefineMacro(operand, body, original.Location, substitutions, frame);
                     if (original.Dialect == AssemblyDialect.Merlin)
                     {
@@ -488,10 +505,11 @@ internal sealed partial class AssemblyPreprocessor
             if (directive == ".REPEAT")
             {
                 IReadOnlyList<Line>? body = Capture(lines, ref index, ".REPEAT", ".ENDREPEAT", original.Location);
-                if (body is not null && Repeat(original, body, substitutions, includeDepth, macroDepth, frame))
-                {
-                    return true;
-                }
+
+                // The body's lines are marked by the iterations that take them; the closing line is the block's.
+                if (body is null) { continue; }
+                MarkLine(lines[index].Location, assembled: true);
+                if (Repeat(original, body, substitutions, includeDepth, macroDepth, frame)) { return true; }
 
                 continue;
             }
@@ -603,6 +621,9 @@ internal sealed partial class AssemblyPreprocessor
 
         bool active = _conditions.Count == 0 || _conditions[^1].Active;
         if (active) { Emit(original, label is ":" ? ":" : $"{label}:"); }
+
+        // The line is assembled as its label is, not as the conditional directive after it would be.
+        _labeledDirective = true;
         text = WithoutLabel(text);
         original = new(WithoutLabel(original.Text), original.Location, original.Dialect);
     }

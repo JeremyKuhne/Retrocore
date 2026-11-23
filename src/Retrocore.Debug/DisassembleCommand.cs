@@ -144,7 +144,7 @@ internal static partial class DisassembleCommand
             string name = symbol.Name;
             if (name.Contains("::", StringComparison.Ordinal))
             {
-                name = $"{StandIn}{name.Replace("::", "__", StringComparison.Ordinal)}";
+                name = $"{StandIn}{scoped.Count}";
                 scoped[name] = symbol.Name;
             }
 
@@ -190,7 +190,8 @@ internal static partial class DisassembleCommand
             .Where(names.ContainsKey)];
 
     // The exported source under a heading, its equates grouped by the file that names them. A scoped name's
-    // stand-in becomes its qualified name in the code, and its equate is defined inside its scopes.
+    // stand-in becomes its qualified name in the code, and its equate is defined inside its scopes, each scope opened
+    // once in a group and continued in a later one.
     private static string Arrange(
         string exported,
         string heading,
@@ -209,6 +210,7 @@ internal static partial class DisassembleCommand
             equates.Add((name, line[(equals + 3)..], group));
         }
 
+        HashSet<string> opened = [with(StringComparer.Ordinal)];
         using ValueStringBuilder source = new(exported.Length + 1024, CultureInfo.InvariantCulture);
         foreach (string line in heading.Split('\n')) { source.Append($"; {line}\n"); }
         source.Append($"\n{lines[0]}\n");
@@ -224,19 +226,34 @@ internal static partial class DisassembleCommand
                 string file => $"\n; From {file}.\n"
             });
 
-            foreach ((string name, string value, _) in group.OrderBy(equate => equate.Value, StringComparer.Ordinal))
+            foreach ((string name, string value, _) in group
+                .Where(equate => !scoped.ContainsKey(equate.Name))
+                .OrderBy(equate => equate.Value, StringComparer.Ordinal))
             {
-                if (!scoped.TryGetValue(name, out string? qualified))
+                source.Append($"{name} = {value}\n");
+            }
+
+            // The scoped names, in order of their names, so that a scope's names are together.
+            List<string> open = [];
+            foreach ((string qualified, string value) in group
+                .Where(equate => scoped.ContainsKey(equate.Name))
+                .Select(equate => (scoped[equate.Name], equate.Value))
+                .OrderBy(equate => equate.Item1, StringComparer.Ordinal))
+            {
+                string[] parts = qualified.Split("::");
+                int common = 0;
+                while (common < open.Count && common < parts.Length - 1 && open[common] == parts[common]) { common++; }
+                for (; open.Count > common; open.RemoveAt(open.Count - 1)) { source.Append(".endscope\n"); }
+                for (; open.Count < parts.Length - 1; open.Add(parts[open.Count]))
                 {
-                    source.Append($"{name} = {value}\n");
-                    continue;
+                    string path = string.Join("::", parts[..(open.Count + 1)]);
+                    source.Append(opened.Add(path) ? $".scope {parts[open.Count]}\n" : $".scope {parts[open.Count]} continued\n");
                 }
 
-                string[] parts = qualified.Split("::");
-                foreach (string scope in parts[..^1]) { source.Append($".scope {scope}\n"); }
                 source.Append($"{parts[^1]} = {value}\n");
-                for (int depth = 1; depth < parts.Length; depth++) { source.Append(".endscope\n"); }
             }
+
+            for (; open.Count > 0; open.RemoveAt(open.Count - 1)) { source.Append(".endscope\n"); }
         }
 
         source.Append('\n');
@@ -336,6 +353,6 @@ internal static partial class DisassembleCommand
     }
 
     // A scoped name's stand-in in the exported source.
-    [GeneratedRegex(@"\bScoped__[A-Za-z0-9_]+\b")]
+    [GeneratedRegex(@"\bScoped__[0-9]+\b")]
     private static partial Regex StandInName();
 }

@@ -87,13 +87,19 @@ public sealed class DisassembleCommandTests
 
     /// <summary>
     ///  A Monitor routine in a family scope keeps its qualified name: the source calls it by that name and defines
-    ///  it inside the scope, and assembles back to the program's bytes.
+    ///  it inside its scopes, each opened once, and assembles back to the program's bytes. A page-zero byte the
+    ///  Monitor shares takes its shared name, not the name one routine gives it.
     /// </summary>
     [TestMethod]
     public void DisassemblyNamesScopedRoutines()
     {
-        // $0800 JSR $F800 (LowRes::Plot); JSR $F88E (Disassembler::Decode::Opcode); JSR $FDED (CharacterOut); RTS
-        byte[] program = [0x20, 0x00, 0xF8, 0x20, 0x8E, 0xF8, 0x20, 0xED, 0xFD, 0x60];
+        // $0800 JSR $F800 (LowRes::Plot); JSR $F832 (LowRes::Clear); JSR $F88C (Disassembler::Decode);
+        // JSR $F88E (Disassembler::Decode::Opcode); JSR $FDED (CharacterOut); LDA $2E; RTS
+        byte[] program =
+        [
+            0x20, 0x00, 0xF8, 0x20, 0x32, 0xF8, 0x20, 0x8C, 0xF8, 0x20, 0x8E, 0xF8, 0x20, 0xED, 0xFD, 0xA5, 0x2E, 0x60
+        ];
+
         string directory = Directory.CreateTempSubdirectory("retrocore-disassemble-").FullName;
         try
         {
@@ -103,9 +109,23 @@ public sealed class DisassembleCommandTests
 
             DisassembleCommand.Run([input, output, "--origin", "$0800", "--sdk-roms", s_inputs]).Should().Be(0);
             string source = File.ReadAllText(output);
-            source.Should().Contain("JSR LowRes::Plot").And.Contain("JSR Disassembler::Decode::Opcode").And.Contain("JSR CharacterOut");
-            source.Should().Contain(".scope LowRes\nPlot = $F800\n.endscope");
-            source.Should().Contain(".scope Disassembler\n.scope Decode\nOpcode = $F88E\n.endscope\n.endscope");
+            source.Should().Contain("JSR LowRes::Plot").And.Contain("JSR LowRes::Clear").And.Contain("JSR CharacterOut");
+            source.Should().Contain("JSR Disassembler::Decode\n").And.Contain("JSR Disassembler::Decode::Opcode");
+            source.Should().Contain("""
+                .scope Disassembler
+                Decode = $F88C
+                .scope Decode
+                Opcode = $F88E
+                .endscope
+                .endscope
+                .scope LowRes
+                Clear = $F832
+                Plot = $F800
+                .endscope
+                """.ReplaceLineEndings("\n"));
+
+            string load = source.Split('\n').Single(line => line.Contains("LDA", StringComparison.Ordinal));
+            load.Should().NotContain("$2E").And.NotContain("::");
         }
         finally
         {

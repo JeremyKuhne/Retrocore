@@ -17,10 +17,11 @@ namespace Retrocore.Debug;
 ///   Each source is assembled as the debugger assembles it for the model, so each name has the address it has on
 ///   that machine; DOS's are where it runs in 48K or more. Where several names share an address, the Monitor's and
 ///   the hardware equates' come first, then the firmware's, BASIC's and DOS's; within a source a label comes before
-///   an equate, a name in fewer scopes before one in more (a routine before its inner labels), and an earlier
-///   definition before a later one. A name in a scope keeps its qualified name, such as <c>LowRes::Plot</c>. A routine's inner labels (<c>ROUTINE_1</c>) are left
-///   out, and page zero takes only the Monitor's and the hardware's names, as programs reuse BASIC's and DOS's
-///   page-zero storage for their own.
+///   an equate, and an earlier definition before a later one. A name in a scope keeps its qualified name, such as
+///   <c>LowRes::Plot</c>. A routine's inner labels (<c>ROUTINE_1</c>) are left out, and page zero takes only the
+///   Monitor's and the hardware's names, as programs reuse BASIC's and DOS's page-zero storage for their own. In page
+///   zero a name in a scope, which is the name one routine gives a shared byte, comes after every other name, so a
+///   program's use of the byte takes its shared name (<c>MASK</c>, not <c>Disassembler::FormatBits</c>).
 ///  </para>
 /// </remarks>
 internal static partial class MachineSymbols
@@ -95,9 +96,9 @@ internal static partial class MachineSymbols
 
         HashSet<string> taken = [with(StringComparer.Ordinal)];
         foreach (var candidate in candidates
-            .OrderBy(candidate => candidate.Rank)
+            .OrderBy(candidate => candidate.Address < 0x100 && candidate.Name.Contains("::", StringComparison.Ordinal))
+            .ThenBy(candidate => candidate.Rank)
             .ThenBy(candidate => candidate.Constant)
-            .ThenBy(candidate => candidate.Name.AsSpan().Count("::"))
             .ThenBy(candidate => candidate.Order))
         {
             if (names.ContainsKey(candidate.Address) || !taken.Add(candidate.Name)) { continue; }

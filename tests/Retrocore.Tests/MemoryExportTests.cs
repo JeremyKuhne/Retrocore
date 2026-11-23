@@ -47,14 +47,14 @@ public sealed class MemoryExportTests
     [TestMethod]
     public void ExportLeavesPageZeroToPlainNames()
     {
-        // $0800 STA $2E; STA $2C; STA $3A (PCL); RTS
+        // $0800 STA $2E; STA $2C; STA $3A (ProgramCounter); RTS
         byte[] program = [0x85, 0x2E, 0x85, 0x2C, 0x85, 0x3A, 0x60];
 
         JsonObject export = Export(program, 0x0800, []);
 
         export.Bool("exact").Should().BeTrue();
         string source = export.String("source") ?? throw new AssertFailedException("The export has no source.");
-        source.Should().Contain("STA PCL").And.NotContain("::").And.NotContain(".scope");
+        source.Should().Contain("STA ProgramCounter").And.NotContain("::").And.NotContain(".scope");
         Reassembles(source, program);
     }
 

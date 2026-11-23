@@ -430,11 +430,11 @@ try {
     // only compares with, as CMP #CR does.
     at = "naming RAM by the Monitor's equates";
     const named = new Map((await request("retro/memory/labels", { memoryReference: "0x0000" })).labels.map(label => [label.address, label.name]));
-    assert.equal(named.get(0x24), "CH");
+    assert.equal(named.get(0x24), "CursorColumn");
     // The program's own constants name an address before the SDK's: its ROW, not the SDK's CV.
     assert.equal(named.get(0x25), "ROW");
-    assert.equal(named.get(0x28), "BASL");
-    assert.equal(named.get(0xC000), "KBD");
+    assert.equal(named.get(0x28), "TextBase");
+    assert.equal(named.get(0xC000), "Keyboard");
     // $0D is the firmware's RamTest::R6H, which it stores to, but never CR, which is only compared with.
     assert.notEqual(named.get(0x0D), "CR");
 
@@ -444,7 +444,7 @@ try {
     const listing = async (address, count, starts) => (await request("retro/memory/listing", { memoryReference: "0x0000", address, count, starts })).lines;
     let lines = await listing(0x0301, 40);
     assert.equal(lines[0].address, 0x0300, "the statement around $0301 starts at $0300");
-    assert.deepEqual([lines[0].text, lines[0].kind, lines[0].label, lines[0].line], ["LDA LCBANK2", "code", "BANK2", program.indexOf("BANK2:") + 2]);
+    assert.deepEqual([lines[0].text, lines[0].kind, lines[0].label, lines[0].line], ["LDA LanguageCardBank2ReadWrite", "code", "BANK2", program.indexOf("BANK2:") + 2]);
     assert.equal(lines[0].path, switching);
     assert.equal(lines[0].target, 0xC083, "the CPU's view goes to the soft switch");
     // A view of main RAM has no soft switches, so the operand goes nowhere from it.
@@ -633,7 +633,7 @@ try {
     assert.equal((await inspect(0x0478)).detail, "screen hole");
     assert.deepEqual([(await inspect(0x2D2D)).region, (await inspect(0x2D2D)).detail], ["Hi-res page 1", "line 83, byte 5 (dots 35-41)"]);
     inspected = await inspect(0x0024);
-    assert.deepEqual([inspected.region, inspected.label, inspected.offset], ["Zero page", "CH", 0]);
+    assert.deepEqual([inspected.region, inspected.label, inspected.offset], ["Zero page", "CursorColumn", 0]);
     assert.ok(inspected.summary?.length > 0, JSON.stringify(inspected));
     assert.match(inspected.mapped, /^Reads and writes /);
     inspected = await inspect(0x0301);
@@ -648,7 +648,7 @@ try {
     // inside one, nor in I/O or a table.
     at = "the instruction at the cursor";
     assert.deepEqual((await inspect(0x0300)).instruction,
-        { text: "LDA LCBANK2", size: 3, cycles: 4, cyclesTaken: null, flags: "N Z", summary: "Loads A from memory." });
+        { text: "LDA LanguageCardBank2ReadWrite", size: 3, cycles: 4, cyclesTaken: null, flags: "N Z", summary: "Loads A from memory." });
     assert.equal((await inspect(0x0317)).instruction.cycles, 3);
     for (const address of [0x0301, 0xC000, 0x0024, 0x031A]) {
         assert.equal((await inspect(address)).instruction, null, "no instruction at $" + address.toString(16));
@@ -696,7 +696,7 @@ try {
         { address: 0x0314, text: "STA $D000", label: "FROZEN+9", kind: "writes" }
     ]]);
     assert.deepEqual((await inspect(0x0317)).references, [{ address: 0x0317, text: "JMP SWITCHED", label: "SWITCHED", kind: "jumps" }]);
-    assert.ok((await inspect(0xC013)).references.some(reference => reference.text === "LDA RDRAMRD" && reference.kind === "reads"));
+    assert.ok((await inspect(0xC013)).references.some(reference => reference.text === "LDA AuxReadState" && reference.kind === "reads"));
     // A soft switch's bits, from what its documentation says of them.
     at = "named bits";
     assert.deepEqual((await inspect(0xC013)).bits, [{ bit: 7, name: null, meaning: "whether RAMRD is on" }]);
@@ -707,7 +707,7 @@ try {
     at = "assembling a line";
     const assemble = line => request("retro/memory/assemble", { memoryReference: "0x0000", address: 0x6560, line });
     const unassembled = (await read("0x6560", 3)).bytes;
-    assert.deepEqual(await assemble("LDA KBD"), { bytes: [0xAD, 0x00, 0xC0], text: "LDA KBD", nop: [0xEA] });
+    assert.deepEqual(await assemble("LDA KBD"), { bytes: [0xAD, 0x00, 0xC0], text: "LDA Keyboard", nop: [0xEA] });
     assert.deepEqual((await assemble("STA CH")).bytes, [0x85, 0x24], "a zero-page label assembles to zero page");
     assert.deepEqual((await assemble("JSR COUT")).bytes, [0x20, 0xED, 0xFD]);
     assert.deepEqual((await assemble("LDA BANK2,X")).bytes, [0xBD, 0x00, 0x03]);
@@ -743,9 +743,9 @@ try {
     const labelled = new Map((await request("retro/memory/labels", { memoryReference: "0x0000" })).labels.map(label => [label.name, label]));
     assert.deepEqual([labelled.get("TABLE").kind, labelled.get("TABLE").size], ["data", 11], JSON.stringify(labelled.get("TABLE")));
     assert.deepEqual([labelled.get("BANK2").kind, labelled.get("BANK2").size], ["code", null]);
-    assert.equal(labelled.get("CH").kind, "constant", JSON.stringify(labelled.get("CH")));
+    assert.equal(labelled.get("CursorColumn").kind, "constant", JSON.stringify(labelled.get("CursorColumn")));
     // A constant names main RAM's byte, which the CPU reads, not auxiliary RAM's at the same address.
-    assert.equal(labelled.get("BRKV")?.address, 0x03F0);
+    assert.equal(labelled.get("BreakVector")?.address, 0x03F0);
     const auxNames = (await request("retro/memory/labels", { memoryReference: "aux:0x0000" })).labels;
     assert.equal(auxNames.find(label => label.address === 0x03F0), undefined, JSON.stringify(auxNames.filter(label => label.address < 0x0400)));
     // Saving as assembly: the program as native source that assembles back to its bytes, by the session's labels.

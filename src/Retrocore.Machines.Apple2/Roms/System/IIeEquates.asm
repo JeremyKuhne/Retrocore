@@ -341,7 +341,8 @@ Address5 = $44
 
 ;; The high byte of the Monitor's fifth address at <Address5>, the same byte as <SavedA>.
 ;;
-;; The Monitor uses the byte only as the saved accumulator, <SavedA>.
+;; The Monitor saves the accumulator here, as <SavedA>, and its < command copies a destination's high byte here
+;; (<Monitor:Commands::Destination::Copy>).
 ;; See: <Address5>, <SavedA>
 ;; Also: A5H (A2RM78, A2RM79, IIEROM82, IIETRM85)
 Address5High = $45
@@ -849,8 +850,7 @@ HiResOn = $C057
 ;; The annunciators are four outputs on the game I/O connector; each has an off address and an on address, the next
 ;; one up, and none can be read back. <Monitor:Startup::Reset> turns annunciators 0 and 1 off.
 ;;
-;; Apple's listings call this address SETAN0 and the next one, <Annunciator0On>, CLRAN0. This file used to give
-;; CLRAN0 to this address, the other way round.
+;; Apple's listings call this address SETAN0 and the next one, <Annunciator0On>, CLRAN0.
 ;; See: <Annunciator0On>, <Annunciator1Off>, <Monitor:Startup::Reset>
 ;; Also: SETAN0 (A2RM79, IIEROM82, IIETRM85)
 Annunciator0Off = $C058
@@ -864,8 +864,7 @@ Annunciator0On = $C059
 ;; Reading or writing it turns annunciator 1 off.
 ;;
 ;; <Annunciator1On>, the next address, turns it on. <Monitor:Startup::Reset> turns it off along with annunciator 0.
-;; Apple's listings call this address SETAN1 and the next one CLRAN1; as with <Annunciator0Off>, this file had
-;; CLRAN1 here, the other way round.
+;; Apple's listings call this address SETAN1 and the next one CLRAN1.
 ;; See: <Annunciator1On>, <Annunciator0Off>, <Monitor:Startup::Reset>
 ;; Also: SETAN1 (A2RM79, IIEROM82, IIETRM85)
 Annunciator1Off = $C05A

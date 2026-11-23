@@ -183,11 +183,11 @@ Done:
     bpl StoreAndAdvance
 
     ; The control characters.
-    cmp #KEY_CR
+    cmp #KEY_RETURN
     beq CarriageReturn
-    cmp #KEY_LF
+    cmp #KEY_LINE_FEED
     beq LineFeed
-    cmp #KEY_BS
+    cmp #KEY_BACKSPACE
     bne RingBell
     ; Falls into Backspace.
 .endproc
@@ -247,7 +247,7 @@ Done:
 ;; Also: VTABZ (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc SetLineBase
 .assert * = $FC24, "SetLineBase must stay at $FC24."
-    ; The firmware takes the line in BASL and the caller's Y in A.
+    ; The firmware takes the line in TextBase and the caller's Y in A.
     sta TextBase
     tya
     ldy #FIRMWARE_LINE_BASE
@@ -685,7 +685,7 @@ ClearBottom:
 .assert * = $FC9E, "ClearLineFrom must stay at $FC9E."
     clc
 
-    ; The firmware takes the column from BAS2L. ClearToEndOfLine (the carry set) is the function before.
+    ; The firmware takes the column from ScrollBase. ClearToEndOfLine (the carry set) is the function before.
     sty ScrollBase
     ldy #FIRMWARE_CLEAR_TO_END_OF_LINE
     bcs KeyboardIn::ToFirmware

@@ -51,7 +51,7 @@ FIRMWARE_CHARACTER_UNDER_CURSOR = $0F
 .assert * = $FD47, "LineInput::Echo must stay at $FD47."
     jsr CharacterOut
 
-    ; In place of the other builds' INVFLG save and restore.
+    ; In place of the other builds' InverseMask save and restore.
     nop
     nop
     nop
@@ -74,9 +74,9 @@ FIRMWARE_CHARACTER_UNDER_CURSOR = $0F
 
     ; The editing keys.
     lda InputBuffer,x
-    cmp #KEY_BS
+    cmp #KEY_BACKSPACE
     beq GetLine::TakeBack
-    cmp #KEY_CTRL_X
+    cmp #KEY_CONTROL_X
     beq Cancel
 
     ; The bell from INPUT_WARNING on.
@@ -150,7 +150,7 @@ TakeBack:
 ;; Also: NXTCHAR (A2RM78, A2RM79, IIEROM82, IIETRM85)
 NextCharacter:
     jsr ReadCharacter
-    cmp #KEY_RIGHT
+    cmp #KEY_RIGHT_ARROW
 .if ENHANCED
     bne Store
     lda (TextBase),y
@@ -178,7 +178,7 @@ Uppercase:
 ;; Also: ADDINP (A2RM78, A2RM79, IIEROM82, IIETRM85)
 Store:
     sta InputBuffer,x
-    cmp #KEY_CR
+    cmp #KEY_RETURN
     bne LineInput::Echo
     ; Falls into ClearAndPrintReturn.
 .endproc
@@ -199,7 +199,7 @@ Store:
 ;; Also: CROUT (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc PrintReturn
 .assert * = $FD8E, "PrintReturn must stay at $FD8E."
-    lda #KEY_CR
+    lda #KEY_RETURN
     bne CharacterOut
 .endproc
 

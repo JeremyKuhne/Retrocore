@@ -344,7 +344,7 @@ AddLength:
 ;; to its target (<Stepper::SimulateJmp>).
 ;; Also: XJSR (A2RM78, A2RM79)
 .proc SimulateJsr
-    ; PC + LENGTH, the JSR's last byte, high byte first.
+    ; PC + OperandLength, the JSR's last byte, high byte first.
     clc
     jsr NextInstruction::AddLength
     tax
@@ -439,7 +439,7 @@ SetPcLow:
     jsr SetKeyboard
 
 ;; Turns annunciators 0 and 1 off, then resets the firmware's state or, on the Autostart Monitor, turns
-;; annunciators 2 and 3 off too.
+;; annunciators 2 and 3 on.
 ;; Also: INITAN (A2RM79, IIEROM82, IIETRM85)
 Annunciators:
     lda Annunciator0Off
@@ -513,7 +513,7 @@ CopyVector:
     dex
     bne CopyVector
 
-    ; LOC0/LOC1 points above slot 7's ROM.
+    ; SlotPointer points above slot 7's ROM.
     lda #SLOT_ROM_PAGE + LAST_SLOT + 1
     stx SlotPointer
     sta LOC1

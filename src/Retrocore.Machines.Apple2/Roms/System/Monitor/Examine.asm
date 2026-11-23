@@ -307,7 +307,7 @@ Done:
 ;;   FromA = sets <CommandMode> to A
 ;; Also: SETMODE (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc SetMode
-    ; The command character is the one before IN,YSAV.
+    ; The command character is the one before InputBuffer,CommandPosition.
     ldy CommandPosition
     lda InputBuffer - 1,y
 
@@ -327,7 +327,7 @@ FromA:
     ; Both bytes.
     ldx #1
 
-;; Copies X + 1 bytes of A2 to A4 and A5.
+;; Copies X + 1 bytes of <Address2> to <Address4> and <Address5>.
 ;; In: X = the index of the last byte, 1 for both
 ;; Out: X = $FF
 ;; Also: LT2 (A2RM78, A2RM79, IIEROM82, IIETRM85)

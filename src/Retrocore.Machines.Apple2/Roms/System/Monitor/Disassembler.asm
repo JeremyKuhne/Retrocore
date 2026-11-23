@@ -163,7 +163,7 @@ Format:
     lda OperandFormats,x
     sta FormatBits
 .if ENHANCED
-    ; The firmware takes the format in X and the opcode in BAS2L.
+    ; The firmware takes the format in X and the opcode in ScrollBase.
     tax
     sty ScrollBase
     ldy #FIRMWARE_DECODE

@@ -70,7 +70,7 @@ Next:
     sta ProgramCounter
     tya
 
-    ; Then plus LENGTH + 1 in SetPcHigh.
+    ; Then plus OperandLength + 1 in SetPcHigh.
     sec
     bcs SimulateRts::SetPcHigh
 .endproc
@@ -110,7 +110,7 @@ PowerUpVectors:
     .word ShowBreak
     .word BasicColdStart
     .byte >BasicColdStart ^ SOFT_ENTRY_CHECK
-.assert * - PowerUpVectors = POWER_UP_VECTOR_BYTES, "BRKV, SOFTEV and PWREDUP."
+.assert * - PowerUpVectors = POWER_UP_VECTOR_BYTES, "BreakVector, SoftEntryVector and SoftEntryCheck."
 
 ;; The disk controller signature <Startup::PowerUp> compares at $Cn01, $Cn03, $Cn05 and $Cn07: every other byte.
 ;;

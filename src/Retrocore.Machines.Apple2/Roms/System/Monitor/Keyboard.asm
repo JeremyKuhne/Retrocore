@@ -224,7 +224,7 @@ Check:
     jsr ReadKey
 .endif
     ; ESC: the compare, equal, leaves the carry set, as Escape::Command needs.
-    cmp #KEY_ESC
+    cmp #KEY_ESCAPE
     beq Escape::Sequence
     rts
 .endproc

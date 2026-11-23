@@ -315,11 +315,11 @@ Loop:
 .assert * = $FB78, "ScreenOutPausing must stay at $FB78."
 
     ; Only a carriage return with Control-S waiting pauses.
-    cmp #KEY_CR
+    cmp #KEY_RETURN
     bne Print
     ldy Keyboard
     bpl Print
-    cpy #KEY_CTRL_S
+    cpy #KEY_CONTROL_S
     bne Print
     bit KeyboardStrobe
 
@@ -330,7 +330,7 @@ WaitForKey:
 .assert * = $FB88, "WaitForKey must stay at $FB88."
     ldy Keyboard
     bpl WaitForKey
-    cpy #KEY_CTRL_C
+    cpy #KEY_CONTROL_C
     beq Print
     bit KeyboardStrobe
 
@@ -419,7 +419,7 @@ ModelId:
     sei
 .endif
 
-    ; RDCXROM's bit 7 into the pushed status, then internal ROM.
+    ; InternalCxRomState's bit 7 into the pushed status, then internal ROM.
     bit InternalCxRomState
     php
     sta InternalCxRomOn

@@ -154,7 +154,7 @@ Store:
 ;; In: Address2 = the slot
 ;; Also: INPRT (A2RM78, A2RM79, IIEROM82, IIETRM85)
 FromA2:
-    ldx #KSWL
+    ldx #InputHook
     ldy #<KeyboardIn
     bne SetHook
 .endproc
@@ -184,7 +184,7 @@ FromA2:
 ;; In: Address2 = the slot
 ;; Also: OUTPRT (A2RM78, A2RM79, IIEROM82, IIETRM85)
 FromA2:
-    ldx #CSWL
+    ldx #OutputHook
     ldy #<ScreenOut
     ; Falls into SetHook.
 .endproc
@@ -581,7 +581,7 @@ TitleEnhanced:
     ; The next character's 8 bits, unless it is a carriage return, which starts the number again.
     lda InputBuffer,y
     ldx #7
-    cmp #KEY_CR
+    cmp #KEY_RETURN
     beq ReadHexNumber
     iny
     bne ShiftDigit::NextBit

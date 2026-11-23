@@ -26,7 +26,7 @@ FIRMWARE_SET_WINDOW = $0C
 FIRMWARE_SET_WINDOW = $08
 .endif
 
-;; Sets text mode with a full window, and the lo-res and page-one switches for later graphics; clears STATUS.
+;; Sets text mode with a full window, and the lo-res and page-one switches for later graphics; clears SavedStatus.
 ;;
 ;; At $FB2F.
 ;; Out: SavedStatus = 0
@@ -64,10 +64,10 @@ FIRMWARE_SET_WINDOW = $08
     ; Falls into SetWindow.
 .endproc
 
-;; Sets the text window from line A down: WNDTOP = A, WNDLFT = 0, and the width and bottom for the current
+;; Sets the text window from line A down: WindowTop = A, WindowLeft = 0, and the width and bottom for the current
 ;; display, through the internal firmware, which also moves the cursor to the bottom line.
 ;;
-;; At $FB4B. The Apple II's Monitors set the 40-column width here themselves, then WNDBTM = 24, and move the
+;; At $FB4B. The Apple II's Monitors set the 40-column width here themselves, then WindowBottom = 24, and move the
 ;; cursor to the bottom line (<VerticalTabTo>).
 ;; In: A = the window's top line
 ;; Out: WindowTop = A, WindowLeft = 0, WindowWidth = the display's width, WindowBottom = 24, CV = the bottom line

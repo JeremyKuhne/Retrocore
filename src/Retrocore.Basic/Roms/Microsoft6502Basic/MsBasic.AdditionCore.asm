@@ -113,11 +113,11 @@ ArgSmaller:
     ldy #$00
     sty FacExtension
 
-;; A shift of eight bits or more goes to <Float::ShiftAndAdd>; a shorter one shifts the operand at X through
-;; <Float::ShiftRight::ShiftLow>.
+;; A shift of 8 to 135 bits goes to <Float::ShiftAndAdd>; any other shifts the operand at X bit by bit through
+;; <Float::ShiftRight::ShiftLow>, since the test of the negative count is signed.
 ;; Also: FADD1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 Align:
-    cmp #$F9                        ; a shift of eight or more starts with whole bytes
+    cmp #$F9                        ; a shift of 8 to 135 bits starts with whole bytes
     bmi ShiftAndAdd
     tay
     lda FacExtension

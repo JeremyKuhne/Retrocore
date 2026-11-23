@@ -83,7 +83,8 @@ Billion:
 .endmacro
 
 ;; Emits the decimal digit table and, optionally, the time-conversion table.
-;; Parameters: defineZero = 1 to define <ZeroValue> within <Float::Half>, 0 when <ZeroValue> is defined elsewhere
+;; Parameters: defineZero = 1 to put the top-level label <ZeroValue> on the last three bytes of <Float::Half>, 0 when
+;;   it is defined elsewhere
 ;;   includeTime = 1 to include the time-conversion table, 0 to omit it
 .macro OutputTables defineZero, includeTime
 

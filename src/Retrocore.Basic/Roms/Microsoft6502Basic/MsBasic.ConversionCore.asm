@@ -209,13 +209,14 @@ Shift:
 Done:
     rts
 
-;; Fewer than eight bits: puts <FacSign>'s bit back in the top byte and shifts through <Float::ShiftRight::ShiftLow>.
+;; Fewer than eight bits: shifts the top byte right one place, filling bit 7 from <FacSign> (sign extension), then
+;; rotates the displaced bit through the lower bytes with <Float::ShiftRight::ShiftLow>.
 ;; Also: QINT1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 ShortShift:
     tay
     lda FacSign
     and #$80
-    lsr FacMantissa1                       ; restore the sign bit before shifting the remaining bytes
+    lsr FacMantissa1                       ; the first one-bit shift, the sign extended into bit 7
     ora FacMantissa1
     sta FacMantissa1
     jsr ShiftRight::ShiftLow

@@ -67,7 +67,8 @@ ToPrintString:
 
     ;; Uses the caller's Y to select the initial output position.
     ;; Entry:
-    ;;   ExtractDigits = With Y at a power of ten: sets X's bit 7 for the first pass and extracts digits
+    ;;   ExtractDigits = With Y at a power of ten: sets X's bit 7 for the first pass and extracts digits; the PET's TI$
+    ;;     conversion enters here with Y at a time divisor
     ;; Also: FOUTC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc FormatFacAtOffset
     .if omitPositiveSpace
@@ -77,7 +78,7 @@ ToPrintString:
         bpl SignDone
         iny
 
-;; Stores the sign character (space or minus, by build).
+;; Stores the minus sign; a positive number skips this store, since this build omits the leading space.
 ;; Also: FOUT1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 StoreSign:
         sta NumberBuffer-1,y
@@ -90,7 +91,7 @@ SignDone:
         bpl StoreSign
         lda #'-'
 
-;; Stores the sign character (space or minus, by build).
+;; Stores the sign character, a space or a minus.
 ;; Also: FOUT1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 StoreSign:
         sta NumberBuffer-1,y
@@ -174,8 +175,9 @@ ConvertInteger:
     tax
     lda #$02
 
-;; Sets carry for the subtraction that follows: branched to outside the fixed-point range, or fallen into with
-;; A = 2, which makes the printed exponent zero (fixed point).
+;; Sets carry for the subtraction that follows: branched to for a value below .01, or fallen into with A = 2, which
+;; makes the printed exponent zero (fixed point). A large value goes on to <Float::FormatFacAtOffset::SetExponent> with
+;; carry already set.
 ;; Also: FOUTPI (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 UseExponent:
     sec
@@ -213,7 +215,8 @@ SavePosition:
 FirstPower:
     ldy #$00
 
-;; With Y at a power of ten: sets X's bit 7 for the first pass and extracts digits.
+;; With Y at a power of ten: sets X's bit 7 for the first pass and extracts digits. The PET's TI$ conversion enters
+;; here with Y at a time divisor.
 ;; Also: FOUTIM (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 ExtractDigits:
     ldx #$80

@@ -155,8 +155,11 @@ Done:
     ;; See: <ResetProgramState>, <ClearVariables>, <Statements::GoSub::Transfer>
     ;; Also: RUN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc Run
-    bne *+5
+    bne WithLine
     jmp ResetProgramState
+
+;; Clears variables and goes to the line, as GOTO does.
+WithLine:
     jsr ClearVariables
     jmp GoSub::Transfer
     .endproc

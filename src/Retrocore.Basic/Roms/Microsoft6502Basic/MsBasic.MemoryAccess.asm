@@ -6,11 +6,11 @@
 ; MICROSOFT 6502 BASIC: ADDRESS CONVERSION AND MEMORY ACCESS
 ;
 ; AddressConversion rejectNegative selects whether a negative FAC sign is an error.
-; PeekFunction preserveAddress, highFirst, guardRom, padGuard independently select POKER preservation,
+; PeekFunction preserveAddress, highFirst, guardRom, padGuard independently select whether PokeAddress is preserved,
 ;   the byte saved first, the page-granular ROM read guard, and eight bytes of padding.
 ; PokeStatement emits POKE.
-; WaitStatement defaultTarget selects the branch for an omitted second mask. It may be STORDO
-;   or a separately placed extension that can return directly or continue at STORDO.
+; WaitStatement defaultTarget selects the branch for an omitted second mask. It may be Statements::Wait::StoreMask
+;   or a separately placed extension that can return directly or continue there.
 
 ;; Emits the address and byte-expression conversion entries.
 ;; Parameters: rejectNegative = 1 to reject negative <Fac> addresses, 0 to use their low 16 bits
@@ -109,7 +109,7 @@ Fetch:
     lda (PokeAddress),y
     tay
 
-;; Restores <PokeAddress> where selected, then jmp SNGFLT; the ROM guard branches here with Y = 0.
+;; Restores <PokeAddress> where selected, then jumps to <ReturnByte>; the ROM guard branches here with Y = 0.
 ;; Also: DOSGFL (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 ToReturnByte:
     .if preserveAddress

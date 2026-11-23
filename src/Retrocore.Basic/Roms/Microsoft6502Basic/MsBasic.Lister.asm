@@ -109,7 +109,7 @@ NextLine:
 ;; Also: TSTDUN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 CheckPastEnd:
     bcs Finish
-;; Saves the offset in ListString, prints the line number, then a space.
+;; Saves the offset in <ListOffset>, prints the line number, then a space.
 ;; Also: TYPLIN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 ListLine:
     sty ListOffset

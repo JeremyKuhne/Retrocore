@@ -157,8 +157,11 @@ SaveArgument:
     pla
     sta FunctionPointer+1
     jsr GetCurrentCharacter
-    beq *+5
+    beq RestoreText
     jmp SNERR
+
+;; Restores the text pointer from before the call.
+RestoreText:
     pla
     sta TextPointer
     pla

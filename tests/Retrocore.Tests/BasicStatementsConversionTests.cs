@@ -40,11 +40,13 @@ public sealed class BasicStatementsConversionTests
     private static readonly string[] s_commodoreKeys = ["M6502", "UNKN", "CBM4S79", "HV1", "HV1R", "HV2", "HV4", "HV4R"];
 
     // The definitions in the converted files that give no overlay name of their own: the families' guard, the
-    // label only the SDK names (CONT1 was the SDK's own), and the labels whose names only a vendor gives (AppleSoft's
-    // overlay, or BASIC 4's listings), which reach them through their vendor's aliases (BasicSharedFloatAliasesTests).
+    // labels only the SDK names (CONT1 was the SDK's own; RUN's and FN's branch targets were *+5), and the labels
+    // whose names only a vendor gives (AppleSoft's overlay, or BASIC 4's listings), which reach them through their
+    // vendor's aliases (BasicSharedFloatAliasesTests).
     private static readonly HashSet<string> s_sdkNames =
     [
-        "FAMILIES_DECLARED", "Statements::Cont::Resume", "Statements::PopFinish",
+        "FAMILIES_DECLARED", "Statements::Cont::Resume", "Statements::PopFinish", "Statements::Run::WithLine",
+        "Functions::Fn::RestoreText",
         "Statements::List::ReadSecondBound", "Statements::List::NextTableByte", "Statements::List::ReadTableByte",
         "Statements::List::ListWordCharacter", "Statements::List::ListLastCharacter",
         "Statements::List::ReadWordByte", "Statements::List::ListFirstWord"
@@ -64,8 +66,9 @@ public sealed class BasicStatementsConversionTests
     ];
 
     /// <summary>
-    ///  In each AppleSoft build, every old name the math files give reaches the value the MACRO-10 overlay gives that
-    ///  name, and every definition they make reaches the overlay by its name or an old name.
+    ///  In each AppleSoft build, every old name the converted files give that the MACRO-10 overlay defines reaches the
+    ///  overlay's value, and every definition they make reaches the overlay by its name or an old name, apart from the
+    ///  SDK's names and the vendor's aliases, whose values BasicSharedFloatAliasesTests checks.
     /// </summary>
     /// <param name="model">The Apple II model.</param>
     [TestMethod]
@@ -81,8 +84,9 @@ public sealed class BasicStatementsConversionTests
     }
 
     /// <summary>
-    ///  In each PET build, every old name the math files give reaches the value the MACRO-10 overlay gives that name,
-    ///  and every definition they make reaches the overlay by its name or an old name.
+    ///  In each PET build, every old name the converted files give that the MACRO-10 overlay defines reaches the
+    ///  overlay's value, and every definition they make reaches the overlay by its name or an old name, apart from the
+    ///  SDK's names and the vendor's aliases, whose values BasicSharedFloatAliasesTests checks.
     /// </summary>
     /// <param name="model">The PET model.</param>
     /// <param name="original">Whether BASIC 1 or 4 uses its original chip.</param>
@@ -150,7 +154,7 @@ public sealed class BasicStatementsConversionTests
     }
 
     /// <summary>
-    ///  Every old name in the math files cites at least one document, every document is in the bibliography, and a
+    ///  Every old name in the converted files cites at least one document, every document is in the bibliography, and a
     ///  vendor's file cites only its vendor's documents and Microsoft's.
     /// </summary>
     [TestMethod]

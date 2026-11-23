@@ -176,7 +176,7 @@ WithLine:
     ;; Saves the caller and transfers to its target line.
     ;;
     ;; From low to high addresses the five-byte stack frame holds <TOKEN_GOSUB>, the current line number and the text
-    ;; pointer still pointing before the target number. <Statements::Return> later skips the saved number.
+    ;; pointer at the target's line number, on its first digit. <Statements::Return> later skips the saved number.
     ;; Entry:
     ;;   Transfer = <GetCurrentCharacter>, <Statements::GoTo>, jmp to the statement loop; RUN with a line enters here
     ;; See: <Statements::GoTo>, <CheckStack>

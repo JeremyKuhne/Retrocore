@@ -66,7 +66,7 @@ public sealed partial class BasicRenameGateTests
         // Compares the repository's copy with the SDK the host ships, which the renamed copy does not replace.
         ["BasicSharedSourceTests.cs"] = "compares with the shipped SDK",
 
-        // Lint the repository's sources, which the gate's rename leaves unchanged.
+        // Lints the sources from its own copy of the inputs, not through BasicNames.
         ["SdkDocumentationTests.cs"] = "lints the sources",
 
         // Assemble only byte images, Microsoft's base or resolver paths, and look no BASIC name up.
@@ -109,6 +109,8 @@ public sealed partial class BasicRenameGateTests
                 s_renamed.SelectMany(Cases),
                 testCase =>
                 {
+                    // Each case must read the renamed copy, or the gate would pass on the unrenamed sources.
+                    BasicNames.Inputs.Should().Be(scratch);
                     Interlocked.Increment(ref run);
                     switch (Run(testCase))
                     {

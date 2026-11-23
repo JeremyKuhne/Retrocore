@@ -73,7 +73,8 @@ public sealed class BasicSharedSourceTests
             .And.Contain("applies to them.");
 
         // Each module derived from Microsoft's source says so in its first lines, after any pragmas.
-        foreach (string module in Directory.EnumerateFiles(RepositoryShared(repository), "MsBasic.*.asm"))
+        foreach (string module in Directory.EnumerateFiles(RepositoryShared(repository), "MsBasic.*.asm")
+            .Concat(Directory.EnumerateFiles(shipped, "MsBasic.*.asm")))
         {
             File.ReadLines(module).SkipWhile(line => line.StartsWith("; retrocore:", StringComparison.Ordinal)).First()
                 .Should().Be(DerivationLine, $"{Path.GetFileName(module)} must say it is derived from Microsoft's source");

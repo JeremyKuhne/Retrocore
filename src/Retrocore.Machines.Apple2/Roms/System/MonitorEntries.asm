@@ -1,13 +1,13 @@
 ;; APPLE IIE MONITOR ENTRY POINTS, FOR THE SOURCES THAT CALL THE MONITOR
 ;;
-;; The Monitor's routines and tables that the internal firmware of both models, the Disk II boot ROM and DOS use,
-;; as equates at their addresses in the Monitor. Monitor.asm defines and documents each of them as a label, so it
-;; does not include this file; the others do, and each definition here inherits the Monitor's documentation. A few
-;; are in only one model's Monitor, and only that model's firmware uses them: VIDSYNC and SLOTRTN in the original
-;; IIe's, SKIPBLNK in the Enhanced IIe's.
+;; The Monitor's routines and tables that the internal firmware of both models, the Disk II boot ROM and DOS use, as
+;; equates at their addresses in the Monitor. Monitor.asm and its Monitor folder define and document each of them as a
+;; label, so they do not include this file; the others do, and each definition here inherits the Monitor's
+;; documentation. A few are in only one model's Monitor, and only that model's firmware uses them: VIDSYNC and SLOTRTN
+;; in the original IIe's, SKIPBLNK in the Enhanced IIe's.
 ;;
 ;; Two names are not here. GETNUM is also a routine of DOS's own, so the Enhanced IIe's firmware defines the
-;; Monitor's itself. DOS's INSDS2, at $F88E, is two bytes into the Monitor's, so DOS defines it.
+;; Monitor's itself. DOS defines its own INSDS2, the Monitor's <Monitor:Disassembler::Decode::Opcode> at $F88E.
 
 ;; Inherit: <Monitor:PRBLNK>
 PRBLNK = $F948
@@ -69,7 +69,7 @@ SETKBD = $FE89
 ;; Inherit: <Monitor:SETVID>
 SETVID = $FE93
 
-;; Inherit: <Monitor:SLOTRTS>
+;; Inherit: <Monitor:SelectSlotRom>
 SLOTRTS = $FEC5
 
 ;; Inherit: <Monitor:SKIPBLNK>

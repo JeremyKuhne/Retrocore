@@ -75,14 +75,99 @@ public sealed class DisassembleCommandTests
 
             DisassembleCommand.Run([input, output, "--origin", "$0800", "--hints", hints, "--sdk-roms", s_inputs]).Should().Be(0);
             string source = File.ReadAllText(output);
-            source.Should().Contain("; From Monitor.asm.").And.Contain("HOME = $FC58").And.Contain("COUT = $FDED");
-            source.Should().Contain("JSR HOME").And.Contain("JSR COUT").And.Contain("PrintLoop:").And.Contain("LDA Message,X");
+            source.Should().Contain("; From Monitor.asm.").And.Contain("Home = $FC58").And.Contain("CharacterOut = $FDED");
+            source.Should().Contain("JSR Home").And.Contain("JSR CharacterOut").And.Contain("PrintLoop:").And.Contain("LDA Message,X");
             source.Should().Contain("; Prints the message.");
         }
         finally
         {
             Directory.Delete(directory, recursive: true);
         }
+    }
+
+    /// <summary>
+    ///  A Monitor routine in a family scope keeps its qualified name: the source calls it by that name and defines
+    ///  it inside its scopes, each opened once, and assembles back to the program's bytes. A page-zero byte the
+    ///  Monitor shares takes its shared name, not the name one routine gives it ($2E) or a value that equals it ($3A),
+    ///  and a .set variable's last value ($A0C0, MnemonicBits) names nothing. Apple's names in the Monitor's
+    ///  Equates.asm, for locations still to be converted, are kept ($25 CV, $C100 B_FUNC). The II Plus has no IIe
+    ///  firmware, so only the Monitor names those.
+    /// </summary>
+    [TestMethod]
+    public void DisassemblyNamesScopedRoutines()
+    {
+        // $0800 JSR $F800 (LowRes::Plot); JSR $F832 (LowRes::Clear); JSR $F88C (Disassembler::Decode);
+        // JSR $F88E (Disassembler::Decode::Opcode); JSR $FDED (CharacterOut); LDA $2E; LDA $3A; LDA $A0C0; LDA $25;
+        // JSR $C100; RTS
+        byte[] program =
+        [
+            0x20, 0x00, 0xF8, 0x20, 0x32, 0xF8, 0x20, 0x8C, 0xF8, 0x20, 0x8E, 0xF8, 0x20, 0xED, 0xFD, 0xA5, 0x2E, 0xA5,
+            0x3A, 0xAD, 0xC0, 0xA0, 0xA5, 0x25, 0x20, 0x00, 0xC1, 0x60
+        ];
+
+        string directory = Directory.CreateTempSubdirectory("retrocore-disassemble-").FullName;
+        try
+        {
+            string input = Path.Join(directory, "plot.bin");
+            string output = Path.Join(directory, "plot.asm");
+            File.WriteAllBytes(input, program);
+
+            string[] args = [input, output, "--origin", "$0800", "--machine", "iiplus", "--sdk-roms", s_inputs];
+            DisassembleCommand.Run(args).Should().Be(0);
+            string source = File.ReadAllText(output);
+            source.Should().Contain("JSR LowRes::Plot").And.Contain("JSR LowRes::Clear").And.Contain("JSR CharacterOut");
+            source.Should().Contain("JSR Disassembler::Decode\n").And.Contain("JSR Disassembler::Decode::Opcode");
+            source.Should().Contain("""
+                .scope Disassembler
+                Decode = $F88C
+                .scope Decode
+                Opcode = $F88E
+                .endscope
+                .endscope
+                .scope LowRes
+                Clear = $F832
+                Plot = $F800
+                .endscope
+                """.ReplaceLineEndings("\n"));
+
+            source.Should().Contain("LDA MASK").And.Contain("LDA PCL").And.NotContain("MnemonicBits");
+            source.Should().Contain("LDA CV").And.Contain("JSR B_FUNC");
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
+    ///  A scope two files' names share is opened in the first file's group and continued in the second's, so the
+    ///  source assembles, calling each by its qualified name.
+    /// </summary>
+    [TestMethod]
+    public void ScopeSharedByTwoFilesIsContinued()
+    {
+        string exported = ".cpu Mos6502\nScoped__0 = $F800\nScoped__1 = $C100\n.org $0800\n    JSR Scoped__0\n    JSR Scoped__1";
+        Dictionary<string, string> files = new(StringComparer.Ordinal)
+        {
+            ["Scoped__0"] = "Monitor.asm",
+            ["Scoped__1"] = "Firmware.asm"
+        };
+
+        Dictionary<string, string> scoped = new(StringComparer.Ordinal)
+        {
+            ["Scoped__0"] = "Escape::A",
+            ["Scoped__1"] = "Escape::B"
+        };
+
+        string source = DisassembleCommand.Arrange(exported, "A test.", files, [], scoped);
+
+        source.Should().Contain("; From Firmware.asm.\n.scope Escape\nB = $C100\n.endscope\n");
+        source.Should().Contain("; From Monitor.asm.\n.scope Escape continued\nA = $F800\n.endscope\n");
+        source.Should().Contain("JSR Escape::A\n    JSR Escape::B");
+        AssemblyOptions options = new(ProcessorVariant.Mos6502, 0x0800, 6);
+        AssemblyResult result = new Retrocore.Assembler.Assembler().Assemble(new AssemblySource(source, "shared.asm"), options);
+        result.Diagnostics.Should().BeEmpty();
+        result.Sections[0].Bytes.ToArray().Should().Equal(0x20, 0x00, 0xF8, 0x20, 0x00, 0xC1);
     }
 
     /// <summary>
@@ -150,7 +235,7 @@ public sealed class DisassembleCommandTests
             string output = Path.Join(directory, "MasterCreate.asm");
             string[] args = ["--disk", disk, "--file", "MASTER CREATE", output, "--dos", "3.3-1980", "--sdk-roms", s_inputs];
             DisassembleCommand.Run(args).Should().Be(0);
-            File.ReadAllText(output).Should().Contain("JSR GETLN").And.Contain("STA PWREDUP");
+            File.ReadAllText(output).Should().Contain("JSR GetLine").And.Contain("STA PWREDUP");
         }
         finally
         {

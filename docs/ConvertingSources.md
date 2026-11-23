@@ -108,9 +108,9 @@ to main with the source, says where each was decided.
   source reads one way; the old name goes in `Also:`. Names a source defines for another source not yet converted
   (DOS's equates for the BASICs, the firmware's for AppleSoft's page zero) keep that source's names until it is
   converted.
-- **Same job, same name** across models and versions (the original and Enhanced IIe, DOS 3.3 and 3.2); each build's
-  definition carries that build's historical names, and the tools resolve an old name to the definition the build
-  assembles.
+- **Same job, same name** across models and versions (the original and Enhanced IIe, DOS 3.3 and 3.2); each
+  definition carries its lineage's historical names (below), and the tools resolve an old name to the definition
+  the build assembles.
 - **Cite Apple's names as code would write them**: upper case, with underscores for dots (`B.FUNC` is `B_FUNC`).
 - **Keep every documented name in `Also:`**, unless it would clash inside one assembly with another definition or
   old name; then it goes in prose ("Apple's listings call it SET80COL"), and the clash is noted. This, fill
@@ -148,9 +148,16 @@ to main with the source, says where each was decided.
   Everything else is in a family scope, even a routine programs call by address (`LowRes::Plot`).
 - **A family spread through a ROM is one scope in pieces**: `.scope X`, then `.scope X continued` for each later
   piece, with a plain `;` comment saying which part.
-- **Builds that differ mid-routine** are written as whole `.proc`s per build under `.if`, repeating the few shared
-  lines, rather than `.if`s inside a routine. This is for a source's own builds; code several vendors share is
-  decided in [the alignment plan](backlog/ConversionAlignment.md) (D5).
+- **Builds that differ mid-routine** keep one routine with `.if`s inside it, so the source shows how each version
+  changed the one before; repeating the unchanged lines in a `.proc` per build hides that. A routine that differs
+  throughout is a `.proc` per build, each with its own contract. A routine with `.if`s inside it states the
+  contract that holds in every build, and its prose says what a build does differently
+  ([the alignment plan](backlog/ConversionAlignment.md), D5).
+- **A routine that descends through the builds is one lineage**: each of its definitions cites, in `Also:`, every
+  document whose listing names it, in any build, so a name from any version finds it in all of them (ClearLineFrom
+  carries the Apple II's CLEOLZ and the IIe's CLREOLZ). A document whose builds lack the routine is not cited.
+  This is for one vendor's builds; which builds a vendor's name resolves in, in code several vendors share, is the
+  alignment plan's D3.
 - **A routine split over two files** (as Apple split RWTS for size) may be one `.proc` spanning the include.
 - **Numbers shared between sources** (the firmware's function numbers, the mode bits) go in one shared file the
   sources include, with `.assert`s tying them to the tables that use them.

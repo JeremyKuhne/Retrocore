@@ -6,5 +6,6 @@ in [AssemblyStyle.md](../AssemblyStyle.md).
 
 | Source | Status | Log |
 | --- | --- | --- |
+| The Apple II Monitor (`Roms/System/Monitor.asm` and `Monitor/`) | Converted | [Monitor.md](Monitor.md) |
 
 Each decision has an ID, which commit messages and comments may cite.

@@ -1,7 +1,7 @@
 # Aligning the two conversion branches
 
-Status: in progress. The owner accepted decisions D1 to D8 as recommended on 2026-11-23; the plan was revised after
-four independent reviews.
+Status: in progress. The owner accepted decisions D1 to D8 as recommended on 2026-11-23, except D5, decided the
+other way; the plan was revised after four independent reviews.
 
 A plan for bringing two bodies of source work to one approach, so that every converted source reads, builds and
 checks the same way:
@@ -33,7 +33,7 @@ The plan takes the best of each.
 | Names | Full words (`CharacterOut`); old names in `Also:` | Microsoft's six-letter names stay current (`FNDLIN`, `LOWTR`) | Full words at the BASIC conversion (B6); until then, unchanged |
 | Historical names | `;; Also: COUT (A2RM78)`: bibliography keys; assembler, links, debugger and editor resolve them | 17 prose `Also:` blocks naming vendor and source in words; the names don't resolve. Alias equates in `*.FloatAliases.asm` and `*.InterpreterAliases.asm` (`COMBYTE = COMBYT` in `AppleSoft.InterpreterAliases.asm`) | The standard form, with old names per build (D3); the alias equates become `Also:` |
 | Structure | `.proc` per routine, scopes, structs | Top-level labels. 78 shared macros in 38 of 51 shared files, plus 33 vendor macros. Bodies end mid-routine and take label arguments | `.proc`, scopes, structs; the macro question is D2 |
-| Builds that differ | Whole `.proc`s per build under `.if` | Inline `.if` on macro parameters (more than 130 in shared code) | D5 |
+| Builds that differ | Whole `.proc`s per build under `.if`, or `.if` inside a routine | Inline `.if` on macro parameters (more than 130 in shared code) | `.if` inside the routine (D5, decided) |
 | Documentation in macros | DocComments 1.1 forbids it | Most shared documentation is inside macro bodies | The tools already read `;;` blocks in macro bodies. What they skip there is `Also:` (`AssemblyAlsoNames.cs`, `AssemblyPreprocessor.HistoricalNames.cs`) and scope and `.using` tracking (`DocumentationParser.ScopeTracker.cs`). See D2 |
 | Lint | `; retrocore: style=strict` on every file | None; never run against main's lint | Strict on every file except the kept originals (`m6502.asm`, the `.mac` overlays) |
 | Contracts | `Keeps:` worked out; checked by running DOS in the debugger | `In:`/`Out:` common, `Keeps:` rare (6 in shared code) | `Keeps:` worked out; checked by routine tests and the debugger |
@@ -44,8 +44,9 @@ The plan takes the best of each.
 
 ## Decisions for the owner
 
-All eight were accepted as recommended (2026-11-23). The session for B5 logs them in `docs/conversions/Basic.md`
-on `claude/basic-rename-table`, which reaches main through `claude/basic-rename-ready`.
+All eight were accepted as recommended (2026-11-23), except D5, which the owner decided the other way. The session
+for B5 logs them in `docs/conversions/Basic.md` on `claude/basic-rename-table`, which reaches main through
+`claude/basic-rename-ready`.
 
 - **D1. Shared code across vendors.** Accept one module for code several vendors inherited from a common ancestor,
   with each difference a named switch or parameter and a one-line reason. *Recommended.* The trade-off is
@@ -89,13 +90,16 @@ on `claude/basic-rename-table`, which reaches main through `claude/basic-rename-
 - **D4. Names.** Rename to full words in the BASIC conversion, keeping Microsoft's and each vendor's names in
   `Also:`. *Recommended*, by ConvertingSources' first naming rule (rename everything to the style). Alternative:
   keep Microsoft's names for the shared modules permanently, as a new exception to that rule.
-- **D5. Builds that differ mid-routine.** The rule goes by ownership, not by a count:
-  - In a source's own builds (DOS 3.3 and 3.2, the IIe models), whole `.proc`s per build.
-  - In a module shared by several vendors, inline `.if` on a named switch, with a comment saying which builds take
-    which branch.
+- **D5. Builds that differ mid-routine.** *Decided by the owner:* an `.if` inside the routine, in a source's own
+  builds and in shared modules alike, on a named switch (`ENHANCED`, `MONITOR = MONITOR_IIE`), with a comment where
+  the switch alone doesn't say which builds take which branch.
+  Showing the difference between versions is part of what the sources teach, and an `.if` shows that history far
+  better than repeating the unchanged lines in a `.proc` per build. A whole `.proc` per build is for routines that
+  differ throughout.
 
-  Contracts: a mid-routine `.if` can't give each variant its own `Keeps:`. A shared routine states the contract
-  that holds in every build, and a variant that keeps less is written as its own `.proc`. *Recommended.*
+  Contracts: a mid-routine `.if` can't give each variant its own `Keeps:`. A routine with `.if`s inside it states the
+  contract that holds in every build, and its prose says what a build does differently. (The recommendation had been a whole `.proc`
+  per build in a source's own builds, with a mid-routine `.if` only in shared modules.)
 - **D6. The MACRO-10 overlays.** Keep them as the selectable second source (`BasicSourceKind.Macro10`). They are
   the per-module byte oracle, not optional. Run the module comparisons in CI on every change to a shared module.
   *Recommended.*

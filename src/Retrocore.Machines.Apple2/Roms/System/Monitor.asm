@@ -51,7 +51,8 @@
 ;; Programs call the Monitor's documented entry points by address, so each one's comment gives its address, and an
 ;; .assert at it checks the address in every build.
 ;;
-;; Maintained by hand. The SystemSourceTests digests check that the IIe models assemble byte-identically.
+;; Maintained by hand. The SystemSourceTests and Apple2SourceTests digests check that every build assembles
+;; byte-identically, and the root refuses any other MONITOR or ENHANCED.
 
 ;; The MONITOR value that builds the Apple II Monitor (1978), chip 341-0004.
 ;; See: <MONITOR_AUTOSTART>, <MONITOR_IIE>
@@ -75,6 +76,10 @@ ENHANCED = 1
 ENHANCED = 0
 .endif
 .endif
+; Only the four builds the digest tests check (SystemSourceTests and Apple2SourceTests): the Apple II and Autostart
+; Monitors, and the original and Enhanced IIe's.
+.assert MONITOR >= MONITOR_II && MONITOR <= MONITOR_IIE, "MONITOR is MONITOR_II, MONITOR_AUTOSTART or MONITOR_IIE."
+.assert ENHANCED = 0 || ENHANCED = 1, "ENHANCED is 1 for the Enhanced IIe or 0 for the original."
 .assert MONITOR = MONITOR_IIE || ENHANCED = 0, "Only the IIe's Monitor has an enhanced model."
 .if ENHANCED
 .cpu Rockwell65C02

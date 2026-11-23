@@ -1018,7 +1018,7 @@ aliases, and that every citation's key is in the bibliography.
 their `Out:` values and `Keeps:` claims:
 
 - `Strings::CopyBytes` and `CopyFrom`: into a destination that crosses a page boundary, and for `CopyBytes` at
-  lengths 0 and 1 too; both keep X.
+  lengths 0 (both builds) and 1 (AppleSoft) too; both keep X.
 - `Strings::ReleaseTemporary`: the latest temporary and others; keeps X.
 - `Variables::MultiplyUnsigned`: products and the OUT OF MEMORY jump.
 - Both builds' `Strings::ReserveSpace`: room to spare, exact room, one byte short (up to the call of the
@@ -1037,6 +1037,13 @@ and the enhanced IIe's AppleSoft. Their program adds the following to the statem
 - variables that were never assigned.
 
 As a control, a false `Keeps: Y` added to `Strings::CopyBytes` was reported on PET BASIC 4.
+
+CI's later steps, run as CI runs them with an empty `RETROCORE_CACHE`, passed except one: the IIe sample assembles,
+every `tools/Test-*.mjs` script but `Test-Memory.mjs` passes, and in `extension/` `check:grammar`, `compile` and
+`test:grammar` pass. `Test-Memory.mjs` expects `$24` to read CH and finds AppleSoft's own name for it. That
+predates this stack's conversions: it already fails, with TRMPOS, on the commit before the workspace step. The math
+step's FOUT became `FormatFac`, which broke `Test-PetDap.mjs`; that branch now finds the line by the routine's
+`.proc`.
 
 ## Other dependents
 

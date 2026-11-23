@@ -113,7 +113,7 @@ try {
     assert.deepEqual(devices.devices.map(device => device.id), ["cassette1", "cassette2"]);
 
     // The default native BASIC maps its cold start inside the editor chip back to the source.
-    const initLine = lineOf(nativeInit, "INIT");
+    const initLine = lineOf(nativeInit, "ColdStart");
     const setInit = await request("setBreakpoints", { source: { path: nativeInit }, breakpoints: [{ line: initLine }] });
     assert.equal(setInit.breakpoints[0].verified, true, JSON.stringify(setInit.breakpoints[0]));
     await request("retro/reset");

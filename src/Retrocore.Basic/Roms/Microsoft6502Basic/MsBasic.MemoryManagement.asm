@@ -145,9 +145,10 @@ NextPage:
 
     ;; Checks that the hardware stack has room for a requested number of two-byte entries and its reserve.
     ;;
-    ;; The selected reserve is added to twice the entry count. AppleSoft and PET BASIC 1 use $36; PET BASIC 2
-    ;; and 4 use $3E. Recursive evaluation and permanent FOR and GOSUB frames call this before allocating space.
-    ;; Counts above $7F are not independently rejected: the bit shifted into carry is added to the low byte.
+    ;; The selected reserve is added to twice the entry count. AppleSoft uses $36, PET BASIC 1 $36 at its default of 19
+    ;; levels, and PET BASIC 2 and 4 $3E. Recursive evaluation and permanent FOR and GOSUB frames call this before
+    ;; allocating space. Counts above $7F are not independently rejected: the bit shifted into carry is added to the low
+    ;; byte.
     ;; In: A = number of two-byte entries, 0 through $7F
     ;; Errors: OUT OF MEMORY if the reserve addition overflows or the resulting threshold exceeds the stack pointer
     ;; See: <FRMEVL>, <Statements::For>, <Statements::GoSub>

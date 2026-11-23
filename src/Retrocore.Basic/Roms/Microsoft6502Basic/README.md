@@ -70,7 +70,7 @@ The interpreter modules also retain each variant's original bytes:
 | `MsBasic.LineNumber.asm` | Shared decimal line-number parsing accepts values below 64000. |
 | `MsBasic.LineSearch.asm` | Shared linked-program search returns the matching line or insertion point. |
 | `MsBasic.MemoryAccess.asm` | `AddressConversion` selects negative-address rejection; `PeekFunction` independently selects address preservation, save order, ROM guarding and padding; `WaitStatement` takes the omitted-mask branch target. |
-| `MsBasic.MemoryManagement.asm` | `MemoryManagement` takes the stack reserve: `$36` for AppleSoft and BASIC 1, `$3E` for BASIC 2/4. BASIC 1 calculates it as `2*STACK_LEVELS+3*ADDITIONAL_PRECISION+13`; the macro asserts the required contiguous page-zero scratch layout. |
+| `MsBasic.MemoryManagement.asm` | `MemoryManagement` takes the stack reserve: `$36` for AppleSoft and BASIC 1 at its default of 19 levels, `$3E` for BASIC 2/4. BASIC 1 calculates it as `2*STACK_LEVELS+3*ADDITIONAL_PRECISION+13`; the macro asserts the required contiguous page-zero scratch layout. |
 | `MsBasic.Next.asm` | AppleSoft and BASIC 1 count through the FOR frame; BASIC 2/4 calculate its offsets. The caller also supplies the platform's next-statement entry. |
 | `MsBasic.OperatorTable.asm` | AppleSoft uses `OperatorEntries 1, 1, OROP1`; PET uses `OperatorEntries 0, 0, ANDOP`. Power/negation and NOT precedences are independent. |
 | `MsBasic.ProgramTransfers.asm` | Shared RESTORE, STOP, CONT, RUN, GOSUB, GOTO and RETURN entries. The caller selects direct-mode detection, output suppression, the next-statement target, RETURN's FOR-pointer byte and optional POP handling independently. |

@@ -1,3 +1,4 @@
+; Derived from Microsoft's BASIC for 6502 (m6502.asm, MIT license; see LICENSE in this folder).
 ; MICROSOFT 6502 BASIC: USER-DEFINED FUNCTIONS
 ;
 ; A DEF FN entry is a scalar-variable entry whose name has the function bit set.

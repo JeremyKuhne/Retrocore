@@ -1,3 +1,4 @@
+; Derived from Microsoft's BASIC for 6502 (m6502.asm, MIT license; see LICENSE in this folder).
 ; MICROSOFT 6502 BASIC: SHARED BUILD SWITCHES
 ;
 ; The platform selects REALIO before including this file. These defaults describe the AppleSoft and PET builds.

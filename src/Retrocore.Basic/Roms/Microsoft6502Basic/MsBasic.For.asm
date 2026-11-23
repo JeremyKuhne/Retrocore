@@ -1,3 +1,4 @@
+; Derived from Microsoft's BASIC for 6502 (m6502.asm, MIT license; see LICENSE in this folder).
 ; MICROSOFT 6502 BASIC: FOR
 ;
 ; The platform's next-statement entry follows <NXTCON>. NEXT and the FOR-frame

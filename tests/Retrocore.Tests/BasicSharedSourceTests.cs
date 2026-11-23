@@ -42,8 +42,9 @@ public sealed class BasicSharedSourceTests
     }
 
     /// <summary>
-    ///  The SDK ships Microsoft's LICENSE beside the shared sources derived from Microsoft's BASIC, and the
-    ///  extension's third-party notices name that BASIC and where the SDK keeps it.
+    ///  The SDK ships Microsoft's LICENSE beside the shared sources derived from Microsoft's BASIC, each derived
+    ///  module says it is derived from Microsoft's source, and the extension's third-party notices name that BASIC,
+    ///  where the SDK keeps it and the modules derived from it.
     /// </summary>
     [TestMethod]
     public void SdkShipsMicrosoftsLicenseBesideTheSharedSources()
@@ -66,8 +67,21 @@ public sealed class BasicSharedSourceTests
         notices.Should().Contain("Microsoft BASIC for 6502 Microprocessor")
             .And.Contain("https://github.com/microsoft/BASIC-M6502")
             .And.Contain("server/Sdk/Roms/Microsoft6502Basic/")
-            .And.Contain("Copyright (c) Microsoft Corporation, 1976-1978.");
+            .And.Contain("Copyright (c) Microsoft Corporation, 1976-1978.")
+            .And.Contain("The native MsBasic.*.asm modules in src/Retrocore.Basic/Roms/Microsoft6502Basic")
+            .And.Contain("are derived from Microsoft's m6502.asm, and the license below applies to them.");
+
+        // Each module derived from Microsoft's source says so in its first lines, after any pragmas.
+        foreach (string module in Directory.EnumerateFiles(RepositoryShared(repository), "MsBasic.*.asm"))
+        {
+            File.ReadLines(module).SkipWhile(line => line.StartsWith("; retrocore:", StringComparison.Ordinal)).First()
+                .Should().Be(DerivationLine, $"{Path.GetFileName(module)} must say it is derived from Microsoft's source");
+        }
     }
+
+    // The line each module derived from Microsoft's m6502.asm starts with.
+    private const string DerivationLine =
+        "; Derived from Microsoft's BASIC for 6502 (m6502.asm, MIT license; see LICENSE in this folder).";
 
     /// <summary>
     ///  Both AppleSoft selections assemble identically in either layout and map to that layout's shared files.

@@ -1,3 +1,4 @@
+; Derived from Microsoft's BASIC for 6502 (m6502.asm, MIT license; see LICENSE in this folder).
 ; COMMODORE BASIC 4: LINKED STRING-SPACE ALLOCATION
 ;
 ; STRING_ALLOCATION invokes this BASIC 4 body before the BASIC 4 linked collector.

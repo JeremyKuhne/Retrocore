@@ -1,3 +1,4 @@
+; Derived from Microsoft's BASIC for 6502 (m6502.asm, MIT license; see LICENSE in this folder).
 ; MICROSOFT 6502 BASIC: NEW, CLEAR AND EXECUTION RESET
 ;
 ; These entries discard program or variable storage, reset the stack and position the text pointer. Callers

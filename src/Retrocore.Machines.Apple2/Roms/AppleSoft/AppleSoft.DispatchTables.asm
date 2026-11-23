@@ -353,9 +353,9 @@ TOKEN_LAST_SIMPLE_FUNCTION = $E7
     .byte "MID", '$' | $80          ; $EA MID$
     .byte $00
 
-;; Error messages addressed by the ERR constants' byte offsets.
+;; Error messages addressed by the ERROR_* constants' byte offsets.
 ;;
-;; Each message ends in a character with bit 7 set. <ERROR> prints until that byte, then appends <ERR>;
+;; Each message ends in a character with bit 7 set. <ERROR> prints until that byte, then appends <ErrorSuffix>;
 ;; all offsets fit in one byte.
 ERRTAB:
 ;; Offset of `NEXT` WITHOUT `FOR` in <ERRTAB>.

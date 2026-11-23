@@ -468,7 +468,7 @@ DescriptorPointer = FunctionPointer + 2
 ;; Also: FOUR6 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 CollectorStep = DescriptorPointer + 3
 
-;; Writable three-byte jump whose operand bytes are <CollectorOffset> and <ArgExtension>.
+;; Writable three-byte jump whose operand bytes are <CollectorOffset> and <FunctionJumpHigh>.
 ;; Also: JMPER (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 FunctionJump = CollectorStep + 1
 
@@ -476,10 +476,11 @@ FunctionJump = CollectorStep + 1
 ;; Also: SIZE (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 CollectorOffset = FunctionJump + 1
 
-;; The smaller operand's extension byte while adding, and `EXP`'s rounding byte, sharing the second operand byte of
-;; <FunctionJump>.
+;; The second operand byte of <FunctionJump>, which the floating-point code borrows: while adding, the extension
+;; (rounding) byte of the operand that is not shifted, the shifted one's being in <FacExtension>; `EXP` keeps its
+;; rounding byte here.
 ;; Also: OLDOV (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
-ArgExtension = FunctionJump + 2
+FunctionJumpHigh = FunctionJump + 2
 
 ;; Five-byte floating-point temporary overlapping <FunctionPointer> and <DescriptorPointer>.
 ;; Also: TEMPF3 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)

@@ -338,10 +338,11 @@ FunctionJump = $90
 ;; Also: SIZE (M6502)
 CollectorOffset = $91
 
-;; The smaller operand's extension byte while adding, and `EXP`'s rounding byte, sharing the second operand byte of
-;; <FunctionJump>.
+;; The second operand byte of <FunctionJump>, which the floating-point code borrows: while adding, the extension
+;; (rounding) byte of the operand that is not shifted, the shifted one's being in <FacExtension>; `EXP` keeps its
+;; rounding byte here.
 ;; Also: OLDOV (M6502), EXTRASY (AS82)
-ArgExtension = $92
+FunctionJumpHigh = $92
 
 ;; Packed floating-point temporary, sharing <FunctionPointer>.
 ;; Also: TEMPF3 (M6502)

@@ -7,6 +7,9 @@
 ;
 ; The pending operations' stack holds five-byte packed values.
 
+;; The number of relational tokens, `>`, `=` and `<`, which follow one another from <TOKEN_GREATER>.
+RELATION_TOKENS = 3
+
 ;; Emits the precedence evaluator and its operand stack routines.
 ;; Parameters: carryReturn = 1 to carry <EvaluateExpression::PushSignedFac>'s return address into its high byte, 0 to
 ;;   increment only its low byte (AppleSoft, BASIC 1 and 2)
@@ -20,8 +23,9 @@
     ;; In: TextPointer = first character of the expression
     ;; Out: Fac = numeric result or string descriptor pointer, ValueType = result type,
     ;;   TextPointer = terminating character
-    ;; Errors: SYNTAX for a repeated relation, TYPE MISMATCH for a string where a number is needed, FORMULA TOO COMPLEX
-    ;;   or OUT OF MEMORY when the stack runs out
+    ;; Errors: SYNTAX for a repeated relation, TYPE MISMATCH for a string where a number is needed, OUT OF MEMORY when
+    ;;   the stack runs out (<CheckStack>), FORMULA TOO COMPLEX when the string temporaries are full, and those of the
+    ;;   operands, operators and functions it evaluates
     ;; Entry:
     ;;   NextOperator = rereads the character after an operand; <Strings::Concatenate> jumps back here
     ;;   Prefix = pushes the operation at Y and evaluates its operand; <ApplyPrefixOperator> jumps here for unary minus
@@ -65,7 +69,7 @@ NextRelation:
     sec
     sbc #<TOKEN_GREATER
     bcc EndRelations
-    cmp #$03
+    cmp #RELATION_TOKENS
     bcs EndRelations
     cmp #$01
     rol a

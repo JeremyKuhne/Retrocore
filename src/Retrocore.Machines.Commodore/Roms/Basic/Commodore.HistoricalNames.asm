@@ -129,6 +129,13 @@ AndOperator = Operators::And
 .endif
 
 
+; BASIC 4's allocator's return, which Microsoft's GETRTS names in the output routine instead.
+.ifdef Strings::ReserveSpace::Done
+;; Inherit: <Strings::ReserveSpace::Done>
+;; Also: GETRTS (CBM4S79, HV4, HV4R)
+ReserveReturn = Strings::ReserveSpace::Done
+.endif
+
 ; BASIC 4's room check in its linked allocator.
 .ifdef Strings::ReserveSpace::CheckLinkedRoom
 ;; Inherit: <Strings::ReserveSpace::CheckLinkedRoom>

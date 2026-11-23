@@ -36,7 +36,10 @@
     ;; Out: A = low value address and Y = high value address for a scalar or an array element,
     ;;   TextPointer = next non-space character,
     ;;   ValueType = $FF for a string or 0 for a number, IntegerType = $80 for an integer or 0 otherwise
-    ;; Errors: SYNTAX for an invalid first character or a disallowed integer name
+    ;; Errors: SYNTAX for an invalid first character, a disallowed integer name or a name the PET reserves
+    ;;   (<Variables::CheckReservedName>), OUT OF MEMORY when a new variable does not fit (<Variables::Create>), and
+    ;;   the array path's: BAD SUBSCRIPT, REDIM'D ARRAY, ILLEGAL QUANTITY, OUT OF MEMORY, and OUT OF DATA for
+    ;;   AppleSoft's existing-array lookup
     ;; Entry:
     ;;   WithDimensionFlag = starts with A = first character and X = dimension flag
     ;;   KeepDimensionFlag = starts with A = first character, retaining the current dimension flag
@@ -145,7 +148,8 @@ CheckSubscript:
 ToChooseArrayLookup:
         jmp Variables::ChooseArrayLookup
 
-;; No `(`: bit 7 of <SubscriptMode> searches the scalars, bit 6 goes to the existing-array lookup.
+;; No `(`: bit 7 of <SubscriptMode> searches the scalars, bit 6 goes to the existing-array lookup, and a zero
+;; <SubscriptMode> falls into <SearchScalars>.
 NoParenthesis:
         bit SubscriptMode
         bmi SearchScalars
@@ -256,7 +260,7 @@ Advance:
     bne CheckReservedName
     .if callerHigh
         tsx
-        lda $0102,x
+        lda Stack + 2,x
         cmp #>(ISVRET-1)
         bne CheckReservedName
     .endif

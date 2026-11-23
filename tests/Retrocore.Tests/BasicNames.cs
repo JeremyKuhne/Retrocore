@@ -45,6 +45,39 @@ internal static partial class BasicNames
     ];
 
     /// <summary>
+    ///  Gets the names both vendors' historical-names files give, each for its own definition (Basic.md E4): ANDOP and
+    ///  the classic collector's steps, which BASIC 4 gives to its array back-link steps.
+    /// </summary>
+    internal static string[] BothVendorsNames { get; } =
+    [
+        "ANDOP", "ARYVA2", "ARYVA3", "ARYVGO", "ARYGET", "GOGO", "DVARTS"
+    ];
+
+    /// <summary>
+    ///  Gets the names a vendor's alias gives in some builds that other builds still give to a label of a vendor's own
+    ///  unconverted code, until part C converts it (Basic.md E3): BASIC 4's GETRTS, which is the output routine's
+    ///  return in AppleSoft and BASIC 1 and 2.
+    /// </summary>
+    internal static string[] VendorLabelNames { get; } = ["GETRTS"];
+
+    /// <summary>
+    ///  Gets whether a build defines a name as a label of a vendor's own code, in the folder of the vendor's historical
+    ///  names but outside them, as it does the <see cref="VendorLabelNames"/>.
+    /// </summary>
+    /// <param name="result">The build.</param>
+    /// <param name="name">The name.</param>
+    /// <param name="historicalNames">The vendor's historical-names file.</param>
+    /// <returns>Whether the name is one of those and its definition is such a label.</returns>
+    internal static bool IsVendorLabel(AssemblyResult result, string name, string historicalNames)
+    {
+        string folder = Path.GetDirectoryName(Path.GetFullPath(historicalNames)) ?? historicalNames;
+        return VendorLabelNames.Contains(name)
+            && result.FindDefinition(name)?.Location?.Path is { } path
+            && Path.GetFullPath(path).StartsWith(folder, StringComparison.OrdinalIgnoreCase)
+            && !path.EndsWith(".HistoricalNames.asm", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
     ///  Gets the folder the BASIC tests read their sources from: the test output's <c>Inputs</c>, unless
     ///  <see cref="WithInputs"/> has replaced it for this flow.
     /// </summary>

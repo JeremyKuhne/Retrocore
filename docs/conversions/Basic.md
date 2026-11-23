@@ -901,8 +901,11 @@ Decisions and how the table was applied:
   `OperandEvaluation`, `IntegerVariableValue`, `FunctionDispatch`, `LogicalOperators`, `VariableInput`,
   `VariableInputMessages`, `VariableSearch`, `SimpleVariableLookup`, `ExistingArrayEntry`, `StringStorage`,
   `StringAllocation`, `UnlinkedStringAllocation`, `LinkedStringAllocation`, `StringConcatenation`,
-  `StringFromNumber`, `StringFunctions`, `StringGarbageCollection`). Every invocation, root and test follows. Only
-  their `<link>`s change in the vendors' files, as X6 has it; the vendors' code keeps its old names until part C.
+  `StringFromNumber`, `StringFunctions`, `StringGarbageCollection`). Every invocation, root and test follows. In the
+  vendors' files, as X6 has it, the code keeps its old names until part C and only the `<link>`s change, except:
+  - each vendor's `OperatorEntries` table names AND's handler `Operators::And`, where AppleSoft's had `OROP1` and
+    Commodore's `ANDOP`;
+  - two of part C's labels become the shared names (E6).
 - E2. D5, narrowed (S11): the builds' differences stay mid-routine `.if`s, and each contract holds in every build or
   names the build that differs. `LogicalOperators` gives AppleSoft's Boolean OR, which falls into AND, under `.else`,
   and the PET's bitwise Or and And under `.if bitwise`. The exception is `Strings::ReserveSpace` (GETSPA). Its two
@@ -919,6 +922,8 @@ Decisions and how the table was applied:
       `Commodore.InterpreterAliases.asm`, which is now deleted, as AppleSoft's was in M10.
     - BASIC 4's NXTPTR, QDSVAR, ARYVA2, ARYVA3, ARYVGO, ARYGET, GOGO, GOGO1, DVARTS, ARYDON, RES00, FRE01, FRE02 and
       TRYAG4 (CBM4S79, HV4, HV4R).
+    - GETRTS (CBM4S79, HV4, HV4R) on BASIC 4's allocator's return. The table cites M6502 for it too, but Microsoft's
+      GETRTS is the output routine's return (PrintCharacter::Return, rows 1441 and 1969).
 
     Each is under `.ifdef` its target (COPYC as E6 says), so a build of part of the modules leaves it out.
   - AppleSoft: the overlay's own labels INDLO1, GOTAR1, GOTAR2, NOTOP1, ANDOP, OROP1, OROP11, OROP12, NOWGE2,
@@ -934,7 +939,9 @@ Decisions and how the table was applied:
   two collectors, which are different code under the same names. The vendor-leak checks of the workspace, math and
   statement steps now allow the names both vendors give (`Except`).
 - E5. Three overlay labels get no `Also:`. They are LENFLT (`Functions::Len::ToFloat`) and BASIC 4's NOTDS and NOTDS1
-  (`StoreString`'s disk-status check, part C's names until then). No document gives them. A Commodore alias must
+  (`StoreString`'s disk-status check, part C's names until then). No document gives them. HV4 and HV4R call NOTDS's
+  and NOTDS1's addresses DSKX2 and DSKX1. Those names wait for part C, which converts the labels and can give them
+  (rows 2349 and 2350). A Commodore alias must
   cite one of its build's documents (`BasicAttribution.PetKeys`, S7), so UNKN cannot be a Commodore alias's
   citation. Asking for an exemption to that rule would weaken a check, so I did not. Instead, `BasicNames.OverlayOnlyLabels`
   lists them, and the overlay comparisons (`NativeBasicMatchesTheOverlay`, the assignment, string-function and
@@ -953,23 +960,35 @@ Decisions and how the table was applied:
 - E7. TRYAG4's target is `Strings::ReserveSpace::CheckLinkedRoom`, not the table's `CheckRoom`. The documentation
   merges a qualified name's topics across builds, so under the table's name the classic allocator's `CheckRoom`
   would also have taken BASIC 4's TRYAG4 (`PetOldNamesMatchTheOverlay` and the citation checks fail that way).
-- E8. M4's deferral: BASIC 1's and AppleSoft's own zero bytes, `ZeroValue`, cite ZERO along the PET line (M6502,
-  CBM4S79, HV1, HV1R, HV2, HV4, HV4R). `ZeroVariable` (SIMZER) has no `Also:` in the modules; AppleSoft's alias
-  gives SIMZER (E3).
+- E8. M4's deferral: BASIC 1's own zero bytes, `ZeroValue` in `MsBasic.VariableLookup.asm`, cite ZERO along the PET
+  line (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R), under S11's lineage rule; the table's row 860 gives M6502, HV1
+  and HV1R. AppleSoft's and BASIC 2's and 4's `ZeroValue` is the math step's, inside `Float::Half`. AppleSoft's own
+  bytes here are `ZeroVariable` (SIMZER), which has no `Also:` in the modules; AppleSoft's alias gives SIMZER (E3).
+- E8a. Citations on a definition that only one vendor's builds assemble: the lineage rule stays within the vendor's
+  line. BASIC 4's allocator does not cite ASTIL for GETSPA. AppleSoft's Boolean OR cites OROP by M6502 only, since
+  the PET's documents describe its bitwise OR. Definitions that only some of a line's builds assemble cite the whole
+  line, as S11 has it: the classic allocator cites the BASIC 4 documents, BASIC 4's cites HV1, HV1R and HV2, and so
+  do both COPYC aliases.
 - E9. Constants and layouts:
   - `INPUT_MODE_INPUT`, `INPUT_MODE_GET` and `INPUT_MODE_READ` (asserted where READ's mode is the operand of a
     skipped `lda #`).
   - `FLOAT_SIZE` and `DEFAULT_BOUND` in `MsBasic.Layouts.asm`.
   - The operator table's precedences, `PRECEDENCE_ADD` to `PRECEDENCE_RELATION`.
   - `.sizeof(Variable)`, `.sizeof(ArrayHeader)`, `ArrayHeader::DIMENSIONS` and `LENGTH`, `OperatorEntry`'s fields
-    and `StringDescriptor`'s fields where the code had numbers.
+    and `StringDescriptor`'s fields in many of the places the code had numbers, and `RELATION_TOKENS` for the count
+    of relational tokens. Some offsets and counts are still numbers, among them the collector's descriptor-offset
+    arithmetic, the multiplication's 16 bits and a few descriptor and variable offsets; naming them is left for a
+    later pass.
   - `*+n` branches are labels (`Arithmetic`, `NotFn`, `NotEmpty`).
 - E10. Three of `SimpleVariableLookup`'s parameters are renamed so its line fits in 120 columns: `checkCallerHigh` is
   `callerHigh`, `useSimzer` is `ownZero` and `arrayEntryAlias` is `countEntry`. The table keeps the SDK's own
   names (KEEP). Whether to wrap the line instead is a question for the owner.
 - E11. Tests and their helpers:
-  - `BasicNames` declares the three new scopes. Its `CurrentNamesOf` orders a vendor's per-build names last and
-    skips a name two definitions give. Its `DefiningSymbol` follows an alias to its target.
+  - `BasicNames` declares the three new scopes. In its `CurrentNamesOf`, an old name that names different
+    definitions in different builds (ANDOP) goes last and gives way to an old name that names only that definition.
+    Its `DefiningSymbol` follows an alias to its target. `BothVendorsNames` pins the names both vendors' files give,
+    and `VendorLabelNames` the one (GETRTS) that other builds still give to a label of their own unconverted code;
+    the vendor-leak checks exempt exactly those.
   - The standalone sources predefine `BasicNames.ScopedNames` and include `MsBasic.Layouts.asm`.
   - The region comparisons skip the vendors' names, as S10's do.
   - The rename gate now renames CRDO and NEWSTT, in the vendor files that use them (a `Files` list), since their
@@ -983,7 +1002,7 @@ Decisions and how the table was applied:
     Commodore's historical names.
 
 Checked: the full suite, the rename gate, the lint tests and `BasicExpressionsConversionTests`. The suite has
-3,963 passed, none failed and 665 skipped; the skipped tests are the ROM-dump comparisons, which need dumps that
+3,964 passed, none failed and 665 skipped; the skipped tests are the ROM-dump comparisons, which need dumps that
 are not here. `BasicExpressionsConversionTests` compares every old name in the sixteen files and the vendors'
 historical names with the MACRO-10 overlay's value in each of the eight builds. It checks that each definition
 reaches the overlay by its name or an old name, that a vendor's names resolve only in its builds and through its

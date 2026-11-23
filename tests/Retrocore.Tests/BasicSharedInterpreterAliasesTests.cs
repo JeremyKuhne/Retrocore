@@ -76,8 +76,8 @@ public sealed class BasicSharedInterpreterAliasesTests
     }
 
     /// <summary>
-    ///  PET revisions retain their assignment and string-function bytes, addresses and vendor names; the names are in
-    ///  Commodore's historical names, which BasicSharedFloatAliasesTests checks entry by entry.
+    ///  PET revisions retain their assignment and string-function bytes, addresses and vendor names; the names are
+    ///  aliases in Commodore's historical names, which cite the build's documents.
     /// </summary>
     /// <param name="model">The PET model.</param>
     /// <param name="original">Whether BASIC 1 or 4 uses its original chip.</param>
@@ -161,9 +161,12 @@ public sealed class BasicSharedInterpreterAliasesTests
         CompareRegion(legacy, native, conversionStart, conversionEnd);
         CompareRegion(legacy, native, functionsStart, functionsEnd);
 
-        // Each Commodore name reaches, in the whole build, the address the PET listing gives it and its target's.
+        // Each Commodore name reaches, in the whole build, the address the PET listing gives it and its target's, through
+        // an alias in Commodore's historical names that cites the build's documents, and the debugger resolves it to
+        // its target's source.
         AssemblyResult build = PetSdkModules.AssembleBasic(Pet, model, original);
         DocumentationSet docs = Documents(native, PetNames);
+        DocumentationSet buildDocs = Documents(build, PetNames);
         int versionIndex = early ? 0 : linked ? 2 : 1;
         foreach (var entry in s_petEntries)
         {
@@ -172,6 +175,11 @@ public sealed class BasicSharedInterpreterAliasesTests
             build.Symbol(entry.Name).Should().Be(entry.Addresses[versionIndex], $"{entry.Name} must match the PET listing");
             BasicWorkspaceConversionTests.InFiles(build.HistoricalNames[entry.Name], [PetNames]).Should().BeTrue(
                 $"{entry.Name} must reach {Path.GetFileName(PetNames)}");
+
+            DocumentationTopic target = AssertAlias(
+                build, buildDocs, entry.Target, entry.Name, BasicAttribution.PetKeys(model, original), BasicAttribution.CommodoreKeys);
+
+            AssertDebugEntry(build, entry.Name, target.Path);
         }
 
         AssertRoutine(native, docs, "COPYZC");
@@ -204,6 +212,53 @@ public sealed class BasicSharedInterpreterAliasesTests
 
         topic.Kind.Should().Be(DocumentationKind.Routine, $"{name} is a routine");
         topic.Summary.Should().NotBeNullOrWhiteSpace();
+    }
+
+    // The vendor's alias cites the documents that give its name, and the shared definition doesn't give the name.
+    private static DocumentationTopic AssertAlias(
+        AssemblyResult result,
+        DocumentationSet docs,
+        string target,
+        string name,
+        string[] buildKeys,
+        string[] documentKeys)
+    {
+        DocumentationTopic topic = docs.FindTopic(result.DefinitionName(target))
+            ?? throw new AssertFailedException($"{target} has no documentation.");
+
+        DocumentationTopic alias = docs.FindTopic(result.DefinitionName(name))
+            ?? throw new AssertFailedException($"{name} has no alias documentation.");
+
+        Path.GetFullPath(alias.Path).Should().Be(Path.GetFullPath(PetNames), $"{name}'s alias is Commodore's");
+        DocumentationAlso also = alias.Comments
+            .Where(comment => Path.GetFullPath(comment.Path) == Path.GetFullPath(PetNames))
+            .SelectMany(comment => DocumentationAlso.Of(comment.Sections))
+            .SingleOrDefault(also => also.Name == name)
+            ?? throw new AssertFailedException($"{name} is not in its alias's Also: section.");
+
+        also.Sources.Should().Contain(buildKeys, $"{name} must cite the documents that give it in this build");
+        also.Sources.Should().BeEquivalentTo(documentKeys, $"{name} must cite every document that gives it");
+        foreach (string key in also.Sources)
+        {
+            BasicAttribution.Bibliography.Find(key).Should().NotBeNull($"{name} cites {key}, which must be in docs/Bibliography.md");
+        }
+
+        BasicAttribution.AssertNotShared(result, docs, name);
+        return topic;
+    }
+
+    // The debugger resolves the name to its address, whose source is the target's.
+    private static void AssertDebugEntry(AssemblyResult result, string name, string path)
+    {
+        DebugInfo debug = new();
+        debug.Add(new SourceMapModule(result, area: null));
+        DebugTestMemory memory = new();
+        memory.Set(0, result.Sections[0].Bytes.ToArray());
+        debug.Resolve(name, memory).Should().Be(result.Symbol(name));
+        DebugPosition position = debug.Position(memory, checked((ushort)result.Symbol(name)))
+            ?? throw new AssertFailedException($"{name} has no debugger source position.");
+
+        Path.GetFullPath(position.Chain[0].Path).Should().Be(Path.GetFullPath(path));
     }
 
     // Apple's name that is another definition's in AppleSoft: it can't resolve, so the shared remarks give it.

@@ -62,7 +62,6 @@ public sealed class PetRomSourceTests
     [DataRow(PetModel.Pet4032, true)]
     public void NativeBasicMatchesTheOverlay(PetModel model, bool original)
     {
-
         AssemblyResult native = PetSdkModules.AssembleBasic(PetSources, model, original, BasicSourceKind.Native);
         AssemblyResult legacy = PetLegacyBasic.Assemble(PetSources, model, original);
         AssemblyResult editor = PetSdkModules.AssembleEditor(PetSources, model);

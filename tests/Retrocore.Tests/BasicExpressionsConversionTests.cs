@@ -55,6 +55,7 @@ public sealed class BasicExpressionsConversionTests
         ["FRE01"] = ["CBM4S79", "HV4", "HV4R"],
         ["FRE02"] = ["CBM4S79", "HV4", "HV4R"],
         ["TRYAG4"] = ["CBM4S79", "HV4", "HV4R"],
+        ["GETRTS"] = ["CBM4S79", "HV4", "HV4R"],
         ["ANDOP"] = ["M6502", "CBM4S79", "HV1", "HV1R", "HV2", "HV4", "HV4R"]
     };
 
@@ -77,7 +78,7 @@ public sealed class BasicExpressionsConversionTests
     internal static readonly string[] CommodoreTargetOldNames =
     [
         "COPYZC", "FNDVAR", "STR", "CHR", "LEFT", "RIGHT", "MID", "NXTPTR", "QDSVAR", "ARYVA2",
-        "ARYVA3", "ARYVGO", "ARYGET", "GOGO", "GOGO1", "DVARTS", "ARYDON", "TRYAG3", "TRYAG4", "RES00", "FRE01", "FRE02",
+        "ARYVA3", "ARYVGO", "ARYGET", "GOGO", "GOGO1", "DVARTS", "ARYDON", "TRYAG3", "TRYAG4", "GETRTS", "RES00", "FRE01", "FRE02",
         "ANDOP"
     ];
 
@@ -98,9 +99,9 @@ public sealed class BasicExpressionsConversionTests
     // gives, which reach them through their vendor's aliases.
     private static readonly HashSet<string> s_sdkNames =
     [
-        "FAMILIES_DECLARED", "INPUT_MODE_INPUT", "INPUT_MODE_GET", "INPUT_MODE_READ",
+        "FAMILIES_DECLARED", "INPUT_MODE_INPUT", "INPUT_MODE_GET", "INPUT_MODE_READ", "RELATION_TOKENS",
         "EvaluateExpression::Arithmetic", "EvaluateFunctionOperand::NotFn", "Functions::Val::NotEmpty",
-        "FindVariable::SearchScalars", "Strings::ReserveSpace::CheckLinkedRoom", "Operators::And", "Operators::And::LoadFalse",
+        "FindVariable::SearchScalars", "Strings::ReserveSpace::CheckLinkedRoom", "Strings::ReserveSpace::Done", "Operators::And", "Operators::And::LoadFalse",
         "Operators::And::LoadTrue",
         "Operators::Not::LoadFalse", "Variables::FindArray::Search", "Variables::ArrayFound::CheckDimensions",
         "Variables::ArrayMissing", "AssignVariableList::CheckEmptyLine", "AssignVariableList::RestoreCharacter",
@@ -183,16 +184,20 @@ public sealed class BasicExpressionsConversionTests
         appleNames.Should().Contain(["INDLO1", "OROP1", "ANDOP", "STRNA3", "SIMZER", "QINTG1"]);
         petNames.Should().Contain(["COPYC", "STRD", "MIDD", "NXTPTR", "RES00", "ANDOP", "ARYVA2"]);
 
-        // ANDOP is both vendors' name, for a different definition in each (R4): the loop below checks that each
-        // vendor's builds reach their own.
+        // A name both vendors' files give, each for its own definition (Basic.md E4), reaches each vendor's own alias,
+        // which the loop below checks; a name a vendor's unconverted code still gives a label of its own is that label
+        // in those builds (BasicNames.VendorLabelNames).
+        appleNames.Intersect(petNames).Should().BeEquivalentTo(BasicNames.BothVendorsNames);
         foreach (string name in appleNames.Except(petNames))
         {
-            pet.Should().AllSatisfy(build => build.HasSymbol(name).Should().BeFalse($"{name} is AppleSoft's name"));
+            pet.Should().AllSatisfy(build => (build.HasSymbol(name) && !BasicNames.IsVendorLabel(build, name, CommodoreNames))
+                .Should().BeFalse($"{name} is AppleSoft's name"));
         }
 
         foreach (string name in petNames.Except(appleNames))
         {
-            apple.Should().AllSatisfy(build => build.HasSymbol(name).Should().BeFalse($"{name} is the PET's name"));
+            apple.Should().AllSatisfy(build => (build.HasSymbol(name) && !BasicNames.IsVendorLabel(build, name, AppleNames))
+                .Should().BeFalse($"{name} is the PET's name"));
         }
 
         // Each vendor's name reaches its vendor's alias, whose value is the shared definition's.
@@ -201,7 +206,8 @@ public sealed class BasicExpressionsConversionTests
         {
             foreach (AssemblyResult build in builds)
             {
-                foreach (string name in names.Where(build.HasSymbol))
+                foreach (string name in names.Where(old => build.HasSymbol(old)
+                    && !BasicNames.IsVendorLabel(build, old, file)))
                 {
                     BasicWorkspaceConversionTests.InFiles(build.HistoricalNames[name], [file]).Should().BeTrue(
                         $"{name} must reach the alias in {Path.GetFileName(file)}");
@@ -220,8 +226,9 @@ public sealed class BasicExpressionsConversionTests
 
     /// <summary>
     ///  In each PET build, Commodore's name for each of these modules' definitions that the build has reaches its
-    ///  target through Commodore's alias, inherits its documentation, cites the documents that give it, this build's
-    ///  among them, and has the debugger's source position of its target.
+    ///  target through Commodore's alias, inherits its documentation, cites the documents that give it (this build's
+    ///  among them, unless it is Microsoft's name too and cites M6502), and has the debugger's source position of its
+    ///  target.
     /// </summary>
     /// <param name="model">The PET model.</param>
     /// <param name="original">Whether BASIC 1 or 4 uses its original chip.</param>
@@ -237,7 +244,7 @@ public sealed class BasicExpressionsConversionTests
         bool linked = native.HasSymbol("Variables::Create::NextArray");
 
         // BASIC 4's descriptor copy is its own, in Commodore's file, so COPYC's target is not a shared definition
-        // there; BasicSharedInterpreterAliasesTests checks its address in every build.
+        // there; BasicSharedInterpreterAliasesTests checks its address and citations in every build.
         Dictionary<string, string[]> expected = CommodoreOldNames
             .Where(pair => native.HistoricalNames.TryGetValue(pair.Key, out AssemblySymbol? definition)
                 && BasicWorkspaceConversionTests.InFiles(definition, [CommodoreNames])
@@ -248,6 +255,11 @@ public sealed class BasicExpressionsConversionTests
                 StringComparer.Ordinal);
 
         expected.Should().ContainKeys("STRD", "CHRD", "LEFTD", "RIGHTD", "MIDD", "ANDOP", "ARYVA2");
+        if (linked)
+        {
+            expected.Should().ContainKeys("NXTPTR", "QDSVAR", "GOGO1", "ARYDON", "RES00", "FRE01", "FRE02", "TRYAG4", "GETRTS");
+        }
+
         BasicSharedFloatAliasesTests.CheckAliases(native, CommodoreNames, expected, (model, original), expected.Keys);
     }
 

@@ -117,16 +117,20 @@ public sealed class BasicMathConversionTests
         appleNames.Should().Contain(["PRNTFAC", "FIDVT", "BILLION", "MISMTCH", "OVERFLOW"]);
         petNames.Should().Contain(["SQR05", "TENC", "MULLN2", "GFDIV"]);
 
-        // A name both vendors' files give, each for its own definition (ANDOP and the classic collector's steps, from
-        // the expressions step, K12), reaches each vendor's own alias, which the loop below checks.
+        // A name both vendors' files give, each for its own definition (Basic.md E4), reaches each vendor's own alias,
+        // which the loop below checks; a name a vendor's unconverted code still gives a label of its own is that label
+        // in those builds (BasicNames.VendorLabelNames).
+        appleNames.Intersect(petNames).Should().BeEquivalentTo(BasicNames.BothVendorsNames);
         foreach (string name in appleNames.Except(petNames))
         {
-            pet.Should().AllSatisfy(build => build.HasSymbol(name).Should().BeFalse($"{name} is AppleSoft's name"));
+            pet.Should().AllSatisfy(build => (build.HasSymbol(name) && !BasicNames.IsVendorLabel(build, name, CommodoreNames))
+                .Should().BeFalse($"{name} is AppleSoft's name"));
         }
 
         foreach (string name in petNames.Except(appleNames))
         {
-            apple.Should().AllSatisfy(build => build.HasSymbol(name).Should().BeFalse($"{name} is the PET's name"));
+            apple.Should().AllSatisfy(build => (build.HasSymbol(name) && !BasicNames.IsVendorLabel(build, name, AppleNames))
+                .Should().BeFalse($"{name} is the PET's name"));
         }
 
         // Each vendor's name reaches its vendor's alias, whose value is the shared definition's.
@@ -135,7 +139,8 @@ public sealed class BasicMathConversionTests
         {
             foreach (AssemblyResult build in builds)
             {
-                foreach (string name in names.Where(build.HasSymbol))
+                foreach (string name in names.Where(old => build.HasSymbol(old)
+                    && !BasicNames.IsVendorLabel(build, old, file)))
                 {
                     BasicWorkspaceConversionTests.InFiles(build.HistoricalNames[name], [file]).Should().BeTrue(
                         $"{name} must reach the alias in {Path.GetFileName(file)}");

@@ -40,9 +40,9 @@ public sealed class BasicSharedAliasConsistencyTests
     [TestMethod]
     public void NativeRootsExposeOnlyTheirDocumentedAliases()
     {
-        // AppleSoft's interpreter aliases have all joined its historical names (Basic.md M10); Commodore's remain.
-        string[] appleFiles = AliasFiles(Apple, "AppleSoft", interpreterAliases: false);
-        string[] petFiles = AliasFiles(PetBasic, "Commodore", interpreterAliases: false);
+        // Both vendors' interpreter aliases have joined their historical names (Basic.md M10 and E3).
+        string[] appleFiles = AliasFiles(Apple, "AppleSoft");
+        string[] petFiles = AliasFiles(PetBasic, "Commodore");
         List<NativeRoot> roots = [];
         foreach (Apple2Model model in (Apple2Model[])[Apple2Model.IIPlus, Apple2Model.IIe, Apple2Model.IIeEnhanced])
         {
@@ -121,9 +121,13 @@ public sealed class BasicSharedAliasConsistencyTests
             }
 
             HashSet<string> ownNames = aliases.Select(alias => alias.Name).ToHashSet(StringComparer.Ordinal);
+            // A name the other platform's alias gives that this build's own unconverted code gives a label of its own is
+            // that label here (BasicNames.VendorLabelNames).
+            string ownNamesFile = Path.Join(root.Apple ? Apple : PetBasic, root.Apple ? "AppleSoft.HistoricalNames.asm" : "Commodore.HistoricalNames.asm");
             foreach (string name in (root.Apple ? petNames : appleNames).Where(name => !ownNames.Contains(name)))
             {
-                root.Result.HasSymbol(name).Should().BeFalse($"{root.Name} must not expose the other platform's alias");
+                (root.Result.HasSymbol(name) && !BasicNames.IsVendorLabel(root.Result, name, ownNamesFile))
+                    .Should().BeFalse($"{root.Name} must not expose the other platform's alias");
             }
 
             DocumentationSet docs = Documents(root.Result);
@@ -264,12 +268,12 @@ public sealed class BasicSharedAliasConsistencyTests
             .Should().BeFalse();
     }
 
-    private static string[] AliasFiles(string directory, string prefix, bool interpreterAliases)
+    private static string[] AliasFiles(string directory, string prefix)
     {
-        // The interpreter alias files join the historical-names file as their definitions convert (Basic.md M10).
+        // The interpreter alias files have joined the historical-names file (Basic.md M10 and E3).
         foreach (string name in (string[])[$"{prefix}.InterpreterAliases.asm", $"{prefix}.HistoricalNames.asm"])
         {
-            bool expected = interpreterAliases || name.EndsWith(".HistoricalNames.asm", StringComparison.Ordinal);
+            bool expected = name.EndsWith(".HistoricalNames.asm", StringComparison.Ordinal);
             File.Exists(Path.Join(directory, name)).Should().Be(expected, $"the platform {(expected ? "must retain" : "has retired")} {name}");
         }
 

@@ -28,11 +28,24 @@ public sealed partial class BasicRenameGateTests
     private const string OldName = "FNDLIN";
     private const string NewName = "FindLine";
 
+    // A second rename, of a label defined in a macro's body (MEMORY_MANAGEMENT's), whose Also: reaches it because
+    // each build expands the macro once.
+    private const string MacroOldName = "BLTU";
+    private const string MacroNewName = "MoveRangeUp";
+
+    // Each rename, with the file that defines the name.
+    private static readonly (string Old, string New, string File, Regex Word)[] s_renames =
+    [
+        (OldName, NewName, "MsBasic.LineSearch.asm", OldNameWord()),
+        (MacroOldName, MacroNewName, "MsBasic.MemoryManagement.asm", MacroOldNameWord())
+    ];
+
     // The classes that assemble the native BASIC sources and look its names up, run against the renamed copy.
     private static readonly Type[] s_renamed =
     [
         typeof(AppleSoftTests), typeof(Basic1IndependentSwitchTests), typeof(BasicNativeRootSwitchTests),
-        typeof(BasicSharedArrayMultiplicationTests), typeof(BasicSharedAssignmentTests),
+        typeof(BasicSharedAliasConsistencyTests), typeof(BasicSharedArrayMultiplicationTests),
+        typeof(BasicSharedAssignmentTests), typeof(BasicSharedFloatAliasesTests), typeof(BasicSharedInterpreterAliasesTests),
         typeof(BasicSharedCharacterReaderTests), typeof(BasicSharedCommandInputTests), typeof(BasicSharedExpressionTests),
         typeof(BasicSharedForTests), typeof(BasicSharedGarbageCollectionTests), typeof(BasicSharedIntegerConversionTests),
         typeof(BasicSharedLineNumberTests), typeof(BasicSharedLineSearchTests), typeof(BasicSharedListerTests),
@@ -47,14 +60,13 @@ public sealed partial class BasicRenameGateTests
         typeof(PetSharedFloatAssemblyTests)
     ];
 
-    // Test sources that assemble BASIC but are not run against the renamed copy, each for its reason. Their lookups
-    // are checked as the others' are, except the files session B2 owns.
+    // Test sources that assemble BASIC but are not run against the renamed copy, each for its reason.
     private static readonly Dictionary<string, string> s_notRenamed = new(StringComparer.Ordinal)
     {
         // Compares the repository's copy with the SDK the host ships, which the renamed copy does not replace.
         ["BasicSharedSourceTests.cs"] = "compares with the shipped SDK",
 
-        // Lint the sources, whose test-only Also: key is no bibliography entry.
+        // Lint the repository's sources, which the gate's rename leaves unchanged.
         ["SdkDocumentationTests.cs"] = "lints the sources",
 
         // Assemble only byte images, Microsoft's base or resolver paths, and look no BASIC name up.
@@ -63,23 +75,18 @@ public sealed partial class BasicRenameGateTests
         ["OverlayBaseResolverTests.cs"] = "looks no name up",
         ["SystemMasterBasicTests.cs"] = "looks no name up",
 
-        // Session B2's alias tests and attribution, which it converts with the sources' Also: sections.
-        ["BasicSharedAliasConsistencyTests.cs"] = "owned by B2",
-        ["BasicSharedFloatAliasesTests.cs"] = "owned by B2",
-        ["BasicSharedInterpreterAliasesTests.cs"] = "owned by B2",
-        ["BasicAttribution.cs"] = "owned by B2",
-
         // The lookups themselves and this gate.
         ["BasicNames.cs"] = "the lookups",
         ["BasicRenameGateTests.cs"] = "this gate"
     };
 
     // Helpers the renamed classes use, whose lookups are checked with theirs.
-    private static readonly string[] s_helpers = ["BasicMachines.cs", "PetLegacyBasic.cs"];
+    private static readonly string[] s_helpers = ["BasicAttribution.cs", "BasicMachines.cs", "PetLegacyBasic.cs"];
 
     /// <summary>
-    ///  Renaming <c>FNDLIN</c> to <c>FindLine</c> in a copy of the native sources, with <c>;; Also: FNDLIN</c>, keeps
-    ///  every ROM's bytes and leaves every BASIC test green without changing it.
+    ///  Renaming <c>FNDLIN</c> to <c>FindLine</c>, and <c>BLTU</c> in a macro's body to <c>MoveRangeUp</c>, in a copy
+    ///  of the native sources, each with its old name in <c>;; Also:</c>, keeps every ROM's bytes and leaves every
+    ///  BASIC test green without changing it.
     /// </summary>
     [TestMethod]
     public void RenamingALabelLeavesTheTestsGreen()
@@ -87,8 +94,12 @@ public sealed partial class BasicRenameGateTests
         string scratch = Directory.CreateTempSubdirectory("retrocore-rename").FullName;
         try
         {
-            int renamed = CopyRenamed(BasicNames.Inputs, scratch);
-            renamed.Should().BeGreaterThan(3, $"{OldName} is used across the shared, AppleSoft and PET sources");
+            Dictionary<string, int> renamed = CopyRenamed(BasicNames.Inputs, scratch);
+            foreach ((string oldName, _, _, _) in s_renames)
+            {
+                renamed[oldName].Should().BeGreaterThan(3, $"{oldName} is used across the shared, AppleSoft and PET sources");
+            }
+
             CheckRename(BasicNames.Inputs, scratch);
 
             ConcurrentBag<string> failures = [];
@@ -107,7 +118,7 @@ public sealed partial class BasicRenameGateTests
                 }));
 
             failures.Should().BeEmpty(
-                $"renaming {OldName} must not break a test; {run} ran, {inconclusive.Count} inconclusive:{Environment.NewLine}{string.Join(Environment.NewLine, failures)}");
+                $"renaming {OldName} and {MacroOldName} must not break a test; {run} ran, {inconclusive.Count} inconclusive:{Environment.NewLine}{string.Join(Environment.NewLine, failures)}");
 
             run.Should().BeGreaterThan(500);
             inconclusive.Should().OnlyContain(
@@ -134,10 +145,14 @@ public sealed partial class BasicRenameGateTests
             AssemblyResult native = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(scratch), Apple2Model.IIeEnhanced);
             native.Success.Should().BeTrue();
 
-            Action oldNameOnly = () => _ = native.Symbols[OldName];
-            oldNameOnly.Should().Throw<KeyNotFoundException>("the renamed sources no longer define the old name");
-            native.Symbol(OldName).Should().Be(native.Symbol(NewName));
-            native.DefinitionName(OldName).Should().Be(NewName);
+            foreach ((string oldName, string newName, _, _) in s_renames)
+            {
+                Action oldNameOnly = () => _ = native.Symbols[oldName];
+                oldNameOnly.Should().Throw<KeyNotFoundException>($"the renamed sources no longer define {oldName}");
+                native.Symbol(oldName).Should().Be(native.Symbol(newName));
+                native.DefinitionName(oldName).Should().Be(newName);
+            }
+
             native.HasSymbol("FNDLIN_NOT_A_NAME").Should().BeFalse();
             Action neither = () => native.Symbol("FNDLIN_NOT_A_NAME");
             neither.Should().Throw<KeyNotFoundException>();
@@ -145,13 +160,17 @@ public sealed partial class BasicRenameGateTests
             // A standalone build of the module, as the comparisons assemble it, finds the dependency by either name.
             Dictionary<string, long> predefined = BasicNames.WithCurrentNames(new Dictionary<string, long>
             {
-                [OldName] = native.Symbol(OldName)
+                [OldName] = native.Symbol(OldName),
+                [MacroOldName] = native.Symbol(MacroOldName)
             });
 
             Dictionary<string, long> renamed = [];
             BasicNames.WithInputs(scratch, () => renamed = BasicNames.WithCurrentNames(predefined));
-            renamed.Should().ContainKeys(OldName, NewName);
-            renamed[NewName].Should().Be(renamed[OldName]);
+            foreach ((string oldName, string newName, _, _) in s_renames)
+            {
+                renamed.Should().ContainKeys(oldName, newName);
+                renamed[newName].Should().Be(renamed[oldName]);
+            }
         }
         finally
         {
@@ -171,6 +190,10 @@ public sealed partial class BasicRenameGateTests
         foreach (string file in renamed)
         {
             File.Exists(Path.Join(tests, file)).Should().BeTrue($"{file} must hold its class");
+
+            // A class that found its sources itself would run against the unrenamed ones.
+            File.ReadAllText(Path.Join(tests, file)).Should().NotContain(
+                "AppContext.BaseDirectory", $"{file} must read its sources from BasicNames.Inputs");
         }
 
         // A source that assembles BASIC must be in one of the lists, so a new one is not silently left out.
@@ -207,16 +230,16 @@ public sealed partial class BasicRenameGateTests
             $"a lookup by name must find a renamed definition by its old name too (BasicNames):{Environment.NewLine}{string.Join(Environment.NewLine, raw)}");
     }
 
-    // Copies the inputs, renaming the label in the native BASIC sources and giving it its old name in an Also:
-    // section; Microsoft's MACRO-10 sources keep the name. Returns how many native files changed.
-    private static int CopyRenamed(string inputs, string scratch)
+    // Copies the inputs, renaming the labels in the native BASIC sources and giving each its old name in an Also:
+    // section; Microsoft's MACRO-10 sources keep the names. Returns how many native files each rename changed.
+    private static Dictionary<string, int> CopyRenamed(string inputs, string scratch)
     {
         foreach (string directory in Directory.GetDirectories(inputs, "*", SearchOption.AllDirectories))
         {
             Directory.CreateDirectory(Path.Join(scratch, Path.GetRelativePath(inputs, directory)));
         }
 
-        int changed = 0;
+        Dictionary<string, int> changed = s_renames.ToDictionary(rename => rename.Old, _ => 0, StringComparer.Ordinal);
         foreach (string path in Directory.GetFiles(inputs, "*", SearchOption.AllDirectories))
         {
             string relative = Path.GetRelativePath(inputs, path);
@@ -228,17 +251,21 @@ public sealed partial class BasicRenameGateTests
             }
 
             string text = File.ReadAllText(path);
-            string replaced = OldNameWord().Replace(text, NewName);
-            if (Path.GetFileName(path) == "MsBasic.LineSearch.asm")
+            string replaced = text;
+            foreach ((string oldName, string newName, string file, Regex word) in s_renames)
             {
+                string before = replaced;
+                replaced = word.Replace(replaced, newName);
+                if (!string.Equals(replaced, before, StringComparison.Ordinal)) { changed[oldName]++; }
+                if (Path.GetFileName(path) != file) { continue; }
+
                 // The definition's documentation ends on the line before it.
-                int at = replaced.IndexOf($"\n{NewName}:", StringComparison.Ordinal);
-                at.Should().BeGreaterThan(0, $"MsBasic.LineSearch.asm defines {OldName}");
+                int at = replaced.IndexOf($"\n{newName}:", StringComparison.Ordinal);
+                at.Should().BeGreaterThan(0, $"{file} defines {oldName}");
                 string newLine = replaced.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
-                replaced = replaced.Insert(at + 1, $";; Also: {OldName} (TEST){newLine}");
+                replaced = replaced.Insert(at + 1, $";; Also: {oldName} (M6502){newLine}");
             }
 
-            if (!string.Equals(replaced, text, StringComparison.Ordinal)) { changed++; }
             File.WriteAllText(target, replaced);
         }
 
@@ -254,7 +281,7 @@ public sealed partial class BasicRenameGateTests
             && !Path.GetFileName(relative).Equals("m6502.asm", StringComparison.OrdinalIgnoreCase);
     }
 
-    // The renamed copy defines the new name, reaches it by the old one, and builds every ROM byte for byte.
+    // The renamed copy defines the new names, reaches each by its old one, and builds every ROM byte for byte.
     private static void CheckRename(string inputs, string scratch)
     {
         Apple2Model[] models = [Apple2Model.IIPlus, Apple2Model.IIe, Apple2Model.IIeEnhanced];
@@ -284,10 +311,14 @@ public sealed partial class BasicRenameGateTests
     private static void CheckRename(AssemblyResult before, AssemblyResult after, string build)
     {
         after.Success.Should().BeTrue($"{build} must assemble after the rename");
-        before.Symbols.Should().ContainKey(OldName);
-        after.Symbols.Should().NotContainKey(OldName, $"{build} must no longer define {OldName}");
-        after.Symbols[NewName].Should().Be(before.Symbols[OldName], $"{build} must keep {NewName} where {OldName} was");
-        after.HistoricalNames[OldName].Name.Should().Be(NewName);
+        foreach ((string oldName, string newName, _, _) in s_renames)
+        {
+            before.Symbols.Should().ContainKey(oldName);
+            after.Symbols.Should().NotContainKey(oldName, $"{build} must no longer define {oldName}");
+            after.Symbols[newName].Should().Be(before.Symbols[oldName], $"{build} must keep {newName} where {oldName} was");
+            after.HistoricalNames[oldName].Name.Should().Be(newName, $"{build} must resolve {oldName} through its Also:");
+        }
+
         after.Sections.Select(section => section.Bytes.ToArray()).Should().BeEquivalentTo(
             before.Sections.Select(section => section.Bytes.ToArray()),
             options => options.WithStrictOrdering(),
@@ -368,11 +399,16 @@ public sealed partial class BasicRenameGateTests
     [GeneratedRegex($@"\b{OldName}\b")]
     private static partial Regex OldNameWord();
 
+    // The renamed macro label, as a whole word.
+    [GeneratedRegex($@"\b{MacroOldName}\b")]
+    private static partial Regex MacroOldNameWord();
+
     // A lookup by name that does not reach a renamed definition by its old name.
-    // A documentation lookup is one unless it is on a program's variables or on a language analysis, which finds an
-    // Also: name itself. So are an assembly's symbol table handed on whole, a label a test's source defines by one of
-    // Microsoft's names, and a definition's name compared with a literal one.
-    [GeneratedRegex(@"\.Symbols(\[|\.(TryGetValue|ContainsKey|Should|GetValueOrDefault)\(|;)|SymbolDefinitions\.(Single|First|SingleOrDefault|FirstOrDefault|ToDictionary)\(|(?<!\b(variables|initial))\.Find(Routine)?\(|PredefinedSymbols = (?!BasicNames\.WithCurrentNames\()|^\s*[A-Z][A-Z0-9]{1,5}:\s*$|""[A-Z][A-Z0-9]{1,5}:""|Name\.Should\(\)\.Be\(""|EntryLabels\.Should\(\)\.Contain\(""")]
+    // A documentation lookup is one unless it is on a program's variables, on a language analysis, which finds an
+    // Also: name itself, or on the bibliography, which looks up a document's key. So are an assembly's symbol table
+    // handed on whole, a label a test's source defines by one of Microsoft's names, and a definition's name compared
+    // with a literal one.
+    [GeneratedRegex(@"\.Symbols(\[|\.(TryGetValue|ContainsKey|Should|GetValueOrDefault)\(|;)|SymbolDefinitions\.(Single|First|SingleOrDefault|FirstOrDefault|ToDictionary)\(|(?<!\b(variables|initial|Bibliography))\.Find(Routine)?\(|PredefinedSymbols = (?!BasicNames\.WithCurrentNames\()|^\s*[A-Z][A-Z0-9]{1,5}:\s*$|""[A-Z][A-Z0-9]{1,5}:""|Name\.Should\(\)\.Be\(""|EntryLabels\.Should\(\)\.Contain\(""")]
     private static partial Regex RawLookup();
 
     // The same lookups with the symbol table on one line and the lookup on the next.

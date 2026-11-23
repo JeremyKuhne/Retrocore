@@ -17,12 +17,12 @@ namespace Retrocore.Tests;
 [TestClass]
 public sealed class BasicSharedInterpreterAliasesTests
 {
-    private static readonly string s_inputs = Path.Join(AppContext.BaseDirectory, "Inputs");
-    private static readonly string s_apple = Path.Join(s_inputs, "AppleSoft");
-    private static readonly string s_pet = Path.Join(s_inputs, "Pet");
-    private static readonly string s_shared = Path.Join(s_inputs, "Microsoft6502Basic");
-    private static readonly string s_appleAliases = Path.Join(s_apple, "AppleSoft.InterpreterAliases.asm");
-    private static readonly string s_petAliases = Path.Join(s_pet, "Basic", "Commodore.InterpreterAliases.asm");
+    // The sources, from BasicNames.Inputs on each use, so the rename gate can run these tests on its copy.
+    private static string Apple => Path.Join(BasicNames.Inputs, "AppleSoft");
+    private static string Pet => Path.Join(BasicNames.Inputs, "Pet");
+    private static string Shared => Path.Join(BasicNames.Inputs, "Microsoft6502Basic");
+    private static string AppleAliases => Path.Join(Apple, "AppleSoft.InterpreterAliases.asm");
+    private static string PetAliases => Path.Join(Pet, "Basic", "Commodore.InterpreterAliases.asm");
 
     // Addresses in the independently assembled PET1, PET2 and PET4 reconstructions:
     // https://github.com/ethandicks/cbmsymbols/tree/e3120427a32e8b066eb8afdc434af547fd0906f3/listings
@@ -46,27 +46,30 @@ public sealed class BasicSharedInterpreterAliasesTests
     [DataRow(Apple2Model.IIeEnhanced)]
     public void AppleInterpreterAliasPreservesBytesAndDocumentation(Apple2Model model)
     {
-        string root = Path.Join(s_apple, "AppleSoft.asm");
+        string root = Path.Join(Apple, "AppleSoft.asm");
         AssemblyResult native = SdkModules.AssembleAppleSoft(root, model);
-        AssemblyResult legacy = SdkModules.AssembleAppleSoft(Path.Join(s_apple, "applesoft.mac"), model);
+        AssemblyResult legacy = SdkModules.AssembleAppleSoft(Path.Join(Apple, "applesoft.mac"), model);
         SdkModules.AppleSoftImage(native).ToArray().Should().Equal(SdkModules.AppleSoftImage(legacy).ToArray());
-        native.Symbols["COMBYTE"].Should().Be(0xE74C, "Apple TIL 76 identifies this entry");
-        native.Symbols["COMBYTE"].Should().Be(native.Symbols["COMBYT"]);
-        foreach (var entry in s_petEntries) { native.Symbols.Should().NotContainKey(entry.Name); }
+        native.Symbol("COMBYTE").Should().Be(0xE74C, "Apple TIL 76 identifies this entry");
+        native.Symbol("COMBYTE").Should().Be(native.Symbol("COMBYT"));
+        foreach (var entry in s_petEntries)
+        {
+            native.HasSymbol(entry.Name).Should().BeFalse($"{entry.Name} is a PET name");
+        }
 
-        AssertAliasFile(native, s_appleAliases, ["COMBYTE"]);
-        DocumentationSet docs = Documents(native, s_appleAliases);
+        AssertAliasFile(native, AppleAliases, ["COMBYTE"]);
+        DocumentationSet docs = Documents(native, AppleAliases);
         DocumentationTopic comma = AssertAlias(native, docs, "COMBYT", "COMBYTE", ["ASTIL"], ["ASTIL", "AS82"]);
         AssertDebugEntry(native, "COMBYTE", comma.Path);
 
         // Apple's published COPY and GARBAG names collide with different Microsoft labels.
-        native.Symbols["COPYZC"].Should().Be(0xDAB7);
-        native.Symbols["COPY"].Should().NotBe(native.Symbols["COPYZC"]);
-        native.Symbols["GARBA2"].Should().Be(0xE484);
-        native.Symbols["GARBAG"].Should().Be(0xE474);
+        native.Symbol("COPYZC").Should().Be(0xDAB7);
+        native.Symbol("COPY").Should().NotBe(native.Symbol("COPYZC"));
+        native.Symbol("GARBA2").Should().Be(0xE484);
+        native.Symbol("GARBAG").Should().Be(0xE474);
         DocumentationTopic assignment = AssertProse(docs, "GETSPT", "COPY");
         AssertProse(docs, "GARBA2", "GARBAG");
-        assignment.EntryLabels.Should().Contain("COPYZC");
+        assignment.EntryLabels.Should().Contain(native.DefinitionName("COPYZC"));
         CheckDocumentation(docs, "MsBasic.MemoryAccess.asm", "MsBasic.Assignment.asm", "MsBasic.StringGarbageCollection.asm");
     }
 
@@ -83,7 +86,7 @@ public sealed class BasicSharedInterpreterAliasesTests
     [DataRow(PetModel.Pet4032, true)]
     public void PetInterpreterAliasesPreserveBytesAndDocumentation(PetModel model, bool original)
     {
-        AssemblyResult legacy = PetLegacyBasic.Assemble(s_pet, model, original);
+        AssemblyResult legacy = PetLegacyBasic.Assemble(Pet, model, original);
         bool early = model == PetModel.Pet2001;
         bool linked = model == PetModel.Pet4032;
         int assignmentStart = Address(legacy, "GETSPT");
@@ -130,43 +133,43 @@ public sealed class BasicSharedInterpreterAliasesTests
         AssemblyOptions options = new(ProcessorVariant.Mos6502, 0, 0x10000)
         {
             SourceResolver = new FileAssemblySourceResolver(),
-            IncludePaths = [s_shared],
-            PredefinedSymbols = symbols
+            IncludePaths = [Shared],
+            PredefinedSymbols = BasicNames.WithCurrentNames(symbols)
         };
 
         AssemblyResult native = RequireSuccess(new Retrocore.Assembler.Assembler().Assemble(
-            new AssemblySource(source, Path.Join(s_pet, "Basic", "InterpreterAliasTest.asm")), options));
+            new AssemblySource(source, Path.Join(Pet, "Basic", "InterpreterAliasTest.asm")), options));
 
-        native.Symbols["INTERPRETER_ASSIGNMENT_END"].Should().Be(assignmentEnd);
-        native.Symbols["INTERPRETER_CONVERSION_END"].Should().Be(conversionEnd);
-        native.Symbols["INTERPRETER_FUNCTIONS_END"].Should().Be(functionsEnd);
-        native.Symbols["INTERPRETER_ALIASES_END"].Should().Be(functionsEnd);
+        native.Symbol("INTERPRETER_ASSIGNMENT_END").Should().Be(assignmentEnd);
+        native.Symbol("INTERPRETER_CONVERSION_END").Should().Be(conversionEnd);
+        native.Symbol("INTERPRETER_FUNCTIONS_END").Should().Be(functionsEnd);
+        native.Symbol("INTERPRETER_ALIASES_END").Should().Be(functionsEnd);
         CompareRegion(legacy, native, assignmentStart, assignmentEnd);
         CompareRegion(legacy, native, conversionStart, conversionEnd);
         CompareRegion(legacy, native, functionsStart, functionsEnd);
 
-        AssertAliasFile(native, s_petAliases, [.. s_petEntries.Select(entry => entry.Name)]);
-        DocumentationSet docs = Documents(native, s_petAliases);
+        AssertAliasFile(native, PetAliases, [.. s_petEntries.Select(entry => entry.Name)]);
+        DocumentationSet docs = Documents(native, PetAliases);
         int versionIndex = early ? 0 : linked ? 2 : 1;
         foreach (var entry in s_petEntries)
         {
-            native.Symbols[entry.Name].Should().Be(native.Symbols[entry.Target]);
-            native.Symbols[entry.Name].Should().Be(entry.Addresses[versionIndex], $"{entry.Name} must match the PET listing");
+            native.Symbol(entry.Name).Should().Be(native.Symbol(entry.Target));
+            native.Symbol(entry.Name).Should().Be(entry.Addresses[versionIndex], $"{entry.Name} must match the PET listing");
             string topic = entry.Target == "COPYZC" ? "GETSPT" : entry.Target;
             DocumentationTopic documented = AssertAlias(
                 native, docs, topic, entry.Name, BasicAttribution.PetKeys(model, original), BasicAttribution.CommodoreKeys);
 
             string path = linked && entry.Target == "COPYZC"
-                ? Path.Join(s_pet, "Basic", "Commodore.StringAssignment.asm")
+                ? Path.Join(Pet, "Basic", "Commodore.StringAssignment.asm")
                 : documented.Path;
 
             AssertDebugEntry(native, entry.Name, path);
         }
 
-        (docs.Find("GETSPT") ?? throw new AssertFailedException("GETSPT has no shared documentation."))
-            .EntryLabels.Should().Contain("COPYZC");
+        (docs.FindTopic("GETSPT") ?? throw new AssertFailedException("GETSPT has no shared documentation."))
+            .EntryLabels.Should().Contain(native.DefinitionName("COPYZC"));
 
-        native.Symbols.Should().NotContainKey("COMBYTE");
+        native.HasSymbol("COMBYTE").Should().BeFalse("COMBYTE is an Apple name");
         CheckDocumentation(docs, "MsBasic.Assignment.asm", "MsBasic.StringConversion.asm", "MsBasic.StringFunctions.asm");
     }
 
@@ -204,11 +207,11 @@ public sealed class BasicSharedInterpreterAliasesTests
         DocumentationSet docs = Documents(result, path);
         foreach (string name in expected)
         {
-            DocumentationTopic alias = docs.Find(name)
+            DocumentationTopic alias = docs.FindTopic(name)
                 ?? throw new AssertFailedException($"{name} has no alias documentation.");
 
             Path.GetFullPath(alias.Path).Should().Be(full);
-            alias.Value.Should().Be(result.Symbols[name]);
+            alias.Value.Should().Be(result.Symbol(name));
             alias.Summary.Should().NotBeNullOrWhiteSpace();
         }
     }
@@ -222,10 +225,10 @@ public sealed class BasicSharedInterpreterAliasesTests
         string[] buildKeys,
         string[] documentKeys)
     {
-        DocumentationTopic topic = docs.Find(target)
+        DocumentationTopic topic = docs.FindTopic(target)
             ?? throw new AssertFailedException($"{target} has no shared documentation.");
 
-        DocumentationTopic alias = docs.Find(name)
+        DocumentationTopic alias = docs.FindTopic(name)
             ?? throw new AssertFailedException($"{name} has no alias documentation.");
 
         BasicAttribution.AssertCites(alias, buildKeys, documentKeys);
@@ -236,7 +239,7 @@ public sealed class BasicSharedInterpreterAliasesTests
     // Apple's name that is another definition's in AppleSoft: it can't resolve, so the shared remarks give it.
     private static DocumentationTopic AssertProse(DocumentationSet docs, string target, string name)
     {
-        DocumentationTopic topic = docs.Find(target)
+        DocumentationTopic topic = docs.FindTopic(target)
             ?? throw new AssertFailedException($"{target} has no shared documentation.");
 
         BasicAttribution.Has(topic.Remarks, name, "AppleSoft")
@@ -251,8 +254,8 @@ public sealed class BasicSharedInterpreterAliasesTests
         debug.Add(new SourceMapModule(result, area: null));
         DebugTestMemory memory = new();
         memory.Set(0, result.Sections[0].Bytes.ToArray());
-        debug.Resolve(name, memory).Should().Be(result.Symbols[name]);
-        DebugPosition position = debug.Position(memory, checked((ushort)result.Symbols[name]))
+        debug.Resolve(name, memory).Should().Be(result.Symbol(name));
+        DebugPosition position = debug.Position(memory, checked((ushort)result.Symbol(name)))
             ?? throw new AssertFailedException($"{name} has no debugger source position.");
 
         Path.GetFullPath(position.Chain[0].Path).Should().Be(Path.GetFullPath(path));
@@ -281,7 +284,7 @@ public sealed class BasicSharedInterpreterAliasesTests
             $"{Path.GetFileName(diagnostic.Path)}:{diagnostic.Line + 1}: {diagnostic.Message}")));
     }
 
-    private static int Address(AssemblyResult result, string name) => checked((int)result.Symbols[name]);
+    private static int Address(AssemblyResult result, string name) => checked((int)result.Symbol(name));
 
     private static AssemblyResult RequireSuccess(AssemblyResult result)
     {

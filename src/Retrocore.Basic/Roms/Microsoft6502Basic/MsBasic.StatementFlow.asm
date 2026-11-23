@@ -44,7 +44,7 @@ Done:
     .endproc
 
     ;; Scans from <TextPointer> to an unquoted colon or a zero byte.
-    ;; Out: Y = terminator offset
+    ;; Out: Y = terminator offset, A = the terminator, zero = set, carry = set
     ;; See: <Statements::Data>, <DATLOP>, <FindLineEnd>
     ;; Also: DATAN (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc FindStatementEnd
@@ -53,7 +53,7 @@ Done:
     .endproc
 
     ;; Scans from <TextPointer> to the end-of-line zero.
-    ;; Out: Y = terminator offset
+    ;; Out: Y = terminator offset, A = 0, zero = set, carry = set
     ;; Also: REMN (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc FindLineEnd
     ldx #$00
@@ -128,7 +128,8 @@ Test:
     jsr FindLineEnd
     beq AdvanceTextPointer
     .endproc
-    ;; A digit after THEN/GOTO: <Statements::GoTo>; else the statement through <GONE3>.
+    ;; A digit after `THEN` goes to its line through <Statements::GoTo>; anything else, `GOTO` included, runs as a
+    ;; statement through <GONE3>.
     ;; Also: DOCOND (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc IfTrue
     jsr GetCurrentCharacter

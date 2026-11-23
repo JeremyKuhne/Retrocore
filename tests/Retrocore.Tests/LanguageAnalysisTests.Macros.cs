@@ -115,6 +115,69 @@ public sealed partial class LanguageAnalysisTests
         }
     }
 
+    // A file that gives COMBYTE only in a branch its build leaves out, and uses it: the SDK's AppleSoft also gives
+    // the name, and neither may become the file's hint.
+    private const string OmittedBranchProbe = """
+        ; retrocore: style=strict
+        ;; A probe.
+
+        .cpu Mos6502
+        .org $0300
+
+        .if 0
+        ;; Reads a byte, in a build this file leaves out.
+        ;; Also: COMBYTE (A2RM78)
+        Unused:
+            rts
+        .endif
+
+        ;; Reads a byte.
+        ;; Also: PRBBYTE (A2RM78)
+        PRBBYT:
+            rts
+
+        ;; Reads through both names.
+        Echo:
+            jsr PRBBYTE
+            jsr COMBYTE
+            rts
+        """;
+
+    /// <summary>
+    ///  A file's own old name takes precedence over an SDK module's only where the file's build gives it: one given
+    ///  only in a branch the build leaves out gets no hint naming that branch's definition, as before the precedence.
+    /// </summary>
+    /// <returns>The test.</returns>
+    [TestMethod]
+    public async Task OldNamesInAnOmittedBranchDoNotHint()
+    {
+        string folder = Directory.CreateTempSubdirectory("retrocore-macros").FullName;
+        try
+        {
+            string text = OmittedBranchProbe.ReplaceLineEndings("\n");
+            string probe = Directory.CreateDirectory(Path.Join(folder, "probe")).FullName;
+            string path = Path.GetFullPath(Path.Join(probe, "Probe.asm"));
+            File.WriteAllText(path, text);
+            File.WriteAllText(Path.Join(probe, "Bibliography.md"), MemberBibliography);
+            RecordingLanguageClient client = new();
+            LanguageWorkspace workspace = new(client);
+            workspace.Update(path, text);
+            DocumentUri uri = DocumentUri.FromFileSystemPath(path);
+
+            // The file's own name in its build gets its hint, so the diagnostics are complete when it appears.
+            List<Diagnostic> published = await client.Wait(
+                uri,
+                diagnostics => diagnostics.Any(diagnostic => diagnostic.Message.StartsWith("PRBBYTE is a historical name", StringComparison.Ordinal)));
+
+            published.Should().Contain(diagnostic => diagnostic.Message == "PRBBYTE is a historical name of PRBBYT.");
+            published.Should().NotContain(diagnostic => diagnostic.Message.StartsWith("COMBYTE is a historical name", StringComparison.Ordinal));
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
     // Two macros whose bodies define the same name, each with its own old name, expanded in two scopes.
     private const string TwoMacroProbe = """
         ; retrocore: style=strict

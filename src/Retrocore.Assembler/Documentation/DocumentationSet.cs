@@ -356,9 +356,16 @@ public sealed class DocumentationSet
         List<DocumentationComment> participants = [.. outside.Where(comment => !BareInherit(comment))];
         if (participants.Count == 0) { participants = outside; }
         bool Gave(DocumentationComment comment) => DocumentationAlso.Of(comment.Sections).Any(also => also.Name == name);
-        bool InBuild(DocumentationComment comment) => !thisBuild || CommentInBuild(comment);
-        return participants.Any(comment => Gave(comment) && InBuild(comment))
-            || (participants.Count != 0 && participants.All(Gave) && outside.Any(comment => BareInherit(comment) && InBuild(comment)));
+        bool Built(DocumentationComment comment) => !thisBuild || CommentInBuild(comment);
+        if (participants.Any(comment => Gave(comment) && Built(comment))) { return true; }
+
+        // As Merge does, a section every branch writes alike, documents and all, is shared with the inheriting branch.
+        bool Shared(DocumentationSection section) =>
+            participants.All(comment => comment.Sections.Any(candidate => Same(candidate, section)));
+
+        return participants.Count != 0
+            && outside.Any(comment => BareInherit(comment) && Built(comment))
+            && DocumentationAlso.Of(participants[0].Sections.Where(Shared)).Any(also => also.Name == name);
     }
 
     /// <summary>

@@ -303,7 +303,7 @@ public sealed partial class DocumentationResolver
                 break;
             case "Also":
                 // A routine written once per build gives each build's old names under its own condition.
-                if (!Current.InBuild(topic, section)) { break; }
+                if (!Current.InBuild(topic, section) || OnlyUnreachedMacros(topic, section)) { break; }
                 CheckAlso(topic, section, also);
                 break;
             case "Entry":
@@ -537,6 +537,17 @@ public sealed partial class DocumentationResolver
                 warn($"Also: {other.Name} has the historical name {also.Name} too.", section.Line);
             }
         }
+    }
+
+    // Whether only definitions in macros' bodies whose old names reach nothing write a section: one the build doesn't
+    // expand once, which says nothing about the build's definitions, or whose name varies, which CheckExpandedAlso
+    // reports.
+    private bool OnlyUnreachedMacros(DocumentationTopic topic, DocumentationSection section)
+    {
+        IEnumerable<DocumentationComment> writers = topic.Comments.Where(comment => comment.Sections.Any(candidate =>
+            candidate.Name.Equals(section.Name, StringComparison.OrdinalIgnoreCase) && candidate.Text == section.Text));
+
+        return writers.Any() && writers.All(comment => comment.Macro is not null && !Current.Reaches(comment));
     }
 
     // Whether another definition in this build gives a definition's old name too.

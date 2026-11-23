@@ -101,6 +101,9 @@ public sealed partial class HistoricalNameTests
 
         // Nor does the lint check it, though its old name is also a definition: the build has no such definition.
         Check($"{MacroLibrary}\nCOMBYTE = 1\n").Should().BeEmpty();
+
+        // Also beside a definition outside the macro that shares its topic, which the build assembles.
+        Check($"{MacroLibrary}\nCOMBYT = 1\nCOMBYTE = 1\n").Should().BeEmpty();
     }
 
     /// <summary>
@@ -1216,6 +1219,30 @@ public sealed partial class HistoricalNameTests
         skipped.Should().NotContain("Inherit:");
         Set(Macro + "\n" + skipped).FindAlso("OLD", thisBuild: true).Select(topic => topic.Name).Should().Equal("BAR");
         Check(Macro + "\n" + skipped).Should().BeEmpty();
+
+        // Branches that cite different documents share nothing with the inheriting one, as without the macro.
+        const string Cited = """
+            X = 3
+            .if X = 1
+            ;; One.
+            ;; Also: OLD (TEST)
+            FOO = 1
+            .elseif X = 2
+            ;; Two.
+            ;; Also: OLD (BOOK)
+            FOO = 2
+            .else
+            ;; Inherit:
+            FOO = 3
+            .endif
+            ;; Another.
+            ;; Also: OLD (TEST)
+            BAR = 3
+            """;
+
+        string[] apart = [.. Set(Cited).FindAlso("OLD", thisBuild: true).Select(topic => topic.Name)];
+        apart.Should().Equal("BAR");
+        Set(Macro + "\n" + Cited).FindAlso("OLD", thisBuild: true).Select(topic => topic.Name).Should().Equal(apart);
     }
 
     private static List<DocumentationDiagnostic> Check(string text) =>

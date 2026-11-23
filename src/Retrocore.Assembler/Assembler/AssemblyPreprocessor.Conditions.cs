@@ -6,6 +6,10 @@ namespace Retrocore.Assembler;
 
 internal sealed partial class AssemblyPreprocessor
 {
+    // An error found expanding a conditional's line, before its condition could be read; reported, as false, where
+    // the condition is tested, so the conditional still opens and its .else and .endif stay matched.
+    private string? _conditionFailure;
+
     private bool ConditionalDirective(string operation, string operand, AssemblyLocation location, int floor, AssemblyDialect dialect)
     {
         try
@@ -14,9 +18,59 @@ internal sealed partial class AssemblyPreprocessor
         }
         finally
         {
-            // An ambiguity the line's expansion found is for this line's condition only.
+            // An ambiguity or failure the line's expansion found is for this line's condition only.
             _conditionAmbiguity = null;
+            _conditionFailure = null;
         }
+    }
+
+    /// <summary>
+    ///  Reports an error that stopped a line's expansion, keeping a conditional on that line in the nesting.
+    /// </summary>
+    /// <param name="message">The error.</param>
+    /// <param name="line">The line, before expansion.</param>
+    /// <param name="floor">The conditional depth this source or macro body opened at.</param>
+    /// <remarks>
+    ///  <para>
+    ///   A function in a condition, such as <c>.definedmacro(1+2)</c>, fails while the whole line is expanded,
+    ///   before the condition is read. The conditional is still opened, or continued, and treated as false, as
+    ///   for any condition that cannot be read; its error is reported where the condition is tested, so an
+    ///   <c>.elseif</c> after a taken branch, which is not tested, reports nothing, as in ca65. A failing operand
+    ///   of <c>.else</c> or <c>.endif</c> is reported, and the branch still changes or closes. Without this, the
+    ///   conditional's <c>.endif</c> would be reported as unexpected too.
+    ///  </para>
+    /// </remarks>
+    private void ExpansionFailure(string message, Line line, int floor)
+    {
+        // The keyword may come from a text definition, so the line is read with its definitions expanded.
+        string text = AssemblySyntax.AsString(line.Text);
+        try
+        {
+            text = ExpandCa65Definitions(text);
+        }
+        catch (Exception exception) when (exception is AssemblyError or OverflowException)
+        {
+            // The failure being reported may be this expansion's; the line is then read as written.
+        }
+
+        Split(text, out _, out ReadOnlySpan<char> operationText, out ReadOnlySpan<char> operandText);
+        string operation = operationText.ToString().ToUpperInvariant();
+        bool active = _conditions.Count == 0 || _conditions[^1].Active;
+        if (operation is ".ELSE" or ".ENDIF")
+        {
+            if (active) { Error(message, line.Location); }
+            ConditionalDirective(operation, "", line.Location, floor, line.Dialect);
+            return;
+        }
+
+        if (operation is ".IF" or ".ELSEIF" or ".IFDEF" or ".IFNDEF" or ".IFBLANK" || IsCa65Condition(operation))
+        {
+            _conditionFailure = message;
+            ConditionalDirective(operation, operandText.ToString(), line.Location, floor, line.Dialect);
+            return;
+        }
+
+        if (active) { Error(message, line.Location); }
     }
 
     private bool ConditionalDirectiveText(string operation, string operand, AssemblyLocation location, int floor, AssemblyDialect dialect)
@@ -34,6 +88,7 @@ internal sealed partial class AssemblyPreprocessor
         if (operation is not (".ELSE" or ".ELSEIF" or ".ENDIF")) { return false; }
         if (_conditions.Count <= floor)
         {
+            if (_conditionFailure is { } failure) { Error(failure, location); }
             Error($"Unexpected {operation}.", location);
             return true;
         }
@@ -70,6 +125,12 @@ internal sealed partial class AssemblyPreprocessor
 
     private bool TestCondition(string operation, string operand, AssemblyLocation location, AssemblyDialect dialect)
     {
+        if (_conditionFailure is { } failure)
+        {
+            Error(failure, location);
+            return false;
+        }
+
         _nameAmbiguity = null;
         bool result = TestConditionText(operation, operand, location, dialect);
         _nameAmbiguity ??= _conditionAmbiguity;

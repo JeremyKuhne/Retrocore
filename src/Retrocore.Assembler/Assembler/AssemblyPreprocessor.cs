@@ -382,16 +382,12 @@ internal sealed partial class AssemblyPreprocessor
                 }
                 catch (AssemblyError failure)
                 {
-                    if (_conditions.Count == 0 || _conditions[^1].Active) { Error(failure.Message, original.Location); }
+                    ExpansionFailure(failure.Message, original, conditionFloor);
                     continue;
                 }
                 catch (OverflowException)
                 {
-                    if (_conditions.Count == 0 || _conditions[^1].Active)
-                    {
-                        Error("Expansion overflow.", original.Location);
-                    }
-
+                    ExpansionFailure("Expansion overflow.", original, conditionFloor);
                     continue;
                 }
             }
@@ -423,16 +419,12 @@ internal sealed partial class AssemblyPreprocessor
                 }
                 catch (AssemblyError failure)
                 {
-                    if (_conditions.Count == 0 || _conditions[^1].Active) { Error(failure.Message, original.Location); }
+                    ExpansionFailure(failure.Message, original, conditionFloor);
                     continue;
                 }
                 catch (OverflowException)
                 {
-                    if (_conditions.Count == 0 || _conditions[^1].Active)
-                    {
-                        Error("ca65 expansion overflow.", original.Location);
-                    }
-
+                    ExpansionFailure("ca65 expansion overflow.", original, conditionFloor);
                     continue;
                 }
             }

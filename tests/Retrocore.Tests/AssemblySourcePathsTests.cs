@@ -67,6 +67,103 @@ public class AssemblySourcePathsTests
         GeneratorPath.IsPathFullyQualified(path).Should().Be(Path.IsPathFullyQualified(path));
 
     /// <summary>
+    ///  The generator's polyfill applies .NET's Windows rules for full qualification on any platform, so the
+    ///  Windows branch is checked where the tests run, against the results of .NET's <c>PathInternal.Windows</c>.
+    /// </summary>
+    /// <param name="path">The path.</param>
+    /// <param name="expected">Whether .NET on Windows finds it fully qualified.</param>
+    [TestMethod]
+    [DataRow("", false)]
+    [DataRow("Library.asm", false)]
+    [DataRow(@"\", false)]
+    [DataRow(@"\lib\Library.asm", false)]
+    [DataRow("/lib/Library.asm", false)]
+    [DataRow(@"\\server\share\Library.asm", true)]
+    [DataRow("//server/share/Library.asm", true)]
+    [DataRow(@"\/server", true)]
+    [DataRow(@"\\?\C:\lib\Library.asm", true)]
+    [DataRow(@"\?\C:\lib\Library.asm", true)]
+    [DataRow(@"\??\C:\lib\Library.asm", true)]
+    [DataRow("C:", false)]
+    [DataRow("C:Library.asm", false)]
+    [DataRow(@"C:\", true)]
+    [DataRow(@"c:\lib\Library.asm", true)]
+    [DataRow("C:/lib/Library.asm", true)]
+    [DataRow(@"1:\lib\Library.asm", false)]
+    public void PolyfilledFullQualificationFollowsWindowsRules(string path, bool expected) =>
+        GeneratorPath.IsPathFullyQualified(path, windows: true).Should().Be(expected);
+
+    /// <summary>
+    ///  The generator's polyfill applies .NET's Unix rules for full qualification on any platform: only a leading
+    ///  <c>/</c> qualifies.
+    /// </summary>
+    /// <param name="path">The path.</param>
+    /// <param name="expected">Whether .NET on Unix finds it fully qualified.</param>
+    [TestMethod]
+    [DataRow("", false)]
+    [DataRow("/", true)]
+    [DataRow("/lib/Library.asm", true)]
+    [DataRow(@"\lib\Library.asm", false)]
+    [DataRow(@"\\server\share\Library.asm", false)]
+    [DataRow(@"C:\lib\Library.asm", false)]
+    public void PolyfilledFullQualificationFollowsUnixRules(string path, bool expected) =>
+        GeneratorPath.IsPathFullyQualified(path, windows: false).Should().Be(expected);
+
+    /// <summary>
+    ///  The generator's polyfill joins with .NET's separators for each platform on any platform: Windows takes
+    ///  either slash as a separator and adds <c>\</c>; Unix takes only <c>/</c>.
+    /// </summary>
+    /// <param name="path1">The first path.</param>
+    /// <param name="path2">The second path.</param>
+    /// <param name="windows">Whether to apply Windows rules.</param>
+    /// <param name="expected">The joined path .NET gives on that platform.</param>
+    [TestMethod]
+    [DataRow(@"C:\work", "lib", true, @"C:\work\lib")]
+    [DataRow(@"C:\work\", "lib", true, @"C:\work\lib")]
+    [DataRow("C:/work/", "lib", true, "C:/work/lib")]
+    [DataRow(@"C:\work", "/lib", true, @"C:\work/lib")]
+    [DataRow(@"C:\work", @"\lib", true, @"C:\work\lib")]
+    [DataRow("work", @"\lib", false, @"work/\lib")]
+    [DataRow(@"work\", "lib", false, @"work\/lib")]
+    [DataRow("/work/", "lib", false, "/work/lib")]
+    public void PolyfilledJoinFollowsEachPlatformsRules(string path1, string path2, bool windows, string expected) =>
+        GeneratorPath.Join(path1, path2, windows).Should().Be(expected);
+
+    /// <summary>
+    ///  Under Windows rules, a path rooted without being fully qualified depends on current-directory state and
+    ///  every other path does not; under Unix rules none does. The assembler's and the generator's copies agree.
+    /// </summary>
+    /// <param name="path">The path.</param>
+    /// <param name="expected">Whether it depends on current-directory state under Windows rules.</param>
+    [TestMethod]
+    [DataRow("", false)]
+    [DataRow("Library.asm", false)]
+    [DataRow(@"lib\Library.asm", false)]
+    [DataRow(@"\", true)]
+    [DataRow("/", true)]
+    [DataRow(@"\lib\Library.asm", true)]
+    [DataRow("/lib/Library.asm", true)]
+    [DataRow(@"\\server\share\Library.asm", false)]
+    [DataRow(@"\?\C:\lib\Library.asm", false)]
+    [DataRow("C:", true)]
+    [DataRow("C:Library.asm", true)]
+    [DataRow(@"d:lib\Library.asm", true)]
+    [DataRow(@"C:\lib\Library.asm", false)]
+    [DataRow("C:/lib/Library.asm", false)]
+    [DataRow("1:Library.asm", false)]
+    public void CurrentDirectoryPathsFollowWindowsRules(string path, bool expected)
+    {
+        AssemblySourcePaths.DependsOnCurrentDirectory(path, windows: true).Should().Be(expected);
+        GeneratorAssembly.AssemblySourcePaths.DependsOnCurrentDirectory(path, windows: true).Should().Be(expected);
+        AssemblySourcePaths.DependsOnCurrentDirectory(path, windows: false).Should().BeFalse();
+        GeneratorAssembly.AssemblySourcePaths.DependsOnCurrentDirectory(path, windows: false).Should().BeFalse();
+
+        // Rooted and not fully qualified, by the polyfill's independent statement of .NET's Windows rule.
+        bool rooted = path.Length > 0 && (path[0] is '\\' or '/' || (path.Length > 1 && path[1] == ':' && char.IsAsciiLetter(path[0])));
+        expected.Should().Be(rooted && !GeneratorPath.IsPathFullyQualified(path, windows: true));
+    }
+
+    /// <summary>
     ///  The generator's copy of the rule resolves every request as the assembler's does, or rejects it as the
     ///  assembler's does.
     /// </summary>
@@ -94,8 +191,7 @@ public class AssemblySourcePathsTests
     }
 
     /// <summary>
-    ///  A relative request is joined to the including folder, even one that only looks rooted on another operating
-    ///  system, and a fully qualified one is used as it is.
+    ///  A relative request is joined to the including folder and a fully qualified one is used as it is.
     /// </summary>
     [TestMethod]
     public void RequestsAreJoinedUnlessFullyQualified()

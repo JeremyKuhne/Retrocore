@@ -33,10 +33,10 @@ internal sealed partial class AssemblyPreprocessor
                 IAssemblySourceResolver? resolver = _options.SourceResolver;
                 resolver?.TryResolve(source.Path, request, out baseSource);
             }
-            catch (Exception error) when (error is IOException or UnauthorizedAccessException or ArgumentException)
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException or AssemblyError)
             {
-                // As an include reports them: unreadable, denied, or a name no path can hold or that depends on
-                // current-directory state.
+                // What an include reports: unreadable, denied, a name no path can hold or that depends on
+                // current-directory state, or the resolver's own error, such as invalid dialect metadata.
                 Error($"Cannot resolve overlay base '{request}': {error.Message}", pragma);
                 return;
             }

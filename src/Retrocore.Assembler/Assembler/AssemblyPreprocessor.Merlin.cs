@@ -406,7 +406,7 @@ internal sealed partial class AssemblyPreprocessor
         {
             return request;
         }
-        catch (ArgumentException)
+        catch (Exception error) when (error is ArgumentException or NotSupportedException)
         {
             // A name no path can hold, or one that depends on current-directory state: the include it becomes
             // reports it.

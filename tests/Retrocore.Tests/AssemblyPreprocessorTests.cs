@@ -135,12 +135,51 @@ public partial class AssemblyPreprocessorTests
     public void CurrentDirectoryIncludesAreReportedOnWindows(string request)
     {
         Resolver resolver = new();
-        resolver.Add(@"C:\root\local.inc", ".byte $11");
         AssemblyResult result = new NativeAssembler().Assemble(
             new AssemblySource($".include \"{request}\"", @"C:\root\main.asm"),
             Options(resolver));
 
         result.Diagnostics.Single().Message.Should().Be($"Invalid include path: An include path must be relative or fully qualified, not '{request}'.");
+    }
+
+    /// <summary>
+    ///  On Windows, a search path rooted without being fully qualified is reported by its own name, not under a
+    ///  combined path the source never wrote.
+    /// </summary>
+    [TestMethod]
+    [OSCondition(OperatingSystems.Windows)]
+    public void CurrentDirectorySearchPathsAreReportedOnWindows()
+    {
+        AssemblyResult result = new NativeAssembler().Assemble(
+            new AssemblySource(".include \"local.inc\"", @"C:\root\main.asm"),
+            Options(new Resolver(), includePaths: [@"\search"]));
+
+        result.Diagnostics.Single().Message.Should().Be(@"Invalid include path: A search path must be relative or fully qualified, not '\search'.");
+    }
+
+    /// <summary>
+    ///  A MACRO-10 overlay reports what its resolver throws for the base, as an include does, rather than letting
+    ///  it out of the assembler.
+    /// </summary>
+    [TestMethod]
+    public void OverlayBaseResolverErrorsAreReported()
+    {
+        Exception[] errors =
+        [
+            new AssemblyError(line: 0, "Invalid RetrocoreDialect metadata 'z80'."),
+            new IOException("The base could not be read."),
+            new UnauthorizedAccessException("The base is denied."),
+            new NotSupportedException("The base's path format is not supported."),
+        ];
+
+        foreach (Exception error in errors)
+        {
+            AssemblyResult overlay = new NativeAssembler().Assemble(
+                new AssemblySource("; retrocore: dialect=macro10 overlay=base.mac\n", P("root/main.mac")),
+                Options(new ThrowingResolver(error)));
+
+            overlay.Diagnostics.Single().Message.Should().Be($"Cannot resolve overlay base 'base.mac': {error.Message}");
+        }
     }
 
     /// <summary>
@@ -620,5 +659,4 @@ public partial class AssemblyPreprocessorTests
                 IncludePaths = includePaths ?? [],
                 SdkPaths = sdkPaths ?? []
             };
-
 }

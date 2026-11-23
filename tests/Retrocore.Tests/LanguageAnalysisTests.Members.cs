@@ -3,7 +3,6 @@
 // See LICENSE file in the project root for full license information
 
 using System.Text.Json.Nodes;
-using Retrocore.Assembler;
 using Retrocore.Debug.Language;
 using Retrocore.Documentation;
 
@@ -451,32 +450,24 @@ public sealed partial class LanguageAnalysisTests
     }
 
     /// <summary>
-    ///  The editor resolves an included name as the assembler's file resolver does, so it names a file by the path
-    ///  the assembler reads it from (relative, parent and fully qualified), and rejects the Windows names the
-    ///  assembler rejects because they depend on current-directory state.
+    ///  The editor names an included file by the path the assembler reads it from: a relative or parent name from
+    ///  the including folder, a fully qualified one as it is, and none for a name no path can hold.
     /// </summary>
-    /// <param name="request">The included name.</param>
     [TestMethod]
-    [DataRow("Library.asm")]
-    [DataRow("../lib/Library.asm")]
-    [DataRow("/shared/Library.asm")]
-    [DataRow(@"\lib\Library.asm")]
-    [DataRow(@"C:Library.asm")]
-    [DataRow(@"C:\lib\Library.asm")]
-    [DataRow(@"\\server\share\Library.asm")]
-    public void IncludesResolveAsTheAssemblerResolvesThem(string request)
+    public void IncludesNameTheFilesTheAssemblerReads()
     {
-        string from = Path.GetFullPath(Path.Join(Path.GetTempPath(), "retrocore-paths", "program", "Main.asm"));
-        if (AssemblySourcePaths.DependsOnCurrentDirectory(request))
-        {
-            FluentActions.Invoking(() => LanguagePaths.Resolve(from, request)).Should().Throw<ArgumentException>();
-            SourceIncludes.IncludeLines(from, [$".include \"{request}\""]).Should().BeEmpty();
-            return;
-        }
+        string folder = Path.GetFullPath(Path.Join(Path.GetTempPath(), "retrocore-paths", "program"));
+        string from = Path.Join(folder, "Main.asm");
+        string qualified = Path.GetFullPath(Path.Join(Path.GetTempPath(), "shared", "Library.asm"));
+        string[] lines = [".include \"Library.asm\"", ".include \"../lib/Library.asm\"", $".include \"{qualified}\"", $".include \"bad{'\0'}name\""];
 
-        LanguagePaths.Resolve(from, request).Should().Be(AssemblySourcePaths.Resolve(from, request));
-        LanguagePaths.Resolve("", request).Should().Be(AssemblySourcePaths.Resolve("", request));
-        SourceIncludes.IncludeLines(from, [$".include \"{request}\""]).Should().Equal((0, AssemblySourcePaths.Resolve(from, request)));
+        SourceIncludes.IncludeLines(from, lines).Should().Equal(
+            (0, Path.Join(folder, "Library.asm")),
+            (1, Path.GetFullPath(Path.Join(folder, "..", "lib", "Library.asm"))),
+            (2, qualified));
+
+        LanguagePaths.Resolve(from, "Library.asm").Should().Be(Path.Join(folder, "Library.asm"));
+        LanguagePaths.Resolve(from, qualified).Should().Be(qualified);
     }
 
     /// <summary>

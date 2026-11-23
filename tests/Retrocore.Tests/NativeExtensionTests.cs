@@ -356,17 +356,22 @@ public class NativeExtensionTests
     }
 
     /// <summary>
-    ///  A constant defined with <c>:=</c> is fixed once defined, as one defined with <c>=</c> is, and needs a value.
+    ///  A constant defined with <c>:=</c> is fixed once defined, as one defined with <c>=</c> is, and every spelling
+    ///  of a definition without a value reports the same one error.
     /// </summary>
     /// <param name="text">The source.</param>
     /// <param name="message">The error it reports.</param>
     [TestMethod]
     [DataRow("V := 1\nV := 2", "Duplicate symbol 'V'.")]
     [DataRow("V = 1\nV := 2", "Duplicate symbol 'V'.")]
-    [DataRow("V :=", "Invalid expression ':='.")]
+    [DataRow("V :=", "A constant definition requires an expression.")]
+    [DataRow("V:=", "A constant definition requires an expression.")]
+    [DataRow("V =", "A constant definition requires an expression.")]
+    [DataRow("V=", "A constant definition requires an expression.")]
+    [DataRow("V := ; no value", "A constant definition requires an expression.")]
     public void ColonEqualsConstantMistakesAreReported(string text, string message)
     {
-        Assemble(text).Diagnostics.Select(diagnostic => diagnostic.Message).Should().Contain(message);
+        Assemble(text).Diagnostics.Select(diagnostic => diagnostic.Message).Should().Equal(message);
     }
 
     /// <summary>

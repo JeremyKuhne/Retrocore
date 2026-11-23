@@ -150,12 +150,19 @@ public sealed partial class Assembler
         if (suffix.Span.StartsWith(":=", StringComparison.Ordinal)) { assignment = 2; }
         else if (!suffix.IsEmpty && suffix.Span[0] == '=') { assignment = 1; }
 
-        if (identifierLength != 0 && assignment != 0 && !suffix[assignment..].Span.Trim().IsEmpty)
+        if (identifierLength != 0 && assignment != 0)
         {
+            // An empty right side is still a definition, so every spelling reports it alike.
+            operand = suffix[assignment..].Trim();
+            if (operand.IsEmpty)
+            {
+                error = "A constant definition requires an expression.";
+                return null;
+            }
+
             // Constants lower to the same typed statement kind as caller-constructed .EQU nodes.
             label = text[..identifierLength].ToString();
             operation = ".EQU".AsMemory();
-            operand = suffix[assignment..].Trim();
         }
         else if (identifierLength != 0
             && suffix.Length > 4

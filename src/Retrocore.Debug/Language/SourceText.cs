@@ -84,6 +84,10 @@ internal static class SourceText
         return end > start ? (line[start..end], start) : null;
     }
 
+    // What ends an operation, and a directive's name, which also ends at a parenthesis.
+    private static readonly char[] s_operationEnds = [' ', '\t'];
+    private static readonly char[] s_directiveEnds = [' ', '\t', '('];
+
     /// <summary>
     ///  Gets whether text ends where an operation goes: the first word after an optional label in column 0 (a
     ///  directive may start in column 0 too).
@@ -100,8 +104,9 @@ internal static class SourceText
             rest = rest[end..];
         }
 
+        // A directive's name ends at a parenthesis too, as the assembler reads it: in ".if(", what follows is an operand.
         rest = rest.TrimStart();
-        return rest.IndexOfAny([' ', '\t']) < 0;
+        return rest.IndexOfAny(rest.StartsWith('.') ? s_directiveEnds : s_operationEnds) < 0;
     }
 
     /// <summary>

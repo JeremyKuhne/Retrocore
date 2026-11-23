@@ -42,8 +42,9 @@ internal static class Ca65Frontend
                 return $"{name} = {Expression(rest[1..].ToString(), time)}";
             }
 
+            // As anywhere a directive's name is read, a parenthesis right after it starts the operand.
             if (rest.StartsWith(".set", StringComparison.OrdinalIgnoreCase)
-                && (rest.Length == 4 || char.IsWhiteSpace(rest[4])))
+                && (rest.Length == 4 || char.IsWhiteSpace(rest[4]) || rest[4] == '('))
             {
                 return $"{name} .set {Expression(rest[4..].ToString(), time)}";
             }
@@ -61,8 +62,7 @@ internal static class Ca65Frontend
             source = source[(labelLength + 1)..].TrimStart();
         }
 
-        int end = 0;
-        while (end < source.Length && !char.IsWhiteSpace(source[end])) { end++; }
+        int end = AssemblySyntax.OperationLength(source);
         string operation = source[..end].ToString();
         string operand = source[end..].Trim().ToString();
         if (operation.Length == 0) { return prefix; }

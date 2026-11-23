@@ -747,6 +747,21 @@ public sealed partial class LanguageAnalysisTests
         SourceText.WordAt(line, column)?.Word.Should().Be(expected);
 
     /// <summary>
+    ///  The operation is the first word after an optional label; a directive's name ends at a parenthesis, as the
+    ///  assembler reads it, so what follows <c>.if(</c> is an operand.
+    /// </summary>
+    /// <param name="before">The line up to the cursor.</param>
+    /// <param name="expected">Whether an operation belongs at the cursor.</param>
+    [TestMethod]
+    [DataRow("    ld", true)]
+    [DataRow("start: .i", true)]
+    [DataRow("    .if ", false)]
+    [DataRow("    .if(", false)]
+    [DataRow("start: .byte(", false)]
+    public void IsOperationEndsADirectiveAtAParenthesis(string before, bool expected) =>
+        SourceText.IsOperation(before).Should().Be(expected);
+
+    /// <summary>
     ///  A definition from an older analysis may no longer have a line in the edited document.
     /// </summary>
     /// <param name="line">The stale definition's line.</param>

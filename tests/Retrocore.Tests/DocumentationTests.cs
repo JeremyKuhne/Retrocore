@@ -200,6 +200,8 @@ public class DocumentationTests
             START: rts
             ;; Not a constant: the assembler rejects the line.
             JOINED: .equ,3
+            ;; A constant: the parenthesis starts the operand.
+            PARENTHESIZED: .equ(4)
             """);
 
         file.Diagnostics.Should().BeEmpty();
@@ -209,7 +211,8 @@ public class DocumentationTests
             ("KEY_ESC", DocumentationKind.Constant),
             ("TOTAL", DocumentationKind.Variable),
             ("START", DocumentationKind.Routine),
-            ("JOINED", DocumentationKind.Routine));
+            ("JOINED", DocumentationKind.Routine),
+            ("PARENTHESIZED", DocumentationKind.Constant));
     }
 
     /// <summary>

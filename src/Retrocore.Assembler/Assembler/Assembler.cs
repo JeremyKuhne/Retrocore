@@ -174,7 +174,7 @@ public sealed partial class Assembler
         else if (identifierLength != 0
             && suffix.Length > 4
             && suffix.Span[..4].Equals(".SET", StringComparison.OrdinalIgnoreCase)
-            && char.IsWhiteSpace(suffix.Span[4]))
+            && (char.IsWhiteSpace(suffix.Span[4]) || suffix.Span[4] == '('))
         {
             label = text[..identifierLength].ToString();
             operation = ".SET".AsMemory();
@@ -204,7 +204,9 @@ public sealed partial class Assembler
                 end += wide;
             }
 
-            if ((!span.IsEmpty && end == start) || (end < span.Length && !char.IsWhiteSpace(span[end])))
+            // As in ca65, an opening parenthesis right after a directive starts its operand.
+            bool separated = end == span.Length || char.IsWhiteSpace(span[end]) || (start == 1 && span[end] == '(');
+            if ((!span.IsEmpty && end == start) || !separated)
             {
                 error = "Invalid assembly statement.";
                 return null;

@@ -141,7 +141,10 @@ internal sealed partial class AssemblyPreprocessor
     /// </remarks>
     private void InactiveDefinedConditional(ref Line original, ref ReadOnlyMemory<char> text, ReadOnlySpan<char> operation)
     {
-        if (_ca65State?.Defines.Count is not > 0 || operation.IsEmpty || operation[0] == '.') { return; }
+        // Only a definition in the operation's place can make the line a conditional directive.
+        if (_ca65State is not { Defines.Count: > 0 } state || operation.IsEmpty) { return; }
+        if ((state.DefineLengths & LengthBit(operation.Length)) == 0) { return; }
+        if (!state.Defines.ContainsKey(operation.ToString())) { return; }
         string expanded;
         try
         {
@@ -156,6 +159,9 @@ internal sealed partial class AssemblyPreprocessor
         if (!IsConditionalDirective(directive)) { return; }
         original = new(expanded, original.Location, original.Dialect);
         text = original.Text;
+
+        // A label before it is read as on the directive written out: split off, and not defined in a skipped block.
+        DirectiveLabel(ref original, ref text);
     }
 
     private static bool IsConditionalDirective(ReadOnlySpan<char> operation) =>

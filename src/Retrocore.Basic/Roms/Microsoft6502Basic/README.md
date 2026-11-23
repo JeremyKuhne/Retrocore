@@ -216,7 +216,9 @@ The [Commodore platform definitions](../../../Retrocore.Machines.Commodore/Roms/
 include the workspace, dispatch, assignment and channel I/O macros without emitting bytes. The
 [workspace](../../../Retrocore.Machines.Commodore/Roms/Basic/Commodore.Equates.asm) defines PET RAM and system
 entry addresses and documents the independent switches for BASIC 1, 2 and 4; its default is BASIC 2. The shared
-math package also assembles against these equates for every PET revision.
+math package also assembles against these equates for every PET revision. Where a shared module's comment names a
+build (AppleSoft, PET BASIC 1, 2 or 4), it describes that build with its root's default switches; the macro's
+parameters say what each switch changes, and some comments also say "by default".
 The [dispatch tables](../../../Retrocore.Machines.Commodore/Roms/Basic/Commodore.DispatchTables.asm) emit the
 statement and function vectors, the shared operator table, reserved words and messages. Their independent choices
 select GO, disk commands, the early file-data message and single-CR messages; the workspace's `ERROR_PADDING5`

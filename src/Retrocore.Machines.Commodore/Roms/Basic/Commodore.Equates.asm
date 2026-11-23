@@ -683,7 +683,7 @@ NumberBuffer = NumberBufferPrefix + 1
 .if CLOCK_IN_PAGE2
 ;; Three-byte clock in the early kernal's page-two workspace.
 ;;
-;; The kernal listings (K4S79, HVK4) call it `TIME`, a name the builds give a switch.
+;; BASIC 4's kernal listings (K4S79, HVK4) call it `TIME` at its page-zero location, a name the builds give a switch.
 ;; Also: CQTIMR (M6502), CTIMR (CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 JiffyClock = $0200
 .else
@@ -696,7 +696,8 @@ JiffyClock = $8D
 .if STATUS_IN_PAGE2
 ;; I/O status byte in the early kernal's page-two workspace.
 ;;
-;; The kernal listings (K4S79, HVK4) call it `SATUS`, which BASIC 4's system equates define.
+;; BASIC 4's kernal listings (K4S79, HVK4) call it `SATUS` at its page-zero location, which BASIC 4's system equates
+;; define.
 ;; Also: CQSTAT (M6502), CSTAT (CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 IoStatus = $020C
 .else

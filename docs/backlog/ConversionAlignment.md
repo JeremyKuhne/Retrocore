@@ -97,8 +97,8 @@ for B5 logs them in `docs/conversions/Basic.md` on `claude/basic-rename-table`, 
   better than repeating the unchanged lines in a `.proc` per build. A whole `.proc` per build is for routines that
   differ throughout.
 
-  Contracts: a mid-routine `.if` can't give each variant its own `Keeps:`. A routine states the contract that holds
-  in every build, and its prose says what a build does differently. (The recommendation had been a whole `.proc`
+  Contracts: a mid-routine `.if` can't give each variant its own `Keeps:`. A routine with `.if`s inside it states the
+  contract that holds in every build, and its prose says what a build does differently. (The recommendation had been a whole `.proc`
   per build in a source's own builds, with a mid-routine `.if` only in shared modules.)
 - **D6. The MACRO-10 overlays.** Keep them as the selectable second source (`BasicSourceKind.Macro10`). They are
   the per-module byte oracle, not optional. Run the module comparisons in CI on every change to a shared module.

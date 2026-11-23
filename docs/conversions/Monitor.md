@@ -30,9 +30,9 @@ digests check.
     source shows what each version changed: Decode, GetLine, Echo, SetHook and ReadKey. Return, the same in every
     build, is written once between the per-build cassette code. The routines that differ throughout (the IIe's
     calls into its firmware, the Enhanced IIe's cassette stubs, the Apple II's TRACE and STEP) are a `.proc` per
-    build under `.if`. The two IIe's ClearToEndOfLine and ClearLineFrom have one shape, but the original IIe flips
-    the carry, keeps the column elsewhere and leaves through another routine, so an `.if` would sit on nearly every
-    line; they stay a `.proc` per build.
+    build under `.if`. Both IIes' ClearToEndOfLine and ClearLineFrom have one shape, but the original IIe flips the
+    carry, keeps the column at $1F instead of BAS2L and leaves through Scroll's firmware call instead of
+    KeyboardIn's, so an `.if` would sit on most lines; they stay a `.proc` per build.
 11. VLINEZ is a scope-level label `LowRes::NextVerticalRow`, shared by the family's routines.
 12. SLOTRTS on the original IIe is `Commands::UserText` (Control-Y runs the text bytes and falls into USR), and on
     the Enhanced IIe `SelectSlotRom`; the Apple II and Autostart Monitors have none.

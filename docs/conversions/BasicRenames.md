@@ -4,8 +4,8 @@ The rename table for the BASIC sources, step 3 of [the method](../ConvertingSour
 review. Nothing is renamed yet. The decisions, the documents, the inventory's method and counts, and every question
 this table raises are in the log, [Basic.md](Basic.md); a note such as "see A-Q4" points at a part's question
 there, and the cross-cutting ones are X1 to X16, which the owner settled as recommended on 2026-11-23. The table follows
-them: statement names keep their keyword split at its words (X13), and every local is written by its full path
-(X16).
+them: statement names keep their keyword split at its words (X13), every local is written by its full path
+(X16), and the kernal routines BASIC calls have the `Kernal` prefix (X14).
 
 One row per name per file (but for three pairs of same-named macro parameters): 2,411 rows, grouped by module (the shared Microsoft modules first, then AppleSoft's,
 then Commodore's), in the module's source order within each. The columns:
@@ -36,6 +36,7 @@ then Commodore's), in the module's source order within each. The columns:
 The inventory and the document checks were made by script against the eight builds; the names were drafted in
 seven parts and merged; where the parts disagreed, and what two independent reviews corrected, the log says (K1
 to K12, R1 to R10).
+
 
 ### MsBasic.AdditionCore
 
@@ -403,7 +404,7 @@ to K12, R1 to R10).
 | # | Old | New | Kind | Builds | Documents (checked) | D3 | Reason |
 | ---: | --- | --- | --- | --- | --- | --- | --- |
 | 282 | `FNDLIN` | `FindLine` | routine | all | M6502, ASTIL [AS], CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R; spelling only: AS82 [AS] | no | walks the links from ProgramStart until a line number >= LineNumber; SourceStart = that line, carry set on an exact match |
-| 283 | `FNDLNC` | `FindLine::FromAddress` | entry | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | starts the walk at the line A (low) / X (high); Goto enters here for a forward search |
+| 283 | `FNDLNC` | `FindLine::FromAddress` | entry | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | starts the walk at the line A (low) / X (high); GoTo enters here for a forward search |
 | 284 | `FNDLO1` | `FindLine::CompareLow` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | high bytes equal: compares the low bytes |
 | 285 | `AFFRTS` | `FindLine::NextLine` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | loads the link into A/X and loops |
 | 286 | `FLINRT` | `FindLine::NotFound` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | zero link (end of program): clears carry |
@@ -736,7 +737,7 @@ to K12, R1 to R10).
 | 553 | `GOSUB_AND_GOTO` | `GosubAndGoto` | macro | all |  | — | emits GOSUB and GOTO (x1) |
 | 554 | `nextStatement` | `KEEP` | parameter of GOSUB_AND_GOTO | all |  | — | the statement loop's entry; already descriptive |
 | 555 | `GOSUB` | `Statements::GoSub` | routine | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R; spelling only: AS82 [AS] | no | CheckStack(3), pushes a GosubFrame (TextPointer, CurrentLine, TOKEN_GOSUB), then the transfer — see B1-Q2 (GosubFrame), B1-Q8 (spelling) |
-| 556 | `RUNC2` | `Statements::GoSub::Transfer` | entry | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | GetCurrentCharacter, Goto, jmp to the statement loop; RUN with a line enters here |
+| 556 | `RUNC2` | `Statements::GoSub::Transfer` | entry | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | GetCurrentCharacter, GoTo, jmp to the statement loop; RUN with a line enters here |
 | 557 | `GOTO` | `Statements::GoTo` | routine | all | M6502, ASTIL [AS], CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R; spelling only: AS82 [AS] | no | ReadLineNumber, FindLineEnd; searches from the next line when the target's high byte is above CurrentLine's, else from ProgramStart; TextPointer = line - 1 |
 | 558 | `LUK4IT` | `Statements::GoTo::SearchFromStart` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | A/X = ProgramStart |
 | 559 | `LUKALL` | `Statements::GoTo::Search` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | FindLine::FromAddress |
@@ -746,7 +747,7 @@ to K12, R1 to R10).
 | 563 | `searchLow` | `KEEP` | parameter of RETURN_STATEMENT | all |  | — | set AssignedVariable's low (BASIC 1, AppleSoft) or high byte; already descriptive |
 | 564 | `popEntry` | `KEEP` | parameter of RETURN_STATEMENT | all |  | — | AppleSoft's POP test; already descriptive |
 | 565 | `RETURN` | `Statements::Return` | routine | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R; spelling only: ASTIL [AS], AS82 [AS] | no | FindForFrame with an impossible variable skips FOR frames; GOSUB frame: restore; else RETURN WITHOUT GOSUB — bug documented: the low-byte variant can still match |
-| 566 | `USERR` | `Statements::Return::UndefinedStatement` | entry | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | X = UNDEF'D STATEMENT (skipped by RETURN's BIT), jmp ERROR; Goto enters here |
+| 566 | `USERR` | `Statements::Return::UndefinedStatement` | entry | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | X = UNDEF'D STATEMENT (skipped by RETURN's BIT), jmp ERROR; GoTo enters here |
 | 567 | `SNERR2` | `Statements::Return::ToSyntaxError` | entry | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | jmp SNERR; ON enters here |
 | 568 | `RETU1` | `Statements::Return::RestoreCaller` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | pops the frame into CurrentLine and TextPointer (POP: to PopFinish), falls into Data to skip the rest |
 
@@ -810,7 +811,7 @@ to K12, R1 to R10).
 | 607 | `IF` | `Statements::If` | routine | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R; spelling only: AS82 [AS] | no | evaluates, requires THEN or GOTO; false falls into Rem |
 | 608 | `OKGOTO` | `Statements::If::Test` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | FacExponent nonzero: true |
 | 609 | `REM` | `Statements::Rem` | routine | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R; spelling only: AS82 [AS] | no | FindLineEnd, then (always) AdvanceTextPointer |
-| 610 | `DOCOND` | `Statements::IfTrue` | routine | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | a digit after THEN/GOTO: Goto; else the statement through GONE3 — own proc: If branches past Rem to it |
+| 610 | `DOCOND` | `Statements::IfTrue` | routine | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | a digit after THEN/GOTO: GoTo; else the statement through GONE3 — own proc: If branches past Rem to it |
 | 611 | `DOCO` | `Statements::IfTrue::ToExecuteStatement` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | jmp GONE3 — target named as part C names GONE3 |
 | 612 | `ON_STATEMENT` | `OnStatement` | macro | all |  | — | emits ON (x1) |
 | 613 | `ONGOTO` | `Statements::On` | routine | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R; spelling only: AS82 [AS] | no | GETBYT selects; requires GOTO or GOSUB; skips n-1 line numbers, then dispatches the token through GONE2 — Also ON in AppleSoft (its own label, same address) |
@@ -1972,7 +1973,7 @@ to K12, R1 to R10).
 | 1604 | `FERRP` | `Statements::Header::ToBadDisk` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Only jumps on to BADDIS |
 | 1605 | `DCLOSE` | `Statements::DClose` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R]; spelling only: CBM4S79 [P4 P4R], HV4, HV4R | vendor | DCLOSE: accepts only a file number and unit; closes that file, or all the unit's files — K4S79 DCLOSE; jump-table DCLOSE in prose |
 | 1606 | `DCLSE` | `Statements::DClose::Close` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Forgets DS$, then closes LA through the kernal or branches to CloseDeviceFiles |
-| 1607 | `DCLALL` | `Disk::CloseDeviceFiles` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Closes every logical file whose device is FA, rescanning the table after each close — Dclose branches into it; HEADER, COLLECT and BACKUP call it |
+| 1607 | `DCLALL` | `Disk::CloseDeviceFiles` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Closes every logical file whose device is FA, rescanning the table after each close — DClose branches into it; HEADER, COLLECT and BACKUP call it |
 | 1608 | `DCLLP` | `Disk::CloseDeviceFiles::NextFile` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Steps down the open-file table |
 | 1609 | `DCLBYE` | `Disk::CloseDeviceFiles::Done` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | rts when no file of the device remains |
 | 1610 | `BOBREC` | `Disk::PositionRecord` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Gives FILE NOT OPEN unless LA is open, else sends P, secondary, record (POKER) and position (RECPOS) — Reached by jmp from Record; FNLEN2 is RECPOS's shared byte |
@@ -2025,7 +2026,7 @@ to K12, R1 to R10).
 | 1657 | `OLDCLR` | `ForgetDiskStatus` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Marks DS$'s buffer as garbage (length 40, $FF) and zeroes its length and ST; keeps Y — Kernal4's TALK and LISTEN call it, so top level; see F-Q2 |
 | 1658 | `OLDCL1` | `ForgetDiskStatus::Clear` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Zeroes ST and DSDESC |
 | 1659 | `SENDP` | `Disk::BuildCommand` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Starts the command at TBUFF+0 and falls into BuildCommandAt |
-| 1660 | `SENDP1` | `Disk::BuildCommandAt` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Forgets DS$, expands A template bytes from Y+1 into TBUFF at X, then names it the kernal filename — Dopen and Dsave enter here after @; falls into SetCommandName |
+| 1660 | `SENDP1` | `Disk::BuildCommandAt` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Forgets DS$, expands A template bytes from Y+1 into TBUFF at X, then names it the kernal filename — DOpen and DSave enter here after @; falls into SetCommandName |
 | 1661 | `SENDP2` | `Disk::BuildCommandAt::NextByte` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Counts down KCOUNT and fetches the next template byte |
 | 1662 | `RXFN1` | `Disk::BuildCommandAt::FirstName` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Tests for INSERT_FIRST_NAME — Unreferenced, kept for its K4S79 name |
 | 1663 | `RXFN2` | `Disk::BuildCommandAt::SecondName` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Tests for INSERT_SECOND_NAME |
@@ -2289,35 +2290,35 @@ to K12, R1 to R10).
 | 1886 | `MS3` | `FileNotOpenMessage` | message | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | the kernal's FILE NOT OPEN message; RECORD reports it |
 | 1887 | `MSG30` | `ConfirmMessage` | message | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | the kernal's confirmation prompt; RUSURE prints it, then accepts only Y or YES |
 | 1888 | `MSG31` | `BadDiskMessage` | message | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | the kernal's bad-disk message; BADDIS prints it in direct mode |
-| 1889 | `TALK` | `Talk` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | addresses a device on the IEEE bus as talker |
-| 1890 | `LISTN` | `Listen` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | addresses a device on the IEEE bus as listener |
-| 1891 | `MSG` | `PrintMessage` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | prints the kernal message at offset Y |
-| 1892 | `SECND` | `SendSecondary` | routine | P4 P4R | spelling only: K4S79 [P4 P4R], HVK4 [P4 P4R]; other names here: TKSA (HVK4) | vendor | sends a secondary address after Talk |
-| 1893 | `UNTLK` | `Untalk` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | sends UNTALK on the bus |
-| 1894 | `UNLSN` | `Unlisten` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | sends UNLISTEN on the bus |
-| 1895 | `ACPTR` | `ReceiveByte` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | receives a byte from the bus talker |
-| 1896 | `GETIN` | `GetInput` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | gets a character without waiting (behind GetCharacter's vector) |
-| 1897 | `BASIN` | `InputCharacter` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | reads a character from the selected input (behind KernalCharacterIn) |
-| 1898 | `BSOUT` | `OutputCharacter` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | writes a character to the selected output (behind KernalCharacterOut) |
+| 1889 | `TALK` | `KernalTalk` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | addresses a device on the IEEE bus as talker |
+| 1890 | `LISTN` | `KernalListen` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | addresses a device on the IEEE bus as listener |
+| 1891 | `MSG` | `KernalPrintMessage` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | prints the kernal message at offset Y |
+| 1892 | `SECND` | `KernalSendSecondary` | routine | P4 P4R | spelling only: K4S79 [P4 P4R], HVK4 [P4 P4R]; other names here: TKSA (HVK4) | vendor | sends a secondary address after Talk |
+| 1893 | `UNTLK` | `KernalUntalk` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | sends UNTALK on the bus |
+| 1894 | `UNLSN` | `KernalUnlisten` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | sends UNLISTEN on the bus |
+| 1895 | `ACPTR` | `KernalReceiveByte` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | receives a byte from the bus talker |
+| 1896 | `GETIN` | `KernalGetInput` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | gets a character without waiting (behind GetCharacter's vector) |
+| 1897 | `BASIN` | `KernalInputCharacter` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | reads a character from the selected input (behind KernalCharacterIn) |
+| 1898 | `BSOUT` | `KernalOutputCharacter` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | writes a character to the selected output (behind KernalCharacterOut) |
 | 1899 | `CLRCH` | `KernalRestoreChannels` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | restores the default input and output |
 | 1900 | `CLRCHN` | `KernalRestoreChannels` | alias | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | the same entry under a second kernal name — one definition with Also: CLRCH, CLRCHN |
-| 1901 | `JLTLK` | `FindLogicalFile` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | looks up LogicalFile in the kernal's tables; zero set when found |
-| 1902 | `JZ100` | `LoadFileEntry` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | loads the found file's table entry into the current fields |
-| 1903 | `CLOS5` | `CloseLogicalFile` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | closes the selected logical file |
-| 1904 | `FCLOSE` | `CloseLogicalFile` | alias | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | the same entry under a second kernal name — one definition with Also: CLOS5, FCLOSE |
-| 1905 | `CLOS10` | `CloseFileAt` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | closes the file at table position X (DCLOSE) |
-| 1906 | `STOP1` | `TestStopKey` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | tests the STOP key; zero set when pressed — distinct from the CheckStop vector |
-| 1907 | `LD15` | `MonitorLoad` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | the kernal load entry the monitor calls |
-| 1908 | `LOADNP` | `LoadWithoutName` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | loads without parsing a filename (DLOAD) |
-| 1909 | `OPENIB` | `SendOpen` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | sends an OPEN with the filename on the bus |
-| 1910 | `OP94` | `OpenPrepared` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | opens the filename a disk command prepared |
-| 1911 | `FOPEN` | `OpenCurrentFile` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | opens using the current kernal file fields (CATALOG) |
+| 1901 | `JLTLK` | `KernalFindLogicalFile` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | looks up LogicalFile in the kernal's tables; zero set when found |
+| 1902 | `JZ100` | `KernalLoadFileEntry` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | loads the found file's table entry into the current fields |
+| 1903 | `CLOS5` | `KernalCloseLogicalFile` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | closes the selected logical file |
+| 1904 | `FCLOSE` | `KernalCloseLogicalFile` | alias | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | the same entry under a second kernal name — one definition with Also: CLOS5, FCLOSE |
+| 1905 | `CLOS10` | `KernalCloseFileAt` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | closes the file at table position X (DCLOSE) |
+| 1906 | `STOP1` | `KernalTestStopKey` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | tests the STOP key; zero set when pressed — distinct from the CheckStop vector |
+| 1907 | `LD15` | `KernalMonitorLoad` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | the kernal load entry the monitor calls |
+| 1908 | `LOADNP` | `KernalLoadWithoutName` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | loads without parsing a filename (DLOAD) |
+| 1909 | `OPENIB` | `KernalSendOpen` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | sends an OPEN with the filename on the bus |
+| 1910 | `OP94` | `KernalOpenPrepared` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | opens the filename a disk command prepared |
+| 1911 | `FOPEN` | `KernalOpenCurrentFile` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | opens using the current kernal file fields (CATALOG) |
 | 1912 | `ERMSG` | `KernalReportMessage` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | reports kernal message Y as an error |
-| 1913 | `SV3` | `BasicSave` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | the kernal's BASIC save entry (DSAVE) |
-| 1914 | `SV5` | `MonitorSave` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | the kernal's save entry the monitor calls |
-| 1915 | `CHKIN` | `SetInputChannel` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | selects a logical file for input |
-| 1916 | `CHKOUT` | `SetOutputChannel` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R]; other names here: CKOUT (HVK4) | vendor | selects a logical file for output |
-| 1917 | `TWAIT` | `WaitForTape` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | waits for the tape operation to finish |
+| 1913 | `SV3` | `KernalBasicSave` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | the kernal's BASIC save entry (DSAVE) |
+| 1914 | `SV5` | `KernalMonitorSave` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | the kernal's save entry the monitor calls |
+| 1915 | `CHKIN` | `KernalSetInputChannel` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | selects a logical file for input |
+| 1916 | `CHKOUT` | `KernalSetOutputChannel` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R]; other names here: CKOUT (HVK4) | vendor | selects a logical file for output |
+| 1917 | `TWAIT` | `KernalWaitForTape` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | waits for the tape operation to finish |
 | 1918 | `SPERR` | `STATUS_LOAD_ERROR` | constant | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R]; other names here: CHANL (HVK4) | vendor | IoStatus bit ($10) for a load or verify error — HVK4 calls it CHANL |
 | 1919 | `CR` | `CHARACTER_RETURN` | constant | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | carriage return ($0D), the monitor's line end — other PET parts may name CR; one definition (see D-Q6) |
 | 1920 | `ONTK` | `TOKEN_ON` | token | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | BASIC's ON token; the disk parser reads ON as the unit keyword — should be the token table's TOKEN_ON (one definition) |

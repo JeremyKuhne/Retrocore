@@ -962,8 +962,8 @@ Decisions and how the table was applied:
   line (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R), under S11's lineage rule; the table's row 860 gives M6502, HV1
   and HV1R. AppleSoft's and BASIC 2's and 4's `ZeroValue` is the math step's, inside `Float::Half`. AppleSoft's own
   bytes here are `ZeroVariable` (SIMZER), which has no `Also:` in the modules; AppleSoft's alias gives SIMZER (E3).
-  The math step's `ZeroValue` cites ZERO by M6502, CBM4S79, HV2, HV4 and HV4R, without HV1 and HV1R, which give the
-  name to BASIC 1's other zero; whether the lineage rule should add them there too is a question for the owner.
+  The math step's `ZeroValue`, inside `Float::Half`, now cites the whole line too (M6502, CBM4S79, HV1, HV1R, HV2,
+  HV4, HV4R), adding HV1 and HV1R, which give the name to BASIC 1's own zero, as the lineage rule asks.
 - E8a. Citations on a definition that only one vendor's builds assemble: the lineage rule stays within the vendor's
   line. BASIC 4's allocator does not cite ASTIL for GETSPA. AppleSoft's Boolean OR cites OROP by M6502 only, since
   the PET's documents describe its bitwise OR. Within the PET line, a routine that every build has, though in two
@@ -1036,7 +1036,9 @@ As a control, a false `Keeps: Y` added to `Strings::CopyBytes` was reported on P
 CI's later steps, run as CI runs them with an empty `RETROCORE_CACHE`, passed except one: the IIe sample assembles,
 every `tools/Test-*.mjs` script but `Test-Memory.mjs` passes, and in `extension/` `check:grammar`, `compile` and
 `test:grammar` pass. `Test-Memory.mjs` expects `$24` to read CH and finds AppleSoft's own name for it. That
-predates this stack's conversions: it already fails, with TRMPOS, on the commit before the workspace step. The math
+predates this stack's conversions: it already fails, with TRMPOS, on the commit before the workspace step. It is
+fixed on `claude/basic-modules` (the Memory view ranks an SDK address's names as the disassembler does), which this
+stack takes when it rebases. The math
 step's FOUT became `FormatFac`, which broke `Test-PetDap.mjs`; that branch now finds the line by the routine's
 `.proc`.
 

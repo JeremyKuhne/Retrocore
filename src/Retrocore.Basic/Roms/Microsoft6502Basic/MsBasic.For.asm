@@ -31,9 +31,11 @@
     tax
     txs
 
-;; Drops the statement loop's return address, makes sure the stack has room for nine more two-byte entries
-;; (<CheckStack>), and pushes the text pointer after the statement and <CurrentLine>. Then it requires `TO`, evaluates
-;; the limit, puts its sign into the mantissa's top bit, and has <FORPSH> push it and continue at <ReadStep>.
+;; Drops the statement loop's return address (where an earlier frame for the variable was found, the stack pointer
+;; already left it behind, and this drops the old frame's last two bytes), makes sure the stack has room for nine more
+;; two-byte entries (<CheckStack>), and pushes the text pointer after the statement and <CurrentLine>. Then it requires
+;; `TO`, evaluates the limit, puts its sign into the mantissa's top bit, and has <FORPSH> push it and continue at
+;; <ReadStep>.
 ;; Also: NOTOL (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 BuildFrame:
     pla

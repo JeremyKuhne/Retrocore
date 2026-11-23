@@ -275,7 +275,7 @@ Store:
 ;; Prints a Return, then <A1L>/<A1H> as "AAAA-".
 ;;
 ;; At $FD92.
-;; Out: Y = 0
+;; Out: Y = 0, when the output hook keeps Y as the screen's does
 ;; Entry:
 ;;   YX = prints a Return, then Y and X as "YYXX-"
 ;; Also: PRA1 (A2RM78, A2RM79, IIEROM82)
@@ -286,7 +286,7 @@ Store:
 
 ;; Prints a Return, then Y and X as "YYXX-".
 ;; In: Y = the high byte, X = the low byte
-;; Out: Y = 0
+;; Out: Y = 0, when the output hook keeps Y as the screen's does
 ;; Also: PRYX2 (A2RM78, A2RM79, IIEROM82, IIETRM85)
 YX:
 .assert * = $FD96, "PrintAddress::YX must stay at $FD96."

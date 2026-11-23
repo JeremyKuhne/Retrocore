@@ -162,7 +162,7 @@ OperandFormats:
 ;; "$" have these firsts; <FormatCharacter2> has the seconds.
 ;; Also: CHAR1 (A2RM78, A2RM79, IIEROM82, IIETRM85)
 FormatCharacter1:
-.assert * = $F9B4, "FormatCharacter1 must stay at $F9B4, where the Enhanced IIe's firmware reads it."
+.assert * = $F9B4, "FormatCharacter1 must stay at $F9B4, where the mini-assemblers read it."
     .byte ",),#($"
 
 ;; The second character of each operand format bit, or 0 for none, in the order of <FormatCharacter1>.
@@ -170,7 +170,7 @@ FormatCharacter1:
 ;; At $F9BA.
 ;; Also: CHAR2 (A2RM78, A2RM79, IIEROM82, IIETRM85)
 FormatCharacter2:
-.assert * = $F9BA, "FormatCharacter2 must stay at $F9BA, where the Enhanced IIe's firmware reads it."
+.assert * = $F9BA, "FormatCharacter2 must stay at $F9BA, where the mini-assemblers read it."
     .byte "Y", 0, "X$$", 0
 
 ;; Packs one mnemonic into the 16-bit constant MNEMONIC_slot, for <MnemonicsLeft> and <MnemonicsRight>.
@@ -239,7 +239,7 @@ FormatCharacter2:
 ;; An invalid opcode gets slot 16, "???".
 ;; Also: MNEML (A2RM78, A2RM79, IIEROM82, IIETRM85)
 MnemonicsLeft:
-.assert * = $F9C0, "MnemonicsLeft must stay at $F9C0, where the Enhanced IIe's firmware reads it."
+.assert * = $F9C0, "MnemonicsLeft must stay at $F9C0, where the mini-assemblers read it."
 .repeat 64, slot
     .byte >.ident(.sprintf("MNEMONIC_%d", slot))
 .endrepeat
@@ -249,7 +249,7 @@ MnemonicsLeft:
 ;; At $FA00.
 ;; Also: MNEMR (A2RM78, A2RM79, IIEROM82, IIETRM85)
 MnemonicsRight:
-.assert * = $FA00, "MnemonicsRight must stay at $FA00, where the Enhanced IIe's firmware reads it."
+.assert * = $FA00, "MnemonicsRight must stay at $FA00, where the mini-assemblers read it."
 .repeat 64, slot
     .byte <.ident(.sprintf("MNEMONIC_%d", slot))
 .endrepeat

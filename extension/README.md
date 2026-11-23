@@ -637,9 +637,10 @@ The SDK's native sources for the rest of the system ROM are in
 `src/Retrocore.Machines.Apple2/Roms/System`:
 
 - **`Monitor.asm`** covers $F800-$FFFF, including its subject files in the
-  `Monitor` folder. Lines that differ between the IIe models sit under
-  `.if ENHANCED`, which defaults to 1 for the Enhanced IIe; 0 selects the
-  original.
+  `Monitor` folder, for four Monitors: `MONITOR` 0 the Apple II's, 1 the
+  Autostart Monitor, 2 the IIe's, where `ENHANCED` 1 (the default) selects the
+  Enhanced IIe and 0 the original. Its names say what each routine does, and
+  Apple's names are kept as historical names (`;; Also:`).
 - **`Firmware.Original.asm`** and **`Firmware.Enhanced.asm`** cover $C100-$CFFF,
   the 80-column firmware and the routines the Monitor calls with internal ROM
   switched in.
@@ -648,8 +649,8 @@ The SDK's native sources for the rest of the system ROM are in
   firmware, the Disk II boot ROM and DOS (`Roms/Dos`) include both, and the Monitor
   the first, so each name is defined and documented once.
 
-Each assembles byte-identically to its model's ROM, and `SystemSourceTests` pins
-all four builds by digest. Apple's documented entry points, tables, page-zero
+Each assembles byte-identically to its model's ROM, and `SystemSourceTests` and
+`Apple2SourceTests` pin the builds by digest. In the other sources, Apple's documented entry points, tables, page-zero
 locations and soft switches have their Apple names. Every routine and table has a
 comment describing what it does, with its inputs and outputs where known, and the
 firmware's routines have descriptive names (`SCROLLUP80`, `MINILINE`). Other labels

@@ -150,6 +150,33 @@ public sealed class BasicStatementRoutineTests
     }
 
     /// <summary>
+    ///  <c>EraseProgram</c> stores a zero link at <c>ProgramStart</c> and sets <c>VariablesStart</c> two bytes on in PET
+    ///  BASIC 4, which clears carry first, but adds the incoming carry too in AppleSoft, so its <c>NEW</c>, which
+    ///  arrives with carry set, leaves three.
+    /// </summary>
+    /// <param name="apple">Whether to run AppleSoft rather than PET BASIC 4.</param>
+    /// <param name="carry">The incoming carry.</param>
+    /// <param name="offset">How far past <c>ProgramStart</c> the variables start.</param>
+    [TestMethod]
+    [DataRow(true, false, 2)]
+    [DataRow(true, true, 3)]
+    [DataRow(false, false, 2)]
+    [DataRow(false, true, 2)]
+    public void EraseProgramAddsTheCarryWhereTheBuildKeepsIt(bool apple, bool carry, int offset)
+    {
+        BasicMathMachine machine = new(apple);
+        machine.Memory.AsSpan(Program, 2).Fill(0xEE);
+        SetWord(machine, "ProgramStart", Program);
+        SetWord(machine, "VariablesStart", 0);
+
+        int reached = machine.CallUntil("EraseProgram", [machine.Address("ResetProgramState")], carry: carry);
+
+        reached.Should().Be(machine.Address("ResetProgramState"), "it falls into ResetProgramState");
+        machine.Memory.AsSpan(Program, 2).ToArray().Should().Equal(0, 0);
+        Word(machine, "VariablesStart").Should().Be(Program + offset);
+    }
+
+    /// <summary>
     ///  <c>FindLine</c> leaves <c>SourceStart</c> at the line equal to or after <c>LineNumber</c>, or at the end
     ///  marker, with carry set only for an exact match.
     /// </summary>

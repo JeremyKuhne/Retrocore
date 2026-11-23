@@ -762,7 +762,7 @@ on PET BASIC 2, PET BASIC 4 and the enhanced IIe's AppleSoft, and reported a fal
 Converted, with `; retrocore: style=strict`: the fifteen shared modules of part B1, `MsBasic.CharacterReader`,
 `CommandCore`, `For`, `LineNumber`, `LineSearch`, `Lister`, `MemoryAccess`, `MemoryManagement`, `Next`,
 `OperatorTable`, `Print`, `ProgramReset`, `ProgramTransfers`, `StatementFlow` and `UserFunctions`. Each statement
-handler is a `.proc` in `Statements`, which `MsBasic.Families.asm` now declares with `Float` and `Functions`; each
+handler is a `.proc` in `Statements`, which `MsBasic.Families.asm` now declares after `Float` and `Functions`; each
 macro opens and closes the scope around the handlers it emits (B1-Q9). The other routines are top level, as the table
 puts them. The bytes are unchanged in all eight builds.
 
@@ -803,7 +803,9 @@ Decisions and how the table was applied:
 - S8. CommandCore's labels that are locals of part C's routines (TYPERR, MAIN1, QDECT1, MLOOP, CZLOOP, GETBPT,
   STUFFH, COLIS, NODATT, STR1 and STRNG) keep their names until part C converts those routines.
 - S9. Contracts from the code: `IsLetter` keeps A, X and Y (its two subtractions take $100 in all); the character
-  reader's copy keeps X and Y. STOP, END and StopOrEnd are described from the code.
+  reader's copy keeps X and Y. STOP, END and StopOrEnd are described from the code. `EraseProgram` adds the incoming
+  carry where `clearCarry` is 0, so AppleSoft's and BASIC 1's `NEW`, which arrives with carry set, puts
+  VariablesStart three bytes past ProgramStart, as `EraseProgramAddsTheCarryWhereTheBuildKeepsIt` pins.
 - S10. Tests and their helpers:
   - The rename gate renames STROUT and PTRGET (top level, and in a macro's body), since FNDLIN and BLTU are
     converted. It found that `MathUsesNativeWorkspaceAndMatchesTheLegacyBytes` declared its external labels by
@@ -817,13 +819,13 @@ Decisions and how the table was applied:
     probe uses PRBBYTE. That the SDK's name changed what the editor reports for a user file's own historical name of
     the same spelling may be worth a look.
 
-Checked: the full suite (3,886 passed, none failed; 665 skipped, the ROM-dump comparisons without the dumps), the
+Checked: the full suite (3,890 passed, none failed; 665 skipped, the ROM-dump comparisons without the dumps), the
 rename gate, the lint tests, and `BasicStatementsConversionTests`, which compares every old name in the fifteen
 files and the vendors' historical names with the MACRO-10 overlay's value in each of the eight builds (about 150 per
 build), checks that each definition reaches the overlay by its name or an old name, that a vendor's names resolve
 only in its builds and through its aliases, and that every citation's key is in the bibliography.
-`BasicStatementRoutineTests` runs IsLetter, the character reader's copy, ReadLineNumber, FindLine, FindStatementEnd
-and FindLineEnd in the enhanced IIe's AppleSoft and PET BASIC 4 and checks their `Out:` values and `Keeps:` claims;
+`BasicStatementRoutineTests` runs IsLetter, the character reader's copy, ReadLineNumber, FindLine, FindStatementEnd,
+FindLineEnd and EraseProgram in the enhanced IIe's AppleSoft and PET BASIC 4 and checks their `Out:` values and `Keeps:` claims;
 the existing BasicShared*Tests run the rest (FindForFrame, MoveRangeUp, CheckStack, CheckFreeMemory, the
 statements). The debugger's contract checking ran clean on PET BASIC 2, PET BASIC 4 and the enhanced IIe's AppleSoft
 over a program that adds IF, POKE and PEEK, ON GOSUB and ON GOTO, RETURN from inside FOR, RESTORE, READ and DATA, REM,

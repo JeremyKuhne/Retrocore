@@ -208,8 +208,8 @@ public sealed class PetSharedFloatAssemblyTests
             .Where(symbol => symbol.Value < start || symbol.Value >= end)
             .ToDictionary(symbol => symbol.Name, symbol => symbol.Value, StringComparer.Ordinal);
 
-        // The character reader's file also holds the letter test, whose Also: names ISLETC and ISLRTS: the region
-        // which the template's build does not use, and predefining them would make them second definitions of its old names.
+        // The character reader's file also holds the letter test, whose Also: names ISLETC and ISLRTS. The template's
+        // build does not use them, and predefining them would make them second definitions of those old names.
         if (withTemplate)
         {
             symbols.Remove("ISLETC");

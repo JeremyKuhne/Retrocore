@@ -21,7 +21,9 @@
     ;; step's sign; on continuation, the frame's line and text pointers restore the loop body. Otherwise the
     ;; frame is removed. An unmatched variable raises NEXT WITHOUT FOR.
     ;; Entry:
-    ;;   ToError = Relays to <RequireType::ToError>; `READ`'s input path (VariableInput) branches here too
+    ;;   ToError = with zero set, relays to <RequireType::ToError>, as for NEXT WITHOUT FOR (offset 0) and for
+    ;;     `READ`'s input path (VariableInput), which branches here with `beq`; with zero clear, falls into
+    ;;     <Statements::Next::AddStep>
     ;; Also: NEXT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc Next
     bne WithVariable
@@ -42,7 +44,8 @@ SearchFrame:
     beq AddStep
     ldx #<ERROR_NEXT_WITHOUT_FOR
 
-;; Relays to <RequireType::ToError>; `READ`'s input path (VariableInput) branches here too.
+;; With zero set, relays to <RequireType::ToError>, as for NEXT WITHOUT FOR (offset 0) and for `READ`'s input path
+;; (VariableInput), which branches here with `beq`; with zero clear, falls into <AddStep>.
 ;; Also: ERRGO5 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 ToError:
     beq RequireType::ToError
@@ -107,11 +110,11 @@ ToNextStatement:
 ;; Also: LOOPDN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 EndLoop:
     txa
-    adc #$11
+    adc #(FOR_FRAME_SIZE - 1)           ; carry is set
     tax
     txs
     jsr GetCurrentCharacter
-    cmp #$2C
+    cmp #','
     bne ToNextStatement
     jsr GetNextCharacter
     jsr WithVariable

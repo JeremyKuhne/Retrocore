@@ -157,7 +157,7 @@ USEDEF:
 ;; Emits program initialization and the sign-on.
 ;; Parameters: reloadProgramStart = 1 to load the initial program address again,
 ;;             carryProgramStart = 1 to carry an increment into its high byte,
-;;             checkRoom = 1 to call <REASON>,
+;;             checkRoom = 1 to call <CheckFreeMemory>,
 ;;             carriageFirst = 1 to print a carriage return instead of a separate sign-on,
 ;;             banner = sign-on string when carriageFirst is 0
 .macro COMMODORE_START_PROGRAM reloadProgramStart, carryProgramStart, checkRoom, carriageFirst, banner

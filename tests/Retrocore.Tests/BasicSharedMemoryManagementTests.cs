@@ -518,7 +518,7 @@ public sealed class BasicSharedMemoryManagementTests
             .include "MsBasic.Layouts.asm"
             .include "MsBasic.MemoryManagement.asm"
             .org ${start:X4}
-                MEMORY_MANAGEMENT {reserve}
+                MemoryManagement {reserve}
             MEMORY_MANAGEMENT_END:
             """;
 
@@ -538,7 +538,7 @@ public sealed class BasicSharedMemoryManagementTests
         }
 
         AssemblyResult native = new Assembler.Assembler().Assemble(
-            new AssemblySource(source, Path.Join(SharedInputs, "SharedMemoryManagementTest.asm")),
+            new AssemblySource(BasicNames.ScopedNames(symbols) + "\n" + source, Path.Join(SharedInputs, "SharedMemoryManagementTest.asm")),
             new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
             {
                 SourceResolver = new FileAssemblySourceResolver(),
@@ -588,12 +588,12 @@ public sealed class BasicSharedMemoryManagementTests
             .include "Commodore.Equates.asm"
             .include "MsBasic.MemoryManagement.asm"
             .org ${legacy.Symbol("FNDFOR"):X4}
-                MEMORY_MANAGEMENT (2 * STACK_LEVELS + 3 * ADDITIONAL_PRECISION + 13)
+                MemoryManagement (2 * STACK_LEVELS + 3 * ADDITIONAL_PRECISION + 13)
             MEMORY_MANAGEMENT_END:
             """;
 
         AssemblyResult native = new Assembler.Assembler().Assemble(
-            new AssemblySource(source, Path.Join(PetBasicInputs, "SharedMemoryWorkspaceTest.asm")),
+            new AssemblySource(BasicNames.ScopedNames(symbols) + "\n" + source, Path.Join(PetBasicInputs, "SharedMemoryWorkspaceTest.asm")),
             new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
             {
                 SourceResolver = new FileAssemblySourceResolver(),

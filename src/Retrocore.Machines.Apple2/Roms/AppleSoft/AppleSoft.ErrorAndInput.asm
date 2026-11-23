@@ -11,7 +11,7 @@ OMERR:
 
 ;; Dispatches to an active ONERR handler or prints the selected error and returns to the command loop.
 ;;
-;; The high bit marks the last character of each message in <ERRTAB>. After the message, <STKINI> clears
+;; The high bit marks the last character of each message in <ERRTAB>. After the message, <ResetStack> clears
 ;; execution state and the line number is printed unless the error occurred in direct mode.
 ;; In: X = error-table offset
 ERROR:
@@ -28,13 +28,13 @@ GETERR:
     inx
     pla
     bpl GETERR
-    BASIC_ERROR_FINISH
+    ErrorFinish
 READY:
 ;; Prompts for a command, executing a direct statement or inserting or deleting a numbered line.
 ;;
-;; Editing an existing line first closes the gap. A replacement opens space with <BLTU>, then the program is
+;; Editing an existing line first closes the gap. A replacement opens space with <MoveRangeUp>, then the program is
 ;; relinked and variables and execution state are reset. An empty numbered line deletes the old line.
-;; See: <INLIN1>, <CRUNCH>, <FNDLIN>, <LNKPRG>
+;; See: <INLIN1>, <CRUNCH>, <FindLine>, <LNKPRG>
 MAIN:
     jsr CRDO
     ldx #$DD
@@ -55,7 +55,7 @@ READY1:
     stx VARTAB
     ldx PRGEND+1
     stx VARTAB+1
-    BASIC_DELETE_OLD_LINE INDEX
+    DeleteOldLine INDEX
 NODEL:
     lda BUF
     beq FINI
@@ -112,7 +112,7 @@ CHEAD:
     sta PRGEND+1
     jmp MAIN
 CHEAD1:
-    BASIC_LINK_LINE 0
+    LinkLine 0
 
 ;; Reads a line through the Monitor without printing a prompt character.
 ;;
@@ -162,7 +162,7 @@ BUFOFS .set $0200
 ;; tokenization; ? abbreviates PRINT. Enhanced IIe folds case outside quoted strings and DATA. AT is not matched
 ;; when followed by N or O, allowing ATN and TO to be recognized.
 ;; Out: TXTPTR = address before the tokenized line, Y = encoded line length including its header
-;; See: <LIST>
+;; See: <Statements::List>
 CRUNCH:
     ldx TXTPTR
     dex
@@ -244,7 +244,7 @@ RESPU1:
     cmp #'O'
     beq NTHIS
     lda #ATTK
-    BASIC_TOKEN_STORE BUF, ENHNCD
+    TokenStore BUF, ENHNCD
 NTHIS:
     ldx TXTPTR
     inc COUNT
@@ -275,7 +275,7 @@ LISTRT:
 
 .include "../Microsoft6502Basic/MsBasic.LineSearch.asm"
 .include "../Microsoft6502Basic/MsBasic.ProgramReset.asm"
-    PROGRAM_RESET 1, 1, 1, 0, 1
-    CLEAR_STATEMENT STKRTS
-    CLEAR_STORAGE 0, 0
-    EXECUTION_RESET 0, 0, $F8
+    ProgramReset 1, 1, 0, 1
+    ClearStatement STKRTS
+    ClearStorage 0, 0
+    ExecutionReset 0, 0, $F8

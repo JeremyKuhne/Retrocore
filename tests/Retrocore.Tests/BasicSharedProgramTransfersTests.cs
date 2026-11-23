@@ -204,8 +204,8 @@ public sealed class BasicSharedProgramTransfersTests
             .cpu Mos6502
             .include "MsBasic.ProgramTransfers.asm"
             .org ${legacy.Symbol("RESTOR"):X4}
-                RESTORE_DATA
-                STOP_AND_CONTINUE {(early ? 0 : 1)}, {(disk ? 0 : 1)}
+                RestoreStatement
+                StopAndContinue {(early ? 0 : 1)}, {(disk ? 0 : 1)}
             """;
 
         string[] dependencies =
@@ -218,7 +218,7 @@ public sealed class BasicSharedProgramTransfersTests
         foreach (string name in dependencies) { symbols.Add(name, legacy.Symbol(name)); }
         if (!disk) { symbols.Add("CNTWFL", legacy.Symbol("CNTWFL")); }
         AssemblyResult native = new Assembler.Assembler().Assemble(
-            new AssemblySource(source, Path.Join(folder, "SharedStopTest.asm")),
+            new AssemblySource(BasicNames.ScopedNames(symbols) + "\n" + source, Path.Join(folder, "SharedStopTest.asm")),
             new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
             {
                 SourceResolver = new FileAssemblySourceResolver(),
@@ -309,10 +309,10 @@ public sealed class BasicSharedProgramTransfersTests
             .cpu Mos6502
             .include "MsBasic.ProgramTransfers.asm"
             .org ${legacy.Symbol("RUN"):X4}
-                RUN_STATEMENT {(apple ? 1 : 0)}
-                GOSUB_AND_GOTO {(apple ? "NXTCO1" : "NEWSTT")}
+                RunStatement
+                GosubAndGoto {(apple ? "NXTCO1" : "NEWSTT")}
             {(apple ? BasicNames.Label("POP") : "")}
-                RETURN_STATEMENT {(searchLow ? 1 : 0)}, {(apple ? 1 : 0)}
+                ReturnStatement {(searchLow ? 1 : 0)}, {(apple ? 1 : 0)}
             TRANSFER_END:
             """;
 
@@ -339,7 +339,7 @@ public sealed class BasicSharedProgramTransfersTests
         }
 
         AssemblyResult native = new Assembler.Assembler().Assemble(
-            new AssemblySource(source, Path.Join(folder, "SharedTransfersTest.asm")),
+            new AssemblySource(BasicNames.ScopedNames(symbols) + "\n" + source, Path.Join(folder, "SharedTransfersTest.asm")),
             new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
             {
                 SourceResolver = new FileAssemblySourceResolver(),

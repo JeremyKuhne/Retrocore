@@ -52,4 +52,12 @@ MultiplyByLogOfTwo = Functions::Log::MultiplyByLogOfTwo
 ;; Also: GFDIV (M6502)
 ToDividePacked = Functions::Tan::ToDividePacked
 
+;; Inherit: <CharacterReaderTemplate::GetCurrent>
+;; Also: CHDGOT (HV1, HV1R, HV2, HV4, HV4R)
+CharacterReaderGetCurrent = CharacterReaderTemplate::GetCurrent
+
+;; Inherit: <CharacterReaderTemplate::Done>
+;; Also: CHDRTS (HV1, HV1R, HV2, HV4, HV4R)
+CharacterReaderDone = CharacterReaderTemplate::Done
+
 .endscope

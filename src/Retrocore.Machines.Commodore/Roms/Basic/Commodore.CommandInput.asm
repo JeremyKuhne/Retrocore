@@ -41,7 +41,7 @@ GETERR:
     inx
     pla
     bpl GETERR
-    BASIC_ERROR_FINISH
+    ErrorFinish
 
 ;; Prints the READY message before reading another command.
 ;; See: <MAIN>
@@ -67,7 +67,7 @@ READY:
     .assert resetBeforeInsert = 0 || linkReturns = 1, "Relinking before insertion requires a returning LNKPRG."
 
 ;; Reads and executes a direct command, or inserts, replaces or deletes a numbered program line.
-;; See: <INLIN>, <CRUNCH>, <FNDLIN>, <LNKPRG>
+;; See: <INLIN>, <CRUNCH>, <FindLine>, <LNKPRG>
 MAIN:
     jsr INLIN
     stx TXTPTR
@@ -83,7 +83,7 @@ MAIN:
     jsr CRUNCH
     jmp GONE
 
-    BASIC_DELETE_OLD_LINE INDEX1
+    DeleteOldLine INDEX1
 NODEL:
 .if resetBeforeInsert
     jsr RUNC
@@ -129,7 +129,7 @@ STOLOP:
     bpl STOLOP
 
 ;; Clears execution state and relinks the program after an edit.
-;; See: <RUNC>, <LNKPRG>
+;; See: <ResetProgramState>, <LNKPRG>
 FINI:
     jsr RUNC
 .if linkReturns
@@ -156,7 +156,7 @@ CHEAD:
     bne *+5
     jmp MAIN
 .endif
-    BASIC_LINK_LINE addHighToY
+    LinkLine addHighToY
 .if linkReturns
 LNKRTS:
     rts
@@ -254,7 +254,7 @@ INCRTS:
 ;; quoted strings and REM text, including in an unquoted DATA field. The early walker ignores spaces within a word.
 ;; In: TXTPTR = address of the first input character
 ;; Out: TXTPTR = address before <BUF>, Y = encoded line length including the link and line-number header
-;; See: <LIST>
+;; See: <Statements::List>
 CRUNCH:
     ldx TXTPTR
     ldy #$04
@@ -325,7 +325,7 @@ RESCON:
     bne NTHIS
     ora COUNT
 
-    BASIC_TOKEN_STORE BUFOFS, 0
+    TokenStore BUFOFS, 0
 NTHIS:
     ldx TXTPTR
     inc COUNT

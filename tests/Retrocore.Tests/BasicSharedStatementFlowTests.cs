@@ -145,10 +145,10 @@ public sealed class BasicSharedStatementFlowTests
             .cpu Mos6502
             .include "MsBasic.StatementFlow.asm"
             .org ${legacy.Symbol("DATA"):X4}
-                STATEMENT_SCAN {(quoteFirst ? 1 : 0)}, {(popExit ? 1 : 0)}
-                CONDITIONAL_STATEMENTS
+                StatementScan {(quoteFirst ? 1 : 0)}, {(popExit ? 1 : 0)}
+                ConditionalStatements
             {(popExit ? BasicNames.Label("ON") : "")}
-                ON_STATEMENT
+                OnStatement
             STATEMENT_FLOW_END:
             """;
 
@@ -163,7 +163,7 @@ public sealed class BasicSharedStatementFlowTests
             name => name, name => legacy.Symbol(name), StringComparer.Ordinal);
 
         AssemblyResult native = new Assembler.Assembler().Assemble(
-            new AssemblySource(source, Path.Join(folder, "SharedStatementFlowTest.asm")),
+            new AssemblySource(BasicNames.ScopedNames(symbols) + "\n" + source, Path.Join(folder, "SharedStatementFlowTest.asm")),
             new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
             {
                 SourceResolver = new FileAssemblySourceResolver(),

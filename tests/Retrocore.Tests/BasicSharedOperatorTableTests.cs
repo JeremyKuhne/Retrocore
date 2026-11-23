@@ -105,18 +105,19 @@ public sealed class BasicSharedOperatorTableTests
             .cpu Mos6502
             .include "MsBasic.OperatorTable.asm"
             .org $C000
-                OPERATOR_TABLE {powerBelowNegation}, {highNot}, ANDOP
+                OperatorEntries {powerBelowNegation}, {highNot}, ANDOP
             """;
 
         string[] dependencies =
             ["FADDT", "FSUBT", "FMULTT", "FDIVT", "FPWRT", "OROP1", "ANDOP", "OROP", "NEGOP", "NOTOP", "DOREL"];
 
+        Dictionary<string, long> symbols = dependencies.ToDictionary(name => name, _ => 0xD000L);
         AssemblyResult result = new Assembler.Assembler().Assemble(
-            new AssemblySource(source, Path.Join(folder, "InvalidOperatorTableTest.asm")),
+            new AssemblySource(BasicNames.ScopedNames(symbols) + "\n" + source, Path.Join(folder, "InvalidOperatorTableTest.asm")),
             new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
             {
                 SourceResolver = new FileAssemblySourceResolver(),
-                PredefinedSymbols = BasicNames.WithCurrentNames(dependencies.ToDictionary(name => name, _ => 0xD000L))
+                PredefinedSymbols = BasicNames.WithCurrentNames(symbols)
             });
 
         result.Success.Should().BeFalse();
@@ -133,7 +134,7 @@ public sealed class BasicSharedOperatorTableTests
             .cpu Mos6502
             .include "MsBasic.OperatorTable.asm"
             .org ${start:X4}
-                OPERATOR_TABLE {(powerBelowNegation ? 1 : 0)}, {(highNot ? 1 : 0)}, {andEntry}
+                OperatorEntries {(powerBelowNegation ? 1 : 0)}, {(highNot ? 1 : 0)}, {andEntry}
             OPERATOR_TABLE_END:
             """;
 
@@ -143,14 +144,15 @@ public sealed class BasicSharedOperatorTableTests
             "OROP", "NEGOP", "NOTOP", "DOREL"
         ];
 
+        Dictionary<string, long> symbols = dependencies.ToDictionary(name => name, name => legacy.Symbol(name));
         AssemblyOptions options = new(ProcessorVariant.Mos6502, 0, 0x10000)
         {
             SourceResolver = new FileAssemblySourceResolver(),
-            PredefinedSymbols = BasicNames.WithCurrentNames(dependencies.ToDictionary(name => name, name => legacy.Symbol(name)))
+            PredefinedSymbols = BasicNames.WithCurrentNames(symbols)
         };
 
         AssemblyResult result = new Assembler.Assembler().Assemble(
-            new AssemblySource(source, Path.Join(folder, "OperatorTableTest.asm")),
+            new AssemblySource(BasicNames.ScopedNames(symbols) + "\n" + source, Path.Join(folder, "OperatorTableTest.asm")),
             options);
 
         result.Success.Should().BeTrue(string.Join(Environment.NewLine, result.Diagnostics.Select(diagnostic =>

@@ -265,11 +265,9 @@ public sealed class BasicSharedAliasConsistencyTests
 
     private static string[] AliasFiles(string directory, string prefix)
     {
-        foreach (string name in (string[])[$"{prefix}.InterpreterAliases.asm", $"{prefix}.HistoricalNames.asm"])
-        {
-            string file = Path.Join(directory, name);
-            File.Exists(file).Should().BeTrue($"the platform must retain {name}");
-        }
+        // The interpreter alias files join the historical-names file as their definitions convert (Basic.md M10).
+        string names = Path.Join(directory, $"{prefix}.HistoricalNames.asm");
+        File.Exists(names).Should().BeTrue($"the platform must retain {Path.GetFileName(names)}");
 
         return [.. Directory.EnumerateFiles(directory, "*Aliases.asm")
             .Append(Path.Join(directory, $"{prefix}.HistoricalNames.asm"))

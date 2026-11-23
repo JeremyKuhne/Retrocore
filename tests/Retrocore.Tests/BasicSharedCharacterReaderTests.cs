@@ -150,7 +150,7 @@ public sealed class BasicSharedCharacterReaderTests
             .cpu Mos6502
             .include "MsBasic.CharacterReader.asm"
             .org ${start:X4}
-                CHARACTER_READER ${lastSeed:X2}
+                CharacterReader ${lastSeed:X2}
             READER_END:
             """;
 

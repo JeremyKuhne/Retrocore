@@ -157,7 +157,7 @@ public sealed class BasicSharedUserFunctionsTests
             .cpu Mos6502
             .include "MsBasic.UserFunctions.asm"
             .org ${legacy.Symbol("ERRDIR"):X4}
-                USER_FUNCTIONS {(earlyCheck ? 1 : 0)}
+                UserFunctions {(earlyCheck ? 1 : 0)}
             USER_FUNCTIONS_END:
             """;
 
@@ -172,7 +172,7 @@ public sealed class BasicSharedUserFunctionsTests
             name => name, name => legacy.Symbol(name), StringComparer.Ordinal);
 
         AssemblyResult native = new Assembler.Assembler().Assemble(
-            new AssemblySource(source, Path.Join(folder, "SharedUserFunctionsTest.asm")),
+            new AssemblySource(BasicNames.ScopedNames(symbols) + "\n" + source, Path.Join(folder, "SharedUserFunctionsTest.asm")),
             new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
             {
                 SourceResolver = new FileAssemblySourceResolver(),

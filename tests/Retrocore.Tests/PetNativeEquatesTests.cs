@@ -275,6 +275,13 @@ public sealed class PetNativeEquatesTests
             selectors.Add(name, legacy.Symbol(name));
         }
 
+        // Commodore's historical names also alias the character reader's template, outside this region.
+        Dictionary<string, long> template = new(StringComparer.Ordinal)
+        {
+            ["CHZGOT"] = legacy.Symbol("CHZGOT"),
+            ["CHZRTS"] = legacy.Symbol("CHZRTS")
+        };
+
         string source = $"""
             .cpu Mos6502
             .include "{EquatesFile}"
@@ -282,6 +289,7 @@ public sealed class PetNativeEquatesTests
             .org ${start:X4}
             .include "Commodore.FloatingPoint.asm"
             {EndOfMath}:
+            {BasicNames.ScopedNames(template)}
             .include "Commodore.HistoricalNames.asm"
             """;
 
@@ -373,7 +381,7 @@ public sealed class PetNativeEquatesTests
                 COMMODORE_DISPATCH_TABLES {(early ? 0 : 1)}, {(disk ? 1 : 0)}, {(early ? 1 : 0)}, {(disk ? 1 : 0)}
             COMPOSED_TABLE_END:
             .org ${legacy.Symbol("FNDFOR"):X4}
-                MEMORY_MANAGEMENT {(early ? "$36" : "$3E")}
+                MemoryManagement {(early ? "$36" : "$3E")}
             COMPOSED_MEMORY_MANAGEMENT_END:
                 COMMODORE_ERROR_READY {(disk ? 0 : 1)}
                 COMMODORE_COMMAND_LOOP {(early ? 0 : 1)}, {(early ? 0 : 1)}, {(early ? 0 : 1)}, {(disk ? 1 : 0)}
@@ -382,34 +390,34 @@ public sealed class PetNativeEquatesTests
             COMPOSED_COMMAND_INPUT_END:
             .include "MsBasic.LineSearch.asm"
             COMPOSED_LINE_SEARCH_END:
-                PROGRAM_RESET 0, 0, 0, {(early ? 0 : 1)}, {(early ? 0 : 1)}
-                {(early ? "" : "CLEAR_STATEMENT STKRTS")}
-                CLEAR_STORAGE 1, {(disk ? 1 : 0)}
-                EXECUTION_RESET {(early && original ? 1 : 0)}, {(early && !original ? 1 : 0)}, {(early ? (original ? "$FC" : "$FE") : "$FA")}
+                ProgramReset 0, 0, {(early ? 0 : 1)}, {(early ? 0 : 1)}
+                {(early ? "" : "ClearStatement STKRTS")}
+                ClearStorage 1, {(disk ? 1 : 0)}
+                ExecutionReset {(early && original ? 1 : 0)}, {(early && !original ? 1 : 0)}, {(early ? (original ? "$FC" : "$FE") : "$FA")}
             COMPOSED_PROGRAM_RESET_END:
-                LIST_RANGE 0, FLNRTS
-                LIST_LINES 1, {(early ? 0 : 1)}, 0, LINPRT, 0, READY
-                LIST_TOKENS {(disk ? 1 : 0)}, 1, 1, 0
+                ListRange 0, FLNRTS
+                ListLines 1, {(early ? 0 : 1)}, 0, LINPRT, 0, READY
+                ListTokens {(disk ? 1 : 0)}, 1, 1, 0
             COMPOSED_LIST_END:
             .include "MsBasic.For.asm"
             COMPOSED_FOR_END:
                 COMMODORE_STATEMENT_FETCH INPUT_BUFFER_PAGE, {(waitMessage ? 1 : 0)}, {(early ? 1 : 0)}, {(early ? 1 : 0)}, {(disk && !original ? "GONEGT" : "CHRGET")}
                 COMMODORE_STATEMENT_DISPATCH {(early ? 1 : 0)}, {(disk ? 1 : 0)}
             COMPOSED_STATEMENT_DISPATCH_END:
-                RESTORE_DATA
-                STOP_AND_CONTINUE {(early ? 0 : 1)}, {(disk ? 0 : 1)}
+                RestoreStatement
+                StopAndContinue {(early ? 0 : 1)}, {(disk ? 0 : 1)}
             COMPOSED_STOP_END:
-                {(early ? "NULL_STATEMENT 10" : "")}
-                {(early ? "CLEAR_STATEMENT CONTRT" : "")}
+                {(early ? "NullStatement 10" : "")}
+                {(early ? "ClearStatement CONTRT" : "")}
                 {(early ? "jmp CLEARC" : "")}
             COMPOSED_EARLY_CLEAR_END:
-                RUN_STATEMENT 0
-                GOSUB_AND_GOTO NEWSTT
-                RETURN_STATEMENT {(early ? 1 : 0)}, 0
+                RunStatement
+                GosubAndGoto NEWSTT
+                ReturnStatement {(early ? 1 : 0)}, 0
             COMPOSED_PROGRAM_TRANSFER_END:
-                STATEMENT_SCAN {(early ? 1 : 0)}, 0
-                CONDITIONAL_STATEMENTS
-                ON_STATEMENT
+                StatementScan {(early ? 1 : 0)}, 0
+                ConditionalStatements
+                OnStatement
             COMPOSED_STATEMENT_FLOW_END:
             .org ${legacy.Symbol("LINGET"):X4}
             .include "MsBasic.LineNumber.asm"
@@ -422,7 +430,7 @@ public sealed class PetNativeEquatesTests
             COMPOSED_ASSIGNMENT_END:
                 COMMODORE_PRINT_CHANNELS
             COMPOSED_CHANNEL_PRINT_END:
-                PRINT_CORE TABER, {(early ? 0 : 1)}, 0, 1
+                PrintItems TABER, {(early ? 0 : 1)}, 0, 1
             COMPOSED_PRINT_END:
                 COMMODORE_LINE_END INPUT_BUFFER_PAGE, {(early ? 1 : 0)}, {(disk ? 1 : 0)}, {(early ? 1 : 0)}
             COMPOSED_LINE_END:
@@ -441,7 +449,7 @@ public sealed class PetNativeEquatesTests
                 VARIABLE_INPUT INPUT_BUFFER_PAGE, 0, {(early ? 1 : 0)}, {(early ? 1 : 0)}, 1, 0
                 VARIABLE_INPUT_MESSAGES 0, {(disk ? 0 : 1)}
             COMPOSED_VARIABLE_INPUT_END:
-                NEXT_ENTRIES {(early ? 1 : 0)}, NEWSTT
+                NextEntries {(early ? 1 : 0)}, NEWSTT
                 EXPRESSION_CORE {(disk ? 1 : 0)}
             COMPOSED_EXPRESSION_END:
                 OPERAND_EVALUATION 1, 1, ISFUN
@@ -459,7 +467,7 @@ public sealed class PetNativeEquatesTests
             COMPOSED_DIM_END:
                 VARIABLE_NAME 0, 0, 1, 0, {(disk ? 1 : 0)}, {(disk ? 1 : 0)}
             COMPOSED_VARIABLE_NAME_END:
-                LETTER_TEST
+                LetterTest
             COMPOSED_LETTER_TEST_END:
                 SIMPLE_VARIABLE_LOOKUP 0, {(early ? 1 : 0)}, 0, 1, 1, {(disk ? 1 : 0)}, {(disk ? 1 : 0)}, 0
             COMPOSED_SCALAR_LOOKUP_END:
@@ -472,7 +480,7 @@ public sealed class PetNativeEquatesTests
             COMPOSED_MULTIPLY_END:
                 SimpleFunctions 0
             COMPOSED_SIMPLE_FUNCTIONS_END:
-                USER_FUNCTIONS {(early ? 1 : 0)}
+                UserFunctions {(early ? 1 : 0)}
             COMPOSED_USER_FUNCTIONS_END:
                 STRING_FROM_NUMBER
             COMPOSED_STRING_CONVERSION_END:
@@ -486,14 +494,14 @@ public sealed class PetNativeEquatesTests
                 STRING_FUNCTIONS {(early ? 1 : 0)}, {(early ? 1 : 0)}, {(early ? 1 : 0)}, {(disk ? 1 : 0)}
             COMPOSED_STRING_FUNCTIONS_END:
             .org ${legacy.Symbol("GETNUM"):X4}
-                MEMORY_ACCESS_ADDRESS 1
-                MEMORY_ACCESS_PEEK {(early ? 0 : 1)}, 1, {(early ? 1 : 0)}, {(waitMessage ? 1 : 0)}
-                MEMORY_ACCESS_POKE
-                MEMORY_ACCESS_WAIT {(waitMessage ? "WaitHiddenMessage" : "STORDO")}
+                AddressConversion 1
+                PeekFunction {(early ? 0 : 1)}, 1, {(early ? 1 : 0)}, {(waitMessage ? 1 : 0)}
+                PokeStatement
+                WaitStatement {(waitMessage ? "WaitHiddenMessage" : "STORDO")}
             COMPOSED_MEMORY_ACCESS_END:
             .org ${legacy.Symbol("FADDH"):X4}
             .include "Commodore.FloatingPoint.asm"
-                CHARACTER_READER {(early ? "$59" : "$58")}
+                CharacterReader {(early ? "$59" : "$58")}
             COMPOSED_READER_END:
                 COMMODORE_INITIALIZE {(early ? 1 : 0)}, {(waitMessage ? 1 : 0)}, {(early ? 1 : 0)}, {(early ? 1 : 0)}, INPUT_BUFFER_PAGE, {(disk ? 1 : 0)}, {(early ? 1 : 0)}
                 COMMODORE_MEMORY_PROBE {(early ? 1 : 0)}, {(early ? 1 : 0)}, {(early ? 0 : 1)}, {(disk ? 1 : 0)}, {(early ? 1 : 0)}, {(early ? "$92" : "$55")}

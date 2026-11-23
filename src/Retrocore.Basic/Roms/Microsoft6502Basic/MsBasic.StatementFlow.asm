@@ -44,7 +44,7 @@ Done:
     .endproc
 
     ;; Scans from <TextPointer> to an unquoted colon or a zero byte.
-    ;; Out: Y = terminator offset, A = the terminator, zero = set, carry = set
+    ;; Out: Y = terminator offset, A = the terminator, zero = set
     ;; See: <Statements::Data>, <DATLOP>, <FindLineEnd>
     ;; Also: DATAN (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc FindStatementEnd
@@ -53,7 +53,7 @@ Done:
     .endproc
 
     ;; Scans from <TextPointer> to the end-of-line zero.
-    ;; Out: Y = terminator offset, A = 0, zero = set, carry = set
+    ;; Out: Y = terminator offset, A = 0, zero = set
     ;; Also: REMN (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc FindLineEnd
     ldx #$00

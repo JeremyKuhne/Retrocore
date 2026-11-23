@@ -96,7 +96,7 @@ Hook:
 .assert * = $FD1B, "KeyboardIn must stay at $FD1B."
     ldy #FIRMWARE_KEYBOARD_IN
 
-;; Goes to the firmware function in Y; <ClearLineFrom> and, on the Enhanced IIe, <Escape::ReadKey> branch
+;; Goes to the firmware function in Y; <ClearLineFrom> and, on the Enhanced IIe, <Escape::ReadEscapeKey> branch
 ;; here too.
 ToFirmware:
     jmp CallFirmware
@@ -114,9 +114,9 @@ ToFirmware:
 ;; At $FD21.
 ;; Out: A = the key
 ;; Also: RDESC (IIEROM82, IIETRM85)
-.proc ReadKey
-.assert * = $FD21, "Escape::ReadKey must stay at $FD21."
-    jsr ::ReadKey
+.proc ReadEscapeKey
+.assert * = $FD21, "Escape::ReadEscapeKey must stay at $FD21."
+    jsr ReadKey
     ldy #FIRMWARE_ESCAPE_KEY
 .if ENHANCED
     bne KeyboardIn::ToFirmware
@@ -133,7 +133,7 @@ ToFirmware:
 .proc ReadKeyAllowEscape
 .assert * = $FD28, "Escape::ReadKeyAllowEscape must stay at $FD28."
     lsr MSLOT
-    jmp ::ReadKey
+    jmp ReadKey
 
     ; Unused.
     .byte $EA
@@ -202,9 +202,9 @@ Check:
 .proc Sequence
 .assert * = $FD2F, "Escape::Sequence must stay at $FD2F."
 .if MONITOR = MONITOR_IIE
-    jsr ReadKey
+    jsr ReadEscapeKey
 .else
-    jsr ::ReadKey
+    jsr ReadKey
 .endif
 .if MONITOR = MONITOR_II
     jsr Command

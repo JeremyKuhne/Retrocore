@@ -69,7 +69,7 @@ SETKBD = $FE89
 ;; Inherit: <Monitor:SETVID>
 SETVID = $FE93
 
-;; Inherit: <Monitor:SLOTRTS>
+;; Inherit: <Monitor:SelectSlotRom>
 SLOTRTS = $FEC5
 
 ;; Inherit: <Monitor:SKIPBLNK>

@@ -163,7 +163,7 @@ public sealed class PetBasic4RevisionTests
             .include "Commodore.ChannelInput.asm"
             .include "Commodore.Basic4Patches.asm"
             .org ${legacy.Symbol("INPUT"):X4}
-                COMMODORE_INPUT_STATEMENT 0, 3, {(original ? 0 : 1)}, 0, 1
+                CommodoreInputStatement 0, 3, {(original ? 0 : 1)}, 0, 1
             INPUT_END:
             .org ${legacy.Symbol("ISVAR") - 1:X4}
                 COMMODORE_BASIC4_OPERAND_SPLIT {(original ? 0 : 1)}
@@ -186,7 +186,7 @@ public sealed class PetBasic4RevisionTests
         symbols.Add("LINE_WIDTH_STORAGE", 0);
         symbols.Add("EXTENDED_DISK_VECTORS", 1);
         AssemblyResult native = new Assembler.Assembler().Assemble(
-            new AssemblySource(source, Path.Join(BasicInputs, "Basic4RevisionTest.asm")),
+            new AssemblySource(BasicNames.ScopedNames(symbols) + "\n" + source, Path.Join(BasicInputs, "Basic4RevisionTest.asm")),
             new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
             {
                 SourceResolver = new FileAssemblySourceResolver(),

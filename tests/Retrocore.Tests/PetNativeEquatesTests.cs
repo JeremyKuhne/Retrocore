@@ -384,15 +384,15 @@ public sealed class PetNativeEquatesTests
             .include "MsBasic.VariableLookup.asm"
             .include "MsBasic.Arrays.asm"
             .org ${legacy.Symbol("STMDSP"):X4}
-                COMMODORE_DISPATCH_TABLES {(early ? 0 : 1)}, {(disk ? 1 : 0)}, {(early ? 1 : 0)}, {(disk ? 1 : 0)}
+                CommodoreDispatchTables {(early ? 0 : 1)}, {(disk ? 1 : 0)}, {(early ? 1 : 0)}, {(disk ? 1 : 0)}
             COMPOSED_TABLE_END:
             .org ${legacy.Symbol("FNDFOR"):X4}
                 MemoryManagement {(early ? "$36" : "$3E")}
             COMPOSED_MEMORY_MANAGEMENT_END:
-                COMMODORE_ERROR_READY {(disk ? 0 : 1)}
-                COMMODORE_COMMAND_LOOP {(early ? 0 : 1)}, {(early ? 0 : 1)}, {(early ? 0 : 1)}, {(disk ? 1 : 0)}
-                COMMODORE_TERMINAL_INPUT {(early ? 1 : 0)}, {(disk ? 1 : 0)}
-                COMMODORE_TOKENIZE {(disk ? 1 : 0)}, {(early ? 1 : 0)}
+                CommodoreErrorReady {(disk ? 0 : 1)}
+                CommodoreCommandLoop {(early ? 0 : 1)}, {(early ? 0 : 1)}, {(early ? 0 : 1)}, {(disk ? 1 : 0)}
+                CommodoreTerminalInput {(early ? 1 : 0)}, {(disk ? 1 : 0)}
+                CommodoreTokenize {(disk ? 1 : 0)}, {(early ? 1 : 0)}
             COMPOSED_COMMAND_INPUT_END:
             .include "MsBasic.LineSearch.asm"
             COMPOSED_LINE_SEARCH_END:
@@ -407,8 +407,8 @@ public sealed class PetNativeEquatesTests
             COMPOSED_LIST_END:
             .include "MsBasic.For.asm"
             COMPOSED_FOR_END:
-                COMMODORE_STATEMENT_FETCH INPUT_BUFFER_PAGE, {(waitMessage ? 1 : 0)}, {(early ? 1 : 0)}, {(early ? 1 : 0)}, {(disk && !original ? "GONEGT" : "CHRGET")}
-                COMMODORE_STATEMENT_DISPATCH {(early ? 1 : 0)}, {(disk ? 1 : 0)}
+                CommodoreStatementFetch INPUT_BUFFER_PAGE, {(waitMessage ? 1 : 0)}, {(early ? 1 : 0)}, {(early ? 1 : 0)}, {(disk && !original ? "GONEGT" : "CHRGET")}
+                CommodoreStatementDispatch {(early ? 1 : 0)}, {(disk ? 1 : 0)}
             COMPOSED_STATEMENT_DISPATCH_END:
                 RestoreStatement
                 StopAndContinue {(early ? 0 : 1)}, {(disk ? 0 : 1)}
@@ -434,23 +434,23 @@ public sealed class PetNativeEquatesTests
                 StringAssignment {(disk ? 1 : 0)}, {(disk ? 1 : 0)}
                 {(disk ? $"STRING_LINK_ADJUST {(original ? 0 : 1)}" : "")}
             COMPOSED_ASSIGNMENT_END:
-                COMMODORE_PRINT_CHANNELS
+                CommodorePrintChannels
             COMPOSED_CHANNEL_PRINT_END:
                 PrintItems TABER, {(early ? 0 : 1)}, 0, 1
             COMPOSED_PRINT_END:
-                COMMODORE_LINE_END INPUT_BUFFER_PAGE, {(early ? 1 : 0)}, {(disk ? 1 : 0)}, {(early ? 1 : 0)}
+                CommodoreLineEnd INPUT_BUFFER_PAGE, {(early ? 1 : 0)}, {(disk ? 1 : 0)}, {(early ? 1 : 0)}
             COMPOSED_LINE_END:
-                COMMODORE_PRINT_SPACING {(early ? 1 : 0)}
+                CommodorePrintSpacing {(early ? 1 : 0)}
             COMPOSED_PRINT_SPACING_END:
             .include "MsBasic.StringOutput.asm"
             COMPOSED_STRING_OUTPUT_END:
-                COMMODORE_CHARACTER_OUTPUT {(early ? 1 : 0)}, {(early ? 1 : 0)}, {(disk ? 0 : 1)}, {(disk ? 0 : 1)}
+                CommodoreCharacterOutput {(early ? 1 : 0)}, {(early ? 1 : 0)}, {(disk ? 0 : 1)}, {(disk ? 0 : 1)}
             COMPOSED_CHARACTER_OUTPUT_END:
-                COMMODORE_INPUT_ERROR {(early ? 1 : 0)}
+                CommodoreInputError {(early ? 1 : 0)}
             COMPOSED_INPUT_ERROR_END:
-                COMMODORE_CHANNEL_INPUT INPUT_BUFFER_PAGE
+                CommodoreChannelInput INPUT_BUFFER_PAGE
             COMPOSED_CHANNEL_INPUT_END:
-                COMMODORE_INPUT_STATEMENT {(disk ? 0 : 1)}, {(disk ? 3 : 2)}, {(disk && !original ? 1 : 0)}, {(early ? 1 : 0)}, {(disk ? 1 : 0)}
+                CommodoreInputStatement {(disk ? 0 : 1)}, {(disk ? 3 : 2)}, {(disk && !original ? 1 : 0)}, {(early ? 1 : 0)}, {(disk ? 1 : 0)}
             COMPOSED_INPUT_END:
                 VariableInput INPUT_BUFFER_PAGE, 0, {(early ? 1 : 0)}, {(early ? 1 : 0)}, 1, 0
                 VariableInputMessages 0, {(disk ? 0 : 1)}
@@ -462,7 +462,7 @@ public sealed class PetNativeEquatesTests
             COMPOSED_OPERAND_END:
                 {(disk ? $"COMMODORE_BASIC4_OPERAND_SPLIT {(original ? 0 : 1)}" : "")}
             COMPOSED_OPERAND_SPLIT_END:
-                COMMODORE_VARIABLE_VALUE {(disk ? 1 : 0)}, {(early ? 1 : 0)}, {(disk ? 1 : 0)}
+                CommodoreVariableValue {(disk ? 1 : 0)}, {(early ? 1 : 0)}, {(disk ? 1 : 0)}
             COMPOSED_VARIABLE_VALUE_END:
                 FunctionDispatch
                 LogicalOperators 1
@@ -509,14 +509,14 @@ public sealed class PetNativeEquatesTests
             .include "Commodore.FloatingPoint.asm"
                 CharacterReader {(early ? "$59" : "$58")}
             COMPOSED_READER_END:
-                COMMODORE_INITIALIZE {(early ? 1 : 0)}, {(waitMessage ? 1 : 0)}, {(early ? 1 : 0)}, {(early ? 1 : 0)}, INPUT_BUFFER_PAGE, {(disk ? 1 : 0)}, {(early ? 1 : 0)}
-                COMMODORE_MEMORY_PROBE {(early ? 1 : 0)}, {(early ? 1 : 0)}, {(early ? 0 : 1)}, {(disk ? 1 : 0)}, {(early ? 1 : 0)}, {(early ? "$92" : "$55")}
-                COMMODORE_START_PROGRAM {(disk ? 0 : 1)}, {(early ? 1 : 0)}, {(disk ? 0 : 1)}, {(early ? 1 : 0)}, {(early ? "0" : disk ? "SIGNON" : "FREMES")}
+                CommodoreInitialize {(early ? 1 : 0)}, {(waitMessage ? 1 : 0)}, {(early ? 1 : 0)}, {(early ? 1 : 0)}, INPUT_BUFFER_PAGE, {(disk ? 1 : 0)}, {(early ? 1 : 0)}
+                CommodoreMemoryProbe {(early ? 1 : 0)}, {(early ? 1 : 0)}, {(early ? 0 : 1)}, {(disk ? 1 : 0)}, {(early ? 1 : 0)}, {(early ? "$92" : "$55")}
+                CommodoreStartProgram {(disk ? 0 : 1)}, {(early ? 1 : 0)}, {(disk ? 0 : 1)}, {(early ? 1 : 0)}, {(early ? "0" : disk ? "SIGNON" : "FREMES")}
             COMPOSED_INITIALIZATION_END:
-                COMMODORE_START_MESSAGES {(early ? 1 : 0)}
+                CommodoreStartMessages {(early ? 1 : 0)}
             COMPOSED_MESSAGES_END:
                 {(early ? "COMMODORE_BASIC1_EDITOR_PATCHES" : "")}
-                {(early ? "" : BasicNames.Label("LASTWR"))}
+                {(early ? "" : BasicNames.CurrentLabel("LASTWR"))}
             COMPOSED_BASIC1_PATCH_END:
             {(early ? ".org $E7F3" : "")}
                 {(early ? "COMMODORE_BASIC1_ARRAY_PATCH" : "")}
@@ -685,9 +685,10 @@ public sealed class PetNativeEquatesTests
         bool early = model == PetModel.Pet2001;
         string source = $"""
             .cpu Mos6502
+            .include "../../Microsoft6502Basic/MsBasic.VariableInput.asm"
             .include "Commodore.ChannelInput.asm"
             .org ${legacy.Symbol("GET"):X4}
-                COMMODORE_CHANNEL_INPUT {(early ? 0 : 2)}
+                CommodoreChannelInput {(early ? 0 : 2)}
             """;
 
         string[] dependencies =
@@ -761,7 +762,7 @@ public sealed class PetNativeEquatesTests
             .cpu Mos6502
             .include "Commodore.Platform.asm"
             .org $3000
-                COMMODORE_MEMORY_PROBE {(early ? 1 : 0)}, {(early ? 1 : 0)}, {(early ? 0 : 1)}, 0, {(early ? 1 : 0)}, {(early ? "$92" : "$55")}
+                CommodoreMemoryProbe {(early ? 1 : 0)}, {(early ? 1 : 0)}, {(early ? 0 : 1)}, 0, {(early ? 1 : 0)}, {(early ? "$92" : "$55")}
             PROBE_END:
             """;
 
@@ -820,7 +821,7 @@ public sealed class PetNativeEquatesTests
             .cpu Mos6502
             .include "Commodore.StatementDispatch.asm"
             .org ${legacy.Symbol("NEWSTT"):X4}
-                COMMODORE_STATEMENT_FETCH {(early ? 0 : 2)}, {(basic2 ? 1 : 0)}, {(early ? 1 : 0)}, {(early ? 1 : 0)}, CHRGET
+                CommodoreStatementFetch {(early ? 0 : 2)}, {(basic2 ? 1 : 0)}, {(early ? 1 : 0)}, {(early ? 1 : 0)}, CHRGET
             """;
 
         List<string> dependencies = ["ISCNTC", "TXTPTR", "OLDTXT", "ENDCON", "CURLIN", "SNERR", "CHRGET", "GONE3"];
@@ -966,7 +967,7 @@ public sealed class PetNativeEquatesTests
         Dictionary<string, long> symbols = dependencies.ToDictionary(
             name => name, name => legacy.Symbol(name), StringComparer.Ordinal);
 
-        AssemblyResult native = RequireSuccess(Assemble(BasicNames.ScopedNames(symbols) + "\n" + source, symbols));
+        AssemblyResult native = RequireSuccess(Assemble(source, symbols));
         RecordingBus bus = new();
         native.Sections[0].Bytes.Span.CopyTo(bus.Memory);
         bus.Memory[checked((int)native.Symbol("COUNT"))] = 1;
@@ -1053,7 +1054,7 @@ public sealed class PetNativeEquatesTests
 
     private static AssemblyResult Assemble(string source, IReadOnlyDictionary<string, long> selectors) =>
         new Retrocore.Assembler.Assembler().Assemble(
-            new AssemblySource(source, Path.Join(BasicInputs, "NativeEquatesTest.asm")),
+            new AssemblySource(BasicNames.ScopedNames(selectors) + "\n" + source, Path.Join(BasicInputs, "NativeEquatesTest.asm")),
             new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
             {
                 SourceResolver = new FileAssemblySourceResolver(),

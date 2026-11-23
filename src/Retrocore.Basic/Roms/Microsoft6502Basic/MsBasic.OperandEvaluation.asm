@@ -200,7 +200,7 @@ ToGetNextCharacter:
     ;; Also: SNERR (M6502, CBM4S79, K4S79, HV1, HV1R, HV2, HV4, HV4R, HVK4)
     .proc SyntaxError
     ldx #<ERROR_SYNTAX
-    jmp ERROR
+    jmp ReportError
     .endproc
 
     ;; Selects the unary-minus entry of <OperatorTable> and falls into <ApplyPrefixOperator>.
@@ -247,7 +247,7 @@ NotInteger:
 
 ;; Emits the built-in function argument parser and dispatcher.
 .macro FunctionDispatch
-    ;; Parses a built-in function's arguments and dispatches through <FUNDSP>.
+    ;; Parses a built-in function's arguments and dispatches through <FunctionTable>.
     ;;
     ;; The string slicing functions take a string and a byte argument; their descriptors and arguments are
     ;; stacked for the callee. Ordinary functions take one parenthesized expression.
@@ -283,12 +283,12 @@ OneArgument:
     jsr EvaluateParenthesized
     pla
     tay
-;; Stores the routine's address from <FUNDSP> in <FunctionJump>, calls it, then requires a numeric result.
+;; Stores the routine's address from <FunctionTable> in <FunctionJump>, calls it, then requires a numeric result.
 ;; Also: FINGO (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 Dispatch:
-    lda FUNDSP-2*TOKEN_FIRST_FUNCTION+256,y
+    lda FunctionTable-2*TOKEN_FIRST_FUNCTION+256,y
     sta FunctionJump+1
-    lda FUNDSP-2*TOKEN_FIRST_FUNCTION+257,y
+    lda FunctionTable-2*TOKEN_FIRST_FUNCTION+257,y
     sta FunctionJump+2
     jsr FunctionJump
     jmp RequireNumber

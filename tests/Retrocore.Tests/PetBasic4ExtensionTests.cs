@@ -108,10 +108,10 @@ public sealed class PetBasic4ExtensionTests
             .include "Commodore.Platform.asm"
             .include "Commodore.Basic4Extension.asm"
             .org ${legacy.Symbol("INIT"):X4}
-                COMMODORE_INITIALIZE 0, 0, 0, 0, 2, 1, 0
-                COMMODORE_MEMORY_PROBE 0, 0, 1, 1, 0, $55
-                COMMODORE_START_PROGRAM 0, 0, 0, 0, SIGNON
-                COMMODORE_START_MESSAGES 0
+                CommodoreInitialize 0, 0, 0, 0, 2, 1, 0
+                CommodoreMemoryProbe 0, 0, 1, 1, 0, $55
+                CommodoreStartProgram 0, 0, 0, 0, SIGNON
+                CommodoreStartMessages 0
             {BasicNames.Label("LASTWR")}
                 COMMODORE_BASIC4_EXTENSION {(original ? 0 : 1)}
             COMPOSED_END:
@@ -834,7 +834,7 @@ public sealed class PetBasic4ExtensionTests
             """;
 
         return new Assembler.Assembler().Assemble(
-            new AssemblySource(source, Path.Join(BasicInputs, "Basic4ExtensionTest.asm")),
+            new AssemblySource(BasicNames.ScopedNames(symbols) + "\n" + source, Path.Join(BasicInputs, "Basic4ExtensionTest.asm")),
             new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
             {
                 SourceResolver = new FileAssemblySourceResolver(),
@@ -862,7 +862,7 @@ public sealed class PetBasic4ExtensionTests
     private static AssemblyResult Assemble(string source, IReadOnlyDictionary<string, long> symbols)
     {
         AssemblyResult result = new Assembler.Assembler().Assemble(
-            new AssemblySource(source, Path.Join(BasicInputs, "Basic4ExtensionTest.asm")),
+            new AssemblySource(BasicNames.ScopedNames(symbols) + "\n" + source, Path.Join(BasicInputs, "Basic4ExtensionTest.asm")),
             new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
             {
                 SourceResolver = new FileAssemblySourceResolver(),

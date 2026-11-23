@@ -25,21 +25,22 @@ namespace Retrocore.Tests;
 [TestClass]
 public sealed partial class BasicRenameGateTests
 {
-    // The shared modules are converted, so the renames are of the vendors' interpreter labels, which each vendor
-    // defines in its own file under the same old name: AppleSoft's and the PET's newline routine.
-    private const string OldName = "CRDO";
-    private const string NewName = "PrintNewline";
+    // The shared modules and the vendors' interpreter files are converted, so the first rename is of a current name
+    // each vendor defines as a plain label in its own file: the reserved-word list.
+    private const string OldName = "ReservedWords";
+    private const string NewName = "ReservedNames";
 
-    // A second rename, of a label the PET defines in a macro's body (its statement fetch), whose Also: reaches it
-    // because each build expands the macro once; AppleSoft defines it as a plain label.
-    private const string MacroOldName = "NEWSTT";
-    private const string MacroNewName = "NextStatement";
+    // A second rename, of a label BASIC 1 defines in a macro's body (its editor-ROM patches), whose Also: reaches it
+    // because each build expands the macro once; AppleSoft and BASIC 2 and 4 define it as a plain label.
+    private const string MacroOldName = "LASTWR";
+    private const string MacroNewName = "LastRomWord";
 
     // Each rename, with the files that define the name.
     private static readonly (string Old, string New, string[] Files, Regex Word)[] s_renames =
     [
-        (OldName, NewName, ["AppleSoft.Print.asm", "Commodore.ChannelPrint.asm"], OldNameWord()),
-        (MacroOldName, MacroNewName, ["AppleSoft.ControlFlow.asm", "Commodore.StatementDispatch.asm"], MacroOldNameWord())
+        (OldName, NewName, ["AppleSoft.DispatchTables.asm", "Commodore.DispatchTables.asm"], OldNameWord()),
+        (MacroOldName, MacroNewName, ["AppleSoft.PlatformHelpers.asm", "Commodore.Basic1Patches.asm", "Basic2.asm", "Basic4.asm"],
+            MacroOldNameWord())
     ];
 
     // The classes that assemble the native BASIC sources and look its names up, run against the renamed copy.
@@ -90,7 +91,7 @@ public sealed partial class BasicRenameGateTests
     private static readonly string[] s_helpers = ["BasicAttribution.cs", "BasicMachines.cs", "BasicMathMachine.cs", "PetLegacyBasic.cs"];
 
     /// <summary>
-    ///  Renaming <c>CRDO</c> to <c>PrintNewline</c>, and <c>NEWSTT</c> in a macro's body to <c>NextStatement</c>, in a copy
+    ///  Renaming <c>ReservedWords</c> to <c>ReservedNames</c>, and <c>LASTWR</c> in a macro's body to <c>LastRomWord</c>, in a copy
     ///  of the native sources, each with its old name in <c>;; Also:</c>, keeps every ROM's bytes and leaves every
     ///  BASIC test green without changing it.
     /// </summary>
@@ -161,8 +162,8 @@ public sealed partial class BasicRenameGateTests
                 native.DefinitionName(oldName).Should().Be(newName);
             }
 
-            native.HasSymbol("CRDO_NOT_A_NAME").Should().BeFalse();
-            Action neither = () => native.Symbol("CRDO_NOT_A_NAME");
+            native.HasSymbol("ReservedWords_NOT_A_NAME").Should().BeFalse();
+            Action neither = () => native.Symbol("ReservedWords_NOT_A_NAME");
             neither.Should().Throw<KeyNotFoundException>();
 
             // A standalone build of the module, as the comparisons assemble it, finds the dependency by either name.

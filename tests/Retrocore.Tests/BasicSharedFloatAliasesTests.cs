@@ -63,6 +63,7 @@ public sealed class BasicSharedFloatAliasesTests
         ["FMAPT1"] = ["UNKN"],
         ["QINTG1"] = ["UNKN"],
         ["TRYAG3"] = ["M6502"],
+        ["ON"] = ["UNKN"],
         ["ARYVA2"] = ["M6502"],
         ["ARYVA3"] = ["M6502"],
         ["ARYVGO"] = ["M6502"],
@@ -251,7 +252,8 @@ public sealed class BasicSharedFloatAliasesTests
             native.Symbol(name).Should().Be(legacy.Symbol(name), $"{name} must keep the overlay's value");
         }
 
-        foreach (string appleName in s_appleNames.Keys)
+        // BASIC 4's disk parser defines a label of its own named ON, for a command's ON U device clause.
+        foreach (string appleName in s_appleNames.Keys.Where(name => !(name == "ON" && model == PetModel.Pet4032)))
         {
             native.HasSymbol(appleName).Should().BeFalse($"{appleName} is an Apple name");
         }

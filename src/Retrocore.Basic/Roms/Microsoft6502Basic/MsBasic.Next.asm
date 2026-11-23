@@ -151,7 +151,7 @@ EndLoop:
     ;; Out: carry = selected type on success
     ;; Errors: TYPE MISMATCH if the types differ
     ;; Entry:
-    ;;   ToError = jumps to <ERROR>; <Statements::Next::ToError> relays here
+    ;;   ToError = jumps to <ReportError>; <Statements::Next::ToError> relays here
     ;; Also: CHKVAL (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc RequireType
     bit ValueType
@@ -173,9 +173,9 @@ IsString:
 Mismatch:
     ldx #<ERROR_TYPE_MISMATCH
 
-;; Jumps to <ERROR>; <Statements::Next::ToError> relays here.
+;; Jumps to <ReportError>; <Statements::Next::ToError> relays here.
 ;; Also: ERRGO4 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 ToError:
-    jmp ERROR
+    jmp ReportError
     .endproc
 .endmacro

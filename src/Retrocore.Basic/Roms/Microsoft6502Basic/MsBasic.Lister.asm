@@ -86,7 +86,7 @@ StartListing:
 ;; The stop check and newline precede the upper-bound comparison. A zero high byte in the next link
 ;; ends the listing. With `trackQuotes`, each line starts with <TokenizeState> = 1, complemented for each quote.
 ;; In: SourceStart = link field of the first line, LineNumber = inclusive upper bound
-;; See: <ISCNTC>, <Statements::List::CheckToken>
+;; See: <CheckStop>, <Statements::List::CheckToken>
 ;; Also: LIST4 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 NextLine:
     ldy #$01
@@ -95,8 +95,8 @@ NextLine:
     .endif
     lda (SourceStart),y
     beq Finish
-    jsr ISCNTC
-    jsr CRDO
+    jsr CheckStop
+    jsr PrintNewline
     iny
     lda (SourceStart),y
     tax
@@ -124,7 +124,7 @@ ResumeLine:
 ;; Outputs A; with columnMode wraps at the column and indents to 5.
 ;; Also: PLOOP (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 ListCharacter:
-    jsr OUTDO
+    jsr PrintCharacter
     .if columnMode
         .if trackQuotes
             pha
@@ -141,7 +141,7 @@ ListCharacter:
         .else
             bcc NextByte
         .endif
-        jsr CRDO
+        jsr PrintNewline
         lda #$05
         sta TerminalPosition
         .if trackQuotes
@@ -179,7 +179,7 @@ NextByte:
 Finish:
     .if finalCr
         lda #$0D
-        jsr OUTDO
+        jsr PrintCharacter
     .endif
     jmp resume
 .endmacro
@@ -205,7 +205,7 @@ ReadTableByte:
 
 ;; Emits character handling and reserved-word expansion after <ListLines>.
 ;;
-;; Mode 0 indexes <RESLST> with an eight-bit Y; mode 1 walks it through <Pointer1>, with a special first-token
+;; Mode 0 indexes <ReservedWords> with an eight-bit Y; mode 1 walks it through <Pointer1>, with a special first-token
 ;; path and a signed X countdown; mode 2 uses <ListNextTableByte> and the pointer in <Fac>. The line walker
 ;; and token expansion must use the same quote-tracking choice.
 ;; Parameters: tableMode = 0 for direct indexed, 1 for <Pointer1> indirect, 2 for <Fac> indirect with page carry;
@@ -218,12 +218,12 @@ ReadTableByte:
     .assert literalPi = 0 || literalPi = 1, "literalPi must be 0 or 1."
     .assert spaceWords = 0 || spaceWords = 1, "spaceWords must be 0 or 1."
 
-;; Prints a stored character or expands a token using <RESLST>.
+;; Prints a stored character or expands a token using <ReservedWords>.
 ;;
 ;; The high bit marks the last byte of each reserved word. In table mode 0 Y wraps after 256 table bytes;
 ;; the two indirect modes can walk farther. Tokens are not checked against the end of the table.
 ;; In: A = nonzero stored byte, Y = offset in the current line, negative = bit 7 of A
-;; See: <Statements::List::NextLine>, <OUTDO>
+;; See: <Statements::List::NextLine>, <PrintCharacter>
 ;; Also: QPLOP (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 CheckToken:
     bpl ListCharacter
@@ -238,9 +238,9 @@ CheckToken:
     .if tableMode = 1
         tax
         sty ListOffset
-        ldy #>RESLST
+        ldy #>ReservedWords
         sty Pointer1+1
-        ldy #<RESLST
+        ldy #<ReservedWords
         sty Pointer1
         ldy #$00
         asl a
@@ -251,9 +251,9 @@ CheckToken:
         tax
         sty ListOffset
         .if tableMode = 2
-            ldy #<(RESLST-256)
+            ldy #<(ReservedWords-256)
             sty Fac
-            ldy #>(RESLST-256)
+            ldy #>(ReservedWords-256)
             sty FacMantissa1
         .endif
         ldy #$FF
@@ -281,7 +281,7 @@ ReadWordByte:
         jsr NextTableByte
     .else
         iny
-        lda RESLST,y
+        lda ReservedWords,y
     .endif
     bpl SkipWord
     bmi FindWord
@@ -295,7 +295,7 @@ ListFirstWord:
     .endif
     .if spaceWords
         lda #' '
-        jsr OUTDO
+        jsr PrintCharacter
     .endif
     .if spaceWords || tableMode = 2
 ;; AppleSoft: reads and prints the next keyword byte.
@@ -307,11 +307,11 @@ ListWordCharacter:
         jsr NextTableByte
     .else
         iny
-        lda RESLST,y
+        lda ReservedWords,y
     .endif
     .if spaceWords
         bmi ListLastCharacter
-        jsr OUTDO
+        jsr PrintCharacter
         .if tableMode = 1
             beq ListLastCharacter
             iny
@@ -321,12 +321,12 @@ ListWordCharacter:
         .endif
 ;; AppleSoft: prints the last keyword byte and a space, back to <Statements::List::ResumeLine>.
 ListLastCharacter:
-        jsr OUTDO
+        jsr PrintCharacter
         lda #' '
         bne ResumeLine
     .else
         bmi ResumeLine
-        jsr OUTDO
+        jsr PrintCharacter
         .if tableMode = 2
             bne ListWordCharacter
         .else

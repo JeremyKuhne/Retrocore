@@ -56,10 +56,10 @@ internal static partial class BasicNames
 
     /// <summary>
     ///  Gets the names a vendor's alias gives in some builds that other builds still give to a label of a vendor's own
-    ///  unconverted code, until part C converts it (Basic.md E3): BASIC 4's GETRTS, which is the output routine's
-    ///  return in AppleSoft and BASIC 1 and 2.
+    ///  unconverted code, until its part converts it: BASIC 4's GETRTS, which is the output routine's return in
+    ///  AppleSoft and BASIC 1 and 2 (Basic.md E3), and AppleSoft's ON, which is BASIC 4's disk-command parser.
     /// </summary>
-    internal static string[] VendorLabelNames { get; } = ["GETRTS"];
+    internal static string[] VendorLabelNames { get; } = ["GETRTS", "ON"];
 
     /// <summary>
     ///  Gets whether a build defines a name as a label of a vendor's own code, in the folder of the vendor's historical
@@ -410,6 +410,20 @@ internal static partial class BasicNames
     /// <exception cref="InvalidOperationException">The builds give the name to different definitions.</exception>
     internal static string Label(string name) =>
         string.Join('\n', CurrentNames(name).Where(current => !IsScoped(current)).Prepend(name).Select(label => $"{label}:"));
+
+    /// <summary>
+    ///  Gets the source that defines a label a test's own source gives one of Microsoft's names, under the unscoped
+    ///  names the native BASIC builds now define it by, or under the old name where they define none. Unlike
+    ///  <see cref="Label(string)"/>, it never defines an old name that an <c>;; Also:</c> in the build's sources gives,
+    ///  which the documentation would report as a second definition.
+    /// </summary>
+    /// <param name="name">The label, as Microsoft's source has it.</param>
+    /// <returns>The label definitions, one per line.</returns>
+    internal static string CurrentLabel(string name)
+    {
+        string[] current = [.. CurrentNames(name).Where(current => !IsScoped(current))];
+        return string.Join('\n', (current.Length == 0 ? [name] : current).Select(label => $"{label}:"));
+    }
 
     /// <summary>
     ///  Gets the names the native BASIC builds define an old name by now, through their <c>;; Also:</c> sections.

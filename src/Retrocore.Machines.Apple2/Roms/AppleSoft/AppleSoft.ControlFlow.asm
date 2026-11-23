@@ -1,193 +1,299 @@
-;; APPLESOFT: STATEMENT DISPATCH AND CONTROL FLOW
-;;
-;; The statement dispatcher, FOR and GOSUB frames, program transfers and cassette commands. The FOR stack
-;; search and NEXT are in other modules; LET and PRINT follow in AppleSoft.Assignment.asm and AppleSoft.Print.asm.
+; retrocore: style=strict
+; APPLESOFT: STATEMENT DISPATCH AND CONTROL FLOW
+;
+; The statement dispatcher, FOR and GOSUB frames, program transfers and cassette commands. The FOR stack
+; search and NEXT are in other modules; LET and PRINT follow in AppleSoft.Assignment.asm and AppleSoft.Print.asm.
 
 .include "../Microsoft6502Basic/MsBasic.For.asm"
 .include "../Microsoft6502Basic/MsBasic.ProgramTransfers.asm"
 .include "../Microsoft6502Basic/MsBasic.StatementFlow.asm"
 
-NXTCO1:
+;; The ASCII code of Control-C, which <HandleBreak> compares A with for the shared STOP code.
+CONTROL_C = $03
+
+;; Control-C as the keyboard reads it, with bit 7 set.
+KEYBOARD_CONTROL_C = CONTROL_C | $80
+
+;; Saves the stack pointer in <StatementStack>, the level `ONERR` resumes at, and falls into <NextStatement>.
+;;
+;; It is the next-statement target AppleSoft's GOTO, NEXT, LIST and the run-only path of <Tokenize> pass, where the
+;; PET's pass <NextStatement>.
+;; Also: NXTCO1 (UNKN)
+.proc NextStatementSavingStack
     tsx
-    stx REMSTK
+    stx StatementStack
+    ; Falls into NextStatement.
+.endproc
 
 ;; Runs the next statement or advances to the next linked line, checking for Control-C first.
 ;;
-;; Saves the current text position for CONT while running a program. Trace mode prints each line number.
-;; See: <GONE>, <ISCNTC>, <Statements::Cont>
-NEWSTT:
-    jsr ISCNTC
-    lda TXTPTR
-    ldy TXTPTR+1
-    ldx CURLIN+1
+;; Saves the current text position in <StoppedText>, for CONT, while running a program. Trace mode prints each line
+;; number.
+;; Entry:
+;;   TraceLine = prints `#` and the line number when `TRACE` is on and a program is running, then falls into
+;;     <ExecuteStatement>; <CommandLoop> jumps here for a direct statement and <CheckStatementSeparator> after a colon
+;; See: <ExecuteStatement>, <CheckStop>, <Statements::Cont>
+;; Also: NEWSTT (M6502)
+.proc NextStatement
+    jsr CheckStop
+    lda TextPointer
+    ldy TextPointer+1
+    ldx CurrentLine+1
     inx
-    beq DIRCON
-    sta OLDTXT
-    sty OLDTXT+1
-DIRCON:
-    ldy #$00
-    lda (TXTPTR),y
-    bne MORSTS
-    ldy #$02
-    lda (TXTPTR),y
-    clc
-    beq GONE1
-    iny
-    lda (TXTPTR),y
-    sta CURLIN
-    iny
-    lda (TXTPTR),y
-    sta CURLIN+1
-    tya
-    adc TXTPTR
-    sta TXTPTR
-    bcc TRCLIN
-    inc TXTPTR+1
-TRCLIN:
-    bit TRCFLG
-    bpl GONE
-    ldx CURLIN+1
-    inx
-    beq GONE
-    lda #'#'
-    jsr OUTDO
-    ldx CURLIN
-    lda CURLIN+1
-    jsr LINPRT
-    jsr OUTSPC
+    beq TestSeparator
+    sta StoppedText
+    sty StoppedText+1
 
-;; Advances past the separator and dispatches a statement using <STMDSP>, or treats a non-token as LET.
-;; See: <NEWSTT>, <Statements::Let>
-GONE:
-    jsr CHRGET
-    jsr GONE3
-    jmp NXTCO1
-GONE1:
-    beq ENDCON
-GONE3:
-    beq ISCRTS
-; GetNextCharacter leaves carry set for a non-digit; a digit here is a syntax error.
-GONE2:
-    sbc #ENDTK
-    bcc GLET
-    cmp #$40
-    bcs SNERR1
+;; Reads the byte at <TextPointer>: a nonzero byte goes to <CheckStatementSeparator>, and a zero one reads the next
+;; line's link and number.
+;; Also: DIRCON (M6502)
+TestSeparator:
+    ldy #$00
+    lda (TextPointer),y
+    bne CheckStatementSeparator
+    ldy #$02                        ; the next line's link high byte, past the zero
+    lda (TextPointer),y
+    clc
+    beq ExecuteStatement::ToEndOfProgram
+    iny
+    lda (TextPointer),y
+    sta CurrentLine
+    iny
+    lda (TextPointer),y
+    sta CurrentLine+1
+    tya
+    adc TextPointer
+    sta TextPointer
+    bcc TraceLine
+    inc TextPointer+1
+
+;; Prints `#` and the line number when `TRACE` is on and a program is running, then falls into <ExecuteStatement>.
+;; Also: TRCLIN (UNKN)
+TraceLine:
+    bit TraceMode
+    bpl ExecuteStatement
+    ldx CurrentLine+1
+    inx
+    beq ExecuteStatement
+    lda #'#'
+    jsr PrintCharacter
+    ldx CurrentLine
+    lda CurrentLine+1
+    jsr Float::PrintDecimalAX
+    jsr PrintSpace
+    ; Falls into ExecuteStatement.
+.endproc
+
+;; Advances past the separator and dispatches a statement with <DispatchStatement>, then goes on to the next one.
+;; Entry:
+;;   ToEndOfProgram = goes on to <Statements::StopOrEnd::Finish>, the end of the program; <NextStatement> branches
+;;     here, for range, at a zero link
+;; See: <NextStatement>, <Statements::Let>
+;; Also: GONE (M6502)
+.proc ExecuteStatement
+    jsr GetNextCharacter
+    jsr DispatchStatement
+    jmp NextStatementSavingStack
+
+;; Goes on to <Statements::StopOrEnd::Finish>, the end of the program.
+;; Also: GONE1 (UNKN)
+ToEndOfProgram:
+    beq Statements::StopOrEnd::Finish
+.endproc
+
+;; Returns at the end of a statement; otherwise dispatches a statement token through <StatementTable>, and anything
+;; else is <Statements::Let>.
+;; In: A = the statement's first character, zero = set at the end of the statement, carry = set unless it is a digit
+;;   (as <GetNextCharacter> leaves it)
+;; Entry:
+;;   WithToken = subtracts <TOKEN_END> from A (carry set) and dispatches; the shared `ON` and IF code enters here with
+;;     a token
+;; Also: GONE3 (M6502)
+.proc DispatchStatement
+    beq Statements::Restore::Done
+
+;; Subtracts <TOKEN_END> and dispatches; <GetNextCharacter> leaves carry set for a non-digit, and a digit here is a
+;; syntax error.
+;; Also: GONE2 (M6502)
+WithToken:
+    sbc #TOKEN_END
+    bcc ToLet
+    cmp #TOKEN_TAB - TOKEN_END      ; TAB( is the first token that is not a statement
+    bcs CheckStatementSeparator::ToSyntaxError
     asl a
     tay
-    lda STMDSP+1,y
+    lda StatementTable+1,y
     pha
-    lda STMDSP,y
+    lda StatementTable,y
     pha
-    jmp CHRGET
-GLET:
-    jmp LET
-MORSTS:
+    jmp GetNextCharacter
+
+;; Jumps on to <Statements::Let> for a character below <TOKEN_END>.
+;; Also: GLET (M6502)
+ToLet:
+    jmp Statements::Let
+.endproc
+
+;; Takes a colon back to <NextStatement::TraceLine> for the next statement; anything else is a syntax error.
+;; In: A = the nonzero byte at <TextPointer>
+;; Entry:
+;;   ToSyntaxError = jumps to <SyntaxError>; <DispatchStatement> branches here for a token beyond the statements
+;; Also: MORSTS (M6502)
+.proc CheckStatementSeparator
     cmp #':'
-    beq TRCLIN
-SNERR1:
-    jmp SNERR
+    beq NextStatement::TraceLine
+
+;; Jumps on to <SyntaxError>.
+;; Also: SNERR1 (M6502)
+ToSyntaxError:
+    jmp SyntaxError
+.endproc
 
     RestoreStatement
 
-;; Checks the keyboard for Control-C without consuming any other key.
-;; See: <ISCCA1>, <Statements::Stop>
-ISCNTC:
+;; Checks the keyboard for Control-C without consuming any other key: returns at once unless the keyboard holds it,
+;; and otherwise reads the key and falls into <HandleBreak>.
+;; See: <HandleBreak>, <Statements::Stop>
+;; Also: ISCNTC (M6502, ASTIL)
+.proc CheckStop
     lda KBD
-    cmp #$83
-    beq ISCCAP
+    cmp #KEYBOARD_CONTROL_C
+    beq ConsumeKey
     rts
-ISCCAP:
-    jsr INCHR
 
-;; Handles Control-C, passing error code $FF to an active ONERR handler.
-ISCCA1:
+;; Consumes the Control-C key through <InputCharacter>.
+;; Also: ISCCAP (M6502)
+ConsumeKey:
+    jsr InputCharacter
+    ; Falls into HandleBreak.
+.endproc
+
+;; Handles a break: gives error code $FF to an active `ONERR` handler, and otherwise compares A with <CONTROL_C> and
+;; falls into the shared STOP code, which reports BREAK when they match.
+;; In: A = the key read
+;; Also: ISCCA1 (UNKN)
+.proc HandleBreak
     ldx #$FF
-    bit ERRFLG
-    bpl ISCCA2
+    bit OnErrorActive
+    bpl NoHandler
     jmp HANDLE
-ISCCA2:
-    cmp #$03
+
+;; No `ONERR` handler is active: sets the flags for the shared STOP code from A.
+;; Also: ISCCA2 (UNKN)
+NoHandler:
+    cmp #CONTROL_C
+    ; Falls into Statements::Stop.
+.endproc
 
     StopAndContinue 1, 0
 
-;; SAVE: writes the program length and program text to cassette through the Monitor.
-;; See: <LOAD>, <VARTIO>, <PROGIO>
-SAVE:
-    sec
-    lda PRGEND
-    sbc TXTTAB
-    sta POKER
-    lda PRGEND+1
-    sbc TXTTAB+1
-    sta POKER+1
-    jsr VARTIO
-    jsr MWRITE
-    jsr PROGIO
-    jmp MWRITE
+.scope Statements continued
 
-;; LOAD: reads a cassette program, then resets and relinks it unless the lock flag is set.
-;; See: <SAVE>, <FINI>
-LOAD:
-    jsr VARTIO
+;; SAVE: writes the program's two-byte length and then the program to cassette through the Monitor.
+;; See: <Statements::Load>, <SetCassetteLengthRange>, <SetCassetteProgramRange>
+;; Also: SAVE (M6502)
+.proc Save
+    sec
+    lda ProgramEnd
+    sbc ProgramStart
+    sta PokeAddress
+    lda ProgramEnd+1
+    sbc ProgramStart+1
+    sta PokeAddress+1
+    jsr SetCassetteLengthRange
+    jsr MWRITE
+    jsr SetCassetteProgramRange
+    jmp MWRITE
+.endproc
+
+;; LOAD: reads a cassette program's length and text and sets <VariablesStart>, then clears the program's state, and
+;; also relinks it unless it was saved run-only.
+;; See: <Statements::Save>, <ClearAndRelink>
+;; Also: LOAD (M6502)
+.proc Load
+    jsr SetCassetteLengthRange
     jsr MREAD
     clc
-    lda TXTTAB
-    adc POKER
-    sta VARTAB
-    lda TXTTAB+1
-    adc POKER+1
-    sta VARTAB+1
-    lda TEMPPT
-    sta LOCK
-    jsr PROGIO
+    lda ProgramStart
+    adc PokeAddress
+    sta VariablesStart
+    lda ProgramStart+1
+    adc PokeAddress+1
+    sta VariablesStart+1
+    lda NextTemporary
+    sta RunOnly
+    jsr SetCassetteProgramRange
     jsr MREAD
-    bit LOCK
-    bpl LOAD1
-    jmp RUNC
-LOAD1:
-    jmp FINI
+    bit RunOnly
+    bpl ToClearAndRelink
+    jmp ResetProgramState
 
-;; Sets the Monitor cassette range to the two-byte program length at <POKER>, and clears <LOCK>.
-VARTIO:
-    lda #<POKER
+;; Jumps on to <ClearAndRelink> when <RunOnly> is clear.
+;; Also: LOAD1 (UNKN)
+ToClearAndRelink:
+    jmp ClearAndRelink
+.endproc
+
+.endscope
+
+;; Points the Monitor's cassette range, A1 to A2, at the two bytes of <PokeAddress>, and clears <RunOnly>.
+;; Also: VARTIO (M6502)
+.proc SetCassetteLengthRange
+    lda #<PokeAddress
     ldy #$00
     sta A1L
     sty A1H
-    lda #<(POKER+2)
+    lda #<(PokeAddress+2)
     sta A2L
     sty A2H
-    sty LOCK
+    sty RunOnly
     rts
+.endproc
 
-;; Sets the Monitor cassette range to the program from <TXTTAB> through <VARTAB>.
-PROGIO:
-    lda TXTTAB
-    ldy TXTTAB+1
+;; Points the Monitor's cassette range, A1 to A2, at the program from <ProgramStart> to <VariablesStart>.
+;; Also: PROGIO (M6502)
+.proc SetCassetteProgramRange
+    lda ProgramStart
+    ldy ProgramStart+1
     sta A1L
     sty A1H
-    lda VARTAB
-    ldy VARTAB+1
+    lda VariablesStart
+    ldy VariablesStart+1
     sta A2L
     sty A2H
     rts
+.endproc
 
-;; Decrements <CURLIN>+1 while preserving the incoming flags before <Statements::Run>.
-RUNSTM:
+.scope Statements continued
+
+;; RUN's dispatch entry: decrements <CurrentLine>'s high byte, keeping the incoming flags, and falls into the shared
+;; <Statements::Run>.
+;; Also: RUNSTM (UNKN)
+.proc PrepareRun
     php
-    dec CURLIN+1
+    dec CurrentLine+1
     plp
-    RunStatement
-    GosubAndGoto NXTCO1
+    ; Falls into Run.
+.endproc
 
-;; POP: searches past FOR frames for the innermost GOSUB frame and discards it without transferring control.
-POP:
+.endscope
+
+    RunStatement
+    GosubAndGoto NextStatementSavingStack
+
+.scope Statements continued
+
+;; POP: discards the innermost GOSUB frame, and the FOR frames above it, without transferring control. It is also
+;; RETURN's dispatch entry: the shared <Statements::Return> that follows tells the two apart by Y.
+;; Also: POP (UNKN)
+Pop:
+
+.endscope
+
     ReturnStatement 1, 1
 
     StatementScan 0, 1
     ConditionalStatements
-
-;; ON: selects a one-based entry in a GOTO or GOSUB line-number list.
-ON:
     OnStatement
 
 .include "../Microsoft6502Basic/MsBasic.LineNumber.asm"

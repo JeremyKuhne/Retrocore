@@ -16,11 +16,11 @@
     .scope Float continued
 
     ;; Prints the line-number prefix and the current line number.
-    ;; See: <Float::PrintDecimalAX>, <INTXT>
+    ;; See: <Float::PrintDecimalAX>, <LineNumberPrefix>
     ;; Also: INPRT (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc PrintInLineNumber
-    lda #<INTXT
-    ldy #>INTXT
+    lda #<LineNumberPrefix
+    ldy #>LineNumberPrefix
     jsr PrintFac::ToPrintString
     lda CurrentLine+1
     ldx CurrentLine

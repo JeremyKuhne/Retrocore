@@ -329,8 +329,8 @@ ChecksumFix:
 ;;
 ;; Its entry in the key table became the last Control-Y, which wins: in the Autostart Monitor it points at the
 ;; five NOPs after the rts, which run into <Commands::User>, and in the original IIe at the text that replaced
-;; them (<Commands::UserText>), which runs into it too. The
-;; Enhanced IIe gave the entry to its own S command, which searches memory.
+;; them (<Commands::UserText>), which runs into it too. The Enhanced IIe gave the entry to its own S command, which
+;; searches memory.
 ;; Also: STEPZ (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc Step
     rts

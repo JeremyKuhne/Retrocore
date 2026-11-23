@@ -27,9 +27,12 @@ digests check.
 9. Widely called documented entry points are top level (SetKeyboard, SetScreen, GetLine, ReadHexNumber); family
    scopes hold what is internal to them.
 10. Where builds differ only in places, the routine is one `.proc` with `.if` inside it (the owner's D5), so the
-    source shows what each version changed: Decode, GetLine, Echo, SetHook and ReadKey, and Return is written once
-    between the per-build cassette code. The routines that differ throughout (the IIe's calls into its firmware,
-    the Enhanced IIe's cassette stubs, the Apple II's TRACE and STEP) are a `.proc` per build under `.if`.
+    source shows what each version changed: Decode, GetLine, Echo, SetHook and ReadKey. Return, the same in every
+    build, is written once between the per-build cassette code. The routines that differ throughout (the IIe's
+    calls into its firmware, the Enhanced IIe's cassette stubs, the Apple II's TRACE and STEP) are a `.proc` per
+    build under `.if`. The two IIe's ClearToEndOfLine and ClearLineFrom have one shape, but the original IIe flips
+    the carry, keeps the column elsewhere and leaves through another routine, so an `.if` would sit on nearly every
+    line; they stay a `.proc` per build.
 11. VLINEZ is a scope-level label `LowRes::NextVerticalRow`, shared by the family's routines.
 12. SLOTRTS on the original IIe is `Commands::UserText` (Control-Y runs the text bytes and falls into USR), and on
     the Enhanced IIe `SelectSlotRom`; the Apple II and Autostart Monitors have none.
@@ -37,8 +40,9 @@ digests check.
 14. The disassembler's addressing-mode enum's members are full words (ZERO_PAGE_X, INDIRECT_INDEXED).
 15. RESET is `Startup::Reset` (Also: RESET); `ResetToMonitor` mentions the 1978 listing's RESET in prose only.
 16. GETLN1 is `GetLine::NoPrompt` (Also: GETLN1); the source's GETLN_1 spelling is dropped.
-17. INSDS2 is `Disassembler::Decode::Opcode` ($F88E), where Integer BASIC's mini-assembler, Programmer's Aid and
-    DOS's relocator call it with the opcode in A; `Decode` ($F88C) loads the opcode first.
+17. INSDS2 is `Disassembler::Decode::Opcode` ($F88E), where DOS's relocator, the Apple II's Integer BASIC
+    mini-assembler and Programmer's Aid, and the Enhanced IIe's firmware call it with the opcode in A; `Decode`
+    ($F88C) loads the opcode first.
 18. Top level is for the I/O everything uses; subsystem routines stay in their families even when programs call
     them (LowRes::Plot, Disassembler::PrintInstruction, Cassette::WriteHeader, Startup::PowerUp).
 19. `Commands` is one scope in nine pieces on the Enhanced IIe and eight in the other builds.

@@ -321,6 +321,79 @@ public sealed partial class LanguageAnalysisTests
         }
     }
 
+    /// <summary>
+    ///  A file included inside two scopes defines its text-only names in each: a definition in a branch the build
+    ///  does not take is recorded once per scope, and never as a root name.
+    /// </summary>
+    [TestMethod]
+    public void TextOnlyDefinitionsAreInEachScopeAFileIsIncludedIn()
+    {
+        string folder = Directory.CreateTempSubdirectory("retrocore-included").FullName;
+        try
+        {
+            string main = Path.Join(folder, "Main.asm");
+            File.WriteAllText(main, """
+                .org $0300
+                .scope First
+                .include "Shared.asm"
+                .endscope
+                .scope Second
+                .include "Shared.asm"
+                .endscope
+                """.ReplaceLineEndings("\n"));
+
+            // The editor learns where a file is included from the statements it assembles, so it has one.
+            File.WriteAllText(Path.Join(folder, "Shared.asm"), """
+                    nop
+                .if 0
+                VALUE = 1
+                .endif
+                """.ReplaceLineEndings("\n"));
+
+            SourceAnalysis analysis = SourceAnalysis.Assemble(Path.GetFullPath(main), _ => null);
+            analysis.Definitions.Select(site => site.Name).Where(name => name.EndsWith("VALUE", StringComparison.Ordinal))
+                .Should().BeEquivalentTo("First::VALUE", "Second::VALUE");
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    /// <summary>
+    ///  In a source with errors, a text-only definition written qualified keeps its spelling rather than gaining its
+    ///  scope twice, and a cheap local keeps its own, while a plain label is qualified by its scope.
+    /// </summary>
+    [TestMethod]
+    public void TextOnlyQualifiedNamesAndCheapLocalsKeepTheirSpelling()
+    {
+        string folder = Directory.CreateTempSubdirectory("retrocore-spelling").FullName;
+        try
+        {
+            string main = Path.Join(folder, "Broken.asm");
+            File.WriteAllText(main, """
+                .org $0300
+                .scope Outer
+                Outer::Written:
+                    nop
+                Plain:
+                @loop:
+                    bne @loop
+                    lda #
+                .endscope
+                """.ReplaceLineEndings("\n"));
+
+            SourceAnalysis analysis = SourceAnalysis.Assemble(Path.GetFullPath(main), _ => null);
+            analysis.Result.Success.Should().BeFalse();
+            analysis.Definitions.Select(site => site.Name).Should().Contain(["Outer::Written", "Outer::Plain", "@loop"])
+                .And.NotContain(["Outer::Outer::Written", "Outer::@loop", "Plain"]);
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
     private static LspParams Request(DocumentUri uri, int line, int character) =>
         new(new TextDocumentItem(uri, "retrocore-asm", ""), new Position(line, character), new ReferenceContext(IncludeDeclaration: false), "", []);
 }

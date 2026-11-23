@@ -189,7 +189,12 @@ internal sealed partial class SourceAnalysis
                 bool constant = match.Groups["equate"].Success;
                 SymbolSiteKind kind = constant ? SymbolSiteKind.Constant : SymbolSiteKind.Label;
                 string plain = match.Groups["name"].Value;
-                foreach (string scope in ScopesAt(path, line).Select(scopes => scopes.Scope).Distinct(StringComparer.Ordinal))
+
+                // A name written qualified keeps its spelling (the assembler rejects defining one), and a cheap local
+                // belongs to the label before it, not to a scope.
+                bool scoped = !plain.Contains("::", StringComparison.Ordinal) && !plain.StartsWith('@');
+                IEnumerable<string> enclosing = scoped ? ScopesAt(path, line).Select(context => context.Scope) : [""];
+                foreach (string scope in enclosing.Distinct(StringComparer.Ordinal))
                 {
                     string name = scope.Length == 0 ? plain : $"{scope}::{plain}";
                     if (_definitions.ContainsKey(name)) { continue; }

@@ -681,8 +681,9 @@ the build:
 - A line is assembled if any pass over it took it, so a file included twice, with a branch taken in one place and
   not the other, has both branches assembled. A file only a skipped branch includes is never opened and has no
   lines in the report.
-- A conditional directive's own line goes with the branch around the whole conditional. Inside a skipped branch,
-  nested conditionals are skipped whole.
+- A conditional directive's own line goes with the branch around the whole conditional, except that a label on it
+  (`Done: .endif`) is defined only when the branch it closes was taken, and its line goes with the label. Inside a
+  skipped branch, nested conditionals are skipped whole.
 - Each expansion of a macro is a pass over its body, so a body line is assembled where some expansion took it: a
   branch no expansion took, and the body of a macro never invoked, are skipped. The `.macro` and `.endmacro` lines
   go with the definition. A `.repeat` body is likewise assembled where an iteration took it, so one repeated no
@@ -690,7 +691,8 @@ the build:
 - Branches are chosen while the source is expanded, so an error found once code is laid out (an undefined name, a
   branch out of range) leaves the report whole. After an error found while expanding, every line decided from
   that error on, or never reached, is undecided rather than skipped; so is every line not assembled when expansion
-  stops at its line limit. So are the lines of a MACRO-10 source that produced no statement.
+  stops at its line limit. So are the lines of a MACRO-10 source that produced no statement, and every line of one
+  whose expansion reported an error.
 
 ```asm
 Model = 2

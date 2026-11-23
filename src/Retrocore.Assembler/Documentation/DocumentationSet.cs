@@ -290,13 +290,14 @@ public sealed class DocumentationSet
     /// <remarks>
     ///  <para>
     ///   When the set was created from an assembly, the assembly answers it exactly for every kind of topic: the
-    ///   branch is in the build when the assembly assembled the line the section's comment documents (see
+    ///   branch is in the build when the assembly assembled the line the section's comment documents, and not when
+    ///   the assembly never opened its file (see
     ///   <see cref="AssemblyResult.SkippedLines"/>), as the assembler chose it, with the macros defined before that
     ///   point and the constants as they were there.
     ///  </para>
     ///  <para>
     ///   Without that report (documentation from a debug file, which has no source) or for a line it leaves
-    ///   undecided (after an error in expansion, or in a file the assembly never opened), the section's condition is
+    ///   undecided (after an error in expansion), the section's condition is
     ///   evaluated from the build's symbols and every macro the files define, which can differ from the assembler's
     ///   view where a macro is defined after the <c>.ifdef</c> that tests it or in a branch not taken.
     ///  </para>
@@ -304,10 +305,13 @@ public sealed class DocumentationSet
     public bool InBuild(DocumentationTopic topic, DocumentationSection section)
     {
         if (section.Condition is null) { return true; }
-        bool? assembled = section.OriginPath is { Length: > 0 } path
-            ? _skipped?.IsAssembled(path, section.OriginLine)
-            : null;
+        if (section.OriginPath is not { Length: > 0 } path || _skipped is not { } skipped)
+        {
+            return DocumentationConditions.InBuild(section.Condition, _symbols, IsDefined);
+        }
 
+        // A file the assembly never opened, such as one only a branch it skipped includes, has nothing in the build.
+        bool? assembled = skipped.Opened(path) ? skipped.IsAssembled(path, section.OriginLine) : false;
         return assembled ?? DocumentationConditions.InBuild(section.Condition, _symbols, IsDefined);
     }
 

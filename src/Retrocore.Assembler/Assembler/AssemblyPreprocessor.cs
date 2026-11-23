@@ -352,6 +352,7 @@ internal sealed partial class AssemblyPreprocessor
 
             // A conditional directive's own line counts with the branch around it, which it marks itself.
             MarkLine(original.Location, _conditions.Count == 0 || _conditions[^1].Active);
+            _labeledDirective = false;
 
             ReadOnlyMemory<char> text = original.Dialect == AssemblyDialect.Merlin
                 ? original.Text
@@ -616,6 +617,9 @@ internal sealed partial class AssemblyPreprocessor
 
         bool active = _conditions.Count == 0 || _conditions[^1].Active;
         if (active) { Emit(original, label is ":" ? ":" : $"{label}:"); }
+
+        // The line is assembled as its label is, not as the conditional directive after it would be.
+        _labeledDirective = true;
         text = WithoutLabel(text);
         original = new(WithoutLabel(original.Text), original.Location, original.Dialect);
     }

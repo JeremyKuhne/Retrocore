@@ -13,6 +13,12 @@ internal sealed partial class AssemblyPreprocessor
     private string? _markedPath;
     private FileLines? _marked;
 
+    // The earliest expansion position from which a dialect's own expander chose branches it then reported errors in.
+    private int _untrustedFrom = int.MaxValue;
+
+    // Whether the line being expanded had a label before its directive, which DirectiveLabel removed.
+    private bool _labeledDirective;
+
     /// <summary>
     ///  Notes a file the assembly opened, once however often it is included.
     /// </summary>
@@ -64,13 +70,13 @@ internal sealed partial class AssemblyPreprocessor
     private AssemblySkippedLines SkippedLines()
     {
         // A choice made at or after the first error may rest on what the error lost.
-        int trusted = int.MaxValue;
+        int trusted = _untrustedFrom;
         foreach ((int Order, AssemblyDiagnostic Diagnostic) error in _diagnostics)
         {
             trusted = Math.Min(trusted, error.Order);
         }
 
-        bool errors = trusted != int.MaxValue;
+        bool errors = _diagnostics.Count != 0;
 
         StringComparer paths = AssemblySkippedLines.PathComparer;
         Dictionary<string, int> counts = [with(paths)];

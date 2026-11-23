@@ -13,7 +13,8 @@ namespace Retrocore.Assembler;
 ///  <para>
 ///   A line is assembled when the assembly took it in any pass over it: a file included twice, in one place where an
 ///   <c>.if</c> takes a branch and another where it skips it, has that branch assembled. A conditional directive's
-///   own line is assembled when the branch around it is. Each expansion of a macro is a pass over its body, so a
+///   own line is assembled when the branch around it is, except that one carrying a label, such as <c>Done: .endif</c>,
+///   is assembled when the label is defined: when the branch it closes was taken. Each expansion of a macro is a pass over its body, so a
 ///   body line is assembled when some expansion took it: a branch of an <c>.if</c> in the body that no expansion
 ///   took is skipped, as is the body of a macro never invoked, while its <c>.macro</c> and <c>.endmacro</c> lines go
 ///   with the definition. A <c>.repeat</c>'s body is likewise assembled when some iteration took it, so a body
@@ -31,7 +32,7 @@ namespace Retrocore.Assembler;
 ///   leaves every line it did not assemble undecided. A line an earlier pass skipped is still reported skipped after
 ///   a later error, which assumes the error did not cut short a pass that would have assembled it. A line of a
 ///   MACRO-10 source that produced no statement is undecided too, error or not: its conditionals are expanded with
-///   the rest of its text and not reported.
+///   the rest of its text and not reported; when that expansion reports an error, every line of the source is.
 ///  </para>
 /// </remarks>
 public sealed class AssemblySkippedLines
@@ -78,6 +79,17 @@ public sealed class AssemblySkippedLines
     ///  Gets whether every line of every opened file is known to be assembled or skipped.
     /// </summary>
     public bool IsComplete => Undecided.Count == 0;
+
+    /// <summary>
+    ///  Gets whether the assembly opened a file.
+    /// </summary>
+    /// <param name="path">The file, as any path that names it.</param>
+    /// <returns>Whether it is in the report.</returns>
+    public bool Opened(string path)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        return path.Length != 0 && _lineCounts.ContainsKey(FullPath(path));
+    }
 
     /// <summary>
     ///  Gets whether the assembly assembled a source line.

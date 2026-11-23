@@ -40,8 +40,9 @@ internal sealed partial class AssemblyPreprocessor
 
         Conditional current = _conditions[^1];
 
-        // A closing or continuing directive belongs to the branch around the whole conditional.
-        if (current.Parent) { MarkLine(location, assembled: true); }
+        // A closing or continuing directive belongs to the branch around the whole conditional, unless it carries a
+        // label, which is defined only when the branch it closes was taken.
+        if (current.Parent && !_labeledDirective) { MarkLine(location, assembled: true); }
         if (operation == ".ENDIF")
         {
             if (operand.Length != 0) { Error(".endif takes no operand.", location); }

@@ -49,6 +49,8 @@ internal sealed partial class AssemblyPreprocessor
             lines = expander.Expand(source.Text, source.Path, parent);
         }
 
+        // The expander chose every branch before reporting its errors, so its lines are trusted only without them.
+        int start = _visited;
         foreach ((string text, AssemblyLocation location) in lines)
         {
             _visited++;
@@ -56,7 +58,12 @@ internal sealed partial class AssemblyPreprocessor
             Emit(new Line(text, location, AssemblyDialect.Macro10), text);
         }
 
-        foreach ((string message, AssemblyLocation location) in expander.Errors) { Error(message, location); }
+        foreach ((string message, AssemblyLocation location) in expander.Errors)
+        {
+            Error(message, location);
+            _untrustedFrom = Math.Min(_untrustedFrom, start);
+        }
+
         if (expander.Aliases.Count == 0) { return; }
         _macro10Aliases ??= [with(StringComparer.Ordinal)];
         foreach (KeyValuePair<string, string> alias in expander.Aliases) { _macro10Aliases[alias.Key] = alias.Value; }

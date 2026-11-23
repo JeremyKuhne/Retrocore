@@ -440,6 +440,44 @@ public sealed partial class HistoricalNameTests
     }
 
     /// <summary>
+    ///  A file the assembly never opened has nothing in its build: a definition documented in it under a condition
+    ///  doesn't give its old names to this build, though its condition text would hold.
+    /// </summary>
+    [TestMethod]
+    public void SectionsOfFilesTheAssemblyNeverOpenedArentInTheBuild()
+    {
+        string program = """
+            ;; Reads a key.
+            ;; Also: OLDKEY (TEST)
+            ReadKey:
+                rts
+            """;
+
+        string unopened = """
+            .ifndef WIDE
+            ;; Reads a key slowly.
+            ;; Also: OLDKEY (TEST)
+            SlowKey:
+                rts
+            .else
+            ;; Reads a key slowly.
+            SlowKey:
+                rts
+            .endif
+            """;
+
+        DocumentationSet set = DocumentationSet.Create(
+            [DocumentationParser.Parse(program, "test.asm"), DocumentationParser.Parse(unopened, "unopened.asm")],
+            Assemble(program));
+
+        DocumentationTopic slow = Required(set.Find("SlowKey"));
+        DocumentationSection also = slow.Sections.Single(section => section.Name == "Also");
+        also.Condition.Should().NotBeNull();
+        set.Gives(slow, "OLDKEY", thisBuild: true).Should().BeFalse();
+        set.FindAlso("OLDKEY", thisBuild: true).Should().ContainSingle().Which.Name.Should().Be("ReadKey");
+    }
+
+    /// <summary>
     ///  Another module is assembled for its default build, which says nothing about the build of the source that
     ///  links into it: an old name two of its builds give is ambiguous there, not its default build's.
     /// </summary>

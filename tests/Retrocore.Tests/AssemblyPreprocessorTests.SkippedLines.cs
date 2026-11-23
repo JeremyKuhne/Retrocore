@@ -305,6 +305,38 @@ public partial class AssemblyPreprocessorTests
     }
 
     /// <summary>
+    ///  A label on a closing or continuing directive is defined only when the branch it closes was taken, so its line
+    ///  is assembled only then.
+    /// </summary>
+    [TestMethod]
+    public void LabeledDirectivesFollowTheirLabels()
+    {
+        AssemblyResult result = Assemble("""
+            .if 0
+            .byte 1
+            Skipped: .else
+            .byte 2
+            Taken: .endif
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+        result.Symbols.Should().ContainKey("Taken").And.NotContainKey("Skipped");
+        Runs(Required(result.SkippedLines), "main.asm").Should().Equal((1, 2));
+    }
+
+    /// <summary>
+    ///  A MACRO-10 source whose expansion reported an error chose its branches with what the error lost, so its lines
+    ///  are undecided, even those that made statements.
+    /// </summary>
+    [TestMethod]
+    public void Macro10ErrorsLeaveTheFileUndecided()
+    {
+        AssemblyParseResult parsed = NativeAssembler.Parse(new("; retrocore: dialect=macro10\n\tEXP\t1\n\tEXP\t2\n\tIFE\t<\n", "other.s"));
+        parsed.Diagnostics.Should().NotBeEmpty();
+        Required(parsed.SkippedLines).IsAssembled("other.s", 1).Should().BeNull();
+    }
+
+    /// <summary>
     ///  A project built by hand, not by parsing, has no report.
     /// </summary>
     [TestMethod]

@@ -15,8 +15,7 @@ internal sealed partial class AssemblyPreprocessor
         if (!op.IsEmpty && op[0] != '.' && tail.StartsWith("."))
         {
             name = op.ToString();
-            int space = 0;
-            while (space < tail.Length && !char.IsWhiteSpace(tail[space])) { space++; }
+            int space = AssemblySyntax.OperationLength(tail);
             op = tail[..space];
             tail = tail[space..].Trim();
         }

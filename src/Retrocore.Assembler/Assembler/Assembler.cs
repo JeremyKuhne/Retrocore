@@ -174,7 +174,7 @@ public sealed partial class Assembler
         else if (identifierLength != 0
             && suffix.Length > 4
             && suffix.Span[..4].Equals(".SET", StringComparison.OrdinalIgnoreCase)
-            && char.IsWhiteSpace(suffix.Span[4]))
+            && (char.IsWhiteSpace(suffix.Span[4]) || suffix.Span[4] == '('))
         {
             label = text[..identifierLength].ToString();
             operation = ".SET".AsMemory();

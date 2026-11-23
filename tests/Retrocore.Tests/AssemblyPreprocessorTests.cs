@@ -538,7 +538,7 @@ public partial class AssemblyPreprocessorTests
 
     /// <summary>
     ///  As in ca65, an opening parenthesis right after a directive starts its operand, so <c>.if(1)</c> reads as
-    ///  <c>.if (1)</c>, for conditionals, data, repeats and one a definition spells.
+    ///  <c>.if (1)</c>, for conditionals, data, repeats, assignments, structure members and one a definition spells.
     /// </summary>
     /// <param name="dialect">The source dialect.</param>
     /// <param name="text">The source.</param>
@@ -554,6 +554,10 @@ public partial class AssemblyPreprocessorTests
     [DataRow(AssemblyDialect.Native, ".repeat(2)\n.byte 7\n.endrepeat", 7, 7)]
     [DataRow(AssemblyDialect.Ca65, ".res(2), $EA", 0xEA, 0xEA)]
     [DataRow(AssemblyDialect.Native, ".define IFX .if\nIFX(1)\n.byte 1\n.endif\n.byte 2", 1, 2)]
+    [DataRow(AssemblyDialect.Native, "Value .set(3)\n.byte Value, 4", 3, 4)]
+    [DataRow(AssemblyDialect.Ca65, "Value .set(3)\n.byte Value, 4", 3, 4)]
+    [DataRow(AssemblyDialect.Native, ".struct Pair\nFirst .byte\nSecond .res(2)\n.endstruct\n.byte .sizeof(Pair), Pair::Second", 3, 1)]
+    [DataRow(AssemblyDialect.Ca65, ".struct Pair\nFirst .byte\nSecond .res(2)\n.endstruct\n.byte .sizeof(Pair), Pair::Second", 3, 1)]
     public void DirectivesTakeAParenthesizedOperandWithoutASpace(AssemblyDialect dialect, string text, int first, int second)
     {
         AssemblyResult result = Assemble(text, dialect);

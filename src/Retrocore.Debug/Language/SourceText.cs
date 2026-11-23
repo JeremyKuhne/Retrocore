@@ -100,8 +100,10 @@ internal static class SourceText
             rest = rest[end..];
         }
 
+        // A directive's name ends at a parenthesis too, as the assembler reads it: in ".if(", what follows is an operand.
         rest = rest.TrimStart();
-        return rest.IndexOfAny([' ', '\t']) < 0;
+        char[] separators = rest.StartsWith('.') ? [' ', '\t', '('] : [' ', '\t'];
+        return rest.IndexOfAny(separators) < 0;
     }
 
     /// <summary>

@@ -200,18 +200,32 @@ public static partial class DocumentationParser
     {
         if (!afterName.StartsWith(':') || afterName.StartsWith("::", StringComparison.Ordinal)) { return ""; }
 
-        // The directive ends at a space or a comment, as the assembler reads it: ".equ,3" is not one.
+        // The directive ends where the assembler ends it, at a space, a parenthesis or a comment: ".equ,3" is not
+        // one, ".equ(3)" is.
         string rest = afterName[1..].TrimStart();
-        int end = 0;
-        while (end < rest.Length && !char.IsWhiteSpace(rest[end]) && rest[end] != ';') { end++; }
+        int end = OperationLength(rest);
+        int comment = rest.IndexOf(';', 0, end);
+        if (comment >= 0) { end = comment; }
         string word = rest[..end].ToLowerInvariant();
         return word is ".equ" or ".set" ? word : "";
     }
 
+    // Where the assembler ends a line's operation (AssemblySyntax.OperationLength, which the source generator does not
+    // compile): at whitespace, or for a directive, also at an opening parenthesis.
+    private static int OperationLength(string text)
+    {
+        bool directive = text.Length != 0 && text[0] == '.';
+        int end = 0;
+        while (end < text.Length && !char.IsWhiteSpace(text[end]) && !(directive && text[end] == '(')) { end++; }
+        return end;
+    }
+
     private static string FirstWord(string text)
     {
-        int end = 0;
-        while (end < text.Length && !char.IsWhiteSpace(text[end]) && text[end] != ',') { end++; }
+        // A directive's name ends at a parenthesis too, as the assembler reads it.
+        int end = OperationLength(text);
+        int comma = text.IndexOf(',', 0, end);
+        if (comma >= 0) { end = comma; }
         return text[..end];
     }
 

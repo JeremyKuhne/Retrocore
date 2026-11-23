@@ -1,7 +1,7 @@
 ; retrocore: style=strict
-;; The Monitor's own names for page zero, the values several of its files use, and the entries it calls in the
-;; internal firmware and the language ROMs. The page zero the Apple II Monitor's step and arithmetic routines use is
-;; in their scopes.
+;; The Monitor's own names for page zero and the entries it calls in the internal firmware and the language ROMs:
+;; locations only, the values several of its files use being in Monitor.asm. The page zero the Apple II Monitor's
+;; step and arithmetic routines use is in their scopes.
 
 ; Page zero not in IIeEquates.asm, because DOS has names of its own spelled the same. The firmware inherits these.
 
@@ -19,14 +19,6 @@ LOC1 = $01
 ;; <VerticalTab> sets <BASL>/<BASH> for it. The 80-column firmware keeps a copy in <Firmware:OURCV>.
 ;; See: <CH>, <BASL>, <WNDTOP>, <WNDBTM>, <VerticalTab>
 CV = $25
-
-; Values several of the Monitor's files use.
-
-;; <INVFLG> for normal text: printable characters print as they are.
-TEXT_NORMAL = $FF
-
-;; Added to a slot number to make the high byte of its ROM's page, $Cn00.
-SLOT_ROM_PAGE = $C0
 
 ; The internal firmware's entries, and CLRROM, a label in the Enhanced IIe's firmware.
 

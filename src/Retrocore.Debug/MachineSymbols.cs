@@ -15,15 +15,17 @@ namespace Retrocore.Debug;
 /// </summary>
 /// <remarks>
 ///  <para>
-///   Each source is assembled as the debugger assembles it for the model, so each name has the address it has on
-///   that machine; DOS's are where it runs in 48K or more. Where several names share an address, the Monitor's and
-///   the hardware equates' come first, then the firmware's, BASIC's and DOS's; within a source a label comes before
-///   an equate, and an earlier definition before a later one. A name in a scope keeps its qualified name, such as
-///   <c>LowRes::Plot</c>, as do its inner labels (<c>Disassembler::Decode::Opcode</c>). Numbered inner labels
-///   (<c>ROUTINE_1</c>) are left out, and so are values in the sources that follow the style guide (equates named as
-///   it names values, such as <c>SCREEN_WIDTH</c>). Page zero takes only the Monitor's and the hardware's names, as
-///   programs reuse BASIC's and DOS's page-zero storage for their own. In page zero a name in a scope, which is the name one family of routines gives a byte, comes after every other
-///   name, so a program's use of the byte takes its shared name (<c>MASK</c>, not <c>Disassembler::FormatBits</c>).
+///   Each source is assembled as the debugger assembles it for the model, so each name has the address it has on that
+///   machine; DOS's are where it runs in 48K or more. Where several names share an address, the Monitor's and the
+///   hardware equates' come first, then the firmware's, BASIC's and DOS's; within a source a label comes before an
+///   equate, and an earlier definition before a later one. A name in a scope keeps its qualified name, such as
+///   <c>LowRes::Plot</c>, as do its inner labels (<c>Disassembler::Decode::Opcode</c>). Names that end in an underscore
+///   and a number, as a routine's numbered inner labels do (<c>ROUTINE_1</c>), are left out, and so are values in the
+///   sources that follow the style guide (equates named as it names values, such as <c>SCREEN_WIDTH</c>). Page zero
+///   takes only the Monitor's and the hardware's names, as programs reuse BASIC's and DOS's page-zero storage for their
+///   own. In page zero a name in a scope, which is the name one family of routines gives a byte, comes after every
+///   other name, so a program's use of the byte takes its shared name (<c>MASK</c>, not
+///   <c>Disassembler::FormatBits</c>).
 ///  </para>
 /// </remarks>
 internal static partial class MachineSymbols
@@ -115,8 +117,8 @@ internal static partial class MachineSymbols
 
     // Whether an equate in a source that follows the style guide is a value rather than an address. There locations
     // are PascalCase, so a value is one named in capitals (SCREEN_WIDTH, COLUMNS, AddressMode::ABSOLUTE) or a .set
-    // variable, in either form; an Equates.asm keeps Apple's one-word capital names for locations still to be
-    // converted (CV, LOC1), though not one with an underscore (B_FUNC). Other sources name their locations in
+    // variable, in either form. An Equates.asm holds only locations, keeping Apple's capital names for them until they
+    // are converted (CV, B_FUNC), so only its .set variables are values. Other sources name their locations in
     // capitals too, so the rule cannot tell their values from them and leaves both (IIeEquates.asm's KEY_ names, until
     // it follows the style guide).
     private static bool IsValue(string name, AssemblyLocation location, Dictionary<string, string[]?> styled)
@@ -135,7 +137,7 @@ internal static partial class MachineSymbols
         if (lines is null) { return false; }
         if (location.Line < lines.Length && SetVariable().IsMatch(lines[location.Line])) { return true; }
 
-        return ValueName().IsMatch(name) || (CapitalName().IsMatch(name) && Path.GetFileName(path) != "Equates.asm");
+        return Path.GetFileName(path) != "Equates.asm" && (ValueName().IsMatch(name) || CapitalName().IsMatch(name));
     }
 
     /// <summary>

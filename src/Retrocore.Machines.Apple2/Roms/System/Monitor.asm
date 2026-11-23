@@ -100,6 +100,14 @@ ENHANCED = 0
 ; The Monitor's own page zero, the firmware's entries and the build's other names.
 .include "Monitor/Equates.asm"
 
+; Values several of the Monitor's files use.
+
+;; <INVFLG> for normal text: printable characters print as they are.
+TEXT_NORMAL = $FF
+
+;; Added to a slot number to make the high byte of its ROM's page, $Cn00.
+SLOT_ROM_PAGE = $C0
+
 .org $F800
 
 .include "Monitor/LowRes.asm"

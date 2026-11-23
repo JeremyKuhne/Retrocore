@@ -48,17 +48,21 @@ most often missed:
 
 - **Structure:** each routine is a `.proc`, and a family that shares code or entries is a `.scope`. Labels go
   on their own line at column 0 with names for what happens there (`NextRow`, `NotFound`), never `ROUTINE_1` or
-  an address (`L_F8C2`); drop a label nothing refers to.
+  an address (`L_F8C2`); drop a label nothing refers to, unless a document names it (then it stays, renamed, with
+  `Also:`).
 - **Names:** PascalCase for routines, labels, variables, tables, macros and types; UPPER_SNAKE_CASE for constants,
-  and for struct and union fields and enum members, which are offsets and values.
-  Name things after what the code does. In the SDK's ROM sources, names follow the original documentation:
+  and for struct and union fields and enum members, which are offsets and values. An equate that names a location
+  (a soft switch, a variable) is PascalCase.
+  Name things after what the code does. In the SDK's ROM sources not yet converted (a converted source renames to
+  the style, keeping the old names in `Also:`; see ConvertingSources.md), names follow the original documentation:
   Apple's for the IIe; the documented ROM calls and Microsoft's BASIC names for Level II; Li-Chen Wang's Tiny
   BASIC names for Level I; for the PET's editors and kernals, Commodore's names from its 1979 BASIC 4 kernal
   listing, where BASIC 4 has the same code, and Microsoft's for the jump table at `$FFC0`.
 - **Historical names are never dropped.** A name from a manual or listing that a definition no longer has
   goes in its `;; Also:` section, with the documents' keys from [the bibliography](../../../docs/Bibliography.md):
   `;; Also: COUT (A2RM78)`. Old code keeps assembling and the editor offers the new name. Add a document to the
-  bibliography before citing it.
+  bibliography before citing it. [ConvertingSources.md](../../../docs/ConvertingSources.md) lists the few cases
+  where a name goes in prose instead.
 - **Constants:** every value that means something gets one (unit numbers, offsets, masks, counts, control
   codes); 0 for clearing and 1 or 2 for stepping a pointer stay numbers.
 - **Documentation:** a `;;` block **above** every definition (never a trailing `;;`, except on a type's member);
@@ -82,6 +86,12 @@ most often missed:
   empty storage as `.res`.
 
 ## Converting a source to the style
+
+Read [ConvertingSources.md](../../../docs/ConvertingSources.md) first: who the sources are for (developers new to
+the old machines, with the old names kept as a bridge), the method (inventory, citations, a rename table the owner
+reviews, conversion, verification) and the rules learned so far. The
+[conversion logs](../../../docs/conversions/README.md), one per source as each lands, are the precedents: follow a
+settled rule rather than deciding it again.
 
 For a disassembly, an old-style SDK source, or anything maintained by hand that does not follow the guide yet:
 

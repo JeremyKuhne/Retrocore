@@ -1,5 +1,17 @@
 # Agent instructions
 
+## Assembly sources
+
+Retrocore's sources are being converted for developers new to the old platforms: names say what things are, and
+the names manuals and listings used are kept as historical names (`;; Also:`), so old documents and code still lead
+to the right definitions. Before writing, converting or disassembling assembly, read
+[ConvertingSources.md](docs/ConvertingSources.md) (the philosophy, the method and the rules learned so far), the
+[style guide](docs/AssemblyStyle.md) and the [conversion logs](docs/conversions/README.md), and use the
+[native-assembly](.claude/skills/retrocore-native-assembly/SKILL.md) and
+[disassembly](.claude/skills/retrocore-disassembly/SKILL.md) skills. A pull request for an item of
+[the alignment plan](docs/backlog/ConversionAlignment.md#order-and-ownership) follows the plan's process, which
+replaces copilot-review-loop and steward below.
+
 ## Native AOT PGO maintenance
 
 Windows x64 Release Desktop publishing uses a bundled application PGO profile. Before changing 6502

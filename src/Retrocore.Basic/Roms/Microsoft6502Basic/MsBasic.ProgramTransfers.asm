@@ -14,7 +14,7 @@
 
     ;; Positions the DATA reader before the first program line.
     ;; Entry:
-    ;;   SetDataPointer = Stores A/Y in <DataPointer>; READ's finish enters here
+    ;;   SetDataPointer = Stores A/Y in <DataPointer>; `READ`'s finish enters here
     ;;   Done = The rts; the statement dispatcher returns through it at end of statement
     ;; See: <READ>, <DataPointer>
     ;; Also: RESTOR (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
@@ -25,7 +25,7 @@
     ldy ProgramStart+1
     bcs SetDataPointer
     dey
-;; Stores A/Y in <DataPointer>; READ's finish enters here.
+;; Stores A/Y in <DataPointer>; `READ`'s finish enters here.
 ;; Also: RESFIN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 SetDataPointer:
     sta DataPointer
@@ -60,10 +60,10 @@ Done:
     clc
     .endproc
     ;; Trailing text returns; in a program saves <StoppedText> and <StoppedLine>; drops the return; BREAK (carry) or
-    ;; READY.
+    ;; <READY>.
     ;; Entry:
-    ;;   SaveLine = Saves <CurrentLine> in <StoppedLine>; the PET's INPUT stop paths enter here
-    ;;   Finish = Carry set: BREAK through <ReportMessage>; clear: READY; the dispatchers enter here at the end of the
+    ;;   SaveLine = Saves <CurrentLine> in <StoppedLine>; the PET's `INPUT` stop paths enter here
+    ;;   Finish = Carry set: BREAK through <ReportMessage>; clear: <READY>; the dispatchers enter here at the end of the
     ;;     program
     ;; Also: STOPC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc StopOrEnd
@@ -77,7 +77,7 @@ Done:
     beq DiscardReturn
     sta StoppedText
     sty StoppedText+1
-;; Saves <CurrentLine> in <StoppedLine>; the PET's INPUT stop paths enter here.
+;; Saves <CurrentLine> in <StoppedLine>; the PET's `INPUT` stop paths enter here.
 ;; Also: STPEND (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 SaveLine:
     lda CurrentLine
@@ -89,7 +89,7 @@ SaveLine:
 DiscardReturn:
     pla
     pla
-;; Carry set: BREAK through <ReportMessage>; clear: READY; the dispatchers enter here at the end of the program.
+;; Carry set: BREAK through <ReportMessage>; clear: <READY>; the dispatchers enter here at the end of the program.
 ;; Also: ENDCON (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 Finish:
     lda #<BRKTXT
@@ -100,7 +100,7 @@ Finish:
     .endif
     bcc ToReady
     jmp ReportMessage
-;; Jmp READY.
+;; Jumps to <READY>.
 ;; Also: GORDY (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 ToReady:
     jmp READY
@@ -118,7 +118,6 @@ ToReady:
     bne Resume
     jmp ERROR
 ;; Copies <StoppedText> and <StoppedLine> back.
-;; Also: CONT1 (UNKN)
 Resume:
     lda StoppedText
     sta TextPointer
@@ -255,8 +254,9 @@ Done:
     ;; previous high byte is zero.
     ;; Errors: RETURN WITHOUT GOSUB if there is no GOSUB frame
     ;; Entry:
-    ;;   UndefinedStatement = X = UNDEF'D STATEMENT (skipped by RETURN's BIT), jmp ERROR; <Statements::GoTo> enters here
-    ;;   ToSyntaxError = Jmp SNERR; ON enters here
+    ;; UndefinedStatement = reports UNDEF'D STATEMENT (RETURN's error skips the load) through <ERROR>;
+    ;; <Statements::GoTo> enters here
+    ;;   ToSyntaxError = jumps to <SNERR>; `ON` enters here
     ;; See: <Statements::GoSub>, <FindForFrame>
     ;; Also: RETURN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc Return
@@ -269,17 +269,17 @@ Done:
     beq RestoreCaller
     ldx #ERROR_RETURN_WITHOUT_GOSUB
     .byte $2C                   ; BIT absolute skips the following LDX on the RETURN error path
-;; X = UNDEF'D STATEMENT (skipped by RETURN's BIT), jmp ERROR; <Statements::GoTo> enters here.
+;; Reports UNDEF'D STATEMENT (RETURN's error skips the load) through <ERROR>; <Statements::GoTo> enters here.
 ;; Also: USERR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 UndefinedStatement:
     ldx #ERROR_UNDEFINED_STATEMENT
     jmp ERROR
-;; Jmp SNERR; ON enters here.
+;; Jumps to <SNERR>; `ON` enters here.
 ;; Also: SNERR2 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 ToSyntaxError:
     jmp SNERR
-;; Pops the frame into <CurrentLine> and <TextPointer> (POP: to <Statements::PopFinish>), falls into Data to skip the
-;; rest.
+;; Pops the frame into <CurrentLine> and <TextPointer> (POP: to <Statements::PopFinish>), falls into <Statements::Data>
+;; to skip the rest.
 ;; Also: RETU1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 RestoreCaller:
     pla

@@ -18,6 +18,9 @@ public sealed class PetSharedFloatAssemblyTests
 {
     private const string EndLabel = "PET_TEST_END_OF_FLOAT";
 
+    // The character reader's template: 24 bytes of code and five of seed.
+    private const int TemplateSize = 29;
+
     private static string Inputs => BasicNames.Inputs;
     private static string PetInputs => Path.Join(Inputs, "Pet");
     private static string SharedInputs => Path.Join(Inputs, "Microsoft6502Basic");
@@ -123,9 +126,9 @@ public sealed class PetSharedFloatAssemblyTests
     [TestMethod]
     public void SharedAndWaitRoutinesRetainDocumentationAndSourceChains()
     {
-        (AssemblyResult legacy, AssemblyResult native) = Assemble(PetModel.Pet2001Basic2, original: false);
+        (AssemblyResult legacy, AssemblyResult native) = Assemble(PetModel.Pet2001Basic2, original: false, withTemplate: true);
         int start = checked((int)legacy.Symbol("FADDH"));
-        int end = checked((int)legacy.Symbol("INITAT"));
+        int end = checked((int)legacy.Symbol("INITAT")) + TemplateSize;
         DebugTestMemory memory = new();
         memory.Set((ushort)start, native.Sections[0].Bytes.Slice(start, end - start).ToArray());
         SourceMapModule module = new(native, area: null);
@@ -188,16 +191,30 @@ public sealed class PetSharedFloatAssemblyTests
         next.Should().Be(end, "the entire math package must be emitted, with no extra native output");
     }
 
-    private static (AssemblyResult Legacy, AssemblyResult Native) Assemble(PetModel model, bool original)
+    private static (AssemblyResult Legacy, AssemblyResult Native) Assemble(
+        PetModel model,
+        bool original,
+        bool withTemplate = false)
     {
         AssemblyResult legacy = PetLegacyBasic.Assemble(PetInputs, model, original);
         int start = checked((int)legacy.Symbol("FADDH"));
-        int end = checked((int)legacy.Symbol("INITAT"));
+
+        // Commodore's historical names alias two labels of the character reader's template, which follows the math
+        // region; a build that checks their documentation assembles the template too.
+        int end = checked((int)legacy.Symbol("INITAT")) + (withTemplate ? TemplateSize : 0);
 
         // Also exclude address-valued assignments in this range: aliases must not satisfy local references for us.
         Dictionary<string, long> symbols = legacy.SymbolDefinitions
             .Where(symbol => symbol.Value < start || symbol.Value >= end)
             .ToDictionary(symbol => symbol.Name, symbol => symbol.Value, StringComparer.Ordinal);
+
+        // The character reader's file also holds the letter test, whose Also: names ISLETC and ISLRTS: the region
+        // which the template's build does not use, and predefining them would make them second definitions of its old names.
+        if (withTemplate)
+        {
+            symbols.Remove("ISLETC");
+            symbols.Remove("ISLRTS");
+        }
 
         bool basic1 = model == PetModel.Pet2001;
         symbols.Add("SHORT_MULTIPLY_ZERO", basic1 ? 1 : 0);
@@ -213,6 +230,7 @@ public sealed class PetSharedFloatAssemblyTests
             .org ${start:X4}
             .include "Commodore.FloatingPoint.asm"
             {EndLabel}:
+            {(withTemplate ? $".include \"MsBasic.CharacterReader.asm\"\n    CharacterReader {(basic1 ? "$59" : "$58")}" : "")}
             .include "Commodore.HistoricalNames.asm"
             """;
 

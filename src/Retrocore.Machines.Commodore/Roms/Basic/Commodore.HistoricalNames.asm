@@ -52,11 +52,23 @@ MultiplyByLogOfTwo = Functions::Log::MultiplyByLogOfTwo
 ToDividePacked = Functions::Tan::ToDividePacked
 
 ;; Inherit: <CharacterReaderTemplate::GetCurrent>
-;; Also: CHDGOT (HV1, HV1R, HV2, HV4, HV4R)
+;; Also: CHDGOT (CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 CharacterReaderGetCurrent = CharacterReaderTemplate::GetCurrent
 
 ;; Inherit: <CharacterReaderTemplate::Done>
-;; Also: CHDRTS (HV1, HV1R, HV2, HV4, HV4R)
+;; Also: CHDRTS (CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 CharacterReaderDone = CharacterReaderTemplate::Done
+
+
+; BASIC 4's lister, which reads its keyword table through a pointer.
+.ifdef Statements::List::ReadWordByte
+;; Inherit: <Statements::List::ReadWordByte>
+;; Also: RESCR2 (CBM4S79, HV4, HV4R)
+ReadListWordByte = Statements::List::ReadWordByte
+
+;; Inherit: <Statements::List::ListFirstWord>
+;; Also: PRIT3B (CBM4S79, HV4, HV4R)
+ListFirstWord = Statements::List::ListFirstWord
+.endif
 
 .endscope

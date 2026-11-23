@@ -51,4 +51,33 @@ New = Statements::New
 ;; Also: COMBYTE (ASTIL, AS82)
 ReadCommaAndByte = ::ReadCommaAndByte
 
+
+;; Inherit: <Statements::List::ReadSecondBound>
+;; Also: GOLST1 (UNKN)
+SecondListBound = Statements::List::ReadSecondBound
+
+;; Inherit: <Statements::List::NextTableByte>
+;; Also: GRODY1 (UNKN)
+NextListTableByte = Statements::List::NextTableByte
+
+;; Inherit: <Statements::List::ReadTableByte>
+;; Also: GRODY2 (UNKN)
+ReadListTableByte = Statements::List::ReadTableByte
+
+;; Inherit: <Statements::List::ListWordCharacter>
+;; Also: PRIT31 (UNKN)
+ListKeywordCharacter = Statements::List::ListWordCharacter
+
+;; Inherit: <Statements::List::ListLastCharacter>
+;; Also: PRIT32 (UNKN)
+ListLastKeywordCharacter = Statements::List::ListLastCharacter
+
+;; Inherit: <Statements::Cont::Resume>
+;; Also: CONT1 (UNKN)
+ContResume = Statements::Cont::Resume
+
+;; Inherit: <Statements::PopFinish>
+;; Also: REMER1 (UNKN)
+PopFinish = Statements::PopFinish
+
 .endscope

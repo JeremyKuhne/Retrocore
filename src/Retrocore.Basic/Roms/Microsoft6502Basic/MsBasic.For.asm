@@ -12,11 +12,12 @@
 
 ;; Assigns the initial value and builds a loop frame, replacing an earlier FOR for the same variable.
 ;;
-;; From low to high addresses the <FOR_FRAME_SIZE>-byte frame holds <TOKEN_FOR>, the variable address, the five-byte step, its
-;; sign, the five-byte packed limit, the line number and the text pointer after the FOR statement.
+;; The frame is a <ForFrame>, built on the stack from its last field down, so that from low addresses to high it
+;; holds the `FOR` token, the variable's address, the packed step, the step's sign, the packed limit, the line
+;; number and the text pointer after the statement. A frame for the same variable, and every frame above it, is
+;; discarded first.
 ;; Entry:
-;;   ReadStep = Its address is the continuation the limit's push (FORPSH) jumps to: loads 1.0, or evaluates the STEP
-;;     expression
+;;   ReadStep = the continuation the limit's push jumps to: loads 1, or evaluates the expression after `STEP`
 ;; See: <FindForFrame>, <FORPSH>, <Statements::Next>
 ;; Also: FOR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 .proc For
@@ -30,8 +31,9 @@
     tax
     txs
 
-;; Drops the statement loop's return, <CheckStack>(9), pushes the text after the statement and <CurrentLine>,
-;; evaluates TO's limit.
+;; Drops the statement loop's return address, makes sure the stack has room for nine more two-byte entries
+;; (<CheckStack>), and pushes the text pointer after the statement and <CurrentLine>. Then it requires `TO`, evaluates
+;; the limit, puts its sign into the mantissa's top bit, and has <FORPSH> push it and continue at <ReadStep>.
 ;; Also: NOTOL (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 BuildFrame:
     pla
@@ -76,7 +78,7 @@ ReadStep:
     jsr GetNextCharacter
     jsr EvaluateNumber
 
-;; Pushes the step (PUSHF), its sign (SIGN) and <AssignedVariable>.
+;; Pushes the step through <PUSHF>, its sign first (from <Float::GetSign>), then <AssignedVariable>.
 ;; Also: ONEON (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 PushStep:
     jsr Float::GetSign
@@ -86,7 +88,7 @@ PushStep:
     lda AssignedVariable
     pha
 
-;; Pushes TOKEN_FOR to complete the frame; falls into the vendor's statement loop.
+;; Pushes the `FOR` token, which completes the frame, and falls into the vendor's statement loop.
 ;; Also: NXTCON (M6502)
 PushToken:
     lda #TOKEN_FOR

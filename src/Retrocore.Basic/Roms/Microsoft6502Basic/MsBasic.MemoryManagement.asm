@@ -1,28 +1,30 @@
 ; retrocore: style=strict
 ; Derived from Microsoft's BASIC for 6502 (m6502.asm, MIT license; see LICENSE in this folder).
 
-.include "MsBasic.Families.asm"
-
-;; MICROSOFT 6502 BASIC: STACK AND BLOCK MANAGEMENT
+;; MICROSOFT 6502 BASIC: MEMORY MANAGEMENT
 ;;
 ;; The FOR-frame search, backward block transfer, stack check and string-space check are contiguous in
 ;; AppleSoft and PET BASIC 1, 2 and 4. They use five-byte floating-point storage and the workspace from
 ;; <DestinationEnd> through <SourceStart>+1 as transfer scratch. Their one code difference is the stack reserve.
 
+.include "MsBasic.Families.asm"
+
 ;; Emits the common stack and block-management routines.
 ;; Parameters: stackReserve = the byte added by <CheckStack> to the requested stack space
 .macro MemoryManagement stackReserve
     .assert stackReserve >= 0 && stackReserve <= 255, "stackReserve must fit in a byte."
-    .assert FloatTemporary1 = DestinationEnd - 1 && SourceEnd = DestinationEnd + 2, "REASON requires contiguous transfer scratch."
-    .assert SourceStart = DestinationEnd + 7 && Fac = DestinationEnd + 9, "REASON requires contiguous transfer scratch."
-    .assert FloatTemporary1 >= 0 && Fac <= $FF, "REASON requires page-zero transfer scratch."
+    .assert FloatTemporary1 = DestinationEnd - 1, "CheckFreeMemory needs contiguous scratch."
+    .assert SourceEnd = DestinationEnd + 2, "CheckFreeMemory needs contiguous scratch."
+    .assert SourceStart = DestinationEnd + 7 && Fac = DestinationEnd + 9, "CheckFreeMemory needs contiguous scratch."
+    .assert FloatTemporary1 >= 0 && Fac <= $FF, "CheckFreeMemory needs page-zero scratch."
 
-    ;; Finds the active FOR frame for <AssignedVariable>, starting just above the caller's return and statement addresses.
+    ;; Finds the active FOR frame for <AssignedVariable>, starting just above the caller's return and statement
+    ;; addresses.
     ;;
-    ;; Consecutive FOR frames begin with <TOKEN_FOR> and occupy <FOR_FRAME_SIZE> bytes. A zero high byte in <AssignedVariable> selects
-    ;; the first FOR frame and copies its variable pointer to <AssignedVariable>. A different frame kind ends the search.
-    ;; A matching comparison leaves zero set; reaching another frame kind leaves it clear. A wrapped search
-    ;; also leaves zero set, so callers rely on there being a non-FOR frame at the bottom of the stack.
+    ;; Consecutive FOR frames begin with <TOKEN_FOR> and occupy <FOR_FRAME_SIZE> bytes. A zero high byte in
+    ;; <AssignedVariable> selects the first FOR frame and copies its variable pointer to <AssignedVariable>. A different
+    ;; frame kind ends the search. A matching comparison leaves zero set; reaching another frame kind leaves it clear. A
+    ;; wrapped search also leaves zero set, so callers rely on there being a non-FOR frame at the bottom of the stack.
     ;; Out: X = stack offset immediately below the frame, or $00 if the search wraps,
     ;;   zero = set for a match or a wrapped search, clear for another frame kind
     ;; Keeps: Y
@@ -34,7 +36,7 @@
     inx
     inx
     inx
-;; Stops at a frame not marked TOKEN_FOR; a zero <AssignedVariable> high byte adopts this frame's variable.
+;; Stops at a frame not marked <TOKEN_FOR>; a zero <AssignedVariable> high byte adopts this frame's variable.
 ;; Also: FFLOOP (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 NextFrame:
     lda Stack + 1 + ForFrame::TOKEN,x
@@ -54,7 +56,7 @@ Compare:
     lda AssignedVariable
     cmp Stack + 1 + ForFrame::VARIABLE,x
     beq Done
-;; Adds FOR_FRAME_SIZE to X and loops unless X wraps to 0.
+;; Adds <FOR_FRAME_SIZE> to X and loops unless X wraps to 0.
 ;; Also: ADDFRS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 SkipFrame:
     txa
@@ -70,9 +72,9 @@ Done:
 
     ;; Makes room by copying a block toward higher addresses, checking its new end against string space.
     ;;
-    ;; The source is <SourceStart> up to but not including <SourceEnd>; <DestinationEnd> is the corresponding destination end.
-    ;; Copying backward permits overlap. The checked entry tests the supplied end and sets <ArraysEnd> to it; the
-    ;; collector enters at <MoveRangeUp::Unchecked> instead because it manages string space itself.
+    ;; The source is <SourceStart> up to but not including <SourceEnd>; <DestinationEnd> is the corresponding
+    ;; destination end. Copying backward permits overlap. The checked entry tests the supplied end and sets <ArraysEnd>
+    ;; to it; the collector enters at <MoveRangeUp::Unchecked> instead because it manages string space itself.
     ;; In: A = destination end low byte, Y = destination end high byte, DestinationEnd = destination end,
     ;;   SourceStart = source start, SourceEnd = source end
     ;; Out: ArraysEnd = destination end, SourceStart = unchanged, SourceEnd = source start minus $100,
@@ -161,9 +163,10 @@ NextPage:
     ;; Checks that an address is below the bottom of allocated string space, collecting strings if necessary.
     ;;
     ;; If the address meets or exceeds <StringsBottom>, <GARBA2> compacts strings. The address and the nine bytes of
-    ;; shared floating-point and transfer scratch from <DestinationEnd> through <SourceStart>+1 are saved across collection.
-    ;; The save loop pushes Y first, then <SourceStart>+1 down to <DestinationEnd>. Its last load reads <FloatTemporary1> but is not pushed.
-    ;; On AppleSoft those scratch addresses are $9C through $94 and the unused last load is at $93.
+    ;; shared floating-point and transfer scratch from <DestinationEnd> through <SourceStart>+1 are saved across
+    ;; collection. The save loop pushes Y first, then <SourceStart>+1 down to <DestinationEnd>. Its last load reads
+    ;; <FloatTemporary1> but is not pushed. On AppleSoft those scratch addresses are $9C through $94 and the unused last
+    ;; load is at $93.
     ;; In: A = address low byte, Y = address high byte
     ;; Out: A = address low byte, Y = address high byte
     ;; Errors: OUT OF MEMORY if the address is still at or above <StringsBottom>
@@ -174,7 +177,7 @@ NextPage:
     bne Collect
     cmp StringsBottom
     bcc Done
-;; Pushes A, Y and nine scratch bytes, calls GARBA2.
+;; Pushes A, Y and nine scratch bytes, calls <GARBA2>.
 ;; Also: TRYMOR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 Collect:
     pha

@@ -279,20 +279,47 @@ public sealed class BasicSharedAliasConsistencyTests
         path.EndsWith(".HistoricalNames.asm", StringComparison.OrdinalIgnoreCase);
 
     // A historical-names file's aliases: each scoped alias once per old name its Also: section gives, read from the
-    // file's text so a missing include cannot hide one.
-    private static IEnumerable<Alias> ReadHistoricalNames(string path, string scope)
+    // file's text so a missing include cannot hide one. An alias under .ifdef Target, for a definition only some
+    // builds have (BASIC 4's lister labels), is expected exactly where the build defines that target.
+    private static IEnumerable<Alias> ReadHistoricalNames(string path, string scope, AssemblyResult result)
     {
         string[] lines = File.ReadAllLines(path);
+        string?[] guards = new string?[lines.Length];
+        string? guard = null;
+        for (int line = 0; line < lines.Length; line++)
+        {
+            string[] words = lines[line].Split(';', 2)[0].Split((char[])[' ', '\t'], StringSplitOptions.RemoveEmptyEntries);
+            if (words is [".ifdef", string name])
+            {
+                guard.Should().BeNull($"{Path.GetFileName(path)}:{line + 1} must not nest its guards");
+                guard = name;
+            }
+            else if (words is [".endif"])
+            {
+                guard = null;
+            }
+            else
+            {
+                words.Should().NotContain(word => word.StartsWith(".if", StringComparison.OrdinalIgnoreCase)
+                    || word.StartsWith(".else", StringComparison.OrdinalIgnoreCase),
+                    $"{Path.GetFileName(path)}:{line + 1} may guard an alias only with .ifdef");
+            }
+
+            guards[line] = guard;
+        }
+
         DocumentationFile file = DocumentationParser.Parse(string.Join('\n', lines), path);
         foreach (DocumentationComment comment in file.Comments)
         {
             DocumentationAlso[] names = [.. DocumentationAlso.Of(comment.Sections)];
             if (names.Length == 0) { continue; }
+            if (guards[comment.TargetLine] is string target && !result.HasSymbol(target)) { continue; }
             string[] parts = lines[comment.TargetLine].Split(';', 2)[0].Split('=', 2, StringSplitOptions.TrimEntries);
             parts.Should().HaveCount(2, $"{Path.GetFileName(path)}:{comment.TargetLine + 1} must be an alias");
             foreach (DocumentationAlso also in names)
             {
-                yield return (also.Name, parts[1], path, comment.TargetLine, $"{scope}::{parts[0]}");
+                // An absolute target (::Name) reaches the top-level definition the alias's own name would hide.
+                yield return (also.Name, parts[1].TrimStart(':'), path, comment.TargetLine, $"{scope}::{parts[0]}");
             }
         }
     }
@@ -305,7 +332,7 @@ public sealed class BasicSharedAliasConsistencyTests
         {
             if (IsHistoricalNames(path))
             {
-                aliases.AddRange(ReadHistoricalNames(path, root.Apple ? "AppleSoft" : "Commodore"));
+                aliases.AddRange(ReadHistoricalNames(path, root.Apple ? "AppleSoft" : "Commodore", root.Result));
                 continue;
             }
 
@@ -332,7 +359,7 @@ public sealed class BasicSharedAliasConsistencyTests
                 definition.Kind.Should().Be(AssemblyStatementKind.Constant, $"{path} must contain direct aliases");
                 aliases.Add((
                     Name: definition.Label ?? throw new AssertFailedException($"Missing alias name in {path}."),
-                    Target: definition.Operand.Text.Trim(),
+                    Target: definition.Operand.Text.Trim().TrimStart(':'),
                     Path: path,
                     Line: definition.Location?.Line ?? throw new AssertFailedException($"Missing source location in {path}."),
                     Definition: definition.Label));

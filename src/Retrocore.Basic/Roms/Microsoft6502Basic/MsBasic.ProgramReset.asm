@@ -28,7 +28,8 @@
     .endproc
     .endscope
 
-    ;; Stores a zero link at <ProgramStart>, sets <VariablesStart> to <ProgramStart> + 2; falls into <ResetProgramState>.
+    ;; Stores a zero link at <ProgramStart>, sets <VariablesStart> to <ProgramStart> + 2; falls into
+    ;; <ResetProgramState>.
     ;; Also: SCRTCH (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc EraseProgram
     lda #$00
@@ -105,7 +106,7 @@
     dex
     stx NULCNT
     rts
-;; Jmp FCERR.
+;; Jumps to <FCERR>.
 ;; Also: FCERR1 (M6502, HV1, HV1R)
 ToIllegalQuantity:
     jmp FCERR
@@ -142,7 +143,7 @@ ToIllegalQuantity:
     sty ArraysStart+1
     sta ArraysEnd
     sty ArraysEnd+1
-;; Jsr Statements::Restore; falls into <ResetStack>.
+;; Calls <Statements::Restore>, then falls into <ResetStack>.
 ;; Also: FLOAD (M6502, CBM4S79, K4S79, HV1, HV1R, HV2, HV4, HV4R, HVK4)
 RestoreData:
     jsr Statements::Restore

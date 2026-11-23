@@ -8,7 +8,7 @@
 ;; Emits the uppercase-letter test.
 .macro LetterTest
 
-    ;; Tests whether A is an uppercase ASCII letter.
+    ;; Tests whether A holds an uppercase letter, $41 through $5A.
     ;; In: A = character, decimal = clear
     ;; Out: carry = set for A through Z, clear otherwise
     ;; Also: ISLETC (M6502, ASTIL, AS82, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
@@ -32,9 +32,9 @@ Done:
 
     ;; Template for the character-fetch code copied to <GetNextCharacter> in page zero.
     ;;
-    ;; The copy increments <TextPointer>, whose two bytes are the operand at <CharacterReaderTemplate::GetCurrent>, and skips spaces. Five seed bytes
-    ;; follow the code, but startup copies only the first four to <RandomValue>. BASIC 1 stores $59 as the fifth byte;
-    ;; AppleSoft and the later PET BASICs store $58.
+    ;; The copy increments <TextPointer>, whose two bytes are the operand at <CharacterReaderTemplate::GetCurrent>, and
+    ;; skips spaces. Five seed bytes follow the code, but startup copies only the first four to <RandomValue>. BASIC 1
+    ;; stores $59 as the fifth byte; AppleSoft and the later PET BASICs store $58.
     ;; In: decimal = clear
     ;; Out: A = the non-space character, carry = clear for a digit and set otherwise, zero = set for a null or colon
     ;; Keeps: X, Y

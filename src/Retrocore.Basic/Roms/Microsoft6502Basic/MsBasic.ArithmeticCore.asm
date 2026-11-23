@@ -141,8 +141,9 @@ Done:
 
     ;; Combines the exponents and signs for multiplication or division.
     ;;
-    ;; A zero operand or exponent underflow discards the caller's return address and returns zero from the arithmetic
-    ;; operation. Overflow goes to <Float::OverflowError>.
+    ;; A zero operand or a combined exponent below the range discards the caller's return address and returns zero
+    ;; from the arithmetic operation. A sum that rebiases to exactly zero stores a zero exponent, clears the sign and
+    ;; returns to the caller. Overflow goes to <Float::OverflowError>.
     ;; Also: MULDIV (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc CombineExponents
     lda ArgExponent
@@ -160,7 +161,8 @@ Done:
     clc
     .byte $2C                       ; BIT absolute skips the BPL and its displacement
 
-;; No carry from the add: a sum under $80 underflows; otherwise rebiases and stores the exponent.
+;; No carry from the add: a sum under $80 underflows; otherwise rebiases and stores the exponent, clearing the sign
+;; when it is zero.
 ;; Also: TRYOFF (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 NoCarry:
     bpl Underflow

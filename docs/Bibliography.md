@@ -61,5 +61,7 @@ where the check found that the document gives that name for that thing:
 - **HVK4:** as the HV keys, at the BASIC 4 ROMs' addresses.
 - **Lineage:** a definition that descends through a vendor's builds cites, in every build, each document of that line
   whose listing names it, including the other builds' documents; a document whose build lacks the definition stays
-  out. Where a document gives the definition a different value (BASIC 1's NUMLEV), the comment says so in prose.
+  out. Where a switch gives the builds different values (BUFLEN, NUMLEV, STKEND, CTIMR, CSTAT, CHTIM), each value
+  cites the whole line, since each document names the same definition in its own build; NUMLEV's prose explains
+  why BASIC 1's documents write its reserve as 23 levels.
   The rule and the names it reaches are recorded in `docs/conversions/Basic.md`, section S11.

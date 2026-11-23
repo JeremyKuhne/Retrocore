@@ -107,11 +107,11 @@ public sealed partial class BasicRenameGateTests
                 }));
 
             failures.Should().BeEmpty(
-                $"renaming {OldName} must not break a test; {run} ran, {inconclusive.Count} inconclusive");
+                $"renaming {OldName} must not break a test; {run} ran, {inconclusive.Count} inconclusive:{Environment.NewLine}{string.Join(Environment.NewLine, failures)}");
 
             run.Should().BeGreaterThan(500);
             inconclusive.Should().OnlyContain(
-                message => message.Contains("dump", StringComparison.OrdinalIgnoreCase),
+                message => message.Contains("Assert.Inconclusive. Set RETROCORE_", StringComparison.Ordinal),
                 "only a test that needs chip dumps the repository does not have may be inconclusive");
         }
         finally
@@ -189,7 +189,11 @@ public sealed partial class BasicRenameGateTests
 
         foreach (string file in checkedFiles)
         {
-            string[] lines = File.ReadAllLines(Path.Join(tests, file));
+            string text = File.ReadAllText(Path.Join(tests, file));
+            raw.AddRange(SplitLookup().Matches(text).Select(match =>
+                $"{file}:{text[..match.Index].Count(character => character == '\n') + 1}: {match.Value.Trim()}"));
+
+            string[] lines = text.Split('\n');
             for (int line = 0; line < lines.Length; line++)
             {
                 if (RawLookup().IsMatch(lines[line]))
@@ -199,7 +203,8 @@ public sealed partial class BasicRenameGateTests
             }
         }
 
-        raw.Should().BeEmpty("a lookup by name must find a renamed definition by its old name too (BasicNames)");
+        raw.Should().BeEmpty(
+            $"a lookup by name must find a renamed definition by its old name too (BasicNames):{Environment.NewLine}{string.Join(Environment.NewLine, raw)}");
     }
 
     // Copies the inputs, renaming the label in the native BASIC sources and giving it its old name in an Also:
@@ -364,7 +369,14 @@ public sealed partial class BasicRenameGateTests
     private static partial Regex OldNameWord();
 
     // A lookup by name that does not reach a renamed definition by its old name.
-    [GeneratedRegex(@"\.Symbols(\[|\.(TryGetValue|ContainsKey|Should|GetValueOrDefault)\()|SymbolDefinitions\.(Single|First|SingleOrDefault|FirstOrDefault|ToDictionary)\(|Documentation\.Find(Routine)?\(|PredefinedSymbols = (?!BasicNames\.WithCurrentNames\()")]
+    // A documentation lookup is one unless it is on a program's variables or on a language analysis, which finds an
+    // Also: name itself. So are an assembly's symbol table handed on whole, a label a test's source defines by one of
+    // Microsoft's names, and a definition's name compared with a literal one.
+    [GeneratedRegex(@"\.Symbols(\[|\.(TryGetValue|ContainsKey|Should|GetValueOrDefault)\(|;)|SymbolDefinitions\.(Single|First|SingleOrDefault|FirstOrDefault|ToDictionary)\(|(?<!\b(variables|initial))\.Find(Routine)?\(|PredefinedSymbols = (?!BasicNames\.WithCurrentNames\()|^\s*[A-Z][A-Z0-9]{1,5}:\s*$|""[A-Z][A-Z0-9]{1,5}:""|Name\.Should\(\)\.Be\(""|EntryLabels\.Should\(\)\.Contain\(""")]
     private static partial Regex RawLookup();
+
+    // The same lookups with the symbol table on one line and the lookup on the next.
+    [GeneratedRegex(@"\.Symbols\s*\n\s*\.(TryGetValue|ContainsKey|Should|GetValueOrDefault)\(")]
+    private static partial Regex SplitLookup();
 
 }

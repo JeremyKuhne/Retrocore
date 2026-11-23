@@ -182,8 +182,8 @@ public sealed class BasicSharedMemoryManagementTests
         DocumentationTopic transfer = module.Documentation.FindRoutineTopic("BLTUC")
             ?? throw new AssertFailedException("BLTUC lost its entry documentation.");
 
-        transfer.Name.Should().Be("BLTU");
-        transfer.EntryLabels.Should().Contain("BLTUC");
+        transfer.Name.Should().Be(native.DefinitionName("BLTU"));
+        transfer.EntryLabels.Should().Contain(native.DefinitionName("BLTUC"));
         DocumentationSection keeps = module.Documentation.FindTopic("FNDFOR")?.Section("Keeps")
             ?? throw new AssertFailedException("FNDFOR lost its Keeps contract.");
 

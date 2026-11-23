@@ -167,7 +167,8 @@ internal sealed partial class DebugSession
         int stop = after.IndexOfAny(stops);
         string following = (stop < 0 ? after : after[..stop]).Trim();
 
-        // Another byte's bit, as KBDSTRB's "clears bit 7 of KBD" or "KBD's bit 7" speaks of, is not this one's.
+        // Another byte's bit, as KeyboardStrobe's "clears ... bit 7 of Keyboard" or "Keyboard's bit 7" speaks of, is
+        // not this one's.
         if (following.StartsWith("of ", StringComparison.Ordinal)) { return null; }
         string leading = text[..match.Index].TrimEnd();
         if (leading.EndsWith("'s", StringComparison.Ordinal)) { return null; }

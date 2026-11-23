@@ -25,7 +25,7 @@ namespace Retrocore.Debug;
 ///   such a source's Equates.asm, which holds locations). Page zero takes only the Monitor's and the hardware's names,
 ///   as programs reuse BASIC's and DOS's page-zero storage for their own. In page zero a name in a scope, which is the
 ///   name one family of routines gives a byte, comes after every other name, so a program's use of the byte takes its
-///   shared name (<c>MASK</c>, not <c>Disassembler::FormatBits</c>).
+///   shared name (<c>PlotMask</c>, not <c>Disassembler::FormatBits</c>).
 ///  </para>
 /// </remarks>
 internal static partial class MachineSymbols

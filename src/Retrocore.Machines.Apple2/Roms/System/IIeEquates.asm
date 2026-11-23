@@ -29,9 +29,9 @@ SlotPointer = $00
 
 ;; The column where the text window starts, 0 for a full screen.
 ;;
-;; <Monitor:SetWindow> clears it, and <Monitor:SetLineBase> adds it to <TextBase>, so <CursorColumn> counts columns
-;; from the window's left edge. In 80 columns, <Firmware:VTAB80> adds half of it, since each byte of a line then
-;; holds two columns.
+;; <Monitor:SetWindow> clears it, and <Monitor:SetLineBase> adds it to <TextBase> (on the Enhanced IIe, through the
+;; firmware's <Firmware:VTAB80>), so <CursorColumn> counts columns from the window's left edge. In 80 columns, the
+;; firmware adds half of it, since each byte of a line then holds two columns.
 ;; See: <WindowWidth>, <WindowTop>, <WindowBottom>, <Monitor:SetWindow>
 ;; Also: WNDLFT (A2RM78, A2RM79, IIEROM82, IIETRM85)
 WindowLeft = $20

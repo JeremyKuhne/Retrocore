@@ -101,9 +101,9 @@ public sealed partial class DebugModuleTests
     }
 
     /// <summary>
-    ///  Where two modules name one address, the Monitor's name comes first even when BASIC's module was added first,
-    ///  as a memory view's first name wins: AppleSoft's TRMPOS is the Monitor's CH. Each constant carries the source
-    ///  that defines it, and modules of one rank keep their order.
+    ///  Where the SDK's modules name one address, the Monitor's name comes first even when BASIC's module was added
+    ///  first, as a memory view's first name wins: AppleSoft's TRMPOS is the Monitor's CH. A program's names come
+    ///  before every SDK name, modules of one rank keep their order, and each constant carries its source.
     /// </summary>
     [TestMethod]
     public void AddressConstantsRankTheMonitorsNamesFirst()
@@ -111,6 +111,12 @@ public sealed partial class DebugModuleTests
         string folder = Directory.CreateTempSubdirectory().FullName;
         try
         {
+            SourceMapModule program = Module(Path.Join(folder, "Program", "Monitor.asm"), """
+                CURSOR = $24
+                  sta CURSOR
+                  rts
+                """);
+
             SourceMapModule basic = Module(Path.Join(folder, "AppleSoft", "AppleSoft.Equates.asm"), """
                 TRMPOS = $24
                 HOLD = $50
@@ -138,12 +144,16 @@ public sealed partial class DebugModuleTests
                 """);
 
             monitor.AddressConstants.Single().Path.Should().Be(Path.Join(folder, "System", "Monitor.asm"));
-            (string Name, long Value)[] ranked = [.. MachineSymbols.ByRank(
-                ((SourceMapModule[])[basic, dos, dos32, monitor])
-                    .SelectMany(module => module.AddressConstants)
-                    .Select(constant => (constant.Name, constant.Value, constant.Path)))];
+            (string Name, long Value)[] Ranked(params SourceMapModule[] modules) => [.. MachineSymbols.ByRank(
+                modules.SelectMany(module => module.AddressConstants
+                    .Select(constant => (constant.Name, constant.Value, constant.Path, Ranked: module != program))))];
 
-            ranked.Should().Equal(("CH", 0x24L), ("TRMPOS", 0x24L), ("HOLD", 0x50L), ("SPOT", 0x50L), ("OTHER", 0x50L));
+            Ranked(basic, dos, dos32, monitor)
+                .Should().Equal(("CH", 0x24L), ("TRMPOS", 0x24L), ("HOLD", 0x50L), ("SPOT", 0x50L), ("OTHER", 0x50L));
+
+            // The program's Monitor.asm is a program's, not the SDK's, and comes first without a rank.
+            Ranked(program, basic, monitor)
+                .Should().Equal(("CURSOR", 0x24L), ("CH", 0x24L), ("TRMPOS", 0x24L), ("HOLD", 0x50L));
         }
         finally
         {

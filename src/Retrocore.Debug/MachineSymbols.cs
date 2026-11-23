@@ -160,18 +160,25 @@ internal static partial class MachineSymbols
     }
 
     /// <summary>
-    ///  Orders names from several modules so that, where they name one address, the Monitor's, the hardware's and the
-    ///  firmware's come before BASIC's and DOS's, as <see cref="Rank(string)"/> ranks them.
+    ///  Orders names from several modules so that the unranked ones, a program's, come first in the order given, and
+    ///  then the ranked ones, the SDK's, by <see cref="Rank(string)"/>: where they name one address, the Monitor's,
+    ///  the hardware's and the firmware's come before BASIC's and DOS's.
     /// </summary>
     /// <remarks>
     ///  <para>
-    ///   The order is otherwise kept, so modules of one rank, and every module of another machine's, stay in the order
-    ///   given: AppleSoft's <c>TRMPOS</c> and the Monitor's <c>CH</c> both name $24, and <c>CH</c> comes first.
+    ///   The order is otherwise kept, so names of one rank stay in the order given: AppleSoft's <c>TRMPOS</c> and the
+    ///   Monitor's <c>CH</c> both name $24, and <c>CH</c> comes first. Ranks are by file name, so on any machine a
+    ///   ranked name from a Monitor, firmware or BASIC source, such as PET BASIC's <c>m6502.asm</c> and
+    ///   <c>MsBasic.*.asm</c>, comes before one from its other sources.
     ///  </para>
     /// </remarks>
-    /// <param name="names">Each name, its value and the source that defines it, in the modules' order.</param>
-    /// <returns>The names and values, highest rank first.</returns>
-    internal static IEnumerable<(string Name, long Value)> ByRank(IEnumerable<(string Name, long Value, string? Path)> names)
+    /// <param name="names">
+    ///  Each name, its value, the source that defines it (a name with none ranks with the other sources'), and whether
+    ///  it is ranked, in the modules' order.
+    /// </param>
+    /// <returns>The names and values, the unranked first, then the ranked by lowest <see cref="Rank(string)"/>.</returns>
+    internal static IEnumerable<(string Name, long Value)> ByRank(
+        IEnumerable<(string Name, long Value, string? Path, bool Ranked)> names)
     {
         Dictionary<string, int> ranks = [];
         int RankOf(string? path)
@@ -181,7 +188,7 @@ internal static partial class MachineSymbols
             return rank;
         }
 
-        return [.. names.Select(name => (name.Name, name.Value, Rank: RankOf(name.Path)))
+        return [.. names.Select(name => (name.Name, name.Value, Rank: name.Ranked ? RankOf(name.Path) : -1))
             .OrderBy(name => name.Rank)
             .Select(name => (name.Name, name.Value))];
     }

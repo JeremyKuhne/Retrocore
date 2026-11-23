@@ -66,6 +66,24 @@ internal static partial class SourceIncludes
     }
 
     /// <summary>
+    ///  Gets the lines of a source that include another file with <c>.include</c>, and the files they name.
+    /// </summary>
+    /// <param name="path">The source's full path, which a relative name is resolved against.</param>
+    /// <param name="lines">The source's lines.</param>
+    /// <returns>Each including line's zero-based index and the full path of the file it names.</returns>
+    internal static IEnumerable<(int Line, string File)> IncludeLines(string path, IReadOnlyList<string> lines)
+    {
+        string directory = Path.GetDirectoryName(path) ?? "";
+        for (int line = 0; line < lines.Count; line++)
+        {
+            if (Include().Match(lines[line]) is not { Success: true } match) { continue; }
+            string named = match.Groups["file"].Value;
+            if (named.AsSpan().IndexOfAny(Path.GetInvalidPathChars()) >= 0) { continue; }
+            yield return (line, Path.GetFullPath(Path.Join(directory, named)));
+        }
+    }
+
+    /// <summary>
     ///  Gets the roots among a folder's sources: every assembly source that no other one includes.
     /// </summary>
     /// <param name="folder">The folder, searched with its subfolders.</param>

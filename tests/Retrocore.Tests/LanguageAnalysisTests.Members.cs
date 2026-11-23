@@ -323,7 +323,9 @@ public sealed partial class LanguageAnalysisTests
 
     /// <summary>
     ///  A file included inside two scopes defines its text-only names in each: a definition in a branch the build
-    ///  does not take is recorded once per scope, and never as a root name.
+    ///  does not take is recorded once per scope, and never as a root name. That holds for a file the assembly reaches
+    ///  (whose statements show where it is included) and for one whose whole content the build skips (whose
+    ///  <c>.include</c> lines show it).
     /// </summary>
     [TestMethod]
     public void TextOnlyDefinitionsAreInEachScopeAFileIsIncludedIn()
@@ -336,13 +338,15 @@ public sealed partial class LanguageAnalysisTests
                 .org $0300
                 .scope First
                 .include "Shared.asm"
+                .include "Skipped.asm"
                 .endscope
                 .scope Second
                 .include "Shared.asm"
+                .include "Skipped.asm"
                 .endscope
                 """.ReplaceLineEndings("\n"));
 
-            // The editor learns where a file is included from the statements it assembles, so it has one.
+            // This file assembles a statement; the other assembles nothing.
             File.WriteAllText(Path.Join(folder, "Shared.asm"), """
                     nop
                 .if 0
@@ -350,9 +354,16 @@ public sealed partial class LanguageAnalysisTests
                 .endif
                 """.ReplaceLineEndings("\n"));
 
+            File.WriteAllText(Path.Join(folder, "Skipped.asm"), """
+                .if 0
+                SKIPPED = 1
+                .endif
+                """.ReplaceLineEndings("\n"));
+
             SourceAnalysis analysis = SourceAnalysis.Assemble(Path.GetFullPath(main), _ => null);
-            analysis.Definitions.Select(site => site.Name).Where(name => name.EndsWith("VALUE", StringComparison.Ordinal))
-                .Should().BeEquivalentTo("First::VALUE", "Second::VALUE");
+            List<string> names = [.. analysis.Definitions.Select(site => site.Name)];
+            names.Where(name => name.EndsWith("VALUE", StringComparison.Ordinal)).Should().BeEquivalentTo("First::VALUE", "Second::VALUE");
+            names.Where(name => name.EndsWith("SKIPPED", StringComparison.Ordinal)).Should().BeEquivalentTo("First::SKIPPED", "Second::SKIPPED");
         }
         finally
         {

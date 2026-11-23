@@ -113,11 +113,11 @@ The program-reset macros take the independent side effects documented in the sou
 
 | Variant | `ProgramReset` | `ClearStorage` | `ExecutionReset` | `StopAndContinue` |
 | --- | --- | --- | --- | --- |
-| AppleSoft | `1, 1, 1, 0, 1` | `0, 0` | `0, 0, $F8` | `1, 0` |
-| PET BASIC 1 original | `0, 0, 0, 0, 0` | `1, 0` | `1, 0, $FC` | `0, 1` |
-| PET BASIC 1 revised | `0, 0, 0, 0, 0` | `1, 0` | `0, 1, $FE` | `0, 1` |
-| PET BASIC 2 | `0, 0, 0, 1, 1` | `1, 0` | `0, 0, $FA` | `1, 1` |
-| PET BASIC 4 | `0, 0, 0, 1, 1` | `1, 1` | `0, 0, $FA` | `1, 0` |
+| AppleSoft | `1, 1, 0, 1` | `0, 0` | `0, 0, $F8` | `1, 0` |
+| PET BASIC 1 original | `0, 0, 0, 0` | `1, 0` | `1, 0, $FC` | `0, 1` |
+| PET BASIC 1 revised | `0, 0, 0, 0` | `1, 0` | `0, 1, $FE` | `0, 1` |
+| PET BASIC 2 | `0, 0, 1, 1` | `1, 0` | `0, 0, $FA` | `1, 1` |
+| PET BASIC 4 | `0, 0, 1, 1` | `1, 1` | `0, 0, $FA` | `1, 0` |
 
 PET BASIC 1 also retains `NullStatement 10` even though its reserved-word table has no NULL token. Its
 increment-before-comparison accepts values 0 through 8 and, through byte wraparound, 255.

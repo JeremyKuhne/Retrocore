@@ -280,8 +280,8 @@ internal static partial class BasicNames
 
     /// <summary>
     ///  Gets the source that defines a label a test's own source gives one of Microsoft's names: the label, and a
-    ///  label at the same place under every name the native BASIC builds now define it by, so the modules reach it
-    ///  whether they use the old name or the new one.
+    ///  label at the same place under every unscoped name the native BASIC builds now define it by, so the modules
+    ///  reach it whether they use the old name or the new one.
     /// </summary>
     /// <param name="name">The label, as Microsoft's source has it.</param>
     /// <returns>The label definitions, one per line.</returns>
@@ -379,7 +379,9 @@ internal static partial class BasicNames
 
         string line = File.ReadLines(location.Path).ElementAt(location.Line);
         Match match = AliasLine().Match(line);
-        return match.Success ? match.Groups["target"].Value : null;
+        return match.Success
+            ? match.Groups["target"].Value
+            : throw new InvalidOperationException($"{location.Path}:{location.Line + 1} is not an alias line: {line}");
     }
 
     [GeneratedRegex(@"^\s*\w+\s*=\s*(::)?(?<target>[A-Za-z_]\w*(::\w+)*)\s*$")]

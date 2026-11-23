@@ -90,7 +90,7 @@ EARLY_LINE_EDIT = 1                 ;; 1 retains the early line-editing entries 
 TOKENIZE_SKIP_SPACES = 1            ;; 1 skips spaces while matching reserved words
 .endif
 .ifndef NEW_CLEAR_CARRY
-NEW_CLEAR_CARRY = 0                 ;; 1 clears carry before <Statements::New> adds two to the program start
+NEW_CLEAR_CARRY = 0                 ;; 1 clears carry before <EraseProgram> adds two to the program start
 .endif
 .ifndef RUN_SET_ZERO
 RUN_SET_ZERO = 0                    ;; 1 loads zero after <ResetProgramState> positions the text pointer

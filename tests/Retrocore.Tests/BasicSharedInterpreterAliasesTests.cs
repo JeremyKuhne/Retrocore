@@ -58,7 +58,10 @@ public sealed class BasicSharedInterpreterAliasesTests
             native.HasSymbol(entry.Name).Should().BeFalse($"{entry.Name} is a PET name");
         }
 
-        native.HistoricalNames["COMBYTE"].Location?.Path.Should().EndWith("AppleSoft.HistoricalNames.asm");
+        AssemblyLocation location = native.HistoricalNames["COMBYTE"].Location
+            ?? throw new AssertFailedException("COMBYTE has no source location.");
+
+        location.Path.Should().EndWith("AppleSoft.HistoricalNames.asm");
         DocumentationSet docs = Documents(native, AppleNames);
 
         // Apple's published COPY and GARBAG names collide with different Microsoft labels.

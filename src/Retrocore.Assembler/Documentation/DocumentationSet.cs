@@ -585,26 +585,6 @@ public sealed class DocumentationSet
     }
 
     /// <summary>
-    ///  Gets whether the assembly made the definition a comment of a topic documents, where that comment gives a
-    ///  historical name: the assembler's own record of where it defined symbols, so a branch it left out, whatever its
-    ///  condition reads, does not count.
-    /// </summary>
-    /// <param name="topic">The topic.</param>
-    /// <param name="name">The historical name.</param>
-    /// <returns>
-    ///  Whether a comment that gives the name documents a definition the assembly made; false without a record.
-    /// </returns>
-    internal bool DefinesWhereGiven(DocumentationTopic topic, string name) =>
-        _definedAt.Count != 0 && topic.Comments.Any(comment => GivesAt(comment, name));
-
-    // Whether a comment gives a historical name and documents a definition the assembly made.
-    private bool GivesAt(DocumentationComment comment, string name)
-    {
-        bool gives = DocumentationAlso.Of(comment.Sections).Any(also => also.Name == name);
-        return gives && _definedAt.Contains((System.IO.Path.GetFullPath(comment.Path), comment.TargetLine));
-    }
-
-    /// <summary>
     ///  Gets whether a topic's definition is in this set's assembly: false only for a label or equate the assembly
     ///  leaves out, in a branch of an <c>.if</c> its build does not take or in a macro's body it never expands.
     /// </summary>

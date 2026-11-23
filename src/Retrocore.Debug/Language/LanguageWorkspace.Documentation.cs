@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
+using Retrocore.Assembler;
 using Retrocore.Documentation;
 
 namespace Retrocore.Debug.Language;
@@ -183,13 +184,14 @@ internal sealed partial class LanguageWorkspace
                 string? replacement = symbols.Count == 1 ? symbols[0] : null;
                 current[name] = current.TryGetValue(name, out string? earlier) && earlier != replacement ? null : replacement;
 
-                // Only a name the build gives takes precedence: the assembler made the definition its comment
-                // documents. One in a branch the build leaves out stays as ambiguous with the SDK's as before. While
-                // the file has errors there is no such record, and a condition cannot be trusted to evaluate as the
-                // assembler would, so only a definition its text makes under no condition counts then.
+                // Only a name the build gives takes precedence, and only for the definition it gives it to: the
+                // assembler's own table of historical names says so. Anything else stays as ambiguous with the SDK's
+                // as before. While the file has errors there is no such table, and a condition or a macro's
+                // expansion cannot be trusted to come out as the assembler's would, so only a definition its text
+                // makes outside any condition and macro body counts then.
                 bool given = replacement is not null && topics.Count == 1 && (analysis.Result.Success
-                    ? set.DefinesWhereGiven(topics[0], name)
-                    : topics[0].Comments.All(comment => comment.Condition is null)
+                    ? analysis.Result.HistoricalNames.TryGetValue(name, out AssemblySymbol? target) && target.Name == replacement
+                    : topics[0].Comments.All(comment => comment.Condition is null && comment.Macro is null)
                         && analysis.Definitions.Any(site => site.Name == replacement));
 
                 if (thisBuild && given)

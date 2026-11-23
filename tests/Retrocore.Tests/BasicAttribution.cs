@@ -96,15 +96,30 @@ internal static partial class BasicAttribution
     /// </summary>
     /// <param name="result">A build.</param>
     /// <param name="docs">The build's documentation.</param>
-    /// <param name="target">The shared definition the name is for.</param>
     /// <param name="name">The vendor's name.</param>
-    internal static void AssertNotShared(AssemblyResult result, DocumentationSet docs, string target, string name)
+    internal static void AssertNotShared(AssemblyResult result, DocumentationSet docs, string name)
     {
         result.HistoricalNames.Should().NotContainKey(name, $"{name} must resolve only through its vendor's alias");
-        if (docs.Find(target) is { } topic)
+        foreach (DocumentationTopic topic in docs.Topics.Where(IsShared))
         {
             DocumentationAlso.Of(topic.Sections).Select(also => also.Name)
-                .Should().NotContain(name, $"{target} is shared, so its Also: must not give the vendor's {name}");
+                .Should().NotContain(name, $"{topic.Name} is shared, so its Also: must not give the vendor's {name}");
+        }
+    }
+
+    /// <summary>
+    ///  Asserts that every historical name a shared definition gives is Microsoft's, which every build shares: a name
+    ///  only a vendor's documents give belongs in that vendor's own file.
+    /// </summary>
+    /// <param name="docs">A build's documentation.</param>
+    internal static void AssertSharedNamesAreMicrosofts(DocumentationSet docs)
+    {
+        foreach (DocumentationTopic topic in docs.Topics.Where(IsShared))
+        {
+            foreach (DocumentationAlso also in DocumentationAlso.Of(topic.Sections))
+            {
+                also.Sources.Should().Contain("M6502", $"{topic.Name} is shared, so {also.Name} must be Microsoft's name");
+            }
         }
     }
 
@@ -132,6 +147,13 @@ internal static partial class BasicAttribution
         }
 
         return false;
+    }
+
+    // Whether a definition is documented in the shared Microsoft modules.
+    private static bool IsShared(DocumentationTopic topic)
+    {
+        string shared = $"{Path.DirectorySeparatorChar}Microsoft6502Basic{Path.DirectorySeparatorChar}";
+        return topic.Comments.Any(comment => comment.Path.Contains(shared, StringComparison.OrdinalIgnoreCase));
     }
 
     private static DocumentationBibliography ReadBibliography()
@@ -165,7 +187,7 @@ internal static partial class BasicAttribution
     private static partial Regex Cited();
 
     // "In <variant>, <source> call(s) ... `NAME` ...": the source is the text before "calls" and must not be empty.
-    [GeneratedRegex(@"^[Ii]n (?<variant>AppleSoft|PET BASIC [0-9](?: and [0-9])?), (?<source>\S.*?) calls? (?<rest>.*)$")]
+    [GeneratedRegex(@"^[Ii]n (?<variant>AppleSoft), (?<source>\S.*?) calls? (?<rest>.*)$")]
     private static partial Regex Attribution();
 
     [GeneratedRegex(@"(?<=[.;])\s+(?=[Ii]n )")]

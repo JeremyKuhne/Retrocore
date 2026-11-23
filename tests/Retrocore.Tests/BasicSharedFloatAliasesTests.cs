@@ -199,7 +199,7 @@ public sealed class BasicSharedFloatAliasesTests
             Path.GetFullPath(topic.Path).Should().StartWith(Path.GetFullPath(s_shared) + Path.DirectorySeparatorChar);
             topic.Value.Should().Be(result.Symbols[target]);
 
-            BasicAttribution.AssertNotShared(result, docs, target, name);
+            BasicAttribution.AssertNotShared(result, docs, name);
 
             DebugPosition position = debug.Position(memory, checked((ushort)result.Symbols[name]))
                 ?? throw new AssertFailedException($"{name} has no debugger source position.");

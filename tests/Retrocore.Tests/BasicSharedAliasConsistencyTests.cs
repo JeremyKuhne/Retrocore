@@ -122,6 +122,12 @@ public sealed class BasicSharedAliasConsistencyTests
             }
 
             DocumentationSet docs = Documents(root.Result);
+            BasicAttribution.AssertSharedNamesAreMicrosofts(docs);
+            foreach (string name in root.Apple ? petNames : appleNames)
+            {
+                BasicAttribution.AssertNotShared(root.Result, docs, name);
+            }
+
             Dictionary<string, Alias> byName = aliases.ToDictionary(alias => alias.Name, StringComparer.Ordinal);
             foreach (Alias alias in aliases)
             {
@@ -165,6 +171,56 @@ public sealed class BasicSharedAliasConsistencyTests
         {
             keys.Should().Equal(expected.Split(','));
         }
+    }
+
+    /// <summary>
+    ///  Each PET build's names come from its own reconstruction, and BASIC 4's from Commodore's listing too.
+    /// </summary>
+    /// <param name="model">The PET model.</param>
+    /// <param name="original">Whether BASIC 1 or 4 uses its original chip.</param>
+    /// <param name="expected">The documents' keys, comma-separated.</param>
+    [TestMethod]
+    [DataRow(PetModel.Pet2001, true, "HV1")]
+    [DataRow(PetModel.Pet2001, false, "HV1R")]
+    [DataRow(PetModel.Pet2001Basic2, false, "HV2")]
+    [DataRow(PetModel.Pet4032, true, "HV4,CBM4S79")]
+    [DataRow(PetModel.Pet4032, false, "HV4R,CBM4S79")]
+    public void PetBuildsTakeTheirOwnDocuments(PetModel model, bool original, string expected)
+    {
+        BasicAttribution.PetKeys(model, original).Should().Equal(expected.Split(','));
+        foreach (string key in BasicAttribution.PetKeys(model, original))
+        {
+            BasicAttribution.Bibliography.Find(key).Should().NotBeNull($"{key} must be in docs/Bibliography.md");
+        }
+    }
+
+    /// <summary>
+    ///  A vendor's name that can't resolve is attributed in one sentence of the remarks, with the variant, the name
+    ///  and a source.
+    /// </summary>
+    /// <param name="text">The remarks' sentences.</param>
+    /// <param name="expected">Whether they attribute ALIAS to AppleSoft and cite a source.</param>
+    [TestMethod]
+    [DataRow("In AppleSoft, Apple's listing calls it `ALIAS`.", true)]
+    [DataRow("In AppleSoft, Apple's\n;; listing calls it `ALIAS`.", true)]
+    [DataRow("In AppleSoft, a listing calls it `OTHER`. In AppleSoft, `ALIAS` is a spelling.", false)]
+    [DataRow("In AppleSoft, `ALIAS`.", false)]
+    [DataRow("In PET BASIC 4, a listing calls it `ALIAS`.", false)]
+    [DataRow("Apple's listing calls it `ALIAS`.", false)]
+    public void ProseAttributionBelongsToTheAliasAndVariant(string text, bool expected)
+    {
+        string source = $"""
+            ;; A shared routine.
+            ;;
+            ;; {text}
+            TARGET:
+                rts
+            """;
+
+        DocumentationFile file = DocumentationParser.Parse(source, Path.Join(s_shared, "AttributionFixture.asm"));
+        DocumentationComment comment = file.Comments.Single(comment => comment.Name == "TARGET");
+        comment.Remarks.Should().NotBeEmpty("the fixture's attribution must be a remark");
+        BasicAttribution.Has(comment.Remarks, "ALIAS", "AppleSoft").Should().Be(expected);
     }
 
     /// <summary>
@@ -290,7 +346,7 @@ public sealed class BasicSharedAliasConsistencyTests
                 throw new AssertFailedException($"{root.Name}: {alias.Name}'s shared target {targetName} has no active shared documentation.");
             }
 
-            BasicAttribution.AssertNotShared(root.Result, docs, targetName, alias.Name);
+            BasicAttribution.AssertNotShared(root.Result, docs, alias.Name);
         }
         else
         {

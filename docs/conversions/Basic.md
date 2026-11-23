@@ -50,8 +50,8 @@ Made by script, from the source branch's sources, with the repository's assemble
 - **Per file:** every definition in the native files was listed by a text scan: labels (column 0), equates,
   `.ifndef` defaults (switches), `.set` names, macros and macro parameters, with the macro each is inside.
 - **Coverage:** every symbol of every build matched a text definition at the same file and line, except the
-  predefined switches (ENHNCD, APLPLS, REVISD). 138 text definitions are in no build's table: 125 lines of the
-  `.set` counter Q (the table keeps its last value), nine `.ifndef` defaults that the builds predefine or override,
+  predefined switches (ENHNCD, APLPLS, REVISD). 138 text definitions are in no build's table: 124 lines of the
+  `.set` counter Q and AppleSoft's first `BUFOFS .set` (the table keeps a name's last value), nine `.ifndef` defaults that the builds predefine or override,
   three alternate equates (Commodore's CHARAC and TEMPPT for other layouts) and one label (`LIST_QUOTE_CHECK`, in a
   branch no build takes).
 - **Macros:** each macro's expansion sites per build come from the source maps. Every macro that defines a label is
@@ -175,14 +175,14 @@ is cited only where the check below found that the document gives that name for 
 
 | Proposed key | Document | How it was checked | Rows cited |
 | --- | --- | --- | ---: |
-| M6502 | Microsoft's BASIC M6502 8K version 1.1 source (MACRO-10), the repository's `m6502.asm` (the same text, but for whitespace, as cbmsrc's `BASIC_PET_V2_MICROSOFT/M6502.MAC`) | Each overlay build (`.mac` on `m6502.asm`) assembled; a name is cited for a build when `m6502.asm` defines it and the overlay build gives it the same value as the native build. 970 of these matches are names whose overlay definition is in the vendor's `.mac` patch, which keeps Microsoft's label on the replaced code. No name had a different value. | 1,246 |
-| ASTIL | Apple II Technical Information Library, "Applesoft: Internals" articles (index to routines 1-4, page zero memory map 1-2, and the routine articles) | Names and addresses parsed from the index and page-zero articles; cited where the address equals the AppleSoft builds' value. Names found only in the articles' prose are "spelling only". | 180 |
-| AS82 | Apple's Applesoft source listing, dated 5/26/1982 (Roger Wagner Publishing's reference copy, scanned for KansasFest) | Only the archive's OCR text could be fetched (the scan's files are on a blocked host). The OCR is heavily damaged: a name is cited only where its symbol table gives the same value (13 rows); 255 rows' names appear in the text but could not be tied to the thing, and are "spelling only". | 13 |
-| ASRM78 | Apple's Applesoft Reference Manual (Extended Precision Floating Point BASIC), August 1978 | OCR text: its memory map gives CHRGET at $B1. Apple's Applesoft II BASIC Programming Reference Manual (1978/1981) gives the same and nothing more; the IIe Applesoft BASIC Programmer's Reference Manuals (vols. 1 and 2) give no internal names. | 1 |
-| CBM4S79 | Commodore PET BASIC 4 source, listing dated July 23, 1979: a pre-release, OCRed and reconstructed by Martin Hoffmann-Vetter (cbmsrc `BASIC_PET_V4_1979-07-23`) | Its addresses differ from the ROMs, so page-zero names are checked by value and code labels by the first instruction at the label (same mnemonic). | 868 |
-| K4S79 | Commodore PET 2001 operating system 4.0 source, dated July 25, 1979 (cbmsrc `KERNAL_PET_4.0_1979-10-23`), which holds BASIC 4's $D000 ROM: the monitor and the disk-command code | Assembled for RAM ($8000 lower) by an address-only pass; cited where the address plus $8000 (or the page-zero value) equals the native build's. | 355 |
-| HV1, HV1R, HV2, HV4, HV4R | Martin Hoffmann-Vetter's reconstructions of PET BASIC 1, 1 revised, 2, 4 and 4 revised (cbmsrc `BASIC_PET_V1_REC` ... `BASIC_PET_V4R_REC`), which build the ROMs | An address-only pass over each (a script of ours that reads the text; Commodore's assembler was not run), checked against the ROM: FNDLIN and INIT land where the native builds put them. A name is cited for its build where its address or value equals the native one. 15 names differ in value (DOPEN, APPEND ... name the kernal's jump-table entries there, not BASIC 4's routines) and are not cited. | 869-903 each |
-| HVK4 | Hoffmann-Vetter's reconstruction of the PET 4.0 operating system (cbmsrc `KERNAL_PET_4.0_REC`) | As HV*: 356 names at the BASIC 4 ROMs' addresses. | 356 |
+| M6502 | Microsoft's BASIC M6502 8K version 1.1 source (MACRO-10), the repository's `m6502.asm` (the same text, but for whitespace, as cbmsrc's `BASIC_PET_V2_MICROSOFT/M6502.MAC`) | Each overlay build (`.mac` on `m6502.asm`) assembled; a name is cited for a build when `m6502.asm` defines it and the overlay build gives it the same value as the native build. Where the overlay's definition is in the vendor's `.mac` (973 build-names), the value match proves only that the overlay kept Microsoft's label on the code that replaced Microsoft's; the review checked each such case for the `.mac` replacing the very line that defines the name, and removed M6502 from the nine rows where it does not (BASIC 4's array-creation code, BASIC 1's patch routines). No name had a different value. | 1,242 |
+| ASTIL | Apple II Technical Information Library, "Applesoft: Internals" articles (index to routines 1-4, page zero memory map 1-2, and the routine articles) | Names and addresses parsed from the index, the page-zero map and the routine articles' name-and-address lists; cited where the address equals the AppleSoft builds' value. Names found only in prose are "spelling only". | 181 |
+| AS82 | Apple's Applesoft source listing, dated 5/26/1982 (Roger Wagner Publishing's reference copy, scanned for KansasFest) | Only the archive's OCR text could be fetched (the scan's files are on a host the network refuses). The OCR is heavily damaged: a name is cited only where its symbol tables give the same value (19 rows), and 13 other names at native addresses were read from them by hand (MISMTCH, NXLINK, BILLION ...); 249 rows' names appear in the text but could not be tied to the thing, and are "spelling only". The listing's header limits it to the owner of the copy of Applesoft it came from, and Apple as author and the date rest on the archive's description. | 19 |
+| ASRM78 | Apple's Applesoft II Reference Manual (Extended Precision Floating Point BASIC Language), August 1978 | OCR text: its memory map gives CHRGET at $B1. It also names ERRFLG, the ONERR flag, but at location 222, where the ROM's is 216 (the Applesoft II BASIC Programming Reference Manual's example uses 216): a candidate for X12's kind of question, not cited. The IIe Applesoft BASIC Programmer's Reference Manuals (1982, vols. 1 and 2) give no internal names. | 1 |
+| CBM4S79 | Commodore PET BASIC 4 source, listing dated July 23, 1979: a pre-release, OCRed and reconstructed by Martin Hoffmann-Vetter (cbmsrc `BASIC_PET_V4_1979-07-23`) | Its addresses differ from the ROMs, so page-zero names are checked by value and code labels by the code at the label (the review compared each label's first instructions and data bytes, and added 29 rows the first check had missed). | 897 |
+| K4S79 | Commodore PET 2001 operating system, version 4.0 (July 25, 1979), listing of October 23, 1979 (cbmsrc `KERNAL_PET_4.0_1979-10-23`): the whole operating system, including BASIC 4's $D000 ROM (the monitor and the disk-command code) | Assembled for RAM ($8000 lower); cited where the address plus $8000 (or the page-zero value) equals the native build's. | 365 |
+| HV1, HV1R, HV2, HV4, HV4R | Martin Hoffmann-Vetter's reconstructions of PET BASIC 1, 1 revised, 2, 4 and 4 revised (cbmsrc `BASIC_PET_V1_REC` ... `BASIC_PET_V4R_REC`), which build the ROMs | Assembled by a script of ours that reads their text (Commodore's assembler was not run) and reproduces the ROMs' bytes, but for the checksum bytes. A name is cited for its build where its address or value equals the native one. 15 names differ in value and are not cited: 12 name the kernal's jump-table entries there (DOPEN, APPEND ...), not BASIC 4's routines; ISVAR, GETDTL and NUMLEV differ for other reasons. | 869-903 each |
+| HVK4 | Hoffmann-Vetter's reconstruction of the PET 4.0 operating system (cbmsrc `KERNAL_PET_4.0_REC`) | As HV*: names at the BASIC 4 ROMs' addresses. | 366 |
 
 cbmsrc is <https://github.com/mist64/cbmsrc>, checked at commit 01bd60f162ef92212ef0cb67546ae8f42be34168. Its notes
 say that Microsoft built BASIC 1, 1 revised and 2, and that the reconstructions of BASIC 1 in Commodore's assembler
@@ -190,8 +190,8 @@ format "never existed": they carry Commodore's later names back to BASIC 1's cod
 still documents that give those names for that code, but their names are a reconstructor's, not Commodore's or
 Microsoft's of 1977. They are cited on that understanding (question X12).
 
-Not used: Scot Kamins' Applesoft BASIC Programmer's Reference Manual (1985, Apple's official manual) is lending-only
-at the archive and could not be read. Apple Orchard's "Applesoft Internal Entry Points" and S-C's Applesoft
+Not used: the 1985 edition of Scot Kamins' Applesoft BASIC Programmer's Reference Manual (Apple's official manual;
+the 1982 IIe volumes, also his, were read) is lending-only at the archive and could not be read. Apple Orchard's "Applesoft Internal Entry Points" and S-C's Applesoft
 disassembly were not fetched; the sources' comments do not cite them, and no name in the table depends on them.
 
 ### Proposed bibliography rows
@@ -203,9 +203,9 @@ disassembly were not fetched; the sources' comments do not cite them, and no nam
 | M6502 | BASIC M6502 8K version 1.1 source (MACRO-10), published under the MIT license | 1978 | Microsoft | <https://github.com/microsoft/BASIC-M6502> |
 | ASTIL | Apple II Technical Information Library: "Applesoft: Internals" articles | | Apple Computer | <https://mirrors.apple2.org.za/Apple%20II%20Documentation%20Project/Companies/Apple/Documentation/Apple%20Technical%20Information%20Library/> |
 | AS82 | Applesoft source listing, May 26, 1982 (Roger Wagner Publishing's reference copy) | 1982 | Apple Computer | <https://archive.org/details/roger_wagner_applesoft_source> |
-| ASRM78 | Applesoft Reference Manual | August 1978 | Apple Computer | <https://archive.org/details/Applesoft_II_Reference_Manual_1978-08_Apple> |
+| ASRM78 | Applesoft II Reference Manual | 1978 | Apple Computer | <https://archive.org/details/Applesoft_II_Reference_Manual_1978-08_Apple> |
 | CBM4S79 | PET BASIC version 4 source, listing of July 23, 1979 (OCRed and reconstructed by Martin Hoffmann-Vetter) | 1979 | Commodore | <https://github.com/mist64/cbmsrc/tree/01bd60f162ef92212ef0cb67546ae8f42be34168/BASIC_PET_V4_1979-07-23> |
-| K4S79 | PET 2001 operating system version 4.0 source, July 25, 1979 (OCRed and reconstructed by Martin Hoffmann-Vetter) | 1979 | Commodore | <https://github.com/mist64/cbmsrc/tree/01bd60f162ef92212ef0cb67546ae8f42be34168/KERNAL_PET_4.0_1979-10-23> |
+| K4S79 | PET 2001 operating system version 4.0 (July 25, 1979), listing of October 23, 1979 (OCRed and reconstructed by Martin Hoffmann-Vetter) | 1979 | Commodore | <https://github.com/mist64/cbmsrc/tree/01bd60f162ef92212ef0cb67546ae8f42be34168/KERNAL_PET_4.0_1979-10-23> |
 | HV1 | PET BASIC 1 (901439-01 ...), reconstructed source | | Martin Hoffmann-Vetter | <https://github.com/mist64/cbmsrc/tree/01bd60f162ef92212ef0cb67546ae8f42be34168/BASIC_PET_V1_REC> |
 | HV1R | PET BASIC 1 revised (901439-09 ...), reconstructed source | | Martin Hoffmann-Vetter | <https://github.com/mist64/cbmsrc/tree/01bd60f162ef92212ef0cb67546ae8f42be34168/BASIC_PET_V1R_REC> |
 | HV2 | PET BASIC 2 (901465-01, -02, 901447-24), reconstructed source | | Martin Hoffmann-Vetter | <https://github.com/mist64/cbmsrc/tree/01bd60f162ef92212ef0cb67546ae8f42be34168/BASIC_PET_V2_REC> |
@@ -219,12 +219,14 @@ conversion replaces those with `Also:` entries and these keys.
 ## Step 3: the rename table
 
 [BasicRenames.md](BasicRenames.md) has all 2,411 rows. It was drafted in seven parts with one set of rules and one
-glossary for the shared workspace (below), then merged. Of the rows, 2,126 get a new name, 262 keep theirs (the
-SDK's own switches and macro parameters, and the names C# and the tests predefine: REVISD, ENHNCD, APLPLS, TIME,
-EXTIO, DISKO, REALIO) and 23 are dropped (unreferenced, with no document name). 367 rows that would be renamed have
-no document name: mostly AppleSoft's copies of Monitor and IIe names (which carry the Apple manuals' names once they
-come from IIeEquates, question X10), AppleSoft-only labels the damaged AS82 text could not confirm, and the SDK's
-own labels.
+glossary for the shared workspace (below), then merged, then corrected after two independent reviews (below). Of the
+rows, 2,142 get a new name, 255 keep theirs (the SDK's own switches and macro parameters, and the names C#
+predefines: REVISD, ENHNCD, APLPLS, TIME, EXTIO, DISKO, REALIO; X15 asks about the names tests predefine) and 14 are
+dropped. A DROP removes the definition: either nothing uses it and no document names it, or it duplicates another
+definition, whose `Also:` then takes its documented name (ZSTORD, KIMY), or it is a question (REDDY and GOTK, C-Q8;
+LINWID, D-Q3). 297 renamed rows have no checked document name: mostly AppleSoft's copies of Monitor and IIe names
+(which carry the Apple manuals' names once they come from IIeEquates, question X10), AppleSoft-only labels the damaged
+AS82 text could not confirm, and the SDK's own labels.
 
 The parts: A, the floating-point package; B1, the shared program and statement modules; B2, the shared expression,
 variable and string modules; C, the vendors' own copies of the interpreter (AppleSoft and Commodore side by side);
@@ -311,13 +313,14 @@ Today `AppleSoft.FloatAliases`, `AppleSoft.InterpreterAliases`, `Commodore.Float
   scoped alias that carries the vendor's names in `Also:` and inherits the target's documentation:
 
   ```asm
-  ;; Inherit: <Float::SquareRootHalf>
+  ;; Inherit: <Float::SquareRootOfHalf>
   ;; Also: SQR05 (CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
-  Commodore::SquareRootHalf = Float::SquareRootHalf
+  Commodore::SquareRootOfHalf = Float::SquareRootOfHalf
   ```
 
   The old name then resolves only in that vendor's builds (D3). The scope keeps the alias names out of the top
-  level. The table's D3 column marks each shared definition with such names ("aliases: ...").
+  level. The table gives each alias-file entry its scoped name (`Commodore::SquareRootOfHalf`, `AppleSoft::PrintFac`),
+  and its D3 column marks each shared definition that has one.
 - **Alternatives:**
   - a directive that attaches an `Also:` to another definition, without a second name (a tool change);
   - plain equates (`SQR05 = Float::SquareRootHalf`). This works today, but the editor would treat the old names as
@@ -408,7 +411,7 @@ AppleSoft.Equates redefines about 90 names that the converted IIeEquates and Mon
 
 - **Recommendation:** cite HV1 and HV1R where they give a name (X7), noting their origin in the bibliography.
   Microsoft's name (M6502) is on almost all of the same definitions anyway: of the 869 rows HV1 confirms, all but
-  16 are also Microsoft's.
+  14 are also Microsoft's.
 - **Alternative:** cite only Microsoft and the BASIC 2/4 documents, and give HV1's own names in prose.
 
 ### X13. Statement names
@@ -436,6 +439,28 @@ AppleSoft.Equates redefines about 90 names that the converted IIeEquates and Mon
 - **Alternatives:**
   - a `Kernal` scope;
   - leave the kernal's names for its own conversion, with only `Also:` meanwhile.
+
+### X15. Switches the tests predefine
+
+The tests predefine more build switches than the seven C# does: BUFPAG, BUFLEN, NULCMD, LOCAL_TRMPOS,
+VARTXT_IN_LINNUM, INTIDX_USE_FRMNUM, SHORT_FMUL_ZERO, PRECISE_FOUT_LIMIT, INTPRC, ADDPRC, LNGERR, NUMLEV and STKEND
+(BasicSharedMemoryManagementTests, PetNativeEquatesTests, Basic1IndependentSwitchTests). The table renames them. An
+`.ifndef` default is not reached through `Also:`, so a test that predefines the old name would silently get the
+default.
+
+- **Recommendation:** rename them as drafted, and change the tests in the PR that renames each (the tests are the
+  SDK's own; B4's helper can map an old switch name to the new one). The roots could assert that no old name is
+  predefined, so that a stale predefinition fails loudly.
+- **Alternative:** KEEP every switch a test or C# predefines, as the seven are kept.
+
+### X16. How locals of scoped routines are written
+
+The parts wrote a scoped routine's locals two ways: in full (`Float::AlignAndAdd::ArgSmaller`, part A) or without
+the scope (`Let::Number`, `CollectGarbage::NextArray`).
+
+- **Recommendation:** write the full path in the table (as code outside the scope reaches it); the table is
+  normalized once X1 and X13 are settled.
+- **Alternative:** the routine's own name only, the scope implied by the routine's row.
 
 ## Where the drafts disagreed
 
@@ -479,6 +504,37 @@ Still open (used as glossary names in the table, with scoped aliases proposed in
 - LOWTR: `FoundLine` as FindLine's alias (B1).
 - AppleSoft's LINWID and NCMWID: unused or misnamed there (D-Q3).
 
+## Corrected after the independent reviews
+
+Two reviews were run on the draft, one checking the inventory and the table against the code (rebuilding all eight
+builds), one checking every citation against the documents. Their findings, as corrected:
+
+- R1. Coverage, the counts, every row's builds and about 150 reasons were confirmed. M6502 was removed from nine
+  rows where the overlay's label is on Commodore's own code (BASIC 4's array creation, BASIC 1's patches).
+- R2. Citations the first checks missed were added: CBM4S79 on 29 rows of identical code or data; K4S79 and HVK4 on
+  the kernal routines outside $D000-$DFFF (the first address pass drifted there; the reviewer's byte-exact one is
+  used); M6502 where `m6502.asm` defines a name inside an `IFN`/`IFE` bracket (DIRCON, ARGMOH); ASTIL's routine
+  articles (FDIVT); the reconstructions' names for the kernal jump table (COPEN ... CCALL, DCAT, SCRATC, READDS),
+  and TKSA for SECND; 13 names from AS82's symbol tables, read by hand.
+- R3. Names that would shadow a name their own routine uses were changed (`Disk::ReadErrorChannel::SendTalk`, not
+  `::Talk`, which calls Talk; `Functions::Peek::ToReturnByte`; the disk parser's `Read*` and the command builder's
+  `Put*` locals; `Statements::ShLoad::SetShapeTable`; `CheckStop::ConsumeKey`; `LinkProgram::StoreLink`, beside the
+  macro LinkLine; and others).
+- R4. Rows where one old name labels different things by build now give a name per build: ANDOP
+  (`Operators::And` on the PET, `Operators::Or` in AppleSoft), AppleSoft's LINCHK and TABER (dropped in II+ and IIe,
+  where they fall inside instructions), SNERR1 (inside NextStatement in BASIC 1).
+- R5. QNUM is `ClassifyCharacter` and CHRRTS `CharacterReaderReturn` (B1-Q3); Commodore's TI$ code calls QNUM and the
+  PET debug host looks up CHRRTS.
+- R6. AppleSoft's CV keeps the Monitor's definition, CV (Dos.md X7), rather than D's `CursorLine`.
+- R7. The alias files' entries take scoped names (X5), and the shared definitions they target show them in D3.
+- R8. Stale names after the merge were fixed (CheckBreak, NextStatement, BasicEnd), as were the facts in this log
+  (the $F530 byte count, the `.set` split, PRECEDENCE_UNARY on the PET, K4S79's date, ASRM78's title, the
+  reconstructions' differing names).
+- R9. Left open for the owner: X15 (renamed switches tests predefine), X16 (how locals are written), and the
+  remaining DROPs that drop a documented name (C-Q8, D-Q3).
+- R10. One row per name per file has three exceptions: parameters of the same name in two macros of one file
+  (rows 296/315, 1933/1943, 1956/1972).
+
 ## Other dependents
 
 - **DOS** left BASIC's names unchanged until this conversion: X7 in [Dos.md](Dos.md) ("BASIC names wait for the
@@ -502,7 +558,7 @@ The parts' notes list these, among others; each is a comment for the conversion,
 - The classic allocator, on a zero-length request that does not fit, collects twice and returns without
   allocating (B2).
 - VAL leaves a zero after the string and does not restore TextPointer when FIN fails (B2).
-- AppleSoft: 11 unreachable bytes at $F530; XDRAW's and DRAW's collision counts count different things; Apple's
+- AppleSoft: 10 unreachable bytes at $F530; XDRAW's and DRAW's collision counts count different things; Apple's
   DRWPNT and XDRPNT names are swapped (E).
 - BASIC 4: the original ROM recognizes DS$ by address alone; the disk-status read has no length limit; HEADER
   closes the unit's files before asking for confirmation (F).
@@ -796,7 +852,7 @@ label as `Proc::Label`.
 - **`OperatorEntry`**: 3 bytes. `PRECEDENCE` .byte and `HANDLER` .word, where HANDLER is the address minus 1.
   ExpressionCore reads `OPTAB+1,y` and `OPTAB+2,y`. Name the precedences too: PRECEDENCE_ADD = $79,
   PRECEDENCE_MULTIPLY = $7B, PRECEDENCE_POWER = $7D/$7F, PRECEDENCE_AND = $50, PRECEDENCE_OR = $46,
-  PRECEDENCE_RELATION = $64, PRECEDENCE_UNARY = $7F, PRECEDENCE_NOT = $5A. ExpressionCore's `cmp #$64` is the
+  PRECEDENCE_RELATION = $64, PRECEDENCE_UNARY = $7F in AppleSoft ($7D on the PET, where negation shares power's level), PRECEDENCE_NOT = $5A. ExpressionCore's `cmp #$64` is the
   relation entry's precedence.
 - **`FunctionDefinition`**: the value of a DEF FN variable. `FORMULA` .word (the text pointer), `ARGUMENT` .word (the
   argument variable's value pointer), and a fifth byte that DEF also stores (the character after `=`). FNDOER reads
@@ -881,7 +937,7 @@ NEXT_ENTRIES, for example, emits Next and then EvaluateNumber and RequireType.
 - `PeekFunction`, `PokeStatement` and `WaitStatement` (MEMORY_ACCESS_*).
 - `OperatorEntries` (OPERATOR_TABLE). Calling it OperatorTable would give it the same name as the table.
 - `PrintItems` (PRINT_CORE).
-- `NextStatement` (NEXT_ENTRIES). It reads close to the parameter `nextStatement`; `NextAndTypeChecks` is the
+- `NextStatement` (NEXT_ENTRIES; settled as `NextEntries`, K1). It reads close to the parameter `nextStatement`; `NextAndTypeChecks` is the
   alternative.
 
 Every macro parameter is already descriptive camelCase, and I wrote KEEP for each. Two are DROPs (B1-Q7).
@@ -1495,7 +1551,7 @@ workspace part, so the reasons use the old names for it.
   used it because the Monitor's lo-res family is the scope `LowRes`, and Monitor rule 18 keeps subsystem routines
   in their family even when programs call them (`LowRes::Plot`).
 - Top level: what other modules reach (TrapError, ReadLowResCoordinates, ToIllegalQuantity, the enhanced IIe's
-  tokenizer, lister and PRINT helpers), the two TIL "text" readers, and BasicEnd.
+  tokenizer, lister and PRINT helpers), the two TIL "text" readers, and BasicEnd (settled as InterpreterEnd, K3).
 
 #### Questions
 
@@ -1573,13 +1629,13 @@ reads as masks. MASK1C is a real `.byte`.
 - Alternative: one `RowInGroupMask`-style name per bit field of the screen address (group bits, third bits) once the
   conversion documents the layout.
 
-**E-Q9. Unreachable code at $F530.** After StepVertical's last `bcc`, 11 bytes zero HGRX and HGRY and fall into
+**E-Q9. Unreachable code at $F530.** After StepVertical's last `bcc`, 10 bytes ($F530-$F539) zero HGRX and HGRY and fall into
 HighRes::Line, drawing a line from (0,0). Nothing branches there, and the `bcc` is always taken: the `asl` clears
 bit 0 of LowResBase, the `ror` moves that bit into carry, and no path between them sets it.
 - Recommend: no label; document the bytes as unreachable, with what they would do.
 - Alternative: a named local `StepVertical::LineFromOrigin`, if a document gives this address a name.
 
-**E-Q10. LASTWR.** It is `BasicEnd` (Also: LASTWR (M6502)), "End" being the byte after, as in DOS X5. It needs the
+**E-Q10. LASTWR.** (Settled as `InterpreterEnd`, K3.) It was drafted as `BasicEnd` (Also: LASTWR (M6502)), "End" being the byte after, as in DOS X5. It needs the
 same name as the Commodore part's LASTWR. Its `.res 100` is Microsoft's temporary-stack block. In AppleSoft it
 covers $F800-$F863, which is Monitor ROM code (LowRes::Plot to just before LowRes::SetColor), not the "Monitor
 workspace" the comment says. That comment is wrong and should be fixed in the conversion.
@@ -1605,7 +1661,7 @@ should be an alias of it in AppleSoft's file (`TerminalPosition = CursorColumn`)
 
 #### Named to match another part or source
 
-- BasicEnd: matches the Commodore part's LASTWR (Basic2, Basic4, Basic1Patches).
+- BasicEnd (settled as InterpreterEnd, K3): matches the Commodore part's LASTWR (Basic2, Basic4, Basic1Patches).
 - Statements::PrNumber and InNumber: follow DOS's Commands::PrNumber.
 - ShLoad::StoreEnd, ShLoad::ShapeTable, SetArrayBlock and CallAppleSoftCassette: follow the Enhanced IIe firmware's
   AppleSoftCassette.

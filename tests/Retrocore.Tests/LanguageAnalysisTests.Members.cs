@@ -473,7 +473,8 @@ public sealed partial class LanguageAnalysisTests
     /// <summary>
     ///  On Windows, a name rooted on the current drive or naming another drive replaces the including file's folder,
     ///  as the assembler reads it, and a relative name is joined to it. A name rooted without a drive is on the
-    ///  current directory's drive, as <see cref="Path.GetFullPath(string)"/> places it.
+    ///  current directory's drive, as <see cref="Path.GetFullPath(string)"/> places it, and a drive-relative name is
+    ///  in that drive's own current directory, which the test leaves alone, so only the result's shape is checked.
     /// </summary>
     [TestMethod]
     [OSCondition(OperatingSystems.Windows)]
@@ -483,6 +484,9 @@ public sealed partial class LanguageAnalysisTests
         LanguagePaths.Resolve(From, @"\lib\Library.asm").Should().Be(Path.GetFullPath(@"\lib\Library.asm"));
         LanguagePaths.Resolve(From, @"D:\lib\Library.asm").Should().Be(@"D:\lib\Library.asm");
         LanguagePaths.Resolve(From, @"lib\Library.asm").Should().Be(@"C:\work\program\lib\Library.asm");
+
+        string driveRelative = LanguagePaths.Resolve(From, "C:Library.asm");
+        driveRelative.Should().StartWith(@"C:\").And.EndWith(@"\Library.asm").And.NotBe(@"C:\work\program\Library.asm");
     }
 
     private static LspParams Request(DocumentUri uri, int line, int character) =>

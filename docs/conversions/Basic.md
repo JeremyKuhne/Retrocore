@@ -184,7 +184,12 @@ is cited only where the check below found that the document gives that name for 
 | HV1, HV1R, HV2, HV4, HV4R | Martin Hoffmann-Vetter's reconstructions of PET BASIC 1, 1 revised, 2, 4 and 4 revised (cbmsrc `BASIC_PET_V1_REC` ... `BASIC_PET_V4R_REC`), which build the ROMs | Assembled by a script of ours that reads their text (Commodore's assembler was not run) and reproduces the ROMs' bytes, but for the checksum bytes. A name is cited for its build where its address or value equals the native one. 15 names differ in value and are not cited: 12 name the kernal's jump-table entries there (DOPEN, APPEND ...), not BASIC 4's routines; ISVAR, GETDTL and NUMLEV differ for other reasons. | 869-903 each |
 | HVK4 | Hoffmann-Vetter's reconstruction of the PET 4.0 operating system (cbmsrc `KERNAL_PET_4.0_REC`) | As HV*: names at the BASIC 4 ROMs' addresses. | 366 |
 
-cbmsrc is <https://github.com/mist64/cbmsrc>, checked at commit 01bd60f162ef92212ef0cb67546ae8f42be34168. Its notes
+cbmsrc is <https://github.com/mist64/cbmsrc>, checked at commit 01bd60f162ef92212ef0cb67546ae8f42be34168.
+Its reconstructions of BASIC 1 name the ROMs they build 901439-01, -05, -02, -06 and -03 (-09 for the revised first
+ROM), where the repository, its C# and its docs name the chips it builds 901447-01 to -05 (and -09). Both sets of numbers are
+right for what they describe: assembled, HV1 and HV1R equal the repository's original and revised BASIC 1 builds in
+all 8,192 bytes from $C000 to $DFFF, so the two part-number series hold the same code. The documents in hand do not
+say how the two series differ. Its notes
 say that Microsoft built BASIC 1, 1 revised and 2, and that the reconstructions of BASIC 1 in Commodore's assembler
 format "never existed": they carry Commodore's later names back to BASIC 1's code for comparison. HV1 and HV1R are
 still documents that give those names for that code, but their names are a reconstructor's, not Commodore's or
@@ -206,8 +211,8 @@ disassembly were not fetched; the sources' comments do not cite them, and no nam
 | ASRM78 | Applesoft II Reference Manual | 1978 | Apple Computer | <https://archive.org/details/Applesoft_II_Reference_Manual_1978-08_Apple> |
 | CBM4S79 | PET BASIC version 4 source, listing of July 23, 1979 (OCRed and reconstructed by Martin Hoffmann-Vetter) | 1979 | Commodore | <https://github.com/mist64/cbmsrc/tree/01bd60f162ef92212ef0cb67546ae8f42be34168/BASIC_PET_V4_1979-07-23> |
 | K4S79 | PET 2001 operating system version 4.0 (July 25, 1979), listing of October 23, 1979 (OCRed and reconstructed by Martin Hoffmann-Vetter) | 1979 | Commodore | <https://github.com/mist64/cbmsrc/tree/01bd60f162ef92212ef0cb67546ae8f42be34168/KERNAL_PET_4.0_1979-10-23> |
-| HV1 | PET BASIC 1 (901439-01 ...), reconstructed source | | Martin Hoffmann-Vetter | <https://github.com/mist64/cbmsrc/tree/01bd60f162ef92212ef0cb67546ae8f42be34168/BASIC_PET_V1_REC> |
-| HV1R | PET BASIC 1 revised (901439-09 ...), reconstructed source | | Martin Hoffmann-Vetter | <https://github.com/mist64/cbmsrc/tree/01bd60f162ef92212ef0cb67546ae8f42be34168/BASIC_PET_V1R_REC> |
+| HV1 | PET BASIC 1, original first ROM, reconstructed source (the document names its ROMs 901439-01 ...; it assembles to the same bytes as the repository's 901447-01 build) | | Martin Hoffmann-Vetter | <https://github.com/mist64/cbmsrc/tree/01bd60f162ef92212ef0cb67546ae8f42be34168/BASIC_PET_V1_REC> |
+| HV1R | PET BASIC 1, revised first ROM, reconstructed source (the document names its ROMs 901439-09 ...; it assembles to the same bytes as the repository's 901447-09 build) | | Martin Hoffmann-Vetter | <https://github.com/mist64/cbmsrc/tree/01bd60f162ef92212ef0cb67546ae8f42be34168/BASIC_PET_V1R_REC> |
 | HV2 | PET BASIC 2 (901465-01, -02, 901447-24), reconstructed source | | Martin Hoffmann-Vetter | <https://github.com/mist64/cbmsrc/tree/01bd60f162ef92212ef0cb67546ae8f42be34168/BASIC_PET_V2_REC> |
 | HV4 | PET BASIC 4 (901465-19, -20, -21), reconstructed source | | Martin Hoffmann-Vetter | <https://github.com/mist64/cbmsrc/tree/01bd60f162ef92212ef0cb67546ae8f42be34168/BASIC_PET_V4_REC> |
 | HV4R | PET BASIC 4 revised (901465-23, -20, -21), reconstructed source | | Martin Hoffmann-Vetter | <https://github.com/mist64/cbmsrc/tree/01bd60f162ef92212ef0cb67546ae8f42be34168/BASIC_PET_V4R_REC> |
@@ -259,6 +264,10 @@ Settled by the owner on 2026-11-23, each as recommended in the question below it
   Apple name and Microsoft's name for different definitions clash in one build, Microsoft's keeps `Also:` and
   Apple's is in prose. The vendors' Monitor and kernal synonyms (CQINLN, MPLOT ...) go in the same file; a vendor's
   own files need none, since their `Also:` goes on their definitions.
+  The file holds the alias files' entries and also every vendor-only name the table lists under "other names here"
+  on a shared definition (its D3 column: "aliases: ..."), which becomes a new entry at conversion: for example
+  `AppleSoft::Billion` for BILLION (AS82, at NZMIL's $ED14 in every AppleSoft build), `AppleSoft::DivideArg` for
+  FIDVT (ASTIL) and `AppleSoft::Mismatch` for MISMTCH (AS82, at `RequireType::Mismatch`).
 - X6. The vendor-only files convert in the same effort, each right after the shared modules it calls, referring to
   converted names by their old ones meanwhile (they resolve through `Also:`).
 - X7. One job, one name in both vendors' files; each build's definition carries that build's documents' names, and a

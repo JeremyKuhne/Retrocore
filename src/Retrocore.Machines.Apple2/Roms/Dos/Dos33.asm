@@ -61,6 +61,10 @@ MASTER = 1
 YEAR = 1983
 .endif
 
+; Only the four builds DosSourceTests checks by digest: either image, of either year.
+.assert MASTER = 0 || MASTER = 1, "MASTER is 1 for the System Master's image or 0 for DOS where it runs."
+.assert YEAR = 1983 || YEAR = 1980, "YEAR is 1983 or 1980: the 680-0210-A master's DOS 3.3 or the 680-0051 masters'."
+
 ; Apple's build options. The 1980 DOS is the one without the revision B patches.
 
 ;; 1 builds RWTS with an on-screen trace for diagnosing it, without the formatter; always 0 in the masters.

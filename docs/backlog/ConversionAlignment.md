@@ -38,7 +38,7 @@ The plan takes the best of each.
 | Lint | `; retrocore: style=strict` on every file | None; never run against main's lint | Strict on every file except the kept originals (`m6502.asm`, the `.mac` overlays) |
 | Contracts | `Keeps:` worked out; checked by running DOS in the debugger | `In:`/`Out:` common, `Keeps:` rare (6 in shared code) | `Keeps:` worked out; checked by routine tests and the debugger |
 | Byte check | The digest tests (`DosSourceTests`, `Apple2SourceTests`, `SystemSourceTests`) per whole build | Also each module against the MACRO-10 build's region, by Microsoft's names | Both, with the module check keyed by historical name (B4) |
-| Build switches | Each root asserts its combinations in its source's PR: the Monitor's `MONITOR` and `ENHANCED`, the firmware's `ENHANCED`, DOS's `MASTER` and `YEAR` (A3). Before them, main checks only that `ENHANCED` goes with the IIe's `MONITOR` | Roots assert `TIME`, `EXTIO`, `DISKO` (the README says `EXTIO` and `DISKO` select no code, and `TIME` is only partly wired) | Every root asserts the combinations its digest tests check |
+| Build switches | Each root asserts the combinations its digest tests check: the Monitor's `MONITOR` and `ENHANCED`, the firmware's `ENHANCED`, DOS's `MASTER` and `YEAR` (A3) | Roots assert `TIME`, `EXTIO`, `DISKO` (the README says `EXTIO` and `DISKO` select no code, and `TIME` is only partly wired) | Every root asserts the combinations its digest tests check |
 | Variant documentation | Spread over decisions and comments | A README table of every switch | A table per root or folder |
 | Original sources | Cited in the bibliography | `m6502.asm` kept with tabs expanded, its license, and an LF-normalized SHA-256 in the `.mac` pragmas and tests | Both |
 
@@ -131,15 +131,12 @@ gives the same four conflicts as onto main. A goes first only because its PRs ar
   with the Monitor); this plan, the pointer to its process, the two rules and the skill's lines that match them are
   new. `e5ecea0` also carries the four conversion logs (three say "Converted", DOS's "Decided"), which land with
   their sources (A2), and the DOS31 and DOS33 bibliography lines, which land with DOS.
-- [ ] **A2. One PR per source:** the Monitor, IIeEquates, the firmware, DOS, in that order. Each carries its
+- [x] **A2. One PR per source:** the Monitor, IIeEquates, the firmware, DOS, in that order. Each carries its
   conversion log and its README row, is byte-identical by the digest tests, lint-clean, and contract-checked in the
   debugger.
-  - *Status:* stacked on A1 as `claude/convert-monitor`, `claude/convert-iieequates`, `claude/convert-firmware`
-    and `claude/convert-dos`.
-- [ ] **A3. Assert the DOS builds:** `Dos33.asm` asserts its supported `MASTER` and `YEAR`, and `Dos32.asm` its
+- [x] **A3. Assert the DOS builds:** `Dos33.asm` asserts its supported `MASTER` and `YEAR`, and `Dos32.asm` its
   `MASTER` (`YEAR` selects nothing in DOS 3.2), in the DOS PR. The Monitor's root asserts `MONITOR` and
   `ENHANCED` in the Monitor PR, and the firmware roots their `ENHANCED` in the firmware PR.
-  - *Status:* in `claude/convert-dos`.
 
 Exit for each PR: `EveryRepositorySourceIsCleanInTheEditor`, `SdkDocumentationIsClean` and the digest tests pass.
 

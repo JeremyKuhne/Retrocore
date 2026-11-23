@@ -46,7 +46,9 @@ boot loader and formatter. Also converted with it: `Software/MasterCreate.asm`, 
 - X12. The SDK's own names get no `Also:`; DOS 3.2's BOOT 1 macros, named as capital mnemonics, are renamed in the
   style.
 - X13. DOS32, MASTER and YEAR (the SDK's build options, which C# predefines) are unchanged; Apple's DIAGMODE, DOS33B
-  and ULC are renamed with `Also:`; ORIGIN is `MASTER_ORIGIN` with `Also: ORIGIN (DOS33)` and an `.assert`.
+  and ULC are renamed with `Also:`; ORIGIN is `MASTER_ORIGIN` with `Also: ORIGIN (DOS33)` and an `.assert`. Each
+  root asserts the values its digests check: `Dos33.asm` a MASTER of 0 or 1 and a YEAR of 1983 or 1980, `Dos32.asm`
+  a MASTER of 0 or 1 (YEAR selects nothing in DOS 3.2).
 
 ## Where the drafts disagreed
 

@@ -208,8 +208,10 @@ NoCarry:
     ; Falls into AddScaledArgAndDouble.
     .endproc
 
-    ;; With A = Arg's exponent: clears <ResultSign>, <Float::AlignAndAdd>, then doubles <Fac> (exponent + 1); overflow
-    ;; is an error.
+    ;; Adds the argument accumulator, scaled by A as its exponent, to <Fac> through <Float::AlignAndAdd> with
+    ;; <ResultSign> cleared, then doubles the sum (exponent + 1); overflow is an error. From <Float::MultiplyByTen>,
+    ;; A is the copy's exponent plus 2, so the sum is five times <Fac> and the result ten times.
+    ;; In: A = the exponent to give the argument accumulator's mantissa
     ;; Entry:
     ;;   Done = The shared rts
     ;; Also: FINML6 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)

@@ -46,8 +46,9 @@
     .scope Float continued
 
     ;; The unshifted operand's extension byte while two numbers are added: <Float::AddArg> saves <FacExtension> here,
-    ;; <Float::AlignAndAdd> clears it when <Fac> is the one shifted, and <Float::AddMantissas> adds it in. The byte is
-    ;; <FunctionJumpHigh>, which Microsoft's source names OLDOV here too.
+    ;; <Float::AlignAndAdd> clears it when <Fac> is the one shifted, and <Float::AddMantissas> adds it in or
+    ;; <Float::AlignAndAdd::Subtract> subtracts the shifted bits from it. The byte is <FunctionJumpHigh>, which
+    ;; Microsoft's source names OLDOV here too.
     UnshiftedExtension = FunctionJumpHigh
 
     ;; Shifts the smaller operand right through <Float::ShiftRight> (eight bits or more), then joins

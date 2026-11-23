@@ -851,14 +851,16 @@ Decisions and how the table was applied:
     differences this way, inside the shared macros.
   - Lineage citations: a definition that descends through a vendor's builds cites every document of that line whose
     listing names it, not only its own build's. Within the PET line, checked against mist64/cbmsrc, that adds CBM4S79 to
-    the kernal and disk vectors and the RND timer in `Commodore.Equates.asm` (from the workspace step), K4S79 to TIL,
-    and HV1 and HV1R to BUFLEN and NUMLEV, and gives the jiffy clock and I/O status the BASIC documents' CTIMR and CSTAT
-    (the kernal's TIME and SATUS are in prose: the builds define both names themselves); the statement modules' and the
-    historical names' citations already followed it. BASIC 1's ZERO is a definition of its own in
-    `MsBasic.VariableLookup.asm` (M4), whose step will cite the line on it. The AppleSoft documents (ASTIL, AS82) are
-    not available here to check. One test rule would forbid a lineage-only alias: a Commodore alias without M6502 must
-    cite one of its own build's documents (`BasicAttribution.PetKeys`). No alias needs that yet; changing the rule is a
-    question for the owner.
+    the kernal vectors, to the three disk vectors the BASIC 4 documents name apart from BASIC's own routines, and to the
+    RND timer in `Commodore.Equates.asm` (from the workspace step); K4S79 to TIL; HV1 and HV1R's BUFLEN to BASIC 1's own
+    buffer length in `Basic1.asm`; and the BASIC documents' CTIMR and CSTAT to the jiffy clock and I/O status. The
+    kernal's TIME and SATUS are in prose, since the builds define both names themselves, and so is HV1 and HV1R's
+    NUMLEV, which writes BASIC 1's 54-byte stack reserve as 23 levels plus eight bytes where the build has 19 levels.
+    The statement modules' and the historical names' citations already followed the rule. BASIC 1's ZERO is a definition
+    of its own in `MsBasic.VariableLookup.asm` (M4), whose step will cite the line on it. The AppleSoft documents
+    (ASTIL, AS82) are not available here to check. One test rule would forbid a lineage-only alias: a Commodore alias
+    without M6502 must cite one of its own build's documents (`BasicAttribution.PetKeys`). No alias needs that yet;
+    changing the rule is a question for the owner.
 
 Checked: the full suite (3,914 passed, none failed; 665 skipped, the ROM-dump comparisons without the dumps), the rename
 gate, the lint tests, and `BasicStatementsConversionTests`, which compares every old name in the fifteen files and the

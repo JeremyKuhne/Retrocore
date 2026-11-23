@@ -349,6 +349,16 @@ internal static partial class BasicNames
     internal static bool IsVendorName(string name) =>
         s_vendor.GetOrAdd(Inputs, inputs => new(() => VendorNamesIn(inputs))).Value.Contains(name);
 
+    /// <summary>
+    ///  Gets whether a build includes a vendor's historical names file, as the whole AppleSoft and PET builds do and a
+    ///  standalone build of a shared module does not.
+    /// </summary>
+    /// <param name="result">The build.</param>
+    /// <returns><see langword="true"/> when one of the build's definitions is in a historical names file.</returns>
+    internal static bool IncludesHistoricalNames(AssemblyResult result) =>
+        result.SymbolDefinitions.Any(symbol =>
+            symbol.Location?.Path.EndsWith(".HistoricalNames.asm", StringComparison.OrdinalIgnoreCase) == true);
+
     // The vendor's names by inputs folder.
     private static readonly ConcurrentDictionary<string, Lazy<HashSet<string>>> s_vendor = new(StringComparer.Ordinal);
 

@@ -11,9 +11,9 @@ using Retrocore.Machines.Commodore;
 namespace Retrocore.Tests;
 
 /// <summary>
-///  Checks the shared program and statement modules as converted to the style guide (Basic.md, B1): they keep every
-///  old name they renamed, each reaching the value Microsoft's MACRO-10 build gives it, the vendors' own names for
-///  their definitions resolve only in their vendor's builds, and each cites documents in the bibliography.
+///  Checks the shared program and statement modules as converted to the style guide (Basic.md, B1): every old name
+///  they give that Microsoft's MACRO-10 build defines reaches that build's value, the vendors' own names for their
+///  definitions resolve only in their vendor's builds, and each cites documents in the bibliography.
 /// </summary>
 [TestClass]
 public sealed class BasicStatementsConversionTests

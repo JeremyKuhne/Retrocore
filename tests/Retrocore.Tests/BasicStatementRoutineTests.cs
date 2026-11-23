@@ -212,7 +212,8 @@ public sealed class BasicStatementRoutineTests
 
     /// <summary>
     ///  <c>FindStatementEnd</c> returns in Y the offset from <c>TextPointer</c> of the first colon outside quotes, or
-    ///  of the line's zero; <c>FindLineEnd</c> returns the zero's, past any colon.
+    ///  of the line's zero; <c>FindLineEnd</c> returns the zero's, past any colon. Both return the terminator in A, with
+    ///  zero and carry set.
     /// </summary>
     /// <param name="apple">Whether to run AppleSoft rather than PET BASIC 4.</param>
     /// <param name="routine">The routine.</param>
@@ -236,6 +237,9 @@ public sealed class BasicStatementRoutineTests
         machine.Call(routine, y: 0xFF);
 
         machine.Cpu.Registers.Y.Should().Be((byte)offset);
+        machine.Cpu.Registers.Accumulator.Should().Be((byte)text[offset], "A is the terminator");
+        machine.Cpu.Registers.Status.HasFlag(StatusRegister.Zero).Should().BeTrue();
+        machine.Cpu.Registers.Status.HasFlag(StatusRegister.Carry).Should().BeTrue();
         Word(machine, "TextPointer").Should().Be(Text, "the scan leaves the pointer for the caller to advance");
     }
 

@@ -341,17 +341,18 @@ internal sealed partial class DebugSession
             labels[address] = name;
         }
 
-        // Then the constants the CPU's instructions address memory through, such as the Monitor's CH, which name RAM
-        // rather than code, so they apply whatever is mapped there, while the code that uses them is in memory; a
-        // label at the same address comes first.
+        // Then the constants the CPU's instructions address memory through, such as the Monitor's CursorColumn, which
+        // name RAM rather than code, so they apply whatever is mapped there, while the code that uses them is in
+        // memory; a label at the same address comes first.
         if (!constants) { return (labels, labels); }
         SortedDictionary<int, string> names = [];
         foreach ((int address, string name) in labels) { names.Add(address, name); }
         foreach ((int address, string name, bool _) in SourceNames(bank, memory, SourceNameKinds.Constants, names.ContainsKey))
         {
             // A constant names what the CPU's instructions reach at its address, so in a bank's view it names the
-            // bank's byte only where the CPU reads the bank there now: the Monitor's BRKV is main RAM's $03F0, not
-            // auxiliary RAM's, unless the machine reads auxiliary RAM there. A coprocessor's space is its own CPU's view.
+            // bank's byte only where the CPU reads the bank there now: the Monitor's BreakVector is main RAM's $03F0,
+            // not auxiliary RAM's, unless the machine reads auxiliary RAM there. A coprocessor's space is its own CPU's
+            // view.
             if (bank is { InstructionSet: null } && !bank.ReadBy(Target, (ushort)address)) { continue; }
             names[address] = name;
         }

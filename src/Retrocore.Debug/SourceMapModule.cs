@@ -197,9 +197,9 @@ internal sealed partial class SourceMapModule : IDebugModule
         return false;
     }
 
-    // The constants an instruction addresses memory through, as STA CH or LDA (BASL),Y do: a constant the operand
-    // names whose value is the address the instruction's bytes encode, its memory operand or pointer, or on the 6809
-    // an indirect or PC-relative postbyte's address. Matching the value leaves out an immediate value, an index's
+    // The constants an instruction addresses memory through, as STA CursorColumn or LDA (TextBase),Y do: a constant the
+    // operand names whose value is the address the instruction's bytes encode, its memory operand or pointer, or on the
+    // 6809 an indirect or PC-relative postbyte's address. Matching the value leaves out an immediate value, an index's
     // offset and a term added to another address, and picks the right one of names that differ only in case or scope.
     private static (string Name, long Value, IsaDescription Cpu, string? Path)[] AddressConstantsOf(
         AssemblyResult result,
@@ -236,9 +236,13 @@ internal sealed partial class SourceMapModule : IDebugModule
             }
         }
 
+        // A historical name's symbol is the definition's own, so code that uses both names finds it once.
+        Dictionary<string, AssemblySymbol> definitions = [with(StringComparer.Ordinal)];
+        foreach (AssemblySymbol symbol in result.SymbolDefinitions) { definitions.TryAdd(symbol.Name, symbol); }
         foreach ((string name, AssemblySymbol symbol) in result.HistoricalNames)
         {
-            if (Named(symbol, out _)) { Add(name, symbol); }
+            AssemblySymbol definition = definitions.GetValueOrDefault(symbol.Name, symbol);
+            if (Named(definition, out _)) { Add(name, definition); }
         }
 
         if (byName.Count == 0) { return []; }

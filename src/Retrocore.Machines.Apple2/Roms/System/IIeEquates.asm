@@ -2,7 +2,8 @@
 ;; APPLE IIE EQUATES: PAGE ZERO, LOW MEMORY, SOFT SWITCHES AND KEYS
 ;;
 ;; The IIe's page-zero locations, low-memory vectors and buffers, soft switches and I/O locations, and keyboard
-;; characters. The Monitor, both models' internal firmware, the Disk II boot ROM and DOS include this file, so each
+;; characters. The Monitor, both models' internal firmware, the Disk II boot ROM, DOS and the SDK's card and program
+;; sources include this file, so each
 ;; name here is defined and documented once, and each of those sources defines only the names that are its own. The
 ;; Monitor's entry points, which the Monitor defines as labels, are in MonitorEntries.asm for the others.
 ;;
@@ -18,10 +19,10 @@
 
 ;; The low byte of a pointer the Monitor borrows for short jobs.
 ;;
-;; <Monitor:Startup::PowerUp> points <SlotPointer>/<Monitor:LOC1> at each slot's $Cn00 page in turn while it looks
-;; for a disk controller, then jumps through them to the one it finds. <Monitor:SetHook> stores a hook through
-;; <SlotPointer>,X with X = <OutputHook> or <InputHook>, and the self-tests in the internal firmware use it as a
-;; working pointer.
+;; The Autostart and IIe Monitors' <Monitor:Startup::PowerUp> points <SlotPointer>/<Monitor:LOC1> at each slot's $Cn00
+;; page in turn while it looks for a disk controller, then jumps through them to the one it finds. <Monitor:SetHook>
+;; stores a hook through <SlotPointer>,X with X = <OutputHook> or <InputHook>, and the self-tests in the internal
+;; firmware use it as a working pointer.
 ;; See: <Monitor:LOC1>, <Monitor:Startup::PowerUp>, <Monitor:SetHook>
 ;; Also: LOC0 (A2RM78, A2RM79, IIEROM82, IIETRM85)
 SlotPointer = $00
@@ -38,8 +39,8 @@ WindowLeft = $20
 ;; The width of the text window in columns: 40, or 80 when the 80-column firmware is active.
 ;;
 ;; <Monitor:AdvanceCursor> starts a new line when <CursorColumn> reaches it, and <Monitor:Backspace> moves to the
-;; column before it on the line above. The internal firmware sets it when it sets the window (<Monitor:SetWindow>)
-;; or switches between 40 and 80 columns.
+;; column before it on the line above. <Monitor:SetWindow> sets it to 40 on the Apple II's Monitors; on the IIe,
+;; the internal firmware sets it there and when it switches between 40 and 80 columns.
 ;; See: <WindowLeft>, <CursorColumn>, <Monitor:SetWindow>
 ;; Also: WNDWDTH (A2RM78, A2RM79, IIEROM82, IIETRM85)
 WindowWidth = $21
@@ -57,8 +58,8 @@ WindowTop = $22
 ;; screen.
 ;;
 ;; The window's lines run from <WindowTop> up to, but not including, this one. <Monitor:LineFeed> scrolls the window
-;; instead of moving <Monitor:CV> to it. The internal firmware sets it to 24 when it sets the window
-;; (<Monitor:SetWindow>).
+;; instead of moving <Monitor:CV> to it. <Monitor:SetWindow> sets it to 24, through the internal firmware on the
+;; IIe.
 ;; See: <WindowTop>, <Monitor:CV>, <Monitor:LineFeed>, <Monitor:Scroll>
 ;; Also: WNDBTM (A2RM78, A2RM79, IIEROM82, IIETRM85)
 WindowBottom = $23
@@ -127,7 +128,7 @@ ScrollBaseHigh = $2B
 ;; The rightmost column of a horizontal lo-res line.
 ;;
 ;; <Monitor:LowRes::HorizontalLine> plots from the column in Y to <HorizontalLineEnd>. The disassembler's
-;; <Monitor:Disassembler::PrintInstruction::PadBytes> uses it while it unpacks a mnemonic.
+;; <Monitor:Disassembler::PrintInstruction> uses it while it unpacks a mnemonic.
 ;; See: <VerticalLineEnd>, <Monitor:LowRes::HorizontalLine>
 ;; Also: H2 (A2RM78, A2RM79, IIEROM82, IIETRM85)
 HorizontalLineEnd = $2C
@@ -136,7 +137,7 @@ HorizontalLineEnd = $2C
 ;;
 ;; <Monitor:LowRes::VerticalLine> plots from the row in A down to <VerticalLineEnd>, and <Monitor:LowRes::Clear> and
 ;; <Monitor:LowRes::ClearTop> set it to clear the screen. The disassembler's
-;; <Monitor:Disassembler::PrintInstruction::PadBytes> uses it while it unpacks a mnemonic.
+;; <Monitor:Disassembler::PrintInstruction> uses it while it unpacks a mnemonic.
 ;; See: <HorizontalLineEnd>, <Monitor:LowRes::VerticalLine>, <Monitor:LowRes::Clear>
 ;; Also: V2 (A2RM78, A2RM79, IIEROM82, IIETRM85)
 VerticalLineEnd = $2D
@@ -349,7 +350,8 @@ Address5 = $44
 ;; Also: A5H (A2RM78, A2RM79, IIEROM82, IIETRM85)
 Address5High = $45
 
-;; The accumulator, saved when the Monitor takes a BRK or IRQ or calls <Monitor:SaveRegisters>.
+;; The accumulator, saved by the Monitor's BRK and interrupt entries and by <Monitor:SaveRegisters>; on the Enhanced
+;; IIe, whose IRQ vector reaches the firmware, only for a BRK.
 ;;
 ;; <Monitor:Interrupt> and <Monitor:SaveRegisters> store A here and <Monitor:RestoreRegisters> reloads it. It is the
 ;; first of the five saved registers, ahead of <SavedX>, <SavedY>, <SavedStatus> and <SavedStackPointer>, which
@@ -392,8 +394,8 @@ SavedStackPointer = $49
 
 ;; The low byte of a count that runs while the firmware waits for a key, a seed for random numbers.
 ;;
-;; The keyboard input routines increment <RandomSeed>/<RandomSeedHigh> on every pass of their wait loop, so the count
-;; depends on how long the user takes to type. Programs read it to seed their random numbers.
+;; The keyboard input routines increment <RandomSeed> on every pass of their wait loop, and <RandomSeedHigh> when it
+;; wraps, so the count depends on how long the user takes to type. Programs read it to seed their random numbers.
 ;; See: <RandomSeedHigh>, <Monitor:KeyboardIn>
 ;; Also: RNDL (A2RM78, A2RM79, IIEROM82, IIETRM85)
 RandomSeed = $4E
@@ -417,7 +419,8 @@ InputBuffer = $0200
 
 ;; The address <Monitor:Break> jumps through once it has saved the registers: the BRK handler.
 ;;
-;; <Monitor:Startup::PowerUp> points it at <Monitor:ShowBreak>, which shows the registers and enters the Monitor; a
+;; The Autostart and IIe Monitors' <Monitor:Startup::PowerUp> points it at <Monitor:ShowBreak>, which shows the
+;; registers and enters the Monitor; a
 ;; program can point it at a handler of its own. The Apple II Monitor has no such vector.
 ;; See: <Monitor:Break>, <Monitor:ShowBreak>, <Monitor:Startup::PowerUp>
 ;; Also: BRKV (A2RM79, IIEROM82, IIETRM85)
@@ -425,7 +428,8 @@ BreakVector = $03F0
 
 ;; The soft entry: the address a reset jumps through once <SoftEntryCheck> shows it is valid.
 ;;
-;; <Monitor:Startup::Reset> jumps through it when <SoftEntryCheck> matches its high byte, and otherwise powers up.
+;; The Autostart and IIe Monitors' <Monitor:Startup::Reset> jumps through it when <SoftEntryCheck> matches its high
+;; byte, and otherwise powers up; the Apple II Monitor has no soft entry.
 ;; <Monitor:Startup::PowerUp> points it at <Monitor:BasicColdStart>, and the first reset after that at
 ;; <Monitor:BasicWarmStart>, so later resets keep the program.
 ;; See: <SoftEntryCheck>, <Monitor:Startup::Reset>, <Monitor:ValidateSoftEntry>
@@ -435,7 +439,7 @@ SoftEntryVector = $03F2
 ;; The byte that shows <SoftEntryVector> is valid: its high byte exclusive-ored with $A5.
 ;;
 ;; <Monitor:ValidateSoftEntry> sets it for the vector's current value, so a program that changes the vector calls it.
-;; A check byte that does not match makes <Monitor:Startup::Reset> power up instead.
+;; A check byte that does not match makes the Autostart and IIe Monitors' <Monitor:Startup::Reset> power up instead.
 ;; See: <SoftEntryVector>, <Monitor:ValidateSoftEntry>, <Monitor:Startup::Reset>
 ;; Also: PWREDUP (A2RM79, IIEROM82, IIETRM85)
 SoftEntryCheck = $03F4
@@ -457,7 +461,8 @@ NmiJump = $03FB
 ;; The address the Monitor's interrupt handler jumps through for an IRQ that is not a BRK.
 ;;
 ;; <Monitor:Interrupt> sends a BRK to <Monitor:Break> and any other IRQ through this vector. On the Enhanced IIe,
-;; the firmware's interrupt code goes through <Monitor:CallUserIrq> to it.
+;; whose IRQ vector reaches the firmware instead, the firmware's interrupt code goes through <Monitor:CallUserIrq> to
+;; it.
 ;; See: <Monitor:Interrupt>, <Monitor:CallUserIrq>, <BreakVector>
 ;; Also: IRQLOC (A2RM78, A2RM79, IIEROM82)
 UserIrqVector = $03FE
@@ -468,9 +473,10 @@ TextPage1 = $0400
 
 ;; The $Cn of the slot whose $C800 expansion ROM is selected, in a screen hole of text page one.
 ;;
-;; <Monitor:Startup::PowerUp> stores each slot's $Cn here as it tries it. On the Enhanced IIe, the interrupt code
-;; (<Monitor:SelectInterruptRom>) selects that slot's ROM again after the user's handler, and
-;; <Monitor:Escape::ReadKeyAllowEscape> clears bit 7 to tell the 80-column firmware to take escape sequences.
+;; The Autostart and IIe Monitors' <Monitor:Startup::PowerUp> stores each slot's $Cn here as it tries it. On the
+;; Enhanced IIe, the interrupt code (<Monitor:SelectInterruptRom>) selects that slot's ROM again after the user's
+;; handler, and <Monitor:Escape::ReadKeyAllowEscape> clears bit 7 to tell the 80-column firmware to take escape
+;; sequences.
 ;; See: <Monitor:Startup::PowerUp>, <Monitor:SelectInterruptRom>
 ;; Also: MSLOT (A2RM79, IIEROM82, IIETRM85)
 ExpansionRomSlot = $07F8
@@ -480,7 +486,8 @@ ExpansionRomSlot = $07F8
 ;; The keyboard: bit 7 is set when a key has been typed, and bits 0-6 are its code.
 ;;
 ;; The key stays here, bit 7 set, until a program clears the strobe by touching <KeyboardStrobe>.
-;; <Monitor:KeyboardIn> waits on it, and <Monitor:ScreenOutPausing> looks here for Control-S. Writing the same address
+;; <Monitor:KeyboardIn> waits on it, and, but on the Apple II Monitor, <Monitor:ScreenOutPausing> looks here for
+;; Control-S. Writing the same address
 ;; turns 80STORE off (<Store80Off>). Apple's IOADR names it as the start of the I/O area.
 ;; See: <KeyboardStrobe>, <Monitor:KeyboardIn>, <Store80Off>
 ;; Also: KBD (A2RM78, A2RM79, IIEROM82, IIETRM85), IOADR (A2RM78, A2RM79, IIEROM82, IIETRM85)
@@ -616,7 +623,8 @@ Columns80On = $C00D
 ;; Also: CLRALTCHAR (IIEROM82, IIETRM85)
 AlternateCharactersOff = $C00E
 
-;; Writing it turns ALTCHAR on: text shows the alternate character set, with inverse lowercase instead of flashing.
+;; Writing it turns ALTCHAR on: text shows the alternate character set, which has no flashing characters, with
+;; lowercase in both normal and inverse.
 ;;
 ;; On the Enhanced IIe, the alternate set also holds the MouseText symbols. The 80-column firmware turns it on when
 ;; it starts, and <AlternateCharactersOff> turns it off; <AlternateCharactersState> reports it.
@@ -628,7 +636,8 @@ AlternateCharactersOn = $C00F
 ;; is down.
 ;;
 ;; <Monitor:KeyboardIn> clears the strobe after it takes a key, so the next read of <Keyboard> waits for a new one.
-;; <Monitor:Startup::Reset>, <Monitor:ScreenOutPausing> and <Monitor:ScreenOutPausing::WaitForKey> clear it too.
+;; On all but the Apple II Monitor, <Monitor:Startup::Reset>, <Monitor:ScreenOutPausing> and
+;; <Monitor:ScreenOutPausing::WaitForKey> clear it too.
 ;; See: <Keyboard>, <Monitor:KeyboardIn>, <Monitor:ScreenOutPausing::WaitForKey>
 ;; Also: KBDSTRB (A2RM78, A2RM79, IIEROM82, IIETRM85)
 KeyboardStrobe = $C010
@@ -732,8 +741,8 @@ MixedState = $C01B
 ;; Reading it reports in bit 7 whether PAGE2 is on.
 ;;
 ;; <Page2Off> turns PAGE2 off and <Page2On> on. With 80STORE on, PAGE2 on means text page one is mapped to auxiliary
-;; memory rather than page two being displayed. The original IIe's interrupt return code reads it to put the page
-;; back.
+;; memory rather than page two being displayed. The original IIe's <Monitor:RestoreAfterFirmware> reads it to put
+;; the page back.
 ;; See: <Page2Off>, <Page2On>, <Store80State>
 ;; Also: RDPAGE2 (IIEROM82, IIETRM85)
 Page2State = $C01C
@@ -1012,7 +1021,7 @@ KEY_CONTROL_B = $82
 
 ;; Control-C: the Monitor's command that continues `BASIC` (<Monitor:Commands::ContinueBasic>).
 ;;
-;; It is also left in the keyboard when it ends a Control-S pause.
+;; It is also left in the keyboard when it ends a Control-S pause, on all but the Apple II Monitor.
 ;; Also: KEY_CTRL_C (UNKN)
 KEY_CONTROL_C = $83
 
@@ -1031,7 +1040,8 @@ KEY_BACKSPACE = $88
 ;; Also: KEY_LF (UNKN)
 KEY_LINE_FEED = $8A
 
-;; Control-K: the up arrow key, the Monitor's IN# command, and on output, clear to the end of the window.
+;; Control-K: the up arrow key, the Monitor's IN# command, and, in the 80-column firmware's output, clear to the end
+;; of the window.
 ;; Also: KEY_CTRL_K (UNKN)
 KEY_CONTROL_K = $8B
 
@@ -1043,7 +1053,7 @@ KEY_RETURN = $8D
 ;; Also: KEY_CTRL_P (UNKN)
 KEY_CONTROL_P = $90
 
-;; Control-S: pauses output at the next carriage return until a key is typed.
+;; Control-S: pauses output at the next carriage return until a key is typed, on all but the Apple II Monitor.
 ;; Also: KEY_CTRL_S (UNKN)
 KEY_CONTROL_S = $93
 

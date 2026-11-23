@@ -80,6 +80,31 @@ public sealed partial class DebugModuleTests
     }
 
     /// <summary>
+    ///  An equate an instruction accesses by one of its historical names, from its Also: section, is named by its own
+    ///  name, and once when code uses both names.
+    /// </summary>
+    [TestMethod]
+    public void AddressConstantsFollowHistoricalNames()
+    {
+        Dictionary<string, long> named = AddressConstants("""
+            ;; The keyboard.
+            ;; Also: KBD (UNKN)
+            Keyboard = $C000
+            ;; The cursor's column.
+            ;; Also: CH (UNKN)
+            CursorColumn = $24
+            start:
+              lda KBD
+              sta Keyboard
+              sta CH
+              rts
+
+            """);
+
+        named.Should().BeEquivalentTo(new Dictionary<string, long> { ["Keyboard"] = 0xC000, ["CursorColumn"] = 0x24 });
+    }
+
+    /// <summary>
     ///  An equate both CPUs of a module access is named for each.
     /// </summary>
     [TestMethod]

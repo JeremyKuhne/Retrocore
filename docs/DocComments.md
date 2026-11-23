@@ -275,8 +275,10 @@ CharacterOut = $FDED
   - **Never expanded:** the old name reaches nothing, and there is no diagnostic: the build has no definition, as
     for one in a branch it leaves out, and a build that expands the macro checks it.
   - **A name that differs in each expansion** gets no old name: one a parameter gives (`name:` in
-    `.macro Entry name`), a `.local` name, or a cheap local (`@loop`). The lint reports an
-    `also` error on it.
+    `.macro Entry name`), a `.local` name, or a cheap local (`@loop`). Nor does a `.set` variable in a macro's
+    body, which has a version for each assignment. The lint reports an `also` error on each.
+  - A definition outside the macro that shares the name keeps its own old names, whatever the macro's
+    expansions.
   - Only a native `.macro` counts; an `Also:` in a ca65, Merlin or MACRO-10 macro's body reaches nothing.
 - **Members:** a member's old name reaches the qualified member: `;; Also: IBCMD (DOS33)` above `COMMAND .byte`
   in `.struct Iob` makes `lda #IBCMD` assemble as `lda #Iob::COMMAND`, and `<IBCMD>` link to it. Two types may

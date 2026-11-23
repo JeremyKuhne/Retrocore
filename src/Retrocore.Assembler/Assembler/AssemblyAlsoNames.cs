@@ -14,7 +14,8 @@ namespace Retrocore.Assembler;
 ///  <para>
 ///   A definition in a macro's body is defined again by each expansion. Its old names reach it only when the build
 ///   expands it exactly once: the names of a line that two expansions define reach neither, and the lint reports
-///   them. A name local to each expansion, a parameter's or a <c>.local</c> one, is never given old names.
+///   them. A name local to each expansion, a parameter's or a <c>.local</c> one, and a <c>.set</c> variable in a
+///   macro's body are never given old names.
 ///  </para>
 /// </remarks>
 internal sealed class AssemblyAlsoNames
@@ -45,8 +46,11 @@ internal sealed class AssemblyAlsoNames
                 // A scope has no address of its own: its line is lowered to a hidden start label, which an old name
                 // must not reach. A named type is a scope too.
                 bool scope = comment.Kind is DocumentationKind.Scope or DocumentationKind.Struct or DocumentationKind.Enum;
-                // A name that differs in each expansion of a macro has nothing one old name could reach.
-                bool varies = comment.NamedByParameter || comment.LocalToExpansion;
+
+                // A name that differs in each expansion of a macro has nothing one old name could reach, nor has a
+                // .set variable there, whose versions the documentation can't count as the assembler does.
+                bool variable = comment.Macro is not null && comment.Kind == DocumentationKind.Variable;
+                bool varies = comment.NamedByParameter || comment.LocalToExpansion || variable;
                 if (comment.Keyword is not null || scope || varies) { continue; }
                 string[] also = [.. DocumentationAlso.Of(comment.Sections).Select(item => item.Name)];
                 if (also.Length == 0) { continue; }

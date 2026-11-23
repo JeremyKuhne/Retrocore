@@ -173,40 +173,44 @@ public sealed partial class DocumentationResolver
             CheckSection(topic, section, Section, (message, line) => Warn(DocumentationRules.Also, message, line));
         }
 
-        if (topic.Section("Also") is { } also && ExpandedAlso(topic) is { } expanded)
+        foreach (DocumentationComment comment in topic.Comments)
         {
-            diagnostics.Add(new(expanded, topic.Path, also.Line, DocumentationSeverity.Error, DocumentationRules.Also));
+            if (comment.Section("Also") is { } also && ExpandedAlso(topic, comment) is { } expanded)
+            {
+                diagnostics.Add(new(expanded, topic.Path, also.Line, DocumentationSeverity.Error, DocumentationRules.Also));
+            }
         }
     }
 
-    // Why the old names of a definition in a macro's body reach nothing, though the build expands the macro: each
-    // expansion names it after an argument, or makes its own local of it, or the build defines it more than once.
-    // Null when they reach it, or the build expands the macro nowhere, which another build that does checks.
-    private string? ExpandedAlso(DocumentationTopic topic)
+    // Why the old names a definition in a macro's body gives itself reach nothing, though the build expands the
+    // macro: each expansion names it after an argument, or makes its own local of it, a .set variable has a version
+    // for each assignment, or the build defines it more than once. Null when they reach it, outside a macro's body,
+    // or when the build expands the macro nowhere, which another build that does checks.
+    private string? ExpandedAlso(DocumentationTopic topic, DocumentationComment comment)
     {
-        foreach (DocumentationComment comment in topic.Comments)
+        if (comment.Macro is not { } macro) { return null; }
+        if (comment.NamedByParameter)
         {
-            if (comment.Macro is not { } macro) { continue; }
-            if (comment.NamedByParameter)
-            {
-                return $"Also: {topic.Name} is named by a parameter of the macro {macro}, so each expansion names it "
-                    + "after its argument and an old name can't reach it; give the old name in prose.";
-            }
-
-            if (comment.LocalToExpansion)
-            {
-                return $"Also: {topic.Name} is local to each expansion of the macro {macro}, so an old name can't "
-                    + "reach it; give the old name in prose.";
-            }
-
-            if (Current.Expansions(comment) is > 1 and int count)
-            {
-                return $"Also: the macro {macro} is expanded {count} times, so {topic.Name} is defined {count} times and "
-                    + "an old name can't reach one of them; give the old name in prose.";
-            }
+            return $"Also: {topic.Name} is named by a parameter of the macro {macro}, so each expansion names it "
+                + "after its argument and an old name can't reach it; give the old name in prose.";
         }
 
-        return null;
+        if (comment.LocalToExpansion)
+        {
+            return $"Also: {topic.Name} is local to each expansion of the macro {macro}, so an old name can't "
+                + "reach it; give the old name in prose.";
+        }
+
+        if (comment.Kind == DocumentationKind.Variable)
+        {
+            return $"Also: {topic.Name} is a .set variable in the macro {macro}, which each assignment gives a new "
+                + "version, so an old name can't reach it; give the old name in prose.";
+        }
+
+        return Current.Expansions(comment) is > 1 and int count
+            ? $"Also: the macro {macro} is expanded {count} times, so {topic.Name} is defined {count} times and "
+                + "an old name can't reach one of them; give the old name in prose."
+            : null;
     }
 
     private void CheckSection(
@@ -488,7 +492,7 @@ public sealed partial class DocumentationResolver
             {
                 warn($"Also: {also.Name} is also {sibling}, a member of the same type, which it would not mean.", section.Line);
             }
-            else if (Current.Reaches(topic) && Current.Topics.FirstOrDefault(other => !ReferenceEquals(other, topic)
+            else if (Current.AlsoOf(topic).Any(item => item.Name == also.Name) && Current.Topics.FirstOrDefault(other => !ReferenceEquals(other, topic)
                 && !OtherBuild(topic, other)
                 && !OtherBuilds(other)
                 && Current.Gives(other, also.Name, thisBuild: true)) is { } other)

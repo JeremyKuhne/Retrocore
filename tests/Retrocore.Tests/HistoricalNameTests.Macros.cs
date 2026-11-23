@@ -319,6 +319,67 @@ public sealed partial class HistoricalNameTests
         twice.TryResolve("COMBYTE", out _).Should().BeFalse();
     }
 
+    /// <summary>
+    ///  A definition outside a macro keeps its own old name when a macro's body defines one of the same name, which
+    ///  shares its topic: whether the build expands the macro never, once in a scope, or twice, the old name reaches
+    ///  the definition outside, the topic is that definition's, and the lint reports nothing about the macro.
+    /// </summary>
+    [TestMethod]
+    public void OldNamesOutsideAMacroKeepWorkingBesideOne()
+    {
+        const string Source = """
+            .macro Library
+            ;; A macro reader.
+            COMBYT:
+                rts
+            .endmacro
+            ;; Top-level reader.
+            ;; Also: COMBYTE (TEST)
+            COMBYT:
+                rts
+            ;; Reads through <COMBYTE>.
+            Echo:
+                jsr COMBYTE
+            """;
+
+        foreach (string expansions in (string[])["", ".scope A\n    Library\n.endscope\n", ".scope A\n    Library\n.endscope\n.scope B\n    Library\n.endscope\n"])
+        {
+            string text = $"{Source}\n{expansions}";
+            Assemble(text).HistoricalNames["COMBYTE"].Name.Should().Be("COMBYT");
+            DocumentationSet set = Set(text);
+            DocumentationTopic topic = set.FindAlso("COMBYTE", thisBuild: true).Should().ContainSingle().Subject;
+            set.SymbolOf(topic).Should().Be("COMBYT");
+            topic.Value.Should().Be(0x1000);
+            set.AlsoOf(topic).Select(also => also.Name).Should().Equal("COMBYTE");
+            Check(text).Should().BeEmpty();
+        }
+    }
+
+    /// <summary>
+    ///  A <c>.set</c> variable in a macro's body has no old name, as its versions differ by assignment: the assembler
+    ///  and the documentation resolve nothing, and the lint reports it.
+    /// </summary>
+    [TestMethod]
+    public void OldNamesOfVariablesInAMacroReachNothing()
+    {
+        const string Text = """
+            .macro Bump
+            ;; A counter.
+            ;; Also: OLD (TEST)
+            COUNT .set 1
+            .endmacro
+                Bump
+                .byte OLD
+            """;
+
+        Assemble(Text).Diagnostics.Should().ContainSingle().Which.Message.Should().Contain("OLD");
+        Set(Text).FindAlso("OLD").Should().BeEmpty();
+        Check(Text).Select(diagnostic => (diagnostic.Severity, diagnostic.Message)).Should().Equal((
+            DocumentationSeverity.Error,
+            "Also: COUNT is a .set variable in the macro Bump, which each assignment gives a new version, so an old "
+                + "name can't reach it; give the old name in prose."));
+    }
+
     private static List<DocumentationDiagnostic> Check(string text) =>
         new DocumentationResolver(Set(text)) { Bibliography = DocumentationBibliography.Parse(Bibliography) }.Check();
 }

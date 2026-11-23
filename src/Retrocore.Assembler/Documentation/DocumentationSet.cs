@@ -268,19 +268,23 @@ public sealed class DocumentationSet
     public DocumentationTopic? FindSymbol(string symbol)
     {
         if (Find(symbol) is { } topic) { return topic; }
-        if (_bySymbol is null)
+        Dictionary<string, DocumentationTopic>? bySymbol = _bySymbol;
+        if (bySymbol is null)
         {
-            _bySymbol = [with(StringComparer.Ordinal)];
+            // Built before it is published, as requests can ask from more than one thread.
+            bySymbol = [with(StringComparer.Ordinal)];
             foreach (DocumentationTopic candidate in _ordered)
             {
                 if (ExpandedName(candidate.Comments) is { } expanded && expanded != candidate.Name)
                 {
-                    _bySymbol[expanded] = candidate;
+                    bySymbol[expanded] = candidate;
                 }
             }
+
+            _bySymbol = bySymbol;
         }
 
-        return _bySymbol.TryGetValue(symbol, out topic) ? topic : null;
+        return bySymbol.TryGetValue(symbol, out topic) ? topic : null;
     }
 
     private Dictionary<string, DocumentationTopic>? _bySymbol;
@@ -320,31 +324,41 @@ public sealed class DocumentationSet
     /// <param name="thisBuild">Whether only its sections in this set's build count, as the assembler's do.</param>
     /// <returns>Whether it gives the name.</returns>
     public bool Gives(DocumentationTopic topic, string name, bool thisBuild = false) =>
-        Reaches(topic)
-            && DocumentationAlso.Of(topic.Sections.Where(section => !thisBuild || InBuild(topic, section)))
-                .Any(also => also.Name == name);
+        topic.Comments.All(comment => comment.Macro is null)
+            ? DocumentationAlso.Of(topic.Sections.Where(section => !thisBuild || InBuild(topic, section)))
+                .Any(also => also.Name == name)
+            : AlsoOf(topic).Any(also => also.Name == name);
 
     /// <summary>
-    ///  Gets the historical names a topic's <c>Also:</c> sections give it that reach it: none for a definition in a
-    ///  macro's body that this set's build doesn't expand exactly once.
+    ///  Gets the historical names a topic's <c>Also:</c> sections give it that reach it, as the assembler resolves
+    ///  them: in a macro's body, only the sections of definitions that <see cref="Reaches"/> says their names reach.
     /// </summary>
     /// <param name="topic">The topic.</param>
     /// <returns>The names, with the documents that give them.</returns>
     public IEnumerable<DocumentationAlso> AlsoOf(DocumentationTopic topic) =>
-        Reaches(topic) ? DocumentationAlso.Of(topic.Sections) : [];
+        topic.Comments.All(comment => comment.Macro is null)
+            ? DocumentationAlso.Of(topic.Sections)
+            : topic.Comments.Where(Reaches)
+                .SelectMany(comment => DocumentationAlso.Of(comment.Sections))
+                .GroupBy(also => also.Name, StringComparer.Ordinal)
+                .Select(group => group.First());
 
     /// <summary>
-    ///  Gets whether the historical names a topic's <c>Also:</c> sections give reach it, as the assembler resolves
-    ///  them.
+    ///  Gets whether the historical names a definition's own <c>Also:</c> section gives reach it, as the assembler
+    ///  resolves them.
     /// </summary>
-    /// <param name="topic">The topic.</param>
+    /// <param name="comment">The definition's comment.</param>
     /// <returns>
-    ///  False for a definition in a macro's body that this set's build doesn't expand exactly once, whose name a
-    ///  parameter or <c>.local</c> gives, or whose expansions are not known; otherwise true.
+    ///  For a definition in a macro's body, whether this set's build expands it exactly once and its name is the same
+    ///  in each expansion: not a parameter's, a <c>.local</c> or a cheap local, nor a <c>.set</c> variable, which
+    ///  has a version for each assignment. False when its expansions are not known. True outside a macro's body.
     /// </returns>
-    public bool Reaches(DocumentationTopic topic) =>
-        topic.Comments.All(comment => comment.Macro is null
-            || (!comment.NamedByParameter && !comment.LocalToExpansion && Expansions(comment) == 1));
+    public bool Reaches(DocumentationComment comment) =>
+        comment.Macro is null
+            || (!comment.NamedByParameter
+                && !comment.LocalToExpansion
+                && comment.Kind != DocumentationKind.Variable
+                && Expansions(comment) == 1);
 
     /// <summary>
     ///  Gets how many times this set's build defined a definition in a macro's body: once for each expansion.
@@ -365,14 +379,15 @@ public sealed class DocumentationSet
     /// <returns>The symbol's name.</returns>
     public string SymbolOf(DocumentationTopic topic) => ExpandedName(topic.Comments) ?? topic.Name;
 
-    // The name a macro body definition's only expansion gave it, or null.
+    // The name a macro body definition's only expansion gave it, or null; null too for a topic that also documents a
+    // definition outside a macro's body, which is the symbol of its own name.
     private string? ExpandedName(IEnumerable<DocumentationComment> comments)
     {
         if (_expansions is null) { return null; }
         string? found = null;
         foreach (DocumentationComment comment in comments)
         {
-            if (comment.Macro is null) { continue; }
+            if (comment.Macro is null) { return null; }
             (string, int) at = (System.IO.Path.GetFullPath(comment.Path), comment.TargetLine);
             if (!_expansions.TryGetValue(at, out List<string>? names)) { continue; }
             if (names.Count != 1 || (found is not null && found != names[0])) { return null; }
@@ -442,8 +457,8 @@ public sealed class DocumentationSet
                 // A scope or a named type has nothing for an old name to reach, as in the assembler, nor has a
                 // definition in a macro's body the build doesn't expand once.
                 bool scope = topic.Kind is DocumentationKind.Scope or DocumentationKind.Struct or DocumentationKind.Enum;
-                if (scope || !Reaches(topic)) { continue; }
-                foreach (DocumentationAlso item in DocumentationAlso.Of(topic.Sections))
+                if (scope) { continue; }
+                foreach (DocumentationAlso item in AlsoOf(topic))
                 {
                     if (!also.TryGetValue(item.Name, out List<DocumentationTopic>? topics))
                     {

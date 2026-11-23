@@ -161,7 +161,8 @@ needs files.
 | `Unknown instruction or unsupported addressing mode: X ...` | A label without its colon, a form the CPU lacks (`lda zp,y`), or a missing `.cpu`. |
 | `Operand is outside the byte range; use < or > for extraction.` | A 16-bit value in a byte; take `<` or `>` of it, in parentheses if it is a sum. |
 | `Missing expression operand.` | `Name .equ value`, a `.paramcount` outside a macro, or an empty operand. |
-| `Conditional requires a constant known at this point in source order.` | A label or later symbol in `.if` or a `.repeat` count. |
+| `Conditional requires a constant known at this point in source order.` | A label, a later or undefined symbol, or a procedure's size in `.if`. |
+| `.repeat count requires a constant known at this point in source order.` | A label, a later or undefined symbol, or a procedure's size as a `.repeat` count. |
 | `Use != for inequality ...` | `<>` from another assembler. |
 | `A character literal holds one character ...` | `'TEXT'` where a string needs `"TEXT"`. |
 | `Displacement is outside the signed 8-bit range.` | An `[IX+d]` displacement beyond -128 to 127. |

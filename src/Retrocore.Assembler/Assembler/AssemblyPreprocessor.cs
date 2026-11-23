@@ -568,7 +568,8 @@ internal sealed partial class AssemblyPreprocessor
             return false;
         }
 
-        if (!Constant(Substitute(args[0], substitutions, frame), original.Location, out long count)) { return false; }
+        string countText = Substitute(args[0], substitutions, frame);
+        if (!Constant(countText, original.Location, out long count, ".repeat count")) { return false; }
         if (count < 0 || count > _options.MaximumRepeatCount)
         {
             Error("Repeat count exceeds the configured limit.", original.Location);
@@ -755,7 +756,7 @@ internal sealed partial class AssemblyPreprocessor
         }
     }
 
-    private bool Constant(string text, AssemblyLocation location, out long value, string purpose = "Conditional")
+    private bool Constant(string text, AssemblyLocation location, out long value, string purpose)
     {
         value = 0;
 

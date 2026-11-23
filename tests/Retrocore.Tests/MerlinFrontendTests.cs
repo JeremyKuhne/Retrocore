@@ -292,6 +292,7 @@ public partial class MerlinFrontendTests
     [DataRow("        ASC 'unterminated", "Unterminated")]
     [DataRow("        ERR 1", "assertion")]
     [DataRow("        LUP 999999999\n        NOP\n        --^", "Repeat")]
+    [DataRow("        LUP Nope\n        NOP\n        --^", ".repeat count requires a constant")]
     public void InvalidMerlinSourceIsDiagnosed(string text, string message)
     {
         AssemblyResult result = new NativeAssembler().Assemble(

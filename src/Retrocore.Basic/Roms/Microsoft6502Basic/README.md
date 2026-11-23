@@ -67,7 +67,7 @@ The interpreter modules also retain each variant's original bytes:
 | `MsBasic.LineNumber.asm` | Shared decimal line-number parsing accepts values below 64000. |
 | `MsBasic.LineSearch.asm` | Shared linked-program search returns the matching line or insertion point. |
 | `MsBasic.MemoryAccess.asm` | `MEMORY_ACCESS_ADDRESS` selects negative-address rejection; `MEMORY_ACCESS_PEEK` independently selects address preservation, save order, ROM guarding and padding; `MEMORY_ACCESS_WAIT` takes the omitted-mask branch target. |
-| `MsBasic.MemoryManagement.asm` | `MEMORY_MANAGEMENT` takes the stack reserve: `$36` for AppleSoft and BASIC 1, `$3E` for BASIC 2/4. BASIC 1 calculates it as `2*NUMLEV+3*ADDPRC+13`; the macro asserts the required contiguous page-zero scratch layout. |
+| `MsBasic.MemoryManagement.asm` | `MEMORY_MANAGEMENT` takes the stack reserve: `$36` for AppleSoft and BASIC 1, `$3E` for BASIC 2/4. BASIC 1 calculates it as `2*STACK_LEVELS+3*ADDPRC+13`; the macro asserts the required contiguous page-zero scratch layout. |
 | `MsBasic.Next.asm` | AppleSoft and BASIC 1 count through the FOR frame; BASIC 2/4 calculate its offsets. The caller also supplies the platform's next-statement entry. |
 | `MsBasic.OperatorTable.asm` | AppleSoft uses `OPERATOR_TABLE 1, 1, OROP1`; PET uses `OPERATOR_TABLE 0, 0, ANDOP`. Power/negation and NOT precedences are independent. |
 | `MsBasic.ProgramTransfers.asm` | Shared RESTORE, STOP, CONT, RUN, GOSUB, GOTO and RETURN entries. The caller selects direct-mode detection, output suppression, the next-statement target, RETURN's FOR-pointer byte and optional POP handling independently. |
@@ -125,8 +125,8 @@ increment-before-comparison accepts values 0 through 8 and, through byte wraparo
 The [BASIC 1 root](../../../Retrocore.Machines.Commodore/Roms/Basic/Basic1.asm) gives each choice below an
 overridable `.ifndef` default. Supply symbols before including the root, or pass their values to the named
 macro parameters when composing another variant. Values are 0 or 1 unless stated otherwise. The existing
-workspace switches are documented in `Commodore.Equates.asm`; the root also uses `LOCAL_TRMPOS` for output
-and initialization and derives `GETSTK`'s reserve from `NUMLEV`. `RESET_STACK_POINTER`, `RANDOM_SEED_TAIL`
+workspace switches are documented in `Commodore.Equates.asm`; the root also uses `LOCAL_TERMINAL_POSITION` for output
+and initialization and derives `GETSTK`'s reserve from `STACK_LEVELS`. `RESET_STACK_POINTER`, `RANDOM_SEED_TAIL`
 and `PROBE_TEST_BYTE` are bytes; `NULL_INCREMENT_LIMIT` is 2 through 255.
 
 | Choice | BASIC 1 default | Macro parameter or effect |
@@ -142,7 +142,7 @@ and `PROBE_TEST_BYTE` are bytes; `NULL_INCREMENT_LIMIT` is 2 through 255.
 | `RUN_SET_ZERO` | 0 | `PROGRAM_RESET` `runSetsZero`: load zero after positioning the text pointer. |
 | `RESET_STACK_EARLY` | `1-REVISD` | `EXECUTION_RESET` `earlyStack`: store the return address before moving the stack pointer. |
 | `RESET_STACK_PADDING` | `REVISD` | `EXECUTION_RESET` `paddedReturn`: retain the revised reset's extra RTS and unused byte. |
-| `RESET_STACK_POINTER` | `<(STKEND-$101-2*RESET_STACK_EARLY)` | `EXECUTION_RESET` `stackTop`: byte loaded into the stack pointer. |
+| `RESET_STACK_POINTER` | `<(STACK_END-$101-2*RESET_STACK_EARLY)` | `EXECUTION_RESET` `stackTop`: byte loaded into the stack pointer. |
 | `LIST_GUARD_OFFSET` | 0 | `LIST_LINES` `guardOffset`: stop if a malformed line's index wraps. |
 | `STATEMENT_FETCH_NOP` | 0 | `COMMODORE_STATEMENT_FETCH` `spareByte`: insert the later NOP. |
 | `EARLY_SEPARATOR_CHECK` | 1 | `COMMODORE_STATEMENT_FETCH` `earlySeparators`: check separators before the link. |

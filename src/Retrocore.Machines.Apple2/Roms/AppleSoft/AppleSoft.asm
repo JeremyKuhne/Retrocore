@@ -27,15 +27,13 @@
 
 .cpu Mos6502
 
-; The build switches Microsoft named, renamed in the BASIC conversion (decision X15). A predefined old name would be
-; ignored rather than reaching its switch, so it is an error.
-.assert .not .defined(BUFPAG), "Predefine INPUT_BUFFER_PAGE, not BUFPAG."
-.assert .not .defined(BUFLEN), "Predefine INPUT_BUFFER_LENGTH, not BUFLEN."
-.assert .not .defined(NULCMD), "Predefine NULL_COMMAND, not NULCMD."
-.assert .not .defined(NUMLEV), "Predefine STACK_LEVELS, not NUMLEV."
-.assert .not .defined(STKEND), "Predefine STACK_END, not STKEND."
-.assert .not .defined(LOCAL_TRMPOS), "Predefine LOCAL_TERMINAL_POSITION, not LOCAL_TRMPOS."
-.assert .not .defined(VARTXT_IN_LINNUM), "Predefine VARIABLE_LIST_IN_LINE_NUMBER, not VARTXT_IN_LINNUM."
+; Microsoft's configuration values that AppleSoft fixes, renamed in the BASIC conversion (decision X15). A predefined
+; old name would shadow the old name the definition carries and change nothing, so it is an error.
+.assert .not .defined(BUFPAG), "AppleSoft fixes INPUT_BUFFER_PAGE; BUFPAG cannot be predefined."
+.assert .not .defined(BUFLEN), "AppleSoft fixes INPUT_BUFFER_LENGTH; BUFLEN cannot be predefined."
+.assert .not .defined(NULCMD), "AppleSoft fixes NULL_COMMAND; NULCMD cannot be predefined."
+.assert .not .defined(NUMLEV), "AppleSoft fixes STACK_LEVELS; NUMLEV cannot be predefined."
+.assert .not .defined(STKEND), "AppleSoft fixes STACK_END; STKEND cannot be predefined."
 
 .ifndef ENHNCD
 ENHNCD = 1                          ;; 1 for the enhanced IIe ROM

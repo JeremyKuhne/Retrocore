@@ -7,8 +7,8 @@
 
 .cpu Mos6502
 
-; The build switches Microsoft named, renamed in the BASIC conversion (decision X15). A predefined old name would be
-; ignored rather than reaching its switch, so it is an error.
+; The build switches the BASIC conversion renamed (decision X15). A switch predefined by its old name would be
+; ignored, since an .ifndef default is not reached through Also:, so it is an error.
 .assert .not .defined(BUFPAG), "Predefine INPUT_BUFFER_PAGE, not BUFPAG."
 .assert .not .defined(BUFLEN), "Predefine INPUT_BUFFER_LENGTH, not BUFLEN."
 .assert .not .defined(NULCMD), "Predefine NULL_COMMAND, not NULCMD."

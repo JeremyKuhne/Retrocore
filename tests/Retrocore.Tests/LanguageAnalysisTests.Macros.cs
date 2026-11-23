@@ -492,4 +492,72 @@ public sealed partial class LanguageAnalysisTests
             Directory.Delete(folder, recursive: true);
         }
     }
+
+    // A label documented in both branches of an .if, each giving its own old name: the build takes the second, so
+    // COMBYTE, which the SDK's AppleSoft also gives, is no old name of the label here.
+    private const string TwoBranchProbe = """
+        ; retrocore: style=strict
+        ;; A probe.
+
+        .cpu Mos6502
+        .org $0300
+
+        ;; The probe's model.
+        MODEL = 2
+
+        .if MODEL = 1
+        ;; Reads a byte.
+        ;; Also: COMBYTE (A2RM78)
+        Reader:
+            rts
+        .else
+        ;; Reads a byte.
+        ;; Also: PRBBYTE (A2RM78)
+        Reader:
+            rts
+        .endif
+
+        ;; Reads through the label's old name in this build.
+        Echo:
+            jsr PRBBYTE
+            rts
+
+        .ifdef COMBYTE
+        .endif
+        """;
+
+    /// <summary>
+    ///  A label documented in both branches of an <c>.if</c> takes precedence over an SDK module's spelling only for
+    ///  the name its build's branch gives: the other branch's name gets no hint naming the label.
+    /// </summary>
+    /// <returns>The test.</returns>
+    [TestMethod]
+    public async Task OldNamesOfTheOtherBranchDoNotHint()
+    {
+        string folder = Directory.CreateTempSubdirectory("retrocore-macros").FullName;
+        try
+        {
+            string text = TwoBranchProbe.ReplaceLineEndings("\n");
+            string probe = Directory.CreateDirectory(Path.Join(folder, "probe")).FullName;
+            string path = Path.GetFullPath(Path.Join(probe, "Probe.asm"));
+            File.WriteAllText(path, text);
+            File.WriteAllText(Path.Join(probe, "Bibliography.md"), MemberBibliography);
+            RecordingLanguageClient client = new();
+            LanguageWorkspace workspace = new(client);
+            workspace.Update(path, text);
+            DocumentUri uri = DocumentUri.FromFileSystemPath(path);
+
+            List<Diagnostic> published = await client.Wait(
+                uri,
+                diagnostics => diagnostics.Any(diagnostic => diagnostic.Message.StartsWith("PRBBYTE is a historical name", StringComparison.Ordinal)));
+
+            published.Should().NotContain(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error, "the probe assembles");
+            published.Should().Contain(diagnostic => diagnostic.Message == "PRBBYTE is a historical name of Reader.");
+            published.Should().NotContain(diagnostic => diagnostic.Message.StartsWith("COMBYTE is a historical name", StringComparison.Ordinal));
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
 }

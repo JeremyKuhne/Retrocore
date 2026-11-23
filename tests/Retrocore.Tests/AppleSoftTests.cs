@@ -18,8 +18,8 @@ public sealed class AppleSoftTests
 {
     private const int AppleSoftOffset = SdkModules.AppleSoftOrigin - 0xC000;
 
-    private static readonly string s_native = Path.Join(AppContext.BaseDirectory, "Inputs", "AppleSoft", "AppleSoft.asm");
-    private static readonly string s_overlay = Path.Join(AppContext.BaseDirectory, "Inputs", "AppleSoft", "applesoft.mac");
+    private static string NativePath => Path.Join(BasicNames.Inputs, "AppleSoft", "AppleSoft.asm");
+    private static string OverlayPath => Path.Join(BasicNames.Inputs, "AppleSoft", "applesoft.mac");
 
     /// <summary>
     ///  Both listings are byte-identical for each model, pinned by digest so no ROM is needed.
@@ -32,7 +32,7 @@ public sealed class AppleSoftTests
     [DataRow(Apple2Model.IIeEnhanced, "498D7571F6C6A920075084B84D497619DEF48F9D5A7160A964B3B512EE5214FC")]
     public void AppleSoftSourcesMatchTheModelsRom(Apple2Model model, string expectedHash)
     {
-        foreach (string source in new[] { s_native, s_overlay })
+        foreach (string source in new[] { NativePath, OverlayPath })
         {
             AssemblyResult result = SdkModules.AssembleAppleSoft(source, model);
 
@@ -48,7 +48,7 @@ public sealed class AppleSoftTests
     [TestMethod]
     public void MicrosoftSourceKeepsItsPinnedSha()
     {
-        string path = Path.GetFullPath(Path.Join(s_overlay, "..", "..", "Microsoft6502Basic", "m6502.asm"));
+        string path = Path.GetFullPath(Path.Join(OverlayPath, "..", "..", "Microsoft6502Basic", "m6502.asm"));
         string source = File.ReadAllText(path).Replace("\r\n", "\n", StringComparison.Ordinal);
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(source)))
             .Should().Be("F3EC99C91DEDB8EB3441DED866F45797BB3E03ED26567A253E24CECF23CD63AC");
@@ -64,20 +64,20 @@ public sealed class AppleSoftTests
     [DataRow(Apple2Model.IIeEnhanced)]
     public void NativeListingKeepsLegacyRomLabels(Apple2Model model)
     {
-        AssemblyResult native = SdkModules.AssembleAppleSoft(s_native, model);
-        AssemblyResult legacy = SdkModules.AssembleAppleSoft(s_overlay, model);
+        AssemblyResult native = SdkModules.AssembleAppleSoft(NativePath, model);
+        AssemblyResult legacy = SdkModules.AssembleAppleSoft(OverlayPath, model);
         var labels = legacy.SymbolDefinitions.Where(symbol =>
             !symbol.IsConstant && symbol.Value is >= SdkModules.AppleSoftOrigin and < 0xF800);
 
         foreach (var label in labels)
         {
-            native.Symbols.Should().ContainKey(label.Name);
-            native.Symbols[label.Name].Should().Be(label.Value, $"the legacy entry point {label.Name} must stay at its ROM address");
+            native.SymbolsWithHistoricalNames.Should().ContainKey(label.Name);
+            native.Symbol(label.Name).Should().Be(label.Value, $"the legacy entry point {label.Name} must stay at its ROM address");
         }
 
         foreach (string name in (string[])["REALIO", "INTPRC", "ADDPRC", "LNGERR", "TIME", "EXTIO", "DISKO"])
         {
-            native.Symbols[name].Should().Be(legacy.Symbols[name], $"{name} must match the Microsoft build");
+            native.Symbol(name).Should().Be(legacy.Symbol(name), $"{name} must match the Microsoft build");
         }
     }
 
@@ -87,7 +87,7 @@ public sealed class AppleSoftTests
     [TestMethod]
     public void StandaloneNativeBuildDefaultsToEnhancedIIe()
     {
-        string path = Path.GetFullPath(s_native);
+        string path = Path.GetFullPath(NativePath);
         AssemblyOptions options = new(ProcessorVariant.Mos6502, 0, 0x10000)
         {
             SourceResolver = new FileAssemblySourceResolver()
@@ -99,7 +99,7 @@ public sealed class AppleSoftTests
 
         standalone.Success.Should().BeTrue();
         SdkModules.AppleSoftImage(standalone).ToArray().Should().Equal(
-            SdkModules.AppleSoftImage(SdkModules.AssembleAppleSoft(s_overlay, Apple2Model.IIeEnhanced)).ToArray());
+            SdkModules.AppleSoftImage(SdkModules.AssembleAppleSoft(OverlayPath, Apple2Model.IIeEnhanced)).ToArray());
     }
 
     /// <summary>
@@ -108,7 +108,7 @@ public sealed class AppleSoftTests
     [TestMethod]
     public void AppleSoftSourceSelectionPreservesBuiltRoms()
     {
-        string inputs = Path.Join(AppContext.BaseDirectory, "Inputs");
+        string inputs = BasicNames.Inputs;
         foreach (Apple2Model model in (Apple2Model[])[Apple2Model.IIPlus, Apple2Model.IIeEnhanced])
         {
             Apple2Roms native = SdkModules.BuildRoms(model, inputs);
@@ -136,7 +136,7 @@ public sealed class AppleSoftTests
 
         Apple2Roms roms = Apple2Roms.LoadFromDirectory(model, directory);
         ReadOnlySpan<byte> expected = roms.System.Slice(AppleSoftOffset, SdkModules.AppleSoftSize);
-        ReadOnlySpan<byte> actual = SdkModules.AppleSoftImage(SdkModules.AssembleAppleSoft(s_native, model)).Span;
+        ReadOnlySpan<byte> actual = SdkModules.AppleSoftImage(SdkModules.AssembleAppleSoft(NativePath, model)).Span;
         int first = actual.CommonPrefixLength(expected);
         first.Should().Be(SdkModules.AppleSoftSize, $"the first difference is at ${SdkModules.AppleSoftOrigin + first:X4}");
     }
@@ -147,7 +147,7 @@ public sealed class AppleSoftTests
     [TestMethod]
     public void AppleSoftDebugsInNativeSource()
     {
-        string inputs = Path.Join(AppContext.BaseDirectory, "Inputs");
+        string inputs = BasicNames.Inputs;
         Apple2Bus bus = new(SdkModules.BuildRoms(Apple2Model.IIeEnhanced, inputs));
         DebugInfo debug = new();
         SdkModules.AddTo(debug, Apple2Model.IIeEnhanced, inputs);
@@ -196,7 +196,7 @@ public sealed class AppleSoftTests
     [TestMethod]
     public void AppleSoftMacro10SourceRemainsDebuggable()
     {
-        string inputs = Path.Join(AppContext.BaseDirectory, "Inputs");
+        string inputs = BasicNames.Inputs;
         Apple2Roms roms = SdkModules.BuildRoms(
             Apple2Model.IIeEnhanced,
             inputs,
@@ -208,7 +208,7 @@ public sealed class AppleSoftTests
 
         ushort gone = (ushort)debug.Resolve("GONE");
         DebugPosition? position = debug.Position(new Apple2TestMemory(bus), gone);
-        string microsoftSource = Path.GetFullPath(Path.Join(s_overlay, "..", "..", "Microsoft6502Basic", "m6502.asm"));
+        string microsoftSource = Path.GetFullPath(Path.Join(OverlayPath, "..", "..", "Microsoft6502Basic", "m6502.asm"));
         position.Should().NotBeNull();
         position?.Chain.Should().ContainSingle();
         position?.Chain[0].Path.Should().Be(microsoftSource);

@@ -19,7 +19,7 @@ public sealed class BasicTokenizerTests
     // A CSAVE tape's leader, sync byte, three header bytes and name.
     private const int BasicTapeHeader = 255 + 1 + 3 + 1;
 
-    private static readonly string s_inputs = Path.Join(AppContext.BaseDirectory, "Inputs");
+    private static string Inputs => BasicNames.Inputs;
 
     /// <summary>
     ///  The reserved word lists are the ROMs' own, in token order.
@@ -27,12 +27,12 @@ public sealed class BasicTokenizerTests
     [TestMethod]
     public void KeywordsMatchTheRoms()
     {
-        AssemblyResult appleSoft = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(s_inputs), Apple2Model.IIeEnhanced);
-        RomWords(appleSoft.Sections[0].Bytes.Span[(int)appleSoft.Symbols["RESLST"]..], lastLetterMarked: true)
+        AssemblyResult appleSoft = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(Inputs), Apple2Model.IIeEnhanced);
+        RomWords(appleSoft.Sections[0].Bytes.Span[(int)appleSoft.Symbol("RESLST")..], lastLetterMarked: true)
             .Should().Equal(BasicDialect.AppleSoft.Keywords);
 
-        AssemblyResult level2 = Trs80SdkModules.AssembleLevel2(Path.Join(s_inputs, "Trs80", "Level2.asm"), revision: 12);
-        RomWords(level2.Sections[0].Bytes.Span[(int)level2.Symbols["KEYWORDS"]..], lastLetterMarked: false)
+        AssemblyResult level2 = Trs80SdkModules.AssembleLevel2(Path.Join(Inputs, "Trs80", "Level2.asm"), revision: 12);
+        RomWords(level2.Sections[0].Bytes.Span[(int)level2.Symbol("KEYWORDS")..], lastLetterMarked: false)
             .Should().Equal(BasicDialect.Level2.Keywords);
     }
 
@@ -45,13 +45,13 @@ public sealed class BasicTokenizerTests
     {
         foreach (Apple2Model model in (Apple2Model[])[Apple2Model.IIe, Apple2Model.IIeEnhanced])
         {
-            AssemblyResult appleSoft = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(s_inputs), model);
-            appleSoft.Symbols.Should().ContainKeys("NEWSTT", "MAIN");
+            AssemblyResult appleSoft = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(Inputs), model);
+            appleSoft.SymbolsWithHistoricalNames.Should().ContainKeys("NEWSTT", "MAIN");
         }
 
         foreach (int revision in (int[])[12, 13])
         {
-            Trs80SdkModules.AssembleLevel2(Path.Join(s_inputs, "Trs80", "Level2.asm"), revision).Symbols
+            Trs80SdkModules.AssembleLevel2(Path.Join(Inputs, "Trs80", "Level2.asm"), revision).Symbols
                 .Should().ContainKeys("NEWSTT", "READY");
         }
     }
@@ -242,7 +242,7 @@ public sealed class BasicTokenizerTests
     [TestMethod]
     public void ColorBasicKeywordsMatchTheRoms()
     {
-        string roms = Path.Join(s_inputs, "Coco");
+        string roms = Path.Join(Inputs, "Coco");
         AssemblyResult color = CocoSdkModules.AssembleColorBasic(Path.Join(roms, "ColorBasic.asm"), 12);
         AssemblyResult extended = CocoSdkModules.AssembleExtendedBasic(Path.Join(roms, "ExtendedBasic.asm"), 11);
         AssemblyResult disk = CocoSdkModules.AssembleDiskBasic(Path.Join(roms, "DiskBasic.asm"), 11);
@@ -255,7 +255,7 @@ public sealed class BasicTokenizerTests
         static List<string> Table(AssemblyResult rom, string label, int count)
         {
             int origin = rom.Sections[0].Origin;
-            List<string> words = RomWords(rom.Sections[0].Bytes.Span[((int)rom.Symbols[label] - origin)..], lastLetterMarked: true);
+            List<string> words = RomWords(rom.Sections[0].Bytes.Span[((int)rom.Symbol(label) - origin)..], lastLetterMarked: true);
             return words[..count];
         }
     }

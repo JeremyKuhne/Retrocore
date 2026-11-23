@@ -40,8 +40,8 @@ public sealed class BasicSharedVariableLookupTests
     private const int Pet2 = 2;
     private const int Pet4 = 4;
     private const int TextAddress = 0x3000;
-    private static readonly string s_inputs = Path.Join(AppContext.BaseDirectory, "Inputs");
-    private static readonly string s_shared = Path.Join(s_inputs, "Microsoft6502Basic");
+    private static string Inputs => BasicNames.Inputs;
+    private static string SharedInputs => Path.Join(Inputs, "Microsoft6502Basic");
 
     /// <summary>
     ///  The complete AppleSoft image, all labels and the extracted span retain their legacy values.
@@ -54,9 +54,9 @@ public sealed class BasicSharedVariableLookupTests
     public void AppleSoftUsesSharedVariableLookup(Apple2Model model)
     {
         AssemblyResult legacy = SdkModules.AssembleAppleSoft(
-            SdkModules.AppleSoftPath(s_inputs, BasicSourceKind.Macro10), model);
+            SdkModules.AppleSoftPath(Inputs, BasicSourceKind.Macro10), model);
 
-        AssemblyResult native = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(s_inputs), model);
+        AssemblyResult native = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(Inputs), model);
         LookupFeatures features = Settings(Apple, model == Apple2Model.IIeEnhanced ? 0xC4 : 0);
         AssemblyResult standalone = AssembleRegion(legacy, features);
 
@@ -66,14 +66,14 @@ public sealed class BasicSharedVariableLookupTests
         AssertEmittedSpan(legacy, standalone);
         byte[] vectors =
         [
-            0x4C, (byte)legacy.Symbols["INIT"], (byte)(legacy.Symbols["INIT"] >> 8),
-            0x4C, (byte)legacy.Symbols["MAIN"], (byte)(legacy.Symbols["MAIN"] >> 8),
+            0x4C, (byte)legacy.Symbol("INIT"), (byte)(legacy.Symbol("INIT") >> 8),
+            0x4C, (byte)legacy.Symbol("MAIN"), (byte)(legacy.Symbol("MAIN") >> 8),
             (byte)features.VectorByte
         ];
 
         native.Sections[0].Bytes.Slice(0xE000, vectors.Length).ToArray().Should().Equal(vectors);
-        native.Symbols["PTRGT4"].Should().Be(0xE007);
-        native.SymbolDefinitions.Single(symbol => symbol.Name == "PTRGET").Location?.Path
+        native.Symbol("PTRGT4").Should().Be(0xE007);
+        native.Definition("PTRGET").Location?.Path
             .Should().EndWith("MsBasic.VariableLookup.asm");
     }
 
@@ -90,7 +90,7 @@ public sealed class BasicSharedVariableLookupTests
     [DataRow(PetModel.Pet4032, true)]
     public void SharedVariableLookupMatchesPet(PetModel model, bool original)
     {
-        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(s_inputs, "Pet"), model, original);
+        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(Inputs, "Pet"), model, original);
         int variant = model == PetModel.Pet2001 ? Pet1 : model == PetModel.Pet2001Basic2 ? Pet2 : Pet4;
         AssemblyResult native = AssembleRegion(legacy, Settings(variant));
         CompareRegion(legacy, native);
@@ -98,22 +98,22 @@ public sealed class BasicSharedVariableLookupTests
         AssemblyResult withWorkspace = AssembleRegion(legacy, Settings(variant), nativePet: variant);
         CompareRegion(legacy, withWorkspace);
         AssertEmittedSpan(legacy, withWorkspace);
-        withWorkspace.SymbolDefinitions.Single(symbol => symbol.Name == "VARNAM").Location?.Path
+        withWorkspace.Definition("VARNAM").Location?.Path
             .Should().EndWith("Commodore.Equates.asm");
 
         if (variant == Pet1)
         {
-            native.Symbols["ZERO"].Should().Be(native.Symbols["LDZR"] + 5);
+            native.Symbol("ZERO").Should().Be(native.Symbol("LDZR") + 5);
         }
         else
         {
-            native.Symbols["ZERO"].Should().Be(legacy.Symbols["FHALF"] + 2);
+            native.Symbol("ZERO").Should().Be(legacy.Symbol("FHALF") + 2);
         }
 
         SourceMapModule module = new(native, area: null);
         if (variant == Pet1)
         {
-            DocumentationTopic topic = module.Documentation.Find("ZERO")
+            DocumentationTopic topic = module.Documentation.FindTopic("ZERO")
                 ?? throw new AssertFailedException("BASIC 1's inline zero is not documented.");
 
             topic.Kind.Should().Be(DocumentationKind.Table);
@@ -121,7 +121,7 @@ public sealed class BasicSharedVariableLookupTests
 
         if (variant == Pet4)
         {
-            DocumentationTopic topic = module.Documentation.Find("ARYVA2")
+            DocumentationTopic topic = module.Documentation.FindTopic("ARYVA2")
                 ?? throw new AssertFailedException("The linked-array fixup is not documented.");
 
             topic.Kind.Should().Be(DocumentationKind.Routine);
@@ -147,7 +147,7 @@ public sealed class BasicSharedVariableLookupTests
     public void SharedEntriesRetainDocumentationAndEditorSourceChains()
     {
         AssemblyResult native = SdkModules.AssembleAppleSoft(
-            SdkModules.AppleSoftPath(s_inputs), Apple2Model.IIeEnhanced);
+            SdkModules.AppleSoftPath(Inputs), Apple2Model.IIeEnhanced);
 
         int start = Address(native, "PTRGET");
         int end = Address(native, "ISARY");
@@ -156,13 +156,13 @@ public sealed class BasicSharedVariableLookupTests
         SourceMapModule module = new(native, area: null);
         foreach (string name in (string[])["PTRGET", "NOTFNS", "LDZR", "VAROK", "FINPTR", "FMAPTR", "FMAPT1", "QINTG1"])
         {
-            DocumentationTopic topic = module.Documentation.Find(name)
+            DocumentationTopic topic = module.Documentation.FindTopic(name)
                 ?? throw new AssertFailedException($"{name} is not documented.");
 
             topic.Kind.Should().Be(DocumentationKind.Routine);
             topic.Path.Should().EndWith("MsBasic.VariableLookup.asm");
             topic.Summary.Should().NotBeNullOrWhiteSpace();
-            ushort address = checked((ushort)native.Symbols[name]);
+            ushort address = checked((ushort)native.Symbol(name));
             DebugPosition position = module.Position(memory, address)
                 ?? throw new AssertFailedException($"{name} has no debugger source position.");
 
@@ -172,10 +172,10 @@ public sealed class BasicSharedVariableLookupTests
             module.Entries(position.Chain[0].Path, position.Chain[0].Line).Should().Contain(address);
             string macroEntry = name == "PTRGET" ? "PTRGET" : name == "QINTG1" ? "QINTG1" : "NOTFNS";
             module.Entries(position.Chain[1].Path, position.Chain[1].Line)
-                .Should().Contain(checked((ushort)native.Symbols[macroEntry]));
+                .Should().Contain(checked((ushort)native.Symbol(macroEntry)));
         }
 
-        SourceAnalysis analysis = SourceAnalysis.Assemble(Path.Join(s_inputs, "AppleSoft", "AppleSoft.asm"), _ => null);
+        SourceAnalysis analysis = SourceAnalysis.Assemble(Path.Join(Inputs, "AppleSoft", "AppleSoft.asm"), _ => null);
         DocumentationResolver resolver = new(
             analysis.Documentation,
             isDirective: name => DirectiveDocs.Describe(name) is not null,
@@ -302,7 +302,7 @@ public sealed class BasicSharedVariableLookupTests
 
             ushort returned = ReturnFor(legacy);
             Processor<RecordingBus> cpu = Start(bus, Address(legacy, "PTRGET"), returned - 1);
-            ushort syntax = checked((ushort)legacy.Symbols["SNERR"]);
+            ushort syntax = checked((ushort)legacy.Symbol("SNERR"));
             StepUntil(cpu, 5000, returned, syntax);
             bool rejected = variant != Apple || flag == 0x80;
             cpu.Registers.ProgramCounter.Should().Be(rejected ? syntax : returned);
@@ -352,7 +352,7 @@ public sealed class BasicSharedVariableLookupTests
             ((byte[])[first, second, 7, 0, 1, 0, 1]).CopyTo(bus.Memory, 0x5000);
             WriteWord(bus.Memory, Address(legacy, "STREND"), 0x5007);
             ushort returned = ReturnFor(legacy);
-            ushort syntax = checked((ushort)legacy.Symbols["SNERR"]);
+            ushort syntax = checked((ushort)legacy.Symbol("SNERR"));
             Processor<RecordingBus> cpu = Start(bus, Address(native, "PTRGET"), returned - 1);
             StepUntil(cpu, 5000, returned, syntax);
             bool rejected = integerName && rejectAnyFlag;
@@ -394,7 +394,7 @@ public sealed class BasicSharedVariableLookupTests
             }
 
             ushort returned = ReturnFor(legacy);
-            ushort error = checked((ushort)legacy.Symbols["ERROR"]);
+            ushort error = checked((ushort)legacy.Symbol("ERROR"));
             Processor<RecordingBus> cpu = Start(bus, Address(legacy, "PTRGET"), returned - 1);
             StepUntil(cpu, 5000, returned, error);
             cpu.Registers.ProgramCounter.Should().Be(exists ? returned : error);
@@ -404,7 +404,7 @@ public sealed class BasicSharedVariableLookupTests
             }
             else
             {
-                cpu.Registers.X.Should().Be((byte)legacy.Symbols["ERROD"]);
+                cpu.Registers.X.Should().Be((byte)legacy.Symbol("ERROD"));
             }
 
             ReadWord(bus.Memory, Address(legacy, "ARYTAB")).Should().Be(0x5000);
@@ -475,7 +475,7 @@ public sealed class BasicSharedVariableLookupTests
 
             ushort returned = ReturnFor(legacy);
             Processor<RecordingBus> cpu = Start(bus, Address(legacy, "PTRGET"), returned - 1);
-            StepUntil(cpu, 10000, returned, checked((ushort)legacy.Symbols["ERROR"]));
+            StepUntil(cpu, 10000, returned, checked((ushort)legacy.Symbol("ERROR")));
             cpu.Registers.ProgramCounter.Should().Be(returned);
             ReadWord(bus.Memory, Address(legacy, "ARYTAB")).Should().Be(0x40FF);
             ReadWord(bus.Memory, Address(legacy, "STREND")).Should().Be(0x40FF + arrays.Length);
@@ -504,7 +504,7 @@ public sealed class BasicSharedVariableLookupTests
                 RecordingBus bus = CreateBus(legacy, native, useShared);
                 PrepareText(bus, legacy, name);
                 ushort returned = ReturnFor(legacy);
-                ushort syntax = checked((ushort)legacy.Symbols["SNERR"]);
+                ushort syntax = checked((ushort)legacy.Symbol("SNERR"));
                 Processor<RecordingBus> cpu = Start(bus, Address(source, "PTRGET"), returned - 1);
                 StepUntil(cpu, 5000, returned, syntax);
                 string significant = name[..2];
@@ -545,10 +545,10 @@ public sealed class BasicSharedVariableLookupTests
         if (!samePage) { stackedReturn ^= 0x0100; }
         ushort returned = (ushort)((stackedReturn + 1) & 0xFFFF);
         Processor<RecordingBus> cpu = Start(bus, Address(source, "NOTFNS"), stackedReturn);
-        StepUntil(cpu, 5000, returned, checked((ushort)legacy.Symbols["SNERR"]));
+        StepUntil(cpu, 5000, returned, checked((ushort)legacy.Symbol("SNERR")));
         cpu.Registers.ProgramCounter.Should().Be(returned);
         bool zero = samePage || !checkHigh;
-        string zeroName = source.Symbols.ContainsKey("SIMZER") ? "SIMZER" : "ZERO";
+        string zeroName = source.HasSymbol("SIMZER") ? "SIMZER" : "ZERO";
         int expected = zero ? Address(source, zeroName) : 0x5002;
         (cpu.Registers.Accumulator | (cpu.Registers.Y << 8)).Should().Be(expected);
         ReadWord(bus.Memory, Address(legacy, "ARYTAB")).Should().Be(zero ? 0x5000 : 0x5007);
@@ -563,10 +563,10 @@ public sealed class BasicSharedVariableLookupTests
     private static AssemblyResult Legacy(int variant, bool original = false) => variant switch
     {
         Apple => SdkModules.AssembleAppleSoft(
-            SdkModules.AppleSoftPath(s_inputs, BasicSourceKind.Macro10), Apple2Model.IIeEnhanced),
-        Pet1 => PetLegacyBasic.Assemble(Path.Join(s_inputs, "Pet"), PetModel.Pet2001, original),
-        Pet2 => PetLegacyBasic.Assemble(Path.Join(s_inputs, "Pet"), PetModel.Pet2001Basic2),
-        Pet4 => PetLegacyBasic.Assemble(Path.Join(s_inputs, "Pet"), PetModel.Pet4032, original),
+            SdkModules.AppleSoftPath(Inputs, BasicSourceKind.Macro10), Apple2Model.IIeEnhanced),
+        Pet1 => PetLegacyBasic.Assemble(Path.Join(Inputs, "Pet"), PetModel.Pet2001, original),
+        Pet2 => PetLegacyBasic.Assemble(Path.Join(Inputs, "Pet"), PetModel.Pet2001Basic2),
+        Pet4 => PetLegacyBasic.Assemble(Path.Join(Inputs, "Pet"), PetModel.Pet4032, original),
         _ => throw new ArgumentOutOfRangeException(nameof(variant))
     };
 
@@ -607,7 +607,7 @@ public sealed class BasicSharedVariableLookupTests
             .include "MsBasic.VariableLookup.asm"
             .include "MsBasic.CharacterReader.asm"
             .include "MsBasic.IntegerConversion.asm"
-            .org ${legacy.Symbols["PTRGET"]:X4}
+            .org ${legacy.Symbol("PTRGET"):X4}
                 VARIABLE_NAME {Flag(features.FixedVectors)}, ${features.VectorByte:X2}, {Flag(features.RejectAnyFlag)}, {Flag(features.ExistingArrays)}, {Flag(features.ClearWithY)}, {Flag(features.LongFound)}
                 LETTER_TEST
                 SIMPLE_VARIABLE_LOOKUP {Flag(features.CheckCallerHigh)}, {Flag(features.InlineZero)}, {Flag(features.UseSimzer)}, {Flag(features.ClockNames)}, {Flag(features.StatusName)}, {Flag(features.DiskNames)}, {Flag(features.LinkedArrays)}, {Flag(features.ArrayEntryAlias)}
@@ -625,7 +625,7 @@ public sealed class BasicSharedVariableLookupTests
         ];
 
         Dictionary<string, long> symbols = dependencies.ToDictionary(
-            name => name, name => legacy.Symbols[name], StringComparer.Ordinal);
+            name => name, name => legacy.Symbol(name), StringComparer.Ordinal);
 
         if (nativePet is { } variant)
         {
@@ -656,20 +656,20 @@ public sealed class BasicSharedVariableLookupTests
             symbols.Add("EXTENDED_DISK_VECTORS", Flag(disk));
         }
 
-        if (features.ExistingArrays) { symbols.Add("INDLO1", legacy.Symbols["INDLO1"]); }
+        if (features.ExistingArrays) { symbols.Add("INDLO1", legacy.Symbol("INDLO1")); }
         if (!features.InlineZero)
         {
             string name = features.UseSimzer ? "SIMZER" : "ZERO";
-            symbols.Add(name, externalZero ?? legacy.Symbols[name]);
+            symbols.Add(name, externalZero ?? legacy.Symbol(name));
         }
 
         AssemblyResult native = new Assembler.Assembler().Assemble(
-            new AssemblySource(source, Path.Join(s_shared, "VariableLookupTest.asm")),
+            new AssemblySource(source, Path.Join(SharedInputs, "VariableLookupTest.asm")),
             new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
             {
                 SourceResolver = new FileAssemblySourceResolver(),
-                IncludePaths = [Path.Join(s_inputs, "Pet", "Basic")],
-                PredefinedSymbols = symbols
+                IncludePaths = [Path.Join(Inputs, "Pet", "Basic")],
+                PredefinedSymbols = BasicNames.WithCurrentNames(symbols)
             });
 
         native.Success.Should().BeTrue(string.Join(Environment.NewLine, native.Diagnostics.Select(diagnostic =>
@@ -685,9 +685,9 @@ public sealed class BasicSharedVariableLookupTests
         foreach (AssemblySymbol label in legacy.SymbolDefinitions.Where(
             symbol => !symbol.IsConstant && symbol.Value >= start && symbol.Value < end))
         {
-            native.Symbols.Should().ContainKey(label.Name);
-            native.Symbols[label.Name].Should().Be(label.Value, $"{label.Name} must retain its ROM address");
-            native.SymbolDefinitions.Single(symbol => symbol.Name == label.Name).Location?.Path
+            native.SymbolsWithHistoricalNames.Should().ContainKey(label.Name);
+            native.Symbol(label.Name).Should().Be(label.Value, $"{label.Name} must retain its ROM address");
+            native.Definition(label.Name).Location?.Path
                 .Should().NotBe("<predefined>", $"{label.Name} must be defined by the assembled span");
         }
 
@@ -699,7 +699,7 @@ public sealed class BasicSharedVariableLookupTests
     {
         int start = Address(legacy, "PTRGET");
         int end = Address(legacy, "ISARY");
-        native.Symbols["LOOKUP_END"].Should().Be(end);
+        native.Symbol("LOOKUP_END").Should().Be(end);
         int next = start;
         foreach (AssemblySourceMapEntry entry in native.SourceMap
             .Where(entry => entry.Size > 0 && entry.Operation != ".ORG" && entry.Address >= start && entry.Address < end)
@@ -769,7 +769,7 @@ public sealed class BasicSharedVariableLookupTests
         (byte)(Address(legacy, "ISVRET") - 1) == 0xFF ? (ushort)0x2001 : (ushort)0x2000;
 
     private static int Flag(bool value) => value ? 1 : 0;
-    private static int Address(AssemblyResult source, string name) => checked((int)source.Symbols[name]);
+    private static int Address(AssemblyResult source, string name) => checked((int)source.Symbol(name));
     private static int ReadWord(byte[] memory, int address) => memory[address] | (memory[address + 1] << 8);
 
     private static void WriteWord(byte[] memory, int address, int value)

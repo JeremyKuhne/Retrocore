@@ -16,7 +16,7 @@ namespace Retrocore.Tests;
 [TestClass]
 public sealed class BasicSharedSimpleFunctionsTests
 {
-    private static readonly string s_inputs = Path.Join(AppContext.BaseDirectory, "Inputs");
+    private static string Inputs => BasicNames.Inputs;
 
     /// <summary>
     ///  The shared routines retain AppleSoft's bytes and labels for every model.
@@ -29,14 +29,14 @@ public sealed class BasicSharedSimpleFunctionsTests
     public void AppleSoftUsesSharedFunctions(Apple2Model model)
     {
         AssemblyResult legacy = SdkModules.AssembleAppleSoft(
-            SdkModules.AppleSoftPath(s_inputs, BasicSourceKind.Macro10),
+            SdkModules.AppleSoftPath(Inputs, BasicSourceKind.Macro10),
             model);
 
-        AssemblyResult native = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(s_inputs), model);
+        AssemblyResult native = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(Inputs), model);
         AssemblyResult standalone = AssembleShared(legacy, setCarry: true);
         CompareRegion(legacy, native);
         CompareRegion(legacy, standalone);
-        standalone.Symbols["SIMPLE_FUNCTIONS_END"].Should().Be(legacy.Symbols["ERRDIR"]);
+        standalone.Symbol("SIMPLE_FUNCTIONS_END").Should().Be(legacy.Symbol("ERRDIR"));
     }
 
     /// <summary>
@@ -52,10 +52,10 @@ public sealed class BasicSharedSimpleFunctionsTests
     [DataRow(PetModel.Pet4032, true)]
     public void SharedFunctionsMatchPet(PetModel model, bool original)
     {
-        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(s_inputs, "Pet"), model, original);
+        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(Inputs, "Pet"), model, original);
         AssemblyResult native = AssembleShared(legacy, setCarry: false);
         CompareRegion(legacy, native);
-        native.Symbols["SIMPLE_FUNCTIONS_END"].Should().Be(legacy.Symbols["ERRDIR"]);
+        native.Symbol("SIMPLE_FUNCTIONS_END").Should().Be(legacy.Symbol("ERRDIR"));
     }
 
     /// <summary>
@@ -71,16 +71,16 @@ public sealed class BasicSharedSimpleFunctionsTests
     [DataRow(true, true, true)]
     public void FloatByteEntryPreservesOrSetsCarry(bool setCarry, bool initialCarry, bool expectedCarry)
     {
-        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(s_inputs, "Pet"), PetModel.Pet2001Basic2);
+        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(Inputs, "Pet"), PetModel.Pet2001Basic2);
         AssemblyResult native = AssembleShared(legacy, setCarry);
         RecordingBus bus = new();
         native.Sections[0].Bytes.Span.CopyTo(bus.Memory);
-        ushort target = checked((ushort)native.Symbols["GIVAYF"]);
+        ushort target = checked((ushort)native.Symbol("GIVAYF"));
         Processor<RecordingBus> cpu = new(bus)
         {
             Registers = new()
             {
-                ProgramCounter = checked((ushort)native.Symbols["SNGFLT"]),
+                ProgramCounter = checked((ushort)native.Symbol("SNGFLT")),
                 Y = 42,
                 Status = initialCarry ? StatusRegister.Unused | StatusRegister.Carry : StatusRegister.Unused
             }
@@ -102,20 +102,20 @@ public sealed class BasicSharedSimpleFunctionsTests
     [TestMethod]
     public void FunctionsRetainDocumentationAndSourcePositions()
     {
-        AssemblyResult native = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(s_inputs), Apple2Model.IIeEnhanced);
-        int start = checked((int)native.Symbols["FRE"]);
-        int end = checked((int)native.Symbols["ERRDIR"]);
+        AssemblyResult native = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(Inputs), Apple2Model.IIeEnhanced);
+        int start = checked((int)native.Symbol("FRE"));
+        int end = checked((int)native.Symbol("ERRDIR"));
         DebugTestMemory memory = new();
         memory.Set((ushort)start, native.Sections[0].Bytes.Slice(start, end - start).ToArray());
         SourceMapModule module = new(native, area: null);
         foreach (string name in (string[])["FRE", "GIVAYF", "POS", "SNGFLT"])
         {
-            DocumentationTopic topic = module.Documentation.Find(name)
+            DocumentationTopic topic = module.Documentation.FindTopic(name)
                 ?? throw new AssertFailedException($"{name} is not documented.");
 
             topic.Kind.Should().Be(DocumentationKind.Routine);
             topic.Path.Should().EndWith("MsBasic.SimpleFunctions.asm");
-            ushort address = checked((ushort)native.Symbols[name]);
+            ushort address = checked((ushort)native.Symbol(name));
             DebugPosition position = module.Position(memory, address)
                 ?? throw new AssertFailedException($"{name} has no debugger source position.");
 
@@ -126,11 +126,11 @@ public sealed class BasicSharedSimpleFunctionsTests
 
     private static AssemblyResult AssembleShared(AssemblyResult legacy, bool setCarry)
     {
-        string folder = Path.Join(s_inputs, "Microsoft6502Basic");
+        string folder = Path.Join(Inputs, "Microsoft6502Basic");
         string source = $"""
             .cpu Mos6502
             .include "MsBasic.SimpleFunctions.asm"
-            .org ${legacy.Symbols["FRE"]:X4}
+            .org ${legacy.Symbol("FRE"):X4}
                 SIMPLE_FUNCTIONS {(setCarry ? 1 : 0)}
             SIMPLE_FUNCTIONS_END:
             """;
@@ -141,14 +141,14 @@ public sealed class BasicSharedSimpleFunctionsTests
         ];
 
         Dictionary<string, long> symbols = dependencies.ToDictionary(
-            name => name, name => legacy.Symbols[name], StringComparer.Ordinal);
+            name => name, name => legacy.Symbol(name), StringComparer.Ordinal);
 
         AssemblyResult native = new Assembler.Assembler().Assemble(
             new AssemblySource(source, Path.Join(folder, "SharedSimpleFunctionsTest.asm")),
             new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
             {
                 SourceResolver = new FileAssemblySourceResolver(),
-                PredefinedSymbols = symbols
+                PredefinedSymbols = BasicNames.WithCurrentNames(symbols)
             });
 
         native.Success.Should().BeTrue(string.Join(Environment.NewLine, native.Diagnostics.Select(diagnostic =>
@@ -159,13 +159,13 @@ public sealed class BasicSharedSimpleFunctionsTests
 
     private static void CompareRegion(AssemblyResult legacy, AssemblyResult native)
     {
-        int start = checked((int)legacy.Symbols["FRE"]);
-        int end = checked((int)legacy.Symbols["ERRDIR"]);
+        int start = checked((int)legacy.Symbol("FRE"));
+        int end = checked((int)legacy.Symbol("ERRDIR"));
         foreach (AssemblySymbol label in legacy.SymbolDefinitions.Where(
             symbol => !symbol.IsConstant && symbol.Value >= start && symbol.Value < end))
         {
-            native.Symbols.Should().ContainKey(label.Name);
-            native.Symbols[label.Name].Should().Be(label.Value, $"{label.Name} must retain its ROM address");
+            native.SymbolsWithHistoricalNames.Should().ContainKey(label.Name);
+            native.Symbol(label.Name).Should().Be(label.Value, $"{label.Name} must retain its ROM address");
         }
 
         native.Sections[0].Bytes.Slice(start, end - start).ToArray()

@@ -16,8 +16,8 @@ namespace Retrocore.Tests;
 [TestClass]
 public sealed class BasicSharedAssignmentTests
 {
-    private static readonly string s_inputs = Path.Join(AppContext.BaseDirectory, "Inputs");
-    private static readonly string s_shared = Path.Join(s_inputs, "Microsoft6502Basic");
+    private static string Inputs => BasicNames.Inputs;
+    private static string SharedInputs => Path.Join(Inputs, "Microsoft6502Basic");
 
     /// <summary>
     ///  Both shared blocks retain AppleSoft's bytes and labels for every model.
@@ -30,17 +30,17 @@ public sealed class BasicSharedAssignmentTests
     public void AppleSoftUsesSharedAssignment(Apple2Model model)
     {
         AssemblyResult legacy = SdkModules.AssembleAppleSoft(
-            SdkModules.AppleSoftPath(s_inputs, BasicSourceKind.Macro10),
+            SdkModules.AppleSoftPath(Inputs, BasicSourceKind.Macro10),
             model);
 
-        AssemblyResult native = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(s_inputs), model);
+        AssemblyResult native = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(Inputs), model);
         AssemblyResult standalone = AssembleShared(legacy, standardStrings: true, longLengthError: null);
         CompareRegion(legacy, native, "LET", "INPCOM");
         CompareRegion(legacy, native, "GETSPT", "STRDON");
         CompareRegion(legacy, standalone, "LET", "INPCOM");
         CompareRegion(legacy, standalone, "GETSPT", "STRDON");
-        standalone.Symbols["ASSIGNMENT_START_END"].Should().Be(legacy.Symbols["INPCOM"]);
-        standalone.Symbols["ASSIGNMENT_STRING_END"].Should().Be(legacy.Symbols["STRDON"]);
+        standalone.Symbol("ASSIGNMENT_START_END").Should().Be(legacy.Symbol("INPCOM"));
+        standalone.Symbol("ASSIGNMENT_STRING_END").Should().Be(legacy.Symbol("STRDON"));
     }
 
     /// <summary>
@@ -56,15 +56,15 @@ public sealed class BasicSharedAssignmentTests
     [DataRow(PetModel.Pet4032, true)]
     public void SharedAssignmentMatchesPet(PetModel model, bool original)
     {
-        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(s_inputs, "Pet"), model, original);
+        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(Inputs, "Pet"), model, original);
         bool linkedStrings = model == PetModel.Pet4032;
         AssemblyResult native = AssembleShared(legacy, !linkedStrings, model == PetModel.Pet2001, !original);
         CompareRegion(legacy, native, "LET", "INPCOM");
         CompareRegion(legacy, native, "INPCOM", "GETSPT");
         CompareRegion(legacy, native, "GETSPT", "PRINTN");
-        native.Symbols["ASSIGNMENT_START_END"].Should().Be(legacy.Symbols["INPCOM"]);
-        native.Symbols["ASSIGNMENT_TIME_END"].Should().Be(legacy.Symbols["GETSPT"]);
-        native.Symbols["ASSIGNMENT_STRING_END"].Should().Be(legacy.Symbols["PRINTN"]);
+        native.Symbol("ASSIGNMENT_START_END").Should().Be(legacy.Symbol("INPCOM"));
+        native.Symbol("ASSIGNMENT_TIME_END").Should().Be(legacy.Symbol("GETSPT"));
+        native.Symbol("ASSIGNMENT_STRING_END").Should().Be(legacy.Symbol("PRINTN"));
     }
 
     /// <summary>
@@ -90,7 +90,7 @@ public sealed class BasicSharedAssignmentTests
         }
 
         cpu.Registers.ProgramCounter.Should().Be(complete);
-        int clock = checked((int)native.Symbols["CQTIMR"]);
+        int clock = checked((int)native.Symbol("CQTIMR"));
         int actual = (bus.Memory[clock] << 16) | (bus.Memory[clock + 1] << 8) | bus.Memory[clock + 2];
         actual.Should().Be(ticks);
     }
@@ -107,7 +107,7 @@ public sealed class BasicSharedAssignmentTests
     public void ClockAssignmentRejectsInvalidText(PetModel model, string text)
     {
         (_, Processor<RecordingBus> cpu, AssemblyResult native) = ClockAssignment(model, text);
-        ushort error = checked((ushort)native.Symbols["FCERR"]);
+        ushort error = checked((ushort)native.Symbol("FCERR"));
         for (int instruction = 0; instruction < 20000 && cpu.Registers.ProgramCounter != error; instruction++)
         {
             cpu.StepInstruction();
@@ -127,13 +127,13 @@ public sealed class BasicSharedAssignmentTests
     public void ClockAssignmentPassesOrdinaryStringsThrough(PetModel model)
     {
         (RecordingBus bus, Processor<RecordingBus> cpu, AssemblyResult native) = ClockAssignment(model, "123456");
-        int destination = checked((int)native.Symbols["FORPNT"]);
-        int clock = checked((int)native.Symbols["CQTIMR"]);
+        int destination = checked((int)native.Symbol("FORPNT"));
+        int clock = checked((int)native.Symbol("CQTIMR"));
         bus.Memory[destination + 1] ^= 0x01;
         bus.Memory[clock] = 0x12;
         bus.Memory[clock + 1] = 0x34;
         bus.Memory[clock + 2] = 0x56;
-        ushort stringAssignment = checked((ushort)native.Symbols["GETSPT"]);
+        ushort stringAssignment = checked((ushort)native.Symbol("GETSPT"));
         for (int instruction = 0; instruction < 4 && cpu.Registers.ProgramCounter != stringAssignment; instruction++)
         {
             cpu.StepInstruction();
@@ -167,19 +167,19 @@ public sealed class BasicSharedAssignmentTests
         bool statusExists,
         bool linked)
     {
-        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(s_inputs, "Pet"), PetModel.Pet4032, original);
+        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(Inputs, "Pet"), PetModel.Pet4032, original);
         AssemblyResult native = AssembleShared(
             legacy, standardStrings: false, longLengthError: false, patchedStatus: !original);
 
         RecordingBus bus = new();
         legacy.Sections[0].Bytes.Span.CopyTo(bus.Memory);
-        int start = checked((int)native.Symbols["GETSPT"]);
-        int end = checked((int)legacy.Symbols["PRINTN"]);
+        int start = checked((int)native.Symbol("GETSPT"));
+        int end = checked((int)legacy.Symbol("PRINTN"));
         native.Sections[0].Bytes.Span.Slice(start, end - start).CopyTo(bus.Memory.AsSpan(start));
 
-        int index = checked((int)native.Symbols["INDEX"]);
-        int free = checked((int)native.Symbols["FRETOP"]);
-        int disk = checked((int)native.Symbols["DSDESC"]);
+        int index = checked((int)native.Symbol("INDEX"));
+        int free = checked((int)native.Symbol("FRETOP"));
+        int disk = checked((int)native.Symbol("DSDESC"));
         bus.Memory[index] = 0x00;
         bus.Memory[index + 1] = 0x05;
         bus.Memory[0x0500] = (byte)length;
@@ -198,7 +198,7 @@ public sealed class BasicSharedAssignmentTests
         {
             Registers = new()
             {
-                ProgramCounter = checked((ushort)native.Symbols["STRADJ"]),
+                ProgramCounter = checked((ushort)native.Symbol("STRADJ")),
                 StackPointer = 0xFD,
                 Status = StatusRegister.Unused
             }
@@ -236,15 +236,15 @@ public sealed class BasicSharedAssignmentTests
         bool statusExists,
         bool sameAddress)
     {
-        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(s_inputs, "Pet"), PetModel.Pet4032, original);
+        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(Inputs, "Pet"), PetModel.Pet4032, original);
         AssemblyResult native = AssembleShared(
             legacy, standardStrings: false, longLengthError: false, patchedStatus: !original);
 
         RecordingBus bus = new();
         native.Sections[0].Bytes.Span.CopyTo(bus.Memory);
-        int fac = checked((int)native.Symbols["FACMO"]);
-        int free = checked((int)native.Symbols["FRETOP"]);
-        int disk = checked((int)native.Symbols["DSDESC"]);
+        int fac = checked((int)native.Symbol("FACMO"));
+        int free = checked((int)native.Symbol("FRETOP"));
+        int disk = checked((int)native.Symbol("DSDESC"));
         bus.Memory[fac] = 0x00;
         bus.Memory[fac + 1] = 0x05;
         bus.Memory[0x0500] = 5;
@@ -255,13 +255,13 @@ public sealed class BasicSharedAssignmentTests
         bus.Memory[disk] = statusExists ? (byte)1 : (byte)0;
         bus.Memory[disk + 1] = sameAddress ? (byte)0x00 : (byte)0x01;
         bus.Memory[disk + 2] = 0x60;
-        ushort copy = checked((ushort)native.Symbols["COPY"]);
-        ushort direct = checked((ushort)native.Symbols["DNTCPY"]);
+        ushort copy = checked((ushort)native.Symbol("COPY"));
+        ushort direct = checked((ushort)native.Symbol("DNTCPY"));
         Processor<RecordingBus> cpu = new(bus)
         {
             Registers = new()
             {
-                ProgramCounter = checked((ushort)native.Symbols["GETSPT"]),
+                ProgramCounter = checked((ushort)native.Symbol("GETSPT")),
                 StackPointer = 0xFD,
                 Status = StatusRegister.Unused
             }
@@ -283,22 +283,22 @@ public sealed class BasicSharedAssignmentTests
     [TestMethod]
     public void AssignmentKeepsDocumentationAndSourcePositions()
     {
-        AssemblyResult native = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(s_inputs), Apple2Model.IIeEnhanced);
+        AssemblyResult native = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(Inputs), Apple2Model.IIeEnhanced);
         SourceMapModule module = new(native, area: null);
         DebugTestMemory memory = new();
-        int start = checked((int)native.Symbols["LET"]);
-        int end = checked((int)native.Symbols["STRDON"]);
+        int start = checked((int)native.Symbol("LET"));
+        int end = checked((int)native.Symbol("STRDON"));
         memory.Set((ushort)start, native.Sections[0].Bytes.Slice(start, end - start).ToArray());
 
         foreach (string name in (string[])["LET", "QINTGR", "INPCOM", "GETSPT"])
         {
-            DocumentationTopic topic = module.Documentation.Find(name)
+            DocumentationTopic topic = module.Documentation.FindTopic(name)
                 ?? throw new AssertFailedException($"{name} is not documented.");
 
             topic.Kind.Should().Be(DocumentationKind.Routine);
             topic.Path.Should().EndWith("MsBasic.Assignment.asm");
             topic.Summary.Should().NotBeNullOrWhiteSpace();
-            ushort address = checked((ushort)native.Symbols[name]);
+            ushort address = checked((ushort)native.Symbol(name));
             DebugPosition position = module.Position(memory, address)
                 ?? throw new AssertFailedException($"{name} has no debugger source position.");
 
@@ -311,17 +311,17 @@ public sealed class BasicSharedAssignmentTests
         PetModel model,
         string text)
     {
-        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(s_inputs, "Pet"), model);
+        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(Inputs, "Pet"), model);
         AssemblyResult native = AssembleShared(
             legacy, model != PetModel.Pet4032, model == PetModel.Pet2001, patchedStatus: true);
 
         RecordingBus bus = new();
         legacy.Sections[0].Bytes.Span.CopyTo(bus.Memory);
-        int start = checked((int)native.Symbols["INPCOM"]);
-        int end = checked((int)legacy.Symbols["GETSPT"]);
+        int start = checked((int)native.Symbol("INPCOM"));
+        int end = checked((int)legacy.Symbol("GETSPT"));
         native.Sections[0].Bytes.Span.Slice(start, end - start).CopyTo(bus.Memory.AsSpan(start));
-        int index = checked((int)native.Symbols["INDEX"]);
-        int free = checked((int)native.Symbols["FREFAC"]);
+        int index = checked((int)native.Symbol("INDEX"));
+        int free = checked((int)native.Symbol("FREFAC"));
 
         // Supply a descriptor's text and length while using the ROM's actual math and digit routines.
         byte[] fetch =
@@ -337,8 +337,8 @@ public sealed class BasicSharedAssignmentTests
             bus.Memory[0x0400 + offset] = (byte)text[offset];
         }
 
-        int destination = checked((int)native.Symbols["FORPNT"]);
-        bus.Memory[destination + 1] = (byte)(native.Symbols["ZERO"] >> 8);
+        int destination = checked((int)native.Symbol("FORPNT"));
+        bus.Memory[destination + 1] = (byte)(native.Symbol("ZERO") >> 8);
         Processor<RecordingBus> cpu = new(bus)
         {
             Registers = new()
@@ -368,13 +368,13 @@ public sealed class BasicSharedAssignmentTests
 
         string stringBlock = standardStrings
             ? $"""
-                .org ${legacy.Symbols["GETSPT"]:X4}
+                .org ${legacy.Symbol("GETSPT"):X4}
                     STRING_ASSIGNMENT 0, 0
                 ASSIGNMENT_STRING_END:
                 """
             : $"""
                 .include "Commodore.StringAssignment.asm"
-                .org ${legacy.Symbols["GETSPT"]:X4}
+                .org ${legacy.Symbol("GETSPT"):X4}
                     STRING_ASSIGNMENT 1, 1
                     STRING_LINK_ADJUST {(patchedStatus ? 1 : 0)}
                 ASSIGNMENT_STRING_END:
@@ -383,7 +383,7 @@ public sealed class BasicSharedAssignmentTests
         string source = $"""
             .cpu Mos6502
             .include "MsBasic.Assignment.asm"
-            .org ${legacy.Symbols["LET"]:X4}
+            .org ${legacy.Symbol("LET"):X4}
                 ASSIGNMENT_START
             ASSIGNMENT_START_END:
             {clockBlock}
@@ -398,7 +398,7 @@ public sealed class BasicSharedAssignmentTests
         ];
 
         Dictionary<string, long> symbols = dependencies.ToDictionary(
-            name => name, name => legacy.Symbols[name], StringComparer.Ordinal);
+            name => name, name => legacy.Symbol(name), StringComparer.Ordinal);
 
         if (longLengthError is not null)
         {
@@ -408,23 +408,23 @@ public sealed class BasicSharedAssignmentTests
                 "QINT", "FACMOH", "CQTIMR", "INDEX", "QNUM", "FCERR", "FINLOG"
             ];
 
-            foreach (string name in clockDependencies) { symbols.Add(name, legacy.Symbols[name]); }
+            foreach (string name in clockDependencies) { symbols.Add(name, legacy.Symbol(name)); }
         }
 
         if (!standardStrings)
         {
-            symbols.Add("DSDESC", legacy.Symbols["DSDESC"]);
-            symbols.Add("ROMLOC", legacy.Symbols["ROMLOC"]);
-            if (patchedStatus) { symbols.Add("ADJDS", legacy.Symbols["ADJDS"]); }
+            symbols.Add("DSDESC", legacy.Symbol("DSDESC"));
+            symbols.Add("ROMLOC", legacy.Symbol("ROMLOC"));
+            if (patchedStatus) { symbols.Add("ADJDS", legacy.Symbol("ADJDS")); }
         }
 
         AssemblyResult native = new Assembler.Assembler().Assemble(
-            new AssemblySource(source, Path.Join(s_shared, "SharedAssignmentTest.asm")),
+            new AssemblySource(source, Path.Join(SharedInputs, "SharedAssignmentTest.asm")),
             new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
             {
                 SourceResolver = new FileAssemblySourceResolver(),
-                IncludePaths = [Path.Join(s_inputs, "Pet", "Basic")],
-                PredefinedSymbols = symbols
+                IncludePaths = [Path.Join(Inputs, "Pet", "Basic")],
+                PredefinedSymbols = BasicNames.WithCurrentNames(symbols)
             });
 
         native.Success.Should().BeTrue(string.Join(Environment.NewLine, native.Diagnostics.Select(diagnostic =>
@@ -435,13 +435,13 @@ public sealed class BasicSharedAssignmentTests
 
     private static void CompareRegion(AssemblyResult legacy, AssemblyResult native, string first, string after)
     {
-        int start = checked((int)legacy.Symbols[first]);
-        int end = checked((int)legacy.Symbols[after]);
+        int start = checked((int)legacy.Symbol(first));
+        int end = checked((int)legacy.Symbol(after));
         foreach (AssemblySymbol label in legacy.SymbolDefinitions.Where(
             symbol => !symbol.IsConstant && symbol.Value >= start && symbol.Value < end))
         {
-            native.Symbols.Should().ContainKey(label.Name);
-            native.Symbols[label.Name].Should().Be(label.Value, $"{label.Name} must retain its ROM address");
+            native.SymbolsWithHistoricalNames.Should().ContainKey(label.Name);
+            native.Symbol(label.Name).Should().Be(label.Value, $"{label.Name} must retain its ROM address");
         }
 
         native.Sections[0].Bytes.Slice(start, end - start).ToArray()

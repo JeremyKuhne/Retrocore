@@ -486,9 +486,9 @@ ExpansionRomSlot = $07F8
 ;; The keyboard: bit 7 is set when a key has been typed, and bits 0-6 are its code.
 ;;
 ;; The key stays here, bit 7 set, until a program clears the strobe by touching <KeyboardStrobe>.
-;; <Monitor:KeyboardIn> waits on it, and, but on the Apple II Monitor, <Monitor:ScreenOutPausing> looks here for
-;; Control-S. Writing the same address
-;; turns 80STORE off (<Store80Off>). Apple's IOADR names it as the start of the I/O area.
+;; <Monitor:KeyboardIn> waits on it, and on all but the Apple II Monitor, <Monitor:ScreenOutPausing> looks here for
+;; Control-S. Writing the same address turns 80STORE off (<Store80Off>). Apple's IOADR names it as the start of the
+;; I/O area.
 ;; See: <KeyboardStrobe>, <Monitor:KeyboardIn>, <Store80Off>
 ;; Also: KBD (A2RM78, A2RM79, IIEROM82, IIETRM85), IOADR (A2RM78, A2RM79, IIEROM82, IIETRM85)
 Keyboard = $C000

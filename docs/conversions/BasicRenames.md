@@ -38,6 +38,7 @@ seven parts and merged; where the parts disagreed, and what two independent revi
 to K12, R1 to R10).
 
 
+
 ### MsBasic.AdditionCore
 
 | # | Old | New | Kind | Builds | Documents (checked) | D3 | Reason |
@@ -72,7 +73,7 @@ to K12, R1 to R10).
 | 28 | `NEGFCH` | `Float::ComplementMantissa` | routine | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | complements Fac's four mantissa bytes and FacExtension and adds one; falls into IncrementMantissa when the extension carries — ToLongInteger calls it |
 | 29 | `INCFAC` | `Float::IncrementMantissa` | routine | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | adds one to Fac's mantissa, low byte first, carrying upward — Round::Increment calls it |
 | 30 | `INCFRT` | `Float::IncrementMantissa::Done` | entry | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | the shared rts — reached from ComplementMantissa; see A-Q4 |
-| 31 | `OVERR` | `Float::OverflowError` | routine | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R; other names here: OVERFLOW (AS82) | aliases: OVERFLOW | loads OVERFLOW's error offset into X and jumps to the error handler — ShiftInCarry, ToOverflowError and AccumulateExponentDigit reach it |
+| 31 | `OVERR` | `Float::OverflowError` | routine | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R; other names here: OVERFLOW (AS82) | aliases: OVERFLOW (AppleSoft) | loads OVERFLOW's error offset into X and jumps to the error handler — ShiftInCarry, ToOverflowError and AccumulateExponentDigit reach it |
 | 32 | `MULSHF` | `Float::ShiftProductByte` | routine | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | sets X to the byte before Result1 and falls into ShiftRightByte, moving the product right a byte — MultiplyByte jumps here for a zero multiplier byte |
 | 33 | `SHFTR2` | `Float::ShiftRightByte` | routine | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | moves the four bytes at X+1..X+4 down a byte, the low one into FacExtension, filling the top from Bits; falls into ShiftRight — ShiftRight branches back here for each whole byte |
 | 34 | `SHIFTR` | `Float::ShiftRight` | routine | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | shifts the four bytes after X right by the negative count in A: whole bytes first, then bits, keeping the top byte's sign — ShiftAndAdd and ToLongInteger call it |
@@ -109,7 +110,7 @@ to K12, R1 to R10).
 | 60 | `DIV10` | `Float::DivideByTen` | routine | all | M6502, ASTIL [AS], CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | copies Fac to Arg (rounded), points Y:A at Ten with a positive ResultSign, and falls into DivideArgByPacked — Falls into DivideArgByPacked |
 | 61 | `FDIVF` | `Float::DivideArgByPacked` | routine | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | stores X as ResultSign, loads the packed divisor at Y:A into Fac, and divides: Fac = Arg / packed — Functions::Sin calls it with TwoPi |
 | 62 | `FDIV` | `Float::DividePacked` | routine | all | M6502, ASTIL [AS], CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R; spelling only: AS82 [AS] | no | unpacks Y:A into Arg (LoadArg), then falls into DivideArg: Fac = packed / Fac — Falls into DivideArg |
-| 63 | `FDIVT` | `Float::DivideArg` | routine | all | M6502, ASTIL [AS], CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R, ASTIL; spelling only: AS82 [AS]; other names here: FIDVT (ASTIL) | aliases: FIDVT | Fac = Arg / Fac: rounds the divisor, combines exponents, builds quotient bits by compare and subtract, normalizes; zero divisor is an error — operator-table target for '/'; ASTIL spells it FIDVT: keep both in Also, see A-Q1 |
+| 63 | `FDIVT` | `Float::DivideArg` | routine | all | M6502, ASTIL [AS], CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R, ASTIL; spelling only: AS82 [AS]; other names here: FIDVT (ASTIL) | aliases: FIDVT (AppleSoft) | Fac = Arg / Fac: rounds the divisor, combines exponents, builds quotient bits by compare and subtract, normalizes; zero divisor is an error — operator-table target for '/'; ASTIL spells it FIDVT: keep both in Also, see A-Q1 |
 | 64 | `DIVIDE` | `Float::DivideArg::Compare` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | compares Arg's mantissa with Fac's, top byte first |
 | 65 | `SAVQUO` | `Float::DivideArg::SaveBit` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | rotates the comparison's carry into the quotient byte; each full byte is stored in Result, the fifth goes to LastBits |
 | 66 | `QSHFT` | `Float::DivideArg::TestSubtract` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | restores the comparison's flags: Arg >= Fac subtracts |
@@ -277,7 +278,7 @@ to K12, R1 to R10).
 | 193 | `FINMUL` | `Float::ReadNumber::MultiplyLoop` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | MultiplyByTen until DecimalExponent is zero |
 | 194 | `FINQNG` | `Float::ReadNumber::ApplySign` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | negates the result if InputSign is negative |
 | 195 | `NEGXQS` | `Float::ReadNumber::ToNegate` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | jumps on to Negate — only jumps on: To plus the target |
-| 196 | `FINDIG` | `Float::ReadNumber::Digit` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R; other names here: INSRTDIG (AS82) | aliases: INSRTDIG | counts a digit after the point, then multiplies Fac by ten |
+| 196 | `FINDIG` | `Float::ReadNumber::Digit` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R; other names here: INSRTDIG (AS82) | aliases: INSRTDIG (AppleSoft) | counts a digit after the point, then multiplies Fac by ten |
 | 197 | `FINDG1` | `Float::ReadNumber::AddDigit` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | MultiplyByTen, then adds the digit's value (AddSignedByte) |
 | 198 | `FINLOG` | `Float::AddSignedByte` | routine | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | copies Fac to Arg, makes the signed byte in A a number, and adds Arg: Fac = Fac + A — Functions::Log and Commodore's TI$ assignment call it |
 | 199 | `FINEDG` | `Float::AccumulateExponentDigit` | routine | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | DecimalExponent = DecimalExponent * 10 + digit, with the build's limit: a positive overflow is OVERFLOW — placed after AddSignedByte; reached from ReadNumber, returns to ReadNumber::NextExponentCharacter |
@@ -331,7 +332,7 @@ to K12, R1 to R10).
 | 232 | `FLOAT_ONE` | `FloatOne` | macro | all |  | — | emits the packed constant 1 — expanded three times; defines no label |
 | 233 | `LOG_CONSTANTS` | `LogarithmConstants` | macro | all |  | — | emits One, LogPolynomial, SquareRootOfHalf, SquareRootOfTwo, MinusHalf and LogOfTwo — LOG_CONSTANTS in full words |
 | 234 | `FONE` | `Float::One` | data | all | M6502, HV1, HV1R, HV2, HV4, HV4R, CBM4S79 [P4 P4R]; spelling only: AS82 [AS] | no | the packed constant 1 — For and Functions::Atn use it |
-| 235 | `LOGCN2` | `Float::LogPolynomial` | table | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R; other names here: LOGSER (AS82) | aliases: LOGSER | degree 3 and four packed coefficients for Functions::Log |
+| 235 | `LOGCN2` | `Float::LogPolynomial` | table | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R; other names here: LOGSER (AS82) | aliases: LOGSER (AppleSoft) | degree 3 and four packed coefficients for Functions::Log |
 | 236 | `SQRHLF` | `Float::SquareRootOfHalf` | data | all | M6502 | no; alias SQR05 in Commodore | the packed square root of 1/2 — Commodore's SQR05 alias, row 2273 |
 | 237 | `SQRTWO` | `Float::SquareRootOfTwo` | data | all | M6502 | no; alias SQR20 in Commodore | the packed square root of 2 — Commodore's SQR20 alias, row 2274 |
 | 238 | `NEGHLF` | `Float::MinusHalf` | data | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | the packed constant -1/2 |
@@ -340,7 +341,7 @@ to K12, R1 to R10).
 | 241 | `preciseUpper` | `KEEP` | parameter of OUTPUT_CONSTANTS | all |  | — | SDK's descriptive parameter: selects the upper limit's last byte |
 | 242 | `NZ0999` | `Float::LowerOutputLimit` | data | all | M6502 | no; alias N0999 in Commodore | the packed 99,999,999.9: FormatFac multiplies by ten while Fac is below it — Commodore's N0999 alias, row 2276 |
 | 243 | `NZ9999` | `Float::UpperOutputLimit` | data | all | M6502 | no; alias N9999 in Commodore | the packed 999,999,999.x (by build): FormatFac divides by ten while Fac is above it — Commodore's N9999 alias, row 2277 |
-| 244 | `NZMIL` | `Float::Billion` | data | all | M6502; other names here: BILLION (AS82) | aliases: BILLION | the packed 1,000,000,000: FormatFac multiplies a Fac below 1 by it — Commodore's NMIL alias, row 2278 |
+| 244 | `NZMIL` | `Float::Billion` | data | all | M6502; other names here: BILLION (AS82) | no; alias NMIL in Commodore; aliases: BILLION (AppleSoft) | the packed 1,000,000,000: FormatFac multiplies a Fac below 1 by it — Commodore's NMIL alias, row 2278 |
 | 245 | `OUTPUT_TABLES` | `OutputTables` | macro | all |  | — | emits Half, ZeroValue (by build), PowersOfTen and the TI$ divisors (by build) |
 | 246 | `defineZero` | `KEEP` | parameter of OUTPUT_TABLES | all |  | — | SDK's descriptive parameter: 1 defines ZeroValue inside Half |
 | 247 | `includeTime` | `KEEP` | parameter of OUTPUT_TABLES | all |  | — | SDK's descriptive parameter: 1 adds the TI$ divisors — same name as DecimalOutput's parameter (row 455) |
@@ -555,7 +556,7 @@ to K12, R1 to R10).
 | 401 | `CHKVAL` | `RequireType` | routine | all | M6502, ASTIL [AS], CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | ValueType's sign must equal carry, else TYPE MISMATCH |
 | 402 | `CHKOK` | `RequireType::Done` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | the rts |
 | 403 | `DOCSTR` | `RequireType::IsString` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | a string result: succeeds only with carry set |
-| 404 | `CHKERR` | `RequireType::Mismatch` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R; other names here: MISMTCH (AS82) | aliases: MISMTCH | X = the TYPE MISMATCH error |
+| 404 | `CHKERR` | `RequireType::Mismatch` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R; other names here: MISMTCH (AS82) | aliases: MISMTCH (AppleSoft) | X = the TYPE MISMATCH error |
 | 405 | `ERRGO4` | `RequireType::ToError` | entry | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | jmp ERROR; Statements::Next::ToError relays here |
 
 ### MsBasic.OperandEvaluation

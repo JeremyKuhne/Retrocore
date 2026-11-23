@@ -24,11 +24,12 @@
     ;; Consecutive FOR frames begin with <TOKEN_FOR> and occupy <FOR_FRAME_SIZE> bytes. A zero high byte in
     ;; <AssignedVariable> selects the first FOR frame and copies its variable pointer to <AssignedVariable>. A different
     ;; frame kind ends the search. A matching comparison leaves zero set; reaching another frame kind leaves it clear. A
-    ;; wrapped search also leaves zero set, so callers rely on there being a non-FOR frame at the bottom of the stack.
-    ;; Out: X = stack offset immediately below the frame, or $00 if the search wraps,
-    ;;   zero = set for a match or a wrapped search, clear for another frame kind, carry = set for a match,
+    ;; search that steps X to exactly $00 also stops with zero set, and one that steps past $FF to another offset reads
+    ;; on from the bottom of the stack page, so callers rely on there being a non-FOR frame below the FOR frames.
+    ;; Out: X = stack offset immediately below the frame, or $00 if the search steps to it,
+    ;;   zero = set for a match or a search ending at $00, clear for another frame kind, carry = set for a match,
     ;;   A = with zero clear, the token of the frame kind the search stopped at (<Statements::Return> tests it for
-    ;;   <TOKEN_GOSUB>); on a match, the variable's low byte; on a wrapped search, 0
+    ;;   <TOKEN_GOSUB>); on a match, the variable's low byte; on a search ending at $00, 0
     ;; Keeps: Y
     ;; See: <Statements::For>, <Statements::Next>
     ;; Also: FNDFOR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
@@ -58,7 +59,7 @@ Compare:
     lda AssignedVariable
     cmp Stack + 1 + ForFrame::VARIABLE,x
     beq Done
-;; Adds <FOR_FRAME_SIZE> to X and loops unless X wraps to 0.
+;; Adds <FOR_FRAME_SIZE> to X, modulo 256, and loops unless X is then exactly 0.
 ;; Also: ADDFRS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 SkipFrame:
     txa

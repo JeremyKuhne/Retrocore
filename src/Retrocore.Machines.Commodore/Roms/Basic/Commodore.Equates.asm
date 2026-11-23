@@ -34,7 +34,7 @@ INPUT_BUFFER_PAGE = 2
 .endif
 .ifndef INPUT_BUFFER_LENGTH
 ;; Input buffer length in bytes.
-;; Also: BUFLEN (M6502, CBM4S79, HV2, HV4, HV4R)
+;; Also: BUFLEN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 INPUT_BUFFER_LENGTH = 81
 .endif
 .ifndef NULL_COMMAND
@@ -97,9 +97,9 @@ EXTENDED_DISK_VECTORS = 0
 .if STACK_RESERVE_19
 ;; Stack reserve, counted in two-byte levels.
 ;;
-;; BASIC 1's reconstructions (HV1, HV1R) write the same 54-byte reserve as `NUMLEV` = 23 plus eight bytes, where this
-;; build adds three and thirteen to nineteen levels, so their name for 23 is not cited here.
-;; Also: NUMLEV (M6502, CBM4S79, HV2, HV4, HV4R)
+;; The documents give NUMLEV as 23, the other builds' value: BASIC 1's reconstructions (HV1, HV1R) write this build's
+;; 54-byte reserve as 23 levels plus eight bytes, where this build adds three and thirteen to nineteen levels.
+;; Also: NUMLEV (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 STACK_LEVELS = 19
 .else
 ;; Stack reserve, counted in two-byte levels.
@@ -759,7 +759,8 @@ KernalResetChannels = KernalSelectOutput + 3
 
 ;; Read a character from the current input.
 ;;
-;; The BASIC 4 reconstructions (HV4, HV4R) also call it `INCHR`, which here is BASIC's own label for another routine.
+;; BASIC 4's source and reconstructions (CBM4S79, HV4, HV4R) also call it `INCHR`, which here is BASIC's own label
+;; for another routine.
 ;; Also: CQINCH (M6502), CINCH (CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 KernalCharacterIn = KernalResetChannels + 3
 

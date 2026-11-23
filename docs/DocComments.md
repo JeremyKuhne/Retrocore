@@ -35,9 +35,11 @@ the comment is not copied into expansions, which suits documentation there too.
 
 A native `.macro`'s body may hold documentation: a `;;` block above a definition in the body documents the
 symbol each expansion defines, as a shared module written as macros (Microsoft 6502 BASIC's) needs. Its topic has
-the name the body writes, and the value of the symbol the build's expansion defines, which a scope around the
-expansion qualifies (`Basic::COMBYT` for `COMBYT` expanded in `.scope Basic`). A label or constant the build
-doesn't expand is not checked, as one in a branch of conditional assembly the build leaves out isn't. Historical names
+the name the body writes. When the build expands the line once, the topic has the value of the symbol that
+expansion defines, which a scope around the expansion qualifies (`Basic::COMBYT` for `COMBYT` expanded in
+`.scope Basic`); otherwise it has the value of a symbol of the name the body writes, if any. A label or constant
+the build doesn't expand is not checked, as one in a branch of conditional assembly the build leaves out isn't;
+one it expands, in a scope or more than once, is checked like any other. Historical names
 in a macro's body follow section 2.4.
 
 ### 1.2 What a comment documents
@@ -269,7 +271,7 @@ CharacterOut = $FDED
   and the debugger, as any other old name does; the quick fix writes the qualified name. An expansion in a branch
   of conditional assembly the build leaves out doesn't count, and one by another macro's body does.
   - **Expanded more than once:** the old name reaches none of the definitions, and the lint reports an `also`
-    error saying how many times the macro is expanded: give the old name in prose instead. A conditional between
+    error saying how many times the build defines it: give the old name in prose instead. A conditional between
     the first expansion and the second sees the first one's old name, since the assembler learns of the second
     only when it gets there.
   - **Never expanded:** the old name reaches nothing, and there is no diagnostic: the build has no definition, as
@@ -279,7 +281,8 @@ CharacterOut = $FDED
     body, which has a version for each assignment. The lint reports an `also` error on each.
   - A definition outside the macro that shares the name keeps its own old names, whatever the macro's
     expansions.
-  - Only a native `.macro` counts; an `Also:` in a ca65, Merlin or MACRO-10 macro's body reaches nothing.
+  - This holds for a `.macro` body, native or ca65. Don't give old names in a Merlin (`MAC`) or MACRO-10
+    (`DEFINE`) macro's body: the assembler gives them nothing there.
 - **Members:** a member's old name reaches the qualified member: `;; Also: IBCMD (DOS33)` above `COMMAND .byte`
   in `.struct Iob` makes `lda #IBCMD` assemble as `lda #Iob::COMMAND`, and `<IBCMD>` link to it. Two types may
   have members of the same name (`Iob::VOLUME`, `FileParameters::VOLUME`), but not the same old name, as for any

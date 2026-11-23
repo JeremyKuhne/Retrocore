@@ -208,8 +208,8 @@ public sealed partial class DocumentationResolver
         }
 
         return Current.Expansions(comment) is > 1 and int count
-            ? $"Also: the macro {macro} is expanded {count} times, so {topic.Name} is defined {count} times and "
-                + "an old name can't reach one of them; give the old name in prose."
+            ? $"Also: {topic.Name} is defined {count} times, by expansions of the macro {macro}, so an old name "
+                + "can't reach one of them; give the old name in prose."
             : null;
     }
 

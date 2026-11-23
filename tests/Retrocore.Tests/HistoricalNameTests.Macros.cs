@@ -82,7 +82,7 @@ public sealed partial class HistoricalNameTests
             .ifdef COMBYTE
                 .byte $FF
             .endif
-            """).Sections[0].Bytes.Span[..2].ToArray().Should().Equal(0x60, 0x60);
+            """).Sections[0].Bytes.Span[..3].ToArray().Should().Equal(0x60, 0x60, 0x00);
     }
 
     /// <summary>
@@ -257,8 +257,8 @@ public sealed partial class HistoricalNameTests
         twice.Severity.Should().Be(DocumentationSeverity.Error);
         twice.Line.Should().Be(2);
         twice.Message.Should().Be(
-            "Also: the macro Library is expanded 2 times, so COMBYT is defined 2 times and an old name can't reach "
-                + "one of them; give the old name in prose.");
+            "Also: COMBYT is defined 2 times, by expansions of the macro Library, so an old name can't reach one of "
+                + "them; give the old name in prose.");
 
         Check("""
             .macro Entry name
@@ -288,7 +288,35 @@ public sealed partial class HistoricalNameTests
             "Also: again is local to each expansion of the macro Delay, so an old name can't reach it; give the old "
                 + "name in prose."));
 
+        Check("""
+            .macro Scan
+            ;; A loop.
+            ;; Also: OLD (TEST)
+            @loop:
+                dex
+                bne @loop
+            .endmacro
+                Scan
+            """).Select(diagnostic => diagnostic.Message).Should().Equal(
+            "Also: @loop is local to each expansion of the macro Scan, so an old name can't reach it; give the old "
+                + "name in prose.");
+
         Check($"{MacroLibrary}\n").Should().BeEmpty();
+
+        // A name expanded twice is no clash with another definition that gives it, which alone has it.
+        Check($"""
+            {MacroLibrary}
+            .scope First
+                Library
+            .endscope
+            .scope Second
+                Library
+            .endscope
+            ;; Another reader.
+            ;; Also: COMBYTE (TEST)
+            Other:
+                rts
+            """).Select(diagnostic => diagnostic.Rule).Should().Equal(DocumentationRules.Also);
 
         Check($"""
             {MacroLibrary}
@@ -378,6 +406,63 @@ public sealed partial class HistoricalNameTests
             DocumentationSeverity.Error,
             "Also: COUNT is a .set variable in the macro Bump, which each assignment gives a new version, so an old "
                 + "name can't reach it; give the old name in prose."));
+    }
+
+    /// <summary>
+    ///  A member of a type in a macro's body, and a macro expanded by another macro's body under a condition: the
+    ///  documentation finds each old name, and links to it resolve, as in the assembler.
+    /// </summary>
+    [TestMethod]
+    public void OldNamesInMacroVariantsAreDocumented()
+    {
+        DocumentationSet members = Set("""
+            .macro Types
+            ;; An I/O block.
+            .struct Iob
+                ;; The block's type.
+                TYPE .byte
+                ;; The command.
+                ;; Also: IBCMD (TEST)
+                COMMAND .byte
+            .endstruct
+            .endmacro
+                Types
+            ;; Uses <IBCMD>.
+            Echo:
+                rts
+            """);
+
+        members.FindAlso("IBCMD", thisBuild: true).Should().ContainSingle().Which.Name.Should().Be("Iob::COMMAND");
+        new DocumentationResolver(members).Resolve(Required(members.Find("Echo")), "IBCMD").Topic?.Name
+            .Should().Be("Iob::COMMAND");
+
+        DocumentationSet nested = Set($"""
+            {MacroLibrary}
+            .macro Interpreter
+                Library
+            .endmacro
+            ENHANCED = 0
+            .if ENHANCED
+                Interpreter
+            .else
+                Interpreter
+            .endif
+            """);
+
+        nested.FindAlso("COMBYTE", thisBuild: true).Should().ContainSingle().Which.Name.Should().Be("COMBYT");
+    }
+
+    /// <summary>
+    ///  A ca65 <c>.macro</c>'s body gives old names as a native one's does.
+    /// </summary>
+    [TestMethod]
+    public void OldNamesInCa65MacrosAssemble()
+    {
+        string text = $"; retrocore: dialect=ca65\n{MacroLibrary}\n    Library\n    jsr COMBYTE\n";
+        AssemblyResult result = Assemble(text);
+        result.Diagnostics.Should().BeEmpty();
+        result.HistoricalNames["COMBYTE"].Name.Should().Be("COMBYT");
+        Set(text).FindAlso("COMBYTE").Should().ContainSingle();
     }
 
     private static List<DocumentationDiagnostic> Check(string text) =>

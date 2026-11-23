@@ -181,6 +181,29 @@ public class DocumentationTests
     }
 
     /// <summary>
+    ///  A constant or variable defined with a colon and <c>.equ</c> or <c>.set</c> is documented as one, not as a
+    ///  routine, and a label with code after it is still a routine.
+    /// </summary>
+    [TestMethod]
+    public void ColonDirectiveDefinitionsAreRecognized()
+    {
+        DocumentationFile file = Parse("""
+            ;; Return, with bit 7 set.
+            KEY_CR: .equ $8D
+            ;; A counter.
+            COUNT: .set 0
+            ;; The routine.
+            START: rts
+            """);
+
+        file.Diagnostics.Should().BeEmpty();
+        file.Comments.Select(comment => (comment.Name, comment.Kind)).Should().Equal(
+            ("KEY_CR", DocumentationKind.Constant),
+            ("COUNT", DocumentationKind.Variable),
+            ("START", DocumentationKind.Routine));
+    }
+
+    /// <summary>
     ///  Links, URLs and references are found, and comparisons are not links.
     /// </summary>
     [TestMethod]

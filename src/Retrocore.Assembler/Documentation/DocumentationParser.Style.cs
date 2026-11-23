@@ -220,7 +220,8 @@ public static partial class DocumentationParser
         return null;
     }
 
-    // The name a line defines: a block's (.proc Name), a constant's (Name = value) or a label's (Name:).
+    // The name a line defines: a block's (.proc Name), a constant's (Name = value or Name: .equ value), a variable's
+    // (Name .set value or Name: .set value) or a label's (Name:).
     private static string? DefinedName(string code)
     {
         string directive = Directive(code);
@@ -237,7 +238,8 @@ public static partial class DocumentationParser
         bool equals = after.StartsWith('=') && !after.StartsWith("==", StringComparison.Ordinal);
         bool constant = equals || after.StartsWith(":=", StringComparison.Ordinal);
         bool variable = after.StartsWith(".set", StringComparison.OrdinalIgnoreCase);
-        return constant || variable || IsLabelOnly(code) ? code[..end] : null;
+        bool colonDefinition = ColonDefinition(code[end..]).Length != 0;
+        return constant || variable || colonDefinition || IsLabelOnly(code) ? code[..end] : null;
     }
 
     // A label followed by code on the same line, such as "Loop: lda (Pointer),y": the label, or null.
@@ -248,6 +250,9 @@ public static partial class DocumentationParser
         {
             return null;
         }
+
+        // Name: .equ value and Name: .set value are a constant and a variable, not a label.
+        if (end != 0 && ColonDefinition(code[end..]).Length != 0) { return null; }
 
         // Name:=value is a constant, not a label.
         string rest = code[(end + 1)..];

@@ -346,11 +346,11 @@ Done:
     rts
     .endproc
 
-    ;; Reports the floating-point overflow error through <ERROR>.
+    ;; Reports the floating-point overflow error through <ReportError>.
     ;; Also: OVERR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc OverflowError
     ldx #ERROR_OVERFLOW
-    jmp ERROR
+    jmp ReportError
     .endproc
 
     ; Mantissa negation, overflow, and the shared arithmetic shifter.

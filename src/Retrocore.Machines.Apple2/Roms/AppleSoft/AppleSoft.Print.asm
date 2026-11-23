@@ -1,126 +1,208 @@
-;; APPLESOFT: PRINT AND CHARACTER OUTPUT
-;;
-;; PRINT formats expressions, while the shared string and character output routines serve
-;; error reporting, listing and other statements.
+; retrocore: style=strict
+; APPLESOFT: PRINT AND CHARACTER OUTPUT
+;
+; PRINT formats expressions, while the shared string and character output routines serve
+; error reporting, listing and other statements.
 
 .include "../Microsoft6502Basic/MsBasic.Print.asm"
 
-.if ENHNCD
-    PrintItems TABER, 1, 1, 0
-.else
-    PrintItems LINCH1, 1, 1, 0
-.endif
-NCMPOS = $0E
+    PrintItems PrintTabOrSpace, 1, 1, 0
+
+;; Microsoft's last comma-zone column, ((40/14)-1)*14; AppleSoft's code compares with column 24 inline and never
+;; uses it.
+;; Also: NCMPOS (M6502)
+LAST_COMMA_COLUMN = $0E
 
 ;; Prints a carriage return, then complements A for the callers that test the result.
-CRDO:
-    lda #$0D
-    jsr OUTDO
-CRFIN:
-    eor #$FF
-PRTRTS:
-    rts
+;; Entry:
+;;   Finish = complements A; the shared <PrintString> enters here after printing a return from a string
+;;   Return = returns; the shared PRINT and <PrintString> branch here to end
+;; Also: CRDO (M6502, ASTIL)
+.proc PrintNewline
+    lda #$0D                        ; carriage return
+    jsr PrintCharacter
 
-;; Advances PRINT to the next comma zone, wrapping when necessary.
-COMPRT:
+;; Complements A.
+;; Also: CRFIN (M6502)
+Finish:
+    eor #$FF
+
+;; Returns.
+;; Also: PRTRTS (M6502)
+Return:
+    rts
+.endproc
+
+;; PRINT's comma: starts a new line past column 24, and otherwise prints spaces to the next 16-column zone. The enhanced
+;; IIe reads the column through <CHKCOL>, for 80 columns, and sets it through <PrintTabOrSpace>; the II Plus and IIe
+;; store it in <TerminalPosition>.
+;; Also: COMPRT (M6502)
+.proc PrintComma
 .if ENHNCD
     jsr CHKCOL
-    bmi LINCHK
+    bmi NextZone
 .else
-    lda TRMPOS
+    lda TerminalPosition
 .endif
-    cmp #$18
+    cmp #24                         ; the last zone's first column
+    bcc NextZone
+    jsr PrintNewline
+    bne PrintSpaces::ContinuePrint
+
 .if ENHNCD
-    bcc LINCHK
+;; Rounds the column up to the next zone and goes on to set it.
+;; Also: LINCHK (M6502)
+NextZone:
 .else
-    bcc COMPR1
-.endif
-    jsr CRDO
-    bne NOTABR
-.if ENHNCD
-LINCHK:
-.else
-COMPR1:
+;; Rounds the column up to the next zone and sets it. Microsoft's LINCHK, the enhanced IIe's label here, falls inside
+;; the `and`'s operand in these builds, at <PrintComma::ZoneMaskOperand>, and the `TAB` and `SPC` entry's bytes overlap
+;; the next instructions.
+;; Also: COMPR1 (UNKN)
+NextZone:
 .endif
     adc #$10
 .if ENHNCD
     and #$F0
     tax
     sec
-    bcs TABER2
-TABER:
+    bcs PrintTabOrSpace::MoveToColumn
 .else
-    ; These overlapping instructions implement comma, TAB and SPC entries in the original ROM.
-    .byte $29
-LINCHK:
-    .byte $F0, $85, $24, $90, $19
-LINCH1:
+
+;; The `and`'s operand, where Microsoft's LINCHK falls in these builds; nothing enters it here.
+;; Also: LINCHK (M6502)
+ZoneMaskOperand = * + 1
+    and #$F0
+    sta TerminalPosition
+    bcc PrintSpaces::ContinuePrint
+.endif
+.endproc
+
+;; `TAB(` or `SPC(`: reads the byte argument and the `)`, then prints spaces to the column (`TAB`) or the count (`SPC`),
+;; and continues PRINT. The enhanced IIe's <PrintComma> enters at `MoveToColumn` to set the column.
+;; In: carry = set for `TAB`, clear for `SPC`
+.proc PrintTabOrSpace
+.if ENHNCD
+
+;; Saves the carry and reads the argument.
+;; Also: TABER (M6502)
+ReadArgument:
+.else
+
+;; Saves the carry and reads the argument. Microsoft's TABER, the enhanced IIe's name for this routine, falls inside the
+;; `jsr`'s operand in these builds, at <PrintTabOrSpace::EvaluateCallHigh>.
+;; Also: LINCH1 (UNKN)
+ReadArgument:
 .endif
     php
-.if ENHNCD
-    jsr GTBYTC
-    cmp #')'
-    bne SNERR4
-.else
-    .byte $20, $F5
-TABER:
-    .byte $E6, $C9, $29
-    beq TABER1
-    jmp SNERR
+.if .not ENHNCD
+
+;; The `jsr`'s high address byte, where Microsoft's TABER falls in these builds; nothing enters it here.
+;; Also: TABER (M6502)
+EvaluateCallHigh = * + 2
 .endif
-TABER1:
+    jsr SkipAndEvaluateByte
+    cmp #')'
+.if ENHNCD
+    bne HandleBadInput::ToSyntaxError
+.else
+    beq ClosedParenthesis
+    jmp SyntaxError
+.endif
+
+;; After the `)`: `SPC` prints X spaces; `TAB` subtracts the column.
+;; Also: TABER1 (UNKN)
+ClosedParenthesis:
     plp
-    bcc XSPAC
+    bcc PrintSpaces::CountInX
     dex
 .if ENHNCD
-TABER2:
+;; Computes the spaces to the target column through <TRMSET>; the enhanced IIe's <PrintComma> enters here.
+;; Also: TABER2 (UNKN)
+MoveToColumn:
     jsr TRMSET
 .else
     txa
-    sbc TRMPOS
+    sbc TerminalPosition
 .endif
-    bcc NOTABR
-ASPAC:
+    bcc PrintSpaces::ContinuePrint
+    ; Falls into PrintSpaces.
+.endproc
+
+;; Prints A spaces, then continues PRINT; nothing in AppleSoft enters here, and the label is kept for its old name.
+;; Entry:
+;;   CountInX = prints X spaces (zero prints none); <PrintTabOrSpace>'s `SPC` enters here
+;;   ContinuePrint = rereads the current character and continues PRINT at <Statements::Print::Item> without a newline;
+;;     the shared PRINT, <PrintComma> and <PrintTabOrSpace> branch here
+;; Also: ASPAC (M6502)
+.proc PrintSpaces
     tax
-XSPAC:
+
+;; Prints X spaces; zero prints none.
+;; Also: XSPAC (M6502)
+CountInX:
     inx
-XSPAC2:
+
+;; Counts down; zero goes on to `ContinuePrint`.
+;; Also: XSPAC2 (M6502)
+Next:
     dex
-    bne XSPAC1
-NOTABR:
-    jsr CHRGET
-    jmp PRINTC
-XSPAC1:
-    jsr OUTSPC
-    bne XSPAC2
+    bne One
+
+;; Rereads the current character and continues PRINT without a newline.
+;; Also: NOTABR (M6502)
+ContinuePrint:
+    jsr GetNextCharacter
+    jmp Statements::Print::Item
+
+;; Prints one space and loops.
+;; Also: XSPAC1 (M6502)
+One:
+    jsr PrintSpace
+    bne Next
+.endproc
+
 .include "../Microsoft6502Basic/MsBasic.StringOutput.asm"
-;; Prints a space.
-OUTSPC:
+
+;; Prints a space: loads it and skips <PrintQuestionMark>'s load, into <PrintCharacter>.
+;; Also: OUTSPC (M6502, ASTIL)
+.proc PrintSpace
     lda #' '
-    .byte $2C                       ; BIT absolute skips OUTQST's LDA
+    .byte $2C                       ; BIT absolute skips PrintQuestionMark's LDA
+    ; Falls into PrintQuestionMark, past its load.
+.endproc
 
 ;; Prints a question mark.
-OUTQST:
+;; Also: OUTQST (M6502, ASTIL)
+.proc PrintQuestionMark
     lda #'?'
+    ; Falls into PrintCharacter.
+.endproc
 
-;; Sends a character to the Monitor output routine and applies the configured output delay.
+;; Sends a character to the Monitor's output routine and applies the configured output delay.
 ;;
-;; Printable characters also receive <FLASHB>; output is passed with bit 7 set.
+;; Printable characters also receive <FlashMask>; output is passed with bit 7 set.
 ;; In: A = character
-;; Out: A = character returned by the Monitor, with bit 7 cleared
-;; See: <OUTCH>, <MWAIT>, <SPEEDZ>
-OUTDO:
+;; Out: A = the character returned by the Monitor, with bit 7 cleared
+;; See: <OUTCH>, <MWAIT>, <OutputDelay>
+;; Also: OUTDO (M6502, ASTIL)
+.proc PrintCharacter
     ora #$80
-    cmp #$A0
-    bcc OUTLOC
-    ora FLASHB
-TRYOUT:
-OUTLOC:
+    cmp #(' ' | $80)
+    bcc Send
+    ora FlashMask
+
+;; Sends the character through <OUTCH> and applies the output delay.
+;; Also: OUTLOC (M6502), TRYOUT (M6502)
+Send:
     jsr OUTCH
     and #$7F
     pha
-    lda SPEEDZ
+    lda OutputDelay
     jsr MWAIT
     pla
-GETRTS:
+
+;; Returns; nothing in AppleSoft branches here, and the label is kept for its old name.
+;; Also: GETRTS (M6502)
+Return:
     rts
+.endproc

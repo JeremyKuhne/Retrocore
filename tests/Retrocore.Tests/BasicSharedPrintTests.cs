@@ -99,7 +99,7 @@ public sealed class BasicSharedPrintTests
             .cpu Mos6502
             .include "Commodore.ChannelPrint.asm"
             .org ${legacy.Symbol("FININL"):X4}
-                COMMODORE_LINE_END {(early ? 0 : 2)}, {(early ? 1 : 0)}, {(disk ? 1 : 0)}, {(early ? 1 : 0)}
+                CommodoreLineEnd {(early ? 0 : 2)}, {(early ? 1 : 0)}, {(disk ? 1 : 0)}, {(early ? 1 : 0)}
             """;
 
         List<string> dependencies = ["BUF", "CHANNL", "TRMPOS", "OUTDO"];
@@ -166,7 +166,7 @@ public sealed class BasicSharedPrintTests
             .cpu Mos6502
             .include "Commodore.ChannelPrint.asm"
             .org ${legacy.Symbol("COMPRT"):X4}
-                COMMODORE_PRINT_SPACING {(early ? 1 : 0)}
+                CommodorePrintSpacing {(early ? 1 : 0)}
             """;
 
         string[] dependencies =
@@ -247,7 +247,7 @@ public sealed class BasicSharedPrintTests
             .cpu Mos6502
             .include "Commodore.ChannelPrint.asm"
             .org ${legacy.Symbol("OUTSPC"):X4}
-                COMMODORE_CHARACTER_OUTPUT {(early ? 1 : 0)}, {(early ? 1 : 0)}, {(disk ? 0 : 1)}, {(disk ? 0 : 1)}
+                CommodoreCharacterOutput {(early ? 1 : 0)}, {(early ? 1 : 0)}, {(disk ? 0 : 1)}, {(disk ? 0 : 1)}
             """;
 
         List<string> dependencies = ["CHANNL", flagSlot, "TRMPOS", "OUTCH"];

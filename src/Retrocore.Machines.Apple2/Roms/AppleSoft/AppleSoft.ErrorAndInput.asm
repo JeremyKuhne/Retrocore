@@ -1,281 +1,398 @@
-;; APPLESOFT: ERRORS, COMMAND INPUT AND PROGRAM STORAGE
-;;
-;; Error reporting and the command loop, line editing and tokenization, program-line search and insertion,
-;; and the NEW and CLEAR paths. Statement execution continues in <NEWSTT>.
+; retrocore: style=strict
+; APPLESOFT: ERRORS, COMMAND INPUT AND PROGRAM STORAGE
+;
+; Error reporting and the command loop, line editing and tokenization, program-line search and insertion,
+; and the NEW and CLEAR paths. Statement execution continues in NextStatement.
 
 .include "../Microsoft6502Basic/MsBasic.CommandCore.asm"
 
-;; Reports an OUT OF MEMORY error.
-OMERR:
-    ldx #ERROM
+;; Reports an OUT OF MEMORY error: loads its offset and falls into <ReportError>.
+;; Also: OMERR (M6502)
+.proc ReportOutOfMemory
+    ldx #ERROR_OUT_OF_MEMORY
+    ; Falls into ReportError.
+.endproc
 
-;; Dispatches to an active ONERR handler or prints the selected error and returns to the command loop.
+;; Passes the error to an active `ONERR` handler, or prints it and returns to the command loop.
 ;;
-;; The high bit marks the last character of each message in <ERRTAB>. After the message, <ResetStack> clears
+;; The high bit marks the last character of each message in <ErrorMessages>. After the message, <ResetStack> clears
 ;; execution state and the line number is printed unless the error occurred in direct mode.
-;; In: X = error-table offset
-ERROR:
-    bit ERRFLG
-    bpl ERROR1
+;; In: X = the message's offset in <ErrorMessages>
+;; Also: ERROR (M6502, ASTIL)
+.proc ReportError
+    bit OnErrorActive
+    bpl PrintMessage
     jmp HANDLE
-ERROR1:
-    jsr CRDO
-    jsr OUTQST
-GETERR:
-    lda ERRTAB,x
+
+;; No `ONERR` handler is active: starts a new line and prints the question mark.
+;; Also: ERROR1 (UNKN), DOERRMSG (AS82)
+PrintMessage:
+    jsr PrintNewline
+    jsr PrintQuestionMark
+
+;; Prints the message's characters until the one with bit 7 set, then falls into `AddErrorSuffix`.
+;; Also: GETERR (M6502)
+NextCharacter:
+    lda ErrorMessages,x
     pha
-    jsr OUTDO
+    jsr PrintCharacter
     inx
     pla
-    bpl GETERR
+    bpl NextCharacter
     ErrorFinish
-READY:
-;; Prompts for a command, executing a direct statement or inserting or deleting a numbered line.
+.endproc
+
+    ReportMessageRoutine
+
+;; Where errors, `END` and `STOP` return: AppleSoft prints no READY message, so this is <CommandLoop>'s own address.
+;; Also: READY (M6502)
+ReadyForCommand:
+
+;; Prompts for a command, then runs a direct statement or inserts, replaces or deletes a numbered line.
 ;;
 ;; Editing an existing line first closes the gap. A replacement opens space with <MoveRangeUp>, then the program is
 ;; relinked and variables and execution state are reset. An empty numbered line deletes the old line.
-;; See: <INLIN1>, <CRUNCH>, <FindLine>, <LNKPRG>
-MAIN:
-    jsr CRDO
-    ldx #$DD
-    jsr INLIN1
-    stx TXTPTR
-    sty TXTPTR+1
-    lsr ERRFLG
-    jsr CHRGET
+;; See: <InputLine::WithPrompt>, <Tokenize>, <FindLine>, <LinkProgram>
+;; Also: MAIN (M6502)
+.proc CommandLoop
+    jsr PrintNewline
+    ldx #(']' | $80)
+    jsr InputLine::WithPrompt
+    stx TextPointer
+    sty TextPointer+1
+    lsr OnErrorActive
+    jsr GetNextCharacter
     tax
-    beq MAIN
+    beq CommandLoop
     ldx #$FF
-    stx CURLIN+1
-    bcc READY1
-    jsr CRUNCH
-    jmp TRCLIN
-READY1:
-    ldx PRGEND
-    stx VARTAB
-    ldx PRGEND+1
-    stx VARTAB+1
-    DeleteOldLine INDEX
-NODEL:
+    stx CurrentLine+1
+    bcc EditProgram
+    jsr Tokenize
+    jmp NextStatement::TraceLine
+
+;; A numbered line: resets <VariablesStart> from <ProgramEnd>, then deletes any old line of that number.
+;; Also: READY1 (UNKN)
+EditProgram:
+    ldx ProgramEnd
+    stx VariablesStart
+    ldx ProgramEnd+1
+    stx VariablesStart+1
+    DeleteOldLine Pointer1
+
+;; After any deletion: an empty line relinks; otherwise opens space at the insertion point with <MoveRangeUp>.
+;; Also: NODEL (M6502)
+InsertLine:
     lda BUF
-    beq FINI
-    lda MEMSIZ
-    ldy MEMSIZ+1
-    sta FRETOP
-    sty FRETOP+1                 ; Microsoft's NCMWID here is the same byte
-    lda VARTAB
-    sta HIGHTR
-    adc COUNT
-    sta HIGHDS
-    ldy VARTAB+1
-    sty HIGHTR+1
-    bcc NODELC
+    beq ClearAndRelink
+    lda MemoryTop
+    ldy MemoryTop+1
+    sta StringsBottom
+    sty StringsBottom+1             ; Microsoft's NCMWID here is the same byte
+    lda VariablesStart
+    sta SourceEnd
+    adc Counter
+    sta DestinationEnd
+    ldy VariablesStart+1
+    sty SourceEnd+1
+    bcc OpenGap
     iny
-NODELC:
-    sty HIGHDS+1
-    jsr BLTU
-    lda LINNUM
-    ldy LINNUM+1
+
+;; Stores the high byte of the move's end and opens the gap with <MoveRangeUp>.
+;; Also: NODELC (M6502)
+OpenGap:
+    sty DestinationEnd+1
+    jsr MoveRangeUp
+    lda LineNumber
+    ldy LineNumber+1
     sta BUF-2
     sty BUF-1
-    lda STREND
-    ldy STREND+1
-    sta VARTAB
-    sty VARTAB+1
-    ldy COUNT
-NODEL1:
+    lda ArraysEnd
+    ldy ArraysEnd+1
+    sta VariablesStart
+    sty VariablesStart+1
+    ldy Counter
+
+;; Copies the tokenized line from the input buffer into the program.
+;; Also: NODEL1 (UNKN)
+CopyLine:
     lda BUF-5,y
     dey
-    sta (LOWTR),y
-    bne NODEL1
+    sta (SourceStart),y
+    bne CopyLine
+    ; Falls into ClearAndRelink.
+.endproc
 
-;; Clears execution state and relinks the program after editing or loading it.
-FINI:
-    jsr RUNC
+;; Clears execution state and relinks the program after editing or loading it, falling into <LinkProgram>.
+;; See: <ResetProgramState>
+;; Also: FINI (M6502)
+.proc ClearAndRelink
+    jsr ResetProgramState
+    ; Falls into LinkProgram.
+.endproc
 
-;; Rebuilds the linked program line addresses, then records <VARTAB> as <PRGEND> and returns to the prompt.
+;; Rebuilds the linked program's line addresses, then records <VariablesStart> as <ProgramEnd> and returns to
+;; <CommandLoop>.
 ;;
 ;; Each line ends in zero; the next line starts immediately after it. A zero link marks the end of the program.
-LNKPRG:
-    lda TXTTAB
-    ldy TXTTAB+1
-    sta INDEX
-    sty INDEX+1
+;; Also: LNKPRG (M6502)
+.proc LinkProgram
+    lda ProgramStart
+    ldy ProgramStart+1
+    sta Pointer1
+    sty Pointer1+1
     clc
-CHEAD:
-    ldy #$01
-    lda (INDEX),y
-    bne CHEAD1
-    lda VARTAB
-    sta PRGEND
-    lda VARTAB+1
-    sta PRGEND+1
-    jmp MAIN
-CHEAD1:
+
+;; Tests a line's link high byte; zero ends the program.
+;; Also: CHEAD (M6502), NXLINK (AS82)
+NextLine:
+    ldy #ProgramLine::LINK + 1
+    lda (Pointer1),y
+    bne StoreLink
+    lda VariablesStart
+    sta ProgramEnd
+    lda VariablesStart+1
+    sta ProgramEnd+1
+    jmp CommandLoop
+
+;; Scans the line to its zero and stores the next line's address as its link.
+;; Also: CHEAD1 (UNKN)
+StoreLink:
     LinkLine 0
+.endproc
 
 ;; Reads a line through the Monitor without printing a prompt character.
 ;;
 ;; The terminating byte is replaced with zero, the input is limited to 239 characters, and bit 7 is cleared
-;; from each character. X/Y return the address immediately before <BUF>.
-;; Entry: INLIN1 = uses X as the Monitor prompt character
-;; Out: A = 0, X = $FF, Y = $01
-;; See: <GETLN>, <INCHR>
-INLIN:
-    ldx #$80
-INLIN1:
+;; from each character.
+;; Out: A = 0, X = the low byte of the address before <BUF>, Y = its high byte
+;; Entry:
+;;   WithPrompt = uses X as the Monitor's prompt character; <CommandLoop> enters here with `]`
+;; See: <GETLN>, <InputCharacter>
+;; Also: INLIN (M6502, ASTIL)
+.proc InputLine
+    ldx #$80                        ; a prompt the Monitor prints as nothing
+
+;; Uses X as the Monitor's prompt character.
+;; Also: INLIN1 (UNKN)
+WithPrompt:
     stx PROMPT
     jsr GETLN
-    cpx #$EF
-    bcc GDBUFS
-    ldx #$EF
-GDBUFS:
+    cpx #239                        ; the longest line BASIC keeps
+    bcc Terminate
+    ldx #239
+
+;; Stores the zero after the last character.
+;; Also: GDBUFS (M6502, ASTIL)
+Terminate:
     lda #$00
     sta BUF,x
     txa
-    beq NOCHR
-LOPBHT:
+    beq Finish
+
+;; Clears bit 7 of each input character.
+;; Also: LOPBHT (M6502)
+ClearHighBits:
     lda BUF-1,x
     and #$7F
     sta BUF-1,x
     dex
-    bne LOPBHT
-NOCHR:
-    lda #$00
-    ldx #$FF
-    ldy #$01
-    rts
+    bne ClearHighBits
 
-;; Reads one character through the Monitor and clears its high bit.
-;; Out: A = character with bit 7 clear
-INCHR:
+;; Returns A = 0 and X/Y = the address before <BUF>.
+;; Also: NOCHR (M6502)
+Finish:
+    lda #$00
+    ldx #<(BUF-1)
+    ldy #>(BUF-1)
+    rts
+.endproc
+
+;; Reads a key through the Monitor and clears its high bit.
+;; Out: A = the character, with bit 7 clear
+;; Also: INCHR (M6502, ASTIL)
+.proc InputCharacter
     jsr CQINCH
     and #$7F
-INCRTS:
-    rts
-BUFOFS .set $0000
-BUFOFS .set $0200
 
-;; Tokenizes the line in <BUF>, replacing reserved words by their single-byte tokens from <RESLST>.
+;; Returns; nothing branches here, and the label is kept for its old name.
+;; Also: INCRTS (M6502)
+Return:
+    rts
+.endproc
+
+;; The input buffer's page base for the tokenizer's indexing. Microsoft's source sets it to 0 and then to $0200;
+;; AppleSoft's code never uses it.
+;; Also: BUFOFS (M6502)
+INPUT_BUFFER_BASE = $0200
+
+;; Tokenizes the line in <BUF> in place, replacing reserved words by their single-byte tokens from <ReservedWords>.
 ;;
-;; Spaces outside literals and DATA are discarded. Quoted strings, DATA fields and REM text are copied without
-;; tokenization; ? abbreviates PRINT. Enhanced IIe folds case outside quoted strings and DATA. AT is not matched
-;; when followed by N or O, allowing ATN and TO to be recognized.
-;; Out: TXTPTR = address before the tokenized line, Y = encoded line length including its header
+;; Spaces outside literals and `DATA` are discarded. Quoted strings, `DATA` fields and `REM` text are copied without
+;; tokenization; `?` abbreviates `PRINT`. The enhanced IIe folds case outside quoted strings and `DATA`. `AT` is not
+;; matched when followed by `N` or `O`, so that `ATN` and `TO` are recognized. Where the program is run-only
+;; (<RunOnly>), it discards its caller and runs the program instead.
+;; Out: TextPointer = the address before the tokenized line, Y = the encoded line's length, header included
 ;; See: <Statements::List>
-CRUNCH:
-    ldx TXTPTR
+;; Also: CRUNCH (M6502)
+.proc Tokenize
+    ldx TextPointer
     dex
-    ldy #$04
-    sty DORES
-    bit LOCK
-    bpl CRUNC1
+    ldy #$04                        ; the stores, to BUF-5,y after an increment, start at BUF
+    sty TokenizeState
+    bit RunOnly
+    bpl Advance
     pla
     pla
-    jsr RUNC
-    jmp NXTCO1
-CRUNC1:
+    jsr ResetProgramState
+    jmp NextStatementSavingStack
+
+;; Steps to the next input character.
+;; Also: CRUNC1 (UNKN)
+Advance:
     inx
-KLOOP:
+
+;; Reads the next input character, folding its case on the enhanced IIe, for tokenizing.
+;; Also: KLOOP (M6502)
+NextCharacter:
 .if ENHNCD
     jsr UPCASE
 .else
     lda BUF,x
 .endif
-    bit DORES
-    bvs CMPSP1
-CMPSPC:
+    bit TokenizeState
+    bvs CheckQuote
+
+;; Skips a space outside `DATA`.
+;; Also: CMPSPC (M6502)
+CheckSpace:
     cmp #' '
-    beq CRUNC1
-CMPSP1:
-    sta ENDCHR
+    beq Advance
+
+;; Records the character as the end delimiter, and starts a quoted copy at a quote.
+;; Also: CMPSP1 (UNKN)
+CheckQuote:
+    sta EndDelimiter
     cmp #'"'
-    beq STRNG
-    bvs STUFFH
+    beq StoreLiteral
+    bvs StoreByte
     cmp #'?'
-    bne KLOOP1
-    lda #PRINTK
-    bne STUFFH
-KLOOP1:
+    bne CheckDigit
+    lda #TOKEN_PRINT
+    bne StoreByte
+
+;; Copies digits, `:` and `;` unchanged.
+;; Also: KLOOP1 (M6502)
+CheckDigit:
     cmp #'0'
-    bcc MUSTCR
-    cmp #$3C
-    bcc STUFFH
-MUSTCR:
-    sty BUFPTR
-    lda #<(RESLST-256)
-    sta FAC
-    lda #>(RESLST-256)
-    sta FACHO
+    bcc SearchWords
+    cmp #';' + 1
+    bcc StoreByte
+
+;; Sets up the walk of <ReservedWords> from the current input position.
+;; Also: MUSTCR (M6502)
+SearchWords:
+    sty TokenizePointer
+    lda #<(ReservedWords-256)
+    sta Fac
+    lda #>(ReservedWords-256)
+    sta FacMantissa1
     ldy #$00
-    sty COUNT
+    sty Counter
     dey
-    stx TXTPTR
+    stx TextPointer
     dex
-RESER:
+
+;; A character matched: advances in the table, with the page carry, and in the input.
+;; Also: RESER (M6502)
+CharacterMatched:
     iny
-    bne RESPUL
-    inc FACHO
-RESPUL:
+    bne AdvanceInput
+    inc FacMantissa1
+
+;; Advances the input index, skipping spaces.
+;; Also: RESPUL (M6502)
+AdvanceInput:
     inx
-RESPU1:
+
+;; Compares the input character with the table's.
+;; Also: RESPU1 (UNKN)
+CompareCharacter:
 .if ENHNCD
     jsr UPCASE
 .else
     lda BUF,x
 .endif
     cmp #' '
-    beq RESPUL
+    beq AdvanceInput
     sec
-    sbc (FAC),y
-    beq RESER
-    cmp #$80
-    bne NTHIS
-    ora COUNT
-    cmp #ATTK
-    bne GETBPT
+    sbc (Fac),y
+    beq CharacterMatched
+    cmp #$80                        ; the word's last character, which has bit 7 set
+    bne NextWord
+    ora Counter
+    cmp #TOKEN_AT
+    bne StoreToken
 .if ENHNCD
     jsr UPNXT
 .else
     lda BUF+1,x
 .endif
     cmp #'N'
-    beq NTHIS
+    beq NextWord
     cmp #'O'
-    beq NTHIS
-    lda #ATTK
+    beq NextWord
+    lda #TOKEN_AT
     TokenStore BUF, ENHNCD
-NTHIS:
-    ldx TXTPTR
-    inc COUNT
-NTHIS2:
-    lda (FAC),y
-NTHIS1:
+
+;; A mismatch: restores the input index, counts the word and skips to its end.
+;; Also: NTHIS (M6502)
+NextWord:
+    ldx TextPointer
+    inc Counter
+
+;; Reads table bytes until the word's last character.
+;; Also: NTHIS2 (UNKN)
+SkipWord:
+    lda (Fac),y
+
+;; Advances the table index; nothing branches here, and the label is kept for its old name.
+;; Also: NTHIS1 (M6502)
+AdvanceTable:
     iny
-    bne NTHIS3
-    inc FACHO
-NTHIS3:
+    bne TestWordEnd
+    inc FacMantissa1
+
+;; Tests bit 7 of the table byte after any page carry.
+;; Also: NTHIS3 (UNKN)
+TestWordEnd:
     asl a
-    bcc NTHIS2
-    lda (FAC),y
-    bne RESPU1
+    bcc SkipWord
+    lda (Fac),y
+    bne CompareCharacter
 .if ENHNCD
     jsr UPBUF
 .else
     lda BUF,x
 .endif
-    bpl GETBPT
-CRDONE:
+    bpl StoreToken
+
+;; Stores the line's end and sets <TextPointer> to the byte before <BUF>.
+;; Also: CRDONE (M6502)
+Finish:
     sta BUF-3,y
-    dec TXTPTR+1
+    dec TextPointer+1
     lda #$FF
-    sta TXTPTR
-LISTRT:
+    sta TextPointer
+
+;; Returns; nothing branches here, and the label is kept for its old name.
+;; Also: LISTRT (M6502)
+Return:
     rts
+.endproc
 
 .include "../Microsoft6502Basic/MsBasic.LineSearch.asm"
 .include "../Microsoft6502Basic/MsBasic.ProgramReset.asm"
     ProgramReset 1, 1, 0, 1
-    ClearStatement STKRTS
+    ClearStatement ResetStack::Done
     ClearStorage 0, 0
     ExecutionReset 0, 0, $F8

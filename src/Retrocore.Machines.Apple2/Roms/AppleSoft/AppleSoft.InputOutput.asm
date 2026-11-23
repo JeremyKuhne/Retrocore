@@ -1,95 +1,148 @@
-;; APPLESOFT: GET, INPUT AND READ
-;;
-;; These statements share variable lookup and conversion but get their values from a key, an input line or
-;; DATA statements. The string assignment and output helpers used here precede this module in
-;; AppleSoft.Assignment.asm and AppleSoft.Print.asm.
+; retrocore: style=strict
+; APPLESOFT: GET, INPUT AND READ
+;
+; These statements share variable lookup and conversion but get their values from a key, an input line or
+; DATA statements. The string assignment and output helpers used here precede this module in
+; AppleSoft.Assignment.asm and AppleSoft.Print.asm.
+
+.include "../Microsoft6502Basic/MsBasic.Families.asm"
 
 ;; Handles a malformed input value: retries INPUT, or reports a syntax error for READ or GET.
 ;;
-;; For READ the reported line is the DATA line; GET is reported as direct. An active ONERR handler receives
+;; For READ the reported line is the DATA line; GET is reported as direct. An active `ONERR` handler receives
 ;; error code $FE for the INPUT retry path.
-;; See: <DOAGIN>, <DATLIN>, <SyntaxError>
-TRMNOK:
-    lda INPFLG
-    beq DOAGIN
-    bmi GETDTL
+;; In: InputMode = the statement's mode (<INPUT_MODE_INPUT>, <INPUT_MODE_GET> or <INPUT_MODE_READ>)
+;; Entry:
+;;   ToSyntaxError = jumps to <SyntaxError>; the enhanced IIe's <PrintTabOrSpace> branches here
+;; See: <RetryInput>, <DataLine>, <SyntaxError>
+;; Also: TRMNOK (M6502)
+.proc HandleBadInput
+    lda InputMode
+    beq RetryInput
+    bmi UseDataLine
     ldy #$FF
-    bne STCURL
-GETDTL:
-    lda DATLIN
-    ldy DATLIN+1
-STCURL:
-    sta CURLIN
-    sty CURLIN+1
-SNERR4:
-    jmp SNERR
-SNERR6:
-    pla
-TRMNO1:
+    bne SetLine
 
-;; Prints ?REENTER and restores the current statement's text pointer, unless ONERR intercepts the retry.
-DOAGIN:
-    bit ERRFLG
-    bpl TRMNO2
+;; READ: takes <DataLine> as the error's line.
+;; Also: GETDTL (M6502)
+UseDataLine:
+    lda DataLine
+    ldy DataLine+1
+
+;; Stores the error's line in <CurrentLine>.
+;; Also: STCURL (M6502)
+SetLine:
+    sta CurrentLine
+    sty CurrentLine+1
+
+;; Jumps on to <SyntaxError>.
+;; Also: SNERR4 (M6502)
+ToSyntaxError:
+    jmp SyntaxError
+.endproc
+
+;; Drops a stacked byte and falls into <RetryInput>; the shared INPUT code enters here.
+;; Also: SNERR6 (UNKN)
+.proc DiscardAndRetryInput
+    pla
+    ; Falls into RetryInput.
+.endproc
+
+;; Prints ?REENTER and restores the current statement's text pointer from <StoppedText>, unless `ONERR` intercepts the
+;; retry with error code $FE.
+;; Also: DOAGIN (M6502), TRMNO1 (M6502)
+.proc RetryInput
+    bit OnErrorActive
+    bpl PrintRetry
     ldx #$FE
     jmp HANDLE
-TRMNO2:
-    lda #<TRYAGN
-    ldy #>TRYAGN
-    jsr STROUT
-    lda OLDTXT
-    ldy OLDTXT+1
-    sta TXTPTR
-    sty TXTPTR+1
+
+;; No `ONERR` handler is active: prints the retry message and restores <TextPointer> from <StoppedText>.
+;; Also: TRMNO2 (UNKN)
+PrintRetry:
+    lda #<RetryMessage
+    ldy #>RetryMessage
+    jsr PrintText
+    lda StoppedText
+    ldy StoppedText+1
+    sta TextPointer
+    sty TextPointer+1
     rts
+.endproc
+
+.scope Statements continued
 
 ;; GET: reads individual keyboard characters into the variables in its list.
 ;; Errors: ILLEGAL DIRECT when used in direct mode
 ;; See: <AssignVariableList>, <CQINCH>
-GET:
-    jsr ERRDIR
-GETTTY:
-    ldx #$01
-    ldy #$02
+;; Also: GET (M6502)
+.proc Get
+    jsr RejectDirectMode
+
+;; Sets up an empty buffer and enters the shared input code in GET mode; nothing in AppleSoft enters here, and the
+;; label is kept for its old name.
+;; Also: GETTTY (M6502)
+ReadCharacters:
+    ldx #<(BUF+1)
+    ldy #>(BUF+1)
     lda #$00
     sta BUF+1
-    lda #$40
-    jsr INPCO1
+    lda #INPUT_MODE_GET
+    jsr AssignVariableList
     rts
+.endproc
 
 ;; INPUT: prints an optional quoted prompt and reads values for its variable list.
 ;;
-;; A literal prompt must be followed by a semicolon. Without one INPUT prints a question mark.
+;; A literal prompt must be followed by a semicolon. Without one INPUT prints a question mark. A line that starts with
+;; Control-C stops the program as the statement loop does, through <HandleBreak>.
 ;; Errors: ILLEGAL DIRECT when used in direct mode
-;; See: <INLIN>, <AssignVariableList::NextVariable>
-INPUT:
+;; See: <InputLine>, <AssignVariableList::NextVariable>
+;; Also: INPUT (M6502)
+.proc Input
     cmp #'"'
-    bne INPUT1
-    jsr STRTXT
+    bne NoPrompt
+    jsr ReadQuotedString
     lda #';'
-    jsr SYNCHR
-    jsr STRPRT
-    jmp NOTQTI
-INPUT1:
-    jsr OUTQST
-NOTQTI:
-    jsr ERRDIR
+    jsr CheckCharacter
+    jsr PrintString
+    jmp CheckDirect
+
+;; No quoted prompt: prints a question mark.
+;; Also: INPUT1 (UNKN)
+NoPrompt:
+    jsr PrintQuestionMark
+
+;; Rejects direct mode and puts a comma before the buffer.
+;; Also: NOTQTI (M6502)
+CheckDirect:
+    jsr RejectDirectMode
     lda #','
     sta BUF-1
 
-; A leading Control-C follows the same stop path as the statement loop.
-GETAGN:
-    jsr INLIN
+;; Reads the line; one that starts with Control-C goes to <HandleBreak>. Nothing branches here, and the label is kept
+;; for its old name.
+;; Also: GETAGN (M6502)
+ReadLine:
+    jsr InputLine
     lda BUF
-    cmp #$03
-    bne INPCON
-    jmp ISCCA1
+    cmp #CONTROL_C
+    bne AssignInputList
+    jmp HandleBreak
+.endproc
+
+.endscope
 
 ;; Prints a question mark and reads another input line.
-QINLIN:
-    jsr OUTQST
-GINLIN:
-    jmp INLIN
+;; Also: QINLIN (M6502)
+.proc PromptAndInputLine
+    jsr PrintQuestionMark
+
+;; Jumps on to <InputLine>; nothing in AppleSoft enters here, and the label is kept for its old name.
+;; Also: GINLIN (M6502)
+ToInputLine:
+    jmp InputLine
+.endproc
 
 .include "../Microsoft6502Basic/MsBasic.VariableInput.asm"
     VariableInput 2, 1, 0, 0, 0, 1

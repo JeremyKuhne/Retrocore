@@ -1,110 +1,113 @@
 ; retrocore: style=strict
 ;; APPLESOFT: HANDLER TABLES, RESERVED WORDS AND MESSAGES
 ;;
-;; These tables begin at $D000. <CRUNCH> searches <RESLST> in order; <Statements::List> expands its token bytes back
-;; through the same list. <GONE> dispatches statement tokens with <STMDSP>, while expression evaluation uses
-;; <FUNDSP> and <OperatorTable>. <ERROR> indexes <ERRTAB> by byte offset, not by an ordinal error number.
+;; These tables begin at $D000. <Tokenize> searches <ReservedWords> in order; <Statements::List> expands its token bytes
+;; back through the same list. <ExecuteStatement> dispatches statement tokens with <StatementTable>, while expression
+;; evaluation uses <FunctionTable> and <OperatorTable>. <ReportError> indexes <ErrorMessages> by byte offset, not by an
+;; ordinal error number.
 
 ;; Handler addresses minus one for the 64 statements, indexed by token $80-$BF.
 ;;
-;; <GONE> pushes the high and low bytes and returns through <GetNextCharacter>; the RTS increments the stacked
-;; address before entering the handler. `HOME` enters the Monitor and & enters the RAM vector <AmpersandJump>.
-STMDSP:
-    .word END - 1                   ; $80 END
-    .word FOR - 1                   ; $81 FOR
-    .word NEXT - 1                  ; $82 NEXT
-    .word DATA - 1                  ; $83 DATA
-    .word INPUT - 1                 ; $84 INPUT
-    .word DEL - 1                   ; $85 DEL
-    .word DIM - 1                   ; $86 DIM
-    .word READ - 1                  ; $87 READ
-    .word GR - 1                    ; $88 GR
-    .word TEXT - 1                  ; $89 TEXT
-    .word PRNUM - 1                 ; $8A PR#
-    .word INNUM - 1                 ; $8B IN#
-    .word CALL - 1                  ; $8C CALL
-    .word PLOT - 1                  ; $8D PLOT
-    .word HLIN - 1                  ; $8E HLIN
-    .word VLIN - 1                  ; $8F VLIN
-    .word HGR2 - 1                  ; $90 HGR2
-    .word HGR - 1                   ; $91 HGR
-    .word HCOLOR - 1                ; $92 HCOLOR=
-    .word HPLOT - 1                 ; $93 HPLOT
-    .word DRAW - 1                  ; $94 DRAW
-    .word XDRAW - 1                 ; $95 XDRAW
-    .word HTAB - 1                  ; $96 HTAB
-    .word HOME - 1                  ; $97 HOME
-    .word ROT - 1                   ; $98 ROT=
-    .word SCALE - 1                 ; $99 SCALE=
-    .word SHLOAD - 1                ; $9A SHLOAD
-    .word TRACE - 1                 ; $9B TRACE
-    .word NOTRAC - 1                ; $9C NOTRACE
-    .word NRMSTM - 1                ; $9D NORMAL
-    .word INVERS - 1                ; $9E INVERSE
-    .word FLASH - 1                 ; $9F FLASH
-    .word COLSTM - 1                ; $A0 COLOR=
-    .word POP - 1                   ; $A1 POP
-    .word VTAB - 1                  ; $A2 VTAB
-    .word HIMEM - 1                 ; $A3 HIMEM:
-    .word LOMEM - 1                 ; $A4 LOMEM:
-    .word ONERR - 1                 ; $A5 ONERR
-    .word RESUME - 1                ; $A6 RESUME
-    .word RECALL - 1                ; $A7 RECALL
-    .word STORE - 1                 ; $A8 STORE
-    .word SPEED - 1                 ; $A9 SPEED=
-    .word LET - 1                   ; $AA LET
-    .word GOTO - 1                  ; $AB GOTO
-    .word RUNSTM - 1                ; $AC RUN
-    .word IF - 1                    ; $AD IF
-    .word RESTOR - 1                ; $AE RESTORE
-    .word AmpersandJump - 1         ; $AF &
-    .word GOSUB - 1                 ; $B0 GOSUB
-    .word POP - 1                   ; $B1 RETURN
-    .word REM - 1                   ; $B2 REM
-    .word STOP - 1                  ; $B3 STOP
-    .word ON - 1                    ; $B4 ON
-    .word WAIT - 1                  ; $B5 WAIT
-    .word LOAD - 1                  ; $B6 LOAD
-    .word SAVE - 1                  ; $B7 SAVE
-    .word DEF - 1                   ; $B8 DEF
-    .word POKE - 1                  ; $B9 POKE
-    .word PRINT - 1                 ; $BA PRINT
-    .word CONT - 1                  ; $BB CONT
-    .word LIST - 1                  ; $BC LIST
-    .word CLEAR - 1                 ; $BD CLEAR
-    .word GET - 1                   ; $BE GET
-    .word NEW - 1                   ; $BF NEW
+;; <ExecuteStatement> pushes the high and low bytes and returns through <GetNextCharacter>; the RTS increments the
+;; stacked address before entering the handler. `HOME` enters the Monitor and & enters the RAM vector <AmpersandJump>.
+;; Also: STMDSP (M6502)
+StatementTable:
+    .word Statements::End - 1               ; $80 END
+    .word Statements::For - 1               ; $81 FOR
+    .word Statements::Next - 1              ; $82 NEXT
+    .word Statements::Data - 1              ; $83 DATA
+    .word Statements::Input - 1             ; $84 INPUT
+    .word DEL - 1                           ; $85 DEL
+    .word Statements::Dim - 1               ; $86 DIM
+    .word Statements::Read - 1              ; $87 READ
+    .word GR - 1                            ; $88 GR
+    .word TEXT - 1                          ; $89 TEXT
+    .word PRNUM - 1                         ; $8A PR#
+    .word INNUM - 1                         ; $8B IN#
+    .word CALL - 1                          ; $8C CALL
+    .word PLOT - 1                          ; $8D PLOT
+    .word HLIN - 1                          ; $8E HLIN
+    .word VLIN - 1                          ; $8F VLIN
+    .word HGR2 - 1                          ; $90 HGR2
+    .word HGR - 1                           ; $91 HGR
+    .word HCOLOR - 1                        ; $92 HCOLOR=
+    .word HPLOT - 1                         ; $93 HPLOT
+    .word DRAW - 1                          ; $94 DRAW
+    .word XDRAW - 1                         ; $95 XDRAW
+    .word HTAB - 1                          ; $96 HTAB
+    .word HOME - 1                          ; $97 HOME
+    .word ROT - 1                           ; $98 ROT=
+    .word SCALE - 1                         ; $99 SCALE=
+    .word SHLOAD - 1                        ; $9A SHLOAD
+    .word TRACE - 1                         ; $9B TRACE
+    .word NOTRAC - 1                        ; $9C NOTRACE
+    .word NRMSTM - 1                        ; $9D NORMAL
+    .word INVERS - 1                        ; $9E INVERSE
+    .word FLASH - 1                         ; $9F FLASH
+    .word COLSTM - 1                        ; $A0 COLOR=
+    .word Statements::Pop - 1               ; $A1 POP
+    .word VTAB - 1                          ; $A2 VTAB
+    .word HIMEM - 1                         ; $A3 HIMEM:
+    .word LOMEM - 1                         ; $A4 LOMEM:
+    .word ONERR - 1                         ; $A5 ONERR
+    .word RESUME - 1                        ; $A6 RESUME
+    .word RECALL - 1                        ; $A7 RECALL
+    .word STORE - 1                         ; $A8 STORE
+    .word SPEED - 1                         ; $A9 SPEED=
+    .word Statements::Let - 1               ; $AA LET
+    .word Statements::GoTo - 1              ; $AB GOTO
+    .word Statements::PrepareRun - 1        ; $AC RUN
+    .word Statements::If - 1                ; $AD IF
+    .word Statements::Restore - 1           ; $AE RESTORE
+    .word AmpersandJump - 1                 ; $AF &
+    .word Statements::GoSub - 1             ; $B0 GOSUB
+    .word Statements::Pop - 1               ; $B1 RETURN
+    .word Statements::Rem - 1               ; $B2 REM
+    .word Statements::Stop - 1              ; $B3 STOP
+    .word Statements::On - 1                ; $B4 ON
+    .word WAIT - 1                          ; $B5 WAIT
+    .word Statements::Load - 1              ; $B6 LOAD
+    .word Statements::Save - 1              ; $B7 SAVE
+    .word Statements::Def - 1               ; $B8 DEF
+    .word Statements::Poke - 1              ; $B9 POKE
+    .word Statements::Print - 1             ; $BA PRINT
+    .word Statements::Cont - 1              ; $BB CONT
+    .word Statements::List - 1              ; $BC LIST
+    .word Statements::Clear - 1             ; $BD CLEAR
+    .word Statements::Get - 1               ; $BE GET
+    .word Statements::New - 1               ; $BF NEW
 
 ;; Addresses of the functions in token order, from `SGN` through `MID$`.
 ;;
-;; Unlike <STMDSP>, these words are the actual entry addresses. The SCRN( entry goes to <ERROR>; its
+;; Unlike <StatementTable>, these words are the actual entry addresses. The SCRN( entry goes to <ReportError>; its
 ;; special handling is elsewhere in expression evaluation. `USR` enters the writable <UserVector> vector.
-FUNDSP:
-    .word SGN                       ; SGN
-    .word INT                       ; INT
-    .word ABS                       ; ABS
-    .word UserVector                ; USR
-    .word FRE                       ; FRE
-    .word ERROR                     ; SCRN(
-    .word PDL                       ; PDL
-    .word POS                       ; POS
-    .word SQR                       ; SQR
-    .word RND                       ; RND
-    .word LOG                       ; LOG
-    .word EXP                       ; EXP
-    .word COS                       ; COS
-    .word SIN                       ; SIN
-    .word TAN                       ; TAN
-    .word ATN                       ; ATN
-    .word PEEK                      ; PEEK
-    .word LEN                       ; LEN
-    .word STR                       ; STR$
-    .word VAL                       ; VAL
-    .word ASC                       ; ASC
-    .word CHR                       ; CHR$
-    .word LEFT                      ; LEFT$
-    .word RIGHT                     ; RIGHT$
-    .word MID                       ; MID$
+;; Also: FUNDSP (M6502)
+FunctionTable:
+    .word Functions::Sgn                    ; SGN
+    .word Functions::Int                    ; INT
+    .word Functions::Abs                    ; ABS
+    .word UserVector                        ; USR
+    .word Functions::Fre                    ; FRE
+    .word ReportError                       ; SCRN(
+    .word Functions::Pdl                    ; PDL
+    .word Functions::Pos                    ; POS
+    .word Functions::Sqr                    ; SQR
+    .word Functions::Rnd                    ; RND
+    .word Functions::Log                    ; LOG
+    .word Functions::Exp                    ; EXP
+    .word Functions::Cos                    ; COS
+    .word Functions::Sin                    ; SIN
+    .word Functions::Tan                    ; TAN
+    .word Functions::Atn                    ; ATN
+    .word Functions::Peek                   ; PEEK
+    .word Functions::Len                    ; LEN
+    .word Functions::Str                    ; STR$
+    .word Functions::Val                    ; VAL
+    .word Functions::Asc                    ; ASC
+    .word Functions::Chr                    ; CHR$
+    .word Functions::Left                   ; LEFT$
+    .word Functions::Right                  ; RIGHT$
+    .word Functions::Mid                    ; MID$
 
 .include "../Microsoft6502Basic/MsBasic.OperatorTable.asm"
     ; AppleSoft puts power below negation, gives NOT unary precedence, and dispatches AND to <Operators::And>.
@@ -118,7 +121,8 @@ FUNDSP:
 ;;
 ;; Microsoft's source counts the token values here, and the error offsets below, with an assembly-time variable,
 ;; Q; this table writes each token's value and computes each offset.
-RESLST:
+;; Also: RESLST (M6502)
+ReservedWords:
     .byte "EN", 'D' | $80           ; $80 END
 
 ;; The token of `END`, the first statement token.
@@ -313,7 +317,7 @@ TOKEN_LESS = $D1
 
     .byte "SG", 'N' | $80           ; $D2 SGN
 
-;; The token of `SGN`, the first function; the evaluator and <FUNDSP>'s index start here.
+;; The token of `SGN`, the first function; the evaluator and <FunctionTable>'s index start here.
 ;; Also: ONEFUN (M6502)
 TOKEN_FIRST_FUNCTION = $D2
 
@@ -355,108 +359,109 @@ TOKEN_LAST_SIMPLE_FUNCTION = $E7
 
 ;; Error messages addressed by the ERROR_* constants' byte offsets.
 ;;
-;; Each message ends in a character with bit 7 set. <ERROR> prints until that byte, then appends <ErrorSuffix>;
+;; Each message ends in a character with bit 7 set. <ReportError> prints until that byte, then appends <ErrorSuffix>;
 ;; all offsets fit in one byte.
-ERRTAB:
-;; Offset of `NEXT` WITHOUT `FOR` in <ERRTAB>.
+;; Also: ERRTAB (M6502)
+ErrorMessages:
+;; Offset of `NEXT` WITHOUT `FOR` in <ErrorMessages>.
 ;; Also: ERRNF (M6502)
-ERROR_NEXT_WITHOUT_FOR = * - ERRTAB
+ERROR_NEXT_WITHOUT_FOR = * - ErrorMessages
     .byte "NEXT WITHOUT FO", 'R' | $80
     .assert ERROR_NEXT_WITHOUT_FOR = $00, "ERROR_NEXT_WITHOUT_FOR must stay at its offset."
 
-;; Offset of `SYNTAX` in <ERRTAB>.
+;; Offset of `SYNTAX` in <ErrorMessages>.
 ;; Also: ERRSN (M6502)
-ERROR_SYNTAX = * - ERRTAB
+ERROR_SYNTAX = * - ErrorMessages
     .byte "SYNTA", 'X' | $80
     .assert ERROR_SYNTAX = $10, "ERROR_SYNTAX must stay at its offset."
 
-;; Offset of `RETURN` WITHOUT `GOSUB` in <ERRTAB>.
+;; Offset of `RETURN` WITHOUT `GOSUB` in <ErrorMessages>.
 ;; Also: ERRRG (M6502)
-ERROR_RETURN_WITHOUT_GOSUB = * - ERRTAB
+ERROR_RETURN_WITHOUT_GOSUB = * - ErrorMessages
     .byte "RETURN WITHOUT GOSU", 'B' | $80
     .assert ERROR_RETURN_WITHOUT_GOSUB = $16, "ERROR_RETURN_WITHOUT_GOSUB must stay at its offset."
 
-;; Offset of OUT OF `DATA` in <ERRTAB>.
+;; Offset of OUT OF `DATA` in <ErrorMessages>.
 ;; Also: ERROD (M6502)
-ERROR_OUT_OF_DATA = * - ERRTAB
+ERROR_OUT_OF_DATA = * - ErrorMessages
     .byte "OUT OF DAT", 'A' | $80
     .assert ERROR_OUT_OF_DATA = $2A, "ERROR_OUT_OF_DATA must stay at its offset."
 
-;; Offset of ILLEGAL QUANTITY in <ERRTAB>.
+;; Offset of ILLEGAL QUANTITY in <ErrorMessages>.
 ;; Also: ERRFC (M6502)
-ERROR_ILLEGAL_QUANTITY = * - ERRTAB
+ERROR_ILLEGAL_QUANTITY = * - ErrorMessages
     .byte "ILLEGAL QUANTIT", 'Y' | $80
     .assert ERROR_ILLEGAL_QUANTITY = $35, "ERROR_ILLEGAL_QUANTITY must stay at its offset."
 
-;; Offset of OVERFLOW in <ERRTAB>.
+;; Offset of OVERFLOW in <ErrorMessages>.
 ;; Also: ERROV (M6502, ASTIL)
-ERROR_OVERFLOW = * - ERRTAB
+ERROR_OVERFLOW = * - ErrorMessages
     .byte "OVERFLO", 'W' | $80
     .assert ERROR_OVERFLOW = $45, "ERROR_OVERFLOW must stay at its offset."
 
-;; Offset of OUT OF MEMORY in <ERRTAB>.
+;; Offset of OUT OF MEMORY in <ErrorMessages>.
 ;; Also: ERROM (M6502)
-ERROR_OUT_OF_MEMORY = * - ERRTAB
+ERROR_OUT_OF_MEMORY = * - ErrorMessages
     .byte "OUT OF MEMOR", 'Y' | $80
     .assert ERROR_OUT_OF_MEMORY = $4D, "ERROR_OUT_OF_MEMORY must stay at its offset."
 
-;; Offset of UNDEF'D STATEMENT in <ERRTAB>.
+;; Offset of UNDEF'D STATEMENT in <ErrorMessages>.
 ;; Also: ERRUS (M6502)
-ERROR_UNDEFINED_STATEMENT = * - ERRTAB
+ERROR_UNDEFINED_STATEMENT = * - ErrorMessages
     .byte "UNDEF'D STATEMEN", 'T' | $80
     .assert ERROR_UNDEFINED_STATEMENT = $5A, "ERROR_UNDEFINED_STATEMENT must stay at its offset."
 
-;; Offset of BAD SUBSCRIPT in <ERRTAB>.
+;; Offset of BAD SUBSCRIPT in <ErrorMessages>.
 ;; Also: ERRBS (M6502)
-ERROR_BAD_SUBSCRIPT = * - ERRTAB
+ERROR_BAD_SUBSCRIPT = * - ErrorMessages
     .byte "BAD SUBSCRIP", 'T' | $80
     .assert ERROR_BAD_SUBSCRIPT = $6B, "ERROR_BAD_SUBSCRIPT must stay at its offset."
 
-;; Offset of REDIM'D ARRAY in <ERRTAB>.
+;; Offset of REDIM'D ARRAY in <ErrorMessages>.
 ;; Also: ERRDD (M6502)
-ERROR_REDIMENSIONED_ARRAY = * - ERRTAB
+ERROR_REDIMENSIONED_ARRAY = * - ErrorMessages
     .byte "REDIM'D ARRA", 'Y' | $80
     .assert ERROR_REDIMENSIONED_ARRAY = $78, "ERROR_REDIMENSIONED_ARRAY must stay at its offset."
 
-;; Offset of DIVISION BY `ZERO` in <ERRTAB>.
+;; Offset of DIVISION BY `ZERO` in <ErrorMessages>.
 ;; Also: ERRDV0 (M6502)
-ERROR_DIVISION_BY_ZERO = * - ERRTAB
+ERROR_DIVISION_BY_ZERO = * - ErrorMessages
     .byte "DIVISION BY ZER", 'O' | $80
     .assert ERROR_DIVISION_BY_ZERO = $85, "ERROR_DIVISION_BY_ZERO must stay at its offset."
 
-;; Offset of ILLEGAL DIRECT in <ERRTAB>.
+;; Offset of ILLEGAL DIRECT in <ErrorMessages>.
 ;; Also: ERRID (M6502)
-ERROR_ILLEGAL_DIRECT = * - ERRTAB
+ERROR_ILLEGAL_DIRECT = * - ErrorMessages
     .byte "ILLEGAL DIREC", 'T' | $80
     .assert ERROR_ILLEGAL_DIRECT = $95, "ERROR_ILLEGAL_DIRECT must stay at its offset."
 
-;; Offset of TYPE MISMATCH in <ERRTAB>.
+;; Offset of TYPE MISMATCH in <ErrorMessages>.
 ;; Also: ERRTM (M6502)
-ERROR_TYPE_MISMATCH = * - ERRTAB
+ERROR_TYPE_MISMATCH = * - ErrorMessages
     .byte "TYPE MISMATC", 'H' | $80
     .assert ERROR_TYPE_MISMATCH = $A3, "ERROR_TYPE_MISMATCH must stay at its offset."
 
-;; Offset of STRING TOO LONG in <ERRTAB>.
+;; Offset of STRING TOO LONG in <ErrorMessages>.
 ;; Also: ERRLS (M6502)
-ERROR_STRING_TOO_LONG = * - ERRTAB
+ERROR_STRING_TOO_LONG = * - ErrorMessages
     .byte "STRING TOO LON", 'G' | $80
     .assert ERROR_STRING_TOO_LONG = $B0, "ERROR_STRING_TOO_LONG must stay at its offset."
 
-;; Offset of FORMULA TOO COMPLEX in <ERRTAB>.
+;; Offset of FORMULA TOO COMPLEX in <ErrorMessages>.
 ;; Also: ERRST (M6502)
-ERROR_FORMULA_TOO_COMPLEX = * - ERRTAB
+ERROR_FORMULA_TOO_COMPLEX = * - ErrorMessages
     .byte "FORMULA TOO COMPLE", 'X' | $80
     .assert ERROR_FORMULA_TOO_COMPLEX = $BF, "ERROR_FORMULA_TOO_COMPLEX must stay at its offset."
 
-;; Offset of CAN'T CONTINUE in <ERRTAB>.
+;; Offset of CAN'T CONTINUE in <ErrorMessages>.
 ;; Also: ERRCN (M6502)
-ERROR_CANT_CONTINUE = * - ERRTAB
+ERROR_CANT_CONTINUE = * - ErrorMessages
     .byte "CAN'T CONTINU", 'E' | $80
     .assert ERROR_CANT_CONTINUE = $D2, "ERROR_CANT_CONTINUE must stay at its offset."
 
-;; Offset of UNDEF'D FUNCTION in <ERRTAB>.
+;; Offset of UNDEF'D FUNCTION in <ErrorMessages>.
 ;; Also: ERRUF (M6502)
-ERROR_UNDEFINED_FUNCTION = * - ERRTAB
+ERROR_UNDEFINED_FUNCTION = * - ErrorMessages
     .byte "UNDEF'D FUNCTIO", 'N' | $80
     .assert ERROR_UNDEFINED_FUNCTION = $E0, "ERROR_UNDEFINED_FUNCTION must stay at its offset."
 

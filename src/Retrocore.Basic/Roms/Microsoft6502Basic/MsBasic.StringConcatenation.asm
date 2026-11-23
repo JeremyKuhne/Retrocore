@@ -45,7 +45,7 @@
     adc (FacMantissa3),y
     bcc LengthOk
     ldx #<ERROR_STRING_TOO_LONG
-    jmp ERROR
+    jmp ReportError
 
 ;; Allocates the combined string and copies the two strings into it.
 ;; Also: SIZEOK (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)

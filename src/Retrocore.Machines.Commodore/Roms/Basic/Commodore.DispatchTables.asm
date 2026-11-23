@@ -11,7 +11,7 @@
 ;; Parameters: goToken = 1 to include the `GO` spelling; diskCommands = 1 to add the disk statements;
 ;;   badData = 1 for the early `BAD DATA` error, 0 for `FILE DATA`;
 ;;   singleReturn = 1 for a carriage return alone in `READY` and `BREAK`, 0 for `CR/LF`
-.macro COMMODORE_DISPATCH_TABLES goToken, diskCommands, badData, singleReturn
+.macro CommodoreDispatchTables goToken, diskCommands, badData, singleReturn
     .assert goToken = 0 || goToken = 1, "goToken is 0 or 1."
     .assert diskCommands = 0 || diskCommands = 1, "diskCommands is 0 or 1."
     .assert badData = 0 || badData = 1, "badData is 0 or 1."
@@ -20,44 +20,45 @@
 
 ;; Statement handler addresses minus one, indexed by token starting with `END`.
 ;; Disk commands, when present, follow `GO` in this table even though their tokens follow the functions.
-STMDSP:
-    .word END - 1
-    .word FOR - 1
-    .word NEXT - 1
-    .word DATA - 1
-    .word INPUTN - 1
-    .word INPUT - 1
-    .word DIM - 1
-    .word READ - 1
-    .word LET - 1
-    .word GOTO - 1
-    .word RUN - 1
-    .word IF - 1
-    .word RESTOR - 1
-    .word GOSUB - 1
-    .word RETURN - 1
-    .word REM - 1
-    .word STOP - 1
-    .word ONGOTO - 1
-    .word FNWAIT - 1
+;; Also: STMDSP (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+StatementTable:
+    .word Statements::End - 1
+    .word Statements::For - 1
+    .word Statements::Next - 1
+    .word Statements::Data - 1
+    .word Statements::InputNumber - 1
+    .word Statements::Input - 1
+    .word Statements::Dim - 1
+    .word Statements::Read - 1
+    .word Statements::Let - 1
+    .word Statements::GoTo - 1
+    .word Statements::Run - 1
+    .word Statements::If - 1
+    .word Statements::Restore - 1
+    .word Statements::GoSub - 1
+    .word Statements::Return - 1
+    .word Statements::Rem - 1
+    .word Statements::Stop - 1
+    .word Statements::On - 1
+    .word Statements::Wait - 1
     .word KernalLoad - 1
     .word KernalSave - 1
     .word KernalVerify - 1
-    .word DEF - 1
-    .word POKE - 1
-    .word PRINTN - 1
-    .word PRINT - 1
-    .word CONT - 1
-    .word LIST - 1
-    .word CLEAR - 1
-    .word CMD - 1
+    .word Statements::Def - 1
+    .word Statements::Poke - 1
+    .word Statements::PrintNumber - 1
+    .word Statements::Print - 1
+    .word Statements::Cont - 1
+    .word Statements::List - 1
+    .word Statements::Clear - 1
+    .word Statements::Cmd - 1
     .word KernalSys - 1
     .word KernalOpen - 1
     .word KernalClose - 1
-    .word GET - 1
-    .word SCRATH - 1
+    .word Statements::Get - 1
+    .word Statements::New - 1
     .if diskCommands
-        .word GO - 1
+        .word Statements::Go - 1
         .word KernalConcat - 1
         .word KernalDiskOpen - 1
         .word KernalDiskClose - 1
@@ -75,49 +76,60 @@ STMDSP:
         .word KernalDirectory - 1
     .endif
 
-;; Function entry addresses, in token order from `SGN` through `MID$`.
-FUNDSP:
-    .word SGN
-    .word INT
-    .word ABS
+    ;; Function entry addresses, in token order from `SGN` through `MID$`.
+    ;; Also: FUNDSP (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    .proc FunctionTable
+    .word Functions::Sgn
+    .word Functions::Int
+    .word Functions::Abs
 
-;; Initial `USR` function target: the writable jump at <UserVector>.
-USRLOC:
+;; `USR`'s entry: the writable jump at <UserVector>.
+;; Also: USRLOC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+Usr:
     .word UserVector
-    .word FRE
-    .word POS
-    .word SQR
-    .word RND
-    .word LOG
-    .word EXP
+    .word Functions::Fre
+    .word Functions::Pos
+    .word Functions::Sqr
+    .word Functions::Rnd
+    .word Functions::Log
+    .word Functions::Exp
 
-;; `COS` function-table entry.
-COSFIX:
-    .word COS
-;; `SIN` function-table entry.
-SINFIX:
-    .word SIN
-;; `TAN` function-table entry.
-TANFIX:
-    .word TAN
-;; `ATN` function-table entry.
-ATNFIX:
-    .word ATN
-    .word PEEK
-    .word LEN
-    .word STR
-    .word VAL
-    .word ASC
-    .word CHR
-    .word LEFT
-    .word RIGHT
-    .word MID
+;; `COS`'s entry, Microsoft's patch point; nothing refers to it, and the label is kept for its old name.
+;; Also: COSFIX (M6502)
+Cos:
+    .word Functions::Cos
+
+;; `SIN`'s entry, Microsoft's patch point; kept for its old name.
+;; Also: SINFIX (M6502)
+Sin:
+    .word Functions::Sin
+
+;; `TAN`'s entry, Microsoft's patch point; kept for its old name.
+;; Also: TANFIX (M6502)
+Tan:
+    .word Functions::Tan
+
+;; `ATN`'s entry, Microsoft's patch point; kept for its old name.
+;; Also: ATNFIX (M6502)
+Atn:
+    .word Functions::Atn
+    .word Functions::Peek
+    .word Functions::Len
+    .word Functions::Str
+    .word Functions::Val
+    .word Functions::Asc
+    .word Functions::Chr
+    .word Functions::Left
+    .word Functions::Right
+    .word Functions::Mid
+    .endproc
 
     OperatorEntries 0, 0, Operators::And
 
 ;; Reserved words in token order; bit 7 marks the last character of each spelling.
-;; <CRUNCH> searches this list and <Statements::List> expands tokens from it. A zero byte ends the list.
-RESLST:
+;; <Tokenize> searches this list and <Statements::List> expands tokens from it. A zero byte ends the list.
+;; Also: RESLST (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+ReservedWords:
     .byte "EN", 'D' | $80
     ;; The token of `END`, the first statement token.
     ;; Also: ENDTK (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
@@ -281,88 +293,89 @@ RESLST:
     .byte $00
 
 ;; Error messages addressed by the ERROR_* constants' byte offsets.
-;; Bit 7 on the last character ends each message; <ERROR> appends <ErrorSuffix>.
-ERRTAB:
-    ;; Offset of `NEXT` WITHOUT `FOR` in <ERRTAB>.
+;; Bit 7 on the last character ends each message; <ReportError> appends <ErrorSuffix>.
+;; Also: ERRTAB (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+ErrorMessages:
+    ;; Offset of `NEXT` WITHOUT `FOR` in <ErrorMessages>.
     ;; Also: ERRNF (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
-    ERROR_NEXT_WITHOUT_FOR = * - ERRTAB
+    ERROR_NEXT_WITHOUT_FOR = * - ErrorMessages
     .byte "NEXT WITHOUT FO", 'R' | $80
-    ;; Offset of SYNTAX in <ERRTAB>.
+    ;; Offset of SYNTAX in <ErrorMessages>.
     ;; Also: ERRSN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
-    ERROR_SYNTAX = * - ERRTAB
+    ERROR_SYNTAX = * - ErrorMessages
     .byte "SYNTA", 'X' | $80
-    ;; Offset of `RETURN` WITHOUT `GOSUB` in <ERRTAB>.
+    ;; Offset of `RETURN` WITHOUT `GOSUB` in <ErrorMessages>.
     ;; Also: ERRRG (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
-    ERROR_RETURN_WITHOUT_GOSUB = * - ERRTAB
+    ERROR_RETURN_WITHOUT_GOSUB = * - ErrorMessages
     .byte "RETURN WITHOUT GOSU", 'B' | $80
-    ;; Offset of OUT OF `DATA` in <ERRTAB>.
+    ;; Offset of OUT OF `DATA` in <ErrorMessages>.
     ;; Also: ERROD (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
-    ERROR_OUT_OF_DATA = * - ERRTAB
+    ERROR_OUT_OF_DATA = * - ErrorMessages
     .byte "OUT OF DAT", 'A' | $80
-    ;; Offset of ILLEGAL QUANTITY in <ERRTAB>.
+    ;; Offset of ILLEGAL QUANTITY in <ErrorMessages>.
     ;; Also: ERRFC (M6502, CBM4S79, K4S79, HV1, HV1R, HV2, HV4, HV4R, HVK4)
-    ERROR_ILLEGAL_QUANTITY = * - ERRTAB
+    ERROR_ILLEGAL_QUANTITY = * - ErrorMessages
     .byte "ILLEGAL QUANTIT", 'Y' | $80
     .if ERROR_PADDING5
         .res 5, $00
     .endif
-    ;; Offset of OVERFLOW in <ERRTAB>.
+    ;; Offset of OVERFLOW in <ErrorMessages>.
     ;; Also: ERROV (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
-    ERROR_OVERFLOW = * - ERRTAB
+    ERROR_OVERFLOW = * - ErrorMessages
     .byte "OVERFLO", 'W' | $80
-    ;; Offset of OUT OF MEMORY in <ERRTAB>.
+    ;; Offset of OUT OF MEMORY in <ErrorMessages>.
     ;; Also: ERROM (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
-    ERROR_OUT_OF_MEMORY = * - ERRTAB
+    ERROR_OUT_OF_MEMORY = * - ErrorMessages
     .byte "OUT OF MEMOR", 'Y' | $80
-    ;; Offset of UNDEF'D STATEMENT in <ERRTAB>.
+    ;; Offset of UNDEF'D STATEMENT in <ErrorMessages>.
     ;; Also: ERRUS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
-    ERROR_UNDEFINED_STATEMENT = * - ERRTAB
+    ERROR_UNDEFINED_STATEMENT = * - ErrorMessages
     .byte "UNDEF'D STATEMEN", 'T' | $80
-    ;; Offset of `BAD` SUBSCRIPT in <ERRTAB>.
+    ;; Offset of `BAD` SUBSCRIPT in <ErrorMessages>.
     ;; Also: ERRBS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
-    ERROR_BAD_SUBSCRIPT = * - ERRTAB
+    ERROR_BAD_SUBSCRIPT = * - ErrorMessages
     .byte "BAD SUBSCRIP", 'T' | $80
-    ;; Offset of REDIM'D ARRAY in <ERRTAB>.
+    ;; Offset of REDIM'D ARRAY in <ErrorMessages>.
     ;; Also: ERRDD (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
-    ERROR_REDIMENSIONED_ARRAY = * - ERRTAB
+    ERROR_REDIMENSIONED_ARRAY = * - ErrorMessages
     .byte "REDIM'D ARRA", 'Y' | $80
-    ;; Offset of DIVISION BY `ZERO` in <ERRTAB>.
+    ;; Offset of DIVISION BY `ZERO` in <ErrorMessages>.
     ;; Also: ERRDV0 (M6502)
-    ERROR_DIVISION_BY_ZERO = * - ERRTAB
+    ERROR_DIVISION_BY_ZERO = * - ErrorMessages
     .byte "DIVISION BY ZER", 'O' | $80
-    ;; Offset of ILLEGAL DIRECT in <ERRTAB>.
+    ;; Offset of ILLEGAL DIRECT in <ErrorMessages>.
     ;; Also: ERRID (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
-    ERROR_ILLEGAL_DIRECT = * - ERRTAB
+    ERROR_ILLEGAL_DIRECT = * - ErrorMessages
     .byte "ILLEGAL DIREC", 'T' | $80
-    ;; Offset of TYPE MISMATCH in <ERRTAB>.
+    ;; Offset of TYPE MISMATCH in <ErrorMessages>.
     ;; Also: ERRTM (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
-    ERROR_TYPE_MISMATCH = * - ERRTAB
+    ERROR_TYPE_MISMATCH = * - ErrorMessages
     .byte "TYPE MISMATC", 'H' | $80
-    ;; Offset of STRING TOO LONG in <ERRTAB>.
+    ;; Offset of STRING TOO LONG in <ErrorMessages>.
     ;; Also: ERRLS (M6502, CBM4S79, K4S79, HV1, HV1R, HV2, HV4, HV4R, HVK4)
-    ERROR_STRING_TOO_LONG = * - ERRTAB
+    ERROR_STRING_TOO_LONG = * - ErrorMessages
     .byte "STRING TOO LON", 'G' | $80
     ;; Offset of the file-data message: `BAD` `DATA` in BASIC 1, FILE `DATA` later.
     ;; Also: ERRBD (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
-    ERROR_FILE_DATA = * - ERRTAB
+    ERROR_FILE_DATA = * - ErrorMessages
     .if badData
         .byte "BAD DAT", 'A' | $80
     .else
         .byte "FILE DAT", 'A' | $80
     .endif
-    ;; Offset of FORMULA TOO COMPLEX in <ERRTAB>.
+    ;; Offset of FORMULA TOO COMPLEX in <ErrorMessages>.
     ;; Also: ERRST (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
-    ERROR_FORMULA_TOO_COMPLEX = * - ERRTAB
+    ERROR_FORMULA_TOO_COMPLEX = * - ErrorMessages
     .byte "FORMULA TOO COMPLE", 'X' | $80
-    ;; Offset of CAN'T CONTINUE in <ERRTAB>.
+    ;; Offset of CAN'T CONTINUE in <ErrorMessages>.
     ;; Also: ERRCN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
-    ERROR_CANT_CONTINUE = * - ERRTAB
+    ERROR_CANT_CONTINUE = * - ErrorMessages
     .byte "CAN'T CONTINU", 'E' | $80
-    ;; Offset of UNDEF'D FUNCTION in <ERRTAB>.
+    ;; Offset of UNDEF'D FUNCTION in <ErrorMessages>.
     ;; Also: ERRUF (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
-    ERROR_UNDEFINED_FUNCTION = * - ERRTAB
+    ERROR_UNDEFINED_FUNCTION = * - ErrorMessages
     .byte "UNDEF'D FUNCTIO", 'N' | $80
-    .assert * - ERRTAB <= 256, "The error message offsets must fit in one byte."
+    .assert * - ErrorMessages <= 256, "The error message offsets must fit in one byte."
 
 ;; Suffix appended to an error message.
 ;; Also: ERR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)

@@ -43,10 +43,10 @@ internal static partial class BasicNames
 
     /// <summary>
     ///  Gets the names a vendor's alias gives in some builds that other builds still give to a label of a vendor's own
-    ///  unconverted code, until part C converts it (Basic.md E3): BASIC 4's GETRTS, which is the output routine's
-    ///  return in AppleSoft and BASIC 1 and 2.
+    ///  unconverted code, until its part converts it: BASIC 4's GETRTS, which is the output routine's return in
+    ///  AppleSoft and BASIC 1 and 2 (Basic.md E3), and AppleSoft's ON, which is BASIC 4's disk-command parser.
     /// </summary>
-    internal static string[] VendorLabelNames { get; } = ["GETRTS"];
+    internal static string[] VendorLabelNames { get; } = ["GETRTS", "ON"];
 
     /// <summary>
     ///  Gets whether a build defines a name as a label of a vendor's own code, in the folder of the vendor's historical
@@ -288,14 +288,18 @@ internal static partial class BasicNames
 
         // An old name that names different definitions in different builds (ANDOP: the PET's And, AppleSoft's Or)
         // goes last, and gives way where another old name names only that definition.
-        foreach ((string name, long value) in symbols.OrderBy(pair => CurrentNames(pair.Key).Count))
+        // A name another build's vendor label gives (VendorLabelNames) goes after every other, and gives way.
+        foreach ((string name, long value) in symbols
+            .OrderBy(pair => VendorLabelNames.Contains(pair.Key) ? 1 : 0)
+            .ThenBy(pair => CurrentNames(pair.Key).Count))
         {
-            bool perBuild = CurrentNames(name).Count > 1;
+            bool perBuild = CurrentNames(name).Count > 1 || VendorLabelNames.Contains(name);
             foreach (string current in CurrentNames(name).Where(current => !symbols.ContainsKey(current)))
             {
                 if (added.TryGetValue(current, out string? first) && names[current] != value)
                 {
-                    if (perBuild && CurrentNames(first).Count == 1) { continue; }
+                    // Per-build names go last: a name that means another definition in another build gives way.
+                    if (perBuild) { continue; }
 
                     throw new InvalidOperationException(
                         $"{first} and {name} are both old names of {current}, with different values.");
@@ -332,6 +336,20 @@ internal static partial class BasicNames
     /// </remarks>
     internal static string Label(string name) =>
         string.Join('\n', CurrentNames(name).Where(current => !IsScoped(current)).Prepend(name).Select(label => $"{label}:"));
+
+    /// <summary>
+    ///  Gets the source that defines a label a test's own source gives one of Microsoft's names, under the unscoped
+    ///  names the native BASIC builds now define it by, or under the old name where they define none. Unlike
+    ///  <see cref="Label(string)"/>, it never defines an old name that an <c>;; Also:</c> in the build's sources gives,
+    ///  which the documentation would report as a second definition.
+    /// </summary>
+    /// <param name="name">The label, as Microsoft's source has it.</param>
+    /// <returns>The label definitions, one per line.</returns>
+    internal static string CurrentLabel(string name)
+    {
+        string[] current = [.. CurrentNames(name).Where(current => !IsScoped(current))];
+        return string.Join('\n', (current.Length == 0 ? [name] : current).Select(label => $"{label}:"));
+    }
 
     /// <summary>
     ///  Gets the names the native BASIC builds define an old name by now, through their <c>;; Also:</c> sections.

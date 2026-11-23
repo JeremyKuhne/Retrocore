@@ -136,15 +136,15 @@ NextArray:
     ;; Reports ILLEGAL QUANTITY.
     ;; Errors: ILLEGAL QUANTITY
     ;; Entry:
-    ;;   ToError = jumps to <ERROR> with the error in X; <Variables::ArrayFound> branches here with REDIM'D ARRAY
+    ;;   ToError = jumps to <ReportError> with the error in X; <Variables::ArrayFound> branches here with REDIM'D ARRAY
     ;; Also: FCERR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc IllegalQuantityError
     ldx #<ERROR_ILLEGAL_QUANTITY
 
-;; Jumps to <ERROR> with the error in X; <Variables::ArrayFound> branches here with REDIM'D ARRAY.
+;; Jumps to <ReportError> with the error in X; <Variables::ArrayFound> branches here with REDIM'D ARRAY.
 ;; Also: ERRGO3 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 ToError:
-    jmp ERROR
+    jmp ReportError
     .endproc
 
     .scope Variables continued
@@ -185,7 +185,7 @@ CheckDimensions:
         lda SubscriptMode
         beq CreateArray
         ldx #<ERROR_OUT_OF_DATA
-        jmp ERROR
+        jmp ReportError
         .endproc
     .endif
 
@@ -323,7 +323,7 @@ NextPage:
     ;; Out: VariablePointer = address of the selected array element, A = its low byte, Y = its high byte
     ;; Errors: BAD SUBSCRIPT if a subscript is out of bounds, OUT OF MEMORY if the offset overflows
     ;; Entry:
-    ;;   ToOutOfMemoryError = jumps to <OMERR>; <CreateArray> and <MultiplyUnsigned> branch here on overflow
+    ;;   ToOutOfMemoryError = jumps to <ReportOutOfMemory>; <CreateArray> and <MultiplyUnsigned> branch here on overflow
     ;;   Done = returns; <CreateArray> (for DIM) and <RejectDirectMode> branch here as the nearest `RTS`
     ;; Also: GETDEF (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc ElementAddress
@@ -355,10 +355,10 @@ NextSubscript:
 ToBadSubscriptError:
     jmp BadSubscriptError
 
-;; Jumps to <OMERR>; <CreateArray> and <MultiplyUnsigned> branch here on overflow.
+;; Jumps to <ReportOutOfMemory>; <CreateArray> and <MultiplyUnsigned> branch here on overflow.
 ;; Also: OMERR1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 ToOutOfMemoryError:
-    jmp OMERR
+    jmp ReportOutOfMemory
 
 ;; High byte below the bound: skips the bound's low byte.
 ;; Also: INLPN2 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)

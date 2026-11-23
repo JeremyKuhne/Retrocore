@@ -156,11 +156,11 @@ NextPage:
     .proc CheckStack
     asl a
     adc #stackReserve
-    bcs OMERR
+    bcs ReportOutOfMemory
     sta Pointer1
     tsx
     cpx Pointer1
-    bcc OMERR
+    bcc ReportOutOfMemory
     rts
     .endproc
 
@@ -208,9 +208,9 @@ RestoreScratch:
     pla
     cpy StringsBottom+1
     bcc Done
-    bne OMERR
+    bne ReportOutOfMemory
     cmp StringsBottom
-    bcs OMERR
+    bcs ReportOutOfMemory
 ;; Returns.
 ;; Also: REARTS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 Done:

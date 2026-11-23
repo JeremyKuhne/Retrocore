@@ -474,10 +474,10 @@ public sealed class BasicSharedCommandInputTests
             .include "Commodore.Equates.asm"
             .include "Commodore.CommandInput.asm"
             .org ${start:X4}
-                COMMODORE_ERROR_READY {Flag(!disk)}
-                COMMODORE_COMMAND_LOOP {Flag(!early)}, {Flag(!early)}, {Flag(!early)}, {Flag(disk)}
-                COMMODORE_TERMINAL_INPUT {Flag(early)}, {Flag(disk)}
-                COMMODORE_TOKENIZE {Flag(disk)}, {Flag(early)}
+                CommodoreErrorReady {Flag(!disk)}
+                CommodoreCommandLoop {Flag(!early)}, {Flag(!early)}, {Flag(!early)}, {Flag(disk)}
+                CommodoreTerminalInput {Flag(early)}, {Flag(disk)}
+                CommodoreTokenize {Flag(disk)}, {Flag(early)}
             COMMAND_INPUT_END:
             """;
 

@@ -68,12 +68,12 @@ Done:
     .endproc
     ;; Stops the program. With text after the statement it returns, and the dispatcher reports the syntax error. In a
     ;; program it saves <TextPointer> and <CurrentLine> in <StoppedText> and <StoppedLine> for `CONT`. Then it drops
-    ;; the statement loop's return address and reports BREAK, with carry set, or goes to <READY>.
+    ;; the statement loop's return address and reports BREAK, with carry set, or goes to <ReadyForCommand>.
     ;; In: carry = set for BREAK, zero = set at the end of the statement
     ;; Entry:
     ;;   SaveLine = saves <CurrentLine> in <StoppedLine>; the PET's `INPUT` stop paths enter here
-    ;;   Finish = reports BREAK through <ReportMessage> with carry set, or goes to <READY>; the dispatchers enter here
-    ;;     at the end of the program
+    ;;   Finish = reports BREAK through <ReportMessage> with carry set, or goes to <ReadyForCommand>; the dispatchers
+    ;;     enter here at the end of the program
     ;; Also: STOPC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc StopOrEnd
     bne Cont::Done
@@ -98,22 +98,22 @@ SaveLine:
 DiscardReturn:
     pla
     pla
-;; Reports BREAK through <ReportMessage> with carry set, or goes to <READY>; the dispatchers enter here at the end
-;; of the program.
+;; Reports BREAK through <ReportMessage> with carry set, or goes to <ReadyForCommand>; the dispatchers enter here at
+;; the end of the program.
 ;; Also: ENDCON (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 Finish:
-    lda #<BRKTXT
-    ldy #>BRKTXT
+    lda #<BreakMessage
+    ldy #>BreakMessage
     .if clearOutput
         ldx #$00
         stx OutputSuppressed
     .endif
     bcc ToReady
     jmp ReportMessage
-;; Jumps to <READY>.
+;; Jumps to <ReadyForCommand>.
 ;; Also: GORDY (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 ToReady:
-    jmp READY
+    jmp ReadyForCommand
     .endproc
 
     ;; Resumes at the saved line and text position, or reports CAN'T CONTINUE.
@@ -127,7 +127,7 @@ ToReady:
     ldx #ERROR_CANT_CONTINUE
     ldy StoppedText+1
     bne Resume
-    jmp ERROR
+    jmp ReportError
 ;; Copies <StoppedText> and <StoppedLine> back.
 Resume:
     lda StoppedText
@@ -279,7 +279,7 @@ Done:
     ;;   FOR frame it matched; a matched frame whose variable address ends in the GOSUB token raises no error, and
     ;;   RETURN restores the caller from that FOR frame's bytes
     ;; Entry:
-    ;;   UndefinedStatement = reports UNDEF'D STATEMENT through <ERROR> (RETURN's error skips its load);
+    ;;   UndefinedStatement = reports UNDEF'D STATEMENT through <ReportError> (RETURN's error skips its load);
     ;;     <Statements::GoTo> enters here
     ;;   ToSyntaxError = jumps to <SyntaxError>; `ON` enters here
     ;; See: <Statements::GoSub>, <FindForFrame>
@@ -294,11 +294,11 @@ Done:
     beq RestoreCaller
     ldx #ERROR_RETURN_WITHOUT_GOSUB
     .byte $2C                   ; BIT absolute skips the following LDX on the RETURN error path
-;; Reports UNDEF'D STATEMENT through <ERROR> (RETURN's error skips its load); <Statements::GoTo> enters here.
+;; Reports UNDEF'D STATEMENT through <ReportError> (RETURN's error skips its load); <Statements::GoTo> enters here.
 ;; Also: USERR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 UndefinedStatement:
     ldx #ERROR_UNDEFINED_STATEMENT
-    jmp ERROR
+    jmp ReportError
 ;; Jumps to <SyntaxError>; `ON` enters here.
 ;; Also: SNERR2 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 ToSyntaxError:
@@ -310,7 +310,7 @@ RestoreCaller:
     pla
     pla
     .if popEntry
-        cpy #((POPTK-TOKEN_END)*2)
+        cpy #((TOKEN_POP-TOKEN_END)*2)
         beq PopFinish
     .endif
     sta CurrentLine

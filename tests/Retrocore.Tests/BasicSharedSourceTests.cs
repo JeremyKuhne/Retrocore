@@ -42,6 +42,34 @@ public sealed class BasicSharedSourceTests
     }
 
     /// <summary>
+    ///  The SDK ships Microsoft's LICENSE beside the shared sources derived from Microsoft's BASIC, and the
+    ///  extension's third-party notices name that BASIC and where the SDK keeps it.
+    /// </summary>
+    [TestMethod]
+    public void SdkShipsMicrosoftsLicenseBesideTheSharedSources()
+    {
+        string repository = RepositoryRoot();
+        string shipped = Path.Join(s_shipped, "Microsoft6502Basic");
+        string license = Path.Join(shipped, "LICENSE");
+        File.Exists(license).Should().BeTrue($"the SDK must ship Microsoft's LICENSE in {shipped}");
+        File.ReadAllText(license).Should().Be(File.ReadAllText(Path.Join(RepositoryShared(repository), "LICENSE")));
+        File.ReadAllText(license).Should().Contain("Copyright (c) Microsoft Corporation.");
+
+        string[] sources = [.. Directory.EnumerateFiles(RepositoryShared(repository), "*.asm").Select(path => Path.GetFileName(path))];
+        sources.Should().Contain("m6502.asm").And.Contain(name => name.StartsWith("MsBasic.", StringComparison.Ordinal));
+        foreach (string source in sources)
+        {
+            File.Exists(Path.Join(shipped, source)).Should().BeTrue($"{source} must ship beside Microsoft's LICENSE");
+        }
+
+        string notices = File.ReadAllText(Path.Join(repository, "extension", "ThirdPartyNotices.txt"));
+        notices.Should().Contain("Microsoft BASIC for 6502 Microprocessor")
+            .And.Contain("https://github.com/microsoft/BASIC-M6502")
+            .And.Contain("server/Sdk/Roms/Microsoft6502Basic/")
+            .And.Contain("Copyright (c) Microsoft Corporation, 1976-1978.");
+    }
+
+    /// <summary>
     ///  Both AppleSoft selections assemble identically in either layout and map to that layout's shared files.
     /// </summary>
     /// <param name="model">The Apple II model.</param>

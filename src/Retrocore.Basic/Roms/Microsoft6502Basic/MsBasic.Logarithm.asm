@@ -57,7 +57,7 @@ MultiplyByLogOfTwo:
     ldy #>Float::LogOfTwo
 
     .assert * = Float::MultiplyPacked, "LOG must fall through to FMULT."
-    ; Falls into MultiplyPacked.
+    ; Falls into Float::MultiplyPacked.
     .endproc
     .endscope
 

@@ -199,7 +199,7 @@ public sealed class PetRomSourceTests
         foreach ((string file, string macro, string first, string end, string[] entries, string[] dependencies) in
             ((string, string, string, string, string[], string[])[])
             [
-                ("MsBasic.AdditionCore.asm", "AdditionEntries", "FADDH", "FSUBT",
+                ("MsBasic.AdditionCore.asm", "AddEntries", "FADDH", "FSUBT",
                     ["FADDH", "FSUB", "FSUBT"],
                     ["FHALF", "FADD", "CONUPK", "FACSGN", "ARGSGN", "ARISGN", "FACEXP", "FADDT"]),
                 ("MsBasic.AdditionCore.asm", "AddAndNormalize", "FADD5", "FONE",
@@ -277,7 +277,7 @@ public sealed class PetRomSourceTests
         {
             int origin = checked((int)basic.Symbol(first));
             int expectedEnd = checked((int)basic.Symbol(end));
-            if (macro == "AdditionEntries")
+            if (macro == "AddEntries")
             {
                 // BASIC 2 inserts its hidden-message routine immediately after FSUBT's 15 bytes.
                 expectedEnd += 15;

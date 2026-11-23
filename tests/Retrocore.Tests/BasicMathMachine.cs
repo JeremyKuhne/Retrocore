@@ -111,7 +111,10 @@ internal sealed class BasicMathMachine
     {
         if (value == 0) { return new byte[5]; }
         int exponent = Math.ILogB(Math.Abs(value)) + 1;
-        uint fraction = checked((uint)(Math.ScaleB(Math.Abs(value), 32 - exponent)));
+        exponent.Should().BeInRange(-127, 127, $"{value} must be in the format's range");
+        double scaled = Math.ScaleB(Math.Abs(value), 32 - exponent);
+        scaled.Should().Be(Math.Floor(scaled), $"{value} must fit the format's 32-bit mantissa exactly");
+        uint fraction = checked((uint)scaled);
         fraction.Should().BeGreaterThanOrEqualTo(0x80000000u);
         return
         [

@@ -25,5 +25,5 @@
 
 .include "MsBasic.AdditionCore.asm"
 
-    AdditionEntries
+    AddEntries
     AddAndNormalize

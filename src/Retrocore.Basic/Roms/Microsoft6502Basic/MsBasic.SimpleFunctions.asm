@@ -68,7 +68,6 @@ Collect:
     .if setCarry
         sec
     .endif
-    beq ReturnSignedWord
-    ; Falls into ReturnSignedWord.
+    beq ReturnSignedWord             ; always taken: A is zero
     .endproc
 .endmacro

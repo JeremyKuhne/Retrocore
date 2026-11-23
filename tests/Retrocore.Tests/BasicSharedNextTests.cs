@@ -152,7 +152,7 @@ public sealed class BasicSharedNextTests
             .include "MsBasic.Layouts.asm"
             .include "MsBasic.Next.asm"
             .org ${start:X4}
-                NEXT_ENTRIES {(countedStack ? 1 : 0)}, RESUME_NEXT
+                NextEntries {(countedStack ? 1 : 0)}, RESUME_NEXT
             NEXT_END:
             """;
 
@@ -174,7 +174,7 @@ public sealed class BasicSharedNextTests
         };
 
         AssemblyResult native = new Assembler.Assembler().Assemble(
-            new AssemblySource(source, Path.Join(folder, "NextEntriesTest.asm")),
+            new AssemblySource(BasicNames.ScopedNames(symbols) + "\n" + source, Path.Join(folder, "NextEntriesTest.asm")),
             options);
 
         native.Success.Should().BeTrue(string.Join(Environment.NewLine, native.Diagnostics.Select(diagnostic =>

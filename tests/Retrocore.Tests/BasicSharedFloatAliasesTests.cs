@@ -35,7 +35,9 @@ public sealed class BasicSharedFloatAliasesTests
         ["INSRTDIG"] = ["AS82"],
         ["LOGSER"] = ["AS82"],
         ["BILLION"] = ["AS82"],
-        ["MISMTCH"] = ["AS82"]
+        ["MISMTCH"] = ["AS82"],
+        ["NEW"] = ["ASTIL", "AS82"],
+        ["COMBYTE"] = ["ASTIL", "AS82"]
     };
 
     // The names Microsoft's source gives only in its Commodore builds, with the documents that give each.
@@ -43,6 +45,13 @@ public sealed class BasicSharedFloatAliasesTests
     {
         ["MULLN2"] = ["M6502", "CBM4S79", "HV4", "HV4R"],
         ["GFDIV"] = ["M6502"]
+    };
+
+    // The Commodore reconstructions' spellings of the character reader's labels.
+    private static readonly Dictionary<string, string[]> s_hoffmannVetterNames = new(StringComparer.Ordinal)
+    {
+        ["CHDGOT"] = ["HV1", "HV1R", "HV2", "HV4", "HV4R"],
+        ["CHDRTS"] = ["HV1", "HV1R", "HV2", "HV4", "HV4R"]
     };
 
     // Addresses in the independently assembled PET1, PET2 and PET4 listings:
@@ -118,8 +127,12 @@ public sealed class BasicSharedFloatAliasesTests
         AssemblyResult legacy = PetLegacyBasic.Assemble(Pet, model, original);
         int start = checked((int)legacy.Symbol("FADDH"));
         int end = checked((int)legacy.Symbol("INITAT"));
+
+        // The character reader's template follows the math region, and Commodore's historical names alias two of its
+        // labels: 24 bytes of code and five of seed.
+        int templateEnd = end + 29;
         Dictionary<string, long> symbols = legacy.SymbolDefinitions
-            .Where(symbol => symbol.Value < start || symbol.Value >= end)
+            .Where(symbol => symbol.Value < start || symbol.Value >= templateEnd)
             .ToDictionary(symbol => symbol.Name, symbol => symbol.Value, StringComparer.Ordinal);
 
         bool basic1 = model == PetModel.Pet2001;
@@ -139,6 +152,9 @@ public sealed class BasicSharedFloatAliasesTests
             FLOAT_ALIAS_BEFORE:
             .include "Commodore.HistoricalNames.asm"
             FLOAT_ALIAS_AFTER:
+            .include "MsBasic.CharacterReader.asm"
+                CharacterReader {(basic1 ? "$59" : "$58")}
+            TEMPLATE_END:
             """;
 
         AssemblyOptions options = new(ProcessorVariant.Mos6502, 0, 0x10000)
@@ -153,8 +169,9 @@ public sealed class BasicSharedFloatAliasesTests
 
         native.Symbol("FLOAT_ALIAS_BEFORE").Should().Be(end);
         native.Symbol("FLOAT_ALIAS_AFTER").Should().Be(end);
-        native.Sections[0].Bytes.Slice(start, end - start).ToArray()
-            .Should().Equal(legacy.Sections[0].Bytes.Slice(start, end - start).ToArray());
+        native.Symbol("TEMPLATE_END").Should().Be(templateEnd);
+        native.Sections[0].Bytes.Slice(start, templateEnd - start).ToArray()
+            .Should().Equal(legacy.Sections[0].Bytes.Slice(start, templateEnd - start).ToArray());
 
         int next = start;
         foreach (AssemblySourceMapEntry entry in native.SourceMap
@@ -165,7 +182,7 @@ public sealed class BasicSharedFloatAliasesTests
             next += entry.Size;
         }
 
-        next.Should().Be(end);
+        next.Should().Be(templateEnd);
         int versionIndex = basic1 ? 0 : basic2 ? 1 : 2;
         foreach ((string name, int[] addresses) in s_petAddresses)
         {
@@ -185,7 +202,11 @@ public sealed class BasicSharedFloatAliasesTests
         Dictionary<string, string[]> names = s_petAddresses.Keys
             .ToDictionary(name => name, _ => BasicAttribution.CommodoreKeys, StringComparer.Ordinal);
 
-        foreach ((string name, string[] keys) in s_microsoftPetNames) { names.Add(name, keys); }
+        foreach ((string name, string[] keys) in s_microsoftPetNames.Concat(s_hoffmannVetterNames))
+        {
+            names.Add(name, keys);
+        }
+
         CheckAliases(native, PetAliases, names, (model, original));
         CheckDocumentation(native, PetAliases);
     }

@@ -106,7 +106,7 @@ public sealed class BasicSharedProgramResetTests
             .cpu Mos6502
             .include "MsBasic.ProgramReset.asm"
             .org ${legacy.Symbol("NULL"):X4}
-                NULL_STATEMENT 10
+                NullStatement 10
             NULL_END:
             """;
 
@@ -117,7 +117,7 @@ public sealed class BasicSharedProgramResetTests
         }
 
         AssemblyResult native = new Assembler.Assembler().Assemble(
-            new AssemblySource(source, Path.Join(folder, "NullStatementTest.asm")),
+            new AssemblySource(BasicNames.ScopedNames(symbols) + "\n" + source, Path.Join(folder, "NullStatementTest.asm")),
             new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
             {
                 SourceResolver = new FileAssemblySourceResolver(),
@@ -154,7 +154,7 @@ public sealed class BasicSharedProgramResetTests
             .cpu Mos6502
             .include "MsBasic.ProgramReset.asm"
             .org ${legacy.Symbol("STKINI"):X4}
-                EXECUTION_RESET {(early && original ? 1 : 0)}, {(early && !original ? 1 : 0)}, {top}
+                ExecutionReset {(early && original ? 1 : 0)}, {(early && !original ? 1 : 0)}, {top}
             RESET_END:
             """;
 
@@ -162,7 +162,7 @@ public sealed class BasicSharedProgramResetTests
         Dictionary<string, long> symbols = [];
         foreach (string name in dependencies) { symbols.Add(name, legacy.Symbol(name)); }
         AssemblyResult result = new Assembler.Assembler().Assemble(
-            new AssemblySource(source, Path.Join(folder, "ProgramResetTest.asm")),
+            new AssemblySource(BasicNames.ScopedNames(symbols) + "\n" + source, Path.Join(folder, "ProgramResetTest.asm")),
             new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
             {
                 SourceResolver = new FileAssemblySourceResolver(),

@@ -1,16 +1,16 @@
 ;; Applesoft cold start ($F10B-$F1D4).
 ;;
-;; The <INITAT> template initializes the page-zero character reader and random seed; <INIT> installs the
-;; interpreter vectors, discovers available memory and enters <MAIN>. <INITAT> immediately follows
+;; The <CharacterReaderTemplate> template initializes the page-zero character reader and random seed; <INIT> installs the
+;; interpreter vectors, discovers available memory and enters <MAIN>. <CharacterReaderTemplate> immediately follows
 ;; <Float::ArctangentPolynomial> in MsBasic.Transcendental.asm. AppleSoft.AppleCommands.asm follows this module.
 
 ;; Group: Cold start
 
-    CHARACTER_READER $58
+    CharacterReader $58
 
 ;; Cold-starts Applesoft, initializes its workspace and enters <MAIN>.
 ;;
-;; It installs the restart and USR vectors, copies <INITAT> and four bytes of the initial random value to page
+;; It installs the restart and USR vectors, copies <CharacterReaderTemplate> and four bytes of the initial random value to page
 ;; zero, probes RAM by complementing and restoring a byte on each page, rounds the upper limit down to a 4 KB
 ;; boundary, initializes the program at $0800 and resets the interpreter. The probe stops at the first location
 ;; that fails either test.

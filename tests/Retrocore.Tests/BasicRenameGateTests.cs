@@ -28,7 +28,7 @@ public sealed partial class BasicRenameGateTests
     private const string OldName = "FNDLIN";
     private const string NewName = "FindLine";
 
-    // A second rename, of a label defined in a macro's body (MEMORY_MANAGEMENT's), whose Also: reaches it because
+    // A second rename, of a label defined in a macro's body (MemoryManagement's), whose Also: reaches it because
     // each build expands the macro once.
     private const string MacroOldName = "BLTU";
     private const string MacroNewName = "MoveRangeUp";

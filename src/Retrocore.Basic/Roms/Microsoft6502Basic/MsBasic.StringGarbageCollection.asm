@@ -32,7 +32,7 @@
 ;;
 ;; In: FOUR6 = <STRSIZ>, decimal = clear
 ;; Out: FRETOP = lower boundary after collection
-;; See: <DVAR>, <GRBPAS>, <BLTUC>
+;; See: <DVAR>, <GRBPAS>, <MoveRangeUp::Unchecked>
 GARBA2:
     ldx MEMSIZ
     lda MEMSIZ+1

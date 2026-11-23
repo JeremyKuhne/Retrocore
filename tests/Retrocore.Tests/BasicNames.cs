@@ -241,7 +241,7 @@ internal static class BasicNames
     }
 
     // The scopes MsBasic.Families.asm declares.
-    private static readonly string[] s_families = ["Float", "Functions"];
+    private static readonly string[] s_families = ["Float", "Functions", "Statements"];
 
     private static bool IsScoped(string name) => name.Contains("::", StringComparison.Ordinal);
 

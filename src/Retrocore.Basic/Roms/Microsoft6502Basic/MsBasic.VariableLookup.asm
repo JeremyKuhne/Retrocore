@@ -1,7 +1,7 @@
 ; Derived from Microsoft's BASIC for 6502 (m6502.asm, MIT license; see LICENSE in this folder).
 ; MICROSOFT 6502 BASIC: VARIABLE NAMES AND SIMPLE-VARIABLE LOOKUP
 ;
-; Emit VARIABLE_NAME, the separately shared LETTER_TEST, and SIMPLE_VARIABLE_LOOKUP in that order.
+; Emit VARIABLE_NAME, the separately shared LetterTest, and SIMPLE_VARIABLE_LOOKUP in that order.
 ; The integer-conversion entries follow; AppleSoft then emits EXISTING_ARRAY_ENTRY before ISARY.
 
 ;; Emits the variable-name parser and scalar-table search up to the letter test.
@@ -34,7 +34,7 @@
 ;; Out: A = low value address and Y = high value address for a scalar, TXTPTR = next non-space character,
 ;;   VALTYP = $FF for a string or 0 for a number, INTFLG = $80 for an integer or 0 otherwise
 ;; Errors: SYNTAX for an invalid first character or a disallowed integer name
-;; See: <ISLETC>, <NOTFNS>, <FINPTR>, <ISARY>
+;; See: <IsLetter>, <NOTFNS>, <FINPTR>, <ISARY>
 PTRGET:
     ldx #$00
     jsr CHRGOT
@@ -283,12 +283,12 @@ QDSVAR:
 
 ;; Inserts a zero-initialized seven-byte scalar entry before the array table.
 ;;
-;; <BLTU> moves existing arrays upward and checks that the new end fits. When enabled, the linked-string
+;; <MoveRangeUp> moves existing arrays upward and checks that the new end fits. When enabled, the linked-string
 ;; collector's array back-links are adjusted after the move. The entry's two name bytes precede five zero bytes.
 ;; In: VARNAM = encoded name, decimal = clear
 ;; Out: VARPNT = address of the new value
 ;; Errors: OUT OF MEMORY if the enlarged tables cannot fit
-;; See: <BLTU>, <FINPTR>
+;; See: <MoveRangeUp>, <FINPTR>
 VAROK:
     lda ARYTAB
     ldy ARYTAB+1

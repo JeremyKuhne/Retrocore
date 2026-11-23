@@ -6,9 +6,9 @@
 .include "../Microsoft6502Basic/MsBasic.Print.asm"
 
 .if ENHNCD
-    PRINT_CORE TABER, 1, 1, 0
+    PrintItems TABER, 1, 1, 0
 .else
-    PRINT_CORE LINCH1, 1, 1, 0
+    PrintItems LINCH1, 1, 1, 0
 .endif
 NCMPOS = $0E
 

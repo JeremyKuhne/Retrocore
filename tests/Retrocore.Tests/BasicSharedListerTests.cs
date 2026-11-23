@@ -550,10 +550,10 @@ public sealed class BasicSharedListerTests
             .cpu Mos6502
             .include "MsBasic.Lister.asm"
             .org ${legacy.Symbol("LIST"):X4}
-                LIST_RANGE {(options.CommaRange ? 1 : 0)}, {options.SecondBoundReturn}
-                LIST_LINES {(options.TrackQuotes ? 1 : 0)}, {(options.GuardOffset ? 1 : 0)}, {options.ColumnMode}, {options.LinePrinter}, {(options.FinalCr ? 1 : 0)}, {options.Resume}
-                {(options.TableMode == 2 ? "LIST_TABLE_NEXT" : "")}
-                LIST_TOKENS {options.TableMode}, {(options.TrackQuotes ? 1 : 0)}, {(options.LiteralPi ? 1 : 0)}, {(options.SpaceWords ? 1 : 0)}
+                ListRange {(options.CommaRange ? 1 : 0)}, {options.SecondBoundReturn}
+                ListLines {(options.TrackQuotes ? 1 : 0)}, {(options.GuardOffset ? 1 : 0)}, {options.ColumnMode}, {options.LinePrinter}, {(options.FinalCr ? 1 : 0)}, {options.Resume}
+                {(options.TableMode == 2 ? "ListNextTableByte" : "")}
+                ListTokens {options.TableMode}, {(options.TrackQuotes ? 1 : 0)}, {(options.LiteralPi ? 1 : 0)}, {(options.SpaceWords ? 1 : 0)}
             LIST_REGION_END:
             """;
 
@@ -571,7 +571,7 @@ public sealed class BasicSharedListerTests
             name => name, name => legacy.Symbol(name), StringComparer.Ordinal);
 
         AssemblyResult native = new Assembler.Assembler().Assemble(
-            new AssemblySource(source, Path.Join(folder, "SharedListerTest.asm")),
+            new AssemblySource(BasicNames.ScopedNames(symbols) + "\n" + source, Path.Join(folder, "SharedListerTest.asm")),
             new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
             {
                 SourceResolver = new FileAssemblySourceResolver(),

@@ -379,11 +379,11 @@ public sealed class BasicSharedMemoryAccessTests
             .cpu Mos6502
             .include "MsBasic.MemoryAccess.asm"
             .org ${start:X4}
-                MEMORY_ACCESS_ADDRESS {(features.RejectNegative ? 1 : 0)}
-                MEMORY_ACCESS_PEEK {(features.PreserveAddress ? 1 : 0)}, {(features.HighFirst ? 1 : 0)}, {(features.GuardRom ? 1 : 0)}, {(features.PadGuard ? 1 : 0)}
-                MEMORY_ACCESS_POKE
+                AddressConversion {(features.RejectNegative ? 1 : 0)}
+                PeekFunction {(features.PreserveAddress ? 1 : 0)}, {(features.HighFirst ? 1 : 0)}, {(features.GuardRom ? 1 : 0)}, {(features.PadGuard ? 1 : 0)}
+                PokeStatement
             {(features.WaitAlias ? BasicNames.Label("WAIT") : "")}
-                MEMORY_ACCESS_WAIT {target}
+                WaitStatement {target}
             MEMORY_ACCESS_END:
             """;
 
@@ -410,7 +410,7 @@ public sealed class BasicSharedMemoryAccessTests
             .cpu Mos6502
             .include "MsBasic.MemoryAccess.asm"
             .org ${start:X4}
-                MEMORY_ACCESS_PEEK 1, {(highFirst ? 1 : 0)}, 1, {(padded ? 1 : 0)}
+                PeekFunction 1, {(highFirst ? 1 : 0)}, 1, {(padded ? 1 : 0)}
             PEEK_END:
             """;
 
@@ -435,7 +435,7 @@ public sealed class BasicSharedMemoryAccessTests
         };
 
         AssemblyResult result = new Assembler.Assembler().Assemble(
-            new AssemblySource(source, Path.Join(folder, "MemoryAccessTest.asm")),
+            new AssemblySource(BasicNames.ScopedNames(symbols) + "\n" + source, Path.Join(folder, "MemoryAccessTest.asm")),
             options);
 
         result.Success.Should().BeTrue(string.Join(Environment.NewLine, result.Diagnostics.Select(diagnostic =>

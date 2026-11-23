@@ -59,7 +59,7 @@ BASIC4_OUTPUT_PADDING = 1           ;; include BASIC 4's output patch space
 ; Dispatch tables, errors, command input and program editing.
 .org $B000
     COMMODORE_DISPATCH_TABLES 1, 1, 0, 1
-    MEMORY_MANAGEMENT $3E
+    MemoryManagement $3E
     COMMODORE_ERROR_READY 0
     COMMODORE_COMMAND_LOOP 1, 1, 1, 1
     COMMODORE_TERMINAL_INPUT 0, 1
@@ -67,13 +67,13 @@ BASIC4_OUTPUT_PADDING = 1           ;; include BASIC 4's output patch space
 .include "../../Microsoft6502Basic/MsBasic.LineSearch.asm"
 
 ; Program control, statement dispatch and assignment.
-    PROGRAM_RESET 0, 0, 0, 1, 1
-    CLEAR_STATEMENT STKRTS
-    CLEAR_STORAGE 1, 1
-    EXECUTION_RESET 0, 0, $FA
-    LIST_RANGE 0, FLNRTS
-    LIST_LINES 1, 1, 0, LINPRT, 0, READY
-    LIST_TOKENS 1, 1, 1, 0
+    ProgramReset 0, 0, 1, 1
+    ClearStatement STKRTS
+    ClearStorage 1, 1
+    ExecutionReset 0, 0, $FA
+    ListRange 0, FLNRTS
+    ListLines 1, 1, 0, LINPRT, 0, READY
+    ListTokens 1, 1, 1, 0
 .include "../../Microsoft6502Basic/MsBasic.For.asm"
 .if REVISD
     COMMODORE_STATEMENT_FETCH INPUT_BUFFER_PAGE, 0, 0, 0, GONEGT
@@ -81,14 +81,14 @@ BASIC4_OUTPUT_PADDING = 1           ;; include BASIC 4's output patch space
     COMMODORE_STATEMENT_FETCH INPUT_BUFFER_PAGE, 0, 0, 0, CHRGET
 .endif
     COMMODORE_STATEMENT_DISPATCH 0, 1
-    RESTORE_DATA
-    STOP_AND_CONTINUE 1, 0
-    RUN_STATEMENT 0
-    GOSUB_AND_GOTO NEWSTT
-    RETURN_STATEMENT 0, 0
-    STATEMENT_SCAN 0, 0
-    CONDITIONAL_STATEMENTS
-    ON_STATEMENT
+    RestoreStatement
+    StopAndContinue 1, 0
+    RunStatement
+    GosubAndGoto NEWSTT
+    ReturnStatement 0, 0
+    StatementScan 0, 0
+    ConditionalStatements
+    OnStatement
 .include "../../Microsoft6502Basic/MsBasic.LineNumber.asm"
     ASSIGNMENT_START
     TIME_STRING_ASSIGNMENT 0
@@ -97,7 +97,7 @@ BASIC4_OUTPUT_PADDING = 1           ;; include BASIC 4's output patch space
 
 ; Terminal and channel output, then READ and input.
     COMMODORE_PRINT_CHANNELS
-    PRINT_CORE TABER, 1, 0, 1
+    PrintItems TABER, 1, 0, 1
     COMMODORE_LINE_END INPUT_BUFFER_PAGE, 0, 1, 0
     COMMODORE_PRINT_SPACING 0
 .include "../../Microsoft6502Basic/MsBasic.StringOutput.asm"
@@ -109,7 +109,7 @@ BASIC4_OUTPUT_PADDING = 1           ;; include BASIC 4's output patch space
     VARIABLE_INPUT_MESSAGES 0, 0
 
 ; Expressions, variables, arrays and linked strings.
-    NEXT_ENTRIES 0, NEWSTT
+    NextEntries 0, NEWSTT
     EXPRESSION_CORE 1
     OPERAND_EVALUATION 1, 1, ISFUN
     COMMODORE_BASIC4_OPERAND_SPLIT REVISD
@@ -119,14 +119,14 @@ BASIC4_OUTPUT_PADDING = 1           ;; include BASIC 4's output patch space
     RelationalOperators $FF
 .include "../../Microsoft6502Basic/MsBasic.Dim.asm"
     VARIABLE_NAME 0, 0, 1, 0, 1, 1
-    LETTER_TEST
+    LetterTest
     SIMPLE_VARIABLE_LOOKUP 0, 0, 0, 1, 1, 1, 1, 0
     IntegerConversionBoundary
     IntegerConversion FRMEVL, 1
     ARRAY_LOOKUP 0, 1, 1
 .include "../../Microsoft6502Basic/MsBasic.ArrayMultiplication.asm"
     SimpleFunctions 0
-    USER_FUNCTIONS 0
+    UserFunctions 0
     STRING_FROM_NUMBER
     STRING_STORAGE INPUT_BUFFER_PAGE, 1
     STRING_ALLOCATION 1
@@ -135,14 +135,14 @@ BASIC4_OUTPUT_PADDING = 1           ;; include BASIC 4's output patch space
     STRING_FUNCTIONS 0, 0, 0, 1
 
 ; Memory access, floating point, startup and the BASIC 4 extension.
-    MEMORY_ACCESS_ADDRESS 1
-    MEMORY_ACCESS_PEEK 1, 1, 0, 0
-    MEMORY_ACCESS_POKE
-    MEMORY_ACCESS_WAIT STORDO
+    AddressConversion 1
+    PeekFunction 1, 1, 0, 0
+    PokeStatement
+    WaitStatement STORDO
 .include "Commodore.FloatingPoint.asm"
 .include "Commodore.HistoricalNames.asm"
 .include "Commodore.InterpreterAliases.asm"
-    CHARACTER_READER $58
+    CharacterReader $58
     COMMODORE_INITIALIZE 0, 0, 0, 0, INPUT_BUFFER_PAGE, 1, 0
     COMMODORE_MEMORY_PROBE 0, 0, 1, 1, 0, $55
     COMMODORE_START_PROGRAM 0, 0, 0, 0, SIGNON

@@ -4,7 +4,7 @@
 ;; Parameters: bufferPage = zero for a page-zero direct buffer, or the nonzero buffer page,
 ;;             spareByte = 1 to retain the later ROM's NOP before the direct-mode branch,
 ;;             earlySeparators = 1 to check separators before the line link,
-;;             shortEnd = 1 to branch directly to <ENDCON>,
+;;             shortEnd = 1 to branch directly to <Statements::StopOrEnd::Finish>,
 ;;             fetchToken = character-reader entry, or the revised BASIC 4 PI-checking patch
 .macro COMMODORE_STATEMENT_FETCH bufferPage, spareByte, earlySeparators, shortEnd, fetchToken
     .assert bufferPage >= 0 && bufferPage <= 255, "bufferPage must fit in a byte."
@@ -17,7 +17,7 @@
 ;; The text position is saved for INPUT retry when execution is not in the direct buffer's page.
 ;; A zero line link ends the program. The earlier separator check accepts a colon before reading the link.
 ;; In: TXTPTR = statement separator or line terminator
-;; See: <GONE>, <ENDCON>
+;; See: <GONE>, <Statements::StopOrEnd::Finish>
 NEWSTT:
     jsr ISCNTC
     lda TXTPTR

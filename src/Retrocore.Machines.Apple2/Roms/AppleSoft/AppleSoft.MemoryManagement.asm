@@ -8,4 +8,4 @@
 
 .include "../Microsoft6502Basic/MsBasic.MemoryManagement.asm"
 
-    MEMORY_MANAGEMENT $36
+    MemoryManagement $36

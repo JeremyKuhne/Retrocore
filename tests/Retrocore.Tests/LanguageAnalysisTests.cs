@@ -218,6 +218,7 @@ public sealed partial class LanguageAnalysisTests
     [DataRow("VALUE equ_3", false)]
     [DataRow("VALUE equ$10", false)]
     [DataRow("VALUE EQU*", false)]
+    [DataRow("VALUE equ;comment", false)]
     [DataRow("VALUE equ ;no operand", true)]
     [DataRow("VALUE equ", true)]
     public void MerlinEquatesSurviveErrorsInAnyCase(string definition, bool constant)

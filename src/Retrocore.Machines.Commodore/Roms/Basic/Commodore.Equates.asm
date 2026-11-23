@@ -647,7 +647,7 @@ LinearIndex = NumberBufferPointer
 ;; Also: CHRGET (M6502, CBM4S79, K4S79, HV1, HV1R, HV2, HV4, HV4R, HVK4)
 GetNextCharacter = NumberBufferPointer + 2
 
-;; Fetch entry that does not increment <TextPointer>.
+;; Fetch entry that does not first increment <TextPointer>; it skips spaces.
 ;; Also: CHRGOT (M6502, CBM4S79, K4S79, HV1, HV1R, HV2, HV4, HV4R, HVK4)
 GetCurrentCharacter = GetNextCharacter + 6
 

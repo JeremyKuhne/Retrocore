@@ -90,6 +90,35 @@ public sealed class BasicStatementRoutineTests
     }
 
     /// <summary>
+    ///  The character reader's second entry, <c>GetCurrentCharacter</c>, returns the character at <c>TextPointer</c>
+    ///  without advancing to it first, but skips spaces from there, which advances the pointer.
+    /// </summary>
+    /// <param name="apple">Whether to run AppleSoft rather than PET BASIC 4.</param>
+    /// <param name="text">The text from <c>TextPointer</c>.</param>
+    /// <param name="expected">The character returned.</param>
+    /// <param name="skipped">The spaces skipped before it.</param>
+    [TestMethod]
+    [DataRow(true, "A", 'A', 0)]
+    [DataRow(true, "  A", 'A', 2)]
+    [DataRow(true, ":", ':', 0)]
+    [DataRow(false, "7", '7', 0)]
+    [DataRow(false, " 7", '7', 1)]
+    public void GetCurrentCharacterStaysUnlessItSkipsSpaces(bool apple, string text, char expected, int skipped)
+    {
+        BasicMathMachine machine = new(apple);
+        InstallCharacterReader(machine);
+        PutText(machine, text);
+        SetWord(machine, "TextPointer", Text);
+
+        machine.Call("GetCurrentCharacter", x: KeptX, y: KeptY);
+
+        machine.Cpu.Registers.Accumulator.Should().Be((byte)expected);
+        Word(machine, "TextPointer").Should().Be(Text + skipped);
+        machine.Cpu.Registers.X.Should().Be(KeptX);
+        machine.Cpu.Registers.Y.Should().Be(KeptY);
+    }
+
+    /// <summary>
     ///  <c>ReadLineNumber</c> reads the digits from the current character on, skipping the spaces the character reader
     ///  skips, into <c>LineNumber</c>, and returns at the terminator with it in A and carry set.
     /// </summary>

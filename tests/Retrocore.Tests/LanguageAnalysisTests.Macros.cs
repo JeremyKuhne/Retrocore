@@ -115,8 +115,8 @@ public sealed partial class LanguageAnalysisTests
         }
     }
 
-    // A file that gives COMBYTE only in a branch its build leaves out, and uses it: the SDK's AppleSoft also gives
-    // the name, and neither may become the file's hint.
+    // A file that gives COMBYTE only in a branch its build leaves out, and uses it where an undefined name is no error:
+    // the SDK's AppleSoft also gives the name, and neither may become the file's hint.
     private const string OmittedBranchProbe = """
         ; retrocore: style=strict
         ;; A probe.
@@ -136,11 +136,13 @@ public sealed partial class LanguageAnalysisTests
         PRBBYT:
             rts
 
-        ;; Reads through both names.
+        ;; Reads through the file's name.
         Echo:
             jsr PRBBYTE
-            jsr COMBYTE
             rts
+
+        .ifdef COMBYTE
+        .endif
         """;
 
     /// <summary>
@@ -170,7 +172,62 @@ public sealed partial class LanguageAnalysisTests
                 diagnostics => diagnostics.Any(diagnostic => diagnostic.Message.StartsWith("PRBBYTE is a historical name", StringComparison.Ordinal)));
 
             published.Should().Contain(diagnostic => diagnostic.Message == "PRBBYTE is a historical name of PRBBYT.");
+            published.Should().NotContain(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error, "the probe assembles");
             published.Should().NotContain(diagnostic => diagnostic.Message.StartsWith("COMBYTE is a historical name", StringComparison.Ordinal));
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    // A file that gives COMBYTE itself, which the SDK's AppleSoft also gives, and has an unrelated error.
+    private const string ErrorProbe = """
+        ; retrocore: style=strict
+        ;; A probe.
+
+        .cpu Mos6502
+        .org $0300
+
+        ;; Requires a comma and reads a byte.
+        ;; Also: COMBYTE (A2RM78)
+        COMBYT:
+            rts
+
+        ;; Reads through the old name.
+        Echo:
+            jsr COMBYTE
+            NOTANINSTRUCTION
+            rts
+        """;
+
+    /// <summary>
+    ///  A file's own old name keeps its hint over an SDK module's of the same spelling while the file has an error,
+    ///  when its assembly stops short of the definitions: the definitions its text makes count then.
+    /// </summary>
+    /// <returns>The test.</returns>
+    [TestMethod]
+    public async Task OwnOldNamesHintWhileTheFileHasAnError()
+    {
+        string folder = Directory.CreateTempSubdirectory("retrocore-macros").FullName;
+        try
+        {
+            string text = ErrorProbe.ReplaceLineEndings("\n");
+            string probe = Directory.CreateDirectory(Path.Join(folder, "probe")).FullName;
+            string path = Path.GetFullPath(Path.Join(probe, "Probe.asm"));
+            File.WriteAllText(path, text);
+            File.WriteAllText(Path.Join(probe, "Bibliography.md"), MemberBibliography);
+            RecordingLanguageClient client = new();
+            LanguageWorkspace workspace = new(client);
+            workspace.Update(path, text);
+            DocumentUri uri = DocumentUri.FromFileSystemPath(path);
+
+            List<Diagnostic> published = await client.Wait(
+                uri,
+                diagnostics => diagnostics.Any(diagnostic => diagnostic.Code == DocumentationRules.HistoricalName));
+
+            published.Should().Contain(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error, "the probe has an error");
+            published.Should().Contain(diagnostic => diagnostic.Message == "COMBYTE is a historical name of COMBYT.");
         }
         finally
         {

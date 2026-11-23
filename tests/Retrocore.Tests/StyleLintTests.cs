@@ -344,7 +344,7 @@ public sealed class StyleLintTests
         DocumentationRules.All.Select(rule => rule.Id).Should().Equal(
             "line-length", "ascii", "trailing-doc", "label-alone", "address-name", "column-zero", "indent",
             "comment-indent", "unlinked-name", "link", "ambiguous-link", "also", "sections", "historical-name",
-            "deprecated", "undocumented-export", "placement", "exclusion");
+            "deprecated", "using-shadow", "undocumented-export", "placement", "exclusion");
 
         DocumentationRules.All.Where(rule => !rule.Ignorable).Select(rule => rule.Id).Should().Equal("placement", "exclusion");
 

@@ -133,6 +133,104 @@ public sealed partial class LanguageAnalysisTests
         }
     }
 
+    // An old name that a .using brings to another type's member inside one procedure.
+    private const string ShadowProbe = """
+        ;; An I/O block.
+        .struct Iob
+            ;; The block's type, which a listing also calls TYPE.
+            ;; Also: TYPE (A2RM78)
+            TYPE .byte
+            ;; The command.
+            ;; Also: IBCMD (A2RM78)
+            COMMAND .byte
+        .endstruct
+
+        ;; Uses an old name that the .using here brings to the old name's own definition.
+        .proc Agreeing
+        .using Iob
+            lda #TYPE
+            rts
+        .endproc
+
+        ;; Another block, with a field of the same spelling.
+        .struct Other
+            ;; Padding.
+            PAD .byte
+            ;; Its own field.
+            IBCMD .byte
+        .endstruct
+
+        ;; Uses the name under a .using.
+        .proc Shadowed
+        .using Other
+            lda #IBCMD
+            rts
+        .endproc
+
+        ;; Uses the old name, which nothing shadows here, and the other field by its full name.
+        .proc Plain
+            lda #IBCMD
+            lda #Other::IBCMD
+            rts
+        .endproc
+        """;
+
+    /// <summary>
+    ///  A historical name that a <c>.using</c> makes mean another definition gets a <c>using-shadow</c> warning where
+    ///  code uses it, with quick fixes that write either name; elsewhere it is an ordinary historical name, and a
+    ///  qualified name is neither. A <c>.using</c> that brings the old name to its own definition is not reported.
+    /// </summary>
+    /// <returns>The test.</returns>
+    [TestMethod]
+    public async Task ShadowedOldNamesAreReported()
+    {
+        string folder = Directory.CreateTempSubdirectory("retrocore-shadow").FullName;
+        try
+        {
+            string text = ShadowProbe.ReplaceLineEndings("\n");
+            string[] lines = text.Split('\n');
+            string probe = Directory.CreateDirectory(Path.Join(folder, "probe")).FullName;
+            string path = Path.GetFullPath(Path.Join(probe, "Shadow.asm"));
+            File.WriteAllText(path, text);
+            File.WriteAllText(Path.Join(probe, "Bibliography.md"), MemberBibliography);
+            RecordingLanguageClient client = new();
+            LanguageWorkspace workspace = new(client);
+            workspace.Update(path, text);
+            DocumentUri uri = DocumentUri.FromFileSystemPath(path);
+
+            int shadowedLine = Array.FindIndex(lines, line => line.Contains("lda #IBCMD", StringComparison.Ordinal));
+            int plainLine = Array.FindLastIndex(lines, line => line.Contains("lda #IBCMD", StringComparison.Ordinal));
+            List<Diagnostic> published = await client.Wait(uri, diagnostics => diagnostics.Count == 2);
+            published.Select(diagnostic => (diagnostic.Code, diagnostic.Range.Start.Line, diagnostic.Message)).Should().BeEquivalentTo(
+            [
+                (DocumentationRules.UsingShadow, shadowedLine,
+                    "IBCMD is a historical name of Iob::COMMAND, but the .using in effect here makes it Other::IBCMD."),
+                (DocumentationRules.HistoricalName, plainLine, "IBCMD is a historical name of Iob::COMMAND.")
+            ]);
+
+            Diagnostic shadowed = published.Single(diagnostic => diagnostic.Code == DocumentationRules.UsingShadow);
+            shadowed.Severity.Should().Be(DiagnosticSeverity.Warning);
+            JsonNode? actions = new CodeActionHandler(workspace, new BasicDocuments(client)).Handle(new JsonObject
+            {
+                ["textDocument"] = new JsonObject { ["uri"] = uri.Text },
+                ["context"] = new JsonObject { ["diagnostics"] = new JsonArray(shadowed.ToJson()) }
+            });
+
+            List<(string? Title, bool Preferred, string? Text)> fixes = [.. ((actions as JsonArray) ?? [])
+                .Where(action => action?["title"]?.GetValue<string>()?.StartsWith("Use ", StringComparison.Ordinal) == true)
+                .Select(action => (
+                    action?["title"]?.GetValue<string>(),
+                    action?["isPreferred"]?.GetValue<bool>() == true,
+                    action?["edit"]?["changes"]?[uri.Text]?[0]?["newText"]?.GetValue<string>()))];
+
+            fixes.Should().Equal(("Use Other::IBCMD", true, "Other::IBCMD"), ("Use Iob::COMMAND", false, "Iob::COMMAND"));
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
     private static LspParams Request(DocumentUri uri, int line, int character) =>
         new(new TextDocumentItem(uri, "retrocore-asm", ""), new Position(line, character), new ReferenceContext(IncludeDeclaration: false), "", []);
 }

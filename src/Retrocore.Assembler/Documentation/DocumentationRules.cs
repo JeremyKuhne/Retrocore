@@ -86,6 +86,11 @@ public static class DocumentationRules
     public const string Deprecated = "deprecated";
 
     /// <summary>
+    ///  A historical name that a <c>.using</c> makes mean another definition where code uses it.
+    /// </summary>
+    public const string UsingShadow = "using-shadow";
+
+    /// <summary>
     ///  An exported name without documentation.
     /// </summary>
     public const string UndocumentedExport = "undocumented-export";
@@ -120,6 +125,7 @@ public static class DocumentationRules
         new(Sections, "The sections' form: `Entry:`, `Members:`, `Parameters:`, `Inherit:`, `Include:`, `Flags:`, register lists, `name = meaning` entries and `{name}` references.", TakesNames: false, Ignorable: true),
         new(HistoricalName, "Code uses a definition's current name, not a historical one from its `Also:` section. Narrow it to names: `historical-name:COUT`.", TakesNames: true, Ignorable: true),
         new(Deprecated, "Code does not use a definition with a `Deprecated:` section. Narrow it to names: `deprecated:Name`.", TakesNames: true, Ignorable: true),
+        new(UsingShadow, "Code does not use a historical name that a `.using` makes mean another definition there; it writes the name it means. Narrow it to names: `using-shadow:IBCMD`.", TakesNames: true, Ignorable: true),
         new(UndocumentedExport, "An exported name has `;;` documentation.", TakesNames: false, Ignorable: true),
         new(Placement, "A `;;` comment documents a definition directly below it. Its errors can't be ignored.", TakesNames: false, Ignorable: false),
         new(Exclusion, "An `ignore=` exclusion names known rules and turns something off. Its diagnostics can't be ignored.", TakesNames: false, Ignorable: false)
@@ -129,7 +135,7 @@ public static class DocumentationRules
     ///  Gets the rules only the editor runs, on code rather than documentation: a caller of
     ///  <c>DocumentationResolver.Lint</c> passes their problems in.
     /// </summary>
-    public static IReadOnlyCollection<string> EditorRules { get; } = [HistoricalName, Deprecated];
+    public static IReadOnlyCollection<string> EditorRules { get; } = [HistoricalName, Deprecated, UsingShadow];
 
     /// <summary>
     ///  Gets the rules the resolver checks in each topic's <c>;;</c> blocks, and so only in the build that assembles

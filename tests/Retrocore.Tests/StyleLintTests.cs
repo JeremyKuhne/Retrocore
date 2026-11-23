@@ -130,6 +130,40 @@ public sealed class StyleLintTests
     }
 
     /// <summary>
+    ///  A constant defined with <c>:=</c>, spaced or not, follows the rules of one defined with <c>=</c>: it is a
+    ///  definition at column 0, not code to indent or a label sharing its line, and its name is checked.
+    /// </summary>
+    [TestMethod]
+    public void ColonEqualsConstantsAreDefinitions()
+    {
+        string text = Pragma + """
+            .cpu Mos6502
+            .org $0300
+
+            ;; The Apple II's carriage return, with its high bit set.
+            RETURN := $8D
+
+            ;; The width of a line.
+            WIDTH:=40
+
+            ;; An address.
+            L_F8C2 := 1
+                Indented := 3
+
+            ;; Prints a carriage return.
+            .proc PrintReturn
+                lda #RETURN
+                ldx #WIDTH
+                rts
+            .endproc
+            """;
+
+        Problems(text).Should().BeEquivalentTo(
+            "12: Name L_F8C2 for what it is: a name that is only an address says nothing.",
+            "13: Put definitions, labels and block directives at column 0.");
+    }
+
+    /// <summary>
     ///  Prose that names a documented definition without linking it is reported; links, code spans, entry names,
     ///  instructions, a capitalized word starting a sentence and a historical name (from an Also: section) are not.
     /// </summary>

@@ -234,7 +234,8 @@ public static partial class DocumentationParser
         int end = IdentifierLength(code, 0);
         if (end == 0) { return null; }
         string after = code[end..].TrimStart();
-        bool constant = after.StartsWith('=') && !after.StartsWith("==", StringComparison.Ordinal);
+        bool equals = after.StartsWith('=') && !after.StartsWith("==", StringComparison.Ordinal);
+        bool constant = equals || after.StartsWith(":=", StringComparison.Ordinal);
         bool variable = after.StartsWith(".set", StringComparison.OrdinalIgnoreCase);
         return constant || variable || IsLabelOnly(code) ? code[..end] : null;
     }
@@ -248,8 +249,9 @@ public static partial class DocumentationParser
             return null;
         }
 
+        // Name:=value is a constant, not a label.
         string rest = code[(end + 1)..];
-        return rest.Length != 0 && rest[0] != ':' && rest.Trim().Length != 0 ? code[..(end == 0 ? 1 : end)] : null;
+        return rest.Length != 0 && rest[0] is not (':' or '=') && rest.Trim().Length != 0 ? code[..(end == 0 ? 1 : end)] : null;
     }
 
     private static bool IsLabelOnly(string code)

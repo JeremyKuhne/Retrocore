@@ -141,7 +141,8 @@ Loop:
     jsr Round
     .endproc
 
-    ;; Copies <Fac> without first rounding it.
+    ;; Copies <Fac>, sign included, without first rounding it, and clears <FacExtension>.
+    ;; Out: A = exponent of <Fac>, X = 0
     ;; Entry:
     ;;   Done = The shared rts
     ;; Also: MOVEF (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
@@ -165,7 +166,8 @@ Done:
 
     ;; Rounds the <Fac> mantissa upward when bit 7 of <FacExtension> is set.
     ;;
-    ;; A carry out of the mantissa shifts it right and increments the exponent. A zero exponent needs no rounding.
+    ;; A carry out of the mantissa shifts it right and increments the exponent. A zero exponent needs no rounding;
+    ;; otherwise <FacExtension> is shifted left, its bit 7 out.
     ;; Entry:
     ;;   Increment = <Float::IncrementMantissa>; a mantissa that wrapped to zero goes to <Float::ShiftInCarry>
     ;; See: <Float::IncrementMantissa>, <Float::ShiftInCarry>

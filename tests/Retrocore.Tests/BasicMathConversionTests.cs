@@ -45,13 +45,14 @@ public sealed class BasicMathConversionTests
     // The definitions in the converted files that give no overlay name of their own: the families' guard, the guard
     // bytes that share OLDOV's byte under their own names, the constants and text of BASIC 2's hidden message and
     // BASIC 4's checksum byte, whose names only the SDK or HV4 gives, the entry the SDK names that Microsoft's
-    // listing leaves unlabeled, and the two labels whose names Microsoft's source gives only in its Commodore builds,
-    // which reach them through Commodore's aliases (BasicSharedFloatAliasesTests).
+    // listing leaves unlabeled, the two labels whose names Microsoft's source gives only in its Commodore builds,
+    // and the label whose name only AppleSoft's overlay gives (FOUT13), which reach them through their vendor's
+    // aliases (BasicSharedFloatAliasesTests).
     private static readonly HashSet<string> s_sdkNames =
     [
         "FAMILIES_DECLARED", "Float::UnshiftedExtension", "Functions::Exp::RoundingByte",
         "HIDDEN_MESSAGE_LENGTH", "SCREEN_CODE_MASK", "Float::PrintFac", "HiddenMessageText", "RomChecksumAdjustment",
-        "Functions::Log::MultiplyByLogOfTwo", "Functions::Tan::ToDividePacked"
+        "Functions::Log::MultiplyByLogOfTwo", "Functions::Tan::ToDividePacked", "Float::FormatFacAtOffset::SignDone"
     ];
 
     private static readonly Apple2Model[] s_appleModels =
@@ -238,9 +239,8 @@ public sealed class BasicMathConversionTests
         result.Symbol("END_OF_CONSTANTS").Should().Be(0x2000 + 5 * 5 + 21, "the families emit no bytes");
     }
 
-    // The SDK's names, and a vendor's aliases and the definitions they alias: a vendor's name is on its alias, whose
-    // value BasicSharedFloatAliasesTests checks against the vendor's listings, so the definition gives no name of its
-    // own for the overlay.
+    // The SDK's names and a vendor's aliases, whose values BasicSharedFloatAliasesTests checks against the vendor's
+    // listings.
     private static HashSet<string> Exempt(AssemblyResult native, string vendorNames)
     {
         HashSet<string> exempt = [.. s_sdkNames];
@@ -248,14 +248,6 @@ public sealed class BasicMathConversionTests
             .Where(symbol => BasicWorkspaceConversionTests.InFiles(symbol, [vendorNames])))
         {
             exempt.Add(alias.Name);
-        }
-
-        foreach (DocumentationComment comment in DocumentationParser.Parse(File.ReadAllText(vendorNames), vendorNames).Comments)
-        {
-            if (comment.Sections.FirstOrDefault(section => section.Name == "Inherit") is { } inherit)
-            {
-                exempt.Add(native.DefinitionName(inherit.Text.Trim().Trim('<', '>')));
-            }
         }
 
         return exempt;

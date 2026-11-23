@@ -715,8 +715,9 @@ Decisions and how the table was applied:
   each saying in prose that Microsoft names it OLDOV there too.
 - M4. ZERO (A-Q7): `ZeroValue` is top level. `OutputTables` closes `Float` around it, and the three bytes are
   emitted outside the scope in every build, labeled only where `defineZero` is 1. BASIC 1's ZERO in
-  `MsBasic.VariableLookup` keeps its name until that module's step. The comment there now says that AppleSoft,
-  like BASIC 2 and 4, uses the bytes in `Float::Half`.
+  `MsBasic.VariableLookup` keeps its name until that module's step. A-Q7's note of a bug in LDZR's comment was
+  mistaken: AppleSoft passes `inlineZero = 1` and `useSimzer = 1`, so it has its own zero bytes there (SIMZER),
+  besides those in `Float::Half`, and the comment stands.
 - M5. A-Q6: AppleSoft's `ZSTORD = STORDO` is dropped and its WAIT passes `STORDO`; ZSTORDO is named in prose.
   BASIC 2's routine is `WaitHiddenMessage` (Also: ZSTORD (M6502), STORD1 (HV2)), with its locals, `HiddenMessageText`
   and two constants for its length and screen-code mask. BASIC 4's checksum byte is `RomChecksumAdjustment` (Also:
@@ -740,7 +741,7 @@ Decisions and how the table was applied:
   pieces of their scopes in the test's source. The PET float alias test predefines only the current names its
   model's build has: BASIC 1 keeps ZERO, so another build's ZeroValue would be a second definition.
 
-Checked: the full suite (3,811 passed, none failed; 665 skipped, the ROM-dump comparisons without the dumps), the rename
+Checked: the full suite (3,815 passed, none failed; 665 skipped, the ROM-dump comparisons without the dumps), the rename
 gate, the lint tests, and `BasicMathConversionTests`, which compares every old name in the math files with the
 MACRO-10 overlay's value in each of the eight builds, checks that each definition reaches the overlay by its name
 or an old name, that a vendor's names resolve only in its builds and through its aliases, and that every citation's

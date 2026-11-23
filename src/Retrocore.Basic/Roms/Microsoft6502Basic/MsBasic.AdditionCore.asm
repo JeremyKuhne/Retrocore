@@ -105,7 +105,8 @@
     ldx #Fac
     bne Align
 
-;; Arg has the smaller exponent: clears <FacExtension>, which takes Arg's shifted-out bits.
+;; Arg has the smaller exponent: clears <FacExtension>, so the bits shifted out of Arg, returned in A, are its only
+;; low bits.
 ;; Also: FADDA (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 ArgSmaller:
     ldy #$00
@@ -170,8 +171,8 @@ Subtract:
 
     ;; Normalizes <Fac> after addition, multiplication or division.
     ;;
-    ;; Whole zero bytes are shifted first, then individual bits. An exponent underflow produces zero;
-    ;; a carry out of addition shifts the result right and increments the exponent.
+    ;; Whole zero bytes are shifted first, then individual bits. An exponent underflow produces zero. A carry out of
+    ;; addition is handled where <Float::AddMantissas> joins at <Float::NormalizeBits::CheckCarry>.
     ;; See: <Float::SetZero>, <Float::ShiftInCarry>
     ;; Also: NORMAL (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc Normalize
@@ -354,6 +355,7 @@ Done:
     ; Mantissa negation, overflow, and the shared arithmetic shifter.
 
     ;; Shifts the multiplication result right by a byte, then continues through <Float::ShiftRight>.
+    ;; In: A = 0, carry = set, so that <Float::ShiftRight> returns after the byte
     ;; Also: MULSHF (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc ShiftProductByte
     ldx #(Result1-1)

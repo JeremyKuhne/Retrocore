@@ -266,7 +266,9 @@ CharacterOut = $FDED
 - **The debugger** resolves an old name in a watch or expression to its definition's value. A watch has no place
   in the source, so no `.using` applies to it: an old name wins over a scoped member's plain name there.
 - **A `.using`** comes before old names: where `.using Iob` is in effect, `VOLUME` is `Iob::VOLUME` even if
-  another definition gives `VOLUME` as an old name, and nothing reports that the old name is shadowed there.
+  another definition gives `VOLUME` as an old name. The editor warns at such a use (`using-shadow`), since code
+  typed in from a listing means the old name's definition; its quick fixes write either full name, the one the
+  `.using` gives first, which keeps the bytes the same.
 - **The editor** treats an old name as its definition: hover (which says it is a historical name), go to
   definition, and links (`<COUT>`). Completion matches old names too, so typing `COUT` offers `CharacterOut`,
   and workspace symbol search finds `CharacterOut (COUT)`. Each use in code gets an information message, with a
@@ -425,6 +427,7 @@ broken link.
   | `sections` | The sections' form: `Entry:`, `Members:`, `Parameters:`, `Inherit:`, `Include:`, `Flags:`, register lists, `name = meaning` entries, `{name}` references. |
   | `historical-name` | Information on a use of an old name in code, with its quick fix. |
   | `deprecated` | A use of a definition with a `Deprecated:` section. |
+  | `using-shadow` | A use of an old name that a `.using` makes mean another definition, with quick fixes for either name. |
   | `undocumented-export` | An exported symbol with no `;;` documentation. |
   | `placement` | A `;;` block that documents nothing it can (section 1.2): errors only. |
   | `exclusion` | A problem with an exclusion itself: an unknown ID, a misplaced one, or one that turns nothing off. |
@@ -433,10 +436,10 @@ broken link.
 
   An `ignore=` exclusion (AssemblyStyle.md, [Turning a rule off](AssemblyStyle.md#turning-a-rule-off)) turns a
   rule off for a file, a line of code or a `;;` block, and `unlinked-name`, `link`, `ambiguous-link`,
-  `address-name`, `label-alone`, `historical-name` and `deprecated` can be narrowed to names
+  `address-name`, `label-alone`, `historical-name`, `deprecated` and `using-shadow` can be narrowed to names
   (`ignore=link:Nowhere`); another rule with a name is an error. Errors can't be ignored, so naming `placement` or
   `exclusion` is an error. An unknown ID is a warning, and an exclusion that turns nothing off is information. That is reported
-  only where the lint looked: `historical-name` and `deprecated` run in the editor alone, and a `;;` block of a
+  only where the lint looked: `historical-name`, `deprecated` and `using-shadow` run in the editor alone, and a `;;` block of a
   definition another build assembles is checked by that build.
 
 ## 6. Open questions

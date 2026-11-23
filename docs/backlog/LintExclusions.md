@@ -35,6 +35,7 @@ outside the editor (the tests, a command-line lint) end with it in brackets:
 | `sections` | The section-form messages: `Entry:`, `Members:`, `Parameters:`, `Inherit:`, `Include:`, `Flags:`, register lists, `name = meaning` entries, `{name}` references. |
 | `historical-name` | The editor's information on a use of an old name in code (the quick fix stays). |
 | `deprecated` | A use of a definition with a `Deprecated:` section. |
+| `using-shadow` | A use of an old name that a `.using` makes mean another definition (added after this spec). |
 | `undocumented-export` | Exported 'X' has no ;; documentation. |
 | `placement` | The `;;` placement errors of `DocumentationParser.cs` (errors only, so never ignorable). |
 | `exclusion` | Problems with an exclusion itself: unknown ID, misplaced, unused (never ignorable). |
@@ -48,7 +49,7 @@ ID. A test checks that every diagnostic the parser and resolver can produce has 
 All three forms use the `; retrocore:` pragma words. An exclusion is `ignore=` and a comma-separated list of rule
 IDs; a rule may be narrowed to names with a colon and `|`: `ignore=unlinked-name:Pascal|Control`. Narrowing by name
 applies to the rules that report a name (`unlinked-name`, `link`, `ambiguous-link`, `address-name`, `label-alone`,
-`historical-name`, `deprecated`); for the others it is an error ("line-length takes no names").
+`historical-name`, `deprecated`, and `using-shadow`, added after this spec); for the others it is an error ("line-length takes no names").
 
 Text after ` -- ` is the reason, which the tools ignore and reviewers read:
 `; retrocore: ignore=line-length -- the table's columns line up with the listing's`.

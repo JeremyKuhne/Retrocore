@@ -370,14 +370,47 @@ internal sealed partial class SourceAnalysis
         return all.Count == 0 ? null : all;
     }
 
-    private List<SymbolSite>? Bound(string name, string path, DocumentationScopes scopes, bool exact)
+    /// <summary>
+    ///  Gets the definitions a plain name binds to at a line only through the <c>.using</c> directives in effect
+    ///  there: null when the code's own scopes or the root define it, or no directive's scope does.
+    /// </summary>
+    /// <param name="name">The plain name, as written.</param>
+    /// <param name="path">The file of the use.</param>
+    /// <param name="line">Its zero-based line.</param>
+    /// <returns>The definitions a <c>.using</c> brings the name to, or null.</returns>
+    internal IReadOnlyList<SymbolSite>? BoundThroughUsing(string name, string path, int line)
+    {
+        // A cheap local, an unnamed label or a qualified name is not looked up through a .using.
+        bool plain = !name.StartsWith('@') && !name.StartsWith(':') && !name.Contains("::", StringComparison.Ordinal);
+        if (!plain) { return null; }
+        bool exact = !UsesMacro10(path);
+        List<SymbolSite> all = [];
+        foreach (DocumentationScopes scopes in ScopesAt(path, line))
+        {
+            if (Own(name, scopes, exact) is not null) { return null; }
+            all.AddRange(Used(name, path, scopes, exact) ?? []);
+        }
+
+        return all.Count == 0 ? null : [.. all.Distinct()];
+    }
+
+    private List<SymbolSite>? Bound(string name, string path, DocumentationScopes scopes, bool exact) =>
+        Own(name, scopes, exact) ?? Used(name, path, scopes, exact);
+
+    // What a plain name binds to in the code's own scopes, innermost first, or at the root.
+    private List<SymbolSite>? Own(string name, DocumentationScopes scopes, bool exact)
     {
         for (string scope = scopes.Scope; scope.Length != 0; scope = Parent(scope))
         {
             if (Defined($"{scope}::{name}", exact) is { } sites) { return sites; }
         }
 
-        if (Defined(name, exact) is { } root) { return root; }
+        return Defined(name, exact);
+    }
+
+    // What a plain name binds to through the .using directives in effect, the innermost directive first.
+    private List<SymbolSite>? Used(string name, string path, DocumentationScopes scopes, bool exact)
+    {
         foreach (DocumentationUsing directive in scopes.Usings)
         {
             List<SymbolSite> used =

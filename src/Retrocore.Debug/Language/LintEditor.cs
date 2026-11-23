@@ -19,13 +19,21 @@ internal static class LintEditor
     /// </summary>
     /// <param name="diagnostic">The diagnostic.</param>
     /// <param name="lineRange">The range of its line, for a diagnostic that has no column.</param>
-    /// <param name="replacement">The current name for a historical name, which the quick fix writes.</param>
+    /// <param name="replacement">
+    ///  The name the preferred quick fix writes: a historical name's current name, or what a <c>.using</c> makes it.
+    /// </param>
+    /// <param name="alternative">A second name a quick fix may write, for a shadowed historical name.</param>
     /// <returns>The editor's diagnostic.</returns>
-    internal static Diagnostic ToDiagnostic(DocumentationDiagnostic diagnostic, LspRange lineRange, string? replacement)
+    internal static Diagnostic ToDiagnostic(
+        DocumentationDiagnostic diagnostic,
+        LspRange lineRange,
+        string? replacement,
+        string? alternative = null)
     {
         JsonObject data = [];
         if (diagnostic.Name is { } name) { data["name"] = name; }
         if (replacement is not null) { data["replacement"] = replacement; }
+        if (alternative is not null) { data["alternative"] = alternative; }
         return new Diagnostic
         {
             Range = diagnostic.Column is int column
@@ -60,10 +68,18 @@ internal static class LintEditor
         {
             if (node is not JsonObject diagnostic || diagnostic["range"] is not JsonObject range) { continue; }
             string? code = diagnostic["code"] is JsonValue value && value.TryGetValue(out string? text) ? text : null;
-            if (code == DocumentationRules.HistoricalName && diagnostic["data"]?["replacement"]?.GetValue<string>() is { } replacement)
+            bool renames = code is DocumentationRules.HistoricalName or DocumentationRules.UsingShadow;
+            if (renames && diagnostic["data"]?["replacement"]?.GetValue<string>() is { } replacement)
             {
                 JsonObject edit = new() { ["range"] = range.DeepClone(), ["newText"] = replacement };
                 actions.Add((JsonNode)Action($"Use {replacement}", uri, diagnostic, [edit], preferred: true));
+            }
+
+            // A shadowed historical name may also be meant as the old name's definition.
+            if (renames && diagnostic["data"]?["alternative"]?.GetValue<string>() is { } alternative)
+            {
+                JsonObject edit = new() { ["range"] = range.DeepClone(), ["newText"] = alternative };
+                actions.Add((JsonNode)Action($"Use {alternative}", uri, diagnostic, [edit], preferred: false));
             }
 
             // Errors can't be ignored (DiagnosticSeverity.Error is 1).

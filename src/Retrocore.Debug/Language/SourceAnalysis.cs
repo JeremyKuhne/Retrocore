@@ -236,8 +236,9 @@ internal sealed partial class SourceAnalysis
         ModelOf(Root),
         Result.SourceMap,
 
-        // An assembly with errors may stop short of definitions it would make; the conditions decide then.
-        Result.Success ? Result.SymbolDefinitions : null);
+        // Branches are chosen while sources expand, so even an assembly with errors says which it took, up to the
+        // first error in expansion; the conditions decide past it.
+        Result.SkippedLines);
 
     // The assembly's symbols, or while it has errors, the definitions found in the text.
     private IReadOnlyDictionary<string, long> Symbols()
@@ -282,7 +283,7 @@ internal sealed partial class SourceAnalysis
         Assembler.Assembler assembler = new();
         AssemblyResult result = parsed.Success
             ? assembler.Assemble(parsed.Project, options)
-            : new([.. parsed.Diagnostics]);
+            : Assembler.Assembler.Failed(parsed);
 
         return new(root, result, parsed.Project, resolver.Resolved, path => openText(path) ?? (File.Exists(path) ? File.ReadAllText(path) : null));
     }

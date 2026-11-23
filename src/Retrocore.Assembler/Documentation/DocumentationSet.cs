@@ -22,8 +22,8 @@ public sealed class DocumentationSet
     private bool _mixed;
     private HashSet<string>? _macros;
 
-    // Where the assembly defined each symbol, by full path and zero-based line: which branch of an .if it took.
-    private HashSet<(string Path, int Line)> _definedAt = [];
+    // The lines the assembly's conditional assembly skipped: which branch of each .if it took.
+    private AssemblySkippedLines? _skipped;
 
     private DocumentationSet(
         string? module,
@@ -103,7 +103,7 @@ public sealed class DocumentationSet
             symbols = moved;
         }
 
-        DocumentationSet set = Create(files, symbols, module, model, result?.SourceMap, result?.SymbolDefinitions);
+        DocumentationSet set = Create(files, symbols, module, model, result?.SourceMap, result?.SkippedLines);
         if (result is not null)
         {
             List<(string, string, int)> exports = [];
@@ -183,8 +183,9 @@ public sealed class DocumentationSet
     /// <param name="module">The module name links may use, or null.</param>
     /// <param name="model">The model the code was built for, or null.</param>
     /// <param name="sourceMap">The assembly's statements, for each part's CPU; null when unknown.</param>
-    /// <param name="definitions">
-    ///  The assembly's symbol definitions, which tell which branch of each <c>.if</c> it took; null when unknown.
+    /// <param name="skippedLines">
+    ///  The lines the assembly's conditional assembly skipped, which tell which branch of each <c>.if</c> it took;
+    ///  null when unknown, as for a debug file, which has no source.
     /// </param>
     /// <returns>The set.</returns>
     public static DocumentationSet Create(
@@ -193,18 +194,11 @@ public sealed class DocumentationSet
         string? module = null,
         string? model = null,
         IEnumerable<AssemblySourceMapEntry>? sourceMap = null,
-        IEnumerable<AssemblySymbol>? definitions = null)
+        AssemblySkippedLines? skippedLines = null)
     {
         List<DocumentationFile> list = [.. files];
-        DocumentationSet set = new(module, model, symbols, list);
+        DocumentationSet set = new(module, model, symbols, list) { _skipped = skippedLines };
         if (sourceMap is not null) { ReadCpus(set, sourceMap); }
-        foreach (AssemblySymbol symbol in definitions ?? [])
-        {
-            if (symbol.Location is { Path.Length: > 0 } location)
-            {
-                set._definedAt.Add((System.IO.Path.GetFullPath(location.Path), location.Line));
-            }
-        }
 
         Dictionary<string, List<DocumentationComment>> byName = [with(StringComparer.Ordinal)];
         List<string> order = [];
@@ -261,10 +255,10 @@ public sealed class DocumentationSet
     /// <remarks>
     ///  <para>
     ///   With <paramref name="thisBuild"/>, a label or equate in a branch of an <c>.if</c> the build leaves out doesn't
-    ///   count, nor does an <c>Also:</c> section of such a branch when both branches document the definition; macros,
-    ///   scopes and types, which are no symbols, always count. This only chooses among definitions: a name only an
-    ///   omitted one gives still finds it, as a plain name of a definition the build leaves out still does. Without
-    ///   the assembly's symbols, every definition counts.
+    ///   count, nor does an <c>Also:</c> section of such a branch when several branches document the definition, for
+    ///   any kind of topic (see <see cref="InBuild"/>). This only chooses among definitions: a name only an omitted
+    ///   one gives still finds it, as a plain name of a definition the build leaves out still does. Without the
+    ///   assembly's symbols, every definition counts.
     ///  </para>
     /// </remarks>
     public IReadOnlyList<DocumentationTopic> FindAlso(string name, bool thisBuild = false)
@@ -295,28 +289,27 @@ public sealed class DocumentationSet
     /// <returns>Whether the section's branch is the one assembled.</returns>
     /// <remarks>
     ///  <para>
-    ///   For a label, equate or member, the assembly answers it exactly: the branch is in the build when the assembly
-    ///   defined a symbol at the line the section's comment documents, as the assembler gives a definition the
-    ///   historical names of the branch it assembled. For anything else, the section's condition is evaluated from
-    ///   the build's symbols and the files' macros, which can differ from the assembler's view where a macro is
-    ///   defined after the <c>.ifdef</c> that tests it.
+    ///   When the set was created from an assembly, the assembly answers it exactly for every kind of topic: the
+    ///   branch is in the build when the assembly assembled the line the section's comment documents (see
+    ///   <see cref="AssemblyResult.SkippedLines"/>), as the assembler chose it, with the macros defined before that
+    ///   point and the constants as they were there.
+    ///  </para>
+    ///  <para>
+    ///   Without that report (documentation from a debug file, which has no source) or for a line it leaves
+    ///   undecided (after an error in expansion, or in a file the assembly never opened), the section's condition is
+    ///   evaluated from the build's symbols and every macro the files define, which can differ from the assembler's
+    ///   view where a macro is defined after the <c>.ifdef</c> that tests it or in a branch not taken.
     ///  </para>
     /// </remarks>
     public bool InBuild(DocumentationTopic topic, DocumentationSection section)
     {
-        return section.Condition is null
-            || (IsSymbol(topic.Kind) && _definedAt.Count != 0 && section.OriginPath is { } path
-                ? _definedAt.Contains((System.IO.Path.GetFullPath(path), section.OriginLine))
-                : DocumentationConditions.InBuild(section.Condition, _symbols, IsDefined));
-    }
+        if (section.Condition is null) { return true; }
+        bool? assembled = section.OriginPath is { Length: > 0 } path
+            ? _skipped?.IsAssembled(path, section.OriginLine)
+            : null;
 
-    // Whether the assembly defines a symbol for a topic of this kind.
-    private static bool IsSymbol(DocumentationKind kind) =>
-        kind is DocumentationKind.Routine
-            or DocumentationKind.Table
-            or DocumentationKind.Constant
-            or DocumentationKind.Variable
-            or DocumentationKind.Member;
+        return assembled ?? DocumentationConditions.InBuild(section.Condition, _symbols, IsDefined);
+    }
 
     /// <summary>
     ///  Gets whether a topic's definition is in this set's assembly: false only for a label or equate the assembly
@@ -401,7 +394,9 @@ public sealed class DocumentationSet
     public bool Defines(string name) => _symbols.ContainsKey(name);
 
     /// <summary>
-    ///  Gets whether a name is defined as an <c>.ifdef</c> sees it: a symbol of the assembly or a macro its files define.
+    ///  Gets whether a name is defined as an <c>.ifdef</c> sees it, approximately: a symbol of the assembly or a macro
+    ///  any of its files defines, wherever and in whichever branch. Only conditions the assembly's report can't
+    ///  decide are evaluated with it (see <see cref="InBuild"/>).
     /// </summary>
     /// <param name="name">The name.</param>
     /// <returns>Whether it is defined.</returns>

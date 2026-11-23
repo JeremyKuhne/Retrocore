@@ -34,6 +34,7 @@ internal sealed partial class AssemblyPreprocessor
 
             try
             {
+                OpenOpaqueLines(baseSource);
                 (string composed, Func<int, AssemblyLocation> location) = Macro10Overlay.Compose(source, baseSource, parent);
                 lines = expander.Expand(composed, location);
             }
@@ -51,6 +52,7 @@ internal sealed partial class AssemblyPreprocessor
         foreach ((string text, AssemblyLocation location) in lines)
         {
             _visited++;
+            MarkLine(location, assembled: true);
             Emit(new Line(text, location, AssemblyDialect.Macro10), text);
         }
 

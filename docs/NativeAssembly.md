@@ -674,6 +674,22 @@ The CPU tests follow the latest `.cpu` before them, or the host's CPU before the
 A condition's value must be known at that point in the source: constants and variables count, labels and `*`
 do not. Inactive blocks are skipped without being read, and every file closes the conditionals it opens.
 
+The assembly reports the lines it skipped, per file it opened (`AssemblyResult.SkippedLines`, also on a failed
+result and on `AssemblyParseResult`), which the documentation tools and the editor use to know which branch is in
+the build:
+
+- A line is assembled if any pass over it took it, so a file included twice, with a branch taken in one place and
+  not the other, has both branches assembled. A file only a skipped branch includes is never opened and has no
+  lines in the report.
+- A conditional directive's own line goes with the branch around the whole conditional. Inside a skipped branch,
+  nested conditionals are skipped whole.
+- A macro's body goes with its definition; an `.if` in the body is chosen again in each expansion, so expansions
+  report nothing. A `.repeat` body is assembled where an iteration took it, so one repeated no times is skipped.
+- Branches are chosen while the source is expanded, so an error found once code is laid out (an undefined name, a
+  branch out of range) leaves the report whole. After an error found while expanding, every line decided from
+  that error on, or never reached, is undecided rather than skipped. So are the lines of a MACRO-10 source that
+  produced no statement.
+
 ```asm
 Model = 2
 .if Model = 1

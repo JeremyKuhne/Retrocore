@@ -47,6 +47,11 @@ public sealed class AssemblyProject
     internal IReadOnlyList<AssemblySectionDefinition>? DeclaredSections => _sectionDefinitions;
 
     /// <summary>
+    ///  Gets or sets the lines the preprocessing that made this project skipped; null for a project built by hand.
+    /// </summary>
+    internal AssemblySkippedLines? SkippedLines { get; set; }
+
+    /// <summary>
     ///  Gets or sets the linker's implicit starting segment.
     /// </summary>
     internal string? InitialSection { get; set; }

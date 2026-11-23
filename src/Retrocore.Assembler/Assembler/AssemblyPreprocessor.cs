@@ -87,6 +87,7 @@ internal sealed partial class AssemblyPreprocessor
         }
 
         AssemblyProject project = processor._project;
+        project.SkippedLines = processor.SkippedLines();
         if (project.FileMarks is not null) { project.FileMarkStatements = [.. project.Statements]; }
         foreach (AssemblySource source in processor._sources) { project.Sources.Add(source); }
         return new(project, [.. processor._diagnostics.OrderBy(item => item.Order).Select(item => item.Diagnostic)]);
@@ -305,6 +306,7 @@ internal sealed partial class AssemblyPreprocessor
         _sources.Add(source);
         if (dialect == AssemblyDialect.Macro10)
         {
+            OpenOpaqueLines(source);
             ProcessMacro10(source, parent);
             if (identity.Length != 0) { _activeIncludes.Remove(identity); }
             return false;
@@ -318,6 +320,8 @@ internal sealed partial class AssemblyPreprocessor
         {
             lines.Add(new(line, new(source.Path, number++, expandedFrom: parent), dialect));
         }
+
+        OpenLines(source.Path, number);
 
         // As in ca65, conditionals are balanced per file: an include cannot close its includer's block.
         int floor = _conditions.Count;
@@ -345,6 +349,9 @@ internal sealed partial class AssemblyPreprocessor
                 _stopped = true;
                 break;
             }
+
+            // A conditional directive's own line counts with the branch around it, which it marks itself.
+            MarkLine(original.Location, _conditions.Count == 0 || _conditions[^1].Active);
 
             ReadOnlyMemory<char> text = original.Dialect == AssemblyDialect.Merlin
                 ? original.Text
@@ -460,7 +467,11 @@ internal sealed partial class AssemblyPreprocessor
             if (_conditions.Count != 0 && !_conditions[^1].Active) { continue; }
             if (directive == ".MACRO")
             {
+                int opening = index;
                 IReadOnlyList<Line>? body = Capture(lines, ref index, ".MACRO", ".ENDMACRO", original.Location);
+
+                // A body is assembled with its definition; an .if in it is chosen again in each expansion.
+                MarkLines(lines, opening + 1, index + 1, assembled: true);
                 if (body is not null)
                 {
                     DefineMacro(operand, body, original.Location, substitutions, frame);
@@ -488,6 +499,9 @@ internal sealed partial class AssemblyPreprocessor
             if (directive == ".REPEAT")
             {
                 IReadOnlyList<Line>? body = Capture(lines, ref index, ".REPEAT", ".ENDREPEAT", original.Location);
+
+                // The body's lines are marked by the iterations that take them; the closing line is the block's.
+                if (body is not null) { MarkLine(lines[index].Location, assembled: true); }
                 if (body is not null && Repeat(original, body, substitutions, includeDepth, macroDepth, frame))
                 {
                     return true;

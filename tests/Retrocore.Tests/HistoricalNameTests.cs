@@ -349,6 +349,64 @@ public sealed partial class HistoricalNameTests
     }
 
     /// <summary>
+    ///  Topics that are no symbols (a structure, a scope, a macro) documented once per branch follow the branch the
+    ///  assembly took, as labels do: an <c>.ifdef</c> of a macro defined after it is not taken, so its sections are
+    ///  another build's, and an old name only they give is not this build's.
+    /// </summary>
+    [TestMethod]
+    public void TopicsOfEveryKindFollowTheBranchTheAssemblyTook()
+    {
+        DocumentationSet set = Set("""
+            .ifdef WIDE
+            ;; A screen cell.
+            ;; Keeps: X
+            .struct Cell
+            Left .byte
+            Right .byte
+            .endstruct
+            ;; The screen.
+            ;; Keeps: X
+            .scope Screen
+            .endscope
+            ;; Prints a byte.
+            ;; Also: PRBYTE (TEST)
+            .macro PrintByte
+            .endmacro
+            .else
+            ;; A screen cell.
+            ;; Keeps: Y
+            .struct Cell
+            Only .byte
+            .endstruct
+            ;; The screen.
+            ;; Keeps: Y
+            .scope Screen
+            .endscope
+            ;; Prints a byte.
+            .macro PrintByte
+            .endmacro
+            .endif
+            .macro WIDE
+            .endmacro
+
+            ;; Prints a byte, the routine.
+            ;; Also: PRBYTE (TEST)
+            PrintByteRoutine:
+                rts
+            """);
+
+        foreach (string name in (string[])["Cell", "Screen"])
+        {
+            DocumentationTopic topic = Required(set.Find(name));
+            List<DocumentationSection> keeps = [.. topic.Sections.Where(section => section.Name == "Keeps")];
+            keeps.Should().HaveCount(2, name);
+            keeps.Single(section => set.InBuild(topic, section)).Text.Should().Be("Y", name);
+        }
+
+        set.FindAlso("PRBYTE", thisBuild: true).Should().ContainSingle().Which.Name.Should().Be("PrintByteRoutine");
+    }
+
+    /// <summary>
     ///  Another module is assembled for its default build, which says nothing about the build of the source that
     ///  links into it: an old name two of its builds give is ambiguous there, not its default build's.
     /// </summary>

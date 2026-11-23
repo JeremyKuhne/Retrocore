@@ -157,7 +157,8 @@ SameSign:
     sbc FacMantissa4
     beq ToLongInteger::Done
 
-;; Turns the carry of the unequal byte and <FacSign> into the order: inverts <FacSign> when <Fac> is larger.
+;; Turns the carry of the unequal byte and <FacSign> into the order: inverts <FacSign> when the operand's magnitude
+;; is the larger, so a positive <Fac> is the lesser.
 ;; Also: FCOMPC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 Unequal:
     lda FacSign
@@ -193,7 +194,7 @@ ToSignFromBit7:
     jsr ComplementMantissa
     txa
 
-;; A long shift goes through <Float::ShiftRight>, then restores Bits from Y.
+;; A long shift goes through <Float::ShiftRight>, then clears <ShiftFill> with the zero it returns in Y.
 ;; Also: QISHFT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 Shift:
     ldx #Fac

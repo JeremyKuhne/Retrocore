@@ -135,8 +135,9 @@ public sealed class BasicMathRoutineTests
     }
 
     /// <summary>
-    ///  <c>Float::ToLongInteger</c> leaves the integer part of a positive <c>Fac</c> as a four-byte integer in
-    ///  <c>FacMantissa1</c> through <c>FacMantissa4</c>, high byte first.
+    ///  <c>Float::ToLongInteger</c> leaves the greatest integer not above <c>Fac</c> as a signed four-byte integer in
+    ///  <c>FacMantissa1</c> through <c>FacMantissa4</c>, high byte first: a negative value's complemented mantissa is
+    ///  shifted with its sign, which rounds it down.
     /// </summary>
     /// <param name="apple">Whether to run AppleSoft rather than PET BASIC 4.</param>
     /// <param name="fac">The value in <c>Fac</c>.</param>
@@ -145,6 +146,9 @@ public sealed class BasicMathRoutineTests
     [DataRow(true, 1234.75, 1234)]
     [DataRow(false, 65535.5, 65535)]
     [DataRow(false, 0.75, 0)]
+    [DataRow(true, -1.5, -2)]
+    [DataRow(false, -1234.75, -1235)]
+    [DataRow(false, -2.0, -2)]
     public void ToLongIntegerLeavesTheIntegerInTheMantissa(bool apple, double fac, int expected)
     {
         BasicMathMachine machine = new(apple);
@@ -155,7 +159,8 @@ public sealed class BasicMathRoutineTests
 
     /// <summary>
     ///  <c>Float::ShiftRight</c> shifts four bytes right by the negative count in A, keeping the high byte's sign, and
-    ///  returns the shifted-out bits in A, above the old <c>FacExtension</c>'s, with carry clear.
+    ///  returns the shifted-out bits in A, above the old <c>FacExtension</c>'s, with carry clear. A count of eight or
+    ///  more moves whole bytes first, filling from <c>ShiftFill</c>, the low byte into <c>FacExtension</c>.
     /// </summary>
     /// <param name="apple">Whether to run AppleSoft rather than PET BASIC 4.</param>
     /// <param name="count">The negative shift count.</param>
@@ -167,6 +172,7 @@ public sealed class BasicMathRoutineTests
     [DataRow(true, -1, 0x80, 0x01, 0xC0, 0x80)]
     [DataRow(false, -2, 0x40, 0x03, 0x10, 0xC0)]
     [DataRow(false, -1, 0x7E, 0x00, 0x3F, 0x00)]
+    [DataRow(true, -9, 0x12, 0x78, 0x00, 0x3C)]
     public void ShiftRightKeepsTheSignAndReturnsTheLowBits(bool apple, int count, int high, int low, int shiftedHigh, int bits)
     {
         BasicMathMachine machine = new(apple);
@@ -176,6 +182,7 @@ public sealed class BasicMathRoutineTests
         machine.Memory[exponent + 3] = 0;
         machine.Memory[exponent + 4] = (byte)low;
         machine.Memory[machine.Address("FacExtension")] = 0;
+        machine.Memory[machine.Address("ShiftFill")] = 0;
         machine.Call("Float::ShiftRight", a: count & 0xFF, x: exponent, carry: false);
 
         machine.Memory[exponent + 1].Should().Be((byte)shiftedHigh);

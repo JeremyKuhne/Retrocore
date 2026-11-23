@@ -57,14 +57,14 @@
     ;; Accumulates one byte of the multiplier, shifting the partial product right.
     ;; In: A = multiplier byte
     ;; Entry:
-    ;;   NonZero = includes the implicit high bit of the final byte
+    ;;   NonZero = skips the zero test, for a byte that is never zero
     ;;   Done = The shared rts
     ;; Also: MLTPLY (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc MultiplyByte
     bne *+5                         ; a zero byte takes the whole-byte shift
     jmp ShiftProductByte
 
-;; Includes the implicit high bit of the final byte.
+;; Shifts the first multiplier bit into carry and sets bit 7 as a marker, which ends the loop when it shifts out.
 ;; Also: MLTPL1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 NonZero:
     lsr a
@@ -296,8 +296,8 @@ Compare:
     ldy ArgMantissa4
     cpy FacMantissa4
 
-;; Rotates the comparison's carry into the quotient byte; each full byte is stored in <Result1> through <Result4>, the
-;; fifth goes to <Float::DivideArg::LastBits>.
+;; Rotates the comparison's carry into the quotient byte; each full byte is stored in <Result1> through <Result4>.
+;; After the fourth it goes on to <Float::DivideArg::LastBits>, and the partial fifth to <Float::DivideArg::Finish>.
 ;; Also: SAVQUO (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 SaveBit:
     php

@@ -115,7 +115,7 @@ ScaleUpSmall:
     jsr MultiplyPacked
     lda #$F7
 
-;; Stores the starting decimal scale in DigitsBeforePoint.
+;; Stores the starting decimal scale in <DigitCount>.
 ;; Also: FOUT7 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 SetScale:
     sta DigitCount

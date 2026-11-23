@@ -28,7 +28,7 @@
     ldy #$00
     ldx #$0A
 
-;; Zeroes the eleven work bytes from DigitsBeforePoint up without touching carry.
+;; Zeroes the eleven work bytes from <DigitCount> up without touching carry.
 ;; Also: FINZLP (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 ClearLoop:
     ; Clear the decimal counters, sign flags and <Fac> workspace without changing carry.

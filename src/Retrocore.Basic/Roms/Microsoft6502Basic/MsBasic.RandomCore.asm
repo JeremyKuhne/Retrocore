@@ -56,7 +56,7 @@ RandomAddend:
         jmp NormalizeAndSave
     .endif
 
-;; Loads RandomSeed and multiplies by <Float::RandomMultiplier> and adds <Float::RandomAddend> (zero argument returns
+;; Loads <RandomValue> and multiplies by <Float::RandomMultiplier> and adds <Float::RandomAddend> (zero argument returns
 ;; it, by build).
 ;; Also: QSETNR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 NextValue:

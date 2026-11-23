@@ -217,7 +217,7 @@ NOTFNS:
 
 ;; Returns the address of the shared zero without allocating a variable.
 ;;
-;; BASIC 1 places two zero bytes here. AppleSoft and BASIC 2 and 4 use bytes within <Float::Half> instead.
+;; BASIC 1 and AppleSoft place two zero bytes here. BASIC 2 and 4 use bytes within <Float::Half> instead.
 ;; Out: A = low address, Y = high address
 LDZR:
 .if useSimzer

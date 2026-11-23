@@ -24,8 +24,9 @@
 
     ;; Raises the argument accumulator to the power in <Fac> and returns the result in <Fac>.
     ;;
-    ;; Zero to the zero power is one. A negative base is accepted only for an integer exponent; the parity of that
-    ;; exponent determines the sign. Otherwise the result is exp(exponent * log(base)).
+    ;; Any base to the zero power is one, and zero to any other power is zero. A negative base is accepted only for an
+    ;; integer exponent; the parity of that exponent determines the sign. Otherwise the result is exp(exponent *
+    ;; log(base)).
     ;; In: zero = set when the exponent is zero
     ;; Errors: illegal quantity for a negative base with a noninteger exponent
     ;; Also: FPWRT (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
@@ -219,7 +220,8 @@ SetPointer:
     sta PolynomialPointer
     ldy PolynomialPointer+1
 
-;; Multiplies by x (<FloatTemporary2>) and steps to the next coefficient.
+;; Multiplies by the coefficient at Y:A on the first pass, and by x (<FloatTemporary2>) on later ones, and steps to
+;; the next coefficient.
 ;; Also: POLY2 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 NextTerm:
     jsr MultiplyPacked
@@ -323,7 +325,8 @@ ToEvaluateOddPolynomial:
 
     ;; Computes tangent of <Fac> in radians as sine divided by cosine.
     ;;
-    ;; The input and sine are saved separately; the cosine is computed from the input's magnitude and quadrant sign.
+    ;; The sine is saved; the cosine is computed from the magnitude of the reduced argument <Functions::Sin> leaves in
+    ;; <FloatTemporary1>, which replaces the input stored there first, and the quadrant sign.
     ;; Also: TAN (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc Tan
     jsr Float::StoreFacInTemporary1
@@ -373,7 +376,7 @@ Cosine:
     bpl Positive
     jsr Float::Negate
 
-;; Pushes the exponent; above 1 takes the reciprocal (One / <Fac>).
+;; Pushes the exponent; a magnitude of 1 or more takes the reciprocal (One / <Fac>).
 ;; Also: ATN1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 Positive:
     lda FacExponent

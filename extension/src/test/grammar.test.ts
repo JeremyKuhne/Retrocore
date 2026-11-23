@@ -128,6 +128,12 @@ test("labels and assignments take priority over instruction-looking identifiers"
     assertScope("N:=3", "N", scope.constant);
     assertScope("N := 3", ":=", "keyword.operator.assignment.retrocore");
     assertScope(".set N, 3", "N", scope.constant);
+    for (const text of ["N: .equ 3", "N:.EQU 3", "N: .set 3"]) {
+        assertScope(text, "N", scope.constant);
+        assert.equal(tokens(text).some(token => token.scopes.includes(scope.label)), false, text);
+    }
+    assertScope("N: .equ 3", ".equ", "keyword.control.directive.retrocore");
+    assertScope("N: .equal 3", "N", scope.label);
     assertScope("Byte_\u00E9: LDA Byte_\u00E9", "Byte_\u00E9", scope.label);
     assertScope("Byte_\u00E9: LDA Byte_\u00E9", "Byte_\u00E9", scope.symbol, 1);
     for (const text of ["LDA:", "LDA = 1", "LDA_LABEL:", "  JSR LDA", "  LDA LDA_LABEL", "; LDA #1", ".byte LDA, X"]) {

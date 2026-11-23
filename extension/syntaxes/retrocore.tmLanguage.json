@@ -547,13 +547,19 @@
       ]
     },
     "constant-definition": {
-      "begin": "^[ \\t]*((?:[A-Za-z_][\\p{L}\\p{Mn}\\p{Nd}\\p{Pc}]*|@[\\p{L}\\p{Mn}\\p{Nd}\\p{Pc}]+))[ \\t]*(:?=|(?i:\\.set)(?=[\\s;]|$))",
+      "begin": "^[ \\t]*((?:[A-Za-z_][\\p{L}\\p{Mn}\\p{Nd}\\p{Pc}]*|@[\\p{L}\\p{Mn}\\p{Nd}\\p{Pc}]+))(?:[ \\t]*(:?=|(?i:\\.set)(?=[\\s;]|$))|(:)[ \\t]*((?i:\\.(?:equ|set))(?=[\\s;]|$)))",
       "beginCaptures": {
         "1": {
           "name": "variable.other.constant.definition.retrocore"
         },
         "2": {
           "name": "keyword.operator.assignment.retrocore"
+        },
+        "3": {
+          "name": "punctuation.separator.label.retrocore"
+        },
+        "4": {
+          "name": "keyword.control.directive.retrocore"
         }
       },
       "end": "$",

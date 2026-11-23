@@ -142,6 +142,11 @@ public sealed partial class LanguageAnalysisTests
     [DataRow("VALUE:\t.equ 3")]
     [DataRow("VALUE:.equ 3")]
     [DataRow("VALUE: .set 3")]
+    [DataRow("VALUE: .EQU 3")]
+    [DataRow("VALUE: .Set 3")]
+    [DataRow("VALUE .SET 3")]
+    [DataRow("VALUE: .equ 3 ; three")]
+    [DataRow("VALUE: .equ")]
     public void ColonDirectiveConstantsSurviveErrors(string definition)
     {
         string directory = Directory.CreateTempSubdirectory().FullName;
@@ -173,6 +178,7 @@ public sealed partial class LanguageAnalysisTests
     [DataRow("VALUE::", false)]
     [DataRow("VALUE: .byte 3", false)]
     [DataRow("VALUE: .equal", false)]
+    [DataRow("VALUE: .equ$8D", false)]
     [DataRow("VALUE EQU 3", true)]
     public void ColonLabelsSurviveErrors(string definition, bool constant)
     {

@@ -168,7 +168,7 @@ internal sealed partial class ScopedNames
     [GeneratedRegex("^[A-Za-z_][A-Za-z0-9_]*(::[A-Za-z_][A-Za-z0-9_]*)+$")]
     private static partial Regex QualifiedName();
 
-    // A stand-in in the exported source.
+    // A stand-in in the exported source; its prefix is StandInPrefix's.
     [GeneratedRegex(@"\bScoped__[0-9]+\b")]
     private static partial Regex StandInName();
 }

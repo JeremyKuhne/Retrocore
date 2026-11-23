@@ -25,6 +25,10 @@ public sealed class DocumentationSet
     // Where the assembly defined each symbol, by full path and zero-based line: which branch of an .if it took.
     private HashSet<(string Path, int Line)> _definedAt = [];
 
+    // The symbols each expansion of a macro body line defined, by the line's full path and zero-based line; null
+    // when the assembly's definitions are not known.
+    private Dictionary<(string Path, int Line), List<string>>? _expansions;
+
     private DocumentationSet(
         string? module,
         string? model,
@@ -198,13 +202,20 @@ public sealed class DocumentationSet
         List<DocumentationFile> list = [.. files];
         DocumentationSet set = new(module, model, symbols, list);
         if (sourceMap is not null) { ReadCpus(set, sourceMap); }
+        Dictionary<(string Path, int Line), List<string>>? expansions = definitions is null ? null : [];
         foreach (AssemblySymbol symbol in definitions ?? [])
         {
             if (symbol.Location is { Path.Length: > 0 } location)
             {
-                set._definedAt.Add((System.IO.Path.GetFullPath(location.Path), location.Line));
+                (string, int) at = (System.IO.Path.GetFullPath(location.Path), location.Line);
+                set._definedAt.Add(at);
+                if (!location.IsMacroExpansion || expansions is null) { continue; }
+                if (!expansions.TryGetValue(at, out List<string>? names)) { expansions[at] = names = []; }
+                names.Add(symbol.Name);
             }
         }
+
+        set._expansions = expansions;
 
         Dictionary<string, List<DocumentationComment>> byName = [with(StringComparer.Ordinal)];
         List<string> order = [];
@@ -249,6 +260,32 @@ public sealed class DocumentationSet
     public DocumentationTopic? Find(string name) => _topics.TryGetValue(name, out DocumentationTopic? topic) ? topic : null;
 
     /// <summary>
+    ///  Finds a topic by the symbol its definition is: its documented name, or, for a definition in a macro's body
+    ///  that the build expands once, the name the expansion gave it (see <see cref="SymbolOf"/>).
+    /// </summary>
+    /// <param name="symbol">The symbol's name, as the assembly has it.</param>
+    /// <returns>The topic, or null.</returns>
+    public DocumentationTopic? FindSymbol(string symbol)
+    {
+        if (Find(symbol) is { } topic) { return topic; }
+        if (_bySymbol is null)
+        {
+            _bySymbol = [with(StringComparer.Ordinal)];
+            foreach (DocumentationTopic candidate in _ordered)
+            {
+                if (ExpandedName(candidate.Comments) is { } expanded && expanded != candidate.Name)
+                {
+                    _bySymbol[expanded] = candidate;
+                }
+            }
+        }
+
+        return _bySymbol.TryGetValue(symbol, out topic) ? topic : null;
+    }
+
+    private Dictionary<string, DocumentationTopic>? _bySymbol;
+
+    /// <summary>
     ///  Finds the topics that give a historical name in their <c>Also:</c> sections.
     /// </summary>
     /// <param name="name">The historical name, such as <c>COUT</c>.</param>
@@ -283,8 +320,67 @@ public sealed class DocumentationSet
     /// <param name="thisBuild">Whether only its sections in this set's build count, as the assembler's do.</param>
     /// <returns>Whether it gives the name.</returns>
     public bool Gives(DocumentationTopic topic, string name, bool thisBuild = false) =>
-        DocumentationAlso.Of(topic.Sections.Where(section => !thisBuild || InBuild(topic, section)))
-            .Any(also => also.Name == name);
+        Reaches(topic)
+            && DocumentationAlso.Of(topic.Sections.Where(section => !thisBuild || InBuild(topic, section)))
+                .Any(also => also.Name == name);
+
+    /// <summary>
+    ///  Gets the historical names a topic's <c>Also:</c> sections give it that reach it: none for a definition in a
+    ///  macro's body that this set's build doesn't expand exactly once.
+    /// </summary>
+    /// <param name="topic">The topic.</param>
+    /// <returns>The names, with the documents that give them.</returns>
+    public IEnumerable<DocumentationAlso> AlsoOf(DocumentationTopic topic) =>
+        Reaches(topic) ? DocumentationAlso.Of(topic.Sections) : [];
+
+    /// <summary>
+    ///  Gets whether the historical names a topic's <c>Also:</c> sections give reach it, as the assembler resolves
+    ///  them.
+    /// </summary>
+    /// <param name="topic">The topic.</param>
+    /// <returns>
+    ///  False for a definition in a macro's body that this set's build doesn't expand exactly once, whose name a
+    ///  parameter or <c>.local</c> gives, or whose expansions are not known; otherwise true.
+    /// </returns>
+    public bool Reaches(DocumentationTopic topic) =>
+        topic.Comments.All(comment => comment.Macro is null
+            || (!comment.NamedByParameter && !comment.LocalToExpansion && Expansions(comment) == 1));
+
+    /// <summary>
+    ///  Gets how many times this set's build defined a definition in a macro's body: once for each expansion.
+    /// </summary>
+    /// <param name="comment">The definition's comment.</param>
+    /// <returns>The count; null outside a macro's body, or when the assembly's definitions are not known.</returns>
+    public int? Expansions(DocumentationComment comment) =>
+        comment.Macro is null || _expansions is null ? null
+            : _expansions.TryGetValue((System.IO.Path.GetFullPath(comment.Path), comment.TargetLine), out List<string>? names)
+                ? names.Count
+                : 0;
+
+    /// <summary>
+    ///  Gets the symbol a topic's definition is: for a definition in a macro's body that the build expands once, the
+    ///  name the expansion gave it (<c>Library::COMBYT</c>, expanded in <c>.scope Library</c>); otherwise its name.
+    /// </summary>
+    /// <param name="topic">The topic.</param>
+    /// <returns>The symbol's name.</returns>
+    public string SymbolOf(DocumentationTopic topic) => ExpandedName(topic.Comments) ?? topic.Name;
+
+    // The name a macro body definition's only expansion gave it, or null.
+    private string? ExpandedName(IEnumerable<DocumentationComment> comments)
+    {
+        if (_expansions is null) { return null; }
+        string? found = null;
+        foreach (DocumentationComment comment in comments)
+        {
+            if (comment.Macro is null) { continue; }
+            (string, int) at = (System.IO.Path.GetFullPath(comment.Path), comment.TargetLine);
+            if (!_expansions.TryGetValue(at, out List<string>? names)) { continue; }
+            if (names.Count != 1 || (found is not null && found != names[0])) { return null; }
+            found = names[0];
+        }
+
+        return found;
+    }
 
     /// <summary>
     ///  Gets whether a topic's section, from one branch of an <c>.if</c> when topics from several were merged, is in
@@ -328,7 +424,8 @@ public sealed class DocumentationSet
         _symbols.Count == 0
             || topic.Kind is not (DocumentationKind.Routine or DocumentationKind.Table or DocumentationKind.Constant or DocumentationKind.Variable)
             || topic.Value is not null
-            || Defines(topic.Name);
+            || Defines(topic.Name)
+            || topic.Comments.Any(comment => Expansions(comment) > 0);
 
     /// <summary>
     ///  Gets every historical name the topics give.
@@ -342,9 +439,10 @@ public sealed class DocumentationSet
             Dictionary<string, List<DocumentationTopic>> also = [with(StringComparer.Ordinal)];
             foreach (DocumentationTopic topic in _ordered)
             {
-                // A scope or a named type has nothing for an old name to reach, as in the assembler.
+                // A scope or a named type has nothing for an old name to reach, as in the assembler, nor has a
+                // definition in a macro's body the build doesn't expand once.
                 bool scope = topic.Kind is DocumentationKind.Scope or DocumentationKind.Struct or DocumentationKind.Enum;
-                if (scope) { continue; }
+                if (scope || !Reaches(topic)) { continue; }
                 foreach (DocumentationAlso item in DocumentationAlso.Of(topic.Sections))
                 {
                     if (!also.TryGetValue(item.Name, out List<DocumentationTopic>? topics))
@@ -440,7 +538,11 @@ public sealed class DocumentationSet
     {
         DocumentationComment first = comments[0];
         string name = first.Name;
-        long? value = set._symbols.TryGetValue(name, out long found) ? found : null;
+
+        // A definition in a macro's body has the value of the symbol its expansion defined, which a scope around the
+        // expansion qualifies.
+        string symbol = set.ExpandedName(comments) ?? name;
+        long? value = set._symbols.TryGetValue(symbol, out long found) ? found : null;
         if (comments.Count == 1)
         {
             return new DocumentationTopic

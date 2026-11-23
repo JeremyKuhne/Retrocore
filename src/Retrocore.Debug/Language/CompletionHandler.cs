@@ -148,7 +148,7 @@ internal sealed class CompletionHandler
 
     // A definition's historical names, from its Also: sections, separated by spaces.
     private static string AlsoNames(SourceAnalysis analysis, string name) =>
-        analysis.Documentation.Find(name) is { } topic
-            ? string.Join(" ", DocumentationAlso.Of(topic.Sections).Select(also => also.Name))
+        analysis.Documentation.FindSymbol(name) is { } topic
+            ? string.Join(" ", analysis.Documentation.AlsoOf(topic).Select(also => also.Name))
             : "";
 }

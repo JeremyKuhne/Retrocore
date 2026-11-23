@@ -141,7 +141,7 @@ internal sealed class HoverHandler
     private bool IsAlso(SymbolSite site, string name)
     {
         if (_workspace.TopicOf(site) is not { } documented) { return false; }
-        return DocumentationAlso.Of(documented.Topic.Sections).Any(also => also.Name == name);
+        return documented.Topic.Set.AlsoOf(documented.Topic).Any(also => also.Name == name);
     }
 
     private string Describe(SymbolSite site)

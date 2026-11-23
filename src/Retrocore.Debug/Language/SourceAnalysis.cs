@@ -319,7 +319,7 @@ internal sealed partial class SourceAnalysis
         // A historical name finds the definition whose Also: section gives it.
         return [.. Documentation.FindAlso(name, thisBuild: true)
             .Where(topic => topic.Name != name)
-            .SelectMany(topic => Find(topic.Name))
+            .SelectMany(topic => Find(Documentation.SymbolOf(topic)))
             .Distinct()];
     }
 

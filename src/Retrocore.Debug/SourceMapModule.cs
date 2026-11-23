@@ -32,7 +32,7 @@ internal sealed partial class SourceMapModule : IDebugModule
     private readonly Dictionary<string, Dictionary<int, List<ushort>>> _entries = [with(StringComparer.OrdinalIgnoreCase)];
     private readonly Dictionary<string, long> _symbols = [with(StringComparer.OrdinalIgnoreCase)];
     private readonly (string Name, long Value)[] _labels;
-    private readonly (string Name, long Value, IsaDescription Cpu)[] _addressConstants;
+    private readonly (string Name, long Value, IsaDescription Cpu, string? Path)[] _addressConstants;
     private readonly Dictionary<string, string[]> _sourceText = [with(StringComparer.OrdinalIgnoreCase)];
     private readonly AssemblyResult _result;
     private readonly int _relocation;
@@ -170,7 +170,7 @@ internal sealed partial class SourceMapModule : IDebugModule
     }
 
     /// <inheritdoc/>
-    public IEnumerable<(string Name, long Value, IsaDescription Cpu)> AddressConstants => _addressConstants;
+    public IEnumerable<(string Name, long Value, IsaDescription Cpu, string? Path)> AddressConstants => _addressConstants;
 
     /// <inheritdoc/>
     public IEnumerable<ushort> DataStatements =>
@@ -201,7 +201,7 @@ internal sealed partial class SourceMapModule : IDebugModule
     // names whose value is the address the instruction's bytes encode, its memory operand or pointer, or on the 6809
     // an indirect or PC-relative postbyte's address. Matching the value leaves out an immediate value, an index's
     // offset and a term added to another address, and picks the right one of names that differ only in case or scope.
-    private static (string Name, long Value, IsaDescription Cpu)[] AddressConstantsOf(
+    private static (string Name, long Value, IsaDescription Cpu, string? Path)[] AddressConstantsOf(
         AssemblyResult result,
         Dictionary<string, string> sourceNames,
         int relocation)
@@ -249,7 +249,8 @@ internal sealed partial class SourceMapModule : IDebugModule
         return [.. found.Select(item => (
                 sourceNames.TryGetValue(item.Symbol.Name, out string? source) ? source : item.Symbol.Name,
                 item.Symbol.Value,
-                item.Cpu))
+                item.Cpu,
+                item.Symbol.Location?.Path))
             .OrderBy(item => item.Item2)
             .ThenBy(item => item.Item1, StringComparer.Ordinal)];
     }

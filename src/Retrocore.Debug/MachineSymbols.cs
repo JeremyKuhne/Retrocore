@@ -48,7 +48,7 @@ internal static partial class MachineSymbols
         string roms = directory ?? SdkModules.RomDirectory;
         string monitor = Path.Join(roms, "System", "Monitor.asm");
         string firmware = SdkModules.FirmwarePath(model, roms);
-        string appleSoft = Path.Join(roms, "AppleSoft", "applesoft.mac");
+        string appleSoft = SdkModules.AppleSoftPath(roms);
         string integer = SdkModules.IntegerBasicPath(roms);
         string dos33 = SdkModules.DosPath("Dos33.asm", roms);
         string dos32 = SdkModules.DosPath("Dos32.asm", roms);
@@ -159,13 +159,56 @@ internal static partial class MachineSymbols
         return Path.GetFileName(path);
     }
 
-    // Which names win at a shared address: the Monitor's, the hardware's, the firmware's, BASIC's, then DOS's.
-    private static int Rank(string file) => file switch
+    /// <summary>
+    ///  Orders names from several modules so that the unranked ones, a program's, come first in the order given, and
+    ///  then the ranked ones, the SDK's, by <see cref="Rank(string)"/>: where they name one address, the Monitor's,
+    ///  the hardware's and the firmware's come before BASIC's and DOS's.
+    /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   AppleSoft's <c>TRMPOS</c> and the Monitor's <c>CH</c> both name $24, and <c>CH</c> comes first; names of one
+    ///   rank stay in the order given. Ranks are by module file name, as <see cref="ModuleFile(string)"/> gives it, so
+    ///   a name from a Monitor, firmware or BASIC source (<c>AppleSoft.*</c>, <c>MsBasic.*</c> or <c>m6502.asm</c>)
+    ///   comes before one from any other source, such as PET BASIC's <c>Commodore.Equates.asm</c> or its kernal's.
+    ///  </para>
+    /// </remarks>
+    /// <param name="names">
+    ///  Each name, its value, the source that defines it (a name with none ranks with the other sources'), and whether
+    ///  it is ranked, in the modules' order.
+    /// </param>
+    /// <returns>
+    ///  The names and values, the unranked first, then the ranked by lowest <see cref="Rank(string)"/>.
+    /// </returns>
+    internal static IEnumerable<(string Name, long Value)> ByRank(
+        IEnumerable<(string Name, long Value, string? Path, bool Ranked)> names)
+    {
+        Dictionary<string, int> ranks = [];
+        int RankOf(string? path)
+        {
+            if (path is null) { return Rank(""); }
+            if (!ranks.TryGetValue(path, out int rank)) { ranks[path] = rank = Rank(ModuleFile(path)); }
+            return rank;
+        }
+
+        return [.. names.Select(name => (name.Name, name.Value, Rank: name.Ranked ? RankOf(name.Path) : -1))
+            .OrderBy(name => name.Rank)
+            .Select(name => (name.Name, name.Value))];
+    }
+
+    /// <summary>
+    ///  Gets which names win at a shared address: the Monitor's, the hardware's, the firmware's, BASIC's, then DOS's
+    ///  and everything else's.
+    /// </summary>
+    /// <param name="file">The module's file, from <see cref="ModuleFile(string)"/>.</param>
+    /// <returns>The rank, lowest first.</returns>
+    internal static int Rank(string file) => file switch
     {
         "Monitor.asm" or "MonitorEntries.asm" => 0,
         "IIeEquates.asm" or "FirmwareEquates.asm" => 1,
         _ when file.StartsWith("Firmware", StringComparison.Ordinal) => 2,
-        "m6502.asm" or "applesoft.mac" => 3,
+        "m6502.asm" or "applesoft.mac" or "AppleSoft.asm" => 3,
+        _ when file.StartsWith("AppleSoft.", StringComparison.Ordinal)
+            || file.StartsWith("MsBasic.", StringComparison.Ordinal) => 3,
         _ => 4
     };
 

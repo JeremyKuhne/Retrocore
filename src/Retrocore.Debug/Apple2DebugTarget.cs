@@ -144,6 +144,7 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
     ///   The ROMs are the dumps in <c>romDirectory</c> (or <c>RETROCORE_IIE_ROMS</c>). Without dumps they are
     ///   assembled from the SDK's sources in <c>sdkRoms</c>, or beside the debug host, which are byte-identical to
     ///   them.
+    ///   <c>basicSource</c> chooses the native source by default or the MACRO-10 overlay.
     ///  </para>
     /// </remarks>
     /// <param name="args">The arguments, such as <c>romDirectory</c>, <c>model</c> and <c>diskImage</c>.</param>
@@ -152,6 +153,12 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
     internal static Apple2DebugTarget Launch(JsonObject args)
     {
         Apple2Model model = Model(args.String("model"));
+        BasicSourceKind basicSource = args.String("basicSource") switch
+        {
+            null or "native" => BasicSourceKind.Native,
+            "macro10" => BasicSourceKind.Macro10,
+            _ => throw new ArgumentException("basicSource must be native or macro10.")
+        };
 
         string? sdk = args.String("sdkRoms") is { } sdkRoms ? Path.GetFullPath(sdkRoms) : null;
         string? diskImage = args.String("diskImage");
@@ -188,7 +195,7 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
         bool autostart = model != Apple2Model.II || monitor == "autostart";
 
         Apple2Roms roms = string.IsNullOrWhiteSpace(dumps)
-            ? SdkModules.BuildRoms(model, sdk, autostart)
+            ? SdkModules.BuildRoms(model, sdk, autostart, basicSource)
             : Apple2Roms.LoadFromDirectory(model, dumps, autostart);
 
         // Programmer's Aid #1 in the II's D0 socket, which is otherwise empty.
@@ -220,6 +227,7 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
         Apple2DebugTarget target = new(machine, model)
         {
             SdkRoms = sdk,
+            BasicSource = basicSource,
             Dos = dos,
             DosYear = dosYear,
             Autostart = autostart,
@@ -325,6 +333,11 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
     ///  Gets whether a II has the Autostart Monitor; the II Plus always does.
     /// </summary>
     internal bool Autostart { get; init; }
+
+    /// <summary>
+    ///  Gets the AppleSoft listing used for the ROM and debugger source map.
+    /// </summary>
+    internal BasicSourceKind BasicSource { get; init; }
 
     /// <summary>
     ///  Gets whether a II's D0 socket holds Programmer's Aid #1.
@@ -1021,7 +1034,13 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
     public void AddSdkModules(DebugInfo debug, string? directory)
     {
         _basicRom = BasicRom.From(
-            SdkModules.AddTo(debug, _model, directory, out Assembler.AssemblyResult? integer, Autostart)?.Symbols,
+            SdkModules.AddTo(
+                debug,
+                _model,
+                directory,
+                out Assembler.AssemblyResult? integer,
+                Autostart,
+                BasicSource)?.Symbols,
             "MAIN",
             run: "RUN",
             resume: "CONT",
@@ -1635,7 +1654,11 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
                 Apple2Model other = _model == Apple2Model.II ? Apple2Model.IIPlus : Apple2Model.II;
                 byte[] card = FirmwareRoms is { } roms
                     ? Apple2Roms.LoadFirmwareCard(other, roms)
-                    : SdkModules.BuildBoardSystem(other, autostart: false, SdkRoms);
+                    : SdkModules.BuildBoardSystem(
+                        other,
+                        autostart: false,
+                        directory: SdkRoms,
+                        basicSource: BasicSource);
 
                 // The AppleSoft card's switch is up on a II, so its Autostart Monitor boots; the Integer card's is down
                 // on a II Plus, as its original Monitor would not boot.

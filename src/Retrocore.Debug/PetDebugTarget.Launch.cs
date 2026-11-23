@@ -22,7 +22,8 @@ internal sealed partial class PetDebugTarget
     ///   dumps in <c>romDirectory</c> (or <c>RETROCORE_PET_ROMS</c>) under MAME's names, in the directory or in its
     ///   <c>pet2001</c>, <c>pet2001n</c>, <c>pet4016</c> or <c>pet4032b</c> folder; without them, they are built from
     ///   the SDK's sources. <c>basicRevision</c> picks BASIC 1's first chip or BASIC 4's <c>$B000</c> chip,
-    ///   <c>revised</c> (the default) or <c>original</c>.
+    ///   <c>revised</c> (the default) or <c>original</c>. <c>basicSource</c> selects the native listing or the
+    ///   MACRO-10 overlay, with native as the default.
     ///  </para>
     ///  <para>
     ///   <c>ramKilobytes</c> is 4, 8, 16 or 32, by default 8, or 32 on a 4032; <c>snow</c> shows CPU accesses to video
@@ -57,6 +58,13 @@ internal sealed partial class PetDebugTarget
             _ => throw new ArgumentException("basicRevision must be revised or original.")
         };
 
+        BasicSourceKind basicSource = args.String("basicSource") switch
+        {
+            null or "native" => BasicSourceKind.Native,
+            "macro10" => BasicSourceKind.Macro10,
+            _ => throw new ArgumentException("basicSource must be native or macro10.")
+        };
+
         int ram = args.Int("ramKilobytes") ?? (model.BasicVersion() == 4 ? 32 : 8);
         if (ram is not (4 or 8 or 16 or 32))
         {
@@ -75,7 +83,7 @@ internal sealed partial class PetDebugTarget
         string sdk = SdkDirectory(args.String("sdkRoms") is { } given ? Path.GetFullPath(given) : null);
         if (directory is null || sdkRoms)
         {
-            roms = PetSdkModules.BuildRoms(model, sdk, original);
+            roms = PetSdkModules.BuildRoms(model, sdk, original, basicSource);
         }
         else
         {
@@ -96,15 +104,16 @@ internal sealed partial class PetDebugTarget
         {
             FastCassette = args.Bool("fastCassette") ?? true,
             SdkRoms = sdkRoms,
-            OriginalBasic = original && model.BasicVersion() != 2
+            OriginalBasic = original && model.BasicVersion() != 2,
+            BasicSource = basicSource
         };
 
         target.SetSound(args.String("sound") ?? "speaker");
 
         // BASIC's page-zero addresses, which loading a program needs before the session adds the SDK's modules.
-        if (File.Exists(Path.Join(sdk, "Basic", PetSdkModules.BasicFile(model))))
+        if (File.Exists(Path.Join(sdk, "Basic", PetSdkModules.BasicFile(model, basicSource))))
         {
-            target.SetBasicSymbols(PetSdkModules.AssembleBasic(sdk, model, original).Symbols);
+            target.SetBasicSymbols(PetSdkModules.AssembleBasic(sdk, model, original, basicSource).Symbols);
         }
 
         target.LaunchDisks(args, sdkRoms ? Environment.GetEnvironmentVariable("RETROCORE_PET_ROMS") : directory);

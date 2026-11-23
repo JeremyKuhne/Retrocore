@@ -2,9 +2,10 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-using System.Security.Cryptography;
+using Retrocore.Assembler;
 using Retrocore.Debug;
 using Retrocore.Machines.Commodore;
+using System.Security.Cryptography;
 
 namespace Retrocore.Tests;
 
@@ -39,6 +40,380 @@ public sealed class PetRomSourceTests
     {
         ReadOnlySpan<byte> image = PetSdkModules.BasicImage(PetSdkModules.AssembleBasic(s_sources, model, original), model).Span;
         Check(image, expectedHash, model, original, PetSdkModules.BasicOrigin(model));
+    }
+
+    /// <summary>
+    ///  Each native root retains the overlay's ROM, editor spill and debugger entry points.
+    /// </summary>
+    /// <param name="model">The PET model.</param>
+    /// <param name="original">Whether BASIC 1 or 4 uses its original first chip.</param>
+    [TestMethod]
+    [DataRow(PetModel.Pet2001, false)]
+    [DataRow(PetModel.Pet2001, true)]
+    [DataRow(PetModel.Pet2001Basic2, false)]
+    [DataRow(PetModel.Pet4032, false)]
+    [DataRow(PetModel.Pet4032, true)]
+    public void NativeBasicMatchesTheOverlay(PetModel model, bool original)
+    {
+        AssemblyResult native = PetSdkModules.AssembleBasic(s_sources, model, original, BasicSourceKind.Native);
+        AssemblyResult legacy = PetLegacyBasic.Assemble(s_sources, model, original);
+        AssemblyResult editor = PetSdkModules.AssembleEditor(s_sources, model);
+
+        PetSdkModules.BasicImage(native, model).ToArray().Should().Equal(PetSdkModules.BasicImage(legacy, model).ToArray());
+        PetSdkModules.EditorImage(native, editor, model).Should().Equal(PetSdkModules.EditorImage(legacy, editor, model));
+
+        int end = model.BasicVersion() == 4 ? 0xE000 : checked((int)legacy.Symbols["LASTWR"]);
+        foreach (AssemblySymbol label in legacy.SymbolDefinitions.Where(symbol =>
+            !symbol.IsConstant && (symbol.Value >= PetSdkModules.BasicOrigin(model) && symbol.Value < end
+                || model == PetModel.Pet2001 && symbol.Value is >= 0xE7F3 and < 0xE7F9)))
+        {
+            native.Symbols.Should().ContainKey(label.Name);
+            native.Symbols[label.Name].Should().Be(label.Value, $"{label.Name} must retain its ROM address");
+        }
+
+        native.SourceMap.Select(entry => entry.Location?.Path).OfType<string>()
+            .Select(Path.GetFileName).Should().Contain("MsBasic.CommandCore.asm");
+
+        SourceMapModule module = new(native, area: null, collapseSingleStatementMacros: true);
+        DebugTestMemory memory = new();
+        memory.Set(0, native.Sections[0].Bytes.ToArray());
+        foreach ((string name, string file) in ((string, string)[])
+            [("PRINT", "MsBasic.Print.asm"), ("INIT", "Commodore.Initialization.asm")])
+        {
+            DebugPosition position = module.Position(memory, checked((ushort)native.Symbols[name]))
+                ?? throw new AssertFailedException($"{name} has no native debugger position.");
+
+            Path.GetFileName(position.Chain[0].Path).Should().Be(file);
+        }
+    }
+
+    /// <summary>
+    ///  Shared floating-point constants can be emitted at each PET BASIC version's addresses without changing their
+    ///  bytes or their entry-point offsets.
+    /// </summary>
+    /// <param name="model">The PET model.</param>
+    /// <param name="original">Whether BASIC 1 or 4 uses its original chip.</param>
+    [TestMethod]
+    [DataRow(PetModel.Pet2001, false)]
+    [DataRow(PetModel.Pet2001, true)]
+    [DataRow(PetModel.Pet2001Basic2, false)]
+    [DataRow(PetModel.Pet4032, false)]
+    [DataRow(PetModel.Pet4032, true)]
+    public void SharedFloatConstantsMatchThePetRom(PetModel model, bool original)
+    {
+        AssemblyResult basic = PetLegacyBasic.Assemble(s_sources, model, original);
+        string folder = Path.Join(AppContext.BaseDirectory, "Inputs", "Microsoft6502Basic");
+        AssemblyOptions options = new(ProcessorVariant.Mos6502, 0, 0x10000)
+        {
+            SourceResolver = new FileAssemblySourceResolver()
+        };
+
+        foreach ((string macro, string end, string[] names) in ((string, string, string[])[])
+            [
+                ("LOG_CONSTANTS", "LOG", ["FONE", "LOGCN2", "SQRHLF", "SQRTWO", "NEGHLF", "LOG2"]),
+                ("OUTPUT_CONSTANTS", "NZMIL", ["NZ0999", "NZ9999", "NZMIL"]),
+                ("OUTPUT_TABLES", "SQR", ["FHALF", "FOUTBL", "FDCEND", "TIMEND"]),
+                ("EXP_CONSTANTS", "EXP", ["LOGEB2", "EXPCON"]),
+                ("SIN_CONSTANTS", "SINCON", ["PI2", "TWOPI", "FR4", "SINCON"]),
+                ("ATN_CONSTANTS", "INITAT", ["ATNCON"])
+            ])
+        {
+            int origin = checked((int)basic.Symbols[names[0]]);
+            int expectedEnd = checked((int)basic.Symbols[end]);
+            if (macro == "SIN_CONSTANTS")
+            {
+                // Bytes after the sine coefficients differ between variants.
+                expectedEnd += 1 + (basic.Sections[0].Bytes.Span[expectedEnd] + 1) * 5;
+            }
+            else if (macro == "OUTPUT_CONSTANTS")
+            {
+                // BASIC 4 places its checksum and padding after the scaling constants.
+                expectedEnd += 5;
+            }
+
+            string invocation = macro switch
+            {
+                "OUTPUT_CONSTANTS" => $"{macro} {(model == PetModel.Pet2001 ? 1 : 0)}",
+                "OUTPUT_TABLES" => $"{macro} {(model == PetModel.Pet2001 ? 0 : 1)}, 1",
+                _ => macro
+            };
+
+            string source = $"""
+                .cpu Mos6502
+                .include "MsBasic.FloatConstants.asm"
+                .org ${origin:X4}
+                    {invocation}
+                END_OF_CONSTANTS:
+                """;
+
+            AssemblyResult constants = new Assembler.Assembler().Assemble(
+                new AssemblySource(source, Path.Join(folder, "FloatConstantsTest.asm")), options);
+
+            constants.Success.Should().BeTrue(string.Join('\n', constants.Diagnostics.Select(diagnostic => diagnostic.Message)));
+            foreach (string name in names)
+            {
+                constants.Symbols[name].Should().Be(basic.Symbols[name], $"{name} must land at the PET BASIC address");
+            }
+
+            if (macro == "OUTPUT_TABLES")
+            {
+                if (model == PetModel.Pet2001)
+                {
+                    constants.Symbols.Should().NotContainKey("ZERO");
+                }
+                else
+                {
+                    constants.Symbols["ZERO"].Should().Be(basic.Symbols["ZERO"]);
+                }
+            }
+
+            constants.Symbols["END_OF_CONSTANTS"].Should().Be(expectedEnd, $"{macro} must emit the whole table");
+            int length = expectedEnd - origin;
+            constants.Sections[0].Bytes.Slice(origin, length).ToArray()
+                .Should().Equal(basic.Sections[0].Bytes.Slice(origin, length).ToArray(), $"{macro} must match {model}");
+        }
+    }
+
+    /// <summary>
+    ///  The shared math routines use each PET version's own addresses without changing the ROM's instructions.
+    /// </summary>
+    /// <param name="model">The PET model.</param>
+    /// <param name="original">Whether BASIC 1 or 4 uses its original chip.</param>
+    [TestMethod]
+    [DataRow(PetModel.Pet2001, false)]
+    [DataRow(PetModel.Pet2001, true)]
+    [DataRow(PetModel.Pet2001Basic2, false)]
+    [DataRow(PetModel.Pet4032, false)]
+    [DataRow(PetModel.Pet4032, true)]
+    public void SharedMathRoutinesMatchThePetRom(PetModel model, bool original)
+    {
+        AssemblyResult basic = PetLegacyBasic.Assemble(s_sources, model, original);
+        string folder = Path.Join(AppContext.BaseDirectory, "Inputs", "Microsoft6502Basic");
+        foreach ((string file, string macro, string first, string end, string[] entries, string[] dependencies) in
+            ((string, string, string, string, string[], string[])[])
+            [
+                ("MsBasic.AdditionCore.asm", "ADD_ENTRIES", "FADDH", "FSUBT",
+                    ["FADDH", "FSUB", "FSUBT"],
+                    ["FHALF", "FADD", "CONUPK", "FACSGN", "ARGSGN", "ARISGN", "FACEXP", "FADDT"]),
+                ("MsBasic.AdditionCore.asm", "ADD_AND_NORMALIZE", "FADD5", "FONE",
+                    ["FADD5", "FADD", "FADDT", "FADDC", "FADDA", "FADD1", "FADD4", "FADD3", "SUBIT", "FADFLT",
+                     "NORMAL", "NORM3", "ZEROFC", "ZEROF1", "ZEROML", "FADD2", "NORM2", "NORM1", "SQUEEZ",
+                     "RNDSHF", "RNDRTS", "NEGFAC", "NEGFCH", "INCFAC", "INCFRT", "OVERR", "MULSHF", "SHFTR2",
+                     "SHIFTR", "SHFTR3", "SHFTR4", "ROLSHF", "SHFTR7", "SHFTRT"],
+                    ["CONUPK", "MOVFA", "FACOV", "OLDOV", "ARGEXP", "FACEXP", "ZERRTS", "ARGSGN", "FACSGN",
+                     "FAC", "ARISGN", "FACLO", "FACMO", "FACMOH", "FACHO", "ARGLO", "ARGMO", "ARGMOH",
+                     "ARGHO", "ERROV", "ERROR", "RESHO", "BITS"]),
+                ("MsBasic.Logarithm.asm", "LOG_ROUTINE", "LOG", "FMULT",
+                    ["LOG", "LOGERR", "LOG1", "MULLN2"],
+                    ["SIGN", "FCERR", "FACEXP", "SQRHLF", "FADD", "SQRTWO", "FDIV", "FONE", "FSUB",
+                     "LOGCN2", "POLYX", "NEGHLF", "FINLOG", "LOG2", "FMULT"]),
+                ("MsBasic.ArithmeticCore.asm", "FLOAT_ARITHMETIC", "FMULT", "MOVFR",
+                    ["FMULT", "FMULTT", "MLTPLY", "MLTPL1", "MLTPL2", "MLTPL3", "MULTRT", "CONUPK",
+                     "MULDIV", "MLDEXP", "TRYOFF", "MLDVEX", "ZEREMV", "GOOVER", "MUL10", "FINML6",
+                     "MUL10R", "TENZC", "DIV10", "FDIVF", "FDIV", "FDIVT", "DIVIDE", "SAVQUO", "QSHFT",
+                     "SHFARG", "DIVSUB", "LD100", "DIVNRM", "DV0ERR"],
+                    ["RESHO", "RESMOH", "RESMO", "RESLO", "FACOV", "FACLO", "FACMO", "FACMOH", "FACHO",
+                     "MOVFR", "MULSHF", "ARGLO", "ARGMO", "ARGMOH", "ARGHO", "INDEX1", "ARGSGN", "FACSGN",
+                     "ARISGN", "ARGEXP", "FACEXP", "ZEROML", "ZEROFC", "OVERR", "MOVAF", "FADDC", "MOVFM",
+                     "ROUND", "ERRDV0", "ERROR"]),
+                ("MsBasic.MovementCore.asm", "FLOAT_MOVEMENT", "MOVFR", "SIGN",
+                    ["MOVFR", "MOVFM", "MOV2F", "MOV1F", "MOVML", "MOVVF", "MOVMF", "MOVFA", "MOVFA1",
+                     "MOVFAL", "MOVAF", "MOVEF", "MOVAFL", "MOVRTS", "ROUND", "INCRND"],
+                    ["RESHO", "FACHO", "RESMOH", "FACMOH", "RESMO", "FACMO", "RESLO", "FACLO", "NORMAL",
+                     "INDEX1", "FACSGN", "FACEXP", "FACOV", "TEMPF2", "TEMPF1", "FORPNT", "ARGSGN", "ARGEXP",
+                     "INCFAC", "RNDSHF"]),
+                ("MsBasic.ConversionCore.asm", "SIGN_INTEGER_ROUTINES", "SIGN", "FIN",
+                    ["SIGN", "FCSIGN", "FCOMPS", "SIGNRT", "SGN", "FLOAT", "FLOATS", "FLOATC", "FLOATB", "ABS",
+                     "FCOMP", "FCOMPN", "FOUTCP", "FCOMPC", "FCOMPD", "QINT", "QISHFT", "QINTRT", "QINT1",
+                     "INT", "CLRFAC", "INTRTS"],
+                    ["FACEXP", "FACSGN", "FACHO", "FACMOH", "FACLO", "FACMO", "FACOV", "FADFLT", "INDEX2",
+                     "BITS", "NEGFCH", "FAC", "SHIFTR", "ROLSHF", "INTEGR"]),
+                ("MsBasic.DecimalInputCore.asm", "DECIMAL_INPUT", "FIN", "NZ0999",
+                    ["FIN", "FINZLP", "QPLUS", "FINC", "FINDGQ", "FIN1", "FINEC1", "FINEC", "FNEDG1",
+                     "FINEC2", "FINDP", "FINE", "FINE1", "FINDIV", "FINMUL", "FINQNG", "NEGXQS", "FINDIG",
+                     "FINDG1", "FINLOG", "FINEDG", "MLEX10", "MLEXMI"],
+                    ["DECCNT", "SGNFLG", "CHRGET", "MINUTK", "PLUSTK", "EXPSGN", "TENEXP", "DPTFLG", "DIV10",
+                     "MUL10", "NEGOP", "MOVAF", "FLOAT", "ARGSGN", "FACSGN", "ARISGN", "FACEXP", "FADDT",
+                     "OVERR", "TXTPTR"]),
+                ("MsBasic.OutputCore.asm", "DECIMAL_OUTPUT", "INPRT", "FHALF",
+                    ["INPRT", "LINPRT", "STROU2", "FOUT", "FOUTC", "FOUT1", "FOUT37", "FOUT7", "FOUT4",
+                     "FOUT3", "FOUT38", "FOUT9", "FOUT5", "BIGGES", "FOUTPI", "FOUT6", "FOUT39", "FOUT16",
+                     "FOUT8", "FOUTIM", "FOUT2", "FOUT41", "FOUT40", "FOUTYP", "STXBUF", "FOUTCM", "FOULDY",
+                     "FOUT11", "FOUT12", "FOUT14", "FOUT15", "FOUT19", "FOUT17", "FOUT20", "FPWRRT"],
+                    ["INTXT", "CURLIN", "FACHO", "FACMOH", "FLOATC", "STROUT", "FACSGN", "FBUFFR", "FBUFPT",
+                     "FACEXP", "NZMIL", "FMULT", "DECCNT", "NZ9999", "FCOMP", "NZ0999", "MUL10", "DIV10",
+                     "FADDH", "QINT", "TENEXP", "FACLO", "FOUTBL", "FACMO", "FDECPT", "FDCEND", "TIMEND"]),
+                ("MsBasic.TranscendentalCore.asm", "POWER_ROUTINES", "SQR", "LOGEB2",
+                    ["SQR", "FPWRT", "FPWRT1", "FPWR1", "NEGOP", "NEGRTS"],
+                    ["MOVAF", "FHALF", "MOVFM", "EXP", "ARGEXP", "ZEROF1", "TEMPF3", "MOVMF", "ARGSGN",
+                     "INT", "FCOMP", "INTEGR", "MOVFA1", "LOG", "FMULT", "FACEXP", "FACSGN"]),
+                ("MsBasic.TranscendentalCore.asm", "EXP_ROUTINE", "EXP", "POLYX",
+                    ["EXP", "STOLD", "GOMLDV", "EXP1", "SWAPLP"],
+                    ["LOGEB2", "FMULT", "FACOV", "INCRND", "OLDOV", "MOVEF", "FACEXP", "MLDVEX",
+                     "INT", "INTEGR", "ARGEXP", "FSUBT", "NEGOP", "EXPCON", "POLY", "ARISGN", "MLDEXP"]),
+                ("MsBasic.TranscendentalCore.asm", "POLYNOMIAL_ROUTINES", "POLYX", "RMULZC",
+                    ["POLYX", "POLY", "POLY1", "POLY3", "POLY2", "POLY4", "RANDRT"],
+                    ["POLYPT", "MOV1F", "TEMPF1", "FMULT", "MOV2F", "DEGREE", "FADD", "TEMPF2"]),
+                ("MsBasic.RandomCore.asm", "RANDOM_ROUTINE", "RMULZC", "COS",
+                    ["RMULZC", "RADDZC", "RND", "QSETNR", "RND1", "STRNEX", "GMOVMF"],
+                    ["SIGN", "RNDX", "MOVFM", "FMULT", "FADD", "FACLO", "FACHO", "FACMOH", "FACMO",
+                     "FACSGN", "FACEXP", "FACOV", "NORMAL", "MOVMF", "CQHTIM"]),
+                ("MsBasic.TranscendentalCore.asm", "TRIG_ROUTINES", "COS", "PI2",
+                    ["COS", "SIN", "SIN1", "SIN2", "SIN3", "GPOLYX", "TAN", "GFDIV", "COSC"],
+                    ["PI2", "FADD", "MOVAF", "TWOPI", "ARGSGN", "FDIVF", "INT", "ARISGN", "FSUBT",
+                     "FR4", "FSUB", "FACSGN", "FADDH", "TANSGN", "NEGOP", "SINCON", "POLYX",
+                     "MOV1F", "TEMPF3", "GMOVMF", "TEMPF1", "MOVFM", "FDIV"]),
+                ("MsBasic.TranscendentalCore.asm", "ATN_ROUTINE", "ATN", "ATNCON",
+                    ["ATN", "ATN1", "ATN2", "ATN3", "ATN4"],
+                    ["FACSGN", "NEGOP", "FACEXP", "FONE", "FDIV", "ATNCON", "POLYX", "PI2", "FSUB"])
+            ])
+        {
+            int origin = checked((int)basic.Symbols[first]);
+            int expectedEnd = checked((int)basic.Symbols[end]);
+            if (macro == "ADD_ENTRIES")
+            {
+                // BASIC 2 inserts its hidden-message routine immediately after FSUBT's 15 bytes.
+                expectedEnd += 15;
+            }
+
+            Dictionary<string, long> symbols = [];
+            foreach (string name in dependencies)
+            {
+                symbols.Add(name, basic.Symbols[name]);
+            }
+
+            string invocation = macro switch
+            {
+                "FLOAT_ARITHMETIC" or "DECIMAL_INPUT" => $"{macro} {(model == PetModel.Pet2001 ? 1 : 0)}",
+                "DECIMAL_OUTPUT" => $"{macro} 0, 1",
+                "RANDOM_ROUTINE" => $"{macro} 1",
+                _ => macro
+            };
+
+            string source = $"""
+                .cpu Mos6502
+                .include "{file}"
+                .org ${origin:X4}
+                    {invocation}
+                END_OF_ROUTINE:
+                """;
+
+            AssemblyOptions options = new(ProcessorVariant.Mos6502, 0, 0x10000)
+            {
+                SourceResolver = new FileAssemblySourceResolver(),
+                PredefinedSymbols = symbols
+            };
+
+            AssemblyResult routine = new Assembler.Assembler().Assemble(
+                new AssemblySource(source, Path.Join(folder, "MathRoutineTest.asm")), options);
+
+            routine.Success.Should().BeTrue(string.Join('\n', routine.Diagnostics.Select(diagnostic => diagnostic.Message)));
+            foreach (string name in entries)
+            {
+                routine.Symbols[name].Should().Be(basic.Symbols[name], $"{name} must land at the PET BASIC address");
+            }
+
+            routine.Symbols["END_OF_ROUTINE"].Should().Be(expectedEnd, $"{macro} must emit the whole routine");
+            int length = expectedEnd - origin;
+            routine.Sections[0].Bytes.Slice(origin, length).ToArray()
+                .Should().Equal(basic.Sections[0].Bytes.Slice(origin, length).ToArray(), $"{macro} must match {model}");
+
+            if (model == PetModel.Pet2001 && !original && macro == "LOG_ROUTINE")
+            {
+                symbols["FMULT"]++;
+
+                AssemblyOptions misplacedOptions = new(ProcessorVariant.Mos6502, 0, 0x10000)
+                {
+                    SourceResolver = options.SourceResolver,
+                    PredefinedSymbols = symbols
+                };
+
+                AssemblyResult misplaced = new Assembler.Assembler().Assemble(
+                    new AssemblySource(source, Path.Join(folder, "MathRoutineTest.asm")),
+                    misplacedOptions);
+
+                misplaced.Success.Should().BeFalse("LOG must not fall through to an unrelated address");
+                misplaced.Diagnostics.Should().Contain(diagnostic => diagnostic.Message.Contains("LOG must fall through to FMULT."));
+            }
+
+            if (model == PetModel.Pet2001 && !original && (macro is "FLOAT_ARITHMETIC" or "DECIMAL_INPUT"))
+            {
+                string invalidSource = source.Replace($"{macro} 1", $"{macro} 2", StringComparison.Ordinal);
+                string parameter = macro == "FLOAT_ARITHMETIC" ? "shortZeroBranch" : "limitAt120";
+                AssemblyResult invalid = new Assembler.Assembler().Assemble(
+                    new AssemblySource(invalidSource, Path.Join(folder, "MathRoutineTest.asm")),
+                    options);
+
+                invalid.Success.Should().BeFalse("the variant selector must be 0 or 1");
+                invalid.Diagnostics.Should().Contain(diagnostic => diagnostic.Message.Contains($"{parameter} is 0 or 1."));
+            }
+        }
+    }
+
+    /// <summary>
+    ///  The two decimal-input variants preserve their different negative-exponent overflow behavior.
+    /// </summary>
+    /// <param name="model">The PET model selecting the variant.</param>
+    /// <param name="exponent">The exponent accumulated before this digit.</param>
+    /// <param name="digit">The next decimal digit.</param>
+    /// <param name="expected">The resulting exponent byte.</param>
+    [TestMethod]
+    [DataRow(PetModel.Pet2001, 12, 0, 112)]
+    [DataRow(PetModel.Pet2001, 13, 7, 121)]
+    [DataRow(PetModel.Pet2001, 100, 9, 41)]
+    [DataRow(PetModel.Pet2001Basic2, 9, 9, 99)]
+    [DataRow(PetModel.Pet2001Basic2, 10, 9, 100)]
+    public void DecimalInputPreservesNegativeExponentBehavior(PetModel model, int exponent, int digit, int expected)
+    {
+        AssemblyResult basic = PetLegacyBasic.Assemble(s_sources, model);
+        int origin = checked((int)basic.Symbols["FIN"]);
+        int end = checked((int)basic.Symbols["NZ0999"]);
+        Dictionary<string, long> symbols = basic.Symbols
+            .Where(symbol => symbol.Value < origin || symbol.Value >= end)
+            .ToDictionary(symbol => symbol.Key, symbol => symbol.Value);
+
+        string folder = Path.Join(AppContext.BaseDirectory, "Inputs", "Microsoft6502Basic");
+        string source = $"""
+            .cpu Mos6502
+            .include "MsBasic.DecimalInputCore.asm"
+            .org ${origin:X4}
+                DECIMAL_INPUT {(model == PetModel.Pet2001 ? 1 : 0)}
+            """;
+
+        AssemblyResult input = new Assembler.Assembler().Assemble(
+            new AssemblySource(source, Path.Join(folder, "DecimalInputTest.asm")),
+            new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
+            {
+                SourceResolver = new FileAssemblySourceResolver(),
+                PredefinedSymbols = symbols
+            });
+
+        input.Success.Should().BeTrue(string.Join('\n', input.Diagnostics.Select(diagnostic => diagnostic.Message)));
+        RecordingBus bus = new();
+        input.Sections[0].Bytes.Span.CopyTo(bus.Memory);
+        int textPointer = checked((int)input.Symbols["TXTPTR"]);
+        int exponentAddress = checked((int)input.Symbols["TENEXP"]);
+        bus.Memory[textPointer] = 0;
+        bus.Memory[textPointer + 1] = 2;
+        bus.Memory[0x0200] = (byte)('0' + digit);
+        bus.Memory[exponentAddress] = (byte)exponent;
+        bus.Memory[checked((int)input.Symbols["EXPSGN"])] = 0x80;
+
+        Processor<RecordingBus> cpu = new(bus);
+        cpu.Registers = new()
+        {
+            ProgramCounter = checked((ushort)input.Symbols["FINEDG"]),
+            Status = StatusRegister.Unused
+        };
+
+        ushort exit = checked((ushort)input.Symbols["FINEC"]);
+        for (int instruction = 0; instruction < 32 && cpu.Registers.ProgramCounter != exit; instruction++)
+        {
+            cpu.StepInstruction();
+        }
+
+        cpu.Registers.ProgramCounter.Should().Be(exit, "the exponent digit must return to the input loop");
+        bus.Memory[exponentAddress].Should().Be((byte)expected);
     }
 
     /// <summary>

@@ -28,10 +28,12 @@ A `files.associations` entry settles it either way: map `*.asm` to
 extension's language where it should not. This extension does not edit your
 settings automatically.
 
-MACRO-10 sources, such as the SDK's AppleSoft (`m6502.asm` and its `applesoft.mac`
-overlay), can use **MACRO-10 Assembly** (`retrocore-macro10`) instead: it is the
-same assembly language, highlighting and language server, with its own red `MAC`
-file icon. The BASIC
+MACRO-10 sources, including the retained AppleSoft source (`m6502.asm` and
+its `applesoft.mac` overlay), can use **MACRO-10 Assembly** (`retrocore-macro10`)
+instead: it is the same assembly language, highlighting and language server,
+with its own red `MAC` file icon. AppleSoft and PET BASIC default to native,
+documented listings; set `basicSource` to `macro10` in an Apple II or PET launch to
+build and debug with the MACRO-10 source. The BASIC
 languages show a green `BAS` icon. Language icons appear only where your file
 icon theme has none of its own for the file.
 
@@ -216,8 +218,10 @@ includes and macros:
   the host, so `COUT` finds the Monitor's.
 
 Each file is assembled as its own root unless an assembly already analysed
-includes it; a MACRO-10 base such as `m6502.asm` is analysed through the overlay
-beside it that names it. If the root has a same-named `.cfg` beside it, the server
+includes it; a MACRO-10 base such as `m6502.asm` is analysed through an overlay
+that names it. The shared Microsoft BASIC sources in `src/Retrocore.Basic/Roms`
+are found from the machine ROM roots across projects, as they are from the SDK's
+sibling folders. If the root has a same-named `.cfg` beside it, the server
 uses that linker configuration when assembling and reanalyzes on open-document
 edits and watched workspace file changes (subject to `files.watcherExclude`).
 This is an editor-only convenience: CLI builds and debug launches require an
@@ -585,13 +589,20 @@ Line numbers are the base's, one-based. The base is found through the
 Every dialect sees them, and MACRO-10 `IFDEF` does too, so a source can default a
 switch with `IFNDEF NAME,<NAME==1>` that a build overrides.
 
-The SDK's AppleSoft II (`src/Retrocore.Machines.Apple2/Roms/AppleSoft`) is Microsoft's
-`m6502.asm` (MIT, with its `LICENSE`) plus `applesoft.mac`, an overlay with Apple's
-changes. Both have their tabs expanded to spaces at the original's 8 columns, so they
-align in any editor. It assembles byte-identically to the IIe ROM at $D000-$F7FF for both
-models: `ENHNCD` is 1 for the Enhanced IIe (the default) and 0 for the original.
-`AppleSoftTests` pin both ROMs by digest, and compare against your dumps when
+The SDK's default AppleSoft II (`src/Retrocore.Machines.Apple2/Roms/AppleSoft`) is a
+fully documented, modular listing in Retrocore's native assembly. It assembles
+byte-identically to the IIe ROM at $D000-$F7FF for both models: `ENHNCD` is 1 for the
+Enhanced IIe (the default) and 0 for the original. Set `basicSource` to `macro10`
+in an Apple II launch to assemble and debug Microsoft's `m6502.asm` (MIT, with its
+`LICENSE` in `Microsoft6502Basic`) plus `applesoft.mac`, Apple's changes as an overlay. `AppleSoftTests` pin
+the II Plus and both IIe ROMs by digest, and compare against your dumps when
 `RETROCORE_IIE_ROMS` is set.
+
+The shared sources live in `src/Retrocore.Basic/Roms/Microsoft6502Basic` in the
+repository and `Sdk/Roms/Microsoft6502Basic` when shipped. The debug host resolves
+both layouts, including when assembling a repository source directly; see the
+[shared-source README](../src/Retrocore.Basic/Roms/Microsoft6502Basic/README.md)
+for using the plain file resolver on the repository's native root.
 
 With the Monitor, the internal firmware and the video ROM
 (`Roms/System/CharacterGenerator.asm`, the font for either model, MouseText included),
@@ -1106,11 +1117,12 @@ by:
   its own DOS 2.0 and controller ROMs, MAME's `c4040` set, and a 2040 DOS 1.2, its
   `c2040` set, from `driveRomDirectory`, else `romDirectory` or `RETROCORE_PET_ROMS`.
 
-BASIC, the screen editor and the kernal are the SDK sources `Basic1.mac`,
-`Basic2.mac` and `Basic4.mac`, `Editor1.asm`, `Editor2.asm` and `Editor4.asm`, and
+BASIC, the screen editor and the kernal are the SDK sources `Basic1.asm`,
+`Basic2.asm` and `Basic4.asm`, `Editor1.asm`, `Editor2.asm` and `Editor4.asm`, and
 `Kernal1.asm`, `Kernal2.asm` and `Kernal4.asm`, which assemble byte-identically to the
 chips, so the PET needs no external files, and debugging steps into the sources as ROM
-modules. Dumps from `romDirectory` or `RETROCORE_PET_ROMS`, MAME's `pet2001`,
+modules. `basicSource: "macro10"` instead selects the original Microsoft source with the
+PET's `Basic1.mac`, `Basic2.mac` or `Basic4.mac` overlay. Dumps from `romDirectory` or `RETROCORE_PET_ROMS`, MAME's `pet2001`,
 `pet2001n`, `pet4016` and `pet4032b` chips, in the folder or its folder for the set,
 replace the sources' ROMs when given.
 
@@ -1579,8 +1591,8 @@ multiple memory-editor subscriptions; it needs the SDK ROM sources but no extern
 
 `npm test` builds and runs both tokenization and the full debugger integration
 tests, which include booting the Model I to Level II's READY. The full integration suite also needs
-`RETROCORE_IIE_ROMS`, a built Release debug host and the existing sample binary/debug
-metadata. It checks source breakpoints with a `retrocore-asm` document alongside the
+a built Release debug host and the existing sample binary/debug metadata; it runs the IIe
+on `RETROCORE_IIE_ROMS` when that is set, and otherwise on ROMs built from the SDK. It checks source breakpoints with a `retrocore-asm` document alongside the
 existing call-stack, video, cycle and beam behavior, and a function breakpoint's hit
 count on the Model I, and reads and writes memory through VS Code's debug memory file
 system. `node tools/Test-Breakpoints.mjs` checks every breakpoint kind through the

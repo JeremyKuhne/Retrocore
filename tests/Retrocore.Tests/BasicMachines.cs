@@ -30,7 +30,7 @@ internal static class BasicMachines
     /// <param name="model">The model.</param>
     /// <returns>The assembly, for its symbols.</returns>
     internal static AssemblyResult AppleSoft(Apple2Model model) =>
-        SdkModules.AssembleAppleSoft(Path.Join(Inputs, "AppleSoft", "applesoft.mac"), model);
+        SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(Inputs), model);
 
     /// <summary>
     ///  Assembles Level II for a revision.

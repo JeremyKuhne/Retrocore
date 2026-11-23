@@ -217,9 +217,12 @@ MAME 0.289 is already in the cache. Its `pet` driver is the trace oracle, and VI
 
 **Built 2026-11-16.** Phase 3 is done.
 
+The SDK now defaults to the native `Basic1.asm`, `Basic2.asm` and `Basic4.asm` roots; the overlays below remain
+available with `basicSource: "macro10"`.
+
 - **The sources** are in `src/Retrocore.Machines.Commodore/Roms`:
-  - `Basic/Basic1.mac` and `Basic/Basic2.mac`, MACRO-10 overlays on `m6502.asm`, named by its path in the Apple II
-    project.
+  - `Basic/Basic1.mac` and `Basic/Basic2.mac`, MACRO-10 overlays on `m6502.asm`, now named by its path in the shared
+    BASIC project.
   - `Basic1/` and `Basic2/`, each with `Editor1.asm`/`Editor2.asm` and `Kernal1.asm`/`Kernal2.asm`, an `Equates.asm`
     of page zero, pages 2-3 and constants, and entries files so each module names the other's routines.
   - `PetEquates.asm` for the hardware.
@@ -256,10 +259,10 @@ MAME 0.289 is already in the cache. Its `pet` driver is the trace oracle, and VI
   - BASIC 1's OPEN loops for ever with ten files open, instead of giving ?TOO MANY FILES.
   - Its IEEE-488 verify sets the wrong status bit, so VERIFY from a disk would not report a mismatch.
   - Its NMI vector's low byte is the RTS that ends MOTOROFF.
-- **`PetSdkModules`** (in the debug host, and linked into the tests) assembles each part and builds a model's
+- **`PetSdkModules`** (in the debug host, which the tests reference) assembles each part and builds a model's
   `PetRoms`.
-  - The debug host's and the tests' copies of the sources keep `m6502.asm` in `AppleSoft` beside `Pet`.
-    `OverlayBaseResolver` finds it there, so nothing moves in the repository.
+  - The SDK copies `m6502.asm` into `Roms/Microsoft6502Basic`, beside `Roms/Pet`; `OverlayBaseResolver` finds it there
+    when the PET overlays' repository-relative paths do not apply.
   - The disassembler gained `--machine none`, which names nothing outside the program, for another machine's ROM.
 - Tests (`PetRomSourceTests`):
   - each build is pinned by digest, and with the dumps present a failure names the first differing byte;

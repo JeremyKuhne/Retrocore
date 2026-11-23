@@ -100,6 +100,77 @@ public sealed partial class DebugModuleTests
         module.AddressConstants.Select(constant => constant.Cpu).Distinct().Should().HaveCount(2);
     }
 
+    /// <summary>
+    ///  Where the SDK's modules name one address, the Monitor's name comes first even when BASIC's module was added
+    ///  first, as a memory view's first name wins: AppleSoft's TRMPOS is the Monitor's CH. A program's names come
+    ///  before every SDK name, modules of one rank keep their order, and each constant carries its source.
+    /// </summary>
+    [TestMethod]
+    public void AddressConstantsRankTheMonitorsNamesFirst()
+    {
+        string folder = Directory.CreateTempSubdirectory().FullName;
+        try
+        {
+            SourceMapModule program = Module(Path.Join(folder, "Program", "main.s"), """
+                CURSOR = $24
+                  sta CURSOR
+                  rts
+                """);
+
+            SourceMapModule basic = Module(Path.Join(folder, "AppleSoft", "AppleSoft.Equates.asm"), """
+                TRMPOS = $24
+                HOLD = $50
+                  sta TRMPOS
+                  sta HOLD
+                  rts
+                """);
+
+            SourceMapModule dos = Module(Path.Join(folder, "Dos", "Dos33.asm"), """
+                SPOT = $50
+                  sta SPOT
+                  rts
+                """);
+
+            SourceMapModule dos32 = Module(Path.Join(folder, "Dos", "Dos32.asm"), """
+                OTHER = $50
+                  sta OTHER
+                  rts
+                """);
+
+            SourceMapModule monitor = Module(Path.Join(folder, "System", "Monitor.asm"), """
+                CH = $24
+                  sta CH
+                  rts
+                """);
+
+            monitor.AddressConstants.Single().Path.Should().Be(Path.Join(folder, "System", "Monitor.asm"));
+            (string Name, long Value)[] Ranked(params SourceMapModule[] modules) => [.. MachineSymbols.ByRank(
+                modules.SelectMany(module => module.AddressConstants
+                    .Select(constant => (constant.Name, constant.Value, constant.Path, Ranked: module != program))))];
+
+            Ranked(basic, dos, dos32, monitor)
+                .Should().Equal(("CH", 0x24L), ("TRMPOS", 0x24L), ("HOLD", 0x50L), ("SPOT", 0x50L), ("OTHER", 0x50L));
+
+            // The program's names come before even the Monitor's, though its main.s would rank with DOS's.
+            Ranked(program, basic, monitor)
+                .Should().Equal(("CURSOR", 0x24L), ("CH", 0x24L), ("TRMPOS", 0x24L), ("HOLD", 0x50L));
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    private static SourceMapModule Module(string path, string source)
+    {
+        AssemblyResult result = new NativeAssembler().Assemble(
+            new AssemblySource(source, path),
+            new(ProcessorVariant.Mos6502, 0x6000, 0x100));
+
+        result.Diagnostics.Should().BeEmpty();
+        return new SourceMapModule(result, area: null);
+    }
+
     private static Dictionary<string, long> AddressConstants(string source) =>
         new SourceMapModule(Assemble(source), area: null).AddressConstants.ToDictionary(constant => constant.Name, constant => constant.Value);
 

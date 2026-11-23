@@ -49,6 +49,10 @@ internal sealed partial class DebugSession
 
     private readonly object _gate = new();
     private DebugInfo _debug = new();
+
+    // The index of the first of the SDK's modules in _debug: the program's come before it, and the SDK's and those the
+    // machine loads later, such as the Apple III's SOS drivers, from it on. Until a launch adds the SDK's, none is.
+    private int _firstSdkModule = int.MaxValue;
     private DebugFrame[]? _frames;
     private DisplayFrame[]? _display;
     private DebugFrame[]? _coprocessorFrames;
@@ -912,6 +916,7 @@ internal sealed partial class DebugSession
         Invalidate();
 
         _debug = new();
+        _firstSdkModule = int.MaxValue;
         LoadHints(args, sourceFile, program);
         if (sourceFile is not null)
         {
@@ -997,6 +1002,7 @@ internal sealed partial class DebugSession
         // The SDK's ROM sources follow the program, each applying only where its memory area is mapped.
         // The SDK's sources can come from the repository instead, so breakpoints set in the files being edited bind.
         string? sdkRoms = args.String("sdkRoms");
+        _firstSdkModule = _debug.Modules.Count;
         Target.AddSdkModules(_debug, sdkRoms is null ? null : Path.GetFullPath(sdkRoms));
         string contracts = args.String("checkContracts") ?? "warn";
         _stopOnContracts = contracts == "stop";

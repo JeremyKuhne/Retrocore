@@ -213,7 +213,10 @@ internal sealed partial class DebugSession
     ///   A label counts where its module's code or data is in memory now, as the call stack and disassembly decide,
     ///   so a ROM's labels go when the language card maps RAM over it. An address takes the first module's label,
     ///   and within a module the first name in order. Constants the CPU's instructions address memory through, such
-    ///   as the Monitor's <c>CH</c> at $24, name the bytes no label does, whatever is mapped there.
+    ///   as the Monitor's <c>CH</c> at $24, name the bytes no label does, whatever is mapped there. The program's
+    ///   constants come first; where the SDK's modules name one address differently, the one the disassembler's
+    ///   <c>MachineSymbols.Rank</c> puts first names it, as the Monitor's <c>CH</c> rather than AppleSoft's
+    ///   <c>TRMPOS</c>.
     ///  </para>
     ///  <para>
     ///   Each has its <c>kind</c>: what its documentation declares it, such as <c>routine</c> or <c>table</c>; else
@@ -356,8 +359,9 @@ internal sealed partial class DebugSession
         return (labels, names);
     }
 
-    // Each label the sources give an address in a space that applies now, and each constant the space's CPU addresses
-    // memory through, as kinds asks, in the modules' order, leaving out addresses skip says are already named.
+    // Each label the sources give an address in a space that applies now, in the modules' order, and each constant the
+    // space's CPU addresses memory through, the program's first and then the SDK's by MachineSymbols.Rank, as kinds
+    // asks, leaving out addresses skip says are already named.
     private IEnumerable<(int Address, string Name, bool Constant)> SourceNames(
         DebugMemoryBank? bank,
         IDebugMemory memory,
@@ -381,15 +385,26 @@ internal sealed partial class DebugSession
 
         if (!kinds.HasFlag(SourceNameKinds.Constants)) { yield break; }
         IsaDescription cpu = (bank?.InstructionSet ?? Target.InstructionSet).Description;
-        foreach (IDebugModule module in _debug.Modules)
+
+        List<(string Name, long Value, string? Path, bool Ranked)> constants = [];
+        for (int index = 0; index < _debug.Modules.Count; index++)
         {
+            IDebugModule module = _debug.Modules[index];
             if (!module.AddressConstants.Any() || !Installed(module)) { continue; }
-            foreach ((string name, long value, IsaDescription constantCpu) in module.AddressConstants)
+            foreach ((string name, long value, IsaDescription constantCpu, string? path) in module.AddressConstants)
             {
-                if (!ReferenceEquals(constantCpu, cpu) || value is < 0 or > 0xFFFF || skip((int)value)) { continue; }
+                if (!ReferenceEquals(constantCpu, cpu) || value is < 0 or > 0xFFFF) { continue; }
                 if (bank is not null && bank.AreaOf((ushort)value) is null) { continue; }
-                yield return ((int)value, name, true);
+                constants.Add((name, value, path, Ranked: index >= _firstSdkModule));
             }
+        }
+
+        // The program's names come first. Where the SDK's modules name one address differently, the Monitor's,
+        // the hardware's and the firmware's come before BASIC's and DOS's, by MachineSymbols.Rank as the
+        // disassembler ranks them. skip is asked as each is given, so a name given earlier takes the address.
+        foreach ((string name, long value) in MachineSymbols.ByRank(constants))
+        {
+            if (!skip((int)value)) { yield return ((int)value, name, true); }
         }
     }
 

@@ -33,15 +33,16 @@ FIRMWARE_KEYBOARD_IN = $06
 FIRMWARE_ESCAPE_KEY = $07
 .endif
 .endif
-.if ENHANCED
-
 ;; Reads a key through the input hook, <KSWL>, with the cursor shown.
 ;;
-;; At $FD0C. The internal firmware shows the cursor, for 40 or 80 columns.
+;; At $FD0C. On the Apple II's Monitors and the original IIe the cursor is the character under it, flashing, and
+;; the input routine puts the character back; on the Enhanced IIe the internal firmware shows the cursor, for 40 or
+;; 80 columns.
 ;; Out: A = the key, with its high bit set
 ;; Also: RDKEY (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc ReadKey
 .assert * = $FD0C, "ReadKey must stay at $FD0C."
+.if ENHANCED
     ldy #FIRMWARE_READ_KEY
     bne ToFirmware
 
@@ -53,21 +54,7 @@ ToFirmware:
     jsr CallFirmware
     nop
     nop
-
-;; Reads the key through the input hook.
-;; Also: RDKEYHOOK (UNKN)
-Hook:
-    jmp (KSWL)
-.endproc
 .else
-
-;; Reads a key through the input hook, <KSWL>, with the cursor shown.
-;;
-;; At $FD0C. The cursor is the character under it, flashing; the input routine puts the character back.
-;; Out: A = the key, with its high bit set
-;; Also: RDKEY (A2RM78, A2RM79, IIEROM82, IIETRM85)
-.proc ReadKey
-.assert * = $FD0C, "ReadKey must stay at $FD0C."
     ; The input routine gets the character in A and the cursor's column in Y.
     ldy CH
     lda (BASL),y
@@ -76,13 +63,13 @@ Hook:
     ora #FLASHING
     sta (BASL),y
     pla
+.endif
 
 ;; Reads the key through the input hook.
 ;; Also: RDKEYHOOK (UNKN)
 Hook:
     jmp (KSWL)
 .endproc
-.endif
 .if MONITOR = MONITOR_IIE
 
 ;; The keyboard's input routine, the input hook's default: the internal firmware waits for a key, then

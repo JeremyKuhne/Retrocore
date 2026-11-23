@@ -97,30 +97,33 @@ MnemonicLow = V2
     jsr PrintThreeBlanks
     ; Falls into Decode with X = 0.
 .endproc
-.if ENHANCED
 
 ;; Decodes the opcode of the instruction at <PCL>/<PCH>: its operand's length and format, and its mnemonic.
 ;;
-;; At $F88C, and $F88E with the opcode in A (<Decode::Opcode>). The Enhanced IIe looks up the mode
-;; and the format here, then hands the opcode to the internal firmware, whose function $10 computes the length and
-;; the mnemonic hash as the other builds do here; that frees $F8B7-$F8CF for <CompareSlot3Rom>.
+;; At $F88C, and $F88E with the opcode in A (<Decode::Opcode>). Every build looks up the mode and the format here.
+;; The Apple II's Monitors and the original IIe then compute the length and the mnemonic hash, leaving X = the
+;; opcode's <GROUP_BITS>; the Enhanced IIe hands the opcode to the internal firmware, whose function $10 computes
+;; them, which frees $F8B7-$F8CF for <CompareSlot3Rom>.
 ;; In: X = 0, PCL/PCH = the instruction
 ;; Out: A = the mnemonic's slot in <MnemonicsLeft> and <MnemonicsRight>, LENGTH = the operand's bytes (0-2),
 ;;   MASK = the operand format, Y = 0
 ;; Uses: X
 ;; Entry:
-;;   Opcode = decodes the opcode in A; the firmware's mini-assembler and DOS's relocator call it at $F88E
+;;   Opcode = decodes the opcode in A; programs call it at $F88E (Integer BASIC's mini-assembler, Programmer's Aid,
+;;     DOS's relocator, and on the Enhanced IIe the firmware's mini-assembler)
 .proc Decode
 .assert * = $F88C, "Decode must stay at $F88C."
     lda (PCL,x)
 
-;; Decodes the opcode in A; the Enhanced IIe firmware's mini-assembler and DOS's relocator call it at $F88E.
+;; Decodes the opcode in A. Programs call it at $F88E: Integer BASIC's mini-assembler, Programmer's Aid and DOS's
+;; relocator, and on the Enhanced IIe the firmware's mini-assembler.
 ;;
 ;; In: A = the opcode
 ;; Inherit: <Decode> Out
 ;; Also: INSDS2 (A2RM78, A2RM79, IIEROM82, IIETRM85)
 Opcode:
-.assert * = $F88E, "Decode::Opcode must stay at $F88E, where the firmware and DOS call it."
+.assert * = $F88E, "Decode::Opcode must stay at $F88E, where programs call it."
+
 
     ; An even opcode's mode is at opcode / 4, in the nibble its bit 1 picks.
     tay
@@ -151,20 +154,57 @@ Invalid:
     ldy #INVALID_OPCODE
     lda #AddressMode::INVALID
 
-;; Looks up the mode's operand format in <OperandFormats>.
+;; Looks up the mode's operand format in <OperandFormats>; except on the Enhanced IIe, also the operand's length in it.
 ;; Also: GETFMT (A2RM78, A2RM79, IIEROM82, IIETRM85)
 Format:
     tax
     lda OperandFormats,x
     sta FormatBits
-
+.if ENHANCED
     ; The firmware takes the format in X and the opcode in BAS2L.
     tax
     sty BAS2L
     ldy #FIRMWARE_DECODE
     jmp CallFirmware
+.else
+    and #LENGTH_BITS
+    sta LENGTH
+
+    ; The mnemonic's slot, from the opcode: TXA's group skips the first step.
+    tya
+    and #GROUP_BITS
+    tax
+    tya
+    ldy #HASH_STEPS
+    cpx #TXA_GROUP
+    beq HashNext
+
+;; One step of the mnemonic hash: shifts out the next of the opcode's bits 0-2, until one is 1.
+;; Also: MNNDX1 (A2RM78, A2RM79, IIEROM82)
+HashStep:
+    lsr a
+    bcc HashNext
+    lsr a
+
+;; Shifts A right, setting <HASH_GROUP_BIT>, once for this step and each step left, then ends the hash.
+;; Also: MNNDX2 (A2RM78, A2RM79, IIEROM82)
+HashShift:
+    lsr a
+    ora #HASH_GROUP_BIT
+    dey
+    bne HashShift
+    iny
+
+;; Counts the steps down.
+;; Also: MNNDX3 (A2RM78, A2RM79, IIEROM82)
+HashNext:
+    dey
+    bne HashStep
+    rts
+.endif
 .endproc
 
+.if ENHANCED
 .endscope
 
 ;; Compares slot 3's ROM, Y times, with the bytes that identify a Pascal 1.1 firmware card: $38 at $C305 and $18
@@ -207,98 +247,6 @@ Done:
 ; Disassembler, continued: printing an instruction, after the Enhanced IIe's CompareSlot3Rom.
 .scope Disassembler continued
 .else
-
-;; Decodes the opcode of the instruction at <PCL>/<PCH>: its operand's length and format, and its mnemonic.
-;;
-;; At $F88C, and $F88E with the opcode in A (<Decode::Opcode>).
-;; In: X = 0, PCL/PCH = the instruction
-;; Out: A = the mnemonic's slot in <MnemonicsLeft> and <MnemonicsRight>, LENGTH = the operand's bytes (0-2),
-;;   MASK = the operand format, X = the opcode's <GROUP_BITS>, Y = 0
-;; Entry:
-;;   Opcode = decodes the opcode in A; programs call it at $F88E (Integer BASIC's mini-assembler, DOS's relocator)
-.proc Decode
-.assert * = $F88C, "Decode must stay at $F88C."
-    lda (PCL,x)
-
-;; Decodes the opcode in A. Programs call it at $F88E: Integer BASIC's mini-assembler, Programmer's Aid and DOS's
-;; relocator.
-;;
-;; In: A = the opcode
-;; Inherit: <Decode> Out
-;; Also: INSDS2 (A2RM78, A2RM79, IIEROM82, IIETRM85)
-Opcode:
-.assert * = $F88E, "Decode::Opcode must stay at $F88E, where programs call it."
-
-    ; An even opcode's mode is at opcode / 4, in the nibble its bit 1 picks.
-    tay
-    lsr a
-    bcc LookUpMode
-
-    ; An odd one ending in binary 11 is invalid, and so is $89.
-    ror a
-    bcs Invalid
-    cmp #ODD_MARK | NO_STA_IMMEDIATE >> 2
-    beq Invalid
-
-    ; The rest are the ORA..SBC group, whose mode only bits 2-4 pick: the last four bytes of the table.
-    and #ODD_MODE_BITS
-
-;; Looks up the mode in <AddressingModes>, from opcode / 4 or the odd group's bits, with carry picking the nibble.
-;; Also: IEVEN (A2RM78, A2RM79, IIEROM82, IIETRM85)
-LookUpMode:
-    lsr a
-    tax
-    lda AddressingModes,x
-    jsr LowRes::ReadColor::Nibble
-    bne Format
-
-;; An invalid opcode: the invalid mode, and the mnemonic "???".
-;; Also: ERR (A2RM78, A2RM79, IIEROM82, IIETRM85)
-Invalid:
-    ldy #INVALID_OPCODE
-    lda #AddressMode::INVALID
-
-;; Looks up the mode's operand format in <OperandFormats>, and the operand's length in it.
-;; Also: GETFMT (A2RM78, A2RM79, IIEROM82, IIETRM85)
-Format:
-    tax
-    lda OperandFormats,x
-    sta FormatBits
-    and #LENGTH_BITS
-    sta LENGTH
-
-    ; The mnemonic's slot, from the opcode: TXA's group skips the first step.
-    tya
-    and #GROUP_BITS
-    tax
-    tya
-    ldy #HASH_STEPS
-    cpx #TXA_GROUP
-    beq HashNext
-
-;; One step of the mnemonic hash: shifts out the next of the opcode's bits 0-2, until one is 1.
-;; Also: MNNDX1 (A2RM78, A2RM79, IIEROM82)
-HashStep:
-    lsr a
-    bcc HashNext
-    lsr a
-
-;; Shifts A right, setting <HASH_GROUP_BIT>, once for this step and each step left, then ends the hash.
-;; Also: MNNDX2 (A2RM78, A2RM79, IIEROM82)
-HashShift:
-    lsr a
-    ora #HASH_GROUP_BIT
-    dey
-    bne HashShift
-    iny
-
-;; Counts the steps down.
-;; Also: MNNDX3 (A2RM78, A2RM79, IIEROM82)
-HashNext:
-    dey
-    bne HashStep
-    rts
-.endproc
 
     ; Three unused bytes, $F8CD-$F8CF.
     .byte $FF, $FF, $FF

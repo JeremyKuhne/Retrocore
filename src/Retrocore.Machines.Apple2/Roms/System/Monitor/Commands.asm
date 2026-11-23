@@ -192,65 +192,49 @@ FromA2:
 ; The keyboard's and the screen's routines share a page, which SetHook stores for slot 0 (on the Enhanced IIe, the
 ; firmware's function $0E stores it).
 .assert >KeyboardIn = >ScreenOut, "KeyboardIn and ScreenOut must share a page."
+;; Sets the hook at X to the ROM of the slot in <A2L>, $Cn00, or for slot 0 to the Monitor's routine whose low byte
+;; is in Y.
+;;
+;; At $FE9B. For slot 0 the Apple II's Monitors and the original IIe store the page of the Monitor's keyboard and
+;; screen routines. The Enhanced IIe stores a high byte of 0 instead, and the internal firmware's function $0E puts
+;; in the page: it turns the 80-column firmware off first when it is on, but keeps input at slot 3 while output goes
+;; there.
+;; In: X = the hook's address in page zero, <CSWL> or <KSWL>, Y = the Monitor routine's low byte, A2L = the slot
+;; Also: IOPRT (A2RM78, A2RM79, IIEROM82, IIETRM85)
+.proc SetHook
+.assert * = $FE9B, "SetHook must stay at $FE9B."
+    lda A2L
+    and #SLOT_NUMBER_MASK
 .if ENHANCED
-
-;; Sets the hook at X to the ROM of the slot in <A2L>, $Cn00, or for slot 0 to the Monitor's routine whose low byte
-;; is in Y.
-;;
-;; At $FE9B. The Enhanced IIe stores a high byte of 0 for slot 0, and the internal firmware's
-;; function $0E puts in the page: it turns the 80-column firmware off first when it is on, but keeps input at slot
-;; 3 while output goes there.
-;; In: X = the hook's address in page zero, <CSWL> or <KSWL>, Y = the Monitor routine's low byte, A2L = the slot
-;; Also: IOPRT (A2RM78, A2RM79, IIEROM82, IIETRM85)
-.proc SetHook
-.assert * = $FE9B, "SetHook must stay at $FE9B."
-    lda A2L
-    and #SLOT_NUMBER_MASK
     beq Store
-
-    ; A slot: $Cn00.
-    ora #SLOT_ROM_PAGE
-    ldy #0
-
-;; Stores the hook, then lets the firmware finish it.
-Store:
-    sty LOC0,x
-    sta LOC1,x
-    ldy #FIRMWARE_SET_HOOK
-    jmp CallFirmware
-.endproc
 .else
-
-;; Sets the hook at X to the ROM of the slot in <A2L>, $Cn00, or for slot 0 to the Monitor's routine whose low byte
-;; is in Y.
-;;
-;; At $FE9B.
-;; In: X = the hook's address in page zero, <CSWL> or <KSWL>, Y = the Monitor routine's low byte, A2L = the slot
-;; Also: IOPRT (A2RM78, A2RM79, IIEROM82, IIETRM85)
-.proc SetHook
-.assert * = $FE9B, "SetHook must stay at $FE9B."
-    lda A2L
-    and #SLOT_NUMBER_MASK
     beq Default
+.endif
 
     ; A slot: $Cn00.
     ora #SLOT_ROM_PAGE
     ldy #0
+.if .not ENHANCED
     beq Store
 
 ;; Slot 0: the page of the Monitor's keyboard and screen routines.
 ;; Also: IOPRT1 (A2RM78, A2RM79, IIEROM82)
 Default:
     lda #>ScreenOut
+.endif
 
-;; Stores the hook.
+;; Stores the hook, which on the Enhanced IIe the firmware then finishes.
 ;; Also: IOPRT2 (A2RM78, A2RM79, IIEROM82)
 Store:
     sty LOC0,x
     sta LOC1,x
+.if ENHANCED
+    ldy #FIRMWARE_SET_HOOK
+    jmp CallFirmware
+.else
     rts
-.endproc
 .endif
+.endproc
 
     ; An unused byte.
     .byte $EA
@@ -424,9 +408,61 @@ Done:
     ; WRITETAPE returns with zero set, so this always beeps.
     beq ReadCassette::Finish
 .endproc
+.else
 
-; Commands: the Enhanced IIe's S, "!" and Return handlers, after WriteCassette.
+;; W: writes the bytes from A1 to A2 to the cassette: a header tone, the bytes, then a checksum byte, their
+;; exclusive-or with $FF.
+;;
+;; At $FECD. Integer `BASIC` calls $FECF, after the lda, with its own header length in A.
+;; In: A1L/A1H = the first address, A2L/A2H = the last
+;; Out: A1L/A1H = the address after A2
+;; Also: WRITE (A2RM78, A2RM79, IIEROM82, IIETRM85)
+.proc WriteCassette
+.assert * = $FECD, "WriteCassette must stay at $FECD."
+    lda #WRITE_HEADER_LENGTH
+    jsr Cassette::WriteHeader
+
+    ; Cassette::WriteHeader leaves A at $FF, where the checksum starts.
+    ldy #WRITE_FIRST_COUNT
+
+;; Writes the byte at A1, keeping the checksum on the stack, and steps A1 to the next until it passes A2.
+;; Also: WR1 (A2RM78, A2RM79, IIEROM82)
+NextByte:
+    ldx #0
+    eor (A1L,x)
+    pha
+    lda (A1L,x)
+    jsr Byte
+    jsr NextInRange
+    ldy #WRITE_NEXT_COUNT
+    pla
+    bcc NextByte
+
+    ; Then the checksum. Byte returns with zero set, so this always beeps.
+    ldy #WRITE_CHECKSUM_COUNT
+    jsr Byte
+    beq Beep
+
+;; Writes the 8 bits of A, high bit first.
+;; In: A = the byte, Y = the count for the first bit
+;; Out: X = 0, zero = set
+;; Also: WRBYTE (A2RM78, A2RM79, IIEROM82)
+Byte:
+    ldx #HALF_CYCLES_PER_BYTE
+
+;; Writes one bit, from the carry.
+;; Also: WRBYT2 (A2RM78, A2RM79, IIEROM82)
+NextBit:
+    asl a
+    jsr Cassette::WriteBit
+    bne NextBit
+    rts
+.endproc
+.endif
+
+; Commands: the Return handler, after WriteCassette, and on the Enhanced IIe the S and "!" handlers before it.
 .scope Commands continued
+.if ENHANCED
 
 ;; S: prints the address of each place from A1 to A2 that holds the byte in <A4L>, or with <A4H> not 0, those two
 ;; bytes.
@@ -461,6 +497,7 @@ Next:
     jsr CallFirmware
     ; Falls into Return.
 .endproc
+.endif
 
 ;; A carriage return: ends the command line, after examining the next line when it was alone, and prompts again.
 ;;
@@ -477,6 +514,7 @@ Next:
 
 .endscope
 
+.if ENHANCED
 ;; R: reads the bytes from A1 to A2 from the cassette with the internal firmware's routine, then beeps, or prints
 ;; ERR when the checksum is wrong.
 ;;
@@ -548,74 +586,6 @@ TitleEnhanced:
 
 .endscope
 .else
-
-;; W: writes the bytes from A1 to A2 to the cassette: a header tone, the bytes, then a checksum byte, their
-;; exclusive-or with $FF.
-;;
-;; At $FECD. Integer `BASIC` calls $FECF, after the lda, with its own header length in A.
-;; In: A1L/A1H = the first address, A2L/A2H = the last
-;; Out: A1L/A1H = the address after A2
-;; Also: WRITE (A2RM78, A2RM79, IIEROM82, IIETRM85)
-.proc WriteCassette
-.assert * = $FECD, "WriteCassette must stay at $FECD."
-    lda #WRITE_HEADER_LENGTH
-    jsr Cassette::WriteHeader
-
-    ; Cassette::WriteHeader leaves A at $FF, where the checksum starts.
-    ldy #WRITE_FIRST_COUNT
-
-;; Writes the byte at A1, keeping the checksum on the stack, and steps A1 to the next until it passes A2.
-;; Also: WR1 (A2RM78, A2RM79, IIEROM82)
-NextByte:
-    ldx #0
-    eor (A1L,x)
-    pha
-    lda (A1L,x)
-    jsr Byte
-    jsr NextInRange
-    ldy #WRITE_NEXT_COUNT
-    pla
-    bcc NextByte
-
-    ; Then the checksum. Byte returns with zero set, so this always beeps.
-    ldy #WRITE_CHECKSUM_COUNT
-    jsr Byte
-    beq Beep
-
-;; Writes the 8 bits of A, high bit first.
-;; In: A = the byte, Y = the count for the first bit
-;; Out: X = 0, zero = set
-;; Also: WRBYTE (A2RM78, A2RM79, IIEROM82)
-Byte:
-    ldx #HALF_CYCLES_PER_BYTE
-
-;; Writes one bit, from the carry.
-;; Also: WRBYT2 (A2RM78, A2RM79, IIEROM82)
-NextBit:
-    asl a
-    jsr Cassette::WriteBit
-    bne NextBit
-    rts
-.endproc
-
-; Commands: the Return handler, after WriteCassette.
-.scope Commands continued
-
-;; A carriage return: ends the command line, after examining the next line when it was alone, and prompts again.
-;;
-;; It drops the return address of the command line's call to <Commands::RunCommand>, and its high byte, $FF,
-;; makes the branch always taken.
-;; In: A = the waiting command, or 0, X = 1 after a number, 0 when none, Y = 0
-;; Also: CRMON (A2RM78, A2RM79, IIEROM82, IIETRM85)
-.proc Return
-    jsr ExamineNextOrBlank
-    pla
-    pla
-    bne CommandLine
-.endproc
-
-.endscope
-
 ;; R: reads the bytes from A1 to A2 from the cassette, then beeps, or prints ERR when the checksum is wrong.
 ;;
 ;; At $FEFD.

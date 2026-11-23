@@ -35,14 +35,19 @@ FIRMWARE_CHARACTER_UNDER_CURSOR = $0F
     sta IN,x
     ; Falls into Echo.
 .endproc
+.endif
 
 ;; Echoes a character typed into the line, other than Return, then performs the backspace key and Control-X, and
 ;; rings the bell near the buffer's end.
 ;;
-;; At $FD47. The 256th character cancels the line.
-;; In: X = the character's position in <IN>
+;; At $FD3D; on the Enhanced IIe, $FD47, after <PickUnderCursor>. The Apple II's Monitors echo in normal video,
+;; whatever <INVFLG> holds, and restore it; the original IIe keeps the save and restore but echoes with <INVFLG> as
+;; it is; the Enhanced IIe echoes the character it is given, in A, and leaves <INVFLG> alone. The 256th character
+;; cancels the line.
+;; In: X = the character's position in <IN>, A = the character
 ;; Also: NOTCR (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc Echo
+.if ENHANCED
 .assert * = $FD47, "LineInput::Echo must stay at $FD47."
     jsr CharacterOut
 
@@ -50,37 +55,7 @@ FIRMWARE_CHARACTER_UNDER_CURSOR = $0F
     nop
     nop
     nop
-
-    ; The editing keys.
-    lda IN,x
-    cmp #KEY_BS
-    beq GetLine::TakeBack
-    cmp #KEY_CTRL_X
-    beq Cancel
-
-    ; The bell from INPUT_WARNING on.
-    cpx #INPUT_WARNING
-    bcc Next
-    jsr Beep
-
-;; Goes on with the next position; past the buffer's end, falls into <Cancel>.
-;; Also: NOTCR1 (A2RM79, IIETRM85)
-Next:
-    inx
-    bne GetLine::NextCharacter
-    ; Falls into Cancel.
-.endproc
 .else
-
-;; Echoes a character typed into the line, other than Return, then performs the backspace key and Control-X, and
-;; rings the bell near the buffer's end.
-;;
-;; At $FD3D. The Apple II's Monitors echo in normal video, whatever <INVFLG> holds, and restore it; the
-;; original IIe keeps the save and restore but echoes with <INVFLG> as it is. The 256th character cancels the
-;; line.
-;; In: X = the character's position in <IN>
-;; Also: NOTCR (A2RM78, A2RM79, IIEROM82, IIETRM85)
-.proc Echo
 .assert * = $FD3D, "LineInput::Echo must stay at $FD3D."
     lda INVFLG
     pha
@@ -95,6 +70,7 @@ Next:
     jsr CharacterOut
     pla
     sta INVFLG
+.endif
 
     ; The editing keys.
     lda IN,x
@@ -115,7 +91,6 @@ Next:
     bne GetLine::NextCharacter
     ; Falls into Cancel.
 .endproc
-.endif
 
 ;; Cancels the input line: prints a backslash and starts again on a new line.
 ;;
@@ -140,12 +115,12 @@ Next:
     jsr PrintReturn
     ; Falls into GetLine.
 .endproc
-.if ENHANCED
 
 ;; Reads a line into <IN> after printing the prompt character in <PROMPT>.
 ;;
 ;; At $FD6A. Backspace deletes a character, Control-X cancels the line, and the right arrow (Control-U) takes
-;; the character under the cursor. Lowercase stays lowercase.
+;; the character under the cursor; on the Enhanced IIe, in 80 columns, the internal firmware gets it
+;; (<LineInput::PickUnderCursor>). The Apple II's Monitors store lowercase letters as capitals; the IIe's keep them.
 ;; Out: X = the line's length, IN,X = the Return that ends it
 ;; Entry:
 ;;   NoPrompt = reads a line without printing the prompt
@@ -176,57 +151,13 @@ TakeBack:
 NextCharacter:
     jsr ReadCharacter
     cmp #KEY_RIGHT
+.if ENHANCED
     bne Store
     lda (BASL),y
     bit RD80VID
     bmi LineInput::PickUnderCursor
     nop
-
-;; Stores the character in the line, and echoes it unless it is a Return.
-;; Also: ADDINP (A2RM78, A2RM79, IIEROM82, IIETRM85)
-Store:
-    sta IN,x
-    cmp #KEY_CR
-    bne LineInput::Echo
-    ; Falls into ClearAndPrintReturn.
-.endproc
 .else
-
-;; Reads a line into <IN> after printing the prompt character in <PROMPT>.
-;;
-;; At $FD6A. Backspace deletes a character, Control-X cancels the line, and the right arrow (Control-U) takes
-;; the character under the cursor. The Apple II's Monitors store lowercase letters as capitals; the original
-;; IIe keeps them.
-;; Out: X = the line's length, IN,X = the Return that ends it
-;; Entry:
-;;   NoPrompt = reads a line without printing the prompt
-;;   TakeBack = takes back a character; at the line's start, starts the line again
-;;   NextCharacter = reads the next character; Control-U takes the one under the cursor
-;; Also: GETLN (A2RM78, A2RM79, IIEROM82, IIETRM85)
-.proc GetLine
-.assert * = $FD6A, "GetLine must stay at $FD6A."
-    lda PROMPT
-    jsr CharacterOut
-
-;; Reads a line without printing the prompt.
-;; Out: X = the line's length, IN,X = the Return that ends it
-;; Also: GETLN1 (A2RM79, IIETRM85)
-NoPrompt:
-.assert * = $FD6F, "GetLine::NoPrompt must stay at $FD6F."
-    ldx #1
-
-;; Takes back a character; at the line's start, starts the line again. <LineInput::Echo> enters here.
-;; Also: BCKSPC (A2RM78, A2RM79, IIEROM82, IIETRM85)
-TakeBack:
-    txa
-    beq GetLineAfterReturn
-    dex
-
-;; Reads the next character; Control-U takes the one under the cursor.
-;; Also: NXTCHAR (A2RM78, A2RM79, IIEROM82, IIETRM85)
-NextCharacter:
-    jsr ReadCharacter
-    cmp #KEY_RIGHT
     bne Uppercase
     lda (BASL),y
 
@@ -241,6 +172,7 @@ Uppercase:
 .else
     and #UPPERCASE_MASK
 .endif
+.endif
 
 ;; Stores the character in the line, and echoes it unless it is a Return.
 ;; Also: ADDINP (A2RM78, A2RM79, IIEROM82, IIETRM85)
@@ -250,7 +182,6 @@ Store:
     bne LineInput::Echo
     ; Falls into ClearAndPrintReturn.
 .endproc
-.endif
 
 ;; Clears the rest of the line, then prints a Return.
 ;;

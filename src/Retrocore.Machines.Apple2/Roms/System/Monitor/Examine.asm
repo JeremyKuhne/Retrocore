@@ -200,6 +200,8 @@ Unmasked:
 ;; <ApplyInverse at ApplyInverse> comes here with the character as given pushed and A = the character with <INVFLG>
 ;; applied. <ScreenOutByWidth at ScreenOutByWidth@Enhanced> prints the pushed one in 80 columns, and A in 40.
 ;; In: A = the character for 40 columns, with the one for 80 columns on the stack
+;; Out: A = the character printed: in 40 columns A as given, in 80 the pushed one
+;; Keeps: Y
 Pushed:
     sty YSAV1
     tay

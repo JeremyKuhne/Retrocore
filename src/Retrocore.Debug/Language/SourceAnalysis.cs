@@ -743,11 +743,13 @@ internal sealed partial class SourceAnalysis
     [GeneratedRegex(@"^[ \t]*\.rom[ \t][^\r\n]*", RegexOptions.Multiline | RegexOptions.IgnoreCase)]
     private static partial Regex RomDeclaration();
 
-    // A name in column 0: a label (with or without a colon) or an equate. Directives start with a dot and match in any
-    // case, as the assembler reads them, and so does Merlin's EQU, as the Merlin preprocessor reads it. A colon
-    // followed by .equ or .set (Name: .equ expr) defines a constant or variable, not a label. The name is atomic, so
-    // one that ends in equ, such as Subsequ, is never cut short to make an equate of its start.
-    [GeneratedRegex(@"^(?<name>(?>[A-Za-z_@][\w@$%?]*(?:::[\w@$%?]+)*))(?:(?<equate>:[ \t]*(?i:\.(?:equ|set))(?=[\s;]|$)|\s*(?::=|==?|(?i:\.equ|\.set|equ)\b))|(?<colon>::?)|\s|$)")]
+    // A name in column 0: a label (with or without a colon) or an equate, whatever the source's dialect. Directives
+    // start with a dot and match in any case, as the assembler reads them. So does Merlin's EQU, as the Merlin
+    // preprocessor reads it, but only as a whole field, as Merlin splits fields at blanks (Name EQU*1 is not one). A
+    // colon followed by .equ or .set (Name: .equ expr) defines a constant or variable, not a label. Each part of the
+    // name is atomic, so a name that ends in equ, such as Subsequ, is never cut short to make an equate of its start,
+    // while Macro-10's NAME::1,,2 can still give back ::1 to be the label NAME and its statement.
+    [GeneratedRegex(@"^(?<name>(?>[A-Za-z_@][\w@$%?]*)(?:::(?>[\w@$%?]+))*)(?:(?<equate>:[ \t]*(?i:\.(?:equ|set))(?=[\s;]|$)|\s*(?::=|==?|(?i:\.equ|\.set)\b|(?i:equ)(?=[\s;]|$)))|(?<colon>::?)|\s|$)")]
     private static partial Regex TextDefinition();
 
     [GeneratedRegex(@"^[ \t]*(?:[A-Za-z_@][\w@]*::?[ \t]*)?\.proc[ \t]+(?<name>[A-Za-z_]\w*)(?=[ \t]*(?::[ \t]*[A-Za-z_]\w*)?[ \t]*(?:;|$))", RegexOptions.IgnoreCase)]

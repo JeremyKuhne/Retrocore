@@ -181,6 +181,8 @@ public sealed partial class LanguageAnalysisTests
     [DataRow("VALUE: .equal", false)]
     [DataRow("VALUE: .equ$8D", false)]
     [DataRow("VALUE EQU 3", true)]
+    [DataRow("VALUE::1,,2", false)]
+    [DataRow("VALUE::0;comment", false)]
     public void ColonLabelsSurviveErrors(string definition, bool constant)
     {
         string directory = Directory.CreateTempSubdirectory().FullName;
@@ -203,7 +205,8 @@ public sealed partial class LanguageAnalysisTests
 
     /// <summary>
     ///  A name defined with Merlin's <c>EQU</c> is a constant in the text of a source that does not assemble in any
-    ///  case, as Merlin reads it, while a name followed by a word that only starts with <c>equ</c> stays a label.
+    ///  case, as Merlin reads it, while a name followed by a field that only starts with <c>equ</c> stays a label. The
+    ///  text is searched whatever the source's dialect, so a native source shows it as well as a Merlin one.
     /// </summary>
     /// <param name="definition">The definition.</param>
     /// <param name="constant">Whether it defines a constant rather than a label.</param>
@@ -213,6 +216,10 @@ public sealed partial class LanguageAnalysisTests
     [DataRow("VALUE\teQu\t3", true)]
     [DataRow("VALUE equal 3", false)]
     [DataRow("VALUE equ_3", false)]
+    [DataRow("VALUE equ$10", false)]
+    [DataRow("VALUE EQU*", false)]
+    [DataRow("VALUE equ ;no operand", true)]
+    [DataRow("VALUE equ", true)]
     public void MerlinEquatesSurviveErrorsInAnyCase(string definition, bool constant)
     {
         string directory = Directory.CreateTempSubdirectory().FullName;

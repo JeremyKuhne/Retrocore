@@ -258,8 +258,8 @@ Store:
 ;; A byte no code runs: $D1 on the original IIe, $00 on the Enhanced IIe, and an unused $EA on the Apple II's.
 ;;
 ;; At $FEAF. Its IIe name says it is there to make the ROM's checksum come out right. On the original IIe, the
-;; self-test's second ROM checksum (<Firmware:ROMSUM2>) adds $E000-$FFFF, this byte among them, and compares the sum
-;; with the byte at $F7FF.
+;; self-test's second ROM checksum (<Firmware:ROMSUM2@Original>) adds $E000-$FFFF, this byte among them, and compares
+;; the sum with the byte at $F7FF.
 ;; Also: CKSUMFIX (IIEROM82, IIETRM85)
 ChecksumFix:
 .assert * = $FEAF, "ChecksumFix must stay at $FEAF."

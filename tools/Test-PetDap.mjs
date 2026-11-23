@@ -33,10 +33,10 @@ let last = "";
 const timeout = setTimeout(() => fail(new Error(`PET DAP integration timed out; the screen was:
 ${last}`)), Number(process.env.RETROCORE_DAP_TIMEOUT ?? 240000));
 
-// The line after a label: its first instruction.
+// The line after a label or a routine's .proc: its first instruction.
 function lineOf(file, label) {
     const lines = readFileSync(file, "utf8").split(/\r?\n/);
-    const index = lines.findIndex(line => line === `${label}:`);
+    const index = lines.findIndex(line => line === `${label}:` || line.trim() === `.proc ${label}`);
     assert.ok(index >= 0, `${label} is in ${file}`);
     return index + 2;
 }
@@ -127,7 +127,7 @@ try {
     await screen(ready, "READY. after native BASIC's cold start");
 
     // A numeric PRINT stops in the shared Microsoft source, not at a root's macro invocation.
-    const outputLine = lineOf(nativeOutput, "FOUT");
+    const outputLine = lineOf(nativeOutput, "FormatFac");
     const setOutput = await request("setBreakpoints", { source: { path: nativeOutput }, breakpoints: [{ line: outputLine }] });
     assert.equal(setOutput.breakpoints[0].verified, true, JSON.stringify(setOutput.breakpoints[0]));
     await type("PRINT 42\r");

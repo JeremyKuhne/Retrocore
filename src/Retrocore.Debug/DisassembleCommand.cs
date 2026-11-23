@@ -7,6 +7,7 @@ using Retrocore.Machines.Apple2;
 using Retrocore.Media;
 using System.Globalization;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Touki.Text;
 
 namespace Retrocore.Debug;
@@ -31,8 +32,11 @@ namespace Retrocore.Debug;
 ///   ranges it left as bytes, which are where hints help.
 ///  </para>
 /// </remarks>
-internal static class DisassembleCommand
+internal static partial class DisassembleCommand
 {
+    // The prefix of a scoped name's stand-in, which no source name starts with.
+    private const string StandIn = "Scoped__";
+
     private const string Usage = """
         Usage: --disassemble input.bin output.asm --origin $0800
                --disassemble --disk image.dsk --file "NAME" output.asm
@@ -129,12 +133,23 @@ internal static class DisassembleCommand
 
         Dictionary<string, string> files = [with(StringComparer.Ordinal)];
         HashSet<string> hinted = new(program.Hints.Names.Values, StringComparer.Ordinal);
+
+        // The analysis takes only plain names, so a name in a scope, such as LowRes::Plot, goes in as a stand-in
+        // that the written source turns back into the qualified name.
+        Dictionary<string, string> scoped = [with(StringComparer.Ordinal)];
         foreach (ushort target in found.References.Select(reference => reference.Target).Distinct())
         {
             if (program.Contains(target) || program.Hints.Names.ContainsKey(target)) { continue; }
             if (!machine.TryGetValue(target, out var symbol) || hinted.Contains(symbol.Name)) { continue; }
-            names[target] = symbol.Name;
-            files[symbol.Name] = symbol.File;
+            string name = symbol.Name;
+            if (name.Contains("::", StringComparison.Ordinal))
+            {
+                name = $"{StandIn}{name.Replace("::", "__", StringComparison.Ordinal)}";
+                scoped[name] = symbol.Name;
+            }
+
+            names[target] = name;
+            files[name] = symbol.File;
         }
 
         // A name the analysis refuses as a symbol, such as one that is also a mnemonic, is left out.
@@ -158,7 +173,7 @@ internal static class DisassembleCommand
                 : $"\nNames outside the program are the SDK sources' for the {named.DisplayName()}"
                     + (dos == "none" ? "." : $" and DOS {dos}."));
 
-        string source = Arrange(result.ExportSource(), heading, files, hinted);
+        string source = Arrange(result.ExportSource(), heading, files, hinted, scoped);
         File.WriteAllText(output, source);
         string? difference = Difference(source, output, program);
         Report(result, output, names.Count, difference);
@@ -174,8 +189,14 @@ internal static class DisassembleCommand
             .Select(diagnostic => diagnostic.Address)
             .Where(names.ContainsKey)];
 
-    // The exported source under a heading, its equates grouped by the file that names them.
-    private static string Arrange(string exported, string heading, Dictionary<string, string> files, HashSet<string> hinted)
+    // The exported source under a heading, its equates grouped by the file that names them. A scoped name's
+    // stand-in becomes its qualified name in the code, and its equate is defined inside its scopes.
+    private static string Arrange(
+        string exported,
+        string heading,
+        Dictionary<string, string> files,
+        HashSet<string> hinted,
+        Dictionary<string, string> scoped)
     {
         string[] lines = exported.Split('\n');
         int code = Array.FindIndex(lines, line => line.StartsWith(".org ", StringComparison.Ordinal));
@@ -205,18 +226,29 @@ internal static class DisassembleCommand
 
             foreach ((string name, string value, _) in group.OrderBy(equate => equate.Value, StringComparer.Ordinal))
             {
-                source.Append($"{name} = {value}\n");
+                if (!scoped.TryGetValue(name, out string? qualified))
+                {
+                    source.Append($"{name} = {value}\n");
+                    continue;
+                }
+
+                string[] parts = qualified.Split("::");
+                foreach (string scope in parts[..^1]) { source.Append($".scope {scope}\n"); }
+                source.Append($"{parts[^1]} = {value}\n");
+                for (int depth = 1; depth < parts.Length; depth++) { source.Append(".endscope\n"); }
             }
         }
 
         source.Append('\n');
         for (int index = code; index < lines.Length; index++)
         {
-            source.Append(lines[index]);
+            source.Append(scoped.Count == 0 ? lines[index] : StandInName().Replace(lines[index], Qualify));
             if (index + 1 < lines.Length) { source.Append('\n'); }
         }
 
         return source.ToString();
+
+        string Qualify(Match match) => scoped.GetValueOrDefault(match.Value, match.Value);
     }
 
     // Where the written source assembles differently from the program, or null when it assembles the same.
@@ -302,4 +334,8 @@ internal static class DisassembleCommand
         Console.Error.WriteLine(message);
         return code;
     }
+
+    // A scoped name's stand-in in the exported source.
+    [GeneratedRegex(@"\bScoped__[A-Za-z0-9_]+\b")]
+    private static partial Regex StandInName();
 }

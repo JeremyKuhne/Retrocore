@@ -86,6 +86,34 @@ public sealed class DisassembleCommandTests
     }
 
     /// <summary>
+    ///  A Monitor routine in a family scope keeps its qualified name: the source calls it by that name and defines
+    ///  it inside the scope, and assembles back to the program's bytes.
+    /// </summary>
+    [TestMethod]
+    public void DisassemblyNamesScopedRoutines()
+    {
+        // $0800 JSR $F800 (LowRes::Plot); JSR $F88E (Disassembler::Decode::Opcode); JSR $FDED (CharacterOut); RTS
+        byte[] program = [0x20, 0x00, 0xF8, 0x20, 0x8E, 0xF8, 0x20, 0xED, 0xFD, 0x60];
+        string directory = Directory.CreateTempSubdirectory("retrocore-disassemble-").FullName;
+        try
+        {
+            string input = Path.Join(directory, "plot.bin");
+            string output = Path.Join(directory, "plot.asm");
+            File.WriteAllBytes(input, program);
+
+            DisassembleCommand.Run([input, output, "--origin", "$0800", "--sdk-roms", s_inputs]).Should().Be(0);
+            string source = File.ReadAllText(output);
+            source.Should().Contain("JSR LowRes::Plot").And.Contain("JSR Disassembler::Decode::Opcode").And.Contain("JSR CharacterOut");
+            source.Should().Contain(".scope LowRes\nPlot = $F800\n.endscope");
+            source.Should().Contain(".scope Disassembler\n.scope Decode\nOpcode = $F88E\n.endscope\n.endscope");
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
     ///  A Z80 program disassembles with <c>--cpu Z80</c>, with no Apple II names, and its text at the restart addresses
     ///  stays data when the hints turn the CPU's vectors off; the source assembles back to the same bytes. An Apple II
     ///  machine with the Z80 is an error.

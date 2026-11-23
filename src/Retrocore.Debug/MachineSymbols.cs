@@ -17,7 +17,8 @@ namespace Retrocore.Debug;
 ///   Each source is assembled as the debugger assembles it for the model, so each name has the address it has on
 ///   that machine; DOS's are where it runs in 48K or more. Where several names share an address, the Monitor's and
 ///   the hardware equates' come first, then the firmware's, BASIC's and DOS's; within a source a label comes before
-///   an equate, and an earlier definition before a later one. A routine's inner labels (<c>ROUTINE_1</c>) are left
+///   an equate, a name in fewer scopes before one in more (a routine before its inner labels), and an earlier
+///   definition before a later one. A name in a scope keeps its qualified name, such as <c>LowRes::Plot</c>. A routine's inner labels (<c>ROUTINE_1</c>) are left
 ///   out, and page zero takes only the Monitor's and the hardware's names, as programs reuse BASIC's and DOS's
 ///   page-zero storage for their own.
 ///  </para>
@@ -96,6 +97,7 @@ internal static partial class MachineSymbols
         foreach (var candidate in candidates
             .OrderBy(candidate => candidate.Rank)
             .ThenBy(candidate => candidate.Constant)
+            .ThenBy(candidate => candidate.Name.AsSpan().Count("::"))
             .ThenBy(candidate => candidate.Order))
         {
             if (names.ContainsKey(candidate.Address) || !taken.Add(candidate.Name)) { continue; }
@@ -134,7 +136,8 @@ internal static partial class MachineSymbols
         _ => 4
     };
 
-    [GeneratedRegex("^[A-Za-z_][A-Za-z0-9_]*$")]
+    // A plain or qualified identifier, such as CharacterOut or LowRes::Plot.
+    [GeneratedRegex("^[A-Za-z_][A-Za-z0-9_]*(::[A-Za-z_][A-Za-z0-9_]*)*$")]
     private static partial Regex Identifier();
 
     // A routine's numbered inner label, such as CMDPROMPT_2.

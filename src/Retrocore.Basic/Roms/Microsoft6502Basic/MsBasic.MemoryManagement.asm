@@ -1,3 +1,5 @@
+; Derived from Microsoft's BASIC for 6502 (m6502.asm, MIT license; see LICENSE in this folder).
+
 ;; MICROSOFT 6502 BASIC: STACK AND BLOCK MANAGEMENT
 ;;
 ;; The FOR-frame search, backward block transfer, stack check and string-space check are contiguous in

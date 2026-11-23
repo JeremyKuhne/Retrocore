@@ -1,3 +1,4 @@
+; Derived from Microsoft's BASIC for 6502 (m6502.asm, MIT license; see LICENSE in this folder).
 ; MICROSOFT 6502 BASIC: ARRAY MULTIPLICATION
 ;
 ; These unsigned 16-bit helpers multiply dimension sizes and element offsets. Overflow branches

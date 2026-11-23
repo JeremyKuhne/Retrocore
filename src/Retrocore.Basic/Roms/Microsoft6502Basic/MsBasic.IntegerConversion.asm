@@ -1,3 +1,4 @@
+; Derived from Microsoft's BASIC for 6502 (m6502.asm, MIT license; see LICENSE in this folder).
 ; MICROSOFT 6502 BASIC: SUBSCRIPT AND SIGNED INTEGER CONVERSION
 ;
 ; Emit INTEGER_CONVERSION_BOUNDARY immediately followed by INTEGER_CONVERSION. The latter selects the expression

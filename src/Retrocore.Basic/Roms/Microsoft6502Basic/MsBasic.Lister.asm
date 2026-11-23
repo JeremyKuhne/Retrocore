@@ -1,3 +1,5 @@
+; Derived from Microsoft's BASIC for 6502 (m6502.asm, MIT license; see LICENSE in this folder).
+
 ;; MICROSOFT 6502 BASIC: PROGRAM LISTING
 ;;
 ;; These macros emit LIST's argument parser, linked-line walker and token expansion in that order. The

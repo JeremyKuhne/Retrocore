@@ -1,3 +1,4 @@
+; Derived from Microsoft's BASIC for 6502 (m6502.asm, MIT license; see LICENSE in this folder).
 ; The operator dispatch table shared by Microsoft 6502 BASIC variants.
 
 ;; Emits the operator table with independently selected precedence rules and AND handler.

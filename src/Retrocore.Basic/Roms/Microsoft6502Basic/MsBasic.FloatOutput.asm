@@ -1,3 +1,5 @@
+; Derived from Microsoft's BASIC for 6502 (m6502.asm, MIT license; see LICENSE in this folder).
+
 ;; MICROSOFT 6502 BASIC DECIMAL OUTPUT
 ;;
 ;; <FOUT> converts <FAC> to a zero-terminated decimal string in <FBUFFR>, with a minus sign when its sign bit is set.

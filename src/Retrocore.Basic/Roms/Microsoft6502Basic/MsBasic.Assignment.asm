@@ -1,3 +1,4 @@
+; Derived from Microsoft's BASIC for 6502 (m6502.asm, MIT license; see LICENSE in this folder).
 ; MICROSOFT 6502 BASIC: VARIABLE ASSIGNMENT
 ;
 ; ASSIGNMENT_START emits LET through the common <INPCOM> entry. A variant may put

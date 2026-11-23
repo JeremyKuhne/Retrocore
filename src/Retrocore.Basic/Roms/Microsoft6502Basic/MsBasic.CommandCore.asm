@@ -1,3 +1,4 @@
+; Derived from Microsoft's BASIC for 6502 (m6502.asm, MIT license; see LICENSE in this folder).
 ; MICROSOFT 6502 BASIC: ERROR FINISHING, PROGRAM EDITING AND TOKEN STORAGE
 
 ;; Emits the common error-message suffix and optional program line number.

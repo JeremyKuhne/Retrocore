@@ -1,3 +1,4 @@
+; Derived from Microsoft's BASIC for 6502 (m6502.asm, MIT license; see LICENSE in this folder).
 ; MICROSOFT 6502 BASIC: DECIMAL AND BUFFER STRING CONVERSION
 ;
 ; Emit STRING_FROM_NUMBER immediately before STRING_STORAGE.

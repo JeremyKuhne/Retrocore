@@ -1,3 +1,4 @@
+; Derived from Microsoft's BASIC for 6502 (m6502.asm, MIT license; see LICENSE in this folder).
 ; MICROSOFT 6502 BASIC: RUN, GOSUB, GOTO AND RETURN
 ;
 ; RUN through RETURN are emitted consecutively before DATA. RESTORE and STOP/CONT can be separated by a

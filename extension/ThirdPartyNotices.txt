@@ -78,6 +78,10 @@ The Retrocore extension includes material from the projects below.
    8 columns. The legacy applesoft.mac overlay applies Apple's edits when selected; the SDK's default AppleSoft
    listing is maintained in native Retrocore assembly. Microsoft's LICENSE file is beside the original source.
 
+   The native MsBasic.*.asm modules in src/Retrocore.Basic/Roms/Microsoft6502Basic, shipped as
+   server/Sdk/Roms/Microsoft6502Basic, are derived from Microsoft's m6502.asm, and the license below applies to them.
+   Each module's first lines say so.
+
    Copyright (c) Microsoft Corporation, 1976-1978.
 
    MIT License

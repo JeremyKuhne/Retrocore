@@ -1,3 +1,5 @@
+; Derived from Microsoft's BASIC for 6502 (m6502.asm, MIT license; see LICENSE in this folder).
+
 ;; MICROSOFT 6502 BASIC EXPONENTIATION, RANDOM NUMBERS AND TRANSCENDENTAL FUNCTIONS
 ;;
 ;; These routines operate on the floating-point accumulator <FAC> and use the five-byte packed format for

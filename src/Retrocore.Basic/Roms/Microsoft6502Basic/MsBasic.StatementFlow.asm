@@ -1,3 +1,4 @@
+; Derived from Microsoft's BASIC for 6502 (m6502.asm, MIT license; see LICENSE in this folder).
 ; MICROSOFT 6502 BASIC: DATA, REM, IF AND ON
 ;
 ; The three macros are emitted consecutively before the line-number parser. The scanner can retain an earlier

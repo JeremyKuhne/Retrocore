@@ -1,3 +1,5 @@
+; Derived from Microsoft's BASIC for 6502 (m6502.asm, MIT license; see LICENSE in this folder).
+
 ;; Emits the natural-logarithm routine before the multiplication routine it enters.
 .macro LOG_ROUTINE
 

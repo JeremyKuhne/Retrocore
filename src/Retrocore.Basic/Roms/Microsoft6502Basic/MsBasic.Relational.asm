@@ -1,3 +1,4 @@
+; Derived from Microsoft's BASIC for 6502 (m6502.asm, MIT license; see LICENSE in this folder).
 ; MICROSOFT 6502 BASIC: RELATIONAL OPERATORS
 
 ;; Emits the numeric and string comparison entries.

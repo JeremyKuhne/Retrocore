@@ -72,10 +72,6 @@ ListKeywordCharacter = Statements::List::ListWordCharacter
 ;; Also: PRIT32 (UNKN)
 ListLastKeywordCharacter = Statements::List::ListLastCharacter
 
-;; Inherit: <Statements::Cont::Resume>
-;; Also: CONT1 (UNKN)
-ContResume = Statements::Cont::Resume
-
 ;; Inherit: <Statements::PopFinish>
 ;; Also: REMER1 (UNKN)
 PopFinish = Statements::PopFinish

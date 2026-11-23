@@ -43,7 +43,6 @@ public sealed class BasicSharedFloatAliasesTests
         ["GRODY2"] = ["UNKN"],
         ["PRIT31"] = ["UNKN"],
         ["PRIT32"] = ["UNKN"],
-        ["CONT1"] = ["UNKN"],
         ["REMER1"] = ["UNKN"]
     };
 

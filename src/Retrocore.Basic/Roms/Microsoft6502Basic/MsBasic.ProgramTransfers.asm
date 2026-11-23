@@ -204,7 +204,9 @@ Transfer:
 
     ;; Finds the requested line and points <TextPointer> just before its link field.
     ;;
-    ;; A forward jump can start its search after the current line; otherwise it starts at <ProgramStart>.
+    ;; It searches from just after the current statement's line when the target's high byte is greater than the
+    ;; current line's, a later block of 256 line numbers; otherwise, a forward jump within the same block included,
+    ;; it searches from <ProgramStart>.
     ;; Errors: UNDEF'D STATEMENT if the line is absent
     ;; Entry:
     ;;   Done = returns; RETURN with trailing text returns through it

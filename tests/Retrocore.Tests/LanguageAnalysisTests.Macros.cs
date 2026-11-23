@@ -447,4 +447,133 @@ public sealed partial class LanguageAnalysisTests
             Directory.Delete(folder, recursive: true);
         }
     }
+
+    // A routine defined at the root and again in a macro's body, whose Also: gives COMBYTE, which the SDK's AppleSoft
+    // also gives: the assembler aliases the name to the expansion's definition only, so the root routine must not be
+    // the hint.
+    private const string MacroAndRootProbe = """
+        ; retrocore: style=strict
+        ;; A probe.
+
+        .cpu Mos6502
+        .org $0300
+
+        ;; Emits the byte reader.
+        .macro Library
+            ;; Requires a comma and reads a byte.
+            ;; Also: COMBYTE (A2RM78)
+        Reader:
+            rts
+        .endmacro
+
+        ;; The root reader.
+        Reader:
+            rts
+
+        ;; The interpreter.
+        .scope Basic
+            Library
+        .endscope
+
+        ;; Reads a byte.
+        ;; Also: PRBBYTE (A2RM78)
+        PRBBYT:
+            rts
+
+        ;; Reads through the old names.
+        Echo:
+            jsr PRBBYTE
+            jsr COMBYTE
+            rts
+        """;
+
+    // The same macro expanded in two scopes, so the assembler gives COMBYTE to neither expansion, with a root routine
+    // that gives it only in a branch the build leaves out.
+    private const string TwiceExpandedProbe = """
+        ; retrocore: style=strict
+        ;; A probe.
+
+        .cpu Mos6502
+        .org $0300
+
+        ;; Emits the byte reader.
+        .macro Library
+            ;; Requires a comma and reads a byte.
+            ;; Also: COMBYTE (A2RM78)
+        Reader:
+            rts
+        .endmacro
+
+        .if 0
+        ;; The root reader, in a branch the build leaves out.
+        ;; Also: COMBYTE (A2RM78)
+        Reader:
+            rts
+        .endif
+
+        ;; The interpreter.
+        .scope Basic
+            Library
+        .endscope
+
+        ;; Another interpreter.
+        .scope Other
+            Library
+        .endscope
+
+        ;; Reads a byte.
+        ;; Also: PRBBYTE (A2RM78)
+        PRBBYT:
+            rts
+
+        ;; Reads through the file's name.
+        Echo:
+            jsr PRBBYTE
+            rts
+
+        .ifdef COMBYTE
+        .endif
+        """;
+
+    /// <summary>
+    ///  A file's own old name takes precedence only for the definition the assembler gives it to: not for a root
+    ///  routine that shares its name with a macro's expansion the name belongs to, and not where the assembler gives the
+    ///  name to no definition, as for a macro expanded twice.
+    /// </summary>
+    /// <param name="twice">Whether to use the twice-expanded probe rather than the root and expansion.</param>
+    /// <returns>The test.</returns>
+    [TestMethod]
+    [DataRow(data: false)]
+    [DataRow(data: true)]
+    public async Task OldNamesHintOnlyTheDefinitionTheAssemblerGivesThemTo(bool twice)
+    {
+        string folder = Directory.CreateTempSubdirectory("retrocore-macros").FullName;
+        try
+        {
+            string text = (twice ? TwiceExpandedProbe : MacroAndRootProbe).ReplaceLineEndings("\n");
+            string probe = Directory.CreateDirectory(Path.Join(folder, "probe")).FullName;
+            string path = Path.GetFullPath(Path.Join(probe, "Probe.asm"));
+            File.WriteAllText(path, text);
+            File.WriteAllText(Path.Join(probe, "Bibliography.md"), MemberBibliography);
+            RecordingLanguageClient client = new();
+            LanguageWorkspace workspace = new(client);
+            workspace.Update(path, text);
+            DocumentUri uri = DocumentUri.FromFileSystemPath(path);
+
+            List<Diagnostic> published = await client.Wait(
+                uri,
+                diagnostics => diagnostics.Any(diagnostic => diagnostic.Message.StartsWith("PRBBYTE is a historical name", StringComparison.Ordinal)));
+
+            // The twice-expanded probe's lint reports its Also:, but the assembly itself succeeds.
+            published.Select(diagnostic => diagnostic.Code ?? "").Should().NotContain(
+                code => code.StartsWith("RETROCOREASM", StringComparison.Ordinal),
+                "the probe assembles");
+
+            published.Should().NotContain(diagnostic => diagnostic.Message == "COMBYTE is a historical name of Reader.");
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
 }

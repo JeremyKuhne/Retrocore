@@ -211,6 +211,40 @@ public sealed class BasicStatementRoutineTests
     }
 
     /// <summary>
+    ///  GOTO searches from just past the current statement only when the target's high byte is greater than the
+    ///  current line's; a forward jump within the same 256-line block, or a backward one, searches from
+    ///  <c>ProgramStart</c>.
+    /// </summary>
+    /// <param name="apple">Whether to run AppleSoft rather than PET BASIC 4.</param>
+    /// <param name="current">The current line number.</param>
+    /// <param name="target">The target line number.</param>
+    /// <param name="fromStart">Whether the search starts at <c>ProgramStart</c>.</param>
+    [TestMethod]
+    [DataRow(true, 10, 300, false)]
+    [DataRow(true, 10, 200, true)]
+    [DataRow(true, 300, 5, true)]
+    [DataRow(true, 300, 400, true)]
+    [DataRow(false, 10, 300, false)]
+    [DataRow(false, 10, 200, true)]
+    public void GotoSearchesOnOnlyForALaterBlock(bool apple, int current, int target, bool fromStart)
+    {
+        BasicMathMachine machine = new(apple);
+        InstallCharacterReader(machine);
+        string text = target.ToString(System.Globalization.CultureInfo.InvariantCulture) + "\0";
+        PutText(machine, text);
+        SetWord(machine, "TextPointer", Text);
+        SetWord(machine, "ProgramStart", Program);
+        SetWord(machine, "CurrentLine", current);
+        int search = machine.Address("FindLine::FromAddress");
+
+        int reached = machine.CallUntil("Statements::GoTo", [search], a: text[0], carry: false);
+
+        reached.Should().Be(search);
+        int from = machine.Cpu.Registers.Accumulator | (machine.Cpu.Registers.X << 8);
+        from.Should().Be(fromStart ? Program : Text + text.Length, "past the statement is just past its terminator");
+    }
+
+    /// <summary>
     ///  <c>FindLine</c> leaves <c>SourceStart</c> at the line equal to or after <c>LineNumber</c>, or at the end
     ///  marker, with carry set only for an exact match.
     /// </summary>

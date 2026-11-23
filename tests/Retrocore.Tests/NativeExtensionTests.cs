@@ -270,6 +270,21 @@ public class NativeExtensionTests
     }
 
     /// <summary>
+    ///  A storage map that opens in one procedure and ends in the next leaves both without one size: the first ends
+    ///  inside the map, and the second starts inside it.
+    /// </summary>
+    /// <param name="use">The procedure whose size is used.</param>
+    [TestMethod]
+    [DataRow("First")]
+    [DataRow("Second")]
+    public void AStorageMapAcrossTwoProceduresLeavesBothWithoutASize(string use)
+    {
+        Assemble($".proc First\nnop\n.dum $80\nZero: .res 2\n.endproc\n.proc Second\nOne: .res 1\n.dend\nnop\n.endproc\n.byte .sizeof({use})")
+            .Diagnostics.Select(diagnostic => diagnostic.Message)
+            .Should().Equal(".sizeof requires a contiguous scope or procedure: no section or .logicalorg changes, no storage map across its ends, and not a continued scope.");
+    }
+
+    /// <summary>
     ///  An <c>.org</c> only moves forward, filling the gap, so like <c>.align</c> it leaves a procedure one run of
     ///  addresses whose size counts the fill. A storage map wholly inside a procedure adds nothing to its size, even
     ///  with an <c>.org</c> placing its fields, and a scope wholly inside a storage map has the size of the storage

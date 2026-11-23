@@ -537,6 +537,42 @@ public partial class AssemblyPreprocessorTests
     }
 
     /// <summary>
+    ///  As in ca65, an opening parenthesis right after a directive starts its operand, so <c>.if(1)</c> reads as
+    ///  <c>.if (1)</c>, for conditionals, data, repeats and one a definition spells.
+    /// </summary>
+    /// <param name="dialect">The source dialect.</param>
+    /// <param name="text">The source.</param>
+    /// <param name="first">The first byte assembled.</param>
+    /// <param name="second">The second byte assembled.</param>
+    [TestMethod]
+    [DataRow(AssemblyDialect.Native, ".if(1)\n.byte 1\n.endif\n.byte 2", 1, 2)]
+    [DataRow(AssemblyDialect.Ca65, ".if(1)\n.byte 1\n.endif\n.byte 2", 1, 2)]
+    [DataRow(AssemblyDialect.Native, ".if(0)\n.byte 1\n.elseif(1)\n.byte 3\n.endif\n.byte 2", 3, 2)]
+    [DataRow(AssemblyDialect.Ca65, ".if(0)\n.byte 1\n.elseif(1)\n.byte 3\n.endif\n.byte 2", 3, 2)]
+    [DataRow(AssemblyDialect.Native, ".byte(1)\n.word(2)", 1, 2)]
+    [DataRow(AssemblyDialect.Ca65, ".byte(1)\n.word(2)", 1, 2)]
+    [DataRow(AssemblyDialect.Native, ".repeat(2)\n.byte 7\n.endrepeat", 7, 7)]
+    [DataRow(AssemblyDialect.Ca65, ".res(2), $EA", 0xEA, 0xEA)]
+    [DataRow(AssemblyDialect.Native, ".define IFX .if\nIFX(1)\n.byte 1\n.endif\n.byte 2", 1, 2)]
+    public void DirectivesTakeAParenthesizedOperandWithoutASpace(AssemblyDialect dialect, string text, int first, int second)
+    {
+        AssemblyResult result = Assemble(text, dialect);
+        result.Diagnostics.Should().BeEmpty();
+        result.Sections.Single(section => section.Bytes.Length != 0).Bytes.Span[..2].ToArray().Should().Equal((byte)first, (byte)second);
+    }
+
+    /// <summary>
+    ///  A parenthesized operand right after a directive that takes none is reported as its operand, as ca65 does, and
+    ///  the conditional still closes.
+    /// </summary>
+    [TestMethod]
+    public void ParenthesizedOperandOnEndIfIsReported()
+    {
+        AssemblyResult result = Assemble(".if(1)\n.byte 1\n.endif(1)", AssemblyDialect.Native);
+        result.Diagnostics.Select(error => (error.Message, error.Location?.Line)).Should().Equal((".endif takes no operand.", 2));
+    }
+
+    /// <summary>
     ///  Include depth is measured from the root and metadata collections are copied before use.
     /// </summary>
     [TestMethod]

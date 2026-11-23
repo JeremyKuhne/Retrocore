@@ -61,8 +61,7 @@ internal static class Ca65Frontend
             source = source[(labelLength + 1)..].TrimStart();
         }
 
-        int end = 0;
-        while (end < source.Length && !char.IsWhiteSpace(source[end])) { end++; }
+        int end = AssemblySyntax.OperationLength(source);
         string operation = source[..end].ToString();
         string operand = source[end..].Trim().ToString();
         if (operation.Length == 0) { return prefix; }

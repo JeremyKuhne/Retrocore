@@ -155,6 +155,25 @@ internal static class AssemblySyntax
         text.Length >= 2 && text[0] == '"' && text[^1] == '"' && text[1..^1].IndexOf('"') < 0;
 
     /// <summary>
+    ///  Measures a line's operation, after any label.
+    /// </summary>
+    /// <param name="text">The text from the operation on.</param>
+    /// <returns>The operation's length.</returns>
+    /// <remarks>
+    ///  <para>
+    ///   The operation ends at whitespace. A directive also ends at an opening parenthesis, as in ca65, which reads
+    ///   <c>.if(1)</c> as <c>.if (1)</c>.
+    ///  </para>
+    /// </remarks>
+    internal static int OperationLength(ReadOnlySpan<char> text)
+    {
+        bool directive = !text.IsEmpty && text[0] == '.';
+        int end = 0;
+        while (end < text.Length && !char.IsWhiteSpace(text[end]) && !(directive && text[end] == '(')) { end++; }
+        return end;
+    }
+
+    /// <summary>
     ///  Measures a <c>.w</c> mnemonic suffix that forces absolute addressing.
     /// </summary>
     /// <param name="text">The text immediately after the mnemonic.</param>

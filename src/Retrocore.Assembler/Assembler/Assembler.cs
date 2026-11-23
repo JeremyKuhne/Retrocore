@@ -204,7 +204,9 @@ public sealed partial class Assembler
                 end += wide;
             }
 
-            if ((!span.IsEmpty && end == start) || (end < span.Length && !char.IsWhiteSpace(span[end])))
+            // As in ca65, an opening parenthesis right after a directive starts its operand.
+            bool separated = end == span.Length || char.IsWhiteSpace(span[end]) || (start == 1 && span[end] == '(');
+            if ((!span.IsEmpty && end == start) || !separated)
             {
                 error = "Invalid assembly statement.";
                 return null;

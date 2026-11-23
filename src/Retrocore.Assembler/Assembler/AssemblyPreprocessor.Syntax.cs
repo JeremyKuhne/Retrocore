@@ -35,8 +35,7 @@ internal sealed partial class AssemblyPreprocessor
             text = text[(identifier + 1)..].TrimStart();
         }
 
-        int end = 0;
-        while (end < text.Length && !char.IsWhiteSpace(text[end])) { end++; }
+        int end = AssemblySyntax.OperationLength(text);
         operation = text[..end];
         operand = text[end..].Trim();
     }

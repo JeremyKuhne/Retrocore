@@ -210,8 +210,8 @@ PromptCharacter = $33
 ;; Where the Monitor's command line resumes: the index in <InputBuffer> after the last command character.
 ;;
 ;; <Monitor:CommandLine::NextItem> saves Y here after <Monitor:ReadHexNumber>, and <Monitor:Commands::SetMode> and
-;; the loop in <Monitor:CommandLine::Search> read it back. <Monitor:Commands::ExamineNextOrBlank> counts it down so
-;; that Return alone shows the next eight bytes. The Enhanced IIe's mini-assembler uses it too.
+;; <Monitor:CommandLine::Search>, after the command it runs, read it back. <Monitor:Commands::ExamineNextOrBlank> counts
+;; it down so that Return alone shows the next eight bytes. The Enhanced IIe's mini-assembler uses it too.
 ;; See: <Monitor:CommandLine::NextItem>, <Monitor:ReadHexNumber>, <InputBuffer>
 ;; Also: YSAV (A2RM78, A2RM79, IIEROM82, IIETRM85)
 CommandPosition = $34
@@ -430,8 +430,9 @@ BreakVector = $03F0
 ;;
 ;; The Autostart and IIe Monitors' <Monitor:Startup::Reset> jumps through it when <SoftEntryCheck> matches its high
 ;; byte, and otherwise powers up; the Apple II Monitor has no soft entry.
-;; <Monitor:Startup::PowerUp> points it at <Monitor:BasicColdStart>, and the first reset after that at
-;; <Monitor:BasicWarmStart>, so later resets keep the program.
+;; <Monitor:Startup::PowerUp> points it at <Monitor:BasicColdStart>, and <Monitor:Startup::Reset::FixSoftEntry>,
+;; which the first reset after that or a power-up that finds no disk goes through, at <Monitor:BasicWarmStart>, so
+;; later resets keep the program.
 ;; See: <SoftEntryCheck>, <Monitor:Startup::Reset>, <Monitor:ValidateSoftEntry>
 ;; Also: SOFTEV (A2RM79, IIEROM82, IIETRM85)
 SoftEntryVector = $03F2
@@ -896,7 +897,7 @@ Annunciator2Off = $C05C
 
 ;; Reading or writing it turns annunciator 2 on; <Annunciator2Off> turns it off.
 ;;
-;; The reset function reads it, along with <Annunciator3On>.
+;; The Autostart Monitor's reset and the IIe firmware's reset function read it, along with <Annunciator3On>.
 ;; See: <Annunciator3On>, <Annunciator0Off>
 ;; Also: CLRAN2 (A2RM79, IIEROM82, IIETRM85)
 Annunciator2On = $C05D
@@ -910,8 +911,8 @@ Annunciator3Off = $C05E
 
 ;; Reading or writing it turns annunciator 3 on; <Annunciator3Off> turns it off.
 ;;
-;; While IOUDIS is on, the same addresses turn double hi-res off ($C05F) and on ($C05E) instead. The reset function
-;; reads it, along with <Annunciator2On>.
+;; While IOUDIS is on, the same addresses turn double hi-res off ($C05F) and on ($C05E) instead. The Autostart
+;; Monitor's reset and the IIe firmware's reset function read it, along with <Annunciator2On>.
 ;; See: <Annunciator2On>, <Annunciator0Off>
 ;; Also: CLRAN3 (A2RM79, IIEROM82, IIETRM85)
 Annunciator3On = $C05F
@@ -926,8 +927,9 @@ CassetteIn = $C060
 
 ;; Reading it reports in bit 7 whether button 0, the Open Apple key, is down.
 ;;
-;; At reset, with Open Apple down, the firmware writes over part of every page of RAM, so that a program in memory
-;; does not survive. With both Apple keys down at the end of the self-test, the test runs again.
+;; At reset, with Open Apple down, the firmware writes over two bytes of each page of main RAM from $0200 to $BFFF, so
+;; that a program in memory does not survive. With both Apple keys down at the end of the self-test, the test runs
+;; again.
 ;; See: <Button1>, <Firmware:SELFTEST@Enhanced>
 ;; Also: BUTN0 (IIETRM85)
 Button0 = $C061

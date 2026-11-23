@@ -25,8 +25,7 @@ LIST_LENGTH = 20
 ;; - X = 1 when a number came before the command character, 0 when none did;
 ;; - Y = 0;
 ;; - <Address1>/<Address1High> and <Address3>/<Address3High> = the last number typed with no command waiting, the first
-;;   of a range, and
-;;   <Address2>/<Address2High> = the last number typed.
+;;   of a range, and <Address2>/<Address2High> = the last number typed.
 ;;
 ;; The scope is in nine pieces on the Enhanced IIe and eight in the other builds, because the Monitor's documented
 ;; routines sit between its parts at fixed addresses. Each handler's address minus one must be in page $FE, after its

@@ -3,6 +3,7 @@
 // See LICENSE file in the project root for full license information
 
 using Retrocore.Assembler;
+using Retrocore.Documentation;
 using Retrocore.Machines.Apple2;
 using System.Text.RegularExpressions;
 
@@ -18,8 +19,9 @@ namespace Retrocore.Debug;
 ///   that machine; DOS's are where it runs in 48K or more. Where several names share an address, the Monitor's and
 ///   the hardware equates' come first, then the firmware's, BASIC's and DOS's; within a source a label comes before
 ///   an equate, and an earlier definition before a later one. A name in a scope keeps its qualified name, such as
-///   <c>LowRes::Plot</c>. A routine's inner labels (<c>ROUTINE_1</c>) and values (equates such as
-///   <c>SCREEN_WIDTH</c>, named as the style guide names values) are left out, and page zero takes only the
+///   <c>LowRes::Plot</c>. A routine's inner labels (<c>ROUTINE_1</c>) are left out, and so are values in the sources
+///   that follow the style guide (equates named as it names values, such as <c>SCREEN_WIDTH</c>), and page zero
+///   takes only the
 ///   Monitor's and the hardware's names, as programs reuse BASIC's and DOS's page-zero storage for their own. In
 ///   page zero a name in a scope, which is the name one family of routines gives a byte, comes after every other
 ///   name, so a program's use of the byte takes its shared name (<c>MASK</c>, not <c>Disassembler::FormatBits</c>).
@@ -114,15 +116,15 @@ internal static partial class MachineSymbols
 
     // Whether an equate in a source that follows the style guide is a value rather than an address. There locations
     // are PascalCase, so a value is one named in capitals (SCREEN_WIDTH, COLUMNS, AddressMode::ABSOLUTE) or a .set
-    // variable; an Equates.asm keeps Apple's capital names for locations still to be converted (CV). Other sources
-    // name addresses in capitals, so nothing in them is taken for a value.
+    // variable, in either form; an Equates.asm keeps Apple's one-word capital names for locations still to be
+    // converted (CV, LOC1). Other sources name addresses in capitals, so nothing in them is taken for a value.
     private static bool IsValue(string name, AssemblyLocation location, Dictionary<string, string[]?> styled)
     {
         string path = location.Path;
         if (!styled.TryGetValue(path, out string[]? lines))
         {
             lines = File.Exists(path) ? File.ReadAllLines(path) : null;
-            if (lines is not null && !lines.Take(5).Any(line => line.Contains("retrocore: style=strict", StringComparison.Ordinal)))
+            if (lines is not null && !DocumentationParser.IsStrict(string.Join('\n', lines)))
             {
                 lines = null;
             }
@@ -131,10 +133,7 @@ internal static partial class MachineSymbols
         }
 
         if (lines is null) { return false; }
-        if (location.Line < lines.Length && lines[location.Line].TrimStart().StartsWith(".set ", StringComparison.Ordinal))
-        {
-            return true;
-        }
+        if (location.Line < lines.Length && SetVariable().IsMatch(lines[location.Line])) { return true; }
 
         return ValueName().IsMatch(name) || (CapitalName().IsMatch(name) && Path.GetFileName(path) != "Equates.asm");
     }
@@ -175,6 +174,10 @@ internal static partial class MachineSymbols
     // A value's name, such as SCREEN_WIDTH: capitals and digits with an underscore between words.
     [GeneratedRegex("(^|::)[A-Z0-9]+(_[A-Z0-9]+)+$")]
     private static partial Regex ValueName();
+
+    // A .set variable's line: .set Name, value or Name .set value.
+    [GeneratedRegex(@"^\s*(\S+\s+)?\.set\b", RegexOptions.IgnoreCase)]
+    private static partial Regex SetVariable();
 
     // A name in capitals and digits, such as COLUMNS or AddressMode::ABSOLUTE.
     [GeneratedRegex("(^|::)[A-Z][A-Z0-9]*$")]

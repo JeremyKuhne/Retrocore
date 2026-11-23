@@ -68,7 +68,7 @@ public sealed class BasicSharedFloatAliasesTests
         native.Symbols["PRNTFAC"].Should().Be(0xED2E, "Apple TIL 79 specifies this entry");
         foreach (string petName in s_petAddresses.Keys) { native.Symbols.Should().NotContainKey(petName); }
 
-        CheckAliases(native, s_appleAliases, ["PRNTFAC"], "AppleSoft");
+        CheckAliases(native, s_appleAliases, ["PRNTFAC"], ["ASTIL"], ["ASTIL"]);
         CheckDocumentation(native, s_appleAliases);
     }
 
@@ -142,16 +142,20 @@ public sealed class BasicSharedFloatAliasesTests
         }
 
         native.Symbols.Should().NotContainKey("PRNTFAC");
-        CheckAliases(native, s_petAliases, [.. s_petAddresses.Keys], "PET BASIC");
+        CheckAliases(native, s_petAliases, [.. s_petAddresses.Keys], BasicAttribution.PetKeys(model, original), BasicAttribution.CommodoreKeys);
         CheckDocumentation(native, s_petAliases);
     }
 
-    private static void CheckAliases(AssemblyResult result, string path, string[] expected, string variant)
+    private static void CheckAliases(
+        AssemblyResult result,
+        string path,
+        string[] expected,
+        string[] buildKeys,
+        string[] documentKeys)
     {
+        // Each alias is an equate, documented by the ;; block above it.
         (string Name, string Target)[] aliases = [.. File.ReadLines(path)
-            .Select(line => line.Split(";;", 2, StringSplitOptions.None))
-            .Where(parts => parts.Length == 2 && !string.IsNullOrWhiteSpace(parts[1]))
-            .Select(parts => parts[0])
+            .Select(line => line.Split(';', 2)[0])
             .Where(code => code.Contains('='))
             .Select(code => code.Split('=', 2, StringSplitOptions.TrimEntries))
             .Select(parts => (parts[0], parts[1]))];
@@ -187,6 +191,7 @@ public sealed class BasicSharedFloatAliasesTests
             alias.Summary.Should().NotBeNullOrWhiteSpace();
             Path.GetFullPath(alias.Path).Should().Be(Path.GetFullPath(path));
             alias.Value.Should().Be(result.Symbols[name]);
+            BasicAttribution.AssertCites(alias, buildKeys, documentKeys);
 
             DocumentationTopic topic = docs.Find(target)
                 ?? throw new AssertFailedException($"{target} has no shared documentation.");
@@ -194,8 +199,7 @@ public sealed class BasicSharedFloatAliasesTests
             Path.GetFullPath(topic.Path).Should().StartWith(Path.GetFullPath(s_shared) + Path.DirectorySeparatorChar);
             topic.Value.Should().Be(result.Symbols[target]);
 
-            BasicAttribution.Has(topic.Remarks, name, [variant], prefix: true)
-                .Should().BeTrue($"{target}'s remarks must attribute {name} to {variant} and cite its source");
+            BasicAttribution.AssertNotShared(result, docs, target, name);
 
             DebugPosition position = debug.Position(memory, checked((ushort)result.Symbols[name]))
                 ?? throw new AssertFailedException($"{name} has no debugger source position.");

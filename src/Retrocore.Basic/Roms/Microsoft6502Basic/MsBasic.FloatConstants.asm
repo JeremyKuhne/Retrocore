@@ -21,16 +21,10 @@ LOGCN2:
     .byte $82, $38, $AA, $3B, $20
 
 ;; Packed approximation to the square root of one half.
-;;
-;; In PET BASIC 4, Commodore's 1979 source calls it `SQR05` (code18). In PET BASIC 1 and 2, the
-;; Hoffmann-Vetter reconstructions call it `SQR05` (code18).
 SQRHLF:
     .byte $80, $35, $04, $F3, $34
 
 ;; Packed approximation to the square root of two.
-;;
-;; In PET BASIC 4, Commodore's 1979 source calls it `SQR20` (code18). In PET BASIC 1 and 2, the
-;; Hoffmann-Vetter reconstructions call it `SQR20` (code18).
 SQRTWO:
     .byte $81, $35, $04, $F3, $34
 
@@ -51,16 +45,10 @@ LOG2:
     .assert preciseUpper = 0 || preciseUpper = 1, "preciseUpper is 0 or 1."
 
 ;; Packed lower scaling threshold, 99,999,999.90625.
-;;
-;; In PET BASIC 4, Commodore's 1979 source calls it `N0999` (code22). In PET BASIC 1 and 2, the
-;; Hoffmann-Vetter reconstructions call it `N0999` (code22).
 NZ0999:
     .byte $9B, $3E, $BC, $1F, $FD
 
 ;; Packed upper scaling threshold, selected by the macro's preciseUpper parameter.
-;;
-;; In PET BASIC 4, Commodore's 1979 source calls it `N9999` (code22). In PET BASIC 1 and 2, the
-;; Hoffmann-Vetter reconstructions call it `N9999` (code22).
 NZ9999:
 .if preciseUpper
     .byte $9E, $6E, $6B, $27, $FE
@@ -69,9 +57,6 @@ NZ9999:
 .endif
 
 ;; Packed floating-point constant one billion, used to scale small output values.
-;;
-;; In PET BASIC 4, Commodore's 1979 source calls it `NMIL` (code22). In PET BASIC 1 and 2, the
-;; Hoffmann-Vetter reconstructions call it `NMIL` (code22).
 NZMIL:
     .byte $9E, $6E, $6B, $28, $00
 

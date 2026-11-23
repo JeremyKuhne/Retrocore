@@ -1210,6 +1210,12 @@ public sealed partial class HistoricalNameTests
         string[] without = [.. Set(Outside).FindAlso("OLD", thisBuild: true).Select(topic => topic.Name)];
         without.Should().Equal("FOO", "BAR");
         Set(Macro + "\n" + Outside).FindAlso("OLD", thisBuild: true).Select(topic => topic.Name).Should().Equal(without);
+
+        // With no branch the build takes, the definition gives nothing, as without the macro: no clash with BAR.
+        string skipped = Outside.Replace(".else\n;; Inherit:\nFOO = 2\n", "", StringComparison.Ordinal);
+        skipped.Should().NotContain("Inherit:");
+        Set(Macro + "\n" + skipped).FindAlso("OLD", thisBuild: true).Select(topic => topic.Name).Should().Equal("BAR");
+        Check(Macro + "\n" + skipped).Should().BeEmpty();
     }
 
     private static List<DocumentationDiagnostic> Check(string text) =>

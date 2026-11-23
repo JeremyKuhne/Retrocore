@@ -27,7 +27,7 @@ public sealed class DocumentationSet
 
     // The symbols each expansion of a macro body line defined, by the line's full path and zero-based line; null
     // when the assembly's definitions are not known.
-    private Dictionary<(string Path, int Line), List<string>>? _expansions;
+    private Dictionary<string, Dictionary<int, List<string>>>? _expansions;
 
     // The topics of the symbols once-expanded macros' bodies define, by symbol, built on first use.
     private Dictionary<string, DocumentationTopic>? _bySymbol;
@@ -196,7 +196,7 @@ public sealed class DocumentationSet
     /// </param>
     /// <param name="definitions">
     ///  The assembly's symbol definitions, which count each macro body line's expansions for its historical names;
-    ///  null when unknown, as for a debug file. An assembly with errors has none, so no line counts as expanded.
+    ///  null when unknown, as for a debug file. Pass none for an assembly with errors, so no line counts as expanded.
     /// </param>
     /// <returns>The set.</returns>
     public static DocumentationSet Create(
@@ -213,13 +213,19 @@ public sealed class DocumentationSet
         if (sourceMap is not null) { ReadCpus(set, sourceMap); }
 
         // Each expansion of a macro's body defines its symbols again, at the body's line.
-        Dictionary<(string Path, int Line), List<string>>? expansions = definitions is null ? null : [];
+        // Files are compared as the skipped-lines report compares them, so an editor's path matches the assembler's.
+        Dictionary<string, Dictionary<int, List<string>>>? expansions = definitions is null ? null : new(AssemblySkippedLines.PathComparer);
         foreach (AssemblySymbol symbol in definitions ?? [])
         {
             bool expanded = symbol.Location is { Path.Length: > 0, IsMacroExpansion: true };
             if (expansions is null || !expanded || symbol.Location is not { } location) { continue; }
-            (string, int) at = (System.IO.Path.GetFullPath(location.Path), location.Line);
-            if (!expansions.TryGetValue(at, out List<string>? names)) { expansions[at] = names = []; }
+            string path = AssemblySkippedLines.FullPath(location.Path);
+            if (!expansions.TryGetValue(path, out Dictionary<int, List<string>>? lines))
+            {
+                expansions[path] = lines = [];
+            }
+
+            if (!lines.TryGetValue(location.Line, out List<string>? names)) { lines[location.Line] = names = []; }
             names.Add(symbol.Name);
         }
 
@@ -342,16 +348,17 @@ public sealed class DocumentationSet
                 || topic.Comments.Where(comment => comment.Macro is not null && Reaches(comment))
                     .Any(comment => DocumentationAlso.Of(comment.Sections).Any(also => also.Name == name));
 
-    // Whether a topic's definitions outside macros' bodies give a name, as Merge shares their sections without the
-    // macros' comments: an Also: every branch gives (a bare Inherit: branch sharing the others') is in every build.
+    // Whether a topic's definitions outside macros' bodies give a name, judged as if no macro's body shared the topic:
+    // the build's own branch gives it, or the build takes a bare Inherit: branch, which shares what the others give.
     private bool GivesOutsideMacros(DocumentationTopic topic, string name, bool thisBuild)
     {
         List<DocumentationComment> outside = [.. topic.Comments.Where(comment => comment.Macro is null)];
         List<DocumentationComment> participants = [.. outside.Where(comment => !BareInherit(comment))];
         if (participants.Count == 0) { participants = outside; }
         bool Gave(DocumentationComment comment) => DocumentationAlso.Of(comment.Sections).Any(also => also.Name == name);
-        return participants.Count != 0
-            && (participants.All(Gave) || participants.Any(comment => Gave(comment) && (!thisBuild || CommentInBuild(comment))));
+        bool InBuild(DocumentationComment comment) => !thisBuild || CommentInBuild(comment);
+        return participants.Any(comment => Gave(comment) && InBuild(comment))
+            || (participants.Count != 0 && participants.All(Gave) && outside.Any(comment => BareInherit(comment) && InBuild(comment)));
     }
 
     /// <summary>
@@ -373,7 +380,8 @@ public sealed class DocumentationSet
         comment.Macro is null ? topic.Name : ExpandedName([comment]) ?? topic.Name;
 
     // Whether a definition outside a macro's body is in this set's build, as InBuild tells for a merged section: the
-    // assembly didn't skip its line, or else its condition holds. A macro body's is, when the build expands it.
+    // assembly didn't skip its line, or else its condition holds. A macro body's always counts here: Reaches counts its
+    // expansions.
     private bool CommentInBuild(DocumentationComment comment) =>
         comment.Macro is not null
             || comment.Condition is null
@@ -435,10 +443,15 @@ public sealed class DocumentationSet
     /// <param name="comment">The definition's comment.</param>
     /// <returns>The count; null outside a macro's body, or when the assembly's definitions are not known.</returns>
     public int? Expansions(DocumentationComment comment) =>
-        comment.Macro is null || _expansions is null ? null
-            : _expansions.TryGetValue((System.IO.Path.GetFullPath(comment.Path), comment.TargetLine), out List<string>? names)
-                ? names.Count
-                : 0;
+        comment.Macro is null || _expansions is null ? null : ExpansionsAt(comment)?.Count ?? 0;
+
+    // The symbols each expansion of a comment's line defined, or null when none did.
+    private List<string>? ExpansionsAt(DocumentationComment comment) =>
+        _expansions is not null
+            && _expansions.TryGetValue(AssemblySkippedLines.FullPath(comment.Path), out Dictionary<int, List<string>>? lines)
+            && lines.TryGetValue(comment.TargetLine, out List<string>? names)
+                ? names
+                : null;
 
     /// <summary>
     ///  Gets the symbol a topic's definition is: for a definition in a macro's body that the build expands once, the
@@ -478,8 +491,7 @@ public sealed class DocumentationSet
         foreach (DocumentationComment comment in comments)
         {
             if (comment.Macro is null) { return null; }
-            (string, int) at = (System.IO.Path.GetFullPath(comment.Path), comment.TargetLine);
-            if (!_expansions.TryGetValue(at, out List<string>? names)) { continue; }
+            if (ExpansionsAt(comment) is not { } names) { continue; }
             if (names.Count != 1 || (found is not null && found != names[0])) { return null; }
             found = names[0];
         }

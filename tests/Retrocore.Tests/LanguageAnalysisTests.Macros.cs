@@ -536,9 +536,10 @@ public sealed partial class LanguageAnalysisTests
         """;
 
     /// <summary>
-    ///  A file's own old name takes precedence only for the definition the assembler gives it to: not for a root
-    ///  routine that shares its name with a macro's expansion the name belongs to, and not where the assembler gives the
-    ///  name to no definition, as for a macro expanded twice.
+    ///  A file's own old name takes precedence only for the definition the assembler gives it to, so the editor never
+    ///  hints a root routine that shares its name with the macro expansion the name belongs to, nor a definition where
+    ///  the assembler gives the name to none, as for a macro expanded twice. (For the first, the editor gives no hint
+    ///  at all, as before this precedence: the doc set names the expansion's topic by the root routine's name.)
     /// </summary>
     /// <param name="twice">Whether to use the twice-expanded probe rather than the root and expansion.</param>
     /// <returns>The test.</returns>
@@ -570,6 +571,70 @@ public sealed partial class LanguageAnalysisTests
                 "the probe assembles");
 
             published.Should().NotContain(diagnostic => diagnostic.Message == "COMBYTE is a historical name of Reader.");
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    // A macro whose own comment gives COMBYTE, which the SDK's AppleSoft also gives, in a file with an error: the
+    // assembler gives old names to symbols only, never to a macro.
+    private const string MacroNameProbe = """
+        ; retrocore: style=strict
+        ;; A probe.
+
+        .cpu Mos6502
+        .org $0300
+
+        ;; Emits a reader.
+        ;; Also: COMBYTE (A2RM78)
+        .macro Rd
+            rts
+        .endmacro
+
+        ;; Reads a byte.
+        ;; Also: PRBBYTE (A2RM78)
+        PRBBYT:
+            rts
+
+        ;; Reads through the file's name.
+        Echo:
+            jsr PRBBYTE
+            NOTANINSTRUCTION
+            rts
+
+        .ifdef COMBYTE
+        .endif
+        """;
+
+    /// <summary>
+    ///  While the file has an error, an old name a macro's comment gives gets no hint naming the macro, which the
+    ///  assembler never gives an old name to.
+    /// </summary>
+    /// <returns>The test.</returns>
+    [TestMethod]
+    public async Task OldNamesOfAMacroDoNotHintWhileTheFileHasAnError()
+    {
+        string folder = Directory.CreateTempSubdirectory("retrocore-macros").FullName;
+        try
+        {
+            string text = MacroNameProbe.ReplaceLineEndings("\n");
+            string probe = Directory.CreateDirectory(Path.Join(folder, "probe")).FullName;
+            string path = Path.GetFullPath(Path.Join(probe, "Probe.asm"));
+            File.WriteAllText(path, text);
+            File.WriteAllText(Path.Join(probe, "Bibliography.md"), MemberBibliography);
+            RecordingLanguageClient client = new();
+            LanguageWorkspace workspace = new(client);
+            workspace.Update(path, text);
+            DocumentUri uri = DocumentUri.FromFileSystemPath(path);
+
+            List<Diagnostic> published = await client.Wait(
+                uri,
+                diagnostics => diagnostics.Any(diagnostic => diagnostic.Message.StartsWith("PRBBYTE is a historical name", StringComparison.Ordinal)));
+
+            published.Should().Contain(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error, "the probe has an error");
+            published.Should().NotContain(diagnostic => diagnostic.Message.StartsWith("COMBYTE is a historical name", StringComparison.Ordinal));
         }
         finally
         {

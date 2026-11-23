@@ -497,6 +497,29 @@ public partial class AssemblyPreprocessorTests
     }
 
     /// <summary>
+    ///  A conditional directive that a text definition spells keeps its place in the nesting inside an inactive block,
+    ///  as in ca65, which expands definitions everywhere: it opens, continues or closes there, and an
+    ///  <c>.elseif</c> it spells can take its branch. Other lines in the block stay unread.
+    /// </summary>
+    /// <param name="dialect">The source dialect.</param>
+    /// <param name="text">The source.</param>
+    /// <param name="expected">The one byte the source assembles.</param>
+    [TestMethod]
+    [DataRow(AssemblyDialect.Native, ".define COND .if\n.if 0\nCOND 1\n.byte 1\n.endif\n.byte 5\n.endif\n.byte 6", 6)]
+    [DataRow(AssemblyDialect.Ca65, ".define COND .if\n.if 0\nCOND 1\n.byte 1\n.endif\n.byte 5\n.endif\n.byte 6", 6)]
+    [DataRow(AssemblyDialect.Native, ".define EI .elseif\n.if 0\n.byte 1\nEI 1\n.byte 2\n.endif", 2)]
+    [DataRow(AssemblyDialect.Ca65, ".define EI .elseif\n.if 0\n.byte 1\nEI 1\n.byte 2\n.endif", 2)]
+    [DataRow(AssemblyDialect.Native, ".define EL .else\n.define EN .endif\n.if 0\n.byte 1\nEL\n.byte 2\nEN", 2)]
+    [DataRow(AssemblyDialect.Native, ".define COND .if\n.if 0\nCOND .definedmacro(1+2)\n.endif\n.endif\n.byte 7", 7)]
+    [DataRow(AssemblyDialect.Native, ".define K .byte\n.if 0\nK .definedmacro(1+2)\n.endif\n.byte 9", 9)]
+    public void DefinedConditionalsNestInInactiveBlocks(AssemblyDialect dialect, string text, int expected)
+    {
+        AssemblyResult result = Assemble(text, dialect);
+        result.Diagnostics.Should().BeEmpty();
+        result.Sections.Single(section => section.Bytes.Length != 0).Bytes.Span[0].Should().Be((byte)expected);
+    }
+
+    /// <summary>
     ///  Include depth is measured from the root and metadata collections are copied before use.
     /// </summary>
     [TestMethod]

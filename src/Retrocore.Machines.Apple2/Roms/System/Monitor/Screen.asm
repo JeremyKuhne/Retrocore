@@ -2,16 +2,7 @@
 ;; The text screen's output, $FBC1-$FCA7: line base addresses, the bell, the cursor moves, the escape commands,
 ;; clearing and scrolling, and on the IIe the glue around the internal firmware that does much of it.
 
-; The text screen's layout.
-
-;; A text line's bits 1 and 2, once bit 0 is shifted out: which page of the screen's four the line is in.
-TEXT_LINE_PAGE_BITS = %00000011
-
-;; A text line's bits 3 and 4: which third of the screen the line is in, each third $28 bytes on from the last.
-TEXT_LINE_THIRD_BITS = %00011000
-
-;; What an odd text line adds to its base address: it is in the second half of its page.
-TEXT_ODD_LINE = $80
+; The text screen's layout is lo-res graphics' (LowRes::PAGE_OF_LINE, THIRD_OF_LINE and ODD_LINE_OFFSET).
 
 ; The bell.
 
@@ -93,16 +84,16 @@ FIRMWARE_CLEAR_LINE_FROM = $04
 
     ; The high byte: page one's, plus the line's page.
     lsr a
-    and #TEXT_LINE_PAGE_BITS
+    and #LowRes::PAGE_OF_LINE
     ora #>LINE1
     sta BASH
 
     ; The low byte: $80 for an odd line (bit 0, now in the carry), plus $28 for each third.
     pla
-    and #TEXT_LINE_THIRD_BITS
+    and #LowRes::THIRD_OF_LINE
     bcc StoreLow
-    ; The carry is set, so this adds TEXT_ODD_LINE.
-    adc #TEXT_ODD_LINE - 1
+    ; The carry is set, so this adds LowRes::ODD_LINE_OFFSET.
+    adc #LowRes::ODD_LINE_OFFSET - 1
 
     ; Times five for the third's $28: the value, plus itself shifted left twice.
 ;; Stores the low byte and multiplies its third by five.
@@ -254,7 +245,7 @@ Done:
 ;; Out: BASL/BASH
 ;; Entry:
 ;;   ToFirmware = goes to the firmware function in Y; <ClearToEndOfWindow> and <Scroll> branch here too
-;; Also: VTABZ (A2RM78, A2RM79, IIEROM82, IIETRM85)
+;; Also: VTABZ (IIETRM85)
 .proc SetLineBase
 .assert * = $FC24, "SetLineBase must stay at $FC24."
     ; The firmware takes the line in BASL and the caller's Y in A.
@@ -275,11 +266,11 @@ ToFirmware:
 ;;
 ;; At $FC24.
 ;; In: A = the line
-;; Out: BASL/BASH, A = the low byte
+;; Out: BASL/BASH = the line's address plus the window's left edge, A = its low byte
 ;; Keeps: X, Y
 ;; Entry:
 ;;   Done = the return that <CursorUp> and <Escape::Command> share
-;; Also: VTABZ (A2RM78, A2RM79, IIEROM82, IIETRM85)
+;; Also: VTABZ (A2RM78, A2RM79, IIEROM82)
 .proc SetLineBase
 .assert * = $FC24, "SetLineBase must stay at $FC24."
     ; BaseAddress returns with the carry clear.
@@ -344,7 +335,7 @@ Done:
 ;; Clears from the cursor to the end of the window, through the internal firmware.
 ;;
 ;; At $FC42.
-;; Also: CLREOP (A2RM78, A2RM79, IIEROM82, IIETRM85)
+;; Also: CLREOP (IIETRM85)
 .proc ClearToEndOfWindow
 .assert * = $FC42, "ClearToEndOfWindow must stay at $FC42."
     ldy #FIRMWARE_CLEAR_TO_END_OF_WINDOW
@@ -381,7 +372,7 @@ FortyColumns:
 ;; At $FC58.
 ;; Entry:
 ;;   ToFirmware = goes to the firmware function in Y; <ScreenOutByWidth> branches here too
-;; Also: HOME (A2RM78, A2RM79, IIEROM82, IIETRM85)
+;; Also: HOME (IIETRM85)
 .proc Home
 .assert * = $FC58, "Home must stay at $FC58."
     ldy #FIRMWARE_HOME
@@ -398,7 +389,7 @@ ToFirmware:
 ;; Clears from the cursor to the end of the window, through the internal firmware.
 ;;
 ;; At $FC42.
-;; Also: CLREOP (A2RM78, A2RM79, IIEROM82, IIETRM85)
+;; Also: CLREOP (IIEROM82)
 .proc ClearToEndOfWindow
 .assert * = $FC42, "ClearToEndOfWindow must stay at $FC42."
     ldy #FIRMWARE_CLEAR_TO_END_OF_WINDOW
@@ -411,7 +402,7 @@ ToFirmware:
 ;; Clears the window and puts the cursor at its top left, through the internal firmware.
 ;;
 ;; At $FC58.
-;; Also: HOME (A2RM78, A2RM79, IIEROM82, IIETRM85)
+;; Also: HOME (IIEROM82)
 .proc Home
 .assert * = $FC58, "Home must stay at $FC58."
     ldy #FIRMWARE_HOME
@@ -430,7 +421,7 @@ ToFirmware:
 ;; Keeps: X
 ;; Entry:
 ;;   NextLine = clears line A from column Y, then the lines below it from column 0; <Home> enters here
-;; Also: CLREOP (A2RM78, A2RM79, IIEROM82, IIETRM85)
+;; Also: CLREOP (A2RM78, A2RM79)
 .proc ClearToEndOfWindow
 .assert * = $FC42, "ClearToEndOfWindow must stay at $FC42."
     ; The first line clears from the cursor.
@@ -439,7 +430,7 @@ ToFirmware:
 
 ;; Clears line A from column Y, then the lines below it from column 0; <Home> enters here.
 ;; In: A = the line, Y = the column
-;; Also: CLEOP1 (A2RM78, A2RM79, IIEROM82, IIETRM85)
+;; Also: CLEOP1 (A2RM78, A2RM79)
 NextLine:
     pha
     jsr SetLineBase
@@ -458,7 +449,7 @@ NextLine:
 ;;
 ;; At $FC58.
 ;; Keeps: X
-;; Also: HOME (A2RM78, A2RM79, IIEROM82, IIETRM85)
+;; Also: HOME (A2RM78, A2RM79)
 .proc Home
 .assert * = $FC58, "Home must stay at $FC58."
     lda WNDTOP
@@ -501,7 +492,7 @@ NextLine:
 ;; Scrolls the text window up one line and clears the bottom line, through the internal firmware.
 ;;
 ;; At $FC70.
-;; Also: SCROLL (A2RM78, A2RM79, IIEROM82, IIETRM85)
+;; Also: SCROLL (IIETRM85)
 .proc Scroll
 .assert * = $FC70, "Scroll must stay at $FC70."
     ldy #FIRMWARE_SCROLL
@@ -567,7 +558,7 @@ Print:
 ;; At $FC70.
 ;; Entry:
 ;;   ToFirmware = goes to the firmware function in Y, for the screen routines around it
-;; Also: SCROLL (A2RM78, A2RM79, IIEROM82, IIETRM85)
+;; Also: SCROLL (IIEROM82)
 .proc Scroll
 .assert * = $FC70, "Scroll must stay at $FC70."
     ldy #FIRMWARE_SCROLL
@@ -630,7 +621,7 @@ Done:
 ;; At $FC70. From the window's top line down, each line gets a copy of the one below it, from the window's
 ;; right edge to its left; then the bottom line is cleared and <BASL>/<BASH> set for the cursor's line again.
 ;; Keeps: X
-;; Also: SCROLL (A2RM78, A2RM79, IIEROM82, IIETRM85)
+;; Also: SCROLL (A2RM78, A2RM79)
 .proc Scroll
 .assert * = $FC70, "Scroll must stay at $FC70."
     ; The stack holds the line being read.
@@ -639,7 +630,7 @@ Done:
     jsr SetLineBase
 
 ;; The line just read becomes the one to fill, and the next line down the one to read.
-;; Also: SCRL1 (A2RM78, A2RM79, IIEROM82, IIETRM85)
+;; Also: SCRL1 (A2RM78, A2RM79)
 NextLine:
     lda BASL
     sta BAS2L
@@ -655,7 +646,7 @@ NextLine:
     jsr SetLineBase
 
 ;; Copies a character up a line.
-;; Also: SCRL2 (A2RM78, A2RM79, IIEROM82, IIETRM85)
+;; Also: SCRL2 (A2RM78, A2RM79)
 CopyCharacter:
     lda (BASL),y
     sta (BAS2L),y
@@ -664,7 +655,7 @@ CopyCharacter:
     bmi NextLine
 
 ;; Clears the bottom line, which BASL/BASH still hold.
-;; Also: SCRL3 (A2RM78, A2RM79, IIEROM82, IIETRM85)
+;; Also: SCRL3 (A2RM78, A2RM79)
 ClearBottom:
     ldy #0
     ; ClearLineFrom returns with the carry set.
@@ -678,7 +669,7 @@ ClearBottom:
 ;; Clears from the cursor to the end of the line, through the internal firmware.
 ;;
 ;; At $FC9C. With the carry set, it goes on past <ClearLineFrom>'s first byte.
-;; Also: CLREOL (A2RM78, A2RM79, IIEROM82, IIETRM85)
+;; Also: CLREOL (IIETRM85)
 .proc ClearToEndOfLine
 .assert * = $FC9C, "ClearToEndOfLine must stay at $FC9C."
     sec
@@ -690,7 +681,7 @@ ClearBottom:
 ;;
 ;; At $FC9E.
 ;; In: Y = the column, BASL/BASH = the line
-;; Also: CLREOLZ (IIEROM82, IIETRM85), CLEOLZ (A2RM78, A2RM79)
+;; Also: CLREOLZ (IIETRM85), CLEOLZ (A2RM78, A2RM79)
 .proc ClearLineFrom
 .assert * = $FC9E, "ClearLineFrom must stay at $FC9E."
     clc
@@ -707,7 +698,7 @@ ClearBottom:
 ;; Clears from the cursor to the end of the line, through the internal firmware.
 ;;
 ;; At $FC9C. With the carry clear, it goes on past <ClearLineFrom>'s first byte.
-;; Also: CLREOL (A2RM78, A2RM79, IIEROM82, IIETRM85)
+;; Also: CLREOL (IIEROM82)
 .proc ClearToEndOfLine
 .assert * = $FC9C, "ClearToEndOfLine must stay at $FC9C."
     clc
@@ -719,7 +710,7 @@ ClearBottom:
 ;;
 ;; At $FC9E.
 ;; In: Y = the column, BASL/BASH = the line
-;; Also: CLREOLZ (IIEROM82, IIETRM85), CLEOLZ (A2RM78, A2RM79)
+;; Also: CLREOLZ (IIEROM82), CLEOLZ (A2RM78, A2RM79)
 .proc ClearLineFrom
 .assert * = $FC9E, "ClearLineFrom must stay at $FC9E."
 
@@ -743,7 +734,7 @@ Column = $1F
 ;; At $FC9C.
 ;; Out: carry = set
 ;; Keeps: X
-;; Also: CLREOL (A2RM78, A2RM79, IIEROM82, IIETRM85)
+;; Also: CLREOL (A2RM78, A2RM79)
 .proc ClearToEndOfLine
 .assert * = $FC9C, "ClearToEndOfLine must stay at $FC9C."
     ldy CH
@@ -762,7 +753,7 @@ Column = $1F
     lda #' '
 
 ;; Stores one blank.
-;; Also: CLEOL2 (A2RM78, A2RM79, IIEROM82, IIETRM85)
+;; Also: CLEOL2 (A2RM78, A2RM79)
 Loop:
     sta (BASL),y
     iny

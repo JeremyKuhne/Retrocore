@@ -57,7 +57,7 @@ COLOR_STEP = 3
     ; The text line holds the row and the one after it; carry says which of the two it is.
     lsr a
     php
-    jsr BaseAddress
+    jsr RowAddress
     plp
 
     ; An even row is the low nibble of the text byte, an odd row the high nibble.
@@ -196,8 +196,8 @@ NextColumn:
 ;; Out: GBASL/GBASH = the line's base address, A = <GBASL>
 ;; Keeps: X, Y
 ;; Also: GBASCALC (A2RM78, A2RM79, IIEROM82, IIETRM85)
-.proc BaseAddress
-.assert * = $F847, "BaseAddress must stay at $F847."
+.proc RowAddress
+.assert * = $F847, "RowAddress must stay at $F847."
 
     ; The high byte: page one's, plus the line's bits 1-2; carry = bit 0, whether the line is odd.
     pha
@@ -223,7 +223,7 @@ StoreLow:
     rts
 .endproc
 
-;; Changes the lo-res color to the color number three higher, counting on from 15 to 0.
+;; Changes the lo-res color to the color number three higher, wrapping past 15 (so 15 becomes 2).
 ;;
 ;; At $F85F.
 ;; In: COLOR = the color in both nibbles
@@ -269,7 +269,7 @@ StoreLow:
 .assert * = $F871, "ReadColor must stay at $F871."
     lsr a
     php
-    jsr BaseAddress
+    jsr RowAddress
     lda (GBASL),y
     plp
 

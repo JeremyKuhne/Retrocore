@@ -153,11 +153,11 @@ export async function testLanguageServer(root: string): Promise<void> {
     // The SDK's ROM sources beside the host are indexed for workspace search.
     const cout = await until("workspace symbols", async () => {
         const found = await vscode.commands.executeCommand<vscode.SymbolInformation[]>("vscode.executeWorkspaceSymbolProvider", "COUT");
-        return found.some(symbol => symbol.name === "COUT") ? found : undefined;
+        return found.some(symbol => symbol.name === "CharacterOut (COUT)") ? found : undefined;
     });
-    // The Apple III's boot ROM has a COUT too.
-    const homes = cout.filter(symbol => symbol.name === "COUT").map(symbol => path.basename(symbol.location.uri.fsPath));
-    assert.ok(homes.includes("Monitor.asm"), homes.join(", "));
+    // The Monitor's CharacterOut is found by its old name, COUT; the Apple III's boot ROM has a COUT too.
+    const homes = cout.filter(symbol => symbol.name === "CharacterOut (COUT)").map(symbol => path.basename(symbol.location.uri.fsPath));
+    assert.ok(homes.includes("Examine.asm"), homes.join(", "));
 
     await until("AppleSoft symbols", async () => {
         const found = await vscode.commands.executeCommand<vscode.SymbolInformation[]>("vscode.executeWorkspaceSymbolProvider", "INVERS");

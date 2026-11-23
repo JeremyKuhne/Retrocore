@@ -57,7 +57,7 @@ Next:
 ;;
 ;; The copied branch lands on the trailer's jump to here in <Stepper::RunArea> when it is taken. The target is the
 ;; branch's address plus the real displacement plus 2, the branch's length.
-;; Also: BRANCH (A2RM78, A2RM79, IIEROM82, IIETRM85)
+;; Also: BRANCH (A2RM78, A2RM79)
 .proc TakenBranch
     ; PC plus the displacement.
     clc
@@ -119,7 +119,7 @@ DiskSignature:
 ;; The title <Startup::ShowTitle> shows: "Apple ][" on the original IIe, "APPLE ][" in the Autostart Monitor.
 ;;
 ;; The Enhanced IIe keeps it, but shows <Startup::TitleEnhanced> instead.
-;; Also: TITLE (A2RM78, A2RM79, IIEROM82, IIETRM85)
+;; Also: TITLE (A2RM79, IIEROM82, IIETRM85)
 Title:
 .if MONITOR = MONITOR_IIE
     .byte "Apple ]["
@@ -130,13 +130,14 @@ Title:
 .endscope
 
 ; Escape opens here in the Autostart and IIe Monitors. The Apple II Monitor has no escape keys I, J, K and M,
-; so there it opens at Escape::Command (ESC1).
+; so there it opens empty in Screen.asm, before Escape::Command (ESC1).
 
 ;; Escape mode: the escape commands, the cursor keys that keep escape mode on, and the loop that reads them.
 ;;
-;; In the Autostart and IIe Monitors it is in five pieces: <Escape::CursorKeyCommands> here, the cursor-key loop
+;; In the IIe Monitors it is in five pieces: <Escape::CursorKeyCommands> here, the cursor-key loop
 ;; (<Escape::Perform>, <Escape::CursorKey>, <Escape::NextKey>), the commands (<Escape::Command>), the IIe's key reader
-;; (<Escape::ReadEscapeKey>), and the escape sequence's start (<Escape::Sequence>). The Apple II Monitor has only the
+;; (<Escape::ReadEscapeKey>), and the escape sequence's start (<Escape::Sequence>). The Autostart Monitor has the
+;; same but the key reader. The Apple II Monitor has only the
 ;; commands and the escape sequence's start.
 .scope Escape
 

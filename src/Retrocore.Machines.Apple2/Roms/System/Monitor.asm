@@ -14,7 +14,7 @@
 ;;
 ;; The Apple II Monitor has no power-up or warm-start logic: its reset vector points at OLDRST, which
 ;; sets up the screen and keyboard and enters the Monitor, so the user starts BASIC by hand and no disk
-;; is booted. BRK shows the instruction and the registers directly, without a vector. Its S command
+;; is booted. BRK shows the address and the registers directly, without a vector. Its S command
 ;; steps a program one instruction at a time and T traces it (STEP), and it carries 16-bit multiply
 ;; and divide routines (MULPM, DIVPM) at $FB60-$FBC0. Output goes to the screen without the Control-S
 ;; pause (VIDOUT), and escape mode takes one command, @ or A-F, at a time.
@@ -80,7 +80,9 @@ ENHANCED = 0
 ; Monitors, and the original and Enhanced IIe's.
 .assert MONITOR >= MONITOR_II && MONITOR <= MONITOR_IIE, "MONITOR is MONITOR_II, MONITOR_AUTOSTART or MONITOR_IIE."
 .assert ENHANCED = 0 || ENHANCED = 1, "ENHANCED is 1 for the Enhanced IIe or 0 for the original."
-.assert MONITOR = MONITOR_IIE || ENHANCED = 0, "Only the IIe's Monitor has an enhanced model."
+.if MONITOR != MONITOR_IIE && ENHANCED
+.error "Only the IIe's Monitor has an enhanced model."
+.endif
 .if ENHANCED
 .cpu Rockwell65C02
 .else

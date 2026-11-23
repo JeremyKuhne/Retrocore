@@ -489,9 +489,9 @@ RDRAMWRT = $C014
 ;; Reading it reports in bit 7 which ROM is at $C100-$CFFF: 1 for the IIe's internal ROM, 0 for the cards'.
 ;;
 ;; <Monitor:GOTOCX> pushes the state, through BIT and PHP, before it switches internal ROM in, and the firmware's return
-;; pulls it to decide whether to switch slot ROM back (<Monitor:SelectSlotRom>). <SETSLOTCXROM> and <SETINTCXROM> set the
-;; switch. On the Enhanced IIe, the interrupt handler, <Firmware:IRQHANDLER>, reads it first, so that it can restore the
-;; ROM the interrupted program was using.
+;; pulls it to decide whether to switch slot ROM back (<Monitor:SelectSlotRom>). <SETSLOTCXROM> and <SETINTCXROM> set
+;; the switch. On the Enhanced IIe, the interrupt handler, <Firmware:IRQHANDLER>, reads it first, so that it can restore
+;; the ROM the interrupted program was using.
 ;; See: <SETSLOTCXROM>, <SETINTCXROM>, <Monitor:GOTOCX>
 RDCXROM = $C015
 

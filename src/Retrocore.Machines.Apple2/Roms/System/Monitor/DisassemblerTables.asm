@@ -2,7 +2,7 @@
 ;; The disassembler's tables, $F962-$FA3F: each opcode's addressing mode and each mode's operand format, then the
 ;; operand characters and the packed mnemonics, which the Enhanced IIe's mini-assembler reads too.
 
-; Disassembler, piece 3 of 3: the addressing modes and operand formats.
+; Disassembler, continued: the addressing modes and operand formats.
 .scope Disassembler continued
 
 ;; The addressing modes, each the index of its format in <OperandFormats>.

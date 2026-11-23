@@ -58,8 +58,9 @@ public sealed class SystemSourceTests
     ///  0 and 1) and the original and Enhanced IIe's (2, with <c>ENHANCED</c> 0 and 1). Without the check, an
     ///  <c>ENHANCED</c> of 2 builds the Enhanced IIe's bytes, which nothing checks for that value, and a
     ///  <c>MONITOR</c> of 3 fails only on its entry points' addresses, whose asserts still fail beside the message,
-    ///  so the message is looked for among the diagnostics. The options are built here, as
-    ///  <see cref="SdkModules.AssembleSystem"/> builds them, since it takes a model rather than the values.
+    ///  so the message is looked for among the diagnostics. An enhanced model of a Monitor other than the IIe's is
+    ///  refused too. The options are built here, as <see cref="SdkModules.AssembleSystem"/> builds them, since it
+    ///  throws on the errors the test looks for.
     /// </summary>
     /// <param name="monitor">The value given for <c>MONITOR</c>.</param>
     /// <param name="enhanced">The value given for <c>ENHANCED</c>.</param>
@@ -68,6 +69,8 @@ public sealed class SystemSourceTests
     [DataRow(3, 0, "MONITOR is")]
     [DataRow(-1, 0, "MONITOR is")]
     [DataRow(2, 2, "ENHANCED is")]
+    [DataRow(0, 1, "Only the IIe's Monitor has an enhanced model.")]
+    [DataRow(1, 1, "Only the IIe's Monitor has an enhanced model.")]
     public void UncheckedMonitorBuildIsRefused(int monitor, int enhanced, string message)
     {
         string path = Path.GetFullPath(s_monitor);

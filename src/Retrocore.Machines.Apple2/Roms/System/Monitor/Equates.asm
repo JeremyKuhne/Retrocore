@@ -1,6 +1,6 @@
 ; retrocore: style=strict
-;; The Monitor's own names for page zero, the entries it calls in the internal firmware and the language ROMs, and
-;; the page zero the Apple II Monitor's step and arithmetic routines use.
+;; The Monitor's own names for page zero and the entries it calls in the internal firmware and the language ROMs.
+;; The page zero the Apple II Monitor's step and arithmetic routines use is in their scopes.
 
 ; Page zero not in IIeEquates.asm, because DOS has names of its own spelled the same. The firmware inherits these.
 
@@ -21,8 +21,8 @@ CV = $25
 
 ; The internal firmware's entries, and CLRROM, a label in the Enhanced IIe's firmware.
 
-;; The internal firmware's dispatcher, which runs the function whose number is in Y; the original IIe's <CallFirmware>
-;; jumps here.
+;; The internal firmware's dispatcher, which runs the function whose number is in Y; both IIe models' <CallFirmware>
+;; jump here.
 B_FUNC = $C100
 
 ;; Slot 3's input entry in the internal firmware's 80-column code; <CompareSlot3Rom> compares its bytes.

@@ -46,7 +46,7 @@ HASH_STEPS = 3
 HASH_GROUP_BIT = $20
 
 ;; The Enhanced IIe's internal firmware function that finishes <Decode>: the operand's length and the mnemonic hash.
-FUNCTION_DECODE = $10
+FIRMWARE_DECODE = $10
 
 ; Printing an instruction.
 
@@ -108,17 +108,16 @@ MnemonicLow = V2
 ;; Out: A = the mnemonic's slot in <MnemonicsLeft> and <MnemonicsRight>, LENGTH = the operand's bytes (0-2),
 ;;   MASK = the operand format, Y = 0
 ;; Entry:
-;;   Opcode = decodes the opcode in A; the Enhanced IIe firmware's mini-assembler calls it at $F88E
-;; Also: INSDS2 (A2RM78, A2RM79, IIEROM82, IIETRM85)
+;;   Opcode = decodes the opcode in A; the firmware's mini-assembler and DOS's relocator call it at $F88E
 .proc Decode
 .assert * = $F88C, "Decode must stay at $F88C."
     lda (PCL,x)
 
-;; Decodes the opcode in A; the Enhanced IIe firmware's mini-assembler calls it at $F88E.
+;; Decodes the opcode in A; the Enhanced IIe firmware's mini-assembler and DOS's relocator call it at $F88E.
 ;;
-;; DOS's relocator calls the same address by the name `INSDS2`.
 ;; In: A = the opcode
 ;; Inherit: <Decode> Out
+;; Also: INSDS2 (IIETRM85)
 Opcode:
 .assert * = $F88E, "Decode::Opcode must stay at $F88E, where the firmware calls it."
 
@@ -137,7 +136,7 @@ Opcode:
     and #ODD_MODE_BITS
 
 ;; Looks up the mode in <AddressingModes>, from opcode / 4 or the odd group's bits, with carry picking the nibble.
-;; Also: IEVEN (A2RM78, A2RM79, IIEROM82, IIETRM85)
+;; Also: IEVEN (IIETRM85)
 LookUpMode:
     lsr a
     tax
@@ -146,13 +145,13 @@ LookUpMode:
     bne Format
 
 ;; An invalid opcode: the invalid mode, and the mnemonic "???".
-;; Also: ERR (A2RM78, A2RM79, IIEROM82, IIETRM85)
+;; Also: ERR (IIETRM85)
 Invalid:
     ldy #INVALID_OPCODE
     lda #AddressMode::INVALID
 
 ;; Looks up the mode's operand format in <OperandFormats>.
-;; Also: GETFMT (A2RM78, A2RM79, IIEROM82, IIETRM85)
+;; Also: GETFMT (IIETRM85)
 Format:
     tax
     lda OperandFormats,x
@@ -161,7 +160,7 @@ Format:
     ; The firmware takes the format in X and the opcode in BAS2L.
     tax
     sty BAS2L
-    ldy #FUNCTION_DECODE
+    ldy #FIRMWARE_DECODE
     jmp CallFirmware
 .endproc
 
@@ -204,7 +203,7 @@ Done:
     .byte $00
 .endproc
 
-; Disassembler, piece 2 of 3: printing an instruction, after the Enhanced IIe's CompareSlot3Rom.
+; Disassembler, continued: printing an instruction, after the Enhanced IIe's CompareSlot3Rom.
 .scope Disassembler continued
 .else
 
@@ -215,17 +214,17 @@ Done:
 ;; Out: A = the mnemonic's slot in <MnemonicsLeft> and <MnemonicsRight>, LENGTH = the operand's bytes (0-2),
 ;;   MASK = the operand format, X = the opcode's <GROUP_BITS>, Y = 0
 ;; Entry:
-;;   Opcode = decodes the opcode in A; the Enhanced IIe firmware's mini-assembler calls it at $F88E
-;; Also: INSDS2 (A2RM78, A2RM79, IIEROM82, IIETRM85)
+;;   Opcode = decodes the opcode in A; programs call it at $F88E (Integer BASIC's mini-assembler, DOS's relocator)
 .proc Decode
 .assert * = $F88C, "Decode must stay at $F88C."
     lda (PCL,x)
 
-;; Decodes the opcode in A; the Enhanced IIe firmware's mini-assembler calls it at $F88E.
+;; Decodes the opcode in A. Programs call it at $F88E: Integer BASIC's mini-assembler, Programmer's Aid and DOS's
+;; relocator.
 ;;
-;; DOS's relocator calls the same address by the name `INSDS2`.
 ;; In: A = the opcode
 ;; Inherit: <Decode> Out
+;; Also: INSDS2 (A2RM78, A2RM79, IIEROM82)
 Opcode:
 .assert * = $F88E, "Decode::Opcode must stay at $F88E, where the firmware calls it."
 
@@ -244,7 +243,7 @@ Opcode:
     and #ODD_MODE_BITS
 
 ;; Looks up the mode in <AddressingModes>, from opcode / 4 or the odd group's bits, with carry picking the nibble.
-;; Also: IEVEN (A2RM78, A2RM79, IIEROM82, IIETRM85)
+;; Also: IEVEN (A2RM78, A2RM79, IIEROM82)
 LookUpMode:
     lsr a
     tax
@@ -253,13 +252,13 @@ LookUpMode:
     bne Format
 
 ;; An invalid opcode: the invalid mode, and the mnemonic "???".
-;; Also: ERR (A2RM78, A2RM79, IIEROM82, IIETRM85)
+;; Also: ERR (A2RM78, A2RM79, IIEROM82)
 Invalid:
     ldy #INVALID_OPCODE
     lda #AddressMode::INVALID
 
 ;; Looks up the mode's operand format in <OperandFormats>, and the operand's length in it.
-;; Also: GETFMT (A2RM78, A2RM79, IIEROM82, IIETRM85)
+;; Also: GETFMT (A2RM78, A2RM79, IIEROM82)
 Format:
     tax
     lda OperandFormats,x
@@ -277,14 +276,14 @@ Format:
     beq HashNext
 
 ;; One step of the mnemonic hash: shifts out the next of the opcode's bits 0-2, until one is 1.
-;; Also: MNNDX1 (A2RM78, A2RM79, IIEROM82, IIETRM85)
+;; Also: MNNDX1 (A2RM78, A2RM79, IIEROM82)
 HashStep:
     lsr a
     bcc HashNext
     lsr a
 
 ;; Shifts A right, setting <HASH_GROUP_BIT>, once for this step and each step left, then ends the hash.
-;; Also: MNNDX2 (A2RM78, A2RM79, IIEROM82, IIETRM85)
+;; Also: MNNDX2 (A2RM78, A2RM79, IIEROM82)
 HashShift:
     lsr a
     ora #HASH_GROUP_BIT
@@ -293,7 +292,7 @@ HashShift:
     iny
 
 ;; Counts the steps down.
-;; Also: MNNDX3 (A2RM78, A2RM79, IIEROM82, IIETRM85)
+;; Also: MNNDX3 (A2RM78, A2RM79, IIEROM82)
 HashNext:
     dey
     bne HashStep
@@ -477,7 +476,7 @@ BranchTarget:
 ;;
 ;; At $F94A.
 ;; In: X = the count (1-255, or 0 for 256)
-;; Out: X = 0, A = a blank
+;; Out: X = 0, A = a blank as the output hook returns it (the screen's applies <INVFLG>)
 ;; Keeps: Y
 ;; Also: PRBL2 (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc PrintBlanks
@@ -500,7 +499,7 @@ Print:
 ;; Out: A = the address's low byte, Y = its high byte, X = LENGTH
 ;; Entry:
 ;;   AddLength = the same, adding the carry as given instead of one
-;;   AddA = adds A, sign-extended, and the carry to <PCL>/<PCH>
+;;   AddA = adds A, sign-extended, and the carry to <PCL>/<PCH>, returning the sum without storing it
 ;; Also: PCADJ (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc NextInstruction
 .assert * = $F953, "NextInstruction must stay at $F953."
@@ -514,7 +513,7 @@ Print:
 AddLength:
     lda LENGTH
 
-;; Adds A, sign-extended, and the carry to <PCL>/<PCH>.
+;; Adds A, sign-extended, and the carry to <PCL>/<PCH>, returning the sum in A and Y without storing it.
 ;;
 ;; In: A = the signed amount to add, carry = set to add one more
 ;; Out: A = the sum's low byte, Y = its high byte, X = the amount

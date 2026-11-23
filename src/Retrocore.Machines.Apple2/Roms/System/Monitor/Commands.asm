@@ -195,7 +195,8 @@ FromA2:
     ; Falls into SetHook.
 .endproc
 
-; The keyboard's and the screen's routines share a page, which SetHook stores for slot 0.
+; The keyboard's and the screen's routines share a page, which SetHook stores for slot 0 (on the Enhanced IIe, the
+; firmware's function $0E stores it).
 .assert >KeyboardIn = >ScreenOut, "KeyboardIn and ScreenOut must share a page."
 .if ENHANCED
 
@@ -206,7 +207,7 @@ FromA2:
 ;; function $0E puts in the page: it turns the 80-column firmware off first when it is on, but keeps input at slot
 ;; 3 while output goes there.
 ;; In: X = the hook's address in page zero, <CSWL> or <KSWL>, Y = the Monitor routine's low byte, A2L = the slot
-;; Also: IOPRT (A2RM78, A2RM79, IIEROM82, IIETRM85)
+;; Also: IOPRT (IIETRM85)
 .proc SetHook
 .assert * = $FE9B, "SetHook must stay at $FE9B."
     lda A2L
@@ -231,7 +232,7 @@ Store:
 ;;
 ;; At $FE9B.
 ;; In: X = the hook's address in page zero, <CSWL> or <KSWL>, Y = the Monitor routine's low byte, A2L = the slot
-;; Also: IOPRT (A2RM78, A2RM79, IIEROM82, IIETRM85)
+;; Also: IOPRT (A2RM78, A2RM79, IIEROM82)
 .proc SetHook
 .assert * = $FE9B, "SetHook must stay at $FE9B."
     lda A2L
@@ -244,7 +245,7 @@ Store:
     beq Store
 
 ;; Slot 0: the page of the Monitor's keyboard and screen routines.
-;; Also: IOPRT1 (A2RM78, A2RM79, IIEROM82, IIETRM85)
+;; Also: IOPRT1 (A2RM78, A2RM79, IIEROM82)
 Default:
     lda #>ScreenOut
 
@@ -266,6 +267,7 @@ Store:
 ;; the firmware checks it, so which checksum is not known.
 ;; Also: CKSUMFIX (IIEROM82, IIETRM85)
 ChecksumFix:
+.assert * = $FEAF, "ChecksumFix must stay at $FEAF."
 .if ENHANCED
     .byte $00
 .elseif MONITOR = MONITOR_IIE
@@ -314,7 +316,7 @@ ChecksumFix:
 ;;
 ;; It moves <YSAV> back onto the T, so that after each step (<Commands::Step>, which it falls into) the command
 ;; line runs the T again. A BRK in the program, or reset, stops it.
-;; Also: TRACE (A2RM78, A2RM79, IIEROM82, IIETRM85)
+;; Also: TRACE (A2RM78, A2RM79)
 .proc Trace
     dec YSAV
     ; Falls into Step.
@@ -324,7 +326,7 @@ ChecksumFix:
 ;;
 ;; <RunInstruction at Stepper::RunInstruction> runs it.
 ;; In: X = 1 when the command gave an address, 0 when not, A1L/A1H = the address
-;; Also: STEPZ (A2RM78, A2RM79, IIEROM82, IIETRM85)
+;; Also: STEPZ (A2RM78, A2RM79)
 .proc Step
     jsr SetPcFromA1
     jmp Stepper::RunInstruction
@@ -335,7 +337,7 @@ ChecksumFix:
 ;;
 ;; Its entry in the key table is a Control-Y that a later Control-Y entry hides; the Enhanced IIe gave the
 ;; entry to the "!" command.
-;; Also: TRACE (A2RM78, A2RM79, IIEROM82, IIETRM85)
+;; Also: TRACE (A2RM79, IIEROM82, IIETRM85)
 .proc Trace
     rts
 
@@ -346,9 +348,10 @@ ChecksumFix:
 ;; Does nothing: what is left of the Apple II Monitor's S command, which stepped a program.
 ;;
 ;; Its entry in the key table became the last Control-Y, which wins: in the Autostart Monitor it points at the
-;; five NOPs after the rts, which run into <Commands::User>, and in the original IIe at the bytes after them. The
+;; five NOPs after the rts, which run into <Commands::User>, and in the original IIe at the text that replaced
+;; them (<Commands::UserText>), which runs into it too. The
 ;; Enhanced IIe gave the entry to its own S command, which searches memory.
-;; Also: STEPZ (A2RM78, A2RM79, IIEROM82, IIETRM85)
+;; Also: STEPZ (A2RM79, IIEROM82, IIETRM85)
 .proc Step
     rts
 .if MONITOR = MONITOR_AUTOSTART
@@ -416,7 +419,7 @@ Done:
 ;;
 ;; At $FECD. Integer `BASIC` calls $FECF, after the lda, with its own header length in A.
 ;; In: A1L/A1H = the first address, A2L/A2H = the last
-;; Also: WRITE (A2RM78, A2RM79, IIEROM82, IIETRM85)
+;; Also: WRITE (IIETRM85)
 .proc WriteCassette
 .assert * = $FECD, "WriteCassette must stay at $FECD."
     lda #WRITE_HEADER_LENGTH
@@ -469,7 +472,7 @@ Next:
 ;; It drops the return address of the command line's call to <Commands::RunCommand>, and its high byte, $FF,
 ;; makes the branch always taken.
 ;; In: A = the waiting command, or 0, X = 1 after a number, 0 when none, Y = 0
-;; Also: CRMON (A2RM78, A2RM79, IIEROM82, IIETRM85)
+;; Also: CRMON (IIETRM85)
 .proc Return
     jsr ExamineNextOrBlank
     pla
@@ -486,7 +489,7 @@ Next:
 ;; In: A1L/A1H = the first address, A2L/A2H = the last
 ;; Entry:
 ;;   Finish = switches slot ROM back in and reports: <Beep> when zero is set, or <PrintError>
-;; Also: READ (A2RM78, A2RM79, IIEROM82, IIETRM85)
+;; Also: READ (IIETRM85)
 .proc ReadCassette
 .assert * = $FEFD, "ReadCassette must stay at $FEFD."
     sta SETINTCXROM
@@ -557,7 +560,7 @@ TitleEnhanced:
 ;; At $FECD. Integer `BASIC` calls $FECF, after the lda, with its own header length in A.
 ;; In: A1L/A1H = the first address, A2L/A2H = the last
 ;; Out: A1L/A1H = the address after A2
-;; Also: WRITE (A2RM78, A2RM79, IIEROM82, IIETRM85)
+;; Also: WRITE (A2RM78, A2RM79, IIEROM82)
 .proc WriteCassette
 .assert * = $FECD, "WriteCassette must stay at $FECD."
     lda #WRITE_HEADER_LENGTH
@@ -608,7 +611,7 @@ NextBit:
 ;; It drops the return address of the command line's call to <Commands::RunCommand>, and its high byte, $FF,
 ;; makes the branch always taken.
 ;; In: A = the waiting command, or 0, X = 1 after a number, 0 when none, Y = 0
-;; Also: CRMON (A2RM78, A2RM79, IIEROM82, IIETRM85)
+;; Also: CRMON (A2RM78, A2RM79, IIEROM82)
 .proc Return
     jsr ExamineNextOrBlank
     pla
@@ -623,12 +626,12 @@ NextBit:
 ;; At $FEFD.
 ;; In: A1L/A1H = the first address, A2L/A2H = the last
 ;; Out: A1L/A1H = the address after A2
-;; Also: READ (A2RM78, A2RM79, IIEROM82, IIETRM85)
+;; Also: READ (A2RM78, A2RM79, IIEROM82)
 .proc ReadCassette
 .assert * = $FEFD, "ReadCassette must stay at $FEFD."
 
 ;; The checksum of the bytes read: <MASK>'s byte.
-;; Also: CHKSUM (A2RM78, A2RM79, IIEROM82, IIETRM85)
+;; Also: CHKSUM (A2RM78, A2RM79, IIEROM82)
 Checksum = MASK
     ; Waits for the tape's tone, then lets the header play.
     jsr Cassette::ReadBit
@@ -640,7 +643,7 @@ Checksum = MASK
     jsr Cassette::ReadBit
 
 ;; Waits out the header's half cycles for the shorter one of the sync bit.
-;; Also: RD2 (A2RM78, A2RM79, IIEROM82, IIETRM85)
+;; Also: RD2 (A2RM78, A2RM79, IIEROM82)
 FindSync:
     ldy #READ_SYNC_COUNT
     jsr Cassette::ReadHalfCycle
@@ -670,7 +673,8 @@ NextByte:
 
 ;; Prints "ERR" and beeps.
 ;;
-;; At $FF2D.
+;; At $FF2D. The second R is whatever the output hook leaves in A: the screen's applies <INVFLG>, so in inverse text
+;; it prints a control character instead.
 ;; Also: PRERR (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc PrintError
 .assert * = $FF2D, "PrintError must stay at $FF2D."

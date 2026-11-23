@@ -70,7 +70,7 @@ FIRMWARE_SET_WINDOW = $08
 ;; At $FB4B. The Apple II's Monitors set the 40-column width here themselves, then WNDBTM = 24, and move the
 ;; cursor to the bottom line (<VerticalTabTo>).
 ;; In: A = the window's top line
-;; Out: WNDTOP, WNDLFT, WNDWDTH, WNDBTM, CV = the bottom line
+;; Out: WNDTOP = A, WNDLFT = 0, WNDWDTH = the display's width, WNDBTM = 24, CV = the bottom line
 ;; Also: SETWND (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc SetWindow
     .assert * = $FB4B, "SetWindow must stay at $FB4B."

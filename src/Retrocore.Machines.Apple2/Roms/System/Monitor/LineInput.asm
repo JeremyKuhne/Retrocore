@@ -7,9 +7,6 @@
 ;; The position in <IN> from which each character typed rings the bell: 248, eight before the buffer's end.
 INPUT_WARNING = $F8
 
-;; The <INVFLG> mask for normal video: every bit kept.
-NORMAL_VIDEO = $FF
-
 ;; The mask the original IIe's <GetLine> applies where the Apple II's apply <UPPERCASE_MASK>: every bit, so
 ;; lowercase stays.
 KEEP_CASE_MASK = $FF
@@ -44,7 +41,7 @@ FIRMWARE_CHARACTER_UNDER_CURSOR = $0F
 ;;
 ;; At $FD47. The 256th character cancels the line.
 ;; In: X = the character's position in <IN>
-;; Also: NOTCR (A2RM78, A2RM79, IIEROM82, IIETRM85)
+;; Also: NOTCR (IIETRM85)
 .proc Echo
 .assert * = $FD47, "LineInput::Echo must stay at $FD47."
     jsr CharacterOut
@@ -57,7 +54,7 @@ FIRMWARE_CHARACTER_UNDER_CURSOR = $0F
     ; The editing keys.
     lda IN,x
     cmp #KEY_BS
-    beq GetLine::Backspace
+    beq GetLine::TakeBack
     cmp #KEY_CTRL_X
     beq Cancel
 
@@ -67,7 +64,7 @@ FIRMWARE_CHARACTER_UNDER_CURSOR = $0F
     jsr Beep
 
 ;; Goes on with the next position; past the buffer's end, falls into <Cancel>.
-;; Also: NOTCR1 (A2RM79, IIETRM85)
+;; Also: NOTCR1 (IIETRM85)
 Next:
     inx
     bne GetLine::NextCharacter
@@ -82,12 +79,12 @@ Next:
 ;; original IIe keeps the save and restore but echoes with <INVFLG> as it is. The 256th character cancels the
 ;; line.
 ;; In: X = the character's position in <IN>
-;; Also: NOTCR (A2RM78, A2RM79, IIEROM82, IIETRM85)
+;; Also: NOTCR (A2RM78, A2RM79, IIEROM82)
 .proc Echo
 .assert * = $FD3D, "LineInput::Echo must stay at $FD3D."
     lda INVFLG
     pha
-    lda #NORMAL_VIDEO
+    lda #TEXT_NORMAL
 .if MONITOR = MONITOR_IIE
     nop
     nop
@@ -102,7 +99,7 @@ Next:
     ; The editing keys.
     lda IN,x
     cmp #KEY_BS
-    beq GetLine::Backspace
+    beq GetLine::TakeBack
     cmp #KEY_CTRL_X
     beq Cancel
 
@@ -112,7 +109,7 @@ Next:
     jsr Beep
 
 ;; Goes on with the next position; past the buffer's end, falls into <Cancel>.
-;; Also: NOTCR1 (A2RM79, IIETRM85)
+;; Also: NOTCR1 (A2RM79)
 Next:
     inx
     bne GetLine::NextCharacter
@@ -152,9 +149,9 @@ Next:
 ;; Out: X = the line's length, IN,X = the Return that ends it
 ;; Entry:
 ;;   NoPrompt = reads a line without printing the prompt
-;;   Backspace = takes back a character; at the line's start, starts the line again
+;;   TakeBack = takes back a character; at the line's start, starts the line again
 ;;   NextCharacter = reads the next character; Control-U takes the one under the cursor
-;; Also: GETLN (A2RM78, A2RM79, IIEROM82, IIETRM85)
+;; Also: GETLN (IIETRM85)
 .proc GetLine
 .assert * = $FD6A, "GetLine must stay at $FD6A."
     lda PROMPT
@@ -162,20 +159,20 @@ Next:
 
 ;; Reads a line without printing the prompt.
 ;; Out: X = the line's length, IN,X = the Return that ends it
-;; Also: GETLN1 (A2RM79, IIETRM85)
+;; Also: GETLN1 (IIETRM85)
 NoPrompt:
 .assert * = $FD6F, "GetLine::NoPrompt must stay at $FD6F."
     ldx #1
 
 ;; Takes back a character; at the line's start, starts the line again. <LineInput::Echo> enters here.
-;; Also: BCKSPC (A2RM78, A2RM79, IIEROM82, IIETRM85)
-Backspace:
+;; Also: BCKSPC (IIETRM85)
+TakeBack:
     txa
     beq GetLineAfterReturn
     dex
 
 ;; Reads the next character; Control-U takes the one under the cursor.
-;; Also: NXTCHAR (A2RM78, A2RM79, IIEROM82, IIETRM85)
+;; Also: NXTCHAR (IIETRM85)
 NextCharacter:
     jsr ReadCharacter
     cmp #KEY_RIGHT
@@ -186,7 +183,7 @@ NextCharacter:
     nop
 
 ;; Stores the character in the line, and echoes it unless it is a Return.
-;; Also: ADDINP (A2RM78, A2RM79, IIEROM82, IIETRM85)
+;; Also: ADDINP (IIETRM85)
 Store:
     sta IN,x
     cmp #KEY_CR
@@ -203,9 +200,9 @@ Store:
 ;; Out: X = the line's length, IN,X = the Return that ends it
 ;; Entry:
 ;;   NoPrompt = reads a line without printing the prompt
-;;   Backspace = takes back a character; at the line's start, starts the line again
+;;   TakeBack = takes back a character; at the line's start, starts the line again
 ;;   NextCharacter = reads the next character; Control-U takes the one under the cursor
-;; Also: GETLN (A2RM78, A2RM79, IIEROM82, IIETRM85)
+;; Also: GETLN (A2RM78, A2RM79, IIEROM82)
 .proc GetLine
 .assert * = $FD6A, "GetLine must stay at $FD6A."
     lda PROMPT
@@ -213,20 +210,20 @@ Store:
 
 ;; Reads a line without printing the prompt.
 ;; Out: X = the line's length, IN,X = the Return that ends it
-;; Also: GETLN1 (A2RM79, IIETRM85)
+;; Also: GETLN1 (A2RM79)
 NoPrompt:
 .assert * = $FD6F, "GetLine::NoPrompt must stay at $FD6F."
     ldx #1
 
 ;; Takes back a character; at the line's start, starts the line again. <LineInput::Echo> enters here.
-;; Also: BCKSPC (A2RM78, A2RM79, IIEROM82, IIETRM85)
-Backspace:
+;; Also: BCKSPC (A2RM78, A2RM79, IIEROM82)
+TakeBack:
     txa
     beq GetLineAfterReturn
     dex
 
 ;; Reads the next character; Control-U takes the one under the cursor.
-;; Also: NXTCHAR (A2RM78, A2RM79, IIEROM82, IIETRM85)
+;; Also: NXTCHAR (A2RM78, A2RM79, IIEROM82)
 NextCharacter:
     jsr ReadCharacter
     cmp #KEY_RIGHT
@@ -246,7 +243,7 @@ Uppercase:
 .endif
 
 ;; Stores the character in the line, and echoes it unless it is a Return.
-;; Also: ADDINP (A2RM78, A2RM79, IIEROM82, IIETRM85)
+;; Also: ADDINP (A2RM78, A2RM79, IIEROM82)
 Store:
     sta IN,x
     cmp #KEY_CR

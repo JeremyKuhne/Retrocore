@@ -26,7 +26,7 @@ PRODUCT_BYTES = 4
 ; Page zero, under the names this scope gives it.
 
 ;; The count of operands <MakePositive> negated: bit 0 is set when the result is negative. The same byte is <LENGTH>.
-;; Also: SIGN (A2RM78, A2RM79, IIEROM82, IIETRM85)
+;; Also: SIGN (A2RM78, A2RM79)
 SignCount = LENGTH
 
 ;; The low byte of the 16-bit accumulator: the multiplier or dividend on entry, the product's low half or the quotient
@@ -59,9 +59,10 @@ OperandHigh = $55
 ;;
 ;; At $FB60. It makes both numbers positive (<Arithmetic::MakePositive>), which leaves the product's sign in
 ;; bit 0 of <Arithmetic::SignCount> for the caller to apply, then multiplies them (<Arithmetic::Multiply>).
-;; In: ACL/ACH = a number, AUXL/AUXH = the other, XTNDL/XTNDH = a number added to the product (usually 0)
-;; Out: ACL/ACH = the product's low 16 bits, XTNDL/XTNDH = its high 16 bits,
-;;   SIGN = bit 0 set for a negative product
+;; In: Accumulator/AccumulatorHigh = a number, Operand/OperandHigh = the other,
+;;   Extension/ExtensionHigh = a number added to the product (usually 0)
+;; Out: Accumulator/AccumulatorHigh = the product's low 16 bits, Extension/ExtensionHigh = its high 16 bits,
+;;   SignCount = bit 0 set for a negative product
 ;; Uses: A, X, Y
 ;; See: <Arithmetic::SignedDivide>
 ;; Also: MULPM (A2RM78, A2RM79)
@@ -77,8 +78,10 @@ OperandHigh = $55
 ;;
 ;; At $FB63. Each of its 16 passes adds the multiplicand to the extension when the multiplier's low bit is set,
 ;; then shifts the 32 bits of extension and multiplier right one, the add's carry coming in at the top.
-;; In: ACL/ACH = a number, AUXL/AUXH = the other, XTNDL/XTNDH = a number added to the product (usually 0)
-;; Out: ACL/ACH = the product's low 16 bits, XTNDL/XTNDH = its high 16 bits, X = $FF, Y = 0
+;; In: Accumulator/AccumulatorHigh = a number, Operand/OperandHigh = the other,
+;;   Extension/ExtensionHigh = a number added to the product (usually 0)
+;; Out: Accumulator/AccumulatorHigh = the product's low 16 bits, Extension/ExtensionHigh = its high 16 bits,
+;;   X = $FF, Y = 0
 ;; Uses: A
 ;; Also: MUL (A2RM78, A2RM79)
 .proc Multiply
@@ -126,8 +129,9 @@ ShiftByte:
 ;;
 ;; At $FB81. It makes both numbers positive (<Arithmetic::MakePositive>), which leaves the quotient's sign in
 ;; bit 0 of <Arithmetic::SignCount> for the caller to apply, then divides them (<Arithmetic::Divide>).
-;; In: ACL/ACH = the dividend, AUXL/AUXH = the divisor, XTNDL/XTNDH = 0
-;; Out: ACL/ACH = the quotient, XTNDL/XTNDH = the remainder, SIGN = bit 0 set for a negative quotient
+;; In: Accumulator/AccumulatorHigh = the dividend, Operand/OperandHigh = the divisor, Extension/ExtensionHigh = 0
+;; Out: Accumulator/AccumulatorHigh = the quotient, Extension/ExtensionHigh = the remainder,
+;;   SignCount = bit 0 set for a negative quotient
 ;; Uses: A, X, Y
 ;; See: <Arithmetic::SignedMultiply>
 ;; Also: DIVPM (A2RM78, A2RM79)
@@ -143,8 +147,9 @@ ShiftByte:
 ;; At $FB84. Each of its 16 passes shifts the 32 bits left one and, when the top half is at least the divisor,
 ;; subtracts it there and sets the quotient bit at the bottom. The quotient fits in 16 bits when the high half
 ;; starts below the divisor, as it does when it is 0.
-;; In: ACL/ACH = the dividend's low half, XTNDL/XTNDH = its high half (usually 0), AUXL/AUXH = the divisor
-;; Out: ACL/ACH = the quotient, XTNDL/XTNDH = the remainder, Y = 0
+;; In: Accumulator/AccumulatorHigh = the dividend's low half, Extension/ExtensionHigh = its high half (usually 0),
+;;   Operand/OperandHigh = the divisor
+;; Out: Accumulator/AccumulatorHigh = the quotient, Extension/ExtensionHigh = the remainder, Y = 0
 ;; Uses: A, X
 ;; Also: DIV (A2RM78)
 .proc Divide
@@ -186,7 +191,7 @@ Count:
 ;; <Arithmetic::MakePositive::Number> negates the 16-bit number at page zero X when it is negative, and
 ;; <Arithmetic::MakePositive::Negate> negates it whatever its sign; both need Y = 0. Bit 0 of the count ends set
 ;; when exactly one number was negative.
-;; Out: SIGN = the count of negated numbers, Y = 0
+;; Out: SignCount = the count of negated numbers, Y = 0
 ;; Uses: A, X
 ;; Also: MD1 (A2RM78, A2RM79)
 .proc MakePositive
@@ -206,7 +211,7 @@ Number:
 
 ;; Negates the number at X, X+1 (with Y = 0 and the carry set): 0 minus it, low byte first, and counts it in
 ;; <Arithmetic::SignCount>.
-;; Also: MD3 (A2RM78, IIETRM85)
+;; Also: MD3 (A2RM78)
 Negate:
     tya
     sbc LOC0,x
@@ -285,7 +290,7 @@ Loop:
 ;; changing it.
 ;;
 ;; At $FB6F.
-;; Out: PWREDUP
+;; Out: PWREDUP = the check byte for <SOFTEV>'s current high byte
 ;; Uses: A
 ;; Keeps: X, Y, carry
 ;; Also: SETPWRC (A2RM79, IIEROM82, IIETRM85)
@@ -320,6 +325,7 @@ Loop:
 ;; to see. Then prints A. At $FB88.
 ;; Also: KBDWAIT (A2RM79, IIEROM82, IIETRM85)
 WaitForKey:
+.assert * = $FB88, "WaitForKey must stay at $FB88."
     ldy KBD
     bpl WaitForKey
     cpy #KEY_CTRL_C
@@ -387,7 +393,7 @@ Print:
 ;;
 ;; At $FBB3. Programs read the same address on the Apple II: the Autostart Monitor has $EA here, followed by
 ;; unused $EA bytes up to $FBC0, and the Apple II Monitor $38, a SEC in <Arithmetic::MakePositive>.
-;; Also: VERSION (A2RM78, IIEROM82, IIETRM85)
+;; Also: VERSION (IIEROM82, IIETRM85)
 ModelId:
 .assert * = $FBB3, "ModelId must stay at $FBB3."
 .if MONITOR = MONITOR_AUTOSTART

@@ -48,9 +48,6 @@ SOFT_ENTRY_CHECK = $A5
 
 ; Looking for a disk controller.
 
-;; The page of slot 0's ROM space: slot n's ROM is at the page this plus n.
-SLOT_PAGE_BASE = $C0
-
 ;; The highest slot, the first one <Startup::PowerUp> tries.
 LAST_SLOT = 7
 
@@ -127,7 +124,7 @@ RunArea = A1L
 ;; In: PCL/PCH = the instruction to run
 ;; Out: PCL/PCH = the next instruction to run
 ;; See: <Commands::Step>, <Commands::Trace>
-;; Also: STEP (A2RM78, A2RM79, IIEROM82, IIETRM85)
+;; Also: STEP (A2RM78, A2RM79)
 .proc RunInstruction
     .assert * = $FA43, "Stepper::RunInstruction must stay at $FA43."
     jsr Disassembler::PrintInstruction
@@ -195,7 +192,7 @@ StoreByte:
 ;; At $FA40. The 6502's IRQ vector points at the firmware's handler, <IRQHANDLER>, so only code that jumps here by
 ;; address comes this way. The firmware handles BRK and hands it back at <BreakFromFirmware>.
 ;; In: A = the interrupted program's A
-;; Also: IRQ (A2RM78, A2RM79, IIEROM82, IIETRM85)
+;; Also: IRQ (IIETRM85)
 .proc Interrupt
     .assert * = $FA40, "Interrupt must stay at $FA40."
     sta A5H
@@ -221,7 +218,7 @@ StoreByte:
 ;;
 ;; At $FA40; in the Apple II Monitor, $FA86. The 6502's IRQ vector points here.
 ;; In: A = the interrupted program's A, the stack as the interrupt left it
-;; Also: IRQ (A2RM78, A2RM79, IIEROM82, IIETRM85)
+;; Also: IRQ (A2RM78, A2RM79, IIEROM82)
 .proc Interrupt
 .if MONITOR = MONITOR_II
     .assert * = $FA86, "Interrupt (IRQ) is at $FA86 in the Apple II Monitor."
@@ -247,7 +244,8 @@ StoreByte:
 ;; At $FA4C; in the Apple II Monitor, $FA92. The return address a BRK pushes is two past the BRK, so that is
 ;; where they point. The Apple II Monitor has no <BRKV>: it falls into <ShowBreak>.
 ;; In: A5H = the program's A, the stack as the BRK left it
-;; Out: A5H..SPNT = the program's registers, PCL/PCH = the address after the BRK and its signature byte
+;; Out: A5H..STATUS = the program's registers, SPNT = its S less 4 (its return address and the JSR's still on the
+;;   stack), PCL/PCH = the address after the BRK and its signature byte
 ;; Also: BREAK (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc Break
 .if MONITOR = MONITOR_II
@@ -272,8 +270,8 @@ StoreByte:
 .endif
 .endproc
 
-;; The default BRK handler: disassembles the instruction at <PCL>/<PCH>, shows the registers, and enters the
-;; Monitor.
+;; The default BRK handler: prints the address at <PCL>/<PCH> (decoding its instruction without printing it), shows
+;; the registers on the same line, and enters the Monitor.
 ;;
 ;; At $FA59, reached through <BRKV>; in the Apple II Monitor, $FA9C, which <Break> falls into and
 ;; <Stepper::RunInstruction> jumps to when the instruction to run is a BRK.
@@ -400,9 +398,10 @@ SetPcLow:
 ;; Taking the machine from reset or power-up to a program: the reset handler, power-up and their data, and the
 ;; older reset sequence to the Monitor.
 ;;
-;; The Autostart and IIe Monitors have it in five pieces: <Startup::Reset> and <Startup::PowerUp> here, the
-;; power-up data (<Startup::PowerUpVectors>, <Startup::DiskSignature>, <Startup::Title>), <Startup::ShowTitle>,
-;; the Enhanced IIe's title, and the older reset (<Startup::ResetToMonitor>). The Apple II Monitor has only the last.
+;; The Enhanced IIe has it in five pieces: <Startup::Reset> and <Startup::PowerUp> here, the power-up data
+;; (<Startup::PowerUpVectors>, <Startup::DiskSignature>, <Startup::Title>), <Startup::ShowTitle>, the Enhanced
+;; title, and the older reset (<Startup::ResetToMonitor>). The Autostart and original IIe Monitors have the same four
+;; without the Enhanced title, and the Apple II Monitor has only the last.
 .scope Startup
 
 ;; The reset handler: restores the screen and keyboard, then continues the program that set the soft entry
@@ -419,7 +418,7 @@ SetPcLow:
 ;; Entry:
 ;;   FixSoftEntry = makes <SOFTEV> AppleSoft's warm start, so the next reset keeps the program, then cold-starts
 ;;     AppleSoft
-;; Also: RESET (A2RM78, A2RM79, IIEROM82, IIETRM85)
+;; Also: RESET (A2RM79, IIEROM82, IIETRM85)
 .proc Reset
     .assert * = $FA62, "Startup::Reset must stay at $FA62."
 
@@ -506,7 +505,7 @@ CopyVector:
     bne CopyVector
 
     ; LOC0/LOC1 points above slot 7's ROM.
-    lda #SLOT_PAGE_BASE + LAST_SLOT + 1
+    lda #SLOT_ROM_PAGE + LAST_SLOT + 1
     stx LOC0
     sta LOC1
 
@@ -516,7 +515,7 @@ NextSlot:
     ldy #SIGNATURE_LAST
     dec LOC1
     lda LOC1
-    cmp #SLOT_PAGE_BASE
+    cmp #SLOT_ROM_PAGE
     beq Reset::FixSoftEntry
     sta MSLOT
 

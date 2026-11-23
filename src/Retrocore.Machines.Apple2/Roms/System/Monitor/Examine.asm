@@ -27,8 +27,9 @@ LIST_LENGTH = 20
 ;; - <A1L>/<A1H> and <A3L>/<A3H> = the last number typed with no command waiting, the first of a range, and
 ;;   <A2L>/<A2H> = the last number typed.
 ;;
-;; The scope is in nine pieces, because the Monitor's documented routines sit between its parts at fixed
-;; addresses. Each handler's address minus one must be in page $FE, after its first byte (<Commands::Routines>).
+;; The scope is in nine pieces on the Enhanced IIe and eight in the other builds, because the Monitor's documented
+;; routines sit between its parts at fixed addresses. Each handler's address minus one must be in page $FE, after its
+;; first byte (<Commands::Routines>).
 .scope Commands
 
 ;; Examines memory from A1 to the end of its line of 8 bytes: a carriage return alone after another command.
@@ -174,7 +175,7 @@ Unmasked:
 ;; In: A = the character, with its high bit set
 ;; Out: A = the character as printed
 ;; Keeps: Y
-;; Also: COUT1 (A2RM78, A2RM79, IIEROM82, IIETRM85)
+;; Also: COUT1 (IIETRM85)
 .proc ScreenOut
 .assert * = $FDF0, "ScreenOut must stay at $FDF0."
     pha
@@ -190,7 +191,7 @@ Unmasked:
 ;; Keeps: A, Y
 ;; Entry:
 ;;   Pushed = prints a character, with the one for 80 columns already pushed
-;; Also: COUTZ (A2RM78, A2RM79, IIEROM82, IIETRM85)
+;; Also: COUTZ (IIETRM85)
 .proc ScreenOutNoInverse
 .assert * = $FDF6, "ScreenOutNoInverse must stay at $FDF6."
     pha
@@ -218,7 +219,7 @@ Pushed:
 ;; In: A = the character, with its high bit set
 ;; Out: A = the character as printed, with <INVFLG> applied when printable
 ;; Keeps: Y
-;; Also: COUT1 (A2RM78, A2RM79, IIEROM82, IIETRM85)
+;; Also: COUT1 (A2RM78, A2RM79, IIEROM82)
 .proc ScreenOut
 .assert * = $FDF0, "ScreenOut must stay at $FDF0."
     cmp #' '
@@ -233,7 +234,7 @@ Pushed:
 ;; <ScreenOutPausing at ScreenOutPausing>, which adds the Control-S pause.
 ;; In: A = the character, with its high bit set
 ;; Keeps: A, Y
-;; Also: COUTZ (A2RM78, A2RM79, IIEROM82, IIETRM85)
+;; Also: COUTZ (A2RM78, A2RM79, IIEROM82)
 .proc ScreenOutNoInverse
 .assert * = $FDF6, "ScreenOutNoInverse must stay at $FDF6."
     sty YSAV1

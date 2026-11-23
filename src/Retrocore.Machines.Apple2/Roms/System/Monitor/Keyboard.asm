@@ -39,7 +39,7 @@ FIRMWARE_ESCAPE_KEY = $07
 ;;
 ;; At $FD0C. The internal firmware shows the cursor, for 40 or 80 columns.
 ;; Out: A = the key, with its high bit set
-;; Also: RDKEY (A2RM78, A2RM79, IIEROM82, IIETRM85)
+;; Also: RDKEY (IIETRM85)
 .proc ReadKey
 .assert * = $FD0C, "ReadKey must stay at $FD0C."
     ldy #FIRMWARE_READ_KEY
@@ -65,7 +65,7 @@ Hook:
 ;;
 ;; At $FD0C. The cursor is the character under it, flashing; the input routine puts the character back.
 ;; Out: A = the key, with its high bit set
-;; Also: RDKEY (A2RM78, A2RM79, IIEROM82, IIETRM85)
+;; Also: RDKEY (A2RM78, A2RM79, IIEROM82)
 .proc ReadKey
 .assert * = $FD0C, "ReadKey must stay at $FD0C."
     ; The input routine gets the character in A and the cursor's column in Y.
@@ -92,15 +92,15 @@ Hook:
 ;; waits.
 ;; Out: A = the key, with its high bit set
 ;; Entry:
-;;   ToFirmware = goes to the firmware function in Y; <ClearLineFrom> and, on the Enhanced IIe, <Escape::ReadEscapeKey>
-;;     branch
-;; Also: KEYIN (A2RM78, A2RM79, IIEROM82, IIETRM85)
+;;   ToFirmware = goes to the firmware function in Y; on the Enhanced IIe, <ClearLineFrom> and
+;;     <Escape::ReadEscapeKey> branch here too
+;; Also: KEYIN (IIEROM82, IIETRM85)
 .proc KeyboardIn
 .assert * = $FD1B, "KeyboardIn must stay at $FD1B."
     ldy #FIRMWARE_KEYBOARD_IN
 
-;; Goes to the firmware function in Y; <ClearLineFrom> and, on the Enhanced IIe, <Escape::ReadEscapeKey> branch
-;; here too.
+;; Goes to the firmware function in Y; on the Enhanced IIe, <ClearLineFrom> and <Escape::ReadEscapeKey> branch here
+;; too.
 ToFirmware:
     jmp CallFirmware
 
@@ -175,7 +175,7 @@ PullStatus:
 ;; In: A = the character under the cursor, Y = <CH>
 ;; Out: A = the key, with its high bit set
 ;; Keeps: X, Y
-;; Also: KEYIN (A2RM78, A2RM79, IIEROM82, IIETRM85)
+;; Also: KEYIN (A2RM78, A2RM79)
 .proc KeyboardIn
 .assert * = $FD1B, "KeyboardIn must stay at $FD1B."
     inc RNDL
@@ -183,7 +183,7 @@ PullStatus:
     inc RNDH
 
 ;; Waits until a key is typed.
-;; Also: KEYIN2 (A2RM78, A2RM79, IIEROM82)
+;; Also: KEYIN2 (A2RM78, A2RM79)
 Check:
     bit KBD
     bpl KeyboardIn

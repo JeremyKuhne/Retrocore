@@ -131,14 +131,15 @@ export async function run(): Promise<void> {
         vscode.debug.removeBreakpoints([breakpoint]);
         console.log("Isolated VS Code passed: M1 source/caller debugging, RGBA video, source cycle counts, exact beam breakpoint and cycle-reset command.");
 
-        // The workspace's boot configuration stops first at the Monitor's RESET, as Machine reset is on by default.
+        // The workspace's boot configuration stops first at the Monitor's reset handler (Apple's RESET), as Machine
+        // reset is on by default.
         assert.equal(await vscode.debug.startDebugging(workspace, "IIe: boot with SDK ROM sources"), true);
         assert.equal(await stop(), "breakpoint");
         const boot = vscode.debug.activeDebugSession;
         if (boot === undefined) throw new Error("VS Code did not create the boot session.");
         const reset = await boot.customRequest("stackTrace", { threadId: 1 });
-        assert.equal(path.basename(reset.stackFrames[0].source.path), "Monitor.asm");
-        assert.equal(reset.stackFrames[0].name, "RESET");
+        assert.equal(path.basename(reset.stackFrames[0].source.path), "BreakAndReset.asm");
+        assert.equal(reset.stackFrames[0].name, "Startup::Reset");
 
         // Then, once booted to the ] prompt, at AppleSoft's PRINT through a function breakpoint.
         vscode.debug.addBreakpoints([new vscode.FunctionBreakpoint("PRINT")]);
@@ -151,21 +152,22 @@ export async function run(): Promise<void> {
         assert.equal(path.basename(print.stackFrames[0].source.path), "applesoft.mac");
         assert.equal(print.stackFrames[0].name, "PRINT");
 
-        // RESET's "jsr SETNORM" returned by then: JSR 6, LDY # 2, STY zp 3, RTS 6.
+        // The reset handler's "jsr SetNormal" (Apple's SETNORM) returned by then: JSR 6, LDY # 2, STY zp 3, RTS 6.
         const calls: { path: string; line: number; cycles: number }[] = (await boot.customRequest("retro/cycles")).calls;
-        const monitor = path.join(root, "src", "Retrocore.Machines.Apple2", "Roms", "System", "Monitor.asm");
+        const monitor = path.join(root, "src", "Retrocore.Machines.Apple2", "Roms", "System", "Monitor", "BreakAndReset.asm");
         const setnormLine = (await vscode.workspace.fs.readFile(vscode.Uri.file(monitor))).toString()
-            .split("\n").findIndex(line => /^\s+jsr SETNORM\s+; \$FA63/.test(line)) + 1;
-        const setnorm = calls.find(call => path.basename(call.path) === "Monitor.asm" && call.line === setnormLine);
+            .split("\n").findIndex(line => /^\s+jsr SetNormal\s*$/.test(line)) + 1;
+        assert.ok(setnormLine > 0, "the reset handler calls SetNormal");
+        const setnorm = calls.find(call => path.basename(call.path) === "BreakAndReset.asm" && call.line === setnormLine);
         assert.equal(setnorm?.cycles, 17);
 
-        // CONTROL-RESET stops again at RESET.
+        // CONTROL-RESET stops again at the reset handler.
         vscode.debug.removeBreakpoints(vscode.debug.breakpoints);
         await new Promise(resolve => setTimeout(resolve, 500));
         await boot.customRequest("continue", { threadId: 1 });
         await boot.customRequest("retro/reset");
         assert.equal(await stop(), "breakpoint");
-        assert.equal((await boot.customRequest("stackTrace", { threadId: 1 })).stackFrames[0].name, "RESET");
+        assert.equal((await boot.customRequest("stackTrace", { threadId: 1 })).stackFrames[0].name, "Startup::Reset");
         await boot.customRequest("continue", { threadId: 1 });
         await new Promise(resolve => setTimeout(resolve, 1000));
 

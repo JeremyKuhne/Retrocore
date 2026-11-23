@@ -106,7 +106,7 @@ Done:
 ;;
 ;; At $FCC9.
 ;; In: A = the tone's length, in 256 half cycles
-;; Also: HEADR (A2RM78, A2RM79, IIEROM82, IIETRM85)
+;; Also: HEADR (IIETRM85)
 .proc WriteHeader
 .assert * = $FCC9, "Cassette::WriteHeader must stay at $FCC9."
     sta SETINTCXROM
@@ -191,14 +191,14 @@ Done:
 ; Page zero, under the name this scope gives it.
 
 ;; The tape input's last level, which <ReadHalfCycle> compares the input with: <LENGTH>'s byte.
-;; Also: LASTIN (A2RM78, A2RM79, IIEROM82, IIETRM85)
+;; Also: LASTIN (A2RM78, A2RM79, IIEROM82)
 LastLevel = LENGTH
 
 ;; Writes a cassette header tone, then the sync bit.
 ;;
 ;; At $FCC9.
 ;; In: A = the tone's length, about A x 256 half cycles; carry = set (clear makes it 256 fewer)
-;; Also: HEADR (A2RM78, A2RM79, IIEROM82, IIETRM85)
+;; Also: HEADR (A2RM78, A2RM79, IIEROM82)
 .proc WriteHeader
 .assert * = $FCC9, "Cassette::WriteHeader must stay at $FCC9."
     ; WriteHalfCycle counts X down: 256 half cycles a round.

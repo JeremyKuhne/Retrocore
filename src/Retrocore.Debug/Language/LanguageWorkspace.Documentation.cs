@@ -187,12 +187,12 @@ internal sealed partial class LanguageWorkspace
                 // Only a name the build gives takes precedence, and only for the definition it gives it to: the
                 // assembler's own table of historical names says so. Anything else stays as ambiguous with the SDK's
                 // as before. While the file has errors there is no such table, and a condition or a macro's
-                // expansion cannot be trusted to come out as the assembler's would, so only a definition its text
-                // makes outside any condition and macro body counts then.
+                // expansion cannot be trusted to come out as the assembler's would, so only a symbol its text
+                // defines outside any condition and macro body counts then; a macro takes no old name.
                 bool given = replacement is not null && topics.Count == 1 && (analysis.Result.Success
                     ? analysis.Result.HistoricalNames.TryGetValue(name, out AssemblySymbol? target) && target.Name == replacement
                     : topics[0].Comments.All(comment => comment.Condition is null && comment.Macro is null)
-                        && analysis.Definitions.Any(site => site.Name == replacement));
+                        && analysis.Definitions.Any(site => site.Name == replacement && site.Kind != SymbolSiteKind.Macro));
 
                 if (thisBuild && given)
                 {

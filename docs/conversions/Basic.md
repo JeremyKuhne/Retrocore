@@ -840,10 +840,23 @@ Decisions and how the table was applied:
     symbol, a computed condition) and `OldNamesHintOnlyTheDefinitionTheAssemblerGivesThemTo` (a root routine sharing
     its name with a macro's expansion, a macro expanded twice). The
     doc set's `FindAlso` returns a single topic without its per-build filter, so a file whose other branch gives a
-    name no SDK module gives still gets a hint naming the label; that predates this step and is left for a change of
-    its own.
+    name no SDK module gives still gets a hint naming the label, and a macro-body name whose label shares a root
+    routine's name gets none at all (the doc set names the expansion's topic by the root's name); both predate this
+    step and are left for a change of their own.
+- S11. Two rules the owner settled on the Monitor's PR, which apply here from this step on:
+  - D5, narrowed: a mid-routine `.if` shows how builds differ, better than whole per-build routines; a routine's
+    contract holds in every build, or says which build differs. The statement modules already show their builds'
+    differences this way, inside the shared macros.
+  - Lineage citations: a definition that descends through a vendor's builds cites every document of that line whose
+    listing names it, not only its own build's. Within the PET line, checked against mist64/cbmsrc, that adds CBM4S79
+    to the kernal and disk vectors and the RND timer in `Commodore.Equates.asm` (from the workspace step), and HV1
+    and HV1R to BUFLEN and NUMLEV; the statement modules' and the historical names' citations already followed it.
+    BASIC 1's ZERO is a definition of its own in `MsBasic.VariableLookup.asm` (M4), whose step will cite the line on
+    it. The AppleSoft documents (ASTIL, AS82) are not available here to check. One test rule would forbid a
+    lineage-only alias: a Commodore alias without M6502 must cite one of its own build's documents
+    (`BasicAttribution.PetKeys`). No alias needs that yet; changing the rule is a question for the owner.
 
-Checked: the full suite (3,914 passed, none failed; 665 skipped, the ROM-dump comparisons without the dumps), the rename
+Checked: the full suite (3,915 passed, none failed; 665 skipped, the ROM-dump comparisons without the dumps), the rename
 gate, the lint tests, and `BasicStatementsConversionTests`, which compares every old name in the fifteen files and the
 vendors' historical names with the MACRO-10 overlay's value in each of the eight builds (about 150 per build), checks
 that each definition reaches the overlay by its name or an old name, that a vendor's names resolve only in its builds

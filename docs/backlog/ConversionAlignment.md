@@ -44,8 +44,9 @@ The plan takes the best of each.
 
 ## Decisions for the owner
 
-All eight were accepted as recommended (2026-11-23), except D5, which the owner decided the other way. The session for B5 logs them in `docs/conversions/Basic.md`
-on `claude/basic-rename-table`, which reaches main through `claude/basic-rename-ready`.
+All eight were accepted as recommended (2026-11-23), except D5, which the owner decided the other way. The session
+for B5 logs them in `docs/conversions/Basic.md` on `claude/basic-rename-table`, which reaches main through
+`claude/basic-rename-ready`.
 
 - **D1. Shared code across vendors.** Accept one module for code several vendors inherited from a common ancestor,
   with each difference a named switch or parameter and a one-line reason. *Recommended.* The trade-off is

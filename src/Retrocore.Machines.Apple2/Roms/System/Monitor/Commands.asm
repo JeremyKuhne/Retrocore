@@ -192,6 +192,7 @@ FromA2:
 ; The keyboard's and the screen's routines share a page, which SetHook stores for slot 0 (on the Enhanced IIe, the
 ; firmware's function $0E stores it).
 .assert >KeyboardIn = >ScreenOut, "KeyboardIn and ScreenOut must share a page."
+
 ;; Sets the hook at X to the ROM of the slot in <A2L>, $Cn00, or for slot 0 to the Monitor's routine whose low byte
 ;; is in Y.
 ;;
@@ -515,6 +516,7 @@ Next:
 .endscope
 
 .if ENHANCED
+
 ;; R: reads the bytes from A1 to A2 from the cassette with the internal firmware's routine, then beeps, or prints
 ;; ERR when the checksum is wrong.
 ;;
@@ -586,6 +588,7 @@ TitleEnhanced:
 
 .endscope
 .else
+
 ;; R: reads the bytes from A1 to A2 from the cassette, then beeps, or prints ERR when the checksum is wrong.
 ;;
 ;; At $FEFD.

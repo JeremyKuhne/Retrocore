@@ -150,8 +150,9 @@ to main with the source, says where each was decided.
   piece, with a plain `;` comment saying which part.
 - **Builds that differ mid-routine** keep one routine with `.if`s inside it, so the source shows how each version
   changed the one before; repeating the unchanged lines in a `.proc` per build hides that. A routine that differs
-  throughout is a `.proc` per build. Either way, a routine's contract states what holds in every build, and its
-  prose says what a build does differently ([the alignment plan](backlog/ConversionAlignment.md), D5).
+  throughout is a `.proc` per build, each with its own contract. A routine with `.if`s inside it states the
+  contract that holds in every build, and its prose says what a build does differently
+  ([the alignment plan](backlog/ConversionAlignment.md), D5).
 - **A routine that descends through the builds is one lineage**: each of its definitions cites, in `Also:`, every
   document whose listing names it, in any build, so a name from any version finds it in all of them (ClearLineFrom
   carries the Apple II's CLEOLZ and the IIe's CLREOLZ). A document whose builds lack the routine is not cited.

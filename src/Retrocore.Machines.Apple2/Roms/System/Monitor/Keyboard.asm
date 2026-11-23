@@ -33,6 +33,7 @@ FIRMWARE_KEYBOARD_IN = $06
 FIRMWARE_ESCAPE_KEY = $07
 .endif
 .endif
+
 ;; Reads a key through the input hook, <KSWL>, with the cursor shown.
 ;;
 ;; At $FD0C. On the Apple II's Monitors and the original IIe the cursor is the character under it, flashing, and

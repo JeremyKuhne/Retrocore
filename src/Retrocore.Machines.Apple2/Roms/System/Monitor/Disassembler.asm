@@ -109,21 +109,20 @@ MnemonicLow = V2
 ;;   MASK = the operand format, Y = 0
 ;; Uses: X
 ;; Entry:
-;;   Opcode = decodes the opcode in A; programs call it at $F88E (Integer BASIC's mini-assembler, Programmer's Aid,
-;;     DOS's relocator, and on the Enhanced IIe the firmware's mini-assembler)
+;;   Opcode = decodes the opcode in A; programs call it at $F88E (DOS's relocator, the Apple II's Integer BASIC
+;;     mini-assembler and Programmer's Aid, and on the Enhanced IIe the firmware's mini-assembler)
 .proc Decode
 .assert * = $F88C, "Decode must stay at $F88C."
     lda (PCL,x)
 
-;; Decodes the opcode in A. Programs call it at $F88E: Integer BASIC's mini-assembler, Programmer's Aid and DOS's
-;; relocator, and on the Enhanced IIe the firmware's mini-assembler.
+;; Decodes the opcode in A. Programs call it at $F88E: DOS's relocator, the Apple II's Integer BASIC mini-assembler
+;; and Programmer's Aid, and on the Enhanced IIe the firmware's mini-assembler.
 ;;
 ;; In: A = the opcode
 ;; Inherit: <Decode> Out
 ;; Also: INSDS2 (A2RM78, A2RM79, IIEROM82, IIETRM85)
 Opcode:
 .assert * = $F88E, "Decode::Opcode must stay at $F88E, where programs call it."
-
 
     ; An even opcode's mode is at opcode / 4, in the nibble its bit 1 picks.
     tay
@@ -154,7 +153,8 @@ Invalid:
     ldy #INVALID_OPCODE
     lda #AddressMode::INVALID
 
-;; Looks up the mode's operand format in <OperandFormats>; except on the Enhanced IIe, also the operand's length in it.
+;; Looks up the mode's operand format in <OperandFormats>, and, except on the Enhanced IIe, the operand's length
+;; from it.
 ;; Also: GETFMT (A2RM78, A2RM79, IIEROM82, IIETRM85)
 Format:
     tax

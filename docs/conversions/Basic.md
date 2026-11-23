@@ -770,7 +770,7 @@ Converted, with `; retrocore: style=strict`, part B1's fifteen shared modules: `
 `OperatorTable`, `Print`, `ProgramReset`, `ProgramTransfers`, `StatementFlow` and `UserFunctions`. Each statement
 handler is a `.proc` in `Statements`, which `MsBasic.Families.asm` now declares after `Float` and `Functions`; each
 macro opens and closes the scope around the handlers it emits (B1-Q9), except that the lister's `ListRange` opens
-it with `.proc Statements::List` and `ListTokens` closes them (S2). The other routines are top level, as the table
+the scope and `.proc List` in it, and `ListTokens` closes both (S2). The other routines are top level, as the table
 puts them. The bytes are unchanged in all eight builds.
 
 Decisions and how the table was applied:
@@ -863,8 +863,9 @@ Decisions and how the table was applied:
     character input, since BASIC gives the name to another routine. The workspace step's
     `VendorOldNamesResolveOnlyInTheirVendorsBuilds` required the shared layouts to cite M6502 alone, which forbade the
     lineage; it now requires exactly M6502 and the PET line's documents there. The bibliography's method states the
-    rule too. BASIC 1's own BUFPAG and NULCMD switches, like its BUFLEN, now cite what the Equates' do. Prose about
-    BASIC 1 in the shared modules names its default switches where a switch changes the fact.
+    rule too. BASIC 1's own BUFPAG and NULCMD switches, like its BUFLEN, now cite what the Equates' do. A shared
+    module's comment that names a build describes it with its root's default switches, as the shared folder's README
+    now says; some say "by default" where the reviews asked.
     The statement modules' and the historical names' citations already followed the rule. BASIC 1's ZERO is a definition
     of its own in `MsBasic.VariableLookup.asm` (M4), whose step will cite the line on it. The AppleSoft documents
     (ASTIL, AS82) are not available here to check. One test rule would forbid a lineage-only alias: a Commodore alias

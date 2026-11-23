@@ -1721,7 +1721,7 @@ to K12, R1 to R10).
 
 | # | Old | New | Kind | Builds | Documents (checked) | D3 | Reason |
 | ---: | --- | --- | --- | --- | --- | --- | --- |
-| 1391 | `COMBYTE` | `AppleSoft::ReadCommaAndByte` | alias | AS | ASTIL [AS], AS82 [AS] | vendor | COMBYTE (ASTIL, AS82; ASTIL's article 76) for the comma-and-byte entry; stays in AppleSoft's alias file (D3), pointing at COMBYT's new name. — target named by B2 |
+| 1391 | `COMBYTE` | `AppleSoft::ReadCommaAndByte` | alias | AS | ASTIL [AS], AS82 [AS] | vendor | COMBYTE (ASTIL, AS82; ASTIL's article 76) for the comma-and-byte entry; stays in AppleSoft's alias file (D3), pointing at COMBYT's new name. — target named by B2. Converted: the alias file is gone; COMBYTE is in `AppleSoft.HistoricalNames.asm` (Basic.md S6). |
 
 ### AppleSoft.NumericConversion
 

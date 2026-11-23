@@ -112,7 +112,7 @@ public sealed class PetBasic4ExtensionTests
                 COMMODORE_MEMORY_PROBE 0, 0, 1, 1, 0, $55
                 COMMODORE_START_PROGRAM 0, 0, 0, 0, SIGNON
                 COMMODORE_START_MESSAGES 0
-            LASTWR:
+            {BasicNames.Label("LASTWR")}
                 COMMODORE_BASIC4_EXTENSION {(original ? 0 : 1)}
             COMPOSED_END:
             """;
@@ -157,7 +157,7 @@ public sealed class PetBasic4ExtensionTests
                 "RENAME", "DSCRTC", "RUSURE", "OLDCLR", "SENDP", "DOSPAR", "UNIT", "NEWNAM", "DSLINK", "SIGNON"
             ])
         {
-            docs.Find(name).Should().NotBeNull($"{name} must be documented");
+            docs.FindTopic(name).Should().NotBeNull($"{name} must be documented");
         }
 
         List<DocumentationDiagnostic> diagnostics = new DocumentationResolver(docs).Check();
@@ -826,7 +826,7 @@ public sealed class PetBasic4ExtensionTests
             .include "Commodore.Equates.asm"
             .include "Commodore.Basic4Extension.asm"
             .org ${(origin ?? legacy.Symbol("CALLE")):X4}
-            LASTWR:
+            {BasicNames.Label("LASTWR")}
                 COMMODORE_BASIC4_EXTENSION {revised}
             EXTENSION_END:
             """;

@@ -311,7 +311,7 @@ public sealed class BasicSharedProgramTransfersTests
             .org ${legacy.Symbol("RUN"):X4}
                 RUN_STATEMENT {(apple ? 1 : 0)}
                 GOSUB_AND_GOTO {(apple ? "NXTCO1" : "NEWSTT")}
-            {(apple ? "POP:" : "")}
+            {(apple ? BasicNames.Label("POP") : "")}
                 RETURN_STATEMENT {(searchLow ? 1 : 0)}, {(apple ? 1 : 0)}
             TRANSFER_END:
             """;

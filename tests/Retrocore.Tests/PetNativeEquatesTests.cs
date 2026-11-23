@@ -74,7 +74,7 @@ public sealed class PetNativeEquatesTests
 
         foreach (string name in documented)
         {
-            DocumentationTopic topic = docs.Find(name)
+            DocumentationTopic topic = docs.FindTopic(name)
                 ?? throw new AssertFailedException($"{name} has no workspace documentation.");
 
             topic.Summary.Should().NotBeNullOrWhiteSpace($"{name} needs a useful description");
@@ -494,7 +494,7 @@ public sealed class PetNativeEquatesTests
                 COMMODORE_START_MESSAGES {(early ? 1 : 0)}
             COMPOSED_MESSAGES_END:
                 {(early ? "COMMODORE_BASIC1_EDITOR_PATCHES" : "")}
-                {(early ? "" : "LASTWR:")}
+                {(early ? "" : BasicNames.Label("LASTWR"))}
             COMPOSED_BASIC1_PATCH_END:
             {(early ? ".org $E7F3" : "")}
                 {(early ? "COMMODORE_BASIC1_ARRAY_PATCH" : "")}
@@ -628,7 +628,7 @@ public sealed class PetNativeEquatesTests
 
         foreach (string name in (string[])["GET", "INPUT", "TRMNOK", "ISFUN", "OROP", disk ? "ISVAR1" : "ISVAR"])
         {
-            docs.Find(name).Should().NotBeNull($"{name} must remain documented");
+            docs.FindTopic(name).Should().NotBeNull($"{name} must remain documented");
         }
 
         List<DocumentationDiagnostic> diagnostics = new DocumentationResolver(docs).Check();

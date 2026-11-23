@@ -158,6 +158,41 @@ public partial class AssemblyPreprocessorTests
     }
 
     /// <summary>
+    ///  An include reports what its resolver throws for a path, including the <see cref="NotSupportedException"/>
+    ///  .NET Framework hosts throw for some paths, rather than letting it out of the assembler.
+    /// </summary>
+    [TestMethod]
+    public void IncludeResolverErrorsAreReported()
+    {
+        (Exception Error, string Message)[] cases =
+        [
+            (new ArgumentException("Bad name."), "Invalid include path: Bad name."),
+            (new NotSupportedException("Bad format."), "Invalid include path: Bad format."),
+            (new IOException("Unreadable."), "Include could not be read: Unreadable."),
+            (new UnauthorizedAccessException("Denied."), "Include access was denied: Denied."),
+        ];
+
+        foreach ((Exception error, string message) in cases)
+        {
+            AssemblyResult result = new NativeAssembler().Assemble(
+                new AssemblySource(".include \"part.inc\"", P("root/main.asm")),
+                Options(new ThrowingResolver(error)));
+
+            result.Diagnostics.Single().Message.Should().Be(message);
+        }
+
+        // A Merlin PUT probes the resolver before it becomes an include; the probe leaves an invalid path to it.
+        AssemblyOptions merlin = new(ProcessorVariant.Mos6502, origin: 0x1000, imageSize: 32)
+        {
+            Dialect = AssemblyDialect.Merlin,
+            SourceResolver = new ThrowingResolver(new NotSupportedException("Bad format."))
+        };
+
+        new NativeAssembler().Assemble(new AssemblySource("        PUT part\n", P("root/main.s")), merlin)
+            .Diagnostics.Single().Message.Should().Be("Invalid include path: Bad format.");
+    }
+
+    /// <summary>
     ///  A MACRO-10 overlay reports what its resolver throws for the base, as an include does, rather than letting
     ///  it out of the assembler.
     /// </summary>

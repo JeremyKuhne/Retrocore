@@ -34,7 +34,7 @@ INPUT_BUFFER_PAGE = 2
 .endif
 .ifndef INPUT_BUFFER_LENGTH
 ;; Input buffer length in bytes.
-;; Also: BUFLEN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: BUFLEN (M6502, CBM4S79, HV2, HV4, HV4R)
 INPUT_BUFFER_LENGTH = 81
 .endif
 .ifndef NULL_COMMAND
@@ -96,7 +96,10 @@ EXTENDED_DISK_VECTORS = 0
 .ifndef STACK_LEVELS
 .if STACK_RESERVE_19
 ;; Stack reserve, counted in two-byte levels.
-;; Also: NUMLEV (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;;
+;; BASIC 1's reconstructions (HV1, HV1R) write the same 54-byte reserve as `NUMLEV` = 23 plus eight bytes, where this
+;; build adds three and thirteen to nineteen levels, so their name for 23 is not cited here.
+;; Also: NUMLEV (M6502, CBM4S79, HV2, HV4, HV4R)
 STACK_LEVELS = 19
 .else
 ;; Stack reserve, counted in two-byte levels.

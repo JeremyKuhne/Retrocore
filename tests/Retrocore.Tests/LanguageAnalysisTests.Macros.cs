@@ -516,7 +516,7 @@ public sealed partial class LanguageAnalysisTests
                 code => code.StartsWith("RETROCOREASM", StringComparison.Ordinal),
                 "the probe assembles");
 
-            published.Should().NotContain(diagnostic => diagnostic.Message == "COMBYTE is a historical name of Reader.");
+            published.Should().NotContain(diagnostic => diagnostic.Message.StartsWith("COMBYTE is a historical name", StringComparison.Ordinal));
         }
         finally
         {

@@ -34,7 +34,9 @@ REVISD = 1                          ;; 1 selects the revised first BASIC 1 chip
 INPUT_BUFFER_PAGE = 0               ;; input buffer in page zero
 .endif
 .ifndef INPUT_BUFFER_LENGTH
-INPUT_BUFFER_LENGTH = 80            ;; input buffer length
+;; Input buffer length in bytes.
+;; Also: BUFLEN (HV1, HV1R)
+INPUT_BUFFER_LENGTH = 80
 .endif
 .ifndef NULL_COMMAND
 NULL_COMMAND = 1                    ;; reserve the NULL count

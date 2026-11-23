@@ -105,7 +105,8 @@
     ;; Sets the number of null characters printed after a line ending.
     ;;
     ;; The comparison is made after incrementing X: values from zero through incrementedLimit - 2 pass, as does
-    ;; 255 because the increment wraps. Some builds retain this entry without exposing a NULL token.
+    ;; 255 because the increment wraps. With text after the byte, it returns for the dispatcher's syntax error. Some
+    ;; builds retain this entry without exposing a NULL token.
     ;; Errors: ILLEGAL QUANTITY for other byte values
     ;; See: <GETBYT>
     ;; Also: NULL (M6502, HV1, HV1R)

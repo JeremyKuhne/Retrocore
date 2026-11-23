@@ -60,7 +60,7 @@ Done:
     stx Delimiter
     ldy #$00
     sty EndDelimiter
-;; Exchanges Delimiter and <EndDelimiter> (on entry and at each quote).
+;; Exchanges <Delimiter> and <EndDelimiter> (on entry and at each quote).
 ;; Also: EXCHQT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 SwapDelimiters:
     lda EndDelimiter
@@ -89,7 +89,6 @@ NextCharacter:
         .scope Statements continued
 
         ;; AppleSoft: pulls the three GOSUB frame bytes left and returns, for POP.
-        ;; Also: REMER1 (UNKN)
         .proc PopFinish
         pla
         pla
@@ -129,13 +128,13 @@ Test:
     jsr FindLineEnd
     beq AdvanceTextPointer
     .endproc
-    ;; A digit after THEN/GOTO: <Statements::GoTo>; else the statement through GONE3.
+    ;; A digit after THEN/GOTO: <Statements::GoTo>; else the statement through <GONE3>.
     ;; Also: DOCOND (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc IfTrue
     jsr GetCurrentCharacter
     bcs ToExecuteStatement
     jmp GoTo
-;; Jmp GONE3.
+;; Jumps to <GONE3>.
 ;; Also: DOCO (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 ToExecuteStatement:
     jmp GONE3

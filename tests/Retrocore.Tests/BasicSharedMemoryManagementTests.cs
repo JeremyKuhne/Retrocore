@@ -179,11 +179,20 @@ public sealed class BasicSharedMemoryManagementTests
             topic.Summary.Should().NotBeNullOrWhiteSpace();
         }
 
+        // The unchecked copy is an entry inside the routine: listed in its Entry: section and documented itself.
+        DocumentationTopic routine = module.Documentation.FindTopic("BLTU")
+            ?? throw new AssertFailedException("BLTU is not documented.");
+
+        // The section names the entry inside the routine's scope.
+        string routineName = native.DefinitionName("BLTU");
+        string entryName = native.DefinitionName("BLTUC");
+        entryName.Should().StartWith(routineName + "::");
+        routine.EntryLabels.Should().Contain(entryName[(routineName.Length + 2)..]);
         DocumentationTopic transfer = module.Documentation.FindRoutineTopic("BLTUC")
             ?? throw new AssertFailedException("BLTUC lost its entry documentation.");
 
-        transfer.Name.Should().Be(native.DefinitionName("BLTU"));
-        transfer.EntryLabels.Should().Contain(native.DefinitionName("BLTUC"));
+        transfer.Name.Should().Be(native.DefinitionName("BLTUC"));
+        transfer.Summary.Should().NotBeNullOrWhiteSpace();
         DocumentationSection keeps = module.Documentation.FindTopic("FNDFOR")?.Section("Keeps")
             ?? throw new AssertFailedException("FNDFOR lost its Keeps contract.");
 

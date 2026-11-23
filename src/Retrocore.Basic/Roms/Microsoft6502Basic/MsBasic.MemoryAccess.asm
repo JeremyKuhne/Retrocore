@@ -19,8 +19,8 @@
 
     ;; Reads an address expression followed by a comma and a byte expression.
     ;;
-    ;; The address is placed in <PokeAddress> before the byte is evaluated. A nested <Functions::Peek> can change it when that
-    ;; entry is configured not to preserve <PokeAddress>.
+    ;; The address is placed in <PokeAddress> before the byte is evaluated. A nested <Functions::Peek> can change it
+    ;; when that entry is configured not to preserve <PokeAddress>.
     ;; Out: X = byte value, TextPointer = terminating character
     ;; See: <EvaluateNumber>, <ConvertToAddress>, <ReadCommaAndByte>
     ;; Also: GETNUM (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
@@ -102,7 +102,7 @@
         .endrepeat
     .endif
 
-;; Lda (<PokeAddress>),y; tay.
+;; Reads the byte at <PokeAddress> into A and Y.
 ;; Also: GETCON (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 Fetch:
     lda (PokeAddress),y
@@ -130,8 +130,8 @@ ToReturnByte:
 
     ;; Stores the byte from a POKE statement at its specified address.
     ;;
-    ;; The byte expression may call <Functions::Peek>; its address-preservation configuration determines whether that nested
-    ;; call leaves the original destination in <PokeAddress>.
+    ;; The byte expression may call <Functions::Peek>; its address-preservation configuration determines whether that
+    ;; nested call leaves the original destination in <PokeAddress>.
     ;; See: <ReadAddressAndByte>
     ;; Also: POKE (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc Poke
@@ -145,7 +145,7 @@ ToReturnByte:
 
 .endmacro
 
-;; Emits the WAIT entry.
+;; Emits the `WAIT` entry.
 ;; Parameters: defaultTarget = branch target when the optional second mask is omitted
 .macro WaitStatement defaultTarget
 

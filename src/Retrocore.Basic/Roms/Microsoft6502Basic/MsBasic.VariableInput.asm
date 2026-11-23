@@ -224,7 +224,8 @@ TRMOK1:
 
 ;; Searches forward for a DATA statement, remembering each new line number in <DATLIN>.
 ;;
-;; <FindStatementEnd> skips statements, including quoted colons. A zero high byte in the next line link reports OUT OF DATA.
+;; <FindStatementEnd> skips statements, including quoted colons. A zero high byte in the next line link reports OUT OF
+;; DATA.
 ;; See: <DATBK1>
 DATLOP:
     jsr DATAN

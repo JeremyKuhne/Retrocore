@@ -14,7 +14,7 @@
     stx LineNumber
     stx LineNumber+1
 
-;; A non-digit exits through Statements::On::Done; otherwise multiplies by 10 and adds the digit.
+;; A non-digit exits through <Statements::On::Done>; otherwise multiplies by 10 and adds the digit.
 ;; Also: MORLIN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 NextDigit:
     bcs Statements::On::Done

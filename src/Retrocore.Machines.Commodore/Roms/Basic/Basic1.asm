@@ -117,16 +117,16 @@ SHORT_END_BRANCH = 1                ;; 1 branches directly to the end-of-program
 EARLY_STATEMENT_DISPATCH = 1        ;; 1 uses the earlier statement-dispatch carry and error paths
 .endif
 .ifndef STOP_BY_LINE_NUMBER
-STOP_BY_LINE_NUMBER = 0             ;; 1 detects direct <Statements::Stop> using the current line rather than the text page
+STOP_BY_LINE_NUMBER = 0             ;; 1 has <Statements::Stop> detect direct mode by the line, not the text page
 .endif
 .ifndef NULL_INCREMENT_LIMIT
 NULL_INCREMENT_LIMIT = 10           ;; first rejected value after incrementing the <Statements::Null> count
 .endif
 .ifndef RETURN_LOW_FOR_POINTER
-RETURN_LOW_FOR_POINTER = 1          ;; 1 makes <Statements::Return>'s <Statements::For> search set the low pointer byte instead of the high
+RETURN_LOW_FOR_POINTER = 1          ;; 1 has <Statements::Return>'s frame search set the low pointer byte
 .endif
 .ifndef QUOTE_BRANCH_FIRST
-QUOTE_BRANCH_FIRST = 1              ;; 1 tests the quote branch first while scanning <Statements::Data> and <Statements::Rem>
+QUOTE_BRANCH_FIRST = 1              ;; 1 tests quotes first while <Statements::Data> and <Statements::Rem> scan
 .endif
 .ifndef TIME_LONG_ERROR
 TIME_LONG_ERROR = 1                 ;; 1 uses the long jump for an invalid TI$ length

@@ -257,7 +257,7 @@ public sealed class PetNativeEquatesTests
                 $"{name} must be in the BASIC ROM");
 
             (label.Value < start || label.Value >= end).Should().BeTrue($"{name} must be outside the math package");
-            declarations.Add($".dum ${label.Value:X4}{Environment.NewLine}{name}:{Environment.NewLine}.dend");
+            declarations.Add($".dum ${label.Value:X4}{Environment.NewLine}{BasicNames.Label(name)}{Environment.NewLine}.dend");
         }
 
         Dictionary<string, long> selectors = Features(model);
@@ -275,12 +275,18 @@ public sealed class PetNativeEquatesTests
             selectors.Add(name, legacy.Symbol(name));
         }
 
-        // Commodore's historical names also alias the character reader's template, outside this region.
+        // Commodore's historical names also alias the character reader's template, outside this region; the
+        // external labels' scoped current names are defined with it.
         Dictionary<string, long> template = new(StringComparer.Ordinal)
         {
             ["CHZGOT"] = legacy.Symbol("CHZGOT"),
             ["CHZRTS"] = legacy.Symbol("CHZRTS")
         };
+
+        foreach (string name in externalLabels)
+        {
+            template.Add(name, legacy.Symbol(name));
+        }
 
         string source = $"""
             .cpu Mos6502

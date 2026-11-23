@@ -21,14 +21,14 @@
     ;; step's sign; on continuation, the frame's line and text pointers restore the loop body. Otherwise the
     ;; frame is removed. An unmatched variable raises NEXT WITHOUT FOR.
     ;; Entry:
-    ;;   ToError = Relays to <RequireType::ToError>; READ's input path (VariableInput) branches here too
+    ;;   ToError = Relays to <RequireType::ToError>; `READ`'s input path (VariableInput) branches here too
     ;; Also: NEXT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc Next
     bne WithVariable
     ldy #$00
     beq SearchFrame
 
-;; NEXT names a variable: PTRGET; the comma path jsr's here for the next variable.
+;; NEXT names a variable: <PTRGET>; the comma path jsr's here for the next variable.
 ;; Also: GETFOR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 WithVariable:
     jsr PTRGET
@@ -42,12 +42,12 @@ SearchFrame:
     beq AddStep
     ldx #<ERROR_NEXT_WITHOUT_FOR
 
-;; Relays to <RequireType::ToError>; READ's input path (VariableInput) branches here too.
+;; Relays to <RequireType::ToError>; `READ`'s input path (VariableInput) branches here too.
 ;; Also: ERRGO5 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 ToError:
     beq RequireType::ToError
 
-;; Sets the stack to the frame, adds ForFrame::STEP to the variable, stores, compares with ForFrame::LIMIT signed by
+;; Sets the stack to the frame, adds <ForFrame::STEP> to the variable, stores, compares with <ForFrame::LIMIT> signed by
 ;; STEP_SIGN.
 ;; Also: HAVFOR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 AddStep:
@@ -98,12 +98,12 @@ AddStep:
     lda Stack + 1 + ForFrame::TEXT_POINTER_HIGH,x
     sta TextPointer+1
 
-;; Jmp to the continuation.
+;; Jumps to the continuation.
 ;; Also: NEWSGO (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 ToNextStatement:
     jmp nextStatement
 
-;; Removes the frame (adds FOR_FRAME_SIZE); a comma continues with the next variable.
+;; Removes the frame (adds <FOR_FRAME_SIZE>); a comma continues with the next variable.
 ;; Also: LOOPDN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 EndLoop:
     txa
@@ -149,7 +149,7 @@ EndLoop:
     ;; Out: carry = selected type on success
     ;; Errors: TYPE MISMATCH if the types differ
     ;; Entry:
-    ;;   ToError = Jmp ERROR; Statements::Next::ToError relays here
+    ;;   ToError = jumps to <ERROR>; <Statements::Next::ToError> relays here
     ;; Also: CHKVAL (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc RequireType
     bit ValueType
@@ -171,7 +171,7 @@ IsString:
 Mismatch:
     ldx #<ERROR_TYPE_MISMATCH
 
-;; Jmp ERROR; Statements::Next::ToError relays here.
+;; Jumps to <ERROR>; <Statements::Next::ToError> relays here.
 ;; Also: ERRGO4 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 ToError:
     jmp ERROR

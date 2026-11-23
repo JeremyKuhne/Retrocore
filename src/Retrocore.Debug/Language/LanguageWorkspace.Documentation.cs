@@ -147,16 +147,23 @@ internal sealed partial class LanguageWorkspace
     {
         List<DocumentationDiagnostic> diagnostics = [];
         Dictionary<string, string?> current = [with(StringComparer.Ordinal)];
+        HashSet<string> own = [with(StringComparer.Ordinal)];
         foreach (DocumentationSet set in analysis.OtherModules(SdkAnalyses()).Select(sdk => sdk.Documentation).Prepend(analysis.Documentation))
         {
+            bool thisBuild = ReferenceEquals(set, analysis.Documentation);
             foreach (string name in set.AlsoNames)
             {
                 // A name a root symbol has is never historical; one a scope defines is checked at each use, below.
                 if (analysis.Definitions.Any(site => site.Name == name)) { continue; }
 
-                IReadOnlyList<DocumentationTopic> topics = set.FindAlso(name, thisBuild: ReferenceEquals(set, analysis.Documentation));
+                // The file's own build gives its old names first: an SDK module's Also: of the same spelling, which
+                // the build does not include, neither replaces nor cancels it.
+                if (!thisBuild && own.Contains(name)) { continue; }
+
+                IReadOnlyList<DocumentationTopic> topics = set.FindAlso(name, thisBuild);
                 string? replacement = topics.Count == 1 ? set.SymbolOf(topics[0]) : null;
                 current[name] = current.TryGetValue(name, out string? earlier) && earlier != replacement ? null : replacement;
+                if (thisBuild) { own.Add(name); }
             }
         }
 

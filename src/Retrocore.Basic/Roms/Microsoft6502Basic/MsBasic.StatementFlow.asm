@@ -150,7 +150,8 @@ ToExecuteStatement:
 
     ;; Selects a one-based entry in a <Statements::GoTo> or <Statements::GoSub> line-number list.
     ;;
-    ;; Proceeds past the list when the selector exceeds the number of entries.
+    ;; Proceeds past the list when the selector is 0 or exceeds the number of entries: a selector of 0 counts down
+    ;; through $FF and walks every entry.
     ;; Entry:
     ;;   RequireGoto = requires <TOKEN_GOTO> in A, else a syntax error; <ReadLineNumber> branches here for a line
     ;;     number that is too large, with its high byte in A

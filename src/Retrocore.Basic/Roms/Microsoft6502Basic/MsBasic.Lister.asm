@@ -20,8 +20,9 @@
     ;;
     ;; A nonzero single number selects that line; a minus token introduces an upper bound. When selected, a
     ;; comma is also accepted. A zero upper bound, including an omitted one, becomes $FFFF. A valid command
-    ;; discards the statement dispatcher's return address before listing; invalid trailing text returns to the
-    ;; dispatcher.
+    ;; discards the statement dispatcher's return address before listing; trailing text after a bound returns to
+    ;; the dispatcher. A second bound with no digits counts as omitted, since <ReadLineNumber> then returns with zero
+    ;; set, so `LIST 10-X` lists from line 10 to the end and the text after the minus is ignored.
     ;; In: A = current character, carry = clear for a digit, zero = set for a null or colon
     ;; See: <ReadLineNumber>, <FindLine>, <Statements::List::NextLine>
     ;; Also: LIST (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)

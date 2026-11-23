@@ -4,12 +4,11 @@
 .include "MsBasic.Families.asm"
 
 ; MICROSOFT 6502 BASIC: NEXT AND RESULT-TYPE CHECKS
-;
-; NextEntries countedStack, nextStatement
-;   countedStack = 1 advances X through the frame; 0 calculates the offsets in A.
-;   nextStatement is the platform's continuation after <Statements::Next>.
-; The frame holds a five-byte step, its sign and a five-byte packed limit.
 
+;; Emits <Statements::Next>, which steps the <ForFrame> that `FOR` pushed (a five-byte step, its sign and a five-byte
+;; packed limit), and the expression and type checks that follow it.
+;; Parameters: countedStack = 1 to advance X through the frame, 0 to calculate the offsets in A;
+;;   nextStatement = the platform's continuation after <Statements::Next>
 .macro NextEntries countedStack, nextStatement
     .assert countedStack = 0 || countedStack = 1, "countedStack must be 0 or 1."
 

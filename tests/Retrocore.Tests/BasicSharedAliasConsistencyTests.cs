@@ -41,8 +41,9 @@ public sealed class BasicSharedAliasConsistencyTests
     [TestMethod]
     public void NativeRootsExposeOnlyTheirDocumentedAliases()
     {
-        string[] appleFiles = AliasFiles(Apple, "AppleSoft");
-        string[] petFiles = AliasFiles(PetBasic, "Commodore");
+        // AppleSoft's interpreter aliases have all joined its historical names (Basic.md M10); Commodore's remain.
+        string[] appleFiles = AliasFiles(Apple, "AppleSoft", interpreterAliases: false);
+        string[] petFiles = AliasFiles(PetBasic, "Commodore", interpreterAliases: true);
         List<NativeRoot> roots = [];
         foreach (Apple2Model model in (Apple2Model[])[Apple2Model.IIPlus, Apple2Model.IIe, Apple2Model.IIeEnhanced])
         {
@@ -264,11 +265,14 @@ public sealed class BasicSharedAliasConsistencyTests
             .Should().BeFalse();
     }
 
-    private static string[] AliasFiles(string directory, string prefix)
+    private static string[] AliasFiles(string directory, string prefix, bool interpreterAliases)
     {
         // The interpreter alias files join the historical-names file as their definitions convert (Basic.md M10).
-        string names = Path.Join(directory, $"{prefix}.HistoricalNames.asm");
-        File.Exists(names).Should().BeTrue($"the platform must retain {Path.GetFileName(names)}");
+        foreach (string name in (string[])[$"{prefix}.InterpreterAliases.asm", $"{prefix}.HistoricalNames.asm"])
+        {
+            bool expected = interpreterAliases || name.EndsWith(".HistoricalNames.asm", StringComparison.Ordinal);
+            File.Exists(Path.Join(directory, name)).Should().Be(expected, $"the platform {(expected ? "must retain" : "has retired")} {name}");
+        }
 
         return [.. Directory.EnumerateFiles(directory, "*Aliases.asm")
             .Append(Path.Join(directory, $"{prefix}.HistoricalNames.asm"))

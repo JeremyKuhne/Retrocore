@@ -15,7 +15,7 @@
     ;; Positions the DATA reader before the first program line.
     ;; Entry:
     ;;   SetDataPointer = Stores A/Y in <DataPointer>; `READ`'s finish enters here
-    ;;   Done = returns; the statement dispatcher returns through it at end of statement
+    ;;   Done = returns; the statement dispatcher, except BASIC 1's early one, returns through it at end of statement
     ;; See: <READ>, <DataPointer>
     ;; Also: RESTOR (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc Restore
@@ -30,7 +30,7 @@
 SetDataPointer:
     sta DataPointer
     sty DataPointer+1
-;; Returns; the statement dispatcher returns through it at end of statement.
+;; Returns; the statement dispatcher, except BASIC 1's early one, returns through it at end of statement.
 ;; Also: ISCRTS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 Done:
     rts
@@ -265,6 +265,10 @@ Done:
     ;; The earlier search sets the low byte of <AssignedVariable> to $FF; later versions set the high byte instead.
     ;; The earlier code can still match a FOR variable ending in $FF, or select the first frame if the
     ;; previous high byte is zero.
+    ;;
+    ;; Where `popEntry` is 1 (AppleSoft), `POP` enters here too, and Y tells them apart: for `POP` the routine
+    ;; discards the frame through <Statements::PopFinish> instead of returning to the caller.
+    ;; In: zero = set at the end of the statement, Y = the statement token's offset in the dispatch table
     ;; Errors: RETURN WITHOUT GOSUB if there is no GOSUB frame
     ;; Entry:
     ;;   UndefinedStatement = reports UNDEF'D STATEMENT through <ERROR>, a load RETURN's error skips;

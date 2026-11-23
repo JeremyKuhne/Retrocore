@@ -84,7 +84,7 @@ public sealed class DocumentationComment
     public bool IsTrailing { get; init; }
 
     /// <summary>
-    ///  Gets the macro whose body holds the definition, such as <c>MEMORY_ACCESS_ADDRESS</c>; null outside a
+    ///  Gets the macro whose body holds the definition, such as <c>AddressConversion</c>; null outside a
     ///  macro's body. Each expansion of the macro defines it again, as the assembler names it there.
     /// </summary>
     public string? Macro { get; init; }

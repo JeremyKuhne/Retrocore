@@ -102,6 +102,7 @@ public sealed class BasicStatementRoutineTests
     [DataRow(true, "0\0", 0, 1)]
     [DataRow(true, "63999,", 63999, 5)]
     [DataRow(true, "1 2 3-", 123, 5)]
+    [DataRow(true, "X", 0, 0)]
     [DataRow(false, "10\0", 10, 2)]
     [DataRow(false, "6400:", 6400, 4)]
     public void ReadLineNumberReturnsTheNumberAndTerminator(bool apple, string text, int number, int terminator)
@@ -111,12 +112,14 @@ public sealed class BasicStatementRoutineTests
         PutText(machine, text);
         SetWord(machine, "TextPointer", Text);
 
-        machine.Call("ReadLineNumber", a: text[0], carry: false);
+        machine.Call("ReadLineNumber", a: text[0], carry: !char.IsAsciiDigit(text[0]));
 
         Word(machine, "LineNumber").Should().Be(number);
         Word(machine, "TextPointer").Should().Be(Text + terminator);
         machine.Cpu.Registers.Accumulator.Should().Be((byte)text[terminator]);
         machine.Cpu.Registers.Status.HasFlag(StatusRegister.Carry).Should().BeTrue();
+        machine.Cpu.Registers.Status.HasFlag(StatusRegister.Zero).Should().Be(
+            terminator == 0 || text[terminator] is '\0' or ':', "zero is set when no digit was read or at a null or colon");
     }
 
     /// <summary>

@@ -359,8 +359,8 @@ Done:
     ;;
     ;; With A = 0 and carry set, <Float::ShiftRight> returns after the byte; with carry clear it shifts one bit more.
     ;; <Float::MultiplyByte>'s zero path passes on whatever carry it was given: set after a nonzero multiplier byte,
-    ;; but clear after a zero one, so a second zero byte in a row shifts the product nine bits and, once the product
-    ;; is nonzero, loses a bit.
+    ;; clear after a zero one. So a second zero byte in a row shifts <Result1> through <Result4> nine bits, halving
+    ;; the partial product so far; the bit shift leaves <FacExtension> alone.
     ;; In: A = 0
     ;; Also: MULSHF (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc ShiftProductByte

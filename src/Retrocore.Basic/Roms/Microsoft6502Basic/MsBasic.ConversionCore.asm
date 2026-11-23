@@ -120,7 +120,8 @@ Done:
     sta Pointer2
     .endproc
 
-    ;; As <Float::Compare>, with the operand's low byte already in <Pointer2> and its high byte in Y.
+    ;; As <Float::Compare>, with the low byte of the packed operand's address already in <Pointer2> and its high byte
+    ;; in Y.
     ;; Also: FCOMPN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc CompareAtPointer2
     sty Pointer2+1

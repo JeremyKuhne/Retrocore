@@ -893,6 +893,13 @@ then in the host's include paths. `.include <file>` looks only in the host's SDK
 `dialect=native|ca65|merlin|macro10` names the included file's dialect. Includes nest up to the depth limit and
 cannot form a cycle.
 
+A path is either relative, joined to the folder it's looked for in, or fully qualified: `/lib/x.inc` on Linux and
+macOS, `C:\lib\x.inc`, `C:/lib/x.inc` or `\\server\share\x.inc` on Windows. On Windows, a path that's rooted but not
+fully qualified, such as `\lib\x.inc`, `/lib/x.inc` or `C:x.inc`, is an error, because where it points depends on
+the current directory; so is such a host include or SDK path. On Linux and macOS a backslash and a colon are
+ordinary file-name characters. The same rule applies to `.incbin`, Merlin's `PUT` and `USE`, and a MACRO-10
+overlay's base.
+
 `.incbin "file"[, start[, size]]` inserts a file's bytes.
 
 ```text

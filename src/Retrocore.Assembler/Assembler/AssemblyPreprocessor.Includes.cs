@@ -185,7 +185,7 @@ internal sealed partial class AssemblyPreprocessor
             IOException => $"Include could not be read: {error.Message}",
             AssemblyError => error.Message,
             UnauthorizedAccessException => $"Include access was denied: {error.Message}",
-            ArgumentException => $"Invalid include path: {error.Message}",
+            ArgumentException or NotSupportedException => $"Invalid include path: {error.Message}",
             _ => null
         };
 

@@ -124,6 +124,143 @@ public partial class AssemblyPreprocessorTests
     }
 
     /// <summary>
+    ///  On Windows, an include rooted without being fully qualified is reported, not read from wherever current-
+    ///  directory state points.
+    /// </summary>
+    /// <param name="request">The include request.</param>
+    [TestMethod]
+    [OSCondition(OperatingSystems.Windows)]
+    [DataRow(@"\lib\local.inc")]
+    [DataRow("C:local.inc")]
+    public void CurrentDirectoryIncludesAreReportedOnWindows(string request)
+    {
+        Resolver resolver = new();
+        AssemblyResult result = new NativeAssembler().Assemble(
+            new AssemblySource($".include \"{request}\"", @"C:\root\main.asm"),
+            Options(resolver));
+
+        result.Diagnostics.Single().Message.Should().Be($"Invalid include path: An include path must be relative or fully qualified, not '{request}'.");
+    }
+
+    /// <summary>
+    ///  On Windows, a search path rooted without being fully qualified is reported by its own name, not under a
+    ///  combined path the source never wrote.
+    /// </summary>
+    [TestMethod]
+    [OSCondition(OperatingSystems.Windows)]
+    public void CurrentDirectorySearchPathsAreReportedOnWindows()
+    {
+        AssemblyResult result = new NativeAssembler().Assemble(
+            new AssemblySource(".include \"local.inc\"", @"C:\root\main.asm"),
+            Options(new Resolver(), includePaths: [@"\search"]));
+
+        result.Diagnostics.Single().Message.Should().Be(@"Invalid include path: A search path must be relative or fully qualified, not '\search'.");
+    }
+
+    /// <summary>
+    ///  An include reports what its resolver throws for a path, including the <see cref="NotSupportedException"/>
+    ///  .NET Framework hosts throw for some paths, rather than letting it out of the assembler.
+    /// </summary>
+    [TestMethod]
+    public void IncludeResolverErrorsAreReported()
+    {
+        (Exception Error, string Message)[] cases =
+        [
+            (new ArgumentException("Bad name."), "Invalid include path: Bad name."),
+            (new NotSupportedException("Bad format."), "Invalid include path: Bad format."),
+            (new IOException("Unreadable."), "Include could not be read: Unreadable."),
+            (new UnauthorizedAccessException("Denied."), "Include access was denied: Denied."),
+        ];
+
+        foreach ((Exception error, string message) in cases)
+        {
+            AssemblyResult result = new NativeAssembler().Assemble(
+                new AssemblySource(".include \"part.inc\"", P("root/main.asm")),
+                Options(new ThrowingResolver(error)));
+
+            result.Diagnostics.Single().Message.Should().Be(message);
+        }
+
+        // A Merlin PUT probes the resolver before it becomes an include; the probe leaves an invalid path to it.
+        AssemblyOptions merlin = new(ProcessorVariant.Mos6502, origin: 0x1000, imageSize: 32)
+        {
+            Dialect = AssemblyDialect.Merlin,
+            SourceResolver = new ThrowingResolver(new NotSupportedException("Bad format."))
+        };
+
+        new NativeAssembler().Assemble(new AssemblySource("        PUT part\n", P("root/main.s")), merlin)
+            .Diagnostics.Single().Message.Should().Be("Invalid include path: Bad format.");
+    }
+
+    /// <summary>
+    ///  A MACRO-10 overlay reports what its resolver throws for the base, as an include does, rather than letting
+    ///  it out of the assembler.
+    /// </summary>
+    [TestMethod]
+    public void OverlayBaseResolverErrorsAreReported()
+    {
+        Exception[] errors =
+        [
+            new AssemblyError(line: 0, "Invalid RetrocoreDialect metadata 'z80'."),
+            new IOException("The base could not be read."),
+            new UnauthorizedAccessException("The base is denied."),
+            new NotSupportedException("The base's path format is not supported."),
+        ];
+
+        foreach (Exception error in errors)
+        {
+            AssemblyResult overlay = new NativeAssembler().Assemble(
+                new AssemblySource("; retrocore: dialect=macro10 overlay=base.mac\n", P("root/main.mac")),
+                Options(new ThrowingResolver(error)));
+
+            overlay.Diagnostics.Single().Message.Should().Be($"Cannot resolve overlay base 'base.mac': {error.Message}");
+        }
+    }
+
+    /// <summary>
+    ///  A name no path can hold, reached by a Merlin PUT or USE probe or a MACRO-10 overlay's base rather than an
+    ///  .include, is reported as a diagnostic, not thrown out of the assembler.
+    /// </summary>
+    /// <param name="request">The requested name.</param>
+    [TestMethod]
+    [DataRow("bad\0name")]
+    public void InvalidDialectRequestsAreReported(string request) => DialectRequestsAreReported(request);
+
+    /// <summary>
+    ///  On Windows, a Merlin PUT or USE name or a MACRO-10 overlay's base rooted without being fully qualified is
+    ///  reported as an .include's is, not thrown out of the assembler.
+    /// </summary>
+    /// <param name="request">The requested name.</param>
+    [TestMethod]
+    [OSCondition(OperatingSystems.Windows)]
+    [DataRow("C:part")]
+    [DataRow(@"\part")]
+    public void CurrentDirectoryDialectRequestsAreReportedOnWindows(string request) => DialectRequestsAreReported(request);
+
+    private static void DialectRequestsAreReported(string request)
+    {
+        Resolver resolver = new();
+        AssemblyOptions options = new(ProcessorVariant.Mos6502, origin: 0x1000, imageSize: 32)
+        {
+            Dialect = AssemblyDialect.Merlin,
+            SourceResolver = resolver
+        };
+
+        foreach (string operation in (string[])["PUT", "USE"])
+        {
+            AssemblyResult merlin = new NativeAssembler().Assemble(new AssemblySource($"        {operation} {request}\n", P("root/main.s")), options);
+
+            merlin.Diagnostics.Single().Message.Should().StartWith("Invalid include path: ");
+        }
+
+        AssemblyResult overlay = new NativeAssembler().Assemble(
+            new AssemblySource($"; retrocore: dialect=macro10 overlay={request}\n", P("root/main.mac")),
+            Options(resolver));
+
+        overlay.Diagnostics.Single().Message.Should().StartWith($"Cannot resolve overlay base '{request}': ");
+    }
+
+    /// <summary>
     ///  Runtime filesystem access is explicit and keeps relative include semantics.
     /// </summary>
     [TestMethod]
@@ -713,5 +850,4 @@ public partial class AssemblyPreprocessorTests
                 IncludePaths = includePaths ?? [],
                 SdkPaths = sdkPaths ?? []
             };
-
 }

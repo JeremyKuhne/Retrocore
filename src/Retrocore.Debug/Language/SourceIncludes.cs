@@ -4,6 +4,8 @@
 
 using System.Text.RegularExpressions;
 
+using Retrocore.Assembler;
+
 namespace Retrocore.Debug.Language;
 
 /// <summary>
@@ -81,10 +83,22 @@ internal static partial class SourceIncludes
         }
     }
 
-    // The full path of a file a source names, as the workspace's resolver finds it (LanguagePaths.Resolve): an
-    // absolute name as it is, a relative one from the source's folder. Null for a name no path can hold.
-    private static string? Named(string path, string name) =>
-        name.AsSpan().IndexOfAny(Path.GetInvalidPathChars()) >= 0 ? null : LanguagePaths.Resolve(path, name);
+    // The full path of a file a source names, as the workspace's resolver finds it (LanguagePaths.Resolve): a fully
+    // qualified name as it is, a relative one from the source's folder. Null for a name the assembler rejects: one no
+    // path can hold, one that depends on current-directory state, or one too long for a full path.
+    private static string? Named(string path, string name)
+    {
+        bool invalid = name.AsSpan().IndexOfAny(Path.GetInvalidPathChars()) >= 0;
+        if (invalid || AssemblySourcePaths.DependsOnCurrentDirectory(name)) { return null; }
+        try
+        {
+            return LanguagePaths.Resolve(path, name);
+        }
+        catch (Exception error) when (error is ArgumentException or IOException or NotSupportedException)
+        {
+            return null;
+        }
+    }
 
     /// <summary>
     ///  Gets the roots among a folder's sources: every assembly source that no other one includes.

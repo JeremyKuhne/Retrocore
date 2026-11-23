@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
+using Retrocore.Assembler;
+
 namespace Retrocore.Debug.Language;
 
 /// <summary>
@@ -10,15 +12,19 @@ namespace Retrocore.Debug.Language;
 internal static class LanguagePaths
 {
     /// <summary>
-    ///  Resolves an include request relative to the including file, as the assembler does.
+    ///  Resolves an include request relative to the including file, with the assembler's own rule, so the editor
+    ///  names a file by the path the assembler reads it from.
     /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   A fully qualified request is used as it is and a relative one is joined to the including file's folder. A
+    ///   Windows request rooted without being fully qualified, such as <c>\lib\X.asm</c> or <c>C:X.asm</c>, depends on
+    ///   current-directory state and is rejected.
+    ///  </para>
+    /// </remarks>
     /// <param name="fromPath">The including file, or empty.</param>
     /// <param name="request">The requested path.</param>
     /// <returns>The full path.</returns>
-    internal static string Resolve(string fromPath, string request)
-    {
-        if (Path.IsPathFullyQualified(request)) { return Path.GetFullPath(request); }
-        string directory = fromPath.Length == 0 ? "" : Path.GetDirectoryName(Path.GetFullPath(fromPath)) ?? "";
-        return Path.GetFullPath(Path.Join(directory, request));
-    }
+    /// <exception cref="ArgumentException">The request depends on current-directory state.</exception>
+    internal static string Resolve(string fromPath, string request) => AssemblySourcePaths.Resolve(fromPath, request);
 }

@@ -449,6 +449,40 @@ public sealed partial class LanguageAnalysisTests
         }
     }
 
+    /// <summary>
+    ///  The editor names an included file by the path the assembler reads it from: a relative or parent name from
+    ///  the including folder, a fully qualified one as it is, and none for a name no path can hold.
+    /// </summary>
+    [TestMethod]
+    public void IncludesNameTheFilesTheAssemblerReads()
+    {
+        string folder = Path.GetFullPath(Path.Join(Path.GetTempPath(), "retrocore-paths", "program"));
+        string from = Path.Join(folder, "Main.asm");
+        string qualified = Path.GetFullPath(Path.Join(Path.GetTempPath(), "shared", "Library.asm"));
+        string[] lines = [".include \"Library.asm\"", ".include \"../lib/Library.asm\"", $".include \"{qualified}\"", $".include \"bad{'\0'}name\""];
+
+        SourceIncludes.IncludeLines(from, lines).Should().Equal(
+            (0, Path.Join(folder, "Library.asm")),
+            (1, Path.GetFullPath(Path.Join(folder, "..", "lib", "Library.asm"))),
+            (2, qualified));
+
+        LanguagePaths.Resolve(from, "Library.asm").Should().Be(Path.Join(folder, "Library.asm"));
+        LanguagePaths.Resolve(from, qualified).Should().Be(qualified);
+    }
+
+    /// <summary>
+    ///  On Windows, a name rooted without being fully qualified depends on current-directory state, so the editor
+    ///  does not take it for an include, as the assembler rejects it; a fully qualified or relative name is.
+    /// </summary>
+    [TestMethod]
+    [OSCondition(OperatingSystems.Windows)]
+    public void CurrentDirectoryIncludesAreNotFilesOnWindows()
+    {
+        const string From = @"C:\work\program\Main.asm";
+        string[] lines = [@".include ""\lib\Library.asm""", @".include ""C:Library.asm""", @".include ""D:\lib\Library.asm""", @".include ""lib\Library.asm"""];
+        SourceIncludes.IncludeLines(From, lines).Should().Equal((2, @"D:\lib\Library.asm"), (3, @"C:\work\program\lib\Library.asm"));
+    }
+
     private static LspParams Request(DocumentUri uri, int line, int character) =>
         new(new TextDocumentItem(uri, "retrocore-asm", ""), new Position(line, character), new ReferenceContext(IncludeDeclaration: false), "", []);
 }

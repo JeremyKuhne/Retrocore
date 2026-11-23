@@ -349,9 +349,9 @@ Done:
     .proc OverflowError
     ldx #ERROR_OVERFLOW
     jmp ERROR
+    .endproc
 
     ; Mantissa negation, overflow, and the shared arithmetic shifter.
-    .endproc
 
     ;; Shifts the multiplication result right by a byte, then continues through <Float::ShiftRight>.
     ;; Also: MULSHF (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
@@ -359,8 +359,8 @@ Done:
     ldx #(Result1-1)
     .endproc
 
-    ;; Moves the four bytes at X+1..X+4 down a byte, the low one into <FacExtension>, filling the top from Bits; falls
-    ;; into <Float::ShiftRight>.
+    ;; Moves the four bytes at X+1..X+4 down a byte, the low one into <FacExtension>, filling the top from
+    ;; <ShiftFill>; falls into <Float::ShiftRight>.
     ;; Also: SHFTR2 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc ShiftRightByte
     ldy 4,x

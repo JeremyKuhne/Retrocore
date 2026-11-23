@@ -45,7 +45,9 @@ public sealed partial class BasicRenameGateTests
     [
         typeof(AppleSoftTests), typeof(Basic1IndependentSwitchTests), typeof(BasicNativeRootSwitchTests),
         typeof(BasicSharedAliasConsistencyTests), typeof(BasicSharedArrayMultiplicationTests),
-        typeof(BasicSharedAssignmentTests), typeof(BasicSharedFloatAliasesTests), typeof(BasicSharedInterpreterAliasesTests),
+        typeof(BasicMathConversionTests), typeof(BasicMathRoutineTests), typeof(BasicSharedAssignmentTests),
+        typeof(BasicSharedFloatAliasesTests),
+        typeof(BasicSharedInterpreterAliasesTests),
         typeof(BasicSharedCharacterReaderTests), typeof(BasicSharedCommandInputTests), typeof(BasicSharedExpressionTests),
         typeof(BasicSharedForTests), typeof(BasicSharedGarbageCollectionTests), typeof(BasicSharedIntegerConversionTests),
         typeof(BasicSharedLineNumberTests), typeof(BasicSharedLineSearchTests), typeof(BasicSharedListerTests),
@@ -81,7 +83,7 @@ public sealed partial class BasicRenameGateTests
     };
 
     // Helpers the renamed classes use, whose lookups are checked with theirs.
-    private static readonly string[] s_helpers = ["BasicAttribution.cs", "BasicMachines.cs", "PetLegacyBasic.cs"];
+    private static readonly string[] s_helpers = ["BasicAttribution.cs", "BasicMachines.cs", "BasicMathMachine.cs", "PetLegacyBasic.cs"];
 
     /// <summary>
     ///  Renaming <c>FNDLIN</c> to <c>FindLine</c>, and <c>BLTU</c> in a macro's body to <c>MoveRangeUp</c>, in a copy

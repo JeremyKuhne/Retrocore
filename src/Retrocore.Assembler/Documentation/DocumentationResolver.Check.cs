@@ -567,8 +567,7 @@ public sealed partial class DocumentationResolver
             {
                 warn($"Also: {also.Name} is already the definition's name.", section.Line);
             }
-            // A build that leaves the definition out, as an .if can, may define its old name elsewhere.
-            else if (Current.Defines(also.Name) && (topic.Kind == DocumentationKind.Member || Current.Defines(topic.Name)))
+            else if (Current.Defines(also.Name))
             {
                 warn($"Also: {also.Name} is also a definition, which code reaches instead of {topic.Name}.", section.Line);
             }

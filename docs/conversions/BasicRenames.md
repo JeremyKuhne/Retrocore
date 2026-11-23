@@ -37,8 +37,6 @@ The inventory and the document checks were made by script against the eight buil
 seven parts and merged; where the parts disagreed, and what two independent reviews corrected, the log says (K1
 to K12, R1 to R10).
 
-
-
 ### MsBasic.AdditionCore
 
 | # | Old | New | Kind | Builds | Documents (checked) | D3 | Reason |
@@ -110,7 +108,7 @@ to K12, R1 to R10).
 | 60 | `DIV10` | `Float::DivideByTen` | routine | all | M6502, ASTIL [AS], CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | copies Fac to Arg (rounded), points Y:A at Ten with a positive ResultSign, and falls into DivideArgByPacked — Falls into DivideArgByPacked |
 | 61 | `FDIVF` | `Float::DivideArgByPacked` | routine | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | stores X as ResultSign, loads the packed divisor at Y:A into Fac, and divides: Fac = Arg / packed — Functions::Sin calls it with TwoPi |
 | 62 | `FDIV` | `Float::DividePacked` | routine | all | M6502, ASTIL [AS], CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R; spelling only: AS82 [AS] | no | unpacks Y:A into Arg (LoadArg), then falls into DivideArg: Fac = packed / Fac — Falls into DivideArg |
-| 63 | `FDIVT` | `Float::DivideArg` | routine | all | M6502, ASTIL [AS], CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R, ASTIL; spelling only: AS82 [AS]; other names here: FIDVT (ASTIL) | aliases: FIDVT (AppleSoft) | Fac = Arg / Fac: rounds the divisor, combines exponents, builds quotient bits by compare and subtract, normalizes; zero divisor is an error — operator-table target for '/'; ASTIL spells it FIDVT: keep both in Also, see A-Q1 |
+| 63 | `FDIVT` | `Float::DivideArg` | routine | all | M6502, ASTIL [AS], CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R; spelling only: AS82 [AS]; other names here: FIDVT (ASTIL) | aliases: FIDVT (AppleSoft) | Fac = Arg / Fac: rounds the divisor, combines exponents, builds quotient bits by compare and subtract, normalizes; zero divisor is an error — operator-table target for '/'; ASTIL spells it FIDVT: keep both in Also, see A-Q1 |
 | 64 | `DIVIDE` | `Float::DivideArg::Compare` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | compares Arg's mantissa with Fac's, top byte first |
 | 65 | `SAVQUO` | `Float::DivideArg::SaveBit` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | rotates the comparison's carry into the quotient byte; each full byte is stored in Result, the fifth goes to LastBits |
 | 66 | `QSHFT` | `Float::DivideArg::TestSubtract` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | restores the comparison's flags: Arg >= Fac subtracts |
@@ -199,8 +197,8 @@ to K12, R1 to R10).
 | 129 | `CHARACTER_READER` | `CharacterReader` | macro | all |  | — | emits the page-zero reader's template and the seed bytes (x1) |
 | 130 | `seedTail` | `KEEP` | parameter of CHARACTER_READER | all |  | — | the fifth seed byte ($58 or BASIC 1's $59); already descriptive camelCase |
 | 131 | `INITAT` | `CharacterReaderTemplate` | data | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | the code startup copies to GetNextCharacter in page zero (lda CharacterReaderTemplate-1,x loop), with the four seed bytes after it — see B1-Q3; executed only as the page-zero copy |
-| 132 | `CHZGOT` | `CharacterReaderTemplate::GetCurrent` | local | all | M6502; other names here: CHDGOT (HV1, HV1R, HV2, HV4, HV4R) | aliases: CHDGOT | the copy's GetCurrentCharacter: lda abs (operand becomes TextPointer), then classify — Also: CHDGOT (HV1, HV1R, HV2, HV4, HV4R) in the PET builds |
-| 133 | `CHZRTS` | `CharacterReaderTemplate::Done` | local | all | M6502; other names here: CHDRTS (HV1, HV1R, HV2, HV4, HV4R) | aliases: CHDRTS | the rts the colon-or-above test branches to; the seed bytes follow — Also: CHDRTS (HV*) in the PET builds; QNUM/CHRRTS equates: see B1-Q3 |
+| 132 | `CHZGOT` | `CharacterReaderTemplate::GetCurrent` | local | all | M6502; other names here: CHDGOT (HV1, HV1R, HV2, HV4, HV4R) | aliases: CHDGOT (Commodore) | the copy's GetCurrentCharacter: lda abs (operand becomes TextPointer), then classify — Also: CHDGOT (HV1, HV1R, HV2, HV4, HV4R) in the PET builds |
+| 133 | `CHZRTS` | `CharacterReaderTemplate::Done` | local | all | M6502; other names here: CHDRTS (HV1, HV1R, HV2, HV4, HV4R) | aliases: CHDRTS (Commodore) | the rts the colon-or-above test branches to; the seed bytes follow — Also: CHDRTS (HV*) in the PET builds; QNUM/CHRRTS equates: see B1-Q3 |
 
 ### MsBasic.CommandCore
 
@@ -721,7 +719,7 @@ to K12, R1 to R10).
 | 536 | `STOP_AND_CONTINUE` | `StopAndContinue` | macro | all |  | — | emits STOP, END, their shared halt and CONT (x1) |
 | 537 | `lineNumberDirect` | `KEEP` | parameter of STOP_AND_CONTINUE | all |  | — | direct mode by CurrentLine or the text page; already descriptive |
 | 538 | `clearOutput` | `KEEP` | parameter of STOP_AND_CONTINUE | all |  | — | clear OutputSuppressed before BREAK; already descriptive |
-| 539 | `STOP` | `Statements::Stop` | routine | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R; spelling only: ASTIL [AS], AS82 [AS], K4S79 [P4 P4R], HVK4 [P4 P4R]; other names here: BSTOP (HVK4) | aliases: BSTOP | carry set (CHRGET's non-digit, or ISCNTC's cmp #3 for Control-C) skips End's clc, so BREAK is printed; falls into End — Also: BSTOP (HVK4) in BASIC 4 if checked |
+| 539 | `STOP` | `Statements::Stop` | routine | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R; spelling only: ASTIL [AS], AS82 [AS], K4S79 [P4 P4R], HVK4 [P4 P4R]; other names here: BSTOP (HVK4) | aliases: BSTOP (Commodore) | carry set (CHRGET's non-digit, or ISCNTC's cmp #3 for Control-C) skips End's clc, so BREAK is printed; falls into End — Also: BSTOP (HVK4) in BASIC 4 if checked |
 | 540 | `END` | `Statements::End` | routine | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R; spelling only: ASTIL [AS], AS82 [AS] | no | clears carry (no message), falls into StopOrEnd |
 | 541 | `STOPC` | `Statements::StopOrEnd` | routine | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | trailing text returns; in a program saves StoppedText and StoppedLine; drops the return; BREAK (carry) or READY — own proc: Stop branches into it |
 | 542 | `STPEND` | `Statements::StopOrEnd::SaveLine` | entry | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | saves CurrentLine in StoppedLine; the PET's INPUT stop paths enter here |

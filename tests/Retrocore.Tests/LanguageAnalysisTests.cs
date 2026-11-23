@@ -106,6 +106,33 @@ public sealed partial class LanguageAnalysisTests
     }
 
     /// <summary>
+    ///  A constant defined with <c>:=</c>, spaced or not, is a constant in the text of a source that does not
+    ///  assemble, as one defined with <c>=</c> is, not a label.
+    /// </summary>
+    /// <param name="definition">The constant's definition.</param>
+    [TestMethod]
+    [DataRow("VALUE := 3")]
+    [DataRow("VALUE:=3")]
+    public void ColonEqualsConstantsSurviveErrors(string definition)
+    {
+        string directory = Directory.CreateTempSubdirectory().FullName;
+        try
+        {
+            string main = Path.Join(directory, "main.asm");
+            File.WriteAllText(main, $".org $6000\nstart:\n    jmp missing\n{definition}\n");
+
+            SourceAnalysis analysis = SourceAnalysis.Assemble(main, _ => null);
+
+            analysis.Result.Success.Should().BeFalse();
+            analysis.Find("VALUE").Single().Kind.Should().Be(SymbolSiteKind.Constant);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
     ///  A procedure remains navigable when its assembly has errors.
     /// </summary>
     /// <param name="error">A line that makes assembly fail.</param>

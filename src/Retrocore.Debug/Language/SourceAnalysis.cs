@@ -743,7 +743,7 @@ internal sealed partial class SourceAnalysis
     private static partial Regex RomDeclaration();
 
     // A name in column 0: a label (with or without a colon) or an equate. Directives start with a dot.
-    [GeneratedRegex(@"^(?<name>[A-Za-z_@][\w@$%?]*(?:::[\w@$%?]+)*)(?:(?<colon>::?)|(?<equate>\s*(?:==?|\.equ\b|\.set\b|EQU\b))|\s|$)")]
+    [GeneratedRegex(@"^(?<name>[A-Za-z_@][\w@$%?]*(?:::[\w@$%?]+)*)(?:(?<equate>\s*(?::=|==?|\.equ\b|\.set\b|EQU\b))|(?<colon>::?)|\s|$)")]
     private static partial Regex TextDefinition();
 
     [GeneratedRegex(@"^[ \t]*(?:[A-Za-z_@][\w@]*::?[ \t]*)?\.proc[ \t]+(?<name>[A-Za-z_]\w*)(?=[ \t]*(?::[ \t]*[A-Za-z_]\w*)?[ \t]*(?:;|$))", RegexOptions.IgnoreCase)]

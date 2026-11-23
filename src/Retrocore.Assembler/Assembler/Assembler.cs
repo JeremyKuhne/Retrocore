@@ -144,12 +144,25 @@ public sealed partial class Assembler
         ReadOnlyMemory<char> operand;
         int identifierLength = AssemblySyntax.IdentifierLength(text.Span);
         ReadOnlyMemory<char> suffix = text[identifierLength..].TrimStart();
-        if (identifierLength != 0 && !suffix.IsEmpty && suffix.Span[0] == '=' && !suffix[1..].Span.Trim().IsEmpty)
+
+        // ca65's := spells the same constant definition as =.
+        int assignment = 0;
+        if (suffix.Span.StartsWith(":=", StringComparison.Ordinal)) { assignment = 2; }
+        else if (!suffix.IsEmpty && suffix.Span[0] == '=') { assignment = 1; }
+
+        if (identifierLength != 0 && assignment != 0)
         {
+            // An empty right side is still a definition, so every spelling reports it alike.
+            operand = suffix[assignment..].Trim();
+            if (operand.IsEmpty)
+            {
+                error = "A constant definition requires an expression.";
+                return null;
+            }
+
             // Constants lower to the same typed statement kind as caller-constructed .EQU nodes.
             label = text[..identifierLength].ToString();
             operation = ".EQU".AsMemory();
-            operand = suffix[1..].Trim();
         }
         else if (identifierLength != 0
             && suffix.Length > 4

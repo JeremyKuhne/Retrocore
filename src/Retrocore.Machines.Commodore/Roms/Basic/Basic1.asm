@@ -35,7 +35,7 @@ INPUT_BUFFER_PAGE = 0               ;; input buffer in page zero
 .endif
 .ifndef INPUT_BUFFER_LENGTH
 ;; Input buffer length in bytes.
-;; Also: BUFLEN (HV1, HV1R)
+;; Also: BUFLEN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 INPUT_BUFFER_LENGTH = 80
 .endif
 .ifndef NULL_COMMAND

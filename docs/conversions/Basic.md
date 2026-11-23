@@ -659,8 +659,9 @@ Decisions and how the table was applied:
   (LOCAL_TRMPOS, VARTXT_IN_LINNUM) are not historical and get none. Each PET root asserts that none of the seven old
   names is predefined; AppleSoft, which fixes Microsoft's five, rejects those five as values it fixes. The
   switches C# sets keep their names. BASIC 1's root sets three of the five itself
-  (INPUT_BUFFER_PAGE, INPUT_BUFFER_LENGTH, NULL_COMMAND), so there the Equates' definitions, and their old names,
-  are skipped; nothing uses the old names any more.
+  (INPUT_BUFFER_PAGE, INPUT_BUFFER_LENGTH, NULL_COMMAND), so there the Equates' definitions are skipped; nothing
+  uses the old names any more. Since the statement step (S11), BASIC 1's own three carry the same `Also:` as the
+  Equates'.
 - W8. D-Q3: SIZE is `CollectorOffset`, as recommended (the string collector's offset; the recommendation's scoped
   alias waits for the collector's step); LSTPNT is `ListOffset` and DECCNT `DigitCount`, as the table has them.
   OLDOV keeps the table's `FunctionJumpHigh`: the recommended `ArgExtension` rests on D-Q3's reading that FADD keeps
@@ -807,11 +808,11 @@ Decisions and how the table was applied:
   STUFFH, COLIS, NODATT, STR1 and STRNG) keep their names until part C converts those routines.
 - S9. Contracts from the code: `IsLetter` keeps A, X and Y (its two subtractions take $100 in all); the character
   reader's copy keeps X and Y. STOP, END and StopOrEnd are described from the code. `EraseProgram` adds the incoming
-  carry where `clearCarry` is 0, so AppleSoft's and BASIC 1's `NEW`, which arrives with carry set, puts
-  VariablesStart three bytes past ProgramStart; `EraseProgramAddsTheCarryWhereTheBuildKeepsIt` pins AppleSoft's and
-  PET BASIC 4's. The flags routines depend on are stated: ReadLineNumber's zero (so `LIST 10-X` lists to the end),
-  FindForFrame's carry and A, the zero New, Clear and Return take, Return's Y (POP), and that ResetProgramState
-  clears by falling into the next entry.
+  carry where `clearCarry` is 0, so AppleSoft's and, by default, BASIC 1's `NEW`, which arrives with carry set, puts
+  VariablesStart three bytes past ProgramStart; `EraseProgramAddsTheCarryOnlyWhereTheBuildDoesNotClearIt` pins
+  AppleSoft's and PET BASIC 4's. The flags routines depend on are stated: ReadLineNumber's zero (so `LIST 10-X` lists to
+  the end), FindForFrame's carry and A, the zero New, Clear and Return take, Return's Y (POP), and that
+  ResetProgramState clears by falling into the next entry.
 - S10. Tests and their helpers:
   - The rename gate renames STROUT and PTRGET (top level, and in a macro's body), since FNDLIN and BLTU are
     converted. It found that `MathUsesNativeWorkspaceAndMatchesTheLegacyBytes` declared its external labels by
@@ -831,7 +832,8 @@ Decisions and how the table was applied:
     assembler would make of conditions, repeats, macros and scoped includes, and every rule the reviews tried for
     files with errors gave some case a hint naming the wrong definition, so while a file has errors its own name that
     an SDK module also gives loses its hint until the errors are fixed. The unchanged COMBYTE probe fails without the
-    change; the others guard against the wrong hints earlier versions of it gave: `OldNamesInAnOmittedBranchDoNotHint` (with and without an error),
+    change; the others guard against the wrong hints earlier versions of it gave:
+    `OldNamesInAnOmittedBranchDoNotHint` (with and without an error),
     `OldNamesOfTheOtherBranchDoNotHint` (a label documented in both branches),
     `OldNamesUnderConditionsTheEditorCannotReadDoNotHint` (an `.ifdef` of a later symbol, a computed condition),
     `OldNamesHintOnlyTheDefinitionTheAssemblerGivesThemTo` (a root routine sharing its name with a macro's expansion,
@@ -856,7 +858,8 @@ Decisions and how the table was applied:
     character input, since BASIC gives the name to another routine. The workspace step's
     `VendorOldNamesResolveOnlyInTheirVendorsBuilds` required the shared layouts to cite M6502 alone, which forbade the
     lineage; it now requires exactly M6502 and the PET line's documents there. The bibliography's method states the
-    rule too.
+    rule too. BASIC 1's own BUFPAG and NULCMD switches, like its BUFLEN, now cite what the Equates' do. Prose about
+    BASIC 1 in the shared modules names its default switches where a switch changes the fact.
     The statement modules' and the historical names' citations already followed the rule. BASIC 1's ZERO is a definition
     of its own in `MsBasic.VariableLookup.asm` (M4), whose step will cite the line on it. The AppleSoft documents
     (ASTIL, AS82) are not available here to check. One test rule would forbid a lineage-only alias: a Commodore alias

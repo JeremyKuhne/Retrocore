@@ -37,7 +37,7 @@ Done:
     ;;
     ;; The copy increments <TextPointer>, whose two bytes are the operand at <CharacterReaderTemplate::GetCurrent>, and
     ;; skips spaces. Five seed bytes follow the code, but startup copies only the first four to <RandomValue>. BASIC 1
-    ;; stores $59 as the fifth byte; AppleSoft and the later PET BASICs store $58.
+    ;; stores $59 by default as the fifth byte; AppleSoft and the later PET BASICs store $58.
     ;;
     ;; Commodore's BASIC 4 source and Martin Hoffmann-Vetter's reconstructions spell the labels CHZGOT and CHZRTS as
     ;; `CHDGOT` and `CHDRTS`, which the PET builds take as Commodore's historical names.

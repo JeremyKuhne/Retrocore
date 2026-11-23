@@ -4,7 +4,7 @@
 ;; blocks upward as they grow; string collection also uses the unchecked entry of the same backward copy.
 ;; These routines follow the tables in AppleSoft.asm.
 ;;
-;; Apple uses a $36-byte stack reserve rather than the generic Microsoft calculation based on <NUMLEV>.
+;; Apple uses a $36-byte stack reserve rather than the generic Microsoft calculation based on <STACK_LEVELS>.
 
 .include "../Microsoft6502Basic/MsBasic.MemoryManagement.asm"
 

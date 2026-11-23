@@ -5,6 +5,16 @@
 
 .cpu Mos6502
 
+; The build switches Microsoft named, renamed in the BASIC conversion (decision X15). A predefined old name would be
+; ignored rather than reaching its switch, so it is an error.
+.assert .not .defined(BUFPAG), "Predefine INPUT_BUFFER_PAGE, not BUFPAG."
+.assert .not .defined(BUFLEN), "Predefine INPUT_BUFFER_LENGTH, not BUFLEN."
+.assert .not .defined(NULCMD), "Predefine NULL_COMMAND, not NULCMD."
+.assert .not .defined(NUMLEV), "Predefine STACK_LEVELS, not NUMLEV."
+.assert .not .defined(STKEND), "Predefine STACK_END, not STKEND."
+.assert .not .defined(LOCAL_TRMPOS), "Predefine LOCAL_TERMINAL_POSITION, not LOCAL_TRMPOS."
+.assert .not .defined(VARTXT_IN_LINNUM), "Predefine VARIABLE_LIST_IN_LINE_NUMBER, not VARTXT_IN_LINNUM."
+
 .ifndef REVISD
 REVISD = 1                          ;; 1 selects the revised $B000 BASIC 4 chip
 .endif
@@ -59,9 +69,9 @@ BASIC4_OUTPUT_PADDING = 1           ;; include BASIC 4's output patch space
     LIST_TOKENS 1, 1, 1, 0
 .include "../../Microsoft6502Basic/MsBasic.For.asm"
 .if REVISD
-    COMMODORE_STATEMENT_FETCH BUFPAG, 0, 0, 0, GONEGT
+    COMMODORE_STATEMENT_FETCH INPUT_BUFFER_PAGE, 0, 0, 0, GONEGT
 .else
-    COMMODORE_STATEMENT_FETCH BUFPAG, 0, 0, 0, CHRGET
+    COMMODORE_STATEMENT_FETCH INPUT_BUFFER_PAGE, 0, 0, 0, CHRGET
 .endif
     COMMODORE_STATEMENT_DISPATCH 0, 1
     RESTORE_DATA
@@ -81,14 +91,14 @@ BASIC4_OUTPUT_PADDING = 1           ;; include BASIC 4's output patch space
 ; Terminal and channel output, then READ and input.
     COMMODORE_PRINT_CHANNELS
     PRINT_CORE TABER, 1, 0, 1
-    COMMODORE_LINE_END BUFPAG, 0, 1, 0
+    COMMODORE_LINE_END INPUT_BUFFER_PAGE, 0, 1, 0
     COMMODORE_PRINT_SPACING 0
 .include "../../Microsoft6502Basic/MsBasic.StringOutput.asm"
     COMMODORE_CHARACTER_OUTPUT 0, 0, 0, 0
     COMMODORE_INPUT_ERROR 0
-    COMMODORE_CHANNEL_INPUT BUFPAG
+    COMMODORE_CHANNEL_INPUT INPUT_BUFFER_PAGE
     COMMODORE_INPUT_STATEMENT 0, 3, REVISD, 0, 1
-    VARIABLE_INPUT BUFPAG, 0, 0, 0, 1, 0
+    VARIABLE_INPUT INPUT_BUFFER_PAGE, 0, 0, 0, 1, 0
     VARIABLE_INPUT_MESSAGES 0, 0
 
 ; Expressions, variables, arrays and linked strings.
@@ -111,7 +121,7 @@ BASIC4_OUTPUT_PADDING = 1           ;; include BASIC 4's output patch space
     SIMPLE_FUNCTIONS 0
     USER_FUNCTIONS 0
     STRING_FROM_NUMBER
-    STRING_STORAGE BUFPAG, 1
+    STRING_STORAGE INPUT_BUFFER_PAGE, 1
     STRING_ALLOCATION 1
     LINKED_STRING_GARBAGE_COLLECTION
     STRING_CONCATENATION 1
@@ -126,7 +136,7 @@ BASIC4_OUTPUT_PADDING = 1           ;; include BASIC 4's output patch space
 .include "Commodore.FloatAliases.asm"
 .include "Commodore.InterpreterAliases.asm"
     CHARACTER_READER $58
-    COMMODORE_INITIALIZE 0, 0, 0, 0, BUFPAG, 1, 0
+    COMMODORE_INITIALIZE 0, 0, 0, 0, INPUT_BUFFER_PAGE, 1, 0
     COMMODORE_MEMORY_PROBE 0, 0, 1, 1, 0, $55
     COMMODORE_START_PROGRAM 0, 0, 0, 0, SIGNON
     COMMODORE_START_MESSAGES 0

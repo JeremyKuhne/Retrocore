@@ -202,6 +202,15 @@ internal static class BasicNames
     }
 
     /// <summary>
+    ///  Gets predefined symbols exactly as given, without the current names <see cref="WithCurrentNames"/> adds: for
+    ///  a test of what a build does with an old name predefined by itself.
+    /// </summary>
+    /// <param name="symbols">The predefined symbols.</param>
+    /// <returns>A copy of the symbols.</returns>
+    internal static Dictionary<string, long> AsGiven(IReadOnlyDictionary<string, long> symbols) =>
+        new(symbols, StringComparer.Ordinal);
+
+    /// <summary>
     ///  Gets the source that defines a label a test's own source gives one of Microsoft's names: the label, and a
     ///  label at the same place under every name the native BASIC builds now define it by, so the modules reach it
     ///  whether they use the old name or the new one.

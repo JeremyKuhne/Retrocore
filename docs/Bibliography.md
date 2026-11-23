@@ -17,9 +17,11 @@ workspace adds documents of its own, or replaces a key, with the same columns.
 | IBSM | Annotated listing of Integer BASIC, by Paul R. Santa-Maria | | | |
 | IIEROM82 | Apple IIe Reference Manual Addendum: Monitor ROM Listings, For //e Only | 1982 | Apple Computer | <https://archive.org/details/Reference_Manual_Addendum_Monitor_ROM_Listings> |
 | IIETRM85 | Apple IIe Technical Reference Manual | 1985 | Addison-Wesley | <https://archive.org/details/a2etrm> |
+| UNKN | Unclear where this originated: a name no listed document gives | | | |
 | M6502 | BASIC M6502 8K version 1.1 source (MACRO-10), published under the MIT license | 1978 | Microsoft | <https://github.com/microsoft/BASIC-M6502> |
 | ASTIL | Apple II Technical Information Library: "Applesoft: Internals" articles | | Apple Computer | <https://mirrors.apple2.org.za/Apple%20II%20Documentation%20Project/Companies/Apple/Documentation/Apple%20Technical%20Information%20Library/> |
 | AS82 | Applesoft source listing, May 26, 1982 (Roger Wagner Publishing's reference copy) | 1982 | Apple Computer | <https://archive.org/details/roger_wagner_applesoft_source> |
+| ASRM78 | Applesoft II Reference Manual | 1978 | Apple Computer | <https://archive.org/details/Applesoft_II_Reference_Manual_1978-08_Apple> |
 | CBM4S79 | PET BASIC version 4 source, listing of July 23, 1979 (OCRed and reconstructed by Martin Hoffmann-Vetter) | 1979 | Commodore | <https://github.com/mist64/cbmsrc/tree/01bd60f162ef92212ef0cb67546ae8f42be34168/BASIC_PET_V4_1979-07-23> |
 | K4S79 | PET 2001 operating system version 4.0 (July 25, 1979), listing of October 23, 1979 (OCRed and reconstructed by Martin Hoffmann-Vetter) | 1979 | Commodore | <https://github.com/mist64/cbmsrc/tree/01bd60f162ef92212ef0cb67546ae8f42be34168/KERNAL_PET_4.0_1979-10-23> |
 | HV1 | PET BASIC 1 (901439-01 ...), reconstructed source | | Martin Hoffmann-Vetter | <https://github.com/mist64/cbmsrc/tree/01bd60f162ef92212ef0cb67546ae8f42be34168/BASIC_PET_V1_REC> |

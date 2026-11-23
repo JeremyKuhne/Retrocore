@@ -22,7 +22,7 @@
 ;; The early ROM uses the whole stack and marks the line number as direct. The later ROMs load their
 ;; configured stack top. The following memory probe establishes BASIC's limit.
 INIT:
-    ldx #<(STKEND-$100)
+    ldx #<(STACK_END-$100)
 .if markDirect
     stx CURLIN+1
 .endif
@@ -54,7 +54,7 @@ MOVCHG:
     sta BITS
     sta CHANNL
     sta LASTPT+1
-.if NULCMD
+.if NULL_COMMAND
     sta NULCNT
 .endif
 .if localPosition

@@ -259,7 +259,7 @@ public sealed class BasicSharedCommandInputTests
         Processor<RecordingBus> cpu = Start(bus, Address(native, "INLIN"));
         ushort error = checked((ushort)native.Symbol("ERROR"));
         ushort nextCharacter = checked((ushort)native.Symbol("INLINC"));
-        byte limit = checked((byte)native.Symbol("BUFLEN"));
+        byte limit = checked((byte)native.Symbol("INPUT_BUFFER_LENGTH"));
         for (int step = 0; step < 5000 && cpu.Registers.ProgramCounter != error; step++)
         {
             if (!reject && cpu.Registers.ProgramCounter == nextCharacter && cpu.Registers.X == limit) { break; }
@@ -497,16 +497,16 @@ public sealed class BasicSharedCommandInputTests
             symbols.Add(name, definition.Value);
         }
 
-        symbols.Add("BUFPAG", early ? 0 : 2);
-        symbols.Add("BUFLEN", early ? 80 : 81);
-        symbols.Add("NULCMD", Flag(early));
+        symbols.Add("INPUT_BUFFER_PAGE", early ? 0 : 2);
+        symbols.Add("INPUT_BUFFER_LENGTH", early ? 80 : 81);
+        symbols.Add("NULL_COMMAND", Flag(early));
         symbols.Add("TERMINAL_FIRST", Flag(early));
         symbols.Add("FULL_STACK_TOP", Flag(early));
         symbols.Add("STACK_RESERVE_19", Flag(early));
-        symbols.Add("LOCAL_TRMPOS", Flag(early));
+        symbols.Add("LOCAL_TERMINAL_POSITION", Flag(early));
         symbols.Add("LINE_WIDTH_STORAGE", Flag(!disk));
         symbols.Add("DISK_STATUS_STRING", Flag(disk));
-        symbols.Add("VARTXT_IN_LINNUM", Flag(early));
+        symbols.Add("VARIABLE_LIST_IN_LINE_NUMBER", Flag(early));
         symbols.Add("CLOCK_IN_PAGE2", Flag(early));
         symbols.Add("STATUS_IN_PAGE2", Flag(early));
         symbols.Add("RND_TIMER_9044", Flag(early));
@@ -577,7 +577,7 @@ public sealed class BasicSharedCommandInputTests
         cpu.Registers = cpu.Registers with
         {
             Accumulator = input[0],
-            StackPointer = checked((byte)(native.Symbol("STKEND") - 0x101)),
+            StackPointer = checked((byte)(native.Symbol("STACK_END") - 0x101)),
             Status = StatusRegister.Unused
         };
 

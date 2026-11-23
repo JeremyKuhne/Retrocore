@@ -55,9 +55,9 @@ public sealed partial class BasicRenameGateTests
         typeof(BasicSharedStatementFlowTests), typeof(BasicSharedStringConcatenationTests),
         typeof(BasicSharedStringFunctionTests), typeof(BasicSharedStringStorageTests), typeof(BasicSharedUserFunctionsTests),
         typeof(BasicSharedVariableInputTests), typeof(BasicSharedVariableLookupTests), typeof(BasicTokenizerTests),
-        typeof(BasicVariableTests), typeof(PetBasic4ExtensionTests), typeof(PetBasic4RevisionTests),
-        typeof(PetBasicConformanceTests), typeof(PetNativeEquatesTests), typeof(PetRomSourceTests),
-        typeof(PetSharedFloatAssemblyTests)
+        typeof(BasicVariableTests), typeof(BasicWorkspaceConversionTests), typeof(PetBasic4ExtensionTests),
+        typeof(PetBasic4RevisionTests), typeof(PetBasicConformanceTests), typeof(PetNativeEquatesTests),
+        typeof(PetRomSourceTests), typeof(PetSharedFloatAssemblyTests)
     ];
 
     // Test sources that assemble BASIC but are not run against the renamed copy, each for its reason.
@@ -410,7 +410,7 @@ public sealed partial class BasicRenameGateTests
     // Also: name itself, or on the bibliography, which looks up a document's key. So are an assembly's symbol table
     // handed on whole, a label a test's source defines by one of Microsoft's names, and a definition's name compared
     // with a literal one.
-    [GeneratedRegex(@"\.Symbols(\[|\.(TryGetValue|ContainsKey|Should|GetValueOrDefault)\(|;)|SymbolDefinitions\.(Single|First|SingleOrDefault|FirstOrDefault|ToDictionary)\(|(?<!\b(variables|initial|Bibliography))\.Find(Routine)?\(|PredefinedSymbols = (?!BasicNames\.WithCurrentNames\()|^\s*[A-Z][A-Z0-9]{1,5}:\s*$|""[A-Z][A-Z0-9]{1,5}:""|Name\.Should\(\)\.Be\(""|EntryLabels\.Should\(\)\.Contain\(""")]
+    [GeneratedRegex(@"\.Symbols(\[|\.(TryGetValue|ContainsKey|Should|GetValueOrDefault)\(|;)|SymbolDefinitions\.(Single|First|SingleOrDefault|FirstOrDefault|ToDictionary)\(|(?<!\b(variables|initial|Bibliography))\.Find(Routine)?\(|PredefinedSymbols = (?!BasicNames\.(WithCurrentNames|AsGiven)\()|^\s*[A-Z][A-Z0-9]{1,5}:\s*$|""[A-Z][A-Z0-9]{1,5}:""|Name\.Should\(\)\.Be\(""|EntryLabels\.Should\(\)\.Contain\(""")]
     private static partial Regex RawLookup();
 
     // The same lookups with the symbol table on one line and the lookup on the next.

@@ -62,7 +62,7 @@ NODEL:
     lda MEMSIZ
     ldy MEMSIZ+1
     sta FRETOP
-    sty NCMWID
+    sty FRETOP+1                 ; Microsoft's NCMWID here is the same byte
     lda VARTAB
     sta HIGHTR
     adc COUNT

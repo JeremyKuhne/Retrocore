@@ -31,20 +31,20 @@ FNDFOR:
     inx
     inx
 FFLOOP:
-    lda $0101,x                 ; frame marker
+    lda Stack + 1 + ForFrame::TOKEN,x
     cmp #FORTK
     bne FFRTS
     lda FORPNT+1
     bne CMPFOR
-    lda $0102,x
+    lda Stack + 1 + ForFrame::VARIABLE,x
     sta FORPNT
-    lda $0103,x
+    lda Stack + 1 + ForFrame::VARIABLE+1,x
     sta FORPNT+1
 CMPFOR:
-    cmp $0103,x
+    cmp Stack + 1 + ForFrame::VARIABLE+1,x
     bne ADDFRS
     lda FORPNT
-    cmp $0102,x
+    cmp Stack + 1 + ForFrame::VARIABLE,x
     beq FFRTS
 ADDFRS:
     txa

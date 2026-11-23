@@ -83,7 +83,7 @@ MinimumInteger:
 ;; A nonzero result (Compare unequal, or <FacSign> negative) goes to ILLEGAL QUANTITY.
 ;; Also: NONONO (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 FailUnlessEqual:
-    bne FCERR
+    bne IllegalQuantityError
 
 ;; Converts <Fac> without checking its type, sign or range.
 ;; See: <Float::ToLongInteger>

@@ -97,7 +97,7 @@ SUPPRESS_OUTPUT_KEY = $0F
 ;; Also: START (M6502, ASTIL)
 RestartJump = $00
 
-;; Page-zero jump initialized to <STROUT>.
+;; Page-zero jump initialized to <PrintText>.
 ;; Also: RDYJSR (M6502, ASTIL)
 PrintStringJump = $03
 

@@ -107,8 +107,8 @@ FUNDSP:
     .word MID                       ; MID$
 
 .include "../Microsoft6502Basic/MsBasic.OperatorTable.asm"
-    ; AppleSoft puts power below negation, gives NOT unary precedence, and dispatches AND to <OROP1>.
-    OperatorEntries 1, 1, OROP1
+    ; AppleSoft puts power below negation, gives NOT unary precedence, and dispatches AND to <Operators::And>.
+    OperatorEntries 1, 1, Operators::And
 
 ;; Reserved-word spellings in token order, starting at $80 and ending with a zero byte.
 ;;

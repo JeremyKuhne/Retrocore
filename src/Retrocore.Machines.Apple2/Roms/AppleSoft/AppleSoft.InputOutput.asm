@@ -8,7 +8,7 @@
 ;;
 ;; For READ the reported line is the DATA line; GET is reported as direct. An active ONERR handler receives
 ;; error code $FE for the INPUT retry path.
-;; See: <DOAGIN>, <DATLIN>, <SNERR>
+;; See: <DOAGIN>, <DATLIN>, <SyntaxError>
 TRMNOK:
     lda INPFLG
     beq DOAGIN
@@ -45,7 +45,7 @@ TRMNO2:
 
 ;; GET: reads individual keyboard characters into the variables in its list.
 ;; Errors: ILLEGAL DIRECT when used in direct mode
-;; See: <INPCO1>, <CQINCH>
+;; See: <AssignVariableList>, <CQINCH>
 GET:
     jsr ERRDIR
 GETTTY:
@@ -61,7 +61,7 @@ GETTTY:
 ;;
 ;; A literal prompt must be followed by a semicolon. Without one INPUT prints a question mark.
 ;; Errors: ILLEGAL DIRECT when used in direct mode
-;; See: <INLIN>, <INLOOP>
+;; See: <INLIN>, <AssignVariableList::NextVariable>
 INPUT:
     cmp #'"'
     bne INPUT1
@@ -92,5 +92,5 @@ GINLIN:
     jmp INLIN
 
 .include "../Microsoft6502Basic/MsBasic.VariableInput.asm"
-    VARIABLE_INPUT 2, 1, 0, 0, 0, 1
-    VARIABLE_INPUT_MESSAGES 1, 0
+    VariableInput 2, 1, 0, 0, 0, 1
+    VariableInputMessages 1, 0

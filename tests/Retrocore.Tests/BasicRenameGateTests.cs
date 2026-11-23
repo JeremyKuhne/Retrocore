@@ -25,19 +25,21 @@ namespace Retrocore.Tests;
 [TestClass]
 public sealed partial class BasicRenameGateTests
 {
-    private const string OldName = "STROUT";
-    private const string NewName = "PrintText";
+    // The shared modules are converted, so the renames are of the vendors' interpreter labels, which each vendor
+    // defines in its own file under the same old name: AppleSoft's and the PET's newline routine.
+    private const string OldName = "CRDO";
+    private const string NewName = "PrintNewline";
 
-    // A second rename, of a label defined in a macro's body (VariableLookup's), whose Also: reaches it because
-    // each build expands the macro once.
-    private const string MacroOldName = "PTRGET";
-    private const string MacroNewName = "FindVariable";
+    // A second rename, of a label the PET defines in a macro's body (its statement fetch), whose Also: reaches it
+    // because each build expands the macro once; AppleSoft defines it as a plain label.
+    private const string MacroOldName = "NEWSTT";
+    private const string MacroNewName = "NextStatement";
 
-    // Each rename, with the file that defines the name.
-    private static readonly (string Old, string New, string File, Regex Word)[] s_renames =
+    // Each rename, with the files that define the name.
+    private static readonly (string Old, string New, string[] Files, Regex Word)[] s_renames =
     [
-        (OldName, NewName, "MsBasic.StringOutput.asm", OldNameWord()),
-        (MacroOldName, MacroNewName, "MsBasic.VariableLookup.asm", MacroOldNameWord())
+        (OldName, NewName, ["AppleSoft.Print.asm", "Commodore.ChannelPrint.asm"], OldNameWord()),
+        (MacroOldName, MacroNewName, ["AppleSoft.ControlFlow.asm", "Commodore.StatementDispatch.asm"], MacroOldNameWord())
     ];
 
     // The classes that assemble the native BASIC sources and look its names up, run against the renamed copy.
@@ -46,7 +48,7 @@ public sealed partial class BasicRenameGateTests
         typeof(AppleSoftTests), typeof(Basic1IndependentSwitchTests), typeof(BasicNativeRootSwitchTests),
         typeof(BasicSharedAliasConsistencyTests), typeof(BasicSharedArrayMultiplicationTests),
         typeof(BasicMathConversionTests), typeof(BasicMathRoutineTests), typeof(BasicSharedAssignmentTests),
-        typeof(BasicStatementsConversionTests), typeof(BasicStatementRoutineTests),
+        typeof(BasicStatementsConversionTests), typeof(BasicStatementRoutineTests), typeof(BasicExpressionsConversionTests),
         typeof(BasicSharedFloatAliasesTests),
         typeof(BasicSharedInterpreterAliasesTests),
         typeof(BasicSharedCharacterReaderTests), typeof(BasicSharedCommandInputTests), typeof(BasicSharedExpressionTests),
@@ -87,7 +89,7 @@ public sealed partial class BasicRenameGateTests
     private static readonly string[] s_helpers = ["BasicAttribution.cs", "BasicMachines.cs", "BasicMathMachine.cs", "PetLegacyBasic.cs"];
 
     /// <summary>
-    ///  Renaming <c>STROUT</c> to <c>PrintText</c>, and <c>PTRGET</c> in a macro's body to <c>FindVariable</c>, in a copy
+    ///  Renaming <c>CRDO</c> to <c>PrintNewline</c>, and <c>NEWSTT</c> in a macro's body to <c>NextStatement</c>, in a copy
     ///  of the native sources, each with its old name in <c>;; Also:</c>, keeps every ROM's bytes and leaves every
     ///  BASIC test green without changing it.
     /// </summary>
@@ -158,8 +160,8 @@ public sealed partial class BasicRenameGateTests
                 native.DefinitionName(oldName).Should().Be(newName);
             }
 
-            native.HasSymbol("STROUT_NOT_A_NAME").Should().BeFalse();
-            Action neither = () => native.Symbol("STROUT_NOT_A_NAME");
+            native.HasSymbol("CRDO_NOT_A_NAME").Should().BeFalse();
+            Action neither = () => native.Symbol("CRDO_NOT_A_NAME");
             neither.Should().Throw<KeyNotFoundException>();
 
             // A standalone build of the module, as the comparisons assemble it, finds the dependency by either name.
@@ -263,12 +265,13 @@ public sealed partial class BasicRenameGateTests
 
             string text = File.ReadAllText(path);
             string replaced = text;
-            foreach ((string oldName, string newName, string file, Regex word) in s_renames)
+            foreach ((string oldName, string newName, string[] files, Regex word) in s_renames)
             {
                 string before = replaced;
                 replaced = word.Replace(replaced, newName);
                 if (!string.Equals(replaced, before, StringComparison.Ordinal)) { changed[oldName]++; }
-                if (Path.GetFileName(path) != file) { continue; }
+                string file = Path.GetFileName(path);
+                if (!files.Contains(file)) { continue; }
 
                 // The definition's documentation ends on the line before it.
                 int at = replaced.IndexOf($"\n{newName}:", StringComparison.Ordinal);

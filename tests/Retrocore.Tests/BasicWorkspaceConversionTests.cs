@@ -40,7 +40,7 @@ public sealed class BasicWorkspaceConversionTests
         "Stack", "Variable", "ArrayHeader", "StringDescriptor", "ForFrame", "GosubFrame", "OperatorEntry",
         "ProgramLine", "FunctionDefinition", "TERMINAL_FIRST", "FULL_STACK_TOP", "STACK_RESERVE_19", "LOCAL_TERMINAL_POSITION", "LINE_WIDTH_STORAGE",
         "DISK_STATUS_STRING", "VARIABLE_LIST_IN_LINE_NUMBER", "CLOCK_IN_PAGE2", "STATUS_IN_PAGE2", "RND_TIMER_9044",
-        "ERROR_PADDING5", "EXTENDED_DISK_VECTORS"
+        "ERROR_PADDING5", "EXTENDED_DISK_VECTORS", "FLOAT_SIZE", "DEFAULT_BOUND"
     ];
 
     private static readonly Apple2Model[] s_appleModels =

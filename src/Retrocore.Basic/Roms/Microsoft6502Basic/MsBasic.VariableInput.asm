@@ -1,23 +1,39 @@
+; retrocore: style=strict
 ; Derived from Microsoft's BASIC for 6502 (m6502.asm, MIT license; see LICENSE in this folder).
+
+.include "MsBasic.Families.asm"
+
 ; MICROSOFT 6502 BASIC: READ AND VARIABLE INPUT
 ;
-; VARIABLE_INPUT follows the platform's GET and INPUT entries. VARIABLE_INPUT_MESSAGES emits the
+; VariableInput follows the platform's GET and INPUT entries. VariableInputMessages emits the
 ; immediately following warning strings. Both macros are emitted before NEXT.
 ;
-; AppleSoft:           VARIABLE_INPUT 2, 1, 0, 0, 0, 1; VARIABLE_INPUT_MESSAGES 1, 0
-; PET BASIC 1:         VARIABLE_INPUT 0, 0, 1, 1, 1, 0; VARIABLE_INPUT_MESSAGES 0, 1
-; PET BASIC 2:         VARIABLE_INPUT 2, 0, 0, 0, 1, 0; VARIABLE_INPUT_MESSAGES 0, 1
-; PET BASIC 4:         VARIABLE_INPUT 2, 0, 0, 0, 1, 0; VARIABLE_INPUT_MESSAGES 0, 0
+; AppleSoft:           VariableInput 2, 1, 0, 0, 0, 1; VariableInputMessages 1, 0
+; PET BASIC 1:         VariableInput 0, 0, 1, 1, 1, 0; VariableInputMessages 0, 1
+; PET BASIC 2:         VariableInput 2, 0, 0, 0, 1, 0; VariableInputMessages 0, 1
+; PET BASIC 4:         VariableInput 2, 0, 0, 0, 1, 0; VariableInputMessages 0, 0
 ;
-; The early GETSTR helper is external: it stores CHARAC, advances the cursor, removes its JSR return
-; address, and jumps back to RESETC with A = 0. BASIC 1 supplies it in the editor-ROM patches.
+; The early GETSTR helper is external: it stores the character, advances the cursor, removes its JSR return
+; address, and jumps back to AssignVariableList::StringAtCursor with A = 0. BASIC 1 supplies it in the editor-ROM
+; patches.
 
-;; Emits READ and the common GET, INPUT and READ variable-processing loop.
-;; Parameters: bufferPage = the page containing <BUF>, maskGetBit7 = 1 to clear bit 7 of a GET character,
-;;   getPointerYFirst = 1 to load the GET buffer pointer's high byte before its low byte,
+; The values of <InputMode>, which says where AssignVariableList takes its values from.
+;; <InputMode> for `INPUT`: the values come from the line the user types.
+INPUT_MODE_INPUT = $00
+;; <InputMode> for `GET`: bit 6 set, one character from the keyboard.
+INPUT_MODE_GET = $40
+;; <InputMode> for `READ`: bit 7 set, the values come from `DATA` statements.
+;;
+;; It is also the opcode of `TYA`, which where the input buffer is in page zero `READ` turns into the operand of a
+;; `LDA` immediate, so that the `INPUT` entry's first instruction loads it.
+INPUT_MODE_READ = $98
+
+;; Emits `READ` and the common `GET`, `INPUT` and `READ` variable-processing loop.
+;; Parameters: bufferPage = the page containing <BUF>, maskGetBit7 = 1 to clear bit 7 of a `GET` character,
+;;   getPointerYFirst = 1 to load the `GET` buffer pointer's high byte before its low byte,
 ;;   patchedGetString = 1 to use the early `GETSTR` patch, channelInput = 1 to honor input channels,
-;;   blankNumericRetry = 1 to retry an empty terminal INPUT numeric value
-.macro VARIABLE_INPUT bufferPage, maskGetBit7, getPointerYFirst, patchedGetString, channelInput, blankNumericRetry
+;;   blankNumericRetry = 1 to retry an empty terminal `INPUT` numeric value
+.macro VariableInput bufferPage, maskGetBit7, getPointerYFirst, patchedGetString, channelInput, blankNumericRetry
     .assert bufferPage >= 0 && bufferPage <= 255, "bufferPage must fit in a byte."
     .assert BUF > 0 && BUF / 256 = bufferPage, "BUF must be in bufferPage and have a preceding byte."
     .assert maskGetBit7 = 0 || maskGetBit7 = 1, "maskGetBit7 must be 0 or 1."
@@ -26,279 +42,325 @@
     .assert channelInput = 0 || channelInput = 1, "channelInput must be 0 or 1."
     .assert blankNumericRetry = 0 || blankNumericRetry = 1, "blankNumericRetry must be 0 or 1."
     .assert patchedGetString = 0 || bufferPage = 0, "The early GETSTR patch requires a page-zero buffer."
-.if getPointerYFirst
-    .assert <(BUF-1) != 0, "The GET buffer pointer's low byte must make its branch unconditional."
-.elseif bufferPage
-    .assert >(BUF-1) != 0, "The GET buffer pointer's high byte must make its branch unconditional."
-.endif
+    .if getPointerYFirst
+        .assert <(BUF-1) != 0, "The GET buffer pointer's low byte must make its branch unconditional."
+    .elseif bufferPage
+        .assert >(BUF-1) != 0, "The GET buffer pointer's high byte must make its branch unconditional."
+    .endif
 
-;; Reads values for a variable list from DATA, starting at the saved <DATPTR>.
-;; In: decimal = clear
-;; See: <INPCO1>, <DATLOP>, <Statements::Restore>
-READ:
-    ldx DATPTR
-    ldy DATPTR+1
-.if bufferPage
-    lda #$98
-    .byte $2C                   ; BIT absolute skips the INPUT flag load
-.else
-    .byte $A9                   ; LDA immediate consumes INPCON's TYA opcode as $98
-.endif
+    .scope Statements continued
 
-;; Starts an INPUT variable list with X/Y pointing to its input buffer.
-;; In: X = cursor low byte, Y = cursor high byte (zero for a page-zero buffer)
-INPCON:
-.if bufferPage
-    lda #$00
-.else
-    tya
-.endif
+    ;; Reads values for a variable list from `DATA`, starting at the saved <DataPointer>.
+    ;; In: decimal = clear
+    ;; See: <AssignVariableList>, <AssignVariableList::SearchData>, <Statements::Restore>
+    ;; Also: READ (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    .proc Read
+    ldx DataPointer
+    ldy DataPointer+1
+    .if bufferPage
+        lda #INPUT_MODE_READ
+        .byte $2C                   ; BIT absolute skips the INPUT mode's load
+    .else
+        .assert INPUT_MODE_READ = $98, "READ's mode must be the TYA opcode its LDA immediate takes."
+        .byte $A9                   ; LDA immediate takes AssignInputList's TYA opcode as INPUT_MODE_READ
+    .endif
+    ; Falls into AssignInputList.
+    .endproc
+    .endscope
 
-;; Assigns a GET, INPUT or READ value to each variable in the statement's list.
-;;
-;; <INPPTR> tracks the input cursor while <VARTXT> saves the variable-list position. GET obtains one
-;; character when its sentinel is reached; READ searches subsequent DATA statements. A comma in the
-;; variable list continues the loop. The early PET uses its `GETSTR` patch; AppleSoft masks GET characters
-;; and retries an empty terminal numeric INPUT. A selected file channel suppresses terminal prompts and warnings.
-;; In: A = source flag ($40 GET, $00 INPUT, $98 READ), X = cursor low byte, Y = cursor high byte,
-;;   decimal = clear
-;; See: <PTRGET>, <INPCOM>, <QINTGR>, <DATLOP>
-INPCO1:
-    sta INPFLG
-    stx INPPTR
-    sty INPPTR+1
+    ;; Starts an `INPUT` variable list with X/Y pointing to its input buffer.
+    ;;
+    ;; It sets A to <INPUT_MODE_INPUT>: with `LDA` where the buffer is outside page zero, or from Y where it is in page
+    ;; zero.
+    ;; In: X = cursor low byte, Y = cursor high byte (zero for a page-zero buffer)
+    ;; Also: INPCON (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    .proc AssignInputList
+    .if bufferPage
+        lda #$00
+    .else
+        tya
+    .endif
+    ; Falls into AssignVariableList.
+    .endproc
+
+    ;; Assigns a `GET`, `INPUT` or `READ` value to each variable in the statement's list.
+    ;;
+    ;; <InputPointer> tracks the input cursor while <VariableListPointer> saves the variable-list position. `GET`
+    ;; obtains one character when its sentinel is reached; `READ` searches subsequent `DATA` statements. A comma in the
+    ;; variable list continues the loop. BASIC 1 uses its `GETSTR` patch; AppleSoft masks `GET` characters and retries
+    ;; an empty terminal numeric `INPUT`. On the PET, a selected file channel suppresses terminal prompts and warnings.
+    ;; In: A = <INPUT_MODE_GET>, <INPUT_MODE_INPUT> or <INPUT_MODE_READ>, X = cursor low byte, Y = cursor high byte,
+    ;;   decimal = clear
+    ;; Errors: OUT OF DATA when `READ` finds no more `DATA`, and the vendor's handling of a malformed value (<TRMNOK>)
+    ;; Entry:
+    ;;   StringAtCursor = clears carry so the string starts at the current character; BASIC 1's `GETSTR` patch jumps
+    ;;     back here
+    ;; See: <FindVariable>, <AssignString>, <StoreNumber>, <AssignVariableList::SearchData>
+    ;; Also: INPCO1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    .proc AssignVariableList
+    sta InputMode
+    stx InputPointer
+    sty InputPointer+1
 
 ;; Resolves the next variable, then switches from the variable list to the saved input cursor.
-INLOOP:
-    jsr PTRGET
-    sta FORPNT
-    sty FORPNT+1
-    lda TXTPTR
-    ldy TXTPTR+1
-    sta VARTXT
-    sty VARTXT+1
-    ldx INPPTR
-    ldy INPPTR+1
-    stx TXTPTR
-    sty TXTPTR+1
-    jsr CHRGOT
-    bne DATBK1
-    bit INPFLG
-    bvc QDATA
-    jsr CZGETL
-.if maskGetBit7
-    and #$7F
-.endif
+;; Also: INLOOP (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+NextVariable:
+    jsr FindVariable
+    sta AssignedVariable
+    sty AssignedVariable+1
+    lda TextPointer
+    ldy TextPointer+1
+    sta VariableListPointer
+    sty VariableListPointer+1
+    ldx InputPointer
+    ldy InputPointer+1
+    stx TextPointer
+    sty TextPointer+1
+    jsr GetCurrentCharacter
+    bne NextValue
+    bit InputMode
+    bvc SourceEmpty
+    jsr GetCharacter
+    .if maskGetBit7
+        and #$7F
+    .endif
     sta BUF
-.if getPointerYFirst
-    ldy #>(BUF-1)
-    ldx #<(BUF-1)
-    bne DATBK
-.else
-    ldx #<(BUF-1)
-    ldy #>(BUF-1)
-.if bufferPage
-    bne DATBK
-.else
-    beq DATBK
-.endif
-.endif
+    .if getPointerYFirst
+        ldy #>(BUF-1)
+        ldx #<(BUF-1)
+        bne SetCursor
+    .else
+        ldx #<(BUF-1)
+        ldy #>(BUF-1)
+        .if bufferPage
+            bne SetCursor
+        .else
+            beq SetCursor
+        .endif
+    .endif
 
-;; Continues READ at the next DATA statement or obtains another INPUT line.
-QDATA:
-    bmi DATLOP
-.if channelInput
-    lda CHANNL
-    bne GETNTH
-.endif
+;; Continues `READ` at the next `DATA` statement or obtains another `INPUT` line.
+;; Also: QDATA (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+SourceEmpty:
+    bmi SearchData
+    .if channelInput
+        lda CurrentChannel
+        bne ReadAnotherLine
+    .endif
     jsr OUTQST
-GETNTH:
+;; Reads a line with <QINLIN>.
+;; Also: GETNTH (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+ReadAnotherLine:
     jsr QINLIN
-DATBK:
-    stx TXTPTR
-    sty TXTPTR+1
+;; Sets <TextPointer> to X/Y.
+;; Also: DATBK (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+SetCursor:
+    stx TextPointer
+    sty TextPointer+1
 
 ;; Starts conversion of the next string or numeric value at the input cursor.
-DATBK1:
-    jsr CHRGET
-    bit VALTYP
-.if blankNumericRetry
-    bpl NOWGE2
-.else
-    bpl NUMINS
-.endif
-    bit INPFLG
-    bvc SETQUT
-.if patchedGetString
-    lda #$00
-    jsr GETSTR
-    nop
-.else
-    inx
-    stx TXTPTR
-    lda #$00
-    sta CHARAC
-    beq RESETC
-.endif
+;; Also: DATBK1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+NextValue:
+    jsr GetNextCharacter
+    bit ValueType
+    .if blankNumericRetry
+        bpl CheckEmptyLine
+    .else
+        bpl ConvertNumber
+    .endif
+    bit InputMode
+    bvc SetDelimiters
+    .if patchedGetString
+        lda #$00
+        jsr GETSTR
+        nop
+    .else
+        inx
+        stx TextPointer
+        lda #$00
+        sta Delimiter
+        beq StringAtCursor
+    .endif
 
 ;; Sets quote delimiters, or colon and comma delimiters for an unquoted string.
-SETQUT:
-    sta CHARAC
+;; Also: SETQUT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+SetDelimiters:
+    sta Delimiter
     cmp #'"'
-    beq NOWGET
+    beq MakeString
     lda #':'
-    sta CHARAC
+    sta Delimiter
     lda #','
 
-;; Uses the current text position as the start of an unquoted or single-character GET string.
+;; Uses the current text position as the start of an unquoted or single-character `GET` string.
 ;; In: A = ending delimiter, TextPointer = first character
-RESETC:
+;; Also: RESETC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+StringAtCursor:
     clc
 
 ;; Builds and assigns a string from the input cursor.
 ;;
-;; Carry set skips an opening quote; carry clear starts at the current character. <STRLT2> makes the
-;; descriptor, <ST2TXT> advances the input cursor, and <INPCOM> assigns the result.
+;; Carry set skips an opening quote; carry clear starts at the current character. <Strings::FromTextUntil> makes the
+;; descriptor, <SetTextPointer> advances the input cursor, and <AssignString> assigns the result.
 ;; In: A = ending delimiter, TextPointer = text position, carry = set to skip a quote, decimal = clear
-NOWGET:
-    sta ENDCHR
-    lda TXTPTR
-    ldy TXTPTR+1
+;; Also: NOWGET (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+MakeString:
+    sta EndDelimiter
+    lda TextPointer
+    ldy TextPointer+1
     adc #$00
-    bcc NOWGE1
+    bcc HaveAddress
     iny
-NOWGE1:
-    jsr STRLT2
-    jsr ST2TXT
-    jsr INPCOM
-    jmp STRDN2
+;; Text address in A/Y: makes and assigns the string.
+;; Also: NOWGE1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+HaveAddress:
+    jsr Strings::FromTextUntil
+    jsr SetTextPointer
+    jsr AssignString
+    jmp CheckTerminator
 
-.if blankNumericRetry
-;; Saves the numeric character while checking whether the input buffer starts with zero.
-NOWGE2:
-    pha
-    lda BUF
-    beq TRMOK1
-NOWGE3:
-    pla
-.endif
+    .if blankNumericRetry
+;; Saves the numeric character while checking whether the input line is empty.
+CheckEmptyLine:
+        pha
+        lda BUF
+        beq EmptyNumber
+;; Pulls the saved character back.
+RestoreCharacter:
+        pla
+    .endif
 
 ;; Converts and assigns a numeric value, including integer variables.
-NUMINS:
-    jsr FIN
-    lda INTFLG
-    jsr QINTGR
+;; Also: NUMINS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+ConvertNumber:
+    jsr Float::ReadNumber
+    lda IntegerType
+    jsr StoreNumber
 
 ;; Validates the input terminator and restores the variable-list cursor.
 ;;
-;; A zero or colon is accepted by <CHRGOT>'s zero flag; a comma is also accepted. Otherwise the
+;; A zero or colon is accepted by <GetCurrentCharacter>'s zero flag; a comma is also accepted. Otherwise the
 ;; platform's malformed-input handler decides whether to retry or report an error.
-STRDN2:
-    jsr CHRGOT
-    beq TRMOK
+;; Also: STRDN2 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+CheckTerminator:
+    jsr GetCurrentCharacter
+    beq TerminatorOk
     cmp #','
-    beq TRMOK
+    beq TerminatorOk
     jmp TRMNOK
-TRMOK:
-    lda TXTPTR
-    ldy TXTPTR+1
-    sta INPPTR
-    sty INPPTR+1
-    lda VARTXT
-    ldy VARTXT+1
-    sta TXTPTR
-    sty TXTPTR+1
-    jsr CHRGOT
-    beq VAREND
-    jsr CHKCOM
-    jmp INLOOP
-.if blankNumericRetry
+;; Saves the input cursor, returns to the variable list and continues after a comma.
+;; Also: TRMOK (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+TerminatorOk:
+    lda TextPointer
+    ldy TextPointer+1
+    sta InputPointer
+    sty InputPointer+1
+    lda VariableListPointer
+    ldy VariableListPointer+1
+    sta TextPointer
+    sty TextPointer+1
+    jsr GetCurrentCharacter
+    beq ListDone
+    jsr CheckComma
+    jmp NextVariable
+    .if blankNumericRetry
 
-;; Retries an empty numeric INPUT, or restores the saved character for READ and GET.
-;; See: <SNERR6>, <NOWGE3>
-TRMOK1:
-    lda INPFLG
-    bne NOWGE3
-    jmp SNERR6
-.endif
+;; Retries an empty numeric `INPUT`, or restores the saved character for `READ` and `GET`.
+;; See: <SNERR6>, <AssignVariableList::RestoreCharacter>
+EmptyNumber:
+        lda InputMode
+        bne RestoreCharacter
+        jmp SNERR6
+    .endif
 
-;; Searches forward for a DATA statement, remembering each new line number in <DATLIN>.
+;; Searches forward for a `DATA` statement, remembering each new line number in <DataLine>.
 ;;
 ;; <FindStatementEnd> skips statements, including quoted colons. A zero high byte in the next line link reports OUT OF
 ;; DATA.
-;; See: <DATBK1>
-DATLOP:
-    jsr DATAN
+;; See: <AssignVariableList::NextValue>
+;; Also: DATLOP (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+SearchData:
+    jsr FindStatementEnd
     iny
     tax
-    bne NOWLIN
-    ldx #ERROD
+    bne CheckStatement
+    ldx #ERROR_OUT_OF_DATA
     iny
-    lda (TXTPTR),y
-    beq ERRGO5
+    lda (TextPointer),y
+    beq Statements::Next::ToError
     iny
-    lda (TXTPTR),y
-    sta DATLIN
+    lda (TextPointer),y
+    sta DataLine
     iny
-    lda (TXTPTR),y
+    lda (TextPointer),y
     iny
-    sta DATLIN+1
-NOWLIN:
-    lda (TXTPTR),y
+    sta DataLine+1
+;; Reads the statement's first token and loops until it is `DATA`.
+;; Also: NOWLIN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+CheckStatement:
+    lda (TextPointer),y
     tax
-    jsr ADDON
-    cpx #DATATK
-    bne DATLOP
-    jmp DATBK1
+    jsr AdvanceTextPointer
+    cpx #TOKEN_DATA
+    bne SearchData
+    jmp NextValue
 
-;; Saves READ's cursor or warns about extra terminal INPUT characters.
+;; Saves `READ`'s cursor or warns about extra terminal `INPUT` characters.
 ;;
 ;; Channel input suppresses the warning. A zero at the input cursor needs no warning.
-VAREND:
-    lda INPPTR
-    ldy INPPTR+1
-    ldx INPFLG
-    bpl VARY0
-    jmp RESFIN
-VARY0:
+;; Also: VAREND (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+ListDone:
+    lda InputPointer
+    ldy InputPointer+1
+    ldx InputMode
+    bpl CheckExtra
+    jmp Statements::Restore::SetDataPointer
+;; Prints EXTRA IGNORED when input remains, except on a PET's input channel.
+;; Also: VARY0 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+CheckExtra:
     ldy #$00
-    lda (INPPTR),y
-    beq INPRTS
-.if channelInput
-    lda CHANNL
-    bne INPRTS
-.endif
-    lda #<EXIGNT
-    ldy #>EXIGNT
-    jmp STROUT
-INPRTS:
+    lda (InputPointer),y
+    beq Done
+    .if channelInput
+        lda CurrentChannel
+        bne Done
+    .endif
+    lda #<ExtraIgnoredMessage
+    ldy #>ExtraIgnoredMessage
+    jmp PrintText
+;; Returns.
+;; Also: INPRTS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+Done:
     rts
+    .endproc
 .endmacro
 
-;; Emits the extra-input warning and retry messages immediately after VARIABLE_INPUT.
+;; Emits the extra-input warning and retry messages immediately after <VariableInput>.
 ;; Parameters: shortRetry = 1 for "?REENTER", 0 for "?REDO FROM START";
 ;;   lineFeed = 1 to follow each carriage return with a line feed
-.macro VARIABLE_INPUT_MESSAGES shortRetry, lineFeed
+.macro VariableInputMessages shortRetry, lineFeed
     .assert shortRetry = 0 || shortRetry = 1, "shortRetry must be 0 or 1."
     .assert lineFeed = 0 || lineFeed = 1, "lineFeed must be 0 or 1."
 
-;; Zero-terminated warning for extra terminal INPUT values.
-EXIGNT:
+;; Zero-terminated warning for extra terminal `INPUT` values.
+;; Also: EXIGNT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+ExtraIgnoredMessage:
     .byte "?EXTRA IGNORED", $0D
-.if lineFeed
-    .byte $0A
-.endif
+    .if lineFeed
+        .byte $0A
+    .endif
     .byte $00
 
-;; Zero-terminated prompt for retrying malformed terminal INPUT.
-TRYAGN:
-.if shortRetry
-    .byte "?REENTER", $0D
-.else
-    .byte "?REDO FROM START", $0D
-.endif
-.if lineFeed
-    .byte $0A
-.endif
+;; Zero-terminated prompt for retrying malformed terminal `INPUT`.
+;; Also: TRYAGN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+RetryMessage:
+    .if shortRetry
+        .byte "?REENTER", $0D
+    .else
+        .byte "?REDO FROM START", $0D
+    .endif
+    .if lineFeed
+        .byte $0A
+    .endif
     .byte $00
 .endmacro

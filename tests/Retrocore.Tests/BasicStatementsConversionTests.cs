@@ -49,7 +49,9 @@ public sealed class BasicStatementsConversionTests
         "Functions::Fn::RestoreText",
         "Statements::List::ReadSecondBound", "Statements::List::NextTableByte", "Statements::List::ReadTableByte",
         "Statements::List::ListWordCharacter", "Statements::List::ListLastCharacter",
-        "Statements::List::ReadWordByte", "Statements::List::ListFirstWord"
+        "Statements::List::ReadWordByte", "Statements::List::ListFirstWord",
+        "PRECEDENCE_ADD", "PRECEDENCE_MULTIPLY", "PRECEDENCE_UPPER", "PRECEDENCE_TOP", "PRECEDENCE_AND", "PRECEDENCE_OR",
+        "PRECEDENCE_NOT", "PRECEDENCE_RELATION"
     ];
 
     // Each build compares about 150 old names with the overlay, and the files give about 180.
@@ -120,12 +122,14 @@ public sealed class BasicStatementsConversionTests
         appleNames.Should().Contain(["NEW", "COMBYTE", "GOLST1", "GRODY1", "REMER1"]);
         petNames.Should().Contain(["CHDGOT", "CHDRTS", "RESCR2", "PRIT3B"]);
 
-        foreach (string name in appleNames)
+        // A name both vendors' files give, each for its own definition (ANDOP and the classic collector's steps, from
+        // the expressions step, K12), is checked by the loop below, which follows each vendor's to its own alias.
+        foreach (string name in appleNames.Except(petNames))
         {
             pet.Should().AllSatisfy(build => build.HasSymbol(name).Should().BeFalse($"{name} is AppleSoft's name"));
         }
 
-        foreach (string name in petNames)
+        foreach (string name in petNames.Except(appleNames))
         {
             apple.Should().AllSatisfy(build => build.HasSymbol(name).Should().BeFalse($"{name} is the PET's name"));
         }

@@ -152,7 +152,7 @@ PRINT_TOKEN_SPACING = 1             ;; 1 distinguishes TAB and SPC by token and 
 ALWAYS_SKIP_CHARACTER = 1           ;; 1 sends cursor-right as a space on every channel
 .endif
 .ifndef INPUT_ERROR_EDITOR_PATCH
-INPUT_ERROR_EDITOR_PATCH = 1        ;; 1 calls the editor's <GET>/<READ> error-line helper
+INPUT_ERROR_EDITOR_PATCH = 1        ;; 1 calls the editor's <GET>/<Statements::Read> error-line helper
 .endif
 .ifndef INPUT_STOP_EDITOR_PATCH
 INPUT_STOP_EDITOR_PATCH = 1         ;; 1 calls the editor's stop helper for blank <INPUT>
@@ -172,7 +172,7 @@ NEXT_COUNTED_STACK = 1              ;; 1 counts through the <Statements::For> fr
 CLOCK_EDITOR_PATCH = 1              ;; 1 uses the editor's TI and TI$ variable checks
 .endif
 .ifndef INTIDX_USE_FRMNUM
-INTIDX_USE_FRMNUM = 1               ;; 1 evaluates subscripts with <EvaluateNumber>, 0 with <FRMEVL>
+INTIDX_USE_FRMNUM = 1               ;; 1 evaluates subscripts with <EvaluateNumber>, 0 with <EvaluateExpression>
 .endif
 .ifndef POSINT_CHECK_TYPE
 POSINT_CHECK_TYPE = 0               ;; 1 checks the numeric type at <FacToNonnegativeInteger>
@@ -196,13 +196,13 @@ GC_PATCH_ARRAY_STEP = 1             ;; 1 calls the editor's array-descriptor ste
 GC_SUBTRACT_OFFSET = 1              ;; 1 subtracts three to form the descriptor offset instead of masking
 .endif
 .ifndef REJECT_ZERO_SLICES
-REJECT_ZERO_SLICES = 1              ;; 1 rejects zero <LEFT> and <RIGHT> counts as well as a zero <MID> start
+REJECT_ZERO_SLICES = 1              ;; 1 rejects zero <Functions::Left> and <Functions::Right> counts as well as a zero <Functions::Mid> start
 .endif
 .ifndef PREAM_INDIRECT_RETURN
-PREAM_INDIRECT_RETURN = 1           ;; 1 returns from <PREAM> through the writable jump
+PREAM_INDIRECT_RETURN = 1           ;; 1 returns from <Functions::SliceArguments> through the writable jump
 .endif
 .ifndef ASC_SHARED_LEN_JUMP
-ASC_SHARED_LEN_JUMP = 1             ;; 1 sends <ASC> through <LEN>'s numeric conversion jump
+ASC_SHARED_LEN_JUMP = 1             ;; 1 sends <Functions::Asc> through <Functions::Len>'s numeric conversion jump
 .endif
 
 ; Memory-access, arithmetic and startup choices.
@@ -315,9 +315,9 @@ RESET_STACK_POINTER = <(STACK_END-$101-2*RESET_STACK_EARLY) ;; stack pointer aft
     ConditionalStatements
     OnStatement
 .include "../../Microsoft6502Basic/MsBasic.LineNumber.asm"
-    ASSIGNMENT_START
+    AssignmentStart
     TIME_STRING_ASSIGNMENT TIME_LONG_ERROR
-    STRING_ASSIGNMENT 0, 0
+    StringAssignment 0, 0
 
 ; Terminal and channel output, then READ and input.
     COMMODORE_PRINT_CHANNELS
@@ -329,37 +329,37 @@ RESET_STACK_POINTER = <(STACK_END-$101-2*RESET_STACK_EARLY) ;; stack pointer aft
     COMMODORE_INPUT_ERROR INPUT_ERROR_EDITOR_PATCH
     COMMODORE_CHANNEL_INPUT INPUT_BUFFER_PAGE
     COMMODORE_INPUT_STATEMENT 1, 2, 0, INPUT_STOP_EDITOR_PATCH, 0
-    VARIABLE_INPUT INPUT_BUFFER_PAGE, 0, GET_POINTER_Y_FIRST, GET_STRING_EDITOR_PATCH, 1, 0
-    VARIABLE_INPUT_MESSAGES 0, 1
+    VariableInput INPUT_BUFFER_PAGE, 0, GET_POINTER_Y_FIRST, GET_STRING_EDITOR_PATCH, 1, 0
+    VariableInputMessages 0, 1
 
 ; Expressions, variables, arrays and strings.
     NextEntries NEXT_COUNTED_STACK, NEWSTT
-    EXPRESSION_CORE 0
-    OPERAND_EVALUATION 1, 1, ISFUN
+    ExpressionCore 0
+    OperandEvaluation 1, 1, ISFUN
     COMMODORE_VARIABLE_VALUE 0, CLOCK_EDITOR_PATCH, 0
-    FUNCTION_DISPATCH
-    LOGICAL_OPERATORS 1
+    FunctionDispatch
+    LogicalOperators 1
     RelationalOperators $FF
 .include "../../Microsoft6502Basic/MsBasic.Dim.asm"
-    VARIABLE_NAME 0, 0, 1, 0, 0, 0
+    VariableSearch 0, 0, 1, 0, 0, 0
     LetterTest
-    SIMPLE_VARIABLE_LOOKUP 0, 1-ZERO_IN_HALF_CONSTANT, 0, 1, 1, 0, 0, 0
+    SimpleVariableLookup 0, 1-ZERO_IN_HALF_CONSTANT, 0, 1, 1, 0, 0, 0
     IntegerConversionBoundary
 .if INTIDX_USE_FRMNUM
     IntegerConversion FRMNUM, POSINT_CHECK_TYPE
 .else
     IntegerConversion FRMEVL, POSINT_CHECK_TYPE
 .endif
-    ARRAY_LOOKUP 0, 0, ARRAY_SAVE_OFFSET_HIGH
+    ArrayLookup 0, 0, ARRAY_SAVE_OFFSET_HIGH
 .include "../../Microsoft6502Basic/MsBasic.ArrayMultiplication.asm"
     SimpleFunctions 0
     UserFunctions USER_FN_LOW_CHECK
-    STRING_FROM_NUMBER
-    STRING_STORAGE INPUT_BUFFER_PAGE, STRING_CLEAR_FACOV
-    STRING_ALLOCATION 0
-    STRING_GARBAGE_COLLECTION GC_FULL_POINTER, GC_PATCH_ARRAY_STEP, GC_SUBTRACT_OFFSET
-    STRING_CONCATENATION 0
-    STRING_FUNCTIONS REJECT_ZERO_SLICES, PREAM_INDIRECT_RETURN, ASC_SHARED_LEN_JUMP, 0
+    StringFromNumber
+    StringStorage INPUT_BUFFER_PAGE, STRING_CLEAR_FACOV
+    StringAllocation 0
+    StringGarbageCollection GC_FULL_POINTER, GC_PATCH_ARRAY_STEP, GC_SUBTRACT_OFFSET
+    StringConcatenation 0
+    StringFunctions REJECT_ZERO_SLICES, PREAM_INDIRECT_RETURN, ASC_SHARED_LEN_JUMP, 0
 
 ; Memory access, floating point and cold startup.
     AddressConversion 1
@@ -372,7 +372,6 @@ RESET_STACK_POINTER = <(STACK_END-$101-2*RESET_STACK_EARLY) ;; stack pointer aft
 .endif
 .include "Commodore.FloatingPoint.asm"
 .include "Commodore.HistoricalNames.asm"
-.include "Commodore.InterpreterAliases.asm"
     CharacterReader RANDOM_SEED_TAIL
     COMMODORE_INITIALIZE INIT_MARK_DIRECT, INIT_LINE_WIDTH, INIT_DELAY_SIZE, LOCAL_TERMINAL_POSITION, INPUT_BUFFER_PAGE, 0, INIT_EARLY_BUFFER_SETUP
     COMMODORE_MEMORY_PROBE PROBE_LOAD_ZERO, PROBE_LOAD_INDEX_ZERO, PROBE_SAVE_START, 0, PROBE_STOP_AT_SCREEN, PROBE_TEST_BYTE

@@ -1,27 +1,40 @@
+; retrocore: style=strict
 ; Derived from Microsoft's BASIC for 6502 (m6502.asm, MIT license; see LICENSE in this folder).
+
+.include "MsBasic.Families.asm"
+
 ; MICROSOFT 6502 BASIC: STRING OUTPUT
 
 ;; Prints text up to a quotation mark or zero.
 ;; In: A = low string address, Y = high string address
-;; See: <STRLIT>, <STRPRT>
-STROUT:
-    jsr STRLIT
+;; See: <Strings::FromText>, <PrintString>
+;; Also: STROUT (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+.proc PrintText
+    jsr Strings::FromText
+; Falls into PrintString.
+.endproc
 
-;; Prints the string whose descriptor is addressed by <FACMO>, releasing the temporary if applicable.
-;; In: FACMO/FACLO = string descriptor address
-;; See: <FREFAC>, <OUTDO>
-STRPRT:
-    jsr FREFAC
+;; Prints the string whose descriptor is addressed by <FacMantissa3>, releasing the temporary if applicable.
+;;
+;; Each carriage return it prints is followed by the vendor's <CRFIN>. It ends at <PRTRTS>, Print's return.
+;; In: FacMantissa3 = string descriptor address (low byte), FacMantissa4 = its high byte
+;; See: <Strings::ReleaseFac>, <OUTDO>
+;; Also: STRPRT (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+.proc PrintString
+    jsr Strings::ReleaseFac
     tax
     ldy #$00
     inx
-STRPR2:
+;; Prints the next character until the count runs out.
+;; Also: STRPR2 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+NextCharacter:
     dex
     beq PRTRTS
-    lda (INDEX),y
+    lda (Pointer1),y
     jsr OUTDO
     iny
-    cmp #$0D
-    bne STRPR2
+    cmp #$0D                    ; carriage return
+    bne NextCharacter
     jsr CRFIN
-    jmp STRPR2
+    jmp NextCharacter
+.endproc

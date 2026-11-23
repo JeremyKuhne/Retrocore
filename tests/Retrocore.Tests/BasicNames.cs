@@ -308,7 +308,7 @@ internal static partial class BasicNames
     }
 
     // The scopes MsBasic.Families.asm declares.
-    private static readonly string[] s_families = ["Float", "Functions", "Statements"];
+    private static readonly string[] s_families = ["Float", "Functions", "Statements", "Operators", "Strings", "Variables"];
 
     private static bool IsScoped(string name) => name.Contains("::", StringComparison.Ordinal);
 
@@ -512,6 +512,32 @@ internal static partial class BasicNames
         }
 
         return names;
+    }
+
+    /// <summary>
+    ///  The labels only the SDK's own MACRO-10 overlays give, which no document names and the rename table gives no
+    ///  <c>;; Also:</c> (Basic.md B2), with the definition at each one's address in the native builds that have it.
+    /// </summary>
+    internal static IReadOnlyDictionary<string, string> OverlayOnlyLabels => s_overlayOnlyLabels;
+
+    private static readonly Dictionary<string, string> s_overlayOnlyLabels = new(StringComparer.Ordinal)
+    {
+        ["LENFLT"] = "Functions::Len::ToFloat",
+        ["NOTDS"] = "StoreString::NOTDS",
+        ["NOTDS1"] = "StoreString::NOTDS1"
+    };
+
+    /// <summary>
+    ///  Gets the definition a name reaches in a build, following a vendor's alias in its historical names file to the
+    ///  definition it names.
+    /// </summary>
+    /// <param name="result">The build.</param>
+    /// <param name="name">The name, current or old.</param>
+    /// <returns>The definition the shared or vendor code makes.</returns>
+    internal static AssemblySymbol DefiningSymbol(AssemblyResult result, string name)
+    {
+        AssemblySymbol definition = result.Definition(name);
+        return AliasTarget(definition) is { } target ? result.Definition(target) : definition;
     }
 
     // The target of an alias in a vendor's historical names file, from its line (Name = Target or Name = ::Target).

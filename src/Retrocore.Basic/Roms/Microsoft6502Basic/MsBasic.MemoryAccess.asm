@@ -32,11 +32,11 @@
     ;; Requires a comma and reads the following byte expression.
     ;;
     ;; Out: X = byte value, TextPointer = terminating character
-    ;; See: <CHKCOM>, <GETBYT>
+    ;; See: <CheckComma>, <EvaluateByte>
     ;; Also: COMBYT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc ReadCommaAndByte
-    jsr CHKCOM
-    jmp GETBYT
+    jsr CheckComma
+    jmp EvaluateByte
     .endproc
 
     ;; Converts <Fac> to a 16-bit address in <PokeAddress>.
@@ -50,11 +50,11 @@
     .proc ConvertToAddress
     .if rejectNegative
         lda FacSign
-        bmi GOFUC
+        bmi Functions::ToIllegalQuantityError
     .endif
     lda FacExponent
     cmp #$91
-    bcs GOFUC
+    bcs Functions::ToIllegalQuantityError
     jsr Float::ToLongInteger
     lda FacMantissa3
     ldy FacMantissa4

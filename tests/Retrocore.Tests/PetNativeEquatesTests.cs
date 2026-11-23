@@ -429,9 +429,9 @@ public sealed class PetNativeEquatesTests
             .include "MsBasic.LineNumber.asm"
             COMPOSED_LINE_NUMBER_END:
             .org ${legacy.Symbol("LET"):X4}
-                ASSIGNMENT_START
+                AssignmentStart
                 TIME_STRING_ASSIGNMENT {(early ? 1 : 0)}
-                STRING_ASSIGNMENT {(disk ? 1 : 0)}, {(disk ? 1 : 0)}
+                StringAssignment {(disk ? 1 : 0)}, {(disk ? 1 : 0)}
                 {(disk ? $"STRING_LINK_ADJUST {(original ? 0 : 1)}" : "")}
             COMPOSED_ASSIGNMENT_END:
                 COMMODORE_PRINT_CHANNELS
@@ -452,35 +452,35 @@ public sealed class PetNativeEquatesTests
             COMPOSED_CHANNEL_INPUT_END:
                 COMMODORE_INPUT_STATEMENT {(disk ? 0 : 1)}, {(disk ? 3 : 2)}, {(disk && !original ? 1 : 0)}, {(early ? 1 : 0)}, {(disk ? 1 : 0)}
             COMPOSED_INPUT_END:
-                VARIABLE_INPUT INPUT_BUFFER_PAGE, 0, {(early ? 1 : 0)}, {(early ? 1 : 0)}, 1, 0
-                VARIABLE_INPUT_MESSAGES 0, {(disk ? 0 : 1)}
+                VariableInput INPUT_BUFFER_PAGE, 0, {(early ? 1 : 0)}, {(early ? 1 : 0)}, 1, 0
+                VariableInputMessages 0, {(disk ? 0 : 1)}
             COMPOSED_VARIABLE_INPUT_END:
                 NextEntries {(early ? 1 : 0)}, NEWSTT
-                EXPRESSION_CORE {(disk ? 1 : 0)}
+                ExpressionCore {(disk ? 1 : 0)}
             COMPOSED_EXPRESSION_END:
-                OPERAND_EVALUATION 1, 1, ISFUN
+                OperandEvaluation 1, 1, ISFUN
             COMPOSED_OPERAND_END:
                 {(disk ? $"COMMODORE_BASIC4_OPERAND_SPLIT {(original ? 0 : 1)}" : "")}
             COMPOSED_OPERAND_SPLIT_END:
                 COMMODORE_VARIABLE_VALUE {(disk ? 1 : 0)}, {(early ? 1 : 0)}, {(disk ? 1 : 0)}
             COMPOSED_VARIABLE_VALUE_END:
-                FUNCTION_DISPATCH
-                LOGICAL_OPERATORS 1
+                FunctionDispatch
+                LogicalOperators 1
             COMPOSED_FUNCTION_DISPATCH_END:
                 RelationalOperators $FF
             COMPOSED_RELATIONAL_END:
             .include "MsBasic.Dim.asm"
             COMPOSED_DIM_END:
-                VARIABLE_NAME 0, 0, 1, 0, {(disk ? 1 : 0)}, {(disk ? 1 : 0)}
+                VariableSearch 0, 0, 1, 0, {(disk ? 1 : 0)}, {(disk ? 1 : 0)}
             COMPOSED_VARIABLE_NAME_END:
                 LetterTest
             COMPOSED_LETTER_TEST_END:
-                SIMPLE_VARIABLE_LOOKUP 0, {(early ? 1 : 0)}, 0, 1, 1, {(disk ? 1 : 0)}, {(disk ? 1 : 0)}, 0
+                SimpleVariableLookup 0, {(early ? 1 : 0)}, 0, 1, 1, {(disk ? 1 : 0)}, {(disk ? 1 : 0)}, 0
             COMPOSED_SCALAR_LOOKUP_END:
                 IntegerConversionBoundary
                 IntegerConversion {(early ? "FRMNUM" : "FRMEVL")}, {(early ? 0 : 1)}
             COMPOSED_INTEGER_CONVERSION_END:
-                ARRAY_LOOKUP 0, {(disk ? 1 : 0)}, {(early ? 0 : 1)}
+                ArrayLookup 0, {(disk ? 1 : 0)}, {(early ? 0 : 1)}
             COMPOSED_ARRAY_END:
             .include "MsBasic.ArrayMultiplication.asm"
             COMPOSED_MULTIPLY_END:
@@ -488,16 +488,16 @@ public sealed class PetNativeEquatesTests
             COMPOSED_SIMPLE_FUNCTIONS_END:
                 UserFunctions {(early ? 1 : 0)}
             COMPOSED_USER_FUNCTIONS_END:
-                STRING_FROM_NUMBER
+                StringFromNumber
             COMPOSED_STRING_CONVERSION_END:
-                STRING_STORAGE INPUT_BUFFER_PAGE, {(early ? 0 : 1)}
-                STRING_ALLOCATION {(disk ? 1 : 0)}
+                StringStorage INPUT_BUFFER_PAGE, {(early ? 0 : 1)}
+                StringAllocation {(disk ? 1 : 0)}
             COMPOSED_STRING_STORAGE_END:
-                {(disk ? "LINKED_STRING_GARBAGE_COLLECTION" : $"STRING_GARBAGE_COLLECTION {(early ? 0 : 1)}, {(early ? 1 : 0)}, {(early ? 1 : 0)}")}
+                {(disk ? "LINKED_STRING_GARBAGE_COLLECTION" : $"StringGarbageCollection {(early ? 0 : 1)}, {(early ? 1 : 0)}, {(early ? 1 : 0)}")}
             COMPOSED_COLLECTOR_END:
-                STRING_CONCATENATION {(disk ? 1 : 0)}
+                StringConcatenation {(disk ? 1 : 0)}
             COMPOSED_CONCATENATION_END:
-                STRING_FUNCTIONS {(early ? 1 : 0)}, {(early ? 1 : 0)}, {(early ? 1 : 0)}, {(disk ? 1 : 0)}
+                StringFunctions {(early ? 1 : 0)}, {(early ? 1 : 0)}, {(early ? 1 : 0)}, {(disk ? 1 : 0)}
             COMPOSED_STRING_FUNCTIONS_END:
             .org ${legacy.Symbol("GETNUM"):X4}
                 AddressConversion 1
@@ -605,6 +605,13 @@ public sealed class PetNativeEquatesTests
             foreach (AssemblySymbol label in legacy.SymbolDefinitions.Where(
                 symbol => !symbol.IsConstant && symbol.Value >= start && symbol.Value < end))
             {
+                // A label only the SDK's own overlays give has no historical name; its definition keeps its address.
+                if (BasicNames.OverlayOnlyLabels.TryGetValue(label.Name, out string? current))
+                {
+                    native.Symbol(current).Should().Be(label.Value, $"{label.Name}'s definition must retain its ROM address");
+                    continue;
+                }
+
                 native.SymbolsWithHistoricalNames.Should().ContainKey(label.Name);
                 native.Symbol(label.Name).Should().Be(label.Value, $"{label.Name} must retain its ROM address");
             }
@@ -943,9 +950,10 @@ public sealed class PetNativeEquatesTests
         bool disk = model == PetModel.Pet4032;
         string source = $"""
             .cpu Mos6502
+            .include "MsBasic.Layouts.asm"
             .include "MsBasic.Arrays.asm"
             .org ${legacy.Symbol("ISARY"):X4}
-                ARRAY_LOOKUP 0, {(disk ? 1 : 0)}, {(early ? 0 : 1)}
+                ArrayLookup 0, {(disk ? 1 : 0)}, {(early ? 0 : 1)}
             """;
 
         string[] dependencies =
@@ -958,7 +966,7 @@ public sealed class PetNativeEquatesTests
         Dictionary<string, long> symbols = dependencies.ToDictionary(
             name => name, name => legacy.Symbol(name), StringComparer.Ordinal);
 
-        AssemblyResult native = RequireSuccess(Assemble(source, symbols));
+        AssemblyResult native = RequireSuccess(Assemble(BasicNames.ScopedNames(symbols) + "\n" + source, symbols));
         RecordingBus bus = new();
         native.Sections[0].Bytes.Span.CopyTo(bus.Memory);
         bus.Memory[checked((int)native.Symbol("COUNT"))] = 1;

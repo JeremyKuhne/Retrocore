@@ -21,7 +21,7 @@
     ;; frame is removed. An unmatched variable raises NEXT WITHOUT FOR.
     ;; Entry:
     ;;   ToError = with zero set, relays to <RequireType::ToError>, as for NEXT WITHOUT FOR (offset 0) and for
-    ;;     `READ`'s input path (VariableInput), which branches here with `beq`; with zero clear, falls into
+    ;;     `READ`'s input path (<AssignVariableList>), which branches here with `beq`; with zero clear, falls into
     ;;     <Statements::Next::AddStep>
     ;; Also: NEXT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc Next
@@ -29,10 +29,10 @@
     ldy #$00
     beq SearchFrame
 
-;; NEXT names a variable: <PTRGET>; the comma path jsr's here for the next variable.
+;; NEXT names a variable: <FindVariable>; the comma path jsr's here for the next variable.
 ;; Also: GETFOR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 WithVariable:
-    jsr PTRGET
+    jsr FindVariable
 
 ;; <AssignedVariable> = A/Y (Y = 0: any), <FindForFrame>; no frame: NEXT WITHOUT FOR.
 ;; Also: STXFOR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
@@ -44,7 +44,7 @@ SearchFrame:
     ldx #<ERROR_NEXT_WITHOUT_FOR
 
 ;; With zero set, relays to <RequireType::ToError>, as for NEXT WITHOUT FOR (offset 0) and for `READ`'s input path
-;; (VariableInput), which branches here with `beq`; with zero clear, falls into <AddStep>.
+;; (<AssignVariableList>), which branches here with `beq`; with zero clear, falls into <AddStep>.
 ;; Also: ERRGO5 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 ToError:
     beq RequireType::ToError
@@ -126,7 +126,7 @@ EndLoop:
     ;; Errors: TYPE MISMATCH for a string
     ;; Also: FRMNUM (M6502, ASTIL, CBM4S79, K4S79, HV1, HV1R, HV2, HV4, HV4R, HVK4)
     .proc EvaluateNumber
-    jsr FRMEVL
+    jsr EvaluateExpression
     .endproc
 
     ;; Requires the current expression result to be numeric.

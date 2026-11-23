@@ -16,7 +16,7 @@
     ;; Entry:
     ;;   SetDataPointer = Stores A/Y in <DataPointer>; `READ`'s finish enters here
     ;;   Done = returns; the statement dispatcher, except BASIC 1's early one, returns through it at end of statement
-    ;; See: <READ>, <DataPointer>
+    ;; See: <Statements::Read>, <DataPointer>
     ;; Also: RESTOR (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc Restore
     sec
@@ -281,7 +281,7 @@ Done:
     ;; Entry:
     ;;   UndefinedStatement = reports UNDEF'D STATEMENT through <ERROR> (RETURN's error skips its load);
     ;;     <Statements::GoTo> enters here
-    ;;   ToSyntaxError = jumps to <SNERR>; `ON` enters here
+    ;;   ToSyntaxError = jumps to <SyntaxError>; `ON` enters here
     ;; See: <Statements::GoSub>, <FindForFrame>
     ;; Also: RETURN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc Return
@@ -299,10 +299,10 @@ Done:
 UndefinedStatement:
     ldx #ERROR_UNDEFINED_STATEMENT
     jmp ERROR
-;; Jumps to <SNERR>; `ON` enters here.
+;; Jumps to <SyntaxError>; `ON` enters here.
 ;; Also: SNERR2 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 ToSyntaxError:
-    jmp SNERR
+    jmp SyntaxError
 ;; Pops the frame into <CurrentLine> and <TextPointer> (POP: to <Statements::PopFinish>), falls into <Statements::Data>
 ;; to skip the rest.
 ;; Also: RETU1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)

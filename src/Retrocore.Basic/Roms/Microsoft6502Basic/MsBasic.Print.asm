@@ -20,7 +20,7 @@
     ;; In: FacMantissa3 = string descriptor address low byte, FacMantissa4 = its high byte
     ;; Also: STRDON (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc PrintStringItem
-    jsr STRPRT
+    jsr PrintString
     .endproc
 
     ;; Continues PRINT at the current character.
@@ -36,8 +36,8 @@
     ;; Entry:
     ;;   Item = prints the next item: at the end of the statement, returns without a carriage return; otherwise
     ;;     `TAB(`, `SPC(`, a comma, a semicolon, or an expression, a number formatted by <Float::FormatFac> through
-    ;;     <STRLIT>; the `TAB(`, `SPC(`, comma and semicolon code, the vendors' included, returns here
-    ;; See: <STRPRT>, <Float::FormatFac>, <COMPRT>
+    ;;     <Strings::FromText>; the `TAB(`, `SPC(`, comma and semicolon code, the vendors' included, returns here
+    ;; See: <PrintString>, <Float::FormatFac>, <COMPRT>
     ;; Also: PRINT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc Print
     beq CRDO
@@ -61,17 +61,17 @@ Item:
     beq COMPRT
     cmp #';'
     beq NOTABR
-    jsr FRMEVL
+    jsr EvaluateExpression
     bit ValueType
     bmi PrintStringItem
     jsr Float::FormatFac
-    jsr STRLIT
+    jsr Strings::FromText
     .if trailingSpace
 
 ;; Prints a converted number and a trailing space, then continues PRINT.
 ;; Also: LINCHK (M6502)
 NumberItem:
-        jsr STRPRT
+        jsr PrintString
         jsr OUTSPC
         bne PrintNextItem
     .else

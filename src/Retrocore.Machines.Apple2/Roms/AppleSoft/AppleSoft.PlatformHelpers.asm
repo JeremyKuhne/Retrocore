@@ -141,7 +141,7 @@ CHKCO1:
 
 ;; Sets the cassette transfer range for an array on unenhanced models.
 ;;
-;; It uses the array descriptor at <LOWTR>, the stored length in <LINNUM>, and <FMAPT1> to locate the data.
+;; It uses the array descriptor at <LOWTR>, the stored length in <LINNUM>, and <Variables::ElementsStart::FromCount> to locate the data.
 SETA2:
     clc
     lda LOWTR

@@ -24,11 +24,15 @@ DISK_STATUS_STRING = 1              ;; BASIC 4 has the disk-status string descri
 ;; a variable can reclaim it while a temporary descriptor still points at its former contents.
 .macro LINKED_STRING_GARBAGE_COLLECTION
 
-;; Compacts linked strings and updates their descriptors.
+.scope Strings continued
+;; Compacts linked strings and updates their descriptors: BASIC 4's <Strings::CollectGarbage>, by the classic
+;; collector's name (Basic.md B2's notes).
 ;; In: MEMSIZ = exclusive top of string space, FRETOP = first allocated byte, decimal = clear
 ;; Out: FRETOP = new first allocated byte, FRESPC = new first allocated byte
 ;; See: <ENDGRB>, <SETINX>
-GARBA2:
+;; Also: GARBA2 (M6502, CBM4S79, HV4, HV4R)
+CollectGarbage:
+.endscope
     ldy #$00
     sty HIGHDS
     lda MEMSIZ

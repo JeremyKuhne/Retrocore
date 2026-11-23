@@ -12,7 +12,7 @@
     ;;
     ;; It reduces <Fac> to a fractional range, evaluates a polynomial, adds the binary exponent, and multiplies by
     ;; ln(2).
-    ;; Errors: illegal argument = jumps to <FCERR> for zero or a negative argument
+    ;; Errors: illegal argument = jumps to <IllegalQuantityError> for zero or a negative argument
     ;; See: <Float::LogPolynomial>, <Float::EvaluateOddPolynomial>
     ;; Also: LOG (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc Log
@@ -23,7 +23,7 @@
 ;; Jumps on to the ILLEGAL QUANTITY error for zero or a negative argument.
 ;; Also: LOGERR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 ToIllegalQuantity:
-    jmp FCERR
+    jmp IllegalQuantityError
 
 ;; Saves the unbiased exponent and sets <Fac>'s exponent to $80.
 ;; Also: LOG1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)

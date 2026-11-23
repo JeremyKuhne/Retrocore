@@ -77,4 +77,103 @@ ListLastKeywordCharacter = Statements::List::ListLastCharacter
 ;; Also: REMER1 (UNKN)
 PopFinish = Statements::PopFinish
 
+;; Inherit: <Variables::FindArray::Search>
+;; Also: INDLO1 (UNKN)
+FindArraySearch = Variables::FindArray::Search
+
+;; Inherit: <Variables::ArrayFound::CheckDimensions>
+;; Also: GOTAR1 (UNKN)
+ArrayFoundCheckDimensions = Variables::ArrayFound::CheckDimensions
+
+;; Inherit: <Variables::ArrayMissing>
+;; Also: GOTAR2 (UNKN)
+ArrayMissing = Variables::ArrayMissing
+
+;; Inherit: <Operators::Not::LoadFalse>
+;; Also: NOTOP1 (UNKN)
+NotLoadFalse = Operators::Not::LoadFalse
+
+;; Inherit: <Operators::Or>
+;; Also: ANDOP (UNKN)
+OrOperator = Operators::Or
+
+;; Inherit: <Operators::And>
+;; Also: OROP1 (UNKN)
+AndOperator = Operators::And
+
+;; Inherit: <Operators::And::LoadFalse>
+;; Also: OROP11 (UNKN)
+AndLoadFalse = Operators::And::LoadFalse
+
+;; Inherit: <Operators::And::LoadTrue>
+;; Also: OROP12 (UNKN)
+AndLoadTrue = Operators::And::LoadTrue
+
+;; Inherit: <AssignVariableList::CheckEmptyLine>
+;; Also: NOWGE2 (UNKN)
+CheckEmptyInputLine = AssignVariableList::CheckEmptyLine
+
+;; Inherit: <AssignVariableList::RestoreCharacter>
+;; Also: NOWGE3 (UNKN)
+RestoreInputCharacter = AssignVariableList::RestoreCharacter
+
+;; Inherit: <AssignVariableList::EmptyNumber>
+;; Also: TRMOK1 (UNKN)
+EmptyInputNumber = AssignVariableList::EmptyNumber
+
+;; Inherit: <FindVariable::AfterVectors>
+;; Also: PTRGT4 (UNKN)
+AfterVectors = FindVariable::AfterVectors
+
+;; Inherit: <FindVariable::ToChooseArrayLookup>
+;; Also: STRNA1 (UNKN)
+ToChooseArrayLookup = FindVariable::ToChooseArrayLookup
+
+;; Inherit: <FindVariable::NoParenthesis>
+;; Also: STRNA2 (UNKN)
+NoParenthesis = FindVariable::NoParenthesis
+
+;; Inherit: <FindVariable::SearchScalars>
+;; Also: STRNA3 (UNKN)
+SearchScalars = FindVariable::SearchScalars
+
+;; Inherit: <ZeroVariable>
+;; Also: SIMZER (UNKN)
+SimpleZero = ::ZeroVariable
+
+;; Inherit: <Variables::ElementsStart::FromCount>
+;; Also: FMAPT1 (UNKN)
+ElementsStartFromCount = Variables::ElementsStart::FromCount
+
+;; Inherit: <Variables::ChooseArrayLookup>
+;; Also: QINTG1 (UNKN)
+ChooseArrayLookup = Variables::ChooseArrayLookup
+
+
+; The classic collector's steps, whose Microsoft names BASIC 4 gives to its array back-link steps instead.
+
+;; Inherit: <Strings::CollectGarbage::NextArray>
+;; Also: ARYVA2 (M6502)
+CollectorNextArray = Strings::CollectGarbage::NextArray
+
+;; Inherit: <Strings::CollectGarbage::CheckArraysEnd>
+;; Also: ARYVA3 (M6502)
+CollectorCheckArraysEnd = Strings::CollectGarbage::CheckArraysEnd
+
+;; Inherit: <Strings::CollectGarbage::ReadArray>
+;; Also: ARYVGO (M6502)
+CollectorReadArray = Strings::CollectGarbage::ReadArray
+
+;; Inherit: <Strings::CollectGarbage::ElementsReady>
+;; Also: ARYGET (M6502)
+CollectorElementsReady = Strings::CollectGarbage::ElementsReady
+
+;; Inherit: <Strings::CollectGarbage::CheckElement>
+;; Also: GOGO (M6502)
+CollectorCheckElement = Strings::CollectGarbage::CheckElement
+
+;; Inherit: <Strings::CollectGarbage::Advance>
+;; Also: DVARTS (M6502)
+CollectorAdvance = Strings::CollectGarbage::Advance
+
 .endscope

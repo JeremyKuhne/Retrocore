@@ -1591,8 +1591,8 @@ multiple memory-editor subscriptions; it needs the SDK ROM sources but no extern
 
 `npm test` builds and runs both tokenization and the full debugger integration
 tests, which include booting the Model I to Level II's READY. The full integration suite also needs
-`RETROCORE_IIE_ROMS`, a built Release debug host and the existing sample binary/debug
-metadata. It checks source breakpoints with a `retrocore-asm` document alongside the
+a built Release debug host and the existing sample binary/debug metadata; it runs the IIe
+on `RETROCORE_IIE_ROMS` when that is set, and otherwise on ROMs built from the SDK. It checks source breakpoints with a `retrocore-asm` document alongside the
 existing call-stack, video, cycle and beam behavior, and a function breakpoint's hit
 count on the Model I, and reads and writes memory through VS Code's debug memory file
 system. `node tools/Test-Breakpoints.mjs` checks every breakpoint kind through the

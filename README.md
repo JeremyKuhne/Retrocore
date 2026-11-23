@@ -262,7 +262,7 @@ launch are invisible to Explorer, VS Code, and normal terminals.
 | Variable | Holds |
 | --- | --- |
 | `RETROCORE_CACHE` | Base folder for cached external files (default `%USERPROFILE%\Retrocore`, shown as `<cache>` below). |
-| `RETROCORE_IIE_ROMS` | Apple IIe CD, EF, and video ROM dumps. Optional for debugging (which otherwise builds from the SDK); required by `AppleSharp`, the IIe chip/oracle tests, and `extension`'s full `npm test`. |
+| `RETROCORE_IIE_ROMS` | Apple IIe CD, EF, and video ROM dumps. Optional for debugging (which otherwise builds from the SDK); required by `AppleSharp` and the IIe chip/oracle tests; `extension`'s full `npm test` uses them when set and otherwise ROMs built from the SDK. |
 | `RETROCORE_IIPLUS_ROMS`, `RETROCORE_II_ROMS` | Apple II Plus and Apple II 2716 chip dumps (defaults `<cache>\apple2-roms\APPLE II+` and `<cache>\apple2-roms\APPLE II`); optional for debugging. |
 | `RETROCORE_DISKII_ROMS` | Disk II P5/P6 chip dumps under their `apple2.org.za` names (default `<cache>\disk2-roms`). |
 | `RETROCORE_APPLE1_ROMS` | Apple-1 Monitor, ACI and BASIC dumps, `wozmon.bin`, `aci.bin` and `basic.bin` (default `<cache>\apple1-roms` for the ROM source checks); optional for debugging. |
@@ -320,7 +320,7 @@ npm --prefix extension ci
 npm --prefix extension run compile
 npm --prefix extension run test:grammar   # needs nothing external
 npm --prefix extension run test:language  # needs VS Code
-npm --prefix extension test               # full editor + debugger suite: needs VS Code, RETROCORE_IIE_ROMS, and iie-sample
+npm --prefix extension test               # full editor + debugger suite: needs VS Code and iie-sample
 ```
 
 Without `cc65`, you can also build `artifacts\iie-sample\main.bin` and `main.dbg` with `Retrocore.Debug` itself:

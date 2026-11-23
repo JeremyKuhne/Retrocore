@@ -45,12 +45,13 @@ internal static partial class BasicNames
     ];
 
     /// <summary>
-    ///  Gets the names both vendors' historical-names files give, each for its own definition (Basic.md E4): ANDOP and
-    ///  the classic collector's steps, which BASIC 4 gives to its array back-link steps.
+    ///  Gets the names both vendors' historical-names files give, each for its own definition (Basic.md E4): ANDOP, the
+    ///  classic collector's steps, which BASIC 4 gives to its array back-link steps, and the unlinked allocator's room
+    ///  check, TRYAG3, which BASIC 4 gives to its step before.
     /// </summary>
     internal static string[] BothVendorsNames { get; } =
     [
-        "ANDOP", "ARYVA2", "ARYVA3", "ARYVGO", "ARYGET", "GOGO", "DVARTS"
+        "ANDOP", "ARYVA2", "ARYVA3", "ARYVGO", "ARYGET", "GOGO", "DVARTS", "TRYAG3"
     ];
 
     /// <summary>

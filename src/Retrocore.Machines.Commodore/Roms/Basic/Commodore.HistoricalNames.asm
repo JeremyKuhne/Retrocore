@@ -136,6 +136,20 @@ AndOperator = Operators::And
 ReserveReturn = Strings::ReserveSpace::Done
 .endif
 
+; The unlinked allocator's room check in BASIC 1 and 2, and the linked allocator's step before its own, which BASIC 4's
+; documents give Microsoft's name for the room check.
+.ifdef Strings::ReserveSpace::CheckRoom
+;; Inherit: <Strings::ReserveSpace::CheckRoom>
+;; Also: TRYAG3 (M6502, HV1, HV1R, HV2)
+UnlinkedCheckRoom = Strings::ReserveSpace::CheckRoom
+.endif
+
+.ifdef Strings::ReserveSpace::BelowLink
+;; Inherit: <Strings::ReserveSpace::BelowLink>
+;; Also: TRYAG3 (CBM4S79, HV4, HV4R)
+ReserveBelowLink = Strings::ReserveSpace::BelowLink
+.endif
+
 ; BASIC 4's room check in its linked allocator.
 .ifdef Strings::ReserveSpace::CheckLinkedRoom
 ;; Inherit: <Strings::ReserveSpace::CheckLinkedRoom>

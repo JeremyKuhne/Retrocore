@@ -72,6 +72,16 @@ public sealed class BasicSharedInterpreterAliasesTests
         AssertProse(docs, "GETSPT", "COPY");
         AssertProse(docs, "GARBA2", "GARBAG");
         AssertRoutine(native, docs, "COPYZC");
+
+        // StoreString (GETSPT) falls into the copy: the last instruction before it is StoreString's and ends there.
+        int copy = checked((int)native.Symbol("COPYZC"));
+        AssemblySourceMapEntry last = native.SourceMap
+            .Where(entry => entry.Size > 0 && entry.Address < copy)
+            .MaxBy(entry => entry.Address)
+            ?? throw new AssertFailedException("Nothing precedes COPYZC.");
+
+        (last.Address + last.Size).Should().Be(copy, "StoreString falls into the descriptor copy");
+        last.Address.Should().BeGreaterThan(checked((int)native.Symbol("GETSPT")));
         CheckDocumentation(docs, "MsBasic.MemoryAccess.asm", "MsBasic.Assignment.asm", "MsBasic.StringGarbageCollection.asm");
     }
 
@@ -179,7 +189,13 @@ public sealed class BasicSharedInterpreterAliasesTests
             DocumentationTopic target = AssertAlias(
                 build, buildDocs, entry.Target, entry.Name, BasicAttribution.PetKeys(model, original), BasicAttribution.CommodoreKeys);
 
-            AssertDebugEntry(build, entry.Name, target.Path);
+            // BASIC 4's descriptor copy is its own, in its vendor's file; the others' source is their shared module's.
+            string expectedSource = linked && entry.Target == "COPYZC"
+                ? Path.Join(Pet, "Basic", "Commodore.StringAssignment.asm")
+                : target.Path;
+
+            Path.GetFileName(expectedSource).Should().NotBe(Path.GetFileName(PetNames));
+            AssertDebugEntry(build, entry.Name, expectedSource);
         }
 
         AssertRoutine(native, docs, "COPYZC");

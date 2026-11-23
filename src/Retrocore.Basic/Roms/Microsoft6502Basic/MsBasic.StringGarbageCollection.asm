@@ -38,7 +38,8 @@
     ;; In AppleSoft, Apple Computer, in The Apple Orchard (March/April 1980, p. 16), calls it `GARBAG`, which is
     ;; distinct from Microsoft's `GARBAG` allocation-retry entry.
     ;;
-    ;; In: CollectorStep = <DESCRIPTOR_SIZE>, decimal = clear
+    ;; In: CollectorStep = <DESCRIPTOR_SIZE>, as Microsoft's and AppleSoft's cold starts set it and every collection
+    ;;   leaves it (the temporaries' scan reads it before the pass sets it), decimal = clear
     ;; Out: StringsBottom = lower boundary after collection
     ;; See: <Strings::CollectGarbage::ConsiderDescriptor>, <Strings::CollectGarbage::MoveBest>, <MoveRangeUp::Unchecked>
     ;; Also: GARBA2 (M6502, HV1, HV1R, HV2)

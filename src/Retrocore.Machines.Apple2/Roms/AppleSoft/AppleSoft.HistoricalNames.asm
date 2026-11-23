@@ -7,9 +7,9 @@
 ;; Technical Information Library's AppleSoft articles (ASTIL; PRNTFAC is in article 79, "Applesoft: Internals--Device
 ;; I/O Routines", a2til228.txt, and COMBYTE in article 76, "Applesoft: Internals--Floating Point Math Package (3 of
 ;; 3)", a2til231.txt) and the May 1982 Applesoft source listing (AS82), or UNKN for the names only the SDK's MACRO-10
-;; overlay of AppleSoft gives, which its callers use. The classic collector's steps also have Microsoft's names here
-;; (M6502), since BASIC 4 gives those names to other definitions (Basic.md E4). Including this file emits no bytes
-;; and does not change the origin.
+;; overlay of AppleSoft gives, which its callers use. The room check and the classic collector's steps also have
+;; Microsoft's names here (M6502), since BASIC 4 gives those names to other definitions (Basic.md E4). Including this
+;; file emits no bytes and does not change the origin.
 
 ;; The aliases for Apple's names. Code uses the definitions' own names; these exist for the old names.
 .scope AppleSoft
@@ -151,7 +151,12 @@ ElementsStartFromCount = Variables::ElementsStart::FromCount
 ChooseArrayLookup = Variables::ChooseArrayLookup
 
 
-; The classic collector's steps, whose Microsoft names BASIC 4 gives to its array back-link steps instead.
+; The unlinked allocator's room check and the classic collector's steps, whose Microsoft names BASIC 4 gives to other
+; steps instead.
+
+;; Inherit: <Strings::ReserveSpace::CheckRoom>
+;; Also: TRYAG3 (M6502)
+UnlinkedCheckRoom = Strings::ReserveSpace::CheckRoom
 
 ;; Inherit: <Strings::CollectGarbage::NextArray>
 ;; Also: ARYVA2 (M6502)

@@ -26,7 +26,7 @@ DISK_STATUS_STRING = 1              ;; BASIC 4 has the disk-status string descri
 
 .scope Strings continued
 ;; Compacts linked strings and updates their descriptors: BASIC 4's <Strings::CollectGarbage>, by the classic
-;; collector's name (Basic.md B2's notes).
+;; collector's name (Basic.md E6).
 ;; In: MEMSIZ = exclusive top of string space, FRETOP = first allocated byte, decimal = clear
 ;; Out: FRETOP = new first allocated byte, FRESPC = new first allocated byte
 ;; See: <ENDGRB>, <SETINX>

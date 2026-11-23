@@ -54,6 +54,7 @@ public sealed class BasicExpressionsConversionTests
         ["RES00"] = ["CBM4S79", "HV4", "HV4R"],
         ["FRE01"] = ["CBM4S79", "HV4", "HV4R"],
         ["FRE02"] = ["CBM4S79", "HV4", "HV4R"],
+        ["TRYAG3"] = ["CBM4S79", "HV4", "HV4R"],
         ["TRYAG4"] = ["CBM4S79", "HV4", "HV4R"],
         ["GETRTS"] = ["CBM4S79", "HV4", "HV4R"],
         ["ANDOP"] = ["M6502", "CBM4S79", "HV1", "HV1R", "HV2", "HV4", "HV4R"]
@@ -68,7 +69,8 @@ public sealed class BasicExpressionsConversionTests
         ["ARYVGO"] = ["M6502", "HV1", "HV1R", "HV2"],
         ["ARYGET"] = ["M6502", "HV1", "HV1R", "HV2"],
         ["GOGO"] = ["M6502", "HV1", "HV1R", "HV2"],
-        ["DVARTS"] = ["M6502", "HV1", "HV1R", "HV2"]
+        ["DVARTS"] = ["M6502", "HV1", "HV1R", "HV2"],
+        ["TRYAG3"] = ["M6502", "HV1", "HV1R", "HV2"]
     };
 
     /// <summary>
@@ -101,7 +103,8 @@ public sealed class BasicExpressionsConversionTests
     [
         "FAMILIES_DECLARED", "INPUT_MODE_INPUT", "INPUT_MODE_GET", "INPUT_MODE_READ", "RELATION_TOKENS",
         "EvaluateExpression::Arithmetic", "EvaluateFunctionOperand::NotFn", "Functions::Val::NotEmpty",
-        "FindVariable::SearchScalars", "Strings::ReserveSpace::CheckLinkedRoom", "Strings::ReserveSpace::Done", "Operators::And", "Operators::And::LoadFalse",
+        "FindVariable::SearchScalars", "Strings::ReserveSpace::CheckLinkedRoom", "Strings::ReserveSpace::Done",
+        "Strings::ReserveSpace::CheckRoom", "Strings::ReserveSpace::BelowLink", "Operators::And", "Operators::And::LoadFalse",
         "Operators::And::LoadTrue",
         "Operators::Not::LoadFalse", "Variables::FindArray::Search", "Variables::ArrayFound::CheckDimensions",
         "Variables::ArrayMissing", "AssignVariableList::CheckEmptyLine", "AssignVariableList::RestoreCharacter",

@@ -20,8 +20,8 @@
     ;;
     ;; The array descriptor contains the two name bytes, total byte length (low byte first), a dimension
     ;; count, and one two-byte bound per dimension (high byte first). Each bound is the maximum index plus
-    ;; one. A new implicitly dimensioned array has bounds 0 through 10 in every dimension. Subscripts and
-    ;; type flags are stacked while recursive expressions are evaluated.
+    ;; one. A new implicitly dimensioned array has bound <DEFAULT_BOUND>, indexes 0 to 10, in every
+    ;; dimension. Subscripts and type flags are stacked while recursive expressions are evaluated.
     ;;
     ;; Where `existingArrays` is 1 (AppleSoft), <Variables::ChooseArrayLookup> enters at `Search` to skip the
     ;; subscripts.
@@ -200,6 +200,7 @@ CheckDimensions:
     .proc CreateArray
     jsr ElementsStart
     jsr CheckFreeMemory
+    ; BASIC 4 clears with Y, the others with A.
     .if clearWithY
         ldy #$00
         sty LinearIndex+1

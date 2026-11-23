@@ -162,6 +162,7 @@ NoParenthesis:
 
 ;; Clears <SubscriptMode> and starts at <VariablesStart>.
 SearchScalars:
+    ; BASIC 4 clears with Y, the others with A.
     .if clearWithY
         ldy #$00
         sty SubscriptMode
@@ -198,6 +199,7 @@ CompareName:
     lda VariableName+1
     iny
     cmp (SourceStart),y
+    ; BASIC 4 jumps to the value's address; the others branch.
     .if longFound
         bne SecondMismatch
         jmp Variables::ValueAddress
@@ -286,7 +288,7 @@ Advance:
 
     .if inlineZero
         .if ownZero
-;; Two zero bytes that an absent scalar reads, AppleSoft's own beside <ZeroValue>.
+;; Two zero bytes that an absent scalar reads: AppleSoft's own, rather than <ZeroValue>.
 ZeroVariable:
         .else
 ;; Two zero bytes that an absent scalar reads.

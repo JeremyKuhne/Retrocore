@@ -138,6 +138,7 @@ Copy:
 ;; Also: MID2 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 HaveLength:
     jsr SliceArguments
+    ; `rejectZeroSlices` is 1 in AppleSoft and, by default, BASIC 1, and 0 in BASIC 2 and 4.
     .if .not rejectZeroSlices
         .if indirectReturn
             txa
@@ -327,6 +328,7 @@ SetEnd:
     ldy #$00
     lda (Pointer2),y
     pha
+    ; BASIC 4 takes the zero from Y.
     .if zeroTermViaY
         tya
     .else

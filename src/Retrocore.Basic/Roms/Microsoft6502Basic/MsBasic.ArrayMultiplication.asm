@@ -16,7 +16,7 @@
 ;; In: SourceStart = descriptor address, Y = offset of the dimension's low byte, LinearIndex = multiplicand
 ;; Out: X = low product byte, A = high product byte, Y = high product byte
 ;; Errors: OUT OF MEMORY on 16-bit overflow
-;; Uses: Addend, DigitCount, Pointer1
+;; Uses: Addend, DigitCount, LinearIndex, Pointer1
 ;; Also: UMULT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 .proc MultiplyByBound
     sty Pointer1
@@ -33,7 +33,7 @@
 ;; In: A = high multiplier byte, Addend = low multiplier byte, LinearIndex = multiplicand
 ;; Out: X = low product byte, A = high product byte, Y = high product byte
 ;; Errors: OUT OF MEMORY on 16-bit overflow
-;; Uses: Addend, DigitCount
+;; Uses: Addend, DigitCount, LinearIndex
 ;; Also: UMULTD (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 .proc MultiplyUnsigned
     sta Addend+1

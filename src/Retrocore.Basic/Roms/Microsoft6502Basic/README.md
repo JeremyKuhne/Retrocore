@@ -52,7 +52,7 @@ The interpreter modules also retain each variant's original bytes:
 | `MsBasic.Arrays.asm` | Array lookup and allocation, selecting existing-array support, allocation-counter initialization and the early offset bug independently. |
 | `MsBasic.Assignment.asm` | `AssignmentStart` supplies LET and the `INPCOM` entry. `StringAssignment` selects optional platform hooks for a disk-status source and linked-string collection. |
 | `MsBasic.CharacterReader.asm` | The uppercase-letter test and `CharacterReader` template. The latter takes seed byte `$59` for BASIC 1, `$58` for AppleSoft and BASIC 2/4; startup copies only the first four seed bytes. |
-| `MsBasic.ExpressionCore.asm` | `ExpressionCore 1` carries a `PUSHF` return address across a page, as BASIC 4 does; AppleSoft and BASIC 1/2 use `0`. |
+| `MsBasic.ExpressionCore.asm` | `ExpressionCore 1` carries a `PushSignedFac` return address across a page, as BASIC 4 does; AppleSoft and BASIC 1/2 use `0`. |
 | `MsBasic.OperandEvaluation.asm` | Shared operand and function dispatch, with independent choices for the PI token and Boolean or signed 16-bit logical operators. |
 | `MsBasic.VariableInput.asm` | Shared READ and GET/INPUT variable processing, with independent buffer, channel, character-mask and retry choices. |
 | `MsBasic.VariableLookup.asm` | Variable-name parsing and scalar lookup, with independent choices for reserved names, zero storage, caller checks and linked-array fixups. |
@@ -103,8 +103,8 @@ After the matching collector, `StringConcatenation 0` emits `CAT` through `FRETM
 BASIC 1/2; BASIC 4 uses `StringConcatenation 1` and supplies its `STRADJ` link helper. Follow either with
 the variant's `StringFunctions` invocation. The linked-release switch is independent of allocator and
 collector selection, but those choices must agree on the representation used by the running interpreter.
-The macro requires `EVAL`, `CHKSTR`, `ERROR`, `STRINI`, `PUTNEW`, `TSTOP`, `ERRLS`, `FACMO`, `FACLO`,
-`STRNG1`, `DSCPNT`, `INDEX`, `FRESPC`, `FRETOP`, `LASTPT`, `TEMPPT` and `STRSIZ` from its caller.
+The macro requires the workspace (`MsBasic.Layouts.asm`'s `DESCRIPTOR_SIZE` and the vendor's equates) and the
+error and evaluator entries the other shared modules define.
 
 `PrintItems` takes the TAB handler and independent choices for clearing carry before SPC and comma, and for
 printing a separate trailing space after numbers. AppleSoft uses `TABER` (enhanced) or `LINCH1` (earlier),

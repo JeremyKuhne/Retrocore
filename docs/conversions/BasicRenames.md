@@ -958,7 +958,7 @@ to K12, R1 to R10).
 | ---: | --- | --- | --- | --- | --- | --- | --- |
 | 699 | `UNLINKED_STRING_ALLOCATION` | `UnlinkedStringAllocation` | macro | AS P1 P1R P2 |  | — | Emits the ordinary allocator's body after GETSPA |
 | 700 | `TRYAG2` | `Strings::ReserveSpace::Try` | local | AS P1 P1R P2 | M6502, HV1, HV1R, HV2 | no | Computes StringsBottom minus the length — Same job as the linked TRYAG2 |
-| 701 | `TRYAG3` | `Strings::ReserveSpace::CheckRoom` | local | AS P1 P1R P2 | M6502, HV1, HV1R, HV2 | no | Compares the new bottom with ArraysEnd (equality fits) — Linked builds' TRYAG3 is another step; their TRYAG4 is this one |
+| 701 | `TRYAG3` | `Strings::ReserveSpace::CheckRoom` | local | AS P1 P1R P2 | M6502, HV1, HV1R, HV2 | no | Compares the new bottom with ArraysEnd (equality fits) — Linked builds' TRYAG3 is another step; their TRYAG4 is this one Converted: each vendor's alias `UnlinkedCheckRoom` (AppleSoft: M6502; Commodore: M6502, HV1, HV1R, HV2), since BASIC 4 gives TRYAG3 to another step (Basic.md E4). |
 | 702 | `STRFRE` | `Strings::ReserveSpace::Take` | local | AS P1 P1R P2 | M6502, HV1, HV1R, HV2 | no | Sets StringsBottom and NewString to the new bottom; returns X/Y = address, A = length |
 | 703 | `GARBAG` | `Strings::ReserveSpace::Collect` | local | AS P1 P1R P2 | M6502, HV1, HV1R, HV2; spelling only: ASTIL [AS], AS82 [AS] | no | Collects once (OUT OF MEMORY if already collected) and retries a nonempty request — A zero-length failure falls out of the macro into CollectGarbage a second time (documented); Apple's GARBAG (Orchard) names CollectGarbage: see B2-Q8 |
 
@@ -968,7 +968,7 @@ to K12, R1 to R10).
 | ---: | --- | --- | --- | --- | --- | --- | --- |
 | 704 | `LINKED_STRING_ALLOCATION` | `LinkedStringAllocation` | macro | P4 P4R |  | — | Emits BASIC 4's allocator body, which adds a two-byte link after each string |
 | 705 | `TRYAG2` | `Strings::ReserveSpace::Try` | local | P4 P4R | M6502, CBM4S79 [P4 P4R], HV4, HV4R | no | (P4) Returns at once for length 0, else computes the link address below StringsBottom |
-| 706 | `TRYAG3` | `Strings::ReserveSpace::BelowLink` | local | P4 P4R | M6502, CBM4S79 [P4 P4R], HV4, HV4R | no | (P4) Saves the link address in Pointer1 and subtracts the length |
+| 706 | `TRYAG3` | `Strings::ReserveSpace::BelowLink` | local | P4 P4R | M6502, CBM4S79 [P4 P4R], HV4, HV4R | no | (P4) Saves the link address in Pointer1 and subtracts the length Converted: Commodore's alias `ReserveBelowLink`, cited CBM4S79, HV4, HV4R; Microsoft's TRYAG3 is the room check, so a shared Also: would misattribute it (Basic.md E4). |
 | 707 | `TRYAG4` | `Strings::ReserveSpace::CheckRoom` | local | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | no | (P4) Compares the new bottom with ArraysEnd Converted: the target is `Strings::ReserveSpace::CheckLinkedRoom`, and the name is Commodore's alias; under the classic allocator's name, the documentation's merged topic would give TRYAG4 to the classic label too (Basic.md E7). |
 | 708 | `STRFRE` | `Strings::ReserveSpace::Take` | local | P4 P4R | M6502, CBM4S79 [P4 P4R], HV4, HV4R | no | (P4) Writes the garbage link (length, $FF) and sets NewString and StringsBottom |
 | 709 | `GETRTS` | `Strings::ReserveSpace::Done` | local | P4 P4R | M6502, CBM4S79 [P4 P4R], HV4, HV4R | no | (P4) The RTS Converted: Commodore's alias, cited CBM4S79, HV4, HV4R; Microsoft's GETRTS is the output routine's return, so a shared Also: would misattribute it (Basic.md E3). |

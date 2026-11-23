@@ -3,9 +3,9 @@
 ;;
 ;; The IIe's page-zero locations, low-memory vectors and buffers, soft switches and I/O locations, and keyboard
 ;; characters. The Monitor, both models' internal firmware, the Disk II boot ROM, DOS and the SDK's card and program
-;; sources include this file, so each
-;; name here is defined and documented once, and each of those sources defines only the names that are its own. The
-;; Monitor's entry points, which the Monitor defines as labels, are in MonitorEntries.asm for the others.
+;; sources include this file, so each name here is defined and documented once, and each of those sources defines
+;; only the names that are its own. The Monitor's entry points, which the Monitor defines as labels, are in
+;; MonitorEntries.asm for the others.
 ;;
 ;; The names follow the assembly style guide. Each definition lists the names Apple's manuals and listings give its
 ;; location as its historical names, so code written with them, and the sources that still use them, assemble
@@ -68,17 +68,17 @@ WindowBottom = $23
 ;;
 ;; <Monitor:StoreAndAdvance> stores each character at (<TextBase>),Y with Y = <CursorColumn>, and
 ;; <Monitor:AdvanceCursor>, <Monitor:Backspace> and <Monitor:CarriageReturn> move it. The 80-column firmware keeps
-;; its own column in <Firmware:OURCH>, copies it here after each character, and takes up a new value a program
-;; stores here (<Firmware:SYNCCH>).
+;; its own column in <Firmware:OURCH>, copies it here after each character in 40 columns, and takes up a new value a
+;; program stores here (<Firmware:SYNCCH>).
 ;; See: <Monitor:CV>, <TextBase>, <WindowWidth>, <Firmware:OURCH>
 ;; Also: CH (A2RM78, A2RM79, IIEROM82, IIETRM85)
 CursorColumn = $24
 
 ;; The low byte of the address of the text line that holds the lo-res row being drawn.
 ;;
-;; <Monitor:LowRes::RowAddress> sets <LowResBase>/<LowResBaseHigh> from a row number: each text line holds two
-;; lo-res rows, one in each nibble. <Monitor:LowRes::Plot::SameRow> and <Monitor:LowRes::ReadColor> then read and
-;; write (<LowResBase>),Y with Y = the column.
+;; <Monitor:LowRes::RowAddress> sets <LowResBase>/<LowResBaseHigh> from a text line, half the row: each text line
+;; holds two lo-res rows, one in each nibble. <Monitor:LowRes::Plot::SameRow> and <Monitor:LowRes::ReadColor> then
+;; read and write (<LowResBase>),Y with Y = the column.
 ;; See: <LowResBaseHigh>, <Monitor:LowRes::RowAddress>, <Monitor:LowRes::Plot>, <Monitor:LowRes::ReadColor>
 ;; Also: GBASL (A2RM78, A2RM79, IIEROM82, IIETRM85)
 LowResBase = $26
@@ -218,8 +218,8 @@ CommandPosition = $34
 
 ;; Y, saved by <Monitor:ScreenOutNoInverse> while it prints a character.
 ;;
-;; <Monitor:ScreenOutNoInverse> stores Y here first and reloads it at the end, so <Monitor:ScreenOut> keeps Y. The
-;; internal firmware's 80-column output reads it, and the Enhanced IIe's mini-assembler uses it as scratch.
+;; <Monitor:ScreenOutNoInverse> stores Y here first and reloads it at the end, so <Monitor:ScreenOut> keeps Y. On
+;; the Enhanced IIe, the internal firmware's 80-column output reads it and the mini-assembler uses it as scratch.
 ;; See: <Monitor:ScreenOutNoInverse>, <Monitor:ScreenOut>
 ;; Also: YSAV1 (A2RM78, A2RM79, IIEROM82, IIETRM85), SAVY1 (IIETRM85)
 SavedOutputY = $35
@@ -420,8 +420,8 @@ InputBuffer = $0200
 ;; The address <Monitor:Break> jumps through once it has saved the registers: the BRK handler.
 ;;
 ;; The Autostart and IIe Monitors' <Monitor:Startup::PowerUp> points it at <Monitor:ShowBreak>, which shows the
-;; registers and enters the Monitor; a
-;; program can point it at a handler of its own. The Apple II Monitor has no such vector.
+;; registers and enters the Monitor; a program can point it at a handler of its own. The Apple II Monitor has no
+;; such vector.
 ;; See: <Monitor:Break>, <Monitor:ShowBreak>, <Monitor:Startup::PowerUp>
 ;; Also: BRKV (A2RM79, IIEROM82, IIETRM85)
 BreakVector = $03F0
@@ -460,9 +460,9 @@ NmiJump = $03FB
 
 ;; The address the Monitor's interrupt handler jumps through for an IRQ that is not a BRK.
 ;;
-;; <Monitor:Interrupt> sends a BRK to <Monitor:Break> and any other IRQ through this vector. On the Enhanced IIe,
-;; whose IRQ vector reaches the firmware instead, the firmware's interrupt code goes through <Monitor:CallUserIrq> to
-;; it.
+;; On all but the Enhanced IIe, <Monitor:Interrupt> sends a BRK to <Monitor:Break> and any other IRQ through this
+;; vector. On the Enhanced IIe, whose IRQ vector reaches the firmware instead, the firmware's interrupt code goes
+;; through <Monitor:CallUserIrq> to it.
 ;; See: <Monitor:Interrupt>, <Monitor:CallUserIrq>, <BreakVector>
 ;; Also: IRQLOC (A2RM78, A2RM79, IIEROM82)
 UserIrqVector = $03FE
@@ -523,7 +523,8 @@ AuxReadOff = $C002
 ;; Writing it turns RAMRD on: reads from $0200-$BFFF come from auxiliary memory.
 ;;
 ;; <AuxReadOff> reads main memory again, and <AuxReadState> reports the switch. Writes still follow RAMWRT
-;; (<AuxWriteOn>). <Firmware:AUXMOVE@Enhanced> and <Firmware:XFER@Enhanced> use it to copy from auxiliary memory.
+;; (<AuxWriteOn>). <Firmware:AUXMOVE@Enhanced> uses it to copy from auxiliary memory, and
+;; <Firmware:XFER@Enhanced> to pass control to it.
 ;; See: <AuxReadOff>, <AuxReadState>, <AuxWriteOn>, <Firmware:AUXMOVE@Enhanced>, <Firmware:XFER@Enhanced>
 ;; Also: RDCARDRAM (IIEROM82, IIETRM85)
 AuxReadOn = $C003
@@ -756,8 +757,8 @@ HiResState = $C01D
 
 ;; Reading it reports in bit 7 whether ALTCHAR is on, the alternate character set shown.
 ;;
-;; <AlternateCharactersOn> turns it on and <AlternateCharactersOff> off. The firmware reads it to choose the screen
-;; codes it stores for inverse and normal characters, which differ between the two sets.
+;; <AlternateCharactersOn> turns it on and <AlternateCharactersOff> off. The Enhanced IIe's firmware reads it to
+;; choose the screen codes it stores for inverse and normal characters, which differ between the two sets.
 ;; See: <AlternateCharactersOn>, <AlternateCharactersOff>
 ;; Also: RDALTCHAR (IIETRM85), ALTCHARSET (IIETRM85)
 AlternateCharactersState = $C01E
@@ -766,7 +767,8 @@ AlternateCharactersState = $C01E
 ;;
 ;; <Columns80On> turns it on and <Columns80Off> off. The Enhanced Monitor's <Monitor:ScreenOutByWidth> and
 ;; <Monitor:GetLine::NextCharacter> read it, and the internal firmware reads it throughout to choose its 40- or
-;; 80-column code.
+;; 80-column code. The Technical Reference Manual's table of display switches calls this switch RD80COL, and
+;; <Store80State> RD80STORE; its listings, like Apple's ROM listings, give RD80COL to <Store80State>.
 ;; See: <Columns80On>, <Columns80Off>
 ;; Also: RD80VID (IIEROM82, IIETRM85)
 Columns80State = $C01F

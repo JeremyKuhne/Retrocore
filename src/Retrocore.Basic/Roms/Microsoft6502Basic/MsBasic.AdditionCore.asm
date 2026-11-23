@@ -114,7 +114,7 @@ ArgSmaller:
     sty FacExtension
 
 ;; A shift of 8 to 135 bits goes to <Float::ShiftAndAdd>; any other shifts the operand at X bit by bit through
-;; <Float::ShiftRight::ShiftLow>, since the test of the negative count is signed.
+;; <Float::ShiftRight::ShiftLow>, because `bmi` tests bit 7 of A - $F9, which wraps for the larger counts.
 ;; Also: FADD1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 Align:
     cmp #$F9                        ; a shift of 8 to 135 bits starts with whole bytes

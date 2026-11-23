@@ -30,9 +30,10 @@ RandomAddend:
     ;;
     ;; A negative argument starts a sequence from that argument. A positive argument advances the saved value using
     ;; <Float::RandomMultiplier> and <Float::RandomAddend>. Zero returns the last value in <RandomValue> unless the
-    ;; timer variant reads hardware timers. The high and low mantissa bytes are exchanged, the exponent is shifted into
-    ;; the mantissa during normalization, and the positive result is saved in <RandomValue>. The timer variant also
-    ;; exchanges the middle mantissa bytes.
+    ;; timer variant reads hardware timers. For a nonzero argument the high and low mantissa bytes are exchanged (and,
+    ;; in the timer variant, the middle two); a zero argument's timer bytes are loaded already permuted and skip the
+    ;; exchange. The exponent is shifted into the mantissa during normalization, and the positive result is saved in
+    ;; <RandomValue>.
     ;; Out: Fac = pseudorandom value
     ;; Entry:
     ;;   ToStoreFac = Jumps on to <Float::StoreFac>

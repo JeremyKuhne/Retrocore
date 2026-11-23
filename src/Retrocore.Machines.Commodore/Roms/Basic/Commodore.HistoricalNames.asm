@@ -65,7 +65,9 @@ CharacterReaderDone = CharacterReaderTemplate::Done
 ;; Inherit: <Statements::List::ReadWordByte>
 ;; Also: RESCR2 (CBM4S79, HV4, HV4R)
 ReadListWordByte = Statements::List::ReadWordByte
+.endif
 
+.ifdef Statements::List::ListFirstWord
 ;; Inherit: <Statements::List::ListFirstWord>
 ;; Also: PRIT3B (CBM4S79, HV4, HV4R)
 ListFirstWord = Statements::List::ListFirstWord

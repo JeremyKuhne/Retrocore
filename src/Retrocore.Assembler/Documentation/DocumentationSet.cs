@@ -585,13 +585,24 @@ public sealed class DocumentationSet
     }
 
     /// <summary>
-    ///  Gets whether the <c>.if</c> conditions a topic's comment is under hold in this set's build, as its symbols or,
-    ///  while the assembly has errors, its text's definitions decide them.
+    ///  Gets whether the assembly made the definition a comment of a topic documents, where that comment gives a
+    ///  historical name: the assembler's own record of where it defined symbols, so a branch it left out, whatever its
+    ///  condition reads, does not count.
     /// </summary>
     /// <param name="topic">The topic.</param>
-    /// <returns>Whether the topic is in a branch the build takes, or is under no condition.</returns>
-    internal bool ConditionHolds(DocumentationTopic topic) =>
-        topic.Condition is not { } condition || DocumentationConditions.InBuild(condition, _symbols, IsDefined);
+    /// <param name="name">The historical name.</param>
+    /// <returns>
+    ///  Whether a comment that gives the name documents a definition the assembly made; false without a record.
+    /// </returns>
+    internal bool DefinesWhereGiven(DocumentationTopic topic, string name) =>
+        _definedAt.Count != 0 && topic.Comments.Any(comment => GivesAt(comment, name));
+
+    // Whether a comment gives a historical name and documents a definition the assembly made.
+    private bool GivesAt(DocumentationComment comment, string name)
+    {
+        bool gives = DocumentationAlso.Of(comment.Sections).Any(also => also.Name == name);
+        return gives && _definedAt.Contains((System.IO.Path.GetFullPath(comment.Path), comment.TargetLine));
+    }
 
     /// <summary>
     ///  Gets whether a topic's definition is in this set's assembly: false only for a label or equate the assembly

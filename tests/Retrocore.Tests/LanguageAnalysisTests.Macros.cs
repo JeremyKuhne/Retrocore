@@ -560,4 +560,114 @@ public sealed partial class LanguageAnalysisTests
             Directory.Delete(folder, recursive: true);
         }
     }
+
+    // A label whose condition the editor cannot read as the assembler does, giving COMBYTE, which the SDK's AppleSoft
+    // also gives: an .ifdef of a symbol defined later, which the assembler takes as undefined, and, with an error in
+    // the file, an .if on a computed value.
+    private const string LateDefinitionProbe = """
+        ; retrocore: style=strict
+        ;; A probe.
+
+        .cpu Mos6502
+        .org $0300
+
+        .ifdef LATER
+        ;; Reads a byte, in a branch the assembler leaves out.
+        ;; Also: COMBYTE (A2RM78)
+        Reader:
+            rts
+        .else
+        Reader:
+            rts
+        .endif
+
+        ;; Reads a byte.
+        ;; Also: PRBBYTE (A2RM78)
+        PRBBYT:
+            rts
+
+        ;; Reads through the file's name.
+        Echo:
+            jsr PRBBYTE
+            rts
+
+        .ifdef COMBYTE
+        .endif
+
+        ;; Defined after the test of it.
+        LATER = 1
+        """;
+
+    private const string ComputedConditionProbe = """
+        ; retrocore: style=strict
+        ;; A probe.
+
+        .cpu Mos6502
+        .org $0300
+
+        ;; A base value.
+        ONE = 1
+
+        ;; The probe's model.
+        MODEL = ONE + 1
+
+        .if MODEL != 2
+        ;; Reads a byte, in a branch the build leaves out.
+        ;; Also: COMBYTE (A2RM78)
+        Reader:
+            rts
+        .endif
+
+        ;; Reads a byte.
+        ;; Also: PRBBYTE (A2RM78)
+        PRBBYT:
+            rts
+
+        ;; Reads through the file's name.
+        Echo:
+            jsr PRBBYTE
+            NOTANINSTRUCTION
+            rts
+
+        .ifdef COMBYTE
+        .endif
+        """;
+
+    /// <summary>
+    ///  A file's own old name takes precedence only where the assembler made the definition: not in a branch an
+    ///  <c>.ifdef</c> of a later symbol leaves out, and, while the file has an error, not under any condition, whose
+    ///  value the text alone cannot be trusted to give.
+    /// </summary>
+    /// <param name="late">Whether to use the late-definition probe rather than the computed condition.</param>
+    /// <returns>The test.</returns>
+    [TestMethod]
+    [DataRow(data: true)]
+    [DataRow(data: false)]
+    public async Task OldNamesUnderConditionsTheEditorCannotReadDoNotHint(bool late)
+    {
+        string folder = Directory.CreateTempSubdirectory("retrocore-macros").FullName;
+        try
+        {
+            string text = (late ? LateDefinitionProbe : ComputedConditionProbe).ReplaceLineEndings("\n");
+            string probe = Directory.CreateDirectory(Path.Join(folder, "probe")).FullName;
+            string path = Path.GetFullPath(Path.Join(probe, "Probe.asm"));
+            File.WriteAllText(path, text);
+            File.WriteAllText(Path.Join(probe, "Bibliography.md"), MemberBibliography);
+            RecordingLanguageClient client = new();
+            LanguageWorkspace workspace = new(client);
+            workspace.Update(path, text);
+            DocumentUri uri = DocumentUri.FromFileSystemPath(path);
+
+            List<Diagnostic> published = await client.Wait(
+                uri,
+                diagnostics => diagnostics.Any(diagnostic => diagnostic.Message.StartsWith("PRBBYTE is a historical name", StringComparison.Ordinal)));
+
+            published.Any(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error).Should().Be(!late);
+            published.Should().NotContain(diagnostic => diagnostic.Message.StartsWith("COMBYTE is a historical name", StringComparison.Ordinal));
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
 }

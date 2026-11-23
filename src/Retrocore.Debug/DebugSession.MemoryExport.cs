@@ -15,7 +15,7 @@ internal sealed partial class DebugSession
     // How many times an analysis that fails drops the entry points its errors are at and runs again.
     private const int ExportRetries = 4;
 
-    // A name the native assembler takes as a label: scoped and local names, such as Main::@1loop, are left out.
+    // A name the native assembler takes as a label: scoped and local names, such as Main::@1loop, are not.
     [GeneratedRegex("^[A-Za-z_][A-Za-z0-9_]*$")]
     private static partial Regex ExportName();
 
@@ -100,13 +100,23 @@ internal sealed partial class DebugSession
         }
 
         // The session's names that the native assembler takes, each once, the first address's winning; names are
-        // case-sensitive, so TABLE and table are two.
+        // case-sensitive, so TABLE and table are two. A name in a scope, such as the Monitor's LowRes::Plot, can name
+        // an address outside the range, which the source defines inside its scopes: it goes through the analysis as
+        // a stand-in, which the source then calls by the qualified name. Inside the range, where a name is a label,
+        // only a plain name can.
         Dictionary<ushort, string> names = [];
         HashSet<string> used = [with(StringComparer.Ordinal)];
+        ScopedNames scoped = new();
         foreach ((int address, string name) in analysis.Labels.Concat(analysis.Names))
         {
-            if (names.ContainsKey((ushort)address) || !ExportName().IsMatch(name) || !used.Add(name)) { continue; }
-            names[(ushort)address] = name;
+            bool outside = address < from || address >= from + count;
+            bool plain = ExportName().IsMatch(name);
+            if (names.ContainsKey((ushort)address) || !(plain || (outside && ScopedNames.IsScoped(name))) || !used.Add(name))
+            {
+                continue;
+            }
+
+            names[(ushort)address] = plain ? name : scoped.StandInFor(name);
         }
 
         Dictionary<ushort, string> comments = [];
@@ -117,7 +127,7 @@ internal sealed partial class DebugSession
 
         bool vectors = bank is null || bank.InstructionSet is not null;
         DisassemblyResult? result = ExportAnalysis(image, from, analysis, regions, entries, names, comments, vectors);
-        string? source = result?.ExportSource();
+        string? source = result?.ExportSource() is { } exported ? scoped.Rewrite(exported) : null;
         bool exact = result is not null && source is not null && AssemblesTo(source, result, image);
         if (!exact)
         {
@@ -132,7 +142,7 @@ internal sealed partial class DebugSession
                 comments,
                 vectors);
 
-            source = result?.ExportSource()
+            source = (result?.ExportSource() is { } bytes ? scoped.Rewrite(bytes) : null)
                 ?? throw new InvalidOperationException($"${from:X4}-${from + count - 1:X4} could not be saved as assembly.");
         }
 

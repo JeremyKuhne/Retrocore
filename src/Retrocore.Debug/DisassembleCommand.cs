@@ -7,7 +7,6 @@ using Retrocore.Machines.Apple2;
 using Retrocore.Media;
 using System.Globalization;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using Touki.Text;
 
 namespace Retrocore.Debug;
@@ -34,9 +33,6 @@ namespace Retrocore.Debug;
 /// </remarks>
 internal static partial class DisassembleCommand
 {
-    // The prefix of a scoped name's stand-in, which no source name starts with.
-    private const string StandIn = "Scoped__";
-
     private const string Usage = """
         Usage: --disassemble input.bin output.asm --origin $0800
                --disassemble --disk image.dsk --file "NAME" output.asm
@@ -136,17 +132,12 @@ internal static partial class DisassembleCommand
 
         // The analysis takes only plain names, so a name in a scope, such as LowRes::Plot, goes in as a stand-in
         // that the written source turns back into the qualified name.
-        Dictionary<string, string> scoped = [with(StringComparer.Ordinal)];
+        ScopedNames scoped = new();
         foreach (ushort target in found.References.Select(reference => reference.Target).Distinct())
         {
             if (program.Contains(target) || program.Hints.Names.ContainsKey(target)) { continue; }
             if (!machine.TryGetValue(target, out var symbol) || hinted.Contains(symbol.Name)) { continue; }
-            string name = symbol.Name;
-            if (name.Contains("::", StringComparison.Ordinal))
-            {
-                name = $"{StandIn}{scoped.Count}";
-                scoped[name] = symbol.Name;
-            }
+            string name = ScopedNames.IsScoped(symbol.Name) ? scoped.StandInFor(symbol.Name) : symbol.Name;
 
             names[target] = name;
             files[name] = symbol.File;
@@ -198,14 +189,14 @@ internal static partial class DisassembleCommand
     /// <param name="heading">The heading's lines.</param>
     /// <param name="files">For each machine name or stand-in, the file that names it.</param>
     /// <param name="hinted">The hints' names.</param>
-    /// <param name="scoped">For each stand-in, the qualified name it stands for.</param>
+    /// <param name="scoped">The stand-ins and the qualified names they stand for.</param>
     /// <returns>The source to write.</returns>
     internal static string Arrange(
         string exported,
         string heading,
         Dictionary<string, string> files,
         HashSet<string> hinted,
-        Dictionary<string, string> scoped)
+        ScopedNames scoped)
     {
         string[] lines = exported.Split('\n');
         int code = Array.FindIndex(lines, line => line.StartsWith(".org ", StringComparison.Ordinal));
@@ -235,45 +226,25 @@ internal static partial class DisassembleCommand
             });
 
             foreach ((string name, string value, _) in group
-                .Where(equate => !scoped.ContainsKey(equate.Name))
+                .Where(equate => !scoped.TryGetQualified(equate.Name, out _))
                 .OrderBy(equate => equate.Value, StringComparer.Ordinal))
             {
                 source.Append($"{name} = {value}\n");
             }
 
-            // The scoped names, in order of their names, so that a scope's names are together.
-            List<string> open = [];
-            foreach ((string qualified, string value) in group
-                .Where(equate => scoped.ContainsKey(equate.Name))
-                .Select(equate => (scoped[equate.Name], equate.Value))
-                .OrderBy(equate => equate.Item1, StringComparer.Ordinal))
-            {
-                string[] parts = qualified.Split("::");
-                int common = 0;
-                while (common < open.Count && common < parts.Length - 1 && open[common] == parts[common]) { common++; }
-                for (; open.Count > common; open.RemoveAt(open.Count - 1)) { source.Append(".endscope\n"); }
-                for (; open.Count < parts.Length - 1; open.Add(parts[open.Count]))
-                {
-                    string path = string.Join("::", parts[..(open.Count + 1)]);
-                    source.Append(opened.Add(path) ? $".scope {parts[open.Count]}\n" : $".scope {parts[open.Count]} continued\n");
-                }
-
-                source.Append($"{parts[^1]} = {value}\n");
-            }
-
-            for (; open.Count > 0; open.RemoveAt(open.Count - 1)) { source.Append(".endscope\n"); }
+            source.Append(scoped.ScopedEquates(
+                group.Where(equate => scoped.TryGetQualified(equate.Name, out _)).Select(equate => (equate.Name, equate.Value)),
+                opened));
         }
 
         source.Append('\n');
         for (int index = code; index < lines.Length; index++)
         {
-            source.Append(scoped.Count == 0 ? lines[index] : StandInName().Replace(lines[index], Qualify));
+            source.Append(scoped.Qualify(lines[index]));
             if (index + 1 < lines.Length) { source.Append('\n'); }
         }
 
         return source.ToString();
-
-        string Qualify(Match match) => scoped.GetValueOrDefault(match.Value, match.Value);
     }
 
     // Where the written source assembles differently from the program, or null when it assembles the same.
@@ -360,7 +331,4 @@ internal static partial class DisassembleCommand
         return code;
     }
 
-    // A scoped name's stand-in in the exported source.
-    [GeneratedRegex(@"\bScoped__[0-9]+\b")]
-    private static partial Regex StandInName();
 }

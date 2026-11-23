@@ -153,11 +153,9 @@ public sealed class DisassembleCommandTests
             ["Scoped__1"] = "Firmware.asm"
         };
 
-        Dictionary<string, string> scoped = new(StringComparer.Ordinal)
-        {
-            ["Scoped__0"] = "Escape::A",
-            ["Scoped__1"] = "Escape::B"
-        };
+        ScopedNames scoped = new();
+        scoped.StandInFor("Escape::A").Should().Be("Scoped__0");
+        scoped.StandInFor("Escape::B").Should().Be("Scoped__1");
 
         string source = DisassembleCommand.Arrange(exported, "A test.", files, [], scoped);
 

@@ -21,7 +21,7 @@ NEWCHR:
 
 ;; Prints expressions, handling comma zones, semicolons, TAB and SPC.
 ;; In: A = current character, zero = set at the end of the statement
-;; See: <STRPRT>, <FOUT>, <COMPRT>
+;; See: <STRPRT>, <Float::FormatFac>, <COMPRT>
 PRINT:
     beq CRDO
 

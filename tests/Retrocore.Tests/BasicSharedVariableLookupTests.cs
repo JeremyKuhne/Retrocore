@@ -596,8 +596,8 @@ public sealed class BasicSharedVariableLookupTests
         int? nativePet = null)
     {
         string conversion = omitConversion ? "" : $"""
-                INTEGER_CONVERSION_BOUNDARY
-                INTEGER_CONVERSION {(features.NumericEvaluator ? "FRMNUM" : "FRMEVL")}, {Flag(features.CheckType)}
+                IntegerConversionBoundary
+                IntegerConversion {(features.NumericEvaluator ? "FRMNUM" : "FRMEVL")}, {Flag(features.CheckType)}
             """;
 
         string platform = nativePet is null ? "" : ".include \"Commodore.Equates.asm\"";
@@ -664,7 +664,7 @@ public sealed class BasicSharedVariableLookupTests
         }
 
         AssemblyResult native = new Assembler.Assembler().Assemble(
-            new AssemblySource(source, Path.Join(SharedInputs, "VariableLookupTest.asm")),
+            new AssemblySource(BasicNames.ScopedNames(symbols) + "\n" + source, Path.Join(SharedInputs, "VariableLookupTest.asm")),
             new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
             {
                 SourceResolver = new FileAssemblySourceResolver(),

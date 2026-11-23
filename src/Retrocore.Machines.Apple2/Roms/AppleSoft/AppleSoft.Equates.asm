@@ -22,6 +22,7 @@
 REALIO = $04
 .include "../Microsoft6502Basic/MsBasic.Switches.asm"
 .include "../Microsoft6502Basic/MsBasic.Layouts.asm"
+.include "../Microsoft6502Basic/MsBasic.Families.asm"
 
 ;; Microsoft build switch for the `NULL` command.
 ;; Also: NULCMD (M6502)

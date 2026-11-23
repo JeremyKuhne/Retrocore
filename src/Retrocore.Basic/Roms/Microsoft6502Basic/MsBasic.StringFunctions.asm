@@ -9,7 +9,7 @@
 ;; Emits CHR$, slicing, LEN, ASC, byte conversion and VAL through <VALRTS>.
 ;; Parameters: rejectZeroSlices = 1 to reject zero LEFT$/RIGHT$ counts in <PREAM>, 0 to reject only MID$ start zero,
 ;;   indirectReturn = 1 to return from <PREAM> through the writable jump operand, 0 to restore the stack return,
-;;   sharedLenJump = 1 for <ASC> to use LENFLT, 0 for <ASC> to jump directly to <SNGFLT>,
+;;   sharedLenJump = 1 for <ASC> to use LENFLT, 0 for <ASC> to jump directly to <ReturnByte>,
 ;;   zeroTermViaY = 1 to use TYA for <VAL>'s terminator, 0 to load zero immediately
 .macro STRING_FUNCTIONS rejectZeroSlices, indirectReturn, sharedLenJump, zeroTermViaY
     .assert rejectZeroSlices = 0 || rejectZeroSlices = 1, "rejectZeroSlices must be 0 or 1."
@@ -224,7 +224,8 @@ CHRGO2:
 ;; Converts the numeric prefix of a string to <FAC>; an empty string yields zero.
 ;;
 ;; The byte immediately after the counted characters must be writable. It is saved and replaced with zero for
-;; <FIN>; on success, that byte and the caller's <TXTPTR> are restored. An error from <FIN> bypasses restoration.
+;; <Float::ReadNumber>; on success, that byte and the caller's <TXTPTR> are restored. An error from <Float::ReadNumber>
+;; bypasses restoration.
 VAL:
     jsr LEN1
     bne *+5

@@ -14,12 +14,19 @@
 .assert .not .defined(STKEND), "Predefine STACK_END, not STKEND."
 .assert .not .defined(LOCAL_TRMPOS), "Predefine LOCAL_TERMINAL_POSITION, not LOCAL_TRMPOS."
 .assert .not .defined(VARTXT_IN_LINNUM), "Predefine VARIABLE_LIST_IN_LINE_NUMBER, not VARTXT_IN_LINNUM."
+.assert .not .defined(INTPRC), "Predefine INTEGER_VARIABLES, not INTPRC."
+.assert .not .defined(ADDPRC), "Predefine ADDITIONAL_PRECISION, not ADDPRC."
+.assert .not .defined(LNGERR), "Predefine LONG_ERRORS, not LNGERR."
+.assert .not .defined(SHORT_FMUL_ZERO), "Predefine SHORT_MULTIPLY_ZERO, not SHORT_FMUL_ZERO."
+.assert .not .defined(EARLY_FIN_LIMIT), "Predefine EARLY_INPUT_EXPONENT_LIMIT, not EARLY_FIN_LIMIT."
+.assert .not .defined(PRECISE_FOUT_LIMIT), "Predefine PRECISE_OUTPUT_LIMIT, not PRECISE_FOUT_LIMIT."
+.assert .not .defined(ZERO_AT_FHALF), "Predefine ZERO_IN_HALF_CONSTANT, not ZERO_AT_FHALF."
 
 ROMLOC = $C000                      ;; start of the BASIC 2 ROM
-SHORT_FMUL_ZERO = 0                 ;; use the later multiply-by-zero branch
-EARLY_FIN_LIMIT = 0                 ;; use the later decimal exponent limit
-PRECISE_FOUT_LIMIT = 0              ;; use the later decimal-output threshold
-ZERO_AT_FHALF = 1                   ;; define <ZERO> within the half constant
+SHORT_MULTIPLY_ZERO = 0             ;; use the later multiply-by-zero branch
+EARLY_INPUT_EXPONENT_LIMIT = 0      ;; use the later decimal exponent limit
+PRECISE_OUTPUT_LIMIT = 0            ;; use the later decimal-output threshold
+ZERO_IN_HALF_CONSTANT = 1           ;; define <ZeroValue> within the half constant
 WAIT_EASTER_EGG = 1                 ;; include BASIC 2's hidden WAIT message
 BASIC4_OUTPUT_PADDING = 0           ;; omit BASIC 4's output patch space
 
@@ -85,16 +92,16 @@ BASIC4_OUTPUT_PADDING = 0           ;; omit BASIC 4's output patch space
     COMMODORE_VARIABLE_VALUE 0, 0, 0
     FUNCTION_DISPATCH
     LOGICAL_OPERATORS 1
-    RELATIONAL_OPERATORS $FF
+    RelationalOperators $FF
 .include "../../Microsoft6502Basic/MsBasic.Dim.asm"
     VARIABLE_NAME 0, 0, 1, 0, 0, 0
     LETTER_TEST
     SIMPLE_VARIABLE_LOOKUP 0, 0, 0, 1, 1, 0, 0, 0
-    INTEGER_CONVERSION_BOUNDARY
-    INTEGER_CONVERSION FRMEVL, 1
+    IntegerConversionBoundary
+    IntegerConversion FRMEVL, 1
     ARRAY_LOOKUP 0, 0, 1
 .include "../../Microsoft6502Basic/MsBasic.ArrayMultiplication.asm"
-    SIMPLE_FUNCTIONS 0
+    SimpleFunctions 0
     USER_FUNCTIONS 0
     STRING_FROM_NUMBER
     STRING_STORAGE INPUT_BUFFER_PAGE, 1
@@ -107,9 +114,9 @@ BASIC4_OUTPUT_PADDING = 0           ;; omit BASIC 4's output patch space
     MEMORY_ACCESS_ADDRESS 1
     MEMORY_ACCESS_PEEK 1, 1, 0, 1
     MEMORY_ACCESS_POKE
-    MEMORY_ACCESS_WAIT ZSTORD
+    MEMORY_ACCESS_WAIT WaitHiddenMessage
 .include "Commodore.FloatingPoint.asm"
-.include "Commodore.FloatAliases.asm"
+.include "Commodore.HistoricalNames.asm"
 .include "Commodore.InterpreterAliases.asm"
     CHARACTER_READER $58
     COMMODORE_INITIALIZE 0, 1, 0, 0, INPUT_BUFFER_PAGE, 0, 0

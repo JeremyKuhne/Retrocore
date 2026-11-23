@@ -2,7 +2,7 @@
 ;;
 ;; The shared entries follow the byte-conversion helpers in AppleSoft.Strings.asm. AppleSoft accepts negative
 ;; addresses, preserves <POKER> across <PEEK>, and reads ROM without a guard or padding. Its omitted WAIT mask
-;; branches to <ZSTORD>, an alias of <STORDO> defined in MsBasic.FloatingPoint.asm.
+;; branches straight to <STORDO>, the plain wait, where Microsoft's source names the target ZSTORDO.
 
 .include "../Microsoft6502Basic/MsBasic.MemoryAccess.asm"
 
@@ -14,4 +14,4 @@
 ;; Entry: FNWAIT = the same WAIT entry
 ;; See: <FNWAIT>
 WAIT:
-    MEMORY_ACCESS_WAIT ZSTORD
+    MEMORY_ACCESS_WAIT STORDO

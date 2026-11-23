@@ -1,53 +1,74 @@
+; retrocore: style=strict
 ; Derived from Microsoft's BASIC for 6502 (m6502.asm, MIT license; see LICENSE in this folder).
+
+.include "MsBasic.Families.asm"
+
 ; MICROSOFT 6502 BASIC: FREE SPACE AND POSITION
 ;
 ; These entries follow array multiplication and precede the user-defined-function code.
 
 ;; Emits the free-space, position and integer-to-float entries.
-;; Parameters: setCarry = 1 to set carry before the <SNGFLT> branch, 0 to leave it unchanged
-.macro SIMPLE_FUNCTIONS setCarry
+;; Parameters: setCarry = 1 to set carry before the <ReturnByte> branch, 0 to leave it unchanged
+.macro SimpleFunctions setCarry
     .assert setCarry = 0 || setCarry = 1, "setCarry must be 0 or 1."
 
-;; Collects unused strings and returns free space between <STREND> and <FRETOP> in <FAC>.
-;;
-;; If the argument is a string, its temporary descriptor is released before collection. The 16-bit
-;; difference is converted as a signed integer, so free space of 32768 bytes or more appears negative.
-FRE:
-    lda VALTYP
-    beq NOFREF
+    .scope Functions continued
+
+    ;; Collects unused strings and returns free space between <ArraysEnd> and <StringsBottom> in <Fac>.
+    ;;
+    ;; If the argument is a string, its temporary descriptor is released before collection. The 16-bit
+    ;; difference is converted as a signed integer, so free space of 32768 bytes or more appears negative.
+    ;; Also: FRE (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    .proc Fre
+    lda ValueType
+    beq Collect
     jsr FREFAC
 
-NOFREF:
+;; Collects garbage and subtracts.
+;; Also: NOFREF (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+Collect:
     jsr GARBA2
     sec
-    lda FRETOP
-    sbc STREND
+    lda StringsBottom
+    sbc ArraysEnd
     tay
-    lda FRETOP+1
-    sbc STREND+1
+    lda StringsBottom+1
+    sbc ArraysEnd+1
+    .endproc
+    .endscope
 
-;; Converts the signed 16-bit value in A:Y to floating point in <FAC>.
-;; In: A = high byte, Y = low byte
-;; Out: FAC = numeric result, VALTYP = numeric
-GIVAYF:
+    ;; Converts the signed 16-bit value in A:Y to floating point in <Fac>.
+    ;; In: A = high byte, Y = low byte
+    ;; Out: Fac = numeric result, ValueType = numeric
+    ;; Also: GIVAYF (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    .proc ReturnSignedWord
     ldx #$00
-    stx VALTYP
-    sta FACHO
-    sty FACMOH
+    stx ValueType
+    sta FacMantissa1
+    sty FacMantissa2
     ldx #$90
-    jmp FLOATS
+    jmp Float::ConvertSignedWord
+    .endproc
 
-;; Returns the current text output column in <FAC>.
-POS:
-    ldy TRMPOS
+    .scope Functions continued
 
-;; Converts the unsigned byte in Y to floating point in <FAC>.
-;; In: Y = value
-;; Out: FAC = numeric result, VALTYP = numeric
-SNGFLT:
+    ;; Returns the current text output column in <Fac>.
+    ;; Also: POS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    .proc Pos
+    ldy TerminalPosition
+    .endproc
+    .endscope
+
+    ;; Converts the unsigned byte in Y to floating point in <Fac>.
+    ;; In: Y = value
+    ;; Out: Fac = numeric result, ValueType = numeric
+    ;; Also: SNGFLT (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    .proc ReturnByte
     lda #$00
-.if setCarry
-    sec
-.endif
-    beq GIVAYF
+    .if setCarry
+        sec
+    .endif
+    beq ReturnSignedWord
+    ; Falls into ReturnSignedWord.
+    .endproc
 .endmacro

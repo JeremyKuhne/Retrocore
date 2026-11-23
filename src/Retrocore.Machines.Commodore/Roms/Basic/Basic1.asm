@@ -16,6 +16,13 @@
 .assert .not .defined(STKEND), "Predefine STACK_END, not STKEND."
 .assert .not .defined(LOCAL_TRMPOS), "Predefine LOCAL_TERMINAL_POSITION, not LOCAL_TRMPOS."
 .assert .not .defined(VARTXT_IN_LINNUM), "Predefine VARIABLE_LIST_IN_LINE_NUMBER, not VARTXT_IN_LINNUM."
+.assert .not .defined(INTPRC), "Predefine INTEGER_VARIABLES, not INTPRC."
+.assert .not .defined(ADDPRC), "Predefine ADDITIONAL_PRECISION, not ADDPRC."
+.assert .not .defined(LNGERR), "Predefine LONG_ERRORS, not LNGERR."
+.assert .not .defined(SHORT_FMUL_ZERO), "Predefine SHORT_MULTIPLY_ZERO, not SHORT_FMUL_ZERO."
+.assert .not .defined(EARLY_FIN_LIMIT), "Predefine EARLY_INPUT_EXPONENT_LIMIT, not EARLY_FIN_LIMIT."
+.assert .not .defined(PRECISE_FOUT_LIMIT), "Predefine PRECISE_OUTPUT_LIMIT, not PRECISE_FOUT_LIMIT."
+.assert .not .defined(ZERO_AT_FHALF), "Predefine ZERO_IN_HALF_CONSTANT, not ZERO_AT_FHALF."
 
 .ifndef REVISD
 REVISD = 1                          ;; 1 selects the revised first BASIC 1 chip
@@ -54,7 +61,7 @@ CLOCK_IN_PAGE2 = 1                  ;; place the clock in page two
 STATUS_IN_PAGE2 = 1                 ;; place I/O status in page two
 .endif
 .ifndef RND_TIMER_9044
-RND_TIMER_9044 = 1                  ;; use the early hardware timer for <RND>(0)
+RND_TIMER_9044 = 1                  ;; use the early hardware timer for <Functions::Rnd>(0)
 .endif
 .ifndef ERROR_PADDING5
 ERROR_PADDING5 = 1                  ;; retain five unused error-table bytes
@@ -162,7 +169,7 @@ CLOCK_EDITOR_PATCH = 1              ;; 1 uses the editor's TI and TI$ variable c
 INTIDX_USE_FRMNUM = 1               ;; 1 evaluates subscripts with <FRMNUM>, 0 with <FRMEVL>
 .endif
 .ifndef POSINT_CHECK_TYPE
-POSINT_CHECK_TYPE = 0               ;; 1 checks the numeric type at <POSINT>
+POSINT_CHECK_TYPE = 0               ;; 1 checks the numeric type at <FacToNonnegativeInteger>
 .endif
 .ifndef ARRAY_SAVE_OFFSET_HIGH
 ARRAY_SAVE_OFFSET_HIGH = 0          ;; 1 saves the high element-offset byte and fixes the early array bug
@@ -202,17 +209,17 @@ PEEK_GUARD_ROM = 1                  ;; 1 returns zero for protected ROM pages
 .ifndef PEEK_PAD_GUARD
 PEEK_PAD_GUARD = 0                  ;; 1 emits eight padding bytes in <PEEK>
 .endif
-.ifndef SHORT_FMUL_ZERO
-SHORT_FMUL_ZERO = 1                 ;; 1 uses the short multiply-by-zero branch
+.ifndef SHORT_MULTIPLY_ZERO
+SHORT_MULTIPLY_ZERO = 1             ;; 1 uses the short multiply-by-zero branch
 .endif
-.ifndef EARLY_FIN_LIMIT
-EARLY_FIN_LIMIT = 1                 ;; 1 retains the earlier decimal exponent limit
+.ifndef EARLY_INPUT_EXPONENT_LIMIT
+EARLY_INPUT_EXPONENT_LIMIT = 1      ;; 1 retains the earlier decimal exponent limit
 .endif
-.ifndef PRECISE_FOUT_LIMIT
-PRECISE_FOUT_LIMIT = 1              ;; 1 uses the earlier decimal-output threshold
+.ifndef PRECISE_OUTPUT_LIMIT
+PRECISE_OUTPUT_LIMIT = 1            ;; 1 uses the earlier decimal-output threshold
 .endif
-.ifndef ZERO_AT_FHALF
-ZERO_AT_FHALF = 0                   ;; 1 defines <ZERO> in <FHALF> instead of variable lookup
+.ifndef ZERO_IN_HALF_CONSTANT
+ZERO_IN_HALF_CONSTANT = 0           ;; 1 defines `ZeroValue` in <Float::Half> instead of variable lookup
 .endif
 .ifndef WAIT_EASTER_EGG
 WAIT_EASTER_EGG = 0                 ;; 1 includes the hidden WAIT message and <FNWAIT>'s omitted-mask handler
@@ -273,7 +280,7 @@ RESET_STACK_POINTER = <(STACK_END-$101-2*RESET_STACK_EARLY) ;; stack pointer aft
 ; Dispatch tables, errors, command input and program editing.
 .org $C000
     COMMODORE_DISPATCH_TABLES GO_TOKEN, 0, BAD_DATA_ERROR, 0
-    MEMORY_MANAGEMENT 2*STACK_LEVELS+3*ADDPRC+13
+    MEMORY_MANAGEMENT 2*STACK_LEVELS+3*ADDITIONAL_PRECISION+13
     COMMODORE_ERROR_READY 1
     COMMODORE_COMMAND_LOOP COMMAND_TEST_CHARACTER, COMMAND_RESET_BEFORE_INSERT, LINK_RETURNS, 0
     COMMODORE_TERMINAL_INPUT EARLY_LINE_EDIT, 0
@@ -326,20 +333,20 @@ RESET_STACK_POINTER = <(STACK_END-$101-2*RESET_STACK_EARLY) ;; stack pointer aft
     COMMODORE_VARIABLE_VALUE 0, CLOCK_EDITOR_PATCH, 0
     FUNCTION_DISPATCH
     LOGICAL_OPERATORS 1
-    RELATIONAL_OPERATORS $FF
+    RelationalOperators $FF
 .include "../../Microsoft6502Basic/MsBasic.Dim.asm"
     VARIABLE_NAME 0, 0, 1, 0, 0, 0
     LETTER_TEST
-    SIMPLE_VARIABLE_LOOKUP 0, 1-ZERO_AT_FHALF, 0, 1, 1, 0, 0, 0
-    INTEGER_CONVERSION_BOUNDARY
+    SIMPLE_VARIABLE_LOOKUP 0, 1-ZERO_IN_HALF_CONSTANT, 0, 1, 1, 0, 0, 0
+    IntegerConversionBoundary
 .if INTIDX_USE_FRMNUM
-    INTEGER_CONVERSION FRMNUM, POSINT_CHECK_TYPE
+    IntegerConversion FRMNUM, POSINT_CHECK_TYPE
 .else
-    INTEGER_CONVERSION FRMEVL, POSINT_CHECK_TYPE
+    IntegerConversion FRMEVL, POSINT_CHECK_TYPE
 .endif
     ARRAY_LOOKUP 0, 0, ARRAY_SAVE_OFFSET_HIGH
 .include "../../Microsoft6502Basic/MsBasic.ArrayMultiplication.asm"
-    SIMPLE_FUNCTIONS 0
+    SimpleFunctions 0
     USER_FUNCTIONS USER_FN_LOW_CHECK
     STRING_FROM_NUMBER
     STRING_STORAGE INPUT_BUFFER_PAGE, STRING_CLEAR_FACOV
@@ -353,12 +360,12 @@ RESET_STACK_POINTER = <(STACK_END-$101-2*RESET_STACK_EARLY) ;; stack pointer aft
     MEMORY_ACCESS_PEEK PEEK_PRESERVE_ADDRESS, 1, PEEK_GUARD_ROM, PEEK_PAD_GUARD
     MEMORY_ACCESS_POKE
 .if WAIT_EASTER_EGG
-    MEMORY_ACCESS_WAIT ZSTORD
+    MEMORY_ACCESS_WAIT WaitHiddenMessage
 .else
     MEMORY_ACCESS_WAIT STORDO
 .endif
 .include "Commodore.FloatingPoint.asm"
-.include "Commodore.FloatAliases.asm"
+.include "Commodore.HistoricalNames.asm"
 .include "Commodore.InterpreterAliases.asm"
     CHARACTER_READER RANDOM_SEED_TAIL
     COMMODORE_INITIALIZE INIT_MARK_DIRECT, INIT_LINE_WIDTH, INIT_DELAY_SIZE, LOCAL_TERMINAL_POSITION, INPUT_BUFFER_PAGE, 0, INIT_EARLY_BUFFER_SETUP

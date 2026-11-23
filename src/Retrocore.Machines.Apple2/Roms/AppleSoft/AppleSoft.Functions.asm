@@ -6,5 +6,5 @@
 .include "../Microsoft6502Basic/MsBasic.SimpleFunctions.asm"
 .include "../Microsoft6502Basic/MsBasic.UserFunctions.asm"
 
-    SIMPLE_FUNCTIONS 1
+    SimpleFunctions 1
     USER_FUNCTIONS 0

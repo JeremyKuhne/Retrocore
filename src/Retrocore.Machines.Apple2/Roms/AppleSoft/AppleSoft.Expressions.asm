@@ -53,7 +53,7 @@ QSTAT2:
     LOGICAL_OPERATORS 0
 
 .include "../Microsoft6502Basic/MsBasic.Relational.asm"
-    RELATIONAL_OPERATORS $01
+    RelationalOperators $01
 
 ;; Reads the paddle specified by the numeric argument and returns its value in <FAC>.
 PDL:

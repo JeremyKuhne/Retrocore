@@ -200,18 +200,20 @@ public sealed class PetSharedFloatAssemblyTests
             .ToDictionary(symbol => symbol.Name, symbol => symbol.Value, StringComparer.Ordinal);
 
         bool basic1 = model == PetModel.Pet2001;
-        symbols.Add("SHORT_FMUL_ZERO", basic1 ? 1 : 0);
-        symbols.Add("EARLY_FIN_LIMIT", basic1 ? 1 : 0);
-        symbols.Add("PRECISE_FOUT_LIMIT", basic1 ? 1 : 0);
-        symbols.Add("ZERO_AT_FHALF", basic1 ? 0 : 1);
+        symbols.Add("SHORT_MULTIPLY_ZERO", basic1 ? 1 : 0);
+        symbols.Add("EARLY_INPUT_EXPONENT_LIMIT", basic1 ? 1 : 0);
+        symbols.Add("PRECISE_OUTPUT_LIMIT", basic1 ? 1 : 0);
+        symbols.Add("ZERO_IN_HALF_CONSTANT", basic1 ? 0 : 1);
         symbols.Add("WAIT_EASTER_EGG", model == PetModel.Pet2001Basic2 ? 1 : 0);
         symbols.Add("BASIC4_OUTPUT_PADDING", model == PetModel.Pet4032 ? 1 : 0);
 
         string source = $"""
             .cpu Mos6502
+            {BasicNames.ScopedNames(symbols)}
             .org ${start:X4}
             .include "Commodore.FloatingPoint.asm"
             {EndLabel}:
+            .include "Commodore.HistoricalNames.asm"
             """;
 
         AssemblyOptions options = new(ProcessorVariant.Mos6502, 0, 0x10000)

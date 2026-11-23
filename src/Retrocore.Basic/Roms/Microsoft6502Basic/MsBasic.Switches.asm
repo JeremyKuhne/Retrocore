@@ -10,14 +10,20 @@
 .ifndef REALIO
 REALIO = 4                          ;; Microsoft I/O target: 3 for Commodore, 4 for Apple
 .endif
-.ifndef INTPRC
-INTPRC = 1                          ;; 1 includes integer-variable and integer-array support
+.ifndef INTEGER_VARIABLES
+;; 1 includes integer-variable and integer-array support.
+;; Also: INTPRC (M6502)
+INTEGER_VARIABLES = 1
 .endif
-.ifndef ADDPRC
-ADDPRC = 1                          ;; 1 includes the extra floating-point mantissa byte
+.ifndef ADDITIONAL_PRECISION
+;; 1 includes the extra floating-point mantissa byte; code also uses it as that byte's count.
+;; Also: ADDPRC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+ADDITIONAL_PRECISION = 1
 .endif
-.ifndef LNGERR
-LNGERR = 1                          ;; 1 uses full error messages
+.ifndef LONG_ERRORS
+;; 1 uses full error messages.
+;; Also: LNGERR (M6502)
+LONG_ERRORS = 1
 .endif
 .ifndef TIME
 .if REALIO = 3
@@ -42,9 +48,9 @@ DISKO = 0                           ;; legacy disk-I/O setting; informational in
 .endif
 
 .assert REALIO = 3 || REALIO = 4, "The native sources support REALIO 3 and 4."
-.assert INTPRC = 1, "INTPRC must be 1; the native sources require integer arrays."
-.assert ADDPRC = 1, "ADDPRC must be 1; the native sources require five-byte floats."
-.assert LNGERR = 1, "LNGERR must be 1; the native sources require long errors."
+.assert INTEGER_VARIABLES = 1, "INTEGER_VARIABLES must be 1; the native sources require integer arrays."
+.assert ADDITIONAL_PRECISION = 1, "ADDITIONAL_PRECISION must be 1; the native sources require five-byte floats."
+.assert LONG_ERRORS = 1, "LONG_ERRORS must be 1; the native sources require long errors."
 .assert TIME = 0 || TIME = 1, "TIME is 0 or 1."
 .assert EXTIO = 0 || EXTIO = 1, "EXTIO is 0 or 1."
 .assert DISKO = 0 || DISKO = 1, "DISKO is 0 or 1."

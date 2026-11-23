@@ -36,7 +36,7 @@
 .assert WAIT_EASTER_EGG = 0 || WAIT_EASTER_EGG = 1, "WAIT_EASTER_EGG is 0 or 1."
 .assert BASIC4_OUTPUT_PADDING = 0 || BASIC4_OUTPUT_PADDING = 1, "BASIC4_OUTPUT_PADDING is 0 or 1."
 
-    AdditionEntries
+    AddEntries
 
 .if WAIT_EASTER_EGG
 ;; Handles BASIC 2's WAIT with no second mask, including its hidden message.

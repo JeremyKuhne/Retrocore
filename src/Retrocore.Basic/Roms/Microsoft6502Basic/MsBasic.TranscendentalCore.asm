@@ -16,7 +16,7 @@
     lda #<Float::Half
     ldy #>Float::Half
     jsr Float::LoadFac
-    ; Falls into RaiseArg.
+    ; Falls into Float::RaiseArg.
     .endproc
     .endscope
 

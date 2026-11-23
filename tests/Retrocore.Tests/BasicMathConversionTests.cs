@@ -216,10 +216,12 @@ public sealed class BasicMathConversionTests
     [DataRow(data: false)]
     public void FamiliesAreDeclaredOnce(bool twice)
     {
+        // The logarithm constants are five packed numbers and a polynomial: a degree byte and four numbers.
         string source = $"""
             .cpu Mos6502
             {(twice ? ".include \"MsBasic.Families.asm\"" : "")}
             .include "MsBasic.FloatConstants.asm"
+            .include "MsBasic.Logarithm.asm"
             .include "MsBasic.Families.asm"
             .org $2000
                 LogarithmConstants

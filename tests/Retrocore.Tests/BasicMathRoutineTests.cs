@@ -31,6 +31,7 @@ public sealed class BasicMathRoutineTests
     [DataRow(false, "Float::SubtractFromPacked", 4.0, 10.0, 6.0)]
     [DataRow(true, "Float::MultiplyPacked", 3.0, -2.5, -7.5)]
     [DataRow(false, "Float::MultiplyPacked", 3.0, -2.5, -7.5)]
+    [DataRow(false, "Float::MultiplyPacked", 1.0, 1.0000000004656612873077392578125, 1.0000000004656612873077392578125)]
     [DataRow(true, "Float::DividePacked", 4.0, 10.0, 2.5)]
     [DataRow(false, "Float::DividePacked", -4.0, 10.0, -2.5)]
     public void PackedOperationsLeaveTheResultInFac(bool apple, string routine, double fac, double operand, double expected)
@@ -40,6 +41,31 @@ public sealed class BasicMathRoutineTests
         machine.Pack(Operand, operand);
         machine.Call(routine, a: Operand & 0xFF, y: Operand >> 8);
         machine.Fac.Should().Be(expected);
+    }
+
+    /// <summary>
+    ///  A zero multiplier byte that follows another zero byte reaches <c>Float::ShiftProductByte</c> with carry clear,
+    ///  so the partial product shifts nine bits rather than eight: once the product is nonzero, a bit is lost. With
+    ///  <c>Fac</c> = 1 + 2^-31 (its mantissa bytes $80, $00, $00, $01) the product with 1 loses its low bit, while
+    ///  the same product with the operands swapped, whose multiplier bytes are all zero below the top, keeps it.
+    /// </summary>
+    /// <param name="apple">Whether to run AppleSoft rather than PET BASIC 4.</param>
+    [TestMethod]
+    [DataRow(data: true)]
+    [DataRow(data: false)]
+    public void MultiplicationLosesABitAfterTwoZeroMultiplierBytes(bool apple)
+    {
+        const double OnePlus = 1.0000000004656612873077392578125;
+        BasicMathMachine machine = new(apple);
+        machine.SetFac(OnePlus);
+        machine.Pack(Operand, 1.0);
+        machine.Call("Float::MultiplyPacked", a: Operand & 0xFF, y: Operand >> 8);
+        machine.Fac.Should().Be(1.0);
+
+        machine.SetFac(1.0);
+        machine.Pack(Operand, OnePlus);
+        machine.Call("Float::MultiplyPacked", a: Operand & 0xFF, y: Operand >> 8);
+        machine.Fac.Should().Be(OnePlus);
     }
 
     /// <summary>
@@ -187,6 +213,41 @@ public sealed class BasicMathRoutineTests
 
         machine.Memory[exponent + 1].Should().Be((byte)shiftedHigh);
         machine.Cpu.Registers.Accumulator.Should().Be((byte)bits);
+        machine.Cpu.Registers.Status.HasFlag(StatusRegister.Carry).Should().BeFalse();
+    }
+
+    /// <summary>
+    ///  A bit shift returns the old <c>FacExtension</c> shifted right below the bits shifted out; a shift of eight or
+    ///  more first moves whole bytes down, filling the top from <c>ShiftFill</c> and moving the low byte into
+    ///  <c>FacExtension</c>, which then takes the place of the old extension.
+    /// </summary>
+    /// <param name="apple">Whether to run AppleSoft rather than PET BASIC 4.</param>
+    /// <param name="count">The negative shift count.</param>
+    /// <param name="fill">The byte in <c>ShiftFill</c>.</param>
+    /// <param name="expected">The four bytes after the shift, high first, then A, then <c>FacExtension</c>.</param>
+    [TestMethod]
+    [DataRow(true, -1, 0x00, new int[] { 0xC0, 0x09, 0x1A, 0x2B, 0x4D, 0x9A })]
+    [DataRow(false, -9, 0xFF, new int[] { 0xFF, 0x89, 0x1A, 0x2B, 0x3C, 0x78 })]
+    [DataRow(true, -16, 0x00, new int[] { 0x00, 0x00, 0x12, 0x34, 0x56, 0x56 })]
+    public void ShiftRightMovesEveryByte(bool apple, int count, int fill, int[] expected)
+    {
+        BasicMathMachine machine = new(apple);
+        int exponent = machine.Address("ArgExponent");
+        byte[] bytes = [0x80, 0x12, 0x34, 0x56];
+        if (count != -1) { bytes = [0x12, 0x34, 0x56, 0x78]; }
+        bytes.CopyTo(machine.Memory, exponent + 1);
+        machine.Memory[machine.Address("FacExtension")] = 0x9A;
+        machine.Memory[machine.Address("ShiftFill")] = (byte)fill;
+        machine.Call("Float::ShiftRight", a: count & 0xFF, x: exponent, carry: false);
+
+        int[] actual =
+        [
+            .. machine.Memory.AsSpan(exponent + 1, 4).ToArray().Select(value => (int)value),
+            machine.Cpu.Registers.Accumulator,
+            machine.Memory[machine.Address("FacExtension")]
+        ];
+
+        actual.Should().Equal(expected);
         machine.Cpu.Registers.Status.HasFlag(StatusRegister.Carry).Should().BeFalse();
     }
 

@@ -4,7 +4,7 @@
 .include "MsBasic.Families.asm"
 
 ;; Emits the addition and subtraction entries that can precede platform-specific code.
-.macro AdditionEntries
+.macro AddEntries
 
     .scope Float continued
 
@@ -130,7 +130,7 @@ Combine:
     bit ResultSign
     bpl AddMantissas
 
-; Opposite signs: subtract the smaller magnitude from the larger.
+; Opposite signs: subtract the shifted operand from the other; NormalizeSigned negates a negative difference.
 ;; Picks Y as the operand that was not shifted, so the shifted one (X) is subtracted from it.
 ;; Also: FADD3 (M6502)
 OppositeSigns:
@@ -356,7 +356,12 @@ Done:
     ; Mantissa negation, overflow, and the shared arithmetic shifter.
 
     ;; Shifts the multiplication result right by a byte, then continues through <Float::ShiftRight>.
-    ;; In: A = 0, carry = set, so that <Float::ShiftRight> returns after the byte
+    ;;
+    ;; With A = 0 and carry set, <Float::ShiftRight> returns after the byte; with carry clear it shifts one bit more.
+    ;; <Float::MultiplyByte>'s zero path passes on whatever carry it was given: set after a nonzero multiplier byte,
+    ;; but clear after a zero one, so a second zero byte in a row shifts the product nine bits and, once the product
+    ;; is nonzero, loses a bit.
+    ;; In: A = 0
     ;; Also: MULSHF (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc ShiftProductByte
     ldx #(Result1-1)

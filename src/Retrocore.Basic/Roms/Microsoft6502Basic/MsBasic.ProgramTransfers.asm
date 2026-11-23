@@ -118,8 +118,8 @@ ToReady:
 
     ;; Resumes at the saved line and text position, or reports CAN'T CONTINUE.
     ;; Entry:
-    ;;   Done = returns; STOP and END (through <Statements::StopOrEnd>), NULL, BASIC 1's CLEAR and its dispatcher
-    ;;     return through it
+    ;;   Done = returns; STOP and END (through <Statements::StopOrEnd>), NULL, BASIC 1's CLEAR and its early
+    ;;     dispatcher return through it
     ;; See: <Statements::Stop>, <ResetStack>
     ;; Also: CONT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc Cont
@@ -137,8 +137,8 @@ Resume:
     ldy StoppedLine+1
     sta CurrentLine
     sty CurrentLine+1
-;; Returns; STOP and END (through <Statements::StopOrEnd>), NULL, BASIC 1's CLEAR and its dispatcher return through
-;; it.
+;; Returns; STOP and END (through <Statements::StopOrEnd>), NULL, BASIC 1's CLEAR and its early dispatcher return
+;; through it.
 ;; Also: CONTRT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 Done:
     rts
@@ -276,7 +276,8 @@ Done:
     ;; discards the frame through <Statements::PopFinish> instead of returning to the caller.
     ;; In: zero = set at the end of the statement, Y = the statement token's offset in the dispatch table
     ;; Errors: RETURN WITHOUT GOSUB if there is no GOSUB frame or, where `searchLow` is 1, if the search stops at a
-    ;;   FOR frame it matched
+    ;;   FOR frame it matched; a matched frame whose variable address ends in the GOSUB token raises no error, and
+    ;;   RETURN restores the caller from that FOR frame's bytes
     ;; Entry:
     ;;   UndefinedStatement = reports UNDEF'D STATEMENT through <ERROR> (RETURN's error skips its load);
     ;;     <Statements::GoTo> enters here

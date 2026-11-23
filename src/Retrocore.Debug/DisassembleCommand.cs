@@ -132,7 +132,7 @@ internal static partial class DisassembleCommand
 
         // The analysis takes only plain names, so a name in a scope, such as LowRes::Plot, goes in as a stand-in
         // that the written source turns back into the qualified name.
-        ScopedNames scoped = new();
+        ScopedNames scoped = new(hinted.Concat(machine.Values.Select(symbol => symbol.Name)));
         foreach (ushort target in found.References.Select(reference => reference.Target).Distinct())
         {
             if (program.Contains(target) || program.Hints.Names.ContainsKey(target)) { continue; }

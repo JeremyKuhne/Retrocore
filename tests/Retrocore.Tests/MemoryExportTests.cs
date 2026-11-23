@@ -25,26 +25,69 @@ public sealed class MemoryExportTests
     [TestMethod]
     public void ExportNamesTheMonitorsScopedRoutines()
     {
-        // $0800 JSR $FDED (CharacterOut); JSR $F800 (LowRes::Plot); JSR $F832 (LowRes::Clear); RTS
-        byte[] program = [0x20, 0xED, 0xFD, 0x20, 0x00, 0xF8, 0x20, 0x32, 0xF8, 0x60];
+        // $0800 JSR $FDED (CharacterOut); JSR $F800 (LowRes::Plot); JSR $F832 (LowRes::Clear);
+        // JSR $F88C (Disassembler::Decode); JSR $F88E (Disassembler::Decode::Opcode); RTS
+        byte[] program = [0x20, 0xED, 0xFD, 0x20, 0x00, 0xF8, 0x20, 0x32, 0xF8, 0x20, 0x8C, 0xF8, 0x20, 0x8E, 0xF8, 0x60];
 
-        JsonObject export = Export(program, 0x0800);
+        JsonObject export = Export(program, 0x0800, []);
 
         export.Bool("exact").Should().BeTrue();
         string source = export.String("source") ?? throw new AssertFailedException("The export has no source.");
         source.Should().Contain("JSR CharacterOut").And.Contain("JSR LowRes::Plot").And.Contain("JSR LowRes::Clear");
+        source.Should().Contain("JSR Disassembler::Decode\n").And.Contain("JSR Disassembler::Decode::Opcode");
         source.Should().Contain(".scope LowRes\nClear = $F832\nPlot = $F800\n.endscope\n");
+        source.Should().Contain(".scope Disassembler\nDecode = $F88C\n.scope Decode\nOpcode = $F88E\n.endscope\n.endscope\n");
+        Reassembles(source, program);
+    }
 
+    /// <summary>
+    ///  A name in the session that looks like the export's stand-in for a scoped name, here a hint's, keeps its own
+    ///  address: the stand-ins are chosen apart from the session's names.
+    /// </summary>
+    [TestMethod]
+    public void ExportKeepsANameThatLooksLikeAStandIn()
+    {
+        // $0800 STA $0300 (the hint's Scoped__0); JSR $F800 (LowRes::Plot); RTS
+        byte[] program = [0x8D, 0x00, 0x03, 0x20, 0x00, 0xF8, 0x60];
+        string directory = Directory.CreateTempSubdirectory("retrocore-export-").FullName;
+        string hints = Path.Join(directory, "hints.json");
+        try
+        {
+            JsonObject mark = new()
+            {
+                ["memoryReference"] = "0x0000",
+                ["address"] = 0x0300,
+                ["name"] = "Scoped__0",
+                ["hints"] = hints
+            };
+
+            JsonObject export = Export(program, 0x0800, [("retro/memory/mark", mark)]);
+
+            export.Bool("exact").Should().BeTrue();
+            string source = export.String("source") ?? throw new AssertFailedException("The export has no source.");
+            source.Should().Contain("STA Scoped__0").And.Contain("Scoped__0 = $0300").And.Contain("JSR LowRes::Plot");
+            source.Should().Contain(".scope LowRes\nPlot = $F800\n.endscope\n");
+            Reassembles(source, program);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    // The source assembles back to the program's bytes.
+    private static void Reassembles(string source, byte[] program)
+    {
         AssemblyOptions options = new(ProcessorVariant.Mos6502, 0x0800, program.Length);
         AssemblyResult result = new Retrocore.Assembler.Assembler().Assemble(new AssemblySource(source, "export.asm"), options);
         result.Diagnostics.Should().BeEmpty();
         result.Sections[0].Bytes.ToArray().Should().Equal(program);
     }
 
-    // Launches a II Plus from the SDK's sources, writes the program and exports it.
-    private static JsonObject Export(byte[] program, int address)
+    // Launches a II Plus from the SDK's sources, writes the program, sends the other requests and exports it.
+    private static JsonObject Export(byte[] program, int address, (string Command, JsonObject Arguments)[] others)
     {
-        byte[][] requests =
+        List<byte[]> requests =
         [
             Request(1, "initialize", []),
             Request(2, "launch", new JsonObject
@@ -60,6 +103,7 @@ public sealed class MemoryExportTests
                 ["memoryReference"] = $"0x{address:X4}",
                 ["data"] = Convert.ToBase64String(program)
             }),
+            .. others.Select((other, index) => Request(10 + index, other.Command, other.Arguments)),
             Request(4, "retro/memory/export", new JsonObject
             {
                 ["memoryReference"] = "0x0000",

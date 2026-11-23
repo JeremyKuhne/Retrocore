@@ -3,6 +3,7 @@
 // See LICENSE file in the project root for full license information
 
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using System.Text.RegularExpressions;
 using Touki.Text;
 
@@ -13,18 +14,27 @@ namespace Retrocore.Debug;
 /// </summary>
 /// <remarks>
 ///  <para>
-///   The disassembler's analysis takes only plain names, so each scoped name goes through it as a stand-in, and the
-///   exported source is then rewritten: the code calls the name by its qualified name, and its equate is defined
-///   inside its scopes, each scope opened once and continued where it is needed again.
+///   The disassembler's analysis takes only plain names, so each scoped name goes through it as a stand-in, a plain
+///   name none of the disassembly's other names is, and the exported source is then rewritten: the code calls the name
+///   by its qualified name, and its equate is defined inside its scopes, each scope opened once (and continued where a
+///   later group of equates needs it again, as <see cref="DisassembleCommand"/> groups them).
 ///  </para>
 /// </remarks>
 internal sealed partial class ScopedNames
 {
-    // The prefix of a stand-in, which no source name starts with.
+    // The prefix of a stand-in; a number after it makes the stand-in, skipping any the disassembly's names use.
     private const string StandInPrefix = "Scoped__";
 
     private readonly Dictionary<string, string> _qualified = [with(StringComparer.Ordinal)];
     private readonly Dictionary<string, string> _standIns = [with(StringComparer.Ordinal)];
+    private readonly HashSet<string> _taken;
+    private int _next;
+
+    /// <summary>
+    ///  Starts with the plain names the disassembly may also use, which no stand-in is.
+    /// </summary>
+    /// <param name="taken">The disassembly's other names: the hints', the program's and the machine's.</param>
+    internal ScopedNames(IEnumerable<string> taken) => _taken = new(taken, StringComparer.Ordinal);
 
     /// <summary>
     ///  Gets whether no scoped name has been given a stand-in.
@@ -48,7 +58,7 @@ internal sealed partial class ScopedNames
     {
         if (!_standIns.TryGetValue(qualified, out string? standIn))
         {
-            standIn = $"{StandInPrefix}{_standIns.Count}";
+            do { standIn = $"{StandInPrefix}{_next++}"; } while (_taken.Contains(standIn));
             _standIns[qualified] = standIn;
             _qualified[standIn] = qualified;
         }
@@ -123,7 +133,7 @@ internal sealed partial class ScopedNames
         int code = Array.FindIndex(lines, line => line.StartsWith(".org ", StringComparison.Ordinal));
         if (code < 1) { return exported; }
 
-        using ValueStringBuilder source = new(stackalloc char[512]);
+        using ValueStringBuilder source = new(exported.Length + 256, CultureInfo.InvariantCulture);
         source.Append(lines[0]);
         source.Append('\n');
         List<(string StandIn, string Value)> scoped = [];

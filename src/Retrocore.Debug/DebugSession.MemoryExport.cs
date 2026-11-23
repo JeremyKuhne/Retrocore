@@ -106,7 +106,7 @@ internal sealed partial class DebugSession
         // only a plain name can.
         Dictionary<ushort, string> names = [];
         HashSet<string> used = [with(StringComparer.Ordinal)];
-        ScopedNames scoped = new();
+        ScopedNames scoped = new(analysis.Labels.Concat(analysis.Names).Select(pair => pair.Value));
         foreach ((int address, string name) in analysis.Labels.Concat(analysis.Names))
         {
             bool outside = address < from || address >= from + count;

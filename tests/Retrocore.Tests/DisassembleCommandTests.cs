@@ -153,7 +153,7 @@ public sealed class DisassembleCommandTests
             ["Scoped__1"] = "Firmware.asm"
         };
 
-        ScopedNames scoped = new();
+        ScopedNames scoped = new([]);
         scoped.StandInFor("Escape::A").Should().Be("Scoped__0");
         scoped.StandInFor("Escape::B").Should().Be("Scoped__1");
 

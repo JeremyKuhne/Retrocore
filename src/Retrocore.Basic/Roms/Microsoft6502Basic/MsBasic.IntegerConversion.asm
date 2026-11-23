@@ -47,7 +47,7 @@ MinimumInteger:
     ;; When selected, the type check runs before the sign check. Otherwise the caller must supply a numeric result.
     ;; A set sign bit is rejected even when the exponent is zero.
     ;; In: Fac = numeric result, ValueType = result type when the type check is selected
-    ;; Out: FACMO/FACLO = integer, high byte first
+    ;; Out: FacMantissa3 = the integer's high byte, FacMantissa4 = its low byte
     ;; Errors: TYPE MISMATCH if the selected type check rejects a string, ILLEGAL QUANTITY if negative or too large
     ;; See: <FacToInteger>
     ;; Also: POSINT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
@@ -66,7 +66,7 @@ MinimumInteger:
     ;; packed value $90 $80 $00 $00 $20 compares equal. <Float::Compare> also uses the <FacExtension> guard in its
     ;; last-byte comparison. <Float::ToLongInteger> rounds fractions down and the result here is its low 16 bits.
     ;; In: Fac = numeric result
-    ;; Out: FACMO/FACLO = signed integer, high byte first
+    ;; Out: FacMantissa3 = the signed integer's high byte, FacMantissa4 = its low byte
     ;; Errors: ILLEGAL QUANTITY if the exponent is at least $90 and the comparison is unequal
     ;; Entry:
     ;;   FailUnlessEqual = A nonzero result (Compare unequal, or <FacSign> negative) goes to ILLEGAL QUANTITY

@@ -681,6 +681,76 @@ resolve only in its builds, and that every citation's key is in the bibliography
 ran clean over a program using FOR, NEXT, GOSUB, DEF FN, arrays and strings on PET BASIC 2, PET BASIC 4 and the
 enhanced IIe's AppleSoft, built from these sources.
 
+### M. The math package (X8 step 3)
+
+Converted, with `; retrocore: style=strict`:
+
+- The thirteen shared modules of part A: `MsBasic.AdditionCore`, `ArithmeticCore`, `MovementCore`, `ConversionCore`,
+  `DecimalInputCore`, `OutputCore`, `FloatConstants`, `Logarithm`, `TranscendentalCore`, `RandomCore`,
+  `IntegerConversion`, `Relational` and `SimpleFunctions`. Each routine is a `.proc` in `Float` or `Functions`
+  (A-Q2, A-Q3), or top level where the table puts it (A-Q9), its locals and the labels other routines enter written
+  by their full paths (X16, A-Q4).
+- AppleSoft's six compositions (`MsBasic.FloatingPoint`, `FloatArithmetic`, `FloatMovement`, `FloatConversion`,
+  `FloatOutput`, `Transcendental`) and `Commodore.FloatingPoint.asm`: their headers, and Commodore's own routine.
+- `MsBasic.Families.asm`, new and shared: it declares `Float` and `Functions`, empty, so each macro can add its piece
+  with `.scope Name continued` (B1-Q9). Each module that adds to them includes it, and a guard
+  (`FAMILIES_DECLARED`) makes only the first inclusion declare them, so a build or a test can include the modules
+  alone and in any order.
+- `AppleSoft.HistoricalNames.asm` and `Commodore.HistoricalNames.asm`, new, replace the two float alias files (X5).
+
+Decisions and how the table was applied:
+
+- M1. The old names are in `Also:` as in W1, each definition expanded once per build (D2). A name the table gives
+  only for one vendor's builds (Microsoft's MULLN2 and GFDIV, which M6502 has for the PET only; Apple's PRNTFAC,
+  OVERFLOW, FIDVT, INSRTDIG, LOGSER, BILLION and MISMTCH; Commodore's SQR05, SQR20, TENC, N0999, N9999, NMIL, RMULC
+  and RADDC) is an entry of its vendor's historical-names file instead: a scoped alias (`Commodore::SquareRootOfHalf
+  = Float::SquareRootOfHalf`) that inherits its target's documentation and gives the name in its `Also:`. Since the
+  assembler takes no qualified definition, each file opens its vendor's scope. MISMTCH's target is CHKERR in the
+  unconverted `MsBasic.Next.asm`, which gains a summary so the alias has documentation to inherit.
+- M2. FOUT13, which only the SDK's AppleSoft overlay gives (the table: no document), is AppleSoft's alias
+  `AppleSoft::SignDone` with `Also: FOUT13 (UNKN)`, since the label is in AppleSoft's build only and the overlay's
+  callers keep it. LINPRT_FOUT, the SDK's own name, which nothing uses, gets no `Also:`, as the table says.
+- M3. OLDOV (W8): the byte keeps `FunctionJumpHigh` with its `Also:`; its floating-point uses read it through scoped
+  aliases, `Float::UnshiftedExtension` (AddArg, AlignAndAdd and AddMantissas) and `Functions::Exp::RoundingByte`,
+  each saying in prose that Microsoft names it OLDOV there too.
+- M4. ZERO (A-Q7): `ZeroValue` is top level. `OutputTables` closes `Float` around it, and the three bytes are
+  emitted outside the scope in every build, labeled only where `defineZero` is 1. BASIC 1's ZERO in
+  `MsBasic.VariableLookup` keeps its name until that module's step. The comment there now says that AppleSoft,
+  like BASIC 2 and 4, uses the bytes in `Float::Half`.
+- M5. A-Q6: AppleSoft's `ZSTORD = STORDO` is dropped and its WAIT passes `STORDO`; ZSTORDO is named in prose.
+  BASIC 2's routine is `WaitHiddenMessage` (Also: ZSTORD (M6502), STORD1 (HV2)), with its locals, `HiddenMessageText`
+  and two constants for its length and screen-code mask. BASIC 4's checksum byte is `RomChecksumAdjustment` (Also:
+  CHSUMC (HV4, HV4R)).
+- M6. A-Q10: the macros take PascalCase names with full words (`AdditionEntries`, `LogarithmRoutine`,
+  `ExponentialConstants`, `TrigonometricRoutines`, `SignAndIntegerRoutines` ...), and every invocation, root and test
+  follows; DecimalInput's `limitAt120` is `earlyExponentLimit`. Macros take no `Also:`, so nothing keeps the old
+  macro names.
+- M7. Switches (X15, W7): Microsoft's INTPRC, ADDPRC and LNGERR are `INTEGER_VARIABLES`, `ADDITIONAL_PRECISION` and
+  `LONG_ERRORS` with `Also:`, and the PET's SHORT_FMUL_ZERO, EARLY_FIN_LIMIT, PRECISE_FOUT_LIMIT and ZERO_AT_FHALF
+  are `SHORT_MULTIPLY_ZERO`, `EARLY_INPUT_EXPONENT_LIMIT`, `PRECISE_OUTPUT_LIMIT` and `ZERO_IN_HALF_CONSTANT`
+  (SDK names, no `Also:`). Their uses (FOR's `8+ADDITIONAL_PRECISION`, the collector's, BASIC 1's stack reserve)
+  take the new names. The PET roots reject the seven old names predefined, and AppleSoft the three it fixes.
+- M8. A-Q8: the line-number printers stay in `Float`.
+- M9. Links elsewhere: the unconverted modules' documentation links to the math labels by their new names (a link
+  does not resolve through `Also:`), so a renamed label does not leave a broken link.
+- M10. The interpreter alias files (`AppleSoft.InterpreterAliases`, `Commodore.InterpreterAliases`) wait for the
+  steps of the code they alias, and join the historical-names files then.
+- M11. Tests: a module built alone gets the names its dependencies now have from `BasicNames.WithCurrentNames`, but
+  a scoped name (`Float::LoadArg`) cannot be predefined, so `BasicNames.ScopedNames` writes those as constants in
+  pieces of their scopes in the test's source. The PET float alias test predefines only the current names its
+  model's build has: BASIC 1 keeps ZERO, so another build's ZeroValue would be a second definition.
+
+Checked: the full suite (3,811 passed, none failed; 665 skipped, the ROM-dump comparisons without the dumps), the rename
+gate, the lint tests, and `BasicMathConversionTests`, which compares every old name in the math files with the
+MACRO-10 overlay's value in each of the eight builds, checks that each definition reaches the overlay by its name
+or an old name, that a vendor's names resolve only in its builds and through its aliases, and that every citation's
+key is in the bibliography. `BasicMathRoutineTests` runs AddPacked, SubtractFromPacked, MultiplyPacked,
+DividePacked, Compare, GetSign, LoadFac, StoreFac, ToLongInteger, ShiftRight and FormatFac in the enhanced IIe's
+AppleSoft and PET BASIC 4 and checks their results and `Out:` values; the math modules claim no `Keeps:`. The
+debugger's contract checking ran clean over the W program, which uses FOR with STEP, DEF FN, VAL, INT, SQR and SIN,
+on PET BASIC 2, PET BASIC 4 and the enhanced IIe's AppleSoft, and reported a false `Keeps: Y` added to
+`Float::LoadFac` as a control.
+
 ## Other dependents
 
 - **DOS** left BASIC's names unchanged until this conversion: X7 in [Dos.md](Dos.md) ("BASIC names wait for the

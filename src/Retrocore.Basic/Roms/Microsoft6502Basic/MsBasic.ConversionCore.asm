@@ -100,12 +100,12 @@ Done:
     .proc Abs
     lsr FacSign
     rts
-
-    ; Comparison and floating-point-to-integer conversion.
     .endproc
     .endscope
 
     .scope Float continued
+
+    ; Comparison and floating-point-to-integer conversion.
 
     ;; Compares <Fac> to a packed number and returns an ordering byte in A.
     ;;

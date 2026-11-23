@@ -64,7 +64,7 @@ public sealed class BasicWorkspaceConversionTests
     {
         AssemblyResult native = AssembleAppleSoft(model);
         AssemblyResult legacy = SdkModules.AssembleAppleSoft(Path.Join(AppleFolder, "applesoft.mac"), model);
-        CheckAgainstOverlay(native, legacy, [.. Converted(AppleFolder, s_appleFiles), Layouts], minimum: 200);
+        CheckAgainstOverlay(native, legacy, [.. Converted(AppleFolder, s_appleFiles), Layouts], minimum: 200, s_sdkNames);
     }
 
     /// <summary>
@@ -83,7 +83,7 @@ public sealed class BasicWorkspaceConversionTests
     {
         AssemblyResult native = PetSdkModules.AssembleBasic(PetFolder, model, original);
         AssemblyResult legacy = PetLegacyBasic.Assemble(PetFolder, model, original);
-        CheckAgainstOverlay(native, legacy, [.. Converted(CommodoreFolder, s_commodoreFiles), Layouts], minimum: 150);
+        CheckAgainstOverlay(native, legacy, [.. Converted(CommodoreFolder, s_commodoreFiles), Layouts], minimum: 150, s_sdkNames);
     }
 
     /// <summary>
@@ -174,8 +174,25 @@ public sealed class BasicWorkspaceConversionTests
         count.Should().BeGreaterThan(400, "the converted workspace keeps every old name it renamed");
     }
 
-    // Each old name a converted file gives reaches its definition with the overlay's value for that name.
-    private static void CheckAgainstOverlay(AssemblyResult native, AssemblyResult legacy, string[] files, int minimum)
+    /// <summary>
+    ///  Checks that each old name a converted file gives reaches its definition with the overlay's value for that
+    ///  name, and that each definition the files make reaches the overlay by its name or an old name.
+    /// </summary>
+    /// <param name="native">The native build.</param>
+    /// <param name="legacy">The MACRO-10 overlay's build of the same model.</param>
+    /// <param name="files">The converted files.</param>
+    /// <param name="minimum">The fewest old names that must be compared.</param>
+    /// <param name="sdkNames">The SDK's own definitions, which no overlay gives.</param>
+    /// <param name="scoped">
+    ///  Whether a scoped definition is checked too; the workspace's are a type's members, which come with their type.
+    /// </param>
+    internal static void CheckAgainstOverlay(
+        AssemblyResult native,
+        AssemblyResult legacy,
+        string[] files,
+        int minimum,
+        IReadOnlySet<string> sdkNames,
+        bool scoped = false)
     {
         native.Success.Should().BeTrue();
         legacy.Success.Should().BeTrue();
@@ -192,14 +209,14 @@ public sealed class BasicWorkspaceConversionTests
             compared++;
         }
 
-        compared.Should().BeGreaterThan(minimum, "the converted files rename the overlay's workspace names");
+        compared.Should().BeGreaterThan(minimum, "the converted files rename the overlay's names");
 
         // Every definition the converted files make reaches the overlay by its name or an old name, so an old name
         // dropped from an Also: section, which code may not use, still fails.
         IEnumerable<AssemblySymbol> definitions = native.SymbolDefinitions.Where(symbol =>
             InFiles(symbol, files)
-                && !symbol.Name.Contains("::", StringComparison.Ordinal)
-                && !s_sdkNames.Contains(symbol.Name));
+                && (scoped || !symbol.Name.Contains("::", StringComparison.Ordinal))
+                && !sdkNames.Contains(symbol.Name));
 
         foreach (AssemblySymbol definition in definitions)
         {
@@ -210,12 +227,24 @@ public sealed class BasicWorkspaceConversionTests
         }
     }
 
-    private static HashSet<string> OldNames(IEnumerable<AssemblyResult> builds, string[] files) =>
+    /// <summary>
+    ///  Gets the old names the given files give in any of the builds.
+    /// </summary>
+    /// <param name="builds">The builds.</param>
+    /// <param name="files">The files.</param>
+    /// <returns>The old names.</returns>
+    internal static HashSet<string> OldNames(IEnumerable<AssemblyResult> builds, string[] files) =>
         [.. builds.SelectMany(build => build.HistoricalNames)
             .Where(pair => InFiles(pair.Value, files))
             .Select(pair => pair.Key)];
 
-    private static bool InFiles(AssemblySymbol definition, string[] files) =>
+    /// <summary>
+    ///  Gets whether a definition is in one of the files.
+    /// </summary>
+    /// <param name="definition">The definition.</param>
+    /// <param name="files">The files.</param>
+    /// <returns>Whether it is.</returns>
+    internal static bool InFiles(AssemblySymbol definition, string[] files) =>
         definition.Location is { } location
             && files.Any(file => string.Equals(
                 Path.GetFullPath(location.Path), Path.GetFullPath(file), StringComparison.OrdinalIgnoreCase));

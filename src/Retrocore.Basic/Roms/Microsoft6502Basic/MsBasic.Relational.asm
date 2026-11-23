@@ -31,7 +31,8 @@
     jmp NumberResult
 
 ;; Compares bytes up to the shorter string's length, then compares lengths if needed.
-;; In: ARGMO/ARGLO = argument descriptor address, FACMO/FACLO = accumulator descriptor address,
+;; In: ArgMantissa3 = the low byte of the argument's descriptor address, ArgMantissa4 = its high byte,
+;;   FacMantissa3 = the low byte of the accumulator's descriptor address, FacMantissa4 = its high byte,
 ;;   RelationMask = relation mask
 ;; Out: Fac = zero or the variant's true value
 ;; Also: STRCMP (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)

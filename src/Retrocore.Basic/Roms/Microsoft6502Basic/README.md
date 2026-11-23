@@ -29,10 +29,12 @@ than silently implying a different configuration. Those assertions do not apply 
 it can supply its own values and independently compose the appropriate clock, channel, disk and
 time-output macros.
 
-`MsBasic.FloatConstants.asm` defines macros for the five-byte `ADDITIONAL_PRECISION = 1` constants and polynomial tables shared
-by AppleSoft and all three PET BASIC versions. A native variant can emit each block where its ROM needs it.
-`MsBasic.AdditionCore.asm` supplies addition, normalization and shifting. `MsBasic.Logarithm.asm` provides the
-shared `LOG` routine, which must immediately precede `FMULT` because it falls through to that routine.
+The math modules put their routines in two scopes, `Float` and `Functions`, which `MsBasic.Families.asm` declares;
+each module includes it, and only the first inclusion declares them. `MsBasic.FloatConstants.asm` defines macros for
+the five-byte `ADDITIONAL_PRECISION = 1` constants and polynomial tables shared by AppleSoft and all three PET BASIC
+versions. A native variant can emit each block where its ROM needs it. `MsBasic.AdditionCore.asm` supplies
+addition, normalization and shifting. `MsBasic.Logarithm.asm` provides the shared `Functions::Log` routine, which
+must immediately precede `Float::MultiplyPacked` because it falls through to that routine.
 `MsBasic.ArithmeticCore.asm` supplies multiplication and division,
 including the short zero-result branch used by PET BASIC 1; `MsBasic.MovementCore.asm` supplies the movement and
 rounding routines. `MsBasic.ConversionCore.asm` supplies sign, comparison and integer conversion;
@@ -180,7 +182,7 @@ and `PROBE_TEST_BYTE` are bytes; `NULL_INCREMENT_LIMIT` is 2 through 255.
 | `SHORT_MULTIPLY_ZERO` | 1 | `FloatArithmetic` `shortZeroBranch`: use the short zero-result branch. |
 | `EARLY_INPUT_EXPONENT_LIMIT` | 1 | `DecimalInput` `earlyExponentLimit`: use the earlier exponent limit. |
 | `PRECISE_OUTPUT_LIMIT` | 1 | `OutputConstants`: use the 999,999,999.5 upper threshold. |
-| `ZERO_IN_HALF_CONSTANT` | 0 | Define ZERO in FHALF when 1, or emit it at `SIMPLE_VARIABLE_LOOKUP` when 0. |
+| `ZERO_IN_HALF_CONSTANT` | 0 | Define `ZeroValue` in `Float::Half` when 1, or emit ZERO at `SIMPLE_VARIABLE_LOOKUP` when 0. |
 | `WAIT_EASTER_EGG` | 0 | Emit the hidden WAIT routine and signature, and route the omitted-mask branch to it. |
 | `RANDOM_SEED_TAIL` | `$59` | `CHARACTER_READER` `seedTail`: the random seed's last byte. |
 | `INIT_MARK_DIRECT` | 1 | `COMMODORE_INITIALIZE` `markDirect`: mark the current line direct. |

@@ -40,10 +40,20 @@ internal sealed partial class AssemblyPreprocessor
         bool active = _conditions.Count == 0 || _conditions[^1].Active;
         original = new(text, original.Location, original.Dialect);
         if (Ca65Definition(original, active)) { return true; }
-        if (!active) { return false; }
+        if (!active)
+        {
+            InactiveDefinedConditional(ref original, ref text, initialOperation);
+            return false;
+        }
+
         _nameAmbiguity = null;
         original = new(ExpandCa65Functions(ExpandCa65Definitions(AssemblySyntax.AsString(text))), original.Location, original.Dialect);
         text = original.Text;
+
+        // A label before a conditional directive that a definition spells belongs to the label, as on the directive
+        // written out.
+        Split(text.Span, out _, out ReadOnlySpan<char> expandedOperation, out _);
+        if (IsConditionalDirective(expandedOperation)) { DirectiveLabel(ref original, ref text); }
         Split(text.Span, out ReadOnlySpan<char> label, out ReadOnlySpan<char> op, out ReadOnlySpan<char> operand);
         string operation = op.ToString().ToUpperInvariant();
 
@@ -118,6 +128,58 @@ internal sealed partial class AssemblyPreprocessor
 
         return false;
     }
+
+    /// <summary>
+    ///  Reads a conditional directive that a text definition spells, on a line in an inactive block, so that the
+    ///  block's nesting is kept.
+    /// </summary>
+    /// <param name="original">The line, replaced by its definitions' text when that is a conditional directive.</param>
+    /// <param name="text">The line's text, replaced with <paramref name="original"/>.</param>
+    /// <param name="operation">The line's operation as written.</param>
+    /// <remarks>
+    ///  <para>
+    ///   An inactive line is otherwise not expanded. ca65 expands text definitions everywhere, so with
+    ///   <c>.define If .if</c>, an <c>If</c> in a skipped block opens a conditional there, and an <c>.elseif</c> a
+    ///   definition spells can choose its branch. Only definitions are expanded, not functions, and only a line that
+    ///   then is a conditional directive changes; a definition that cannot be expanded leaves the line as written.
+    ///  </para>
+    /// </remarks>
+    private void InactiveDefinedConditional(ref Line original, ref ReadOnlyMemory<char> text, ReadOnlySpan<char> operation)
+    {
+        // Only a definition in the operation's place can make the line a conditional directive.
+        // A definition with parameters may be called with its arguments in parentheses, as IFX(1).
+        ReadOnlySpan<char> name = operation[..AssemblySyntax.IdentifierLength(operation)];
+        if (_ca65State is not { Defines.Count: > 0 } state || name.IsEmpty) { return; }
+        if ((state.DefineLengths & LengthBit(name.Length)) == 0) { return; }
+        if (!state.Defines.ContainsKey(name.ToString())) { return; }
+        string expanded;
+        try
+        {
+            expanded = ExpandCa65Definitions(AssemblySyntax.AsString(text));
+        }
+        catch (Exception exception) when (exception is AssemblyError or OverflowException)
+        {
+            return;
+        }
+
+        Split(expanded, out _, out ReadOnlySpan<char> directive, out _);
+        if (!IsConditionalDirective(directive)) { return; }
+        original = new(expanded, original.Location, original.Dialect);
+        text = original.Text;
+
+        // A label before it is read as on the directive written out: split off, and not defined in a skipped block.
+        DirectiveLabel(ref original, ref text);
+    }
+
+    private static bool IsConditionalDirective(ReadOnlySpan<char> operation) =>
+        operation.Equals(".if", StringComparison.OrdinalIgnoreCase)
+            || operation.Equals(".elseif", StringComparison.OrdinalIgnoreCase)
+            || operation.Equals(".else", StringComparison.OrdinalIgnoreCase)
+            || operation.Equals(".endif", StringComparison.OrdinalIgnoreCase)
+            || operation.Equals(".ifdef", StringComparison.OrdinalIgnoreCase)
+            || operation.Equals(".ifndef", StringComparison.OrdinalIgnoreCase)
+            || operation.Equals(".ifblank", StringComparison.OrdinalIgnoreCase)
+            || IsCa65Condition(operation);
 
     private bool NeedsCa65Expansion(
         ReadOnlySpan<char> text,

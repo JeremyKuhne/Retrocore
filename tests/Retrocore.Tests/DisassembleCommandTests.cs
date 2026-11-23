@@ -140,6 +140,36 @@ public sealed class DisassembleCommandTests
     }
 
     /// <summary>
+    ///  A hint's name that looks like a scoped name's stand-in keeps its own address: the stand-ins are chosen apart
+    ///  from the hints' and the machine's names.
+    /// </summary>
+    [TestMethod]
+    public void HintNamedLikeAStandInKeepsItsAddress()
+    {
+        // $0800 STA $0300 (the hint's Scoped__0); JSR $F800 (LowRes::Plot); RTS
+        byte[] program = [0x8D, 0x00, 0x03, 0x20, 0x00, 0xF8, 0x60];
+        string directory = Directory.CreateTempSubdirectory("retrocore-disassemble-").FullName;
+        try
+        {
+            string input = Path.Join(directory, "store.bin");
+            string hints = Path.Join(directory, "hints.json");
+            string output = Path.Join(directory, "store.asm");
+            File.WriteAllBytes(input, program);
+            File.WriteAllText(hints, """{ "names": { "$0300": "Scoped__0" } }""");
+
+            string[] args = [input, output, "--origin", "$0800", "--hints", hints, "--sdk-roms", s_inputs];
+            DisassembleCommand.Run(args).Should().Be(0);
+            string source = File.ReadAllText(output);
+            source.Should().Contain("STA Scoped__0").And.Contain("Scoped__0 = $0300").And.Contain("JSR LowRes::Plot");
+            source.Should().Contain(".scope LowRes\nPlot = $F800\n.endscope\n");
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
     ///  A scope two files' names share is opened in the first file's group and continued in the second's, so the
     ///  source assembles, calling each by its qualified name.
     /// </summary>
@@ -153,11 +183,9 @@ public sealed class DisassembleCommandTests
             ["Scoped__1"] = "Firmware.asm"
         };
 
-        Dictionary<string, string> scoped = new(StringComparer.Ordinal)
-        {
-            ["Scoped__0"] = "Escape::A",
-            ["Scoped__1"] = "Escape::B"
-        };
+        ScopedNames scoped = new([]);
+        scoped.StandInFor("Escape::A").Should().Be("Scoped__0");
+        scoped.StandInFor("Escape::B").Should().Be("Scoped__1");
 
         string source = DisassembleCommand.Arrange(exported, "A test.", files, [], scoped);
 

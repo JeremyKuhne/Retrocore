@@ -98,8 +98,7 @@ internal static partial class LanguageHost
         or PetBasicId
         or BasicId;
 
-    // Serves the requests about a machine that is off (LanguageHost.Machine.cs), which the language server's tests
-    // leave out with the debug targets they need.
+    // Serves the requests about a machine that is off (LanguageHost.Machine.cs).
     static partial void ServeMachine(JsonRpcServer server);
 
     /// <summary>

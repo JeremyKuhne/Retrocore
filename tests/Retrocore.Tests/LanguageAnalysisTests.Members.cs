@@ -133,6 +133,83 @@ public sealed partial class LanguageAnalysisTests
         }
     }
 
+    /// <summary>
+    ///  A definition in a branch of conditional assembly that the build does not take is found in the text, and is
+    ///  qualified by its scope as the assembler would qualify it: it is not taken for a root name, so an old name of
+    ///  the same spelling still gets its hint where code uses it.
+    /// </summary>
+    /// <returns>The test.</returns>
+    [TestMethod]
+    public async Task UnassembledDefinitionsKeepTheirScope()
+    {
+        const string Probe = """
+            ;; Picks the build.
+            VARIANT = 1
+
+            ;; An I/O block.
+            .struct Iob
+                ;; The block's type.
+                TYPE .byte
+                ;; The command.
+                ;; Also: IBCMD (A2RM78)
+                COMMAND .byte
+            .endstruct
+
+            ;; Constants that differ by build.
+            .scope Other
+            .if VARIANT
+            ;; The first build's value.
+            IBCMD = 1
+            .else
+            ;; The second build's value.
+            IBCMD = 2
+            .endif
+            .endscope
+
+            ;; Uses the old name, outside the scope.
+            .proc Use
+                lda #IBCMD
+                rts
+            .endproc
+            """;
+
+        string folder = Directory.CreateTempSubdirectory("retrocore-unassembled").FullName;
+        try
+        {
+            string text = Probe.ReplaceLineEndings("\n");
+            string[] lines = text.Split('\n');
+            string probe = Directory.CreateDirectory(Path.Join(folder, "probe")).FullName;
+            string path = Path.GetFullPath(Path.Join(probe, "Builds.asm"));
+            File.WriteAllText(path, text);
+            File.WriteAllText(Path.Join(probe, "Bibliography.md"), MemberBibliography);
+            RecordingLanguageClient client = new();
+            LanguageWorkspace workspace = new(client);
+            workspace.Update(path, text);
+            DocumentUri uri = DocumentUri.FromFileSystemPath(path);
+
+            SourceAnalysis? analysis = null;
+            for (int attempt = 0; attempt < 6 && analysis is null; attempt++)
+            {
+                analysis = await workspace.AnalysisOfAsync(path, CancellationToken.None);
+            }
+
+            // The taken branch is assembled; the other is found in the text, in its scope, where the assembled one
+            // already defines the name. Neither is a root name.
+            int taken = Array.FindIndex(lines, line => line.Contains("IBCMD = 1", StringComparison.Ordinal));
+            (analysis?.Definitions ?? []).Where(site => site.Name.EndsWith("IBCMD", StringComparison.Ordinal))
+                .Select(site => (site.Name, site.Line)).Should().Equal(("Other::IBCMD", taken));
+
+            int use = Array.FindIndex(lines, line => line.Contains("lda #IBCMD", StringComparison.Ordinal));
+            List<Diagnostic> published = await client.Wait(uri, diagnostics => diagnostics.Count != 0);
+            published.Select(diagnostic => (diagnostic.Code, diagnostic.Range.Start.Line, diagnostic.Message)).Should().Equal(
+                (DocumentationRules.HistoricalName, use, "IBCMD is a historical name of Iob::COMMAND."));
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
     private static LspParams Request(DocumentUri uri, int line, int character) =>
         new(new TextDocumentItem(uri, "retrocore-asm", ""), new Position(line, character), new ReferenceContext(IncludeDeclaration: false), "", []);
 }

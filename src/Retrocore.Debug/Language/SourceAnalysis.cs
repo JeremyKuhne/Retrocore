@@ -181,14 +181,18 @@ internal sealed partial class SourceAnalysis
                 bool bare = match.Success && !match.Groups["colon"].Success && !match.Groups["equate"].Success;
                 bool instruction = bare && InstructionDocs.IsMnemonic(match.Groups["name"].Value);
                 // A line the assembler defined a name on has it already, qualified by its scope.
-                if (match.Success
-                    && !instruction
-                    && !_definitions.ContainsKey(match.Groups["name"].Value)
-                    && !assembled.Contains((path.ToUpperInvariant(), line)))
+                if (!match.Success || instruction || assembled.Contains((path.ToUpperInvariant(), line))) { continue; }
+
+                // One it did not assemble (a branch of conditional assembly not taken, or a source with errors) is
+                // qualified by the scopes around it as the assembler would qualify it, so a name in a scope is not
+                // taken for a root name: once for each scope the file is included in.
+                bool constant = match.Groups["equate"].Success;
+                SymbolSiteKind kind = constant ? SymbolSiteKind.Constant : SymbolSiteKind.Label;
+                string plain = match.Groups["name"].Value;
+                foreach (string scope in ScopesAt(path, line).Select(scopes => scopes.Scope).Distinct(StringComparer.Ordinal))
                 {
-                    bool constant = match.Groups["equate"].Success;
-                    SymbolSiteKind kind = constant ? SymbolSiteKind.Constant : SymbolSiteKind.Label;
-                    string name = match.Groups["name"].Value;
+                    string name = scope.Length == 0 ? plain : $"{scope}::{plain}";
+                    if (_definitions.ContainsKey(name)) { continue; }
                     long? value = result.Symbols.TryGetValue(name, out long known) ? known : null;
                     SymbolSite site = new(name, path, line, Column: 0, kind, value);
                     _textOnly.Add(site);

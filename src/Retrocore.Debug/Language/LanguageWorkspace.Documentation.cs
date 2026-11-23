@@ -164,18 +164,16 @@ internal sealed partial class LanguageWorkspace
                 string? replacement = topics.Count == 1 ? set.SymbolOf(topics[0]) : null;
                 current[name] = current.TryGetValue(name, out string? earlier) && earlier != replacement ? null : replacement;
 
-                // Only a name whose definition the build makes takes precedence; one in a branch it leaves out stays
-                // as ambiguous with the SDK's as before. While the file has errors, the assembly may stop short of its
-                // definitions, so those its text makes count, in a branch whose condition holds.
-                bool built = replacement is not null && (analysis.Result.Success
-                    ? analysis.Result.Symbols.ContainsKey(replacement)
-                    : analysis.Definitions.Any(site => site.Name == replacement));
+                // Only a name the build gives takes precedence: the assembler made the definition its comment
+                // documents. One in a branch the build leaves out stays as ambiguous with the SDK's as before. While
+                // the file has errors there is no such record, and a condition cannot be trusted to evaluate as the
+                // assembler would, so only a definition its text makes under no condition counts then.
+                bool given = replacement is not null && topics.Count == 1 && (analysis.Result.Success
+                    ? set.DefinesWhereGiven(topics[0], name)
+                    : topics[0].Comments.All(comment => comment.Condition is null)
+                        && analysis.Definitions.Any(site => site.Name == replacement));
 
-                // The build must give the name: the topic's own condition holds, and the Also: section that gives it
-                // is in the build, which for a label documented in both branches of an .if decides it.
-                bool given = topics.Count == 1 && set.Gives(topics[0], name, thisBuild: true);
-                bool taken = given && set.ConditionHolds(topics[0]);
-                if (thisBuild && built && taken)
+                if (thisBuild && given)
                 {
                     own.Add(name);
                 }

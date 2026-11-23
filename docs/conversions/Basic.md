@@ -796,7 +796,7 @@ Decisions and how the table was applied:
   - Commodore: CHDGOT and CHDRTS (CBM4S79, HV1, HV1R, HV2, HV4, HV4R), Commodore's spellings of CHZGOT and CHZRTS,
     in every PET build. The rename table leaves CBM4S79 out; its `code26` names both labels, as the HV
     reconstructions do (checked in mist64/cbmsrc at the bibliography's commit). BASIC 4's lister labels RESCR2 and
-    PRIT3B (CBM4S79, HV4, HV4R) are under `.ifdef` their targets.
+    PRIT3B (CBM4S79, HV4, HV4R) are each under `.ifdef` its target.
   - The SDK's own names that no overlay or document gives get no `Also:`, as the table says: CONT1, and
     LIST_QUOTE_CHECK, which no build assembles.
 - S7. BSTOP, the name Commodore's BASIC 4 kernal listing (K4S79) and Hoffmann-Vetter's reconstruction of it (HVK4)
@@ -825,19 +825,19 @@ Decisions and how the table was applied:
     regions hold no lister, leaves them out.
   - The editor probe in `LanguageAnalysisTests.Macros` gives COMBYTE as a user file's own old name. Once the SDK gave
     the same name, the editor's merge of the file's and the SDK modules' `Also:` names cancelled it, and the file lost
-    its hint and quick fix. A name whose definition the file's assembly made now takes precedence
-    (`LanguageWorkspace.HistoricalNames`), and the unchanged probe fails without that fix; one the file gives only in a
-    branch its build leaves out does not, so it gets no hint naming that branch's definition
-    (`OldNamesInAnOmittedBranchDoNotHint`, which fails if any name the file gives takes precedence). While the file
-    has errors, the definitions its text makes count (`OwnOldNamesHintWhileTheFileHasAnError`, which fails on the
-    assembly's symbols alone), in a branch whose `.if` condition holds
-    (`OldNamesInAnOmittedBranchDoNotHintWhileTheFileHasAnError`, which fails without that check). The `Also:`
-    section that gives the name must be in the build too, which decides it for a label documented in both branches
-    (`OldNamesOfTheOtherBranchDoNotHint`, which fails without it). The doc set's `FindAlso` returns a single topic
-    without that filter, so a file whose other branch gives a name no SDK module gives still gets a hint naming the
-    label; that predates this step and is left for a change of its own.
+    its hint and quick fix. The file's own name now takes precedence where its build gives it
+    (`LanguageWorkspace.HistoricalNames`, `DocumentationSet.DefinesWhereGiven`): when the file assembles, the
+    assembler made the definition the giving comment documents, by its own record of where it defined symbols; while
+    the file has errors there is no such record, so only a definition the text makes under no condition counts.
+    Anywhere else the merge behaves as before. Each case has a probe that fails without its part: the unchanged
+    COMBYTE probe, `OwnOldNamesHintWhileTheFileHasAnError`, `OldNamesInAnOmittedBranchDoNotHint` (with and without an
+    error), `OldNamesOfTheOtherBranchDoNotHint` (a label documented in both branches) and
+    `OldNamesUnderConditionsTheEditorCannotReadDoNotHint` (an `.ifdef` of a later symbol, a computed condition). The
+    doc set's `FindAlso` returns a single topic without its per-build filter, so a file whose other branch gives a
+    name no SDK module gives still gets a hint naming the label; that predates this step and is left for a change of
+    its own.
 
-Checked: the full suite (3,904 passed, none failed; 665 skipped, the ROM-dump comparisons without the dumps), the rename
+Checked: the full suite (3,906 passed, none failed; 665 skipped, the ROM-dump comparisons without the dumps), the rename
 gate, the lint tests, and `BasicStatementsConversionTests`, which compares every old name in the fifteen files and the
 vendors' historical names with the MACRO-10 overlay's value in each of the eight builds (about 150 per build), checks
 that each definition reaches the overlay by its name or an old name, that a vendor's names resolve only in its builds

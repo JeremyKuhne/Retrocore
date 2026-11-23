@@ -116,7 +116,8 @@ internal static partial class SourceIncludes
         return current;
     }
 
-    // A file's folder and the folders beside it, its own first, the others by name.
+    // A file's folder, the folders beside it and the folder above, its own first, the others by name and the folder
+    // above last. A module's parts may be in a folder of their own, included from the one above.
     private static List<string> NeighborFolders(string path)
     {
         string? directory = Path.GetDirectoryName(path);
@@ -134,6 +135,8 @@ internal static partial class SourceIncludes
             // The parent went away, or became unreadable, while it was listed; the file's own folder is still searched.
         }
 
+        // SourcesIn finds nothing in the folder above if it went away too.
+        folders.Add(parent);
         return folders;
     }
 

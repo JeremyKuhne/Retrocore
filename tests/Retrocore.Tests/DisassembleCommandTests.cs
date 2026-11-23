@@ -158,6 +158,32 @@ public sealed class DisassembleCommandTests
         }
     }
 
+    /// <summary>
+    ///  A definition in a module's part, in a folder beside the module's main file, is named as the module's when a
+    ///  disassembly picks between names at one address; a file with no such main file is its own module.
+    /// </summary>
+    [TestMethod]
+    public void PartsInAModuleFolderBelongToTheModule()
+    {
+        string folder = Directory.CreateTempSubdirectory("retrocore-module").FullName;
+        try
+        {
+            File.WriteAllText(Path.Join(folder, "Monitor.asm"), ".include \"Monitor/Screen.asm\"\n");
+            string part = Path.Join(Directory.CreateDirectory(Path.Join(folder, "Monitor")).FullName, "Screen.asm");
+            File.WriteAllText(part, "    rts\n");
+            string other = Path.Join(Directory.CreateDirectory(Path.Join(folder, "Other")).FullName, "Lone.asm");
+            File.WriteAllText(other, "    rts\n");
+
+            MachineSymbols.ModuleFile(part).Should().Be("Monitor.asm");
+            MachineSymbols.ModuleFile(other).Should().Be("Lone.asm");
+            MachineSymbols.ModuleFile(Path.Join(folder, "Monitor.asm")).Should().Be("Monitor.asm");
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
     // The same disk with each track's sectors in ProDOS's order.
     private static byte[] ProDosOrder(byte[] disk)
     {

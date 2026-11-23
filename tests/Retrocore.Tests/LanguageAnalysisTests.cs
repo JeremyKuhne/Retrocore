@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
+using Retrocore.Documentation;
 using Retrocore.Debug.Language;
 
 namespace Retrocore.Tests;
@@ -409,6 +410,52 @@ public sealed partial class LanguageAnalysisTests
     }
 
     /// <summary>
+    ///  The editor's documentation knows which branch of an <c>.if</c> the assembly took, as the assembler's does: a
+    ///  macro defined after the <c>.ifdef</c> that tests it doesn't select that branch's <c>Entry:</c>.
+    /// </summary>
+    [TestMethod]
+    public void DocumentationFollowsTheBranchTheAssemblyTook()
+    {
+        string directory = Directory.CreateTempSubdirectory().FullName;
+        try
+        {
+            string main = Path.Join(directory, "main.asm");
+            File.WriteAllText(main, """
+                .cpu Mos6502
+                .org $6000
+                .ifdef WIDE
+                ;; Scrolls, wide.
+                ;; Entry:
+                ;;   Wide = the wide loop
+                .proc Scroll
+                Wide:
+                    rts
+                .endproc
+                .else
+                ;; Scrolls, narrow.
+                ;; Entry:
+                ;;   Narrow = the narrow loop
+                .proc Scroll
+                Narrow:
+                    rts
+                .endproc
+                .endif
+                .macro WIDE
+                .endmacro
+                """);
+
+            SourceAnalysis analysis = SourceAnalysis.Assemble(main, _ => null);
+
+            analysis.Result.Diagnostics.Should().BeEmpty();
+            new DocumentationResolver(analysis.Documentation).Check().Should().BeEmpty();
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
     ///  A <c>.define</c> in an included file is found from its uses, with its documentation, even when its name
     ///  is also a mnemonic.
     /// </summary>
@@ -467,6 +514,29 @@ public sealed partial class LanguageAnalysisTests
         string inputs = Path.Join(AppContext.BaseDirectory, "Inputs");
         SourceIncludes.RootOf(Path.GetFullPath(Path.Join(inputs, file)))
             .Should().Be(Path.GetFullPath(Path.Join(inputs, root)));
+    }
+
+    /// <summary>
+    ///  A module's part in a folder of its own, included from the module's main file in the folder above, is
+    ///  analyzed through that main file.
+    /// </summary>
+    [TestMethod]
+    public void PartsInAModuleFolderAreAnalyzedThroughTheMainFile()
+    {
+        string folder = Directory.CreateTempSubdirectory("retrocore-parts").FullName;
+        try
+        {
+            string root = Path.Join(folder, "Monitor.asm");
+            File.WriteAllText(root, ".include \"Monitor/Screen.asm\"\n");
+            string part = Path.Join(Directory.CreateDirectory(Path.Join(folder, "Monitor")).FullName, "Screen.asm");
+            File.WriteAllText(part, "    rts\n");
+
+            SourceIncludes.RootOf(part).Should().Be(root);
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
     }
 
     /// <summary>

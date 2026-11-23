@@ -3,6 +3,7 @@
 // See LICENSE file in the project root for full license information
 
 using Retrocore.Assembler;
+using Retrocore.Debug;
 using Retrocore.Documentation;
 using NativeAssembler = Retrocore.Assembler.Assembler;
 
@@ -119,6 +120,33 @@ public sealed partial class HistoricalNameTests
     }
 
     /// <summary>
+    ///  The debugger resolves a historical name, in a watch or a breakpoint, to its definition.
+    /// </summary>
+    [TestMethod]
+    public void OldNamesResolveInTheDebugger()
+    {
+        string folder = Directory.CreateTempSubdirectory("retrocore-also").FullName;
+        try
+        {
+            string path = Path.Join(folder, "Library.asm");
+            File.WriteAllText(path, Library);
+            AssemblyResult result = new NativeAssembler().Assemble(
+                new AssemblySource(Library, path),
+                new AssemblyOptions(ProcessorVariant.Mos6502, origin: 0x1000, imageSize: 0x100));
+
+            DebugInfo debug = new();
+            debug.Add(new SourceMapModule(result, area: null));
+            debug.Resolve("CharacterOut").Should().Be(0xFDED);
+            debug.Resolve("COUT").Should().Be(0xFDED);
+            debug.Resolve("KEYIN").Should().Be(0x1000);
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    /// <summary>
     ///  An <c>Also:</c> item is a name and the keys of the documents that give it.
     /// </summary>
     [TestMethod]
@@ -152,6 +180,235 @@ public sealed partial class HistoricalNameTests
         resolver.Resolve(echo, "COUT").Topic?.Name.Should().Be("CharacterOut");
         resolver.Resolve(echo, "RDKEY").Topic?.Name.Should().Be("Monitor::ReadKey");
         resolver.Check().Should().BeEmpty();
+    }
+
+    /// <summary>
+    ///  Two models may give one old name to different code: only the build's own definition counts, so a link
+    ///  resolves to it, and the two are not reported as sharing the name.
+    /// </summary>
+    [TestMethod]
+    public void OldNamesOfOtherBuildsDontCount()
+    {
+        DocumentationSet set = Set("""
+            ENHANCED = 1
+            .if ENHANCED
+            ;; Selects the slot's ROM.
+            ;; Also: SLOTRTS (TEST)
+            SelectSlotRom:
+                rts
+            .else
+            ;; Text that runs as code.
+            ;; Also: SLOTRTS (TEST)
+            UserText:
+                rts
+            .endif
+
+            ;; Returns through <SLOTRTS>.
+            Echo:
+                rts
+            """);
+
+        DocumentationResolver resolver = new(set);
+        Required(resolver.Resolve(Required(set.Find("Echo")), "SLOTRTS").Topic).Name.Should().Be("SelectSlotRom");
+        resolver.Check().Should().BeEmpty();
+    }
+
+    /// <summary>
+    ///  The same holds when the two builds' conditions are joined in one <c>.if</c>, which the opposite-branch rule
+    ///  does not take apart.
+    /// </summary>
+    [TestMethod]
+    public void OldNamesOfOtherBuildsUnderJoinedConditionsDontCount()
+    {
+        DocumentationSet set = Set("""
+            MONITOR = 2
+            ENHANCED = 0
+            .if MONITOR = 2 && .not ENHANCED
+            ;; Text that runs as code.
+            ;; Also: SLOTRTS (TEST)
+            UserText:
+                rts
+            .endif
+            .if ENHANCED
+            ;; Selects the slot's ROM.
+            ;; Also: SLOTRTS (TEST)
+            SelectSlotRom:
+                rts
+            .endif
+
+            ;; Returns through <SLOTRTS>.
+            Echo:
+                rts
+            """);
+
+        DocumentationResolver resolver = new(set);
+        Required(resolver.Resolve(Required(set.Find("Echo")), "SLOTRTS").Topic).Name.Should().Be("UserText");
+        resolver.Check().Should().BeEmpty();
+    }
+
+    /// <summary>
+    ///  A routine documented in both branches gives each build's old names in that branch's section: one the other
+    ///  branch's section gives is not this build's, so it neither resolves to the routine nor counts as shared with
+    ///  this build's definition of it.
+    /// </summary>
+    [TestMethod]
+    public void AlsoSectionsOfOtherBuildsDontCount()
+    {
+        DocumentationSet set = Set("""
+            ENHANCED = 1
+            .if ENHANCED
+            ;; Reads a key.
+            ReadKey:
+                rts
+            ;; Waits for a key.
+            ;; Also: OLDKEY (TEST)
+            WaitKey:
+                rts
+            .else
+            ;; Reads a key.
+            ;; Also: OLDKEY (TEST)
+            ReadKey:
+                rts
+            .endif
+
+            ;; Echoes <OLDKEY>.
+            Echo:
+                rts
+            """);
+
+        DocumentationResolver resolver = new(set);
+        Required(resolver.Resolve(Required(set.Find("Echo")), "OLDKEY").Topic).Name.Should().Be("WaitKey");
+        resolver.Check().Should().BeEmpty();
+    }
+
+    /// <summary>
+    ///  A macro defined only in a branch the build doesn't take, or after the <c>.ifdef</c> that tests it, is not
+    ///  defined for that <c>.ifdef</c>, as the assembler sees it: the branch's old names are not this build's.
+    /// </summary>
+    [TestMethod]
+    public void AlsoSectionsUnderMacrosTheAssemblerHasNotSeenDontCount()
+    {
+        DocumentationSet set = Set("""
+            .if 0
+            .macro FAST
+            .endmacro
+            .endif
+            .ifdef FAST
+            ;; Reads a key.
+            ;; Also: OLDKEY (TEST)
+            ReadKey:
+                rts
+            .else
+            ;; Reads a key.
+            ReadKey:
+                rts
+            ;; Waits for a key.
+            ;; Also: OLDKEY (TEST)
+            WaitKey:
+                rts
+            .endif
+            .ifdef WIDE
+            ;; Scrolls.
+            ;; Also: OLDSCROLL (TEST)
+            Scroll:
+                rts
+            .else
+            ;; Scrolls.
+            Scroll:
+                rts
+            ;; Scrolls slowly.
+            ;; Also: OLDSCROLL (TEST)
+            SlowScroll:
+                rts
+            .endif
+            .ifdef WIDE
+            ;; The line width.
+            ;; Also: OLDWIDTH (TEST)
+            WIDTH = 80
+            .else
+            ;; The line width.
+            WIDTH = 40
+            ;; The narrow line width.
+            ;; Also: OLDWIDTH (TEST)
+            NARROW_WIDTH = 40
+            .endif
+            .macro WIDE
+            .endmacro
+
+            ;; Echoes <OLDKEY>, <OLDSCROLL> and <OLDWIDTH>.
+            Echo:
+                rts
+            """);
+
+        DocumentationResolver resolver = new(set);
+        DocumentationTopic echo = Required(set.Find("Echo"));
+        Required(resolver.Resolve(echo, "OLDKEY").Topic).Name.Should().Be("WaitKey");
+        Required(resolver.Resolve(echo, "OLDSCROLL").Topic).Name.Should().Be("SlowScroll");
+        Required(resolver.Resolve(echo, "OLDWIDTH").Topic).Name.Should().Be("NARROW_WIDTH");
+        resolver.Check().Should().BeEmpty();
+    }
+
+    /// <summary>
+    ///  Another module is assembled for its default build, which says nothing about the build of the source that
+    ///  links into it: an old name two of its builds give is ambiguous there, not its default build's.
+    /// </summary>
+    [TestMethod]
+    public void OldNamesOfAnotherModulesBuildsAreAmbiguous()
+    {
+        string library = """
+            ENHANCED = 1
+            .if ENHANCED
+            ;; Selects the slot's ROM.
+            ;; Also: SLOTRTS (TEST)
+            SelectSlotRom:
+                rts
+            .else
+            ;; Text that runs as code.
+            ;; Also: SLOTRTS (TEST)
+            UserText:
+                rts
+            .endif
+            """;
+
+        DocumentationSet other = DocumentationSet.Create(
+            [DocumentationParser.Parse(library, "Library.asm")], Assemble(library), "Library");
+
+        DocumentationSet program = Set("""
+            ;; Returns through <SLOTRTS>.
+            Echo:
+                rts
+            """);
+
+        DocumentationTarget target = new DocumentationResolver(program, [other]).Resolve(Required(program.Find("Echo")), "SLOTRTS");
+        target.Kind.Should().Be(DocumentationTargetKind.Ambiguous);
+    }
+
+    /// <summary>
+    ///  Only labels and equates can be left out of a build: a macro that gives an old name a label gives too still
+    ///  counts, so the name is ambiguous rather than the label's.
+    /// </summary>
+    [TestMethod]
+    public void OldNamesOfMacrosAlwaysCount()
+    {
+        DocumentationSet set = Set("""
+            ;; Prints a byte.
+            ;; Also: PRBYTE (TEST)
+            .macro PrintByte
+                rts
+            .endmacro
+
+            ;; Prints a byte, the routine.
+            ;; Also: PRBYTE (TEST)
+            PrintByteRoutine:
+                rts
+
+            ;; Prints through <PRBYTE>.
+            Echo:
+                rts
+            """);
+
+        DocumentationTarget target = new DocumentationResolver(set).Resolve(Required(set.Find("Echo")), "PRBYTE");
+        target.Kind.Should().Be(DocumentationTargetKind.Ambiguous);
     }
 
     /// <summary>

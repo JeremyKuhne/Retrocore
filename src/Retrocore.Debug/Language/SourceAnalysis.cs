@@ -232,7 +232,10 @@ internal sealed partial class SourceAnalysis
         Symbols(),
         ModuleOf(Root),
         ModelOf(Root),
-        Result.SourceMap);
+        Result.SourceMap,
+
+        // An assembly with errors may stop short of definitions it would make; the conditions decide then.
+        Result.Success ? Result.SymbolDefinitions : null);
 
     // The assembly's symbols, or while it has errors, the definitions found in the text.
     private IReadOnlyDictionary<string, long> Symbols()
@@ -312,7 +315,7 @@ internal sealed partial class SourceAnalysis
         if (scoped.Count != 0) { return scoped; }
 
         // A historical name finds the definition whose Also: section gives it.
-        return [.. Documentation.FindAlso(name)
+        return [.. Documentation.FindAlso(name, thisBuild: true)
             .Where(topic => topic.Name != name)
             .SelectMany(topic => Find(topic.Name))
             .Distinct()];

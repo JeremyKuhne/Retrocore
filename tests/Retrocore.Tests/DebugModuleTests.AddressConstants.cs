@@ -111,7 +111,7 @@ public sealed partial class DebugModuleTests
         string folder = Directory.CreateTempSubdirectory().FullName;
         try
         {
-            SourceMapModule program = Module(Path.Join(folder, "Program", "Monitor.asm"), """
+            SourceMapModule program = Module(Path.Join(folder, "Program", "main.s"), """
                 CURSOR = $24
                   sta CURSOR
                   rts
@@ -151,7 +151,7 @@ public sealed partial class DebugModuleTests
             Ranked(basic, dos, dos32, monitor)
                 .Should().Equal(("CH", 0x24L), ("TRMPOS", 0x24L), ("HOLD", 0x50L), ("SPOT", 0x50L), ("OTHER", 0x50L));
 
-            // The program's Monitor.asm is a program's, not the SDK's, and comes first without a rank.
+            // The program's names come before even the Monitor's, though its main.s would rank last.
             Ranked(program, basic, monitor)
                 .Should().Equal(("CURSOR", 0x24L), ("CH", 0x24L), ("TRMPOS", 0x24L), ("HOLD", 0x50L));
         }

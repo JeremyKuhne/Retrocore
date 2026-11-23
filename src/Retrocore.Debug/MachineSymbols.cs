@@ -176,7 +176,9 @@ internal static partial class MachineSymbols
     ///  Each name, its value, the source that defines it (a name with none ranks with the other sources'), and whether
     ///  it is ranked, in the modules' order.
     /// </param>
-    /// <returns>The names and values, the unranked first, then the ranked by lowest <see cref="Rank(string)"/>.</returns>
+    /// <returns>
+    ///  The names and values, the unranked first, then the ranked by lowest <see cref="Rank(string)"/>.
+    /// </returns>
     internal static IEnumerable<(string Name, long Value)> ByRank(
         IEnumerable<(string Name, long Value, string? Path, bool Ranked)> names)
     {

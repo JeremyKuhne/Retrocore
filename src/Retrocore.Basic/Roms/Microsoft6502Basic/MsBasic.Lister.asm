@@ -175,7 +175,7 @@ NextByte:
     sta SourceStart+1
     bne NextLine
 ;; Optional carriage return, then jmp to the resume entry.
-;; Also: GRODY (M6502, HV1, HV1R, HV2, HV4, HV4R, CBM4S79)
+;; Also: GRODY (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 Finish:
     .if finalCr
         lda #$0D

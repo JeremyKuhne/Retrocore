@@ -20,6 +20,7 @@ public sealed class DocumentationSet
     // The CPU every statement was assembled for, unless they were for more than one.
     private IsaDescription? _onlyCpu;
     private bool _mixed;
+    private HashSet<string>? _macros;
 
     private DocumentationSet(
         string? module,
@@ -268,7 +269,7 @@ public sealed class DocumentationSet
     /// <param name="thisBuild">Whether only its sections in this set's build count, as the assembler's do.</param>
     /// <returns>Whether it gives the name.</returns>
     public bool Gives(DocumentationTopic topic, string name, bool thisBuild = false) =>
-        DocumentationAlso.Of(topic.Sections.Where(section => !thisBuild || DocumentationConditions.InBuild(section.Condition, _symbols)))
+        DocumentationAlso.Of(topic.Sections.Where(section => !thisBuild || DocumentationConditions.InBuild(section.Condition, _symbols, IsDefined)))
             .Any(also => also.Name == name);
 
     /// <summary>
@@ -352,6 +353,17 @@ public sealed class DocumentationSet
     /// <param name="name">The name.</param>
     /// <returns>Whether it is defined.</returns>
     public bool Defines(string name) => _symbols.ContainsKey(name);
+
+    /// <summary>
+    ///  Gets whether a name is defined as an <c>.ifdef</c> sees it: a symbol of the assembly or a macro its files define.
+    /// </summary>
+    /// <param name="name">The name.</param>
+    /// <returns>Whether it is defined.</returns>
+    public bool IsDefined(string name)
+    {
+        _macros ??= [.. Files.SelectMany(file => file.Macros)];
+        return _symbols.ContainsKey(name) || _macros.Contains(name);
+    }
 
     /// <summary>
     ///  Tests whether a qualified name is a scope: one that a documented or assembled name is qualified by.

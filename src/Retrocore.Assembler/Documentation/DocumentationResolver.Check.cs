@@ -331,7 +331,7 @@ public sealed partial class DocumentationResolver
     }
 
     // Whether a section's .if condition holds for the build the documentation's symbols come from.
-    private bool InThisBuild(string? condition) => DocumentationConditions.InBuild(condition, Current.Symbols);
+    private bool InThisBuild(string? condition) => DocumentationConditions.InBuild(condition, Current.Symbols, Current.IsDefined);
 
     // Whether an Entry: label is in the routine: from its address up to the next documented routine that is neither
     // one of its entries nor one of its own locals (a .proc's labels may have their own ;; blocks).

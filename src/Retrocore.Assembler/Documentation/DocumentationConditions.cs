@@ -12,12 +12,13 @@ internal static class DocumentationConditions
     /// <summary>
     ///  Gets whether a section's <c>.if</c> condition holds for the build an assembly's symbols come from: each part of
     ///  it ("MONITOR = MONITOR_IIE and not ENHANCED") is evaluated from those symbols, and an <c>.ifdef</c>'s
-    ///  "defined NAME" by whether they have the name, as they are the whole build's. A part they can't decide holds.
+    ///  "defined NAME" by whether the build defines the name, as a symbol or a macro. A part they can't decide holds.
     /// </summary>
     /// <param name="condition">The section's condition, or null for one that always applies.</param>
     /// <param name="symbols">The build's symbols; with none, every condition holds.</param>
+    /// <param name="isDefined">Whether a name is defined as an <c>.ifdef</c> sees it: a symbol or a macro.</param>
     /// <returns>Whether the section is in the build.</returns>
-    internal static bool InBuild(string? condition, IReadOnlyDictionary<string, long> symbols)
+    internal static bool InBuild(string? condition, IReadOnlyDictionary<string, long> symbols, Func<string, bool> isDefined)
     {
         if (condition is null || symbols.Count == 0) { return true; }
         long? Symbol(string name) => symbols.TryGetValue(name, out long value) ? value : null;
@@ -29,7 +30,7 @@ internal static class DocumentationConditions
             bool? holds = Holds(test, Symbol);
             if (test.StartsWith("defined ", StringComparison.Ordinal))
             {
-                holds = symbols.ContainsKey(test["defined ".Length..].Trim());
+                holds = isDefined(test["defined ".Length..].Trim());
             }
 
             if (holds == not) { return false; }

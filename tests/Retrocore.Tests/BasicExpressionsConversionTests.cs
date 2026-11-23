@@ -135,7 +135,7 @@ public sealed class BasicExpressionsConversionTests
     /// <summary>
     ///  In each AppleSoft build, every old name the converted files give that the MACRO-10 overlay defines reaches the
     ///  overlay's value, and every definition they make reaches the overlay by its name or an old name, apart from the
-    ///  SDK's names and the vendor's aliases, whose values BasicSharedFloatAliasesTests checks.
+    ///  SDK's names and the vendor's aliases, whose values the alias tests check.
     /// </summary>
     /// <param name="model">The Apple II model.</param>
     [TestMethod]
@@ -153,7 +153,7 @@ public sealed class BasicExpressionsConversionTests
     /// <summary>
     ///  In each PET build, every old name the converted files give that the MACRO-10 overlay defines reaches the
     ///  overlay's value, and every definition they make reaches the overlay by its name or an old name, apart from the
-    ///  SDK's names and the vendor's aliases, whose values BasicSharedFloatAliasesTests checks.
+    ///  SDK's names and the vendor's aliases, whose values the alias tests check.
     /// </summary>
     /// <param name="model">The PET model.</param>
     /// <param name="original">Whether BASIC 1 or 4 uses its original chip.</param>
@@ -299,7 +299,7 @@ public sealed class BasicExpressionsConversionTests
         count.Should().BeGreaterThan(MinimumOldNames, "the converted modules keep every old name they renamed");
     }
 
-    // The SDK's names and a vendor's aliases, whose values BasicSharedFloatAliasesTests checks against the vendor's
+    // The SDK's names and a vendor's aliases, whose values the alias tests check against the vendor's
     // listings.
     private static HashSet<string> Exempt(AssemblyResult native, string vendorNames)
     {

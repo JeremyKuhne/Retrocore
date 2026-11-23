@@ -556,6 +556,8 @@ public partial class AssemblyPreprocessorTests
     [DataRow(AssemblyDialect.Native, ".define IFX .if\nIFX(1)\n.byte 1\n.endif\n.byte 2", 1, 2)]
     [DataRow(AssemblyDialect.Native, "Value .set(3)\n.byte Value, 4", 3, 4)]
     [DataRow(AssemblyDialect.Ca65, "Value .set(3)\n.byte Value, 4", 3, 4)]
+    [DataRow(AssemblyDialect.Ca65, "Value .set(1 <> 0)\n.byte Value, 4", 1, 4)]
+    [DataRow(AssemblyDialect.Ca65, "Value .set(2 | 1 + 1)\n.byte Value, 5", 4, 5)]
     [DataRow(AssemblyDialect.Native, ".struct Pair\nFirst .byte\nSecond .res(2)\n.endstruct\n.byte .sizeof(Pair), Pair::Second", 3, 1)]
     [DataRow(AssemblyDialect.Ca65, ".struct Pair\nFirst .byte\nSecond .res(2)\n.endstruct\n.byte .sizeof(Pair), Pair::Second", 3, 1)]
     public void DirectivesTakeAParenthesizedOperandWithoutASpace(AssemblyDialect dialect, string text, int first, int second)

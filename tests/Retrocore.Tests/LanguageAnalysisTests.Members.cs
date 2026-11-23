@@ -405,6 +405,50 @@ public sealed partial class LanguageAnalysisTests
         }
     }
 
+    /// <summary>
+    ///  A file named by an absolute path in an <c>.include</c> is found where the workspace's resolver finds it: a
+    ///  skipped file is placed in the scope it is included in, and the root search finds the source that includes it.
+    ///  A name no path can hold is passed over rather than failing the search.
+    /// </summary>
+    [TestMethod]
+    public void AbsoluteIncludesAreFoundWhereTheResolverFindsThem()
+    {
+        string folder = Directory.CreateTempSubdirectory("retrocore-absolute").FullName;
+        try
+        {
+            // The included file is in another folder, so a name resolved from the including file's folder misses it.
+            string library = Directory.CreateDirectory(Path.Join(folder, "library")).FullName;
+            string program = Directory.CreateDirectory(Path.Join(folder, "program")).FullName;
+            string skipped = Path.GetFullPath(Path.Join(library, "Skipped.asm"));
+            File.WriteAllText(skipped, """
+                .if 0
+                ABSOLUTE = 1
+                .endif
+                """.ReplaceLineEndings("\n"));
+
+            string main = Path.GetFullPath(Path.Join(program, "Main.asm"));
+            File.WriteAllText(main, $"""
+                .org $0300
+                .scope First
+                .include "{skipped}"
+                .endscope
+                .include "bad{'\0'}name.asm"
+                """.ReplaceLineEndings("\n"));
+
+            SourceIncludes.IncludesOf(main).Should().Equal(skipped);
+            SourceIncludes.IncludeLines(main, File.ReadAllLines(main)).Should().Equal((2, skipped));
+            SourceIncludes.RootOf(skipped).Should().Be(main);
+
+            SourceAnalysis analysis = SourceAnalysis.Assemble(main, _ => null);
+            analysis.Definitions.Select(site => site.Name).Where(name => name.EndsWith("ABSOLUTE", StringComparison.Ordinal))
+                .Should().Equal("First::ABSOLUTE");
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
     private static LspParams Request(DocumentUri uri, int line, int character) =>
         new(new TextDocumentItem(uri, "retrocore-asm", ""), new Position(line, character), new ReferenceContext(IncludeDeclaration: false), "", []);
 }

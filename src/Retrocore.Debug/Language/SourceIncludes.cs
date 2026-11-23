@@ -37,7 +37,6 @@ internal static partial class SourceIncludes
     /// <returns>The full paths of the files it names.</returns>
     internal static IEnumerable<string> IncludesOf(string path)
     {
-        string directory = Path.GetDirectoryName(path) ?? "";
         string text;
         try
         {
@@ -52,16 +51,18 @@ internal static partial class SourceIncludes
 
         foreach (Match match in Include().Matches(text))
         {
-            yield return Path.GetFullPath(Path.Join(directory, match.Groups["file"].Value));
+            if (Named(path, match.Groups["file"].Value) is { } file) { yield return file; }
         }
 
         // An overlay's first line names the base it edits.
         int end = text.IndexOf('\n', StringComparison.Ordinal);
         string first = end < 0 ? text : text[..end];
         Match overlay = Overlay().Match(first);
-        if (overlay.Success && first.Contains("retrocore:", StringComparison.Ordinal))
+        if (overlay.Success
+            && first.Contains("retrocore:", StringComparison.Ordinal)
+            && Named(path, overlay.Groups["file"].Value) is { } overlaid)
         {
-            yield return Path.GetFullPath(Path.Join(directory, overlay.Groups["file"].Value));
+            yield return overlaid;
         }
     }
 
@@ -73,15 +74,17 @@ internal static partial class SourceIncludes
     /// <returns>Each including line's zero-based index and the full path of the file it names.</returns>
     internal static IEnumerable<(int Line, string File)> IncludeLines(string path, IReadOnlyList<string> lines)
     {
-        string directory = Path.GetDirectoryName(path) ?? "";
         for (int line = 0; line < lines.Count; line++)
         {
             if (Include().Match(lines[line]) is not { Success: true } match) { continue; }
-            string named = match.Groups["file"].Value;
-            if (named.AsSpan().IndexOfAny(Path.GetInvalidPathChars()) >= 0) { continue; }
-            yield return (line, Path.GetFullPath(Path.Join(directory, named)));
+            if (Named(path, match.Groups["file"].Value) is { } file) { yield return (line, file); }
         }
     }
+
+    // The full path of a file a source names, as the workspace's resolver finds it (LanguagePaths.Resolve): an
+    // absolute name as it is, a relative one from the source's folder. Null for a name no path can hold.
+    private static string? Named(string path, string name) =>
+        name.AsSpan().IndexOfAny(Path.GetInvalidPathChars()) >= 0 ? null : LanguagePaths.Resolve(path, name);
 
     /// <summary>
     ///  Gets the roots among a folder's sources: every assembly source that no other one includes.

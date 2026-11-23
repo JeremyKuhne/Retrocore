@@ -88,16 +88,17 @@ public sealed class DisassembleCommandTests
     /// <summary>
     ///  A Monitor routine in a family scope keeps its qualified name: the source calls it by that name and defines
     ///  it inside its scopes, each opened once, and assembles back to the program's bytes. A page-zero byte the
-    ///  Monitor shares takes its shared name, not the name one routine gives it.
+    ///  Monitor shares takes its shared name, not the name one routine gives it or a value that equals it.
     /// </summary>
     [TestMethod]
     public void DisassemblyNamesScopedRoutines()
     {
         // $0800 JSR $F800 (LowRes::Plot); JSR $F832 (LowRes::Clear); JSR $F88C (Disassembler::Decode);
-        // JSR $F88E (Disassembler::Decode::Opcode); JSR $FDED (CharacterOut); LDA $2E; RTS
+        // JSR $F88E (Disassembler::Decode::Opcode); JSR $FDED (CharacterOut); LDA $2E; LDA $3A; RTS
         byte[] program =
         [
-            0x20, 0x00, 0xF8, 0x20, 0x32, 0xF8, 0x20, 0x8C, 0xF8, 0x20, 0x8E, 0xF8, 0x20, 0xED, 0xFD, 0xA5, 0x2E, 0x60
+            0x20, 0x00, 0xF8, 0x20, 0x32, 0xF8, 0x20, 0x8C, 0xF8, 0x20, 0x8E, 0xF8, 0x20, 0xED, 0xFD, 0xA5, 0x2E, 0xA5,
+            0x3A, 0x60
         ];
 
         string directory = Directory.CreateTempSubdirectory("retrocore-disassemble-").FullName;
@@ -124,13 +125,43 @@ public sealed class DisassembleCommandTests
                 .endscope
                 """.ReplaceLineEndings("\n"));
 
-            string load = source.Split('\n').Single(line => line.Contains("LDA", StringComparison.Ordinal));
-            load.Should().NotContain("$2E").And.NotContain("::");
+            source.Should().Contain("LDA MASK").And.Contain("LDA PCL");
         }
         finally
         {
             Directory.Delete(directory, recursive: true);
         }
+    }
+
+    /// <summary>
+    ///  A scope two files' names share is opened in the first file's group and continued in the second's, so the
+    ///  source assembles, calling each by its qualified name.
+    /// </summary>
+    [TestMethod]
+    public void ScopeSharedByTwoFilesIsContinued()
+    {
+        string exported = ".cpu Mos6502\nScoped__0 = $F800\nScoped__1 = $C100\n.org $0800\n    JSR Scoped__0\n    JSR Scoped__1";
+        Dictionary<string, string> files = new(StringComparer.Ordinal)
+        {
+            ["Scoped__0"] = "Monitor.asm",
+            ["Scoped__1"] = "Firmware.asm"
+        };
+
+        Dictionary<string, string> scoped = new(StringComparer.Ordinal)
+        {
+            ["Scoped__0"] = "Escape::A",
+            ["Scoped__1"] = "Escape::B"
+        };
+
+        string source = DisassembleCommand.Arrange(exported, "A test.", files, [], scoped);
+
+        source.Should().Contain("; From Firmware.asm.\n.scope Escape\nB = $C100\n.endscope\n");
+        source.Should().Contain("; From Monitor.asm.\n.scope Escape continued\nA = $F800\n.endscope\n");
+        source.Should().Contain("JSR Escape::A\n    JSR Escape::B");
+        AssemblyOptions options = new(ProcessorVariant.Mos6502, 0x0800, 6);
+        AssemblyResult result = new Retrocore.Assembler.Assembler().Assemble(new AssemblySource(source, "shared.asm"), options);
+        result.Diagnostics.Should().BeEmpty();
+        result.Sections[0].Bytes.ToArray().Should().Equal(0x20, 0x00, 0xF8, 0x20, 0x00, 0xC1);
     }
 
     /// <summary>

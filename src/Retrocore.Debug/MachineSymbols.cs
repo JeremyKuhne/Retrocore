@@ -18,10 +18,11 @@ namespace Retrocore.Debug;
 ///   that machine; DOS's are where it runs in 48K or more. Where several names share an address, the Monitor's and
 ///   the hardware equates' come first, then the firmware's, BASIC's and DOS's; within a source a label comes before
 ///   an equate, and an earlier definition before a later one. A name in a scope keeps its qualified name, such as
-///   <c>LowRes::Plot</c>. A routine's inner labels (<c>ROUTINE_1</c>) are left out, and page zero takes only the
-///   Monitor's and the hardware's names, as programs reuse BASIC's and DOS's page-zero storage for their own. In page
-///   zero a name in a scope, which is the name one routine gives a shared byte, comes after every other name, so a
-///   program's use of the byte takes its shared name (<c>MASK</c>, not <c>Disassembler::FormatBits</c>).
+///   <c>LowRes::Plot</c>. A routine's inner labels (<c>ROUTINE_1</c>) and values (equates such as
+///   <c>SCREEN_WIDTH</c>, named as the style guide names values) are left out, and page zero takes only the
+///   Monitor's and the hardware's names, as programs reuse BASIC's and DOS's page-zero storage for their own. In
+///   page zero a name in a scope, which is the name one family of routines gives a byte, comes after every other
+///   name, so a program's use of the byte takes its shared name (<c>MASK</c>, not <c>Disassembler::FormatBits</c>).
 ///  </para>
 /// </remarks>
 internal static partial class MachineSymbols
@@ -75,6 +76,7 @@ internal static partial class MachineSymbols
         if (dos == "3.2" && File.Exists(dos32)) { builds.Add(SdkModules.AssembleDos(dos32, master: false)); }
 
         List<(ushort Address, string Name, string File, int Rank, bool Constant, int Order)> candidates = [];
+        Dictionary<string, string[]?> styled = [with(StringComparer.Ordinal)];
         int order = 0;
         foreach (AssemblyResult build in builds)
         {
@@ -82,6 +84,8 @@ internal static partial class MachineSymbols
             {
                 if (symbol.Location is not { } location || symbol.Value is < 0 or > 0xFFFF) { continue; }
                 if (!Identifier().IsMatch(symbol.Name) || InnerLabel().IsMatch(symbol.Name)) { continue; }
+
+                if (symbol.IsConstant && IsValue(symbol.Name, location, styled)) { continue; }
                 string file = ModuleFile(location.Path);
                 int rank = Rank(file);
 
@@ -106,6 +110,33 @@ internal static partial class MachineSymbols
         }
 
         return names;
+    }
+
+    // Whether an equate in a source that follows the style guide is a value rather than an address. There locations
+    // are PascalCase, so a value is one named in capitals (SCREEN_WIDTH, COLUMNS, AddressMode::ABSOLUTE) or a .set
+    // variable; an Equates.asm keeps Apple's capital names for locations still to be converted (CV). Other sources
+    // name addresses in capitals, so nothing in them is taken for a value.
+    private static bool IsValue(string name, AssemblyLocation location, Dictionary<string, string[]?> styled)
+    {
+        string path = location.Path;
+        if (!styled.TryGetValue(path, out string[]? lines))
+        {
+            lines = File.Exists(path) ? File.ReadAllLines(path) : null;
+            if (lines is not null && !lines.Take(5).Any(line => line.Contains("retrocore: style=strict", StringComparison.Ordinal)))
+            {
+                lines = null;
+            }
+
+            styled[path] = lines;
+        }
+
+        if (lines is null) { return false; }
+        if (location.Line < lines.Length && lines[location.Line].TrimStart().StartsWith(".set ", StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        return ValueName().IsMatch(name) || (CapitalName().IsMatch(name) && Path.GetFileName(path) != "Equates.asm");
     }
 
     /// <summary>
@@ -140,6 +171,14 @@ internal static partial class MachineSymbols
     // A plain or qualified identifier, such as CharacterOut or LowRes::Plot.
     [GeneratedRegex("^[A-Za-z_][A-Za-z0-9_]*(::[A-Za-z_][A-Za-z0-9_]*)*$")]
     private static partial Regex Identifier();
+
+    // A value's name, such as SCREEN_WIDTH: capitals and digits with an underscore between words.
+    [GeneratedRegex("(^|::)[A-Z0-9]+(_[A-Z0-9]+)+$")]
+    private static partial Regex ValueName();
+
+    // A name in capitals and digits, such as COLUMNS or AddressMode::ABSOLUTE.
+    [GeneratedRegex("(^|::)[A-Z][A-Z0-9]*$")]
+    private static partial Regex CapitalName();
 
     // A routine's numbered inner label, such as CMDPROMPT_2.
     [GeneratedRegex("_[0-9]+$")]

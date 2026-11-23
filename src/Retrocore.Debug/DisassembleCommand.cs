@@ -189,10 +189,18 @@ internal static partial class DisassembleCommand
             .Select(diagnostic => diagnostic.Address)
             .Where(names.ContainsKey)];
 
-    // The exported source under a heading, its equates grouped by the file that names them. A scoped name's
-    // stand-in becomes its qualified name in the code, and its equate is defined inside its scopes, each scope opened
-    // once in a group and continued in a later one.
-    private static string Arrange(
+    /// <summary>
+    ///  Arranges the exported source under a heading, its equates grouped by the file that names them. A scoped
+    ///  name's stand-in becomes its qualified name in the code, and its equate is defined inside its scopes, each
+    ///  scope opened once in a group and continued in a later one.
+    /// </summary>
+    /// <param name="exported">The analysis's exported source.</param>
+    /// <param name="heading">The heading's lines.</param>
+    /// <param name="files">For each machine name or stand-in, the file that names it.</param>
+    /// <param name="hinted">The hints' names.</param>
+    /// <param name="scoped">For each stand-in, the qualified name it stands for.</param>
+    /// <returns>The source to write.</returns>
+    internal static string Arrange(
         string exported,
         string heading,
         Dictionary<string, string> files,

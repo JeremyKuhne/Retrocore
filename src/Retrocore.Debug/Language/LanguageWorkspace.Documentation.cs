@@ -164,12 +164,15 @@ internal sealed partial class LanguageWorkspace
                 string? replacement = topics.Count == 1 ? set.SymbolOf(topics[0]) : null;
                 current[name] = current.TryGetValue(name, out string? earlier) && earlier != replacement ? null : replacement;
 
-                // Only a name whose definition the assembly made takes precedence; one in a branch it leaves out
-                // stays as ambiguous with the SDK's as before. While the file has errors, the assembly may stop short
-                // of its definitions, so those its text makes count.
-                if (thisBuild && replacement is not null && (analysis.Result.Success
+                // Only a name whose definition the build makes takes precedence; one in a branch it leaves out stays
+                // as ambiguous with the SDK's as before. While the file has errors, the assembly may stop short of its
+                // definitions, so those its text makes count, in a branch whose condition holds.
+                bool built = replacement is not null && (analysis.Result.Success
                     ? analysis.Result.Symbols.ContainsKey(replacement)
-                    : analysis.Definitions.Any(site => site.Name == replacement)))
+                    : analysis.Definitions.Any(site => site.Name == replacement));
+
+                bool taken = topics.Count == 1 && set.ConditionHolds(topics[0]);
+                if (thisBuild && built && taken)
                 {
                     own.Add(name);
                 }

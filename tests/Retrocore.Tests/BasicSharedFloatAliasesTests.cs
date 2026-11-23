@@ -53,15 +53,15 @@ public sealed class BasicSharedFloatAliasesTests
         ["GFDIV"] = ["M6502"]
     };
 
-    // The Commodore reconstructions' spellings of the character reader's labels, which BASIC 1 and 2 take.
+    // Commodore's spellings of the character reader's labels, in its BASIC 4 source and the reconstructions.
     private static readonly Dictionary<string, string[]> s_hoffmannVetterNames = new(StringComparer.Ordinal)
     {
-        ["CHDGOT"] = ["HV1", "HV1R", "HV2"],
-        ["CHDRTS"] = ["HV1", "HV1R", "HV2"]
+        ["CHDGOT"] = ["CBM4S79", "HV1", "HV1R", "HV2", "HV4", "HV4R"],
+        ["CHDRTS"] = ["CBM4S79", "HV1", "HV1R", "HV2", "HV4", "HV4R"]
     };
 
     // The names whose aliases Commodore's file guards, so that only some builds define them.
-    private static readonly HashSet<string> s_guardedNames = ["CHDGOT", "CHDRTS", "RESCR2", "PRIT3B"];
+    private static readonly HashSet<string> s_guardedNames = ["RESCR2", "PRIT3B"];
 
     // Addresses in the independently assembled PET1, PET2 and PET4 listings:
     // https://github.com/ethandicks/cbmsymbols/tree/e3120427a32e8b066eb8afdc434af547fd0906f3/listings
@@ -220,9 +220,7 @@ public sealed class BasicSharedFloatAliasesTests
         Dictionary<string, string[]> names = s_petAddresses.Keys
             .ToDictionary(name => name, _ => BasicAttribution.CommodoreKeys, StringComparer.Ordinal);
 
-        // BASIC 4's source leaves the character reader's labels unnamed, so only BASIC 1 and 2 take the spellings.
-        IEnumerable<KeyValuePair<string, string[]>> spellings = model == PetModel.Pet4032 ? [] : s_hoffmannVetterNames;
-        foreach ((string name, string[] keys) in s_microsoftPetNames.Concat(spellings))
+        foreach ((string name, string[] keys) in s_microsoftPetNames.Concat(s_hoffmannVetterNames))
         {
             names.Add(name, keys);
         }

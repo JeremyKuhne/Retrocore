@@ -38,6 +38,8 @@ public sealed class BasicStatementRoutineTests
     [DataRow(false, 'A', true)]
     [DataRow(false, 'Z', true)]
     [DataRow(false, '[', false)]
+    [DataRow(false, 'a', false)]
+    [DataRow(false, (char)0xC1, false)]
     public void IsLetterSetsCarryForUppercaseLetters(bool apple, char character, bool letter)
     {
         BasicMathMachine machine = new(apple);

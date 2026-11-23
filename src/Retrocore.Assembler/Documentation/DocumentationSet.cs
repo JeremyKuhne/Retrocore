@@ -430,6 +430,15 @@ public sealed class DocumentationSet
             or DocumentationKind.Member;
 
     /// <summary>
+    ///  Gets whether the <c>.if</c> conditions a topic's comment is under hold in this set's build, as its symbols or,
+    ///  while the assembly has errors, its text's definitions decide them.
+    /// </summary>
+    /// <param name="topic">The topic.</param>
+    /// <returns>Whether the topic is in a branch the build takes, or is under no condition.</returns>
+    internal bool ConditionHolds(DocumentationTopic topic) =>
+        topic.Condition is not { } condition || DocumentationConditions.InBuild(condition, _symbols, IsDefined);
+
+    /// <summary>
     ///  Gets whether a topic's definition is in this set's assembly: false only for a label or equate the assembly
     ///  leaves out, in a branch of an <c>.if</c> its build does not take.
     /// </summary>

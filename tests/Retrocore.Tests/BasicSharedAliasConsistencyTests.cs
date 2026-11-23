@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-using System.Globalization;
 using Retrocore.Assembler;
 using Retrocore.Debug;
 using Retrocore.Documentation;
@@ -285,8 +284,7 @@ public sealed class BasicSharedAliasConsistencyTests
 
     // A historical-names file's aliases: each scoped alias once per old name its Also: section gives, read from the
     // file's text so a missing include cannot hide one. An alias may be guarded, for names only some builds' documents
-    // give: under .ifdef Target it is expected exactly where the build defines that target (BASIC 4's lister labels),
-    // and under .if Switch = value where the build's switch has that value (BASIC 1 and 2's spellings).
+    // give: under .ifdef Target it is expected exactly where the build defines that target (BASIC 4's lister labels).
     private static IEnumerable<Alias> ReadHistoricalNames(string path, string scope, AssemblyResult result)
     {
         string[] lines = File.ReadAllLines(path);
@@ -301,11 +299,6 @@ public sealed class BasicSharedAliasConsistencyTests
                 guard.Should().BeNull($"{where} must not nest its guards");
                 guard = result.HasSymbol(target);
             }
-            else if (words is [".if", string name, "=", string value])
-            {
-                guard.Should().BeNull($"{where} must not nest its guards");
-                guard = result.Symbol(name) == long.Parse(value, CultureInfo.InvariantCulture);
-            }
             else if (words is [".endif"])
             {
                 guard.Should().NotBeNull($"{where} must close a guard");
@@ -315,7 +308,7 @@ public sealed class BasicSharedAliasConsistencyTests
             {
                 words.Should().NotContain(word => word.StartsWith(".if", StringComparison.OrdinalIgnoreCase)
                     || word.StartsWith(".else", StringComparison.OrdinalIgnoreCase),
-                    $"{where} may guard an alias only with .ifdef Target or .if Switch = value");
+                    $"{where} may guard an alias only with .ifdef Target");
             }
 
             included[line] = guard ?? true;

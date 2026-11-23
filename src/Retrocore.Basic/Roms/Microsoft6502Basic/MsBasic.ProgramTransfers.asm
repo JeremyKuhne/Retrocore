@@ -52,8 +52,8 @@ Done:
     ;;
     ;; The statement dispatcher arrives with carry set unless a digit follows, and the Control-C check with carry set
     ;; by its comparison; a set carry goes on to <Statements::StopOrEnd>, which reports BREAK, and a clear one falls
-    ;; into <Statements::End>. In BASIC 4, Martin Hoffmann-Vetter's reconstruction of the kernal (HVK4) calls this
-    ;; entry `BSTOP`.
+    ;; into <Statements::End>. In BASIC 4, Commodore's kernal listing (K4S79) and Martin Hoffmann-Vetter's
+    ;; reconstruction of the kernal (HVK4) call this entry `BSTOP`, an equate of the kernal's.
     ;; In: carry = set for BREAK, zero = set at the end of the statement
     ;; See: <Statements::End>, <Statements::Cont>
     ;; Also: STOP (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)

@@ -80,8 +80,10 @@ inference instead of turning it into a factual `In:`, `Out:`, or `Keeps:` claim.
 
 ## Finishing the source
 
-Edit the output by hand into a source someone can maintain. Follow the retrocore-native-assembly skill throughout
-(its syntax rules and its section on converting a source) and [the style guide](../../../docs/AssemblyStyle.md).
+Edit the output by hand into a source someone can maintain: the goal is a disassembly a developer new to the old
+machine can follow, naming what it uses of the ROMs and DOS by the SDK sources' names. Follow the
+retrocore-native-assembly skill throughout (its syntax rules and its section on converting a source),
+[the style guide](../../../docs/AssemblyStyle.md) and [ConvertingSources.md](../../../docs/ConvertingSources.md).
 Then:
 
 - **Labels:** put each routine in a `.proc` and rename every generated label after what the code does, as a local

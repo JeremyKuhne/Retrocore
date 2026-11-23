@@ -109,7 +109,9 @@ the Variables view and verifies `Keeps:` and `Uses:` contracts when calls return
 summaries into generated C# XML documentation ([DocComments.md](docs/DocComments.md)). A definition's `Also:`
 section keeps the names manuals and listings gave it, so code written with them still assembles and the editor
 offers the current name. Sources maintained by hand follow [the assembly style guide](docs/AssemblyStyle.md),
-which the SDK's ROM sources are being converted to.
+which the SDK's ROM sources are being converted to, for developers new to the old machines, with the old names
+kept as a bridge to the original documents. [ConvertingSources.md](docs/ConvertingSources.md) is why and how, and
+[the conversion logs](docs/conversions/README.md) record what was decided for each source converted.
 
 In VS Code, assembly files get syntax highlighting, live diagnostics as you type, go to definition, find all
 references, hovers (instruction summaries, flags, addressing modes, cycle counts, and emitted bytes),
@@ -390,7 +392,8 @@ Design notes for upcoming work live in [`docs/backlog`](docs/backlog):
 - [the Z80 SoftCards for the Apple II and Apple III](docs/backlog/SoftCard.md);
 - [the Commodore PET](docs/backlog/Pet.md): the 8032's 80 columns and CRTC, if wanted;
 - [the Kaypro II](docs/backlog/Kaypro.md): CP/M's sources and its disks as a file system;
-- [the BBC Micro's later models and expansions](docs/backlog/BbcMicro.md).
+- [the BBC Micro's later models and expansions](docs/backlog/BbcMicro.md);
+- [aligning the conversion of the SDK's sources](docs/backlog/ConversionAlignment.md) with the shared BASIC modules.
 
 ## License
 

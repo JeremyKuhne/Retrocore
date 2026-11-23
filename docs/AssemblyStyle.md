@@ -4,6 +4,13 @@ How Retrocore's assembly sources are written: the SDK's ROM sources, the samples
 hand. The goal is source a person can read, debug and change: structure that shows how the code works, names that
 say what things are, and documentation the tools can check.
 
+The reader it is written for knows programming and today's tools but not the old machine: names say what things
+are in full words, comments explain the machine and link the docs that explain its concepts, and the names the
+original manuals and listings used stay attached as historical names (`Also:`), so a reader coming from those
+documents still lands on the right definition. Success is a source that is easy to debug and to build new software
+on with modern tools, and that makes disassemblies of old programs, which name what they use by these sources'
+names, easy to follow. [ConvertingSources.md](ConvertingSources.md) says more, and how a source is converted.
+
 [NativeAssembly.md](NativeAssembly.md) is the dialect and [DocComments.md](DocComments.md) the `;;` format. This
 guide is how to use them.
 
@@ -200,8 +207,9 @@ Done:
 - **Labels go on their own line**, at column 0.
 - **Every label has a name for what happens there**: `Loop`, `NextRow`, `NotFound`, `WriteProtected`. Never
   `ROUTINE_1`, and never a name that is only an address (`L_F8C2`, `SUB_D253`). A label nothing refers to is
-  dropped.
-- **Case:** PascalCase for routines, labels, variables and tables; UPPER_SNAKE_CASE for constants. Macros are
+  dropped, unless a document names it: then it stays as a local, with `Also:`.
+- **Case:** PascalCase for routines, labels, variables and tables; UPPER_SNAKE_CASE for constants. An equate that
+  names a location, such as a soft switch or a variable, is a location, not a constant: PascalCase. Macros are
   PascalCase. Types (`.struct`, `.union`, `.enum`) are PascalCase, and their fields and members are
   UPPER_SNAKE_CASE: they are offsets and values, which is to say constants (`Iob::TRACK`, `Command::READ`).
 - **Name things after what the code does**, not after a guess, and not after a manual unless the code shows
@@ -209,7 +217,8 @@ Done:
 - **Historical names are kept.** A name from a manual or listing that the definition no longer has goes in its
   `Also:` section with the documents that give it, cited from the [bibliography](Bibliography.md). Code written
   with the old name still assembles, and the editor offers the new one ([DocComments.md](DocComments.md),
-  section 2.4).
+  section 2.4). [ConvertingSources.md](ConvertingSources.md) lists the few cases where a name goes in prose
+  instead.
 - **Shared bytes get scoped names.** Where a routine uses a shared zero-page byte for its own purpose, it names
   it inside its scope, from the global name (`Divisor = Work1`), never from a number, with a `;;` comment.
 

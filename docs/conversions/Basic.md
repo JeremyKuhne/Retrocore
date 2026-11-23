@@ -831,18 +831,18 @@ Decisions and how the table was applied:
     branch its build leaves out does not, so it gets no hint naming that branch's definition
     (`OldNamesInAnOmittedBranchDoNotHint`, which fails if any name the file gives takes precedence).
 
-Checked: the full suite (3,892 passed, none failed; 665 skipped, the ROM-dump comparisons without the dumps), the rename
+Checked: the full suite (3,894 passed, none failed; 665 skipped, the ROM-dump comparisons without the dumps), the rename
 gate, the lint tests, and `BasicStatementsConversionTests`, which compares every old name in the fifteen files and the
 vendors' historical names with the MACRO-10 overlay's value in each of the eight builds (about 150 per build), checks
 that each definition reaches the overlay by its name or an old name, that a vendor's names resolve only in its builds
 and through its aliases, and that every citation's key is in the bibliography. `BasicStatementRoutineTests` runs
 IsLetter, the character reader's copy, ReadLineNumber, FindLine, FindStatementEnd, FindLineEnd and EraseProgram in the
-enhanced IIe's AppleSoft and PET BASIC 4 and checks their `Out:` values and `Keeps:` claims; the existing
-BasicShared*Tests run the rest (FindForFrame, MoveRangeUp, CheckStack, CheckFreeMemory, the statements). The debugger's
-contract checking ran clean on PET BASIC 2, PET BASIC 4 and the enhanced IIe's AppleSoft over a program that adds IF,
-POKE and PEEK, ON GOSUB and ON GOTO, RETURN from inside FOR, RESTORE, READ and DATA, REM, CLEAR (CLR) and LIST with a
-range to the math step's, and reported a false `Keeps: X` added to `FindLine` as a control (a first control, `Keeps: A`
-on IsLetter, was not reported because the claim is true).
+enhanced IIe's AppleSoft and PET BASIC 4 and checks their `Out:` values and, for IsLetter and the character reader,
+their `Keeps:` claims; the existing BasicShared*Tests run the rest (FindForFrame, MoveRangeUp, CheckStack,
+CheckFreeMemory, the statements). The debugger's contract checking ran clean on PET BASIC 2, PET BASIC 4 and the
+enhanced IIe's AppleSoft over a program that adds IF, POKE and PEEK, ON GOSUB and ON GOTO, RETURN from inside FOR,
+RESTORE, READ and DATA, REM, CLEAR (CLR) and LIST with a range to the math step's, and reported a false `Keeps: X` added
+to `FindLine` as a control (a first control, `Keeps: A` on IsLetter, was not reported because the claim is true).
 
 ## Other dependents
 

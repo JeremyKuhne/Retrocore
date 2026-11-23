@@ -213,7 +213,7 @@ public sealed class BasicStatementRoutineTests
     /// <summary>
     ///  <c>FindStatementEnd</c> returns in Y the offset from <c>TextPointer</c> of the first colon outside quotes, or
     ///  of the line's zero; <c>FindLineEnd</c> returns the zero's, past any colon. Both return the terminator in A, with
-    ///  zero and carry set.
+    ///  zero set; carry is whatever the last comparison left, so it is not a result.
     /// </summary>
     /// <param name="apple">Whether to run AppleSoft rather than PET BASIC 4.</param>
     /// <param name="routine">The routine.</param>
@@ -226,6 +226,8 @@ public sealed class BasicStatementRoutineTests
     [DataRow(true, "FindStatementEnd", "ABC\0", 3)]
     [DataRow(true, "FindLineEnd", "AB:C\0", 4)]
     [DataRow(true, "FindLineEnd", "A\"B\0", 3)]
+    [DataRow(true, "FindLineEnd", "A \0", 2)]
+    [DataRow(true, "FindStatementEnd", "A !\0", 3)]
     [DataRow(false, "FindStatementEnd", "A\"B:C\":D\0", 6)]
     [DataRow(false, "FindLineEnd", "A:B:C\0", 5)]
     public void ScansStopAtTheirTerminator(bool apple, string routine, string text, int offset)
@@ -239,7 +241,6 @@ public sealed class BasicStatementRoutineTests
         machine.Cpu.Registers.Y.Should().Be((byte)offset);
         machine.Cpu.Registers.Accumulator.Should().Be((byte)text[offset], "A is the terminator");
         machine.Cpu.Registers.Status.HasFlag(StatusRegister.Zero).Should().BeTrue();
-        machine.Cpu.Registers.Status.HasFlag(StatusRegister.Carry).Should().BeTrue();
         Word(machine, "TextPointer").Should().Be(Text, "the scan leaves the pointer for the caller to advance");
     }
 

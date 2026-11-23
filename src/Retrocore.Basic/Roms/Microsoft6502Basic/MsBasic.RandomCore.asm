@@ -56,8 +56,9 @@ RandomAddend:
         jmp NormalizeAndSave
     .endif
 
-;; Loads <RandomValue> and multiplies by <Float::RandomMultiplier> and adds <Float::RandomAddend> (zero argument returns
-;; it, by build).
+;; Loads <RandomValue>. Without timers, a zero argument returns it unchanged through
+;; <Float::EvaluateStoredPolynomial::Done>; otherwise it is multiplied by <Float::RandomMultiplier> and
+;; <Float::RandomAddend> is added.
 ;; Also: QSETNR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 NextValue:
     lda #<RandomValue

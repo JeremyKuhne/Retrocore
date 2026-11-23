@@ -52,7 +52,9 @@ NonzeroBase:
     tya
     ldy SmallInteger
 
-;; <Fac> = Arg, then EXP(power * LOG(base)), negated for an odd power.
+;; <Fac> = Arg with its sign from A: positive for a negative base's whole power, so the parity negates the result,
+;; and negative for a fractional power, which <Functions::Log> rejects. Then EXP(power * LOG(base)), negated for an
+;; odd power.
 ;; Also: FPWR1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 TakeLog:
     jsr CopyArgToFacWithSign

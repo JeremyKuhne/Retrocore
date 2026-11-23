@@ -45,15 +45,16 @@ public sealed class BasicMathRoutineTests
 
     /// <summary>
     ///  A zero multiplier byte that follows another zero byte reaches <c>Float::ShiftProductByte</c> with carry clear,
-    ///  so the partial product shifts nine bits rather than eight: once the product is nonzero, a bit is lost. With
-    ///  <c>Fac</c> = 1 + 2^-31 (its mantissa bytes $80, $00, $00, $01) the product with 1 loses its low bit, while
-    ///  the same product with the operands swapped, whose multiplier bytes are all zero below the top, keeps it.
+    ///  so the result bytes shift nine bits rather than eight, halving the partial product so far. With <c>Fac</c> =
+    ///  1 + 2^-31 (mantissa bytes $80, $00, $00, $01) times 1, the low bit ends at half weight in
+    ///  <c>FacExtension</c>: the unrounded mantissa reads 1, and rounding as the result is stored restores 1 + 2^-31.
+    ///  The same product with the operands swapped, whose multiplier is zero below its top byte, is exact.
     /// </summary>
     /// <param name="apple">Whether to run AppleSoft rather than PET BASIC 4.</param>
     [TestMethod]
     [DataRow(data: true)]
     [DataRow(data: false)]
-    public void MultiplicationLosesABitAfterTwoZeroMultiplierBytes(bool apple)
+    public void MultiplicationHalvesThePartialProductAfterTwoZeroMultiplierBytes(bool apple)
     {
         const double OnePlus = 1.0000000004656612873077392578125;
         BasicMathMachine machine = new(apple);
@@ -61,11 +62,16 @@ public sealed class BasicMathRoutineTests
         machine.Pack(Operand, 1.0);
         machine.Call("Float::MultiplyPacked", a: Operand & 0xFF, y: Operand >> 8);
         machine.Fac.Should().Be(1.0);
+        machine.Memory[machine.Address("FacExtension")].Should().Be(0x80);
+
+        machine.Call("Float::StoreFac", x: Operand & 0xFF, y: Operand >> 8);
+        machine.Memory.AsSpan(Operand, 5).ToArray().Should().Equal(BasicMathMachine.Packed(OnePlus));
 
         machine.SetFac(1.0);
         machine.Pack(Operand, OnePlus);
         machine.Call("Float::MultiplyPacked", a: Operand & 0xFF, y: Operand >> 8);
         machine.Fac.Should().Be(OnePlus);
+        machine.Memory[machine.Address("FacExtension")].Should().Be(0);
     }
 
     /// <summary>

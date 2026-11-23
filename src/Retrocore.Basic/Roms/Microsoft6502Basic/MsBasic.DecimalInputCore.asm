@@ -185,8 +185,9 @@ AddDigit:
 
     ;; Accumulates a decimal exponent digit into <DecimalExponent>.
     ;;
-    ;; With the later limit, an accumulated exponent of ten or more signals overflow when positive and becomes 100
-    ;; when negative. With the earlier limit, an accumulated exponent of twelve or more signals overflow when positive;
+    ;; With the later limit, a further digit after an accumulated exponent of ten or more signals overflow when
+    ;; positive and makes it 100 when negative. With the earlier limit, a further digit after twelve or more signals
+    ;; overflow when positive;
     ;; when negative, the arithmetic uses eleven for the first term but still adds the old <DecimalExponent>. The
     ;; resulting exponent is (88 + twice the old exponent + the next digit), modulo 256.
     ;; Also: FINEDG (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)

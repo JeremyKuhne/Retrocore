@@ -317,7 +317,8 @@ TestSubtract:
     plp
     bcs Subtract
 
-;; Shifts Arg left one bit and compares again (a carry out means it is larger).
+;; Shifts Arg left one bit. A carry out gives quotient bit 1 and a clear top bit gives 0, both without comparing;
+;; otherwise it compares again.
 ;; Also: SHFARG (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 ShiftDividend:
     asl ArgMantissa4

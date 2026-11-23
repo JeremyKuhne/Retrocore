@@ -135,6 +135,7 @@ Loop:
     .endproc
 
     ;; Rounds <Fac> and copies it into the argument accumulator.
+    ;; Out: A = exponent of <Fac>, X = 0, FacExtension = 0
     ;; See: <Float::Round>
     ;; Also: MOVAF (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc CopyFacToArg

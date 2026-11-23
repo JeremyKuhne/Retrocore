@@ -758,7 +758,8 @@ key is in the bibliography. `BasicMathRoutineTests` runs AddPacked, SubtractFrom
 DividePacked, Compare, GetSign, LoadFac, StoreFac, ToLongInteger, ShiftRight and FormatFac in the enhanced IIe's
 AppleSoft and PET BASIC 4 and checks their results and `Out:` values; the math modules claim no `Keeps:`. It also
 pins a quirk the review found in Microsoft's multiplication, now documented on `Float::ShiftProductByte`: a zero
-multiplier byte after another zero byte shifts the product nine bits, so 1 + 2^-31 times 1 gives 1. The
+multiplier byte after another zero byte shifts the partial product nine bits, halving it, so 1 + 2^-31 times 1
+leaves its low bit at half weight in FacExtension, and only rounding restores it. The
 debugger's contract checking ran clean over the W program, which uses FOR with STEP, DEF FN, VAL, INT, SQR and SIN,
 on PET BASIC 2, PET BASIC 4 and the enhanced IIe's AppleSoft, and reported a false `Keeps: Y` added to
 `Float::LoadFac` as a control.

@@ -835,8 +835,8 @@ Decisions and how the table was applied:
     anywhere else, and whenever the file has errors, the merge behaves as before. The text alone cannot say what the
     assembler would make of conditions, repeats, macros and scoped includes, and every rule the reviews tried for
     files with errors gave some case a hint naming the wrong definition, so while a file has errors its own name that
-    an SDK module also gives loses its hint until the errors are fixed. Probes that fail without the change: the
-    unchanged COMBYTE probe, `OldNamesInAnOmittedBranchDoNotHint` (with and without an error),
+    an SDK module also gives loses its hint until the errors are fixed. The unchanged COMBYTE probe fails without the
+    change; the others guard against the wrong hints earlier versions of it gave: `OldNamesInAnOmittedBranchDoNotHint` (with and without an error),
     `OldNamesOfTheOtherBranchDoNotHint` (a label documented in both branches),
     `OldNamesUnderConditionsTheEditorCannotReadDoNotHint` (an `.ifdef` of a later symbol, a computed condition),
     `OldNamesHintOnlyTheDefinitionTheAssemblerGivesThemTo` (a root routine sharing its name with a macro's expansion,
@@ -852,10 +852,15 @@ Decisions and how the table was applied:
   - Lineage citations: a definition that descends through a vendor's builds cites every document of that line whose
     listing names it, not only its own build's. Within the PET line, checked against mist64/cbmsrc, that adds CBM4S79 to
     the kernal vectors, to the three disk vectors the BASIC 4 documents name apart from BASIC's own routines, and to the
-    RND timer in `Commodore.Equates.asm` (from the workspace step); K4S79 to TIL; HV1 and HV1R's BUFLEN to BASIC 1's own
-    buffer length in `Basic1.asm`; and the BASIC documents' CTIMR and CSTAT to the jiffy clock and I/O status. The
-    kernal's TIME and SATUS are in prose, since the builds define both names themselves, and so is HV1 and HV1R's
-    NUMLEV, which writes BASIC 1's 54-byte stack reserve as 23 levels plus eight bytes where the build has 19 levels.
+    RND timer in `Commodore.Equates.asm` (from the workspace step); K4S79 to TIL; every PET document and M6502 to
+    BUFLEN, in both BASIC 1's `Basic1.asm` and the other builds' `Commodore.Equates.asm`, and to the shared FORSIZ and
+    STRSIZ in `MsBasic.Layouts.asm`; and the BASIC documents' CTIMR and CSTAT to the jiffy clock and I/O status. The
+    kernal's TIME and SATUS are in prose, since the builds define both names themselves. NUMLEV cites the whole line
+    on BASIC 1's 19 levels too, with prose saying the documents give it as 23: HV1 and HV1R write the build's 54-byte
+    stack reserve as 23 levels plus eight bytes. BASIC 4's INCHR (CBM4S79, HV4, HV4R) is in prose on the kernal's
+    character input, since BASIC gives the name to another routine. The workspace step's
+    `VendorOldNamesResolveOnlyInTheirVendorsBuilds` required the shared layouts to cite M6502 alone, which forbade the
+    lineage; it now requires exactly M6502 and the PET line's documents there.
     The statement modules' and the historical names' citations already followed the rule. BASIC 1's ZERO is a definition
     of its own in `MsBasic.VariableLookup.asm` (M4), whose step will cite the line on it. The AppleSoft documents
     (ASTIL, AS82) are not available here to check. One test rule would forbid a lineage-only alias: a Commodore alias

@@ -88,7 +88,7 @@ public sealed class BasicWorkspaceConversionTests
 
     /// <summary>
     ///  An old name only one vendor's converted files give resolves in none of the other vendor's builds, and the
-    ///  shared layouts give only Microsoft's names.
+    ///  shared layouts give only Microsoft's names, citing with M6502 the PET documents of their lineage.
     /// </summary>
     [TestMethod]
     public void VendorOldNamesResolveOnlyInTheirVendorsBuilds()
@@ -118,13 +118,15 @@ public sealed class BasicWorkspaceConversionTests
             }
         }
 
-        // The layouts are shared, so each old name there must be Microsoft's, which every build has.
+        // The layouts are shared, so each old name there must be Microsoft's, which every build has. Under the lineage
+        // rule it also cites every PET document whose listing names it; no AppleSoft document is checked here (S11).
         DocumentationFile layouts = Parse(Path.Join(SharedFolder, LayoutsFile));
         DocumentationAlso[] shared = [.. OldNamesIn(layouts)];
         shared.Select(also => also.Name).Should().BeEquivalentTo(["STRSIZ", "FORSIZ"]);
+        string[] lineage = ["M6502", "CBM4S79", "HV1", "HV1R", "HV2", "HV4", "HV4R"];
         foreach (DocumentationAlso also in shared)
         {
-            also.Sources.Should().Equal(["M6502"], $"{also.Name} is on a shared definition, which every build has");
+            also.Sources.Should().Equal(lineage, $"{also.Name} is Microsoft's name, which every PET listing also gives");
             foreach (AssemblyResult build in apple.Concat(pet))
             {
                 build.Symbol(also.Name).Should().Be(build.Symbol(build.DefinitionName(also.Name)));

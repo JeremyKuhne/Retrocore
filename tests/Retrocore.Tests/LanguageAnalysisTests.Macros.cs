@@ -609,6 +609,7 @@ public sealed partial class LanguageAnalysisTests
                 diagnostics => diagnostics.Any(diagnostic => diagnostic.Message.StartsWith("PRBBYTE is a historical name", StringComparison.Ordinal)));
 
             published.Any(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error).Should().Be(!late);
+            published.Should().Contain(diagnostic => diagnostic.Message == "PRBBYTE is a historical name of PRBBYT.");
             published.Should().NotContain(diagnostic => diagnostic.Message.StartsWith("COMBYTE is a historical name", StringComparison.Ordinal));
         }
         finally
@@ -739,6 +740,7 @@ public sealed partial class LanguageAnalysisTests
                 code => code.StartsWith("RETROCOREASM", StringComparison.Ordinal),
                 "the probe assembles");
 
+            published.Should().Contain(diagnostic => diagnostic.Message == "PRBBYTE is a historical name of PRBBYT.");
             published.Should().NotContain(diagnostic => diagnostic.Message.StartsWith("COMBYTE is a historical name", StringComparison.Ordinal));
         }
         finally
@@ -803,6 +805,7 @@ public sealed partial class LanguageAnalysisTests
                 diagnostics => diagnostics.Any(diagnostic => diagnostic.Message.StartsWith("PRBBYTE is a historical name", StringComparison.Ordinal)));
 
             published.Should().Contain(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error, "the probe has an error");
+            published.Should().Contain(diagnostic => diagnostic.Message == "PRBBYTE is a historical name of PRBBYT.");
             published.Should().NotContain(diagnostic => diagnostic.Message.StartsWith("COMBYTE is a historical name", StringComparison.Ordinal));
         }
         finally

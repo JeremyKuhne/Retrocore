@@ -196,7 +196,7 @@ public sealed class DocumentationSet
     /// </param>
     /// <param name="definitions">
     ///  The assembly's symbol definitions, which count each macro body line's expansions for its historical names;
-    ///  null when unknown, as for an assembly with errors or a debug file.
+    ///  null when unknown, as for a debug file. An assembly with errors has none, so no line counts as expanded.
     /// </param>
     /// <returns>The set.</returns>
     public static DocumentationSet Create(
@@ -338,8 +338,21 @@ public sealed class DocumentationSet
         topic.Comments.All(comment => comment.Macro is null)
             ? DocumentationAlso.Of(topic.Sections.Where(section => !thisBuild || InBuild(topic, section)))
                 .Any(also => also.Name == name)
-            : topic.Comments.Where(comment => Reaches(comment) && (!thisBuild || CommentInBuild(comment)))
-                .Any(comment => DocumentationAlso.Of(comment.Sections).Any(also => also.Name == name));
+            : GivesOutsideMacros(topic, name, thisBuild)
+                || topic.Comments.Where(comment => comment.Macro is not null && Reaches(comment))
+                    .Any(comment => DocumentationAlso.Of(comment.Sections).Any(also => also.Name == name));
+
+    // Whether a topic's definitions outside macros' bodies give a name, as Merge shares their sections without the
+    // macros' comments: an Also: every branch gives (a bare Inherit: branch sharing the others') is in every build.
+    private bool GivesOutsideMacros(DocumentationTopic topic, string name, bool thisBuild)
+    {
+        List<DocumentationComment> outside = [.. topic.Comments.Where(comment => comment.Macro is null)];
+        List<DocumentationComment> participants = [.. outside.Where(comment => !BareInherit(comment))];
+        if (participants.Count == 0) { participants = outside; }
+        bool Gave(DocumentationComment comment) => DocumentationAlso.Of(comment.Sections).Any(also => also.Name == name);
+        return participants.Count != 0
+            && (participants.All(Gave) || participants.Any(comment => Gave(comment) && (!thisBuild || CommentInBuild(comment))));
+    }
 
     /// <summary>
     ///  Gets whether a definition's own old names reach it in this set's build: <see cref="Reaches"/>, for a

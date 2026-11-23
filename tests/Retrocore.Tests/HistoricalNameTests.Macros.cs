@@ -98,6 +98,9 @@ public sealed partial class HistoricalNameTests
             """);
 
         result.Diagnostics.Should().ContainSingle().Which.Message.Should().Contain("COMBYTE");
+
+        // Nor does the lint check it, though its old name is also a definition: the build has no such definition.
+        Check($"{MacroLibrary}\nCOMBYTE = 1\n").Should().BeEmpty();
     }
 
     /// <summary>
@@ -1139,6 +1142,74 @@ public sealed partial class HistoricalNameTests
         DocumentationSet set = Set(text);
         set.FindAlso("COMBYTE", thisBuild: true).Should().BeEmpty();
         set.AlsoOf(Required(set.Find("COMBYT"))).Should().BeEmpty();
+    }
+
+    /// <summary>
+    ///  A definition outside a macro that shares a macro body's topic is in the build only where the assembly took its
+    ///  branch: an <c>.ifdef</c> on a macro defined after it is skipped, so its old name is no clash.
+    /// </summary>
+    [TestMethod]
+    public void OldNamesBesideAMacroFollowTheSkippedLines()
+    {
+        const string Text = """
+            .ifdef LATER
+            ;; One.
+            ;; Also: OLD (TEST)
+            FOO = 1
+            .endif
+            .macro LATER
+            .endmacro
+            .macro Library
+            ;; Two.
+            ;; Also: OLD (TEST)
+            FOO:
+                rts
+            .endmacro
+            .scope Basic
+                Library
+            .endscope
+            """;
+
+        Check(Text).Should().BeEmpty();
+        DocumentationSet set = Set(Text);
+        set.SymbolOf(set.FindAlso("OLD", thisBuild: true).Should().ContainSingle().Subject, "OLD").Should().Be("Basic::FOO");
+    }
+
+    /// <summary>
+    ///  A definition outside a macro whose other branch only inherits shares that branch's old name in every build, as
+    ///  without the macro: a macro's body that defines the same name doesn't change it.
+    /// </summary>
+    [TestMethod]
+    public void InheritedOldNamesBesideAMacroAreShared()
+    {
+        const string Outside = """
+            .ifdef WIDE
+            ;; One.
+            ;; Also: OLD (TEST)
+            FOO = 1
+            .else
+            ;; Inherit:
+            FOO = 2
+            .endif
+            ;; Another.
+            ;; Also: OLD (TEST)
+            BAR = 3
+            """;
+
+        const string Macro = """
+            .macro Library
+            ;; A reader.
+            FOO:
+                rts
+            .endmacro
+            .scope Basic
+                Library
+            .endscope
+            """;
+
+        string[] without = [.. Set(Outside).FindAlso("OLD", thisBuild: true).Select(topic => topic.Name)];
+        without.Should().Equal("FOO", "BAR");
+        Set(Macro + "\n" + Outside).FindAlso("OLD", thisBuild: true).Select(topic => topic.Name).Should().Equal(without);
     }
 
     private static List<DocumentationDiagnostic> Check(string text) =>

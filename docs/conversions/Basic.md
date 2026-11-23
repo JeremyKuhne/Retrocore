@@ -763,7 +763,8 @@ Converted, with `; retrocore: style=strict`, part B1's fifteen shared modules: `
 `CommandCore`, `For`, `LineNumber`, `LineSearch`, `Lister`, `MemoryAccess`, `MemoryManagement`, `Next`,
 `OperatorTable`, `Print`, `ProgramReset`, `ProgramTransfers`, `StatementFlow` and `UserFunctions`. Each statement
 handler is a `.proc` in `Statements`, which `MsBasic.Families.asm` now declares after `Float` and `Functions`; each
-macro opens and closes the scope around the handlers it emits (B1-Q9). The other routines are top level, as the table
+macro opens and closes the scope around the handlers it emits (B1-Q9), except that the lister's `ListRange` opens
+it with `.proc Statements::List` and `ListTokens` closes them (S2). The other routines are top level, as the table
 puts them. The bytes are unchanged in all eight builds.
 
 Decisions and how the table was applied:
@@ -820,10 +821,12 @@ Decisions and how the table was applied:
     value`) and expects a guarded alias exactly where its build takes it; flipping the CHD guard fails it.
   - The editor probe in `LanguageAnalysisTests.Macros` gives COMBYTE as a user file's own old name. Once the SDK gave
     the same name, the editor's merge of the file's and the SDK modules' `Also:` names cancelled it, and the file lost
-    its hint and quick fix. The file's own build now takes precedence (`LanguageWorkspace.HistoricalNames`), and the
-    unchanged probe fails without that fix.
+    its hint and quick fix. A name whose definition the file's assembly made now takes precedence
+    (`LanguageWorkspace.HistoricalNames`), and the unchanged probe fails without that fix; one the file gives only in a
+    branch its build leaves out does not, so it gets no hint naming that branch's definition
+    (`OldNamesInAnOmittedBranchDoNotHint`, which fails if any name the file gives takes precedence).
 
-Checked: the full suite (3,891 passed, none failed; 665 skipped, the ROM-dump comparisons without the dumps), the rename
+Checked: the full suite (3,892 passed, none failed; 665 skipped, the ROM-dump comparisons without the dumps), the rename
 gate, the lint tests, and `BasicStatementsConversionTests`, which compares every old name in the fifteen files and the
 vendors' historical names with the MACRO-10 overlay's value in each of the eight builds (about 150 per build), checks
 that each definition reaches the overlay by its name or an old name, that a vendor's names resolve only in its builds

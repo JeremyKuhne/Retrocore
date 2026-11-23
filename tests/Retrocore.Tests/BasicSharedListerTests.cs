@@ -624,8 +624,9 @@ public sealed class BasicSharedListerTests
         {
             if (label.Name.StartsWith("__m10_", StringComparison.Ordinal)) { continue; }
 
-            // A vendor's alias reaches its name only in the vendor's whole build, which this compares too.
-            if (BasicNames.IsVendorName(label.Name) && !native.SymbolsWithHistoricalNames.ContainsKey(label.Name))
+            // A vendor's alias reaches its name only in a build that includes the vendor's historical names: a
+            // standalone build of the module skips it, and a whole build must have it.
+            if (BasicNames.IsVendorName(label.Name) && !BasicNames.IncludesHistoricalNames(native))
             {
                 continue;
             }

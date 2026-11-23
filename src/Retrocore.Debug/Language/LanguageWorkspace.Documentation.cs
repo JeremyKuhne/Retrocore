@@ -157,13 +157,19 @@ internal sealed partial class LanguageWorkspace
                 if (analysis.Definitions.Any(site => site.Name == name)) { continue; }
 
                 // The file's own build gives its old names first: an SDK module's Also: of the same spelling, which
-                // the build does not include, neither replaces nor cancels it.
+                // the build does not include, neither replaces nor cancels one the build gives.
                 if (!thisBuild && own.Contains(name)) { continue; }
 
                 IReadOnlyList<DocumentationTopic> topics = set.FindAlso(name, thisBuild);
                 string? replacement = topics.Count == 1 ? set.SymbolOf(topics[0]) : null;
                 current[name] = current.TryGetValue(name, out string? earlier) && earlier != replacement ? null : replacement;
-                if (thisBuild) { own.Add(name); }
+
+                // Only a name whose definition the assembly made takes precedence; one in a branch it leaves out
+                // stays as ambiguous with the SDK's as before.
+                if (thisBuild && replacement is not null && analysis.Result.Symbols.ContainsKey(replacement))
+                {
+                    own.Add(name);
+                }
             }
         }
 

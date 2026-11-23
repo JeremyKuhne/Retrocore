@@ -3,7 +3,7 @@
 
 .include "MsBasic.Families.asm"
 
-; MICROSOFT 6502 BASIC: RUN, GOSUB, GOTO AND RETURN
+; MICROSOFT 6502 BASIC: RESTORE, STOP, END, CONT, RUN, GOSUB, GOTO AND RETURN
 ;
 ; RUN through RETURN are emitted consecutively before DATA. RESTORE and STOP/CONT can be separated by a
 ; platform's interrupt handling. The macros select their platform-specific entry points and early quirks.
@@ -41,7 +41,7 @@ Done:
 
 ;; Emits STOP, END and CONT.
 ;; Parameters: lineNumberDirect = 1 to detect direct execution through <CurrentLine>, 0 through the text-pointer page;
-;;   clearOutput = 1 to clear the output-suppression flag before reporting a break
+;;   clearOutput = 1 to clear the output-suppression flag as the program stops, with or without the break message
 .macro StopAndContinue lineNumberDirect, clearOutput
     .assert lineNumberDirect = 0 || lineNumberDirect = 1, "lineNumberDirect is 0 or 1."
     .assert clearOutput = 0 || clearOutput = 1, "clearOutput is 0 or 1."
@@ -271,7 +271,7 @@ Done:
     ;; In: zero = set at the end of the statement, Y = the statement token's offset in the dispatch table
     ;; Errors: RETURN WITHOUT GOSUB if there is no GOSUB frame
     ;; Entry:
-    ;;   UndefinedStatement = reports UNDEF'D STATEMENT through <ERROR>, a load RETURN's error skips;
+    ;;   UndefinedStatement = reports UNDEF'D STATEMENT through <ERROR> (RETURN's error skips its load);
     ;;     <Statements::GoTo> enters here
     ;;   ToSyntaxError = jumps to <SNERR>; `ON` enters here
     ;; See: <Statements::GoSub>, <FindForFrame>
@@ -286,7 +286,7 @@ Done:
     beq RestoreCaller
     ldx #ERROR_RETURN_WITHOUT_GOSUB
     .byte $2C                   ; BIT absolute skips the following LDX on the RETURN error path
-;; Reports UNDEF'D STATEMENT through <ERROR>, a load RETURN's error skips; <Statements::GoTo> enters here.
+;; Reports UNDEF'D STATEMENT through <ERROR> (RETURN's error skips its load); <Statements::GoTo> enters here.
 ;; Also: USERR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 UndefinedStatement:
     ldx #ERROR_UNDEFINED_STATEMENT

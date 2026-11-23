@@ -7,7 +7,7 @@
 
 ;; Emits the operator table with independently selected precedence rules and AND handler.
 ;; Parameters: powerBelowNegation = 1 for power below unary negation, 0 for power above it
-;;   highNot = 1 for NOT at the unary precedence, 0 for the original lower precedence
+;;   highNot = 1 for NOT at the unary precedence (with powerBelowNegation = 1), 0 for the original lower precedence
 ;;   andEntry = the AND operator's handler
 .macro OperatorEntries powerBelowNegation, highNot, andEntry
 

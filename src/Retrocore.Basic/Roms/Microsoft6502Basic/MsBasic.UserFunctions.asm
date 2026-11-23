@@ -94,7 +94,8 @@ ToError:
     ;;
     ;; The argument variable's old value and the caller's text pointer are saved on the stack. The function
     ;; expression is evaluated with the new argument, then both are restored. An undefined function is an error.
-    ;; The early check also rejects a defined argument whose address has a zero low byte.
+    ;; The early check tests the low byte of the argument variable's address for none, so it also takes a function
+    ;; whose argument variable's address ends in $00 as undefined.
     ;; Out: Fac = function result
     ;; Also: FNDOER (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc Fn

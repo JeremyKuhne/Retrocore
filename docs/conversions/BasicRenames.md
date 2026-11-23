@@ -3,7 +3,9 @@
 The rename table for the BASIC sources, step 3 of [the method](../ConvertingSources.md): a draft for the owner's
 review. Nothing is renamed yet. The decisions, the documents, the inventory's method and counts, and every question
 this table raises are in the log, [Basic.md](Basic.md); a note such as "see A-Q4" points at a part's question
-there, and the cross-cutting ones are X1 to X16.
+there, and the cross-cutting ones are X1 to X16, which the owner settled as recommended on 2026-11-23. The table follows
+them: statement names keep their keyword split at its words (X13), and every local is written by its full path
+(X16).
 
 One row per name per file (but for three pairs of same-named macro parameters): 2,411 rows, grouped by module (the shared Microsoft modules first, then AppleSoft's,
 then Commodore's), in the module's source order within each. The columns:
@@ -122,9 +124,9 @@ to K12, R1 to R10).
 | ---: | --- | --- | --- | --- | --- | --- | --- |
 | 72 | `UMULT` | `Variables::MultiplyByBound` | routine | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Saves Y in Pointer1, loads the big-endian bound at (SourceStart),Y into A:Addend and falls into Variables::MultiplyUnsigned — Called by CreateArray and ElementAddress only; see B2-Q2 (Variables scope) |
 | 73 | `UMULTD` | `Variables::MultiplyUnsigned` | routine | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Multiplies LinearIndex by A:Addend in 16 shift-and-add steps; product in X (low) and A/Y (high); OUT OF MEMORY on overflow — Uses DigitsBeforePoint (DECCNT) as its bit counter: needs a scoped alias, see glossary list |
-| 74 | `UMULTC` | `MultiplyUnsigned::NextBit` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Doubles the partial product in X/Y and adds the multiplier when the bit shifted out of LinearIndex is set |
-| 75 | `UMLCNT` | `MultiplyUnsigned::CountBit` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Decrements the 16-bit counter and loops to NextBit |
-| 76 | `UMLRTS` | `MultiplyUnsigned::Done` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | The routine's RTS; nothing branches here — Unreferenced but documented (M6502): kept as a local |
+| 74 | `UMULTC` | `Variables::MultiplyUnsigned::NextBit` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Doubles the partial product in X/Y and adds the multiplier when the bit shifted out of LinearIndex is set |
+| 75 | `UMLCNT` | `Variables::MultiplyUnsigned::CountBit` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Decrements the 16-bit counter and loops to NextBit |
+| 76 | `UMLRTS` | `Variables::MultiplyUnsigned::Done` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | The routine's RTS; nothing branches here — Unreferenced but documented (M6502): kept as a local |
 
 ### MsBasic.Arrays
 
@@ -135,35 +137,35 @@ to K12, R1 to R10).
 | 79 | `clearWithY` | `KEEP` | parameter of ARRAY_LOOKUP | all |  | — | 1 clears the array allocation counter with LDY/STY instead of LDA/TAY/STA — SDK's own name |
 | 80 | `saveOffsetHigh` | `KEEP` | parameter of ARRAY_LOOKUP | all |  | — | 1 stores the final element offset's high byte in LinearIndex before scaling; 0 keeps BASIC 1's array bug — SDK's own name; see B2-Q9 (D5: weaker-contract variant) |
 | 81 | `ISARY` | `Variables::FindArray` | routine | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Stacks each subscript (via integer conversion) and the type flags, then searches the array table from ArraysStart for VariableName — Reached by FindVariable's JMP or by Variables::ChooseArrayLookup's fall-through |
-| 82 | `INDLOP` | `FindArray::NextSubscript` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Evaluates one subscript and swaps it under the saved flags on the stack; loops while a comma follows |
-| 83 | `INDLO1` | `FindArray::Search` | entry | AS | none found | — | Starts the table search at ArraysStart (AS: entered from Variables::ChooseArrayLookup to skip subscripts) — Entry used across macros by EXISTING_ARRAY_ENTRY |
-| 84 | `LOPFDA` | `FindArray::CheckEnd` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Points SourceStart at the next array header and stops at ArraysEnd |
-| 85 | `LOPFDV` | `FindArray::CompareName` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Compares the header's two name bytes with VariableName |
-| 86 | `NMARY1` | `FindArray::NextArray` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Adds the header's length to SourceStart; on an address carry falls into BadSubscriptError — Falling into BAD SUBSCRIPT on a wrapped table address is odd but unreachable in practice |
+| 82 | `INDLOP` | `Variables::FindArray::NextSubscript` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Evaluates one subscript and swaps it under the saved flags on the stack; loops while a comma follows |
+| 83 | `INDLO1` | `Variables::FindArray::Search` | entry | AS | none found | — | Starts the table search at ArraysStart (AS: entered from Variables::ChooseArrayLookup to skip subscripts) — Entry used across macros by EXISTING_ARRAY_ENTRY |
+| 84 | `LOPFDA` | `Variables::FindArray::CheckEnd` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Points SourceStart at the next array header and stops at ArraysEnd |
+| 85 | `LOPFDV` | `Variables::FindArray::CompareName` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Compares the header's two name bytes with VariableName |
+| 86 | `NMARY1` | `Variables::FindArray::NextArray` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Adds the header's length to SourceStart; on an address carry falls into BadSubscriptError — Falling into BAD SUBSCRIPT on a wrapped table address is odd but unreachable in practice |
 | 87 | `BSERR` | `BadSubscriptError` | routine | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Loads the BAD SUBSCRIPT offset and skips into IllegalQuantityError's jump with a BIT — Falls into IllegalQuantityError; see B2-Q5 (error entries) |
 | 88 | `FCERR` | `IllegalQuantityError` | routine | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Loads the ILLEGAL QUANTITY offset and jumps to the error handler — Called from many modules and both vendors; see B2-Q5 |
 | 89 | `ERRGO3` | `IllegalQuantityError::ToError` | entry | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | JMP ERROR with X = the error offset; Variables::ArrayFound branches here with REDIM'D ARRAY — To + ERROR's new name (another part) |
 | 90 | `GOTARY` | `Variables::ArrayFound` | routine | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Reports REDIM'D ARRAY when dimensioning; else checks the dimension count (BAD SUBSCRIPT) and jumps to ElementAddress — Reached by branch from FindArray; AS returns carry set for an existing-array lookup |
-| 91 | `GOTAR1` | `ArrayFound::CheckDimensions` | local | AS | none found | — | (AS) Ordinary reference: sets ArrayPointer and compares the stacked dimension count with the header's |
+| 91 | `GOTAR1` | `Variables::ArrayFound::CheckDimensions` | local | AS | none found | — | (AS) Ordinary reference: sets ArrayPointer and compares the stacked dimension count with the header's |
 | 92 | `GOTAR2` | `Variables::ArrayMissing` | routine | AS | none found | — | (AS) Array not found: an ordinary reference goes on to CreateArray, an existing-array lookup reports OUT OF DATA — Reached by branch from FindArray; separate .proc because it falls into CreateArray |
 | 93 | `NOTFDD` | `Variables::CreateArray` | routine | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Writes a new array header (name, element size, bounds from DIM or 11), checks room, zeroes the values and sets the length — Returns at ElementAddress::Done for DIM, else falls into ElementAddress |
-| 94 | `NOTFLT` | `CreateArray::CheckSecond` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Element size so far: 5, minus 1 if the first name byte has bit 7 set; now tests the second byte |
-| 95 | `STOMLT` | `CreateArray::StoreSize` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Saves the element size (5, 3 or 2) in LinearIndex and writes the dimension count |
-| 96 | `LOPPTA` | `CreateArray::NextDimension` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Takes the next bound: 11 by default, or the stacked DIM subscript plus one |
-| 97 | `NOTDIM` | `CreateArray::StoreBound` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Writes the bound high byte first and multiplies it into the running size |
-| 98 | `GREASE` | `CreateArray::CheckRoom` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Calls REASON for the new ArraysEnd and stores it, then clears the values page by page |
-| 99 | `ZERITA` | `CreateArray::ClearLoop` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Zeroes the bytes of one page of values downward |
-| 100 | `DECCUR` | `CreateArray::NextPage` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Moves ArrayPointer down a page and counts pages, then writes the header's length |
+| 94 | `NOTFLT` | `Variables::CreateArray::CheckSecond` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Element size so far: 5, minus 1 if the first name byte has bit 7 set; now tests the second byte |
+| 95 | `STOMLT` | `Variables::CreateArray::StoreSize` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Saves the element size (5, 3 or 2) in LinearIndex and writes the dimension count |
+| 96 | `LOPPTA` | `Variables::CreateArray::NextDimension` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Takes the next bound: 11 by default, or the stacked DIM subscript plus one |
+| 97 | `NOTDIM` | `Variables::CreateArray::StoreBound` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Writes the bound high byte first and multiplies it into the running size |
+| 98 | `GREASE` | `Variables::CreateArray::CheckRoom` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Calls REASON for the new ArraysEnd and stores it, then clears the values page by page |
+| 99 | `ZERITA` | `Variables::CreateArray::ClearLoop` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Zeroes the bytes of one page of values downward |
+| 100 | `DECCUR` | `Variables::CreateArray::NextPage` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Moves ArrayPointer down a page and counts pages, then writes the header's length |
 | 101 | `GETDEF` | `Variables::ElementAddress` | routine | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Checks each stacked subscript against its bound, forms the linear index, scales it by the element size and returns the element's address in VariablePointer and A/Y |
-| 102 | `INLPNM` | `ElementAddress::NextSubscript` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Pops the next subscript into ArrayIndex and compares it with the bound, high byte first |
-| 103 | `BSERR7` | `ElementAddress::ToBadSubscriptError` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | JMP BSERR for a subscript at or above its bound |
-| 104 | `OMERR1` | `ElementAddress::ToOutOfMemoryError` | entry | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | JMP OMERR; CreateArray and MultiplyUnsigned branch here on overflow — Entered from other routines, so an entry; To + OMERR's new name (another part) |
-| 105 | `INLPN2` | `ElementAddress::SkipLow` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | High byte below the bound: skips the bound's low byte |
-| 106 | `INLPN1` | `ElementAddress::InBounds` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Multiplies the index so far by this dimension's bound and adds the subscript's low byte |
-| 107 | `ADDIND` | `ElementAddress::AddSubscript` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Adds the subscript's high byte and counts down the dimensions |
-| 108 | `NOTFL1` | `ElementAddress::CheckSecond` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Element size so far from the first name byte; now tests the second |
-| 109 | `STOML1` | `ElementAddress::ScaleBySize` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Multiplies the linear index by the element size and adds ArrayPointer to give VariablePointer |
-| 110 | `DIMRTS` | `ElementAddress::Done` | entry | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | The RTS; CreateArray (for DIM) and ERRDIR in UserFunctions branch here as the nearest RTS — ERRDIR (part B1) uses it as a borrowed RTS; see B2-Q6 |
+| 102 | `INLPNM` | `Variables::ElementAddress::NextSubscript` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Pops the next subscript into ArrayIndex and compares it with the bound, high byte first |
+| 103 | `BSERR7` | `Variables::ElementAddress::ToBadSubscriptError` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | JMP BSERR for a subscript at or above its bound |
+| 104 | `OMERR1` | `Variables::ElementAddress::ToOutOfMemoryError` | entry | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | JMP OMERR; CreateArray and MultiplyUnsigned branch here on overflow — Entered from other routines, so an entry; To + OMERR's new name (another part) |
+| 105 | `INLPN2` | `Variables::ElementAddress::SkipLow` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | High byte below the bound: skips the bound's low byte |
+| 106 | `INLPN1` | `Variables::ElementAddress::InBounds` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Multiplies the index so far by this dimension's bound and adds the subscript's low byte |
+| 107 | `ADDIND` | `Variables::ElementAddress::AddSubscript` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Adds the subscript's high byte and counts down the dimensions |
+| 108 | `NOTFL1` | `Variables::ElementAddress::CheckSecond` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Element size so far from the first name byte; now tests the second |
+| 109 | `STOML1` | `Variables::ElementAddress::ScaleBySize` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Multiplies the linear index by the element size and adds ArrayPointer to give VariablePointer |
+| 110 | `DIMRTS` | `Variables::ElementAddress::Done` | entry | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | The RTS; CreateArray (for DIM) and ERRDIR in UserFunctions branch here as the nearest RTS — ERRDIR (part B1) uses it as a borrowed RTS; see B2-Q6 |
 
 ### MsBasic.Assignment
 
@@ -171,7 +173,7 @@ to K12, R1 to R10).
 | ---: | --- | --- | --- | --- | --- | --- | --- |
 | 111 | `ASSIGNMENT_START` | `AssignmentStart` | macro | all |  | — | Emits LET, the numeric store and the start of the string assignment (LET through INPCOM) |
 | 112 | `LET` | `Statements::Let` | routine | all | M6502, ASTIL [AS], CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R; spelling only: AS82 [AS] | no | Finds the variable, requires '=', evaluates the expression, checks its type and stores it — Falls into StoreNumber; string results go through Statements::LetString |
-| 113 | `COPNUM` | `Let::Number` | local | all | M6502 | no | Numeric result: pulls the saved IntegerType into A and falls into StoreNumber — Unreferenced but documented (M6502): kept |
+| 113 | `COPNUM` | `Statements::Let::Number` | local | all | M6502 | no | Numeric result: pulls the saved IntegerType into A and falls into StoreNumber — Unreferenced but documented (M6502): kept |
 | 114 | `QINTGR` | `StoreNumber` | routine | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Stores FAC in the variable at AssignedVariable: rounded two-byte integer (high byte first) when A is negative, else packed float — Called by AssignVariableList; LET falls into it |
 | 115 | `COPFLT` | `StoreNumber::ToPackFac` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | JMP MOVVF: packs FAC into the variable — To + MOVVF's new name (part A) |
 | 116 | `COPSTR` | `Statements::LetString` | routine | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R; spelling only: AS82 [AS] | no | LET's string path: drops the saved flag and falls into AssignString — Physically after StoreNumber, so its own .proc; see B2-Q7 |
@@ -287,8 +289,8 @@ to K12, R1 to R10).
 | ---: | --- | --- | --- | --- | --- | --- | --- |
 | 202 | `DIM3` | `Statements::DimNextArray` | routine | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Requires the comma between arrays and falls into Statements::Dim — Before the handler's entry, so its own .proc; see B2-Q7 |
 | 203 | `DIM` | `Statements::Dim` | routine | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R; spelling only: AS82 [AS] | no | For each array, calls FindVariable::WithDimensionFlag with the DIM flag set, looping while a comma follows |
-| 204 | `DIM1` | `Dim::DefineArray` | local | all | M6502 | no | Calls FindVariable::WithDimensionFlag, which creates the array — Unreferenced but documented (M6502): kept |
-| 205 | `DIMCON` | `Dim::CheckMore` | local | all | M6502 | no | Rereads the current character; a non-terminator goes back to DimNextArray — Unreferenced but documented (M6502): kept |
+| 204 | `DIM1` | `Statements::Dim::DefineArray` | local | all | M6502 | no | Calls FindVariable::WithDimensionFlag, which creates the array — Unreferenced but documented (M6502): kept |
+| 205 | `DIMCON` | `Statements::Dim::CheckMore` | local | all | M6502 | no | Rereads the current character; a non-terminator goes back to DimNextArray — Unreferenced but documented (M6502): kept |
 
 ### MsBasic.ExpressionCore
 
@@ -573,7 +575,7 @@ to K12, R1 to R10).
 | 417 | `STRTX2` | `ReadQuotedString::HaveAddress` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Text address in A/Y (carry from the quote added): makes the string and sets TextPointer |
 | 418 | `EVAL3` | `EvaluateTokenOperand` | routine | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | An operand starting with a token: NOT goes to ApplyPrefixOperator with NOT's table entry, others to EvaluateFunctionOperand — Reached by branch from EvaluateOperand; see B2-Q3 |
 | 419 | `NOTOP` | `Operators::Not` | routine | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | The NOT operator: Boolean 1 for zero, else 0 (AS); or the signed 16-bit complement (PET) — Dispatched from OperatorTable; see B2-Q4 (Operators scope) |
-| 420 | `NOTOP1` | `Not::LoadFalse` | local | AS | none found | — | (AS) Nonzero operand: result 0 |
+| 420 | `NOTOP1` | `Operators::Not::LoadFalse` | local | AS | none found | — | (AS) Nonzero operand: result 0 |
 | 421 | `EVAL4` | `EvaluateFunctionOperand` | routine | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | FN goes to FNDOER; a token below the first function falls into EvaluateParenthesized; a function jumps to functionEntry — Falls into EvaluateParenthesized |
 | 422 | `PARCHK` | `EvaluateParenthesized` | routine | all | M6502, ASTIL [AS], CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R; spelling only: AS82 [AS], K4S79 [P4 P4R], HVK4 [P4 P4R] | no | Requires '(', evaluates an expression and falls into CheckCloseParenthesis — ASTIL entry |
 | 423 | `CHKCLS` | `CheckCloseParenthesis` | routine | all | M6502, ASTIL [AS], CBM4S79 [P4 P4R], K4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R, HVK4 [P4 P4R] | no | Loads ')' and skips into CheckCharacter with BITs — ASTIL entry |
@@ -596,8 +598,8 @@ to K12, R1 to R10).
 | 440 | `OROP` | `Operators::Or` | routine | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | The OR operator: PET complements both operands and their AND (Y = $FF) by skipping into And; AS falls through its Boolean test — Dispatched from OperatorTable |
 | 441 | `ANDOP` | `Operators::And` [PET]; `Operators::Or` [AS] | routine | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | yes: AS (on Operators::Or) | (PET) The signed 16-bit AND of Arg and FAC, with COUNT as the complement mask that OR sets — In AS this label sits at OR's entry: there ANDOP goes on Operators::Or and And is OROP1; see B2-Q4 |
 | 442 | `OROP1` | `Operators::And` | routine | AS | none found | — | (AS) The Boolean AND: 1 when both exponents are nonzero, else 0 — Same job as the PET's ANDOP, so the same name; Apple's dispatch table names it |
-| 443 | `OROP11` | `And::LoadFalse` | local | AS | none found | — | (AS) A zero operand: result 0 |
-| 444 | `OROP12` | `And::LoadTrue` | entry | AS | none found | — | (AS) Result 1; Operators::Or branches here when either operand is nonzero — Entered from Or |
+| 443 | `OROP11` | `Operators::And::LoadFalse` | local | AS | none found | — | (AS) A zero operand: result 0 |
+| 444 | `OROP12` | `Operators::And::LoadTrue` | entry | AS | none found | — | (AS) Result 1; Operators::Or branches here when either operand is nonzero — Entered from Or |
 
 ### MsBasic.OperatorTable
 
@@ -733,13 +735,13 @@ to K12, R1 to R10).
 | 552 | `RUN1` | `DROP` | local | AS | none found | — | AppleSoft's label at jsr ClearVariables: unreferenced, no document |
 | 553 | `GOSUB_AND_GOTO` | `GosubAndGoto` | macro | all |  | — | emits GOSUB and GOTO (x1) |
 | 554 | `nextStatement` | `KEEP` | parameter of GOSUB_AND_GOTO | all |  | — | the statement loop's entry; already descriptive |
-| 555 | `GOSUB` | `Statements::Gosub` | routine | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R; spelling only: AS82 [AS] | no | CheckStack(3), pushes a GosubFrame (TextPointer, CurrentLine, TOKEN_GOSUB), then the transfer — see B1-Q2 (GosubFrame), B1-Q8 (spelling) |
-| 556 | `RUNC2` | `Statements::Gosub::Transfer` | entry | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | GetCurrentCharacter, Goto, jmp to the statement loop; RUN with a line enters here |
-| 557 | `GOTO` | `Statements::Goto` | routine | all | M6502, ASTIL [AS], CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R; spelling only: AS82 [AS] | no | ReadLineNumber, FindLineEnd; searches from the next line when the target's high byte is above CurrentLine's, else from ProgramStart; TextPointer = line - 1 |
-| 558 | `LUK4IT` | `Statements::Goto::SearchFromStart` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | A/X = ProgramStart |
-| 559 | `LUKALL` | `Statements::Goto::Search` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | FindLine::FromAddress |
-| 560 | `QFOUND` | `Statements::Goto::CheckFound` | local | all | M6502 | no | not found: UNDEF'D STATEMENT — kept unreferenced: documented (M6502) |
-| 561 | `GORTS` | `Statements::Goto::Done` | entry | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | the rts; RETURN with trailing text returns through it — shared exit: see B1-Q1 |
+| 555 | `GOSUB` | `Statements::GoSub` | routine | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R; spelling only: AS82 [AS] | no | CheckStack(3), pushes a GosubFrame (TextPointer, CurrentLine, TOKEN_GOSUB), then the transfer — see B1-Q2 (GosubFrame), B1-Q8 (spelling) |
+| 556 | `RUNC2` | `Statements::GoSub::Transfer` | entry | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | GetCurrentCharacter, Goto, jmp to the statement loop; RUN with a line enters here |
+| 557 | `GOTO` | `Statements::GoTo` | routine | all | M6502, ASTIL [AS], CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R; spelling only: AS82 [AS] | no | ReadLineNumber, FindLineEnd; searches from the next line when the target's high byte is above CurrentLine's, else from ProgramStart; TextPointer = line - 1 |
+| 558 | `LUK4IT` | `Statements::GoTo::SearchFromStart` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | A/X = ProgramStart |
+| 559 | `LUKALL` | `Statements::GoTo::Search` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | FindLine::FromAddress |
+| 560 | `QFOUND` | `Statements::GoTo::CheckFound` | local | all | M6502 | no | not found: UNDEF'D STATEMENT — kept unreferenced: documented (M6502) |
+| 561 | `GORTS` | `Statements::GoTo::Done` | entry | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | the rts; RETURN with trailing text returns through it — shared exit: see B1-Q1 |
 | 562 | `RETURN_STATEMENT` | `ReturnStatement` | macro | all |  | — | emits RETURN with its search and POP choices (x1) |
 | 563 | `searchLow` | `KEEP` | parameter of RETURN_STATEMENT | all |  | — | set AssignedVariable's low (BASIC 1, AppleSoft) or high byte; already descriptive |
 | 564 | `popEntry` | `KEEP` | parameter of RETURN_STATEMENT | all |  | — | AppleSoft's POP test; already descriptive |
@@ -824,24 +826,24 @@ to K12, R1 to R10).
 | 618 | `STRING_CONCATENATION` | `StringConcatenation` | macro | all |  | — | Emits concatenation, the character movers and the release routines (CAT through FRETMS) |
 | 619 | `linkedRelease` | `KEEP` | parameter of STRING_CONCATENATION | all |  | — | 1 assembles BASIC 4's release that marks linked strings as garbage — SDK's own name |
 | 620 | `CAT` | `Strings::Concatenate` | routine | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R; spelling only: AS82 [AS] | no | Saves the first descriptor, evaluates the second operand (a string), allocates the sum, copies both, releases both and pushes the result; jumps to EvaluateExpression::NextOperator — STRING TOO LONG above 255; see B2-Q1 (Strings scope) |
-| 621 | `SIZEOK` | `Concatenate::LengthOk` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Allocates the combined string and copies the two strings into it |
+| 621 | `SIZEOK` | `Strings::Concatenate::LengthOk` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Allocates the combined string and copies the two strings into it |
 | 622 | `MOVINS` | `Strings::CopyString` | routine | all | M6502, ASTIL [AS], CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R; spelling only: AS82 [AS] | no | Copies the characters described by the descriptor at StringPointer to NewString; falls into CopyFrom — ASTIL entry |
 | 623 | `MOVSTR` | `Strings::CopyFrom` | routine | all | M6502, ASTIL [AS], CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R; spelling only: AS82 [AS] | no | Copies A bytes from X:Y to NewString; falls into CopyBytes — ASTIL entry |
 | 624 | `MOVDO` | `Strings::CopyBytes` | routine | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Copies A bytes from Pointer1 to NewString, last byte first, and advances NewString — Keeps X |
-| 625 | `MOVLP` | `CopyBytes::Loop` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Copies one byte downward |
-| 626 | `QMOVE` | `CopyBytes::CheckMore` | local | all | M6502 | no | Loops while bytes remain — Unreferenced but documented (M6502): kept |
-| 627 | `MVDONE` | `CopyBytes::Advance` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Adds the length to NewString |
-| 628 | `MVSTRT` | `CopyBytes::Done` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | The RTS |
+| 625 | `MOVLP` | `Strings::CopyBytes::Loop` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Copies one byte downward |
+| 626 | `QMOVE` | `Strings::CopyBytes::CheckMore` | local | all | M6502 | no | Loops while bytes remain — Unreferenced but documented (M6502): kept |
+| 627 | `MVDONE` | `Strings::CopyBytes::Advance` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Adds the length to NewString |
+| 628 | `MVSTRT` | `Strings::CopyBytes::Done` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | The RTS |
 | 629 | `FRESTR` | `Strings::ReleaseFacString` | routine | all | M6502, ASTIL [AS], CBM4S79 [P4 P4R], K4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R, HVK4 [P4 P4R]; spelling only: AS82 [AS] | no | Requires FAC to be a string (TYPE MISMATCH) and falls into ReleaseFac — ASTIL entry |
 | 630 | `FREFAC` | `Strings::ReleaseFac` | routine | all | M6502, ASTIL [AS], CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R; spelling only: AS82 [AS] | no | Releases the string whose descriptor FAC points to; falls into ReleaseDescriptor — ASTIL entry |
 | 631 | `FRETMP` | `Strings::ReleaseDescriptor` | routine | all | M6502, ASTIL [AS], CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R; spelling only: AS82 [AS] | no | Removes the descriptor at A:Y if it is the latest temporary, reclaims its space when it is lowest (PET 4: marks its link as garbage), returns A = length, X/Y and Pointer1 = address — ASTIL entry |
-| 632 | `RES00` | `ReleaseDescriptor::CheckBottom` | local | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | no | (P4) Stores the string's start and checks whether it is StringsBottom |
-| 633 | `FRE01` | `ReleaseDescriptor::SkipLink` | local | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | no | (P4) Raises StringsBottom past the second link byte |
-| 634 | `FREPLA` | `ReleaseDescriptor::RestoreLength` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Pulls the length back into A |
-| 635 | `FRE02` | `ReleaseDescriptor::ReadDescriptor` | local | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | no | (P4) Loads the length into A and the address into Pointer1 and X/Y |
-| 636 | `FRETRT` | `ReleaseDescriptor::StoreAddress` | local | AS P1 P1R P2 | M6502, HV1, HV1R, HV2 | no | Stores the address in Pointer1 and returns |
+| 632 | `RES00` | `Strings::ReleaseDescriptor::CheckBottom` | local | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | no | (P4) Stores the string's start and checks whether it is StringsBottom |
+| 633 | `FRE01` | `Strings::ReleaseDescriptor::SkipLink` | local | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | no | (P4) Raises StringsBottom past the second link byte |
+| 634 | `FREPLA` | `Strings::ReleaseDescriptor::RestoreLength` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Pulls the length back into A |
+| 635 | `FRE02` | `Strings::ReleaseDescriptor::ReadDescriptor` | local | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | no | (P4) Loads the length into A and the address into Pointer1 and X/Y |
+| 636 | `FRETRT` | `Strings::ReleaseDescriptor::StoreAddress` | local | AS P1 P1R P2 | M6502, HV1, HV1R, HV2 | no | Stores the address in Pointer1 and returns |
 | 637 | `FRETMS` | `Strings::ReleaseTemporary` | routine | all | M6502, ASTIL [AS], CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R; spelling only: AS82 [AS] | no | Pops the descriptor A:Y off the temporary stack if it is the latest one; zero set on a match — ASTIL entry; Keeps X |
-| 638 | `FRERTS` | `ReleaseTemporary::Done` | entry | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | The RTS; (P4) ReleaseDescriptor branches here — Entered from ReleaseDescriptor in BASIC 4 |
+| 638 | `FRERTS` | `Strings::ReleaseTemporary::Done` | entry | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | The RTS; (P4) ReleaseDescriptor branches here — Entered from ReleaseDescriptor in BASIC 4 |
 
 ### MsBasic.StringConversion
 
@@ -861,19 +863,19 @@ to K12, R1 to R10).
 | 645 | `sharedLenJump` | `KEEP` | parameter of STRING_FUNCTIONS | all |  | — | 1 makes ASC jump through LEN's float conversion — SDK's own name |
 | 646 | `zeroTermViaY` | `KEEP` | parameter of STRING_FUNCTIONS | all |  | — | 1 writes VAL's terminator with TYA instead of LDA #0 — SDK's own name |
 | 647 | `CHR` | `Functions::Chr` | routine | all | M6502; spelling only: AS82 [AS] | no; alias CHRD in Commodore | Converts the argument to a byte, allocates a one-byte string holding it and pushes it as a temporary — Commodore's CHRD alias |
-| 648 | `RLZRET` | `Chr::ToPushTemporary` | local | all | M6502 | no | JMP PUTNEW — Unreferenced but documented (M6502): kept |
+| 648 | `RLZRET` | `Functions::Chr::ToPushTemporary` | local | all | M6502 | no | JMP PUTNEW — Unreferenced but documented (M6502): kept |
 | 649 | `LEFT` | `Functions::Left` | routine | all | M6502; spelling only: AS82 [AS] | no; alias LEFTD in Commodore | Takes the leftmost count characters (all if the count is longer); falls into Functions::Slice — Commodore's LEFTD alias |
 | 650 | `RLEFT` | `Functions::Slice` | routine | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Shared by LEFT$, RIGHT$ and MID$: allocates the slice, releases the source and copies from its start offset — Entered from Left (fall-through), Right (JMP) and Mid (branches to its entries) |
-| 651 | `RLEFT1` | `Slice::PushStart` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Pushes the start offset |
-| 652 | `RLEFT2` | `Slice::CountInX` | entry | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Takes the count from X; Mid branches here — Entered from Mid |
-| 653 | `RLEFT3` | `Slice::CountInA` | entry | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Pushes the count in A, allocates it and releases the source descriptor; Mid branches here — Entered from Mid |
-| 654 | `PULMOR` | `Slice::Copy` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Copies the characters and pushes the result |
+| 651 | `RLEFT1` | `Functions::Slice::PushStart` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Pushes the start offset |
+| 652 | `RLEFT2` | `Functions::Slice::CountInX` | entry | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Takes the count from X; Mid branches here — Entered from Mid |
+| 653 | `RLEFT3` | `Functions::Slice::CountInA` | entry | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Pushes the count in A, allocates it and releases the source descriptor; Mid branches here — Entered from Mid |
+| 654 | `PULMOR` | `Functions::Slice::Copy` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Copies the characters and pushes the result |
 | 655 | `RIGHT` | `Functions::Right` | routine | all | M6502; spelling only: AS82 [AS] | no; alias RIGHTD in Commodore | Computes the start offset of the rightmost count characters and jumps to Slice — Commodore's RIGHTD alias |
 | 656 | `MID` | `Functions::Mid` | routine | all | M6502 | no; alias MIDD in Commodore | Reads the optional length (255 if absent), checks the start, and enters Slice with the shortened count — Commodore's MIDD alias |
-| 657 | `MID2` | `Mid::HaveLength` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Gets the descriptor and start with SliceArguments |
+| 657 | `MID2` | `Functions::Mid::HaveLength` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Gets the descriptor and start with SliceArguments |
 | 658 | `PREAM` | `Functions::SliceArguments` | routine | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Requires ')', drops the dispatcher's return and pops the byte argument and the descriptor (DescriptorPointer) — P1's indirect return wraps within the page when the saved low byte is $FF (documented) |
 | 659 | `LEN` | `Functions::Len` | routine | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R; spelling only: AS82 [AS] | no | Returns the length of the string argument as a number |
-| 660 | `LENFLT` | `Len::ToFloat` | entry | P1 P1R | none found | — | (P1) JMP SNGFLT; ASC jumps here — To + SNGFLT's new name (part A); HV1's LD657 is an address name: no Also |
+| 660 | `LENFLT` | `Functions::Len::ToFloat` | entry | P1 P1R | none found | — | (P1) JMP SNGFLT; ASC jumps here — To + SNGFLT's new name (part A); HV1's LD657 is an address name: no Also |
 | 661 | `LEN1` | `Functions::ReleaseArgument` | routine | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Releases the string argument (ReleaseFacString), marks the result numeric and returns its length in A and Y — Called by LEN, ASC and VAL |
 | 662 | `ASC` | `Functions::Asc` | routine | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R; spelling only: AS82 [AS] | no | Returns the first character's code; ILLEGAL QUANTITY for an empty string |
 | 663 | `GOFUC` | `Functions::ToIllegalQuantityError` | routine | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | JMP FCERR, shared by the string functions, ConvertToByte and MemoryAccess — Reached from several routines and modules, so not a local; see B2-Q5 |
@@ -882,7 +884,7 @@ to K12, R1 to R10).
 | 666 | `CONINT` | `ConvertToByte` | routine | all | M6502, ASTIL [AS], CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R; spelling only: AS82 [AS] | no | Converts FAC to 0-255 in X (ILLEGAL QUANTITY otherwise) and rereads the current character — ASTIL entry |
 | 667 | `CHRGO2` | `ConvertToByte::ToGetCurrentCharacter` | local | all | M6502 | no | JMP CHRGOT — Unreferenced but documented (M6502): kept |
 | 668 | `VAL` | `Functions::Val` | routine | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R; spelling only: AS82 [AS] | no | Parses the string's numeric prefix with FIN, zeroing the byte after it meanwhile; an empty string gives zero — An error in FIN leaves that byte zeroed and TextPointer unrestored (documented, not fixed) |
-| 669 | `VAL2` | `Val::SetEnd` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Saves the byte after the string, writes a terminator and parses the number |
+| 669 | `VAL2` | `Functions::Val::SetEnd` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Saves the byte after the string, writes a terminator and parses the number |
 | 670 | `ST2TXT` | `SetTextPointer` | routine | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R; spelling only: ASTIL [AS] | no | Loads TextPointer from SecondStringPointer — After FromText it moves past the scanned text; in VAL it restores the saved pointer |
 | 671 | `VALRTS` | `SetTextPointer::Done` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | The RTS — Unreferenced but documented (M6502): kept |
 
@@ -895,25 +897,25 @@ to K12, R1 to R10).
 | 674 | `patchedArrayStep` | `KEEP` | parameter of STRING_GARBAGE_COLLECTION | AS P1 P1R P2 |  | — | 1 calls the editor ROM's ARYINC for the array step (P1) — SDK's own name |
 | 675 | `subtractDescriptorOffset` | `KEEP` | parameter of STRING_GARBAGE_COLLECTION | AS P1 P1R P2 |  | — | 1 forms the descriptor offset by subtracting 3 instead of masking with 4 — SDK's own name |
 | 676 | `GARBA2` | `Strings::CollectGarbage` | routine | AS P1 P1R P2 | M6502, HV1, HV1R, HV2 | no | Repeatedly finds the highest live string below StringsBottom among temporaries, scalars and string arrays and moves it up under the strings already collected — P4's linked collector (part F) should take the same name; AS and P1 stop early at a page-zero temporary (documented); ASTIL's GARBAG ($E484) is this routine; GARBAG is also Microsoft's name for ReserveSpace::Collect (B2-Q8) |
-| 677 | `FNDVAR` | `CollectGarbage::NextPass` | local | AS P1 P1R P2 | M6502, HV1, HV1R, HV2; spelling only: AS82 [AS] | no | Sets StringsBottom to the top of the collected strings, clears the best candidate and starts at the temporaries |
-| 678 | `TVAR` | `CollectGarbage::ScanTemporaries` | local | AS P1 P1R P2 | M6502, HV1, HV1R, HV2; spelling only: AS82 [AS] | no | Considers each temporary descriptor up to NextTemporary — Not NextTemporary: that is a top-level name |
-| 679 | `SVARS` | `CollectGarbage::StartScalars` | local | AS P1 P1R P2 | M6502, HV1, HV1R, HV2; spelling only: AS82 [AS] | no | Sets the step to a scalar entry's size and starts at VariablesStart |
-| 680 | `SVAR` | `CollectGarbage::ScanScalars` | local | AS P1 P1R P2 | M6502, HV1, HV1R, HV2; spelling only: AS82 [AS] | no | Stops at ArraysStart |
-| 681 | `SVARGO` | `CollectGarbage::CheckScalar` | local | AS P1 P1R P2 | M6502, HV1, HV1R, HV2; spelling only: AS82 [AS] | no | Considers one scalar if it is a string variable |
-| 682 | `ARYVAR` | `CollectGarbage::StartArrays` | local | AS P1 P1R P2 | M6502, HV1, HV1R, HV2; spelling only: AS82 [AS] | no | Sets ArrayPointer to the arrays and the step to a descriptor's size |
-| 683 | `ARYVA2` | `CollectGarbage::NextArray` | local | AS P1 P1R P2 | M6502, HV1, HV1R, HV2; spelling only: AS82 [AS] | no | Loads the next array's address |
-| 684 | `ARYVA3` | `CollectGarbage::CheckArraysEnd` | local | AS P1 P1R P2 | M6502, HV1, HV1R, HV2 | no | At ArraysEnd the scan is over: moves the best string |
-| 685 | `ARYVGO` | `CollectGarbage::ReadArray` | local | AS P1 P1R P2 | M6502, HV1, HV1R, HV2; spelling only: AS82 [AS] | no | Advances ArrayPointer past this array and, for a string array, points Pointer1 at its first element |
-| 686 | `ARYGET` | `CollectGarbage::ElementsReady` | local | AS P1 P1R P2 | M6502, HV1, HV1R, HV2 | no | Loads Pointer1's high byte for the element loop |
-| 687 | `ARYSTR` | `CollectGarbage::ScanElements` | local | AS P1 P1R P2 | M6502, HV1, HV1R, HV2; spelling only: AS82 [AS] | no | Stops at the array's end (ArrayPointer) |
-| 688 | `GOGO` | `CollectGarbage::CheckElement` | local | AS P1 P1R P2 | M6502, HV1, HV1R, HV2; spelling only: AS82 [AS] | no | Considers one element's descriptor |
-| 689 | `DVARS` | `CollectGarbage::ConsiderScalar` | local | AS P1 P1R P2 | M6502, HV1, HV1R, HV2; spelling only: AS82 [AS] | no | Subroutine: skips a scalar that is not a string, then falls into ConsiderDescriptor |
-| 690 | `DVAR` | `CollectGarbage::ConsiderDescriptor` | local | AS P1 P1R P2 | M6502, HV1, HV1R, HV2; spelling only: AS82 [AS] | no | Subroutine: records a nonempty string below StringsBottom and above the best so far as the new best |
-| 691 | `DVAR2` | `CollectGarbage::CheckBest` | local | AS P1 P1R P2 | M6502, HV1, HV1R, HV2 | no | Compares the string's address with CollectorTop (the best so far) |
-| 692 | `DVAR3` | `CollectGarbage::NewBest` | local | AS P1 P1R P2 | M6502, HV1, HV1R, HV2 | no | Records the string's address in CollectorTop, the descriptor in CollectorPointer and the step in SIZE |
-| 693 | `DVARTS` | `CollectGarbage::Advance` | local | AS P1 P1R P2 | M6502, HV1, HV1R, HV2; spelling only: AS82 [AS] | no | Adds the step (CollectorStep) to Pointer1 |
-| 694 | `GRBRTS` | `CollectGarbage::Return` | local | AS P1 P1R P2 | M6502, HV1, HV1R, HV2 | no | Returns with X = Pointer1's high byte and Y = 0 (also the collector's exit when nothing is left to move) |
-| 695 | `GRBPAS` | `CollectGarbage::MoveBest` | local | AS P1 P1R P2 | M6502, HV1, HV1R, HV2 | no | Moves the best string up to StringsBottom with BLTUC, rewrites its descriptor's address and starts the next pass — SIZE is reused as the descriptor offset: needs a scoped alias, see glossary list |
+| 677 | `FNDVAR` | `Strings::CollectGarbage::NextPass` | local | AS P1 P1R P2 | M6502, HV1, HV1R, HV2; spelling only: AS82 [AS] | no | Sets StringsBottom to the top of the collected strings, clears the best candidate and starts at the temporaries |
+| 678 | `TVAR` | `Strings::CollectGarbage::ScanTemporaries` | local | AS P1 P1R P2 | M6502, HV1, HV1R, HV2; spelling only: AS82 [AS] | no | Considers each temporary descriptor up to NextTemporary — Not NextTemporary: that is a top-level name |
+| 679 | `SVARS` | `Strings::CollectGarbage::StartScalars` | local | AS P1 P1R P2 | M6502, HV1, HV1R, HV2; spelling only: AS82 [AS] | no | Sets the step to a scalar entry's size and starts at VariablesStart |
+| 680 | `SVAR` | `Strings::CollectGarbage::ScanScalars` | local | AS P1 P1R P2 | M6502, HV1, HV1R, HV2; spelling only: AS82 [AS] | no | Stops at ArraysStart |
+| 681 | `SVARGO` | `Strings::CollectGarbage::CheckScalar` | local | AS P1 P1R P2 | M6502, HV1, HV1R, HV2; spelling only: AS82 [AS] | no | Considers one scalar if it is a string variable |
+| 682 | `ARYVAR` | `Strings::CollectGarbage::StartArrays` | local | AS P1 P1R P2 | M6502, HV1, HV1R, HV2; spelling only: AS82 [AS] | no | Sets ArrayPointer to the arrays and the step to a descriptor's size |
+| 683 | `ARYVA2` | `Strings::CollectGarbage::NextArray` | local | AS P1 P1R P2 | M6502, HV1, HV1R, HV2; spelling only: AS82 [AS] | no | Loads the next array's address |
+| 684 | `ARYVA3` | `Strings::CollectGarbage::CheckArraysEnd` | local | AS P1 P1R P2 | M6502, HV1, HV1R, HV2 | no | At ArraysEnd the scan is over: moves the best string |
+| 685 | `ARYVGO` | `Strings::CollectGarbage::ReadArray` | local | AS P1 P1R P2 | M6502, HV1, HV1R, HV2; spelling only: AS82 [AS] | no | Advances ArrayPointer past this array and, for a string array, points Pointer1 at its first element |
+| 686 | `ARYGET` | `Strings::CollectGarbage::ElementsReady` | local | AS P1 P1R P2 | M6502, HV1, HV1R, HV2 | no | Loads Pointer1's high byte for the element loop |
+| 687 | `ARYSTR` | `Strings::CollectGarbage::ScanElements` | local | AS P1 P1R P2 | M6502, HV1, HV1R, HV2; spelling only: AS82 [AS] | no | Stops at the array's end (ArrayPointer) |
+| 688 | `GOGO` | `Strings::CollectGarbage::CheckElement` | local | AS P1 P1R P2 | M6502, HV1, HV1R, HV2; spelling only: AS82 [AS] | no | Considers one element's descriptor |
+| 689 | `DVARS` | `Strings::CollectGarbage::ConsiderScalar` | local | AS P1 P1R P2 | M6502, HV1, HV1R, HV2; spelling only: AS82 [AS] | no | Subroutine: skips a scalar that is not a string, then falls into ConsiderDescriptor |
+| 690 | `DVAR` | `Strings::CollectGarbage::ConsiderDescriptor` | local | AS P1 P1R P2 | M6502, HV1, HV1R, HV2; spelling only: AS82 [AS] | no | Subroutine: records a nonempty string below StringsBottom and above the best so far as the new best |
+| 691 | `DVAR2` | `Strings::CollectGarbage::CheckBest` | local | AS P1 P1R P2 | M6502, HV1, HV1R, HV2 | no | Compares the string's address with CollectorTop (the best so far) |
+| 692 | `DVAR3` | `Strings::CollectGarbage::NewBest` | local | AS P1 P1R P2 | M6502, HV1, HV1R, HV2 | no | Records the string's address in CollectorTop, the descriptor in CollectorPointer and the step in SIZE |
+| 693 | `DVARTS` | `Strings::CollectGarbage::Advance` | local | AS P1 P1R P2 | M6502, HV1, HV1R, HV2; spelling only: AS82 [AS] | no | Adds the step (CollectorStep) to Pointer1 |
+| 694 | `GRBRTS` | `Strings::CollectGarbage::Return` | local | AS P1 P1R P2 | M6502, HV1, HV1R, HV2 | no | Returns with X = Pointer1's high byte and Y = 0 (also the collector's exit when nothing is left to move) |
+| 695 | `GRBPAS` | `Strings::CollectGarbage::MoveBest` | local | AS P1 P1R P2 | M6502, HV1, HV1R, HV2 | no | Moves the best string up to StringsBottom with BLTUC, rewrites its descriptor's address and starts the next pass — SIZE is reused as the descriptor offset: needs a scoped alias, see glossary list |
 
 ### MsBasic.StringOutput
 
@@ -934,15 +936,15 @@ to K12, R1 to R10).
 | 715 | `STRSPA` | `Strings::Allocate` | routine | all | M6502, ASTIL [AS], CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R; spelling only: AS82 [AS] | no | Reserves A bytes and puts the length and address in NewDescriptor — ASTIL entry |
 | 716 | `STRLIT` | `Strings::FromText` | routine | all | M6502, ASTIL [AS], CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R; spelling only: AS82 [AS] | no | Sets both delimiters to a quote and falls into FromTextUntil — ASTIL entry |
 | 717 | `STRLT2` | `Strings::FromTextUntil` | routine | all | M6502, ASTIL [AS], CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R; spelling only: AS82 [AS] | no | Scans the text at A:Y to zero, Delimiter or EndDelimiter, copies it if it is in page zero or InputBuffer, and pushes the temporary — ASTIL entry; the terminator must be within 256 bytes |
-| 718 | `STRGET` | `FromTextUntil::Scan` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Reads characters until a terminator |
-| 719 | `STRFIN` | `FromTextUntil::AtDelimiter` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Sets carry to skip a closing quote |
-| 720 | `STRFI1` | `FromTextUntil::AtZero` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Clears carry: the terminator is not skipped |
-| 721 | `STRFI2` | `FromTextUntil::SetLength` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Stores the length and the end position in SecondStringPointer |
-| 722 | `STRST2` | `FromTextUntil::CheckPage` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Chooses copying by the text's page |
-| 723 | `STRCP` | `FromTextUntil::CopyText` | local | all | M6502, CBM4S79 [P4 P4R], HV2, HV4, HV4R | no | Allocates and copies the text into string space — Falls into PushTemporary |
+| 718 | `STRGET` | `Strings::FromTextUntil::Scan` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Reads characters until a terminator |
+| 719 | `STRFIN` | `Strings::FromTextUntil::AtDelimiter` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Sets carry to skip a closing quote |
+| 720 | `STRFI1` | `Strings::FromTextUntil::AtZero` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Clears carry: the terminator is not skipped |
+| 721 | `STRFI2` | `Strings::FromTextUntil::SetLength` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Stores the length and the end position in SecondStringPointer |
+| 722 | `STRST2` | `Strings::FromTextUntil::CheckPage` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Chooses copying by the text's page |
+| 723 | `STRCP` | `Strings::FromTextUntil::CopyText` | local | all | M6502, CBM4S79 [P4 P4R], HV2, HV4, HV4R | no | Allocates and copies the text into string space — Falls into PushTemporary |
 | 724 | `PUTNEW` | `Strings::PushTemporary` | routine | all | M6502, ASTIL [AS], CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R; spelling only: AS82 [AS] | no | Copies NewDescriptor to the next temporary descriptor, points FAC at it and marks a string; FORMULA TOO COMPLEX when full — ASTIL entry |
-| 725 | `ERRGO2` | `PushTemporary::ToError` | entry | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | JMP ERROR; both allocators branch here with OUT OF MEMORY — To + ERROR's new name (another part) |
-| 726 | `PUTNW1` | `PushTemporary::Store` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Stores the descriptor and advances NextTemporary and LastTemporary |
+| 725 | `ERRGO2` | `Strings::PushTemporary::ToError` | entry | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | JMP ERROR; both allocators branch here with OUT OF MEMORY — To + ERROR's new name (another part) |
+| 726 | `PUTNW1` | `Strings::PushTemporary::Store` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Stores the descriptor and advances NextTemporary and LastTemporary |
 | 727 | `STRING_ALLOCATION` | `StringAllocation` | macro | all |  | — | Emits GETSPA with the unlinked or linked body |
 | 728 | `linkedStrings` | `KEEP` | parameter of STRING_ALLOCATION | all |  | — | 1 selects BASIC 4's linked allocator — SDK's own name |
 | 729 | `GETSPA` | `Strings::ReserveSpace` | routine | all | M6502, ASTIL [AS], CBM4S79 [P4 P4R], K4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R, HVK4 [P4 P4R]; spelling only: AS82 [AS] | no | Reserves A bytes below StringsBottom, collecting garbage once if needed; X/Y and NewString = the address — ASTIL entry; Commodore's disk commands call it |
@@ -952,22 +954,22 @@ to K12, R1 to R10).
 | # | Old | New | Kind | Builds | Documents (checked) | D3 | Reason |
 | ---: | --- | --- | --- | --- | --- | --- | --- |
 | 699 | `UNLINKED_STRING_ALLOCATION` | `UnlinkedStringAllocation` | macro | AS P1 P1R P2 |  | — | Emits the ordinary allocator's body after GETSPA |
-| 700 | `TRYAG2` | `ReserveSpace::Try` | local | AS P1 P1R P2 | M6502, HV1, HV1R, HV2 | no | Computes StringsBottom minus the length — Same job as the linked TRYAG2 |
-| 701 | `TRYAG3` | `ReserveSpace::CheckRoom` | local | AS P1 P1R P2 | M6502, HV1, HV1R, HV2 | no | Compares the new bottom with ArraysEnd (equality fits) — Linked builds' TRYAG3 is another step; their TRYAG4 is this one |
-| 702 | `STRFRE` | `ReserveSpace::Take` | local | AS P1 P1R P2 | M6502, HV1, HV1R, HV2 | no | Sets StringsBottom and NewString to the new bottom; returns X/Y = address, A = length |
-| 703 | `GARBAG` | `ReserveSpace::Collect` | local | AS P1 P1R P2 | M6502, HV1, HV1R, HV2; spelling only: ASTIL [AS], AS82 [AS] | no | Collects once (OUT OF MEMORY if already collected) and retries a nonempty request — A zero-length failure falls out of the macro into CollectGarbage a second time (documented); Apple's GARBAG (Orchard) names CollectGarbage: see B2-Q8 |
+| 700 | `TRYAG2` | `Strings::ReserveSpace::Try` | local | AS P1 P1R P2 | M6502, HV1, HV1R, HV2 | no | Computes StringsBottom minus the length — Same job as the linked TRYAG2 |
+| 701 | `TRYAG3` | `Strings::ReserveSpace::CheckRoom` | local | AS P1 P1R P2 | M6502, HV1, HV1R, HV2 | no | Compares the new bottom with ArraysEnd (equality fits) — Linked builds' TRYAG3 is another step; their TRYAG4 is this one |
+| 702 | `STRFRE` | `Strings::ReserveSpace::Take` | local | AS P1 P1R P2 | M6502, HV1, HV1R, HV2 | no | Sets StringsBottom and NewString to the new bottom; returns X/Y = address, A = length |
+| 703 | `GARBAG` | `Strings::ReserveSpace::Collect` | local | AS P1 P1R P2 | M6502, HV1, HV1R, HV2; spelling only: ASTIL [AS], AS82 [AS] | no | Collects once (OUT OF MEMORY if already collected) and retries a nonempty request — A zero-length failure falls out of the macro into CollectGarbage a second time (documented); Apple's GARBAG (Orchard) names CollectGarbage: see B2-Q8 |
 
 ### MsBasic.StringStorage.Linked
 
 | # | Old | New | Kind | Builds | Documents (checked) | D3 | Reason |
 | ---: | --- | --- | --- | --- | --- | --- | --- |
 | 704 | `LINKED_STRING_ALLOCATION` | `LinkedStringAllocation` | macro | P4 P4R |  | — | Emits BASIC 4's allocator body, which adds a two-byte link after each string |
-| 705 | `TRYAG2` | `ReserveSpace::Try` | local | P4 P4R | M6502, CBM4S79 [P4 P4R], HV4, HV4R | no | (P4) Returns at once for length 0, else computes the link address below StringsBottom |
-| 706 | `TRYAG3` | `ReserveSpace::BelowLink` | local | P4 P4R | M6502, CBM4S79 [P4 P4R], HV4, HV4R | no | (P4) Saves the link address in Pointer1 and subtracts the length |
-| 707 | `TRYAG4` | `ReserveSpace::CheckRoom` | local | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | no | (P4) Compares the new bottom with ArraysEnd |
-| 708 | `STRFRE` | `ReserveSpace::Take` | local | P4 P4R | M6502, CBM4S79 [P4 P4R], HV4, HV4R | no | (P4) Writes the garbage link (length, $FF) and sets NewString and StringsBottom |
-| 709 | `GETRTS` | `ReserveSpace::Done` | local | P4 P4R | M6502, CBM4S79 [P4 P4R], HV4, HV4R | no | (P4) The RTS |
-| 710 | `GARBAG` | `ReserveSpace::Collect` | local | P4 P4R | M6502, CBM4S79 [P4 P4R], HV4, HV4R | no | (P4) Collects once (OUT OF MEMORY if already collected) and retries |
+| 705 | `TRYAG2` | `Strings::ReserveSpace::Try` | local | P4 P4R | M6502, CBM4S79 [P4 P4R], HV4, HV4R | no | (P4) Returns at once for length 0, else computes the link address below StringsBottom |
+| 706 | `TRYAG3` | `Strings::ReserveSpace::BelowLink` | local | P4 P4R | M6502, CBM4S79 [P4 P4R], HV4, HV4R | no | (P4) Saves the link address in Pointer1 and subtracts the length |
+| 707 | `TRYAG4` | `Strings::ReserveSpace::CheckRoom` | local | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | no | (P4) Compares the new bottom with ArraysEnd |
+| 708 | `STRFRE` | `Strings::ReserveSpace::Take` | local | P4 P4R | M6502, CBM4S79 [P4 P4R], HV4, HV4R | no | (P4) Writes the garbage link (length, $FF) and sets NewString and StringsBottom |
+| 709 | `GETRTS` | `Strings::ReserveSpace::Done` | local | P4 P4R | M6502, CBM4S79 [P4 P4R], HV4, HV4R | no | (P4) The RTS |
+| 710 | `GARBAG` | `Strings::ReserveSpace::Collect` | local | P4 P4R | M6502, CBM4S79 [P4 P4R], HV4, HV4R | no | (P4) Collects once (OUT OF MEMORY if already collected) and retries |
 
 ### MsBasic.Switches
 
@@ -1125,24 +1127,24 @@ to K12, R1 to R10).
 | 859 | `SIMZER` | `ZeroVariable` | data | AS | none found | — | (AS) Two zero bytes an absent variable reads — AS also has ZERO (part A) elsewhere: a separate name is needed; see B2-Q12 |
 | 860 | `ZERO` | `ZeroValue` | data | P1 P1R | M6502, HV1, HV1R | no | (P1) The zero bytes an absent variable reads; P1 has no ZERO in FHALF — Must match part A's name for ZERO (same job); see B2-Q12 |
 | 861 | `NOTEVL` | `Variables::CheckReservedName` | routine | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | (PET) Rejects TI, ST and (P4) DS/DS$ with SYNTAX, returns the zero for TI$; falls into Create — In AS it is empty and shares Create's address |
-| 862 | `GOBADV` | `CheckReservedName::ToSyntaxError` | local | PET | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | (PET) JMP SNERR for a reserved name |
-| 863 | `QSTAVR` | `CheckReservedName::CheckStatus` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | (PET) Checks for ST |
-| 864 | `QDSVAR` | `CheckReservedName::CheckDiskStatus` | local | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | no | (P4) Checks for DS and DS$ |
+| 862 | `GOBADV` | `Variables::CheckReservedName::ToSyntaxError` | local | PET | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | (PET) JMP SNERR for a reserved name |
+| 863 | `QSTAVR` | `Variables::CheckReservedName::CheckStatus` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | (PET) Checks for ST |
+| 864 | `QDSVAR` | `Variables::CheckReservedName::CheckDiskStatus` | local | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | no | (P4) Checks for DS and DS$ |
 | 865 | `VAROK` | `Variables::Create` | routine | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Moves the arrays up seven bytes with BLTU, writes the name and five zero bytes and falls into ValueAddress — P4 also adjusts the moved arrays' string back-links |
-| 866 | `NOTEVE` | `Create::SetNewEnd` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Stores the arrays' new end and moves them |
-| 867 | `ARYVA2` | `Create::NextArray` | local | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | no | (P4) Loads the next array's address — Same job and name as CollectGarbage::NextArray |
-| 868 | `ARYVA3` | `Create::CheckArraysEnd` | local | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | no | (P4) Stops at ArraysEnd |
-| 869 | `ARYVGO` | `Create::ReadArray` | local | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | no | (P4) Advances ArrayPointer past the array and, for a string array, points Pointer1 at its first element |
-| 870 | `ARYGET` | `Create::ScanElements` | local | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | no | (P4) Stops at the array's end |
-| 871 | `GOGO` | `Create::CheckElement` | local | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | no | (P4) Skips an empty string or one below StringsBottom |
-| 872 | `GOGO1` | `Create::MoveLink` | local | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | no | (P4) Adds 7 to the back-link after the string's characters |
-| 873 | `DVARTS` | `Create::Advance` | local | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | no | (P4) Steps Pointer1 to the next descriptor |
-| 874 | `ARYDON` | `Create::WriteEntry` | local | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | no | (P4) Back-links done: writes the new entry |
+| 866 | `NOTEVE` | `Variables::Create::SetNewEnd` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Stores the arrays' new end and moves them |
+| 867 | `ARYVA2` | `Variables::Create::NextArray` | local | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | no | (P4) Loads the next array's address — Same job and name as CollectGarbage::NextArray |
+| 868 | `ARYVA3` | `Variables::Create::CheckArraysEnd` | local | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | no | (P4) Stops at ArraysEnd |
+| 869 | `ARYVGO` | `Variables::Create::ReadArray` | local | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | no | (P4) Advances ArrayPointer past the array and, for a string array, points Pointer1 at its first element |
+| 870 | `ARYGET` | `Variables::Create::ScanElements` | local | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | no | (P4) Stops at the array's end |
+| 871 | `GOGO` | `Variables::Create::CheckElement` | local | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | no | (P4) Skips an empty string or one below StringsBottom |
+| 872 | `GOGO1` | `Variables::Create::MoveLink` | local | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | no | (P4) Adds 7 to the back-link after the string's characters |
+| 873 | `DVARTS` | `Variables::Create::Advance` | local | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | no | (P4) Steps Pointer1 to the next descriptor |
+| 874 | `ARYDON` | `Variables::Create::WriteEntry` | local | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | no | (P4) Back-links done: writes the new entry |
 | 875 | `FINPTR` | `Variables::ValueAddress` | routine | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Returns the address two bytes into the entry at SourceStart in A/Y and VariablePointer — FindVariable branches (P4: jumps) here when found |
-| 876 | `FINNOW` | `ValueAddress::Store` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Stores VariablePointer and returns |
+| 876 | `FINNOW` | `Variables::ValueAddress::Store` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Stores VariablePointer and returns |
 | 877 | `FMAPTR` | `Variables::ElementsStart` | routine | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Sets ArrayPointer to the first value after the header: SourceStart + 5 + 2 x the dimension count in Counter — Called by FindArray's paths and CreateArray |
-| 878 | `FMAPT1` | `ElementsStart::FromCount` | entry | AS | none found | — | (AS) Same with the dimension count in A; STORE/RECALL call it — Entered from AppleSoft.PlatformHelpers |
-| 879 | `JSRGM` | `ElementsStart::Store` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Stores ArrayPointer and returns |
+| 878 | `FMAPT1` | `Variables::ElementsStart::FromCount` | entry | AS | none found | — | (AS) Same with the dimension count in A; STORE/RECALL call it — Entered from AppleSoft.PlatformHelpers |
+| 879 | `JSRGM` | `Variables::ElementsStart::Store` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Stores ArrayPointer and returns |
 | 880 | `EXISTING_ARRAY_ENTRY` | `ExistingArrayEntry` | macro | AS |  | — | Emits Apple's choice between subscripts and the existing-array lookup (QINTG1) |
 | 881 | `QINTG1` | `Variables::ChooseArrayLookup` | routine | AS | none found | — | (AS) With SubscriptsAllowed nonzero skips subscripts to FindArray::Search; else falls into FindArray — Reached by FindVariable's JMP |
 
@@ -1948,11 +1950,11 @@ to K12, R1 to R10).
 | 1582 | `ENTRY1` | `Disk::FindSecondaryAddress::NextAddress` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Tries the next secondary address |
 | 1583 | `ENTRY2` | `Disk::FindSecondaryAddress::NextFile` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Compares against the next open file's secondary address |
 | 1584 | `RFOUND` | `Disk::FindSecondaryAddress::Found` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Stores the unused address in SA |
-| 1585 | `DOPEN` | `Statements::Dopen` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R]; spelling only: CBM4S79 [P4 P4R], HV4, HV4R | vendor | DOPEN: needs a name and file number, rejects a second name or drive, opens with ,type,length when given and @ when replacing — K4S79 DOPEN; the $FF96 entry's DOPEN goes in prose; see F-Q1 |
-| 1586 | `DOPEN2` | `Statements::Dopen::Open` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Chooses a secondary address and template length 3 |
-| 1587 | `RECLCK` | `Statements::Dopen::TypedOpen` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Template length 7, adding the file type and record length — Unreferenced, kept for its K4S79 name |
-| 1588 | `LEAV` | `Statements::Dopen::CheckReplace` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Prefixes @ in TBUFF when the name began with @ |
-| 1589 | `LEAV1` | `Statements::Dopen::NoReplace` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Builds the command from position 0 and opens |
+| 1585 | `DOPEN` | `Statements::DOpen` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R]; spelling only: CBM4S79 [P4 P4R], HV4, HV4R | vendor | DOPEN: needs a name and file number, rejects a second name or drive, opens with ,type,length when given and @ when replacing — K4S79 DOPEN; the $FF96 entry's DOPEN goes in prose; see F-Q1 |
+| 1586 | `DOPEN2` | `Statements::DOpen::Open` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Chooses a secondary address and template length 3 |
+| 1587 | `RECLCK` | `Statements::DOpen::TypedOpen` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Template length 7, adding the file type and record length — Unreferenced, kept for its K4S79 name |
+| 1588 | `LEAV` | `Statements::DOpen::CheckReplace` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Prefixes @ in TBUFF when the name began with @ |
+| 1589 | `LEAV1` | `Statements::DOpen::NoReplace` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Builds the command from position 0 and opens |
 | 1590 | `APPEND` | `Statements::Append` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R]; spelling only: CBM4S79 [P4 P4R], HV4, HV4R | vendor | APPEND: needs a name and file number, rejects other options, opens with ,A — K4S79 APPEND; jump-table APPEND in prose |
 | 1591 | `DAPPEN` | `Statements::Append::Open` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Chooses a secondary address and sends the append template |
 | 1592 | `ERRCHL` | `Disk::ReadStatus` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Reads the error channel into DS$, allocating its buffer first when DSDESC is 0 — Falls into AllocateStatus; branches to ReadErrorChannel |
@@ -1968,8 +1970,8 @@ to K12, R1 to R10).
 | 1602 | `FCONT` | `Statements::Header::Send` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Sends the N command |
 | 1603 | `FERRS` | `Statements::Header::CheckResult` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Reads the status; a first digit of 2 or more means a bad disk — Unreferenced, kept for its K4S79 name |
 | 1604 | `FERRP` | `Statements::Header::ToBadDisk` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Only jumps on to BADDIS |
-| 1605 | `DCLOSE` | `Statements::Dclose` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R]; spelling only: CBM4S79 [P4 P4R], HV4, HV4R | vendor | DCLOSE: accepts only a file number and unit; closes that file, or all the unit's files — K4S79 DCLOSE; jump-table DCLOSE in prose |
-| 1606 | `DCLSE` | `Statements::Dclose::Close` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Forgets DS$, then closes LA through the kernal or branches to CloseDeviceFiles |
+| 1605 | `DCLOSE` | `Statements::DClose` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R]; spelling only: CBM4S79 [P4 P4R], HV4, HV4R | vendor | DCLOSE: accepts only a file number and unit; closes that file, or all the unit's files — K4S79 DCLOSE; jump-table DCLOSE in prose |
+| 1606 | `DCLSE` | `Statements::DClose::Close` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Forgets DS$, then closes LA through the kernal or branches to CloseDeviceFiles |
 | 1607 | `DCLALL` | `Disk::CloseDeviceFiles` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Closes every logical file whose device is FA, rescanning the table after each close — Dclose branches into it; HEADER, COLLECT and BACKUP call it |
 | 1608 | `DCLLP` | `Disk::CloseDeviceFiles::NextFile` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Steps down the open-file table |
 | 1609 | `DCLBYE` | `Disk::CloseDeviceFiles::Done` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | rts when no file of the device remains |
@@ -1996,13 +1998,13 @@ to K12, R1 to R10).
 | 1630 | `RDRT0` | `Disk::AppendSecondName::Empty` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Removes the separator before an empty name |
 | 1631 | `RDRT1` | `Disk::AppendSecondName::Done` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Restores Y and sets carry |
 | 1632 | `RID` | `Disk::AppendDiskId` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Appends the two DISKID bytes to TBUFF; returns A = X |
-| 1633 | `DSAVE` | `Statements::Dsave` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R]; spelling only: CBM4S79 [P4 P4R], HV4, HV4R | vendor | DSAVE: needs a name, accepts drive and unit and @; saves through SV3 — K4S79 DSAVE |
-| 1634 | `DSAVE2` | `Statements::Dsave::Save` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Chooses the open template |
-| 1635 | `SAVLD0` | `Statements::Dsave::Replace` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Prefixes @ and builds from position 1 — Unreferenced, kept for its K4S79 name |
-| 1636 | `SAVLD1` | `Statements::Dsave::NoReplace` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Builds from position 0 |
-| 1637 | `DLOAD` | `Statements::Dload` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R]; spelling only: CBM4S79 [P4 P4R], HV4, HV4R | vendor | DLOAD: needs a name, accepts drive and unit; clears VERCK and loads through LOADNP — K4S79 DLOAD |
-| 1638 | `DLOERR` | `Statements::Dload::Reject` | entry | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | jmp SNERR, also the target of Rename's bne — Rename branches here; see F-Q4 |
-| 1639 | `DLOAD2` | `Statements::Dload::Load` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Builds the name and loads |
+| 1633 | `DSAVE` | `Statements::DSave` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R]; spelling only: CBM4S79 [P4 P4R], HV4, HV4R | vendor | DSAVE: needs a name, accepts drive and unit and @; saves through SV3 — K4S79 DSAVE |
+| 1634 | `DSAVE2` | `Statements::DSave::Save` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Chooses the open template |
+| 1635 | `SAVLD0` | `Statements::DSave::Replace` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Prefixes @ and builds from position 1 — Unreferenced, kept for its K4S79 name |
+| 1636 | `SAVLD1` | `Statements::DSave::NoReplace` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Builds from position 0 |
+| 1637 | `DLOAD` | `Statements::DLoad` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R]; spelling only: CBM4S79 [P4 P4R], HV4, HV4R | vendor | DLOAD: needs a name, accepts drive and unit; clears VERCK and loads through LOADNP — K4S79 DLOAD |
+| 1638 | `DLOERR` | `Statements::DLoad::Reject` | entry | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | jmp SNERR, also the target of Rename's bne — Rename branches here; see F-Q4 |
+| 1639 | `DLOAD2` | `Statements::DLoad::Load` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Builds the name and loads |
 | 1640 | `RENAME` | `Statements::Rename` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R]; spelling only: CBM4S79 [P4 P4R], HV4, HV4R | vendor | RENAME: needs two names, accepts drive and unit; sends R — K4S79 RENAME |
 | 1641 | `DREN` | `Statements::Rename::Send` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Sends the rename template — Unreferenced, kept for its K4S79 name |
 | 1642 | `DSCRTC` | `Statements::Scratch` | routine | P4 P4R | none found | vendor | SCRATCH: needs a name; confirms in direct mode, sends S and prints the drive's reply in direct mode — Undocumented spelling DSCRTC (the overlay's); see F-Q3 |
@@ -2826,26 +2828,26 @@ to K12, R1 to R10).
 | 2365 | `DISK_STATUS_STRING` | `KEEP` | switch | none |  | vendor | Default for opening the file alone — SDK build switch, already UPPER_SNAKE |
 | 2366 | `LINKED_STRING_GARBAGE_COLLECTION` | `LinkedStringGarbageCollection` | macro | P4 P4R |  | vendor | Emits BASIC 4's one-pass linked collector |
 | 2367 | `GARBA2` | `Strings::CollectGarbage` | routine | P4 P4R | M6502, CBM4S79 [P4 P4R], HV4, HV4R | vendor | Walks string space down from MEMSIZ by links, sliding live strings over garbage and updating their descriptors; sets FRETOP — Must match part B2's GARBA2; see F-Q8 |
-| 2368 | `GLOOP` | `CollectGarbage::NextString` | local | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | vendor | Ends at FRETOP |
-| 2369 | `COL00` | `CollectGarbage::Examine` | local | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | vendor | Lowers the destination past a link unless a gap is open |
-| 2370 | `COL00B` | `CollectGarbage::ReadLink` | local | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | vendor | Lowers the source past the link and tests for garbage ($FF) |
-| 2371 | `COL00A` | `CollectGarbage::SkipGarbage` | local | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | vendor | Lowers the source by the garbage length and opens a gap |
-| 2372 | `COL01` | `CollectGarbage::LiveString` | local | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | vendor | Loads the descriptor address; moves the string only when a gap is open |
-| 2373 | `COL02` | `CollectGarbage::MoveString` | local | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | vendor | Copies the link and the characters down and updates the descriptor |
-| 2374 | `GLOP1` | `CollectGarbage::CopyByte` | local | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | vendor | Copies one character |
-| 2375 | `COL02B` | `CollectGarbage::UpdateDescriptor` | local | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | vendor | Stores the new address in the descriptor |
-| 2376 | `COL02A` | `CollectGarbage::NextMoved` | local | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | vendor | Next string while moving |
-| 2377 | `GRBEND` | `CollectGarbage::ToFinish` | local | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | vendor | Only jumps on to Finish |
-| 2378 | `COL03` | `CollectGarbage::KeepString` | local | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | vendor | Live string with no gap: lowers both pointers by its length |
-| 2379 | `ENDGRB` | `CollectGarbage::Finish` | local | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | vendor | Sets FRETOP from FRESPC |
-| 2380 | `SKIP2` | `CollectGarbage::SkipLinks` | routine | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | vendor | Lowers the destination by 2 and falls into SkipSourceLink — Nested routines only the collector calls |
-| 2381 | `SKIP2A` | `CollectGarbage::SkipSourceLink` | routine | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | vendor | Loads 2 and falls into LowerSource |
-| 2382 | `MOVPNT` | `CollectGarbage::LowerSource` | routine | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | vendor | Subtracts A from GRBPNT |
-| 2383 | `MOV00` | `CollectGarbage::LowerSource::Store` | local | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | vendor | Stores the result |
-| 2384 | `MOVTOP` | `CollectGarbage::LowerDestination` | routine | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | vendor | Subtracts A from GRBTOP |
-| 2385 | `MOV01` | `CollectGarbage::LowerDestination::Store` | local | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | vendor | Stores the result |
-| 2386 | `SETINX` | `CollectGarbage::LoadDescriptorAddress` | routine | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | vendor | Copies the link at GRBPNT into INDEX; returns negative |
-| 2387 | `SET00` | `CollectGarbage::LoadDescriptorAddress::NextByte` | local | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | vendor | Copies one byte |
+| 2368 | `GLOOP` | `Strings::CollectGarbage::NextString` | local | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | vendor | Ends at FRETOP |
+| 2369 | `COL00` | `Strings::CollectGarbage::Examine` | local | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | vendor | Lowers the destination past a link unless a gap is open |
+| 2370 | `COL00B` | `Strings::CollectGarbage::ReadLink` | local | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | vendor | Lowers the source past the link and tests for garbage ($FF) |
+| 2371 | `COL00A` | `Strings::CollectGarbage::SkipGarbage` | local | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | vendor | Lowers the source by the garbage length and opens a gap |
+| 2372 | `COL01` | `Strings::CollectGarbage::LiveString` | local | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | vendor | Loads the descriptor address; moves the string only when a gap is open |
+| 2373 | `COL02` | `Strings::CollectGarbage::MoveString` | local | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | vendor | Copies the link and the characters down and updates the descriptor |
+| 2374 | `GLOP1` | `Strings::CollectGarbage::CopyByte` | local | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | vendor | Copies one character |
+| 2375 | `COL02B` | `Strings::CollectGarbage::UpdateDescriptor` | local | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | vendor | Stores the new address in the descriptor |
+| 2376 | `COL02A` | `Strings::CollectGarbage::NextMoved` | local | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | vendor | Next string while moving |
+| 2377 | `GRBEND` | `Strings::CollectGarbage::ToFinish` | local | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | vendor | Only jumps on to Finish |
+| 2378 | `COL03` | `Strings::CollectGarbage::KeepString` | local | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | vendor | Live string with no gap: lowers both pointers by its length |
+| 2379 | `ENDGRB` | `Strings::CollectGarbage::Finish` | local | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | vendor | Sets FRETOP from FRESPC |
+| 2380 | `SKIP2` | `Strings::CollectGarbage::SkipLinks` | routine | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | vendor | Lowers the destination by 2 and falls into SkipSourceLink — Nested routines only the collector calls |
+| 2381 | `SKIP2A` | `Strings::CollectGarbage::SkipSourceLink` | routine | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | vendor | Loads 2 and falls into LowerSource |
+| 2382 | `MOVPNT` | `Strings::CollectGarbage::LowerSource` | routine | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | vendor | Subtracts A from GRBPNT |
+| 2383 | `MOV00` | `Strings::CollectGarbage::LowerSource::Store` | local | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | vendor | Stores the result |
+| 2384 | `MOVTOP` | `Strings::CollectGarbage::LowerDestination` | routine | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | vendor | Subtracts A from GRBTOP |
+| 2385 | `MOV01` | `Strings::CollectGarbage::LowerDestination::Store` | local | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | vendor | Stores the result |
+| 2386 | `SETINX` | `Strings::CollectGarbage::LoadDescriptorAddress` | routine | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | vendor | Copies the link at GRBPNT into INDEX; returns negative |
+| 2387 | `SET00` | `Strings::CollectGarbage::LoadDescriptorAddress::NextByte` | local | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | vendor | Copies one byte |
 
 ### Commodore.TimeAssignment
 

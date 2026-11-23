@@ -221,7 +221,7 @@ conversion replaces those with `Also:` entries and these keys.
 [BasicRenames.md](BasicRenames.md) has all 2,411 rows. It was drafted in seven parts with one set of rules and one
 glossary for the shared workspace (below), then merged, then corrected after two independent reviews (below). Of the
 rows, 2,142 get a new name, 255 keep theirs (the SDK's own switches and macro parameters, and the names C#
-predefines: REVISD, ENHNCD, APLPLS, TIME, EXTIO, DISKO, REALIO; X15 asks about the names tests predefine) and 14 are
+predefines: REVISD, ENHNCD, APLPLS, TIME, EXTIO, DISKO, REALIO; X15 settled the names tests predefine) and 14 are
 dropped. A DROP removes the definition: either nothing uses it and no document names it, or it duplicates another
 definition, whose `Also:` then takes its documented name (ZSTORD, KIMY), or it is a question (REDDY and GOTK, C-Q8;
 LINWID, D-Q3). 297 renamed rows have no checked document name: mostly AppleSoft's copies of Monitor and IIe names
@@ -232,11 +232,55 @@ The parts: A, the floating-point package; B1, the shared program and statement m
 variable and string modules; C, the vendors' own copies of the interpreter (AppleSoft and Commodore side by side);
 D, the workspace and build switches; E, AppleSoft's statements and graphics; F, BASIC 4's disk, monitor and string
 code and BASIC 1's patches. Their own questions follow the cross-cutting ones, numbered by part (A-Q1 ...).
+## Cross-cutting decisions
 
-## Cross-cutting questions
+Settled by the owner on 2026-11-23, each as recommended in the question below it. The table follows them.
 
-Each has a recommendation, which the draft table follows, and its alternatives. The owner settles them; the parts'
-own questions below go into more detail.
+- X1. Top level holds the documented entries, the dispatch targets several modules share, the error entries
+  (`SyntaxError`, `ReportError` ...), the shared workspace and the kernal and Monitor entries. The families are scopes:
+  `Statements` (handlers named for their keyword), `Functions`, `Operators`, `Float`, `Strings`, `Variables`,
+  `HighRes`, `Disk` and `Monitor`, opened and continued around the macro calls where the ROM layout cuts a family.
+- X2. A label another routine enters in the middle of a routine is an entry of the routine it sits in
+  (`FindLine::Done`), listed in its `Entry:` section; a separate `.proc` only where the code before it is another
+  routine or a table needs the address.
+- X3. One shared file of layouts: `Variable`, `ArrayHeader`, `StringDescriptor` (`DESCRIPTOR_SIZE`), `ForFrame`
+  (`FOR_FRAME_SIZE`), `GosubFrame`, `OperatorEntry`, `ProgramLine`, `FunctionDefinition`; BASIC 4's string back-link
+  in Commodore's file.
+- X4. Tokens are `TOKEN_<KEYWORD>`, with role names for range bounds (`TOKEN_FIRST_FUNCTION`); error codes are
+  `ERROR_<MESSAGE>`, which are also the message offsets; message labels are `<Name>Message`; precedences are
+  `PRECEDENCE_*` and input modes `INPUT_MODE_*`, each defined once where its table is.
+- X5. Each vendor's names for shared definitions go in one historical-names file per vendor
+  (`AppleSoft.HistoricalNames.asm`, `Commodore.HistoricalNames.asm`), replacing the alias files: a scoped alias per
+  entry (`Commodore::SquareRootOfHalf = Float::SquareRootOfHalf`) with `Inherit:` and the vendor's `Also:`. Where an
+  Apple name and Microsoft's name for different definitions clash in one build, Microsoft's keeps `Also:` and
+  Apple's is in prose.
+- X6. The vendor-only files convert in the same effort, each right after the shared modules it calls.
+- X7. One job, one name in both vendors' files; each build's definition carries that build's documents' names, and a
+  shared definition's vendor-only names go in the vendor's file (X5). Address-generated reconstruction names
+  (LCA5A) are dropped; HV's PATCHn names are kept.
+- X8. The PRs go: the prerequisites (`Also:` in macros, B4's helper, lookups by `Also:` in the debug hosts), the
+  workspace, the math package, the shared program modules, the shared expression and string modules, the vendors'
+  interpreter copies, then AppleSoft's and Commodore's own files.
+- X9. B4's helper resolves either name through `Also:`, the debug hosts use the same lookup, and each moves to the
+  new names in the PR that renames the definition.
+- X10. AppleSoft includes `IIeEquates.asm` and `MonitorEntries.asm`, which grows the entries AppleSoft calls;
+  AppleSoft.Equates keeps only BASIC's workspace.
+- X11. The accumulators keep the field's short terms: `Fac`, `FacExponent`, `FacMantissa1`-`4`, `FacSign`,
+  `FacExtension`, the same for `Arg`, and `ResultSign`.
+- X12. HV1 and HV1R are cited where they give a name, with their origin noted in the bibliography.
+- X13. A statement keeps its keyword, split at the words a reader sees in it: `GoSub`, `GoTo`, `OnErr`, `HColor`,
+  `DOpen`, `DClose`, `DLoad`, `DSave`.
+- X14. The kernal's entries and routines BASIC calls are top level with a `Kernal` prefix (`KernalOpen`); the three
+  vectors shared code calls are `CheckStop`, `GetCharacter` and `CloseAllFiles`.
+- X15. The switches the tests predefine are renamed as drafted, and the tests change in the PR that renames each;
+  the roots may assert that no old name is predefined.
+- X16. The table writes every local by its full path (`Statements::Let::Number`, `Strings::CollectGarbage::NextArray`).
+
+The table was normalized for X13 (6 statement names and their locals) and X16 (143 names given their scope), 2026-11-23.
+
+## The cross-cutting questions, as put
+
+Each had a recommendation and its alternatives; the parts' own questions below go into more detail.
 
 ### X1. Scopes, and what stays top level
 
@@ -427,7 +471,7 @@ AppleSoft.Equates redefines about 90 names that the converted IIeEquates and Mon
 - **Alternatives:**
   - one capital (`Gosub`, `Dopen`);
   - descriptive names (`Statements::DiskOpen`, `Statements::Continue`).
-- The table is normalized once this is settled.
+- Settled as recommended; the table is normalized.
 
 ### X14. The PET operating system's names
 
@@ -459,7 +503,7 @@ The parts wrote a scoped routine's locals two ways: in full (`Float::AlignAndAdd
 the scope (`Let::Number`, `CollectGarbage::NextArray`).
 
 - **Recommendation:** write the full path in the table (as code outside the scope reaches it); the table is
-  normalized once X1 and X13 are settled.
+  normalized (settled as recommended).
 - **Alternative:** the routine's own name only, the scope implied by the routine's row.
 
 ## Where the drafts disagreed
@@ -530,8 +574,8 @@ builds), one checking every citation against the documents. Their findings, as c
 - R8. Stale names after the merge were fixed (CheckBreak, NextStatement, BasicEnd), as were the facts in this log
   (the $F530 byte count, the `.set` split, PRECEDENCE_UNARY on the PET, K4S79's date, ASRM78's title, the
   reconstructions' differing names).
-- R9. Left open for the owner: X15 (renamed switches tests predefine), X16 (how locals are written), and the
-  remaining DROPs that drop a documented name (C-Q8, D-Q3).
+- R9. Raised by the reviews: X15 (renamed switches tests predefine) and X16 (how locals are written), both since
+  settled; and the remaining DROPs that drop a documented name (C-Q8, D-Q3), still open.
 - R10. One row per name per file has three exceptions: parameters of the same name in two macros of one file
   (rows 296/315, 1933/1943, 1956/1972).
 
@@ -567,6 +611,88 @@ The parts' notes list these, among others; each is a comment for the conversion,
   workspace" is Monitor ROM code.
 
 ## Per-part questions
+
+### What the settled decisions answer
+
+The decisions above, the settled rules of [the method](../ConvertingSources.md) and the merge (K1-K12) and review
+(R1-R10) corrections answer most of the parts' questions. The rest still need the owner.
+
+Answered:
+
+| Question | Answered by |
+| --- | --- |
+| A-Q1 | D2 and X5 |
+| A-Q2, A-Q3, A-Q9 | X1 |
+| A-Q4 | X2 |
+| A-Q5 | X11 |
+| A-Q7 | K7 |
+| A-Q10 | X15 (Microsoft's switches renamed); D4 (macros in full words) |
+| B1-Q1 | X2 |
+| B1-Q2 | X3 |
+| B1-Q5 | Dos.md P9 ("range, not block") |
+| B1-Q6 | the method: bugs are documented, not fixed |
+| B1-Q8 | X13 (`GoSub`, `GoTo`) |
+| B1-Q9 | X1 |
+| B1-Q10 | K1 and D4 |
+| B1-Q11 | X9 and X15 |
+| B2-Q1, B2-Q2, B2-Q4, B2-Q5 | X1 (R4 for ANDOP's per-build name) |
+| B2-Q3, B2-Q6 | X2 |
+| B2-Q8 | X5 |
+| B2-Q10 | X4 |
+| B2-Q12 | K7 |
+| C-Q1 | X9 |
+| C-Q3 | X2 and R4 |
+| C-Q5 | X4 |
+| C-Q6 | K2 |
+| C-Q9 | K8 and K9 |
+| C-Q11 | X5 |
+| D-Q1 | X10 |
+| D-Q2 | the corrected glossary (`RandomValue`) |
+| D-Q5 | X14 |
+| D-Q6 | the method: one definition, both names in `Also:`; X4 for the token and error copies |
+| D-Q7 | R6 (Dos.md X7: the Monitor keeps CV) |
+| D-Q8 | X9 |
+| D-Q9 | X3 |
+| E-Q1 | X2 |
+| E-Q2 | X1 (`HighRes`, Monitor decision 18) |
+| E-Q4 | X13 |
+| E-Q5 | the method: shared bytes get scoped aliases |
+| E-Q6 | X1 (top level for what other code reaches) |
+| E-Q9 | the method: documented, not fixed |
+| E-Q10, F-Q12 | K3 |
+| F-Q1 | X13 (`DOpen`, `DClose` ...) |
+| F-Q2, F-Q7 | X1 |
+| F-Q4, F-Q9 | X2 |
+| F-Q6 | the method: every value that means something gets a constant (the bit names to be agreed with the workspace) |
+| F-Q8 | K4, X1 and the method's scoped aliases |
+| F-Q10 | K5 |
+| F-Q11 | K2 and K6 |
+
+Still for the owner:
+
+| Question | What it asks |
+| --- | --- |
+| A-Q6 | Drop AppleSoft's ZSTORD equate and WAIT label, or keep a vendor alias |
+| A-Q8 | Whether the line-number printers stay in `Float` |
+| B1-Q3 | The character reader's template and inner entries (the draft applies `ClassifyCharacter`, R5) |
+| B1-Q4 | The lister as one `.proc Statements::List` |
+| B1-Q7 | Dropping the parameters `newAlias` and `runLabel` |
+| B2-Q7 | `Statements::DimNextArray` and `Statements::LetString`, which are not keywords |
+| B2-Q9 | Which five variants become their own procs under D5 |
+| B2-Q11 | Labels for AppleSoft's fixed jumps at $E000 |
+| C-Q2 | READY and MAIN (`ReadyForCommand`) |
+| C-Q4 | BASIC 4's split ISVAR (`EvaluateVariable`, `EvaluateVariableBody`) |
+| C-Q7 | The wrappers in front of shared statements (`PrepareRun`, `CheckGoStatement`, `Pop`) |
+| C-Q8 | Dropping AppleSoft's unused REDDY and GOTK (a documented name in prose) |
+| C-Q10 | The four renamed macro parameters |
+| D-Q3 | The glossary names still open (SIZE, OLDOV, GRBTOP, GRBPNT, COUNT, INTEGR, CURTOL, LOWTR, LINWID, NCMWID) |
+| D-Q4 | Keeping AppleSoft's unused Microsoft configuration constants |
+| D-Q10 | The kernal bytes BASIC 4's CATALOG reuses |
+| E-Q3 | Splitting out SETHCOL as `HighRes::SetColor` (the TIL clashes themselves follow the method: prose) |
+| E-Q7 | `SetArrayBlock` or `SetArrayRange` (P9) |
+| E-Q8 | Names for the operand bytes read as masks |
+| F-Q3 | Commodore's spellings of DCOPY, DSCRTC, MGO and GTVLCN, to check against K4S79 |
+| F-Q5 | A macro for the disk-command templates' offsets |
 
 ### A: The floating-point package
 Scope of the part: Microsoft's floating-point package (MsBasic.AdditionCore, ArithmeticCore, MovementCore,

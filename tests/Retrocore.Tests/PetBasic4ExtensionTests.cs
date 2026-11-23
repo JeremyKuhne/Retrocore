@@ -19,8 +19,8 @@ public sealed class PetBasic4ExtensionTests
     private const ushort ReturnAddress = 0x5000;
     private const int InputCounter = 0x0700;
     private const int InputBytes = 0x0710;
-    private static readonly string s_pet = Path.Join(AppContext.BaseDirectory, "Inputs", "Pet");
-    private static readonly string s_basic = Path.Join(s_pet, "Basic");
+    private static string PetInputs => Path.Join(BasicNames.Inputs, "Pet");
+    private static string BasicInputs => Path.Join(PetInputs, "Basic");
 
     private static readonly string[] s_files =
     [
@@ -44,12 +44,12 @@ public sealed class PetBasic4ExtensionTests
     {
         AssemblyResult legacy = Legacy(original);
         AssemblyResult native = AssembleExtension(legacy, original ? 0 : 1);
-        int start = checked((int)legacy.Symbols["CALLE"]);
+        int start = checked((int)legacy.Symbol("CALLE"));
         const int end = 0xE000;
 
         start.Should().Be(0xD472);
-        native.Symbols["LASTWR"].Should().Be(start);
-        native.Symbols["EXTENSION_END"].Should().Be(end);
+        native.Symbol("LASTWR").Should().Be(start);
+        native.Symbol("EXTENSION_END").Should().Be(end);
         AssertEmittedSpan(legacy, start, end, exact: false);
         AssertEmittedSpan(native, start, end, exact: true);
         ReadOnlySpan<byte> expected = legacy.Sections[0].Bytes.Span.Slice(start, end - start);
@@ -62,10 +62,9 @@ public sealed class PetBasic4ExtensionTests
             .ToArray();
 
         labels.Should().NotBeEmpty();
-        Dictionary<string, AssemblySymbol> definitions = native.SymbolDefinitions.ToDictionary(symbol => symbol.Name);
         foreach (AssemblySymbol label in labels)
         {
-            AssemblySymbol nativeLabel = definitions.GetValueOrDefault(label.Name)
+            AssemblySymbol nativeLabel = native.FindDefinition(label.Name)
                 ?? throw new AssertFailedException($"The native module does not define legacy label {label.Name}.");
 
             nativeLabel.Value.Should().Be(label.Value, $"{label.Name} must retain its ROM address");
@@ -81,8 +80,10 @@ public sealed class PetBasic4ExtensionTests
                 && (Path.GetFileName(location.Path).Equals("Commodore.Basic4SystemEquates.asm", StringComparison.OrdinalIgnoreCase)
                     || Path.GetFileName(location.Path).Equals("Commodore.Basic4DiskCommands.asm", StringComparison.OrdinalIgnoreCase))))
         {
-            legacy.Symbols.Should().ContainKey(definition.Name);
-            definition.Value.Should().Be(legacy.Symbols[definition.Name], $"{definition.Name} must match the overlay");
+            legacy.TryGetCounterpart(native, definition.Name, out long overlay).Should().BeTrue(
+                $"{definition.Name} must be in the overlay by its name or a historical name");
+
+            definition.Value.Should().Be(overlay, $"{definition.Name} must match the overlay");
         }
     }
 
@@ -99,14 +100,14 @@ public sealed class PetBasic4ExtensionTests
         Dictionary<string, long> symbols = Dependencies(legacy);
         foreach (string name in (string[])["FCERR", "INITAT", "ROMLOC", "STROUT", "SCRTCH"])
         {
-            symbols.Add(name, legacy.Symbols[name]);
+            symbols.Add(name, legacy.Symbol(name));
         }
 
         string source = $"""
             .cpu Mos6502
             .include "Commodore.Platform.asm"
             .include "Commodore.Basic4Extension.asm"
-            .org ${legacy.Symbols["INIT"]:X4}
+            .org ${legacy.Symbol("INIT"):X4}
                 COMMODORE_INITIALIZE 0, 0, 0, 0, 2, 1, 0
                 COMMODORE_MEMORY_PROBE 0, 0, 1, 1, 0, $55
                 COMMODORE_START_PROGRAM 0, 0, 0, 0, SIGNON
@@ -117,10 +118,10 @@ public sealed class PetBasic4ExtensionTests
             """;
 
         AssemblyResult native = Assemble(source, symbols);
-        int start = checked((int)legacy.Symbols["INIT"]);
+        int start = checked((int)legacy.Symbol("INIT"));
         const int end = 0xE000;
-        native.Symbols["LASTWR"].Should().Be(legacy.Symbols["CALLE"]);
-        native.Symbols["COMPOSED_END"].Should().Be(end);
+        native.Symbol("LASTWR").Should().Be(legacy.Symbol("CALLE"));
+        native.Symbol("COMPOSED_END").Should().Be(end);
         AssertEmittedSpan(legacy, start, end, exact: false);
         AssertEmittedSpan(native, start, end, exact: true);
         ReadOnlySpan<byte> expected = legacy.Sections[0].Bytes.Span.Slice(start, end - start);
@@ -130,8 +131,8 @@ public sealed class PetBasic4ExtensionTests
         foreach (AssemblySymbol label in legacy.SymbolDefinitions.Where(
             symbol => !symbol.IsConstant && symbol.Value >= start && symbol.Value < end))
         {
-            native.Symbols.Should().ContainKey(label.Name);
-            native.Symbols[label.Name].Should().Be(label.Value, $"{label.Name} must retain its ROM address");
+            native.SymbolsWithHistoricalNames.Should().ContainKey(label.Name);
+            native.Symbol(label.Name).Should().Be(label.Value, $"{label.Name} must retain its ROM address");
         }
     }
 
@@ -146,7 +147,7 @@ public sealed class PetBasic4ExtensionTests
     {
         AssemblyResult native = AssembleExtension(Legacy(original), original ? 0 : 1);
         DocumentationSet docs = DocumentationSet.Create(
-            s_files.Select(file => Path.Join(s_basic, file))
+            s_files.Select(file => Path.Join(BasicInputs, file))
                 .Select(path => DocumentationParser.Parse(File.ReadAllText(path), path)), native);
 
         foreach (string name in (string[])
@@ -191,7 +192,7 @@ public sealed class PetBasic4ExtensionTests
         AssemblyResult legacy = Legacy(original: false);
         foreach (string name in (string[])["TXTPTR", "CHRGOT", "CQSTAT", "DSDESC"])
         {
-            native.Symbols[name].Should().Be(legacy.Symbols[name]);
+            native.Symbol(name).Should().Be(legacy.Symbol(name));
         }
 
         native.SourceMap.Where(entry => entry.Size > 0).Should().BeEmpty();
@@ -216,7 +217,7 @@ public sealed class PetBasic4ExtensionTests
             """;
 
         AssemblyResult wrongWorkspace = new Assembler.Assembler().Assemble(
-            new AssemblySource(source, Path.Join(s_basic, "Basic4WrongWorkspaceTest.asm")),
+            new AssemblySource(source, Path.Join(BasicInputs, "Basic4WrongWorkspaceTest.asm")),
             new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
             {
                 SourceResolver = new FileAssemblySourceResolver()
@@ -246,11 +247,11 @@ public sealed class PetBasic4ExtensionTests
             """;
 
         AssemblyResult result = new Assembler.Assembler().Assemble(
-            new AssemblySource(source, Path.Join(s_basic, "Basic4WrongTerminalTest.asm")),
+            new AssemblySource(source, Path.Join(BasicInputs, "Basic4WrongTerminalTest.asm")),
             new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
             {
                 SourceResolver = new FileAssemblySourceResolver(),
-                PredefinedSymbols = symbols
+                PredefinedSymbols = BasicNames.WithCurrentNames(symbols)
             });
 
         result.Success.Should().BeFalse();
@@ -293,13 +294,13 @@ public sealed class PetBasic4ExtensionTests
                 legacy.Sections[0].Bytes.Span.CopyTo(bus.Memory);
                 if (useNative)
                 {
-                    int start = checked((int)native.Symbols["CALLE"]);
+                    int start = checked((int)native.Symbol("CALLE"));
                     native.Sections[0].Bytes.Span.Slice(start, 0xE000 - start).CopyTo(bus.Memory.AsSpan(start));
                 }
 
                 InstallCharacterReader(bus, native, legacy);
-                int reader = checked((int)native.Symbols["CHRGET"]);
-                int textPointer = checked((int)native.Symbols["TXTPTR"]);
+                int reader = checked((int)native.Symbol("CHRGET"));
+                int textPointer = checked((int)native.Symbol("TXTPTR"));
                 bus.Memory[textPointer] = 0x00;
                 bus.Memory[textPointer + 1] = 0x06;
                 Convert.FromHexString(text).CopyTo(bus.Memory, 0x0600);
@@ -311,21 +312,21 @@ public sealed class PetBasic4ExtensionTests
                     0x20, (byte)reader, (byte)(reader >> 8), 0x60
                 ];
 
-                getByte.CopyTo(bus.Memory, checked((int)native.Symbols["GETBYT"]));
+                getByte.CopyTo(bus.Memory, checked((int)native.Symbol("GETBYT")));
                 Processor<RecordingBus> cpu = Start(bus, native, "DOSPAR");
-                ushort finish = destination == "RETURN" ? ReturnAddress : checked((ushort)native.Symbols[destination]);
+                ushort finish = destination == "RETURN" ? ReturnAddress : checked((ushort)native.Symbol(destination));
                 RunUntil(cpu, finish, 600);
                 if (destination == "RETURN")
                 {
                     cpu.Registers.Accumulator.Should().Be((byte)flags);
-                    bus.Memory[checked((int)native.Symbols["PRSCHK"])].Should().Be((byte)flags);
-                    bus.Memory[checked((int)native.Symbols["DRIVE1"])].Should().Be((byte)drive1);
-                    bus.Memory[checked((int)native.Symbols["DRIVE2"])].Should().Be((byte)drive2);
-                    bus.Memory[checked((int)native.Symbols["FA"])].Should().Be((byte)device);
+                    bus.Memory[checked((int)native.Symbol("PRSCHK"))].Should().Be((byte)flags);
+                    bus.Memory[checked((int)native.Symbol("DRIVE1"))].Should().Be((byte)drive1);
+                    bus.Memory[checked((int)native.Symbol("DRIVE2"))].Should().Be((byte)drive2);
+                    bus.Memory[checked((int)native.Symbol("FA"))].Should().Be((byte)device);
                 }
                 else if (destination == "ERROR")
                 {
-                    cpu.Registers.X.Should().Be((byte)native.Symbols["ERRFC"]);
+                    cpu.Registers.X.Should().Be((byte)native.Symbol("ERRFC"));
                 }
             }
         }
@@ -357,27 +358,27 @@ public sealed class PetBasic4ExtensionTests
                 legacy.Sections[0].Bytes.Span.CopyTo(bus.Memory);
                 if (useNative)
                 {
-                    int start = checked((int)native.Symbols["CALLE"]);
+                    int start = checked((int)native.Symbol("CALLE"));
                     native.Sections[0].Bytes.Span.Slice(start, 0xE000 - start).CopyTo(bus.Memory.AsSpan(start));
                 }
 
                 InstallCharacterReader(bus, native, legacy);
-                int textPointer = checked((int)native.Symbols["TXTPTR"]);
+                int textPointer = checked((int)native.Symbol("TXTPTR"));
                 bus.Memory[textPointer] = 0x00;
                 bus.Memory[textPointer + 1] = 0x06;
                 Encoding.ASCII.GetBytes(text + "\0").CopyTo(bus.Memory, 0x0600);
                 Processor<RecordingBus> cpu = Start(bus, native, "RECORD");
-                RunUntil(cpu, checked((ushort)native.Symbols[destination]), 10_000);
+                RunUntil(cpu, checked((ushort)native.Symbol(destination)), 10_000);
                 if (destination == "BOBREC")
                 {
-                    bus.Memory[checked((int)native.Symbols["LA"])].Should().Be(1);
-                    bus.Memory[checked((int)native.Symbols["RECPOS"])].Should().Be((byte)position);
-                    int record = checked((int)native.Symbols["POKER"]);
+                    bus.Memory[checked((int)native.Symbol("LA"))].Should().Be(1);
+                    bus.Memory[checked((int)native.Symbol("RECPOS"))].Should().Be((byte)position);
+                    int record = checked((int)native.Symbol("POKER"));
                     (bus.Memory[record] | (bus.Memory[record + 1] << 8)).Should().Be(5);
                 }
                 else if (destination == "ERROR")
                 {
-                    cpu.Registers.X.Should().Be((byte)native.Symbols["ERRFC"]);
+                    cpu.Registers.X.Should().Be((byte)native.Symbol("ERRFC"));
                 }
             }
         }
@@ -416,12 +417,12 @@ public sealed class PetBasic4ExtensionTests
             legacy.Sections[0].Bytes.Span.CopyTo(bus.Memory);
             if (useNative)
             {
-                int start = checked((int)native.Symbols["CALLE"]);
+                int start = checked((int)native.Symbol("CALLE"));
                 native.Sections[0].Bytes.Span.Slice(start, 0xE000 - start).CopyTo(bus.Memory.AsSpan(start));
             }
 
-            bus.Memory[checked((int)native.Symbols["FRMEVL"])] = 0x60;
-            int index = checked((int)native.Symbols["INDEX1"]);
+            bus.Memory[checked((int)native.Symbol("FRMEVL"))] = 0x60;
+            int index = checked((int)native.Symbol("INDEX1"));
             byte[] fetch =
             [
                 0xA9, 0x00, 0x85, (byte)index,
@@ -429,13 +430,13 @@ public sealed class PetBasic4ExtensionTests
                 0xA9, (byte)length, 0x60
             ];
 
-            fetch.CopyTo(bus.Memory, checked((int)native.Symbols["FRESTR"]));
+            fetch.CopyTo(bus.Memory, checked((int)native.Symbol("FRESTR")));
             bus.Memory[0x0600] = replacement ? (byte)'@' : (byte)'A';
-            int flags = checked((int)native.Symbols["PRSCHK"]);
+            int flags = checked((int)native.Symbol("PRSCHK"));
             bus.Memory[flags] = (byte)priorFlags;
             StatusRegister status = StatusRegister.Unused | (duplicate ? 0 : StatusRegister.Zero);
             Processor<RecordingBus> cpu = Start(bus, native, "NEWNAM", status: status);
-            ushort finish = destination == "RETURN" ? ReturnAddress : checked((ushort)native.Symbols[destination]);
+            ushort finish = destination == "RETURN" ? ReturnAddress : checked((ushort)native.Symbol(destination));
             RunUntil(cpu, finish, 60);
             if (destination == "RETURN")
             {
@@ -446,7 +447,7 @@ public sealed class PetBasic4ExtensionTests
             }
             else if (destination == "ERROR")
             {
-                cpu.Registers.X.Should().Be((byte)native.Symbols[errorName]);
+                cpu.Registers.X.Should().Be((byte)native.Symbol(errorName));
             }
         }
     }
@@ -463,23 +464,23 @@ public sealed class PetBasic4ExtensionTests
     {
         AssemblyResult native = AssembleExtension(Legacy(original: false), revised: 1);
         RecordingBus bus = NativeBus(native);
-        int filename = checked((int)native.Symbols["FNADR"]);
+        int filename = checked((int)native.Symbol("FNADR"));
         bus.Memory[filename] = 0x00;
         bus.Memory[filename + 1] = 0x06;
         bus.Memory[0x0600] = (byte)'A';
         bus.Memory[0x0601] = (byte)'B';
-        bus.Memory[checked((int)native.Symbols["FNLEN"])] = 2;
-        bus.Memory[checked((int)native.Symbols["DRIVE1"])] = 1;
-        bus.Memory[checked((int)native.Symbols["LRECL"])] = (byte)recordLength;
-        bus.Memory[checked((int)native.Symbols["SATUS"])] = 0x55;
+        bus.Memory[checked((int)native.Symbol("FNLEN"))] = 2;
+        bus.Memory[checked((int)native.Symbol("DRIVE1"))] = 1;
+        bus.Memory[checked((int)native.Symbol("LRECL"))] = (byte)recordLength;
+        bus.Memory[checked((int)native.Symbol("SATUS"))] = 0x55;
         Processor<RecordingBus> cpu = Start(bus, native, "SENDP", accumulator: 7, y: 2);
         RunUntil(cpu, ReturnAddress, 250);
-        int buffer = checked((int)native.Symbols["TBUFF"]);
+        int buffer = checked((int)native.Symbol("TBUFF"));
         byte[] expectedBytes = Convert.FromHexString(expected);
         bus.Memory.AsSpan(buffer, expectedBytes.Length).ToArray().Should().Equal(expectedBytes);
-        bus.Memory[checked((int)native.Symbols["FNLEN"])].Should().Be((byte)expectedBytes.Length);
+        bus.Memory[checked((int)native.Symbol("FNLEN"))].Should().Be((byte)expectedBytes.Length);
         (bus.Memory[filename] | (bus.Memory[filename + 1] << 8)).Should().Be(buffer);
-        bus.Memory[checked((int)native.Symbols["SATUS"])].Should().Be(0);
+        bus.Memory[checked((int)native.Symbol("SATUS"))].Should().Be(0);
     }
 
     /// <summary>
@@ -494,17 +495,17 @@ public sealed class PetBasic4ExtensionTests
         AssemblyResult native = AssembleExtension(Legacy(original), original ? 0 : 1);
         RecordingBus bus = NativeBus(native);
         byte[] allocation = [0xA2, 0x00, 0xA0, 0x40, 0x60];
-        allocation.CopyTo(bus.Memory, checked((int)native.Symbols["GETSPA"]));
+        allocation.CopyTo(bus.Memory, checked((int)native.Symbol("GETSPA")));
         foreach (string entry in (string[])["TALK", "SECND", "UNTLK"])
         {
-            bus.Memory[checked((int)native.Symbols[entry])] = 0x60;
+            bus.Memory[checked((int)native.Symbol(entry))] = 0x60;
         }
 
         const string response = "00, OK,00,00\r";
-        InstallInput(bus, checked((int)native.Symbols["ACPTR"]), response);
-        int descriptor = checked((int)native.Symbols["DSDESC"]);
-        int status = checked((int)native.Symbols["SATUS"]);
-        int device = checked((int)native.Symbols["FA"]);
+        InstallInput(bus, checked((int)native.Symbol("ACPTR")), response);
+        int descriptor = checked((int)native.Symbol("DSDESC"));
+        int status = checked((int)native.Symbol("SATUS"));
+        int device = checked((int)native.Symbol("FA"));
         bus.Memory[status] = 0x55;
         Processor<RecordingBus> cpu = Start(bus, native, "ERRCHL");
         RunUntil(cpu, ReturnAddress, 600);
@@ -536,8 +537,8 @@ public sealed class PetBasic4ExtensionTests
     {
         AssemblyResult native = AssembleExtension(Legacy(original: false), revised: 1);
         RecordingBus bus = NativeBus(native);
-        int descriptor = checked((int)native.Symbols["DSDESC"]);
-        int status = checked((int)native.Symbols["SATUS"]);
+        int descriptor = checked((int)native.Symbol("DSDESC"));
+        int status = checked((int)native.Symbol("SATUS"));
         bus.Memory[descriptor] = 0;
         bus.Memory[descriptor + 1] = 0x34;
         bus.Memory[descriptor + 2] = 0x12;
@@ -574,10 +575,10 @@ public sealed class PetBasic4ExtensionTests
     {
         AssemblyResult native = AssembleExtension(Legacy(original: false), revised: 1);
         RecordingBus bus = NativeBus(native);
-        InstallInput(bus, checked((int)native.Symbols["BASIN"]), answer);
-        bus.Memory[checked((int)native.Symbols["MSG"])] = 0x60;
-        bus.Memory[checked((int)native.Symbols["CLRCH"])] = 0x60;
-        bus.Memory[checked((int)native.Symbols["TXTPTR"]) + 1] = direct ? (byte)2 : (byte)4;
+        InstallInput(bus, checked((int)native.Symbol("BASIN")), answer);
+        bus.Memory[checked((int)native.Symbol("MSG"))] = 0x60;
+        bus.Memory[checked((int)native.Symbol("CLRCH"))] = 0x60;
+        bus.Memory[checked((int)native.Symbol("TXTPTR")) + 1] = direct ? (byte)2 : (byte)4;
         Processor<RecordingBus> cpu = Start(bus, native, "RUSURE", status: StatusRegister.Unused | StatusRegister.Carry);
         RunUntil(cpu, ReturnAddress, 150);
         cpu.Registers.Status.HasFlag(StatusRegister.Carry).Should().Be(rejected);
@@ -598,11 +599,11 @@ public sealed class PetBasic4ExtensionTests
         AssemblyResult native = AssembleExtension(Legacy(original: false), revised: 1);
         RecordingBus bus = NativeBus(native);
         byte[] entries = Convert.FromHexString(used);
-        entries.CopyTo(bus.Memory, checked((int)native.Symbols["SAT"]));
-        bus.Memory[checked((int)native.Symbols["LDTND"])] = (byte)entries.Length;
+        entries.CopyTo(bus.Memory, checked((int)native.Symbol("SAT")));
+        bus.Memory[checked((int)native.Symbol("LDTND"))] = (byte)entries.Length;
         Processor<RecordingBus> cpu = Start(bus, native, "ENTRY0");
         RunUntil(cpu, ReturnAddress, 100);
-        bus.Memory[checked((int)native.Symbols["SA"])].Should().Be((byte)expected);
+        bus.Memory[checked((int)native.Symbol("SA"))].Should().Be((byte)expected);
         cpu.Registers.Y.Should().Be((byte)expected);
     }
 
@@ -614,8 +615,8 @@ public sealed class PetBasic4ExtensionTests
     {
         AssemblyResult native = AssembleExtension(Legacy(original: false), revised: 1);
         RecordingBus bus = NativeBus(native);
-        bus.Memory[checked((int)native.Symbols["CLRCH"])] = 0x60;
-        int vector = checked((int)native.Symbols["CINV"]);
+        bus.Memory[checked((int)native.Symbol("CLRCH"))] = 0x60;
+        int vector = checked((int)native.Symbol("CINV"));
         bus.Memory[vector] = 0x34;
         bus.Memory[vector + 1] = 0x12;
         byte[] stack = [0x66, 0x55, 0x44, 0xB5, 0x00, 0x40];
@@ -624,22 +625,22 @@ public sealed class PetBasic4ExtensionTests
         {
             Registers = new()
             {
-                ProgramCounter = checked((ushort)native.Symbols["BRKE"]),
+                ProgramCounter = checked((ushort)native.Symbol("BRKE")),
                 StackPointer = 0xF9,
                 Status = StatusRegister.Unused | StatusRegister.DecimalMode | StatusRegister.IRQBDisable
             }
         };
 
-        RunUntil(cpu, checked((ushort)native.Symbols["B5"]), 60);
-        bus.Memory[checked((int)native.Symbols["PCL"])].Should().Be(0xFF);
-        bus.Memory[checked((int)native.Symbols["PCH"])].Should().Be(0x3F);
-        bus.Memory[checked((int)native.Symbols["FLGS"])].Should().Be(0xB5);
-        bus.Memory[checked((int)native.Symbols["ACC"])].Should().Be(0x44);
-        bus.Memory[checked((int)native.Symbols["XR"])].Should().Be(0x55);
-        bus.Memory[checked((int)native.Symbols["YR"])].Should().Be(0x66);
-        bus.Memory[checked((int)native.Symbols["SP"])].Should().Be(0xFF);
-        bus.Memory[checked((int)native.Symbols["INVL"])].Should().Be(0x34);
-        bus.Memory[checked((int)native.Symbols["INVH"])].Should().Be(0x12);
+        RunUntil(cpu, checked((ushort)native.Symbol("B5")), 60);
+        bus.Memory[checked((int)native.Symbol("PCL"))].Should().Be(0xFF);
+        bus.Memory[checked((int)native.Symbol("PCH"))].Should().Be(0x3F);
+        bus.Memory[checked((int)native.Symbol("FLGS"))].Should().Be(0xB5);
+        bus.Memory[checked((int)native.Symbol("ACC"))].Should().Be(0x44);
+        bus.Memory[checked((int)native.Symbol("XR"))].Should().Be(0x55);
+        bus.Memory[checked((int)native.Symbol("YR"))].Should().Be(0x66);
+        bus.Memory[checked((int)native.Symbol("SP"))].Should().Be(0xFF);
+        bus.Memory[checked((int)native.Symbol("INVL"))].Should().Be(0x34);
+        bus.Memory[checked((int)native.Symbol("INVH"))].Should().Be(0x12);
         cpu.Registers.Status.HasFlag(StatusRegister.DecimalMode).Should().BeFalse();
         cpu.Registers.Status.HasFlag(StatusRegister.IRQBDisable).Should().BeFalse();
     }
@@ -654,9 +655,9 @@ public sealed class PetBasic4ExtensionTests
         RecordingBus bus = NativeBus(native);
         Processor<RecordingBus> cpu = Start(bus, native, "SETR");
         RunUntil(cpu, ReturnAddress, 30);
-        int pointer = checked((int)native.Symbols["TMP0"]);
+        int pointer = checked((int)native.Symbol("TMP0"));
         int selected = bus.Memory[pointer] | (bus.Memory[pointer + 1] << 8);
-        selected.Should().Be(checked((int)native.Symbols["FLGS"]));
+        selected.Should().Be(checked((int)native.Symbol("FLGS")));
         cpu.Registers.Accumulator.Should().Be(5);
     }
 
@@ -668,18 +669,18 @@ public sealed class PetBasic4ExtensionTests
     {
         AssemblyResult native = AssembleExtension(Legacy(original: false), revised: 1);
         RecordingBus bus = NativeBus(native);
-        int basin = checked((int)native.Symbols["BASIN"]);
+        int basin = checked((int)native.Symbol("BASIN"));
         byte[] carriageReturn = [0xA9, 0x0D, 0x60];
         carriageReturn.CopyTo(bus.Memory, basin);
-        bus.Memory[checked((int)native.Symbols["SP"])] = 0xE8;
-        bus.Memory[checked((int)native.Symbols["PCH"])] = 0x42;
-        bus.Memory[checked((int)native.Symbols["PCL"])] = 0x11;
-        bus.Memory[checked((int)native.Symbols["FLGS"])] = 0xE9;
-        bus.Memory[checked((int)native.Symbols["ACC"])] = 0x44;
-        bus.Memory[checked((int)native.Symbols["XR"])] = 0x55;
-        bus.Memory[checked((int)native.Symbols["YR"])] = 0x66;
-        bus.Memory[checked((int)native.Symbols["INVL"])] = 0xBC;
-        bus.Memory[checked((int)native.Symbols["INVH"])] = 0x9A;
+        bus.Memory[checked((int)native.Symbol("SP"))] = 0xE8;
+        bus.Memory[checked((int)native.Symbol("PCH"))] = 0x42;
+        bus.Memory[checked((int)native.Symbol("PCL"))] = 0x11;
+        bus.Memory[checked((int)native.Symbol("FLGS"))] = 0xE9;
+        bus.Memory[checked((int)native.Symbol("ACC"))] = 0x44;
+        bus.Memory[checked((int)native.Symbol("XR"))] = 0x55;
+        bus.Memory[checked((int)native.Symbol("YR"))] = 0x66;
+        bus.Memory[checked((int)native.Symbol("INVL"))] = 0xBC;
+        bus.Memory[checked((int)native.Symbol("INVH"))] = 0x9A;
         Processor<RecordingBus> cpu = Start(bus, native, "MGO");
         RunUntil(cpu, 0x4211, 60);
         cpu.Registers.StackPointer.Should().Be(0xE8);
@@ -691,7 +692,7 @@ public sealed class PetBasic4ExtensionTests
         cpu.Registers.Status.HasFlag(StatusRegister.Overflow).Should().BeTrue();
         cpu.Registers.Status.HasFlag(StatusRegister.Negative).Should().BeTrue();
         cpu.Registers.Status.HasFlag(StatusRegister.IRQBDisable).Should().BeFalse();
-        int vector = checked((int)native.Symbols["CINV"]);
+        int vector = checked((int)native.Symbol("CINV"));
         bus.Memory[vector].Should().Be(0xBC);
         bus.Memory[vector + 1].Should().Be(0x9A);
     }
@@ -703,7 +704,7 @@ public sealed class PetBasic4ExtensionTests
     public void MonitorAndDiskEntriesRetainDebuggerSourcePositions()
     {
         AssemblyResult native = AssembleExtension(Legacy(original: false), revised: 1);
-        int start = checked((int)native.Symbols["CALLE"]);
+        int start = checked((int)native.Symbol("CALLE"));
         DebugTestMemory memory = new();
         memory.Set((ushort)start, native.Sections[0].Bytes.Slice(start, 0xE000 - start).ToArray());
         SourceMapModule module = new(native, area: null);
@@ -717,18 +718,18 @@ public sealed class PetBasic4ExtensionTests
 
         foreach ((string name, string file) in entries)
         {
-            ushort address = checked((ushort)native.Symbols[name]);
+            ushort address = checked((ushort)native.Symbol(name));
             DebugPosition position = module.Position(memory, address)
                 ?? throw new AssertFailedException($"{name} has no debugger source position.");
 
             position.Chain[0].Path.Should().EndWith(file);
             module.Entries(position.Chain[0].Path, position.Chain[0].Line).Should().Contain(address);
-            module.Documentation.Find(name).Should().NotBeNull();
+            module.Documentation.FindTopic(name).Should().NotBeNull();
         }
     }
 
     private static AssemblyResult Legacy(bool original) =>
-        PetLegacyBasic.Assemble(s_pet, PetModel.Pet4032, original);
+        PetLegacyBasic.Assemble(PetInputs, PetModel.Pet4032, original);
 
     private static RecordingBus NativeBus(AssemblyResult native)
     {
@@ -739,9 +740,9 @@ public sealed class PetBasic4ExtensionTests
 
     private static void InstallCharacterReader(RecordingBus bus, AssemblyResult native, AssemblyResult legacy)
     {
-        int reader = checked((int)native.Symbols["CHRGET"]);
-        int length = checked((int)(native.Symbols["RNDX"] - reader));
-        int template = checked((int)legacy.Symbols["INITAT"]);
+        int reader = checked((int)native.Symbol("CHRGET"));
+        int length = checked((int)(native.Symbol("RNDX") - reader));
+        int template = checked((int)legacy.Symbol("INITAT"));
         legacy.Sections[0].Bytes.Span.Slice(template, length).CopyTo(bus.Memory.AsSpan(reader));
     }
 
@@ -770,7 +771,7 @@ public sealed class PetBasic4ExtensionTests
         {
             Registers = new()
             {
-                ProgramCounter = checked((ushort)native.Symbols[entry]),
+                ProgramCounter = checked((ushort)native.Symbol(entry)),
                 StackPointer = 0xFD,
                 Accumulator = accumulator,
                 Y = y,
@@ -824,18 +825,18 @@ public sealed class PetBasic4ExtensionTests
             .cpu Mos6502
             .include "Commodore.Equates.asm"
             .include "Commodore.Basic4Extension.asm"
-            .org ${(origin ?? legacy.Symbols["CALLE"]):X4}
+            .org ${(origin ?? legacy.Symbol("CALLE")):X4}
             LASTWR:
                 COMMODORE_BASIC4_EXTENSION {revised}
             EXTENSION_END:
             """;
 
         return new Assembler.Assembler().Assemble(
-            new AssemblySource(source, Path.Join(s_basic, "Basic4ExtensionTest.asm")),
+            new AssemblySource(source, Path.Join(BasicInputs, "Basic4ExtensionTest.asm")),
             new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
             {
                 SourceResolver = new FileAssemblySourceResolver(),
-                PredefinedSymbols = symbols
+                PredefinedSymbols = BasicNames.WithCurrentNames(symbols)
             });
     }
 
@@ -848,7 +849,7 @@ public sealed class PetBasic4ExtensionTests
         ];
 
         Dictionary<string, long> symbols = dependencies.ToDictionary(
-            name => name, name => legacy.Symbols[name], StringComparer.Ordinal);
+            name => name, name => legacy.Symbol(name), StringComparer.Ordinal);
 
         symbols.Add("DISK_STATUS_STRING", 1);
         symbols.Add("LINE_WIDTH_STORAGE", 0);
@@ -859,11 +860,11 @@ public sealed class PetBasic4ExtensionTests
     private static AssemblyResult Assemble(string source, IReadOnlyDictionary<string, long> symbols)
     {
         AssemblyResult result = new Assembler.Assembler().Assemble(
-            new AssemblySource(source, Path.Join(s_basic, "Basic4ExtensionTest.asm")),
+            new AssemblySource(source, Path.Join(BasicInputs, "Basic4ExtensionTest.asm")),
             new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
             {
                 SourceResolver = new FileAssemblySourceResolver(),
-                PredefinedSymbols = symbols
+                PredefinedSymbols = BasicNames.WithCurrentNames(symbols)
             });
 
         return RequireSuccess(result);

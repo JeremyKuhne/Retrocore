@@ -16,7 +16,7 @@ namespace Retrocore.Tests;
 [TestClass]
 public sealed class BasicSharedOperatorTableTests
 {
-    private static readonly string s_inputs = Path.Join(AppContext.BaseDirectory, "Inputs");
+    private static string Inputs => BasicNames.Inputs;
 
     /// <summary>
     ///  AppleSoft uses the shared table, including its Boolean operator entries.
@@ -29,16 +29,16 @@ public sealed class BasicSharedOperatorTableTests
     public void AppleSoftUsesTheSharedTable(Apple2Model model)
     {
         AssemblyResult legacy = SdkModules.AssembleAppleSoft(
-            SdkModules.AppleSoftPath(s_inputs, BasicSourceKind.Macro10),
+            SdkModules.AppleSoftPath(Inputs, BasicSourceKind.Macro10),
             model);
 
-        AssemblyResult native = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(s_inputs), model);
+        AssemblyResult native = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(Inputs), model);
 
         CompareTable(legacy, AssembleTable(legacy, powerBelowNegation: true, highNot: true, andEntry: "OROP1"));
         CompareTable(legacy, native);
-        AssemblySymbol definition = native.SymbolDefinitions.Single(symbol => symbol.Name == "OPTAB");
+        AssemblySymbol definition = native.Definition("OPTAB");
         definition.Location?.Path.Should().EndWith("MsBasic.OperatorTable.asm");
-        DocumentationTopic? topic = new SourceMapModule(native, area: null).Documentation.Find("OPTAB");
+        DocumentationTopic? topic = new SourceMapModule(native, area: null).Documentation.FindTopic("OPTAB");
         topic.Should().NotBeNull();
         topic?.Path.Should().EndWith("MsBasic.OperatorTable.asm");
         topic?.Summary.Should().NotBeNullOrWhiteSpace();
@@ -57,7 +57,7 @@ public sealed class BasicSharedOperatorTableTests
     [DataRow(PetModel.Pet4032, true)]
     public void SharedTableMatchesPet(PetModel model, bool original)
     {
-        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(s_inputs, "Pet"), model, original);
+        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(Inputs, "Pet"), model, original);
         CompareTable(legacy, AssembleTable(legacy, powerBelowNegation: false, highNot: false, andEntry: "ANDOP"));
     }
 
@@ -72,17 +72,17 @@ public sealed class BasicSharedOperatorTableTests
     public void PrecedenceChoicesAreIndependent(bool powerBelowNegation, bool highNot)
     {
         AssemblyResult apple = SdkModules.AssembleAppleSoft(
-            SdkModules.AppleSoftPath(s_inputs, BasicSourceKind.Macro10),
+            SdkModules.AppleSoftPath(Inputs, BasicSourceKind.Macro10),
             Apple2Model.IIeEnhanced);
 
-        AssemblyResult pet = PetLegacyBasic.Assemble(Path.Join(s_inputs, "Pet"), PetModel.Pet2001Basic2);
+        AssemblyResult pet = PetLegacyBasic.Assemble(Path.Join(Inputs, "Pet"), PetModel.Pet2001Basic2);
         AssemblyResult mixed = AssembleTable(pet, powerBelowNegation, highNot, "ANDOP");
 
         ByteAt(mixed, "OPTAB", 12).Should().Be(ByteAt(powerBelowNegation ? apple : pet, "OPTAB", 12));
         ByteAt(mixed, "NEGTAB").Should().Be(ByteAt(powerBelowNegation ? apple : pet, "NEGTAB"));
         ByteAt(mixed, "NOTTAB").Should().Be(ByteAt(highNot ? apple : pet, "NOTTAB"));
-        int andEntry = checked((int)mixed.Symbols["OPTAB"]) + 16;
-        int petAndEntry = checked((int)pet.Symbols["OPTAB"]) + 16;
+        int andEntry = checked((int)mixed.Symbol("OPTAB")) + 16;
+        int petAndEntry = checked((int)pet.Symbol("OPTAB")) + 16;
         mixed.Sections[0].Bytes.Slice(andEntry, 2).ToArray()
             .Should().Equal(pet.Sections[0].Bytes.Slice(petAndEntry, 2).ToArray());
     }
@@ -100,7 +100,7 @@ public sealed class BasicSharedOperatorTableTests
     [DataRow(0, 2, "highNot is 0 or 1.")]
     public void InvalidOperatorSelectorIsRejected(int powerBelowNegation, int highNot, string message)
     {
-        string folder = Path.Join(s_inputs, "Microsoft6502Basic");
+        string folder = Path.Join(Inputs, "Microsoft6502Basic");
         string source = $"""
             .cpu Mos6502
             .include "MsBasic.OperatorTable.asm"
@@ -116,7 +116,7 @@ public sealed class BasicSharedOperatorTableTests
             new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
             {
                 SourceResolver = new FileAssemblySourceResolver(),
-                PredefinedSymbols = dependencies.ToDictionary(name => name, _ => 0xD000L)
+                PredefinedSymbols = BasicNames.WithCurrentNames(dependencies.ToDictionary(name => name, _ => 0xD000L))
             });
 
         result.Success.Should().BeFalse();
@@ -127,8 +127,8 @@ public sealed class BasicSharedOperatorTableTests
     private static AssemblyResult AssembleTable(
         AssemblyResult legacy, bool powerBelowNegation, bool highNot, string andEntry)
     {
-        int start = checked((int)legacy.Symbols["OPTAB"]);
-        string folder = Path.Join(s_inputs, "Microsoft6502Basic");
+        int start = checked((int)legacy.Symbol("OPTAB"));
+        string folder = Path.Join(Inputs, "Microsoft6502Basic");
         string source = $"""
             .cpu Mos6502
             .include "MsBasic.OperatorTable.asm"
@@ -146,7 +146,7 @@ public sealed class BasicSharedOperatorTableTests
         AssemblyOptions options = new(ProcessorVariant.Mos6502, 0, 0x10000)
         {
             SourceResolver = new FileAssemblySourceResolver(),
-            PredefinedSymbols = dependencies.ToDictionary(name => name, name => legacy.Symbols[name])
+            PredefinedSymbols = BasicNames.WithCurrentNames(dependencies.ToDictionary(name => name, name => legacy.Symbol(name)))
         };
 
         AssemblyResult result = new Assembler.Assembler().Assemble(
@@ -156,17 +156,17 @@ public sealed class BasicSharedOperatorTableTests
         result.Success.Should().BeTrue(string.Join(Environment.NewLine, result.Diagnostics.Select(diagnostic =>
             $"{diagnostic.Location?.Path}:{diagnostic.Location?.Line + 1}: {diagnostic.Message}")));
 
-        result.Symbols["OPERATOR_TABLE_END"].Should().Be(legacy.Symbols["RESLST"]);
+        result.Symbol("OPERATOR_TABLE_END").Should().Be(legacy.Symbol("RESLST"));
         return result;
     }
 
     private static void CompareTable(AssemblyResult legacy, AssemblyResult native)
     {
-        int start = checked((int)legacy.Symbols["OPTAB"]);
-        int length = checked((int)(legacy.Symbols["RESLST"] - start));
+        int start = checked((int)legacy.Symbol("OPTAB"));
+        int length = checked((int)(legacy.Symbol("RESLST") - start));
         foreach (string name in (string[])["OPTAB", "NEGTAB", "NOTTAB", "PTDORL"])
         {
-            native.Symbols[name].Should().Be(legacy.Symbols[name], $"{name} must retain its ROM address");
+            native.Symbol(name).Should().Be(legacy.Symbol(name), $"{name} must retain its ROM address");
         }
 
         native.Sections[0].Bytes.Slice(start, length).ToArray()
@@ -174,5 +174,5 @@ public sealed class BasicSharedOperatorTableTests
     }
 
     private static byte ByteAt(AssemblyResult result, string label, int offset = 0) =>
-        result.Sections[0].Bytes.Span[checked((int)result.Symbols[label]) + offset];
+        result.Sections[0].Bytes.Span[checked((int)result.Symbol(label)) + offset];
 }

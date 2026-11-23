@@ -16,7 +16,7 @@ namespace Retrocore.Tests;
 [TestClass]
 public sealed class BasicSharedLineSearchTests
 {
-    private static readonly string s_inputs = Path.Join(AppContext.BaseDirectory, "Inputs");
+    private static string Inputs => BasicNames.Inputs;
 
     /// <summary>
     ///  The shared search retains AppleSoft's bytes and labels for every model.
@@ -29,14 +29,14 @@ public sealed class BasicSharedLineSearchTests
     public void AppleSoftUsesSharedLineSearch(Apple2Model model)
     {
         AssemblyResult legacy = SdkModules.AssembleAppleSoft(
-            SdkModules.AppleSoftPath(s_inputs, BasicSourceKind.Macro10),
+            SdkModules.AppleSoftPath(Inputs, BasicSourceKind.Macro10),
             model);
 
-        AssemblyResult native = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(s_inputs), model);
+        AssemblyResult native = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(Inputs), model);
         AssemblyResult standalone = AssembleShared(legacy);
         CompareRegion(legacy, native);
         CompareRegion(legacy, standalone);
-        standalone.Symbols["LINE_SEARCH_END"].Should().Be(legacy.Symbols["SCRATH"]);
+        standalone.Symbol("LINE_SEARCH_END").Should().Be(legacy.Symbol("SCRATH"));
     }
 
     /// <summary>
@@ -52,10 +52,10 @@ public sealed class BasicSharedLineSearchTests
     [DataRow(PetModel.Pet4032, true)]
     public void SharedLineSearchMatchesPet(PetModel model, bool original)
     {
-        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(s_inputs, "Pet"), model, original);
+        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(Inputs, "Pet"), model, original);
         AssemblyResult native = AssembleShared(legacy);
         CompareRegion(legacy, native);
-        native.Symbols["LINE_SEARCH_END"].Should().Be(legacy.Symbols["SCRATH"]);
+        native.Symbol("LINE_SEARCH_END").Should().Be(legacy.Symbol("SCRATH"));
     }
 
     /// <summary>
@@ -72,13 +72,13 @@ public sealed class BasicSharedLineSearchTests
     [DataRow(40, 0x200C, false)]
     public void SearchFindsTheMatchOrInsertionPoint(int line, int pointer, bool found)
     {
-        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(s_inputs, "Pet"), PetModel.Pet2001Basic2);
+        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(Inputs, "Pet"), PetModel.Pet2001Basic2);
         AssemblyResult native = AssembleShared(legacy);
         RecordingBus bus = new();
         native.Sections[0].Bytes.Span.CopyTo(bus.Memory);
-        int text = checked((int)native.Symbols["TXTTAB"]);
-        int number = checked((int)native.Symbols["LINNUM"]);
-        int result = checked((int)native.Symbols["LOWTR"]);
+        int text = checked((int)native.Symbol("TXTTAB"));
+        int number = checked((int)native.Symbol("LINNUM"));
+        int result = checked((int)native.Symbol("LOWTR"));
         bus.Memory[text] = 0x00;
         bus.Memory[text + 1] = 0x20;
         bus.Memory[number] = (byte)line;
@@ -92,7 +92,7 @@ public sealed class BasicSharedLineSearchTests
         {
             Registers = new()
             {
-                ProgramCounter = checked((ushort)native.Symbols["FNDLIN"]),
+                ProgramCounter = checked((ushort)native.Symbol("FNDLIN")),
                 StackPointer = 0xFD,
                 Status = StatusRegister.Unused
             }
@@ -114,13 +114,13 @@ public sealed class BasicSharedLineSearchTests
     [TestMethod]
     public void LineSearchRetainsDocumentationAndSourcePosition()
     {
-        AssemblyResult native = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(s_inputs), Apple2Model.IIeEnhanced);
-        int start = checked((int)native.Symbols["FNDLIN"]);
-        int end = checked((int)native.Symbols["SCRATH"]);
+        AssemblyResult native = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(Inputs), Apple2Model.IIeEnhanced);
+        int start = checked((int)native.Symbol("FNDLIN"));
+        int end = checked((int)native.Symbol("SCRATH"));
         DebugTestMemory memory = new();
         memory.Set((ushort)start, native.Sections[0].Bytes.Slice(start, end - start).ToArray());
         SourceMapModule module = new(native, area: null);
-        DocumentationTopic topic = module.Documentation.Find("FNDLIN")
+        DocumentationTopic topic = module.Documentation.FindTopic("FNDLIN")
             ?? throw new AssertFailedException("FNDLIN is not documented.");
 
         topic.Kind.Should().Be(DocumentationKind.Routine);
@@ -135,24 +135,24 @@ public sealed class BasicSharedLineSearchTests
 
     private static AssemblyResult AssembleShared(AssemblyResult legacy)
     {
-        string folder = Path.Join(s_inputs, "Microsoft6502Basic");
+        string folder = Path.Join(Inputs, "Microsoft6502Basic");
         string source = $"""
             .cpu Mos6502
-            .org ${legacy.Symbols["FNDLIN"]:X4}
+            .org ${legacy.Symbol("FNDLIN"):X4}
             .include "MsBasic.LineSearch.asm"
             LINE_SEARCH_END:
             """;
 
         string[] dependencies = ["TXTTAB", "LOWTR", "LINNUM"];
         Dictionary<string, long> symbols = dependencies.ToDictionary(
-            name => name, name => legacy.Symbols[name], StringComparer.Ordinal);
+            name => name, name => legacy.Symbol(name), StringComparer.Ordinal);
 
         AssemblyResult native = new Assembler.Assembler().Assemble(
             new AssemblySource(source, Path.Join(folder, "SharedLineSearchTest.asm")),
             new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
             {
                 SourceResolver = new FileAssemblySourceResolver(),
-                PredefinedSymbols = symbols
+                PredefinedSymbols = BasicNames.WithCurrentNames(symbols)
             });
 
         native.Success.Should().BeTrue(string.Join(Environment.NewLine, native.Diagnostics.Select(diagnostic =>
@@ -163,13 +163,13 @@ public sealed class BasicSharedLineSearchTests
 
     private static void CompareRegion(AssemblyResult legacy, AssemblyResult native)
     {
-        int start = checked((int)legacy.Symbols["FNDLIN"]);
-        int end = checked((int)legacy.Symbols["SCRATH"]);
+        int start = checked((int)legacy.Symbol("FNDLIN"));
+        int end = checked((int)legacy.Symbol("SCRATH"));
         foreach (AssemblySymbol label in legacy.SymbolDefinitions.Where(
             symbol => !symbol.IsConstant && symbol.Value >= start && symbol.Value < end))
         {
-            native.Symbols.Should().ContainKey(label.Name);
-            native.Symbols[label.Name].Should().Be(label.Value, $"{label.Name} must retain its ROM address");
+            native.SymbolsWithHistoricalNames.Should().ContainKey(label.Name);
+            native.Symbol(label.Name).Should().Be(label.Value, $"{label.Name} must retain its ROM address");
         }
 
         native.Sections[0].Bytes.Slice(start, end - start).ToArray()

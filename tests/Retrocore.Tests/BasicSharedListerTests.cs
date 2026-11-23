@@ -41,7 +41,7 @@ public sealed class BasicSharedListerTests
     private const ushort ReturnAddress = 0x3000;
     private const int TextAddress = 0x3500;
     private const int ProgramAddress = 0x4000;
-    private static readonly string s_inputs = Path.Join(AppContext.BaseDirectory, "Inputs");
+    private static string Inputs => BasicNames.Inputs;
 
     /// <summary>
     ///  Every AppleSoft model retains its whole image and legacy labels with the shared lister.
@@ -54,12 +54,12 @@ public sealed class BasicSharedListerTests
     public void AppleSoftUsesSharedLister(Apple2Model model)
     {
         AssemblyResult legacy = AppleLegacy(model);
-        AssemblyResult native = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(s_inputs), model);
+        AssemblyResult native = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(Inputs), model);
         AssemblyResult region = AssembleRegion(legacy, AppleOptions(model));
         CompareRegion(legacy, native);
         CompareRegion(legacy, region);
         AssertEmittedSpan(region, Address(legacy, "LIST"), Address(legacy, "FOR"));
-        region.Symbols["LIST_REGION_END"].Should().Be(legacy.Symbols["FOR"]);
+        region.Symbol("LIST_REGION_END").Should().Be(legacy.Symbol("FOR"));
         native.Sections[0].Bytes.ToArray().Should().Equal(legacy.Sections[0].Bytes.ToArray());
         CompareLabels(legacy, native, 0, 0x10000);
         AssertListerDocumentation(new SourceMapModule(region, area: null).Documentation);
@@ -78,11 +78,11 @@ public sealed class BasicSharedListerTests
     [DataRow(PetModel.Pet4032, true)]
     public void SharedListerMatchesPet(PetModel model, bool original)
     {
-        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(s_inputs, "Pet"), model, original);
+        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(Inputs, "Pet"), model, original);
         AssemblyResult region = AssembleRegion(legacy, PetOptions(model));
         CompareRegion(legacy, region);
         AssertEmittedSpan(region, Address(legacy, "LIST"), Address(legacy, "FOR"));
-        region.Symbols["LIST_REGION_END"].Should().Be(legacy.Symbols["FOR"]);
+        region.Symbol("LIST_REGION_END").Should().Be(legacy.Symbol("FOR"));
         AssertListerDocumentation(new SourceMapModule(region, area: null).Documentation);
     }
 
@@ -95,7 +95,7 @@ public sealed class BasicSharedListerTests
     [DataRow(Apple2Model.IIeEnhanced)]
     public void ListerRetainsDocumentationAndSourceChains(Apple2Model model)
     {
-        AssemblyResult native = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(s_inputs), model);
+        AssemblyResult native = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(Inputs), model);
         int start = Address(native, "LIST");
         int end = Address(native, "FOR");
         DebugTestMemory memory = new();
@@ -103,13 +103,13 @@ public sealed class BasicSharedListerTests
         SourceMapModule module = new(native, area: null);
         foreach (string name in (string[])["LIST", "LIST4", "GRODY1", "QPLOP"])
         {
-            DocumentationTopic topic = module.Documentation.Find(name)
+            DocumentationTopic topic = module.Documentation.FindTopic(name)
                 ?? throw new AssertFailedException($"{name} is not documented.");
 
             topic.Kind.Should().Be(DocumentationKind.Routine);
-            topic.Value.Should().Be(native.Symbols[name]);
+            topic.Value.Should().Be(native.Symbol(name));
             topic.Path.Should().EndWith("MsBasic.Lister.asm");
-            ushort address = checked((ushort)native.Symbols[name]);
+            ushort address = checked((ushort)native.Symbol(name));
             DebugPosition position = module.Position(memory, address)
                 ?? throw new AssertFailedException($"{name} has no debugger source position.");
 
@@ -156,12 +156,12 @@ public sealed class BasicSharedListerTests
     [DataRow(PetModel.Pet4032)]
     public void PetListerHandlesQuotesPiAndLongTokenTable(PetModel model)
     {
-        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(s_inputs, "Pet"), model);
+        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(Inputs, "Pet"), model);
         ListerOptions options = PetOptions(model);
         AssemblyResult region = AssembleRegion(legacy, options);
         BasicDialect dialect = PetDialect(model);
         byte print = dialect.Tokenize("PRINT").Single();
-        byte pi = checked((byte)legacy.Symbols["PI"]);
+        byte pi = checked((byte)legacy.Symbol("PI"));
         List<byte> text = [.. dialect.Tokenize("END:FOR:"), (byte)'"', print, (byte)'"', (byte)':', print, (byte)':', pi];
         List<byte> expected = [(byte)' ', .. "END:FOR:\""u8.ToArray(), print, .. "\":PRINT:"u8.ToArray(), pi];
         if (model == PetModel.Pet4032)
@@ -194,7 +194,7 @@ public sealed class BasicSharedListerTests
     [DataRow(PetModel.Pet4032)]
     public void PetQuoteStateDoesNotLeakToTheNextLine(PetModel model)
     {
-        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(s_inputs, "Pet"), model);
+        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(Inputs, "Pet"), model);
         ListerOptions options = PetOptions(model);
         AssemblyResult region = AssembleRegion(legacy, options);
         byte print = PetDialect(model).Tokenize("PRINT").Single();
@@ -232,7 +232,7 @@ public sealed class BasicSharedListerTests
     [DataRow(PetModel.Pet4032)]
     public void PetListBoundsAndErrorFlags(PetModel model)
     {
-        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(s_inputs, "Pet"), model);
+        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(Inputs, "Pet"), model);
         ListerOptions options = PetOptions(model);
         CheckBoundsAndErrors(legacy, AssembleRegion(legacy, options), options, PetDialect(model), apple: false);
     }
@@ -247,7 +247,7 @@ public sealed class BasicSharedListerTests
     [DataRow(PetModel.Pet4032)]
     public void PetMalformedLineRetainsItsOffsetWrapBehavior(PetModel model)
     {
-        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(s_inputs, "Pet"), model);
+        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(Inputs, "Pet"), model);
         ListerOptions options = PetOptions(model);
         AssemblyResult region = AssembleRegion(legacy, options);
         foreach (bool shared in (bool[])[false, true])
@@ -268,7 +268,7 @@ public sealed class BasicSharedListerTests
     [DataRow(true, true)]
     public void QuoteTrackingAndOffsetGuardAreIndependent(bool trackQuotes, bool guardOffset)
     {
-        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(s_inputs, "Pet"), PetModel.Pet2001Basic2);
+        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(Inputs, "Pet"), PetModel.Pet2001Basic2);
         ListerOptions options = PetOptions(PetModel.Pet2001Basic2) with
         {
             TrackQuotes = trackQuotes,
@@ -310,7 +310,7 @@ public sealed class BasicSharedListerTests
         {
             Registers = new()
             {
-                ProgramCounter = checked((ushort)region.Symbols["GRODY1"]),
+                ProgramCounter = checked((ushort)region.Symbol("GRODY1")),
                 Accumulator = 0x5A,
                 X = 0x42,
                 Y = (byte)offset,
@@ -357,7 +357,7 @@ public sealed class BasicSharedListerTests
             foreach ((string command, int[] lines) in cases)
             {
                 ListingRun run = RunCommand(legacy, region, options, dialect, apple, shared, command);
-                run.Exit.Should().Be(checked((ushort)(shared ? region : legacy).Symbols["GRODY"]), command);
+                run.Exit.Should().Be(checked((ushort)(shared ? region : legacy).Symbol("GRODY")), command);
                 run.Numbers.Should().Equal(lines, command);
             }
 
@@ -478,7 +478,7 @@ public sealed class BasicSharedListerTests
         {
             Registers = new()
             {
-                ProgramCounter = checked((ushort)code.Symbols[entry]),
+                ProgramCounter = checked((ushort)code.Symbol(entry)),
                 Accumulator = accumulator,
                 StackPointer = stack,
                 Status = status
@@ -488,7 +488,7 @@ public sealed class BasicSharedListerTests
         List<byte> output = [];
         List<int> numbers = [];
         int? errorReturn = null;
-        ushort finish = checked((ushort)code.Symbols["GRODY"]);
+        ushort finish = checked((ushort)code.Symbol("GRODY"));
         for (int instruction = 0; instruction < 30000; instruction++)
         {
             ushort pc = cpu.Registers.ProgramCounter;
@@ -545,11 +545,11 @@ public sealed class BasicSharedListerTests
 
     private static AssemblyResult AssembleRegion(AssemblyResult legacy, ListerOptions options)
     {
-        string folder = Path.Join(s_inputs, "Microsoft6502Basic");
+        string folder = Path.Join(Inputs, "Microsoft6502Basic");
         string source = $"""
             .cpu Mos6502
             .include "MsBasic.Lister.asm"
-            .org ${legacy.Symbols["LIST"]:X4}
+            .org ${legacy.Symbol("LIST"):X4}
                 LIST_RANGE {(options.CommaRange ? 1 : 0)}, {options.SecondBoundReturn}
                 LIST_LINES {(options.TrackQuotes ? 1 : 0)}, {(options.GuardOffset ? 1 : 0)}, {options.ColumnMode}, {options.LinePrinter}, {(options.FinalCr ? 1 : 0)}, {options.Resume}
                 {(options.TableMode == 2 ? "LIST_TABLE_NEXT" : "")}
@@ -568,14 +568,14 @@ public sealed class BasicSharedListerTests
         if (options.ColumnMode != 0) { dependencies.Add("TRMPOS"); }
         if (options.ColumnMode == 2) { dependencies.Add("CHKCOL"); }
         Dictionary<string, long> symbols = dependencies.ToDictionary(
-            name => name, name => legacy.Symbols[name], StringComparer.Ordinal);
+            name => name, name => legacy.Symbol(name), StringComparer.Ordinal);
 
         AssemblyResult native = new Assembler.Assembler().Assemble(
             new AssemblySource(source, Path.Join(folder, "SharedListerTest.asm")),
             new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
             {
                 SourceResolver = new FileAssemblySourceResolver(),
-                PredefinedSymbols = symbols
+                PredefinedSymbols = BasicNames.WithCurrentNames(symbols)
             });
 
         native.Success.Should().BeTrue(string.Join(Environment.NewLine, native.Diagnostics.Select(diagnostic =>
@@ -614,8 +614,8 @@ public sealed class BasicSharedListerTests
         {
             if (label.Name.StartsWith("__m10_", StringComparison.Ordinal)) { continue; }
 
-            native.Symbols.Should().ContainKey(label.Name);
-            native.Symbols[label.Name].Should().Be(label.Value, $"{label.Name} must retain its ROM address");
+            native.SymbolsWithHistoricalNames.Should().ContainKey(label.Name);
+            native.Symbol(label.Name).Should().Be(label.Value, $"{label.Name} must retain its ROM address");
         }
     }
 
@@ -659,7 +659,7 @@ public sealed class BasicSharedListerTests
     }
 
     private static AssemblyResult AppleLegacy(Apple2Model model) =>
-        SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(s_inputs, BasicSourceKind.Macro10), model);
+        SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(Inputs, BasicSourceKind.Macro10), model);
 
     private static ListerOptions AppleOptions(Apple2Model model)
     {
@@ -699,7 +699,7 @@ public sealed class BasicSharedListerTests
         _ => BasicDialect.PetBasic4
     };
 
-    private static int Address(AssemblyResult result, string name) => checked((int)result.Symbols[name]);
+    private static int Address(AssemblyResult result, string name) => checked((int)result.Symbol(name));
 
     private static int GetWord(byte[] memory, int address) => memory[address] | (memory[address + 1] << 8);
 

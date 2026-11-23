@@ -282,7 +282,7 @@ internal sealed partial class PetDebugTarget : IDebugTarget
         {
             debug.Add(new SourceMapModule(basic, PetMemoryArea.Basic, collapseSingleStatementMacros: true));
             debug.Add(new SourceMapModule(editor, PetMemoryArea.Editor));
-            SetBasicSymbols(basic.Symbols);
+            SetBasicSymbols(basic.SymbolsWithHistoricalNames);
         }
 
         Assembler.AssemblyResult kernal = PetSdkModules.AssembleKernal(sdk, model);

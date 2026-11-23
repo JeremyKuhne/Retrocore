@@ -20,7 +20,7 @@ public sealed class BasicSharedStringFunctionTests
 {
     private const ushort ReturnAddress = 0x2000;
     private const int TextAddress = 0x3000;
-    private static readonly string s_inputs = Path.Join(AppContext.BaseDirectory, "Inputs");
+    private static string Inputs => BasicNames.Inputs;
 
     /// <summary>
     ///  Each AppleSoft model consumes the shared region without changing its image or legacy ROM labels.
@@ -33,15 +33,15 @@ public sealed class BasicSharedStringFunctionTests
     public void AppleSoftUsesSharedStringFunctions(Apple2Model model)
     {
         AssemblyResult legacy = SdkModules.AssembleAppleSoft(
-            SdkModules.AppleSoftPath(s_inputs, BasicSourceKind.Macro10),
+            SdkModules.AppleSoftPath(Inputs, BasicSourceKind.Macro10),
             model);
 
-        AssemblyResult native = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(s_inputs), model);
+        AssemblyResult native = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(Inputs), model);
         AssemblyResult region = AssembleRegion(legacy, rejectZeroSlices: true, indirectReturn: false, sharedLenJump: false, zeroTermViaY: false);
         CompareRegion(legacy, native);
         CompareRegion(legacy, region);
         AssertEmittedSpan(region, Address(legacy, "CHR"), Address(legacy, "GETNUM"));
-        region.Symbols["STRING_FUNCTIONS_END"].Should().Be(legacy.Symbols["GETNUM"]);
+        region.Symbol("STRING_FUNCTIONS_END").Should().Be(legacy.Symbol("GETNUM"));
         native.Sections[0].Bytes.ToArray().Should().Equal(legacy.Sections[0].Bytes.ToArray());
         CompareLabels(legacy, native, 0, 0x10000);
     }
@@ -59,11 +59,11 @@ public sealed class BasicSharedStringFunctionTests
     [DataRow(PetModel.Pet4032, true)]
     public void SharedStringFunctionsMatchPet(PetModel model, bool original)
     {
-        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(s_inputs, "Pet"), model, original);
+        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(Inputs, "Pet"), model, original);
         AssemblyResult region = AssemblePetRegion(legacy, model);
         CompareRegion(legacy, region);
         AssertEmittedSpan(region, Address(legacy, "CHR"), Address(legacy, "GETNUM"));
-        region.Symbols["STRING_FUNCTIONS_END"].Should().Be(legacy.Symbols["GETNUM"]);
+        region.Symbol("STRING_FUNCTIONS_END").Should().Be(legacy.Symbol("GETNUM"));
     }
 
     /// <summary>
@@ -77,7 +77,7 @@ public sealed class BasicSharedStringFunctionTests
     public void AppleSoftStringExpressionsKeepTheirBehavior(Apple2Model model)
     {
         AssemblyResult legacy = SdkModules.AssembleAppleSoft(
-            SdkModules.AppleSoftPath(s_inputs, BasicSourceKind.Macro10),
+            SdkModules.AppleSoftPath(Inputs, BasicSourceKind.Macro10),
             model);
 
         AssemblyResult region = AssembleRegion(legacy, rejectZeroSlices: true, indirectReturn: false, sharedLenJump: false, zeroTermViaY: false);
@@ -100,7 +100,7 @@ public sealed class BasicSharedStringFunctionTests
     [DataRow(PetModel.Pet4032, true)]
     public void PetStringExpressionsKeepEachVersionsBehavior(PetModel model, bool original)
     {
-        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(s_inputs, "Pet"), model, original);
+        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(Inputs, "Pet"), model, original);
         AssemblyResult region = AssemblePetRegion(legacy, model);
         BasicDialect dialect = model switch
         {
@@ -128,7 +128,7 @@ public sealed class BasicSharedStringFunctionTests
     [DataRow(true, true)]
     public void PreambleReturnAndZeroCheckingAreIndependent(bool rejectZeroSlices, bool indirectReturn)
     {
-        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(s_inputs, "Pet"), PetModel.Pet2001Basic2);
+        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(Inputs, "Pet"), PetModel.Pet2001Basic2);
         AssemblyResult region = AssembleRegion(legacy, rejectZeroSlices, indirectReturn, sharedLenJump: false, zeroTermViaY: false);
         CheckPreamble(legacy, region, useShared: true, rejectZeroSlices, indirectReturn);
     }
@@ -139,7 +139,7 @@ public sealed class BasicSharedStringFunctionTests
     [TestMethod]
     public void MidChecksTheArgumentWithAnIndirectPreamble()
     {
-        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(s_inputs, "Pet"), PetModel.Pet2001Basic2);
+        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(Inputs, "Pet"), PetModel.Pet2001Basic2);
         AssemblyResult region = AssembleRegion(legacy, rejectZeroSlices: false, indirectReturn: true, sharedLenJump: true, zeroTermViaY: true);
         foreach ((byte start, string expected) in ((byte, string)[])[(0, ""), (1, "ABCDE"), (2, "BCDE"), (6, "")])
         {
@@ -159,14 +159,14 @@ public sealed class BasicSharedStringFunctionTests
             {
                 Registers = new()
                 {
-                    ProgramCounter = checked((ushort)region.Symbols["MID2"]),
+                    ProgramCounter = checked((ushort)region.Symbol("MID2")),
                     StackPointer = 0xF8,
                     Status = StatusRegister.Unused
                 }
             };
 
-            ushort error = checked((ushort)region.Symbols["GOFUC"]);
-            StepUntil(cpu, 10000, ReturnAddress, error, checked((ushort)legacy.Symbols["ERROR"]));
+            ushort error = checked((ushort)region.Symbol("GOFUC"));
+            StepUntil(cpu, 10000, ReturnAddress, error, checked((ushort)legacy.Symbol("ERROR")));
             cpu.Registers.ProgramCounter.Should().Be(start == 0 ? error : ReturnAddress);
             if (start == 0) { continue; }
 
@@ -189,7 +189,7 @@ public sealed class BasicSharedStringFunctionTests
     [DataRow(true, true)]
     public void NumericStringChoicesAreIndependent(bool sharedLenJump, bool zeroTermViaY)
     {
-        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(s_inputs, "Pet"), PetModel.Pet2001Basic2);
+        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(Inputs, "Pet"), PetModel.Pet2001Basic2);
         AssemblyResult region = AssembleRegion(legacy, rejectZeroSlices: false, indirectReturn: false, sharedLenJump, zeroTermViaY);
         RecordingBus bus = CreateBus(legacy, region, useShared: true);
         PrepareRuntime(bus, legacy);
@@ -199,12 +199,12 @@ public sealed class BasicSharedStringFunctionTests
         SetWord(bus.Memory, Address(legacy, "FACMO"), 0x5000);
         bus.Memory[Address(legacy, "VALTYP")] = 0xFF;
         Processor<RecordingBus> cpu = Start(bus, Address(region, "ASC"));
-        StepUntil(cpu, 10000, ReturnAddress, checked((ushort)legacy.Symbols["FCERR"]));
+        StepUntil(cpu, 10000, ReturnAddress, checked((ushort)legacy.Symbol("FCERR")));
         cpu.Registers.ProgramCounter.Should().Be(ReturnAddress);
         GetIntegerResult(bus, legacy).Should().Be(255);
         if (sharedLenJump)
         {
-            ushort jump = checked((ushort)region.Symbols["LENFLT"]);
+            ushort jump = checked((ushort)region.Symbol("LENFLT"));
             bus.Accesses.Should().Contain(access => access.Address == jump && access.Operation == BusOperation.Read);
         }
 
@@ -217,7 +217,7 @@ public sealed class BasicSharedStringFunctionTests
     [TestMethod]
     public void StringFunctionsRetainDocumentationAndSourceChains()
     {
-        AssemblyResult native = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(s_inputs), Apple2Model.IIeEnhanced);
+        AssemblyResult native = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(Inputs), Apple2Model.IIeEnhanced);
         int start = Address(native, "CHR");
         int end = Address(native, "GETNUM");
         DebugTestMemory memory = new();
@@ -226,18 +226,18 @@ public sealed class BasicSharedStringFunctionTests
 
         foreach (string name in (string[])["CHR", "LEFT", "RIGHT", "MID", "PREAM", "LEN", "LEN1", "ASC", "GTBYTC", "GETBYT", "CONINT", "VAL", "ST2TXT"])
         {
-            DocumentationTopic topic = module.Documentation.Find(name)
+            DocumentationTopic topic = module.Documentation.FindTopic(name)
                 ?? throw new AssertFailedException($"{name} is not documented.");
 
             topic.Kind.Should().Be(DocumentationKind.Routine);
-            topic.Value.Should().Be(native.Symbols[name]);
+            topic.Value.Should().Be(native.Symbol(name));
             topic.Path.Should().EndWith("MsBasic.StringFunctions.asm");
             topic.Summary.Should().NotBeNullOrWhiteSpace();
         }
 
         foreach (string name in (string[])["CHR", "PREAM", "VAL"])
         {
-            ushort address = checked((ushort)native.Symbols[name]);
+            ushort address = checked((ushort)native.Symbol(name));
             DebugPosition position = module.Position(memory, address)
                 ?? throw new AssertFailedException($"{name} has no debugger source position.");
 
@@ -283,13 +283,13 @@ public sealed class BasicSharedStringFunctionTests
                 {
                     Registers = new()
                     {
-                        ProgramCounter = checked((ushort)(useShared ? region : legacy).Symbols["PREAM"]),
+                        ProgramCounter = checked((ushort)(useShared ? region : legacy).Symbol("PREAM")),
                         StackPointer = 0xF8,
                         Status = StatusRegister.Unused
                     }
                 };
 
-                ushort error = checked((ushort)(useShared ? region : legacy).Symbols["GOFUC"]);
+                ushort error = checked((ushort)(useShared ? region : legacy).Symbol("GOFUC"));
                 ushort target = indirectReturn
                     ? (ushort)((savedReturn & 0xFF00) | ((savedReturn + 1) & 0xFF))
                     : (ushort)(savedReturn + 1);
@@ -348,9 +348,9 @@ public sealed class BasicSharedStringFunctionTests
                 text.CopyTo(bus.Memory, TextAddress);
                 SetWord(bus.Memory, Address(legacy, "TXTPTR"), TextAddress);
                 Processor<RecordingBus> cpu = Start(bus, Address(legacy, "FRMEVL"));
-                ushort error = checked((ushort)legacy.Symbols["FCERR"]);
-                ushort syntax = checked((ushort)legacy.Symbols["SNERR"]);
-                ushort otherError = checked((ushort)legacy.Symbols["ERROR"]);
+                ushort error = checked((ushort)legacy.Symbol("FCERR"));
+                ushort syntax = checked((ushort)legacy.Symbol("SNERR"));
+                ushort otherError = checked((ushort)legacy.Symbol("ERROR"));
                 StepUntil(cpu, 30000, ReturnAddress, error, syntax, otherError);
                 cpu.Registers.ProgramCounter.Should().Be(
                     test.Error ? error : ReturnAddress,
@@ -394,7 +394,7 @@ public sealed class BasicSharedStringFunctionTests
             bus.Memory[Address(legacy, "VALTYP")] = 0xFF;
             SetWord(bus.Memory, Address(legacy, "TXTPTR"), callerText);
             Processor<RecordingBus> cpu = Start(bus, Address(useShared ? region : legacy, "VAL"));
-            StepUntil(cpu, 30000, ReturnAddress, checked((ushort)legacy.Symbols["ERROR"]));
+            StepUntil(cpu, 30000, ReturnAddress, checked((ushort)legacy.Symbol("ERROR")));
             cpu.Registers.ProgramCounter.Should().Be(ReturnAddress);
             GetWord(bus.Memory, Address(legacy, "TXTPTR")).Should().Be(callerText);
             bus.Memory[terminator].Should().Be((byte)'9');
@@ -413,7 +413,7 @@ public sealed class BasicSharedStringFunctionTests
             overflow.Memory[Address(legacy, "VALTYP")] = 0xFF;
             SetWord(overflow.Memory, Address(legacy, "TXTPTR"), callerText);
             Processor<RecordingBus> failed = Start(overflow, Address(useShared ? region : legacy, "VAL"));
-            ushort error = checked((ushort)legacy.Symbols["OVERR"]);
+            ushort error = checked((ushort)legacy.Symbol("OVERR"));
             StepUntil(failed, 30000, ReturnAddress, error);
             failed.Registers.ProgramCounter.Should().Be(error);
             overflow.Memory[characters + 5].Should().Be(0);
@@ -439,11 +439,11 @@ public sealed class BasicSharedStringFunctionTests
         bool sharedLenJump,
         bool zeroTermViaY)
     {
-        string folder = Path.Join(s_inputs, "Microsoft6502Basic");
+        string folder = Path.Join(Inputs, "Microsoft6502Basic");
         string source = $"""
             .cpu Mos6502
             .include "MsBasic.StringFunctions.asm"
-            .org ${legacy.Symbols["CHR"]:X4}
+            .org ${legacy.Symbol("CHR"):X4}
                 STRING_FUNCTIONS {(rejectZeroSlices ? 1 : 0)}, {(indirectReturn ? 1 : 0)}, {(sharedLenJump ? 1 : 0)}, {(zeroTermViaY ? 1 : 0)}
             STRING_FUNCTIONS_END:
             """;
@@ -456,14 +456,14 @@ public sealed class BasicSharedStringFunctionTests
         ];
 
         Dictionary<string, long> symbols = dependencies.ToDictionary(
-            name => name, name => legacy.Symbols[name], StringComparer.Ordinal);
+            name => name, name => legacy.Symbol(name), StringComparer.Ordinal);
 
         AssemblyResult native = new Assembler.Assembler().Assemble(
             new AssemblySource(source, Path.Join(folder, "StringFunctionsTest.asm")),
             new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
             {
                 SourceResolver = new FileAssemblySourceResolver(),
-                PredefinedSymbols = symbols
+                PredefinedSymbols = BasicNames.WithCurrentNames(symbols)
             });
 
         native.Success.Should().BeTrue(string.Join(Environment.NewLine, native.Diagnostics.Select(diagnostic =>
@@ -490,8 +490,8 @@ public sealed class BasicSharedStringFunctionTests
                 && symbol.Value >= start
                 && symbol.Value < end))
         {
-            native.Symbols.Should().ContainKey(label.Name);
-            native.Symbols[label.Name].Should().Be(label.Value, $"{label.Name} must retain its ROM address");
+            native.SymbolsWithHistoricalNames.Should().ContainKey(label.Name);
+            native.Symbol(label.Name).Should().Be(label.Value, $"{label.Name} must retain its ROM address");
         }
     }
 
@@ -566,7 +566,7 @@ public sealed class BasicSharedStringFunctionTests
         exits.Should().Contain(cpu.Registers.ProgramCounter, "the routine must reach an expected exit");
     }
 
-    private static int Address(AssemblyResult result, string name) => checked((int)result.Symbols[name]);
+    private static int Address(AssemblyResult result, string name) => checked((int)result.Symbol(name));
 
     private static int GetWord(byte[] memory, int address) => memory[address] | (memory[address + 1] << 8);
 

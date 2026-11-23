@@ -220,7 +220,7 @@ ReadTableByte:
 
 ;; Prints a stored character or expands a token using <RESLST>.
 ;;
-;; The high bit marks the last byte of each reserved word. In direct mode Y wraps after 256 table bytes;
+;; The high bit marks the last byte of each reserved word. In table mode 0 Y wraps after 256 table bytes;
 ;; the two indirect modes can walk farther. Tokens are not checked against the end of the table.
 ;; In: A = nonzero stored byte, Y = offset in the current line, negative = bit 7 of A
 ;; See: <Statements::List::NextLine>, <OUTDO>

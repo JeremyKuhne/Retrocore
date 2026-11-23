@@ -167,9 +167,9 @@ internal static partial class MachineSymbols
     /// <remarks>
     ///  <para>
     ///   The order is otherwise kept, so names of one rank stay in the order given: AppleSoft's <c>TRMPOS</c> and the
-    ///   Monitor's <c>CH</c> both name $24, and <c>CH</c> comes first. Ranks are by file name alone, so a ranked name
-    ///   from a Monitor, firmware or BASIC source, such as PET BASIC's <c>m6502.asm</c> and <c>MsBasic.*.asm</c>,
-    ///   comes before one from the machine's other sources.
+    ///   Monitor's <c>CH</c> both name $24, and <c>CH</c> comes first. Ranks are by module file name, as
+    ///   <see cref="ModuleFile(string)"/> gives it, so a ranked name from a Monitor, firmware or BASIC source, such
+    ///   as PET BASIC's <c>m6502.asm</c> and <c>MsBasic.*.asm</c>, comes before one from the machine's other sources.
     ///  </para>
     /// </remarks>
     /// <param name="names">

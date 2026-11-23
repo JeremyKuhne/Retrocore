@@ -431,7 +431,7 @@ try {
     at = "naming RAM by the Monitor's equates";
     const named = new Map((await request("retro/memory/labels", { memoryReference: "0x0000" })).labels.map(label => [label.address, label.name]));
     assert.equal(named.get(0x24), "CH");
-    // The program's own constants name an address before the SDK's: its ROW, not the Monitor's CV.
+    // The program's own constants name an address before the SDK's: its ROW, not the firmware's CV.
     assert.equal(named.get(0x25), "ROW");
     assert.equal(named.get(0x28), "BASL");
     assert.equal(named.get(0xC000), "KBD");

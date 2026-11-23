@@ -116,8 +116,13 @@ public sealed partial class Assembler
             project.Statements.Add(node);
         }
 
-        // A source without preprocessing directives has no conditionals: all of it is assembled.
-        project.SkippedLines = AssemblySkippedLines.Whole(source.Path, nextLine);
+        // A source without preprocessing directives has no conditionals: all of it is assembled, but for the lines
+        // that didn't parse.
+        project.SkippedLines = AssemblySkippedLines.Whole(
+            source.Path,
+            nextLine,
+            diagnostics?.Select(diagnostic => diagnostic.Location?.Line ?? -1).Where(line => line >= 0).ToArray());
+
         return new(project, diagnostics?.ToArray() ?? []);
     }
 

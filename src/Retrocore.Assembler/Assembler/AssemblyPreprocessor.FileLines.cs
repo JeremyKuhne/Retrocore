@@ -28,9 +28,19 @@ internal sealed partial class AssemblyPreprocessor
         internal int[] Visited { get; } = Filled(count, -1);
 
         /// <summary>
+        ///  Gets, for each line, whether a macro expansion reached it: a body line, which a later expansion could take.
+        /// </summary>
+        internal bool[] Expanded { get; } = new bool[count];
+
+        /// <summary>
         ///  Gets whether a line no pass took may still have been assembled.
         /// </summary>
         internal bool Opaque { get; } = opaque;
+
+        /// <summary>
+        ///  Gets or sets whether the file was included, so that a later inclusion could take what one skipped.
+        /// </summary>
+        internal bool Included { get; set; }
 
         private static int[] Filled(int count, int value)
         {

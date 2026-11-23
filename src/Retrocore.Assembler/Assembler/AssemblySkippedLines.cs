@@ -13,12 +13,14 @@ namespace Retrocore.Assembler;
 ///  <para>
 ///   A line is assembled when the assembly took it in any pass over it: a file included twice, in one place where an
 ///   <c>.if</c> takes a branch and another where it skips it, has that branch assembled. A conditional directive's
-///   own line is assembled when the branch around it is, except that one carrying a label, such as <c>Done: .endif</c>,
-///   is assembled when the label is defined: when the branch it closes was taken. Each expansion of a macro is a pass over its body, so a
-///   body line is assembled when some expansion took it: a branch of an <c>.if</c> in the body that no expansion
-///   took is skipped, as is the body of a macro never invoked, while its <c>.macro</c> and <c>.endmacro</c> lines go
-///   with the definition. A <c>.repeat</c>'s body is likewise assembled when some iteration took it, so a body
-///   repeated no times is skipped.
+///   own line is assembled when the branch around it is, except that one carrying a label, such as
+///   <c>Done: .endif</c>, is assembled when the label is defined: when the branch it closes was taken.
+///  </para>
+///  <para>
+///   Each expansion of a macro is a pass over its body, so a body line is assembled when some expansion took it: a
+///   branch of an <c>.if</c> in the body that no expansion took is skipped, as is the body of a macro never invoked,
+///   while its <c>.macro</c> and <c>.endmacro</c> lines go with the definition. A <c>.repeat</c>'s body is likewise
+///   assembled when some iteration took it, so a body repeated no times is skipped.
 ///  </para>
 ///  <para>
 ///   A file the assembly never opened, such as one only a skipped branch includes, has no entry: nothing says what
@@ -26,13 +28,17 @@ namespace Retrocore.Assembler;
 ///  </para>
 ///  <para>
 ///   Branches are chosen while sources are expanded, before code is laid out, so an error found later (an undefined
-///   symbol, a branch out of range) leaves the report exact. After an error found while expanding, a later branch
-///   may have been chosen from a definition the error lost, or never reached: every line decided from the first such
-///   error on is undecided, and so is every line the assembly didn't reach; an expansion stopped at its line limit
-///   leaves every line it did not assemble undecided. A line an earlier pass skipped is still reported skipped after
-///   a later error, which assumes the error did not cut short a pass that would have assembled it. A line of a
-///   MACRO-10 source that produced no statement is undecided too, error or not: its conditionals are expanded with
-///   the rest of its text and not reported; when that expansion reports an error, every line of the source is.
+///   symbol, a branch out of range) leaves the report exact. An error found while expanding, a line that doesn't
+///   parse included, may lose a definition a later branch depends on: every line decided from the first such error
+///   on is undecided, and so is every line the assembly didn't reach. A line skipped before the error stays skipped
+///   only in a root source outside a macro's body; in an included file or a body, the error may have prevented a
+///   later inclusion or expansion that would assemble it, so it is undecided. An expansion stopped at its line limit
+///   leaves every line it did not assemble undecided.
+///  </para>
+///  <para>
+///   A MACRO-10 source's conditionals are expanded with the rest of its text and not reported, so a line of one is
+///   assembled when it produced a statement and undecided otherwise, error or not; when its expansion reports an
+///   error, every line of it is undecided.
 ///  </para>
 /// </remarks>
 public sealed class AssemblySkippedLines
@@ -65,7 +71,7 @@ public sealed class AssemblySkippedLines
 
     /// <summary>
     ///  Gets, for each file the assembly opened by full path, the runs of lines it skipped, in line order; a file
-    ///  it skipped nothing of has none.
+    ///  it skipped nothing of has an empty list.
     /// </summary>
     public IReadOnlyDictionary<string, IReadOnlyList<AssemblyLineRange>> Skipped { get; }
 
@@ -103,9 +109,32 @@ public sealed class AssemblySkippedLines
     public bool? IsAssembled(string path, int line)
     {
         ArgumentNullException.ThrowIfNull(path);
+        return State(path, line, out _);
+    }
+
+    /// <summary>
+    ///  Gets whether a line is in the build: whether it was assembled, false in a file the assembly never opened
+    ///  when the report is complete, and null when that can't be told.
+    /// </summary>
+    /// <param name="path">The file.</param>
+    /// <param name="line">The zero-based line.</param>
+    /// <returns>Whether the line is in the build, or null.</returns>
+    internal bool? InBuild(string path, int line)
+    {
+        bool? assembled = State(path, line, out bool opened);
+
+        // With an error, the file may be one the assembly would have opened but refused or never reached.
+        return opened ? assembled : IsComplete ? false : null;
+    }
+
+    private bool? State(string path, int line, out bool opened)
+    {
+        opened = false;
         if (path.Length == 0) { return null; }
         string full = FullPath(path);
-        if (!_lineCounts.TryGetValue(full, out int count) || line < 0 || line >= count) { return null; }
+        if (!_lineCounts.TryGetValue(full, out int count)) { return null; }
+        opened = true;
+        if (line < 0 || line >= count) { return null; }
         bool undecided = Undecided.TryGetValue(full, out IReadOnlyList<AssemblyLineRange>? runs) && In(runs, line);
         return undecided ? null : !In(Skipped[full], line);
     }
@@ -157,22 +186,30 @@ public sealed class AssemblySkippedLines
     }
 
     /// <summary>
-    ///  Creates the report of files that had no conditionals, each assembled whole.
+    ///  Creates the report of a source that had no conditionals, assembled whole but for the lines that didn't parse.
     /// </summary>
     /// <param name="path">The file's path.</param>
     /// <param name="lineCount">Its line count.</param>
+    /// <param name="errors">The zero-based lines that didn't parse, in order, or null.</param>
     /// <returns>The report.</returns>
-    internal static AssemblySkippedLines Whole(string path, int lineCount)
+    internal static AssemblySkippedLines Whole(string path, int lineCount, IReadOnlyList<int>? errors)
     {
         Dictionary<string, int> counts = [with(s_paths)];
         Dictionary<string, AssemblyLineRange[]> skipped = [with(s_paths)];
+        Dictionary<string, AssemblyLineRange[]> undecided = [with(s_paths)];
         if (path.Length != 0)
         {
             string full = FullPath(path);
             counts[full] = lineCount;
             skipped[full] = [];
+            if (errors is { Count: > 0 })
+            {
+                AssemblyLineRange[] runs = new AssemblyLineRange[errors.Count];
+                for (int index = 0; index < runs.Length; index++) { runs[index] = new(errors[index], 1); }
+                undecided[full] = runs;
+            }
         }
 
-        return new(counts, skipped, [with(s_paths)]);
+        return new(counts, skipped, undecided);
     }
 }

@@ -89,13 +89,15 @@ Rules:
   `Keeps:` is checked in the Model I's Level II and not in the Model III's. Where the documentation comes from
   an assembly of the source (the lint, the editor, the generated reference), the assembler says which lines it
   skipped, so a branch's sections are the build's when the line they document was assembled, for any kind of
-  definition, exactly as the assembler chose: an `.ifdef` of a macro defined after it is not taken, and a file the
-  assembly never opened has nothing in the build. The editor
-  trusts that while the source has errors too, up to the first error found while expanding the source; an error
-  found only once code is laid out, such as an undefined name, leaves it whole. Past an expansion error, and for
-  documentation from a debug file, which has no source, the condition is evaluated from the build's symbols and
-  the macros the files define. A condition that can't be evaluated, such as one on a symbol the build lacks,
-  applies. The tools label sections by model or condition.
+  definition, as the assembler chose: an `.ifdef` of a macro defined after it is not taken, and a file the
+  assembly never opened has nothing in the build. Only sections that differ between branches depend on the
+  build; those every branch shares, and a definition documented once, apply to every build. The editor trusts
+  the assembler's answer while the source has errors too, up to the first error found while expanding the source
+  (a line that doesn't parse counts); an error found only once code is laid out, such as an undefined name, leaves
+  it whole. Past an expansion error, for a MACRO-10 line that made no statement, and for documentation from a
+  debug file, which has no source, the condition is evaluated from the build's symbols and the macros the files
+  define. A condition that can't be evaluated, such as one on a symbol the build lacks, applies. The tools label
+  sections by model or condition.
 - **MACRO-10 sources** follow the same rules. Overlay markers (`;@REPLACE`, `;@END`) are plain comments and
   never part of a documentation comment. Microsoft's `m6502.asm` is pinned and can't gain `;;` lines, so its
   routines are documented from the overlay (an `;@INSERT BEFORE` block holding the `;;` comment) or with

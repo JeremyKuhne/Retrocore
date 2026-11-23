@@ -321,7 +321,7 @@ internal sealed partial class AssemblyPreprocessor
             lines.Add(new(line, new(source.Path, number++, expandedFrom: parent), dialect));
         }
 
-        OpenLines(source.Path, number);
+        OpenLines(source.Path, number, included: parent is not null);
 
         // As in ca65, conditionals are balanced per file: an include cannot close its includer's block.
         int floor = _conditions.Count;
@@ -471,9 +471,9 @@ internal sealed partial class AssemblyPreprocessor
                 IReadOnlyList<Line>? body = Capture(lines, ref index, ".MACRO", ".ENDMACRO", original.Location);
 
                 // The body's lines are marked by the expansions that take them; the closing line is the definition's.
-                if (body is not null) { MarkLine(lines[index].Location, assembled: true); }
                 if (body is not null)
                 {
+                    MarkLine(lines[index].Location, assembled: true);
                     DefineMacro(operand, body, original.Location, substitutions, frame);
                     if (original.Dialect == AssemblyDialect.Merlin)
                     {
@@ -501,11 +501,9 @@ internal sealed partial class AssemblyPreprocessor
                 IReadOnlyList<Line>? body = Capture(lines, ref index, ".REPEAT", ".ENDREPEAT", original.Location);
 
                 // The body's lines are marked by the iterations that take them; the closing line is the block's.
-                if (body is not null) { MarkLine(lines[index].Location, assembled: true); }
-                if (body is not null && Repeat(original, body, substitutions, includeDepth, macroDepth, frame))
-                {
-                    return true;
-                }
+                if (body is null) { continue; }
+                MarkLine(lines[index].Location, assembled: true);
+                if (Repeat(original, body, substitutions, includeDepth, macroDepth, frame)) { return true; }
 
                 continue;
             }

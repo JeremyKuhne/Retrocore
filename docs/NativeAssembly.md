@@ -674,6 +674,17 @@ The CPU tests follow the latest `.cpu` before them, or the host's CPU before the
 A condition's value must be known at that point in the source: constants and variables count, labels and `*`
 do not. Inactive blocks are skipped without being read, and every file closes the conditionals it opens.
 
+```asm
+Model = 2
+.if Model = 1
+        nop
+.elseif Model = 2
+        brk
+.else
+        rts
+.endif
+```
+
 The assembly reports the lines it skipped, per file it opened (`AssemblyResult.SkippedLines`, also on a failed
 result and on `AssemblyParseResult`), which the documentation tools and the editor use to know which branch is in
 the build:
@@ -689,21 +700,13 @@ the build:
   go with the definition. A `.repeat` body is likewise assembled where an iteration took it, so one repeated no
   times is skipped.
 - Branches are chosen while the source is expanded, so an error found once code is laid out (an undefined name, a
-  branch out of range) leaves the report whole. After an error found while expanding, every line decided from
-  that error on, or never reached, is undecided rather than skipped; so is every line not assembled when expansion
-  stops at its line limit. So are the lines of a MACRO-10 source that produced no statement, and every line of one
-  whose expansion reported an error.
-
-```asm
-Model = 2
-.if Model = 1
-        nop
-.elseif Model = 2
-        brk
-.else
-        rts
-.endif
-```
+  branch out of range) leaves the report whole. After an error found while expanding (a line that doesn't parse
+  counts), every line decided from that error on, or never reached, is undecided rather than skipped. A line
+  skipped before the error stays skipped only in a root source outside a macro's body: the error may have
+  prevented a later inclusion or expansion that would take it. Every line not assembled when expansion stops at
+  its line limit is undecided too.
+- A MACRO-10 source's conditionals are expanded with the rest of its text, so its lines that produced no statement
+  are undecided, and every line of one whose expansion reported an error.
 
 ## Repeats
 

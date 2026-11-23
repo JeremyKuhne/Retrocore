@@ -249,6 +249,57 @@ public partial class AssemblyPreprocessorTests
     }
 
     /// <summary>
+    ///  After an error, a line an included file or a macro's body skipped is undecided, not skipped: the error may
+    ///  have prevented a later inclusion or expansion that would take it. A root source's own skips before the error
+    ///  stand.
+    /// </summary>
+    [TestMethod]
+    public void SkipsInIncludedFilesAndBodiesBeforeAnErrorAreUndecided()
+    {
+        Resolver resolver = new();
+        resolver.Add("part.inc", """
+            .ifdef Wide
+            .byte 1
+            .endif
+            """);
+
+        AssemblyResult result = Assemble("""
+            .macro Pick wide
+            .if wide
+            .byte 2
+            .endif
+            .endmacro
+            .if 0
+            .byte 3
+            .endif
+            .include "part.inc"
+            Pick 0
+            .include "missing.inc"
+            Pick 1
+            """, resolver);
+
+        result.Success.Should().BeFalse();
+        AssemblySkippedLines skipped = Required(result.SkippedLines);
+        skipped.IsAssembled("main.asm", 6).Should().BeFalse("the root's own skip came before the error");
+        skipped.IsAssembled("part.inc", 1).Should().BeNull("a later inclusion could take it");
+        skipped.IsAssembled("main.asm", 2).Should().BeNull("a later expansion could take it");
+    }
+
+    /// <summary>
+    ///  A line the direct native parse rejected is undecided; the rest of a source without conditionals is assembled.
+    /// </summary>
+    [TestMethod]
+    public void LinesTheDirectParseRejectedAreUndecided()
+    {
+        AssemblyParseResult parsed = NativeAssembler.Parse(new AssemblySource("nop\n%% bad\nnop", "main.asm"));
+        parsed.Success.Should().BeFalse();
+        AssemblySkippedLines skipped = Required(parsed.SkippedLines);
+        skipped.IsAssembled("main.asm", 0).Should().BeTrue();
+        skipped.IsAssembled("main.asm", 1).Should().BeNull();
+        skipped.IsAssembled("main.asm", 2).Should().BeTrue();
+    }
+
+    /// <summary>
     ///  A source without preprocessing directives, parsed without the preprocessor, is assembled whole; the parse
     ///  reports the same as the assembly.
     /// </summary>

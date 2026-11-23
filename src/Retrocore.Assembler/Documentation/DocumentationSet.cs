@@ -289,17 +289,21 @@ public sealed class DocumentationSet
     /// <returns>Whether the section's branch is the one assembled.</returns>
     /// <remarks>
     ///  <para>
-    ///   When the set was created from an assembly, the assembly answers it exactly for every kind of topic: the
-    ///   branch is in the build when the assembly assembled the line the section's comment documents, and not when
-    ///   the assembly never opened its file (see
-    ///   <see cref="AssemblyResult.SkippedLines"/>), as the assembler chose it, with the macros defined before that
-    ///   point and the constants as they were there.
+    ///   Only a section that differs between branches has a condition; one every branch shares, or the sections of a
+    ///   definition documented once, are in every build.
     ///  </para>
     ///  <para>
-    ///   Without that report (documentation from a debug file, which has no source) or for a line it leaves
-    ///   undecided (after an error in expansion), the section's condition is
-    ///   evaluated from the build's symbols and every macro the files define, which can differ from the assembler's
-    ///   view where a macro is defined after the <c>.ifdef</c> that tests it or in a branch not taken.
+    ///   When the set was created from an assembly, the assembly answers it for every kind of topic: the branch is in
+    ///   the build when the assembly assembled the line the section's comment documents, as the assembler chose it
+    ///   with the macros defined before that point and the constants as they were there (see
+    ///   <see cref="AssemblyResult.SkippedLines"/>). A file the assembly never opened is not in the build.
+    ///  </para>
+    ///  <para>
+    ///   Without that report (documentation from a debug file, which has no source), for a line it leaves undecided
+    ///   (after an error in expansion, or a MACRO-10 line that made no statement), or for a file not opened by an
+    ///   assembly with errors, the section's condition is evaluated from the build's symbols and every macro the
+    ///   files define, which can differ from the assembler's view where a macro is defined after the
+    ///   <c>.ifdef</c> that tests it or in a branch not taken.
     ///  </para>
     /// </remarks>
     public bool InBuild(DocumentationTopic topic, DocumentationSection section)
@@ -311,7 +315,7 @@ public sealed class DocumentationSet
         }
 
         // A file the assembly never opened, such as one only a branch it skipped includes, has nothing in the build.
-        bool? assembled = skipped.Opened(path) ? skipped.IsAssembled(path, section.OriginLine) : false;
+        bool? assembled = skipped.InBuild(path, section.OriginLine);
         return assembled ?? DocumentationConditions.InBuild(section.Condition, _symbols, IsDefined);
     }
 

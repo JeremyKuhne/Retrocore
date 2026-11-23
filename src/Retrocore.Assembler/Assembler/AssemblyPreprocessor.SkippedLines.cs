@@ -25,10 +25,16 @@ internal sealed partial class AssemblyPreprocessor
     /// <param name="path">The file's path.</param>
     /// <param name="count">Its line count.</param>
     /// <param name="opaque">Whether lines no pass took may still be assembled.</param>
-    private void OpenLines(string path, int count, bool opaque = false)
+    /// <param name="included">Whether an <c>.include</c> opened it, rather than its being a root source.</param>
+    private void OpenLines(string path, int count, bool opaque = false, bool included = false)
     {
-        if (path.Length == 0 || _fileLines.ContainsKey(path)) { return; }
-        _fileLines[path] = new(count, opaque);
+        if (path.Length == 0) { return; }
+        if (!_fileLines.TryGetValue(path, out FileLines? lines))
+        {
+            _fileLines[path] = lines = new(count, opaque);
+        }
+
+        lines.Included |= included;
     }
 
     /// <summary>
@@ -60,6 +66,7 @@ internal sealed partial class AssemblyPreprocessor
         if (_marked is not { } lines || (uint)location.Line >= (uint)lines.Visited.Length) { return; }
         int line = location.Line;
         lines.Visited[line] = _visited;
+        if (location.IsMacroExpansion) { lines.Expanded[line] = true; }
         if (assembled && lines.Assembled[line] == int.MaxValue) { lines.Assembled[line] = _visited; }
     }
 
@@ -104,8 +111,16 @@ internal sealed partial class AssemblyPreprocessor
                 // times. With one, only a line every pass reached before the error is known to be.
                 else
                 {
-                    // A stopped expansion cut short passes that might have assembled a line an earlier one skipped.
-                    bool reached = !_stopped && lines.Visited[line] >= 0 && lines.Visited[line] < trusted;
+                    // After an error, only a line no later pass could reach is known to be skipped: one of a root
+                    // source, outside a macro's body, before the error. An error may have chosen against a later
+                    // inclusion or expansion that would take a line an earlier one skipped, or a stopped expansion
+                    // cut it short.
+                    bool reached = !_stopped
+                        && !lines.Included
+                        && !lines.Expanded[line]
+                        && lines.Visited[line] >= 0
+                        && lines.Visited[line] < trusted;
+
                     here = !errors || reached ? LineState.Skipped : LineState.Undecided;
                 }
 

@@ -440,41 +440,45 @@ public sealed partial class HistoricalNameTests
     }
 
     /// <summary>
-    ///  A file the assembly never opened has nothing in its build: a definition documented in it under a condition
-    ///  doesn't give its old names to this build, though its condition text would hold.
+    ///  A file the assembly never opened has nothing in its build: a definition of any kind documented in it under a
+    ///  condition is not this build's, though its condition text would hold, also after an error found once code is
+    ///  laid out. After an error in expansion the assembly may have refused or never reached the file, so the
+    ///  condition decides.
     /// </summary>
     [TestMethod]
     public void SectionsOfFilesTheAssemblyNeverOpenedArentInTheBuild()
     {
-        string program = """
-            ;; Reads a key.
-            ;; Also: OLDKEY (TEST)
-            ReadKey:
-                rts
-            """;
-
         string unopened = """
             .ifndef WIDE
-            ;; Reads a key slowly.
-            ;; Also: OLDKEY (TEST)
-            SlowKey:
-                rts
+            ;; A screen cell.
+            ;; Keeps: X
+            .struct Cell
+            Left .byte
+            .endstruct
             .else
-            ;; Reads a key slowly.
-            SlowKey:
-                rts
+            ;; A screen cell.
+            ;; Keeps: Y
+            .struct Cell
+            Only .byte
+            .endstruct
             .endif
             """;
 
-        DocumentationSet set = DocumentationSet.Create(
-            [DocumentationParser.Parse(program, "test.asm"), DocumentationParser.Parse(unopened, "unopened.asm")],
-            Assemble(program));
+        foreach ((string program, bool inBuild) in ((string, bool)[])[
+            ("Start:\n    rts\n", false),
+            ("Start:\n    jmp Nowhere\n", false),
+            ("Start:\n    .bogus\n", true)
+        ])
+        {
+            DocumentationSet set = DocumentationSet.Create(
+                [DocumentationParser.Parse(program, "test.asm"), DocumentationParser.Parse(unopened, "unopened.asm")],
+                Assemble(program));
 
-        DocumentationTopic slow = Required(set.Find("SlowKey"));
-        DocumentationSection also = slow.Sections.Single(section => section.Name == "Also");
-        also.Condition.Should().NotBeNull();
-        set.Gives(slow, "OLDKEY", thisBuild: true).Should().BeFalse();
-        set.FindAlso("OLDKEY", thisBuild: true).Should().ContainSingle().Which.Name.Should().Be("ReadKey");
+            DocumentationTopic cell = Required(set.Find("Cell"));
+            DocumentationSection keeps = cell.Sections.First(section => section.Name == "Keeps" && section.Text == "X");
+            keeps.Condition.Should().NotBeNull();
+            set.InBuild(cell, keeps).Should().Be(inBuild, program);
+        }
     }
 
     /// <summary>

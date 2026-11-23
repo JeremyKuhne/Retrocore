@@ -444,11 +444,16 @@ public partial class AssemblyPreprocessorTests
     [DataRow(AssemblyDialect.Native, ".if 0\n.elseif .definedmacro(1+2)\n.byte 1\n.else\n.byte 2\n.endif", 1, ".definedmacro requires one macro name.")]
     [DataRow(AssemblyDialect.Native, ".ifdef .definedmacro(1+2)\n.byte 1\n.endif", 0, ".definedmacro requires one macro name.")]
     [DataRow(AssemblyDialect.Native, ".if 1\n.byte 1\n.endif .definedmacro(1+2)\n.byte 2", 2, ".definedmacro requires one macro name.")]
+    [DataRow(AssemblyDialect.Native, ".if 1\n.byte 1\n.else .definedmacro(1+2)\n.byte 2\n.endif", 2, ".definedmacro requires one macro name.")]
+    [DataRow(AssemblyDialect.Native, ".define COND .if\nCOND .definedmacro(1+2)\n.byte 1\n.endif", 1, ".definedmacro requires one macro name.")]
+    [DataRow(AssemblyDialect.Native, ".macro M\n.if .definedmacro(1+2)\n.endif\n.endmacro\nM", 1, ".definedmacro requires one macro name.")]
     [DataRow(AssemblyDialect.Ca65, ".if .definedmacro(1+2)\n.byte 1\n.endif", 0, ".definedmacro requires one macro name.")]
+    [DataRow(AssemblyDialect.Ca65, ".define COND .if\nCOND .definedmacro(1+2)\n.byte 1\n.endif", 1, ".definedmacro requires one macro name.")]
     [DataRow(AssemblyDialect.Ca65, ".if .const(.sizeof(Later))\n.byte 1\n.endif\nLater: .byte 0", 0, ".const cannot test a size known only once the program is laid out.")]
     [DataRow(AssemblyDialect.Ca65, ".if 0\n.elseif .definedmacro(1+2)\n.byte 1\n.endif", 1, ".definedmacro requires one macro name.")]
     [DataRow(AssemblyDialect.Merlin, " DO 1\n DO ]undefined+)\n DFB 1\n ELSE\n DFB 2\n FIN\n FIN", 1, "Invalid Merlin symbol.")]
     [DataRow(AssemblyDialect.Merlin, " IF MX=1\n DFB 1\n ELSE\n DFB 2\n FIN", 0, "65816 IF MX is unsupported.")]
+    [DataRow(AssemblyDialect.Merlin, " DFB X+:a\n__merlin_0 DO 1\n DFB 1\n ELSE\n DFB 2\n FIN", 1, "Merlin label '__merlin_0' collides with a generated alias.")]
     public void FailedConditionsStillOpenTheirConditional(AssemblyDialect dialect, string text, int line, string message)
     {
         AssemblyResult result = Assemble(text, dialect);
@@ -456,18 +461,38 @@ public partial class AssemblyPreprocessorTests
     }
 
     /// <summary>
-    ///  As in ca65, an <c>.elseif</c> after a taken branch is not tested, so a condition that would fail there
-    ///  reports nothing and its branch is skipped.
+    ///  A condition that is not tested, an <c>.elseif</c> after a taken branch, as in ca65, or one inside an
+    ///  inactive block, reports nothing even where its line would fail to expand, and its branch is skipped.
+    /// </summary>
+    /// <param name="dialect">The source dialect.</param>
+    /// <param name="text">The source, which assembles the bytes 1 and 4.</param>
+    [TestMethod]
+    [DataRow(AssemblyDialect.Native, ".if 1\n.byte 1\n.elseif .definedmacro(1+2)\n.byte 2\n.else\n.byte 3\n.endif\n.byte 4")]
+    [DataRow(AssemblyDialect.Ca65, ".if 1\n.byte 1\n.elseif .definedmacro(1+2)\n.byte 2\n.else\n.byte 3\n.endif\n.byte 4")]
+    [DataRow(AssemblyDialect.Native, ".byte 1\n.if 0\n.if .definedmacro(1+2)\n.byte 2\n.elseif .definedmacro(1+2)\n.endif\n.endif\n.byte 4")]
+    [DataRow(AssemblyDialect.Ca65, ".byte 1\n.if 0\n.if .definedmacro(1+2)\n.byte 2\n.elseif .definedmacro(1+2)\n.endif\n.endif\n.byte 4")]
+    [DataRow(AssemblyDialect.Merlin, " DFB 1\n DO 0\n DO ]bad+)\n DFB 2\n FIN\n FIN\n DFB 4")]
+    public void UntestedFailingConditionsReportNothing(AssemblyDialect dialect, string text)
+    {
+        AssemblyResult result = Assemble(text, dialect);
+        result.Diagnostics.Should().BeEmpty();
+        result.Sections.Single(section => section.Bytes.Length != 0).Bytes.Span[..2].ToArray().Should().Equal(1, 4);
+    }
+
+    /// <summary>
+    ///  An <c>.elseif</c> with no conditional open, here at the top of a macro body, reports both its condition's
+    ///  error and that it is unexpected, as ca65 does.
     /// </summary>
     /// <param name="dialect">The source dialect.</param>
     [TestMethod]
     [DataRow(AssemblyDialect.Native)]
     [DataRow(AssemblyDialect.Ca65)]
-    public void FailingElseIfAfterTakenBranchIsNotTested(AssemblyDialect dialect)
+    public void UnexpectedElseIfReportsItsFailedCondition(AssemblyDialect dialect)
     {
-        AssemblyResult result = Assemble(".if 1\n.byte 1\n.elseif .definedmacro(1+2)\n.byte 2\n.else\n.byte 3\n.endif\n.byte 4", dialect);
-        result.Diagnostics.Should().BeEmpty();
-        result.Sections.Single(section => section.Bytes.Length != 0).Bytes.Span[..2].ToArray().Should().Equal(1, 4);
+        AssemblyResult result = Assemble(".macro M\n.elseif .definedmacro(1+2)\n.endmacro\n.if 1\nM\n.endif", dialect);
+        result.Diagnostics.Select(error => (error.Message, error.Location?.Line)).Should().Equal(
+            (".definedmacro requires one macro name.", 1),
+            ("Unexpected .ELSEIF.", 1));
     }
 
     /// <summary>

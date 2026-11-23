@@ -6,6 +6,10 @@ namespace Retrocore.Assembler;
 
 internal sealed partial class AssemblyPreprocessor
 {
+    // An error found expanding a conditional's line, before its condition could be read; reported, as false, where
+    // the condition is tested, so the conditional still opens and its .else and .endif stay matched.
+    private string? _conditionFailure;
+
     private bool ConditionalDirective(string operation, string operand, AssemblyLocation location, int floor, AssemblyDialect dialect)
     {
         try
@@ -29,16 +33,27 @@ internal sealed partial class AssemblyPreprocessor
     /// <remarks>
     ///  <para>
     ///   A function in a condition, such as <c>.definedmacro(1+2)</c>, fails while the whole line is expanded,
-    ///   before the condition is read. The conditional still opens or continues, as a condition that could not
-    ///   be read does, false, and its error is reported where the condition is tested: an <c>.elseif</c> after a
-    ///   taken branch is not tested, as in ca65. A failing operand of <c>.else</c> or <c>.endif</c> is reported,
-    ///   and the branch still changes or closes. Otherwise the conditional's <c>.endif</c> would be reported as
-    ///   unexpected too.
+    ///   before the condition is read. The conditional is still opened, or continued, and treated as false, as
+    ///   for any condition that cannot be read; its error is reported where the condition is tested, so an
+    ///   <c>.elseif</c> after a taken branch, which is not tested, reports nothing, as in ca65. A failing operand
+    ///   of <c>.else</c> or <c>.endif</c> is reported, and the branch still changes or closes. Without this, the
+    ///   conditional's <c>.endif</c> would be reported as unexpected too.
     ///  </para>
     /// </remarks>
     private void ExpansionFailure(string message, Line line, int floor)
     {
-        Split(line.Text.Span, out _, out ReadOnlySpan<char> operationText, out ReadOnlySpan<char> operandText);
+        // The keyword may come from a text definition, so the line is read with its definitions expanded.
+        string text = AssemblySyntax.AsString(line.Text);
+        try
+        {
+            text = ExpandCa65Definitions(text);
+        }
+        catch (AssemblyError)
+        {
+            // The failure being reported may be this expansion's; the line is then read as written.
+        }
+
+        Split(text, out _, out ReadOnlySpan<char> operationText, out ReadOnlySpan<char> operandText);
         string operation = operationText.ToString().ToUpperInvariant();
         bool active = _conditions.Count == 0 || _conditions[^1].Active;
         if (operation is ".ELSE" or ".ENDIF")
@@ -73,6 +88,7 @@ internal sealed partial class AssemblyPreprocessor
         if (operation is not (".ELSE" or ".ELSEIF" or ".ENDIF")) { return false; }
         if (_conditions.Count <= floor)
         {
+            if (_conditionFailure is { } failure) { Error(failure, location); }
             Error($"Unexpected {operation}.", location);
             return true;
         }

@@ -22,17 +22,15 @@ LOGCN2:
 
 ;; Packed approximation to the square root of one half.
 ;;
-;; Also:
-;;   PET BASIC 4: `SQR05`, Commodore 1979 source, code18.
-;;   PET BASIC 1/2: `SQR05`, Hoffmann-Vetter reconstructions, code18.
+;; Commodore's 1979 source for PET BASIC 4 calls it `SQR05` (code18), as do the Hoffmann-Vetter
+;; reconstructions of PET BASIC 1 and 2.
 SQRHLF:
     .byte $80, $35, $04, $F3, $34
 
 ;; Packed approximation to the square root of two.
 ;;
-;; Also:
-;;   PET BASIC 4: `SQR20`, Commodore 1979 source, code18.
-;;   PET BASIC 1/2: `SQR20`, Hoffmann-Vetter reconstructions, code18.
+;; Commodore's 1979 source for PET BASIC 4 calls it `SQR20` (code18), as do the Hoffmann-Vetter
+;; reconstructions of PET BASIC 1 and 2.
 SQRTWO:
     .byte $81, $35, $04, $F3, $34
 
@@ -54,17 +52,15 @@ LOG2:
 
 ;; Packed lower scaling threshold, 99,999,999.90625.
 ;;
-;; Also:
-;;   PET BASIC 4: `N0999`, Commodore 1979 source, code22.
-;;   PET BASIC 1/2: `N0999`, Hoffmann-Vetter reconstructions, code22.
+;; Commodore's 1979 source for PET BASIC 4 calls it `N0999` (code22), as do the Hoffmann-Vetter
+;; reconstructions of PET BASIC 1 and 2.
 NZ0999:
     .byte $9B, $3E, $BC, $1F, $FD
 
 ;; Packed upper scaling threshold, selected by the macro's preciseUpper parameter.
 ;;
-;; Also:
-;;   PET BASIC 4: `N9999`, Commodore 1979 source, code22.
-;;   PET BASIC 1/2: `N9999`, Hoffmann-Vetter reconstructions, code22.
+;; Commodore's 1979 source for PET BASIC 4 calls it `N9999` (code22), as do the Hoffmann-Vetter
+;; reconstructions of PET BASIC 1 and 2.
 NZ9999:
 .if preciseUpper
     .byte $9E, $6E, $6B, $27, $FE
@@ -74,9 +70,8 @@ NZ9999:
 
 ;; Packed floating-point constant one billion, used to scale small output values.
 ;;
-;; Also:
-;;   PET BASIC 4: `NMIL`, Commodore 1979 source, code22.
-;;   PET BASIC 1/2: `NMIL`, Hoffmann-Vetter reconstructions, code22.
+;; Commodore's 1979 source for PET BASIC 4 calls it `NMIL` (code22), as do the Hoffmann-Vetter
+;; reconstructions of PET BASIC 1 and 2.
 NZMIL:
     .byte $9E, $6E, $6B, $28, $00
 

@@ -12,13 +12,13 @@
 ;; blank on a nonnegative value; PET BASIC retains it. A negative sign is emitted when bit 7 of
 ;; <FACSGN> is set, even when the exponent is zero. One caller return address is discarded before
 ;; continuing at <TIMSTR>.
+;;
+;; Commodore's 1979 source for PET BASIC 4 calls it `STRD` (code14), as do the Hoffmann-Vetter
+;; reconstructions of PET BASIC 1 and 2.
+;;
 ;; In: FAC = numeric value, VALTYP = numeric, decimal = clear
 ;; Out: FACMO/FACLO = temporary descriptor pointer, VALTYP = string
 ;; Errors: TYPE MISMATCH for a string, OUT OF MEMORY or FORMULA TOO COMPLEX while making the result
-;;
-;; Also:
-;;   PET BASIC 4: `STRD`, Commodore 1979 source, code14.
-;;   PET BASIC 1/2: `STRD`, Hoffmann-Vetter reconstructions, code14.
 STR:
     jsr CHKNUM
     ldy #$00

@@ -16,11 +16,11 @@
     .assert zeroTermViaY = 0 || zeroTermViaY = 1, "zeroTermViaY must be 0 or 1."
 
 ;; Returns CHR$(n), a one-byte string containing the value of n.
-;; Errors: ILLEGAL QUANTITY if the argument cannot be converted to a byte
 ;;
-;; Also:
-;;   PET BASIC 4: `CHRD`, Commodore 1979 source, code16.
-;;   PET BASIC 1/2: `CHRD`, Hoffmann-Vetter reconstructions, code16.
+;; Commodore's 1979 source for PET BASIC 4 calls it `CHRD` (code16), as do the Hoffmann-Vetter
+;; reconstructions of PET BASIC 1 and 2.
+;;
+;; Errors: ILLEGAL QUANTITY if the argument cannot be converted to a byte
 CHR:
     jsr CONINT
     txa
@@ -37,11 +37,11 @@ RLZRET:
     jmp PUTNEW
 
 ;; Returns the leftmost requested characters, or the whole string if the count exceeds its length.
-;; Errors: ILLEGAL QUANTITY for a zero count when rejectZeroSlices is selected
 ;;
-;; Also:
-;;   PET BASIC 4: `LEFTD`, Commodore 1979 source, code16.
-;;   PET BASIC 1/2: `LEFTD`, Hoffmann-Vetter reconstructions, code16.
+;; Commodore's 1979 source for PET BASIC 4 calls it `LEFTD` (code16), as do the Hoffmann-Vetter
+;; reconstructions of PET BASIC 1 and 2.
+;;
+;; Errors: ILLEGAL QUANTITY for a zero count when rejectZeroSlices is selected
 LEFT:
     jsr PREAM
     cmp (DSCPNT),y
@@ -80,11 +80,11 @@ PULMOR:
     jmp PUTNEW
 
 ;; Returns the rightmost requested characters, or the whole string if the count exceeds its length.
-;; Errors: ILLEGAL QUANTITY for a zero count when rejectZeroSlices is selected
 ;;
-;; Also:
-;;   PET BASIC 4: `RIGHTD`, Commodore 1979 source, code16.
-;;   PET BASIC 1/2: `RIGHTD`, Hoffmann-Vetter reconstructions, code16.
+;; Commodore's 1979 source for PET BASIC 4 calls it `RIGHTD` (code16), as do the Hoffmann-Vetter
+;; reconstructions of PET BASIC 1 and 2.
+;;
+;; Errors: ILLEGAL QUANTITY for a zero count when rejectZeroSlices is selected
 RIGHT:
     jsr PREAM
     clc
@@ -95,11 +95,11 @@ RIGHT:
 ;; Returns MID$(string, start [, length]), with a one-based start and an optional length.
 ;;
 ;; A start beyond the end produces an empty string; a length extending past the end is shortened.
-;; Errors: ILLEGAL QUANTITY for a zero start
 ;;
-;; Also:
-;;   PET BASIC 4: `MIDD`, Commodore 1979 source, code16.
-;;   PET BASIC 1/2: `MIDD`, Hoffmann-Vetter reconstructions, code16.
+;; Commodore's 1979 source for PET BASIC 4 calls it `MIDD` (code16), as do the Hoffmann-Vetter
+;; reconstructions of PET BASIC 1 and 2.
+;;
+;; Errors: ILLEGAL QUANTITY for a zero start
 MID:
     lda #$FF
     sta FACLO

@@ -29,8 +29,7 @@ LINPRT:
 
 ;; Prints <FAC> as a decimal number through <FOUT> and <STROUT>.
 ;;
-;; Also:
-;;   AppleSoft: `PRNTFAC`, Apple Technical Information Library article 79, Device I/O Routines.
+;; Apple's Technical Information Library article 79, Device I/O Routines, calls it `PRNTFAC`.
 LINPRT_FOUT:
     jsr FOUT
 

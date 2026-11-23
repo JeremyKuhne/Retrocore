@@ -61,15 +61,14 @@ INPCOM:
     .assert linkedCollector = 0 || linkedCollector = 1, "linkedCollector must be 0 or 1."
 
 ;; Copies a string's descriptor to <FORPNT>, copying the characters first if necessary.
+;;
+;; Apple calls the <COPYZC> entry `COPY` (The Apple Orchard, March/April 1980, p. 15), which is distinct from
+;; Microsoft's <COPY> entry. Commodore's 1979 source for PET BASIC 4 calls <COPYZC> `COPYC` (code6), as do the
+;; Hoffmann-Vetter reconstructions of PET BASIC 1 and 2.
+;;
 ;; In: FACMO/FACLO = descriptor address, FORPNT = destination variable
 ;; Entry: COPYZC = stores the descriptor addressed by Y:A, with variant-specific collection bookkeeping
 ;; See: <STRINI>, <FRETMS>
-;;
-;; Also:
-;;   AppleSoft: `COPY` names the <COPYZC> entry (Apple Computer, The Apple Orchard, March/April 1980, p. 15);
-;;     it is distinct from the Microsoft <COPY> entry.
-;;   PET BASIC 4: `COPYC` names <COPYZC>, Commodore 1979 source, code6.
-;;   PET BASIC 1/2: `COPYC` names <COPYZC>, Hoffmann-Vetter reconstructions, code6.
 GETSPT:
     ldy #$02
     lda (FACMO),y

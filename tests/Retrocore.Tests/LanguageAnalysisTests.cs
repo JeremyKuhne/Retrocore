@@ -202,6 +202,38 @@ public sealed partial class LanguageAnalysisTests
     }
 
     /// <summary>
+    ///  A name defined with Merlin's <c>EQU</c> is a constant in the text of a source that does not assemble in any
+    ///  case, as Merlin reads it, while a name followed by a word that only starts with <c>equ</c> stays a label.
+    /// </summary>
+    /// <param name="definition">The definition.</param>
+    /// <param name="constant">Whether it defines a constant rather than a label.</param>
+    [TestMethod]
+    [DataRow("VALUE equ 3", true)]
+    [DataRow("VALUE Equ 3", true)]
+    [DataRow("VALUE\teQu\t3", true)]
+    [DataRow("VALUE equal 3", false)]
+    [DataRow("VALUE equ_3", false)]
+    public void MerlinEquatesSurviveErrorsInAnyCase(string definition, bool constant)
+    {
+        string directory = Directory.CreateTempSubdirectory().FullName;
+        try
+        {
+            string main = Path.Join(directory, "main.asm");
+            File.WriteAllText(main, $".org $6000\nstart:\n    jmp missing\n{definition}\n");
+
+            SourceAnalysis analysis = SourceAnalysis.Assemble(main, _ => null);
+
+            analysis.Result.Success.Should().BeFalse();
+            SymbolSiteKind kind = constant ? SymbolSiteKind.Constant : SymbolSiteKind.Label;
+            analysis.Find("VALUE").Single().Kind.Should().Be(kind);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
     ///  A procedure remains navigable when its assembly has errors.
     /// </summary>
     /// <param name="error">A line that makes assembly fail.</param>

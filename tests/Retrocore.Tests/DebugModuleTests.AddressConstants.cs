@@ -151,7 +151,7 @@ public sealed partial class DebugModuleTests
             Ranked(basic, dos, dos32, monitor)
                 .Should().Equal(("CH", 0x24L), ("TRMPOS", 0x24L), ("HOLD", 0x50L), ("SPOT", 0x50L), ("OTHER", 0x50L));
 
-            // The program's names come before even the Monitor's, though its main.s would rank last.
+            // The program's names come before even the Monitor's, though its main.s would rank with DOS's.
             Ranked(program, basic, monitor)
                 .Should().Equal(("CURSOR", 0x24L), ("CH", 0x24L), ("TRMPOS", 0x24L), ("HOLD", 0x50L));
         }

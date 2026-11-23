@@ -50,8 +50,9 @@ internal sealed partial class DebugSession
     private readonly object _gate = new();
     private DebugInfo _debug = new();
 
-    // The index of the first of the SDK's modules in _debug; the program's come before it.
-    private int _firstSdkModule;
+    // The index of the first of the SDK's modules in _debug: the program's come before it, and the SDK's and those the
+    // machine loads later, such as the Apple III's SOS drivers, from it on. Until a launch adds the SDK's, none is.
+    private int _firstSdkModule = int.MaxValue;
     private DebugFrame[]? _frames;
     private DisplayFrame[]? _display;
     private DebugFrame[]? _coprocessorFrames;
@@ -915,6 +916,7 @@ internal sealed partial class DebugSession
         Invalidate();
 
         _debug = new();
+        _firstSdkModule = int.MaxValue;
         LoadHints(args, sourceFile, program);
         if (sourceFile is not null)
         {

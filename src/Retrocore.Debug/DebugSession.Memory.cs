@@ -214,8 +214,9 @@ internal sealed partial class DebugSession
     ///   so a ROM's labels go when the language card maps RAM over it. An address takes the first module's label,
     ///   and within a module the first name in order. Constants the CPU's instructions address memory through, such
     ///   as the Monitor's <c>CH</c> at $24, name the bytes no label does, whatever is mapped there. The program's
-    ///   constants come first; where the SDK's modules name one address differently, the one the disassembler ranks
-    ///   first names it, as the Monitor's <c>CH</c> rather than AppleSoft's <c>TRMPOS</c>.
+    ///   constants come first; where the SDK's modules name one address differently, the one the disassembler's
+    ///   <c>MachineSymbols.Rank</c> puts first names it, as the Monitor's <c>CH</c> rather than AppleSoft's
+    ///   <c>TRMPOS</c>.
     ///  </para>
     ///  <para>
     ///   Each has its <c>kind</c>: what its documentation declares it, such as <c>routine</c> or <c>table</c>; else

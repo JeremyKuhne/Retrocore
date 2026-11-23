@@ -106,16 +106,17 @@ TextBase = $28
 ;; Also: BASH (A2RM78, A2RM79, IIEROM82, IIETRM85)
 TextBaseHigh = $29
 
-;; The low byte of a second text line address, the line a scroll copies from.
+;; The low byte of a second text line address, the line a scroll copies to.
 ;;
-;; The internal firmware's scroll routines set <ScrollBase> and <ScrollBaseHigh> to the line below the one at
-;; <TextBase> and copy it up. On the Enhanced IIe, <Monitor:ClearLineFrom> and <Monitor:Disassembler::Decode> also
-;; pass a value to the firmware here: the column to clear from, or the opcode to decode.
+;; <Monitor:Scroll> sets <ScrollBase> and <ScrollBaseHigh> to the line at <TextBase>, moves <TextBase> down a line
+;; and copies that line up into this one; on the IIe, the internal firmware's scroll routines do. On the Enhanced
+;; IIe, <Monitor:ClearLineFrom> and <Monitor:Disassembler::Decode> also pass a value to the firmware here: the column
+;; to clear from, or the opcode to decode.
 ;; See: <TextBase>, <ScrollBaseHigh>, <Monitor:Scroll>, <Monitor:ClearLineFrom>
 ;; Also: BAS2L (A2RM78, A2RM79, IIEROM82, IIETRM85)
 ScrollBase = $2A
 
-;; The high byte of the second text line address at <ScrollBase>, the line a scroll copies from.
+;; The high byte of the second text line address at <ScrollBase>, the line a scroll copies to.
 ;;
 ;; The scroll routines set it with <ScrollBase>. The original IIe's 40/80-column conversion also counts columns here
 ;; while it copies the screen.
@@ -188,7 +189,7 @@ CommandMode = $31
 ;;
 ;; <Monitor:SetNormal> and <Monitor:SetInverse> set it, and <Monitor:Startup::Reset> restores normal text. The
 ;; 80-column firmware tests only its bit 7, showing inverse text when it is clear. The Apple II's
-;; Monitors' <Monitor:GetLine> sets it to $FF while it echoes input.
+;; Monitors' <Monitor:LineInput::Echo> sets it to $FF while it echoes a character, then restores it.
 ;; See: <Monitor:SetNormal>, <Monitor:SetInverse>, <Monitor:ScreenOut>
 ;; Also: INVFLG (A2RM78, A2RM79, IIEROM82, IIETRM85)
 InverseMask = $32
@@ -219,7 +220,7 @@ CommandPosition = $34
 ;; <Monitor:ScreenOutNoInverse> stores Y here first and reloads it at the end, so <Monitor:ScreenOut> keeps Y. The
 ;; internal firmware's 80-column output reads it, and the Enhanced IIe's mini-assembler uses it as scratch.
 ;; See: <Monitor:ScreenOutNoInverse>, <Monitor:ScreenOut>
-;; Also: YSAV1 (A2RM78, A2RM79, IIEROM82, IIETRM85)
+;; Also: YSAV1 (A2RM78, A2RM79, IIEROM82, IIETRM85), SAVY1 (IIETRM85)
 SavedOutputY = $35
 
 ;; The low byte of the output hook: the address of the routine <Monitor:CharacterOut> sends each character to.
@@ -859,7 +860,7 @@ Annunciator0Off = $C058
 ;; Reading or writing it turns annunciator 0 on.
 ;;
 ;; See: <Annunciator0Off>
-;; Also: CLRAN0 (A2RM79, IIEROM82, IIETRM85)
+;; Also: CLRAN0 (IIEROM82, IIETRM85)
 Annunciator0On = $C059
 
 ;; Reading or writing it turns annunciator 1 off.
@@ -873,7 +874,7 @@ Annunciator1Off = $C05A
 ;; Reading or writing it turns annunciator 1 on.
 ;;
 ;; See: <Annunciator1Off>
-;; Also: CLRAN1 (A2RM79, IIEROM82, IIETRM85)
+;; Also: CLRAN1 (IIEROM82, IIETRM85)
 Annunciator1On = $C05B
 
 ;; Reading or writing it turns annunciator 2 off.

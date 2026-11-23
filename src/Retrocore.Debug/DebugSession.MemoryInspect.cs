@@ -108,7 +108,7 @@ internal sealed partial class DebugSession
 
     // The bits of a flag byte or soft switch, as its documentation names them: the masks it links to, such as
     // INIT0's <MMUEN> = $40, whose own documentation speaks of a bit, then what its summary says of a bit by number,
-    // as RDRAMRD's "reports in bit 7 whether RAMRD is on" does. Only a constant's or variable's.
+    // as AuxReadState's "reports in bit 7 whether RAMRD is on" does. Only a constant's or variable's.
     private JsonArray? BitsOf(IDebugModule owner, string name, string? summary)
     {
         if (summary is null || owner.Documentation.Find(name) is not { } topic) { return null; }

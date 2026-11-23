@@ -793,17 +793,17 @@ Decisions and how the table was applied:
   `OnStatement`, `UserFunctions`), and every invocation, root and test follows.
 - S6. Names only a vendor's documents give are entries of its historical-names file, as M1 has them, since a shared
   definition cites only Microsoft's names (`AssertSharedNamesAreMicrosofts`):
-  - AppleSoft: NEW (ASTIL, AS82) and COMBYTE (ASTIL, AS82), which leave `AppleSoft.InterpreterAliases.asm` (deleted,
-    M10), and the overlay's own labels GOLST1, GRODY1, GRODY2, PRIT31, PRIT32 and REMER1, cited UNKN as FOUT13 is
-    (M2). The table says "no Also" for these, but `applesoft.mac` defines them, and its callers and the label
-    comparisons keep them. COMBYTE's alias targets `::ReadCommaAndByte`, since its own name would hide the top-level
-    routine.
+  - AppleSoft: NEW (ASTIL, AS82), which `ProgramReset`'s dropped `newAlias` defined (S4), and COMBYTE (ASTIL, AS82),
+    which leaves `AppleSoft.InterpreterAliases.asm` (deleted, M10), and the overlay's own labels GOLST1, GRODY1,
+    GRODY2, PRIT31, PRIT32 and REMER1, cited UNKN as FOUT13 is (M2). The table says "no Also" for these, but
+    `applesoft.mac` defines them, and its callers and the label comparisons keep them. COMBYTE's alias targets
+    `::ReadCommaAndByte`, since its own name would hide the top-level routine.
   - Commodore: CHDGOT and CHDRTS (HV1, HV1R, HV2), Hoffmann-Vetter's spellings of CHZGOT and CHZRTS, under
     `.if BASIC4_OUTPUT_PADDING = 0`. BASIC 4's own source (CBM4S79) leaves those labels unnamed, and a Commodore
     alias must cite every document of its build, so BASIC 4's spelling (HV4, HV4R) is given in the template's prose.
     BASIC 4's lister labels RESCR2 and PRIT3B (CBM4S79, HV4, HV4R) are under `.ifdef` their targets.
-  - The SDK's own names that no overlay or document gives get no `Also:`, as the table says: CONT1 and
-    LIST_QUOTE_CHECK (which no build assembles).
+  - The SDK's own names that no overlay or document gives get no `Also:`, as the table says: CONT1, and
+    LIST_QUOTE_CHECK, which no build assembles.
 - S7. BSTOP, the name Hoffmann-Vetter's reconstruction of the BASIC 4 kernal (HVK4) gives `Statements::Stop`, is in
   prose: HVK4 is not one of the PET builds' documents, so it cannot be an alias's citation.
 - S8. CommandCore's labels that are locals of part C's routines (TYPERR, MAIN1, QDECT1, MLOOP, CZLOOP, GETBPT,

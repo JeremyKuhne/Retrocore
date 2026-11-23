@@ -31,12 +31,14 @@ workspace adds documents of its own, or replaces a key, with the same columns.
 
 The Microsoft 6502 BASIC keys were checked against the SDK's builds before any name is cited from them; none of their
 text is in the repository. The full method, with the counts, is step 2 of the BASIC conversion's log,
-`docs/conversions/Basic.md`. A name is cited from a document only where the check found that the
-document gives that name for that thing:
+`docs/conversions/Basic.md`, on the `claude/basic-rename-table` branch until it is merged. A name is cited from a
+document only where the check found that the document gives that name for that thing:
 
 - **M6502:** the repository's `m6502.asm`. Each MACRO-10 overlay build was assembled on it, and a name is cited for a
-  build where `m6502.asm` defines it and the overlay build gives it the same value as the native build (but for nine
-  rows, where a vendor's overlay replaces the line that defines it).
+  build where `m6502.asm` defines it and the overlay build gives it the same value as the native build. Where the
+  overlay's definition is in a vendor's `.mac`, a matching value shows only that the overlay kept Microsoft's label on
+  the vendor's code, so each such case was checked for the `.mac` replacing the very line that defines the name;
+  M6502 is not cited on the nine rows where it does not.
 - **ASTIL:** names and addresses read from the "Applesoft: Internals" index, page-zero map and routine articles, and
   cited where the address equals the AppleSoft builds' value. A name found only in prose is not cited.
 - **AS82:** only the archive's damaged OCR text could be read. A name is cited only where the listing's symbol tables

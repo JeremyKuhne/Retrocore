@@ -229,7 +229,7 @@ public sealed class BasicSharedInterpreterAliasesTests
             ?? throw new AssertFailedException($"{name} has no alias documentation.");
 
         BasicAttribution.AssertCites(alias, buildKeys, documentKeys);
-        BasicAttribution.AssertNotShared(result, docs, target, name);
+        BasicAttribution.AssertNotShared(result, docs, name);
         return topic;
     }
 

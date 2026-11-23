@@ -200,8 +200,8 @@ to K12, R1 to R10).
 | 129 | `CHARACTER_READER` | `CharacterReader` | macro | all |  | — | emits the page-zero reader's template and the seed bytes (x1) |
 | 130 | `seedTail` | `KEEP` | parameter of CHARACTER_READER | all |  | — | the fifth seed byte ($58 or BASIC 1's $59); already descriptive camelCase |
 | 131 | `INITAT` | `CharacterReaderTemplate` | data | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | the code startup copies to GetNextCharacter in page zero (lda CharacterReaderTemplate-1,x loop), with the four seed bytes after it — see B1-Q3; executed only as the page-zero copy |
-| 132 | `CHZGOT` | `CharacterReaderTemplate::GetCurrent` | local | all | M6502; other names here: CHDGOT (HV1, HV1R, HV2, HV4, HV4R) | aliases: CHDGOT (Commodore) | the copy's GetCurrentCharacter: lda abs (operand becomes TextPointer), then classify — Also: CHDGOT (HV1, HV1R, HV2, HV4, HV4R) in the PET builds |
-| 133 | `CHZRTS` | `CharacterReaderTemplate::Done` | local | all | M6502; other names here: CHDRTS (HV1, HV1R, HV2, HV4, HV4R) | aliases: CHDRTS (Commodore) | the rts the colon-or-above test branches to; the seed bytes follow — Also: CHDRTS (HV*) in the PET builds; QNUM/CHRRTS equates: see B1-Q3 |
+| 132 | `CHZGOT` | `CharacterReaderTemplate::GetCurrent` | local | all | M6502; other names here: CHDGOT (HV1, HV1R, HV2, HV4, HV4R) | aliases: CHDGOT (Commodore) | the copy's GetCurrentCharacter: lda abs (operand becomes TextPointer), then classify — Also: CHDGOT (HV1, HV1R, HV2, HV4, HV4R) in the PET builds Converted: CHDGOT is Commodore's alias in BASIC 1 and 2 (HV1, HV1R, HV2); BASIC 4 gives it in prose (Basic.md S6). |
+| 133 | `CHZRTS` | `CharacterReaderTemplate::Done` | local | all | M6502; other names here: CHDRTS (HV1, HV1R, HV2, HV4, HV4R) | aliases: CHDRTS (Commodore) | the rts the colon-or-above test branches to; the seed bytes follow — Also: CHDRTS (HV*) in the PET builds; QNUM/CHRRTS equates: see B1-Q3 Converted: CHDRTS is Commodore's alias in BASIC 1 and 2 (HV1, HV1R, HV2); BASIC 4 gives it in prose (Basic.md S6). |
 
 ### MsBasic.CommandCore
 
@@ -421,7 +421,7 @@ to K12, R1 to R10).
 | 290 | `secondBoundReturn` | `KEEP` | parameter of LIST_RANGE | all |  | — | where trailing text after the second bound returns; already descriptive |
 | 291 | `LIST` | `Statements::List` | routine | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R; spelling only: ASTIL [AS], AS82 [AS] | no | parses [first][-[last]], finds the first line, lists through the bound; one proc over ListRange, ListLines, ListNextTableByte and ListTokens — see B1-Q4: no label inside is reached from outside the native sources |
 | 292 | `GOLST` | `Statements::List::ReadFirstBound` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | ReadLineNumber, FindLine, then checks for the end, minus (or comma) |
-| 293 | `GOLST1` | `Statements::List::ReadSecondBound` | local | AS | none found | — | AppleSoft: after minus or comma, reads the upper bound — SDK's own (no document): no Also |
+| 293 | `GOLST1` | `Statements::List::ReadSecondBound` | local | AS | none found | — | AppleSoft: after minus or comma, reads the upper bound — SDK's own (no document): no Also Converted: AppleSoft's alias, Also: GOLST1 (UNKN), since applesoft.mac defines it (Basic.md S6). |
 | 294 | `LSTEND` | `Statements::List::StartListing` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | drops the statement loop's return; a zero upper bound becomes $FFFF; falls into NextLine |
 | 295 | `LIST_LINES` | `ListLines` | macro | all |  | — | emits the line walker (x1; AppleSoft chooses one of two expansions by ENHNCD) |
 | 296 | `trackQuotes` | `KEEP` | parameter of LIST_LINES | all |  | — | quote tracking through TokenizeState; already descriptive |
@@ -439,8 +439,8 @@ to K12, R1 to R10).
 | 308 | `PLOOP1` | `Statements::List::NextByte` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | next byte: nonzero to CheckToken; zero follows the link to the next line |
 | 309 | `GRODY` | `Statements::List::Finish` | local | all | M6502, HV1, HV1R, HV2, HV4, HV4R, CBM4S79 [P4 P4R] | no | optional carriage return, then jmp to the resume entry |
 | 310 | `LIST_TABLE_NEXT` | `ListNextTableByte` | macro | AS |  | — | emits AppleSoft's page-carrying keyword-table reader (x1) |
-| 311 | `GRODY1` | `Statements::List::NextTableByte` | local | AS | none found | — | subroutine: iny, carrying into the pointer's high byte (FacMantissa1), then reads (Fac),y — called by jsr within List |
-| 312 | `GRODY2` | `Statements::List::ReadTableByte` | local | AS | none found | — | lda (Fac),y; rts |
+| 311 | `GRODY1` | `Statements::List::NextTableByte` | local | AS | none found | — | subroutine: iny, carrying into the pointer's high byte (FacMantissa1), then reads (Fac),y — called by jsr within List Converted: AppleSoft's alias, Also: GRODY1 (UNKN), since applesoft.mac defines it (Basic.md S6). |
+| 312 | `GRODY2` | `Statements::List::ReadTableByte` | local | AS | none found | — | lda (Fac),y; rts Converted: AppleSoft's alias, Also: GRODY2 (UNKN), since applesoft.mac defines it (Basic.md S6). |
 | 313 | `LIST_TOKENS` | `ListTokens` | macro | all |  | — | emits the character and keyword expansion (x1) |
 | 314 | `tableMode` | `KEEP` | parameter of LIST_TOKENS | all |  | — | 0, 1 or 2: indexed, Pointer1, or Fac table walk; already descriptive |
 | 315 | `trackQuotes` | `KEEP` | parameter of LIST_TOKENS | all |  | — | print high-bit bytes inside quotes literally; already descriptive |
@@ -449,11 +449,11 @@ to K12, R1 to R10).
 | 318 | `QPLOP` | `Statements::List::CheckToken` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | bit 7 clear (or PI, or inside quotes): an ordinary character; else counts down to the token's keyword |
 | 319 | `RESRCH` | `Statements::List::FindWord` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | dex per keyword; reaching the token's count prints that word |
 | 320 | `RESCR1` | `Statements::List::SkipWord` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | reads table bytes until one with bit 7 set (a word's last byte) |
-| 321 | `RESCR2` | `Statements::List::ReadWordByte` | local | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | no | BASIC 4: reads (Pointer1),y after advancing the pointer |
+| 321 | `RESCR2` | `Statements::List::ReadWordByte` | local | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | no | BASIC 4: reads (Pointer1),y after advancing the pointer Converted: Commodore's alias, under .ifdef its target (Basic.md S6). |
 | 322 | `PRIT3` | `Statements::List::ListWord` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | prints the keyword's bytes up to the one with bit 7 set |
-| 323 | `PRIT3B` | `Statements::List::ListFirstWord` | local | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | no | BASIC 4: the first token ($80) skips the search |
-| 324 | `PRIT31` | `Statements::List::ListWordCharacter` | local | AS | none found | — | AppleSoft: reads and prints the next keyword byte — SDK's own: no Also |
-| 325 | `PRIT32` | `Statements::List::ListLastCharacter` | local | AS | none found | — | AppleSoft: prints the last keyword byte and a space, back to ResumeLine — SDK's own: no Also |
+| 323 | `PRIT3B` | `Statements::List::ListFirstWord` | local | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | no | BASIC 4: the first token ($80) skips the search Converted: Commodore's alias, under .ifdef its target (Basic.md S6). |
+| 324 | `PRIT31` | `Statements::List::ListWordCharacter` | local | AS | none found | — | AppleSoft: reads and prints the next keyword byte — SDK's own: no Also Converted: AppleSoft's alias, Also: PRIT31 (UNKN), since applesoft.mac defines it (Basic.md S6). |
+| 325 | `PRIT32` | `Statements::List::ListLastCharacter` | local | AS | none found | — | AppleSoft: prints the last keyword byte and a space, back to ResumeLine — SDK's own: no Also Converted: AppleSoft's alias, Also: PRIT32 (UNKN), since applesoft.mac defines it (Basic.md S6). |
 
 ### MsBasic.Logarithm
 
@@ -722,7 +722,7 @@ to K12, R1 to R10).
 | 536 | `STOP_AND_CONTINUE` | `StopAndContinue` | macro | all |  | — | emits STOP, END, their shared halt and CONT (x1) |
 | 537 | `lineNumberDirect` | `KEEP` | parameter of STOP_AND_CONTINUE | all |  | — | direct mode by CurrentLine or the text page; already descriptive |
 | 538 | `clearOutput` | `KEEP` | parameter of STOP_AND_CONTINUE | all |  | — | clear OutputSuppressed before BREAK; already descriptive |
-| 539 | `STOP` | `Statements::Stop` | routine | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R; spelling only: ASTIL [AS], AS82 [AS], K4S79 [P4 P4R], HVK4 [P4 P4R]; other names here: BSTOP (HVK4) | aliases: BSTOP (Commodore) | carry set (CHRGET's non-digit, or ISCNTC's cmp #3 for Control-C) skips End's clc, so BREAK is printed; falls into End — Also: BSTOP (HVK4) in BASIC 4 if checked |
+| 539 | `STOP` | `Statements::Stop` | routine | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R; spelling only: ASTIL [AS], AS82 [AS], K4S79 [P4 P4R], HVK4 [P4 P4R]; other names here: BSTOP (HVK4) | aliases: BSTOP (Commodore) | carry set (CHRGET's non-digit, or ISCNTC's cmp #3 for Control-C) skips End's clc, so BREAK is printed; falls into End — Also: BSTOP (HVK4) in BASIC 4 if checked Converted: BSTOP is in prose, since HVK4 is not a PET build's document (Basic.md S7). |
 | 540 | `END` | `Statements::End` | routine | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R; spelling only: ASTIL [AS], AS82 [AS] | no | clears carry (no message), falls into StopOrEnd |
 | 541 | `STOPC` | `Statements::StopOrEnd` | routine | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | trailing text returns; in a program saves StoppedText and StoppedLine; drops the return; BREAK (carry) or READY — own proc: Stop branches into it |
 | 542 | `STPEND` | `Statements::StopOrEnd::SaveLine` | entry | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | saves CurrentLine in StoppedLine; the PET's INPUT stop paths enter here |
@@ -808,7 +808,7 @@ to K12, R1 to R10).
 | 602 | `REMN` | `FindLineEnd` | routine | all | M6502, ASTIL [AS], CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R; spelling only: AS82 [AS] | no | Delimiter = 0, EndDelimiter = 0; Y = offset of the zero byte, quotes toggling the delimiters |
 | 603 | `EXCHQT` | `FindLineEnd::SwapDelimiters` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | exchanges Delimiter and EndDelimiter (on entry and at each quote) |
 | 604 | `REMER` | `FindLineEnd::NextCharacter` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | zero or EndDelimiter ends; a quote swaps |
-| 605 | `REMER1` | `Statements::PopFinish` | routine | AS | none found | — | AppleSoft: pulls the three GOSUB frame bytes left and returns, for POP — own proc: reached only from Return; SDK's own name |
+| 605 | `REMER1` | `Statements::PopFinish` | routine | AS | none found | — | AppleSoft: pulls the three GOSUB frame bytes left and returns, for POP — own proc: reached only from Return; SDK's own name Converted: AppleSoft's alias, Also: REMER1 (UNKN), since applesoft.mac defines it (Basic.md S6). |
 | 606 | `CONDITIONAL_STATEMENTS` | `ConditionalStatements` | macro | all |  | — | emits IF, REM and IF's true path (x1) |
 | 607 | `IF` | `Statements::If` | routine | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R; spelling only: AS82 [AS] | no | evaluates, requires THEN or GOTO; false falls into Rem |
 | 608 | `OKGOTO` | `Statements::If::Test` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | FacExponent nonzero: true |

@@ -39,101 +39,12 @@
     <ProjectReference Include="..\..\src\Retrocore.Machines.Kaypro\Retrocore.Machines.Kaypro.csproj" />
     <ProjectReference Include="..\..\src\Retrocore.Cpu.I8080\Retrocore.Cpu.I8080.csproj" />
     <ProjectReference Include="..\..\src\Retrocore.Cpu.M6809\Retrocore.Cpu.M6809.csproj" />
+    <ProjectReference Include="..\..\src\Retrocore.Debug\Retrocore.Debug.csproj" />
     <ProjectReference Include="..\..\tools\DosDisk\DosDisk.csproj" />
     <ProjectReference Include="..\..\src\Retrocore.Generators\Retrocore.Generators.csproj" Aliases="Generator" />
     <Compile Include="..\Retrocore.Perf\RamBus.cs" Link="RamBus.cs" />
     <Compile Include="..\Retrocore.Perf\CpuWorkload.cs" Link="CpuWorkload.cs" />
     <Compile Include="..\Retrocore.Perf\SystemRomWorkload.cs" Link="SystemRomWorkload.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\DapTransport.cs" Link="DapTransport.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\DisplayFrameWriter.cs" Link="DisplayFrameWriter.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\JsonArgs.cs" Link="JsonArgs.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\FileRevision.cs" Link="FileRevision.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\LocalData.cs" Link="LocalData.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\LaunchMedia.cs" Link="LaunchMedia.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\ImageWrite.cs" Link="ImageWrite.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\Overwrite.cs" Link="Overwrite.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\ImageWriter.cs" Link="ImageWriter.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\DiskSource.cs" Link="DiskSource.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\ImageCheck.cs" Link="ImageCheck.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\ImageWatcher.cs" Link="ImageWatcher.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\ImageWatch.cs" Link="ImageWatch.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\DeviceJson.cs" Link="DeviceJson.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\MediaActions.cs" Link="MediaActions.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\MediaActions.Kept.cs" Link="MediaActions.Kept.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\MediaActions.Differences.cs" Link="MediaActions.Differences.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\KeptDisk.cs" Link="KeptDisk.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\MediaActions.Journal.cs" Link="MediaActions.Journal.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\RecoveryJournal.cs" Link="RecoveryJournal.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\RecoveryJournal.Written.cs" Link="RecoveryJournal.Written.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\RecoveryJournal.Sessions.cs" Link="RecoveryJournal.Sessions.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\JournalDisk.cs" Link="JournalDisk.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\Apple2Loader.cs" Link="Apple2Loader.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\ProFileMedia.cs" Link="ProFileMedia.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\FloppyMedia.cs" Link="FloppyMedia.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\FloppyFamily.cs" Link="FloppyFamily.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\ListingOperands.cs" Link="ListingOperands.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\InstructionCycles.cs" Link="InstructionCycles.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\FlatBus.cs" Link="FlatBus.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\JsonNodes.cs" Link="JsonNodes.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\DebugScreens.cs" Link="DebugScreens.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\MessageFraming.cs" Link="MessageFraming.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\Language\Protocol\*.cs" Link="Language\Protocol\%(Filename)%(Extension)" />
-    <!-- The language server's sources, but not its requests about a machine that is off, which need the debug targets. -->
-    <Compile Include="..\..\src\Retrocore.Debug\Language\*.cs" Exclude="..\..\src\Retrocore.Debug\Language\LanguageHost.Machine.cs" Link="Language\%(Filename)%(Extension)" />
-    <Compile Include="..\..\src\Retrocore.Debug\IDebugMemory.cs" Link="IDebugMemory.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\IDebugCallStack.cs" Link="IDebugCallStack.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\DebugFrame.cs" Link="DebugFrame.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\DebugFrameValues.cs" Link="DebugFrameValues.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\DebugRegisters.cs" Link="DebugRegisters.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\M6502Frames.cs" Link="M6502Frames.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\Z80CallStack.cs" Link="Z80CallStack.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\M6809CallStack.cs" Link="M6809CallStack.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\I8080CallStack.cs" Link="I8080CallStack.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\DebugCallStack.cs" Link="DebugCallStack.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\DebugCallCycles.cs" Link="DebugCallCycles.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\DebugLineCycles.cs" Link="DebugLineCycles.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\DebugContract.cs" Link="DebugContract.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\DebugContracts.cs" Link="DebugContracts.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\DebugDocumentation.cs" Link="DebugDocumentation.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\SymbolTable.cs" Link="SymbolTable.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\SymbolTable.LineComparer.cs" Link="SymbolTable.LineComparer.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\SourceLine.cs" Link="SourceLine.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\DebugPosition.cs" Link="DebugPosition.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\IDebugModule.cs" Link="IDebugModule.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\SourceMapModule.cs" Link="SourceMapModule.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\DebugFileModule.cs" Link="DebugFileModule.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\SourceMapModule.Statement.cs" Link="SourceMapModule.Statement.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\DebugInfo.cs" Link="DebugInfo.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\SdkModules.cs" Link="SdkModules.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\CommandAddress.cs" Link="CommandAddress.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\DosCommand.cs" Link="DosCommand.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\Apple2PascalMemory.cs" Link="Apple2PascalMemory.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\EmulatedPascalCompiler.cs" Link="EmulatedPascalCompiler.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\EmulatedPascalCompiler.Files.cs" Link="EmulatedPascalCompiler.Files.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\EmulatedPascalSystem.cs" Link="EmulatedPascalSystem.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\DiskImageFile.cs" Link="DiskImageFile.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\EmulatedPascalTools.cs" Link="EmulatedPascalTools.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\EmulatedApple3PascalSystem.cs" Link="EmulatedApple3PascalSystem.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\EmulatedApple3PascalTools.cs" Link="EmulatedApple3PascalTools.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\Apple3SdkModules.cs" Link="Apple3SdkModules.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\Apple3PascalMemory.cs" Link="Apple3PascalMemory.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\PascalRuntime.cs" Link="PascalRuntime.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\MachineSymbols.cs" Link="MachineSymbols.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\DisassembleCommand.cs" Link="DisassembleCommand.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\DisassemblyHints.cs" Link="DisassemblyHints.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\MemoryHints.cs" Link="MemoryHints.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\MemoryHintSpace.cs" Link="MemoryHintSpace.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\DebugRegion.cs" Link="DebugRegion.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\DisassemblyProgram.cs" Link="DisassemblyProgram.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\Trs80SdkModules.cs" Link="Trs80SdkModules.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\KayproSdkModules.cs" Link="KayproSdkModules.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\Apple1SdkModules.cs" Link="Apple1SdkModules.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\CocoSdkModules.cs" Link="CocoSdkModules.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\BbcSdkModules.cs" Link="BbcSdkModules.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\PetSdkModules.cs" Link="PetSdkModules.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\OverlayBaseResolver.cs" Link="OverlayBaseResolver.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\DefineArgument.cs" Link="DefineArgument.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\Coco3Assembly.cs" Link="Coco3Assembly.cs" />
     <None Include="..\..\src\Retrocore.Cpu.M6502\OpcodeTables.txt" Link="Inputs\OpcodeTables.txt" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\src\Retrocore.Pascal\Pcode.asm" Link="Inputs\Pcode.asm" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\src\Retrocore.Machines.Apple2\Roms\*.rom.asm" Link="Inputs\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />

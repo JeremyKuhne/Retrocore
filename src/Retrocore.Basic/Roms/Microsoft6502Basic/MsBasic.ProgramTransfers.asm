@@ -151,7 +151,8 @@ Done:
     .scope Statements continued
 
     ;; Clears variables and runs from the beginning or the specified line.
-    ;; In: zero = set when no line number follows
+    ;; In: zero = set at the end of the statement; any other text, even one that is not a line number, runs from
+    ;;   the line <ReadLineNumber> reads there (line 0 when it reads no digits)
     ;; See: <ResetProgramState>, <ClearVariables>, <Statements::GoSub::Transfer>
     ;; Also: RUN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc Run
@@ -264,9 +265,9 @@ Done:
 
     ;; Searches past FOR frames and restores the <Statements::GoSub> caller's line and text position.
     ;;
-    ;; The earlier search sets the low byte of <AssignedVariable> to $FF; later versions set the high byte instead.
-    ;; The earlier code can still match a FOR variable ending in $FF, or select the first frame if the
-    ;; previous high byte is zero.
+    ;; Where `searchLow` is 1 (AppleSoft and PET BASIC 1) the search sets the low byte of <AssignedVariable> to $FF;
+    ;; where it is 0 (PET BASIC 2 and 4) it sets the high byte instead. The low-byte search can still match a FOR
+    ;; variable ending in $FF, or select the first frame if the previous high byte is zero.
     ;;
     ;; Where `popEntry` is 1 (AppleSoft), `POP` enters here too, and Y tells them apart: for `POP` the routine
     ;; discards the frame through <Statements::PopFinish> instead of returning to the caller.

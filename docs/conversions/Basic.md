@@ -860,7 +860,8 @@ Decisions and how the table was applied:
     stack reserve as 23 levels plus eight bytes. BASIC 4's INCHR (CBM4S79, HV4, HV4R) is in prose on the kernal's
     character input, since BASIC gives the name to another routine. The workspace step's
     `VendorOldNamesResolveOnlyInTheirVendorsBuilds` required the shared layouts to cite M6502 alone, which forbade the
-    lineage; it now requires exactly M6502 and the PET line's documents there.
+    lineage; it now requires exactly M6502 and the PET line's documents there. The bibliography's method states the
+    rule too.
     The statement modules' and the historical names' citations already followed the rule. BASIC 1's ZERO is a definition
     of its own in `MsBasic.VariableLookup.asm` (M4), whose step will cite the line on it. The AppleSoft documents
     (ASTIL, AS82) are not available here to check. One test rule would forbid a lineage-only alias: a Commodore alias

@@ -697,11 +697,19 @@ public sealed class DocumentationSet
         List<DocumentationComment> participants = [.. comments.Where(comment => !BareInherit(comment))];
         if (participants.Count == 0) { participants = comments; }
         List<DocumentationSection> sections = [];
+
+        // Definitions outside macros' bodies share sections among themselves, as they would without the macros, and
+        // only while the build has one of them; a macro's body always counts its own.
+        bool mixed = comments.Any(comment => comment.Macro is not null);
+        List<DocumentationComment> outside = [.. participants.Where(comment => comment.Macro is null)];
+        bool outsideBuilt = !mixed || comments.Any(comment => comment.Macro is null && set.CommentInBuild(comment));
         foreach (DocumentationComment comment in participants)
         {
+            List<DocumentationComment> peers = mixed && comment.Macro is null ? outside : participants;
             foreach (DocumentationSection section in comment.Sections)
             {
-                bool shared = participants.All(other => other.Sections.Any(candidate => Same(candidate, section)));
+                bool alike = peers.All(other => other.Sections.Any(candidate => Same(candidate, section)));
+                bool shared = alike && (comment.Macro is not null || outsideBuilt);
                 if (shared)
                 {
                     if (!sections.Any(existing => existing.Condition is null && Same(existing, section)))

@@ -1243,6 +1243,64 @@ public sealed partial class HistoricalNameTests
         string[] apart = [.. Set(Cited).FindAlso("OLD", thisBuild: true).Select(topic => topic.Name)];
         apart.Should().Equal("BAR");
         Set(Macro + "\n" + Cited).FindAlso("OLD", thisBuild: true).Select(topic => topic.Name).Should().Equal(apart);
+
+        // Nor does an inheriting branch the build skips share anything, when it takes no branch at all.
+        const string Neither = """
+            X = 3
+            .if X = 1
+            ;; One.
+            ;; Also: OLD (TEST)
+            FOO = 1
+            .elseif X = 2
+            ;; Inherit:
+            FOO = 2
+            .endif
+            ;; Another.
+            ;; Also: OLD (TEST)
+            BAR = 3
+            """;
+
+        string[] none = [.. Set(Neither).FindAlso("OLD", thisBuild: true).Select(topic => topic.Name)];
+        none.Should().Equal("BAR");
+        Set(Macro + "\n" + Neither).FindAlso("OLD", thisBuild: true).Select(topic => topic.Name).Should().Equal(none);
+    }
+
+    /// <summary>
+    ///  The lint checks a definition outside a macro whose branch only inherits as it would without the macro: the
+    ///  shared section's documents and clashes are reported alike.
+    /// </summary>
+    [TestMethod]
+    public void InheritedOldNamesBesideAMacroAreChecked()
+    {
+        const string Outside = """
+            .ifdef WIDE
+            ;; One.
+            ;; Also: OLD (NOSUCH)
+            FOO = 1
+            .else
+            ;; Inherit:
+            FOO = 2
+            .endif
+            ;; Another.
+            ;; Also: OLD (TEST)
+            BAR = 3
+            """;
+
+        const string Macro = """
+            .macro Library
+            ;; A reader.
+            FOO:
+                rts
+            .endmacro
+            .scope Basic
+                Library
+            .endscope
+            """;
+
+        string[] without = [.. Check(Outside).Select(diagnostic => diagnostic.Message).Order(StringComparer.Ordinal)];
+        without.Should().Contain("Also: no document 'NOSUCH' in the bibliography.");
+        Check(Macro + "\n" + Outside).Select(diagnostic => diagnostic.Message).Order(StringComparer.Ordinal)
+            .Should().Equal(without);
     }
 
     private static List<DocumentationDiagnostic> Check(string text) =>

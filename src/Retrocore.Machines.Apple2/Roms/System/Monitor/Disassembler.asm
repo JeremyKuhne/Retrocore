@@ -118,7 +118,7 @@ MnemonicLow = V2
 ;;
 ;; In: A = the opcode
 ;; Inherit: <Decode> Out
-;; Also: INSDS2 (IIETRM85)
+;; Also: INSDS2 (A2RM78, A2RM79, IIEROM82, IIETRM85)
 Opcode:
 .assert * = $F88E, "Decode::Opcode must stay at $F88E, where the firmware and DOS call it."
 
@@ -137,7 +137,7 @@ Opcode:
     and #ODD_MODE_BITS
 
 ;; Looks up the mode in <AddressingModes>, from opcode / 4 or the odd group's bits, with carry picking the nibble.
-;; Also: IEVEN (IIETRM85)
+;; Also: IEVEN (A2RM78, A2RM79, IIEROM82, IIETRM85)
 LookUpMode:
     lsr a
     tax
@@ -146,13 +146,13 @@ LookUpMode:
     bne Format
 
 ;; An invalid opcode: the invalid mode, and the mnemonic "???".
-;; Also: ERR (IIETRM85)
+;; Also: ERR (A2RM78, A2RM79, IIEROM82, IIETRM85)
 Invalid:
     ldy #INVALID_OPCODE
     lda #AddressMode::INVALID
 
 ;; Looks up the mode's operand format in <OperandFormats>.
-;; Also: GETFMT (IIETRM85)
+;; Also: GETFMT (A2RM78, A2RM79, IIEROM82, IIETRM85)
 Format:
     tax
     lda OperandFormats,x
@@ -225,7 +225,7 @@ Done:
 ;;
 ;; In: A = the opcode
 ;; Inherit: <Decode> Out
-;; Also: INSDS2 (A2RM78, A2RM79, IIEROM82)
+;; Also: INSDS2 (A2RM78, A2RM79, IIEROM82, IIETRM85)
 Opcode:
 .assert * = $F88E, "Decode::Opcode must stay at $F88E, where programs call it."
 
@@ -244,7 +244,7 @@ Opcode:
     and #ODD_MODE_BITS
 
 ;; Looks up the mode in <AddressingModes>, from opcode / 4 or the odd group's bits, with carry picking the nibble.
-;; Also: IEVEN (A2RM78, A2RM79, IIEROM82)
+;; Also: IEVEN (A2RM78, A2RM79, IIEROM82, IIETRM85)
 LookUpMode:
     lsr a
     tax
@@ -253,13 +253,13 @@ LookUpMode:
     bne Format
 
 ;; An invalid opcode: the invalid mode, and the mnemonic "???".
-;; Also: ERR (A2RM78, A2RM79, IIEROM82)
+;; Also: ERR (A2RM78, A2RM79, IIEROM82, IIETRM85)
 Invalid:
     ldy #INVALID_OPCODE
     lda #AddressMode::INVALID
 
 ;; Looks up the mode's operand format in <OperandFormats>, and the operand's length in it.
-;; Also: GETFMT (A2RM78, A2RM79, IIEROM82)
+;; Also: GETFMT (A2RM78, A2RM79, IIEROM82, IIETRM85)
 Format:
     tax
     lda OperandFormats,x

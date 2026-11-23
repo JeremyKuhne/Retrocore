@@ -12,10 +12,12 @@ digests check.
 3. Apple labels nothing references (PRBL3, INITAN, SETPG3, RTS4C, VFYOK, RESTR1, MD3) stay as named locals with
    `Also:`: a label with a documented name is kept.
 4. Locals that jump on to a firmware routine are `ToFirmware`, not `CallFirmware`.
-5. Names are cited only from documents in hand, and only names checked against each document's listing. A routine
-   written once per build cites only the documents whose ROM it is: A2RM78 the Apple II Monitor, A2RM79 that and the
-   Autostart Monitor, IIEROM82 the original IIe's, IIETRM85 the Enhanced IIe's. CLEOLZ and CLREOLZ, each spelled so
-   in only one family's listings, are cited to those listings on every build's definition.
+5. Names are cited only from documents in hand, and only names checked against each document's listing: A2RM78 the
+   Apple II Monitor, A2RM79 that and the Autostart Monitor, IIEROM82 the original IIe's, IIETRM85 the Enhanced IIe's.
+   A routine that descends through the builds is one lineage (the owner's decision): each of its definitions, even
+   one written per build, cites every document that names the routine in any build, so CLEOLZ (the Apple II's
+   spelling) and CLREOLZ (the IIe's) are on every build's ClearLineFrom. A document whose builds lack the routine is
+   not cited (STEP and BRANCH have no IIe document).
 6. Names that may be this source's own (MEMFIND, MINIASM, TITLE2E, RDKEYHOOK ...) stay in `Also:` as UNKN;
    XGOTOCX (IIEROM82) and DOCOUT1 (IIETRM85), which the IIe listings give, cite them. Obviously generated numbered
    locals (`GETLN_1`, `CLREOP_2`) are dropped with no `Also:`.

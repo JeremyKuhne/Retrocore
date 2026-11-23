@@ -201,7 +201,7 @@ FromA2:
 ;; function $0E puts in the page: it turns the 80-column firmware off first when it is on, but keeps input at slot
 ;; 3 while output goes there.
 ;; In: X = the hook's address in page zero, <CSWL> or <KSWL>, Y = the Monitor routine's low byte, A2L = the slot
-;; Also: IOPRT (IIETRM85)
+;; Also: IOPRT (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc SetHook
 .assert * = $FE9B, "SetHook must stay at $FE9B."
     lda A2L
@@ -226,7 +226,7 @@ Store:
 ;;
 ;; At $FE9B.
 ;; In: X = the hook's address in page zero, <CSWL> or <KSWL>, Y = the Monitor routine's low byte, A2L = the slot
-;; Also: IOPRT (A2RM78, A2RM79, IIEROM82)
+;; Also: IOPRT (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc SetHook
 .assert * = $FE9B, "SetHook must stay at $FE9B."
     lda A2L
@@ -311,7 +311,7 @@ ChecksumFix:
 ;;
 ;; It moves <YSAV> back onto the T, so that after each step (<Commands::Step>, which it falls into) the command
 ;; line runs the T again. A BRK in the program, or reset, stops it.
-;; Also: TRACE (A2RM78, A2RM79)
+;; Also: TRACE (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc Trace
     dec YSAV
     ; Falls into Step.
@@ -321,7 +321,7 @@ ChecksumFix:
 ;;
 ;; <RunInstruction at Stepper::RunInstruction> runs it.
 ;; In: X = 1 when the command gave an address, 0 when not, A1L/A1H = the address
-;; Also: STEPZ (A2RM78, A2RM79)
+;; Also: STEPZ (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc Step
     jsr SetPcFromA1
     jmp Stepper::RunInstruction
@@ -332,7 +332,7 @@ ChecksumFix:
 ;;
 ;; Its entry in the key table is a Control-Y that a later Control-Y entry hides; the Enhanced IIe gave the
 ;; entry to the "!" command.
-;; Also: TRACE (A2RM79, IIEROM82, IIETRM85)
+;; Also: TRACE (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc Trace
     rts
 
@@ -346,7 +346,7 @@ ChecksumFix:
 ;; five NOPs after the rts, which run into <Commands::User>, and in the original IIe at the text that replaced
 ;; them (<Commands::UserText>), which runs into it too. The
 ;; Enhanced IIe gave the entry to its own S command, which searches memory.
-;; Also: STEPZ (A2RM79, IIEROM82, IIETRM85)
+;; Also: STEPZ (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc Step
     rts
 .if MONITOR = MONITOR_AUTOSTART
@@ -414,7 +414,7 @@ Done:
 ;;
 ;; At $FECD. Integer `BASIC` calls $FECF, after the lda, with its own header length in A.
 ;; In: A1L/A1H = the first address, A2L/A2H = the last
-;; Also: WRITE (IIETRM85)
+;; Also: WRITE (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc WriteCassette
 .assert * = $FECD, "WriteCassette must stay at $FECD."
     lda #WRITE_HEADER_LENGTH
@@ -467,7 +467,7 @@ Next:
 ;; It drops the return address of the command line's call to <Commands::RunCommand>, and its high byte, $FF,
 ;; makes the branch always taken.
 ;; In: A = the waiting command, or 0, X = 1 after a number, 0 when none, Y = 0
-;; Also: CRMON (IIETRM85)
+;; Also: CRMON (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc Return
     jsr ExamineNextOrBlank
     pla
@@ -484,7 +484,7 @@ Next:
 ;; In: A1L/A1H = the first address, A2L/A2H = the last
 ;; Entry:
 ;;   Finish = switches slot ROM back in and reports: <Beep> when zero is set, or <PrintError>
-;; Also: READ (IIETRM85)
+;; Also: READ (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc ReadCassette
 .assert * = $FEFD, "ReadCassette must stay at $FEFD."
     sta SETINTCXROM
@@ -555,7 +555,7 @@ TitleEnhanced:
 ;; At $FECD. Integer `BASIC` calls $FECF, after the lda, with its own header length in A.
 ;; In: A1L/A1H = the first address, A2L/A2H = the last
 ;; Out: A1L/A1H = the address after A2
-;; Also: WRITE (A2RM78, A2RM79, IIEROM82)
+;; Also: WRITE (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc WriteCassette
 .assert * = $FECD, "WriteCassette must stay at $FECD."
     lda #WRITE_HEADER_LENGTH
@@ -606,7 +606,7 @@ NextBit:
 ;; It drops the return address of the command line's call to <Commands::RunCommand>, and its high byte, $FF,
 ;; makes the branch always taken.
 ;; In: A = the waiting command, or 0, X = 1 after a number, 0 when none, Y = 0
-;; Also: CRMON (A2RM78, A2RM79, IIEROM82)
+;; Also: CRMON (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc Return
     jsr ExamineNextOrBlank
     pla
@@ -621,7 +621,7 @@ NextBit:
 ;; At $FEFD.
 ;; In: A1L/A1H = the first address, A2L/A2H = the last
 ;; Out: A1L/A1H = the address after A2
-;; Also: READ (A2RM78, A2RM79, IIEROM82)
+;; Also: READ (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc ReadCassette
 .assert * = $FEFD, "ReadCassette must stay at $FEFD."
 

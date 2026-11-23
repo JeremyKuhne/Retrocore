@@ -192,7 +192,7 @@ StoreByte:
 ;; At $FA40. The 6502's IRQ vector points at the firmware's handler, <IRQHANDLER>, so only code that jumps here by
 ;; address comes this way. The firmware handles BRK and hands it back at <BreakFromFirmware>.
 ;; In: A = the interrupted program's A
-;; Also: IRQ (IIETRM85)
+;; Also: IRQ (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc Interrupt
 .assert * = $FA40, "Interrupt must stay at $FA40."
     sta A5H
@@ -218,7 +218,7 @@ StoreByte:
 ;;
 ;; At $FA40; in the Apple II Monitor, $FA86. The 6502's IRQ vector points here.
 ;; In: A = the interrupted program's A, the stack as the interrupt left it
-;; Also: IRQ (A2RM78, A2RM79, IIEROM82)
+;; Also: IRQ (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc Interrupt
 .if MONITOR = MONITOR_II
     .assert * = $FA86, "Interrupt (IRQ) is at $FA86 in the Apple II Monitor."

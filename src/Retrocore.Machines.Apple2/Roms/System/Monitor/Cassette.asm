@@ -106,7 +106,7 @@ Done:
 ;;
 ;; At $FCC9.
 ;; In: A = the tone's length, in 256 half cycles
-;; Also: HEADR (IIETRM85)
+;; Also: HEADR (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc WriteHeader
 .assert * = $FCC9, "Cassette::WriteHeader must stay at $FCC9."
     sta SETINTCXROM
@@ -198,7 +198,7 @@ LastLevel = LENGTH
 ;;
 ;; At $FCC9.
 ;; In: A = the tone's length, about A x 256 half cycles; carry = set (clear makes it 256 fewer)
-;; Also: HEADR (A2RM78, A2RM79, IIEROM82)
+;; Also: HEADR (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc WriteHeader
 .assert * = $FCC9, "Cassette::WriteHeader must stay at $FCC9."
     ; WriteHalfCycle counts X down: 256 half cycles a round.

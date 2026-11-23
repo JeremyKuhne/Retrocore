@@ -148,9 +148,13 @@ to main with the source, says where each was decided.
   Everything else is in a family scope, even a routine programs call by address (`LowRes::Plot`).
 - **A family spread through a ROM is one scope in pieces**: `.scope X`, then `.scope X continued` for each later
   piece, with a plain `;` comment saying which part.
-- **Builds that differ mid-routine** are written as whole `.proc`s per build under `.if`, repeating the few shared
-  lines, rather than `.if`s inside a routine. This is for a source's own builds; code several vendors share is
-  decided in [the alignment plan](backlog/ConversionAlignment.md) (D5).
+- **Builds that differ mid-routine** keep one routine with `.if`s inside it, so the source shows how each version
+  changed the one before; repeating the unchanged lines in a `.proc` per build hides that. A routine that differs
+  throughout is a `.proc` per build. Its contract states what holds in every build
+  ([the alignment plan](backlog/ConversionAlignment.md), D5).
+- **A routine that descends through the builds is one lineage**: each of its definitions cites, in `Also:`, every
+  document whose listing names it, in any build, so a name from any version finds it in all of them (ClearLineFrom
+  carries the Apple II's CLEOLZ and the IIe's CLREOLZ). A document whose builds lack the routine is not cited.
 - **A routine split over two files** (as Apple split RWTS for size) may be one `.proc` spanning the include.
 - **Numbers shared between sources** (the firmware's function numbers, the mode bits) go in one shared file the
   sources include, with `.assert`s tying them to the tables that use them.

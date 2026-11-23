@@ -244,7 +244,7 @@ Done:
 ;; Out: BASL/BASH
 ;; Entry:
 ;;   ToFirmware = goes to the firmware function in Y; <ClearToEndOfWindow> and <Scroll> branch here too
-;; Also: VTABZ (IIETRM85)
+;; Also: VTABZ (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc SetLineBase
 .assert * = $FC24, "SetLineBase must stay at $FC24."
     ; The firmware takes the line in BASL and the caller's Y in A.
@@ -269,7 +269,7 @@ ToFirmware:
 ;; Keeps: X, Y
 ;; Entry:
 ;;   Done = the return that <CursorUp> and <Escape::Command> share
-;; Also: VTABZ (A2RM78, A2RM79, IIEROM82)
+;; Also: VTABZ (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc SetLineBase
 .assert * = $FC24, "SetLineBase must stay at $FC24."
     ; BaseAddress returns with the carry clear.
@@ -334,7 +334,7 @@ Done:
 ;; Clears from the cursor to the end of the window, through the internal firmware.
 ;;
 ;; At $FC42.
-;; Also: CLREOP (IIETRM85)
+;; Also: CLREOP (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc ClearToEndOfWindow
 .assert * = $FC42, "ClearToEndOfWindow must stay at $FC42."
     ldy #FIRMWARE_CLEAR_TO_END_OF_WINDOW
@@ -371,7 +371,7 @@ FortyColumns:
 ;; At $FC58.
 ;; Entry:
 ;;   ToFirmware = goes to the firmware function in Y; <ScreenOutByWidth> branches here too
-;; Also: HOME (IIETRM85)
+;; Also: HOME (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc Home
 .assert * = $FC58, "Home must stay at $FC58."
     ldy #FIRMWARE_HOME
@@ -388,7 +388,7 @@ ToFirmware:
 ;; Clears from the cursor to the end of the window, through the internal firmware.
 ;;
 ;; At $FC42.
-;; Also: CLREOP (IIEROM82)
+;; Also: CLREOP (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc ClearToEndOfWindow
 .assert * = $FC42, "ClearToEndOfWindow must stay at $FC42."
     ldy #FIRMWARE_CLEAR_TO_END_OF_WINDOW
@@ -401,7 +401,7 @@ ToFirmware:
 ;; Clears the window and puts the cursor at its top left, through the internal firmware.
 ;;
 ;; At $FC58.
-;; Also: HOME (IIEROM82)
+;; Also: HOME (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc Home
 .assert * = $FC58, "Home must stay at $FC58."
     ldy #FIRMWARE_HOME
@@ -420,7 +420,7 @@ ToFirmware:
 ;; Keeps: X
 ;; Entry:
 ;;   NextLine = clears line A from column Y, then the lines below it from column 0; <Home> enters here
-;; Also: CLREOP (A2RM78, A2RM79)
+;; Also: CLREOP (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc ClearToEndOfWindow
 .assert * = $FC42, "ClearToEndOfWindow must stay at $FC42."
     ; The first line clears from the cursor.
@@ -448,7 +448,7 @@ NextLine:
 ;;
 ;; At $FC58.
 ;; Keeps: X
-;; Also: HOME (A2RM78, A2RM79)
+;; Also: HOME (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc Home
 .assert * = $FC58, "Home must stay at $FC58."
     lda WNDTOP
@@ -491,7 +491,7 @@ NextLine:
 ;; Scrolls the text window up one line and clears the bottom line, through the internal firmware.
 ;;
 ;; At $FC70.
-;; Also: SCROLL (IIETRM85)
+;; Also: SCROLL (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc Scroll
 .assert * = $FC70, "Scroll must stay at $FC70."
     ldy #FIRMWARE_SCROLL
@@ -557,7 +557,7 @@ Print:
 ;; At $FC70.
 ;; Entry:
 ;;   ToFirmware = goes to the firmware function in Y, for the screen routines around it
-;; Also: SCROLL (IIEROM82)
+;; Also: SCROLL (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc Scroll
 .assert * = $FC70, "Scroll must stay at $FC70."
     ldy #FIRMWARE_SCROLL
@@ -620,7 +620,7 @@ Done:
 ;; At $FC70. From the window's top line down, each line gets a copy of the one below it, from the window's
 ;; right edge to its left; then the bottom line is cleared and <BASL>/<BASH> set for the cursor's line again.
 ;; Keeps: X
-;; Also: SCROLL (A2RM78, A2RM79)
+;; Also: SCROLL (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc Scroll
 .assert * = $FC70, "Scroll must stay at $FC70."
     ; The stack holds the line being read.
@@ -668,7 +668,7 @@ ClearBottom:
 ;; Clears from the cursor to the end of the line, through the internal firmware.
 ;;
 ;; At $FC9C. With the carry set, it goes on past <ClearLineFrom>'s first byte.
-;; Also: CLREOL (IIETRM85)
+;; Also: CLREOL (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc ClearToEndOfLine
 .assert * = $FC9C, "ClearToEndOfLine must stay at $FC9C."
     sec
@@ -680,7 +680,7 @@ ClearBottom:
 ;;
 ;; At $FC9E.
 ;; In: Y = the column, BASL/BASH = the line
-;; Also: CLREOLZ (IIETRM85), CLEOLZ (A2RM78, A2RM79)
+;; Also: CLREOLZ (IIEROM82, IIETRM85), CLEOLZ (A2RM78, A2RM79)
 .proc ClearLineFrom
 .assert * = $FC9E, "ClearLineFrom must stay at $FC9E."
     clc
@@ -697,7 +697,7 @@ ClearBottom:
 ;; Clears from the cursor to the end of the line, through the internal firmware.
 ;;
 ;; At $FC9C. With the carry clear, it goes on past <ClearLineFrom>'s first byte.
-;; Also: CLREOL (IIEROM82)
+;; Also: CLREOL (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc ClearToEndOfLine
 .assert * = $FC9C, "ClearToEndOfLine must stay at $FC9C."
     clc
@@ -709,7 +709,7 @@ ClearBottom:
 ;;
 ;; At $FC9E.
 ;; In: Y = the column, BASL/BASH = the line
-;; Also: CLREOLZ (IIEROM82), CLEOLZ (A2RM78, A2RM79)
+;; Also: CLREOLZ (IIEROM82, IIETRM85), CLEOLZ (A2RM78, A2RM79)
 .proc ClearLineFrom
 .assert * = $FC9E, "ClearLineFrom must stay at $FC9E."
 
@@ -733,7 +733,7 @@ Column = $1F
 ;; At $FC9C.
 ;; Out: carry = set
 ;; Keeps: X
-;; Also: CLREOL (A2RM78, A2RM79)
+;; Also: CLREOL (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc ClearToEndOfLine
 .assert * = $FC9C, "ClearToEndOfLine must stay at $FC9C."
     ldy CH

@@ -57,7 +57,7 @@ TRCLIN:
     jsr OUTSPC
 
 ;; Advances past the separator and dispatches a statement using <STMDSP>, or treats a non-token as LET.
-;; See: <NEWSTT>, <LET>
+;; See: <NEWSTT>, <Statements::Let>
 GONE:
     jsr CHRGET
     jsr GONE3

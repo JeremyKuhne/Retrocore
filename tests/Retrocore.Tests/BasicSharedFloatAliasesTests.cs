@@ -43,7 +43,31 @@ public sealed class BasicSharedFloatAliasesTests
         ["GRODY2"] = ["UNKN"],
         ["PRIT31"] = ["UNKN"],
         ["PRIT32"] = ["UNKN"],
-        ["REMER1"] = ["UNKN"]
+        ["REMER1"] = ["UNKN"],
+        ["INDLO1"] = ["UNKN"],
+        ["GOTAR1"] = ["UNKN"],
+        ["GOTAR2"] = ["UNKN"],
+        ["NOTOP1"] = ["UNKN"],
+        ["ANDOP"] = ["UNKN"],
+        ["OROP1"] = ["UNKN"],
+        ["OROP11"] = ["UNKN"],
+        ["OROP12"] = ["UNKN"],
+        ["NOWGE2"] = ["UNKN"],
+        ["NOWGE3"] = ["UNKN"],
+        ["TRMOK1"] = ["UNKN"],
+        ["PTRGT4"] = ["UNKN"],
+        ["STRNA1"] = ["UNKN"],
+        ["STRNA2"] = ["UNKN"],
+        ["STRNA3"] = ["UNKN"],
+        ["SIMZER"] = ["UNKN"],
+        ["FMAPT1"] = ["UNKN"],
+        ["QINTG1"] = ["UNKN"],
+        ["ARYVA2"] = ["M6502"],
+        ["ARYVA3"] = ["M6502"],
+        ["ARYVGO"] = ["M6502"],
+        ["ARYGET"] = ["M6502"],
+        ["GOGO"] = ["M6502"],
+        ["DVARTS"] = ["M6502"]
     };
 
     // The names Microsoft's source gives only in its Commodore builds, with the documents that give each.
@@ -60,8 +84,13 @@ public sealed class BasicSharedFloatAliasesTests
         ["CHDRTS"] = ["CBM4S79", "HV1", "HV1R", "HV2", "HV4", "HV4R"]
     };
 
-    // The names whose aliases Commodore's file guards, so that only some builds define them.
-    private static readonly HashSet<string> s_guardedNames = ["RESCR2", "PRIT3B"];
+    // The names whose aliases Commodore's file guards, so that only some builds define them: BASIC 4's lister names,
+    // and the names of the expression, variable and string modules' definitions, which the math region's build leaves
+    // out and BasicExpressionsConversionTests checks in the whole builds.
+    private static readonly HashSet<string> s_guardedNames =
+    [
+        "RESCR2", "PRIT3B", .. BasicExpressionsConversionTests.CommodoreOldNames.Keys
+    ];
 
     // Addresses in the independently assembled PET1, PET2 and PET4 listings:
     // https://github.com/ethandicks/cbmsymbols/tree/e3120427a32e8b066eb8afdc434af547fd0906f3/listings
@@ -149,9 +178,18 @@ public sealed class BasicSharedFloatAliasesTests
         symbols.Remove("ISLETC");
         symbols.Remove("ISLRTS");
 
-        // BASIC 4's lister names, which the whole builds' tests check, would define the aliases without the lister.
+        // BASIC 1's zero is in its variable lookup, not the math region, whose constants' file documents the other
+        // builds' ZERO: predefined, it would be a second definition of that old name.
+        symbols.Remove("ZERO");
+
+        // BASIC 4's lister names, which the whole builds' tests check, would define the aliases without the lister; so
+        // would the old names of the expression, variable and string modules' definitions.
         symbols.Remove("RESCR2");
         symbols.Remove("PRIT3B");
+        foreach (string name in BasicExpressionsConversionTests.CommodoreTargetOldNames)
+        {
+            symbols.Remove(name);
+        }
 
         bool basic1 = model == PetModel.Pet2001;
         bool basic2 = model == PetModel.Pet2001Basic2;
@@ -229,13 +267,22 @@ public sealed class BasicSharedFloatAliasesTests
         CheckDocumentation(native, PetAliases);
     }
 
-    // Each alias in the file is a scoped constant, documented above it, whose Also: section gives the vendor's
-    // names; each name resolves to its target through the alias, and to no shared definition.
-    private static void CheckAliases(
+    /// <summary>
+    ///  Checks a vendor's historical names file: each alias is a scoped constant, documented above it, whose Also:
+    ///  section gives the vendor's names; each name resolves to its target through the alias, and to no shared
+    ///  definition.
+    /// </summary>
+    /// <param name="result">The build.</param>
+    /// <param name="path">The historical names file.</param>
+    /// <param name="expected">The names the file must give, with the documents each cites.</param>
+    /// <param name="pet">The PET build, whose documents a name without M6502 must cite; null for AppleSoft.</param>
+    /// <param name="part">The names to compare, when only part of the file's are checked; null for all.</param>
+    internal static void CheckAliases(
         AssemblyResult result,
         string path,
         Dictionary<string, string[]> expected,
-        (PetModel Model, bool Original)? pet)
+        (PetModel Model, bool Original)? pet,
+        IReadOnlyCollection<string>? part = null)
     {
         string full = Path.GetFullPath(path);
         bool InFile(string? location) =>
@@ -250,15 +297,24 @@ public sealed class BasicSharedFloatAliasesTests
         result.SourceMap.Where(entry => entry.Size > 0 && InFile(entry.Location?.Path))
             .Should().BeEmpty("aliases must not emit bytes");
 
-        // The old names the file gives, from its own text: every alias gives at least one.
+        // The old names the file gives, from its own text: every alias gives at least one. Of two guarded aliases that
+        // give one name to different definitions in different builds (ARYVA2, K12), only the one the build defines is
+        // read.
+        string[] lines = File.ReadAllLines(path);
         DocumentationFile file = DocumentationParser.Parse(File.ReadAllText(path), path);
+        bool Defined(DocumentationComment comment) =>
+            lines[comment.TargetLine].Split('=', 2) is [string alias, _]
+                && definitions.Any(symbol => symbol.Name.EndsWith("::" + alias.Trim(), StringComparison.Ordinal));
+
         // Only a guarded alias's name, which the build leaves out, may be missing from the expected names; any other
         // unexpected name, even one the build does not resolve, fails the comparison below.
         IEnumerable<DocumentationAlso> inBuild = file.Comments
+            .Where(comment => Defined(comment) || !DocumentationAlso.Of(comment.Sections).Any(also => s_guardedNames.Contains(also.Name)))
             .SelectMany(comment => DocumentationAlso.Of(comment.Sections))
             .Where(also => expected.ContainsKey(also.Name)
                 || !s_guardedNames.Contains(also.Name)
-                || result.HistoricalNames.ContainsKey(also.Name));
+                || result.HistoricalNames.ContainsKey(also.Name))
+            .Where(also => part is null || part.Contains(also.Name));
 
         DocumentationAlso[] given = [.. inBuild];
         given.Select(also => also.Name).Should().BeEquivalentTo(expected.Keys);

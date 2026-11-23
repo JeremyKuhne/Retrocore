@@ -113,7 +113,7 @@ ATNFIX:
     .word RIGHT
     .word MID
 
-    OperatorEntries 0, 0, ANDOP
+    OperatorEntries 0, 0, Operators::And
 
 ;; Reserved words in token order; bit 7 marks the last character of each spelling.
 ;; <CRUNCH> searches this list and <Statements::List> expands tokens from it. A zero byte ends the list.

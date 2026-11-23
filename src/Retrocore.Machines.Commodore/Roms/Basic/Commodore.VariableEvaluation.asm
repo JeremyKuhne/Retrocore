@@ -80,7 +80,7 @@ ISVDS:
 STRRTS:
     rts
 
-    INTEGER_VARIABLE_VALUE
+    IntegerVariableValue
 
 .if clockPatch
     jmp TINUM

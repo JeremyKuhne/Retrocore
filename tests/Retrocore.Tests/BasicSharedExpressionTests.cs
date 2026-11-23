@@ -155,6 +155,7 @@ public sealed class BasicSharedExpressionTests
         string folder = Path.Join(Inputs, "Microsoft6502Basic");
         string source = $"""
             .cpu Mos6502
+            .include "MsBasic.Layouts.asm"
             .include "MsBasic.Relational.asm"
             .org ${legacy.Symbol("DOREL"):X4}
                 RelationalOperators {(apple ? "$01" : "$FF")}
@@ -237,7 +238,7 @@ public sealed class BasicSharedExpressionTests
         {
             Registers = new()
             {
-                ProgramCounter = checked((ushort)native.Symbol(or ? "OROP" : "ANDOP")),
+                ProgramCounter = checked((ushort)native.Symbol(or ? "OROP" : "Operators::And")),
                 StackPointer = 0xFF,
                 Status = StatusRegister.Unused
             }
@@ -278,7 +279,7 @@ public sealed class BasicSharedExpressionTests
         {
             Registers = new()
             {
-                ProgramCounter = checked((ushort)native.Symbol(or ? "OROP" : "OROP1")),
+                ProgramCounter = checked((ushort)native.Symbol(or ? "OROP" : "Operators::And")),
                 Status = StatusRegister.Unused
             }
         };
@@ -298,24 +299,27 @@ public sealed class BasicSharedExpressionTests
         string folder = Path.Join(Inputs, "Microsoft6502Basic");
         string source = $"""
             .cpu Mos6502
+            .include "MsBasic.Layouts.asm"
             .include "MsBasic.OperandEvaluation.asm"
             .org ${legacy.Symbol("OROP"):X4}
-                LOGICAL_OPERATORS {(bitwise ? 1 : 0)}
+                LogicalOperators {(bitwise ? 1 : 0)}
             """;
 
         string[] dependencies = bitwise
             ? ["COUNT", "AYINT", "FACMO", "INTEGR", "FACLO", "MOVFA", "GIVAYF"]
             : ["ARGEXP", "FACEXP", "SNGFLT"];
 
+        Dictionary<string, long> symbols = dependencies.ToDictionary(
+            name => name, name => legacy.Symbol(name), StringComparer.Ordinal);
+
         AssemblyOptions options = new(ProcessorVariant.Mos6502, 0, 0x10000)
         {
             SourceResolver = new FileAssemblySourceResolver(),
-            PredefinedSymbols = BasicNames.WithCurrentNames(dependencies.ToDictionary(
-                name => name, name => legacy.Symbol(name), StringComparer.Ordinal))
+            PredefinedSymbols = BasicNames.WithCurrentNames(symbols)
         };
 
         AssemblyResult native = new Assembler.Assembler().Assemble(
-            new AssemblySource(source, Path.Join(folder, "LogicalOperatorsTest.asm")), options);
+            new AssemblySource(BasicNames.ScopedNames(symbols) + "\n" + source, Path.Join(folder, "LogicalOperatorsTest.asm")), options);
 
         native.Success.Should().BeTrue(string.Join(Environment.NewLine, native.Diagnostics.Select(diagnostic =>
             $"{diagnostic.Location?.Path}:{diagnostic.Location?.Line + 1}: {diagnostic.Message}")));
@@ -329,9 +333,11 @@ public sealed class BasicSharedExpressionTests
         string folder = Path.Join(Inputs, "Microsoft6502Basic");
         string source = $"""
             .cpu Mos6502
+            .include "MsBasic.Layouts.asm"
+            .include "MsBasic.OperatorTable.asm"
             .include "MsBasic.ExpressionCore.asm"
             .org ${start:X4}
-                EXPRESSION_CORE {(carryReturn ? 1 : 0)}
+                ExpressionCore {(carryReturn ? 1 : 0)}
             EXPRESSION_END:
             """;
 
@@ -353,7 +359,7 @@ public sealed class BasicSharedExpressionTests
         };
 
         AssemblyResult native = new Assembler.Assembler().Assemble(
-            new AssemblySource(source, Path.Join(folder, "ExpressionCoreTest.asm")),
+            new AssemblySource(BasicNames.ScopedNames(symbols) + "\n" + source, Path.Join(folder, "ExpressionCoreTest.asm")),
             options);
 
         native.Success.Should().BeTrue(string.Join(Environment.NewLine, native.Diagnostics.Select(diagnostic =>
@@ -371,6 +377,13 @@ public sealed class BasicSharedExpressionTests
 
         foreach (AssemblySymbol label in labels)
         {
+            // A vendor's alias reaches its name only in a build that includes the vendor's historical names: a
+            // standalone build of the module skips it, and a whole build must have it.
+            if (BasicNames.IsVendorName(label.Name) && !BasicNames.IncludesHistoricalNames(native))
+            {
+                continue;
+            }
+
             native.SymbolsWithHistoricalNames.Should().ContainKey(label.Name);
             native.Symbol(label.Name).Should().Be(label.Value, $"{label.Name} must retain its ROM address");
         }

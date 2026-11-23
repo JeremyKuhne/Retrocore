@@ -85,7 +85,7 @@ GONE:
     .assert diskCommands = 0 || diskCommands = 1, "diskCommands is 0 or 1."
     .assert earlyDispatch = 0 || diskCommands = 0, "Early dispatch has no disk-command gap."
 
-;; Dispatches a statement token through <STMDSP>, or treats a non-token as <LET>.
+;; Dispatches a statement token through <STMDSP>, or treats a non-token as <Statements::Let>.
 ;; Entry: GONE2 = dispatches the token in A after ON's selection
 ;; In: A = statement token or first character, carry = set for a non-digit
 ;; Errors: SYNTAX for a non-statement reserved word

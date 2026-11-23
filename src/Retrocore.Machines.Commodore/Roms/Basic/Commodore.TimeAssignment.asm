@@ -1,6 +1,6 @@
 ; COMMODORE BASIC: CLOCK-STRING ASSIGNMENT
 ;
-; This block follows the shared <INPCOM> entry and falls through to <GETSPT>
+; This block follows the shared <AssignString> entry and falls through to <StoreString>
 ; when the destination is an ordinary string variable.
 
 ;; Emits the TI$ assignment entry for a six-digit hours, minutes and seconds string.

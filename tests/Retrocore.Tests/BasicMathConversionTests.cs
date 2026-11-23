@@ -117,12 +117,14 @@ public sealed class BasicMathConversionTests
         appleNames.Should().Contain(["PRNTFAC", "FIDVT", "BILLION", "MISMTCH", "OVERFLOW"]);
         petNames.Should().Contain(["SQR05", "TENC", "MULLN2", "GFDIV"]);
 
-        foreach (string name in appleNames)
+        // A name both vendors' files give, each for its own definition (ANDOP and the classic collector's steps, from
+        // the expressions step, K12), reaches each vendor's own alias, which the loop below checks.
+        foreach (string name in appleNames.Except(petNames))
         {
             pet.Should().AllSatisfy(build => build.HasSymbol(name).Should().BeFalse($"{name} is AppleSoft's name"));
         }
 
-        foreach (string name in petNames)
+        foreach (string name in petNames.Except(appleNames))
         {
             apple.Should().AllSatisfy(build => build.HasSymbol(name).Should().BeFalse($"{name} is the PET's name"));
         }

@@ -22,12 +22,12 @@
     .proc Fre
     lda ValueType
     beq Collect
-    jsr FREFAC
+    jsr Strings::ReleaseFac
 
 ;; Collects garbage and subtracts.
 ;; Also: NOFREF (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 Collect:
-    jsr GARBA2
+    jsr Strings::CollectGarbage
     sec
     lda StringsBottom
     sbc ArraysEnd

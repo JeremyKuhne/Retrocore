@@ -108,10 +108,10 @@
     ;; 255 because the increment wraps. With text after the byte, it returns for the dispatcher's syntax error. Some
     ;; builds retain this entry without exposing a NULL token.
     ;; Errors: ILLEGAL QUANTITY for other byte values
-    ;; See: <GETBYT>
+    ;; See: <EvaluateByte>
     ;; Also: NULL (M6502, HV1, HV1R)
     .proc Null
-    jsr GETBYT
+    jsr EvaluateByte
     bne Cont::Done
     inx
     cpx #incrementedLimit
@@ -119,10 +119,10 @@
     dex
     stx NULCNT
     rts
-;; Jumps to <FCERR>.
+;; Jumps to <IllegalQuantityError>.
 ;; Also: FCERR1 (M6502, HV1, HV1R)
 ToIllegalQuantity:
-    jmp FCERR
+    jmp IllegalQuantityError
     .endproc
     .endscope
 

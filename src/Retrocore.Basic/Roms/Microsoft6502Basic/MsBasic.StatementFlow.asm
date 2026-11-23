@@ -18,7 +18,7 @@
     .scope Statements continued
 
     ;; Skips DATA fields up to an unquoted colon or end of line.
-    ;; See: <FindStatementEnd>, <READ>
+    ;; See: <FindStatementEnd>, <Statements::Read>
     ;; Also: DATA (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc Data
     jsr FindStatementEnd
@@ -45,7 +45,7 @@ Done:
 
     ;; Scans from <TextPointer> to an unquoted colon or a zero byte.
     ;; Out: Y = terminator offset, A = the terminator, zero = set
-    ;; See: <Statements::Data>, <DATLOP>, <FindLineEnd>
+    ;; See: <Statements::Data>, <AssignVariableList::SearchData>, <FindLineEnd>
     ;; Also: DATAN (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc FindStatementEnd
     ldx #':'
@@ -109,12 +109,12 @@ NextCharacter:
     ;; See: <Statements::Rem>, <Statements::GoTo>, <GONE3>
     ;; Also: IF (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc If
-    jsr FRMEVL
+    jsr EvaluateExpression
     jsr GetCurrentCharacter
     cmp #TOKEN_GOTO
     beq Test
     lda #TOKEN_THEN
-    jsr SYNCHR
+    jsr CheckCharacter
 ;; <FacExponent> nonzero: true.
 ;; Also: OKGOTO (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 Test:
@@ -159,7 +159,7 @@ ToExecuteStatement:
     ;;   Done = returns; <ReadLineNumber> exits through it at a non-digit
     ;; Also: ONGOTO (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc On
-    jsr GETBYT
+    jsr EvaluateByte
     pha
     cmp #TOKEN_GOSUB
     beq NextEntry

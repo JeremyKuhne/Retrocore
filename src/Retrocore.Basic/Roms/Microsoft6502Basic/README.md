@@ -50,9 +50,9 @@ The interpreter modules also retain each variant's original bytes:
 | --- | --- |
 | `MsBasic.ArrayMultiplication.asm` | Shared unsigned array multiplication, with no switches. |
 | `MsBasic.Arrays.asm` | Array lookup and allocation, selecting existing-array support, allocation-counter initialization and the early offset bug independently. |
-| `MsBasic.Assignment.asm` | `ASSIGNMENT_START` supplies LET and the `INPCOM` entry. `STRING_ASSIGNMENT` selects optional platform hooks for a disk-status source and linked-string collection. |
+| `MsBasic.Assignment.asm` | `AssignmentStart` supplies LET and the `INPCOM` entry. `StringAssignment` selects optional platform hooks for a disk-status source and linked-string collection. |
 | `MsBasic.CharacterReader.asm` | The uppercase-letter test and `CharacterReader` template. The latter takes seed byte `$59` for BASIC 1, `$58` for AppleSoft and BASIC 2/4; startup copies only the first four seed bytes. |
-| `MsBasic.ExpressionCore.asm` | `EXPRESSION_CORE 1` carries a `PUSHF` return address across a page, as BASIC 4 does; AppleSoft and BASIC 1/2 use `0`. |
+| `MsBasic.ExpressionCore.asm` | `ExpressionCore 1` carries a `PUSHF` return address across a page, as BASIC 4 does; AppleSoft and BASIC 1/2 use `0`. |
 | `MsBasic.OperandEvaluation.asm` | Shared operand and function dispatch, with independent choices for the PI token and Boolean or signed 16-bit logical operators. |
 | `MsBasic.VariableInput.asm` | Shared READ and GET/INPUT variable processing, with independent buffer, channel, character-mask and retry choices. |
 | `MsBasic.VariableLookup.asm` | Variable-name parsing and scalar lookup, with independent choices for reserved names, zero storage, caller checks and linked-array fixups. |
@@ -91,17 +91,17 @@ ROM guard and padding):
 | PET BASIC 2 | `1` | `1, 1, 0, 1` | `ZSTORD`, its hidden-message extension |
 | PET BASIC 4 | `1` | `1, 1, 0, 0` | `STORDO` |
 
-`STRING_FUNCTIONS` takes the zero-slice check, indirect preamble return, shared LEN/ASC jump and VAL terminator
+`StringFunctions` takes the zero-slice check, indirect preamble return, shared LEN/ASC jump and VAL terminator
 choices in that order. AppleSoft uses `1, 0, 0, 0`; PET BASIC 1 uses `1, 1, 1, 0`, BASIC 2 uses `0, 0, 0, 0`,
 and BASIC 4 uses `0, 0, 0, 1`.
 
-`STRING_STORAGE` takes the input-buffer page and whether to clear `FACOV`: AppleSoft uses `2, 0`, PET BASIC 1
-uses `0, 0`, and BASIC 2/4 use `2, 1`. Follow it with `STRING_ALLOCATION 1` for BASIC 4's linked allocator,
+`StringStorage` takes the input-buffer page and whether to clear `FACOV`: AppleSoft uses `2, 0`, PET BASIC 1
+uses `0, 0`, and BASIC 2/4 use `2, 1`. Follow it with `StringAllocation 1` for BASIC 4's linked allocator,
 or `0` for the other variants.
 
-After the matching collector, `STRING_CONCATENATION 0` emits `CAT` through `FRETMS` for AppleSoft and PET
-BASIC 1/2; BASIC 4 uses `STRING_CONCATENATION 1` and supplies its `STRADJ` link helper. Follow either with
-the variant's `STRING_FUNCTIONS` invocation. The linked-release switch is independent of allocator and
+After the matching collector, `StringConcatenation 0` emits `CAT` through `FRETMS` for AppleSoft and PET
+BASIC 1/2; BASIC 4 uses `StringConcatenation 1` and supplies its `STRADJ` link helper. Follow either with
+the variant's `StringFunctions` invocation. The linked-release switch is independent of allocator and
 collector selection, but those choices must agree on the representation used by the running interpreter.
 The macro requires `EVAL`, `CHKSTR`, `ERROR`, `STRINI`, `PUTNEW`, `TSTOP`, `ERRLS`, `FACMO`, `FACLO`,
 `STRNG1`, `DSCPNT`, `INDEX`, `FRESPC`, `FRETOP`, `LASTPT`, `TEMPPT` and `STRSIZ` from its caller.
@@ -162,28 +162,28 @@ and `PROBE_TEST_BYTE` are bytes; `NULL_INCREMENT_LIMIT` is 2 through 255.
 | `ALWAYS_SKIP_CHARACTER` | 1 | `COMMODORE_CHARACTER_OUTPUT` `alwaysSkip`: send cursor-right on all channels. |
 | `INPUT_ERROR_EDITOR_PATCH` | 1 | `COMMODORE_INPUT_ERROR` `editorPatch`: use the editor's error-line helper. |
 | `INPUT_STOP_EDITOR_PATCH` | 1 | `COMMODORE_INPUT_STATEMENT` `editorPatch`: use the editor's blank-INPUT stop helper. |
-| `GET_POINTER_Y_FIRST` | 1 | `VARIABLE_INPUT` `getPointerYFirst`: load GET's buffer-pointer high byte first. |
-| `GET_STRING_EDITOR_PATCH` | 1 | `VARIABLE_INPUT` `patchedGetString`: use the editor's GET string helper. |
+| `GET_POINTER_Y_FIRST` | 1 | `VariableInput` `getPointerYFirst`: load GET's buffer-pointer high byte first. |
+| `GET_STRING_EDITOR_PATCH` | 1 | `VariableInput` `patchedGetString`: use the editor's GET string helper. |
 | `NEXT_COUNTED_STACK` | 1 | `NextEntries` `countedStack`: count through the FOR frame rather than compute offsets. |
 | `CLOCK_EDITOR_PATCH` | 1 | `COMMODORE_VARIABLE_VALUE` `clockPatch`: use the editor's TI and TI$ checks. |
 | `INTIDX_USE_FRMNUM` | 1 | `IntegerConversion` `evaluateEntry`: use FRMNUM, or FRMEVL when 0. |
 | `POSINT_CHECK_TYPE` | 0 | `IntegerConversion` `checkType`: check the numeric type at POSINT. |
-| `ARRAY_SAVE_OFFSET_HIGH` | 0 | `ARRAY_LOOKUP` `saveOffsetHigh`: retain the corrected high offset byte. |
+| `ARRAY_SAVE_OFFSET_HIGH` | 0 | `ArrayLookup` `saveOffsetHigh`: retain the corrected high offset byte. |
 | `USER_FN_LOW_CHECK` | 1 | `UserFunctions` `earlyCheck`: check the argument pointer's low instead of high byte. |
-| `STRING_CLEAR_FACOV` | 0 | `STRING_STORAGE` `clearFacOverflow`: clear FACOV when making a temporary. |
-| `GC_FULL_POINTER` | 0 | `STRING_GARBAGE_COLLECTION` `fullDescriptorPointer`: test both descriptor-pointer bytes. |
-| `GC_PATCH_ARRAY_STEP` | 1 | `STRING_GARBAGE_COLLECTION` `patchedArrayStep`: call the editor's array-step helper. |
-| `GC_SUBTRACT_OFFSET` | 1 | `STRING_GARBAGE_COLLECTION` `subtractDescriptorOffset`: subtract three instead of masking. |
-| `REJECT_ZERO_SLICES` | 1 | `STRING_FUNCTIONS` `rejectZeroSlices`: reject zero LEFT$/RIGHT$ counts. |
-| `PREAM_INDIRECT_RETURN` | 1 | `STRING_FUNCTIONS` `indirectReturn`: return through the writable jump. |
-| `ASC_SHARED_LEN_JUMP` | 1 | `STRING_FUNCTIONS` `sharedLenJump`: share LEN's conversion jump. |
+| `STRING_CLEAR_FACOV` | 0 | `StringStorage` `clearFacOverflow`: clear FACOV when making a temporary. |
+| `GC_FULL_POINTER` | 0 | `StringGarbageCollection` `fullDescriptorPointer`: test both descriptor-pointer bytes. |
+| `GC_PATCH_ARRAY_STEP` | 1 | `StringGarbageCollection` `patchedArrayStep`: call the editor's array-step helper. |
+| `GC_SUBTRACT_OFFSET` | 1 | `StringGarbageCollection` `subtractDescriptorOffset`: subtract three instead of masking. |
+| `REJECT_ZERO_SLICES` | 1 | `StringFunctions` `rejectZeroSlices`: reject zero LEFT$/RIGHT$ counts. |
+| `PREAM_INDIRECT_RETURN` | 1 | `StringFunctions` `indirectReturn`: return through the writable jump. |
+| `ASC_SHARED_LEN_JUMP` | 1 | `StringFunctions` `sharedLenJump`: share LEN's conversion jump. |
 | `PEEK_PRESERVE_ADDRESS` | 0 | `PeekFunction` `preserveAddress`: restore the prior POKE/WAIT address. |
 | `PEEK_GUARD_ROM` | 1 | `PeekFunction` `guardRom`: return zero for protected ROM pages. |
 | `PEEK_PAD_GUARD` | 0 | `PeekFunction` `padGuard`: emit eight padding bytes. |
 | `SHORT_MULTIPLY_ZERO` | 1 | `FloatArithmetic` `shortZeroBranch`: use the short zero-result branch. |
 | `EARLY_INPUT_EXPONENT_LIMIT` | 1 | `DecimalInput` `earlyExponentLimit`: use the earlier exponent limit. |
 | `PRECISE_OUTPUT_LIMIT` | 1 | `OutputConstants`: use the 999,999,999.5 upper threshold. |
-| `ZERO_IN_HALF_CONSTANT` | 0 | Define `ZeroValue` in `Float::Half` when 1, or emit ZERO at `SIMPLE_VARIABLE_LOOKUP` when 0. |
+| `ZERO_IN_HALF_CONSTANT` | 0 | Define `ZeroValue` in `Float::Half` when 1, or emit ZERO at `SimpleVariableLookup` when 0. |
 | `WAIT_EASTER_EGG` | 0 | Emit the hidden WAIT routine and signature, and route the omitted-mask branch to it. |
 | `RANDOM_SEED_TAIL` | `$59` | `CharacterReader` `seedTail`: the random seed's last byte. |
 | `INIT_MARK_DIRECT` | 1 | `COMMODORE_INITIALIZE` `markDirect`: mark the current line direct. |
@@ -224,7 +224,7 @@ statement and function vectors, the shared operator table, reserved words and me
 select GO, disk commands, the early file-data message and single-CR messages; the workspace's `ERROR_PADDING5`
 selects the early error-table padding. Tests compare the tables and error offsets against every PET overlay.
 The [clock-string assignment](../../../Retrocore.Machines.Commodore/Roms/Basic/Commodore.TimeAssignment.asm)
-goes between `ASSIGNMENT_START` and `STRING_ASSIGNMENT`. BASIC 4's
+goes between `AssignmentStart` and `StringAssignment`. BASIC 4's
 [string-assignment hooks](../../../Retrocore.Machines.Commodore/Roms/Basic/Commodore.StringAssignment.asm)
 handle the mutable disk-status string and linked collector. Tests compose these with the shared assignment code
 and compare its complete `LET`-to-`PRINTN` region against all five PET overlay builds.

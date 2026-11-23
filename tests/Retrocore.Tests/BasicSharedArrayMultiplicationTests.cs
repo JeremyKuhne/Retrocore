@@ -165,27 +165,30 @@ public sealed class BasicSharedArrayMultiplicationTests
         string folder = Path.Join(Inputs, "Microsoft6502Basic");
         string source = $"""
             .cpu Mos6502
+            .include "MsBasic.Layouts.asm"
             .org ${start:X4}
             .include "MsBasic.ArrayMultiplication.asm"
             MULTIPLY_END:
             """;
 
+        Dictionary<string, long> symbols = new(StringComparer.Ordinal)
+        {
+            ["INDEX"] = legacy.Symbol("INDEX"),
+            ["LOWTR"] = legacy.Symbol("LOWTR"),
+            ["ADDEND"] = legacy.Symbol("ADDEND"),
+            ["CURTOL"] = legacy.Symbol("CURTOL"),
+            ["DECCNT"] = legacy.Symbol("DECCNT"),
+            ["OMERR1"] = legacy.Symbol("OMERR1")
+        };
+
         AssemblyOptions options = new(ProcessorVariant.Mos6502, 0, 0x10000)
         {
             SourceResolver = new FileAssemblySourceResolver(),
-            PredefinedSymbols = BasicNames.WithCurrentNames(new Dictionary<string, long>
-            {
-                ["INDEX"] = legacy.Symbol("INDEX"),
-                ["LOWTR"] = legacy.Symbol("LOWTR"),
-                ["ADDEND"] = legacy.Symbol("ADDEND"),
-                ["CURTOL"] = legacy.Symbol("CURTOL"),
-                ["DECCNT"] = legacy.Symbol("DECCNT"),
-                ["OMERR1"] = legacy.Symbol("OMERR1")
-            })
+            PredefinedSymbols = BasicNames.WithCurrentNames(symbols)
         };
 
         AssemblyResult native = new Assembler.Assembler().Assemble(
-            new AssemblySource(source, Path.Join(folder, "ArrayMultiplicationTest.asm")),
+            new AssemblySource(BasicNames.ScopedNames(symbols) + "\n" + source, Path.Join(folder, "ArrayMultiplicationTest.asm")),
             options);
 
         native.Success.Should().BeTrue(string.Join(Environment.NewLine, native.Diagnostics.Select(diagnostic =>

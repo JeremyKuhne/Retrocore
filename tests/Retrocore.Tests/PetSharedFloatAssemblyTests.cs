@@ -216,6 +216,13 @@ public sealed class PetSharedFloatAssemblyTests
             symbols.Remove("ISLRTS");
         }
 
+        // The old names of the definitions Commodore's guarded aliases name would define those aliases without the
+        // modules that hold them.
+        foreach (string name in BasicExpressionsConversionTests.CommodoreTargetOldNames)
+        {
+            symbols.Remove(name);
+        }
+
         bool basic1 = model == PetModel.Pet2001;
         symbols.Add("SHORT_MULTIPLY_ZERO", basic1 ? 1 : 0);
         symbols.Add("EARLY_INPUT_EXPONENT_LIMIT", basic1 ? 1 : 0);

@@ -486,16 +486,17 @@ public sealed class BasicSharedStringConcatenationTests
     {
         string source = $"""
             .cpu Mos6502
+            .include "MsBasic.Layouts.asm"
             .include "MsBasic.StringConcatenation.asm"
             .org ${legacy.Symbol("CAT"):X4}
-                STRING_CONCATENATION {(linkedRelease ? 1 : 0)}
+                StringConcatenation {(linkedRelease ? 1 : 0)}
             STRING_CONCATENATION_END:
             """;
 
         string[] dependencies =
         [
             "FAC", "FACMO", "FACLO", "EVAL", "CHKSTR", "STRNG1", "ERRLS", "ERROR", "STRINI", "DSCPNT",
-            "PUTNEW", "TSTOP", "INDEX", "FRESPC", "FRETOP", "LASTPT", "TEMPPT", "STRSIZ", "TXTPTR", "CHR"
+            "PUTNEW", "TSTOP", "INDEX", "FRESPC", "FRETOP", "LASTPT", "TEMPPT", "TXTPTR", "CHR"
         ];
 
         if (linkedRelease) { dependencies = [.. dependencies, "STRADJ"]; }
@@ -535,7 +536,7 @@ public sealed class BasicSharedStringConcatenationTests
             .include "Commodore.Equates.asm"
             .include <MsBasic.StringConcatenation.asm>
             .org ${legacy.Symbol("CAT"):X4}
-                STRING_CONCATENATION {(linked ? 1 : 0)}
+                StringConcatenation {(linked ? 1 : 0)}
             STRING_CONCATENATION_END:
             """;
 
@@ -556,7 +557,7 @@ public sealed class BasicSharedStringConcatenationTests
             name => name, name => legacy.Symbol(name), StringComparer.Ordinal);
 
         AssemblyResult native = new Assembler.Assembler().Assemble(
-            new AssemblySource(source, path),
+            new AssemblySource(BasicNames.ScopedNames(symbols) + "\n" + source, path),
             new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
             {
                 SourceResolver = new FileAssemblySourceResolver(),
@@ -580,6 +581,13 @@ public sealed class BasicSharedStringConcatenationTests
                 && symbol.Value >= start
                 && symbol.Value < end))
         {
+            // A vendor's alias reaches its name only in a build that includes the vendor's historical names: a
+            // standalone build of the module skips it, and a whole build must have it.
+            if (BasicNames.IsVendorName(label.Name) && !BasicNames.IncludesHistoricalNames(native))
+            {
+                continue;
+            }
+
             native.SymbolsWithHistoricalNames.Should().ContainKey(label.Name);
             native.Symbol(label.Name).Should().Be(label.Value, $"{label.Name} must retain its ROM address");
         }

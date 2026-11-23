@@ -29,7 +29,7 @@
 
     ;; Prints the unsigned line number in A:X.
     ;; In: A = high byte of line number, X = low byte of line number
-    ;; See: <Float::FormatFac>, <STROUT>
+    ;; See: <Float::FormatFac>, <PrintText>
     ;; Also: LINPRT (M6502, ASTIL, CBM4S79, K4S79, HV1, HV1R, HV2, HV4, HV4R, HVK4)
     .proc PrintDecimalAX
     sta FacMantissa1
@@ -40,16 +40,16 @@
     ; Falls into PrintFac.
     .endproc
 
-    ;; Prints <Fac> as a decimal number through <Float::FormatFac> and <STROUT>.
+    ;; Prints <Fac> as a decimal number through <Float::FormatFac> and <PrintText>.
     ;; Entry:
-    ;;   ToPrintString = Jumps on to <STROUT>, printing the string at Y:A
+    ;;   ToPrintString = Jumps on to <PrintText>, printing the string at Y:A
     .proc PrintFac
     jsr FormatFac
 
-;; Prints the string addressed by Y:A through <STROUT>.
+;; Prints the string addressed by Y:A through <PrintText>.
 ;; Also: STROU2 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 ToPrintString:
-    jmp STROUT
+    jmp PrintText
     .endproc
 
     ;; Formats <Fac> as a zero-terminated decimal string in <NumberBuffer>.

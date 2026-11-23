@@ -1,131 +1,170 @@
+; retrocore: style=strict
 ; Derived from Microsoft's BASIC for 6502 (m6502.asm, MIT license; see LICENSE in this folder).
+
+.include "MsBasic.Families.asm"
+
 ; MICROSOFT 6502 BASIC: VARIABLE ASSIGNMENT
 ;
-; ASSIGNMENT_START emits LET through the common <INPCOM> entry. A variant may put
-; its time-string assignment there before invoking STRING_ASSIGNMENT.
+; AssignmentStart emits LET through the common <AssignString> entry. A variant may put
+; its time-string assignment there before invoking StringAssignment.
 
 ;; Emits the common LET and numeric-assignment entries.
-.macro ASSIGNMENT_START
+.macro AssignmentStart
 
-;; Evaluates an expression and assigns it to a numeric or string variable.
-;; See: <PTRGET>, <QINTGR>, <INPCOM>
-LET:
-    jsr PTRGET
-    sta FORPNT
-    sty FORPNT+1
-    lda #EQULTK
-    jsr SYNCHR
-    lda INTFLG
+    .scope Statements continued
+
+    ;; Evaluates an expression and assigns it to a numeric or string variable.
+    ;; See: <FindVariable>, <StoreNumber>, <AssignString>
+    ;; Also: LET (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    .proc Let
+    jsr FindVariable
+    sta AssignedVariable
+    sty AssignedVariable+1
+    lda #TOKEN_EQUAL
+    jsr CheckCharacter
+    lda IntegerType
     pha
-    lda VALTYP
+    lda ValueType
     pha
-    jsr FRMEVL
+    jsr EvaluateExpression
     pla
     rol a
-    jsr CHKVAL
-    bne COPSTR
+    jsr RequireType
+    bne LetString
 
-COPNUM:
+;; Numeric result: pulls the saved <IntegerType> into A and falls into <StoreNumber>.
+;; Also: COPNUM (M6502)
+Number:
     pla
+    ; Falls into StoreNumber.
+    .endproc
+    .endscope
 
-;; Stores numeric <FAC> in the variable at <FORPNT>, choosing integer or floating-point storage.
-;; In: A = integer flag
-QINTGR:
-    bpl COPFLT
-    jsr ROUND
-    jsr AYINT
+    ;; Stores numeric <Fac> in the variable at <AssignedVariable>, choosing integer or floating-point storage.
+    ;; The integer is rounded and stored high byte first; a float is packed.
+    ;; In: A = negative for an integer variable (as <IntegerType>), Fac = the value
+    ;; Also: QINTGR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    .proc StoreNumber
+    bpl ToPackFac
+    jsr Float::Round
+    jsr FacToInteger
     ldy #$00
-    lda FACMO
-    sta (FORPNT),y
+    lda FacMantissa3
+    sta (AssignedVariable),y
     iny
-    lda FACLO
-    sta (FORPNT),y
+    lda FacMantissa4
+    sta (AssignedVariable),y
     rts
 
-COPFLT:
-    jmp MOVVF
+;; Jumps to <Float::StoreFacInVariable>, which packs <Fac> into the variable.
+;; Also: COPFLT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+ToPackFac:
+    jmp Float::StoreFacInVariable
+    .endproc
 
-COPSTR:
+    .scope Statements continued
+
+    ;; LET's string path: drops the saved flag and falls into <AssignString>.
+    ;; Also: COPSTR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    .proc LetString
     pla
+    ; Falls into AssignString.
+    .endproc
+    .endscope
 
-;; Assigns the string result of LET, INPUT or READ to the variable at <FORPNT>.
+;; Assigns the string result of `LET`, `INPUT` or `READ` to the variable at <AssignedVariable>.
 ;;
-;; The time-string implementation, when present, precedes <GETSPT>.
-INPCOM:
+;; The time-string implementation, when present, precedes <StoreString>.
+;; Also: INPCOM (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+AssignString:
 
 .endmacro
 
 ;; Emits the common string-assignment code, with optional platform hooks.
-;; Parameters: statusCheck = 1 to invoke STRING_STATUS_CHECK, linkedCollector = 1 to invoke LINKED_STRING_STORE
-.macro STRING_ASSIGNMENT statusCheck, linkedCollector
+;; Parameters: statusCheck = 1 to invoke `STRING_STATUS_CHECK`, linkedCollector = 1 to invoke `LINKED_STRING_STORE`
+.macro StringAssignment statusCheck, linkedCollector
     .assert statusCheck = 0 || statusCheck = 1, "statusCheck must be 0 or 1."
     .assert linkedCollector = 0 || linkedCollector = 1, "linkedCollector must be 0 or 1."
 
-;; Copies a string's descriptor to <FORPNT>, copying the characters first if necessary.
-;;
-;; In AppleSoft, Apple Computer, in The Apple Orchard (March/April 1980, p. 15), calls the <COPYZC> entry
-;; `COPY`, which is distinct from Microsoft's <COPY> entry.
-;;
-;; In: FACMO/FACLO = descriptor address, FORPNT = destination variable
-;; Entry: COPYZC = stores the descriptor addressed by Y:A, with variant-specific collection bookkeeping
-;; See: <STRINI>, <FRETMS>
-GETSPT:
+    ;; Copies a string's descriptor to <AssignedVariable>, copying the characters first if necessary.
+    ;;
+    ;; In AppleSoft, Apple Computer, in The Apple Orchard (March/April 1980, p. 15), calls the <StoreDescriptor> entry
+    ;; `COPY`, which is distinct from Microsoft's <StoreString::CopyCharacters> entry.
+    ;;
+    ;; In: FacMantissa3 = the descriptor's address (low byte), FacMantissa4 = its high byte,
+    ;;   AssignedVariable = the destination variable
+    ;; See: <Strings::AllocateForFac>, <Strings::ReleaseTemporary>
+    ;; Also: GETSPT (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    .proc StoreString
     ldy #$02
-    lda (FACMO),y
-.if statusCheck
-    STRING_STATUS_CHECK
-.endif
-    cmp FRETOP+1
-    bcc DNTCPY
-    bne QVARIA
+    lda (FacMantissa3),y
+    .if statusCheck
+        STRING_STATUS_CHECK
+    .endif
+    cmp StringsBottom+1
+    bcc KeepCharacters
+    bne CheckDescriptor
     dey
-    lda (FACMO),y
-    cmp FRETOP
-    bcc DNTCPY
+    lda (FacMantissa3),y
+    cmp StringsBottom
+    bcc KeepCharacters
 
-QVARIA:
-    ldy FACLO
-    cpy VARTAB+1
-    bcc DNTCPY
-    bne COPY
-    lda FACMO
-    cmp VARTAB
-    bcs COPY
+;; String is in string space: copies it only if its descriptor lies at or above <VariablesStart> (a variable's).
+;; Also: QVARIA (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+CheckDescriptor:
+    ldy FacMantissa4
+    cpy VariablesStart+1
+    bcc KeepCharacters
+    bne CopyCharacters
+    lda FacMantissa3
+    cmp VariablesStart
+    bcs CopyCharacters
 
-DNTCPY:
-    lda FACMO
-    ldy FACLO
-    jmp COPYZC
+;; Uses the source descriptor as it is and jumps to <StoreDescriptor>.
+;; Also: DNTCPY (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+KeepCharacters:
+    lda FacMantissa3
+    ldy FacMantissa4
+    jmp StoreDescriptor
 
-COPY:
+;; Allocates the length, copies the characters with <Strings::CopyString> and stores <NewDescriptor>.
+;; Also: COPY (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+CopyCharacters:
     ldy #$00
-    lda (FACMO),y
-    jsr STRINI
-    lda DSCPNT
-    ldy DSCPNT+1
-    sta STRNG1
-    sty STRNG1+1
-    jsr MOVINS
-.if linkedCollector
-    LINKED_STRING_STORE
-.else
-    lda #<DSCTMP
-    ldy #$00
+    lda (FacMantissa3),y
+    jsr Strings::AllocateForFac
+    lda DescriptorPointer
+    ldy DescriptorPointer+1
+    sta StringPointer
+    sty StringPointer+1
+    jsr Strings::CopyString
+    .if linkedCollector
+        ; Falls into BASIC 4's linked store, which ends at its own StoreDescriptor.
+        .endproc
+        LINKED_STRING_STORE
+    .else
+        lda #<NewDescriptor
+        ldy #$00
+        ; Falls into StoreDescriptor.
+        .endproc
 
-COPYZC:
-    sta DSCPNT
-    sty DSCPNT+1
-    jsr FRETMS
-    ldy #$00
-    lda (DSCPNT),y
-    sta (FORPNT),y
-    iny
-    lda (DSCPNT),y
-    sta (FORPNT),y
-    iny
-    lda (DSCPNT),y
-    sta (FORPNT),y
-    rts
-.endif
+        ;; Stores the descriptor addressed by Y:A, with variant-specific collection bookkeeping.
+        ;; Also: COPYZC (M6502)
+        .proc StoreDescriptor
+        sta DescriptorPointer
+        sty DescriptorPointer+1
+        jsr Strings::ReleaseTemporary
+        ldy #$00
+        lda (DescriptorPointer),y
+        sta (AssignedVariable),y
+        iny
+        lda (DescriptorPointer),y
+        sta (AssignedVariable),y
+        iny
+        lda (DescriptorPointer),y
+        sta (AssignedVariable),y
+        rts
+        .endproc
+    .endif
 
 .endmacro

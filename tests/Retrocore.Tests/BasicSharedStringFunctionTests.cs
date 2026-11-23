@@ -204,7 +204,7 @@ public sealed class BasicSharedStringFunctionTests
         GetIntegerResult(bus, legacy).Should().Be(255);
         if (sharedLenJump)
         {
-            ushort jump = checked((ushort)region.Symbol("LENFLT"));
+            ushort jump = checked((ushort)region.Symbol("Functions::Len::ToFloat"));
             bus.Accesses.Should().Contain(access => access.Address == jump && access.Operation == BusOperation.Read);
         }
 
@@ -442,9 +442,10 @@ public sealed class BasicSharedStringFunctionTests
         string folder = Path.Join(Inputs, "Microsoft6502Basic");
         string source = $"""
             .cpu Mos6502
+            .include "MsBasic.Layouts.asm"
             .include "MsBasic.StringFunctions.asm"
             .org ${legacy.Symbol("CHR"):X4}
-                STRING_FUNCTIONS {(rejectZeroSlices ? 1 : 0)}, {(indirectReturn ? 1 : 0)}, {(sharedLenJump ? 1 : 0)}, {(zeroTermViaY ? 1 : 0)}
+                StringFunctions {(rejectZeroSlices ? 1 : 0)}, {(indirectReturn ? 1 : 0)}, {(sharedLenJump ? 1 : 0)}, {(zeroTermViaY ? 1 : 0)}
             STRING_FUNCTIONS_END:
             """;
 
@@ -459,7 +460,7 @@ public sealed class BasicSharedStringFunctionTests
             name => name, name => legacy.Symbol(name), StringComparer.Ordinal);
 
         AssemblyResult native = new Assembler.Assembler().Assemble(
-            new AssemblySource(source, Path.Join(folder, "StringFunctionsTest.asm")),
+            new AssemblySource(BasicNames.ScopedNames(symbols) + "\n" + source, Path.Join(folder, "StringFunctionsTest.asm")),
             new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
             {
                 SourceResolver = new FileAssemblySourceResolver(),
@@ -490,6 +491,20 @@ public sealed class BasicSharedStringFunctionTests
                 && symbol.Value >= start
                 && symbol.Value < end))
         {
+            // A vendor's alias reaches its name only in a build that includes the vendor's historical names: a
+            // standalone build of the module skips it, and a whole build must have it.
+            if (BasicNames.IsVendorName(label.Name) && !BasicNames.IncludesHistoricalNames(native))
+            {
+                continue;
+            }
+
+            // A label only the SDK's own overlays give has no historical name; its definition keeps its address.
+            if (BasicNames.OverlayOnlyLabels.TryGetValue(label.Name, out string? current))
+            {
+                native.Symbol(current).Should().Be(label.Value, $"{label.Name}'s definition must retain its ROM address");
+                continue;
+            }
+
             native.SymbolsWithHistoricalNames.Should().ContainKey(label.Name);
             native.Symbol(label.Name).Should().Be(label.Value, $"{label.Name} must retain its ROM address");
         }

@@ -1,15 +1,19 @@
+; retrocore: style=strict
 ; Derived from Microsoft's BASIC for 6502 (m6502.asm, MIT license; see LICENSE in this folder).
+
+.include "MsBasic.Families.asm"
+
 ; MICROSOFT 6502 BASIC: VARIABLE NAMES AND SIMPLE-VARIABLE LOOKUP
 ;
-; Emit VARIABLE_NAME, the separately shared LetterTest, and SIMPLE_VARIABLE_LOOKUP in that order.
-; The integer-conversion entries follow; AppleSoft then emits EXISTING_ARRAY_ENTRY before ISARY.
+; Emit VariableSearch, the separately shared LetterTest, and SimpleVariableLookup in that order.
+; The integer-conversion entries follow; AppleSoft then emits ExistingArrayEntry before <Variables::FindArray>.
 
 ;; Emits the variable-name parser and scalar-table search up to the letter test.
 ;; Parameters: fixedVectors = 1 to emit Apple's fixed ROM vectors, vectorByte = the model byte at $E006,
 ;;   rejectAnyFlag = 1 to reject integer names for any nonzero subscript flag, 0 to test bit 7 only,
 ;;   existingArrays = 1 for Apple's existing-array lookup mode, clearWithY = 1 to clear the flag using Y,
-;;   longFound = 1 when the found-variable branch must jump to <FINPTR>
-.macro VARIABLE_NAME fixedVectors, vectorByte, rejectAnyFlag, existingArrays, clearWithY, longFound
+;;   longFound = 1 when the found-variable branch must jump to <Variables::ValueAddress>
+.macro VariableSearch fixedVectors, vectorByte, rejectAnyFlag, existingArrays, clearWithY, longFound
     .assert fixedVectors = 0 || fixedVectors = 1, "fixedVectors must be 0 or 1."
     .assert vectorByte >= 0 && vectorByte <= 255, "vectorByte must fit in one byte."
     .assert rejectAnyFlag = 0 || rejectAnyFlag = 1, "rejectAnyFlag must be 0 or 1."
@@ -17,465 +21,559 @@
     .assert clearWithY = 0 || clearWithY = 1, "clearWithY must be 0 or 1."
     .assert longFound = 0 || longFound = 1, "longFound must be 0 or 1."
 
-;; Parses a variable name and finds or creates its value.
-;;
-;; The name starts with a letter; only its first two letters or digits are significant, though further letters
-;; and digits are consumed. A dollar suffix sets the high bit of the second name byte and makes a string;
-;; a percent suffix sets both name bits and selects an integer. Subscripts can recursively evaluate expressions.
-;; Scalar entries are seven bytes.
-;; An absent scalar read by the expression evaluator can return a shared zero without setting <VARPNT>.
-;; The array check ORs the following character with <SUBFLG> before comparing it with '('. PET rejects a
-;; percent suffix for any nonzero flag; AppleSoft tests bit 7 instead and, when bit 7 is clear, uses bit 6
-;; for the cassette STORE and RECALL existing-array lookup. That lookup returns carry set without an element
-;; address, or reports OUT OF DATA when the array is absent.
-;; Entry: PTRGT1 = starts with A = first character and X = dimension flag
-;; Entry: PTRGT2 = starts with A = first character, retaining the current dimension flag
-;; In: TXTPTR = first character, SUBFLG = subscript mode, decimal = clear
-;; Out: A = low value address and Y = high value address for a scalar, TXTPTR = next non-space character,
-;;   VALTYP = $FF for a string or 0 for a number, INTFLG = $80 for an integer or 0 otherwise
-;; Errors: SYNTAX for an invalid first character or a disallowed integer name
-;; See: <IsLetter>, <NOTFNS>, <FINPTR>, <ISARY>
-PTRGET:
+    ;; Parses a variable name and finds or creates its value.
+    ;;
+    ;; The name starts with a letter; only its first two letters or digits are significant, though further letters
+    ;; and digits are consumed. A dollar suffix sets the high bit of the second name byte and makes a string;
+    ;; a percent suffix sets both name bits and selects an integer. Subscripts can recursively evaluate expressions.
+    ;; Scalar entries are seven bytes.
+    ;; An absent scalar read by the expression evaluator can return a shared zero without setting <VariablePointer>.
+    ;; The array check ORs the following character with <SubscriptMode> before comparing it with '('. PET rejects a
+    ;; percent suffix for any nonzero flag; AppleSoft tests bit 7 instead and, when bit 7 is clear, uses bit 6
+    ;; for the cassette `STORE` and `RECALL` existing-array lookup. That lookup returns carry set without an element
+    ;; address, or reports OUT OF DATA when the array is absent.
+    ;; In: TextPointer = first character, SubscriptMode = subscript mode, decimal = clear
+    ;; Out: A = low value address and Y = high value address for a scalar or an array element,
+    ;;   TextPointer = next non-space character,
+    ;;   ValueType = $FF for a string or 0 for a number, IntegerType = $80 for an integer or 0 otherwise
+    ;; Errors: SYNTAX for an invalid first character or a disallowed integer name
+    ;; Entry:
+    ;;   WithDimensionFlag = starts with A = first character and X = dimension flag
+    ;;   KeepDimensionFlag = starts with A = first character, retaining the current dimension flag
+    ;; See: <IsLetter>, <Variables::NotFound>, <Variables::ValueAddress>, <Variables::FindArray>
+    ;; Also: PTRGET (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    .proc FindVariable
     ldx #$00
-    jsr CHRGOT
+    jsr GetCurrentCharacter
 
-PTRGT1:
-    stx DIMFLG
+;; Starts with A = first character and X = dimension flag.
+;; Also: PTRGT1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+WithDimensionFlag:
+    stx Dimensioning
 
-PTRGT2:
-    sta VARNAM
-    jsr CHRGOT
-    jsr ISLETC
-    bcs PTRGT3
+;; Starts with A = first character, retaining the current dimension flag.
+;; Also: PTRGT2 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+KeepDimensionFlag:
+    sta VariableName
+    jsr GetCurrentCharacter
+    jsr IsLetter
+    bcs ValidFirst
 
-INTERR:
-    jmp SNERR
+;; Jumps to <SyntaxError> for a bad first character or a forbidden `%`.
+;; Also: INTERR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+ToSyntaxError:
+    jmp SyntaxError
 
-PTRGT3:
+;; Clears <ValueType> and <IntegerType> and reads the second character.
+;; Also: PTRGT3 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+ValidFirst:
     ldx #$00
-    stx VALTYP
-    stx INTFLG
-.if fixedVectors
-    jmp PTRGT4
-    .assert * = $E000, "AppleSoft's fixed vectors must start at $E000."
-    jmp INIT
-    jmp MAIN
-    .byte vectorByte
+    stx ValueType
+    stx IntegerType
+    .if fixedVectors
+        jmp AfterVectors
+        .assert * = $E000, "AppleSoft's fixed vectors must start at $E000."
+        jmp INIT
+        jmp MAIN
+        .byte vectorByte
 
-PTRGT4:
-.endif
-    jsr CHRGET
-    bcc ISSEC
-    jsr ISLETC
-    bcc NOSEC
+;; The code after AppleSoft's fixed jumps at $E000 (to <INIT> and <MAIN>) and its model byte.
+AfterVectors:
+    .endif
+    jsr GetNextCharacter
+    bcc SecondCharacter
+    jsr IsLetter
+    bcc CheckSuffix
 
-ISSEC:
+;; Keeps a letter or digit as the second name character.
+;; Also: ISSEC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+SecondCharacter:
     tax
 
-EATEM:
-    jsr CHRGET
-    bcc EATEM
-    jsr ISLETC
-    bcs EATEM
+;; Consumes further letters and digits.
+;; Also: EATEM (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+SkipRest:
+    jsr GetNextCharacter
+    bcc SkipRest
+    jsr IsLetter
+    bcs SkipRest
 
-NOSEC:
-    cmp #$24
-    bne NOTSTR
+;; `$` makes a string: sets <ValueType> and the second byte's bit 7.
+;; Also: NOSEC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+CheckSuffix:
+    cmp #'$'
+    bne CheckInteger
     lda #$FF
-    sta VALTYP
-    bne TURNON
+    sta ValueType
+    bne MarkSecond
 
-NOTSTR:
-    cmp #$25
-    bne STRNAM
-    lda SUBFLG
-.if rejectAnyFlag
-    bne INTERR
-.else
-    bmi INTERR
-.endif
+;; `%` makes an integer (a syntax error where subscripts are not allowed) and sets both bytes' bit 7.
+;; Also: NOTSTR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+CheckInteger:
+    cmp #'%'
+    bne CheckSubscript
+    lda SubscriptMode
+    .if rejectAnyFlag
+        bne ToSyntaxError
+    .else
+        bmi ToSyntaxError
+    .endif
     lda #$80
-    sta INTFLG
-    ora VARNAM
-    sta VARNAM
+    sta IntegerType
+    ora VariableName
+    sta VariableName
 
-TURNON:
+;; Sets bit 7 of the second name byte and consumes the suffix.
+;; Also: TURNON (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+MarkSecond:
     txa
     ora #$80
     tax
-    jsr CHRGET
+    jsr GetNextCharacter
 
-STRNAM:
-    stx VARNAM+1
+;; Stores the second byte and compares the next character, ORed with <SubscriptMode>, with `(`.
+;; Also: STRNAM (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+CheckSubscript:
+    stx VariableName+1
     sec
-    ora SUBFLG
-    sbc #$28
-.if existingArrays
-    bne STRNA2
+    ora SubscriptMode
+    sbc #'('
+    .if existingArrays
+        bne NoParenthesis
 
-STRNA1:
-    jmp QINTG1
+;; Jumps to <Variables::ChooseArrayLookup>.
+ToChooseArrayLookup:
+        jmp Variables::ChooseArrayLookup
 
-STRNA2:
-    bit SUBFLG
-    bmi STRNA3
-    bvs STRNA1
+;; No `(`: bit 7 of <SubscriptMode> searches the scalars, bit 6 goes to the existing-array lookup.
+NoParenthesis:
+        bit SubscriptMode
+        bmi SearchScalars
+        bvs ToChooseArrayLookup
 
-STRNA3:
-.else
-    bne SCALAR_SEARCH
-    jmp ISARY
-.endif
+    .else
+        bne SearchScalars
+        jmp Variables::FindArray
+    .endif
 
-SCALAR_SEARCH:
-.if clearWithY
-    ldy #$00
-    sty SUBFLG
-.else
-    lda #$00
-    sta SUBFLG
-.endif
-    lda VARTAB
-    ldx VARTAB+1
-.if .not clearWithY
-    ldy #$00
-.endif
+;; Clears <SubscriptMode> and starts at <VariablesStart>.
+SearchScalars:
+    .if clearWithY
+        ldy #$00
+        sty SubscriptMode
+    .else
+        lda #$00
+        sta SubscriptMode
+    .endif
+    lda VariablesStart
+    ldx VariablesStart+1
+    .if .not clearWithY
+        ldy #$00
+    .endif
 
-STXFND:
-    stx LOWTR+1
+;; Stores the entry pointer's high byte (start, and on a page crossing).
+;; Also: STXFND (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+SetEntryHigh:
+    stx SourceStart+1
 
-LOPFND:
-    sta LOWTR
-    cpx ARYTAB+1
-    bne LOPFN
-    cmp ARYTAB
-    beq NOTFNS
+;; Stores the low byte; at <ArraysStart> the name is not found.
+;; Also: LOPFND (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+CheckEnd:
+    sta SourceStart
+    cpx ArraysStart+1
+    bne CompareName
+    cmp ArraysStart
+    beq Variables::NotFound
 
-LOPFN:
-    lda VARNAM
-    cmp (LOWTR),y
-    bne NOTIT
-    lda VARNAM+1
+;; Compares both name bytes with <VariableName>.
+;; Also: LOPFN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+CompareName:
+    lda VariableName
+    cmp (SourceStart),y
+    bne Advance
+    lda VariableName+1
     iny
-    cmp (LOWTR),y
-.if longFound
-    bne NXTPTR
-    jmp FINPTR
+    cmp (SourceStart),y
+    .if longFound
+        bne SecondMismatch
+        jmp Variables::ValueAddress
 
-NXTPTR:
-    dey
-.else
-    beq FINPTR
-    dey
-.endif
+;; The second byte differs: restores Y.
+SecondMismatch:
+        dey
+    .else
+        beq Variables::ValueAddress
+        dey
+    .endif
 
-NOTIT:
+;; Steps past an entry and loops.
+;;
+;; Only a table that wrapped past $FFFF would fall out of the routine, into the code after it.
+;; Also: NOTIT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+Advance:
     clc
-    lda LOWTR
-    adc #$07
-    bcc LOPFND
+    lda SourceStart
+    adc #.sizeof(Variable)
+    bcc CheckEnd
     inx
-    bne STXFND
+    bne SetEntryHigh
+    .endproc
 .endmacro
 
 ;; Emits the absent-variable handling, scalar insertion and array-data pointer calculation.
-;; Parameters: checkCallerHigh = 1 to check both bytes of the evaluator's return address,
-;;   inlineZero = 1 to emit two zero bytes here, useSimzer = 1 to name the zero SIMZER rather than ZERO,
+;; Parameters: callerHigh = 1 to check both bytes of the evaluator's return address,
+;;   inlineZero = 1 to emit two zero bytes here, ownZero = 1 for AppleSoft's own <ZeroVariable> rather than
+;;   <ZeroValue>,
 ;;   clockNames = 1 to recognize TI and TI$, statusName = 1 to protect ST,
 ;;   diskNames = 1 to protect DS and DS$, linkedArrays = 1 to adjust BASIC 4's string back-links,
-;;   arrayEntryAlias = 1 to expose Apple's FMAPT1 entry
-.macro SIMPLE_VARIABLE_LOOKUP checkCallerHigh, inlineZero, useSimzer, clockNames, statusName, diskNames, linkedArrays, arrayEntryAlias
-    .assert checkCallerHigh = 0 || checkCallerHigh = 1, "checkCallerHigh must be 0 or 1."
+;;   countEntry = 1 to give <Variables::ElementsStart> AppleSoft's entry with the count in A
+.macro SimpleVariableLookup callerHigh, inlineZero, ownZero, clockNames, statusName, diskNames, linkedArrays, countEntry
+    .assert callerHigh = 0 || callerHigh = 1, "callerHigh must be 0 or 1."
     .assert inlineZero = 0 || inlineZero = 1, "inlineZero must be 0 or 1."
-    .assert useSimzer = 0 || useSimzer = 1, "useSimzer must be 0 or 1."
+    .assert ownZero = 0 || ownZero = 1, "ownZero must be 0 or 1."
     .assert clockNames = 0 || clockNames = 1, "clockNames must be 0 or 1."
     .assert statusName = 0 || statusName = 1, "statusName must be 0 or 1."
     .assert diskNames = 0 || diskNames = 1, "diskNames must be 0 or 1."
     .assert linkedArrays = 0 || linkedArrays = 1, "linkedArrays must be 0 or 1."
-    .assert arrayEntryAlias = 0 || arrayEntryAlias = 1, "arrayEntryAlias must be 0 or 1."
+    .assert countEntry = 0 || countEntry = 1, "countEntry must be 0 or 1."
 
-;; Handles a missing scalar, returning a shared zero to the expression evaluator or creating an entry.
-;;
-;; The stacked return address is compared with <ISVRET>-1. PET compares only the low byte, so another
-;; caller with the same low byte also receives the zero; AppleSoft checks the high byte as well.
-;; The zero return does not update <VARPNT>. Otherwise reserved names are checked before insertion.
-;; With clock support, TI is rejected and TI$ returns the zero; ST is rejected with channel status support.
-;; BASIC 4 additionally rejects DS and DS$. Other names proceed to insertion.
-;; In: VARNAM = encoded name, Y = 0, decimal = clear
-;; See: <LDZR>, <VAROK>
-NOTFNS:
+    .scope Variables continued
+
+    ;; Handles a missing scalar, returning a shared zero to the expression evaluator or creating an entry.
+    ;;
+    ;; The stacked return address is compared with <ISVRET>-1. PET compares only the low byte, so another
+    ;; caller with the same low byte also receives the zero; AppleSoft checks the high byte as well.
+    ;; The zero return does not update <VariablePointer>. Otherwise reserved names are checked before insertion.
+    ;; With clock support, TI is rejected and TI$ returns the zero; ST is rejected with channel status support.
+    ;; BASIC 4 additionally rejects DS and DS$. Other names proceed to insertion.
+    ;; In: VariableName = encoded name, Y = 0, decimal = clear
+    ;; See: <Variables::ReturnZero>, <Variables::Create>
+    ;; Also: NOTFNS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    .proc NotFound
     pla
     pha
     cmp #<(ISVRET-1)
-    bne NOTEVL
-.if checkCallerHigh
-    tsx
-    lda $0102,x
-    cmp #>(ISVRET-1)
-    bne NOTEVL
-.endif
+    bne CheckReservedName
+    .if callerHigh
+        tsx
+        lda $0102,x
+        cmp #>(ISVRET-1)
+        bne CheckReservedName
+    .endif
+    ; Falls into ReturnZero.
+    .endproc
 
-;; Returns the address of the shared zero without allocating a variable.
-;;
-;; BASIC 1 and AppleSoft place two zero bytes here. BASIC 2 and 4 use bytes within <Float::Half> instead.
-;; Out: A = low address, Y = high address
-LDZR:
-.if useSimzer
-    lda #<SIMZER
-    ldy #>SIMZER
-.else
-    lda #<ZERO
-    ldy #>ZERO
-.endif
+    ;; Returns the address of the shared zero without allocating a variable.
+    ;;
+    ;; BASIC 1 and AppleSoft place two zero bytes here. BASIC 2 and 4 use bytes within <Float::Half> instead.
+    ;; Out: A = low address, Y = high address
+    ;; Also: LDZR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    .proc ReturnZero
+    .if ownZero
+        lda #<ZeroVariable
+        ldy #>ZeroVariable
+    .else
+        lda #<ZeroValue
+        ldy #>ZeroValue
+    .endif
     rts
+    .endproc
+    .endscope
 
-.if inlineZero
-.if useSimzer
-;; Two zero bytes used for an absent scalar or empty string.
-SIMZER:
-.else
-;; Two zero bytes used for an absent scalar or empty string.
-ZERO:
-.endif
-    .byte $00, $00
-.endif
-
-NOTEVL:
-.if clockNames || statusName || diskNames
-    lda VARNAM
-    ldy VARNAM+1
-.endif
-.if clockNames
-    cmp #'T'
-    bne QSTAVR
-    cpy #('I'+$80)
-    beq LDZR
-    cpy #'I'
-    bne QSTAVR
-.elseif statusName || diskNames
-    jmp QSTAVR
-.endif
-.if clockNames || statusName || diskNames
-GOBADV:
-    jmp SNERR
-.endif
-
-QSTAVR:
-.if statusName
-    cmp #'S'
-.if diskNames
-    bne QDSVAR
-.else
-    bne VAROK
-.endif
-    cpy #'T'
-    beq GOBADV
-.endif
-.if diskNames
-QDSVAR:
-    cmp #'D'
-    bne VAROK
-    cpy #'S'
-    beq GOBADV
-    cpy #('S'+$80)
-    beq GOBADV
-.endif
-
-;; Inserts a zero-initialized seven-byte scalar entry before the array table.
+    .if inlineZero
+        .if ownZero
+;; Two zero bytes that an absent scalar reads, AppleSoft's own beside <ZeroValue>.
+ZeroVariable:
+        .else
+;; Two zero bytes that an absent scalar reads.
 ;;
-;; <MoveRangeUp> moves existing arrays upward and checks that the new end fits. When enabled, the linked-string
-;; collector's array back-links are adjusted after the move. The entry's two name bytes precede five zero bytes.
-;; In: VARNAM = encoded name, decimal = clear
-;; Out: VARPNT = address of the new value
-;; Errors: OUT OF MEMORY if the enlarged tables cannot fit
-;; See: <MoveRangeUp>, <FINPTR>
-VAROK:
-    lda ARYTAB
-    ldy ARYTAB+1
-    sta LOWTR
-    sty LOWTR+1
-    lda STREND
-    ldy STREND+1
-    sta HIGHTR
-    sty HIGHTR+1
+;; BASIC 2 and 4 have no such bytes here: their <ZeroValue> lies inside <Float::Half>.
+;; Also: ZERO (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+ZeroValue:
+        .endif
+        .byte $00, $00
+    .endif
+
+    .scope Variables continued
+
+    ;; Rejects the names the PET reserves, and returns the zero for `TI$`; other names fall into <Create>.
+    ;;
+    ;; Where `clockNames` is 1 (the PET), `TI` is rejected with a syntax error and `TI$` gets the zero; where
+    ;; `statusName` is 1 (the PET), `ST`; where `diskNames` is 1 (BASIC 4), `DS` and `DS$`. In AppleSoft it is empty.
+    ;; In: VariableName = encoded name, Y = 0
+    ;; Errors: SYNTAX for a reserved name
+    ;; Also: NOTEVL (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    .proc CheckReservedName
+    .if clockNames || statusName || diskNames
+        lda VariableName
+        ldy VariableName+1
+    .endif
+    .if clockNames
+        cmp #'T'
+        bne CheckStatus
+        cpy #('I'+$80)
+        beq ReturnZero
+        cpy #'I'
+        bne CheckStatus
+    .elseif statusName || diskNames
+        jmp CheckStatus
+    .endif
+    .if clockNames || statusName || diskNames
+;; Jumps to <SyntaxError> for a reserved name.
+;; Also: GOBADV (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+ToSyntaxError:
+        jmp SyntaxError
+    .endif
+
+;; Checks for `ST`.
+;; Also: QSTAVR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+CheckStatus:
+    .if statusName
+        cmp #'S'
+        .if diskNames
+            bne CheckDiskStatus
+        .else
+            bne Create
+        .endif
+        cpy #'T'
+        beq ToSyntaxError
+    .endif
+    .if diskNames
+;; Checks for `DS` and `DS$`.
+CheckDiskStatus:
+        cmp #'D'
+        bne Create
+        cpy #'S'
+        beq ToSyntaxError
+        cpy #('S'+$80)
+        beq ToSyntaxError
+    .endif
+    .endproc
+
+    ;; Inserts a zero-initialized seven-byte scalar entry before the array table.
+    ;;
+    ;; <MoveRangeUp> moves existing arrays upward and checks that the new end fits. When enabled, the linked-string
+    ;; collector's array back-links are adjusted after the move. The entry's two name bytes precede five zero bytes.
+    ;; In: VariableName = encoded name, decimal = clear
+    ;; Out: VariablePointer = address of the new value, A = its low byte, Y = its high byte
+    ;; Errors: OUT OF MEMORY if the enlarged tables cannot fit
+    ;; See: <MoveRangeUp>, <Variables::ValueAddress>
+    ;; Also: VAROK (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    .proc Create
+    lda ArraysStart
+    ldy ArraysStart+1
+    sta SourceStart
+    sty SourceStart+1
+    lda ArraysEnd
+    ldy ArraysEnd+1
+    sta SourceEnd
+    sty SourceEnd+1
     clc
-    adc #$07
-    bcc NOTEVE
+    adc #.sizeof(Variable)
+    bcc SetNewEnd
     iny
 
-NOTEVE:
-    sta HIGHDS
-    sty HIGHDS+1
-    jsr BLTU
-    lda HIGHDS
-    ldy HIGHDS+1
+;; Stores the arrays' new end and moves them.
+;; Also: NOTEVE (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+SetNewEnd:
+    sta DestinationEnd
+    sty DestinationEnd+1
+    jsr MoveRangeUp
+    lda DestinationEnd
+    ldy DestinationEnd+1
     iny
-    sta ARYTAB
-    sty ARYTAB+1
-.if linkedArrays
-    sta ARYPNT
-    sty ARYPNT+1
+    sta ArraysStart
+    sty ArraysStart+1
+    .if linkedArrays
+        sta ArrayPointer
+        sty ArrayPointer+1
 
 ;; Adjusts back-links for live strings in arrays moved to make room for a scalar.
 ;;
 ;; String descriptors are three bytes. For a nonempty string, the descriptor address is stored immediately
-;; after its characters. If that back-link address is at or above <FRETOP>, its value is increased by seven.
-;; Numeric arrays, empty strings and back-links below <FRETOP> are left alone.
-;; In: ARYPNT = first moved array, STREND = end of array storage, decimal = clear
-ARYVA2:
-    lda ARYPNT
-    ldx ARYPNT+1
+;; after its characters. If that back-link address is at or above <StringsBottom>, its value is increased by the
+;; entry's seven bytes.
+;; Numeric arrays, empty strings and back-links below <StringsBottom> are left alone.
+;; In: ArrayPointer = first moved array, ArraysEnd = end of array storage, decimal = clear
+NextArray:
+        lda ArrayPointer
+        ldx ArrayPointer+1
 
-ARYVA3:
-    cpx STREND+1
-    bne ARYVGO
-    cmp STREND
-    beq ARYDON
+;; Stops at <ArraysEnd>.
+CheckArraysEnd:
+        cpx ArraysEnd+1
+        bne ReadArray
+        cmp ArraysEnd
+        beq WriteEntry
 
-ARYVGO:
-    sta INDEX1
-    stx INDEX1+1
+;; Advances <ArrayPointer> past the array and, for a string array, points <Pointer1> at its first element.
+ReadArray:
+        sta Pointer1
+        stx Pointer1+1
+        ldy #$00
+        lda (Pointer1),y
+        tax
+        iny
+        lda (Pointer1),y
+        php
+        iny
+        lda (Pointer1),y
+        adc ArrayPointer
+        sta ArrayPointer
+        iny
+        lda (Pointer1),y
+        adc ArrayPointer+1
+        sta ArrayPointer+1
+        plp
+        bpl NextArray
+        txa
+        bmi NextArray
+        iny
+        lda (Pointer1),y
+        ldy #$00
+        asl a
+        adc #.sizeof(ArrayHeader)
+        adc Pointer1
+        sta Pointer1
+        bcc ScanElements
+        inc Pointer1+1
+
+;; Stops at the array's end.
+ScanElements:
+        ldx Pointer1+1
+        cpx ArrayPointer+1
+        bne CheckElement
+        cmp ArrayPointer
+        beq CheckArraysEnd
+
+;; Skips an empty string or one below <StringsBottom>.
+CheckElement:
+        ldy #$00
+        lda (Pointer1),y
+        beq Advance
+        iny
+        clc
+        adc (Pointer1),y
+        sta SourceEnd
+        tax
+        iny
+        lda (Pointer1),y
+        adc #$00
+        sta SourceEnd+1
+        cmp StringsBottom+1
+        bcc Advance
+        bne MoveLink
+        cpx StringsBottom
+        bcc Advance
+
+;; Adds the entry's seven bytes to the back-link after the string's characters.
+MoveLink:
+        ldy #$00
+        lda (SourceEnd),y
+        adc #.sizeof(Variable) - 1      ; carry is set, so this adds the entry's size
+        sta (SourceEnd),y
+        iny
+        lda (SourceEnd),y
+        adc #$00
+        sta (SourceEnd),y
+
+;; Steps <Pointer1> to the next descriptor.
+Advance:
+        lda #DESCRIPTOR_SIZE
+        clc
+        adc Pointer1
+        sta Pointer1
+        bcc ScanElements
+        inc Pointer1+1
+        bne ScanElements
+
+;; Back-links done: writes the new entry.
+WriteEntry:
+    .endif
     ldy #$00
-    lda (INDEX1),y
-    tax
+    lda VariableName
+    sta (SourceStart),y
     iny
-    lda (INDEX1),y
-    php
-    iny
-    lda (INDEX1),y
-    adc ARYPNT
-    sta ARYPNT
-    iny
-    lda (INDEX1),y
-    adc ARYPNT+1
-    sta ARYPNT+1
-    plp
-    bpl ARYVA2
-    txa
-    bmi ARYVA2
-    iny
-    lda (INDEX1),y
-    ldy #$00
-    asl a
-    adc #$05
-    adc INDEX1
-    sta INDEX1
-    bcc ARYGET
-    inc INDEX1+1
-
-ARYGET:
-    ldx INDEX1+1
-    cpx ARYPNT+1
-    bne GOGO
-    cmp ARYPNT
-    beq ARYVA3
-
-GOGO:
-    ldy #$00
-    lda (INDEX1),y
-    beq DVARTS
-    iny
-    clc
-    adc (INDEX1),y
-    sta HIGHTR
-    tax
-    iny
-    lda (INDEX1),y
-    adc #$00
-    sta HIGHTR+1
-    cmp FRETOP+1
-    bcc DVARTS
-    bne GOGO1
-    cpx FRETOP
-    bcc DVARTS
-
-GOGO1:
-    ldy #$00
-    lda (HIGHTR),y
-    adc #$06
-    sta (HIGHTR),y
-    iny
-    lda (HIGHTR),y
-    adc #$00
-    sta (HIGHTR),y
-
-DVARTS:
-    lda #STRSIZ
-    clc
-    adc INDEX1
-    sta INDEX1
-    bcc ARYGET
-    inc INDEX1+1
-    bne ARYGET
-
-ARYDON:
-.endif
-    ldy #$00
-    lda VARNAM
-    sta (LOWTR),y
-    iny
-    lda VARNAM+1
-    sta (LOWTR),y
+    lda VariableName+1
+    sta (SourceStart),y
     lda #$00
     iny
-    sta (LOWTR),y
+    sta (SourceStart),y
     iny
-    sta (LOWTR),y
+    sta (SourceStart),y
     iny
-    sta (LOWTR),y
+    sta (SourceStart),y
     iny
-    sta (LOWTR),y
+    sta (SourceStart),y
     iny
-    sta (LOWTR),y
+    sta (SourceStart),y
+    ; Falls into ValueAddress.
+    .endproc
 
-;; Returns the value address two bytes after the scalar entry at <LOWTR>.
-;; In: LOWTR = scalar entry address, decimal = clear
-;; Out: A = low value address, Y = high value address, VARPNT = value address
-FINPTR:
-    lda LOWTR
+    ;; Returns the value address two bytes after the scalar entry at <SourceStart>.
+    ;; In: SourceStart = scalar entry address, decimal = clear
+    ;; Out: A = low value address, Y = high value address, VariablePointer = value address
+    ;; Also: FINPTR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    .proc ValueAddress
+    lda SourceStart
     clc
     adc #$02
-    ldy LOWTR+1
-    bcc FINNOW
+    ldy SourceStart+1
+    bcc Store
     iny
 
-FINNOW:
-    sta VARPNT
-    sty VARPNT+1
+;; Stores <VariablePointer> and returns.
+;; Also: FINNOW (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+Store:
+    sta VariablePointer
+    sty VariablePointer+1
     rts
+    .endproc
 
-;; Computes the start of array values from the descriptor and dimension count.
-;; In: LOWTR = array descriptor, COUNT = number of dimensions, decimal = clear
-;; Out: ARYPNT = first value address
-FMAPTR:
-    lda COUNT
-.if arrayEntryAlias
+    ;; Computes the start of array values from the descriptor and dimension count.
+    ;;
+    ;; Where `countEntry` is 1 (AppleSoft), `FromCount` takes the count in A instead; `STORE` and `RECALL` call it.
+    ;; In: SourceStart = array descriptor, Counter = number of dimensions, decimal = clear
+    ;; Out: ArrayPointer = first value address, A = its low byte, Y = its high byte
+    ;; Also: FMAPTR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    .proc ElementsStart
+    lda Counter
+    .if countEntry
 
 ;; Computes the start of array values with the dimension count already in A.
-;; In: A = number of dimensions, LOWTR = array descriptor, decimal = clear
-;; Out: ARYPNT = first value address
-FMAPT1:
-.endif
+FromCount:
+    .endif
     asl a
-    adc #$05
-    adc LOWTR
-    ldy LOWTR+1
-    bcc JSRGM
+    adc #.sizeof(ArrayHeader)
+    adc SourceStart
+    ldy SourceStart+1
+    bcc Store
     iny
 
-JSRGM:
-    sta ARYPNT
-    sty ARYPNT+1
+;; Stores <ArrayPointer> and returns.
+;; Also: JSRGM (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+Store:
+    sta ArrayPointer
+    sty ArrayPointer+1
     rts
+    .endproc
+    .endscope
+
 .endmacro
 
 ;; Emits the AppleSoft entry for choosing an existing-array lookup.
-.macro EXISTING_ARRAY_ENTRY
+.macro ExistingArrayEntry
 
-;; Enters array parsing, or skips the subscripts for an existing-array lookup.
-;; In: SUBFLG = 0 for ordinary subscripts, nonzero for the existing-array path
-;; See: <ISARY>, <INDLO1>
-QINTG1:
-    lda SUBFLG
-    bne INDLO1
+    .scope Variables continued
+
+    ;; Enters array parsing, or skips the subscripts for an existing-array lookup.
+    ;; In: SubscriptMode = 0 for ordinary subscripts, nonzero for the existing-array path
+    ;; See: <Variables::FindArray>, <Variables::FindArray::Search>
+    .proc ChooseArrayLookup
+    lda SubscriptMode
+    bne FindArray::Search
+    ; Falls into FindArray.
+    .endproc
+    .endscope
+
 .endmacro

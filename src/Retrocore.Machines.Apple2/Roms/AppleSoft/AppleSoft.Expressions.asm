@@ -4,15 +4,15 @@
 ;; frames are created in AppleSoft.ControlFlow.asm; it is here because the ROM places it immediately before
 ;; the expression evaluator. The evaluator saves pending operators and operands on the machine stack.
 ;; <OperatorTable> gives each operator its precedence and dispatch address. Relational operators accumulate a mask,
-;; and string concatenation returns to the evaluator through <TSTOP>.
+;; and string concatenation returns to the evaluator through <EvaluateExpression::NextOperator>.
 
 .include "../Microsoft6502Basic/MsBasic.Next.asm"
 .include "../Microsoft6502Basic/MsBasic.ExpressionCore.asm"
 .include "../Microsoft6502Basic/MsBasic.OperandEvaluation.asm"
 
     NextEntries 1, NXTCO1
-    EXPRESSION_CORE 0
-    OPERAND_EVALUATION 0, 0, QSTAT2
+    ExpressionCore 0
+    OperandEvaluation 0, 0, QSTAT2
 
 ;; Resolves a variable operand and loads its value, or leaves its string descriptor in <FAC>.
 ISVAR:
@@ -29,7 +29,7 @@ ISVRET:
 STRRTS:
     rts
 
-    INTEGER_VARIABLE_VALUE
+    IntegerVariableValue
 
 QSTATV:
     jmp MOVFM
@@ -49,8 +49,8 @@ QSTAT2:
     cmp #<SCRNTK
     beq QSTAT1
 
-    FUNCTION_DISPATCH
-    LOGICAL_OPERATORS 0
+    FunctionDispatch
+    LogicalOperators 0
 
 .include "../Microsoft6502Basic/MsBasic.Relational.asm"
     RelationalOperators $01

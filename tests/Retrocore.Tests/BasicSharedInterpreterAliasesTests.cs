@@ -22,7 +22,7 @@ public sealed class BasicSharedInterpreterAliasesTests
     private static string Pet => Path.Join(BasicNames.Inputs, "Pet");
     private static string Shared => Path.Join(BasicNames.Inputs, "Microsoft6502Basic");
     private static string AppleNames => Path.Join(Apple, "AppleSoft.HistoricalNames.asm");
-    private static string PetAliases => Path.Join(Pet, "Basic", "Commodore.InterpreterAliases.asm");
+    private static string PetNames => Path.Join(Pet, "Basic", "Commodore.HistoricalNames.asm");
 
     // Addresses in the independently assembled PET1, PET2 and PET4 reconstructions:
     // https://github.com/ethandicks/cbmsymbols/tree/e3120427a32e8b066eb8afdc434af547fd0906f3/listings
@@ -69,14 +69,15 @@ public sealed class BasicSharedInterpreterAliasesTests
         native.Symbol("COPY").Should().NotBe(native.Symbol("COPYZC"));
         native.Symbol("GARBA2").Should().Be(0xE484);
         native.Symbol("GARBAG").Should().Be(0xE474);
-        DocumentationTopic assignment = AssertProse(docs, "GETSPT", "COPY");
+        AssertProse(docs, "GETSPT", "COPY");
         AssertProse(docs, "GARBA2", "GARBAG");
-        assignment.EntryLabels.Should().Contain(native.DefinitionName("COPYZC"));
+        AssertRoutine(native, docs, "COPYZC");
         CheckDocumentation(docs, "MsBasic.MemoryAccess.asm", "MsBasic.Assignment.asm", "MsBasic.StringGarbageCollection.asm");
     }
 
     /// <summary>
-    ///  PET revisions retain their assignment and string-function bytes, addresses and vendor names.
+    ///  PET revisions retain their assignment and string-function bytes, addresses and vendor names; the names are in
+    ///  Commodore's historical names, which BasicSharedFloatAliasesTests checks entry by entry.
     /// </summary>
     /// <param name="model">The PET model.</param>
     /// <param name="original">Whether BASIC 1 or 4 uses its original chip.</param>
@@ -103,16 +104,28 @@ public sealed class BasicSharedInterpreterAliasesTests
             .Where(symbol => symbol.Value < functionsStart || symbol.Value >= functionsEnd)
             .ToDictionary(symbol => symbol.Name, symbol => symbol.Value, StringComparer.Ordinal);
 
+        // The included files document the macros this test does not expand (LET's, for one), whose Also: names would
+        // otherwise be predefined second definitions.
+        foreach (string file in (string[])["MsBasic.Assignment.asm", "MsBasic.StringConversion.asm", "MsBasic.StringFunctions.asm"])
+        {
+            string path = Path.Join(Shared, file);
+            foreach (DocumentationAlso also in DocumentationParser.Parse(File.ReadAllText(path), path).Comments
+                .SelectMany(comment => DocumentationAlso.Of(comment.Sections)))
+            {
+                symbols.Remove(also.Name);
+            }
+        }
+
         string assignment = linked
             ? $"""
                 .include "Commodore.StringAssignment.asm"
                 .org ${assignmentStart:X4}
-                    STRING_ASSIGNMENT 1, 1
+                    StringAssignment 1, 1
                     STRING_LINK_ADJUST {(original ? 0 : 1)}
                 """
             : $"""
                 .org ${assignmentStart:X4}
-                    STRING_ASSIGNMENT 0, 0
+                    StringAssignment 0, 0
                 """;
 
         string source = $"""
@@ -123,13 +136,11 @@ public sealed class BasicSharedInterpreterAliasesTests
             {assignment}
             INTERPRETER_ASSIGNMENT_END:
             .org ${conversionStart:X4}
-                STRING_FROM_NUMBER
+                StringFromNumber
             INTERPRETER_CONVERSION_END:
             .org ${functionsStart:X4}
-                STRING_FUNCTIONS {(early ? 1 : 0)}, {(early ? 1 : 0)}, {(early ? 1 : 0)}, {(linked ? 1 : 0)}
+                StringFunctions {(early ? 1 : 0)}, {(early ? 1 : 0)}, {(early ? 1 : 0)}, {(linked ? 1 : 0)}
             INTERPRETER_FUNCTIONS_END:
-            .include "Commodore.InterpreterAliases.asm"
-            INTERPRETER_ALIASES_END:
             """;
 
         AssemblyOptions options = new(ProcessorVariant.Mos6502, 0, 0x10000)
@@ -146,32 +157,24 @@ public sealed class BasicSharedInterpreterAliasesTests
         native.Symbol("INTERPRETER_ASSIGNMENT_END").Should().Be(assignmentEnd);
         native.Symbol("INTERPRETER_CONVERSION_END").Should().Be(conversionEnd);
         native.Symbol("INTERPRETER_FUNCTIONS_END").Should().Be(functionsEnd);
-        native.Symbol("INTERPRETER_ALIASES_END").Should().Be(functionsEnd);
         CompareRegion(legacy, native, assignmentStart, assignmentEnd);
         CompareRegion(legacy, native, conversionStart, conversionEnd);
         CompareRegion(legacy, native, functionsStart, functionsEnd);
 
-        AssertAliasFile(native, PetAliases, [.. s_petEntries.Select(entry => entry.Name)]);
-        DocumentationSet docs = Documents(native, PetAliases);
+        // Each Commodore name reaches, in the whole build, the address the PET listing gives it and its target's.
+        AssemblyResult build = PetSdkModules.AssembleBasic(Pet, model, original);
+        DocumentationSet docs = Documents(native, PetNames);
         int versionIndex = early ? 0 : linked ? 2 : 1;
         foreach (var entry in s_petEntries)
         {
-            native.Symbol(entry.Name).Should().Be(native.Symbol(entry.Target));
-            native.Symbol(entry.Name).Should().Be(entry.Addresses[versionIndex], $"{entry.Name} must match the PET listing");
-            string topic = entry.Target == "COPYZC" ? "GETSPT" : entry.Target;
-            DocumentationTopic documented = AssertAlias(
-                native, docs, topic, entry.Name, BasicAttribution.PetKeys(model, original), BasicAttribution.CommodoreKeys);
-
-            string path = linked && entry.Target == "COPYZC"
-                ? Path.Join(Pet, "Basic", "Commodore.StringAssignment.asm")
-                : documented.Path;
-
-            AssertDebugEntry(native, entry.Name, path);
+            native.HasSymbol(entry.Name).Should().BeFalse($"{entry.Name} is in Commodore's historical names, not the modules");
+            build.Symbol(entry.Name).Should().Be(build.Symbol(entry.Target));
+            build.Symbol(entry.Name).Should().Be(entry.Addresses[versionIndex], $"{entry.Name} must match the PET listing");
+            BasicWorkspaceConversionTests.InFiles(build.HistoricalNames[entry.Name], [PetNames]).Should().BeTrue(
+                $"{entry.Name} must reach {Path.GetFileName(PetNames)}");
         }
 
-        (docs.FindTopic("GETSPT") ?? throw new AssertFailedException("GETSPT has no shared documentation."))
-            .EntryLabels.Should().Contain(native.DefinitionName("COPYZC"));
-
+        AssertRoutine(native, docs, "COPYZC");
         native.HasSymbol("COMBYTE").Should().BeFalse("COMBYTE is an Apple name");
         CheckDocumentation(docs, "MsBasic.Assignment.asm", "MsBasic.StringConversion.asm", "MsBasic.StringFunctions.asm");
     }
@@ -193,50 +196,14 @@ public sealed class BasicSharedInterpreterAliasesTests
         next.Should().Be(end);
     }
 
-    private static void AssertAliasFile(AssemblyResult result, string path, string[] expected)
+    // The descriptor copy, which the vendors' code enters, is a routine of its own after StoreString's tail.
+    private static void AssertRoutine(AssemblyResult result, DocumentationSet docs, string name)
     {
-        string full = Path.GetFullPath(path);
-        result.SymbolDefinitions
-            .Where(symbol => symbol.Location is { } location
-                && string.Equals(Path.GetFullPath(location.Path), full, StringComparison.OrdinalIgnoreCase))
-            .Select(symbol => symbol.Name)
-            .Should().BeEquivalentTo(expected, "the alias file must define precisely the documented names");
+        DocumentationTopic topic = docs.FindTopic(result.DefinitionName(name))
+            ?? throw new AssertFailedException($"{name} has no documentation.");
 
-        result.SourceMap.Where(entry => entry.Size > 0
-            && entry.Location is { } location
-            && string.Equals(Path.GetFullPath(location.Path), full, StringComparison.OrdinalIgnoreCase))
-            .Should().BeEmpty("aliases must not emit bytes");
-
-        DocumentationSet docs = Documents(result, path);
-        foreach (string name in expected)
-        {
-            DocumentationTopic alias = docs.FindTopic(name)
-                ?? throw new AssertFailedException($"{name} has no alias documentation.");
-
-            Path.GetFullPath(alias.Path).Should().Be(full);
-            alias.Value.Should().Be(result.Symbol(name));
-            alias.Summary.Should().NotBeNullOrWhiteSpace();
-        }
-    }
-
-    // The vendor's alias cites the documents that give its name, and the shared definition doesn't give the name.
-    private static DocumentationTopic AssertAlias(
-        AssemblyResult result,
-        DocumentationSet docs,
-        string target,
-        string name,
-        string[] buildKeys,
-        string[] documentKeys)
-    {
-        DocumentationTopic topic = docs.FindTopic(target)
-            ?? throw new AssertFailedException($"{target} has no shared documentation.");
-
-        DocumentationTopic alias = docs.FindTopic(name)
-            ?? throw new AssertFailedException($"{name} has no alias documentation.");
-
-        BasicAttribution.AssertCites(alias, buildKeys, documentKeys);
-        BasicAttribution.AssertNotShared(result, docs, name);
-        return topic;
+        topic.Kind.Should().Be(DocumentationKind.Routine, $"{name} is a routine");
+        topic.Summary.Should().NotBeNullOrWhiteSpace();
     }
 
     // Apple's name that is another definition's in AppleSoft: it can't resolve, so the shared remarks give it.
@@ -249,19 +216,6 @@ public sealed class BasicSharedInterpreterAliasesTests
             .Should().BeTrue($"{target}'s remarks must attribute {name} to AppleSoft and cite its source");
 
         return topic;
-    }
-
-    private static void AssertDebugEntry(AssemblyResult result, string name, string path)
-    {
-        DebugInfo debug = new();
-        debug.Add(new SourceMapModule(result, area: null));
-        DebugTestMemory memory = new();
-        memory.Set(0, result.Sections[0].Bytes.ToArray());
-        debug.Resolve(name, memory).Should().Be(result.Symbol(name));
-        DebugPosition position = debug.Position(memory, checked((ushort)result.Symbol(name)))
-            ?? throw new AssertFailedException($"{name} has no debugger source position.");
-
-        Path.GetFullPath(position.Chain[0].Path).Should().Be(Path.GetFullPath(path));
     }
 
     private static DocumentationSet Documents(AssemblyResult result, string aliases)

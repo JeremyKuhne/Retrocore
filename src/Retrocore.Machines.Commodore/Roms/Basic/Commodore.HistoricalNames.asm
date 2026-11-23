@@ -73,4 +73,184 @@ ReadListWordByte = Statements::List::ReadWordByte
 ListFirstWord = Statements::List::ListFirstWord
 .endif
 
+
+; The string assignment's descriptor copy and the shared string functions. Each is guarded, so that a build of part
+; of the modules, without them, leaves them out: the shared copy by the classic collector it goes with, BASIC 4's own
+; copy (in Commodore.StringAssignment.asm) and the functions by their targets.
+.ifdef Strings::CollectGarbage::NextPass
+;; Inherit: <::StoreDescriptor>
+;; Also: COPYC (CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+StoreDescriptor = ::StoreDescriptor
+.endif
+
+.ifdef ::StoreLinkedDescriptor
+;; Inherit: <::StoreLinkedDescriptor>
+;; Also: COPYC (CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+LinkedDescriptor = ::StoreLinkedDescriptor
+.endif
+
+.ifdef Functions::Str
+;; Inherit: <Functions::Str>
+;; Also: STRD (CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+Str = Functions::Str
+.endif
+
+.ifdef Functions::Chr
+;; Inherit: <Functions::Chr>
+;; Also: CHRD (CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+Chr = Functions::Chr
+.endif
+
+.ifdef Functions::Left
+;; Inherit: <Functions::Left>
+;; Also: LEFTD (CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+Left = Functions::Left
+.endif
+
+.ifdef Functions::Right
+;; Inherit: <Functions::Right>
+;; Also: RIGHTD (CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+Right = Functions::Right
+.endif
+
+.ifdef Functions::Mid
+;; Inherit: <Functions::Mid>
+;; Also: MIDD (CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+Mid = Functions::Mid
+.endif
+
+
+; The PET's AND, which Microsoft's source names ANDOP; AppleSoft's overlay gives ANDOP to its OR.
+.ifdef Operators::And
+;; Inherit: <Operators::And>
+;; Also: ANDOP (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+AndOperator = Operators::And
+.endif
+
+
+; BASIC 4's room check in its linked allocator.
+.ifdef Strings::ReserveSpace::CheckLinkedRoom
+;; Inherit: <Strings::ReserveSpace::CheckLinkedRoom>
+;; Also: TRYAG4 (CBM4S79, HV4, HV4R)
+ReserveCheckRoom = Strings::ReserveSpace::CheckLinkedRoom
+.endif
+
+; The classic collector's steps in BASIC 1 and 2, whose Microsoft names BASIC 4 gives to its array back-link steps.
+.ifdef Strings::CollectGarbage::NextArray
+;; Inherit: <Strings::CollectGarbage::NextArray>
+;; Also: ARYVA2 (M6502, HV1, HV1R, HV2)
+CollectorNextArray = Strings::CollectGarbage::NextArray
+.endif
+
+.ifdef Strings::CollectGarbage::CheckArraysEnd
+;; Inherit: <Strings::CollectGarbage::CheckArraysEnd>
+;; Also: ARYVA3 (M6502, HV1, HV1R, HV2)
+CollectorCheckArraysEnd = Strings::CollectGarbage::CheckArraysEnd
+.endif
+
+.ifdef Strings::CollectGarbage::ReadArray
+;; Inherit: <Strings::CollectGarbage::ReadArray>
+;; Also: ARYVGO (M6502, HV1, HV1R, HV2)
+CollectorReadArray = Strings::CollectGarbage::ReadArray
+.endif
+
+.ifdef Strings::CollectGarbage::ElementsReady
+;; Inherit: <Strings::CollectGarbage::ElementsReady>
+;; Also: ARYGET (M6502, HV1, HV1R, HV2)
+CollectorElementsReady = Strings::CollectGarbage::ElementsReady
+.endif
+
+.ifdef Strings::CollectGarbage::CheckElement
+;; Inherit: <Strings::CollectGarbage::CheckElement>
+;; Also: GOGO (M6502, HV1, HV1R, HV2)
+CollectorCheckElement = Strings::CollectGarbage::CheckElement
+.endif
+
+.ifdef Strings::CollectGarbage::Advance
+;; Inherit: <Strings::CollectGarbage::Advance>
+;; Also: DVARTS (M6502, HV1, HV1R, HV2)
+CollectorAdvance = Strings::CollectGarbage::Advance
+.endif
+
+
+; BASIC 4's names for its own paths in the shared variable lookup and string release.
+.ifdef FindVariable::SecondMismatch
+;; Inherit: <FindVariable::SecondMismatch>
+;; Also: NXTPTR (CBM4S79, HV4, HV4R)
+SecondNameMismatch = FindVariable::SecondMismatch
+.endif
+
+.ifdef Variables::CheckReservedName::CheckDiskStatus
+;; Inherit: <Variables::CheckReservedName::CheckDiskStatus>
+;; Also: QDSVAR (CBM4S79, HV4, HV4R)
+CheckDiskStatusName = Variables::CheckReservedName::CheckDiskStatus
+.endif
+
+.ifdef Variables::Create::NextArray
+;; Inherit: <Variables::Create::NextArray>
+;; Also: ARYVA2 (CBM4S79, HV4, HV4R)
+CreateNextArray = Variables::Create::NextArray
+.endif
+
+.ifdef Variables::Create::CheckArraysEnd
+;; Inherit: <Variables::Create::CheckArraysEnd>
+;; Also: ARYVA3 (CBM4S79, HV4, HV4R)
+CreateCheckArraysEnd = Variables::Create::CheckArraysEnd
+.endif
+
+.ifdef Variables::Create::ReadArray
+;; Inherit: <Variables::Create::ReadArray>
+;; Also: ARYVGO (CBM4S79, HV4, HV4R)
+CreateReadArray = Variables::Create::ReadArray
+.endif
+
+.ifdef Variables::Create::ScanElements
+;; Inherit: <Variables::Create::ScanElements>
+;; Also: ARYGET (CBM4S79, HV4, HV4R)
+CreateScanElements = Variables::Create::ScanElements
+.endif
+
+.ifdef Variables::Create::CheckElement
+;; Inherit: <Variables::Create::CheckElement>
+;; Also: GOGO (CBM4S79, HV4, HV4R)
+CreateCheckElement = Variables::Create::CheckElement
+.endif
+
+.ifdef Variables::Create::MoveLink
+;; Inherit: <Variables::Create::MoveLink>
+;; Also: GOGO1 (CBM4S79, HV4, HV4R)
+CreateMoveLink = Variables::Create::MoveLink
+.endif
+
+.ifdef Variables::Create::Advance
+;; Inherit: <Variables::Create::Advance>
+;; Also: DVARTS (CBM4S79, HV4, HV4R)
+CreateAdvance = Variables::Create::Advance
+.endif
+
+.ifdef Variables::Create::WriteEntry
+;; Inherit: <Variables::Create::WriteEntry>
+;; Also: ARYDON (CBM4S79, HV4, HV4R)
+CreateWriteEntry = Variables::Create::WriteEntry
+.endif
+
+.ifdef Strings::ReleaseDescriptor::CheckBottom
+;; Inherit: <Strings::ReleaseDescriptor::CheckBottom>
+;; Also: RES00 (CBM4S79, HV4, HV4R)
+ReleaseCheckBottom = Strings::ReleaseDescriptor::CheckBottom
+.endif
+
+.ifdef Strings::ReleaseDescriptor::SkipLink
+;; Inherit: <Strings::ReleaseDescriptor::SkipLink>
+;; Also: FRE01 (CBM4S79, HV4, HV4R)
+ReleaseSkipLink = Strings::ReleaseDescriptor::SkipLink
+.endif
+
+.ifdef Strings::ReleaseDescriptor::ReadDescriptor
+;; Inherit: <Strings::ReleaseDescriptor::ReadDescriptor>
+;; Also: FRE02 (CBM4S79, HV4, HV4R)
+ReleaseReadDescriptor = Strings::ReleaseDescriptor::ReadDescriptor
+.endif
+
+
 .endscope

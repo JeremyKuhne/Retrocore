@@ -42,7 +42,7 @@ public sealed class BasicSharedAliasConsistencyTests
     {
         // AppleSoft's interpreter aliases have all joined its historical names (Basic.md M10); Commodore's remain.
         string[] appleFiles = AliasFiles(Apple, "AppleSoft", interpreterAliases: false);
-        string[] petFiles = AliasFiles(PetBasic, "Commodore", interpreterAliases: true);
+        string[] petFiles = AliasFiles(PetBasic, "Commodore", interpreterAliases: false);
         List<NativeRoot> roots = [];
         foreach (Apple2Model model in (Apple2Model[])[Apple2Model.IIPlus, Apple2Model.IIe, Apple2Model.IIeEnhanced])
         {
@@ -297,7 +297,8 @@ public sealed class BasicSharedAliasConsistencyTests
             if (words is [".ifdef", string target])
             {
                 guard.Should().BeNull($"{where} must not nest its guards");
-                guard = result.HasSymbol(target);
+                // A target written ::Name, to reach past the vendor's scope, is the top-level Name.
+                guard = result.HasSymbol(target.StartsWith("::", StringComparison.Ordinal) ? target[2..] : target);
             }
             else if (words is [".endif"])
             {

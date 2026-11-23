@@ -1,61 +1,80 @@
+; retrocore: style=strict
 ; Derived from Microsoft's BASIC for 6502 (m6502.asm, MIT license; see LICENSE in this folder).
+
+.include "MsBasic.Families.asm"
+
 ; MICROSOFT 6502 BASIC: ARRAY MULTIPLICATION
 ;
-; These unsigned 16-bit helpers multiply dimension sizes and element offsets. Overflow branches
-; to <OMERR1> in the array code.
+; These unsigned 16-bit helpers multiply dimension sizes and element offsets. Overflow branches to the array code's
+; OUT OF MEMORY jump.
 
-;; Multiplies <CURTOL> by a big-endian two-byte dimension in an array descriptor.
+.scope Variables continued
+
+;; Multiplies <LinearIndex> by a big-endian two-byte dimension in an array descriptor.
 ;;
-;; The 16 shifts consume <CURTOL>; it is zero on successful return. <INDEX> saves the original Y.
-;; In: LOWTR = descriptor address, Y = offset of the dimension's low byte, CURTOL = multiplicand
+;; The 16 shifts consume <LinearIndex>; it is zero on successful return. <Pointer1> saves the original Y.
+;; In: SourceStart = descriptor address, Y = offset of the dimension's low byte, LinearIndex = multiplicand
 ;; Out: X = low product byte, A = high product byte, Y = high product byte
 ;; Errors: OUT OF MEMORY on 16-bit overflow
-;; Uses: CURTOL, CURTOL+1, ADDEND, ADDEND+1, DECCNT, INDEX
-UMULT:
-    sty INDEX
-    lda (LOWTR),y
-    sta ADDEND
+;; Uses: Addend, DigitCount, Pointer1
+;; Also: UMULT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+.proc MultiplyByBound
+    sty Pointer1
+    lda (SourceStart),y
+    sta Addend
     dey
-    lda (LOWTR),y
+    lda (SourceStart),y
+; Falls into MultiplyUnsigned.
+.endproc
 
-;; Multiplies <CURTOL> by A:<ADDEND>, with A holding the high byte.
+;; Multiplies <LinearIndex> by A:<Addend>, with A holding the high byte.
 ;;
-;; This entry likewise consumes <CURTOL>, leaving it zero on successful return.
-;; In: A = high multiplier byte, ADDEND = low multiplier byte, CURTOL = multiplicand
+;; This entry likewise consumes <LinearIndex>, leaving it zero on successful return.
+;; In: A = high multiplier byte, Addend = low multiplier byte, LinearIndex = multiplicand
 ;; Out: X = low product byte, A = high product byte, Y = high product byte
 ;; Errors: OUT OF MEMORY on 16-bit overflow
-;; Uses: CURTOL, CURTOL+1, ADDEND+1, DECCNT
-UMULTD:
-    sta ADDEND+1
+;; Uses: Addend, DigitCount
+;; Also: UMULTD (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+.proc MultiplyUnsigned
+    sta Addend+1
     lda #$10
-    sta DECCNT
+    sta DigitCount
     ldx #$00
     ldy #$00
 
-UMULTC:
-    ; Shift the partial product and add the multiplier for each set bit of CURTOL.
+;; Doubles the partial product in X/Y and adds the multiplier when the bit shifted out of <LinearIndex> is set.
+;; Also: UMULTC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+NextBit:
+    ; Shift the partial product and add the multiplier for each set bit of LinearIndex.
     txa
     asl a
     tax
     tya
     rol a
     tay
-    bcs OMERR1
-    asl CURTOL
-    rol CURTOL+1
-    bcc UMLCNT
+    bcs ElementAddress::ToOutOfMemoryError
+    asl LinearIndex
+    rol LinearIndex+1
+    bcc CountBit
     clc
     txa
-    adc ADDEND
+    adc Addend
     tax
     tya
-    adc ADDEND+1
+    adc Addend+1
     tay
-    bcs OMERR1
+    bcs ElementAddress::ToOutOfMemoryError
 
-UMLCNT:
-    dec DECCNT
-    bne UMULTC
+;; Decrements the 16-bit counter and loops to <NextBit>.
+;; Also: UMLCNT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+CountBit:
+    dec DigitCount
+    bne NextBit
 
-UMLRTS:
+;; The routine's RTS; nothing branches here.
+;; Also: UMLRTS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+Done:
     rts
+.endproc
+.endscope
+

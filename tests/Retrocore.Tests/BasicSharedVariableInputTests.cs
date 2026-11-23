@@ -480,8 +480,8 @@ public sealed class BasicSharedVariableInputTests
             {(nativeWorkspace ? ".include \"Commodore.Equates.asm\"" : "")}
             .include "MsBasic.VariableInput.asm"
             .org ${legacy.Symbol("READ"):X4}
-                VARIABLE_INPUT {(early ? 0 : 2)}, {Flag(apple)}, {Flag(early)}, {Flag(early)}, {Flag(!apple)}, {Flag(apple)}
-                VARIABLE_INPUT_MESSAGES {Flag(apple)}, {Flag(early || variant == Pet2)}
+                VariableInput {(early ? 0 : 2)}, {Flag(apple)}, {Flag(early)}, {Flag(early)}, {Flag(!apple)}, {Flag(apple)}
+                VariableInputMessages {Flag(apple)}, {Flag(early || variant == Pet2)}
             VARIABLE_INPUT_END:
             """;
 
@@ -556,9 +556,16 @@ public sealed class BasicSharedVariableInputTests
         foreach (AssemblySymbol label in legacy.SymbolDefinitions.Where(
             symbol => !symbol.IsConstant && symbol.Value >= start && symbol.Value < end))
         {
+            // A vendor's alias reaches its name only in a build that includes the vendor's historical names: a
+            // standalone build of the module skips it, and a whole build must have it.
+            if (BasicNames.IsVendorName(label.Name) && !BasicNames.IncludesHistoricalNames(native))
+            {
+                continue;
+            }
+
             native.SymbolsWithHistoricalNames.Should().ContainKey(label.Name);
             native.Symbol(label.Name).Should().Be(label.Value, $"{label.Name} must retain its ROM address");
-            native.Definition(label.Name).Location?.Path
+            BasicNames.DefiningSymbol(native, label.Name).Location?.Path
                 .Should().EndWith("MsBasic.VariableInput.asm", $"{label.Name} must be defined by the shared block");
         }
     }

@@ -92,6 +92,13 @@ FOR_FRAME_SIZE = .sizeof(ForFrame)
     FIRST_CHARACTER .byte ;; The formula's first character, which nothing reads.
 .endstruct
 
+;; The size of a packed real, the largest array element and the value an integer or string element's size is
+;; counted down from.
+FLOAT_SIZE = 5
+
+;; The bound each dimension of an array used without `DIM` gets: indexes 0 to 10.
+DEFAULT_BOUND = 11
+
 ; The layouts the code depends on.
 .assert .sizeof(Variable) = 7, "A simple variable takes seven bytes."
 .assert .sizeof(ArrayHeader) = 5, "An array's header takes five bytes."

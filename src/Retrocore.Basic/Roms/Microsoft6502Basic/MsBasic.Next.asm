@@ -156,7 +156,7 @@ EndLoop:
     bmi IsString
     bcs Mismatch
 
-;; The rts.
+;; Returns.
 ;; Also: CHKOK (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 Done:
     rts

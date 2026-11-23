@@ -6,8 +6,15 @@
 ; MICROSOFT 6502 BASIC: DECIMAL LINE NUMBERS
 
 ;; Reads a decimal line number from the current text position, rejecting values at or above 64000.
+;;
+;; The character reader skips spaces between the digits. Before adding a digit to a value of 6400 ($1900) or more,
+;; the routine branches to <Statements::On::RequireGoto> with the value's high byte in A, for the syntax error. That
+;; code tests A for <TOKEN_GOTO>, so a value whose high byte is the token, followed by another digit, goes on into
+;; `ON`'s selection loop with whatever selector it holds instead: 43776 to 44031 in AppleSoft, 35072 to 35327 on the
+;; PET.
 ;; In: A = current character, carry = clear for a digit
 ;; Out: LineNumber = line number, TextPointer = terminating character, A = terminating character, carry = set
+;; Errors: SYNTAX for a value of 64000 or more
 ;; Also: LINGET (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 .proc ReadLineNumber
     ldx #$00

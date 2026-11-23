@@ -9,8 +9,11 @@
 .macro LetterTest
 
     ;; Tests whether A holds an uppercase letter, $41 through $5A.
+    ;;
+    ;; The two subtractions take $5B and then $A5 from the character, $100 in all, so A comes back unchanged.
     ;; In: A = character, decimal = clear
     ;; Out: carry = set for A through Z, clear otherwise
+    ;; Keeps: A, X, Y
     ;; Also: ISLETC (M6502, ASTIL, AS82, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc IsLetter
     cmp #$41
@@ -18,7 +21,7 @@
     sbc #$5B
     sec
     sbc #$A5
-;; The rts below-'A' branches to.
+;; Returns; a character below `A` branches here.
 ;; Also: ISLRTS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 Done:
     rts
@@ -35,6 +38,10 @@ Done:
     ;; The copy increments <TextPointer>, whose two bytes are the operand at <CharacterReaderTemplate::GetCurrent>, and
     ;; skips spaces. Five seed bytes follow the code, but startup copies only the first four to <RandomValue>. BASIC 1
     ;; stores $59 as the fifth byte; AppleSoft and the later PET BASICs store $58.
+    ;;
+    ;; Martin Hoffmann-Vetter's reconstructions spell the labels CHZGOT and CHZRTS as `CHDGOT` and `CHDRTS`: the PET
+    ;; BASIC 1 and 2 builds take those as Commodore's historical names, and in BASIC 4 (HV4, HV4R) they are given here,
+    ;; since BASIC 4's own source (CBM4S79) does not name the labels.
     ;; In: decimal = clear
     ;; Out: A = the non-space character, carry = clear for a digit and set otherwise, zero = set for a null or colon
     ;; Keeps: X, Y
@@ -57,7 +64,7 @@ GetCurrent:
     sec
     sbc #$D0
 
-;; The rts the colon-or-above test branches to; the seed bytes follow.
+;; Returns; a colon or anything above it branches here. The seed bytes follow.
 ;; Also: CHZRTS (M6502)
 Done:
     rts

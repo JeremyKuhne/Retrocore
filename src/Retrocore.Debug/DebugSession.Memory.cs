@@ -213,7 +213,9 @@ internal sealed partial class DebugSession
     ///   A label counts where its module's code or data is in memory now, as the call stack and disassembly decide,
     ///   so a ROM's labels go when the language card maps RAM over it. An address takes the first module's label,
     ///   and within a module the first name in order. Constants the CPU's instructions address memory through, such
-    ///   as the Monitor's <c>CH</c> at $24, name the bytes no label does, whatever is mapped there.
+    ///   as the Monitor's <c>CH</c> at $24, name the bytes no label does, whatever is mapped there; where modules
+    ///   name one address differently, the Monitor's and the firmware's name it, as <c>CH</c> rather than AppleSoft's
+    ///   <c>TRMPOS</c>.
     ///  </para>
     ///  <para>
     ///   Each has its <c>kind</c>: what its documentation declares it, such as <c>routine</c> or <c>table</c>; else
@@ -381,15 +383,24 @@ internal sealed partial class DebugSession
 
         if (!kinds.HasFlag(SourceNameKinds.Constants)) { yield break; }
         IsaDescription cpu = (bank?.InstructionSet ?? Target.InstructionSet).Description;
+
+        List<(string Name, long Value, string? Path)> constants = [];
         foreach (IDebugModule module in _debug.Modules)
         {
             if (!module.AddressConstants.Any() || !Installed(module)) { continue; }
-            foreach ((string name, long value, IsaDescription constantCpu) in module.AddressConstants)
+            foreach ((string name, long value, IsaDescription constantCpu, string? path) in module.AddressConstants)
             {
-                if (!ReferenceEquals(constantCpu, cpu) || value is < 0 or > 0xFFFF || skip((int)value)) { continue; }
+                if (!ReferenceEquals(constantCpu, cpu) || value is < 0 or > 0xFFFF) { continue; }
                 if (bank is not null && bank.AreaOf((ushort)value) is null) { continue; }
-                yield return ((int)value, name, true);
+                constants.Add((name, value, path));
             }
+        }
+
+        // Where modules name one address differently, the Monitor's and the firmware's names come first, as the
+        // disassembler's do; skip is asked as each is given, so a name given earlier takes the address.
+        foreach ((string name, long value) in MachineSymbols.ByRank(constants))
+        {
+            if (!skip((int)value)) { yield return ((int)value, name, true); }
         }
     }
 

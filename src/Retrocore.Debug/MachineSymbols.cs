@@ -159,8 +159,40 @@ internal static partial class MachineSymbols
         return Path.GetFileName(path);
     }
 
-    // Which names win at a shared address: the Monitor's, the hardware's, the firmware's, BASIC's, then DOS's.
-    private static int Rank(string file) => file switch
+    /// <summary>
+    ///  Orders names from several modules so that, where they name one address, the Monitor's, the hardware's and the
+    ///  firmware's come before BASIC's and DOS's, as <see cref="Rank(string)"/> ranks them.
+    /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   The order is otherwise kept, so modules of one rank, and every module of another machine's, stay in the order
+    ///   given: AppleSoft's <c>TRMPOS</c> and the Monitor's <c>CH</c> both name $24, and <c>CH</c> comes first.
+    ///  </para>
+    /// </remarks>
+    /// <param name="names">Each name, its value and the source that defines it, in the modules' order.</param>
+    /// <returns>The names and values, highest rank first.</returns>
+    internal static IEnumerable<(string Name, long Value)> ByRank(IEnumerable<(string Name, long Value, string? Path)> names)
+    {
+        Dictionary<string, int> ranks = [];
+        int RankOf(string? path)
+        {
+            if (path is null) { return Rank(""); }
+            if (!ranks.TryGetValue(path, out int rank)) { ranks[path] = rank = Rank(ModuleFile(path)); }
+            return rank;
+        }
+
+        return [.. names.Select(name => (name.Name, name.Value, Rank: RankOf(name.Path)))
+            .OrderBy(name => name.Rank)
+            .Select(name => (name.Name, name.Value))];
+    }
+
+    /// <summary>
+    ///  Gets which names win at a shared address: the Monitor's, the hardware's, the firmware's, BASIC's, then DOS's
+    ///  and everything else's.
+    /// </summary>
+    /// <param name="file">The module's file, from <see cref="ModuleFile(string)"/>.</param>
+    /// <returns>The rank, lowest first.</returns>
+    internal static int Rank(string file) => file switch
     {
         "Monitor.asm" or "MonitorEntries.asm" => 0,
         "IIeEquates.asm" or "FirmwareEquates.asm" => 1,

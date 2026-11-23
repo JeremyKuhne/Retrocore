@@ -100,6 +100,67 @@ public sealed partial class DebugModuleTests
         module.AddressConstants.Select(constant => constant.Cpu).Distinct().Should().HaveCount(2);
     }
 
+    /// <summary>
+    ///  Where two modules name one address, the Monitor's name comes first even when BASIC's module was added first,
+    ///  as a memory view's first name wins: AppleSoft's TRMPOS is the Monitor's CH. Each constant carries the source
+    ///  that defines it, and modules of one rank keep their order.
+    /// </summary>
+    [TestMethod]
+    public void AddressConstantsRankTheMonitorsNamesFirst()
+    {
+        string folder = Directory.CreateTempSubdirectory().FullName;
+        try
+        {
+            SourceMapModule basic = Module(Path.Join(folder, "AppleSoft", "AppleSoft.Equates.asm"), """
+                TRMPOS = $24
+                HOLD = $50
+                  sta TRMPOS
+                  sta HOLD
+                  rts
+                """);
+
+            SourceMapModule dos = Module(Path.Join(folder, "Dos", "Dos33.asm"), """
+                SPOT = $50
+                  sta SPOT
+                  rts
+                """);
+
+            SourceMapModule dos32 = Module(Path.Join(folder, "Dos", "Dos32.asm"), """
+                OTHER = $50
+                  sta OTHER
+                  rts
+                """);
+
+            SourceMapModule monitor = Module(Path.Join(folder, "System", "Monitor.asm"), """
+                CH = $24
+                  sta CH
+                  rts
+                """);
+
+            monitor.AddressConstants.Single().Path.Should().Be(Path.Join(folder, "System", "Monitor.asm"));
+            (string Name, long Value)[] ranked = [.. MachineSymbols.ByRank(
+                ((SourceMapModule[])[basic, dos, dos32, monitor])
+                    .SelectMany(module => module.AddressConstants)
+                    .Select(constant => (constant.Name, constant.Value, constant.Path)))];
+
+            ranked.Should().Equal(("CH", 0x24L), ("TRMPOS", 0x24L), ("HOLD", 0x50L), ("SPOT", 0x50L), ("OTHER", 0x50L));
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    private static SourceMapModule Module(string path, string source)
+    {
+        AssemblyResult result = new NativeAssembler().Assemble(
+            new AssemblySource(source, path),
+            new(ProcessorVariant.Mos6502, 0x6000, 0x100));
+
+        result.Diagnostics.Should().BeEmpty();
+        return new SourceMapModule(result, area: null);
+    }
+
     private static Dictionary<string, long> AddressConstants(string source) =>
         new SourceMapModule(Assemble(source), area: null).AddressConstants.ToDictionary(constant => constant.Name, constant => constant.Value);
 

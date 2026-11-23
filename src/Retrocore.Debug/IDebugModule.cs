@@ -55,9 +55,10 @@ internal interface IDebugModule
 
     /// <summary>
     ///  Gets the module's constants that its instructions address memory through, such as a zero-page equate that
-    ///  <c>STA CH</c> stores to, with the CPU whose instructions do, so a memory view can name those bytes.
+    ///  <c>STA CH</c> stores to, with the CPU whose instructions do and the source that defines it, so a memory view
+    ///  can name those bytes.
     /// </summary>
-    IEnumerable<(string Name, long Value, IsaDescription Cpu)> AddressConstants => [];
+    IEnumerable<(string Name, long Value, IsaDescription Cpu, string? Path)> AddressConstants => [];
 
     /// <summary>
     ///  Gets whether memory holds the module's code now, so its <see cref="AddressConstants"/> name what it uses: a

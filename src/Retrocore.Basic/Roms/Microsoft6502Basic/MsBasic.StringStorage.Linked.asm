@@ -39,8 +39,8 @@ Try:
     bcs BelowLink
     dey
 
-;; Saves the link address in <Pointer1> and subtracts the length.
-;; Also: TRYAG3 (M6502, CBM4S79, HV4, HV4R)
+;; Saves the link address in <Pointer1> and subtracts the length. BASIC 4's documents call it TRYAG3, Microsoft's
+;; name for the room check, so Commodore's historical names give it (Basic.md E4).
 BelowLink:
     sta Pointer1
     sty Pointer1+1

@@ -20,7 +20,7 @@
     .assert bufferPage >= 0 && bufferPage <= 255, "bufferPage must fit in a byte."
     .assert clearFacOverflow = 0 || clearFacOverflow = 1, "clearFacOverflow must be 0 or 1."
     .assert DESCRIPTOR_SIZE = 3 && TEMPORARY_COUNT > 0, "String temporaries must have three-byte descriptors."
-    .assert TemporaryDescriptors >= 0, "The temporary stack must start in page zero."
+    .assert TemporaryDescriptors >= 0, "The temporary stack must not start below address zero."
     .assert TemporaryDescriptors + DESCRIPTOR_SIZE * TEMPORARY_COUNT <= $FF, "The temporaries must fit in page zero."
 
     .scope Strings continued
@@ -124,6 +124,7 @@ SetLength:
 CheckPage:
     stx SecondStringPointer+1
     lda StringPointer+1
+    ; Where the input buffer is outside page zero (all but BASIC 1), text in page zero or the buffer's page is copied.
     .if bufferPage
         beq CopyText
         cmp #bufferPage

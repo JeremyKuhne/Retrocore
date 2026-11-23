@@ -45,6 +45,7 @@
     .proc FromNumberBuffer
     lda #<NumberBufferPrefix
     ldy #>NumberBufferPrefix
+    ; The prefix is in page zero, so Y is 0 and this always branches.
     beq FromText
     .endproc
     .endscope

@@ -316,7 +316,7 @@ Dispatch:
         ;; Computes signed 16-bit AND on the numeric argument and <Fac>.
         ;;
         ;; Microsoft's ANDOP names it on the PET, and AppleSoft's overlay gives the name to <Operators::Or> instead, so
-        ;; each vendor's historical names file gives it (Basic.md B2's notes).
+        ;; each vendor's historical names file gives it (Basic.md E4).
         ;; Out: Fac = numeric result
         ;; Errors: ILLEGAL QUANTITY if an operand is outside -32768 to 32767
         .proc And

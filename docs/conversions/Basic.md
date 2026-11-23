@@ -927,7 +927,10 @@ Decisions and how the table was applied:
     `FindVariable::SearchScalars` stands.
 - E4. One old name with a different definition in each vendor (K12, R4). ANDOP is AppleSoft's `Operators::Or` and the
   PET's `Operators::And`. ARYVA2, ARYVA3, ARYVGO, ARYGET, GOGO and DVARTS are the classic collector's steps in
-  AppleSoft and BASIC 1 and 2, but `Variables::Create`'s array back-link steps in BASIC 4. Each name is an alias in
+  AppleSoft and BASIC 1 and 2, but `Variables::Create`'s array back-link steps in BASIC 4. TRYAG3 is the unlinked
+  allocator's room check (Microsoft's) there, but BASIC 4's step before its own room check
+  (`Strings::ReserveSpace::BelowLink`); the table's row 706 gives that one M6502 too, which m6502.asm does not bear
+  out. Each name is an alias in
   both vendors' files; Commodore's are guarded by their targets, since each PET build defines only one of them.
   The classic collector's aliases are `Collector<Step>`:
   AppleSoft cites M6502, and Commodore cites M6502, HV1, HV1R and HV2. The lineage rule is not extended across the
@@ -959,11 +962,14 @@ Decisions and how the table was applied:
   line (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R), under S11's lineage rule; the table's row 860 gives M6502, HV1
   and HV1R. AppleSoft's and BASIC 2's and 4's `ZeroValue` is the math step's, inside `Float::Half`. AppleSoft's own
   bytes here are `ZeroVariable` (SIMZER), which has no `Also:` in the modules; AppleSoft's alias gives SIMZER (E3).
+  The math step's `ZeroValue` cites ZERO by M6502, CBM4S79, HV2, HV4 and HV4R, without HV1 and HV1R, which give the
+  name to BASIC 1's other zero; whether the lineage rule should add them there too is a question for the owner.
 - E8a. Citations on a definition that only one vendor's builds assemble: the lineage rule stays within the vendor's
   line. BASIC 4's allocator does not cite ASTIL for GETSPA. AppleSoft's Boolean OR cites OROP by M6502 only, since
-  the PET's documents describe its bitwise OR. Definitions that only some of a line's builds assemble cite the whole
-  line, as S11 has it: the classic allocator cites the BASIC 4 documents, BASIC 4's cites HV1, HV1R and HV2, and so
-  do both COPYC aliases.
+  the PET's documents describe its bitwise OR. Within the PET line, a routine that every build has, though in two
+  versions, cites the whole line, as S11 has it: both allocators' GETSPA, and both COPYC aliases. The labels inside
+  the two allocators and the two collectors, which are different code under the same names (E4), cite only the
+  documents of the builds that have them.
 - E9. Constants and layouts:
   - `INPUT_MODE_INPUT`, `INPUT_MODE_GET` and `INPUT_MODE_READ` (asserted where READ's mode is the operand of a
     skipped `lda #`).
@@ -971,9 +977,9 @@ Decisions and how the table was applied:
   - The operator table's precedences, `PRECEDENCE_ADD` to `PRECEDENCE_RELATION`.
   - `.sizeof(Variable)`, `.sizeof(ArrayHeader)`, `ArrayHeader::DIMENSIONS` and `LENGTH`, `OperatorEntry`'s fields
     and `StringDescriptor`'s fields in many of the places the code had numbers, and `RELATION_TOKENS` for the count
-    of relational tokens. Some offsets and counts are still numbers, among them the collector's descriptor-offset
-    arithmetic, the multiplication's 16 bits and a few descriptor and variable offsets; naming them is left for a
-    later pass.
+    of relational tokens. Some offsets, counts and flag values are still numbers, among them the collector's
+    descriptor-offset arithmetic, the multiplication's 16 bits, the link's two bytes, a few descriptor and variable
+    offsets, the type flags ($FF, $80, $7F) and the carriage return; naming them is left for a later pass.
   - `*+n` branches are labels (`Arithmetic`, `NotFn`, `NotEmpty`).
 - E10. Three of `SimpleVariableLookup`'s parameters are renamed so its line fits in 120 columns: `checkCallerHigh` is
   `callerHigh`, `useSimzer` is `ownZero` and `arrayEntryAlias` is `countEntry`. The table keeps the SDK's own
@@ -1006,11 +1012,12 @@ aliases, and that every citation's key is in the bibliography.
 `BasicExpressionRoutineTests` runs these routines in the enhanced IIe's AppleSoft and PET BASIC 4 and checks
 their `Out:` values and `Keeps:` claims:
 
-- `Strings::CopyBytes` and `CopyFrom`: across a page boundary and at length 0; both keep X.
+- `Strings::CopyBytes` and `CopyFrom`: into a destination that crosses a page boundary, and for `CopyBytes` at
+  lengths 0 and 1 too; both keep X.
 - `Strings::ReleaseTemporary`: the latest temporary and others; keeps X.
 - `Variables::MultiplyUnsigned`: products and the OUT OF MEMORY jump.
-- Both builds' `Strings::ReserveSpace`: room to spare, exact room, one byte short, and BASIC 4's zero-length
-  return and link.
+- Both builds' `Strings::ReserveSpace`: room to spare, exact room, one byte short (up to the call of the
+  collector), AppleSoft's collection for a zero length, and BASIC 4's zero-length return and link.
 - `EvaluateByte`: the value, the next character, and ILLEGAL QUANTITY past 255.
 
 The existing BasicShared*Tests run the rest. The debugger's contract checking ran clean on PET BASIC 2, PET BASIC 4

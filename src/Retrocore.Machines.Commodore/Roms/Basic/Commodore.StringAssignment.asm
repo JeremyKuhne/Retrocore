@@ -36,7 +36,7 @@ NOTDS:
     ldy #>DSCTMP
 
 ;; Frees a temporary, links its string to the variable, marks the variable's old string as garbage and copies the
-;; descriptor: BASIC 4's own descriptor copy, which Commodore.HistoricalNames.asm gives BASIC 4's name (Basic.md B2).
+;; descriptor: BASIC 4's own descriptor copy, which Commodore.HistoricalNames.asm gives BASIC 4's name (Basic.md E6).
 ;; Also: COPYZC (M6502)
 StoreLinkedDescriptor:
 

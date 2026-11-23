@@ -745,8 +745,8 @@ internal sealed partial class SourceAnalysis
 
     // A name in column 0: a label (with or without a colon) or an equate. Directives start with a dot and match in any
     // case, as the assembler reads them, and so does Merlin's EQU, as the Merlin preprocessor reads it. A colon
-    // followed by .equ or .set (Name: .equ expr) defines a constant or variable, not a label. The name is whole (atomic),
-    // so a name that ends in equ, such as Subsequ, is never cut short to make an equate of its start.
+    // followed by .equ or .set (Name: .equ expr) defines a constant or variable, not a label. The name is atomic, so
+    // one that ends in equ, such as Subsequ, is never cut short to make an equate of its start.
     [GeneratedRegex(@"^(?<name>(?>[A-Za-z_@][\w@$%?]*(?:::[\w@$%?]+)*))(?:(?<equate>:[ \t]*(?i:\.(?:equ|set))(?=[\s;]|$)|\s*(?::=|==?|(?i:\.equ|\.set|equ)\b))|(?<colon>::?)|\s|$)")]
     private static partial Regex TextDefinition();
 

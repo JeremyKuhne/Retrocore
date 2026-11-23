@@ -236,8 +236,8 @@ internal sealed partial class SourceAnalysis
         ModelOf(Root),
         Result.SourceMap,
 
-        // Branches are chosen while sources expand, so even an assembly with errors says which it took, up to the
-        // first error in expansion; the conditions decide past it.
+        // Branches are chosen while sources expand, so even an assembly with errors says which it took where an error
+        // can't have changed that; the conditions decide where it can.
         Result.SkippedLines);
 
     // The assembly's symbols, or while it has errors, the definitions found in the text.

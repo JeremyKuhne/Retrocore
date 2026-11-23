@@ -23,11 +23,11 @@ COMMAND_PAIR_STEP = $100 - 3
 ; Slots.
 
 ;; The page of slot 1's ROM, the lowest page <MSLOT> can name a slot by.
-FIRST_SLOT_PAGE = $C1
+FIRST_SLOT_PAGE = SLOT_ROM_PAGE + 1
 
 .if MONITOR = MONITOR_IIE
 
-; The internal firmware's functions: the number in Y when the Monitor calls <GOTOCX>. The two IIe models
+; The internal firmware's functions: the number in Y when the Monitor calls <CallFirmware>. The two IIe models
 ; number them differently.
 .if ENHANCED
 
@@ -95,7 +95,6 @@ FIRMWARE_CLEAR_LINE_FROM = $04
     ; The carry is set, so this adds LowRes::ODD_LINE_OFFSET.
     adc #LowRes::ODD_LINE_OFFSET - 1
 
-    ; Times five for the third's $28: the value, plus itself shifted left twice.
 ;; Stores the low byte and multiplies its third by five.
 ;; Also: BASCLC2 (A2RM79, IIEROM82, IIETRM85)
 StoreLow:
@@ -109,8 +108,8 @@ StoreLow:
 
 ;; Rings the bell when A is Control-G: about 0.1 seconds at about 1 kHz.
 ;;
-;; At $FBD9. <ScreenOutDirect> sends every control character it does not perform here, and the others are
-;; ignored.
+;; At $FBD9. <ScreenOutDirect> sends here every control character it does not perform itself; all but Control-G
+;; are ignored.
 ;; In: A = the character
 ;; Keeps: X
 ;; Also: BELL1 (A2RM78, A2RM79, IIEROM82, IIETRM85)
@@ -654,7 +653,7 @@ CopyCharacter:
     bpl CopyCharacter
     bmi NextLine
 
-;; Clears the bottom line, which BASL/BASH still hold.
+;; Clears the bottom line, which <BASL>/<BASH> still hold.
 ;; Also: SCRL3 (A2RM78, A2RM79)
 ClearBottom:
     ldy #0

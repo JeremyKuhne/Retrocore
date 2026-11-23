@@ -2,23 +2,17 @@
 ;; The Monitor's text-mode, hook, `BASIC`, G, cassette and register routines, and the commands between them
 ;; ($FE75-$FF58).
 
-; Text modes: the masks <INVFLG> holds.
+; Text modes: the masks <INVFLG> holds (TEXT_NORMAL, the other, is in Monitor/Equates.asm).
 
 ;; <INVFLG> for inverse text: printable characters lose bits 6 and 7.
 TEXT_INVERSE = $3F
-
-;; <INVFLG> for normal text: printable characters print as they are.
-TEXT_NORMAL = $FF
 
 ; Hooks.
 
 ;; The bits of <A2L> that hold the slot number for `PR#` and `IN#`.
 SLOT_NUMBER_MASK = $0F
 
-;; Added to a slot number to make the high byte of its ROM's page, $Cn00.
-SLOT_ROM_PAGE = $C0
-
-; The internal firmware's functions, the numbers in Y for <GOTOCX>.
+; The internal firmware's functions, the numbers in Y for <CallFirmware>.
 
 ;; Runs the mini-assembler for a line: the Enhanced IIe's "!" command.
 FIRMWARE_MINI_ASSEMBLER = $0D
@@ -261,10 +255,11 @@ Store:
     ; An unused byte.
     .byte $EA
 
-;; A byte nothing reads: $D1 on the original IIe, $00 on the Enhanced IIe, and an unused $EA on the Apple II's.
+;; A byte no code runs: $D1 on the original IIe, $00 on the Enhanced IIe, and an unused $EA on the Apple II's.
 ;;
-;; At $FEAF. Its IIe name says it is there to make the ROM's checksum come out right; nothing in the Monitor or
-;; the firmware checks it, so which checksum is not known.
+;; At $FEAF. Its IIe name says it is there to make the ROM's checksum come out right. On the original IIe, the
+;; self-test's second ROM checksum (<ROMSUM2>) adds $E000-$FFFF, this byte among them, and compares the sum with the
+;; byte at $F7FF.
 ;; Also: CKSUMFIX (IIEROM82, IIETRM85)
 ChecksumFix:
 .assert * = $FEAF, "ChecksumFix must stay at $FEAF."
@@ -566,7 +561,7 @@ TitleEnhanced:
     lda #WRITE_HEADER_LENGTH
     jsr Cassette::WriteHeader
 
-    ; HEADR leaves A at $FF, where the checksum starts.
+    ; Cassette::WriteHeader leaves A at $FF, where the checksum starts.
     ldy #WRITE_FIRST_COUNT
 
 ;; Writes the byte at A1, keeping the checksum on the stack, and steps A1 to the next until it passes A2.
@@ -638,7 +633,7 @@ Checksum = MASK
     lda #READ_HEADER_DELAY
     jsr Cassette::WriteHeader
 
-    ; HEADR leaves A at $FF, where the checksum starts.
+    ; Cassette::WriteHeader leaves A at $FF, where the checksum starts.
     sta Checksum
     jsr Cassette::ReadBit
 
@@ -655,7 +650,7 @@ FindSync:
 ;; Also: RD3 (A2RM78, A2RM79, IIEROM82)
 NextByte:
     jsr Cassette::ReadByte
-    ; RDBYTE leaves X at 0.
+    ; Cassette::ReadByte leaves X at 0.
     sta (A1L,x)
     eor Checksum
     sta Checksum
@@ -673,8 +668,8 @@ NextByte:
 
 ;; Prints "ERR" and beeps.
 ;;
-;; At $FF2D. The second R is whatever the output hook leaves in A: the screen's applies <INVFLG>, so in inverse text
-;; it prints a control character instead.
+;; At $FF2D. The second R is whatever the output hook leaves in A. The screen's leaves the R as it stored it, so in
+;; inverse or flashing text the second R shows as the first does; another hook may leave something else.
 ;; Also: PRERR (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc PrintError
 .assert * = $FF2D, "PrintError must stay at $FF2D."
@@ -725,7 +720,8 @@ Done:
 ;; Saves A, X, Y, P and S, then clears decimal mode.
 ;;
 ;; At $FF4A. Its rts, at $FF58, is the one other sources call as a routine that does nothing.
-;; Out: A5H = A, XREG = X, YREG = Y, STATUS = P, SPNT = S
+;; Out: A5H = A, XREG = X, YREG = Y, STATUS = P, SPNT = S less 2 (its return address still on the stack), A = P,
+;;   X = SPNT
 ;; Keeps: Y
 ;; Entry:
 ;;   ExceptA = saves X, Y, P and S, then clears decimal mode

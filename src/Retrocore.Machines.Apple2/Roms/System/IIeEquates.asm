@@ -382,8 +382,9 @@ WRCARDRAM = $C005
 ;;
 ;; <SETINTCXROM> maps the IIe's internal ROM there instead, and <RDCXROM> reports which is mapped in bit 7. Slot 3's
 ;; page, $C300, shows the card's ROM only while SLOTC3ROM is on too (<SETSLOTC3ROM>). The Monitor writes it on its way
-;; back from the internal firmware, as in <Monitor:SelectSlotRom>.
-;; See: <SETINTCXROM>, <RDCXROM>, <Monitor:GOTOCX>, <Monitor:SelectSlotRom>
+;; back from the internal firmware: <Monitor:SelectSlotRom> on the Enhanced IIe, <Monitor:SlotRomReturn> on the
+;; original.
+;; See: <SETINTCXROM>, <RDCXROM>, <Monitor:GOTOCX>, <Monitor:SelectSlotRom>, <Monitor:SlotRomReturn>
 SETSLOTCXROM = $C006
 
 ;; Writing it maps the IIe's internal ROM at $C100-$CFFF, turning SLOTCXROM off.
@@ -489,9 +490,10 @@ RDRAMWRT = $C014
 ;; Reading it reports in bit 7 which ROM is at $C100-$CFFF: 1 for the IIe's internal ROM, 0 for the cards'.
 ;;
 ;; <Monitor:GOTOCX> pushes the state, through BIT and PHP, before it switches internal ROM in, and the firmware's return
-;; pulls it to decide whether to switch slot ROM back (<Monitor:SelectSlotRom>). <SETSLOTCXROM> and <SETINTCXROM> set
-;; the switch. On the Enhanced IIe, the interrupt handler, <Firmware:IRQHANDLER>, reads it first, so that it can restore
-;; the ROM the interrupted program was using.
+;; pulls it to decide whether to switch slot ROM back (<Monitor:SelectSlotRom> on the Enhanced IIe,
+;; <Monitor:SlotRomReturn> on the original). <SETSLOTCXROM> and <SETINTCXROM> set the switch. On the Enhanced IIe,
+;; the interrupt handler, <Firmware:IRQHANDLER>, reads it first, so that it can restore the ROM the interrupted program
+;; was using.
 ;; See: <SETSLOTCXROM>, <SETINTCXROM>, <Monitor:GOTOCX>
 RDCXROM = $C015
 

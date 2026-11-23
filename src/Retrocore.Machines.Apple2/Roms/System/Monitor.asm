@@ -12,12 +12,12 @@
 ;;
 ;; Documented entry points keep their addresses in all four, so programs can call them by address.
 ;;
-;; The Apple II Monitor has no power-up or warm-start logic: its reset vector points at OLDRST, which
-;; sets up the screen and keyboard and enters the Monitor, so the user starts BASIC by hand and no disk
-;; is booted. BRK shows the address and the registers directly, without a vector. Its S command
-;; steps a program one instruction at a time and T traces it (STEP), and it carries 16-bit multiply
-;; and divide routines (MULPM, DIVPM) at $FB60-$FBC0. Output goes to the screen without the Control-S
-;; pause (VIDOUT), and escape mode takes one command, @ or A-F, at a time.
+;; The Apple II Monitor has no power-up or warm-start logic: its reset vector points at RESET (OLDRST in the later
+;; listings), which sets up the screen and keyboard and enters the Monitor, so the user starts BASIC by hand and no disk
+;; is booted. BRK shows the address and the registers directly, without a vector. Its S command steps a program one
+;; instruction at a time and T traces it (STEP), and it carries 16-bit multiply and divide routines (MULPM, DIVPM) at
+;; $FB60-$FBC0. Output goes to the screen without the Control-S pause (VIDOUT), and escape mode takes one command, @ or
+;; A-F, at a time.
 ;;
 ;; The Autostart Monitor takes the machine from power-up to a program. Its RESET checks the soft entry
 ;; vector at $3F2-$3F4 (<SOFTEV> and its check byte <PWREDUP>): when it is valid, a reset continues the
@@ -31,7 +31,7 @@
 ;; CLREOL and KEYIN load a function number into Y and jump to GOTOCX, which switches internal ROM in and
 ;; enters the firmware's dispatcher at $C100. Its input line keeps lowercase, where the Apple II's
 ;; Monitors turn it into uppercase. The Enhanced IIe sends more routines that way (RDKEY, VTABZ,
-;; CLREOP, SETWND, INSDS2, OUTPORT), replaces the cassette routines with stubs into internal ROM, and
+;; INSDS2, OUTPORT), replaces the cassette routines with stubs into internal ROM, and
 ;; adds lowercase input; its IRQ entry goes to $C3FA.
 ;;
 ;; Two predefined symbols choose the build. MONITOR picks the Monitor: 0 (<MONITOR_II>) for the Apple II

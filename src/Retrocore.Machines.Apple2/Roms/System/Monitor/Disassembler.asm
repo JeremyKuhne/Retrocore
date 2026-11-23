@@ -107,6 +107,7 @@ MnemonicLow = V2
 ;; In: X = 0, PCL/PCH = the instruction
 ;; Out: A = the mnemonic's slot in <MnemonicsLeft> and <MnemonicsRight>, LENGTH = the operand's bytes (0-2),
 ;;   MASK = the operand format, Y = 0
+;; Uses: X
 ;; Entry:
 ;;   Opcode = decodes the opcode in A; the firmware's mini-assembler and DOS's relocator call it at $F88E
 .proc Decode
@@ -119,7 +120,7 @@ MnemonicLow = V2
 ;; Inherit: <Decode> Out
 ;; Also: INSDS2 (IIETRM85)
 Opcode:
-.assert * = $F88E, "Decode::Opcode must stay at $F88E, where the firmware calls it."
+.assert * = $F88E, "Decode::Opcode must stay at $F88E, where the firmware and DOS call it."
 
     ; An even opcode's mode is at opcode / 4, in the nibble its bit 1 picks.
     tay
@@ -226,7 +227,7 @@ Done:
 ;; Inherit: <Decode> Out
 ;; Also: INSDS2 (A2RM78, A2RM79, IIEROM82)
 Opcode:
-.assert * = $F88E, "Decode::Opcode must stay at $F88E, where the firmware calls it."
+.assert * = $F88E, "Decode::Opcode must stay at $F88E, where programs call it."
 
     ; An even opcode's mode is at opcode / 4, in the nibble its bit 1 picks.
     tay

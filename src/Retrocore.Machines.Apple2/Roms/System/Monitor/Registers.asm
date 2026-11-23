@@ -18,12 +18,13 @@ REGISTER_COUNT = 5
 ;;   NoReturn = prints the registers without the carriage return first, at $FADA; <ShowBreak> calls it
 ;; Also: REGDSP (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc ShowRegisters
-    .assert * = $FAD7, "ShowRegisters must stay at $FAD7."
+.assert * = $FAD7, "ShowRegisters must stay at $FAD7."
     jsr PrintReturn
 
-;; Prints the registers without the carriage return first, at $FADA; <ShowBreak> calls it.
+;; Prints the registers without the carriage return first; <ShowBreak> calls it.
 ;; Also: RGDSP1 (A2RM78, A2RM79, IIEROM82, IIETRM85)
 NoReturn:
+.assert * = $FADA, "ShowRegisters::NoReturn must stay at $FADA."
     lda #<A5H
     sta A3L
     lda #>A5H
@@ -100,7 +101,7 @@ Trailer:
 ; Startup: the power-up defaults, the disk signature and the title.
 .scope Startup continued
 
-;; The power-up defaults for $03F0-$03F4: <BRKV> = <ShowBreak>, <SOFTEV> = AppleSoft's cold start (<BasicColdStart>),
+;; The power-up defaults for $03F0-$03F4: <BRKV> = <ShowBreak>, <SOFTEV> = BASIC's cold start (<BasicColdStart>),
 ;; and <PWREDUP> to match.
 ;; Also: PWRCON (A2RM79, IIEROM82, IIETRM85)
 PowerUpVectors:
@@ -134,11 +135,10 @@ Title:
 
 ;; Escape mode: the escape commands, the cursor keys that keep escape mode on, and the loop that reads them.
 ;;
-;; In the IIe Monitors it is in five pieces: <Escape::CursorKeyCommands> here, the cursor-key loop
-;; (<Escape::Perform>, <Escape::CursorKey>, <Escape::NextKey>), the commands (<Escape::Command>), the IIe's key reader
-;; (<Escape::ReadEscapeKey>), and the escape sequence's start (<Escape::Sequence>). The Autostart Monitor has the
-;; same but the key reader. The Apple II Monitor has only the
-;; commands and the escape sequence's start.
+;; In the IIe Monitors it is in five pieces: <Escape::CursorKeyCommands> here, the cursor-key loop (<Escape::Perform>,
+;; <Escape::CursorKey>, <Escape::NextKey>), the commands (<Escape::Command>), the IIe's key reader
+;; (<Escape::ReadEscapeKey>), and the escape sequence's start (<Escape::Sequence>). The Autostart Monitor has the same
+;; but the key reader. The Apple II Monitor has only the commands and the escape sequence's start.
 .scope Escape
 
 ;; The cursor commands of the escape-mode keys I, J, K and M, for <Escape::CursorKey>: D (up), B (left),
@@ -170,7 +170,7 @@ RegisterNames:
 ;; Keeps: X, carry
 ;; Also: PREAD (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc ReadPaddle
-    .assert * = $FB1E, "ReadPaddle must stay at $FB1E."
+.assert * = $FB1E, "ReadPaddle must stay at $FB1E."
 
     ; Starts the timers.
     lda PTRIG

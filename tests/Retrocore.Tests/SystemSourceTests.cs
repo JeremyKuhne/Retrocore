@@ -188,7 +188,7 @@ public sealed class SystemSourceTests
         DebugPosition? position = debug.Position(new Apple2TestMemory(bus), 0xFDED);
         position.Should().NotBeNull();
         SourceLine line = position?.Chain[0] ?? throw new AssertFailedException("No source for COUT.");
-        line.Path.Should().StartWith(Path.Join(Path.GetDirectoryName(Path.GetFullPath(s_monitor)), "Monitor"));
+        line.Path.Should().StartWith(Path.Join(Path.GetDirectoryName(Path.GetFullPath(s_monitor)), "Monitor") + Path.DirectorySeparatorChar);
         string[] lines = File.ReadAllLines(line.Path);
         lines[line.Line - 2].Should().StartWith(".assert * = $FDED");
         lines[line.Line - 3].Should().Be(".proc CharacterOut");

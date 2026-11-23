@@ -67,7 +67,7 @@ OperandHigh = $55
 ;; See: <Arithmetic::SignedDivide>
 ;; Also: MULPM (A2RM78, A2RM79)
 .proc SignedMultiply
-    .assert * = $FB60, "Arithmetic::SignedMultiply must stay at $FB60."
+.assert * = $FB60, "Arithmetic::SignedMultiply must stay at $FB60."
     jsr MakePositive
     ; Falls into Multiply.
 .endproc
@@ -85,7 +85,7 @@ OperandHigh = $55
 ;; Uses: A
 ;; Also: MUL (A2RM78, A2RM79)
 .proc Multiply
-    .assert * = $FB63, "Arithmetic::Multiply must stay at $FB63."
+.assert * = $FB63, "Arithmetic::Multiply must stay at $FB63."
     ldy #WORD_BITS
 
 ;; One pass: adds the multiplicand when the multiplier's low bit is set.
@@ -99,7 +99,8 @@ NextBit:
     ; X = -2, then -1: the low byte, then the high byte.
     ldx #$100 - 2
 
-;; Adds a byte of AUXL/AUXH to XTNDL/XTNDH; in page zero XTNDL+2,X wraps round to XTNDL.
+;; Adds a byte of <Operand>/<OperandHigh> to <Extension>/<ExtensionHigh>; in page zero <Extension> + 2,X wraps
+;; round to <Extension>.
 ;; Also: MUL3 (A2RM78, A2RM79)
 AddByte:
     lda Extension + 2,x
@@ -113,7 +114,7 @@ AddByte:
 Shift:
     ldx #PRODUCT_BYTES - 1
 
-;; Shifts a byte: XTNDH, XTNDL, ACH, then ACL.
+;; Shifts a byte: <ExtensionHigh>, <Extension>, <AccumulatorHigh>, then <Accumulator>.
 ;; Also: MUL5 (A2RM78, A2RM79)
 ShiftByte:
     ror Accumulator,x
@@ -136,7 +137,7 @@ ShiftByte:
 ;; See: <Arithmetic::SignedMultiply>
 ;; Also: DIVPM (A2RM78, A2RM79)
 .proc SignedDivide
-    .assert * = $FB81, "Arithmetic::SignedDivide must stay at $FB81."
+.assert * = $FB81, "Arithmetic::SignedDivide must stay at $FB81."
     jsr MakePositive
     ; Falls into Divide.
 .endproc
@@ -153,7 +154,7 @@ ShiftByte:
 ;; Uses: A, X
 ;; Also: DIV (A2RM78)
 .proc Divide
-    .assert * = $FB84, "Arithmetic::Divide must stay at $FB84."
+.assert * = $FB84, "Arithmetic::Divide must stay at $FB84."
     ldy #WORD_BITS
 
 ;; One pass: shifts the 32 bits left, then subtracts the divisor from the top half if it fits.
@@ -266,7 +267,7 @@ TITLE_COLUMN = 15
 ;; Out: Y = 0
 ;; Also: APPLEII (A2RM79, IIEROM82, IIETRM85)
 .proc ShowTitle
-    .assert * = $FB60, "Startup::ShowTitle must stay at $FB60."
+.assert * = $FB60, "Startup::ShowTitle must stay at $FB60."
     jsr Home
     ldy #TITLE_LENGTH
 
@@ -295,7 +296,7 @@ Loop:
 ;; Keeps: X, Y, carry
 ;; Also: SETPWRC (A2RM79, IIEROM82, IIETRM85)
 .proc ValidateSoftEntry
-    .assert * = $FB6F, "ValidateSoftEntry must stay at $FB6F."
+.assert * = $FB6F, "ValidateSoftEntry must stay at $FB6F."
     lda SOFTEV+1
     eor #SOFT_ENTRY_CHECK
     sta PWREDUP
@@ -307,10 +308,10 @@ Loop:
 ;;
 ;; At $FB78.
 ;; In: A = the character
-;; Uses: Y
+;; Uses: A, Y
 ;; Also: VIDWAIT (A2RM79, IIEROM82, IIETRM85)
 .proc ScreenOutPausing
-    .assert * = $FB78, "ScreenOutPausing must stay at $FB78."
+.assert * = $FB78, "ScreenOutPausing must stay at $FB78."
 
     ; Only a carriage return with Control-S waiting pauses.
     cmp #KEY_CR
@@ -411,7 +412,7 @@ ModelId:
 ;; In: Y = the function number; other registers as the function needs
 ;; Also: GOTOCX (IIEROM82, IIETRM85)
 .proc CallFirmware
-    .assert * = $FBB4, "CallFirmware must stay at $FBB4."
+.assert * = $FBB4, "CallFirmware must stay at $FBB4."
 .if .not ENHANCED
     php
     sei

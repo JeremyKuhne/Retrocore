@@ -20,8 +20,8 @@ digests check.
    XGOTOCX (IIEROM82) and DOCOUT1 (IIETRM85), which the IIe listings give, cite them. Obviously generated numbered
    locals (`GETLN_1`, `CLREOP_2`) are dropped with no `Also:`.
 7. The firmware's entry equates (B_FUNC, BASICIN, IRQHANDLER ...) wait for the firmware conversion.
-8. Families spread through the ROM are continued scopes: `Commands`, `Startup`, `Stepper` (the 1978 STEP and
-   TRACE), each later piece `.scope X continued` with a plain comment saying which part.
+8. Families spread through the ROM are continued scopes: `Commands`, `Startup`, `Stepper` (the 1978 STEP's
+   stepping; TRACE is `Commands::Trace`), each later piece `.scope X continued` with a plain comment saying which part.
 9. Widely called documented entry points are top level (SetKeyboard, SetScreen, GetLine, ReadHexNumber); family
    scopes hold what is internal to them.
 10. Where builds differ mid-routine, each build's routines are whole `.if` blocks of complete `.proc`s.

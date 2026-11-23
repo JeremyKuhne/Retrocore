@@ -12,7 +12,7 @@ CHARACTER_BITS = %00111111
 FLASHING = %01000000
 .if MONITOR = MONITOR_IIE
 
-; The internal firmware's functions: the number in Y when the Monitor calls <GOTOCX>. The two IIe models
+; The internal firmware's functions: the number in Y when the Monitor calls <CallFirmware>. The two IIe models
 ; number them differently.
 .if ENHANCED
 

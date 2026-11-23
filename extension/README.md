@@ -636,8 +636,9 @@ Immediates that are characters, tokens or error codes use m6502.asm's spellings
 The SDK's native sources for the rest of the system ROM are in
 `src/Retrocore.Machines.Apple2/Roms/System`:
 
-- **`Monitor.asm`** covers $F800-$FFFF for both models. Lines that differ sit
-  under `.if ENHANCED`, which defaults to 1 for the Enhanced IIe; 0 selects the
+- **`Monitor.asm`** covers $F800-$FFFF, including its subject files in the
+  `Monitor` folder. Lines that differ between the IIe models sit under
+  `.if ENHANCED`, which defaults to 1 for the Enhanced IIe; 0 selects the
   original.
 - **`Firmware.Original.asm`** and **`Firmware.Enhanced.asm`** cover $C100-$CFFF,
   the 80-column firmware and the routines the Monitor calls with internal ROM

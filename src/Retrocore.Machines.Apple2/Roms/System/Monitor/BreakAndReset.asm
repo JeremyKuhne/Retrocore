@@ -126,7 +126,7 @@ RunArea = A1L
 ;; See: <Commands::Step>, <Commands::Trace>
 ;; Also: STEP (A2RM78, A2RM79)
 .proc RunInstruction
-    .assert * = $FA43, "Stepper::RunInstruction must stay at $FA43."
+.assert * = $FA43, "Stepper::RunInstruction must stay at $FA43."
     jsr Disassembler::PrintInstruction
 
     ; The command line's return address, out of the program's way.
@@ -136,7 +136,7 @@ RunArea = A1L
     sta ReturnAddressHigh
     ldx #TRAILER_SIZE
 
-;; Copies <Stepper::Trailer> to XQT+1 through XQT+8; the instruction overwrites the start of it.
+;; Copies <Stepper::Trailer> to <Stepper::RunArea> + 1 through + 8; the instruction overwrites the start of it.
 ;; Also: XQINIT (A2RM78, A2RM79)
 FillTrailer:
     lda Trailer - 1,x
@@ -166,7 +166,7 @@ FillTrailer:
     cmp #TAKEN_DISPLACEMENT
     beq StoreByte
 
-;; Copies the instruction to <Stepper::RunArea>, from its last byte (Y = LENGTH) down to its opcode.
+;; Copies the instruction to <Stepper::RunArea>, from its last byte (Y = <LENGTH>) down to its opcode.
 ;; Also: XQ1 (A2RM78)
 CopyByte:
     lda (PCL),y
@@ -194,7 +194,7 @@ StoreByte:
 ;; In: A = the interrupted program's A
 ;; Also: IRQ (IIETRM85)
 .proc Interrupt
-    .assert * = $FA40, "Interrupt must stay at $FA40."
+.assert * = $FA40, "Interrupt must stay at $FA40."
     sta A5H
     lda A5H
     jmp IRQHANDLER
@@ -206,7 +206,7 @@ StoreByte:
 ;; At $FA47, which the firmware jumps to.
 ;; In: A = the program's A, the stack as the BRK left it
 .proc BreakFromFirmware
-    .assert * = $FA47, "BreakFromFirmware is at $FA47."
+.assert * = $FA47, "BreakFromFirmware is at $FA47."
     sta SETSLOTCXROM
     sta A5H
     ; Falls into Break.
@@ -410,17 +410,17 @@ SetPcLow:
 ;; At $FA62, where the 6502's reset vector points. It restores normal video, text mode, a full window and the screen and
 ;; keyboard hooks, turns annunciators 0 and 1 off, lets the internal firmware reset its state, releases any $C800 ROM
 ;; and clears the keyboard strobe, then beeps. When <PWREDUP> shows the soft entry vector (<SOFTEV>) was set by a
-;; program, it jumps through it; the first time it holds AppleSoft's cold start (<BasicColdStart>, $E000) it is changed
-;; to $E003 so later resets warm-start AppleSoft. Otherwise this is a power-up (<Startup::PowerUp>).
+;; program, it jumps through it; the first time it holds BASIC's cold start (<BasicColdStart>, $E000) it is changed
+;; to $E003 so later resets warm-start BASIC. Otherwise this is a power-up (<Startup::PowerUp>).
 ;;
 ;; The Autostart Monitor reads <CLRAN2> and <CLRAN3> in place of the firmware call, as it has no internal firmware to
 ;; reset. The Apple II Monitor has no Reset: its reset vector points at <Startup::ResetToMonitor>.
 ;; Entry:
-;;   FixSoftEntry = makes <SOFTEV> AppleSoft's warm start, so the next reset keeps the program, then cold-starts
-;;     AppleSoft
+;;   FixSoftEntry = makes <SOFTEV> BASIC's warm start, so the next reset keeps the program, then cold-starts
+;;     BASIC
 ;; Also: RESET (A2RM79, IIEROM82, IIETRM85)
 .proc Reset
-    .assert * = $FA62, "Startup::Reset must stay at $FA62."
+.assert * = $FA62, "Startup::Reset must stay at $FA62."
 
     ; The screen and the hooks.
     cld
@@ -459,14 +459,14 @@ CheckSoftEntry:
     cmp PWREDUP
     bne PowerUp
 
-    ; AppleSoft's cold start, $E000, the first time only.
+    ; BASIC's cold start, $E000, the first time only.
     lda SOFTEV
     bne WarmStart
     lda #>BasicColdStart
     cmp SOFTEV+1
     bne WarmStart
 
-;; Makes <SOFTEV> AppleSoft's warm start, so the next reset keeps the program, then cold-starts AppleSoft.
+;; Makes <SOFTEV> BASIC's warm start, so the next reset keeps the program, then cold-starts BASIC.
 ;; <Startup::PowerUp> comes here when it finds no disk.
 ;; Also: FIXSEV (A2RM79, IIEROM82, IIETRM85)
 FixSoftEntry:
@@ -481,14 +481,14 @@ WarmStart:
 .endproc
 
 ;; Power-up: shows the title, sets the vectors to their defaults, then starts the disk controller in the highest
-;; slot that has one, or else AppleSoft.
+;; slot that has one, or else BASIC.
 ;;
 ;; At $FAA6. It sets <BRKV>, <SOFTEV> and <PWREDUP> from <Startup::PowerUpVectors>, then looks for a bootable disk
 ;; controller from slot 7 down to slot 1 by its signature bytes (<Startup::DiskSignature>), and starts the first
-;; one found at $Cn00. With none, it starts AppleSoft through <Startup::Reset::FixSoftEntry>.
+;; one found at $Cn00. With none, it starts BASIC through <Startup::Reset::FixSoftEntry>.
 ;; Also: PWRUP (A2RM79, IIEROM82, IIETRM85)
 .proc PowerUp
-    .assert * = $FAA6, "Startup::PowerUp must stay at $FAA6."
+.assert * = $FAA6, "Startup::PowerUp must stay at $FAA6."
     jsr ShowTitle
 
 ;; Sets <BRKV>, <SOFTEV> and <PWREDUP> from <Startup::PowerUpVectors>.
@@ -509,7 +509,7 @@ CopyVector:
     stx LOC0
     sta LOC1
 
-;; Tries the next slot down; past slot 1, starts AppleSoft.
+;; Tries the next slot down; past slot 1, starts BASIC.
 ;; Also: SLOOP (A2RM79, IIEROM82, IIETRM85)
 NextSlot:
     ldy #SIGNATURE_LAST

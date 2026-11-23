@@ -79,8 +79,7 @@ Done:
 ;; The ".", "+" and "-" commands, run by the number after them: "." examines A1 to A2, and "+" and "-" print
 ;; <A1L> plus or minus <A2L> as "=xx".
 ;;
-;; <Commands::Blank> comes here when a blank or carriage return ends the number, and the waiting command is not
-;; ":". A
+;; <Commands::Blank> comes here when a blank or carriage return ends the number, and the waiting command is not ":". A
 ;; number with no command waiting comes here too, and with A1 = A2 shows its one byte.
 ;; In: A = the waiting command, or 0 for none, A1L/A1H = the first number, A2L/A2H = the second, Y = 0
 ;; Also: XAMPM (A2RM78, A2RM79, IIEROM82, IIETRM85)

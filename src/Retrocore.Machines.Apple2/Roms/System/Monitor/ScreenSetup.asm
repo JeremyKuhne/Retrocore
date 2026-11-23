@@ -32,7 +32,7 @@ FIRMWARE_SET_WINDOW = $08
 ;; Out: STATUS = 0
 ;; Also: INIT (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc InitDisplay
-    .assert * = $FB2F, "InitDisplay must stay at $FB2F."
+.assert * = $FB2F, "InitDisplay must stay at $FB2F."
     lda #0
     sta STATUS
     lda LORES
@@ -45,7 +45,7 @@ FIRMWARE_SET_WINDOW = $08
 ;; At $FB39.
 ;; Also: SETTXT (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc SetText
-    .assert * = $FB39, "SetText must stay at $FB39."
+.assert * = $FB39, "SetText must stay at $FB39."
     lda TXTSET
     lda #0
     beq SetWindow
@@ -56,7 +56,7 @@ FIRMWARE_SET_WINDOW = $08
 ;; At $FB40. The text window is the four lines below the graphics.
 ;; Also: SETGR (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc SetGraphics
-    .assert * = $FB40, "SetGraphics must stay at $FB40."
+.assert * = $FB40, "SetGraphics must stay at $FB40."
     lda TXTCLR
     lda MIXSET
     jsr LowRes::ClearTop
@@ -73,7 +73,7 @@ FIRMWARE_SET_WINDOW = $08
 ;; Out: WNDTOP = A, WNDLFT = 0, WNDWDTH = the display's width, WNDBTM = 24, CV = the bottom line
 ;; Also: SETWND (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc SetWindow
-    .assert * = $FB4B, "SetWindow must stay at $FB4B."
+.assert * = $FB4B, "SetWindow must stay at $FB4B."
     sta WNDTOP
     lda #0
     sta WNDLFT
@@ -103,7 +103,7 @@ FIRMWARE_SET_WINDOW = $08
 ;; Out: CV = A, BASL/BASH = its base address (<VerticalTab>)
 ;; Also: TABV (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc VerticalTabTo
-    .assert * = $FB5B, "VerticalTabTo must stay at $FB5B."
+.assert * = $FB5B, "VerticalTabTo must stay at $FB5B."
     sta CV
     jmp VerticalTab
 .endproc

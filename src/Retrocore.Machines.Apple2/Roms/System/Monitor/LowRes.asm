@@ -264,6 +264,8 @@ StoreLow:
 ;; In: A = the row (0-47), Y = the column (0-39)
 ;; Out: A = the color number (0-15), GBASL/GBASH = the base address of the row's text line
 ;; Keeps: X, Y
+;; Entry:
+;;   Nibble = takes the high or low nibble of a byte; <Disassembler::Decode> uses it too
 ;; Also: SCRN (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc ReadColor
 .assert * = $F871, "ReadColor must stay at $F871."

@@ -280,7 +280,8 @@ public class SdkDocumentationTests
 
     /// <summary>
     ///  The Monitor's other builds pass the lint too: the II's, the II Plus's and the original IIe's own routines'
-    ///  documentation, and the links in it, with the other modules as the Enhanced IIe's Monitor sees them.
+    ///  documentation, and the links in it, with the other modules as the Enhanced IIe's Monitor sees them. The
+    ///  Monitor's own problems are Monitor.asm's and its Monitor folder's.
     /// </summary>
     /// <param name="model">The II (the original Monitor), II Plus (the Autostart Monitor) or original IIe.</param>
     [TestMethod]
@@ -299,8 +300,9 @@ public class SdkDocumentationTests
             isDirective: name => DirectiveDocs.Describe(name) is not null,
             isInstruction: InstructionDocs.IsMnemonic);
 
+        string folder = Path.Join(Path.GetDirectoryName(path), "Monitor") + Path.DirectorySeparatorChar;
         List<string> problems = [.. resolver.Lint()
-            .Where(problem => Path.GetFileName(problem.Path) == "Monitor.asm")
+            .Where(problem => problem.Path == path || problem.Path.StartsWith(folder, StringComparison.Ordinal))
             .Select(problem => $"{Path.GetFileName(problem.Path)}:{problem.Line + 1}: {problem.Text}")];
 
         problems.Should().BeEmpty($"the lint found:{Environment.NewLine}{string.Join(Environment.NewLine, problems)}");

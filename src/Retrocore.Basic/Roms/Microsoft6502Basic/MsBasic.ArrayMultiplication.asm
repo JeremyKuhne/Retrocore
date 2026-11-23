@@ -65,13 +65,13 @@ NextBit:
     tay
     bcs ElementAddress::ToOutOfMemoryError
 
-;; Decrements the 16-bit counter and loops to <NextBit>.
+;; Counts down <DigitCount>, once for each of the 16 bits, and loops to <NextBit>.
 ;; Also: UMLCNT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 CountBit:
     dec DigitCount
     bne NextBit
 
-;; The routine's RTS; nothing branches here.
+;; The routine's RTS; nothing branches here, and the label is kept for its old name.
 ;; Also: UMLRTS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 Done:
     rts

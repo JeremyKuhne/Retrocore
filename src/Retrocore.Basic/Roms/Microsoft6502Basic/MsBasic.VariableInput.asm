@@ -24,8 +24,8 @@ INPUT_MODE_INPUT = $00
 INPUT_MODE_GET = $40
 ;; <InputMode> for `READ`: bit 7 set, the values come from `DATA` statements.
 ;;
-;; It is also the opcode of `TYA`, which where the input buffer is in page zero `READ` turns into the operand of a
-;; `LDA` immediate, so that the `INPUT` entry's first instruction loads it.
+;; It is also the opcode of `TYA`. Where the input buffer is in page zero, `READ` ends in an `LDA` immediate opcode
+;; that takes <AssignInputList>'s `TYA` as its operand, so `READ` loads this mode and the `TYA` never runs for it.
 INPUT_MODE_READ = $98
 
 ;; Emits `READ` and the common `GET`, `INPUT` and `READ` variable-processing loop.
@@ -76,7 +76,7 @@ INPUT_MODE_READ = $98
     ;; Also: INPCON (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc AssignInputList
     .if bufferPage
-        lda #$00
+        lda #INPUT_MODE_INPUT
     .else
         tya
     .endif

@@ -15,8 +15,8 @@
 
     ;; Evaluates a numeric constant, variable, string literal, parenthesized expression or function.
     ;;
-    ;; A quoted literal falls into <ReadQuotedString>, a unary minus and `NOT` go to <ApplyPrefixOperator>, and the
-    ;; other tokens to <EvaluateFunctionOperand>.
+    ;; A quoted literal falls into <ReadQuotedString>, a unary minus goes to <ApplyPrefixOperator>, and the other tokens
+    ;; to <EvaluateTokenOperand>, which sends `NOT` to <ApplyPrefixOperator> and the rest to <EvaluateFunctionOperand>.
     ;; In: TextPointer = character preceding the operand
     ;; Out: Fac = value or string descriptor, ValueType = result type, TextPointer = terminating character
     ;; Also: EVAL (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
@@ -66,6 +66,8 @@ CheckPoint:
     .endproc
 
     ;; Builds a descriptor for the quoted literal at <TextPointer> and advances past it.
+    ;; In: TextPointer = the opening quote, carry = set (as the comparison that found the quote leaves it), so that
+    ;;   adding it skips the quote
     ;; Also: STRTXT (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc ReadQuotedString
     lda TextPointer
@@ -303,6 +305,7 @@ Dispatch:
     .if bitwise
         ;; Computes OR on the numeric argument and <Fac>.
         ;; Out: Fac = numeric result
+        ;; Errors: ILLEGAL QUANTITY if an operand is outside -32768 to 32767
         ;; Also: OROP (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
         .proc Or
         ldy #$FF
@@ -315,6 +318,7 @@ Dispatch:
         ;; Microsoft's ANDOP names it on the PET, and AppleSoft's overlay gives the name to <Operators::Or> instead, so
         ;; each vendor's historical names file gives it (Basic.md B2's notes).
         ;; Out: Fac = numeric result
+        ;; Errors: ILLEGAL QUANTITY if an operand is outside -32768 to 32767
         .proc And
         ldy #$00
         sty Counter
@@ -341,7 +345,7 @@ Dispatch:
     .else
         ;; Computes Boolean OR on the numeric argument and <Fac>.
         ;; Out: Fac = zero or one
-        ;; Also: OROP (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+        ;; Also: OROP (M6502)
         .proc Or
         lda ArgExponent
         ora FacExponent

@@ -148,7 +148,9 @@ CopyCharacters:
         ; Falls into StoreDescriptor.
         .endproc
 
-        ;; Stores the descriptor addressed by Y:A, with variant-specific collection bookkeeping.
+        ;; Releases the descriptor addressed by Y:A if it is the latest temporary and copies it to <AssignedVariable>:
+        ;; the classic collector's copy (BASIC 4's is its own, in its vendor's file).
+        ;; In: A = descriptor address (low byte), Y = its high byte, AssignedVariable = the destination variable
         ;; Also: COPYZC (M6502)
         .proc StoreDescriptor
         sta DescriptorPointer

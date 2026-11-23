@@ -150,7 +150,7 @@ public sealed class BasicExpressionRoutineTests
     ///  or above <c>ArraysEnd</c>, returning the length in A and the address in X, Y and <c>NewString</c>. AppleSoft's
     ///  unlinked allocator takes just the characters; BASIC 4's takes two bytes more, writes a link of the length and
     ///  $FF above them, and returns at once for a zero length with X = 0 and Y unchanged. One byte short of the room,
-    ///  both collect garbage.
+    ///  both collect garbage, and so does AppleSoft's for a zero length, which it checks too.
     /// </summary>
     /// <param name="apple">Whether to run AppleSoft rather than PET BASIC 4.</param>
     /// <param name="length">The number of characters.</param>
@@ -160,6 +160,7 @@ public sealed class BasicExpressionRoutineTests
     [DataRow(true, 10, 0)]
     [DataRow(true, 10, -1)]
     [DataRow(true, 0, 5)]
+    [DataRow(true, 0, -1)]
     [DataRow(false, 10, 100)]
     [DataRow(false, 10, 0)]
     [DataRow(false, 10, -1)]

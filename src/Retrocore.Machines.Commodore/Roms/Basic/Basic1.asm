@@ -196,7 +196,8 @@ GC_PATCH_ARRAY_STEP = 1             ;; 1 calls the editor's array-descriptor ste
 GC_SUBTRACT_OFFSET = 1              ;; 1 subtracts three to form the descriptor offset instead of masking
 .endif
 .ifndef REJECT_ZERO_SLICES
-REJECT_ZERO_SLICES = 1              ;; 1 rejects zero <Functions::Left> and <Functions::Right> counts as well as a zero <Functions::Mid> start
+;; 1 rejects zero <Functions::Left> and <Functions::Right> counts as well as a zero <Functions::Mid> start.
+REJECT_ZERO_SLICES = 1
 .endif
 .ifndef PREAM_INDIRECT_RETURN
 PREAM_INDIRECT_RETURN = 1           ;; 1 returns from <Functions::SliceArguments> through the writable jump

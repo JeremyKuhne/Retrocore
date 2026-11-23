@@ -92,8 +92,8 @@ FOR_FRAME_SIZE = .sizeof(ForFrame)
     FIRST_CHARACTER .byte ;; The formula's first character, which nothing reads.
 .endstruct
 
-;; The size of a packed real, the largest array element and the value an integer or string element's size is
-;; counted down from.
+;; The size of a packed real, which is the largest array element. The array code starts an element's size at it
+;; and counts it down: to 2 for an integer, to 3 for a string.
 FLOAT_SIZE = 5
 
 ;; The bound each dimension of an array used without `DIM` gets: indexes 0 to 10.

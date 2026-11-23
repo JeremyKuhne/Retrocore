@@ -209,7 +209,8 @@ HaveLength:
 
     ;; Returns the length of a string in <Fac>.
     ;;
-    ;; Where `sharedLenJump` is 1 (BASIC 1), <Asc> jumps to its `ToFloat`, the jump to <ReturnByte>.
+    ;; Where `sharedLenJump` is 1 (BASIC 1), <Asc> jumps to this routine's `ToFloat`, the jump to <ReturnByte>.
+    ;; Errors: TYPE MISMATCH if <Fac> is not a string
     ;; Also: LEN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc Len
     jsr ReleaseArgument
@@ -234,7 +235,7 @@ ToFloat:
     .endproc
 
     ;; Returns the first character's byte value in <Fac>.
-    ;; Errors: ILLEGAL QUANTITY for an empty string
+    ;; Errors: TYPE MISMATCH if <Fac> is not a string, ILLEGAL QUANTITY for an empty string
     ;; Also: ASC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc Asc
     jsr ReleaseArgument
@@ -296,6 +297,7 @@ ToGetCurrentCharacter:
     ;; The byte immediately after the counted characters must be writable. It is saved and replaced with zero for
     ;; <Float::ReadNumber>; on success, that byte and the caller's <TextPointer> are restored. An error from
     ;; <Float::ReadNumber> bypasses restoration.
+    ;; Errors: TYPE MISMATCH if <Fac> is not a string
     ;; Also: VAL (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc Val
     jsr ReleaseArgument

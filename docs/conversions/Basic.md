@@ -829,9 +829,11 @@ Decisions and how the table was applied:
     its hint and quick fix. A name whose definition the file's assembly made now takes precedence
     (`LanguageWorkspace.HistoricalNames`), and the unchanged probe fails without that fix; one the file gives only in a
     branch its build leaves out does not, so it gets no hint naming that branch's definition
-    (`OldNamesInAnOmittedBranchDoNotHint`, which fails if any name the file gives takes precedence).
+    (`OldNamesInAnOmittedBranchDoNotHint`, which fails if any name the file gives takes precedence). While the file
+    has errors, the definitions its text makes count (`OwnOldNamesHintWhileTheFileHasAnError`, which fails on the
+    assembly's symbols alone).
 
-Checked: the full suite (3,894 passed, none failed; 665 skipped, the ROM-dump comparisons without the dumps), the rename
+Checked: the full suite (3,900 passed, none failed; 665 skipped, the ROM-dump comparisons without the dumps), the rename
 gate, the lint tests, and `BasicStatementsConversionTests`, which compares every old name in the fifteen files and the
 vendors' historical names with the MACRO-10 overlay's value in each of the eight builds (about 150 per build), checks
 that each definition reaches the overlay by its name or an old name, that a vendor's names resolve only in its builds

@@ -184,8 +184,11 @@ internal sealed partial class LanguageWorkspace
                 current[name] = current.TryGetValue(name, out string? earlier) && earlier != replacement ? null : replacement;
 
                 // Only a name whose definition the assembly made takes precedence; one in a branch it leaves out
-                // stays as ambiguous with the SDK's as before.
-                if (thisBuild && replacement is not null && analysis.Result.Symbols.ContainsKey(replacement))
+                // stays as ambiguous with the SDK's as before. While the file has errors, the assembly may stop short
+                // of its definitions, so those its text makes count.
+                if (thisBuild && replacement is not null && (analysis.Result.Success
+                    ? analysis.Result.Symbols.ContainsKey(replacement)
+                    : analysis.Definitions.Any(site => site.Name == replacement)))
                 {
                     own.Add(name);
                 }

@@ -508,7 +508,7 @@ LinearIndex = $AD
 ;; Also: CHRGET (M6502, ASTIL, ASRM78)
 GetNextCharacter = $B1
 
-;; Page-zero entry to fetch without incrementing <TextPointer>.
+;; Page-zero entry to fetch the current character without first incrementing <TextPointer>; it skips spaces.
 ;; Also: CHRGOT (M6502, ASTIL)
 GetCurrentCharacter = $B7
 

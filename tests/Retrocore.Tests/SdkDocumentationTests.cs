@@ -61,7 +61,7 @@ public class SdkDocumentationTests
              "QINT", "INT", "FIN", "FINEDG", "NZ9999", "FOUT", "FHALF", "FOUTBL", "SQR", "EXPCON", "EXP",
              "POLY", "RND", "RMULZC", "SIN", "GFDIV", "SINCON", "ATN", "ATNCON"])
         {
-            basic.Find(name).Should().NotBeNull($"the shared macro must retain {name}'s documentation");
+            basic.FindTopic(name).Should().NotBeNull($"the shared macro must retain {name}'s documentation");
         }
 
         DocumentationResolver resolver = new(

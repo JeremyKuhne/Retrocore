@@ -113,7 +113,7 @@ internal sealed partial class PetDebugTarget
         // BASIC's page-zero addresses, which loading a program needs before the session adds the SDK's modules.
         if (File.Exists(Path.Join(sdk, "Basic", PetSdkModules.BasicFile(model, basicSource))))
         {
-            target.SetBasicSymbols(PetSdkModules.AssembleBasic(sdk, model, original, basicSource).Symbols);
+            target.SetBasicSymbols(PetSdkModules.AssembleBasic(sdk, model, original, basicSource).SymbolsWithHistoricalNames);
         }
 
         target.LaunchDisks(args, sdkRoms ? Environment.GetEnvironmentVariable("RETROCORE_PET_ROMS") : directory);

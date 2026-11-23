@@ -16,7 +16,7 @@ namespace Retrocore.Tests;
 [TestClass]
 public sealed class BasicSharedExpressionTests
 {
-    private static readonly string s_inputs = Path.Join(AppContext.BaseDirectory, "Inputs");
+    private static string Inputs => BasicNames.Inputs;
 
     /// <summary>
     ///  AppleSoft retains its expression code and labels when it uses the shared evaluator.
@@ -29,14 +29,14 @@ public sealed class BasicSharedExpressionTests
     public void AppleSoftUsesSharedExpressionCore(Apple2Model model)
     {
         AssemblyResult legacy = SdkModules.AssembleAppleSoft(
-            SdkModules.AppleSoftPath(s_inputs, BasicSourceKind.Macro10),
+            SdkModules.AppleSoftPath(Inputs, BasicSourceKind.Macro10),
             model);
 
-        AssemblyResult native = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(s_inputs), model);
+        AssemblyResult native = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(Inputs), model);
 
         CompareRegion(legacy, AssembleRegion(legacy, carryReturn: false));
         CompareRegion(legacy, native);
-        AssemblySymbol definition = native.SymbolDefinitions.Single(symbol => symbol.Name == "FRMEVL");
+        AssemblySymbol definition = native.Definition("FRMEVL");
         definition.Location?.Path.Should().EndWith("MsBasic.ExpressionCore.asm");
     }
 
@@ -53,9 +53,9 @@ public sealed class BasicSharedExpressionTests
     [DataRow(PetModel.Pet4032, true)]
     public void SharedExpressionCoreMatchesPet(PetModel model, bool original)
     {
-        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(s_inputs, "Pet"), model, original);
+        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(Inputs, "Pet"), model, original);
         AssemblyResult native = AssembleRegion(legacy, model == PetModel.Pet4032);
-        native.Symbols["EXPRESSION_END"].Should().Be(legacy.Symbols["EVAL"]);
+        native.Symbol("EXPRESSION_END").Should().Be(legacy.Symbol("EVAL"));
         CompareRegion(legacy, native);
     }
 
@@ -65,9 +65,9 @@ public sealed class BasicSharedExpressionTests
     [TestMethod]
     public void ExpressionCoreRetainsDocumentationAndSourceChains()
     {
-        AssemblyResult native = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(s_inputs), Apple2Model.IIeEnhanced);
-        ushort start = checked((ushort)native.Symbols["FRMEVL"]);
-        int length = checked((int)(native.Symbols["EVAL"] - start));
+        AssemblyResult native = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(Inputs), Apple2Model.IIeEnhanced);
+        ushort start = checked((ushort)native.Symbol("FRMEVL"));
+        int length = checked((int)(native.Symbol("EVAL") - start));
         DebugTestMemory memory = new();
         memory.Set(start, native.Sections[0].Bytes.Slice(start, length).ToArray());
         SourceMapModule module = new(native, area: null);
@@ -82,7 +82,7 @@ public sealed class BasicSharedExpressionTests
 
         foreach (string name in (string[])["FRMEVL", "PUSHF", "FORPSH"])
         {
-            DocumentationTopic topic = module.Documentation.Find(name)
+            DocumentationTopic topic = module.Documentation.FindTopic(name)
                 ?? throw new AssertFailedException($"{name} is not documented.");
 
             topic.Kind.Should().Be(DocumentationKind.Routine);
@@ -104,10 +104,10 @@ public sealed class BasicSharedExpressionTests
     [DataRow(PetModel.Pet4032, 0xFE, 0x30)]
     public void PushfPreservesEachVersionsReturnAddressBehavior(PetModel model, int returnLow, int expectedHigh)
     {
-        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(s_inputs, "Pet"), model);
+        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(Inputs, "Pet"), model);
         AssemblyResult native = AssembleRegion(legacy, model == PetModel.Pet4032);
-        int index = checked((int)native.Symbols["INDEX1"]);
-        ushort continueAt = checked((ushort)native.Symbols["FORPSH"]);
+        int index = checked((int)native.Symbol("INDEX1"));
+        ushort continueAt = checked((ushort)native.Symbol("FORPSH"));
         RecordingBus bus = new();
         native.Sections[0].Bytes.Span.CopyTo(bus.Memory);
         bus.Memory[0x01FE] = (byte)returnLow;
@@ -117,7 +117,7 @@ public sealed class BasicSharedExpressionTests
         {
             Registers = new()
             {
-                ProgramCounter = checked((ushort)native.Symbols["PUSHF"]),
+                ProgramCounter = checked((ushort)native.Symbol("PUSHF")),
                 StackPointer = 0xFD,
                 Accumulator = 0x5A,
                 Status = StatusRegister.Unused
@@ -149,14 +149,14 @@ public sealed class BasicSharedExpressionTests
     public void RelationalResultUsesTheVariantsTrueValue(bool apple, bool equal)
     {
         AssemblyResult legacy = apple
-            ? SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(s_inputs, BasicSourceKind.Macro10), Apple2Model.IIeEnhanced)
-            : PetLegacyBasic.Assemble(Path.Join(s_inputs, "Pet"), PetModel.Pet2001Basic2);
+            ? SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(Inputs, BasicSourceKind.Macro10), Apple2Model.IIeEnhanced)
+            : PetLegacyBasic.Assemble(Path.Join(Inputs, "Pet"), PetModel.Pet2001Basic2);
 
-        string folder = Path.Join(s_inputs, "Microsoft6502Basic");
+        string folder = Path.Join(Inputs, "Microsoft6502Basic");
         string source = $"""
             .cpu Mos6502
             .include "MsBasic.Relational.asm"
-            .org ${legacy.Symbols["DOREL"]:X4}
+            .org ${legacy.Symbol("DOREL"):X4}
                 RELATIONAL_OPERATORS {(apple ? "$01" : "$FF")}
             RELATIONAL_END:
             """;
@@ -170,7 +170,7 @@ public sealed class BasicSharedExpressionTests
         Dictionary<string, long> symbols = [];
         foreach (string name in dependencies)
         {
-            symbols.Add(name, legacy.Symbols[name]);
+            symbols.Add(name, legacy.Symbol(name));
         }
 
         AssemblyResult native = new Assembler.Assembler().Assemble(
@@ -178,30 +178,30 @@ public sealed class BasicSharedExpressionTests
             new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
             {
                 SourceResolver = new FileAssemblySourceResolver(),
-                PredefinedSymbols = symbols
+                PredefinedSymbols = BasicNames.WithCurrentNames(symbols)
             });
 
         native.Success.Should().BeTrue(string.Join(Environment.NewLine, native.Diagnostics.Select(diagnostic => diagnostic.Message)));
-        int start = checked((int)legacy.Symbols["DOREL"]);
-        int end = checked((int)legacy.Symbols[apple ? "PDL" : "DIM3"]);
-        native.Symbols["RELATIONAL_END"].Should().Be(end);
+        int start = checked((int)legacy.Symbol("DOREL"));
+        int end = checked((int)legacy.Symbol(apple ? "PDL" : "DIM3"));
+        native.Symbol("RELATIONAL_END").Should().Be(end);
         native.Sections[0].Bytes.Slice(start, end - start).ToArray()
             .Should().Equal(legacy.Sections[0].Bytes.Slice(start, end - start).ToArray());
 
         RecordingBus bus = new();
         native.Sections[0].Bytes.Span.CopyTo(bus.Memory);
-        bus.Memory[checked((int)native.Symbols["DOMASK"])] = equal ? (byte)2 : (byte)1;
+        bus.Memory[checked((int)native.Symbol("DOMASK"))] = equal ? (byte)2 : (byte)1;
         Processor<RecordingBus> cpu = new(bus)
         {
             Registers = new()
             {
-                ProgramCounter = checked((ushort)native.Symbols["DOCMP"]),
+                ProgramCounter = checked((ushort)native.Symbol("DOCMP")),
                 X = 0,
                 Status = StatusRegister.Unused
             }
         };
 
-        ushort destination = checked((ushort)native.Symbols["FLOAT"]);
+        ushort destination = checked((ushort)native.Symbol("FLOAT"));
         for (int instruction = 0; instruction < 20 && cpu.Registers.ProgramCounter != destination; instruction++)
         {
             cpu.StepInstruction();
@@ -221,29 +221,29 @@ public sealed class BasicSharedExpressionTests
     [DataRow(false, 0x0550)]
     public void PetLogicalOperatorsCombineBothIntegerBytes(bool or, int expected)
     {
-        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(s_inputs, "Pet"), PetModel.Pet2001Basic2);
+        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(Inputs, "Pet"), PetModel.Pet2001Basic2);
         AssemblyResult native = AssembleLogicalOperators(legacy, bitwise: true);
         RecordingBus bus = new();
         native.Sections[0].Bytes.Span.CopyTo(bus.Memory);
-        byte high = checked((byte)native.Symbols["FACMO"]);
-        byte low = checked((byte)native.Symbols["FACLO"]);
+        byte high = checked((byte)native.Symbol("FACMO"));
+        byte low = checked((byte)native.Symbol("FACLO"));
         bus.Memory[high] = 0xA5;
         bus.Memory[low] = 0x5A;
-        bus.Memory[checked((int)native.Symbols["AYINT"])] = 0x60;
+        bus.Memory[checked((int)native.Symbol("AYINT"))] = 0x60;
         byte[] moveArgument = [0xA9, 0x0F, 0x85, high, 0xA9, 0xF0, 0x85, low, 0x60];
-        moveArgument.CopyTo(bus.Memory, checked((int)native.Symbols["MOVFA"]));
+        moveArgument.CopyTo(bus.Memory, checked((int)native.Symbol("MOVFA")));
 
         Processor<RecordingBus> cpu = new(bus)
         {
             Registers = new()
             {
-                ProgramCounter = checked((ushort)native.Symbols[or ? "OROP" : "ANDOP"]),
+                ProgramCounter = checked((ushort)native.Symbol(or ? "OROP" : "ANDOP")),
                 StackPointer = 0xFF,
                 Status = StatusRegister.Unused
             }
         };
 
-        ushort destination = checked((ushort)native.Symbols["GIVAYF"]);
+        ushort destination = checked((ushort)native.Symbol("GIVAYF"));
         for (int instruction = 0; instruction < 100 && cpu.Registers.ProgramCounter != destination; instruction++)
         {
             cpu.StepInstruction();
@@ -267,23 +267,23 @@ public sealed class BasicSharedExpressionTests
     public void AppleSoftLogicalOperatorsReturnBooleans(bool or, bool argumentNonzero, int expected)
     {
         AssemblyResult legacy = SdkModules.AssembleAppleSoft(
-            SdkModules.AppleSoftPath(s_inputs, BasicSourceKind.Macro10), Apple2Model.IIeEnhanced);
+            SdkModules.AppleSoftPath(Inputs, BasicSourceKind.Macro10), Apple2Model.IIeEnhanced);
 
         AssemblyResult native = AssembleLogicalOperators(legacy, bitwise: false);
         RecordingBus bus = new();
         native.Sections[0].Bytes.Span.CopyTo(bus.Memory);
-        bus.Memory[checked((int)native.Symbols["ARGEXP"])] = argumentNonzero ? (byte)0x81 : (byte)0;
-        bus.Memory[checked((int)native.Symbols["FACEXP"])] = 0x81;
+        bus.Memory[checked((int)native.Symbol("ARGEXP"))] = argumentNonzero ? (byte)0x81 : (byte)0;
+        bus.Memory[checked((int)native.Symbol("FACEXP"))] = 0x81;
         Processor<RecordingBus> cpu = new(bus)
         {
             Registers = new()
             {
-                ProgramCounter = checked((ushort)native.Symbols[or ? "OROP" : "OROP1"]),
+                ProgramCounter = checked((ushort)native.Symbol(or ? "OROP" : "OROP1")),
                 Status = StatusRegister.Unused
             }
         };
 
-        ushort destination = checked((ushort)native.Symbols["SNGFLT"]);
+        ushort destination = checked((ushort)native.Symbol("SNGFLT"));
         for (int instruction = 0; instruction < 20 && cpu.Registers.ProgramCounter != destination; instruction++)
         {
             cpu.StepInstruction();
@@ -295,11 +295,11 @@ public sealed class BasicSharedExpressionTests
 
     private static AssemblyResult AssembleLogicalOperators(AssemblyResult legacy, bool bitwise)
     {
-        string folder = Path.Join(s_inputs, "Microsoft6502Basic");
+        string folder = Path.Join(Inputs, "Microsoft6502Basic");
         string source = $"""
             .cpu Mos6502
             .include "MsBasic.OperandEvaluation.asm"
-            .org ${legacy.Symbols["OROP"]:X4}
+            .org ${legacy.Symbol("OROP"):X4}
                 LOGICAL_OPERATORS {(bitwise ? 1 : 0)}
             """;
 
@@ -310,8 +310,8 @@ public sealed class BasicSharedExpressionTests
         AssemblyOptions options = new(ProcessorVariant.Mos6502, 0, 0x10000)
         {
             SourceResolver = new FileAssemblySourceResolver(),
-            PredefinedSymbols = dependencies.ToDictionary(
-                name => name, name => legacy.Symbols[name], StringComparer.Ordinal)
+            PredefinedSymbols = BasicNames.WithCurrentNames(dependencies.ToDictionary(
+                name => name, name => legacy.Symbol(name), StringComparer.Ordinal))
         };
 
         AssemblyResult native = new Assembler.Assembler().Assemble(
@@ -325,8 +325,8 @@ public sealed class BasicSharedExpressionTests
 
     private static AssemblyResult AssembleRegion(AssemblyResult legacy, bool carryReturn)
     {
-        int start = checked((int)legacy.Symbols["FRMEVL"]);
-        string folder = Path.Join(s_inputs, "Microsoft6502Basic");
+        int start = checked((int)legacy.Symbol("FRMEVL"));
+        string folder = Path.Join(Inputs, "Microsoft6502Basic");
         string source = $"""
             .cpu Mos6502
             .include "MsBasic.ExpressionCore.asm"
@@ -344,12 +344,12 @@ public sealed class BasicSharedExpressionTests
         ];
 
         Dictionary<string, long> symbols = dependencies.ToDictionary(
-            name => name, name => legacy.Symbols[name], StringComparer.Ordinal);
+            name => name, name => legacy.Symbol(name), StringComparer.Ordinal);
 
         AssemblyOptions options = new(ProcessorVariant.Mos6502, 0, 0x10000)
         {
             SourceResolver = new FileAssemblySourceResolver(),
-            PredefinedSymbols = symbols
+            PredefinedSymbols = BasicNames.WithCurrentNames(symbols)
         };
 
         AssemblyResult native = new Assembler.Assembler().Assemble(
@@ -364,15 +364,15 @@ public sealed class BasicSharedExpressionTests
 
     private static void CompareRegion(AssemblyResult legacy, AssemblyResult native)
     {
-        int start = checked((int)legacy.Symbols["FRMEVL"]);
-        int end = checked((int)legacy.Symbols["EVAL"]);
+        int start = checked((int)legacy.Symbol("FRMEVL"));
+        int end = checked((int)legacy.Symbol("EVAL"));
         IEnumerable<AssemblySymbol> labels = legacy.SymbolDefinitions.Where(
             symbol => !symbol.IsConstant && symbol.Value >= start && symbol.Value < end);
 
         foreach (AssemblySymbol label in labels)
         {
-            native.Symbols.Should().ContainKey(label.Name);
-            native.Symbols[label.Name].Should().Be(label.Value, $"{label.Name} must retain its ROM address");
+            native.SymbolsWithHistoricalNames.Should().ContainKey(label.Name);
+            native.Symbol(label.Name).Should().Be(label.Value, $"{label.Name} must retain its ROM address");
         }
 
         native.Sections[0].Bytes.Slice(start, end - start).ToArray()

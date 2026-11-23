@@ -14,8 +14,8 @@ namespace Retrocore.Tests;
 public sealed class PetBasic4RevisionTests
 {
     private const ushort ReturnAddress = 0x5000;
-    private static readonly string s_pet = Path.Join(AppContext.BaseDirectory, "Inputs", "Pet");
-    private static readonly string s_basic = Path.Join(s_pet, "Basic");
+    private static string PetInputs => Path.Join(BasicNames.Inputs, "Pet");
+    private static string BasicInputs => Path.Join(PetInputs, "Basic");
 
     /// <summary>
     ///  The standalone status adjustment and patch area match the corresponding legacy spans and labels.
@@ -28,13 +28,13 @@ public sealed class PetBasic4RevisionTests
     {
         AssemblyResult legacy = Legacy(original);
         AssemblyResult native = AssembleAdjustment(legacy, original);
-        CompareRegion(legacy, native, checked((int)legacy.Symbols["STRADJ"]), checked((int)legacy.Symbols["PRINTN"]));
-        CompareRegion(legacy, native, checked((int)legacy.Symbols["ISVAR"] - 1), checked((int)legacy.Symbols["ISVAR1"]));
-        native.Symbols["ADJUSTMENT_END"].Should().Be(legacy.Symbols["PRINTN"]);
-        native.Symbols["PATCH_END"].Should().Be(legacy.Symbols["ISVAR1"]);
-        native.Symbols.ContainsKey("ADJDS").Should().Be(!original);
-        native.Symbols.ContainsKey("GONEGT").Should().Be(!original);
-        native.Symbols.ContainsKey("INPNUL").Should().Be(!original);
+        CompareRegion(legacy, native, checked((int)legacy.Symbol("STRADJ")), checked((int)legacy.Symbol("PRINTN")));
+        CompareRegion(legacy, native, checked((int)legacy.Symbol("ISVAR") - 1), checked((int)legacy.Symbol("ISVAR1")));
+        native.Symbol("ADJUSTMENT_END").Should().Be(legacy.Symbol("PRINTN"));
+        native.Symbol("PATCH_END").Should().Be(legacy.Symbol("ISVAR1"));
+        native.HasSymbol("ADJDS").Should().Be(!original);
+        native.HasSymbol("GONEGT").Should().Be(!original);
+        native.HasSymbol("INPNUL").Should().Be(!original);
     }
 
     /// <summary>
@@ -70,12 +70,12 @@ public sealed class PetBasic4RevisionTests
             if (useNative)
             {
                 CopyRegion(native, bus, "STRADJ", "ADJUSTMENT_END");
-                CopyRegion(native, bus, checked((int)legacy.Symbols["ISVAR"] - 1), checked((int)legacy.Symbols["ISVAR1"]));
+                CopyRegion(native, bus, checked((int)legacy.Symbol("ISVAR") - 1), checked((int)legacy.Symbol("ISVAR1")));
             }
 
-            int index = checked((int)native.Symbols["INDEX"]);
-            int freeTop = checked((int)native.Symbols["FRETOP"]);
-            int status = checked((int)native.Symbols["DSDESC"]);
+            int index = checked((int)native.Symbol("INDEX"));
+            int freeTop = checked((int)native.Symbol("FRETOP"));
+            int status = checked((int)native.Symbol("DSDESC"));
             bus.Memory[index] = 0x00;
             bus.Memory[index + 1] = 0x06;
             bus.Memory[0x0600] = 4;
@@ -115,7 +115,7 @@ public sealed class PetBasic4RevisionTests
     {
         AssemblyResult legacy = Legacy(original);
         AssemblyResult native = AssembleInput(legacy, original);
-        CompareRegion(legacy, native, checked((int)legacy.Symbols["INPUT"]), checked((int)legacy.Symbols["READ"]));
+        CompareRegion(legacy, native, checked((int)legacy.Symbol("INPUT")), checked((int)legacy.Symbol("READ")));
         foreach (bool useNative in new[] { false, true })
         {
             RecordingBus bus = new();
@@ -123,19 +123,19 @@ public sealed class PetBasic4RevisionTests
             if (useNative)
             {
                 CopyRegion(native, bus, "INPUT", "INPUT_END");
-                CopyRegion(native, bus, checked((int)legacy.Symbols["ISVAR"] - 1), checked((int)legacy.Symbols["ISVAR1"]));
+                CopyRegion(native, bus, checked((int)legacy.Symbol("ISVAR") - 1), checked((int)legacy.Symbol("ISVAR1")));
             }
 
-            bus.Memory[checked((int)native.Symbols["BUF"])] = 0;
-            bus.Memory[checked((int)native.Symbols["CHANNL"])] = (byte)channel;
-            bus.Memory[checked((int)native.Symbols["CQSTAT"])] = (byte)status;
+            bus.Memory[checked((int)native.Symbol("BUF"))] = 0;
+            bus.Memory[checked((int)native.Symbol("CHANNL"))] = (byte)channel;
+            bus.Memory[checked((int)native.Symbol("CQSTAT"))] = (byte)status;
             Processor<RecordingBus> cpu = Start(bus, native, "BUFFUL");
-            RunUntil(cpu, checked((ushort)native.Symbols[destination]), 30);
+            RunUntil(cpu, checked((ushort)native.Symbol(destination)), 30);
         }
     }
 
     private static AssemblyResult Legacy(bool original) =>
-        PetLegacyBasic.Assemble(s_pet, PetModel.Pet4032, original);
+        PetLegacyBasic.Assemble(PetInputs, PetModel.Pet4032, original);
 
     private static AssemblyResult AssembleAdjustment(AssemblyResult legacy, bool original)
     {
@@ -144,10 +144,10 @@ public sealed class PetBasic4RevisionTests
             .include "Commodore.Equates.asm"
             .include "Commodore.StringAssignment.asm"
             .include "Commodore.Basic4Patches.asm"
-            .org ${legacy.Symbols["STRADJ"]:X4}
+            .org ${legacy.Symbol("STRADJ"):X4}
                 STRING_LINK_ADJUST {(original ? 0 : 1)}
             ADJUSTMENT_END:
-            .org ${legacy.Symbols["ISVAR"] - 1:X4}
+            .org ${legacy.Symbol("ISVAR") - 1:X4}
                 COMMODORE_BASIC4_OPERAND_SPLIT {(original ? 0 : 1)}
             PATCH_END:
             """;
@@ -162,10 +162,10 @@ public sealed class PetBasic4RevisionTests
             .include "Commodore.Equates.asm"
             .include "Commodore.ChannelInput.asm"
             .include "Commodore.Basic4Patches.asm"
-            .org ${legacy.Symbols["INPUT"]:X4}
+            .org ${legacy.Symbol("INPUT"):X4}
                 COMMODORE_INPUT_STATEMENT 0, 3, {(original ? 0 : 1)}, 0, 1
             INPUT_END:
-            .org ${legacy.Symbols["ISVAR"] - 1:X4}
+            .org ${legacy.Symbol("ISVAR") - 1:X4}
                 COMMODORE_BASIC4_OPERAND_SPLIT {(original ? 0 : 1)}
             PATCH_END:
             """;
@@ -180,17 +180,17 @@ public sealed class PetBasic4RevisionTests
     private static AssemblyResult Assemble(AssemblyResult legacy, string source, string[] dependencies)
     {
         Dictionary<string, long> symbols = dependencies.ToDictionary(
-            name => name, name => legacy.Symbols[name], StringComparer.Ordinal);
+            name => name, name => legacy.Symbol(name), StringComparer.Ordinal);
 
         symbols.Add("DISK_STATUS_STRING", 1);
         symbols.Add("LINE_WIDTH_STORAGE", 0);
         symbols.Add("EXTENDED_DISK_VECTORS", 1);
         AssemblyResult native = new Assembler.Assembler().Assemble(
-            new AssemblySource(source, Path.Join(s_basic, "Basic4RevisionTest.asm")),
+            new AssemblySource(source, Path.Join(BasicInputs, "Basic4RevisionTest.asm")),
             new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
             {
                 SourceResolver = new FileAssemblySourceResolver(),
-                PredefinedSymbols = symbols
+                PredefinedSymbols = BasicNames.WithCurrentNames(symbols)
             });
 
         native.Success.Should().BeTrue(string.Join(Environment.NewLine, native.Diagnostics.Select(diagnostic =>
@@ -216,11 +216,10 @@ public sealed class PetBasic4RevisionTests
         }
 
         next.Should().Be(end);
-        Dictionary<string, AssemblySymbol> definitions = native.SymbolDefinitions.ToDictionary(symbol => symbol.Name);
         foreach (AssemblySymbol label in legacy.SymbolDefinitions.Where(
             symbol => !symbol.IsConstant && symbol.Value >= start && symbol.Value < end))
         {
-            AssemblySymbol nativeLabel = definitions.GetValueOrDefault(label.Name)
+            AssemblySymbol nativeLabel = native.FindDefinition(label.Name)
                 ?? throw new AssertFailedException($"The native module does not define {label.Name}.");
 
             nativeLabel.Value.Should().Be(label.Value);
@@ -232,7 +231,7 @@ public sealed class PetBasic4RevisionTests
     }
 
     private static void CopyRegion(AssemblyResult native, RecordingBus bus, string start, string end) =>
-        CopyRegion(native, bus, checked((int)native.Symbols[start]), checked((int)native.Symbols[end]));
+        CopyRegion(native, bus, checked((int)native.Symbol(start)), checked((int)native.Symbol(end)));
 
     private static void CopyRegion(AssemblyResult native, RecordingBus bus, int start, int end) =>
         native.Sections[0].Bytes.Span.Slice(start, end - start).CopyTo(bus.Memory.AsSpan(start));
@@ -245,7 +244,7 @@ public sealed class PetBasic4RevisionTests
         {
             Registers = new()
             {
-                ProgramCounter = checked((ushort)native.Symbols[entry]),
+                ProgramCounter = checked((ushort)native.Symbol(entry)),
                 StackPointer = 0xFD,
                 Status = StatusRegister.Unused | StatusRegister.Carry
             }

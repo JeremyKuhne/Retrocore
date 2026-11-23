@@ -16,7 +16,7 @@ namespace Retrocore.Tests;
 [TestClass]
 public sealed class BasicSharedNextTests
 {
-    private static readonly string s_inputs = Path.Join(AppContext.BaseDirectory, "Inputs");
+    private static string Inputs => BasicNames.Inputs;
 
     /// <summary>
     ///  AppleSoft uses the shared template without changing its NEXT or type-check code.
@@ -29,14 +29,14 @@ public sealed class BasicSharedNextTests
     public void AppleSoftUsesSharedNextEntries(Apple2Model model)
     {
         AssemblyResult legacy = SdkModules.AssembleAppleSoft(
-            SdkModules.AppleSoftPath(s_inputs, BasicSourceKind.Macro10),
+            SdkModules.AppleSoftPath(Inputs, BasicSourceKind.Macro10),
             model);
 
-        AssemblyResult native = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(s_inputs), model);
+        AssemblyResult native = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(Inputs), model);
 
         CompareRegion(legacy, AssembleRegion(legacy, countedStack: true, "NXTCO1"));
         CompareRegion(legacy, native);
-        AssemblySymbol definition = native.SymbolDefinitions.Single(symbol => symbol.Name == "NEXT");
+        AssemblySymbol definition = native.Definition("NEXT");
         definition.Location?.Path.Should().EndWith("MsBasic.Next.asm");
     }
 
@@ -53,9 +53,9 @@ public sealed class BasicSharedNextTests
     [DataRow(PetModel.Pet4032, true)]
     public void SharedNextEntriesMatchPet(PetModel model, bool original)
     {
-        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(s_inputs, "Pet"), model, original);
+        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(Inputs, "Pet"), model, original);
         AssemblyResult native = AssembleRegion(legacy, model == PetModel.Pet2001, "NEWSTT");
-        native.Symbols["NEXT_END"].Should().Be(legacy.Symbols["FRMEVL"]);
+        native.Symbol("NEXT_END").Should().Be(legacy.Symbol("FRMEVL"));
         CompareRegion(legacy, native);
     }
 
@@ -65,9 +65,9 @@ public sealed class BasicSharedNextTests
     [TestMethod]
     public void SharedNextRetainsDocumentationAndSourceChains()
     {
-        AssemblyResult native = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(s_inputs), Apple2Model.IIeEnhanced);
-        ushort start = checked((ushort)native.Symbols["NEXT"]);
-        int length = checked((int)(native.Symbols["FRMEVL"] - start));
+        AssemblyResult native = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(Inputs), Apple2Model.IIeEnhanced);
+        ushort start = checked((ushort)native.Symbol("NEXT"));
+        int length = checked((int)(native.Symbol("FRMEVL") - start));
         DebugTestMemory memory = new();
         memory.Set(start, native.Sections[0].Bytes.Slice(start, length).ToArray());
         SourceMapModule module = new(native, area: null);
@@ -82,7 +82,7 @@ public sealed class BasicSharedNextTests
 
         foreach (string name in (string[])["NEXT", "FRMNUM", "CHKNUM", "CHKSTR", "CHKVAL"])
         {
-            DocumentationTopic topic = module.Documentation.Find(name)
+            DocumentationTopic topic = module.Documentation.FindTopic(name)
                 ?? throw new AssertFailedException($"{name} is not documented.");
 
             topic.Kind.Should().Be(DocumentationKind.Routine);
@@ -104,11 +104,11 @@ public sealed class BasicSharedNextTests
     [DataRow(true, 0xFF, false)]
     public void TypeChecksAcceptOrRejectTheirResult(bool stringEntry, int type, bool mismatch)
     {
-        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(s_inputs, "Pet"), PetModel.Pet2001Basic2);
+        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(Inputs, "Pet"), PetModel.Pet2001Basic2);
         AssemblyResult native = AssembleRegion(legacy, countedStack: false, "NEWSTT");
-        int valueType = checked((int)native.Symbols["VALTYP"]);
-        ushort accepted = checked((ushort)native.Symbols["CHKOK"]);
-        ushort error = checked((ushort)native.Symbols["ERROR"]);
+        int valueType = checked((int)native.Symbol("VALTYP"));
+        ushort accepted = checked((ushort)native.Symbol("CHKOK"));
+        ushort error = checked((ushort)native.Symbol("ERROR"));
         RecordingBus bus = new();
         native.Sections[0].Bytes.Span.CopyTo(bus.Memory);
         bus.Memory[valueType] = (byte)type;
@@ -117,7 +117,7 @@ public sealed class BasicSharedNextTests
         {
             Registers = new()
             {
-                ProgramCounter = checked((ushort)native.Symbols[stringEntry ? "CHKSTR" : "CHKNUM"]),
+                ProgramCounter = checked((ushort)native.Symbol(stringEntry ? "CHKSTR" : "CHKNUM")),
                 X = 0x42,
                 Status = StatusRegister.Unused
             }
@@ -134,7 +134,7 @@ public sealed class BasicSharedNextTests
         bus.Memory[valueType].Should().Be((byte)type);
         if (mismatch)
         {
-            cpu.Registers.X.Should().Be((byte)native.Symbols["ERRTM"]);
+            cpu.Registers.X.Should().Be((byte)native.Symbol("ERRTM"));
         }
         else
         {
@@ -145,8 +145,8 @@ public sealed class BasicSharedNextTests
 
     private static AssemblyResult AssembleRegion(AssemblyResult legacy, bool countedStack, string resume)
     {
-        int start = checked((int)legacy.Symbols["NEXT"]);
-        string folder = Path.Join(s_inputs, "Microsoft6502Basic");
+        int start = checked((int)legacy.Symbol("NEXT"));
+        string folder = Path.Join(Inputs, "Microsoft6502Basic");
         string source = $"""
             .cpu Mos6502
             .include "MsBasic.Next.asm"
@@ -162,14 +162,14 @@ public sealed class BasicSharedNextTests
         ];
 
         Dictionary<string, long> symbols = dependencies.ToDictionary(
-            name => name, name => legacy.Symbols[name], StringComparer.Ordinal);
+            name => name, name => legacy.Symbol(name), StringComparer.Ordinal);
 
-        symbols.Add("RESUME_NEXT", legacy.Symbols[resume]);
+        symbols.Add("RESUME_NEXT", legacy.Symbol(resume));
 
         AssemblyOptions options = new(ProcessorVariant.Mos6502, 0, 0x10000)
         {
             SourceResolver = new FileAssemblySourceResolver(),
-            PredefinedSymbols = symbols
+            PredefinedSymbols = BasicNames.WithCurrentNames(symbols)
         };
 
         AssemblyResult native = new Assembler.Assembler().Assemble(
@@ -184,15 +184,15 @@ public sealed class BasicSharedNextTests
 
     private static void CompareRegion(AssemblyResult legacy, AssemblyResult native)
     {
-        int start = checked((int)legacy.Symbols["NEXT"]);
-        int end = checked((int)legacy.Symbols["FRMEVL"]);
+        int start = checked((int)legacy.Symbol("NEXT"));
+        int end = checked((int)legacy.Symbol("FRMEVL"));
         IEnumerable<AssemblySymbol> labels = legacy.SymbolDefinitions.Where(
             symbol => !symbol.IsConstant && symbol.Value >= start && symbol.Value < end);
 
         foreach (AssemblySymbol label in labels)
         {
-            native.Symbols.Should().ContainKey(label.Name);
-            native.Symbols[label.Name].Should().Be(label.Value, $"{label.Name} must retain its ROM address");
+            native.SymbolsWithHistoricalNames.Should().ContainKey(label.Name);
+            native.Symbol(label.Name).Should().Be(label.Value, $"{label.Name} must retain its ROM address");
         }
 
         native.Sections[0].Bytes.Slice(start, end - start).ToArray()

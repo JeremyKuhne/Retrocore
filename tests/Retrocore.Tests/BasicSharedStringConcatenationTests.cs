@@ -25,8 +25,8 @@ public sealed class BasicSharedStringConcatenationTests
     private const int Pet4 = 4;
     private const ushort ReturnAddress = 0x2000;
     private const int TextAddress = 0x3000;
-    private static readonly string s_inputs = Path.Join(AppContext.BaseDirectory, "Inputs");
-    private static readonly string s_shared = Path.Join(s_inputs, "Microsoft6502Basic");
+    private static string Inputs => BasicNames.Inputs;
+    private static string SharedInputs => Path.Join(Inputs, "Microsoft6502Basic");
 
     /// <summary>
     ///  Each AppleSoft model emits the complete region and keeps the full legacy image and labels.
@@ -39,12 +39,12 @@ public sealed class BasicSharedStringConcatenationTests
     public void AppleSoftConcatenationMatchesLegacy(Apple2Model model)
     {
         AssemblyResult legacy = AppleLegacy(model);
-        AssemblyResult native = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(s_inputs), model);
+        AssemblyResult native = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(Inputs), model);
         AssemblyResult standalone = AssembleRegion(legacy, linkedRelease: false);
         CompareRegion(legacy, native);
         CompareRegion(legacy, standalone);
         AssertSpan(standalone, Address(legacy, "CAT"), Address(legacy, "CHR"));
-        standalone.Symbols["STRING_CONCATENATION_END"].Should().Be(legacy.Symbols["CHR"]);
+        standalone.Symbol("STRING_CONCATENATION_END").Should().Be(legacy.Symbol("CHR"));
         native.Sections[0].Bytes.ToArray().Should().Equal(legacy.Sections[0].Bytes.ToArray());
     }
 
@@ -61,7 +61,7 @@ public sealed class BasicSharedStringConcatenationTests
     [DataRow(PetModel.Pet4032, true)]
     public void PetConcatenationMatchesOverlay(PetModel model, bool original)
     {
-        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(s_inputs, "Pet"), model, original);
+        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(Inputs, "Pet"), model, original);
         bool linked = model == PetModel.Pet4032;
         foreach (AssemblyResult region in (AssemblyResult[])
             [
@@ -71,7 +71,7 @@ public sealed class BasicSharedStringConcatenationTests
         {
             CompareRegion(legacy, region);
             AssertSpan(region, Address(legacy, "CAT"), Address(legacy, "CHR"));
-            region.Symbols["STRING_CONCATENATION_END"].Should().Be(legacy.Symbols["CHR"]);
+            region.Symbol("STRING_CONCATENATION_END").Should().Be(legacy.Symbol("CHR"));
         }
     }
 
@@ -119,7 +119,7 @@ public sealed class BasicSharedStringConcatenationTests
                 dialect.Tokenize(test.Expression).CopyTo(bus.Memory, TextAddress);
                 SetWord(bus.Memory, Address(legacy, "TXTPTR"), TextAddress);
                 Processor<RecordingBus> cpu = Start(bus, Address(legacy, "FRMEVL"));
-                ushort error = checked((ushort)legacy.Symbols["ERROR"]);
+                ushort error = checked((ushort)legacy.Symbol("ERROR"));
                 RunTo(cpu, 50000, ReturnAddress, error);
                 cpu.Registers.ProgramCounter.Should().Be(
                     test.Error is null ? ReturnAddress : error,
@@ -127,7 +127,7 @@ public sealed class BasicSharedStringConcatenationTests
 
                 if (test.Error is not null)
                 {
-                    cpu.Registers.X.Should().Be((byte)legacy.Symbols[test.Error]);
+                    cpu.Registers.X.Should().Be((byte)legacy.Symbol(test.Error));
                     continue;
                 }
 
@@ -273,11 +273,11 @@ public sealed class BasicSharedStringConcatenationTests
                     bus.Memory[Address(legacy, "VALTYP")] = stringType ? (byte)0xFF : (byte)0;
                     string entry = checkType ? "FRESTR" : "FREFAC";
                     Processor<RecordingBus> cpu = Start(bus, Address(useShared ? region : legacy, entry));
-                    ushort error = checked((ushort)legacy.Symbols["ERROR"]);
+                    ushort error = checked((ushort)legacy.Symbol("ERROR"));
                     RunTo(cpu, 500, ReturnAddress, error);
                     bool rejected = checkType && !stringType;
                     cpu.Registers.ProgramCounter.Should().Be(rejected ? error : ReturnAddress);
-                    if (rejected) { cpu.Registers.X.Should().Be((byte)legacy.Symbols["ERRTM"]); }
+                    if (rejected) { cpu.Registers.X.Should().Be((byte)legacy.Symbol("ERRTM")); }
                     GetWord(bus.Memory, Address(legacy, "FRETOP"))
                         .Should().Be(characters + (rejected ? 0 : 2 + (linked ? 2 : 0)));
 
@@ -433,7 +433,7 @@ public sealed class BasicSharedStringConcatenationTests
     [TestMethod]
     public void ConcatenationEntriesRetainDocumentationAndSourceChains()
     {
-        AssemblyResult apple = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(s_inputs), Apple2Model.IIeEnhanced);
+        AssemblyResult apple = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(Inputs), Apple2Model.IIeEnhanced);
         SourceMapModule appleModule = new(apple, area: null);
         DebugTestMemory memory = new();
         int start = Address(apple, "CAT");
@@ -441,14 +441,14 @@ public sealed class BasicSharedStringConcatenationTests
         memory.Set((ushort)start, apple.Sections[0].Bytes.Slice(start, end - start).ToArray());
         foreach (string name in (string[])["CAT", "MOVINS", "MOVSTR", "MOVDO", "FRESTR", "FREFAC", "FRETMP", "FRETMS"])
         {
-            DocumentationTopic topic = appleModule.Documentation.Find(name)
+            DocumentationTopic topic = appleModule.Documentation.FindTopic(name)
                 ?? throw new AssertFailedException($"{name} is not documented.");
 
             topic.Kind.Should().Be(DocumentationKind.Routine);
-            topic.Value.Should().Be(apple.Symbols[name]);
+            topic.Value.Should().Be(apple.Symbol(name));
             topic.Path.Should().EndWith("MsBasic.StringConcatenation.asm");
             topic.Summary.Should().NotBeNullOrWhiteSpace();
-            DebugPosition position = appleModule.Position(memory, checked((ushort)apple.Symbols[name]))
+            DebugPosition position = appleModule.Position(memory, checked((ushort)apple.Symbol(name)))
                 ?? throw new AssertFailedException($"{name} has no debugger source position.");
 
             position.Chain.Select(line => Path.GetFileName(line.Path))
@@ -460,7 +460,7 @@ public sealed class BasicSharedStringConcatenationTests
         SourceMapModule linked = new(AssembleRegion(pet, linkedRelease: true), area: null);
         foreach (string name in (string[])["CAT", "MOVSTR", "MOVDO", "FRESTR", "FREFAC", "FRETMP", "FRETMS"])
         {
-            DocumentationTopic topic = linked.Documentation.Find(name)
+            DocumentationTopic topic = linked.Documentation.FindTopic(name)
                 ?? throw new AssertFailedException($"{name} is not documented for linked strings.");
 
             topic.Kind.Should().Be(DocumentationKind.Routine);
@@ -471,14 +471,14 @@ public sealed class BasicSharedStringConcatenationTests
     }
 
     private static AssemblyResult AppleLegacy(Apple2Model model) =>
-        SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(s_inputs, BasicSourceKind.Macro10), model);
+        SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(Inputs, BasicSourceKind.Macro10), model);
 
     private static AssemblyResult Legacy(int variant, bool original) => variant switch
     {
         Apple => AppleLegacy(Apple2Model.IIeEnhanced),
-        Pet1 => PetLegacyBasic.Assemble(Path.Join(s_inputs, "Pet"), PetModel.Pet2001, original),
-        Pet2 => PetLegacyBasic.Assemble(Path.Join(s_inputs, "Pet"), PetModel.Pet2001Basic2),
-        Pet4 => PetLegacyBasic.Assemble(Path.Join(s_inputs, "Pet"), PetModel.Pet4032, original),
+        Pet1 => PetLegacyBasic.Assemble(Path.Join(Inputs, "Pet"), PetModel.Pet2001, original),
+        Pet2 => PetLegacyBasic.Assemble(Path.Join(Inputs, "Pet"), PetModel.Pet2001Basic2),
+        Pet4 => PetLegacyBasic.Assemble(Path.Join(Inputs, "Pet"), PetModel.Pet4032, original),
         _ => throw new ArgumentOutOfRangeException(nameof(variant))
     };
 
@@ -487,7 +487,7 @@ public sealed class BasicSharedStringConcatenationTests
         string source = $"""
             .cpu Mos6502
             .include "MsBasic.StringConcatenation.asm"
-            .org ${legacy.Symbols["CAT"]:X4}
+            .org ${legacy.Symbol("CAT"):X4}
                 STRING_CONCATENATION {(linkedRelease ? 1 : 0)}
             STRING_CONCATENATION_END:
             """;
@@ -499,7 +499,7 @@ public sealed class BasicSharedStringConcatenationTests
         ];
 
         if (linkedRelease) { dependencies = [.. dependencies, "STRADJ"]; }
-        return Assemble(legacy, source, Path.Join(s_shared, "StringConcatenationTest.asm"), dependencies);
+        return Assemble(legacy, source, Path.Join(SharedInputs, "StringConcatenationTest.asm"), dependencies);
     }
 
     private static AssemblyResult AssemblePetWorkspace(AssemblyResult legacy, PetModel model)
@@ -534,14 +534,14 @@ public sealed class BasicSharedStringConcatenationTests
             {options}
             .include "Commodore.Equates.asm"
             .include <MsBasic.StringConcatenation.asm>
-            .org ${legacy.Symbols["CAT"]:X4}
+            .org ${legacy.Symbol("CAT"):X4}
                 STRING_CONCATENATION {(linked ? 1 : 0)}
             STRING_CONCATENATION_END:
             """;
 
         string[] dependencies = ["EVAL", "CHKSTR", "ERRLS", "ERROR", "STRINI", "PUTNEW", "TSTOP"];
         if (linked) { dependencies = [.. dependencies, "STRADJ"]; }
-        return Assemble(legacy, source, Path.Join(s_inputs, "Pet", "Basic", "PetConcatenationTest.asm"), dependencies);
+        return Assemble(legacy, source, Path.Join(Inputs, "Pet", "Basic", "PetConcatenationTest.asm"), dependencies);
     }
 
     private static AssemblyResult Assemble(AssemblyResult legacy, string source, string path, string[] dependencies)
@@ -553,15 +553,15 @@ public sealed class BasicSharedStringConcatenationTests
 
         dependencies.Any(regionLabels.Contains).Should().BeFalse("no label inside the region may be predefined");
         Dictionary<string, long> symbols = dependencies.ToDictionary(
-            name => name, name => legacy.Symbols[name], StringComparer.Ordinal);
+            name => name, name => legacy.Symbol(name), StringComparer.Ordinal);
 
         AssemblyResult native = new Assembler.Assembler().Assemble(
             new AssemblySource(source, path),
             new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
             {
                 SourceResolver = new FileAssemblySourceResolver(),
-                SdkPaths = [s_shared],
-                PredefinedSymbols = symbols
+                SdkPaths = [SharedInputs],
+                PredefinedSymbols = BasicNames.WithCurrentNames(symbols)
             });
 
         native.Success.Should().BeTrue(string.Join(Environment.NewLine, native.Diagnostics.Select(diagnostic =>
@@ -580,8 +580,8 @@ public sealed class BasicSharedStringConcatenationTests
                 && symbol.Value >= start
                 && symbol.Value < end))
         {
-            native.Symbols.Should().ContainKey(label.Name);
-            native.Symbols[label.Name].Should().Be(label.Value, $"{label.Name} must retain its ROM address");
+            native.SymbolsWithHistoricalNames.Should().ContainKey(label.Name);
+            native.Symbol(label.Name).Should().Be(label.Value, $"{label.Name} must retain its ROM address");
         }
 
         native.Sections[0].Bytes.Slice(start, end - start).ToArray()
@@ -670,7 +670,7 @@ public sealed class BasicSharedStringConcatenationTests
         exits.Should().Contain(cpu.Registers.ProgramCounter, "the routine must reach an expected exit");
     }
 
-    private static int Address(AssemblyResult result, string name) => checked((int)result.Symbols[name]);
+    private static int Address(AssemblyResult result, string name) => checked((int)result.Symbol(name));
 
     private static int GetWord(byte[] memory, int address) => memory[address] | (memory[address + 1] << 8);
 

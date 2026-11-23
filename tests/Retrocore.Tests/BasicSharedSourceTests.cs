@@ -18,7 +18,7 @@ namespace Retrocore.Tests;
 [TestClass]
 public sealed class BasicSharedSourceTests
 {
-    private static readonly string s_inputs = Path.GetFullPath(Path.Join(AppContext.BaseDirectory, "Inputs"));
+    private static string Inputs => Path.GetFullPath(BasicNames.Inputs);
     private static readonly string s_shipped = ShippedRoms();
 
     /// <summary>
@@ -31,7 +31,7 @@ public sealed class BasicSharedSourceTests
         foreach (string folder in (string[])
             [
                 RepositoryShared(repository),
-                Path.Join(s_inputs, "Microsoft6502Basic"),
+                Path.Join(Inputs, "Microsoft6502Basic"),
                 Path.Join(s_shipped, "Microsoft6502Basic")
             ])
         {
@@ -249,7 +249,7 @@ public sealed class BasicSharedSourceTests
     {
         string repository = RepositoryRoot();
         string from = Path.Join(repository, "src", "Retrocore.Machines.Apple2", "Roms", "AppleSoft", "AppleSoft.asm");
-        OverlayBaseResolver resolver = new(Path.Join(s_inputs, "Microsoft6502Basic"));
+        OverlayBaseResolver resolver = new(Path.Join(Inputs, "Microsoft6502Basic"));
         resolver.TryResolve(from, "../Microsoft6502Basic/MsBasic.FloatConstants.asm", out AssemblySource? source)
             .Should().BeTrue();
 
@@ -326,7 +326,7 @@ public sealed class BasicSharedSourceTests
         foreach ((string shared, string apple) in ((string, string)[])
             [
                 (RepositoryShared(repository), Path.Join(repository, "src", "Retrocore.Machines.Apple2", "Roms", "AppleSoft")),
-                (Path.Join(s_inputs, "Microsoft6502Basic"), Path.Join(s_inputs, "AppleSoft")),
+                (Path.Join(Inputs, "Microsoft6502Basic"), Path.Join(Inputs, "AppleSoft")),
                 (Path.Join(s_shipped, "Microsoft6502Basic"), Path.Join(s_shipped, "AppleSoft"))
             ])
         {
@@ -340,7 +340,7 @@ public sealed class BasicSharedSourceTests
     [TestMethod]
     public void SdkRootDiscoveryFindsTheShippedIncludes()
     {
-        foreach (string roms in (string[])[s_inputs, s_shipped])
+        foreach (string roms in (string[])[Inputs, s_shipped])
         {
             List<string> roots = SourceIncludes.Roots(roms);
             roots.Should().Contain(Path.Join(roms, "AppleSoft", "AppleSoft.asm"));
@@ -433,7 +433,7 @@ public sealed class BasicSharedSourceTests
     }
 
     private static byte OneByte(SourceAnalysis analysis) =>
-        analysis.Result.Sections[0].Bytes.Span[checked((int)analysis.Result.Symbols["FONE"])];
+        analysis.Result.Sections[0].Bytes.Span[checked((int)analysis.Result.Symbol("FONE"))];
 
     private static AssemblyResult Assemble(
         string path,
@@ -445,7 +445,7 @@ public sealed class BasicSharedSourceTests
         {
             SourceResolver = resolver,
             IncludePaths = includePaths ?? [],
-            PredefinedSymbols = symbols ?? new Dictionary<string, long>()
+            PredefinedSymbols = BasicNames.WithCurrentNames(symbols ?? new Dictionary<string, long>())
         };
 
         AssemblyResult result = new Assembler.Assembler().Assemble(new AssemblySource(File.ReadAllText(path), path), options);

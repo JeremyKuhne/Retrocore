@@ -23,7 +23,7 @@ public sealed class BasicSharedIntegerConversionTests
     private const ushort GeneralEvaluator = 0x5010;
     private const ushort CharacterReader = 0x5020;
     private const int TextAddress = 0x3000;
-    private static readonly string s_inputs = Path.Join(AppContext.BaseDirectory, "Inputs");
+    private static string Inputs => BasicNames.Inputs;
 
     /// <summary>
     ///  Every AppleSoft model retains its whole ROM, conversion region, and legacy entry points.
@@ -36,15 +36,15 @@ public sealed class BasicSharedIntegerConversionTests
     public void AppleSoftUsesSharedIntegerConversion(Apple2Model model)
     {
         AssemblyResult legacy = SdkModules.AssembleAppleSoft(
-            SdkModules.AppleSoftPath(s_inputs, BasicSourceKind.Macro10),
+            SdkModules.AppleSoftPath(Inputs, BasicSourceKind.Macro10),
             model);
 
-        AssemblyResult native = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(s_inputs), model);
+        AssemblyResult native = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(Inputs), model);
         AssemblyResult region = AssembleRegion(legacy, numericEvaluator: true, checkType: false);
         SdkModules.AppleSoftImage(native).ToArray().Should().Equal(SdkModules.AppleSoftImage(legacy).ToArray());
         CompareRegion(legacy, native, "QINTG1");
         CompareRegion(legacy, region, "QINTG1");
-        region.Symbols["INTEGER_CONVERSION_END"].Should().Be(legacy.Symbols["QINTG1"]);
+        region.Symbol("INTEGER_CONVERSION_END").Should().Be(legacy.Symbol("QINTG1"));
         CheckBoundaries(legacy, region);
         CheckTypeCases(legacy, region, checkType: false);
         CheckSubscripts(legacy, region, BasicDialect.AppleSoft);
@@ -64,11 +64,11 @@ public sealed class BasicSharedIntegerConversionTests
     [DataRow(PetModel.Pet4032, true)]
     public void SharedIntegerConversionMatchesPet(PetModel model, bool original)
     {
-        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(s_inputs, "Pet"), model, original);
+        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(Inputs, "Pet"), model, original);
         bool early = model == PetModel.Pet2001;
         AssemblyResult region = AssembleRegion(legacy, numericEvaluator: early, checkType: !early);
         CompareRegion(legacy, region, "ISARY");
-        region.Symbols["INTEGER_CONVERSION_END"].Should().Be(legacy.Symbols["ISARY"]);
+        region.Symbol("INTEGER_CONVERSION_END").Should().Be(legacy.Symbol("ISARY"));
         CheckBoundaries(legacy, region);
         CheckTypeCases(legacy, region, checkType: !early);
         BasicDialect dialect = model switch
@@ -95,7 +95,7 @@ public sealed class BasicSharedIntegerConversionTests
     public void EvaluatorAndTypeCheckAreIndependent(bool numericEvaluator, bool checkType)
     {
         AssemblyResult legacy = SdkModules.AssembleAppleSoft(
-            SdkModules.AppleSoftPath(s_inputs, BasicSourceKind.Macro10),
+            SdkModules.AppleSoftPath(Inputs, BasicSourceKind.Macro10),
             Apple2Model.IIeEnhanced);
 
         AssemblyResult region = AssembleRegion(legacy, numericEvaluator, checkType, stubEvaluator: true);
@@ -106,8 +106,8 @@ public sealed class BasicSharedIntegerConversionTests
         SetFac(bus, legacy, 0, 0, 0, 0, 0, 0, 0);
         bus.Memory[Address(legacy, "VALTYP")] = 0;
         Processor<RecordingBus> cpu = Start(bus, region, "INTIDX");
-        ushort finish = checked((ushort)legacy.Symbols["QINT"]);
-        ushort typeCheck = checked((ushort)legacy.Symbols["CHKNUM"]);
+        ushort finish = checked((ushort)legacy.Symbol("QINT"));
+        ushort typeCheck = checked((ushort)legacy.Symbol("CHKNUM"));
         int checks = 0;
         for (int instruction = 0; instruction < 100 && cpu.Registers.ProgramCounter != finish; instruction++)
         {
@@ -130,7 +130,7 @@ public sealed class BasicSharedIntegerConversionTests
     public void BoundaryMustImmediatelyPrecedeConversion()
     {
         AssemblyResult legacy = SdkModules.AssembleAppleSoft(
-            SdkModules.AppleSoftPath(s_inputs, BasicSourceKind.Macro10),
+            SdkModules.AppleSoftPath(Inputs, BasicSourceKind.Macro10),
             Apple2Model.IIeEnhanced);
 
         AssemblyResult separated = AssembleRegion(legacy, numericEvaluator: true, checkType: false, insertGap: true);
@@ -146,18 +146,18 @@ public sealed class BasicSharedIntegerConversionTests
     public void EntriesRetainDocumentationAndSourceChains()
     {
         AssemblyResult native = SdkModules.AssembleAppleSoft(
-            SdkModules.AppleSoftPath(s_inputs),
+            SdkModules.AppleSoftPath(Inputs),
             Apple2Model.IIeEnhanced);
 
         int start = Address(native, "N32768");
         int end = Address(native, "QINTG1");
-        ushort firstEntry = checked((ushort)native.Symbols["INTIDX"]);
+        ushort firstEntry = checked((ushort)native.Symbol("INTIDX"));
         DebugTestMemory memory = new();
         memory.Set((ushort)start, native.Sections[0].Bytes.Slice(start, end - start).ToArray());
         SourceMapModule module = new(native, area: null);
         foreach (string name in (string[])["INTIDX", "POSINT", "AYINT", "QINTGO"])
         {
-            ushort address = checked((ushort)native.Symbols[name]);
+            ushort address = checked((ushort)native.Symbol(name));
             DebugPosition position = module.Position(memory, address)
                 ?? throw new AssertFailedException($"{name} has no debugger source position.");
 
@@ -166,7 +166,7 @@ public sealed class BasicSharedIntegerConversionTests
             position.Chain[1].Path.Should().EndWith("AppleSoft.Arrays.asm");
             module.Entries(position.Chain[0].Path, position.Chain[0].Line).Should().Contain(address);
             module.Entries(position.Chain[1].Path, position.Chain[1].Line).Should().Contain(firstEntry);
-            DocumentationTopic topic = module.Documentation.Find(name)
+            DocumentationTopic topic = module.Documentation.FindTopic(name)
                 ?? throw new AssertFailedException($"{name} is not documented.");
 
             topic.Kind.Should().Be(DocumentationKind.Routine);
@@ -175,7 +175,7 @@ public sealed class BasicSharedIntegerConversionTests
             topic.Summary.Should().NotBeNullOrWhiteSpace();
         }
 
-        DocumentationTopic constant = module.Documentation.Find("N32768")
+        DocumentationTopic constant = module.Documentation.FindTopic("N32768")
             ?? throw new AssertFailedException("N32768 is not documented.");
 
         constant.Kind.Should().Be(DocumentationKind.Table);
@@ -215,7 +215,7 @@ public sealed class BasicSharedIntegerConversionTests
             ("unchecked negative half", "QINTGO", 0x80, 0x80, 0, 0, 0, 0x80, 0, 0xFFFF)
         ];
 
-        ushort error = checked((ushort)legacy.Symbols["FCERR"]);
+        ushort error = checked((ushort)legacy.Symbol("FCERR"));
         foreach (var value in cases)
         {
             foreach (bool shared in (bool[])[false, true])
@@ -249,14 +249,14 @@ public sealed class BasicSharedIntegerConversionTests
                 SetFac(bus, legacy, 0, 0, 0, 0, 0, sign, 0);
                 bus.Memory[Address(legacy, "VALTYP")] = type;
                 Processor<RecordingBus> cpu = Start(bus, shared ? region : legacy, "POSINT");
-                ushort functionError = checked((ushort)legacy.Symbols["FCERR"]);
-                ushort typeError = checked((ushort)legacy.Symbols["ERROR"]);
+                ushort functionError = checked((ushort)legacy.Symbol("FCERR"));
+                ushort typeError = checked((ushort)legacy.Symbol("ERROR"));
                 StepUntil(cpu, 3000, ReturnAddress, functionError, typeError);
                 ushort expected = checkType && type != 0 ? typeError : sign != 0 ? functionError : ReturnAddress;
                 cpu.Registers.ProgramCounter.Should().Be(expected, $"type ${type:X2}, sign ${sign:X2}");
                 if (expected == typeError)
                 {
-                    cpu.Registers.X.Should().Be((byte)legacy.Symbols["ERRTM"]);
+                    cpu.Registers.X.Should().Be((byte)legacy.Symbol("ERRTM"));
                 }
                 else if (expected == ReturnAddress)
                 {
@@ -286,14 +286,14 @@ public sealed class BasicSharedIntegerConversionTests
                 byte[] text = dialect.Tokenize(value.Text);
                 PrepareText(bus, legacy, text);
                 Processor<RecordingBus> cpu = Start(bus, shared ? region : legacy, "INTIDX");
-                ushort functionError = checked((ushort)legacy.Symbols["FCERR"]);
-                ushort typeError = checked((ushort)legacy.Symbols["ERROR"]);
+                ushort functionError = checked((ushort)legacy.Symbol("FCERR"));
+                ushort typeError = checked((ushort)legacy.Symbol("ERROR"));
                 StepUntil(cpu, 10000, ReturnAddress, functionError, typeError);
                 ushort expected = value.TypeError ? typeError : value.Result is null ? functionError : ReturnAddress;
                 cpu.Registers.ProgramCounter.Should().Be(expected, value.Text);
                 if (value.TypeError)
                 {
-                    cpu.Registers.X.Should().Be((byte)legacy.Symbols["ERRTM"]);
+                    cpu.Registers.X.Should().Be((byte)legacy.Symbol("ERRTM"));
                 }
                 else if (value.Result is { } result)
                 {
@@ -322,8 +322,8 @@ public sealed class BasicSharedIntegerConversionTests
                 PrepareText(bus, legacy, dialect.Tokenize(value.Text));
                 WriteWord(bus.Memory, Address(legacy, "TXTPTR"), TextAddress + 1);
                 Processor<RecordingBus> cpu = Start(bus, legacy, "FRMNUM");
-                ushort functionError = checked((ushort)legacy.Symbols["FCERR"]);
-                ushort typeError = checked((ushort)legacy.Symbols["ERROR"]);
+                ushort functionError = checked((ushort)legacy.Symbol("FCERR"));
+                ushort typeError = checked((ushort)legacy.Symbol("ERROR"));
                 StepUntil(cpu, 10000, ReturnAddress, functionError, typeError);
                 cpu.Registers.ProgramCounter.Should().Be(ReturnAddress, $"evaluating {value.Text}");
 
@@ -345,12 +345,12 @@ public sealed class BasicSharedIntegerConversionTests
         bool stubEvaluator = false,
         bool insertGap = false)
     {
-        string folder = Path.Join(s_inputs, "Microsoft6502Basic");
+        string folder = Path.Join(Inputs, "Microsoft6502Basic");
         string evaluator = numericEvaluator ? "FRMNUM" : "FRMEVL";
         string source = $"""
             .cpu Mos6502
             .include "MsBasic.IntegerConversion.asm"
-            .org ${legacy.Symbols["N32768"]:X4}
+            .org ${legacy.Symbol("N32768"):X4}
                 INTEGER_CONVERSION_BOUNDARY
             {(insertGap ? "    .byte $00" : "")}
                 INTEGER_CONVERSION {evaluator}, {(checkType ? 1 : 0)}
@@ -359,7 +359,7 @@ public sealed class BasicSharedIntegerConversionTests
 
         string[] dependencies = ["CHRGET", "FRMNUM", "FRMEVL", "CHKNUM", "FACSGN", "FACEXP", "FCOMP", "FCERR", "QINT"];
         Dictionary<string, long> symbols = dependencies.ToDictionary(
-            name => name, name => legacy.Symbols[name], StringComparer.Ordinal);
+            name => name, name => legacy.Symbol(name), StringComparer.Ordinal);
 
         if (stubEvaluator)
         {
@@ -373,7 +373,7 @@ public sealed class BasicSharedIntegerConversionTests
             new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
             {
                 SourceResolver = new FileAssemblySourceResolver(),
-                PredefinedSymbols = symbols
+                PredefinedSymbols = BasicNames.WithCurrentNames(symbols)
             });
 
         if (!insertGap)
@@ -392,8 +392,8 @@ public sealed class BasicSharedIntegerConversionTests
         foreach (AssemblySymbol label in legacy.SymbolDefinitions.Where(
             symbol => !symbol.IsConstant && symbol.Value >= start && symbol.Value < end))
         {
-            native.Symbols.Should().ContainKey(label.Name);
-            native.Symbols[label.Name].Should().Be(label.Value, $"{label.Name} must retain its ROM address");
+            native.SymbolsWithHistoricalNames.Should().ContainKey(label.Name);
+            native.Symbol(label.Name).Should().Be(label.Value, $"{label.Name} must retain its ROM address");
         }
 
         native.Sections[0].Bytes.Slice(start, end - start).ToArray()
@@ -439,7 +439,7 @@ public sealed class BasicSharedIntegerConversionTests
     {
         bus.Memory.AsSpan(Address(legacy, "INITAT"), 24).CopyTo(bus.Memory.AsSpan(Address(legacy, "CHRGET")));
         bus.Memory[Address(legacy, "JMPER")] = 0x4C;
-        bus.Memory[Address(legacy, "TEMPPT")] = (byte)legacy.Symbols["TEMPST"];
+        bus.Memory[Address(legacy, "TEMPPT")] = (byte)legacy.Symbol("TEMPST");
         bus.Memory[TextAddress] = (byte)'(';
         text.CopyTo(bus.Memory, TextAddress + 1);
         bus.Memory[TextAddress + 1 + text.Length] = (byte)')';
@@ -462,7 +462,7 @@ public sealed class BasicSharedIntegerConversionTests
         {
             Registers = new()
             {
-                ProgramCounter = checked((ushort)source.Symbols[entry]),
+                ProgramCounter = checked((ushort)source.Symbol(entry)),
                 StackPointer = 0xFD,
                 Status = StatusRegister.Unused
             }
@@ -477,7 +477,7 @@ public sealed class BasicSharedIntegerConversionTests
         }
     }
 
-    private static int Address(AssemblyResult source, string name) => checked((int)source.Symbols[name]);
+    private static int Address(AssemblyResult source, string name) => checked((int)source.Symbol(name));
 
     private static int ReadInteger(byte[] memory, AssemblyResult source) =>
         (memory[Address(source, "FACMO")] << 8) | memory[Address(source, "FACLO")];

@@ -23,7 +23,7 @@ public sealed class BasicSharedGarbageCollectionTests
     private const int Array = 0x50F8;
     private const int ArrayDescriptor = Array + 7;
     private const int Top = 0x7100;
-    private static readonly string s_inputs = Path.Join(AppContext.BaseDirectory, "Inputs");
+    private static string Inputs => BasicNames.Inputs;
 
     /// <summary>
     ///  The complete AppleSoft image and every collector label retain their original bytes and addresses.
@@ -37,14 +37,14 @@ public sealed class BasicSharedGarbageCollectionTests
     public void AppleSoftCollectorRetainsBytesLabelsAndDigest(Apple2Model model, string expectedHash)
     {
         AssemblyResult legacy = AppleLegacy(model);
-        AssemblyResult native = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(s_inputs), model);
+        AssemblyResult native = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(Inputs), model);
         AssemblyResult region = AssembleClassic(legacy, fullPointer: false, patchedArray: false, subtractOffset: false);
         int start = Address(legacy, "GARBA2");
         int end = Address(legacy, "CAT");
         CompareRegion(legacy, native, start, end);
         CompareRegion(legacy, region, start, end);
         AssertSpan(region, start, end);
-        region.Symbols["COLLECTOR_END"].Should().Be(end);
+        region.Symbol("COLLECTOR_END").Should().Be(end);
         CheckStringEntryParity(legacy, native);
         native.Sections[0].Bytes.ToArray().Should().Equal(legacy.Sections[0].Bytes.ToArray());
         Convert.ToHexString(SHA256.HashData(SdkModules.AppleSoftImage(native).Span)).Should().Be(expectedHash);
@@ -68,18 +68,18 @@ public sealed class BasicSharedGarbageCollectionTests
         int end = Address(legacy, "CAT");
         CompareRegion(legacy, region, start, end);
         AssertSpan(region, start, end);
-        region.Symbols["COLLECTOR_END"].Should().Be(end);
+        region.Symbol("COLLECTOR_END").Should().Be(end);
         AssemblyResult composed = AssembleClassicWithPetWorkspace(legacy, early);
         CompareRegion(legacy, composed, start, end);
         AssertSpan(composed, start, end);
-        composed.Symbols["COLLECTOR_END"].Should().Be(end);
+        composed.Symbol("COLLECTOR_END").Should().Be(end);
         CheckStringEntryParity(legacy);
         CheckPetStringSlice(legacy, early, linked: false);
         if (early)
         {
             int patch = Address(legacy, "ARYINC");
             patch.Should().Be(0xE7F3);
-            region.Symbols["ARYINC"].Should().Be(patch);
+            region.Symbol("ARYINC").Should().Be(patch);
         }
     }
 
@@ -98,7 +98,7 @@ public sealed class BasicSharedGarbageCollectionTests
         int end = Address(legacy, "CAT");
         CompareRegion(legacy, region, start, end);
         AssertSpan(region, start, end);
-        region.Symbols["COLLECTOR_END"].Should().Be(end);
+        region.Symbol("COLLECTOR_END").Should().Be(end);
         CheckStringEntryParity(legacy);
         CheckPetStringSlice(legacy, early: false, linked: true);
         foreach (bool explicitWorkspace in (bool[])[false, true])
@@ -106,7 +106,7 @@ public sealed class BasicSharedGarbageCollectionTests
             AssemblyResult composed = AssembleLinkedWithPetWorkspace(legacy, explicitWorkspace);
             CompareRegion(legacy, composed, start, end);
             AssertSpan(composed, start, end);
-            composed.Symbols["COLLECTOR_END"].Should().Be(end);
+            composed.Symbol("COLLECTOR_END").Should().Be(end);
         }
     }
 
@@ -412,7 +412,7 @@ public sealed class BasicSharedGarbageCollectionTests
                 {
                     Registers = new()
                     {
-                        ProgramCounter = checked((ushort)legacy.Symbols["STR"]),
+                        ProgramCounter = checked((ushort)legacy.Symbol("STR")),
                         StackPointer = 0xFB,
                         X = 0x5A,
                         Y = 0xC3,
@@ -451,14 +451,14 @@ public sealed class BasicSharedGarbageCollectionTests
             {
                 Registers = new()
                 {
-                    ProgramCounter = checked((ushort)legacy.Symbols["STR"]),
+                    ProgramCounter = checked((ushort)legacy.Symbol("STR")),
                     StackPointer = 0xFB,
                     Status = StatusRegister.Unused
                 }
             };
 
-            StepTo(cpu, checked((ushort)legacy.Symbols["ERROR"]));
-            cpu.Registers.X.Should().Be((byte)legacy.Symbols["ERRTM"]);
+            StepTo(cpu, checked((ushort)legacy.Symbol("ERROR")));
+            cpu.Registers.X.Should().Be((byte)legacy.Symbol("ERRTM"));
         }
     }
 
@@ -526,7 +526,7 @@ public sealed class BasicSharedGarbageCollectionTests
     [TestMethod]
     public void CollectorsRetainDocumentationAndSourcePositions()
     {
-        AssemblyResult apple = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(s_inputs), Apple2Model.IIeEnhanced);
+        AssemblyResult apple = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(Inputs), Apple2Model.IIeEnhanced);
         SourceMapModule appleModule = new(apple, area: null);
         DebugTestMemory memory = new();
         int start = Address(apple, "GARBA2");
@@ -534,12 +534,12 @@ public sealed class BasicSharedGarbageCollectionTests
         memory.Set((ushort)start, apple.Sections[0].Bytes.Slice(start, end - start).ToArray());
         foreach (string name in (string[])["GARBA2", "DVARS", "DVAR", "GRBPAS"])
         {
-            DocumentationTopic topic = appleModule.Documentation.Find(name)
+            DocumentationTopic topic = appleModule.Documentation.FindTopic(name)
                 ?? throw new AssertFailedException($"{name} is not documented.");
 
             topic.Kind.Should().Be(DocumentationKind.Routine);
             topic.Path.Should().EndWith("MsBasic.StringGarbageCollection.asm");
-            DebugPosition position = appleModule.Position(memory, checked((ushort)apple.Symbols[name]))
+            DebugPosition position = appleModule.Position(memory, checked((ushort)apple.Symbol(name)))
                 ?? throw new AssertFailedException($"{name} has no debugger source position.");
 
             position.Chain.Select(line => Path.GetFileName(line.Path))
@@ -552,12 +552,12 @@ public sealed class BasicSharedGarbageCollectionTests
         memory.Set((ushort)stringStart, apple.Sections[0].Bytes.Slice(stringStart, stringEnd - stringStart).ToArray());
         foreach (string name in (string[])["STR", "TIMSTR"])
         {
-            DocumentationTopic topic = appleModule.Documentation.Find(name)
+            DocumentationTopic topic = appleModule.Documentation.FindTopic(name)
                 ?? throw new AssertFailedException($"{name} is not documented.");
 
             topic.Kind.Should().Be(DocumentationKind.Routine);
             topic.Path.Should().EndWith("MsBasic.StringConversion.asm");
-            DebugPosition position = appleModule.Position(memory, checked((ushort)apple.Symbols[name]))
+            DebugPosition position = appleModule.Position(memory, checked((ushort)apple.Symbol(name)))
                 ?? throw new AssertFailedException($"{name} has no debugger source position.");
 
             position.Chain.Select(line => Path.GetFileName(line.Path))
@@ -569,7 +569,7 @@ public sealed class BasicSharedGarbageCollectionTests
         SourceMapModule linked = new(AssembleLinked(pet), area: null);
         foreach (string name in (string[])["GARBA2", "ENDGRB", "SKIP2", "MOVPNT", "MOVTOP", "SETINX"])
         {
-            DocumentationTopic topic = linked.Documentation.Find(name)
+            DocumentationTopic topic = linked.Documentation.FindTopic(name)
                 ?? throw new AssertFailedException($"{name} is not documented.");
 
             topic.Kind.Should().Be(DocumentationKind.Routine);
@@ -584,10 +584,10 @@ public sealed class BasicSharedGarbageCollectionTests
     }
 
     private static AssemblyResult AppleLegacy(Apple2Model model) =>
-        SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(s_inputs, BasicSourceKind.Macro10), model);
+        SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(Inputs, BasicSourceKind.Macro10), model);
 
     private static AssemblyResult PetLegacy(PetModel model, bool original) =>
-        PetLegacyBasic.Assemble(Path.Join(s_inputs, "Pet"), model, original);
+        PetLegacyBasic.Assemble(Path.Join(Inputs, "Pet"), model, original);
 
     private static AssemblyResult VariantLegacy(int variant, bool original) => variant switch
     {
@@ -600,11 +600,11 @@ public sealed class BasicSharedGarbageCollectionTests
 
     private static AssemblyResult AssembleStringEntry(AssemblyResult legacy)
     {
-        string folder = Path.Join(s_inputs, "Microsoft6502Basic");
+        string folder = Path.Join(Inputs, "Microsoft6502Basic");
         string source = $"""
             .cpu Mos6502
             .include "MsBasic.StringConversion.asm"
-            .org ${legacy.Symbols["STR"]:X4}
+            .org ${legacy.Symbol("STR"):X4}
                 STRING_FROM_NUMBER
             STRING_ENTRY_END:
             """;
@@ -624,18 +624,18 @@ public sealed class BasicSharedGarbageCollectionTests
         AssemblyResult region = AssembleStringEntry(legacy);
         CompareRegion(legacy, region, start, end);
         AssertSpan(region, start, end);
-        region.Symbols["STRING_ENTRY_END"].Should().Be(end);
+        region.Symbol("STRING_ENTRY_END").Should().Be(end);
         if (native is not null) { CompareRegion(legacy, native, start, end); }
     }
 
     private static AssemblyResult AssembleClassic(
         AssemblyResult legacy, bool fullPointer, bool patchedArray, bool subtractOffset)
     {
-        string folder = Path.Join(s_inputs, "Microsoft6502Basic");
+        string folder = Path.Join(Inputs, "Microsoft6502Basic");
         string source = $"""
             .cpu Mos6502
             .include "MsBasic.StringGarbageCollection.asm"
-            .org ${legacy.Symbols["GARBA2"]:X4}
+            .org ${legacy.Symbol("GARBA2"):X4}
                 STRING_GARBAGE_COLLECTION {(fullPointer ? 1 : 0)}, {(patchedArray ? 1 : 0)}, {(subtractOffset ? 1 : 0)}
             COLLECTOR_END:
             """;
@@ -654,11 +654,11 @@ public sealed class BasicSharedGarbageCollectionTests
 
     private static AssemblyResult AssembleLinked(AssemblyResult legacy)
     {
-        string folder = Path.Join(s_inputs, "Pet", "Basic");
+        string folder = Path.Join(Inputs, "Pet", "Basic");
         string source = $"""
             .cpu Mos6502
             .include "Commodore.StringGarbageCollection.asm"
-            .org ${legacy.Symbols["GARBA2"]:X4}
+            .org ${legacy.Symbol("GARBA2"):X4}
                 LINKED_STRING_GARBAGE_COLLECTION
             COLLECTOR_END:
             """;
@@ -669,7 +669,7 @@ public sealed class BasicSharedGarbageCollectionTests
 
     private static AssemblyResult AssembleClassicWithPetWorkspace(AssemblyResult legacy, bool early)
     {
-        string folder = Path.Join(s_inputs, "Pet", "Basic");
+        string folder = Path.Join(Inputs, "Pet", "Basic");
         string options = PetWorkspaceOptions(early, linked: false);
 
         string source = $"""
@@ -677,7 +677,7 @@ public sealed class BasicSharedGarbageCollectionTests
             {options}
             .include "Commodore.Equates.asm"
             .include <MsBasic.StringGarbageCollection.asm>
-            .org ${legacy.Symbols["GARBA2"]:X4}
+            .org ${legacy.Symbol("GARBA2"):X4}
                 STRING_GARBAGE_COLLECTION {(early ? 0 : 1)}, {(early ? 1 : 0)}, {(early ? 1 : 0)}
             COLLECTOR_END:
             """;
@@ -688,7 +688,7 @@ public sealed class BasicSharedGarbageCollectionTests
 
     private static void CheckPetStringSlice(AssemblyResult legacy, bool early, bool linked)
     {
-        string folder = Path.Join(s_inputs, "Pet", "Basic");
+        string folder = Path.Join(Inputs, "Pet", "Basic");
         string options = PetWorkspaceOptions(early, linked);
         string linkedSource = linked ? ".include \"Commodore.StringGarbageCollection.asm\"" : "";
         string collector = linked
@@ -703,7 +703,7 @@ public sealed class BasicSharedGarbageCollectionTests
             .include <MsBasic.StringStorage.asm>
             .include <MsBasic.StringGarbageCollection.asm>
             {linkedSource}
-            .org ${legacy.Symbols["STR"]:X4}
+            .org ${legacy.Symbol("STR"):X4}
                 STRING_FROM_NUMBER
                 STRING_STORAGE BUFPAG, {(early ? 0 : 1)}
                 STRING_ALLOCATION {(linked ? 1 : 0)}
@@ -719,7 +719,7 @@ public sealed class BasicSharedGarbageCollectionTests
         int end = Address(legacy, "CAT");
         CompareRegion(legacy, composed, start, end);
         AssertSpan(composed, start, end);
-        composed.Symbols["STRING_SLICE_END"].Should().Be(end);
+        composed.Symbol("STRING_SLICE_END").Should().Be(end);
     }
 
     private static string PetWorkspaceOptions(bool early, bool linked) => early
@@ -746,7 +746,7 @@ public sealed class BasicSharedGarbageCollectionTests
 
     private static AssemblyResult AssembleLinkedWithPetWorkspace(AssemblyResult legacy, bool explicitWorkspace)
     {
-        string folder = Path.Join(s_inputs, "Pet", "Basic");
+        string folder = Path.Join(Inputs, "Pet", "Basic");
         string workspace = explicitWorkspace
             ? """
                 LINE_WIDTH_STORAGE = 0
@@ -759,7 +759,7 @@ public sealed class BasicSharedGarbageCollectionTests
             .cpu Mos6502
             {workspace}
             .include "Commodore.StringGarbageCollection.asm"
-            .org ${legacy.Symbols["GARBA2"]:X4}
+            .org ${legacy.Symbol("GARBA2"):X4}
                 LINKED_STRING_GARBAGE_COLLECTION
             COLLECTOR_END:
             """;
@@ -770,15 +770,15 @@ public sealed class BasicSharedGarbageCollectionTests
     private static AssemblyResult Assemble(AssemblyResult legacy, string source, string path, string[] dependencies)
     {
         Dictionary<string, long> symbols = dependencies.ToDictionary(
-            name => name, name => legacy.Symbols[name], StringComparer.Ordinal);
+            name => name, name => legacy.Symbol(name), StringComparer.Ordinal);
 
         AssemblyResult native = new Assembler.Assembler().Assemble(
             new AssemblySource(source, path),
             new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
             {
                 SourceResolver = new FileAssemblySourceResolver(),
-                SdkPaths = [Path.Join(s_inputs, "Microsoft6502Basic")],
-                PredefinedSymbols = symbols
+                SdkPaths = [Path.Join(Inputs, "Microsoft6502Basic")],
+                PredefinedSymbols = BasicNames.WithCurrentNames(symbols)
             });
 
         native.Success.Should().BeTrue(string.Join(Environment.NewLine, native.Diagnostics.Select(diagnostic =>
@@ -795,8 +795,8 @@ public sealed class BasicSharedGarbageCollectionTests
                 && symbol.Value >= start
                 && symbol.Value < end))
         {
-            native.Symbols.Should().ContainKey(label.Name);
-            native.Symbols[label.Name].Should().Be(label.Value, $"{label.Name} must retain its ROM address");
+            native.SymbolsWithHistoricalNames.Should().ContainKey(label.Name);
+            native.Symbol(label.Name).Should().Be(label.Value, $"{label.Name} must retain its ROM address");
         }
 
         native.Sections[0].Bytes.Slice(start, end - start).ToArray()
@@ -835,7 +835,7 @@ public sealed class BasicSharedGarbageCollectionTests
         GetWord(bus.Memory, Address(legacy, "FRETOP")).Should().Be(0x70F5);
         if (patchedArray)
         {
-            ushort patch = checked((ushort)legacy.Symbols["ARYINC"]);
+            ushort patch = checked((ushort)legacy.Symbol("ARYINC"));
             bus.Accesses.Should().Contain(access => access.Address == patch && access.Operation == BusOperation.Read);
         }
     }
@@ -856,7 +856,7 @@ public sealed class BasicSharedGarbageCollectionTests
         bus.Memory.AsSpan(fullPointer ? 0x70FC : 0x70E8, 4).ToArray().Should().Equal("TEMP"u8.ToArray());
         if (patchedArray)
         {
-            ushort patch = checked((ushort)legacy.Symbols["ARYINC"]);
+            ushort patch = checked((ushort)legacy.Symbol("ARYINC"));
             bus.Accesses.Should().Contain(access => access.Address == patch && access.Operation == BusOperation.Read);
         }
     }
@@ -1030,7 +1030,7 @@ public sealed class BasicSharedGarbageCollectionTests
             $"{Path.GetFileName(problem.Path)}:{problem.Line + 1}: {problem.Message}")));
     }
 
-    private static int Address(AssemblyResult result, string name) => checked((int)result.Symbols[name]);
+    private static int Address(AssemblyResult result, string name) => checked((int)result.Symbol(name));
 
     private static int GetWord(byte[] memory, int address) => memory[address] | (memory[address + 1] << 8);
 

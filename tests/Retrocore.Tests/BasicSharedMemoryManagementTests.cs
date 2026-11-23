@@ -21,9 +21,9 @@ public sealed class BasicSharedMemoryManagementTests
     private const int Pet2 = 2;
     private const int Pet4 = 4;
 
-    private static readonly string s_inputs = Path.Join(AppContext.BaseDirectory, "Inputs");
-    private static readonly string s_shared = Path.Join(s_inputs, "Microsoft6502Basic");
-    private static readonly string s_petBasic = Path.Join(s_inputs, "Pet", "Basic");
+    private static string Inputs => BasicNames.Inputs;
+    private static string SharedInputs => Path.Join(Inputs, "Microsoft6502Basic");
+    private static string PetBasicInputs => Path.Join(Inputs, "Pet", "Basic");
 
     /// <summary>
     ///  The complete AppleSoft ROM and the promoted labels retain their legacy bytes and addresses.
@@ -36,14 +36,14 @@ public sealed class BasicSharedMemoryManagementTests
     public void AppleSoftUsesSharedMemoryManagement(Apple2Model model)
     {
         AssemblyResult legacy = SdkModules.AssembleAppleSoft(
-            SdkModules.AppleSoftPath(s_inputs, BasicSourceKind.Macro10),
+            SdkModules.AppleSoftPath(Inputs, BasicSourceKind.Macro10),
             model);
 
-        AssemblyResult native = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(s_inputs), model);
+        AssemblyResult native = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(Inputs), model);
         AssemblyResult standalone = AssembleRegion(legacy, 0x36);
         CompareRegion(legacy, native);
         CompareRegion(legacy, standalone);
-        standalone.Symbols["MEMORY_MANAGEMENT_END"].Should().Be(legacy.Symbols["OMERR"]);
+        standalone.Symbol("MEMORY_MANAGEMENT_END").Should().Be(legacy.Symbol("OMERR"));
         SdkModules.AppleSoftImage(native).ToArray().Should().Equal(SdkModules.AppleSoftImage(legacy).ToArray());
     }
 
@@ -60,15 +60,15 @@ public sealed class BasicSharedMemoryManagementTests
     [DataRow(PetModel.Pet4032, true)]
     public void SharedMemoryManagementMatchesPet(PetModel model, bool original)
     {
-        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(s_inputs, "Pet"), model, original);
-        int reserve = checked((int)(2 * legacy.Symbols["NUMLEV"] + 3 * legacy.Symbols["ADDPRC"] + 13));
+        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(Inputs, "Pet"), model, original);
+        int reserve = checked((int)(2 * legacy.Symbol("NUMLEV") + 3 * legacy.Symbol("ADDPRC") + 13));
         AssemblyResult native = AssembleRegion(legacy, reserve);
         AssemblyResult composed = AssemblePetWorkspace(legacy, model);
-        native.Symbols["MEMORY_MANAGEMENT_END"].Should().Be(legacy.Symbols["OMERR"]);
-        composed.Symbols["MEMORY_MANAGEMENT_END"].Should().Be(legacy.Symbols["OMERR"]);
+        native.Symbol("MEMORY_MANAGEMENT_END").Should().Be(legacy.Symbol("OMERR"));
+        composed.Symbol("MEMORY_MANAGEMENT_END").Should().Be(legacy.Symbol("OMERR"));
         CompareRegion(legacy, native);
         CompareRegion(legacy, composed);
-        AssemblyLocation workspace = composed.SymbolDefinitions.Single(symbol => symbol.Name == "HIGHDS").Location
+        AssemblyLocation workspace = composed.Definition("HIGHDS").Location
             ?? throw new AssertFailedException("HIGHDS lost its workspace source.");
 
         workspace.Path.Should().EndWith("Commodore.Equates.asm");
@@ -80,7 +80,7 @@ public sealed class BasicSharedMemoryManagementTests
     [TestMethod]
     public void StackReserveChangesOnlyItsOperand()
     {
-        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(s_inputs, "Pet"), PetModel.Pet2001Basic2);
+        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(Inputs, "Pet"), PetModel.Pet2001Basic2);
         AssemblyResult early = AssembleRegion(legacy, 0x36);
         AssemblyResult later = AssembleRegion(legacy, 0x3E);
         int start = Address(legacy, "FNDFOR");
@@ -104,7 +104,7 @@ public sealed class BasicSharedMemoryManagementTests
     [DataRow(256)]
     public void InvalidStackReserveIsRejected(int reserve)
     {
-        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(s_inputs, "Pet"), PetModel.Pet2001Basic2);
+        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(Inputs, "Pet"), PetModel.Pet2001Basic2);
         AssemblyResult invalid = AssembleRegion(legacy, reserve, expectSuccess: false);
         invalid.Success.Should().BeFalse();
         invalid.Diagnostics.Select(diagnostic => diagnostic.Message).Should().Contain(message => message.Contains("stackReserve"));
@@ -120,10 +120,10 @@ public sealed class BasicSharedMemoryManagementTests
     [DataRow(true, "page-zero")]
     public void InvalidTransferScratchIsRejected(bool outsidePage, string diagnostic)
     {
-        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(s_inputs, "Pet"), PetModel.Pet2001Basic2);
+        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(Inputs, "Pet"), PetModel.Pet2001Basic2);
         Dictionary<string, long> changes = new()
         {
-            ["HIGHTR"] = legacy.Symbols["HIGHTR"] + 1
+            ["HIGHTR"] = legacy.Symbol("HIGHTR") + 1
         };
 
         if (outsidePage)
@@ -146,7 +146,7 @@ public sealed class BasicSharedMemoryManagementTests
     [TestMethod]
     public void SharedEntriesRetainDocumentationAndSourcePositions()
     {
-        AssemblyResult native = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(s_inputs), Apple2Model.IIeEnhanced);
+        AssemblyResult native = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(Inputs), Apple2Model.IIeEnhanced);
         int start = Address(native, "FNDFOR");
         int end = Address(native, "OMERR");
         DebugTestMemory memory = new();
@@ -155,7 +155,7 @@ public sealed class BasicSharedMemoryManagementTests
 
         foreach (string name in (string[])["FNDFOR", "BLTU", "BLTUC", "GETSTK", "REASON"])
         {
-            ushort address = checked((ushort)native.Symbols[name]);
+            ushort address = checked((ushort)native.Symbol(name));
             DebugPosition position = module.Position(memory, address)
                 ?? throw new AssertFailedException($"{name} has no debugger source position.");
 
@@ -171,7 +171,7 @@ public sealed class BasicSharedMemoryManagementTests
 
         foreach (string name in (string[])["FNDFOR", "BLTU", "GETSTK", "REASON"])
         {
-            DocumentationTopic topic = module.Documentation.Find(name)
+            DocumentationTopic topic = module.Documentation.FindTopic(name)
                 ?? throw new AssertFailedException($"{name} is not documented.");
 
             topic.Kind.Should().Be(DocumentationKind.Routine);
@@ -179,12 +179,12 @@ public sealed class BasicSharedMemoryManagementTests
             topic.Summary.Should().NotBeNullOrWhiteSpace();
         }
 
-        DocumentationTopic transfer = module.Documentation.FindRoutine("BLTUC")
+        DocumentationTopic transfer = module.Documentation.FindRoutineTopic("BLTUC")
             ?? throw new AssertFailedException("BLTUC lost its entry documentation.");
 
         transfer.Name.Should().Be("BLTU");
         transfer.EntryLabels.Should().Contain("BLTUC");
-        DocumentationSection keeps = module.Documentation.Find("FNDFOR")?.Section("Keeps")
+        DocumentationSection keeps = module.Documentation.FindTopic("FNDFOR")?.Section("Keeps")
             ?? throw new AssertFailedException("FNDFOR lost its Keeps contract.");
 
         keeps.Items.Should().Contain("Y");
@@ -207,8 +207,8 @@ public sealed class BasicSharedMemoryManagementTests
         AssemblyResult image = EdgeImage(Pet2);
         RecordingBus bus = BusFor(image);
         WriteWord(bus.Memory, Address(image, "FORPNT"), wanted);
-        Frame(bus.Memory, 0x54, (byte)image.Symbols["FORTK"], 0x2122);
-        Frame(bus.Memory, 0x66, (byte)image.Symbols["FORTK"], 0x3456);
+        Frame(bus.Memory, 0x54, (byte)image.Symbol("FORTK"), 0x2122);
+        Frame(bus.Memory, 0x66, (byte)image.Symbol("FORTK"), 0x3456);
         bus.Memory[0x0101 + 0x78] = 0x00;
 
         Processor<RecordingBus> cpu = new(bus)
@@ -242,8 +242,8 @@ public sealed class BasicSharedMemoryManagementTests
         int size = Address(image, "FORSIZ");
         for (int offset = 6; offset != 0; offset = (offset + size) & 0xFF)
         {
-            bus.Memory[0x0101 + offset] = (byte)image.Symbols["FORTK"];
-            bus.Memory[0x0103 + offset] = (byte)image.Symbols["FORTK"];
+            bus.Memory[0x0101 + offset] = (byte)image.Symbol("FORTK");
+            bus.Memory[0x0103 + offset] = (byte)image.Symbol("FORTK");
         }
 
         Processor<RecordingBus> cpu = new(bus)
@@ -490,7 +490,7 @@ public sealed class BasicSharedMemoryManagementTests
     {
         if (variant == Apple)
         {
-            return SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(s_inputs), Apple2Model.IIeEnhanced);
+            return SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(Inputs), Apple2Model.IIeEnhanced);
         }
 
         PetModel model = variant switch
@@ -501,8 +501,8 @@ public sealed class BasicSharedMemoryManagementTests
             _ => throw new ArgumentOutOfRangeException(nameof(variant))
         };
 
-        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(s_inputs, "Pet"), model);
-        int reserve = checked((int)(2 * legacy.Symbols["NUMLEV"] + 3 * legacy.Symbols["ADDPRC"] + 13));
+        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(Inputs, "Pet"), model);
+        int reserve = checked((int)(2 * legacy.Symbol("NUMLEV") + 3 * legacy.Symbol("ADDPRC") + 13));
         return AssembleRegion(legacy, reserve);
     }
 
@@ -528,7 +528,7 @@ public sealed class BasicSharedMemoryManagementTests
         ];
 
         Dictionary<string, long> symbols = dependencies.ToDictionary(
-            name => name, name => legacy.Symbols[name], StringComparer.Ordinal);
+            name => name, name => legacy.Symbol(name), StringComparer.Ordinal);
 
         if (changes is not null)
         {
@@ -536,11 +536,11 @@ public sealed class BasicSharedMemoryManagementTests
         }
 
         AssemblyResult native = new Assembler.Assembler().Assemble(
-            new AssemblySource(source, Path.Join(s_shared, "SharedMemoryManagementTest.asm")),
+            new AssemblySource(source, Path.Join(SharedInputs, "SharedMemoryManagementTest.asm")),
             new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
             {
                 SourceResolver = new FileAssemblySourceResolver(),
-                PredefinedSymbols = symbols
+                PredefinedSymbols = BasicNames.WithCurrentNames(symbols)
             });
 
         if (expectSuccess)
@@ -577,25 +577,25 @@ public sealed class BasicSharedMemoryManagementTests
 
         foreach (string name in (string[])["FORTK", "FORSIZ", "GARBA2", "OMERR"])
         {
-            symbols.Add(name, legacy.Symbols[name]);
+            symbols.Add(name, legacy.Symbol(name));
         }
 
         string source = $"""
             .cpu Mos6502
             .include "Commodore.Equates.asm"
             .include "MsBasic.MemoryManagement.asm"
-            .org ${legacy.Symbols["FNDFOR"]:X4}
+            .org ${legacy.Symbol("FNDFOR"):X4}
                 MEMORY_MANAGEMENT (2 * NUMLEV + 3 * ADDPRC + 13)
             MEMORY_MANAGEMENT_END:
             """;
 
         AssemblyResult native = new Assembler.Assembler().Assemble(
-            new AssemblySource(source, Path.Join(s_petBasic, "SharedMemoryWorkspaceTest.asm")),
+            new AssemblySource(source, Path.Join(PetBasicInputs, "SharedMemoryWorkspaceTest.asm")),
             new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
             {
                 SourceResolver = new FileAssemblySourceResolver(),
-                IncludePaths = [s_shared],
-                PredefinedSymbols = symbols
+                IncludePaths = [SharedInputs],
+                PredefinedSymbols = BasicNames.WithCurrentNames(symbols)
             });
 
         native.Success.Should().BeTrue(string.Join(Environment.NewLine, native.Diagnostics.Select(diagnostic =>
@@ -611,9 +611,9 @@ public sealed class BasicSharedMemoryManagementTests
         foreach (AssemblySymbol label in legacy.SymbolDefinitions.Where(
             symbol => !symbol.IsConstant && symbol.Value >= start && symbol.Value < end))
         {
-            native.Symbols.Should().ContainKey(label.Name);
-            native.Symbols[label.Name].Should().Be(label.Value, $"{label.Name} must retain its ROM address");
-            AssemblySymbol definition = native.SymbolDefinitions.Single(symbol => symbol.Name == label.Name);
+            native.SymbolsWithHistoricalNames.Should().ContainKey(label.Name);
+            native.Symbol(label.Name).Should().Be(label.Value, $"{label.Name} must retain its ROM address");
+            AssemblySymbol definition = native.Definition(label.Name);
             definition.IsConstant.Should().BeFalse($"{label.Name} must remain a debugger-visible label");
             AssemblyLocation location = definition.Location
                 ?? throw new AssertFailedException($"{label.Name} lost its source location.");
@@ -642,7 +642,7 @@ public sealed class BasicSharedMemoryManagementTests
         cpu.Registers.ProgramCounter.Should().Be((ushort)target);
     }
 
-    private static int Address(AssemblyResult image, string name) => checked((int)image.Symbols[name]);
+    private static int Address(AssemblyResult image, string name) => checked((int)image.Symbol(name));
 
     private static int ReadWord(byte[] memory, int address) => memory[address] | (memory[address + 1] << 8);
 

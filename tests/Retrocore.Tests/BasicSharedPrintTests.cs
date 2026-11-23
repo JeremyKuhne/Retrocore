@@ -26,13 +26,13 @@ public sealed class BasicSharedPrintTests
     [DataRow(PetModel.Pet4032, false)]
     public void SpcDispatchRetainsTheVariantsCarry(PetModel model, bool carry)
     {
-        string inputs = Path.Join(AppContext.BaseDirectory, "Inputs");
+        string inputs = BasicNames.Inputs;
         AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(inputs, "Pet"), model);
         string folder = Path.Join(inputs, "Microsoft6502Basic");
         string source = $"""
             .cpu Mos6502
             .include "MsBasic.Print.asm"
-            .org ${legacy.Symbols["STRDON"]:X4}
+            .org ${legacy.Symbol("STRDON"):X4}
                 PRINT_CORE TABER, {(carry ? 0 : 1)}, 0, 1
             """;
 
@@ -43,14 +43,14 @@ public sealed class BasicSharedPrintTests
         ];
 
         Dictionary<string, long> symbols = dependencies.ToDictionary(
-            name => name, name => legacy.Symbols[name], StringComparer.Ordinal);
+            name => name, name => legacy.Symbol(name), StringComparer.Ordinal);
 
         AssemblyResult native = new Assembler.Assembler().Assemble(
             new AssemblySource(source, Path.Join(folder, "PrintTest.asm")),
             new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
             {
                 SourceResolver = new FileAssemblySourceResolver(),
-                PredefinedSymbols = symbols
+                PredefinedSymbols = BasicNames.WithCurrentNames(symbols)
             });
 
         native.Success.Should().BeTrue(string.Join(Environment.NewLine, native.Diagnostics.Select(diagnostic => diagnostic.Message)));
@@ -60,13 +60,13 @@ public sealed class BasicSharedPrintTests
         {
             Registers = new()
             {
-                ProgramCounter = checked((ushort)native.Symbols["PRINTC"]),
-                Accumulator = checked((byte)native.Symbols["SPCTK"]),
+                ProgramCounter = checked((ushort)native.Symbol("PRINTC")),
+                Accumulator = checked((byte)native.Symbol("SPCTK")),
                 Status = StatusRegister.Unused
             }
         };
 
-        ushort handler = checked((ushort)native.Symbols["TABER"]);
+        ushort handler = checked((ushort)native.Symbol("TABER"));
         for (int instruction = 0; instruction < 10 && cpu.Registers.ProgramCounter != handler; instruction++)
         {
             cpu.StepInstruction();
@@ -90,7 +90,7 @@ public sealed class BasicSharedPrintTests
     [DataRow(PetModel.Pet4032, 0x80, "0D0A")]
     public void NewlineUsesTheVariantsChannelRules(PetModel model, int channel, string output)
     {
-        string inputs = Path.Join(AppContext.BaseDirectory, "Inputs");
+        string inputs = BasicNames.Inputs;
         string folder = Path.Join(inputs, "Pet", "Basic");
         AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(inputs, "Pet"), model);
         bool early = model == PetModel.Pet2001;
@@ -98,29 +98,29 @@ public sealed class BasicSharedPrintTests
         string source = $"""
             .cpu Mos6502
             .include "Commodore.ChannelPrint.asm"
-            .org ${legacy.Symbols["FININL"]:X4}
+            .org ${legacy.Symbol("FININL"):X4}
                 COMMODORE_LINE_END {(early ? 0 : 2)}, {(early ? 1 : 0)}, {(disk ? 1 : 0)}, {(early ? 1 : 0)}
             """;
 
         List<string> dependencies = ["BUF", "CHANNL", "TRMPOS", "OUTDO"];
         if (early) { dependencies.Add("NULCNT"); }
         Dictionary<string, long> symbols = dependencies.ToDictionary(
-            name => name, name => legacy.Symbols[name], StringComparer.Ordinal);
+            name => name, name => legacy.Symbol(name), StringComparer.Ordinal);
 
         AssemblyResult native = new Assembler.Assembler().Assemble(
             new AssemblySource(source, Path.Join(folder, "ChannelPrintTest.asm")),
             new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
             {
                 SourceResolver = new FileAssemblySourceResolver(),
-                PredefinedSymbols = symbols
+                PredefinedSymbols = BasicNames.WithCurrentNames(symbols)
             });
 
         native.Success.Should().BeTrue(string.Join(Environment.NewLine, native.Diagnostics.Select(diagnostic => diagnostic.Message)));
         RecordingBus bus = new();
         native.Sections[0].Bytes.Span.CopyTo(bus.Memory);
-        bus.Memory[checked((int)native.Symbols["CHANNL"])] = (byte)channel;
-        if (early) { bus.Memory[checked((int)native.Symbols["NULCNT"])] = 2; }
-        ushort outdo = checked((ushort)native.Symbols["OUTDO"]);
+        bus.Memory[checked((int)native.Symbol("CHANNL"))] = (byte)channel;
+        if (early) { bus.Memory[checked((int)native.Symbol("NULCNT"))] = 2; }
+        ushort outdo = checked((ushort)native.Symbol("OUTDO"));
         bus.Memory[outdo] = 0x60;
         bus.Memory[0x01FE] = (byte)((ReturnAddress - 1) & 0xFF);
         bus.Memory[0x01FF] = (byte)((ReturnAddress - 1) >> 8);
@@ -128,7 +128,7 @@ public sealed class BasicSharedPrintTests
         {
             Registers = new()
             {
-                ProgramCounter = checked((ushort)native.Symbols["CRDO"]),
+                ProgramCounter = checked((ushort)native.Symbol("CRDO")),
                 StackPointer = 0xFD,
                 X = 0x55,
                 Status = StatusRegister.Unused
@@ -158,14 +158,14 @@ public sealed class BasicSharedPrintTests
     [DataRow(PetModel.Pet4032, 0)]
     public void SpcZeroRetainsTheEarlyLoopBehavior(PetModel model, int count)
     {
-        string inputs = Path.Join(AppContext.BaseDirectory, "Inputs");
+        string inputs = BasicNames.Inputs;
         string folder = Path.Join(inputs, "Pet", "Basic");
         AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(inputs, "Pet"), model);
         bool early = model == PetModel.Pet2001;
         string source = $"""
             .cpu Mos6502
             .include "Commodore.ChannelPrint.asm"
-            .org ${legacy.Symbols["COMPRT"]:X4}
+            .org ${legacy.Symbol("COMPRT"):X4}
                 COMMODORE_PRINT_SPACING {(early ? 1 : 0)}
             """;
 
@@ -175,38 +175,38 @@ public sealed class BasicSharedPrintTests
         ];
 
         Dictionary<string, long> symbols = dependencies.ToDictionary(
-            name => name, name => legacy.Symbols[name], StringComparer.Ordinal);
+            name => name, name => legacy.Symbol(name), StringComparer.Ordinal);
 
         AssemblyResult native = new Assembler.Assembler().Assemble(
             new AssemblySource(source, Path.Join(folder, "PrintSpacingTest.asm")),
             new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
             {
                 SourceResolver = new FileAssemblySourceResolver(),
-                PredefinedSymbols = symbols
+                PredefinedSymbols = BasicNames.WithCurrentNames(symbols)
             });
 
         native.Success.Should().BeTrue(string.Join(Environment.NewLine, native.Diagnostics.Select(diagnostic => diagnostic.Message)));
         RecordingBus bus = new();
         native.Sections[0].Bytes.Span.CopyTo(bus.Memory);
-        int getByte = checked((int)native.Symbols["GTBYTC"]);
+        int getByte = checked((int)native.Symbol("GTBYTC"));
         byte[] byteStub = [0xA2, 0x00, 0xA9, (byte)')', 0x60];
         byteStub.CopyTo(bus.Memory, getByte);
-        int outSpace = checked((int)native.Symbols["OUTSPC"]);
+        int outSpace = checked((int)native.Symbol("OUTSPC"));
         byte[] spaceStub = [0xA9, 0x1D, 0x60];
         spaceStub.CopyTo(bus.Memory, outSpace);
-        bus.Memory[checked((int)native.Symbols["CHRGET"])] = 0x60;
+        bus.Memory[checked((int)native.Symbol("CHRGET"))] = 0x60;
         Processor<RecordingBus> cpu = new(bus)
         {
             Registers = new()
             {
-                ProgramCounter = checked((ushort)native.Symbols["TABER"]),
-                Accumulator = checked((byte)native.Symbols["SPCTK"]),
+                ProgramCounter = checked((ushort)native.Symbol("TABER")),
+                Accumulator = checked((byte)native.Symbol("SPCTK")),
                 StackPointer = 0xFD,
                 Status = StatusRegister.Unused
             }
         };
 
-        ushort continuation = checked((ushort)native.Symbols["PRINTC"]);
+        ushort continuation = checked((ushort)native.Symbol("PRINTC"));
         int spaces = 0;
         for (int instruction = 0; instruction < 2_000 && cpu.Registers.ProgramCounter != continuation; instruction++)
         {
@@ -237,7 +237,7 @@ public sealed class BasicSharedPrintTests
         bool setFlagSlot,
         string output)
     {
-        string inputs = Path.Join(AppContext.BaseDirectory, "Inputs");
+        string inputs = BasicNames.Inputs;
         string folder = Path.Join(inputs, "Pet", "Basic");
         AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(inputs, "Pet"), model);
         bool early = model == PetModel.Pet2001;
@@ -246,30 +246,30 @@ public sealed class BasicSharedPrintTests
         string source = $"""
             .cpu Mos6502
             .include "Commodore.ChannelPrint.asm"
-            .org ${legacy.Symbols["OUTSPC"]:X4}
+            .org ${legacy.Symbol("OUTSPC"):X4}
                 COMMODORE_CHARACTER_OUTPUT {(early ? 1 : 0)}, {(early ? 1 : 0)}, {(disk ? 0 : 1)}, {(disk ? 0 : 1)}
             """;
 
         List<string> dependencies = ["CHANNL", flagSlot, "TRMPOS", "OUTCH"];
         if (early) { dependencies.Add("INCTRM"); }
         Dictionary<string, long> symbols = dependencies.ToDictionary(
-            name => name, name => legacy.Symbols[name], StringComparer.Ordinal);
+            name => name, name => legacy.Symbol(name), StringComparer.Ordinal);
 
         AssemblyResult native = new Assembler.Assembler().Assemble(
             new AssemblySource(source, Path.Join(folder, "CharacterOutputTest.asm")),
             new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
             {
                 SourceResolver = new FileAssemblySourceResolver(),
-                PredefinedSymbols = symbols
+                PredefinedSymbols = BasicNames.WithCurrentNames(symbols)
             });
 
         native.Success.Should().BeTrue(string.Join(Environment.NewLine, native.Diagnostics.Select(diagnostic => diagnostic.Message)));
         RecordingBus bus = new();
         native.Sections[0].Bytes.Span.CopyTo(bus.Memory);
-        bus.Memory[checked((int)native.Symbols["CHANNL"])] = (byte)channel;
-        bus.Memory[checked((int)native.Symbols[flagSlot])] = setFlagSlot ? (byte)0x80 : (byte)0;
-        if (early) { bus.Memory[checked((int)native.Symbols["INCTRM"])] = 0x60; }
-        ushort outch = checked((ushort)native.Symbols["OUTCH"]);
+        bus.Memory[checked((int)native.Symbol("CHANNL"))] = (byte)channel;
+        bus.Memory[checked((int)native.Symbol(flagSlot))] = setFlagSlot ? (byte)0x80 : (byte)0;
+        if (early) { bus.Memory[checked((int)native.Symbol("INCTRM"))] = 0x60; }
+        ushort outch = checked((ushort)native.Symbol("OUTCH"));
         bus.Memory[outch] = 0x60;
         bus.Memory[0x01FE] = (byte)((ReturnAddress - 1) & 0xFF);
         bus.Memory[0x01FF] = (byte)((ReturnAddress - 1) >> 8);
@@ -277,7 +277,7 @@ public sealed class BasicSharedPrintTests
         {
             Registers = new()
             {
-                ProgramCounter = checked((ushort)native.Symbols["OUTSPC"]),
+                ProgramCounter = checked((ushort)native.Symbol("OUTSPC")),
                 StackPointer = 0xFD,
                 Status = StatusRegister.Unused
             }

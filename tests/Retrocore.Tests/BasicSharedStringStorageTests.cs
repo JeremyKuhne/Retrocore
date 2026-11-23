@@ -22,8 +22,8 @@ public sealed class BasicSharedStringStorageTests
     private const int Pet2 = 2;
     private const int Pet4 = 4;
     private const ushort ReturnAddress = 0x2000;
-    private static readonly string s_inputs = Path.Join(AppContext.BaseDirectory, "Inputs");
-    private static readonly string s_shared = Path.Join(s_inputs, "Microsoft6502Basic");
+    private static string Inputs => BasicNames.Inputs;
+    private static string SharedInputs => Path.Join(Inputs, "Microsoft6502Basic");
 
     /// <summary>
     ///  The complete AppleSoft image and every promoted legacy label remain unchanged.
@@ -36,15 +36,15 @@ public sealed class BasicSharedStringStorageTests
     public void AppleSoftUsesSharedStringStorage(Apple2Model model)
     {
         AssemblyResult legacy = SdkModules.AssembleAppleSoft(
-            SdkModules.AppleSoftPath(s_inputs, BasicSourceKind.Macro10),
+            SdkModules.AppleSoftPath(Inputs, BasicSourceKind.Macro10),
             model);
 
-        AssemblyResult native = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(s_inputs), model);
+        AssemblyResult native = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(Inputs), model);
         AssemblyResult standalone = AssembleStorage(legacy, bufferPage: 2, clearFacOverflow: false, linkedStrings: false);
         CompareRegion(legacy, native);
         CompareRegion(legacy, standalone);
         AssertEmittedSpan(standalone, Address(legacy, "STRINI"), Address(legacy, "GARBA2"));
-        standalone.Symbols["STRING_STORAGE_END"].Should().Be(legacy.Symbols["GARBA2"]);
+        standalone.Symbol("STRING_STORAGE_END").Should().Be(legacy.Symbol("GARBA2"));
         native.Sections[0].Bytes.ToArray().Should().Equal(legacy.Sections[0].Bytes.ToArray());
     }
 
@@ -61,13 +61,13 @@ public sealed class BasicSharedStringStorageTests
     [DataRow(PetModel.Pet4032, true)]
     public void SharedStringStorageMatchesPet(PetModel model, bool original)
     {
-        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(s_inputs, "Pet"), model, original);
+        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(Inputs, "Pet"), model, original);
         bool early = model == PetModel.Pet2001;
         bool linked = model == PetModel.Pet4032;
         AssemblyResult native = AssembleStorage(legacy, early ? 0 : 2, clearFacOverflow: !early, linkedStrings: linked);
         CompareRegion(legacy, native);
         AssertEmittedSpan(native, Address(legacy, "STRINI"), Address(legacy, "GARBA2"));
-        native.Symbols["STRING_STORAGE_END"].Should().Be(legacy.Symbols["GARBA2"]);
+        native.Symbol("STRING_STORAGE_END").Should().Be(legacy.Symbol("GARBA2"));
     }
 
     /// <summary>
@@ -76,7 +76,7 @@ public sealed class BasicSharedStringStorageTests
     [TestMethod]
     public void StorageEntriesRetainDocumentationAndSourceChains()
     {
-        AssemblyResult native = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(s_inputs), Apple2Model.IIeEnhanced);
+        AssemblyResult native = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(Inputs), Apple2Model.IIeEnhanced);
         int start = Address(native, "STRINI");
         int end = Address(native, "GARBA2");
         DebugTestMemory memory = new();
@@ -84,18 +84,18 @@ public sealed class BasicSharedStringStorageTests
         SourceMapModule module = new(native, area: null);
         foreach (string name in (string[])["STRINI", "STRSPA", "STRLIT", "STRLT2", "PUTNEW", "GETSPA"])
         {
-            DocumentationTopic topic = module.Documentation.Find(name)
+            DocumentationTopic topic = module.Documentation.FindTopic(name)
                 ?? throw new AssertFailedException($"{name} is not documented.");
 
             topic.Kind.Should().Be(DocumentationKind.Routine);
-            topic.Value.Should().Be(native.Symbols[name]);
+            topic.Value.Should().Be(native.Symbol(name));
             topic.Path.Should().EndWith("MsBasic.StringStorage.asm");
             topic.Summary.Should().NotBeNullOrWhiteSpace();
         }
 
         foreach (string name in (string[])["STRINI", "STRLIT", "PUTNEW", "GETSPA"])
         {
-            ushort address = checked((ushort)native.Symbols[name]);
+            ushort address = checked((ushort)native.Symbol(name));
             DebugPosition position = module.Position(memory, address)
                 ?? throw new AssertFailedException($"{name} has no debugger source position.");
 
@@ -105,7 +105,7 @@ public sealed class BasicSharedStringStorageTests
             module.Entries(position.Chain[0].Path, position.Chain[0].Line).Should().Contain(address);
         }
 
-        DebugPosition retry = module.Position(memory, checked((ushort)native.Symbols["TRYAG2"]))
+        DebugPosition retry = module.Position(memory, checked((ushort)native.Symbol("TRYAG2")))
             ?? throw new AssertFailedException("TRYAG2 has no debugger source position.");
 
         retry.Chain.Select(line => Path.GetFileName(line.Path))
@@ -138,13 +138,13 @@ public sealed class BasicSharedStringStorageTests
         DebugTestMemory memory = new();
         memory.Set((ushort)start, native.Sections[0].Bytes.Slice(start, end - start).ToArray());
         SourceMapModule module = new(native, area: null);
-        DocumentationTopic topic = module.Documentation.Find("LINKED_STRING_ALLOCATION")
+        DocumentationTopic topic = module.Documentation.FindTopic("LINKED_STRING_ALLOCATION")
             ?? throw new AssertFailedException("The linked allocator is not documented.");
 
         topic.Kind.Should().Be(DocumentationKind.Macro);
         topic.Path.Should().EndWith("MsBasic.StringStorage.Linked.asm");
         topic.Summary.Should().NotBeNullOrWhiteSpace();
-        DebugPosition retry = module.Position(memory, checked((ushort)native.Symbols["TRYAG2"]))
+        DebugPosition retry = module.Position(memory, checked((ushort)native.Symbol("TRYAG2")))
             ?? throw new AssertFailedException("The linked retry has no debugger source position.");
 
         retry.Chain.Select(line => Path.GetFileName(line.Path))
@@ -191,7 +191,7 @@ public sealed class BasicSharedStringStorageTests
             "Q\""u8.CopyTo(bus.Memory.AsSpan(source));
             WriteWord(bus.Memory, Address(legacy, "FACMO"), 0x4321);
             Processor<RecordingBus> cpu = Start(bus, Address(native, "STRLIT"), (byte)source, (byte)(source >> 8));
-            RunTo(cpu, 10000, -1, ReturnAddress, checked((ushort)legacy.Symbols["ERROR"]));
+            RunTo(cpu, 10000, -1, ReturnAddress, checked((ushort)legacy.Symbol("ERROR")));
             cpu.Registers.ProgramCounter.Should().Be(ReturnAddress);
             int descriptor = ReadWord(bus.Memory, Address(legacy, "FACMO"));
             int data = ReadWord(bus.Memory, descriptor + 1);
@@ -252,7 +252,7 @@ public sealed class BasicSharedStringStorageTests
                     (byte)test.Source,
                     (byte)(test.Source >> 8));
 
-                RunTo(cpu, 10000, -1, ReturnAddress, checked((ushort)legacy.Symbols["ERROR"]));
+                RunTo(cpu, 10000, -1, ReturnAddress, checked((ushort)legacy.Symbol("ERROR")));
                 cpu.Registers.ProgramCounter.Should().Be(ReturnAddress);
                 ReadWord(bus.Memory, Address(legacy, "STRNG2"))
                     .Should().Be(test.Source + test.Length + (test.Skip ? 1 : 0));
@@ -305,7 +305,7 @@ public sealed class BasicSharedStringStorageTests
                 bus.Memory[Address(legacy, "FACOV")] = 0xA5;
                 AssemblyResult code = useShared ? native : legacy;
                 Processor<RecordingBus> cpu = Start(bus, Address(code, "PUTNEW"));
-                RunTo(cpu, 1000, -1, ReturnAddress, checked((ushort)legacy.Symbols["ERROR"]));
+                RunTo(cpu, 1000, -1, ReturnAddress, checked((ushort)legacy.Symbol("ERROR")));
                 cpu.Registers.ProgramCounter.Should().Be(ReturnAddress);
                 int descriptor = temp + slot * 3;
                 bus.Memory.AsSpan(descriptor, 3).ToArray()
@@ -320,10 +320,10 @@ public sealed class BasicSharedStringStorageTests
             }
 
             Processor<RecordingBus> overflow = Start(bus, Address(useShared ? native : legacy, "PUTNEW"));
-            ushort error = checked((ushort)legacy.Symbols["ERROR"]);
+            ushort error = checked((ushort)legacy.Symbol("ERROR"));
             RunTo(overflow, 1000, -1, ReturnAddress, error);
             overflow.Registers.ProgramCounter.Should().Be(error);
-            overflow.Registers.X.Should().Be((byte)legacy.Symbols["ERRST"]);
+            overflow.Registers.X.Should().Be((byte)legacy.Symbol("ERRST"));
             bus.Memory[Address(legacy, "TEMPPT")].Should().Be((byte)(temp + 9));
             bus.Memory[temp + 9].Should().Be(0xCC);
             bus.Memory[last + 1].Should().Be(0x7B);
@@ -363,7 +363,7 @@ public sealed class BasicSharedStringStorageTests
                 bus.Memory[Address(legacy, "GARBFL")] = 0x81;
                 AssemblyResult code = useShared ? native : legacy;
                 Processor<RecordingBus> cpu = Start(bus, Address(code, "GETSPA"), test.Length, 0xA7);
-                int collections = RunTo(cpu, 1000, Address(legacy, "GARBA2"), ReturnAddress, checked((ushort)legacy.Symbols["ERROR"]));
+                int collections = RunTo(cpu, 1000, Address(legacy, "GARBA2"), ReturnAddress, checked((ushort)legacy.Symbol("ERROR")));
                 cpu.Registers.ProgramCounter.Should().Be(ReturnAddress);
                 collections.Should().Be(0);
                 bus.Memory[Address(legacy, "GARBFL")].Should().Be(0x40);
@@ -413,7 +413,7 @@ public sealed class BasicSharedStringStorageTests
                 WriteWord(bus.Memory, Address(legacy, "DSCPNT"), 0x5678);
                 AssemblyResult code = useShared ? native : legacy;
                 Processor<RecordingBus> cpu = Start(bus, Address(code, save ? "STRINI" : "STRSPA"), 5);
-                RunTo(cpu, 1000, -1, ReturnAddress, checked((ushort)legacy.Symbols["ERROR"]));
+                RunTo(cpu, 1000, -1, ReturnAddress, checked((ushort)legacy.Symbol("ERROR")));
                 cpu.Registers.ProgramCounter.Should().Be(ReturnAddress);
                 ReadWord(bus.Memory, Address(legacy, "DSCPNT")).Should().Be(save ? 0x4321 : 0x5678);
                 int descriptor = Address(legacy, "DSCTMP");
@@ -466,14 +466,14 @@ public sealed class BasicSharedStringStorageTests
 
             AssemblyResult code = useShared ? native : legacy;
             Processor<RecordingBus> cpu = Start(bus, Address(code, "GETSPA"), length);
-            ushort error = checked((ushort)legacy.Symbols["ERROR"]);
+            ushort error = checked((ushort)legacy.Symbol("ERROR"));
             int collections = RunTo(cpu, 20000, Address(legacy, "GARBA2"), ReturnAddress, error);
             cpu.Registers.ProgramCounter.Should().Be(fits ? ReturnAddress : error);
             collections.Should().Be(1);
             bus.Memory[Address(legacy, "GARBFL")].Should().Be(linked ? (byte)0xA0 : (byte)0x80);
             if (!fits)
             {
-                cpu.Registers.X.Should().Be((byte)legacy.Symbols["ERROM"]);
+                cpu.Registers.X.Should().Be((byte)legacy.Symbol("ERROM"));
                 continue;
             }
 
@@ -514,7 +514,7 @@ public sealed class BasicSharedStringStorageTests
             WriteWord(bus.Memory, Address(legacy, "FRESPC"), 0x4444);
             AssemblyResult code = useShared ? native : legacy;
             Processor<RecordingBus> cpu = Start(bus, Address(code, "GETSPA"));
-            int collections = RunTo(cpu, 20000, Address(legacy, "GARBA2"), ReturnAddress, checked((ushort)legacy.Symbols["ERROR"]));
+            int collections = RunTo(cpu, 20000, Address(legacy, "GARBA2"), ReturnAddress, checked((ushort)legacy.Symbol("ERROR")));
             cpu.Registers.ProgramCounter.Should().Be(ReturnAddress);
             collections.Should().Be(2);
             ReadWord(bus.Memory, Address(legacy, "FRETOP")).Should().Be(0x6100);
@@ -525,10 +525,10 @@ public sealed class BasicSharedStringStorageTests
     private static AssemblyResult Legacy(int variant, bool original = false) => variant switch
     {
         Apple => SdkModules.AssembleAppleSoft(
-            SdkModules.AppleSoftPath(s_inputs, BasicSourceKind.Macro10), Apple2Model.IIeEnhanced),
-        Pet1 => PetLegacyBasic.Assemble(Path.Join(s_inputs, "Pet"), PetModel.Pet2001, original),
-        Pet2 => PetLegacyBasic.Assemble(Path.Join(s_inputs, "Pet"), PetModel.Pet2001Basic2),
-        Pet4 => PetLegacyBasic.Assemble(Path.Join(s_inputs, "Pet"), PetModel.Pet4032, original),
+            SdkModules.AppleSoftPath(Inputs, BasicSourceKind.Macro10), Apple2Model.IIeEnhanced),
+        Pet1 => PetLegacyBasic.Assemble(Path.Join(Inputs, "Pet"), PetModel.Pet2001, original),
+        Pet2 => PetLegacyBasic.Assemble(Path.Join(Inputs, "Pet"), PetModel.Pet2001Basic2),
+        Pet4 => PetLegacyBasic.Assemble(Path.Join(Inputs, "Pet"), PetModel.Pet4032, original),
         _ => throw new ArgumentOutOfRangeException(nameof(variant))
     };
 
@@ -544,7 +544,7 @@ public sealed class BasicSharedStringStorageTests
         string source = $"""
             .cpu Mos6502
             .include "MsBasic.StringStorage.asm"
-            .org ${legacy.Symbols["STRINI"]:X4}
+            .org ${legacy.Symbol("STRINI"):X4}
                 STRING_STORAGE {bufferPage}, {(clearFacOverflow ? 1 : 0)}
                 STRING_ALLOCATION {(linkedStrings ? 1 : 0)}
             STRING_STORAGE_END:
@@ -558,14 +558,14 @@ public sealed class BasicSharedStringStorageTests
         ];
 
         Dictionary<string, long> symbols = dependencies.ToDictionary(
-            name => name, name => legacy.Symbols[name], StringComparer.Ordinal);
+            name => name, name => legacy.Symbol(name), StringComparer.Ordinal);
 
         AssemblyResult native = new Assembler.Assembler().Assemble(
-            new AssemblySource(source, Path.Join(s_shared, "StringStorageTest.asm")),
+            new AssemblySource(source, Path.Join(SharedInputs, "StringStorageTest.asm")),
             new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
             {
                 SourceResolver = new FileAssemblySourceResolver(),
-                PredefinedSymbols = symbols
+                PredefinedSymbols = BasicNames.WithCurrentNames(symbols)
             });
 
         native.Success.Should().BeTrue(string.Join(Environment.NewLine, native.Diagnostics.Select(diagnostic =>
@@ -584,8 +584,8 @@ public sealed class BasicSharedStringStorageTests
                 && symbol.Value >= start
                 && symbol.Value < end))
         {
-            native.Symbols.Should().ContainKey(label.Name);
-            native.Symbols[label.Name].Should().Be(label.Value, $"{label.Name} must retain its ROM address");
+            native.SymbolsWithHistoricalNames.Should().ContainKey(label.Name);
+            native.Symbol(label.Name).Should().Be(label.Value, $"{label.Name} must retain its ROM address");
         }
 
         native.Sections[0].Bytes.Slice(start, end - start).ToArray()
@@ -659,7 +659,7 @@ public sealed class BasicSharedStringStorageTests
         return visits;
     }
 
-    private static int Address(AssemblyResult result, string name) => checked((int)result.Symbols[name]);
+    private static int Address(AssemblyResult result, string name) => checked((int)result.Symbol(name));
 
     private static int ReadWord(byte[] memory, int address) => memory[address] | (memory[address + 1] << 8);
 

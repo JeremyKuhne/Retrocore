@@ -122,6 +122,38 @@ public sealed class AssemblyResult
     /// </summary>
     public IReadOnlyDictionary<string, AssemblySymbol> HistoricalNames { get; }
 
+    /// <summary>
+    ///  Gets the value of every name code reaches: each symbol by its name, and each name in
+    ///  <see cref="HistoricalNames"/> that no symbol has, as code resolves them.
+    /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   A lookup by a definition's old name keeps working when the definition is renamed and keeps the old name in its
+    ///   <c>;; Also:</c> section. A name that is neither a symbol nor an unambiguous historical name is not here.
+    ///  </para>
+    /// </remarks>
+    public IReadOnlyDictionary<string, long> SymbolsWithHistoricalNames =>
+        _symbolsWithHistoricalNames ??= SymbolsWithHistoricalNamesOf(Symbols, HistoricalNames);
+
+    private IReadOnlyDictionary<string, long>? _symbolsWithHistoricalNames;
+
+    private static IReadOnlyDictionary<string, long> SymbolsWithHistoricalNamesOf(
+        IReadOnlyDictionary<string, long> symbols,
+        IReadOnlyDictionary<string, AssemblySymbol> historical)
+    {
+        if (historical.Count == 0) { return symbols; }
+        Dictionary<string, long> names = [with(StringComparer.Ordinal)];
+        foreach (KeyValuePair<string, long> symbol in symbols) { names.Add(symbol.Key, symbol.Value); }
+
+        // Code reaches an old name only where no symbol has it.
+        foreach (KeyValuePair<string, AssemblySymbol> name in historical.Where(name => !names.ContainsKey(name.Key)))
+        {
+            names.Add(name.Key, name.Value.Value);
+        }
+
+        return new ReadOnlyDictionary<string, long>(names);
+    }
+
     private static IReadOnlyDictionary<string, AssemblySymbol> EmptyHistoricalNames { get; } =
         new ReadOnlyDictionary<string, AssemblySymbol>(new Dictionary<string, AssemblySymbol>());
 

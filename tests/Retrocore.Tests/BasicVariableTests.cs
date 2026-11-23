@@ -48,7 +48,7 @@ public sealed class BasicVariableTests
     {
         Apple2Machine machine = BasicMachines.BootIIe(Apple2Model.IIeEnhanced);
         foreach (string line in s_appleSoft) { BasicMachines.TypeLine(machine, line); }
-        ushort gone = (ushort)BasicMachines.AppleSoft(Apple2Model.IIeEnhanced).Symbols["GONE"];
+        ushort gone = (ushort)BasicMachines.AppleSoft(Apple2Model.IIeEnhanced).Symbol("GONE");
         DelegateBasicMemory memory = new(
             address => machine.Bus.Peek((ushort)address),
             (address, value) => machine.Bus.Write((ushort)address, value));
@@ -81,7 +81,7 @@ public sealed class BasicVariableTests
         AssemblyResult rom = BasicMachines.Level2(revision);
         Trs80Machine machine = BasicMachines.BootLevel2(rom);
         foreach (string line in s_level2) { BasicMachines.Type(machine, line + "\r"); }
-        ushort gone = (ushort)rom.Symbols["GONE"];
+        ushort gone = (ushort)rom.Symbol("GONE");
         DelegateBasicMemory memory = new(
             address => machine.Bus.Peek((ushort)address),
             (address, value) => machine.Bus.Write((ushort)address, value));

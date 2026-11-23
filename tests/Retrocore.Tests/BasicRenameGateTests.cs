@@ -218,6 +218,12 @@ public sealed partial class BasicRenameGateTests
             raw.AddRange(SplitLookup().Matches(text).Select(match =>
                 $"{file}:{text[..match.Index].Count(character => character == '\n') + 1}: {match.Value.Trim()}"));
 
+            // Predefining symbols as given, without their current names, is for the test of the roots' guard alone.
+            if (file != "BasicNativeRootSwitchTests.cs" && text.Contains("BasicNames.AsGiven(", StringComparison.Ordinal))
+            {
+                raw.Add($"{file}: BasicNames.AsGiven");
+            }
+
             string[] lines = text.Split('\n');
             for (int line = 0; line < lines.Length; line++)
             {

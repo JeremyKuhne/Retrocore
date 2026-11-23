@@ -617,7 +617,9 @@ Converted, with `; retrocore: style=strict`:
   `ProgramLine` and `FunctionDefinition`. Both vendors' Equates include it; the copies of STRSIZ and FORSIZ in the
   Equates and dispatch tables join it. The FOR frame's stack-relative offsets in `MsBasic.MemoryManagement.asm`
   (FNDFOR) and `MsBasic.Next.asm` (NEXT) are written through it (`Stack + 1 + ForFrame::STEP_SIGN,x`); those two
-  files are otherwise unconverted. No other code reaches a layout through the stack by a fixed offset.
+  files are otherwise unconverted. Their other frame arithmetic stays literal until their own steps: NEXT's
+  `adc #$04` and `adc #$06` (or the `inx` runs) to the step and the limit, its `adc #$11` that pops the frame, and
+  FOR's `FORSIZ-3`.
 - `AppleSoft.DispatchTables.asm` and `Commodore.DispatchTables.asm`: the tokens (`TOKEN_*`), the error offsets
   (`ERROR_*`) and the messages (`ErrorSuffix`, `LineNumberPrefix`, `BreakMessage`, and the PET's `ReadyMessage`),
   X4. The tables themselves (STMDSP, FUNDSP, RESLST, ERRTAB) keep their names for their own step. The Commodore
@@ -629,8 +631,10 @@ Decisions and how the table was applied:
   dropped (the Equates and dispatch tables are vendor files, so each name already resolves only in its vendor's
   builds). The table's "other names here" go in the same `Also:`, each on one definition: the location where the
   table lists it on a location and its aliases (TEMP3 on `FunctionPointer`, ARRYPT on `DestinationEnd`).
-- W2. "None found" is cited as `UNKN` (the row phase A added to the bibliography, added here the same way), so the
-  unconverted files' uses of those names still resolve. This is the owner's open choice between UNKN and no `Also:`
+- W2. A row whose documents give no name (its Documents column "none found", or only "spelling only" or "other
+  names here") cites its old name as `UNKN`, so the unconverted files' uses of it still resolve. The bibliography
+  gains UNKN, the same row the Monitor and IIeEquates conversions add on their branch, and ASRM78, as proposed in
+  step 2. This is the owner's open choice between UNKN and no `Also:`
   (the table's introduction); UNKN is the one that keeps the old names working.
 - W3. Names two definitions shared in one file are one definition with both old names (INDEX1 and INDEX are
   `Pointer1`). KIMY is dropped into `Dimensioning`'s `Also:`.
@@ -639,7 +643,8 @@ Decisions and how the table was applied:
   (the table counter, which the tables no longer use) and AppleSoft's LINWID and NCMWID (D-Q3) are named in prose
   and not defined; NCMWID's one use is written `FRETOP+1`, the same byte.
 - W5. The tokens and error offsets the PET's Equates copied for the math package (PLUSTK, MINUTK, ERROV, ERRDV0) are
-  defined once, with their tables (X4); `TOKEN_PI` stays in the Equates, since the table has no spelling for it.
+  defined once, with their tables (X4), so an assembly of the math package with the Equates but without the tables
+  must supply them, as the workspace test now does; `TOKEN_PI` stays in the Equates, since the table has no spelling for it.
   The AppleSoft error offsets are computed from their messages (`* - ERRTAB`), as the PET's were, each with an
   `.assert` of its value.
 - W6. AppleSoft's copies of the Monitor's, the IIe's and the firmware's names keep their names and definitions in
@@ -650,15 +655,22 @@ Decisions and how the table was applied:
   LOCAL_TRMPOS, VARTXT_IN_LINNUM) are renamed as drafted everywhere they are used, since an `.ifndef` default is
   not reached through `Also:`, and the tests predefine the new names. Microsoft's five keep `Also:`; the SDK's two
   (LOCAL_TRMPOS, VARTXT_IN_LINNUM) are not historical and get none. Each root asserts that none of the seven old
-  names is predefined. The switches C# sets keep their names.
-- W8. D-Q3, followed as recommended: SIZE is `CollectorOffset` (the string collector's offset; the recommendation's
-  scoped alias waits for the collector's step) and OLDOV `ArgExtension`, in both vendors; LSTPNT is `ListOffset`
-  and DECCNT `DigitCount`, as the table has them. The table's rows are updated to match.
+  names is predefined. The switches C# sets keep their names. BASIC 1's root sets three of the five itself
+  (INPUT_BUFFER_PAGE, INPUT_BUFFER_LENGTH, NULL_COMMAND), so there the Equates' definitions, and their old names,
+  are skipped; nothing uses the old names any more.
+- W8. D-Q3: SIZE is `CollectorOffset`, as recommended (the string collector's offset; the recommendation's scoped
+  alias waits for the collector's step); LSTPNT is `ListOffset` and DECCNT `DigitCount`, as the table has them.
+  OLDOV keeps the table's `FunctionJumpHigh`: the recommended `ArgExtension` rests on D-Q3's reading that FADD keeps
+  the smaller operand's extension there, but it keeps the unshifted operand's (FAC's, or zero), with the shifted
+  one's in FacExtension, and EXP keeps a rounding byte there; neither is the argument's. A new question for the
+  owner: a name for the byte's floating-point uses (`UnshiftedExtension`, or scoped aliases in FADD and EXP when
+  the math package converts). The table's rows are updated to match.
 - W9. C# lookups (X9): the debug hosts keep Microsoft's names, which reach the native builds through `Also:` and
   are the MACRO-10 builds' own names, so one lookup serves both sources. The tests likewise look the old names up
   through `BasicNames`; they move when the MACRO-10 comparisons no longer need them.
-- W10. Prose names BASIC's keywords in backticks (`FOR`, `DATA`): the statement handlers' labels have those names,
-  so the lint would otherwise ask for a link.
+- W10. Prose writes in backticks the words that are also documented labels: BASIC's keywords (`FOR`, `DATA`), whose
+  handlers have those names, and words of the messages (`ZERO`, `ERROR`, `BREAK`), so the lint does not ask for a
+  link to an unrelated routine.
 
 Checked: the full suite, the rename gate, the lint tests, and `BasicWorkspaceConversionTests`, which compares every
 old name in the converted files with the MACRO-10 overlay's value in each build, checks that a vendor's old names

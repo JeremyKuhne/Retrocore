@@ -27,6 +27,21 @@ public sealed class BasicWorkspaceConversionTests
     private static string PetFolder => Path.Join(BasicNames.Inputs, "Pet");
     private static string CommodoreFolder => Path.Join(PetFolder, "Basic");
     private static string SharedFolder => Path.Join(BasicNames.Inputs, "Microsoft6502Basic");
+    private static string Layouts => Path.Join(SharedFolder, LayoutsFile);
+
+    // The documents that give each vendor's names: a vendor's file cites only these, Microsoft's source and UNKN.
+    private static readonly string[] s_appleKeys = ["M6502", "UNKN", "ASTIL", "AS82", "ASRM78"];
+    private static readonly string[] s_commodoreKeys =
+        ["M6502", "UNKN", "CBM4S79", "K4S79", "HV1", "HV1R", "HV2", "HV4", "HV4R", "HVK4"];
+
+    // The SDK's own names, which no document and no overlay gives: the switches, the stack page and the layouts.
+    private static readonly HashSet<string> s_sdkNames =
+    [
+        "Stack", "Variable", "ArrayHeader", "StringDescriptor", "ForFrame", "GosubFrame", "OperatorEntry",
+        "ProgramLine", "FunctionDefinition", "TERMINAL_FIRST", "FULL_STACK_TOP", "STACK_RESERVE_19", "LOCAL_TERMINAL_POSITION", "LINE_WIDTH_STORAGE",
+        "DISK_STATUS_STRING", "VARIABLE_LIST_IN_LINE_NUMBER", "CLOCK_IN_PAGE2", "STATUS_IN_PAGE2", "RND_TIMER_9044",
+        "ERROR_PADDING5", "EXTENDED_DISK_VECTORS"
+    ];
 
     private static readonly Apple2Model[] s_appleModels =
         [Apple2Model.IIPlus, Apple2Model.IIe, Apple2Model.IIeEnhanced];
@@ -49,7 +64,7 @@ public sealed class BasicWorkspaceConversionTests
     {
         AssemblyResult native = AssembleAppleSoft(model);
         AssemblyResult legacy = SdkModules.AssembleAppleSoft(Path.Join(AppleFolder, "applesoft.mac"), model);
-        CheckAgainstOverlay(native, legacy, Converted(AppleFolder, s_appleFiles), minimum: 200);
+        CheckAgainstOverlay(native, legacy, [.. Converted(AppleFolder, s_appleFiles), Layouts], minimum: 200);
     }
 
     /// <summary>
@@ -68,7 +83,7 @@ public sealed class BasicWorkspaceConversionTests
     {
         AssemblyResult native = PetSdkModules.AssembleBasic(PetFolder, model, original);
         AssemblyResult legacy = PetLegacyBasic.Assemble(PetFolder, model, original);
-        CheckAgainstOverlay(native, legacy, Converted(CommodoreFolder, s_commodoreFiles), minimum: 150);
+        CheckAgainstOverlay(native, legacy, [.. Converted(CommodoreFolder, s_commodoreFiles), Layouts], minimum: 150);
     }
 
     /// <summary>
@@ -118,8 +133,8 @@ public sealed class BasicWorkspaceConversionTests
     }
 
     /// <summary>
-    ///  Every old name in the converted files cites at least one document, and every document is in the
-    ///  bibliography.
+    ///  Every old name in the converted files cites at least one document, every document is in the bibliography,
+    ///  and a vendor's file cites only that vendor's documents and Microsoft's.
     /// </summary>
     [TestMethod]
     public void OldNamesCiteDocumentsInTheBibliography()
@@ -133,9 +148,20 @@ public sealed class BasicWorkspaceConversionTests
         int count = 0;
         foreach (string path in files)
         {
+            // A vendor's file cites its vendor's documents; the shared layouts, Microsoft's (checked above).
+            string name = Path.GetFileName(path);
+            string[]? vendor = null;
+            if (s_appleFiles.Contains(name)) { vendor = s_appleKeys; }
+            if (s_commodoreFiles.Contains(name)) { vendor = s_commodoreKeys; }
+
             foreach (DocumentationAlso also in OldNamesIn(Parse(path)))
             {
                 count++;
+                if (vendor is not null)
+                {
+                    also.Sources.Should().BeSubsetOf(vendor, $"{also.Name} in {name} is its vendor's name");
+                }
+
                 also.Sources.Should().NotBeEmpty($"{also.Name} in {Path.GetFileName(path)} must cite its documents");
                 foreach (string key in also.Sources)
                 {
@@ -167,6 +193,21 @@ public sealed class BasicWorkspaceConversionTests
         }
 
         compared.Should().BeGreaterThan(minimum, "the converted files rename the overlay's workspace names");
+
+        // Every definition the converted files make reaches the overlay by its name or an old name, so an old name
+        // dropped from an Also: section, which code may not use, still fails.
+        IEnumerable<AssemblySymbol> definitions = native.SymbolDefinitions.Where(symbol =>
+            InFiles(symbol, files)
+                && !symbol.Name.Contains("::", StringComparison.Ordinal)
+                && !s_sdkNames.Contains(symbol.Name));
+
+        foreach (AssemblySymbol definition in definitions)
+        {
+            legacy.TryGetCounterpart(native, definition.Name, out long expected).Should().BeTrue(
+                $"{definition.Name} must keep the name the overlay gives it, as its own or in its Also: section");
+
+            definition.Value.Should().Be(expected, $"{definition.Name} must keep the overlay's value");
+        }
     }
 
     private static HashSet<string> OldNames(IEnumerable<AssemblyResult> builds, string[] files) =>

@@ -1,4 +1,6 @@
 ; retrocore: style=strict
+; Derived from Microsoft's BASIC for 6502 (m6502.asm, MIT license; see LICENSE in this folder).
+
 ;; MICROSOFT 6502 BASIC: MEMORY LAYOUTS
 ;;
 ;; The layouts of the records BASIC keeps in memory and on the stack, which AppleSoft and every PET build share:
@@ -50,7 +52,7 @@ DESCRIPTOR_SIZE = .sizeof(StringDescriptor)
 .struct ForFrame
     TOKEN .byte ;; The `FOR` token, which marks the frame.
     VARIABLE .word ;; The address of the loop variable's value.
-    STEP .res 5 ;; The step, a packed real.
+    STEP .res 5 ;; The step in packed order, its sign bit left as the mantissa's normalized bit (see <STEP_SIGN>).
     STEP_SIGN .byte ;; The step's sign: 1, 0 or $FF.
     LIMIT .res 5 ;; The limit, a packed real.
     LINE .word ;; The line number of the `FOR` statement.
@@ -66,7 +68,7 @@ FOR_FRAME_SIZE = .sizeof(ForFrame)
 .struct GosubFrame
     TOKEN .byte ;; The `GOSUB` token, which marks the frame.
     LINE .word ;; The line number of the `GOSUB` statement.
-    TEXT_POINTER .word ;; The text pointer before the target's line number.
+    TEXT_POINTER .word ;; The text pointer at the target's line number, which `RETURN` skips.
 .endstruct
 
 ;; An entry of the operator table: what the expression evaluator needs to apply a binary operator.

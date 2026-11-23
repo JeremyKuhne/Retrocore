@@ -280,8 +280,8 @@ RESLST:
     .endif
     .byte $00
 
-;; Error messages addressed by the ERR constants' byte offsets.
-;; Bit 7 on the last character ends each message; <ERROR> appends <ERR>.
+;; Error messages addressed by the ERROR_* constants' byte offsets.
+;; Bit 7 on the last character ends each message; <ERROR> appends <ErrorSuffix>.
 ERRTAB:
     ;; Offset of `NEXT` WITHOUT `FOR` in <ERRTAB>.
     ;; Also: ERRNF (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)

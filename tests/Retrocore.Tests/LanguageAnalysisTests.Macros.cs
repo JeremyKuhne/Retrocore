@@ -404,60 +404,6 @@ public sealed partial class LanguageAnalysisTests
         }
     }
 
-    // A file that gives COMBYTE itself, which the SDK's AppleSoft also gives, and has an unrelated error.
-    private const string ErrorProbe = """
-        ; retrocore: style=strict
-        ;; A probe.
-
-        .cpu Mos6502
-        .org $0300
-
-        ;; Requires a comma and reads a byte.
-        ;; Also: COMBYTE (A2RM78)
-        COMBYT:
-            rts
-
-        ;; Reads through the old name.
-        Echo:
-            jsr COMBYTE
-            NOTANINSTRUCTION
-            rts
-        """;
-
-    /// <summary>
-    ///  A file's own old name keeps its hint over an SDK module's of the same spelling while the file has an error,
-    ///  when its assembly stops short of the definitions: the definitions its text makes count then.
-    /// </summary>
-    /// <returns>The test.</returns>
-    [TestMethod]
-    public async Task OwnOldNamesHintWhileTheFileHasAnError()
-    {
-        string folder = Directory.CreateTempSubdirectory("retrocore-macros").FullName;
-        try
-        {
-            string text = ErrorProbe.ReplaceLineEndings("\n");
-            string probe = Directory.CreateDirectory(Path.Join(folder, "probe")).FullName;
-            string path = Path.GetFullPath(Path.Join(probe, "Probe.asm"));
-            File.WriteAllText(path, text);
-            File.WriteAllText(Path.Join(probe, "Bibliography.md"), MemberBibliography);
-            RecordingLanguageClient client = new();
-            LanguageWorkspace workspace = new(client);
-            workspace.Update(path, text);
-            DocumentUri uri = DocumentUri.FromFileSystemPath(path);
-
-            List<Diagnostic> published = await client.Wait(
-                uri,
-                diagnostics => diagnostics.Any(diagnostic => diagnostic.Code == DocumentationRules.HistoricalName));
-
-            published.Should().Contain(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error, "the probe has an error");
-            published.Should().Contain(diagnostic => diagnostic.Message == "COMBYTE is a historical name of COMBYT.");
-        }
-        finally
-        {
-            Directory.Delete(folder, recursive: true);
-        }
-    }
-
     /// <summary>
     ///  While the file has an error, a name it gives only in a branch its build leaves out still gets no hint naming
     ///  that branch's definition: the branch's condition decides, as the assembly cannot.

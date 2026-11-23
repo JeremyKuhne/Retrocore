@@ -778,7 +778,7 @@ Decisions and how the table was applied:
   each with its old name in `Also:`. A label that only some builds define (FN's UndefinedFunction) is named in the
   routine's prose instead, since an `Entry:` item must exist in every build.
 - S2. The character reader's template is `.proc CharacterReaderTemplate` with `GetCurrent` (CHZGOT) and `Done`
-  (CHZRTS) (B1-Q3). The lister is one `.proc Statements::List`, opened in `ListRange` and closed in `ListTokens`
+  (CHZRTS) (B1-Q3). The lister is one `.proc List` in `Statements`, opened in `ListRange` and closed in `ListTokens`
   (B1-Q4). BLTU is `MoveRangeUp`, with `MoveRangeUp::Unchecked` (B1-Q5).
 - S3. B1-Q6's quirk is documented on `ReadLineNumber` and `Statements::On::RequireGoto`, and
   `ReadLineNumberSendsAGotoTokenHighByteIntoOn` pins it: in AppleSoft 437760 and 440319 reach ON's loop, 440320 is a
@@ -830,33 +830,37 @@ Decisions and how the table was applied:
     regions hold no lister, leaves them out.
   - The editor probe in `LanguageAnalysisTests.Macros` gives COMBYTE as a user file's own old name. Once the SDK gave
     the same name, the editor's merge of the file's and the SDK modules' `Also:` names cancelled it, and the file lost
-    its hint and quick fix. The file's own name now takes precedence only where its build gives it, and only for the
-    definition it gives it to (`LanguageWorkspace.HistoricalNames`): when the file assembles, the assembler's own
-    table of historical names decides; while the file has errors there is no such table, so only a definition the
-    text makes outside any condition and macro body counts. Anywhere else the merge behaves as before. Each case has a
-    probe that fails without its part: the unchanged COMBYTE probe, `OwnOldNamesHintWhileTheFileHasAnError`,
-    `OldNamesInAnOmittedBranchDoNotHint` (with and without an error), `OldNamesOfTheOtherBranchDoNotHint` (a label
-    documented in both branches), `OldNamesUnderConditionsTheEditorCannotReadDoNotHint` (an `.ifdef` of a later
-    symbol, a computed condition) and `OldNamesHintOnlyTheDefinitionTheAssemblerGivesThemTo` (a root routine sharing
-    its name with a macro's expansion, a macro expanded twice). The
-    doc set's `FindAlso` returns a single topic without its per-build filter, so a file whose other branch gives a
-    name no SDK module gives still gets a hint naming the label, and a macro-body name whose label shares a root
-    routine's name gets none at all (the doc set names the expansion's topic by the root's name); both predate this
-    step and are left for a change of their own.
+    its hint and quick fix. When the file assembles, its own name now takes precedence where the assembler's own
+    table of historical names gives it to the definition the hint would name (`LanguageWorkspace.HistoricalNames`);
+    anywhere else, and whenever the file has errors, the merge behaves as before. The text alone cannot say what the
+    assembler would make of conditions, repeats, macros and scoped includes, and every rule the reviews tried for
+    files with errors gave some case a hint naming the wrong definition, so while a file has errors its own name that
+    an SDK module also gives loses its hint until the errors are fixed. Probes that fail without the change: the
+    unchanged COMBYTE probe, `OldNamesInAnOmittedBranchDoNotHint` (with and without an error),
+    `OldNamesOfTheOtherBranchDoNotHint` (a label documented in both branches),
+    `OldNamesUnderConditionsTheEditorCannotReadDoNotHint` (an `.ifdef` of a later symbol, a computed condition),
+    `OldNamesHintOnlyTheDefinitionTheAssemblerGivesThemTo` (a root routine sharing its name with a macro's expansion,
+    a macro expanded twice) and `OldNamesOfAMacroDoNotHintWhileTheFileHasAnError`. The doc set's `FindAlso` returns a
+    single topic without its per-build filter, so a file whose other branch gives a name no SDK module gives still
+    gets a hint naming the label, and a macro-body name whose label shares a root routine's name gets none at all
+    (the doc set names the expansion's topic by the root's name); both predate this step and are left for a change
+    of their own.
 - S11. Two rules the owner settled on the Monitor's PR, which apply here from this step on:
   - D5, narrowed: a mid-routine `.if` shows how builds differ, better than whole per-build routines; a routine's
     contract holds in every build, or says which build differs. The statement modules already show their builds'
     differences this way, inside the shared macros.
   - Lineage citations: a definition that descends through a vendor's builds cites every document of that line whose
-    listing names it, not only its own build's. Within the PET line, checked against mist64/cbmsrc, that adds CBM4S79
-    to the kernal and disk vectors and the RND timer in `Commodore.Equates.asm` (from the workspace step), and HV1
-    and HV1R to BUFLEN and NUMLEV; the statement modules' and the historical names' citations already followed it.
-    BASIC 1's ZERO is a definition of its own in `MsBasic.VariableLookup.asm` (M4), whose step will cite the line on
-    it. The AppleSoft documents (ASTIL, AS82) are not available here to check. One test rule would forbid a
-    lineage-only alias: a Commodore alias without M6502 must cite one of its own build's documents
-    (`BasicAttribution.PetKeys`). No alias needs that yet; changing the rule is a question for the owner.
+    listing names it, not only its own build's. Within the PET line, checked against mist64/cbmsrc, that adds CBM4S79 to
+    the kernal and disk vectors and the RND timer in `Commodore.Equates.asm` (from the workspace step), K4S79 to TIL,
+    and HV1 and HV1R to BUFLEN and NUMLEV, and gives the jiffy clock and I/O status the BASIC documents' CTIMR and CSTAT
+    (the kernal's TIME and SATUS are in prose: the builds define both names themselves); the statement modules' and the
+    historical names' citations already followed it. BASIC 1's ZERO is a definition of its own in
+    `MsBasic.VariableLookup.asm` (M4), whose step will cite the line on it. The AppleSoft documents (ASTIL, AS82) are
+    not available here to check. One test rule would forbid a lineage-only alias: a Commodore alias without M6502 must
+    cite one of its own build's documents (`BasicAttribution.PetKeys`). No alias needs that yet; changing the rule is a
+    question for the owner.
 
-Checked: the full suite (3,915 passed, none failed; 665 skipped, the ROM-dump comparisons without the dumps), the rename
+Checked: the full suite (3,914 passed, none failed; 665 skipped, the ROM-dump comparisons without the dumps), the rename
 gate, the lint tests, and `BasicStatementsConversionTests`, which compares every old name in the fifteen files and the
 vendors' historical names with the MACRO-10 overlay's value in each of the eight builds (about 150 per build), checks
 that each definition reaches the overlay by its name or an old name, that a vendor's names resolve only in its builds

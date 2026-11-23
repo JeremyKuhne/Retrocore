@@ -3,14 +3,14 @@
 ;; This part follows INPUT and READ in AppleSoft.InputOutput.asm. NEXT belongs with FOR, whose stack
 ;; frames are created in AppleSoft.ControlFlow.asm; it is here because the ROM places it immediately before
 ;; the expression evaluator. The evaluator saves pending operators and operands on the machine stack.
-;; <OPTAB> gives each operator its precedence and dispatch address. Relational operators accumulate a mask,
+;; <OperatorTable> gives each operator its precedence and dispatch address. Relational operators accumulate a mask,
 ;; and string concatenation returns to the evaluator through <TSTOP>.
 
 .include "../Microsoft6502Basic/MsBasic.Next.asm"
 .include "../Microsoft6502Basic/MsBasic.ExpressionCore.asm"
 .include "../Microsoft6502Basic/MsBasic.OperandEvaluation.asm"
 
-    NEXT_ENTRIES 1, NXTCO1
+    NextEntries 1, NXTCO1
     EXPRESSION_CORE 0
     OPERAND_EVALUATION 0, 0, QSTAT2
 

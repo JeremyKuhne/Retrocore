@@ -609,7 +609,7 @@ public sealed class BasicSharedVariableLookupTests
             .include "MsBasic.IntegerConversion.asm"
             .org ${legacy.Symbol("PTRGET"):X4}
                 VARIABLE_NAME {Flag(features.FixedVectors)}, ${features.VectorByte:X2}, {Flag(features.RejectAnyFlag)}, {Flag(features.ExistingArrays)}, {Flag(features.ClearWithY)}, {Flag(features.LongFound)}
-                LETTER_TEST
+                LetterTest
                 SIMPLE_VARIABLE_LOOKUP {Flag(features.CheckCallerHigh)}, {Flag(features.InlineZero)}, {Flag(features.UseSimzer)}, {Flag(features.ClockNames)}, {Flag(features.StatusName)}, {Flag(features.DiskNames)}, {Flag(features.LinkedArrays)}, {Flag(features.ArrayEntryAlias)}
             {conversion}
                 {(features.ExistingArrays ? "EXISTING_ARRAY_ENTRY" : "")}

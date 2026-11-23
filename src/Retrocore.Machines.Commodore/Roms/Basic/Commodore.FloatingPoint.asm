@@ -41,7 +41,7 @@
 .if WAIT_EASTER_EGG
 ;; Handles BASIC 2's WAIT with no second mask, including its hidden message.
 ;;
-;; For an address other than $1966 (decimal 6502), it continues the plain wait at <STORDO> with a zero second mask.
+;; For an address other than $1966 (decimal 6502), it continues the plain wait at <Statements::Wait::StoreMask> with a zero second mask.
 ;; For $1966, it writes "MICROSOFT!" as PET screen codes to successive addresses from $8000, repeating it the number
 ;; of times in the first mask. A zero count wraps to 256 repetitions, writing through $89FF. This path changes the
 ;; saved address and decrements the first mask to zero before returning.

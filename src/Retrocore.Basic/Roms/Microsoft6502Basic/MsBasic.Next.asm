@@ -1,138 +1,179 @@
+; retrocore: style=strict
 ; Derived from Microsoft's BASIC for 6502 (m6502.asm, MIT license; see LICENSE in this folder).
+
+.include "MsBasic.Families.asm"
+
 ; MICROSOFT 6502 BASIC: NEXT AND RESULT-TYPE CHECKS
 ;
-; NEXT_ENTRIES countedStack, nextStatement
+; NextEntries countedStack, nextStatement
 ;   countedStack = 1 advances X through the frame; 0 calculates the offsets in A.
-;   nextStatement is the platform's continuation after <NEXT>.
+;   nextStatement is the platform's continuation after <Statements::Next>.
 ; The frame holds a five-byte step, its sign and a five-byte packed limit.
 
-.macro NEXT_ENTRIES countedStack, nextStatement
+.macro NextEntries countedStack, nextStatement
     .assert countedStack = 0 || countedStack = 1, "countedStack must be 0 or 1."
 
-;; Executes NEXT, optionally naming a FOR variable and optionally continuing with a comma-separated list.
-;;
-;; <FNDFOR> locates the frame. The step is added to the variable and compared with the limit using the
-;; step's sign; on continuation, the frame's line and text pointers restore the loop body. Otherwise the
-;; frame is removed. An unmatched variable raises NEXT WITHOUT FOR.
-NEXT:
-    bne GETFOR
-    ldy #$00
-    beq STXFOR
+    .scope Statements continued
 
-GETFOR:
+    ;; Executes NEXT, optionally naming a FOR variable and optionally continuing with a comma-separated list.
+    ;;
+    ;; <FindForFrame> locates the frame. The step is added to the variable and compared with the limit using the
+    ;; step's sign; on continuation, the frame's line and text pointers restore the loop body. Otherwise the
+    ;; frame is removed. An unmatched variable raises NEXT WITHOUT FOR.
+    ;; Entry:
+    ;;   ToError = Relays to <RequireType::ToError>; READ's input path (VariableInput) branches here too
+    ;; Also: NEXT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    .proc Next
+    bne WithVariable
+    ldy #$00
+    beq SearchFrame
+
+;; NEXT names a variable: PTRGET; the comma path jsr's here for the next variable.
+;; Also: GETFOR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+WithVariable:
     jsr PTRGET
 
-STXFOR:
-    sta FORPNT
-    sty FORPNT+1
-    jsr FNDFOR
-    beq HAVFOR
-    ldx #<ERRNF
+;; <AssignedVariable> = A/Y (Y = 0: any), <FindForFrame>; no frame: NEXT WITHOUT FOR.
+;; Also: STXFOR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+SearchFrame:
+    sta AssignedVariable
+    sty AssignedVariable+1
+    jsr FindForFrame
+    beq AddStep
+    ldx #<ERROR_NEXT_WITHOUT_FOR
 
-ERRGO5:
-    beq ERRGO4
+;; Relays to <RequireType::ToError>; READ's input path (VariableInput) branches here too.
+;; Also: ERRGO5 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+ToError:
+    beq RequireType::ToError
 
-HAVFOR:
+;; Sets the stack to the frame, adds ForFrame::STEP to the variable, stores, compares with ForFrame::LIMIT signed by
+;; STEP_SIGN.
+;; Also: HAVFOR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+AddStep:
     txs
-.if countedStack
-    inx
-    inx
-    inx
-    inx
-    txa
-    inx
-    inx
-    inx
-    inx
-    inx
-    inx
-    stx INDEX2
-.else
-    txa
-    clc
-    adc #$04
-    pha
-    adc #$06
-    sta INDEX2
-    pla
-.endif
+    .if countedStack
+        inx
+        inx
+        inx
+        inx
+        txa
+        inx
+        inx
+        inx
+        inx
+        inx
+        inx
+        stx Pointer2
+    .else
+        txa
+        clc
+        adc #$04
+        pha
+        adc #$06
+        sta Pointer2
+        pla
+    .endif
     ldy #$01
-    jsr MOVFM
+    jsr Float::LoadFac
     tsx
     lda Stack + 1 + ForFrame::STEP_SIGN,x
-    sta FACSGN
-    lda FORPNT
-    ldy FORPNT+1
-    jsr FADD
-    jsr MOVVF
+    sta FacSign
+    lda AssignedVariable
+    ldy AssignedVariable+1
+    jsr Float::AddPacked
+    jsr Float::StoreFacInVariable
     ldy #$01
-    jsr FCOMPN
+    jsr Float::CompareAtPointer2
     tsx
     sec
     sbc Stack + 1 + ForFrame::STEP_SIGN,x
-    beq LOOPDN
+    beq EndLoop
     lda Stack + 1 + ForFrame::LINE,x
-    sta CURLIN
+    sta CurrentLine
     lda Stack + 1 + ForFrame::LINE+1,x
-    sta CURLIN+1
+    sta CurrentLine+1
     lda Stack + 1 + ForFrame::TEXT_POINTER,x
-    sta TXTPTR
+    sta TextPointer
     lda Stack + 1 + ForFrame::TEXT_POINTER_HIGH,x
-    sta TXTPTR+1
+    sta TextPointer+1
 
-NEWSGO:
+;; Jmp to the continuation.
+;; Also: NEWSGO (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+ToNextStatement:
     jmp nextStatement
 
-LOOPDN:
+;; Removes the frame (adds FOR_FRAME_SIZE); a comma continues with the next variable.
+;; Also: LOOPDN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+EndLoop:
     txa
     adc #$11
     tax
     txs
-    jsr CHRGOT
+    jsr GetCurrentCharacter
     cmp #$2C
-    bne NEWSGO
-    jsr CHRGET
-    jsr GETFOR
+    bne ToNextStatement
+    jsr GetNextCharacter
+    jsr WithVariable
+    .endproc
+    .endscope
 
-;; Evaluates an expression and requires its result to be numeric.
-;; In: TXTPTR = first character of the expression
-;; Out: FAC = numeric result, TXTPTR = terminating character
-;; Errors: TYPE MISMATCH for a string
-FRMNUM:
+    ;; Evaluates an expression and requires its result to be numeric.
+    ;; In: TextPointer = first character of the expression
+    ;; Out: Fac = numeric result, TextPointer = terminating character
+    ;; Errors: TYPE MISMATCH for a string
+    ;; Also: FRMNUM (M6502, ASTIL, CBM4S79, K4S79, HV1, HV1R, HV2, HV4, HV4R, HVK4)
+    .proc EvaluateNumber
     jsr FRMEVL
+    .endproc
 
-;; Requires the current expression result to be numeric.
-;; In: VALTYP = result type
-;; Errors: TYPE MISMATCH for a string
-CHKNUM:
+    ;; Requires the current expression result to be numeric.
+    ;; In: ValueType = result type
+    ;; Errors: TYPE MISMATCH for a string
+    ;; Also: CHKNUM (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    .proc RequireNumber
     clc
     .byte $24                   ; BIT zero-page skips the next byte
+    .endproc
 
-;; Requires the current expression result to be a string.
-;; In: VALTYP = result type
-;; Errors: TYPE MISMATCH for a number
-CHKSTR:
+    ;; Requires the current expression result to be a string.
+    ;; In: ValueType = result type
+    ;; Errors: TYPE MISMATCH for a number
+    ;; Also: CHKSTR (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    .proc RequireString
     sec
+    .endproc
 
-;; Checks the result type selected by carry without changing <VALTYP>.
-;; In: carry = set for string or clear for numeric, VALTYP = result type
-;; Out: carry = selected type on success
-;; Errors: TYPE MISMATCH if the types differ
-CHKVAL:
-    bit VALTYP
-    bmi DOCSTR
-    bcs CHKERR
+    ;; Checks the result type selected by carry without changing <ValueType>.
+    ;; In: carry = set for string or clear for numeric, ValueType = result type
+    ;; Out: carry = selected type on success
+    ;; Errors: TYPE MISMATCH if the types differ
+    ;; Entry:
+    ;;   ToError = Jmp ERROR; Statements::Next::ToError relays here
+    ;; Also: CHKVAL (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    .proc RequireType
+    bit ValueType
+    bmi IsString
+    bcs Mismatch
 
-CHKOK:
+;; The rts.
+;; Also: CHKOK (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+Done:
     rts
 
-DOCSTR:
-    bcs CHKOK
+;; A string result: succeeds only with carry set.
+;; Also: DOCSTR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+IsString:
+    bcs Done
 
 ;; Reports TYPE MISMATCH: loads its error offset into X and jumps on to the error handler.
-CHKERR:
-    ldx #<ERRTM
+;; Also: CHKERR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+Mismatch:
+    ldx #<ERROR_TYPE_MISMATCH
 
-ERRGO4:
+;; Jmp ERROR; Statements::Next::ToError relays here.
+;; Also: ERRGO4 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+ToError:
     jmp ERROR
+    .endproc
 .endmacro

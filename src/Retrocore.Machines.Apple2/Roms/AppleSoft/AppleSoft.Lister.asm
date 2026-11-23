@@ -5,11 +5,11 @@
 
 .include "../Microsoft6502Basic/MsBasic.Lister.asm"
 
-    LIST_RANGE 1, STKRTS
+    ListRange 1, STKRTS
 .if ENHNCD
-    LIST_LINES 0, 0, 2, SPCLIN, 1, NXTCO1
+    ListLines 0, 0, 2, SPCLIN, 1, NXTCO1
 .else
-    LIST_LINES 0, 0, 1, LINPRT, 1, NXTCO1
+    ListLines 0, 0, 1, LINPRT, 1, NXTCO1
 .endif
-    LIST_TABLE_NEXT
-    LIST_TOKENS 2, 0, 0, 1
+    ListNextTableByte
+    ListTokens 2, 0, 0, 1

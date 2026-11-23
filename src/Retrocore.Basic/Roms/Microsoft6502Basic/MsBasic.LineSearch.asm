@@ -1,46 +1,64 @@
+; retrocore: style=strict
 ; Derived from Microsoft's BASIC for 6502 (m6502.asm, MIT license; see LICENSE in this folder).
+
+.include "MsBasic.Families.asm"
+
 ; MICROSOFT 6502 BASIC: PROGRAM LINE SEARCH
 
-;; Finds the stored program line equal to or immediately after <LINNUM>.
-;; In: LINNUM = line number to find
-;; Out: LOWTR = link field of the matching or following line or the end marker, carry = set for an exact match
-;; Entry: FNDLNC = searches from the line at A (low) and X (high)
-FNDLIN:
-    lda TXTTAB
-    ldx TXTTAB+1
+;; Finds the stored program line equal to or immediately after <LineNumber>.
+;; In: LineNumber = line number to find
+;; Out: SourceStart = link field of the matching or following line or the end marker, carry = set for an exact match
+;; Entry:
+;;   FromAddress = searches from the line at A (low) and X (high)
+;;   Done = The rts; Statements::New and List's range parsing branch here for a syntax error return
+;; Also: FNDLIN (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+.proc FindLine
+    lda ProgramStart
+    ldx ProgramStart+1
 
-FNDLNC:
+;; Searches from the line at A (low) and X (high).
+;; Also: FNDLNC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+FromAddress:
     ldy #$01
-    sta LOWTR
-    stx LOWTR+1
-    lda (LOWTR),y
-    beq FLINRT
+    sta SourceStart
+    stx SourceStart+1
+    lda (SourceStart),y
+    beq NotFound
     iny
     iny
-    lda LINNUM+1
-    cmp (LOWTR),y
-    bcc FLNRTS
-    beq FNDLO1
+    lda LineNumber+1
+    cmp (SourceStart),y
+    bcc Done
+    beq CompareLow
     dey
-    bne AFFRTS
+    bne NextLine
 
-FNDLO1:
-    lda LINNUM
+;; High bytes equal: compares the low bytes.
+;; Also: FNDLO1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+CompareLow:
+    lda LineNumber
     dey
-    cmp (LOWTR),y
-    bcc FLNRTS
-    beq FLNRTS
+    cmp (SourceStart),y
+    bcc Done
+    beq Done
 
-AFFRTS:
+;; Loads the link into A/X and loops.
+;; Also: AFFRTS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+NextLine:
     dey
-    lda (LOWTR),y
+    lda (SourceStart),y
     tax
     dey
-    lda (LOWTR),y
-    bcs FNDLNC
+    lda (SourceStart),y
+    bcs FromAddress
 
-FLINRT:
+;; Zero link (end of program): clears carry.
+;; Also: FLINRT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+NotFound:
     clc
 
-FLNRTS:
+;; The rts; Statements::New and List's range parsing branch here for a syntax error return.
+;; Also: FLNRTS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+Done:
     rts
+.endproc

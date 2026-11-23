@@ -113,10 +113,10 @@ ATNFIX:
     .word RIGHT
     .word MID
 
-    OPERATOR_TABLE 0, 0, ANDOP
+    OperatorEntries 0, 0, ANDOP
 
 ;; Reserved words in token order; bit 7 marks the last character of each spelling.
-;; <CRUNCH> searches this list and <LIST> expands tokens from it. A zero byte ends the list.
+;; <CRUNCH> searches this list and <Statements::List> expands tokens from it. A zero byte ends the list.
 RESLST:
     .byte "EN", 'D' | $80
     ;; The token of `END`, the first statement token.

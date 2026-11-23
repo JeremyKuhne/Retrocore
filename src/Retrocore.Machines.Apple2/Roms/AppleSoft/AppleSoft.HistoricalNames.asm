@@ -39,8 +39,16 @@ LogPolynomial = Float::LogPolynomial
 ;; Also: BILLION (AS82)
 Billion = Float::Billion
 
-;; Inherit: <CHKERR>
+;; Inherit: <RequireType::Mismatch>
 ;; Also: MISMTCH (AS82)
-Mismatch = CHKERR
+Mismatch = RequireType::Mismatch
+
+;; Inherit: <Statements::New>
+;; Also: NEW (ASTIL, AS82)
+New = Statements::New
+
+;; Inherit: <::ReadCommaAndByte>
+;; Also: COMBYTE (ASTIL, AS82)
+ReadCommaAndByte = ::ReadCommaAndByte
 
 .endscope

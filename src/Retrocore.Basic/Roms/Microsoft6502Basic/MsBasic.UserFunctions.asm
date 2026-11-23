@@ -1,4 +1,8 @@
+; retrocore: style=strict
 ; Derived from Microsoft's BASIC for 6502 (m6502.asm, MIT license; see LICENSE in this folder).
+
+.include "MsBasic.Families.asm"
+
 ; MICROSOFT 6502 BASIC: USER-DEFINED FUNCTIONS
 ;
 ; A DEF FN entry is a scalar-variable entry whose name has the function bit set.
@@ -6,158 +10,184 @@
 
 ;; Emits DEF and FN with either undefined-function check.
 ;; Parameters: earlyCheck = 1 to test the low byte of the argument address, 0 to test its high byte
-.macro USER_FUNCTIONS earlyCheck
+.macro UserFunctions earlyCheck
     .assert earlyCheck = 0 || earlyCheck = 1, "earlyCheck must be 0 or 1."
 
-;; Rejects a statement in direct mode.
-;; Errors: ILLEGAL DIRECT when no program line is executing
-ERRDIR:
-    ldx CURLIN+1
+    ;; Rejects a statement in direct mode.
+    ;; Errors: ILLEGAL DIRECT when no program line is executing
+    ;; Entry:
+    ;;   UndefinedFunction = X = UNDEF'D FUNCTION, skipped by ILLEGAL DIRECT's BIT; FN enters here
+    ;;   ToError = Jmp ERROR; BASIC 1's FN enters here
+    ;; Also: ERRDIR (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    .proc RejectDirectMode
+    ldx CurrentLine+1
     inx
     bne DIMRTS
-    ldx #<ERRID
-.if earlyCheck = 0
-    .byte $2C                   ; BIT absolute skips the next two bytes
+    ldx #<ERROR_ILLEGAL_DIRECT
+    .if earlyCheck = 0
+        .byte $2C                   ; BIT absolute skips the next two bytes
 
 ;; Reports a call to a function with no definition.
-ERRGUF:
-    ldx #<ERRUF
-.endif
+;; Also: ERRGUF (M6502, CBM4S79, HV2, HV4, HV4R)
+UndefinedFunction:
+        ldx #<ERROR_UNDEFINED_FUNCTION
+    .endif
 
-ERRGO1:
+;; Jmp ERROR; BASIC 1's FN enters here.
+;; Also: ERRGO1 (M6502, HV1, HV1R)
+ToError:
     jmp ERROR
+    .endproc
 
-;; Defines a single-argument numeric function from the rest of the current program statement.
-;;
-;; The function entry records the expression's text pointer and the argument variable's value pointer.
-;; The formula is evaluated when called, not when defined.
-;; Errors: ILLEGAL DIRECT in direct mode, TYPE MISMATCH for a string name or argument
-DEF:
-    jsr GETFNM
-    jsr ERRDIR
+    .scope Statements continued
+
+    ;; Defines a single-argument numeric function from the rest of the current program statement.
+    ;;
+    ;; The function entry records the expression's text pointer and the argument variable's value pointer.
+    ;; The formula is evaluated when called, not when defined.
+    ;; Errors: ILLEGAL DIRECT in direct mode, TYPE MISMATCH for a string name or argument
+    ;; Also: DEF (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    .proc Def
+    jsr ReadFunctionName
+    jsr RejectDirectMode
     jsr CHKOPN
     lda #$80
-    sta SUBFLG
+    sta SubscriptMode
     jsr PTRGET
-    jsr CHKNUM
+    jsr RequireNumber
     jsr CHKCLS
-    lda #<EQULTK
+    lda #<TOKEN_EQUAL
     jsr SYNCHR
     pha
-    lda VARPNT+1
+    lda VariablePointer+1
     pha
-    lda VARPNT
+    lda VariablePointer
     pha
-    lda TXTPTR+1
+    lda TextPointer+1
     pha
-    lda TXTPTR
+    lda TextPointer
     pha
-    jsr DATA
-    jmp DEFFIN
+    jsr Data
+    jmp PopToFunctionPointer
+    .endproc
+    .endscope
 
-;; Parses FN and its name, finding or creating the function's scalar entry.
-;; Out: DEFPNT = function entry value address
-GETFNM:
-    lda #<FNTK
+    ;; Parses FN and its name, finding or creating the function's scalar entry.
+    ;; Out: FunctionPointer = function entry value address
+    ;; Also: GETFNM (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    .proc ReadFunctionName
+    lda #<TOKEN_FN
     jsr SYNCHR
     ora #$80
-    sta SUBFLG
+    sta SubscriptMode
     jsr PTRGT2
-    sta DEFPNT
-    sty DEFPNT+1
-    jmp CHKNUM
+    sta FunctionPointer
+    sty FunctionPointer+1
+    jmp RequireNumber
+    .endproc
 
-;; Calls a user-defined function with a numeric argument.
-;;
-;; The argument variable's old value and the caller's text pointer are saved on the stack. The function
-;; expression is evaluated with the new argument, then both are restored. An undefined function is an error.
-;; The early check also rejects a defined argument whose address has a zero low byte.
-;; Out: FAC = function result
-FNDOER:
-    jsr GETFNM
-    lda DEFPNT+1
+    .scope Functions continued
+
+    ;; Calls a user-defined function with a numeric argument.
+    ;;
+    ;; The argument variable's old value and the caller's text pointer are saved on the stack. The function
+    ;; expression is evaluated with the new argument, then both are restored. An undefined function is an error.
+    ;; The early check also rejects a defined argument whose address has a zero low byte.
+    ;; Out: Fac = function result
+    ;; Also: FNDOER (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    .proc Fn
+    jsr ReadFunctionName
+    lda FunctionPointer+1
     pha
-    lda DEFPNT
+    lda FunctionPointer
     pha
     jsr PARCHK
-    jsr CHKNUM
+    jsr RequireNumber
     pla
-    sta DEFPNT
+    sta FunctionPointer
     pla
-    sta DEFPNT+1
+    sta FunctionPointer+1
     ldy #$02
-.if earlyCheck
-    ldx #<ERRUF
-    lda (DEFPNT),y
-    beq ERRGO1
-    sta VARPNT
-    tax
-    iny
-    lda (DEFPNT),y
-.else
-    lda (DEFPNT),y
-    sta VARPNT
-    tax
-    iny
-    lda (DEFPNT),y
-    beq ERRGUF
-.endif
-    sta VARPNT+1
+    .if earlyCheck
+        ldx #<ERROR_UNDEFINED_FUNCTION
+        lda (FunctionPointer),y
+        beq RejectDirectMode::ToError
+        sta VariablePointer
+        tax
+        iny
+        lda (FunctionPointer),y
+    .else
+        lda (FunctionPointer),y
+        sta VariablePointer
+        tax
+        iny
+        lda (FunctionPointer),y
+        beq RejectDirectMode::UndefinedFunction
+    .endif
+    sta VariablePointer+1
     iny
 
-DEFSTF:
-    lda (VARPNT),y
+;; Pushes the argument variable's five bytes.
+;; Also: DEFSTF (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+SaveArgument:
+    lda (VariablePointer),y
     pha
     dey
-    bpl DEFSTF
-    ldy VARPNT+1
-    jsr MOVMF
-    lda TXTPTR+1
+    bpl SaveArgument
+    ldy VariablePointer+1
+    jsr Float::StoreFac
+    lda TextPointer+1
     pha
-    lda TXTPTR
+    lda TextPointer
     pha
-    lda (DEFPNT),y
-    sta TXTPTR
+    lda (FunctionPointer),y
+    sta TextPointer
     iny
-    lda (DEFPNT),y
-    sta TXTPTR+1
-    lda VARPNT+1
+    lda (FunctionPointer),y
+    sta TextPointer+1
+    lda VariablePointer+1
     pha
-    lda VARPNT
+    lda VariablePointer
     pha
-    jsr FRMNUM
+    jsr EvaluateNumber
     pla
-    sta DEFPNT
+    sta FunctionPointer
     pla
-    sta DEFPNT+1
-    jsr CHRGOT
+    sta FunctionPointer+1
+    jsr GetCurrentCharacter
     beq *+5
     jmp SNERR
     pla
-    sta TXTPTR
+    sta TextPointer
     pla
-    sta TXTPTR+1
+    sta TextPointer+1
+    .endproc
+    .endscope
 
-;; Copies five stacked bytes into the destination at <DEFPNT>.
-;;
-;; DEF uses this to install its text and argument pointers; <FNDOER> uses it to restore the argument value.
-DEFFIN:
+    ;; Copies five stacked bytes into the destination at <FunctionPointer>.
+    ;;
+    ;; DEF uses this to install its text and argument pointers; <Functions::Fn> uses it to restore the argument value.
+    ;; Also: DEFFIN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    .proc PopToFunctionPointer
     ldy #$00
     pla
-    sta (DEFPNT),y
+    sta (FunctionPointer),y
     pla
     iny
-    sta (DEFPNT),y
+    sta (FunctionPointer),y
     pla
     iny
-    sta (DEFPNT),y
+    sta (FunctionPointer),y
     pla
     iny
-    sta (DEFPNT),y
+    sta (FunctionPointer),y
     pla
     iny
-    sta (DEFPNT),y
+    sta (FunctionPointer),y
 
-DEFRTS:
+;; The rts.
+;; Also: DEFRTS (M6502)
+Done:
     rts
+    .endproc
 .endmacro

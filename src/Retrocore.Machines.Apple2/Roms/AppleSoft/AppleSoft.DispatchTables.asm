@@ -1,9 +1,9 @@
 ; retrocore: style=strict
 ;; APPLESOFT: HANDLER TABLES, RESERVED WORDS AND MESSAGES
 ;;
-;; These tables begin at $D000. <CRUNCH> searches <RESLST> in order; <LIST> expands its token bytes back
+;; These tables begin at $D000. <CRUNCH> searches <RESLST> in order; <Statements::List> expands its token bytes back
 ;; through the same list. <GONE> dispatches statement tokens with <STMDSP>, while expression evaluation uses
-;; <FUNDSP> and <OPTAB>. <ERROR> indexes <ERRTAB> by byte offset, not by an ordinal error number.
+;; <FUNDSP> and <OperatorTable>. <ERROR> indexes <ERRTAB> by byte offset, not by an ordinal error number.
 
 ;; Handler addresses minus one for the 64 statements, indexed by token $80-$BF.
 ;;
@@ -108,7 +108,7 @@ FUNDSP:
 
 .include "../Microsoft6502Basic/MsBasic.OperatorTable.asm"
     ; AppleSoft puts power below negation, gives NOT unary precedence, and dispatches AND to <OROP1>.
-    OPERATOR_TABLE 1, 1, OROP1
+    OperatorEntries 1, 1, OROP1
 
 ;; Reserved-word spellings in token order, starting at $80 and ending with a zero byte.
 ;;

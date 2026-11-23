@@ -33,7 +33,7 @@ public sealed class BasicSharedPrintTests
             .cpu Mos6502
             .include "MsBasic.Print.asm"
             .org ${legacy.Symbol("STRDON"):X4}
-                PRINT_CORE TABER, {(carry ? 0 : 1)}, 0, 1
+                PrintItems TABER, {(carry ? 0 : 1)}, 0, 1
             """;
 
         string[] dependencies =
@@ -46,7 +46,7 @@ public sealed class BasicSharedPrintTests
             name => name, name => legacy.Symbol(name), StringComparer.Ordinal);
 
         AssemblyResult native = new Assembler.Assembler().Assemble(
-            new AssemblySource(source, Path.Join(folder, "PrintTest.asm")),
+            new AssemblySource(BasicNames.ScopedNames(symbols) + "\n" + source, Path.Join(folder, "PrintTest.asm")),
             new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
             {
                 SourceResolver = new FileAssemblySourceResolver(),
@@ -108,7 +108,7 @@ public sealed class BasicSharedPrintTests
             name => name, name => legacy.Symbol(name), StringComparer.Ordinal);
 
         AssemblyResult native = new Assembler.Assembler().Assemble(
-            new AssemblySource(source, Path.Join(folder, "ChannelPrintTest.asm")),
+            new AssemblySource(BasicNames.ScopedNames(symbols) + "\n" + source, Path.Join(folder, "ChannelPrintTest.asm")),
             new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
             {
                 SourceResolver = new FileAssemblySourceResolver(),
@@ -178,7 +178,7 @@ public sealed class BasicSharedPrintTests
             name => name, name => legacy.Symbol(name), StringComparer.Ordinal);
 
         AssemblyResult native = new Assembler.Assembler().Assemble(
-            new AssemblySource(source, Path.Join(folder, "PrintSpacingTest.asm")),
+            new AssemblySource(BasicNames.ScopedNames(symbols) + "\n" + source, Path.Join(folder, "PrintSpacingTest.asm")),
             new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
             {
                 SourceResolver = new FileAssemblySourceResolver(),
@@ -256,7 +256,7 @@ public sealed class BasicSharedPrintTests
             name => name, name => legacy.Symbol(name), StringComparer.Ordinal);
 
         AssemblyResult native = new Assembler.Assembler().Assemble(
-            new AssemblySource(source, Path.Join(folder, "CharacterOutputTest.asm")),
+            new AssemblySource(BasicNames.ScopedNames(symbols) + "\n" + source, Path.Join(folder, "CharacterOutputTest.asm")),
             new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
             {
                 SourceResolver = new FileAssemblySourceResolver(),

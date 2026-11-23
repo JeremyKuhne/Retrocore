@@ -10,12 +10,12 @@
 ;; arrays. Each simple variable occupies seven bytes: two for its encoded name and five for its value.
 ;; An array record has a name, length, dimension count and bounds, followed by its values. A string descriptor
 ;; holds a byte count and a two-byte character address; characters need not be zero-terminated. Strings occupy
-;; memory downwards from <MEMSIZ>, with <FRETOP> at their lower edge. <REASON> runs string collection before
+;; memory downwards from <MEMSIZ>, with <FRETOP> at their lower edge. <CheckFreeMemory> runs string collection before
 ;; reporting OUT OF MEMORY when the growing regions meet.
 ;;
 ;; Input is converted by <CRUNCH> using <RESLST>. Tokens select statement handlers through <STMDSP> and
-;; function handlers through <FUNDSP>; <OPTAB> supplies operator precedence and handlers. Startup copies
-;; <INITAT> to <CHRGET> in page zero, where its self-modifying load operand is <TXTPTR>. Monitor entry
+;; function handlers through <FUNDSP>; <OperatorTable> supplies operator precedence and handlers. Startup copies
+;; <CharacterReaderTemplate> to <CHRGET> in page zero, where its self-modifying load operand is <TXTPTR>. Monitor entry
 ;; points provide the machine's input, output and graphics.
 ;;
 ;; The included files follow ROM address order. Their names describe the main contents, not isolated call
@@ -71,7 +71,6 @@ APLPLS = 0                          ;; 1 for the II Plus ROM, with ENHNCD = 0
 .include "../Microsoft6502Basic/MsBasic.FloatConversion.asm"
 .include "../Microsoft6502Basic/MsBasic.FloatOutput.asm"
 .include "AppleSoft.HistoricalNames.asm"
-.include "AppleSoft.InterpreterAliases.asm"
 .include "../Microsoft6502Basic/MsBasic.Transcendental.asm"
 .include "AppleSoft.Initialization.asm"
 .include "AppleSoft.AppleCommands.asm"

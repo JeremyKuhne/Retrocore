@@ -34,7 +34,7 @@
 
 ;; Reads values for a variable list from DATA, starting at the saved <DATPTR>.
 ;; In: decimal = clear
-;; See: <INPCO1>, <DATLOP>, <RESTOR>
+;; See: <INPCO1>, <DATLOP>, <Statements::Restore>
 READ:
     ldx DATPTR
     ldy DATPTR+1
@@ -224,7 +224,7 @@ TRMOK1:
 
 ;; Searches forward for a DATA statement, remembering each new line number in <DATLIN>.
 ;;
-;; <DATAN> skips statements, including quoted colons. A zero high byte in the next line link reports OUT OF DATA.
+;; <FindStatementEnd> skips statements, including quoted colons. A zero high byte in the next line link reports OUT OF DATA.
 ;; See: <DATBK1>
 DATLOP:
     jsr DATAN

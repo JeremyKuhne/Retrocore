@@ -24,4 +24,9 @@ FAMILIES_DECLARED = 1
 ;; The handlers of BASIC's functions, each named for its keyword, which the function table dispatches to.
 .scope Functions
 .endscope
+
+;; The handlers of BASIC's statements and commands, each named for its keyword, which the statement table dispatches
+;; to, with the entries they share.
+.scope Statements
+.endscope
 .endif

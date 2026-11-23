@@ -1303,6 +1303,39 @@ public sealed partial class HistoricalNameTests
             .Should().Equal(without);
     }
 
+    /// <summary>
+    ///  A section a macro's body and every branch outside it write alike is listed once, whichever branches the build
+    ///  takes.
+    /// </summary>
+    [TestMethod]
+    public void SectionsAMacroSharesAreListedOnce()
+    {
+        DocumentationSet set = Set("""
+            .macro Library
+            ;; A reader.
+            ;; Also: MOLD (TEST)
+            FOO:
+                rts
+            .endmacro
+            .scope Basic
+                Library
+            .endscope
+            X = 3
+            .if X = 1
+            ;; One.
+            ;; Also: MOLD (TEST)
+            FOO = 1
+            .elseif X = 2
+            ;; Two.
+            ;; Also: MOLD (TEST)
+            FOO = 2
+            .endif
+            """);
+
+        Required(set.Find("FOO")).Sections.Where(section => section.Name == "Also").Should().ContainSingle()
+            .Which.Condition.Should().BeNull();
+    }
+
     private static List<DocumentationDiagnostic> Check(string text) =>
         new DocumentationResolver(Set(text)) { Bibliography = DocumentationBibliography.Parse(Bibliography) }.Check();
 }

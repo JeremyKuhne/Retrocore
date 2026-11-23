@@ -698,8 +698,9 @@ public sealed class DocumentationSet
         if (participants.Count == 0) { participants = comments; }
         List<DocumentationSection> sections = [];
 
-        // Definitions outside macros' bodies share sections among themselves, as they would without the macros, and
-        // only while the build has one of them; a macro's body always counts its own.
+        // Definitions outside macros' bodies share sections among themselves, as they would without the macros. Without
+        // the macros, a topic the build has none of isn't assembled, so nothing checks those sections; here the
+        // macros' expansions assemble it, so the outside ones are shared only while the build has one of them.
         bool mixed = comments.Any(comment => comment.Macro is not null);
         List<DocumentationComment> outside = [.. participants.Where(comment => comment.Macro is null)];
         bool outsideBuilt = !mixed || comments.Any(comment => comment.Macro is null && set.CommentInBuild(comment));
@@ -717,8 +718,9 @@ public sealed class DocumentationSet
                         sections.Add(section);
                     }
                 }
-                else
+                else if (!sections.Any(existing => existing.Condition is null && Same(existing, section)))
                 {
+                    // A section a macro's body shares with every branch is there already, for every build.
                     sections.Add(section.WithCondition(comment.Condition, comment.Path, comment.TargetLine));
                 }
             }

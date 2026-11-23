@@ -139,32 +139,31 @@ public sealed class BasicSharedAliasConsistencyTests
     }
 
     /// <summary>
-    ///  The alias, build and source attribution must occur in the same Also entry.
+    ///  The alias, build and source attribution must occur in the same sentence of the remarks.
     /// </summary>
-    /// <param name="text">An Also entry.</param>
-    /// <param name="expected">Whether it attributes the alias to BASIC 4 and cites a source.</param>
+    /// <param name="text">The remarks' attribution sentences.</param>
+    /// <param name="expected">Whether they attribute the alias to BASIC 4 and cite a source.</param>
     [TestMethod]
-    [DataRow("PET BASIC 4: `ALIAS`, Commodore listing.", true)]
-    [DataRow("PET BASIC 4: `OTHER`, listing; PET BASIC 1/2: `ALIAS`, reconstruction.", false)]
-    [DataRow("PET BASIC 4: `OTHER`, listing. PET BASIC 1/2: `ALIAS`, reconstruction.", false)]
-    [DataRow("PET BASIC 4: `ALIAS`", false)]
-    [DataRow("PET BASIC 4: `ALIAS`,\n;;     Commodore listing.", true)]
-    public void AlsoAttributionBelongsToTheAliasAndBuild(string text, bool expected)
+    [DataRow("In PET BASIC 4, Commodore's listing calls it `ALIAS`.", true)]
+    [DataRow("In PET BASIC 4, a listing calls it `OTHER`; in PET BASIC 1 and 2, a reconstruction calls it `ALIAS`.", false)]
+    [DataRow("In PET BASIC 4, a listing calls it `OTHER`. In PET BASIC 1 and 2, a reconstruction calls it `ALIAS`.", false)]
+    [DataRow("In PET BASIC 4, `ALIAS`.", false)]
+    [DataRow("In PET BASIC 4, Commodore's\n;; listing calls it `ALIAS`.", true)]
+    public void AttributionBelongsToTheAliasAndBuild(string text, bool expected)
     {
         string source = $"""
             ;; A shared routine.
             ;;
-            ;; Also:
-            ;;   {text}
+            ;; {text}
             TARGET:
                 rts
             """;
 
         DocumentationFile file = DocumentationParser.Parse(source, Path.Join(s_shared, "AttributionFixture.asm"));
-        DocumentationSection also = file.Comments.Single(comment => comment.Name == "TARGET").Section("Also")
-            ?? throw new AssertFailedException("The fixture has no Also section.");
+        DocumentationComment comment = file.Comments.Single(comment => comment.Name == "TARGET");
+        comment.Remarks.Should().NotBeEmpty("the fixture's attribution must be a remark");
 
-        HasAttribution(also, "ALIAS", ["PET BASIC 4"]).Should().Be(expected);
+        BasicAttribution.Has(comment.Remarks, "ALIAS", ["PET BASIC 4"]).Should().Be(expected);
     }
 
     /// <summary>
@@ -289,9 +288,8 @@ public sealed class BasicSharedAliasConsistencyTests
                 throw new AssertFailedException($"{root.Name}: {alias.Name}'s shared target {targetName} has no active shared documentation.");
             }
 
-            active.Sections.Where(section => section.Name.Equals("Also", StringComparison.OrdinalIgnoreCase))
-                .Any(section => HasAttribution(section, alias.Name, root.Attributions))
-                .Should().BeTrue($"{root.Name}: {targetName}'s Also section must attribute {alias.Name} and cite its source");
+            BasicAttribution.Has(active.Remarks, alias.Name, root.Attributions)
+                .Should().BeTrue($"{root.Name}: {targetName}'s remarks must attribute {alias.Name} and cite its source");
         }
         else
         {
@@ -346,54 +344,6 @@ public sealed class BasicSharedAliasConsistencyTests
         if (target.IsConstant || topic?.Kind != DocumentationKind.Routine || active is null) { return false; }
         if (!IsWithin(target.Location?.Path, directory) || !IsWithin(active.Path, directory)) { return false; }
         return !sharedSymbols.Contains(target.Name) && !foreignSymbols.Contains(target.Name);
-    }
-
-    private static bool HasAttribution(DocumentationSection section, string name, string[] variants)
-    {
-        string marker = $"`{name}`";
-        foreach (string entry in AttributionEntries(section))
-        {
-            int colon = entry.IndexOf(':');
-            if (colon < 0 || !variants.Contains(entry[..colon].Trim(), StringComparer.OrdinalIgnoreCase)) { continue; }
-
-            int end = entry.Length;
-            int apple = entry.IndexOf("AppleSoft:", colon + 1, StringComparison.OrdinalIgnoreCase);
-            int pet = entry.IndexOf("PET BASIC ", colon + 1, StringComparison.OrdinalIgnoreCase);
-            if (apple >= 0) { end = Math.Min(end, apple); }
-            if (pet >= 0) { end = Math.Min(end, pet); }
-            int at = entry.IndexOf(marker, colon + 1, StringComparison.Ordinal);
-            if (at < 0 || at >= end) { continue; }
-            int comma = entry.IndexOf(',', at + marker.Length);
-            if (comma >= 0 && comma < end && entry[(comma + 1)..end].Trim().TrimEnd('.').Length != 0) { return true; }
-        }
-
-        return false;
-    }
-
-    private static List<string> AttributionEntries(DocumentationSection section)
-    {
-        List<string> groups = [];
-        string? current = null;
-        int indentation = 0;
-        foreach (string line in section.Lines)
-        {
-            string text = line.Trim();
-            if (text.Length == 0) { continue; }
-            int indent = line.Length - line.TrimStart().Length;
-            if (current is null || indent <= indentation)
-            {
-                if (current is not null) { groups.Add(current); }
-                current = text;
-                indentation = indent;
-            }
-            else
-            {
-                current += $" {text}";
-            }
-        }
-
-        if (current is not null) { groups.Add(current); }
-        return [.. groups.SelectMany(group => group.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))];
     }
 
     private static DocumentationSet Documents(AssemblyResult result)

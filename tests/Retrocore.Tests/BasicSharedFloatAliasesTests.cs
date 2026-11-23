@@ -194,10 +194,8 @@ public sealed class BasicSharedFloatAliasesTests
             Path.GetFullPath(topic.Path).Should().StartWith(Path.GetFullPath(s_shared) + Path.DirectorySeparatorChar);
             topic.Value.Should().Be(result.Symbols[target]);
 
-            DocumentationSection also = topic.Section("Also")
-                ?? throw new AssertFailedException($"{target} has no Also section.");
-
-            also.Text.Should().Contain($"`{name}`").And.Contain(variant);
+            BasicAttribution.Has(topic.Remarks, name, [variant], prefix: true)
+                .Should().BeTrue($"{target}'s remarks must attribute {name} to {variant} and cite its source");
 
             DebugPosition position = debug.Position(memory, checked((ushort)result.Symbols[name]))
                 ?? throw new AssertFailedException($"{name} has no debugger source position.");

@@ -17,8 +17,8 @@
 
 ;; Returns CHR$(n), a one-byte string containing the value of n.
 ;;
-;; Commodore's 1979 source for PET BASIC 4 calls it `CHRD` (code16), as do the Hoffmann-Vetter
-;; reconstructions of PET BASIC 1 and 2.
+;; In PET BASIC 4, Commodore's 1979 source calls it `CHRD` (code16). In PET BASIC 1 and 2, the
+;; Hoffmann-Vetter reconstructions call it `CHRD` (code16).
 ;;
 ;; Errors: ILLEGAL QUANTITY if the argument cannot be converted to a byte
 CHR:
@@ -38,8 +38,8 @@ RLZRET:
 
 ;; Returns the leftmost requested characters, or the whole string if the count exceeds its length.
 ;;
-;; Commodore's 1979 source for PET BASIC 4 calls it `LEFTD` (code16), as do the Hoffmann-Vetter
-;; reconstructions of PET BASIC 1 and 2.
+;; In PET BASIC 4, Commodore's 1979 source calls it `LEFTD` (code16). In PET BASIC 1 and 2, the
+;; Hoffmann-Vetter reconstructions call it `LEFTD` (code16).
 ;;
 ;; Errors: ILLEGAL QUANTITY for a zero count when rejectZeroSlices is selected
 LEFT:
@@ -81,8 +81,8 @@ PULMOR:
 
 ;; Returns the rightmost requested characters, or the whole string if the count exceeds its length.
 ;;
-;; Commodore's 1979 source for PET BASIC 4 calls it `RIGHTD` (code16), as do the Hoffmann-Vetter
-;; reconstructions of PET BASIC 1 and 2.
+;; In PET BASIC 4, Commodore's 1979 source calls it `RIGHTD` (code16). In PET BASIC 1 and 2, the
+;; Hoffmann-Vetter reconstructions call it `RIGHTD` (code16).
 ;;
 ;; Errors: ILLEGAL QUANTITY for a zero count when rejectZeroSlices is selected
 RIGHT:
@@ -96,8 +96,8 @@ RIGHT:
 ;;
 ;; A start beyond the end produces an empty string; a length extending past the end is shortened.
 ;;
-;; Commodore's 1979 source for PET BASIC 4 calls it `MIDD` (code16), as do the Hoffmann-Vetter
-;; reconstructions of PET BASIC 1 and 2.
+;; In PET BASIC 4, Commodore's 1979 source calls it `MIDD` (code16). In PET BASIC 1 and 2, the
+;; Hoffmann-Vetter reconstructions call it `MIDD` (code16).
 ;;
 ;; Errors: ILLEGAL QUANTITY for a zero start
 MID:

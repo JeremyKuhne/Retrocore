@@ -56,7 +56,7 @@ public sealed class BasicSharedInterpreterAliasesTests
 
         AssertAliasFile(native, s_appleAliases, ["COMBYTE"]);
         DocumentationSet docs = Documents(native, s_appleAliases);
-        DocumentationTopic comma = AssertAlso(docs, "COMBYT", "COMBYTE", "AppleSoft");
+        DocumentationTopic comma = AssertAttribution(docs, "COMBYT", "COMBYTE", "AppleSoft");
         AssertDebugEntry(native, "COMBYTE", comma.Path);
 
         // Apple's published COPY and GARBAG names collide with different Microsoft labels.
@@ -64,8 +64,8 @@ public sealed class BasicSharedInterpreterAliasesTests
         native.Symbols["COPY"].Should().NotBe(native.Symbols["COPYZC"]);
         native.Symbols["GARBA2"].Should().Be(0xE484);
         native.Symbols["GARBAG"].Should().Be(0xE474);
-        DocumentationTopic assignment = AssertAlso(docs, "GETSPT", "COPY", "AppleSoft");
-        AssertAlso(docs, "GARBA2", "GARBAG", "AppleSoft");
+        DocumentationTopic assignment = AssertAttribution(docs, "GETSPT", "COPY", "AppleSoft");
+        AssertAttribution(docs, "GARBA2", "GARBAG", "AppleSoft");
         assignment.EntryLabels.Should().Contain("COPYZC");
         CheckDocumentation(docs, "MsBasic.MemoryAccess.asm", "MsBasic.Assignment.asm", "MsBasic.StringGarbageCollection.asm");
     }
@@ -153,7 +153,7 @@ public sealed class BasicSharedInterpreterAliasesTests
             native.Symbols[entry.Name].Should().Be(native.Symbols[entry.Target]);
             native.Symbols[entry.Name].Should().Be(entry.Addresses[versionIndex], $"{entry.Name} must match the PET listing");
             string topic = entry.Target == "COPYZC" ? "GETSPT" : entry.Target;
-            DocumentationTopic documented = AssertAlso(docs, topic, entry.Name, "PET BASIC");
+            DocumentationTopic documented = AssertAttribution(docs, topic, entry.Name, "PET BASIC");
             string path = linked && entry.Target == "COPYZC"
                 ? Path.Join(s_pet, "Basic", "Commodore.StringAssignment.asm")
                 : documented.Path;
@@ -161,7 +161,7 @@ public sealed class BasicSharedInterpreterAliasesTests
             AssertDebugEntry(native, entry.Name, path);
         }
 
-        AssertAlso(docs, "GETSPT", "COPYC", "PET BASIC").EntryLabels.Should().Contain("COPYZC");
+        AssertAttribution(docs, "GETSPT", "COPYC", "PET BASIC").EntryLabels.Should().Contain("COPYZC");
         native.Symbols.Should().NotContainKey("COMBYTE");
         CheckDocumentation(docs, "MsBasic.Assignment.asm", "MsBasic.StringConversion.asm", "MsBasic.StringFunctions.asm");
     }
@@ -209,15 +209,14 @@ public sealed class BasicSharedInterpreterAliasesTests
         }
     }
 
-    private static DocumentationTopic AssertAlso(DocumentationSet docs, string target, string name, string variant)
+    private static DocumentationTopic AssertAttribution(DocumentationSet docs, string target, string name, string variant)
     {
         DocumentationTopic topic = docs.Find(target)
             ?? throw new AssertFailedException($"{target} has no shared documentation.");
 
-        DocumentationSection also = topic.Section("Also")
-            ?? throw new AssertFailedException($"{target} has no Also section.");
+        BasicAttribution.Has(topic.Remarks, name, [variant], prefix: true)
+            .Should().BeTrue($"{target}'s remarks must attribute {name} to {variant} and cite its source");
 
-        also.Text.Should().Contain($"`{name}`").And.Contain(variant);
         return topic;
     }
 

@@ -196,7 +196,7 @@ public sealed class BasicStatementRoutineTests
     [DataRow(true, true, 3)]
     [DataRow(false, false, 2)]
     [DataRow(false, true, 2)]
-    public void EraseProgramAddsTheCarryWhereTheBuildKeepsIt(bool apple, bool carry, int offset)
+    public void EraseProgramAddsTheCarryOnlyWhereTheBuildDoesNotClearIt(bool apple, bool carry, int offset)
     {
         BasicMathMachine machine = new(apple);
         machine.Memory.AsSpan(Program, 2).Fill(0xEE);

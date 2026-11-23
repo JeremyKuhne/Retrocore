@@ -84,7 +84,7 @@ StartListing:
 ;; Displays linked lines through the inclusive upper bound.
 ;;
 ;; The stop check and newline precede the upper-bound comparison. A zero high byte in the next link
-;; ends the listing. Quote tracking starts each line with <TokenizeState> = 1 and complements it for each quote.
+;; ends the listing. With `trackQuotes`, each line starts with <TokenizeState> = 1, complemented for each quote.
 ;; In: SourceStart = link field of the first line, LineNumber = inclusive upper bound
 ;; See: <ISCNTC>, <Statements::List::CheckToken>
 ;; Also: LIST4 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)

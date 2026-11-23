@@ -31,7 +31,9 @@ REVISD = 1                          ;; 1 selects the revised first BASIC 1 chip
 
 ; Workspace changes are independent so their layout can be reused by another variant.
 .ifndef INPUT_BUFFER_PAGE
-INPUT_BUFFER_PAGE = 0               ;; input buffer in page zero
+;; Input buffer page: 0 for page zero or 2 for page two.
+;; Also: BUFPAG (M6502, CBM4S79, HV2, HV4, HV4R)
+INPUT_BUFFER_PAGE = 0
 .endif
 .ifndef INPUT_BUFFER_LENGTH
 ;; Input buffer length in bytes.
@@ -39,7 +41,9 @@ INPUT_BUFFER_PAGE = 0               ;; input buffer in page zero
 INPUT_BUFFER_LENGTH = 80
 .endif
 .ifndef NULL_COMMAND
-NULL_COMMAND = 1                    ;; reserve the NULL count
+;; 1 reserves the `NULL` count byte; BASIC 1 has the code but no `NULL` token.
+;; Also: NULCMD (M6502)
+NULL_COMMAND = 1
 .endif
 .ifndef TERMINAL_FIRST
 TERMINAL_FIRST = 1                  ;; place terminal storage before general scratch

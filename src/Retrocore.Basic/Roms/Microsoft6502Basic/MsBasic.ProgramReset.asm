@@ -34,7 +34,7 @@
     ;;
     ;; Where the build passes `clearCarry` = 1 (PET BASIC 2 and 4), <VariablesStart> is <ProgramStart> + 2. Elsewhere
     ;; the incoming carry is added too: `NEW` arrives from the dispatcher with carry set, as the character reader
-    ;; leaves it at the end of a statement, so AppleSoft's and BASIC 1's `NEW` leave <VariablesStart> at
+    ;; leaves it at the end of a statement, so AppleSoft's and, by default, BASIC 1's `NEW` leave <VariablesStart> at
     ;; <ProgramStart> + 3. The startup code calls it too, with the carry its own code leaves.
     ;; In: carry = added to the address where `clearCarry` is 0
     ;; Also: SCRTCH (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)

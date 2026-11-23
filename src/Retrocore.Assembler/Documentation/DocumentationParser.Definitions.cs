@@ -199,7 +199,12 @@ public static partial class DocumentationParser
     private static string ColonDefinition(string afterName)
     {
         if (!afterName.StartsWith(':') || afterName.StartsWith("::", StringComparison.Ordinal)) { return ""; }
-        string word = FirstWord(afterName[1..].TrimStart()).ToLowerInvariant();
+
+        // The directive ends at a space or a comment, as the assembler reads it: ".equ,3" is not one.
+        string rest = afterName[1..].TrimStart();
+        int end = 0;
+        while (end < rest.Length && !char.IsWhiteSpace(rest[end]) && rest[end] != ';') { end++; }
+        string word = rest[..end].ToLowerInvariant();
         return word is ".equ" or ".set" ? word : "";
     }
 

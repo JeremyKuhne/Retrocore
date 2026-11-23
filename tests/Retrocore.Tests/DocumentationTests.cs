@@ -198,6 +198,8 @@ public class DocumentationTests
             TOTAL: .SET 0
             ;; The routine.
             START: rts
+            ;; Not a constant: the assembler rejects the line.
+            JOINED: .equ,3
             """);
 
         file.Diagnostics.Should().BeEmpty();
@@ -206,7 +208,8 @@ public class DocumentationTests
             ("COUNT", DocumentationKind.Variable),
             ("KEY_ESC", DocumentationKind.Constant),
             ("TOTAL", DocumentationKind.Variable),
-            ("START", DocumentationKind.Routine));
+            ("START", DocumentationKind.Routine),
+            ("JOINED", DocumentationKind.Routine));
     }
 
     /// <summary>

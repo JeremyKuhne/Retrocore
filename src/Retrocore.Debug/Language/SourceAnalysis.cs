@@ -743,9 +743,9 @@ internal sealed partial class SourceAnalysis
     [GeneratedRegex(@"^[ \t]*\.rom[ \t][^\r\n]*", RegexOptions.Multiline | RegexOptions.IgnoreCase)]
     private static partial Regex RomDeclaration();
 
-    // A name in column 0: a label (with or without a colon) or an equate. Directives start with a dot, in any case, as
-    // the assembler reads them. A colon followed by .equ or .set (Name: .equ expr) defines a constant or variable, not
-    // a label.
+    // A name in column 0: a label (with or without a colon) or an equate. Directives start with a dot and match in any
+    // case, as the assembler reads them; Merlin's EQU matches as written. A colon followed by .equ or .set
+    // (Name: .equ expr) defines a constant or variable, not a label.
     [GeneratedRegex(@"^(?<name>[A-Za-z_@][\w@$%?]*(?:::[\w@$%?]+)*)(?:(?<equate>:[ \t]*(?i:\.(?:equ|set))(?=[ \t;]|$)|\s*(?::=|==?|(?i:\.equ|\.set)\b|EQU\b))|(?<colon>::?)|\s|$)")]
     private static partial Regex TextDefinition();
 

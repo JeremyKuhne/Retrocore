@@ -608,7 +608,7 @@ public class DocumentationTests
     /// <summary>
     ///  A routine's Entry: section under a condition the build doesn't take is not checked, for the conditions the
     ///  assembler writes: a negated test (<c>.not</c>) joined to another, and <c>.ifdef</c> and <c>.ifndef</c>, which
-    ///  count a macro as defined as the assembler does.
+    ///  count a macro as defined as the assembler does, but only one defined before them.
     /// </summary>
     [TestMethod]
     public void EntriesOfOtherBuildsAreNotChecked()
@@ -671,6 +671,30 @@ public class DocumentationTests
                 rts
             .endproc
             .endif
+            """,
+            """
+            .cpu Mos6502
+            .ifdef WIDE
+            ;; Scrolls, wide.
+            ;; Entry:
+            ;;   Wide = the wide loop
+            .proc Scroll
+            Wide:
+                rts
+            .endproc
+            .else
+            ;; Scrolls, narrow.
+            ;; Entry:
+            ;;   Narrow = the narrow loop
+            .proc Scroll
+            Narrow:
+                rts
+            .endproc
+            .endif
+
+            ;; Marks a feature, after the .ifdef has been read: the assembler takes the narrow branch.
+            .macro WIDE
+            .endmacro
             """])
         {
             new DocumentationResolver(Set(text)).Check().Should().BeEmpty(text);

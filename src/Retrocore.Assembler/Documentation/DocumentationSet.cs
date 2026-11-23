@@ -22,6 +22,9 @@ public sealed class DocumentationSet
     private bool _mixed;
     private HashSet<string>? _macros;
 
+    // Where the assembly defined each symbol, by full path and zero-based line: which branch of an .if it took.
+    private HashSet<(string Path, int Line)> _definedAt = [];
+
     private DocumentationSet(
         string? module,
         string? model,
@@ -113,7 +116,13 @@ public sealed class DocumentationSet
             }
 
             set.Exports = exports;
-
+            foreach (AssemblySymbol symbol in result.SymbolDefinitions)
+            {
+                if (symbol.Location is { Path.Length: > 0 } location)
+                {
+                    set._definedAt.Add((System.IO.Path.GetFullPath(location.Path), location.Line));
+                }
+            }
         }
 
         return set;
@@ -269,8 +278,40 @@ public sealed class DocumentationSet
     /// <param name="thisBuild">Whether only its sections in this set's build count, as the assembler's do.</param>
     /// <returns>Whether it gives the name.</returns>
     public bool Gives(DocumentationTopic topic, string name, bool thisBuild = false) =>
-        DocumentationAlso.Of(topic.Sections.Where(section => !thisBuild || DocumentationConditions.InBuild(section.Condition, _symbols, IsDefined)))
+        DocumentationAlso.Of(topic.Sections.Where(section => !thisBuild || InBuild(topic, section)))
             .Any(also => also.Name == name);
+
+    /// <summary>
+    ///  Gets whether a topic's section, from one branch of an <c>.if</c> when topics from several were merged, is in
+    ///  this set's build.
+    /// </summary>
+    /// <param name="topic">The topic.</param>
+    /// <param name="section">One of its sections.</param>
+    /// <returns>Whether the section's branch is the one assembled.</returns>
+    /// <remarks>
+    ///  <para>
+    ///   For a label, equate or member, the assembly answers it exactly: the branch is in the build when the assembly
+    ///   defined a symbol at the line the section's comment documents, as the assembler gives a definition the
+    ///   historical names of the branch it assembled. For anything else, the section's condition is evaluated from
+    ///   the build's symbols and the files' macros, which can differ from the assembler's view where a macro is
+    ///   defined after the <c>.ifdef</c> that tests it.
+    ///  </para>
+    /// </remarks>
+    public bool InBuild(DocumentationTopic topic, DocumentationSection section)
+    {
+        return section.Condition is null
+            || (IsSymbol(topic.Kind) && _definedAt.Count != 0 && section.OriginPath is { } path
+                ? _definedAt.Contains((System.IO.Path.GetFullPath(path), section.OriginLine))
+                : DocumentationConditions.InBuild(section.Condition, _symbols, IsDefined));
+    }
+
+    // Whether the assembly defines a symbol for a topic of this kind.
+    private static bool IsSymbol(DocumentationKind kind) =>
+        kind is DocumentationKind.Routine
+            or DocumentationKind.Table
+            or DocumentationKind.Constant
+            or DocumentationKind.Variable
+            or DocumentationKind.Member;
 
     /// <summary>
     ///  Gets whether a topic's definition is in this set's assembly: false only for a label or equate the assembly
@@ -429,7 +470,7 @@ public sealed class DocumentationSet
                 }
                 else
                 {
-                    sections.Add(section.WithCondition(comment.Condition));
+                    sections.Add(section.WithCondition(comment.Condition, comment.Path, comment.TargetLine));
                 }
             }
         }

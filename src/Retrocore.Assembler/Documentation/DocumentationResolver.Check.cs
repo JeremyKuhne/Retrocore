@@ -225,12 +225,12 @@ public sealed partial class DocumentationResolver
                 break;
             case "Also":
                 // A routine written once per build gives each build's old names under its own condition.
-                if (!InThisBuild(section.Condition)) { break; }
+                if (!Current.InBuild(topic, section)) { break; }
                 CheckAlso(topic, section, also);
                 break;
             case "Entry":
                 // A routine written once per build lists each build's entries under its own condition.
-                if (!InThisBuild(section.Condition)) { break; }
+                if (!Current.InBuild(topic, section)) { break; }
                 foreach (DocumentationEntry entry in section.Entries)
                 {
                     if (!InsideRoutine(topic, entry.Name))
@@ -330,8 +330,6 @@ public sealed partial class DocumentationResolver
         return $"{section}: '{name}' is not a register, flag or symbol.";
     }
 
-    // Whether a section's .if condition holds for the build the documentation's symbols come from.
-    private bool InThisBuild(string? condition) => DocumentationConditions.InBuild(condition, Current.Symbols, Current.IsDefined);
 
     // Whether an Entry: label is in the routine: from its address up to the next documented routine that is neither
     // one of its entries nor one of its own locals (a .proc's labels may have their own ;; blocks).

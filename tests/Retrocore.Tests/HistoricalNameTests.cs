@@ -282,6 +282,61 @@ public sealed partial class HistoricalNameTests
     }
 
     /// <summary>
+    ///  A macro defined only in a branch the build doesn't take, or after the <c>.ifdef</c> that tests it, is not
+    ///  defined for that <c>.ifdef</c>, as the assembler sees it: the branch's old names are not this build's.
+    /// </summary>
+    [TestMethod]
+    public void AlsoSectionsUnderMacrosTheAssemblerHasNotSeenDontCount()
+    {
+        DocumentationSet set = Set("""
+            .if 0
+            .macro FAST
+            .endmacro
+            .endif
+            .ifdef FAST
+            ;; Reads a key.
+            ;; Also: OLDKEY (TEST)
+            ReadKey:
+                rts
+            .else
+            ;; Reads a key.
+            ReadKey:
+                rts
+            ;; Waits for a key.
+            ;; Also: OLDKEY (TEST)
+            WaitKey:
+                rts
+            .endif
+            .ifdef WIDE
+            ;; Scrolls.
+            ;; Also: OLDSCROLL (TEST)
+            Scroll:
+                rts
+            .else
+            ;; Scrolls.
+            Scroll:
+                rts
+            ;; Scrolls slowly.
+            ;; Also: OLDSCROLL (TEST)
+            SlowScroll:
+                rts
+            .endif
+            .macro WIDE
+            .endmacro
+
+            ;; Echoes <OLDKEY> and <OLDSCROLL>.
+            Echo:
+                rts
+            """);
+
+        DocumentationResolver resolver = new(set);
+        DocumentationTopic echo = Required(set.Find("Echo"));
+        Required(resolver.Resolve(echo, "OLDKEY").Topic).Name.Should().Be("WaitKey");
+        Required(resolver.Resolve(echo, "OLDSCROLL").Topic).Name.Should().Be("SlowScroll");
+        resolver.Check().Should().BeEmpty();
+    }
+
+    /// <summary>
     ///  Another module is assembled for its default build, which says nothing about the build of the source that
     ///  links into it: an old name two of its builds give is ambiguous there, not its default build's.
     /// </summary>

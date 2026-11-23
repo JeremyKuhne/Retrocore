@@ -124,6 +124,9 @@ test("labels and assignments take priority over instruction-looking identifiers"
     assertScope("JSR = $42", "JSR", scope.constant);
     assertScope("A = $10", "A", scope.constant);
     assertScope("N .set 3", "N", scope.constant);
+    assertScope("N := 3", "N", scope.constant);
+    assertScope("N:=3", "N", scope.constant);
+    assertScope("N := 3", ":=", "keyword.operator.assignment.retrocore");
     assertScope(".set N, 3", "N", scope.constant);
     assertScope("Byte_\u00E9: LDA Byte_\u00E9", "Byte_\u00E9", scope.label);
     assertScope("Byte_\u00E9: LDA Byte_\u00E9", "Byte_\u00E9", scope.symbol, 1);

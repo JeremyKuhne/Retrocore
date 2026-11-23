@@ -138,7 +138,7 @@ as remainder.
 
 | Form | Defines |
 | --- | --- |
-| `Name = expr` or `Name: .equ expr` | A constant. It may use labels and later symbols, and is fixed once defined. |
+| `Name = expr`, `Name := expr` or `Name: .equ expr` | A constant. It may use labels and later symbols, and is fixed once defined. |
 | `Name .set expr`, `Name: .set expr` or `.set Name, expr` | A variable. Each assignment is a new value; a use sees the latest assignment before it in the source. |
 | `Name:` | A label: the address of what follows. |
 

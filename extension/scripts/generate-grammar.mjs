@@ -315,7 +315,7 @@ const grammar = {
             ]
         },
         "constant-definition": {
-            begin: `^[ \\t]*(${definition})[ \\t]*(=|(?i:\\.set)${boundary})`,
+            begin: `^[ \\t]*(${definition})[ \\t]*(:?=|(?i:\\.set)${boundary})`,
             beginCaptures: {
                 "1": { name: "variable.other.constant.definition.retrocore" },
                 "2": { name: "keyword.operator.assignment.retrocore" }

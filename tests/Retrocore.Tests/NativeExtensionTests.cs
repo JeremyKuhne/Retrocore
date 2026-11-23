@@ -54,6 +54,9 @@ public class NativeExtensionTests
     [DataRow("Known = 1\n.if .defined(Known) && Known = 1\n.byte 5\n.endif", new byte[] { 5 })]
     [DataRow(".out \"note\"\n.warning \"ignored\"\n.byte 1", new byte[] { 1 })]
     [DataRow("CPU_6502 = 7\n.byte CPU_6502", new byte[] { 7 })]
+    [DataRow("V := 5\nW:=V + Later\n.byte V, W\nLater = 2", new byte[] { 5, 7 })]
+    [DataRow("Entry:\n@cheap := 3\n.byte @cheap", new byte[] { 3 })]
+    [DataRow("V := 1\n.if V = 1\n.byte 9\n.endif", new byte[] { 9 })]
     public void NativeSourcesUseSharedFeatures(string text, byte[] expected)
     {
         AssemblyResult result = Assemble(text);
@@ -350,6 +353,20 @@ public class NativeExtensionTests
         result.Diagnostics.Should().BeEmpty();
         result.Sections[0].Bytes.Span[..11].ToArray().Should().Equal(
             0xEA, 0, 0, 0, 0xEA, 0xEA, 0xEA, 5, 2, 5, 0x90);
+    }
+
+    /// <summary>
+    ///  A constant defined with <c>:=</c> is fixed once defined, as one defined with <c>=</c> is, and needs a value.
+    /// </summary>
+    /// <param name="text">The source.</param>
+    /// <param name="message">The error it reports.</param>
+    [TestMethod]
+    [DataRow("V := 1\nV := 2", "Duplicate symbol 'V'.")]
+    [DataRow("V = 1\nV := 2", "Duplicate symbol 'V'.")]
+    [DataRow("V :=", "Invalid expression ':='.")]
+    public void ColonEqualsConstantMistakesAreReported(string text, string message)
+    {
+        Assemble(text).Diagnostics.Select(diagnostic => diagnostic.Message).Should().Contain(message);
     }
 
     /// <summary>

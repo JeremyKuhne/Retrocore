@@ -679,29 +679,37 @@ NumberBuffer = NumberBufferPrefix + 1
 ; Operating-system state and RND(0)'s read addresses.
 .if CLOCK_IN_PAGE2
 ;; Three-byte clock in the early kernal's page-two workspace.
-;; Also: CQTIMR (M6502)
+;;
+;; The kernal listings (K4S79, HVK4) call it `TIME`, a name the builds give a switch.
+;; Also: CQTIMR (M6502), CTIMR (CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 JiffyClock = $0200
 .else
 ;; Three-byte clock in page zero.
-;; Also: CQTIMR (M6502)
+;;
+;; The kernal listings (K4S79, HVK4) call it `TIME`, a name the builds give a switch.
+;; Also: CQTIMR (M6502), CTIMR (CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 JiffyClock = $8D
 .endif
 .if STATUS_IN_PAGE2
 ;; I/O status byte in the early kernal's page-two workspace.
-;; Also: CQSTAT (M6502)
+;;
+;; The kernal listings (K4S79, HVK4) call it `SATUS`, which BASIC 4's system equates define.
+;; Also: CQSTAT (M6502), CSTAT (CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 IoStatus = $020C
 .else
 ;; I/O status byte in page zero.
-;; Also: CQSTAT (M6502)
+;;
+;; The kernal listings (K4S79, HVK4) call it `SATUS`, which BASIC 4's system equates define.
+;; Also: CQSTAT (M6502), CSTAT (CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 IoStatus = $96
 .endif
 .if RND_TIMER_9044
 ;; RND(0) reads here and at offsets 1, 4 and 5, not the VIA timer.
-;; Also: CQHTIM (M6502), CHTIM (CBM4S79, HV1, HV1R, HV2, HV4, HV4R), TIL (HVK4)
+;; Also: CQHTIM (M6502), CHTIM (CBM4S79, HV1, HV1R, HV2, HV4, HV4R), TIL (K4S79, HVK4)
 RandomTimer = $9044
 .else
 ;; RND(0) reads the VIA timer registers at offsets 0, 1, 4 and 5.
-;; Also: CQHTIM (M6502), CHTIM (CBM4S79, HV1, HV1R, HV2, HV4, HV4R), TIL (HVK4)
+;; Also: CQHTIM (M6502), CHTIM (CBM4S79, HV1, HV1R, HV2, HV4, HV4R), TIL (K4S79, HVK4)
 RandomTimer = $E844
 .endif
 .if CLOCK_IN_PAGE2 = 0

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
+using System.Globalization;
 using Retrocore.Assembler;
 using Retrocore.Debug;
 using Retrocore.Documentation;
@@ -279,33 +280,41 @@ public sealed class BasicSharedAliasConsistencyTests
         path.EndsWith(".HistoricalNames.asm", StringComparison.OrdinalIgnoreCase);
 
     // A historical-names file's aliases: each scoped alias once per old name its Also: section gives, read from the
-    // file's text so a missing include cannot hide one. An alias under .ifdef Target, for a definition only some
-    // builds have (BASIC 4's lister labels), is expected exactly where the build defines that target.
+    // file's text so a missing include cannot hide one. An alias may be guarded, for names only some builds' documents
+    // give: under .ifdef Target it is expected exactly where the build defines that target (BASIC 4's lister labels),
+    // and under .if Switch = value where the build's switch has that value (BASIC 1 and 2's spellings).
     private static IEnumerable<Alias> ReadHistoricalNames(string path, string scope, AssemblyResult result)
     {
         string[] lines = File.ReadAllLines(path);
-        string?[] guards = new string?[lines.Length];
-        string? guard = null;
+        bool[] included = new bool[lines.Length];
+        bool? guard = null;
         for (int line = 0; line < lines.Length; line++)
         {
+            string where = $"{Path.GetFileName(path)}:{line + 1}";
             string[] words = lines[line].Split(';', 2)[0].Split((char[])[' ', '\t'], StringSplitOptions.RemoveEmptyEntries);
-            if (words is [".ifdef", string name])
+            if (words is [".ifdef", string target])
             {
-                guard.Should().BeNull($"{Path.GetFileName(path)}:{line + 1} must not nest its guards");
-                guard = name;
+                guard.Should().BeNull($"{where} must not nest its guards");
+                guard = result.HasSymbol(target);
+            }
+            else if (words is [".if", string name, "=", string value])
+            {
+                guard.Should().BeNull($"{where} must not nest its guards");
+                guard = result.Symbol(name) == long.Parse(value, CultureInfo.InvariantCulture);
             }
             else if (words is [".endif"])
             {
+                guard.Should().NotBeNull($"{where} must close a guard");
                 guard = null;
             }
             else
             {
                 words.Should().NotContain(word => word.StartsWith(".if", StringComparison.OrdinalIgnoreCase)
                     || word.StartsWith(".else", StringComparison.OrdinalIgnoreCase),
-                    $"{Path.GetFileName(path)}:{line + 1} may guard an alias only with .ifdef");
+                    $"{where} may guard an alias only with .ifdef Target or .if Switch = value");
             }
 
-            guards[line] = guard;
+            included[line] = guard ?? true;
         }
 
         DocumentationFile file = DocumentationParser.Parse(string.Join('\n', lines), path);
@@ -313,7 +322,7 @@ public sealed class BasicSharedAliasConsistencyTests
         {
             DocumentationAlso[] names = [.. DocumentationAlso.Of(comment.Sections)];
             if (names.Length == 0) { continue; }
-            if (guards[comment.TargetLine] is string target && !result.HasSymbol(target)) { continue; }
+            if (!included[comment.TargetLine]) { continue; }
             string[] parts = lines[comment.TargetLine].Split(';', 2)[0].Split('=', 2, StringSplitOptions.TrimEntries);
             parts.Should().HaveCount(2, $"{Path.GetFileName(path)}:{comment.TargetLine + 1} must be an alias");
             foreach (DocumentationAlso also in names)

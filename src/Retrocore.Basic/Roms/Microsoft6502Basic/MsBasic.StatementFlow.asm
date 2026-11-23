@@ -28,7 +28,7 @@
     ;; Advances <TextPointer> by Y, to the terminator found by <FindStatementEnd> or <FindLineEnd>.
     ;; In: Y = offset of the terminator
     ;; Entry:
-    ;;   Done = The rts; <FindLineEnd>'s terminator branches return through it
+    ;;   Done = returns; <FindLineEnd>'s terminator branches return through it
     ;; Also: ADDON (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc AdvanceTextPointer
     tya
@@ -37,7 +37,7 @@
     sta TextPointer
     bcc Done
     inc TextPointer+1
-;; The rts; <FindLineEnd>'s terminator branches return through it.
+;; Returns; <FindLineEnd>'s terminator branches return through it.
 ;; Also: REMRTS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 Done:
     rts
@@ -152,15 +152,17 @@ ToExecuteStatement:
     ;;
     ;; Proceeds past the list when the selector exceeds the number of entries.
     ;; Entry:
-    ;;   RequireGoto = Not GOTO: syntax error; <ReadLineNumber>'s overflow branch also lands here
-    ;;   Done = The rts; <ReadLineNumber> exits through it at a non-digit
+    ;;   RequireGoto = requires <TOKEN_GOTO> in A, else a syntax error; <ReadLineNumber> branches here for a line
+    ;;     number that is too large, with its high byte in A
+    ;;   Done = returns; <ReadLineNumber> exits through it at a non-digit
     ;; Also: ONGOTO (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc On
     jsr GETBYT
     pha
     cmp #TOKEN_GOSUB
     beq NextEntry
-;; Not GOTO: syntax error; <ReadLineNumber>'s overflow branch also lands here.
+;; Requires <TOKEN_GOTO> in A, else a syntax error. <ReadLineNumber> branches here for a line number that is too
+;; large, with its high byte in A, so a high byte equal to the token continues into the loop below.
 ;; Also: SNERR3 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 RequireGoto:
     cmp #TOKEN_GOTO
@@ -180,7 +182,7 @@ SkipEntry:
     cmp #','
     beq NextEntry
     pla
-;; The rts; <ReadLineNumber> exits through it at a non-digit.
+;; Returns; <ReadLineNumber> exits through it at a non-digit.
 ;; Also: ONGRTS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 Done:
     rts

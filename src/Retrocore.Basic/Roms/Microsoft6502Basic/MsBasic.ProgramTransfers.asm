@@ -15,7 +15,7 @@
     ;; Positions the DATA reader before the first program line.
     ;; Entry:
     ;;   SetDataPointer = Stores A/Y in <DataPointer>; `READ`'s finish enters here
-    ;;   Done = The rts; the statement dispatcher returns through it at end of statement
+    ;;   Done = returns; the statement dispatcher returns through it at end of statement
     ;; See: <READ>, <DataPointer>
     ;; Also: RESTOR (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc Restore
@@ -30,7 +30,7 @@
 SetDataPointer:
     sta DataPointer
     sty DataPointer+1
-;; The rts; the statement dispatcher returns through it at end of statement.
+;; Returns; the statement dispatcher returns through it at end of statement.
 ;; Also: ISCRTS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 Done:
     rts
@@ -48,23 +48,32 @@ Done:
 
     .scope Statements continued
 
-    ;; Saves the program position and reports BREAK; END stops without the message.
+    ;; Stops the program with the BREAK message.
+    ;;
+    ;; The statement dispatcher arrives with carry set unless a digit follows, and the Control-C check with carry set
+    ;; by its comparison; a set carry goes on to <Statements::StopOrEnd>, which reports BREAK, and a clear one falls
+    ;; into <Statements::End>. In BASIC 4, Martin Hoffmann-Vetter's reconstruction of the kernal (HVK4) calls this
+    ;; entry `BSTOP`.
+    ;; In: carry = set for BREAK, zero = set at the end of the statement
     ;; See: <Statements::End>, <Statements::Cont>
     ;; Also: STOP (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc Stop
     bcs StopOrEnd
     .endproc
-    ;; Clears carry (no message), falls into <Statements::StopOrEnd>.
+    ;; Ends the program without a message: clears carry and falls into <Statements::StopOrEnd>.
+    ;; In: zero = set at the end of the statement
     ;; Also: END (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc End
     clc
     .endproc
-    ;; Trailing text returns; in a program saves <StoppedText> and <StoppedLine>; drops the return; BREAK (carry) or
-    ;; <READY>.
+    ;; Stops the program. With text after the statement it returns, and the dispatcher reports the syntax error. In a
+    ;; program it saves <TextPointer> and <CurrentLine> in <StoppedText> and <StoppedLine> for `CONT`. Then it drops
+    ;; the statement loop's return address and reports BREAK, with carry set, or goes to <READY>.
+    ;; In: carry = set for BREAK, zero = set at the end of the statement
     ;; Entry:
-    ;;   SaveLine = Saves <CurrentLine> in <StoppedLine>; the PET's `INPUT` stop paths enter here
-    ;;   Finish = Carry set: BREAK through <ReportMessage>; clear: <READY>; the dispatchers enter here at the end of the
-    ;;     program
+    ;;   SaveLine = saves <CurrentLine> in <StoppedLine>; the PET's `INPUT` stop paths enter here
+    ;;   Finish = reports BREAK through <ReportMessage> with carry set, or goes to <READY>; the dispatchers enter here
+    ;;     at the end of the program
     ;; Also: STOPC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc StopOrEnd
     bne Cont::Done
@@ -84,12 +93,13 @@ SaveLine:
     ldy CurrentLine+1
     sta StoppedLine
     sty StoppedLine+1
-;; Pla pla: drops the statement loop's return.
+;; Drops the statement loop's return address.
 ;; Also: DIRIS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 DiscardReturn:
     pla
     pla
-;; Carry set: BREAK through <ReportMessage>; clear: <READY>; the dispatchers enter here at the end of the program.
+;; Reports BREAK through <ReportMessage> with carry set, or goes to <READY>; the dispatchers enter here at the end
+;; of the program.
 ;; Also: ENDCON (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 Finish:
     lda #<BRKTXT
@@ -108,7 +118,7 @@ ToReady:
 
     ;; Resumes at the saved line and text position, or reports CAN'T CONTINUE.
     ;; Entry:
-    ;;   Done = The rts; STOP, NULL, BASIC 1's CLEAR and its dispatcher return through it
+    ;;   Done = returns; STOP, NULL, BASIC 1's CLEAR and its dispatcher return through it
     ;; See: <Statements::Stop>, <ResetStack>
     ;; Also: CONT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc Cont
@@ -126,7 +136,7 @@ Resume:
     ldy StoppedLine+1
     sta CurrentLine
     sty CurrentLine+1
-;; The rts; STOP, NULL, BASIC 1's CLEAR and its dispatcher return through it.
+;; Returns; STOP, NULL, BASIC 1's CLEAR and its dispatcher return through it.
 ;; Also: CONTRT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 Done:
     rts
@@ -194,7 +204,7 @@ Transfer:
     ;; A forward jump can start its search after the current line; otherwise it starts at <ProgramStart>.
     ;; Errors: UNDEF'D STATEMENT if the line is absent
     ;; Entry:
-    ;;   Done = The rts; RETURN with trailing text returns through it
+    ;;   Done = returns; RETURN with trailing text returns through it
     ;; See: <ReadLineNumber>, <FindLine::FromAddress>
     ;; Also: GOTO (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc GoTo
@@ -229,7 +239,7 @@ CheckFound:
     lda SourceStart+1
     sbc #$00
     sta TextPointer+1
-;; The rts; RETURN with trailing text returns through it.
+;; Returns; RETURN with trailing text returns through it.
 ;; Also: GORTS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 Done:
     rts
@@ -254,8 +264,8 @@ Done:
     ;; previous high byte is zero.
     ;; Errors: RETURN WITHOUT GOSUB if there is no GOSUB frame
     ;; Entry:
-    ;; UndefinedStatement = reports UNDEF'D STATEMENT (RETURN's error skips the load) through <ERROR>;
-    ;; <Statements::GoTo> enters here
+    ;;   UndefinedStatement = reports UNDEF'D STATEMENT through <ERROR>, a load RETURN's error skips;
+    ;;     <Statements::GoTo> enters here
     ;;   ToSyntaxError = jumps to <SNERR>; `ON` enters here
     ;; See: <Statements::GoSub>, <FindForFrame>
     ;; Also: RETURN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
@@ -269,7 +279,7 @@ Done:
     beq RestoreCaller
     ldx #ERROR_RETURN_WITHOUT_GOSUB
     .byte $2C                   ; BIT absolute skips the following LDX on the RETURN error path
-;; Reports UNDEF'D STATEMENT (RETURN's error skips the load) through <ERROR>; <Statements::GoTo> enters here.
+;; Reports UNDEF'D STATEMENT through <ERROR>, a load RETURN's error skips; <Statements::GoTo> enters here.
 ;; Also: USERR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 UndefinedStatement:
     ldx #ERROR_UNDEFINED_STATEMENT

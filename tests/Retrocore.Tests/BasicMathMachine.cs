@@ -134,7 +134,20 @@ internal sealed class BasicMathMachine
     /// <param name="x">The value in X.</param>
     /// <param name="y">The value in Y.</param>
     /// <param name="carry">Whether carry is set.</param>
-    public void Call(string routine, int a = 0, int x = 0, int y = 0, bool carry = false)
+    public void Call(string routine, int a = 0, int x = 0, int y = 0, bool carry = false) =>
+        CallUntil(routine, [], a, x, y, carry);
+
+    /// <summary>
+    ///  Calls a routine from page 3 and runs until it returns there or reaches one of the given addresses.
+    /// </summary>
+    /// <param name="routine">The routine's name.</param>
+    /// <param name="stops">The addresses to stop at.</param>
+    /// <param name="a">The value in A.</param>
+    /// <param name="x">The value in X.</param>
+    /// <param name="y">The value in Y.</param>
+    /// <param name="carry">Whether carry is set.</param>
+    /// <returns>The address reached: a stop, or the caller's return.</returns>
+    public int CallUntil(string routine, int[] stops, int a = 0, int x = 0, int y = 0, bool carry = false)
     {
         ushort target = checked((ushort)_build.Symbol(routine));
         Memory[Caller] = 0x20;
@@ -156,7 +169,8 @@ internal sealed class BasicMathMachine
         for (int instruction = 0; instruction < 200_000; instruction++)
         {
             Cpu.StepInstruction();
-            if (Cpu.Registers.ProgramCounter == Returned) { return; }
+            int counter = Cpu.Registers.ProgramCounter;
+            if (counter == Returned || stops.Contains(counter)) { return counter; }
         }
 
         throw new AssertFailedException($"{routine} did not return.");

@@ -164,7 +164,7 @@ RestoreData:
     ;; <SubscriptMode> is cleared and CONT is disabled. The early stack sequence stores the return address before
     ;; moving the stack pointer; an interrupt in between can overwrite it.
     ;; Entry:
-    ;;   Done = The rts; LIST and CLEAR return through it for a syntax error
+    ;;   Done = returns; LIST and CLEAR return through it for a syntax error
     ;; See: <FindForFrame>, <Statements::Cont>
     ;; Also: STKINI (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc ResetStack
@@ -193,7 +193,7 @@ RestoreData:
         rts
         .byte $51
     .endif
-;; The rts; LIST and CLEAR return through it for a syntax error.
+;; Returns; LIST and CLEAR return through it for a syntax error.
 ;; Also: STKRTS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 Done:
     rts

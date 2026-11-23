@@ -187,7 +187,7 @@ SaveArgument:
     iny
     sta (FunctionPointer),y
 
-;; The rts.
+;; Returns.
 ;; Also: DEFRTS (M6502)
 Done:
     rts

@@ -157,7 +157,7 @@ ToReturnByte:
     ;; placed extension; the ordinary path stores the mask at <WaitXorMask> and polls with <WaitAndMask>.
     ;; Entry:
     ;;   StoreMask = Stores X as <WaitXorMask>; BASIC 2's hidden-message extension (ZSTORD) continues here
-    ;;   Done = The rts; the addition core (AdditionCore) branches here as its own return
+    ;;   Done = returns; the addition core (AdditionCore) branches here as its own return
     ;; See: <ReadAddressAndByte>, <ReadCommaAndByte>, <Statements::Wait::StoreMask>
     ;; Also: FNWAIT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc Wait
@@ -182,7 +182,7 @@ Poll:
     and WaitAndMask
     beq Poll
 
-;; The rts; the addition core (AdditionCore) branches here as its own return.
+;; Returns; the addition core (AdditionCore) branches here as its own return.
 ;; Also: ZERRTS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 Done:
     rts

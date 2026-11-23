@@ -26,9 +26,24 @@ internal sealed partial class AssemblyPreprocessor
         if (PragmaValue(source.Text, "overlay") is { } request)
         {
             // An overlay edits a pinned base, so unchanged lines keep the base's file and line for debugging.
-            if (_options.SourceResolver is not { } resolver || !resolver.TryResolve(source.Path, request, out AssemblySource? baseSource))
+            AssemblySource? baseSource = null;
+            AssemblyLocation pragma = new(source.Path, line: 0, expandedFrom: parent);
+            try
             {
-                Error($"Cannot resolve overlay base '{request}'.", new(source.Path, line: 0, expandedFrom: parent));
+                IAssemblySourceResolver? resolver = _options.SourceResolver;
+                resolver?.TryResolve(source.Path, request, out baseSource);
+            }
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException or ArgumentException)
+            {
+                // As an include reports them: unreadable, denied, or a name no path can hold or that depends on
+                // current-directory state.
+                Error($"Cannot resolve overlay base '{request}': {error.Message}", pragma);
+                return;
+            }
+
+            if (baseSource is null)
+            {
+                Error($"Cannot resolve overlay base '{request}'.", pragma);
                 return;
             }
 

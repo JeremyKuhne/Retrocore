@@ -56,6 +56,7 @@ public class AssemblySourcePathsTests
     [DataRow("//server/share/Library.asm")]
     [DataRow(@"\\?\C:\lib\Library.asm")]
     [DataRow(@"\?\C:\lib\Library.asm")]
+    [DataRow(@"\??\C:\lib\Library.asm")]
     [DataRow("C:")]
     [DataRow("C:Library.asm")]
     [DataRow(@"C:\")]

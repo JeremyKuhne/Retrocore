@@ -406,6 +406,12 @@ internal sealed partial class AssemblyPreprocessor
         {
             return request;
         }
+        catch (ArgumentException)
+        {
+            // A name no path can hold, or one that depends on current-directory state: the include it becomes
+            // reports it.
+            return request;
+        }
     }
 
     private string MerlinLocationLabel(string label) => $"__merlin_at_{(_merlin ??= new()).Names.Resolve(label)}";

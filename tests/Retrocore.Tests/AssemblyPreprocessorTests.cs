@@ -144,6 +144,49 @@ public partial class AssemblyPreprocessorTests
     }
 
     /// <summary>
+    ///  A name no path can hold, reached by a Merlin PUT or USE probe or a MACRO-10 overlay's base rather than an
+    ///  .include, is reported as a diagnostic, not thrown out of the assembler.
+    /// </summary>
+    /// <param name="request">The requested name.</param>
+    [TestMethod]
+    [DataRow("bad\0name")]
+    public void InvalidDialectRequestsAreReported(string request) => DialectRequestsAreReported(request);
+
+    /// <summary>
+    ///  On Windows, a Merlin PUT or USE name or a MACRO-10 overlay's base rooted without being fully qualified is
+    ///  reported as an .include's is, not thrown out of the assembler.
+    /// </summary>
+    /// <param name="request">The requested name.</param>
+    [TestMethod]
+    [OSCondition(OperatingSystems.Windows)]
+    [DataRow("C:part")]
+    [DataRow(@"\part")]
+    public void CurrentDirectoryDialectRequestsAreReportedOnWindows(string request) => DialectRequestsAreReported(request);
+
+    private static void DialectRequestsAreReported(string request)
+    {
+        Resolver resolver = new();
+        AssemblyOptions options = new(ProcessorVariant.Mos6502, origin: 0x1000, imageSize: 32)
+        {
+            Dialect = AssemblyDialect.Merlin,
+            SourceResolver = resolver
+        };
+
+        foreach (string operation in (string[])["PUT", "USE"])
+        {
+            AssemblyResult merlin = new NativeAssembler().Assemble(new AssemblySource($"        {operation} {request}\n", P("root/main.s")), options);
+
+            merlin.Diagnostics.Single().Message.Should().StartWith("Invalid include path: ");
+        }
+
+        AssemblyResult overlay = new NativeAssembler().Assemble(
+            new AssemblySource($"; retrocore: dialect=macro10 overlay={request}\n", P("root/main.mac")),
+            Options(resolver));
+
+        overlay.Diagnostics.Single().Message.Should().StartWith($"Cannot resolve overlay base '{request}': ");
+    }
+
+    /// <summary>
     ///  Runtime filesystem access is explicit and keeps relative include semantics.
     /// </summary>
     [TestMethod]

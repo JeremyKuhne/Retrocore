@@ -181,6 +181,8 @@ public sealed partial class LanguageAnalysisTests
     [DataRow("VALUE: .equal", false)]
     [DataRow("VALUE: .equ$8D", false)]
     [DataRow("VALUE EQU 3", true)]
+    [DataRow("VALUE::1,,2", false)]
+    [DataRow("VALUE::0;comment", false)]
     public void ColonLabelsSurviveErrors(string definition, bool constant)
     {
         string directory = Directory.CreateTempSubdirectory().FullName;
@@ -194,6 +196,72 @@ public sealed partial class LanguageAnalysisTests
             analysis.Result.Success.Should().BeFalse();
             SymbolSiteKind kind = constant ? SymbolSiteKind.Constant : SymbolSiteKind.Label;
             analysis.Find("VALUE").Single().Kind.Should().Be(kind);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
+    ///  A name defined with Merlin's <c>EQU</c> is a constant in the text of a source that does not assemble in any
+    ///  case, as Merlin reads it, while a name followed by a field that only starts with <c>equ</c> stays a label. The
+    ///  text is searched whatever the source's dialect, so a native source shows it as well as a Merlin one.
+    /// </summary>
+    /// <param name="definition">The definition.</param>
+    /// <param name="constant">Whether it defines a constant rather than a label.</param>
+    [TestMethod]
+    [DataRow("VALUE equ 3", true)]
+    [DataRow("VALUE Equ 3", true)]
+    [DataRow("VALUE\teQu\t3", true)]
+    [DataRow("VALUE equal 3", false)]
+    [DataRow("VALUE equ_3", false)]
+    [DataRow("VALUE equ$10", false)]
+    [DataRow("VALUE EQU*", false)]
+    [DataRow("VALUE equ;comment", false)]
+    [DataRow("VALUE equ ;no operand", true)]
+    [DataRow("VALUE equ", true)]
+    public void MerlinEquatesSurviveErrorsInAnyCase(string definition, bool constant)
+    {
+        string directory = Directory.CreateTempSubdirectory().FullName;
+        try
+        {
+            string main = Path.Join(directory, "main.asm");
+            File.WriteAllText(main, $".org $6000\nstart:\n    jmp missing\n{definition}\n");
+
+            SourceAnalysis analysis = SourceAnalysis.Assemble(main, _ => null);
+
+            analysis.Result.Success.Should().BeFalse();
+            SymbolSiteKind kind = constant ? SymbolSiteKind.Constant : SymbolSiteKind.Label;
+            analysis.Find("VALUE").Single().Kind.Should().Be(kind);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
+    ///  A name ending in <c>equ</c> is not cut short to make an equate of its start, in any case.
+    /// </summary>
+    /// <param name="line">A line beginning with such a name.</param>
+    /// <param name="prefix">The start of the name, which must not be defined.</param>
+    [TestMethod]
+    [DataRow("Subsequ;comment", "Subs")]
+    [DataRow("SUBSEQU;comment", "SUBS")]
+    [DataRow("Lequ.b 3", "L")]
+    public void NamesEndingInEquAreNotCutShort(string line, string prefix)
+    {
+        string directory = Directory.CreateTempSubdirectory().FullName;
+        try
+        {
+            string main = Path.Join(directory, "main.asm");
+            File.WriteAllText(main, $".org $6000\nstart:\n    jmp missing\n{line}\n");
+
+            SourceAnalysis analysis = SourceAnalysis.Assemble(main, _ => null);
+
+            analysis.Result.Success.Should().BeFalse();
+            analysis.Find(prefix).Should().BeEmpty();
         }
         finally
         {

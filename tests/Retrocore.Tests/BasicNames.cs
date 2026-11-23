@@ -106,10 +106,10 @@ internal static class BasicNames
     internal static AssemblySymbol? FindDefinition(this AssemblyResult result, string name)
     {
         if (result.Symbols.ContainsKey(name)) { return Defined(result, name); }
-        if (!result.HistoricalNames.TryGetValue(name, out AssemblySymbol? historical)) { return null; }
 
-        // A .set variable's old name reaches a private version of it, which has no definition of its own.
-        return result.Symbols.ContainsKey(historical.Name) ? Defined(result, historical.Name) : historical;
+        // An old name's entry has the definition's name and location with the value the name has, which for a .set
+        // variable's old name is the version where it was documented, not the variable's last.
+        return result.HistoricalNames.TryGetValue(name, out AssemblySymbol? historical) ? historical : null;
     }
 
     /// <summary>
@@ -143,7 +143,7 @@ internal static class BasicNames
     /// <returns>Whether the other build has the definition by any of its names.</returns>
     internal static bool TryGetCounterpart(this AssemblyResult other, AssemblyResult result, string definition, out long value)
     {
-        if (other.TryGetSymbol(definition, out value)) { return true; }
+        // The old names come first: a new name could be another of Microsoft's.
         foreach ((string name, AssemblySymbol target) in result.HistoricalNames.OrderBy(pair => pair.Key, StringComparer.Ordinal))
         {
             if (string.Equals(target.Name, definition, StringComparison.Ordinal) && other.TryGetSymbol(name, out value))
@@ -152,8 +152,7 @@ internal static class BasicNames
             }
         }
 
-        value = 0;
-        return false;
+        return other.TryGetSymbol(definition, out value);
     }
 
     private static AssemblySymbol Defined(AssemblyResult result, string name) =>
@@ -174,7 +173,8 @@ internal static class BasicNames
     /// <remarks>
     ///  <para>
     ///   A test takes the values from another build, usually the MACRO-10 oracle, by Microsoft's names. The modules
-    ///   reach each value by its old name or by the name a rename gave it. A name given explicitly keeps its value.
+    ///   reach each value by its old name or by the name a rename gave it. A name given explicitly keeps its value;
+    ///   two old names that give one current name different values are an error.
     ///  </para>
     /// </remarks>
     /// <param name="symbols">The predefined symbols, by the names Microsoft's source has.</param>
@@ -182,13 +182,34 @@ internal static class BasicNames
     internal static Dictionary<string, long> WithCurrentNames(IReadOnlyDictionary<string, long> symbols)
     {
         Dictionary<string, long> names = new(symbols, StringComparer.Ordinal);
+        Dictionary<string, string> added = [with(StringComparer.Ordinal)];
         foreach ((string name, long value) in symbols)
         {
-            foreach (string current in CurrentNames(name)) { names.TryAdd(current, value); }
+            foreach (string current in CurrentNames(name).Where(current => !symbols.ContainsKey(current)))
+            {
+                if (added.TryGetValue(current, out string? first) && names[current] != value)
+                {
+                    throw new InvalidOperationException(
+                        $"{first} and {name} are both old names of {current}, with different values.");
+                }
+
+                names[current] = value;
+                added[current] = name;
+            }
         }
 
         return names;
     }
+
+    /// <summary>
+    ///  Gets the source that defines a label a test's own source gives one of Microsoft's names: the label, and a
+    ///  label at the same place under every name the native BASIC builds now define it by, so the modules reach it
+    ///  whether they use the old name or the new one.
+    /// </summary>
+    /// <param name="name">The label, as Microsoft's source has it.</param>
+    /// <returns>The label definitions, one per line.</returns>
+    internal static string Label(string name) =>
+        string.Join('\n', CurrentNames(name).Prepend(name).Select(label => $"{label}:"));
 
     /// <summary>
     ///  Gets the names the native BASIC builds define an old name by now, through their <c>;; Also:</c> sections.

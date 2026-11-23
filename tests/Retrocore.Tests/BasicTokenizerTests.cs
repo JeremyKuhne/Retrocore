@@ -51,7 +51,7 @@ public sealed class BasicTokenizerTests
 
         foreach (int revision in (int[])[12, 13])
         {
-            Trs80SdkModules.AssembleLevel2(Path.Join(Inputs, "Trs80", "Level2.asm"), revision).Symbols
+            Trs80SdkModules.AssembleLevel2(Path.Join(Inputs, "Trs80", "Level2.asm"), revision).SymbolsWithHistoricalNames
                 .Should().ContainKeys("NEWSTT", "READY");
         }
     }

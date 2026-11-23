@@ -382,7 +382,7 @@ public sealed class BasicSharedMemoryAccessTests
                 MEMORY_ACCESS_ADDRESS {(features.RejectNegative ? 1 : 0)}
                 MEMORY_ACCESS_PEEK {(features.PreserveAddress ? 1 : 0)}, {(features.HighFirst ? 1 : 0)}, {(features.GuardRom ? 1 : 0)}, {(features.PadGuard ? 1 : 0)}
                 MEMORY_ACCESS_POKE
-            {(features.WaitAlias ? "WAIT:" : "")}
+            {(features.WaitAlias ? BasicNames.Label("WAIT") : "")}
                 MEMORY_ACCESS_WAIT {target}
             MEMORY_ACCESS_END:
             """;

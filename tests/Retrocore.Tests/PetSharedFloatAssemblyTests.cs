@@ -150,7 +150,7 @@ public sealed class PetSharedFloatAssemblyTests
         foreach ((string name, string file) in ((string, string)[])
             [("FADDH", "MsBasic.AdditionCore.asm"), ("ZSTORD", "Commodore.FloatingPoint.asm")])
         {
-            DocumentationTopic topic = docs.Find(name) ?? throw new AssertFailedException($"{name} is not documented.");
+            DocumentationTopic topic = docs.FindTopic(name) ?? throw new AssertFailedException($"{name} is not documented.");
             topic.Kind.Should().Be(DocumentationKind.Routine);
             topic.Value.Should().Be(native.Symbol(name));
             topic.Path.Should().EndWith(file);

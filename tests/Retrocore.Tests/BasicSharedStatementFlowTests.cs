@@ -147,7 +147,7 @@ public sealed class BasicSharedStatementFlowTests
             .org ${legacy.Symbol("DATA"):X4}
                 STATEMENT_SCAN {(quoteFirst ? 1 : 0)}, {(popExit ? 1 : 0)}
                 CONDITIONAL_STATEMENTS
-            {(popExit ? "ON:" : "")}
+            {(popExit ? BasicNames.Label("ON") : "")}
                 ON_STATEMENT
             STATEMENT_FLOW_END:
             """;

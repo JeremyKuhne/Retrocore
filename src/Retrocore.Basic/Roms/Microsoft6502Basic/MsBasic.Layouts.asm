@@ -68,7 +68,7 @@ FOR_FRAME_SIZE = .sizeof(ForFrame)
 .struct GosubFrame
     TOKEN .byte ;; The `GOSUB` token, which marks the frame.
     LINE .word ;; The line number of the `GOSUB` statement.
-    TEXT_POINTER .word ;; The text pointer at the target's line number, which `RETURN` skips.
+    TEXT_POINTER .word ;; The text pointer at the target's line number, not yet read; `RETURN` skips it.
 .endstruct
 
 ;; An entry of the operator table: what the expression evaluator needs to apply a binary operator.

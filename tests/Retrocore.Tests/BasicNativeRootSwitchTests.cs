@@ -46,8 +46,9 @@ public sealed class BasicNativeRootSwitchTests
     }
 
     /// <summary>
-    ///  Each shipped root rejects a switch predefined by the name the BASIC conversion renamed it from (decision X15),
-    ///  which it would otherwise ignore: an <c>.ifndef</c> default is not reached through <c>Also:</c>.
+    ///  Each shipped root rejects a value predefined by the name the BASIC conversion renamed it from (decision X15),
+    ///  which it would otherwise ignore: a PET switch's <c>.ifndef</c> default is not reached through <c>Also:</c>, and
+    ///  AppleSoft fixes Microsoft's values, so a predefined old name there only shadows the definition's.
     /// </summary>
     /// <param name="root">The native root's file name without its extension.</param>
     /// <param name="oldName">Microsoft's or the SDK's earlier name for the switch.</param>
@@ -58,8 +59,6 @@ public sealed class BasicNativeRootSwitchTests
     [DataRow("AppleSoft", "NULCMD", "NULL_COMMAND")]
     [DataRow("AppleSoft", "NUMLEV", "STACK_LEVELS")]
     [DataRow("AppleSoft", "STKEND", "STACK_END")]
-    [DataRow("AppleSoft", "LOCAL_TRMPOS", "LOCAL_TERMINAL_POSITION")]
-    [DataRow("AppleSoft", "VARTXT_IN_LINNUM", "VARIABLE_LIST_IN_LINE_NUMBER")]
     [DataRow("Basic1", "BUFPAG", "INPUT_BUFFER_PAGE")]
     [DataRow("Basic1", "BUFLEN", "INPUT_BUFFER_LENGTH")]
     [DataRow("Basic1", "NULCMD", "NULL_COMMAND")]
@@ -85,8 +84,12 @@ public sealed class BasicNativeRootSwitchTests
     {
         AssemblyResult image = AssembleRoot(root, new() { [oldName] = 0 }, asGiven: true);
         image.Success.Should().BeFalse($"{root} must not silently ignore a predefined {oldName}");
+        string expected = root == "AppleSoft"
+            ? $"AppleSoft fixes {name}; {oldName} cannot be predefined."
+            : $"Predefine {name}, not {oldName}.";
+
         image.Diagnostics.Select(diagnostic => diagnostic.Message)
-            .Should().Contain(message => message.Contains($"Predefine {name}, not {oldName}."));
+            .Should().Contain(message => message.Contains(expected));
     }
 
     /// <summary>

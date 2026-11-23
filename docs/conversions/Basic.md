@@ -643,7 +643,7 @@ Decisions and how the table was applied:
   (the table's introduction); UNKN is the one that keeps the old names working.
 - W3. Names two definitions shared in one file are one definition with both old names (INDEX1 and INDEX are
   `Pointer1`). KIMY is dropped into `Dimensioning`'s `Also:`.
-- W4. Names left in prose because they would clash with another definition in the same build: HV4's INCHR for
+- W4. Names left in prose because they would clash with another definition in the same build: the BASIC 4 reconstructions' INCHR for
   `KernalCharacterIn` (BASIC's own INCHR is another routine). Microsoft's REDDY and GOTK in AppleSoft (C-Q8), Q
   (the table counter, which the tables no longer use) and AppleSoft's LINWID and NCMWID (D-Q3) are named in prose
   and not defined; NCMWID's one use is written `FRETOP+1`, the same byte.
@@ -660,7 +660,8 @@ Decisions and how the table was applied:
   LOCAL_TRMPOS, VARTXT_IN_LINNUM) are renamed as drafted everywhere they are used, since an `.ifndef` default is
   not reached through `Also:`, and the tests predefine the new names. Microsoft's five keep `Also:`; the SDK's two
   (LOCAL_TRMPOS, VARTXT_IN_LINNUM) are not historical and get none. Each root asserts that none of the seven old
-  names is predefined. The switches C# sets keep their names. BASIC 1's root sets three of the five itself
+  names is predefined; AppleSoft, which fixes Microsoft's five, rejects those five as values it fixes. The
+  switches C# sets keep their names. BASIC 1's root sets three of the five itself
   (INPUT_BUFFER_PAGE, INPUT_BUFFER_LENGTH, NULL_COMMAND), so there the Equates' definitions, and their old names,
   are skipped; nothing uses the old names any more.
 - W8. D-Q3: SIZE is `CollectorOffset`, as recommended (the string collector's offset; the recommendation's scoped
@@ -2160,10 +2161,10 @@ The shared workspace names both vendors define, named before the parts were draf
 | VARTXT | `VariableListPointer` | alias: READ/INPUT's pointer into the variable list |
 | DEFPNT | `FunctionPointer` | pointer used in a DEF FN definition |
 | JMPER | `FunctionJump` | a JMP the function dispatcher stores its target into |
-| SIZE | `FunctionJumpTarget` | alias: JMPER+1 (verify uses) |
-| OLDOV | `FunctionJumpHigh` | alias: JMPER+2 (verify uses) |
+| SIZE | `CollectorOffset` | alias: JMPER+1, the string collector's offset (W8) |
+| OLDOV | `FunctionJumpHigh` | alias: JMPER+2, the unshifted operand's extension while adding (W8) |
 | USRPOK | `UserVector` | the JMP that USR calls |
-| KIMY | `SavedOutputY` | alias of Dimensioning: Y saved while printing (verify) |
+| KIMY | `SavedOutputY` | alias of Dimensioning; dropped, in Dimensioning's `Also:` (W3) |
 | ANDMSK | `WaitAndMask` | WAIT's AND mask (alias of AssignedVariable) |
 | EORMSK | `WaitXorMask` | WAIT's EOR mask |
 | POKER | `PokeAddress` | alias of LineNumber: POKE's and WAIT's address |

@@ -13,8 +13,8 @@
 ;; <FACSGN> is set, even when the exponent is zero. One caller return address is discarded before
 ;; continuing at <TIMSTR>.
 ;;
-;; Commodore's 1979 source for PET BASIC 4 calls it `STRD` (code14), as do the Hoffmann-Vetter
-;; reconstructions of PET BASIC 1 and 2.
+;; In PET BASIC 4, Commodore's 1979 source calls it `STRD` (code14). In PET BASIC 1 and 2, the
+;; Hoffmann-Vetter reconstructions call it `STRD` (code14).
 ;;
 ;; In: FAC = numeric value, VALTYP = numeric, decimal = clear
 ;; Out: FACMO/FACLO = temporary descriptor pointer, VALTYP = string

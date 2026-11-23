@@ -398,7 +398,8 @@ public sealed partial class LanguageAnalysisTests
     {
         string folder = Path.GetFullPath(Path.Join(AppContext.BaseDirectory, "Inputs", "AppleSoft"));
         string overlay = Path.Join(folder, "applesoft.mac");
-        string basis = Path.Join(folder, "m6502.asm");
+        string basis = Path.GetFullPath(Path.Join(AppContext.BaseDirectory, "Inputs", "Microsoft6502Basic", "m6502.asm"));
+        File.Exists(basis).Should().BeTrue("the overlay's base must be where the test inputs keep it");
 
         SourceAnalysis analysis = SourceAnalysis.Assemble(overlay, _ => null);
 

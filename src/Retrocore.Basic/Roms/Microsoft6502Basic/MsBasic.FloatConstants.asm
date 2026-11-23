@@ -22,15 +22,15 @@ LOGCN2:
 
 ;; Packed approximation to the square root of one half.
 ;;
-;; Commodore's 1979 source for PET BASIC 4 calls it `SQR05` (code18), as do the Hoffmann-Vetter
-;; reconstructions of PET BASIC 1 and 2.
+;; In PET BASIC 4, Commodore's 1979 source calls it `SQR05` (code18). In PET BASIC 1 and 2, the
+;; Hoffmann-Vetter reconstructions call it `SQR05` (code18).
 SQRHLF:
     .byte $80, $35, $04, $F3, $34
 
 ;; Packed approximation to the square root of two.
 ;;
-;; Commodore's 1979 source for PET BASIC 4 calls it `SQR20` (code18), as do the Hoffmann-Vetter
-;; reconstructions of PET BASIC 1 and 2.
+;; In PET BASIC 4, Commodore's 1979 source calls it `SQR20` (code18). In PET BASIC 1 and 2, the
+;; Hoffmann-Vetter reconstructions call it `SQR20` (code18).
 SQRTWO:
     .byte $81, $35, $04, $F3, $34
 
@@ -52,15 +52,15 @@ LOG2:
 
 ;; Packed lower scaling threshold, 99,999,999.90625.
 ;;
-;; Commodore's 1979 source for PET BASIC 4 calls it `N0999` (code22), as do the Hoffmann-Vetter
-;; reconstructions of PET BASIC 1 and 2.
+;; In PET BASIC 4, Commodore's 1979 source calls it `N0999` (code22). In PET BASIC 1 and 2, the
+;; Hoffmann-Vetter reconstructions call it `N0999` (code22).
 NZ0999:
     .byte $9B, $3E, $BC, $1F, $FD
 
 ;; Packed upper scaling threshold, selected by the macro's preciseUpper parameter.
 ;;
-;; Commodore's 1979 source for PET BASIC 4 calls it `N9999` (code22), as do the Hoffmann-Vetter
-;; reconstructions of PET BASIC 1 and 2.
+;; In PET BASIC 4, Commodore's 1979 source calls it `N9999` (code22). In PET BASIC 1 and 2, the
+;; Hoffmann-Vetter reconstructions call it `N9999` (code22).
 NZ9999:
 .if preciseUpper
     .byte $9E, $6E, $6B, $27, $FE
@@ -70,8 +70,8 @@ NZ9999:
 
 ;; Packed floating-point constant one billion, used to scale small output values.
 ;;
-;; Commodore's 1979 source for PET BASIC 4 calls it `NMIL` (code22), as do the Hoffmann-Vetter
-;; reconstructions of PET BASIC 1 and 2.
+;; In PET BASIC 4, Commodore's 1979 source calls it `NMIL` (code22). In PET BASIC 1 and 2, the
+;; Hoffmann-Vetter reconstructions call it `NMIL` (code22).
 NZMIL:
     .byte $9E, $6E, $6B, $28, $00
 

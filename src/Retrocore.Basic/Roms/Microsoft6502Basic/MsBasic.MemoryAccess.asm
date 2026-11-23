@@ -24,7 +24,8 @@ GETNUM:
 
 ;; Requires a comma and reads the following byte expression.
 ;;
-;; Apple's Technical Information Library article 76, Floating Point Math Package (3 of 3), calls it `COMBYTE`.
+;; In AppleSoft, Apple's Technical Information Library article 76, Floating Point Math Package (3 of 3), calls it
+;; `COMBYTE`.
 ;;
 ;; Out: X = byte value, TXTPTR = terminating character
 ;; See: <CHKCOM>, <GETBYT>

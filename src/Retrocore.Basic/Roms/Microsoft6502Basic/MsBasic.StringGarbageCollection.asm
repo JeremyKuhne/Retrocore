@@ -26,8 +26,8 @@
 ;; descriptor is in page zero, as for a temporary, they end collection without moving it or any
 ;; lower remaining strings. PET BASIC 2 tests both bytes and collects those temporaries.
 ;;
-;; Apple calls it `GARBAG` (The Apple Orchard, March/April 1980, p. 16), which is distinct from Microsoft's
-;; `GARBAG` allocation-retry entry.
+;; In AppleSoft, Apple Computer, in The Apple Orchard (March/April 1980, p. 16), calls it `GARBAG`, which is
+;; distinct from Microsoft's `GARBAG` allocation-retry entry.
 ;;
 ;; In: FOUR6 = <STRSIZ>, decimal = clear
 ;; Out: FRETOP = lower boundary after collection

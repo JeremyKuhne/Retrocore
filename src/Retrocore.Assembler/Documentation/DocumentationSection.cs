@@ -75,10 +75,29 @@ public sealed class DocumentationSection
     public string Text => string.Join(" ", Lines.Select(line => line.Trim()).Where(line => line.Length != 0));
 
     /// <summary>
+    ///  Gets the source and zero-based line of the definition the section's comment documents, when topics from
+    ///  several branches of an <c>.if</c> were merged; otherwise null and -1.
+    /// </summary>
+    public string? OriginPath { get; init; }
+
+    /// <inheritdoc cref="OriginPath"/>
+    public int OriginLine { get; init; } = -1;
+
+    /// <summary>
     ///  Copies the section with a condition.
     /// </summary>
     /// <param name="condition">The condition.</param>
     /// <returns>The copy.</returns>
     public DocumentationSection WithCondition(string? condition) =>
         new(Name, Line, Lines, Entries, Items) { Condition = condition };
+
+    /// <summary>
+    ///  Copies the section with a condition and the definition its comment documents.
+    /// </summary>
+    /// <param name="condition">The condition.</param>
+    /// <param name="path">The definition's source.</param>
+    /// <param name="line">The definition's zero-based line.</param>
+    /// <returns>The copy.</returns>
+    public DocumentationSection WithCondition(string? condition, string path, int line) =>
+        new(Name, Line, Lines, Entries, Items) { Condition = condition, OriginPath = path, OriginLine = line };
 }

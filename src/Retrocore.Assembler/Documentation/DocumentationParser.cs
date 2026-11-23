@@ -208,7 +208,25 @@ public static partial class DocumentationParser
 
         // Without the style checks this is not the lint, so there is nothing for exclusions to apply to.
         List<DocumentationExclusion> exclusions = style ? Exclusions(lines, path, diagnostics) : [];
-        return new(path, comments, diagnostics) { Strict = strict, Exclusions = exclusions };
+        return new(path, comments, diagnostics)
+        {
+            Strict = strict,
+            Exclusions = exclusions,
+            Macros = MacroNames(lines)
+        };
+    }
+
+    // The macros a source defines, in any dialect.
+    private static List<string> MacroNames(string[] lines)
+    {
+        List<string> names = [];
+        List<string?> none = [];
+        foreach (string line in lines)
+        {
+            if (Define(Split(line).Code, none) is { Kind: DocumentationKind.Macro } macro) { names.Add(macro.Name); }
+        }
+
+        return names;
     }
 
     /// <summary>

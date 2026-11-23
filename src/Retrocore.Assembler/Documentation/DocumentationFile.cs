@@ -24,4 +24,9 @@ public sealed record DocumentationFile(
     ///  Gets the rules the file's <c>ignore=</c> pragmas turn off, and where.
     /// </summary>
     public IReadOnlyList<DocumentationExclusion> Exclusions { get; init; } = [];
+
+    /// <summary>
+    ///  Gets the macros the file defines, in any dialect: an <c>.ifdef</c> counts them as defined, as it does symbols.
+    /// </summary>
+    public IReadOnlyList<string> Macros { get; init; } = [];
 }

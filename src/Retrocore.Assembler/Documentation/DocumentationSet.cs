@@ -20,6 +20,10 @@ public sealed class DocumentationSet
     // The CPU every statement was assembled for, unless they were for more than one.
     private IsaDescription? _onlyCpu;
     private bool _mixed;
+    private HashSet<string>? _macros;
+
+    // Where the assembly defined each symbol, by full path and zero-based line: which branch of an .if it took.
+    private HashSet<(string Path, int Line)> _definedAt = [];
 
     private DocumentationSet(
         string? module,
@@ -99,7 +103,7 @@ public sealed class DocumentationSet
             symbols = moved;
         }
 
-        DocumentationSet set = Create(files, symbols, module, model, result?.SourceMap);
+        DocumentationSet set = Create(files, symbols, module, model, result?.SourceMap, result?.SymbolDefinitions);
         if (result is not null)
         {
             List<(string, string, int)> exports = [];
@@ -112,7 +116,6 @@ public sealed class DocumentationSet
             }
 
             set.Exports = exports;
-
         }
 
         return set;
@@ -180,17 +183,29 @@ public sealed class DocumentationSet
     /// <param name="module">The module name links may use, or null.</param>
     /// <param name="model">The model the code was built for, or null.</param>
     /// <param name="sourceMap">The assembly's statements, for each part's CPU; null when unknown.</param>
+    /// <param name="definitions">
+    ///  The assembly's symbol definitions, which tell which branch of each <c>.if</c> it took; null when unknown.
+    /// </param>
     /// <returns>The set.</returns>
     public static DocumentationSet Create(
         IEnumerable<DocumentationFile> files,
         IReadOnlyDictionary<string, long> symbols,
         string? module = null,
         string? model = null,
-        IEnumerable<AssemblySourceMapEntry>? sourceMap = null)
+        IEnumerable<AssemblySourceMapEntry>? sourceMap = null,
+        IEnumerable<AssemblySymbol>? definitions = null)
     {
         List<DocumentationFile> list = [.. files];
         DocumentationSet set = new(module, model, symbols, list);
         if (sourceMap is not null) { ReadCpus(set, sourceMap); }
+        foreach (AssemblySymbol symbol in definitions ?? [])
+        {
+            if (symbol.Location is { Path.Length: > 0 } location)
+            {
+                set._definedAt.Add((System.IO.Path.GetFullPath(location.Path), location.Line));
+            }
+        }
+
         Dictionary<string, List<DocumentationComment>> byName = [with(StringComparer.Ordinal)];
         List<string> order = [];
         foreach (DocumentationFile file in list)
@@ -237,9 +252,83 @@ public sealed class DocumentationSet
     ///  Finds the topics that give a historical name in their <c>Also:</c> sections.
     /// </summary>
     /// <param name="name">The historical name, such as <c>COUT</c>.</param>
+    /// <param name="thisBuild">
+    ///  Whether only the definitions this set's assembly assembles count. Two models may give the same old name to
+    ///  different code (the original and Enhanced IIe's SLOTRTS), and within its own build a source means its own
+    ///  one; a set used as another module, assembled for its default build, says nothing about the caller's build.
+    /// </param>
     /// <returns>The topics, in source order; usually none or one.</returns>
-    public IReadOnlyList<DocumentationTopic> FindAlso(string name) =>
-        AlsoIndex().TryGetValue(name, out List<DocumentationTopic>? found) ? found : [];
+    /// <remarks>
+    ///  <para>
+    ///   With <paramref name="thisBuild"/>, a label or equate in a branch of an <c>.if</c> the build leaves out doesn't
+    ///   count, nor does an <c>Also:</c> section of such a branch when both branches document the definition; macros,
+    ///   scopes and types, which are no symbols, always count. This only chooses among definitions: a name only an
+    ///   omitted one gives still finds it, as a plain name of a definition the build leaves out still does. Without
+    ///   the assembly's symbols, every definition counts.
+    ///  </para>
+    /// </remarks>
+    public IReadOnlyList<DocumentationTopic> FindAlso(string name, bool thisBuild = false)
+    {
+        if (!AlsoIndex().TryGetValue(name, out List<DocumentationTopic>? found)) { return []; }
+        if (!thisBuild || found.Count < 2) { return found; }
+        List<DocumentationTopic> built = [.. found.Where(topic => Assembles(topic) && Gives(topic, name, thisBuild: true))];
+        return built.Count == 0 ? found : built;
+    }
+
+    /// <summary>
+    ///  Gets whether a topic gives a historical name in an <c>Also:</c> section.
+    /// </summary>
+    /// <param name="topic">The topic.</param>
+    /// <param name="name">The historical name.</param>
+    /// <param name="thisBuild">Whether only its sections in this set's build count, as the assembler's do.</param>
+    /// <returns>Whether it gives the name.</returns>
+    public bool Gives(DocumentationTopic topic, string name, bool thisBuild = false) =>
+        DocumentationAlso.Of(topic.Sections.Where(section => !thisBuild || InBuild(topic, section)))
+            .Any(also => also.Name == name);
+
+    /// <summary>
+    ///  Gets whether a topic's section, from one branch of an <c>.if</c> when topics from several were merged, is in
+    ///  this set's build.
+    /// </summary>
+    /// <param name="topic">The topic.</param>
+    /// <param name="section">One of its sections.</param>
+    /// <returns>Whether the section's branch is the one assembled.</returns>
+    /// <remarks>
+    ///  <para>
+    ///   For a label, equate or member, the assembly answers it exactly: the branch is in the build when the assembly
+    ///   defined a symbol at the line the section's comment documents, as the assembler gives a definition the
+    ///   historical names of the branch it assembled. For anything else, the section's condition is evaluated from
+    ///   the build's symbols and the files' macros, which can differ from the assembler's view where a macro is
+    ///   defined after the <c>.ifdef</c> that tests it.
+    ///  </para>
+    /// </remarks>
+    public bool InBuild(DocumentationTopic topic, DocumentationSection section)
+    {
+        return section.Condition is null
+            || (IsSymbol(topic.Kind) && _definedAt.Count != 0 && section.OriginPath is { } path
+                ? _definedAt.Contains((System.IO.Path.GetFullPath(path), section.OriginLine))
+                : DocumentationConditions.InBuild(section.Condition, _symbols, IsDefined));
+    }
+
+    // Whether the assembly defines a symbol for a topic of this kind.
+    private static bool IsSymbol(DocumentationKind kind) =>
+        kind is DocumentationKind.Routine
+            or DocumentationKind.Table
+            or DocumentationKind.Constant
+            or DocumentationKind.Variable
+            or DocumentationKind.Member;
+
+    /// <summary>
+    ///  Gets whether a topic's definition is in this set's assembly: false only for a label or equate the assembly
+    ///  leaves out, in a branch of an <c>.if</c> its build does not take.
+    /// </summary>
+    /// <param name="topic">The topic.</param>
+    /// <returns>Whether it is assembled, or can't be told apart.</returns>
+    public bool Assembles(DocumentationTopic topic) =>
+        _symbols.Count == 0
+            || topic.Kind is not (DocumentationKind.Routine or DocumentationKind.Table or DocumentationKind.Constant or DocumentationKind.Variable)
+            || topic.Value is not null
+            || Defines(topic.Name);
 
     /// <summary>
     ///  Gets every historical name the topics give.
@@ -275,12 +364,26 @@ public sealed class DocumentationSet
     }
 
     /// <summary>
+    ///  Gets the symbol an <c>Entry:</c> label names: the routine's own local when the routine is a <c>.proc</c>
+    ///  that defines one (<c>Plot::SameRow</c> for <c>SameRow</c> in <c>Plot</c>), otherwise the label as written.
+    /// </summary>
+    /// <param name="routine">The routine whose comment lists the entry.</param>
+    /// <param name="label">The label as written.</param>
+    /// <returns>The symbol's name.</returns>
+    public string EntrySymbol(DocumentationTopic routine, string label)
+    {
+        string local = $"{routine.Name}::{label}";
+        return _symbols.ContainsKey(local) || _topics.ContainsKey(local) ? local : label;
+    }
+
+    /// <summary>
     ///  Finds the topic of a label documented as an entry into a routine, or the routine itself.
     /// </summary>
     /// <param name="name">The label.</param>
     /// <returns>The routine's topic, or null.</returns>
     public DocumentationTopic? FindRoutine(string name) =>
-        Find(name) ?? _ordered.FirstOrDefault(topic => topic.EntryLabels.Contains(name, StringComparer.Ordinal));
+        Find(name) ?? _ordered.FirstOrDefault(topic =>
+            topic.EntryLabels.Any(label => label == name || EntrySymbol(topic, label) == name));
 
     /// <summary>
     ///  Finds the documented label at an address.
@@ -296,6 +399,17 @@ public sealed class DocumentationSet
     /// <param name="name">The name.</param>
     /// <returns>Whether it is defined.</returns>
     public bool Defines(string name) => _symbols.ContainsKey(name);
+
+    /// <summary>
+    ///  Gets whether a name is defined as an <c>.ifdef</c> sees it: a symbol of the assembly or a macro its files define.
+    /// </summary>
+    /// <param name="name">The name.</param>
+    /// <returns>Whether it is defined.</returns>
+    public bool IsDefined(string name)
+    {
+        _macros ??= [.. Files.SelectMany(file => file.Macros)];
+        return _symbols.ContainsKey(name) || _macros.Contains(name);
+    }
 
     /// <summary>
     ///  Tests whether a qualified name is a scope: one that a documented or assembled name is qualified by.
@@ -361,7 +475,7 @@ public sealed class DocumentationSet
                 }
                 else
                 {
-                    sections.Add(section.WithCondition(comment.Condition));
+                    sections.Add(section.WithCondition(comment.Condition, comment.Path, comment.TargetLine));
                 }
             }
         }

@@ -67,11 +67,17 @@ public sealed partial class DocumentationResolver
     public static string? ModelOf(string? condition)
     {
         if (condition is null) { return null; }
-        bool model = condition.Contains("ENHANCED", StringComparison.OrdinalIgnoreCase)
-            || condition.Contains("ENHNCD", StringComparison.OrdinalIgnoreCase);
 
-        if (!model) { return null; }
-        return condition.StartsWith("not ", StringComparison.OrdinalIgnoreCase) ? "Original" : "Enhanced";
+        // In a joined condition ("MONITOR = MONITOR_IIE and not ENHANCED") the part that names the switch decides.
+        foreach (string part in condition.Split(" and ", StringSplitOptions.TrimEntries))
+        {
+            bool model = part.Contains("ENHANCED", StringComparison.OrdinalIgnoreCase)
+                || part.Contains("ENHNCD", StringComparison.OrdinalIgnoreCase);
+
+            if (model) { return part.StartsWith("not ", StringComparison.OrdinalIgnoreCase) ? "Original" : "Enhanced"; }
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -99,129 +105,11 @@ public sealed partial class DocumentationResolver
         foreach (string part in condition.Split(" and ", StringSplitOptions.TrimEntries))
         {
             bool not = part.StartsWith("not ", StringComparison.OrdinalIgnoreCase);
-            if (Holds(not ? part[4..].Trim() : part, symbol) is { } holds && holds == not) { return false; }
+            bool? holds = DocumentationConditions.Holds(not ? part[4..].Trim() : part, symbol);
+            if (holds is { } value && value == not) { return false; }
         }
 
         return true;
-    }
-
-    // Evaluates an .if operand of comparisons joined by && and || and grouped by parentheses, or null when it cannot.
-    private static bool? Holds(string test, Func<string, long?> symbol)
-    {
-        int at = 0;
-        bool? value = Either(test, ref at, symbol);
-        return at == test.Length ? value : null;
-    }
-
-    // Tests joined by ||, up to a closing parenthesis or the end.
-    private static bool? Either(string text, ref int at, Func<string, long?> symbol)
-    {
-        bool? any = Both(text, ref at, symbol);
-        while (Take(text, ref at, "||"))
-        {
-            bool? next = Both(text, ref at, symbol);
-            any = any == true || next == true ? true : any is null || next is null ? null : false;
-        }
-
-        return any;
-    }
-
-    // Tests joined by &&.
-    private static bool? Both(string text, ref int at, Func<string, long?> symbol)
-    {
-        bool? all = Test(text, ref at, symbol);
-        while (Take(text, ref at, "&&"))
-        {
-            bool? next = Test(text, ref at, symbol);
-            all = all == false || next == false ? false : all is null || next is null ? null : true;
-        }
-
-        return all;
-    }
-
-    // A parenthesized group, or a comparison running to the next &&, || or closing parenthesis.
-    private static bool? Test(string text, ref int at, Func<string, long?> symbol)
-    {
-        if (Take(text, ref at, "("))
-        {
-            bool? group = Either(text, ref at, symbol);
-            return Take(text, ref at, ")") ? group : null;
-        }
-
-        int start = at;
-        while (at < text.Length && text[at] != ')' && !Ahead(text, at, "&&") && !Ahead(text, at, "||"))
-        {
-            at += IsCharacter(text, at) ? 3 : 1;
-        }
-
-        return Comparison(text[start..at], symbol);
-    }
-
-    // Skips spaces, then the token if it is next.
-    private static bool Take(string text, ref int at, string token)
-    {
-        while (at < text.Length && text[at] == ' ') { at++; }
-        if (!Ahead(text, at, token)) { return false; }
-        at += token.Length;
-        while (at < text.Length && text[at] == ' ') { at++; }
-        return true;
-    }
-
-    private static bool Ahead(string text, int at, string token) =>
-        string.CompareOrdinal(text, at, token, 0, token.Length) == 0;
-
-    private static bool? Comparison(string text, Func<string, long?> symbol)
-    {
-        foreach (string op in (string[])["!=", "<=", ">=", "==", "=", "<", ">"])
-        {
-            int at = OperatorAt(text, op);
-            if (at <= 0) { continue; }
-            if (Operand(text[..at], symbol) is not { } left || Operand(text[(at + op.Length)..], symbol) is not { } right)
-            {
-                return null;
-            }
-
-            return op switch
-            {
-                "!=" => left != right,
-                "<=" => left <= right,
-                ">=" => left >= right,
-                "<" => left < right,
-                ">" => left > right,
-                _ => left == right
-            };
-        }
-
-        // A bare symbol holds when it is nonzero.
-        return Operand(text, symbol) is { } value ? value != 0 : null;
-    }
-
-    // Where an operator first appears outside character literals, or -1.
-    private static int OperatorAt(string text, string op)
-    {
-        for (int at = 0; at < text.Length; at += IsCharacter(text, at) ? 3 : 1)
-        {
-            if (Ahead(text, at, op)) { return at; }
-        }
-
-        return -1;
-    }
-
-    // Whether a character literal, such as 'B', starts here.
-    private static bool IsCharacter(string text, int at) =>
-        text[at] == '\'' && at + 2 < text.Length && text[at + 2] == '\'';
-
-    private static long? Operand(string text, Func<string, long?> symbol)
-    {
-        string trimmed = text.Trim();
-        if (trimmed.Length == 3 && trimmed[0] == '\'' && trimmed[2] == '\'') { return trimmed[1]; }
-        if (trimmed.StartsWith('$') && long.TryParse(trimmed[1..], System.Globalization.NumberStyles.HexNumber, provider: null, out long hex))
-        {
-            return hex;
-        }
-
-        if (long.TryParse(trimmed, out long number)) { return number; }
-        return trimmed.Length != 0 && (char.IsLetter(trimmed[0]) || trimmed[0] == '_') ? symbol(trimmed) : null;
     }
 
     /// <summary>
@@ -357,7 +245,7 @@ public sealed partial class DocumentationResolver
             ? (Path.GetFileName(topic.Path).ToUpperInvariant(), topic.Line, target.Value)
             : ("", -1, target.Value);
 
-    private static DocumentationTarget? Match(DocumentationSet set, string name, bool also = true)
+    private DocumentationTarget? Match(DocumentationSet set, string name, bool also = true)
     {
         if (set.Find(name) is { } topic) { return Found(topic); }
         if (set.Symbols.TryGetValue(name, out long value))
@@ -368,10 +256,11 @@ public sealed partial class DocumentationResolver
         return also ? Also(set, name) : null;
     }
 
-    // A historical name reaches the definition that gives it in an Also: section.
-    private static DocumentationTarget? Also(DocumentationSet set, string name)
+    // A historical name reaches the definition that gives it in an Also: section: in the set being checked, the one its
+    // build assembles; in another module, any of its builds', so a name two of them give is ambiguous.
+    private DocumentationTarget? Also(DocumentationSet set, string name)
     {
-        IReadOnlyList<DocumentationTopic> also = set.FindAlso(name);
+        IReadOnlyList<DocumentationTopic> also = set.FindAlso(name, thisBuild: ReferenceEquals(set, Current));
         if (also.Count == 1) { return Found(also[0]); }
         return also.Count > 1 ? new(DocumentationTargetKind.Ambiguous, name) : null;
     }

@@ -154,7 +154,7 @@ internal sealed partial class LanguageWorkspace
                 // A name a root symbol has is never historical; one a scope defines is checked at each use, below.
                 if (analysis.Definitions.Any(site => site.Name == name)) { continue; }
 
-                IReadOnlyList<DocumentationTopic> topics = set.FindAlso(name);
+                IReadOnlyList<DocumentationTopic> topics = set.FindAlso(name, thisBuild: ReferenceEquals(set, analysis.Documentation));
                 string? replacement = topics.Count == 1 ? topics[0].Name : null;
                 current[name] = current.TryGetValue(name, out string? earlier) && earlier != replacement ? null : replacement;
             }

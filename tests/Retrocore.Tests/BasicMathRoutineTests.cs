@@ -27,6 +27,7 @@ public sealed class BasicMathRoutineTests
     [TestMethod]
     [DataRow(true, "Float::AddPacked", 1.5, 2.25, 3.75)]
     [DataRow(false, "Float::AddPacked", -1.5, 2.25, 0.75)]
+    [DataRow(true, "Float::AddPacked", 1.2676506002282294E+30, 7.888609052210118E-31, 1.2676506002282294E+30)]
     [DataRow(true, "Float::SubtractFromPacked", 4.0, 10.0, 6.0)]
     [DataRow(false, "Float::SubtractFromPacked", 4.0, 10.0, 6.0)]
     [DataRow(true, "Float::MultiplyPacked", 3.0, -2.5, -7.5)]

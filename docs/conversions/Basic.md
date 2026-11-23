@@ -743,7 +743,7 @@ Decisions and how the table was applied:
   pieces of their scopes in the test's source. The PET float alias test predefines only the current names its
   model's build has: BASIC 1 keeps ZERO, so another build's ZeroValue would be a second definition.
 
-Checked: the full suite (3,821 passed, none failed; 665 skipped, the ROM-dump comparisons without the dumps), the rename
+Checked: the full suite (3,822 passed, none failed; 665 skipped, the ROM-dump comparisons without the dumps), the rename
 gate, the lint tests, and `BasicMathConversionTests`, which compares every old name in the math files with the
 MACRO-10 overlay's value in each of the eight builds, checks that each definition reaches the overlay by its name
 or an old name, that a vendor's names resolve only in its builds and through its aliases, and that every citation's

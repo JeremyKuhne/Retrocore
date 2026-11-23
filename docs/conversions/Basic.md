@@ -17,8 +17,8 @@ ROMs byte for byte:
 | P4 | PET BASIC 4, original | `Basic4.asm`, REVISD = 0 |
 | P4R | PET BASIC 4, revised | `Basic4.asm`, REVISD = 1 |
 
-"AS" is the three AppleSoft builds, "PET" the five PET builds, "all" the eight. The sources keep Microsoft's
-six-letter names today. This log covers steps 1 to 3 of [the method](../ConvertingSources.md): the inventory, the
+"AS" is the three AppleSoft builds, "PET" the five PET builds, "all" the eight. The unconverted sources keep
+Microsoft's six-letter names. This log covers steps 1 to 3 of [the method](../ConvertingSources.md): the inventory, the
 sources and citations, and the rename table, [BasicRenames.md](BasicRenames.md), a draft for the owner's review.
 The conversion itself (step 4) is logged below, under "Step 4: the conversion", one step of X8 at a time.
 
@@ -627,14 +627,15 @@ Converted, with `; retrocore: style=strict`:
   FOR's `FORSIZ-3`.
 - `AppleSoft.DispatchTables.asm` and `Commodore.DispatchTables.asm`: the tokens (`TOKEN_*`), the error offsets
   (`ERROR_*`) and the messages (`ErrorSuffix`, `LineNumberPrefix`, `BreakMessage`, and the PET's `ReadyMessage`),
-  X4. The tables themselves (STMDSP, FUNDSP, RESLST, ERRTAB) keep their names for their own step. The Commodore
+  X4. The tables themselves (STMDSP, FUNDSP, RESLST, ERRTAB) and the PET's COMMODORE_DISPATCH_TABLES macro keep
+  their names for their own step. The Commodore
   macro's body is indented as the strict lint asks of a macro.
 
 Decisions and how the table was applied:
 
 - W1. Every renamed definition's old name is in its `Also:` with the table's keys, the brackets of a key's builds
   dropped (the Equates and dispatch tables are vendor files, so each name already resolves only in its vendor's
-  builds). The table's "other names here" go in the same `Also:`, each on one definition: the location where the
+  builds). The shared layouts cite Microsoft's source alone, since every build has them. The table's "other names here" go in the same `Also:`, each on one definition: the location where the
   table lists it on a location and its aliases (TEMP3 on `FunctionPointer`, ARRYPT on `DestinationEnd`).
 - W2. A row whose documents give no name (its Documents column "none found", or only "spelling only" or "other
   names here") cites its old name as `UNKN`, so the unconverted files' uses of it still resolve. The bibliography
@@ -655,11 +656,12 @@ Decisions and how the table was applied:
 - W6. AppleSoft's copies of the Monitor's, the IIe's and the firmware's names keep their names and definitions in
   AppleSoft.Equates, in their own section, until AppleSoft includes IIeEquates.asm and MonitorEntries.asm (X10,
   pending: the converted IIeEquates is on `claude/convert-iieequates`, not yet on main). Their trailing comments
-  are moved above them, as the strict lint asks. This covers Microsoft's CQ* synonyms, BUF and OUTCH.
+  are moved above them, as the strict lint asks. This covers Microsoft's CQ* synonyms, BUF and OUTCH. The table's
+  other names for them (ASTIL's HBAS for GBASL) join their `Also:` with X10.
 - W7. Switches (X15): the seven a test predefines and the Equates define (BUFPAG, BUFLEN, NULCMD, NUMLEV, STKEND,
   LOCAL_TRMPOS, VARTXT_IN_LINNUM) are renamed as drafted everywhere they are used, since an `.ifndef` default is
   not reached through `Also:`, and the tests predefine the new names. Microsoft's five keep `Also:`; the SDK's two
-  (LOCAL_TRMPOS, VARTXT_IN_LINNUM) are not historical and get none. Each root asserts that none of the seven old
+  (LOCAL_TRMPOS, VARTXT_IN_LINNUM) are not historical and get none. Each PET root asserts that none of the seven old
   names is predefined; AppleSoft, which fixes Microsoft's five, rejects those five as values it fixes. The
   switches C# sets keep their names. BASIC 1's root sets three of the five itself
   (INPUT_BUFFER_PAGE, INPUT_BUFFER_LENGTH, NULL_COMMAND), so there the Equates' definitions, and their old names,

@@ -124,7 +124,7 @@ public sealed class BasicWorkspaceConversionTests
         shared.Select(also => also.Name).Should().BeEquivalentTo(["STRSIZ", "FORSIZ"]);
         foreach (DocumentationAlso also in shared)
         {
-            also.Sources.Should().Contain("M6502", $"{also.Name} is on a shared definition");
+            also.Sources.Should().Equal(["M6502"], $"{also.Name} is on a shared definition, which every build has");
             foreach (AssemblyResult build in apple.Concat(pet))
             {
                 build.Symbol(also.Name).Should().Be(build.Symbol(build.DefinitionName(also.Name)));

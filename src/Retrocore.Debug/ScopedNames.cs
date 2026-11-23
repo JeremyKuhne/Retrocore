@@ -33,7 +33,7 @@ internal sealed partial class ScopedNames
     /// <summary>
     ///  Starts with the plain names the disassembly may also use, which no stand-in is.
     /// </summary>
-    /// <param name="taken">The disassembly's other names: the hints', the program's and the machine's.</param>
+    /// <param name="taken">The disassembly's other names, such as the hints' and the machine's.</param>
     internal ScopedNames(IEnumerable<string> taken) => _taken = new(taken, StringComparer.Ordinal);
 
     /// <summary>
@@ -76,12 +76,15 @@ internal sealed partial class ScopedNames
         _qualified.TryGetValue(standIn, out qualified);
 
     /// <summary>
-    ///  Replaces the stand-ins in a line of code with their qualified names.
+    ///  Replaces the stand-ins in a line of code with their qualified names; a comment line, the hints' text, is left
+    ///  as it is.
     /// </summary>
     /// <param name="line">The line.</param>
     /// <returns>The line with the qualified names.</returns>
     internal string Qualify(string line) =>
-        IsEmpty ? line : StandInName().Replace(line, match => _qualified.GetValueOrDefault(match.Value, match.Value));
+        IsEmpty || line.StartsWith(';')
+            ? line
+            : StandInName().Replace(line, match => _qualified.GetValueOrDefault(match.Value, match.Value));
 
     /// <summary>
     ///  Writes the equates of stand-ins inside their scopes, in order of their qualified names so that a scope's names

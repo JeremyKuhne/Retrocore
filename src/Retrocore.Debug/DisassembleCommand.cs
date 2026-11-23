@@ -143,7 +143,7 @@ internal static partial class DisassembleCommand
             files[name] = symbol.File;
         }
 
-        // A name the analysis refuses as a symbol, such as one that is also a mnemonic, is left out.
+        // A name the analysis refuses as a symbol, one that is not a plain identifier or is another's, is left out.
         DisassemblyResult result = Disassembler.Analyze(program.Project(names));
         ushort[] refused = Refused(result, names);
         while (refused.Length > 0)
@@ -330,5 +330,4 @@ internal static partial class DisassembleCommand
         Console.Error.WriteLine(message);
         return code;
     }
-
 }

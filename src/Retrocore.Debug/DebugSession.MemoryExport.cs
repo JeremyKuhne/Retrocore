@@ -103,15 +103,17 @@ internal sealed partial class DebugSession
         // case-sensitive, so TABLE and table are two. A name in a scope, such as the Monitor's LowRes::Plot, can name
         // an address outside the range, which the source defines inside its scopes: it goes through the analysis as
         // a stand-in, which the source then calls by the qualified name. Inside the range, where a name is a label,
-        // only a plain name can.
+        // only a plain name can, and so in page zero, where a scoped name is one routine family's for a byte others
+        // share (the disassembler's FormatBits for MASK's $2E).
         Dictionary<ushort, string> names = [];
         HashSet<string> used = [with(StringComparer.Ordinal)];
         ScopedNames scoped = new(analysis.Labels.Concat(analysis.Names).Select(pair => pair.Value));
         foreach ((int address, string name) in analysis.Labels.Concat(analysis.Names))
         {
             bool outside = address < from || address >= from + count;
+            bool scopable = outside && address >= 0x100 && ScopedNames.IsScoped(name);
             bool plain = ExportName().IsMatch(name);
-            if (names.ContainsKey((ushort)address) || !(plain || (outside && ScopedNames.IsScoped(name))) || !used.Add(name))
+            if (names.ContainsKey((ushort)address) || !(plain || scopable) || !used.Add(name))
             {
                 continue;
             }

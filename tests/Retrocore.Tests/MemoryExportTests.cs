@@ -41,6 +41,24 @@ public sealed class MemoryExportTests
     }
 
     /// <summary>
+    ///  A page-zero byte is not named by a scoped name, which is one routine family's name for a byte others share
+    ///  (the disassembler's FormatBits for MASK's $2E), as the session has it.
+    /// </summary>
+    [TestMethod]
+    public void ExportLeavesPageZeroToPlainNames()
+    {
+        // $0800 STA $2E; STA $2C; STA $3A (PCL); RTS
+        byte[] program = [0x85, 0x2E, 0x85, 0x2C, 0x85, 0x3A, 0x60];
+
+        JsonObject export = Export(program, 0x0800, []);
+
+        export.Bool("exact").Should().BeTrue();
+        string source = export.String("source") ?? throw new AssertFailedException("The export has no source.");
+        source.Should().Contain("STA PCL").And.NotContain("::").And.NotContain(".scope");
+        Reassembles(source, program);
+    }
+
+    /// <summary>
     ///  A name in the session that looks like the export's stand-in for a scoped name, here a hint's, keeps its own
     ///  address: the stand-ins are chosen apart from the session's names.
     /// </summary>

@@ -101,7 +101,7 @@ Half:
 
     .if defineZero
 ;; Three zero bytes shared by <Float::Half> and other constants.
-;; Also: ZERO (M6502, CBM4S79, HV2, HV4, HV4R)
+;; Also: ZERO (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 ZeroValue:
     .endif
     .byte $00, $00, $00

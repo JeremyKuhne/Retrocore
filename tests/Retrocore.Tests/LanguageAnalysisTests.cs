@@ -523,9 +523,9 @@ public sealed partial class LanguageAnalysisTests
                 SourceAnalysis analysis = SourceAnalysis.Assemble(main, _ => null);
 
                 analysis.Result.Success.Should().BeFalse(error);
-                DocumentationTopic scroll = analysis.Documentation.Find("Scroll")
-                    ?? throw new AssertFailedException("Expected Scroll.");
-                scroll.Sections.Where(section => section.Name == "Entry" && analysis.Documentation.InBuild(scroll, section))
+                DocumentationSet set = analysis.Documentation;
+                if (set.Find("Scroll") is not { } scroll) { throw new AssertFailedException("Expected Scroll."); }
+                scroll.Sections.Where(section => section.Name == "Entry" && set.InBuild(scroll, section))
                     .Should().ContainSingle(error)
                     .Which.Text.Should().Contain("Narrow", error);
             }

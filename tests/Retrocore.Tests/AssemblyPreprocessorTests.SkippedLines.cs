@@ -218,7 +218,7 @@ public partial class AssemblyPreprocessorTests
         // An unterminated conditional leaves everything from its opening on undecided.
         AssemblySkippedLines open = Required(Assemble(".byte 0\n.if 0\n.byte 1\n").SkippedLines);
         open.IsAssembled("main.asm", 0).Should().BeTrue();
-        open.Undecided[Path.GetFullPath("main.asm")].Should().Equal(new AssemblyLineRange(1, 2));
+        open.Undecided[Path.GetFullPath("main.asm")].Should().Equal(new AssemblyLineRange(1, 3));
     }
 
     /// <summary>

@@ -108,14 +108,27 @@ internal sealed partial class AssemblyPreprocessor
         if (operation == "DO")
         {
             EmitLabel();
-            return active ? $".if {Expression(operand)}" : ".if 0";
+            if (!active) { return ".if 0"; }
+            try
+            {
+                return $".if {Expression(operand)}";
+            }
+            catch (AssemblyError failure)
+            {
+                // The conditional still opens, false, so its ELSE and FIN stay matched; the error is reported
+                // where the condition is tested.
+                _conditionFailure = failure.Message;
+                return ".if 0";
+            }
         }
 
         if (operation == "IF")
         {
-            if (operand.StartsWith("MX", StringComparison.OrdinalIgnoreCase))
+            if (active && operand.StartsWith("MX", StringComparison.OrdinalIgnoreCase))
             {
-                throw new AssemblyError(0, "65816 IF MX is unsupported.");
+                EmitLabel();
+                _conditionFailure = "65816 IF MX is unsupported.";
+                return ".if 0";
             }
 
             string characters = new([.. operand.Where(character => !char.IsWhiteSpace(character))]);

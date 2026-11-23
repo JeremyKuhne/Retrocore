@@ -16,6 +16,10 @@ internal sealed partial class AssemblyPreprocessor
     private readonly List<AssemblySource> _sources = [];
     private readonly AssemblyProject _project = new();
     private readonly List<Conditional> _conditions = [];
+
+    // An error found expanding a conditional's line, before its condition could be read; reported, as false, where
+    // the condition is tested, so the conditional still opens and its .else and .endif stay matched.
+    private string? _conditionFailure;
     private readonly Dictionary<string, Macro> _macros = [with(StringComparer.Ordinal)];
 
     // Created once so translating each ca65 line does not allocate a delegate.
@@ -382,16 +386,12 @@ internal sealed partial class AssemblyPreprocessor
                 }
                 catch (AssemblyError failure)
                 {
-                    if (_conditions.Count == 0 || _conditions[^1].Active) { Error(failure.Message, original.Location); }
+                    ExpansionFailure(failure.Message, original, conditionFloor);
                     continue;
                 }
                 catch (OverflowException)
                 {
-                    if (_conditions.Count == 0 || _conditions[^1].Active)
-                    {
-                        Error("Expansion overflow.", original.Location);
-                    }
-
+                    ExpansionFailure("Expansion overflow.", original, conditionFloor);
                     continue;
                 }
             }
@@ -423,16 +423,12 @@ internal sealed partial class AssemblyPreprocessor
                 }
                 catch (AssemblyError failure)
                 {
-                    if (_conditions.Count == 0 || _conditions[^1].Active) { Error(failure.Message, original.Location); }
+                    ExpansionFailure(failure.Message, original, conditionFloor);
                     continue;
                 }
                 catch (OverflowException)
                 {
-                    if (_conditions.Count == 0 || _conditions[^1].Active)
-                    {
-                        Error("ca65 expansion overflow.", original.Location);
-                    }
-
+                    ExpansionFailure("ca65 expansion overflow.", original, conditionFloor);
                     continue;
                 }
             }

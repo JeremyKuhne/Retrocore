@@ -428,6 +428,49 @@ public partial class AssemblyPreprocessorTests
     }
 
     /// <summary>
+    ///  A condition whose line fails to expand, such as a function refusing its operand, reports only that error:
+    ///  the conditional still opens, false, so its <c>.else</c>, <c>.elseif</c> and <c>.endif</c> stay matched, as
+    ///  they do for a condition that is not a constant.
+    /// </summary>
+    /// <param name="dialect">The source dialect.</param>
+    /// <param name="text">The source.</param>
+    /// <param name="line">The zero-based line of the one expected error.</param>
+    /// <param name="message">The one expected error.</param>
+    [TestMethod]
+    [DataRow(AssemblyDialect.Native, ".if Undefined = 1\n.byte 1\n.endif", 0, "Conditional requires a constant known at this point in source order.")]
+    [DataRow(AssemblyDialect.Native, ".if .definedmacro(1+2)\n.byte 1\n.endif", 0, ".definedmacro requires one macro name.")]
+    [DataRow(AssemblyDialect.Native, ".if .const(.sizeof(Later))\n.byte 1\n.endif\nLater: .byte 0", 0, ".const cannot test a size known only once the program is laid out.")]
+    [DataRow(AssemblyDialect.Native, ".if 1\n.if .definedmacro(1+2)\n.else\n.byte 1\n.endif\n.endif", 1, ".definedmacro requires one macro name.")]
+    [DataRow(AssemblyDialect.Native, ".if 0\n.elseif .definedmacro(1+2)\n.byte 1\n.else\n.byte 2\n.endif", 1, ".definedmacro requires one macro name.")]
+    [DataRow(AssemblyDialect.Native, ".ifdef .definedmacro(1+2)\n.byte 1\n.endif", 0, ".definedmacro requires one macro name.")]
+    [DataRow(AssemblyDialect.Native, ".if 1\n.byte 1\n.endif .definedmacro(1+2)\n.byte 2", 2, ".definedmacro requires one macro name.")]
+    [DataRow(AssemblyDialect.Ca65, ".if .definedmacro(1+2)\n.byte 1\n.endif", 0, ".definedmacro requires one macro name.")]
+    [DataRow(AssemblyDialect.Ca65, ".if .const(.sizeof(Later))\n.byte 1\n.endif\nLater: .byte 0", 0, ".const cannot test a size known only once the program is laid out.")]
+    [DataRow(AssemblyDialect.Ca65, ".if 0\n.elseif .definedmacro(1+2)\n.byte 1\n.endif", 1, ".definedmacro requires one macro name.")]
+    [DataRow(AssemblyDialect.Merlin, " DO 1\n DO ]undefined+)\n DFB 1\n ELSE\n DFB 2\n FIN\n FIN", 1, "Invalid Merlin symbol.")]
+    [DataRow(AssemblyDialect.Merlin, " IF MX=1\n DFB 1\n ELSE\n DFB 2\n FIN", 0, "65816 IF MX is unsupported.")]
+    public void FailedConditionsStillOpenTheirConditional(AssemblyDialect dialect, string text, int line, string message)
+    {
+        AssemblyResult result = Assemble(text, dialect);
+        result.Diagnostics.Select(error => (error.Message, error.Location?.Line)).Should().Equal((message, line));
+    }
+
+    /// <summary>
+    ///  As in ca65, an <c>.elseif</c> after a taken branch is not tested, so a condition that would fail there
+    ///  reports nothing and its branch is skipped.
+    /// </summary>
+    /// <param name="dialect">The source dialect.</param>
+    [TestMethod]
+    [DataRow(AssemblyDialect.Native)]
+    [DataRow(AssemblyDialect.Ca65)]
+    public void FailingElseIfAfterTakenBranchIsNotTested(AssemblyDialect dialect)
+    {
+        AssemblyResult result = Assemble(".if 1\n.byte 1\n.elseif .definedmacro(1+2)\n.byte 2\n.else\n.byte 3\n.endif\n.byte 4", dialect);
+        result.Diagnostics.Should().BeEmpty();
+        result.Sections.Single(section => section.Bytes.Length != 0).Bytes.Span[..2].ToArray().Should().Equal(1, 4);
+    }
+
+    /// <summary>
     ///  Include depth is measured from the root and metadata collections are copied before use.
     /// </summary>
     [TestMethod]
@@ -546,6 +589,11 @@ public partial class AssemblyPreprocessorTests
 
     private static AssemblyResult Assemble(string text, IAssemblySourceResolver? resolver = null) =>
         new NativeAssembler().Assemble(new AssemblySource(text, "main.asm"), Options(resolver));
+
+    private static AssemblyResult Assemble(string text, AssemblyDialect dialect) =>
+        new NativeAssembler().Assemble(
+            new AssemblySource(text, "main.asm"),
+            new(ProcessorVariant.Mos6502, origin: 0x1000, imageSize: 32) { Dialect = dialect });
 
     private static AssemblyOptions Options(
         IAssemblySourceResolver? resolver = null,

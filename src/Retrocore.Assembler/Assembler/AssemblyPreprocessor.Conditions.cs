@@ -14,9 +14,48 @@ internal sealed partial class AssemblyPreprocessor
         }
         finally
         {
-            // An ambiguity the line's expansion found is for this line's condition only.
+            // An ambiguity or failure the line's expansion found is for this line's condition only.
             _conditionAmbiguity = null;
+            _conditionFailure = null;
         }
+    }
+
+    /// <summary>
+    ///  Reports an error that stopped a line's expansion, keeping a conditional on that line in the nesting.
+    /// </summary>
+    /// <param name="message">The error.</param>
+    /// <param name="line">The line, before expansion.</param>
+    /// <param name="floor">The conditional depth this source or macro body opened at.</param>
+    /// <remarks>
+    ///  <para>
+    ///   A function in a condition, such as <c>.definedmacro(1+2)</c>, fails while the whole line is expanded,
+    ///   before the condition is read. The conditional still opens or continues, as a condition that could not
+    ///   be read does, false, and its error is reported where the condition is tested: an <c>.elseif</c> after a
+    ///   taken branch is not tested, as in ca65. A failing operand of <c>.else</c> or <c>.endif</c> is reported,
+    ///   and the branch still changes or closes. Otherwise the conditional's <c>.endif</c> would be reported as
+    ///   unexpected too.
+    ///  </para>
+    /// </remarks>
+    private void ExpansionFailure(string message, Line line, int floor)
+    {
+        Split(line.Text.Span, out _, out ReadOnlySpan<char> operationText, out ReadOnlySpan<char> operandText);
+        string operation = operationText.ToString().ToUpperInvariant();
+        bool active = _conditions.Count == 0 || _conditions[^1].Active;
+        if (operation is ".ELSE" or ".ENDIF")
+        {
+            if (active) { Error(message, line.Location); }
+            ConditionalDirective(operation, "", line.Location, floor, line.Dialect);
+            return;
+        }
+
+        if (operation is ".IF" or ".ELSEIF" or ".IFDEF" or ".IFNDEF" or ".IFBLANK" || IsCa65Condition(operation))
+        {
+            _conditionFailure = message;
+            ConditionalDirective(operation, operandText.ToString(), line.Location, floor, line.Dialect);
+            return;
+        }
+
+        if (active) { Error(message, line.Location); }
     }
 
     private bool ConditionalDirectiveText(string operation, string operand, AssemblyLocation location, int floor, AssemblyDialect dialect)
@@ -70,6 +109,12 @@ internal sealed partial class AssemblyPreprocessor
 
     private bool TestCondition(string operation, string operand, AssemblyLocation location, AssemblyDialect dialect)
     {
+        if (_conditionFailure is { } failure)
+        {
+            Error(failure, location);
+            return false;
+        }
+
         _nameAmbiguity = null;
         bool result = TestConditionText(operation, operand, location, dialect);
         _nameAmbiguity ??= _conditionAmbiguity;

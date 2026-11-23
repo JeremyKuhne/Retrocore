@@ -26,9 +26,9 @@ HEX_LETTER_CODE = (('A' ^ '0') + KEY_CODE_OFFSET) & $FF
 ;; Sets normal text, text mode with a full window (<InitDisplay>), and the screen and keyboard hooks, then enters the
 ;; Monitor.
 ;;
-;; At $FF59. It is the Apple II Monitor's reset handler, which <ResetVector> points at and which the
-;; 1978 listing names `RESET`. The later Monitors' reset handler does the same set-up itself, and programs jump
-;; here to enter the Monitor.
+;; At $FF59. It is the Apple II Monitor's reset handler, which <ResetVector> points at and which the 1978 listing names
+;; `RESET`; that name stays in prose here, as the later Monitors' listings give it to their own reset handler,
+;; <Startup::Reset>. That handler does the same set-up itself, and programs jump here to enter the Monitor.
 ;; Also: OLDRST (A2RM79, IIEROM82, IIETRM85)
 .proc ResetToMonitor
 .assert * = $FF59, "Startup::ResetToMonitor must stay at $FF59."
@@ -139,8 +139,9 @@ Next:
 ;; Reads a hexadecimal number from the input line into A2, and returns the character after it as a command code.
 ;;
 ;; At $FFA7. Each digit also copies the number to A1 and A3 unless a command is waiting (<MODE>). The
-;; code is (character EOR "0") + $89, as <Commands::Keys> holds them. On the Enhanced IIe, an apostrophe makes the
-;; character after it 8 bits of the number (<Commands::LetterOrQuote>).
+;; code is (character EOR "0") + $89, as <Commands::Keys> holds them. On the Enhanced IIe it reads the line in
+;; uppercase, so a to f are digits too, and an apostrophe makes the character after it 8 bits of the number
+;; (<Commands::LetterOrQuote>).
 ;; In: Y = the index in <IN>
 ;; Out: A = the code, Y = the index after the character, A2L/A2H = the number, X = 1 after a digit, 0 when none
 ;; Entry:

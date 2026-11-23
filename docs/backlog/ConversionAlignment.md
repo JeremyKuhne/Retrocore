@@ -1,7 +1,7 @@
 # Aligning the two conversion branches
 
-Status: in progress. The owner accepted decisions D1 to D8 as recommended on 2026-11-23; the plan was revised after
-four independent reviews.
+Status: in progress. The owner accepted decisions D1 to D8 as recommended on 2026-11-23, except D5, decided the
+other way; the plan was revised after four independent reviews.
 
 A plan for bringing two bodies of source work to one approach, so that every converted source reads, builds and
 checks the same way:
@@ -44,7 +44,7 @@ The plan takes the best of each.
 
 ## Decisions for the owner
 
-All eight were accepted as recommended (2026-11-23). The session for B5 logs them in `docs/conversions/Basic.md`
+All eight were accepted as recommended (2026-11-23), except D5, which the owner decided the other way. The session for B5 logs them in `docs/conversions/Basic.md`
 on `claude/basic-rename-table`, which reaches main through `claude/basic-rename-ready`.
 
 - **D1. Shared code across vendors.** Accept one module for code several vendors inherited from a common ancestor,
@@ -90,7 +90,8 @@ on `claude/basic-rename-table`, which reaches main through `claude/basic-rename-
   `Also:`. *Recommended*, by ConvertingSources' first naming rule (rename everything to the style). Alternative:
   keep Microsoft's names for the shared modules permanently, as a new exception to that rule.
 - **D5. Builds that differ mid-routine.** *Decided by the owner:* an `.if` inside the routine, in a source's own
-  builds and in shared modules alike, on a named switch with a comment saying which builds take which branch.
+  builds and in shared modules alike, on a named switch (`ENHANCED`, `MONITOR = MONITOR_IIE`), with a comment where
+  the switch alone doesn't say which builds take which branch.
   Showing the difference between versions is part of what the sources teach, and an `.if` shows that history far
   better than repeating the unchanged lines in a `.proc` per build. A whole `.proc` per build is for routines that
   differ throughout.

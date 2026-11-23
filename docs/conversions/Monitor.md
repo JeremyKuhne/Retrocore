@@ -26,7 +26,10 @@ digests check.
    stepping; TRACE is `Commands::Trace`), each later piece `.scope X continued` with a plain comment saying which part.
 9. Widely called documented entry points are top level (SetKeyboard, SetScreen, GetLine, ReadHexNumber); family
    scopes hold what is internal to them.
-10. Where builds differ mid-routine, each build's routines are whole `.if` blocks of complete `.proc`s.
+10. Where builds differ only in places, the routine is one `.proc` with `.if` inside it (the owner's D5), so the
+    source shows what each version changed: Decode, GetLine, Echo, SetHook and ReadKey, and Return is written once
+    between the per-build cassette code. The routines that differ throughout (the IIe's calls into its firmware,
+    the Enhanced IIe's cassette stubs, the Apple II's TRACE and STEP) are a `.proc` per build under `.if`.
 11. VLINEZ is a scope-level label `LowRes::NextVerticalRow`, shared by the family's routines.
 12. SLOTRTS on the original IIe is `Commands::UserText` (Control-Y runs the text bytes and falls into USR), and on
     the Enhanced IIe `SelectSlotRom`; the Apple II and Autostart Monitors have none.

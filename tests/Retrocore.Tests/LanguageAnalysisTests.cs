@@ -133,6 +133,75 @@ public sealed partial class LanguageAnalysisTests
     }
 
     /// <summary>
+    ///  A constant or variable defined with a colon and <c>.equ</c> or <c>.set</c> is a constant in the text of a
+    ///  source that does not assemble, as one defined with <c>=</c> is, not a label.
+    /// </summary>
+    /// <param name="definition">The definition.</param>
+    [TestMethod]
+    [DataRow("VALUE: .equ 3")]
+    [DataRow("VALUE:\t.equ 3")]
+    [DataRow("VALUE:.equ 3")]
+    [DataRow("VALUE: .set 3")]
+    [DataRow("VALUE: .EQU 3")]
+    [DataRow("VALUE: .Set 3")]
+    [DataRow("VALUE .SET 3")]
+    [DataRow("VALUE: .equ 3 ; three")]
+    [DataRow("VALUE: .equ")]
+    [DataRow("VALUE: .equ\u00A03")]
+    public void ColonDirectiveConstantsSurviveErrors(string definition)
+    {
+        string directory = Directory.CreateTempSubdirectory().FullName;
+        try
+        {
+            string main = Path.Join(directory, "main.asm");
+            File.WriteAllText(main, $".org $6000\nstart:\n    jmp missing\n{definition}\n");
+
+            SourceAnalysis analysis = SourceAnalysis.Assemble(main, _ => null);
+
+            analysis.Result.Success.Should().BeFalse();
+            analysis.Find("VALUE").Single().Kind.Should().Be(SymbolSiteKind.Constant);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
+    ///  A label with a colon is still a label in the text of a source that does not assemble, whatever follows it,
+    ///  as is a name defined with Merlin's <c>EQU</c> still a constant.
+    /// </summary>
+    /// <param name="definition">The definition.</param>
+    /// <param name="constant">Whether it defines a constant rather than a label.</param>
+    [TestMethod]
+    [DataRow("VALUE:", false)]
+    [DataRow("VALUE: nop", false)]
+    [DataRow("VALUE::", false)]
+    [DataRow("VALUE: .byte 3", false)]
+    [DataRow("VALUE: .equal", false)]
+    [DataRow("VALUE: .equ$8D", false)]
+    [DataRow("VALUE EQU 3", true)]
+    public void ColonLabelsSurviveErrors(string definition, bool constant)
+    {
+        string directory = Directory.CreateTempSubdirectory().FullName;
+        try
+        {
+            string main = Path.Join(directory, "main.asm");
+            File.WriteAllText(main, $".org $6000\nstart:\n    jmp missing\n{definition}\n");
+
+            SourceAnalysis analysis = SourceAnalysis.Assemble(main, _ => null);
+
+            analysis.Result.Success.Should().BeFalse();
+            SymbolSiteKind kind = constant ? SymbolSiteKind.Constant : SymbolSiteKind.Label;
+            analysis.Find("VALUE").Single().Kind.Should().Be(kind);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
     ///  A procedure remains navigable when its assembly has errors.
     /// </summary>
     /// <param name="error">A line that makes assembly fail.</param>

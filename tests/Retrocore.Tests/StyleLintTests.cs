@@ -164,6 +164,41 @@ public sealed class StyleLintTests
     }
 
     /// <summary>
+    ///  A constant or variable defined with a colon and <c>.equ</c> or <c>.set</c> follows the rules of one defined
+    ///  with <c>=</c>: it is a definition at column 0, not a label sharing its line, and its name is checked.
+    /// </summary>
+    [TestMethod]
+    public void ColonDirectiveConstantsAreDefinitions()
+    {
+        string text = Pragma + """
+            .cpu Mos6502
+            .org $0300
+
+            ;; The Apple II's carriage return, with its high bit set.
+            RETURN: .equ $8D
+
+            ;; The width of a line.
+            WIDTH: .set 40
+
+            ;; An address.
+            L_F8C2: .equ 1
+                Indented: .equ 3
+
+            ;; Prints a carriage return.
+            .proc PrintReturn
+                lda #RETURN
+                ldx #WIDTH
+            Loop: rts
+            .endproc
+            """;
+
+        Problems(text).Should().BeEquivalentTo(
+            "12: Name L_F8C2 for what it is: a name that is only an address says nothing.",
+            "13: Put definitions, labels and block directives at column 0.",
+            "19: Put the label Loop on its own line.");
+    }
+
+    /// <summary>
     ///  Prose that names a documented definition without linking it is reported; links, code spans, entry names,
     ///  instructions, a capitalized word starting a sentence, a scope's name and a historical name (from an Also: section)
     ///  are not.

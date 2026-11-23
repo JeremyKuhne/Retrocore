@@ -181,6 +181,57 @@ public class DocumentationTests
     }
 
     /// <summary>
+    ///  A constant or variable defined with a colon and <c>.equ</c> or <c>.set</c> is documented as one, not as a
+    ///  routine, and a label with code after it is still a routine.
+    /// </summary>
+    [TestMethod]
+    public void ColonDirectiveDefinitionsAreRecognized()
+    {
+        DocumentationFile file = Parse("""
+            ;; Return, with bit 7 set.
+            KEY_CR: .equ $8D
+            ;; A counter.
+            COUNT: .set 0
+            ;; Escape, with bit 7 set.
+            KEY_ESC: .EQU $9B
+            ;; Another counter.
+            TOTAL: .SET 0
+            ;; The routine.
+            START: rts
+            ;; Not a constant: the assembler rejects the line.
+            JOINED: .equ,3
+            """);
+
+        file.Diagnostics.Should().BeEmpty();
+        file.Comments.Select(comment => (comment.Name, comment.Kind)).Should().Equal(
+            ("KEY_CR", DocumentationKind.Constant),
+            ("COUNT", DocumentationKind.Variable),
+            ("KEY_ESC", DocumentationKind.Constant),
+            ("TOTAL", DocumentationKind.Variable),
+            ("START", DocumentationKind.Routine),
+            ("JOINED", DocumentationKind.Routine));
+    }
+
+    /// <summary>
+    ///  A constant defined with a colon and <c>.equ</c> is named and kinded as one defined with <c>=</c>, in a scope
+    ///  and in a type.
+    /// </summary>
+    /// <param name="open">The line that opens the block.</param>
+    /// <param name="close">The line that closes it.</param>
+    [TestMethod]
+    [DataRow(".scope Outer", ".endscope")]
+    [DataRow(".struct Outer", ".endstruct")]
+    public void ColonDirectiveConstantsMatchEquals(string open, string close)
+    {
+        DocumentationFile colon = Parse($"{open}\n;; Three.\nVALUE: .equ 3\n{close}\n");
+        DocumentationFile equals = Parse($"{open}\n;; Three.\nVALUE = 3\n{close}\n");
+
+        List<(string Name, DocumentationKind Kind)> expected = [.. equals.Comments.Select(comment => (comment.Name, comment.Kind))];
+        colon.Comments.Select(comment => (comment.Name, comment.Kind)).Should().Equal(expected);
+        colon.Comments.Should().Contain(comment => comment.Name.EndsWith("VALUE", StringComparison.Ordinal));
+    }
+
+    /// <summary>
     ///  Links, URLs and references are found, and comparisons are not links.
     /// </summary>
     [TestMethod]

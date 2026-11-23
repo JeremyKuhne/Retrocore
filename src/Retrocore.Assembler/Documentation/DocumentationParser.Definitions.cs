@@ -82,8 +82,19 @@ public static partial class DocumentationParser
         string qualified = container is null ? identifier : $"{container}::{identifier}";
         if (tail.StartsWith(':') && !tail.StartsWith(":=", StringComparison.Ordinal))
         {
+            // Name: .equ expr and Name: .set expr define a constant and a variable, not a label.
             string afterLabel = tail.TrimStart(':').Trim();
-            return new(identifier, DocumentationKind.Routine, afterLabel, []);
+            DocumentationKind constant = inType ? DocumentationKind.Member : DocumentationKind.Constant;
+            DocumentationKind? defined = ColonDefinition(tail) switch
+            {
+                ".equ" => constant,
+                ".set" => DocumentationKind.Variable,
+                _ => null,
+            };
+
+            return defined is { } kind
+                ? new(qualified, kind, "", [])
+                : new(identifier, DocumentationKind.Routine, afterLabel, []);
         }
 
         string spaced = tail.TrimStart();
@@ -181,6 +192,20 @@ public static partial class DocumentationParser
         }
 
         return index;
+    }
+
+    // The directive after a name and one colon that makes it a constant or variable rather than a label, as in
+    // "Name: .equ expr" or "Name: .set expr": ".equ" or ".set", or "" when the colon is a label's.
+    private static string ColonDefinition(string afterName)
+    {
+        if (!afterName.StartsWith(':') || afterName.StartsWith("::", StringComparison.Ordinal)) { return ""; }
+
+        // The directive ends at a space or a comment, as the assembler reads it: ".equ,3" is not one.
+        string rest = afterName[1..].TrimStart();
+        int end = 0;
+        while (end < rest.Length && !char.IsWhiteSpace(rest[end]) && rest[end] != ';') { end++; }
+        string word = rest[..end].ToLowerInvariant();
+        return word is ".equ" or ".set" ? word : "";
     }
 
     private static string FirstWord(string text)

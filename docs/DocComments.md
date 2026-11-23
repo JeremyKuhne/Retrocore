@@ -47,8 +47,8 @@ documented is also a lint error.
 | --- | --- | --- |
 | A label followed by an instruction | Routine | Address in each model, and the model if under `.if` |
 | A label followed by data (`.byte`, `.word`, `.res`, a data macro, `.repeat`) | Table | Address and size |
-| `NAME = value` or `.equ` | Constant | Value |
-| `.set NAME, value` | Variable | First value |
+| `NAME = value`, `NAME := value` or `NAME: .equ value` | Constant | Value |
+| `NAME .set value`, `NAME: .set value` or `.set NAME, value` | Variable | First value |
 | `.macro NAME params` | Macro | Parameter list |
 | `.enum`, `.struct`, `.union` | Enum, Struct | Members and their values or offsets |
 | A member of a `.struct`, `.union` or `.enum` | Member | Its offset or value, named as the assembler names it (`Iob::COMMAND`) |

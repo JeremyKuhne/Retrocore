@@ -315,10 +315,13 @@ const grammar = {
             ]
         },
         "constant-definition": {
-            begin: `^[ \\t]*(${definition})[ \\t]*(:?=|(?i:\\.set)${boundary})`,
+            // Name = expr, Name := expr, Name .set expr, and Name: .equ expr or Name: .set expr.
+            begin: `^[ \\t]*(${definition})(?:[ \\t]*(:?=|(?i:\\.set)${boundary})|(:)[ \\t]*((?i:\\.(?:equ|set))${boundary}))`,
             beginCaptures: {
                 "1": { name: "variable.other.constant.definition.retrocore" },
-                "2": { name: "keyword.operator.assignment.retrocore" }
+                "2": { name: "keyword.operator.assignment.retrocore" },
+                "3": { name: "punctuation.separator.label.retrocore" },
+                "4": { name: "keyword.control.directive.retrocore" }
             },
             end: "$",
             patterns: operands

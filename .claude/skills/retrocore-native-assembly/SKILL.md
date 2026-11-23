@@ -125,7 +125,7 @@ ways that keep the bytes.
 - **Verifying:** run the digest tests, which need no ROMs:
 
   ```powershell
-  dotnet test tests/Retrocore.Tests -c Release --filter "FullyQualifiedName~SdkDocumentationTests|FullyQualifiedName~SystemSourceTests|FullyQualifiedName~Trs80RomSourceTests|FullyQualifiedName~Apple1RomTests|FullyQualifiedName~AppleSoftTests|FullyQualifiedName~KayproTests|FullyQualifiedName~PetRomSourceTests|FullyQualifiedName~PetBasicConformanceTests"
+  dotnet test tests/Retrocore.Tests -c Release --filter "FullyQualifiedName~SdkDocumentationTests|FullyQualifiedName~SystemSourceTests|FullyQualifiedName~Trs80RomSourceTests|FullyQualifiedName~Apple1RomTests|FullyQualifiedName~AppleSoftTests|FullyQualifiedName~KayproTests|FullyQualifiedName~PetRomSourceTests|FullyQualifiedName~PetBasicConformanceTests|FullyQualifiedName~BasicShared|FullyQualifiedName~BasicNativeRootSwitchTests|FullyQualifiedName~Basic1IndependentSwitchTests|FullyQualifiedName~PetBasic4|FullyQualifiedName~PetNativeEquatesTests|FullyQualifiedName~PetSharedFloatAssemblyTests"
   ```
 
   With the dumps present (`RETROCORE_IIE_ROMS`, `RETROCORE_TRS80_ROMS`, `RETROCORE_PET_ROMS`), the same tests

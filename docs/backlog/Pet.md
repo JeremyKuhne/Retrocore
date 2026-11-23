@@ -259,7 +259,7 @@ available with `basicSource: "macro10"`.
   - BASIC 1's OPEN loops for ever with ten files open, instead of giving ?TOO MANY FILES.
   - Its IEEE-488 verify sets the wrong status bit, so VERIFY from a disk would not report a mismatch.
   - Its NMI vector's low byte is the RTS that ends MOTOROFF.
-- **`PetSdkModules`** (in the debug host, and linked into the tests) assembles each part and builds a model's
+- **`PetSdkModules`** (in the debug host, which the tests reference) assembles each part and builds a model's
   `PetRoms`.
   - The SDK copies `m6502.asm` into `Roms/Microsoft6502Basic`, beside `Roms/Pet`; `OverlayBaseResolver` finds it there
     when the PET overlays' repository-relative paths do not apply.

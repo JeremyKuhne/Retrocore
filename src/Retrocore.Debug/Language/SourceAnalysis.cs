@@ -223,7 +223,10 @@ internal sealed partial class SourceAnalysis
         Symbols(),
         ModuleOf(Root),
         ModelOf(Root),
-        Result.SourceMap);
+        Result.SourceMap,
+
+        // An assembly with errors may stop short of definitions it would make; the conditions decide then.
+        Result.Success ? Result.SymbolDefinitions : null);
 
     // The assembly's symbols, or while it has errors, the definitions found in the text.
     private IReadOnlyDictionary<string, long> Symbols()

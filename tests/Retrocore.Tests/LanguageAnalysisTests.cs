@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
+using Retrocore.Documentation;
 using Retrocore.Debug.Language;
 
 namespace Retrocore.Tests;
@@ -406,6 +407,52 @@ public sealed partial class LanguageAnalysisTests
         analysis.UsesMacro10(basis).Should().BeTrue();
         analysis.Find("INVERSEEXTRA", analysis.UsesMacro10(overlay)).Should().ContainSingle().Which.Name.Should().Be("INVERS");
         analysis.Find("INVERSEEXTRA", analysis.UsesMacro10(basis)).Should().ContainSingle().Which.Name.Should().Be("INVERS");
+    }
+
+    /// <summary>
+    ///  The editor's documentation knows which branch of an <c>.if</c> the assembly took, as the assembler's does: a
+    ///  macro defined after the <c>.ifdef</c> that tests it doesn't select that branch's <c>Entry:</c>.
+    /// </summary>
+    [TestMethod]
+    public void DocumentationFollowsTheBranchTheAssemblyTook()
+    {
+        string directory = Directory.CreateTempSubdirectory().FullName;
+        try
+        {
+            string main = Path.Join(directory, "main.asm");
+            File.WriteAllText(main, """
+                .cpu Mos6502
+                .org $6000
+                .ifdef WIDE
+                ;; Scrolls, wide.
+                ;; Entry:
+                ;;   Wide = the wide loop
+                .proc Scroll
+                Wide:
+                    rts
+                .endproc
+                .else
+                ;; Scrolls, narrow.
+                ;; Entry:
+                ;;   Narrow = the narrow loop
+                .proc Scroll
+                Narrow:
+                    rts
+                .endproc
+                .endif
+                .macro WIDE
+                .endmacro
+                """);
+
+            SourceAnalysis analysis = SourceAnalysis.Assemble(main, _ => null);
+
+            analysis.Result.Diagnostics.Should().BeEmpty();
+            new DocumentationResolver(analysis.Documentation).Check().Should().BeEmpty();
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
     }
 
     /// <summary>

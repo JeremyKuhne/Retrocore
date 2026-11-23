@@ -321,10 +321,21 @@ public sealed partial class HistoricalNameTests
             SlowScroll:
                 rts
             .endif
+            .ifdef WIDE
+            ;; The line width.
+            ;; Also: OLDWIDTH (TEST)
+            WIDTH = 80
+            .else
+            ;; The line width.
+            WIDTH = 40
+            ;; The narrow line width.
+            ;; Also: OLDWIDTH (TEST)
+            NARROW_WIDTH = 40
+            .endif
             .macro WIDE
             .endmacro
 
-            ;; Echoes <OLDKEY> and <OLDSCROLL>.
+            ;; Echoes <OLDKEY>, <OLDSCROLL> and <OLDWIDTH>.
             Echo:
                 rts
             """);
@@ -333,6 +344,7 @@ public sealed partial class HistoricalNameTests
         DocumentationTopic echo = Required(set.Find("Echo"));
         Required(resolver.Resolve(echo, "OLDKEY").Topic).Name.Should().Be("WaitKey");
         Required(resolver.Resolve(echo, "OLDSCROLL").Topic).Name.Should().Be("SlowScroll");
+        Required(resolver.Resolve(echo, "OLDWIDTH").Topic).Name.Should().Be("NARROW_WIDTH");
         resolver.Check().Should().BeEmpty();
     }
 

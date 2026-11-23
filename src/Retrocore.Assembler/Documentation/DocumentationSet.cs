@@ -103,7 +103,7 @@ public sealed class DocumentationSet
             symbols = moved;
         }
 
-        DocumentationSet set = Create(files, symbols, module, model, result?.SourceMap);
+        DocumentationSet set = Create(files, symbols, module, model, result?.SourceMap, result?.SymbolDefinitions);
         if (result is not null)
         {
             List<(string, string, int)> exports = [];
@@ -116,13 +116,6 @@ public sealed class DocumentationSet
             }
 
             set.Exports = exports;
-            foreach (AssemblySymbol symbol in result.SymbolDefinitions)
-            {
-                if (symbol.Location is { Path.Length: > 0 } location)
-                {
-                    set._definedAt.Add((System.IO.Path.GetFullPath(location.Path), location.Line));
-                }
-            }
         }
 
         return set;
@@ -190,17 +183,29 @@ public sealed class DocumentationSet
     /// <param name="module">The module name links may use, or null.</param>
     /// <param name="model">The model the code was built for, or null.</param>
     /// <param name="sourceMap">The assembly's statements, for each part's CPU; null when unknown.</param>
+    /// <param name="definitions">
+    ///  The assembly's symbol definitions, which tell which branch of each <c>.if</c> it took; null when unknown.
+    /// </param>
     /// <returns>The set.</returns>
     public static DocumentationSet Create(
         IEnumerable<DocumentationFile> files,
         IReadOnlyDictionary<string, long> symbols,
         string? module = null,
         string? model = null,
-        IEnumerable<AssemblySourceMapEntry>? sourceMap = null)
+        IEnumerable<AssemblySourceMapEntry>? sourceMap = null,
+        IEnumerable<AssemblySymbol>? definitions = null)
     {
         List<DocumentationFile> list = [.. files];
         DocumentationSet set = new(module, model, symbols, list);
         if (sourceMap is not null) { ReadCpus(set, sourceMap); }
+        foreach (AssemblySymbol symbol in definitions ?? [])
+        {
+            if (symbol.Location is { Path.Length: > 0 } location)
+            {
+                set._definedAt.Add((System.IO.Path.GetFullPath(location.Path), location.Line));
+            }
+        }
+
         Dictionary<string, List<DocumentationComment>> byName = [with(StringComparer.Ordinal)];
         List<string> order = [];
         foreach (DocumentationFile file in list)

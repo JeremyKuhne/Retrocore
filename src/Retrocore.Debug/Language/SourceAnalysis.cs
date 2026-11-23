@@ -746,7 +746,7 @@ internal sealed partial class SourceAnalysis
     // A name in column 0: a label (with or without a colon) or an equate. Directives start with a dot and match in any
     // case, as the assembler reads them; Merlin's EQU matches as written. A colon followed by .equ or .set
     // (Name: .equ expr) defines a constant or variable, not a label.
-    [GeneratedRegex(@"^(?<name>[A-Za-z_@][\w@$%?]*(?:::[\w@$%?]+)*)(?:(?<equate>:[ \t]*(?i:\.(?:equ|set))(?=[ \t;]|$)|\s*(?::=|==?|(?i:\.equ|\.set)\b|EQU\b))|(?<colon>::?)|\s|$)")]
+    [GeneratedRegex(@"^(?<name>[A-Za-z_@][\w@$%?]*(?:::[\w@$%?]+)*)(?:(?<equate>:[ \t]*(?i:\.(?:equ|set))(?=[\s;]|$)|\s*(?::=|==?|(?i:\.equ|\.set)\b|EQU\b))|(?<colon>::?)|\s|$)")]
     private static partial Regex TextDefinition();
 
     [GeneratedRegex(@"^[ \t]*(?:[A-Za-z_@][\w@]*::?[ \t]*)?\.proc[ \t]+(?<name>[A-Za-z_]\w*)(?=[ \t]*(?::[ \t]*[A-Za-z_]\w*)?[ \t]*(?:;|$))", RegexOptions.IgnoreCase)]

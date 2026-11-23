@@ -147,6 +147,7 @@ public sealed partial class LanguageAnalysisTests
     [DataRow("VALUE .SET 3")]
     [DataRow("VALUE: .equ 3 ; three")]
     [DataRow("VALUE: .equ")]
+    [DataRow("VALUE: .equ\u00A03")]
     public void ColonDirectiveConstantsSurviveErrors(string definition)
     {
         string directory = Directory.CreateTempSubdirectory().FullName;

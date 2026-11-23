@@ -13,7 +13,7 @@ using NativeRoot = (
     bool Apple,
     string Directory,
     string[] AliasFiles,
-    string[] Attributions,
+    string[] Keys,
     Retrocore.Assembler.AssemblyResult Result);
 
 namespace Retrocore.Tests;
@@ -31,8 +31,9 @@ public sealed class BasicSharedAliasConsistencyTests
     private static readonly string s_shared = Path.Join(s_inputs, "Microsoft6502Basic");
 
     /// <summary>
-    ///  All AppleSoft models and PET revisions include their own aliases, with attributed shared documentation,
-    ///  and expose no aliases belonging exclusively to the other platform.
+    ///  All AppleSoft models and PET revisions include their own aliases, each citing the documents that give it in
+    ///  that build, and expose no aliases belonging exclusively to the other platform. No shared definition gives a
+    ///  vendor's name as a historical name, which would resolve in every build.
     /// </summary>
     [TestMethod]
     public void NativeRootsExposeOnlyTheirDocumentedAliases()
@@ -47,7 +48,7 @@ public sealed class BasicSharedAliasConsistencyTests
                 Apple: true,
                 Directory: s_apple,
                 AliasFiles: appleFiles,
-                Attributions: ["AppleSoft"],
+                Keys: ["ASTIL"],
                 Result: SdkModules.AssembleAppleSoft(Path.Join(s_apple, "AppleSoft.asm"), model)));
         }
 
@@ -60,21 +61,12 @@ public sealed class BasicSharedAliasConsistencyTests
                 (PetModel.Pet4032, true)
             ])
         {
-            int version = model.BasicVersion();
-            string[] attributions = version switch
-            {
-                1 => ["PET BASIC 1", "PET BASIC 1/2"],
-                2 => ["PET BASIC 2", "PET BASIC 1/2"],
-                4 => ["PET BASIC 4"],
-                _ => throw new AssertFailedException($"Unexpected PET BASIC version {version}.")
-            };
-
             roots.Add((
-                Name: $"PET BASIC {version}, original={original}",
+                Name: $"PET BASIC {model.BasicVersion()}, original={original}",
                 Apple: false,
                 Directory: s_petBasic,
                 AliasFiles: petFiles,
-                Attributions: attributions,
+                Keys: BasicAttribution.PetKeys(model, original),
                 Result: PetSdkModules.AssembleBasic(s_pet, model, original, BasicSourceKind.Native)));
         }
 
@@ -139,31 +131,40 @@ public sealed class BasicSharedAliasConsistencyTests
     }
 
     /// <summary>
-    ///  The alias, build and source attribution must occur in the same sentence of the remarks.
+    ///  An alias cites its documents as an <c>Also:</c> item does, by its own name and the documents' keys.
     /// </summary>
-    /// <param name="text">The remarks' attribution sentences.</param>
-    /// <param name="expected">Whether they attribute the alias to BASIC 4 and cite a source.</param>
+    /// <param name="text">The alias's remark.</param>
+    /// <param name="expected">The keys it cites for ALIAS, comma-separated, or null for none.</param>
     [TestMethod]
-    [DataRow("In PET BASIC 4, Commodore's listing calls it `ALIAS`.", true)]
-    [DataRow("In PET BASIC 4, a listing calls it `OTHER`; in PET BASIC 1 and 2, a reconstruction calls it `ALIAS`.", false)]
-    [DataRow("In PET BASIC 4, a listing calls it `OTHER`. In PET BASIC 1 and 2, a reconstruction calls it `ALIAS`.", false)]
-    [DataRow("In PET BASIC 4, `ALIAS`.", false)]
-    [DataRow("In PET BASIC 4, Commodore's\n;; listing calls it `ALIAS`.", true)]
-    public void AttributionBelongsToTheAliasAndBuild(string text, bool expected)
+    [DataRow("Commodore's name for <TARGET>: ALIAS (CBM4S79, HV4), in code19.", "CBM4S79,HV4")]
+    [DataRow("Commodore's name for <TARGET>: ALIAS (HV4,\n;; HV4R), in code19.", "HV4,HV4R")]
+    [DataRow("Commodore's name for <TARGET>: OTHER (HV4); ALIAS is another spelling.", null)]
+    [DataRow("Commodore's name for <TARGET>: ALIAS, in code19.", null)]
+    [DataRow("Commodore's name for <TARGET>: ALIAS (), in code19.", null)]
+    [DataRow("Commodore's name for <TARGET>: XALIAS (HV4) and <ALIAS> (HV4R).", null)]
+    public void CitationBelongsToTheAlias(string text, string? expected)
     {
         string source = $"""
-            ;; A shared routine.
+            ;; An alias.
             ;;
             ;; {text}
-            TARGET:
-                rts
+            ALIAS = TARGET
+            TARGET = $1234
             """;
 
-        DocumentationFile file = DocumentationParser.Parse(source, Path.Join(s_shared, "AttributionFixture.asm"));
-        DocumentationComment comment = file.Comments.Single(comment => comment.Name == "TARGET");
-        comment.Remarks.Should().NotBeEmpty("the fixture's attribution must be a remark");
+        DocumentationFile file = DocumentationParser.Parse(source, Path.Join(s_petBasic, "CitationFixture.asm"));
+        DocumentationComment comment = file.Comments.Single(comment => comment.Name == "ALIAS");
+        comment.Remarks.Should().NotBeEmpty("the fixture's citation must be a remark");
 
-        BasicAttribution.Has(comment.Remarks, "ALIAS", ["PET BASIC 4"]).Should().Be(expected);
+        IReadOnlyList<string>? keys = BasicAttribution.Citation(comment.Remarks, "ALIAS");
+        if (expected is null)
+        {
+            keys.Should().BeNull();
+        }
+        else
+        {
+            keys.Should().Equal(expected.Split(','));
+        }
     }
 
     /// <summary>
@@ -273,6 +274,7 @@ public sealed class BasicSharedAliasConsistencyTests
             .Should().BeTrue($"{alias.Name} must have its own source attribution");
 
         aliasTopic.Value.Should().Be(definition.Value);
+        BasicAttribution.AssertCites(aliasTopic, root.Keys);
 
         string targetName = UltimateTarget(alias, aliases);
         AssemblySymbol target = Symbol(root.Result, targetName, $"{root.Name}: {alias.Name}'s target");
@@ -288,8 +290,7 @@ public sealed class BasicSharedAliasConsistencyTests
                 throw new AssertFailedException($"{root.Name}: {alias.Name}'s shared target {targetName} has no active shared documentation.");
             }
 
-            BasicAttribution.Has(active.Remarks, alias.Name, root.Attributions)
-                .Should().BeTrue($"{root.Name}: {targetName}'s remarks must attribute {alias.Name} and cite its source");
+            BasicAttribution.AssertNotShared(root.Result, docs, targetName, alias.Name);
         }
         else
         {

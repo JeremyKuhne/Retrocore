@@ -12,10 +12,10 @@
 
 ;; Assigns the initial value and builds a loop frame, replacing an earlier FOR for the same variable.
 ;;
-;; The frame is a <ForFrame>, built on the stack from its last field down, so that from low addresses to high it
-;; holds the `FOR` token, the variable's address, the packed step, the step's sign, the packed limit, the line
-;; number and the text pointer after the statement. A frame for the same variable, and every frame above it, is
-;; discarded first.
+;; The frame is a <ForFrame>, built on the stack from its last field down, so that from low addresses to high it holds
+;; the `FOR` token, the variable's address, the step in packed order (its top mantissa bit the normalized 1, not the
+;; sign), the step's sign, the packed limit, the line number and the text pointer after the statement. A frame for the
+;; same variable, and every frame above it, is discarded first.
 ;; Entry:
 ;;   ReadStep = the continuation the limit's push jumps to: loads 1, or evaluates the expression after `STEP`
 ;; See: <FindForFrame>, <FORPSH>, <Statements::Next>

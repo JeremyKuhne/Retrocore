@@ -30,9 +30,9 @@
     .endproc
 
     ;; Prints expressions, handling comma zones, semicolons, `TAB` and SPC.
-    ;; In: A = current character, zero = set at the end of the statement
     ;;
-    ;; At the end of the statement it prints a carriage return; the vendors' channel `PRINT` enters here too.
+    ;; At the end of the statement it prints a carriage return; the PET's `PRINT#` and `CMD` enter here too.
+    ;; In: A = current character, zero = set at the end of the statement
     ;; Entry:
     ;;   Item = prints the next item: at the end of the statement, returns without a carriage return; otherwise
     ;;     `TAB(`, `SPC(`, a comma, a semicolon, or an expression, a number formatted by <Float::FormatFac> through

@@ -1,12 +1,13 @@
 ; retrocore: style=strict
 ;; COMMODORE BASIC: COMMODORE'S NAMES OF SHARED DEFINITIONS
 ;;
-;; Commodore's names, and the names Microsoft's source gives only in its Commodore builds, for definitions of the
-;; shared Microsoft modules. They resolve only in the PET builds that include this file. Each entry is an alias in
-;; <Commodore> that inherits its target's documentation and gives the names in its `Also:` section, citing the
-;; documents by their keys in docs/Bibliography.md: Microsoft's source (M6502), Commodore's BASIC 4 listing of July
-;; 23, 1979 (CBM4S79), and Martin Hoffmann-Vetter's reconstructions of each PET BASIC (HV1, HV1R, HV2, HV4, HV4R),
-;; each for its own build. Including this file emits no bytes and does not change the origin.
+;; Commodore's names, and the names Microsoft's source gives only in its Commodore builds, for definitions of the shared
+;; Microsoft modules. They resolve only in the PET builds that include this file. Each entry is an alias in <Commodore>
+;; that inherits its target's documentation and gives the names in its `Also:` section, citing the documents by their
+;; keys in docs/Bibliography.md: Microsoft's source (M6502), Commodore's BASIC 4 listing of July 23, 1979 (CBM4S79), and
+;; Martin Hoffmann-Vetter's reconstructions of each PET BASIC (HV1, HV1R, HV2, HV4, HV4R), each for its own build and,
+;; under the lineage rule, for the same definition in the other PET builds. Including this file emits no bytes and does
+;; not change the origin.
 
 ;; The aliases for Commodore's names. Code uses the definitions' own names; these exist for the old names.
 .scope Commodore

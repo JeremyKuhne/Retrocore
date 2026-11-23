@@ -89,17 +89,19 @@ public sealed class DisassembleCommandTests
     ///  A Monitor routine in a family scope keeps its qualified name: the source calls it by that name and defines
     ///  it inside its scopes, each opened once, and assembles back to the program's bytes. A page-zero byte the
     ///  Monitor shares takes its shared name, not the name one routine gives it ($2E) or a value that equals it ($3A),
-    ///  and a .set variable's last value ($A0C0, MnemonicBits) names nothing.
+    ///  and a .set variable's last value ($A0C0, MnemonicBits) names nothing. Apple's names in the Monitor's
+    ///  Equates.asm, for locations still to be converted, are kept ($25, CV).
     /// </summary>
     [TestMethod]
     public void DisassemblyNamesScopedRoutines()
     {
         // $0800 JSR $F800 (LowRes::Plot); JSR $F832 (LowRes::Clear); JSR $F88C (Disassembler::Decode);
-        // JSR $F88E (Disassembler::Decode::Opcode); JSR $FDED (CharacterOut); LDA $2E; LDA $3A; LDA $A0C0; RTS
+        // JSR $F88E (Disassembler::Decode::Opcode); JSR $FDED (CharacterOut); LDA $2E; LDA $3A; LDA $A0C0; LDA $25;
+        // RTS
         byte[] program =
         [
             0x20, 0x00, 0xF8, 0x20, 0x32, 0xF8, 0x20, 0x8C, 0xF8, 0x20, 0x8E, 0xF8, 0x20, 0xED, 0xFD, 0xA5, 0x2E, 0xA5,
-            0x3A, 0xAD, 0xC0, 0xA0, 0x60
+            0x3A, 0xAD, 0xC0, 0xA0, 0xA5, 0x25, 0x60
         ];
 
         string directory = Directory.CreateTempSubdirectory("retrocore-disassemble-").FullName;
@@ -127,6 +129,7 @@ public sealed class DisassembleCommandTests
                 """.ReplaceLineEndings("\n"));
 
             source.Should().Contain("LDA MASK").And.Contain("LDA PCL").And.NotContain("MnemonicBits");
+            source.Should().Contain("LDA CV");
         }
         finally
         {

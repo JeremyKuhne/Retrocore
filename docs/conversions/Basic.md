@@ -793,14 +793,16 @@ Decisions and how the table was applied:
     GRODY2, PRIT31, PRIT32 and REMER1, cited UNKN as FOUT13 is (M2). The table says "no Also" for these, but
     `applesoft.mac` defines them, and its callers and the label comparisons keep them. COMBYTE's alias targets
     `::ReadCommaAndByte`, since its own name would hide the top-level routine.
-  - Commodore: CHDGOT and CHDRTS (HV1, HV1R, HV2), Hoffmann-Vetter's spellings of CHZGOT and CHZRTS, under
-    `.if BASIC4_OUTPUT_PADDING = 0`. BASIC 4's own source (CBM4S79) leaves those labels unnamed, and a Commodore
-    alias must cite every document of its build, so BASIC 4's spelling (HV4, HV4R) is given in the template's prose.
-    BASIC 4's lister labels RESCR2 and PRIT3B (CBM4S79, HV4, HV4R) are under `.ifdef` their targets.
+  - Commodore: CHDGOT and CHDRTS (CBM4S79, HV1, HV1R, HV2, HV4, HV4R), Commodore's spellings of CHZGOT and CHZRTS,
+    in every PET build. The rename table leaves CBM4S79 out; its `code26` names both labels, as the HV
+    reconstructions do (checked in mist64/cbmsrc at the bibliography's commit). BASIC 4's lister labels RESCR2 and
+    PRIT3B (CBM4S79, HV4, HV4R) are under `.ifdef` their targets.
   - The SDK's own names that no overlay or document gives get no `Also:`, as the table says: CONT1, and
     LIST_QUOTE_CHECK, which no build assembles.
-- S7. BSTOP, the name Hoffmann-Vetter's reconstruction of the BASIC 4 kernal (HVK4) gives `Statements::Stop`, is in
-  prose: HVK4 is not one of the PET builds' documents, so it cannot be an alias's citation.
+- S7. BSTOP, the name Commodore's BASIC 4 kernal listing (K4S79) and Hoffmann-Vetter's reconstruction of it (HVK4)
+  give `Statements::Stop` as an equate of the kernal's, is in prose: a Commodore alias must cite one of its build's
+  BASIC documents (`BasicAttribution.PetKeys`), and neither kernal listing is one, so it cannot be an alias's
+  citation. Whether the kernal's documents should count for that rule is a question for the owner.
 - S8. CommandCore's labels that are locals of part C's routines (TYPERR, MAIN1, QDECT1, MLOOP, CZLOOP, GETBPT,
   STUFFH, COLIS, NODATT, STR1 and STRNG) keep their names until part C converts those routines.
 - S9. Contracts from the code: `IsLetter` keeps A, X and Y (its two subtractions take $100 in all); the character
@@ -817,8 +819,9 @@ Decisions and how the table was applied:
   - `BasicNames.CurrentNames` follows a vendor's alias to its target, so a standalone build predefines the name the
     modules use (`Statements::PopFinish`, not `AppleSoft::PopFinish`). `BasicNames.IsVendorName` lets a standalone
     region's label comparison skip the vendor's names, which the same tests compare in the whole builds.
-  - `BasicSharedAliasConsistencyTests` reads the guards in a historical-names file (`.ifdef Target`, `.if Switch =
-    value`) and expects a guarded alias exactly where its build takes it; flipping the CHD guard fails it.
+  - `BasicSharedAliasConsistencyTests` reads the `.ifdef Target` guards in a historical-names file and expects a
+    guarded alias exactly where its build defines the target; `BasicSharedFloatAliasesTests` expects RESCR2 and
+    PRIT3B only there.
   - The editor probe in `LanguageAnalysisTests.Macros` gives COMBYTE as a user file's own old name. Once the SDK gave
     the same name, the editor's merge of the file's and the SDK modules' `Also:` names cancelled it, and the file lost
     its hint and quick fix. A name whose definition the file's assembly made now takes precedence
@@ -826,9 +829,10 @@ Decisions and how the table was applied:
     branch its build leaves out does not, so it gets no hint naming that branch's definition
     (`OldNamesInAnOmittedBranchDoNotHint`, which fails if any name the file gives takes precedence). While the file
     has errors, the definitions its text makes count (`OwnOldNamesHintWhileTheFileHasAnError`, which fails on the
-    assembly's symbols alone).
+    assembly's symbols alone), in a branch whose `.if` condition holds
+    (`OldNamesInAnOmittedBranchDoNotHintWhileTheFileHasAnError`, which fails without that check).
 
-Checked: the full suite (3,900 passed, none failed; 665 skipped, the ROM-dump comparisons without the dumps), the rename
+Checked: the full suite (3,903 passed, none failed; 665 skipped, the ROM-dump comparisons without the dumps), the rename
 gate, the lint tests, and `BasicStatementsConversionTests`, which compares every old name in the fifteen files and the
 vendors' historical names with the MACRO-10 overlay's value in each of the eight builds (about 150 per build), checks
 that each definition reaches the overlay by its name or an old name, that a vendor's names resolve only in its builds

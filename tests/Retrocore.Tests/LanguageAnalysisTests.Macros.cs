@@ -234,4 +234,39 @@ public sealed partial class LanguageAnalysisTests
             Directory.Delete(folder, recursive: true);
         }
     }
+
+    /// <summary>
+    ///  While the file has an error, a name it gives only in a branch its build leaves out still gets no hint naming
+    ///  that branch's definition: the branch's condition decides, as the assembly cannot.
+    /// </summary>
+    /// <returns>The test.</returns>
+    [TestMethod]
+    public async Task OldNamesInAnOmittedBranchDoNotHintWhileTheFileHasAnError()
+    {
+        string folder = Directory.CreateTempSubdirectory("retrocore-macros").FullName;
+        try
+        {
+            string text = (OmittedBranchProbe + "\n    NOTANINSTRUCTION\n").ReplaceLineEndings("\n");
+            string probe = Directory.CreateDirectory(Path.Join(folder, "probe")).FullName;
+            string path = Path.GetFullPath(Path.Join(probe, "Probe.asm"));
+            File.WriteAllText(path, text);
+            File.WriteAllText(Path.Join(probe, "Bibliography.md"), MemberBibliography);
+            RecordingLanguageClient client = new();
+            LanguageWorkspace workspace = new(client);
+            workspace.Update(path, text);
+            DocumentUri uri = DocumentUri.FromFileSystemPath(path);
+
+            List<Diagnostic> published = await client.Wait(
+                uri,
+                diagnostics => diagnostics.Any(diagnostic => diagnostic.Message.StartsWith("PRBBYTE is a historical name", StringComparison.Ordinal)));
+
+            published.Should().Contain(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error, "the probe has an error");
+            published.Should().Contain(diagnostic => diagnostic.Message == "PRBBYTE is a historical name of PRBBYT.");
+            published.Should().NotContain(diagnostic => diagnostic.Message.StartsWith("COMBYTE is a historical name", StringComparison.Ordinal));
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
 }

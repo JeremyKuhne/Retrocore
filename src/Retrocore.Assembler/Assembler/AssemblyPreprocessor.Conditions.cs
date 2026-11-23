@@ -48,7 +48,7 @@ internal sealed partial class AssemblyPreprocessor
         {
             text = ExpandCa65Definitions(text);
         }
-        catch (AssemblyError)
+        catch (Exception exception) when (exception is AssemblyError or OverflowException)
         {
             // The failure being reported may be this expansion's; the line is then read as written.
         }

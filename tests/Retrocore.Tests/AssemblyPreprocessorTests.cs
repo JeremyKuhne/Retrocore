@@ -461,8 +461,9 @@ public partial class AssemblyPreprocessorTests
     }
 
     /// <summary>
-    ///  A condition that is not tested, an <c>.elseif</c> after a taken branch, as in ca65, or one inside an
-    ///  inactive block, reports nothing even where its line would fail to expand, and its branch is skipped.
+    ///  An <c>.elseif</c> after a taken branch is not tested, as in ca65, so a condition that would fail to expand
+    ///  there reports nothing and its branch is skipped. A failing condition inside an inactive block is not read
+    ///  either; those rows guard that the fix keeps it so.
     /// </summary>
     /// <param name="dialect">The source dialect.</param>
     /// <param name="text">The source, which assembles the bytes 1 and 4.</param>

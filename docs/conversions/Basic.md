@@ -20,7 +20,7 @@ ROMs byte for byte:
 "AS" is the three AppleSoft builds, "PET" the five PET builds, "all" the eight. The sources keep Microsoft's
 six-letter names today. This log covers steps 1 to 3 of [the method](../ConvertingSources.md): the inventory, the
 sources and citations, and the rename table, [BasicRenames.md](BasicRenames.md), a draft for the owner's review.
-Nothing is converted yet, and no byte changes.
+The conversion itself (step 4) is logged below, under "Step 4: the conversion", one step of X8 at a time.
 
 ## Decisions accepted by the owner
 
@@ -599,6 +599,72 @@ builds), one checking every citation against the documents. Their findings, as c
   settled; and the remaining DROPs that drop a documented name (C-Q8, D-Q3), still open.
 - R10. One row per name per file has three exceptions: parameters of the same name in two macros of one file
   (rows 296/315, 1933/1943, 1956/1972).
+
+## Step 4: the conversion
+
+Each step of X8 converts some files and leaves the rest unconverted: those keep using the old names, which resolve
+through the converted definitions' `Also:` sections. Every step keeps all eight builds byte-identical.
+
+### W. The workspace (X8 step 2)
+
+Converted, with `; retrocore: style=strict`:
+
+- `AppleSoft.Equates.asm` and `Commodore.Equates.asm`: BASIC's workspace, page zero, the build constants and, on
+  the PET, the kernal's jump table (X14's `Kernal` prefix, and the three shared vectors `CheckStop`, `GetCharacter`
+  and `CloseAllFiles`).
+- `MsBasic.Layouts.asm`, new and shared (X3): `Stack`, `Variable`, `ArrayHeader`, `StringDescriptor` with
+  `DESCRIPTOR_SIZE` (STRSIZ), `ForFrame` with `FOR_FRAME_SIZE` (FORSIZ), `GosubFrame`, `OperatorEntry`,
+  `ProgramLine` and `FunctionDefinition`. Both vendors' Equates include it; the copies of STRSIZ and FORSIZ in the
+  Equates and dispatch tables join it. The FOR frame's stack-relative offsets in `MsBasic.MemoryManagement.asm`
+  (FNDFOR) and `MsBasic.Next.asm` (NEXT) are written through it (`Stack + 1 + ForFrame::STEP_SIGN,x`); those two
+  files are otherwise unconverted. No other code reaches a layout through the stack by a fixed offset.
+- `AppleSoft.DispatchTables.asm` and `Commodore.DispatchTables.asm`: the tokens (`TOKEN_*`), the error offsets
+  (`ERROR_*`) and the messages (`ErrorSuffix`, `LineNumberPrefix`, `BreakMessage`, and the PET's `ReadyMessage`),
+  X4. The tables themselves (STMDSP, FUNDSP, RESLST, ERRTAB) keep their names for their own step. The Commodore
+  macro's body is indented as the strict lint asks of a macro.
+
+Decisions and how the table was applied:
+
+- W1. Every renamed definition's old name is in its `Also:` with the table's keys, the brackets of a key's builds
+  dropped (the Equates and dispatch tables are vendor files, so each name already resolves only in its vendor's
+  builds). The table's "other names here" go in the same `Also:`, each on one definition: the location where the
+  table lists it on a location and its aliases (TEMP3 on `FunctionPointer`, ARRYPT on `DestinationEnd`).
+- W2. "None found" is cited as `UNKN` (the row phase A added to the bibliography, added here the same way), so the
+  unconverted files' uses of those names still resolve. This is the owner's open choice between UNKN and no `Also:`
+  (the table's introduction); UNKN is the one that keeps the old names working.
+- W3. Names two definitions shared in one file are one definition with both old names (INDEX1 and INDEX are
+  `Pointer1`). KIMY is dropped into `Dimensioning`'s `Also:`.
+- W4. Names left in prose because they would clash with another definition in the same build: HV4's INCHR for
+  `KernalCharacterIn` (BASIC's own INCHR is another routine). Microsoft's REDDY and GOTK in AppleSoft (C-Q8), Q
+  (the table counter, which the tables no longer use) and AppleSoft's LINWID and NCMWID (D-Q3) are named in prose
+  and not defined; NCMWID's one use is written `FRETOP+1`, the same byte.
+- W5. The tokens and error offsets the PET's Equates copied for the math package (PLUSTK, MINUTK, ERROV, ERRDV0) are
+  defined once, with their tables (X4); `TOKEN_PI` stays in the Equates, since the table has no spelling for it.
+  The AppleSoft error offsets are computed from their messages (`* - ERRTAB`), as the PET's were, each with an
+  `.assert` of its value.
+- W6. AppleSoft's copies of the Monitor's, the IIe's and the firmware's names keep their names and definitions in
+  AppleSoft.Equates, in their own section, until AppleSoft includes IIeEquates.asm and MonitorEntries.asm (X10,
+  pending: the converted IIeEquates is on `claude/convert-iieequates`, not yet on main). Their trailing comments
+  are moved above them, as the strict lint asks. This covers Microsoft's CQ* synonyms, BUF and OUTCH.
+- W7. Switches (X15): the seven a test predefines and the Equates define (BUFPAG, BUFLEN, NULCMD, NUMLEV, STKEND,
+  LOCAL_TRMPOS, VARTXT_IN_LINNUM) are renamed as drafted everywhere they are used, since an `.ifndef` default is
+  not reached through `Also:`, and the tests predefine the new names. Microsoft's five keep `Also:`; the SDK's two
+  (LOCAL_TRMPOS, VARTXT_IN_LINNUM) are not historical and get none. Each root asserts that none of the seven old
+  names is predefined. The switches C# sets keep their names.
+- W8. D-Q3, followed as recommended: SIZE is `CollectorOffset` (the string collector's offset; the recommendation's
+  scoped alias waits for the collector's step) and OLDOV `ArgExtension`, in both vendors; LSTPNT is `ListOffset`
+  and DECCNT `DigitCount`, as the table has them. The table's rows are updated to match.
+- W9. C# lookups (X9): the debug hosts keep Microsoft's names, which reach the native builds through `Also:` and
+  are the MACRO-10 builds' own names, so one lookup serves both sources. The tests likewise look the old names up
+  through `BasicNames`; they move when the MACRO-10 comparisons no longer need them.
+- W10. Prose names BASIC's keywords in backticks (`FOR`, `DATA`): the statement handlers' labels have those names,
+  so the lint would otherwise ask for a link.
+
+Checked: the full suite, the rename gate, the lint tests, and `BasicWorkspaceConversionTests`, which compares every
+old name in the converted files with the MACRO-10 overlay's value in each build, checks that a vendor's old names
+resolve only in its builds, and that every citation's key is in the bibliography. The debugger's contract checking
+ran clean over a program using FOR, NEXT, GOSUB, DEF FN, arrays and strings on PET BASIC 2, PET BASIC 4 and the
+enhanced IIe's AppleSoft, built from these sources.
 
 ## Other dependents
 

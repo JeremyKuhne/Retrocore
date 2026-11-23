@@ -515,15 +515,17 @@ public sealed class BasicSharedMemoryManagementTests
         int start = Address(legacy, "FNDFOR");
         string source = $"""
             .cpu Mos6502
+            .include "MsBasic.Layouts.asm"
             .include "MsBasic.MemoryManagement.asm"
             .org ${start:X4}
                 MEMORY_MANAGEMENT {reserve}
             MEMORY_MANAGEMENT_END:
             """;
 
+        // FORSIZ comes from the layouts the source includes.
         string[] dependencies =
         [
-            "FORTK", "FORSIZ", "FORPNT", "HIGHDS", "HIGHTR", "LOWTR", "INDEX", "STREND",
+            "FORTK", "FORPNT", "HIGHDS", "HIGHTR", "LOWTR", "INDEX", "STREND",
             "FRETOP", "TEMPF1", "FAC", "GARBA2", "OMERR"
         ];
 
@@ -558,16 +560,16 @@ public sealed class BasicSharedMemoryManagementTests
         bool disk = model == PetModel.Pet4032;
         Dictionary<string, long> symbols = new()
         {
-            ["BUFPAG"] = early ? 0 : 2,
-            ["BUFLEN"] = early ? 80 : 81,
-            ["NULCMD"] = early ? 1 : 0,
+            ["INPUT_BUFFER_PAGE"] = early ? 0 : 2,
+            ["INPUT_BUFFER_LENGTH"] = early ? 80 : 81,
+            ["NULL_COMMAND"] = early ? 1 : 0,
             ["TERMINAL_FIRST"] = early ? 1 : 0,
             ["FULL_STACK_TOP"] = early ? 1 : 0,
             ["STACK_RESERVE_19"] = early ? 1 : 0,
-            ["LOCAL_TRMPOS"] = early ? 1 : 0,
+            ["LOCAL_TERMINAL_POSITION"] = early ? 1 : 0,
             ["LINE_WIDTH_STORAGE"] = disk ? 0 : 1,
             ["DISK_STATUS_STRING"] = disk ? 1 : 0,
-            ["VARTXT_IN_LINNUM"] = early ? 1 : 0,
+            ["VARIABLE_LIST_IN_LINE_NUMBER"] = early ? 1 : 0,
             ["CLOCK_IN_PAGE2"] = early ? 1 : 0,
             ["STATUS_IN_PAGE2"] = early ? 1 : 0,
             ["RND_TIMER_9044"] = early ? 1 : 0,
@@ -575,7 +577,8 @@ public sealed class BasicSharedMemoryManagementTests
             ["EXTENDED_DISK_VECTORS"] = disk ? 1 : 0
         };
 
-        foreach (string name in (string[])["FORTK", "FORSIZ", "GARBA2", "OMERR"])
+        // FORSIZ comes from the layouts the workspace includes.
+        foreach (string name in (string[])["FORTK", "GARBA2", "OMERR"])
         {
             symbols.Add(name, legacy.Symbol(name));
         }
@@ -585,7 +588,7 @@ public sealed class BasicSharedMemoryManagementTests
             .include "Commodore.Equates.asm"
             .include "MsBasic.MemoryManagement.asm"
             .org ${legacy.Symbol("FNDFOR"):X4}
-                MEMORY_MANAGEMENT (2 * NUMLEV + 3 * ADDPRC + 13)
+                MEMORY_MANAGEMENT (2 * STACK_LEVELS + 3 * ADDPRC + 13)
             MEMORY_MANAGEMENT_END:
             """;
 

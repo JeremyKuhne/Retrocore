@@ -110,7 +110,7 @@ NODEL:
 NODELC:
     sty HIGHDS+1
     jsr BLTU
-.if BUFPAG
+.if INPUT_BUFFER_PAGE
     lda LINNUM
     ldy LINNUM+1
     sta BUF-2
@@ -204,7 +204,7 @@ GOODCH:
     sta BUF,x
     inx
 .if checkedInput
-    cpx #BUFLEN
+    cpx #INPUT_BUFFER_LENGTH
     bne INLINC
     ldx #<ERRLS
     jmp ERROR
@@ -353,7 +353,7 @@ NTHIS2:
     bpl GETBPT
 CRDONE:
     sta BUF-3,y
-.if BUFPAG
+.if INPUT_BUFFER_PAGE
     dec TXTPTR+1
 .endif
     lda #<(BUF-1)

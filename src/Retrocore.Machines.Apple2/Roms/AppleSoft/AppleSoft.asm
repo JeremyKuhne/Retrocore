@@ -27,6 +27,16 @@
 
 .cpu Mos6502
 
+; The build switches Microsoft named, renamed in the BASIC conversion (decision X15). A predefined old name would be
+; ignored rather than reaching its switch, so it is an error.
+.assert .not .defined(BUFPAG), "Predefine INPUT_BUFFER_PAGE, not BUFPAG."
+.assert .not .defined(BUFLEN), "Predefine INPUT_BUFFER_LENGTH, not BUFLEN."
+.assert .not .defined(NULCMD), "Predefine NULL_COMMAND, not NULCMD."
+.assert .not .defined(NUMLEV), "Predefine STACK_LEVELS, not NUMLEV."
+.assert .not .defined(STKEND), "Predefine STACK_END, not STKEND."
+.assert .not .defined(LOCAL_TRMPOS), "Predefine LOCAL_TERMINAL_POSITION, not LOCAL_TRMPOS."
+.assert .not .defined(VARTXT_IN_LINNUM), "Predefine VARIABLE_LIST_IN_LINE_NUMBER, not VARTXT_IN_LINNUM."
+
 .ifndef ENHNCD
 ENHNCD = 1                          ;; 1 for the enhanced IIe ROM
 .endif

@@ -278,8 +278,9 @@ public sealed class BasicSharedAliasConsistencyTests
         List<Alias> aliases = [];
         foreach (string path in root.AliasFiles)
         {
+            // A type's members (ForFrame::TOKEN) come with their type, and a predefined name is unqualified.
             Dictionary<string, long> context = root.Result.SymbolDefinitions
-                .Where(symbol => !SameFile(symbol.Location?.Path, path))
+                .Where(symbol => !SameFile(symbol.Location?.Path, path) && !symbol.Name.Contains("::", StringComparison.Ordinal))
                 .ToDictionary(symbol => symbol.Name, symbol => symbol.Value, StringComparer.Ordinal);
 
             AssemblyParseResult parsed = Retrocore.Assembler.Assembler.Parse(

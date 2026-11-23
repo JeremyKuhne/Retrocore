@@ -149,6 +149,7 @@ public sealed class BasicSharedNextTests
         string folder = Path.Join(Inputs, "Microsoft6502Basic");
         string source = $"""
             .cpu Mos6502
+            .include "MsBasic.Layouts.asm"
             .include "MsBasic.Next.asm"
             .org ${start:X4}
                 NEXT_ENTRIES {(countedStack ? 1 : 0)}, RESUME_NEXT

@@ -7,20 +7,30 @@
 
 .cpu Mos6502
 
+; The build switches Microsoft named, renamed in the BASIC conversion (decision X15). A predefined old name would be
+; ignored rather than reaching its switch, so it is an error.
+.assert .not .defined(BUFPAG), "Predefine INPUT_BUFFER_PAGE, not BUFPAG."
+.assert .not .defined(BUFLEN), "Predefine INPUT_BUFFER_LENGTH, not BUFLEN."
+.assert .not .defined(NULCMD), "Predefine NULL_COMMAND, not NULCMD."
+.assert .not .defined(NUMLEV), "Predefine STACK_LEVELS, not NUMLEV."
+.assert .not .defined(STKEND), "Predefine STACK_END, not STKEND."
+.assert .not .defined(LOCAL_TRMPOS), "Predefine LOCAL_TERMINAL_POSITION, not LOCAL_TRMPOS."
+.assert .not .defined(VARTXT_IN_LINNUM), "Predefine VARIABLE_LIST_IN_LINE_NUMBER, not VARTXT_IN_LINNUM."
+
 .ifndef REVISD
 REVISD = 1                          ;; 1 selects the revised first BASIC 1 chip
 .endif
 .assert REVISD = 0 || REVISD = 1, "REVISD is 0 or 1."
 
 ; Workspace changes are independent so their layout can be reused by another variant.
-.ifndef BUFPAG
-BUFPAG = 0                          ;; input buffer in page zero
+.ifndef INPUT_BUFFER_PAGE
+INPUT_BUFFER_PAGE = 0               ;; input buffer in page zero
 .endif
-.ifndef BUFLEN
-BUFLEN = 80                         ;; input buffer length
+.ifndef INPUT_BUFFER_LENGTH
+INPUT_BUFFER_LENGTH = 80            ;; input buffer length
 .endif
-.ifndef NULCMD
-NULCMD = 1                          ;; reserve the NULL count
+.ifndef NULL_COMMAND
+NULL_COMMAND = 1                    ;; reserve the NULL count
 .endif
 .ifndef TERMINAL_FIRST
 TERMINAL_FIRST = 1                  ;; place terminal storage before general scratch
@@ -31,11 +41,11 @@ FULL_STACK_TOP = 1                  ;; use the whole page-one stack
 .ifndef STACK_RESERVE_19
 STACK_RESERVE_19 = 1                ;; reserve 19 stack levels
 .endif
-.ifndef LOCAL_TRMPOS
-LOCAL_TRMPOS = 1                    ;; keep BASIC's terminal position
+.ifndef LOCAL_TERMINAL_POSITION
+LOCAL_TERMINAL_POSITION = 1         ;; keep BASIC's terminal position
 .endif
-.ifndef VARTXT_IN_LINNUM
-VARTXT_IN_LINNUM = 1                ;; share the variable-list and input-line pointers
+.ifndef VARIABLE_LIST_IN_LINE_NUMBER
+VARIABLE_LIST_IN_LINE_NUMBER = 1    ;; share the variable-list and input-line pointers
 .endif
 .ifndef CLOCK_IN_PAGE2
 CLOCK_IN_PAGE2 = 1                  ;; place the clock in page two
@@ -256,14 +266,14 @@ BASIC4_OUTPUT_PADDING = 0           ;; omit BASIC 4's output patch space
 .assert DISKO = 1, "BASIC 1 requires DISKO = 1."
 
 .ifndef RESET_STACK_POINTER
-RESET_STACK_POINTER = <(STKEND-$101-2*RESET_STACK_EARLY) ;; stack pointer after preserving the return address
+RESET_STACK_POINTER = <(STACK_END-$101-2*RESET_STACK_EARLY) ;; stack pointer after preserving the return address
 .endif
 .assert INTIDX_USE_FRMNUM = 0 || INTIDX_USE_FRMNUM = 1, "INTIDX_USE_FRMNUM is 0 or 1."
 
 ; Dispatch tables, errors, command input and program editing.
 .org $C000
     COMMODORE_DISPATCH_TABLES GO_TOKEN, 0, BAD_DATA_ERROR, 0
-    MEMORY_MANAGEMENT 2*NUMLEV+3*ADDPRC+13
+    MEMORY_MANAGEMENT 2*STACK_LEVELS+3*ADDPRC+13
     COMMODORE_ERROR_READY 1
     COMMODORE_COMMAND_LOOP COMMAND_TEST_CHARACTER, COMMAND_RESET_BEFORE_INSERT, LINK_RETURNS, 0
     COMMODORE_TERMINAL_INPUT EARLY_LINE_EDIT, 0
@@ -278,7 +288,7 @@ RESET_STACK_POINTER = <(STKEND-$101-2*RESET_STACK_EARLY) ;; stack pointer after 
     LIST_LINES 1, LIST_GUARD_OFFSET, 0, LINPRT, 0, READY
     LIST_TOKENS 0, 1, 1, 0
 .include "../../Microsoft6502Basic/MsBasic.For.asm"
-    COMMODORE_STATEMENT_FETCH BUFPAG, STATEMENT_FETCH_NOP, EARLY_SEPARATOR_CHECK, SHORT_END_BRANCH, CHRGET
+    COMMODORE_STATEMENT_FETCH INPUT_BUFFER_PAGE, STATEMENT_FETCH_NOP, EARLY_SEPARATOR_CHECK, SHORT_END_BRANCH, CHRGET
     COMMODORE_STATEMENT_DISPATCH EARLY_STATEMENT_DISPATCH, 0
     RESTORE_DATA
     STOP_AND_CONTINUE STOP_BY_LINE_NUMBER, 1
@@ -299,14 +309,14 @@ RESET_STACK_POINTER = <(STKEND-$101-2*RESET_STACK_EARLY) ;; stack pointer after 
 ; Terminal and channel output, then READ and input.
     COMMODORE_PRINT_CHANNELS
     PRINT_CORE TABER, PRINT_CLEAR_SPC_CARRY, 0, 1
-    COMMODORE_LINE_END BUFPAG, LOCAL_TRMPOS, 0, PRINT_NULL_PADDING
+    COMMODORE_LINE_END INPUT_BUFFER_PAGE, LOCAL_TERMINAL_POSITION, 0, PRINT_NULL_PADDING
     COMMODORE_PRINT_SPACING PRINT_TOKEN_SPACING
 .include "../../Microsoft6502Basic/MsBasic.StringOutput.asm"
-    COMMODORE_CHARACTER_OUTPUT ALWAYS_SKIP_CHARACTER, LOCAL_TRMPOS, 1, 1
+    COMMODORE_CHARACTER_OUTPUT ALWAYS_SKIP_CHARACTER, LOCAL_TERMINAL_POSITION, 1, 1
     COMMODORE_INPUT_ERROR INPUT_ERROR_EDITOR_PATCH
-    COMMODORE_CHANNEL_INPUT BUFPAG
+    COMMODORE_CHANNEL_INPUT INPUT_BUFFER_PAGE
     COMMODORE_INPUT_STATEMENT 1, 2, 0, INPUT_STOP_EDITOR_PATCH, 0
-    VARIABLE_INPUT BUFPAG, 0, GET_POINTER_Y_FIRST, GET_STRING_EDITOR_PATCH, 1, 0
+    VARIABLE_INPUT INPUT_BUFFER_PAGE, 0, GET_POINTER_Y_FIRST, GET_STRING_EDITOR_PATCH, 1, 0
     VARIABLE_INPUT_MESSAGES 0, 1
 
 ; Expressions, variables, arrays and strings.
@@ -332,7 +342,7 @@ RESET_STACK_POINTER = <(STKEND-$101-2*RESET_STACK_EARLY) ;; stack pointer after 
     SIMPLE_FUNCTIONS 0
     USER_FUNCTIONS USER_FN_LOW_CHECK
     STRING_FROM_NUMBER
-    STRING_STORAGE BUFPAG, STRING_CLEAR_FACOV
+    STRING_STORAGE INPUT_BUFFER_PAGE, STRING_CLEAR_FACOV
     STRING_ALLOCATION 0
     STRING_GARBAGE_COLLECTION GC_FULL_POINTER, GC_PATCH_ARRAY_STEP, GC_SUBTRACT_OFFSET
     STRING_CONCATENATION 0
@@ -351,7 +361,7 @@ RESET_STACK_POINTER = <(STKEND-$101-2*RESET_STACK_EARLY) ;; stack pointer after 
 .include "Commodore.FloatAliases.asm"
 .include "Commodore.InterpreterAliases.asm"
     CHARACTER_READER RANDOM_SEED_TAIL
-    COMMODORE_INITIALIZE INIT_MARK_DIRECT, INIT_LINE_WIDTH, INIT_DELAY_SIZE, LOCAL_TRMPOS, BUFPAG, 0, INIT_EARLY_BUFFER_SETUP
+    COMMODORE_INITIALIZE INIT_MARK_DIRECT, INIT_LINE_WIDTH, INIT_DELAY_SIZE, LOCAL_TERMINAL_POSITION, INPUT_BUFFER_PAGE, 0, INIT_EARLY_BUFFER_SETUP
     COMMODORE_MEMORY_PROBE PROBE_LOAD_ZERO, PROBE_LOAD_INDEX_ZERO, PROBE_SAVE_START, 0, PROBE_STOP_AT_SCREEN, PROBE_TEST_BYTE
 .if START_BANNER_AFTER_FREE
     COMMODORE_START_PROGRAM 1, START_CARRY_PROGRAM_START, 1, 1, 0

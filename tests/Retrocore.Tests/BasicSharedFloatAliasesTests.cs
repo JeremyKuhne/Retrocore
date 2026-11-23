@@ -252,10 +252,16 @@ public sealed class BasicSharedFloatAliasesTests
             native.Symbol(name).Should().Be(legacy.Symbol(name), $"{name} must keep the overlay's value");
         }
 
-        // BASIC 4's disk parser defines a label of its own named ON, for a command's ON U device clause.
+        // BASIC 4's disk parser defines a label of its own named ON, for a command's ON U device clause, where the
+        // MACRO-10 build has it, and not the shared ON statement AppleSoft's alias names.
         foreach (string appleName in s_appleNames.Keys.Where(name => !(name == "ON" && model == PetModel.Pet4032)))
         {
             native.HasSymbol(appleName).Should().BeFalse($"{appleName} is an Apple name");
+        }
+
+        if (model == PetModel.Pet4032)
+        {
+            native.Symbol("ON").Should().Be(legacy.Symbol("ON")).And.NotBe(native.Symbol("Statements::On"));
         }
 
         Dictionary<string, string[]> names = s_petAddresses.Keys

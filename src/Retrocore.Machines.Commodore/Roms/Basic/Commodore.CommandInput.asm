@@ -330,7 +330,7 @@ Return:
     ;; quoted strings and `REM` text, including in an unquoted `DATA` field. Where `skipKeywordSpaces` is 1
     ;; (BASIC 1), the walker ignores spaces within a word; where `indirectTable` is 1 (BASIC 4), it walks the table
     ;; through <Pointer1>.
-    ;; In: TextPointer = address of the first input character
+    ;; In: TextPointer = the first character's address, whose low byte is its offset in <InputBuffer>'s page
     ;; Out: TextPointer = address before <InputBuffer>, Y = encoded line length including the link and line-number
     ;;   header
     ;; See: <Statements::List>

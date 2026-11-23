@@ -33,9 +33,9 @@ Return:
     rts
 .endproc
 
-;; PRINT's comma: starts a new line past column 24, and otherwise prints spaces to the next 16-column zone. The enhanced
-;; IIe reads the column through <CHKCOL>, for 80 columns, and sets it through <PrintTabOrSpace>; the II Plus and IIe
-;; store it in <TerminalPosition>.
+;; PRINT's comma: starts a new line at or past column 24, and otherwise moves to the next 16-column zone. The
+;; enhanced IIe reads the column through <CHKCOL>, for 80 columns, and prints spaces to the zone through
+;; <PrintTabOrSpace>; the II Plus and IIe only store the zone's column in <TerminalPosition>.
 ;; Also: COMPRT (M6502)
 .proc PrintComma
 .if ENHNCD
@@ -128,7 +128,7 @@ MoveToColumn:
     ; Falls into PrintSpaces.
 .endproc
 
-;; Prints A spaces, then continues PRINT; nothing in AppleSoft enters here, and the label is kept for its old name.
+;; Prints A spaces, then continues PRINT; <PrintTabOrSpace> falls into it with the count for `TAB`.
 ;; Entry:
 ;;   CountInX = prints X spaces (zero prints none); <PrintTabOrSpace>'s `SPC` enters here
 ;;   ContinuePrint = rereads the current character and continues PRINT at <Statements::Print::Item> without a newline;

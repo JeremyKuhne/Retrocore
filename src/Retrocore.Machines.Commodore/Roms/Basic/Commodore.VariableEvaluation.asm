@@ -29,13 +29,15 @@
     .endif
 
     ;; Makes `TI$` and, in BASIC 4, `DS$` strings, and otherwise leaves a string variable's descriptor address in
-    ;; <Fac>; loads `TI`, `ST` and, in BASIC 4, `DS` as numbers, and a numeric variable's value into <Fac>.
+    ;; <FacMantissa3> and <FacMantissa4>; loads `TI`, `ST` and, in BASIC 4, `DS` as numbers, and a numeric variable's
+    ;; value, into <Fac>.
     ;;
     ;; Where `clockPatch` is 1 (BASIC 1), the editor ROM's `TISTR` and `TINUM` test for `TI$` and `TI`, returning to
     ;; this routine's `MatchClockString` and `MatchClockNumber`, and `TINUM` to `MatchStatus` and `LoadFloat`.
     ;; In: A = the value's address (low byte), Y = its high byte, VariableName = the variable's name, ValueType = its
     ;;   type, IntegerType = negative for an integer variable
-    ;; Out: Fac = the numeric value or the string's descriptor address, ValueType = the result's type
+    ;; Out: Fac = the numeric value; for a string, FacMantissa3 = its descriptor's address (low byte), FacMantissa4 =
+    ;;   its high byte; ValueType = the result's type
     ;; Also: ISVRET (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc LoadVariableValue
     sta FacMantissa3
@@ -56,7 +58,7 @@ MatchClockString:
         stx FacExtension
         .if diskStatus
             ldx FacMantissa4
-            cpx #$8B
+            cpx #$8B                ; at or above $8B00, out of RAM, as a reserved variable's is; others test bit 7
             bcc Return
         .else
             bit FacMantissa4
@@ -79,7 +81,7 @@ MatchClockString:
     sty DecimalExponent
     dey
     sty NumberBufferPointer
-    ldy #$06
+    ldy #$06                        ; TI$'s six digits
     sty DigitCount
     ldy #<(Float::PowersOfTenEnd-Float::PowersOfTen)
     jsr Float::FormatFacAtOffset::ExtractDigits
@@ -116,7 +118,7 @@ MatchClockNumber:
     .else
         .if diskStatus
             ldx FacMantissa4
-            cpx #$8B
+            cpx #$8B                ; at or above $8B00, out of RAM, as a reserved variable's is; others test bit 7
             bcc LoadFloat
         .else
             bit FacMantissa4
@@ -133,7 +135,7 @@ MatchClockNumber:
     .endif
     jsr ReadClock
     tya
-    ldx #$A0
+    ldx #$A0                        ; the exponent of a 32-bit integer in the mantissa
     jmp Float::ConvertMantissa
     .if diskStatus
 

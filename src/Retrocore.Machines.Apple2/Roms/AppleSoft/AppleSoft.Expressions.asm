@@ -22,7 +22,8 @@
     ; Falls into LoadVariableValue.
 .endproc
 
-;; Leaves a string variable's descriptor address in <Fac>, and loads a numeric variable's value into <Fac>.
+;; Leaves a string variable's descriptor address in <FacMantissa3> and <FacMantissa4>, and loads a numeric
+;; variable's value into <Fac>.
 ;; In: A = the value's address (low byte), Y = its high byte, ValueType = the variable's type, IntegerType = negative
 ;;   for an integer variable
 ;; Out: FacMantissa3 = the value's address (low byte), FacMantissa4 = its high byte; for a number, Fac = its value

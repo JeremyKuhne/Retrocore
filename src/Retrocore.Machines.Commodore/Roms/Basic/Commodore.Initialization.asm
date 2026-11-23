@@ -241,7 +241,8 @@ CheckRoom:
 .macro CommodoreStartMessages earlyBanner
     .assert earlyBanner = 0 || earlyBanner = 1, "earlyBanner is 0 or 1."
 
-;; The free-memory count's suffix, `BYTES FREE`, and a newline; BASIC 1's sign-on follows it.
+;; The free-memory count's suffix, `BYTES FREE`. BASIC 2 and 4 end it with a carriage return; BASIC 1 goes on, in
+;; the same string, with the cursor home, its sign-on and three cursor-downs.
 ;; Also: WORDS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 BytesFreeMessage:
     .byte " BYTES FREE"

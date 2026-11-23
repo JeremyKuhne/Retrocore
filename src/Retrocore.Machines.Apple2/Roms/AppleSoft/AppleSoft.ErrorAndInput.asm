@@ -160,10 +160,13 @@ StoreLink:
     LinkLine 0
 .endproc
 
+;; The longest line AppleSoft keeps from the Monitor's input.
+INPUT_LINE_LIMIT = 239
+
 ;; Reads a line through the Monitor without printing a prompt character.
 ;;
-;; The terminating byte is replaced with zero, the input is limited to 239 characters, and bit 7 is cleared
-;; from each character.
+;; The terminating byte is replaced with zero, the input is limited to <INPUT_LINE_LIMIT> characters, and bit 7 is
+;; cleared from each character.
 ;; Out: A = 0, X = the low byte of the address before <BUF>, Y = its high byte
 ;; Entry:
 ;;   WithPrompt = uses X as the Monitor's prompt character; <CommandLoop> enters here with `]`
@@ -177,9 +180,9 @@ StoreLink:
 WithPrompt:
     stx PROMPT
     jsr GETLN
-    cpx #239                        ; the longest line BASIC keeps
+    cpx #INPUT_LINE_LIMIT
     bcc Terminate
-    ldx #239
+    ldx #INPUT_LINE_LIMIT
 
 ;; Stores the zero after the last character.
 ;; Also: GDBUFS (M6502, ASTIL)
@@ -231,6 +234,7 @@ INPUT_BUFFER_BASE = $0200
 ;; tokenization; `?` abbreviates `PRINT`. The enhanced IIe folds case outside quoted strings and `DATA`. `AT` is not
 ;; matched when followed by `N` or `O`, so that `ATN` and `TO` are recognized. Where the program is run-only
 ;; (<RunOnly>), it discards its caller and runs the program instead.
+;; In: TextPointer = the first character's address, whose low byte is its offset in <BUF>'s page
 ;; Out: TextPointer = the address before the tokenized line, Y = the encoded line's length, header included
 ;; See: <Statements::List>
 ;; Also: CRUNCH (M6502)

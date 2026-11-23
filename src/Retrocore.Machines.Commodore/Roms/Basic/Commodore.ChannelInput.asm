@@ -93,7 +93,7 @@ Release:
     ;;
     ;; An optional quoted prompt is printed first. Terminal input receives a question-mark prompt and a blank line stops
     ;; the program; a file error releases the channel and skips to the next statement. Where `revisedEof` is 1 (the
-    ;; revised BASIC 4), the editor ROM's `INPNUL` takes the blank-line and end-of-file handling.
+    ;; revised BASIC 4), its patch `INPNUL`, in BASIC's patch area, takes the blank-line and end-of-file handling.
     ;; Entry:
     ;;   CheckDirect = rejects direct mode and puts a comma before the buffer; <Statements::InputNumber> enters here
     ;;   ReadLine = reads a line and checks the channel's status; the revised BASIC 4's `INPNUL` re-enters here
@@ -143,7 +143,7 @@ CheckEmpty:
     .if editorPatch
         jmp INPSTP
     .elseif localStopLabel
-        ; Falls into StopEmptyInput.
+        ; Falls into StopEmptyInput, except in the revised BASIC 4, which jumped to INPNUL.
     .else
         clc
         jmp Statements::StopOrEnd::SaveLine

@@ -460,7 +460,7 @@ try {
         [[table.address, "data", 2], [table.address + 2, "code", 1]], "the 65C02 runs $03 as a one-byte NOP");
     // The language card's RAM is mapped over the Monitor now, so its code lists from the ROM's bank.
     lines = (await request("retro/memory/listing", { memoryReference: "rom:0x0000", address: 0xFDED, count: 3 })).lines;
-    assert.deepEqual([lines[0].address, lines[0].label, lines[0].kind], [0xFDED, "COUT", "code"]);
+    assert.deepEqual([lines[0].address, lines[0].label, lines[0].kind], [0xFDED, "CharacterOut", "code"]);
     assert.equal((await listing(0xFDED, 3))[0].kind, "unknown", "RAM is mapped there, which no source describes");
     // Decode from here starts where it is told, inside the instruction at $0300.
     lines = await listing(0x0301, 2, [0x0301]);

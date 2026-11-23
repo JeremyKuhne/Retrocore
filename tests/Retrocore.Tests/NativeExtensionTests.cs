@@ -285,6 +285,35 @@ public class NativeExtensionTests
     }
 
     /// <summary>
+    ///  A scope is refused like a procedure when a storage map crosses its end or its start, including an inner
+    ///  scope inside a procedure.
+    /// </summary>
+    /// <param name="text">The source.</param>
+    [TestMethod]
+    [DataRow(".scope Ends\nnop\n.dum $80\nZero: .res 2\n.endscope\n.dend\n.byte .sizeof(Ends)")]
+    [DataRow(".dum $80\n.scope Starts\nZero: .res 2\n.dend\nnop\n.endscope\n.byte .sizeof(Starts)")]
+    [DataRow(".proc Outer\nnop\n.scope Inner\n.dum $80\nZero: .res 2\n.endscope\n.dend\nnop\n.endproc\n.byte .sizeof(Outer::Inner)")]
+    public void AStorageMapAcrossAScopeLeavesItWithoutASize(string text)
+    {
+        Assemble(text).Diagnostics.Select(diagnostic => diagnostic.Message).Should().Equal(
+            ".sizeof requires a contiguous scope or procedure: no section or .logicalorg changes, no storage map across its ends, and not a continued scope.");
+    }
+
+    /// <summary>
+    ///  A procedure around an inner scope that a storage map crosses keeps its size: the map opens and ends inside
+    ///  the procedure, so only the inner scope has an end in it.
+    /// </summary>
+    [TestMethod]
+    public void AProcedureAroundACrossedScopeKeepsItsSize()
+    {
+        AssemblyResult result = Assemble(
+            ".proc Outer\nnop\n.scope Inner\n.dum $80\nZero: .res 2\n.endscope\n.dend\nnop\n.endproc\n.byte .sizeof(Outer)");
+
+        result.Diagnostics.Should().BeEmpty();
+        result.Sections[0].Bytes.Span[..3].ToArray().Should().Equal(0xEA, 0xEA, 2);
+    }
+
+    /// <summary>
     ///  An <c>.org</c> only moves forward, filling the gap, so like <c>.align</c> it leaves a procedure one run of
     ///  addresses whose size counts the fill. A storage map wholly inside a procedure adds nothing to its size, even
     ///  with an <c>.org</c> placing its fields, and a scope wholly inside a storage map has the size of the storage

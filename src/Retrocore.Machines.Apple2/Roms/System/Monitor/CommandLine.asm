@@ -90,6 +90,8 @@ Search:
 
 ;; Shifts a hexadecimal digit into A2, then copies the number to A1 and A3 and reads on.
 ;; In: A = the digit, in bits 0-3
+;; Entry:
+;;   NextBit = shifts the top bit of A into A2 X + 1 times
 ;; Also: DIG (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc ShiftDigit
     ; The digit's 4 bits, from the top of A.
@@ -141,6 +143,8 @@ Next:
 ;; character after it 8 bits of the number (<Commands::LetterOrQuote>).
 ;; In: Y = the index in <IN>
 ;; Out: A = the code, Y = the index after the character, A2L/A2H = the number, X = 1 after a digit, 0 when none
+;; Entry:
+;;   NextCharacter = reads the next character of the number
 ;; Also: GETNUM (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc ReadHexNumber
 .assert * = $FFA7, "ReadHexNumber must stay at $FFA7."

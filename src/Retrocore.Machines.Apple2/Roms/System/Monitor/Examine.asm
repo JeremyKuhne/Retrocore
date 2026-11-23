@@ -34,6 +34,8 @@ LIST_LENGTH = 20
 ;; Examines memory from A1 to the end of its line of 8 bytes: a carriage return alone after another command.
 ;; In: A1L/A1H = the first address, Y = 0
 ;; Out: A1L/A1H = the address after the last byte shown
+;; Entry:
+;;   Range = examines memory from A1 to A2, 8 bytes a line: a carriage return, "AAAA-" and the bytes, each after a blank
 ;; Also: XAM8 (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc ExamineLine
     ; The line ends at A1's last address with the same high bits.
@@ -131,6 +133,8 @@ Add:
 ;;
 ;; At $FDE3.
 ;; In: A = the nibble, in bits 0-3
+;; Entry:
+;;   Unmasked = prints A, 0 to 15, as a hexadecimal digit
 ;; Also: PRHEX (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc PrintHexDigit
 .assert * = $FDE3, "PrintHexDigit must stay at $FDE3."
@@ -184,6 +188,8 @@ Unmasked:
 ;; does, with the Control-S pause.
 ;; In: A = the character, with its high bit set
 ;; Keeps: A, Y
+;; Entry:
+;;   Pushed = prints a character, with the one for 80 columns already pushed
 ;; Also: COUTZ (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc ScreenOutNoInverse
 .assert * = $FDF6, "ScreenOutNoInverse must stay at $FDF6."
@@ -293,6 +299,8 @@ Done:
 ;; ".", ":", "+" and "-": waits for the next number, setting <MODE> to the command character.
 ;;
 ;; Its rts, at $FE1F, is one the Disk 3.5 firmware calls as a routine that does nothing on the IIe.
+;; Entry:
+;;   FromA = sets <MODE> to A
 ;; Also: SETMODE (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc SetMode
     ; The command character is the one before IN,YSAV.

@@ -312,6 +312,9 @@ StoreByte:
 ;; <Stepper::RunInstruction> enters with the carry set from its compare, which adds the one;
 ;; <Stepper::SimulateRti> enters with it clear.
 ;; In: carry = set to add one to the pulled address
+;; Entry:
+;;   SetPcHigh = sets <PCH>, then moves the PC past the instruction (<Stepper::SimulateRts::AddLength>)
+;;   AddLength = adds <LENGTH> and the carry to <PCL>/<PCH>; <Stepper::FellThrough> enters here
 ;; Also: XRTS (A2RM78, A2RM79)
 .proc SimulateRts
     pla
@@ -356,6 +359,9 @@ AddLength:
 ;; JMP indirect enters at <Stepper::SimulateJmp::Indirect> with the carry set: the first pass loads the pointer, and the
 ;; second, from the start with Y = 1, loads the address it points to.
 ;; In: Y = the offset of the operand's high byte
+;; Entry:
+;;   Indirect = loads the operand at PC+Y-1 into <PCL>/<PCH>, and with the carry set loads again from there
+;;   SetPcLow = sets <PCL>, then loads again for JMP indirect, or ends the step
 ;; Also: XJMP (A2RM78, A2RM79)
 .proc SimulateJmp
     clc
@@ -410,6 +416,9 @@ SetPcLow:
 ;;
 ;; The Autostart Monitor reads <CLRAN2> and <CLRAN3> in place of the firmware call, as it has no internal firmware to
 ;; reset. The Apple II Monitor has no Reset: its reset vector points at <Startup::ResetToMonitor>.
+;; Entry:
+;;   FixSoftEntry = makes <SOFTEV> AppleSoft's warm start, so the next reset keeps the program, then cold-starts
+;;     AppleSoft
 ;; Also: RESET (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc Reset
     .assert * = $FA62, "Startup::Reset must stay at $FA62."

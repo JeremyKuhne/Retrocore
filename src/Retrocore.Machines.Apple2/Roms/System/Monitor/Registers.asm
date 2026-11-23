@@ -14,6 +14,8 @@ REGISTER_COUNT = 5
 ;; In: A5H..SPNT = the registers
 ;; Out: X = 0
 ;; Uses: A, A3L/A3H
+;; Entry:
+;;   NoReturn = prints the registers without the carriage return first, at $FADA; <ShowBreak> calls it
 ;; Also: REGDSP (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc ShowRegisters
     .assert * = $FAD7, "ShowRegisters must stay at $FAD7."

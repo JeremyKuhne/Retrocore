@@ -705,8 +705,9 @@ the build:
   skipped before the error stays skipped only in a root source outside a macro's body: the error may have
   prevented a later inclusion or expansion that would take it. Every line not assembled when expansion stops at
   its line limit is undecided too.
-- A MACRO-10 source's conditionals are expanded with the rest of its text, so its lines that produced no statement
-  are undecided, and every line of one whose expansion reported an error.
+- A MACRO-10 source's conditionals are expanded with the rest of its text, so its lines its expander didn't pass on
+  are undecided, and every line of one whose expansion reported an error. A source without preprocessing directives
+  has no conditionals: its lines are assembled but for those that didn't parse, which are undecided.
 
 ## Repeats
 

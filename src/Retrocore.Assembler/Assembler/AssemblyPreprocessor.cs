@@ -83,7 +83,14 @@ internal sealed partial class AssemblyPreprocessor
         processor.FinishMacro10();
         if (processor._ca65State is { } ca65)
         {
-            foreach (TypeFrame type in ca65.Types) { processor.Error("Unterminated ca65 type.", type.Opening); }
+            foreach (TypeFrame type in ca65.Types)
+            {
+                processor.Error("Unterminated ca65 type.", type.Opening);
+
+                // The lines after an unclosed type were read as its members, so what was chosen from there is suspect.
+                processor._untrustedFrom = Math.Min(processor._untrustedFrom, type.Order);
+            }
+
         }
 
         AssemblyProject project = processor._project;

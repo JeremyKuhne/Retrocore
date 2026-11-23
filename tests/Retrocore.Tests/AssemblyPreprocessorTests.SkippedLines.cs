@@ -275,7 +275,6 @@ public partial class AssemblyPreprocessorTests
             .include "part.inc"
             Pick 0
             .include "missing.inc"
-            Pick 1
             """, resolver);
 
         result.Success.Should().BeFalse();
@@ -291,12 +290,36 @@ public partial class AssemblyPreprocessorTests
     [TestMethod]
     public void LinesTheDirectParseRejectedAreUndecided()
     {
-        AssemblyParseResult parsed = NativeAssembler.Parse(new AssemblySource("nop\n%% bad\nnop", "main.asm"));
+        AssemblyParseResult parsed = NativeAssembler.Parse(new AssemblySource("nop\n%% bad\n%% worse\nnop", "main.asm"));
         parsed.Success.Should().BeFalse();
         AssemblySkippedLines skipped = Required(parsed.SkippedLines);
         skipped.IsAssembled("main.asm", 0).Should().BeTrue();
-        skipped.IsAssembled("main.asm", 1).Should().BeNull();
-        skipped.IsAssembled("main.asm", 2).Should().BeTrue();
+        skipped.Undecided[Path.GetFullPath("main.asm")].Should().Equal(new AssemblyLineRange(1, 2));
+        skipped.IsAssembled("main.asm", 3).Should().BeTrue();
+    }
+
+    /// <summary>
+    ///  An unterminated ca65 type read the lines after it as its members, so what was chosen from its opening on is
+    ///  undecided, though the error is reported when the source ends.
+    /// </summary>
+    [TestMethod]
+    public void AnUnterminatedTypeLeavesWhatFollowsUndecided()
+    {
+        AssemblyResult result = Assemble("""
+            .if 0
+            .byte 1
+            .endif
+            .struct Open
+            Field .byte
+            .if 0
+            .byte 2
+            .endif
+            """);
+
+        result.Success.Should().BeFalse();
+        AssemblySkippedLines skipped = Required(result.SkippedLines);
+        skipped.IsAssembled("main.asm", 1).Should().BeFalse();
+        skipped.IsAssembled("main.asm", 6).Should().BeNull();
     }
 
     /// <summary>

@@ -296,13 +296,14 @@ public sealed class DocumentationSet
     ///   When the set was created from an assembly, the assembly answers it for every kind of topic: the branch is in
     ///   the build when the assembly assembled the line the section's comment documents, as the assembler chose it
     ///   with the macros defined before that point and the constants as they were there (see
-    ///   <see cref="AssemblyResult.SkippedLines"/>). A file the assembly never opened is not in the build.
+    ///   <see cref="AssemblyResult.SkippedLines"/>). A file the assembly never opened is not in the build, unless an
+    ///   error in expansion may have kept it from opening it.
     ///  </para>
     ///  <para>
     ///   Without that report (documentation from a debug file, which has no source), for a line it leaves undecided
-    ///   (after an error in expansion, or a MACRO-10 line that made no statement), or for a file not opened by an
-    ///   assembly with errors, the section's condition is evaluated from the build's symbols and every macro the
-    ///   files define, which can differ from the assembler's view where a macro is defined after the
+    ///   (after an error in expansion, or a MACRO-10 line its expander didn't pass on), or for a file not opened by
+    ///   an assembly with expansion errors, the section's condition is evaluated from the build's symbols and every
+    ///   macro the files define, which can differ from the assembler's view where a macro is defined after the
     ///   <c>.ifdef</c> that tests it or in a branch not taken.
     ///  </para>
     /// </remarks>

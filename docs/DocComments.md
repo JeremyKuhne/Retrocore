@@ -94,7 +94,7 @@ Rules:
   build; those every branch shares, and a definition documented once, apply to every build. The editor trusts
   the assembler's answer while the source has errors too, up to the first error found while expanding the source
   (a line that doesn't parse counts); an error found only once code is laid out, such as an undefined name, leaves
-  it whole. Past an expansion error, for a MACRO-10 line that made no statement, and for documentation from a
+  it whole. Past an expansion error, for a MACRO-10 line its expander didn't pass on, and for documentation from a
   debug file, which has no source, the condition is evaluated from the build's symbols and the macros the files
   define. A condition that can't be evaluated, such as one on a symbol the build lacks, applies. The tools label
   sections by model or condition.

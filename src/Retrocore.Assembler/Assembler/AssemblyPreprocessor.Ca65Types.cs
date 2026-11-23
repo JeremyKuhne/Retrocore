@@ -47,6 +47,7 @@ internal sealed partial class AssemblyPreprocessor
             if (name.Length != 0) { Emit(line, $".scope {name}"); }
             state.Types.Add(new(operation, name, qualified, name.Length == 0 ? start : 0, line.Location)
             {
+                Order = _visited,
                 Member = memberKey,
                 Scope = _project.Statements.Count > emitted ? _project.Statements[emitted] : null
             });

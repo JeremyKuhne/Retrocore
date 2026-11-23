@@ -37,8 +37,9 @@ namespace Retrocore.Assembler;
 ///  </para>
 ///  <para>
 ///   A MACRO-10 source's conditionals are expanded with the rest of its text and not reported, so a line of one is
-///   assembled when it produced a statement and undecided otherwise, error or not; when its expansion reports an
-///   error, every line of it is undecided.
+///   assembled when its expander passed it on and undecided otherwise, error or not; when its expansion reports an
+///   error, every line of it is undecided. A source without preprocessing directives, parsed directly, has no
+///   conditionals: its lines are assembled but for those that didn't parse, which are undecided.
 ///  </para>
 /// </remarks>
 public sealed class AssemblySkippedLines
@@ -47,6 +48,7 @@ public sealed class AssemblySkippedLines
         Path.DirectorySeparatorChar == '\\' ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
 
     private readonly Dictionary<string, int> _lineCounts;
+    private readonly bool _knowsEveryFile;
 
     /// <summary>
     ///  Creates a report.
@@ -54,12 +56,18 @@ public sealed class AssemblySkippedLines
     /// <param name="lineCounts">Each opened file's line count, by full path.</param>
     /// <param name="skipped">Each opened file's skipped runs.</param>
     /// <param name="undecided">The undecided runs of the files that have some.</param>
+    /// <param name="knowsEveryFile">
+    ///  Whether every file the assembly would open is in the report: false after an expansion error, which may have
+    ///  refused or never reached one, or when a source had no path to record.
+    /// </param>
     internal AssemblySkippedLines(
         Dictionary<string, int> lineCounts,
         Dictionary<string, AssemblyLineRange[]> skipped,
-        Dictionary<string, AssemblyLineRange[]> undecided)
+        Dictionary<string, AssemblyLineRange[]> undecided,
+        bool knowsEveryFile)
     {
         _lineCounts = lineCounts;
+        _knowsEveryFile = knowsEveryFile;
         Skipped = ReadOnly(skipped);
         Undecided = ReadOnly(undecided);
     }
@@ -77,7 +85,7 @@ public sealed class AssemblySkippedLines
 
     /// <summary>
     ///  Gets, by full path, the runs of lines whose state this assembly can't vouch for, in line order; only files
-    ///  that have such lines are here: none when expansion found no error, except in MACRO-10 sources.
+    ///  that have such lines are here: none when parsing found no error, except in MACRO-10 sources.
     /// </summary>
     public IReadOnlyDictionary<string, IReadOnlyList<AssemblyLineRange>> Undecided { get; }
 
@@ -113,8 +121,8 @@ public sealed class AssemblySkippedLines
     }
 
     /// <summary>
-    ///  Gets whether a line is in the build: whether it was assembled, false in a file the assembly never opened
-    ///  when the report is complete, and null when that can't be told.
+    ///  Gets whether a line is in the build: whether it was assembled, false in a file the assembly never opened when
+    ///  the report knows every file it would open, and null when that can't be told.
     /// </summary>
     /// <param name="path">The file.</param>
     /// <param name="line">The zero-based line.</param>
@@ -123,8 +131,8 @@ public sealed class AssemblySkippedLines
     {
         bool? assembled = State(path, line, out bool opened);
 
-        // With an error, the file may be one the assembly would have opened but refused or never reached.
-        return opened ? assembled : IsComplete ? false : null;
+        // After an expansion error the file may be one the assembly would have opened but refused or never reached.
+        return opened ? assembled : _knowsEveryFile ? false : null;
     }
 
     private bool? State(string path, int line, out bool opened)
@@ -197,6 +205,8 @@ public sealed class AssemblySkippedLines
         Dictionary<string, int> counts = [with(s_paths)];
         Dictionary<string, AssemblyLineRange[]> skipped = [with(s_paths)];
         Dictionary<string, AssemblyLineRange[]> undecided = [with(s_paths)];
+
+        // A source without conditionals includes nothing, so its own file is every file.
         if (path.Length != 0)
         {
             string full = FullPath(path);
@@ -204,12 +214,24 @@ public sealed class AssemblySkippedLines
             skipped[full] = [];
             if (errors is { Count: > 0 })
             {
-                AssemblyLineRange[] runs = new AssemblyLineRange[errors.Count];
-                for (int index = 0; index < runs.Length; index++) { runs[index] = new(errors[index], 1); }
-                undecided[full] = runs;
+                List<AssemblyLineRange> runs = [];
+                foreach (int line in errors)
+                {
+                    if (runs.Count != 0 && line < runs[^1].End) { continue; }
+                    if (runs.Count != 0 && line == runs[^1].End)
+                    {
+                        runs[^1] = new(runs[^1].Start, runs[^1].Count + 1);
+                        continue;
+                    }
+
+                    runs.Add(new(line, 1));
+                }
+
+                undecided[full] = [.. runs];
             }
         }
 
-        return new(counts, skipped, undecided);
+        // A line that didn't parse might have been a misspelled .include, so with one the files are not all known.
+        return new(counts, skipped, undecided, knowsEveryFile: path.Length != 0 && errors is not { Count: > 0 });
     }
 }

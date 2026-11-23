@@ -354,7 +354,7 @@ public sealed partial class HistoricalNameTests
     ///  another build's, and an old name only they give is not this build's.
     /// </summary>
     [TestMethod]
-    public void TopicsOfEveryKindFollowTheBranchTheAssemblyTook()
+    public void TopicsThatAreNoSymbolsFollowTheBranchTheAssemblyTook()
     {
         DocumentationSet set = Set("""
             .ifdef WIDE
@@ -467,7 +467,8 @@ public sealed partial class HistoricalNameTests
         foreach ((string program, bool inBuild) in ((string, bool)[])[
             ("Start:\n    rts\n", false),
             ("Start:\n    jmp Nowhere\n", false),
-            ("Start:\n    .bogus\n", true)
+            ("Start:\n    .bogus\n", true),
+            (".if 1\nStart:\n.endif\n    .bogus\n", true)
         ])
         {
             DocumentationSet set = DocumentationSet.Create(

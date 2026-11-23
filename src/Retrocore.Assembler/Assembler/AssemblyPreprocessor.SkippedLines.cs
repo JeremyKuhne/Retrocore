@@ -13,8 +13,12 @@ internal sealed partial class AssemblyPreprocessor
     private string? _markedPath;
     private FileLines? _marked;
 
-    // The earliest expansion position from which a dialect's own expander chose branches it then reported errors in.
+    // The earliest expansion position from which an error reported later, such as a dialect's own expander's or an
+    // unterminated type's, makes the branches chosen untrustworthy.
     private int _untrustedFrom = int.MaxValue;
+
+    // Whether a source had no path, so the report can't say which files the assembly opened.
+    private bool _unnamedSource;
 
     // Whether the line being expanded had a label before its directive, which DirectiveLabel removed.
     private bool _labeledDirective;
@@ -28,10 +32,18 @@ internal sealed partial class AssemblyPreprocessor
     /// <param name="included">Whether an <c>.include</c> opened it, rather than its being a root source.</param>
     private void OpenLines(string path, int count, bool opaque = false, bool included = false)
     {
-        if (path.Length == 0) { return; }
+        if (path.Length == 0)
+        {
+            _unnamedSource = true;
+            return;
+        }
+
         if (!_fileLines.TryGetValue(path, out FileLines? lines))
         {
             _fileLines[path] = lines = new(count, opaque);
+
+            // A line marked before its file opened would have cached the file as unknown.
+            if (ReferenceEquals(path, _markedPath)) { _markedPath = null; }
         }
 
         lines.Included |= included;
@@ -43,7 +55,7 @@ internal sealed partial class AssemblyPreprocessor
     /// <param name="source">The file.</param>
     private void OpenOpaqueLines(AssemblySource source)
     {
-        if (source.Path.Length == 0 || _fileLines.ContainsKey(source.Path)) { return; }
+        if (_fileLines.ContainsKey(source.Path)) { return; }
         int count = 0;
         foreach (ReadOnlyMemory<char> _ in new AssemblyLines(source.Text.AsMemory())) { count++; }
         OpenLines(source.Path, count, opaque: true);
@@ -140,7 +152,7 @@ internal sealed partial class AssemblyPreprocessor
             if (unknown.Length != 0) { undecided[full] = unknown; }
         }
 
-        return new(counts, skipped, undecided);
+        return new(counts, skipped, undecided, knowsEveryFile: !errors && !_unnamedSource);
     }
 
     private static AssemblyLineRange[] Runs(byte[] states, LineState wanted)

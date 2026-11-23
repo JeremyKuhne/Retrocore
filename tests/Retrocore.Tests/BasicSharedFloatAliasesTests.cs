@@ -53,11 +53,11 @@ public sealed class BasicSharedFloatAliasesTests
         ["GFDIV"] = ["M6502"]
     };
 
-    // The Commodore reconstructions' spellings of the character reader's labels.
+    // The Commodore reconstructions' spellings of the character reader's labels, which BASIC 1 and 2 take.
     private static readonly Dictionary<string, string[]> s_hoffmannVetterNames = new(StringComparer.Ordinal)
     {
-        ["CHDGOT"] = ["CBM4S79", "HV1", "HV1R", "HV2", "HV4", "HV4R"],
-        ["CHDRTS"] = ["CBM4S79", "HV1", "HV1R", "HV2", "HV4", "HV4R"]
+        ["CHDGOT"] = ["HV1", "HV1R", "HV2"],
+        ["CHDRTS"] = ["HV1", "HV1R", "HV2"]
     };
 
     // Addresses in the independently assembled PET1, PET2 and PET4 listings:
@@ -217,7 +217,9 @@ public sealed class BasicSharedFloatAliasesTests
         Dictionary<string, string[]> names = s_petAddresses.Keys
             .ToDictionary(name => name, _ => BasicAttribution.CommodoreKeys, StringComparer.Ordinal);
 
-        foreach ((string name, string[] keys) in s_microsoftPetNames.Concat(s_hoffmannVetterNames))
+        // BASIC 4's source leaves the character reader's labels unnamed, so only BASIC 1 and 2 take the spellings.
+        IEnumerable<KeyValuePair<string, string[]>> spellings = model == PetModel.Pet4032 ? [] : s_hoffmannVetterNames;
+        foreach ((string name, string[] keys) in s_microsoftPetNames.Concat(spellings))
         {
             names.Add(name, keys);
         }

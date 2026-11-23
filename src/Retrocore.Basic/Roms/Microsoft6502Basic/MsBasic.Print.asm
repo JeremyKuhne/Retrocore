@@ -17,7 +17,7 @@
     .scope Statements continued
 
     ;; Prints a string expression and continues the PRINT statement.
-    ;; In: FACMO/FACLO = string descriptor address
+    ;; In: FacMantissa3 = string descriptor address low byte, FacMantissa4 = its high byte
     ;; Also: STRDON (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc PrintStringItem
     jsr STRPRT
@@ -32,9 +32,9 @@
     ;; Prints expressions, handling comma zones, semicolons, `TAB` and SPC.
     ;; In: A = current character, zero = set at the end of the statement
     ;; Entry:
-    ;; Item = at the end, returns; `TAB`/SPC, comma, semicolon, or an expression (string, or number via FOUT and
-    ;; <STRLIT>); the
-    ;;     vendors' channel PRINT enters here
+    ;;   Item = prints the next item: at the end of the statement, returns; otherwise `TAB(`, `SPC(`, a comma, a
+    ;;     semicolon, or an expression, a number formatted by <Float::FormatFac> through <STRLIT>; the vendors'
+    ;;     channel `PRINT` enters here
     ;; See: <STRPRT>, <Float::FormatFac>, <COMPRT>
     ;; Also: PRINT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc Print

@@ -51,14 +51,17 @@ MultiplyByLogOfTwo = Functions::Log::MultiplyByLogOfTwo
 ;; Also: GFDIV (M6502)
 ToDividePacked = Functions::Tan::ToDividePacked
 
+; BASIC 1 and 2, whose documents spell the character reader's labels this way. BASIC 4's source (CBM4S79) leaves
+; them unnamed, so BASIC 4's builds give these names only in the template's prose.
+.if BASIC4_OUTPUT_PADDING = 0
 ;; Inherit: <CharacterReaderTemplate::GetCurrent>
-;; Also: CHDGOT (CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: CHDGOT (HV1, HV1R, HV2)
 CharacterReaderGetCurrent = CharacterReaderTemplate::GetCurrent
 
 ;; Inherit: <CharacterReaderTemplate::Done>
-;; Also: CHDRTS (CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: CHDRTS (HV1, HV1R, HV2)
 CharacterReaderDone = CharacterReaderTemplate::Done
-
+.endif
 
 ; BASIC 4's lister, which reads its keyword table through a pointer.
 .ifdef Statements::List::ReadWordByte

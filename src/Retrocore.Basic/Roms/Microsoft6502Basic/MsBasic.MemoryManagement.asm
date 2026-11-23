@@ -64,7 +64,7 @@ SkipFrame:
     adc #FOR_FRAME_SIZE
     tax
     bne NextFrame
-;; The rts.
+;; Returns.
 ;; Also: FFRTS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 Done:
     rts
@@ -207,7 +207,7 @@ RestoreScratch:
     bne OMERR
     cmp StringsBottom
     bcs OMERR
-;; The rts.
+;; Returns.
 ;; Also: REARTS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 Done:
     rts

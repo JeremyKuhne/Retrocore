@@ -21,7 +21,7 @@ public sealed class BasicStatementRoutineTests
 
     /// <summary>
     ///  <c>IsLetter</c> sets carry for A through Z only: not for the characters either side of them, a lowercase
-    ///  letter, or a letter with bit 7 set.
+    ///  letter, or a letter with bit 7 set; it keeps A, X and Y.
     /// </summary>
     /// <param name="apple">Whether to run AppleSoft rather than PET BASIC 4.</param>
     /// <param name="character">The character in A.</param>
@@ -41,8 +41,11 @@ public sealed class BasicStatementRoutineTests
     public void IsLetterSetsCarryForUppercaseLetters(bool apple, char character, bool letter)
     {
         BasicMathMachine machine = new(apple);
-        machine.Call("IsLetter", a: character, carry: !letter);
+        machine.Call("IsLetter", a: character, x: KeptX, y: KeptY, carry: !letter);
         machine.Cpu.Registers.Status.HasFlag(StatusRegister.Carry).Should().Be(letter);
+        machine.Cpu.Registers.Accumulator.Should().Be((byte)character);
+        machine.Cpu.Registers.X.Should().Be(KeptX);
+        machine.Cpu.Registers.Y.Should().Be(KeptY);
     }
 
     /// <summary>
@@ -114,6 +117,36 @@ public sealed class BasicStatementRoutineTests
         Word(machine, "TextPointer").Should().Be(Text + terminator);
         machine.Cpu.Registers.Accumulator.Should().Be((byte)text[terminator]);
         machine.Cpu.Registers.Status.HasFlag(StatusRegister.Carry).Should().BeTrue();
+    }
+
+    /// <summary>
+    ///  Before adding a digit to a value of 6400 or more, <c>ReadLineNumber</c> branches to ON's GOTO test with the
+    ///  value's high byte in A: a high byte other than the GOTO token is a syntax error, but one equal to it (43776 to
+    ///  44031 in AppleSoft, 35072 to 35327 on the PET) goes on into ON's selection loop.
+    /// </summary>
+    /// <param name="apple">Whether to run AppleSoft rather than PET BASIC 4.</param>
+    /// <param name="text">The digits.</param>
+    /// <param name="intoOn">Whether the number reaches ON's loop rather than the syntax error.</param>
+    [TestMethod]
+    [DataRow(true, "437760", true)]
+    [DataRow(true, "440319", true)]
+    [DataRow(true, "440320", false)]
+    [DataRow(true, "64000", false)]
+    [DataRow(false, "350720", true)]
+    [DataRow(false, "353280", false)]
+    public void ReadLineNumberSendsAGotoTokenHighByteIntoOn(bool apple, string text, bool intoOn)
+    {
+        BasicMathMachine machine = new(apple);
+        InstallCharacterReader(machine);
+        PutText(machine, text + "\0");
+        SetWord(machine, "TextPointer", Text);
+        int loop = machine.Address("ONGLOP");
+        int syntaxError = machine.Address("SNERR2");
+
+        int reached = machine.CallUntil("ReadLineNumber", [loop, syntaxError], a: text[0], carry: false);
+
+        reached.Should().Be(intoOn ? loop : syntaxError);
+        Word(machine, "TextPointer").Should().Be(Text + text.Length - 1, "the last digit is the one not added");
     }
 
     /// <summary>

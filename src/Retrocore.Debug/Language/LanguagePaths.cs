@@ -17,13 +17,14 @@ internal static class LanguagePaths
     /// </summary>
     /// <remarks>
     ///  <para>
-    ///   A rooted request replaces the including file's folder, as <see cref="Path.Combine(string, string)"/> lets
-    ///   it: on Windows, <c>\lib\X.asm</c> is at the root of the current directory's drive and <c>C:X.asm</c> on
-    ///   drive C, not under the including folder.
+    ///   A fully qualified request is used as it is and a relative one is joined to the including file's folder. A
+    ///   Windows request rooted without being fully qualified, such as <c>\lib\X.asm</c> or <c>C:X.asm</c>, depends on
+    ///   current-directory state and is rejected.
     ///  </para>
     /// </remarks>
     /// <param name="fromPath">The including file, or empty.</param>
     /// <param name="request">The requested path.</param>
     /// <returns>The full path.</returns>
+    /// <exception cref="ArgumentException">The request depends on current-directory state.</exception>
     internal static string Resolve(string fromPath, string request) => AssemblySourcePaths.Resolve(fromPath, request);
 }

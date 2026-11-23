@@ -452,7 +452,8 @@ public sealed partial class LanguageAnalysisTests
 
     /// <summary>
     ///  The editor resolves an included name as the assembler's file resolver does, so it names a file by the path
-    ///  the assembler reads it from: relative, parent, absolute, and the rooted forms that differ on Windows.
+    ///  the assembler reads it from (relative, parent and fully qualified), and rejects the Windows names the
+    ///  assembler rejects because they depend on current-directory state.
     /// </summary>
     /// <param name="request">The included name.</param>
     [TestMethod]
@@ -466,27 +467,29 @@ public sealed partial class LanguageAnalysisTests
     public void IncludesResolveAsTheAssemblerResolvesThem(string request)
     {
         string from = Path.GetFullPath(Path.Join(Path.GetTempPath(), "retrocore-paths", "program", "Main.asm"));
+        if (AssemblySourcePaths.DependsOnCurrentDirectory(request))
+        {
+            FluentActions.Invoking(() => LanguagePaths.Resolve(from, request)).Should().Throw<ArgumentException>();
+            SourceIncludes.IncludeLines(from, [$".include \"{request}\""]).Should().BeEmpty();
+            return;
+        }
+
         LanguagePaths.Resolve(from, request).Should().Be(AssemblySourcePaths.Resolve(from, request));
         LanguagePaths.Resolve("", request).Should().Be(AssemblySourcePaths.Resolve("", request));
+        SourceIncludes.IncludeLines(from, [$".include \"{request}\""]).Should().Equal((0, AssemblySourcePaths.Resolve(from, request)));
     }
 
     /// <summary>
-    ///  On Windows, a name rooted on the current drive or naming another drive replaces the including file's folder,
-    ///  as the assembler reads it, and a relative name is joined to it. A name rooted without a drive is on the
-    ///  current directory's drive, as <see cref="Path.GetFullPath(string)"/> places it, and a drive-relative name is
-    ///  in that drive's own current directory, which the test leaves alone, so only the result's shape is checked.
+    ///  On Windows, a name rooted without being fully qualified depends on current-directory state, so the editor
+    ///  does not take it for an include, as the assembler rejects it; a fully qualified or relative name is.
     /// </summary>
     [TestMethod]
     [OSCondition(OperatingSystems.Windows)]
-    public void RootedIncludesReplaceTheFolderOnWindows()
+    public void CurrentDirectoryIncludesAreNotFilesOnWindows()
     {
         const string From = @"C:\work\program\Main.asm";
-        LanguagePaths.Resolve(From, @"\lib\Library.asm").Should().Be(Path.GetFullPath(@"\lib\Library.asm"));
-        LanguagePaths.Resolve(From, @"D:\lib\Library.asm").Should().Be(@"D:\lib\Library.asm");
-        LanguagePaths.Resolve(From, @"lib\Library.asm").Should().Be(@"C:\work\program\lib\Library.asm");
-
-        string driveRelative = LanguagePaths.Resolve(From, "C:Library.asm");
-        driveRelative.Should().StartWith(@"C:\").And.EndWith(@"\Library.asm").And.NotBe(@"C:\work\program\Library.asm");
+        string[] lines = [@".include ""\lib\Library.asm""", @".include ""C:Library.asm""", @".include ""D:\lib\Library.asm""", @".include ""lib\Library.asm"""];
+        SourceIncludes.IncludeLines(From, lines).Should().Equal((2, @"D:\lib\Library.asm"), (3, @"C:\work\program\lib\Library.asm"));
     }
 
     private static LspParams Request(DocumentUri uri, int line, int character) =>

@@ -867,6 +867,11 @@ then in the host's include paths. `.include <file>` looks only in the host's SDK
 `dialect=native|ca65|merlin|macro10` names the included file's dialect. Includes nest up to the depth limit and
 cannot form a cycle.
 
+A path is either relative, joined to the folder it's looked for in, or fully qualified: `/lib/x.inc` on Linux and
+macOS, `C:\lib\x.inc` or `\\server\share\x.inc` on Windows. On Windows, a path that's rooted but not fully
+qualified, such as `\lib\x.inc`, `/lib/x.inc` or `C:x.inc`, is an error, because where it points depends on the
+current directory.
+
 `.incbin "file"[, start[, size]]` inserts a file's bytes.
 
 ```text

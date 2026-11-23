@@ -124,6 +124,26 @@ public partial class AssemblyPreprocessorTests
     }
 
     /// <summary>
+    ///  On Windows, an include rooted without being fully qualified is reported, not read from wherever current-
+    ///  directory state points.
+    /// </summary>
+    /// <param name="request">The include request.</param>
+    [TestMethod]
+    [OSCondition(OperatingSystems.Windows)]
+    [DataRow(@"\lib\local.inc")]
+    [DataRow("C:local.inc")]
+    public void CurrentDirectoryIncludesAreReportedOnWindows(string request)
+    {
+        Resolver resolver = new();
+        resolver.Add(@"C:\root\local.inc", ".byte $11");
+        AssemblyResult result = new NativeAssembler().Assemble(
+            new AssemblySource($".include \"{request}\"", @"C:\root\main.asm"),
+            Options(resolver));
+
+        result.Diagnostics.Single().Message.Should().Be($"Invalid include path: An include path must be relative or fully qualified, not '{request}'.");
+    }
+
+    /// <summary>
     ///  Runtime filesystem access is explicit and keeps relative include semantics.
     /// </summary>
     [TestMethod]

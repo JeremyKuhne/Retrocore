@@ -16,12 +16,42 @@ public static partial class DocumentationParser
         private readonly List<bool> _named = [];
         private readonly List<(int Depth, DocumentationUsing Using)> _usings = [];
         private DocumentationScopes? _current;
-        private int _macros;
+
+        // The macro bodies open around the line, innermost last, with the names that differ in each expansion: the
+        // macro's parameters and its .local names.
+        private readonly List<(string Name, HashSet<string> Parameters, HashSet<string> Locals)> _macros = [];
 
         /// <summary>
         ///  Gets the names of the open named scopes, outermost first.
         /// </summary>
         internal List<string> Scopes { get; } = [];
+
+        /// <summary>
+        ///  Gets the macro whose body the next line is in, innermost; null outside a macro's body.
+        /// </summary>
+        internal string? Macro => _macros.Count == 0 ? null : _macros[^1].Name;
+
+        /// <summary>
+        ///  Gets how a definition's name, as the next line writes it, varies from one expansion of the macro around
+        ///  it to the next.
+        /// </summary>
+        /// <param name="name">The definition's name.</param>
+        /// <returns>
+        ///  Whether a part of it is one of the macro's parameters, and whether it is local to each expansion: a
+        ///  <c>.local</c> name or a cheap local (<c>@name</c>).
+        /// </returns>
+        internal (bool Parameter, bool Local) Varies(string name)
+        {
+            if (_macros.Count == 0) { return (false, false); }
+
+            // A macro defined in another's body takes the outer one's parameters and .local names in each of its
+            // expansions too.
+            string[] parts = name.Split(["::"], StringSplitOptions.None);
+            string last = parts[parts.Length - 1];
+            bool local = (last.Length != 0 && last[0] == '@') || _macros.Any(macro => macro.Locals.Contains(last));
+            bool parameter = parts.Any(part => _macros.Any(macro => macro.Parameters.Contains(part)));
+            return (!local && parameter, local);
+        }
 
         /// <summary>
         ///  Gets the scope and the <c>.using</c> directives in effect before the next line.
@@ -44,7 +74,7 @@ public static partial class DocumentationParser
             AdvanceCode(code, line, !namesKnown && (assembled?.UsingAssembled(line) ?? true));
 
             // A macro invoked on the line may itself have given a .using, which applies from the next line.
-            if (assembled is not null && _macros == 0)
+            if (assembled is not null && _macros.Count == 0)
             {
                 IEnumerable<string[]> written = assembled.LineUsings is { } lineUsings ? lineUsings(line) : [];
                 foreach (string[] names in written.Concat(assembled.InvokedUsings(line)))
@@ -60,15 +90,24 @@ public static partial class DocumentationParser
             string word = FirstWord(code).ToLowerInvariant();
 
             // A .using in a macro's body applies where the macro is invoked, not where it is defined.
-            if (word == ".macro")
+            // ca65's short forms open and close a macro too.
+            if (word is ".macro" or ".mac")
             {
-                _macros++;
+                IReadOnlyList<string> words = Words(code[word.Length..]);
+                HashSet<string> parameters = [with(StringComparer.Ordinal), .. words.Skip(1)];
+                _macros.Add((words.Count == 0 ? "" : words[0], parameters, [with(StringComparer.Ordinal)]));
                 return;
             }
 
-            if (word == ".endmacro")
+            if (word is ".endmacro" or ".endmac")
             {
-                if (_macros != 0) { _macros--; }
+                if (_macros.Count != 0) { _macros.RemoveAt(_macros.Count - 1); }
+                return;
+            }
+
+            if (word == ".local" && _macros.Count != 0)
+            {
+                foreach (string local in Words(code[word.Length..])) { _macros[^1].Locals.Add(local); }
                 return;
             }
 
@@ -96,7 +135,7 @@ public static partial class DocumentationParser
                 _usings.RemoveAll(item => item.Depth > _named.Count);
                 _current = null;
             }
-            else if (word == ".using" && _macros == 0 && assembled)
+            else if (word == ".using" && _macros.Count == 0 && assembled)
             {
                 string[] names = [.. code[word.Length..].Split(',').Select(name => name.Trim()).Where(name => name.Length != 0)];
                 if (names.Length != 0)

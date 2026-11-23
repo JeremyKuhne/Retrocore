@@ -238,7 +238,10 @@ internal sealed partial class SourceAnalysis
 
         // Branches are chosen while sources expand, so even an assembly with errors says which it took where an error
         // can't have changed that; the conditions decide where it can.
-        Result.SkippedLines);
+        Result.SkippedLines,
+
+        // An assembly with errors may stop short of definitions it would make, so its macros' expansions aren't known.
+        Result.Success ? Result.SymbolDefinitions : null);
 
     // The assembly's symbols, or while it has errors, the definitions found in the text.
     private IReadOnlyDictionary<string, long> Symbols()
@@ -320,7 +323,7 @@ internal sealed partial class SourceAnalysis
         // A historical name finds the definition whose Also: section gives it.
         return [.. Documentation.FindAlso(name, thisBuild: true)
             .Where(topic => topic.Name != name)
-            .SelectMany(topic => Find(topic.Name))
+            .SelectMany(topic => Find(Documentation.SymbolOf(topic, name)))
             .Distinct()];
     }
 

@@ -261,7 +261,17 @@ public sealed partial class DocumentationResolver
     private DocumentationTarget? Also(DocumentationSet set, string name)
     {
         IReadOnlyList<DocumentationTopic> also = set.FindAlso(name, thisBuild: ReferenceEquals(set, Current));
-        if (also.Count == 1) { return Found(also[0]); }
+        if (also.Count == 1)
+        {
+            // In a topic macros' bodies share with other definitions of the name, the old name reaches one symbol of
+            // them, which the target names, with its own value.
+            DocumentationTopic topic = also[0];
+            string symbol = set.SymbolOf(topic, name);
+            if (symbol == topic.Name) { return Found(topic); }
+            long? value = set.Symbols.TryGetValue(symbol, out long found) ? found : null;
+            return Found(topic) with { Name = symbol, Value = value };
+        }
+
         return also.Count > 1 ? new(DocumentationTargetKind.Ambiguous, name) : null;
     }
 

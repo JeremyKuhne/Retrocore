@@ -165,7 +165,7 @@ public static partial class DocumentationParser
                     continue;
                 }
 
-                comments.Add(Documented(path, lines, start, index, definition, body, conditions, dataMacros, isTrailing: false, tracker.Current.Usings));
+                comments.Add(Documented(path, lines, start, index, definition, body, conditions, dataMacros, isTrailing: false, tracker));
                 continue;
             }
 
@@ -177,7 +177,7 @@ public static partial class DocumentationParser
                 if (Qualify(Define(code, containers), scopes) is { } definition)
                 {
                     List<(int, string)> body = [(index, Strip(comment))];
-                    comments.Add(Documented(path, lines, index, index, definition, body, conditions, dataMacros, isTrailing: true, tracker.Current.Usings));
+                    comments.Add(Documented(path, lines, index, index, definition, body, conditions, dataMacros, isTrailing: true, tracker));
                 }
                 else
                 {
@@ -324,7 +324,7 @@ public static partial class DocumentationParser
         List<(string Text, bool Not)> conditions,
         HashSet<string> dataMacros,
         bool isTrailing,
-        IReadOnlyList<DocumentationUsing> usings)
+        ScopeTracker tracker)
     {
         DocumentationKind kind = definition.Kind;
         List<string> aliases = [];
@@ -338,6 +338,7 @@ public static partial class DocumentationParser
         }
 
         (string summary, List<string> remarks, List<DocumentationSection> sections) = Body(body);
+        (bool parameter, bool local) = tracker.Varies(definition.Name);
         return new DocumentationComment
         {
             Path = path,
@@ -353,7 +354,10 @@ public static partial class DocumentationParser
             Members = kind is DocumentationKind.Enum or DocumentationKind.Struct ? Members(lines, target) : [],
             Condition = ConditionText(conditions),
             IsTrailing = isTrailing,
-            Usings = usings
+            Usings = tracker.Current.Usings,
+            Macro = tracker.Macro,
+            NamedByParameter = parameter,
+            LocalToExpansion = local
         };
     }
 

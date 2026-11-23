@@ -59,8 +59,14 @@ public sealed partial class DocumentationResolver
         foreach (DocumentationTopic topic in Current.Topics)
         {
             // A definition in another build of a conditional source, such as a routine only one model has, is
-            // checked by the build that assembles it, where its links and entries are there.
-            if (OtherBuilds(topic)) { continue; }
+            // checked by the build that assembles it, where its links and entries are there. An old name in a
+            // macro's body that no build could give is reported all the same.
+            if (OtherBuilds(topic))
+            {
+                CheckExpandedAlso(topic, diagnostics);
+                continue;
+            }
+
             CheckTopic(topic, diagnostics);
         }
 
@@ -172,6 +178,78 @@ public sealed partial class DocumentationResolver
         {
             CheckSection(topic, section, Section, (message, line) => Warn(DocumentationRules.Also, message, line));
         }
+
+        CheckExpandedAlso(topic, diagnostics);
+
+        // A macro's body shares the topic of the name it defines with any other definition of that name, though each
+        // is its own symbol: an old name two of them give is ambiguous to the assembler, as one two topics give is.
+        // Branches of conditional assembly are one symbol, and only the build's branch counts.
+        if (topic.Comments.All(comment => comment.Macro is null)) { return; }
+        Dictionary<string, string> given = [with(StringComparer.Ordinal)];
+        foreach (DocumentationComment comment in topic.Comments.Where(Current.ReachesInBuild))
+        {
+            if (comment.Section("Also") is not { } also) { continue; }
+            string symbol = Current.SymbolOf(topic, comment);
+            foreach (DocumentationAlso item in DocumentationAlso.Of(comment.Sections))
+            {
+                if (given.TryGetValue(item.Name, out string? earlier) && earlier != symbol)
+                {
+                    // Each comment of the topic may be in a file of its own.
+                    diagnostics.Add(new(
+                        $"Also: {item.Name} is given by two definitions of {topic.Name}, {earlier} and {symbol}, so code "
+                            + "can't tell which it means; give it to one of them.",
+                        comment.Path,
+                        also.Line,
+                        DocumentationSeverity.Warning,
+                        DocumentationRules.Also));
+                }
+
+                given.TryAdd(item.Name, symbol);
+            }
+        }
+    }
+
+    // Reports each Also: in a macro's body that can't reach its definition, in the comment's own file.
+    private void CheckExpandedAlso(DocumentationTopic topic, List<DocumentationDiagnostic> diagnostics)
+    {
+        foreach (DocumentationComment comment in topic.Comments)
+        {
+            if (comment.Section("Also") is { } also && ExpandedAlso(topic, comment) is { } expanded)
+            {
+                diagnostics.Add(new(expanded, comment.Path, also.Line, DocumentationSeverity.Error, DocumentationRules.Also));
+            }
+        }
+    }
+
+    // Why the old names a definition in a macro's body gives itself reach nothing. In no build can they reach a name
+    // each expansion takes from an argument or makes its own local, nor a .set variable, which has a version for each
+    // assignment; those are reported whether or not this build expands the macro. Otherwise they reach nothing when
+    // this build defines the line more than once. Null when they reach it, or outside a macro's body.
+    private string? ExpandedAlso(DocumentationTopic topic, DocumentationComment comment)
+    {
+        if (comment.Macro is not { } macro) { return null; }
+        if (comment.NamedByParameter)
+        {
+            return $"Also: {topic.Name} is named by a parameter of the macro {macro}, so each expansion names it "
+                + "after its argument and an old name can't reach it; give the old name in prose.";
+        }
+
+        if (comment.LocalToExpansion)
+        {
+            return $"Also: {topic.Name} is local to each expansion of the macro {macro}, so an old name can't "
+                + "reach it; give the old name in prose.";
+        }
+
+        if (comment.Kind == DocumentationKind.Variable)
+        {
+            return $"Also: {topic.Name} is a .set variable in the macro {macro}, which each assignment gives a new "
+                + "version, so an old name can't reach it; give the old name in prose.";
+        }
+
+        return Current.Expansions(comment) is > 1 and int count
+            ? $"Also: {topic.Name} is defined {count} times, by expansions of the macro {macro}, so an old name "
+                + "can't reach any of them; give the old name in prose."
+            : null;
     }
 
     private void CheckSection(
@@ -453,15 +531,20 @@ public sealed partial class DocumentationResolver
             {
                 warn($"Also: {also.Name} is also {sibling}, a member of the same type, which it would not mean.", section.Line);
             }
-            else if (Current.Topics.FirstOrDefault(other => !ReferenceEquals(other, topic)
-                && !OtherBuild(topic, other)
-                && !OtherBuilds(other)
-                && Current.Gives(other, also.Name, thisBuild: true)) is { } other)
+            else if (Current.AlsoOf(topic).Any(item => item.Name == also.Name)
+                && Current.Topics.FirstOrDefault(other => Clashes(topic, other, also.Name)) is { } other)
             {
                 warn($"Also: {other.Name} has the historical name {also.Name} too.", section.Line);
             }
         }
     }
+
+    // Whether another definition in this build gives a definition's old name too.
+    private bool Clashes(DocumentationTopic topic, DocumentationTopic other, string name) =>
+        !ReferenceEquals(other, topic)
+            && !OtherBuild(topic, other)
+            && !OtherBuilds(other)
+            && Current.Gives(other, name, thisBuild: true);
 
     // Whether two definitions are in different builds: in opposite branches of conditional assembly, as one model's
     // routine and another's are (one's condition holds a test the other's negates). Each build has only one of them,
@@ -469,11 +552,19 @@ public sealed partial class DocumentationResolver
     private static bool OtherBuild(DocumentationTopic topic, DocumentationTopic other)
     {
         if (topic.Condition is not { } condition || other.Condition is not { } otherCondition) { return false; }
+
+        // A condition in a macro's body is each expansion's own, so it never sets a definition apart in another build:
+        // two expansions can take opposite branches of one, and an expansion can define what a branch outside leaves
+        // in. Which lines the build defines, Reaches and Gives already count.
+        if (InMacro(topic) || InMacro(other)) { return false; }
+
         string[] terms = condition.Split(" and ");
         string[] otherTerms = otherCondition.Split(" and ");
         return terms.Any(term => otherTerms.Contains($"not {term}") || term.StartsWith("not ", StringComparison.Ordinal)
             && otherTerms.Contains(term[4..]));
     }
+
+    private static bool InMacro(DocumentationTopic topic) => topic.Comments.Any(comment => comment.Macro is not null);
 
     private static string LastName(string name)
     {

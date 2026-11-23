@@ -2,7 +2,7 @@
 ;; The Monitor's text-mode, hook, `BASIC`, G, cassette and register routines, and the commands between them
 ;; ($FE75-$FF58).
 
-; Text modes: the masks <INVFLG> holds (TEXT_NORMAL, the other, is in Monitor.asm).
+; Text modes: the masks <INVFLG> holds. The normal one, TEXT_NORMAL, is in Monitor.asm.
 
 ;; <INVFLG> for inverse text: printable characters lose bits 6 and 7.
 TEXT_INVERSE = $3F

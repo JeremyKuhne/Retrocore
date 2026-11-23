@@ -112,7 +112,8 @@ public sealed class DisassembleCommandTests
             string output = Path.Join(directory, "plot.asm");
             File.WriteAllBytes(input, program);
 
-            DisassembleCommand.Run([input, output, "--origin", "$0800", "--machine", "iiplus", "--sdk-roms", s_inputs]).Should().Be(0);
+            string[] args = [input, output, "--origin", "$0800", "--machine", "iiplus", "--sdk-roms", s_inputs];
+            DisassembleCommand.Run(args).Should().Be(0);
             string source = File.ReadAllText(output);
             source.Should().Contain("JSR LowRes::Plot").And.Contain("JSR LowRes::Clear").And.Contain("JSR CharacterOut");
             source.Should().Contain("JSR Disassembler::Decode\n").And.Contain("JSR Disassembler::Decode::Opcode");

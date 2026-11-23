@@ -46,7 +46,8 @@
 ;; several pieces where the ROM interleaves them. Names say what the code does; each name Apple's listings gave a
 ;; definition is in its Also: section, so code written with Apple's names still assembles and the editor offers the
 ;; current ones. The page-zero locations, soft switches and keys the other IIe sources share are in IIeEquates.asm,
-;; which it includes; Monitor/Equates.asm has the few this source adds.
+;; which it includes; Monitor/Equates.asm has the few locations this source adds, and this file the values its parts
+;; share.
 ;;
 ;; Programs call the Monitor's documented entry points by address, so each one's comment gives its address, and an
 ;; .assert at it checks the address in every build.
@@ -97,7 +98,7 @@ ENHANCED = 0
 ; The IIe's page zero, low memory, soft switches and keys, shared with the firmware, the Disk II boot ROM and DOS.
 .include "IIeEquates.asm"
 
-; The Monitor's own page zero, the firmware's entries and the build's other names.
+; The Monitor's own page zero and the firmware's and language ROMs' entries it calls.
 .include "Monitor/Equates.asm"
 
 ; Values several of the Monitor's files use.

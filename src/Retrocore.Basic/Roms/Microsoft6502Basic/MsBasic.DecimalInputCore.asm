@@ -212,7 +212,8 @@ ClampNegative:
         jmp OverflowError
     .endif
 
-;; Computes A * 10 + the digit at <TextPointer>.
+;; Computes (4 * A + <DecimalExponent>) * 2 + the digit at <TextPointer>: ten times <DecimalExponent> plus the digit,
+;; except on the earlier build's clamp path, where A is 11.
 ;; Also: MLEX10 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 TimesTen:
     asl a

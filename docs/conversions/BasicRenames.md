@@ -105,7 +105,7 @@ to K12, R1 to R10).
 | 54 | `ZEREMV` | `Float::Underflow` | routine | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | drops the caller's return address and sets Fac to zero, so the caller's caller gets zero — AddExponent branches here |
 | 55 | `GOOVER` | `Float::ToOverflowError` | routine | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | jumps on to OverflowError — only jumps on, so To plus the target; shared by AddExponent, ExponentOutOfRange, MultiplyByTen and DivideArg (not a local), see A-Q4 |
 | 56 | `MUL10` | `Float::MultiplyByTen` | routine | all | M6502, ASTIL [AS], CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | copies Fac to Arg, then adds Arg to Fac with Arg's exponent raised by 2 and doubles: Fac * 10 — Falls into AddScaledArgAndDouble |
-| 57 | `FINML6` | `Float::AddScaledArgAndDouble` | routine | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | with A = Arg's exponent: clears ResultSign, AlignAndAdd, then doubles Fac (exponent + 1); overflow is an error — Commodore's TI$ assignment calls it to multiply by six |
+| 57 | `FINML6` | `Float::AddScaledArgAndDouble` | routine | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | adds Arg, with A as its exponent, to Fac through AlignAndAdd with ResultSign cleared, then doubles the sum (exponent + 1); overflow is an error — Commodore's TI$ assignment calls it to multiply by six |
 | 58 | `MUL10R` | `Float::AddScaledArgAndDouble::Done` | entry | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | the shared rts — reached from MultiplyByTen for a zero Fac; see A-Q4 |
 | 59 | `TENZC` | `Float::Ten` | data | all | M6502 | no; alias TENC in Commodore | the packed constant 10 — Commodore's TENC alias, see row 2275 |
 | 60 | `DIV10` | `Float::DivideByTen` | routine | all | M6502, ASTIL [AS], CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | copies Fac to Arg (rounded), points Y:A at Ten with a positive ResultSign, and falls into DivideArgByPacked — Falls into DivideArgByPacked |
@@ -284,7 +284,7 @@ to K12, R1 to R10).
 | 198 | `FINLOG` | `Float::AddSignedByte` | routine | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | copies Fac to Arg, makes the signed byte in A a number, and adds Arg: Fac = Fac + A — Functions::Log and Commodore's TI$ assignment call it |
 | 199 | `FINEDG` | `Float::AccumulateExponentDigit` | routine | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | DecimalExponent = DecimalExponent * 10 + digit, with the build's limit: a positive overflow is OVERFLOW — placed after AddSignedByte; reached from ReadNumber, returns to ReadNumber::NextExponentCharacter |
 | 200 | `MLEXMI` | `Float::AccumulateExponentDigit::ClampNegative` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | negative exponent over the limit: earlier build continues with 11, later build stores 100 — one name for both variants' definitions (lines 151 and 175), each clamps a negative exponent |
-| 201 | `MLEX10` | `Float::AccumulateExponentDigit::TimesTen` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | computes A * 10 + the digit at TextPointer |
+| 201 | `MLEX10` | `Float::AccumulateExponentDigit::TimesTen` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | computes (4 * A + DecimalExponent) * 2 + the digit at TextPointer: ten times DecimalExponent plus the digit, except on the earlier build's clamp path (A = 11) |
 
 ### MsBasic.Dim
 
@@ -640,7 +640,7 @@ to K12, R1 to R10).
 | 469 | `FOUT9` | `Float::FormatFacAtOffset::DivideDown` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | DivideByTen and raises the scale |
 | 470 | `FOUT5` | `Float::FormatFacAtOffset::RoundHalf` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | adds 1/2 (AddHalf) to round |
 | 471 | `BIGGES` | `Float::FormatFacAtOffset::ConvertInteger` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | ToLongInteger, then decides between fixed point and an E exponent from the scale |
-| 472 | `FOUTPI` | `Float::FormatFacAtOffset::UseExponent` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | outside the fixed-point range: sets carry so the exponent is kept |
+| 472 | `FOUTPI` | `Float::FormatFacAtOffset::UseExponent` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | sets carry for the subtraction: branched to outside the fixed-point range, or fallen into with A = 2 for fixed point |
 | 473 | `FOUT6` | `Float::FormatFacAtOffset::SetExponent` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | stores the printed exponent in DecimalExponent (0 means fixed point) and the digits before the point |
 | 474 | `FOUT39` | `Float::FormatFacAtOffset::LeadingPoint` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | no digits before the point: writes '.' and, if needed, '0' |
 | 475 | `FOUT16` | `Float::FormatFacAtOffset::SavePosition` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | saves the buffer position |

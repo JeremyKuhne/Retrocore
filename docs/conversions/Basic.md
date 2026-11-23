@@ -718,7 +718,8 @@ Decisions and how the table was applied:
   `AppleSoft::SignDone` with `Also: FOUT13 (UNKN)`, since the label is in AppleSoft's build only and the overlay's
   callers keep it. LINPRT_FOUT, the SDK's own name, which nothing uses, gets no `Also:`, as the table says.
 - M3. OLDOV (W8): the byte keeps `FunctionJumpHigh` with its `Also:`; its floating-point uses read it through scoped
-  aliases, `Float::UnshiftedExtension` (AddArg, AlignAndAdd and AddMantissas) and `Functions::Exp::RoundingByte`,
+  aliases, `Float::UnshiftedExtension` (AddArg and AlignAndAdd set it; AddMantissas and AlignAndAdd's Subtract read
+  it) and `Functions::Exp::RoundingByte`,
   each saying in prose that Microsoft names it OLDOV there too.
 - M4. ZERO (A-Q7): `ZeroValue` is top level. `OutputTables` closes `Float` around it, and the three bytes are
   emitted outside the scope in every build, labeled only where `defineZero` is 1. BASIC 1's ZERO in

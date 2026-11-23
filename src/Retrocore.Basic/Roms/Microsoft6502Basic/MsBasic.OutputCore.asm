@@ -174,7 +174,8 @@ ConvertInteger:
     tax
     lda #$02
 
-;; Outside the fixed-point range: sets carry so the exponent is kept.
+;; Sets carry for the subtraction that follows: branched to outside the fixed-point range, or fallen into with
+;; A = 2, which makes the printed exponent zero (fixed point).
 ;; Also: FOUTPI (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 UseExponent:
     sec

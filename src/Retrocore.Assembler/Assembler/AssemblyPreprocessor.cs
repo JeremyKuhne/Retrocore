@@ -90,7 +90,6 @@ internal sealed partial class AssemblyPreprocessor
                 // The lines after an unclosed type were read as its members, so what was chosen from there is suspect.
                 processor._untrustedFrom = Math.Min(processor._untrustedFrom, type.Order);
             }
-
         }
 
         AssemblyProject project = processor._project;

@@ -258,7 +258,8 @@ public sealed class DocumentationSet
     ///   count, nor does an <c>Also:</c> section of such a branch when several branches document the definition, for
     ///   any kind of topic (see <see cref="InBuild"/>). This only chooses among definitions: a name only an omitted
     ///   one gives still finds it, as a plain name of a definition the build leaves out still does. Without the
-    ///   assembly's symbols, every definition counts.
+    ///   assembly's symbols, as after a failed assembly, every definition counts, though its sections still follow
+    ///   the assembly's report of the lines it skipped.
     ///  </para>
     /// </remarks>
     public IReadOnlyList<DocumentationTopic> FindAlso(string name, bool thisBuild = false)

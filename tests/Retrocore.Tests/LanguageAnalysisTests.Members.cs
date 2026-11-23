@@ -323,7 +323,9 @@ public sealed partial class LanguageAnalysisTests
 
     /// <summary>
     ///  A file included inside two scopes defines its text-only names in each: a definition in a branch the build
-    ///  does not take is recorded once per scope, and never as a root name.
+    ///  does not take is recorded once per scope, and never as a root name. That holds for a file the assembly reaches
+    ///  (whose statements show where it is included) and for one whose whole content the build skips (whose
+    ///  <c>.include</c> lines show it).
     /// </summary>
     [TestMethod]
     public void TextOnlyDefinitionsAreInEachScopeAFileIsIncludedIn()
@@ -336,13 +338,15 @@ public sealed partial class LanguageAnalysisTests
                 .org $0300
                 .scope First
                 .include "Shared.asm"
+                .include "Skipped.asm"
                 .endscope
                 .scope Second
                 .include "Shared.asm"
+                .include "Skipped.asm"
                 .endscope
                 """.ReplaceLineEndings("\n"));
 
-            // The editor learns where a file is included from the statements it assembles, so it has one.
+            // This file assembles a statement; the other assembles nothing.
             File.WriteAllText(Path.Join(folder, "Shared.asm"), """
                     nop
                 .if 0
@@ -350,9 +354,16 @@ public sealed partial class LanguageAnalysisTests
                 .endif
                 """.ReplaceLineEndings("\n"));
 
+            File.WriteAllText(Path.Join(folder, "Skipped.asm"), """
+                .if 0
+                SKIPPED = 1
+                .endif
+                """.ReplaceLineEndings("\n"));
+
             SourceAnalysis analysis = SourceAnalysis.Assemble(Path.GetFullPath(main), _ => null);
-            analysis.Definitions.Select(site => site.Name).Where(name => name.EndsWith("VALUE", StringComparison.Ordinal))
-                .Should().BeEquivalentTo("First::VALUE", "Second::VALUE");
+            List<string> names = [.. analysis.Definitions.Select(site => site.Name)];
+            names.Where(name => name.EndsWith("VALUE", StringComparison.Ordinal)).Should().BeEquivalentTo("First::VALUE", "Second::VALUE");
+            names.Where(name => name.EndsWith("SKIPPED", StringComparison.Ordinal)).Should().BeEquivalentTo("First::SKIPPED", "Second::SKIPPED");
         }
         finally
         {
@@ -387,6 +398,50 @@ public sealed partial class LanguageAnalysisTests
             analysis.Result.Success.Should().BeFalse();
             analysis.Definitions.Select(site => site.Name).Should().Contain(["Outer::Written", "Outer::Plain", "@loop"])
                 .And.NotContain(["Outer::Outer::Written", "Outer::@loop", "Plain"]);
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    /// <summary>
+    ///  A file named by an absolute path in an <c>.include</c> is found where the workspace's resolver finds it: a
+    ///  skipped file is placed in the scope it is included in, and the root search finds the source that includes it.
+    ///  A name no path can hold is passed over rather than failing the search.
+    /// </summary>
+    [TestMethod]
+    public void AbsoluteIncludesAreFoundWhereTheResolverFindsThem()
+    {
+        string folder = Directory.CreateTempSubdirectory("retrocore-absolute").FullName;
+        try
+        {
+            // The included file is in another folder, so a name resolved from the including file's folder misses it.
+            string library = Directory.CreateDirectory(Path.Join(folder, "library")).FullName;
+            string program = Directory.CreateDirectory(Path.Join(folder, "program")).FullName;
+            string skipped = Path.GetFullPath(Path.Join(library, "Skipped.asm"));
+            File.WriteAllText(skipped, """
+                .if 0
+                ABSOLUTE = 1
+                .endif
+                """.ReplaceLineEndings("\n"));
+
+            string main = Path.GetFullPath(Path.Join(program, "Main.asm"));
+            File.WriteAllText(main, $"""
+                .org $0300
+                .scope First
+                .include "{skipped}"
+                .endscope
+                .include "bad{'\0'}name.asm"
+                """.ReplaceLineEndings("\n"));
+
+            SourceIncludes.IncludesOf(main).Should().Equal(skipped);
+            SourceIncludes.IncludeLines(main, File.ReadAllLines(main)).Should().Equal((2, skipped));
+            SourceIncludes.RootOf(skipped).Should().Be(main);
+
+            SourceAnalysis analysis = SourceAnalysis.Assemble(main, _ => null);
+            analysis.Definitions.Select(site => site.Name).Where(name => name.EndsWith("ABSOLUTE", StringComparison.Ordinal))
+                .Should().Equal("First::ABSOLUTE");
         }
         finally
         {

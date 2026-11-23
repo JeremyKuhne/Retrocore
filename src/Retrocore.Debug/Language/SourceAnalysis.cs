@@ -133,6 +133,8 @@ internal sealed partial class SourceAnalysis
             }
         }
 
+        IncludeSitesFromText();
+
         // The assembler knows native names; show the spelling the source used.
         Dictionary<string, string> spelling = [with(StringComparer.Ordinal)];
         foreach (KeyValuePair<string, string> alias in result.SymbolAliases) { spelling[alias.Value] = alias.Key; }
@@ -509,6 +511,26 @@ internal sealed partial class SourceAnalysis
         }
 
         return [.. contexts.Select(lines => (uint)line < (uint)lines.Count ? lines[line] : DocumentationScopes.Root)];
+    }
+
+    // The assembly shows where a file is included only through the statements the file contributes, so one whose
+    // whole content the build skips (an .if branch not taken) has no include site, and its names would seem to be at
+    // the root. Such a file takes its sites from the .include lines in the text of the analysis's other files.
+    private void IncludeSitesFromText()
+    {
+        Dictionary<string, List<(string Path, int Line)>> found = [with(StringComparer.OrdinalIgnoreCase)];
+        foreach ((string path, string[] lines) in _lines)
+        {
+            foreach ((int line, string file) in SourceIncludes.IncludeLines(path, lines))
+            {
+                bool member = _lines.ContainsKey(file) && !string.Equals(file, path, StringComparison.OrdinalIgnoreCase);
+                if (!member || _includedFrom.ContainsKey(file)) { continue; }
+                if (!found.TryGetValue(file, out List<(string Path, int Line)>? sites)) { found[file] = sites = []; }
+                if (!sites.Contains((path, line))) { sites.Add((path, line)); }
+            }
+        }
+
+        foreach ((string file, List<(string Path, int Line)> sites) in found) { _includedFrom[file] = sites; }
     }
 
     // What the assembler took from a file: its .using lines, and those its macro invocations produced; null when

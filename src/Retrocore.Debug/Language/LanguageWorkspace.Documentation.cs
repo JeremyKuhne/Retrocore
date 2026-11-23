@@ -201,7 +201,8 @@ internal sealed partial class LanguageWorkspace
     }
 
     // The warning for a historical name that a .using brings to another definition at a use, and that definition's
-    // name; null when the code's own scopes bind it, or the .using reaches more than one definition.
+    // name; null when the code's own scopes bind it, or the .using reaches more than one definition site (even of one
+    // name), so the fix would be a guess.
     private static (DocumentationDiagnostic Diagnostic, string Used)? Shadowed(
         SourceAnalysis analysis,
         string name,
@@ -214,10 +215,10 @@ internal sealed partial class LanguageWorkspace
 
         // A .using is native syntax only, and does not reach into an included file, so the names compare as the
         // native dialect's do: case matters.
-        string[] names = [.. used.Select(site => site.Name).Distinct(StringComparer.Ordinal)];
-        if (names.Length != 1 || names[0] == replacement) { return null; }
+        if (used.Count != 1 || used[0].Name == replacement) { return null; }
+        string target = used[0].Name;
         DocumentationDiagnostic diagnostic = new(
-            $"{name} is a historical name of {replacement}, but the .using in effect here makes it {names[0]}.",
+            $"{name} is a historical name of {replacement}, but the .using in effect here makes it {target}.",
             member,
             line,
             DocumentationSeverity.Warning,
@@ -228,7 +229,7 @@ internal sealed partial class LanguageWorkspace
             Length = name.Length
         };
 
-        return (diagnostic, names[0]);
+        return (diagnostic, target);
     }
 
     // Whether code uses a name as a whole word in an operand or operation (not as the label it defines).

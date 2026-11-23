@@ -49,7 +49,7 @@ ID. A test checks that every diagnostic the parser and resolver can produce has 
 All three forms use the `; retrocore:` pragma words. An exclusion is `ignore=` and a comma-separated list of rule
 IDs; a rule may be narrowed to names with a colon and `|`: `ignore=unlinked-name:Pascal|Control`. Narrowing by name
 applies to the rules that report a name (`unlinked-name`, `link`, `ambiguous-link`, `address-name`, `label-alone`,
-`historical-name`, `deprecated`); for the others it is an error ("line-length takes no names").
+`historical-name`, `deprecated`, and `using-shadow`, added after this spec); for the others it is an error ("line-length takes no names").
 
 Text after ` -- ` is the reason, which the tools ignore and reviewers read:
 `; retrocore: ignore=line-length -- the table's columns line up with the listing's`.

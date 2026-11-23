@@ -20,7 +20,8 @@
 
     .scope Statements continued
 
-    ;; Discards the program and falls into the variable and stack reset.
+    ;; Discards the program and falls into the variable and stack reset; with text after the statement, returns.
+    ;; In: zero = set at the end of the statement, carry = as <EraseProgram> takes it
     ;; See: <ClearVariables>, <EraseProgram>
     ;; Also: SCRATH (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc New
@@ -34,7 +35,7 @@
     ;; Where the build passes `clearCarry` = 1 (PET BASIC 2 and 4), <VariablesStart> is <ProgramStart> + 2. Elsewhere
     ;; the incoming carry is added too: `NEW` arrives from the dispatcher with carry set, as the character reader
     ;; leaves it at the end of a statement, so AppleSoft's and BASIC 1's `NEW` leave <VariablesStart> at
-    ;; <ProgramStart> + 3.
+    ;; <ProgramStart> + 3. The startup code calls it too, with the carry its own code leaves.
     ;; In: carry = added to the address where `clearCarry` is 0
     ;; Also: SCRTCH (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc EraseProgram
@@ -64,6 +65,10 @@
     .endproc
 
     ;; Positions the text pointer before the program and clears variables and execution state.
+    ;;
+    ;; It clears them by falling into the next entry the build emits: in BASIC 1 <ClearVariables>, elsewhere
+    ;; <Statements::Clear>, which returns unless zero is set, so those builds pass `runSetsZero` = 1 to load zero
+    ;; first.
     ;; See: <RewindTextPointer>, <ClearVariables>
     ;; Also: RUNC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc ResetProgramState
@@ -79,7 +84,8 @@
 .macro ClearStatement returnEntry
     .scope Statements continued
 
-    ;; Discards variables and execution state, retaining the program text.
+    ;; Discards variables and execution state, retaining the program text; with text after the statement, returns.
+    ;; In: zero = set at the end of the statement
     ;; See: <ClearVariables>
     ;; Also: CLEAR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc Clear

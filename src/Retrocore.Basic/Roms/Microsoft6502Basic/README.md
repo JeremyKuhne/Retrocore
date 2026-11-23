@@ -29,7 +29,8 @@ than silently implying a different configuration. Those assertions do not apply 
 it can supply its own values and independently compose the appropriate clock, channel, disk and
 time-output macros.
 
-The math modules put their routines in two scopes, `Float` and `Functions`, which `MsBasic.Families.asm` declares;
+The math modules put their routines in two scopes, `Float` and `Functions`, and the statement modules their handlers in
+`Statements`, which `MsBasic.Families.asm` declares;
 each module includes it, and only the first inclusion declares them. `MsBasic.FloatConstants.asm` defines macros for
 the five-byte `ADDITIONAL_PRECISION = 1` constants and polynomial tables shared by AppleSoft and all three PET BASIC
 versions. A native variant can emit each block where its ROM needs it. `MsBasic.AdditionCore.asm` supplies
@@ -85,7 +86,7 @@ ROM guard and padding):
 
 | Variant | `AddressConversion` | `PeekFunction` | Omitted WAIT mask |
 | --- | --- | --- | --- |
-| AppleSoft | `0` | `1, 0, 0, 0` | `ZSTORD`, an alias of `STORDO` |
+| AppleSoft | `0` | `1, 0, 0, 0` | `STORDO` (Microsoft's ZSTORDO) |
 | PET BASIC 1 | `1` | `0, 1, 1, 0` | `STORDO` |
 | PET BASIC 2 | `1` | `1, 1, 0, 1` | `ZSTORD`, its hidden-message extension |
 | PET BASIC 4 | `1` | `1, 1, 0, 0` | `STORDO` |

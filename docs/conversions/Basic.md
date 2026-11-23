@@ -759,7 +759,7 @@ on PET BASIC 2, PET BASIC 4 and the enhanced IIe's AppleSoft, and reported a fal
 
 ### S. The program and statement modules (X8 step 4)
 
-Converted, with `; retrocore: style=strict`: the fifteen shared modules of part B1, `MsBasic.CharacterReader`,
+Converted, with `; retrocore: style=strict`, part B1's fifteen shared modules: `MsBasic.CharacterReader`,
 `CommandCore`, `For`, `LineNumber`, `LineSearch`, `Lister`, `MemoryAccess`, `MemoryManagement`, `Next`,
 `OperatorTable`, `Print`, `ProgramReset`, `ProgramTransfers`, `StatementFlow` and `UserFunctions`. Each statement
 handler is a `.proc` in `Statements`, which `MsBasic.Families.asm` now declares after `Float` and `Functions`; each
@@ -780,11 +780,11 @@ Decisions and how the table was applied:
 - S4. B1-Q7: `ProgramReset` loses `newAlias` and `RunStatement` loses `runLabel` (and RUN1); NEW is AppleSoft's alias
   of `Statements::New`. The vendors' invocations follow; the bytes do not change.
 - S5. The macros take the names in B1-Q10 and the table (`LetterTest`, `CharacterReader`, `ErrorFinish`, `ListRange`,
-  `ListLines`, `ListNextTableByte`, `ListTokens`, `AddressConversion`, `PeekFunction`, `PokeStatement`,
-  `WaitStatement`, `MemoryManagement`, `NextEntries`, `OperatorEntries`, `PrintItems`, `ProgramReset`,
-  `ClearStatement`, `NullStatement`, `ClearStorage`, `ExecutionReset`, `RestoreStatement`, `StopAndContinue`,
-  `RunStatement`, `GosubAndGoto`, `ReturnStatement`, `StatementScan`, `ConditionalStatements`, `OnStatement`,
-  `UserFunctions`), and every invocation, root and test follows.
+  `ListLines`, `ListNextTableByte`, `ListTokens`, `DeleteOldLine`, `LinkLine`, `TokenStore`, `AddressConversion`,
+  `PeekFunction`, `PokeStatement`, `WaitStatement`, `MemoryManagement`, `NextEntries`, `OperatorEntries`, `PrintItems`,
+  `ProgramReset`, `ClearStatement`, `NullStatement`, `ClearStorage`, `ExecutionReset`, `RestoreStatement`,
+  `StopAndContinue`, `RunStatement`, `GosubAndGoto`, `ReturnStatement`, `StatementScan`, `ConditionalStatements`,
+  `OnStatement`, `UserFunctions`), and every invocation, root and test follows.
 - S6. Names only a vendor's documents give are entries of its historical-names file, as M1 has them, since a shared
   definition cites only Microsoft's names (`AssertSharedNamesAreMicrosofts`):
   - AppleSoft: NEW (ASTIL, AS82) and COMBYTE (ASTIL, AS82), which leave `AppleSoft.InterpreterAliases.asm` (deleted,
@@ -805,7 +805,10 @@ Decisions and how the table was applied:
 - S9. Contracts from the code: `IsLetter` keeps A, X and Y (its two subtractions take $100 in all); the character
   reader's copy keeps X and Y. STOP, END and StopOrEnd are described from the code. `EraseProgram` adds the incoming
   carry where `clearCarry` is 0, so AppleSoft's and BASIC 1's `NEW`, which arrives with carry set, puts
-  VariablesStart three bytes past ProgramStart, as `EraseProgramAddsTheCarryWhereTheBuildKeepsIt` pins.
+  VariablesStart three bytes past ProgramStart; `EraseProgramAddsTheCarryWhereTheBuildKeepsIt` pins AppleSoft's and
+  PET BASIC 4's. The flags routines depend on are stated: ReadLineNumber's zero (so `LIST 10-X` lists to the end),
+  FindForFrame's carry and A, the zero New, Clear and Return take, Return's Y (POP), and that ResetProgramState
+  clears by falling into the next entry.
 - S10. Tests and their helpers:
   - The rename gate renames STROUT and PTRGET (top level, and in a macro's body), since FNDLIN and BLTU are
     converted. It found that `MathUsesNativeWorkspaceAndMatchesTheLegacyBytes` declared its external labels by
@@ -815,22 +818,23 @@ Decisions and how the table was applied:
     region's label comparison skip the vendor's names, which the same tests compare in the whole builds.
   - `BasicSharedAliasConsistencyTests` reads the guards in a historical-names file (`.ifdef Target`, `.if Switch =
     value`) and expects a guarded alias exactly where its build takes it; flipping the CHD guard fails it.
-  - The editor probe in `LanguageAnalysisTests.Macros` used COMBYTE as a made-up name; now that the SDK gives it, the
-    probe uses PRBBYTE. That the SDK's name changed what the editor reports for a user file's own historical name of
-    the same spelling may be worth a look.
+  - The editor probe in `LanguageAnalysisTests.Macros` gives COMBYTE as a user file's own old name. Once the SDK gave
+    the same name, the editor's merge of the file's and the SDK modules' `Also:` names cancelled it, and the file lost
+    its hint and quick fix. The file's own build now takes precedence (`LanguageWorkspace.HistoricalNames`), and the
+    unchanged probe fails without that fix.
 
-Checked: the full suite (3,890 passed, none failed; 665 skipped, the ROM-dump comparisons without the dumps), the
-rename gate, the lint tests, and `BasicStatementsConversionTests`, which compares every old name in the fifteen
-files and the vendors' historical names with the MACRO-10 overlay's value in each of the eight builds (about 150 per
-build), checks that each definition reaches the overlay by its name or an old name, that a vendor's names resolve
-only in its builds and through its aliases, and that every citation's key is in the bibliography.
-`BasicStatementRoutineTests` runs IsLetter, the character reader's copy, ReadLineNumber, FindLine, FindStatementEnd,
-FindLineEnd and EraseProgram in the enhanced IIe's AppleSoft and PET BASIC 4 and checks their `Out:` values and `Keeps:` claims;
-the existing BasicShared*Tests run the rest (FindForFrame, MoveRangeUp, CheckStack, CheckFreeMemory, the
-statements). The debugger's contract checking ran clean on PET BASIC 2, PET BASIC 4 and the enhanced IIe's AppleSoft
-over a program that adds IF, POKE and PEEK, ON GOSUB and ON GOTO, RETURN from inside FOR, RESTORE, READ and DATA, REM,
-CLEAR (CLR) and LIST with a range to the math step's, and reported a false `Keeps: X` added to `FindLine` as a
-control (a first control, `Keeps: A` on IsLetter, was not reported because the claim is true).
+Checked: the full suite (3,891 passed, none failed; 665 skipped, the ROM-dump comparisons without the dumps), the rename
+gate, the lint tests, and `BasicStatementsConversionTests`, which compares every old name in the fifteen files and the
+vendors' historical names with the MACRO-10 overlay's value in each of the eight builds (about 150 per build), checks
+that each definition reaches the overlay by its name or an old name, that a vendor's names resolve only in its builds
+and through its aliases, and that every citation's key is in the bibliography. `BasicStatementRoutineTests` runs
+IsLetter, the character reader's copy, ReadLineNumber, FindLine, FindStatementEnd, FindLineEnd and EraseProgram in the
+enhanced IIe's AppleSoft and PET BASIC 4 and checks their `Out:` values and `Keeps:` claims; the existing
+BasicShared*Tests run the rest (FindForFrame, MoveRangeUp, CheckStack, CheckFreeMemory, the statements). The debugger's
+contract checking ran clean on PET BASIC 2, PET BASIC 4 and the enhanced IIe's AppleSoft over a program that adds IF,
+POKE and PEEK, ON GOSUB and ON GOTO, RETURN from inside FOR, RESTORE, READ and DATA, REM, CLEAR (CLR) and LIST with a
+range to the math step's, and reported a false `Keeps: X` added to `FindLine` as a control (a first control, `Keeps: A`
+on IsLetter, was not reported because the claim is true).
 
 ## Other dependents
 

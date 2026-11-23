@@ -26,7 +26,8 @@
     ;; frame kind ends the search. A matching comparison leaves zero set; reaching another frame kind leaves it clear. A
     ;; wrapped search also leaves zero set, so callers rely on there being a non-FOR frame at the bottom of the stack.
     ;; Out: X = stack offset immediately below the frame, or $00 if the search wraps,
-    ;;   zero = set for a match or a wrapped search, clear for another frame kind
+    ;;   zero = set for a match or a wrapped search, clear for another frame kind, carry = set for a match,
+    ;;   A = the token of the frame kind the search stopped at (<Statements::Return> tests it for <TOKEN_GOSUB>)
     ;; Keeps: Y
     ;; See: <Statements::For>, <Statements::Next>
     ;; Also: FNDFOR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)

@@ -820,8 +820,9 @@ Decisions and how the table was applied:
     modules use (`Statements::PopFinish`, not `AppleSoft::PopFinish`). `BasicNames.IsVendorName` lets a standalone
     region's label comparison skip the vendor's names, which the same tests compare in the whole builds.
   - `BasicSharedAliasConsistencyTests` reads the `.ifdef Target` guards in a historical-names file and expects a
-    guarded alias exactly where its build defines the target; `BasicSharedFloatAliasesTests` expects RESCR2 and
-    PRIT3B only there.
+    guarded alias exactly where its build defines the target, and there checks its citations against the build's
+    documents; RESCR2 and PRIT3B are checked so only in the BASIC 4 builds. `BasicSharedFloatAliasesTests`, whose PET
+    regions hold no lister, leaves them out.
   - The editor probe in `LanguageAnalysisTests.Macros` gives COMBYTE as a user file's own old name. Once the SDK gave
     the same name, the editor's merge of the file's and the SDK modules' `Also:` names cancelled it, and the file lost
     its hint and quick fix. A name whose definition the file's assembly made now takes precedence
@@ -830,9 +831,13 @@ Decisions and how the table was applied:
     (`OldNamesInAnOmittedBranchDoNotHint`, which fails if any name the file gives takes precedence). While the file
     has errors, the definitions its text makes count (`OwnOldNamesHintWhileTheFileHasAnError`, which fails on the
     assembly's symbols alone), in a branch whose `.if` condition holds
-    (`OldNamesInAnOmittedBranchDoNotHintWhileTheFileHasAnError`, which fails without that check).
+    (`OldNamesInAnOmittedBranchDoNotHintWhileTheFileHasAnError`, which fails without that check). The `Also:`
+    section that gives the name must be in the build too, which decides it for a label documented in both branches
+    (`OldNamesOfTheOtherBranchDoNotHint`, which fails without it). The doc set's `FindAlso` returns a single topic
+    without that filter, so a file whose other branch gives a name no SDK module gives still gets a hint naming the
+    label; that predates this step and is left for a change of its own.
 
-Checked: the full suite (3,903 passed, none failed; 665 skipped, the ROM-dump comparisons without the dumps), the rename
+Checked: the full suite (3,904 passed, none failed; 665 skipped, the ROM-dump comparisons without the dumps), the rename
 gate, the lint tests, and `BasicStatementsConversionTests`, which compares every old name in the fifteen files and the
 vendors' historical names with the MACRO-10 overlay's value in each of the eight builds (about 150 per build), checks
 that each definition reaches the overlay by its name or an old name, that a vendor's names resolve only in its builds

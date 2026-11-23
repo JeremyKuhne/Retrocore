@@ -171,7 +171,10 @@ internal sealed partial class LanguageWorkspace
                     ? analysis.Result.Symbols.ContainsKey(replacement)
                     : analysis.Definitions.Any(site => site.Name == replacement));
 
-                bool taken = topics.Count == 1 && set.ConditionHolds(topics[0]);
+                // The build must give the name: the topic's own condition holds, and the Also: section that gives it
+                // is in the build, which for a label documented in both branches of an .if decides it.
+                bool given = topics.Count == 1 && set.Gives(topics[0], name, thisBuild: true);
+                bool taken = given && set.ConditionHolds(topics[0]);
                 if (thisBuild && built && taken)
                 {
                     own.Add(name);

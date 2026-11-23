@@ -672,7 +672,9 @@ The CPU tests follow the latest `.cpu` before them, or the host's CPU before the
 6809, the 8080 and the 8085 none of them is true.
 
 A condition's value must be known at that point in the source: constants and variables count, labels and `*`
-do not. Inactive blocks are skipped without being read, and every file closes the conditionals it opens.
+do not. Inactive blocks are skipped without being read, except for the conditional directives in them, which
+keep the nesting, including one a [`.define`](#textual-definitions) spells. Every file closes the conditionals it
+opens.
 
 ```asm
 Model = 2

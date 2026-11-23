@@ -399,6 +399,27 @@ public partial class AssemblyPreprocessorTests
     }
 
     /// <summary>
+    ///  A labeled directive that a text definition spells, in a skipped branch, is read as the directive written out:
+    ///  its label is not defined and its line is skipped.
+    /// </summary>
+    [TestMethod]
+    public void LabeledDefinedDirectivesFollowTheirLabels()
+    {
+        AssemblyResult result = Assemble("""
+            .define Otherwise .else
+            .if 0
+            .byte 1
+            Skipped: Otherwise
+            .byte 2
+            .endif
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+        result.Symbols.Should().NotContainKey("Skipped");
+        Runs(Required(result.SkippedLines), "main.asm").Should().Equal((2, 2));
+    }
+
+    /// <summary>
     ///  A MACRO-10 source whose expansion reported an error chose its branches with what the error lost, so its lines
     ///  are undecided, even those that made statements.
     /// </summary>

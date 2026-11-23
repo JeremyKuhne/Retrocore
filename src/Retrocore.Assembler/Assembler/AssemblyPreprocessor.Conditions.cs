@@ -183,7 +183,7 @@ internal sealed partial class AssemblyPreprocessor
             return operation == ".IFDEF" ? defined : !defined;
         }
 
-        return Constant(operand, location, out long value) && value != 0;
+        return Constant(operand, location, out long value, "Conditional") && value != 0;
     }
 
     private void CloseConditions(int depth, bool report = true)

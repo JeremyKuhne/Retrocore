@@ -184,6 +184,39 @@ public class NativeExtensionTests
     }
 
     /// <summary>
+    ///  A <c>.repeat</c> count is read before a procedure is assembled and in source order, so a procedure's size, a
+    ///  label, or a name defined later or not at all is refused with an error that names <c>.repeat</c>, not a
+    ///  conditional.
+    /// </summary>
+    /// <param name="count">The repeat count.</param>
+    /// <param name="ca65">Whether the source is in the ca65 dialect.</param>
+    [TestMethod]
+    [DataRow("SIZE", false)]
+    [DataRow(".sizeof(Block)", false)]
+    [DataRow("Block", false)]
+    [DataRow("Later", false)]
+    [DataRow("Nope", false)]
+    [DataRow("SIZE", true)]
+    [DataRow(".sizeof(Block)", true)]
+    [DataRow("Block", true)]
+    [DataRow("Later", true)]
+    [DataRow("Nope", true)]
+    public void RepeatCountsMustBeKnownConstants(string count, bool ca65)
+    {
+        AssemblyResult result = new NativeAssembler().Assemble(
+            new AssemblySource(
+                $".proc Block\nnop\nnop\n.endproc\nSIZE = .sizeof(Block)\n.repeat {count}\nnop\n.endrepeat\nLater = 2",
+                "main.asm"),
+            new AssemblyOptions(ProcessorVariant.Mos6502, origin: 0x1000, imageSize: 32)
+            {
+                Dialect = ca65 ? AssemblyDialect.Ca65 : AssemblyDialect.Native
+            });
+
+        result.Diagnostics.Select(diagnostic => diagnostic.Message).Should().Equal(
+            ".repeat count requires a constant known at this point in source order.");
+    }
+
+    /// <summary>
     ///  A variable's historical name keeps the procedure size it had when it was documented, so <c>.ifconst</c>
     ///  refuses it too.
     /// </summary>

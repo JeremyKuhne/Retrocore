@@ -60,6 +60,9 @@ public sealed class BasicSharedFloatAliasesTests
         ["CHDRTS"] = ["HV1", "HV1R", "HV2"]
     };
 
+    // The names whose aliases Commodore's file guards, so that only some builds define them.
+    private static readonly HashSet<string> s_guardedNames = ["CHDGOT", "CHDRTS", "RESCR2", "PRIT3B"];
+
     // Addresses in the independently assembled PET1, PET2 and PET4 listings:
     // https://github.com/ethandicks/cbmsymbols/tree/e3120427a32e8b066eb8afdc434af547fd0906f3/listings
     private static readonly Dictionary<string, int[]> s_petAddresses = new(StringComparer.Ordinal)
@@ -251,10 +254,13 @@ public sealed class BasicSharedFloatAliasesTests
 
         // The old names the file gives, from its own text: every alias gives at least one.
         DocumentationFile file = DocumentationParser.Parse(File.ReadAllText(path), path);
-        // A name the build leaves out (BASIC 4's, in the other builds) must not be expected there either.
+        // Only a guarded alias's name, which the build leaves out, may be missing from the expected names; any other
+        // unexpected name, even one the build does not resolve, fails the comparison below.
         IEnumerable<DocumentationAlso> inBuild = file.Comments
             .SelectMany(comment => DocumentationAlso.Of(comment.Sections))
-            .Where(also => expected.ContainsKey(also.Name) || result.HistoricalNames.ContainsKey(also.Name));
+            .Where(also => expected.ContainsKey(also.Name)
+                || !s_guardedNames.Contains(also.Name)
+                || result.HistoricalNames.ContainsKey(also.Name));
 
         DocumentationAlso[] given = [.. inBuild];
         given.Select(also => also.Name).Should().BeEquivalentTo(expected.Keys);

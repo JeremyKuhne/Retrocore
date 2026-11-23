@@ -175,9 +175,9 @@ ConvertInteger:
     tax
     lda #$02
 
-;; Sets carry for the subtraction that follows: branched to for a value below .01, or fallen into with A = 2, which
-;; makes the printed exponent zero (fixed point). A large value goes on to <Float::FormatFacAtOffset::SetExponent> with
-;; carry already set.
+;; Sets carry for the subtraction that follows: branched to when the decimal scale is below -10 (the value, rounded
+;; to nine digits, is below .01), or fallen into with A = 2, which makes the printed exponent zero (fixed point). A
+;; large value goes on to <Float::FormatFacAtOffset::SetExponent> with carry already set.
 ;; Also: FOUTPI (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 UseExponent:
     sec

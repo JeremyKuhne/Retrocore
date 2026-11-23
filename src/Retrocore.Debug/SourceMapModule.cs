@@ -208,7 +208,7 @@ internal sealed partial class SourceMapModule : IDebugModule
     {
         // Each constant by the names an operand can spell it with: its own, the source's alias, the last part of a
         // scoped name, and its historical names, from its Also: section, which code not yet converted still uses
-        // (the IIe firmware's LDA LCBANK2 for LanguageCardBank2ReadWrite).
+        // (the IIe firmware's STA LCBANK2 for LanguageCardBank2ReadWrite).
         Dictionary<string, List<AssemblySymbol>> byName = [with(StringComparer.OrdinalIgnoreCase)];
         void Add(string name, AssemblySymbol symbol)
         {

@@ -426,8 +426,8 @@ try {
     assert.equal((await event("stopped")).reason, "breakpoint");
     assert.equal((await read("main:0xD000", 1)).bytes[0], 0x11, "bank 2 holds what the program wrote");
 
-    // The Monitor's equates name the bytes its instructions address, as STA CH and (BASL),Y do, but not a value it
-    // only compares with, as CMP #CR does.
+    // The Monitor's equates name the bytes its instructions address, as STA CursorColumn and (TextBase),Y do, but not a
+    // value it only compares with, as CMP #CR does.
     at = "naming RAM by the Monitor's equates";
     const named = new Map((await request("retro/memory/labels", { memoryReference: "0x0000" })).labels.map(label => [label.address, label.name]));
     assert.equal(named.get(0x24), "CursorColumn");
@@ -700,8 +700,8 @@ try {
     // A soft switch's bits, from what its documentation says of them.
     at = "named bits";
     assert.deepEqual((await inspect(0xC013)).bits, [{ bit: 7, name: null, meaning: "whether RAMRD is on" }]);
-    assert.equal((await inspect(0x0024)).bits, null, "CH says nothing of its bits");
-    // The IIe's KBDSTRB reports in bit 7 whether a key is down: its own bit, unlike "clears bit 7 of KBD".
+    assert.equal((await inspect(0x0024)).bits, null, "CursorColumn says nothing of its bits");
+    // The IIe's KeyboardStrobe reports in bit 7 whether a key is down: its own bit, unlike "clears bit 7 of Keyboard".
     assert.deepEqual((await inspect(0xC010)).bits, [{ bit: 7, name: null, meaning: "whether a key is down" }]);
     // Assembling in place: one line at an address, with the session's labels, written by the editor, not here.
     at = "assembling a line";

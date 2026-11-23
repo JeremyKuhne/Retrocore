@@ -24,7 +24,7 @@ one entry.
 ## Notes and names settled
 
 - N1. The annunciators are Annunciator0Off/On and Annunciator1Off/On at Apple's addresses (SETANn even, CLRANn odd);
-  the file's swapped CLRAN0/CLRAN1 were corrected.
+  the file had put CLRAN0 and CLRAN1 on the off addresses ($C058, $C05A), Apple's SETAN0 and SETAN1.
 - N3. The Cx ROM switches are InternalCxRomOn ($C007), InternalCxRomOff ($C006), InternalCxRomState ($C015).
 - N4. MODE goes only on CommandMode ($31).
 - N5. Page 3: NmiJump ($3FB), SoftEntryVector ($3F2), UserIrqVector ($3FE).

@@ -283,7 +283,7 @@ Pushed:
     cmp #':'
     bne ExamineOrCalculate
 
-;; Stores A2L at A3 and steps A3 to the next byte, keeping ":" waiting.
+;; Stores <Address2> at <Address3> and steps <Address3> to the next byte, keeping ":" waiting.
 ;; In: A = ":", Address2 = the byte, Address3/Address3High = where, Y = 0
 ;; Also: STOR (A2RM78, A2RM79, IIEROM82, IIETRM85)
 Store:

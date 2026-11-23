@@ -474,7 +474,7 @@ NextBit:
 ;; Out: Address1/Address1High = the address after A2
 ;; Also: MEMFIND (UNKN)
 .proc Search
-    ; A4H, when it is not 0, must be in the second byte.
+    ; Address4High, when it is not 0, must be in the second byte.
     ldy #1
     lda Address4High
     beq CompareLow

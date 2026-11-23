@@ -187,8 +187,8 @@ CommandMode = $31
 ;; flashing.
 ;;
 ;; <Monitor:SetNormal> and <Monitor:SetInverse> set it, and <Monitor:Startup::Reset> restores normal text. The
-;; 80-column firmware tests only its bit 7, showing inverse text when it is clear. The original IIe's
-;; <Monitor:GetLine> sets it to $FF while it echoes input.
+;; 80-column firmware tests only its bit 7, showing inverse text when it is clear. The Apple II's
+;; Monitors' <Monitor:GetLine> sets it to $FF while it echoes input.
 ;; See: <Monitor:SetNormal>, <Monitor:SetInverse>, <Monitor:ScreenOut>
 ;; Also: INVFLG (A2RM78, A2RM79, IIEROM82, IIETRM85)
 InverseMask = $32
@@ -234,7 +234,8 @@ OutputHook = $36
 ;; The high byte of the output hook at <OutputHook>.
 ;;
 ;; Sending output to slot 3 and the 80-column firmware's start-up point the hook at <Firmware:BASICOUT@Enhanced>
-;; ($C307). On the Enhanced IIe, quitting the firmware with Control-U points it back at <Monitor:ScreenOut>.
+;; ($C307); <Monitor:SetOutput> first points it at $C300. Quitting the firmware with Control-U points it back at
+;; <Monitor:ScreenOut>.
 ;; See: <OutputHook>, <Monitor:CharacterOut>
 ;; Also: CSWH (A2RM78, A2RM79, IIEROM82, IIETRM85)
 OutputHookHigh = $37
@@ -250,8 +251,8 @@ InputHook = $38
 
 ;; The high byte of the input hook at <InputHook>.
 ;;
-;; The 80-column firmware's start-up points the hook at <Firmware:BASICIN@Enhanced> ($C305). On the Enhanced IIe,
-;; quitting the firmware with Control-U points it back at <Monitor:KeyboardIn>.
+;; The 80-column firmware's start-up points the hook at <Firmware:BASICIN@Enhanced> ($C305). Quitting the firmware
+;; with Control-U points it back at <Monitor:KeyboardIn>.
 ;; See: <InputHook>, <Monitor:ReadKey>
 ;; Also: KSWH (A2RM78, A2RM79, IIEROM82, IIETRM85)
 InputHookHigh = $39
@@ -336,7 +337,7 @@ Address4High = $43
 ;; interrupt handler leaves the memory state it found here for a BRK, and its mini-assembler collects an operand's
 ;; address mode in it.
 ;; See: <Address5High>, <Monitor:Commands::Destination>, <Address4>
-;; Also: A5L (A2RM78, A2RM79, IIEROM82), MACSTAT (IIETRM85)
+;; Also: A5L (A2RM78, A2RM79, IIEROM82, IIETRM85), MACSTAT (IIETRM85)
 Address5 = $44
 
 ;; The high byte of the Monitor's fifth address at <Address5>, the same byte as <SavedA>.
@@ -753,7 +754,7 @@ AlternateCharactersState = $C01E
 
 ;; Reading it reports in bit 7 whether the 80-column display, 80COL, is on.
 ;;
-;; <Columns80On> turns it on and <Columns80Off> off. The Enhanced Monitor's <Monitor:ClearToEndOfWindow> and
+;; <Columns80On> turns it on and <Columns80Off> off. The Enhanced Monitor's <Monitor:ScreenOutByWidth> and
 ;; <Monitor:GetLine::NextCharacter> read it, and the internal firmware reads it throughout to choose its 40- or
 ;; 80-column code.
 ;; See: <Columns80On>, <Columns80Off>
@@ -872,17 +873,30 @@ Annunciator1Off = $C05A
 ;; Reading or writing it turns annunciator 1 on.
 ;;
 ;; See: <Annunciator1Off>
-;; Also: CLRAN1 (A2RM79, IIEROM82)
+;; Also: CLRAN1 (A2RM79, IIEROM82, IIETRM85)
 Annunciator1On = $C05B
 
-;; Reading or writing it turns annunciator 2 on; $C05C turns it off.
+;; Reading or writing it turns annunciator 2 off.
+;;
+;; See: <Annunciator2On>
+;; Also: SETAN2 (IIEROM82, IIETRM85)
+Annunciator2Off = $C05C
+
+;; Reading or writing it turns annunciator 2 on; <Annunciator2Off> turns it off.
 ;;
 ;; The reset function reads it, along with <Annunciator3On>.
 ;; See: <Annunciator3On>, <Annunciator0Off>
 ;; Also: CLRAN2 (A2RM79, IIEROM82, IIETRM85)
 Annunciator2On = $C05D
 
-;; Reading or writing it turns annunciator 3 on; $C05E turns it off.
+;; Reading or writing it turns annunciator 3 off.
+;;
+;; While IOUDIS is on, it turns double hi-res on instead.
+;; See: <Annunciator3On>
+;; Also: SETAN3 (IIEROM82, IIETRM85)
+Annunciator3Off = $C05E
+
+;; Reading or writing it turns annunciator 3 on; <Annunciator3Off> turns it off.
 ;;
 ;; While IOUDIS is on, the same addresses turn double hi-res off ($C05F) and on ($C05E) instead. The reset function
 ;; reads it, along with <Annunciator2On>.

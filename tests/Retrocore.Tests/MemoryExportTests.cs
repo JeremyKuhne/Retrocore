@@ -42,7 +42,7 @@ public sealed class MemoryExportTests
 
     /// <summary>
     ///  A page-zero byte is not named by a scoped name, which is one routine family's name for a byte others share
-    ///  (the disassembler's FormatBits for MASK's $2E); a byte the session has a plain name for keeps it.
+    ///  (the disassembler's FormatBits for PlotMask's $2E); a byte the session has a plain name for keeps it.
     /// </summary>
     [TestMethod]
     public void ExportLeavesPageZeroToPlainNames()

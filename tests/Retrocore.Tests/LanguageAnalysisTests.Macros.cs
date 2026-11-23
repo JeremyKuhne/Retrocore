@@ -22,8 +22,8 @@ public sealed partial class LanguageAnalysisTests
         ;; Emits the byte reader.
         .macro Library
             ;; Requires a comma and reads a byte.
-            ;; Also: COMBYTE (A2RM78)
-        COMBYT:
+            ;; Also: PRBBYTE (A2RM78)
+        PRBBYT:
             rts
         .endmacro
 
@@ -32,9 +32,9 @@ public sealed partial class LanguageAnalysisTests
             Library
         .endscope
 
-        ;; Reads through <COMBYTE>.
+        ;; Reads through <PRBBYTE>.
         Echo:
-            jsr COMBYTE
+            jsr PRBBYTE
             rts
         """;
 
@@ -69,9 +69,9 @@ public sealed partial class LanguageAnalysisTests
             analysis.Should().NotBeNull();
             DocumentUri uri = DocumentUri.FromFileSystemPath(path);
 
-            int use = Array.FindIndex(lines, line => line.Contains("jsr COMBYTE", StringComparison.Ordinal));
-            int column = lines[use].IndexOf("COMBYTE", StringComparison.Ordinal);
-            int body = Array.FindIndex(lines, line => line.StartsWith("COMBYT:", StringComparison.Ordinal));
+            int use = Array.FindIndex(lines, line => line.Contains("jsr PRBBYTE", StringComparison.Ordinal));
+            int column = lines[use].IndexOf("PRBBYTE", StringComparison.Ordinal);
+            int body = Array.FindIndex(lines, line => line.StartsWith("PRBBYT:", StringComparison.Ordinal));
             LspParams at = Request(uri, use, column + 1);
 
             List<Diagnostic> published = await client.Wait(
@@ -79,7 +79,7 @@ public sealed partial class LanguageAnalysisTests
                 diagnostics => diagnostics.Count == 1 && diagnostics[0].Code == DocumentationRules.HistoricalName);
 
             Diagnostic hint = published.Should().ContainSingle().Which;
-            hint.Message.Should().Be("COMBYTE is a historical name of Basic::COMBYT.");
+            hint.Message.Should().Be("PRBBYTE is a historical name of Basic::PRBBYT.");
             hint.Range.Start.Should().Be(new Position(use, column));
             JsonNode? actions = new CodeActionHandler(workspace, new BasicDocuments(client)).Handle(new JsonObject
             {
@@ -88,23 +88,23 @@ public sealed partial class LanguageAnalysisTests
             });
 
             JsonNode? fix = (actions as JsonArray)?.FirstOrDefault(
-                action => action?["title"]?.GetValue<string>() == "Use Basic::COMBYT");
+                action => action?["title"]?.GetValue<string>() == "Use Basic::PRBBYT");
 
             JsonNode? edit = fix?["edit"]?["changes"]?[uri.Text]?[0];
-            (edit?["newText"]?.GetValue<string>()).Should().Be("Basic::COMBYT");
+            (edit?["newText"]?.GetValue<string>()).Should().Be("Basic::PRBBYT");
 
             Hover? hover = await new HoverHandler(workspace, new BasicDocuments(client)).Handle(at);
-            (hover?.Contents.Value).Should().Contain("`COMBYTE` is a historical name of `Basic::COMBYT`.");
+            (hover?.Contents.Value).Should().Contain("`PRBBYTE` is a historical name of `Basic::PRBBYT`.");
 
             List<CompletionItem> completions = await new CompletionHandler(workspace, new BasicDocuments(client))
                 .Handle(Request(uri, use, column));
 
-            CompletionItem completion = completions.Should().ContainSingle(item => item.Label == "Basic::COMBYT").Which;
-            completion.FilterText.Should().Contain("COMBYTE");
+            CompletionItem completion = completions.Should().ContainSingle(item => item.Label == "Basic::PRBBYT").Which;
+            completion.FilterText.Should().Contain("PRBBYTE");
 
-            LspParams query = Request(uri, 0, 0) with { Query = "COMBYTE" };
+            LspParams query = Request(uri, 0, 0) with { Query = "PRBBYTE" };
             IEnumerable<WorkspaceSymbol> symbols = await new WorkspaceSymbolHandler(workspace).Handle(query);
-            symbols.Select(symbol => symbol.Name).Should().Contain("Basic::COMBYT (COMBYTE)");
+            symbols.Select(symbol => symbol.Name).Should().Contain("Basic::PRBBYT (PRBBYTE)");
 
             IEnumerable<LspLocation> definitions = await new DefinitionHandler(workspace, new BasicDocuments(client)).Handle(at);
             definitions.Should().ContainSingle().Which.Range.Start.Line.Should().Be(body);

@@ -1,12 +1,12 @@
 ; retrocore: style=strict
 ; Derived from Microsoft's BASIC for 6502 (m6502.asm, MIT license; see LICENSE in this folder).
 
-.include "MsBasic.Families.asm"
-
 ;; MICROSOFT 6502 BASIC: PROGRAM LISTING
 ;;
 ;; These macros emit LIST's argument parser, linked-line walker and token expansion in that order. The
 ;; platform supplies the output and continuation entries and chooses the independent listing behaviors.
+
+.include "MsBasic.Families.asm"
 
 ;; Emits the <Statements::List> argument parser.
 ;; Parameters: commaRange = 1 to accept a comma as well as a minus token between bounds;
@@ -20,7 +20,8 @@
     ;;
     ;; A nonzero single number selects that line; a minus token introduces an upper bound. When selected, a
     ;; comma is also accepted. A zero upper bound, including an omitted one, becomes $FFFF. A valid command
-    ;; discards the statement dispatcher's return address before listing; invalid trailing text returns to the dispatcher.
+    ;; discards the statement dispatcher's return address before listing; invalid trailing text returns to the
+    ;; dispatcher.
     ;; In: A = current character, carry = clear for a digit, zero = set for a null or colon
     ;; See: <ReadLineNumber>, <FindLine>, <Statements::List::NextLine>
     ;; Also: LIST (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
@@ -48,13 +49,12 @@ ReadFirstBound:
     bne FindLine::Done
     .if commaRange
 ;; AppleSoft: after minus or comma, reads the upper bound.
-;; Also: GOLST1 (UNKN)
 ReadSecondBound:
     .endif
     jsr GetNextCharacter
     jsr ReadLineNumber
     bne secondBoundReturn
-;; Drops the statement loop's return; a zero upper bound becomes $FFFF; falls into NextLine.
+;; Drops the statement loop's return; a zero upper bound becomes $FFFF; falls into <Statements::List::NextLine>.
 ;; Also: LSTEND (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 StartListing:
     pla
@@ -145,7 +145,6 @@ ListCharacter:
         sta TerminalPosition
         .if trackQuotes
 ;; Restores the character saved around the wrap check, then the quote test.
-;; Also: LIST_QUOTE_CHECK (UNKN)
 CheckQuote:
             pla
         .endif
@@ -193,13 +192,11 @@ Finish:
 ;; Out: A = table byte, Y = advanced offset, FacMantissa1 = incremented when Y wraps,
 ;;   zero = set for a zero byte, negative = bit 7 of the byte
 ;; Keeps: X, carry
-;; Also: GRODY1 (UNKN)
 NextTableByte:
     iny
     bne ReadTableByte
     inc FacMantissa1
-;; Lda (<Fac>),y; rts.
-;; Also: GRODY2 (UNKN)
+;; Reads (<Fac>),y and returns.
 ReadTableByte:
     lda (Fac),y
     rts
@@ -276,8 +273,7 @@ SkipWord:
         inc Pointer1
         bne ReadWordByte
         inc Pointer1+1
-;; BASIC 4: reads (Pointer1),y after advancing the pointer.
-;; Also: RESCR2 (CBM4S79, HV4, HV4R)
+;; BASIC 4: reads (<Pointer1>),y after advancing the pointer.
 ReadWordByte:
         lda (Pointer1),y
     .elseif tableMode = 2
@@ -294,7 +290,6 @@ ListWord:
     .if tableMode = 1
         iny
 ;; BASIC 4: the first token ($80) skips the search.
-;; Also: PRIT3B (CBM4S79, HV4, HV4R)
 ListFirstWord:
     .endif
     .if spaceWords
@@ -303,7 +298,6 @@ ListFirstWord:
     .endif
     .if spaceWords || tableMode = 2
 ;; AppleSoft: reads and prints the next keyword byte.
-;; Also: PRIT31 (UNKN)
 ListWordCharacter:
     .endif
     .if tableMode = 1
@@ -325,7 +319,6 @@ ListWordCharacter:
             bne ListWordCharacter
         .endif
 ;; AppleSoft: prints the last keyword byte and a space, back to <Statements::List::ResumeLine>.
-;; Also: PRIT32 (UNKN)
 ListLastCharacter:
         jsr OUTDO
         lda #' '

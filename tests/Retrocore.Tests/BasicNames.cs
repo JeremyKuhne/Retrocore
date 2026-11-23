@@ -9,6 +9,7 @@ using Retrocore.Machines.Apple2;
 using Retrocore.Machines.Commodore;
 using System.Collections.Concurrent;
 using System.Globalization;
+using System.Text.RegularExpressions;
 
 namespace Retrocore.Tests;
 
@@ -22,7 +23,7 @@ namespace Retrocore.Tests;
 ///   resolves it. A name that is neither is not found, so a lookup that should fail still fails.
 ///  </para>
 /// </remarks>
-internal static class BasicNames
+internal static partial class BasicNames
 {
     private static readonly AsyncLocal<string?> s_inputs = new();
 
@@ -354,9 +355,14 @@ internal static class BasicNames
     /// </summary>
     /// <param name="name">The label, as Microsoft's source has it.</param>
     /// <returns>The label definitions, one per line.</returns>
+    /// <remarks>
+    ///  <para>
+    ///   A current name inside a scope cannot be a label here; <see cref="ScopedNames(IReadOnlyDictionary{string, long})"/> defines it.
+    ///  </para>
+    /// </remarks>
     /// <exception cref="InvalidOperationException">The builds give the name to different definitions.</exception>
     internal static string Label(string name) =>
-        string.Join('\n', CurrentNames(name).Prepend(name).Select(label => $"{label}:"));
+        string.Join('\n', CurrentNames(name).Where(current => !IsScoped(current)).Prepend(name).Select(label => $"{label}:"));
 
     /// <summary>
     ///  Gets the names the native BASIC builds define an old name by now, through their <c>;; Also:</c> sections.
@@ -459,7 +465,9 @@ internal static class BasicNames
                     own[name] = targets = [with(StringComparer.Ordinal)];
                 }
 
-                targets.Add(definition.Name);
+                // A vendor's alias (AppleSoft::PopFinish = Statements::PopFinish) is how the build reaches the name;
+                // the modules define and use its target, so a standalone build predefines that.
+                targets.Add(AliasTarget(definition) ?? definition.Name);
             }
 
             byBuild[key] = own.ToDictionary(pair => pair.Key, pair => pair.Value.ToArray(), StringComparer.Ordinal);
@@ -467,4 +475,49 @@ internal static class BasicNames
 
         return byBuild;
     }
+
+    /// <summary>
+    ///  Gets whether a vendor's historical names file (AppleSoft's or Commodore's) gives an old name, through an
+    ///  alias: a standalone build of a shared module, which does not include that file, does not define it.
+    /// </summary>
+    /// <param name="name">The old name.</param>
+    /// <returns><see langword="true"/> for a vendor's name.</returns>
+    internal static bool IsVendorName(string name) =>
+        s_vendor.GetOrAdd(Inputs, inputs => new(() => VendorNamesIn(inputs))).Value.Contains(name);
+
+    // The vendor's names by inputs folder.
+    private static readonly ConcurrentDictionary<string, Lazy<HashSet<string>>> s_vendor = new(StringComparer.Ordinal);
+
+    private static HashSet<string> VendorNamesIn(string inputs)
+    {
+        HashSet<string> names = [with(StringComparer.Ordinal)];
+        foreach (string path in (string[])
+            [
+                Path.Join(inputs, "AppleSoft", "AppleSoft.HistoricalNames.asm"),
+                Path.Join(inputs, "Pet", "Basic", "Commodore.HistoricalNames.asm")
+            ])
+        {
+            DocumentationFile file = DocumentationParser.Parse(File.ReadAllText(path), path);
+            names.UnionWith(file.Comments.SelectMany(comment => DocumentationAlso.Of(comment.Sections)).Select(also => also.Name));
+        }
+
+        return names;
+    }
+
+    // The target of an alias in a vendor's historical names file, from its line (Name = Target or Name = ::Target).
+    private static string? AliasTarget(AssemblySymbol definition)
+    {
+        if (definition.Location is not { } location
+            || !location.Path.EndsWith(".HistoricalNames.asm", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        string line = File.ReadLines(location.Path).ElementAt(location.Line);
+        Match match = AliasLine().Match(line);
+        return match.Success ? match.Groups["target"].Value : null;
+    }
+
+    [GeneratedRegex(@"^\s*\w+\s*=\s*(::)?(?<target>[A-Za-z_]\w*(::\w+)*)\s*$")]
+    private static partial Regex AliasLine();
 }

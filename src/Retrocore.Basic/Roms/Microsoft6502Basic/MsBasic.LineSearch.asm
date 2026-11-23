@@ -10,7 +10,7 @@
 ;; Out: SourceStart = link field of the matching or following line or the end marker, carry = set for an exact match
 ;; Entry:
 ;;   FromAddress = searches from the line at A (low) and X (high)
-;;   Done = The rts; Statements::New and List's range parsing branch here for a syntax error return
+;;   Done = The rts; <Statements::New> and List's range parsing branch here for a syntax error return
 ;; Also: FNDLIN (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 .proc FindLine
     lda ProgramStart
@@ -57,7 +57,7 @@ NextLine:
 NotFound:
     clc
 
-;; The rts; Statements::New and List's range parsing branch here for a syntax error return.
+;; The rts; <Statements::New> and List's range parsing branch here for a syntax error return.
 ;; Also: FLNRTS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 Done:
     rts

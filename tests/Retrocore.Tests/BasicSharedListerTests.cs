@@ -106,6 +106,14 @@ public sealed class BasicSharedListerTests
             DocumentationTopic topic = module.Documentation.FindTopic(name)
                 ?? throw new AssertFailedException($"{name} is not documented.");
 
+            // AppleSoft's own names reach the shared label through the vendor's alias, which inherits its documentation.
+            if (topic.Section("Inherit") is { } inherit)
+            {
+                string target = inherit.Text.Trim().Trim('<', '>');
+                topic = module.Documentation.FindTopic(target)
+                    ?? throw new AssertFailedException($"{name}'s alias inherits from {target}, which is not documented.");
+            }
+
             topic.Kind.Should().Be(DocumentationKind.Routine);
             topic.Value.Should().Be(native.Symbol(name));
             topic.Path.Should().EndWith("MsBasic.Lister.asm");
@@ -310,7 +318,9 @@ public sealed class BasicSharedListerTests
         {
             Registers = new()
             {
-                ProgramCounter = checked((ushort)region.Symbol("GRODY1")),
+                // AppleSoft's alias gives GRODY1 only in the whole build, at the address the region keeps.
+                ProgramCounter = checked((ushort)SdkModules.AssembleAppleSoft(
+                    SdkModules.AppleSoftPath(Inputs), Apple2Model.IIeEnhanced).Symbol("GRODY1")),
                 Accumulator = 0x5A,
                 X = 0x42,
                 Y = (byte)offset,
@@ -613,6 +623,12 @@ public sealed class BasicSharedListerTests
             symbol => !symbol.IsConstant && symbol.Value >= start && symbol.Value < end))
         {
             if (label.Name.StartsWith("__m10_", StringComparison.Ordinal)) { continue; }
+
+            // A vendor's alias reaches its name only in the vendor's whole build, which this compares too.
+            if (BasicNames.IsVendorName(label.Name) && !native.SymbolsWithHistoricalNames.ContainsKey(label.Name))
+            {
+                continue;
+            }
 
             native.SymbolsWithHistoricalNames.Should().ContainKey(label.Name);
             native.Symbol(label.Name).Should().Be(label.Value, $"{label.Name} must retain its ROM address");

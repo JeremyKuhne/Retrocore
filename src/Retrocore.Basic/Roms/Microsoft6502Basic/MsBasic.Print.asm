@@ -6,7 +6,7 @@
 ; MICROSOFT 6502 BASIC: PRINT DISPATCH
 
 ;; Emits the expression and separator dispatch for PRINT.
-;; Parameters: tabEntry = TAB and SPC handler, clearSpaceCarry = 1 to clear carry before SPC dispatch;
+;; Parameters: tabEntry = `TAB` and SPC handler, clearSpaceCarry = 1 to clear carry before SPC dispatch;
 ;;   clearCommaCarry = 1 to clear carry before comma dispatch;
 ;;   trailingSpace = 1 to print a separate space after a converted number
 .macro PrintItems tabEntry, clearSpaceCarry, clearCommaCarry, trailingSpace
@@ -29,10 +29,11 @@
     jsr GetCurrentCharacter
     .endproc
 
-    ;; Prints expressions, handling comma zones, semicolons, TAB and SPC.
+    ;; Prints expressions, handling comma zones, semicolons, `TAB` and SPC.
     ;; In: A = current character, zero = set at the end of the statement
     ;; Entry:
-    ;;   Item = End: return; TAB/SPC, comma, semicolon, or an expression (string, or number via FOUT and STRLIT); the
+    ;; Item = at the end, returns; `TAB`/SPC, comma, semicolon, or an expression (string, or number via FOUT and
+    ;; <STRLIT>); the
     ;;     vendors' channel PRINT enters here
     ;; See: <STRPRT>, <Float::FormatFac>, <COMPRT>
     ;; Also: PRINT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)

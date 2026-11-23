@@ -58,7 +58,9 @@ most often missed:
 - **Historical names are never dropped.** A name from a manual or listing that a definition no longer has
   goes in its `;; Also:` section, with the documents' keys from [the bibliography](../../../docs/Bibliography.md):
   `;; Also: COUT (A2RM78)`. Old code keeps assembling and the editor offers the new name. Add a document to the
-  bibliography before citing it.
+  bibliography before citing it. In a macro's body, an `Also:` reaches its definition only where the build expands
+  that line once, and never a name a parameter, `.local` or cheap `@` local gives, nor a `.set` variable;
+  otherwise write the old name in prose (DocComments 2.4).
 - **Constants:** every value that means something gets one (unit numbers, offsets, masks, counts, control
   codes); 0 for clearing and 1 or 2 for stepping a pointer stay numbers.
 - **Documentation:** a `;;` block **above** every definition (never a trailing `;;`, except on a type's member);

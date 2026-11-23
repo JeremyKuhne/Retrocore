@@ -18,6 +18,10 @@ internal sealed partial class AssemblyPreprocessor
     // An ambiguity found expanding a condition's line, reported where the condition is tested.
     private string? _conditionAmbiguity;
 
+    // The target the first definition of each macro body line with old names declared, or null once a second has:
+    // a line expanded more than once gives its old names to none of its definitions.
+    private Dictionary<(string Path, int Line), string?>? _expandedTargets;
+
     /// <summary>
     ///  Reads a source's <c>Also:</c> sections the first time it is processed.
     /// </summary>
@@ -36,13 +40,15 @@ internal sealed partial class AssemblyPreprocessor
     /// <returns>For a <c>.set</c> with old names, the private name holding this value; otherwise null.</returns>
     private string? RecordHistoricalNames(AssemblyStatement node, string qualified)
     {
-        if (node.Location is not { IsMacroExpansion: false } location
+        if (node.Location is not { } location
             || !_alsoNames.TryGetValue(location.Path, out AssemblyAlsoNames? names)
             || names is null
-            || names.Of(location.Path, location.Line) is not { Count: > 0 } historical)
+            || names.Of(location) is not { Count: > 0 } historical)
         {
             return null;
         }
+
+        if (location.IsMacroExpansion && !FirstExpansion(location, historical)) { return null; }
 
         // The assembler aliases a .set variable's version at this line, not the variable.
         string? snapshot = null;
@@ -53,6 +59,8 @@ internal sealed partial class AssemblyPreprocessor
         }
 
         string target = snapshot ?? qualified;
+        (string, int) line = (location.Path, location.Line);
+        if (location.IsMacroExpansion && _expandedTargets is not null) { _expandedTargets[line] = target; }
         foreach (string name in historical)
         {
             _historicalNames ??= [with(StringComparer.Ordinal)];
@@ -65,6 +73,32 @@ internal sealed partial class AssemblyPreprocessor
         }
 
         return snapshot;
+    }
+
+    // Whether a macro body line's definition is the first the build declares there. At the second, the first one's
+    // old names stop reaching it, so conditionals after that see none, as the assembler, which knows every
+    // expansion, gives none; a condition between the two saw them.
+    private bool FirstExpansion(AssemblyLocation location, IReadOnlyList<string> historical)
+    {
+        _expandedTargets ??= [];
+        (string, int) line = (location.Path, location.Line);
+        if (!_expandedTargets.TryGetValue(line, out string? first))
+        {
+            _expandedTargets[line] = null;
+            return true;
+        }
+
+        if (first is null) { return false; }
+        _expandedTargets[line] = null;
+        foreach (string name in historical)
+        {
+            List<string>? targets = null;
+            if (_historicalNames?.TryGetValue(name, out targets) != true || targets is null) { continue; }
+            targets.Remove(first);
+            if (targets.Count == 0) { _historicalNames?.Remove(name); }
+        }
+
+        return false;
     }
 
     /// <summary>

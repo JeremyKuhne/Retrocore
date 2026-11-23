@@ -155,7 +155,7 @@ internal sealed partial class LanguageWorkspace
                 if (analysis.Definitions.Any(site => site.Name == name)) { continue; }
 
                 IReadOnlyList<DocumentationTopic> topics = set.FindAlso(name, thisBuild: ReferenceEquals(set, analysis.Documentation));
-                string? replacement = topics.Count == 1 ? topics[0].Name : null;
+                string? replacement = topics.Count == 1 ? set.SymbolOf(topics[0]) : null;
                 current[name] = current.TryGetValue(name, out string? earlier) && earlier != replacement ? null : replacement;
             }
         }

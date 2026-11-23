@@ -85,7 +85,8 @@ public sealed class AssemblyResult
     /// <remarks>
     ///  <para>
     ///   Branches are chosen while sources are expanded, so this is the expansion's report even when assembly
-    ///   failed later; see <see cref="AssemblySkippedLines"/> for what an expansion error leaves undecided.
+    ///   failed later; see <see cref="AssemblySkippedLines"/> for what an expansion error leaves undecided. A parsed
+    ///   project whose statements were edited before assembling keeps the report of the source it was parsed from.
     ///  </para>
     /// </remarks>
     public AssemblySkippedLines? SkippedLines { get; internal init; }

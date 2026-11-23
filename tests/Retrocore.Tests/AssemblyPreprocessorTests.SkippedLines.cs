@@ -123,11 +123,12 @@ public partial class AssemblyPreprocessorTests
     }
 
     /// <summary>
-    ///  A macro's body is assembled with its definition, whatever an <c>.if</c> in it chooses in each expansion, and
-    ///  skipped with a definition in a branch not taken.
+    ///  Each expansion is a pass over a macro's body: a body line is assembled where some expansion took it, so a
+    ///  branch no expansion took and the body of a macro never invoked are skipped, while the <c>.macro</c> and
+    ///  <c>.endmacro</c> lines go with the definition, and a definition in a branch not taken is skipped whole.
     /// </summary>
     [TestMethod]
-    public void MacroBodiesFollowTheirDefinitions()
+    public void MacroBodiesAreAssembledWhereAnExpansionTookThem()
     {
         AssemblyResult result = Assemble("""
             .macro Pick wide
@@ -144,11 +145,37 @@ public partial class AssemblyPreprocessorTests
             .endmacro
             Pick 0
             .endif
+            .macro Unused
+            .byte 4
+            .endmacro
             """);
 
         result.Diagnostics.Should().BeEmpty();
         result.Sections[0].Bytes.Span[0].Should().Be(1);
-        Runs(Required(result.SkippedLines), "main.asm").Should().Equal((9, 4));
+        Runs(Required(result.SkippedLines), "main.asm").Should().Equal((4, 1), (9, 4), (15, 1));
+    }
+
+    /// <summary>
+    ///  An expansion stopped at its line limit may have cut short a pass that would assemble what an earlier pass
+    ///  skipped, so only what it assembled is known.
+    /// </summary>
+    [TestMethod]
+    public void AStoppedExpansionLeavesWhatItSkippedUndecided()
+    {
+        AssemblyOptions options = new(ProcessorVariant.Mos6502, origin: 0x1000, imageSize: 32)
+        {
+            MaximumExpandedLines = 4
+        };
+
+        AssemblyResult result = new NativeAssembler().Assemble(
+            new AssemblySource(".if 0\n.byte 1\n.endif\n.byte 2\n.byte 3\n.byte 4\n", "main.asm"),
+            options);
+
+        result.Success.Should().BeFalse();
+        AssemblySkippedLines skipped = Required(result.SkippedLines);
+        skipped.IsAssembled("main.asm", 0).Should().BeTrue();
+        skipped.IsAssembled("main.asm", 1).Should().BeNull();
+        Runs(skipped, "main.asm").Should().BeEmpty();
     }
 
     /// <summary>

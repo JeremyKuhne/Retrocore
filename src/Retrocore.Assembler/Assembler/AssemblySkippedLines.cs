@@ -13,9 +13,11 @@ namespace Retrocore.Assembler;
 ///  <para>
 ///   A line is assembled when the assembly took it in any pass over it: a file included twice, in one place where an
 ///   <c>.if</c> takes a branch and another where it skips it, has that branch assembled. A conditional directive's
-///   own line is assembled when the branch around it is. A macro's body is assembled when its definition is: an
-///   <c>.if</c> inside a body is decided again in each expansion, so expansions report nothing. A <c>.repeat</c>'s
-///   body is assembled when some iteration took it, so a body repeated no times is skipped.
+///   own line is assembled when the branch around it is. Each expansion of a macro is a pass over its body, so a
+///   body line is assembled when some expansion took it: a branch of an <c>.if</c> in the body that no expansion
+///   took is skipped, as is the body of a macro never invoked, while its <c>.macro</c> and <c>.endmacro</c> lines go
+///   with the definition. A <c>.repeat</c>'s body is likewise assembled when some iteration took it, so a body
+///   repeated no times is skipped.
 ///  </para>
 ///  <para>
 ///   A file the assembly never opened, such as one only a skipped branch includes, has no entry: nothing says what
@@ -25,8 +27,11 @@ namespace Retrocore.Assembler;
 ///   Branches are chosen while sources are expanded, before code is laid out, so an error found later (an undefined
 ///   symbol, a branch out of range) leaves the report exact. After an error found while expanding, a later branch
 ///   may have been chosen from a definition the error lost, or never reached: every line decided from the first such
-///   error on is undecided, and so is every line the assembly didn't reach. So is a line of a MACRO-10 source that
-///   produced no statement, whose conditionals are expanded with the rest of its text and not reported.
+///   error on is undecided, and so is every line the assembly didn't reach; an expansion stopped at its line limit
+///   leaves every line it did not assemble undecided. A line an earlier pass skipped is still reported skipped after
+///   a later error, which assumes the error did not cut short a pass that would have assembled it. A line of a
+///   MACRO-10 source that produced no statement is undecided too, error or not: its conditionals are expanded with
+///   the rest of its text and not reported.
 ///  </para>
 /// </remarks>
 public sealed class AssemblySkippedLines
@@ -65,7 +70,7 @@ public sealed class AssemblySkippedLines
 
     /// <summary>
     ///  Gets, by full path, the runs of lines whose state this assembly can't vouch for, in line order; only files
-    ///  that have such lines are here, and none are when expansion found no error.
+    ///  that have such lines are here: none when expansion found no error, except in MACRO-10 sources.
     /// </summary>
     public IReadOnlyDictionary<string, IReadOnlyList<AssemblyLineRange>> Undecided { get; }
 
@@ -87,10 +92,28 @@ public sealed class AssemblySkippedLines
     {
         ArgumentNullException.ThrowIfNull(path);
         if (path.Length == 0) { return null; }
-        string full = Path.GetFullPath(path);
+        string full = FullPath(path);
         if (!_lineCounts.TryGetValue(full, out int count) || line < 0 || line >= count) { return null; }
         bool undecided = Undecided.TryGetValue(full, out IReadOnlyList<AssemblyLineRange>? runs) && In(runs, line);
         return undecided ? null : !In(Skipped[full], line);
+    }
+
+    /// <summary>
+    ///  Gets the full path the report keys a file by, or the path as given when it names no file the platform can
+    ///  resolve.
+    /// </summary>
+    /// <param name="path">The path.</param>
+    /// <returns>The key.</returns>
+    internal static string FullPath(string path)
+    {
+        try
+        {
+            return Path.GetFullPath(path);
+        }
+        catch (Exception failure) when (failure is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return path;
+        }
     }
 
     // Binary search of sorted, disjoint runs.
@@ -133,7 +156,7 @@ public sealed class AssemblySkippedLines
         Dictionary<string, AssemblyLineRange[]> skipped = [with(s_paths)];
         if (path.Length != 0)
         {
-            string full = Path.GetFullPath(path);
+            string full = FullPath(path);
             counts[full] = lineCount;
             skipped[full] = [];
         }

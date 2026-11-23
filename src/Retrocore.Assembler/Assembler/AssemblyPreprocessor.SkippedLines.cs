@@ -31,6 +31,7 @@ internal sealed partial class AssemblyPreprocessor
     /// <param name="source">The file.</param>
     private void OpenOpaqueLines(AssemblySource source)
     {
+        if (source.Path.Length == 0 || _fileLines.ContainsKey(source.Path)) { return; }
         int count = 0;
         foreach (ReadOnlyMemory<char> _ in new AssemblyLines(source.Text.AsMemory())) { count++; }
         OpenLines(source.Path, count, opaque: true);
@@ -39,11 +40,10 @@ internal sealed partial class AssemblyPreprocessor
     /// <summary>
     ///  Notes that a pass reached a physical line, and whether it assembled it.
     /// </summary>
-    /// <param name="location">The line's location; a macro expansion's lines are their definition's.</param>
+    /// <param name="location">The line's location; a macro expansion's lines are its body's.</param>
     /// <param name="assembled">Whether the branch around it was taken.</param>
     private void MarkLine(AssemblyLocation location, bool assembled)
     {
-        if (location.IsMacroExpansion) { return; }
         string path = location.Path;
         if (!ReferenceEquals(path, _markedPath))
         {
@@ -55,21 +55,6 @@ internal sealed partial class AssemblyPreprocessor
         int line = location.Line;
         lines.Visited[line] = _visited;
         if (assembled && lines.Assembled[line] == int.MaxValue) { lines.Assembled[line] = _visited; }
-    }
-
-    /// <summary>
-    ///  Notes the lines a macro or repeat body captured, which no pass reaches one at a time.
-    /// </summary>
-    /// <param name="lines">The lines.</param>
-    /// <param name="start">The first captured.</param>
-    /// <param name="end">The one past the last.</param>
-    /// <param name="assembled">Whether they are assembled.</param>
-    private void MarkLines(IReadOnlyList<Line> lines, int start, int end, bool assembled)
-    {
-        for (int index = start; index < end && index < lines.Count; index++)
-        {
-            MarkLine(lines[index].Location, assembled);
-        }
     }
 
     /// <summary>
@@ -93,7 +78,7 @@ internal sealed partial class AssemblyPreprocessor
         foreach (KeyValuePair<string, FileLines> file in _fileLines)
         {
             FileLines lines = file.Value;
-            string full = Path.GetFullPath(file.Key);
+            string full = AssemblySkippedLines.FullPath(file.Key);
             int count = lines.Visited.Length;
 
             // Two spellings of one file are one file: a line either pass assembled is assembled.
@@ -113,7 +98,8 @@ internal sealed partial class AssemblyPreprocessor
                 // times. With one, only a line every pass reached before the error is known to be.
                 else
                 {
-                    bool reached = lines.Visited[line] >= 0 && lines.Visited[line] < trusted;
+                    // A stopped expansion cut short passes that might have assembled a line an earlier one skipped.
+                    bool reached = !_stopped && lines.Visited[line] >= 0 && lines.Visited[line] < trusted;
                     here = !errors || reached ? LineState.Skipped : LineState.Undecided;
                 }
 

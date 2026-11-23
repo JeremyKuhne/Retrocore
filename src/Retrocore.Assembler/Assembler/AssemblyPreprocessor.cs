@@ -467,11 +467,10 @@ internal sealed partial class AssemblyPreprocessor
             if (_conditions.Count != 0 && !_conditions[^1].Active) { continue; }
             if (directive == ".MACRO")
             {
-                int opening = index;
                 IReadOnlyList<Line>? body = Capture(lines, ref index, ".MACRO", ".ENDMACRO", original.Location);
 
-                // A body is assembled with its definition; an .if in it is chosen again in each expansion.
-                MarkLines(lines, opening + 1, index + 1, assembled: true);
+                // The body's lines are marked by the expansions that take them; the closing line is the definition's.
+                if (body is not null) { MarkLine(lines[index].Location, assembled: true); }
                 if (body is not null)
                 {
                     DefineMacro(operand, body, original.Location, substitutions, frame);

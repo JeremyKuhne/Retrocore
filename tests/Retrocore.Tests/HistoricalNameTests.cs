@@ -407,6 +407,39 @@ public sealed partial class HistoricalNameTests
     }
 
     /// <summary>
+    ///  A definition documented once per branch of an <c>.if</c> inside a macro's body follows the branch its
+    ///  expansions took, so an old name only the other branch gives is not this build's.
+    /// </summary>
+    [TestMethod]
+    public void AlsoSectionsInMacroBodiesFollowTheExpansions()
+    {
+        DocumentationSet set = Set("""
+            .macro Entry wide
+            .if wide
+            ;; Starts.
+            ;; Also: OLDSTART (TEST)
+            Start:
+                rts
+            .else
+            ;; Starts.
+            Start:
+                rts
+            .endif
+            .endmacro
+            Entry 0
+
+            ;; Starts, the other way.
+            ;; Also: OLDSTART (TEST)
+            OtherStart:
+                rts
+            """);
+
+        DocumentationTopic start = Required(set.Find("Start"));
+        set.Gives(start, "OLDSTART", thisBuild: true).Should().BeFalse();
+        set.FindAlso("OLDSTART", thisBuild: true).Should().ContainSingle().Which.Name.Should().Be("OtherStart");
+    }
+
+    /// <summary>
     ///  Another module is assembled for its default build, which says nothing about the build of the source that
     ///  links into it: an old name two of its builds give is ambiguous there, not its default build's.
     /// </summary>

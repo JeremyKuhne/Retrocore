@@ -3,6 +3,7 @@
 // See LICENSE file in the project root for full license information
 
 using System.Text.Json.Nodes;
+using Retrocore.Assembler;
 using Retrocore.Debug.Language;
 using Retrocore.Documentation;
 
@@ -447,6 +448,41 @@ public sealed partial class LanguageAnalysisTests
         {
             Directory.Delete(folder, recursive: true);
         }
+    }
+
+    /// <summary>
+    ///  The editor resolves an included name as the assembler's file resolver does, so it names a file by the path
+    ///  the assembler reads it from: relative, parent, absolute, and the rooted forms that differ on Windows.
+    /// </summary>
+    /// <param name="request">The included name.</param>
+    [TestMethod]
+    [DataRow("Library.asm")]
+    [DataRow("../lib/Library.asm")]
+    [DataRow("/shared/Library.asm")]
+    [DataRow(@"\lib\Library.asm")]
+    [DataRow(@"C:Library.asm")]
+    [DataRow(@"C:\lib\Library.asm")]
+    [DataRow(@"\\server\share\Library.asm")]
+    public void IncludesResolveAsTheAssemblerResolvesThem(string request)
+    {
+        string from = Path.GetFullPath(Path.Join(Path.GetTempPath(), "retrocore-paths", "program", "Main.asm"));
+        LanguagePaths.Resolve(from, request).Should().Be(AssemblySourcePaths.Resolve(from, request));
+        LanguagePaths.Resolve("", request).Should().Be(AssemblySourcePaths.Resolve("", request));
+    }
+
+    /// <summary>
+    ///  On Windows, a name rooted on the current drive or naming another drive replaces the including file's folder,
+    ///  as the assembler reads it, and a relative name is joined to it. A name rooted without a drive is on the
+    ///  current directory's drive, as <see cref="Path.GetFullPath(string)"/> places it.
+    /// </summary>
+    [TestMethod]
+    [OSCondition(OperatingSystems.Windows)]
+    public void RootedIncludesReplaceTheFolderOnWindows()
+    {
+        const string From = @"C:\work\program\Main.asm";
+        LanguagePaths.Resolve(From, @"\lib\Library.asm").Should().Be(Path.GetFullPath(@"\lib\Library.asm"));
+        LanguagePaths.Resolve(From, @"D:\lib\Library.asm").Should().Be(@"D:\lib\Library.asm");
+        LanguagePaths.Resolve(From, @"lib\Library.asm").Should().Be(@"C:\work\program\lib\Library.asm");
     }
 
     private static LspParams Request(DocumentUri uri, int line, int character) =>

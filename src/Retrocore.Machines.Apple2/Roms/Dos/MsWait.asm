@@ -9,10 +9,10 @@
 ;;
 ;; In DOS 3.3 the delay starts the page at $BA00. <DiskII::ReadTranslate> is indexed by the nibble itself, and only
 ;; nibbles $96-$FF are valid, so its entries need only the last $6A bytes of the page: the code and tables before them
-;; share it. The space between holds three patches added to DOS later: <AppendFix::ClearUnlessAppend> and
-;; <AppendFix::Finish>, for the APPEND command, and <TurnOff80Columns>, for the Apple IIe's 80-column display. In the
-;; 1983 master the APPEND fix's last part lives here; Apple's listing has a longer version in the boot loader's page
-;; (see Dos33.asm).
+;; share it. In the 1983 DOS the space between holds three patches added to DOS later: <AppendFix::ClearUnlessAppend>
+;; and <AppendFix::Finish>, for the APPEND command, and <TurnOff80Columns>, for the Apple IIe's 80-column display; the
+;; 1980 DOS has leftover bytes there. In the 1983 master the APPEND fix's last part lives here; Apple's listing has a
+;; longer version in the boot loader's page (see Dos33.asm).
 ;;
 ;; In DOS 3.2 the delay follows the head mover at $BA7F, the read table's entries for nibbles $AB-$FF end the same page,
 ;; and <DiskII::WriteTranslate> follows the buffers. The timing rules for the tables and buffers are in RwtsEquates.asm,

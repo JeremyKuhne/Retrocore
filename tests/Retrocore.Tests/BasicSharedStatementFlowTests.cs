@@ -145,10 +145,10 @@ public sealed class BasicSharedStatementFlowTests
             .cpu Mos6502
             .include "MsBasic.StatementFlow.asm"
             .org ${legacy.Symbol("DATA"):X4}
-                STATEMENT_SCAN {(quoteFirst ? 1 : 0)}, {(popExit ? 1 : 0)}
-                CONDITIONAL_STATEMENTS
+                StatementScan {(quoteFirst ? 1 : 0)}, {(popExit ? 1 : 0)}
+                ConditionalStatements
             {(popExit ? BasicNames.Label("ON") : "")}
-                ON_STATEMENT
+                OnStatement
             STATEMENT_FLOW_END:
             """;
 
@@ -163,7 +163,7 @@ public sealed class BasicSharedStatementFlowTests
             name => name, name => legacy.Symbol(name), StringComparer.Ordinal);
 
         AssemblyResult native = new Assembler.Assembler().Assemble(
-            new AssemblySource(source, Path.Join(folder, "SharedStatementFlowTest.asm")),
+            new AssemblySource(BasicNames.ScopedNames(symbols) + "\n" + source, Path.Join(folder, "SharedStatementFlowTest.asm")),
             new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
             {
                 SourceResolver = new FileAssemblySourceResolver(),
@@ -183,6 +183,13 @@ public sealed class BasicSharedStatementFlowTests
         foreach (AssemblySymbol label in legacy.SymbolDefinitions.Where(
             symbol => !symbol.IsConstant && symbol.Value >= start && symbol.Value < end))
         {
+            // A vendor's alias reaches its name only in a build that includes the vendor's historical names: a
+            // standalone build of the module skips it, and a whole build must have it.
+            if (BasicNames.IsVendorName(label.Name) && !BasicNames.IncludesHistoricalNames(native))
+            {
+                continue;
+            }
+
             native.SymbolsWithHistoricalNames.Should().ContainKey(label.Name);
             native.Symbol(label.Name).Should().Be(label.Value, $"{label.Name} must retain its ROM address");
         }

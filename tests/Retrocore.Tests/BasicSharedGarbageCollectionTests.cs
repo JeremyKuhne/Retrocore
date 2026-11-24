@@ -773,7 +773,7 @@ public sealed class BasicSharedGarbageCollectionTests
             name => name, name => legacy.Symbol(name), StringComparer.Ordinal);
 
         AssemblyResult native = new Assembler.Assembler().Assemble(
-            new AssemblySource(source, path),
+            new AssemblySource(BasicNames.ScopedNames(symbols) + "\n" + source, path),
             new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
             {
                 SourceResolver = new FileAssemblySourceResolver(),

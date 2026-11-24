@@ -80,7 +80,7 @@ RAM_ORIGIN = $2A00
 ;; Also: CZGETL (M6502)
 GetCharacter = $FD0C
 
-;; Generic Microsoft stack reserve in two-byte levels; Apple uses a different reserve in <GETSTK>.
+;; Generic Microsoft stack reserve in two-byte levels; Apple uses a different reserve in <CheckStack>.
 ;; Also: NUMLEV (M6502)
 STACK_LEVELS = $17
 
@@ -299,7 +299,7 @@ WaitAndMask = $85
 ;; Also: EORMSK (M6502)
 WaitXorMask = $86
 
-;; Two-byte pointer to an <OPTAB> entry, shared with <VariableListPointer>.
+;; Two-byte pointer to an <OperatorTable> entry, shared with <VariableListPointer>.
 ;; Also: OPPTR (M6502, ASTIL), LASTOP (AS82)
 OperatorPointer = $87
 
@@ -353,11 +353,11 @@ FloatTemporary3 = $8A
 ;; Also: TEMPF1 (M6502, ASTIL), TEMP1 (ASTIL)
 FloatTemporary1 = $93
 
-;; Two-byte end of the destination block for <BLTU>, shared with <ArrayPointer>.
+;; Two-byte end of the destination block for <MoveRangeUp>, shared with <ArrayPointer>.
 ;; Also: HIGHDS (M6502, ASTIL, AS82), ARRYPT (ASTIL)
 DestinationEnd = $94
 
-;; Two-byte end of the source block for <BLTU>.
+;; Two-byte end of the source block for <MoveRangeUp>.
 ;; Also: HIGHTR (M6502, ASTIL)
 SourceEnd = $96
 
@@ -369,7 +369,7 @@ FloatTemporary2 = $98
 ;; Also: LOWDS (M6502, ASTIL)
 DestinationStart = $99
 
-;; Two-byte start of the source block for <BLTU>, shared with <CollectorTop>.
+;; Two-byte start of the source block for <MoveRangeUp>, shared with <CollectorTop>.
 ;; Also: LOWTR (M6502, ASTIL)
 SourceStart = $9B
 
@@ -504,11 +504,11 @@ PolynomialPointer = $AD
 LinearIndex = $AD
 
 ; Character-fetch code copied to page zero, random state and page-one output buffer.
-;; Page-zero character-fetch entry copied from <INITAT>.
+;; Page-zero character-fetch entry copied from <CharacterReaderTemplate>.
 ;; Also: CHRGET (M6502, ASTIL, ASRM78)
 GetNextCharacter = $B1
 
-;; Page-zero entry to fetch without incrementing <TextPointer>.
+;; Page-zero entry to fetch the current character without first incrementing <TextPointer>; it skips spaces.
 ;; Also: CHRGOT (M6502, ASTIL)
 GetCurrentCharacter = $B7
 

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
+using Retrocore.Assembler;
 using Retrocore.Documentation;
 
 namespace Retrocore.Debug.Language;
@@ -165,18 +166,39 @@ internal sealed partial class LanguageWorkspace
     {
         List<DocumentationDiagnostic> diagnostics = [];
         Dictionary<string, string?> current = [with(StringComparer.Ordinal)];
+        HashSet<string> own = [with(StringComparer.Ordinal)];
         foreach (DocumentationSet set in analysis.OtherModules(SdkAnalyses()).Select(sdk => sdk.Documentation).Prepend(analysis.Documentation))
         {
+            bool thisBuild = ReferenceEquals(set, analysis.Documentation);
             foreach (string name in set.AlsoNames)
             {
                 // A name a root symbol has is never historical; one a scope defines is checked at each use, below.
                 if (analysis.Definitions.Any(site => site.Name == name)) { continue; }
 
-                bool thisBuild = ReferenceEquals(set, analysis.Documentation);
+                // The file's own build gives its old names first: an SDK module's Also: of the same spelling, which
+                // the build does not include, neither replaces nor cancels one the build gives.
+                if (!thisBuild && own.Contains(name)) { continue; }
+
                 IReadOnlyList<DocumentationTopic> topics = set.FindAlso(name, thisBuild);
                 IReadOnlyList<string> symbols = topics.Count == 1 ? set.SymbolsOf(topics[0], name, thisBuild) : [];
                 string? replacement = symbols.Count == 1 ? symbols[0] : null;
                 current[name] = current.TryGetValue(name, out string? earlier) && earlier != replacement ? null : replacement;
+
+                // Only a name the build gives takes precedence, and only for the definition it gives it to: the
+                // assembler's own table of historical names says so. Anything else stays as ambiguous with the SDK's
+                // as before. While the file has errors there is no such table, and the text alone cannot say what
+                // the assembler would make of conditions, repeats, macros and scoped includes, so the merge behaves
+                // as before then.
+                bool given = replacement is not null
+                    && topics.Count == 1
+                    && analysis.Result.Success
+                    && analysis.Result.HistoricalNames.TryGetValue(name, out AssemblySymbol? target)
+                    && target.Name == replacement;
+
+                if (thisBuild && given)
+                {
+                    own.Add(name);
+                }
             }
         }
 

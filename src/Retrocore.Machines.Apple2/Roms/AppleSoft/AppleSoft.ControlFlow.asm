@@ -14,7 +14,7 @@ NXTCO1:
 ;; Runs the next statement or advances to the next linked line, checking for Control-C first.
 ;;
 ;; Saves the current text position for CONT while running a program. Trace mode prints each line number.
-;; See: <GONE>, <ISCNTC>, <CONT>
+;; See: <GONE>, <ISCNTC>, <Statements::Cont>
 NEWSTT:
     jsr ISCNTC
     lda TXTPTR
@@ -66,7 +66,7 @@ GONE1:
     beq ENDCON
 GONE3:
     beq ISCRTS
-; CHRGET leaves carry set for a non-digit; a digit here is a syntax error.
+; GetNextCharacter leaves carry set for a non-digit; a digit here is a syntax error.
 GONE2:
     sbc #ENDTK
     bcc GLET
@@ -87,10 +87,10 @@ MORSTS:
 SNERR1:
     jmp SNERR
 
-    RESTORE_DATA
+    RestoreStatement
 
 ;; Checks the keyboard for Control-C without consuming any other key.
-;; See: <ISCCA1>, <STOP>
+;; See: <ISCCA1>, <Statements::Stop>
 ISCNTC:
     lda KBD
     cmp #$83
@@ -108,7 +108,7 @@ ISCCA1:
 ISCCA2:
     cmp #$03
 
-    STOP_AND_CONTINUE 1, 0
+    StopAndContinue 1, 0
 
 ;; SAVE: writes the program length and program text to cassette through the Monitor.
 ;; See: <LOAD>, <VARTIO>, <PROGIO>
@@ -171,23 +171,23 @@ PROGIO:
     sty A2H
     rts
 
-;; Decrements <CURLIN>+1 while preserving the incoming flags before <RUN>.
+;; Decrements <CURLIN>+1 while preserving the incoming flags before <Statements::Run>.
 RUNSTM:
     php
     dec CURLIN+1
     plp
-    RUN_STATEMENT 1
-    GOSUB_AND_GOTO NXTCO1
+    RunStatement
+    GosubAndGoto NXTCO1
 
 ;; POP: searches past FOR frames for the innermost GOSUB frame and discards it without transferring control.
 POP:
-    RETURN_STATEMENT 1, 1
+    ReturnStatement 1, 1
 
-    STATEMENT_SCAN 0, 1
-    CONDITIONAL_STATEMENTS
+    StatementScan 0, 1
+    ConditionalStatements
 
 ;; ON: selects a one-based entry in a GOTO or GOSUB line-number list.
 ON:
-    ON_STATEMENT
+    OnStatement
 
 .include "../Microsoft6502Basic/MsBasic.LineNumber.asm"

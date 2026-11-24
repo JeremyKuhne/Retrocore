@@ -12,7 +12,7 @@
 .include "../Microsoft6502Basic/MsBasic.Arrays.asm"
 
     VARIABLE_NAME 1, (ENHNCD * $C4), 0, 1, 0, 0
-    LETTER_TEST
+    LetterTest
     SIMPLE_VARIABLE_LOOKUP 1, 1, 1, 0, 0, 0, 0, 1
 
     IntegerConversionBoundary

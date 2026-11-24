@@ -5,8 +5,8 @@
 ;;
 ;; These routines operate on <Fac> and use the five-byte packed format for constants and polynomial coefficients.
 ;; <Functions::Log> and the arithmetic primitives are in the floating-point modules. This shared module follows
-;; MsBasic.FloatOutput.asm; in the Apple II build its final table ends immediately before the machine-specific
-;; <INITAT> cold-start template.
+;; MsBasic.FloatOutput.asm; in the Apple II build its final table ends immediately before the
+;; character reader's template, <CharacterReaderTemplate>.
 
 .include "MsBasic.TranscendentalCore.asm"
 .include "MsBasic.RandomCore.asm"

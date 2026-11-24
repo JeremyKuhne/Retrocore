@@ -34,7 +34,7 @@ INPUT_BUFFER_PAGE = 2
 .endif
 .ifndef INPUT_BUFFER_LENGTH
 ;; Input buffer length in bytes.
-;; Also: BUFLEN (M6502, CBM4S79, HV2, HV4, HV4R)
+;; Also: BUFLEN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 INPUT_BUFFER_LENGTH = 81
 .endif
 .ifndef NULL_COMMAND
@@ -96,11 +96,14 @@ EXTENDED_DISK_VECTORS = 0
 .ifndef STACK_LEVELS
 .if STACK_RESERVE_19
 ;; Stack reserve, counted in two-byte levels.
-;; Also: NUMLEV (M6502, CBM4S79, HV2, HV4, HV4R)
+;;
+;; The documents give NUMLEV as 23, the other builds' value: BASIC 1's reconstructions (HV1, HV1R) write this build's
+;; 54-byte reserve as 23 levels plus eight bytes, where this build adds three and thirteen to nineteen levels.
+;; Also: NUMLEV (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 STACK_LEVELS = 19
 .else
 ;; Stack reserve, counted in two-byte levels.
-;; Also: NUMLEV (M6502, CBM4S79, HV2, HV4, HV4R)
+;; Also: NUMLEV (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 STACK_LEVELS = 23
 .endif
 .endif
@@ -647,7 +650,7 @@ LinearIndex = NumberBufferPointer
 ;; Also: CHRGET (M6502, CBM4S79, K4S79, HV1, HV1R, HV2, HV4, HV4R, HVK4)
 GetNextCharacter = NumberBufferPointer + 2
 
-;; Fetch entry that does not increment <TextPointer>.
+;; Fetch entry that does not first increment <TextPointer>; it skips spaces.
 ;; Also: CHRGOT (M6502, CBM4S79, K4S79, HV1, HV1R, HV2, HV4, HV4R, HVK4)
 GetCurrentCharacter = GetNextCharacter + 6
 
@@ -679,29 +682,38 @@ NumberBuffer = NumberBufferPrefix + 1
 ; Operating-system state and RND(0)'s read addresses.
 .if CLOCK_IN_PAGE2
 ;; Three-byte clock in the early kernal's page-two workspace.
-;; Also: CQTIMR (M6502)
+;;
+;; BASIC 4's kernal listings (K4S79, HVK4) call it `TIME` at its page-zero location, a name the builds give a switch.
+;; Also: CQTIMR (M6502), CTIMR (CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 JiffyClock = $0200
 .else
 ;; Three-byte clock in page zero.
-;; Also: CQTIMR (M6502)
+;;
+;; The kernal listings (K4S79, HVK4) call it `TIME`, a name the builds give a switch.
+;; Also: CQTIMR (M6502), CTIMR (CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 JiffyClock = $8D
 .endif
 .if STATUS_IN_PAGE2
 ;; I/O status byte in the early kernal's page-two workspace.
-;; Also: CQSTAT (M6502)
+;;
+;; BASIC 4's kernal listings (K4S79, HVK4) call it `SATUS` at its page-zero location, which BASIC 4's system equates
+;; define.
+;; Also: CQSTAT (M6502), CSTAT (CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 IoStatus = $020C
 .else
 ;; I/O status byte in page zero.
-;; Also: CQSTAT (M6502)
+;;
+;; The kernal listings (K4S79, HVK4) call it `SATUS`, which BASIC 4's system equates define.
+;; Also: CQSTAT (M6502), CSTAT (CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 IoStatus = $96
 .endif
 .if RND_TIMER_9044
 ;; RND(0) reads here and at offsets 1, 4 and 5, not the VIA timer.
-;; Also: CQHTIM (M6502), CHTIM (HV1, HV1R, HV2, HV4, HV4R), TIL (HVK4)
+;; Also: CQHTIM (M6502), CHTIM (CBM4S79, HV1, HV1R, HV2, HV4, HV4R), TIL (K4S79, HVK4)
 RandomTimer = $9044
 .else
 ;; RND(0) reads the VIA timer registers at offsets 0, 1, 4 and 5.
-;; Also: CQHTIM (M6502), CHTIM (HV1, HV1R, HV2, HV4, HV4R), TIL (HVK4)
+;; Also: CQHTIM (M6502), CHTIM (CBM4S79, HV1, HV1R, HV2, HV4, HV4R), TIL (K4S79, HVK4)
 RandomTimer = $E844
 .endif
 .if CLOCK_IN_PAGE2 = 0
@@ -727,61 +739,62 @@ RandomTimer = $E844
 
 ; PET kernal jump table, named as Microsoft's BASIC calls its entries.
 ;; Execute BASIC's OPEN.
-;; Also: CQOPEN (M6502), COPEN (HV1, HV1R, HV2, HV4, HV4R)
+;; Also: CQOPEN (M6502), COPEN (CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 KernalOpen = $FFC0
 
 ;; Execute BASIC's CLOSE.
-;; Also: CQCLOS (M6502), CCLOS (HV1, HV1R, HV2, HV4, HV4R)
+;; Also: CQCLOS (M6502), CCLOS (CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 KernalClose = KernalOpen + 3
 
 ;; Select a logical channel for input.
-;; Also: CQOIN (M6502), COIN (HV1, HV1R, HV2, HV4, HV4R)
+;; Also: CQOIN (M6502), COIN (CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 KernalSelectInput = KernalClose + 3
 
 ;; Select a logical channel for output.
-;; Also: CQOOUT (M6502), COOUT (HV1, HV1R, HV2, HV4, HV4R)
+;; Also: CQOOUT (M6502), COOUT (CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 KernalSelectOutput = KernalSelectInput + 3
 
 ;; Restore the default input and output channels.
-;; Also: CQCCHN (M6502), CCCHN (HV1, HV1R, HV2, HV4, HV4R), CLSCHN (HV1, HV1R, HV2, HV4, HV4R)
+;; Also: CQCCHN (M6502), CCCHN (CBM4S79, HV1, HV1R, HV2, HV4, HV4R), CLSCHN (CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 KernalResetChannels = KernalSelectOutput + 3
 
 ;; Read a character from the current input.
 ;;
-;; The BASIC 4 reconstructions (HV4, HV4R) also call it `INCHR`, which here is BASIC's own label for another routine.
-;; Also: CQINCH (M6502), CINCH (HV1, HV1R, HV2, HV4, HV4R)
+;; BASIC 4's source and reconstructions (CBM4S79, HV4, HV4R) also call it `INCHR`, which in BASIC 1 and 2 is BASIC's
+;; own label for another routine; the lineage rule would give the name to those builds too, so it stays in prose.
+;; Also: CQINCH (M6502), CINCH (CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 KernalCharacterIn = KernalResetChannels + 3
 
 ;; Write a character to the current output.
-;; Also: OUTCH (M6502, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: OUTCH (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 KernalCharacterOut = KernalCharacterIn + 3
 
 ;; Execute BASIC's LOAD.
-;; Also: CQLOAD (M6502), CLOAD (HV1, HV1R, HV2, HV4, HV4R)
+;; Also: CQLOAD (M6502), CLOAD (CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 KernalLoad = KernalCharacterOut + 3
 
 ;; Execute BASIC's SAVE.
-;; Also: CQSAVE (M6502), CSAVE (HV1, HV1R, HV2, HV4, HV4R)
+;; Also: CQSAVE (M6502), CSAVE (CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 KernalSave = KernalLoad + 3
 
 ;; Execute BASIC's VERIFY.
-;; Also: CQVERF (M6502), CVERF (HV1, HV1R, HV2, HV4, HV4R)
+;; Also: CQVERF (M6502), CVERF (CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 KernalVerify = KernalSave + 3
 
 ;; Execute BASIC's SYS.
-;; Also: CQSYS (M6502), CSYS (HV1, HV1R, HV2, HV4, HV4R)
+;; Also: CQSYS (M6502), CSYS (CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 KernalSys = KernalVerify + 3
 
 ;; Test the `STOP` key.
-;; Also: ISCNTC (M6502, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: ISCNTC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 CheckStop = KernalSys + 3
 
 ;; Get one character for BASIC's `GET`.
-;; Also: CZGETL (M6502), CGETL (HV1, HV1R, HV2, HV4, HV4R)
+;; Also: CZGETL (M6502), CGETL (CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 GetCharacter = CheckStop + 3
 
 ;; Close all open channels.
-;; Also: CQCALL (M6502), CCALL (HV1, HV1R, HV2, HV4, HV4R)
+;; Also: CQCALL (M6502), CCALL (CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 CloseAllFiles = GetCharacter + 3
 
 .if EXTENDED_DISK_VECTORS
@@ -830,7 +843,7 @@ KernalDiskSave = KernalAppend + 3
 KernalDiskLoad = KernalDiskSave + 3
 
 ;; List a disk directory.
-;; Also: CQDCAT (UNKN), DCAT (HV4, HV4R)
+;; Also: CQDCAT (UNKN), DCAT (CBM4S79, HV4, HV4R)
 KernalDirectory = KernalDiskLoad + 3
 
 ;; Rename a disk file.
@@ -838,10 +851,10 @@ KernalDirectory = KernalDiskLoad + 3
 KernalRename = KernalDirectory + 3
 
 ;; Scratch a disk file.
-;; Also: CQSCRA (UNKN), SCRATC (HV4, HV4R)
+;; Also: CQSCRA (UNKN), SCRATC (CBM4S79, HV4, HV4R)
 KernalScratch = KernalRename + 3
 
 ;; Read the disk status.
-;; Also: CQRDDS (UNKN), READDS (HV4, HV4R)
+;; Also: CQRDDS (UNKN), READDS (CBM4S79, HV4, HV4R)
 KernalReadDiskStatus = KernalScratch + 3
 .endif

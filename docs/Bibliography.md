@@ -50,11 +50,19 @@ where the check found that the document gives that name for that thing:
 - **AS82:** only the archive's damaged OCR text could be read. A name is cited only where the listing's symbol tables
   give the same value as the AppleSoft builds. Apple's authorship and the date rest on the archive's description.
 - **CBM4S79:** a pre-release whose addresses differ from the ROMs, so page-zero names were checked by value and code
-  labels by the instructions and data at the label. It gives names for BASIC 4 only.
+  labels by the instructions and data at the label. It gives names for BASIC 4, and, under the lineage rule below,
+  for the same definitions in the other PET builds.
 - **K4S79:** assembled for RAM ($8000 lower), and cited where the address plus $8000, or the page-zero value, equals
   the BASIC 4 build's.
 - **HV1, HV1R, HV2, HV4, HV4R:** assembled by a script that reads their text and reproduces each ROM's bytes but
-  for the checksum bytes. A name is cited for its own build where its address or value equals the native build's.
+  for the checksum bytes. A name is cited for its own build where its address or value equals the native build's,
+  and, under the lineage rule below, on the same definition in the other PET builds.
   cbmsrc's notes say the reconstructions of BASIC 1 carry Commodore's later names back to BASIC 1's code, so HV1's
   and HV1R's names are the reconstructor's, not Microsoft's or Commodore's of 1977.
 - **HVK4:** as the HV keys, at the BASIC 4 ROMs' addresses.
+- **Lineage:** a definition that descends through a vendor's builds cites, in every build, each document of that line
+  whose listing names it, including the other builds' documents; a document whose build lacks the definition stays out.
+  Where a switch gives the builds different values (BUFPAG, BUFLEN, NUMLEV, STKEND, CTIMR, CSTAT, CHTIM, TIL), each
+  value cites the whole line, since each document names the same definition in its own build; NUMLEV's prose explains
+  why BASIC 1's documents write its reserve as 23 levels. The rule and the names it reaches are recorded in
+  `docs/conversions/Basic.md`, section S11.

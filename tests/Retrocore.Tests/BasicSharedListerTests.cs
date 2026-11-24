@@ -106,6 +106,14 @@ public sealed class BasicSharedListerTests
             DocumentationTopic topic = module.Documentation.FindTopic(name)
                 ?? throw new AssertFailedException($"{name} is not documented.");
 
+            // AppleSoft's own names reach the shared label through the vendor's alias, which inherits its documentation.
+            if (topic.Section("Inherit") is { } inherit)
+            {
+                string target = inherit.Text.Trim().Trim('<', '>');
+                topic = module.Documentation.FindTopic(target)
+                    ?? throw new AssertFailedException($"{name}'s alias inherits from {target}, which is not documented.");
+            }
+
             topic.Kind.Should().Be(DocumentationKind.Routine);
             topic.Value.Should().Be(native.Symbol(name));
             topic.Path.Should().EndWith("MsBasic.Lister.asm");
@@ -310,7 +318,9 @@ public sealed class BasicSharedListerTests
         {
             Registers = new()
             {
-                ProgramCounter = checked((ushort)region.Symbol("GRODY1")),
+                // AppleSoft's alias gives GRODY1 only in the whole build, at the address the region keeps.
+                ProgramCounter = checked((ushort)SdkModules.AssembleAppleSoft(
+                    SdkModules.AppleSoftPath(Inputs), Apple2Model.IIeEnhanced).Symbol("GRODY1")),
                 Accumulator = 0x5A,
                 X = 0x42,
                 Y = (byte)offset,
@@ -550,10 +560,10 @@ public sealed class BasicSharedListerTests
             .cpu Mos6502
             .include "MsBasic.Lister.asm"
             .org ${legacy.Symbol("LIST"):X4}
-                LIST_RANGE {(options.CommaRange ? 1 : 0)}, {options.SecondBoundReturn}
-                LIST_LINES {(options.TrackQuotes ? 1 : 0)}, {(options.GuardOffset ? 1 : 0)}, {options.ColumnMode}, {options.LinePrinter}, {(options.FinalCr ? 1 : 0)}, {options.Resume}
-                {(options.TableMode == 2 ? "LIST_TABLE_NEXT" : "")}
-                LIST_TOKENS {options.TableMode}, {(options.TrackQuotes ? 1 : 0)}, {(options.LiteralPi ? 1 : 0)}, {(options.SpaceWords ? 1 : 0)}
+                ListRange {(options.CommaRange ? 1 : 0)}, {options.SecondBoundReturn}
+                ListLines {(options.TrackQuotes ? 1 : 0)}, {(options.GuardOffset ? 1 : 0)}, {options.ColumnMode}, {options.LinePrinter}, {(options.FinalCr ? 1 : 0)}, {options.Resume}
+                {(options.TableMode == 2 ? "ListNextTableByte" : "")}
+                ListTokens {options.TableMode}, {(options.TrackQuotes ? 1 : 0)}, {(options.LiteralPi ? 1 : 0)}, {(options.SpaceWords ? 1 : 0)}
             LIST_REGION_END:
             """;
 
@@ -571,7 +581,7 @@ public sealed class BasicSharedListerTests
             name => name, name => legacy.Symbol(name), StringComparer.Ordinal);
 
         AssemblyResult native = new Assembler.Assembler().Assemble(
-            new AssemblySource(source, Path.Join(folder, "SharedListerTest.asm")),
+            new AssemblySource(BasicNames.ScopedNames(symbols) + "\n" + source, Path.Join(folder, "SharedListerTest.asm")),
             new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
             {
                 SourceResolver = new FileAssemblySourceResolver(),
@@ -613,6 +623,13 @@ public sealed class BasicSharedListerTests
             symbol => !symbol.IsConstant && symbol.Value >= start && symbol.Value < end))
         {
             if (label.Name.StartsWith("__m10_", StringComparison.Ordinal)) { continue; }
+
+            // A vendor's alias reaches its name only in a build that includes the vendor's historical names: a
+            // standalone build of the module skips it, and a whole build must have it.
+            if (BasicNames.IsVendorName(label.Name) && !BasicNames.IncludesHistoricalNames(native))
+            {
+                continue;
+            }
 
             native.SymbolsWithHistoricalNames.Should().ContainKey(label.Name);
             native.Symbol(label.Name).Should().Be(label.Value, $"{label.Name} must retain its ROM address");

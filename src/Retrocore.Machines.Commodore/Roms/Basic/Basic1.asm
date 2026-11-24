@@ -31,13 +31,19 @@ REVISD = 1                          ;; 1 selects the revised first BASIC 1 chip
 
 ; Workspace changes are independent so their layout can be reused by another variant.
 .ifndef INPUT_BUFFER_PAGE
-INPUT_BUFFER_PAGE = 0               ;; input buffer in page zero
+;; Input buffer page: 0 for page zero or 2 for page two.
+;; Also: BUFPAG (M6502, CBM4S79, HV2, HV4, HV4R)
+INPUT_BUFFER_PAGE = 0
 .endif
 .ifndef INPUT_BUFFER_LENGTH
-INPUT_BUFFER_LENGTH = 80            ;; input buffer length
+;; Input buffer length in bytes.
+;; Also: BUFLEN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+INPUT_BUFFER_LENGTH = 80
 .endif
 .ifndef NULL_COMMAND
-NULL_COMMAND = 1                    ;; reserve the NULL count
+;; 1 reserves the `NULL` count byte; BASIC 1 has the code but no `NULL` token.
+;; Also: NULCMD (M6502)
+NULL_COMMAND = 1
 .endif
 .ifndef TERMINAL_FIRST
 TERMINAL_FIRST = 1                  ;; place terminal storage before general scratch
@@ -90,10 +96,10 @@ EARLY_LINE_EDIT = 1                 ;; 1 retains the early line-editing entries 
 TOKENIZE_SKIP_SPACES = 1            ;; 1 skips spaces while matching reserved words
 .endif
 .ifndef NEW_CLEAR_CARRY
-NEW_CLEAR_CARRY = 0                 ;; 1 clears carry before <SCRATH> adds two to the program start
+NEW_CLEAR_CARRY = 0                 ;; 1 clears carry before <EraseProgram> adds two to the program start
 .endif
 .ifndef RUN_SET_ZERO
-RUN_SET_ZERO = 0                    ;; 1 loads zero after <RUNC> positions the text pointer
+RUN_SET_ZERO = 0                    ;; 1 loads zero after <ResetProgramState> positions the text pointer
 .endif
 .ifndef RESET_STACK_EARLY
 RESET_STACK_EARLY = 1-REVISD        ;; 1 stores the return address before moving the stack pointer
@@ -102,7 +108,7 @@ RESET_STACK_EARLY = 1-REVISD        ;; 1 stores the return address before moving
 RESET_STACK_PADDING = REVISD        ;; 1 retains the revised reset's extra RTS and unused byte
 .endif
 .ifndef LIST_GUARD_OFFSET
-LIST_GUARD_OFFSET = 0               ;; 1 stops <LIST> when a malformed line's byte offset wraps
+LIST_GUARD_OFFSET = 0               ;; 1 stops <Statements::List> when a malformed line's byte offset wraps
 .endif
 .ifndef STATEMENT_FETCH_NOP
 STATEMENT_FETCH_NOP = 0             ;; 1 retains the later NOP before the direct-mode branch
@@ -117,16 +123,16 @@ SHORT_END_BRANCH = 1                ;; 1 branches directly to the end-of-program
 EARLY_STATEMENT_DISPATCH = 1        ;; 1 uses the earlier statement-dispatch carry and error paths
 .endif
 .ifndef STOP_BY_LINE_NUMBER
-STOP_BY_LINE_NUMBER = 0             ;; 1 detects direct <STOP> using the current line rather than the text page
+STOP_BY_LINE_NUMBER = 0             ;; 1 has <Statements::Stop> detect direct mode by the line, not the text page
 .endif
 .ifndef NULL_INCREMENT_LIMIT
-NULL_INCREMENT_LIMIT = 10           ;; first rejected value after incrementing the <NULL> count
+NULL_INCREMENT_LIMIT = 10           ;; first rejected value after incrementing the <Statements::Null> count
 .endif
 .ifndef RETURN_LOW_FOR_POINTER
-RETURN_LOW_FOR_POINTER = 1          ;; 1 makes <RETURN>'s <FOR> search set the low pointer byte instead of the high
+RETURN_LOW_FOR_POINTER = 1          ;; 1 has <Statements::Return>'s frame search set the low pointer byte
 .endif
 .ifndef QUOTE_BRANCH_FIRST
-QUOTE_BRANCH_FIRST = 1              ;; 1 tests the quote branch first while scanning <DATA> and <REM>
+QUOTE_BRANCH_FIRST = 1              ;; 1 tests quotes first while <Statements::Data> and <Statements::Rem> scan
 .endif
 .ifndef TIME_LONG_ERROR
 TIME_LONG_ERROR = 1                 ;; 1 uses the long jump for an invalid TI$ length
@@ -160,13 +166,13 @@ GET_STRING_EDITOR_PATCH = 1         ;; 1 calls the editor's <GET> string helper
 
 ; Variable, array and string choices.
 .ifndef NEXT_COUNTED_STACK
-NEXT_COUNTED_STACK = 1              ;; 1 counts through the <FOR> frame rather than calculating its offsets
+NEXT_COUNTED_STACK = 1              ;; 1 counts through the <Statements::For> frame rather than calculating its offsets
 .endif
 .ifndef CLOCK_EDITOR_PATCH
 CLOCK_EDITOR_PATCH = 1              ;; 1 uses the editor's TI and TI$ variable checks
 .endif
 .ifndef INTIDX_USE_FRMNUM
-INTIDX_USE_FRMNUM = 1               ;; 1 evaluates subscripts with <FRMNUM>, 0 with <FRMEVL>
+INTIDX_USE_FRMNUM = 1               ;; 1 evaluates subscripts with <EvaluateNumber>, 0 with <FRMEVL>
 .endif
 .ifndef POSINT_CHECK_TYPE
 POSINT_CHECK_TYPE = 0               ;; 1 checks the numeric type at <FacToNonnegativeInteger>
@@ -201,13 +207,13 @@ ASC_SHARED_LEN_JUMP = 1             ;; 1 sends <ASC> through <LEN>'s numeric con
 
 ; Memory-access, arithmetic and startup choices.
 .ifndef PEEK_PRESERVE_ADDRESS
-PEEK_PRESERVE_ADDRESS = 0           ;; 1 restores the previous <POKER> address after <PEEK>
+PEEK_PRESERVE_ADDRESS = 0           ;; 1 restores the previous <POKER> address after <Functions::Peek>
 .endif
 .ifndef PEEK_GUARD_ROM
 PEEK_GUARD_ROM = 1                  ;; 1 returns zero for protected ROM pages
 .endif
 .ifndef PEEK_PAD_GUARD
-PEEK_PAD_GUARD = 0                  ;; 1 emits eight padding bytes in <PEEK>
+PEEK_PAD_GUARD = 0                  ;; 1 emits eight padding bytes in <Functions::Peek>
 .endif
 .ifndef SHORT_MULTIPLY_ZERO
 SHORT_MULTIPLY_ZERO = 1             ;; 1 uses the short multiply-by-zero branch
@@ -222,7 +228,7 @@ PRECISE_OUTPUT_LIMIT = 1            ;; 1 uses the earlier decimal-output thresho
 ZERO_IN_HALF_CONSTANT = 0           ;; 1 defines `ZeroValue` in <Float::Half> instead of variable lookup
 .endif
 .ifndef WAIT_EASTER_EGG
-WAIT_EASTER_EGG = 0                 ;; 1 includes the hidden WAIT message and <FNWAIT>'s omitted-mask handler
+WAIT_EASTER_EGG = 0                 ;; 1 includes the hidden WAIT message and <Statements::Wait>'s omitted-mask handler
 .endif
 .ifndef RANDOM_SEED_TAIL
 RANDOM_SEED_TAIL = $59              ;; last byte of the character-reader template's random seed
@@ -261,7 +267,7 @@ START_CARRY_PROGRAM_START = 1       ;; 1 carries the initial program-start incre
 START_BANNER_AFTER_FREE = 1         ;; 1 prints the early sign-on after the free-memory count
 .endif
 
-ROMLOC = $C000                      ;; start of the BASIC ROM protected by <PEEK>
+ROMLOC = $C000                      ;; start of the BASIC ROM protected by <Functions::Peek>
 BASIC4_OUTPUT_PADDING = 0           ;; omit BASIC 4's output patch space
 
 ; Define the shared and platform macros before emitting the interpreter.
@@ -280,7 +286,7 @@ RESET_STACK_POINTER = <(STACK_END-$101-2*RESET_STACK_EARLY) ;; stack pointer aft
 ; Dispatch tables, errors, command input and program editing.
 .org $C000
     COMMODORE_DISPATCH_TABLES GO_TOKEN, 0, BAD_DATA_ERROR, 0
-    MEMORY_MANAGEMENT 2*STACK_LEVELS+3*ADDITIONAL_PRECISION+13
+    MemoryManagement 2*STACK_LEVELS+3*ADDITIONAL_PRECISION+13
     COMMODORE_ERROR_READY 1
     COMMODORE_COMMAND_LOOP COMMAND_TEST_CHARACTER, COMMAND_RESET_BEFORE_INSERT, LINK_RETURNS, 0
     COMMODORE_TERMINAL_INPUT EARLY_LINE_EDIT, 0
@@ -288,26 +294,26 @@ RESET_STACK_POINTER = <(STACK_END-$101-2*RESET_STACK_EARLY) ;; stack pointer aft
 .include "../../Microsoft6502Basic/MsBasic.LineSearch.asm"
 
 ; Program control, statement dispatch and assignment.
-    PROGRAM_RESET 0, 0, 0, NEW_CLEAR_CARRY, RUN_SET_ZERO
-    CLEAR_STORAGE 1, 0
-    EXECUTION_RESET RESET_STACK_EARLY, RESET_STACK_PADDING, RESET_STACK_POINTER
-    LIST_RANGE 0, FLNRTS
-    LIST_LINES 1, LIST_GUARD_OFFSET, 0, LINPRT, 0, READY
-    LIST_TOKENS 0, 1, 1, 0
+    ProgramReset 0, 0, NEW_CLEAR_CARRY, RUN_SET_ZERO
+    ClearStorage 1, 0
+    ExecutionReset RESET_STACK_EARLY, RESET_STACK_PADDING, RESET_STACK_POINTER
+    ListRange 0, FLNRTS
+    ListLines 1, LIST_GUARD_OFFSET, 0, LINPRT, 0, READY
+    ListTokens 0, 1, 1, 0
 .include "../../Microsoft6502Basic/MsBasic.For.asm"
     COMMODORE_STATEMENT_FETCH INPUT_BUFFER_PAGE, STATEMENT_FETCH_NOP, EARLY_SEPARATOR_CHECK, SHORT_END_BRANCH, CHRGET
     COMMODORE_STATEMENT_DISPATCH EARLY_STATEMENT_DISPATCH, 0
-    RESTORE_DATA
-    STOP_AND_CONTINUE STOP_BY_LINE_NUMBER, 1
-    NULL_STATEMENT NULL_INCREMENT_LIMIT
-    CLEAR_STATEMENT CONTRT
+    RestoreStatement
+    StopAndContinue STOP_BY_LINE_NUMBER, 1
+    NullStatement NULL_INCREMENT_LIMIT
+    ClearStatement CONTRT
     jmp CLEARC
-    RUN_STATEMENT 0
-    GOSUB_AND_GOTO NEWSTT
-    RETURN_STATEMENT RETURN_LOW_FOR_POINTER, 0
-    STATEMENT_SCAN QUOTE_BRANCH_FIRST, 0
-    CONDITIONAL_STATEMENTS
-    ON_STATEMENT
+    RunStatement
+    GosubAndGoto NEWSTT
+    ReturnStatement RETURN_LOW_FOR_POINTER, 0
+    StatementScan QUOTE_BRANCH_FIRST, 0
+    ConditionalStatements
+    OnStatement
 .include "../../Microsoft6502Basic/MsBasic.LineNumber.asm"
     ASSIGNMENT_START
     TIME_STRING_ASSIGNMENT TIME_LONG_ERROR
@@ -315,7 +321,7 @@ RESET_STACK_POINTER = <(STACK_END-$101-2*RESET_STACK_EARLY) ;; stack pointer aft
 
 ; Terminal and channel output, then READ and input.
     COMMODORE_PRINT_CHANNELS
-    PRINT_CORE TABER, PRINT_CLEAR_SPC_CARRY, 0, 1
+    PrintItems TABER, PRINT_CLEAR_SPC_CARRY, 0, 1
     COMMODORE_LINE_END INPUT_BUFFER_PAGE, LOCAL_TERMINAL_POSITION, 0, PRINT_NULL_PADDING
     COMMODORE_PRINT_SPACING PRINT_TOKEN_SPACING
 .include "../../Microsoft6502Basic/MsBasic.StringOutput.asm"
@@ -327,7 +333,7 @@ RESET_STACK_POINTER = <(STACK_END-$101-2*RESET_STACK_EARLY) ;; stack pointer aft
     VARIABLE_INPUT_MESSAGES 0, 1
 
 ; Expressions, variables, arrays and strings.
-    NEXT_ENTRIES NEXT_COUNTED_STACK, NEWSTT
+    NextEntries NEXT_COUNTED_STACK, NEWSTT
     EXPRESSION_CORE 0
     OPERAND_EVALUATION 1, 1, ISFUN
     COMMODORE_VARIABLE_VALUE 0, CLOCK_EDITOR_PATCH, 0
@@ -336,7 +342,7 @@ RESET_STACK_POINTER = <(STACK_END-$101-2*RESET_STACK_EARLY) ;; stack pointer aft
     RelationalOperators $FF
 .include "../../Microsoft6502Basic/MsBasic.Dim.asm"
     VARIABLE_NAME 0, 0, 1, 0, 0, 0
-    LETTER_TEST
+    LetterTest
     SIMPLE_VARIABLE_LOOKUP 0, 1-ZERO_IN_HALF_CONSTANT, 0, 1, 1, 0, 0, 0
     IntegerConversionBoundary
 .if INTIDX_USE_FRMNUM
@@ -347,7 +353,7 @@ RESET_STACK_POINTER = <(STACK_END-$101-2*RESET_STACK_EARLY) ;; stack pointer aft
     ARRAY_LOOKUP 0, 0, ARRAY_SAVE_OFFSET_HIGH
 .include "../../Microsoft6502Basic/MsBasic.ArrayMultiplication.asm"
     SimpleFunctions 0
-    USER_FUNCTIONS USER_FN_LOW_CHECK
+    UserFunctions USER_FN_LOW_CHECK
     STRING_FROM_NUMBER
     STRING_STORAGE INPUT_BUFFER_PAGE, STRING_CLEAR_FACOV
     STRING_ALLOCATION 0
@@ -356,18 +362,18 @@ RESET_STACK_POINTER = <(STACK_END-$101-2*RESET_STACK_EARLY) ;; stack pointer aft
     STRING_FUNCTIONS REJECT_ZERO_SLICES, PREAM_INDIRECT_RETURN, ASC_SHARED_LEN_JUMP, 0
 
 ; Memory access, floating point and cold startup.
-    MEMORY_ACCESS_ADDRESS 1
-    MEMORY_ACCESS_PEEK PEEK_PRESERVE_ADDRESS, 1, PEEK_GUARD_ROM, PEEK_PAD_GUARD
-    MEMORY_ACCESS_POKE
+    AddressConversion 1
+    PeekFunction PEEK_PRESERVE_ADDRESS, 1, PEEK_GUARD_ROM, PEEK_PAD_GUARD
+    PokeStatement
 .if WAIT_EASTER_EGG
-    MEMORY_ACCESS_WAIT WaitHiddenMessage
+    WaitStatement WaitHiddenMessage
 .else
-    MEMORY_ACCESS_WAIT STORDO
+    WaitStatement STORDO
 .endif
 .include "Commodore.FloatingPoint.asm"
 .include "Commodore.HistoricalNames.asm"
 .include "Commodore.InterpreterAliases.asm"
-    CHARACTER_READER RANDOM_SEED_TAIL
+    CharacterReader RANDOM_SEED_TAIL
     COMMODORE_INITIALIZE INIT_MARK_DIRECT, INIT_LINE_WIDTH, INIT_DELAY_SIZE, LOCAL_TERMINAL_POSITION, INPUT_BUFFER_PAGE, 0, INIT_EARLY_BUFFER_SETUP
     COMMODORE_MEMORY_PROBE PROBE_LOAD_ZERO, PROBE_LOAD_INDEX_ZERO, PROBE_SAVE_START, 0, PROBE_STOP_AT_SCREEN, PROBE_TEST_BYTE
 .if START_BANNER_AFTER_FREE

@@ -21,7 +21,7 @@ public sealed class BasicSharedInterpreterAliasesTests
     private static string Apple => Path.Join(BasicNames.Inputs, "AppleSoft");
     private static string Pet => Path.Join(BasicNames.Inputs, "Pet");
     private static string Shared => Path.Join(BasicNames.Inputs, "Microsoft6502Basic");
-    private static string AppleAliases => Path.Join(Apple, "AppleSoft.InterpreterAliases.asm");
+    private static string AppleNames => Path.Join(Apple, "AppleSoft.HistoricalNames.asm");
     private static string PetAliases => Path.Join(Pet, "Basic", "Commodore.InterpreterAliases.asm");
 
     // Addresses in the independently assembled PET1, PET2 and PET4 reconstructions:
@@ -37,7 +37,8 @@ public sealed class BasicSharedInterpreterAliasesTests
     ];
 
     /// <summary>
-    ///  AppleSoft keeps its bytes and the documented comma-and-byte entry in each model.
+    ///  AppleSoft keeps its bytes and the documented comma-and-byte entry in each model; COMBYTE, Apple's name for
+    ///  it, is in AppleSoft's historical names, which BasicSharedFloatAliasesTests checks entry by entry.
     /// </summary>
     /// <param name="model">The Apple II model.</param>
     [TestMethod]
@@ -57,10 +58,11 @@ public sealed class BasicSharedInterpreterAliasesTests
             native.HasSymbol(entry.Name).Should().BeFalse($"{entry.Name} is a PET name");
         }
 
-        AssertAliasFile(native, AppleAliases, ["COMBYTE"]);
-        DocumentationSet docs = Documents(native, AppleAliases);
-        DocumentationTopic comma = AssertAlias(native, docs, "COMBYT", "COMBYTE", ["ASTIL"], ["ASTIL", "AS82"]);
-        AssertDebugEntry(native, "COMBYTE", comma.Path);
+        AssemblyLocation location = native.HistoricalNames["COMBYTE"].Location
+            ?? throw new AssertFailedException("COMBYTE has no source location.");
+
+        location.Path.Should().EndWith("AppleSoft.HistoricalNames.asm");
+        DocumentationSet docs = Documents(native, AppleNames);
 
         // Apple's published COPY and GARBAG names collide with different Microsoft labels.
         native.Symbol("COPYZC").Should().Be(0xDAB7);

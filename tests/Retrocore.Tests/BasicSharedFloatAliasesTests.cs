@@ -35,7 +35,15 @@ public sealed class BasicSharedFloatAliasesTests
         ["INSRTDIG"] = ["AS82"],
         ["LOGSER"] = ["AS82"],
         ["BILLION"] = ["AS82"],
-        ["MISMTCH"] = ["AS82"]
+        ["MISMTCH"] = ["AS82"],
+        ["NEW"] = ["ASTIL", "AS82"],
+        ["COMBYTE"] = ["ASTIL", "AS82"],
+        ["GOLST1"] = ["UNKN"],
+        ["GRODY1"] = ["UNKN"],
+        ["GRODY2"] = ["UNKN"],
+        ["PRIT31"] = ["UNKN"],
+        ["PRIT32"] = ["UNKN"],
+        ["REMER1"] = ["UNKN"]
     };
 
     // The names Microsoft's source gives only in its Commodore builds, with the documents that give each.
@@ -44,6 +52,16 @@ public sealed class BasicSharedFloatAliasesTests
         ["MULLN2"] = ["M6502", "CBM4S79", "HV4", "HV4R"],
         ["GFDIV"] = ["M6502"]
     };
+
+    // Commodore's spellings of the character reader's labels, in its BASIC 4 source and the reconstructions.
+    private static readonly Dictionary<string, string[]> s_hoffmannVetterNames = new(StringComparer.Ordinal)
+    {
+        ["CHDGOT"] = ["CBM4S79", "HV1", "HV1R", "HV2", "HV4", "HV4R"],
+        ["CHDRTS"] = ["CBM4S79", "HV1", "HV1R", "HV2", "HV4", "HV4R"]
+    };
+
+    // The names whose aliases Commodore's file guards, so that only some builds define them.
+    private static readonly HashSet<string> s_guardedNames = ["RESCR2", "PRIT3B"];
 
     // Addresses in the independently assembled PET1, PET2 and PET4 listings:
     // https://github.com/ethandicks/cbmsymbols/tree/e3120427a32e8b066eb8afdc434af547fd0906f3/listings
@@ -118,9 +136,22 @@ public sealed class BasicSharedFloatAliasesTests
         AssemblyResult legacy = PetLegacyBasic.Assemble(Pet, model, original);
         int start = checked((int)legacy.Symbol("FADDH"));
         int end = checked((int)legacy.Symbol("INITAT"));
+
+        // The character reader's template follows the math region, and Commodore's historical names alias two of its
+        // labels: 24 bytes of code and five of seed.
+        int templateEnd = end + 29;
         Dictionary<string, long> symbols = legacy.SymbolDefinitions
-            .Where(symbol => symbol.Value < start || symbol.Value >= end)
+            .Where(symbol => symbol.Value < start || symbol.Value >= templateEnd)
             .ToDictionary(symbol => symbol.Name, symbol => symbol.Value, StringComparer.Ordinal);
+
+        // The character reader's file also holds the letter test, whose Also: names ISLETC and ISLRTS: the region
+        // does not use them, and predefining them would make them second definitions of its old names.
+        symbols.Remove("ISLETC");
+        symbols.Remove("ISLRTS");
+
+        // BASIC 4's lister names, which the whole builds' tests check, would define the aliases without the lister.
+        symbols.Remove("RESCR2");
+        symbols.Remove("PRIT3B");
 
         bool basic1 = model == PetModel.Pet2001;
         bool basic2 = model == PetModel.Pet2001Basic2;
@@ -139,6 +170,9 @@ public sealed class BasicSharedFloatAliasesTests
             FLOAT_ALIAS_BEFORE:
             .include "Commodore.HistoricalNames.asm"
             FLOAT_ALIAS_AFTER:
+            .include "MsBasic.CharacterReader.asm"
+                CharacterReader {(basic1 ? "$59" : "$58")}
+            TEMPLATE_END:
             """;
 
         AssemblyOptions options = new(ProcessorVariant.Mos6502, 0, 0x10000)
@@ -153,8 +187,9 @@ public sealed class BasicSharedFloatAliasesTests
 
         native.Symbol("FLOAT_ALIAS_BEFORE").Should().Be(end);
         native.Symbol("FLOAT_ALIAS_AFTER").Should().Be(end);
-        native.Sections[0].Bytes.Slice(start, end - start).ToArray()
-            .Should().Equal(legacy.Sections[0].Bytes.Slice(start, end - start).ToArray());
+        native.Symbol("TEMPLATE_END").Should().Be(templateEnd);
+        native.Sections[0].Bytes.Slice(start, templateEnd - start).ToArray()
+            .Should().Equal(legacy.Sections[0].Bytes.Slice(start, templateEnd - start).ToArray());
 
         int next = start;
         foreach (AssemblySourceMapEntry entry in native.SourceMap
@@ -165,7 +200,7 @@ public sealed class BasicSharedFloatAliasesTests
             next += entry.Size;
         }
 
-        next.Should().Be(end);
+        next.Should().Be(templateEnd);
         int versionIndex = basic1 ? 0 : basic2 ? 1 : 2;
         foreach ((string name, int[] addresses) in s_petAddresses)
         {
@@ -185,7 +220,11 @@ public sealed class BasicSharedFloatAliasesTests
         Dictionary<string, string[]> names = s_petAddresses.Keys
             .ToDictionary(name => name, _ => BasicAttribution.CommodoreKeys, StringComparer.Ordinal);
 
-        foreach ((string name, string[] keys) in s_microsoftPetNames) { names.Add(name, keys); }
+        foreach ((string name, string[] keys) in s_microsoftPetNames.Concat(s_hoffmannVetterNames))
+        {
+            names.Add(name, keys);
+        }
+
         CheckAliases(native, PetAliases, names, (model, original));
         CheckDocumentation(native, PetAliases);
     }
@@ -213,7 +252,15 @@ public sealed class BasicSharedFloatAliasesTests
 
         // The old names the file gives, from its own text: every alias gives at least one.
         DocumentationFile file = DocumentationParser.Parse(File.ReadAllText(path), path);
-        DocumentationAlso[] given = [.. file.Comments.SelectMany(comment => DocumentationAlso.Of(comment.Sections))];
+        // Only a guarded alias's name, which the build leaves out, may be missing from the expected names; any other
+        // unexpected name, even one the build does not resolve, fails the comparison below.
+        IEnumerable<DocumentationAlso> inBuild = file.Comments
+            .SelectMany(comment => DocumentationAlso.Of(comment.Sections))
+            .Where(also => expected.ContainsKey(also.Name)
+                || !s_guardedNames.Contains(also.Name)
+                || result.HistoricalNames.ContainsKey(also.Name));
+
+        DocumentationAlso[] given = [.. inBuild];
         given.Select(also => also.Name).Should().BeEquivalentTo(expected.Keys);
 
         DocumentationSet docs = Documents(result, path);
@@ -239,7 +286,9 @@ public sealed class BasicSharedFloatAliasesTests
             DocumentationSection inherit = aliasTopic.Section("Inherit")
                 ?? throw new AssertFailedException($"{alias.Name} must inherit its target's documentation.");
 
+            // An absolute link (<::Name>) reaches a top-level definition an alias of the same name would hide.
             string target = inherit.Text.Trim().Trim('<', '>');
+            target = target.StartsWith("::", StringComparison.Ordinal) ? target[2..] : target;
             result.Symbol(name).Should().Be(result.Symbol(target), $"{name} must alias {target}");
             debug.Resolve(name, memory).Should().Be(result.Symbol(target));
 

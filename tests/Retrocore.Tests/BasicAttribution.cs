@@ -117,11 +117,16 @@ internal static partial class BasicAttribution
                 $"{name} may be a historical name only on its vendor's alias in a HistoricalNames file, not on {definition.Name}");
         }
 
+        // A vendor's name that is also one of the build's BASIC keywords, such as AppleSoft's NEW, is the keyword where
+        // shared prose writes it, so only Also: sections are checked for it.
+        bool keyword = result.HasSymbol("TOKEN_" + name);
         Regex word = new($@"(?<![\w$]){Regex.Escape(name)}(?![\w$])");
         foreach (DocumentationTopic topic in SharedTopics(docs))
         {
             DocumentationAlso.Of(topic.Sections).Select(also => also.Name)
                 .Should().NotContain(name, $"{topic.Name} is shared, so its Also: must not give the vendor's {name}");
+
+            if (keyword) { continue; }
 
             word.IsMatch(string.Join(" ", topic.Comments.SelectMany(Text)))
                 .Should().BeFalse($"{topic.Name} is shared, so its documentation must not give the vendor's {name}");

@@ -34,7 +34,7 @@
 
 ;; Reads values for a variable list from DATA, starting at the saved <DATPTR>.
 ;; In: decimal = clear
-;; See: <INPCO1>, <DATLOP>, <RESTOR>
+;; See: <INPCO1>, <DATLOP>, <Statements::Restore>
 READ:
     ldx DATPTR
     ldy DATPTR+1
@@ -151,7 +151,7 @@ SETQUT:
     lda #','
 
 ;; Uses the current text position as the start of an unquoted or single-character GET string.
-;; In: A = ending delimiter, TXTPTR = first character
+;; In: A = ending delimiter, TextPointer = first character
 RESETC:
     clc
 
@@ -159,7 +159,7 @@ RESETC:
 ;;
 ;; Carry set skips an opening quote; carry clear starts at the current character. <STRLT2> makes the
 ;; descriptor, <ST2TXT> advances the input cursor, and <INPCOM> assigns the result.
-;; In: A = ending delimiter, TXTPTR = text position, carry = set to skip a quote, decimal = clear
+;; In: A = ending delimiter, TextPointer = text position, carry = set to skip a quote, decimal = clear
 NOWGET:
     sta ENDCHR
     lda TXTPTR
@@ -224,7 +224,8 @@ TRMOK1:
 
 ;; Searches forward for a DATA statement, remembering each new line number in <DATLIN>.
 ;;
-;; <DATAN> skips statements, including quoted colons. A zero high byte in the next line link reports OUT OF DATA.
+;; <FindStatementEnd> skips statements, including quoted colons. A zero high byte in the next line link reports OUT OF
+;; DATA.
 ;; See: <DATBK1>
 DATLOP:
     jsr DATAN

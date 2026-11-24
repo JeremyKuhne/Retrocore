@@ -25,19 +25,19 @@ namespace Retrocore.Tests;
 [TestClass]
 public sealed partial class BasicRenameGateTests
 {
-    private const string OldName = "FNDLIN";
-    private const string NewName = "FindLine";
+    private const string OldName = "STROUT";
+    private const string NewName = "PrintText";
 
-    // A second rename, of a label defined in a macro's body (MEMORY_MANAGEMENT's), whose Also: reaches it because
+    // A second rename, of a label defined in a macro's body (VariableLookup's), whose Also: reaches it because
     // each build expands the macro once.
-    private const string MacroOldName = "BLTU";
-    private const string MacroNewName = "MoveRangeUp";
+    private const string MacroOldName = "PTRGET";
+    private const string MacroNewName = "FindVariable";
 
     // Each rename, with the file that defines the name.
     private static readonly (string Old, string New, string File, Regex Word)[] s_renames =
     [
-        (OldName, NewName, "MsBasic.LineSearch.asm", OldNameWord()),
-        (MacroOldName, MacroNewName, "MsBasic.MemoryManagement.asm", MacroOldNameWord())
+        (OldName, NewName, "MsBasic.StringOutput.asm", OldNameWord()),
+        (MacroOldName, MacroNewName, "MsBasic.VariableLookup.asm", MacroOldNameWord())
     ];
 
     // The classes that assemble the native BASIC sources and look its names up, run against the renamed copy.
@@ -46,6 +46,7 @@ public sealed partial class BasicRenameGateTests
         typeof(AppleSoftTests), typeof(Basic1IndependentSwitchTests), typeof(BasicNativeRootSwitchTests),
         typeof(BasicSharedAliasConsistencyTests), typeof(BasicSharedArrayMultiplicationTests),
         typeof(BasicMathConversionTests), typeof(BasicMathRoutineTests), typeof(BasicSharedAssignmentTests),
+        typeof(BasicStatementsConversionTests), typeof(BasicStatementRoutineTests),
         typeof(BasicSharedFloatAliasesTests),
         typeof(BasicSharedInterpreterAliasesTests),
         typeof(BasicSharedCharacterReaderTests), typeof(BasicSharedCommandInputTests), typeof(BasicSharedExpressionTests),
@@ -86,7 +87,7 @@ public sealed partial class BasicRenameGateTests
     private static readonly string[] s_helpers = ["BasicAttribution.cs", "BasicMachines.cs", "BasicMathMachine.cs", "PetLegacyBasic.cs"];
 
     /// <summary>
-    ///  Renaming <c>FNDLIN</c> to <c>FindLine</c>, and <c>BLTU</c> in a macro's body to <c>MoveRangeUp</c>, in a copy
+    ///  Renaming <c>STROUT</c> to <c>PrintText</c>, and <c>PTRGET</c> in a macro's body to <c>FindVariable</c>, in a copy
     ///  of the native sources, each with its old name in <c>;; Also:</c>, keeps every ROM's bytes and leaves every
     ///  BASIC test green without changing it.
     /// </summary>
@@ -157,8 +158,8 @@ public sealed partial class BasicRenameGateTests
                 native.DefinitionName(oldName).Should().Be(newName);
             }
 
-            native.HasSymbol("FNDLIN_NOT_A_NAME").Should().BeFalse();
-            Action neither = () => native.Symbol("FNDLIN_NOT_A_NAME");
+            native.HasSymbol("STROUT_NOT_A_NAME").Should().BeFalse();
+            Action neither = () => native.Symbol("STROUT_NOT_A_NAME");
             neither.Should().Throw<KeyNotFoundException>();
 
             // A standalone build of the module, as the comparisons assemble it, finds the dependency by either name.

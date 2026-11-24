@@ -40,8 +40,9 @@ public sealed class BasicSharedAliasConsistencyTests
     [TestMethod]
     public void NativeRootsExposeOnlyTheirDocumentedAliases()
     {
-        string[] appleFiles = AliasFiles(Apple, "AppleSoft");
-        string[] petFiles = AliasFiles(PetBasic, "Commodore");
+        // AppleSoft's interpreter aliases have all joined its historical names (Basic.md M10); Commodore's remain.
+        string[] appleFiles = AliasFiles(Apple, "AppleSoft", interpreterAliases: false);
+        string[] petFiles = AliasFiles(PetBasic, "Commodore", interpreterAliases: true);
         List<NativeRoot> roots = [];
         foreach (Apple2Model model in (Apple2Model[])[Apple2Model.IIPlus, Apple2Model.IIe, Apple2Model.IIeEnhanced])
         {
@@ -263,12 +264,13 @@ public sealed class BasicSharedAliasConsistencyTests
             .Should().BeFalse();
     }
 
-    private static string[] AliasFiles(string directory, string prefix)
+    private static string[] AliasFiles(string directory, string prefix, bool interpreterAliases)
     {
+        // The interpreter alias files join the historical-names file as their definitions convert (Basic.md M10).
         foreach (string name in (string[])[$"{prefix}.InterpreterAliases.asm", $"{prefix}.HistoricalNames.asm"])
         {
-            string file = Path.Join(directory, name);
-            File.Exists(file).Should().BeTrue($"the platform must retain {name}");
+            bool expected = interpreterAliases || name.EndsWith(".HistoricalNames.asm", StringComparison.Ordinal);
+            File.Exists(Path.Join(directory, name)).Should().Be(expected, $"the platform {(expected ? "must retain" : "has retired")} {name}");
         }
 
         return [.. Directory.EnumerateFiles(directory, "*Aliases.asm")
@@ -281,20 +283,49 @@ public sealed class BasicSharedAliasConsistencyTests
         path.EndsWith(".HistoricalNames.asm", StringComparison.OrdinalIgnoreCase);
 
     // A historical-names file's aliases: each scoped alias once per old name its Also: section gives, read from the
-    // file's text so a missing include cannot hide one.
-    private static IEnumerable<Alias> ReadHistoricalNames(string path, string scope)
+    // file's text so a missing include cannot hide one. An alias may be guarded, for names only some builds' documents
+    // give: under .ifdef Target it is expected exactly where the build defines that target (BASIC 4's lister labels).
+    private static IEnumerable<Alias> ReadHistoricalNames(string path, string scope, AssemblyResult result)
     {
         string[] lines = File.ReadAllLines(path);
+        bool[] included = new bool[lines.Length];
+        bool? guard = null;
+        for (int line = 0; line < lines.Length; line++)
+        {
+            string where = $"{Path.GetFileName(path)}:{line + 1}";
+            string[] words = lines[line].Split(';', 2)[0].Split((char[])[' ', '\t'], StringSplitOptions.RemoveEmptyEntries);
+            if (words is [".ifdef", string target])
+            {
+                guard.Should().BeNull($"{where} must not nest its guards");
+                guard = result.HasSymbol(target);
+            }
+            else if (words is [".endif"])
+            {
+                guard.Should().NotBeNull($"{where} must close a guard");
+                guard = null;
+            }
+            else
+            {
+                words.Should().NotContain(word => word.StartsWith(".if", StringComparison.OrdinalIgnoreCase)
+                    || word.StartsWith(".else", StringComparison.OrdinalIgnoreCase),
+                    $"{where} may guard an alias only with .ifdef Target");
+            }
+
+            included[line] = guard ?? true;
+        }
+
         DocumentationFile file = DocumentationParser.Parse(string.Join('\n', lines), path);
         foreach (DocumentationComment comment in file.Comments)
         {
             DocumentationAlso[] names = [.. DocumentationAlso.Of(comment.Sections)];
             if (names.Length == 0) { continue; }
+            if (!included[comment.TargetLine]) { continue; }
             string[] parts = lines[comment.TargetLine].Split(';', 2)[0].Split('=', 2, StringSplitOptions.TrimEntries);
             parts.Should().HaveCount(2, $"{Path.GetFileName(path)}:{comment.TargetLine + 1} must be an alias");
             foreach (DocumentationAlso also in names)
             {
-                yield return (also.Name, parts[1], path, comment.TargetLine, $"{scope}::{parts[0]}");
+                // An absolute target (::Name) reaches the top-level definition the alias's own name would hide.
+                yield return (also.Name, parts[1].TrimStart(':'), path, comment.TargetLine, $"{scope}::{parts[0]}");
             }
         }
     }
@@ -307,7 +338,7 @@ public sealed class BasicSharedAliasConsistencyTests
         {
             if (IsHistoricalNames(path))
             {
-                aliases.AddRange(ReadHistoricalNames(path, root.Apple ? "AppleSoft" : "Commodore"));
+                aliases.AddRange(ReadHistoricalNames(path, root.Apple ? "AppleSoft" : "Commodore", root.Result));
                 continue;
             }
 
@@ -334,7 +365,7 @@ public sealed class BasicSharedAliasConsistencyTests
                 definition.Kind.Should().Be(AssemblyStatementKind.Constant, $"{path} must contain direct aliases");
                 aliases.Add((
                     Name: definition.Label ?? throw new AssertFailedException($"Missing alias name in {path}."),
-                    Target: definition.Operand.Text.Trim(),
+                    Target: definition.Operand.Text.Trim().TrimStart(':'),
                     Path: path,
                     Line: definition.Location?.Line ?? throw new AssertFailedException($"Missing source location in {path}."),
                     Definition: definition.Label));

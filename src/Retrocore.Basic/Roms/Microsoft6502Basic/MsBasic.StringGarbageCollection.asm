@@ -30,9 +30,9 @@
 ;; In AppleSoft, Apple Computer, in The Apple Orchard (March/April 1980, p. 16), calls it `GARBAG`, which is
 ;; distinct from Microsoft's `GARBAG` allocation-retry entry.
 ;;
-;; In: FOUR6 = <STRSIZ>, decimal = clear
-;; Out: FRETOP = lower boundary after collection
-;; See: <DVAR>, <GRBPAS>, <BLTUC>
+;; In: CollectorStep = <STRSIZ>, decimal = clear
+;; Out: StringsBottom = lower boundary after collection
+;; See: <DVAR>, <GRBPAS>, <MoveRangeUp::Unchecked>
 GARBA2:
     ldx MEMSIZ
     lda MEMSIZ+1

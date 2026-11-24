@@ -1,11 +1,15 @@
+; retrocore: style=strict
 ; Derived from Microsoft's BASIC for 6502 (m6502.asm, MIT license; see LICENSE in this folder).
+
+.include "MsBasic.Families.asm"
+
 ; The operator dispatch table shared by Microsoft 6502 BASIC variants.
 
 ;; Emits the operator table with independently selected precedence rules and AND handler.
 ;; Parameters: powerBelowNegation = 1 for power below unary negation, 0 for power above it
-;;   highNot = 1 for NOT at the unary precedence, 0 for the original lower precedence
+;;   highNot = 1 for NOT at the unary precedence (with powerBelowNegation = 1), 0 for the original lower precedence
 ;;   andEntry = the AND operator's handler
-.macro OPERATOR_TABLE powerBelowNegation, highNot, andEntry
+.macro OperatorEntries powerBelowNegation, highNot, andEntry
 
     .assert powerBelowNegation = 0 || powerBelowNegation = 1, "powerBelowNegation is 0 or 1."
     .assert highNot = 0 || highNot = 1, "highNot is 0 or 1."
@@ -15,47 +19,51 @@
 ;; Each entry is one precedence byte followed by a little-endian handler address minus one. The evaluator
 ;; stacks that address for RTS dispatch. Higher precedence binds more tightly; the following entries provide
 ;; unary negation, NOT and the shared relational handler.
-OPTAB:
+;; Also: OPTAB (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+OperatorTable:
     .byte $79
-    .word FADDT - 1
+    .word Float::AddArg - 1
     .byte $79
-    .word FSUBT - 1
+    .word Float::SubtractFromArg - 1
     .byte $7B
-    .word FMULTT - 1
+    .word Float::MultiplyArg - 1
     .byte $7B
-    .word FDIVT - 1
-.if powerBelowNegation
-    .byte $7D
-.else
-    .byte $7F
-.endif
-    .word FPWRT - 1
+    .word Float::DivideArg - 1
+    .if powerBelowNegation
+        .byte $7D
+    .else
+        .byte $7F
+    .endif
+    .word Float::RaiseArg - 1
     .byte $50
     .word andEntry - 1
     .byte $46
     .word OROP - 1
 
 ;; Precedence and handler address minus one for unary negation.
-NEGTAB:
-.if powerBelowNegation
-    .byte $7F
-.else
-    .byte $7D
-.endif
-    .word NEGOP - 1
+;; Also: NEGTAB (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+Negation:
+    .if powerBelowNegation
+        .byte $7F
+    .else
+        .byte $7D
+    .endif
+    .word Float::Negate - 1
 
 ;; Precedence and handler address minus one for NOT.
-NOTTAB:
-.if highNot
-    .byte $7F
-.else
-    .byte $5A
-.endif
+;; Also: NOTTAB (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+Not:
+    .if highNot
+        .byte $7F
+    .else
+        .byte $5A
+    .endif
     .word NOTOP - 1
 
 ;; Precedence and handler address minus one for relational comparisons.
-PTDORL:
+;; Also: PTDORL (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+Relation:
     .byte $64
-    .word DOREL - 1
+    .word ApplyRelation - 1
 
 .endmacro

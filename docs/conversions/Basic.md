@@ -647,10 +647,11 @@ Decisions and how the table was applied:
   between UNKN and no `Also:` (the table's introduction); UNKN is the one that keeps the old names working.
 - W3. Names two definitions shared in one file are one definition with both old names (INDEX1 and INDEX are
   `Pointer1`). KIMY is dropped into `Dimensioning`'s `Also:`.
-- W4. Names left in prose because they would clash with another definition in the same build: the BASIC 4 reconstructions' INCHR for
-  `KernalCharacterIn` (BASIC's own INCHR is another routine). Microsoft's REDDY and GOTK in AppleSoft (C-Q8), Q
-  (the table counter, which the tables no longer use) and AppleSoft's LINWID and NCMWID (D-Q3) are named in prose
-  and not defined; NCMWID's one use is written `FRETOP+1`, the same byte.
+- W4. Names left in prose because they would clash with another definition in the same build, or in a build the lineage
+  rule reaches: BASIC 4's INCHR (CBM4S79, HV4, HV4R) for `KernalCharacterIn` (BASIC 1's and 2's own INCHR is another
+  routine). Microsoft's REDDY and GOTK in AppleSoft (C-Q8), Q (the table counter, which the tables no longer use) and
+  AppleSoft's LINWID and NCMWID (D-Q3) are named in prose and not defined; NCMWID's one use is written `FRETOP+1`, the
+  same byte.
 - W5. The tokens and error offsets the PET's Equates copied for the math package (PLUSTK, MINUTK, ERROV, ERRDV0) are
   defined once, with their tables (X4), so an assembly of the math package with the Equates but without the tables
   must supply them, as the workspace test now does; `TOKEN_PI` stays in the Equates, since the table has no spelling for it.
@@ -666,8 +667,9 @@ Decisions and how the table was applied:
   (LOCAL_TRMPOS, VARTXT_IN_LINNUM) are not historical and get none. Each PET root asserts that none of the seven old
   names is predefined; AppleSoft, which fixes Microsoft's five, rejects those five as values it fixes. The
   switches C# sets keep their names. BASIC 1's root sets three of the five itself
-  (INPUT_BUFFER_PAGE, INPUT_BUFFER_LENGTH, NULL_COMMAND), so there the Equates' definitions, and their old names,
-  are skipped; nothing uses the old names any more.
+  (INPUT_BUFFER_PAGE, INPUT_BUFFER_LENGTH, NULL_COMMAND), so there the Equates' definitions are skipped; nothing
+  uses the old names any more. Since the statement step (S11), BASIC 1's own three carry the same `Also:` as the
+  Equates'.
 - W8. D-Q3: SIZE is `CollectorOffset`, as recommended (the string collector's offset; the recommendation's scoped
   alias waits for the collector's step); LSTPNT is `ListOffset` and DECCNT `DigitCount`, as the table has them.
   OLDOV keeps the table's `FunctionJumpHigh`: the recommended `ArgExtension` rests on D-Q3's reading that FADD keeps
@@ -761,6 +763,127 @@ byte after another zero byte shifts the partial product nine bits, halving it, s
 at half weight in FacExtension, and only rounding restores it. The debugger's contract checking ran clean over the W
 program, which uses FOR with STEP, DEF FN, VAL, INT, SQR and SIN, on PET BASIC 2, PET BASIC 4 and the enhanced IIe's
 AppleSoft, and reported a false `Keeps: Y` added to `Float::LoadFac` as a control.
+
+### S. The program and statement modules (X8 step 4)
+
+Converted, with `; retrocore: style=strict`, part B1's fifteen shared modules: `MsBasic.CharacterReader`,
+`CommandCore`, `For`, `LineNumber`, `LineSearch`, `Lister`, `MemoryAccess`, `MemoryManagement`, `Next`,
+`OperatorTable`, `Print`, `ProgramReset`, `ProgramTransfers`, `StatementFlow` and `UserFunctions`. Each statement
+handler is a `.proc` in `Statements`, which `MsBasic.Families.asm` now declares after `Float` and `Functions`; each
+macro opens and closes the scope around the handlers it emits (B1-Q9), except that the lister's `ListRange` opens
+the scope and `.proc List` in it, and `ListTokens` closes both (S2). The other routines are top level, as the table
+puts them. The bytes are unchanged in all eight builds.
+
+Decisions and how the table was applied:
+
+- S1. Entries inside a routine (B1-Q1) are its labels, listed in its `Entry:` section and documented where they are,
+  each with its old name in `Also:`. A label that only some builds define (FN's UndefinedFunction) is named in the
+  routine's prose instead, since an `Entry:` item must exist in every build.
+- S2. The character reader's template is `.proc CharacterReaderTemplate` with `GetCurrent` (CHZGOT) and `Done`
+  (CHZRTS) (B1-Q3). The lister is one `.proc List` in `Statements`, opened in `ListRange` and closed in `ListTokens`
+  (B1-Q4). BLTU is `MoveRangeUp`, with `MoveRangeUp::Unchecked` (B1-Q5).
+- S3. B1-Q6's quirk is documented on `ReadLineNumber` and `Statements::On::RequireGoto`, and
+  `ReadLineNumberSendsAGotoTokenHighByteIntoOn` pins it: in AppleSoft 437760 and 440319 reach ON's loop, 440320 is a
+  syntax error; on the PET, 350720 reaches it.
+- S4. B1-Q7: `ProgramReset` loses `newAlias` and `RunStatement` loses `runLabel` (and RUN1); NEW is AppleSoft's alias
+  of `Statements::New`. The vendors' invocations follow; the bytes do not change.
+- S5. The macros take the names in B1-Q10 and the table (`LetterTest`, `CharacterReader`, `ErrorFinish`, `ListRange`,
+  `ListLines`, `ListNextTableByte`, `ListTokens`, `DeleteOldLine`, `LinkLine`, `TokenStore`, `AddressConversion`,
+  `PeekFunction`, `PokeStatement`, `WaitStatement`, `MemoryManagement`, `NextEntries`, `OperatorEntries`, `PrintItems`,
+  `ProgramReset`, `ClearStatement`, `NullStatement`, `ClearStorage`, `ExecutionReset`, `RestoreStatement`,
+  `StopAndContinue`, `RunStatement`, `GosubAndGoto`, `ReturnStatement`, `StatementScan`, `ConditionalStatements`,
+  `OnStatement`, `UserFunctions`), and every invocation, root and test follows.
+- S6. Names only a vendor's documents give are entries of its historical-names file, as M1 has them, since a shared
+  definition cites only Microsoft's names (`AssertSharedNamesAreMicrosofts`):
+  - AppleSoft: NEW (ASTIL, AS82), which `ProgramReset`'s dropped `newAlias` defined (S4), and COMBYTE (ASTIL, AS82),
+    which leaves `AppleSoft.InterpreterAliases.asm` (deleted, M10), and the overlay's own labels GOLST1, GRODY1,
+    GRODY2, PRIT31, PRIT32 and REMER1, cited UNKN as FOUT13 is (M2). The table says "no Also" for these, but
+    `applesoft.mac` defines them, and its callers and the label comparisons keep them. COMBYTE's alias targets
+    `::ReadCommaAndByte`, since its own name would hide the top-level routine.
+  - Commodore: CHDGOT and CHDRTS (CBM4S79, HV1, HV1R, HV2, HV4, HV4R), Commodore's spellings of CHZGOT and CHZRTS,
+    in every PET build. The rename table leaves CBM4S79 out; its `code26` names both labels, as the HV
+    reconstructions do (checked in mist64/cbmsrc at the bibliography's commit). BASIC 4's lister labels RESCR2 and
+    PRIT3B (CBM4S79, HV4, HV4R) are each under `.ifdef` its target.
+  - The SDK's own names that no overlay or document gives get no `Also:`, as the table says: CONT1, and
+    LIST_QUOTE_CHECK, which no build assembles.
+- S7. BSTOP, the name Commodore's BASIC 4 kernal listing (K4S79) and Hoffmann-Vetter's reconstruction of it (HVK4)
+  give `Statements::Stop` as an equate of the kernal's, is in prose: a Commodore alias must cite one of its build's
+  BASIC documents (`BasicAttribution.PetKeys`), and neither kernal listing is one, so it cannot be an alias's
+  citation. Whether the kernal's documents should count for that rule is a question for the owner.
+- S8. CommandCore's labels that are locals of part C's routines (TYPERR, MAIN1, QDECT1, MLOOP, CZLOOP, GETBPT,
+  STUFFH, COLIS, NODATT, STR1 and STRNG) keep their names until part C converts those routines.
+- S9. Contracts from the code: `IsLetter` keeps A, X and Y (its two subtractions take $100 in all); the character
+  reader's copy keeps X and Y. STOP, END and StopOrEnd are described from the code. `EraseProgram` adds the incoming
+  carry where `clearCarry` is 0, so AppleSoft's and, by default, BASIC 1's `NEW`, which arrives with carry set, puts
+  VariablesStart three bytes past ProgramStart; `EraseProgramAddsTheCarryOnlyWhereTheBuildDoesNotClearIt` pins
+  AppleSoft's and PET BASIC 4's. The flags routines depend on are stated: ReadLineNumber's zero (so `LIST 10-X` lists to
+  the end), FindForFrame's carry and A, the zero New, Clear and Return take, Return's Y (POP), and that
+  ResetProgramState clears by falling into the next entry.
+- S10. Tests and their helpers:
+  - The rename gate renames STROUT and PTRGET (top level, and in a macro's body), since FNDLIN and BLTU are
+    converted. It found that `MathUsesNativeWorkspaceAndMatchesTheLegacyBytes` declared its external labels by
+    their old names only; they now go through `BasicNames.Label` and `ScopedNames`.
+  - `BasicNames.CurrentNames` follows a vendor's alias to its target, so a standalone build predefines the name the
+    modules use (`Statements::PopFinish`, not `AppleSoft::PopFinish`). `BasicNames.IsVendorName` lets a standalone
+    region's label comparison skip the vendor's names, which the whole builds' tests compare.
+  - `BasicSharedAliasConsistencyTests` reads the `.ifdef Target` guards in a historical-names file and expects a
+    guarded alias exactly where its build defines the target, and there checks its citations against the build's
+    documents; RESCR2 and PRIT3B are checked so only in the BASIC 4 builds. `BasicSharedFloatAliasesTests`, whose PET
+    regions hold no lister, leaves them out.
+  - The editor probe in `LanguageAnalysisTests.Macros` gives COMBYTE as a user file's own old name. Once the SDK gave
+    the same name, the editor's merge of the file's and the SDK modules' `Also:` names cancelled it, and the file lost
+    its hint and quick fix. When the file assembles, its own name now takes precedence where the assembler's own table
+    of historical names gives it to the definition the hint would name (`LanguageWorkspace.HistoricalNames`); anywhere
+    else, and whenever the file has errors, the merge behaves as before. The text alone cannot say what the assembler
+    would make of conditions, repeats, macros and scoped includes, and every rule the reviews tried for files with
+    errors gave some case a hint naming the wrong definition, so while a file has errors its own name that an SDK module
+    also gives loses its hint until the errors are fixed. The unchanged COMBYTE probe fails without the change; the
+    others guard against the wrong hints earlier versions of it gave: `OldNamesInAnOmittedBranchDoNotHint` (with and
+    without an error), `OldNamesOfTheOtherBranchDoNotHint` (a label documented in both branches),
+    `OldNamesUnderConditionsTheEditorCannotReadDoNotHint` (an `.ifdef` of a later symbol, a computed condition),
+    `OldNamesHintOnlyTheDefinitionTheAssemblerGivesThemTo` (a root routine sharing its name with a macro's expansion, a
+    macro expanded twice) and `OldNamesOfAMacroDoNotHintWhileTheFileHasAnError`. The doc set's `FindAlso` returns a
+    single topic without its per-build filter, so a file whose other branch gives a name no SDK module gives still gets
+    a hint naming the label; that predates this step and is left for a change of its own. A macro-body name whose label
+    shares a root routine's name, in a macro expanded once, hints the expansion (`Basic::Reader`), the definition the
+    assembler gives it to, through the doc set's name-aware lookup (#132).
+- S11. Two rules the owner settled on the Monitor's PR, which apply here from this step on:
+  - D5, narrowed: a mid-routine `.if` shows how builds differ, better than whole per-build routines; a routine's
+    contract holds in every build, or says which build differs. The statement modules already show their builds'
+    differences this way, inside the shared macros.
+  - Lineage citations: a definition that descends through a vendor's builds cites every document of that line whose
+    listing names it, not only its own build's. Within the PET line, checked against mist64/cbmsrc, that adds CBM4S79 to
+    the kernal vectors, to the three disk vectors the BASIC 4 documents name apart from BASIC's own routines, and to the
+    RND timer in `Commodore.Equates.asm` (from the workspace step); K4S79 to TIL; every PET document and M6502 to
+    BUFLEN, in both BASIC 1's `Basic1.asm` and the other builds' `Commodore.Equates.asm`, and to the shared FORSIZ and
+    STRSIZ in `MsBasic.Layouts.asm`; and the BASIC documents' CTIMR and CSTAT to the jiffy clock and I/O status. The
+    kernal's TIME and SATUS are in prose, since the builds define both names themselves. NUMLEV cites the whole line on
+    BASIC 1's 19 levels too, with prose saying the documents give it as 23: HV1 and HV1R write the build's 54-byte stack
+    reserve as 23 levels plus eight bytes. BASIC 4's INCHR (CBM4S79, HV4, HV4R) is in prose on the kernal's character
+    input, since BASIC 1 and 2 give the name to another routine and the lineage rule would cite it in their builds too.
+    The workspace step's `VendorOldNamesResolveOnlyInTheirVendorsBuilds` required the shared layouts to cite M6502
+    alone, which forbade the lineage; it now requires exactly M6502 and the PET line's documents there. The
+    bibliography's method states the rule too. BASIC 1's own BUFPAG and NULCMD switches, like its BUFLEN, now cite what
+    the Equates' do. A shared module's comment that names a build describes it with its root's default switches, as the
+    shared folder's README now says; some say "by default" where the reviews asked. The statement modules' and the
+    historical names' citations already followed the rule. BASIC 1's ZERO is a definition of its own in
+    `MsBasic.VariableLookup.asm` (M4), whose step will cite the line on it. The AppleSoft documents (ASTIL, AS82) are
+    not available here to check. One test rule would forbid a lineage-only alias: a Commodore alias without M6502 must
+    cite one of its own build's documents (`BasicAttribution.PetKeys`). No alias needs that yet; changing the rule is a
+    question for the owner.
+
+Checked: the full suite, the rename gate, the lint tests, and `BasicStatementsConversionTests`, which compares every old
+name in the fifteen files and the vendors' historical names with the MACRO-10 overlay's value in each of the eight
+builds (about 150 per build), checks that each definition reaches the overlay by its name or an old name, that a
+vendor's names resolve only in its builds and through its aliases, and that every citation's key is in the bibliography.
+`BasicStatementRoutineTests` runs IsLetter, the character reader's copy, ReadLineNumber, FindLine, FindStatementEnd,
+FindLineEnd, EraseProgram and GOTO's search start in the enhanced IIe's AppleSoft and PET BASIC 4 and checks their
+`Out:` values and, for IsLetter and the character reader, their `Keeps:` claims; the existing BasicShared*Tests run the
+rest (FindForFrame, MoveRangeUp, CheckStack, CheckFreeMemory, the statements). The debugger's contract checking ran
+clean on PET BASIC 2, PET BASIC 4 and the enhanced IIe's AppleSoft over a program that adds IF, POKE and PEEK, ON GOSUB
+and ON GOTO, RETURN from inside FOR, RESTORE, READ and DATA, REM, CLEAR (CLR) and LIST with a range to the math step's,
+and reported a false `Keeps: X` added to `FindLine` as a control (a first control, `Keeps: A` on IsLetter, was not
+reported because the claim is true).
 
 ## Other dependents
 

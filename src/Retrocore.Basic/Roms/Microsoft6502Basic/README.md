@@ -29,7 +29,8 @@ than silently implying a different configuration. Those assertions do not apply 
 it can supply its own values and independently compose the appropriate clock, channel, disk and
 time-output macros.
 
-The math modules put their routines in two scopes, `Float` and `Functions`, which `MsBasic.Families.asm` declares;
+The math modules put their routines in two scopes, `Float` and `Functions`, and the statement modules their handlers in
+`Statements`, which `MsBasic.Families.asm` declares;
 each module includes it, and only the first inclusion declares them. `MsBasic.FloatConstants.asm` defines macros for
 the five-byte `ADDITIONAL_PRECISION = 1` constants and polynomial tables shared by AppleSoft and all three PET BASIC
 versions. A native variant can emit each block where its ROM needs it. `MsBasic.AdditionCore.asm` supplies
@@ -50,7 +51,7 @@ The interpreter modules also retain each variant's original bytes:
 | `MsBasic.ArrayMultiplication.asm` | Shared unsigned array multiplication, with no switches. |
 | `MsBasic.Arrays.asm` | Array lookup and allocation, selecting existing-array support, allocation-counter initialization and the early offset bug independently. |
 | `MsBasic.Assignment.asm` | `ASSIGNMENT_START` supplies LET and the `INPCOM` entry. `STRING_ASSIGNMENT` selects optional platform hooks for a disk-status source and linked-string collection. |
-| `MsBasic.CharacterReader.asm` | The uppercase-letter test and `CHARACTER_READER` template. The latter takes seed byte `$59` for BASIC 1, `$58` for AppleSoft and BASIC 2/4; startup copies only the first four seed bytes. |
+| `MsBasic.CharacterReader.asm` | The uppercase-letter test and `CharacterReader` template. The latter takes seed byte `$59` for BASIC 1, `$58` for AppleSoft and BASIC 2/4; startup copies only the first four seed bytes. |
 | `MsBasic.ExpressionCore.asm` | `EXPRESSION_CORE 1` carries a `PUSHF` return address across a page, as BASIC 4 does; AppleSoft and BASIC 1/2 use `0`. |
 | `MsBasic.OperandEvaluation.asm` | Shared operand and function dispatch, with independent choices for the PI token and Boolean or signed 16-bit logical operators. |
 | `MsBasic.VariableInput.asm` | Shared READ and GET/INPUT variable processing, with independent buffer, channel, character-mask and retry choices. |
@@ -68,26 +69,26 @@ The interpreter modules also retain each variant's original bytes:
 | `MsBasic.IntegerConversion.asm` | Shared subscript and signed-integer conversion independently selects the evaluator and type check. The boundary prefix must immediately precede the routine: its fifth comparison byte is the next instruction's opcode. |
 | `MsBasic.LineNumber.asm` | Shared decimal line-number parsing accepts values below 64000. |
 | `MsBasic.LineSearch.asm` | Shared linked-program search returns the matching line or insertion point. |
-| `MsBasic.MemoryAccess.asm` | `MEMORY_ACCESS_ADDRESS` selects negative-address rejection; `MEMORY_ACCESS_PEEK` independently selects address preservation, save order, ROM guarding and padding; `MEMORY_ACCESS_WAIT` takes the omitted-mask branch target. |
-| `MsBasic.MemoryManagement.asm` | `MEMORY_MANAGEMENT` takes the stack reserve: `$36` for AppleSoft and BASIC 1, `$3E` for BASIC 2/4. BASIC 1 calculates it as `2*STACK_LEVELS+3*ADDITIONAL_PRECISION+13`; the macro asserts the required contiguous page-zero scratch layout. |
+| `MsBasic.MemoryAccess.asm` | `AddressConversion` selects negative-address rejection; `PeekFunction` independently selects address preservation, save order, ROM guarding and padding; `WaitStatement` takes the omitted-mask branch target. |
+| `MsBasic.MemoryManagement.asm` | `MemoryManagement` takes the stack reserve: `$36` for AppleSoft and BASIC 1 at its default of 19 levels, `$3E` for BASIC 2/4. BASIC 1 calculates it as `2*STACK_LEVELS+3*ADDITIONAL_PRECISION+13`; the macro asserts the required contiguous page-zero scratch layout. |
 | `MsBasic.Next.asm` | AppleSoft and BASIC 1 count through the FOR frame; BASIC 2/4 calculate its offsets. The caller also supplies the platform's next-statement entry. |
-| `MsBasic.OperatorTable.asm` | AppleSoft uses `OPERATOR_TABLE 1, 1, OROP1`; PET uses `OPERATOR_TABLE 0, 0, ANDOP`. Power/negation and NOT precedences are independent. |
+| `MsBasic.OperatorTable.asm` | AppleSoft uses `OperatorEntries 1, 1, OROP1`; PET uses `OperatorEntries 0, 0, ANDOP`. Power/negation and NOT precedences are independent. |
 | `MsBasic.ProgramTransfers.asm` | Shared RESTORE, STOP, CONT, RUN, GOSUB, GOTO and RETURN entries. The caller selects direct-mode detection, output suppression, the next-statement target, RETURN's FOR-pointer byte and optional POP handling independently. |
 | `MsBasic.ProgramReset.asm` | Shared NEW, CLEAR, NULL, stack reset and text-pointer setup; independent choices preserve platform side effects and BASIC 1's original or revised stack reset. |
 | `MsBasic.Relational.asm` | Shared numeric and string comparisons; AppleSoft uses `$01` for true, PET uses `$FF`. |
 | `MsBasic.SimpleFunctions.asm` | Shared FRE, POS and integer-to-floating-point entries; `SimpleFunctions 1` retains AppleSoft's extra carry set, PET uses `0`. |
 | `MsBasic.StatementFlow.asm` | Shared DATA/REM scanning and IF/ON dispatch; the scanner independently selects BASIC 1's quote-branch order and AppleSoft's POP unwind entry. |
 | `MsBasic.StringFunctions.asm` | Shared CHR$, slicing, LEN, ASC, byte conversion and VAL, with independent choices for slice errors, preamble return, LEN/ASC dispatch and VAL's terminator. |
-| `MsBasic.UserFunctions.asm` | `USER_FUNCTIONS 1` retains BASIC 1's low-byte undefined-function check; AppleSoft and BASIC 2/4 use the corrected high-byte check (`0`). |
+| `MsBasic.UserFunctions.asm` | `UserFunctions 1` retains BASIC 1's low-byte undefined-function check; AppleSoft and BASIC 2/4 use the corrected high-byte check (`0`). |
 
 The memory-access macros use these settings (PEEK's arguments are address preservation, high-byte-first save,
 ROM guard and padding):
 
-| Variant | `MEMORY_ACCESS_ADDRESS` | `MEMORY_ACCESS_PEEK` | Omitted WAIT mask |
+| Variant | `AddressConversion` | `PeekFunction` | Omitted WAIT mask |
 | --- | --- | --- | --- |
-| AppleSoft | `0` | `1, 0, 0, 0` | `ZSTORD`, an alias of `STORDO` |
+| AppleSoft | `0` | `1, 0, 0, 0` | `STORDO` (Microsoft's ZSTORDO) |
 | PET BASIC 1 | `1` | `0, 1, 1, 0` | `STORDO` |
-| PET BASIC 2 | `1` | `1, 1, 0, 1` | `ZSTORD`, its hidden-message extension |
+| PET BASIC 2 | `1` | `1, 1, 0, 1` | `WaitHiddenMessage`, its hidden-message extension (Microsoft's ZSTORD) |
 | PET BASIC 4 | `1` | `1, 1, 0, 0` | `STORDO` |
 
 `STRING_FUNCTIONS` takes the zero-slice check, indirect preamble return, shared LEN/ASC jump and VAL terminator
@@ -105,21 +106,21 @@ collector selection, but those choices must agree on the representation used by 
 The macro requires `EVAL`, `CHKSTR`, `ERROR`, `STRINI`, `PUTNEW`, `TSTOP`, `ERRLS`, `FACMO`, `FACLO`,
 `STRNG1`, `DSCPNT`, `INDEX`, `FRESPC`, `FRETOP`, `LASTPT`, `TEMPPT` and `STRSIZ` from its caller.
 
-`PRINT_CORE` takes the TAB handler and independent choices for clearing carry before SPC and comma, and for
+`PrintItems` takes the TAB handler and independent choices for clearing carry before SPC and comma, and for
 printing a separate trailing space after numbers. AppleSoft uses `TABER` (enhanced) or `LINCH1` (earlier),
 then `1, 1, 0`; PET BASIC 1 uses `TABER, 0, 0, 1`, and BASIC 2/4 use `TABER, 1, 0, 1`.
 
 The program-reset macros take the independent side effects documented in the source:
 
-| Variant | `PROGRAM_RESET` | `CLEAR_STORAGE` | `EXECUTION_RESET` | `STOP_AND_CONTINUE` |
+| Variant | `ProgramReset` | `ClearStorage` | `ExecutionReset` | `StopAndContinue` |
 | --- | --- | --- | --- | --- |
-| AppleSoft | `1, 1, 1, 0, 1` | `0, 0` | `0, 0, $F8` | `1, 0` |
-| PET BASIC 1 original | `0, 0, 0, 0, 0` | `1, 0` | `1, 0, $FC` | `0, 1` |
-| PET BASIC 1 revised | `0, 0, 0, 0, 0` | `1, 0` | `0, 1, $FE` | `0, 1` |
-| PET BASIC 2 | `0, 0, 0, 1, 1` | `1, 0` | `0, 0, $FA` | `1, 1` |
-| PET BASIC 4 | `0, 0, 0, 1, 1` | `1, 1` | `0, 0, $FA` | `1, 0` |
+| AppleSoft | `1, 1, 0, 1` | `0, 0` | `0, 0, $F8` | `1, 0` |
+| PET BASIC 1 original | `0, 0, 0, 0` | `1, 0` | `1, 0, $FC` | `0, 1` |
+| PET BASIC 1 revised | `0, 0, 0, 0` | `1, 0` | `0, 1, $FE` | `0, 1` |
+| PET BASIC 2 | `0, 0, 1, 1` | `1, 0` | `0, 0, $FA` | `1, 1` |
+| PET BASIC 4 | `0, 0, 1, 1` | `1, 1` | `0, 0, $FA` | `1, 0` |
 
-PET BASIC 1 also retains `NULL_STATEMENT 10` even though its reserved-word table has no NULL token. Its
+PET BASIC 1 also retains `NullStatement 10` even though its reserved-word table has no NULL token. Its
 increment-before-comparison accepts values 0 through 8 and, through byte wraparound, 255.
 
 ### BASIC 1's independent choices
@@ -128,7 +129,7 @@ The [BASIC 1 root](../../../Retrocore.Machines.Commodore/Roms/Basic/Basic1.asm) 
 overridable `.ifndef` default. Supply symbols before including the root, or pass their values to the named
 macro parameters when composing another variant. Values are 0 or 1 unless stated otherwise. The existing
 workspace switches are documented in `Commodore.Equates.asm`; the root also uses `LOCAL_TERMINAL_POSITION` for output
-and initialization and derives `GETSTK`'s reserve from `STACK_LEVELS`. `RESET_STACK_POINTER`, `RANDOM_SEED_TAIL`
+and initialization and derives `CheckStack`'s reserve from `STACK_LEVELS`. `RESET_STACK_POINTER`, `RANDOM_SEED_TAIL`
 and `PROBE_TEST_BYTE` are bytes; `NULL_INCREMENT_LIMIT` is 2 through 255.
 
 | Choice | BASIC 1 default | Macro parameter or effect |
@@ -140,22 +141,22 @@ and `PROBE_TEST_BYTE` are bytes; `NULL_INCREMENT_LIMIT` is 2 through 255.
 | `LINK_RETURNS` | 0 | `COMMODORE_COMMAND_LOOP` `linkReturns`: return from relinking instead of entering the prompt. |
 | `EARLY_LINE_EDIT` | 1 | `COMMODORE_TERMINAL_INPUT` `earlyDelete`: keep early editor entries and their newline. |
 | `TOKENIZE_SKIP_SPACES` | 1 | `COMMODORE_TOKENIZE` `skipKeywordSpaces`: allow spaces within reserved words. |
-| `NEW_CLEAR_CARRY` | 0 | `PROGRAM_RESET` `clearCarry`: clear carry before adding two. |
-| `RUN_SET_ZERO` | 0 | `PROGRAM_RESET` `runSetsZero`: load zero after positioning the text pointer. |
-| `RESET_STACK_EARLY` | `1-REVISD` | `EXECUTION_RESET` `earlyStack`: store the return address before moving the stack pointer. |
-| `RESET_STACK_PADDING` | `REVISD` | `EXECUTION_RESET` `paddedReturn`: retain the revised reset's extra RTS and unused byte. |
-| `RESET_STACK_POINTER` | `<(STACK_END-$101-2*RESET_STACK_EARLY)` | `EXECUTION_RESET` `stackTop`: byte loaded into the stack pointer. |
-| `LIST_GUARD_OFFSET` | 0 | `LIST_LINES` `guardOffset`: stop if a malformed line's index wraps. |
+| `NEW_CLEAR_CARRY` | 0 | `ProgramReset` `clearCarry`: clear carry before adding two. |
+| `RUN_SET_ZERO` | 0 | `ProgramReset` `runSetsZero`: load zero after positioning the text pointer. |
+| `RESET_STACK_EARLY` | `1-REVISD` | `ExecutionReset` `earlyStack`: store the return address before moving the stack pointer. |
+| `RESET_STACK_PADDING` | `REVISD` | `ExecutionReset` `paddedReturn`: retain the revised reset's extra RTS and unused byte. |
+| `RESET_STACK_POINTER` | `<(STACK_END-$101-2*RESET_STACK_EARLY)` | `ExecutionReset` `stackTop`: byte loaded into the stack pointer. |
+| `LIST_GUARD_OFFSET` | 0 | `ListLines` `guardOffset`: stop if a malformed line's index wraps. |
 | `STATEMENT_FETCH_NOP` | 0 | `COMMODORE_STATEMENT_FETCH` `spareByte`: insert the later NOP. |
 | `EARLY_SEPARATOR_CHECK` | 1 | `COMMODORE_STATEMENT_FETCH` `earlySeparators`: check separators before the link. |
 | `SHORT_END_BRANCH` | 1 | `COMMODORE_STATEMENT_FETCH` `shortEnd`: branch directly to end-of-program. |
 | `EARLY_STATEMENT_DISPATCH` | 1 | `COMMODORE_STATEMENT_DISPATCH` `earlyDispatch`: use the early carry and error paths. |
-| `STOP_BY_LINE_NUMBER` | 0 | `STOP_AND_CONTINUE` `lineNumberDirect`: detect direct mode by line number instead of text page. |
-| `NULL_INCREMENT_LIMIT` | 10 | `NULL_STATEMENT` `incrementedLimit`: first rejected incremented NULL count. |
-| `RETURN_LOW_FOR_POINTER` | 1 | `RETURN_STATEMENT` `searchLow`: set the low instead of high FOR-pointer byte. |
-| `QUOTE_BRANCH_FIRST` | 1 | `STATEMENT_SCAN` `quoteFirst`: branch on a quote before a non-quote. |
+| `STOP_BY_LINE_NUMBER` | 0 | `StopAndContinue` `lineNumberDirect`: detect direct mode by line number instead of text page. |
+| `NULL_INCREMENT_LIMIT` | 10 | `NullStatement` `incrementedLimit`: first rejected incremented NULL count. |
+| `RETURN_LOW_FOR_POINTER` | 1 | `ReturnStatement` `searchLow`: set the low instead of high FOR-pointer byte. |
+| `QUOTE_BRANCH_FIRST` | 1 | `StatementScan` `quoteFirst`: branch on a quote before a non-quote. |
 | `TIME_LONG_ERROR` | 1 | `TIME_STRING_ASSIGNMENT` `longLengthError`: use the long invalid-length jump. |
-| `PRINT_CLEAR_SPC_CARRY` | 0 | `PRINT_CORE` `clearSpaceCarry`: clear carry before SPC dispatch. |
+| `PRINT_CLEAR_SPC_CARRY` | 0 | `PrintItems` `clearSpaceCarry`: clear carry before SPC dispatch. |
 | `PRINT_NULL_PADDING` | 1 | `COMMODORE_LINE_END` `nullPadding`: print the configured NULLs after a newline. |
 | `PRINT_TOKEN_SPACING` | 1 | `COMMODORE_PRINT_SPACING` `tokenDispatch`: select TAB/SPC by token and use the early space loop. |
 | `ALWAYS_SKIP_CHARACTER` | 1 | `COMMODORE_CHARACTER_OUTPUT` `alwaysSkip`: send cursor-right on all channels. |
@@ -163,12 +164,12 @@ and `PROBE_TEST_BYTE` are bytes; `NULL_INCREMENT_LIMIT` is 2 through 255.
 | `INPUT_STOP_EDITOR_PATCH` | 1 | `COMMODORE_INPUT_STATEMENT` `editorPatch`: use the editor's blank-INPUT stop helper. |
 | `GET_POINTER_Y_FIRST` | 1 | `VARIABLE_INPUT` `getPointerYFirst`: load GET's buffer-pointer high byte first. |
 | `GET_STRING_EDITOR_PATCH` | 1 | `VARIABLE_INPUT` `patchedGetString`: use the editor's GET string helper. |
-| `NEXT_COUNTED_STACK` | 1 | `NEXT_ENTRIES` `countedStack`: count through the FOR frame rather than compute offsets. |
+| `NEXT_COUNTED_STACK` | 1 | `NextEntries` `countedStack`: count through the FOR frame rather than compute offsets. |
 | `CLOCK_EDITOR_PATCH` | 1 | `COMMODORE_VARIABLE_VALUE` `clockPatch`: use the editor's TI and TI$ checks. |
 | `INTIDX_USE_FRMNUM` | 1 | `IntegerConversion` `evaluateEntry`: use FRMNUM, or FRMEVL when 0. |
 | `POSINT_CHECK_TYPE` | 0 | `IntegerConversion` `checkType`: check the numeric type at POSINT. |
 | `ARRAY_SAVE_OFFSET_HIGH` | 0 | `ARRAY_LOOKUP` `saveOffsetHigh`: retain the corrected high offset byte. |
-| `USER_FN_LOW_CHECK` | 1 | `USER_FUNCTIONS` `earlyCheck`: check the argument pointer's low instead of high byte. |
+| `USER_FN_LOW_CHECK` | 1 | `UserFunctions` `earlyCheck`: check the argument pointer's low instead of high byte. |
 | `STRING_CLEAR_FACOV` | 0 | `STRING_STORAGE` `clearFacOverflow`: clear FACOV when making a temporary. |
 | `GC_FULL_POINTER` | 0 | `STRING_GARBAGE_COLLECTION` `fullDescriptorPointer`: test both descriptor-pointer bytes. |
 | `GC_PATCH_ARRAY_STEP` | 1 | `STRING_GARBAGE_COLLECTION` `patchedArrayStep`: call the editor's array-step helper. |
@@ -176,15 +177,15 @@ and `PROBE_TEST_BYTE` are bytes; `NULL_INCREMENT_LIMIT` is 2 through 255.
 | `REJECT_ZERO_SLICES` | 1 | `STRING_FUNCTIONS` `rejectZeroSlices`: reject zero LEFT$/RIGHT$ counts. |
 | `PREAM_INDIRECT_RETURN` | 1 | `STRING_FUNCTIONS` `indirectReturn`: return through the writable jump. |
 | `ASC_SHARED_LEN_JUMP` | 1 | `STRING_FUNCTIONS` `sharedLenJump`: share LEN's conversion jump. |
-| `PEEK_PRESERVE_ADDRESS` | 0 | `MEMORY_ACCESS_PEEK` `preserveAddress`: restore the prior POKE/WAIT address. |
-| `PEEK_GUARD_ROM` | 1 | `MEMORY_ACCESS_PEEK` `guardRom`: return zero for protected ROM pages. |
-| `PEEK_PAD_GUARD` | 0 | `MEMORY_ACCESS_PEEK` `padGuard`: emit eight padding bytes. |
+| `PEEK_PRESERVE_ADDRESS` | 0 | `PeekFunction` `preserveAddress`: restore the prior POKE/WAIT address. |
+| `PEEK_GUARD_ROM` | 1 | `PeekFunction` `guardRom`: return zero for protected ROM pages. |
+| `PEEK_PAD_GUARD` | 0 | `PeekFunction` `padGuard`: emit eight padding bytes. |
 | `SHORT_MULTIPLY_ZERO` | 1 | `FloatArithmetic` `shortZeroBranch`: use the short zero-result branch. |
 | `EARLY_INPUT_EXPONENT_LIMIT` | 1 | `DecimalInput` `earlyExponentLimit`: use the earlier exponent limit. |
 | `PRECISE_OUTPUT_LIMIT` | 1 | `OutputConstants`: use the 999,999,999.5 upper threshold. |
 | `ZERO_IN_HALF_CONSTANT` | 0 | Define `ZeroValue` in `Float::Half` when 1, or emit ZERO at `SIMPLE_VARIABLE_LOOKUP` when 0. |
 | `WAIT_EASTER_EGG` | 0 | Emit the hidden WAIT routine and signature, and route the omitted-mask branch to it. |
-| `RANDOM_SEED_TAIL` | `$59` | `CHARACTER_READER` `seedTail`: the random seed's last byte. |
+| `RANDOM_SEED_TAIL` | `$59` | `CharacterReader` `seedTail`: the random seed's last byte. |
 | `INIT_MARK_DIRECT` | 1 | `COMMODORE_INITIALIZE` `markDirect`: mark the current line direct. |
 | `INIT_LINE_WIDTH` | 0 | `COMMODORE_INITIALIZE` `lineWidth`: initialize the width and comma-zone position. |
 | `INIT_DELAY_SIZE` | 1 | `COMMODORE_INITIALIZE` `delayedSize`: set descriptor size after clearing flags. |
@@ -215,7 +216,9 @@ The [Commodore platform definitions](../../../Retrocore.Machines.Commodore/Roms/
 include the workspace, dispatch, assignment and channel I/O macros without emitting bytes. The
 [workspace](../../../Retrocore.Machines.Commodore/Roms/Basic/Commodore.Equates.asm) defines PET RAM and system
 entry addresses and documents the independent switches for BASIC 1, 2 and 4; its default is BASIC 2. The shared
-math package also assembles against these equates for every PET revision.
+math package also assembles against these equates for every PET revision. Where a shared module's comment names a
+build (AppleSoft, PET BASIC 1, 2 or 4), it describes that build with its root's default switches; the macro's
+parameters say what each switch changes, and some comments also say "by default".
 The [dispatch tables](../../../Retrocore.Machines.Commodore/Roms/Basic/Commodore.DispatchTables.asm) emit the
 statement and function vectors, the shared operator table, reserved words and messages. Their independent choices
 select GO, disk commands, the early file-data message and single-CR messages; the workspace's `ERROR_PADDING5`

@@ -179,11 +179,20 @@ public sealed class BasicSharedMemoryManagementTests
             topic.Summary.Should().NotBeNullOrWhiteSpace();
         }
 
+        // The unchecked copy is an entry inside the routine: listed in its Entry: section and documented itself.
+        DocumentationTopic routine = module.Documentation.FindTopic("BLTU")
+            ?? throw new AssertFailedException("BLTU is not documented.");
+
+        // The section names the entry inside the routine's scope.
+        string routineName = native.DefinitionName("BLTU");
+        string entryName = native.DefinitionName("BLTUC");
+        entryName.Should().StartWith(routineName + "::");
+        routine.EntryLabels.Should().Contain(entryName[(routineName.Length + 2)..]);
         DocumentationTopic transfer = module.Documentation.FindRoutineTopic("BLTUC")
             ?? throw new AssertFailedException("BLTUC lost its entry documentation.");
 
-        transfer.Name.Should().Be(native.DefinitionName("BLTU"));
-        transfer.EntryLabels.Should().Contain(native.DefinitionName("BLTUC"));
+        transfer.Name.Should().Be(native.DefinitionName("BLTUC"));
+        transfer.Summary.Should().NotBeNullOrWhiteSpace();
         DocumentationSection keeps = module.Documentation.FindTopic("FNDFOR")?.Section("Keeps")
             ?? throw new AssertFailedException("FNDFOR lost its Keeps contract.");
 
@@ -518,7 +527,7 @@ public sealed class BasicSharedMemoryManagementTests
             .include "MsBasic.Layouts.asm"
             .include "MsBasic.MemoryManagement.asm"
             .org ${start:X4}
-                MEMORY_MANAGEMENT {reserve}
+                MemoryManagement {reserve}
             MEMORY_MANAGEMENT_END:
             """;
 
@@ -538,7 +547,7 @@ public sealed class BasicSharedMemoryManagementTests
         }
 
         AssemblyResult native = new Assembler.Assembler().Assemble(
-            new AssemblySource(source, Path.Join(SharedInputs, "SharedMemoryManagementTest.asm")),
+            new AssemblySource(BasicNames.ScopedNames(symbols) + "\n" + source, Path.Join(SharedInputs, "SharedMemoryManagementTest.asm")),
             new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
             {
                 SourceResolver = new FileAssemblySourceResolver(),
@@ -588,12 +597,12 @@ public sealed class BasicSharedMemoryManagementTests
             .include "Commodore.Equates.asm"
             .include "MsBasic.MemoryManagement.asm"
             .org ${legacy.Symbol("FNDFOR"):X4}
-                MEMORY_MANAGEMENT (2 * STACK_LEVELS + 3 * ADDITIONAL_PRECISION + 13)
+                MemoryManagement (2 * STACK_LEVELS + 3 * ADDITIONAL_PRECISION + 13)
             MEMORY_MANAGEMENT_END:
             """;
 
         AssemblyResult native = new Assembler.Assembler().Assemble(
-            new AssemblySource(source, Path.Join(PetBasicInputs, "SharedMemoryWorkspaceTest.asm")),
+            new AssemblySource(BasicNames.ScopedNames(symbols) + "\n" + source, Path.Join(PetBasicInputs, "SharedMemoryWorkspaceTest.asm")),
             new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
             {
                 SourceResolver = new FileAssemblySourceResolver(),

@@ -6,8 +6,9 @@
 ;; <Commodore> that inherits its target's documentation and gives the names in its `Also:` section, citing the
 ;; documents by their keys in docs/Bibliography.md: Microsoft's source (M6502), Commodore's BASIC 4 listing of July
 ;; 23, 1979 (CBM4S79), and Martin Hoffmann-Vetter's reconstructions of each PET BASIC (HV1, HV1R, HV2, HV4, HV4R),
-;; each for its own build. In CBM4S79, SQR05 and SQR20 are in code18, TENC in code19, N0999, N9999 and NMIL in
-;; code22, and RMULC and RADDC in code25. Including this file emits no bytes and does not change the origin.
+;; each for its own build and, under the lineage rule, for the same definition in the other PET builds. In CBM4S79,
+;; SQR05 and SQR20 are in code18, TENC in code19, N0999, N9999 and NMIL in code22, and RMULC and RADDC in code25.
+;; Including this file emits no bytes and does not change the origin.
 
 ;; The aliases for Commodore's names. Code uses the definitions' own names; these exist for the old names.
 .scope Commodore
@@ -51,5 +52,26 @@ MultiplyByLogOfTwo = Functions::Log::MultiplyByLogOfTwo
 ;; Inherit: <Functions::Tan::ToDividePacked>
 ;; Also: GFDIV (M6502)
 ToDividePacked = Functions::Tan::ToDividePacked
+
+;; Inherit: <CharacterReaderTemplate::GetCurrent>
+;; Also: CHDGOT (CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+CharacterReaderGetCurrent = CharacterReaderTemplate::GetCurrent
+
+;; Inherit: <CharacterReaderTemplate::Done>
+;; Also: CHDRTS (CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+CharacterReaderDone = CharacterReaderTemplate::Done
+
+; BASIC 4's lister, which reads its keyword table through a pointer.
+.ifdef Statements::List::ReadWordByte
+;; Inherit: <Statements::List::ReadWordByte>
+;; Also: RESCR2 (CBM4S79, HV4, HV4R)
+ReadListWordByte = Statements::List::ReadWordByte
+.endif
+
+.ifdef Statements::List::ListFirstWord
+;; Inherit: <Statements::List::ListFirstWord>
+;; Also: PRIT3B (CBM4S79, HV4, HV4R)
+ListFirstWord = Statements::List::ListFirstWord
+.endif
 
 .endscope

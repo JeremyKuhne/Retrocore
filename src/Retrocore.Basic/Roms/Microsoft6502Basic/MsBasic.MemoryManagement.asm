@@ -1,174 +1,219 @@
+; retrocore: style=strict
 ; Derived from Microsoft's BASIC for 6502 (m6502.asm, MIT license; see LICENSE in this folder).
 
-;; MICROSOFT 6502 BASIC: STACK AND BLOCK MANAGEMENT
+;; MICROSOFT 6502 BASIC: MEMORY MANAGEMENT
 ;;
 ;; The FOR-frame search, backward block transfer, stack check and string-space check are contiguous in
 ;; AppleSoft and PET BASIC 1, 2 and 4. They use five-byte floating-point storage and the workspace from
-;; <HIGHDS> through <LOWTR>+1 as transfer scratch. Their one code difference is the stack reserve.
+;; <DestinationEnd> through <SourceStart>+1 as transfer scratch. Their one code difference is the stack reserve.
+
+.include "MsBasic.Families.asm"
 
 ;; Emits the common stack and block-management routines.
-;; Parameters: stackReserve = the byte added by <GETSTK> to the requested stack space
-.macro MEMORY_MANAGEMENT stackReserve
+;; Parameters: stackReserve = the byte added by <CheckStack> to the requested stack space
+.macro MemoryManagement stackReserve
     .assert stackReserve >= 0 && stackReserve <= 255, "stackReserve must fit in a byte."
-    .assert TEMPF1 = HIGHDS - 1 && HIGHTR = HIGHDS + 2, "REASON requires contiguous transfer scratch."
-    .assert LOWTR = HIGHDS + 7 && FAC = HIGHDS + 9, "REASON requires contiguous transfer scratch."
-    .assert TEMPF1 >= 0 && FAC <= $FF, "REASON requires page-zero transfer scratch."
+    .assert FloatTemporary1 = DestinationEnd - 1, "CheckFreeMemory needs contiguous scratch."
+    .assert SourceEnd = DestinationEnd + 2, "CheckFreeMemory needs contiguous scratch."
+    .assert SourceStart = DestinationEnd + 7 && Fac = DestinationEnd + 9, "CheckFreeMemory needs contiguous scratch."
+    .assert FloatTemporary1 >= 0 && Fac <= $FF, "CheckFreeMemory needs page-zero scratch."
 
-;; Finds the active FOR frame for <FORPNT>, starting just above the caller's return and statement addresses.
-;;
-;; Consecutive FOR frames begin with <FORTK> and occupy <FORSIZ> bytes. A zero high byte in <FORPNT> selects
-;; the first FOR frame and copies its variable pointer to <FORPNT>. A different frame kind ends the search.
-;; A matching comparison leaves zero set; reaching another frame kind leaves it clear. A wrapped search
-;; also leaves zero set, so callers rely on there being a non-FOR frame at the bottom of the stack.
-;; Out: X = stack offset immediately below the frame, or $00 if the search wraps,
-;;   zero = set for a match or a wrapped search, clear for another frame kind
-;; Keeps: Y
-;; See: <FOR>, <NEXT>
-FNDFOR:
+    ;; Finds the active FOR frame for <AssignedVariable>, starting just above the caller's return and statement
+    ;; addresses.
+    ;;
+    ;; Consecutive FOR frames begin with <TOKEN_FOR> and occupy <FOR_FRAME_SIZE> bytes. A zero high byte in
+    ;; <AssignedVariable> selects the first FOR frame and copies its variable pointer to <AssignedVariable>. A different
+    ;; frame kind ends the search. A matching comparison leaves zero set; reaching another frame kind leaves it clear. A
+    ;; search that steps X to exactly $00 also stops with zero set, and one that steps past $FF to another offset reads
+    ;; on from the bottom of the stack page, so callers rely on there being a non-FOR frame below the FOR frames.
+    ;; Out: X = stack offset immediately below the frame, or $00 if the search steps to it,
+    ;;   zero = set for a match or a search ending at $00, clear for another frame kind, carry = set for a match,
+    ;;   A = with zero clear, the token of the frame kind the search stopped at (<Statements::Return> tests it for
+    ;;   <TOKEN_GOSUB>); on a match, the variable's low byte; on a search ending at $00, 0
+    ;; Keeps: Y
+    ;; See: <Statements::For>, <Statements::Next>
+    ;; Also: FNDFOR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    .proc FindForFrame
     tsx
     inx
     inx
     inx
     inx
-FFLOOP:
+;; Stops at a frame not marked <TOKEN_FOR>; a zero <AssignedVariable> high byte adopts this frame's variable.
+;; Also: FFLOOP (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+NextFrame:
     lda Stack + 1 + ForFrame::TOKEN,x
-    cmp #FORTK
-    bne FFRTS
-    lda FORPNT+1
-    bne CMPFOR
+    cmp #TOKEN_FOR
+    bne Done
+    lda AssignedVariable+1
+    bne Compare
     lda Stack + 1 + ForFrame::VARIABLE,x
-    sta FORPNT
+    sta AssignedVariable
     lda Stack + 1 + ForFrame::VARIABLE+1,x
-    sta FORPNT+1
-CMPFOR:
+    sta AssignedVariable+1
+;; Compares the frame's variable pointer with <AssignedVariable>.
+;; Also: CMPFOR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+Compare:
     cmp Stack + 1 + ForFrame::VARIABLE+1,x
-    bne ADDFRS
-    lda FORPNT
+    bne SkipFrame
+    lda AssignedVariable
     cmp Stack + 1 + ForFrame::VARIABLE,x
-    beq FFRTS
-ADDFRS:
+    beq Done
+;; Adds <FOR_FRAME_SIZE> to X, modulo 256, and loops unless X is then exactly 0.
+;; Also: ADDFRS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+SkipFrame:
     txa
     clc
-    adc #FORSIZ
+    adc #FOR_FRAME_SIZE
     tax
-    bne FFLOOP
-FFRTS:
+    bne NextFrame
+;; Returns.
+;; Also: FFRTS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+Done:
     rts
+    .endproc
 
-;; Makes room by copying a block toward higher addresses, checking its new end against string space.
-;;
-;; The source is <LOWTR> up to but not including <HIGHTR>; <HIGHDS> is the corresponding destination end.
-;; Copying backward permits overlap. The checked entry tests the supplied end and sets <STREND> to it; the
-;; collector enters at <BLTUC> instead because it manages string space itself.
-;; In: A = destination end low byte, Y = destination end high byte, HIGHDS = destination end,
-;;   LOWTR = source start, HIGHTR = source end
-;; Out: STREND = destination end, LOWTR = unchanged, HIGHTR = source start minus $100,
-;;   HIGHDS = destination start minus $100
-;; Errors: OUT OF MEMORY if the destination end is not below <FRETOP> after collection
-;; Entry: BLTUC = copies without the space check or updating <STREND>
-;; See: <REASON>, <GARBA2>
-BLTU:
-    jsr REASON
-    sta STREND
-    sty STREND+1
-BLTUC:
+    ;; Makes room by copying a block toward higher addresses, checking its new end against string space.
+    ;;
+    ;; The source is <SourceStart> up to but not including <SourceEnd>; <DestinationEnd> is the corresponding
+    ;; destination end. Copying backward permits overlap. The checked entry tests the supplied end and sets <ArraysEnd>
+    ;; to it; the collector enters at <MoveRangeUp::Unchecked> instead because it manages string space itself.
+    ;; In: A = destination end low byte, Y = destination end high byte, DestinationEnd = destination end,
+    ;;   SourceStart = source start, SourceEnd = source end
+    ;; Out: ArraysEnd = destination end, SourceStart = unchanged, SourceEnd = source start minus $100,
+    ;;   DestinationEnd = destination start minus $100
+    ;; Errors: OUT OF MEMORY if the destination end is not below <StringsBottom> after collection
+    ;; Entry:
+    ;;   Unchecked = copies without the space check or updating <ArraysEnd>
+    ;; See: <CheckFreeMemory>, <GARBA2>
+    ;; Also: BLTU (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    .proc MoveRangeUp
+    jsr CheckFreeMemory
+    sta ArraysEnd
+    sty ArraysEnd+1
+;; Copies without the space check or updating <ArraysEnd>.
+;; Also: BLTUC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+Unchecked:
     sec
-    lda HIGHTR
-    sbc LOWTR
-    sta INDEX
+    lda SourceEnd
+    sbc SourceStart
+    sta Pointer1
     tay
-    lda HIGHTR+1
-    sbc LOWTR+1
+    lda SourceEnd+1
+    sbc SourceStart+1
     tax
     inx
     tya
-    beq DECBLT
-    lda HIGHTR
+    beq NextPage
+    lda SourceEnd
     sec
-    sbc INDEX
-    sta HIGHTR
-    bcs BLT1
-    dec HIGHTR+1
+    sbc Pointer1
+    sta SourceEnd
+    bcs SetDestination
+    dec SourceEnd+1
     sec
-BLT1:
-    lda HIGHDS
-    sbc INDEX
-    sta HIGHDS
-    bcs MOREN1
-    dec HIGHDS+1
-    bcc MOREN1
-BLTLP:
-    lda (HIGHTR),y
-    sta (HIGHDS),y
-MOREN1:
+;; Lowers <DestinationEnd> by the partial-page length.
+;; Also: BLT1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+SetDestination:
+    lda DestinationEnd
+    sbc Pointer1
+    sta DestinationEnd
+    bcs NextByte
+    dec DestinationEnd+1
+    bcc NextByte
+;; (<SourceEnd>),y to (<DestinationEnd>),y.
+;; Also: BLTLP (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+CopyByte:
+    lda (SourceEnd),y
+    sta (DestinationEnd),y
+;; Dey; loop; then copies offset 0.
+;; Also: MOREN1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+NextByte:
     dey
-    bne BLTLP
-    lda (HIGHTR),y
-    sta (HIGHDS),y
-DECBLT:
-    dec HIGHTR+1
-    dec HIGHDS+1
+    bne CopyByte
+    lda (SourceEnd),y
+    sta (DestinationEnd),y
+;; Steps both high bytes down a page; X pages.
+;; Also: DECBLT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+NextPage:
+    dec SourceEnd+1
+    dec DestinationEnd+1
     dex
-    bne MOREN1
+    bne NextByte
     rts
+    .endproc
 
-;; Checks that the hardware stack has room for a requested number of two-byte entries and its reserve.
-;;
-;; The selected reserve is added to twice the entry count. AppleSoft and PET BASIC 1 use $36; PET BASIC 2
-;; and 4 use $3E. Recursive evaluation and permanent FOR and GOSUB frames call this before allocating space.
-;; Counts above $7F are not independently rejected: the bit shifted into carry is added to the low byte.
-;; In: A = number of two-byte entries, 0 through $7F
-;; Errors: OUT OF MEMORY if the reserve addition overflows or the resulting threshold exceeds the stack pointer
-;; See: <FRMEVL>, <FOR>, <GOSUB>
-GETSTK:
+    ;; Checks that the hardware stack has room for a requested number of two-byte entries and its reserve.
+    ;;
+    ;; The selected reserve is added to twice the entry count. AppleSoft uses $36, PET BASIC 1 $36 at its default of 19
+    ;; levels, and PET BASIC 2 and 4 $3E. Recursive evaluation and permanent FOR and GOSUB frames call this before
+    ;; allocating space. Counts above $7F are not independently rejected: the bit shifted into carry is added to the low
+    ;; byte.
+    ;; In: A = number of two-byte entries, 0 through $7F
+    ;; Errors: OUT OF MEMORY if the reserve addition overflows or the resulting threshold exceeds the stack pointer
+    ;; See: <FRMEVL>, <Statements::For>, <Statements::GoSub>
+    ;; Also: GETSTK (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    .proc CheckStack
     asl a
     adc #stackReserve
     bcs OMERR
-    sta INDEX
+    sta Pointer1
     tsx
-    cpx INDEX
+    cpx Pointer1
     bcc OMERR
     rts
+    .endproc
 
-;; Checks that an address is below the bottom of allocated string space, collecting strings if necessary.
-;;
-;; If the address meets or exceeds <FRETOP>, <GARBA2> compacts strings. The address and the nine bytes of
-;; shared floating-point and transfer scratch from <HIGHDS> through <LOWTR>+1 are saved across collection.
-;; The save loop pushes Y first, then <LOWTR>+1 down to <HIGHDS>. Its last load reads <TEMPF1> but is not pushed.
-;; On AppleSoft those scratch addresses are $9C through $94 and the unused last load is at $93.
-;; In: A = address low byte, Y = address high byte
-;; Out: A = address low byte, Y = address high byte
-;; Errors: OUT OF MEMORY if the address is still at or above <FRETOP>
-REASON:
-    cpy FRETOP+1
-    bcc REARTS
-    bne TRYMOR
-    cmp FRETOP
-    bcc REARTS
-TRYMOR:
+    ;; Checks that an address is below the bottom of allocated string space, collecting strings if necessary.
+    ;;
+    ;; If the address meets or exceeds <StringsBottom>, <GARBA2> compacts strings. The address and the nine bytes of
+    ;; shared floating-point and transfer scratch from <DestinationEnd> through <SourceStart>+1 are saved across
+    ;; collection. The save loop pushes Y first, then <SourceStart>+1 down to <DestinationEnd>. Its last load reads
+    ;; <FloatTemporary1> but is not pushed. On AppleSoft those scratch addresses are $9C through $94 and the unused last
+    ;; load is at $93.
+    ;; In: A = address low byte, Y = address high byte
+    ;; Out: A = address low byte, Y = address high byte
+    ;; Errors: OUT OF MEMORY if the address is still at or above <StringsBottom>
+    ;; Also: REASON (M6502, ASTIL, AS82, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    .proc CheckFreeMemory
+    cpy StringsBottom+1
+    bcc Done
+    bne Collect
+    cmp StringsBottom
+    bcc Done
+;; Pushes A, Y and nine scratch bytes, calls <GARBA2>.
+;; Also: TRYMOR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+Collect:
     pha
     ldx #$09
     tya
-REASAV:
+;; Pushes <FloatTemporary1>+x for x = 9 down to 1.
+;; Also: REASAV (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+SaveScratch:
     pha
-    lda TEMPF1,x
+    lda FloatTemporary1,x
     dex
-    bpl REASAV
+    bpl SaveScratch
     jsr GARBA2
     ldx #$F7
-REASTO:
+;; Pulls the nine bytes back after collection.
+;; Also: REASTO (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+RestoreScratch:
     pla
-    sta FAC,x
+    sta Fac,x
     inx
-    bmi REASTO
+    bmi RestoreScratch
     pla
     tay
     pla
-    cpy FRETOP+1
-    bcc REARTS
+    cpy StringsBottom+1
+    bcc Done
     bne OMERR
-    cmp FRETOP
+    cmp StringsBottom
     bcs OMERR
-REARTS:
+;; Returns.
+;; Also: REARTS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+Done:
     rts
+    .endproc
 .endmacro

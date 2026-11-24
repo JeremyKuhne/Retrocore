@@ -224,8 +224,8 @@ internal static class SourceText
     ///  <para>
     ///   Skips a macro's body, which names its parameters; a <c>.using</c> line, which names scopes; the body of
     ///   a <c>.struct</c>, <c>.union</c> or <c>.enum</c>, whose names are the type's own members; and the name a
-    ///   <c>.scope</c> or <c>.proc</c> line declares, which is a definition, not a use. A name before <c>::</c>
-    ///   names a scope and one after it a scope's member, so neither is taken either.
+    ///   <c>.scope</c> or <c>.proc</c> line declares, which is a definition, not a use. Nor does it take a name before
+    ///   or after <c>::</c>: the assembler resolves a historical name only as a plain name.
     ///  </para>
     /// </remarks>
     /// <param name="lines">The lines of a source file.</param>
@@ -287,14 +287,17 @@ internal static class SourceText
         return "";
     }
 
-    // The name a .scope or .proc line declares: the word after the directive ("Name" in ".proc Name" and
-    // ".scope Name continued"), or the label before it ("Name .proc").
+    // The name a .scope or .proc line declares: the word after the directive, after any label ("Name" in
+    // ".proc Name", ".scope Name continued" and ca65's "Label: .proc Name"), up to an address size ("Name: far").
     private static string? DeclaredName(string directive)
     {
-        string[] words = directive.Split(separator: (char[]?)null, 3, StringSplitOptions.RemoveEmptyEntries);
-        if (words.Length == 0) { return null; }
-        if (words[0].StartsWith('.')) { return words.Length > 1 ? words[1] : null; }
-        return words[0].TrimEnd(':');
+        string[] words = directive.Split(separator: (char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        int at = Array.FindIndex(words, word => word.StartsWith('.'));
+        if (at < 0 || at + 1 >= words.Length) { return null; }
+        string word = words[at + 1];
+        int end = 0;
+        while (end < word.Length && IsNameCharacter(word[end])) { end++; }
+        return end == 0 ? null : word[..end];
     }
 
     // The names in a line of code, with their columns, but not a label the line defines at its start.
@@ -322,7 +325,8 @@ internal static class SourceText
             while (end < code.Length && IsNameCharacter(code[end])) { end++; }
             bool qualified = index >= 2 && code[index - 1] == ':' && code[index - 2] == ':';
 
-            // A name before :: is a scope's, never a symbol's, so it is not a historical name either.
+            // A name before :: qualifies the one after it, and the assembler looks up a historical name only for a
+            // plain name (AssemblyPreprocessor.ConstantName), so a qualifier is never one.
             bool qualifier = end + 1 < code.Length && code[end] == ':' && code[end + 1] == ':';
             if (index != 0 && !qualified && !qualifier && !char.IsAsciiDigit(code[index]) && code[index - 1] != '$')
             {

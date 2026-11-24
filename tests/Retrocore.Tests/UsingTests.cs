@@ -1016,8 +1016,8 @@ public sealed class UsingTests
     }
 
     /// <summary>
-    ///  The historical-name hint does not take the name a <c>.scope</c> or <c>.proc</c> line declares, or a scope's
-    ///  name before <c>::</c>, as a use.
+    ///  The historical-name hint does not take the name a <c>.scope</c> or <c>.proc</c> line declares, after a label
+    ///  or before an address size as ca65 writes them, or a scope's name before <c>::</c>, as a use.
     /// </summary>
     [TestMethod]
     public void DeclaredScopeNamesAreNotHistoricalNames()
@@ -1030,10 +1030,12 @@ public sealed class UsingTests
             ".proc CH",
             ".endproc",
             "    jsr KBD::Read",
+            "Alias: .scope KBD",
+            "    .proc KBD: far",
             "    lda CH"
         ];
 
-        SourceText.CodeNames(lines).Where(use => use.Name is "KBD" or "CH").Should().Equal([(6, 8, "CH")]);
+        SourceText.CodeNames(lines).Where(use => use.Name is "KBD" or "CH").Should().Equal([(8, 8, "CH")]);
     }
 
     /// <summary>

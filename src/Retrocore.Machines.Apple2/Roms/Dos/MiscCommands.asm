@@ -3,7 +3,7 @@
 ;; characters
 ;;
 ;; The last command handler module, $A510-$A6A7 where DOS runs (in both versions): the handlers for WRITE, READ, INIT,
-;; CATALOG, FP, INT, EXEC and POSITION, which the command table <CommandHandlers> lists, and the code DOS's input and
+;; CATALOG, FP, `INT`, EXEC and POSITION, which the command table <CommandHandlers> lists, and the code DOS's input and
 ;; output hooks (DosHook.asm) call to move the characters of a text file once READ, WRITE or EXEC has started.
 ;;
 ;; Text files work through BASIC's own PRINT and INPUT. READ and WRITE only open the file and set a state:
@@ -13,7 +13,7 @@
 ;; (<TextFile::ReadExecCharacter>). The file stays open until CLOSE, the end of its data, or BASIC going back to
 ;; immediate mode (<TestProgramRunning>).
 ;;
-;; FP and INT choose the BASIC. The Apple II has Integer BASIC or Applesoft in ROM at $D000-$FFFF, and a language
+;; FP and `INT` choose the BASIC. The Apple II has Integer BASIC or Applesoft in ROM at $D000-$FFFF, and a language
 ;; card in slot 0 can hold the other in RAM at the same addresses; <Commands::FindBasic> finds the one wanted.
 ;; Without Applesoft in either, FP runs the System Master's APPLESOFT program, which loads Applesoft into lower RAM.
 ;; OpenClose.asm and LoadSave.asm hold the other handlers; docs/Dos.md describes the command interpreter.
@@ -189,7 +189,7 @@ RunLoader:
     jmp Run
 .endproc
 
-;; INT: makes Integer BASIC the active BASIC and starts DOS and Integer BASIC afresh, losing the program in memory.
+;; `INT`: makes Integer BASIC the active BASIC and starts DOS and Integer BASIC afresh, losing the program in memory.
 ;;
 ;; At $A59E where DOS runs. <MatchBasic> (LoadSave.asm) comes here to switch to Integer BASIC for a program of that
 ;; type.

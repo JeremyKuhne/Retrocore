@@ -5,7 +5,7 @@
 ;; Control-D or typed at BASIC's prompt, and calls the command's handler (Apple's CMDSCAN module, at $9FCD-$A192
 ;; where DOS runs). In order:
 ;;
-;; - <Scanner::Scan> looks the command's name up in <CommandNames> (CommandTables.asm). Blanks are skipped, so "CAT
+;; - <Scanner::Scan> looks the command's name up in <CommandNames> (CommandTables.asm). Blanks are skipped, so "`CAT`
 ;;   ALOG" matches too. The command's number, doubled, ends up in <CommandOffset>.
 ;; - <Scanner::ReadOperands> checks the command's entry in <CommandSyntax>: whether it may be used in direct mode, and
 ;;   whether it takes one or two file names (into <FileName> and <SecondFileName>, 30 characters each, padded with

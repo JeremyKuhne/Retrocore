@@ -178,7 +178,7 @@ Done:
 
 ;; Prints a DOS error message and returns to BASIC.
 ;;
-;; At $A6D2 where DOS runs. It clears the input, output and RUN states. If Applesoft's ONERR GOTO is in force
+;; At $A6D2 where DOS runs. It clears the input, output and RUN states. If Applesoft's `ONERR` GOTO is in force
 ;; (<ASONERR>), nothing is printed, so that the program's handler can deal with the error; otherwise a Return, the bell
 ;; and a Return, the message and a Return. Then, if a program is running, it goes to BASIC's error entry (through
 ;; <BasicError>) with the error number in X; in immediate mode, to BASIC's command level (through <BasicWarmStart>). The
@@ -189,7 +189,7 @@ Done:
 .assert MASTER || * = $A6D2, "Errors::Report is at $A6D2 where DOS runs."
 
 ;; What A holds for BASIC's error entry: Control-C's code, without bit 7. Applesoft's entry (<ASBRK1>) goes to the
-;; ONERR GOTO handler, with X as the error number, if one is in force; otherwise it compares A with Control-C and
+;; `ONERR` GOTO handler, with X as the error number, if one is in force; otherwise it compares A with Control-C and
 ;; stops the program with BREAK and the line's number, as Control-C does. Integer BASIC's entry (<IBBRK>) ignores A.
 CONTROL_C = 3
 
@@ -197,7 +197,7 @@ CONTROL_C = 3
     sta a:HookA
     jsr ClearAllStates
 
-    ; No message while Applesoft's ONERR GOTO is in force.
+    ; No message while Applesoft's `ONERR` GOTO is in force.
     lda a:ActiveBasic
     beq PrintMessages
     lda ASONERR

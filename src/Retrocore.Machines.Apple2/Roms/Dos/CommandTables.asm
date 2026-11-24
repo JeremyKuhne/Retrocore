@@ -79,7 +79,7 @@ COMMAND_MAXFILES = 21
 ;; FP, which selects Applesoft.
 COMMAND_FP = 22
 
-;; INT, which selects Integer BASIC.
+;; `INT`, which selects Integer BASIC.
 COMMAND_INT = 23
 
 ;; BSAVE, which saves memory as a binary file.

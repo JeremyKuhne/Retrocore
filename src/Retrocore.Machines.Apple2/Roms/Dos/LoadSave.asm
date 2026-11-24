@@ -496,13 +496,13 @@ AfterLoad:
 ;;
 ;; At $A4FC where DOS runs. It readies the program to run from its start and clears its variables
 ;; (<ApplesoftRomRun::ResetProgram>), sets <PromptCharacter> and <ASONERR> to the 0 that call leaves in A, so that
-;; ONERR is off and <TestProgramRunning> sees a running program, and starts the program running
+;; `ONERR` is off and <TestProgramRunning> sees a running program, and starts the program running
 ;; (<ApplesoftRomRun::Execute>).
 ;; Also: ASRUN1 (DOS33, DOS31)
 .proc ApplesoftRomRun
 .assert MASTER || * = $A4FC, "Commands::ApplesoftRomRun is at $A4FC where DOS runs."
 
-;; ROM Applesoft's RUNC: points the text pointer before the program's first line, clears the variables, the strings
+;; ROM Applesoft's `RUNC`: points the text pointer before the program's first line, clears the variables, the strings
 ;; and the stack, and leaves A = 0.
 ResetProgram = $D665
 
@@ -523,7 +523,7 @@ Execute = $D7D2
 .proc ApplesoftRamRun
 .assert MASTER || * = $A506, "Commands::ApplesoftRamRun is at $A506 where DOS runs."
 
-;; RAM Applesoft's RUNC, as <ApplesoftRomRun::ResetProgram>.
+;; RAM Applesoft's `RUNC`, as <ApplesoftRomRun::ResetProgram>.
 ResetProgram = $0E65
 
 ;; RAM Applesoft's <AppleSoft:NXTCO1>, as <ApplesoftRomRun::Execute>.

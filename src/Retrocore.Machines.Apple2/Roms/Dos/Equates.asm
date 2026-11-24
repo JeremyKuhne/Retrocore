@@ -207,7 +207,7 @@ ASHM2 = $6F
 ;; See: <AppleSoft:LOCK>, <Commands::Save>
 ASRNX = $D6
 
-;; Applesoft's <ERRFLG>: bit 7 set while an ONERR GOTO is in force.
+;; Applesoft's <ERRFLG>: bit 7 set while an `ONERR` GOTO is in force.
 ;;
 ;; DOS's <Errors::Report> prints no message while it is set, so that the program's handler deals with the error.
 ;; <Commands::ApplesoftRomRun> and <Commands::ApplesoftRamRun> clear it when DOS starts a program.

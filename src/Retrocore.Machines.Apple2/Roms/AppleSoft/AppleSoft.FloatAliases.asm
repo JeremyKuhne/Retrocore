@@ -9,5 +9,5 @@
 
 ;; Prints <FAC> as a decimal number.
 ;;
-;; Apple's name for <LINPRT_FOUT>: PRNTFAC (ASTIL), in ASTIL's article on device I/O routines (79).
+;; Apple's name for <LINPRT_FOUT>: PRNTFAC (ASTIL), in ASTIL's article 79, on device I/O routines.
 PRNTFAC = LINPRT_FOUT

@@ -73,10 +73,20 @@ internal static partial class BasicAttribution
     /// <param name="alias">The alias's documentation.</param>
     /// <param name="build">The documents that cover the build being checked.</param>
     /// <param name="expected">Every document that gives the name, or null to check only the build's.</param>
-    internal static void AssertCites(DocumentationTopic alias, IReadOnlyCollection<string> build, IReadOnlyCollection<string>? expected = null)
+    /// <param name="target">The definition the alias names, which its documentation must link to, or null.</param>
+    internal static void AssertCites(
+        DocumentationTopic alias,
+        IReadOnlyCollection<string> build,
+        IReadOnlyCollection<string>? expected = null,
+        string? target = null)
     {
         IReadOnlyList<string> keys = Citation([alias.Summary, .. alias.Remarks], alias.Name)
             ?? throw new AssertFailedException($"{alias.Name}'s documentation must cite its documents, as '{alias.Name} (KEY)'.");
+
+        if (target is not null)
+        {
+            string.Join(" ", [alias.Summary, .. alias.Remarks]).Should().Contain($"<{target}>", $"{alias.Name}'s documentation must name the definition it aliases");
+        }
 
         foreach (string key in keys)
         {
@@ -100,10 +110,14 @@ internal static partial class BasicAttribution
     internal static void AssertNotShared(AssemblyResult result, DocumentationSet docs, string name)
     {
         result.HistoricalNames.Should().NotContainKey(name, $"{name} must resolve only through its vendor's alias");
-        foreach (DocumentationTopic topic in docs.Topics.Where(IsShared))
+        Regex word = new($@"(?<![\w$]){Regex.Escape(name)}(?![\w$])");
+        foreach (DocumentationTopic topic in SharedTopics(docs))
         {
             DocumentationAlso.Of(topic.Sections).Select(also => also.Name)
                 .Should().NotContain(name, $"{topic.Name} is shared, so its Also: must not give the vendor's {name}");
+
+            word.IsMatch(string.Join(" ", [topic.Summary, .. topic.Remarks]))
+                .Should().BeFalse($"{topic.Name} is shared, so its documentation must not give the vendor's {name}");
         }
     }
 
@@ -114,7 +128,7 @@ internal static partial class BasicAttribution
     /// <param name="docs">A build's documentation.</param>
     internal static void AssertSharedNamesAreMicrosofts(DocumentationSet docs)
     {
-        foreach (DocumentationTopic topic in docs.Topics.Where(IsShared))
+        foreach (DocumentationTopic topic in SharedTopics(docs))
         {
             foreach (DocumentationAlso also in DocumentationAlso.Of(topic.Sections))
             {
@@ -149,6 +163,14 @@ internal static partial class BasicAttribution
         return false;
     }
 
+    // The build's definitions documented in the shared Microsoft modules, of which every build has some.
+    private static List<DocumentationTopic> SharedTopics(DocumentationSet docs)
+    {
+        List<DocumentationTopic> shared = [.. docs.Topics.Where(IsShared)];
+        shared.Should().NotBeEmpty("the build must include the shared Microsoft modules' documentation");
+        return shared;
+    }
+
     // Whether a definition is documented in the shared Microsoft modules.
     private static bool IsShared(DocumentationTopic topic)
     {
@@ -169,7 +191,7 @@ internal static partial class BasicAttribution
     }
 
     // The remarks are one entry per source line, with an empty entry between paragraphs. Each attribution starts a
-    // sentence with "In <variant>,".
+    // sentence, or a clause after a semicolon, with "In <variant>,".
     private static IEnumerable<string> Sentences(IEnumerable<string> remarks)
     {
         List<string> paragraphs = [""];

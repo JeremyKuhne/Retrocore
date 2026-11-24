@@ -23,6 +23,7 @@ GETNUM:
     jsr GETADR
 
 ;; Requires a comma and reads the following byte expression.
+;;
 ;; Out: X = byte value, TXTPTR = terminating character
 ;; See: <CHKCOM>, <GETBYT>
 COMBYT:

@@ -191,7 +191,7 @@ public sealed class BasicSharedFloatAliasesTests
             alias.Summary.Should().NotBeNullOrWhiteSpace();
             Path.GetFullPath(alias.Path).Should().Be(Path.GetFullPath(path));
             alias.Value.Should().Be(result.Symbols[name]);
-            BasicAttribution.AssertCites(alias, buildKeys, documentKeys);
+            BasicAttribution.AssertCites(alias, buildKeys, documentKeys, target);
 
             DocumentationTopic topic = docs.Find(target)
                 ?? throw new AssertFailedException($"{target} has no shared documentation.");

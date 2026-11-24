@@ -32,8 +32,8 @@ workspace adds documents of its own, or replaces a key, with the same columns.
 
 ## How the BASIC documents were checked
 
-The Microsoft 6502 BASIC keys were checked against the SDK's builds before any name is cited from them; none of their
-text is in the repository. The full method, with the counts, is step 2 of the BASIC conversion's log,
+The Microsoft 6502 BASIC keys were checked against the SDK's builds before any name is cited from them. Of their
+text, only M6502's is in the repository, as `m6502.asm`. The full method, with the counts, is step 2 of the BASIC conversion's log,
 `docs/conversions/Basic.md`, on the `claude/basic-rename-table` branch until it is merged. A name is cited from a
 document only where the check found that the document gives that name for that thing:
 
@@ -41,7 +41,8 @@ document only where the check found that the document gives that name for that t
   build where `m6502.asm` defines it and the overlay build gives it the same value as the native build. Where the
   overlay's definition is in a vendor's `.mac`, a matching value shows only that the overlay kept Microsoft's label on
   the vendor's code, so each such case was checked for the `.mac` replacing the very line that defines the name;
-  M6502 is not cited on the nine rows where it does not.
+  M6502 is not cited on the nine rows where it does not (BASIC 4's array-creation code and BASIC 1's patch
+  routines).
 - **ASTIL:** names and addresses read from the "Applesoft: Internals" index, page-zero map and routine articles, and
   cited where the address equals the AppleSoft builds' value. A name found only in prose is not cited.
 - **AS82:** only the archive's damaged OCR text could be read. A name is cited only where the listing's symbol tables

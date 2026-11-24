@@ -330,7 +330,7 @@ public sealed class BasicSharedAliasConsistencyTests
             .Should().BeTrue($"{alias.Name} must have its own source attribution");
 
         aliasTopic.Value.Should().Be(definition.Value);
-        BasicAttribution.AssertCites(aliasTopic, root.Keys);
+        BasicAttribution.AssertCites(aliasTopic, root.Keys, target: alias.Target);
 
         string targetName = UltimateTarget(alias, aliases);
         AssemblySymbol target = Symbol(root.Result, targetName, $"{root.Name}: {alias.Name}'s target");

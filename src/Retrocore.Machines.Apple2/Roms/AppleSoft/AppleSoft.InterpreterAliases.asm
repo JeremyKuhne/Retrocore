@@ -9,5 +9,5 @@
 
 ;; Requires a comma and reads a byte expression.
 ;;
-;; Apple's name for <COMBYT>: COMBYTE (ASTIL, AS82), in ASTIL's article on the floating-point math package (76).
+;; Apple's name for <COMBYT>: COMBYTE (ASTIL, AS82), in ASTIL's article 76, on the floating-point math package.
 COMBYTE = COMBYT

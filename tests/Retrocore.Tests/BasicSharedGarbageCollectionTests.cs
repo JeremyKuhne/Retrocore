@@ -603,9 +603,10 @@ public sealed class BasicSharedGarbageCollectionTests
         string folder = Path.Join(Inputs, "Microsoft6502Basic");
         string source = $"""
             .cpu Mos6502
+            .include "MsBasic.Layouts.asm"
             .include "MsBasic.StringConversion.asm"
             .org ${legacy.Symbol("STR"):X4}
-                STRING_FROM_NUMBER
+                StringFromNumber
             STRING_ENTRY_END:
             """;
 
@@ -634,16 +635,17 @@ public sealed class BasicSharedGarbageCollectionTests
         string folder = Path.Join(Inputs, "Microsoft6502Basic");
         string source = $"""
             .cpu Mos6502
+            .include "MsBasic.Layouts.asm"
             .include "MsBasic.StringGarbageCollection.asm"
             .org ${legacy.Symbol("GARBA2"):X4}
-                STRING_GARBAGE_COLLECTION {(fullPointer ? 1 : 0)}, {(patchedArray ? 1 : 0)}, {(subtractOffset ? 1 : 0)}
+                StringGarbageCollection {(fullPointer ? 1 : 0)}, {(patchedArray ? 1 : 0)}, {(subtractOffset ? 1 : 0)}
             COLLECTOR_END:
             """;
 
         string[] dependencies =
         [
             "MEMSIZ", "FRETOP", "STREND", "GRBPNT", "GRBTOP", "TEMPST", "TEMPPT", "INDEX",
-            "VARTAB", "ARYTAB", "ARYPNT", "FOUR6", "ADDPRC", "INTPRC", "STRSIZ", "SIZE",
+            "VARTAB", "ARYTAB", "ARYPNT", "FOUR6", "ADDPRC", "INTPRC", "SIZE",
             "HIGHTR", "HIGHDS", "BLTUC"
         ];
 
@@ -678,7 +680,7 @@ public sealed class BasicSharedGarbageCollectionTests
             .include "Commodore.Equates.asm"
             .include <MsBasic.StringGarbageCollection.asm>
             .org ${legacy.Symbol("GARBA2"):X4}
-                STRING_GARBAGE_COLLECTION {(early ? 0 : 1)}, {(early ? 1 : 0)}, {(early ? 1 : 0)}
+                StringGarbageCollection {(early ? 0 : 1)}, {(early ? 1 : 0)}, {(early ? 1 : 0)}
             COLLECTOR_END:
             """;
 
@@ -693,7 +695,7 @@ public sealed class BasicSharedGarbageCollectionTests
         string linkedSource = linked ? ".include \"Commodore.StringGarbageCollection.asm\"" : "";
         string collector = linked
             ? "LINKED_STRING_GARBAGE_COLLECTION"
-            : $"STRING_GARBAGE_COLLECTION {(early ? 0 : 1)}, {(early ? 1 : 0)}, {(early ? 1 : 0)}";
+            : $"StringGarbageCollection {(early ? 0 : 1)}, {(early ? 1 : 0)}, {(early ? 1 : 0)}";
 
         string source = $"""
             .cpu Mos6502
@@ -704,9 +706,9 @@ public sealed class BasicSharedGarbageCollectionTests
             .include <MsBasic.StringGarbageCollection.asm>
             {linkedSource}
             .org ${legacy.Symbol("STR"):X4}
-                STRING_FROM_NUMBER
-                STRING_STORAGE INPUT_BUFFER_PAGE, {(early ? 0 : 1)}
-                STRING_ALLOCATION {(linked ? 1 : 0)}
+                StringFromNumber
+                StringStorage INPUT_BUFFER_PAGE, {(early ? 0 : 1)}
+                StringAllocation {(linked ? 1 : 0)}
                 {collector}
             STRING_SLICE_END:
             """;
@@ -795,6 +797,13 @@ public sealed class BasicSharedGarbageCollectionTests
                 && symbol.Value >= start
                 && symbol.Value < end))
         {
+            // A vendor's alias reaches its name only in a build that includes the vendor's historical names: a
+            // standalone build of the module skips it, and a whole build must have it.
+            if (BasicNames.IsVendorName(label.Name) && !BasicNames.IncludesHistoricalNames(native))
+            {
+                continue;
+            }
+
             native.SymbolsWithHistoricalNames.Should().ContainKey(label.Name);
             native.Symbol(label.Name).Should().Be(label.Value, $"{label.Name} must retain its ROM address");
         }

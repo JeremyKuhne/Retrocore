@@ -369,22 +369,23 @@ public sealed class BasicSharedAssignmentTests
         string stringBlock = standardStrings
             ? $"""
                 .org ${legacy.Symbol("GETSPT"):X4}
-                    STRING_ASSIGNMENT 0, 0
+                    StringAssignment 0, 0
                 ASSIGNMENT_STRING_END:
                 """
             : $"""
                 .include "Commodore.StringAssignment.asm"
                 .org ${legacy.Symbol("GETSPT"):X4}
-                    STRING_ASSIGNMENT 1, 1
+                    StringAssignment 1, 1
                     STRING_LINK_ADJUST {(patchedStatus ? 1 : 0)}
                 ASSIGNMENT_STRING_END:
                 """;
 
         string source = $"""
             .cpu Mos6502
+            .include "MsBasic.Layouts.asm"
             .include "MsBasic.Assignment.asm"
             .org ${legacy.Symbol("LET"):X4}
-                ASSIGNMENT_START
+                AssignmentStart
             ASSIGNMENT_START_END:
             {clockBlock}
             {stringBlock}
@@ -419,7 +420,7 @@ public sealed class BasicSharedAssignmentTests
         }
 
         AssemblyResult native = new Assembler.Assembler().Assemble(
-            new AssemblySource(source, Path.Join(SharedInputs, "SharedAssignmentTest.asm")),
+            new AssemblySource(BasicNames.ScopedNames(symbols) + "\n" + source, Path.Join(SharedInputs, "SharedAssignmentTest.asm")),
             new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
             {
                 SourceResolver = new FileAssemblySourceResolver(),
@@ -440,6 +441,20 @@ public sealed class BasicSharedAssignmentTests
         foreach (AssemblySymbol label in legacy.SymbolDefinitions.Where(
             symbol => !symbol.IsConstant && symbol.Value >= start && symbol.Value < end))
         {
+            // A vendor's alias reaches its name only in a build that includes the vendor's historical names: a
+            // standalone build of the module skips it, and a whole build must have it.
+            if (BasicNames.IsVendorName(label.Name) && !BasicNames.IncludesHistoricalNames(native))
+            {
+                continue;
+            }
+
+            // A label only the SDK's own overlays give has no historical name; its definition keeps its address.
+            if (BasicNames.OverlayOnlyLabels.TryGetValue(label.Name, out string? current))
+            {
+                native.Symbol(current).Should().Be(label.Value, $"{label.Name}'s definition must retain its ROM address");
+                continue;
+            }
+
             native.SymbolsWithHistoricalNames.Should().ContainKey(label.Name);
             native.Symbol(label.Name).Should().Be(label.Value, $"{label.Name} must retain its ROM address");
         }

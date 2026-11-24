@@ -85,7 +85,7 @@ Done:
     ;; Errors: OUT OF MEMORY if the destination end is not below <StringsBottom> after collection
     ;; Entry:
     ;;   Unchecked = copies without the space check or updating <ArraysEnd>
-    ;; See: <CheckFreeMemory>, <GARBA2>
+    ;; See: <CheckFreeMemory>, <Strings::CollectGarbage>
     ;; Also: BLTU (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc MoveRangeUp
     jsr CheckFreeMemory
@@ -151,7 +151,7 @@ NextPage:
     ;; byte.
     ;; In: A = number of two-byte entries, 0 through $7F
     ;; Errors: OUT OF MEMORY if the reserve addition overflows or the resulting threshold exceeds the stack pointer
-    ;; See: <FRMEVL>, <Statements::For>, <Statements::GoSub>
+    ;; See: <EvaluateExpression>, <Statements::For>, <Statements::GoSub>
     ;; Also: GETSTK (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc CheckStack
     asl a
@@ -166,11 +166,11 @@ NextPage:
 
     ;; Checks that an address is below the bottom of allocated string space, collecting strings if necessary.
     ;;
-    ;; If the address meets or exceeds <StringsBottom>, <GARBA2> compacts strings. The address and the nine bytes of
-    ;; shared floating-point and transfer scratch from <DestinationEnd> through <SourceStart>+1 are saved across
-    ;; collection. The save loop pushes Y first, then <SourceStart>+1 down to <DestinationEnd>. Its last load reads
-    ;; <FloatTemporary1> but is not pushed. On AppleSoft those scratch addresses are $9C through $94 and the unused last
-    ;; load is at $93.
+    ;; If the address meets or exceeds <StringsBottom>, <Strings::CollectGarbage> compacts strings. The address and the
+    ;; nine bytes of shared floating-point and transfer scratch from <DestinationEnd> through <SourceStart>+1 are saved
+    ;; across collection. The save loop pushes Y first, then <SourceStart>+1 down to <DestinationEnd>. Its last load
+    ;; reads <FloatTemporary1> but is not pushed. On AppleSoft those scratch addresses are $9C through $94 and the
+    ;; unused last load is at $93.
     ;; In: A = address low byte, Y = address high byte
     ;; Out: A = address low byte, Y = address high byte
     ;; Errors: OUT OF MEMORY if the address is still at or above <StringsBottom>
@@ -181,7 +181,7 @@ NextPage:
     bne Collect
     cmp StringsBottom
     bcc Done
-;; Pushes A, Y and nine scratch bytes, calls <GARBA2>.
+;; Pushes A, Y and nine scratch bytes, calls <Strings::CollectGarbage>.
 ;; Also: TRYMOR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 Collect:
     pha
@@ -194,7 +194,7 @@ SaveScratch:
     lda FloatTemporary1,x
     dex
     bpl SaveScratch
-    jsr GARBA2
+    jsr Strings::CollectGarbage
     ldx #$F7
 ;; Pulls the nine bytes back after collection.
 ;; Also: REASTO (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)

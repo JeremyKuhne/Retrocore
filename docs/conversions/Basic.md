@@ -885,6 +885,162 @@ and ON GOTO, RETURN from inside FOR, RESTORE, READ and DATA, REM, CLEAR (CLR) an
 and reported a false `Keeps: X` added to `FindLine` as a control (a first control, `Keeps: A` on IsLetter, was not
 reported because the claim is true).
 
+### E. The expression, variable and string modules (X8 step 5)
+
+Converted, with `; retrocore: style=strict`, part B2's sixteen shared modules: `MsBasic.ArrayMultiplication`, `Arrays`,
+`Assignment`, `Dim`, `ExpressionCore`, `OperandEvaluation`, `VariableInput`, `VariableLookup`, `StringStorage`,
+`StringStorage.Classic`, `StringStorage.Linked`, `StringConcatenation`, `StringConversion`, `StringFunctions`,
+`StringGarbageCollection` and `StringOutput`. The string package is the scope `Strings` (B2-Q1), the variable and
+array internals `Variables` (B2-Q2) and the logical operators `Operators` (B2-Q4). `MsBasic.Families.asm` now
+declares all three. `OperatorTable` is now a `.proc`, so B1's operator entries are its labels rather than top level.
+The bytes are unchanged in all eight builds.
+
+Decisions and how the table was applied:
+
+- E1. The macros take the table's names (`ArrayLookup`, `AssignmentStart`, `StringAssignment`, `ExpressionCore`,
+  `OperandEvaluation`, `IntegerVariableValue`, `FunctionDispatch`, `LogicalOperators`, `VariableInput`,
+  `VariableInputMessages`, `VariableSearch`, `SimpleVariableLookup`, `ExistingArrayEntry`, `StringStorage`,
+  `StringAllocation`, `UnlinkedStringAllocation`, `LinkedStringAllocation`, `StringConcatenation`,
+  `StringFromNumber`, `StringFunctions`, `StringGarbageCollection`). Every invocation, root and test follows. In the
+  vendors' files, as X6 has it, the code keeps its old names until part C and only the `<link>`s change, except:
+  - each vendor's `OperatorEntries` table names AND's handler `Operators::And`, where AppleSoft's had `OROP1` and
+    Commodore's `ANDOP`;
+  - two of part C's labels become the shared names (E6).
+- E2. D5, narrowed (S11): the builds' differences stay mid-routine `.if`s, and each contract holds in every build or
+  names the build that differs. `LogicalOperators` gives AppleSoft's Boolean OR, which falls into AND, under `.else`,
+  and the PET's bitwise Or and And under `.if bitwise`. The exception is `Strings::ReserveSpace` (GETSPA). Its two
+  allocators share only their first instruction, so each is a whole `.proc` in its own file, with its own
+  contract. Each allocator macro opens `Strings` and the routine itself, and the documentation then names its
+  labels in the routine. Before this, the routine was opened in `StringAllocation` and its labels were in a nested
+  macro, where the documentation named them without a scope; a vendor's alias of one could not inherit. A test that
+  pinned GETSPA's topic and source chain to `MsBasic.StringStorage.asm` now expects
+  `MsBasic.StringStorage.Classic.asm` ahead of it.
+- E3. Names that only one vendor's documents give leave the shared modules for that vendor's historical-names file, as
+  S6 has it (`AssertSharedNamesAreMicrosofts`):
+  - Commodore:
+    - STRD, CHRD, LEFTD, RIGHTD and MIDD (CBM4S79, HV1, HV1R, HV2, HV4, HV4R), and COPYC (E6). These were in
+      `Commodore.InterpreterAliases.asm`, which is now deleted, as AppleSoft's was in M10.
+    - BASIC 4's NXTPTR, QDSVAR, ARYVA2, ARYVA3, ARYVGO, ARYGET, GOGO, GOGO1, DVARTS, ARYDON, RES00, FRE01, FRE02 and
+      TRYAG4 (CBM4S79, HV4, HV4R).
+    - GETRTS (CBM4S79, HV4, HV4R) on BASIC 4's allocator's return. The table cites M6502 for it too, but Microsoft's
+      GETRTS is the output routine's return (PrintCharacter::Return, rows 1441 and 1969).
+
+    Each is under `.ifdef` its target (COPYC as E6 says), so a build of part of the modules leaves it out.
+  - AppleSoft: the overlay's own labels INDLO1, GOTAR1, GOTAR2, NOTOP1, ANDOP, OROP1, OROP11, OROP12, NOWGE2,
+    NOWGE3, TRMOK1, PTRGT4, STRNA1, STRNA2, STRNA3, SIMZER, FMAPT1 and QINTG1, cited UNKN as S6's are, since
+    `applesoft.mac` defines them. SIMZER's alias targets `::ZeroVariable`. The table's merge of STRNA3 into
+    `FindVariable::SearchScalars` stands.
+- E4. One old name with a different definition in each vendor (K12, R4). ANDOP is AppleSoft's `Operators::Or` and the
+  PET's `Operators::And`. ARYVA2, ARYVA3, ARYVGO, ARYGET, GOGO and DVARTS are the classic collector's steps in
+  AppleSoft and BASIC 1 and 2, but `Variables::Create`'s array back-link steps in BASIC 4. TRYAG3 is the unlinked
+  allocator's room check (Microsoft's) there, but BASIC 4's step before its own room check
+  (`Strings::ReserveSpace::BelowLink`); the table's row 706 gives that one M6502 too, which m6502.asm does not bear
+  out. Each name is an alias in
+  both vendors' files; Commodore's are guarded by their targets, since each PET build defines only one of them.
+  The classic collector's aliases are `Collector<Step>`:
+  AppleSoft cites M6502, and Commodore cites M6502, HV1, HV1R and HV2. The lineage rule is not extended across the
+  two collectors, which are different code under the same names. The vendor-leak checks of the workspace, math and
+  statement steps now allow the names both vendors give (`Except`).
+- E5. Three overlay labels get no `Also:`. They are LENFLT (`Functions::Len::ToFloat`) and BASIC 4's NOTDS and NOTDS1
+  (`StoreString`'s disk-status check, part C's names until then). No document gives them. HV4 and HV4R call NOTDS's
+  and NOTDS1's addresses DSKX2 and DSKX1. Those names wait for part C, which converts the labels and can give them
+  (rows 2349 and 2350). A Commodore alias must
+  cite one of its build's documents (`BasicAttribution.PetKeys`, S7), so UNKN cannot be a Commodore alias's
+  citation. Asking for an exemption to that rule would weaken a check, so I did not. Instead, `BasicNames.OverlayOnlyLabels`
+  lists them, and the overlay comparisons (`NativeBasicMatchesTheOverlay`, the assignment, string-function and
+  native-equates tests) check that each current name has the overlay's address. Whether such names should be
+  aliases cited UNKN is a question for the owner.
+- E6. The descriptor copy (COPYZC, COPYC). The shared `StoreDescriptor` (COPYZC, M6502) is assembled where the
+  collector is classic, and Commodore's alias gives it COPYC there. It is guarded by
+  `Strings::CollectGarbage::NextPass`, the classic collector's label, since BASIC 4's builds also define
+  `StoreDescriptor`. BASIC 4's own copy is part C's file, `Commodore.StringAssignment.asm`. Its label is now
+  `StoreLinkedDescriptor` (Also: COPYZC (M6502)), and `StoreDescriptor` is an equate of it, by which the shared
+  modules reach it. Commodore's alias `LinkedDescriptor` gives it COPYC, under `.ifdef` its target. Naming the label
+  `StoreDescriptor` would have merged its topic with the shared one, which may cite Microsoft's names only. Likewise,
+  BASIC 4's GARBA2 in `Commodore.StringGarbageCollection.asm` is `Strings::CollectGarbage`, opened as
+  `.scope Strings continued` there (Also: GARBA2 (M6502, CBM4S79, HV4, HV4R)). Both are bridges until part C
+  converts those files.
+- E7. TRYAG4's target is `Strings::ReserveSpace::CheckLinkedRoom`, not the table's `CheckRoom`. The documentation
+  merges a qualified name's topics across builds, so under the table's name the classic allocator's `CheckRoom`
+  would also have taken BASIC 4's TRYAG4 (`PetOldNamesMatchTheOverlay` and the citation checks fail that way).
+- E8. M4's deferral: BASIC 1's own zero bytes, `ZeroValue` in `MsBasic.VariableLookup.asm`, cite ZERO along the PET
+  line (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R), under S11's lineage rule; the table's row 860 gives M6502, HV1
+  and HV1R. AppleSoft's and BASIC 2's and 4's `ZeroValue` is the math step's, inside `Float::Half`. AppleSoft's own
+  bytes here are `ZeroVariable` (SIMZER), which has no `Also:` in the modules; AppleSoft's alias gives SIMZER (E3).
+  The math step's `ZeroValue`, inside `Float::Half`, now cites the whole line too (M6502, CBM4S79, HV1, HV1R, HV2,
+  HV4, HV4R), adding HV1 and HV1R, which give the name to BASIC 1's own zero, as the lineage rule asks.
+- E8a. Citations on a definition that only one vendor's builds assemble: the lineage rule stays within the vendor's
+  line. BASIC 4's allocator does not cite ASTIL for GETSPA. AppleSoft's Boolean OR cites OROP by M6502 only, since
+  the PET's documents describe its bitwise OR. Within the PET line, a routine that every build has, though in two
+  versions, cites the whole line, as S11 has it: both allocators' GETSPA, and both COPYC aliases. The labels inside
+  the two allocators and the two collectors, which are different code under the same names (E4), cite only the
+  documents of the builds that have them.
+- E9. Constants and layouts:
+  - `INPUT_MODE_INPUT`, `INPUT_MODE_GET` and `INPUT_MODE_READ` (asserted where READ's mode is the operand of a
+    skipped `lda #`).
+  - `FLOAT_SIZE` and `DEFAULT_BOUND` in `MsBasic.Layouts.asm`.
+  - The operator table's precedences, `PRECEDENCE_ADD` to `PRECEDENCE_RELATION`.
+  - `.sizeof(Variable)`, `.sizeof(ArrayHeader)`, `ArrayHeader::DIMENSIONS` and `LENGTH`, `OperatorEntry`'s fields
+    and `StringDescriptor`'s fields in many of the places the code had numbers, and `RELATION_TOKENS` for the count
+    of relational tokens. Some offsets, counts and flag values are still numbers, among them the collector's
+    descriptor-offset arithmetic, the multiplication's 16 bits, the link's two bytes, a few descriptor and variable
+    offsets, the type flags ($FF, $80, $7F) and the carriage return; naming them is left for a later pass.
+  - `*+n` branches are labels (`Arithmetic`, `NotFn`, `NotEmpty`).
+- E10. Three of `SimpleVariableLookup`'s parameters are renamed so its line fits in 120 columns: `checkCallerHigh` is
+  `callerHigh`, `useSimzer` is `ownZero` and `arrayEntryAlias` is `countEntry`. The table keeps the SDK's own
+  names (KEEP). Whether to wrap the line instead is a question for the owner.
+- E11. Tests and their helpers:
+  - `BasicNames` declares the three new scopes. An old name that names different definitions in different builds (ANDOP,
+    COPYZC, the room check and the classic collector's steps) is predefined per build: the operator-table,
+    interpreter-alias and decimal-input tests pass `BasicNames.Build(...)` to `WithCurrentNames` and `ScopedNames`, and
+    without a build both reject such a name. Its `DefiningSymbol` follows an alias to its target. `BothVendorsNames`
+    pins the names both vendors' files give, and `VendorLabelNames` the one (GETRTS) that other builds still give to a
+    label of their own unconverted code; the vendor-leak checks exempt exactly those.
+  - The standalone sources predefine `BasicNames.ScopedNames` and include `MsBasic.Layouts.asm`.
+  - The region comparisons skip the vendors' names, as S10's do.
+  - The rename gate now renames CRDO and NEWSTT, in the vendor files that use them (a `Files` list), since their
+    callers are converted.
+  - `BasicSharedFloatAliasesTests.CheckAliases` reads only the guarded aliases a build defines. The math tests
+    predefine none of the targets this step's aliases guard on (`CommodoreTargetOldNames`).
+  - `BasicSharedAliasConsistencyTests` reads a guard on `::Name` as the top-level `Name`.
+  - `BasicExpressionsConversionTests` is new: the overlay comparisons for the sixteen files and both vendors'
+    names, the vendor-leak and alias checks, and the citations of Commodore's aliases.
+  - `BasicSharedInterpreterAliasesTests` checks COPYC, STRD and the rest in the whole builds, now that they are in
+    Commodore's historical names.
+
+Checked: the full suite, the rename gate, the lint tests and `BasicExpressionsConversionTests`.
+`BasicExpressionsConversionTests` compares every old name in the sixteen files and the vendors' historical names with
+the MACRO-10 overlay's value in each of the eight builds. It checks that each definition reaches the overlay by its name
+or an old name, that a vendor's names resolve only in its builds and through its aliases, and that every citation's key
+is in the bibliography.
+
+`BasicExpressionRoutineTests` runs these routines in the enhanced IIe's AppleSoft and PET BASIC 4 and checks
+their `Out:` values and `Keeps:` claims:
+
+- `Strings::CopyBytes` and `CopyFrom`: into a destination that crosses a page boundary, and for `CopyBytes` at
+  lengths 0 (both builds) and 1 (AppleSoft) too; both keep X.
+- `Strings::ReleaseTemporary`: the latest temporary and others; keeps X.
+- `Variables::MultiplyUnsigned`: products and the OUT OF MEMORY jump.
+- Both builds' `Strings::ReserveSpace`: room to spare, exact room, one byte short (up to the call of the collector),
+  AppleSoft's collection for a zero length, and BASIC 4's return for a zero length and its link for a nonempty string.
+- `EvaluateByte`: the value, the next character, and ILLEGAL QUANTITY past 255.
+
+The existing BasicShared*Tests run the rest. The debugger's contract checking ran clean on PET BASIC 2, PET BASIC 4
+and the enhanced IIe's AppleSoft. Their program adds the following to the statement step's:
+
+- integer variables;
+- NOT, AND and OR;
+- string comparison and concatenation;
+- 40 rounds of RIGHT$, MID$ and STR$ with FRE(0), which collects garbage;
+- INPUT of a string and a number;
+- CHR$, ASC and VAL of a concatenation;
+- variables that were never assigned.
+
+As a control, a false `Keeps: Y` added to `Strings::CopyBytes` was reported on PET BASIC 4.
+
+CI's later steps, run as CI runs them with an empty `RETROCORE_CACHE`, pass: the IIe sample assembles, every
+`tools/Test-*.mjs` script passes, and in `extension/` `check:grammar`, `compile` and `test:grammar` pass.
+
 ## Other dependents
 
 - **DOS** left BASIC's names unchanged until this conversion: X7 in the DOS conversion's log, `docs/conversions/Dos.md`,

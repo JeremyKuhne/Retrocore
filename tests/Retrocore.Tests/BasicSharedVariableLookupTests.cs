@@ -103,11 +103,11 @@ public sealed class BasicSharedVariableLookupTests
 
         if (variant == Pet1)
         {
-            native.Symbol("ZERO").Should().Be(native.Symbol("LDZR") + 5);
+            native.Symbol(ZeroName(native, own: false)).Should().Be(native.Symbol("LDZR") + 5);
         }
         else
         {
-            native.Symbol("ZERO").Should().Be(legacy.Symbol("FHALF") + 2);
+            native.Symbol(ZeroName(native, own: false)).Should().Be(legacy.Symbol("FHALF") + 2);
         }
 
         SourceMapModule module = new(native, area: null);
@@ -121,7 +121,8 @@ public sealed class BasicSharedVariableLookupTests
 
         if (variant == Pet4)
         {
-            DocumentationTopic topic = module.Documentation.FindTopic("ARYVA2")
+            // ARYVA2 is BASIC 4's name for it, in Commodore's historical names, which this build of the module lacks.
+            DocumentationTopic topic = module.Documentation.FindTopic("Variables::Create::NextArray")
                 ?? throw new AssertFailedException("The linked-array fixup is not documented.");
 
             topic.Kind.Should().Be(DocumentationKind.Routine);
@@ -156,10 +157,12 @@ public sealed class BasicSharedVariableLookupTests
         SourceMapModule module = new(native, area: null);
         foreach (string name in (string[])["PTRGET", "NOTFNS", "LDZR", "VAROK", "FINPTR", "FMAPTR", "FMAPT1", "QINTG1"])
         {
-            DocumentationTopic topic = module.Documentation.FindTopic(name)
+            // AppleSoft's FMAPT1 and QINTG1 reach their definitions through AppleSoft's historical names.
+            DocumentationTopic topic = module.Documentation.FindTopic(BasicNames.DefiningSymbol(native, name).Name)
                 ?? throw new AssertFailedException($"{name} is not documented.");
 
             topic.Kind.Should().Be(DocumentationKind.Routine);
+
             topic.Path.Should().EndWith("MsBasic.VariableLookup.asm");
             topic.Summary.Should().NotBeNullOrWhiteSpace();
             ushort address = checked((ushort)native.Symbol(name));
@@ -525,7 +528,7 @@ public sealed class BasicSharedVariableLookupTests
 
                 if (rejected) { continue; }
 
-                int expected = zero ? Address(source, features.UseSimzer ? "SIMZER" : "ZERO") : 0x5002;
+                int expected = zero ? Address(source, ZeroName(source, features.UseSimzer)) : 0x5002;
                 (cpu.Registers.Accumulator | (cpu.Registers.Y << 8)).Should().Be(expected, name);
                 ReadWord(bus.Memory, Address(legacy, "ARYTAB")).Should().Be(zero ? 0x5000 : 0x5007, name);
                 ReadWord(bus.Memory, Address(legacy, "VARPNT")).Should().Be(zero ? 0x3333 : 0x5002, name);
@@ -548,8 +551,7 @@ public sealed class BasicSharedVariableLookupTests
         StepUntil(cpu, 5000, returned, checked((ushort)legacy.Symbol("SNERR")));
         cpu.Registers.ProgramCounter.Should().Be(returned);
         bool zero = samePage || !checkHigh;
-        string zeroName = source.HasSymbol("SIMZER") ? "SIMZER" : "ZERO";
-        int expected = zero ? Address(source, zeroName) : 0x5002;
+        int expected = zero ? Address(source, ZeroName(source, source.HasSymbol("SIMZER") || source.HasSymbol("ZeroVariable"))) : 0x5002;
         (cpu.Registers.Accumulator | (cpu.Registers.Y << 8)).Should().Be(expected);
         ReadWord(bus.Memory, Address(legacy, "ARYTAB")).Should().Be(zero ? 0x5000 : 0x5007);
         ReadWord(bus.Memory, Address(legacy, "VARPNT")).Should().Be(zero ? 0x3333 : 0x5002);
@@ -600,7 +602,7 @@ public sealed class BasicSharedVariableLookupTests
                 IntegerConversion {(features.NumericEvaluator ? "FRMNUM" : "FRMEVL")}, {Flag(features.CheckType)}
             """;
 
-        string platform = nativePet is null ? "" : ".include \"Commodore.Equates.asm\"";
+        string platform = nativePet is null ? ".include \"MsBasic.Layouts.asm\"" : ".include \"Commodore.Equates.asm\"";
         string source = $"""
             .cpu Mos6502
             {platform}
@@ -608,11 +610,11 @@ public sealed class BasicSharedVariableLookupTests
             .include "MsBasic.CharacterReader.asm"
             .include "MsBasic.IntegerConversion.asm"
             .org ${legacy.Symbol("PTRGET"):X4}
-                VARIABLE_NAME {Flag(features.FixedVectors)}, ${features.VectorByte:X2}, {Flag(features.RejectAnyFlag)}, {Flag(features.ExistingArrays)}, {Flag(features.ClearWithY)}, {Flag(features.LongFound)}
+                VariableSearch {Flag(features.FixedVectors)}, ${features.VectorByte:X2}, {Flag(features.RejectAnyFlag)}, {Flag(features.ExistingArrays)}, {Flag(features.ClearWithY)}, {Flag(features.LongFound)}
                 LetterTest
-                SIMPLE_VARIABLE_LOOKUP {Flag(features.CheckCallerHigh)}, {Flag(features.InlineZero)}, {Flag(features.UseSimzer)}, {Flag(features.ClockNames)}, {Flag(features.StatusName)}, {Flag(features.DiskNames)}, {Flag(features.LinkedArrays)}, {Flag(features.ArrayEntryAlias)}
+                SimpleVariableLookup {Flag(features.CheckCallerHigh)}, {Flag(features.InlineZero)}, {Flag(features.UseSimzer)}, {Flag(features.ClockNames)}, {Flag(features.StatusName)}, {Flag(features.DiskNames)}, {Flag(features.LinkedArrays)}, {Flag(features.ArrayEntryAlias)}
             {conversion}
-                {(features.ExistingArrays ? "EXISTING_ARRAY_ENTRY" : "")}
+                {(features.ExistingArrays ? "ExistingArrayEntry" : "")}
             LOOKUP_END:
             """;
 
@@ -620,7 +622,7 @@ public sealed class BasicSharedVariableLookupTests
         [
             "CHRGET", "CHRGOT", "TXTPTR", "SNERR", "DIMFLG", "VALTYP", "INTFLG", "SUBFLG", "VARNAM",
             "VARTAB", "ARYTAB", "STREND", "LOWTR", "HIGHDS", "HIGHTR", "VARPNT", "COUNT",
-            "ARYPNT", "ISVRET", "ISARY", "BLTU", "INIT", "MAIN", "FRETOP", "INDEX1", "STRSIZ", "FHALF",
+            "ARYPNT", "ISVRET", "ISARY", "BLTU", "INIT", "MAIN", "FRETOP", "INDEX1", "FHALF",
             "FRMNUM", "FRMEVL", "CHKNUM", "FACSGN", "FACEXP", "FCOMP", "FCERR", "QINT"
         ];
 
@@ -633,7 +635,7 @@ public sealed class BasicSharedVariableLookupTests
             [
                 "CHRGET", "CHRGOT", "TXTPTR", "DIMFLG", "VALTYP", "INTFLG", "SUBFLG", "VARNAM",
                 "VARTAB", "ARYTAB", "STREND", "LOWTR", "HIGHDS", "HIGHTR", "VARPNT", "COUNT",
-                "ARYPNT", "FRETOP", "INDEX1", "STRSIZ", "FACSGN", "FACEXP"
+                "ARYPNT", "FRETOP", "INDEX1", "FACSGN", "FACEXP"
             ];
 
             foreach (string name in workspace) { symbols.Remove(name); }
@@ -657,10 +659,11 @@ public sealed class BasicSharedVariableLookupTests
         }
 
         if (features.ExistingArrays) { symbols.Add("INDLO1", legacy.Symbol("INDLO1")); }
+        // The zero outside the module: by AppleSoft's overlay name, or by its current name, since the module documents
+        // ZERO on its own zero, which a predefined ZERO would make a second definition.
         if (!features.InlineZero)
         {
-            string name = features.UseSimzer ? "SIMZER" : "ZERO";
-            symbols.Add(name, externalZero ?? legacy.Symbol(name));
+            symbols.Add(features.UseSimzer ? "SIMZER" : "ZeroValue", externalZero ?? legacy.Symbol(features.UseSimzer ? "SIMZER" : "ZERO"));
         }
 
         AssemblyResult native = new Assembler.Assembler().Assemble(
@@ -678,6 +681,11 @@ public sealed class BasicSharedVariableLookupTests
         return native;
     }
 
+    // The zero an absent variable reads: AppleSoft's own, by its overlay name or, in a build without AppleSoft's
+    // historical names, its current one; or ZERO, which every build that has it gives.
+    private static string ZeroName(AssemblyResult source, bool own) =>
+        !own ? (source.HasSymbol("ZERO") ? "ZERO" : "ZeroValue") : source.HasSymbol("SIMZER") ? "SIMZER" : "ZeroVariable";
+
     private static void CompareRegion(AssemblyResult legacy, AssemblyResult native)
     {
         int start = Address(legacy, "PTRGET");
@@ -685,6 +693,13 @@ public sealed class BasicSharedVariableLookupTests
         foreach (AssemblySymbol label in legacy.SymbolDefinitions.Where(
             symbol => !symbol.IsConstant && symbol.Value >= start && symbol.Value < end))
         {
+            // A vendor's alias reaches its name only in a build that includes the vendor's historical names: a
+            // standalone build of the module skips it, and a whole build must have it.
+            if (BasicNames.IsVendorName(label.Name) && !BasicNames.IncludesHistoricalNames(native))
+            {
+                continue;
+            }
+
             native.SymbolsWithHistoricalNames.Should().ContainKey(label.Name);
             native.Symbol(label.Name).Should().Be(label.Value, $"{label.Name} must retain its ROM address");
             native.Definition(label.Name).Location?.Path

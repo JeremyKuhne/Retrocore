@@ -18,12 +18,12 @@
 ;; same variable, and every frame above it, is discarded first.
 ;; Entry:
 ;;   ReadStep = the continuation the limit's push jumps to: loads 1, or evaluates the expression after `STEP`
-;; See: <FindForFrame>, <FORPSH>, <Statements::Next>
+;; See: <FindForFrame>, <EvaluateExpression::PushFac>, <Statements::Next>
 ;; Also: FOR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 .proc For
     lda #$80
     sta SubscriptMode
-    jsr LET
+    jsr Statements::Let
     jsr FindForFrame
     bne BuildFrame
     txa
@@ -34,8 +34,8 @@
 ;; Drops the statement loop's return address (where an earlier frame for the variable was found, the stack pointer
 ;; already left it behind, and this drops the old frame's last two bytes), makes sure the stack has room for nine more
 ;; two-byte entries (<CheckStack>), and pushes the text pointer after the statement and <CurrentLine>. Then it requires
-;; `TO`, evaluates the limit, puts its sign into the mantissa's top bit, and has <FORPSH> push it and continue at
-;; <ReadStep>.
+;; `TO`, evaluates the limit, puts its sign into the mantissa's top bit, and has <EvaluateExpression::PushFac> push it
+;; and continue at <ReadStep>.
 ;; Also: NOTOL (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 BuildFrame:
     pla
@@ -55,7 +55,7 @@ BuildFrame:
     lda CurrentLine
     pha
     lda #TOKEN_TO
-    jsr SYNCHR
+    jsr CheckCharacter
     jsr RequireNumber
     jsr EvaluateNumber
     lda FacSign
@@ -66,7 +66,7 @@ BuildFrame:
     ldy #>ReadStep
     sta Pointer1
     sty Pointer1+1
-    jmp FORPSH
+    jmp EvaluateExpression::PushFac
 
 ;; Loads the default step of one, or evaluates the expression after STEP, and completes the FOR frame.
 ;; Also: LDFONE (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
@@ -80,11 +80,12 @@ ReadStep:
     jsr GetNextCharacter
     jsr EvaluateNumber
 
-;; Pushes the step through <PUSHF>, its sign first (from <Float::GetSign>), then <AssignedVariable>.
+;; Pushes the step through <EvaluateExpression::PushSignedFac>, its sign first (from <Float::GetSign>), then
+;; <AssignedVariable>.
 ;; Also: ONEON (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 PushStep:
     jsr Float::GetSign
-    jsr PUSHF
+    jsr EvaluateExpression::PushSignedFac
     lda AssignedVariable+1
     pha
     lda AssignedVariable

@@ -40,13 +40,13 @@ CompareStrings:
     lda #$00
     sta ValueType
     dec OperatorMask
-    jsr FREFAC
+    jsr Strings::ReleaseFac
     sta NewDescriptor
     stx NewDescriptor+1
     sty NewDescriptor+2
     lda ArgMantissa3
     ldy ArgMantissa4
-    jsr FRETMP
+    jsr Strings::ReleaseDescriptor
     stx ArgMantissa3
     sty ArgMantissa4
     tax

@@ -29,4 +29,18 @@ FAMILIES_DECLARED = 1
 ;; to, with the entries they share.
 .scope Statements
 .endscope
+
+;; The handlers of BASIC's logical operators, which the operator table dispatches to.
+.scope Operators
+.endscope
+
+;; The string package: allocating string space and building temporary strings, copying and releasing them, joining
+;; them, and collecting the garbage left in string space.
+.scope Strings
+.endscope
+
+;; The internals of variable and array lookup: creating a variable or an array, finding an array element's address,
+;; and returning the zero an absent variable reads.
+.scope Variables
+.endscope
 .endif

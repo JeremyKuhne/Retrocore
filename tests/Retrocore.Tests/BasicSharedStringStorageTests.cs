@@ -89,7 +89,8 @@ public sealed class BasicSharedStringStorageTests
 
             topic.Kind.Should().Be(DocumentationKind.Routine);
             topic.Value.Should().Be(native.Symbol(name));
-            topic.Path.Should().EndWith("MsBasic.StringStorage.asm");
+            // Each allocator is its own ReserveSpace (GETSPA), in its own file.
+            topic.Path.Should().EndWith(name == "GETSPA" ? "MsBasic.StringStorage.Classic.asm" : "MsBasic.StringStorage.asm");
             topic.Summary.Should().NotBeNullOrWhiteSpace();
         }
 
@@ -99,9 +100,11 @@ public sealed class BasicSharedStringStorageTests
             DebugPosition position = module.Position(memory, address)
                 ?? throw new AssertFailedException($"{name} has no debugger source position.");
 
-            position.Chain.Should().HaveCount(2);
-            position.Chain[0].Path.Should().EndWith("MsBasic.StringStorage.asm");
-            position.Chain[1].Path.Should().EndWith("AppleSoft.Strings.asm");
+            string[] chain = name == "GETSPA"
+                ? ["MsBasic.StringStorage.Classic.asm", "MsBasic.StringStorage.asm", "AppleSoft.Strings.asm"]
+                : ["MsBasic.StringStorage.asm", "AppleSoft.Strings.asm"];
+
+            position.Chain.Select(line => Path.GetFileName(line.Path)).Should().Equal(chain);
             module.Entries(position.Chain[0].Path, position.Chain[0].Line).Should().Contain(address);
         }
 
@@ -138,7 +141,7 @@ public sealed class BasicSharedStringStorageTests
         DebugTestMemory memory = new();
         memory.Set((ushort)start, native.Sections[0].Bytes.Slice(start, end - start).ToArray());
         SourceMapModule module = new(native, area: null);
-        DocumentationTopic topic = module.Documentation.FindTopic("LINKED_STRING_ALLOCATION")
+        DocumentationTopic topic = module.Documentation.FindTopic("LinkedStringAllocation")
             ?? throw new AssertFailedException("The linked allocator is not documented.");
 
         topic.Kind.Should().Be(DocumentationKind.Macro);
@@ -543,17 +546,18 @@ public sealed class BasicSharedStringStorageTests
     {
         string source = $"""
             .cpu Mos6502
+            .include "MsBasic.Layouts.asm"
             .include "MsBasic.StringStorage.asm"
             .org ${legacy.Symbol("STRINI"):X4}
-                STRING_STORAGE {bufferPage}, {(clearFacOverflow ? 1 : 0)}
-                STRING_ALLOCATION {(linkedStrings ? 1 : 0)}
+                StringStorage {bufferPage}, {(clearFacOverflow ? 1 : 0)}
+                StringAllocation {(linkedStrings ? 1 : 0)}
             STRING_STORAGE_END:
             """;
 
         string[] dependencies =
         [
             "FACMO", "FACLO", "DSCPNT", "DSCTMP", "CHARAC", "ENDCHR", "STRNG1", "STRNG2",
-            "TEMPPT", "TEMPST", "STRSIZ", "NUMTMP", "ERRST", "ERROR", "VALTYP", "LASTPT",
+            "TEMPPT", "TEMPST", "NUMTMP", "ERRST", "ERROR", "VALTYP", "LASTPT",
             "GARBFL", "FRETOP", "STREND", "ERROM", "GARBA2", "MOVSTR", "FACOV", "FRESPC", "INDEX"
         ];
 
@@ -561,7 +565,7 @@ public sealed class BasicSharedStringStorageTests
             name => name, name => legacy.Symbol(name), StringComparer.Ordinal);
 
         AssemblyResult native = new Assembler.Assembler().Assemble(
-            new AssemblySource(source, Path.Join(SharedInputs, "StringStorageTest.asm")),
+            new AssemblySource(BasicNames.ScopedNames(symbols) + "\n" + source, Path.Join(SharedInputs, "StringStorageTest.asm")),
             new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
             {
                 SourceResolver = new FileAssemblySourceResolver(),
@@ -584,6 +588,13 @@ public sealed class BasicSharedStringStorageTests
                 && symbol.Value >= start
                 && symbol.Value < end))
         {
+            // A vendor's alias reaches its name only in a build that includes the vendor's historical names: a
+            // standalone build of the module skips it, and a whole build must have it.
+            if (BasicNames.IsVendorName(label.Name) && !BasicNames.IncludesHistoricalNames(native))
+            {
+                continue;
+            }
+
             native.SymbolsWithHistoricalNames.Should().ContainKey(label.Name);
             native.Symbol(label.Name).Should().Be(label.Value, $"{label.Name} must retain its ROM address");
         }

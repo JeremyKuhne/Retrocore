@@ -17,10 +17,10 @@ TYPERR:
 
     ;; Prints the message at A/Y and the current line number unless execution is direct.
     ;; In: A = message address low byte, Y = message address high byte
-    ;; See: <ERROR>, <Statements::Stop>, <STROUT>, <Float::PrintInLineNumber>, <READY>
+    ;; See: <ERROR>, <Statements::Stop>, <PrintText>, <Float::PrintInLineNumber>, <READY>
     ;; Also: ERRFIN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc ReportMessage
-    jsr STROUT
+    jsr PrintText
     ldy CurrentLine+1
     iny
     beq READY

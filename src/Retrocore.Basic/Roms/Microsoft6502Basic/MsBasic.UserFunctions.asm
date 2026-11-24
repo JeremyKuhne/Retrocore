@@ -24,7 +24,7 @@
     .proc RejectDirectMode
     ldx CurrentLine+1
     inx
-    bne DIMRTS
+    bne Variables::ElementAddress::Done
     ldx #<ERROR_ILLEGAL_DIRECT
     .if earlyCheck = 0
         .byte $2C                   ; BIT absolute skips the next two bytes
@@ -52,14 +52,14 @@ ToError:
     .proc Def
     jsr ReadFunctionName
     jsr RejectDirectMode
-    jsr CHKOPN
+    jsr CheckOpenParenthesis
     lda #$80
     sta SubscriptMode
-    jsr PTRGET
+    jsr FindVariable
     jsr RequireNumber
-    jsr CHKCLS
+    jsr CheckCloseParenthesis
     lda #<TOKEN_EQUAL
-    jsr SYNCHR
+    jsr CheckCharacter
     pha
     lda VariablePointer+1
     pha
@@ -79,10 +79,10 @@ ToError:
     ;; Also: GETFNM (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc ReadFunctionName
     lda #<TOKEN_FN
-    jsr SYNCHR
+    jsr CheckCharacter
     ora #$80
     sta SubscriptMode
-    jsr PTRGT2
+    jsr FindVariable::KeepDimensionFlag
     sta FunctionPointer
     sty FunctionPointer+1
     jmp RequireNumber
@@ -104,7 +104,7 @@ ToError:
     pha
     lda FunctionPointer
     pha
-    jsr PARCHK
+    jsr EvaluateParenthesized
     jsr RequireNumber
     pla
     sta FunctionPointer
@@ -159,7 +159,7 @@ SaveArgument:
     sta FunctionPointer+1
     jsr GetCurrentCharacter
     beq RestoreText
-    jmp SNERR
+    jmp SyntaxError
 
 ;; Restores the text pointer from before the call.
 RestoreText:

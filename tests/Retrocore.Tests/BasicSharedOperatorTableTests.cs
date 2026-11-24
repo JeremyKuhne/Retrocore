@@ -16,6 +16,9 @@ namespace Retrocore.Tests;
 [TestClass]
 public sealed class BasicSharedOperatorTableTests
 {
+    // A PET build, whose names the standalone tables take for ANDOP, which names a different routine in AppleSoft.
+    private static readonly string PetBuild = BasicNames.Build(PetModel.Pet4032, original: false);
+
     private static string Inputs => BasicNames.Inputs;
 
     /// <summary>
@@ -34,7 +37,7 @@ public sealed class BasicSharedOperatorTableTests
 
         AssemblyResult native = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(Inputs), model);
 
-        CompareTable(legacy, AssembleTable(legacy, powerBelowNegation: true, highNot: true, andEntry: "OROP1"));
+        CompareTable(legacy, AssembleTable(legacy, BasicNames.Build(model), powerBelowNegation: true, highNot: true, andEntry: "OROP1"));
         CompareTable(legacy, native);
         AssemblySymbol definition = native.Definition("OPTAB");
         definition.Location?.Path.Should().EndWith("MsBasic.OperatorTable.asm");
@@ -58,7 +61,7 @@ public sealed class BasicSharedOperatorTableTests
     public void SharedTableMatchesPet(PetModel model, bool original)
     {
         AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(Inputs, "Pet"), model, original);
-        CompareTable(legacy, AssembleTable(legacy, powerBelowNegation: false, highNot: false, andEntry: "ANDOP"));
+        CompareTable(legacy, AssembleTable(legacy, BasicNames.Build(model, original), powerBelowNegation: false, highNot: false, andEntry: "ANDOP"));
     }
 
     /// <summary>
@@ -76,7 +79,7 @@ public sealed class BasicSharedOperatorTableTests
             Apple2Model.IIeEnhanced);
 
         AssemblyResult pet = PetLegacyBasic.Assemble(Path.Join(Inputs, "Pet"), PetModel.Pet2001Basic2);
-        AssemblyResult mixed = AssembleTable(pet, powerBelowNegation, highNot, "ANDOP");
+        AssemblyResult mixed = AssembleTable(pet, BasicNames.Build(PetModel.Pet2001Basic2, original: false), powerBelowNegation, highNot, "ANDOP");
 
         ByteAt(mixed, "OPTAB", 12).Should().Be(ByteAt(powerBelowNegation ? apple : pet, "OPTAB", 12));
         ByteAt(mixed, "NEGTAB").Should().Be(ByteAt(powerBelowNegation ? apple : pet, "NEGTAB"));
@@ -113,11 +116,11 @@ public sealed class BasicSharedOperatorTableTests
 
         Dictionary<string, long> symbols = dependencies.ToDictionary(name => name, _ => 0xD000L);
         AssemblyResult result = new Assembler.Assembler().Assemble(
-            new AssemblySource(BasicNames.ScopedNames(symbols) + "\n" + source, Path.Join(folder, "InvalidOperatorTableTest.asm")),
+            new AssemblySource(BasicNames.ScopedNames(symbols, PetBuild) + "\n" + source, Path.Join(folder, "InvalidOperatorTableTest.asm")),
             new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
             {
                 SourceResolver = new FileAssemblySourceResolver(),
-                PredefinedSymbols = BasicNames.WithCurrentNames(symbols)
+                PredefinedSymbols = BasicNames.WithCurrentNames(symbols, PetBuild)
             });
 
         result.Success.Should().BeFalse();
@@ -126,7 +129,7 @@ public sealed class BasicSharedOperatorTableTests
     }
 
     private static AssemblyResult AssembleTable(
-        AssemblyResult legacy, bool powerBelowNegation, bool highNot, string andEntry)
+        AssemblyResult legacy, string build, bool powerBelowNegation, bool highNot, string andEntry)
     {
         int start = checked((int)legacy.Symbol("OPTAB"));
         string folder = Path.Join(Inputs, "Microsoft6502Basic");
@@ -148,11 +151,11 @@ public sealed class BasicSharedOperatorTableTests
         AssemblyOptions options = new(ProcessorVariant.Mos6502, 0, 0x10000)
         {
             SourceResolver = new FileAssemblySourceResolver(),
-            PredefinedSymbols = BasicNames.WithCurrentNames(symbols)
+            PredefinedSymbols = BasicNames.WithCurrentNames(symbols, build)
         };
 
         AssemblyResult result = new Assembler.Assembler().Assemble(
-            new AssemblySource(BasicNames.ScopedNames(symbols) + "\n" + source, Path.Join(folder, "OperatorTableTest.asm")),
+            new AssemblySource(BasicNames.ScopedNames(symbols, build) + "\n" + source, Path.Join(folder, "OperatorTableTest.asm")),
             options);
 
         result.Success.Should().BeTrue(string.Join(Environment.NewLine, result.Diagnostics.Select(diagnostic =>

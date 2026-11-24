@@ -1,7 +1,7 @@
 ; COMMODORE BASIC: DISK-STATUS AND LINKED-STRING ASSIGNMENT
 ;
 ; BASIC 4's collector keeps a link after each allocated string. These hooks extend
-; STRING_ASSIGNMENT, and STRING_LINK_ADJUST follows it in the ROM.
+; StringAssignment, and STRING_LINK_ADJUST follows it in the ROM.
 
 ;; Emits the check that forces a copy when the source is the mutable disk-status buffer.
 ;; In: A = source address high byte, Y = 2, FACMO/FACLO = source descriptor
@@ -35,7 +35,13 @@ NOTDS:
     lda #<DSCTMP
     ldy #>DSCTMP
 
-COPYZC:
+;; Frees a temporary, links its string to the variable, marks the variable's old string as garbage and copies the
+;; descriptor: BASIC 4's own descriptor copy, which Commodore.HistoricalNames.asm gives BASIC 4's name (Basic.md E6).
+;; Also: COPYZC (M6502)
+StoreLinkedDescriptor:
+
+;; BASIC 4's <StoreLinkedDescriptor>, under the name by which the shared modules reach their builds' descriptor copy.
+StoreDescriptor = StoreLinkedDescriptor
     sta DSCPNT
     sty DSCPNT+1
     sta INDEX

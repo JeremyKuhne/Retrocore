@@ -49,7 +49,9 @@ public sealed class BasicStatementsConversionTests
         "Functions::Fn::RestoreText",
         "Statements::List::ReadSecondBound", "Statements::List::NextTableByte", "Statements::List::ReadTableByte",
         "Statements::List::ListWordCharacter", "Statements::List::ListLastCharacter",
-        "Statements::List::ReadWordByte", "Statements::List::ListFirstWord"
+        "Statements::List::ReadWordByte", "Statements::List::ListFirstWord",
+        "PRECEDENCE_ADD", "PRECEDENCE_MULTIPLY", "PRECEDENCE_UPPER", "PRECEDENCE_TOP", "PRECEDENCE_AND", "PRECEDENCE_OR",
+        "PRECEDENCE_NOT", "PRECEDENCE_RELATION"
     ];
 
     // Each build compares about 150 old names with the overlay, and the files give about 180.
@@ -120,14 +122,20 @@ public sealed class BasicStatementsConversionTests
         appleNames.Should().Contain(["NEW", "COMBYTE", "GOLST1", "GRODY1", "REMER1"]);
         petNames.Should().Contain(["CHDGOT", "CHDRTS", "RESCR2", "PRIT3B"]);
 
-        foreach (string name in appleNames)
+        // A name both vendors' files give, each for its own definition (Basic.md E4), reaches each vendor's own alias,
+        // which the loop below checks; a name a vendor's unconverted code still gives a label of its own is that label
+        // in those builds (BasicNames.VendorLabelNames).
+        appleNames.Intersect(petNames).Should().BeEquivalentTo(BasicNames.BothVendorsNames);
+        foreach (string name in appleNames.Except(petNames))
         {
-            pet.Should().AllSatisfy(build => build.HasSymbol(name).Should().BeFalse($"{name} is AppleSoft's name"));
+            pet.Should().AllSatisfy(build => (build.HasSymbol(name) && !BasicNames.IsVendorLabel(build, name, CommodoreNames))
+                .Should().BeFalse($"{name} is AppleSoft's name"));
         }
 
-        foreach (string name in petNames)
+        foreach (string name in petNames.Except(appleNames))
         {
-            apple.Should().AllSatisfy(build => build.HasSymbol(name).Should().BeFalse($"{name} is the PET's name"));
+            apple.Should().AllSatisfy(build => (build.HasSymbol(name) && !BasicNames.IsVendorLabel(build, name, AppleNames))
+                .Should().BeFalse($"{name} is the PET's name"));
         }
 
         // Each vendor's name reaches its vendor's alias, whose value is the shared definition's.
@@ -136,7 +144,8 @@ public sealed class BasicStatementsConversionTests
         {
             foreach (AssemblyResult build in builds)
             {
-                foreach (string name in names.Where(build.HasSymbol))
+                foreach (string name in names.Where(old => build.HasSymbol(old)
+                    && !BasicNames.IsVendorLabel(build, old, file)))
                 {
                     BasicWorkspaceConversionTests.InFiles(build.HistoricalNames[name], [file]).Should().BeTrue(
                         $"{name} must reach the alias in {Path.GetFileName(file)}");

@@ -68,9 +68,9 @@ BASIC4_OUTPUT_PADDING = 0           ;; omit BASIC 4's output patch space
     ConditionalStatements
     OnStatement
 .include "../../Microsoft6502Basic/MsBasic.LineNumber.asm"
-    ASSIGNMENT_START
+    AssignmentStart
     TIME_STRING_ASSIGNMENT 0
-    STRING_ASSIGNMENT 0, 0
+    StringAssignment 0, 0
 
 ; Terminal and channel output, then READ and input.
     COMMODORE_PRINT_CHANNELS
@@ -82,33 +82,33 @@ BASIC4_OUTPUT_PADDING = 0           ;; omit BASIC 4's output patch space
     COMMODORE_INPUT_ERROR 0
     COMMODORE_CHANNEL_INPUT INPUT_BUFFER_PAGE
     COMMODORE_INPUT_STATEMENT 1, 2, 0, 0, 0
-    VARIABLE_INPUT INPUT_BUFFER_PAGE, 0, 0, 0, 1, 0
-    VARIABLE_INPUT_MESSAGES 0, 1
+    VariableInput INPUT_BUFFER_PAGE, 0, 0, 0, 1, 0
+    VariableInputMessages 0, 1
 
 ; Expressions, variables, arrays and strings.
     NextEntries 0, NEWSTT
-    EXPRESSION_CORE 0
-    OPERAND_EVALUATION 1, 1, ISFUN
+    ExpressionCore 0
+    OperandEvaluation 1, 1, ISFUN
     COMMODORE_VARIABLE_VALUE 0, 0, 0
-    FUNCTION_DISPATCH
-    LOGICAL_OPERATORS 1
+    FunctionDispatch
+    LogicalOperators 1
     RelationalOperators $FF
 .include "../../Microsoft6502Basic/MsBasic.Dim.asm"
-    VARIABLE_NAME 0, 0, 1, 0, 0, 0
+    VariableSearch 0, 0, 1, 0, 0, 0
     LetterTest
-    SIMPLE_VARIABLE_LOOKUP 0, 0, 0, 1, 1, 0, 0, 0
+    SimpleVariableLookup 0, 0, 0, 1, 1, 0, 0, 0
     IntegerConversionBoundary
     IntegerConversion FRMEVL, 1
-    ARRAY_LOOKUP 0, 0, 1
+    ArrayLookup 0, 0, 1
 .include "../../Microsoft6502Basic/MsBasic.ArrayMultiplication.asm"
     SimpleFunctions 0
     UserFunctions 0
-    STRING_FROM_NUMBER
-    STRING_STORAGE INPUT_BUFFER_PAGE, 1
-    STRING_ALLOCATION 0
-    STRING_GARBAGE_COLLECTION 1, 0, 0
-    STRING_CONCATENATION 0
-    STRING_FUNCTIONS 0, 0, 0, 0
+    StringFromNumber
+    StringStorage INPUT_BUFFER_PAGE, 1
+    StringAllocation 0
+    StringGarbageCollection 1, 0, 0
+    StringConcatenation 0
+    StringFunctions 0, 0, 0, 0
 
 ; Memory access, floating point and cold startup.
     AddressConversion 1
@@ -117,7 +117,6 @@ BASIC4_OUTPUT_PADDING = 0           ;; omit BASIC 4's output patch space
     WaitStatement WaitHiddenMessage
 .include "Commodore.FloatingPoint.asm"
 .include "Commodore.HistoricalNames.asm"
-.include "Commodore.InterpreterAliases.asm"
     CharacterReader $58
     COMMODORE_INITIALIZE 0, 1, 0, 0, INPUT_BUFFER_PAGE, 0, 0
     COMMODORE_MEMORY_PROBE 0, 0, 1, 0, 0, $55

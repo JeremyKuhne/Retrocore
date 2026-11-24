@@ -6,8 +6,8 @@
 ; MICROSOFT 6502 BASIC: SUBSCRIPT AND SIGNED INTEGER CONVERSION
 ;
 ; Emit IntegerConversionBoundary immediately followed by IntegerConversion. The latter selects the expression
-; evaluator independently of POSINT's optional numeric-type check. AppleSoft and PET BASIC 1 use FRMNUM without
-; the extra check; PET BASIC 2 and 4 use FRMEVL and the check.
+; evaluator independently of FacToNonnegativeInteger's optional numeric-type check. AppleSoft and PET BASIC 1 use
+; EvaluateNumber without the extra check; PET BASIC 2 and 4 use EvaluateExpression and the check.
 
 ;; Emits the prefix of the integer-conversion boundary constant.
 .macro IntegerConversionBoundary
@@ -83,7 +83,7 @@ MinimumInteger:
 ;; A nonzero result (Compare unequal, or <FacSign> negative) goes to ILLEGAL QUANTITY.
 ;; Also: NONONO (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 FailUnlessEqual:
-    bne FCERR
+    bne IllegalQuantityError
 
 ;; Converts <Fac> without checking its type, sign or range.
 ;; See: <Float::ToLongInteger>

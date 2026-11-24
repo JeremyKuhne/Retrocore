@@ -74,6 +74,14 @@ public sealed class PetRomSourceTests
             !symbol.IsConstant && (symbol.Value >= PetSdkModules.BasicOrigin(model) && symbol.Value < end
                 || model == PetModel.Pet2001 && symbol.Value is >= 0xE7F3 and < 0xE7F9)))
         {
+            // The labels only the SDK's own overlays give, which no document names, and which the rename table gives
+            // no Also: (Basic.md E5): their definitions keep the overlay's address under their new names.
+            if (BasicNames.OverlayOnlyLabels.TryGetValue(label.Name, out string? current))
+            {
+                native.Symbol(current).Should().Be(label.Value, $"{label.Name}'s definition must retain its ROM address");
+                continue;
+            }
+
             native.SymbolsWithHistoricalNames.Should().ContainKey(label.Name);
             native.Symbol(label.Name).Should().Be(label.Value, $"{label.Name} must retain its ROM address");
         }
@@ -387,7 +395,7 @@ public sealed class PetRomSourceTests
         string folder = Path.Join(BasicNames.Inputs, "Microsoft6502Basic");
         string source = $"""
             .cpu Mos6502
-            {BasicNames.ScopedNames(symbols)}
+            {BasicNames.ScopedNames(symbols, BasicNames.Build(model, original: false))}
             .include "MsBasic.DecimalInputCore.asm"
             .org ${origin:X4}
                 DecimalInput {(model == PetModel.Pet2001 ? 1 : 0)}
@@ -398,7 +406,7 @@ public sealed class PetRomSourceTests
             new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
             {
                 SourceResolver = new FileAssemblySourceResolver(),
-                PredefinedSymbols = BasicNames.WithCurrentNames(symbols)
+                PredefinedSymbols = BasicNames.WithCurrentNames(symbols, BasicNames.Build(model, original: false))
             });
 
         input.Success.Should().BeTrue(string.Join('\n', input.Diagnostics.Select(diagnostic => diagnostic.Message)));

@@ -90,9 +90,9 @@ BASIC4_OUTPUT_PADDING = 1           ;; include BASIC 4's output patch space
     ConditionalStatements
     OnStatement
 .include "../../Microsoft6502Basic/MsBasic.LineNumber.asm"
-    ASSIGNMENT_START
+    AssignmentStart
     TIME_STRING_ASSIGNMENT 0
-    STRING_ASSIGNMENT 1, 1
+    StringAssignment 1, 1
     STRING_LINK_ADJUST REVISD
 
 ; Terminal and channel output, then READ and input.
@@ -105,34 +105,34 @@ BASIC4_OUTPUT_PADDING = 1           ;; include BASIC 4's output patch space
     COMMODORE_INPUT_ERROR 0
     COMMODORE_CHANNEL_INPUT INPUT_BUFFER_PAGE
     COMMODORE_INPUT_STATEMENT 0, 3, REVISD, 0, 1
-    VARIABLE_INPUT INPUT_BUFFER_PAGE, 0, 0, 0, 1, 0
-    VARIABLE_INPUT_MESSAGES 0, 0
+    VariableInput INPUT_BUFFER_PAGE, 0, 0, 0, 1, 0
+    VariableInputMessages 0, 0
 
 ; Expressions, variables, arrays and linked strings.
     NextEntries 0, NEWSTT
-    EXPRESSION_CORE 1
-    OPERAND_EVALUATION 1, 1, ISFUN
+    ExpressionCore 1
+    OperandEvaluation 1, 1, ISFUN
     COMMODORE_BASIC4_OPERAND_SPLIT REVISD
     COMMODORE_VARIABLE_VALUE 1, 0, 1
-    FUNCTION_DISPATCH
-    LOGICAL_OPERATORS 1
+    FunctionDispatch
+    LogicalOperators 1
     RelationalOperators $FF
 .include "../../Microsoft6502Basic/MsBasic.Dim.asm"
-    VARIABLE_NAME 0, 0, 1, 0, 1, 1
+    VariableSearch 0, 0, 1, 0, 1, 1
     LetterTest
-    SIMPLE_VARIABLE_LOOKUP 0, 0, 0, 1, 1, 1, 1, 0
+    SimpleVariableLookup 0, 0, 0, 1, 1, 1, 1, 0
     IntegerConversionBoundary
     IntegerConversion FRMEVL, 1
-    ARRAY_LOOKUP 0, 1, 1
+    ArrayLookup 0, 1, 1
 .include "../../Microsoft6502Basic/MsBasic.ArrayMultiplication.asm"
     SimpleFunctions 0
     UserFunctions 0
-    STRING_FROM_NUMBER
-    STRING_STORAGE INPUT_BUFFER_PAGE, 1
-    STRING_ALLOCATION 1
+    StringFromNumber
+    StringStorage INPUT_BUFFER_PAGE, 1
+    StringAllocation 1
     LINKED_STRING_GARBAGE_COLLECTION
-    STRING_CONCATENATION 1
-    STRING_FUNCTIONS 0, 0, 0, 1
+    StringConcatenation 1
+    StringFunctions 0, 0, 0, 1
 
 ; Memory access, floating point, startup and the BASIC 4 extension.
     AddressConversion 1
@@ -141,7 +141,6 @@ BASIC4_OUTPUT_PADDING = 1           ;; include BASIC 4's output patch space
     WaitStatement STORDO
 .include "Commodore.FloatingPoint.asm"
 .include "Commodore.HistoricalNames.asm"
-.include "Commodore.InterpreterAliases.asm"
     CharacterReader $58
     COMMODORE_INITIALIZE 0, 0, 0, 0, INPUT_BUFFER_PAGE, 1, 0
     COMMODORE_MEMORY_PROBE 0, 0, 1, 1, 0, $55

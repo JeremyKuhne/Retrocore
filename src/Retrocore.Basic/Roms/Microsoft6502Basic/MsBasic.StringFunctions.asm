@@ -1,273 +1,363 @@
+; retrocore: style=strict
 ; Derived from Microsoft's BASIC for 6502 (m6502.asm, MIT license; see LICENSE in this folder).
 
-;; MICROSOFT 6502 BASIC: STRING FUNCTIONS AND BYTE CONVERSION
-;;
-;; These entries use the platform's string allocator and temporary-descriptor release routines.
-;; The switches separately select argument checking, the slice preamble's return sequence, the shared
-;; LEN/ASC jump, and the instruction used to put a zero terminator after a VAL argument.
+.include "MsBasic.Families.asm"
 
-;; Emits CHR$, slicing, LEN, ASC, byte conversion and VAL through <VALRTS>.
-;; Parameters: rejectZeroSlices = 1 to reject zero LEFT$/RIGHT$ counts in <PREAM>, 0 to reject only MID$ start zero,
-;;   indirectReturn = 1 to return from <PREAM> through the writable jump operand, 0 to restore the stack return,
-;;   sharedLenJump = 1 for <ASC> to use LENFLT, 0 for <ASC> to jump directly to <ReturnByte>,
-;;   zeroTermViaY = 1 to use TYA for <VAL>'s terminator, 0 to load zero immediately
-.macro STRING_FUNCTIONS rejectZeroSlices, indirectReturn, sharedLenJump, zeroTermViaY
+; MICROSOFT 6502 BASIC: STRING FUNCTIONS AND BYTE CONVERSION
+;
+; These entries use the platform's string allocator and temporary-descriptor release routines.
+; The switches separately select argument checking, the slice preamble's return sequence, the shared
+; `LEN`/`ASC` jump, and the instruction used to put a zero terminator after a `VAL` argument.
+
+;; Emits `CHR$`, slicing, `LEN`, `ASC`, byte conversion and `VAL` through <SetTextPointer::Done>.
+;; Parameters: rejectZeroSlices = 1 to reject zero `LEFT$`/`RIGHT$` counts in <Functions::SliceArguments>, 0 to
+;;   reject only `MID$`'s zero start,
+;;   indirectReturn = 1 to return from <Functions::SliceArguments> through the writable jump operand, 0 to restore
+;;   the stack return,
+;;   sharedLenJump = 1 for <Functions::Asc> to jump through `LEN`'s conversion, 0 to jump directly to <ReturnByte>,
+;;   zeroTermViaY = 1 to use `TYA` for <Functions::Val>'s terminator, 0 to load zero immediately
+.macro StringFunctions rejectZeroSlices, indirectReturn, sharedLenJump, zeroTermViaY
     .assert rejectZeroSlices = 0 || rejectZeroSlices = 1, "rejectZeroSlices must be 0 or 1."
     .assert indirectReturn = 0 || indirectReturn = 1, "indirectReturn must be 0 or 1."
     .assert sharedLenJump = 0 || sharedLenJump = 1, "sharedLenJump must be 0 or 1."
     .assert zeroTermViaY = 0 || zeroTermViaY = 1, "zeroTermViaY must be 0 or 1."
 
-;; Returns CHR$(n), a one-byte string containing the value of n.
-;;
-;; Errors: ILLEGAL QUANTITY if the argument cannot be converted to a byte
-CHR:
-    jsr CONINT
+    .scope Functions continued
+
+    ;; Returns `CHR$(n)`, a one-byte string containing the value of n.
+    ;;
+    ;; It discards the function dispatcher's return, so that <CallFunction> does not check for a number.
+    ;; Errors: ILLEGAL QUANTITY if the argument cannot be converted to a byte
+    ;; Also: CHR (M6502)
+    .proc Chr
+    jsr ConvertToByte
     txa
     pha
     lda #$01
-    jsr STRSPA
+    jsr Strings::Allocate
     pla
     ldy #$00
-    sta (DSCTMP+1),y
+    sta (NewDescriptor+1),y
     pla
     pla
 
-RLZRET:
-    jmp PUTNEW
+;; Jumps to <Strings::PushTemporary>.
+;; Also: RLZRET (M6502)
+ToPushTemporary:
+    jmp Strings::PushTemporary
+    .endproc
 
-;; Returns the leftmost requested characters, or the whole string if the count exceeds its length.
-;;
-;; Errors: ILLEGAL QUANTITY for a zero count when rejectZeroSlices is selected
-LEFT:
-    jsr PREAM
-    cmp (DSCPNT),y
+    ;; Returns the leftmost requested characters, or the whole string if the count exceeds its length.
+    ;;
+    ;; Errors: ILLEGAL QUANTITY for a zero count where `rejectZeroSlices` is 1
+    ;; Also: LEFT (M6502)
+    .proc Left
+    jsr SliceArguments
+    cmp (DescriptorPointer),y
     tya
+    ; Falls into Slice.
+    .endproc
 
-RLEFT:
-    bcc RLEFT1
-    lda (DSCPNT),y
+    ;; Shared by `LEFT$`, `RIGHT$` and `MID$`: allocates the slice, releases the source and copies from its start
+    ;; offset, then pushes the result as a temporary.
+    ;; In: A = the start offset, X = the count, carry = clear to use them, set to take the whole string from offset
+    ;;   0, DescriptorPointer = the source descriptor, Y = 0
+    ;; Entry:
+    ;;   CountInX = takes the count from X; <Mid> branches here
+    ;;   CountInA = pushes the count in A, allocates it and releases the source descriptor; <Mid> branches here
+    ;; Also: RLEFT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    .proc Slice
+    bcc PushStart
+    lda (DescriptorPointer),y
     tax
     tya
 
-RLEFT1:
+;; Pushes the start offset.
+;; Also: RLEFT1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+PushStart:
     pha
 
-RLEFT2:
+;; Takes the count from X; <Mid> branches here.
+;; Also: RLEFT2 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+CountInX:
     txa
 
-RLEFT3:
+;; Pushes the count in A, allocates it and releases the source descriptor; <Mid> branches here.
+;; Also: RLEFT3 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+CountInA:
     pha
-    jsr STRSPA
-    lda DSCPNT
-    ldy DSCPNT+1
-    jsr FRETMP
+    jsr Strings::Allocate
+    lda DescriptorPointer
+    ldy DescriptorPointer+1
+    jsr Strings::ReleaseDescriptor
     pla
     tay
     pla
     clc
-    adc INDEX
-    sta INDEX
-    bcc PULMOR
-    inc INDEX+1
+    adc Pointer1
+    sta Pointer1
+    bcc Copy
+    inc Pointer1+1
 
-PULMOR:
+;; Copies the characters and pushes the result.
+;; Also: PULMOR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+Copy:
     tya
-    jsr MOVDO
-    jmp PUTNEW
+    jsr Strings::CopyBytes
+    jmp Strings::PushTemporary
+    .endproc
 
-;; Returns the rightmost requested characters, or the whole string if the count exceeds its length.
-;;
-;; Errors: ILLEGAL QUANTITY for a zero count when rejectZeroSlices is selected
-RIGHT:
-    jsr PREAM
+    ;; Returns the rightmost requested characters, or the whole string if the count exceeds its length.
+    ;;
+    ;; Errors: ILLEGAL QUANTITY for a zero count where `rejectZeroSlices` is 1
+    ;; Also: RIGHT (M6502)
+    .proc Right
+    jsr SliceArguments
     clc
-    sbc (DSCPNT),y
+    sbc (DescriptorPointer),y
     eor #$FF
-    jmp RLEFT
+    jmp Slice
+    .endproc
 
-;; Returns MID$(string, start [, length]), with a one-based start and an optional length.
-;;
-;; A start beyond the end produces an empty string; a length extending past the end is shortened.
-;;
-;; Errors: ILLEGAL QUANTITY for a zero start
-MID:
+    ;; Returns `MID$(string, start [, length])`, with a one-based start and an optional length.
+    ;;
+    ;; A start beyond the end produces an empty string; a length extending past the end is shortened.
+    ;;
+    ;; Errors: ILLEGAL QUANTITY for a zero start
+    ;; Also: MID (M6502)
+    .proc Mid
     lda #$FF
-    sta FACLO
-    jsr CHRGOT
-    cmp #$29
-    beq MID2
-    jsr CHKCOM
-    jsr GETBYT
+    sta FacMantissa4
+    jsr GetCurrentCharacter
+    cmp #')'
+    beq HaveLength
+    jsr CheckComma
+    jsr EvaluateByte
 
-MID2:
-    jsr PREAM
-.if .not rejectZeroSlices
-.if indirectReturn
-    txa
-.endif
-    beq GOFUC
-.endif
+;; Gets the descriptor and start with <Functions::SliceArguments>.
+;; Also: MID2 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+HaveLength:
+    jsr SliceArguments
+    ; `rejectZeroSlices` is 1 in AppleSoft and, by default, BASIC 1, and 0 in BASIC 2 and 4.
+    .if .not rejectZeroSlices
+        .if indirectReturn
+            txa
+        .endif
+        beq ToIllegalQuantityError
+    .endif
     dex
     txa
     pha
     clc
     ldx #$00
-    sbc (DSCPNT),y
-    bcs RLEFT2
+    sbc (DescriptorPointer),y
+    bcs Slice::CountInX
     eor #$FF
-    cmp FACLO
-    bcc RLEFT3
-    lda FACLO
-    bcs RLEFT3
+    cmp FacMantissa4
+    bcc Slice::CountInA
+    lda FacMantissa4
+    bcs Slice::CountInA
+    .endproc
 
-;; Checks the closing parenthesis and retrieves the stacked string descriptor and byte argument.
-;;
-;; The dispatcher's return address is discarded. The indirect return increments only the saved low byte,
-;; so its continuation wraps within the same page when that byte was $FF. The stack return carries normally.
-;; The stack holds the preamble return, dispatcher return, byte argument, and descriptor low and high bytes.
-;; The stack return sets zero from the argument; the indirect return sets it from the incremented return byte.
-;; Out: A = byte argument, X = byte argument, Y = 0, DSCPNT = descriptor address
-;; Errors: ILLEGAL QUANTITY for a zero byte argument when rejectZeroSlices is selected
-PREAM:
-    jsr CHKCLS
+    ;; Checks the closing parenthesis and retrieves the stacked string descriptor and byte argument.
+    ;;
+    ;; The dispatcher's return address is discarded. Where `indirectReturn` is 1 (BASIC 1), the return increments
+    ;; only the saved low byte, so its continuation wraps within the same page when that byte was $FF; the stack
+    ;; return (`indirectReturn` = 0) carries normally.
+    ;; The stack holds the preamble return, dispatcher return, byte argument, and descriptor low and high bytes.
+    ;; The stack return sets zero from the argument; the indirect return sets it from the incremented return byte.
+    ;; Out: A = byte argument, X = byte argument, Y = 0, DescriptorPointer = descriptor address
+    ;; Errors: ILLEGAL QUANTITY for a zero byte argument where `rejectZeroSlices` is 1
+    ;; Also: PREAM (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    .proc SliceArguments
+    jsr CheckCloseParenthesis
     pla
-.if indirectReturn
-    sta JMPER+1
-    pla
-    sta JMPER+2
-.else
-    tay
-    pla
-    sta JMPER+1
-.endif
+    .if indirectReturn
+        sta FunctionJump+1
+        pla
+        sta FunctionJump+2
+    .else
+        tay
+        pla
+        sta FunctionJump+1
+    .endif
     pla
     pla
     pla
     tax
     pla
-    sta DSCPNT
+    sta DescriptorPointer
     pla
-    sta DSCPNT+1
-.if .not indirectReturn
-    lda JMPER+1
-    pha
-    tya
-    pha
-.endif
+    sta DescriptorPointer+1
+    .if .not indirectReturn
+        lda FunctionJump+1
+        pha
+        tya
+        pha
+    .endif
     ldy #$00
     txa
-.if rejectZeroSlices
-    beq GOFUC
-.endif
-.if indirectReturn
-    inc JMPER+1
-    jmp (JMPER+1)
-.else
-    rts
-.endif
+    .if rejectZeroSlices
+        beq ToIllegalQuantityError
+    .endif
+    .if indirectReturn
+        inc FunctionJump+1
+        jmp (FunctionJump+1)
+    .else
+        rts
+    .endif
+    .endproc
 
-;; Returns the length of a string in <FAC>.
-LEN:
-    jsr LEN1
-.if sharedLenJump
-LENFLT:
-.endif
-    jmp SNGFLT
+    ;; Returns the length of a string in <Fac>.
+    ;;
+    ;; Where `sharedLenJump` is 1 (BASIC 1), <Asc> jumps to this routine's `ToFloat`, the jump to <ReturnByte>.
+    ;; Errors: TYPE MISMATCH if <Fac> is not a string
+    ;; Also: LEN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    .proc Len
+    jsr ReleaseArgument
+    .if sharedLenJump
+;; Jumps to <ReturnByte>; <Asc> jumps here.
+ToFloat:
+    .endif
+    jmp ReturnByte
+    .endproc
 
-;; Checks and releases a string, returning its length and character address for string functions.
-;; Out: A = length, Y = length, INDEX = character address, VALTYP = numeric
-LEN1:
-    jsr FRESTR
+    ;; Checks and releases a string, returning its length and character address for string functions.
+    ;; Out: A = length, Y = length, zero = set for an empty string, X = 0, Pointer1 = character address,
+    ;;   ValueType = numeric
+    ;; Errors: TYPE MISMATCH if <Fac> is not a string
+    ;; Also: LEN1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    .proc ReleaseArgument
+    jsr Strings::ReleaseFacString
     ldx #$00
-    stx VALTYP
+    stx ValueType
     tay
     rts
+    .endproc
 
-;; Returns the first character's byte value in <FAC>.
-;; Errors: ILLEGAL QUANTITY for an empty string
-ASC:
-    jsr LEN1
-    beq GOFUC
+    ;; Returns the first character's byte value in <Fac>.
+    ;; Errors: TYPE MISMATCH if <Fac> is not a string, ILLEGAL QUANTITY for an empty string
+    ;; Also: ASC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    .proc Asc
+    jsr ReleaseArgument
+    beq ToIllegalQuantityError
     ldy #$00
-    lda (INDEX),y
+    lda (Pointer1),y
     tay
-.if sharedLenJump
-    jmp LENFLT
-.else
-    jmp SNGFLT
-.endif
+    .if sharedLenJump
+        jmp Len::ToFloat
+    .else
+        jmp ReturnByte
+    .endif
+    .endproc
 
-GOFUC:
-    jmp FCERR
+    ;; Jumps to <IllegalQuantityError>, shared by the string functions, <ConvertToByte> and the memory statements.
+    ;; Also: GOFUC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    .proc ToIllegalQuantityError
+    jmp IllegalQuantityError
+    .endproc
+    .endscope
 
-;; Advances past the current character and reads a byte-valued numeric expression.
-GTBYTC:
-    jsr CHRGET
+    ;; Advances past the current character and reads a byte-valued numeric expression.
+    ;; Also: GTBYTC (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    .proc SkipAndEvaluateByte
+    jsr GetNextCharacter
+    ; Falls into EvaluateByte.
+    .endproc
 
-;; Reads a byte-valued numeric expression.
-;; Out: X = value, TXTPTR = terminating character
-GETBYT:
-    jsr FRMNUM
+    ;; Reads a byte-valued numeric expression.
+    ;; Out: X = value, A = the current character, as <GetCurrentCharacter> returns it, TextPointer = terminating
+    ;;   character
+    ;; Errors: TYPE MISMATCH for a string, ILLEGAL QUANTITY if the value is outside the byte range
+    ;; Also: GETBYT (M6502, ASTIL, CBM4S79, K4S79, HV1, HV1R, HV2, HV4, HV4R, HVK4)
+    .proc EvaluateByte
+    jsr EvaluateNumber
+    ; Falls into ConvertToByte.
+    .endproc
 
-;; Converts <FAC> to a nonnegative byte and refreshes the current text character.
-;; Out: X = value
-;; Errors: ILLEGAL QUANTITY if the value is outside the byte range
-CONINT:
-    jsr POSINT
-    ldx FACMO
-    bne GOFUC
-    ldx FACLO
+    ;; Converts <Fac> to a nonnegative byte and refreshes the current text character.
+    ;; Out: X = value, A = the current character, as <GetCurrentCharacter> returns it
+    ;; Errors: ILLEGAL QUANTITY if the value is outside the byte range
+    ;; Also: CONINT (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    .proc ConvertToByte
+    jsr FacToNonnegativeInteger
+    ldx FacMantissa3
+    bne Functions::ToIllegalQuantityError
+    ldx FacMantissa4
 
-CHRGO2:
-    jmp CHRGOT
+;; Jumps to <GetCurrentCharacter>.
+;; Also: CHRGO2 (M6502)
+ToGetCurrentCharacter:
+    jmp GetCurrentCharacter
+    .endproc
 
-;; Converts the numeric prefix of a string to <FAC>; an empty string yields zero.
-;;
-;; The byte immediately after the counted characters must be writable. It is saved and replaced with zero for
-;; <Float::ReadNumber>; on success, that byte and the caller's <TXTPTR> are restored. An error from <Float::ReadNumber>
-;; bypasses restoration.
-VAL:
-    jsr LEN1
-    bne *+5
-    jmp ZEROFC
-    ldx TXTPTR
-    ldy TXTPTR+1
-    stx STRNG2
-    sty STRNG2+1
-    ldx INDEX
-    stx TXTPTR
+    .scope Functions continued
+
+    ;; Converts the numeric prefix of a string to <Fac>; an empty string yields zero.
+    ;;
+    ;; The byte immediately after the counted characters must be writable. It is saved and replaced with zero for
+    ;; <Float::ReadNumber>; on success, that byte and the caller's <TextPointer> are restored. An error from
+    ;; <Float::ReadNumber> bypasses restoration.
+    ;; Errors: TYPE MISMATCH if <Fac> is not a string
+    ;; Also: VAL (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    .proc Val
+    jsr ReleaseArgument
+    bne NotEmpty
+    jmp Float::SetZero
+
+;; A nonempty string: saves <TextPointer> and points it at the characters.
+NotEmpty:
+    ldx TextPointer
+    ldy TextPointer+1
+    stx SecondStringPointer
+    sty SecondStringPointer+1
+    ldx Pointer1
+    stx TextPointer
     clc
-    adc INDEX
-    sta INDEX2
-    ldx INDEX+1
-    stx TXTPTR+1
-    bcc VAL2
+    adc Pointer1
+    sta Pointer2
+    ldx Pointer1+1
+    stx TextPointer+1
+    bcc SetEnd
     inx
 
-VAL2:
-    stx INDEX2+1
+;; Saves the byte after the string, writes a terminator and parses the number.
+;; Also: VAL2 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+SetEnd:
+    stx Pointer2+1
     ldy #$00
-    lda (INDEX2),y
+    lda (Pointer2),y
     pha
-.if zeroTermViaY
-    tya
-.else
-    lda #$00
-.endif
-    sta (INDEX2),y
-    jsr CHRGOT
-    jsr FIN
+    ; BASIC 4 takes the zero from Y.
+    .if zeroTermViaY
+        tya
+    .else
+        lda #$00
+    .endif
+    sta (Pointer2),y
+    jsr GetCurrentCharacter
+    jsr Float::ReadNumber
     pla
     ldy #$00
-    sta (INDEX2),y
+    sta (Pointer2),y
+    ; Falls into SetTextPointer.
+    .endproc
+    .endscope
 
-;; Restores the text pointer saved in <STRNG2>.
-ST2TXT:
-    ldx STRNG2
-    ldy STRNG2+1
-    stx TXTPTR
-    sty TXTPTR+1
+    ;; Sets <TextPointer> from <SecondStringPointer>.
+    ;;
+    ;; After <Strings::FromTextUntil> that moves past the scanned text; after <Functions::Val> it restores the caller's
+    ;; position.
+    ;; Also: ST2TXT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    .proc SetTextPointer
+    ldx SecondStringPointer
+    ldy SecondStringPointer+1
+    stx TextPointer
+    sty TextPointer+1
 
-VALRTS:
+;; Returns.
+;; Also: VALRTS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+Done:
     rts
+    .endproc
 .endmacro

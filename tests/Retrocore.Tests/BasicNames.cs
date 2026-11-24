@@ -45,6 +45,40 @@ internal static partial class BasicNames
     ];
 
     /// <summary>
+    ///  Gets the names both vendors' historical-names files give, each for its own definition (Basic.md E4): ANDOP, the
+    ///  classic collector's steps, which BASIC 4 gives to its array back-link steps, and the unlinked allocator's room
+    ///  check, TRYAG3, which BASIC 4 gives to its step before.
+    /// </summary>
+    internal static string[] BothVendorsNames { get; } =
+    [
+        "ANDOP", "ARYVA2", "ARYVA3", "ARYVGO", "ARYGET", "GOGO", "DVARTS", "TRYAG3"
+    ];
+
+    /// <summary>
+    ///  Gets the names a vendor's alias gives in some builds that other builds still give to a label of a vendor's own
+    ///  unconverted code, until part C converts it (Basic.md E3): BASIC 4's GETRTS, which is the output routine's
+    ///  return in AppleSoft and BASIC 1 and 2.
+    /// </summary>
+    internal static string[] VendorLabelNames { get; } = ["GETRTS"];
+
+    /// <summary>
+    ///  Gets whether a build defines a name as a label of a vendor's own code, in the folder of the vendor's historical
+    ///  names but outside them, as it does the <see cref="VendorLabelNames"/>.
+    /// </summary>
+    /// <param name="result">The build.</param>
+    /// <param name="name">The name.</param>
+    /// <param name="historicalNames">The vendor's historical-names file.</param>
+    /// <returns>Whether the name is one of those and its definition is such a label.</returns>
+    internal static bool IsVendorLabel(AssemblyResult result, string name, string historicalNames)
+    {
+        string folder = Path.GetDirectoryName(Path.GetFullPath(historicalNames)) ?? historicalNames;
+        return VendorLabelNames.Contains(name)
+            && result.FindDefinition(name)?.Location?.Path is { } path
+            && Path.GetFullPath(path).StartsWith(folder, StringComparison.OrdinalIgnoreCase)
+            && !path.EndsWith(".HistoricalNames.asm", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
     ///  Gets the folder the BASIC tests read their sources from: the test output's <c>Inputs</c>, unless
     ///  <see cref="WithInputs"/> has replaced it for this flow.
     /// </summary>
@@ -268,22 +302,35 @@ internal static partial class BasicNames
     internal static string ScopedNames(IReadOnlyDictionary<string, long> symbols) => ScopedNames(symbols, Tables());
 
     /// <summary>
+    ///  Gets the source <see cref="ScopedNames(IReadOnlyDictionary{string, long})"/> gives, with the scoped names one
+    ///  native BASIC build gives the old names.
+    /// </summary>
+    /// <param name="symbols">The predefined symbols, by the names Microsoft's source has.</param>
+    /// <param name="build">The build whose names to define, from a <c>Build</c> overload.</param>
+    /// <returns>The declarations and definitions, one per line.</returns>
+    /// <exception cref="ArgumentException">The build is not a native BASIC build.</exception>
+    internal static string ScopedNames(IReadOnlyDictionary<string, long> symbols, string build) =>
+        ScopedNames(symbols, Tables(), build);
+
+    /// <summary>
     ///  Gets the source <see cref="ScopedNames(IReadOnlyDictionary{string, long})"/> gives, from given tables of each
     ///  build's historical names.
     /// </summary>
     /// <param name="symbols">The predefined symbols, by their old names.</param>
     /// <param name="byBuild">Each build's current names for its historical names, by build key.</param>
+    /// <param name="build">The build whose names to define; null for all of them.</param>
     /// <returns>The declarations and definitions, one per line.</returns>
-    /// <exception cref="InvalidOperationException">The builds give an old name to different definitions.</exception>
+    /// <exception cref="InvalidOperationException">With no build, the builds disagree on an old name.</exception>
     internal static string ScopedNames(
         IReadOnlyDictionary<string, long> symbols,
-        IReadOnlyDictionary<string, IReadOnlyDictionary<string, string[]>> byBuild)
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, string[]>> byBuild,
+        string? build = null)
     {
         List<string> source = [".ifndef FAMILIES_DECLARED", "FAMILIES_DECLARED = 1"];
         source.AddRange(s_families.SelectMany(family => (string[])[$".scope {family}", ".endscope"]));
         source.Add(".endif");
         string[] open = [];
-        foreach ((string name, long value) in CurrentNamesOf(symbols, byBuild, build: null)
+        foreach ((string name, long value) in CurrentNamesOf(symbols, byBuild, build)
             .Where(pair => IsScoped(pair.Key))
             .OrderBy(pair => pair.Key, StringComparer.Ordinal))
         {
@@ -308,7 +355,7 @@ internal static partial class BasicNames
     }
 
     // The scopes MsBasic.Families.asm declares.
-    private static readonly string[] s_families = ["Float", "Functions", "Statements"];
+    private static readonly string[] s_families = ["Float", "Functions", "Statements", "Operators", "Strings", "Variables"];
 
     private static bool IsScoped(string name) => name.Contains("::", StringComparison.Ordinal);
 
@@ -512,6 +559,32 @@ internal static partial class BasicNames
         }
 
         return names;
+    }
+
+    /// <summary>
+    ///  The labels only the SDK's own MACRO-10 overlays give, which no document names and the rename table gives no
+    ///  <c>;; Also:</c> (Basic.md E5), with the definition at each one's address in the native builds that have it.
+    /// </summary>
+    internal static IReadOnlyDictionary<string, string> OverlayOnlyLabels => s_overlayOnlyLabels;
+
+    private static readonly Dictionary<string, string> s_overlayOnlyLabels = new(StringComparer.Ordinal)
+    {
+        ["LENFLT"] = "Functions::Len::ToFloat",
+        ["NOTDS"] = "StoreString::NOTDS",
+        ["NOTDS1"] = "StoreString::NOTDS1"
+    };
+
+    /// <summary>
+    ///  Gets the definition a name reaches in a build, following a vendor's alias in its historical names file to the
+    ///  definition it names.
+    /// </summary>
+    /// <param name="result">The build.</param>
+    /// <param name="name">The name, current or old.</param>
+    /// <returns>The definition the shared or vendor code makes.</returns>
+    internal static AssemblySymbol DefiningSymbol(AssemblyResult result, string name)
+    {
+        AssemblySymbol definition = result.Definition(name);
+        return AliasTarget(definition) is { } target ? result.Definition(target) : definition;
     }
 
     // The target of an alias in a vendor's historical names file, from its line (Name = Target or Name = ::Target).

@@ -48,7 +48,9 @@ public static partial class DocumentationParser
             // expansions too.
             string[] parts = name.Split(["::"], StringSplitOptions.None);
             string last = parts[parts.Length - 1];
-            bool local = (last.Length != 0 && last[0] == '@') || _macros.Any(macro => macro.Locals.Contains(last));
+            bool local = (last.Length != 0 && last[0] == '@')
+                || parts.Any(part => _macros.Any(macro => macro.Locals.Contains(part)));
+
             bool parameter = parts.Any(part => _macros.Any(macro => macro.Parameters.Contains(part)));
             return (!local && parameter, local);
         }

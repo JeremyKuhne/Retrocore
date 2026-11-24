@@ -1017,6 +1017,24 @@ public sealed partial class HistoricalNameTests
         Assemble(Text + "\n    jsr OLD\n").Diagnostics.Should().ContainSingle().Which.Message.Should().Contain("OLD");
         Check(Text).Should().ContainSingle().Which.Message.Should().StartWith("Also: name::X is named by a parameter");
         Set(Text).FindAlso("OLD", thisBuild: true).Should().BeEmpty();
+
+        // Nor does a scope a .local name names, whose name is made up for each expansion.
+        const string Local = """
+            .macro Entry
+            .local S
+            .scope S
+            ;; An entry.
+            ;; Also: OLD (TEST)
+            X:
+                rts
+            .endscope
+            .endmacro
+                Entry
+            """;
+
+        Assemble(Local + "\n    jsr OLD\n").Diagnostics.Should().ContainSingle().Which.Message.Should().Contain("OLD");
+        Check(Local).Should().ContainSingle().Which.Message.Should().StartWith("Also: S::X is local to");
+        Set(Local).FindAlso("OLD", thisBuild: true).Should().BeEmpty();
     }
 
     /// <summary>
@@ -1549,6 +1567,85 @@ public sealed partial class HistoricalNameTests
         DocumentationResolver checker = new(partial) { Bibliography = bibliography };
         checker.Check().Select(diagnostic => diagnostic.Message).Should()
             .Contain("Also: no document 'NOSUCH' in the bibliography.");
+    }
+
+    /// <summary>
+    ///  An outside definition in a branch the build leaves out goes unchecked only beside a macro's body that documents
+    ///  the same name: a topic without one is checked as before, the macro's own sections still are, and in a strict
+    ///  file the skipped branch's prose isn't held to the build's names either.
+    /// </summary>
+    [TestMethod]
+    public void OnlyOutsideBranchesBesideAMacroGoUnchecked()
+    {
+        // No macro: a type in a skipped branch is still the build's topic, and its links are checked.
+        const string Plain = """
+            TALL = 1
+            .scope Shapes
+            .ifdef WIDE
+            ;; Reads <NOSUCH>.
+            .struct Point
+                x .byte
+            .endstruct
+            .endif
+            .endscope
+            """;
+
+        Check(Plain).Should().Contain(diagnostic => diagnostic.Rule == DocumentationRules.Link);
+
+        // The macro's own section, under a condition of its body, is checked beside a skipped outside branch.
+        const string Conditioned = """
+            .macro Library
+            .if 1
+            ;; A reader.
+            ;; Also: OLD (NOSUCH)
+            FOO:
+                rts
+            .endif
+            .endmacro
+            .scope S
+                Library
+            .endscope
+            TALL = 1
+            .ifdef WIDE
+            ;; One.
+            FOO = 1
+            .endif
+            """;
+
+        Check(Conditioned).Select(diagnostic => diagnostic.Message).Should()
+            .Contain("Also: no document 'NOSUCH' in the bibliography.");
+
+        // In a strict file, the skipped branch's prose naming a documented definition isn't reported unlinked.
+        const string Strict = """
+            ; retrocore: style=strict
+            ;; A probe.
+
+            ;; Tall.
+            TALL = 1
+
+            ;; Emits the reader.
+            .macro Library
+                ;; A reader.
+            FOO:
+                rts
+            .endmacro
+
+            ;; The reader's scope.
+            .scope S
+                Library
+            .endscope
+
+            .ifdef WIDE
+            ;; Reads TALL and sets it.
+            FOO = 1
+            .endif
+            """;
+
+        Check(Strict.Replace("Library\n.endscope", "\n.endscope", StringComparison.Ordinal)
+            .Replace(".ifdef WIDE", ".ifdef TALL", StringComparison.Ordinal)).Should()
+            .Contain(diagnostic => diagnostic.Rule == DocumentationRules.UnlinkedName);
+
+        Check(Strict).Should().NotContain(diagnostic => diagnostic.Rule == DocumentationRules.UnlinkedName);
     }
 
     private static List<DocumentationDiagnostic> Check(string text) =>

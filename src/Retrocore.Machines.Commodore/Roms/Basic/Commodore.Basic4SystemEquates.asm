@@ -234,8 +234,8 @@ KernalListen = $F0D5
 ;; Also: MSG (K4S79, HVK4)
 KernalPrintMessage = $F185
 
-;; Sends a secondary address after <KernalTalk>. The overlay's SECND is the kernal's name for another routine, at its
-;; own address.
+;; Sends a secondary address after <KernalTalk>. The overlay's SECND is the kernal's name for another routine, the
+;; one called after LISTEN, at a different address.
 ;; Also: SECND (UNKN), TKSA (K4S79, HVK4)
 KernalSendSecondary = $F193
 

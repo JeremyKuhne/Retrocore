@@ -798,7 +798,8 @@ CloseAllFiles = GetCharacter + 3
 .if EXTENDED_DISK_VECTORS
 ; BASIC 4's jump table (CBM4S79, HV4, HV4R) names these entries CONCAT, DOPEN, DCLOSE, RECORD, FORMAT, COLECT, BACKUP,
 ; DCOPY, APPEND, DSAVE, DLOAD, DCAT, RENAME, SCRATC and READDS. DCAT, SCRATC and READDS are cited on their entries;
-; the overlay and the kernal listings give the other twelve to BASIC's handlers, so they are named only here.
+; the overlay and the kernal listings give the other twelve to BASIC's handlers, so they are named only in prose,
+; here and, for DCOPY, on <KernalCopy>.
 
 ;; Concatenate two files.
 ;; Also: CQCONC (UNKN)

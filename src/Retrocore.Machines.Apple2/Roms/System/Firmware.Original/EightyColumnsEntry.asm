@@ -455,8 +455,8 @@ EscapeCodes:
 
 ;; How many escape keys there are: the length of <CharacterIo::EscapeKeys> and <CharacterIo::EscapeCodes>.
 ;;
-;; Apple's listing starts the lookup at ESCNUM-1, the last key; the ROM's byte is ESCNUM, one past it
-;; (<CharacterIo::EscapeMode::Lookup>).
+;; Apple's listing starts the lookup at ESCNUM, one past the last key (<CharacterIo::EscapeMode::Lookup>); the
+;; Enhanced IIe's starts at ESCNUM-1.
 ;; Also: ESCNUM (IIEROM82, IIETRM85)
 ESCAPE_COUNT = EscapeCodes - EscapeKeys
 .assert ESCAPE_COUNT = ESCAPE_ENTRIES, "One code for each escape key."

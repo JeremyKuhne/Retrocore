@@ -109,7 +109,7 @@ MODE_GOTOXY = %00001000
 MODE_CURSOR_OFF = %00010000
 
 ;; The Enhanced IIe's mode bit 5: the control characters are off, but for those with
-;; <Control::RUNS_WHEN_DISABLED> (escape Control-D; escape Control-E turns them on).
+;; <Control::RUNS_WHEN_DISABLED> (escape Control-D turns them off, escape Control-E on).
 ;; Also: M_CTL2 (IIETRM85)
 MODE_CONTROLS_OFF = %00100000
 

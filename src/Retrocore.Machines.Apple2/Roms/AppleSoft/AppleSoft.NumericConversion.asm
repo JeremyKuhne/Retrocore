@@ -1,8 +1,10 @@
-;; APPLESOFT: PEEK, POKE AND WAIT
-;;
-;; The shared entries follow the byte-conversion helpers in AppleSoft.Strings.asm. AppleSoft accepts negative addresses,
-;; preserves <POKER> across <Functions::Peek>, and reads ROM without a guard or padding. Its omitted WAIT mask branches
-;; straight to <Statements::Wait::StoreMask>, the plain wait, where Microsoft's source names the target ZSTORDO.
+; retrocore: style=strict
+; APPLESOFT: PEEK, POKE AND WAIT
+;
+; The shared entries follow the byte-conversion helpers in AppleSoft.Strings.asm. AppleSoft accepts negative
+; addresses, preserves PokeAddress across Functions::Peek, and reads ROM without a guard or padding. Its omitted WAIT
+; mask branches straight to Statements::Wait::StoreMask, the plain wait, where Microsoft's source names the target
+; ZSTORDO. AppleSoft's own label for Statements::Wait, WAIT, is an alias in AppleSoft.HistoricalNames.asm.
 
 .include "../Microsoft6502Basic/MsBasic.MemoryAccess.asm"
 
@@ -10,6 +12,4 @@
     PeekFunction 1, 0, 0, 0
     PokeStatement
 
-;; Waits until the masked memory value is nonzero: AppleSoft's label for <Statements::Wait>, which follows.
-WAIT:
-    WaitStatement STORDO
+    WaitStatement Statements::Wait::StoreMask

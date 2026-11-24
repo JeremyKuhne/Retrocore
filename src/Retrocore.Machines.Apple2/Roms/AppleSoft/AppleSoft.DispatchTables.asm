@@ -17,43 +17,43 @@ StatementTable:
     .word Statements::Next - 1              ; $82 NEXT
     .word Statements::Data - 1              ; $83 DATA
     .word Statements::Input - 1             ; $84 INPUT
-    .word DEL - 1                           ; $85 DEL
+    .word Statements::Del - 1               ; $85 DEL
     .word Statements::Dim - 1               ; $86 DIM
     .word Statements::Read - 1              ; $87 READ
-    .word GR - 1                            ; $88 GR
-    .word TEXT - 1                          ; $89 TEXT
-    .word PRNUM - 1                         ; $8A PR#
-    .word INNUM - 1                         ; $8B IN#
-    .word CALL - 1                          ; $8C CALL
-    .word PLOT - 1                          ; $8D PLOT
-    .word HLIN - 1                          ; $8E HLIN
-    .word VLIN - 1                          ; $8F VLIN
-    .word HGR2 - 1                          ; $90 HGR2
-    .word HGR - 1                           ; $91 HGR
-    .word HCOLOR - 1                        ; $92 HCOLOR=
-    .word HPLOT - 1                         ; $93 HPLOT
-    .word DRAW - 1                          ; $94 DRAW
-    .word XDRAW - 1                         ; $95 XDRAW
-    .word HTAB - 1                          ; $96 HTAB
+    .word Statements::Gr - 1                ; $88 GR
+    .word Statements::Text - 1              ; $89 TEXT
+    .word Statements::PrNumber - 1          ; $8A PR#
+    .word Statements::InNumber - 1          ; $8B IN#
+    .word Statements::Call - 1              ; $8C CALL
+    .word Statements::Plot - 1              ; $8D PLOT
+    .word Statements::HLin - 1              ; $8E HLIN
+    .word Statements::VLin - 1              ; $8F VLIN
+    .word Statements::HGr2 - 1              ; $90 HGR2
+    .word Statements::HGr - 1               ; $91 HGR
+    .word Statements::HColor - 1            ; $92 HCOLOR=
+    .word Statements::HPlot - 1             ; $93 HPLOT
+    .word Statements::Draw - 1              ; $94 DRAW
+    .word Statements::XDraw - 1             ; $95 XDRAW
+    .word Statements::HTab - 1              ; $96 HTAB
     .word HOME - 1                          ; $97 HOME
-    .word ROT - 1                           ; $98 ROT=
-    .word SCALE - 1                         ; $99 SCALE=
-    .word SHLOAD - 1                        ; $9A SHLOAD
-    .word TRACE - 1                         ; $9B TRACE
-    .word NOTRAC - 1                        ; $9C NOTRACE
-    .word NRMSTM - 1                        ; $9D NORMAL
-    .word INVERS - 1                        ; $9E INVERSE
-    .word FLASH - 1                         ; $9F FLASH
-    .word COLSTM - 1                        ; $A0 COLOR=
+    .word Statements::Rot - 1               ; $98 ROT=
+    .word Statements::Scale - 1             ; $99 SCALE=
+    .word Statements::ShLoad - 1            ; $9A SHLOAD
+    .word Statements::Trace - 1             ; $9B TRACE
+    .word Statements::NoTrace - 1           ; $9C NOTRACE
+    .word Statements::Normal - 1            ; $9D NORMAL
+    .word Statements::Inverse - 1           ; $9E INVERSE
+    .word Statements::Flash - 1             ; $9F FLASH
+    .word Statements::Color - 1             ; $A0 COLOR=
     .word Statements::Pop - 1               ; $A1 POP
-    .word VTAB - 1                          ; $A2 VTAB
-    .word HIMEM - 1                         ; $A3 HIMEM:
-    .word LOMEM - 1                         ; $A4 LOMEM:
-    .word ONERR - 1                         ; $A5 ONERR
-    .word RESUME - 1                        ; $A6 RESUME
-    .word RECALL - 1                        ; $A7 RECALL
-    .word STORE - 1                         ; $A8 STORE
-    .word SPEED - 1                         ; $A9 SPEED=
+    .word Statements::VTab - 1              ; $A2 VTAB
+    .word Statements::HiMem - 1             ; $A3 HIMEM:
+    .word Statements::LoMem - 1             ; $A4 LOMEM:
+    .word Statements::OnErr - 1             ; $A5 ONERR
+    .word Statements::Resume - 1            ; $A6 RESUME
+    .word Statements::Recall - 1            ; $A7 RECALL
+    .word Statements::Store - 1             ; $A8 STORE
+    .word Statements::Speed - 1             ; $A9 SPEED=
     .word Statements::Let - 1               ; $AA LET
     .word Statements::GoTo - 1              ; $AB GOTO
     .word Statements::PrepareRun - 1        ; $AC RUN
@@ -65,7 +65,7 @@ StatementTable:
     .word Statements::Rem - 1               ; $B2 REM
     .word Statements::Stop - 1              ; $B3 STOP
     .word Statements::On - 1                ; $B4 ON
-    .word WAIT - 1                          ; $B5 WAIT
+    .word Statements::Wait - 1              ; $B5 WAIT
     .word Statements::Load - 1              ; $B6 LOAD
     .word Statements::Save - 1              ; $B7 SAVE
     .word Statements::Def - 1               ; $B8 DEF

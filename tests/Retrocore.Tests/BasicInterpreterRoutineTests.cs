@@ -14,6 +14,9 @@ public sealed class BasicInterpreterRoutineTests
     // Where a stub records the byte it was handed; clear of the caller BasicMathMachine writes at $0300.
     private const int Recorded = 0x0310;
 
+    // Where BasicMathMachine's caller loops after the routine returns.
+    private const int CallerReturn = 0x0303;
+
     // The opcodes the stubs are written with.
     private const byte LdxImmediate = 0xA2;
     private const byte LdaImmediate = 0xA9;
@@ -127,7 +130,7 @@ public sealed class BasicInterpreterRoutineTests
         }
         else
         {
-            reached.Should().NotBe(input);
+            reached.Should().Be(CallerReturn, "CheckStop returns at once");
             machine.Cpu.Registers.Accumulator.Should().Be((byte)key);
         }
     }

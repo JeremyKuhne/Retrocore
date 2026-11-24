@@ -156,6 +156,11 @@ ChooseArrayLookup = Variables::ChooseArrayLookup
 ;; Also: ON (UNKN)
 On = Statements::On
 
+;; `WAIT`'s handler, under AppleSoft's own label for it.
+;; Inherit: <Statements::Wait>
+;; Also: WAIT (UNKN)
+Wait = Statements::Wait
+
 
 ; The unlinked allocator's room check and the classic collector's steps, whose Microsoft names BASIC 4 gives to other
 ; steps instead.

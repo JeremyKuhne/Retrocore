@@ -146,7 +146,7 @@ ToReturnByte:
 
 .endmacro
 
-;; Emits the `WAIT` entry.
+;; Emits <Statements::Wait>.
 ;; Parameters: defaultTarget = branch target when the optional second mask is omitted
 .macro WaitStatement defaultTarget
 

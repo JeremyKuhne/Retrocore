@@ -29,7 +29,7 @@ PROGRAM_ORIGIN = $0800
     sty RestartJump+2
     sta PrintStringJump+1
     sty PrintStringJump+2
-    jsr NRMSTM
+    jsr Statements::Normal
     lda #$4C                        ; the JMP opcode for the vectors
     sta RestartJump
     sta PrintStringJump

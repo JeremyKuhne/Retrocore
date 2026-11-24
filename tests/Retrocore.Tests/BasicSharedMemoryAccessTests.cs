@@ -136,9 +136,11 @@ public sealed class BasicSharedMemoryAccessTests
             DocumentationTopic topic = module.Documentation.FindTopic(name)
                 ?? throw new AssertFailedException($"{name} is not documented.");
 
-            topic.Kind.Should().Be(DocumentationKind.Routine);
+            // AppleSoft's own WAIT is an alias of the shared Statements::Wait in its historical names (Basic.md E).
+            bool alias = name == "WAIT";
+            topic.Kind.Should().Be(alias ? DocumentationKind.Constant : DocumentationKind.Routine);
             topic.Value.Should().Be(native.Symbol(name));
-            topic.Path.Should().EndWith(name == "WAIT" ? "AppleSoft.NumericConversion.asm" : "MsBasic.MemoryAccess.asm");
+            topic.Path.Should().EndWith(alias ? "AppleSoft.HistoricalNames.asm" : "MsBasic.MemoryAccess.asm");
             topic.Summary.Should().NotBeNullOrWhiteSpace();
         }
 

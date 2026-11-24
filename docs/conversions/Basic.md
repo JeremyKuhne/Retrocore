@@ -285,9 +285,10 @@ Settled by the owner on 2026-11-23, each as recommended in the question below it
   interpreter copies, then AppleSoft's and Commodore's own files.
 - X9. B4's helper resolves either name through `Also:`, the debug hosts use the same lookup, and each moves to the
   new names in the PR that renames the definition.
-- X10. AppleSoft includes `IIeEquates.asm` and `MonitorEntries.asm`, which grows the entries AppleSoft calls;
-  AppleSoft.Equates keeps only BASIC's workspace. For the clashes this causes, RNDX is `RandomValue` and the unused KIMY
-  is dropped.
+- X10. Revised by the owner (2026-11-24), after including MonitorEntries.asm brought in Monitor names that clash with
+  AppleSoft's (E-8): after DOS's X7 pattern, AppleSoft defines the Monitor entries it calls itself, with `Inherit:`, but
+  unlike DOS it includes `IIeEquates.asm` only; AppleSoft.Equates otherwise keeps only BASIC's workspace. For
+  IIeEquates' clashes, RNDX is `RandomValue` and the unused KIMY is dropped.
 - X11. The accumulators keep the field's short terms: `Fac`, `FacExponent`, `FacMantissa1`-`4`, `FacSign`,
   `FacExtension`, the same for `Arg`, and `ResultSign`; the `Float` routines name their operands by these
   (`AddPacked`, `AddArg`, `LoadFac`).
@@ -658,7 +659,7 @@ Decisions and how the table was applied:
   The AppleSoft error offsets are computed from their messages (`* - ERRTAB`), as the PET's were, each with an
   `.assert` of its value.
 - W6. AppleSoft's copies of the Monitor's, the IIe's and the firmware's names keep their names and definitions in
-  AppleSoft.Equates, in their own section, until AppleSoft includes IIeEquates.asm and MonitorEntries.asm (X10). Their
+  AppleSoft.Equates, in their own section, until X10 replaces them (E-8). Their
   trailing comments are moved above them, as the strict lint asks. This covers Microsoft's CQ* synonyms, BUF and OUTCH.
   The table's other names for them (ASTIL's HBAS for GBASL) join their `Also:` with X10.
 - W7. Switches (X15): the seven a test predefines and the Equates define (BUFPAG, BUFLEN, NULCMD, NUMLEV, STKEND,
@@ -1070,7 +1071,9 @@ Decisions and how the table was applied:
   and listing comparisons), so dropping them would weaken those tests. They are `PrintComma::ZoneMaskOperand` and
   `PrintTabOrSpace::EvaluateCallHigh`, equates at the operand bytes, each documented as an address nothing enters.
   `PrintComma::NextZone` carries LINCHK in the enhanced IIe and COMPR1 elsewhere. `PrintTabOrSpace::ReadArgument`
-  carries TABER in the enhanced IIe and LINCH1 elsewhere.
+  carries TABER in the enhanced IIe and LINCH1 elsewhere. Microsoft's own LINCHK is PRINT's number item and its
+  TABER the `php`, so the enhanced IIe's `ReadArgument` cites TABER by M6502, but the comma code's LINCHK and the
+  operand byte's TABER are the overlay's own and cite UNKN.
 - I4. NOTABR is `PrintSpaces::ContinuePrint`, as X2 has it, not a top-level label (C-Q3's draft). ERRCRD and ERROR1
   are both `ReportError::PrintMessage`; the table gave the PET's as `ShowMessage`.
 - I5. The shared `IntegerVariableValue` expands inside each vendor's `LoadVariableValue`, so GOOO and GOOOOO are
@@ -1137,11 +1140,10 @@ Decisions and how the table was applied:
   `BytesFreeMessage`'s string) and CRTSKP (`PrintSpace::CursorRight`), each now a label in BASIC 1's branch, cited
   HV1 and HV1R. Inside the two versions of `PrintSpaces`, which every build has, the labels cite only their own
   builds' documents (E8a): BASIC 1's XSPAC cites M6502 beside HV1's XSPAC1, and each version's NOTABR its own
-  builds' documents. MORSTS, BASIC 1's own
-  compare inside `NextStatement`, is in prose: as a label it would be a per-build `NextStatement::` name, which the
-  standalone sources that define `NextStatement` cannot predefine. DIRCN1 (CBM4S79, HV2, HV4, HV4R) is now on
-  `NextStatement::ReadLine`. The overlay defines none of the BASIC 1 names at BASIC 1's addresses, so the
-  conversion test exempts those labels there.
+  builds' documents. MORSTS, BASIC 1's own compare inside `NextStatement`, is in prose: as a label it would be a
+  per-build `NextStatement::` name, which the standalone sources that define `NextStatement` cannot predefine. DIRCN1
+  (CBM4S79, HV2, HV4, HV4R) is now on `NextStatement::ReadLine`. The overlay defines none of the BASIC 1 names at
+  BASIC 1's addresses, so the conversion test exempts those labels there.
 
 Checked: the full suite, the rename gate, the lint tests and `BasicInterpreterConversionTests`. The suite's
 skipped tests are the ROM-dump comparisons, which need dumps that are not here, so they did not run.
@@ -1160,6 +1162,107 @@ The existing tests run the rest. The debugger's contract checking ran clean on P
 enhanced IIe's AppleSoft. The contract check's program adds PRINT's comma, `TAB(` and `SPC(` to the expression step's, and a
 GOSUB that AppleSoft leaves by POP. As a control, a false `Keeps: A` added to AppleSoft's `PrintNewline` was
 reported.
+
+### E. AppleSoft's own files (X8 step 7)
+
+Converted, with `; retrocore: style=strict`, part E's three modules, `AppleSoft.AppleCommands`,
+`AppleSoft.HighResolution` and `AppleSoft.PlatformHelpers`, and the AppleSoft files still outside the style: the
+small modules that compose the shared ones (`Arrays`, `Assignment`, `Functions`, `Lister`, `MemoryManagement`,
+`NumericConversion`, `Strings`) and the root, `AppleSoft.asm`. Every AppleSoft file is now strict. The other
+AppleSoft files' references to part E's names follow (the dispatch table, `TrapError`, `ReadLowResCoordinates`,
+`Statements::Normal`, the enhanced IIe's tokenizer and PRINT helpers). The bytes are unchanged in all eight builds,
+the three AppleSoft and the five PET.
+Of the shared modules, only the WAIT entry's comment changed: it links `Statements::Wait` rather than naming WAIT,
+which is now AppleSoft's alias (E-2). `BasicBuildLinkTests` found four links in these files to definitions only some
+AppleSoft builds have (`CompareCommaColumn`, `Statements::CallAppleSoftCassette`, `Statements::SetArrayBlock` and the
+PET's `Statements::Print::NumberItem`), now in backticks.
+
+Decisions and how the table was applied:
+
+- E-1. Owner questions, as I recommended:
+  - E-Q1: the entries other routines branch into stay `Proc::Label`s, listed under the routine's `Entry:`.
+  - E-Q2: the hi-res engine is the scope `HighRes`; `ReadHighResCoordinates` and `ReadLowResCoordinates` are top
+    level.
+  - E-Q3: the Technical Information Library's HPLOT, HLIN, DRAW and XDRAW for the engine entries are in prose,
+    since the statements have those names. The engine entries keep the overlay's HPLOT0, HGLIN, DRAW0 and XDRAW0
+    (UNKN). SETHCOL is `HighRes::SetColor`, split out of `Statements::HColor`, which falls into it after its
+    `EvaluateByte`. RESUME cites UNKN, not ASTIL as I had recommended: ASTIL's RESUME is $F317, one less than the
+    handler, and the bibliography cites ASTIL only where its address is the build's value; the TIL's name is in
+    prose.
+  - E-Q4: keywords split at their words (`HGr2`, `HColor`, `XDraw`, `PrNumber`).
+  - E-Q6: the enhanced IIe's helpers that other modules call are top level.
+  - E-Q7: `ToIllegalQuantity`, `RejectHighResArgument`, `Statements::SetArrayBlock` and
+    `Statements::CallAppleSoftCassette`.
+  - E-Q8: `LowTwoBitsMask`, `BitTwoMask` and `RowInGroupMask`, with the operand trick in their comments.
+  - E-Q9: the unreachable 10 bytes after `HighRes::StepVertical`'s last `bcc` are documented, with no label.
+  - E-Q10: LASTWR is `InterpreterEnd`, and the wrong "Monitor workspace" comment now says the reserved bytes cover
+    the Monitor's code.
+- E-2. Departures from the table's names:
+  - HCOLO1 is `HighRes::SetColor::Done`, since the return is now SetColor's (E-Q3).
+  - MASK03 and MASK04 are `HighRes::PlotStep::LowTwoBitsMask` and `HighRes::StepVertical::BitTwoMask`: each is an
+    equate at an operand inside its routine, so it is that routine's, not the scope's.
+  - WAIT, AppleSoft's second label on the shared `Statements::Wait`, was DROP. The overlay's label must still
+    resolve, so it is an alias in `AppleSoft.HistoricalNames.asm` (`Wait = Statements::Wait`, Also WAIT (UNKN)), as
+    ON is (I6), and the dispatch table names `Statements::Wait`.
+  - The table's notes give HPLOT, DRAW and XDRAW for the statements as AS82, but its Documents column has AS82 as
+    spelling only for them, so they cite UNKN, as the other spelling-only names do.
+- E-3. E-Q5 waits for X10. The engine still names the Monitor's bytes it borrows by the Monitor's names in
+  AppleSoft.Equates (COLOR as the pixel mask, GBASL and GBASH as the screen byte's address), as the rest of the
+  AppleSoft files name the Monitor's entries and soft switches (INPORT, MPLOT, HISCR). X10 replaces those copies with
+  IIeEquates' names and AppleSoft's own definitions of the Monitor's entries (E-8).
+- E-4. `AppleSoft.PlatformHelpers.asm` interleaved the enhanced IIe's code and the other builds' at the same
+  addresses, sharing a `clc`, `pha`, `pla` and `rts` across `.if` boundaries. Each build's code is now written whole
+  under one `.if ENHNCD`/`.else`, as whole routines; the shared instructions are written in each.
+- E-5. New constants: `LOW_RES_ROWS`, `LOW_RES_COLUMNS`, `TEXT_ROWS`, the inverse and flash masks
+  (`INVERSE_MASK_NORMAL`, `INVERSE_MASK_INVERSE`, `INVERSE_MASK_FLASH`, `FLASH_MASK_FLASH`), `HIGH_RES_PAGE1` and
+  `HIGH_RES_PAGE2`, `PIXELS_PER_BYTE`, `HIGH_RES_ROW_BYTES`, `HIGH_RES_COLUMNS`, `HIGH_RES_ROWS`, `HIGH_RES_COLORS`,
+  `FIRST_PIXEL_MASK`, `LAST_PIXEL_MASK`, `SHAPE_PLOT_BIT`, and the enhanced IIe's `COMMA_LIMIT_40` and
+  `COMMA_LIMIT_80`. The array header's offsets use `ArrayHeader::LENGTH` and `DIMENSIONS`.
+- E-6. Found in the code and documented, not fixed: those the part E proposal lists, and that
+  `HighRes::StepHorizontal` and `StepVertical` take their direction from the negative flag the caller's load or
+  shift leaves, not from A; and `RECALL` accepts a stored array one byte longer than the array, writing that byte
+  past it, since it compares the array's length with the stored length less one.
+- E-7. Tests and their helpers:
+  - The rename gate's macro rename is now `AssignString`, the top-level label at the end of the shared
+    AssignmentStart macro: LASTWR, which it renamed, is converted here and in part F. The gate now exercises
+    lookups by AssignString, the name it renames, instead of by LASTWR.
+  - `BasicSharedFloatAliasesTests` counts WAIT among AppleSoft's names, and `BasicSharedMemoryAccessTests` expects
+    WAIT's topic to be the alias's.
+  - `BasicMathMachine.Call` and `CallUntil` take an optional `negative`, for a routine that tests the flag its
+    caller's load left.
+  - `BasicAppleConversionTests` is new: in each AppleSoft build, every old name the files give that the overlay
+    defines reaches its value, and every definition reaches the overlay by a name, apart from the new constants,
+    the switches and `HighRes::SetColor` (SETHCOL, which the overlay does not label); each old name cites only
+    AppleSoft's documents, Microsoft's source or UNKN, all in the bibliography.
+  - `BasicAppleRoutineTests` is new (below).
+- E-8. X10 is not in this step. As decided, including MonitorEntries.asm, grown with the entries AppleSoft calls, brings
+  in Apple's Monitor names INIT, WAIT, PLOT and READ, which AppleSoft's builds give other definitions (`ColdStart`,
+  `Statements::Wait`, `Statements::Plot`, `Statements::Read`); growing MonitorEntries with ReadPaddle clashes, in the
+  firmware's builds, with the firmware's PREAD; and DOS defines CharacterOut, ReadKey, SetInput and SetOutput itself.
+  The owner decided (2026-11-24) that X10 takes its own alternative, after DOS's X7 pattern, in a pull request of its
+  own after this step: unlike DOS, AppleSoft includes IIeEquates.asm only, and like DOS it defines the Monitor entries
+  it calls in AppleSoft.Equates with `Inherit:`, citing Apple's names except those that clash and adding AppleSoft's own
+  spellings, and gives AppleSoft's spellings of IIeEquates' names as aliases in AppleSoft.HistoricalNames;
+  MonitorEntries.asm is unchanged.
+
+Checked: the full suite, the rename gate, the lint tests and `BasicAppleConversionTests`. The suite's skipped tests
+are the ROM-dump comparisons, which need dumps that are not here, so they did not run.
+
+`BasicAppleRoutineTests` runs these routines in the enhanced IIe's AppleSoft and checks what their documentation
+says:
+
+- `HighRes::Position`: the interleaved row address, the byte in Y and `HighResByteIndex`, the pixel mask, the point,
+  and the color flipped for an odd byte, at points from (0,0) to (279,191).
+- `HighRes::FindCoordinates`: it rebuilds the point `Position` set.
+- `HighRes::StepHorizontal`: within a byte, across bytes, and its wrap within the row, both ways.
+- The enhanced IIe's `UppercaseCharacter`, `DistanceToColumn` (40 and 80 columns, with the caller's carry) and
+  `CompareCommaColumn` (A, carry and negative).
+
+The debugger's contract checking ran clean on the enhanced IIe's and the original IIe's AppleSoft, with a program of
+GR, COLOR=, PLOT, HLIN, VLIN and SCRN; HGR, HGR2, HCOLOR= and HPLOT TO; TEXT, NORMAL, INVERSE and FLASH; VTAB and
+HTAB; SPEED=, TRACE and NOTRACE; ONERR GOTO; HIMEM: and LOMEM:; PR#0 and IN#0; and DEL as a command. The II Plus could
+not be run that way: the debugger session's prompt check does not see its prompt. As a control, a false `Keeps: A`
+added to `HighRes::Plot` was reported.
 
 ## Other dependents
 
@@ -1185,8 +1288,8 @@ The parts' notes list these, among others; each is a comment for the conversion,
 - The classic allocator, on a zero-length request that does not fit, collects twice and returns without
   allocating (B2).
 - VAL leaves a zero after the string and does not restore TextPointer when FIN fails (B2).
-- AppleSoft: 10 unreachable bytes at $F530; XDRAW's and DRAW's collision counts count different things; Apple's
-  DRWPNT and XDRPNT names are swapped (E).
+- AppleSoft: 10 unreachable bytes at $F530; XDRAW's and DRAW's collision counts count different things; the
+  overlay's DRWPNT and XDRPNT names are swapped (E).
 - BASIC 4: the original ROM recognizes DS$ by address alone; the disk-status read has no length limit; HEADER
   closes the unit's files before asking for confirmation (F).
 - Comments found wrong: MLTPL1's "implicit high bit" (it is the loop's end marker); VariableLookup's note on where
@@ -2366,7 +2469,7 @@ workspace" the comment says. That comment is wrong and should be fixed in the co
 - Shape number 0 is accepted. It reads the table's count byte and unused byte as an offset.
 - XDRAW's collision count (COLCNT) counts pixels that were clear before XDRAW toggled them. DRAW's counts pixels
   that already had the color.
-- Apple's DRWPNT is XDRAW's step and XDRPNT is DRAW's step: the old names are the wrong way round.
+- The overlay's DRWPNT is XDRAW's step and XDRPNT is DRAW's step: the names are the wrong way round for this code.
 - An HSCALE of 0 draws 256 steps per vector.
 - The enhanced IIe's uppercase conversion also folds $7B-$7F to $5B-$5F. When the byte after the current one has
   bit 7 set, UPNXT returns the current byte instead of the next (likely unreachable).

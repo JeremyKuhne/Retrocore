@@ -56,7 +56,7 @@ LoadFloat:
 ;; Also: QSTAT1 (UNKN)
 .proc Scrn
     jsr GetNextCharacter
-    jsr PLOTFN
+    jsr ReadLowResCoordinates
     txa
     ldy LowResFirst
     jsr MSCRN

@@ -26,8 +26,8 @@ Nothing is converted yet, and no byte changes.
 
 - D1. Code several vendors inherited from Microsoft stays in one shared module; each difference is a named switch or
   parameter with a one-line reason.
-- D2. The modules keep their macros. A tool change (in progress) makes an `Also:` in a macro that is expanded once
-  per build apply at that expansion; a macro expanded more than once gives its old names in prose.
+- D2. The modules keep their macros. A tool change (since merged, #132) makes an `Also:` in a macro that is expanded
+  once per build apply at that expansion; a macro expanded more than once gives its old names in prose.
 - D3. Historical names take the standard form, `;; Also: NAME (KEY)`, with bibliography keys only for documents in
   hand and checked. A vendor's old name on shared code must resolve only in that vendor's builds, so it goes in the
   vendor's own file as an alias with `Also:`. Each build is tested to resolve only its own names.
@@ -201,7 +201,8 @@ disassembly were not fetched; the sources' comments do not cite them, and no nam
 
 ### Proposed bibliography rows
 
-`docs/Bibliography.md` is not edited on this branch. The rows proposed:
+The rows as proposed. All but ASRM78 are now in `docs/Bibliography.md` (#133), whose rows, with some titles
+worded differently, are the ones that count; ASRM78 is added by the first step that cites it.
 
 | Key | Title | Year | Publisher | Link |
 | --- | --- | --- | --- | --- |
@@ -218,8 +219,8 @@ disassembly were not fetched; the sources' comments do not cite them, and no nam
 | HV4R | PET BASIC 4 revised (901465-23, -20, -21), reconstructed source | | Martin Hoffmann-Vetter | <https://github.com/mist64/cbmsrc/tree/01bd60f162ef92212ef0cb67546ae8f42be34168/BASIC_PET_V4R_REC> |
 | HVK4 | PET operating system 4.0 (901465-21, 901447-29, 901465-22), reconstructed source | | Martin Hoffmann-Vetter | <https://github.com/mist64/cbmsrc/tree/01bd60f162ef92212ef0cb67546ae8f42be34168/KERNAL_PET_4.0_REC> |
 
-The existing sources' comments already cite "Apple TIL 76/79" and "Commodore BASIC 4 code18" in prose; the
-conversion replaces those with `Also:` entries and these keys.
+The sources' comments cited "Apple TIL 76/79" and "Commodore BASIC 4 code18" in prose; #133 replaced those in the
+alias files with these keys (`COMBYTE (ASTIL, AS82)`), and the conversion moves them into `Also:` entries.
 
 ## Step 3: the rename table
 
@@ -427,7 +428,8 @@ Commodore's BASIC 4 disk, monitor and record files, BASIC 1's patches, and the s
 
 - **Recommendation:**
   1. **Prerequisites:** the tool change for `Also:` in macros (D2), plan item B4's rename-proof test helper, and
-     symbol lookups by `Also:` in the debug hosts (X9).
+     symbol lookups by `Also:` in the debug hosts (X9). The first is merged (#132); the other two come with the
+     rename gate (`tests/Retrocore.Tests/BasicNames.cs`, and `SymbolsWithHistoricalNames` in the hosts).
   2. **The workspace:** both Equates files, the layouts (X3), and the tokens and error codes in both dispatch-tables
      files.
   3. **The math package (part A),** with the vendors' float alias files becoming historical-names entries.
@@ -602,15 +604,16 @@ builds), one checking every citation against the documents. Their findings, as c
 
 ## Other dependents
 
-- **DOS** left BASIC's names unchanged until this conversion: X7 in [Dos.md](Dos.md) ("BASIC names wait for the
-  BASICs' conversion"). P2 is DOS's BASIC vector: the labels for the six live words, written with a BasicEntries
-  macro. When AppleSoft's entries are renamed, DOS's vector should name the entries it jumps to by their new names.
+- **DOS** left BASIC's names unchanged until this conversion: X7 in the DOS conversion's log, `Dos.md` (on the
+  `claude/convert-dos` branch; "BASIC names wait for the BASICs' conversion"). P2 is DOS's BASIC vector: the labels for
+  the six live words, written with a BasicEntries macro. When AppleSoft's entries are renamed, DOS's vector should name
+  the entries it jumps to by their new names.
 - **The disassembler** ([retrocore-disassembly](../../.claude/skills/retrocore-disassembly/SKILL.md)) names a
   program's uses of BASIC by these sources' names, so every program that calls AppleSoft's entries (`jsr FRMEVL`,
   `jsr HPOSN`) disassembles with the new names after the conversion. The ASTIL index's entries are what programs
   call most, so their new names matter most.
-- **The tests** look labels up by Microsoft's names; plan item B4 adds a rename-proof helper before any rename
-  (X9).
+- **The tests** look labels up through `BasicNames` (plan item B4), which finds a label by its Microsoft name or
+  its new one (X9).
 - **The debug hosts** look up BASIC's workspace by name (X9).
 - **The overlays** (D6) keep Microsoft's names: they are the oracle, and the table does not touch them.
 
@@ -733,10 +736,10 @@ AppleSoft.FloatAliases, AppleSoft.NumericConversion (WAIT) and Commodore.FloatAl
 
 ##### A-Q1. Where do the `Also:` names go for labels defined inside macros?
 
-Every label in this part is defined inside a macro body (D2 keeps the macros). DocComments 2.4 says an `Also:`
-inside a macro's body is ignored. So FADD, MOVFM, FOUT and the rest cannot reach their new names from the
-definitions themselves, even though all of them are expanded once per build (x1). This is also why today's vendor
-alias files exist.
+Every label in this part is defined inside a macro body (D2 keeps the macros). DocComments 2.4 said, when this was
+drafted, that an `Also:` inside a macro's body is ignored (#132 has since changed that; see D2). So FADD, MOVFM, FOUT
+and the rest cannot reach their new names from the definitions themselves, even though all of them are expanded once per
+build (x1). This is also why today's vendor alias files exist.
 
 - **Recommendation:** have the assembler and tools honor `Also:` on a label in a macro that is expanded at most once
   per assembly. Every macro in this part that defines labels is x1. FLOAT_ONE (x3) defines no label. Microsoft's

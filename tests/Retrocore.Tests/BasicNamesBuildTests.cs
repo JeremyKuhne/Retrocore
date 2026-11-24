@@ -72,8 +72,8 @@ public sealed class BasicNamesBuildTests
     }
 
     /// <summary>
-    ///  An old name whose current name is inside a scope gets it from <see cref="BasicNames.ScopedNames(IReadOnlyDictionary{string, long}, IReadOnlyDictionary{string, IReadOnlyDictionary{string, string[]}})"/>, as a
-    ///  constant in its scope, and not as a predefined symbol, which can't name a scope's member.
+    ///  An old name whose current name is inside a scope gets it from <c>BasicNames.ScopedNames</c>, as a constant in
+    ///  its scope, and not as a predefined symbol, which can't name a scope's member.
     /// </summary>
     [TestMethod]
     public void AScopedCurrentNameIsDefinedInItsScope()

@@ -102,8 +102,8 @@ internal static partial class BasicAttribution
 
     /// <summary>
     ///  Asserts that a vendor's name for shared code is no historical name of a shared definition, which would make it
-    ///  resolve in every vendor's builds: it may be a historical name only of a definition outside the shared modules,
-    ///  the vendor's alias in its historical-names file.
+    ///  resolve in every vendor's builds: it may be a historical name only of a definition in a historical-names file
+    ///  outside the shared modules, where each build has its own vendor's aliases.
     /// </summary>
     /// <param name="result">A build.</param>
     /// <param name="docs">The build's documentation.</param>

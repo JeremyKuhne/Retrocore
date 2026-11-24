@@ -1020,8 +1020,8 @@ their `Out:` values and `Keeps:` claims:
   lengths 0 (both builds) and 1 (AppleSoft) too; both keep X.
 - `Strings::ReleaseTemporary`: the latest temporary and others; keeps X.
 - `Variables::MultiplyUnsigned`: products and the OUT OF MEMORY jump.
-- Both builds' `Strings::ReserveSpace`: room to spare, exact room, one byte short (up to the call of the
-  collector), AppleSoft's collection for a zero length, and BASIC 4's zero-length return and link.
+- Both builds' `Strings::ReserveSpace`: room to spare, exact room, one byte short (up to the call of the collector),
+  AppleSoft's collection for a zero length, and BASIC 4's return for a zero length and its link for a nonempty string.
 - `EvaluateByte`: the value, the next character, and ILLEGAL QUANTITY past 255.
 
 The existing BasicShared*Tests run the rest. The debugger's contract checking ran clean on PET BASIC 2, PET BASIC 4

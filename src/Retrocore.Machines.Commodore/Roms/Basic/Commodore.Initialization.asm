@@ -261,7 +261,7 @@ SignOnMessage:
     .else
         .byte CARRIAGE_RETURN, $00
 
-;; The sign-on printed before the free-memory count.
+;; The sign-on BASIC 2 prints before the free-memory count; BASIC 4 assembles it but prints its own `SIGNON`.
 ;; Also: FREMES (M6502, CBM4S79, HV2, HV4, HV4R)
 SignOnMessage:
         .byte "### COMMODORE BASIC ###", CARRIAGE_RETURN, CARRIAGE_RETURN, $00

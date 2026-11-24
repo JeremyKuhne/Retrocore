@@ -143,8 +143,8 @@ AddressField = HorizontalLineEnd
 ;; The half-track the selected drive's head is on, while the seek routine moves it; after <SeekTrack>, the track.
 ;;
 ;; It is slot 0's screen-hole byte at $0478, the same byte as the start of RWTS's per-slot table <Drive1HalfTracks>.
-;; <SeekTrack> loads it from the drive's entry in that table before it calls <DiskII::MoveHead>, which compares it with
-;; <TargetHalfTrack>.
+;; <SeekHalfTrack> loads it from the drive's entry in that table before it calls <DiskII::MoveHead>, which compares it
+;; with <TargetHalfTrack>.
 ;; See: <TargetHalfTrack>, <DiskII::MoveHead>, <SeekTrack>
 ;; Also: CURTRK (DOS33, DOS31)
 CurrentTrack = $0478

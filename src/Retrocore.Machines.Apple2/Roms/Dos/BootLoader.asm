@@ -760,7 +760,8 @@ BootCodeStart:
 ;; Set when a read reaches the end of a file whose position is not 0, so that the end of APPEND moves the record
 ;; number on by one.
 ;;
-;; <EndOfData> sets it, and <CloseOnError>, <NextRecord> and <ClearUnlessAppend> clear it; <NextRecord> reads it.
+;; <EndOfData> sets it, and <CloseOnError>, <NextRecord> and, in the 1983 DOS, <ClearUnlessAppend> clear it;
+;; <NextRecord> reads it.
 ;; Also: EOFFLAG (DOS33)
 EndOfFile:
     .byte 0

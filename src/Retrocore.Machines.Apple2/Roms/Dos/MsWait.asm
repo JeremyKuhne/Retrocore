@@ -261,7 +261,7 @@ WriteTranslate:
 ;;
 ;; It is this page's start ($BA00 where DOS runs; Apple's listing makes it from XP, the page's high byte). Because
 ;; the page starts there, `EOR ReadTranslate,Y` with a nibble in Y never crosses a page and always takes 4 cycles.
-;; ReadTranslate + 0 to + $95 is the code and tables above, and the patches below.
+;; ReadTranslate + 0 to + $95 is the code and tables above, and the patches below (leftover bytes in the 1980 DOS).
 ;; Also: DNIBL (DOS33, DOS31)
 ReadTranslate = * & $FF00
 

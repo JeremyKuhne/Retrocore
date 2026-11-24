@@ -57,9 +57,9 @@ public class SdkDocumentationTests
         AssemblyResult result = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(s_inputs), model);
         DocumentationSet basic = Set(result, "AppleSoft");
         foreach (string name in (string[])
-            ["FADD", "NORMAL", "SHIFTR", "FONE", "LOGCN2", "LOG", "MULLN2", "FMULT", "FDIV", "MOVFM", "MOVMF", "ROUND", "SIGN", "FCOMP",
+            ["FADD", "NORMAL", "SHIFTR", "FONE", "LOGCN2", "LOG", "Functions::Log::MultiplyByLogOfTwo", "FMULT", "FDIV", "MOVFM", "MOVMF", "ROUND", "SIGN", "FCOMP",
              "QINT", "INT", "FIN", "FINEDG", "NZ9999", "FOUT", "FHALF", "FOUTBL", "SQR", "EXPCON", "EXP",
-             "POLY", "RND", "RMULZC", "SIN", "GFDIV", "SINCON", "ATN", "ATNCON"])
+             "POLY", "RND", "RMULZC", "SIN", "Functions::Tan::ToDividePacked", "SINCON", "ATN", "ATNCON"])
         {
             basic.FindTopic(name).Should().NotBeNull($"the shared macro must retain {name}'s documentation");
         }

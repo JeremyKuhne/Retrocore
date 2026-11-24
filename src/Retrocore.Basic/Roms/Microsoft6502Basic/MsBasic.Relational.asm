@@ -1,82 +1,102 @@
+; retrocore: style=strict
 ; Derived from Microsoft's BASIC for 6502 (m6502.asm, MIT license; see LICENSE in this folder).
+
+.include "MsBasic.Families.asm"
+
 ; MICROSOFT 6502 BASIC: RELATIONAL OPERATORS
 
 ;; Emits the numeric and string comparison entries.
 ;; Parameters: trueByte = $01 for a true result of one, $FF for a true result of minus one
-.macro RELATIONAL_OPERATORS trueByte
+.macro RelationalOperators trueByte
     .assert trueByte = $01 || trueByte = $FF, "trueByte is $01 or $FF."
 
-;; Compares numeric or string operands and applies the relation mask.
-;; In: carry = set for an argument string or clear for a number, VALTYP = accumulator type,
-;;   DOMASK = relation mask
-;; Out: FAC = zero or the variant's true value
-;; Errors: TYPE MISMATCH if the operand types differ
-;; See: <STRCMP>, <FCOMP>
-DOREL:
+    ;; Compares numeric or string operands and applies the relation mask.
+    ;; In: carry = set for an argument string or clear for a number, ValueType = accumulator type,
+    ;;   RelationMask = relation mask
+    ;; Out: Fac = zero or the variant's true value
+    ;; Errors: TYPE MISMATCH if the operand types differ
+    ;; See: <ApplyRelation::CompareStrings>, <Float::Compare>
+    ;; Also: DOREL (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    .proc ApplyRelation
     jsr CHKVAL
-    bcs STRCMP
-    lda ARGSGN
+    bcs CompareStrings
+    lda ArgSign
     ora #$7F
-    and ARGHO
-    sta ARGHO
-    lda #<ARGEXP
+    and ArgMantissa1
+    sta ArgMantissa1
+    lda #<ArgExponent
     ldy #$00
-    jsr FCOMP
+    jsr Float::Compare
     tax
-    jmp QCOMP
+    jmp NumberResult
 
 ;; Compares bytes up to the shorter string's length, then compares lengths if needed.
-;; In: ARGMO/ARGLO = argument descriptor address, FACMO/FACLO = accumulator descriptor address,
-;;   DOMASK = relation mask
-;; Out: FAC = zero or the variant's true value
-STRCMP:
+;; In: ArgMantissa3 = the low byte of the argument's descriptor address, ArgMantissa4 = its high byte,
+;;   FacMantissa3 = the low byte of the accumulator's descriptor address, FacMantissa4 = its high byte,
+;;   RelationMask = relation mask
+;; Out: Fac = zero or the variant's true value
+;; Also: STRCMP (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+CompareStrings:
     lda #$00
-    sta VALTYP
-    dec OPMASK
+    sta ValueType
+    dec OperatorMask
     jsr FREFAC
-    sta DSCTMP
-    stx DSCTMP+1
-    sty DSCTMP+2
-    lda ARGMO
-    ldy ARGLO
+    sta NewDescriptor
+    stx NewDescriptor+1
+    sty NewDescriptor+2
+    lda ArgMantissa3
+    ldy ArgMantissa4
     jsr FRETMP
-    stx ARGMO
-    sty ARGLO
+    stx ArgMantissa3
+    sty ArgMantissa4
     tax
     sec
-    sbc DSCTMP
-    beq STASGN
+    sbc NewDescriptor
+    beq SetLengthOrder
     lda #$01
-    bcc STASGN
-    ldx DSCTMP
+    bcc SetLengthOrder
+    ldx NewDescriptor
     lda #$FF
-STASGN:
-    sta FACSGN
+;; Stores the length order (0, 1, $FF) for equal prefixes.
+;; Also: STASGN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+SetLengthOrder:
+    sta FacSign
     ldy #$FF
     inx
-NXTCMP:
+;; Counts down the shorter length; at its end uses the length order.
+;; Also: NXTCMP (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+NextByte:
     iny
     dex
-    bne GETCMP
-    ldx FACSGN
-QCOMP:
-    bmi DOCMP
+    bne CompareByte
+    ldx FacSign
+;; Turns the order in X into the carry form <ApplyRelation::ApplyMask> expects.
+;; Also: QCOMP (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+NumberResult:
+    bmi ApplyMask
     clc
-    bcc DOCMP
-GETCMP:
-    lda (ARGMO),y
-    cmp (DSCTMP+1),y
-    beq NXTCMP
+    bcc ApplyMask
+;; Compares one byte of each string.
+;; Also: GETCMP (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+CompareByte:
+    lda (ArgMantissa3),y
+    cmp (NewDescriptor+1),y
+    beq NextByte
     ldx #$FF
-    bcs DOCMP
+    bcs ApplyMask
     ldx #$01
-DOCMP:
+;; Maps the order to a relation bit and masks it with <RelationMask>.
+;; Also: DOCMP (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+ApplyMask:
     inx
     txa
     rol a
-    and DOMASK
-    beq GOFLOT
+    and RelationMask
+    beq ToConvertSignedByte
     lda #trueByte
-GOFLOT:
-    jmp FLOAT
+;; Jumps on to <Float::ConvertSignedByte> with the result.
+;; Also: GOFLOT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+ToConvertSignedByte:
+    jmp Float::ConvertSignedByte
+    .endproc
 .endmacro

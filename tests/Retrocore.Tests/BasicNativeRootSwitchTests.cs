@@ -59,6 +59,9 @@ public sealed class BasicNativeRootSwitchTests
     [DataRow("AppleSoft", "NULCMD", "NULL_COMMAND")]
     [DataRow("AppleSoft", "NUMLEV", "STACK_LEVELS")]
     [DataRow("AppleSoft", "STKEND", "STACK_END")]
+    [DataRow("AppleSoft", "INTPRC", "INTEGER_VARIABLES")]
+    [DataRow("AppleSoft", "ADDPRC", "ADDITIONAL_PRECISION")]
+    [DataRow("AppleSoft", "LNGERR", "LONG_ERRORS")]
     [DataRow("Basic1", "BUFPAG", "INPUT_BUFFER_PAGE")]
     [DataRow("Basic1", "BUFLEN", "INPUT_BUFFER_LENGTH")]
     [DataRow("Basic1", "NULCMD", "NULL_COMMAND")]
@@ -66,6 +69,13 @@ public sealed class BasicNativeRootSwitchTests
     [DataRow("Basic1", "STKEND", "STACK_END")]
     [DataRow("Basic1", "LOCAL_TRMPOS", "LOCAL_TERMINAL_POSITION")]
     [DataRow("Basic1", "VARTXT_IN_LINNUM", "VARIABLE_LIST_IN_LINE_NUMBER")]
+    [DataRow("Basic1", "INTPRC", "INTEGER_VARIABLES")]
+    [DataRow("Basic1", "ADDPRC", "ADDITIONAL_PRECISION")]
+    [DataRow("Basic1", "LNGERR", "LONG_ERRORS")]
+    [DataRow("Basic1", "SHORT_FMUL_ZERO", "SHORT_MULTIPLY_ZERO")]
+    [DataRow("Basic1", "EARLY_FIN_LIMIT", "EARLY_INPUT_EXPONENT_LIMIT")]
+    [DataRow("Basic1", "PRECISE_FOUT_LIMIT", "PRECISE_OUTPUT_LIMIT")]
+    [DataRow("Basic1", "ZERO_AT_FHALF", "ZERO_IN_HALF_CONSTANT")]
     [DataRow("Basic2", "BUFPAG", "INPUT_BUFFER_PAGE")]
     [DataRow("Basic2", "BUFLEN", "INPUT_BUFFER_LENGTH")]
     [DataRow("Basic2", "NULCMD", "NULL_COMMAND")]
@@ -73,6 +83,13 @@ public sealed class BasicNativeRootSwitchTests
     [DataRow("Basic2", "STKEND", "STACK_END")]
     [DataRow("Basic2", "LOCAL_TRMPOS", "LOCAL_TERMINAL_POSITION")]
     [DataRow("Basic2", "VARTXT_IN_LINNUM", "VARIABLE_LIST_IN_LINE_NUMBER")]
+    [DataRow("Basic2", "INTPRC", "INTEGER_VARIABLES")]
+    [DataRow("Basic2", "ADDPRC", "ADDITIONAL_PRECISION")]
+    [DataRow("Basic2", "LNGERR", "LONG_ERRORS")]
+    [DataRow("Basic2", "SHORT_FMUL_ZERO", "SHORT_MULTIPLY_ZERO")]
+    [DataRow("Basic2", "EARLY_FIN_LIMIT", "EARLY_INPUT_EXPONENT_LIMIT")]
+    [DataRow("Basic2", "PRECISE_FOUT_LIMIT", "PRECISE_OUTPUT_LIMIT")]
+    [DataRow("Basic2", "ZERO_AT_FHALF", "ZERO_IN_HALF_CONSTANT")]
     [DataRow("Basic4", "BUFPAG", "INPUT_BUFFER_PAGE")]
     [DataRow("Basic4", "BUFLEN", "INPUT_BUFFER_LENGTH")]
     [DataRow("Basic4", "NULCMD", "NULL_COMMAND")]
@@ -80,6 +97,13 @@ public sealed class BasicNativeRootSwitchTests
     [DataRow("Basic4", "STKEND", "STACK_END")]
     [DataRow("Basic4", "LOCAL_TRMPOS", "LOCAL_TERMINAL_POSITION")]
     [DataRow("Basic4", "VARTXT_IN_LINNUM", "VARIABLE_LIST_IN_LINE_NUMBER")]
+    [DataRow("Basic4", "INTPRC", "INTEGER_VARIABLES")]
+    [DataRow("Basic4", "ADDPRC", "ADDITIONAL_PRECISION")]
+    [DataRow("Basic4", "LNGERR", "LONG_ERRORS")]
+    [DataRow("Basic4", "SHORT_FMUL_ZERO", "SHORT_MULTIPLY_ZERO")]
+    [DataRow("Basic4", "EARLY_FIN_LIMIT", "EARLY_INPUT_EXPONENT_LIMIT")]
+    [DataRow("Basic4", "PRECISE_FOUT_LIMIT", "PRECISE_OUTPUT_LIMIT")]
+    [DataRow("Basic4", "ZERO_AT_FHALF", "ZERO_IN_HALF_CONSTANT")]
     public void ShippedRootsRejectRenamedSwitchNames(string root, string oldName, string name)
     {
         AssemblyResult image = AssembleRoot(root, new() { [oldName] = 0 }, asGiven: true);
@@ -135,7 +159,7 @@ public sealed class BasicNativeRootSwitchTests
             .include "MsBasic.Switches.asm"
             .include "MsBasic.FloatConstants.asm"
             .org $3000
-                OUTPUT_TABLES 0, {includeTime}
+                OutputTables 0, {includeTime}
             END_OF_TABLE:
             """;
 

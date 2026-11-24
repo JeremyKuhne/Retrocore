@@ -588,7 +588,7 @@ public sealed class BasicSharedMemoryManagementTests
             .include "Commodore.Equates.asm"
             .include "MsBasic.MemoryManagement.asm"
             .org ${legacy.Symbol("FNDFOR"):X4}
-                MEMORY_MANAGEMENT (2 * STACK_LEVELS + 3 * ADDPRC + 13)
+                MEMORY_MANAGEMENT (2 * STACK_LEVELS + 3 * ADDITIONAL_PRECISION + 13)
             MEMORY_MANAGEMENT_END:
             """;
 

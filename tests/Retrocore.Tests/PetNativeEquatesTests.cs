@@ -165,9 +165,9 @@ public sealed class PetNativeEquatesTests
     [DataRow("FULL_STACK_TOP", -1)]
     [DataRow("STACK_LEVELS", 0)]
     [DataRow("STACK_LEVELS", 120)]
-    [DataRow("INTPRC", 0)]
-    [DataRow("ADDPRC", 0)]
-    [DataRow("LNGERR", 0)]
+    [DataRow("INTEGER_VARIABLES", 0)]
+    [DataRow("ADDITIONAL_PRECISION", 0)]
+    [DataRow("LONG_ERRORS", 0)]
     [DataRow("TIME", 2)]
     [DataRow("EXTIO", 2)]
     [DataRow("DISKO", 2)]
@@ -261,10 +261,10 @@ public sealed class PetNativeEquatesTests
         }
 
         Dictionary<string, long> selectors = Features(model);
-        selectors.Add("SHORT_FMUL_ZERO", early ? 1 : 0);
-        selectors.Add("EARLY_FIN_LIMIT", early ? 1 : 0);
-        selectors.Add("PRECISE_FOUT_LIMIT", early ? 1 : 0);
-        selectors.Add("ZERO_AT_FHALF", early ? 0 : 1);
+        selectors.Add("SHORT_MULTIPLY_ZERO", early ? 1 : 0);
+        selectors.Add("EARLY_INPUT_EXPONENT_LIMIT", early ? 1 : 0);
+        selectors.Add("PRECISE_OUTPUT_LIMIT", early ? 1 : 0);
+        selectors.Add("ZERO_IN_HALF_CONSTANT", early ? 0 : 1);
         selectors.Add("WAIT_EASTER_EGG", waitMessage ? 1 : 0);
         selectors.Add("BASIC4_OUTPUT_PADDING", disk ? 1 : 0);
 
@@ -282,6 +282,7 @@ public sealed class PetNativeEquatesTests
             .org ${start:X4}
             .include "Commodore.FloatingPoint.asm"
             {EndOfMath}:
+            .include "Commodore.HistoricalNames.asm"
             """;
 
         AssemblyResult native = RequireSuccess(Assemble(source, selectors));
@@ -327,10 +328,10 @@ public sealed class PetNativeEquatesTests
         bool waitMessage = model == PetModel.Pet2001Basic2;
         bool disk = model == PetModel.Pet4032;
         Dictionary<string, long> symbols = Features(model);
-        symbols.Add("SHORT_FMUL_ZERO", early ? 1 : 0);
-        symbols.Add("EARLY_FIN_LIMIT", early ? 1 : 0);
-        symbols.Add("PRECISE_FOUT_LIMIT", early ? 1 : 0);
-        symbols.Add("ZERO_AT_FHALF", early ? 0 : 1);
+        symbols.Add("SHORT_MULTIPLY_ZERO", early ? 1 : 0);
+        symbols.Add("EARLY_INPUT_EXPONENT_LIMIT", early ? 1 : 0);
+        symbols.Add("PRECISE_OUTPUT_LIMIT", early ? 1 : 0);
+        symbols.Add("ZERO_IN_HALF_CONSTANT", early ? 0 : 1);
         symbols.Add("WAIT_EASTER_EGG", waitMessage ? 1 : 0);
         symbols.Add("BASIC4_OUTPUT_PADDING", disk ? 1 : 0);
 
@@ -452,7 +453,7 @@ public sealed class PetNativeEquatesTests
                 FUNCTION_DISPATCH
                 LOGICAL_OPERATORS 1
             COMPOSED_FUNCTION_DISPATCH_END:
-                RELATIONAL_OPERATORS $FF
+                RelationalOperators $FF
             COMPOSED_RELATIONAL_END:
             .include "MsBasic.Dim.asm"
             COMPOSED_DIM_END:
@@ -462,14 +463,14 @@ public sealed class PetNativeEquatesTests
             COMPOSED_LETTER_TEST_END:
                 SIMPLE_VARIABLE_LOOKUP 0, {(early ? 1 : 0)}, 0, 1, 1, {(disk ? 1 : 0)}, {(disk ? 1 : 0)}, 0
             COMPOSED_SCALAR_LOOKUP_END:
-                INTEGER_CONVERSION_BOUNDARY
-                INTEGER_CONVERSION {(early ? "FRMNUM" : "FRMEVL")}, {(early ? 0 : 1)}
+                IntegerConversionBoundary
+                IntegerConversion {(early ? "FRMNUM" : "FRMEVL")}, {(early ? 0 : 1)}
             COMPOSED_INTEGER_CONVERSION_END:
                 ARRAY_LOOKUP 0, {(disk ? 1 : 0)}, {(early ? 0 : 1)}
             COMPOSED_ARRAY_END:
             .include "MsBasic.ArrayMultiplication.asm"
             COMPOSED_MULTIPLY_END:
-                SIMPLE_FUNCTIONS 0
+                SimpleFunctions 0
             COMPOSED_SIMPLE_FUNCTIONS_END:
                 USER_FUNCTIONS {(early ? 1 : 0)}
             COMPOSED_USER_FUNCTIONS_END:
@@ -488,7 +489,7 @@ public sealed class PetNativeEquatesTests
                 MEMORY_ACCESS_ADDRESS 1
                 MEMORY_ACCESS_PEEK {(early ? 0 : 1)}, 1, {(early ? 1 : 0)}, {(waitMessage ? 1 : 0)}
                 MEMORY_ACCESS_POKE
-                MEMORY_ACCESS_WAIT {(waitMessage ? "ZSTORD" : "STORDO")}
+                MEMORY_ACCESS_WAIT {(waitMessage ? "WaitHiddenMessage" : "STORDO")}
             COMPOSED_MEMORY_ACCESS_END:
             .org ${legacy.Symbol("FADDH"):X4}
             .include "Commodore.FloatingPoint.asm"
@@ -506,6 +507,7 @@ public sealed class PetNativeEquatesTests
             {(early ? ".org $E7F3" : "")}
                 {(early ? "COMMODORE_BASIC1_ARRAY_PATCH" : "")}
             COMPOSED_BASIC1_ARRAY_END:
+            .include "Commodore.HistoricalNames.asm"
             """;
 
         AssemblyResult native = RequireSuccess(Assemble(source, symbols));

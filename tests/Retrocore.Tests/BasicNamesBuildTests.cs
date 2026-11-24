@@ -72,6 +72,26 @@ public sealed class BasicNamesBuildTests
     }
 
     /// <summary>
+    ///  An old name whose current name is inside a scope gets it from <c>BasicNames.ScopedNames</c>, as a constant in
+    ///  its scope, and not as a predefined symbol, which can't name a scope's member.
+    /// </summary>
+    [TestMethod]
+    public void AScopedCurrentNameIsDefinedInItsScope()
+    {
+        Dictionary<string, IReadOnlyDictionary<string, string[]>> tables = new(StringComparer.Ordinal)
+        {
+            [BasicNames.Build(Apple2Model.IIeEnhanced)] = new Dictionary<string, string[]>(StringComparer.Ordinal)
+            {
+                ["SCPNAM"] = ["Float::Scoped"]
+            }
+        };
+
+        BasicNames.WithCurrentNames(One("SCPNAM"), tables, build: null).Should().NotContainKey("Float::Scoped");
+        string source = BasicNames.ScopedNames(One("SCPNAM"), tables);
+        source.Split('\n').Should().ContainInOrder(".scope Float continued", "Scoped = $1234", ".endscope");
+    }
+
+    /// <summary>
     ///  For all builds, an old name only one build gives gets that build's name.
     /// </summary>
     [TestMethod]
@@ -127,7 +147,9 @@ public sealed class BasicNamesBuildTests
             foreach ((string name, string[] targets) in table)
             {
                 Dictionary<string, long> own = BasicNames.WithCurrentNames(One(name), build);
-                own.Keys.Except([name]).Should().BeEquivalentTo(targets, $"{build} gives {name} only to its own names");
+                own.Keys.Except([name]).Should().BeEquivalentTo(
+                    targets.Where(target => !target.Contains("::", StringComparison.Ordinal)),
+                    $"{build} gives {name} only to its own names, those inside a scope left to ScopedNames");
             }
         }
 
@@ -137,7 +159,8 @@ public sealed class BasicNamesBuildTests
             Func<Dictionary<string, long>> all = () => BasicNames.WithCurrentNames(One(name));
             if (given.All(targets => targets.SequenceEqual(given[0], StringComparer.Ordinal)))
             {
-                all().Keys.Except([name]).Should().BeEquivalentTo(given[0]);
+                all().Keys.Except([name]).Should().BeEquivalentTo(
+                    given[0].Where(target => !target.Contains("::", StringComparison.Ordinal)));
             }
             else
             {

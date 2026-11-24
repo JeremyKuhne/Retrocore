@@ -34,7 +34,8 @@ COMBYT:
 ;; Converts <FAC> to a 16-bit address in <POKER>.
 ;;
 ;; An exponent of $91 or more is rejected. When the sign check is selected, a set sign bit in <FACSGN> is also
-;; rejected; otherwise negative values are rounded down by <QINT> and their low 16 bits wrap as an address.
+;; rejected; otherwise negative values are rounded down by <Float::ToLongInteger> and their low 16 bits wrap as an
+;; address.
 ;; Out: POKER = address, A = high byte, Y = low byte
 ;; Errors: ILLEGAL QUANTITY for an exponent or sign rejected by this configuration
 GETADR:

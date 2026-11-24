@@ -136,7 +136,7 @@ public sealed class BasicSharedIntegerConversionTests
         AssemblyResult separated = AssembleRegion(legacy, numericEvaluator: true, checkType: false, insertGap: true);
         separated.Success.Should().BeFalse();
         separated.Diagnostics.Should().Contain(diagnostic => diagnostic.Message.Contains(
-            "INTEGER_CONVERSION must immediately follow INTEGER_CONVERSION_BOUNDARY", StringComparison.Ordinal));
+            "IntegerConversion must immediately follow IntegerConversionBoundary", StringComparison.Ordinal));
     }
 
     /// <summary>
@@ -351,9 +351,9 @@ public sealed class BasicSharedIntegerConversionTests
             .cpu Mos6502
             .include "MsBasic.IntegerConversion.asm"
             .org ${legacy.Symbol("N32768"):X4}
-                INTEGER_CONVERSION_BOUNDARY
+                IntegerConversionBoundary
             {(insertGap ? "    .byte $00" : "")}
-                INTEGER_CONVERSION {evaluator}, {(checkType ? 1 : 0)}
+                IntegerConversion {evaluator}, {(checkType ? 1 : 0)}
             INTEGER_CONVERSION_END:
             """;
 
@@ -369,7 +369,7 @@ public sealed class BasicSharedIntegerConversionTests
         }
 
         AssemblyResult result = new Assembler.Assembler().Assemble(
-            new AssemblySource(source, Path.Join(folder, "IntegerConversionTest.asm")),
+            new AssemblySource(BasicNames.ScopedNames(symbols) + "\n" + source, Path.Join(folder, "IntegerConversionTest.asm")),
             new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
             {
                 SourceResolver = new FileAssemblySourceResolver(),

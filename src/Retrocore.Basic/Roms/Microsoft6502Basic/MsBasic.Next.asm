@@ -129,6 +129,7 @@ CHKOK:
 DOCSTR:
     bcs CHKOK
 
+;; Reports TYPE MISMATCH: loads its error offset into X and jumps on to the error handler.
 CHKERR:
     ldx #<ERRTM
 

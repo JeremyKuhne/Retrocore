@@ -157,7 +157,7 @@ public sealed class BasicSharedExpressionTests
             .cpu Mos6502
             .include "MsBasic.Relational.asm"
             .org ${legacy.Symbol("DOREL"):X4}
-                RELATIONAL_OPERATORS {(apple ? "$01" : "$FF")}
+                RelationalOperators {(apple ? "$01" : "$FF")}
             RELATIONAL_END:
             """;
 
@@ -174,7 +174,7 @@ public sealed class BasicSharedExpressionTests
         }
 
         AssemblyResult native = new Assembler.Assembler().Assemble(
-            new AssemblySource(source, Path.Join(folder, "RelationalTest.asm")),
+            new AssemblySource(BasicNames.ScopedNames(symbols) + "\n" + source, Path.Join(folder, "RelationalTest.asm")),
             new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
             {
                 SourceResolver = new FileAssemblySourceResolver(),

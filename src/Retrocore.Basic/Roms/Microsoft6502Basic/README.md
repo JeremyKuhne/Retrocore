@@ -29,10 +29,12 @@ than silently implying a different configuration. Those assertions do not apply 
 it can supply its own values and independently compose the appropriate clock, channel, disk and
 time-output macros.
 
-`MsBasic.FloatConstants.asm` defines macros for the five-byte `ADDPRC=1` constants and polynomial tables shared
-by AppleSoft and all three PET BASIC versions. A native variant can emit each block where its ROM needs it.
-`MsBasic.AdditionCore.asm` supplies addition, normalization and shifting. `MsBasic.Logarithm.asm` provides the
-shared `LOG` routine, which must immediately precede `FMULT` because it falls through to that routine.
+The math modules put their routines in two scopes, `Float` and `Functions`, which `MsBasic.Families.asm` declares;
+each module includes it, and only the first inclusion declares them. `MsBasic.FloatConstants.asm` defines macros for
+the five-byte `ADDITIONAL_PRECISION = 1` constants and polynomial tables shared by AppleSoft and all three PET BASIC
+versions. A native variant can emit each block where its ROM needs it. `MsBasic.AdditionCore.asm` supplies
+addition, normalization and shifting. `MsBasic.Logarithm.asm` provides the shared `Functions::Log` routine, which
+must immediately precede `Float::MultiplyPacked` because it falls through to that routine.
 `MsBasic.ArithmeticCore.asm` supplies multiplication and division,
 including the short zero-result branch used by PET BASIC 1; `MsBasic.MovementCore.asm` supplies the movement and
 rounding routines. `MsBasic.ConversionCore.asm` supplies sign, comparison and integer conversion;
@@ -67,13 +69,13 @@ The interpreter modules also retain each variant's original bytes:
 | `MsBasic.LineNumber.asm` | Shared decimal line-number parsing accepts values below 64000. |
 | `MsBasic.LineSearch.asm` | Shared linked-program search returns the matching line or insertion point. |
 | `MsBasic.MemoryAccess.asm` | `MEMORY_ACCESS_ADDRESS` selects negative-address rejection; `MEMORY_ACCESS_PEEK` independently selects address preservation, save order, ROM guarding and padding; `MEMORY_ACCESS_WAIT` takes the omitted-mask branch target. |
-| `MsBasic.MemoryManagement.asm` | `MEMORY_MANAGEMENT` takes the stack reserve: `$36` for AppleSoft and BASIC 1, `$3E` for BASIC 2/4. BASIC 1 calculates it as `2*STACK_LEVELS+3*ADDPRC+13`; the macro asserts the required contiguous page-zero scratch layout. |
+| `MsBasic.MemoryManagement.asm` | `MEMORY_MANAGEMENT` takes the stack reserve: `$36` for AppleSoft and BASIC 1, `$3E` for BASIC 2/4. BASIC 1 calculates it as `2*STACK_LEVELS+3*ADDITIONAL_PRECISION+13`; the macro asserts the required contiguous page-zero scratch layout. |
 | `MsBasic.Next.asm` | AppleSoft and BASIC 1 count through the FOR frame; BASIC 2/4 calculate its offsets. The caller also supplies the platform's next-statement entry. |
 | `MsBasic.OperatorTable.asm` | AppleSoft uses `OPERATOR_TABLE 1, 1, OROP1`; PET uses `OPERATOR_TABLE 0, 0, ANDOP`. Power/negation and NOT precedences are independent. |
 | `MsBasic.ProgramTransfers.asm` | Shared RESTORE, STOP, CONT, RUN, GOSUB, GOTO and RETURN entries. The caller selects direct-mode detection, output suppression, the next-statement target, RETURN's FOR-pointer byte and optional POP handling independently. |
 | `MsBasic.ProgramReset.asm` | Shared NEW, CLEAR, NULL, stack reset and text-pointer setup; independent choices preserve platform side effects and BASIC 1's original or revised stack reset. |
 | `MsBasic.Relational.asm` | Shared numeric and string comparisons; AppleSoft uses `$01` for true, PET uses `$FF`. |
-| `MsBasic.SimpleFunctions.asm` | Shared FRE, POS and integer-to-floating-point entries; `SIMPLE_FUNCTIONS 1` retains AppleSoft's extra carry set, PET uses `0`. |
+| `MsBasic.SimpleFunctions.asm` | Shared FRE, POS and integer-to-floating-point entries; `SimpleFunctions 1` retains AppleSoft's extra carry set, PET uses `0`. |
 | `MsBasic.StatementFlow.asm` | Shared DATA/REM scanning and IF/ON dispatch; the scanner independently selects BASIC 1's quote-branch order and AppleSoft's POP unwind entry. |
 | `MsBasic.StringFunctions.asm` | Shared CHR$, slicing, LEN, ASC, byte conversion and VAL, with independent choices for slice errors, preamble return, LEN/ASC dispatch and VAL's terminator. |
 | `MsBasic.UserFunctions.asm` | `USER_FUNCTIONS 1` retains BASIC 1's low-byte undefined-function check; AppleSoft and BASIC 2/4 use the corrected high-byte check (`0`). |
@@ -163,8 +165,8 @@ and `PROBE_TEST_BYTE` are bytes; `NULL_INCREMENT_LIMIT` is 2 through 255.
 | `GET_STRING_EDITOR_PATCH` | 1 | `VARIABLE_INPUT` `patchedGetString`: use the editor's GET string helper. |
 | `NEXT_COUNTED_STACK` | 1 | `NEXT_ENTRIES` `countedStack`: count through the FOR frame rather than compute offsets. |
 | `CLOCK_EDITOR_PATCH` | 1 | `COMMODORE_VARIABLE_VALUE` `clockPatch`: use the editor's TI and TI$ checks. |
-| `INTIDX_USE_FRMNUM` | 1 | `INTEGER_CONVERSION` `evaluateEntry`: use FRMNUM, or FRMEVL when 0. |
-| `POSINT_CHECK_TYPE` | 0 | `INTEGER_CONVERSION` `checkType`: check the numeric type at POSINT. |
+| `INTIDX_USE_FRMNUM` | 1 | `IntegerConversion` `evaluateEntry`: use FRMNUM, or FRMEVL when 0. |
+| `POSINT_CHECK_TYPE` | 0 | `IntegerConversion` `checkType`: check the numeric type at POSINT. |
 | `ARRAY_SAVE_OFFSET_HIGH` | 0 | `ARRAY_LOOKUP` `saveOffsetHigh`: retain the corrected high offset byte. |
 | `USER_FN_LOW_CHECK` | 1 | `USER_FUNCTIONS` `earlyCheck`: check the argument pointer's low instead of high byte. |
 | `STRING_CLEAR_FACOV` | 0 | `STRING_STORAGE` `clearFacOverflow`: clear FACOV when making a temporary. |
@@ -177,10 +179,10 @@ and `PROBE_TEST_BYTE` are bytes; `NULL_INCREMENT_LIMIT` is 2 through 255.
 | `PEEK_PRESERVE_ADDRESS` | 0 | `MEMORY_ACCESS_PEEK` `preserveAddress`: restore the prior POKE/WAIT address. |
 | `PEEK_GUARD_ROM` | 1 | `MEMORY_ACCESS_PEEK` `guardRom`: return zero for protected ROM pages. |
 | `PEEK_PAD_GUARD` | 0 | `MEMORY_ACCESS_PEEK` `padGuard`: emit eight padding bytes. |
-| `SHORT_FMUL_ZERO` | 1 | `FLOAT_ARITHMETIC` `shortZeroBranch`: use the short zero-result branch. |
-| `EARLY_FIN_LIMIT` | 1 | `DECIMAL_INPUT` `limitAt120`: use the earlier exponent limit. |
-| `PRECISE_FOUT_LIMIT` | 1 | `OUTPUT_CONSTANTS`: use the 999,999,999.5 upper threshold. |
-| `ZERO_AT_FHALF` | 0 | Define ZERO in FHALF when 1, or emit it at `SIMPLE_VARIABLE_LOOKUP` when 0. |
+| `SHORT_MULTIPLY_ZERO` | 1 | `FloatArithmetic` `shortZeroBranch`: use the short zero-result branch. |
+| `EARLY_INPUT_EXPONENT_LIMIT` | 1 | `DecimalInput` `earlyExponentLimit`: use the earlier exponent limit. |
+| `PRECISE_OUTPUT_LIMIT` | 1 | `OutputConstants`: use the 999,999,999.5 upper threshold. |
+| `ZERO_IN_HALF_CONSTANT` | 0 | Define `ZeroValue` in `Float::Half` when 1, or emit ZERO at `SIMPLE_VARIABLE_LOOKUP` when 0. |
 | `WAIT_EASTER_EGG` | 0 | Emit the hidden WAIT routine and signature, and route the omitted-mask branch to it. |
 | `RANDOM_SEED_TAIL` | `$59` | `CHARACTER_READER` `seedTail`: the random seed's last byte. |
 | `INIT_MARK_DIRECT` | 1 | `COMMODORE_INITIALIZE` `markDirect`: mark the current line direct. |

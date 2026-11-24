@@ -23,7 +23,7 @@ FOR:
 NOTOL:
     pla
     pla
-    lda #(8+ADDPRC)
+    lda #(8+ADDITIONAL_PRECISION)
     jsr GETSTK
     jsr DATAN
     clc

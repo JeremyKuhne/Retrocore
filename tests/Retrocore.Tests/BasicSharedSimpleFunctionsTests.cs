@@ -131,7 +131,7 @@ public sealed class BasicSharedSimpleFunctionsTests
             .cpu Mos6502
             .include "MsBasic.SimpleFunctions.asm"
             .org ${legacy.Symbol("FRE"):X4}
-                SIMPLE_FUNCTIONS {(setCarry ? 1 : 0)}
+                SimpleFunctions {(setCarry ? 1 : 0)}
             SIMPLE_FUNCTIONS_END:
             """;
 
@@ -144,7 +144,7 @@ public sealed class BasicSharedSimpleFunctionsTests
             name => name, name => legacy.Symbol(name), StringComparer.Ordinal);
 
         AssemblyResult native = new Assembler.Assembler().Assemble(
-            new AssemblySource(source, Path.Join(folder, "SharedSimpleFunctionsTest.asm")),
+            new AssemblySource(BasicNames.ScopedNames(symbols) + "\n" + source, Path.Join(folder, "SharedSimpleFunctionsTest.asm")),
             new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
             {
                 SourceResolver = new FileAssemblySourceResolver(),

@@ -12,7 +12,8 @@ using Retrocore.Machines.Commodore;
 namespace Retrocore.Tests;
 
 /// <summary>
-///  Checks documented Apple and PET names against the shared floating-point definitions.
+///  Checks the vendors' historical names for the shared floating-point definitions: each a scoped alias in the
+///  vendor's historical-names file that resolves only in that vendor's builds.
 /// </summary>
 [TestClass]
 public sealed class BasicSharedFloatAliasesTests
@@ -21,8 +22,28 @@ public sealed class BasicSharedFloatAliasesTests
     private static string Apple => Path.Join(BasicNames.Inputs, "AppleSoft");
     private static string Pet => Path.Join(BasicNames.Inputs, "Pet");
     private static string Shared => Path.Join(BasicNames.Inputs, "Microsoft6502Basic");
-    private static string AppleAliases => Path.Join(Apple, "AppleSoft.FloatAliases.asm");
-    private static string PetAliases => Path.Join(Pet, "Basic", "Commodore.FloatAliases.asm");
+    private static string AppleAliases => Path.Join(Apple, "AppleSoft.HistoricalNames.asm");
+    private static string PetAliases => Path.Join(Pet, "Basic", "Commodore.HistoricalNames.asm");
+
+    // AppleSoft's names for shared definitions, with the documents that give each.
+    private static readonly Dictionary<string, string[]> s_appleNames = new(StringComparer.Ordinal)
+    {
+        ["PRNTFAC"] = ["ASTIL"],
+        ["FOUT13"] = ["UNKN"],
+        ["OVERFLOW"] = ["AS82"],
+        ["FIDVT"] = ["ASTIL"],
+        ["INSRTDIG"] = ["AS82"],
+        ["LOGSER"] = ["AS82"],
+        ["BILLION"] = ["AS82"],
+        ["MISMTCH"] = ["AS82"]
+    };
+
+    // The names Microsoft's source gives only in its Commodore builds, with the documents that give each.
+    private static readonly Dictionary<string, string[]> s_microsoftPetNames = new(StringComparer.Ordinal)
+    {
+        ["MULLN2"] = ["M6502", "CBM4S79", "HV4", "HV4R"],
+        ["GFDIV"] = ["M6502"]
+    };
 
     // Addresses in the independently assembled PET1, PET2 and PET4 listings:
     // https://github.com/ethandicks/cbmsymbols/tree/e3120427a32e8b066eb8afdc434af547fd0906f3/listings
@@ -66,12 +87,18 @@ public sealed class BasicSharedFloatAliasesTests
         AssemblyResult legacy = SdkModules.AssembleAppleSoft(Path.Join(Apple, "applesoft.mac"), model);
         SdkModules.AppleSoftImage(native).ToArray().Should().Equal(SdkModules.AppleSoftImage(legacy).ToArray());
         native.Symbol("PRNTFAC").Should().Be(0xED2E, "Apple TIL 79 specifies this entry");
-        foreach (string petName in s_petAddresses.Keys)
+        foreach (string petName in s_petAddresses.Keys.Concat(s_microsoftPetNames.Keys))
         {
             native.HasSymbol(petName).Should().BeFalse($"{petName} is a PET name");
         }
 
-        CheckAliases(native, AppleAliases, ["PRNTFAC"], ["ASTIL"], ["ASTIL"]);
+        // Each old name reaches the address the MACRO-10 build gives it, where that build has it.
+        foreach (string name in s_appleNames.Keys.Where(name => legacy.HasSymbol(name)))
+        {
+            native.Symbol(name).Should().Be(legacy.Symbol(name), $"{name} must keep the overlay's value");
+        }
+
+        CheckAliases(native, AppleAliases, s_appleNames, pet: null);
         CheckDocumentation(native, AppleAliases);
     }
 
@@ -97,19 +124,20 @@ public sealed class BasicSharedFloatAliasesTests
 
         bool basic1 = model == PetModel.Pet2001;
         bool basic2 = model == PetModel.Pet2001Basic2;
-        symbols.Add("SHORT_FMUL_ZERO", basic1 ? 1 : 0);
-        symbols.Add("EARLY_FIN_LIMIT", basic1 ? 1 : 0);
-        symbols.Add("PRECISE_FOUT_LIMIT", basic1 ? 1 : 0);
-        symbols.Add("ZERO_AT_FHALF", basic1 ? 0 : 1);
+        symbols.Add("SHORT_MULTIPLY_ZERO", basic1 ? 1 : 0);
+        symbols.Add("EARLY_INPUT_EXPONENT_LIMIT", basic1 ? 1 : 0);
+        symbols.Add("PRECISE_OUTPUT_LIMIT", basic1 ? 1 : 0);
+        symbols.Add("ZERO_IN_HALF_CONSTANT", basic1 ? 0 : 1);
         symbols.Add("WAIT_EASTER_EGG", basic2 ? 1 : 0);
         symbols.Add("BASIC4_OUTPUT_PADDING", model == PetModel.Pet4032 ? 1 : 0);
 
         string source = $"""
             .cpu Mos6502
             .org ${start:X4}
+            {BasicNames.ScopedNames(symbols)}
             .include "Commodore.FloatingPoint.asm"
             FLOAT_ALIAS_BEFORE:
-            .include "Commodore.FloatAliases.asm"
+            .include "Commodore.HistoricalNames.asm"
             FLOAT_ALIAS_AFTER:
             """;
 
@@ -117,7 +145,7 @@ public sealed class BasicSharedFloatAliasesTests
         {
             SourceResolver = new FileAssemblySourceResolver(),
             IncludePaths = [Shared],
-            PredefinedSymbols = BasicNames.WithCurrentNames(symbols)
+            PredefinedSymbols = BasicNames.WithCurrentNames(symbols, PetSdkModules.AssembleBasic(Pet, model, original))
         };
 
         AssemblyResult native = RequireSuccess(new Retrocore.Assembler.Assembler().Assemble(
@@ -144,36 +172,49 @@ public sealed class BasicSharedFloatAliasesTests
             native.Symbol(name).Should().Be(addresses[versionIndex], $"{name} must match the PET listing");
         }
 
-        native.HasSymbol("PRNTFAC").Should().BeFalse("PRNTFAC is an Apple name");
-        CheckAliases(native, PetAliases, [.. s_petAddresses.Keys], BasicAttribution.PetKeys(model, original), BasicAttribution.CommodoreKeys);
+        foreach (string name in s_microsoftPetNames.Keys)
+        {
+            native.Symbol(name).Should().Be(legacy.Symbol(name), $"{name} must keep the overlay's value");
+        }
+
+        foreach (string appleName in s_appleNames.Keys)
+        {
+            native.HasSymbol(appleName).Should().BeFalse($"{appleName} is an Apple name");
+        }
+
+        Dictionary<string, string[]> names = s_petAddresses.Keys
+            .ToDictionary(name => name, _ => BasicAttribution.CommodoreKeys, StringComparer.Ordinal);
+
+        foreach ((string name, string[] keys) in s_microsoftPetNames) { names.Add(name, keys); }
+        CheckAliases(native, PetAliases, names, (model, original));
         CheckDocumentation(native, PetAliases);
     }
 
+    // Each alias in the file is a scoped constant, documented above it, whose Also: section gives the vendor's
+    // names; each name resolves to its target through the alias, and to no shared definition.
     private static void CheckAliases(
         AssemblyResult result,
         string path,
-        string[] expected,
-        string[] buildKeys,
-        string[] documentKeys)
+        Dictionary<string, string[]> expected,
+        (PetModel Model, bool Original)? pet)
     {
-        // Each alias is an equate, documented by the ;; block above it.
-        (string Name, string Target)[] aliases = [.. File.ReadLines(path)
-            .Select(line => line.Split(';', 2)[0])
-            .Where(code => code.Contains('='))
-            .Select(code => code.Split('=', 2, StringSplitOptions.TrimEntries))
-            .Select(parts => (parts[0], parts[1]))];
+        string full = Path.GetFullPath(path);
+        bool InFile(string? location) =>
+            location is not null && string.Equals(Path.GetFullPath(location), full, StringComparison.OrdinalIgnoreCase);
 
-        aliases.Select(alias => alias.Name).Should().BeEquivalentTo(expected);
-        result.SymbolDefinitions
-            .Where(symbol => symbol.Location is { } location
-                && string.Equals(Path.GetFullPath(location.Path), Path.GetFullPath(path), StringComparison.OrdinalIgnoreCase))
-            .Select(symbol => symbol.Name)
-            .Should().BeEquivalentTo(aliases.Select(alias => alias.Name), "all file definitions must be documented aliases");
+        AssemblySymbol[] definitions = [.. result.SymbolDefinitions.Where(symbol => InFile(symbol.Location?.Path))];
+        definitions.Should().NotBeEmpty();
+        definitions.Should().OnlyContain(
+            symbol => symbol.IsConstant && symbol.Name.Contains("::", StringComparison.Ordinal),
+            "the file defines only scoped aliases");
 
-        result.SourceMap.Where(entry => entry.Size > 0
-            && entry.Location is { } location
-            && string.Equals(Path.GetFullPath(location.Path), Path.GetFullPath(path), StringComparison.OrdinalIgnoreCase))
+        result.SourceMap.Where(entry => entry.Size > 0 && InFile(entry.Location?.Path))
             .Should().BeEmpty("aliases must not emit bytes");
+
+        // The old names the file gives, from its own text: every alias gives at least one.
+        DocumentationFile file = DocumentationParser.Parse(File.ReadAllText(path), path);
+        DocumentationAlso[] given = [.. file.Comments.SelectMany(comment => DocumentationAlso.Of(comment.Sections))];
+        given.Select(also => also.Name).Should().BeEquivalentTo(expected.Keys);
 
         DocumentationSet docs = Documents(result, path);
         DebugInfo debug = new();
@@ -182,25 +223,45 @@ public sealed class BasicSharedFloatAliasesTests
         DebugTestMemory memory = new();
         memory.Set(0, result.Sections[0].Bytes.ToArray());
 
-        foreach ((string name, string target) in aliases)
+        foreach (DocumentationAlso also in given)
         {
-            result.HasSymbol(target).Should().BeTrue($"{name}'s target {target} must be defined");
+            string name = also.Name;
+            result.HistoricalNames.Should().ContainKey(name, $"{name} must be a historical name in this build");
+            AssemblySymbol alias = result.HistoricalNames[name];
+            definitions.Select(symbol => symbol.Name).Should().ContainSingle(
+                definition => definition == alias.Name, $"{name} must reach its vendor's alias");
+
+            // The target is the definition the alias equates to, documented in the shared modules.
+            DocumentationTopic aliasTopic = docs.FindTopic(alias.Name)
+                ?? throw new AssertFailedException($"{alias.Name} has no documentation.");
+
+            aliasTopic.Value.Should().Be(result.Symbol(alias.Name));
+            DocumentationSection inherit = aliasTopic.Section("Inherit")
+                ?? throw new AssertFailedException($"{alias.Name} must inherit its target's documentation.");
+
+            string target = inherit.Text.Trim().Trim('<', '>');
             result.Symbol(name).Should().Be(result.Symbol(target), $"{name} must alias {target}");
             debug.Resolve(name, memory).Should().Be(result.Symbol(target));
 
-            DocumentationTopic alias = docs.FindTopic(name)
-                ?? throw new AssertFailedException($"{name} has no alias documentation.");
-
-            alias.Summary.Should().NotBeNullOrWhiteSpace();
-            Path.GetFullPath(alias.Path).Should().Be(Path.GetFullPath(path));
-            alias.Value.Should().Be(result.Symbol(name));
-            BasicAttribution.AssertCites(alias, buildKeys, documentKeys, target);
-
-            DocumentationTopic topic = docs.FindTopic(target)
+            DocumentationTopic topic = docs.FindRoutineTopic(target)
                 ?? throw new AssertFailedException($"{target} has no shared documentation.");
 
             Path.GetFullPath(topic.Path).Should().StartWith(Path.GetFullPath(Shared) + Path.DirectorySeparatorChar);
             topic.Value.Should().Be(result.Symbol(target));
+            docs.FindTopic(name).Should().BeSameAs(aliasTopic, $"{name} must lead to its vendor's alias");
+
+            // The documents: those that give the name, each in the bibliography, and this build's among them.
+            also.Sources.Should().BeEquivalentTo(expected[name], $"{name} must cite every document that gives it");
+            foreach (string key in also.Sources)
+            {
+                BasicAttribution.Bibliography.Find(key).Should().NotBeNull($"{name} cites {key}, which must be in docs/Bibliography.md");
+            }
+
+            if (pet is { } build && !also.Sources.Contains("M6502"))
+            {
+                also.Sources.Should().Contain(BasicAttribution.PetKeys(build.Model, build.Original),
+                    $"{name} must cite the documents that give it in this build");
+            }
 
             BasicAttribution.AssertNotShared(result, docs, name);
 

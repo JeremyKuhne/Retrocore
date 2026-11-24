@@ -7,7 +7,7 @@ using Retrocore.Debug;
 using Retrocore.Documentation;
 using Retrocore.Machines.Apple2;
 using Retrocore.Machines.Commodore;
-using Alias = (string Name, string Target, string Path, int Line);
+using Alias = (string Name, string Target, string Path, int Line, string Definition);
 using NativeRoot = (
     string Name,
     bool Apple,
@@ -34,7 +34,8 @@ public sealed class BasicSharedAliasConsistencyTests
     /// <summary>
     ///  All AppleSoft models and PET revisions include their own aliases, each citing the documents that give it in
     ///  that build, and expose no aliases belonging exclusively to the other platform. No shared definition gives a
-    ///  vendor's name as a historical name, which would resolve in every build.
+    ///  vendor's name as a historical name, which would resolve in every build: a vendor's historical-names file gives
+    ///  it, on a scoped alias of the shared definition.
     /// </summary>
     [TestMethod]
     public void NativeRootsExposeOnlyTheirDocumentedAliases()
@@ -101,7 +102,9 @@ public sealed class BasicSharedAliasConsistencyTests
         {
             foreach (string file in root.AliasFiles)
             {
-                string[] expected = [.. aliases.Where(alias => SameFile(alias.Path, file)).Select(alias => alias.Name)];
+                string[] expected =
+                    [.. aliases.Where(alias => SameFile(alias.Path, file)).Select(alias => alias.Definition).Distinct()];
+
                 root.Result.SymbolDefinitions.Where(symbol => SameFile(symbol.Location?.Path, file))
                     .Select(symbol => symbol.Name)
                     .Should().BeEquivalentTo(expected, $"{root.Name} must actually include {Path.GetFileName(file)}");
@@ -262,14 +265,38 @@ public sealed class BasicSharedAliasConsistencyTests
 
     private static string[] AliasFiles(string directory, string prefix)
     {
-        foreach (string part in (string[])["Float", "Interpreter"])
+        foreach (string name in (string[])[$"{prefix}.InterpreterAliases.asm", $"{prefix}.HistoricalNames.asm"])
         {
-            string file = Path.Join(directory, $"{prefix}.{part}Aliases.asm");
-            File.Exists(file).Should().BeTrue($"the platform must retain {Path.GetFileName(file)}");
+            string file = Path.Join(directory, name);
+            File.Exists(file).Should().BeTrue($"the platform must retain {name}");
         }
 
-        return [.. Directory.EnumerateFiles(directory, "*Aliases.asm").Select(Path.GetFullPath)
+        return [.. Directory.EnumerateFiles(directory, "*Aliases.asm")
+            .Append(Path.Join(directory, $"{prefix}.HistoricalNames.asm"))
+            .Select(Path.GetFullPath)
             .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)];
+    }
+
+    private static bool IsHistoricalNames(string path) =>
+        path.EndsWith(".HistoricalNames.asm", StringComparison.OrdinalIgnoreCase);
+
+    // A historical-names file's aliases: each scoped alias once per old name its Also: section gives, read from the
+    // file's text so a missing include cannot hide one.
+    private static IEnumerable<Alias> ReadHistoricalNames(string path, string scope)
+    {
+        string[] lines = File.ReadAllLines(path);
+        DocumentationFile file = DocumentationParser.Parse(string.Join('\n', lines), path);
+        foreach (DocumentationComment comment in file.Comments)
+        {
+            DocumentationAlso[] names = [.. DocumentationAlso.Of(comment.Sections)];
+            if (names.Length == 0) { continue; }
+            string[] parts = lines[comment.TargetLine].Split(';', 2)[0].Split('=', 2, StringSplitOptions.TrimEntries);
+            parts.Should().HaveCount(2, $"{Path.GetFileName(path)}:{comment.TargetLine + 1} must be an alias");
+            foreach (DocumentationAlso also in names)
+            {
+                yield return (also.Name, parts[1], path, comment.TargetLine, $"{scope}::{parts[0]}");
+            }
+        }
     }
 
     // Parse the alias files independently so dropping an include cannot make the coverage check vacuous.
@@ -278,6 +305,12 @@ public sealed class BasicSharedAliasConsistencyTests
         List<Alias> aliases = [];
         foreach (string path in root.AliasFiles)
         {
+            if (IsHistoricalNames(path))
+            {
+                aliases.AddRange(ReadHistoricalNames(path, root.Apple ? "AppleSoft" : "Commodore"));
+                continue;
+            }
+
             // A type's members (ForFrame::TOKEN) come with their type, and a predefined name is unqualified.
             Dictionary<string, long> context = root.Result.SymbolDefinitions
                 .Where(symbol => !SameFile(symbol.Location?.Path, path) && !symbol.Name.Contains("::", StringComparison.Ordinal))
@@ -303,7 +336,8 @@ public sealed class BasicSharedAliasConsistencyTests
                     Name: definition.Label ?? throw new AssertFailedException($"Missing alias name in {path}."),
                     Target: definition.Operand.Text.Trim(),
                     Path: path,
-                    Line: definition.Location?.Line ?? throw new AssertFailedException($"Missing source location in {path}.")));
+                    Line: definition.Location?.Line ?? throw new AssertFailedException($"Missing source location in {path}."),
+                    Definition: definition.Label));
             }
         }
 
@@ -318,7 +352,7 @@ public sealed class BasicSharedAliasConsistencyTests
         HashSet<string> sharedSymbols,
         HashSet<string> foreignSymbols)
     {
-        AssemblySymbol definition = Symbol(root.Result, alias.Name, root.Name);
+        AssemblySymbol definition = Symbol(root.Result, alias.Definition, root.Name);
         AssemblySymbol directTarget = Symbol(root.Result, alias.Target, $"{root.Name}: {alias.Name}'s direct target");
         definition.IsConstant.Should().BeTrue($"{alias.Name} must be an alias");
         SameFile(definition.Location?.Path, alias.Path).Should().BeTrue($"{root.Name} must include {alias.Path}");
@@ -331,11 +365,34 @@ public sealed class BasicSharedAliasConsistencyTests
         aliasTopic.Comments.Any(comment =>
             SameFile(comment.Path, alias.Path)
                 && comment.TargetLine == alias.Line
-                && !string.IsNullOrWhiteSpace(comment.Summary))
+                && (!string.IsNullOrWhiteSpace(comment.Summary)
+                    || IsHistoricalNames(alias.Path) && comment.Sections.Any(section => section.Name == "Inherit")))
             .Should().BeTrue($"{alias.Name} must have its own source attribution");
 
         aliasTopic.Value.Should().Be(definition.Value);
-        BasicAttribution.AssertCites(aliasTopic, root.Keys, target: alias.Target);
+        if (IsHistoricalNames(alias.Path))
+        {
+            // An old name on a scoped alias cites its documents in the Also: section: this build's, or Microsoft's
+            // source, which gives some names only in its Commodore builds.
+            root.Result.HistoricalNames[alias.Name].Name.Should().Be(alias.Definition);
+            IReadOnlyList<string> keys = DocumentationAlso.Of(aliasTopic.Sections)
+                .Single(also => also.Name == alias.Name).Sources;
+
+            keys.Should().NotBeEmpty($"{alias.Name} must cite its documents");
+            foreach (string key in keys)
+            {
+                BasicAttribution.Bibliography.Find(key).Should().NotBeNull($"{alias.Name} cites {key}, which must be in docs/Bibliography.md");
+            }
+
+            if (!root.Apple && !keys.Contains("M6502"))
+            {
+                keys.Should().Contain(root.Keys, $"{alias.Name} must cite the documents that give it in this build");
+            }
+        }
+        else
+        {
+            BasicAttribution.AssertCites(aliasTopic, root.Keys, target: alias.Target);
+        }
 
         // The target by the name it has now, which the alias may give by an old one.
         AssemblySymbol target = Symbol(root.Result, UltimateTarget(alias, aliases), $"{root.Name}: {alias.Name}'s target");

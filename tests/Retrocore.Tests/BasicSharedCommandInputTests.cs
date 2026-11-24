@@ -514,7 +514,7 @@ public sealed class BasicSharedCommandInputTests
         symbols.Add("EXTENDED_DISK_VECTORS", Flag(disk));
 
         AssemblyResult result = new Assembler.Assembler().Assemble(
-            new AssemblySource(source, Path.Join(BasicInputs, "CommandInputStandaloneTest.asm")),
+            new AssemblySource(BasicNames.ScopedNames(symbols) + "\n" + source, Path.Join(BasicInputs, "CommandInputStandaloneTest.asm")),
             new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
             {
                 SourceResolver = new FileAssemblySourceResolver(),

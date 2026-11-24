@@ -118,7 +118,7 @@ RestoreFlags:
 
 ;; Compares the output column with the last comma column: <TerminalPosition> with <COMMA_LIMIT_40>, or, with 80
 ;; columns (<RD80VI>), <OURCH> with <COMMA_LIMIT_80>. <PrintComma> uses only its negative flag, and compares A with
-;; <COMMA_NEWLINE_COLUMN> itself, so with 40 columns the carry from <COMMA_LIMIT_40> has no effect on PRINT.
+;; <COMMA_NEWLINE_COLUMN> itself, so the carry has no effect on PRINT.
 ;; Out: A = the column; carry = set at or past the limit; negative = with 80 columns, set below the limit, and with
 ;;   40 columns clear (from <RD80VI>)
 ;; Also: CHKCOL (UNKN)

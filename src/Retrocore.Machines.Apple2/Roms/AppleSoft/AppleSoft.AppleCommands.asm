@@ -170,7 +170,7 @@ ReadAt:
     jmp TABV
 .endproc
 
-;; `SPEED=`: reads a byte and stores its negation, 256 less it, in <OutputDelay>.
+;; `SPEED=`: reads a byte and stores its negation, its two's complement, in <OutputDelay>.
 ;; Also: SPEED (UNKN)
 .proc Speed
     jsr EvaluateByte

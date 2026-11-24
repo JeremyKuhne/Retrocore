@@ -1,0 +1,21 @@
+Step,Commit,Change,Workload,Roots,MeanMs,ErrorMs,StdDevMs,Gen0Per1000,Gen1Per1000,Gen2Per1000,AllocatedMB,Runtime,Report
+baseline,29a687c1,main after #141,Index,All,1162.33,23.246,31.033,27000.0000,19000.0000,0.0000,1388.54,Default,artifacts/sdk-index-benchmarks/baseline/results/Retrocore.Perf.SdkIndexBenchmarks-report.csv
+baseline,29a687c1,main after #141,Assemble,All,820.50,16.135,23.650,32000.0000,29000.0000,15000.0000,889.89,Default,artifacts/sdk-index-benchmarks/baseline/results/Retrocore.Perf.SdkIndexBenchmarks-report.csv
+baseline,29a687c1,main after #141,Index,AppleSoft,50.14,0.910,0.851,1727.2727,1272.7273,363.6364,67.69,Default,artifacts/sdk-index-benchmarks/baseline/results/Retrocore.Perf.SdkIndexBenchmarks-report.csv
+baseline,29a687c1,main after #141,Assemble,AppleSoft,29.44,0.299,0.279,937.5000,687.5000,281.2500,46.71,Default,artifacts/sdk-index-benchmarks/baseline/results/Retrocore.Perf.SdkIndexBenchmarks-report.csv
+f1,be52d5dd,Full paths made once,Index,All,1054.32,20.905,25.673,27000.0000,19000.0000,0.0000,1388.43,Default,artifacts/sdk-index-benchmarks/f1/results/Retrocore.Perf.SdkIndexBenchmarks-report.csv
+f1,be52d5dd,Full paths made once,Assemble,All,718.55,10.389,9.210,32000.0000,30000.0000,15000.0000,889.95,Default,artifacts/sdk-index-benchmarks/f1/results/Retrocore.Perf.SdkIndexBenchmarks-report.csv
+f1,be52d5dd,Full paths made once,Index,AppleSoft,47.02,0.741,0.657,1727.2727,1272.7273,363.6364,67.7,Default,artifacts/sdk-index-benchmarks/f1/results/Retrocore.Perf.SdkIndexBenchmarks-report.csv
+f1,be52d5dd,Full paths made once,Assemble,AppleSoft,29.22,0.576,0.664,937.5000,687.5000,281.2500,46.72,Default,artifacts/sdk-index-benchmarks/f1/results/Retrocore.Perf.SdkIndexBenchmarks-report.csv
+f2,0fe00cc8,Files read once,Index,All,1017.11,19.301,20.652,25000.0000,17000.0000,0.0000,1313.36,Default,artifacts/sdk-index-benchmarks/f2/results/Retrocore.Perf.SdkIndexBenchmarks-report.csv
+f2,0fe00cc8,Files read once,Assemble,All,664.68,12.365,10.326,23000.0000,19000.0000,8000.0000,814.85,Default,artifacts/sdk-index-benchmarks/f2/results/Retrocore.Perf.SdkIndexBenchmarks-report.csv
+f2,0fe00cc8,Files read once,Index,AppleSoft,43.14,0.200,0.178,1500.0000,833.3333,250.0000,64.26,Default,artifacts/sdk-index-benchmarks/f2/results/Retrocore.Perf.SdkIndexBenchmarks-report.csv
+f2,0fe00cc8,Files read once,Assemble,AppleSoft,25.72,0.174,0.154,875.0000,625.0000,250.0000,43.28,Default,artifacts/sdk-index-benchmarks/f2/results/Retrocore.Perf.SdkIndexBenchmarks-report.csv
+f3,dcd63404,One prefiltered macro pass,Index,All,949.11,18.809,27.570,21000.0000,19000.0000,0.0000,1080.73,Default,artifacts/sdk-index-benchmarks/f3/results/Retrocore.Perf.SdkIndexBenchmarks-report.csv
+f3,dcd63404,One prefiltered macro pass,Assemble,All,623.36,12.222,15.010,22000.0000,19000.0000,8000.0000,751.11,Default,artifacts/sdk-index-benchmarks/f3/results/Retrocore.Perf.SdkIndexBenchmarks-report.csv
+f3,dcd63404,One prefiltered macro pass,Index,AppleSoft,39.87,0.462,0.432,1437.5000,1375.0000,437.5000,51.13,Default,artifacts/sdk-index-benchmarks/f3/results/Retrocore.Perf.SdkIndexBenchmarks-report.csv
+f3,dcd63404,One prefiltered macro pass,Assemble,AppleSoft,23.75,0.295,0.261,781.2500,531.2500,218.7500,35.13,Default,artifacts/sdk-index-benchmarks/f3/results/Retrocore.Perf.SdkIndexBenchmarks-report.csv
+f4,04904961,Type-line prefilter,Index,All,941.63,18.534,25.370,20000.0000,19000.0000,0.0000,1038.99,Default,artifacts/sdk-index-benchmarks/f4/results/Retrocore.Perf.SdkIndexBenchmarks-report.csv
+f4,04904961,Type-line prefilter,Assemble,All,630.70,10.355,9.686,21000.0000,17000.0000,7000.0000,740.81,Default,artifacts/sdk-index-benchmarks/f4/results/Retrocore.Perf.SdkIndexBenchmarks-report.csv
+f4,04904961,Type-line prefilter,Index,AppleSoft,37.43,0.382,0.338,1312.5000,1250.0000,375.0000,48.51,Default,artifacts/sdk-index-benchmarks/f4/results/Retrocore.Perf.SdkIndexBenchmarks-report.csv
+f4,04904961,Type-line prefilter,Assemble,AppleSoft,23.80,0.355,0.332,843.7500,437.5000,250.0000,33.92,Default,artifacts/sdk-index-benchmarks/f4/results/Retrocore.Perf.SdkIndexBenchmarks-report.csv

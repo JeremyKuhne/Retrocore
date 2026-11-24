@@ -1092,8 +1092,8 @@ Decisions and how the table was applied:
   documents), and `StoreLink` in the command loop's link pass, where `linkReturns` is 0 (BASIC 1). Some values are
   still numbers with a trailing comment: the JMP opcode both cold starts store, AppleSoft's carriage return and
   16-column zone, the PET clock's reserved-variable threshold, digit count and digit mask, the screen's page and the
-  direct line's $FF; naming them is left for a later pass. The PET command loop's carriage return stays `$0D`, since
-  the tests assemble `Commodore.CommandInput.asm` without the file that defines `CARRIAGE_RETURN`.
+  direct line's $FF; naming them is left for a later pass. The PET line reader's carriage return (`InputLine`) stays
+  `$0D`, since the tests assemble `Commodore.CommandInput.asm` without the file that defines `CARRIAGE_RETURN`.
 - I8a. The PET roots pass `PrintTabOrSpace` to the shared `PrintItems`. Their other macro arguments keep the old
   names they had (CHRGET, NEWSTT, READY, LINPRT, FREMES and others), which resolve through `Also:`.
 - I9. Part F's names stay as they are in the code: BASIC 4's trampoline ISVAR (the shared evaluator still branches

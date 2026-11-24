@@ -172,7 +172,7 @@ ConsumeKey:
 
 ;; Handles a break: gives error code $FF to an active `ONERR` handler, and otherwise compares A with <CONTROL_C> and
 ;; falls into the shared STOP code, which reports BREAK when they match.
-;; In: A = the Control-C character: the key read, or the first character of an INPUT line
+;; In: A = the key read, or the first character of an INPUT line (Control-C)
 ;; Also: ISCCA1 (UNKN)
 .proc HandleBreak
     ldx #$FF

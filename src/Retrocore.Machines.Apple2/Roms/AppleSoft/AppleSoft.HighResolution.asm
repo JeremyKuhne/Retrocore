@@ -189,7 +189,7 @@ Divide:
     lda COLOR
     lsr a
     bcs PreviousByte
-    eor #LAST_PIXEL_MASK
+    eor #$C0                        ; clears the phase bit the shift moved into bit 6, and sets bit 7
 
 ;; Stores the new mask in <COLOR> and returns.
 ;; Also: LFTRT1 (UNKN)
@@ -385,7 +385,7 @@ StoreHigh:
 Down:
     lda GBASH
 
-;; The `adc`'s operand, 4, which the `bit` after it also reads to test bit 2 of the high byte.
+;; The `adc`'s operand, 4, which the later `bit BitTwoMask` also reads to test bit 2 of the high byte.
 ;; Also: MASK04 (UNKN)
 BitTwoMask = * + 1
     adc #4

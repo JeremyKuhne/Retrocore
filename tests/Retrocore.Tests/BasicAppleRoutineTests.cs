@@ -14,7 +14,7 @@ public sealed class BasicAppleRoutineTests
     // The first high-resolution page's high byte.
     private const int Page1 = 0x20;
 
-    // The soft switch whose bit 7 is set with 80 columns, and the firmware's 80-column cursor column.
+    // The soft switch whose bit 7 is set with 80 columns.
     private const int Rd80Vid = 0xC01F;
 
     /// <summary>
@@ -77,7 +77,7 @@ public sealed class BasicAppleRoutineTests
     /// <summary>
     ///  <c>HighRes::StepHorizontal</c> moves the mask one pixel right within a byte, takes the next byte's first pixel
     ///  past the last, wraps from byte 39 to 0 rather than stopping, and moves left from a byte's first pixel to the
-    ///  previous byte's last, wrapping from 0 to 39.
+    ///  previous byte's last, wrapping from 0 to 39; a new byte flips an alternating color to keep it in phase.
     /// </summary>
     /// <param name="mask">The pixel mask in <c>COLOR</c>.</param>
     /// <param name="byteIndex">The byte, in Y.</param>
@@ -97,21 +97,21 @@ public sealed class BasicAppleRoutineTests
         BasicMathMachine machine = new(apple: true);
         machine.Memory[machine.Address("COLOR")] = (byte)mask;
         machine.Memory[machine.Address("HighResByteIndex")] = (byte)byteIndex;
-        machine.Memory[machine.Address("HighResColorByte")] = 0x7F;
+        machine.Memory[machine.Address("HighResColorByte")] = 0x2A;
 
         machine.Call("HighRes::StepHorizontal", a: left ? 0x80 : 0x00, y: byteIndex, negative: left);
 
+        bool newByte = expectedByte != byteIndex;
         machine.Memory[machine.Address("COLOR")].Should().Be((byte)expectedMask);
         machine.Cpu.Registers.Y.Should().Be((byte)expectedByte);
-        if (expectedByte != byteIndex)
-        {
-            machine.Memory[machine.Address("HighResByteIndex")].Should().Be((byte)expectedByte);
-        }
+        machine.Memory[machine.Address("HighResByteIndex")].Should().Be((byte)expectedByte);
+        machine.Memory[machine.Address("HighResColorByte")].Should().Be(
+            newByte ? (byte)0x55 : (byte)0x2A, "an alternating color flips for the next byte");
     }
 
     /// <summary>
-    ///  The enhanced IIe's <c>UppercaseCharacter</c> clears bit 5 of a character at or above <c>a</c>, folding $7B-$7F
-    ///  to $5B-$5F too, and leaves anything below <c>a</c> unchanged.
+    ///  The enhanced IIe's <c>UppercaseCharacter</c> clears bits 5 and 7 of a character at or above <c>a</c>, folding
+    ///  $7B-$7F to $5B-$5F and clearing bit 7 from $80 up, and leaves anything below <c>a</c> unchanged.
     /// </summary>
     /// <param name="character">The character.</param>
     /// <param name="expected">The result.</param>
@@ -123,6 +123,8 @@ public sealed class BasicAppleRoutineTests
     [DataRow(0x60, 0x60)]
     [DataRow(0x41, 0x41)]
     [DataRow(0x31, 0x31)]
+    [DataRow(0xE1, 0x41)]
+    [DataRow(0xC1, 0x41)]
     public void UppercaseCharacterClearsBitFiveFromLowercaseA(int character, int expected)
     {
         BasicMathMachine machine = new(apple: true);

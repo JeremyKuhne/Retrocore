@@ -76,7 +76,8 @@ FLASH_MASK_FLASH = $40
     rts
 .endproc
 
-;; Jumps on to <IllegalQuantityError>; the low-resolution, cursor and high-resolution argument checks branch here.
+;; Jumps on to <IllegalQuantityError>; the low-resolution and cursor argument checks branch here, and
+;; <RejectHighResArgument> jumps here for the high-resolution ones.
 ;; Also: PLOTF1 (UNKN)
 .proc ToIllegalQuantity
     jmp IllegalQuantityError

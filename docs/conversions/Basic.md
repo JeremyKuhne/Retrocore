@@ -1154,7 +1154,8 @@ Converted, with `; retrocore: style=strict`, part E's three modules, `AppleSoft.
 small modules that compose the shared ones (`Arrays`, `Assignment`, `Functions`, `Lister`, `MemoryManagement`,
 `NumericConversion`, `Strings`) and the root, `AppleSoft.asm`. Every AppleSoft file is now strict. The other
 AppleSoft files' references to part E's names follow (the dispatch table, `TrapError`, `ReadLowResCoordinates`,
-`Statements::Normal`, the enhanced IIe's tokenizer and PRINT helpers). The bytes are unchanged in all eight builds.
+`Statements::Normal`, the enhanced IIe's tokenizer and PRINT helpers). The bytes are unchanged in all eight builds,
+the three AppleSoft and the five PET.
 Only AppleSoft's files changed; no shared module did.
 
 Decisions and how the table was applied:
@@ -1182,6 +1183,8 @@ Decisions and how the table was applied:
   - WAIT, AppleSoft's second label on the shared `Statements::Wait`, was DROP. The overlay's label must still
     resolve, so it is an alias in `AppleSoft.HistoricalNames.asm` (`Wait = Statements::Wait`, Also WAIT (UNKN)), as
     ON is (I6), and the dispatch table names `Statements::Wait`.
+  - The table's notes give HPLOT, DRAW and XDRAW for the statements as AS82, but its Documents column has AS82 as
+    spelling only for them, so they cite UNKN, as the other spelling-only names do.
 - E-3. E-Q5 waits for X10. The engine still names the Monitor's bytes it borrows by the Monitor's names in
   AppleSoft.Equates (COLOR as the pixel mask, GBASL and GBASH as the screen byte's address), as the rest of the
   AppleSoft files name the Monitor's entries and soft switches (INPORT, MPLOT, HISCR). X10 replaces those copies with
@@ -1214,7 +1217,7 @@ Decisions and how the table was applied:
   pull request opens.
 
 Checked: the full suite, the rename gate, the lint tests and `BasicAppleConversionTests`. The suite has
-4,024 passed, none failed and 665 skipped; the skipped tests are the ROM-dump comparisons, which need dumps that
+4,026 passed, none failed and 665 skipped; the skipped tests are the ROM-dump comparisons, which need dumps that
 are not here.
 
 `BasicAppleRoutineTests` runs these routines in the enhanced IIe's AppleSoft and checks what their documentation

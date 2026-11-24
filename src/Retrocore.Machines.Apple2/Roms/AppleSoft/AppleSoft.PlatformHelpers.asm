@@ -11,10 +11,10 @@
 .if ENHNCD
 ; The enhanced IIe: cassette through the internal slot 5 ROM, and the tokenizer's, lister's and PRINT's helpers
 
-;; The 40-column limit <CompareCommaColumn> compares the column with.
+;; The 40-column limit <CompareCommaColumn> compares the column with: 40 less 7.
 COMMA_LIMIT_40 = 33
 
-;; The 80-column limit <CompareCommaColumn> compares the column with.
+;; The 80-column limit <CompareCommaColumn> compares the column with: 80 less 7.
 COMMA_LIMIT_80 = 73
 
 .scope Statements continued
@@ -80,8 +80,8 @@ ToOutOfMemory:
     ; Falls into UppercaseCharacter.
 .endproc
 
-;; Clears bit 5 of A when it is `a` or above, keeping the flags of the load before it; it also folds $7B-$7F to
-;; $5B-$5F.
+;; Clears bits 5 and 7 of A when it is `a` or above, keeping the flags of the load before it: it uppercases a
+;; lowercase letter, also folds $7B-$7F to $5B-$5F, and clears bit 7 of any character from $80 up.
 ;; In: A = the character
 ;; Out: A = the character, uppercased
 ;; Also: UPBUF1 (UNKN)
@@ -89,7 +89,7 @@ ToOutOfMemory:
     php
     cmp #'a'
     bcc RestoreFlags
-    and #$5F                        ; clears bit 5
+    and #$5F                        ; clears bits 5 and 7
 
 ;; Restores the flags and returns.
 ;; Also: UPBUF4 (UNKN)
@@ -236,7 +236,7 @@ SetShapeTable:
 .endproc
 
 ;; Points the Monitor's cassette range at an array's data: A1 at its first element, from the header at <SourceStart>,
-;; and A2 at <SourceStart> plus the length in <LineNumber>.
+;; and A2 at its last byte, <SourceStart> plus the length less one in <LineNumber>.
 ;; Also: SETA2 (UNKN)
 .proc SetArrayBlock
     clc

@@ -191,7 +191,7 @@ Exit for each PR: `EveryRepositorySourceIsCleanInTheEditor`, `SdkDocumentationIs
 - [ ] **B6. Convert, one PR per module or family** (step 4): `.proc`s, scopes, structs, named constants,
   `; retrocore: style=strict`, `Keeps:` worked out from the code. Shared modules first, then each vendor's. The
   alias files become `Also:`.
-  - *Status:* step 1, the workspace, in progress on `claude/convert-basic-workspace` (not yet pushed).
+  - *Status:* step 1, the workspace, on `claude/convert-basic-workspace`.
 - [ ] **B7. Update the dependents:**
   - DOS: `docs/conversions/Dos.md` (which lands with A2's DOS PR) says "BASIC names wait for the BASICs' conversion";
     decision P2 is the BASIC vector.

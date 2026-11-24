@@ -177,7 +177,7 @@ Done:
 ;;
 ;; Control-^ starts a GOTOXY: the next two characters, less <GOTOXY_BIAS>, are its column and line. A displayed
 ;; character moves the cursor right; at the window's right edge it stays on the last column while
-;; <MODE_INTERRUPTS> is set, else goes to the next line. <Pascal::WriteEntry at JPWRITE> jumps here.
+;; <MODE_TRANSPARENT> is set, else goes to the next line. <Pascal::WriteEntry at JPWRITE> jumps here.
 ;; In: A = the character
 ;; Out: X = 0
 ;; Also: PWRITE (IIEROM82, IIETRM85), PASPUTCHAR (UNKN)
@@ -248,7 +248,7 @@ Printable:
     cmp WindowWidth
     bcc Done
     lda EightyColumns::Mode
-    and #MODE_INTERRUPTS
+    and #MODE_TRANSPARENT
     beq Wrap
     dec EightyColumns::CursorColumn
     ; Always: the window is wider than one column.

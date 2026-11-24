@@ -208,7 +208,7 @@ CONTROL_N = $0E
 ;; Also: CTRL_O (UNKN)
 CONTROL_O = $0F
 
-;; Control-Q: 40 columns; on the Enhanced IIe, typed after the escape key, quits the 80-column firmware.
+;; Control-Q: 40 columns; typed after the escape key, quits the 80-column firmware.
 ;; Also: CTRL_Q (UNKN)
 CONTROL_Q = $11
 

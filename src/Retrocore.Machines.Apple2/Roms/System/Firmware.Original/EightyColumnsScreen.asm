@@ -416,7 +416,7 @@ ToLineBase:
     pha
     bpl CheckLine                   ; always: the line is 0-23
 
-;; Also: X_VTLOOP (IIEROM82)
+;; Also: X_VTLOOP (IIEROM82, IIETRM85)
 NextLine:
     jsr LineBase
     jsr ClearLine

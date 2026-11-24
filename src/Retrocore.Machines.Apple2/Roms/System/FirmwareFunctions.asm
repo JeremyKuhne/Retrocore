@@ -6,8 +6,8 @@
 ;; models number the functions differently, so ENHANCED picks the set. The Monitor and both models' firmware include
 ;; this file, so the caller and the handler use the same number.
 
-; The .asserts that tie each number to its handler's place in the firmware's dispatch tables are added with the
-; conversion of the firmware's tables.
+; The .asserts that tie each number to its handler's place in the firmware's dispatch tables are in the tables
+; themselves (the FunctionHandler and Handler macros).
 .if ENHANCED
 
 ;; The firmware function that prints a character in 80 columns, for <Monitor:ScreenOutByWidth>: 0 on the Enhanced IIe.

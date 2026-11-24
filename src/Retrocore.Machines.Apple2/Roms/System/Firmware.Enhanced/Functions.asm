@@ -28,7 +28,7 @@
 ; The handlers.
 
 ;; The page every handler in <Handlers> is in: <Dispatch> pushes it as the high byte of the handler's address minus one.
-;; Also: CXFUNC_PAGE (UNKN), BFUNCPG (IIETRM85)
+;; Also: CXFUNC_PAGE (UNKN), BFUNCPG (IIEROM82, IIETRM85)
 HANDLER_PAGE = $C1
 
 ;; The first function <Handlers> holds; <Dispatch> counts the ones below it down to their own handlers.

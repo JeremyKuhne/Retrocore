@@ -154,11 +154,11 @@ READ_NEXT_COUNT = $35
 ;; $FA40 jumps here too, from $FA44, for code that calls it by address. A card in slot 3 whose ROM is in must have
 ;; the first two instructions here, as at <InterruptReturn>; the code goes on at $C400 in the internal ROM.
 ;;
-;; It reserves three stack bytes, where <RestoreInterruptedState> later puts A and its return address, and saves X
-;; and Y. The state byte has <STATE_INTERNAL_CX_ROM>, <STATE_PAGE2> (and selects page 1), <STATE_AUX_READ> and
-;; <STATE_AUX_WRITE> (and selects main memory), <STATE_LANGUAGE_CARD_BANK1> or <STATE_LANGUAGE_CARD_BANK2> (and
-;; selects the ROM), and <STATE_AUX_ZERO_PAGE>: then it keeps the auxiliary stack pointer in <AuxStackPointer>, takes
-;; main's from <MainStackPointer> and selects the main zero page and stack.
+;; It pushes A three times, so the stack keeps it in place of $45, where <RestoreInterruptedState> later puts its return
+;; address in the other two, and saves X and Y. The state byte has <STATE_INTERNAL_CX_ROM>, <STATE_PAGE2> (and selects
+;; page 1), <STATE_AUX_READ> and <STATE_AUX_WRITE> (and selects main memory), <STATE_LANGUAGE_CARD_BANK1> or
+;; <STATE_LANGUAGE_CARD_BANK2> (and selects the ROM), and <STATE_AUX_ZERO_PAGE>: then it keeps the auxiliary stack
+;; pointer in <AuxStackPointer>, takes main's from <MainStackPointer> and selects the main zero page and stack.
 ;;
 ;; A BRK leaves the state byte in <Address5>, pulls the registers back and goes on at the Monitor's
 ;; <BreakFromFirmware>. With the auxiliary zero page on, the registers and the BRK's frame are on the auxiliary
@@ -181,7 +181,7 @@ InternalRom:
     bmi SaveXY
     clc
 
-;; Reserves the three bytes and saves X and Y, then takes the break bit from the pushed status into Y.
+;; Pushes A three times and saves X and Y, then takes the break bit from the pushed status into Y.
 ;; Also: IRQINTCX (IIETRM85)
 SaveXY:
     pha
@@ -478,7 +478,8 @@ NextMode:
     sty Address2
     jsr ReadCassetteData
 
-    ; A2 = HIMEM less one, the table's end; A and the stack = HIMEM less the length, its start.
+    ; A2 = HIMEM less one, the table's end; A and the stack = HIMEM less the length less one,
+    ; its start.
     clc
     lda MEMSIZ
     tax

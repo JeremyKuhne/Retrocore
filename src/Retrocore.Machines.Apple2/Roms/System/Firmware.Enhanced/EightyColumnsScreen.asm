@@ -198,7 +198,7 @@ Finish:
     bpl CheckLine                   ; always: the line is 0-23
 
 ;; One line below.
-;; Also: X_VTLOOP (IIEROM82)
+;; Also: X_VTLOOP (IIEROM82, IIETRM85)
 NextLine:
     jsr LineBase::Row
     jsr ClearLine

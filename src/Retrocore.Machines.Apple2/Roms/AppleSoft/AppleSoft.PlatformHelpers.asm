@@ -28,8 +28,11 @@ COMMA_LIMIT_80 = 73
 .endproc
 
 ;; Calls the internal slot 5 ROM's AppleSoft cassette code, with the slot ROMs switched out around it; carry selects
-;; the shape-table load (set) or the array transfer (clear).
-;; Errors: OUT OF MEMORY where the ROM returns with carry set
+;; the shape-table load (set) or setting the cassette range to an array's data (clear).
+;;
+;; The OUT OF MEMORY branch is reached only if the ROM returns with carry set. Where a shape table does not fit, the
+;; ROM returns with a byte of the start still on the stack, so its return goes astray before the carry test, and
+;; AppleSoft reports no error.
 ;; Also: CALLC5 (UNKN)
 .proc CallAppleSoftCassette
     clc

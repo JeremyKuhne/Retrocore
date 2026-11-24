@@ -1232,14 +1232,14 @@ Decisions and how the table was applied:
     the switches and `HighRes::SetColor` (SETHCOL, which the overlay does not label); each old name cites only
     AppleSoft's documents, Microsoft's source or UNKN, all in the bibliography.
   - `BasicAppleRoutineTests` is new (below).
-- E-8. X10 is not in this step. As decided, including MonitorEntries.asm brings in Apple's Monitor names INIT, WAIT,
-  PLOT and READ, which AppleSoft gives its own definitions (`ColdStart`, `Statements::Wait`, `Statements::Plot`,
-  `Statements::Read`); growing MonitorEntries with ReadPaddle clashes with the firmware's PREAD; and DOS defines
-  CharacterOut, ReadKey, SetInput and SetOutput itself. The owner decided (2026-11-24) that X10 takes its own
-  alternative, DOS's X7 pattern, in a pull request of its own after this step: AppleSoft includes IIeEquates.asm only,
-  defines the Monitor entries it calls in AppleSoft.Equates with `Inherit:`, citing Apple's names except those that
-  clash and adding AppleSoft's own spellings, and gives AppleSoft's spellings of IIeEquates' names as aliases in
-  AppleSoft.HistoricalNames; MonitorEntries.asm is unchanged.
+- E-8. X10 is not in this step. As decided, including MonitorEntries.asm, grown with the entries AppleSoft calls, brings
+  in Apple's Monitor names INIT, WAIT, PLOT and READ, which AppleSoft gives its own definitions (`ColdStart`,
+  `Statements::Wait`, `Statements::Plot`, `Statements::Read`); growing MonitorEntries with ReadPaddle clashes with the
+  firmware's PREAD; and DOS defines CharacterOut, ReadKey, SetInput and SetOutput itself. The owner decided (2026-11-24)
+  that X10 takes its own alternative, DOS's X7 pattern, in a pull request of its own after this step: AppleSoft includes
+  IIeEquates.asm only, defines the Monitor entries it calls in AppleSoft.Equates with `Inherit:`, citing Apple's names
+  except those that clash and adding AppleSoft's own spellings, and gives AppleSoft's spellings of IIeEquates' names as
+  aliases in AppleSoft.HistoricalNames; MonitorEntries.asm is unchanged.
 
 Checked: the full suite, the rename gate, the lint tests and `BasicAppleConversionTests`. The suite's skipped tests
 are the ROM-dump comparisons, which need dumps that are not here, so they did not run.

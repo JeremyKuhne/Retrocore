@@ -470,9 +470,9 @@ SetVariablesStart:
     jmp SETTXT
 .endproc
 
-;; `STORE`: finds the array, writes its length less one, from <LineNumber>, to cassette, then its data, both through
-;; the Monitor's <MWRITE>. The enhanced IIe sets the data's range through its `Statements::CallAppleSoftCassette`,
-;; the others through `Statements::SetArrayBlock`.
+;; `STORE`: finds the array, writes its three-byte header (the length less one, from <LineNumber>, and the byte after
+;; it) to cassette, then its data, both through the Monitor's <MWRITE>. The enhanced IIe sets the data's range through
+;; its `Statements::CallAppleSoftCassette`, the others through `Statements::SetArrayBlock`.
 ;; Also: STORE (UNKN)
 .proc Store
     jsr FindCassetteArray

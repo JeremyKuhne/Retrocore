@@ -15,7 +15,7 @@ namespace Retrocore.Tests;
 ///  overlay by its name or an old name, and each old name cites Commodore's documents, all in the bibliography.
 /// </summary>
 [TestClass]
-public sealed class BasicCommodoreConversionTests
+public sealed partial class BasicCommodoreConversionTests
 {
     // The files part F converted: the PET roots, BASIC 4's disk, monitor, record, extension and ROM-end files and its
     // system equates, BASIC 1's and BASIC 4's patches, and the string, clock and platform files.
@@ -144,8 +144,7 @@ public sealed class BasicCommodoreConversionTests
             {
                 string code = Code(lines[index]);
                 if (code.Contains(".defined(", StringComparison.Ordinal)) { continue; }
-                foreach (System.Text.RegularExpressions.Match word in
-                    System.Text.RegularExpressions.Regex.Matches(code, @"(?<![\w:.$%'])[A-Za-z_][A-Za-z0-9_]*"))
+                foreach (System.Text.RegularExpressions.Match word in Word().Matches(code))
                 {
                     if (native.HistoricalNames.ContainsKey(word.Value) && !current.Contains(word.Value))
                     {
@@ -161,7 +160,8 @@ public sealed class BasicCommodoreConversionTests
     // A line's code, without its comment and its strings and character literals.
     private static string Code(string line)
     {
-        System.Text.StringBuilder code = new();
+        char[] code = new char[line.Length];
+        int length = 0;
         char quote = '\0';
         foreach (char character in line)
         {
@@ -173,11 +173,15 @@ public sealed class BasicCommodoreConversionTests
 
             if (character == ';') { break; }
             if (character is '"' or '\'') { quote = character; continue; }
-            code.Append(character);
+            code[length++] = character;
         }
 
-        return code.ToString();
+        return new string(code, 0, length);
     }
+
+    // A name in code: not a scope's member, a hexadecimal or binary number's digits, or part of a character literal.
+    [System.Text.RegularExpressions.GeneratedRegex(@"(?<![\w:.$%'])[A-Za-z_][A-Za-z0-9_]*")]
+    private static partial System.Text.RegularExpressions.Regex Word();
 
     // The definitions that give no overlay name of their own, in the builds that have them: the SDK's switches and new
     // constants, the scoped aliases routines give workspace bytes, and the labels the old *+n branches became. Every

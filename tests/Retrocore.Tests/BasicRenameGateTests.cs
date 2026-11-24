@@ -57,7 +57,7 @@ public sealed partial class BasicRenameGateTests
         typeof(BasicSharedVariableInputTests), typeof(BasicSharedVariableLookupTests), typeof(BasicTokenizerTests),
         typeof(BasicVariableTests), typeof(BasicWorkspaceConversionTests), typeof(PetBasic4ExtensionTests),
         typeof(PetBasic4RevisionTests), typeof(PetBasicConformanceTests), typeof(PetNativeEquatesTests),
-        typeof(PetRomSourceTests), typeof(PetSharedFloatAssemblyTests)
+        typeof(PetRomSourceTests), typeof(PetSharedFloatAssemblyTests), typeof(BasicNamesBuildTests)
     ];
 
     // Test sources that assemble BASIC but are not run against the renamed copy, each for its reason.

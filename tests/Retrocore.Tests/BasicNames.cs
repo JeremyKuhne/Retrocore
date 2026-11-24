@@ -26,8 +26,21 @@ internal static class BasicNames
     private static readonly AsyncLocal<string?> s_inputs = new();
 
     // The names each historical name of the native BASIC builds is defined by now, by inputs folder.
-    private static readonly ConcurrentDictionary<string, Lazy<IReadOnlyDictionary<string, string[]>>> s_current =
-        new(StringComparer.Ordinal);
+    private static readonly ConcurrentDictionary<string, Lazy<IReadOnlyDictionary<string, IReadOnlyDictionary<string, string[]>>>>
+        s_current = new(StringComparer.Ordinal);
+
+    // The three AppleSoft and five PET BASIC native builds, by the key each build's names are kept under.
+    private static readonly (string Key, Apple2Model? Apple, PetModel Pet, bool Original)[] s_builds =
+    [
+        (Build(Apple2Model.IIPlus), Apple2Model.IIPlus, default, false),
+        (Build(Apple2Model.IIe), Apple2Model.IIe, default, false),
+        (Build(Apple2Model.IIeEnhanced), Apple2Model.IIeEnhanced, default, false),
+        (Build(PetModel.Pet2001, original: false), null, PetModel.Pet2001, false),
+        (Build(PetModel.Pet2001, original: true), null, PetModel.Pet2001, true),
+        (Build(PetModel.Pet2001Basic2, original: false), null, PetModel.Pet2001Basic2, false),
+        (Build(PetModel.Pet4032, original: false), null, PetModel.Pet4032, false),
+        (Build(PetModel.Pet4032, original: true), null, PetModel.Pet4032, true),
+    ];
 
     /// <summary>
     ///  Gets the folder the BASIC tests read their sources from: the test output's <c>Inputs</c>, unless
@@ -176,16 +189,46 @@ internal static class BasicNames
     ///   reach each value by its old name or by the name a rename gave it. A name given explicitly keeps its value;
     ///   two old names that give one current name different values are an error.
     ///  </para>
+    ///  <para>
+    ///   An old name that the builds give to different definitions would add every build's name, so another build's
+    ///   name could reach the assembly; it is an error here, and a test that predefines it names the build it
+    ///   assembles with the other overload.
+    ///  </para>
     /// </remarks>
     /// <param name="symbols">The predefined symbols, by the names Microsoft's source has.</param>
     /// <returns>The predefined symbols with the current names added.</returns>
-    internal static Dictionary<string, long> WithCurrentNames(IReadOnlyDictionary<string, long> symbols)
+    internal static Dictionary<string, long> WithCurrentNames(IReadOnlyDictionary<string, long> symbols) =>
+        WithCurrentNames(symbols, Tables(), build: null);
+
+    /// <summary>
+    ///  Gets the predefined symbols for a standalone build of shared modules, under the names they have and under the
+    ///  names one native BASIC build now defines them by.
+    /// </summary>
+    /// <param name="symbols">The predefined symbols, by the names Microsoft's source has.</param>
+    /// <param name="build">The build whose names to add, from a <c>Build</c> overload.</param>
+    /// <returns>The predefined symbols with the build's current names added.</returns>
+    internal static Dictionary<string, long> WithCurrentNames(IReadOnlyDictionary<string, long> symbols, string build) =>
+        WithCurrentNames(symbols, Tables(), build);
+
+    /// <summary>
+    ///  Adds current names to predefined symbols from given tables of each build's historical names: the names one
+    ///  build defines them by, or with no build the names every build gives, failing on a name the builds give to
+    ///  different definitions.
+    /// </summary>
+    /// <param name="symbols">The predefined symbols, by their old names.</param>
+    /// <param name="byBuild">Each build's current names for its historical names, by build key.</param>
+    /// <param name="build">The build whose names to add; null for all of them.</param>
+    /// <returns>The predefined symbols with the current names added.</returns>
+    internal static Dictionary<string, long> WithCurrentNames(
+        IReadOnlyDictionary<string, long> symbols,
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, string[]>> byBuild,
+        string? build)
     {
         Dictionary<string, long> names = new(symbols, StringComparer.Ordinal);
         Dictionary<string, string> added = [with(StringComparer.Ordinal)];
         foreach ((string name, long value) in symbols)
         {
-            foreach (string current in CurrentNames(name).Where(current => !symbols.ContainsKey(current)))
+            foreach (string current in CurrentNames(name, byBuild, build).Where(current => !symbols.ContainsKey(current)))
             {
                 if (added.TryGetValue(current, out string? first) && names[current] != value)
                 {
@@ -202,7 +245,8 @@ internal static class BasicNames
     }
 
     /// <summary>
-    ///  Gets predefined symbols exactly as given, without the current names <see cref="WithCurrentNames"/> adds: for
+    ///  Gets predefined symbols exactly as given, without the current names
+    ///  <see cref="WithCurrentNames(IReadOnlyDictionary{string, long})"/> adds: for
     ///  a test of what a build does with an old name predefined by itself.
     /// </summary>
     /// <param name="symbols">The predefined symbols.</param>
@@ -225,43 +269,108 @@ internal static class BasicNames
     /// </summary>
     /// <param name="name">The old name.</param>
     /// <returns>The current names; empty when no build gives the name as a historical name.</returns>
-    internal static IReadOnlyList<string> CurrentNames(string name) =>
-        s_current.GetOrAdd(Inputs, inputs => new(() => CurrentNamesIn(inputs))).Value.TryGetValue(name, out string[]? names)
-            ? names
-            : [];
+    /// <exception cref="InvalidOperationException">The builds give the name to different definitions.</exception>
+    internal static IReadOnlyList<string> CurrentNames(string name) => CurrentNames(name, Tables(), build: null);
 
-    // Every historical name of the three AppleSoft and five PET BASIC native builds, with the definitions it names.
-    private static Dictionary<string, string[]> CurrentNamesIn(string inputs)
+    /// <summary>
+    ///  Gets the key of an AppleSoft native build, for <see cref="WithCurrentNames(IReadOnlyDictionary{string, long}, string)"/>.
+    /// </summary>
+    /// <param name="model">The Apple II model whose AppleSoft the build is.</param>
+    /// <returns>The key.</returns>
+    internal static string Build(Apple2Model model) => $"AppleSoft {model}";
+
+    /// <summary>
+    ///  Gets the key of a PET BASIC native build, for <see cref="WithCurrentNames(IReadOnlyDictionary{string, long}, string)"/>.
+    /// </summary>
+    /// <param name="model">The PET model whose BASIC the build is.</param>
+    /// <param name="original">Whether it is the original rather than the revised ROM.</param>
+    /// <returns>The key.</returns>
+    internal static string Build(PetModel model, bool original) => original ? $"PET {model} original" : $"PET {model}";
+
+    /// <summary>
+    ///  Gets each native BASIC build's current names for its historical names, by build key.
+    /// </summary>
+    /// <returns>The tables.</returns>
+    internal static IReadOnlyDictionary<string, IReadOnlyDictionary<string, string[]>> CurrentNamesByBuild() => Tables();
+
+    private static IReadOnlyDictionary<string, IReadOnlyDictionary<string, string[]>> Tables() =>
+        s_current.GetOrAdd(Inputs, inputs => new(() => CurrentNamesIn(inputs))).Value;
+
+    // The current names one build, or with no build every build, gives an old name; an old name the builds give to
+    // different definitions has no names for all builds, only an error.
+    private static string[] CurrentNames(
+        string name,
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, string[]>> byBuild,
+        string? build)
     {
-        Apple2Model[] models = [Apple2Model.IIPlus, Apple2Model.IIe, Apple2Model.IIeEnhanced];
-        (PetModel Model, bool Original)[] pets =
-        [
-            (PetModel.Pet2001, false), (PetModel.Pet2001, true), (PetModel.Pet2001Basic2, false),
-            (PetModel.Pet4032, false), (PetModel.Pet4032, true)
-        ];
-
-        List<AssemblyResult> builds =
-        [
-            .. models.Select(model => SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(inputs), model)),
-            .. pets.Select(pet => PetSdkModules.AssembleBasic(Path.Join(inputs, "Pet"), pet.Model, pet.Original))
-        ];
-
-        Dictionary<string, SortedSet<string>> names = [with(StringComparer.Ordinal)];
-        foreach (AssemblyResult build in builds)
+        if (build is not null)
         {
+            if (!byBuild.TryGetValue(build, out IReadOnlyDictionary<string, string[]>? table))
+            {
+                throw new ArgumentException($"{build} is not a native BASIC build.", nameof(build));
+            }
+
+            return table.TryGetValue(name, out string[]? own) ? own : [];
+        }
+
+        List<string[]> given = [.. byBuild.Values.Where(table => table.ContainsKey(name)).Select(table => table[name])];
+        if (given.Count == 0)
+        {
+            return [];
+        }
+
+        if (given.Any(names => !names.SequenceEqual(given[0], StringComparer.Ordinal)))
+        {
+            List<string> builds = [];
+            foreach ((string key, IReadOnlyDictionary<string, string[]> table) in byBuild)
+            {
+                if (table.TryGetValue(name, out string[]? targets))
+                {
+                    builds.Add(key + ": " + string.Join(' ', targets));
+                }
+            }
+
+            string each = string.Join(", ", builds);
+            throw new InvalidOperationException($"{name} names different definitions in different builds ({each}); predefine it for one build.");
+        }
+
+        return given[0];
+    }
+
+    // Every historical name of the three AppleSoft and five PET BASIC native builds, with the definitions it names in
+    // each build.
+    private static Dictionary<string, IReadOnlyDictionary<string, string[]>> CurrentNamesIn(string inputs)
+    {
+        Dictionary<string, IReadOnlyDictionary<string, string[]>> byBuild = [with(StringComparer.Ordinal)];
+        foreach ((string key, Apple2Model? apple, PetModel pet, bool original) in s_builds)
+        {
+            AssemblyResult build;
+            if (apple is Apple2Model model)
+            {
+                build = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(inputs), model);
+            }
+            else
+            {
+                build = PetSdkModules.AssembleBasic(Path.Join(inputs, "Pet"), pet, original);
+            }
+
             build.Success.Should().BeTrue(string.Join(Environment.NewLine, build.Diagnostics.Select(d => d.Message)));
+
+            Dictionary<string, SortedSet<string>> own = [with(StringComparer.Ordinal)];
             foreach ((string name, AssemblySymbol definition) in build.HistoricalNames)
             {
                 if (build.Symbols.ContainsKey(name)) { continue; }
-                if (!names.TryGetValue(name, out SortedSet<string>? targets))
+                if (!own.TryGetValue(name, out SortedSet<string>? targets))
                 {
-                    names[name] = targets = [with(StringComparer.Ordinal)];
+                    own[name] = targets = [with(StringComparer.Ordinal)];
                 }
 
                 targets.Add(definition.Name);
             }
+
+            byBuild[key] = own.ToDictionary(pair => pair.Key, pair => pair.Value.ToArray(), StringComparer.Ordinal);
         }
 
-        return names.ToDictionary(pair => pair.Key, pair => pair.Value.ToArray(), StringComparer.Ordinal);
+        return byBuild;
     }
 }

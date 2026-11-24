@@ -34,8 +34,8 @@ workspace adds documents of its own, or replaces a key, with the same columns.
 
 The Microsoft 6502 BASIC keys were checked against the SDK's builds before any name is cited from them. Of their
 text, only M6502's is in the repository, as `m6502.asm`. The full method, with the counts, is step 2 of the BASIC
-conversion's log, `docs/conversions/Basic.md`, on the `claude/basic-rename-table` branch until it is merged. A name
-is cited from a document only where the check found that the document gives that name for that thing:
+conversion's log, [`docs/conversions/Basic.md`](conversions/Basic.md). A name is cited from a document only
+where the check found that the document gives that name for that thing:
 
 - **M6502:** the repository's `m6502.asm`. Each MACRO-10 overlay build was assembled on it, and a name is cited for a
   build where `m6502.asm` defines it and the overlay build gives it the same value as the native build. Where the

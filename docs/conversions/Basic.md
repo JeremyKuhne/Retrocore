@@ -1007,12 +1007,11 @@ Decisions and how the table was applied:
   - `BasicSharedInterpreterAliasesTests` checks COPYC, STRD and the rest in the whole builds, now that they are in
     Commodore's historical names.
 
-Checked: the full suite, the rename gate, the lint tests and `BasicExpressionsConversionTests`. The suite has
-3,964 passed, none failed and 665 skipped; the skipped tests are the ROM-dump comparisons, which need dumps that
-are not here. `BasicExpressionsConversionTests` compares every old name in the sixteen files and the vendors'
-historical names with the MACRO-10 overlay's value in each of the eight builds. It checks that each definition
-reaches the overlay by its name or an old name, that a vendor's names resolve only in its builds and through its
-aliases, and that every citation's key is in the bibliography.
+Checked: the full suite, the rename gate, the lint tests and `BasicExpressionsConversionTests`.
+`BasicExpressionsConversionTests` compares every old name in the sixteen files and the vendors' historical names with
+the MACRO-10 overlay's value in each of the eight builds. It checks that each definition reaches the overlay by its name
+or an old name, that a vendor's names resolve only in its builds and through its aliases, and that every citation's key
+is in the bibliography.
 
 `BasicExpressionRoutineTests` runs these routines in the enhanced IIe's AppleSoft and PET BASIC 4 and checks
 their `Out:` values and `Keeps:` claims:
@@ -1038,14 +1037,8 @@ and the enhanced IIe's AppleSoft. Their program adds the following to the statem
 
 As a control, a false `Keeps: Y` added to `Strings::CopyBytes` was reported on PET BASIC 4.
 
-CI's later steps, run as CI runs them with an empty `RETROCORE_CACHE`, passed except one: the IIe sample assembles,
-every `tools/Test-*.mjs` script but `Test-Memory.mjs` passes, and in `extension/` `check:grammar`, `compile` and
-`test:grammar` pass. `Test-Memory.mjs` expects `$24` to read CH and finds AppleSoft's own name for it. That
-predates this stack's conversions: it already fails, with TRMPOS, on the commit before the workspace step. It is
-fixed on `claude/basic-modules` (the Memory view ranks an SDK address's names as the disassembler does), which this
-stack takes when it rebases. The math
-step's FOUT became `FormatFac`, which broke `Test-PetDap.mjs`; that branch now finds the line by the routine's
-`.proc`.
+CI's later steps, run as CI runs them with an empty `RETROCORE_CACHE`, pass: the IIe sample assembles, every
+`tools/Test-*.mjs` script passes, and in `extension/` `check:grammar`, `compile` and `test:grammar` pass.
 
 ## Other dependents
 

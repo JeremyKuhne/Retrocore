@@ -258,7 +258,9 @@ Each session takes its branches to main this way:
   2. *First pass*, once: Haiku, Sonnet and Opus in parallel on the whole diff, each starting from its own area.
   3. *Delta review*, after each fix: Haiku alone on the fix's diff, with the findings it addresses. It checks that
      the fix is right and broke nothing nearby; what it finds goes back to the fix.
-  4. *Closing pass*: Sonnet and Opus on the whole diff. A finding goes back to step 3, not step 2.
+  4. *Closing pass*: Opus alone on the whole diff. A finding goes back to step 3, not step 2. (Sonnet was in the
+     closing pass at first; across the first seven closing passes it found one should-fix, Opus about sixteen and a
+     must-fix, so the closing pass is Opus's, and Sonnet stays in the first pass, where it finds real issues.)
 
   **The brief.** What counts: a wrong value, address or contract; a comment false for the code in a build it is in;
   a lost or mis-keyed historical name; a broken build or test. What does not: a comment that leaves out a use,

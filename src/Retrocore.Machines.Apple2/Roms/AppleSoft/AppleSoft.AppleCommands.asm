@@ -345,7 +345,7 @@ TEXT:
 
 ;; Writes an array's size and contents to cassette.
 ;;
-;; The enhanced IIe uses <CALLC5> to prepare the transfer; earlier models use <SETA2>.
+;; The enhanced IIe uses `CALLC5` to prepare the transfer; earlier models use `SETA2`.
 STORE:
     jsr GETARY
     ldy #3

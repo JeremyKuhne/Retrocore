@@ -273,7 +273,7 @@ Done:
     ;; FOR variable ending in $FF, or select the first frame if the previous high byte is zero.
     ;;
     ;; Where `popEntry` is 1 (AppleSoft), `POP` enters here too, and Y tells them apart: for `POP` the routine
-    ;; discards the frame through <Statements::PopFinish> instead of returning to the caller.
+    ;; discards the frame through AppleSoft's POP finish instead of returning to the caller.
     ;; In: zero = set at the end of the statement, Y = the statement token's offset in the dispatch table
     ;; Errors: RETURN WITHOUT GOSUB if there is no GOSUB frame or, where `searchLow` is 1, if the search stops at a
     ;;   FOR frame it matched; a matched frame whose variable address ends in the GOSUB token raises no error, and
@@ -303,7 +303,7 @@ UndefinedStatement:
 ;; Also: SNERR2 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 ToSyntaxError:
     jmp SyntaxError
-;; Pops the frame into <CurrentLine> and <TextPointer> (POP: to <Statements::PopFinish>), falls into <Statements::Data>
+;; Pops the frame into <CurrentLine> and <TextPointer> (POP: to AppleSoft's POP finish), falls into <Statements::Data>
 ;; to skip the rest.
 ;; Also: RETU1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 RestoreCaller:

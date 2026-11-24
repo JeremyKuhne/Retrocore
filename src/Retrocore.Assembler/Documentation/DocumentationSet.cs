@@ -391,10 +391,14 @@ public sealed class DocumentationSet
     public string SymbolOf(DocumentationTopic topic, DocumentationComment comment) =>
         comment.Macro is null ? topic.Name : ExpandedName([comment]) ?? topic.Name;
 
-    // Whether a definition outside a macro's body is in this set's build, as InBuild tells for a merged section: the
-    // assembly didn't skip its line, or else its condition holds. A macro body's always counts here: Reaches counts its
-    // expansions.
-    private bool CommentInBuild(DocumentationComment comment) =>
+    /// <summary>
+    ///  Gets whether a definition outside a macro's body is in this set's build, as InBuild tells for a merged section:
+    ///  the assembly didn't skip its line, or else its condition holds. A macro body's always counts here:
+    ///  <see cref="Expansions"/> counts its expansions.
+    /// </summary>
+    /// <param name="comment">The definition's comment.</param>
+    /// <returns>Whether the build has it.</returns>
+    internal bool CommentInBuild(DocumentationComment comment) =>
         comment.Macro is not null
             || comment.Condition is null
             || (_skipped?.InBuild(comment.Path, comment.TargetLine)

@@ -1126,6 +1126,12 @@ Decisions and how the table was applied:
     Each old name cites only its vendor's documents, Microsoft's source or UNKN (for Commodore, the BASIC 4 kernal
     listings too, as the workspace's do), all in the bibliography.
   - `BasicInterpreterRoutineTests` is new (below).
+  - `BasicBuildLinkTests` is new: in each of the eight builds, every link in a BASIC comment the build assembles names
+    a definition the build assembles. The lint resolves a link against every build's definitions of a conditional
+    source, so it passed links in all-builds comments to definitions only some builds have; the closing reviews found
+    nine of them in part C's files. The test found three more outside them: the shared RETURN's links to AppleSoft's
+    `Statements::PopFinish`, and AppleSoft's cassette comments' links to the enhanced IIe's `CALLC5` and the others'
+    `SETA2`, which are now described or in backticks. `DocumentationSet.CommentInBuild` is internal for it.
 - I12. Old names the table's rows give only for BASIC 2 and 4, which HV1 and HV1R also give to BASIC 1's own code:
   XSPAC2 (`PrintSpaces::Next`), GLET (`DispatchStatement::ToLet`), FREMES (`SignOnMessage`, inside
   `BytesFreeMessage`'s string) and CRTSKP (`PrintSpace::CursorRight`), each now a label in BASIC 1's branch, cited

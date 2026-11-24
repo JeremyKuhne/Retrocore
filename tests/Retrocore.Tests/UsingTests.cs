@@ -1016,6 +1016,27 @@ public sealed class UsingTests
     }
 
     /// <summary>
+    ///  The historical-name hint does not take the name a <c>.scope</c> or <c>.proc</c> line declares, or a scope's
+    ///  name before <c>::</c>, as a use.
+    /// </summary>
+    [TestMethod]
+    public void DeclaredScopeNamesAreNotHistoricalNames()
+    {
+        string[] lines =
+        [
+            ".scope KBD",
+            ".endscope",
+            ".scope KBD continued",
+            ".proc CH",
+            ".endproc",
+            "    jsr KBD::Read",
+            "    lda CH"
+        ];
+
+        SourceText.CodeNames(lines).Where(use => use.Name is "KBD" or "CH").Should().Equal([(6, 8, "CH")]);
+    }
+
+    /// <summary>
     ///  In the editor, a root name only a skipped conditional branch defines does not hide the name a
     ///  <c>.using</c> brings in, as it does not in the assembler.
     /// </summary>

@@ -31,8 +31,8 @@ PATCH_FILL = $AA
     ;; BASIC 4's variable operand: jumps over the patch area to <EvaluateVariableBody>. The shared evaluator branches
     ;; here, as it does to the other builds' own <EvaluateVariable>, so the patches can grow without moving its target.
     ;;
-    ;; ISVAR is here because the overlay puts it here, and it cites, by the lineage rule, every document that names
-    ;; Microsoft's ISVAR; BASIC 4's own documents (CBM4S79, HV4, HV4R) put the label on the code it jumps to.
+    ;; ISVAR is here because the overlay puts it here, and it cites, by the lineage rule, every bibliography document
+    ;; naming Microsoft's ISVAR; BASIC 4's own documents (CBM4S79, HV4, HV4R) put the label on the code it jumps to.
     ;; Also: ISVAR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc EvaluateVariable
     jmp EvaluateVariableBody

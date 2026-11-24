@@ -482,7 +482,7 @@ Open:
     ;; zero.
     ;;
     ;; The unit defaults to 8. Nothing limits the length, and only a carriage return ends it (a zero is stored like
-    ;; any other byte): a reply of more than 40 characters runs on over the buffer's back-link and beyond.
+    ;; any other byte): a reply of 40 characters or more runs on over the buffer's back-link and beyond.
     ;; In: DeviceNumber = the unit, 0 for 8
     ;; Also: ECHKS (K4S79, HVK4)
     .proc ReadErrorChannel

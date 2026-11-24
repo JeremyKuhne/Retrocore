@@ -2702,7 +2702,9 @@ Decisions and how the table was applied:
     K4S79, HVK4) and `ROM_ORIGIN` ROMLOC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R). A question for the owner: the
     overlay gives ISVAR to BASIC 4's trampoline, where the comparisons need it, but BASIC 4's own documents (CBM4S79,
     HV4, HV4R) give it to the code the trampoline jumps to, `EvaluateVariableBody` (ISVAR1, UNKN), which is also
-    Microsoft's ISVAR. The name stays on the trampoline, with the mismatch in its prose.
+    Microsoft's ISVAR. The name stays on the trampoline, with the mismatch in its prose. A second: CBM4S79's ROMLOC
+    is its RAM build's $3000, a value no PET build has; the lineage rule is read to cover it, as it covers BUFLEN's
+    80 and 81.
   - The table's other names go on the definitions: PATCH1 to PATCH7 (HV1, HV1R) on BASIC 1's patches; PATCHG, PATH0,
     PATH1, PATCHH and PATCHI (HV4R) on the revised chip's; T1, T2, RCNT, FSBLK, STAL, ZZZ1, TAPE2, TKSA, CKOUT and
     CHANL, which the table gives as HVK4's but K4S79 gives at the same places too, so both are cited; PATCH5 (HVK4)
@@ -2760,7 +2762,8 @@ Found in the code (documented, not fixed):
   `FindStringLink`'s address against `ROM_ORIGIN` never branches, since the bit-15 test before it catches the ROM.
 - The clock string: `ClassifyCharacter` is the reader's entry after its colon test, so `TI$`'s string takes every
   byte from `0` up as a digit, counted from `0` (`TI$="1A0000"` sets 27 hours), and rejects only those below `0`; a
-  space is skipped by reading the byte after `TextPointer` instead, which moves `TextPointer` on; the time is not
+  space is skipped by reading the byte after `TextPointer` instead, which moves `TextPointer` on, and that byte gets
+  the reader's full test (a byte from `:` up is rejected, another space skipped); the time is not
   checked against 24 hours. `BasicCommodoreRoutineTests` pins the first.
 - BASIC 4's error-channel read: only a carriage return ends it; a zero is stored like any other byte, so nothing
   stops a long reply.
@@ -2768,9 +2771,9 @@ Found in the code (documented, not fixed):
   CALL" is the kernal's reset with the diagnostic line low; `L` and `S` take at most 15 filename characters;
   `ReadCharacter` at a return drops only its own return address, so a line that ends inside a nested read leaves its
   callers' on the stack; `ReadByte` takes a space and one digit as that digit and does not check its digits.
-- The disk commands: the error channel's read has no length bound (a reply over 40 characters runs over the
+- The disk commands: the error channel's read has no length bound (a reply of 40 characters or more runs over the
   buffer's link); `HEADER` closes the unit's files before asking; `Confirm` takes a zero byte read while draining a
-  rejected answer as yes; every template puts the second name before the first; `R` is accepted and skipped; a name
+  rejected answer as yes; every template with both names puts the second before the first; `R` is accepted and skipped; a name
   takes 16 characters, or 17 with `@`, and a second `@` name is a syntax error; `DiskIdSeen` shares `RecordLength`'s
   byte; `Statements::Catalog::DropAndClose` is unreachable.
 - The revised chip's `FetchStatementCharacter` keeps the `PI` token from reaching `DispatchStatement`, which on the

@@ -38,7 +38,8 @@
     bne SaveState
     .endproc
 
-    ;; Enters the monitor after a `BRK`, with `B` as the entry letter, saving the interrupted program's registers.
+    ;; Enters the monitor after a `BRK`, with `B` as the entry letter, saving the interrupted program's registers; it
+    ;; first restores the default channels.
     ;;
     ;; The 6502 pushed the return address and the status for the `BRK`, and the kernal's interrupt entry pushed A,
     ;; X and Y after them before jumping here. This pops Y, X, A and the status into the save area and clears the

@@ -528,7 +528,8 @@ LoadAddress:
     bne Present
     jmp SyntaxError
 
-;; A character other than a digit must start an expression in parentheses. Basic4.mac spells the label GTVLCN;
+;; A value is there: a digit starts a number, and any other character must start an expression in parentheses.
+;; Basic4.mac spells the label GTVLCN;
 ;; Commodore's kernal listing and its reconstruction (K4S79, HVK4) call it `CONT`, Microsoft's name for
 ;; `Statements::Cont`, so their name is here in prose.
 ;; Also: GTVLCN (UNKN)

@@ -111,8 +111,8 @@ Done:
 
     ;; Finishes <BeginGetString>: points <TextPointer> at the character, drops the return address of the `jsr` to
     ;; <BeginGetString>, and goes on to <AssignVariableList::StringAtCursor> with A = Y, its ending delimiter.
-    ;; In: X = the character's offset, Y = the ending delimiter (<TextPointer>'s high byte, which for BASIC 1's
-    ;;   page-zero buffer is 0)
+    ;; In: X = the character's offset, Y = the ending delimiter (on `GET`'s path, the input cursor's high byte, which
+    ;;   for BASIC 1's page-zero buffer is 0)
     ;; Also: GETST1 (UNKN), PATCH7 (HV1, HV1R)
     .proc ResumeGetString
     stx TextPointer

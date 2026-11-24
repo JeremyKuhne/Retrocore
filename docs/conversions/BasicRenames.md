@@ -1879,7 +1879,7 @@ to K12, R1 to R10).
 | 1526 | `ZERO_AT_FHALF` | `ZERO_IN_HALF_CONSTANT` | switch | P2 |  | vendor | 1 defines ZERO inside the 0.5 constant (BASIC 2 and 4) — renamed for FHALF |
 | 1527 | `WAIT_EASTER_EGG` | `KEEP` | switch | P2 |  | vendor | 1 builds BASIC 2's hidden WAIT message and omitted-mask handler — SDK name; fits the style |
 | 1528 | `BASIC4_OUTPUT_PADDING` | `KEEP` | switch | P2 |  | vendor | 1 builds BASIC 4's checksum byte and patch space before INPRT — SDK name; fits the style |
-| 1529 | `LASTWR` | `InterpreterEnd` | entry | P2 | M6502, HV2 | vendor | label after the interpreter's last byte; PEEK's ROM guard ends at its page — Commodore.Basic1Patches defines BASIC 1's (other part): same name; BASIC 4's extension follows it Converted: cites M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, K4S79 and HVK4, under the lineage rule (Basic.md F4). BASIC 2's and 4's `PEEK` have no ROM guard (`guardRom` 0), so nothing refers to the label there. |
+| 1529 | `LASTWR` | `InterpreterEnd` | entry | P2 | M6502, HV2 | vendor | label after the interpreter's last byte — Commodore.Basic1Patches defines BASIC 1's (other part): same name; BASIC 4's extension follows it Converted: cites M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, K4S79 and HVK4, under the lineage rule (Basic.md F4). BASIC 2's and 4's `PEEK` have no ROM guard (`guardRom` 0), so nothing refers to the label there. |
 
 ### Basic4
 
@@ -1896,7 +1896,7 @@ to K12, R1 to R10).
 | 1538 | `ZERO_AT_FHALF` | `ZERO_IN_HALF_CONSTANT` | switch | P4 P4R |  | vendor | 1 defines ZERO inside the 0.5 constant (BASIC 2 and 4) — renamed for FHALF |
 | 1539 | `WAIT_EASTER_EGG` | `KEEP` | switch | P4 P4R |  | vendor | 1 builds BASIC 2's hidden WAIT message and omitted-mask handler — SDK name; fits the style |
 | 1540 | `BASIC4_OUTPUT_PADDING` | `KEEP` | switch | P4 P4R |  | vendor | 1 builds BASIC 4's checksum byte and patch space before INPRT — SDK name; fits the style |
-| 1541 | `LASTWR` | `InterpreterEnd` | entry | P4 P4R | M6502, K4S79 [P4 P4R], HV4, HV4R, HVK4 [P4 P4R] | vendor | label after the interpreter, where BASIC 4's extension begins ($D472); PEEK's guard ends here — same name as BASIC 2's and BASIC 1's Converted: cites M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, K4S79 and HVK4, under the lineage rule (Basic.md F4). BASIC 2's and 4's `PEEK` have no ROM guard (`guardRom` 0), so nothing refers to the label there. |
+| 1541 | `LASTWR` | `InterpreterEnd` | entry | P4 P4R | M6502, K4S79 [P4 P4R], HV4, HV4R, HVK4 [P4 P4R] | vendor | label after the interpreter, where BASIC 4's extension begins ($D472) — same name as BASIC 2's and BASIC 1's Converted: cites M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, K4S79 and HVK4, under the lineage rule (Basic.md F4). BASIC 2's and 4's `PEEK` have no ROM guard (`guardRom` 0), so nothing refers to the label there. |
 
 ### Commodore.Basic1Patches
 
@@ -2243,8 +2243,8 @@ to K12, R1 to R10).
 | 1840 | `LDTND` | `OpenFileCount` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | number of entries in the kernal's file tables; DCLOSE scans them |
 | 1841 | `DFLTO` | `DefaultOutputDevice` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | the kernal's current output device; CATALOG saves it |
 | 1842 | `WSW` | `CatalogOutputFile` | alias | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | the kernal's cassette write flag, which CATALOG reuses for its output file — kernal name for the byte unknown here; a scoped alias in the catalog routine if a kernal name is kept (see D-Q10) |
-| 1843 | `SAVX` | `MonitorCommandIndex` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R]; other names here: T1 (HVK4) | vendor | the monitor's index of the command it dispatched; LOAD/SAVE test it Converted: T1 cites K4S79 as well as HVK4: the kernal listing gives the name at the same place (Basic.md F4). |
-| 1844 | `TMPC` | `MonitorCount` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R]; other names here: RCNT (HVK4), T2 (HVK4) | vendor | the monitor's BRK marker character, then a byte count — HVK4 also calls it RCNT, T2 Converted: RCNT and T2 cites K4S79 as well as HVK4: the kernal listing gives the name at the same place (Basic.md F4). |
+| 1843 | `SAVX` | `MonitorCommandIndex` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R]; other names here: T1 (K4S79, HVK4) | vendor | the monitor's index of the command it dispatched; LOAD/SAVE test it Converted: T1 cites K4S79 as well as HVK4: the kernal listing gives the name at the same place (Basic.md F4). |
+| 1844 | `TMPC` | `MonitorCount` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R]; other names here: RCNT (K4S79, HVK4), T2 (K4S79, HVK4) | vendor | the monitor's BRK marker character, then a byte count — HVK4 also calls it RCNT, T2 Converted: RCNT and T2 cites K4S79 as well as HVK4: the kernal listing gives the name at the same place (Basic.md F4). |
 | 1845 | `CNTDN` | `CatalogOutputDevice` | alias | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | the kernal's cassette countdown, which CATALOG reuses to save DefaultOutputDevice |
 | 1846 | `EAL` | `EndAddress` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | the kernal's load/save end address; the monitor's SAVE sets it |
 | 1847 | `EAH` | `EndAddressHigh` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | high byte of EndAddress |
@@ -2253,8 +2253,8 @@ to K12, R1 to R10).
 | 1850 | `SA` | `SecondaryAddress` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | the kernal's current secondary address |
 | 1851 | `FA` | `DeviceNumber` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | the kernal's current device (primary address) |
 | 1852 | `FNADR` | `FilenamePointer` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | two-byte pointer to the kernal's current filename |
-| 1853 | `WRAP` | `MonitorAddressWrapped` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R]; other names here: FSBLK (HVK4) | vendor | set when the monitor's address passes $FFFF (INCTMP) — HVK4 calls it FSBLK Converted: FSBLK cites K4S79 as well as HVK4: the kernal listing gives the name at the same place (Basic.md F4). |
-| 1854 | `TMP0` | `MonitorAddress` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R]; other names here: STAL (HVK4) | vendor | two-byte address the monitor is working on — HVK4 calls it STAL Converted: STAL cites K4S79 as well as HVK4: the kernal listing gives the name at the same place (Basic.md F4). |
+| 1853 | `WRAP` | `MonitorAddressWrapped` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R]; other names here: FSBLK (K4S79, HVK4) | vendor | set when the monitor's address passes $FFFF (INCTMP) — HVK4 calls it FSBLK Converted: FSBLK cites K4S79 as well as HVK4: the kernal listing gives the name at the same place (Basic.md F4). |
+| 1854 | `TMP0` | `MonitorAddress` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R]; other names here: STAL (K4S79, HVK4) | vendor | two-byte address the monitor is working on — HVK4 calls it STAL Converted: STAL cites K4S79 as well as HVK4: the kernal listing gives the name at the same place (Basic.md F4). |
 | 1855 | `TMP2` | `MonitorEndAddress` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | two-byte second address of a monitor command (range end) |
 | 1856 | `FNADR2` | `SecondFilenamePointer` | alias | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | second filename pointer for two-name disk commands; shares MonitorEndAddress |
 | 1857 | `BAD` | `MonitorHexByte` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | the monitor's hex-byte assembly scratch (RDOB) at $0100 — same address as NumberBuffer: an alias in BASIC 4 Converted: `MonitorHexByte = NumberBuffer`, asserted $0100 (Basic.md F3). |
@@ -2267,11 +2267,11 @@ to K12, R1 to R10).
 | 1864 | `SP` | `SavedStackPointer` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | the monitor's saved stack pointer — matches IIeEquates |
 | 1865 | `INVH` | `SavedIrqVectorHigh` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | high byte of IrqVector as BRK found it |
 | 1866 | `INVL` | `SavedIrqVector` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | low byte of IrqVector as BRK found it |
-| 1867 | `SAVNAM` | `MonitorFilename` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R]; other names here: ZZZ1 (HVK4) | vendor | buffer for the monitor's LOAD/SAVE filename — HVK4 calls it ZZZ1 Converted: at most 15 characters: a 16th fails the command. Converted: ZZZ1 cites K4S79 as well as HVK4: the kernal listing gives the name at the same place (Basic.md F4). |
+| 1867 | `SAVNAM` | `MonitorFilename` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R]; other names here: ZZZ1 (K4S79, HVK4) | vendor | buffer for the monitor's LOAD/SAVE filename — HVK4 calls it ZZZ1 Converted: at most 15 characters, a 16th failing the command; ZZZ1 cites K4S79 as well as HVK4: the kernal listing gives the name at the same place (Basic.md F4). |
 | 1868 | `LAT` | `LogicalFileTable` | table | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | the kernal's table of open logical file numbers |
 | 1869 | `FAT` | `DeviceTable` | table | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | the kernal's table of the open files' devices |
 | 1870 | `SAT` | `SecondaryAddressTable` | table | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | the kernal's table of the open files' secondary addresses |
-| 1871 | `FNLEN2` | `SecondFilenameLength` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R]; other names here: TAPE2 (HVK4) | vendor | length of a disk command's second filename — HVK4 calls it TAPE2 Converted: TAPE2 cites K4S79 as well as HVK4: the kernal listing gives the name at the same place (Basic.md F4). |
+| 1871 | `FNLEN2` | `SecondFilenameLength` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R]; other names here: TAPE2 (K4S79, HVK4) | vendor | length of a disk command's second filename — HVK4 calls it TAPE2 Converted: TAPE2 cites K4S79 as well as HVK4: the kernal listing gives the name at the same place (Basic.md F4). |
 | 1872 | `RECPOS` | `RecordPosition` | alias | P4 P4R | other names here: TAPE2 (HVK4) | vendor | RECORD's byte position; shares SecondFilenameLength — no document; HVK4 calls the address TAPE2 Converted: Also RECPOS (UNKN); TAPE2 (HVK4) is on SecondFilenameLength. |
 | 1873 | `DRIVE1` | `FirstDrive` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | the disk command's first drive number |
 | 1874 | `DRIVE2` | `SecondDrive` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | the disk command's second drive number |
@@ -2292,7 +2292,7 @@ to K12, R1 to R10).
 | 1889 | `TALK` | `KernalTalk` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | addresses a device on the IEEE bus as talker |
 | 1890 | `LISTN` | `KernalListen` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | addresses a device on the IEEE bus as listener |
 | 1891 | `MSG` | `KernalPrintMessage` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | prints the kernal message at offset Y |
-| 1892 | `SECND` | `KernalSendSecondary` | routine | P4 P4R | spelling only: K4S79 [P4 P4R], HVK4 [P4 P4R]; other names here: TKSA (HVK4) | vendor | sends a secondary address after Talk Converted: Also SECND (UNKN), TKSA (HVK4). Converted: TKSA cites K4S79 as well as HVK4: the kernal listing gives the name at the same place (Basic.md F4). |
+| 1892 | `SECND` | `KernalSendSecondary` | routine | P4 P4R | spelling only: K4S79 [P4 P4R], HVK4 [P4 P4R]; other names here: TKSA (K4S79, HVK4) | vendor | sends a secondary address after Talk Converted: Also SECND (UNKN), TKSA (K4S79, HVK4): the kernal listing gives TKSA at the same place (Basic.md F4). |
 | 1893 | `UNTLK` | `KernalUntalk` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | sends UNTALK on the bus |
 | 1894 | `UNLSN` | `KernalUnlisten` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | sends UNLISTEN on the bus |
 | 1895 | `ACPTR` | `KernalReceiveByte` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | receives a byte from the bus talker |
@@ -2316,9 +2316,9 @@ to K12, R1 to R10).
 | 1913 | `SV3` | `KernalBasicSave` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | the kernal's BASIC save entry (DSAVE) |
 | 1914 | `SV5` | `KernalMonitorSave` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | the kernal's save entry the monitor calls |
 | 1915 | `CHKIN` | `KernalSetInputChannel` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | selects a logical file for input |
-| 1916 | `CHKOUT` | `KernalSetOutputChannel` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R]; other names here: CKOUT (HVK4) | vendor | selects a logical file for output Converted: CKOUT cites K4S79 as well as HVK4: the kernal listing gives the name at the same place (Basic.md F4). |
+| 1916 | `CHKOUT` | `KernalSetOutputChannel` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R]; other names here: CKOUT (K4S79, HVK4) | vendor | selects a logical file for output Converted: CKOUT cites K4S79 as well as HVK4: the kernal listing gives the name at the same place (Basic.md F4). |
 | 1917 | `TWAIT` | `KernalWaitForTape` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | waits for the tape operation to finish |
-| 1918 | `SPERR` | `STATUS_LOAD_ERROR` | constant | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R]; other names here: CHANL (HVK4) | vendor | IoStatus bit ($10) for a load or verify error — HVK4 calls it CHANL Converted: CHANL cites K4S79 as well as HVK4: the kernal listing gives the name at the same place (Basic.md F4). |
+| 1918 | `SPERR` | `STATUS_LOAD_ERROR` | constant | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R]; other names here: CHANL (K4S79, HVK4) | vendor | IoStatus bit ($10) for a load or verify error — HVK4 calls it CHANL Converted: CHANL cites K4S79 as well as HVK4: the kernal listing gives the name at the same place (Basic.md F4). |
 | 1919 | `CR` | `CHARACTER_RETURN` | constant | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | carriage return ($0D), the monitor's line end — other PET parts may name CR; one definition (see D-Q6) Converted: CR (K4S79, HVK4) joins `CARRIAGE_RETURN` in Commodore.ChannelPrint.asm (Basic.md F3). |
 | 1920 | `ONTK` | `TOKEN_ON` | token | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | BASIC's ON token; the disk parser reads ON as the unit keyword — should be the token table's TOKEN_ON (one definition) Converted: `TOKEN_ON`, defined with the token table in Commodore.DispatchTables.asm, Also ONTK (K4S79, HVK4) (Basic.md F3). |
 | 1921 | `NCMDS` | `MONITOR_COMMAND_COUNT` | constant | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | number of built-in monitor commands (8) — HVK4 calls it LBERR |

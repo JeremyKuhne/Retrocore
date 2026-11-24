@@ -64,11 +64,30 @@ public sealed class BasicNamesBuildTests
     {
         Action differing = () => BasicNames.WithCurrentNames(One(Differing), s_tables, build: null);
 
-        differing.Should().Throw<InvalidOperationException>()
-            .WithMessage("*" + Differing + "*AppleOnly*PetOnly*");
+        string message = differing.Should().Throw<InvalidOperationException>().Which.Message;
+        message.Should().Contain(Differing).And.Contain("AppleOnly").And.Contain("PetOnly");
 
         Dictionary<string, long> agreed = BasicNames.WithCurrentNames(One(Agreed), s_tables, build: null);
         agreed.Should().ContainKey("Shared").WhoseValue.Should().Be(Value);
+    }
+
+    /// <summary>
+    ///  For all builds, an old name only one build gives gets that build's name.
+    /// </summary>
+    [TestMethod]
+    public void AllBuildsAddAnOldNameOnlyOneBuildGives()
+    {
+        Dictionary<string, IReadOnlyDictionary<string, string[]>> tables = new(s_tables, StringComparer.Ordinal)
+        {
+            [BasicNames.Build(Apple2Model.IIe)] = new Dictionary<string, string[]>(StringComparer.Ordinal)
+            {
+                ["APLNAM"] = ["AppleName"]
+            }
+        };
+
+        Dictionary<string, long> names = BasicNames.WithCurrentNames(One("APLNAM"), tables, build: null);
+
+        names.Should().ContainKey("AppleName").WhoseValue.Should().Be(Value);
     }
 
     /// <summary>
@@ -84,14 +103,24 @@ public sealed class BasicNamesBuildTests
 
     /// <summary>
     ///  In the native sources, each build's old names get that build's current names, and the all-builds lookup
-    ///  either gives the definitions every build agrees on or rejects the name, for every old name of all eight
-    ///  builds.
+    ///  either gives the definitions the builds agree on or rejects the name, for every old name of all eight builds;
+    ///  a known shared name and an AppleSoft-only one pin the tables down.
     /// </summary>
     [TestMethod]
     public void TheNativeBuildsNamesStayWithTheirBuild()
     {
         IReadOnlyDictionary<string, IReadOnlyDictionary<string, string[]>> tables = BasicNames.CurrentNamesByBuild();
         tables.Should().HaveCount(8, "three AppleSoft and five PET BASIC builds");
+
+        // Microsoft's TXTTAB is ProgramStart in every build; ASTIL's TEXTAB for it is AppleSoft's alone.
+        foreach ((string build, IReadOnlyDictionary<string, string[]> table) in tables)
+        {
+            table.Should().ContainKey("TXTTAB").WhoseValue.Should().Equal(["ProgramStart"], build);
+            table.ContainsKey("TEXTAB").Should().Be(build.StartsWith("AppleSoft", StringComparison.Ordinal), build);
+        }
+
+        BasicNames.WithCurrentNames(One("TEXTAB"), BasicNames.Build(PetModel.Pet4032, original: false))
+            .Should().NotContainKey("ProgramStart", "PET BASIC gives TEXTAB no name");
 
         foreach ((string build, IReadOnlyDictionary<string, string[]> table) in tables)
         {

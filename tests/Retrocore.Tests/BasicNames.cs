@@ -192,9 +192,11 @@ internal static class BasicNames
     ///  <para>
     ///   An old name that the builds give to different definitions would add every build's name, so another build's
     ///   name could reach the assembly; it is an error here, and a test that predefines it names the build it
-    ///   assembles with the other overload.
+    ///   assembles with the other overload. An old name only some builds give, such as AppleSoft's TEXTAB, adds
+    ///   those builds' name in any build's assembly.
     ///  </para>
     /// </remarks>
+    /// <exception cref="InvalidOperationException">The builds give an old name to different definitions.</exception>
     /// <param name="symbols">The predefined symbols, by the names Microsoft's source has.</param>
     /// <returns>The predefined symbols with the current names added.</returns>
     internal static Dictionary<string, long> WithCurrentNames(IReadOnlyDictionary<string, long> symbols) =>
@@ -212,8 +214,8 @@ internal static class BasicNames
 
     /// <summary>
     ///  Adds current names to predefined symbols from given tables of each build's historical names: the names one
-    ///  build defines them by, or with no build the names every build gives, failing on a name the builds give to
-    ///  different definitions.
+    ///  build defines them by, or with no build the names the builds that give an old name agree on, failing on a
+    ///  name they give to different definitions.
     /// </summary>
     /// <param name="symbols">The predefined symbols, by their old names.</param>
     /// <param name="byBuild">Each build's current names for its historical names, by build key.</param>
@@ -261,6 +263,7 @@ internal static class BasicNames
     /// </summary>
     /// <param name="name">The label, as Microsoft's source has it.</param>
     /// <returns>The label definitions, one per line.</returns>
+    /// <exception cref="InvalidOperationException">The builds give the name to different definitions.</exception>
     internal static string Label(string name) =>
         string.Join('\n', CurrentNames(name).Prepend(name).Select(label => $"{label}:"));
 

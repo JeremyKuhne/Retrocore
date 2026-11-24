@@ -1137,7 +1137,8 @@ Decisions and how the table was applied:
   `NextStatement::ReadLine`. The overlay defines none of the BASIC 1 names at BASIC 1's addresses, so the
   conversion test exempts those labels there.
 
-Checked: the full suite, the rename gate, the lint tests and `BasicInterpreterConversionTests`.
+Checked: the full suite, the rename gate, the lint tests and `BasicInterpreterConversionTests`. The suite's
+skipped tests are the ROM-dump comparisons, which need dumps that are not here, so they did not run.
 
 `BasicInterpreterRoutineTests` runs these routines in the enhanced IIe's AppleSoft and PET BASIC 4 and checks
 their `Out:` values:

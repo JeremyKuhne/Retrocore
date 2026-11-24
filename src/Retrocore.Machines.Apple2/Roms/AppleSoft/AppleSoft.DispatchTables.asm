@@ -1,9 +1,10 @@
 ; retrocore: style=strict
-; APPLESOFT: HANDLER TABLES, RESERVED WORDS AND MESSAGES
-;
-; These tables begin at $D000. Tokenize searches ReservedWords in order; LIST expands its token bytes back through
-; the same list. DispatchStatement dispatches statement tokens with StatementTable, while expression evaluation uses
-; FunctionTable and OperatorTable. ReportError indexes ErrorMessages by byte offset, not by an ordinal error number.
+;; APPLESOFT: HANDLER TABLES, RESERVED WORDS AND MESSAGES
+;;
+;; These tables begin at $D000. <Tokenize> searches <ReservedWords> in order; <Statements::List> expands its token bytes
+;; back through the same list. <DispatchStatement> dispatches statement tokens with <StatementTable>, while expression
+;; evaluation uses <FunctionTable> and <OperatorTable>. <ReportError> indexes <ErrorMessages> by byte offset, not by an
+;; ordinal error number.
 
 ;; Handler addresses minus one for the 64 statements, indexed by token $80-$BF.
 ;;

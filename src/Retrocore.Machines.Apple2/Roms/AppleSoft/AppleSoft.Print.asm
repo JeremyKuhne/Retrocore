@@ -37,7 +37,7 @@ Return:
 .endproc
 
 ;; PRINT's comma: starts a new line at or past <COMMA_NEWLINE_COLUMN>, and otherwise moves to the next 16-column
-;; zone. The enhanced IIe reads the column through the firmware's `CHKCOL`, which in 80 columns skips the new line
+;; zone. The enhanced IIe reads the column through AppleSoft's `CHKCOL`, which in 80 columns skips the new line
 ;; below column 73, and prints spaces to the zone through <PrintTabOrSpace>; the II Plus and IIe only store the zone's
 ;; column in <TerminalPosition>.
 ;; Also: COMPRT (M6502)

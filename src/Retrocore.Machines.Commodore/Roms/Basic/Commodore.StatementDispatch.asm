@@ -114,8 +114,8 @@ ReadLine:
     .assert diskCommands = 0 || diskCommands = 1, "diskCommands is 0 or 1."
     .assert earlyDispatch = 0 || diskCommands = 0, "Early dispatch has no disk-command gap."
 
-    ;; Returns at the end of a statement; otherwise dispatches a statement token through <StatementTable>, and treats
-    ;; anything else as <Statements::Let>.
+    ;; Returns at the end of a statement; otherwise dispatches a statement token through <StatementTable>. A
+    ;; character below <TOKEN_END> is <Statements::Let>, and any other token is a syntax error.
     ;;
     ;; Where `diskCommands` is 1 (BASIC 4), the disk tokens after `GO` dispatch from the table's next entries.
     ;; In: A = statement token or first character, zero = set at the end of the statement, carry = set for a non-digit

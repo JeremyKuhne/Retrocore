@@ -2,13 +2,13 @@
 ;; APPLESOFT: HANDLER TABLES, RESERVED WORDS AND MESSAGES
 ;;
 ;; These tables begin at $D000. <Tokenize> searches <ReservedWords> in order; <Statements::List> expands its token bytes
-;; back through the same list. <ExecuteStatement> dispatches statement tokens with <StatementTable>, while expression
+;; back through the same list. <DispatchStatement> dispatches statement tokens with <StatementTable>, while expression
 ;; evaluation uses <FunctionTable> and <OperatorTable>. <ReportError> indexes <ErrorMessages> by byte offset, not by an
 ;; ordinal error number.
 
 ;; Handler addresses minus one for the 64 statements, indexed by token $80-$BF.
 ;;
-;; <ExecuteStatement> pushes the high and low bytes and returns through <GetNextCharacter>; the RTS increments the
+;; <DispatchStatement> pushes the high and low bytes and returns through <GetNextCharacter>; the RTS increments the
 ;; stacked address before entering the handler. `HOME` enters the Monitor and & enters the RAM vector <AmpersandJump>.
 ;; Also: STMDSP (M6502)
 StatementTable:

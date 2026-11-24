@@ -17,8 +17,12 @@ public sealed class BasicInterpreterRoutineTests
     // The opcodes the stubs are written with.
     private const byte LdxImmediate = 0xA2;
     private const byte LdaImmediate = 0xA9;
+    private const byte LdyImmediate = 0xA0;
     private const byte StaAbsolute = 0x8D;
     private const byte Rts = 0x60;
+
+    // What the AppleSoft test's Monitor stub hands back, unlike the character it was given.
+    private const byte MonitorReturned = 0xD5;
 
     // PRINT's token in each dialect.
     private const byte AppleSoftPrintToken = 0xBA;
@@ -100,8 +104,8 @@ public sealed class BasicInterpreterRoutineTests
     }
 
     /// <summary>
-    ///  AppleSoft's <c>CheckStop</c> returns at once with the keyboard's byte in A, without reading the key, unless the
-    ///  keyboard holds Control-C; then it reads the key through <c>InputCharacter</c>.
+    ///  AppleSoft's <c>CheckStop</c> returns at once with the keyboard's byte in A, without calling
+    ///  <c>InputCharacter</c>, unless the keyboard holds Control-C; then it goes on to <c>InputCharacter</c>.
     /// </summary>
     /// <param name="key">The keyboard's byte.</param>
     [TestMethod]
@@ -146,18 +150,20 @@ public sealed class BasicInterpreterRoutineTests
         machine.Memory[output] = StaAbsolute;
         machine.Memory[output + 1] = Recorded & 0xFF;
         machine.Memory[output + 2] = Recorded >> 8;
-        machine.Memory[output + 3] = Rts;
+        machine.Memory[output + 3] = LdaImmediate;
+        machine.Memory[output + 4] = MonitorReturned;
+        machine.Memory[output + 5] = Rts;
         machine.Memory[machine.Address("MWAIT")] = Rts;
 
         machine.Call("PrintCharacter", a: character);
 
         machine.Memory[Recorded].Should().Be((byte)sent);
-        machine.Cpu.Registers.Accumulator.Should().Be((byte)(sent & 0x7F));
+        machine.Cpu.Registers.Accumulator.Should().Be(MonitorReturned & 0x7F, "the Monitor's A, with bit 7 clear");
     }
 
     /// <summary>
     ///  BASIC 4's <c>PrintCharacter</c> sends the character through <c>KernalCharacterOut</c> and returns the
-    ///  kernal's A, with zero set when it is zero.
+    ///  kernal's A, with zero and negative set from it; the stub returns other flags, from a load of Y.
     /// </summary>
     /// <param name="returned">The A the kernal returns.</param>
     [TestMethod]
@@ -173,7 +179,9 @@ public sealed class BasicInterpreterRoutineTests
         machine.Memory[output + 2] = Recorded >> 8;
         machine.Memory[output + 3] = LdaImmediate;
         machine.Memory[output + 4] = (byte)returned;
-        machine.Memory[output + 5] = Rts;
+        machine.Memory[output + 5] = LdyImmediate;
+        machine.Memory[output + 6] = returned == 0 ? (byte)1 : (byte)0;
+        machine.Memory[output + 7] = Rts;
 
         machine.Call("PrintCharacter", a: 0x5A);
 

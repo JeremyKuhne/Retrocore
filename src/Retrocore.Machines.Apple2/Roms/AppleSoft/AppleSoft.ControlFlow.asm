@@ -188,7 +188,8 @@ NoHandler:
 
 .scope Statements continued
 
-;; SAVE: writes the program's two-byte length and then the program to cassette through the Monitor.
+;; SAVE: writes a three-byte header, the program's length and the run-only flag from <NextTemporary>, and then the
+;; program to cassette through the Monitor.
 ;; See: <Statements::Load>, <SetCassetteLengthRange>, <SetCassetteProgramRange>
 ;; Also: SAVE (M6502)
 .proc Save
@@ -205,8 +206,8 @@ NoHandler:
     jmp MWRITE
 .endproc
 
-;; LOAD: reads a cassette program's length and text and sets <VariablesStart>, then clears the program's state, and
-;; also relinks it unless it was saved run-only.
+;; LOAD: reads a cassette program's three-byte header and text, sets <VariablesStart> from the length and <RunOnly> from
+;; the header's third byte, then clears the program's state, and also relinks it unless it was saved run-only.
 ;; See: <Statements::Save>, <ClearAndRelink>
 ;; Also: LOAD (M6502)
 .proc Load
@@ -235,7 +236,8 @@ ToClearAndRelink:
 
 .endscope
 
-;; Points the Monitor's cassette range, A1 to A2, at the two bytes of <PokeAddress>, and clears <RunOnly>.
+;; Points the Monitor's cassette range, A1 to A2, at the three bytes from <PokeAddress> to <NextTemporary>, the length
+;; and the run-only flag, and clears <RunOnly>.
 ;; Also: VARTIO (M6502)
 .proc SetCassetteLengthRange
     lda #<PokeAddress

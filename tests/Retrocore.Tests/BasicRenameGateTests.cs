@@ -26,7 +26,7 @@ namespace Retrocore.Tests;
 public sealed partial class BasicRenameGateTests
 {
     // The shared modules and the vendors' interpreter files are converted, so the first rename is of a current name
-    // each vendor defines as a plain label in its own file: the reserved-word list.
+    // each vendor defines as a label in its own file (the PET's in a macro's body): the reserved-word list.
     private const string OldName = "ReservedWords";
     private const string NewName = "ReservedNames";
 

@@ -115,6 +115,7 @@ ReadLine:
     ;;
     ;; Where `diskCommands` is 1 (BASIC 4), the disk tokens after `GO` dispatch from the table's next entries.
     ;; In: A = statement token or first character, zero = set at the end of the statement, carry = set for a non-digit
+    ;;   (where `earlyDispatch` is 1, BASIC 1, the routine sets carry itself)
     ;; Errors: SYNTAX for a non-statement reserved word
     ;; Entry:
     ;;   WithToken = subtracts <TOKEN_END> from A and dispatches; the shared `ON` code enters here

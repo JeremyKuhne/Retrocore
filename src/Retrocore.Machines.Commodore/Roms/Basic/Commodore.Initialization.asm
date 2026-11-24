@@ -236,6 +236,12 @@ CheckRoom:
     .endproc
 .endmacro
 
+;; The screen's home code, which BASIC 1's sign-on starts with.
+CURSOR_HOME = $13
+
+;; The screen's cursor-down code, which ends BASIC 1's sign-on.
+CURSOR_DOWN = $11
+
 ;; Emits the startup messages, <BytesFreeMessage> and, in BASIC 2 and 4, <SignOnMessage>.
 ;; Parameters: earlyBanner = 1 for BASIC 1's home-and-cursor-down sign-on
 .macro CommodoreStartMessages earlyBanner
@@ -247,7 +253,7 @@ CheckRoom:
 BytesFreeMessage:
     .byte " BYTES FREE"
     .if earlyBanner
-        .byte $13, "*** COMMODORE BASIC ***", $11, $11, $11, $00
+        .byte CURSOR_HOME, "*** COMMODORE BASIC ***", CURSOR_DOWN, CURSOR_DOWN, CURSOR_DOWN, $00
     .else
         .byte CARRIAGE_RETURN, $00
 

@@ -1776,7 +1776,7 @@ to K12, R1 to R10).
 | 1431 | `ASPAC` | `PrintSpaces` | routine | AS | M6502 | vendor | Prints A spaces. — unreferenced in AS; kept for its M6502 name |
 | 1432 | `XSPAC` | `PrintSpaces::CountInX` | entry | AS | M6502 | vendor | Prints X spaces (zero prints none); PrintTabOrSpace's SPC enters here. |
 | 1433 | `XSPAC2` | `PrintSpaces::Next` | local | AS | M6502 | vendor | Counts down; zero goes on to ContinuePrint. |
-| 1434 | `NOTABR` | `ContinuePrint` | entry | AS | M6502 | vendor | Rereads the current character and continues PRINT at PRINTC without a newline. — inside PrintSpaces' loop; PRINT's ; and the comma and TAB paths branch here; see C-Q3 Converted: `PrintSpaces::ContinuePrint`, as X2 has it (Basic.md I4). |
+| 1434 | `NOTABR` | `ContinuePrint` | entry | AS | M6502 | vendor | Reads the next character and continues PRINT at PRINTC without a newline. — inside PrintSpaces' loop; PRINT's ; and the comma and TAB paths branch here; see C-Q3 Converted: `PrintSpaces::ContinuePrint`, as X2 has it (Basic.md I4). |
 | 1435 | `XSPAC1` | `PrintSpaces::One` | local | AS | M6502 | vendor | Prints one space and loops. |
 | 1436 | `OUTSPC` | `PrintSpace` | routine | AS | M6502, ASTIL [AS] | vendor | Loads a space and skips into PrintCharacter. — falls into PrintCharacter (over PrintQuestionMark's load) |
 | 1437 | `OUTQST` | `PrintQuestionMark` | routine | AS | M6502, ASTIL [AS] | vendor | Loads ? and falls into PrintCharacter. |
@@ -2370,7 +2370,7 @@ to K12, R1 to R10).
 | 1957 | `suppressOutput` | `honorSuppression` | parameter of COMMODORE_CHARACTER_OUTPUT | PET |  | vendor | 1 to skip output while OutputSuppressed is set. — renamed: suppressOutput reads as the opposite and means "clear" in CommodoreErrorReady |
 | 1958 | `returnAlias` | `KEEP` | parameter of COMMODORE_CHARACTER_OUTPUT | PET |  | vendor | 1 to define PrintCharacter::Return at the RTS. |
 | 1959 | `OUTSPC` | `PrintSpace` | routine | PET | M6502, CBM4S79 [P4 P4R], HV2, HV4, HV4R; other names here: CRTSKP (HV1, HV1R) | vendor | Loads a space for a file or cursor-right for the screen (always cursor-right in BASIC 1), skipping into PrintCharacter. |
-| 1960 | `CRTSKP` | `PrintSpace::CursorRight` | local | P2 P4 P4R | M6502, CBM4S79 [P4 P4R], HV2, HV4, HV4R | vendor | Loads the cursor-right code. |
+| 1960 | `CRTSKP` | `PrintSpace::CursorRight` | local | P2 P4 P4R | M6502, CBM4S79 [P4 P4R], HV2, HV4, HV4R | vendor | Loads the cursor-right code. Converted: BASIC 1 has it too, `PrintSpace::CursorRight` in its own branch, cited HV1 and HV1R, whose code7 names it. |
 | 1961 | `OUTQST` | `PrintQuestionMark` | routine | PET | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | vendor | Loads ? and falls into PrintCharacter. |
 | 1962 | `OUTDO` | `PrintCharacter` | routine | PET | M6502, HV1, HV1R, HV2, HV4, HV4R, CBM4S79 [P4 P4R] | vendor | Sends A to the selected channel (OUTCH) unless output is suppressed; BASIC 1 tracks the column; returns with zero set from A. |
 | 1963 | `DECTRM` | `PrintCharacter::MoveLeft` | local | P1 P1R | none found | vendor | BASIC 1: cursor-left or delete moves the screen column back. |
@@ -2400,7 +2400,7 @@ to K12, R1 to R10).
 | 1987 | `TABER` | `PrintTabOrSpace` | routine | PET | M6502, HV1, HV1R, HV2, HV4, HV4R, CBM4S79 [P4 P4R] | vendor | TAB( or SPC(: reads the byte argument and ), then prints spaces to the column or the count. — BASIC 1 tests the saved token, later ones the carry; BASIC 1's SPC(0) prints 256 spaces (bug, document) |
 | 1988 | `ASPAC` | `PrintSpaces` | routine | PET | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | vendor | Prints A spaces; PrintComma branches here and PrintTabOrSpace falls into it. — two definitions, one per variant of the macro (lines 213, 232) |
 | 1989 | `XSPAC` | `PrintSpaces::CountInX` | entry | PET | M6502, CBM4S79 [P4 P4R], HV2, HV4, HV4R; other names here: XSPAC1 (HV1, HV1R) | vendor | Prints X spaces. — BASIC 1: the loop itself |
-| 1990 | `NOTABR` | `ContinuePrint` | entry | PET | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | vendor | Rereads the current character and continues PRINT at PRINTC. Converted: `PrintSpaces::ContinuePrint`, as X2 has it (Basic.md I4). |
+| 1990 | `NOTABR` | `ContinuePrint` | entry | PET | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | vendor | Reads the next character and continues PRINT at PRINTC. Converted: `PrintSpaces::ContinuePrint`, as X2 has it (Basic.md I4). |
 | 1991 | `XSPAC2` | `PrintSpaces::Next` | local | P2 P4 P4R | M6502, CBM4S79 [P4 P4R], HV2, HV4, HV4R | vendor | Counts down; zero goes on to ContinuePrint. |
 | 1992 | `XSPAC1` | `PrintSpaces::One` | local | P2 P4 P4R | M6502, CBM4S79 [P4 P4R], HV2, HV4, HV4R | vendor | Prints one space and loops. |
 
@@ -2734,7 +2734,7 @@ to K12, R1 to R10).
 | 2291 | `localPosition` | `KEEP` | parameter of COMMODORE_INITIALIZE | PET |  | vendor | 1 to clear TerminalPosition (BASIC 1). |
 | 2292 | `bufferPage` | `KEEP` | parameter of COMMODORE_INITIALIZE | PET |  | vendor | Zero for a page-zero input buffer, else the buffer's page. |
 | 2293 | `diskStatus` | `KEEP` | parameter of COMMODORE_INITIALIZE | PET |  | vendor | 1 to clear the disk-status descriptor instead of OutputSuppressed (BASIC 4). — same name in CommodoreVariableValue |
-| 2294 | `earlyBufferSetup` | `KEEP` | parameter of COMMODORE_INITIALIZE | PET |  | vendor | 1 to set the page-zero buffer's comma and print a newline (BASIC 1). |
+| 2294 | `earlyBufferSetup` | `KEEP` | parameter of COMMODORE_INITIALIZE | PET |  | vendor | 1 to set the page-zero buffer's comma and print a newline (BASIC 1). Converted: `earlyBuffer`, so the macro's line fits in 120 columns (Basic.md I1). |
 | 2295 | `INIT` | `ColdStart` | routine | PET | M6502, CBM4S79 [P4 P4R], K4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R, HVK4 [P4 P4R] | vendor | Sets the stack and USR vector, copies the character reader, clears the workspace, finds the memory top, prints the sign-on and free bytes and enters ReadyForCommand. |
 | 2296 | `MOVCHG` | `ColdStart::CopyCharacterReader` | local | PET | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | vendor | Copies INITAT's character reader and random seed to page zero. |
 | 2297 | `COMMODORE_MEMORY_PROBE` | `CommodoreMemoryProbe` | macro | PET |  | vendor | Emits ColdStart's RAM probe. — SDK name: case only |

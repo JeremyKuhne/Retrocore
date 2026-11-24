@@ -291,6 +291,7 @@ internal static partial class BasicNames
     {
         Dictionary<string, long> names = new(symbols, StringComparer.Ordinal);
         Dictionary<string, string> added = [with(StringComparer.Ordinal)];
+        HashSet<string> ambiguous = [with(StringComparer.Ordinal)];
 
         // An old name that names different definitions in different builds (ANDOP: the PET's And, AppleSoft's Or)
         // goes last, and gives way where another old name names only that definition.
@@ -300,15 +301,23 @@ internal static partial class BasicNames
             .ThenBy(pair => CurrentNames(pair.Key).Count))
         {
             bool perBuild = CurrentNames(name).Count > 1 || VendorLabelNames.Contains(name);
-            foreach (string current in CurrentNames(name).Where(current => !symbols.ContainsKey(current)))
+            foreach (string current in CurrentNames(name)
+                .Where(current => !symbols.ContainsKey(current) && !ambiguous.Contains(current)))
             {
                 if (added.TryGetValue(current, out string? first) && names[current] != value)
                 {
+                    // The vendors' shifted names (ShiftedNames) cannot tell which build's definition a current name
+                    // is, so it is left out, and a source that needs it fails as unresolved rather than taking either.
+                    if (ShiftedNames.Contains(first) && ShiftedNames.Contains(name))
+                    {
+                        names.Remove(current);
+                        ambiguous.Add(current);
+                        continue;
+                    }
+
                     // Per-build names go last: a name that means another definition in another build gives way to
-                    // one that names only this definition, a vendor label's name gives way to any, and of the
-                    // vendors' swapped names (ShiftedNames) the later gives way.
-                    bool shifted = ShiftedNames.Contains(first) && ShiftedNames.Contains(name);
-                    bool givesWay = CurrentNames(first).Count == 1 || VendorLabelNames.Contains(name) || shifted;
+                    // one that names only this definition, and a vendor label's name gives way to any.
+                    bool givesWay = CurrentNames(first).Count == 1 || VendorLabelNames.Contains(name);
                     if (perBuild && givesWay) { continue; }
 
                     throw new InvalidOperationException(

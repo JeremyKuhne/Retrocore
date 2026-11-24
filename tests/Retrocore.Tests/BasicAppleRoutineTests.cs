@@ -99,7 +99,8 @@ public sealed class BasicAppleRoutineTests
         machine.Memory[machine.Address("HighResByteIndex")] = (byte)byteIndex;
         machine.Memory[machine.Address("HighResColorByte")] = 0x2A;
 
-        machine.Call("HighRes::StepHorizontal", a: left ? 0x80 : 0x00, y: byteIndex, negative: left);
+        // A contradicts the flag, since the direction is the flag the caller's load left, not A.
+        machine.Call("HighRes::StepHorizontal", a: left ? 0x00 : 0x80, y: byteIndex, negative: left);
 
         bool newByte = expectedByte != byteIndex;
         machine.Memory[machine.Address("COLOR")].Should().Be((byte)expectedMask);

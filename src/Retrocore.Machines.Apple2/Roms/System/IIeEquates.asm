@@ -1,5 +1,5 @@
 ; retrocore: style=strict
-;; APPLE IIE EQUATES: PAGE ZERO, LOW MEMORY, SOFT SWITCHES AND KEYS
+;; APPLE IIE EQUATES: PAGE `ZERO`, LOW MEMORY, SOFT SWITCHES AND KEYS
 ;;
 ;; The IIe's page-zero locations, low-memory vectors and buffers, soft switches and I/O locations, and keyboard
 ;; characters. The Monitor, both models' internal firmware, the Disk II boot ROM, DOS and the SDK's card and program
@@ -725,7 +725,7 @@ Store80State = $C018
 ;; Also: RDVBLBAR (IIEROM82, IIETRM85)
 DrawingState = $C019
 
-;; Reading it reports in bit 7 whether TEXT is on, the display showing only text.
+;; Reading it reports in bit 7 whether `TEXT` is on, the display showing only text.
 ;;
 ;; <TextOn> turns it on and <TextOff> off. When the 80-column firmware sets a full window, it reads it to start the
 ;; window at line 20, below the graphics, while graphics are shown.
@@ -791,7 +791,7 @@ CassetteOut = $C020
 ;; Also: SPKR (A2RM78, A2RM79, IIEROM82, IIETRM85)
 Speaker = $C030
 
-;; Reading or writing it turns TEXT off: the display shows graphics instead of text.
+;; Reading or writing it turns `TEXT` off: the display shows graphics instead of text.
 ;;
 ;; <MixedOn> keeps four lines of text below the graphics, and <HiResOff> and <HiResOn> choose the kind.
 ;; <Monitor:SetGraphics> uses it for lo-res, and <TextOn> turns text back on.
@@ -799,7 +799,7 @@ Speaker = $C030
 ;; Also: TXTCLR (A2RM78, A2RM79, IIEROM82, IIETRM85)
 TextOff = $C050
 
-;; Reading or writing it turns TEXT on: the display shows text instead of graphics.
+;; Reading or writing it turns `TEXT` on: the display shows text instead of graphics.
 ;;
 ;; <Monitor:SetText> and <Monitor:InitDisplay> use it. <TextOff> turns graphics back on, and <TextState> reports the
 ;; switch in bit 7. With 80COL on (<Columns80On>), the text is 80 columns wide.

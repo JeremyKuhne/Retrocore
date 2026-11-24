@@ -261,6 +261,12 @@ Each session takes its branches to main this way:
   4. *Closing pass*: Opus alone on the whole diff. A finding goes back to step 3, not step 2. (Sonnet was in the
      closing pass at first; across the first seven closing passes it found one should-fix, Opus about sixteen and a
      must-fix, so the closing pass is Opus's, and Sonnet stays in the first pass, where it finds real issues.)
+  For a diff over about 3,000 lines, the closing pass is split by area, as one whole-diff pass reads a different
+  corner each time and does not converge (DOS's five took 1-3 should-fixes each): the diff is cut into areas that
+  together cover it (none over about 4,000 lines), one Opus reviewer reads each area whole, in parallel, told the
+  finding classes the cycle keeps meeting (for DOS, text true of only one build, and stack and register contracts)
+  and asked to check every comment against each build that assembles it. Each fix gets its delta review; then a
+  final Opus pass reads only the lines changed since the split pass, and the PR opens when it is clean.
   A fix for nits alone gets no model review: after a clean closing pass its nits are applied, the lint and the
   targeted tests run, and it is pushed. Only a fix for a must-fix or should-fix finding goes to a delta review.
 

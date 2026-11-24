@@ -1272,8 +1272,8 @@ NextSector:
 
 ;; Calls RWTS with interrupts off, since RWTS's timing must not be interrupted.
 ;;
-;; The vector at $03D9 (DosInit.asm) comes here, as do the file manager, `BOOT 2` and the INIT writer, through
-;; <Boot::TransferPages>. At $B7B5 where DOS runs.
+;; The vector at $03D9 (DosInit.asm) and the file manager (FileLocateNextByte.asm) come here, as do `BOOT 2` and the
+;; INIT writer through <Boot::TransferPages>. At $B7B5 where DOS runs.
 ;; In:    A = the IOB's address's high byte, Y = its low byte
 ;; Out:   carry = clear if the call succeeded, set if not (the error in the IOB's return code), X = slot * 16
 ;; Keeps: interrupt, decimal

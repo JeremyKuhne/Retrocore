@@ -28,8 +28,6 @@ LINPRT:
     jsr FLOATC
 
 ;; Prints <FAC> as a decimal number through <FOUT> and <STROUT>.
-;;
-;; In AppleSoft, Apple's Technical Information Library article 79, Device I/O Routines, calls it `PRNTFAC`.
 LINPRT_FOUT:
     jsr FOUT
 

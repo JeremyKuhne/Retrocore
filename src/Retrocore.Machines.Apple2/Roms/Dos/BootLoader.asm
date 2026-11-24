@@ -415,7 +415,7 @@ FifthBits = Address1
     ; The ROM's table turns each nibble into its five-bit value. Shifting the entries left three places makes the
     ; reader leave each byte's top five bits in place, as DOS's RWTS does with its own table. Y is $99 from the
     ; ROM, so the loop starts at $0899: the entries are $08AB-$08FF, and the bytes below them, the last of
-    ; RomLowBits' values, are shifted too, harmlessly, since the reader writes them again.
+    ; RomLowBits' values ($0899) and table bytes nothing reads, are shifted too, harmlessly.
 ;; The entry, at $0301: shifts the ROM's table, Y from $99 up.
 ShiftTranslate:
     Lda RomReadTranslate,y

@@ -11,7 +11,7 @@
 ;; In write mode the controller shifts the latch out one bit every 4 cycles, so the code must store a new nibble
 ;; exactly every 32 cycles: a store early or late adds or loses bits on the disk. Every path from one store to the
 ;; next is counted to 32 cycles (more for the self-sync nibbles), which is why the code holds NOPs, PHA/PLA pairs, a
-;; zero-page and an absolute copy of the slot, and why DOS 3.3's <DiskII::LowBits> must start a page. The counts
+;; zero-page and an absolute copy of the slot, and why <DiskII::LowBits> must start a page. The counts
 ;; below run from one store to <LoadLatch> to the next. docs/DiskII.md explains the switches and the field.
 ;;
 ;; The two versions' writers differ in places: the order of the write-protect test, the self-sync nibbles and the
@@ -127,7 +127,7 @@ LowBitsLoop:
 ;; Exclusive-ors A with the next <LowBits> value and writes the result's nibble; entered with A = 0 for the first.
 ;; Also: WDATA1 (DOS33, DOS31)
 LowBitsFirst:
-    eor a:LowBits-1,y               ; in DOS 3.3, LowBits - 1 + Y always crosses a page, taking 5 cycles
+    eor a:LowBits-1,y               ; LowBits - 1 + Y always crosses a page, taking 5 cycles
     tax
     lda a:WriteTranslate,x
     ldx ZeroPageSlot

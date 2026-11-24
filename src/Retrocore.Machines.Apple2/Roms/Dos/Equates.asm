@@ -19,9 +19,9 @@
 ;; addresses, the "2" names those of the RAM Applesoft a System Master can load. These keep Apple's names until the
 ;; BASICs' sources are converted.
 ;;
-;; Apple's equates also define three names DOS never uses, left out here: MULT, the Monitor's
-;; <Monitor:Arithmetic::Multiply>; ASLMEM, the same byte as <ASSOP>; and BOOTSL, a name for $2E, which DOS 3.1 meant
-;; as the boot slot and where RWTS keeps the track it reads (<AddressField>).
+;; Apple's equates also define two names DOS never uses, left out here: MULT, the Monitor's
+;; <Monitor:Arithmetic::Multiply>, and ASLMEM, the same byte as <ASSOP>. Their BOOTSL, a name for $2E, which DOS 3.1
+;; meant as the boot slot, is cited on <FoundTrack>, the track RWTS keeps in that byte.
 
 ; The macros.
 

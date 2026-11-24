@@ -35,7 +35,7 @@
 ;; - MASTER = 1 (the default), with the origin at $1B00, is the image on the System Master's tracks 0 to 2: a
 ;;   relocator at $1B00 and DOS at $1D00-$3FFF. The relocator moves DOS to the top of whatever memory the machine
 ;;   has, adjusting every address in it, so one master boots on any Apple II. It assembles byte for byte to the
-;;   DOS on the master, track 0 sectors 10 to 12, tracks 1 and track 2 sectors 0 to 10, then track 0 sectors 0 to
+;;   DOS on the master, track 0 sectors 10 to 12, track 1 and track 2 sectors 0 to 10, then track 0 sectors 0 to
 ;;   9.
 ;; - MASTER = 0, with the origin at $9D00, is DOS where it runs on a machine with 48K or more: $9D00-$BFFF. This
 ;;   is the copy INIT writes to the disks it formats, and the one the debugger steps through.

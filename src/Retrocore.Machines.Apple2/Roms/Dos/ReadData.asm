@@ -100,7 +100,7 @@ LowBitsLoop:
 WaitLow:
     ldy DataLatch,x
     bpl WaitLow
-    eor a:ReadTranslate,y           ; in DOS 3.3, ReadTranslate starts a page, so this never crosses one
+    eor a:ReadTranslate,y           ; ReadTranslate starts a page, so this never crosses one
     ldy BufferIndex
     sta a:LowBits,y
     bne LowBitsLoop                 ; LDY set zero: until entry 0 is stored

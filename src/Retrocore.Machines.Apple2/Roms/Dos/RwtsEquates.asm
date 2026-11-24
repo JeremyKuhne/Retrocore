@@ -182,8 +182,7 @@ RebuildCount = LowResBase
 .endif
 
 ; The formatter's variables, which <Dos33:DiskII::WriteAddressField> (DOS 3.2's <DiskII::WriteFourAndFour>)
-; writes into each address field. The two
-; versions keep them in different bytes.
+; writes into each address field. The two versions keep them in different bytes.
 
 .if DOS32
 ;; The volume number the formatter writes in each address field, 1-254.

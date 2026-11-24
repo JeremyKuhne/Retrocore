@@ -332,7 +332,7 @@ Format = PhysicalSectors
 ;;
 ;; <Format> starts it at 40. When the check after writing a track (<WriteTrack::Verify>) finds that sector 0 is not
 ;; the first to come round, the gaps were too long for the track: it cuts the gap by 1, or by 2 above 16, and
-;; rewrites the track, and gives up below 5. After track 0 checks, it is cut by 2 more while it is 16 or more.
+;; rewrites the track, and gives up below 5. After track 0 checks, it is cut by 2 more if it is still 16 or more.
 ;; See: <Format>, <WriteTrack>, <WriteTrack::Verify>
 ;; Also: NSYNC (DOS33)
 GapLength = Address5High

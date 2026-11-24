@@ -709,7 +709,7 @@ SeekAgain:
     jmp StartTries
 
     ; An address field: is the head on the right track? If not, the drive's record of the track is corrected to the
-    ; one read, and it seeks again, up to SeeksLeft times before recalibrating.
+    ; one read, and it seeks again, up to MAX_SEEKS - 1 times before recalibrating.
 ;; Compares the track found with the track the head should be on.
 CheckTrack:
     ldy FoundTrack

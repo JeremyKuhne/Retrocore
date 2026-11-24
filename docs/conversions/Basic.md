@@ -824,29 +824,28 @@ Decisions and how the table was applied:
     their old names only; they now go through `BasicNames.Label` and `ScopedNames`.
   - `BasicNames.CurrentNames` follows a vendor's alias to its target, so a standalone build predefines the name the
     modules use (`Statements::PopFinish`, not `AppleSoft::PopFinish`). `BasicNames.IsVendorName` lets a standalone
-    region's label comparison skip the vendor's names, which the same tests compare in the whole builds.
+    region's label comparison skip the vendor's names, which the whole builds' tests compare.
   - `BasicSharedAliasConsistencyTests` reads the `.ifdef Target` guards in a historical-names file and expects a
     guarded alias exactly where its build defines the target, and there checks its citations against the build's
     documents; RESCR2 and PRIT3B are checked so only in the BASIC 4 builds. `BasicSharedFloatAliasesTests`, whose PET
     regions hold no lister, leaves them out.
   - The editor probe in `LanguageAnalysisTests.Macros` gives COMBYTE as a user file's own old name. Once the SDK gave
     the same name, the editor's merge of the file's and the SDK modules' `Also:` names cancelled it, and the file lost
-    its hint and quick fix. When the file assembles, its own name now takes precedence where the assembler's own
-    table of historical names gives it to the definition the hint would name (`LanguageWorkspace.HistoricalNames`);
-    anywhere else, and whenever the file has errors, the merge behaves as before. The text alone cannot say what the
-    assembler would make of conditions, repeats, macros and scoped includes, and every rule the reviews tried for
-    files with errors gave some case a hint naming the wrong definition, so while a file has errors its own name that
-    an SDK module also gives loses its hint until the errors are fixed. The unchanged COMBYTE probe fails without the
-    change; the others guard against the wrong hints earlier versions of it gave:
-    `OldNamesInAnOmittedBranchDoNotHint` (with and without an error),
-    `OldNamesOfTheOtherBranchDoNotHint` (a label documented in both branches),
+    its hint and quick fix. When the file assembles, its own name now takes precedence where the assembler's own table
+    of historical names gives it to the definition the hint would name (`LanguageWorkspace.HistoricalNames`); anywhere
+    else, and whenever the file has errors, the merge behaves as before. The text alone cannot say what the assembler
+    would make of conditions, repeats, macros and scoped includes, and every rule the reviews tried for files with
+    errors gave some case a hint naming the wrong definition, so while a file has errors its own name that an SDK module
+    also gives loses its hint until the errors are fixed. The unchanged COMBYTE probe fails without the change; the
+    others guard against the wrong hints earlier versions of it gave: `OldNamesInAnOmittedBranchDoNotHint` (with and
+    without an error), `OldNamesOfTheOtherBranchDoNotHint` (a label documented in both branches),
     `OldNamesUnderConditionsTheEditorCannotReadDoNotHint` (an `.ifdef` of a later symbol, a computed condition),
-    `OldNamesHintOnlyTheDefinitionTheAssemblerGivesThemTo` (a root routine sharing its name with a macro's expansion,
-    a macro expanded twice) and `OldNamesOfAMacroDoNotHintWhileTheFileHasAnError`. The doc set's `FindAlso` returns a
-    single topic without its per-build filter, so a file whose other branch gives a name no SDK module gives still
-    gets a hint naming the label, and a macro-body name whose label shares a root routine's name gets none at all
-    (the doc set names the expansion's topic by the root's name); both predate this step and are left for a change
-    of their own.
+    `OldNamesHintOnlyTheDefinitionTheAssemblerGivesThemTo` (a root routine sharing its name with a macro's expansion, a
+    macro expanded twice) and `OldNamesOfAMacroDoNotHintWhileTheFileHasAnError`. The doc set's `FindAlso` returns a
+    single topic without its per-build filter, so a file whose other branch gives a name no SDK module gives still gets
+    a hint naming the label; that predates this step and is left for a change of its own. A macro-body name whose label
+    shares a root routine's name hints the expansion (`Basic::Reader`), the definition the assembler gives it to,
+    through the doc set's name-aware lookup (#132).
 - S11. Two rules the owner settled on the Monitor's PR, which apply here from this step on:
   - D5, narrowed: a mid-routine `.if` shows how builds differ, better than whole per-build routines; a routine's
     contract holds in every build, or says which build differs. The statement modules already show their builds'
@@ -872,18 +871,18 @@ Decisions and how the table was applied:
     without M6502 must cite one of its own build's documents (`BasicAttribution.PetKeys`). No alias needs that yet;
     changing the rule is a question for the owner.
 
-Checked: the full suite (3,914 passed, none failed; 665 skipped, the ROM-dump comparisons without the dumps), the rename
-gate, the lint tests, and `BasicStatementsConversionTests`, which compares every old name in the fifteen files and the
-vendors' historical names with the MACRO-10 overlay's value in each of the eight builds (about 150 per build), checks
-that each definition reaches the overlay by its name or an old name, that a vendor's names resolve only in its builds
-and through its aliases, and that every citation's key is in the bibliography. `BasicStatementRoutineTests` runs
-IsLetter, the character reader's copy, ReadLineNumber, FindLine, FindStatementEnd, FindLineEnd, EraseProgram and GOTO's
-search start in the enhanced IIe's AppleSoft and PET BASIC 4 and checks their `Out:` values and, for IsLetter and the
-character reader, their `Keeps:` claims; the existing BasicShared*Tests run the rest (FindForFrame, MoveRangeUp,
-CheckStack, CheckFreeMemory, the statements). The debugger's contract checking ran clean on PET BASIC 2, PET BASIC 4 and
-the enhanced IIe's AppleSoft over a program that adds IF, POKE and PEEK, ON GOSUB and ON GOTO, RETURN from inside FOR,
-RESTORE, READ and DATA, REM, CLEAR (CLR) and LIST with a range to the math step's, and reported a false `Keeps: X` added
-to `FindLine` as a control (a first control, `Keeps: A` on IsLetter, was not reported because the claim is true).
+Checked: the full suite, the rename gate, the lint tests, and `BasicStatementsConversionTests`, which compares every old
+name in the fifteen files and the vendors' historical names with the MACRO-10 overlay's value in each of the eight
+builds (about 150 per build), checks that each definition reaches the overlay by its name or an old name, that a
+vendor's names resolve only in its builds and through its aliases, and that every citation's key is in the bibliography.
+`BasicStatementRoutineTests` runs IsLetter, the character reader's copy, ReadLineNumber, FindLine, FindStatementEnd,
+FindLineEnd, EraseProgram and GOTO's search start in the enhanced IIe's AppleSoft and PET BASIC 4 and checks their
+`Out:` values and, for IsLetter and the character reader, their `Keeps:` claims; the existing BasicShared*Tests run the
+rest (FindForFrame, MoveRangeUp, CheckStack, CheckFreeMemory, the statements). The debugger's contract checking ran
+clean on PET BASIC 2, PET BASIC 4 and the enhanced IIe's AppleSoft over a program that adds IF, POKE and PEEK, ON GOSUB
+and ON GOTO, RETURN from inside FOR, RESTORE, READ and DATA, REM, CLEAR (CLR) and LIST with a range to the math step's,
+and reported a false `Keeps: X` added to `FindLine` as a control (a first control, `Keeps: A` on IsLetter, was not
+reported because the claim is true).
 
 ## Other dependents
 

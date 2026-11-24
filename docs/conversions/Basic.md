@@ -2452,7 +2452,7 @@ SetInverse, so nothing is shadowed.
 - Recommend: as drafted.
 - Alternative: whole keywords as single words (Hgr2, Hcolor, Xdraw).
 
-**E-Q5. Bytes the hi-res code borrows from the Monitor.** It uses PlotColor ($30) as its pixel mask,
+**E-Q5. Bytes the hi-res code borrows from the Monitor.** It uses PlotColor ($30) as its pixel mask (Apple's HMASK),
 LowResBase/LowResBaseHigh as the screen byte's address, HGRDX+1 as the current shape byte, and HGRQUA as the
 rotation quadrant. FacExponent is HFNS's scratch byte.
 - Recommend: scoped aliases in `HighRes` (`PixelMask = PlotColor`, `ByteAddress = LowResBase`,

@@ -69,7 +69,7 @@ internal static partial class BasicNames
     /// <param name="result">The build.</param>
     /// <param name="name">The name.</param>
     /// <param name="historicalNames">The vendor's historical-names file.</param>
-    /// <returns>Whether the name is one of those and its definition is such a label.</returns>
+    /// <returns>Whether the name is one of those and its definition is in such a file.</returns>
     internal static bool IsVendorLabel(AssemblyResult result, string name, string historicalNames)
     {
         string folder = Path.GetDirectoryName(Path.GetFullPath(historicalNames)) ?? historicalNames;

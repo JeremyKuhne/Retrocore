@@ -222,7 +222,8 @@ ToOutOfMemory:
     jmp ReportOutOfMemory
 
 ;; Lowers <MemoryTop> and <StringsBottom> to the table's start, points <ShapeTable> and A1 there, and reads the
-;; table, entering the Monitor's <ReadCassette> past its edge search and delay count with a shorter delay.
+;; table, entering the Monitor's <ReadCassette> past its edge search and delay count with a shorter delay: in the II
+;; Plus's and the original IIe's Monitor, at its `jsr` of the header wait.
 ;; Also: SHLOD3 (UNKN)
 SetShapeTable:
     sta MemoryTop+1

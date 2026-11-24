@@ -268,7 +268,8 @@ public sealed class BasicSharedFloatAliasesTests
         }
 
         native.Symbol("BUF").Should().Be(native.Symbol("InputBuffer"), "BUF is the PET's own name of its input buffer");
-        native.FindDefinition("BUF")?.Location?.Path.Should().NotContain("AppleSoft", "the PET's BUF must not be AppleSoft's alias");
+        AssemblySymbol buffer = native.FindDefinition("BUF") ?? throw new AssertFailedException("BUF must be defined.");
+        buffer.Location?.Path.Should().NotContain("AppleSoft", "the PET's BUF must not be AppleSoft's alias");
 
         if (model == PetModel.Pet4032)
         {

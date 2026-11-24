@@ -63,6 +63,7 @@ public sealed class BasicAppleConversionTests
         native.Symbol("HighRes::PixelMask").Should().Be(native.Symbol("PlotColor"));
         native.Symbol("HighRes::ByteAddress").Should().Be(native.Symbol("LowResBase"));
         native.Symbol("HighRes::ByteAddressHigh").Should().Be(native.Symbol("LowResBaseHigh"));
+        native.HistoricalNames["HBAS"].Name.Should().Be("HighRes::ByteAddress", "ASTIL's HBAS is the hi-res byte address");
     }
 
     /// <summary>

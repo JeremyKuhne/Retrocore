@@ -227,13 +227,13 @@ conversion moves them into `Also:` entries.
 
 [BasicRenames.md](BasicRenames.md) has all 2,411 rows. It was drafted in seven parts with one set of rules and one
 glossary for the shared workspace (below), then merged, then corrected after two independent reviews (below). Of the
-rows, 2,142 get a new name, 255 keep theirs (the SDK's own switches and macro parameters, and the names C#
-predefines: REVISD, ENHNCD, APLPLS, TIME, EXTIO, DISKO, REALIO; X15 settled the names tests predefine) and 14 are
-dropped. A DROP removes the definition: either nothing uses it and no document names it, or it duplicates another
-definition, whose `Also:` then takes its documented name (ZSTORD, KIMY), or it is a question (REDDY and GOTK, C-Q8;
-LINWID, D-Q3). 297 renamed rows have no checked document name: mostly AppleSoft's copies of Monitor and IIe names
-(which carry the Apple manuals' names once they come from IIeEquates, decision X10), AppleSoft-only labels the damaged
-AS82 text could not confirm, and the SDK's own labels.
+rows, 2,142 get a new name, 255 keep theirs (the SDK's own switches and macro parameters, and the names C# predefines:
+REVISD, ENHNCD, APLPLS, TIME, EXTIO, DISKO, REALIO; X15 settled the names tests predefine) and 14 are dropped. A DROP
+removes the definition: either nothing uses it and no document names it; or it duplicates another definition, whose
+`Also:` then takes its documented name (KIMY, TRMNO1); or nothing uses it and its documented name goes in prose (ZSTORD,
+Q); or it is a question (REDDY and GOTK, C-Q8; LINWID, D-Q3). 297 renamed rows have no checked document name: mostly
+AppleSoft's copies of Monitor and IIe names (which carry the Apple manuals' names once they come from IIeEquates,
+decision X10), AppleSoft-only labels the damaged AS82 text could not confirm, and the SDK's own labels.
 
 The parts: A, the floating-point package; B1, the shared program and statement modules; B2, the shared expression,
 variable and string modules; C, the vendors' own copies of the interpreter (AppleSoft and Commodore side by side);
@@ -361,8 +361,8 @@ scope-level label.
   - **Tokens:** `TOKEN_<KEYWORD>` (`TOKEN_FOR`, `TOKEN_GOSUB`), with role names where the code uses a token as a
     range bound (`TOKEN_FIRST_FUNCTION` for ONEFUN, `TOKEN_LAST_SIMPLE_FUNCTION` for LASNUM).
   - **Error codes:** `ERROR_<MESSAGE>` (`ERROR_NEXT_WITHOUT_FOR`, `ERROR_SYNTAX`). In BASIC the error code is the
-    message's offset in the message table, so one set serves both, unlike DOS's ERROR_*/MESSAGE_* (Dos.md X11). The
-    message labels are `<Name>Message` (`ReadyMessage`, `BreakMessage`).
+    message's offset in the message table, so one set serves both, unlike DOS's ERROR_*/MESSAGE_* (the DOS log's X11).
+    The message labels are `<Name>Message` (`ReadyMessage`, `BreakMessage`).
   - **Placement:** one definition each, in the dispatch-tables file where the table defines it. The workspace files'
     copies (PI, PLUSTK, MINUTK, ERROV, ERRDV0) join them.
   - **Precedences:** `PRECEDENCE_*` for the operator table (B1-Q2).
@@ -593,7 +593,7 @@ builds), one checking every citation against the documents. Their findings, as c
   where they fall inside instructions), SNERR1 (inside NextStatement in BASIC 1).
 - R5. QNUM is `ClassifyCharacter` and CHRRTS `CharacterReaderReturn` (B1-Q3); Commodore's TI$ code calls QNUM and the
   PET debug host looks up CHRRTS.
-- R6. AppleSoft's CV keeps the Monitor's definition, CV (Dos.md X7), rather than D's `CursorLine`.
+- R6. AppleSoft's CV keeps the Monitor's definition, CV (the DOS log's X7), rather than D's `CursorLine`.
 - R7. The alias files' entries take scoped names (X5), and the shared definitions they target show them in D3.
 - R8. Stale names after the merge were fixed (CheckBreak, NextStatement, BasicEnd), as were the facts in this log
   (the $F530 byte count, the `.set` split, PRECEDENCE_UNARY on the PET, K4S79's date, ASRM78's title, the
@@ -671,7 +671,7 @@ Answered:
 | C-Q11 | X5 |
 | D-Q2 | X10 (`RandomValue`) |
 | D-Q6 | X4 for the token and error copies; the method's one old name per definition for the rest |
-| D-Q7 | R6 (Dos.md X7: the Monitor keeps CV) |
+| D-Q7 | R6 (the DOS log's X7: the Monitor keeps CV) |
 | D-Q8 | X9 |
 | D-Q9 | X3 |
 | E-Q1 | X2 |
@@ -708,7 +708,7 @@ Still for the owner:
 | A-Q9 | DOREL: top-level `ApplyRelation` (the table) or `Operators::Relation` (B2-Q4), now that `Operators` is a scope |
 | B1-Q3 | The character reader's template and inner entries (the draft applies `ClassifyCharacter`, R5) |
 | B1-Q4 | The lister as one `.proc Statements::List` |
-| B1-Q5, E-Q7 | Whether Dos.md P9 ("range, not block") holds here: `MoveRangeUp`, `SetArrayRange` |
+| B1-Q5, E-Q7 | Whether the DOS log's P9 ("range, not block") holds here: `MoveRangeUp`, `SetArrayRange` |
 | B1-Q7 | Dropping the parameters `newAlias` and `runLabel` |
 | B2-Q7 | `Statements::DimNextArray` and `Statements::LetString`, which are not keywords |
 | B2-Q11 | Labels for AppleSoft's fixed jumps at $E000 |
@@ -1619,7 +1619,7 @@ The monitor stores PCH below PCL, so ProgramCounterHigh is at the lower address.
 
 ##### D-Q7. CV
 
-The Monitor conversion left CV unconverted (Dos.md X7: "BASIC names wait for the BASICs' conversion").
+The Monitor conversion left CV unconverted (the DOS log's X7: "BASIC names wait for the BASICs' conversion").
 **Recommendation:** `CursorLine`, matching the firmware's `EightyColumns::CursorLine` ("its copy of CV"). The
 Monitor's Equates.asm would take the name. Alternative: `CursorRow`.
 

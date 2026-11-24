@@ -1332,7 +1332,7 @@ to K12, R1 to R10).
 | 1037 | `INTFLG` | `IntegerType` | location | AS | M6502, ASTIL [AS] | vendor | integer type: $80 integer, $00 float |
 | 1038 | `DORES` | `TokenizeState` | location | AS | M6502 | vendor | whether the tokenizer may crunch reserved words (cleared in DATA and quotes) |
 | 1039 | `GARBFL` | `CollectionState` | alias | AS | M6502, ASTIL [AS] | vendor | alias of TokenizeState used by string allocation as the collected-once flag |
-| 1040 | `SUBFLG` | `SubscriptMode` | location | AS | M6502, ASTIL [AS]; spelling only: AS82 [AS] | vendor | whether a subscripted or FN name is allowed here — PetDebugTarget looks it up by name (see D-Q8) |
+| 1040 | `SUBFLG` | `SubscriptMode` | location | AS | M6502, ASTIL [AS]; spelling only: AS82 [AS] | vendor | whether a subscripted or FN name is allowed here — PetDebugTarget looks up the PET build's copy by name, not this one (see D-Q8) |
 | 1041 | `INPFLG` | `InputMode` | location | AS | M6502, ASTIL [AS] | vendor | INPUT ($00), GET ($40) or READ ($98) |
 | 1042 | `TANSGN` | `TangentSign` | location | AS | M6502, ASTIL [AS] | vendor | sign flag of TAN/SIN quadrant work |
 | 1043 | `CNTWFL` | `OutputSuppressed` | alias | AS | M6502 | vendor | alias of CollectorStep ($8F); the shared ProgramTransfers code clears it under clearOutput — in AppleSoft it shares CollectorStep's byte |
@@ -1340,9 +1340,9 @@ to K12, R1 to R10).
 | 1045 | `LINWID` | `DROP` | alias | AS | M6502 | vendor | points at CV ($25), the Monitor's cursor line; nothing references it — glossary LineWidth; in AppleSoft the address is not a width and the equate is unused |
 | 1046 | `NCMWID` | `LastCommaColumn` | alias | AS | M6502 | vendor | its one use (READY) stores MEMSIZ+1 here: $70 is StringsBottom's high byte — code disagrees with the glossary: AppleSoft uses NCMWID as StringsBottom+1; recommend writing StringsBottom+1 there and dropping this equate (see D-Q3) |
 | 1047 | `LINNUM` | `LineNumber` | location | AS | M6502, ASTIL [AS]; spelling only: AS82 [AS] | vendor | two-byte integer work area: line numbers, addresses |
-| 1048 | `TEMPPT` | `NextTemporary` | location | AS | M6502; spelling only: ASTIL [AS], AS82 [AS] | vendor | offset of the next free temporary descriptor — PetDebugTarget looks it up by name (see D-Q8) |
+| 1048 | `TEMPPT` | `NextTemporary` | location | AS | M6502; spelling only: ASTIL [AS], AS82 [AS] | vendor | offset of the next free temporary descriptor — PetDebugTarget looks up the PET build's copy by name, not this one (see D-Q8) |
 | 1049 | `LASTPT` | `LastTemporary` | location | AS | M6502, ASTIL [AS] | vendor | two-byte pointer to the last-used temporary descriptor |
-| 1050 | `TEMPST` | `TemporaryDescriptors` | location | AS | M6502, ASTIL [AS]; spelling only: AS82 [AS] | vendor | storage for the three temporary string descriptors — PetDebugTarget looks it up by name (see D-Q8) |
+| 1050 | `TEMPST` | `TemporaryDescriptors` | location | AS | M6502, ASTIL [AS]; spelling only: AS82 [AS] | vendor | storage for the three temporary string descriptors — PetDebugTarget looks up the PET build's copy by name, not this one (see D-Q8) |
 | 1051 | `INDEX1` | `Pointer1` | location | AS | M6502 | vendor | general two-byte pointer 1 — one definition with Also: INDEX1, INDEX |
 | 1052 | `INDEX` | `Pointer1` | alias | AS | M6502, ASTIL [AS]; spelling only: AS82 [AS] | vendor | the same definition as Pointer1 (Microsoft's second name) — no second line: INDEX goes in Pointer1's Also |
 | 1053 | `INDEX2` | `Pointer2` | location | AS | M6502, ASTIL [AS] | vendor | general two-byte pointer 2 |
@@ -1358,10 +1358,10 @@ to K12, R1 to R10).
 | 1063 | `FRETOP` | `StringsBottom` | location | AS | M6502, ASTIL [AS]; spelling only: AS82 [AS] | vendor | two-byte pointer to the lowest string; strings grow down from MemoryTop |
 | 1064 | `FRESPC` | `NewString` | location | AS | M6502, ASTIL [AS]; spelling only: AS82 [AS] | vendor | two-byte pointer to the string just allocated |
 | 1065 | `MEMSIZ` | `MemoryTop` | location | AS | M6502, ASTIL [AS]; spelling only: AS82 [AS] | vendor | two-byte highest address + 1 BASIC uses (HIMEM) |
-| 1066 | `CURLIN` | `CurrentLine` | location | AS | M6502, ASTIL [AS], AS82 [AS] | vendor | two-byte line number executing; high byte $FF in direct mode — PetDebugTarget looks it up by name (see D-Q8) |
+| 1066 | `CURLIN` | `CurrentLine` | location | AS | M6502, ASTIL [AS], AS82 [AS] | vendor | two-byte line number executing; high byte $FF in direct mode — PetDebugTarget looks up the PET build's copy by name, not this one (see D-Q8) |
 | 1067 | `OLDLIN` | `StoppedLine` | location | AS | M6502, ASTIL [AS]; spelling only: AS82 [AS] | vendor | two-byte line STOP or END left, for CONT |
 | 1068 | `POKER` | `PokeAddress` | alias | AS | M6502 | vendor | alias of LineNumber: the address POKE, PEEK and WAIT use |
-| 1069 | `OLDTXT` | `StoppedText` | location | AS | M6502, ASTIL [AS] | vendor | two-byte text pointer STOP or END left, for CONT — PetDebugTarget looks it up by name (see D-Q8) |
+| 1069 | `OLDTXT` | `StoppedText` | location | AS | M6502, ASTIL [AS] | vendor | two-byte text pointer STOP or END left, for CONT — PetDebugTarget looks up the PET build's copy by name, not this one (see D-Q8) |
 | 1070 | `DATLIN` | `DataLine` | location | AS | M6502, ASTIL [AS]; spelling only: AS82 [AS] | vendor | two-byte line number of the DATA being read, for error reports |
 | 1071 | `DATPTR` | `DataPointer` | location | AS | M6502, ASTIL [AS], AS82 [AS] | vendor | two-byte position of READ in the DATA |
 | 1072 | `INPPTR` | `InputPointer` | location | AS | M6502, ASTIL [AS] | vendor | two-byte pointer to the text INPUT or READ is reading |
@@ -1426,7 +1426,7 @@ to K12, R1 to R10).
 | 1131 | `CHRGOT` | `GetCurrentCharacter` | entry | AS | M6502, ASTIL [AS]; spelling only: AS82 [AS] | vendor | entry into the page-zero reader that rereads the current character |
 | 1132 | `TXTPTR` | `TextPointer` | location | AS | M6502; spelling only: ASTIL [AS], AS82 [AS] | vendor | the operand of the load in the page-zero reader: the text being read |
 | 1133 | `QNUM` | `ClassifyCharacter` | local | AS | M6502 | vendor | an entry inside the page-zero reader, past its colon test: classifies A without reading — see B1-Q3 |
-| 1134 | `CHRRTS` | `CharacterReaderReturn` | local | AS | M6502 | vendor | address inside the page-zero reader: its RTS — the page-zero reader's RTS; the PET debug host looks it up (PetDebugTarget.Basic.cs); see B1-Q3 |
+| 1134 | `CHRRTS` | `CharacterReaderReturn` | local | AS | M6502 | vendor | address inside the page-zero reader: its RTS — the page-zero reader's RTS; the PET debug host looks up the PET build's copy (PetDebugTarget.Basic.cs), not this one; see B1-Q3 |
 | 1135 | `RNDX` | `RandomValue` | location | AS | M6502, ASTIL [AS] | vendor | RND's last value (five bytes; startup copies four from the template) — clashes in AppleSoft with IIeEquates RandomSeed (RNDL $4E); see D-Q2 |
 | 1136 | `LOFBUF` | `NumberBufferPrefix` | location | AS | M6502 | vendor | the byte before NumberBuffer, where STR$'s result starts |
 | 1137 | `FBUFFR` | `NumberBuffer` | location | AS | M6502, ASTIL [AS] | vendor | FOUT's output buffer at the bottom of page one |

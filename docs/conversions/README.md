@@ -9,5 +9,6 @@ in [AssemblyStyle.md](../AssemblyStyle.md).
 | The Apple II Monitor (`Roms/System/Monitor.asm` and `Monitor/`) | Converted | [Monitor.md](Monitor.md) |
 | The IIe's shared equates (`Roms/System/IIeEquates.asm`) | Converted | [IIeEquates.md](IIeEquates.md) |
 | The IIe internal firmware (`Roms/System/Firmware.*`) | Converted | [Firmware.md](Firmware.md) |
+| Microsoft 6502 BASIC (`Microsoft6502Basic/MsBasic.*`, AppleSoft's and PET BASIC's own files) | In progress | [Basic.md](Basic.md) |
 
 Each decision has an ID, which commit messages and comments may cite.

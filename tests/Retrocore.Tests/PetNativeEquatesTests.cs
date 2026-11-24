@@ -27,8 +27,8 @@ public sealed class PetNativeEquatesTests
     // These are selectors introduced by the native module, not names in the Microsoft overlay.
     private static readonly HashSet<string> s_features =
     [
-        "TERMINAL_FIRST", "FULL_STACK_TOP", "STACK_RESERVE_19", "LOCAL_TRMPOS", "LINE_WIDTH_STORAGE",
-        "DISK_STATUS_STRING", "VARTXT_IN_LINNUM", "CLOCK_IN_PAGE2", "STATUS_IN_PAGE2", "RND_TIMER_9044",
+        "TERMINAL_FIRST", "FULL_STACK_TOP", "STACK_RESERVE_19", "LOCAL_TERMINAL_POSITION", "LINE_WIDTH_STORAGE",
+        "DISK_STATUS_STRING", "VARIABLE_LIST_IN_LINE_NUMBER", "CLOCK_IN_PAGE2", "STATUS_IN_PAGE2", "RND_TIMER_9044",
         "ERROR_PADDING5", "EXTENDED_DISK_VECTORS"
     ];
 
@@ -69,7 +69,7 @@ public sealed class PetNativeEquatesTests
 
         IEnumerable<string> documented = NativeDefinitions(native).Select(symbol => symbol.Name)
             .Concat(s_features)
-            .Concat(["BUFPAG", "BUFLEN", "NULCMD"])
+            .Concat(["INPUT_BUFFER_PAGE", "INPUT_BUFFER_LENGTH", "NULL_COMMAND"])
             .Distinct(StringComparer.Ordinal);
 
         foreach (string name in documented)
@@ -131,16 +131,16 @@ public sealed class PetNativeEquatesTests
     {
         Dictionary<string, long> selectors = new()
         {
-            ["BUFPAG"] = 0,
-            ["BUFLEN"] = 80,
-            ["LOCAL_TRMPOS"] = 1,
+            ["INPUT_BUFFER_PAGE"] = 0,
+            ["INPUT_BUFFER_LENGTH"] = 80,
+            ["LOCAL_TERMINAL_POSITION"] = 1,
             ["CLOCK_IN_PAGE2"] = 1,
             ["STATUS_IN_PAGE2"] = 1
         };
 
         AssemblyResult baseline = RequireSuccess(AssembleEquates(selectors));
         selectors.Add("DISK_STATUS_STRING", 1);
-        selectors.Add("VARTXT_IN_LINNUM", 1);
+        selectors.Add("VARIABLE_LIST_IN_LINE_NUMBER", 1);
         AssemblyResult selected = RequireSuccess(AssembleEquates(selectors));
 
         selected.Symbol("DSDESC").Should().Be(baseline.Symbol("CNTWFL"));
@@ -160,11 +160,11 @@ public sealed class PetNativeEquatesTests
     /// <param name="name">The selector.</param>
     /// <param name="value">Its unsupported value.</param>
     [TestMethod]
-    [DataRow("BUFPAG", 1)]
-    [DataRow("LOCAL_TRMPOS", 2)]
+    [DataRow("INPUT_BUFFER_PAGE", 1)]
+    [DataRow("LOCAL_TERMINAL_POSITION", 2)]
     [DataRow("FULL_STACK_TOP", -1)]
-    [DataRow("NUMLEV", 0)]
-    [DataRow("NUMLEV", 120)]
+    [DataRow("STACK_LEVELS", 0)]
+    [DataRow("STACK_LEVELS", 120)]
     [DataRow("INTPRC", 0)]
     [DataRow("ADDPRC", 0)]
     [DataRow("LNGERR", 0)]
@@ -187,13 +187,13 @@ public sealed class PetNativeEquatesTests
         AssemblyResult result = AssembleEquates(new Dictionary<string, long>
         {
             ["TERMINAL_FIRST"] = 1,
-            ["BUFPAG"] = 0,
-            ["BUFLEN"] = 255
+            ["INPUT_BUFFER_PAGE"] = 0,
+            ["INPUT_BUFFER_LENGTH"] = 255
         });
 
         result.Success.Should().BeFalse();
         result.Diagnostics.Select(diagnostic => diagnostic.Message)
-            .Should().Contain(message => message.Contains("workspace must not overlap LOFBUF"));
+            .Should().Contain(message => message.Contains("workspace must not overlap NumberBufferPrefix"));
     }
 
     /// <summary>
@@ -202,10 +202,10 @@ public sealed class PetNativeEquatesTests
     [TestMethod]
     public void StackReserveCannotOverlapTheOutputBuffer()
     {
-        AssemblyResult result = AssembleEquates(new Dictionary<string, long> { ["STKEND"] = 0x120 });
+        AssemblyResult result = AssembleEquates(new Dictionary<string, long> { ["STACK_END"] = 0x120 });
         result.Success.Should().BeFalse();
         result.Diagnostics.Select(diagnostic => diagnostic.Message)
-            .Should().Contain(message => message.Contains("NUMLEV's stack reserve"));
+            .Should().Contain(message => message.Contains("STACK_LEVELS's stack reserve"));
     }
 
     /// <summary>
@@ -214,7 +214,7 @@ public sealed class PetNativeEquatesTests
     /// <param name="selector">The page-two operating-system workspace.</param>
     /// <param name="description">The storage described by the diagnostic.</param>
     [TestMethod]
-    [DataRow("CLOCK_IN_PAGE2", "clock")]
+    [DataRow("CLOCK_IN_PAGE2", "Clock")]
     [DataRow("STATUS_IN_PAGE2", "I/O status")]
     public void PageTwoInputCannotOverlapKernalState(string selector, string description)
     {
@@ -267,6 +267,13 @@ public sealed class PetNativeEquatesTests
         selectors.Add("ZERO_AT_FHALF", early ? 0 : 1);
         selectors.Add("WAIT_EASTER_EGG", waitMessage ? 1 : 0);
         selectors.Add("BASIC4_OUTPUT_PADDING", disk ? 1 : 0);
+
+        // The math package's two sign tokens and two error offsets are defined with their tables in
+        // Commodore.DispatchTables.asm, which this region does not include, so the overlay supplies them.
+        foreach (string name in (string[])["PLUSTK", "MINUTK", "ERROV", "ERRDV0"])
+        {
+            selectors.Add(name, legacy.Symbol(name));
+        }
 
         string source = $"""
             .cpu Mos6502
@@ -385,7 +392,7 @@ public sealed class PetNativeEquatesTests
             COMPOSED_LIST_END:
             .include "MsBasic.For.asm"
             COMPOSED_FOR_END:
-                COMMODORE_STATEMENT_FETCH BUFPAG, {(waitMessage ? 1 : 0)}, {(early ? 1 : 0)}, {(early ? 1 : 0)}, {(disk && !original ? "GONEGT" : "CHRGET")}
+                COMMODORE_STATEMENT_FETCH INPUT_BUFFER_PAGE, {(waitMessage ? 1 : 0)}, {(early ? 1 : 0)}, {(early ? 1 : 0)}, {(disk && !original ? "GONEGT" : "CHRGET")}
                 COMMODORE_STATEMENT_DISPATCH {(early ? 1 : 0)}, {(disk ? 1 : 0)}
             COMPOSED_STATEMENT_DISPATCH_END:
                 RESTORE_DATA
@@ -416,7 +423,7 @@ public sealed class PetNativeEquatesTests
             COMPOSED_CHANNEL_PRINT_END:
                 PRINT_CORE TABER, {(early ? 0 : 1)}, 0, 1
             COMPOSED_PRINT_END:
-                COMMODORE_LINE_END BUFPAG, {(early ? 1 : 0)}, {(disk ? 1 : 0)}, {(early ? 1 : 0)}
+                COMMODORE_LINE_END INPUT_BUFFER_PAGE, {(early ? 1 : 0)}, {(disk ? 1 : 0)}, {(early ? 1 : 0)}
             COMPOSED_LINE_END:
                 COMMODORE_PRINT_SPACING {(early ? 1 : 0)}
             COMPOSED_PRINT_SPACING_END:
@@ -426,11 +433,11 @@ public sealed class PetNativeEquatesTests
             COMPOSED_CHARACTER_OUTPUT_END:
                 COMMODORE_INPUT_ERROR {(early ? 1 : 0)}
             COMPOSED_INPUT_ERROR_END:
-                COMMODORE_CHANNEL_INPUT BUFPAG
+                COMMODORE_CHANNEL_INPUT INPUT_BUFFER_PAGE
             COMPOSED_CHANNEL_INPUT_END:
                 COMMODORE_INPUT_STATEMENT {(disk ? 0 : 1)}, {(disk ? 3 : 2)}, {(disk && !original ? 1 : 0)}, {(early ? 1 : 0)}, {(disk ? 1 : 0)}
             COMPOSED_INPUT_END:
-                VARIABLE_INPUT BUFPAG, 0, {(early ? 1 : 0)}, {(early ? 1 : 0)}, 1, 0
+                VARIABLE_INPUT INPUT_BUFFER_PAGE, 0, {(early ? 1 : 0)}, {(early ? 1 : 0)}, 1, 0
                 VARIABLE_INPUT_MESSAGES 0, {(disk ? 0 : 1)}
             COMPOSED_VARIABLE_INPUT_END:
                 NEXT_ENTRIES {(early ? 1 : 0)}, NEWSTT
@@ -468,7 +475,7 @@ public sealed class PetNativeEquatesTests
             COMPOSED_USER_FUNCTIONS_END:
                 STRING_FROM_NUMBER
             COMPOSED_STRING_CONVERSION_END:
-                STRING_STORAGE BUFPAG, {(early ? 0 : 1)}
+                STRING_STORAGE INPUT_BUFFER_PAGE, {(early ? 0 : 1)}
                 STRING_ALLOCATION {(disk ? 1 : 0)}
             COMPOSED_STRING_STORAGE_END:
                 {(disk ? "LINKED_STRING_GARBAGE_COLLECTION" : $"STRING_GARBAGE_COLLECTION {(early ? 0 : 1)}, {(early ? 1 : 0)}, {(early ? 1 : 0)}")}
@@ -487,7 +494,7 @@ public sealed class PetNativeEquatesTests
             .include "Commodore.FloatingPoint.asm"
                 CHARACTER_READER {(early ? "$59" : "$58")}
             COMPOSED_READER_END:
-                COMMODORE_INITIALIZE {(early ? 1 : 0)}, {(waitMessage ? 1 : 0)}, {(early ? 1 : 0)}, {(early ? 1 : 0)}, BUFPAG, {(disk ? 1 : 0)}, {(early ? 1 : 0)}
+                COMMODORE_INITIALIZE {(early ? 1 : 0)}, {(waitMessage ? 1 : 0)}, {(early ? 1 : 0)}, {(early ? 1 : 0)}, INPUT_BUFFER_PAGE, {(disk ? 1 : 0)}, {(early ? 1 : 0)}
                 COMMODORE_MEMORY_PROBE {(early ? 1 : 0)}, {(early ? 1 : 0)}, {(early ? 0 : 1)}, {(disk ? 1 : 0)}, {(early ? 1 : 0)}, {(early ? "$92" : "$55")}
                 COMMODORE_START_PROGRAM {(disk ? 0 : 1)}, {(early ? 1 : 0)}, {(disk ? 0 : 1)}, {(early ? 1 : 0)}, {(early ? "0" : disk ? "SIGNON" : "FREMES")}
             COMPOSED_INITIALIZATION_END:
@@ -602,8 +609,11 @@ public sealed class PetNativeEquatesTests
         native.HasSymbol("GOTK").Should().Be(!early);
         if (!early) { native.Symbol("GOTK").Should().Be(legacy.Symbol("GOTK")); }
 
+        // The workspace's files give the old names these files' documentation still uses.
         string[] documentedFiles =
         [
+            Path.Join(BasicInputs, "Commodore.Equates.asm"),
+            Path.Join(SharedInputs, "MsBasic.Layouts.asm"),
             Path.Join(BasicInputs, "Commodore.DispatchTables.asm"),
             Path.Join(BasicInputs, "Commodore.CommandInput.asm"),
             Path.Join(BasicInputs, "Commodore.ChannelInput.asm"),
@@ -989,16 +999,16 @@ public sealed class PetNativeEquatesTests
         bool disk = model == PetModel.Pet4032;
         return new()
         {
-            ["BUFPAG"] = early ? 0 : 2,
-            ["BUFLEN"] = early ? 80 : 81,
-            ["NULCMD"] = early ? 1 : 0,
+            ["INPUT_BUFFER_PAGE"] = early ? 0 : 2,
+            ["INPUT_BUFFER_LENGTH"] = early ? 80 : 81,
+            ["NULL_COMMAND"] = early ? 1 : 0,
             ["TERMINAL_FIRST"] = early ? 1 : 0,
             ["FULL_STACK_TOP"] = early ? 1 : 0,
             ["STACK_RESERVE_19"] = early ? 1 : 0,
-            ["LOCAL_TRMPOS"] = early ? 1 : 0,
+            ["LOCAL_TERMINAL_POSITION"] = early ? 1 : 0,
             ["LINE_WIDTH_STORAGE"] = disk ? 0 : 1,
             ["DISK_STATUS_STRING"] = disk ? 1 : 0,
-            ["VARTXT_IN_LINNUM"] = early ? 1 : 0,
+            ["VARIABLE_LIST_IN_LINE_NUMBER"] = early ? 1 : 0,
             ["CLOCK_IN_PAGE2"] = early ? 1 : 0,
             ["STATUS_IN_PAGE2"] = early ? 1 : 0,
             ["RND_TIMER_9044"] = early ? 1 : 0,
@@ -1059,9 +1069,10 @@ public sealed class PetNativeEquatesTests
         }
 
         // These Microsoft switches can be supplied before the include, so also compare them when predefined.
-        foreach (string name in (string[])["BUFPAG", "BUFLEN", "NULCMD"])
+        foreach ((string name, string legacyName) in ((string, string)[])
+            [("INPUT_BUFFER_PAGE", "BUFPAG"), ("INPUT_BUFFER_LENGTH", "BUFLEN"), ("NULL_COMMAND", "NULCMD")])
         {
-            native.Symbol(name).Should().Be(legacy.Symbol(name), $"{name} must match the overlay");
+            native.Symbol(name).Should().Be(legacy.Symbol(legacyName), $"{name} must match the overlay's {legacyName}");
         }
 
         // $Z is the simulator's entry, not a PET workspace label; MACRO-10 gives it a native alias.

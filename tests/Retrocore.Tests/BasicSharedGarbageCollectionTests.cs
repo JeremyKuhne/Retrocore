@@ -705,7 +705,7 @@ public sealed class BasicSharedGarbageCollectionTests
             {linkedSource}
             .org ${legacy.Symbol("STR"):X4}
                 STRING_FROM_NUMBER
-                STRING_STORAGE BUFPAG, {(early ? 0 : 1)}
+                STRING_STORAGE INPUT_BUFFER_PAGE, {(early ? 0 : 1)}
                 STRING_ALLOCATION {(linked ? 1 : 0)}
                 {collector}
             STRING_SLICE_END:
@@ -724,14 +724,14 @@ public sealed class BasicSharedGarbageCollectionTests
 
     private static string PetWorkspaceOptions(bool early, bool linked) => early
         ? """
-            BUFPAG = 0
-            BUFLEN = 80
-            NULCMD = 1
+            INPUT_BUFFER_PAGE = 0
+            INPUT_BUFFER_LENGTH = 80
+            NULL_COMMAND = 1
             FULL_STACK_TOP = 1
             STACK_RESERVE_19 = 1
             TERMINAL_FIRST = 1
-            LOCAL_TRMPOS = 1
-            VARTXT_IN_LINNUM = 1
+            LOCAL_TERMINAL_POSITION = 1
+            VARIABLE_LIST_IN_LINE_NUMBER = 1
             CLOCK_IN_PAGE2 = 1
             STATUS_IN_PAGE2 = 1
             RND_TIMER_9044 = 1

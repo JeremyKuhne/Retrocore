@@ -146,8 +146,10 @@ public sealed class PetBasic4ExtensionTests
     public void ExtensionDocumentationResolvesForEachRevision(bool original)
     {
         AssemblyResult native = AssembleExtension(Legacy(original), original ? 0 : 1);
+
+        // The workspace's file gives the old names the extension's documentation still uses.
         DocumentationSet docs = DocumentationSet.Create(
-            s_files.Select(file => Path.Join(BasicInputs, file))
+            s_files.Append("Commodore.Equates.asm").Select(file => Path.Join(BasicInputs, file))
                 .Select(path => DocumentationParser.Parse(File.ReadAllText(path), path)), native);
 
         foreach (string name in (string[])
@@ -234,8 +236,8 @@ public sealed class PetBasic4ExtensionTests
     /// <param name="setting">The incompatible workspace switch.</param>
     [TestMethod]
     [DataRow("TERMINAL_FIRST")]
-    [DataRow("NULCMD")]
-    [DataRow("LOCAL_TRMPOS")]
+    [DataRow("NULL_COMMAND")]
+    [DataRow("LOCAL_TERMINAL_POSITION")]
     public void EarlyTerminalPlacementIsRejected(string setting)
     {
         Dictionary<string, long> symbols = Dependencies(Legacy(original: false));

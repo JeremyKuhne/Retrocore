@@ -1,8 +1,8 @@
 ; COMMODORE BASIC 4: MONITOR AND DISK ROM COMPOSITION
 ;
 ; Include only for BASIC 4, after Commodore.Equates.asm with DISK_STATUS_STRING=1,
-; LINE_WIDTH_STORAGE=0, EXTENDED_DISK_VECTORS=1, BUFPAG=2 and the later terminal defaults
-; TERMINAL_FIRST=NULCMD=LOCAL_TRMPOS=0. These definitions emit no bytes.
+; LINE_WIDTH_STORAGE=0, EXTENDED_DISK_VECTORS=1, INPUT_BUFFER_PAGE=2 and the later terminal defaults
+; TERMINAL_FIRST=NULL_COMMAND=LOCAL_TERMINAL_POSITION=0. These definitions emit no bytes.
 ; Invoke COMMODORE_BASIC4_EXTENSION immediately after the LASTWR label at $D472; it emits
 ; through $DFFF. Its external BASIC entries are READY, SNERR, SYNCHR, CHKCOM, CHKOPN,
 ; CHKCLS, FRMEVL, GETADR, GETBYT, GETSPA, FRESTR, LINPRT and ERROR, plus the ERRFC,
@@ -34,9 +34,9 @@ EXTENDED_DISK_VECTORS = 1           ;; BASIC 4 has the disk-command vectors
 .include "Commodore.Basic4RomEnd.asm"
 
 .assert DISK_STATUS_STRING = 1 && LINE_WIDTH_STORAGE = 0, "BASIC 4 needs the disk-status workspace."
-.assert TERMINAL_FIRST = 0 && NULCMD = 0 && LOCAL_TRMPOS = 0, "BASIC 4 needs the later terminal and scratch workspace."
+.assert TERMINAL_FIRST = 0 && NULL_COMMAND = 0 && LOCAL_TERMINAL_POSITION = 0, "BASIC 4 needs the later terminal and scratch workspace."
 .assert EXTENDED_DISK_VECTORS = 1, "BASIC 4 needs the disk-command vectors."
-.assert BUFPAG = 2 && CQSTAT = SATUS, "BASIC 4 needs the page-two input buffer and page-zero I/O status."
+.assert INPUT_BUFFER_PAGE = 2 && CQSTAT = SATUS, "BASIC 4 needs the page-two input buffer and page-zero I/O status."
 
 ;; Emits BASIC 4's monitor and disk-command extension after the startup messages.
 ;; Parameters: revised = 1 for the revised $B000 ROM, 0 for the original

@@ -1,7 +1,7 @@
 # BASIC rename table (draft)
 
 The rename table for the BASIC sources, step 3 of [the method](../ConvertingSources.md): a draft for the owner's
-review. Nothing is renamed yet. The decisions, the documents, the inventory's method and counts, and every question
+review. The decisions, the documents, the inventory's method and counts, and every question
 this table raises are in the log, [Basic.md](Basic.md); a note such as "see A-Q4" points at a part's question
 there, and the cross-cutting ones are X1 to X16, which the owner settled as recommended on 2026-11-23. The table follows
 them: statement names keep their keyword split at its words (X13), every local is written by its full path
@@ -11,7 +11,7 @@ One row per name per file (but for three pairs of same-named macro parameters): 
 then Commodore's), in the module's source order within each. The columns:
 
 - **#**: the row's number, for reference in reviews.
-- **Old**: the name as the source defines it today.
+- **Old**: the name as the source defined it before the conversion.
 - **New**: the proposed name, as it will be written: `FindLine`, a scope member `Statements::Next`, a local
   `FindLine::Done`, a constant `TOKEN_FOR`. KEEP keeps the name (the SDK's own switches and macro parameters,
   and the names C# predefines); DROP removes the definition (see Basic.md, step 3, for what happens to a dropped
@@ -1341,7 +1341,7 @@ to K12, R1 to R10).
 | 1043 | `CNTWFL` | `OutputSuppressed` | alias | AS | M6502 | vendor | alias of CollectorStep ($8F); the shared ProgramTransfers code clears it under clearOutput — in AppleSoft it shares CollectorStep's byte |
 | 1044 | `TRMPOS` | `TerminalPosition` | alias | AS | M6502 | vendor | alias of the Monitor's CursorColumn ($24): shared print and list code reads the column here — on the Apple, TerminalPosition = CursorColumn |
 | 1045 | `LINWID` | `DROP` | alias | AS | M6502 | vendor | points at CV ($25), the Monitor's cursor line; nothing references it — glossary LineWidth; in AppleSoft the address is not a width and the equate is unused |
-| 1046 | `NCMWID` | `LastCommaColumn` | alias | AS | M6502 | vendor | its one use (READY) stores MEMSIZ+1 here: $70 is StringsBottom's high byte — code disagrees with the glossary: AppleSoft uses NCMWID as StringsBottom+1; recommend writing StringsBottom+1 there and dropping this equate (see D-Q3) |
+| 1046 | `NCMWID` | `DROP` | alias | AS | M6502 | vendor | its one use (READY) stores MEMSIZ+1 here: $70 is StringsBottom's high byte — code disagrees with the glossary: AppleSoft uses NCMWID as StringsBottom+1; recommend writing StringsBottom+1 there and dropping this equate (see D-Q3) |
 | 1047 | `LINNUM` | `LineNumber` | location | AS | M6502, ASTIL [AS]; spelling only: AS82 [AS] | vendor | two-byte integer work area: line numbers, addresses |
 | 1048 | `TEMPPT` | `NextTemporary` | location | AS | M6502; spelling only: ASTIL [AS], AS82 [AS] | vendor | offset of the next free temporary descriptor — PetDebugTarget looks up the PET build's copy by name, not this one (see D-Q8) |
 | 1049 | `LASTPT` | `LastTemporary` | location | AS | M6502, ASTIL [AS] | vendor | two-byte pointer to the last-used temporary descriptor |
@@ -1384,8 +1384,8 @@ to K12, R1 to R10).
 | 1086 | `DSCPNT` | `DescriptorPointer` | location | AS | M6502, ASTIL [AS]; other names here: DSCPTR (AS82) | vendor | two-byte pointer to a string descriptor (assignment, string functions) |
 | 1087 | `FOUR6` | `CollectorStep` | location | AS | M6502, ASTIL [AS] | vendor | the collector's step through descriptors: 3 for strings, 7 in a variable (set at startup to 3) |
 | 1088 | `JMPER` | `FunctionJump` | location | AS | M6502, ASTIL [AS]; other names here: JMPADRS (AS82) | vendor | a JMP opcode; the function dispatcher stores its target into the next two bytes |
-| 1089 | `SIZE` | `FunctionJumpTarget` | alias | AS | M6502 | vendor | alias of JMPER+1; the string collector keeps a descriptor offset here — code disagrees with the glossary note: no code reaches JMPER+1 by this name; its uses are the collector's offset scratch; see D-Q3 |
-| 1090 | `OLDOV` | `FunctionJumpHigh` | alias | AS | M6502; other names here: EXTRASY (AS82) | vendor | alias of JMPER+2; FADD keeps the smaller operand's extension byte here, EXP its rounding — code disagrees with the glossary note: it is an extension (rounding) byte, not a jump address; see D-Q3 |
+| 1089 | `SIZE` | `CollectorOffset` | alias | AS | M6502 | vendor | alias of JMPER+1; the string collector keeps a descriptor offset here — code disagrees with the glossary note: no code reaches JMPER+1 by this name; its uses are the collector's offset scratch; see D-Q3 |
+| 1090 | `OLDOV` | `FunctionJumpHigh` | alias | AS | M6502; other names here: EXTRASY (AS82) | vendor | alias of JMPER+2; FADD keeps the unshifted operand's extension byte here, EXP its rounding — code disagrees with the glossary note: it is an extension (rounding) byte, not a jump address; see D-Q3 |
 | 1091 | `TEMPF3` | `FloatTemporary3` | location | AS | M6502; spelling only: ASTIL [AS]; other names here: TEMP3 (ASTIL) | vendor | packed five-byte float temporary 3; shares FunctionPointer |
 | 1092 | `TEMPF1` | `FloatTemporary1` | location | AS | M6502, ASTIL [AS]; other names here: TEMP1 (ASTIL) | vendor | packed five-byte float temporary 1 |
 | 1093 | `HIGHDS` | `DestinationEnd` | location | AS | M6502, ASTIL [AS], AS82 [AS]; other names here: ARRYPT (ASTIL) | vendor | general two-byte pointer: a block move's high destination end |
@@ -2616,8 +2616,8 @@ to K12, R1 to R10).
 | 2185 | `DSCPNT` | `DescriptorPointer` | location | PET | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | vendor | two-byte pointer to a string descriptor (assignment, string functions) |
 | 2186 | `FOUR6` | `CollectorStep` | location | PET | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | vendor | the collector's step through descriptors: 3 for strings, 7 in a variable (set at startup to 3) |
 | 2187 | `JMPER` | `FunctionJump` | location | PET | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | vendor | a JMP opcode; the function dispatcher stores its target into the next two bytes |
-| 2188 | `SIZE` | `FunctionJumpTarget` | alias | PET | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | vendor | alias of JMPER+1; the string collector keeps a descriptor offset here — code disagrees with the glossary note: no code reaches JMPER+1 by this name; its uses are the collector's offset scratch; see D-Q3 |
-| 2189 | `OLDOV` | `FunctionJumpHigh` | alias | PET | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | vendor | alias of JMPER+2; FADD keeps the smaller operand's extension byte here, EXP its rounding — code disagrees with the glossary note: it is an extension (rounding) byte, not a jump address; see D-Q3 |
+| 2188 | `SIZE` | `CollectorOffset` | alias | PET | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | vendor | alias of JMPER+1; the string collector keeps a descriptor offset here — code disagrees with the glossary note: no code reaches JMPER+1 by this name; its uses are the collector's offset scratch; see D-Q3 |
+| 2189 | `OLDOV` | `FunctionJumpHigh` | alias | PET | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | vendor | alias of JMPER+2; FADD keeps the unshifted operand's extension byte here, EXP its rounding — code disagrees with the glossary note: it is an extension (rounding) byte, not a jump address; see D-Q3 |
 | 2190 | `TEMPF3` | `FloatTemporary3` | location | PET | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | vendor | packed five-byte float temporary 3; shares FunctionPointer |
 | 2191 | `TEMPF1` | `FloatTemporary1` | location | PET | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | vendor | packed five-byte float temporary 1 |
 | 2192 | `HIGHDS` | `DestinationEnd` | location | PET | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | vendor | general two-byte pointer: a block move's high destination end |

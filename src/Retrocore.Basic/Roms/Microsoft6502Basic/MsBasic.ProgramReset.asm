@@ -141,9 +141,9 @@ STKINI:
     stx TEMPPT
     pla
 .if earlyStack
-    sta STKEND-2
+    sta STACK_END-2
     pla
-    sta STKEND-1
+    sta STACK_END-1
     ldx #stackTop
     txs
 .else

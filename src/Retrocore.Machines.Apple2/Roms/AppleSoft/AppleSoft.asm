@@ -27,6 +27,14 @@
 
 .cpu Mos6502
 
+; Microsoft's configuration values that AppleSoft fixes, renamed in the BASIC conversion (decision X15). A predefined
+; old name would shadow the old name the definition carries and change nothing, so it is an error.
+.assert .not .defined(BUFPAG), "AppleSoft fixes INPUT_BUFFER_PAGE; BUFPAG cannot be predefined."
+.assert .not .defined(BUFLEN), "AppleSoft fixes INPUT_BUFFER_LENGTH; BUFLEN cannot be predefined."
+.assert .not .defined(NULCMD), "AppleSoft fixes NULL_COMMAND; NULCMD cannot be predefined."
+.assert .not .defined(NUMLEV), "AppleSoft fixes STACK_LEVELS; NUMLEV cannot be predefined."
+.assert .not .defined(STKEND), "AppleSoft fixes STACK_END; STKEND cannot be predefined."
+
 .ifndef ENHNCD
 ENHNCD = 1                          ;; 1 for the enhanced IIe ROM
 .endif

@@ -59,7 +59,7 @@ HAVFOR:
     ldy #$01
     jsr MOVFM
     tsx
-    lda $0109,x
+    lda Stack + 1 + ForFrame::STEP_SIGN,x
     sta FACSGN
     lda FORPNT
     ldy FORPNT+1
@@ -69,15 +69,15 @@ HAVFOR:
     jsr FCOMPN
     tsx
     sec
-    sbc $0109,x
+    sbc Stack + 1 + ForFrame::STEP_SIGN,x
     beq LOOPDN
-    lda $010F,x
+    lda Stack + 1 + ForFrame::LINE,x
     sta CURLIN
-    lda $0110,x
+    lda Stack + 1 + ForFrame::LINE+1,x
     sta CURLIN+1
-    lda $0112,x
+    lda Stack + 1 + ForFrame::TEXT_POINTER,x
     sta TXTPTR
-    lda $0111,x
+    lda Stack + 1 + ForFrame::TEXT_POINTER_HIGH,x
     sta TXTPTR+1
 
 NEWSGO:

@@ -17,10 +17,10 @@ ROMs byte for byte:
 | P4 | PET BASIC 4, original | `Basic4.asm`, REVISD = 0 |
 | P4R | PET BASIC 4, revised | `Basic4.asm`, REVISD = 1 |
 
-"AS" is the three AppleSoft builds, "PET" the five PET builds, "all" the eight. The sources keep Microsoft's
-six-letter names today. This log covers steps 1 to 3 of [the method](../ConvertingSources.md): the inventory, the
+"AS" is the three AppleSoft builds, "PET" the five PET builds, "all" the eight. The unconverted sources keep
+Microsoft's six-letter names. This log covers steps 1 to 3 of [the method](../ConvertingSources.md): the inventory, the
 sources and citations, and the rename table, [BasicRenames.md](BasicRenames.md), a draft for the owner's review.
-Nothing is converted yet, and no byte changes.
+The conversion itself (step 4) is logged below, under "Step 4: the conversion", one step of X8 at a time.
 
 ## Decisions accepted by the owner
 
@@ -42,7 +42,7 @@ Nothing is converted yet, and no byte changes.
 
 ## Step 1: the inventory
 
-Made by script, from the source branch's sources, with the repository's assembler. Nothing from it is committed.
+Made by script, from the sources before the conversion, with the repository's assembler. Nothing from it is committed.
 
 - **Per build:** each of the eight builds was assembled with the repository's assembler (the native roots, with
   the switches above), and its symbol table dumped with each symbol's defining file and line, and its source map
@@ -201,8 +201,9 @@ disassembly were not fetched; the sources' comments do not cite them, and no nam
 
 ### Proposed bibliography rows
 
-The rows as proposed. All but ASRM78 are now in `docs/Bibliography.md` (#133), whose rows, with some titles
-worded differently, are the ones that count; ASRM78 is added by the first step that cites it.
+The rows as proposed. All are now in `docs/Bibliography.md`, whose rows, with some titles worded differently,
+are the ones that count: all but ASRM78 from #133, and ASRM78 from the workspace step, whose AppleSoft.Equates.asm
+is the first converted source to cite it.
 
 | Key | Title | Year | Publisher | Link |
 | --- | --- | --- | --- | --- |
@@ -227,14 +228,17 @@ conversion moves them into `Also:` entries.
 
 [BasicRenames.md](BasicRenames.md) has all 2,411 rows. It was drafted in seven parts with one set of rules and one
 glossary for the shared workspace (below), then merged, then corrected after two independent reviews (below). Of the
-rows, 2,142 get a new name, 255 keep theirs (the SDK's own switches and macro parameters, and the names C# predefines:
-REVISD, ENHNCD, APLPLS, TIME, EXTIO, DISKO, REALIO; X15 settled the names tests predefine) and 14 are dropped. A DROP
+rows, 2,141 get a new name, 255 keep theirs (the SDK's own switches and macro parameters, and the names C# predefines:
+REVISD, ENHNCD, APLPLS, TIME, EXTIO, DISKO, REALIO; X15 settled the names tests predefine) and 15 are dropped. A DROP
 removes the definition: either nothing uses it and no document names it; or it duplicates another definition, whose
 `Also:` then takes its documented name (KIMY, TRMNO1); or its uses can do without it, and its documented name goes in
 prose (ZSTORD, whose WAIT call can pass STORDO's new name, A-Q6; Q, an assembly-time counter, C-Q8); or it is a question
-(REDDY and GOTK, C-Q8; LINWID, D-Q3). 297 renamed rows have no checked document name: mostly AppleSoft's copies of
-Monitor and IIe names (which carry the Apple manuals' names once they come from IIeEquates, decision X10),
-AppleSoft-only labels the damaged AS82 text could not confirm, and the SDK's own labels.
+(REDDY and GOTK, C-Q8; LINWID, D-Q3). Apart from the 138 renamed rows with no Documents entry (SDK macros, macro
+parameters and switches), 352 renamed rows have no checked document name, the rows W2 cites as UNKN: 249 that no listed
+document gives, 67 that a document matches only in spelling, and 36 whose documents give only other names. 287 of them
+are in AppleSoft's builds only (AS, IIeE, II+ IIe): AppleSoft's copies of Monitor and IIe names (which carry the Apple
+manuals' names once they come from IIeEquates, decision X10), AppleSoft-only labels the damaged AS82 text could not
+confirm, and the SDK's own labels.
 
 The parts: A, the floating-point package; B1, the shared program and statement modules; B2, the shared expression,
 variable and string modules; C, the vendors' own copies of the interpreter (AppleSoft and Commodore side by side);
@@ -337,8 +341,8 @@ scope-level label.
   `Statements::StopOrEnd`, `Float::AddArg` ...).
 - **Alternative:** follow the rule literally: one-instruction procs for shared `rts` exits, and scope-level labels in
   `Float` and `Statements` for the rest. That splits loops across procs.
-- This is a new kind of precedent for the conversions. Settled; adding it to ConvertingSources' structure techniques
-  is a follow-up for the method's own branch.
+- This is a new kind of precedent for the conversions. Settled; adding it to ConvertingSources' structure techniques is
+  a follow-up for ConvertingSources.md.
 
 ### X3. Structs for the data layouts
 
@@ -363,7 +367,7 @@ scope-level label.
     range bound (`TOKEN_FIRST_FUNCTION` for ONEFUN, `TOKEN_LAST_SIMPLE_FUNCTION` for LASNUM).
   - **Error codes:** `ERROR_<MESSAGE>` (`ERROR_NEXT_WITHOUT_FOR`, `ERROR_SYNTAX`). In BASIC the error code is the
     message's offset in the message table, so one set serves both, unlike DOS's ERROR_*/MESSAGE_* (X11 in the DOS log,
-    `docs/conversions/Dos.md` on the `claude/convert-dos` branch). The message labels are `<Name>Message`
+    `docs/conversions/Dos.md`, which comes with the DOS conversion). The message labels are `<Name>Message`
     (`ReadyMessage`, `BreakMessage`).
   - **Placement:** one definition each, in the dispatch-tables file where the table defines it. The workspace files'
     copies (PI, PLUSTK, MINUTK, ERROV, ERRDV0) join them.
@@ -605,12 +609,91 @@ builds), one checking every citation against the documents. Their findings, as c
 - R10. One row per name per file has three exceptions: parameters of the same name in two macros of one file
   (rows 296/315, 1933/1943, 1956/1972).
 
+## Step 4: the conversion
+
+Each step of X8 converts some files and leaves the rest unconverted: those keep using the old names, which resolve
+through the converted definitions' `Also:` sections. Every step keeps all eight builds byte-identical.
+
+### W. The workspace (X8 step 2)
+
+Converted, with `; retrocore: style=strict`:
+
+- `AppleSoft.Equates.asm` and `Commodore.Equates.asm`: BASIC's workspace, page zero, the build constants and, on
+  the PET, the kernal's jump table (X14's `Kernal` prefix, and the three shared vectors `CheckStop`, `GetCharacter`
+  and `CloseAllFiles`).
+- `MsBasic.Layouts.asm`, new and shared (X3): `Stack`, `Variable`, `ArrayHeader`, `StringDescriptor` with
+  `DESCRIPTOR_SIZE` (STRSIZ), `ForFrame` with `FOR_FRAME_SIZE` (FORSIZ), `GosubFrame`, `OperatorEntry`,
+  `ProgramLine` and `FunctionDefinition`. Both vendors' Equates include it; the copies of STRSIZ and FORSIZ in the
+  Equates and dispatch tables join it. The FOR frame's stack-relative offsets in `MsBasic.MemoryManagement.asm`
+  (FNDFOR) and `MsBasic.Next.asm` (NEXT) are written through it (`Stack + 1 + ForFrame::STEP_SIGN,x`); those two
+  files are otherwise unconverted. Their other frame arithmetic stays literal until their own steps: NEXT's
+  `adc #$04` and `adc #$06` (or the `inx` runs) to the step and the limit, its `adc #$11` that pops the frame, and
+  FOR's `FORSIZ-3`.
+- `AppleSoft.DispatchTables.asm` and `Commodore.DispatchTables.asm`: the tokens (`TOKEN_*`), the error offsets
+  (`ERROR_*`) and the messages (`ErrorSuffix`, `LineNumberPrefix`, `BreakMessage`, and the PET's `ReadyMessage`),
+  X4. The tables themselves (STMDSP, FUNDSP, RESLST, ERRTAB) and the PET's COMMODORE_DISPATCH_TABLES macro keep
+  their names for their own step. The Commodore
+  macro's body is indented as the strict lint asks of a macro.
+
+Decisions and how the table was applied:
+
+- W1. Every renamed definition's old name is in its `Also:` with the table's keys, the brackets of a key's builds
+  dropped (the Equates and dispatch tables are vendor files, so each name already resolves only in its vendor's
+  builds). The shared layouts cite Microsoft's source alone, since every build has them. The table's "other names here" go in the same `Also:`, each on one definition: the location where the
+  table lists it on a location and its aliases (TEMP3 on `FunctionPointer`, ARRYPT on `DestinationEnd`).
+- W2. A row whose documents give no name (its Documents column "none found", or only "spelling only" or "other names
+  here") cites its old name as `UNKN`, so the unconverted files' uses of it still resolve. The bibliography has UNKN,
+  which ConvertingSources.md describes (#120), and gains ASRM78, as proposed in step 2. This is the owner's open choice
+  between UNKN and no `Also:` (the table's introduction); UNKN is the one that keeps the old names working.
+- W3. Names two definitions shared in one file are one definition with both old names (INDEX1 and INDEX are
+  `Pointer1`). KIMY is dropped into `Dimensioning`'s `Also:`.
+- W4. Names left in prose because they would clash with another definition in the same build: the BASIC 4 reconstructions' INCHR for
+  `KernalCharacterIn` (BASIC's own INCHR is another routine). Microsoft's REDDY and GOTK in AppleSoft (C-Q8), Q
+  (the table counter, which the tables no longer use) and AppleSoft's LINWID and NCMWID (D-Q3) are named in prose
+  and not defined; NCMWID's one use is written `FRETOP+1`, the same byte.
+- W5. The tokens and error offsets the PET's Equates copied for the math package (PLUSTK, MINUTK, ERROV, ERRDV0) are
+  defined once, with their tables (X4), so an assembly of the math package with the Equates but without the tables
+  must supply them, as the workspace test now does; `TOKEN_PI` stays in the Equates, since the table has no spelling for it.
+  The AppleSoft error offsets are computed from their messages (`* - ERRTAB`), as the PET's were, each with an
+  `.assert` of its value.
+- W6. AppleSoft's copies of the Monitor's, the IIe's and the firmware's names keep their names and definitions in
+  AppleSoft.Equates, in their own section, until AppleSoft includes IIeEquates.asm and MonitorEntries.asm (X10). Their
+  trailing comments are moved above them, as the strict lint asks. This covers Microsoft's CQ* synonyms, BUF and OUTCH.
+  The table's other names for them (ASTIL's HBAS for GBASL) join their `Also:` with X10.
+- W7. Switches (X15): the seven a test predefines and the Equates define (BUFPAG, BUFLEN, NULCMD, NUMLEV, STKEND,
+  LOCAL_TRMPOS, VARTXT_IN_LINNUM) are renamed as drafted everywhere they are used, since an `.ifndef` default is
+  not reached through `Also:`, and the tests predefine the new names. Microsoft's five keep `Also:`; the SDK's two
+  (LOCAL_TRMPOS, VARTXT_IN_LINNUM) are not historical and get none. Each PET root asserts that none of the seven old
+  names is predefined; AppleSoft, which fixes Microsoft's five, rejects those five as values it fixes. The
+  switches C# sets keep their names. BASIC 1's root sets three of the five itself
+  (INPUT_BUFFER_PAGE, INPUT_BUFFER_LENGTH, NULL_COMMAND), so there the Equates' definitions, and their old names,
+  are skipped; nothing uses the old names any more.
+- W8. D-Q3: SIZE is `CollectorOffset`, as recommended (the string collector's offset; the recommendation's scoped
+  alias waits for the collector's step); LSTPNT is `ListOffset` and DECCNT `DigitCount`, as the table has them.
+  OLDOV keeps the table's `FunctionJumpHigh`: the recommended `ArgExtension` rests on D-Q3's reading that FADD keeps
+  the smaller operand's extension there, but it keeps the unshifted operand's (FAC's, or zero), with the shifted
+  one's in FacExtension, and EXP keeps a rounding byte there; neither is the argument's. A new question for the
+  owner: a name for the byte's floating-point uses (`UnshiftedExtension`, or scoped aliases in FADD and EXP when
+  the math package converts). The table's rows are updated to match.
+- W9. C# lookups (X9): the debug hosts keep Microsoft's names, which reach the native builds through `Also:` and
+  are the MACRO-10 builds' own names, so one lookup serves both sources. The tests likewise look the old names up
+  through `BasicNames`; they move when the MACRO-10 comparisons no longer need them.
+- W10. Prose writes in backticks the words that are also documented labels: BASIC's keywords (`FOR`, `DATA`), whose
+  handlers have those names, and words of the messages (`ZERO`, `ERROR`, `BREAK`), so the lint does not ask for a
+  link to an unrelated routine.
+
+Checked: the full suite, the rename gate, the lint tests, and `BasicWorkspaceConversionTests`, which compares every
+old name in the converted files with the MACRO-10 overlay's value in each build, checks that a vendor's old names
+resolve only in its builds, and that every citation's key is in the bibliography. The debugger's contract checking
+ran clean over a program using FOR, NEXT, GOSUB, DEF FN, arrays and strings on PET BASIC 2, PET BASIC 4 and the
+enhanced IIe's AppleSoft, built from these sources.
+
 ## Other dependents
 
-- **DOS** left BASIC's names unchanged until this conversion: X7 in the DOS conversion's log, `Dos.md` (on the
-  `claude/convert-dos` branch; "BASIC names wait for the BASICs' conversion"). P2 is DOS's BASIC vector: the labels for
-  the six live words, written with a BasicEntries macro. When AppleSoft's entries are renamed, DOS's vector should name
-  the entries it jumps to by their new names.
+- **DOS** left BASIC's names unchanged until this conversion: X7 in the DOS conversion's log, `docs/conversions/Dos.md`,
+  which comes with the DOS conversion ("BASIC names wait for the BASICs' conversion"). P2 is DOS's BASIC vector: the
+  labels for the six live words, written with a BasicEntries macro. When AppleSoft's entries are renamed, DOS's vector
+  should name the entries it jumps to by their new names.
 - **The disassembler** ([retrocore-disassembly](../../.claude/skills/retrocore-disassembly/SKILL.md)) names a
   program's uses of BASIC by these sources' names, so every program that calls AppleSoft's entries (`jsr FRMEVL`,
   `jsr HPOSN`) disassembles with the new names after the conversion. The ASTIL index's entries are what programs
@@ -2082,10 +2165,10 @@ The shared workspace names both vendors define, named before the parts were draf
 | VARTXT | `VariableListPointer` | alias: READ/INPUT's pointer into the variable list |
 | DEFPNT | `FunctionPointer` | pointer used in a DEF FN definition |
 | JMPER | `FunctionJump` | a JMP the function dispatcher stores its target into |
-| SIZE | `FunctionJumpTarget` | alias: JMPER+1 (verify uses) |
-| OLDOV | `FunctionJumpHigh` | alias: JMPER+2 (verify uses) |
+| SIZE | `CollectorOffset` | alias: JMPER+1, the string collector's offset (W8) |
+| OLDOV | `FunctionJumpHigh` | alias: JMPER+2, the unshifted operand's extension while adding (W8) |
 | USRPOK | `UserVector` | the JMP that USR calls |
-| KIMY | `SavedOutputY` | alias of Dimensioning: Y saved while printing (verify) |
+| KIMY | `SavedOutputY` | alias of Dimensioning; dropped, in Dimensioning's `Also:` (W3) |
 | ANDMSK | `WaitAndMask` | WAIT's AND mask (alias of AssignedVariable) |
 | EORMSK | `WaitXorMask` | WAIT's EOR mask |
 | POKER | `PokeAddress` | alias of LineNumber: POKE's and WAIT's address |

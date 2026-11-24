@@ -1,14 +1,14 @@
-;; APPLESOFT: DISPATCH, RESERVED WORDS AND ERROR TEXT
+; retrocore: style=strict
+;; APPLESOFT: HANDLER TABLES, RESERVED WORDS AND MESSAGES
 ;;
 ;; These tables begin at $D000. <CRUNCH> searches <RESLST> in order; <LIST> expands its token bytes back
 ;; through the same list. <GONE> dispatches statement tokens with <STMDSP>, while expression evaluation uses
 ;; <FUNDSP> and <OPTAB>. <ERROR> indexes <ERRTAB> by byte offset, not by an ordinal error number.
 
-
 ;; Handler addresses minus one for the 64 statements, indexed by token $80-$BF.
 ;;
-;; <GONE> pushes the high and low bytes and returns through <CHRGET>; the RTS increments the stacked
-;; address before entering the handler. HOME enters the Monitor and & enters the RAM vector <AMPERV>.
+;; <GONE> pushes the high and low bytes and returns through <GetNextCharacter>; the RTS increments the stacked
+;; address before entering the handler. `HOME` enters the Monitor and & enters the RAM vector <AmpersandJump>.
 STMDSP:
     .word END - 1                   ; $80 END
     .word FOR - 1                   ; $81 FOR
@@ -57,7 +57,7 @@ STMDSP:
     .word RUNSTM - 1                ; $AC RUN
     .word IF - 1                    ; $AD IF
     .word RESTOR - 1                ; $AE RESTORE
-    .word AMPERV - 1                ; $AF &
+    .word AmpersandJump - 1         ; $AF &
     .word GOSUB - 1                 ; $B0 GOSUB
     .word POP - 1                   ; $B1 RETURN
     .word REM - 1                   ; $B2 REM
@@ -75,15 +75,15 @@ STMDSP:
     .word GET - 1                   ; $BE GET
     .word NEW - 1                   ; $BF NEW
 
-;; Addresses of the functions in token order, from SGN through MID$.
+;; Addresses of the functions in token order, from `SGN` through `MID$`.
 ;;
 ;; Unlike <STMDSP>, these words are the actual entry addresses. The SCRN( entry goes to <ERROR>; its
-;; special handling is elsewhere in expression evaluation. USR enters the writable <USRPOK> vector.
+;; special handling is elsewhere in expression evaluation. `USR` enters the writable <UserVector> vector.
 FUNDSP:
     .word SGN                       ; SGN
     .word INT                       ; INT
     .word ABS                       ; ABS
-    .word USRPOK                    ; USR
+    .word UserVector                ; USR
     .word FRE                       ; FRE
     .word ERROR                     ; SCRN(
     .word PDL                       ; PDL
@@ -107,329 +107,373 @@ FUNDSP:
     .word MID                       ; MID$
 
 .include "../Microsoft6502Basic/MsBasic.OperatorTable.asm"
-; AppleSoft puts power below negation, gives NOT unary precedence, and dispatches AND to <OROP1>.
+    ; AppleSoft puts power below negation, gives NOT unary precedence, and dispatches AND to <OROP1>.
     OPERATOR_TABLE 1, 1, OROP1
-
-;; Assembly-time counter retained from the Microsoft table definitions, not a runtime location.
-;;
-;; It tracks token values while defining <RESLST>, then byte offsets into <ERRTAB>.
-Q .set $7F
-Q .set $80
 
 ;; Reserved-word spellings in token order, starting at $80 and ending with a zero byte.
 ;;
 ;; Each spelling has bit 7 set on its last character; the preceding characters have bit 7 clear. The token
 ;; is $80 plus the spelling's index, not its offset in this variable-length table. Ordering matters when one
-;; spelling is a prefix of another. REM, DATA and quoted text have special treatment during tokenization.
+;; spelling is a prefix of another. `REM`, `DATA` and quoted text have special treatment during tokenization.
+;;
+;; Microsoft's source counts the token values here, and the error offsets below, with an assembly-time variable,
+;; Q; this table writes each token's value and computes each offset.
 RESLST:
     .byte "EN", 'D' | $80           ; $80 END
-ENDTK = $80                         ;; END
-Q .set $81
+
+;; The token of `END`, the first statement token.
+;; Also: ENDTK (M6502)
+TOKEN_END = $80
+
     .byte "FO", 'R' | $80           ; $81 FOR
-FORTK = $81                         ;; FOR
-Q .set $82
+
+;; The token of `FOR`.
+;; Also: FORTK (M6502)
+TOKEN_FOR = $81
+
     .byte "NEX", 'T' | $80          ; $82 NEXT
-Q .set $83
     .byte "DAT", 'A' | $80          ; $83 DATA
-DATATK = $83                        ;; DATA
-Q .set $84
+
+;; The token of `DATA`.
+;; Also: DATATK (M6502)
+TOKEN_DATA = $83
+
     .byte "INPU", 'T' | $80         ; $84 INPUT
-Q .set $85
     .byte "DE", 'L' | $80           ; $85 DEL
-Q .set $86
     .byte "DI", 'M' | $80           ; $86 DIM
-Q .set $87
     .byte "REA", 'D' | $80          ; $87 READ
-Q .set $88
     .byte "G", 'R' | $80            ; $88 GR
-Q .set $89
     .byte "TEX", 'T' | $80          ; $89 TEXT
-Q .set $8A
     .byte "PR", '#' | $80           ; $8A PR#
-Q .set $8B
     .byte "IN", '#' | $80           ; $8B IN#
-Q .set $8C
     .byte "CAL", 'L' | $80          ; $8C CALL
-Q .set $8D
     .byte "PLO", 'T' | $80          ; $8D PLOT
-Q .set $8E
     .byte "HLI", 'N' | $80          ; $8E HLIN
-Q .set $8F
     .byte "VLI", 'N' | $80          ; $8F VLIN
-Q .set $90
     .byte "HGR", '2' | $80          ; $90 HGR2
-Q .set $91
     .byte "HG", 'R' | $80           ; $91 HGR
-Q .set $92
     .byte "HCOLOR", '=' | $80       ; $92 HCOLOR=
-Q .set $93
     .byte "HPLO", 'T' | $80         ; $93 HPLOT
-Q .set $94
     .byte "DRA", 'W' | $80          ; $94 DRAW
-Q .set $95
     .byte "XDRA", 'W' | $80         ; $95 XDRAW
-Q .set $96
     .byte "HTA", 'B' | $80          ; $96 HTAB
-Q .set $97
     .byte "HOM", 'E' | $80          ; $97 HOME
-Q .set $98
     .byte "ROT", '=' | $80          ; $98 ROT=
-Q .set $99
     .byte "SCALE", '=' | $80        ; $99 SCALE=
-Q .set $9A
     .byte "SHLOA", 'D' | $80        ; $9A SHLOAD
-Q .set $9B
     .byte "TRAC", 'E' | $80         ; $9B TRACE
-Q .set $9C
     .byte "NOTRAC", 'E' | $80       ; $9C NOTRACE
-Q .set $9D
     .byte "NORMA", 'L' | $80        ; $9D NORMAL
-Q .set $9E
     .byte "INVERS", 'E' | $80       ; $9E INVERSE
-Q .set $9F
     .byte "FLAS", 'H' | $80         ; $9F FLASH
-Q .set $A0
     .byte "COLOR", '=' | $80        ; $A0 COLOR=
-Q .set $A1
     .byte "PO", 'P' | $80           ; $A1 POP
-POPTK = $A1                         ;; POP
-Q .set $A2
+
+;; The token of `POP`.
+;; Also: POPTK (UNKN)
+TOKEN_POP = $A1
+
     .byte "VTA", 'B' | $80          ; $A2 VTAB
-Q .set $A3
     .byte "HIMEM", ':' | $80        ; $A3 HIMEM:
-Q .set $A4
     .byte "LOMEM", ':' | $80        ; $A4 LOMEM:
-Q .set $A5
     .byte "ONER", 'R' | $80         ; $A5 ONERR
-Q .set $A6
     .byte "RESUM", 'E' | $80        ; $A6 RESUME
-Q .set $A7
     .byte "RECAL", 'L' | $80        ; $A7 RECALL
-Q .set $A8
     .byte "STOR", 'E' | $80         ; $A8 STORE
-Q .set $A9
     .byte "SPEED", '=' | $80        ; $A9 SPEED=
-Q .set $AA
     .byte "LE", 'T' | $80           ; $AA LET
-Q .set $AB
     .byte "GOT", 'O' | $80          ; $AB GOTO
-GOTOTK = $AB                        ;; GOTO
-Q .set $AC
+
+;; The token of `GOTO`.
+;; Also: GOTOTK (M6502)
+TOKEN_GOTO = $AB
+
     .byte "RU", 'N' | $80           ; $AC RUN
-Q .set $AD
     .byte "I", 'F' | $80            ; $AD IF
-Q .set $AE
     .byte "RESTOR", 'E' | $80       ; $AE RESTORE
-Q .set $AF
     .byte '&' | $80                 ; $AF &
-Q .set $B0
     .byte "GOSU", 'B' | $80         ; $B0 GOSUB
-GOSUTK = $B0                        ;; GOSUB
-Q .set $B1
+
+;; The token of `GOSUB`.
+;; Also: GOSUTK (M6502)
+TOKEN_GOSUB = $B0
+
     .byte "RETUR", 'N' | $80        ; $B1 RETURN
-Q .set $B2
     .byte "RE", 'M' | $80           ; $B2 REM
-REMTK = $B2                         ;; REM
-Q .set $B3
+
+;; The token of `REM`.
+;; Also: REMTK (M6502)
+TOKEN_REM = $B2
+
     .byte "STO", 'P' | $80          ; $B3 STOP
-Q .set $B4
     .byte "O", 'N' | $80            ; $B4 ON
-Q .set $B5
     .byte "WAI", 'T' | $80          ; $B5 WAIT
-Q .set $B6
     .byte "LOA", 'D' | $80          ; $B6 LOAD
-Q .set $B7
     .byte "SAV", 'E' | $80          ; $B7 SAVE
-Q .set $B8
     .byte "DE", 'F' | $80           ; $B8 DEF
-Q .set $B9
     .byte "POK", 'E' | $80          ; $B9 POKE
-Q .set $BA
     .byte "PRIN", 'T' | $80         ; $BA PRINT
-PRINTK = $BA                        ;; PRINT
-Q .set $BB
+
+;; The token of `PRINT` (the tokenizer stores it for ?).
+;; Also: PRINTK (M6502)
+TOKEN_PRINT = $BA
+
     .byte "CON", 'T' | $80          ; $BB CONT
-Q .set $BC
     .byte "LIS", 'T' | $80          ; $BC LIST
-Q .set $BD
     .byte "CLEA", 'R' | $80         ; $BD CLEAR
-Q .set $BE
     .byte "GE", 'T' | $80           ; $BE GET
-Q .set $BF
     .byte "NE", 'W' | $80           ; $BF NEW
-SCRATK = $BF                        ;; NEW
-Q .set $C0
+
+;; The token of `NEW`, the last statement token.
+;; Also: SCRATK (M6502)
+TOKEN_NEW = $BF
+
     .byte "TAB", '(' | $80          ; $C0 TAB(
-TABTK = $C0                         ;; TAB(
-Q .set $C1
+
+;; The token of `TAB(`.
+;; Also: TABTK (M6502)
+TOKEN_TAB = $C0
+
     .byte "T", 'O' | $80            ; $C1 TO
-TOTK = $C1                          ;; TO
-Q .set $C2
+
+;; The token of `TO`.
+;; Also: TOTK (M6502)
+TOKEN_TO = $C1
+
     .byte "F", 'N' | $80            ; $C2 FN
-FNTK = $C2                          ;; FN
-Q .set $C3
+
+;; The token of `FN`.
+;; Also: FNTK (M6502)
+TOKEN_FN = $C2
+
     .byte "SPC", '(' | $80          ; $C3 SPC(
-SPCTK = $C3                         ;; SPC(
-Q .set $C4
+
+;; The token of `SPC(`.
+;; Also: SPCTK (M6502)
+TOKEN_SPC = $C3
+
     .byte "THE", 'N' | $80          ; $C4 THEN
-THENTK = $C4                        ;; THEN
-Q .set $C5
+
+;; The token of `THEN`.
+;; Also: THENTK (M6502)
+TOKEN_THEN = $C4
+
     .byte "A", 'T' | $80            ; $C5 AT
-ATTK = $C5                          ;; AT
-Q .set $C6
+
+;; The token of `AT`; the tokenizer refuses it before N or O.
+;; Also: ATTK (UNKN)
+TOKEN_AT = $C5
+
     .byte "NO", 'T' | $80           ; $C6 NOT
-NOTTK = $C6                         ;; NOT
-Q .set $C7
+
+;; The token of `NOT`.
+;; Also: NOTTK (M6502)
+TOKEN_NOT = $C6
+
     .byte "STE", 'P' | $80          ; $C7 STEP
-STEPTK = $C7                        ;; STEP
-Q .set $C8
+
+;; The token of `STEP`.
+;; Also: STEPTK (M6502)
+TOKEN_STEP = $C7
+
     .byte '+' | $80                 ; $C8 +
-PLUSTK = $C8                        ;; +
-Q .set $C9
+
+;; The token of `+`.
+;; Also: PLUSTK (M6502)
+TOKEN_PLUS = $C8
+
     .byte '-' | $80                 ; $C9 -
-MINUTK = $C9                        ;; -
-Q .set $CA
+
+;; The token of `-`.
+;; Also: MINUTK (M6502)
+TOKEN_MINUS = $C9
+
     .byte '*' | $80                 ; $CA *
-Q .set $CB
     .byte '/' | $80                 ; $CB /
-Q .set $CC
     .byte '^' | $80                 ; $CC ^
-Q .set $CD
     .byte "AN", 'D' | $80           ; $CD AND
-Q .set $CE
     .byte "O", 'R' | $80            ; $CE OR
     .byte '>' | $80                 ; $CF >
-Q .set $CF
-GREATK = $CF                        ;; >
-Q .set $D0
+
+;; The token of `>`, the first relational token.
+;; Also: GREATK (M6502)
+TOKEN_GREATER = $CF
+
     .byte '=' | $80                 ; $D0 =
-EQULTK = $D0                        ;; =
+
+;; The token of `=`.
+;; Also: EQULTK (M6502)
+TOKEN_EQUAL = $D0
+
     .byte '<' | $80                 ; $D1 <
-Q .set $D1
-LESSTK = $D1                        ;; <
-Q .set $D2
+
+;; The token of `<`.
+;; Also: LESSTK (M6502)
+TOKEN_LESS = $D1
+
     .byte "SG", 'N' | $80           ; $D2 SGN
-ONEFUN = $D2                        ;; SGN, the first function
-Q .set $D3
+
+;; The token of `SGN`, the first function; the evaluator and <FUNDSP>'s index start here.
+;; Also: ONEFUN (M6502)
+TOKEN_FIRST_FUNCTION = $D2
+
     .byte "IN", 'T' | $80           ; $D3 INT
-Q .set $D4
     .byte "AB", 'S' | $80           ; $D4 ABS
-Q .set $D5
     .byte "US", 'R' | $80           ; $D5 USR
-Q .set $D6
     .byte "FR", 'E' | $80           ; $D6 FRE
-Q .set $D7
     .byte "SCRN", '(' | $80         ; $D7 SCRN(
-SCRNTK = $D7                        ;; SCRN(
-Q .set $D8
+
+;; The token of `SCRN(`.
+;; Also: SCRNTK (UNKN)
+TOKEN_SCRN = $D7
+
     .byte "PD", 'L' | $80           ; $D8 PDL
-Q .set $D9
     .byte "PO", 'S' | $80           ; $D9 POS
-Q .set $DA
     .byte "SQ", 'R' | $80           ; $DA SQR
-Q .set $DB
     .byte "RN", 'D' | $80           ; $DB RND
-Q .set $DC
     .byte "LO", 'G' | $80           ; $DC LOG
-Q .set $DD
     .byte "EX", 'P' | $80           ; $DD EXP
-Q .set $DE
     .byte "CO", 'S' | $80           ; $DE COS
-Q .set $DF
     .byte "SI", 'N' | $80           ; $DF SIN
-Q .set $E0
     .byte "TA", 'N' | $80           ; $E0 TAN
-Q .set $E1
     .byte "AT", 'N' | $80           ; $E1 ATN
-Q .set $E2
     .byte "PEE", 'K' | $80          ; $E2 PEEK
-Q .set $E3
     .byte "LE", 'N' | $80           ; $E3 LEN
-Q .set $E4
     .byte "STR", '$' | $80          ; $E4 STR$
-Q .set $E5
     .byte "VA", 'L' | $80           ; $E5 VAL
-Q .set $E6
     .byte "AS", 'C' | $80           ; $E6 ASC
-Q .set $E7
     .byte "CHR", '$' | $80          ; $E7 CHR$
-LASNUM = $E7                        ;; CHR$, the last single-argument function
-Q .set $E8
+
+;; The token of `CHR$`, the last function taking one parenthesized argument; later ones are the string slicers.
+;; Also: LASNUM (M6502)
+TOKEN_LAST_SIMPLE_FUNCTION = $E7
+
     .byte "LEFT", '$' | $80         ; $E8 LEFT$
-Q .set $E9
     .byte "RIGHT", '$' | $80        ; $E9 RIGHT$
-Q .set $EA
     .byte "MID", '$' | $80          ; $EA MID$
     .byte $00
-Q .set $00
 
-;; Error messages addressed by the ERR constants' byte offsets.
+;; Error messages addressed by the ERROR_* constants' byte offsets.
 ;;
-;; Each message ends in a character with bit 7 set. <ERROR> prints until that byte, then appends <ERR>;
+;; Each message ends in a character with bit 7 set. <ERROR> prints until that byte, then appends <ErrorSuffix>;
 ;; all offsets fit in one byte.
 ERRTAB:
+;; Offset of `NEXT` WITHOUT `FOR` in <ERRTAB>.
+;; Also: ERRNF (M6502)
+ERROR_NEXT_WITHOUT_FOR = * - ERRTAB
     .byte "NEXT WITHOUT FO", 'R' | $80
-ERRNF = $00                         ;; offset of NEXT WITHOUT FOR in <ERRTAB>
-Q .set $10
-    .byte "SYNTA", 'X' | $80
-ERRSN = $10                         ;; offset of SYNTAX in <ERRTAB>
-Q .set $16
-    .byte "RETURN WITHOUT GOSU", 'B' | $80
-ERRRG = $16                         ;; offset of RETURN WITHOUT GOSUB in <ERRTAB>
-Q .set $2A
-    .byte "OUT OF DAT", 'A' | $80
-ERROD = $2A                         ;; offset of OUT OF DATA in <ERRTAB>
-Q .set $35
-    .byte "ILLEGAL QUANTIT", 'Y' | $80
-ERRFC = $35                         ;; offset of ILLEGAL QUANTITY in <ERRTAB>
-Q .set $45
-    .byte "OVERFLO", 'W' | $80
-ERROV = $45                         ;; offset of OVERFLOW in <ERRTAB>
-Q .set $4D
-    .byte "OUT OF MEMOR", 'Y' | $80
-ERROM = $4D                         ;; offset of OUT OF MEMORY in <ERRTAB>
-Q .set $5A
-    .byte "UNDEF'D STATEMEN", 'T' | $80
-ERRUS = $5A                         ;; offset of UNDEF'D STATEMENT in <ERRTAB>
-Q .set $6B
-    .byte "BAD SUBSCRIP", 'T' | $80
-ERRBS = $6B                         ;; offset of BAD SUBSCRIPT in <ERRTAB>
-Q .set $78
-    .byte "REDIM'D ARRA", 'Y' | $80
-ERRDD = $78                         ;; offset of REDIM'D ARRAY in <ERRTAB>
-Q .set $85
-    .byte "DIVISION BY ZER", 'O' | $80
-ERRDV0 = $85                        ;; offset of DIVISION BY ZERO in <ERRTAB>
-Q .set $95
-    .byte "ILLEGAL DIREC", 'T' | $80
-ERRID = $95                         ;; offset of ILLEGAL DIRECT in <ERRTAB>
-Q .set $A3
-    .byte "TYPE MISMATC", 'H' | $80
-ERRTM = $A3                         ;; offset of TYPE MISMATCH in <ERRTAB>
-Q .set $B0
-    .byte "STRING TOO LON", 'G' | $80
-ERRLS = $B0                         ;; offset of STRING TOO LONG in <ERRTAB>
-Q .set $BF
-    .byte "FORMULA TOO COMPLE", 'X' | $80
-ERRST = $BF                         ;; offset of FORMULA TOO COMPLEX in <ERRTAB>
-Q .set $D2
-    .byte "CAN'T CONTINU", 'E' | $80
-ERRCN = $D2                         ;; offset of CAN'T CONTINUE in <ERRTAB>
-Q .set $E0
-    .byte "UNDEF'D FUNCTIO", 'N' | $80
-ERRUF = $E0                         ;; offset of UNDEF'D FUNCTION in <ERRTAB>
+    .assert ERROR_NEXT_WITHOUT_FOR = $00, "ERROR_NEXT_WITHOUT_FOR must stay at its offset."
 
-;; Error suffix: a space, ERROR, a bell and a zero terminator.
-ERR:
+;; Offset of `SYNTAX` in <ERRTAB>.
+;; Also: ERRSN (M6502)
+ERROR_SYNTAX = * - ERRTAB
+    .byte "SYNTA", 'X' | $80
+    .assert ERROR_SYNTAX = $10, "ERROR_SYNTAX must stay at its offset."
+
+;; Offset of `RETURN` WITHOUT `GOSUB` in <ERRTAB>.
+;; Also: ERRRG (M6502)
+ERROR_RETURN_WITHOUT_GOSUB = * - ERRTAB
+    .byte "RETURN WITHOUT GOSU", 'B' | $80
+    .assert ERROR_RETURN_WITHOUT_GOSUB = $16, "ERROR_RETURN_WITHOUT_GOSUB must stay at its offset."
+
+;; Offset of OUT OF `DATA` in <ERRTAB>.
+;; Also: ERROD (M6502)
+ERROR_OUT_OF_DATA = * - ERRTAB
+    .byte "OUT OF DAT", 'A' | $80
+    .assert ERROR_OUT_OF_DATA = $2A, "ERROR_OUT_OF_DATA must stay at its offset."
+
+;; Offset of ILLEGAL QUANTITY in <ERRTAB>.
+;; Also: ERRFC (M6502)
+ERROR_ILLEGAL_QUANTITY = * - ERRTAB
+    .byte "ILLEGAL QUANTIT", 'Y' | $80
+    .assert ERROR_ILLEGAL_QUANTITY = $35, "ERROR_ILLEGAL_QUANTITY must stay at its offset."
+
+;; Offset of OVERFLOW in <ERRTAB>.
+;; Also: ERROV (M6502, ASTIL)
+ERROR_OVERFLOW = * - ERRTAB
+    .byte "OVERFLO", 'W' | $80
+    .assert ERROR_OVERFLOW = $45, "ERROR_OVERFLOW must stay at its offset."
+
+;; Offset of OUT OF MEMORY in <ERRTAB>.
+;; Also: ERROM (M6502)
+ERROR_OUT_OF_MEMORY = * - ERRTAB
+    .byte "OUT OF MEMOR", 'Y' | $80
+    .assert ERROR_OUT_OF_MEMORY = $4D, "ERROR_OUT_OF_MEMORY must stay at its offset."
+
+;; Offset of UNDEF'D STATEMENT in <ERRTAB>.
+;; Also: ERRUS (M6502)
+ERROR_UNDEFINED_STATEMENT = * - ERRTAB
+    .byte "UNDEF'D STATEMEN", 'T' | $80
+    .assert ERROR_UNDEFINED_STATEMENT = $5A, "ERROR_UNDEFINED_STATEMENT must stay at its offset."
+
+;; Offset of BAD SUBSCRIPT in <ERRTAB>.
+;; Also: ERRBS (M6502)
+ERROR_BAD_SUBSCRIPT = * - ERRTAB
+    .byte "BAD SUBSCRIP", 'T' | $80
+    .assert ERROR_BAD_SUBSCRIPT = $6B, "ERROR_BAD_SUBSCRIPT must stay at its offset."
+
+;; Offset of REDIM'D ARRAY in <ERRTAB>.
+;; Also: ERRDD (M6502)
+ERROR_REDIMENSIONED_ARRAY = * - ERRTAB
+    .byte "REDIM'D ARRA", 'Y' | $80
+    .assert ERROR_REDIMENSIONED_ARRAY = $78, "ERROR_REDIMENSIONED_ARRAY must stay at its offset."
+
+;; Offset of DIVISION BY `ZERO` in <ERRTAB>.
+;; Also: ERRDV0 (M6502)
+ERROR_DIVISION_BY_ZERO = * - ERRTAB
+    .byte "DIVISION BY ZER", 'O' | $80
+    .assert ERROR_DIVISION_BY_ZERO = $85, "ERROR_DIVISION_BY_ZERO must stay at its offset."
+
+;; Offset of ILLEGAL DIRECT in <ERRTAB>.
+;; Also: ERRID (M6502)
+ERROR_ILLEGAL_DIRECT = * - ERRTAB
+    .byte "ILLEGAL DIREC", 'T' | $80
+    .assert ERROR_ILLEGAL_DIRECT = $95, "ERROR_ILLEGAL_DIRECT must stay at its offset."
+
+;; Offset of TYPE MISMATCH in <ERRTAB>.
+;; Also: ERRTM (M6502)
+ERROR_TYPE_MISMATCH = * - ERRTAB
+    .byte "TYPE MISMATC", 'H' | $80
+    .assert ERROR_TYPE_MISMATCH = $A3, "ERROR_TYPE_MISMATCH must stay at its offset."
+
+;; Offset of STRING TOO LONG in <ERRTAB>.
+;; Also: ERRLS (M6502)
+ERROR_STRING_TOO_LONG = * - ERRTAB
+    .byte "STRING TOO LON", 'G' | $80
+    .assert ERROR_STRING_TOO_LONG = $B0, "ERROR_STRING_TOO_LONG must stay at its offset."
+
+;; Offset of FORMULA TOO COMPLEX in <ERRTAB>.
+;; Also: ERRST (M6502)
+ERROR_FORMULA_TOO_COMPLEX = * - ERRTAB
+    .byte "FORMULA TOO COMPLE", 'X' | $80
+    .assert ERROR_FORMULA_TOO_COMPLEX = $BF, "ERROR_FORMULA_TOO_COMPLEX must stay at its offset."
+
+;; Offset of CAN'T CONTINUE in <ERRTAB>.
+;; Also: ERRCN (M6502)
+ERROR_CANT_CONTINUE = * - ERRTAB
+    .byte "CAN'T CONTINU", 'E' | $80
+    .assert ERROR_CANT_CONTINUE = $D2, "ERROR_CANT_CONTINUE must stay at its offset."
+
+;; Offset of UNDEF'D FUNCTION in <ERRTAB>.
+;; Also: ERRUF (M6502)
+ERROR_UNDEFINED_FUNCTION = * - ERRTAB
+    .byte "UNDEF'D FUNCTIO", 'N' | $80
+    .assert ERROR_UNDEFINED_FUNCTION = $E0, "ERROR_UNDEFINED_FUNCTION must stay at its offset."
+
+;; Error suffix: a space, `ERROR`, a bell and a zero terminator.
+;; Also: ERR (M6502)
+ErrorSuffix:
     .byte " ERROR", $07, $00
 
 ;; Line-number introduction: a space, IN, a space and a zero terminator.
-INTXT:
+;; Also: INTXT (M6502)
+LineNumberPrefix:
     .byte " IN ", $00
 
-;; Break message: carriage return, BREAK, a bell and a zero terminator.
-BRKTXT:
+;; Break message: carriage return, `BREAK`, a bell and a zero terminator.
+;; Also: BRKTXT (M6502)
+BreakMessage:
     .byte $0D, "BREAK", $07, $00
-REDDY = $00                         ;; legacy READY message offset (no READY string is stored here)
-GOTK = $FF                          ;; legacy GO token value; no GO spelling occurs in <RESLST>
-FORSIZ = $12                        ;; size in bytes of a FOR stack frame
+
+; Microsoft's REDDY, the READY message's offset, and GOTK, the GO token, are not defined: AppleSoft has neither
+; the message nor the keyword, and nothing uses them.

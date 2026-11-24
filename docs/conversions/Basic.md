@@ -2042,8 +2042,8 @@ so the owner may prefer `LAST_ZONE_COLUMN` for the constant.
 ### D: The workspace and build switches
 Part D covers AppleSoft.Equates, Commodore.Equates, Commodore.Basic4SystemEquates and the build switches in the
 roots AppleSoft.asm, Basic1.asm, Basic2.asm and Basic4.asm. The table has 605 rows for this part. I checked names against the code by grepping every use in the MsBasic, AppleSoft and Commodore sources and
-reading the routines that use them. K4S79 and HVK4 document most of Basic4SystemEquates. HVK4's other spellings (T1, RCNT, FSBLK, STAL, ZZZ1, TAPE2, CHANL,
-LBERR) are in the notes for the `Also:` lists.
+reading the routines that use them. K4S79 and HVK4 document most of Basic4SystemEquates. HVK4's other spellings (T1, RCNT, FSBLK, STAL, ZZZ1,
+TAPE2) are in the notes for the `Also:` lists.
 
 #### Cross-cutting
 

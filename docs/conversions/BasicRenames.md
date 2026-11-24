@@ -2321,7 +2321,7 @@ to K12, R1 to R10).
 | 1918 | `SPERR` | `STATUS_LOAD_ERROR` | constant | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R]; other names here: none | vendor | IoStatus bit ($10) for a load or verify error Converted: CHANL is not this bit: the kernal listings' CHANL (=$0010, under "CONSTANTS FROM BASIC") is BASIC 4's CHANNL location, so it is on `CurrentChannel` (Basic.md F4). |
 | 1919 | `CR` | `CHARACTER_RETURN` | constant | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | carriage return ($0D), the monitor's line end — other PET parts may name CR; one definition (see D-Q6) Converted: CR (K4S79, HVK4) joins `CARRIAGE_RETURN` in Commodore.ChannelPrint.asm (Basic.md F3). |
 | 1920 | `ONTK` | `TOKEN_ON` | token | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | BASIC's ON token; the disk parser reads ON as the unit keyword — should be the token table's TOKEN_ON (one definition) Converted: `TOKEN_ON`, defined with the token table in Commodore.DispatchTables.asm, Also ONTK (K4S79, HVK4) (Basic.md F3). |
-| 1921 | `NCMDS` | `MONITOR_COMMAND_COUNT` | constant | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | number of built-in monitor commands (8) — HVK4 calls it LBERR |
+| 1921 | `NCMDS` | `MONITOR_COMMAND_COUNT` | constant | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | number of built-in monitor commands (8) Converted: no LBERR: the kernal listings' LBERR=8 (K4S79 and HVK4 ob5src:156) is the tape's long-block error bit of the status byte, which only shares the value 8. |
 
 ### Commodore.ChannelInput
 
@@ -2690,10 +2690,10 @@ to K12, R1 to R10).
 | 2262 | `CQAPND` | `KernalAppend` | routine | P4 P4R | none found | vendor | BASIC 4 disk jump-table entry: the dispatch entry of APPEND — named for the keyword; jumps into BASIC 4's own disk commands (see D-Q5) |
 | 2263 | `CQDSAV` | `KernalDiskSave` | routine | P4 P4R | none found | vendor | BASIC 4 disk jump-table entry: the dispatch entry of DSAVE — named for the keyword; jumps into BASIC 4's own disk commands (see D-Q5) |
 | 2264 | `CQDLOD` | `KernalDiskLoad` | routine | P4 P4R | none found | vendor | BASIC 4 disk jump-table entry: the dispatch entry of DLOAD — named for the keyword; jumps into BASIC 4's own disk commands (see D-Q5) |
-| 2265 | `CQDCAT` | `KernalDirectory` | routine | P4 P4R | other names here: DCAT (HV4, HV4R) | vendor | BASIC 4 disk jump-table entry: the dispatch entry of CATALOG and DIRECTORY — named for the keyword; jumps into BASIC 4's own disk commands (see D-Q5) |
+| 2265 | `CQDCAT` | `KernalDirectory` | routine | P4 P4R | other names here: DCAT (CBM4S79, HV4, HV4R) | vendor | BASIC 4 disk jump-table entry: the dispatch entry of CATALOG and DIRECTORY — named for the keyword; jumps into BASIC 4's own disk commands (see D-Q5) |
 | 2266 | `CQRENM` | `KernalRename` | routine | P4 P4R | none found | vendor | BASIC 4 disk jump-table entry: the dispatch entry of RENAME — named for the keyword; jumps into BASIC 4's own disk commands (see D-Q5) |
-| 2267 | `CQSCRA` | `KernalScratch` | routine | P4 P4R | other names here: SCRATC (HV4, HV4R) | vendor | BASIC 4 disk jump-table entry: the dispatch entry of SCRATCH — named for the keyword; jumps into BASIC 4's own disk commands (see D-Q5) |
-| 2268 | `CQRDDS` | `KernalReadDiskStatus` | routine | P4 P4R | other names here: READDS (HV4, HV4R) | vendor | BASIC 4 disk jump-table entry: reading DS or DS$ jumps here |
+| 2267 | `CQSCRA` | `KernalScratch` | routine | P4 P4R | other names here: SCRATC (CBM4S79, HV4, HV4R) | vendor | BASIC 4 disk jump-table entry: the dispatch entry of SCRATCH — named for the keyword; jumps into BASIC 4's own disk commands (see D-Q5) |
+| 2268 | `CQRDDS` | `KernalReadDiskStatus` | routine | P4 P4R | other names here: READDS (CBM4S79, HV4, HV4R) | vendor | BASIC 4 disk jump-table entry: reading DS or DS$ jumps here |
 | 2269 | `PLUSTK` | `TOKEN_PLUS` | token | PET | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | vendor | the + operator's token ($AA); FIN accepts it in an exponent — one definition with the token table's (see D-Q6) |
 | 2270 | `MINUTK` | `TOKEN_MINUS` | token | PET | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | vendor | the - operator's token; FIN accepts it in an exponent |
 | 2271 | `ERROV` | `ERROR_OVERFLOW` | error | PET | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | vendor | offset of OVERFLOW in ErrorTable, asserted against the table — AppleSoft.DispatchTables defines its own ($45): same name |

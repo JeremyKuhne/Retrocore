@@ -404,8 +404,8 @@ Reload:
 
 ;; Runs the handler, with its page's bit 7 back, then the carry clear.
 ;;
-;; The original IIe's listing calls this CTLGO, which the Enhanced listing gives <Reload>, so the name is left out of
-;; Also: here.
+;; The original IIe's listing calls this CTLGO, which the Enhanced listing gives <Reload>, so the name is not among
+;; this one's historical names.
 ;; Also: CTLGO0 (IIETRM85)
 Handle:
     ora #RUNS_WHEN_DISABLED

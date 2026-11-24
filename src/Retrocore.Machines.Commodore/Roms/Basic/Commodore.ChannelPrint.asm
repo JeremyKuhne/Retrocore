@@ -336,7 +336,7 @@ SubtractZone:
         tax
 
 ;; Prints X spaces, 256 for zero.
-;; Also: XSPAC (M6502, CBM4S79, HV2, HV4, HV4R), XSPAC1 (HV1, HV1R)
+;; Also: XSPAC (M6502), XSPAC1 (HV1, HV1R)
 CountInX:
         jsr PrintSpace
 

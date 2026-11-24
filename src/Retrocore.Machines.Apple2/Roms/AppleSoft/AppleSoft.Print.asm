@@ -54,13 +54,14 @@ Return:
     bne PrintSpaces::ContinuePrint
 
 .if ENHNCD
-;; Rounds the column up to the next zone and goes on to set it.
-;; Also: LINCHK (M6502)
+;; Rounds the column up to the next zone and goes on to set it. The overlay's LINCHK is here; Microsoft's is PRINT's
+;; number item, <Statements::Print::NumberItem>.
+;; Also: LINCHK (UNKN)
 NextZone:
 .else
-;; Rounds the column up to the next zone and sets it. Microsoft's LINCHK, the enhanced IIe's label here, falls inside
-;; the `and`'s operand in these builds, at <PrintComma::ZoneMaskOperand>, and Microsoft's TABER falls inside the next
-;; `jsr`'s operand.
+;; Rounds the column up to the next zone and sets it. The overlay's LINCHK, the enhanced IIe's label here, falls
+;; inside the `and`'s operand in these builds, at <PrintComma::ZoneMaskOperand>, and its TABER inside the next `jsr`'s
+;; operand.
 ;; Also: COMPR1 (UNKN)
 NextZone:
 .endif
@@ -72,8 +73,8 @@ NextZone:
     bcs PrintTabOrSpace::MoveToColumn
 .else
 
-;; The `and`'s operand, where Microsoft's LINCHK falls in these builds; nothing enters it here.
-;; Also: LINCHK (M6502)
+;; The `and`'s operand, where the overlay's LINCHK falls in these builds; nothing enters it here.
+;; Also: LINCHK (UNKN)
 ZoneMaskOperand = * + 1
     and #$F0
     sta TerminalPosition
@@ -92,16 +93,16 @@ ZoneMaskOperand = * + 1
 ReadArgument:
 .else
 
-;; Saves the carry and reads the argument. Microsoft's TABER, the enhanced IIe's name for this routine, falls inside the
-;; `jsr`'s operand in these builds, at <PrintTabOrSpace::EvaluateCallHigh>.
+;; Saves the carry and reads the argument. The overlay's TABER, the enhanced IIe's name for this routine, falls inside
+;; the `jsr`'s operand in these builds, at <PrintTabOrSpace::EvaluateCallHigh>.
 ;; Also: LINCH1 (UNKN)
 ReadArgument:
 .endif
     php
 .if .not ENHNCD
 
-;; The `jsr`'s high address byte, where Microsoft's TABER falls in these builds; nothing enters it here.
-;; Also: TABER (M6502)
+;; The `jsr`'s high address byte, where the overlay's TABER falls in these builds; nothing enters it here.
+;; Also: TABER (UNKN)
 EvaluateCallHigh = * + 2
 .endif
     jsr SkipAndEvaluateByte

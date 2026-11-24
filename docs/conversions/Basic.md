@@ -1071,7 +1071,9 @@ Decisions and how the table was applied:
   and listing comparisons), so dropping them would weaken those tests. They are `PrintComma::ZoneMaskOperand` and
   `PrintTabOrSpace::EvaluateCallHigh`, equates at the operand bytes, each documented as an address nothing enters.
   `PrintComma::NextZone` carries LINCHK in the enhanced IIe and COMPR1 elsewhere. `PrintTabOrSpace::ReadArgument`
-  carries TABER in the enhanced IIe and LINCH1 elsewhere.
+  carries TABER in the enhanced IIe and LINCH1 elsewhere. Microsoft's own LINCHK is PRINT's number item and its
+  TABER the `php`, so the enhanced IIe's `ReadArgument` cites TABER by M6502, but the comma code's LINCHK and the
+  operand byte's TABER are the overlay's own and cite UNKN.
 - I4. NOTABR is `PrintSpaces::ContinuePrint`, as X2 has it, not a top-level label (C-Q3's draft). ERRCRD and ERROR1
   are both `ReportError::PrintMessage`; the table gave the PET's as `ShowMessage`.
 - I5. The shared `IntegerVariableValue` expands inside each vendor's `LoadVariableValue`, so GOOO and GOOOOO are
@@ -1119,12 +1121,12 @@ Decisions and how the table was applied:
     listings too, as the workspace's do), all in the bibliography.
   - `BasicInterpreterRoutineTests` is new (below).
 - I12. Old names the table's rows give only for BASIC 2 and 4, which HV1 and HV1R also give to BASIC 1's own code:
-  XSPAC2 (`PrintSpaces::Next`), GLET (`DispatchStatement::ToLet`) and FREMES (`SignOnMessage`, inside
-  `BytesFreeMessage`'s string), each now a label in BASIC 1's branch, cited HV1 and HV1R. MORSTS, BASIC 1's own
-  compare inside `NextStatement`, is in prose: as a label it would be a per-build `NextStatement::` name, which the
-  standalone sources that define `NextStatement` cannot predefine. DIRCN1 (CBM4S79, HV2, HV4, HV4R) is now on
-  `NextStatement::ReadLine`. The overlay defines none of the BASIC 1 names at BASIC 1's addresses, so the
-  conversion test exempts those labels there.
+  CRTSKP (`PrintSpace::CursorRight`), XSPAC2 (`PrintSpaces::Next`), GLET (`DispatchStatement::ToLet`) and FREMES
+  (`SignOnMessage`, inside `BytesFreeMessage`'s string), each now a label in BASIC 1's branch, cited HV1 and HV1R.
+  MORSTS, BASIC 1's own compare inside `NextStatement`, is in prose: as a label it would be a per-build
+  `NextStatement::` name, which the standalone sources that define `NextStatement` cannot predefine. DIRCN1
+  (CBM4S79, HV2, HV4, HV4R) is now on `NextStatement::ReadLine`. The overlay defines none of the BASIC 1 names at
+  BASIC 1's addresses, so the conversion test exempts those labels there.
 
 Checked: the full suite, the rename gate, the lint tests and `BasicInterpreterConversionTests`. The suite has
 3,987 passed, none failed and 665 skipped; the skipped tests are the ROM-dump comparisons, which need dumps that

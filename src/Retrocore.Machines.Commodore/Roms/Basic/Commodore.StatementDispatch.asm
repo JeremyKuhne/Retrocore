@@ -183,7 +183,8 @@ ToLet:
         ;; Runs the next statement after a colon; anything else is a syntax error.
         ;; In: A = the nonzero byte at <TextPointer>
         ;; Entry:
-        ;;   ToSyntaxError = jumps to <SyntaxError>; <DispatchStatement> branches here for a token beyond the statements
+        ;;   ToSyntaxError = jumps to <SyntaxError>; for a token beyond the statements, BASIC 4's <DispatchStatement>
+        ;;     and BASIC 2's <CheckGoStatement> branch here
         ;; Also: MORSTS (M6502, CBM4S79, HV2, HV4, HV4R)
         .proc CheckStatementSeparator
         cmp #':'

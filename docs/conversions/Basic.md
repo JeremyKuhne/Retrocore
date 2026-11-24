@@ -219,8 +219,8 @@ worded differently, are the ones that count; ASRM78 is added by the first step t
 | HV4R | PET BASIC 4 revised (901465-23, -20, -21), reconstructed source | | Martin Hoffmann-Vetter | <https://github.com/mist64/cbmsrc/tree/01bd60f162ef92212ef0cb67546ae8f42be34168/BASIC_PET_V4R_REC> |
 | HVK4 | PET operating system 4.0 (901465-21, 901447-29, 901465-22), reconstructed source | | Martin Hoffmann-Vetter | <https://github.com/mist64/cbmsrc/tree/01bd60f162ef92212ef0cb67546ae8f42be34168/KERNAL_PET_4.0_REC> |
 
-The sources' comments cited "Apple TIL 76/79" and "Commodore BASIC 4 code18" in prose; #133 replaced those in the
-alias files with these keys (`COMBYTE (ASTIL, AS82)`), and the conversion moves them into `Also:` entries.
+The sources' comments cited "Apple TIL 76/79" and "Commodore BASIC 4 code18" in prose; #133 cites them in the
+alias files by these keys (`COMBYTE (ASTIL, AS82)`), and the conversion moves them into `Also:` entries.
 
 ## Step 3: the rename table
 
@@ -428,8 +428,9 @@ Commodore's BASIC 4 disk, monitor and record files, BASIC 1's patches, and the s
 
 - **Recommendation:**
   1. **Prerequisites:** the tool change for `Also:` in macros (D2), plan item B4's rename-proof test helper, and
-     symbol lookups by `Also:` in the debug hosts (X9). The first is merged (#132); the other two come with the
-     rename gate (`tests/Retrocore.Tests/BasicNames.cs`, and `SymbolsWithHistoricalNames` in the hosts).
+     symbol lookups by `Also:` in the debug hosts (X9). The first is merged (#132); the other two are on the
+     rename gate's branch, which brings them to main (`tests/Retrocore.Tests/BasicNames.cs`, and
+     `SymbolsWithHistoricalNames` in the hosts).
   2. **The workspace:** both Equates files, the layouts (X3), and the tokens and error codes in both dispatch-tables
      files.
   3. **The math package (part A),** with the vendors' float alias files becoming historical-names entries.
@@ -741,12 +742,12 @@ drafted, that an `Also:` inside a macro's body is ignored (#132 has since change
 and the rest cannot reach their new names from the definitions themselves, even though all of them are expanded once per
 build (x1). This is also why today's vendor alias files exist.
 
-- **Recommendation:** have the assembler and tools honor `Also:` on a label in a macro that is expanded at most once
-  per assembly. Every macro in this part that defines labels is x1. FLOAT_ONE (x3) defines no label. Microsoft's
-  names (M6502, ASTIL, CBM4S79 where every build has the name) then go on the definitions. A vendor-only name (D3)
-  goes in that vendor's alias file as a documented attachment to the qualified name, for example `PRNTFAC` for
-  `Float::PrintFac` (AppleSoft), `SQR05`/`TENC`/`N0999`/`RMULC` ... (Commodore), and `MULLN2`/`GFDIV`, which M6502
-  gives only for PET builds.
+- **Recommendation (done in #132):** have the assembler and tools honor `Also:` on a label in a macro that is expanded
+  at most once per assembly. Every macro in this part that defines labels is x1. FLOAT_ONE (x3) defines no label.
+  Microsoft's names (M6502, ASTIL, CBM4S79 where every build has the name) then go on the definitions. A vendor-only
+  name (D3) goes in that vendor's alias file as a documented attachment to the qualified name, for example `PRNTFAC` for
+  `Float::PrintFac` (AppleSoft), `SQR05`/`TENC`/`N0999`/`RMULC` ... (Commodore), and `MULLN2`/`GFDIV`, which M6502 gives
+  only for PET builds.
 - Alternative A: a shared `MsBasic.MathAliases.asm` (outside the macros) plus the vendor files, each old name an
   equate to the new name (`FADD = Float::AddPacked`). This works today, but the old names become real symbols: the
   editor gives no "historical name" hover and no quick fix.

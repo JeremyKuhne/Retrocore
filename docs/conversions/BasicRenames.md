@@ -469,7 +469,7 @@ to K12, R1 to R10).
 | 331 | `MEMORY_ACCESS_ADDRESS` | `AddressConversion` | macro | all |  | — | emits ReadAddressAndByte, ReadCommaAndByte and ConvertToAddress (x1) |
 | 332 | `rejectNegative` | `KEEP` | parameter of MEMORY_ACCESS_ADDRESS | all |  | — | reject a negative Fac address (PET); already descriptive |
 | 333 | `GETNUM` | `ReadAddressAndByte` | routine | all | M6502, ASTIL [AS], CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | evaluates a number, converts it to PokeAddress, then falls into ReadCommaAndByte; X = the byte — used by POKE and WAIT |
-| 334 | `COMBYT` | `ReadCommaAndByte` | routine | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no; alias COMBYTE in AppleSoft | requires a comma and jumps to GETBYT; X = the byte — Also: COMBYTE (ASTIL, AS82), as AppleSoft's alias file has it |
+| 334 | `COMBYT` | `ReadCommaAndByte` | routine | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no; alias COMBYTE in AppleSoft | requires a comma and jumps to GETBYT; X = the byte — Apple's COMBYTE (ASTIL, AS82) stays in AppleSoft's alias file, row 1391 |
 | 335 | `GETADR` | `ConvertToAddress` | routine | all | M6502, ASTIL [AS], CBM4S79 [P4 P4R], K4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R, HVK4 [P4 P4R]; spelling only: AS82 [AS] | no | rejects exponent >= $91 (and a negative sign where selected), QINT, stores the low 16 bits in PokeAddress; A = high, Y = low |
 | 336 | `MEMORY_ACCESS_PEEK` | `PeekFunction` | macro | all |  | — | emits PEEK with its save, guard and padding choices (x1) |
 | 337 | `preserveAddress` | `KEEP` | parameter of MEMORY_ACCESS_PEEK | all |  | — | restore PokeAddress around PEEK; already descriptive |
@@ -1718,7 +1718,7 @@ to K12, R1 to R10).
 
 | # | Old | New | Kind | Builds | Documents (checked) | D3 | Reason |
 | ---: | --- | --- | --- | --- | --- | --- | --- |
-| 1391 | `COMBYTE` | `AppleSoft::ReadCommaAndByte` | alias | AS | ASTIL [AS], AS82 [AS] | vendor | ASTIL's COMBYTE (its article 76) for the comma-and-byte entry; stays in AppleSoft's alias file (D3), pointing at COMBYT's new name. — target named by B2 |
+| 1391 | `COMBYTE` | `AppleSoft::ReadCommaAndByte` | alias | AS | ASTIL [AS], AS82 [AS] | vendor | COMBYTE (ASTIL, AS82; ASTIL's article 76) for the comma-and-byte entry; stays in AppleSoft's alias file (D3), pointing at COMBYT's new name. — target named by B2 |
 
 ### AppleSoft.NumericConversion
 

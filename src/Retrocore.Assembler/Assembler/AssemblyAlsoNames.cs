@@ -14,7 +14,7 @@ namespace Retrocore.Assembler;
 ///  <para>
 ///   A definition in a macro's body is defined again by each expansion. Its old names reach it only when the build
 ///   expands it exactly once: the names of a line that two expansions define reach neither, and the lint reports
-///   them. A name that differs in each expansion, a parameter's, a <c>.local</c> one or a cheap local, and a
+///   them where the assembly succeeds. A name that differs in each expansion, a parameter's, a <c>.local</c> one or a cheap local, and a
 ///   <c>.set</c> variable in a macro's body are never given old names.
 ///  </para>
 /// </remarks>

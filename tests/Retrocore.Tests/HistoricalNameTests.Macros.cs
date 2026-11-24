@@ -942,6 +942,29 @@ public sealed partial class HistoricalNameTests
 
             diagnostic.Path.Should().Be(second);
             diagnostic.Line.Should().Be(5);
+
+            // So is a check of the second macro's own section, expanded once.
+            File.WriteAllText(second, "; Second.\n;\n;\n.macro MB\n;; Two.\n;; Also: OLDB (NOSUCH)\nX:\n    rts\n.endmacro\n");
+            string once = text[..text.IndexOf(".scope S3", StringComparison.Ordinal)];
+            File.WriteAllText(main, once);
+            AssemblyResult built = new Retrocore.Assembler.Assembler().Assemble(
+                new AssemblySource(once, main),
+                new AssemblyOptions(ProcessorVariant.Mos6502, origin: 0x1000, imageSize: 0x100)
+                {
+                    SourceResolver = new FileAssemblySourceResolver()
+                });
+
+            built.Diagnostics.Should().BeEmpty();
+            files = [.. ((string[])[main, first, second]).Select(path => DocumentationParser.Parse(File.ReadAllText(path), path))];
+            DocumentationResolver cited = new(DocumentationSet.Create(files, built))
+            {
+                Bibliography = DocumentationBibliography.Parse(Bibliography)
+            };
+
+            DocumentationDiagnostic unknown = cited.Check().Should().ContainSingle().Subject;
+            unknown.Message.Should().Contain("NOSUCH");
+            unknown.Path.Should().Be(second);
+            unknown.Line.Should().Be(5);
         }
         finally
         {
@@ -1072,6 +1095,19 @@ public sealed partial class HistoricalNameTests
                 Plot 1
             .endscope
             """;
+
+        // A scope a parameter names is reported once, as a scope, which no build gives an old name.
+        const string NamedScope = """
+            .macro Entry name
+            ;; An entry.
+            ;; Also: OLD (TEST)
+            .scope name
+            .endscope
+            .endmacro
+                Entry Foo
+            """;
+
+        Check(NamedScope).Should().ContainSingle().Which.Message.Should().Contain("is a scope or type");
 
         // A .define's name isn't qualified by the scopes around it, so a parameter that names it is still found.
         const string Defined = """
@@ -1774,6 +1810,35 @@ public sealed partial class HistoricalNameTests
         {
             DocumentationSet set = Set(text);
             return new DocumentationResolver(set).Resolve(set.Find("Echo") ?? throw new AssertFailedException("No Echo."), name);
+        }
+    }
+
+    /// <summary>
+    ///  A link by the name a macro's expansion defined, from inside its scope or qualified, reaches the body's topic
+    ///  with the symbol's own value, as a link by its old name does.
+    /// </summary>
+    [TestMethod]
+    public void LinksByAnExpansionsNameReachItsTopic()
+    {
+        string text = $$"""
+            {{MacroLibrary}}
+            .scope Basic
+                Library
+            ;; Reads through <COMBYT> and <Basic::COMBYT>.
+            Echo:
+                rts
+            .endscope
+            """;
+
+        DocumentationSet set = Set(text);
+        DocumentationTopic echo = set.Find("Basic::Echo") ?? throw new AssertFailedException("No Echo.");
+        DocumentationResolver resolver = new(set);
+        foreach (string name in (string[])["COMBYT", "Basic::COMBYT"])
+        {
+            DocumentationTarget target = resolver.Resolve(echo, name);
+            (target.Topic?.Name).Should().Be("COMBYT");
+            target.Name.Should().Be("Basic::COMBYT");
+            target.Value.Should().Be(set.Symbols["Basic::COMBYT"]);
         }
     }
 

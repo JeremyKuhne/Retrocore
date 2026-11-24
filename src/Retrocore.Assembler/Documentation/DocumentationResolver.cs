@@ -250,7 +250,10 @@ public sealed partial class DocumentationResolver
         if (set.Find(name) is { } topic) { return Found(topic); }
         if (set.Symbols.TryGetValue(name, out long value))
         {
-            return new(DocumentationTargetKind.Symbol, name) { Set = set, Value = value };
+            // A symbol a macro's expansion defines is documented by its body's topic.
+            return set.FindSymbol(name) is { } expanded
+                ? Found(expanded) with { Name = name, Value = value }
+                : new(DocumentationTargetKind.Symbol, name) { Set = set, Value = value };
         }
 
         return also ? Also(set, name) : null;

@@ -185,9 +185,16 @@ public sealed partial class DocumentationResolver
             }
         }
 
+        // A section a macro's body writes is reported in the body's file, which needn't be the topic's first.
+        bool macros = topic.Comments.Any(comment => comment.Macro is not null);
         foreach (DocumentationSection section in topic.Sections.Where(section => !OtherBuildOutside(topic, section)))
         {
-            CheckSection(topic, section, Section, (message, line) => Warn(DocumentationRules.Also, message, line));
+            string path = macros && section.OriginPath is { } origin ? origin : topic.Path;
+            void At(string rule, string message, int line) =>
+                diagnostics.Add(new(message, path, line, DocumentationSeverity.Warning, rule));
+
+            CheckSection(topic, section, (message, line) => At(DocumentationRules.Sections, message, line),
+                (message, line) => At(DocumentationRules.Also, message, line));
         }
 
         CheckExpandedAlso(topic, diagnostics);
@@ -238,7 +245,10 @@ public sealed partial class DocumentationResolver
     // this build defines the line more than once. Null when they reach it, or outside a macro's body.
     private string? ExpandedAlso(DocumentationTopic topic, DocumentationComment comment)
     {
+        // A scope or a type has no old name in any build, which CheckAlso reports.
         if (comment.Macro is not { } macro) { return null; }
+        bool type = comment.Kind is DocumentationKind.Scope or DocumentationKind.Struct or DocumentationKind.Enum;
+        if (type) { return null; }
         if (comment.NamedByParameter)
         {
             return $"Also: {topic.Name} is named by a parameter of the macro {macro}, so each expansion names it "

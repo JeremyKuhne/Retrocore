@@ -252,6 +252,10 @@ public sealed partial class HistoricalNameTests
 
         DocumentationSet never = Set($"{MacroLibrary}\n");
         never.FindAlso("COMBYTE").Should().BeEmpty();
+
+        // A link by the old name reaches nothing either, and is reported; one by the current name still resolves.
+        string linked = $"{MacroLibrary}\n;; Reads through <COMBYTE> and <COMBYT>.\nEcho:\n    rts\n";
+        Check(linked).Should().ContainSingle().Which.Message.Should().Contain("'COMBYTE'");
     }
 
     /// <summary>
@@ -1051,9 +1055,32 @@ public sealed partial class HistoricalNameTests
             .endscope
             """;
 
-        Assemble(Around + "\n    jsr OLD\n").Diagnostics.Should().BeEmpty();
-        Check(Around).Should().BeEmpty();
-        Set(Around).FindAlso("OLD", thisBuild: true).Should().ContainSingle();
+        // So is one around an inner macro's definition in an outer macro's body.
+        const string Nested = """
+            .macro Outer
+            .scope Draw
+            .macro Plot Draw
+            ;; An entry.
+            ;; Also: OLD (TEST)
+            X:
+                rts
+            .endmacro
+            .endscope
+            .endmacro
+                Outer
+            .scope Basic
+                Plot 1
+            .endscope
+            """;
+
+        foreach (string text in (string[])[Around, Nested])
+        {
+            Assemble(text + "\n    jsr OLD\n").Diagnostics.Should().BeEmpty();
+            Check(text).Should().BeEmpty();
+            DocumentationSet set = Set(text);
+            DocumentationTopic topic = set.FindAlso("OLD", thisBuild: true).Should().ContainSingle().Which;
+            set.SymbolOf(topic, "OLD").Should().Be("Basic::X");
+        }
     }
 
     /// <summary>

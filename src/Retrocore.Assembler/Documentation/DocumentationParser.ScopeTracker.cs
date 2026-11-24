@@ -17,9 +17,8 @@ public static partial class DocumentationParser
         private readonly List<(int Depth, DocumentationUsing Using)> _usings = [];
         private DocumentationScopes? _current;
 
-        // The macro bodies open around the line, innermost last, with the names that differ in each expansion: the
-        // macro's parameters and its .local names.
-        // Each open macro, with how many scopes were open where its definition began.
+        // The macro bodies open around the line, innermost last, with the names that differ in each expansion (the
+        // macro's parameters and its .local names) and how many scopes were open where its definition began.
         private readonly List<(string Name, HashSet<string> Parameters, HashSet<string> Locals, int Depth)> _macros = [];
 
         /// <summary>
@@ -46,16 +45,15 @@ public static partial class DocumentationParser
             if (_macros.Count == 0) { return (false, false); }
 
             // A macro defined in another's body takes the outer one's parameters and .local names in each of its
-            // expansions too.
-            // The scopes around the outermost macro's definition aren't the expansion's: only what's written in it
-            // can vary.
-            string[] all = name.Split(["::"], StringSplitOptions.None);
-            string[] parts = [.. all.Skip(Math.Min(_macros[0].Depth, all.Length - 1))];
-            string last = parts[parts.Length - 1];
+            // expansions too. The scopes around each macro's definition aren't its expansion's: only the parts of the
+            // name written in its body can be its parameters or .local names.
+            string[] qualified = name.Split(["::"], StringSplitOptions.None);
+            IEnumerable<string> Written(int depth) => qualified.Skip(Math.Min(depth, qualified.Length - 1));
+            string last = qualified[qualified.Length - 1];
             bool local = (last.Length != 0 && last[0] == '@')
-                || parts.Any(part => _macros.Any(macro => macro.Locals.Contains(part)));
+                || _macros.Any(macro => Written(macro.Depth).Any(macro.Locals.Contains));
 
-            bool parameter = parts.Any(part => _macros.Any(macro => macro.Parameters.Contains(part)));
+            bool parameter = _macros.Any(macro => Written(macro.Depth).Any(macro.Parameters.Contains));
             return (!local && parameter, local);
         }
 

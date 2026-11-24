@@ -432,21 +432,19 @@ public sealed class BasicSharedSourceTests
         OneByte(initial).Should().Be(0x82);
 
         workspace.Update(path, second);
-        await WaitForByte(workspace, path, 0x83);
+        await ByteOnceIdle(workspace, path, 0x83);
         workspace.Close(path);
-        await WaitForByte(workspace, path, 0x81);
+        await ByteOnceIdle(workspace, path, 0x81);
         File.ReadAllText(path).Should().Be(disk);
     }
 
-    private static async Task WaitForByte(LanguageWorkspace workspace, string path, byte expected)
+    // Waits for every edit so far to be analyzed, however long that takes under load, then checks the result.
+    private static async Task ByteOnceIdle(LanguageWorkspace workspace, string path, byte expected)
     {
-        using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(15));
-        while (true)
-        {
-            SourceAnalysis? analysis = workspace.AnalysisOf(path);
-            if (analysis is { Result.Success: true } && OneByte(analysis) == expected) { return; }
-            await Task.Delay(50, timeout.Token);
-        }
+        await workspace.IdleAsync(path, CancellationToken.None);
+        SourceAnalysis analysis = workspace.AnalysisOf(path) ?? throw new AssertFailedException("The shared file was not analyzed.");
+        analysis.Result.Success.Should().BeTrue(string.Join('\n', analysis.Result.Diagnostics.Select(item => item.Message)));
+        OneByte(analysis).Should().Be(expected);
     }
 
     private static byte OneByte(SourceAnalysis analysis) =>

@@ -60,11 +60,7 @@ public sealed partial class LanguageAnalysisTests
             RecordingLanguageClient client = new();
             LanguageWorkspace workspace = new(client);
             workspace.Update(path, text);
-            SourceAnalysis? analysis = null;
-            for (int attempt = 0; attempt < 6 && analysis is null; attempt++)
-            {
-                analysis = await workspace.AnalysisOfAsync(path, CancellationToken.None);
-            }
+            SourceAnalysis? analysis = await workspace.AnalysisOfAsync(path, CancellationToken.None);
 
             analysis.Should().NotBeNull();
             DocumentUri uri = DocumentUri.FromFileSystemPath(path);
@@ -241,11 +237,7 @@ public sealed partial class LanguageAnalysisTests
             RecordingLanguageClient client = new();
             LanguageWorkspace workspace = new(client);
             workspace.Update(path, text);
-            SourceAnalysis? analysis = null;
-            for (int attempt = 0; attempt < 6 && analysis is null; attempt++)
-            {
-                analysis = await workspace.AnalysisOfAsync(path, CancellationToken.None);
-            }
+            SourceAnalysis? analysis = await workspace.AnalysisOfAsync(path, CancellationToken.None);
 
             analysis.Should().NotBeNull();
             DocumentUri uri = DocumentUri.FromFileSystemPath(path);
@@ -386,11 +378,7 @@ public sealed partial class LanguageAnalysisTests
             RecordingLanguageClient client = new();
             LanguageWorkspace workspace = new(client);
             workspace.Update(path, text);
-            SourceAnalysis? analysis = null;
-            for (int attempt = 0; attempt < 6 && analysis is null; attempt++)
-            {
-                analysis = await workspace.AnalysisOfAsync(path, CancellationToken.None);
-            }
+            SourceAnalysis? analysis = await workspace.AnalysisOfAsync(path, CancellationToken.None);
 
             DocumentationSet set = (analysis ?? throw new AssertFailedException("No analysis.")).Documentation;
             DocumentationTopic echo = set.Find("Echo") ?? throw new AssertFailedException("No Echo.");

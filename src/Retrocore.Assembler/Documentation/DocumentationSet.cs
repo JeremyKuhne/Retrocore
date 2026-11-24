@@ -32,6 +32,12 @@ public sealed class DocumentationSet
     // The topics of the symbols once-expanded macros' bodies define, by symbol, built on first use.
     private Dictionary<string, DocumentationTopic>? _bySymbol;
 
+    // The file topics by name, ignoring case, the first in source order of each; built on first use.
+    private Dictionary<string, DocumentationTopic>? _files;
+
+    // The topics whose Also: sections write each historical name, in source order; built on first use.
+    private Dictionary<string, List<DocumentationTopic>>? _written;
+
     private DocumentationSet(
         string? module,
         string? model,
@@ -274,6 +280,29 @@ public sealed class DocumentationSet
     /// <param name="name">The name, qualified for a member.</param>
     /// <returns>The topic, or null.</returns>
     public DocumentationTopic? Find(string name) => _topics.TryGetValue(name, out DocumentationTopic? topic) ? topic : null;
+
+    /// <summary>
+    ///  Finds a file's topic by the name its comment gives, ignoring case.
+    /// </summary>
+    /// <param name="name">The file's documented name.</param>
+    /// <returns>The first such topic in source order, or null.</returns>
+    public DocumentationTopic? FindFile(string name)
+    {
+        Dictionary<string, DocumentationTopic>? files = _files;
+        if (files is null)
+        {
+            // Built before it is published, as requests can ask from more than one thread.
+            files = [with(StringComparer.OrdinalIgnoreCase)];
+            foreach (DocumentationTopic topic in _ordered)
+            {
+                if (topic.Kind == DocumentationKind.File) { files.TryAdd(topic.Name, topic); }
+            }
+
+            _files = files;
+        }
+
+        return files.TryGetValue(name, out DocumentationTopic? file) ? file : null;
+    }
 
     /// <summary>
     ///  Finds a topic by the symbol its definition is: its documented name, or, for a definition in a macro's body
@@ -601,6 +630,41 @@ public sealed class DocumentationSet
     ///  Gets every historical name the topics give.
     /// </summary>
     public IEnumerable<string> AlsoNames => AlsoIndex().Keys;
+
+    /// <summary>
+    ///  Gets the topics any of whose <c>Also:</c> sections, merged or of one comment, write a historical name, whether
+    ///  or not it reaches them: every topic <see cref="Gives"/> can find giving it, and perhaps more.
+    /// </summary>
+    /// <param name="name">The historical name.</param>
+    /// <returns>The topics, in source order.</returns>
+    internal IReadOnlyList<DocumentationTopic> TopicsWriting(string name)
+    {
+        Dictionary<string, List<DocumentationTopic>>? written = _written;
+        if (written is null)
+        {
+            // Built before it is published, as requests can ask from more than one thread.
+            written = [with(StringComparer.Ordinal)];
+            foreach (DocumentationTopic topic in _ordered)
+            {
+                IEnumerable<DocumentationAlso> items = DocumentationAlso.Of(topic.Sections)
+                    .Concat(topic.Comments.SelectMany(comment => DocumentationAlso.Of(comment.Sections)));
+
+                foreach (DocumentationAlso item in items)
+                {
+                    if (!written.TryGetValue(item.Name, out List<DocumentationTopic>? topics))
+                    {
+                        written[item.Name] = topics = [];
+                    }
+
+                    if (topics.Count == 0 || !ReferenceEquals(topics[^1], topic)) { topics.Add(topic); }
+                }
+            }
+
+            _written = written;
+        }
+
+        return written.TryGetValue(name, out List<DocumentationTopic>? found) ? found : [];
+    }
 
     private Dictionary<string, List<DocumentationTopic>> AlsoIndex()
     {

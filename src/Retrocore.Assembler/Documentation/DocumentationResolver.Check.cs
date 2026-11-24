@@ -576,7 +576,7 @@ public sealed partial class DocumentationResolver
                 warn($"Also: {also.Name} is also {sibling}, a member of the same type, which it would not mean.", section.Line);
             }
             else if (Current.AlsoOf(topic).Any(item => item.Name == also.Name)
-                && Current.Topics.FirstOrDefault(other => Clashes(topic, other, also.Name)) is { } other)
+                && Current.TopicsWriting(also.Name).FirstOrDefault(other => Clashes(topic, other, also.Name)) is { } other)
             {
                 warn($"Also: {other.Name} has the historical name {also.Name} too.", section.Line);
             }

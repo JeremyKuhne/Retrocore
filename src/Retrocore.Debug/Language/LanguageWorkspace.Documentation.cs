@@ -173,7 +173,7 @@ internal sealed partial class LanguageWorkspace
             foreach (string name in set.AlsoNames)
             {
                 // A name a root symbol has is never historical; one a scope defines is checked at each use, below.
-                if (analysis.Definitions.Any(site => site.Name == name)) { continue; }
+                if (analysis.Defines(name)) { continue; }
 
                 // The file's own build gives its old names first: an SDK module's Also: of the same spelling, which
                 // the build does not include, neither replaces nor cancels one the build gives.

@@ -13,6 +13,9 @@
 ;; Also: NCMPOS (M6502)
 LAST_COMMA_COLUMN = $0E
 
+;; The column at or past which PRINT's comma starts a new line instead of moving to the next zone.
+COMMA_NEWLINE_COLUMN = 24
+
 ;; Prints a carriage return, then complements A for the callers that test the result.
 ;; Entry:
 ;;   Finish = complements A; the shared <PrintString> enters here after printing a return from a string
@@ -33,8 +36,8 @@ Return:
     rts
 .endproc
 
-;; PRINT's comma: starts a new line at or past column 24, and otherwise moves to the next 16-column zone. The
-;; enhanced IIe reads the column through <CHKCOL>, for 80 columns, and prints spaces to the zone through
+;; PRINT's comma: starts a new line at or past <COMMA_NEWLINE_COLUMN>, and otherwise moves to the next 16-column
+;; zone. The enhanced IIe reads the column through <CHKCOL>, for 80 columns, and prints spaces to the zone through
 ;; <PrintTabOrSpace>; the II Plus and IIe only store the zone's column in <TerminalPosition>.
 ;; Also: COMPRT (M6502)
 .proc PrintComma
@@ -44,7 +47,7 @@ Return:
 .else
     lda TerminalPosition
 .endif
-    cmp #24                         ; the last zone's first column
+    cmp #COMMA_NEWLINE_COLUMN
     bcc NextZone
     jsr PrintNewline
     bne PrintSpaces::ContinuePrint
@@ -55,8 +58,8 @@ Return:
 NextZone:
 .else
 ;; Rounds the column up to the next zone and sets it. Microsoft's LINCHK, the enhanced IIe's label here, falls inside
-;; the `and`'s operand in these builds, at <PrintComma::ZoneMaskOperand>, and the `TAB` and `SPC` entry's bytes overlap
-;; the next instructions.
+;; the `and`'s operand in these builds, at <PrintComma::ZoneMaskOperand>, and Microsoft's TABER falls inside the next
+;; `jsr`'s operand.
 ;; Also: COMPR1 (UNKN)
 NextZone:
 .endif
@@ -131,7 +134,7 @@ MoveToColumn:
 ;; Prints A spaces, then continues PRINT; <PrintTabOrSpace> falls into it with the count for `TAB`.
 ;; Entry:
 ;;   CountInX = prints X spaces (zero prints none); <PrintTabOrSpace>'s `SPC` enters here
-;;   ContinuePrint = rereads the current character and continues PRINT at <Statements::Print::Item> without a newline;
+;;   ContinuePrint = reads the next character and continues PRINT at <Statements::Print::Item> without a newline;
 ;;     the shared PRINT, <PrintComma> and <PrintTabOrSpace> branch here
 ;; Also: ASPAC (M6502)
 .proc PrintSpaces
@@ -148,7 +151,7 @@ Next:
     dex
     bne One
 
-;; Rereads the current character and continues PRINT without a newline.
+;; Reads the next character and continues PRINT without a newline.
 ;; Also: NOTABR (M6502)
 ContinuePrint:
     jsr GetNextCharacter

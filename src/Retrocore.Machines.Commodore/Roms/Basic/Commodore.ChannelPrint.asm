@@ -329,7 +329,7 @@ SubtractZone:
         ;; Prints A spaces, then continues PRINT; <PrintComma> branches here and <PrintTabOrSpace> falls into it.
         ;; Entry:
         ;;   CountInX = prints X spaces, 256 for zero; <PrintTabOrSpace>'s `SPC` enters here
-        ;;   ContinuePrint = rereads the current character and continues PRINT at <Statements::Print::Item> without
+        ;;   ContinuePrint = reads the next character and continues PRINT at <Statements::Print::Item> without
         ;;     a newline; the shared PRINT and <PrintTabOrSpace> branch here
         ;; Also: ASPAC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
         .proc PrintSpaces
@@ -342,7 +342,7 @@ CountInX:
         dex
         bne CountInX
 
-;; Rereads the current character and continues PRINT without a newline.
+;; Reads the next character and continues PRINT without a newline.
 ;; Also: NOTABR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 ContinuePrint:
         jsr GetNextCharacter
@@ -352,7 +352,7 @@ ContinuePrint:
         ;; Prints A spaces, then continues PRINT; <PrintComma> branches here and <PrintTabOrSpace> falls into it.
         ;; Entry:
         ;;   CountInX = prints X spaces (zero prints none); <PrintTabOrSpace>'s `SPC` enters here
-        ;;   ContinuePrint = rereads the current character and continues PRINT at <Statements::Print::Item> without
+        ;;   ContinuePrint = reads the next character and continues PRINT at <Statements::Print::Item> without
         ;;     a newline; the shared PRINT and <PrintTabOrSpace> branch here
         ;; Also: ASPAC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
         .proc PrintSpaces
@@ -369,7 +369,7 @@ Next:
         dex
         bne One
 
-;; Rereads the current character and continues PRINT without a newline.
+;; Reads the next character and continues PRINT without a newline.
 ;; Also: NOTABR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 ContinuePrint:
         jsr GetNextCharacter

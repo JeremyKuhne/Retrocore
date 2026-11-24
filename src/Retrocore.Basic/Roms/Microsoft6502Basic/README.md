@@ -134,38 +134,38 @@ and `PROBE_TEST_BYTE` are bytes; `NULL_INCREMENT_LIMIT` is 2 through 255.
 
 | Choice | BASIC 1 default | Macro parameter or effect |
 | --- | --- | --- |
-| `GO_TOKEN` | 0 | `COMMODORE_DISPATCH_TABLES` `goToken`: emit GO in the word table. |
-| `BAD_DATA_ERROR` | 1 | `COMMODORE_DISPATCH_TABLES` `badData`: say BAD DATA, not FILE DATA. |
-| `COMMAND_TEST_CHARACTER` | 0 | `COMMODORE_COMMAND_LOOP` `testCharacter`: explicitly test the fetched character. |
-| `COMMAND_RESET_BEFORE_INSERT` | 0 | `COMMODORE_COMMAND_LOOP` `resetBeforeInsert`: clear and relink before insertion. |
-| `LINK_RETURNS` | 0 | `COMMODORE_COMMAND_LOOP` `linkReturns`: return from relinking instead of entering the prompt. |
-| `EARLY_LINE_EDIT` | 1 | `COMMODORE_TERMINAL_INPUT` `earlyDelete`: keep early editor entries and their newline. |
-| `TOKENIZE_SKIP_SPACES` | 1 | `COMMODORE_TOKENIZE` `skipKeywordSpaces`: allow spaces within reserved words. |
+| `GO_TOKEN` | 0 | `CommodoreDispatchTables` `goToken`: emit GO in the word table. |
+| `BAD_DATA_ERROR` | 1 | `CommodoreDispatchTables` `badData`: say BAD DATA, not FILE DATA. |
+| `COMMAND_TEST_CHARACTER` | 0 | `CommodoreCommandLoop` `testCharacter`: explicitly test the fetched character. |
+| `COMMAND_RESET_BEFORE_INSERT` | 0 | `CommodoreCommandLoop` `resetBeforeInsert`: clear and relink before insertion. |
+| `LINK_RETURNS` | 0 | `CommodoreCommandLoop` `linkReturns`: return from relinking instead of entering the prompt. |
+| `EARLY_LINE_EDIT` | 1 | `CommodoreTerminalInput` `earlyDelete`: keep early editor entries and their newline. |
+| `TOKENIZE_SKIP_SPACES` | 1 | `CommodoreTokenize` `skipKeywordSpaces`: allow spaces within reserved words. |
 | `NEW_CLEAR_CARRY` | 0 | `ProgramReset` `clearCarry`: clear carry before adding two. |
 | `RUN_SET_ZERO` | 0 | `ProgramReset` `runSetsZero`: load zero after positioning the text pointer. |
 | `RESET_STACK_EARLY` | `1-REVISD` | `ExecutionReset` `earlyStack`: store the return address before moving the stack pointer. |
 | `RESET_STACK_PADDING` | `REVISD` | `ExecutionReset` `paddedReturn`: retain the revised reset's extra RTS and unused byte. |
 | `RESET_STACK_POINTER` | `<(STACK_END-$101-2*RESET_STACK_EARLY)` | `ExecutionReset` `stackTop`: byte loaded into the stack pointer. |
 | `LIST_GUARD_OFFSET` | 0 | `ListLines` `guardOffset`: stop if a malformed line's index wraps. |
-| `STATEMENT_FETCH_NOP` | 0 | `COMMODORE_STATEMENT_FETCH` `spareByte`: insert the later NOP. |
-| `EARLY_SEPARATOR_CHECK` | 1 | `COMMODORE_STATEMENT_FETCH` `earlySeparators`: check separators before the link. |
-| `SHORT_END_BRANCH` | 1 | `COMMODORE_STATEMENT_FETCH` `shortEnd`: branch directly to end-of-program. |
-| `EARLY_STATEMENT_DISPATCH` | 1 | `COMMODORE_STATEMENT_DISPATCH` `earlyDispatch`: use the early carry and error paths. |
+| `STATEMENT_FETCH_NOP` | 0 | `CommodoreStatementFetch` `spareByte`: insert the later NOP. |
+| `EARLY_SEPARATOR_CHECK` | 1 | `CommodoreStatementFetch` `earlySeparators`: check separators before the link. |
+| `SHORT_END_BRANCH` | 1 | `CommodoreStatementFetch` `shortEnd`: branch directly to end-of-program. |
+| `EARLY_STATEMENT_DISPATCH` | 1 | `CommodoreStatementDispatch` `earlyDispatch`: use the early carry and error paths. |
 | `STOP_BY_LINE_NUMBER` | 0 | `StopAndContinue` `lineNumberDirect`: detect direct mode by line number instead of text page. |
 | `NULL_INCREMENT_LIMIT` | 10 | `NullStatement` `incrementedLimit`: first rejected incremented NULL count. |
 | `RETURN_LOW_FOR_POINTER` | 1 | `ReturnStatement` `searchLow`: set the low instead of high FOR-pointer byte. |
 | `QUOTE_BRANCH_FIRST` | 1 | `StatementScan` `quoteFirst`: branch on a quote before a non-quote. |
 | `TIME_LONG_ERROR` | 1 | `TIME_STRING_ASSIGNMENT` `longLengthError`: use the long invalid-length jump. |
 | `PRINT_CLEAR_SPC_CARRY` | 0 | `PrintItems` `clearSpaceCarry`: clear carry before SPC dispatch. |
-| `PRINT_NULL_PADDING` | 1 | `COMMODORE_LINE_END` `nullPadding`: print the configured NULLs after a newline. |
-| `PRINT_TOKEN_SPACING` | 1 | `COMMODORE_PRINT_SPACING` `tokenDispatch`: select TAB/SPC by token and use the early space loop. |
-| `ALWAYS_SKIP_CHARACTER` | 1 | `COMMODORE_CHARACTER_OUTPUT` `alwaysSkip`: send cursor-right on all channels. |
-| `INPUT_ERROR_EDITOR_PATCH` | 1 | `COMMODORE_INPUT_ERROR` `editorPatch`: use the editor's error-line helper. |
-| `INPUT_STOP_EDITOR_PATCH` | 1 | `COMMODORE_INPUT_STATEMENT` `editorPatch`: use the editor's blank-INPUT stop helper. |
+| `PRINT_NULL_PADDING` | 1 | `CommodoreLineEnd` `nullPadding`: print the configured NULLs after a newline. |
+| `PRINT_TOKEN_SPACING` | 1 | `CommodorePrintSpacing` `tokenDispatch`: select TAB/SPC by token and use the early space loop. |
+| `ALWAYS_SKIP_CHARACTER` | 1 | `CommodoreCharacterOutput` `alwaysSkip`: send cursor-right on all channels. |
+| `INPUT_ERROR_EDITOR_PATCH` | 1 | `CommodoreInputError` `editorPatch`: use the editor's error-line helper. |
+| `INPUT_STOP_EDITOR_PATCH` | 1 | `CommodoreInputStatement` `editorPatch`: use the editor's blank-INPUT stop helper. |
 | `GET_POINTER_Y_FIRST` | 1 | `VariableInput` `getPointerYFirst`: load GET's buffer-pointer high byte first. |
 | `GET_STRING_EDITOR_PATCH` | 1 | `VariableInput` `patchedGetString`: use the editor's GET string helper. |
 | `NEXT_COUNTED_STACK` | 1 | `NextEntries` `countedStack`: count through the FOR frame rather than compute offsets. |
-| `CLOCK_EDITOR_PATCH` | 1 | `COMMODORE_VARIABLE_VALUE` `clockPatch`: use the editor's TI and TI$ checks. |
+| `CLOCK_EDITOR_PATCH` | 1 | `CommodoreVariableValue` `clockPatch`: use the editor's TI and TI$ checks. |
 | `INTIDX_USE_FRMNUM` | 1 | `IntegerConversion` `evaluateEntry`: use FRMNUM, or FRMEVL when 0. |
 | `POSINT_CHECK_TYPE` | 0 | `IntegerConversion` `checkType`: check the numeric type at POSINT. |
 | `ARRAY_SAVE_OFFSET_HIGH` | 0 | `ArrayLookup` `saveOffsetHigh`: retain the corrected high offset byte. |
@@ -186,17 +186,17 @@ and `PROBE_TEST_BYTE` are bytes; `NULL_INCREMENT_LIMIT` is 2 through 255.
 | `ZERO_IN_HALF_CONSTANT` | 0 | Define `ZeroValue` in `Float::Half` when 1, or emit ZERO at `SimpleVariableLookup` when 0. |
 | `WAIT_EASTER_EGG` | 0 | Emit the hidden WAIT routine and signature, and route the omitted-mask branch to it. |
 | `RANDOM_SEED_TAIL` | `$59` | `CharacterReader` `seedTail`: the random seed's last byte. |
-| `INIT_MARK_DIRECT` | 1 | `COMMODORE_INITIALIZE` `markDirect`: mark the current line direct. |
-| `INIT_LINE_WIDTH` | 0 | `COMMODORE_INITIALIZE` `lineWidth`: initialize the width and comma-zone position. |
-| `INIT_DELAY_SIZE` | 1 | `COMMODORE_INITIALIZE` `delayedSize`: set descriptor size after clearing flags. |
-| `INIT_EARLY_BUFFER_SETUP` | 1 | `COMMODORE_INITIALIZE` `earlyBufferSetup`: restore the comma and print a newline. |
-| `PROBE_LOAD_ZERO` | 1 | `COMMODORE_MEMORY_PROBE` `explicitZero`: load zero before setting the RAM address. |
-| `PROBE_LOAD_INDEX_ZERO` | 1 | `COMMODORE_MEMORY_PROBE` `explicitIndex`: load Y with zero rather than copy A. |
-| `PROBE_SAVE_START` | 0 | `COMMODORE_MEMORY_PROBE` `saveProgramStart`: save TXTTAB before probing. |
-| `PROBE_STOP_AT_SCREEN` | 1 | `COMMODORE_MEMORY_PROBE` `screenStop`: compare against the early screen boundary. |
-| `PROBE_TEST_BYTE` | `$92` | `COMMODORE_MEMORY_PROBE` `probeByte`: first value written when testing RAM. |
-| `START_CARRY_PROGRAM_START` | 1 | `COMMODORE_START_PROGRAM` `carryProgramStart`: carry the start increment into the high byte. |
-| `START_BANNER_AFTER_FREE` | 1 | Select the early sign-on both in `COMMODORE_START_PROGRAM` and `COMMODORE_START_MESSAGES`. |
+| `INIT_MARK_DIRECT` | 1 | `CommodoreInitialize` `markDirect`: mark the current line direct. |
+| `INIT_LINE_WIDTH` | 0 | `CommodoreInitialize` `setLineWidth`: initialize the width and comma-zone position. |
+| `INIT_DELAY_SIZE` | 1 | `CommodoreInitialize` `delayedSize`: set descriptor size after clearing flags. |
+| `INIT_EARLY_BUFFER_SETUP` | 1 | `CommodoreInitialize` `earlyBuffer`: restore the comma and print a newline. |
+| `PROBE_LOAD_ZERO` | 1 | `CommodoreMemoryProbe` `explicitZero`: load zero before setting the RAM address. |
+| `PROBE_LOAD_INDEX_ZERO` | 1 | `CommodoreMemoryProbe` `explicitIndex`: load Y with zero rather than copy A. |
+| `PROBE_SAVE_START` | 0 | `CommodoreMemoryProbe` `saveProgramStart`: save TXTTAB before probing. |
+| `PROBE_STOP_AT_SCREEN` | 1 | `CommodoreMemoryProbe` `screenStop`: compare against the early screen boundary. |
+| `PROBE_TEST_BYTE` | `$92` | `CommodoreMemoryProbe` `probeByte`: first value written when testing RAM. |
+| `START_CARRY_PROGRAM_START` | 1 | `CommodoreStartProgram` `carryProgramStart`: carry the start increment into the high byte. |
+| `START_BANNER_AFTER_FREE` | 1 | Select the early sign-on both in `CommodoreStartProgram` and `CommodoreStartMessages`. |
 
 These are individual source choices, not a promise that every combination is a valid BASIC 1 ROM. The root
 still asserts its exact editor-spill and patch addresses; a length-changing selection can fail those assertions,

@@ -160,8 +160,8 @@ StoreLink:
     LinkLine 0
 .endproc
 
-;; The longest line AppleSoft keeps from the Monitor's input.
-INPUT_LINE_LIMIT = 239
+;; The longest line AppleSoft keeps from the Monitor's input: the buffer, less the zero that ends the line.
+INPUT_LINE_LIMIT = INPUT_BUFFER_LENGTH - 1
 
 ;; Reads a line through the Monitor without printing a prompt character.
 ;;

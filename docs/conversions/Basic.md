@@ -1083,7 +1083,8 @@ Decisions and how the table was applied:
   routine's scope within one file. Where a routine's start differs by build, each `.if` branch opens and closes its
   own `.proc` (Commodore's `EvaluateVariableBody` and `EvaluateVariable`), or a per-build label carries the old
   names.
-- I8. New constants: AppleSoft's `CONTROL_C` and `KEYBOARD_CONTROL_C`, and Commodore's `CARRIAGE_RETURN`,
+- I8. New constants: AppleSoft's `CONTROL_C`, `KEYBOARD_CONTROL_C`, `COMMA_NEWLINE_COLUMN`, `INPUT_LINE_LIMIT` and
+  `PROGRAM_ORIGIN` (with `INPUT_BUFFER_BASE` and `LAST_COMMA_COLUMN` from I2), and Commodore's `CARRIAGE_RETURN`,
   `LINE_FEED`, `CURSOR_RIGHT`, `CURSOR_LEFT` and `DELETE_CHARACTER`. Two `*+5` branches are labels: `ReadLine` in
   the statement fetch and `StoreLink` in the command loop's link pass.
 - I9. Part F's names stay as they are in the code: BASIC 4's trampoline ISVAR (the shared evaluator still branches
@@ -1093,14 +1094,15 @@ Decisions and how the table was applied:
 - I11. Tests and their helpers:
   - `BasicNames.CurrentNamesOf` takes the names in `VendorLabelNames` last, and such a name gives way to any other
     old name of the same current name. Another per-build name still gives way only to one that names a single
-    definition, apart from NTHIS1 and NTHIS2, which the vendors give one step apart (`ShiftedNames`).
+    definition. Where NTHIS1 and NTHIS2, which the vendors give one step apart (`ShiftedNames`), name one current
+    name with different values, that name is left out, so a source that needs it fails as unresolved.
   - `BasicNames.CurrentLabel` labels a test's own definition by its current names alone. Defining the old name too
     would be a second definition of a name a source's `Also:` gives; the rename gate found this in the composed
     PET source.
   - The standalone PET sources predefine `BasicNames.ScopedNames` in `PetNativeEquatesTests.Assemble` (and no longer
     a second time in the array test), and the GET test includes `MsBasic.VariableInput.asm` for `INPUT_MODE_GET`.
   - The rename gate renames `ReservedWords` (both dispatch tables) and LASTWR: the interpreter files are converted,
-    and LASTWR is the only plain label left that both vendors' unconverted files define.
+    and LASTWR is the only label left that both vendors' unconverted files define (in BASIC 1, in a macro's body).
   - `VendorOldNamesResolveOnlyInTheirVendorsBuilds` reads the interpreter files too, and counts a name a shared
     module gives in one vendor's builds as that vendor's where the other's own files give it. It pins that set to
     LINCHK.
@@ -1110,8 +1112,8 @@ Decisions and how the table was applied:
     that the MACRO-10 overlay defines reaches its value, and every definition reaches the overlay by a name, apart
     from the new constants, the two `*+5` labels, `PrintTabOrSpace`, whose old names are on its per-build label
     (I3), and `PrintSpace::CursorRight`, whose CRTSKP the overlay does not define in BASIC 1.
-    Each old name cites its vendor's documents (for Commodore, the BASIC 4 kernal listings too, as the workspace's
-    do), all in the bibliography.
+    Each old name cites only its vendor's documents, Microsoft's source or UNKN (for Commodore, the BASIC 4 kernal
+    listings too, as the workspace's do), all in the bibliography.
   - `BasicInterpreterRoutineTests` is new (below).
 
 Checked: the full suite, the rename gate, the lint tests and `BasicInterpreterConversionTests`. The suite has
@@ -1124,7 +1126,7 @@ their `Out:` values:
 - AppleSoft's `InputLine`: lines of 0, 3, 239 and 245 characters (cut to 239), bit 7 cleared, the zero after them,
   the blank prompt, and A, X and Y.
 - `Tokenize` in both builds: the token, `TextPointer` and Y with the header.
-- AppleSoft's `CheckStop`: other keys return at once and leave the key; Control-C goes on to `InputCharacter`.
+- AppleSoft's `CheckStop`: other keys return at once with the key in A; Control-C goes on to `InputCharacter`.
 - AppleSoft's `PrintCharacter`: bit 7 and `FlashMask` on a printable character only, and A with bit 7 clear.
 - BASIC 4's `PrintCharacter`: the kernal's A, with zero and negative from it.
 

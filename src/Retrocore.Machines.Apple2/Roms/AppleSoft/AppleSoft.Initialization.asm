@@ -7,7 +7,8 @@
 
     CharacterReader $58
 
-;; Where a program starts: the zero before its first line; the first line follows it at $0801.
+;; Where a program starts: the zero before its first line; the first line follows it at $0801. The RAM probe starts
+;; on the page after it.
 PROGRAM_ORIGIN = $0800
 
 ;; Cold-starts AppleSoft, initializes its workspace and enters <CommandLoop>.

@@ -101,7 +101,8 @@ public sealed class BasicWorkspaceConversionTests
 
     /// <summary>
     ///  An old name only one vendor's converted files give resolves in none of the other vendor's builds, and the
-    ///  shared layouts give only Microsoft's names, citing with M6502 the PET documents of their lineage.
+    ///  shared layouts give only Microsoft's names, citing with M6502 the PET documents of their lineage. A name a
+    ///  shared module gives in one vendor's builds and the other vendor's own files give, LINCHK alone, is both's.
     /// </summary>
     [TestMethod]
     public void VendorOldNamesResolveOnlyInTheirVendorsBuilds()

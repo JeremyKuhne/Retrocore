@@ -136,8 +136,8 @@ Done:
     rts
 .endproc
 
-;; Returns X less the output column: <TerminalPosition>, or, with 80 columns (<RD80VI>), <OURCH>, subtracted with the
-;; caller's carry.
+;; Returns X less the output column: <TerminalPosition>, subtracted with carry set, or, with 80 columns (<RD80VI>),
+;; <OURCH>, subtracted with the caller's carry.
 ;; In: X = the target column
 ;; Out: A = X less the column; carry = set where there is no borrow
 ;; Entry:

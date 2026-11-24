@@ -247,8 +247,8 @@ Right:
 .endproc
 
 ;; <HighRes::XorDrawShape>'s step: where the vector's plot bit is set, toggles the pixel, counting it in
-;; <CollisionCount> where it was clear, then moves along the vector through <HighRes::PlotStep::Move>. Apple's DRWPNT
-;; is this XDRAW step, and its XDRPNT the DRAW step: the old names are the wrong way round.
+;; <CollisionCount> where it was clear, then moves along the vector through <HighRes::PlotStep::Move>. The overlay's
+;; DRWPNT is this XDRAW step, and its XDRPNT the DRAW step: the names are the wrong way round for this code.
 ;; In: HighResDeltaX+1 = the shape byte, its vector in the low three bits
 ;; Entry:
 ;;   Across = the same with carry set, so the move is a quarter turn from the vector; <HighRes::XorDrawShape> calls
@@ -922,7 +922,7 @@ LineTo:
 ;; at an optional `AT` point, and returns the rotation. Shape number 0 is accepted: it reads the table's count byte
 ;; and the unused byte after it as an offset.
 ;; Out: A = <ShapeRotation>
-;; Errors: ILLEGAL QUANTITY for a shape number above the table's count
+;; Errors: ILLEGAL QUANTITY for a shape number above the table's count, or an `AT` point outside the screen
 ;; Also: SHNUM (UNKN)
 .proc ReadShapeNumber
     jsr EvaluateByte

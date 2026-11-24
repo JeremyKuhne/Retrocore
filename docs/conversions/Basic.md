@@ -1205,8 +1205,8 @@ Decisions and how the table was applied:
   past it, since it compares the array's length with the stored length less one.
 - E-7. Tests and their helpers:
   - The rename gate's macro rename is now `AssignString`, the top-level label at the end of the shared
-    AssignmentStart macro: LASTWR, which it renamed, is converted here and in part F. The gate now exercises the
-    lookups of AssignString's old name, INPCOM, instead of LASTWR's.
+    AssignmentStart macro: LASTWR, which it renamed, is converted here and in part F. The gate now exercises
+    lookups by AssignString, the name it renames, instead of by LASTWR.
   - `BasicSharedFloatAliasesTests` counts WAIT among AppleSoft's names, and `BasicSharedMemoryAccessTests` expects
     WAIT's topic to be the alias's.
   - `BasicMathMachine.Call` and `CallUntil` take an optional `negative`, for a routine that tests the flag its

@@ -368,8 +368,8 @@ FoundLetter:
     jsr Scanner::ParseNumber
     bcs SyntaxError
 
-    ; Compare ParsedNumber with the option's lowest and highest values: its OptionRange, four bytes each, at
-    ; ScannerScratch * 4.
+    ; Compare ParsedNumber with the option's lowest and highest values: its entry in OptionRanges, four bytes an
+    ; option, at ScannerScratch * 4.
     lda a:ScannerScratch
     asl a
     asl a

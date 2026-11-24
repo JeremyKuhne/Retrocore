@@ -111,8 +111,8 @@ Done:
 EndOfData:
     jmp AppendFix::EndOfData
 
-    ; Space the 1983 DOS's revision B patch fills with its call to AppendFix::ClearUnlessAppend; neither byte is
-    ; reached.
+    ; Two bytes no code reaches: where the 1983 DOS has its own unreached NOP and the first byte of its revision B
+    ; call to AppendFix::ClearUnlessAppend.
     nop
     nop
 

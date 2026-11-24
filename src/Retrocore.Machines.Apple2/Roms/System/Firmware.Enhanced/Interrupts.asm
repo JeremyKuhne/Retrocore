@@ -457,9 +457,9 @@ NextMode:
 ;; At $C500. For `SHLOAD` it reads the shape table's two-byte length into <LINNUM> and, when the table fits between
 ;; <STREND> and HIMEM (<MEMSIZ>), loads it just below HIMEM (<AppleSoftCassette::ShapeTable>); otherwise it returns
 ;; carry set, meaning memory is full, but leaves the start's low byte on the stack, so the return goes astray: a bug
-;; in the ROM. The fit is checked on the high bytes only: the table must
-;; start in a page above <STREND>'s. For `STORE` and `RECALL` it sets A1 and A2 to the array's data
-;; (<AppleSoftCassette::ArrayBlock>), which AppleSoft then writes or reads with the Monitor.
+;; in the ROM. The fit is checked on the high bytes only: the table must start in a page above <STREND>'s. For
+;; `STORE` and `RECALL` it sets A1 and A2 to the array's data (<AppleSoftCassette::ArrayBlock>), which AppleSoft
+;; then writes or reads with the Monitor.
 ;; In: carry = set for `SHLOAD`, clear for `STORE` and `RECALL`, LOWTR = the array, LINNUM = its size less one
 ;;     (`STORE` and `RECALL`)
 ;; Out: carry = set when the shape table does not fit (that return goes astray, as above)

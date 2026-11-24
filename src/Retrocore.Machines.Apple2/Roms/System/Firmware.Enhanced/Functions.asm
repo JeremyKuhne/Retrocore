@@ -166,7 +166,7 @@ NextLine:
     ldy WindowWidth
     dey
     pla
-    ; The carry is clear, from the line base or the line count's compare.
+    ; The carry is clear, from the line base.
     adc #1
     cmp WindowBottom
     bcs ClearBottom

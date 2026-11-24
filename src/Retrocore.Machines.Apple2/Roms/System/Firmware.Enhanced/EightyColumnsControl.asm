@@ -514,7 +514,8 @@ Inner:
     rts
 .endproc
 
-;; Control-H: moves the cursor left; from the first column, to the last of the line above.
+;; Control-H: moves the cursor left; from the first column, to the last of the line above, or of the same line on
+;; the window's top line.
 ;; Also: X_BS (IIEROM82, IIETRM85), BACKSPC80 (UNKN)
 .proc Left
     dec EightyColumns::CursorColumn

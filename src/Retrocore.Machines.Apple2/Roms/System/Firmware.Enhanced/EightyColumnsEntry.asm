@@ -182,7 +182,7 @@ Done:
 .scope CharacterIo continued
 
 ;; The 80-column output, function 0 (<FIRMWARE_OUTPUT>): prints the character in A, with Y back from
-;; <SavedOutputY>, as <CharacterIo::InputKey> does.
+;; <SavedOutputY>, then goes on as <CharacterIo::InputKey> does.
 ;; In: A = the character
 ;; Out: A = the character
 ;; Also: BOUT (IIEROM82, IIETRM85), CHARIO80 (UNKN)

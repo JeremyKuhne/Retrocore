@@ -520,7 +520,7 @@ CopyByte:
     lda #>BasicOutput
     sta OutputHookHigh
 
-    ; The bank back: bank 2, RAM read.
+    ; The bank and RAM or ROM back, first bank 2 with RAM read.
     pla
     bpl Bank1
     txa

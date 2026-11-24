@@ -28,7 +28,8 @@ one entry, and the last two points are notes without IDs.
   VTAB, VTABZ, NXTA1, XFER); clashes with other modules' names are kept.
 - F14. Comments the draft flagged as wrong were verified against the code and the assembled bytes, and fixed only
   where they held; bugs in the ROM (the original's escape Control-L lookup, the self-test's failure bits, the
-  Enhanced BRK with ALTZP on) are documented, not changed.
+  Enhanced BRK with ALTZP on, the Enhanced `SHLOAD` out-of-memory return that leaves a byte on the stack) are
+  documented, not changed.
 - F15. The original's $C84D is Pascal 1.0's read entry, asserted, in the Pascal scope.
 - F16. Names that would shadow top-level ones are avoided: Functions::GetKey, Functions::BaseOfLine.
 - The scopes are Functions, CharacterIo, Pascal, Control, Columns, Screen, SelfTest and (Enhanced) LineAssembler,

@@ -443,7 +443,7 @@ CheckLine:
 .endproc
 
 ;; Control-]: clears from the cursor to the end of its line.
-;; Out: Y = <WindowWidth>
+;; Out: Y = <WindowWidth> when the cursor is inside the window, else as it was
 ;; Keeps: X
 ;; Also: X_GS (IIEROM82, IIETRM85), CLREOL80 (UNKN)
 .proc ClearToEndOfLine

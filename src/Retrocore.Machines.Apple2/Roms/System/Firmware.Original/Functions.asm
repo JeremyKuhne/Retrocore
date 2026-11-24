@@ -473,7 +473,7 @@ ChooseSlot3Rom:
 .endproc
 
 ;; Function 7, which the Monitor calls after reading a key in escape mode: makes a letter uppercase, and the arrow keys
-;; I, J, K and M.
+;; the letters I, J, K and M.
 ;;
 ;; Clears bit 5 of any key, not only a letter's; then left, right, down and up (<ArrowKeys>) become J, K, M and I
 ;; (<ArrowLetters>).

@@ -392,7 +392,7 @@ Today `AppleSoft.FloatAliases`, `AppleSoft.InterpreterAliases`, `Commodore.Float
   and its D3 column marks each shared definition that has one.
 - **Alternatives:**
   - a directive that attaches an `Also:` to another definition, without a second name (a tool change);
-  - plain equates (`SQR05 = Float::SquareRootHalf`). This works today, but the editor would treat the old names as
+  - plain equates (`SQR05 = Float::SquareRootOfHalf`). This works today, but the editor would treat the old names as
     ordinary symbols: no historical-name hover, no quick fix.
 - The vendor files' own names (`HighRes`, `Disk` ...) need no such file: their `Also:` goes on their definitions.
 - The vendors' Monitor and kernal synonyms (AppleSoft's CQINLN, MPLOT ...; D-Q1) go in the same file.
@@ -755,8 +755,9 @@ build (x1). This is also why today's vendor alias files exist.
   editor gives no "historical name" hover and no quick fix.
 - Alternative B: one documented alias per old name with a new SDK name. This adds about 250 names for no reader's
   benefit.
-- Rows 1287 and 2273-2280 are marked DROP because their names would move into `Also:`. With Alternative A they stay
-  as equates with their targets renamed.
+- Rows 1287 and 2273-2280 were drafted as DROP because their names would move into `Also:`. With Alternative A they
+  stay as equates with their targets renamed; X5 has since made them scoped aliases (`AppleSoft::PrintFac`,
+  `Commodore::*`).
 - ASTIL spells FDIVT as `FIDVT`. Keep both, per "a name from a document is never dropped".
 
 ##### A-Q2. Is the math package a scope or a set of top-level entries?
@@ -1564,8 +1565,9 @@ which is what the code keeps there). Alternative: `LastRandom`. I used RandomSee
   bug; nothing to change). **SGNFLG** (InputSign) is also confirmed.
 - **LOWDS** (DestinationStart): no code reads it by name. It only anchors the layout of DECCNT and TENEXP. I kept
   the glossary name.
-- **QNUM/CHRRTS**: no code uses either name, because the template has its own CHZ* labels. I wrote
-  `GetNextCharacter::TestColon` and `::Return` as placeholders until the CharacterReader part names them.
+- **QNUM/CHRRTS**: as drafted, no code used either name (R5 corrects this), because the template has its own CHZ*
+  labels. I wrote `GetNextCharacter::TestColon` and `::Return` as placeholders until the CharacterReader part names
+  them.
 
 ##### D-Q4. Unused Microsoft configuration constants in AppleSoft
 

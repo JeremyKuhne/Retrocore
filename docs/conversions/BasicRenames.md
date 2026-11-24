@@ -30,7 +30,9 @@ then Commodore's), in the module's source order within each. The columns:
   means no listed document gives the name: the owner decides between UNKN and no `Also:`.
 - **D3**: for shared code, whether the old names are vendor-only. "no" means Microsoft's name, valid in every
   build; "aliases: ..." lists the vendors' other names, which go in the vendor's own file (X5); "vendor" marks a
-  definition in a vendor's own file, whose names are the vendor's anyway.
+  definition in a vendor's own file, whose names are the vendor's anyway; "yes: ..." names the vendors in whose builds
+  alone the old name is valid; "—" marks a definition with no vendor question to settle (mostly the SDK's
+  macros and their parameters).
 - **Reason**: one line from the code, then any note from drafting.
 
 The inventory and the document checks were made by script against the eight builds; the names were drafted in

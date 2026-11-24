@@ -70,7 +70,8 @@ public sealed class BasicSharedSourceTests
             .And.Contain("Copyright (c) Microsoft Corporation, 1976-1978.")
             .And.Contain("The native MsBasic.*.asm modules in src/Retrocore.Basic/Roms/Microsoft6502Basic")
             .And.Contain("server/Sdk/Roms/Microsoft6502Basic, are derived from Microsoft's m6502.asm, and the license below")
-            .And.Contain("Microsoft code in them;");
+            .And.Contain("Microsoft code in them;")
+            .And.Contain("Apple and Commodore code some of them carry is not Microsoft's.");
 
         // Each module derived from Microsoft's source says so in its first lines, after any pragmas.
         foreach (string module in Directory.EnumerateFiles(RepositoryShared(repository), "MsBasic.*.asm")

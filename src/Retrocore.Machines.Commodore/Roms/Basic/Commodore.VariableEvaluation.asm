@@ -21,7 +21,7 @@
         .endproc
     .else
         ;; Looks up the variable operand with <FindVariable> and falls into <LoadVariableValue>.
-        ;; Also: ISVAR (M6502, HV1, HV1R, HV2)
+        ;; Also: ISVAR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
         .proc EvaluateVariable
         jsr FindVariable
         ; Falls into LoadVariableValue.

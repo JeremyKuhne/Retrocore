@@ -522,16 +522,16 @@ LoadAddress:
     ;; In: A = the current character, as <GetCurrentCharacter> returns it, with carry clear for a numeral and zero set
     ;;   at the statement's end
     ;; Out: X = the value
-    ;; Errors: SYNTAX at the statement's end; ILLEGAL QUANTITY for a value over 255
+    ;; Errors: SYNTAX at the statement's end or for a character other than a digit without `(`; ILLEGAL QUANTITY for a
+    ;;   value over 255
     ;; Also: GTVL2 (K4S79, HVK4)
     .proc ReadValue
     bne Present
     jmp SyntaxError
 
 ;; A value is there: a digit starts a number, and any other character must start an expression in parentheses.
-;; Basic4.mac spells the label GTVLCN;
-;; Commodore's kernal listing and its reconstruction (K4S79, HVK4) call it `CONT`, Microsoft's name for
-;; `Statements::Cont`, so their name is here in prose.
+;; Basic4.mac spells the label GTVLCN; Commodore's kernal listing and its reconstruction (K4S79, HVK4) call it
+;; `CONT`, Microsoft's name for `Statements::Cont`, so their name is here in prose.
 ;; Also: GTVLCN (UNKN)
 Present:
     bcc Number

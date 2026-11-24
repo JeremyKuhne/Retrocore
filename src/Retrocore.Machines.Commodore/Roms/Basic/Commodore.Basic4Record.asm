@@ -19,8 +19,9 @@ ToSyntaxError:
     ;; defaults to 1. The record number is left in <PokeAddress>, which <Disk::PositionRecord> reads as the record
     ;; number.
     ;; Out: LogicalFile = the file, RecordPosition = the position, PokeAddress = the record number
-    ;; Errors: ILLEGAL QUANTITY for file 0 or a position of 0 or 255; SYNTAX for a missing record or text after the
-    ;;   position; `FILE NOT OPEN` (from <Disk::PositionRecord>) for a file that is not open
+    ;; Errors: ILLEGAL QUANTITY for file 0, a file over 255, a record outside 0 to 65535, or a position of 0 or 255;
+    ;;   SYNTAX for a missing record or text after the position; `FILE NOT OPEN` (from <Disk::PositionRecord>) for a
+    ;;   file that is not open
     ;; Also: RECORD (K4S79, HVK4)
     .proc Record
 
@@ -86,7 +87,7 @@ ToQuantityError:
     ; The checks of the parsed parameters. Each takes A = <ParsedParameters>, as <Disk::ParseParameters> returns it,
     ; rejects the parameters its statement does not take with SYNTAX ERROR, and returns A = <ParsedParameters>, but
     ; for <Disk::CheckDriveOnly>, which returns 0. They test only the parameters' bits, so `I` and `R`, which set none,
-    ; pass every check, and so does a unit given twice.
+    ; pass every check, and so does a unit, however often it is given.
 
     ;; `HEADER` and `SCRATCH`: rejects all but a first name, a unit and a first drive, then branches to
     ;; <Disk::RequireFirstName>'s test.

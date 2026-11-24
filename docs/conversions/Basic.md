@@ -2658,7 +2658,8 @@ Decisions and how the table was applied:
     `ForgetDiskStatus` (OLDCLR) is top level, since Kernal4's `TALK` and `LISTEN` call it;
   - BASIC 4's collector is `Strings::CollectGarbage`, as E6 left it, now a `.proc` with nested routines.
 - F2. Owner questions, as the log recommends:
-  - F-Q3: DCOPY, DSCRTC, GTVLCN and MGO, which only the overlay spells so, cite UNKN, since the overlay comparisons
+  - F-Q3: DCOPY, DSCRTC, GTVLCN and MGO, which only the overlay gives these routines (BASIC 4's documents give
+    DCOPY to the kernal's jump-table entry, `KernalCopy`), cite UNKN, since the overlay comparisons
     need every overlay label to resolve. Checked against mist64/cbmsrc at the bibliography's commit, Commodore's
     kernal listing and its reconstruction (K4S79, HVK4) call them COPY, SCRTCH, CONT and GO, each a name BASIC 4
     already gives another definition (`StoreString::CopyCharacters`, `EraseProgram`, `Statements::Cont`,
@@ -2697,8 +2698,9 @@ Decisions and how the table was applied:
   - The reconstructions' address-generated names the table's notes suggested (HV1's LE1AA ..., HV4R's LBA70, HV4's
     LBA74) are dropped, as X7 settled.
   - The lineage rule: BASIC 1's and BASIC 4's `StopEmptyInput` both cite INPSTP (UNKN), PATCH1 (HV1, HV1R) and
-    BUFFU1 (HV4R); BASIC 4's trampoline `EvaluateVariable` cites ISVAR (M6502, HV1, HV1R, HV2), as the other builds'
-    `EvaluateVariable` does; every root's `InterpreterEnd` cites LASTWR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R,
+    BUFFU1 (HV4R); every `EvaluateVariable`, BASIC 4's trampoline and the other builds' routine, cites ISVAR (M6502,
+    CBM4S79, HV1, HV1R, HV2, HV4, HV4R), and so do both collectors' GARBA2; `FindStringLink::CheckStatus` cites ADJ (CBM4S79,
+    HV4, HV4R); every root's `InterpreterEnd` cites LASTWR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R,
     K4S79, HVK4) and `ROM_ORIGIN` ROMLOC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R). A question for the owner: the
     overlay gives ISVAR to BASIC 4's trampoline, where the comparisons need it, but BASIC 4's own documents (CBM4S79,
     HV4, HV4R) give it to the code the trampoline jumps to, `EvaluateVariableBody` (ISVAR1, UNKN), which is also
@@ -2721,8 +2723,8 @@ Decisions and how the table was applied:
   name): a line exclusion quiets the editor, but the SDK's documentation tests do not honor it, so the lines are
   shortened instead. `CommodoreInitialize` and `CommodoreStatementFetch`, part C's macros, take the workspace's
   `LOCAL_TERMINAL_POSITION` and `INPUT_BUFFER_PAGE` from the workspace rather than as parameters; every caller
-  passed those switches or the values they have in its workspace (the table's rows for those parameters, in part C's sections, are not edited), and BASIC 1's
-  `PROBE_LOAD_INDEX_ZERO` is `PROBE_ZERO_INDEX`.
+  passed those switches or the values they have in its workspace (the table's rows for those parameters, in part C's
+  sections, are not edited), and BASIC 1's `PROBE_LOAD_INDEX_ZERO` is `PROBE_ZERO_INDEX`.
 - F7. BASIC 1's switches the table renames (`SUBSCRIPT_CHECKS_NUMERIC`, `POSITIVE_INTEGER_CHECKS_TYPE`,
   `STRING_CLEARS_FAC_EXTENSION`, `COLLECTOR_FULL_POINTER`, `COLLECTOR_PATCH_ARRAY_STEP`, `COLLECTOR_SUBTRACT_OFFSET`,
   `STRING_PREAMBLE_INDIRECT_RETURN`), and `PROBE_ZERO_INDEX`, are renamed in the root, the shared folder's README
@@ -2772,9 +2774,10 @@ Found in the code (documented, not fixed):
   `ReadCharacter` at a return drops only its own return address, so a line that ends inside a nested read leaves its
   callers' on the stack; `ReadByte` takes a space and one digit as that digit and does not check its digits.
 - The disk commands: the error channel's read has no length bound (a reply of 40 characters or more runs over the
-  buffer's link); `HEADER` closes the unit's files before asking; `Confirm` takes a zero byte read while draining a
-  rejected answer as yes; every template with both names puts the second before the first; `R` is accepted and skipped; a name
-  takes 16 characters, or 17 with `@`, and a second `@` name is a syntax error; `DiskIdSeen` shares `RecordLength`'s
-  byte; `Statements::Catalog::DropAndClose` is unreachable.
+  buffer's link); `HEADER` closes the unit's files before asking; `Confirm` drains a rejected answer by the zero flag
+  the kernal's input leaves, not the character, though the screen editor always leaves it clear; every template with
+  both names puts the second before the first; `R` is accepted and skipped; a name takes 16 characters, or 17 with `@`,
+  and a second `@` name is a syntax error; `DiskIdSeen` shares `RecordLength`'s byte;
+  `Statements::Catalog::DropAndClose` is unreachable.
 - The revised chip's `FetchStatementCharacter` keeps the `PI` token from reaching `DispatchStatement`, which on the
   original chip takes it past the disk statements to an entry beyond `StatementTable`.

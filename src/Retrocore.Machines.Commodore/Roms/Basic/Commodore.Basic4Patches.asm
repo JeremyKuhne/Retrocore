@@ -33,7 +33,7 @@ PATCH_FILL = $AA
     ;;
     ;; ISVAR is here because the overlay puts it here; BASIC 4's own documents (CBM4S79, HV4, HV4R) give the name to
     ;; the code it jumps to, which Microsoft's ISVAR also is.
-    ;; Also: ISVAR (M6502, HV1, HV1R, HV2)
+    ;; Also: ISVAR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc EvaluateVariable
     jmp EvaluateVariableBody
     .endproc

@@ -122,8 +122,8 @@ Done:
     jmp AssignVariableList::StringAtCursor
     .endproc
 
-;; The address after BASIC 1's last patch in the editor ROM; <Functions::Peek>'s ROM guard protects the pages from the
-;; ROM's start to the one before its page.
+;; The address after BASIC 1's last patch in the editor ROM's spill (the array patch at $E7F3 comes later);
+;; <Functions::Peek>'s ROM guard protects the pages from the ROM's start to the one before its page.
 ;; Also: LASTWR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, K4S79, HVK4)
 InterpreterEnd:
 .endmacro

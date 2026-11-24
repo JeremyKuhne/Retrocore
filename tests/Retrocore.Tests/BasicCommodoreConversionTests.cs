@@ -12,7 +12,8 @@ namespace Retrocore.Tests;
 /// <summary>
 ///  Checks Commodore's own files as converted to the style guide (Basic.md, F): in each PET build, every old name they
 ///  give that Microsoft's MACRO-10 build defines reaches that build's value, every definition they make reaches the
-///  overlay by its name or an old name, and each old name cites Commodore's documents, all in the bibliography.
+///  overlay by its name or an old name, and each old name cites Commodore's documents, Microsoft's source or UNKN, all
+///  in the bibliography.
 /// </summary>
 [TestClass]
 public sealed partial class BasicCommodoreConversionTests
@@ -111,8 +112,8 @@ public sealed partial class BasicCommodoreConversionTests
         string[] names = model == PetModel.Pet2001
             ?
             [
-                "GETDTL", "INPSTP", "TISTR", "TINUM", "INCTRM", "GETSTR", "GETST1", "ARYINC", "TABER", "FREMES", "ROMLOC",
-                "LASTWR"
+                "GETDTL", "INPSTP", "TISTR", "TINUM", "INCTRM", "GETSTR", "GETST1", "ARYINC", "TABER", "FREMES",
+                "ROMLOC", "LASTWR"
             ]
             : ["INPSTP", "ISVAR", "TABER", "SIGNON", "ROMLOC", "LASTWR", .. original ? Array.Empty<string>() : ["INPNUL"]];
 

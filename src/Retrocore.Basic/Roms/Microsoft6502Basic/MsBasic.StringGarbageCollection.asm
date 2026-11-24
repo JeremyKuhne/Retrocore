@@ -42,7 +42,7 @@
     ;;   leaves it (the temporaries' scan reads it before the pass sets it), decimal = clear
     ;; Out: StringsBottom = lower boundary after collection
     ;; See: <Strings::CollectGarbage::ConsiderDescriptor>, <Strings::CollectGarbage::MoveBest>, <MoveRangeUp::Unchecked>
-    ;; Also: GARBA2 (M6502, HV1, HV1R, HV2)
+    ;; Also: GARBA2 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc CollectGarbage
     ldx MemoryTop
     lda MemoryTop+1

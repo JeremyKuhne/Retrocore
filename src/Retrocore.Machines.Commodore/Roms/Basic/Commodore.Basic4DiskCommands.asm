@@ -186,7 +186,7 @@ CommandTemplates:
     ;; until another key. <CatalogOutputFile> and <CatalogOutputDevice> keep the output channel and its device
     ;; meanwhile.
     ;; In: LogicalFile = the kernal's current file, which the listing is written to unless the default output device
-    ;;   is the screen (as after `CMD`)
+    ;;   is the screen
     ;; Errors: SYNTAX for a parameter other than a drive and a unit
     ;; Also: CATLOG (K4S79, HVK4)
     .proc Catalog
@@ -1038,7 +1038,9 @@ Done:
     ;; In direct mode, asks `ARE YOU SURE ?` and accepts `Y` or `YES`, then a carriage return; in a program,
     ;; accepts at once.
     ;;
-    ;; A rejected answer is read to its carriage return. A zero read meanwhile ends the answer too, but as accepted.
+    ;; A rejected answer is read to its carriage return. The drain tests the zero flag <KernalInputCharacter> leaves,
+    ;; not the character: a read that returned with zero set would end it as accepted, but the screen editor's line
+    ;; input, which the restored channels read, always returns with zero clear.
     ;; Out: carry = set when the answer is no
     ;; Also: RUSURE (K4S79, HVK4)
     .proc Confirm

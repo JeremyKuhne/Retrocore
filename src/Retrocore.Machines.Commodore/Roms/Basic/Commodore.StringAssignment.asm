@@ -153,7 +153,7 @@ CopyByte:
     bcc NoLink
 
 ;; In string space: is it `DS$`'s? The revised chip asks `TestStatusString`.
-;; Also: ADJ (HV4, HV4R)
+;; Also: ADJ (CBM4S79, HV4, HV4R)
 CheckStatus:
     .if patchedStatus
         jmp TestStatusString

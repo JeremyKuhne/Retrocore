@@ -1879,7 +1879,7 @@ to K12, R1 to R10).
 | 1526 | `ZERO_AT_FHALF` | `ZERO_IN_HALF_CONSTANT` | switch | P2 |  | vendor | 1 defines ZERO inside the 0.5 constant (BASIC 2 and 4) — renamed for FHALF |
 | 1527 | `WAIT_EASTER_EGG` | `KEEP` | switch | P2 |  | vendor | 1 builds BASIC 2's hidden WAIT message and omitted-mask handler — SDK name; fits the style |
 | 1528 | `BASIC4_OUTPUT_PADDING` | `KEEP` | switch | P2 |  | vendor | 1 builds BASIC 4's checksum byte and patch space before INPRT — SDK name; fits the style |
-| 1529 | `LASTWR` | `InterpreterEnd` | entry | P2 | M6502, HV2 | vendor | label after the interpreter's last byte — Commodore.Basic1Patches defines BASIC 1's (other part): same name; BASIC 4's extension follows it Converted: cites M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, K4S79 and HVK4, under the lineage rule (Basic.md F4). BASIC 2's and 4's `PEEK` have no ROM guard (`guardRom` 0), so nothing refers to the label there. |
+| 1529 | `LASTWR` | `InterpreterEnd` | entry | P2 | M6502, HV2 | vendor | label after the interpreter's last byte — Commodore.Basic1Patches defines BASIC 1's (other part): same name Converted: cites M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, K4S79 and HVK4, under the lineage rule (Basic.md F4). BASIC 2's and 4's `PEEK` have no ROM guard (`guardRom` 0), so nothing refers to the label there. |
 
 ### Basic4
 
@@ -2272,7 +2272,7 @@ to K12, R1 to R10).
 | 1869 | `FAT` | `DeviceTable` | table | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | the kernal's table of the open files' devices |
 | 1870 | `SAT` | `SecondaryAddressTable` | table | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | the kernal's table of the open files' secondary addresses |
 | 1871 | `FNLEN2` | `SecondFilenameLength` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R]; other names here: TAPE2 (K4S79, HVK4) | vendor | length of a disk command's second filename — HVK4 calls it TAPE2 Converted: TAPE2 cites K4S79 as well as HVK4: the kernal listing gives the name at the same place (Basic.md F4). |
-| 1872 | `RECPOS` | `RecordPosition` | alias | P4 P4R | other names here: TAPE2 (HVK4) | vendor | RECORD's byte position; shares SecondFilenameLength — no document; HVK4 calls the address TAPE2 Converted: Also RECPOS (UNKN); TAPE2 (HVK4) is on SecondFilenameLength. |
+| 1872 | `RECPOS` | `RecordPosition` | alias | P4 P4R | other names here: TAPE2 (K4S79, HVK4) | vendor | RECORD's byte position; shares SecondFilenameLength — no document; HVK4 calls the address TAPE2 Converted: Also RECPOS (UNKN); TAPE2 (K4S79, HVK4) is on SecondFilenameLength. |
 | 1873 | `DRIVE1` | `FirstDrive` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | the disk command's first drive number |
 | 1874 | `DRIVE2` | `SecondDrive` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | the disk command's second drive number |
 | 1875 | `DIDCHK` | `DiskIdSeen` | alias | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | set when the parser has read a disk ID; shares RecordLength |

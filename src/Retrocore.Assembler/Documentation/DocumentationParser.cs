@@ -51,7 +51,8 @@ public static partial class DocumentationParser
     internal static DocumentationFile Parse(string text, string path, DocumentationAssembled? assembled, bool style)
     {
         string[] lines = text.Replace("\r\n", "\n").Split('\n');
-        HashSet<string> dataMacros = DataMacros(lines);
+        List<(int Line, string Name)> macros = MacroDefinitions(lines);
+        HashSet<string> dataMacros = DataMacros(lines, macros);
         List<DocumentationComment> comments = [];
         List<DocumentationDiagnostic> diagnostics = [];
         List<(string Text, bool Not)> conditions = [];
@@ -212,20 +213,36 @@ public static partial class DocumentationParser
         {
             Strict = strict,
             Exclusions = exclusions,
-            Macros = MacroNames(lines)
+            Macros = MacroNames(macros)
         };
     }
 
-    // The macros a source defines, in any dialect.
-    private static List<string> MacroNames(string[] lines)
+    // The macros a source defines, in any dialect, in source order with their lines. Only a line that writes .macro,
+    // .mac, Merlin's MAC or MACRO-10's DEFINE defines one, and each has "mac" or "define" in it, so no other line need
+    // be classified.
+    private static List<(int Line, string Name)> MacroDefinitions(string[] lines)
     {
-        List<string> names = [];
+        List<(int Line, string Name)> macros = [];
         List<string?> none = [];
-        foreach (string line in lines)
+        for (int index = 0; index < lines.Length; index++)
         {
-            if (Define(Split(line).Code, none) is { Kind: DocumentationKind.Macro } macro) { names.Add(macro.Name); }
+            string line = lines[index];
+            bool candidate = line.IndexOf("mac", StringComparison.OrdinalIgnoreCase) >= 0
+                || line.IndexOf("define", StringComparison.OrdinalIgnoreCase) >= 0;
+
+            if (candidate && Define(Split(line).Code, none) is { Kind: DocumentationKind.Macro } macro)
+            {
+                macros.Add((index, macro.Name));
+            }
         }
 
+        return macros;
+    }
+
+    private static List<string> MacroNames(List<(int Line, string Name)> macros)
+    {
+        List<string> names = [with(capacity: macros.Count)];
+        foreach ((_, string name) in macros) { names.Add(name); }
         return names;
     }
 
@@ -422,18 +439,16 @@ public static partial class DocumentationParser
     }
 
     // Macros whose body starts with data make the labels they follow tables.
-    private static HashSet<string> DataMacros(string[] lines)
+    private static HashSet<string> DataMacros(string[] lines, List<(int Line, string Name)> definitions)
     {
         HashSet<string> macros = [with(StringComparer.OrdinalIgnoreCase)];
-        List<string?> none = [];
-        for (int index = 0; index < lines.Length; index++)
+        foreach ((int index, string name) in definitions)
         {
-            if (Define(Split(lines[index]).Code, none) is not { Kind: DocumentationKind.Macro } macro) { continue; }
             for (int body = index + 1; body < lines.Length; body++)
             {
                 string code = Split(lines[body]).Code.Trim();
                 if (code.Length == 0 || IsConditional(code)) { continue; }
-                if (IsData(code, macros)) { macros.Add(macro.Name); }
+                if (IsData(code, macros)) { macros.Add(name); }
                 break;
             }
         }

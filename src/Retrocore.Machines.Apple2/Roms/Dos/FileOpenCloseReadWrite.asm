@@ -208,8 +208,7 @@ StoreSlot:
 ;; disk since OPEN (<WRITTEN>), the file's length in sectors goes into its catalog entry. To get the entry's sector
 ;; back, CLOSE reads the VTOC for the catalog's start and reads <FileControlBlock::EntryCatalogSector> catalog sectors,
 ;; the first from there and each next one by the link in the one before: the count <FindFile> kept when it found the
-;; file, 1 for the first sector. Disk errors leave
-;; the file manager (<AccessDisk>).
+;; file, 1 for the first sector. Disk errors leave the file manager (<AccessDisk>).
 ;; In: FileControlBlock = the file's work area
 ;; Out: DosFileParameters::ReturnCode = 0
 ;; Also: FCLOSE (DOS33, DOS31)

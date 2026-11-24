@@ -200,7 +200,7 @@ NameDone:
     lda #SYNTAX_SECOND_NAME
     and a:CommandSyntax+CommandSyntaxEntry::OPERANDS,y
     beq CheckFirstName
-    ldy #CATALOG_NAME_LENGTH        ; the second name goes to FNAME2
+    ldy #CATALOG_NAME_LENGTH        ; the second name goes to SecondFileName
     php                             ; the zero flag clear: reading the second name
     bne StartName                   ; always
 
@@ -368,8 +368,8 @@ FoundLetter:
     jsr Scanner::ParseNumber
     bcs SyntaxError
 
-    ; Compare ParsedNumber with the option's lowest and highest values, its OptionRange, four bytes from ScannerScratch
-    ; * 4.
+    ; Compare ParsedNumber with the option's lowest and highest values, its OptionRange: four bytes from
+    ; ScannerScratch * 4.
     lda a:ScannerScratch
     asl a
     asl a

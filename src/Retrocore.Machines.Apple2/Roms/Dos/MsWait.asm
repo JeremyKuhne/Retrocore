@@ -275,7 +275,7 @@ FIRST_NIBBLE = $96
 ;; Also: PSC1 (DOS33)
 RwtsPatchCodeStart:
 
-; AppendFix: clearing the flag after DOSGO.
+; AppendFix: clearing the flag after RunFileRequest.
 .scope AppendFix continued
 
 ;; Clears <EndOfFile> unless the command running is APPEND.

@@ -162,7 +162,7 @@ Format:
     jsr FindBasic
     beq Int::StartDos
 
-    ; Integer BASIC (ASIBSW = 0) runs the APPLESOFT program.
+    ; Integer BASIC (ActiveBasic = 0) runs the APPLESOFT program.
     lda #0
     sta a:ActiveBasic
 

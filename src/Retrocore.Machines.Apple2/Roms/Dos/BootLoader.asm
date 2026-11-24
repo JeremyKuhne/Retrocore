@@ -846,7 +846,7 @@ ClearFlag:
     jmp Commands::Verify
 .endproc
 
-; AppendFix: the end of data, for DOSGO.
+; AppendFix: the end of data, for RunFileRequest.
 .scope AppendFix continued
 
 ;; Sets <EndOfFile> for a file manager call from <RunFileRequest> that ends with END OF DATA, unless the file is empty.

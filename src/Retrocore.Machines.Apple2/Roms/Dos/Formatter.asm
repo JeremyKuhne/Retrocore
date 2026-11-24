@@ -323,8 +323,8 @@ ToPosition:
 .scope Formatter
 
 .if DIAGNOSTIC_RWTS
-;; The diagnostic build (DIAGMODE = 1) leaves the formatter out, and Apple's listing then puts the format command's
-;; label on <PhysicalSectors>.
+;; The diagnostic build (DIAGNOSTIC_RWTS = 1) leaves the formatter out, and Apple's listing then puts the format
+;; command's label on <PhysicalSectors>.
 ;; Also: DSKFORM (DOS33)
 Format = PhysicalSectors
 .else

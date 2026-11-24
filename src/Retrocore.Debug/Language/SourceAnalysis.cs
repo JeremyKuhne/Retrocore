@@ -53,7 +53,7 @@ internal sealed partial class SourceAnalysis
         AssemblyProject project,
         IEnumerable<string> members,
         Func<string, string?> text,
-        Func<string, string?> read)
+        Func<string, string[]?> linesOf)
     {
         Root = root;
         Result = result;
@@ -119,10 +119,10 @@ internal sealed partial class SourceAnalysis
         _text = text;
         Members = new(members, StringComparer.OrdinalIgnoreCase) { root };
 
-        // The members' text as the assembly read it; later lookups of other files read them afresh.
+        // The members' lines as the assembly read them, shared with it; later lookups of other files read them afresh.
         foreach (string member in Members)
         {
-            if (read(member) is { } content) { _lines[member] = SourceText.Lines(content); }
+            if (linesOf(member) is { } split) { _lines[member] = split; }
         }
 
         List<string> scopes = [];
@@ -313,7 +313,7 @@ internal sealed partial class SourceAnalysis
     private DocumentationSet CreateDocumentation() => DocumentationSet.Create(
         _lines.Keys
             .OrderBy(path => string.Equals(path, Root, StringComparison.OrdinalIgnoreCase) ? 0 : 1)
-            .Select(path => DocumentationParser.Parse(string.Join("\n", _lines[path]), path, AssembledUsing(path))),
+            .Select(path => DocumentationParser.Parse(_lines[path], path, AssembledUsing(path), style: true)),
         Symbols(),
         ModuleOf(Root),
         ModelOf(Root),
@@ -391,7 +391,7 @@ internal sealed partial class SourceAnalysis
             parsed.Project,
             resolver.Resolved,
             path => openText(path) ?? (File.Exists(path) ? File.ReadAllText(path) : null),
-            path => openText(path) ?? files.ReadIfExists(path));
+            path => openText(path) is { } open ? SourceText.Lines(open) : files.ReadLinesIfExists(path));
     }
 
     /// <summary>

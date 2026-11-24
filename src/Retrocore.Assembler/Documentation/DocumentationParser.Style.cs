@@ -44,6 +44,14 @@ public static partial class DocumentationParser
     /// <returns>Whether it is checked.</returns>
     public static bool IsStrict(string text) => ReadPragma(text)?.Strict == true;
 
+    // IsStrict from the lines Lines splits: they end at CRLF and LF, and the pragma's line ends at a lone CR too.
+    private static bool IsStrict(string[] lines)
+    {
+        string first = lines.Length == 0 ? "" : lines[0];
+        int end = first.IndexOf('\r');
+        return DocumentationPragma.Read(end < 0 ? first : first[..end])?.Strict == true;
+    }
+
     // The style guide's line rules (docs/AssemblyStyle.md): layout, labels, names and plain text.
     private static void Style(string[] lines, string path, List<DocumentationDiagnostic> diagnostics)
     {

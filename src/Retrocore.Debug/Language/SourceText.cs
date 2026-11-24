@@ -44,7 +44,7 @@ internal static class SourceText
     /// </summary>
     /// <param name="text">The text.</param>
     /// <returns>The lines.</returns>
-    internal static string[] Lines(string text) => text.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n');
+    internal static string[] Lines(string text) => Documentation.DocumentationParser.Lines(text);
 
     /// <summary>
     ///  Gets a file's explicitly declared dialect, or its MACRO-10 extension when it has no pragma.

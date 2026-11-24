@@ -44,10 +44,10 @@ internal sealed class WorkspaceSourceResolver : IAssemblySourceResolver, IAssemb
         }
 
         // Disk, at the same path FileAssemblySourceResolver reads.
-        if (_texts.TryRead(path) is { } file)
+        if (_texts.TryReadSource(path) is { } file)
         {
             Resolved.Add(path);
-            source = new(file, path);
+            source = file;
             return true;
         }
 
@@ -62,10 +62,10 @@ internal sealed class WorkspaceSourceResolver : IAssemblySourceResolver, IAssemb
             }
 
             string resolved = LanguagePaths.Resolve("", fallback);
-            if (_texts.TryRead(resolved) is { } shared)
+            if (_texts.TryReadSource(resolved) is { } shared)
             {
                 Resolved.Add(fallback);
-                source = new(shared, resolved);
+                source = shared;
                 return true;
             }
         }

@@ -48,9 +48,19 @@ public static partial class DocumentationParser
     /// <param name="assembled">What the assembler took from the file, or null when not known.</param>
     /// <param name="style">Whether to check a strict source against the style guide.</param>
     /// <returns>The comments and any placement problems.</returns>
-    internal static DocumentationFile Parse(string text, string path, DocumentationAssembled? assembled, bool style)
+    internal static DocumentationFile Parse(string text, string path, DocumentationAssembled? assembled, bool style) =>
+        Parse(Lines(text), path, assembled, style);
+
+    /// <summary>
+    ///  Parses a source file's documentation comments from its lines, as <see cref="Lines(string)"/> splits them.
+    /// </summary>
+    /// <param name="lines">The source's lines, which are only read.</param>
+    /// <param name="path">The source path, recorded in comments and diagnostics.</param>
+    /// <param name="assembled">What the assembler took from the file, or null when not known.</param>
+    /// <param name="style">Whether to check a strict source against the style guide.</param>
+    /// <returns>The comments and any placement problems.</returns>
+    internal static DocumentationFile Parse(string[] lines, string path, DocumentationAssembled? assembled, bool style)
     {
-        string[] lines = text.Replace("\r\n", "\n").Split('\n');
         List<(int Line, string Name)> macros = MacroDefinitions(lines);
         HashSet<string> dataMacros = DataMacros(lines, macros);
         List<DocumentationComment> comments = [];
@@ -204,7 +214,7 @@ public static partial class DocumentationParser
             index++;
         }
 
-        bool strict = IsStrict(text);
+        bool strict = IsStrict(lines);
         if (strict && style) { Style(lines, path, diagnostics); }
 
         // Without the style checks this is not the lint, so there is nothing for exclusions to apply to.
@@ -279,6 +289,18 @@ public static partial class DocumentationParser
     }
 
     /// <summary>
+    ///  Splits a source's text into lines without their terminators, as the parser reads them.
+    /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   Only CRLF and LF end a line; a lone CR stays in its line. A terminating newline leaves an empty last line.
+    ///  </para>
+    /// </remarks>
+    /// <param name="text">The text.</param>
+    /// <returns>The lines.</returns>
+    internal static string[] Lines(string text) => text.Replace("\r\n", "\n").Split('\n');
+
+    /// <summary>
     ///  Parses a documentation text file for <c>Include:</c>: topics in Natural Docs form, each starting with a
     ///  keyword line such as <c>Routine: Name</c> or <c>Topic: Name</c>.
     /// </summary>
@@ -287,7 +309,7 @@ public static partial class DocumentationParser
     /// <returns>The topics, named by their titles.</returns>
     public static IReadOnlyList<DocumentationComment> ParseTopics(string text, string path)
     {
-        string[] lines = text.Replace("\r\n", "\n").Split('\n');
+        string[] lines = Lines(text);
         List<DocumentationComment> topics = [];
         (string Keyword, string Title, int Line)? current = null;
         List<(int, string)> body = [];

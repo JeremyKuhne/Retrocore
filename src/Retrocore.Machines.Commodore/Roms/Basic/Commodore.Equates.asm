@@ -824,7 +824,8 @@ KernalCollect = KernalHeader + 3
 ;; Also: CQBACK (UNKN)
 KernalBackup = KernalCollect + 3
 
-;; Copy a file.
+;; Copy a file. BASIC 4's jump table (CBM4S79, HV4, HV4R) calls this entry DCOPY, a name the overlay gives
+;; `Statements::Copy`, so it is named here only in prose.
 ;; Also: CQCOPY (UNKN)
 KernalCopy = KernalBackup + 3
 

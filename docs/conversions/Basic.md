@@ -2658,9 +2658,10 @@ Decisions and how the table was applied:
     `ForgetDiskStatus` (OLDCLR) is top level, since Kernal4's `TALK` and `LISTEN` call it;
   - BASIC 4's collector is `Strings::CollectGarbage`, as E6 left it, now a `.proc` with nested routines.
 - F2. Owner questions, as the log recommends:
-  - F-Q3: DCOPY, DSCRTC, GTVLCN and MGO, which only the overlay gives these routines (BASIC 4's documents give
-    DCOPY to the kernal's jump-table entry, `KernalCopy`), cite UNKN, since the overlay comparisons
-    need every overlay label to resolve. Checked against mist64/cbmsrc at the bibliography's commit, Commodore's
+  - F-Q3: DCOPY, DSCRTC, GTVLCN and MGO, which no document but the overlay gives these routines, cite UNKN, since the overlay
+    comparisons need every overlay label to resolve. (The question's premise is not quite right: BASIC 4's jump table
+    gives DCOPY to the kernal's entry `KernalCopy`, which names it in prose, since the overlay's DCOPY is in the same
+    build.) Checked against mist64/cbmsrc at the bibliography's commit, Commodore's
     kernal listing and its reconstruction (K4S79, HVK4) call them COPY, SCRTCH, CONT and GO, each a name BASIC 4
     already gives another definition (`StoreString::CopyCharacters`, `EraseProgram`, `Statements::Cont`,
     `Statements::Go`), so they are in prose, as the recommendation said.
@@ -2698,7 +2699,7 @@ Decisions and how the table was applied:
   - The reconstructions' address-generated names the table's notes suggested (HV1's LE1AA ..., HV4R's LBA70, HV4's
     LBA74) are dropped, as X7 settled.
   - The lineage rule: BASIC 1's and BASIC 4's `StopEmptyInput` both cite INPSTP (UNKN), PATCH1 (HV1, HV1R) and
-    BUFFU1 (HV4R); every `EvaluateVariable`, BASIC 4's trampoline and the other builds' routine, cites ISVAR (M6502,
+    BUFFU1 (HV4R); every PET `EvaluateVariable`, BASIC 4's trampoline and the other builds' routine, cites ISVAR (M6502,
     CBM4S79, HV1, HV1R, HV2, HV4, HV4R), and so do both collectors' GARBA2; `FindStringLink::CheckStatus` cites
     ADJ (CBM4S79, HV4, HV4R); every root's `InterpreterEnd` cites LASTWR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R,
     K4S79, HVK4) and `ROM_ORIGIN` ROMLOC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R). A question for the owner: the

@@ -149,7 +149,8 @@ SecondaryAddressTable = $0265
 
 ; The disk commands' parameters, in page three.
 
-;; The length of a disk command's second filename.
+;; The length of a disk command's second filename. The kernal listings (K4S79, HVK4) also call this byte POS, which
+;; BASIC's POS function already has, so it is named here only in prose.
 ;; Also: FNLEN2 (K4S79, HVK4), TAPE2 (K4S79, HVK4)
 SecondFilenameLength = $033A
 

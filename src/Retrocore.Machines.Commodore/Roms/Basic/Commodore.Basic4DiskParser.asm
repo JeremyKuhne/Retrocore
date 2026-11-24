@@ -523,7 +523,7 @@ LoadAddress:
     ;;   at the statement's end
     ;; Out: X = the value
     ;; Errors: SYNTAX at the statement's end or for a character other than a digit without `(`; ILLEGAL QUANTITY for a
-    ;;   value over 255
+    ;;   value outside 0 to 255
     ;; Also: GTVL2 (K4S79, HVK4)
     .proc ReadValue
     bne Present

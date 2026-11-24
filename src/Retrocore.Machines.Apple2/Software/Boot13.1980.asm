@@ -15,7 +15,7 @@
 ;;
 ;; - Its nibble routines, <DiskII::PreNibble> to <DiskII::PostNibble>, are DOS 3.2's; this source includes them
 ;;   from the DOS 3.2 modules.
-;; - Its <DiskII::MoveHead> and <DiskII::Wait> are DOS 3.3's (ReadAddressSeek.asm, MsWait.asm), without the
+;; - Its <DiskII::MoveHead> and <DiskII::Wait> are DOS 3.3's (Seek.asm, MsWait.asm), without the
 ;;   padding before the wait.
 ;; - <Rwts> itself is DOS 3.3's (Rwts1.asm, Rwts2.asm), calling the 13-sector routines, with DOS 3.2's single test
 ;;   of the motor (Rwts32.asm), no sector translation and the volume passed to the formatter as DOS 3.2 passes it.
@@ -246,18 +246,18 @@ HIGH_BIT = $80
 
 ; The RWTS, from DOS 3.2's nibble routines on, at the addresses they have in DOS 3.2's layout less $A000.
 .include "../Roms/Dos/RwtsEquates.asm"
-.include "../Roms/Dos/PreNibble32.asm"
-.include "../Roms/Dos/WriteSector32.asm"
-.include "../Roms/Dos/ReadSector32.asm"
-.include "../Roms/Dos/ReadAddress32.asm"
-.include "../Roms/Dos/PostNibble32.asm"
+.include "../Roms/Dos/PreNibble.asm"
+.include "../Roms/Dos/WriteSector.asm"
+.include "../Roms/Dos/ReadData.asm"
+.include "../Roms/Dos/ReadAddress.asm"
+.include "../Roms/Dos/PostNibble.asm"
 .assert * = $1A1E, "The seek follows the nibble routines."
 
 ; DiskII: DOS 3.3's seek and wait, then DOS 3.2's tables.
 .scope DiskII continued
 
 ;; Moves the head from half-track <CurrentTrack> to half-track A, one half-track at a time: DOS 3.3's
-;; (ReadAddressSeek.asm).
+;; (Seek.asm).
 ;;
 ;; At $1A1E. Each step turns on the next half-track's phase, waits <OnTimes>' time, turns off the phase it left and
 ;; waits <OffTimes>' time, both indexed by the smaller of the half-tracks moved so far and those still to go, at
@@ -397,7 +397,7 @@ OffTimes:
 ;; at ReadTranslate + n, for nibble n.
 ;;
 ;; At $1A00. Only the entries for the nibbles $AB to $FF are used, so the table starts on the page boundary $AB
-;; bytes before the first; the entries are DOS 3.2's (SeekMsWait32.asm).
+;; bytes before the first; the entries are DOS 3.2's (MsWait.asm).
 ReadTranslate = $1A00
 
     ; Zeros up to the first entry.
@@ -435,7 +435,7 @@ HighBits:
 LowBits:
     .res LOW_BITS_SIZE
 
-;; The 32 nibbles, in order: entry n is the nibble written for the five-bit value n (NibbleBuffers32.asm).
+;; The 32 nibbles, in order: entry n is the nibble written for the five-bit value n (MsWait.asm).
 WriteTranslate:
     .byte $AB, $AD, $AE, $AF, $B5, $B6, $B7, $BA
     .byte $BB, $BD, $BE, $BF, $D6, $D7, $DA, $DB

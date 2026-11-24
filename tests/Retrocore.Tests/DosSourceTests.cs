@@ -137,7 +137,7 @@ public sealed class DosSourceTests
             machine.Bus.Write((ushort)(SdkModules.DosOrigin + offset), dos[offset]);
         }
 
-        AssertMapped(machine, "DiskII::ReadAddressField", "ReadAddressSeek.asm", "RDADR16");
+        AssertMapped(machine, "DiskII::ReadAddressField", "ReadAddress.asm", "RDADR16");
     }
 
     /// <summary>
@@ -160,7 +160,7 @@ public sealed class DosSourceTests
         }
 
         HasPrompt(machine).Should().BeTrue("DOS loaded and AppleSoft is waiting at its prompt");
-        AssertMapped(machine, "DiskII::ReadAddressField", "ReadAddressSeek.asm", "RDADR16");
+        AssertMapped(machine, "DiskII::ReadAddressField", "ReadAddress.asm", "RDADR16");
         AssertMapped(machine, "CallFileManager::ForDos", "FileManagerEntry.asm", "DOSENT");
     }
 

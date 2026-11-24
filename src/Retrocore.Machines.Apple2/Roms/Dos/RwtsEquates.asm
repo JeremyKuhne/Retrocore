@@ -14,7 +14,7 @@
 ;; cells), so the write routines store a nibble exactly every 32 cycles and the read routines must take each one
 ;; before the next replaces it. A branch taken across a page boundary, or an indexed access that crosses one, costs
 ;; an extra cycle; so the timed loops each sit within one page, and the tables and buffers they index (in MsWait.asm,
-;; or NibbleBuffers32.asm in DOS 3.2) are placed on purpose.
+;; in both versions) are placed on purpose.
 ;;
 ;; Most of the routines' variables are zero-page bytes the Monitor also uses as working storage, under names for
 ;; what RWTS keeps there. Several share one byte, because the routines that use them never run at the same time:

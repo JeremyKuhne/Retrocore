@@ -1,13 +1,20 @@
 ; retrocore: style=strict
-;; DOS 3.2 RWTS: the postnibble routine, which rebuilds a sector from 5-and-3 values ($B9C1-$BA1D where DOS runs)
+;; DOS 3.3 and 3.2 RWTS: rebuilding a sector from the values read
 ;;
-;; <DiskII::PostNibble> turns the values <DiskII::ReadDataField> read into <DiskII::HighBits> and
-;; <DiskII::LowBits> back into the sector's 256 bytes, in the caller's buffer: the reverse of
-;; <DiskII::PreNibble> (PreNibble32.asm). `BOOT 1` has its own copy of this code, <Boot::Stage1::PostNibble>
-;; (BootLoader32.asm), for the values the 13-sector ROM's reader leaves.
+;; The second half of reading a sector's data. Once <DiskII::ReadDataField> (ReadData.asm) has read a data field
+;; into <DiskII::HighBits> and <DiskII::LowBits>, <DiskII::PostNibble> puts each byte's high and low bits back
+;; together in the caller's buffer, undoing <DiskII::PreNibble> (PreNibble.asm). DOS 3.3's rebuilds a byte from six
+;; high bits and two low bits; DOS 3.2's from five and three. docs/DiskII.md explains both encodings.
+;;
+;; The two versions' routines differ throughout, and sit in different places: DOS 3.3's at $B8C2, before the reader
+;; (Dos33.asm includes this file before ReadData.asm), and DOS 3.2's at $B9C1, after the address field reader
+;; (Dos32.asm and Software/Boot13.1980.asm include it after ReadAddress.asm). `BOOT 1` in DOS 3.2 has its own copy
+;; of DOS 3.2's, <Boot::Stage1::PostNibble> (BootLoader.asm), for the values the 13-sector ROM's reader leaves.
 
 ; DiskII: the postnibble routine.
 .scope DiskII continued
+
+.if DOS32
 
 ;; Rebuilds the 256 bytes at <SectorBuffer> from <HighBits> and <LowBits>.
 ;;
@@ -94,5 +101,45 @@ Loop:
     sta (SectorBuffer),y
     rts
 .endproc
+
+.else
+
+;; Rebuilds RebuildCount bytes at SectorBuffer (256 when RebuildCount is 0) from the six-bit values
+;; <ReadDataField> left in <HighBits> and <LowBits>.
+;;
+;; Byte n is HighBits + n shifted left twice, with the low two bits from LowBits + $55 - (n mod $56). Each byte
+;; shifts two bits out of the bottom of its LowBits entry, low bit first, so the pair <PreNibble> stored swapped
+;; comes back in order; three bytes take their bits from each entry in turn, and LowBits is left shifted away.
+;; In:    SectorBuffer = the buffer, RebuildCount = the number of bytes (0 = 256), HighBits = the values from
+;;   <ReadDataField>, LowBits = the same
+;; Out:   the bytes at SectorBuffer, Y = RebuildCount
+;; Uses:  A, X, LowBits
+;; Also: POSTNB16 (DOS33)
+.proc PostNibble
+    ldy #0                          ; Y: the byte, counting up
+
+;; Starts again at the last <LowBits> entry, for the next third of the bytes.
+;; Also: POST1 (DOS33)
+Loop:
+    ldx #LOW_BITS_SIZE              ; X: the LowBits entry, counting down from $55 and starting again
+
+;; Rebuilds the next byte.
+;; Also: POST2 (DOS33)
+NextByte:
+    dex
+    bmi Loop
+    lda a:HighBits,y                ; the top six bits, 00abcdef
+    lsr a:LowBits,x                 ; and the two low bits, shifted in after them
+    rol a
+    lsr a:LowBits,x
+    rol a
+    sta (SectorBuffer),y
+    iny
+    cpy RebuildCount
+    bne NextByte
+    rts
+.endproc
+
+.endif
 
 .endscope

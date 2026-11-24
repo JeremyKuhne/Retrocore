@@ -13,7 +13,7 @@
 ;; came with it.
 ;;
 ;; Its disk reading is DOS 3.2's, under DOS's names: copies of <DiskII::ReadAddressField>,
-;; <DiskII::ReadDataField> and <DiskII::PostNibble> (ReadAddress32.asm, ReadSector32.asm and PostNibble32.asm) and
+;; <DiskII::ReadDataField> and <DiskII::PostNibble> (ReadAddress.asm, ReadData.asm and PostNibble.asm) and
 ;; of <DiskII::ReadTranslate>'s entries, with a simpler <DiskII::MoveHead>. The slot is written into the code, as
 ;; the operands of four `ldx` instructions and two `lda` instructions, the constants <Start::StartSlot>,
 ;; <LoadBoot::LoadSlot>, <ReadSector::SectorSlot>, <DiskII::MoveHead::PhaseOffSwitch> and
@@ -208,7 +208,7 @@ LoadSlot = * + 1
 ;; at ReadTranslate + n, for nibble n.
 ;;
 ;; At $0D00, <LoadBoot>'s page: only the entries for the nibbles $AB to $FF are used, so the table shares its page
-;; with <LoadBoot>. The entries are DOS 3.2's (SeekMsWait32.asm), those for bytes that are not nibbles included.
+;; with <LoadBoot>. The entries are DOS 3.2's (MsWait.asm), those for bytes that are not nibbles included.
 ReadTranslate = LoadBoot
 
     ; Zeros up to the first entry.
@@ -312,7 +312,7 @@ Address:
 ; DiskII: the postnibble routine.
 .scope DiskII continued
 
-;; Rebuilds the 256 bytes at <SectorBuffer> from <HighBits> and <LowBits>: a copy of DOS 3.2's (PostNibble32.asm).
+;; Rebuilds the 256 bytes at <SectorBuffer> from <HighBits> and <LowBits>: a copy of DOS 3.2's (PostNibble.asm).
 ;;
 ;; <ReadDataField> leaves every value shifted left three places, so a <HighBits> value is a byte's top five bits in
 ;; place, and a <LowBits> value holds a byte's low three bits and a bit each of the group's fourth and fifth bytes,
@@ -392,7 +392,7 @@ Loop:
     ; page.
     .res $0EFD - *
 
-;; Reads a data field's 410 nibbles into <LowBits> and <HighBits>: a copy of DOS 3.2's (ReadSector32.asm).
+;; Reads a data field's 410 nibbles into <LowBits> and <HighBits>: a copy of DOS 3.2's (ReadData.asm).
 ;;
 ;; At $0EFD. It looks for the prologue D5 AA AD within 31 nibbles. Each nibble goes through <ReadTranslate>, and
 ;; exclusive-oring the result with the value before undoes the writer's chaining. <LowBits> fills from its last value
@@ -501,7 +501,7 @@ WaitEpilogueAA:
     rts
 .endproc
 
-;; Reads the next address field into <AddressField>: a copy of DOS 3.2's (ReadAddress32.asm).
+;; Reads the next address field into <AddressField>: a copy of DOS 3.2's (ReadAddress.asm).
 ;;
 ;; It looks for the prologue D5 AA B5, reads the four 4-and-4 bytes, checks that they exclusive-or to zero, and
 ;; checks the epilogue's DE AA. It gives up after about 1,800 nibbles without a D5:

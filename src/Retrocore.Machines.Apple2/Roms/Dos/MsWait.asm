@@ -1,39 +1,49 @@
 ; retrocore: style=strict
-;; DOS 3.3 RWTS: the delay, the nibble tables, patches and the six-bit buffers
+;; DOS 3.3 and 3.2 RWTS: the delay, the nibble tables and the buffers
 ;;
-;; The page at $BA00 where DOS runs, and the two buffer pages after it. <DiskII::Wait> is the delay that times the
-;; head and the motor, <DiskII::OnTimes> and <DiskII::OffTimes> the head's step times, and
-;; <DiskII::WriteTranslate> and <DiskII::ReadTranslate> the translations between six-bit values and nibbles that
-;; the write and read routines use. <DiskII::HighBits> and <DiskII::LowBits> ($BB00-$BC55) hold a sector's 342
-;; six-bit values between the disk and the caller's buffer.
+;; <DiskII::Wait> is the delay that times the head and the motor, <DiskII::OnTimes> and <DiskII::OffTimes> the
+;; head's step times, and <DiskII::WriteTranslate> and <DiskII::ReadTranslate> the translations between values and
+;; nibbles that the write and read routines use. <DiskII::HighBits> and <DiskII::LowBits> hold a sector's values
+;; between the disk and the caller's buffer: 342 six-bit values in DOS 3.3 ($BB00-$BC55 where DOS runs), 410
+;; five-bit values in DOS 3.2 ($BB00-$BC99).
 ;;
-;; ReadTranslate is indexed by the nibble itself, and only nibbles $96-$FF are valid, so its entries need only the
-;; last $6A bytes of a page: the code and tables before them share the page. The space between holds three patches
-;; added to DOS later: <AppendFix::ClearUnlessAppend> and <AppendFix::Finish>, for the APPEND command, and
-;; <TurnOff80Columns>, for the Apple IIe's 80-column display. In the 1983 master the APPEND fix's last part lives
-;; here; Apple's listing has a longer version in the boot loader's page (see Dos33.asm). The timing rules for the
-;; tables and buffers are in RwtsEquates.asm, and docs/DiskII.md explains the nibbles.
+;; In DOS 3.3 the delay starts the page at $BA00. <DiskII::ReadTranslate> is indexed by the nibble itself, and only
+;; nibbles $96-$FF are valid, so its entries need only the last $6A bytes of the page: the code and tables before them
+;; share it. The space between holds three patches added to DOS later: <AppendFix::ClearUnlessAppend> and
+;; <AppendFix::Finish>, for the APPEND command, and <TurnOff80Columns>, for the Apple IIe's 80-column display. In the
+;; 1983 master the APPEND fix's last part lives here; Apple's listing has a longer version in the boot loader's page
+;; (see Dos33.asm).
+;;
+;; In DOS 3.2 the delay follows the head mover at $BA7F, the read table's entries for nibbles $AB-$FF end the same page,
+;; and <DiskII::WriteTranslate> follows the buffers. The timing rules for the tables and buffers are in RwtsEquates.asm,
+;; and docs/DiskII.md explains the nibbles.
+;;
+;; The delay and the step times are the same in both versions but for where the relocator's range ends; the tables
+;; and buffers differ throughout, and <DOS32> chooses.
 
 ; DiskII: the delay.
 .scope DiskII continued
 
+.if DOS32 = 0
     ; Leftover: three bytes of padding that put Wait at the start of a page, so that the branch in its timed loop
     ; never crosses a page boundary, which would add a cycle to every pass.
     Leftover $00, $AA
     Leftover $00, $A0
     Leftover $00, $A0
+.endif
 
 ;; Waits A times about 100 microseconds (256 times when A is 0), adding 1 to <MotorTime> for each.
 ;;
-;; Each pass takes 101 cycles: the loop on X takes 84, and the count and the test the rest. RWTS counts the motor's
-;; start-up time in <MotorTime>, so every wait during a seek counts toward it. At $BA00 where DOS runs.
+;; Each pass takes 101 cycles, about 100 microseconds at the Apple II's 1.02 MHz: the loop on X takes 84, and the
+;; count and the test the rest. RWTS counts the motor's start-up time in <MotorTime>, so every wait during a seek
+;; counts toward it. At $BA00 where DOS 3.3 runs ($BA7F in DOS 3.2).
 ;; In:    A = the number of 100-microsecond waits (0 = 256)
 ;; Out:   A = 0, X = 0, carry = set
 ;; Uses:  MotorTime, MotorTimeHigh
 ;; Keeps: Y
 ;; Also: MSWAIT (DOS33, DOS31)
 .proc Wait
-.assert MASTER || * = $BA00, "Wait is at $BA00 where DOS runs."
+.assert MASTER || DOS32 || * = $BA00, "Wait is at $BA00 where DOS 3.3 runs."
 
 ;; The passes of the inner loop: 17, which take 84 cycles.
 INNER_PASSES = $11
@@ -55,15 +65,24 @@ Count:
     sec
     sbc #1
     bne Wait
+.if DOS32
+;; DOS 3.2's end of the relocator's first range of RWTS's code, <LowLevelCodeStart> to here: the range leaves out
+;; this last `rts`, which has no address to adjust. At $BA8F where DOS 3.2 runs. DOS 3.3's is <LowLevelCodeEnd>,
+;; after the `rts`.
+;; Also: AEC1 (DOS33, DOS31)
+LowLevelCodeEnd:
+.endif
     rts
 .endproc
 
 .endscope
 
+.if DOS32 = 0
 ;; The end of the relocator's first range of code in RWTS, from <LowLevelCodeStart>, the byte after it; the tables
-;; after it hold no addresses. See Relocator.asm.
+;; after it hold no addresses. See Relocator.asm. DOS 3.2's is <DiskII::Wait::LowLevelCodeEnd>.
 ;; Also: AEC1 (DOS33, DOS31)
 LowLevelCodeEnd:
+.endif
 
 ; DiskII: the step times and the translation tables.
 .scope DiskII continued
@@ -90,6 +109,121 @@ OffTimes:
     .byte $1D, $1C, $1C
     .byte $1C, $1C, $1C
 .assert * - OffTimes = TIMES_COUNT, "The two tables are the same length."
+
+.if DOS32
+
+;; The table <ReadDataField> uses to turn a nibble back into its five-bit value, shifted left three places: entry
+;; n, at ReadTranslate + n, for nibble n.
+;;
+;; At $BA00 where DOS runs. Only the entries for the 32 nibbles $AB to $FF are used, so the table starts in the
+;; middle of RWTS's code, on the page boundary $AB bytes before the first, and the code indexes it from the page's
+;; start so that each look-up takes 4 cycles. The table's entries for bytes that are not nibbles hold other
+;; values, which nothing uses. They are the 1978 table's. Apple's listing names the page's high byte XP.
+;; Also: DNIBL (DOS33, DOS31)
+ReadTranslate = * & $FF00
+
+    ; Three bytes before the first nibble's entry, unused.
+    .byte $00, $00, $00
+.assert * = ReadTranslate + $AB, "ReadTranslate's first entry, for nibble $AB, follows the tables."
+    .byte $00, $01, $08, $10        ; $AB-$AE
+    .byte $18, $02, $03, $04        ; $AF-$B2
+    .byte $05, $06, $20, $28        ; $B3-$B6
+    .byte $30, $07, $09, $38        ; $B7-$BA
+    .byte $40, $0A, $48, $50        ; $BB-$BE
+    .byte $58, $0B, $0C, $0D        ; $BF-$C2
+    .byte $0E, $0F, $11, $12        ; $C3-$C6
+    .byte $13, $14, $15, $16        ; $C7-$CA
+    .byte $17, $19, $1A, $1B        ; $CB-$CE
+    .byte $1C, $1D, $1E, $21        ; $CF-$D2
+    .byte $22, $23, $24, $60        ; $D3-$D6
+    .byte $68, $25, $26, $70        ; $D7-$DA
+    .byte $78, $27, $80, $88        ; $DB-$DE
+    .byte $90, $29, $2A, $2B        ; $DF-$E2
+    .byte $2C, $2D, $2E, $2F        ; $E3-$E6
+    .byte $31, $32, $33, $98        ; $E7-$EA
+    .byte $A0, $34, $A8, $B0        ; $EB-$EE
+    .byte $B8, $35, $36, $37        ; $EF-$F2
+    .byte $39, $3A, $C0, $C8        ; $F3-$F6
+    .byte $D0, $3B, $3C, $D8        ; $F7-$FA
+    .byte $E0, $3E, $E8, $F0        ; $FB-$FE
+    .byte $F8                       ; $FF
+
+;; The top five bits of each of a sector's 256 bytes, in five runs of 51 and the last byte's (<PreNibble>). After a
+;; read, the values are shifted left three places.
+;;
+;; At $BB00 where DOS runs. The 1978 listing's NBUF1 to NBUF5 are its five runs, from this address up.
+;; Also: NBUF1 (DOS33, DOS31)
+HighBits:
+    ; leftover
+    .byte $1B, $18, $06, $14, $05, $05, $04, $0D, $04, $03, $02, $01, $0A, $01, $00, $03
+    .byte $00, $03, $03, $03, $03, $06, $00, $00, $1A, $05, $1F, $1C, $13, $15, $05, $04
+    .byte $10, $01, $15, $12, $00, $0F, $12, $09, $05, $00, $00, $02, $00, $00, $00, $00
+    .byte $00, $00, $03, $1C, $19, $06, $06, $06, $05, $10, $04, $04, $03, $02, $01, $0B
+    .byte $07, $04, $00, $00, $03, $03, $0E, $03, $05, $1A, $1C, $1F, $0C, $04, $04, $07
+    .byte $17, $00, $0F, $18, $00, $00, $01, $00, $00, $00, $00, $03, $00, $00, $00, $00
+    .byte $03, $00, $00, $00, $00, $03, $07, $1A, $06, $15, $06, $05, $11, $04, $04, $03
+    .byte $02, $02, $01, $08, $05, $00, $00, $03, $03, $05, $03, $04, $1E, $08, $1C, $14
+    .byte $00, $00, $00, $00, $00, $00, $00, $00, $01, $00, $00, $00, $00, $02, $03, $00
+    .byte $00, $01, $02, $03, $00, $00, $01, $01, $00, $1D, $07, $07, $16, $06, $05, $12
+    .byte $0E, $04, $03, $02, $02, $01, $01, $06, $00, $01, $00, $00, $00, $03, $00, $00
+    .byte $00, $00, $00, $00, $00, $00, $02, $03, $00, $00, $00, $03, $00, $03, $00, $01
+    .byte $00, $00, $00, $00, $02, $00, $02, $00, $00, $00, $00, $02, $1E, $07, $07, $17
+    .byte $13, $05, $05, $0F, $0C, $00, $03, $00, $00, $00, $00, $00, $00, $00, $00, $02
+    .byte $00, $00, $00, $00, $00, $00, $03, $00, $00, $00, $00, $00, $00, $00, $00, $00
+    .byte $03, $00, $00, $00, $00, $00, $00, $01, $02, $02, $03, $00, $00, $00, $00, $1F
+
+;; The low three bits of a sector's bytes, five bits to a value: three runs of 51 and the last byte's three bits
+;; (<PreNibble>). After a read, the values are shifted left three places.
+;;
+;; At $BC00 where DOS runs. The 1978 listing's NBUF6 to NBUF8 are its three runs; its NBUF2 is <HighBits>' second
+;; run.
+;; Also: NBUF2 (DOS33), NBUF6 (DOS31)
+LowBits:
+    ; leftover
+    .byte $0C, $00, $0C, $00, $0C, $00, $00, $00, $14, $1D, $01, $00, $00, $00, $00, $00
+    .byte $00, $04, $18, $1E, $07, $04, $00, $00, $00, $00, $0F, $00, $10, $15, $01, $00
+    .byte $00, $00, $1C, $1F, $19, $10, $0D, $1B, $0F, $00, $14, $1E, $05, $01, $1C, $01
+    .byte $04, $03, $11, $00, $03, $00, $00, $00, $00, $02, $00, $1D, $1E, $03, $0A, $04
+    .byte $01, $02, $00, $02, $04, $13, $19, $05, $08, $08, $04, $00, $10, $15, $15, $0E
+    .byte $18, $0F, $0C, $0C, $04, $1C, $01, $14, $01, $0C, $00, $00, $11, $02, $05, $00
+    .byte $1C, $10, $01, $00, $00, $00, $00, $04, $00, $00, $00, $00, $00, $00, $11, $1F
+    .byte $00, $00, $00, $0D, $0A, $00, $02, $19, $0C, $1A, $03, $0C, $0C, $00, $00, $10
+    .byte $0C, $01, $00, $00, $00, $02, $05, $12, $10, $16, $00, $09, $09, $09, $0C, $05
+    .byte $11, $03, $00, $01, $00, $10, $00, $01, $10, $07
+.assert * - LowBits = LOW_BITS_SIZE, "LowBits holds 154 values."
+
+;; The 32 nibbles, in order: entry n is the nibble written for the five-bit value n.
+;;
+;; At $BC9A where DOS runs. They are the bytes from $AB up whose top bit is set and which have no two 0 bits next
+;; to each other, apart from $D5, which only starts a field. The 1978 table, at the same place.
+;; Also: NIBL (DOS33, DOS31)
+WriteTranslate:
+    .byte $AB, $AD, $AE, $AF, $B5, $B6, $B7, $BA
+    .byte $BB, $BD, $BE, $BF, $D6, $D7, $DA, $DB
+    .byte $DD, $DE, $DF, $EA, $EB, $ED, $EE, $EF
+    .byte $F5, $F6, $F7, $FA, $FB, $FD, $FE, $FF
+
+.endscope
+
+
+    ; Leftover, but for a piece of code and a table in it that nothing uses. The code would look up the sector number
+    ; an address field gave (FoundSector) in the table and go on at the compare in Rwts::RightVolume (Rwts32.asm),
+    ; $BE0A where DOS runs, comparing the result with the IOB's sector. The table, 0, 5, 10, ... modulo 13, would
+    ; make that a software interleave. Its addresses are those of the master image, $3CD0 and $3E0A, and the
+    ; relocator doesn't adjust this page.
+    .byte $1C, $1C, $1C, $00, $00, $00
+    ldy FoundSector
+    lda $3CD0,y
+    ldy #Iob::SECTOR
+    jmp $3E0A
+    .byte $00, $00, $00, $00, $00, $00
+.assert <* = $D0, "The leftover table is at $xxD0."
+    .byte $00, $05, $0A, $02, $07, $0C, $04, $09, $01, $06, $0B, $03, $08
+    .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+    .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+    .byte $00, $00, $00
+
+.else
 
 ;; The nibble that stands for each six-bit value, 0 to $3F: in order, the 64 bytes with the top bit set whose bits
 ;; 6-0 hold at least one pair of adjacent 1 bits and at most one pair of adjacent 0 bits.
@@ -326,3 +460,4 @@ LowBits:
 .assert <HighBits = 0 && <LowBits = 0, "The buffers start pages."
 
 .endscope
+.endif

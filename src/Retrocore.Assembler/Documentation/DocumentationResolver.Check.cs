@@ -108,9 +108,18 @@ public sealed partial class DocumentationResolver
 
         void Section(string message, int line) => Warn(DocumentationRules.Sections, message, line);
 
-        // A section a macro's body writes is reported in the body's file, which needn't be the topic's first.
+        // Where macros' bodies share a topic, a section is reported in the file of the definition that wrote it, which
+        // needn't be the topic's first: a branch's own section knows its origin, and one the definitions share is
+        // the first writer's.
         bool macros = topic.Comments.Any(comment => comment.Macro is not null);
-        string PathOf(DocumentationSection section) => macros ? section.OriginPath ?? topic.Path : topic.Path;
+        string PathOf(DocumentationSection section)
+        {
+            if (!macros) { return topic.Path; }
+            string? writer = topic.Comments
+                .FirstOrDefault(comment => comment.Sections.Any(own => ReferenceEquals(own, section)))?.Path;
+
+            return section.OriginPath ?? writer ?? topic.Path;
+        }
 
         void At(DocumentationSection section, string rule, string message, int line) =>
             diagnostics.Add(new(message, PathOf(section), line, DocumentationSeverity.Warning, rule));

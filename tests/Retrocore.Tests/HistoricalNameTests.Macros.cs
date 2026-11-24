@@ -966,23 +966,39 @@ public sealed partial class HistoricalNameTests
             unknown.Path.Should().Be(second);
             unknown.Line.Should().Be(5);
 
-            // And a section two definitions share, written first in the second file after a bare Inherit: in the first.
-            File.WriteAllText(first, ".macro MA\n;; One.\n;; Inherit:\nX:\n    rts\n.endmacro\n");
-            File.WriteAllText(second, "; Second.\n;\n;\n.macro MB\n;; Two.\n;; Include: nofile.txt\nX:\n    rts\n.endmacro\n.macro MC\n;; Three.\n;; Include: nofile.txt\nX:\n    rts\n.endmacro\n");
-            string three = once + ".scope S3\n    MC\n.endscope\n";
-            File.WriteAllText(main, three);
-            AssemblyResult shared = new Retrocore.Assembler.Assembler().Assemble(
-                new AssemblySource(three, main),
-                new AssemblyOptions(ProcessorVariant.Mos6502, origin: 0x1000, imageSize: 0x100)
-                {
-                    SourceResolver = new FileAssemblySourceResolver()
-                });
+            // And the second macro's Inherit:, though the first file's definition is the topic's first.
+            File.WriteAllText(first, ".macro MA\n;; One.\nX:\n    rts\n.endmacro\n");
+            File.WriteAllText(second, "; Second.\n;\n;\n.macro MB\n;; Two.\n;; Inherit: <NOSUCH>\nX:\n    rts\n.endmacro\n");
+            DocumentationDiagnostic inherit = Checked(once).Should().ContainSingle().Subject;
+            inherit.Message.Should().StartWith("Inherit:");
+            inherit.Path.Should().Be(second);
 
-            shared.Diagnostics.Should().BeEmpty();
-            files = [.. ((string[])[main, first, second]).Select(path => DocumentationParser.Parse(File.ReadAllText(path), path))];
-            List<DocumentationDiagnostic> included = new DocumentationResolver(DocumentationSet.Create(files, shared)).Check();
-            DocumentationDiagnostic missing = included.Should().ContainSingle(item => item.Message.StartsWith("Include:")).Subject;
+            // And a section the build's definitions share: a definition outside the macros in the second file, beside
+            // a macro's body in the first that the build doesn't expand.
+            File.WriteAllText(first, ".macro MA\n;; Two.\nX:\n    rts\n.endmacro\n");
+            File.WriteAllText(second, "; Second.\n;\n;\n;; One.\n;; Include: nofile.txt\nX:\n    rts\n");
+            string plain = text[..text.IndexOf(".scope S1", StringComparison.Ordinal)];
+            DocumentationDiagnostic missing = Checked(plain).Should().ContainSingle().Subject;
+            missing.Message.Should().StartWith("Include:");
             missing.Path.Should().Be(second);
+            missing.Line.Should().Be(4);
+
+            List<DocumentationDiagnostic> Checked(string source)
+            {
+                File.WriteAllText(main, source);
+                AssemblyResult assembled = new Retrocore.Assembler.Assembler().Assemble(
+                    new AssemblySource(source, main),
+                    new AssemblyOptions(ProcessorVariant.Mos6502, origin: 0x1000, imageSize: 0x100)
+                    {
+                        SourceResolver = new FileAssemblySourceResolver()
+                    });
+
+                assembled.Diagnostics.Should().BeEmpty();
+                List<DocumentationFile> parsed =
+                    [.. ((string[])[main, first, second]).Select(path => DocumentationParser.Parse(File.ReadAllText(path), path))];
+
+                return new DocumentationResolver(DocumentationSet.Create(parsed, assembled)).Check();
+            }
         }
         finally
         {

@@ -1094,10 +1094,12 @@ Decisions and how the table was applied:
   is BASIC 4's own INPSTP, under `.if localStopLabel`.
 - I10. The C# debug hosts are unchanged: their old names resolve through `SymbolsWithHistoricalNames`.
 - I11. Tests and their helpers:
-  - `BasicNames.CurrentNamesOf` takes the names in `VendorLabelNames` last, and such a name gives way to any other
-    old name of the same current name. Another per-build name still gives way only to one that names a single
-    definition. Where NTHIS1 and NTHIS2, which the vendors give one step apart (`ShiftedNames`), name one current
-    name with different values, that name is left out, so a source that needs it fails as unresolved.
+  - The builds give NTHIS1 and NTHIS2 one step apart, and TABER to different definitions, so a test that predefines
+    one of them passes its build to `BasicNames` (E11): the PET math, alias and print tests now do. `VendorLabelNames`
+    adds ON, and those names may be a historical name on the vendor's own code, not only on an alias in its
+    historical-names file (`BasicAttribution.AssertNotShared`).
+  - Shared prose links the `ON` statement as `<Statements::On>` rather than naming it: ON is AppleSoft's alias, and
+    AppleSoft has no `TOKEN_ON` to mark it as a keyword.
   - `BasicNames.CurrentLabel` labels a test's own definition by its current names alone. Defining the old name too
     would be a second definition of a name a source's `Also:` gives; the rename gate found this in the composed
     PET source.

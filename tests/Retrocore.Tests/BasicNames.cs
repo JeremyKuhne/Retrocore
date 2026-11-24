@@ -55,17 +55,11 @@ internal static partial class BasicNames
     ];
 
     /// <summary>
-    ///  Gets the names a vendor's alias gives in some builds that other builds still give to a label of a vendor's own
-    ///  unconverted code, until its part converts it: BASIC 4's GETRTS, which is the output routine's return in
-    ///  AppleSoft and BASIC 1 and 2 (Basic.md E3), and AppleSoft's ON, which is BASIC 4's disk-command parser.
+    ///  Gets the names a vendor's alias gives in some builds that other builds give to their vendor's own code: BASIC
+    ///  4's GETRTS, which is the output routine's return in AppleSoft and BASIC 1 and 2 (Basic.md E3), and AppleSoft's
+    ///  ON, which is BASIC 4's disk-command parser.
     /// </summary>
     internal static string[] VendorLabelNames { get; } = ["GETRTS", "ON"];
-
-    /// <summary>
-    ///  Gets the old names that the two vendors give to neighboring definitions, one step apart: AppleSoft's NTHIS2 is
-    ///  the PET's NTHIS1 (<c>Tokenize::SkipWord</c>), and AppleSoft's NTHIS3 the PET's NTHIS2 (Basic.md, C).
-    /// </summary>
-    internal static string[] ShiftedNames { get; } = ["NTHIS1", "NTHIS2"];
 
     /// <summary>
     ///  Gets whether a build defines a name as a label of a vendor's own code, in the folder of the vendor's historical
@@ -284,11 +278,16 @@ internal static partial class BasicNames
     ///  left to <see cref="ScopedNames(IReadOnlyDictionary{string, long})"/>.
     /// </summary>
     /// <param name="symbols">The predefined symbols, by the names Microsoft's source has.</param>
-    /// <param name="build">The build whose names to keep.</param>
+    /// <param name="build">The build whose names to add, from a <c>Build</c> overload.</param>
+    /// <param name="result">That build, whose names to keep.</param>
     /// <returns>The predefined symbols with the build's current names added.</returns>
-    /// <exception cref="InvalidOperationException">The builds give an old name to different definitions.</exception>
-    internal static Dictionary<string, long> WithCurrentNames(IReadOnlyDictionary<string, long> symbols, AssemblyResult build) =>
-        new(WithCurrentNames(symbols).Where(pair => symbols.ContainsKey(pair.Key) || build.HasSymbol(pair.Key)), StringComparer.Ordinal);
+    /// <exception cref="ArgumentException">The build is not a native BASIC build.</exception>
+    internal static Dictionary<string, long> WithCurrentNames(IReadOnlyDictionary<string, long> symbols, string build, AssemblyResult result)
+    {
+        return new(
+            WithCurrentNames(symbols, build).Where(pair => symbols.ContainsKey(pair.Key) || result.HasSymbol(pair.Key)),
+            StringComparer.Ordinal);
+    }
 
     /// <summary>
     ///  Gets the source that defines, for a standalone build, the current names

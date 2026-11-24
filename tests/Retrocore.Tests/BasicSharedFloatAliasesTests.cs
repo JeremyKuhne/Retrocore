@@ -205,7 +205,7 @@ public sealed class BasicSharedFloatAliasesTests
         string source = $"""
             .cpu Mos6502
             .org ${start:X4}
-            {BasicNames.ScopedNames(symbols)}
+            {BasicNames.ScopedNames(symbols, BasicNames.Build(model, original))}
             .include "Commodore.FloatingPoint.asm"
             FLOAT_ALIAS_BEFORE:
             .include "Commodore.HistoricalNames.asm"
@@ -219,7 +219,7 @@ public sealed class BasicSharedFloatAliasesTests
         {
             SourceResolver = new FileAssemblySourceResolver(),
             IncludePaths = [Shared],
-            PredefinedSymbols = BasicNames.WithCurrentNames(symbols, PetSdkModules.AssembleBasic(Pet, model, original))
+            PredefinedSymbols = BasicNames.WithCurrentNames(symbols, BasicNames.Build(model, original), PetSdkModules.AssembleBasic(Pet, model, original))
         };
 
         AssemblyResult native = RequireSuccess(new Retrocore.Assembler.Assembler().Assemble(

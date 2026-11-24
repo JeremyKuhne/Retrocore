@@ -46,11 +46,11 @@ public sealed class BasicSharedPrintTests
             name => name, name => legacy.Symbol(name), StringComparer.Ordinal);
 
         AssemblyResult native = new Assembler.Assembler().Assemble(
-            new AssemblySource(BasicNames.ScopedNames(symbols) + "\n" + source, Path.Join(folder, "PrintTest.asm")),
+            new AssemblySource(BasicNames.ScopedNames(symbols, BasicNames.Build(model, original: false)) + "\n" + source, Path.Join(folder, "PrintTest.asm")),
             new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
             {
                 SourceResolver = new FileAssemblySourceResolver(),
-                PredefinedSymbols = BasicNames.WithCurrentNames(symbols)
+                PredefinedSymbols = BasicNames.WithCurrentNames(symbols, BasicNames.Build(model, original: false))
             });
 
         native.Success.Should().BeTrue(string.Join(Environment.NewLine, native.Diagnostics.Select(diagnostic => diagnostic.Message)));
@@ -108,11 +108,11 @@ public sealed class BasicSharedPrintTests
             name => name, name => legacy.Symbol(name), StringComparer.Ordinal);
 
         AssemblyResult native = new Assembler.Assembler().Assemble(
-            new AssemblySource(BasicNames.ScopedNames(symbols) + "\n" + source, Path.Join(folder, "ChannelPrintTest.asm")),
+            new AssemblySource(BasicNames.ScopedNames(symbols, BasicNames.Build(model, original: false)) + "\n" + source, Path.Join(folder, "ChannelPrintTest.asm")),
             new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
             {
                 SourceResolver = new FileAssemblySourceResolver(),
-                PredefinedSymbols = BasicNames.WithCurrentNames(symbols)
+                PredefinedSymbols = BasicNames.WithCurrentNames(symbols, BasicNames.Build(model, original: false))
             });
 
         native.Success.Should().BeTrue(string.Join(Environment.NewLine, native.Diagnostics.Select(diagnostic => diagnostic.Message)));
@@ -178,11 +178,11 @@ public sealed class BasicSharedPrintTests
             name => name, name => legacy.Symbol(name), StringComparer.Ordinal);
 
         AssemblyResult native = new Assembler.Assembler().Assemble(
-            new AssemblySource(BasicNames.ScopedNames(symbols) + "\n" + source, Path.Join(folder, "PrintSpacingTest.asm")),
+            new AssemblySource(BasicNames.ScopedNames(symbols, BasicNames.Build(model, original: false)) + "\n" + source, Path.Join(folder, "PrintSpacingTest.asm")),
             new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
             {
                 SourceResolver = new FileAssemblySourceResolver(),
-                PredefinedSymbols = BasicNames.WithCurrentNames(symbols)
+                PredefinedSymbols = BasicNames.WithCurrentNames(symbols, BasicNames.Build(model, original: false))
             });
 
         native.Success.Should().BeTrue(string.Join(Environment.NewLine, native.Diagnostics.Select(diagnostic => diagnostic.Message)));
@@ -256,11 +256,11 @@ public sealed class BasicSharedPrintTests
             name => name, name => legacy.Symbol(name), StringComparer.Ordinal);
 
         AssemblyResult native = new Assembler.Assembler().Assemble(
-            new AssemblySource(BasicNames.ScopedNames(symbols) + "\n" + source, Path.Join(folder, "CharacterOutputTest.asm")),
+            new AssemblySource(BasicNames.ScopedNames(symbols, BasicNames.Build(model, original: false)) + "\n" + source, Path.Join(folder, "CharacterOutputTest.asm")),
             new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
             {
                 SourceResolver = new FileAssemblySourceResolver(),
-                PredefinedSymbols = BasicNames.WithCurrentNames(symbols)
+                PredefinedSymbols = BasicNames.WithCurrentNames(symbols, BasicNames.Build(model, original: false))
             });
 
         native.Success.Should().BeTrue(string.Join(Environment.NewLine, native.Diagnostics.Select(diagnostic => diagnostic.Message)));

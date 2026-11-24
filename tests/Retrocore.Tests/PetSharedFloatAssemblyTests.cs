@@ -233,7 +233,7 @@ public sealed class PetSharedFloatAssemblyTests
 
         string source = $"""
             .cpu Mos6502
-            {BasicNames.ScopedNames(symbols)}
+            {BasicNames.ScopedNames(symbols, BasicNames.Build(model, original))}
             .org ${start:X4}
             .include "Commodore.FloatingPoint.asm"
             {EndLabel}:
@@ -245,7 +245,7 @@ public sealed class PetSharedFloatAssemblyTests
         {
             SourceResolver = new FileAssemblySourceResolver(),
             IncludePaths = [SharedInputs],
-            PredefinedSymbols = BasicNames.WithCurrentNames(symbols)
+            PredefinedSymbols = BasicNames.WithCurrentNames(symbols, BasicNames.Build(model, original))
         };
 
         AssemblyResult native = new Retrocore.Assembler.Assembler().Assemble(

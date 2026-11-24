@@ -112,8 +112,11 @@ internal static partial class BasicAttribution
     {
         if (result.HistoricalNames.TryGetValue(name, out AssemblySymbol? definition))
         {
+            // A name of BasicNames.VendorLabelNames, such as GETRTS, is also the build's own name for its vendor's code.
             string? path = definition.Location?.Path;
-            (!IsSharedPath(path) && path?.EndsWith(".HistoricalNames.asm", StringComparison.Ordinal) == true).Should().BeTrue(
+            bool aliasFile = path?.EndsWith(".HistoricalNames.asm", StringComparison.Ordinal) == true;
+            bool vendorFile = aliasFile || BasicNames.VendorLabelNames.Contains(name);
+            (!IsSharedPath(path) && vendorFile).Should().BeTrue(
                 $"{name} may be a historical name only on its vendor's alias in a HistoricalNames file, not on {definition.Name}");
         }
 

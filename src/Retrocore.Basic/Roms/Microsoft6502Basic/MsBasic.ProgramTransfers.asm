@@ -281,7 +281,7 @@ Done:
     ;; Entry:
     ;;   UndefinedStatement = reports UNDEF'D STATEMENT through <ReportError> (RETURN's error skips its load);
     ;;     <Statements::GoTo> enters here
-    ;;   ToSyntaxError = jumps to <SyntaxError>; `ON` enters here
+    ;;   ToSyntaxError = jumps to <SyntaxError>; <Statements::On> enters here
     ;; See: <Statements::GoSub>, <FindForFrame>
     ;; Also: RETURN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc Return
@@ -299,7 +299,7 @@ Done:
 UndefinedStatement:
     ldx #ERROR_UNDEFINED_STATEMENT
     jmp ReportError
-;; Jumps to <SyntaxError>; `ON` enters here.
+;; Jumps to <SyntaxError>; <Statements::On> enters here.
 ;; Also: SNERR2 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 ToSyntaxError:
     jmp SyntaxError

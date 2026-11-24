@@ -14,7 +14,8 @@ namespace Retrocore.Debug.Language;
 ///  <para>
 ///   The SDK's sources are read from disk, never from open documents, so one index serves every workspace in the
 ///   process; it is built once for each ROM directory, on a thread of its own, as it takes seconds and would
-///   otherwise hold a thread pool thread that a request or an analysis needs.
+///   otherwise hold a thread pool thread that a request or an analysis needs. It is never rebuilt: the SDK's sources
+///   do not change while the process runs.
 ///  </para>
 /// </remarks>
 internal sealed class SdkIndex
@@ -67,9 +68,15 @@ internal sealed class SdkIndex
                 _ = analysis.Documentation;
                 lock (_analyses) { _analyses.Add(analysis); }
             }
-            catch (IOException)
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
             {
                 // An unreadable SDK file only means fewer search results.
+            }
+#pragma warning disable CA1031 // One source that fails to analyze only leaves its module out, for every workspace.
+            catch (Exception exception) when (exception is not OutOfMemoryException)
+#pragma warning restore CA1031
+            {
+                Console.Error.WriteLine($"The SDK source {root} was not indexed: {exception}");
             }
         }
     }

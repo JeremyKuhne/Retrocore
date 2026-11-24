@@ -49,10 +49,19 @@ internal sealed partial class LanguageWorkspace
     {
         _server = server;
         _sdk = SdkIndex.For(SdkModules.RomDirectory);
+        // An index that failed part way has fewer modules, which the documentation checks still use.
         _ = _sdk.Completion.ContinueWith(
-            _ => SdkIndexed(),
+            indexing =>
+            {
+                if (indexing.Exception is { } failure)
+                {
+                    Console.Error.WriteLine($"The SDK index is incomplete: {failure}");
+                }
+
+                SdkIndexed();
+            },
             CancellationToken.None,
-            TaskContinuationOptions.OnlyOnRanToCompletion,
+            TaskContinuationOptions.None,
             TaskScheduler.Default);
     }
 
@@ -276,7 +285,7 @@ internal sealed partial class LanguageWorkspace
             list.Add(item.Unnecessary());
         }
 
-        // Before the SDK is indexed, every link to another module would look broken; IndexSdk checks again.
+        // Before the SDK is indexed, every link to another module would look broken; SdkIndexed checks again.
         IEnumerable<KeyValuePair<string, List<Diagnostic>>> documentationDiagnostics = _sdkIndexed
             ? DocumentationDiagnostics(analysis)
             : [];

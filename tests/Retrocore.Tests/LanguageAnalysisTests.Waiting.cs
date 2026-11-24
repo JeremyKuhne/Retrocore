@@ -39,8 +39,8 @@ public sealed partial class LanguageAnalysisTests
     }
 
     /// <summary>
-    ///  A request waiting for a document's first analysis goes on when the analysis ends without one: here the
-    ///  document closes before it is analyzed, and its file is not on disk.
+    ///  A request waiting for a document's first analysis goes on when the analysis ends without one: here a document
+    ///  whose file is not on disk closes, so the attempt it schedules has nothing to read.
     /// </summary>
     /// <returns>The test.</returns>
     [TestMethod]
@@ -52,7 +52,6 @@ public sealed partial class LanguageAnalysisTests
             string probe = Directory.CreateDirectory(Path.Join(folder, "probe")).FullName;
             string path = Path.GetFullPath(Path.Join(probe, "Unsaved.asm"));
             LanguageWorkspace workspace = new(new RecordingLanguageClient());
-            workspace.Update(path, ".org $0300\n    rts\n");
             workspace.Close(path);
 
             (await workspace.AnalysisOfAsync(path, CancellationToken.None)).Should().BeNull();

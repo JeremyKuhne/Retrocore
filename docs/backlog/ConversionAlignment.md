@@ -261,6 +261,8 @@ Each session takes its branches to main this way:
   4. *Closing pass*: Opus alone on the whole diff. A finding goes back to step 3, not step 2. (Sonnet was in the
      closing pass at first; across the first seven closing passes it found one should-fix, Opus about sixteen and a
      must-fix, so the closing pass is Opus's, and Sonnet stays in the first pass, where it finds real issues.)
+  A fix for nits alone gets no model review: after a clean closing pass its nits are applied, the lint and the
+  targeted tests run, and it is pushed. Only a fix for a must-fix or should-fix finding goes to a delta review.
 
   **The brief.** What counts: a wrong value, address or contract; a comment false for the code in a build it is in;
   a lost or mis-keyed historical name; a broken build or test. What does not: a comment that leaves out a use,

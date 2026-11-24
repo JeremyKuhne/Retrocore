@@ -845,8 +845,8 @@ Decisions and how the table was applied:
     macro expanded twice) and `OldNamesOfAMacroDoNotHintWhileTheFileHasAnError`. The doc set's `FindAlso` returns a
     single topic without its per-build filter, so a file whose other branch gives a name no SDK module gives still gets
     a hint naming the label; that predates this step and is left for a change of its own. A macro-body name whose label
-    shares a root routine's name hints the expansion (`Basic::Reader`), the definition the assembler gives it to,
-    through the doc set's name-aware lookup (#132).
+    shares a root routine's name, in a macro expanded once, hints the expansion (`Basic::Reader`), the definition the
+    assembler gives it to, through the doc set's name-aware lookup (#132).
 - S11. Two rules the owner settled on the Monitor's PR, which apply here from this step on:
   - D5, narrowed: a mid-routine `.if` shows how builds differ, better than whole per-build routines; a routine's
     contract holds in every build, or says which build differs. The statement modules already show their builds'

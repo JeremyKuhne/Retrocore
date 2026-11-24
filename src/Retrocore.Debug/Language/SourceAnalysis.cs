@@ -262,6 +262,14 @@ internal sealed partial class SourceAnalysis
     internal IEnumerable<SymbolSite> Definitions => _definitions.Values.SelectMany(sites => sites);
 
     /// <summary>
+    ///  Gets whether a definition has exactly this name, matching case.
+    /// </summary>
+    /// <param name="name">The name, qualified as the definition's is.</param>
+    /// <returns>Whether one of <see cref="Definitions"/> has that name.</returns>
+    internal bool Defines(string name) =>
+        _definitions.TryGetValue(name, out List<SymbolSite>? sites) && sites.Exists(site => site.Name == name);
+
+    /// <summary>
     ///  Assembles a root file over the whole address space.
     /// </summary>
     /// <param name="root">The full path of the root.</param>

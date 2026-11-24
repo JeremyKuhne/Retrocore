@@ -72,12 +72,7 @@ public sealed partial class LanguageAnalysisTests
             RecordingLanguageClient client = new();
             LanguageWorkspace workspace = new(client);
             workspace.Update(path, text);
-            // The first assembly can take longer than a request waits when other tests load the machine.
-            SourceAnalysis? analysis = null;
-            for (int attempt = 0; attempt < 6 && analysis is null; attempt++)
-            {
-                analysis = await workspace.AnalysisOfAsync(path, CancellationToken.None);
-            }
+            SourceAnalysis? analysis = await workspace.AnalysisOfAsync(path, CancellationToken.None);
 
             analysis.Should().NotBeNull();
             DocumentUri uri = DocumentUri.FromFileSystemPath(path);
@@ -294,11 +289,7 @@ public sealed partial class LanguageAnalysisTests
             workspace.Update(path, text);
             DocumentUri uri = DocumentUri.FromFileSystemPath(path);
 
-            SourceAnalysis? analysis = null;
-            for (int attempt = 0; attempt < 6 && analysis is null; attempt++)
-            {
-                analysis = await workspace.AnalysisOfAsync(path, CancellationToken.None);
-            }
+            SourceAnalysis? analysis = await workspace.AnalysisOfAsync(path, CancellationToken.None);
 
             // The taken branch is assembled; the other is found in the text, in its scope, where the assembled one
             // already defines the name. Neither is a root name.

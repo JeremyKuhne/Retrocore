@@ -156,9 +156,22 @@ internal static partial class SourceIncludes
     {
         List<string> candidates = [.. folders.SelectMany(SourcesIn)];
         HashSet<string> seen = [with(StringComparer.OrdinalIgnoreCase), path];
+
+        // Each step up the chain searches the same candidates, so each is read once. Keyed by the exact path, as two
+        // files whose names differ only in case can both exist where names match case.
+        Dictionary<string, HashSet<string>> includes = [with(StringComparer.Ordinal)];
+        HashSet<string> Includes(string candidate)
+        {
+            if (!includes.TryGetValue(candidate, out HashSet<string>? files))
+            {
+                includes[candidate] = files = [with(StringComparer.OrdinalIgnoreCase), .. IncludesOf(candidate)];
+            }
+
+            return files;
+        }
+
         string current = path;
-        while (candidates.FirstOrDefault(candidate =>
-            !seen.Contains(candidate) && IncludesOf(candidate).Contains(current, StringComparer.OrdinalIgnoreCase)) is { } includer)
+        while (candidates.FirstOrDefault(candidate => !seen.Contains(candidate) && Includes(candidate).Contains(current)) is { } includer)
         {
             seen.Add(includer);
             current = includer;

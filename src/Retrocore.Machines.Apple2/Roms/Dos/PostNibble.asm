@@ -23,7 +23,7 @@
 ;; made: a byte's low three bits, then a bit of the group's fourth byte and a bit of its fifth.
 ;; <PostNibble::FourthBits> and <PostNibble::FifthBits> gather those, a bit from each of the group's three <LowBits>
 ;; values. The groups come in the order <PreNibble> made them, X from 50 down to 0.
-;; In: SectorBuffer = the address of the buffer, <HighBits> and LowBits = the values from <ReadDataField>
+;; In: SectorBuffer = the address of the buffer, <HighBits> and <LowBits> = the values from <ReadDataField>
 ;; Out: (SectorBuffer) = the 256 bytes
 ;; Also: POSTNB16 (DOS33), POSTNIB (DOS31)
 .proc PostNibble

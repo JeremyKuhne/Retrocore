@@ -615,7 +615,7 @@ PHASE_MASK = 3
 ;; once more and leaves the last phase on. Every wait is <StepWait>, about 6.4 milliseconds, so each half-track takes
 ;; about 13: slower than DOS's, which speeds up and slows down, but simpler.
 ;; In: A = the half-track to go to, X = slot * 16, CurrentTrack = the half-track the head is on
-;; Out: CurrentTrack = the new half-track, A = 0
+;; Out: CurrentTrack = the new half-track
 ;; Keeps: X
 .proc MoveHead
 

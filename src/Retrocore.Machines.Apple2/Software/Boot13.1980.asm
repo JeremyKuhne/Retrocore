@@ -949,7 +949,7 @@ TRACK_COUNT = 35
     lda #0
     sta FormatTrack
     jsr DiskII::MoveHead
-    lda #DiskII::ODD_BITS
+    lda #DiskII::FOUR_AND_FOUR_BITS
     sta FormatMask
     ldy #FIRST_GAP
 ;; Formats track <FormatTrack>, then the tracks after it.
@@ -1033,7 +1033,7 @@ StoreGapByte:
     sta LoadLatch,x
     cmp DataLatch,x
     pla
-    ora #DiskII::ODD_BITS
+    ora #DiskII::FOUR_AND_FOUR_BITS
     jsr DiskII::WriteFieldNibble
     lda #DiskII::EPILOGUE_FIRST
     jsr DiskII::WriteFieldNibble::Shorter
@@ -1152,10 +1152,6 @@ Finish:
 ; DiskII: the 4-and-4 writer and the nibble writer for address fields.
 .scope DiskII continued
 
-;; The bits that make the first nibble of a 4-and-4 pair from a byte shifted right, and the second from the byte:
-;; every other bit set.
-ODD_BITS = $AA
-
 ;; Writes the byte in A as two 4-and-4 nibbles, its odd bits then its even bits, 32 cycles apart.
 ;;
 ;; The first nibble is the byte shifted right with every other bit set, through <FormatMask>, the zero-page byte
@@ -1170,7 +1166,7 @@ ODD_BITS = $AA
     cmp DataLatch,x
     pla
     cmp ($00,x)                     ; timing: 6 cycles
-    ora #ODD_BITS
+    ora #FOUR_AND_FOUR_BITS
     ; Falls into WriteFieldNibble.
 .endproc
 

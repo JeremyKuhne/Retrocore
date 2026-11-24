@@ -50,6 +50,22 @@ boot loader and formatter. Also converted with it: `Software/MasterCreate.asm`, 
   and ULC are renamed with `Also:`; ORIGIN is `MASTER_ORIGIN` with `Also: ORIGIN (DOS33)` and an `.assert`. Each
   root asserts the values its digests check: `Dos33.asm` a MASTER of 0 or 1 and a YEAR of 1983 or 1980, `Dos32.asm`
   a MASTER of 0 or 1 (YEAR selects nothing in DOS 3.2).
+- X14. The owner's D5 decision: a routine both versions have is one definition, with `.if DOS32` where they differ
+  in places (Stage2, StartDos, CallRwts, PrepareWrite, WriteDataField, ReadDataField, ReadAddressField, MoveHead,
+  Wait, WriteFourAndFour, WriteFieldNibble, SeekTrack, SeekHalfTrack, SetTrack, besides those the same in both); one
+  that differs throughout (Stage1, WriteDos, TransferPages, PreNibble, PostNibble, Format, the translate tables and
+  buffers) has a definition for each version, side by side under `.if DOS32` / `.else` in one module. `Rwts` stays a
+  `.proc` per version: besides DOS 3.3's diagnostic build, which nearly doubles its length, it differs at some twenty-five
+  places (the motor test, the seek counts, the recalibration, the sector translation), so one `.proc` would read
+  as two interleaved. Modules are named for their subject, not their version (ReadData, not PostNibbleRead or
+  ReadSector32; ReadSector.asm in prose would read as the file manager's ReadSector), and each root includes them in its memory
+  order: PostNibble comes before ReadData in DOS 3.3 and after ReadAddress in DOS 3.2, and FourAndFour comes from
+  WriteAddress.asm in DOS 3.3 and from the formatter in DOS 3.2. Software/Boot13.1980.asm, which includes DOS 3.2's
+  nibble routines, includes the shared modules with DOS32 = 1. A definition each version has gives the same
+  historical names in both, as the firmware's lineage rule has it (ConvertedSourceTests.DosLineagesCiteBothVersions):
+  so DOS 3.3's buffers, tables and nibble routines cite the 1978 names too (NBUF6, DNIBL, PRENIBL ...), and DOS
+  3.2's the C listing's (PRENIB16, POSTNB16, FORMERR ...). Two stay with DOS 3.3: NSYNC, a byte DOS 3.2's gap length
+  is not kept in, and BRETRY, the 16-sector ROM's reader offset ($5C, where DOS 3.2's is $5D).
 
 ## Where the drafts disagreed
 

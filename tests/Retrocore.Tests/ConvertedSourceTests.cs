@@ -3,13 +3,15 @@
 // See LICENSE file in the project root for full license information
 
 using System.Text.RegularExpressions;
+using Retrocore.Debug;
 using Retrocore.Debug.Language;
 
 namespace Retrocore.Tests;
 
 /// <summary>
 ///  Checks a converted ROM source keeps that reviews of the conversions kept finding by hand: code written with
-///  the current names, and the historical names of a routine both IIe firmwares have cited alike in each.
+///  the current names, and the historical names of a routine both IIe firmwares, or both DOS versions, have cited
+///  alike in each.
 /// </summary>
 [TestClass]
 public sealed partial class ConvertedSourceTests
@@ -23,6 +25,11 @@ public sealed partial class ConvertedSourceTests
     // (docs/conversions/Firmware.md, F1), or that sit on different code in the two.
     private static readonly HashSet<string> s_firmwareOwnNames =
         ["TESTFAIL", "BASCALC", "DIAGS", "STAY80", "X_USRET", "X_DC1B", "QUIT2", "CTLGO"];
+
+    // Definitions both DOS versions have whose historical names name only one version's (docs/conversions/Dos.md,
+    // X14): DOS 3.3's NSYNC is a byte DOS 3.2's gap length is not kept in, and its BRETRY the 16-sector ROM's $5C, where
+    // the 13-sector ROM's reader is at $5D.
+    private static readonly HashSet<string> s_dosOwnSymbols = ["Formatter::GapLength", "Boot::READ_OFFSET"];
 
     /// <summary>
     ///  A source that follows the style guide writes its code with the current names: a historical name, kept so
@@ -83,6 +90,48 @@ public sealed partial class ConvertedSourceTests
         }
 
         differ.Should().BeEmpty($"both firmwares cite a shared name alike:{Environment.NewLine}{string.Join(Environment.NewLine, differ)}");
+    }
+
+    /// <summary>
+    ///  A definition both DOS versions have gives the same historical names in each, as a routine's lineage cites
+    ///  every listing that names it (docs/conversions/Dos.md, X14). A routine the two share is one definition, so
+    ///  this checks those that differ throughout, which have one for each version.
+    /// </summary>
+    [TestMethod]
+    public void DosLineagesCiteBothVersions()
+    {
+        Dictionary<string, SortedSet<string>> dos33 = HistoricalNamesBySymbol("Dos33.asm");
+        Dictionary<string, SortedSet<string>> dos32 = HistoricalNamesBySymbol("Dos32.asm");
+        List<string> differ = [];
+        foreach ((string symbol, SortedSet<string> names) in dos33)
+        {
+            if (s_dosOwnSymbols.Contains(symbol) || !dos32.TryGetValue(symbol, out SortedSet<string>? other) || names.SetEquals(other))
+            {
+                continue;
+            }
+
+            differ.Add($"{symbol}: DOS 3.3 ({string.Join(", ", names)}), DOS 3.2 ({string.Join(", ", other)})");
+        }
+
+        differ.Should().BeEmpty($"both DOS versions cite a shared definition alike:{Environment.NewLine}{string.Join(Environment.NewLine, differ.Order())}");
+    }
+
+    // The historical names each symbol of a DOS build has, by the symbol's name.
+    private static Dictionary<string, SortedSet<string>> HistoricalNamesBySymbol(string root)
+    {
+        Retrocore.Assembler.AssemblyResult result = SdkModules.AssembleDos(SdkModules.DosPath(root, s_inputs), master: false, year: 1983);
+        Dictionary<string, SortedSet<string>> names = result.Symbols.Keys.ToDictionary(name => name, _ => new SortedSet<string>(StringComparer.Ordinal), StringComparer.Ordinal);
+        foreach ((string name, Retrocore.Assembler.AssemblySymbol symbol) in result.HistoricalNames)
+        {
+            if (!names.TryGetValue(symbol.Name, out SortedSet<string>? set))
+            {
+                names[symbol.Name] = set = [with(StringComparer.Ordinal)];
+            }
+
+            set.Add(name);
+        }
+
+        return names;
     }
 
     // Each historical name a model's firmware gives, with the documents its definitions cite for it.

@@ -60,7 +60,7 @@ with the usual three buffers. Its modules, in memory order:
 | $A884-$AA4E | Command tables | `CommandTables`: command names, what each command accepts, options and error messages |
 | $AA4F-$B5FD | File manager | `FileManagerEntry`, `FileOpenCloseReadWrite`, `FileDeleteCatalog`, `FileManagerIo`, `FileLocateNextByte`, `FileLocateSector`, `FileManagerData` |
 | $B5FE-$B7FF | Boot loader | `BootLoader`: BOOT 1 (the boot sector) at $B600 and BOOT 2 at $B700, which loads the rest of DOS; also the code INIT uses to write DOS to a disk |
-| $B800-$BFFF | RWTS | `RwtsEquates`, `PreNibble`, `WriteSector`, `PostNibbleRead`, `ReadAddressSeek`, `MsWait`, `WriteAddress`, `Rwts1`, `Rwts2`, `Formatter`, `DosPatches`: reading and writing sectors, seeking, and formatting |
+| $B800-$BFFF | RWTS | `RwtsEquates`, `PreNibble`, `WriteSector`, `PostNibble`, `ReadData`, `ReadAddress`, `Seek`, `MsWait`, `WriteAddress` (with `FourAndFour`), `Rwts1`, `Rwts2`, `DriveTracks`, `Formatter`, `DosPatches`: reading and writing sectors, seeking, and formatting |
 
 DOS also puts a page of vectors at $03D0-$03FF, which programs use instead of DOS's own addresses, since those
 move with the machine's memory:
@@ -144,11 +144,14 @@ names in the same style. It builds the same two images, `MASTER = 1`
 byte for byte the master's tracks 0 to 2 and `MASTER = 0` DOS where it runs, both pinned by digest; the
 debugger maps the running build.
 
-The two versions share one copy of the relocator, the command interpreter, the file manager and RWTS's
-equates and patches: each root sets `DOS32`, and the few places they differ are `.if DOS32` blocks.
-`Leftover` (`LEFTOVER`) takes three bytes, one for each master (1983, 1980, then DOS 3.2). The boot loader and RWTS are
-too different to share, so DOS 3.2 has its own, in the modules whose names end in `32` (`BootLoader32.asm`,
-`Rwts32.asm` and so on).
+The two versions share every module but RWTS itself: each root sets `DOS32`, and the places they differ are
+`.if DOS32` blocks. `Leftover` (`LEFTOVER`) takes three bytes, one for each master (1983, 1980, then DOS 3.2). In the
+boot loader, RWTS's low-level routines and the formatter, a routine both versions have is one definition, with `.if`
+where the two differ in places; one that differs throughout (`BOOT 1`, the prenibble and postnibble routines, the
+formatter, the translate tables) has a definition for each version, side by side in its module. RWTS itself, which
+differs at some twenty-five places and has DOS 3.3's diagnostic build woven through it, is `Rwts1.asm` and `Rwts2.asm`
+in DOS 3.3 and `Rwts32.asm` in DOS 3.2; DOS 3.3's address field writer, `WriteAddress.asm`, is its own. Each root
+includes the modules in its version's memory order.
 
 The command interpreter and file manager are the 1980 DOS 3.3's, at the same addresses, apart from the disk's
 geometry (13 sectors, the catalog in sectors 12 to 1) and three places DOS 3.3 later changed: the end of APPEND,

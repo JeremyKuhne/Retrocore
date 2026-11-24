@@ -13,7 +13,7 @@
 ;; - `BOOT 0`, the Disk II ROM, reads track 0 sector 0 to $0800 and runs it (docs/DiskII.md, Boot16.asm). DOS 3.2's
 ;;   ROM reads it to $0300 (Boot13.asm).
 ;; - `BOOT 1`, that sector (the first page of BootLoader.asm), reads the rest of track 0's first ten sectors to
-;;   $3600-$3FFF and jumps to $3700. DOS 3.2's (BootLoader32.asm) reads all ten.
+;;   $3600-$3FFF and jumps to $3700. DOS 3.2's (BootLoader.asm) reads all ten.
 ;; - `BOOT 2` reads the rest of DOS, $1B00-$35FF, from tracks 0 to 2 and ends at <RelocateDos>.
 ;; - This code moves DOS up and starts it at <ColdStart>.
 ;;

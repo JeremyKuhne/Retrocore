@@ -230,7 +230,7 @@ WriteTranslate:
 ;;
 ;; D5 and AA, which mark the fields, fail the test, so data never contains them. <WriteDataField> reads it with
 ;; `LDA WriteTranslate,X`, counted at 4 cycles, so it must not cross a page boundary.
-;; Also: NIBL (DOS33)
+;; Also: NIBL (DOS33, DOS31)
 WriteTranslate:
     .byte $96, $97, $9A
     .byte $9B, $9D, $9E
@@ -262,7 +262,7 @@ WriteTranslate:
 ;; It is this page's start ($BA00 where DOS runs; Apple's listing makes it from XP, the page's high byte). Because
 ;; the page starts there, `EOR ReadTranslate,Y` with a nibble in Y never crosses a page and always takes 4 cycles.
 ;; ReadTranslate + 0 to + $95 is the code and tables above, and the patches below.
-;; Also: DNIBL (DOS33)
+;; Also: DNIBL (DOS33, DOS31)
 ReadTranslate = * & $FF00
 
 ;; The first nibble that is valid, $96, whose entry starts the table's part of the page.
@@ -416,7 +416,7 @@ RwtsPatchCodeEnd:
 ;;
 ;; It must start a page: <ReadDataField> and <WriteDataField> index it with Y from 0 to $FF and count each access
 ;; at 4 cycles.
-;; Also: NBUF1 (DOS33)
+;; Also: NBUF1 (DOS33, DOS31)
 HighBits:
 .if YEAR = 1983
     .res 256, 0
@@ -444,7 +444,7 @@ HighBits:
 ;;
 ;; It must start a page: <WriteDataField> reads it as LowBits - 1 + Y, with Y from $56 down to 1, and counts on
 ;; that always crossing into LowBits' page, a 5-cycle access.
-;; Also: NBUF2 (DOS33)
+;; Also: NBUF2 (DOS33), NBUF6 (DOS31)
 LowBits:
 .if YEAR = 1983
     .res LOW_BITS_SIZE, 0

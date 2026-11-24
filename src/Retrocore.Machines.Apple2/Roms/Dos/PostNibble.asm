@@ -25,7 +25,7 @@
 ;; values. The groups come in the order <PreNibble> made them, X from 50 down to 0.
 ;; In: SectorBuffer = the address of the buffer, <HighBits> and LowBits = the values from <ReadDataField>
 ;; Out: (SectorBuffer) = the 256 bytes
-;; Also: POSTNIB (DOS31)
+;; Also: POSTNB16 (DOS33), POSTNIB (DOS31)
 .proc PostNibble
 
 ;; The low bits of a group's fourth byte, gathered from the group's three <LowBits> values.
@@ -114,12 +114,12 @@ Loop:
 ;;   <ReadDataField>, LowBits = the same
 ;; Out:   the bytes at SectorBuffer, Y = RebuildCount
 ;; Uses:  A, X, LowBits
-;; Also: POSTNB16 (DOS33)
+;; Also: POSTNB16 (DOS33), POSTNIB (DOS31)
 .proc PostNibble
     ldy #0                          ; Y: the byte, counting up
 
 ;; Starts again at the last <LowBits> entry, for the next third of the bytes.
-;; Also: POST1 (DOS33)
+;; Also: POST1 (DOS33), POSTNB1 (DOS31)
 Loop:
     ldx #LOW_BITS_SIZE              ; X: the LowBits entry, counting down from $55 and starting again
 

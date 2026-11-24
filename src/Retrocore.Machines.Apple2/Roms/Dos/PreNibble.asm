@@ -56,6 +56,10 @@ EPILOGUE_THIRD = $EB
 ;; reader that starts anywhere falls into step.
 SELF_SYNC = $FF
 
+;; The bits a 4-and-4 nibble has set between the byte's bits, `1 x 1 x 1 x 1 x`: the address field's first nibble of
+;; a pair is the byte shifted right with these set, and its second the byte with these set.
+FOUR_AND_FOUR_BITS = $AA
+
 .if DOS32
 
 ; The five-bit values.
@@ -100,7 +104,7 @@ VALUE_MASK = $3F
 ;; last value and its low three bits LowBits' last.
 ;; In: SectorBuffer = the address of the sector's 256 bytes
 ;; Out: HighBits = 256 values, LowBits = 154 values, each 0 to 31
-;; Also: PRENIBL (DOS31)
+;; Also: PRENIB16 (DOS33), PRENIBL (DOS31)
 .proc PreNibble
 
 ;; The low three bits of a group's first byte, with two more bits shifted in below them, while the group is split.
@@ -205,14 +209,14 @@ Split:
 ;; In:    SectorBuffer = the address of the 256 bytes to write
 ;; Out:   HighBits = 256 six-bit values, LowBits = 86 six-bit values, X = $FF, Y = 0
 ;; Uses:  A
-;; Also: PRENIB16 (DOS33)
+;; Also: PRENIB16 (DOS33), PRENIBL (DOS31)
 .proc PreNibble
 .assert MASTER || * = $B800, "PreNibble is at $B800 where DOS runs."
     ldx #0                          ; X: the LowBits index, counting up
     ldy #2                          ; Y: the buffer index, counting down from byte 1
 
 ;; Moves the next byte's low two bits into <LowBits> and its top six into <HighBits>.
-;; Also: PRENIB1 (DOS33)
+;; Also: PRENIB1 (DOS33), PNIB1 (DOS31)
 Split:
     dey
     lda (SectorBuffer),y

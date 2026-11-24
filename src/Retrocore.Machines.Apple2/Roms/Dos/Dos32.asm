@@ -12,21 +12,23 @@
 ;;   BASIC's PRINT and INPUT reach it, and carries out commands such as CATALOG, LOAD and OPEN.
 ;; - The file manager (FileManagerEntry to FileManagerData) keeps the files on a disk: the VTOC, the catalog and
 ;;   each file's track/sector list.
-;; - RWTS, "read or write a track and sector" (BootLoader32 to Formatter32), drives the Disk II controller: it
+;; - RWTS, "read or write a track and sector" (BootLoader to Formatter), drives the Disk II controller: it
 ;;   moves the head, turns 256-byte sectors into nibbles and back, and formats disks.
 ;;
 ;; The command interpreter and the file manager are DOS 3.3's, at the same addresses, as they were before DOS
-;; 3.3's own patches, so this file shares their modules with DOS 3.3 (Dos33.asm):
+;; 3.3's own patches, and its boot loader, RWTS and formatter are an earlier form of DOS 3.3's, for 13-sector disks,
+;; so this file shares its modules with DOS 3.3 (Dos33.asm):
 ;;
-;; - Shared: Equates, Relocator, the command interpreter and file manager modules, RwtsEquates, IoBlock and DosPatches.
-;;   They test <DOS32>, set to 1 here, where DOS 3.2 differs: the numbers that describe a 13-sector disk (the VTOC
-;;   image, the free-sector maps, the catalog's first sector), the places DOS 3.3 patched (the end of APPEND, SAVE and
-;;   BSAVE without the check DOS 3.3 added, <RunFileRequest>'s handling of errors), RWTS's zero page and the relocator's
-;;   code ranges. Apple's DOS 3.3 build options are set as DOS 3.2's code needs them:
-;;   <REVISION_B> = 0, for instance, leaves <FileManager::SetPosition> without its CLC.
-;; - DOS 3.2's own, whose names end in 32: BootLoader32, PreNibble32, WriteSector32, ReadSector32, ReadAddress32,
-;;   PostNibble32, SeekMsWait32, NibbleBuffers32, Rwts32 and Formatter32, the boot loader, RWTS and formatter for
-;;   13-sector disks. RWTS is an earlier form of DOS 3.3's.
+;; - Shared: every module but RWTS itself. They test <DOS32>, set to 1 here, where DOS 3.2 differs: the numbers that
+;;   describe a 13-sector disk (the VTOC image, the free-sector maps, the catalog's first sector), the places DOS 3.3
+;;   patched (the end of APPEND, SAVE and BSAVE without the check DOS 3.3 added, <RunFileRequest>'s handling of errors),
+;;   RWTS's zero page and the relocator's code ranges. Apple's DOS 3.3 build options are set as DOS 3.2's code needs
+;;   them: <REVISION_B> = 0, for instance, leaves <FileManager::SetPosition> without its CLC. In the boot loader, RWTS's
+;;   low-level routines and the formatter, a routine both versions have is one definition, with `.if DOS32` where the
+;;   two differ in places; one that differs throughout, such as `BOOT 1`, the prenibble and postnibble routines and the
+;;   formatter, has a definition for each version, side by side in its module.
+;; - DOS 3.2's own: Rwts32, RWTS itself, an earlier form of DOS 3.3's Rwts1 and Rwts2. DOS 3.3's address field
+;;   writer, WriteAddress, is not part of it; its formatter includes the 4-and-4 writer (FourAndFour) itself.
 ;;
 ;; Two builds come from this source, chosen by <MASTER>:
 ;;
@@ -119,7 +121,7 @@ RelocateDos = ColdStart
 .include "FileManagerData.asm"
 
 ; RWTS, starting with the boot loader's pages, $B600-$B7FF where DOS runs.
-.include "BootLoader32.asm"
+.include "BootLoader.asm"
 .include "RwtsEquates.asm"
 .include "PreNibble.asm"
 .include "WriteSector.asm"
@@ -129,5 +131,6 @@ RelocateDos = ColdStart
 .include "Seek.asm"
 .include "MsWait.asm"
 .include "Rwts32.asm"
-.include "Formatter32.asm"
+.include "DriveTracks.asm"
+.include "Formatter.asm"
 .include "DosPatches.asm"

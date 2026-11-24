@@ -19,9 +19,6 @@ WriteAddressCodeStart:
 ; DiskII: the address field writer.
 .scope DiskII continued
 
-;; The bits a 4-and-4 nibble has set between the byte's bits: `1 x 1 x 1 x 1 x`.
-FOUR_AND_FOUR_BITS = $AA
-
 ;; Writes Y + 1 self-sync nibbles (257 when Y is 0) and an address field for sector <FormatSector> of track
 ;; <FormatTrack>, volume <FormatVolume>.
 ;;
@@ -110,57 +107,11 @@ Return:
     rts
 .endproc
 
-;; Writes the byte in A as two 4-and-4 nibbles, its odd bits then its even bits, 32 cycles apart.
-;;
-;; From a store in the caller's last call to the first store here, through `LDA zp`, takes 32 cycles. Falls into
-;; <WriteFieldNibble> for the even bits.
-;; In:    A = the byte, X = slot * 16, FormatMask = $AA, the card in write mode
-;; Uses:  A
-;; Keeps: X, Y
-;; Also: WBYTE (DOS33)
-.proc WriteFourAndFour
-    pha
-    lsr a
-    ora FormatMask                  ; 1 b7 1 b5 1 b3 1 b1
-    sta LoadLatch,x
-    cmp DataLatch,x
-    pla
-    nop                             ; delay
-    nop
-    nop
-    ora #FOUR_AND_FOUR_BITS         ; 1 b6 1 b4 1 b2 1 b0
-    ; Falls into WriteFieldNibble.
-.endproc
-
-;; Writes the nibble in A after a delay that keeps the stores 32 cycles apart.
-;;
-;; From the JSR to the store takes 17 cycles here, 15 at <WriteFieldNibble::Shorter> and 6 at
-;; <WriteFieldNibble::Now>; the store, the CMP and the RTS
-;; take 15 more. A store in one call and the store in the next, with only an `LDA #nibble` between the calls, are
-;; 32 cycles apart through Shorter.
-;; In:    A = the nibble, X = slot * 16, the card in write mode
-;; Keeps: A, X, Y
-;; Entry: Shorter = 2 cycles less delay, Now = no delay
-;; Also: WNIBLA (DOS33)
-.proc WriteFieldNibble
-    nop
-
-;; Writes the nibble 2 cycles sooner.
-;; Also: WNIBLB2 (DOS33)
-Shorter:
-    nop
-    pha                             ; delay
-    pla
-
-;; Writes the nibble at once. Nothing calls it.
-;; Also: WRNIBL (DOS33)
-Now:
-    sta LoadLatch,x                 ; load the nibble
-    cmp DataLatch,x                 ; and shift it out
-    rts
-.endproc
-
 .endscope
+
+; DiskII: the 4-and-4 writer and the nibble writer it shares with the address field writer.
+.include "FourAndFour.asm"
+
 
 ;; The end of the relocator's range for the address field writer, the byte after it.
 ;; Also: EWADR1 (DOS33)

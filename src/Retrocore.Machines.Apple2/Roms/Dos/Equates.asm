@@ -28,8 +28,8 @@
 ;; A byte that holds what was in memory when a master was written, which DOS does not depend on: the 1983 DOS 3.3
 ;; master's value, then the 1980 DOS 3.3 master's, then the DOS 3.2 master's.
 ;;
-;; <DOS32> picks the DOS 3.2 byte; otherwise <YEAR> picks between the DOS 3.3 masters. The modules only DOS 3.3 includes
-;; (BootLoader.asm, MsWait.asm) leave y32 out.
+;; <DOS32> picks the DOS 3.2 byte; otherwise <YEAR> picks between the DOS 3.3 masters. Code only DOS 3.3 assembles
+;; (the parts of BootLoader.asm and MsWait.asm under `.if DOS32 = 0`) leaves y32 out.
 ;; Parameters: y1983 = the byte in the 1983 build, y1980 = the byte in the 1980 build, y32 = the byte in the DOS 3.2
 ;;   build
 .macro Leftover y1983, y1980, y32

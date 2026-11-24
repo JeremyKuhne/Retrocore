@@ -3,7 +3,7 @@
 ;;
 ;; The binary file BOOT13 from the 1983 System Master (680-0210-A). DOS loads its $0500 bytes at $0C00 and starts
 ;; it there. It boots a 13-sector disk, DOS 3.1 to 3.2.1, with a Disk II controller whose boot ROM reads only
-;; 16-sector disks: it does the work of the 13-sector ROM (Boot13.asm) and of `BOOT 1` (BootLoader32.asm) itself,
+;; 16-sector disks: it does the work of the 13-sector ROM (Boot13.asm) and of `BOOT 1` (BootLoader.asm) itself,
 ;; then enters the disk's `BOOT 2`. The 1980 masters' BOOT13 (Boot13.1980.asm) does the same with an RWTS of its own;
 ;; this one needs only a reader.
 ;;
@@ -78,7 +78,7 @@ SectorBuffer = Address2
 ;; The address field just read: the checksum, sector, track and volume (4 bytes).
 AddressField = HorizontalLineEnd
 
-; `BOOT 1`'s two variables, the last bytes of the boot sector as DOS stores it (BootLoader32.asm).
+; `BOOT 1`'s two variables, the last bytes of the boot sector as DOS stores it (BootLoader.asm).
 
 ;; The offset of the first page `BOOT 1` loads, <Dos32:Boot::FirstPage>.
 FIRST_PAGE_OFFSET = $FE

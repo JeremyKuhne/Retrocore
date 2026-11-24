@@ -35,12 +35,14 @@
 ;;
 ;; The modules are shared with DOS 3.2 (Dos32.asm), which has the same command interpreter and file manager:
 ;;
-;; - Shared: Equates, Relocator, the command interpreter and file manager modules, RwtsEquates, IoBlock and
-;;   DosPatches. They test <DOS32>, set to 0 here, where DOS 3.2 differs, and <Leftover> picks each master's
-;;   leftover byte.
-;; - DOS 3.3's own: BootLoader, PreNibble, WriteSector, PostNibbleRead, ReadAddressSeek, MsWait, WriteAddress,
-;;   Rwts1, Rwts2 and Formatter, its 16-sector boot loader, RWTS and formatter. DOS 3.2's counterparts are the
-;;   modules whose names end in 32.
+;; - Shared: every module but RWTS itself and the address field writer. They test <DOS32>, set to 0 here, where DOS
+;;   3.2 differs, and <Leftover> picks each master's leftover byte. A routine both versions have is one definition,
+;;   with `.if DOS32` where the two differ in places; one that differs throughout, such as `BOOT 1`, the prenibble
+;;   and postnibble routines and the formatter, has a definition for each version, side by side in its module.
+;; - DOS 3.3's own: Rwts1 and Rwts2, RWTS itself (DOS 3.2's is Rwts32), and WriteAddress, the address field writer,
+;;   which includes the 4-and-4 writer (FourAndFour, which DOS 3.2's formatter includes). The modules are in each
+;;   version's memory order, so PostNibble, after the address field reader in DOS 3.2, comes before the data field
+;;   reader here.
 ;;
 ;; Maintained by hand; DosSourceTests pin each build by digest.
 
@@ -134,5 +136,6 @@ RelocateDos = ColdStart
 .include "WriteAddress.asm"
 .include "Rwts1.asm"
 .include "Rwts2.asm"
+.include "DriveTracks.asm"
 .include "Formatter.asm"
 .include "DosPatches.asm"

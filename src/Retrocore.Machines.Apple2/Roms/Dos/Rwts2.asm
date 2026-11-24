@@ -1,13 +1,13 @@
 ; retrocore: style=strict ignore=unlinked-name:RWTS -- the disk layer's name in prose
-;; DOS 3.3 RWTS: read or write a track and sector, part two (Apple's RWTSTWO), and the head helpers
+;; DOS 3.3 RWTS: read or write a track and sector, part two (Apple's RWTSTWO)
 ;;
 ;; The rest of <Rwts>, after Rwts1.asm has started the drive and moved the head: it carries out the IOB's command.
 ;; For a read or write it reads address fields until it finds the sector, checking that the head is on the right
 ;; track and the disk has the right volume, then reads or writes the data field behind it. When it cannot find the
 ;; sector it moves the head again, and as a last resort recalibrates, driving the head out to track 0 to find out
-;; where it is. It ends by storing the return code in the IOB and turning the motor off. The helpers after it
-;; (<SeekTrack>, <SeekHalfTrack>, <SlotNumber>, <SetTrack>) keep the position of each drive's head in the screen
-;; holes. At $BDAB-$BEAE where DOS runs. Formatting is in Formatter.asm.
+;; where it is. It ends by storing the return code in the IOB and turning the motor off. The helpers after it,
+;; which keep the position of each drive's head in the screen holes, are in DriveTracks.asm. At $BDAB-$BE59 where DOS
+;; runs. Formatting is in Formatter.asm.
 
 ; Rwts, part two: the command. These constants are Rwts's too.
 
@@ -318,125 +318,4 @@ Write:
     bcc Succeed
     lda #RWTS_WRITE_PROTECTED
     bcs Fail                        ; always
-.endproc
-
-;; Moves the head of the selected drive to track A, and records it as that drive's position.
-;;
-;; When bit 0 of the DCT's <DeviceTable::WHOLE_TRACKS> is set, as for the Disk II, a track is two half-tracks: it
-;; doubles A, seeks, and halves CurrentTrack again, so that CurrentTrack is the track number. Otherwise A goes to
-;; <SeekHalfTrack> as it is. It also uses what <DiskII::MoveHead> uses.
-;; In:    A = the track, X = slot * 16, SelectedDrive = the drive, DctPointer = the DCT
-;; Out:   CurrentTrack = the track, and the drive's byte of <Drive1HalfTracks> or <Drive2HalfTracks> its half-track
-;; Uses:  A, Y, TargetHalfTrack
-;; Keeps: X
-;; Also: MYSEEK (DOS33)
-.proc SeekTrack
-    pha
-.if DIAGNOSTIC_RWTS
-    lda #Rwts::LETTER_SEEK
-    sta Rwts::SeekAt
-.endif
-    ldy #DeviceTable::WHOLE_TRACKS
-    lda (DctPointer),y
-    ror a                           ; bit 0 into the carry
-    pla
-    bcc SeekHalfTrack
-    asl a                           ; the track's half-track
-    jsr SeekHalfTrack
-    lsr CurrentTrack                ; back to a track
-.if DIAGNOSTIC_RWTS
-    lda #Rwts::DIAG_BLANK
-    sta Rwts::SeekAt
-.endif
-    rts
-.endproc
-
-;; Seeks the selected drive's head to half-track A from the position recorded for it, recording A as its new one.
-;;
-;; It also uses what <DiskII::MoveHead> uses.
-;; In:    A = the half-track, X = slot * 16, SelectedDrive = the drive
-;; Out:   CurrentTrack = A, and the drive's byte of <Drive1HalfTracks> or <Drive2HalfTracks> A
-;; Uses:  A, Y, TargetHalfTrack
-;; Keeps: X
-;; Also: MYSEEK2 (DOS33)
-.proc SeekHalfTrack
-    sta TargetHalfTrack
-    jsr SlotNumber
-    lda Drive1HalfTracks,y
-    bit SelectedDrive
-    bmi HavePosition                ; drive 1
-    lda Drive2HalfTracks,y
-
-;; Notes where the head is now.
-;; Also: WASD0 (DOS33)
-HavePosition:
-    sta CurrentTrack
-    lda TargetHalfTrack
-    bit SelectedDrive
-    bmi RecordDrive1
-    sta Drive2HalfTracks,y          ; where it will be
-    bpl Move                        ; always
-
-;; Records drive 1's new position.
-;; Also: ISDRV1 (DOS33)
-RecordDrive1:
-    sta Drive1HalfTracks,y
-
-;; Moves the head.
-;; Also: GOSEEK (DOS33)
-Move:
-    jmp DiskII::MoveHead
-.endproc
-
-;; Turns slot * 16 in X into the slot number in Y.
-;; In:    X = slot * 16
-;; Out:   Y = A = the slot
-;; Keeps: X
-;; Also: XTOY (DOS33)
-.proc SlotNumber
-    txa
-    lsr a
-    lsr a
-    lsr a
-    lsr a
-    tay
-    rts
-.endproc
-
-;; Records that the head of the drive the IOB names is on track A: stores A times 2, the half-track, in the
-;; drive's byte of <Drive1HalfTracks> or <Drive2HalfTracks>.
-;;
-;; It also sets <SelectedDrive> from the IOB's drive.
-;; In:    A = the track, X = slot * 16, IobPointer = the IOB
-;; Out:   SelectedDrive = bit 7 set for drive 1
-;; Uses:  A, Y
-;; Keeps: X
-;; Entry: SetHalfTrack = stores A as it is, for the drive in SelectedDrive, with Y = the slot
-;; Also: SETTRK (DOS33)
-.proc SetTrack
-    pha
-    ldy #Iob::DRIVE
-    lda (IobPointer),y
-    ror a
-    ror SelectedDrive               ; bit 0 of the drive number into bit 7: set for drive 1
-    jsr SlotNumber
-    pla
-    asl a                           ; the half-track
-
-;; Stores half-track A for the drive in <SelectedDrive>. Nothing calls it.
-;; Also: SETTRK2 (DOS33)
-SetHalfTrack:
-    bit SelectedDrive
-    bmi Drive1
-    sta Drive2HalfTracks,y
-    bpl Return                      ; always
-
-;; Stores it for drive 1.
-;; Also: ONDRV1 (DOS33)
-Drive1:
-    sta Drive1HalfTracks,y
-
-;; Also: SETRTS (DOS33)
-Return:
-    rts
 .endproc

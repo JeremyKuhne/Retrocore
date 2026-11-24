@@ -7,7 +7,7 @@
 ;; reach a block through a pointer, and DOS's own IOB and DCT are labeled bytes tied to the structs by the asserts
 ;; at the end. docs/Dos.md explains the IOB and track/sector lists, and docs/DiskII.md the drive.
 ;;
-;; Both boot loaders (BootLoader.asm, BootLoader32.asm) include this file where DOS's IOB and DCT sit, at the end of
+;; The boot loader (BootLoader.asm) includes this file where DOS's IOB and DCT sit, at the end of
 ;; the boot loader's second page: $B7E8-$B7FE where DOS runs, in both versions. The page-3 vector at $03E3,
 ;; <LocateIob at IOBLDR>, gives programs the IOB's address.
 

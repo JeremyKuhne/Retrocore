@@ -3,7 +3,7 @@
 ;;
 ;; The binary file BOOT13 from the 1980 System Masters (680-0051-00 and 680-0051-01). DOS loads its $08F0 bytes at
 ;; $1700 and starts it there. It boots a 13-sector disk, DOS 3.1 to 3.2.1, with a Disk II controller whose boot ROM
-;; reads only 16-sector disks: it does the work of the 13-sector ROM (Boot13.asm) and of `BOOT 1` (BootLoader32.asm),
+;; reads only 16-sector disks: it does the work of the 13-sector ROM (Boot13.asm) and of `BOOT 1` (BootLoader.asm),
 ;; then enters the disk's `BOOT 2`. The 1983 master's BOOT13 (Boot13.1983.asm) is a smaller program that does the
 ;; same.
 ;;
@@ -19,7 +19,7 @@
 ;;   padding before the wait.
 ;; - <Rwts> itself is DOS 3.3's (Rwts1.asm, Rwts2.asm), calling the 13-sector routines, with DOS 3.2's single test
 ;;   of the motor (Rwts32.asm), no sector translation and the volume passed to the formatter as DOS 3.2 passes it.
-;; - The formatter, <Formatter::Format>, is DOS 3.2's (Formatter32.asm), with a wait loop two bytes shorter that
+;; - The formatter, <Formatter::Format>, is DOS 3.2's (Formatter.asm), with a wait loop two bytes shorter that
 ;;   takes as long.
 ;;
 ;; Assembles byte-identically to BOOT13 on the 680-0051-00 and 680-0051-01 masters; docs/DiskII.md explains the
@@ -54,7 +54,7 @@ LastSector = $10
 ;; `BOOT 2`'s address, where the load ends (2 bytes).
 BootEntry = $12
 
-; `BOOT 1`'s two variables, the last bytes of the boot sector as DOS stores it (BootLoader32.asm).
+; `BOOT 1`'s two variables, the last bytes of the boot sector as DOS stores it (BootLoader.asm).
 
 ;; The offset of the first page `BOOT 1` loads, <Dos32:Boot::FirstPage>.
 FIRST_PAGE_OFFSET = $FE
@@ -899,7 +899,7 @@ Return:
 GapLength = SavedY
 
 ;; Formats the disk in the IOB's drive with volume <FormatVolume>, track 0 to track 34, and returns through RWTS's
-;; exits: DOS 3.2's (Formatter32.asm).
+;; exits: DOS 3.2's (Formatter.asm).
 ;;
 ;; At $1E9C. It moves the head to track 0 by seeking from half-track 128. Each track starts with about ten thousand
 ;; self-sync bytes, more than a turn of the disk, which erase it; then come the 13 sectors in the order 0, 10, 7, 4,

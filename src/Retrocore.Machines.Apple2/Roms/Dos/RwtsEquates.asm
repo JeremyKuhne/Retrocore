@@ -7,7 +7,7 @@
 ;; field reader finds a sector, the seek routine moves the head and the wait routine waits. They run from $B800
 ;; where DOS runs, right after the boot loader's two pages, through the tables and buffers that end at $BC55 ($BCB9
 ;; in DOS 3.2). RWTS proper, the routine DOS calls with an IOB, is in Rwts1.asm and Rwts2.asm (Rwts32.asm in DOS
-;; 3.2), and the formatter in Formatter.asm (Formatter32.asm). docs/DiskII.md explains nibbles, the 6-and-2 encoding
+;; 3.2), and the formatter in Formatter.asm. docs/DiskII.md explains nibbles, the 6-and-2 encoding
 ;; (5-and-3 in DOS 3.2), the fields of a sector and the controller's switches.
 ;;
 ;; The code depends on exact cycle counts. A Disk II nibble passes the head every 32 cycles (eight 4-cycle bit

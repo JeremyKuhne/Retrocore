@@ -236,8 +236,8 @@ SetShapeTable:
     sta StringsBottom
     sta Address1
     jsr Cassette::ReadBit
-    lda #3                          ; WriteHeader's delay count
-    jmp ReadCassette+5              ; ReadCassette at its jsr WriteHeader
+    lda #3                          ; Cassette::WriteHeader's delay count
+    jmp ReadCassette+5              ; ReadCassette at its jsr Cassette::WriteHeader
 .endproc
 
 ;; Points the Monitor's cassette range at an array's data: A1 at its first element, from the header at <SourceStart>,

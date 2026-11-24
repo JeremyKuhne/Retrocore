@@ -762,7 +762,7 @@ WriteCassette = $FECD
 ;; Also: MREAD (UNKN), CQCSIN (M6502)
 ReadCassette = $FEFD
 
-;; Microsoft's LINWID names $25 too, but it is the Monitor's cursor line, not a width; LINWID is not defined.
+; Microsoft's LINWID names $25 too, but it is the Monitor's cursor line, not a width; LINWID is not defined.
 ;; Inherit: <Monitor:CV>
 CV = $25
 

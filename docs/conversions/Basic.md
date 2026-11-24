@@ -1267,9 +1267,9 @@ added to `HighRes::Plot` was reported.
 
 ### X. AppleSoft's Monitor and IIe names (X10)
 
-AppleSoft now takes the IIe's names from `IIeEquates.asm`, as the owner decided after part E (E-8). Its copies of
-79 of the Monitor's, the IIe's and the firmware's names are gone from AppleSoft.Equates, and its files use the
-current names. The bytes are unchanged in all eight builds.
+AppleSoft now takes the IIe's names from `IIeEquates.asm`, as the owner decided after part E (E-8). Its copies of 78
+of the Monitor's, the IIe's and the firmware's names are gone from AppleSoft.Equates (CV stays, inheriting the
+Monitor's), and its files use the current names. The bytes are unchanged in all eight builds.
 
 - X-1. AppleSoft.Equates includes `IIeEquates.asm`, not `MonitorEntries.asm`. It defines the Monitor's entries
   AppleSoft calls, after DOS's X7 pattern: each is an equate at the Monitor's address that inherits

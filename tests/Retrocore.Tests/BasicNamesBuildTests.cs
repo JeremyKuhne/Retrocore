@@ -8,9 +8,9 @@ using Retrocore.Machines.Commodore;
 namespace Retrocore.Tests;
 
 /// <summary>
-///  <see cref="BasicNames"/> adds a predefined old name's current names only from the build a test assembles, or, for
-///  all builds, only where every build gives the name the same definitions, so one build's name never reaches another
-///  build's assembly.
+///  <see cref="BasicNames"/> adds a predefined old name's current names from the build a test assembles, or, for all
+///  builds, only where the builds that give the name agree on its definitions, so no build's name for an old name
+///  another build names differently reaches that build's assembly; a name only some builds give adds their name.
 /// </summary>
 [TestClass]
 public sealed class BasicNamesBuildTests

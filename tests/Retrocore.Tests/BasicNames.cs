@@ -209,6 +209,7 @@ internal static class BasicNames
     /// <param name="symbols">The predefined symbols, by the names Microsoft's source has.</param>
     /// <param name="build">The build whose names to add, from a <c>Build</c> overload.</param>
     /// <returns>The predefined symbols with the build's current names added.</returns>
+    /// <exception cref="ArgumentException">The build is not a native BASIC build.</exception>
     internal static Dictionary<string, long> WithCurrentNames(IReadOnlyDictionary<string, long> symbols, string build) =>
         WithCurrentNames(symbols, Tables(), build);
 

@@ -42,7 +42,7 @@ The conversion itself (step 4) is logged below, under "Step 4: the conversion", 
 
 ## Step 1: the inventory
 
-Made by script, from the source branch's sources, with the repository's assembler. Nothing from it is committed.
+Made by script, from the sources before the conversion, with the repository's assembler. Nothing from it is committed.
 
 - **Per build:** each of the eight builds was assembled with the repository's assembler (the native roots, with
   the switches above), and its symbol table dumped with each symbol's defining file and line, and its source map
@@ -232,11 +232,12 @@ REVISD, ENHNCD, APLPLS, TIME, EXTIO, DISKO, REALIO; X15 settled the names tests 
 removes the definition: either nothing uses it and no document names it; or it duplicates another definition, whose
 `Also:` then takes its documented name (KIMY, TRMNO1); or its uses can do without it, and its documented name goes in
 prose (ZSTORD, whose WAIT call can pass STORDO's new name, A-Q6; Q, an assembly-time counter, C-Q8); or it is a question
-(REDDY and GOTK, C-Q8; LINWID, D-Q3). Apart from the SDK's 138 renamed macros, macro parameters and switches, which cite
-no document at all, 316 renamed rows have no checked document name, 249 because no listed document gives the name and 67
-because a document matches only its spelling; 272 of them in AppleSoft's builds only: AppleSoft's copies of Monitor and
-IIe names (which carry the Apple manuals' names once they come from IIeEquates, decision X10), AppleSoft-only labels the
-damaged AS82 text could not confirm, and the SDK's own labels.
+(REDDY and GOTK, C-Q8; LINWID, D-Q3). Apart from the 138 renamed rows with no Documents entry (SDK macros, macro
+parameters and switches), 352 renamed rows have no checked document name, the rows W2 cites as UNKN: 249 that no listed
+document gives, 67 that a document matches only in spelling, and 36 whose documents give only other names. 287 of them
+are in AppleSoft's builds only (AS, IIeE, II+ IIe): AppleSoft's copies of Monitor and IIe names (which carry the Apple
+manuals' names once they come from IIeEquates, decision X10), AppleSoft-only labels the damaged AS82 text could not
+confirm, and the SDK's own labels.
 
 The parts: A, the floating-point package; B1, the shared program and statement modules; B2, the shared expression,
 variable and string modules; C, the vendors' own copies of the interpreter (AppleSoft and Commodore side by side);
@@ -339,8 +340,8 @@ scope-level label.
   `Statements::StopOrEnd`, `Float::AddArg` ...).
 - **Alternative:** follow the rule literally: one-instruction procs for shared `rts` exits, and scope-level labels in
   `Float` and `Statements` for the rest. That splits loops across procs.
-- This is a new kind of precedent for the conversions. Settled; adding it to ConvertingSources' structure techniques
-  is a follow-up for the method's own branch.
+- This is a new kind of precedent for the conversions. Settled; adding it to ConvertingSources' structure techniques is
+  a follow-up for ConvertingSources.md.
 
 ### X3. Structs for the data layouts
 

@@ -1356,6 +1356,32 @@ public sealed partial class HistoricalNameTests
 
         Required(unexpanded.Find("FOO")).Sections.Where(section => section.Name == "Also").Should().ContainSingle()
             .Which.Condition.Should().BeNull();
+
+        // Whichever comes first in the file.
+        DocumentationSet outsideFirst = Set("""
+            X = 3
+            .if X = 1
+            ;; One.
+            ;; Also: MOLD (TEST)
+            FOO = 1
+            .elseif X = 2
+            ;; Two.
+            ;; Also: MOLD (TEST)
+            FOO = 2
+            .endif
+            .macro Library
+            ;; A reader.
+            ;; Also: MOLD (TEST)
+            FOO:
+                rts
+            .endmacro
+            .scope Basic
+                Library
+            .endscope
+            """);
+
+        Required(outsideFirst.Find("FOO")).Sections.Where(section => section.Name == "Also").Should().ContainSingle()
+            .Which.Condition.Should().BeNull();
     }
 
     /// <summary>
@@ -1391,11 +1417,18 @@ public sealed partial class HistoricalNameTests
 
         Check(Macro + "\n" + Built).Count(diagnostic => diagnostic.Rule == DocumentationRules.Sections).Should().Be(2);
 
+        // With another branch in the build, the skipped branch's sections are checked, as without the macro; with no
+        // branch outside the macro in the build, none are, as without the macro the topic isn't this build's.
         string skipped = "X = 2" + Built["X = 1".Length..];
         skipped.Should().Contain(".if X = 1");
         string plainMacro = Macro.Replace(";; Uses: two words\n", "", StringComparison.Ordinal);
         plainMacro.Should().NotContain("Uses");
-        Check(plainMacro + "\n" + skipped).Should().BeEmpty();
+        string[] alone = [.. Check(skipped).Select(diagnostic => diagnostic.Message)];
+        alone.Should().ContainSingle();
+        Check(plainMacro + "\n" + skipped).Select(diagnostic => diagnostic.Message).Should().Equal(alone);
+
+        string none = skipped[..skipped.IndexOf(".else", StringComparison.Ordinal)] + ".endif\n";
+        Check(plainMacro + "\n" + none).Should().BeEmpty();
 
         Check("""
             ;; One.
@@ -1407,6 +1440,72 @@ public sealed partial class HistoricalNameTests
             ;; Three.
             Count .set 2
             """).Count(diagnostic => diagnostic.Rule == DocumentationRules.Sections).Should().Be(2);
+    }
+
+    /// <summary>
+    ///  Where the build's macro expansions aren't known, as in the editor while a file has errors, a definition outside
+    ///  a macro keeps its own old name, and an exclusion in a branch the build skips isn't reported unused, both as
+    ///  without the macro.
+    /// </summary>
+    [TestMethod]
+    public void DefinitionsBesideAMacroKeepTheirNamesWhereExpansionsArentKnown()
+    {
+        const string Outside = """
+            .ifdef WIDE
+            ;; One.
+            ;; Also: OLD (TEST)
+            FOO = 1
+            .endif
+            ;; Another.
+            ;; Also: OLD (TEST)
+            BAR:
+                jmp NOWHERE
+            """;
+
+        const string Macro = """
+            .macro Library
+            ;; A reader.
+            FOO = 5
+            .endmacro
+            .scope S
+                Library
+            .endscope
+            """;
+
+        // As the editor creates a set for an assembly with errors: no definitions, so no expansions are known.
+        static string[] Found(string text)
+        {
+            AssemblyResult result = Assemble(text);
+            result.Success.Should().BeFalse();
+            DocumentationSet set = DocumentationSet.Create(
+                [DocumentationParser.Parse(text, "test.asm")],
+                new Dictionary<string, long> { ["FOO"] = 1, ["BAR"] = 0x1000 },
+                skippedLines: result.SkippedLines);
+
+            return [.. set.FindAlso("OLD", thisBuild: true).Select(topic => topic.Name)];
+        }
+
+        string[] without = Found(Outside);
+        without.Should().Equal("FOO", "BAR");
+        Found(Outside + "\n" + Macro).Should().Equal(without);
+
+        const string Excluded = """
+            TALL = 1
+            .ifdef WIDE
+            ; retrocore: ignore=link
+            ;; One, through <Nowhere>.
+            FOO = 1
+            .endif
+            """;
+
+        static List<DocumentationDiagnostic> Lint(string text)
+        {
+            DocumentationBibliography bibliography = DocumentationBibliography.Parse(Bibliography);
+            return new DocumentationResolver(Set(text)) { Bibliography = bibliography }.Lint();
+        }
+
+        Lint(Excluded).Should().BeEmpty();
+        Lint(Excluded + "\n" + Macro).Should().BeEmpty();
     }
 
     private static List<DocumentationDiagnostic> Check(string text) =>

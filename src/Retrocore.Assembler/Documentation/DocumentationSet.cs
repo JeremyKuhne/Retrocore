@@ -359,12 +359,15 @@ public sealed class DocumentationSet
         bool Built(DocumentationComment comment) => !thisBuild || CommentInBuild(comment);
         if (participants.Any(comment => Gave(comment) && Built(comment))) { return true; }
 
-        // As Merge does, a section every branch writes alike, documents and all, is shared with the inheriting branch.
+        // As Merge does, a section every branch writes alike, documents and all, is shared, in every build, an inheriting
+        // branch's among them; while an expanded macro makes the topic this build's, only while the build has one of
+        // the definitions outside it.
         bool Shared(DocumentationSection section) =>
             participants.All(comment => comment.Sections.Any(candidate => Same(candidate, section)));
 
+        bool expanded = topic.Comments.Any(comment => Expansions(comment) > 0);
         return participants.Count != 0
-            && outside.Any(comment => BareInherit(comment) && Built(comment))
+            && (!thisBuild || !expanded || outside.Any(CommentInBuild))
             && DocumentationAlso.Of(participants[0].Sections.Where(Shared)).Any(also => also.Name == name);
     }
 
@@ -719,13 +722,19 @@ public sealed class DocumentationSet
                         sections.Add(section);
                     }
                 }
-                else if (!(alike && sections.Any(existing => existing.Condition is null && Same(existing, section))))
+                else
                 {
-                    // A section the branches outside share, held back while the build has none of them, is there
-                    // already when a macro's body shares it with every branch, for every build.
                     sections.Add(section.WithCondition(comment.Condition, comment.Path, comment.TargetLine));
                 }
             }
+        }
+
+        // A section the branches outside share, held back while the build has none of them, is there once already
+        // when a macro's body shares it with every branch, for every build.
+        if (!outsideBuilt)
+        {
+            sections.RemoveAll(section => section.Condition is not null
+                && sections.Any(other => other.Condition is null && Same(other, section)));
         }
 
         string summary = participants.Select(comment => comment.Summary).FirstOrDefault(text => text.Length != 0) ?? "";

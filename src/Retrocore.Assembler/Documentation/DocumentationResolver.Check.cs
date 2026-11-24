@@ -37,7 +37,15 @@ public sealed partial class DocumentationResolver
         IEnumerable<string>? otherRules = null)
     {
         HashSet<string> run = [with(StringComparer.Ordinal), .. otherRules ?? []];
-        List<DocumentationComment> skipped = [.. Current.Topics.Where(OtherBuilds).SelectMany(topic => topic.Comments)];
+        // Another build's definitions are checked by that build, as are those outside a macro's body that the build has
+        // none of, though the macro's expansion makes their topic this build's.
+        List<DocumentationComment> skipped = [];
+        foreach (DocumentationTopic topic in Current.Topics)
+        {
+            bool other = OtherBuilds(topic);
+            skipped.AddRange(topic.Comments.Where(comment => other || OtherBuildOutside(topic, comment)));
+        }
+
         bool Checked(DocumentationExclusion exclusion) =>
             (!DocumentationRules.EditorRules.Contains(exclusion.Rule) || run.Contains(exclusion.Rule))
                 && !(DocumentationRules.TopicRules.Contains(exclusion.Rule) && skipped.Any(comment =>
@@ -550,13 +558,13 @@ public sealed partial class DocumentationResolver
         return writers.Any() && writers.All(comment => comment.Macro is not null && !Current.Reaches(comment));
     }
 
-    // Whether a definition outside macros' bodies, in a topic a macro's body shares, is in a branch the build leaves
-    // out: the macro's expansion makes the topic this build's, but the definition is another build's, which checks it,
-    // as without the macro.
+    // Whether a definition outside macros' bodies, in a topic a macro's body shares, is another build's: the build has
+    // none of the outside definitions, so without the macro the topic wouldn't be checked, though the macro's
+    // expansion makes it this build's. With one of them in the build, every branch is checked, as without the macro.
     private bool OtherBuildOutside(DocumentationTopic topic, DocumentationComment comment) =>
         comment.Macro is null
             && topic.Comments.Any(other => other.Macro is not null)
-            && !Current.ReachesInBuild(comment);
+            && !topic.Comments.Any(other => other.Macro is null && Current.ReachesInBuild(other));
 
     // Whether a section of a topic a macro's body shares is an outside definition's in a branch the build leaves out.
     private bool OtherBuildOutside(DocumentationTopic topic, DocumentationSection section) =>

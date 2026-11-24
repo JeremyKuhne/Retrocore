@@ -222,8 +222,11 @@ internal static class SourceText
     /// </summary>
     /// <remarks>
     ///  <para>
-    ///   Skips a macro's body, which names its parameters; a <c>.using</c> line, which names scopes; and the body of
-    ///   a <c>.struct</c>, <c>.union</c> or <c>.enum</c>, whose names are the type's own members.
+    ///   Skips a macro's body, which names its parameters; a <c>.using</c> line, which names scopes; the body of
+    ///   a <c>.struct</c>, <c>.union</c> or <c>.enum</c>, whose names are the type's own members; and the name a
+    ///   <c>.scope</c> or <c>.proc</c> line declares, which is a definition, not a use. Nor does it take a name before
+    ///   <c>::</c> or after a scope's <c>A::</c>: the assembler resolves a historical name only as a plain name, which
+    ///   a root-qualified <c>::Name</c> is.
     ///  </para>
     /// </remarks>
     /// <param name="lines">The lines of a source file.</param>
@@ -259,7 +262,18 @@ internal static class SourceText
             }
 
             if (types != 0) { continue; }
-            foreach ((int start, string name) in Words(code)) { yield return (line, start, name); }
+            string? declared = operation is ".scope" or ".proc" ? DeclaredName(directive) : null;
+            foreach ((int start, string name) in Words(code))
+            {
+                if (declared is not null && string.Equals(name, declared, StringComparison.Ordinal))
+                {
+                    // The scope's or procedure's own name, once: the declaration, not a use.
+                    declared = null;
+                    continue;
+                }
+
+                yield return (line, start, name);
+            }
         }
     }
 
@@ -272,6 +286,19 @@ internal static class SourceText
         }
 
         return "";
+    }
+
+    // The name a .scope or .proc line declares: the word after the directive, after any label ("Name" in
+    // ".proc Name", ".scope Name continued" and ca65's "Label: .proc Name"), up to an address size ("Name: far").
+    private static string? DeclaredName(string directive)
+    {
+        string[] words = directive.Split(separator: (char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        int at = Array.FindIndex(words, word => word.StartsWith('.'));
+        if (at < 0 || at + 1 >= words.Length) { return null; }
+        string word = words[at + 1];
+        int end = 0;
+        while (end < word.Length && IsNameCharacter(word[end])) { end++; }
+        return end == 0 ? null : word[..end];
     }
 
     // The names in a line of code, with their columns, but not a label the line defines at its start.
@@ -297,8 +324,12 @@ internal static class SourceText
 
             int end = index;
             while (end < code.Length && IsNameCharacter(code[end])) { end++; }
-            bool qualified = index >= 2 && code[index - 1] == ':' && code[index - 2] == ':';
-            if (index != 0 && !qualified && !char.IsAsciiDigit(code[index]) && code[index - 1] != '$')
+            // A name after a scope's :: (A::Name) is that scope's member, and a name before :: qualifies the one after
+            // it: the assembler looks up a historical name only for a plain name (AssemblyPreprocessor.ConstantName),
+            // so neither is one. A root-qualified ::Name is the plain name, and is taken.
+            bool qualified = index >= 3 && code[index - 1] == ':' && code[index - 2] == ':' && IsNameCharacter(code[index - 3]);
+            bool qualifier = end + 1 < code.Length && code[end] == ':' && code[end + 1] == ':';
+            if (index != 0 && !qualified && !qualifier && !char.IsAsciiDigit(code[index]) && code[index - 1] != '$')
             {
                 yield return (index, code[index..end]);
             }

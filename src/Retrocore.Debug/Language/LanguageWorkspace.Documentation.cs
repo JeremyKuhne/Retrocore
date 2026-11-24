@@ -183,13 +183,16 @@ internal sealed partial class LanguageWorkspace
         if (current.Count == 0) { return diagnostics; }
         foreach (string member in analysis.Members)
         {
-            foreach ((int line, int start, string name) in SourceText.CodeNames(analysis.LinesOf(member)))
+            string[] lines = analysis.LinesOf(member);
+            foreach ((int line, int start, string name) in SourceText.CodeNames(lines))
             {
                 if (!current.TryGetValue(name, out string? replacement) || replacement is null) { continue; }
 
                 // A name the line's scopes or .using directives define binds there, not to the historical name; a
-                // .using that does so is reported, as the code may mean the old name.
-                if (analysis.Bound(name, member, line) is not null)
+                // .using that does so is reported, as the code may mean the old name. A root-qualified ::Name is the
+                // plain name at the root, which no scope or .using changes.
+                bool root = start >= 2 && lines[line].AsSpan(start - 2, 2) is "::";
+                if (!root && analysis.Bound(name, member, line) is not null)
                 {
                     if (Shadowed(analysis, name, member, line, start, replacement) is { } shadowed)
                     {

@@ -58,7 +58,7 @@ FLASH_MASK_FLASH = $40
 .endscope
 
 ;; Reads two comma-separated low-resolution coordinates, each below <LOW_RES_ROWS>.
-;; Out: LowResFirst = the first coordinate, X = the second, H2 = V2 = the second
+;; Out: LowResFirst = the first coordinate, X = the second, HorizontalLineEnd = VerticalLineEnd = the second
 ;; Errors: ILLEGAL QUANTITY for a coordinate of 48 or more
 ;; Also: PLOTFN (UNKN), PLOTFNS (ASTIL)
 .proc ReadLowResCoordinates
@@ -86,7 +86,7 @@ FLASH_MASK_FLASH = $40
 .scope Statements continued
 
 ;; Reads a low-resolution line's two endpoints, ordering them, then `AT` and its coordinate.
-;; Out: LowResFirst = the lower endpoint, H2 = V2 = the higher, X = the `AT` coordinate
+;; Out: LowResFirst = the lower endpoint, HorizontalLineEnd = VerticalLineEnd = the higher, X = the `AT` coordinate
 ;; Errors: ILLEGAL QUANTITY for a coordinate of 48 or more
 ;; Also: LINFNS (UNKN)
 .proc ReadLowResLine

@@ -63,8 +63,8 @@ internal static partial class BasicNames
     internal static string[] VendorLabelNames { get; } = ["GETRTS", "ON", "BUF"];
 
     /// <summary>
-    ///  Gets whether a build defines a name as a label of a vendor's own code, in the folder of the vendor's historical
-    ///  names but outside them, as it does the <see cref="VendorLabelNames"/>.
+    ///  Gets whether a build gives a name to a definition of a vendor's own code, as its label or an old name, in the
+    ///  folder of the vendor's historical names but outside them, as it does the <see cref="VendorLabelNames"/>.
     /// </summary>
     /// <param name="result">The build.</param>
     /// <param name="name">The name.</param>

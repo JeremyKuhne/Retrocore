@@ -73,7 +73,6 @@ public sealed class BasicSharedFloatAliasesTests
         ["DVARTS"] = ["M6502"],
         ["BUF"] = ["M6502", "ASTIL"],
         ["CQPRMP"] = ["M6502"],
-        ["HBAS"] = ["ASTIL"],
         ["WNDWDT"] = ["UNKN"],
         ["SETSLO"] = ["UNKN"],
         ["SETINT"] = ["UNKN"],
@@ -156,7 +155,7 @@ public sealed class BasicSharedFloatAliasesTests
         }
 
         CheckAliases(native, AppleAliases, s_appleNames, pet: null);
-        CheckDocumentation(native, AppleAliases);
+        CheckDocumentation(native, AppleAliases, apple: true);
     }
 
     /// <summary>
@@ -269,6 +268,7 @@ public sealed class BasicSharedFloatAliasesTests
         }
 
         native.Symbol("BUF").Should().Be(native.Symbol("InputBuffer"), "BUF is the PET's own name of its input buffer");
+        native.FindDefinition("BUF")?.Location?.Path.Should().NotContain("AppleSoft", "the PET's BUF must not be AppleSoft's alias");
 
         if (model == PetModel.Pet4032)
         {
@@ -284,7 +284,7 @@ public sealed class BasicSharedFloatAliasesTests
         }
 
         CheckAliases(native, PetAliases, names, (model, original));
-        CheckDocumentation(native, PetAliases);
+        CheckDocumentation(native, PetAliases, apple: false);
     }
 
     /// <summary>
@@ -372,8 +372,8 @@ public sealed class BasicSharedFloatAliasesTests
                 ?? throw new AssertFailedException($"{target} has no shared documentation.");
 
             // The target is a shared module's, or, for AppleSoft's spelling of a name of the IIe's, IIeEquates.asm's (X10).
-            string folder = Path.GetFullPath(Path.GetDirectoryName(topic.Path) ?? "");
-            bool system = Path.GetFileName(folder) == "System" && Path.GetFileName(topic.Path) == "IIeEquates.asm";
+            string iieEquates = Path.GetFullPath(Path.Join(BasicNames.Inputs, "System", "IIeEquates.asm"));
+            bool system = string.Equals(Path.GetFullPath(topic.Path), iieEquates, StringComparison.OrdinalIgnoreCase);
             if (!system)
             {
                 Path.GetFullPath(topic.Path).Should().StartWith(Path.GetFullPath(Shared) + Path.DirectorySeparatorChar);
@@ -407,13 +407,14 @@ public sealed class BasicSharedFloatAliasesTests
         }
     }
 
-    private static void CheckDocumentation(AssemblyResult result, string aliases)
+    private static void CheckDocumentation(AssemblyResult result, string aliases, bool apple)
     {
         DocumentationSet docs = Documents(result, aliases);
-        // AppleSoft's IIeEquates.asm and its definitions of the Monitor's entries link the other modules (X10).
+        // AppleSoft's IIeEquates.asm and its definitions of the Monitor's entries link the other modules (X10); this
+        // build's own documentation is docs, so the SDK's AppleSoft set is left out.
         List<DocumentationDiagnostic> diagnostics = new DocumentationResolver(
             docs,
-            SdkDocumentationTests.Sets().Where(set => set.Module != "AppleSoft"),
+            apple ? SdkDocumentationTests.Sets().Where(set => set.Module != "AppleSoft") : [],
             isDirective: name => DirectiveDocs.Describe(name) is not null,
             isInstruction: InstructionDocs.IsMnemonic).Check();
 

@@ -12,7 +12,8 @@
 ;; Microsoft's names here (M6502), since BASIC 4 gives those names to other definitions (Basic.md E4). Including this
 ;; file emits no bytes and does not change the origin.
 
-;; The aliases for Apple's names. Code uses the definitions' own names; these exist for the old names.
+;; The aliases for Apple's, Microsoft's and the overlay's names. Code uses the definitions' own names; these exist for
+;; the old names.
 .scope AppleSoft
 
 ;; Inherit: <Float::PrintFac>
@@ -194,9 +195,7 @@ CollectorCheckElement = Strings::CollectGarbage::CheckElement
 ;; Also: DVARTS (M6502)
 CollectorAdvance = Strings::CollectGarbage::Advance
 
-
-; The IIe's definitions that IIeEquates.asm exports under Apple's names, with AppleSoft's and Microsoft's own spellings
-; of them (decision X10).
+; The IIe's definitions in IIeEquates.asm, under AppleSoft's and Microsoft's spellings of them (decision X10).
 
 ;; Inherit: <::InputBuffer>
 ;; Also: BUF (M6502, ASTIL)
@@ -205,10 +204,6 @@ InputBuffer = ::InputBuffer
 ;; Inherit: <::PromptCharacter>
 ;; Also: CQPRMP (M6502)
 PromptCharacter = ::PromptCharacter
-
-;; Inherit: <::LowResBase>
-;; Also: HBAS (ASTIL)
-LowResBase = ::LowResBase
 
 ;; Inherit: <::WindowWidth>
 ;; Also: WNDWDT (UNKN)

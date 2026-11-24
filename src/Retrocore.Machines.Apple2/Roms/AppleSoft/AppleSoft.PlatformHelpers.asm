@@ -138,9 +138,9 @@ RestoreFlags:
 Done:
     rts
 .endproc
-;;  Returns X less the output column: <TerminalPosition>, subtracted with carry set, or, with 80 columns
-;; (<Columns80State>),
-;; <EightyColumns::CursorColumn>, subtracted with the caller's carry.
+
+;; Returns X less the output column: <TerminalPosition>, subtracted with carry set, or, with 80 columns
+;; (<Columns80State>), <EightyColumns::CursorColumn>, subtracted with the caller's carry.
 ;; In: X = the target column
 ;; Out: A = X less the column; carry = set where there is no borrow
 ;; Entry:
@@ -235,8 +235,8 @@ SetShapeTable:
     sta StringsBottom
     sta Address1
     jsr Cassette::ReadBit
-    lda #3                          ; HEADR's delay count
-    jmp ReadCassette+5                     ; READ at its JSR HEADR
+    lda #3                          ; WriteHeader's delay count
+    jmp ReadCassette+5              ; ReadCassette at its jsr WriteHeader
 .endproc
 
 ;; Points the Monitor's cassette range at an array's data: A1 at its first element, from the header at <SourceStart>,

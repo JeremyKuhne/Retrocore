@@ -665,13 +665,12 @@ ShapeRotation = $F9
 ;; Also: AMPERV (UNKN)
 AmpersandJump = $03F5
 
-; The IIe's page zero, low memory, soft switches and keys (decision X10). Microsoft's LINWID names $25, which is the
-; Monitor's CV and not a width; it is not defined.
+; The IIe's page zero, low memory, soft switches and keys (decision X10), in every AppleSoft build, the II Plus's too.
 .include "../System/IIeEquates.asm"
 
-; The Monitor's and the firmware's definitions that AppleSoft uses, at their addresses, as DOS defines the Monitor's
-; routines it calls. Each cites Apple's names and AppleSoft's and Microsoft's own spellings, except Apple's PLOT, READ
-; and WAIT, which are names of AppleSoft's statements.
+; The Monitor's and the firmware's definitions that AppleSoft uses or that carry its old names, at their addresses, as
+; DOS defines the Monitor's routines it calls. Each cites Apple's names and AppleSoft's and Microsoft's own spellings,
+; except Apple's PLOT, READ and WAIT, which are names of AppleSoft's statements.
 
 ;; The Monitor's low-resolution graphics routines, in its <Monitor:LowRes> family, that the graphics statements call.
 .scope LowRes
@@ -763,6 +762,7 @@ WriteCassette = $FECD
 ;; Also: MREAD (UNKN), CQCSIN (M6502)
 ReadCassette = $FEFD
 
+;; Microsoft's LINWID names $25 too, but it is the Monitor's cursor line, not a width; LINWID is not defined.
 ;; Inherit: <Monitor:CV>
 CV = $25
 
@@ -776,7 +776,7 @@ CursorColumn = $057B
 .endscope
 
 ;; Inherit: <Firmware:AppleSoftCassette>
-;; Also: C5ROM (UNKN)
+;; Also: BASTAPE (UNKN), C5ROM (UNKN)
 AppleSoftCassette = $C500
 
 .org $D000

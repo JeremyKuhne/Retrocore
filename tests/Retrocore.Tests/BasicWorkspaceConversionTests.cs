@@ -183,11 +183,10 @@ public sealed class BasicWorkspaceConversionTests
             // A vendor's file cites its vendor's documents; the shared layouts, Microsoft's (checked above).
             string name = Path.GetFileName(path);
             string[]? vendor = null;
-            if (s_appleFiles.Contains(name)) { vendor = s_appleKeys; }
-
             // AppleSoft's Equates also define the Monitor's routines it calls, citing Apple's Monitor manuals (X10).
             if (name == "AppleSoft.Equates.asm") { vendor = [.. s_appleKeys, .. s_monitorKeys]; }
-            if (s_commodoreFiles.Contains(name)) { vendor = s_commodoreKeys; }
+            else if (s_appleFiles.Contains(name)) { vendor = s_appleKeys; }
+            else if (s_commodoreFiles.Contains(name)) { vendor = s_commodoreKeys; }
 
             foreach (DocumentationAlso also in OldNamesIn(Parse(path)))
             {

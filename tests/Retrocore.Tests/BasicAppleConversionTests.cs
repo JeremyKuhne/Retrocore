@@ -58,6 +58,11 @@ public sealed class BasicAppleConversionTests
         AssemblyResult legacy = SdkModules.AssembleAppleSoft(Path.Join(AppleFolder, "applesoft.mac"), model);
         BasicWorkspaceConversionTests.CheckAgainstOverlay(
             native, legacy, Files, minimum: MinimumOverlayNames, s_sdkNames, scoped: true);
+
+        // The hi-res engine's names for the Monitor's bytes, which the comparison leaves out, are those bytes (E-Q5).
+        native.Symbol("HighRes::PixelMask").Should().Be(native.Symbol("PlotColor"));
+        native.Symbol("HighRes::ByteAddress").Should().Be(native.Symbol("LowResBase"));
+        native.Symbol("HighRes::ByteAddressHigh").Should().Be(native.Symbol("LowResBaseHigh"));
     }
 
     /// <summary>

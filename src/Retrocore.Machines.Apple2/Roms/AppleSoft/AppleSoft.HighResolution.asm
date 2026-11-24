@@ -66,6 +66,7 @@ SHAPE_PLOT_BIT = 4
 PixelMask = ::PlotColor
 
 ;; The address of the screen byte the cursor is in: the Monitor's <::LowResBase>, which the engine borrows.
+;; Also: HBAS (ASTIL)
 ByteAddress = ::LowResBase
 
 ;; The address's high byte: the Monitor's <::LowResBaseHigh>.
@@ -560,8 +561,8 @@ CosineTable:
     .byte $E1, $D4, $C5, $B4, $A1
     .byte $8D, $78, $61, $49, $31
     .byte $18, $FF
-;;  Rebuilds <HighResX> and <HighResY> from <ByteAddress> and <ByteAddressHigh>, <HighResByteIndex> and the pixel mask
-;; in <PixelMask>.
+
+;; Rebuilds <HighResX> and <HighResY> from <ByteAddress> and <ByteAddressHigh>, <HighResByteIndex> and <PixelMask>.
 ;; Out: HighResX = the column, HighResY = the row
 ;; Entry:
 ;;   Done = returns; <HighRes::Line> branches here

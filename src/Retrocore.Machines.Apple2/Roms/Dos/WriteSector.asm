@@ -1,13 +1,12 @@
 ; retrocore: style=strict
 ;; DOS 3.3 and 3.2 RWTS: writing a data field
 ;;
-;; Writes a sector's data field from the values <DiskII::PreNibble> left in <DiskII::HighBits> and
-;; <DiskII::LowBits>: a few self-sync nibbles, the prologue D5 AA AD, the data nibbles (the values exclusive-ored in
-;; a chain, then a checksum) and the epilogue DE AA EB. DOS 3.3 writes 343 data nibbles, DOS 3.2 411. RWTS calls it
-;; just after <DiskII::ReadAddressField> has read the sector's address field, so that the data field lands where
-;; the old one was; DOS 3.3's formatter calls it after each address field it writes (DOS 3.2's writes no data
-;; fields). At $B82A-$B8C1 where DOS 3.3 runs
-;; ($B86A-$B8FC in DOS 3.2), all within one page, as its timing requires.
+;; Writes a sector's data field from the values <DiskII::PreNibble> left in <DiskII::HighBits> and <DiskII::LowBits>: a
+;; few self-sync nibbles, the prologue D5 AA AD, the data nibbles (the values exclusive-ored in a chain, then a
+;; checksum) and the epilogue DE AA EB. DOS 3.3 writes 343 data nibbles, DOS 3.2 411. RWTS calls it just after
+;; <DiskII::ReadAddressField> has read the sector's address field, so that the data field lands where the old one was;
+;; DOS 3.3's formatter calls it after each address field it writes (DOS 3.2's writes no data fields). At $B82A-$B8C1
+;; where DOS 3.3 runs ($B86A-$B8FC in DOS 3.2), all within one page, as its timing requires.
 ;;
 ;; In write mode the controller shifts the latch out one bit every 4 cycles, so the code must store a new nibble
 ;; exactly every 32 cycles: a store early or late adds or loses bits on the disk. Every path from one store to the

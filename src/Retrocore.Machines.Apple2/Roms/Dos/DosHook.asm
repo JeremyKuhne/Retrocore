@@ -362,8 +362,8 @@ Write:
     ; Falls into EchoExit.
 .endproc
 
-;; Leaves DOS from an output state, printing the character in <HookA> only if MON C is on; the other entries test
-;; MON O or MON I, or always print.
+;; Leaves DOS from an output state, printing the character in <HookA> as MON asks: entered here, only if MON C is
+;; on.
 ;;
 ;; Each entry prints the character only if its MON option is on (an ECHO_ bit of <EchoFlags>); <EchoExit::Always>
 ;; always prints it. All end at <ExitDos>.

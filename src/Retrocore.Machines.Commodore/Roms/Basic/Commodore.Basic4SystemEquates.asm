@@ -32,11 +32,11 @@ DefaultOutputDevice = $B0
 CatalogOutputFile = $B3
 
 ;; The index of the monitor command being run, in <Monitor::CommandKeys>; `L` and `S` test it.
-;; Also: SAVX (K4S79, HVK4), T1 (HVK4)
+;; Also: SAVX (K4S79, HVK4), T1 (K4S79, HVK4)
 MonitorCommandIndex = $B4
 
 ;; The monitor's entry letter (`B` or `C`), then the count of bytes a command shows or alters.
-;; Also: TMPC (K4S79, HVK4), RCNT (HVK4), T2 (HVK4)
+;; Also: TMPC (K4S79, HVK4), RCNT (K4S79, HVK4), T2 (K4S79, HVK4)
 MonitorCount = $B5
 
 ;; The kernal's cassette countdown, which `CATALOG` reuses to keep <DefaultOutputDevice>.
@@ -71,12 +71,12 @@ DeviceNumber = $D4
 ;; Also: FNADR (K4S79, HVK4)
 FilenamePointer = $DA
 
-;; Set when the monitor's address passes $FFFF, so a display stops there.
-;; Also: WRAP (K4S79, HVK4), FSBLK (HVK4)
+;; Made nonzero (incremented) when the monitor's address passes $FFFF, so a display stops there.
+;; Also: WRAP (K4S79, HVK4), FSBLK (K4S79, HVK4)
 MonitorAddressWrapped = $DE
 
 ;; The two-byte address a monitor command is working on.
-;; Also: TMP0 (K4S79, HVK4), STAL (HVK4)
+;; Also: TMP0 (K4S79, HVK4), STAL (K4S79, HVK4)
 MonitorAddress = $FB
 
 ;; The two-byte second address of a monitor command: the end of a range.
@@ -132,7 +132,7 @@ SavedIrqVectorHigh = $0207
 SavedIrqVector = $0208
 
 ;; The buffer for the monitor's `L` and `S` filename, at most 15 characters: a 16th fails the command.
-;; Also: SAVNAM (K4S79, HVK4), ZZZ1 (HVK4)
+;; Also: SAVNAM (K4S79, HVK4), ZZZ1 (K4S79, HVK4)
 MonitorFilename = $0209
 
 ;; The kernal's table of the open files' logical file numbers.
@@ -150,7 +150,7 @@ SecondaryAddressTable = $0265
 ; The disk commands' parameters, in page three.
 
 ;; The length of a disk command's second filename.
-;; Also: FNLEN2 (K4S79, HVK4), TAPE2 (HVK4)
+;; Also: FNLEN2 (K4S79, HVK4), TAPE2 (K4S79, HVK4)
 SecondFilenameLength = $033A
 
 ;; `RECORD`'s byte position in the record, in <SecondFilenameLength>'s byte.
@@ -232,7 +232,7 @@ KernalListen = $F0D5
 KernalPrintMessage = $F185
 
 ;; Sends a secondary address after <KernalTalk>.
-;; Also: SECND (UNKN), TKSA (HVK4)
+;; Also: SECND (UNKN), TKSA (K4S79, HVK4)
 KernalSendSecondary = $F193
 
 ;; Sends UNTALK on the bus.
@@ -320,7 +320,7 @@ KernalMonitorSave = $F6E3
 KernalSetInputChannel = $F7AF
 
 ;; Selects a logical file for output.
-;; Also: CHKOUT (K4S79, HVK4), CKOUT (HVK4)
+;; Also: CHKOUT (K4S79, HVK4), CKOUT (K4S79, HVK4)
 KernalSetOutputChannel = $F7FE
 
 ;; Waits for the tape operation to finish.
@@ -330,7 +330,7 @@ KernalWaitForTape = $F92B
 ; Values.
 
 ;; The bit of <IoStatus> that reports a load or verify error.
-;; Also: SPERR (K4S79, HVK4), CHANL (HVK4)
+;; Also: SPERR (K4S79, HVK4), CHANL (K4S79, HVK4)
 STATUS_LOAD_ERROR = $10
 
 ;; The number of command letters the monitor knows, in <Monitor::CommandKeys>.

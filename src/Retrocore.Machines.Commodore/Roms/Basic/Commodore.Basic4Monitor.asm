@@ -18,8 +18,9 @@
 .macro CommodoreBasic4Monitor
 
     ;; The machine-language monitor: its entries, its command loop and commands, and the helpers that read and print
-    ;; hexadecimal. The commands are entered by <Monitor::Dispatch> and end by going back to <Monitor::Prompt>; none
-    ;; returns. Its saved registers and work bytes are the kernal's, in Commodore.Basic4SystemEquates.asm.
+    ;; hexadecimal. The commands are entered by <Monitor::Dispatch>, and none returns: `G` resumes the program
+    ;; with `rti`, `X` goes back to <ReadyForCommand>, and the others go back to <Monitor::Prompt>. Its saved
+    ;; registers and work bytes are the kernal's, in Commodore.Basic4SystemEquates.asm.
     .scope Monitor
 
     ; The entries and the command loop.
@@ -27,7 +28,7 @@
     ;; Enters the monitor with `C` as the entry letter.
     ;;
     ;; The kernal jumps here at reset when the diagnostic line is held low (the overlay's comment calls it the entry
-    ;; after a `CALL`). The carry is not set up before <Monitor::SaveState>'s subtraction, which <Monitor::EnterByBreak>
+    ;; after a `CALL`). The carry is not set up before <Monitor::SaveState>'s `adc #$FF`, which <Monitor::EnterByBreak>
     ;; prepares: with carry set, the saved program counter is the address on the stack itself; with it clear, one
     ;; less.
     ;; Also: CALLE (K4S79, HVK4)
@@ -487,8 +488,8 @@ Done:
     ;; `G`: resumes the program with the saved registers, at the saved program counter or, after a space, at an
     ;; address that follows.
     ;;
-    ;; Basic4.mac spells it MGO, and says Commodore's operating system calls it GO, a name BASIC already uses; that
-    ;; spelling is not checked against the kernal's listing here.
+    ;; Basic4.mac spells it MGO. Commodore's kernal listing and its reconstruction (K4S79, HVK4) call it `GO`,
+    ;; which BASIC 4 gives its `GO` statement, so their name is here in prose.
     ;; Entry:
     ;;   Resume = restores the saved stack pointer, interrupt vector and registers, and returns into the program
     ;; Also: MGO (UNKN)
@@ -563,6 +564,8 @@ LoadOrSaveFail:
     ;;   RequireSave = saves, for `S`
     ;; Also: LD (K4S79, HVK4)
     .proc LoadOrSave
+    ; The cassette, then one less for the zeros below.
+    .assert DEVICE_CASSETTE = 1, "LoadOrSave's dey makes zero from the cassette's device number."
     ldy #DEVICE_CASSETTE
     sty DeviceNumber
     dey

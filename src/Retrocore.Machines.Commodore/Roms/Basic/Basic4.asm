@@ -45,7 +45,7 @@ EXTENDED_DISK_VECTORS = 1
 .endif
 
 ;; Start of the BASIC 4 ROM.
-;; Also: ROMLOC (M6502, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: ROMLOC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 ROM_ORIGIN = $B000
 
 ;; Use the later multiply-by-zero branch.
@@ -169,8 +169,8 @@ BASIC4_OUTPUT_PADDING = 1
     CommodoreStartMessages 0
 
 ;; The address after the interpreter's last byte, where the monitor and disk-command extension begin. BASIC 4's `PEEK`
-;; has no ROM guard, so only the extension's check of its address uses it.
-;; Also: LASTWR (M6502, HV1, HV1R, HV2, HV4, HV4R, K4S79, HVK4)
+;; has no ROM guard, so nothing refers to it; the extension checks the same address itself.
+;; Also: LASTWR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, K4S79, HVK4)
 InterpreterEnd:
     CommodoreBasic4Extension REVISD
 .assert * = $E000, "BASIC 4 must end at $DFFF."

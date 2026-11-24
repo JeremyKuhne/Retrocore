@@ -2659,8 +2659,10 @@ Decisions and how the table was applied:
   - BASIC 4's collector is `Strings::CollectGarbage`, as E6 left it, now a `.proc` with nested routines.
 - F2. Owner questions, as the log recommends:
   - F-Q3: DCOPY, DSCRTC, GTVLCN and MGO, which only the overlay spells so, cite UNKN, since the overlay comparisons
-    need every overlay label to resolve. Commodore's own spellings are not claimed: `Basic4/BasicEntries.asm` says
-    the overlay changed them, but nothing checked here says what they were.
+    need every overlay label to resolve. Checked against mist64/cbmsrc at the bibliography's commit, Commodore's
+    kernal listing and its reconstruction (K4S79, HVK4) call them COPY, SCRTCH, CONT and GO, each a name BASIC 4
+    already gives another definition (`StoreString::CopyCharacters`, `EraseProgram`, `Statements::Cont`,
+    `Statements::Go`), so they are in prose, as the recommendation said.
   - F-Q4: the table's choices, with three changes. ERRS1 is `Monitor::ToShowError`, named for the
     `Monitor::ShowError` it jumps to. ERRL is the scope-level `Monitor::LoadOrSaveFail`, since its code comes before
     LD's, which the command tables need as LoadOrSave's start. SNER3 is the entry
@@ -2696,11 +2698,15 @@ Decisions and how the table was applied:
     LBA74) are dropped, as X7 settled.
   - The lineage rule: BASIC 1's and BASIC 4's `StopEmptyInput` both cite INPSTP (UNKN), PATCH1 (HV1, HV1R) and
     BUFFU1 (HV4R); BASIC 4's trampoline `EvaluateVariable` cites ISVAR (M6502, HV1, HV1R, HV2), as the other builds'
-    `EvaluateVariable` does; every root's `InterpreterEnd` cites LASTWR (M6502, HV1, HV1R, HV2, HV4, HV4R, K4S79,
-    HVK4) and `ROM_ORIGIN` ROMLOC (M6502, HV1, HV1R, HV2, HV4, HV4R).
+    `EvaluateVariable` does; every root's `InterpreterEnd` cites LASTWR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R,
+    K4S79, HVK4) and `ROM_ORIGIN` ROMLOC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R). A question for the owner: the
+    overlay gives ISVAR to BASIC 4's trampoline, where the comparisons need it, but BASIC 4's own documents (CBM4S79,
+    HV4, HV4R) give it to the code the trampoline jumps to, `EvaluateVariableBody` (ISVAR1, UNKN), which is also
+    Microsoft's ISVAR. The name stays on the trampoline, with the mismatch in its prose.
   - The table's other names go on the definitions: PATCH1 to PATCH7 (HV1, HV1R) on BASIC 1's patches; PATCHG, PATH0,
-    PATH1, PATCHH and PATCHI (HV4R) on the revised chip's; HVK4's T1, T2, RCNT, FSBLK, STAL, ZZZ1, TAPE2, TKSA, CKOUT
-    and CHANL; PATCH5 (HVK4) on `Disk::StoreStatusLink`.
+    PATH1, PATCHH and PATCHI (HV4R) on the revised chip's; T1, T2, RCNT, FSBLK, STAL, ZZZ1, TAPE2, TKSA, CKOUT and
+    CHANL, which the table gives as HVK4's but K4S79 gives at the same places too, so both are cited; PATCH5 (HVK4)
+    on `Disk::StoreStatusLink`.
 - F5. Part C's leftovers (I9): BASIC 4's ISVAR trampoline is `EvaluateVariable`, and the shared evaluator branches to
   `EvaluateVariable` in every build. BASIC 1's GETDTL, INPSTP, TISTR, TINUM and INCTRM are `GetDataLine`,
   `StopEmptyInput`, `CheckClockString`, `RouteNumericVariable` and `AdvanceTerminalPosition`; the revised BASIC 4's
@@ -2712,8 +2718,8 @@ Decisions and how the table was applied:
 - F6. The two over-length lines in `Basic1.asm` (and a third, the statement fetch's, once its argument had its new
   name): a line exclusion quiets the editor, but the SDK's documentation tests do not honor it, so the lines are
   shortened instead. `CommodoreInitialize` and `CommodoreStatementFetch`, part C's macros, take the workspace's
-  `LOCAL_TERMINAL_POSITION` and `INPUT_BUFFER_PAGE` from the workspace rather than as parameters, which every caller
-  passed anyway (the table's rows for those parameters, in part C's sections, are not edited), and BASIC 1's
+  `LOCAL_TERMINAL_POSITION` and `INPUT_BUFFER_PAGE` from the workspace rather than as parameters; every caller
+  passed those switches or the values they have in its workspace (the table's rows for those parameters, in part C's sections, are not edited), and BASIC 1's
   `PROBE_LOAD_INDEX_ZERO` is `PROBE_ZERO_INDEX`.
 - F7. BASIC 1's switches the table renames (`SUBSCRIPT_CHECKS_NUMERIC`, `POSITIVE_INTEGER_CHECKS_TYPE`,
   `STRING_CLEARS_FAC_EXTENSION`, `COLLECTOR_FULL_POINTER`, `COLLECTOR_PATCH_ARRAY_STEP`, `COLLECTOR_SUBTRACT_OFFSET`,
@@ -2756,6 +2762,8 @@ Found in the code (documented, not fixed):
   byte from `0` up as a digit, counted from `0` (`TI$="1A0000"` sets 27 hours), and rejects only those below `0`; a
   space is skipped by reading the byte after `TextPointer` instead, which moves `TextPointer` on; the time is not
   checked against 24 hours. `BasicCommodoreRoutineTests` pins the first.
+- BASIC 4's error-channel read: only a carriage return ends it; a zero is stored like any other byte, so nothing
+  stops a long reply.
 - The monitor: `EnterByCall` reaches `SaveState`'s subtraction without setting the carry; the overlay's "after a
   CALL" is the kernal's reset with the diagnostic line low; `L` and `S` take at most 15 filename characters;
   `ReadCharacter` at a return drops only its own return address, so a line that ends inside a nested read leaves its

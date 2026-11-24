@@ -111,7 +111,8 @@ Done:
 
     ;; Finishes <BeginGetString>: points <TextPointer> at the character, drops the return address of the `jsr` to
     ;; <BeginGetString>, and goes on to <AssignVariableList::StringAtCursor> with A = Y, its ending delimiter.
-    ;; In: X = the character's offset, Y = the ending delimiter
+    ;; In: X = the character's offset, Y = the ending delimiter (<TextPointer>'s high byte, which for BASIC 1's
+    ;;   page-zero buffer is 0)
     ;; Also: GETST1 (UNKN), PATCH7 (HV1, HV1R)
     .proc ResumeGetString
     stx TextPointer
@@ -123,7 +124,7 @@ Done:
 
 ;; The address after BASIC 1's last patch in the editor ROM; <Functions::Peek>'s ROM guard protects the pages from the
 ;; ROM's start to the one before its page.
-;; Also: LASTWR (M6502, HV1, HV1R, HV2, HV4, HV4R, K4S79, HVK4)
+;; Also: LASTWR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, K4S79, HVK4)
 InterpreterEnd:
 .endmacro
 

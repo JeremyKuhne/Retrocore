@@ -26,7 +26,7 @@
 .assert .not .defined(ZERO_AT_FHALF), "Predefine ZERO_IN_HALF_CONSTANT, not ZERO_AT_FHALF."
 
 ;; Start of the BASIC 2 ROM.
-;; Also: ROMLOC (M6502, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: ROMLOC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 ROM_ORIGIN = $C000
 
 ;; Use the later multiply-by-zero branch.
@@ -142,7 +142,7 @@ BASIC4_OUTPUT_PADDING = 0
 
 ;; The address after the interpreter's last byte, in the editor ROM. BASIC 2's `PEEK` has no ROM guard, so nothing
 ;; uses it.
-;; Also: LASTWR (M6502, HV1, HV1R, HV2, HV4, HV4R, K4S79, HVK4)
+;; Also: LASTWR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, K4S79, HVK4)
 InterpreterEnd:
 
 .assert * = $E1DE, "BASIC 2 must end at $E1DD in the editor ROM."

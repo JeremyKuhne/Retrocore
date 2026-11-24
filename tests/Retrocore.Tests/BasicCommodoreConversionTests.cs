@@ -109,7 +109,8 @@ public sealed class BasicCommodoreConversionTests
     {
         AssemblyResult native = PetSdkModules.AssembleBasic(PetFolder, model, original);
         string[] names = model == PetModel.Pet2001
-            ? ["GETDTL", "INPSTP", "TISTR", "TINUM", "INCTRM", "ISVAR", "TABER", "FREMES", "ROMLOC", "LASTWR"]
+            ? ["GETDTL", "INPSTP", "TISTR", "TINUM", "INCTRM", "GETSTR", "GETST1", "ARYINC", "TABER", "FREMES", "ROMLOC",
+                "LASTWR"]
             : ["INPSTP", "ISVAR", "TABER", "SIGNON", "ROMLOC", "LASTWR", .. original ? Array.Empty<string>() : ["INPNUL"]];
 
         foreach (string name in names)

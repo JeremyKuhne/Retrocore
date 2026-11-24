@@ -184,7 +184,8 @@ public sealed class BasicMonitorRoutineTests
         machine.Memory[monitorAddress] = 0x88;
         machine.Memory[monitorAddress + 1] = 0x99;
 
-        machine.Call("Monitor::ReadAddress");
+        // Carry starts opposite to the expected result, so leaving it alone fails.
+        machine.Call("Monitor::ReadAddress", carry: !carry);
 
         Word(machine, monitorAddress).Should().Be(expected);
         machine.Cpu.Registers.Status.HasFlag(StatusRegister.Carry).Should().Be(carry);

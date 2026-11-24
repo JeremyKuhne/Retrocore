@@ -100,7 +100,7 @@ uses `0, 0`, and BASIC 2/4 use `2, 1`. Follow it with `StringAllocation 1` for B
 or `0` for the other variants.
 
 After the matching collector, `StringConcatenation 0` emits `CAT` through `FRETMS` for AppleSoft and PET
-BASIC 1/2; BASIC 4 uses `StringConcatenation 1` and supplies its `STRADJ` link helper. Follow either with
+BASIC 1/2; BASIC 4 uses `StringConcatenation 1` and supplies its `FindStringLink` (STRADJ) link helper. Follow either with
 the variant's `StringFunctions` invocation. The linked-release switch is independent of allocator and
 collector selection, but those choices must agree on the representation used by the running interpreter.
 The macro requires the workspace (`MsBasic.Layouts.asm`'s `DESCRIPTOR_SIZE` and the vendor's equates) and the
@@ -203,7 +203,7 @@ still asserts its exact editor-spill and patch addresses; a length-changing sele
 and compensating lengths do not make an altered image stock. Relinking before insertion requires `LINK_RETURNS`.
 The early separator and dispatch choices must agree in this composition, and the later dispatch also needs the
 GO token. The fixed editor-patch block supplies helpers referenced by several choices: for example, disabling
-`INPUT_ERROR_EDITOR_PATCH` duplicates its GETDTL definition, while disabling `CLOCK_EDITOR_PATCH` removes
+`INPUT_ERROR_EDITOR_PATCH` duplicates its `GetDataLine` (GETDTL) definition, while disabling `CLOCK_EDITOR_PATCH` removes
 entries the fixed patch needs. A new variant may instead compose the macros with its own matching helpers and
 layout. Changing workspace or string-representation choices likewise requires compatible consumers.
 

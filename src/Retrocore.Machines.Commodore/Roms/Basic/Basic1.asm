@@ -353,7 +353,7 @@ START_BANNER_AFTER_FREE = 1
 .endif
 
 ;; Start of the BASIC ROM protected by <Functions::Peek>.
-;; Also: ROMLOC (M6502, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: ROMLOC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 ROM_ORIGIN = $C000
 
 ;; Omit BASIC 4's output patch space.

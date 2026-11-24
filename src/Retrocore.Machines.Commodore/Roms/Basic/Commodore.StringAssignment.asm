@@ -120,8 +120,8 @@ CopyByte:
     ;; Finds the link after a string's characters, for a nonempty string in string space that is not the disk status
     ;; (`DS$`).
     ;;
-    ;; A string whose address has bit 15 set is in ROM or I/O; one below <StringsBottom> is in the program text or
-    ;; the input buffer. Neither has a link. The test against <ROM_ORIGIN> after the bit-15 test never branches,
+    ;; A string whose address has bit 15 set is in ROM or I/O; one at an address below <StringsBottom> is in the program
+    ;; text or the input buffer. Neither has a link. The test against <ROM_ORIGIN> after the bit-15 test never branches,
     ;; since BASIC 4's ROM starts above $8000. The original chip recognizes `DS$`'s characters by their address
     ;; alone, so after <ForgetDiskStatus> releases the buffer, a string later given the same address is taken for
     ;; `DS$` and never linked; the revised chip's `TestStatusString` also requires `DS$` to be nonempty.

@@ -16,17 +16,19 @@ CLOCK_STRING_LENGTH = 6
     ;; Assigns a string to `TI$`, setting the clock, or passes any other variable on to <StoreString>.
     ;;
     ;; The reserved variables' values are in ROM, in <ZeroValue>'s page, so a destination there is `TI$` (the only
-    ;; reserved string variable). The string must be six decimal digits, `HHMMSS`; it is converted to 60 Hz ticks
+    ;; reserved string variable). The string must be six characters, `HHMMSS`; it is converted to 60 Hz ticks
     ;; (sixtieths of a second), and the low three bytes of the integer are stored in <JiffyClock>
     ;; with interrupts off, so the clock interrupt never sees half of the new value. The value is not checked against
     ;; 24 hours: `TI$ = "999999"` sets the clock past a day. Nor are the digits checked as digits: <ClassifyCharacter>
     ;; is the reader's entry after its colon test, so it takes every byte from `0` up for a digit, with the value of
-    ;; its distance from `0` (`A` counts 17), and rejects only the bytes below `0`. A space it skips by reading on
-    ;; through <TextPointer>, so the digit's place takes the byte after the one <TextPointer> points to (past the
-    ;; statement's end, for `LET`), and <TextPointer> moves on by one.
+    ;; its distance from `0` (`A` counts 17), and rejects only the bytes below `0`. A space it skips by going on to
+    ;; <GetNextCharacter>, which moves <TextPointer> on and reads through it (past the statement's end, for `LET`);
+    ;; that byte takes the digit's place with the reader's full test, so a byte from `:` up is rejected there and
+    ;; another space is skipped too.
     ;; In: AssignedVariable = the destination variable, FacMantissa3 = the string descriptor's address (low byte),
     ;;   FacMantissa4 = its high byte
-    ;; Errors: ILLEGAL QUANTITY if the length is not six or a character is below `0`
+    ;; Errors: ILLEGAL QUANTITY if the length is not six, a character is below `0`, or the byte read for a space is not
+    ;;   a digit
     .proc AssignClockString
     ldy AssignedVariable+1
     cpy #>ZeroValue
@@ -40,7 +42,8 @@ CLOCK_STRING_LENGTH = 6
         bne AddClockDigit::ToIllegalQuantity
     .endif
 
-;; Starts the conversion: a zero <Fac>, with the digit offset in <NumberBufferPointer>.
+;; Starts the conversion: a zero <Fac>, and Y = 0, the first digit's offset, which <NextPair> keeps in
+;; <NumberBufferPointer>.
 Convert:
     ldy #$00
     sty FacExponent

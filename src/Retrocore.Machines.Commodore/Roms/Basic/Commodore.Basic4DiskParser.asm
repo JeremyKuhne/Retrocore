@@ -37,7 +37,7 @@ FILENAME_LIMIT = 16
 ;; The device a disk statement uses when it names no unit.
 DEFAULT_DISK_UNIT = 8
 
-;; The lowest unit a disk statement may name: units 0 to 2 are the keyboard, the cassette and the screen.
+;; The lowest unit a disk statement may name, the screen: units 0 to 2 are the keyboard and the two cassettes.
 FIRST_DISK_UNIT = 3
 
 ;; The unit after the highest a disk statement may name.
@@ -60,19 +60,20 @@ DISK_ID_LENGTH = 2
     ;; It clears the fields, with the unit defaulting to 8, then reads the parameters in any order: `#` and a file
     ;; number (not 0), `W`, `L` and a record length (not 0 or 255), `R`, `D` and a drive (0 or 1, which sets both
     ;; drives), `U` or `ON U` and a unit (3 to 31), `I` and the two characters of a disk ID, and a filename, quoted
-    ;; or in parentheses. `TO` then starts the second part: a second drive, a unit and a second filename. Each
-    ;; parameter sets its bit, and giving one twice is a syntax error. `R` is accepted and skipped, with no effect.
-    ;; The first filename is copied to <FirstFilename>, without the leading `@` of a replacement; the second is left
-    ;; where it is, `@` and all.
+    ;; or in parentheses. `TO` then starts the second part: a second drive, a unit and a second filename. Most
+    ;; parameters set a bit of <ParsedParameters>, and giving one of those twice is a syntax error; but a unit given
+    ;; twice is not checked, `I` is tracked by <DiskIdSeen> instead, and `R` is accepted and skipped, with no effect.
+    ;; The first filename is copied to <FirstFilename> as given; a leading `@` of a replacement is left out of the
+    ;; kernal's filename only. The second is left where it is, `@` and all.
     ;;
     ;; <DiskIdSeen> shares <RecordLength>'s byte, so a record length given before `I` makes the `I` a syntax error,
     ;; and `I` leaves $FF as the record length.
     ;; In: TextPointer = the statement's first parameter character
-    ;; Out: A = <ParsedParameters>, ParsedParameters = a bit for each parameter given, LogicalFile = the file or 0,
+    ;; Out: A = <ParsedParameters>, ParsedParameters = the bits of the parameters given, LogicalFile = the file or 0,
     ;;   DeviceNumber = the unit or 8, FirstDrive = the first drive or 0, SecondDrive = the second drive, else the
-    ;;   first, RecordLength = the record length or 0, DiskId = the disk ID, FilenameLength = the first name's length
-    ;;   or 0, FilenamePointer = the first name, SecondFilenameLength = the second name's length or 0,
-    ;;   SecondFilenamePointer = the second name
+    ;;   first, RecordLength = the record length, 0, or $FF after `I`, DiskId = the disk ID, FilenameLength = the
+    ;;   first name's length or 0, FilenamePointer = the first name, SecondFilenameLength = the second name's length or
+    ;;   0, SecondFilenamePointer = the second name
     ;; Errors: SYNTAX for an unknown or repeated parameter; ILLEGAL QUANTITY for a value out of range or an empty
     ;;   name; STRING TOO LONG for a long name
     ;; Entry:
@@ -527,7 +528,9 @@ LoadAddress:
     bne Present
     jmp SyntaxError
 
-;; A character other than a digit must start an expression in parentheses.
+;; A character other than a digit must start an expression in parentheses. Basic4.mac spells the label GTVLCN;
+;; Commodore's kernal listing and its reconstruction (K4S79, HVK4) call it `CONT`, Microsoft's name for
+;; `Statements::Cont`, so their name is here in prose.
 ;; Also: GTVLCN (UNKN)
 Present:
     bcc Number

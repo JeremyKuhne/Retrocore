@@ -1864,7 +1864,7 @@ to K12, R1 to R10).
 | 1516 | `PROBE_TEST_BYTE` | `KEEP` | switch | P1 P1R |  | vendor | first byte written when testing RAM ($92 BASIC 1, $55 later) — SDK name; fits the style |
 | 1517 | `START_CARRY_PROGRAM_START` | `KEEP` | switch | P1 P1R |  | vendor | 1 carries the program-start increment into its high byte — SDK name; fits the style |
 | 1518 | `START_BANNER_AFTER_FREE` | `KEEP` | switch | P1 P1R |  | vendor | 1 prints the early sign-on after the free-memory count — SDK name; fits the style |
-| 1519 | `ROMLOC` | `ROM_ORIGIN` | constant | P1 P1R | M6502, HV1, HV1R | vendor | start of the BASIC ROM; PEEK's ROM guard starts here Converted: cites the PET line's documents, M6502, HV1, HV1R, HV2, HV4 and HV4R, under the lineage rule (Basic.md F4). |
+| 1519 | `ROMLOC` | `ROM_ORIGIN` | constant | P1 P1R | M6502, HV1, HV1R | vendor | start of the BASIC ROM; PEEK's ROM guard starts here Converted: cites the PET line's documents, M6502, CBM4S79, HV1, HV1R, HV2, HV4 and HV4R, under the lineage rule (Basic.md F4). |
 | 1520 | `BASIC4_OUTPUT_PADDING` | `KEEP` | switch | P1 P1R |  | vendor | 1 builds BASIC 4's checksum byte and patch space before INPRT — SDK name; fits the style |
 | 1521 | `RESET_STACK_POINTER` | `KEEP` | switch | P1 P1R |  | vendor | low byte of STACK_END - $101 - 2*RESET_STACK_EARLY: the reset stack pointer — SDK name; fits the style |
 
@@ -1872,14 +1872,14 @@ to K12, R1 to R10).
 
 | # | Old | New | Kind | Builds | Documents (checked) | D3 | Reason |
 | ---: | --- | --- | --- | --- | --- | --- | --- |
-| 1522 | `ROMLOC` | `ROM_ORIGIN` | constant | P2 | M6502, HV2 | vendor | start of the BASIC 2 ROM ($C000) Converted: cites M6502, HV1, HV1R, HV2, HV4 and HV4R, under the lineage rule (Basic.md F4). |
+| 1522 | `ROMLOC` | `ROM_ORIGIN` | constant | P2 | M6502, HV2 | vendor | start of the BASIC 2 ROM ($C000) Converted: cites M6502, CBM4S79, HV1, HV1R, HV2, HV4 and HV4R, under the lineage rule (Basic.md F4). |
 | 1523 | `SHORT_FMUL_ZERO` | `SHORT_MULTIPLY_ZERO` | switch | P2 |  | vendor | 1 uses BASIC 1's short multiply-by-zero branch in FMULTT — renamed for FMUL |
 | 1524 | `EARLY_FIN_LIMIT` | `EARLY_INPUT_EXPONENT_LIMIT` | switch | P2 |  | vendor | 1 keeps BASIC 1's exponent-12 test in FIN's exponent digits — renamed for FIN |
 | 1525 | `PRECISE_FOUT_LIMIT` | `PRECISE_OUTPUT_LIMIT` | switch | P2 |  | vendor | 1 uses BASIC 1's 999,999,999.5 output threshold — renamed for FOUT |
 | 1526 | `ZERO_AT_FHALF` | `ZERO_IN_HALF_CONSTANT` | switch | P2 |  | vendor | 1 defines ZERO inside the 0.5 constant (BASIC 2 and 4) — renamed for FHALF |
 | 1527 | `WAIT_EASTER_EGG` | `KEEP` | switch | P2 |  | vendor | 1 builds BASIC 2's hidden WAIT message and omitted-mask handler — SDK name; fits the style |
 | 1528 | `BASIC4_OUTPUT_PADDING` | `KEEP` | switch | P2 |  | vendor | 1 builds BASIC 4's checksum byte and patch space before INPRT — SDK name; fits the style |
-| 1529 | `LASTWR` | `InterpreterEnd` | entry | P2 | M6502, HV2 | vendor | label after the interpreter's last byte; PEEK's ROM guard ends at its page — Commodore.Basic1Patches defines BASIC 1's (other part): same name; BASIC 4's extension follows it Converted: cites M6502, HV1, HV1R, HV2, HV4, HV4R, K4S79 and HVK4, under the lineage rule (Basic.md F4). |
+| 1529 | `LASTWR` | `InterpreterEnd` | entry | P2 | M6502, HV2 | vendor | label after the interpreter's last byte; PEEK's ROM guard ends at its page — Commodore.Basic1Patches defines BASIC 1's (other part): same name; BASIC 4's extension follows it Converted: cites M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, K4S79 and HVK4, under the lineage rule (Basic.md F4). BASIC 2's and 4's `PEEK` have no ROM guard (`guardRom` 0), so nothing refers to the label there. |
 
 ### Basic4
 
@@ -1889,14 +1889,14 @@ to K12, R1 to R10).
 | 1531 | `DISK_STATUS_STRING` | `KEEP` | switch | P4 P4R |  | vendor | 1: BASIC 4 reserves the DS$ descriptor — SDK name; fits the style |
 | 1532 | `LINE_WIDTH_STORAGE` | `KEEP` | switch | P4 P4R |  | vendor | 0: BASIC 4 omits LineWidth and LastCommaColumn — SDK name; fits the style |
 | 1533 | `EXTENDED_DISK_VECTORS` | `KEEP` | switch | P4 P4R |  | vendor | 1: BASIC 4 defines the disk-command jump table — SDK name; fits the style |
-| 1534 | `ROMLOC` | `ROM_ORIGIN` | constant | P4 P4R | M6502, HV4, HV4R; spelling only: CBM4S79 [P4 P4R] | vendor | start of the BASIC 4 ROM ($B000) Converted: cites M6502, HV1, HV1R, HV2, HV4 and HV4R, under the lineage rule (Basic.md F4). |
+| 1534 | `ROMLOC` | `ROM_ORIGIN` | constant | P4 P4R | M6502, HV4, HV4R; spelling only: CBM4S79 [P4 P4R] | vendor | start of the BASIC 4 ROM ($B000) Converted: cites M6502, CBM4S79, HV1, HV1R, HV2, HV4 and HV4R, under the lineage rule (Basic.md F4). |
 | 1535 | `SHORT_FMUL_ZERO` | `SHORT_MULTIPLY_ZERO` | switch | P4 P4R |  | vendor | 1 uses BASIC 1's short multiply-by-zero branch in FMULTT — renamed for FMUL |
 | 1536 | `EARLY_FIN_LIMIT` | `EARLY_INPUT_EXPONENT_LIMIT` | switch | P4 P4R |  | vendor | 1 keeps BASIC 1's exponent-12 test in FIN's exponent digits — renamed for FIN |
 | 1537 | `PRECISE_FOUT_LIMIT` | `PRECISE_OUTPUT_LIMIT` | switch | P4 P4R |  | vendor | 1 uses BASIC 1's 999,999,999.5 output threshold — renamed for FOUT |
 | 1538 | `ZERO_AT_FHALF` | `ZERO_IN_HALF_CONSTANT` | switch | P4 P4R |  | vendor | 1 defines ZERO inside the 0.5 constant (BASIC 2 and 4) — renamed for FHALF |
 | 1539 | `WAIT_EASTER_EGG` | `KEEP` | switch | P4 P4R |  | vendor | 1 builds BASIC 2's hidden WAIT message and omitted-mask handler — SDK name; fits the style |
 | 1540 | `BASIC4_OUTPUT_PADDING` | `KEEP` | switch | P4 P4R |  | vendor | 1 builds BASIC 4's checksum byte and patch space before INPRT — SDK name; fits the style |
-| 1541 | `LASTWR` | `InterpreterEnd` | entry | P4 P4R | M6502, K4S79 [P4 P4R], HV4, HV4R, HVK4 [P4 P4R] | vendor | label after the interpreter, where BASIC 4's extension begins ($D472); PEEK's guard ends here — same name as BASIC 2's and BASIC 1's Converted: cites M6502, HV1, HV1R, HV2, HV4, HV4R, K4S79 and HVK4, under the lineage rule (Basic.md F4). |
+| 1541 | `LASTWR` | `InterpreterEnd` | entry | P4 P4R | M6502, K4S79 [P4 P4R], HV4, HV4R, HVK4 [P4 P4R] | vendor | label after the interpreter, where BASIC 4's extension begins ($D472); PEEK's guard ends here — same name as BASIC 2's and BASIC 1's Converted: cites M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, K4S79 and HVK4, under the lineage rule (Basic.md F4). BASIC 2's and 4's `PEEK` have no ROM guard (`guardRom` 0), so nothing refers to the label there. |
 
 ### Commodore.Basic1Patches
 
@@ -1916,7 +1916,7 @@ to K12, R1 to R10).
 | 1553 | `INCTR1` | `AdvanceTerminalPosition::Increment` | local | P1 P1R | none found | vendor | Increments TRMPOS, retried after reloading it from CQPNTR on wrap — HV1 LE1CE in Also Converted: Also INCTR1 (UNKN); HV1's address-generated name is dropped (X7). |
 | 1554 | `INCTR2` | `AdvanceTerminalPosition::Done` | local | P1 P1R | none found | vendor | Shared rts — HV1 LE1D8 in Also Converted: Also INCTR2 (UNKN); HV1's address-generated name is dropped (X7). |
 | 1555 | `GETST1` | `ResumeGetString` | routine | P1 P1R | other names here: PATCH7 (HV1, HV1R) | vendor | Stores X in TXTPTR, discards BeginGetString's return address, A = Y and jumps to RESETC — HV1 PATCH7 in Also; reached by jmp from BeginGetString across INCTRM Converted: Also GETST1 (UNKN), PATCH7 (HV1, HV1R) (Basic.md F4). |
-| 1556 | `LASTWR` | `InterpreterEnd` | location | P1 P1R | M6502, HV1, HV1R | vendor | Marks the byte after BASIC 1's last ROM patch; MEMORY_ACCESS compares against its high byte — Must match part D's LASTWR (Basic2/Basic4) and part E's; see F-Q12 Converted: cites M6502, HV1, HV1R, HV2, HV4, HV4R, K4S79 and HVK4, under the lineage rule (Basic.md F4). |
+| 1556 | `LASTWR` | `InterpreterEnd` | location | P1 P1R | M6502, HV1, HV1R | vendor | Marks the byte after BASIC 1's last ROM patch; MEMORY_ACCESS compares against its high byte — Must match part D's LASTWR (Basic2/Basic4) and part E's; see F-Q12 Converted: cites M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, K4S79 and HVK4, under the lineage rule (Basic.md F4). |
 | 1557 | `COMMODORE_BASIC1_ARRAY_PATCH` | `CommodoreBasic1ArrayPatch` | macro | P1 P1R |  | vendor | Emits the six-byte array-header step at $E7F3 in the editor ROM |
 | 1558 | `ARYINC` | `ArrayHeaderSize` | routine | P1 P1R | none found | vendor | Returns A = dimensions * 2 + 5 (plus the shift's carry) and Y = 0, for the collector's array walk — Called from MsBasic.StringGarbageCollection under patchedArrayStep Converted: Also ARYINC (UNKN). |
 
@@ -1987,7 +1987,7 @@ to K12, R1 to R10).
 | 1619 | `DBACKU` | `Statements::Backup::CloseFiles` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Closes the unit's files and selects the D template — Unreferenced, kept for its K4S79 name |
 | 1620 | `TRANS` | `Disk::SendCommand` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Builds the command from the template (A = length, Y = offset) then falls into OpenCommandChannel |
 | 1621 | `TRANS1` | `Disk::OpenCommandChannel` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Opens the built command on secondary 15 ($6F) through LISTN and OPENIB — PositionRecord jumps here, so its own proc |
-| 1622 | `DCOPY` | `Statements::Copy` | routine | P4 P4R | spelling only: CBM4S79 [P4 P4R], HV4, HV4R | vendor | COPY: a whole-drive copy with both drives alone, else two names checked; sends the C template — Undocumented spelling DCOPY (the overlay's, to avoid m6502's COPY); see F-Q3 Converted: Also DCOPY (UNKN) (F-Q3). |
+| 1622 | `DCOPY` | `Statements::Copy` | routine | P4 P4R | spelling only: CBM4S79 [P4 P4R], HV4, HV4R | vendor | COPY: a whole-drive copy with both drives alone, else two names checked; sends the C template — Undocumented spelling DCOPY (the overlay's, to avoid m6502's COPY); see F-Q3 Converted: Also DCOPY (UNKN) (F-Q3); K4S79 and HVK4 call it COPY, a name BASIC 4 gives another definition, so it is in prose. |
 | 1623 | `COPY2` | `Statements::Copy::CheckFiles` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Checks a file copy's parameters |
 | 1624 | `COPCON` | `Statements::Copy::LoadFlags` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Reloads PRSCHK — Unreferenced, kept for its K4S79 name |
 | 1625 | `COPY3` | `Statements::Copy::Send` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Sends the copy template — The whole-drive and file forms use one template; empty names drop their colons |
@@ -2007,7 +2007,7 @@ to K12, R1 to R10).
 | 1639 | `DLOAD2` | `Statements::DLoad::Load` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Builds the name and loads |
 | 1640 | `RENAME` | `Statements::Rename` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R]; spelling only: CBM4S79 [P4 P4R], HV4, HV4R | vendor | RENAME: needs two names, accepts drive and unit; sends R — K4S79 RENAME |
 | 1641 | `DREN` | `Statements::Rename::Send` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Sends the rename template — Unreferenced, kept for its K4S79 name |
-| 1642 | `DSCRTC` | `Statements::Scratch` | routine | P4 P4R | none found | vendor | SCRATCH: needs a name; confirms in direct mode, sends S and prints the drive's reply in direct mode — Undocumented spelling DSCRTC (the overlay's); see F-Q3 Converted: Also DSCRTC (UNKN) (F-Q3). |
+| 1642 | `DSCRTC` | `Statements::Scratch` | routine | P4 P4R | none found | vendor | SCRATCH: needs a name; confirms in direct mode, sends S and prints the drive's reply in direct mode — Undocumented spelling DSCRTC (the overlay's); see F-Q3 Converted: Also DSCRTC (UNKN) (F-Q3); K4S79 and HVK4 call it SCRTCH, a name BASIC 4 gives another definition, so it is in prose. |
 | 1643 | `DSCRAT` | `Statements::Scratch::Confirm` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Asks; returns when declined — Unreferenced, kept for its K4S79 name |
 | 1644 | `NUMSCR` | `Statements::Scratch::ShowResult` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | In direct mode reads DS$ and prints it between carriage returns — Unreferenced, kept for its K4S79 name |
 | 1645 | `NUMLP` | `Statements::Scratch::NextCharacter` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Prints the next DS$ character |
@@ -2093,7 +2093,7 @@ to K12, R1 to R10).
 | 1720 | `NXX5` | `Disk::EvaluateName::LoadAddress` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | X/Y = the name's address from INDEX1 |
 | 1721 | `GETVAL` | `Disk::ReadNextValue` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Advances with CHRGET and falls into ReadValue |
 | 1722 | `GTVL2` | `Disk::ReadValue` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Evaluates a byte parameter into X: a number, or an expression in parentheses; SYNTAX ERROR at the end of the statement — Record calls it |
-| 1723 | `GTVLCN` | `Disk::ReadValue::Present` | local | P4 P4R | none found | vendor | A non-digit must be (expression) — Undocumented (GTVLCN is the overlay's); not dropped since referenced Converted: Also GTVLCN (UNKN) (F-Q3). |
+| 1723 | `GTVLCN` | `Disk::ReadValue::Present` | local | P4 P4R | none found | vendor | A non-digit must be (expression) — Undocumented (GTVLCN is the overlay's); not dropped since referenced Converted: Also GTVLCN (UNKN) (F-Q3); K4S79 and HVK4 call it CONT, a name BASIC 4 gives another definition, so it is in prose. |
 | 1724 | `NUMERC` | `Disk::ReadValue::Number` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | A digit is read by GETBYT |
 
 ### Commodore.Basic4Extension
@@ -2149,7 +2149,7 @@ to K12, R1 to R10).
 | 1766 | `A4` | `Monitor::AlterBytes` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Stores TMPC and alters bytes while present — AlterRegisters branches here, so its own proc |
 | 1767 | `A5` | `Monitor::AlterBytes::NextByte` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Alters the next byte |
 | 1768 | `A9` | `Monitor::AlterBytes::Done` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Branches to ToPrompt — Unreferenced, kept for its K4S79 name |
-| 1769 | `MGO` | `Monitor::Go` | routine | P4 P4R | none found | vendor | G: optionally sets PC, restores SP, CINV and registers, resumes by RTI — Undocumented spelling MGO (the overlay's); see F-Q3 Converted: Also MGO (UNKN) (F-Q3). |
+| 1769 | `MGO` | `Monitor::Go` | routine | P4 P4R | none found | vendor | G: optionally sets PC, restores SP, CINV and registers, resumes by RTI — Undocumented spelling MGO (the overlay's); see F-Q3 Converted: Also MGO (UNKN) (F-Q3); K4S79 and HVK4 call it GO, a name BASIC 4 gives another definition, so it is in prose. |
 | 1770 | `G1` | `Monitor::Go::Resume` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Restores the saved state and returns into the program |
 | 1771 | `EXIT` | `Monitor::Exit` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | X: restores the saved stack pointer and jumps to READY |
 | 1772 | `ERRL` | `Monitor::LoadOrSave::Fail` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Only jumps on to ReportError — Not ToReportError, which would shadow the scope-level label Converted: the scope-level `Monitor::LoadOrSaveFail`: its code comes before LD's, which the command tables need as LoadOrSave's start (Basic.md F2). |
@@ -2243,8 +2243,8 @@ to K12, R1 to R10).
 | 1840 | `LDTND` | `OpenFileCount` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | number of entries in the kernal's file tables; DCLOSE scans them |
 | 1841 | `DFLTO` | `DefaultOutputDevice` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | the kernal's current output device; CATALOG saves it |
 | 1842 | `WSW` | `CatalogOutputFile` | alias | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | the kernal's cassette write flag, which CATALOG reuses for its output file — kernal name for the byte unknown here; a scoped alias in the catalog routine if a kernal name is kept (see D-Q10) |
-| 1843 | `SAVX` | `MonitorCommandIndex` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R]; other names here: T1 (HVK4) | vendor | the monitor's index of the command it dispatched; LOAD/SAVE test it |
-| 1844 | `TMPC` | `MonitorCount` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R]; other names here: RCNT (HVK4), T2 (HVK4) | vendor | the monitor's BRK marker character, then a byte count — HVK4 also calls it RCNT, T2 |
+| 1843 | `SAVX` | `MonitorCommandIndex` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R]; other names here: T1 (HVK4) | vendor | the monitor's index of the command it dispatched; LOAD/SAVE test it Converted: T1 cites K4S79 as well as HVK4: the kernal listing gives the name at the same place (Basic.md F4). |
+| 1844 | `TMPC` | `MonitorCount` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R]; other names here: RCNT (HVK4), T2 (HVK4) | vendor | the monitor's BRK marker character, then a byte count — HVK4 also calls it RCNT, T2 Converted: RCNT and T2 cites K4S79 as well as HVK4: the kernal listing gives the name at the same place (Basic.md F4). |
 | 1845 | `CNTDN` | `CatalogOutputDevice` | alias | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | the kernal's cassette countdown, which CATALOG reuses to save DefaultOutputDevice |
 | 1846 | `EAL` | `EndAddress` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | the kernal's load/save end address; the monitor's SAVE sets it |
 | 1847 | `EAH` | `EndAddressHigh` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | high byte of EndAddress |
@@ -2253,8 +2253,8 @@ to K12, R1 to R10).
 | 1850 | `SA` | `SecondaryAddress` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | the kernal's current secondary address |
 | 1851 | `FA` | `DeviceNumber` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | the kernal's current device (primary address) |
 | 1852 | `FNADR` | `FilenamePointer` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | two-byte pointer to the kernal's current filename |
-| 1853 | `WRAP` | `MonitorAddressWrapped` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R]; other names here: FSBLK (HVK4) | vendor | set when the monitor's address passes $FFFF (INCTMP) — HVK4 calls it FSBLK |
-| 1854 | `TMP0` | `MonitorAddress` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R]; other names here: STAL (HVK4) | vendor | two-byte address the monitor is working on — HVK4 calls it STAL |
+| 1853 | `WRAP` | `MonitorAddressWrapped` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R]; other names here: FSBLK (HVK4) | vendor | set when the monitor's address passes $FFFF (INCTMP) — HVK4 calls it FSBLK Converted: FSBLK cites K4S79 as well as HVK4: the kernal listing gives the name at the same place (Basic.md F4). |
+| 1854 | `TMP0` | `MonitorAddress` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R]; other names here: STAL (HVK4) | vendor | two-byte address the monitor is working on — HVK4 calls it STAL Converted: STAL cites K4S79 as well as HVK4: the kernal listing gives the name at the same place (Basic.md F4). |
 | 1855 | `TMP2` | `MonitorEndAddress` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | two-byte second address of a monitor command (range end) |
 | 1856 | `FNADR2` | `SecondFilenamePointer` | alias | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | second filename pointer for two-name disk commands; shares MonitorEndAddress |
 | 1857 | `BAD` | `MonitorHexByte` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | the monitor's hex-byte assembly scratch (RDOB) at $0100 — same address as NumberBuffer: an alias in BASIC 4 Converted: `MonitorHexByte = NumberBuffer`, asserted $0100 (Basic.md F3). |
@@ -2267,11 +2267,11 @@ to K12, R1 to R10).
 | 1864 | `SP` | `SavedStackPointer` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | the monitor's saved stack pointer — matches IIeEquates |
 | 1865 | `INVH` | `SavedIrqVectorHigh` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | high byte of IrqVector as BRK found it |
 | 1866 | `INVL` | `SavedIrqVector` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | low byte of IrqVector as BRK found it |
-| 1867 | `SAVNAM` | `MonitorFilename` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R]; other names here: ZZZ1 (HVK4) | vendor | buffer for the monitor's LOAD/SAVE filename — HVK4 calls it ZZZ1 Converted: at most 15 characters: a 16th fails the command. |
+| 1867 | `SAVNAM` | `MonitorFilename` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R]; other names here: ZZZ1 (HVK4) | vendor | buffer for the monitor's LOAD/SAVE filename — HVK4 calls it ZZZ1 Converted: at most 15 characters: a 16th fails the command. Converted: ZZZ1 cites K4S79 as well as HVK4: the kernal listing gives the name at the same place (Basic.md F4). |
 | 1868 | `LAT` | `LogicalFileTable` | table | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | the kernal's table of open logical file numbers |
 | 1869 | `FAT` | `DeviceTable` | table | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | the kernal's table of the open files' devices |
 | 1870 | `SAT` | `SecondaryAddressTable` | table | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | the kernal's table of the open files' secondary addresses |
-| 1871 | `FNLEN2` | `SecondFilenameLength` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R]; other names here: TAPE2 (HVK4) | vendor | length of a disk command's second filename — HVK4 calls it TAPE2 |
+| 1871 | `FNLEN2` | `SecondFilenameLength` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R]; other names here: TAPE2 (HVK4) | vendor | length of a disk command's second filename — HVK4 calls it TAPE2 Converted: TAPE2 cites K4S79 as well as HVK4: the kernal listing gives the name at the same place (Basic.md F4). |
 | 1872 | `RECPOS` | `RecordPosition` | alias | P4 P4R | other names here: TAPE2 (HVK4) | vendor | RECORD's byte position; shares SecondFilenameLength — no document; HVK4 calls the address TAPE2 Converted: Also RECPOS (UNKN); TAPE2 (HVK4) is on SecondFilenameLength. |
 | 1873 | `DRIVE1` | `FirstDrive` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | the disk command's first drive number |
 | 1874 | `DRIVE2` | `SecondDrive` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | the disk command's second drive number |
@@ -2292,7 +2292,7 @@ to K12, R1 to R10).
 | 1889 | `TALK` | `KernalTalk` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | addresses a device on the IEEE bus as talker |
 | 1890 | `LISTN` | `KernalListen` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | addresses a device on the IEEE bus as listener |
 | 1891 | `MSG` | `KernalPrintMessage` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | prints the kernal message at offset Y |
-| 1892 | `SECND` | `KernalSendSecondary` | routine | P4 P4R | spelling only: K4S79 [P4 P4R], HVK4 [P4 P4R]; other names here: TKSA (HVK4) | vendor | sends a secondary address after Talk Converted: Also SECND (UNKN), TKSA (HVK4). |
+| 1892 | `SECND` | `KernalSendSecondary` | routine | P4 P4R | spelling only: K4S79 [P4 P4R], HVK4 [P4 P4R]; other names here: TKSA (HVK4) | vendor | sends a secondary address after Talk Converted: Also SECND (UNKN), TKSA (HVK4). Converted: TKSA cites K4S79 as well as HVK4: the kernal listing gives the name at the same place (Basic.md F4). |
 | 1893 | `UNTLK` | `KernalUntalk` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | sends UNTALK on the bus |
 | 1894 | `UNLSN` | `KernalUnlisten` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | sends UNLISTEN on the bus |
 | 1895 | `ACPTR` | `KernalReceiveByte` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | receives a byte from the bus talker |
@@ -2316,9 +2316,9 @@ to K12, R1 to R10).
 | 1913 | `SV3` | `KernalBasicSave` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | the kernal's BASIC save entry (DSAVE) |
 | 1914 | `SV5` | `KernalMonitorSave` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | the kernal's save entry the monitor calls |
 | 1915 | `CHKIN` | `KernalSetInputChannel` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | selects a logical file for input |
-| 1916 | `CHKOUT` | `KernalSetOutputChannel` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R]; other names here: CKOUT (HVK4) | vendor | selects a logical file for output |
+| 1916 | `CHKOUT` | `KernalSetOutputChannel` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R]; other names here: CKOUT (HVK4) | vendor | selects a logical file for output Converted: CKOUT cites K4S79 as well as HVK4: the kernal listing gives the name at the same place (Basic.md F4). |
 | 1917 | `TWAIT` | `KernalWaitForTape` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | waits for the tape operation to finish |
-| 1918 | `SPERR` | `STATUS_LOAD_ERROR` | constant | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R]; other names here: CHANL (HVK4) | vendor | IoStatus bit ($10) for a load or verify error — HVK4 calls it CHANL |
+| 1918 | `SPERR` | `STATUS_LOAD_ERROR` | constant | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R]; other names here: CHANL (HVK4) | vendor | IoStatus bit ($10) for a load or verify error — HVK4 calls it CHANL Converted: CHANL cites K4S79 as well as HVK4: the kernal listing gives the name at the same place (Basic.md F4). |
 | 1919 | `CR` | `CHARACTER_RETURN` | constant | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | carriage return ($0D), the monitor's line end — other PET parts may name CR; one definition (see D-Q6) Converted: CR (K4S79, HVK4) joins `CARRIAGE_RETURN` in Commodore.ChannelPrint.asm (Basic.md F3). |
 | 1920 | `ONTK` | `TOKEN_ON` | token | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | BASIC's ON token; the disk parser reads ON as the unit keyword — should be the token table's TOKEN_ON (one definition) Converted: `TOKEN_ON`, defined with the token table in Commodore.DispatchTables.asm, Also ONTK (K4S79, HVK4) (Basic.md F3). |
 | 1921 | `NCMDS` | `MONITOR_COMMAND_COUNT` | constant | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | number of built-in monitor commands (8) — HVK4 calls it LBERR |

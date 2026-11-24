@@ -478,11 +478,11 @@ Open:
     .endproc
     .assert >DiskStatusDescriptor = 0, "The status link's high byte clears the I/O status."
 
-    ;; Reads the drive's error channel into the disk-status buffer, up to a carriage return or a zero, and ends the
-    ;; text with a zero.
+    ;; Reads the drive's error channel into the disk-status buffer, up to a carriage return, and ends the text with a
+    ;; zero.
     ;;
-    ;; The unit defaults to 8. Nothing limits the length: a reply of more than 40 characters runs on over the
-    ;; buffer's back-link and beyond.
+    ;; The unit defaults to 8. Nothing limits the length, and only a carriage return ends it (a zero is stored like
+    ;; any other byte): a reply of more than 40 characters runs on over the buffer's back-link and beyond.
     ;; In: DeviceNumber = the unit, 0 for 8
     ;; Also: ECHKS (K4S79, HVK4)
     .proc ReadErrorChannel
@@ -500,7 +500,8 @@ SendTalk:
     jsr KernalSendSecondary
     ldy #$FF
 
-;; Stores the next character received; a zero stores itself, then ends the text as a carriage return does.
+;; Stores the next character received, until a carriage return. The `bne` after the store always branches: the
+;; `cmp` that let the character through left zero clear.
 ;; Also: LOOP1 (K4S79, HVK4)
 NextCharacter:
     iny
@@ -527,7 +528,7 @@ Terminate:
     ;;
     ;; It closes the unit's files before it asks, so they are closed even when the answer is no. A result of 20 or
     ;; more prints the bad-disk message in direct mode.
-    ;; Errors: SYNTAX without a name and a drive, or with another parameter but a unit
+    ;; Errors: SYNTAX without a name and a drive, or with another parameter but a unit and the disk ID
     ;; Also: FORMAT (K4S79, HVK4)
     .proc Header
     jsr Disk::ParseParameters
@@ -757,7 +758,9 @@ CloseFiles:
 
     ;; `COPY`: copies a file, or with two drives alone every file of one drive to the other.
     ;;
-    ;; Both forms send the one template; for a whole drive the names are empty.
+    ;; Both forms send the one template; for a whole drive the names are empty. Basic4.mac spells the routine DCOPY;
+    ;; Commodore's kernal listing and its reconstruction (K4S79, HVK4) call it `COPY`, which in BASIC 4 is already
+    ;; Microsoft's name for `StoreString::CopyCharacters`, so their name is here in prose.
     ;; Errors: SYNTAX for a file copy without two names, or with a file number, a record or a replacement
     ;; Also: DCOPY (UNKN)
     .proc Copy
@@ -808,7 +811,8 @@ Send:
     ;;
     ;; Since it overwrites the second filename's pointer and length, a template inserts the second name first.
     ;; In: X = the command's length so far, Y = the template's offset
-    ;; Out: X = past the name, A = Y = the template's offset, carry = set
+    ;; Out: X = past the name (for an empty name, one less: the separator is removed), A = Y = the template's offset,
+    ;;   carry = set
     ;; Keeps: Y
     ;; Also: RSFN (K4S79, HVK4)
     .proc AppendFirstName
@@ -824,7 +828,8 @@ Send:
     ;; Appends the second filename to <DiskCommandBuffer> at X, or, when it is empty, removes the separator before
     ;; it.
     ;; In: X = the command's length so far, Y = the template's offset
-    ;; Out: X = past the name, A = Y = the template's offset, carry = set
+    ;; Out: X = past the name (for an empty name, one less: the separator is removed), A = Y = the template's offset,
+    ;;   carry = set
     ;; Keeps: Y
     ;; Also: RDFN (K4S79, HVK4)
     .proc AppendSecondName
@@ -961,6 +966,9 @@ Send:
     .endproc
 
     ;; `SCRATCH`: deletes disk files, after asking in direct mode, and in direct mode prints the drive's reply.
+    ;;
+    ;; Basic4.mac spells the routine DSCRTC; Commodore's kernal listing and its reconstruction (K4S79, HVK4) call it
+    ;; `SCRTCH`, Microsoft's name for `EraseProgram`, so their name is here in prose.
     ;; Errors: SYNTAX without a name, or with a parameter other than a drive and a unit
     ;; Also: DSCRTC (UNKN)
     .proc Scratch
@@ -1137,8 +1145,9 @@ Clear:
     ; Falls into BuildCommandAt.
     .endproc
 
-    ;; Forgets `DS$`, then expands a template into <DiskCommandBuffer> after the X bytes already there, and falls
-    ;; into <Disk::SetCommandName> to make it the kernal's filename.
+    ;; Forgets `DS$`, then expands a template into <DiskCommandBuffer> after the X bytes already there, and goes on
+    ;; to <Disk::SetCommandName> to make it the kernal's filename (by a branch when the template ends; it falls in only
+    ;; if X wraps past 255).
     ;;
     ;; Each insertion code is replaced by what it names; any other byte is copied, and a byte from $80 that is not a
     ;; code is dropped.

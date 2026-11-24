@@ -83,9 +83,11 @@ ToQuantityError:
 
     .scope Disk continued
     ; The checks of the parsed parameters. Each takes A = <ParsedParameters>, as <Disk::ParseParameters> returns it,
-    ; rejects the parameters its statement does not take with SYNTAX ERROR, and returns A = <ParsedParameters>.
+    ; rejects the parameters its statement does not take with SYNTAX ERROR, and returns A = <ParsedParameters>, but
+    ; for <Disk::CheckDriveOnly>, which returns 0. They test only the parameters' bits, so `I`, `R` and a repeated
+    ; unit, which set none, pass every check.
 
-    ;; `HEADER` and `SCRATCH`: rejects all but a first name, a unit and a first drive, then falls into
+    ;; `HEADER` and `SCRATCH`: rejects all but a first name, a unit and a first drive, then branches to
     ;; <Disk::RequireFirstName>'s test.
     ;; In: A = the parsed parameters
     ;; Out: A = <ParsedParameters>

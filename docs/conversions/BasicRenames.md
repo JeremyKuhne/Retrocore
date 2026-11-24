@@ -126,7 +126,7 @@ to K12, R1 to R10).
 | # | Old | New | Kind | Builds | Documents (checked) | D3 | Reason |
 | ---: | --- | --- | --- | --- | --- | --- | --- |
 | 72 | `UMULT` | `Variables::MultiplyByBound` | routine | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Saves Y in Pointer1, loads the big-endian bound at (SourceStart),Y into A:Addend and falls into Variables::MultiplyUnsigned — Called by CreateArray and ElementAddress only; see B2-Q2 (Variables scope) |
-| 73 | `UMULTD` | `Variables::MultiplyUnsigned` | routine | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Multiplies LinearIndex by A:Addend in 16 shift-and-add steps; product in X (low) and A/Y (high); OUT OF MEMORY on overflow — Uses DigitsBeforePoint (DECCNT) as its bit counter: needs a scoped alias, see glossary list |
+| 73 | `UMULTD` | `Variables::MultiplyUnsigned` | routine | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Multiplies LinearIndex by A:Addend in 16 shift-and-add steps; product in X (low) and A/Y (high); OUT OF MEMORY on overflow — Uses DigitCount (DECCNT) as its bit counter: needs a scoped alias, see glossary list |
 | 74 | `UMULTC` | `Variables::MultiplyUnsigned::NextBit` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Doubles the partial product in X/Y and adds the multiplier when the bit shifted out of LinearIndex is set |
 | 75 | `UMLCNT` | `Variables::MultiplyUnsigned::CountBit` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Decrements the 16-bit counter and loops to NextBit |
 | 76 | `UMLRTS` | `Variables::MultiplyUnsigned::Done` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | The routine's RTS; nothing branches here — Unreferenced but documented (M6502): kept as a local |
@@ -263,7 +263,7 @@ to K12, R1 to R10).
 | 177 | `DECIMAL_INPUT` | `DecimalInput` | macro | all |  | — | emits ReadNumber, AddSignedByte and AccumulateExponentDigit |
 | 178 | `limitAt120` | `earlyExponentLimit` | parameter of DECIMAL_INPUT | all |  | — | SDK's descriptive parameter: 1 for the earlier exponent limit (12 rather than 10) — renamed in the conversion (Basic.md M6, A-Q10) |
 | 179 | `FIN` | `Float::ReadNumber` | routine | all | M6502, ASTIL [AS], CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R; spelling only: AS82 [AS] | no | reads a decimal number, with sign, point and E exponent, from the text at TextPointer into Fac — ASTIL (FIN); operand evaluation, VAL and INPUT call it; name as DOS's Scanner::ReadNumber |
-| 180 | `FINZLP` | `Float::ReadNumber::ClearLoop` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | zeroes the eleven work bytes from DigitsBeforePoint up without touching carry |
+| 180 | `FINZLP` | `Float::ReadNumber::ClearLoop` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | zeroes the eleven work bytes from DigitCount up without touching carry |
 | 181 | `QPLUS` | `Float::ReadNumber::CheckPlus` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | skips a leading plus sign |
 | 182 | `FINC` | `Float::ReadNumber::NextCharacter` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | reads the next character (GetNextCharacter) |
 | 183 | `FINDGQ` | `Float::ReadNumber::TestDigit` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | a digit (carry clear) goes to Digit |
@@ -633,7 +633,7 @@ to K12, R1 to R10).
 | 462 | `FOUT1` | `Float::FormatFacAtOffset::StoreSign` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | stores the sign character (space or minus, by build) — two definitions, one per variant (lines 61 and 71) |
 | 463 | `FOUT13` | `Float::FormatFacAtOffset::SignDone` | local | AS | none found | — | a positive number in the omitted-space build stores no sign character — AppleSoft only; no document name, but the SDK's AppleSoft overlay labels it, so FOUT13 (UNKN) is on AppleSoft's alias `AppleSoft::SignDone` (Basic.md M2) |
 | 464 | `FOUT37` | `Float::FormatFacAtOffset::ScaleUpSmall` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Fac below 1: multiplies by Billion and starts the decimal scale at -9 |
-| 465 | `FOUT7` | `Float::FormatFacAtOffset::SetScale` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | stores the starting decimal scale in DigitsBeforePoint |
+| 465 | `FOUT7` | `Float::FormatFacAtOffset::SetScale` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | stores the starting decimal scale in DigitCount |
 | 466 | `FOUT4` | `Float::FormatFacAtOffset::CheckUpper` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | compares with UpperOutputLimit: equal goes straight to ConvertInteger, larger divides |
 | 467 | `FOUT3` | `Float::FormatFacAtOffset::CheckLower` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | compares with LowerOutputLimit: larger rounds |
 | 468 | `FOUT38` | `Float::FormatFacAtOffset::MultiplyUp` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | MultiplyByTen and lowers the scale |
@@ -1391,7 +1391,7 @@ to K12, R1 to R10).
 | 1093 | `HIGHDS` | `DestinationEnd` | location | AS | M6502, ASTIL [AS], AS82 [AS]; other names here: ARRYPT (ASTIL) | vendor | general two-byte pointer: a block move's high destination end |
 | 1094 | `HIGHTR` | `SourceEnd` | location | AS | M6502, ASTIL [AS]; spelling only: AS82 [AS] | vendor | general two-byte pointer: a block move's high source end |
 | 1095 | `TEMPF2` | `FloatTemporary2` | location | AS | M6502, ASTIL [AS]; spelling only: AS82 [AS]; other names here: TEMP2 (ASTIL) | vendor | packed five-byte float temporary 2 |
-| 1096 | `LOWDS` | `DestinationStart` | location | AS | M6502, ASTIL [AS] | vendor | general two-byte pointer: a block move's low destination end — no code reads it by this name; it anchors the layout of DigitsBeforePoint and DecimalExponent |
+| 1096 | `LOWDS` | `DestinationStart` | location | AS | M6502, ASTIL [AS] | vendor | general two-byte pointer: a block move's low destination end — no code reads it by this name; it anchors the layout of DigitCount and DecimalExponent |
 | 1097 | `LOWTR` | `SourceStart` | location | AS | M6502, ASTIL [AS]; spelling only: AS82 [AS] | vendor | general two-byte pointer: a block move's low source end; FindLine's result |
 | 1098 | `ARYPNT` | `ArrayPointer` | alias | AS | M6502; spelling only: AS82 [AS]; other names here: ARRYPT (ASTIL) | vendor | alias of DestinationEnd used while building an array |
 | 1099 | `GRBTOP` | `CollectorTop` | alias | AS | M6502 | vendor | alias of SourceStart: the collector's highest string found so far |
@@ -2623,7 +2623,7 @@ to K12, R1 to R10).
 | 2192 | `HIGHDS` | `DestinationEnd` | location | PET | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | vendor | general two-byte pointer: a block move's high destination end |
 | 2193 | `HIGHTR` | `SourceEnd` | location | PET | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | vendor | general two-byte pointer: a block move's high source end |
 | 2194 | `TEMPF2` | `FloatTemporary2` | location | PET | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | vendor | packed five-byte float temporary 2 |
-| 2195 | `LOWDS` | `DestinationStart` | location | PET | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | vendor | general two-byte pointer: a block move's low destination end — no code reads it by this name; it anchors the layout of DigitsBeforePoint and DecimalExponent |
+| 2195 | `LOWDS` | `DestinationStart` | location | PET | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | vendor | general two-byte pointer: a block move's low destination end — no code reads it by this name; it anchors the layout of DigitCount and DecimalExponent |
 | 2196 | `LOWTR` | `SourceStart` | location | PET | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | vendor | general two-byte pointer: a block move's low source end; FindLine's result |
 | 2197 | `ARYPNT` | `ArrayPointer` | alias | PET | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | vendor | alias of DestinationEnd used while building an array |
 | 2198 | `GRBTOP` | `CollectorTop` | alias | PET | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | vendor | alias of SourceStart: the collector's highest string found so far |

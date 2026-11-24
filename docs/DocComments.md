@@ -308,8 +308,8 @@ CharacterOut = $FDED
     expansions, except one an expansion's `Also:` gives too: that old name is ambiguous, in code and in links,
     like any old name two definitions give.
   - This holds for a `.macro` body, native or ca65. Don't give old names in a Merlin (`MAC`) or MACRO-10
-    (`DEFINE`) macro's body: the assembler gives them nothing there. ca65's short `.mac` and `.endmac` count as
-    `.macro` and `.endmacro`.
+    (`DEFINE`) macro's body: the assembler gives them nothing there. In a ca65 source, the short `.mac` and
+    `.endmac` count as `.macro` and `.endmacro`.
   - **In an anonymous `.scope`:** an expansion there defines a symbol the assembly doesn't publish. The assembler
     still gives it the old name when the build expands the line once, but the documentation and the editor can't
     see it, and the lint can't count such expansions: with one there and one elsewhere, the editor shows the old

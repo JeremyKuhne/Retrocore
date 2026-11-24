@@ -101,13 +101,6 @@ public sealed partial class DocumentationResolver
 
     private void CheckTopic(DocumentationTopic topic, List<DocumentationDiagnostic> diagnostics)
     {
-        void Warn(string rule, string message, int line, string? name = null)
-        {
-            diagnostics.Add(new(message, topic.Path, line, DocumentationSeverity.Warning, rule) { Name = name });
-        }
-
-        void Section(string message, int line) => Warn(DocumentationRules.Sections, message, line);
-
         // Where macros' bodies share a topic, a section is reported in the file of the definition that wrote it, which
         // needn't be the topic's first: a branch's own section knows its origin, and one the definitions share is
         // the first writer's.
@@ -123,6 +116,13 @@ public sealed partial class DocumentationResolver
 
         void At(DocumentationSection section, string rule, string message, int line) =>
             diagnostics.Add(new(message, PathOf(section), line, DocumentationSeverity.Warning, rule));
+
+        // So is a diagnostic of a comment's own text, at the comment's line.
+        void In(DocumentationComment comment, string rule, string message, int line, string? name = null)
+        {
+            string path = macros ? comment.Path : topic.Path;
+            diagnostics.Add(new(message, path, line, DocumentationSeverity.Warning, rule) { Name = name });
+        }
 
         // An outside definition the build leaves out, beside a macro's expansion, is checked by the build it's in.
         if (topic.Section("Inherit") is { } inherit && !OtherBuildOutside(topic, inherit))
@@ -170,7 +170,10 @@ public sealed partial class DocumentationResolver
         // In a file that follows the style guide, every documented definition the prose names is a link.
         if (Current.Files.FirstOrDefault(file => SamePath(file.Path, topic.Path)) is { Strict: true })
         {
-            CheckUnlinked(topic, entries, (message, line, name) => Warn(DocumentationRules.UnlinkedName, message, line, name));
+            CheckUnlinked(
+                topic,
+                entries,
+                (comment, message, line, name) => In(comment, DocumentationRules.UnlinkedName, message, line, name));
         }
 
         // Links and {references} anywhere in the topic's own text.
@@ -181,11 +184,13 @@ public sealed partial class DocumentationResolver
                 DocumentationTarget target = Resolve(topic, link.Target, comment);
                 if (target.Kind == DocumentationTargetKind.Unresolved)
                 {
-                    Warn(DocumentationRules.Link, $"No definition, file or address named '{link.Target}'.", line, link.Target);
+                    string message = $"No definition, file or address named '{link.Target}'.";
+                    In(comment, DocumentationRules.Link, message, line, link.Target);
                 }
                 else if (target.Kind == DocumentationTargetKind.Ambiguous)
                 {
-                    Warn(
+                    In(
+                        comment,
                         DocumentationRules.AmbiguousLink,
                         $"'{link.Target}' names definitions in more than one place; qualify it with a module or model.",
                         line,
@@ -197,7 +202,8 @@ public sealed partial class DocumentationResolver
             {
                 if (!entries.Contains(name))
                 {
-                    Section($"{{{name}}} is not an entry of this topic's In, Out, Flags or Parameters.", line);
+                    string message = $"{{{name}}} is not an entry of this topic's In, Out, Flags or Parameters.";
+                    In(comment, DocumentationRules.Sections, message, line);
                 }
             }
         }
@@ -654,7 +660,10 @@ public sealed partial class DocumentationResolver
     [GeneratedRegex("<[^>]*>|`[^`]*`|\\{[^}]*\\}|\"[^\"]*\"", RegexOptions.CultureInvariant)]
     private static partial Regex NotProse();
 
-    private void CheckUnlinked(DocumentationTopic topic, HashSet<string> entries, Action<string, int, string> warn)
+    private void CheckUnlinked(
+        DocumentationTopic topic,
+        HashSet<string> entries,
+        Action<DocumentationComment, string, int, string> warn)
     {
         HashSet<string> reported = [with(StringComparer.Ordinal)];
         foreach ((string text, int line, DocumentationComment comment) in Prose(topic).Where(item => !OtherBuildOutside(topic, item.Comment)))
@@ -692,7 +701,7 @@ public sealed partial class DocumentationResolver
 
                 if (reported.Add($"{line}:{name}"))
                 {
-                    warn($"Link {name} as <{name}>: it names a documented definition.", line, name);
+                    warn(comment, $"Link {name} as <{name}>: it names a documented definition.", line, name);
                 }
             }
         }

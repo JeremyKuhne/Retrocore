@@ -973,6 +973,11 @@ public sealed partial class HistoricalNameTests
             inherit.Message.Should().StartWith("Inherit:");
             inherit.Path.Should().Be(second);
 
+            // And a link in the second macro's text, and a reference that's no entry.
+            File.WriteAllText(second, "; Second.\n;\n;\n.macro MB\n;; Two, through <NOSUCH> and {x}.\nX:\n    rts\n.endmacro\n");
+            List<DocumentationDiagnostic> texts = Checked(once);
+            texts.Should().HaveCount(2).And.OnlyContain(item => item.Path == second && item.Line == 4);
+
             // And a section the build's definitions share: a definition outside the macros in the second file, beside
             // a macro's body in the first that the build doesn't expand.
             File.WriteAllText(first, ".macro MA\n;; Two.\nX:\n    rts\n.endmacro\n");

@@ -249,6 +249,39 @@ public sealed partial class LanguageAnalysisTests
             rts
         """;
 
+    // A macro never expanded beside another macro's body that defines the same name and is expanded once.
+    private const string ExpandedBesideProbe = """
+        ; retrocore: style=strict
+        ;; A probe.
+
+        .cpu Mos6502
+        .org $0300
+
+        ;; Emits a reader.
+        .macro Library
+            ;; The macro's reader.
+        COMBYT:
+            rts
+        .endmacro
+
+        ;; Emits another.
+        .macro Other
+            ;; The other reader.
+        COMBYT:
+            rts
+        .endmacro
+
+        ;; The scope.
+        .scope Basic
+            Other
+        .endscope
+
+        ;; Reads through <COMBYT>.
+        Echo:
+            jsr Basic::COMBYT
+            rts
+        """;
+
     /// <summary>
     ///  A link to a name a macro's body and a definition outside it share opens the outside definition, as without
     ///  the macro, where the build doesn't expand the body.
@@ -257,10 +290,18 @@ public sealed partial class LanguageAnalysisTests
     [TestMethod]
     public async Task LinksBesideAnUnexpandedMacroOpenTheOutsideDefinition()
     {
+        await LinkOpens(UnexpandedProbe, ";; The reader.");
+
+        // Beside another macro's body the build does expand, the link opens that one.
+        await LinkOpens(ExpandedBesideProbe, ";; The other reader.");
+    }
+
+    private static async Task LinkOpens(string source, string opened)
+    {
         string folder = Directory.CreateTempSubdirectory("retrocore-macros").FullName;
         try
         {
-            string text = UnexpandedProbe.ReplaceLineEndings("\n");
+            string text = source.ReplaceLineEndings("\n");
             string[] lines = text.Split('\n');
             string probe = Directory.CreateDirectory(Path.Join(folder, "probe")).FullName;
             string path = Path.GetFullPath(Path.Join(probe, "Probe.asm"));
@@ -278,7 +319,7 @@ public sealed partial class LanguageAnalysisTests
             DocumentationSet set = (analysis ?? throw new AssertFailedException("No analysis.")).Documentation;
             DocumentationTopic echo = set.Find("Echo") ?? throw new AssertFailedException("No Echo.");
             DocumentationTarget target = new DocumentationResolver(set).Resolve(echo, "COMBYT");
-            int comment = Array.FindIndex(lines, line => line.Contains(";; The reader.", StringComparison.Ordinal));
+            int comment = Array.FindIndex(lines, line => line.Contains(opened, StringComparison.Ordinal));
             workspace.Href(target, path).Should().EndWith($"#L{comment + 1}");
         }
         finally

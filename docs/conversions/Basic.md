@@ -230,10 +230,11 @@ glossary for the shared workspace (below), then merged, then corrected after two
 rows, 2,142 get a new name, 255 keep theirs (the SDK's own switches and macro parameters, and the names C# predefines:
 REVISD, ENHNCD, APLPLS, TIME, EXTIO, DISKO, REALIO; X15 settled the names tests predefine) and 14 are dropped. A DROP
 removes the definition: either nothing uses it and no document names it; or it duplicates another definition, whose
-`Also:` then takes its documented name (KIMY, TRMNO1); or nothing uses it and its documented name goes in prose (ZSTORD,
-Q); or it is a question (REDDY and GOTK, C-Q8; LINWID, D-Q3). 297 renamed rows have no checked document name: mostly
-AppleSoft's copies of Monitor and IIe names (which carry the Apple manuals' names once they come from IIeEquates,
-decision X10), AppleSoft-only labels the damaged AS82 text could not confirm, and the SDK's own labels.
+`Also:` then takes its documented name (KIMY, TRMNO1); or its uses can do without it, and its documented name goes in
+prose (ZSTORD, whose WAIT call can pass STORDO's new name, A-Q6; Q, an assembly-time counter, C-Q8); or it is a question
+(REDDY and GOTK, C-Q8; LINWID, D-Q3). 297 renamed rows have no checked document name: mostly AppleSoft's copies of
+Monitor and IIe names (which carry the Apple manuals' names once they come from IIeEquates, decision X10),
+AppleSoft-only labels the damaged AS82 text could not confirm, and the SDK's own labels.
 
 The parts: A, the floating-point package; B1, the shared program and statement modules; B2, the shared expression,
 variable and string modules; C, the vendors' own copies of the interpreter (AppleSoft and Commodore side by side);
@@ -361,8 +362,9 @@ scope-level label.
   - **Tokens:** `TOKEN_<KEYWORD>` (`TOKEN_FOR`, `TOKEN_GOSUB`), with role names where the code uses a token as a
     range bound (`TOKEN_FIRST_FUNCTION` for ONEFUN, `TOKEN_LAST_SIMPLE_FUNCTION` for LASNUM).
   - **Error codes:** `ERROR_<MESSAGE>` (`ERROR_NEXT_WITHOUT_FOR`, `ERROR_SYNTAX`). In BASIC the error code is the
-    message's offset in the message table, so one set serves both, unlike DOS's ERROR_*/MESSAGE_* (the DOS log's X11).
-    The message labels are `<Name>Message` (`ReadyMessage`, `BreakMessage`).
+    message's offset in the message table, so one set serves both, unlike DOS's ERROR_*/MESSAGE_* (X11 in the DOS log,
+    `docs/conversions/Dos.md` on the `claude/convert-dos` branch). The message labels are `<Name>Message`
+    (`ReadyMessage`, `BreakMessage`).
   - **Placement:** one definition each, in the dispatch-tables file where the table defines it. The workspace files'
     copies (PI, PLUSTK, MINUTK, ERROV, ERRDV0) join them.
   - **Precedences:** `PRECEDENCE_*` for the operator table (B1-Q2).

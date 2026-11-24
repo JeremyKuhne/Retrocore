@@ -8,8 +8,8 @@ CLOCK_STRING_LENGTH = 6
 
 ;; Emits the `TI$` assignment, the PET's start of <AssignString>: every string assignment comes here first, and one to
 ;; any other variable goes on to <StoreString>.
-;; Parameters: longLengthError = 1 to reach <IllegalQuantityError> by a jump over it for a wrong length (BASIC 1), 0 to
-;;   branch to the digit check's jump
+;; Parameters: longLengthError = 1 to reach <IllegalQuantityError> for a wrong length by a jump, which the right length
+;;   branches over (BASIC 1), 0 to branch to the digit check's jump
 .macro TimeStringAssignment longLengthError
     .assert longLengthError = 0 || longLengthError = 1, "longLengthError must be 0 or 1."
 
@@ -27,8 +27,8 @@ CLOCK_STRING_LENGTH = 6
     ;; another space is skipped too.
     ;; In: AssignedVariable = the destination variable, FacMantissa3 = the string descriptor's address (low byte),
     ;;   FacMantissa4 = its high byte
-    ;; Errors: ILLEGAL QUANTITY if the length is not six, a character is below `0`, or the byte read for a space is not
-    ;;   a digit
+    ;; Errors: ILLEGAL QUANTITY if the length is not six, a character other than a space is below `0`, or the byte
+    ;;   read for a space is not a digit
     .proc AssignClockString
     ldy AssignedVariable+1
     cpy #>ZeroValue
@@ -66,7 +66,7 @@ NextPair:
     txa
     jsr Float::AddScaledArgAndDouble
 
-;; Counts to six digits; then multiplies the last pair by 10 more, converts <Fac> to an integer and stores the clock.
+;; Counts to six digits; then multiplies the whole value by 10 more, converts <Fac> to an integer and stores the clock.
 ;; Also: NOML6 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 SkipScale:
     ldy NumberBufferPointer
@@ -91,7 +91,7 @@ StoreClock:
     ;; Adds the digit at <Pointer1>+Y to <Fac>: any byte from `0` up, counted from `0`
     ;; (see <AssignClockString>).
     ;; In: Pointer1 = the string's characters, Y = the digit's offset
-    ;; Errors: ILLEGAL QUANTITY if the character is below `0`
+    ;; Errors: ILLEGAL QUANTITY if the character is below `0` and not a space
     ;; Entry:
     ;;   ToIllegalQuantity = jumps to <IllegalQuantityError>; the length check branches here where `longLengthError`
     ;;     is 0

@@ -654,10 +654,9 @@ Decisions and how the table was applied:
   The AppleSoft error offsets are computed from their messages (`* - ERRTAB`), as the PET's were, each with an
   `.assert` of its value.
 - W6. AppleSoft's copies of the Monitor's, the IIe's and the firmware's names keep their names and definitions in
-  AppleSoft.Equates, in their own section, until AppleSoft includes IIeEquates.asm and MonitorEntries.asm (X10,
-  pending: the converted IIeEquates is on `claude/convert-iieequates`, not yet on main). Their trailing comments
-  are moved above them, as the strict lint asks. This covers Microsoft's CQ* synonyms, BUF and OUTCH. The table's
-  other names for them (ASTIL's HBAS for GBASL) join their `Also:` with X10.
+  AppleSoft.Equates, in their own section, until AppleSoft includes IIeEquates.asm and MonitorEntries.asm (X10). Their
+  trailing comments are moved above them, as the strict lint asks. This covers Microsoft's CQ* synonyms, BUF and OUTCH.
+  The table's other names for them (ASTIL's HBAS for GBASL) join their `Also:` with X10.
 - W7. Switches (X15): the seven a test predefines and the Equates define (BUFPAG, BUFLEN, NULCMD, NUMLEV, STKEND,
   LOCAL_TRMPOS, VARTXT_IN_LINNUM) are renamed as drafted everywhere they are used, since an `.ifndef` default is
   not reached through `Also:`, and the tests predefine the new names. Microsoft's five keep `Also:`; the SDK's two

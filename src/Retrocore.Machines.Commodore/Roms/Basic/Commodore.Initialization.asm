@@ -11,7 +11,7 @@
 ;;   localPosition = 1 to initialize BASIC's terminal position,
 ;;   bufferPage = zero for a page-zero buffer, or the nonzero buffer page,
 ;;   diskStatus = 1 to initialize the disk-status descriptor instead of the output-suppression flag,
-;;   earlyBuffer = 1 to restore the page-zero buffer's comma and print a carriage return
+;;   earlyBuffer = 1 to restore the page-zero buffer's comma and print a newline
 .macro CommodoreInitialize markDirect, setLineWidth, delayedSize, localPosition, bufferPage, diskStatus, earlyBuffer
     .assert markDirect = 0 || markDirect = 1, "markDirect is 0 or 1."
     .assert setLineWidth = 0 || setLineWidth = 1, "setLineWidth is 0 or 1."
@@ -86,7 +86,7 @@ CopyCharacterReader:
         jsr PrintNewline
     .endif
     .if bufferPage
-        inx
+        inx                         ; the bytes before the buffer nonzero, for the line chaining
         stx InputBuffer-3
         stx InputBuffer-4
     .endif
@@ -242,7 +242,7 @@ CURSOR_HOME = $13
 ;; The screen's cursor-down code, which ends BASIC 1's sign-on.
 CURSOR_DOWN = $11
 
-;; Emits the startup messages, <BytesFreeMessage> and, in BASIC 2 and 4, <SignOnMessage>.
+;; Emits the startup messages, <BytesFreeMessage> and <SignOnMessage>.
 ;; Parameters: earlyBanner = 1 for BASIC 1's home-and-cursor-down sign-on
 .macro CommodoreStartMessages earlyBanner
     .assert earlyBanner = 0 || earlyBanner = 1, "earlyBanner is 0 or 1."
@@ -253,6 +253,10 @@ CURSOR_DOWN = $11
 BytesFreeMessage:
     .byte " BYTES FREE"
     .if earlyBanner
+
+;; BASIC 1's sign-on, which goes on from <BytesFreeMessage> in the same string.
+;; Also: FREMES (HV1, HV1R)
+SignOnMessage:
         .byte CURSOR_HOME, "*** COMMODORE BASIC ***", CURSOR_DOWN, CURSOR_DOWN, CURSOR_DOWN, $00
     .else
         .byte CARRIAGE_RETURN, $00

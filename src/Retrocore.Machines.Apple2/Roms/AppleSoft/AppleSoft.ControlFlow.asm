@@ -17,7 +17,8 @@ KEYBOARD_CONTROL_C = CONTROL_C | $80
 ;; Saves the stack pointer in <StatementStack>, the level `ONERR` resumes at, and falls into <NextStatement>.
 ;;
 ;; It is the next-statement target AppleSoft's GOTO, NEXT, LIST and the run-only path of <Tokenize> pass, where the
-;; PET's pass <NextStatement>.
+;; PET's GOTO and NEXT pass <NextStatement> and its LIST <ReadyForCommand>. ASTIL and AS82 call this address NEWSTT,
+;; the name <NextStatement> has.
 ;; Also: NXTCO1 (UNKN)
 .proc NextStatementSavingStack
     tsx
@@ -188,8 +189,8 @@ NoHandler:
 
 .scope Statements continued
 
-;; SAVE: writes a three-byte header, the program's length and the run-only flag from <NextTemporary>, and then the
-;; program to cassette through the Monitor.
+;; SAVE: writes a three-byte header, the program's length and the byte at <NextTemporary>, which LOAD reads back as
+;; the run-only flag, and then the program to cassette through the Monitor.
 ;; See: <Statements::Load>, <SetCassetteLengthRange>, <SetCassetteProgramRange>
 ;; Also: SAVE (M6502)
 .proc Save

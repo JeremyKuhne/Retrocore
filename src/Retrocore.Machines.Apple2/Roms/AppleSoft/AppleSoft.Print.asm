@@ -8,8 +8,8 @@
 
     PrintItems PrintTabOrSpace, 1, 1, 0
 
-;; Microsoft's last comma-zone column, ((40/14)-1)*14; AppleSoft's code compares with column 24 inline and never
-;; uses it.
+;; Microsoft's last comma-zone column, ((40/14)-1)*14; AppleSoft's code never uses it, and compares with
+;; <COMMA_NEWLINE_COLUMN> instead.
 ;; Also: NCMPOS (M6502)
 LAST_COMMA_COLUMN = $0E
 
@@ -37,8 +37,9 @@ Return:
 .endproc
 
 ;; PRINT's comma: starts a new line at or past <COMMA_NEWLINE_COLUMN>, and otherwise moves to the next 16-column
-;; zone. The enhanced IIe reads the column through <CHKCOL>, for 80 columns, and prints spaces to the zone through
-;; <PrintTabOrSpace>; the II Plus and IIe only store the zone's column in <TerminalPosition>.
+;; zone. The enhanced IIe reads the column through <CHKCOL>, which in 80 columns skips the new line below column 73, and
+;; prints spaces to the zone through <PrintTabOrSpace>; the II Plus and IIe only store the zone's column in
+;; <TerminalPosition>.
 ;; Also: COMPRT (M6502)
 .proc PrintComma
 .if ENHNCD

@@ -50,7 +50,7 @@ public sealed partial class BasicRenameGateTests
         typeof(BasicSharedAliasConsistencyTests), typeof(BasicSharedArrayMultiplicationTests),
         typeof(BasicMathConversionTests), typeof(BasicMathRoutineTests), typeof(BasicSharedAssignmentTests),
         typeof(BasicStatementsConversionTests), typeof(BasicStatementRoutineTests), typeof(BasicExpressionsConversionTests),
-        typeof(BasicInterpreterConversionTests),
+        typeof(BasicInterpreterConversionTests), typeof(BasicInterpreterRoutineTests),
         typeof(BasicSharedFloatAliasesTests),
         typeof(BasicSharedInterpreterAliasesTests),
         typeof(BasicSharedCharacterReaderTests), typeof(BasicSharedCommandInputTests), typeof(BasicSharedExpressionTests),

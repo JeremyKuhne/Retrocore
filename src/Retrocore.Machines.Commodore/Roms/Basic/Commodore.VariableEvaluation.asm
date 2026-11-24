@@ -150,7 +150,7 @@ EnsureDiskStatus:
 ;; Copies the jiffy clock into <Fac> with interrupts off.
 ;; Also: GETTIM (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 ReadClock:
-    lda #<(JiffyClock-2)
+    lda #<(JiffyClock-2)            ; the clock's three bytes as the mantissa's low three
     ldy #>(JiffyClock-2)
     sei
     jsr Float::LoadFac

@@ -64,7 +64,7 @@ ReadyForCommand:
     jsr GetNextCharacter
     tax
     beq CommandLoop
-    ldx #$FF
+    ldx #$FF                        ; a direct line: line number $FFxx
     stx CurrentLine+1
     bcc EditProgram
     jsr Tokenize
@@ -231,8 +231,8 @@ INPUT_BUFFER_BASE = $0200
 ;; Tokenizes the line in <BUF> in place, replacing reserved words by their single-byte tokens from <ReservedWords>.
 ;;
 ;; Spaces outside literals and `DATA` are discarded. Quoted strings, `DATA` fields and `REM` text are copied without
-;; tokenization; `?` abbreviates `PRINT`. The enhanced IIe folds case outside quoted strings and `DATA`. `AT` is not
-;; matched when followed by `N` or `O`, so that `ATN` and `TO` are recognized. Where the program is run-only
+;; tokenization; `?` abbreviates `PRINT`. The enhanced IIe folds case outside quoted strings, `DATA` and `REM`. `AT` is
+;; not matched when followed by `N` or `O`, so that `ATN` and `TO` are recognized. Where the program is run-only
 ;; (<RunOnly>), it discards its caller and runs the program instead.
 ;; In: TextPointer = the first character's address, whose low byte is its offset in <BUF>'s page
 ;; Out: TextPointer = the address before the tokenized line, Y = the encoded line's length, header included
@@ -385,7 +385,7 @@ TestWordEnd:
 Finish:
     sta BUF-3,y
     dec TextPointer+1
-    lda #$FF
+    lda #<(BUF-1)
     sta TextPointer
 
 ;; Returns; nothing branches here, and the label is kept for its old name.

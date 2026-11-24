@@ -79,8 +79,8 @@ PrintRetry:
 .proc Get
     jsr RejectDirectMode
 
-;; Sets up an empty buffer and enters the shared input code in GET mode; nothing in AppleSoft enters here, and the
-;; label is kept for its old name.
+;; Sets up an empty buffer and enters the shared input code in GET mode; <Statements::Get> falls into it, and
+;; nothing branches here.
 ;; Also: GETTTY (M6502)
 ReadCharacters:
     ldx #<(BUF+1)
@@ -138,7 +138,7 @@ ReadLine:
 .proc PromptAndInputLine
     jsr PrintQuestionMark
 
-;; Jumps on to <InputLine>; nothing in AppleSoft enters here, and the label is kept for its old name.
+;; Jumps on to <InputLine>; <PromptAndInputLine> falls into it, and nothing branches here.
 ;; Also: GINLIN (M6502)
 ToInputLine:
     jmp InputLine

@@ -343,7 +343,7 @@ Done:
     and #CHARACTER_BITS
     ora #FLASHING
     sta (TextBase),y
-    pla
+    pla                             ; F.NOCUR in Apple's listing
     rts
 .endproc
 
@@ -438,7 +438,7 @@ ReadLine = $FCF0
 .endproc
 
 ;; Function 7, 40 columns: clears from the cursor to the end of the line.
-;; Also: F_CLREOL (IIEROM82, IIETRM85), CLREOL40 (UNKN)
+;; Also: F_CLREOL (IIEROM82, IIETRM85), CLREOL40 (UNKN), X_CLREOL (IIETRM85)
 .proc ClearToEndOfLine40
     ldy CursorColumn
     ; Falls into ClearColumns40.
@@ -480,7 +480,7 @@ Store:
 ;; Also: F_RETURN (IIEROM82, IIETRM85), CXEXIT (UNKN)
 .proc Return
     plp
-    bmi ReturnInternal
+    bmi ReturnInternal              ; F.RET2 in Apple's listing
     jmp SelectSlotRom
 .endproc
 

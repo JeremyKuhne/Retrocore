@@ -41,7 +41,8 @@ LastCursorColumn = $047B
 ;; Also: MODE80 (UNKN)
 Mode = $04FB
 
-;; The column of the 80-column firmware's cursor, 0-79, which it copies to <::CursorColumn> for the Monitor.
+;; The column of the 80-column firmware's cursor, 0-79, which it copies to <::CursorColumn> for the Monitor in 40
+;; columns.
 ;; See: <EightyColumns::CursorLine>, <EightyColumns::LastCursorColumn>
 ;; Also: OURCH (IIEROM82, IIETRM85)
 CursorColumn = $057B

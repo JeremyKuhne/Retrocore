@@ -100,7 +100,7 @@ AddLeft:
     clc
     adc TextBase
     sta TextBase
-    rts
+    rts                             ; VTABX in Apple's listing
 .endproc
 
 ;; Turns a lowercase letter into uppercase, and leaves every other character as it is.
@@ -216,6 +216,7 @@ OverflowByte:
     iny
 
 ;; Reads the byte in the half switched in, then main memory back.
+;; Also: PICK2 (IIETRM85)
 Read80:
     tya
     lsr a
@@ -225,6 +226,7 @@ Read80:
     ldy ScrollBase
 
 ;; With the alternate character set, an inverse capital back to $40-$5F.
+;; Also: PICK3 (IIETRM85)
 MouseText:
     bit AlternateCharactersState
     bpl Done
@@ -288,7 +290,7 @@ Write80:
     tya
     lsr a
     tay
-    pla
+    pla                             ; STORIT2 in Apple's listing
     sta (TextBase),y
     lda Page2Off
     ldy ScrollBase
@@ -518,12 +520,13 @@ NextByte:
     jmp ShowInstruction
 .endproc
 
-;; Finds the opcode whose mnemonic and format the parsed line has, from $FF down, and assembles it.
+;; Finds the opcode whose mnemonic and format the parsed line has, trying $00 and then $FF down to $01, and
+;; assembles it.
 ;;
 ;; When no opcode matches and the operand had one byte, it tries once more with the two-byte format, so that
 ;; "JMP $12" assembles as an absolute jump. Falls into <Error> when nothing matches.
-;; In: Address1High = $FF, Address4/Address4High = the packed mnemonic, Address5 = the operand's format,
-;;   SavedOutputY = the operand's bytes
+;; In: Address1High = 0, as <ParseOperand> leaves it, Address4/Address4High = the packed mnemonic, Address5 = the
+;;   operand's format, SavedOutputY = the operand's bytes
 ;; Also: MINIFIND (UNKN), GETOP (IIETRM85)
 .proc FindOpcode
 

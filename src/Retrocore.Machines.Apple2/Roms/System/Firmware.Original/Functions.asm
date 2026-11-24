@@ -215,7 +215,7 @@ ClearBottom:
 .endproc
 
 ;; Function 3, 40 columns: clears from the cursor to the end of the line.
-;; Also: F_CLREOL (IIEROM82, IIETRM85), CLREOL40 (UNKN)
+;; Also: F_CLREOL (IIEROM82, IIETRM85), CLREOL40 (UNKN), X_CLREOL (IIETRM85)
 .proc ClearToEndOfLine40
     ldy CursorColumn
     lda #' '

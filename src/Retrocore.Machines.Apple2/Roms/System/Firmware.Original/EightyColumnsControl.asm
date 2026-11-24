@@ -237,7 +237,7 @@ StartGotoXY:
     sta EightyColumns::GotoXYColumn
     bmi Done
 
-;; Displays the character, in normal video, and moves the cursor right.
+;; Displays the character, in Pascal's current video, and moves the cursor right.
 ;; Also: PWRITE4 (IIEROM82)
 Printable:
     ora #TEXT_HIGH_BIT

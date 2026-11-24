@@ -172,6 +172,7 @@ CheckColumn:
     sty EightyColumns::CursorColumn
 
     ; Y = the column.
+;; Also: CS3 (IIETRM85)
 Done:
     ldy EightyColumns::CursorColumn
     rts

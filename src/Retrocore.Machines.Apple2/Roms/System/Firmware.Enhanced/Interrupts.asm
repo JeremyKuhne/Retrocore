@@ -457,12 +457,13 @@ NextMode:
 ;;
 ;; At $C500. For `SHLOAD` it reads the shape table's two-byte length into <LINNUM> and, when the table fits between
 ;; <STREND> and HIMEM (<MEMSIZ>), loads it just below HIMEM (<AppleSoftCassette::ShapeTable>); otherwise it returns
-;; carry set, and AppleSoft reports that memory is full. The fit is checked on the high bytes only: the table must
+;; carry set, meaning memory is full, but leaves the start's low byte on the stack, so the return goes astray: a bug
+;; in the ROM. The fit is checked on the high bytes only: the table must
 ;; start in a page above <STREND>'s. For `STORE` and `RECALL` it sets A1 and A2 to the array's data
 ;; (<AppleSoftCassette::ArrayBlock>), which AppleSoft then writes or reads with the Monitor.
 ;; In: carry = set for `SHLOAD`, clear for `STORE` and `RECALL`, LOWTR = the array, LINNUM = its size less one
 ;;     (`STORE` and `RECALL`)
-;; Out: carry = set when the shape table does not fit
+;; Out: carry = set when the shape table does not fit (that return goes astray, as above)
 ;; Also: BASTAPE (UNKN)
 .proc AppleSoftCassette
 .assert * = $C500, "AppleSoftCassette must stay at $C500, where AppleSoft calls it."
@@ -501,7 +502,7 @@ StoreEnd:
     bcc OutOfMemory
     bne ShapeTable
 
-    ; Too long: carry set.
+    ; Too long: carry set. The start's low byte is still on the stack, so this return goes astray.
 OutOfMemory:
     sec
     rts
@@ -606,6 +607,7 @@ Toggle:
 ;; Reads a byte from the cassette, high bit first.
 ;; In: Y = the first bit's starting count
 ;; Out: A = the byte, X = 0
+;; Also: RDTAPEBYTE (UNKN)
 .proc ReadCassetteByte
     ldx #BITS_PER_BYTE
 

@@ -47,9 +47,9 @@ ENHANCED = 0
 
 ; A screen hole only this model's firmware uses.
 
-;; Slot 3's screen hole the original IIe's 80-column firmware uses as scratch: the saved status of a function's caller
-;; (<Functions::Prepare80>), the character under the cursor (<Functions::GetKey>), and the code <Control::Perform>
-;; performs.
+;; Slot 3's screen hole the original IIe's 80-column firmware uses as scratch: the status that says whether the internal
+;; ROM was in before a function's call (<Functions::Prepare80>), the character under the cursor (<Functions::GetKey>),
+;; and the code <Control::Perform> performs.
 ;; Also: TEMP1 (IIEROM82)
 FirmwareScratch = $0478
 

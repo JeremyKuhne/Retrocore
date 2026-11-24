@@ -660,7 +660,7 @@ NextLine:
 ;; Also: SCR6 (IIETRM85)
 NextColumn:
     lda (TextBase),y
-    sty Column
+    sty Column                      ; SCR8 in Apple's listing
     pha
     tya
     lsr a

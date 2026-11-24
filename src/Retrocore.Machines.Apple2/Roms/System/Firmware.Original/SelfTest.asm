@@ -93,6 +93,7 @@ LAST_SWITCH_READ = $79
 ; Page zero.
 
 ;; The self-test's pointer into the memory it sums or tests, a scoped name for <SlotPointer>.
+;; Also: TESTPTR (UNKN)
 Pointer = SlotPointer
 
 ;; The pointer's high byte, the page, a scoped name for <LOC1>.

@@ -654,7 +654,9 @@ The SDK's native sources for the rest of the system ROM are in
   Apple's names are kept as historical names (`;; Also:`).
 - **`Firmware.Original.asm`** and **`Firmware.Enhanced.asm`** cover $C100-$CFFF,
   the 80-column firmware and the routines the Monitor calls with internal ROM
-  switched in.
+  switched in, with their subject files in the `Firmware.Original` and
+  `Firmware.Enhanced` folders. Their names say what each routine does
+  (`Control::ScrollUp`, `AssembleLine`), and Apple's are historical names.
 - **`IIeEquates.asm`** names the IIe's page zero, soft switches and keys, and
   **`MonitorEntries.asm`** the Monitor's entry points, for the other sources. The
   firmware, the Disk II boot ROM and DOS (`Roms/Dos`) include both, and the Monitor
@@ -664,9 +666,7 @@ Each assembles byte-identically to its model's ROM, and `SystemSourceTests` and
 `Apple2SourceTests` pin the builds by digest. In the other sources, Apple's
 documented entry points, tables, page-zero locations and soft switches have their
 Apple names. Every routine and table has a comment describing what it does, with
-its inputs and outputs where known, and the firmware's routines have descriptive
-names (`SCROLLUP80`, `MINILINE`). Other labels are named after their routine
-(`PLOT_1`) or their address (`L_C9A4`).
+its inputs and outputs where known.
 
 The sources are maintained by hand. They assemble Apple II text through a high-bit
 `.charmap`, so characters read as `'A'` and `"Apple //e"`, and they build their

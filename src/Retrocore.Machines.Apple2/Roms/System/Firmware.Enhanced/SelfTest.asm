@@ -95,12 +95,14 @@ STATE_CLICK = $FF
 ;;
 ;; <RamTest> counts it from $01 through $FF on each pass, filling the pages and then checking them. Pages $C0-$CF,
 ;; the I/O space, test bank 1 of the language card instead, through <Pointer>.
+;; Also: TESTPAGE (UNKN)
 Page = LOC1
 
 ;; The RAM test's pointer to the page it is testing, a page address with the low byte 0.
 ;;
 ;; <RamTest> sets its high byte from <Page>, adding <BANK1_OFFSET> for the pages $C0-$CF so that they reach bank 1
 ;; of the language card at $D000-$DFFF, and fills or checks the page through it.
+;; Also: TESTPTR (UNKN)
 Pointer = $02
 
 ;; The high byte of <Pointer>.
@@ -109,6 +111,7 @@ PointerHigh = Pointer + 1
 ;; The number of passes the RAM test has left after this one.
 ;;
 ;; <RamTest> sets it to 4 and makes five passes, each going on from the pattern the last one ended with.
+;; Also: TESTCOUNT (UNKN)
 PassesLeft = $04
 
 ;; A byte of page zero that <Passed> shifts right, repeating <SwitchTest> until it is 0; it holds what the zero-page

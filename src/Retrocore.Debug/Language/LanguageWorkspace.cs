@@ -49,8 +49,8 @@ internal sealed partial class LanguageWorkspace
     {
         _server = server;
         _sdk = SdkIndex.For(SdkModules.RomDirectory);
-        // A failed index leaves the documentation checks off, as with modules missing every link to them would look
-        // broken; the failure is reported here, so it is observed.
+        // A failed index leaves the documentation checks off, because missing modules would make every link to them
+        // look broken. The failure is reported here, so it is observed.
         _ = _sdk.Completion.ContinueWith(
             indexing =>
             {

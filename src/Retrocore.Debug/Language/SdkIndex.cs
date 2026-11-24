@@ -13,14 +13,15 @@ namespace Retrocore.Debug.Language;
 /// <remarks>
 ///  <para>
 ///   The SDK's sources are read from disk, never from open documents, so one index serves every workspace in the
-///   process; it is built once for each ROM directory, on a thread of its own, as it takes seconds and would
-///   otherwise hold a thread pool thread that a request or an analysis needs. A source changed on disk after it is
+///   process; it is built once for each ROM directory unless that fails, on a thread of its own, as it takes seconds
+///   and would otherwise hold a thread pool thread that a request or an analysis needs. A source changed on disk after it is
 ///   indexed is not read again until the process restarts.
 ///  </para>
 ///  <para>
-///   An unreadable source is left out. Any other failure fails the whole index, as the documentation checks would
-///   take every link to the missing modules for a broken one; the workspace then leaves those checks off, and the
-///   next workspace to ask builds the index again.
+///   An unreadable source is left out. Any other failure fails the whole index, because otherwise every link to the
+///   missing modules would be reported as broken. A workspace given a failed index leaves the documentation checks
+///   off, though it still searches what was indexed. A workspace created later builds the index again; the language
+///   server has one workspace, so for it that takes a restart.
 ///  </para>
 /// </remarks>
 internal sealed class SdkIndex

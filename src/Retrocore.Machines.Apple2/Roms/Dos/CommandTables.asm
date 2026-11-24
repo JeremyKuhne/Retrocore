@@ -1,4 +1,4 @@
-; retrocore: style=strict ignore=unlinked-name:PR|LOCK -- message text, commands
+; retrocore: style=strict ignore=unlinked-name:PR -- message text, commands
 ;; DOS 3.3 and 3.2 command interpreter: the command and message tables
 ;;
 ;; The data the command scanner (CommandScan.asm) works from, at $A884-$AA4E where DOS runs (Apple's CMDTBLS

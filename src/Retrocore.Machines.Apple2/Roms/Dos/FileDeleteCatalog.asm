@@ -1,4 +1,4 @@
-; retrocore: style=strict ignore=unlinked-name:LOCK -- commands, RWTS and Apple's names in prose
+; retrocore: style=strict
 ;; DOS 3.3 and 3.2 file manager: LOCK, UNLOCK, POSITION, VERIFY, DELETE and CATALOG, and the work area's copies
 ;;
 ;; Apple's FDELCAT module, at $ACEF-$AE8D where DOS runs: the file manager's requests that work on a file as a

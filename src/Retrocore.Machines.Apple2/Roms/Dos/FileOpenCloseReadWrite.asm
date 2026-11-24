@@ -1,4 +1,4 @@
-; retrocore: style=strict ignore=unlinked-name:LOCK -- commands, RWTS and Apple's names in prose
+; retrocore: style=strict
 ;; DOS 3.3 and 3.2 file manager: OPEN, CLOSE, RENAME, READ and WRITE
 ;;
 ;; Apple's FOPCLRW module, at $AB22-$ACEE where DOS runs: the file manager's requests that use a file's contents.

@@ -1,4 +1,4 @@
-; retrocore: style=strict ignore=unlinked-name:LOCK -- commands, messages, RWTS
+; retrocore: style=strict
 ;; DOS 3.3 and 3.2 file manager: the parameter list, the VTOC and catalog buffers and the file control block
 ;;
 ;; The file manager's data and the layouts it works with: the parameter list through which a program or DOS's

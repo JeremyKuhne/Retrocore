@@ -1,4 +1,4 @@
-; retrocore: style=strict ignore=unlinked-name:INPUT -- BASIC's INPUT statement
+; retrocore: style=strict
 ;; DOS 3.3 and 3.2 command interpreter: the handlers for text files, INIT, CATALOG and the BASICs, and a text file's
 ;; characters
 ;;

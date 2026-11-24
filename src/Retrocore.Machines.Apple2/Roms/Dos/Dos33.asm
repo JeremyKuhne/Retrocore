@@ -1,4 +1,4 @@
-; retrocore: style=strict ignore=unlinked-name:INPUT -- the INPUT command in prose
+; retrocore: style=strict
 ;; DOS 3.3, 1983 and 1980: the root that assembles the whole of it from its modules
 ;;
 ;; The disk operating system of the Apple II from 1980 until ProDOS: the code on tracks 0 to 2 of every DOS 3.3

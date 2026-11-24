@@ -6,7 +6,8 @@
 ;; <Commodore> that inherits its target's documentation and gives the names in its `Also:` section, citing the
 ;; documents by their keys in docs/Bibliography.md: Microsoft's source (M6502), Commodore's BASIC 4 listing of July
 ;; 23, 1979 (CBM4S79), and Martin Hoffmann-Vetter's reconstructions of each PET BASIC (HV1, HV1R, HV2, HV4, HV4R),
-;; each for its own build. Including this file emits no bytes and does not change the origin.
+;; each for its own build. In CBM4S79, SQR05 and SQR20 are in code18, TENC in code19, N0999, N9999 and NMIL in
+;; code22, and RMULC and RADDC in code25. Including this file emits no bytes and does not change the origin.
 
 ;; The aliases for Commodore's names. Code uses the definitions' own names; these exist for the old names.
 .scope Commodore

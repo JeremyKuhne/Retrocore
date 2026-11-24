@@ -228,12 +228,12 @@ conversion moves them into `Also:` entries.
 
 [BasicRenames.md](BasicRenames.md) has all 2,411 rows. It was drafted in seven parts with one set of rules and one
 glossary for the shared workspace (below), then merged, then corrected after two independent reviews (below). Of the
-rows, 2,141 get a new name, 255 keep theirs (the SDK's own switches and macro parameters, and the names C# predefines:
+rows, 2,142 get a new name, 254 keep theirs (the SDK's own switches and macro parameters, and the names C# predefines:
 REVISD, ENHNCD, APLPLS, TIME, EXTIO, DISKO, REALIO; X15 settled the names tests predefine) and 15 are dropped. A DROP
 removes the definition: either nothing uses it and no document names it; or it duplicates another definition, whose
 `Also:` then takes its documented name (KIMY, TRMNO1); or its uses can do without it, and its documented name goes in
 prose (ZSTORD, whose WAIT call can pass STORDO's new name, A-Q6; Q, an assembly-time counter, C-Q8); or it is a question
-(REDDY and GOTK, C-Q8; LINWID, D-Q3). Apart from the 138 renamed rows with no Documents entry (SDK macros, macro
+(REDDY and GOTK, C-Q8; LINWID, D-Q3). Apart from the 139 renamed rows with no Documents entry (SDK macros, macro
 parameters and switches), 352 renamed rows have no checked document name, the rows W2 cites as UNKN: 249 that no listed
 document gives, 67 that a document matches only in spelling, and 36 whose documents give only other names. 287 of them
 are in AppleSoft's builds only (AS, IIeE, II+ IIe): AppleSoft's copies of Monitor and IIe names (which carry the Apple
@@ -750,19 +750,17 @@ Decisions and how the table was applied:
   pieces of their scopes in the test's source. The PET float alias test predefines only the current names its
   model's build has: BASIC 1 keeps ZERO, so another build's ZeroValue would be a second definition.
 
-Checked: the full suite (3,822 passed, none failed; 665 skipped, the ROM-dump comparisons without the dumps), the rename
-gate, the lint tests, and `BasicMathConversionTests`, which compares every old name in the math files with the
-MACRO-10 overlay's value in each of the eight builds, checks that each definition reaches the overlay by its name
-or an old name, that a vendor's names resolve only in its builds and through its aliases, and that every citation's
-key is in the bibliography. `BasicMathRoutineTests` runs AddPacked, SubtractFromPacked, MultiplyPacked,
+Checked: the full suite, the rename gate, the lint tests, and `BasicMathConversionTests`, which compares every old name
+in the math files with the MACRO-10 overlay's value in each of the eight builds, checks that each definition reaches the
+overlay by its name or an old name, that a vendor's names resolve only in its builds and through its aliases, and that
+every citation's key is in the bibliography. `BasicMathRoutineTests` runs AddPacked, SubtractFromPacked, MultiplyPacked,
 DividePacked, Compare, GetSign, LoadFac, StoreFac, ToLongInteger, ShiftRight and FormatFac in the enhanced IIe's
-AppleSoft and PET BASIC 4 and checks their results and `Out:` values; the math modules claim no `Keeps:`. It also
-pins a quirk the review found in Microsoft's multiplication, now documented on `Float::ShiftProductByte`: a zero
-multiplier byte after another zero byte shifts the partial product nine bits, halving it, so 1 + 2^-31 times 1
-leaves its low bit at half weight in FacExtension, and only rounding restores it. The
-debugger's contract checking ran clean over the W program, which uses FOR with STEP, DEF FN, VAL, INT, SQR and SIN,
-on PET BASIC 2, PET BASIC 4 and the enhanced IIe's AppleSoft, and reported a false `Keeps: Y` added to
-`Float::LoadFac` as a control.
+AppleSoft and PET BASIC 4 and checks their results and `Out:` values; the math modules claim no `Keeps:`. It also pins a
+quirk the review found in Microsoft's multiplication, now documented on `Float::ShiftProductByte`: a zero multiplier
+byte after another zero byte shifts the partial product nine bits, halving it, so 1 + 2^-31 times 1 leaves its low bit
+at half weight in FacExtension, and only rounding restores it. The debugger's contract checking ran clean over the W
+program, which uses FOR with STEP, DEF FN, VAL, INT, SQR and SIN, on PET BASIC 2, PET BASIC 4 and the enhanced IIe's
+AppleSoft, and reported a false `Keeps: Y` added to `Float::LoadFac` as a control.
 
 ## Other dependents
 

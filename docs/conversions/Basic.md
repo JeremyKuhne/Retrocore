@@ -1565,8 +1565,8 @@ which is what the code keeps there). Alternative: `LastRandom`. I used RandomSee
   bug; nothing to change). **SGNFLG** (InputSign) is also confirmed.
 - **LOWDS** (DestinationStart): no code reads it by name. It only anchors the layout of DECCNT and TENEXP. I kept
   the glossary name.
-- **QNUM/CHRRTS**: as drafted, no code used either name (R5 corrects this), because the template has its own CHZ*
-  labels. I wrote `GetNextCharacter::TestColon` and `::Return` as placeholders until the CharacterReader part names
+- **QNUM/CHRRTS**: I had written that no code used either name, because the template has its own CHZ* labels; that was
+  wrong (R5). I wrote `GetNextCharacter::TestColon` and `::Return` as placeholders until the CharacterReader part names
   them.
 
 ##### D-Q4. Unused Microsoft configuration constants in AppleSoft
@@ -1692,7 +1692,7 @@ the "shared bytes get scoped aliases" rule. That is better once a kernal source 
 - TOKEN_PI, TOKEN_PLUS, TOKEN_MINUS and TOKEN_ON: the token tables.
 - POSITIVE_INTEGER_CHECKS_TYPE and STRING_PREAMBLE_INDIRECT_RETURN: these depend on part B2's names for POSINT and
   PREAM.
-- GetNextCharacter::TestColon and ::Return: pending the CharacterReader part.
+- GetNextCharacter::TestColon and ::Return: settled by R5 as ClassifyCharacter and CharacterReaderReturn.
 - The Apple names follow IIeEquates, MonitorEntries, Monitor/ (LowRes, Cassette), FirmwareEquates
   (EightyColumns::CursorColumn) and Firmware.Enhanced (AppleSoftCassette).
 

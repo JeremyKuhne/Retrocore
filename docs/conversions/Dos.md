@@ -32,8 +32,9 @@ boot loader and formatter. Also converted with it: `Software/MasterCreate.asm`, 
 - X6. The command interpreter's scopes: Scanner, Output, Commands (handlers named for the command word:
   Commands::Catalog, Commands::PrNumber), TextFile, Errors, FileBuffers.
 - X7. DOS's names for locations IIeEquates defines (OUTSW, INSW, LBUFF, ZRSET, PWCNST) join those definitions'
-  `Also:`; Monitor entries MonitorEntries.asm lacks are defined in DOS's Equates.asm with `Inherit:`; DOS's INPRT,
-  OUTPRT and INSDS2 point at other addresses than the Monitor's routines of those names, so they go in prose; the
+  `Also:`; Monitor entries MonitorEntries.asm lacks are defined in DOS's Equates.asm with `Inherit:`; DOS's INPRT and
+  OUTPRT point two bytes before the Monitor's routines of those names, so they go in prose, while its INSDS2 is the
+  Monitor's own entry ($F88E) and joins DecodeOpcode's `Also:`; the
   Monitor keeps CV, and DOS's `KeywordVolume` names it in prose; BASIC names wait for the BASICs' conversion.
 - X8. The 1978 listings' other spellings of the same routines (DOSLDR, WRITE, READ, RDADR, SEEKXIT, ICCFD2 ...) go in
   `Also:` with DOS31; RD1-RD5 clash with the file manager's RD1-RD5 and go in prose.

@@ -91,7 +91,8 @@ Then:
   change goes in the definition's `;; Also:` section.
 - **Equates:** `.include` the SDK's equates instead of repeating their values, for example
   `../Roms/Dos/Equates.asm` and `../Roms/System/FirmwareEquates.asm`. Define only what they lack. DOS's page-3
-  entries (`$03D0`-`$03FF`), for one, are set up as DOS runs, so no source names them.
+  entries (`$03D0`-`$03EF`, such as `DosWarmStartJump`) are in `../Roms/Dos/DosInit.asm`, and the vectors from
+  `$03F0` up in `../Roms/System/IIeEquates.asm`.
 - **Data:** write text as `.byte "TEXT", $0D`, and tables with macros. Name the constants a table or message
   number stands for.
 - **Mnemonics:** use lowercase, as the SDK sources do.

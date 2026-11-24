@@ -92,9 +92,8 @@ SetInput = $FE8B
 SetOutput = $FE95
 
 ;; Inherit: <Monitor:Disassembler::Decode::Opcode>
-;; At $F88E. The relocator, <RelocateDos at DOSREL>, calls it to learn each instruction's length. Apple's DOS
-;; listings call it INSDS2, the name the Monitor's listings give the routine two bytes earlier,
-;; <Monitor:Disassembler::Decode>.
+;; At $F88E. The relocator, <RelocateDos at DOSREL>, calls it to learn each instruction's length.
+;; Also: INSDS2 (DOS33)
 DecodeOpcode = $F88E
 
 ; DOS's purposes for the Monitor's general zero-page pointers.

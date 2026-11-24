@@ -1147,6 +1147,92 @@ enhanced IIe's AppleSoft. Their program adds PRINT's comma, `TAB(` and `SPC(` to
 GOSUB that AppleSoft leaves by POP. As a control, a false `Keeps: A` added to AppleSoft's `PrintNewline` was
 reported.
 
+### E. AppleSoft's own files (X8 step 7)
+
+Converted, with `; retrocore: style=strict`, part E's three modules, `AppleSoft.AppleCommands`,
+`AppleSoft.HighResolution` and `AppleSoft.PlatformHelpers`, and the AppleSoft files still outside the style: the
+small modules that compose the shared ones (`Arrays`, `Assignment`, `Functions`, `Lister`, `MemoryManagement`,
+`NumericConversion`, `Strings`) and the root, `AppleSoft.asm`. Every AppleSoft file is now strict. The other
+AppleSoft files' references to part E's names follow (the dispatch table, `TrapError`, `ReadLowResCoordinates`,
+`Statements::Normal`, the enhanced IIe's tokenizer and PRINT helpers). The bytes are unchanged in all eight builds.
+Only AppleSoft's files changed; no shared module did.
+
+Decisions and how the table was applied:
+
+- E-1. Owner questions, as I recommended:
+  - E-Q1: the entries other routines branch into stay `Proc::Label`s, listed under the routine's `Entry:`.
+  - E-Q2: the hi-res engine is the scope `HighRes`; `ReadHighResCoordinates` and `ReadLowResCoordinates` are top
+    level.
+  - E-Q3: the Technical Information Library's HPLOT, HLIN, DRAW and XDRAW for the engine entries are in prose,
+    since the statements have those names. The engine entries keep the overlay's HPLOT0, HGLIN, DRAW0 and XDRAW0
+    (UNKN). SETHCOL is `HighRes::SetColor`, split out of `Statements::HColor`, which falls into it after its
+    `EvaluateByte`. RESUME cites ASTIL, with its address noted in prose.
+  - E-Q4: keywords split at their words (`HGr2`, `HColor`, `XDraw`, `PrNumber`).
+  - E-Q6: the enhanced IIe's helpers that other modules call are top level.
+  - E-Q7: `ToIllegalQuantity`, `RejectHighResArgument`, `Statements::SetArrayBlock` and
+    `Statements::CallAppleSoftCassette`.
+  - E-Q8: `LowTwoBitsMask`, `BitTwoMask` and `RowInGroupMask`, with the operand trick in their comments.
+  - E-Q9: the unreachable 10 bytes after `HighRes::StepVertical`'s last `bcc` are documented, with no label.
+  - E-Q10: LASTWR is `InterpreterEnd`, and the wrong "Monitor workspace" comment now says the reserved bytes cover
+    the Monitor's code.
+- E-2. Departures from the table's names:
+  - HCOLO1 is `HighRes::SetColor::Done`, since the return is now SetColor's (E-Q3).
+  - MASK03 and MASK04 are `HighRes::PlotStep::LowTwoBitsMask` and `HighRes::StepVertical::BitTwoMask`: each is an
+    equate at an operand inside its routine, so it is that routine's, not the scope's.
+  - WAIT, AppleSoft's second label on the shared `Statements::Wait`, was DROP. The overlay's label must still
+    resolve, so it is an alias in `AppleSoft.HistoricalNames.asm` (`Wait = Statements::Wait`, Also WAIT (UNKN)), as
+    ON is (I6), and the dispatch table names `Statements::Wait`.
+- E-3. E-Q5 waits for X10. The engine still names the Monitor's bytes it borrows by the Monitor's names in
+  AppleSoft.Equates (COLOR as the pixel mask, GBASL and GBASH as the screen byte's address), as the rest of the
+  AppleSoft files name the Monitor's entries and soft switches (INPORT, MPLOT, HISCR). X10 replaces those copies with
+  IIeEquates and MonitorEntries.
+- E-4. `AppleSoft.PlatformHelpers.asm` interleaved the enhanced IIe's code and the other builds' at the same
+  addresses, sharing a `clc`, `pha`, `pla` and `rts` across `.if` boundaries. Each build's code is now written whole
+  under one `.if ENHNCD`/`.else`, as whole routines; the shared instructions are written in each.
+- E-5. New constants: `LOW_RES_ROWS`, `LOW_RES_COLUMNS`, `TEXT_ROWS`, the inverse and flash masks
+  (`INVERSE_MASK_NORMAL`, `INVERSE_MASK_INVERSE`, `INVERSE_MASK_FLASH`, `FLASH_MASK_FLASH`), `HIGH_RES_PAGE1` and
+  `HIGH_RES_PAGE2`, `PIXELS_PER_BYTE`, `HIGH_RES_ROW_BYTES`, `HIGH_RES_COLUMNS`, `HIGH_RES_ROWS`, `HIGH_RES_COLORS`,
+  `FIRST_PIXEL_MASK`, `LAST_PIXEL_MASK`, `SHAPE_PLOT_BIT`, and the enhanced IIe's `COMMA_LIMIT_40` and
+  `COMMA_LIMIT_80`. The array header's offsets use `ArrayHeader::LENGTH` and `DIMENSIONS`.
+- E-6. Found in the code and documented, not fixed: those the part E proposal lists, and that
+  `HighRes::StepHorizontal` and `StepVertical` take their direction from the negative flag the caller's load or
+  shift leaves, not from A.
+- E-7. Tests and their helpers:
+  - The rename gate's macro rename is now `AssignString`, the top-level label at the end of the shared
+    AssignmentStart macro: LASTWR, which it renamed, is converted here and in part F.
+  - `BasicSharedFloatAliasesTests` counts WAIT among AppleSoft's names, and `BasicSharedMemoryAccessTests` expects
+    WAIT's topic to be the alias's.
+  - `BasicMathMachine.Call` and `CallUntil` take an optional `negative`, for a routine that tests the flag its
+    caller's load left.
+  - `BasicAppleConversionTests` is new: in each AppleSoft build, every old name the files give that the overlay
+    defines reaches its value, and every definition reaches the overlay by a name, apart from the new constants,
+    the switches and `HighRes::SetColor` (SETHCOL, which the overlay does not label); each old name cites only
+    AppleSoft's documents, Microsoft's source or UNKN, all in the bibliography.
+  - `BasicAppleRoutineTests` is new (below).
+- E-8. X10 is left for its own commit, the step's last item: it needs the converted IIeEquates (#130) and Monitor
+  (#125), which this stack's base predates. It is made after the stack is rebased onto main and before part E's
+  pull request opens.
+
+Checked: the full suite, the rename gate, the lint tests and `BasicAppleConversionTests`. The suite has
+4,024 passed, none failed and 665 skipped; the skipped tests are the ROM-dump comparisons, which need dumps that
+are not here.
+
+`BasicAppleRoutineTests` runs these routines in the enhanced IIe's AppleSoft and checks what their documentation
+says:
+
+- `HighRes::Position`: the interleaved row address, the byte in Y and `HighResByteIndex`, the pixel mask, the point,
+  and the color flipped for an odd byte, at points from (0,0) to (279,191).
+- `HighRes::FindCoordinates`: it rebuilds the point `Position` set.
+- `HighRes::StepHorizontal`: within a byte, across bytes, and its wrap within the row, both ways.
+- The enhanced IIe's `UppercaseCharacter`, `DistanceToColumn` (40 and 80 columns, with the caller's carry) and
+  `CompareCommaColumn` (A, carry and negative).
+
+The debugger's contract checking ran clean on the enhanced IIe's and the original IIe's AppleSoft, with a program of
+GR, COLOR=, PLOT, HLIN, VLIN and SCRN; HGR, HGR2, HCOLOR= and HPLOT TO; TEXT, NORMAL, INVERSE and FLASH; VTAB and
+HTAB; SPEED=, TRACE and NOTRACE; ONERR GOTO; HIMEM: and LOMEM:; PR#0 and IN#0; and DEL as a command. The II Plus could
+not be run that way: the debugger session's prompt check does not see its prompt. As a control, a false `Keeps: A`
+added to `HighRes::Plot` was reported.
+
 ## Other dependents
 
 - **DOS** left BASIC's names unchanged until this conversion: X7 in [Dos.md](Dos.md) ("BASIC names wait for the

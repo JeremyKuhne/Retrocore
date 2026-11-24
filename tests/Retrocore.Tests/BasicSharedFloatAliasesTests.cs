@@ -64,6 +64,7 @@ public sealed class BasicSharedFloatAliasesTests
         ["QINTG1"] = ["UNKN"],
         ["TRYAG3"] = ["M6502"],
         ["ON"] = ["UNKN"],
+        ["WAIT"] = ["UNKN"],
         ["ARYVA2"] = ["M6502"],
         ["ARYVA3"] = ["M6502"],
         ["ARYVGO"] = ["M6502"],

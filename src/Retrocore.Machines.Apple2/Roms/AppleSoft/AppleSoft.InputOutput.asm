@@ -55,7 +55,7 @@ ToSyntaxError:
     bit OnErrorActive
     bpl PrintRetry
     ldx #$FE
-    jmp HANDLE
+    jmp TrapError
 
 ;; No `ONERR` handler is active: prints the retry message and restores <TextPointer> from <StoppedText>.
 ;; Also: TRMNO2 (UNKN)

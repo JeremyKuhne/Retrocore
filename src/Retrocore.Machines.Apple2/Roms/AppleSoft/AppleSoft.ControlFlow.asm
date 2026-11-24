@@ -176,7 +176,7 @@ ConsumeKey:
     ldx #$FF
     bit OnErrorActive
     bpl NoHandler
-    jmp HANDLE
+    jmp TrapError
 
 ;; No `ONERR` handler is active: sets the flags for the shared STOP code from A.
 ;; Also: ISCCA2 (UNKN)

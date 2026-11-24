@@ -22,7 +22,7 @@
 .proc ReportError
     bit OnErrorActive
     bpl PrintMessage
-    jmp HANDLE
+    jmp TrapError
 
 ;; No `ONERR` handler is active: starts a new line and prints the question mark.
 ;; Also: ERROR1 (UNKN), DOERRMSG (AS82)
@@ -259,7 +259,7 @@ Advance:
 ;; Also: KLOOP (M6502)
 NextCharacter:
 .if ENHNCD
-    jsr UPCASE
+    jsr UppercaseInput
 .else
     lda BUF,x
 .endif
@@ -322,7 +322,7 @@ AdvanceInput:
 ;; Also: RESPU1 (UNKN)
 CompareCharacter:
 .if ENHNCD
-    jsr UPCASE
+    jsr UppercaseInput
 .else
     lda BUF,x
 .endif
@@ -337,7 +337,7 @@ CompareCharacter:
     cmp #TOKEN_AT
     bne StoreToken
 .if ENHNCD
-    jsr UPNXT
+    jsr UppercaseNextCharacter
 .else
     lda BUF+1,x
 .endif
@@ -374,7 +374,7 @@ TestWordEnd:
     lda (Fac),y
     bne CompareCharacter
 .if ENHNCD
-    jsr UPBUF
+    jsr UppercaseBufferCharacter
 .else
     lda BUF,x
 .endif

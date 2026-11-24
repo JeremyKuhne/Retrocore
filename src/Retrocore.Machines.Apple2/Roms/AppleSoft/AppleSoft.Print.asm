@@ -37,13 +37,13 @@ Return:
 .endproc
 
 ;; PRINT's comma: starts a new line at or past <COMMA_NEWLINE_COLUMN>, and otherwise moves to the next 16-column
-;; zone. The enhanced IIe reads the column through <CHKCOL>, which in 80 columns skips the new line below column 73, and
-;; prints spaces to the zone through <PrintTabOrSpace>; the II Plus and IIe only store the zone's column in
-;; <TerminalPosition>.
+;; zone. The enhanced IIe reads the column through <CompareCommaColumn>, which in 80 columns skips the new line below
+;; column 73, and prints spaces to the zone through <PrintTabOrSpace>; the II Plus and IIe only store the zone's column
+;; in <TerminalPosition>.
 ;; Also: COMPRT (M6502)
 .proc PrintComma
 .if ENHNCD
-    jsr CHKCOL
+    jsr CompareCommaColumn
     bmi NextZone
 .else
     lda TerminalPosition
@@ -121,10 +121,10 @@ ClosedParenthesis:
     bcc PrintSpaces::CountInX
     dex
 .if ENHNCD
-;; Computes the spaces to the target column through <TRMSET>; the enhanced IIe's <PrintComma> enters here.
+;; Computes the spaces to the target column through <DistanceToColumn>; the enhanced IIe's <PrintComma> enters here.
 ;; Also: TABER2 (UNKN)
 MoveToColumn:
-    jsr TRMSET
+    jsr DistanceToColumn
 .else
     txa
     sbc TerminalPosition

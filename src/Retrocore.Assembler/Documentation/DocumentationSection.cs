@@ -59,6 +59,15 @@ public sealed class DocumentationSection
     public IReadOnlyList<string> Items { get; }
 
     /// <summary>
+    ///  Gets the historical names an <c>Also:</c> section's items give, read once: the items in the form
+    ///  NAME (KEY, ...), in source order.
+    /// </summary>
+    internal IReadOnlyList<DocumentationAlso> HistoricalNames => _historicalNames ??= DocumentationAlso.Read(Items);
+
+    // Read on first use; a race reads the same items twice, to equal results.
+    private DocumentationAlso[]? _historicalNames;
+
+    /// <summary>
     ///  Gets the condition under which the section applies, when topics from several branches of an
     ///  <c>.if</c> were merged; otherwise null.
     /// </summary>

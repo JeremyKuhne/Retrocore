@@ -18,7 +18,8 @@ namespace Retrocore.Documentation;
 /// </remarks>
 public sealed partial class DocumentationResolver
 {
-    private readonly List<DocumentationSet> _others;
+    // The current set, then the others: every set a link may reach, in the order lookups search them.
+    private readonly DocumentationSet[] _sets;
     private readonly Func<string, bool> _isDirective;
     private readonly Func<string, bool> _isInstruction;
     private readonly Func<string, string?> _readText;
@@ -42,7 +43,7 @@ public sealed partial class DocumentationResolver
         string? root = null)
     {
         Current = current;
-        _others = [.. (others ?? []).Where(set => !ReferenceEquals(set, current))];
+        _sets = [current, .. (others ?? []).Where(set => !ReferenceEquals(set, current))];
         _isDirective = isDirective ?? (_ => false);
         _isInstruction = isInstruction ?? (_ => false);
         _readText = readText ?? (path => File.Exists(path) ? File.ReadAllText(path) : null);
@@ -195,11 +196,7 @@ public sealed partial class DocumentationResolver
         if (name[0] == '.' && _isDirective(name)) { return new(DocumentationTargetKind.Directive, name); }
         foreach (DocumentationSet set in sets)
         {
-            if (set.Topics.FirstOrDefault(topic => topic.Kind == DocumentationKind.File
-                && topic.Name.Equals(name, StringComparison.OrdinalIgnoreCase)) is { } file)
-            {
-                return Found(file);
-            }
+            if (set.FindFile(name) is { } file) { return Found(file); }
         }
 
         // The assembler's scope rules, from the topic's scope outward, then the scopes the .using directives in
@@ -345,7 +342,7 @@ public sealed partial class DocumentationResolver
 
     private IEnumerable<DocumentationSet> SetsFor(string? model)
     {
-        foreach (DocumentationSet set in (DocumentationSet[])[Current, .. _others])
+        foreach (DocumentationSet set in _sets)
         {
             if (model is null || set.Model is null || set.Model.Equals(model, StringComparison.OrdinalIgnoreCase))
             {

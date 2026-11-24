@@ -38,12 +38,21 @@ public sealed record DocumentationAlso(string Name, IReadOnlyList<string> Source
     /// </summary>
     /// <param name="sections">The definition's sections, from its comment or its topic.</param>
     /// <returns>The historical names, in source order.</returns>
-    public static IEnumerable<DocumentationAlso> Of(IEnumerable<DocumentationSection> sections) =>
-        sections
-            .Where(section => section.Name == "Also")
-            .SelectMany(section => section.Items)
-            .Select(Parse)
-            .OfType<DocumentationAlso>();
+    public static IEnumerable<DocumentationAlso> Of(IEnumerable<DocumentationSection> sections)
+    {
+        foreach (DocumentationSection section in sections)
+        {
+            if (section.Name != "Also") { continue; }
+            foreach (DocumentationAlso item in section.HistoricalNames) { yield return item; }
+        }
+    }
+
+    /// <summary>
+    ///  Reads the items of one <c>Also:</c> section.
+    /// </summary>
+    /// <param name="items">The section's items.</param>
+    /// <returns>The historical names, in source order, without the items not in the form NAME (KEY, ...).</returns>
+    internal static DocumentationAlso[] Read(IReadOnlyList<string> items) => [.. items.Select(Parse).OfType<DocumentationAlso>()];
 
     private static bool IsName(string name)
     {

@@ -12,7 +12,7 @@ namespace Retrocore.Perf;
 
 /// <summary>
 ///  Measures the language server's SDK index: every SDK root source assembled from disk and its documentation parsed,
-///  as <see cref="SdkIndex"/> builds it, and the assembly alone.
+///  as <see cref="SdkIndex"/> builds it, sharing one <see cref="SourceFileCache"/>, and the assembly alone.
 /// </summary>
 [MemoryDiagnoser]
 public class SdkIndexBenchmarks
@@ -43,7 +43,8 @@ public class SdkIndexBenchmarks
             throw new InvalidOperationException($"No SDK roots for {Roots} in {SdkModules.RomDirectory}.");
         }
 
-        _expected = Signature([.. _roots.Select(SdkIndex.Index)]);
+        SourceFileCache files = new();
+        _expected = Signature([.. _roots.Select(root => SdkIndex.Index(root, files))]);
         Console.WriteLine($"SDK index input: {_roots.Length} roots from {SdkModules.RomDirectory}, signature {_expected}");
     }
 
@@ -55,10 +56,11 @@ public class SdkIndexBenchmarks
     public int Index()
     {
         SourceAnalysis[] analyses = new SourceAnalysis[_roots.Length];
+        SourceFileCache files = new();
         int topics = 0;
         for (int index = 0; index < _roots.Length; index++)
         {
-            analyses[index] = SdkIndex.Index(_roots[index]);
+            analyses[index] = SdkIndex.Index(_roots[index], files);
             topics += analyses[index].Documentation.Topics.Count;
         }
 
@@ -74,9 +76,10 @@ public class SdkIndexBenchmarks
     public int Assemble()
     {
         int bytes = 0;
+        SourceFileCache files = new();
         foreach (string root in _roots)
         {
-            SourceAnalysis analysis = SourceAnalysis.Assemble(root, _ => null);
+            SourceAnalysis analysis = SourceAnalysis.Assemble(root, _ => null, files);
             foreach (AssemblySection section in analysis.Result.Sections) { bytes += section.Bytes.Length; }
         }
 

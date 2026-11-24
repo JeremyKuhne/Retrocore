@@ -52,7 +52,8 @@ internal sealed partial class SourceAnalysis
         AssemblyResult result,
         AssemblyProject project,
         IEnumerable<string> members,
-        Func<string, string?> text)
+        Func<string, string?> text,
+        Func<string, string?> read)
     {
         Root = root;
         Result = result;
@@ -117,9 +118,11 @@ internal sealed partial class SourceAnalysis
 
         _text = text;
         Members = new(members, StringComparer.OrdinalIgnoreCase) { root };
+
+        // The members' text as the assembly read it; later lookups of other files read them afresh.
         foreach (string member in Members)
         {
-            if (text(member) is { } content) { _lines[member] = SourceText.Lines(content); }
+            if (read(member) is { } content) { _lines[member] = SourceText.Lines(content); }
         }
 
         List<string> scopes = [];
@@ -355,13 +358,18 @@ internal sealed partial class SourceAnalysis
     /// </summary>
     /// <param name="root">The full path of the root.</param>
     /// <param name="openText">Open documents' text by path, or null for files on disk.</param>
+    /// <param name="files">
+    ///  The files read from disk, shared with other analyses made at the same time, such as the SDK index's; null for a
+    ///  cache of this analysis's own.
+    /// </param>
     /// <returns>The analysis.</returns>
-    internal static SourceAnalysis Assemble(string root, Func<string, string?> openText)
+    internal static SourceAnalysis Assemble(string root, Func<string, string?> openText, SourceFileCache? files = null)
     {
-        string text = openText(root) ?? File.ReadAllText(root);
+        files ??= new();
+        string text = openText(root) ?? files.Read(root);
         string configuration = Path.ChangeExtension(root, ".cfg");
         string? configurationText = openText(configuration) ?? (File.Exists(configuration) ? File.ReadAllText(configuration) : null);
-        WorkspaceSourceResolver resolver = new(openText);
+        WorkspaceSourceResolver resolver = new(openText, files);
         AssemblyOptions options = new(ProcessorVariant.Mos6502, 0, AddressSpaceSize)
         {
             SourceResolver = resolver,
@@ -377,7 +385,13 @@ internal sealed partial class SourceAnalysis
             ? assembler.Assemble(parsed.Project, options)
             : Assembler.Assembler.Failed(parsed);
 
-        return new(root, result, parsed.Project, resolver.Resolved, path => openText(path) ?? (File.Exists(path) ? File.ReadAllText(path) : null));
+        return new(
+            root,
+            result,
+            parsed.Project,
+            resolver.Resolved,
+            path => openText(path) ?? (File.Exists(path) ? File.ReadAllText(path) : null),
+            path => openText(path) ?? files.ReadIfExists(path));
     }
 
     /// <summary>

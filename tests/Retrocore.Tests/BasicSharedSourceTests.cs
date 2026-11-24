@@ -294,8 +294,9 @@ public sealed class BasicSharedSourceTests
         files.TryResolve(from, request, out AssemblySource? source).Should().BeTrue();
         source?.Path.Should().Be(path);
 
-        WorkspaceSourceResolver editor = new(candidate =>
-            string.Equals(candidate, path, StringComparison.OrdinalIgnoreCase) ? "; unsaved\n" : null);
+        WorkspaceSourceResolver editor = new(
+            candidate => string.Equals(candidate, path, StringComparison.OrdinalIgnoreCase) ? "; unsaved\n" : null,
+            new SourceFileCache());
 
         editor.TryResolve(from, request, out AssemblySource? open).Should().BeTrue();
         open?.Path.Should().Be(path);

@@ -120,6 +120,65 @@ public sealed class BasicCommodoreConversionTests
         }
     }
 
+    /// <summary>
+    ///  The converted files' code names every definition by its current name: no old name is left in an instruction,
+    ///  a directive or a macro's argument, apart from the roots' checks that an old switch name is not predefined.
+    /// </summary>
+    /// <param name="model">The PET model.</param>
+    /// <param name="original">Whether BASIC 1 or 4 uses its original chip.</param>
+    [TestMethod]
+    [DataRow(PetModel.Pet2001, false)]
+    [DataRow(PetModel.Pet2001, true)]
+    [DataRow(PetModel.Pet2001Basic2, false)]
+    [DataRow(PetModel.Pet4032, false)]
+    [DataRow(PetModel.Pet4032, true)]
+    public void CodeUsesNoOldNames(PetModel model, bool original)
+    {
+        AssemblyResult native = PetSdkModules.AssembleBasic(PetFolder, model, original);
+        HashSet<string> current = [.. native.SymbolDefinitions.Select(symbol => symbol.Name)];
+        List<string> found = [];
+        foreach (string path in Files)
+        {
+            string[] lines = File.ReadAllLines(path);
+            for (int index = 0; index < lines.Length; index++)
+            {
+                string code = Code(lines[index]);
+                if (code.Contains(".defined(", StringComparison.Ordinal)) { continue; }
+                foreach (System.Text.RegularExpressions.Match word in
+                    System.Text.RegularExpressions.Regex.Matches(code, @"(?<![\w:.$%'])[A-Za-z_][A-Za-z0-9_]*"))
+                {
+                    if (native.HistoricalNames.ContainsKey(word.Value) && !current.Contains(word.Value))
+                    {
+                        found.Add($"{Path.GetFileName(path)}:{index + 1}: {word.Value}");
+                    }
+                }
+            }
+        }
+
+        found.Should().BeEmpty("code names definitions by their current names");
+    }
+
+    // A line's code, without its comment and its strings and character literals.
+    private static string Code(string line)
+    {
+        System.Text.StringBuilder code = new();
+        char quote = '\0';
+        foreach (char character in line)
+        {
+            if (quote != '\0')
+            {
+                if (character == quote) { quote = '\0'; }
+                continue;
+            }
+
+            if (character == ';') { break; }
+            if (character is '"' or '\'') { quote = character; continue; }
+            code.Append(character);
+        }
+
+        return code.ToString();
+    }
+
     // The definitions that give no overlay name of their own, in the builds that have them: the SDK's switches and new
     // constants, the scoped aliases routines give workspace bytes, and the labels the old *+n branches became. Every
     // other definition must reach the overlay.

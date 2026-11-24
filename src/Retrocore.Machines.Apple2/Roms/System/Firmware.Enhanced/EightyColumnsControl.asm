@@ -216,6 +216,7 @@ StoreGotoColumn:
     beq HashNext
 
 ;; One step of the mnemonic hash: shifts out the next of the opcode's bits 0-2, until one is 1.
+;; Also: MNNDX1 (IIETRM85)
 HashStep:
     lsr a
     bcc HashNext

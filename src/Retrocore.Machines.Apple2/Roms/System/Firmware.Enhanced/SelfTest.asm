@@ -696,7 +696,7 @@ SystemOkText:
     .byte "System OK"
 .assert * - SystemOkText = SYSTEM_OK_LENGTH, "SYSTEM_OK_LENGTH characters."
 
-    ; The ROM's last byte, which the self-test does not read.
+    ; The ROM's last byte, which the self-test does not read: ZZZEND in Apple's listing.
     .byte $00
 .assert * = $C800, "The self-test ends at the end of $C7FF."
 

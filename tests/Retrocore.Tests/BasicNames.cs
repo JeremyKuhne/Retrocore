@@ -200,7 +200,7 @@ internal static class BasicNames
     /// <param name="symbols">The predefined symbols, by the names Microsoft's source has.</param>
     /// <returns>
     ///  The predefined symbols with the current names added, except those inside a scope, which
-    ///  <see cref="ScopedNames"/> defines.
+    ///  <see cref="ScopedNames(IReadOnlyDictionary{string, long})"/> defines.
     /// </returns>
     /// <exception cref="InvalidOperationException">The builds give an old name to different definitions.</exception>
     internal static Dictionary<string, long> WithCurrentNames(IReadOnlyDictionary<string, long> symbols) =>
@@ -226,6 +226,8 @@ internal static class BasicNames
     /// <param name="byBuild">Each build's current names for its historical names, by build key.</param>
     /// <param name="build">The build whose names to add; null for all of them.</param>
     /// <returns>The predefined symbols with the current names added.</returns>
+    /// <exception cref="InvalidOperationException">With no build, the builds disagree on an old name.</exception>
+    /// <exception cref="ArgumentException">The build is not in the tables.</exception>
     internal static Dictionary<string, long> WithCurrentNames(
         IReadOnlyDictionary<string, long> symbols,
         IReadOnlyDictionary<string, IReadOnlyDictionary<string, string[]>> byBuild,
@@ -237,17 +239,20 @@ internal static class BasicNames
     /// <summary>
     ///  Gets the predefined symbols as <see cref="WithCurrentNames(IReadOnlyDictionary{string, long})"/> does, but
     ///  with only the current names one build has: another build's name for an old one, as ZeroValue is ZERO's where
-    ///  BASIC 1 keeps ZERO elsewhere, would be a second definition in a part of that build.
+    ///  BASIC 1 keeps ZERO elsewhere, would be a second definition in a part of that build. Names inside a scope are
+    ///  left to <see cref="ScopedNames(IReadOnlyDictionary{string, long})"/>.
     /// </summary>
     /// <param name="symbols">The predefined symbols, by the names Microsoft's source has.</param>
     /// <param name="build">The build whose names to keep.</param>
     /// <returns>The predefined symbols with the build's current names added.</returns>
+    /// <exception cref="InvalidOperationException">The builds give an old name to different definitions.</exception>
     internal static Dictionary<string, long> WithCurrentNames(IReadOnlyDictionary<string, long> symbols, AssemblyResult build) =>
         new(WithCurrentNames(symbols).Where(pair => symbols.ContainsKey(pair.Key) || build.HasSymbol(pair.Key)), StringComparer.Ordinal);
 
     /// <summary>
-    ///  Gets the source that defines, for a standalone build, the current names <see cref="WithCurrentNames(IReadOnlyDictionary{string, long})"/> cannot
-    ///  predefine: those inside a scope, such as <c>Float::LoadArg</c>, each a constant in a piece of its scope.
+    ///  Gets the source that defines, for a standalone build, the current names
+    ///  <see cref="WithCurrentNames(IReadOnlyDictionary{string, long})"/> cannot predefine: those inside a scope, such
+    ///  as <c>Float::LoadArg</c>, each a constant in a piece of its scope, from every build's names.
     /// </summary>
     /// <remarks>
     ///  <para>
@@ -258,13 +263,26 @@ internal static class BasicNames
     /// </remarks>
     /// <param name="symbols">The predefined symbols, by the names Microsoft's source has.</param>
     /// <returns>The declarations and definitions, one per line.</returns>
-    internal static string ScopedNames(IReadOnlyDictionary<string, long> symbols)
+    /// <exception cref="InvalidOperationException">The builds give an old name to different definitions.</exception>
+    internal static string ScopedNames(IReadOnlyDictionary<string, long> symbols) => ScopedNames(symbols, Tables());
+
+    /// <summary>
+    ///  Gets the source <see cref="ScopedNames(IReadOnlyDictionary{string, long})"/> gives, from given tables of each
+    ///  build's historical names.
+    /// </summary>
+    /// <param name="symbols">The predefined symbols, by their old names.</param>
+    /// <param name="byBuild">Each build's current names for its historical names, by build key.</param>
+    /// <returns>The declarations and definitions, one per line.</returns>
+    /// <exception cref="InvalidOperationException">The builds give an old name to different definitions.</exception>
+    internal static string ScopedNames(
+        IReadOnlyDictionary<string, long> symbols,
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, string[]>> byBuild)
     {
         List<string> source = [".ifndef FAMILIES_DECLARED", "FAMILIES_DECLARED = 1"];
         source.AddRange(s_families.SelectMany(family => (string[])[$".scope {family}", ".endscope"]));
         source.Add(".endif");
         string[] open = [];
-        foreach ((string name, long value) in CurrentNamesOf(symbols, Tables(), build: null)
+        foreach ((string name, long value) in CurrentNamesOf(symbols, byBuild, build: null)
             .Where(pair => IsScoped(pair.Key))
             .OrderBy(pair => pair.Key, StringComparer.Ordinal))
         {
@@ -320,8 +338,9 @@ internal static class BasicNames
     }
 
     /// <summary>
-    ///  Gets predefined symbols exactly as given, without the current names <see cref="WithCurrentNames(IReadOnlyDictionary{string, long})"/> adds: for
-    ///  a test of what a build does with an old name predefined by itself.
+    ///  Gets predefined symbols exactly as given, without the current names
+    ///  <see cref="WithCurrentNames(IReadOnlyDictionary{string, long})"/> adds: for a test of what a build does with an
+    ///  old name predefined by itself.
     /// </summary>
     /// <param name="symbols">The predefined symbols.</param>
     /// <returns>A copy of the symbols.</returns>

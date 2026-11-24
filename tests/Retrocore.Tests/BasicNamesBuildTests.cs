@@ -72,6 +72,26 @@ public sealed class BasicNamesBuildTests
     }
 
     /// <summary>
+    ///  An old name whose current name is inside a scope gets it from <see cref="BasicNames.ScopedNames(IReadOnlyDictionary{string, long}, IReadOnlyDictionary{string, IReadOnlyDictionary{string, string[]}})"/>, as a
+    ///  constant in its scope, and not as a predefined symbol, which can't name a scope's member.
+    /// </summary>
+    [TestMethod]
+    public void AScopedCurrentNameIsDefinedInItsScope()
+    {
+        Dictionary<string, IReadOnlyDictionary<string, string[]>> tables = new(StringComparer.Ordinal)
+        {
+            [BasicNames.Build(Apple2Model.IIeEnhanced)] = new Dictionary<string, string[]>(StringComparer.Ordinal)
+            {
+                ["SCPNAM"] = ["Float::Scoped"]
+            }
+        };
+
+        BasicNames.WithCurrentNames(One("SCPNAM"), tables, build: null).Should().NotContainKey("Float::Scoped");
+        string source = BasicNames.ScopedNames(One("SCPNAM"), tables);
+        source.Split('\n').Should().ContainInOrder(".scope Float continued", "Scoped = $1234", ".endscope");
+    }
+
+    /// <summary>
     ///  For all builds, an old name only one build gives gets that build's name.
     /// </summary>
     [TestMethod]

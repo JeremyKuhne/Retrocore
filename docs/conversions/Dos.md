@@ -51,8 +51,8 @@ boot loader and formatter. Also converted with it: `Software/MasterCreate.asm`, 
   root asserts the values its digests check: `Dos33.asm` a MASTER of 0 or 1 and a YEAR of 1983 or 1980, `Dos32.asm`
   a MASTER of 0 or 1 (YEAR selects nothing in DOS 3.2).
 - X14. The owner's D5 decision: a routine both versions have is one definition, with `.if DOS32` where they differ
-  in places (Stage2, StartDos, CallRwts, PrepareWrite, WriteDataField, ReadDataField, ReadAddressField, MoveHead,
-  Wait, WriteFourAndFour, WriteFieldNibble, SeekTrack, SeekHalfTrack, SetTrack, besides those the same in both); one
+  in places (Stage2, StartDos, WriteDataField, ReadAddressField, MoveHead, Wait, WriteFourAndFour, WriteFieldNibble,
+  SeekHalfTrack, FreeSector, besides those the same in both, such as CallRwts, ReadDataField and SetTrack); one
   that differs throughout (Stage1, WriteDos, TransferPages, PreNibble, PostNibble, Format, the translate tables and
   buffers) has a definition for each version, side by side under `.if DOS32` / `.else` in one module. `Rwts` stays a
   `.proc` per version: besides DOS 3.3's diagnostic build, which nearly doubles its length, it differs at some twenty-five

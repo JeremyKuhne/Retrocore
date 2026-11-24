@@ -71,7 +71,7 @@ RWTS_READ = 1
 ;; Also: IBCWTS (DOS33, DOS31)
 RWTS_WRITE = 2
 
-;; RWTS command: formats the whole disk, writing every track's address fields and empty data fields.
+;; RWTS command: formats the whole disk, writing every track's address fields, and in DOS 3.3 empty data fields too.
 ;; Also: IBFMT (DOS33, DOS31)
 RWTS_FORMAT = 4
 

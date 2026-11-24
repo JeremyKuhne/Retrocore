@@ -10,14 +10,15 @@
 ;; $03D9, call it through <CallRwts> (BootLoader.asm), which disables interrupts for the call; DOS's own IOB is
 ;; <DosIob> and its DCT <DosDeviceTable>. docs/Dos.md explains the IOB, and docs/DiskII.md the drive.
 ;;
-;; This is DOS 3.3's RWTS (its Rwts1.asm and Rwts2.asm) as it was before DOS 3.3 changed it: the names are DOS
-;; 3.3's where the code is the same. DOS 3.2 differs in a few places. It reads the sector number the IOB gives as
-;; the number on the disk, with no translation. It checks once, not eight times, whether the motor is turning; it
-;; reads the motor's start-up count from both of the DCT's bytes; a seek that finds the head on the wrong track uses
-;; up one of its address tries, where DOS 3.3 counts up to four such seeks before it recalibrates; and its formatter
-;; is part of RWTS's code rather than a module of its own. RWTS reads the IOB's bytes from <Iob::SLOT_TIMES_16> to
-;; <Iob::PREVIOUS_DRIVE> but the byte count, and writes the return code, the volume found and the previous slot and
-;; drive; it reads the DCT's <DeviceTable::WHOLE_TRACKS> and both bytes of <DeviceTable::MOTOR_DELAY>.
+;; This is DOS 3.3's RWTS (its Rwts1.asm and Rwts2.asm) as it was before DOS 3.3 changed it: the names are DOS 3.3's
+;; where the code is the same. DOS 3.2 differs in a few places. It reads the sector number the IOB gives as the number
+;; on the disk, with no translation. It checks once, not eight times, whether the motor is turning; it reads the motor's
+;; start-up count from both of the DCT's bytes; when an address field shows the head on the wrong track it seeks again
+;; with a fresh count of address tries, as often as that happens, where DOS 3.3 allows four such seeks before it
+;; recalibrates; and its formatter is part of RWTS's code rather than a module of its own. RWTS reads the IOB's slot,
+;; drive, volume, track, sector, DCT and buffer addresses, command and previous slot and drive, and writes the return
+;; code, the volume found and the previous slot and drive; it reads the DCT's <DeviceTable::WHOLE_TRACKS> and both bytes
+;; of <DeviceTable::MOTOR_DELAY>.
 ;;
 ;; Several values live in screen holes, at the address given plus the slot (<Drive1HalfTracks>,
 ;; <Drive2HalfTracks>) or at slot 0's byte (the counters); see RwtsEquates.asm.
@@ -72,8 +73,7 @@ FoundTrack = AddressField + 2
 ;; Also: VOLUME (DOS33)
 FoundVolume = AddressField + 3
 
-;; The address fields, and in DOS 3.2 the seeks too, left before RWTS gives up on the track (slot 0's screen-hole
-;; byte at $0578).
+;; The address fields left before RWTS gives up on the track (slot 0's screen-hole byte at $0578).
 ;; Also: RETRYCNT (DOS33)
 RetriesLeft = $0578
 
@@ -243,7 +243,7 @@ DelayLoop:
 ;; Carries out the IOB's command with the head on the track: 0 seeks only, 4 formats, odd reads and even writes.
 ;;
 ;; A write's sector is prepared first, while nothing is waiting; the carry, set to read or clear to write, waits on
-;; the stack. A wrong track costs a try, as a bad address field does.
+;; the stack. A wrong track means a seek and a fresh count of tries.
 ;; In: X = slot * 16, the motor test's flags on the stack
 ;; Also: TRYTRK (DOS33)
 TryTrack:
@@ -290,7 +290,8 @@ SeekAgain:
     jmp StartTries
 
     ; An address field: is the head on the right track? If not, the drive's record of the track is corrected to
-    ; the one read, and it seeks again, counting the seeks against RetriesLeft too.
+    ; the one read, and it seeks again. The DEC is lost: SeekAgain goes on to StartTries, which starts the count
+    ; again, so only a count already run out (which a found address field cannot leave) would recalibrate.
 ;; Also: RDRIGHT (DOS33)
 CheckTrack:
     ldy FoundTrack
@@ -367,8 +368,8 @@ GotSector:
 ;; RWTS's success exit: stores A in the IOB's return code, turns the motor off and returns with the carry clear.
 ;;
 ;; `.byte $24` is the opcode of `bit` zero page: with the `sec` that follows as its operand, it reads byte $38 and
-;; skips the `sec`, changing only the negative, overflow and zero flags. It stores whatever A holds, which is 0
-;; only for a seek: after a read it is the sector's last byte, after a write a byte read from the card. The file
+;; skips the `sec`, changing only the negative, overflow and zero flags. It stores whatever A holds: 0 for a seek;
+;; after a read the sector's last byte, after a write a byte read from the card. The file
 ;; manager reads the return code only when the carry is set. The formatter ends here too.
 ;; In: A = the return code, X = slot * 16
 ;; Out: carry = clear

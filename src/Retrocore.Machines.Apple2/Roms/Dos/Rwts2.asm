@@ -247,10 +247,10 @@ GoodRead:
 ;; RWTS's exit: stores A in the IOB's return code, turns the motor off and returns, with the carry clear here or
 ;; set from <Fail>.
 ;;
-;; The byte after the CLC is the opcode of BIT zero page: with the SEC that follows as its operand, it reads byte
-;; $38 and skips the SEC, changing only the negative, overflow and zero flags. The success exit stores whatever A
-;; holds, which is 0 only for a seek: after a read it is the sector's last byte, after a write a byte read from the
-;; card. The file manager reads the return code only when the carry is set.
+;; The byte after the CLC is the opcode of BIT zero page: with the SEC that follows as its operand, it reads byte $38
+;; and skips the SEC, changing only the negative, overflow and zero flags. The success exit stores whatever A holds: 0
+;; for a seek; after a read the sector's last byte, after a write a byte read from the card. The file manager reads the
+;; return code only when the carry is set.
 ;; In:    A = the return code, X = slot * 16, IobPointer = the IOB
 ;; Out:   carry = clear here, set from Fail
 ;; Entry: Fail = the error exit

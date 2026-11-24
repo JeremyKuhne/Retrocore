@@ -61,7 +61,8 @@ SHORTEST_GAP = 16
 ;; One more than the runs of 256 self-sync bytes that erase a track after the first gap's worth: 38 runs.
 ERASE_RUNS = $27
 
-;; The $FF nibbles where a sector's data field goes, before a last run of 256: 173 in all with it, 429.
+;; The $FF nibbles of the first run where a sector's data field goes, 173; a run of 256 and one more $FF follow, 430
+;; in all.
 DATA_AREA_FIRST = $AD
 
 ;; The runs of $FF nibbles in a data area, the first <DATA_AREA_FIRST> long and the second 256.
@@ -181,7 +182,7 @@ StoreGapByte:
     lda #DiskII::SELF_SYNC
     jsr DiskII::WriteFieldNibble::Shorter
 
-    ; Where the data field goes: $FF nibbles, 32 cycles apart, 173 then 256 of them.
+    ; Where the data field goes: $FF nibbles, 32 cycles apart, 173 then 256 of them, and one more after the runs.
     ldy #DATA_AREA_RUNS
     sty GapCount
     ldy #DATA_AREA_FIRST

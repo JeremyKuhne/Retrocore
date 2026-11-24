@@ -49,7 +49,7 @@
 ;; half-track in <FoundTrack>'s byte rather than <TargetHalfTrack>'s. It also uses what <DiskII::MoveHead> uses.
 ;; In:    A = the half-track, X = slot * 16, SelectedDrive = the drive
 ;; Out:   CurrentTrack = A, and the drive's byte of <Drive1HalfTracks> or <Drive2HalfTracks> A
-;; Uses:  A, Y, TargetHalfTrack, FoundTrack
+;; Uses:  A, Y, TargetHalfTrack
 ;; Keeps: X
 ;; Also: MYSEEK2 (DOS33)
 .proc SeekHalfTrack

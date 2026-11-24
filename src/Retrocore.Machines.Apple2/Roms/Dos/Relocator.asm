@@ -340,8 +340,8 @@ AddressRanges:
 
 ;; The code ranges to adjust: a count of bytes used, then <RelocationRange> entries, each a run of instructions.
 ;;
-;; DOS 3.2's RWTS is laid out differently, and it has no patch areas: its table has six entries and room for one
-;; more. The 1980 DOS 3.3 has no patch area after <DiskII::Wait>.
+;; DOS 3.2's RWTS is laid out differently, its patches inside its RWTS range: its table has six entries and room for
+;; one more. The 1980 DOS 3.3 has no patch area after <DiskII::Wait>.
 ;; Also: CDETAB (DOS33, DOS31)
 CodeRanges:
 .if DOS32

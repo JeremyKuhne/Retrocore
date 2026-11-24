@@ -21,8 +21,8 @@
 ;;
 ;; The dispatcher reaches most handlers by RTS through a table of their addresses minus one, so each of them starts in
 ;; page $C1, after its first byte. A screen function has two handlers: a 40-column one, and an 80-column one that runs
-;; while the 80-column firmware is active. Every function leaves through <Functions::Return>, which puts the ROM back
-;; as <Monitor:CallFirmware> found it.
+;; while the 80-column firmware is active. Every function but the reset, when it starts the self-test, leaves through
+;; <Functions::Return>, which puts the ROM back as <Monitor:CallFirmware> found it.
 .scope Functions
 
 ; The handlers.

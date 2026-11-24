@@ -5,8 +5,8 @@
 ;;
 ;; - Firmware.Enhanced/Functions.asm, $C100-$C2FF: the screen and keyboard functions the Monitor calls through
 ;;   <Monitor:CallFirmware>, with the internal ROM switched in and a function number in Y (FirmwareFunctions.asm),
-;;   performed by <DispatchFunction>; every function returns through <Functions::Return>. Also the reset hook,
-;;   <Functions::ResetFirmware>.
+;;   performed by <DispatchFunction>; every function returns through <Functions::Return>, but the reset when it starts
+;;   the self-test. Also the reset hook, <Functions::ResetFirmware>.
 ;; - Firmware.Enhanced/SlotEntry.asm, $C300-$C3F9: slot 3's entry points, <BasicInitialize> (`PR#3`),
 ;;   <BasicInput> and <BasicOutput>; the Pascal 1.1 signature and <PascalOffsets>; and <AuxMove> and <AuxTransfer>.
 ;; - Firmware.Enhanced/Interrupts.asm, $C3FA-$C5FF: <HandleInterrupt> at $C3FA, where the IRQ vector at $FFFE points,

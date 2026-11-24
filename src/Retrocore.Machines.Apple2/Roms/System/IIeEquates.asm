@@ -650,7 +650,7 @@ KeyboardStrobe = $C010
 ;; <LanguageCardBank1ReadWrite> and the rest) choose it. The Enhanced IIe's interrupt handler reads it to restore
 ;; the bank afterwards.
 ;; See: <LanguageCardRamState>, <LanguageCardBank1ReadWrite>, <LanguageCardBank2ReadWrite>
-;; Also: RDLCBNK2 (IIEROM82, IIETRM85)
+;; Also: RDLCBNK2 (IIEROM82, IIETRM85), RDBNK2 (IIETRM85)
 LanguageCardBank2State = $C011
 
 ;; Reading it reports in bit 7 whether $D000-$FFFF reads come from language card RAM (1) or ROM (0).

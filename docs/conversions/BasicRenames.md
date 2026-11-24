@@ -11,7 +11,7 @@ One row per name per file (but for three pairs of same-named macro parameters): 
 then Commodore's), in the module's source order within each. The columns:
 
 - **#**: the row's number, for reference in reviews.
-- **Old**: the name as the source defines it today.
+- **Old**: the name as the source defined it before the conversion.
 - **New**: the proposed name, as it will be written: `FindLine`, a scope member `Statements::Next`, a local
   `FindLine::Done`, a constant `TOKEN_FOR`. KEEP keeps the name (the SDK's own switches and macro parameters,
   and the names C# predefines); DROP removes the definition (see Basic.md, step 3, for what happens to a dropped

@@ -665,7 +665,7 @@ ShapeRotation = $F9
 AmpersandJump = $03F5
 
 ; AppleSoft's copies of the Monitor's, the IIe's and the firmware's names, which keep their names until AppleSoft
-; includes IIeEquates.asm and MonitorEntries.asm (decision X10, pending). Microsoft's LINWID names $25, which is the
+; includes IIeEquates.asm and MonitorEntries.asm (decision X10). Microsoft's LINWID names $25, which is the
 ; Monitor's CV and not a width; it is not defined.
 ;; Monitor line-input entry used by the Microsoft build.
 CQINLN = $FD67
@@ -815,7 +815,7 @@ RNDH = $4F
 OURCH = $057B
 
 
-; Hardware switches and Monitor or firmware entry points, also pending X10.
+; Hardware switches and Monitor or firmware entry points, which also wait for X10.
 ;; Keyboard data soft switch.
 KBD = $C000
 

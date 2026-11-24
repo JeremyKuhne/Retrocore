@@ -61,7 +61,7 @@ Done:
 ;; Control-Y: moves the cursor to the window's top line, column 0, and computes the line's base.
 ;; Out: A = 0
 ;; Keeps: X, Y
-;; Also: X_EM (IIEROM82)
+;; Also: X_EM (IIEROM82, IIETRM85), HOMECURSOR (UNKN)
 .proc Home
     lda WindowTop
     sta EightyColumns::CursorLine
@@ -73,7 +73,7 @@ Done:
 ;; Control-Z: clears the cursor's line across the window, in the current video.
 ;; Out: Y = $FF
 ;; Keeps: X
-;; Also: X_SUB (IIEROM82)
+;; Also: X_SUB (IIEROM82, IIETRM85), CLRLINE80 (UNKN)
 .proc ClearLine
     ldy WindowWidth
     dey
@@ -94,7 +94,7 @@ Loop:
 
 ;; Control-\: moves the cursor right; at the window's right edge, does a <CarriageReturn at X_CR> instead.
 ;; Keeps: X
-;; Also: X_FS (IIEROM82)
+;; Also: X_FS (IIEROM82, IIETRM85), FWDSPACE80 (UNKN)
 .proc Right
     inc EightyColumns::CursorColumn
     lda EightyColumns::CursorColumn
@@ -109,7 +109,7 @@ Done:
 
 ;; Control-_: moves the cursor up a line, but not above the window's top line.
 ;; Keeps: X, Y
-;; Also: X_US (IIEROM82)
+;; Also: X_US (IIEROM82, IIETRM85), UP80 (UNKN)
 .proc Up
     dec EightyColumns::CursorLine
     bmi AtTop
@@ -134,7 +134,7 @@ Done:
 
 ;; Control-N: normal video: clears <MODE_INVERSE> and sets <InverseMask> to <MASK_NORMAL>.
 ;; Keeps: X
-;; Also: X_SO (IIEROM82)
+;; Also: X_SO (IIEROM82, IIETRM85), NORMAL80 (UNKN)
 .proc Normal
     lda EightyColumns::Mode
     and #MODE_INVERSE ^ $FF
@@ -144,7 +144,7 @@ Done:
 
 ;; Control-O: inverse video: sets <MODE_INVERSE> and sets <InverseMask> to <MASK_INVERSE>.
 ;; Keeps: X
-;; Also: X_SI (IIEROM82)
+;; Also: X_SI (IIEROM82, IIETRM85), INVERSE80 (UNKN)
 .proc Inverse
     lda EightyColumns::Mode
     ora #MODE_INVERSE
@@ -155,7 +155,7 @@ Done:
 ;; Stores the mode byte and the inverse mask.
 ;; In: A = the mode, Y = the mask
 ;; Keeps: A, X, Y
-;; Also: STUFFINV (IIEROM82)
+;; Also: STUFFINV (IIEROM82, IIETRM85), SETINVFLG (UNKN)
 .proc StoreVideo
     sta EightyColumns::Mode
     sty InverseMask
@@ -219,14 +219,14 @@ Done:
 
 ;; The low bytes of each control character's handler address minus one, Control-G to Control-_: <Perform> reads
 ;; the entry for code Y at HandlersLow - <CONTROL_G> + Y.
-;; Also: CTLADL (IIEROM82)
+;; Also: CTLADL (IIEROM82, IIETRM85), CTRLLOW (UNKN)
 HandlersLow:
 .repeat HandlerCount, index
     .byte <.ident(.sprintf("CONTROL_HANDLER_%d", index))
 .endrepeat
 
 ;; The high bytes of each control character's handler address minus one; 0 where the character has none.
-;; Also: CTLADH (IIEROM82)
+;; Also: CTLADH (IIEROM82, IIETRM85), CTRLPAGE (UNKN)
 HandlersHigh:
 .repeat HandlerCount, index
     .byte >.ident(.sprintf("CONTROL_HANDLER_%d", index))
@@ -234,7 +234,7 @@ HandlersHigh:
 
 ;; Control-J, a line feed: moves the cursor down a line; on the window's bottom line, scrolls the window up instead.
 ;; Keeps: X
-;; Also: X_LF (IIEROM82)
+;; Also: X_LF (IIEROM82, IIETRM85), LF80 (UNKN)
 .proc LineFeed
     inc EightyColumns::CursorLine
     lda EightyColumns::CursorLine
@@ -243,7 +243,7 @@ HandlersHigh:
     jmp ToLineBase
 
 ;; Puts the cursor back on the window's bottom line, then scrolls up.
-;; Also: X_LF2 (IIEROM82)
+;; Also: X_LF2 (IIEROM82, IIETRM85), SCROLL80 (UNKN)
 AtBottom:
     ldy WindowBottom
     dey
@@ -253,7 +253,7 @@ AtBottom:
 
 ;; Control-W: scrolls the window up a line and clears its bottom line.
 ;; Keeps: X
-;; Also: SCROLLUP (IIEROM82)
+;; Also: SCROLLUP (IIEROM82, IIETRM85), SCROLLUP80 (UNKN)
 .proc ScrollUp
     txa
     pha
@@ -263,7 +263,7 @@ AtBottom:
 
 ;; Control-V: scrolls the window down a line and clears its top line.
 ;; Keeps: X
-;; Also: SCROLLDN (IIEROM82)
+;; Also: SCROLLDN (IIEROM82, IIETRM85), SCROLLDN80 (UNKN)
 .proc ScrollDown
     txa
     pha
@@ -277,7 +277,7 @@ AtBottom:
 ;; halved while it does.
 ;; X as the caller had it is on the stack, for <FinishScroll>.
 ;; In: X = <SCROLL_UP> or <SCROLL_DOWN>
-;; Also: SCROLL1 (IIEROM82)
+;; Also: SCROLL1 (IIEROM82), SCROLLIT (IIETRM85)
 .proc Scroll
     bit Columns80State
     bpl Lines
@@ -409,7 +409,7 @@ ToLineBase:
 
 ;; Control-K: clears from the cursor to the end of its line, then each line below it in the window.
 ;; Keeps: X
-;; Also: X_VT (IIEROM82)
+;; Also: X_VT (IIEROM82, IIETRM85), CLREOP80 (UNKN)
 .proc ClearToEndOfWindow
     jsr ClearToEndOfLine
     lda EightyColumns::CursorLine
@@ -421,7 +421,7 @@ NextLine:
     jsr LineBase
     jsr ClearLine
 
-;; Also: X_VTNEXT (IIEROM82)
+;; Also: X_VTNEXT (IIEROM82, IIETRM85)
 CheckLine:
     inc EightyColumns::CursorLine
     lda EightyColumns::CursorLine
@@ -436,7 +436,7 @@ CheckLine:
 
 ;; Control-L: homes the cursor and clears the window.
 ;; Keeps: X
-;; Also: X_FF (IIEROM82)
+;; Also: X_FF (IIEROM82, IIETRM85), CLRSCRN80 (UNKN)
 .proc HomeAndClear
     jsr Home
     jmp ClearToEndOfWindow
@@ -445,7 +445,7 @@ CheckLine:
 ;; Control-]: clears from the cursor to the end of its line.
 ;; Out: Y = <WindowWidth>
 ;; Keeps: X
-;; Also: X_GS (IIEROM82)
+;; Also: X_GS (IIEROM82, IIETRM85), CLREOL80 (UNKN)
 .proc ClearToEndOfLine
     ldy EightyColumns::CursorColumn
     jmp ClearLineFrom::Check
@@ -459,7 +459,7 @@ CheckLine:
 ;; Keeps: X
 ;; Entry:
 ;;   Check = stores nothing when Y is at the edge or past it: <ClearToEndOfLine> enters here
-;; Also: X_GSEOLZ (IIEROM82)
+;; Also: X_GSEOLZ (IIEROM82, IIETRM85)
 .proc ClearLineFrom
     lda #' '
     jsr Screen::StoreCharacter
@@ -477,7 +477,7 @@ Check:
 ;; Control-Q: sets the full 40-column window, below the graphics when graphics are shown, and converts the screen
 ;; with <Columns::To40> if 80 columns are on.
 ;; Keeps: X
-;; Also: X_DC1 (IIEROM82)
+;; Also: X_DC1 (IIEROM82, IIETRM85), SET40COL (UNKN)
 .proc Columns40
     lda #0
     sta WindowLeft
@@ -504,7 +504,7 @@ Done:
 ;; Control-R: when auxiliary memory answers, sets the full 80-column window, below the graphics when graphics are
 ;; shown, and converts the screen with <Columns::To80> unless 80STORE is already on.
 ;; Keeps: X
-;; Also: X_DC2 (IIEROM82)
+;; Also: X_DC2 (IIEROM82, IIETRM85)
 .proc Columns80
     jsr TestAuxMemory
     bne Quit::Done
@@ -525,7 +525,7 @@ CheckStore80:
 ;; Control-U: leaves the 80-column firmware with <QuitFirmware>, unless the Pascal protocol is active.
 ;; Entry:
 ;;   Done = the return <Columns80> shares
-;; Also: X_NAK (IIEROM82)
+;; Also: X_NAK (IIEROM82, IIETRM85), QUIT80 (UNKN)
 .proc Quit
     lda EightyColumns::Mode
     and #MODE_PASCAL
@@ -545,7 +545,7 @@ Done:
 ;; At $CD9B.
 ;; Out: A = 24
 ;; Keeps: X, Y
-;; Also: FULL80 (IIEROM82)
+;; Also: FULL80 (IIEROM82, IIETRM85)
 .proc FullWindow80
 .assert * = $CD9B, "FullWindow80 must stay at $CD9B."
     lda #0
@@ -563,7 +563,7 @@ Done:
 ;; screen and keyboard hooks back.
 ;;
 ;; At $CDAA.
-;; Also: QUIT (IIEROM82)
+;; Also: QUIT (IIEROM82, IIETRM85), OFF80 (UNKN)
 .proc QuitFirmware
 .assert * = $CDAA, "QuitFirmware must stay at $CDAA."
     lda #0

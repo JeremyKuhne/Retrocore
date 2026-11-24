@@ -126,7 +126,7 @@ PascalOffsets:
 ;; <MODE_INTERRUPTS> when the caller had interrupts enabled, and copies <CV> to <EightyColumns::CursorLine>. The pushed
 ;; P keeps the carry and V for <InputOrOutput> and <Initialize>, which run from the $C800 ROM.
 ;; In: A = the character, carry and overflow = as the entry set them
-;; Also: BASICENT (IIEROM82)
+;; Also: BASICENT (IIEROM82, IIETRM85), C3ENTRY (UNKN)
 .proc Enter
     sta EightyColumns::CurrentCharacter
     pha
@@ -150,7 +150,7 @@ PascalOffsets:
 
 ;; Releases every slot's $C800 ROM, so that the next fetch from page $C3 selects the internal one, takes the cursor's
 ;; line and records the claim.
-;; Also: BASICENT2 (IIEROM82)
+;; Also: BASICENT2 (IIEROM82), NOGETLN (IIETRM85)
 ClaimRom:
     lda ExpansionRomOff
     lda CV
@@ -164,7 +164,7 @@ ClaimRom:
     jmp InputOrOutput
 
 ;; Initializes the firmware, after `PR#3`.
-;; Also: JBASINIT (IIEROM82)
+;; Also: JBASINIT (IIEROM82, IIETRM85), C3GOINIT (UNKN)
 ToInitialize:
     jmp Initialize
 .endproc
@@ -181,7 +181,7 @@ ToInitialize:
 ;; Pascal's init entry: claims the $C800 ROM, then runs <Init>.
 ;;
 ;; At $C34B.
-;; Also: JPINIT (IIEROM82)
+;; Also: JPINIT (IIEROM82, IIETRM85), PASINIT (UNKN)
 .proc InitEntry
     jsr ClaimExpansionRom
     jmp Init
@@ -190,7 +190,7 @@ ToInitialize:
 ;; Pascal's read entry: claims the $C800 ROM, then runs <Read>.
 ;;
 ;; At $C351.
-;; Also: JPREAD (IIEROM82)
+;; Also: JPREAD (IIEROM82, IIETRM85), PASREAD (UNKN)
 .proc ReadEntry
     jsr ClaimExpansionRom
     jmp Read
@@ -199,7 +199,7 @@ ToInitialize:
 ;; Pascal's write entry: claims the $C800 ROM, then runs <Write>.
 ;;
 ;; At $C357.
-;; Also: JPWRITE (IIEROM82)
+;; Also: JPWRITE (IIEROM82, IIETRM85), PASWRITE (UNKN)
 .proc WriteEntry
     jsr ClaimExpansionRom
     jmp Write
@@ -208,7 +208,7 @@ ToInitialize:
 ;; Pascal's status entry: claims the $C800 ROM, then runs <Status>.
 ;;
 ;; At $C35D.
-;; Also: JPSTAT (IIEROM82)
+;; Also: JPSTAT (IIEROM82, IIETRM85), PASSTATUS (UNKN)
 .proc StatusEntry
     jsr ClaimExpansionRom
     jmp Status
@@ -224,7 +224,7 @@ ToInitialize:
 ;;     destination, carry = set to copy main to auxiliary memory, clear for auxiliary to main
 ;; Out: Address1/Address1High = the address after A2, Address4/Address4High = the address after the copy
 ;; Keeps: A, X, Y
-;; Also: C3_MOVE (UNKN)
+;; Also: C3_MOVE (UNKN), DOAUXMOVE (UNKN)
 .proc CopyMainAux
     pha
     tya
@@ -241,17 +241,17 @@ ToInitialize:
     bcs Start
 
 ;; Carry clear: reads auxiliary, writes main.
-;; Also: MOVEC2M (IIEROM82)
+;; Also: MOVEC2M (IIEROM82, IIETRM85)
 AuxToMain:
     sta AuxWriteOff
     sta AuxReadOn
 
-;; Also: MOVESTRT (IIEROM82)
+;; Also: MOVESTRT (IIEROM82, IIETRM85)
 Start:
     ldy #0
 
 ;; Copies a byte and steps A4.
-;; Also: MOVELOOP (IIEROM82)
+;; Also: MOVELOOP (IIEROM82, IIETRM85)
 Loop:
     lda (Address1),y
     sta (Address4),y
@@ -281,14 +281,14 @@ CheckEnd:
     sta AuxWriteOn
 
 ;; Puts RAMRD back.
-;; Also: C03 (IIEROM82)
+;; Also: C03 (IIEROM82, IIETRM85)
 RestoreRead:
     sta AuxReadOff
     pla
     bpl Done
     sta AuxReadOn
 
-;; Also: MOVERET (IIEROM82)
+;; Also: MOVERET (IIEROM82, IIETRM85)
 Done:
     pla
     tay
@@ -304,7 +304,7 @@ Done:
 ;; <AuxTransfer> has it.
 ;; In: TransferAddress/TransferAddressHigh = the target, carry = set to run in auxiliary memory, clear for main,
 ;;     overflow = set for the auxiliary zero page and stack, clear for main's
-;; Also: C3_XFER (UNKN)
+;; Also: C3_XFER (UNKN), DOXFER (UNKN)
 .proc JumpMainAux
     pha
     lda TransferAddress
@@ -320,14 +320,14 @@ Done:
     bvs AuxZeroPage
 
 ;; Carry clear: main memory, then the zero page by V.
-;; Also: XFERC2M (IIEROM82)
+;; Also: XFERC2M (IIEROM82, IIETRM85)
 Main:
     sta AuxReadOff
     sta AuxWriteOff
     bvc MainZeroPage
 
 ;; V set: stores the address in this bank, then jumps with the auxiliary zero page and stack.
-;; Also: XFERAZP (IIEROM82)
+;; Also: XFERAZP (IIEROM82, IIETRM85)
 AuxZeroPage:
     pla
     sta TransferAddressHigh
@@ -352,7 +352,7 @@ MainZeroPage:
 ;; Records in <ExpansionRomSlot> that the internal $C800 ROM is in, so that interrupt code knows whose ROM to select
 ;; again.
 ;; Keeps: A, X, Y
-;; Also: SETC8 (IIEROM82)
+;; Also: SETC8 (IIEROM82, IIETRM85), SETMSLOT3 (UNKN)
 .proc ClaimExpansionRom
     pha
     lda #SLOT3_ROM_PAGE

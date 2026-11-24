@@ -13,7 +13,7 @@ LeaveQuotes:
     sta EightyColumns::Mode
 
 ;; Makes a lowercase key uppercase while <MODE_UPPERCASE> is set and the line is outside quotes.
-;; Also: B_FIXCHR (IIEROM82)
+;; Also: B_FIXCHR (IIEROM82), UPSHIFT (UNKN), UPSHFT (IIETRM85)
 Upshift:
     lda EightyColumns::Mode
     and #MODE_UPPERCASE
@@ -108,7 +108,7 @@ BELL_TOGGLES = $C0
 ;; Starts the firmware for Pascal 1.0: as <Pascal::Init>, with <MODE_PASCAL10> too.
 ;;
 ;; <Pascal::Init10Entry> jumps here.
-;; Also: PINIT1_0 (IIEROM82)
+;; Also: PINIT1_0 (IIEROM82, IIETRM85), C9PASINIT (UNKN)
 .proc Init10
     lda #MODE_PASCAL | MODE_PASCAL10
     jmp Init::SetMode
@@ -121,12 +121,12 @@ BELL_TOGGLES = $C0
 ;; Out: X = 0, or <PASCAL_NO_DEVICE> when no card answers
 ;; Entry:
 ;;   SetMode = starts with the mode in A; <Pascal::Init10> jumps here
-;; Also: PINIT (IIEROM82)
+;; Also: PINIT (IIEROM82, IIETRM85)
 .proc Init
     lda #MODE_PASCAL
 
 ;; Stores the mode from A, then starts.
-;; Also: PINIT2 (IIEROM82)
+;; Also: PINIT2 (IIEROM82, IIETRM85)
 SetMode:
     sta EightyColumns::Mode
     jsr FullWindow80
@@ -137,7 +137,7 @@ SetMode:
     rts
 
 ;; A card answered: 80 columns, the window cleared and the cursor shown.
-;; Also: PIGOOD (UNKN)
+;; Also: PIGOOD (IIETRM85)
 CardPresent:
     sta Store80On
     sta Columns80On
@@ -153,7 +153,7 @@ CardPresent:
 ;; <Pascal::ReadEntry at JPREAD> jumps here.
 ;; Out: A = <EightyColumns::CurrentCharacter> = the key, with its high bit clear; X = 0, or <PASCAL10_READ_X> for
 ;;   Pascal 1.0
-;; Also: C8_PREAD (UNKN), PREAD (IIEROM82)
+;; Also: C8_PREAD (UNKN), PREAD (IIEROM82, IIETRM85), PASGETKEY (UNKN)
 .proc Read
     jsr Setup
     jsr WaitForKey
@@ -166,7 +166,7 @@ CardPresent:
     ldx #PASCAL10_READ_X
 
 ;; Returns the key.
-;; Also: PREADRET2 (IIEROM82)
+;; Also: PREADRET2 (IIEROM82, IIETRM85)
 Done:
     lda EightyColumns::CurrentCharacter
     rts
@@ -180,7 +180,7 @@ Done:
 ;; <MODE_INTERRUPTS> is set, else goes to the next line. <Pascal::WriteEntry at JPWRITE> jumps here.
 ;; In: A = the character
 ;; Out: X = 0
-;; Also: PWRITE (IIEROM82)
+;; Also: PWRITE (IIEROM82, IIETRM85), PASPUTCHAR (UNKN)
 .proc Write
     sta EightyColumns::CurrentCharacter
     jsr Setup
@@ -273,14 +273,14 @@ Done:
 ;; Waits for a key, counting <RandomSeed>/<RandomSeedHigh> up meanwhile, then clears the keyboard strobe.
 ;; Out: A = the key, with its high bit set
 ;; Keeps: X, Y
-;; Also: GETKEY80 (UNKN), GETKEY (IIEROM82)
+;; Also: GETKEY80 (UNKN), GETKEY (IIEROM82, IIETRM85), GETKEYRND (UNKN)
 .proc WaitForKey
     inc RandomSeed
     bne Poll
     inc RandomSeedHigh
 
 ;; Reads the keyboard.
-;; Also: GETK2 (IIEROM82)
+;; Also: GETK2 (IIEROM82, IIETRM85)
 Poll:
     lda Keyboard
     bpl WaitForKey
@@ -293,7 +293,7 @@ Poll:
 ;; interrupt flag.
 ;; Out: A = the byte read back; zero = set when it is <AUX_TEST_BYTE>, a card answered
 ;; Keeps: X
-;; Also: TESTCARD (IIEROM82)
+;; Also: TESTCARD (IIEROM82, IIETRM85), AUXPRESENT (UNKN)
 .proc TestAuxMemory
     ; PAGE2's state in the carry, 80STORE's in negative, both saved.
     lda Page2State
@@ -318,7 +318,7 @@ Poll:
     sta Page2Off
 
 ;; 80STORE off unless it was on.
-;; Also: STAY2 (IIEROM82)
+;; Also: STAY2 (IIEROM82, IIETRM85)
 Restore80Store:
     bmi RestoreInterrupts
     sta Store80Off
@@ -345,7 +345,7 @@ Compare:
 ;; Keeps: A, X, Y
 ;; Entry:
 ;;   Row = takes the line in A
-;; Also: C8_BASCALC (UNKN), BASCALC (IIEROM82)
+;; Also: C8_BASCALC (UNKN), BASCALC (IIEROM82), VTAB80 (UNKN)
 .proc LineBase
     clc
     bcc Calculate
@@ -396,7 +396,7 @@ StoreLow:
     lsr a
 
 ;; Adds the left edge, then lets interrupts in when the caller allowed them, outside Pascal.
-;; Also: BASCLC3 (IIEROM82)
+;; Also: BASCLC3 (IIEROM82), VTAB40 (IIETRM85)
 AddLeft:
     plp
     adc TextBase
@@ -437,7 +437,7 @@ Done:
 ;; In: A = the code, $00-$1F
 ;; Out: carry = clear when a handler ran, set when the code has none
 ;; Keeps: A, Y
-;; Also: CTLCHAR (IIEROM82)
+;; Also: CTLCHAR (IIEROM82, IIETRM85)
 .proc Perform
     sta FirmwareScratch
     pha
@@ -450,19 +450,19 @@ Done:
     bne Handle
 
 ;; No handler: the carry set.
-;; Also: CTLCHARX (IIEROM82)
+;; Also: CTLCHARX (IIEROM82, IIETRM85)
 NotHandled:
     sec
     bcs Done
 
 ;; Runs the handler, then the carry clear.
-;; Also: CTLGO (IIEROM82)
+;; Also: CTLGO (IIEROM82, IIETRM85)
 Handle:
     jsr Jump
     clc
 
 ;; Y and A back.
-;; Also: CTLRET (IIEROM82)
+;; Also: CTLRET (IIEROM82, IIETRM85)
 Done:
     pla
     tay
@@ -473,7 +473,7 @@ Done:
 ;; Goes to the handler of control character Y: pushes its page from A and its low byte minus one from
 ;; <HandlersLow at CTLADL>, and returns into it.
 ;; In: A = the handler's page, Y = the code
-;; Also: CTLXFER (IIEROM82)
+;; Also: CTLXFER (IIEROM82, IIETRM85), CTRLJUMP (UNKN)
 .proc Jump
     pha
     lda HandlersLow - CONTROL_G,y
@@ -483,14 +483,14 @@ Done:
 
 ;; Control-G: rings the bell, a pause and then <BELL_TOGGLES> toggles of the speaker.
 ;; Keeps: X
-;; Also: X_BELL (IIEROM82)
+;; Also: X_BELL (IIEROM82, IIETRM85), BELL80 (UNKN)
 .proc Bell
     lda #BELL_PAUSE
     jsr Pause
     ldy #BELL_TOGGLES
 
 ;; Toggles the speaker once.
-;; Also: C8_BELL2 (UNKN), BELL2 (IIEROM82)
+;; Also: C8_BELL2 (UNKN), BELL2 (IIEROM82, IIETRM85)
 Click:
     lda #BELL_HALF_CYCLE
     jsr Pause
@@ -506,17 +506,17 @@ Click:
 ;; In: A = the count
 ;; Out: A = 0
 ;; Keeps: X, Y
-;; Also: C8_WAIT (UNKN)
+;; Also: C8_WAIT (UNKN), DELAYA (UNKN)
 .proc Pause
     sec
 
 ;; The outer count.
-;; Also: C8_WAIT2 (UNKN), WAIT2 (IIEROM82)
+;; Also: C8_WAIT2 (UNKN), WAIT2 (IIEROM82, IIETRM85)
 Outer:
     pha
 
 ;; The inner count.
-;; Also: C8_WAIT3 (UNKN), WAIT3 (IIEROM82)
+;; Also: C8_WAIT3 (UNKN), WAIT3 (IIEROM82, IIETRM85)
 Inner:
     sbc #1
     bne Inner
@@ -527,7 +527,7 @@ Inner:
 .endproc
 
 ;; Control-H: moves the cursor left; from the first column, to the last of the line above.
-;; Also: X_BS (IIEROM82)
+;; Also: X_BS (IIEROM82, IIETRM85), BACKSPC80 (UNKN)
 .proc Left
     dec EightyColumns::CursorColumn
     bpl Done
@@ -541,14 +541,14 @@ PreviousLine:
     jsr Up
 
 ;; Returns.
-;; Also: BSDONE (IIEROM82)
+;; Also: BSDONE (IIEROM82, IIETRM85)
 Done:
     rts
 .endproc
 
 ;; Control-M: a carriage return. While BASIC's input reads a line (<MODE_INPUT>, outside Pascal), it clears the rest
 ;; of the line first; then the cursor goes to the first column and, outside Pascal, down a line.
-;; Also: X_CR (IIEROM82)
+;; Also: X_CR (IIEROM82, IIETRM85), CR80 (UNKN)
 .proc CarriageReturn
     lda EightyColumns::Mode
     and #MODE_PASCAL

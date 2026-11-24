@@ -39,7 +39,7 @@ Column = ScrollBaseHigh
 ;; It converts from the last line up to line 0, or to line 20 when graphics are shown, and puts the cursor
 ;; back as it was.
 ;; Keeps: X
-;; Also: SCRN84 (IIEROM82)
+;; Also: SCRN84 (IIEROM82, IIETRM85), SCR80TO40 (UNKN)
 .proc To40
 
     ; The cursor, for <Finish>.
@@ -52,7 +52,7 @@ Column = ScrollBaseHigh
     sta Line
     sta Store80On
 
-;; Also: SCR40 (IIEROM82)
+;; Also: SCR40 (IIEROM82), SCR1 (IIETRM85)
 NextLine:
     lda Line
     jsr LineBase::Row
@@ -66,7 +66,7 @@ NextLine:
     bcs NextLine
 
 ;; Turns 80STORE and 80 columns off, then goes to <Finish>.
-;; Also: SCR40RET (IIEROM82)
+;; Also: SCR40RET (IIEROM82), SCR4 (IIETRM85)
 Done:
     sta Store80Off
     sta Columns80Off
@@ -119,7 +119,7 @@ NextColumn:
 ;; It converts from the last line up to line 0, or to line 20 when graphics are shown, and puts the cursor
 ;; back as it was.
 ;; Keeps: X
-;; Also: SCRN48 (IIEROM82)
+;; Also: SCRN48 (IIEROM82, IIETRM85), SCR40TO80 (UNKN)
 .proc To80
 
     ; The cursor, for <Finish>.
@@ -131,7 +131,7 @@ NextColumn:
     lda #LAST_LINE
     sta Line
 
-;; Also: SCR80 (IIEROM82)
+;; Also: SCR80 (IIEROM82), SCR5 (IIETRM85)
 NextLine:
     lda Line
     jsr LineBase::Row
@@ -145,7 +145,7 @@ NextLine:
     bcs NextLine
 
 ;; Turns 80 columns on.
-;; Also: SCR80RET (IIEROM82)
+;; Also: SCR80RET (IIEROM82), SCR9 (IIETRM85)
 Done:
     sta Columns80On
     ; Falls into Finish.
@@ -154,7 +154,7 @@ Done:
 ;; Finishes a conversion: puts the cursor back from the stack, where <To40> and <To80> push its line, then its
 ;; column, and computes its line's base.
 ;; Keeps: X, Y
-;; Also: SCRNRET (IIEROM82)
+;; Also: SCRNRET (IIEROM82, IIETRM85)
 .proc Finish
     pla
     sta EightyColumns::CursorColumn
@@ -202,7 +202,7 @@ NextColumn:
 ;; Blanks bytes 20-39 of the line at <TextBase> in the half switched in, columns 40-79 of an 80-column line: normal
 ;; blanks, or inverse ones when <InverseMask> says so.
 ;; Keeps: X
-;; Also: CLRHALF (IIEROM82)
+;; Also: CLRHALF (IIEROM82, IIETRM85), CLRRIGHT (UNKN)
 .proc ClearRightHalf
     ldy #COLUMNS_40 / 2
     lda #' '
@@ -295,7 +295,7 @@ SavedColumn = $1F
 
 ;; Flips bit 7 of the character at the cursor, which shows or hides the cursor.
 ;; Keeps: A, X, Y
-;; Also: INVERT (IIEROM82)
+;; Also: INVERT (IIEROM82, IIETRM85)
 .proc InvertCursor
     pha
     tya
@@ -316,7 +316,7 @@ SavedColumn = $1F
 ;; In: A = the character, Y = the column
 ;; Out: overflow = set
 ;; Keeps: A, X, Y
-;; Also: STORCHAR (IIEROM82)
+;; Also: STORCHAR (IIEROM82, IIETRM85), PUTINV (UNKN)
 .proc StoreCharacter
     pha
     bit InverseMask
@@ -324,7 +324,7 @@ SavedColumn = $1F
     eor #NORMAL_BIT
 
 ;; Writes the character: <OverflowByte> sets overflow for <Access>.
-;; Also: STOR2 (IIEROM82)
+;; Also: STOR2 (IIEROM82, IIETRM85)
 Store:
     bit OverflowByte
     jsr Access
@@ -333,7 +333,7 @@ Store:
 .endproc
 
 ;; <StoreCharacter>'s RTS, $60, which `bit OverflowByte` reads to set overflow: <Access>'s write.
-;; Also: SEV (IIEROM82)
+;; Also: SEV (IIEROM82, IIETRM85)
 OverflowByte:
     rts
 
@@ -341,7 +341,7 @@ OverflowByte:
 ;; In: Y = the column
 ;; Out: A = the character, overflow = clear
 ;; Keeps: X, Y
-;; Also: PICK (IIEROM82)
+;; Also: PICK (IIEROM82, IIETRM85), GETSCRCHAR (UNKN)
 .proc ReadCharacter
     clv
     jsr Access
@@ -432,7 +432,7 @@ Done:
 ;; Saves the character at the cursor in <EightyColumns::CurrentCharacter> and shows a "+" there in the opposite
 ;; video: the escape mode's cursor.
 ;; Keeps: A, X, Y
-;; Also: ESCON (IIEROM82)
+;; Also: ESCON (IIEROM82, IIETRM85), ESCCURSOR (UNKN)
 .proc ShowEscapeCursor
     pha
     tya
@@ -451,7 +451,7 @@ Done:
 ;; Keeps: A, X, Y
 ;; Entry:
 ;;   Store = writes A at column Y, with Y and A pushed: <ShowEscapeCursor> enters here
-;; Also: ESCOFF (IIEROM82)
+;; Also: ESCOFF (IIEROM82, IIETRM85), RESTCHAR (UNKN)
 .proc RestoreCharacter
     pha
     tya
@@ -461,7 +461,7 @@ Done:
 
 ;; Writes A at column Y, then takes Y and A back from the stack, where the caller pushed A, then Y.
 ;; In: A = the character, Y = the column
-;; Also: ESCRET (IIEROM82)
+;; Also: ESCRET (IIEROM82, IIETRM85)
 Store:
     bit OverflowByte
     jsr Access
@@ -480,7 +480,7 @@ Store:
 ;; RAM or ROM as before, but not whether RAM could be written. It copies through <OutputHook>, whose low byte it
 ;; puts back and whose high byte it leaves at $C3, slot 3's page.
 ;; Keeps: A
-;; Also: COPYROM (IIEROM82)
+;; Also: COPYROM (IIEROM82, IIETRM85), LCMONCOPY (UNKN)
 .proc CopyMonitorToRam
 .assert * = $CF78, "CopyMonitorToRam must stay at $CF78."
     pha
@@ -505,7 +505,7 @@ Store:
     lda #0
     sta OutputHook
 
-;; Also: COPYROM2 (IIEROM82)
+;; Also: COPYROM2 (IIEROM82, IIETRM85)
 CopyByte:
     lda (OutputHook),y
     sta (OutputHook),y
@@ -547,7 +547,7 @@ Bank1:
 Bank1Rom:
     lda LanguageCardRomWriteBank1
 
-;; Also: COPYRET (IIEROM82)
+;; Also: COPYRET (IIEROM82), ROMOK (IIETRM85)
 Done:
     plp
     pla
@@ -560,7 +560,7 @@ Done:
 ;; Sets up a Pascal call: the full 80-column window unless <MODE_TRANSPARENT> is set, <InverseMask> from
 ;; <MODE_INVERSE>, and <TextBase> from <EightyColumns::SavedTextBase>.
 ;; Keeps: X, Y
-;; Also: PSETUP (IIEROM82)
+;; Also: PSETUP (IIEROM82, IIETRM85), PASRESTORE (UNKN)
 .proc Setup
     lda EightyColumns::Mode
     and #MODE_TRANSPARENT
@@ -577,7 +577,7 @@ SetVideo:
     beq RestoreBase
     lsr InverseMask
 
-;; Also: PSETUPRET (IIEROM82)
+;; Also: PSETUPRET (IIEROM82, IIETRM85)
 RestoreBase:
     lda EightyColumns::SavedTextBase
     sta TextBase

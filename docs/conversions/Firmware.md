@@ -7,8 +7,11 @@ with the shared `FirmwareEquates.asm` and `FirmwareFunctions.asm`. Documents cit
 The IDs are the ones the rename table's review gave: numbers not here (F9, F13) are not gaps to fill, F10-F11 are
 one entry, and the last two points are notes without IDs.
 
-- F1. A routine that does the same job has the same name in both models' files; each file's `Also:` has that
-  model's Apple name.
+- F1. A routine that does the same job has the same name in both models' files, and it is one lineage: each
+  model's `Also:` has every name either listing gives it, cited to the listing that gives it (the owner's lineage
+  decision, ConvertingSources.md). The firmwares stay two sources: of the 24 routines both have, 6 are identical, 5
+  differ in places and 13 throughout, and the rest of each is its own, at its own addresses. A name that means
+  different routines in the two models (TESTFAIL, BASCALC, DIAGS, STAY80) stays with its own model's definition.
 - F2. Apple's dotted and lower-case names are cited upper case with underscores: B_FUNC, F_CLREOP, X_FF.
 - F3. The firmware function numbers are in a shared `FirmwareFunctions.asm`, included by the Monitor and both
   firmware files, with `.assert`s tying each number to its handler table entry.

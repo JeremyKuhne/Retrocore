@@ -115,13 +115,13 @@ PassedOpcode = ScrollBase
 ;; Out: TextBase/TextBaseHigh = the cursor line's base address
 ;; Entry:
 ;;   FromLine = clears from column Y of line A down; <Home40> branches here
-;; Also: CLREOP40 (UNKN), F_CLREOP (IIETRM85)
+;; Also: F_CLREOP (IIEROM82, IIETRM85), CLREOP40 (UNKN)
 .proc ClearToEndOfWindow40
     ldy CursorColumn
     lda CV
 
 ;; Clears from column Y of line A to the end of the window.
-;; Also: CLEOP1 (IIETRM85)
+;; Also: CLEOP1 (IIEROM82, IIETRM85)
 FromLine:
     pha
     jsr LineBase::Row
@@ -137,7 +137,7 @@ FromLine:
 
 ;; Function 5, 40 columns: moves the cursor to the window's top left and clears the window.
 ;; Out: CV = <WindowTop>, CursorColumn = 0
-;; Also: HOME40 (UNKN), F_HOME (IIETRM85)
+;; Also: F_HOME (IIEROM82, IIETRM85), HOME40 (UNKN)
 .proc Home40
     lda WindowTop
     sta CV
@@ -149,14 +149,14 @@ FromLine:
 ;; Function 6, 40 columns: scrolls the window up a line.
 ;;
 ;; Copies each line of the window to the line above it, from the second line down, then clears the bottom line.
-;; Also: SCROLL40 (UNKN), F_SCROLL (IIETRM85)
+;; Also: F_SCROLL (IIEROM82, IIETRM85), SCROLL40 (UNKN)
 .proc Scroll40
     lda WindowTop
     pha
     jsr LineBase::Row
 
 ;; Makes the line just copied the destination, and the next line the source.
-;; Also: SCRL1 (IIETRM85)
+;; Also: SCRL1 (IIEROM82, IIETRM85)
 NextLine:
     lda TextBase
     sta ScrollBase
@@ -173,7 +173,7 @@ NextLine:
     jsr LineBase::Row
 
 ;; Copies the line, right to left.
-;; Also: SCRL2 (IIETRM85)
+;; Also: SCRL2 (IIEROM82, IIETRM85)
 CopyByte:
     lda (TextBase),y
     sta (ScrollBase),y
@@ -182,7 +182,7 @@ CopyByte:
     bmi NextLine
 
 ;; Clears the bottom line.
-;; Also: SCRL3 (IIETRM85)
+;; Also: SCRL3 (IIEROM82, IIETRM85)
 ClearBottom:
     ldy #0
     jsr ClearColumns40
@@ -204,7 +204,7 @@ RowLineBase:
 ;;
 ;; The Monitor's <SetWindow> has set the window's top and left. <SetWindowWidth> runs it for the 80-column firmware too.
 ;; Out: WindowWidth, WindowBottom, CV = the last line, TextBase/TextBaseHigh = its base address
-;; Also: SETWNDREST (UNKN), F_SETWND (IIETRM85)
+;; Also: F_SETWND (IIEROM82, IIETRM85), SETWNDREST (UNKN)
 .proc SetWindow40
     lda #WIDTH_40
     sta WindowWidth
@@ -217,45 +217,45 @@ RowLineBase:
 .endproc
 
 ;; Function 8, 40 columns: clears from the column the Monitor left in <PassedColumn> to the end of the line.
-;; Also: CLREOLZ40 (UNKN), F_CLREOLZ (IIETRM85)
+;; Also: F_CLEOLZ (IIEROM82), CLREOLZ40 (UNKN), F_CLREOLZ (IIETRM85)
 .proc ClearLineFrom40
     ldy PassedColumn
     jmp ClearColumns40
 .endproc
 
 ;; Function 6, 80 columns: scrolls the window up a line.
-;; Also: CXSCROLL80 (UNKN), B_SCROLL (IIETRM85)
+;; Also: B_SCROLL (IIEROM82, IIETRM85), CXSCROLL80 (UNKN)
 .proc Scroll80
     jmp Control::ScrollUp
 .endproc
 
 ;; Function 7, 80 columns: clears from the firmware's cursor to the end of the line.
-;; Also: CXCLREOL80 (UNKN), B_CLREOL (IIETRM85)
+;; Also: B_CLREOL (IIEROM82, IIETRM85), CXCLREOL80 (UNKN)
 .proc ClearToEndOfLine80
     jmp Control::ClearToEndOfLine
 .endproc
 
 ;; Function 8, 80 columns: clears from the column the Monitor left in <PassedColumn> to the end of the line.
-;; Also: CXCLREOLZ80 (UNKN), B_CLREOLZ (IIETRM85)
+;; Also: B_CLEOLZ (IIEROM82), CXCLREOLZ80 (UNKN), B_CLREOLZ (IIETRM85)
 .proc ClearLineFrom80
     ldy PassedColumn
     jmp Control::ClearLineFrom
 .endproc
 
 ;; Function $0A, 80 columns: clears from the firmware's cursor to the end of the window.
-;; Also: CXCLREOP80 (UNKN), B_CLREOP (IIETRM85)
+;; Also: B_CLREOP (IIEROM82, IIETRM85), CXCLREOP80 (UNKN)
 .proc ClearToEndOfWindow80
     jmp Control::ClearToEndOfWindow
 .endproc
 
 ;; Function $0C, 80 columns: goes on in <SetWindowWidth>.
-;; Also: CXSETWND80 (UNKN), B_SETWND (IIETRM85)
+;; Also: B_SETWND (IIEROM82, IIETRM85), CXSETWND80 (UNKN)
 .proc SetWindow80
     jmp SetWindowWidth
 .endproc
 
 ;; Function 9, which the Monitor's reset calls, in both halves of <Handlers>: goes on in <ResetFirmware>.
-;; Also: CXRESET (UNKN), B_RESET (IIETRM85)
+;; Also: B_RESET (IIEROM82, IIETRM85), CXRESET (UNKN)
 .proc Reset
     jmp ResetFirmware
 .endproc
@@ -270,7 +270,7 @@ RowLineBase:
 ;;
 ;; Then gives the Monitor the firmware's cursor column, in <CursorColumn> and <EightyColumns::LastCursorColumn>, and
 ;; sets the cursor line's base address.
-;; Also: CXHOME80 (UNKN), B_HOME (IIETRM85)
+;; Also: B_HOME (IIEROM82, IIETRM85), CXHOME80 (UNKN)
 .proc Home80
     jsr Control::HomeAndClear
     lda EightyColumns::CursorColumn
@@ -366,20 +366,20 @@ Done:
 ;; Left, right, down and up (<ArrowKeys>) become J, K, M and I (<ArrowLetters>).
 ;; In: A = the key
 ;; Out: A = the key, translated
-;; Also: CXESCKEY (UNKN), B_ESCFIX (IIETRM85)
+;; Also: B_ESCFIX (IIEROM82, IIETRM85), CXESCKEY (UNKN)
 .proc EscapeKey
     jsr Upshift
     ldy #ARROW_COUNT - 1
 
 ;; Compares the key with an arrow key, and takes its letter when they match.
-;; Also: B_ESCFIX2 (IIETRM85)
+;; Also: B_ESCFIX2 (IIEROM82, IIETRM85)
 Compare:
     cmp ArrowKeys,y
     bne Next
     lda ArrowLetters,y
 
 ;; The next arrow key, down to the first.
-;; Also: B_ESCFIX3 (IIETRM85)
+;; Also: B_ESCFIX3 (IIEROM82, IIETRM85)
 Next:
     dey
     bpl Compare
@@ -437,7 +437,7 @@ ReadLine = $FCF0
 .endproc
 
 ;; Function 7, 40 columns: clears from the cursor to the end of the line.
-;; Also: CLREOL40 (UNKN), F_CLREOL (IIETRM85)
+;; Also: F_CLREOL (IIEROM82, IIETRM85), CLREOL40 (UNKN)
 .proc ClearToEndOfLine40
     ldy CursorColumn
     ; Falls into ClearColumns40.
@@ -447,7 +447,7 @@ ReadLine = $FCF0
 ;;
 ;; The blank is a space, or an inverse space with the alternate characters on and <InverseMask> making inverse text.
 ;; In: Y = the column, TextBase/TextBaseHigh = the line
-;; Also: CLRLINE40 (UNKN), X_CLREOLZ (IIETRM85)
+;; Also: X_CLEOLZ (IIEROM82), CLRLINE40 (UNKN), X_CLREOLZ (IIETRM85)
 .proc ClearColumns40
     lda #' '
     bit AlternateCharactersState
@@ -476,7 +476,7 @@ Store:
 
 ;; The exit every function leaves through: pulls the status <Monitor:CallFirmware> pushed, and returns through
 ;; <SelectSlotRom>, which switches slot ROM in, unless internal ROM was in before the call.
-;; Also: CXEXIT (UNKN), F_RETURN (IIETRM85)
+;; Also: F_RETURN (IIEROM82, IIETRM85), CXEXIT (UNKN)
 .proc Return
     plp
     bmi ReturnInternal
@@ -485,7 +485,7 @@ Store:
 
 ;; The exit when internal ROM was in before the call: returns through <SelectSlotRom>'s return,
 ;; <Monitor:SelectSlotRom::Done>, leaving the ROM as it is.
-;; Also: CXEXITINT (UNKN), F_RET1 (IIETRM85)
+;; Also: F_RET1 (IIEROM82, IIETRM85), CXEXITINT (UNKN)
 ReturnInternal:
     ; SelectSlotRom's first instruction, sta InternalCxRomOff, is three bytes.
     jmp SelectSlotRom + 3
@@ -600,7 +600,7 @@ HANDLER_COUNT = * - Handlers
 ;; Out: A = the key
 ;; Entry:
 ;;   ToReturn = returns; <GetKey40> branches here
-;; Also: CXKEYIN (UNKN), B_KEYIN (IIETRM85)
+;; Also: B_KEYIN (IIEROM82, IIETRM85), CXKEYIN (UNKN)
 .proc GetKey
     bit Columns80State
     bpl GetKey40
@@ -684,7 +684,7 @@ CheckKey:
 ;; line, for function $0C in 80 columns.
 ;; Out: WindowWidth, WindowBottom, CV = the last line, TextBase/TextBaseHigh = its base address,
 ;;      EightyColumns::CursorLine = <CV>
-;; Also: SETWND80 (UNKN), B_SETWNDX (IIETRM85)
+;; Also: B_SETWNDX (IIEROM82, IIETRM85), SETWND80 (UNKN)
 .proc SetWindowWidth
     jsr SetWindow40
     bit Columns80State
@@ -709,7 +709,7 @@ CopyLine:
 ;; ROM in, and the internal one instead when <TestSlot3Card> says to.
 ;; Entry:
 ;;   Done = returns; <ShowCursorWhen40> branches here
-;; Also: RESETFW (UNKN), B_RESETX (IIETRM85)
+;; Also: B_RESETX (IIEROM82, IIETRM85), RESETFW (UNKN)
 .proc ResetFirmware
     lda #MODE_INACTIVE
     sta EightyColumns::Mode
@@ -733,7 +733,7 @@ CheckOpenApple:
     sec
 
 ;; Stores a space in two bytes of the page, the second one lower.
-;; Also: BLAST (IIETRM85)
+;; Also: BLAST (IIEROM82, IIETRM85)
 SpoilPage:
     sta Address1High
     pha
@@ -747,7 +747,7 @@ SpoilPage:
     bne SpoilPage
 
 ;; Switches slot 3's ROM in, then the internal one instead when <TestSlot3Card> says to.
-;; Also: RESETRET (IIETRM85)
+;; Also: RESETRET (IIEROM82, IIETRM85)
 ChooseSlot3Rom:
     sta SlotC3RomOn
     jsr TestSlot3Card
@@ -761,7 +761,7 @@ Done:
 .endproc
 
 ;; The arrow keys <EscapeKey> translates: left, right, down and up.
-;; Also: ARROWKEYS (UNKN), ESCIN (IIETRM85)
+;; Also: ESCIN (IIEROM82, IIETRM85), ARROWKEYS (UNKN)
 ArrowKeys:
     .byte KEY_BACKSPACE, KEY_RIGHT_ARROW, KEY_LINE_FEED, KEY_CONTROL_K
 

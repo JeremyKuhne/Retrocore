@@ -118,7 +118,7 @@ internal static partial class MachineSymbols
     // Whether an equate in a source that follows the style guide is a value rather than an address. There locations
     // are PascalCase, so a value is one named in capitals (SCREEN_WIDTH, COLUMNS, AddressMode::ABSOLUTE) or a .set
     // variable, in either form. Such a source's Equates.asm holds only locations, keeping Apple's capital names for
-    // them until they are converted (CV, B_FUNC), so only its .set variables are values. Other sources name their
+    // them until they are converted (CV, LOC1), so only its .set variables are values. Other sources name their
     // locations in capitals too, so the rule cannot tell their values from them and leaves both.
     private static bool IsValue(string name, AssemblyLocation location, Dictionary<string, string[]?> styled)
     {

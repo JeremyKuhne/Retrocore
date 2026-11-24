@@ -79,7 +79,7 @@ COLON_CODE = ((':' ^ '0') + $89) & $FF
 ;; Keeps: X, Y
 ;; Entry:
 ;;   Row = computes the base of line A
-;; Also: VTAB80 (UNKN)
+;; Also: C8_BASCALC (UNKN), VTAB80 (UNKN)
 .proc LineBase
 .assert * = $CDFE, "LineBase must stay at $CDFE."
     lda CV
@@ -94,7 +94,7 @@ Row:
     bpl AddLeft
     lsr a
 
-;; Also: VTAB40 (IIETRM85)
+;; Also: BASCLC3 (IIEROM82), VTAB40 (IIETRM85)
 AddLeft:
     clc
     adc TextBase
@@ -108,7 +108,7 @@ AddLeft:
 ;; In: A = the character
 ;; Out: A = the character, uppercase
 ;; Keeps: X, Y
-;; Also: UPSHIFT (UNKN), UPSHFT (IIETRM85)
+;; Also: B_FIXCHR (IIEROM82), UPSHIFT (UNKN), UPSHFT (IIETRM85)
 .proc Upshift
 .assert * = $CE14, "Upshift must stay at $CE14."
     cmp #'a'
@@ -148,7 +148,7 @@ Done:
 ;; Keeps: A, Y
 ;; Entry:
 ;;   Done = the return <FlipCursor> branches to when the cursor is hidden
-;; Also: INVERT (IIETRM85)
+;; Also: INVERT (IIEROM82, IIETRM85)
 .proc InvertCursor
     pha
     tya
@@ -171,14 +171,14 @@ Done:
 ;; Falls into <OverflowByte>.
 ;; In: A = the character, Y = the column
 ;; Keeps: A, X, Y
-;; Also: PUTINV (UNKN), STORCHAR (IIETRM85)
+;; Also: STORCHAR (IIEROM82, IIETRM85), PUTINV (UNKN)
 .proc StoreCharacter
     pha
     bit InverseMask
     bmi Store
     and #NORMAL_BIT ^ $FF
 
-;; Also: STOR2 (IIETRM85)
+;; Also: STOR2 (IIEROM82, IIETRM85)
 Store:
     jsr WriteCharacter
     pla
@@ -186,7 +186,7 @@ Store:
 .endproc
 
 ;; <StoreCharacter>'s RTS, $60, which `bit OverflowByte` reads to set overflow.
-;; Also: SEV (IIETRM85)
+;; Also: SEV (IIEROM82, IIETRM85)
 OverflowByte:
     rts
 
@@ -198,7 +198,7 @@ OverflowByte:
 ;; In: Y = the column
 ;; Out: A = the character
 ;; Keeps: X, Y
-;; Also: GETSCRCHAR (UNKN), PICK (IIETRM85)
+;; Also: PICK (IIEROM82, IIETRM85), GETSCRCHAR (UNKN)
 .proc ReadCharacter
     lda (TextBase),y
     bit Columns80State
@@ -309,7 +309,7 @@ Write40:
 ;; Saves the character at the cursor in <EightyColumns::CurrentCharacter> and shows a "+" there in the opposite
 ;; video: the escape mode's cursor.
 ;; Keeps: A, X, Y
-;; Also: ESCCURSOR (UNKN), ESCON (IIETRM85)
+;; Also: ESCON (IIEROM82, IIETRM85), ESCCURSOR (UNKN)
 .proc ShowEscapeCursor
     pha
     tya
@@ -328,7 +328,7 @@ Write40:
 ;; Keeps: A, X, Y
 ;; Entry:
 ;;   Store = writes A at column Y, with Y and A pushed: <ShowEscapeCursor> enters here
-;; Also: RESTCHAR (UNKN), ESCOFF (IIETRM85)
+;; Also: ESCOFF (IIEROM82, IIETRM85), RESTCHAR (UNKN)
 .proc RestoreCharacter
     pha
     tya
@@ -338,7 +338,7 @@ Write40:
 
 ;; Writes A at column Y, then takes Y and A back from the stack, where the caller pushed A, then Y.
 ;; In: A = the character, Y = the column
-;; Also: ESCRET (IIETRM85)
+;; Also: ESCRET (IIEROM82, IIETRM85)
 Store:
     jsr WriteCharacter
     pla
@@ -355,7 +355,7 @@ Store:
 ;; Sets up a Pascal call: the full 80-column window, <InverseMask> from <MODE_INVERSE>, and <TextBase> and <CV> from
 ;; <EightyColumns::SavedTextBase> and <EightyColumns::CursorLine>.
 ;; Keeps: X, Y
-;; Also: PASRESTORE (UNKN), PSETUP (IIETRM85)
+;; Also: PSETUP (IIEROM82, IIETRM85), PASRESTORE (UNKN)
 .proc Setup
     jsr FullWindow80
 
@@ -367,7 +367,7 @@ Store:
     beq RestoreBase
     lsr InverseMask
 
-;; Also: PSETUPRET (IIETRM85)
+;; Also: PSETUPRET (IIEROM82, IIETRM85)
 RestoreBase:
     lda EightyColumns::SavedTextBase
     sta TextBase
@@ -384,7 +384,7 @@ RestoreBase:
 ;; <ModelId> is not the IIe's, then puts back the bank and whether RAM can be written.
 ;;
 ;; At $CEF4. It copies through <OutputHook>, which it leaves at $0000 for its caller to set.
-;; Also: LCMONCOPY (UNKN), COPYROM (IIETRM85)
+;; Also: COPYROM (IIEROM82, IIETRM85), LCMONCOPY (UNKN)
 .proc CopyMonitorToRam
 .assert * = $CEF4, "CopyMonitorToRam must stay at $CEF4."
     bit LanguageCardRamState
@@ -420,7 +420,7 @@ Copy:
     sta OutputHookHigh
     sty OutputHook
 
-;; Also: COPYROM2 (IIETRM85)
+;; Also: COPYROM2 (IIEROM82, IIETRM85)
 CopyByte:
     lda (OutputHook),y
     sta (OutputHook),y
@@ -433,7 +433,7 @@ CopyByte:
     lda LanguageCardBank2ReadOnly,x
     lda LanguageCardBank2ReadOnly,x
 
-;; Also: ROMOK (IIETRM85)
+;; Also: COPYRET (IIEROM82), ROMOK (IIETRM85)
 Done:
     rts
 .endproc

@@ -133,7 +133,7 @@ PascalOffsets:
 ;; while <EightyColumns::Mode>'s bit 7 is set, as it is once the firmware has quit (the mode is then $FF) and while
 ;; Pascal uses it, goes to the Monitor's <KeyboardIn> instead, which becomes the input hook.
 ;; In: A = the character, carry and overflow = as the entry set them
-;; Also: C3ENTRY (UNKN), BASICENT (IIETRM85)
+;; Also: BASICENT (IIEROM82, IIETRM85), C3ENTRY (UNKN)
 .proc Enter
     sta EightyColumns::CurrentCharacter
     tya
@@ -150,7 +150,7 @@ PascalOffsets:
     sta EightyColumns::Mode
 
 ;; Claims the $C800 ROM, then goes by V and the carry. A is the mode.
-;; Also: NOGETLN (IIETRM85)
+;; Also: BASICENT2 (IIEROM82), NOGETLN (IIETRM85)
 ClaimRom:
     jsr ClaimExpansionRom
     plp
@@ -174,7 +174,7 @@ ToInputOrOutput:
     jmp InputOrOutput
 
 ;; Initializes the firmware, after `PR#3`.
-;; Also: C3GOINIT (UNKN), JBASINIT (IIETRM85)
+;; Also: JBASINIT (IIEROM82, IIETRM85), C3GOINIT (UNKN)
 ToInitialize:
     jmp Initialize
 .endproc
@@ -192,7 +192,7 @@ ToInitialize:
 ;;
 ;; At $C34A.
 ;; Out: X = 0, or 9 when there is no auxiliary memory for 80 columns
-;; Also: PASINIT (UNKN), JPINIT (IIETRM85)
+;; Also: JPINIT (IIEROM82, IIETRM85), PASINIT (UNKN)
 .proc InitEntry
     jsr ClaimExpansionRom
     jmp Init
@@ -202,7 +202,7 @@ ToInitialize:
 ;;
 ;; At $C350.
 ;; Out: A = the key, with bit 7 clear, X = 0, or $C3 for Pascal 1.0
-;; Also: PASREAD (UNKN), JPREAD (IIETRM85)
+;; Also: JPREAD (IIEROM82, IIETRM85), PASREAD (UNKN)
 .proc ReadEntry
     jsr ClaimExpansionRom
     jmp Read
@@ -212,7 +212,7 @@ ToInitialize:
 ;;
 ;; At $C356.
 ;; In: A = the character
-;; Also: PASWRITE (UNKN), JPWRITE (IIETRM85)
+;; Also: JPWRITE (IIEROM82, IIETRM85), PASWRITE (UNKN)
 .proc WriteEntry
     jsr ClaimExpansionRom
     jmp Write
@@ -226,7 +226,7 @@ ToInitialize:
 ;; Out: X = 0, or <PASCAL_BAD_REQUEST> for another request, carry = set when ready, clear when not or for another
 ;;     request
 ;; Keeps: A, Y
-;; Also: PASSTATUS (UNKN), JPSTAT (IIETRM85)
+;; Also: JPSTAT (IIEROM82, IIETRM85), PASSTATUS (UNKN)
 .proc StatusEntry
     tax
     beq Ready
@@ -258,7 +258,7 @@ NotReady:
 ;; $C800 ROM, so that the next fetch from page $C3 selects the internal one.
 ;; Uses: X
 ;; Keeps: A, Y
-;; Also: SETMSLOT3 (UNKN), SETC8 (IIETRM85)
+;; Also: SETC8 (IIEROM82, IIETRM85), SETMSLOT3 (UNKN)
 .proc ClaimExpansionRom
     ldx #SLOT3_ROM_PAGE
     stx ExpansionRomSlot
@@ -274,7 +274,7 @@ NotReady:
 ;;     destination, carry = set to copy main to auxiliary memory, clear for auxiliary to main
 ;; Out: Address1/Address1High = the address after A2, Address4/Address4High = the address after the copy
 ;; Keeps: A, X, Y
-;; Also: DOAUXMOVE (UNKN)
+;; Also: C3_MOVE (UNKN), DOAUXMOVE (UNKN)
 .proc CopyMainAux
     pha
     tya
@@ -291,17 +291,17 @@ NotReady:
     bcs Start
 
 ;; Carry clear: reads auxiliary, writes main.
-;; Also: MOVEC2M (IIETRM85)
+;; Also: MOVEC2M (IIEROM82, IIETRM85)
 AuxToMain:
     sta AuxWriteOff
     sta AuxReadOn
 
-;; Also: MOVESTRT (IIETRM85)
+;; Also: MOVESTRT (IIEROM82, IIETRM85)
 Start:
     ldy #0
 
 ;; Copies a byte and steps A4.
-;; Also: MOVELOOP (IIETRM85)
+;; Also: MOVELOOP (IIEROM82, IIETRM85)
 Loop:
     lda (Address1),y
     sta (Address4),y
@@ -310,6 +310,7 @@ Loop:
     inc Address4High
 
     ; Compares A1 with A2, then steps A1.
+;; Also: C3_NXTA1 (UNKN)
 NextSource:
     lda Address1
     cmp Address2
@@ -320,6 +321,7 @@ NextSource:
     inc Address1High
 
     ; Goes on until A1 was A2, then puts RAMWRT back.
+;; Also: C01 (IIEROM82)
 CheckEnd:
     bcc Loop
     sta AuxWriteOff
@@ -328,14 +330,14 @@ CheckEnd:
     sta AuxWriteOn
 
 ;; Puts RAMRD back.
-;; Also: C03 (IIETRM85)
+;; Also: C03 (IIEROM82, IIETRM85)
 RestoreRead:
     sta AuxReadOff
     pla
     bpl Done
     sta AuxReadOn
 
-;; Also: MOVERET (IIETRM85)
+;; Also: MOVERET (IIEROM82, IIETRM85)
 Done:
     pla
     tay
@@ -351,7 +353,7 @@ Done:
 ;; <AuxTransfer> has it.
 ;; In: TransferAddress/TransferAddressHigh = the target, carry = set to run in auxiliary memory, clear for main,
 ;;     overflow = set for the auxiliary zero page and stack, clear for main's
-;; Also: DOXFER (UNKN)
+;; Also: C3_XFER (UNKN), DOXFER (UNKN)
 .proc JumpMainAux
     pha
     lda TransferAddress
@@ -366,7 +368,7 @@ Done:
     bcs ZeroPage
 
 ;; Carry clear: main memory.
-;; Also: XFERC2M (IIETRM85)
+;; Also: XFERC2M (IIEROM82, IIETRM85)
 Main:
     sta AuxReadOff
     sta AuxWriteOff
@@ -383,7 +385,7 @@ ZeroPage:
     sta AuxZeroPageOff
     bvc Jump
 
-;; Also: XFERAZP (IIETRM85)
+;; Also: XFERAZP (IIEROM82, IIETRM85)
 AuxZeroPage:
     sta AuxZeroPageOn
 

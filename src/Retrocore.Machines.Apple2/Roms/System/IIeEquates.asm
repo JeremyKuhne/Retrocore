@@ -30,8 +30,8 @@ SlotPointer = $00
 ;; The column where the text window starts, 0 for a full screen.
 ;;
 ;; <Monitor:SetWindow> clears it, and <Monitor:SetLineBase> adds it to <TextBase> (on the Enhanced IIe, through the
-;; firmware's <Firmware:VTAB80>), so <CursorColumn> counts columns from the window's left edge. In 80 columns, the
-;; firmware adds half of it, since each byte of a line then holds two columns.
+;; firmware's <Firmware:VTAB80@Enhanced>), so <CursorColumn> counts columns from the window's left edge. In 80 columns,
+;; the firmware adds half of it, since each byte of a line then holds two columns.
 ;; See: <WindowWidth>, <WindowTop>, <WindowBottom>, <Monitor:SetWindow>
 ;; Also: WNDLFT (A2RM78, A2RM79, IIEROM82, IIETRM85)
 WindowLeft = $20
@@ -94,7 +94,7 @@ LowResBaseHigh = $27
 ;;
 ;; <Monitor:BaseAddress> sets <TextBase>/<TextBaseHigh> from a line number, and <Monitor:VerticalTab> sets them for
 ;; <Monitor:CV>, adding <WindowLeft>. <Monitor:StoreAndAdvance> then stores each character at (<TextBase>),Y with
-;; Y = <CursorColumn>. On the Enhanced IIe, <Monitor:SetLineBase> has the internal firmware's <Firmware:VTAB80>
+;; Y = <CursorColumn>. On the Enhanced IIe, <Monitor:SetLineBase> has the internal firmware's <Firmware:VTAB80@Enhanced>
 ;; compute them.
 ;; See: <TextBaseHigh>, <Monitor:BaseAddress>, <Monitor:VerticalTab>, <Monitor:CV>, <CursorColumn>
 ;; Also: BASL (A2RM78, A2RM79, IIEROM82, IIETRM85)

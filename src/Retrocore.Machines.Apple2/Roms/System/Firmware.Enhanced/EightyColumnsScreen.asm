@@ -36,7 +36,7 @@ SCROLL_UP = 1
 
 ;; Control-W: scrolls the window up a line and clears its bottom line.
 ;; Keeps: X
-;; Also: SCROLLUP80 (UNKN), SCROLLUP (IIETRM85)
+;; Also: SCROLLUP (IIEROM82, IIETRM85), SCROLLUP80 (UNKN)
 .proc ScrollUp
     ldy #SCROLL_UP
     ; Falls into Scroll.
@@ -49,7 +49,7 @@ SCROLL_UP = 1
 ;; width are odd.
 ;; In: Y = <SCROLL_UP> or <SCROLL_DOWN>
 ;; Keeps: X
-;; Also: SCROLLIT (IIETRM85)
+;; Also: SCROLL1 (IIEROM82), SCROLLIT (IIETRM85)
 .proc Scroll
 
 ;; The direction, kept in <EightyColumns::SavedTextBase>, which the scroll borrows.
@@ -184,7 +184,7 @@ Finish:
 
 ;; Control-K: clears from the cursor to the end of its line, then each line below it in the window.
 ;; Keeps: X
-;; Also: CLREOP80 (UNKN), X_VT (IIETRM85)
+;; Also: X_VT (IIEROM82, IIETRM85), CLREOP80 (UNKN)
 .proc ClearToEndOfWindow
     jsr ClearToEndOfLine
     lda CV
@@ -196,7 +196,7 @@ NextLine:
     jsr LineBase::Row
     jsr ClearLine
 
-;; Also: X_VTNEXT (IIETRM85)
+;; Also: X_VTNEXT (IIEROM82, IIETRM85)
 CheckLine:
     inc CV
     lda CV
@@ -211,7 +211,7 @@ CheckLine:
 
 ;; Control-L: homes the cursor and clears the window.
 ;; Keeps: X
-;; Also: CLRSCRN80 (UNKN), X_FF (IIETRM85)
+;; Also: X_FF (IIEROM82, IIETRM85), CLRSCRN80 (UNKN)
 .proc HomeAndClear
     jsr Home
     jmp ClearToEndOfWindow
@@ -220,7 +220,7 @@ CheckLine:
 ;; Control-Z: clears the cursor's line across the window.
 ;; Out: carry = set
 ;; Keeps: X
-;; Also: CLRLINE80 (UNKN), X_SUB (IIETRM85)
+;; Also: X_SUB (IIEROM82, IIETRM85), CLRLINE80 (UNKN)
 .proc ClearLine
     ldy #0
     beq ClearLineFrom               ; always
@@ -229,7 +229,7 @@ CheckLine:
 ;; Control-]: clears from the cursor to the end of its line.
 ;; Out: carry = set
 ;; Keeps: X
-;; Also: CLREOL80 (UNKN), X_GS (IIETRM85)
+;; Also: X_GS (IIEROM82, IIETRM85), CLREOL80 (UNKN)
 .proc ClearToEndOfLine
     ldy EightyColumns::CursorColumn
     ; Falls into ClearLineFrom.
@@ -245,7 +245,7 @@ CheckLine:
 ;; Keeps: X
 ;; Entry:
 ;;   Store40 = the 40-column loop, with A = the blank: Functions' 40-column clearing jumps here
-;; Also: X_GSEOLZ (IIETRM85)
+;; Also: X_GSEOLZ (IIEROM82, IIETRM85)
 .proc ClearLineFrom
     lda InverseMask
     and #NORMAL_BIT
@@ -279,7 +279,7 @@ Store40:
 ;; <InverseMask> says so.
 ;; Out: carry = set
 ;; Keeps: X
-;; Also: CLRRIGHT (UNKN), CLRHALF (IIETRM85)
+;; Also: CLRHALF (IIEROM82, IIETRM85), CLRRIGHT (UNKN)
 .proc ClearRightHalf
     stx ScrollBase
     ldx #<-COLUMNS_40
@@ -362,7 +362,7 @@ Done:
 ;; Keeps: X
 ;; Entry:
 ;;   Convert = the same without the Pascal check: <QuitFirmware> enters here
-;; Also: SET40COL (UNKN), X_DC1 (IIETRM85)
+;; Also: X_DC1 (IIEROM82, IIETRM85), SET40COL (UNKN)
 .proc Columns40
     lda EightyColumns::Mode
     bmi SetWindowTop::Done
@@ -381,7 +381,7 @@ Convert:
 ;;
 ;; This source called it SET80COL, the name Apple's listings give the 80STORE switch, <Store80On>.
 ;; Keeps: X
-;; Also: X_DC2 (IIETRM85)
+;; Also: X_DC2 (IIEROM82, IIETRM85)
 .proc Columns80
     jsr TestAuxMemory
     bne SetWindowTop::Done
@@ -473,7 +473,7 @@ StoreMode:
 ;; Keeps: X
 ;; Entry:
 ;;   SetInputHook = sets the input hook to the Monitor's <KeyboardIn>: CharacterIo's entry calls it
-;; Also: QUIT80 (UNKN), X_NAK (IIETRM85)
+;; Also: X_NAK (IIEROM82, IIETRM85), QUIT80 (UNKN)
 .proc Quit
     lda EightyColumns::Mode
     bmi SetOutputHook::Done
@@ -530,7 +530,7 @@ Done:
 ;; Keeps: X, Y
 ;; Entry:
 ;;   Store = sets the window A columns wide: <FullWindow40> enters here
-;; Also: FULL80 (IIETRM85)
+;; Also: FULL80 (IIEROM82, IIETRM85)
 .proc FullWindow80
 .assert * = $CD71, "FullWindow80 must stay at $CD71."
     lda #COLUMNS_80
@@ -553,7 +553,7 @@ Store:
 ;;
 ;; At $CD80.
 ;; Keeps: X
-;; Also: OFF80 (UNKN), QUIT (IIETRM85)
+;; Also: QUIT (IIEROM82, IIETRM85), OFF80 (UNKN)
 .proc QuitFirmware
 .assert * = $CD80, "QuitFirmware must stay at $CD80."
     bit Columns80State
@@ -580,14 +580,14 @@ Column = ScrollBase
 ;;
 ;; It converts from the last line up to the window's top line, then computes the cursor line's base.
 ;; Keeps: X
-;; Also: SCR80TO40 (UNKN), SCRN84 (IIETRM85)
+;; Also: SCRN84 (IIEROM82, IIETRM85), SCR80TO40 (UNKN)
 .proc To40
     txa
     pha
     ldx #LAST_LINE
     sta Store80On
 
-;; Also: SCR1 (IIETRM85)
+;; Also: SCR40 (IIEROM82), SCR1 (IIETRM85)
 NextLine:
     txa
     jsr RowBase
@@ -617,7 +617,7 @@ Main:
     bcs NextLine
 
 ;; Turns 80STORE and 80 columns off, then goes to <Finish>.
-;; Also: SCR4 (IIETRM85)
+;; Also: SCR40RET (IIEROM82), SCR4 (IIETRM85)
 Done:
     sta Store80Off
     sta Columns80Off
@@ -629,13 +629,13 @@ Done:
 ;;
 ;; It converts from the last line up to the window's top line, then computes the cursor line's base.
 ;; Keeps: X
-;; Also: SCR40TO80 (UNKN), SCRN48 (IIETRM85)
+;; Also: SCRN48 (IIEROM82, IIETRM85), SCR40TO80 (UNKN)
 .proc To80
     txa
     pha
     ldx #LAST_LINE
 
-;; Also: SCR5 (IIETRM85)
+;; Also: SCR80 (IIEROM82), SCR5 (IIETRM85)
 NextLine:
     txa
     jsr RowBase
@@ -670,7 +670,7 @@ Main:
     bcs NextLine
 
 ;; Turns 80 columns on.
-;; Also: SCR9 (IIETRM85)
+;; Also: SCR80RET (IIEROM82), SCR9 (IIETRM85)
 Done:
     sta Columns80On
     ; Falls into Finish.
@@ -679,7 +679,7 @@ Done:
 ;; Finishes a conversion: computes the cursor line's base and takes X back from the stack, where <To40> and <To80>
 ;; push it.
 ;; Keeps: Y
-;; Also: SCRNRET (IIETRM85)
+;; Also: SCRNRET (IIEROM82, IIETRM85)
 .proc Finish
     jsr LineBase
     pla

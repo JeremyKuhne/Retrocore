@@ -437,7 +437,7 @@ Hang:
 ;; byte that fails goes to <RamFailed>, with <Expected>, <WriteCheck> and <Pointer>/<PointerHigh> + Y saying which;
 ;; after the four passes, <Passed>. The downward passes check page zero only down to $0007, so only the upward
 ;; passes check $0006 (<LowerLimit>).
-;; Also: RAMTEST (UNKN)
+;; Also: RAMTEST (UNKN), TSTMEM (IIETRM85)
 .proc RamTest
     ; The hi-res screen, and bank 2 of the language card, read and written.
     lda TextOff
@@ -727,7 +727,7 @@ Hang:
 ;; Ends a self-test that passed: switches the language card's ROM back in and resets the text screen; with both
 ;; Apple keys still held runs the test again through <RunFromStack>, otherwise prints "KERNEL OK"
 ;; (<KernelOkText>) and hangs.
-;; Also: TESTPASS (UNKN)
+;; Also: TESTPASS (UNKN), BIGLOOP (IIETRM85)
 .proc Passed
     lda LanguageCardRomOnly
     jsr ResetScreen

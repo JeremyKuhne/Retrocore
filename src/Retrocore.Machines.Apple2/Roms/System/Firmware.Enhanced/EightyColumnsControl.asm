@@ -94,7 +94,7 @@ BELL_TOGGLES = $C0
 ;;   SaveBase = saves <TextBase>/<TextBaseHigh>, then shows the cursor; <Pascal::GotoXY>, <Pascal::WriteControl> and
 ;;     <Pascal::Init> go here
 ;;   ShowCursor = shows the cursor, X = 0; <Pascal::StoreGotoColumn> goes here
-;; Also: PASPUTCHAR (UNKN), PWRITE (IIETRM85)
+;; Also: PWRITE (IIEROM82, IIETRM85), PASPUTCHAR (UNKN)
 .proc Write
     and #ASCII_BITS
     tax
@@ -255,7 +255,7 @@ HashNext:
 ;; 80STORE and PAGE2, and reads it back, then restores the byte, PAGE2 and 80STORE.
 ;; Out: A = the byte read back; zero = set when it is <AUX_TEST_BYTE>, auxiliary memory answered
 ;; Keeps: X
-;; Also: AUXPRESENT (UNKN), TESTCARD (IIETRM85)
+;; Also: TESTCARD (IIEROM82, IIETRM85), AUXPRESENT (UNKN)
 .proc TestAuxMemory
     ; PAGE2's state in the carry, 80STORE's in negative, both saved.
     lda Page2State
@@ -278,7 +278,7 @@ HashNext:
     sta Page2Off
 
 ;; 80STORE off unless it was on.
-;; Also: STAY2 (IIETRM85)
+;; Also: STAY2 (IIEROM82, IIETRM85)
 Restore80Store:
     bmi Compare
     sta Store80Off
@@ -364,7 +364,7 @@ RUNS_WHEN_DISABLED = $80
 ;; In: A = the code, $00-$1F
 ;; Out: carry = clear when a handler ran, set when the code has none
 ;; Keeps: A, Y
-;; Also: CTLCHAR (IIETRM85)
+;; Also: CTLCHAR (IIEROM82, IIETRM85)
 .proc Perform
 
 ;; The code, then the handler's page while the mode is checked: <EightyColumns::SavedTextBase>, borrowed.
@@ -390,7 +390,7 @@ Code = EightyColumns::SavedTextBase
     beq Reload
 
 ;; No handler, or the control characters are off: the carry set.
-;; Also: CTLCHARX (IIETRM85)
+;; Also: CTLCHARX (IIEROM82, IIETRM85)
 NotHandled:
     sec
     bcs Done
@@ -400,14 +400,14 @@ Reload:
     lda Code
 
 ;; Runs the handler, with its page's bit 7 back, then the carry clear.
-;; Also: CTLGO (IIETRM85)
+;; Also: CTLGO (IIEROM82, IIETRM85)
 Handle:
     ora #RUNS_WHEN_DISABLED
     jsr Jump
     clc
 
 ;; Y and A back.
-;; Also: CTLRET (IIETRM85)
+;; Also: CTLRET (IIEROM82, IIETRM85)
 Done:
     pla
     tay
@@ -423,7 +423,7 @@ OverflowByte:
 ;; Goes to the handler of control code Y: pushes its page from A and its low byte minus one from
 ;; <Control::HandlersLow>, and returns into it.
 ;; In: A = the handler's page, Y = the code, <Control::FIRST_CODE> or above
-;; Also: CTRLJUMP (UNKN), CTLXFER (IIETRM85)
+;; Also: CTLXFER (IIEROM82, IIETRM85), CTRLJUMP (UNKN)
 .proc Jump
     pha
     lda HandlersLow - FIRST_CODE,y
@@ -465,14 +465,14 @@ Done:
 
 ;; Control-G: rings the bell, a pause and then <BELL_TOGGLES> toggles of the speaker.
 ;; Keeps: X
-;; Also: BELL80 (UNKN), X_BELL (IIETRM85)
+;; Also: X_BELL (IIEROM82, IIETRM85), BELL80 (UNKN)
 .proc Bell
     lda #BELL_PAUSE
     jsr Pause
     ldy #BELL_TOGGLES
 
 ;; Toggles the speaker once.
-;; Also: BELL2 (IIETRM85)
+;; Also: C8_BELL2 (UNKN), BELL2 (IIEROM82, IIETRM85)
 Click:
     lda #BELL_HALF_CYCLE
     jsr Pause
@@ -488,17 +488,17 @@ Click:
 ;; In: A = the count
 ;; Out: A = 0
 ;; Keeps: X, Y
-;; Also: DELAYA (UNKN)
+;; Also: C8_WAIT (UNKN), DELAYA (UNKN)
 .proc Pause
     sec
 
 ;; The outer count.
-;; Also: WAIT2 (IIETRM85)
+;; Also: C8_WAIT2 (UNKN), WAIT2 (IIEROM82, IIETRM85)
 Outer:
     pha
 
 ;; The inner count.
-;; Also: WAIT3 (IIETRM85)
+;; Also: C8_WAIT3 (UNKN), WAIT3 (IIEROM82, IIETRM85)
 Inner:
     sbc #1
     bne Inner
@@ -509,7 +509,7 @@ Inner:
 .endproc
 
 ;; Control-H: moves the cursor left; from the first column, to the last of the line above.
-;; Also: BACKSPC80 (UNKN), X_BS (IIETRM85)
+;; Also: X_BS (IIEROM82, IIETRM85), BACKSPC80 (UNKN)
 .proc Left
     dec EightyColumns::CursorColumn
     bpl Done
@@ -519,13 +519,13 @@ Inner:
     jsr Up
 
 ;; Returns.
-;; Also: BSDONE (IIETRM85)
+;; Also: BSDONE (IIEROM82, IIETRM85)
 Done:
     rts
 .endproc
 
 ;; Control-M: a carriage return: the cursor to the first column and, outside Pascal, down a line.
-;; Also: CR80 (UNKN), X_CR (IIETRM85)
+;; Also: X_CR (IIEROM82, IIETRM85), CR80 (UNKN)
 .proc CarriageReturn
     lda #0
     sta EightyColumns::CursorColumn
@@ -539,7 +539,7 @@ Done:
 .endproc
 
 ;; Control-Y: homes the cursor, to the window's top line and the first column.
-;; Also: HOMECURSOR (UNKN), X_EM (IIETRM85)
+;; Also: X_EM (IIEROM82, IIETRM85), HOMECURSOR (UNKN)
 .proc Home
     lda WindowTop
     sta CV
@@ -549,7 +549,7 @@ Done:
 .endproc
 
 ;; Control-\: moves the cursor right, to the next line at the window's right edge.
-;; Also: FWDSPACE80 (UNKN), X_FS (IIETRM85)
+;; Also: X_FS (IIEROM82, IIETRM85), FWDSPACE80 (UNKN)
 .proc Right
     inc EightyColumns::CursorColumn
     lda EightyColumns::CursorColumn
@@ -558,12 +558,13 @@ Done:
     jsr CarriageReturn
 
     ; Returns.
+;; Also: X_FSRET (IIEROM82)
 Done:
     rts
 .endproc
 
 ;; Control-_: moves the cursor up a line, unless it is on the window's top line.
-;; Also: UP80 (UNKN), X_US (IIETRM85)
+;; Also: X_US (IIEROM82, IIETRM85), UP80 (UNKN)
 .proc Up
     lda WindowTop
     cmp CV
@@ -574,7 +575,7 @@ Done:
 
 ;; Control-N: normal text, and in Pascal <MODE_INVERSE> cleared.
 ;; Keeps: X
-;; Also: NORMAL80 (UNKN), X_SO (IIETRM85)
+;; Also: X_SO (IIEROM82, IIETRM85), NORMAL80 (UNKN)
 .proc Normal
     lda EightyColumns::Mode
     bpl SetNormal
@@ -590,7 +591,7 @@ SetNormal:
 
 ;; Control-O: inverse text, and in Pascal <MODE_INVERSE> set.
 ;; Keeps: X
-;; Also: INVERSE80 (UNKN), X_SI (IIETRM85)
+;; Also: X_SI (IIEROM82, IIETRM85), INVERSE80 (UNKN)
 .proc Inverse
     lda EightyColumns::Mode
     bpl SetInverse
@@ -608,7 +609,7 @@ SetInverse:
 ;; Keeps: X
 ;; Entry:
 ;;   Done = returns; <Control::Up> branches here
-;; Also: SETINVFLG (UNKN), STUFFINV (IIETRM85)
+;; Also: STUFFINV (IIEROM82, IIETRM85), SETINVFLG (UNKN)
 .proc StoreVideo
     sta EightyColumns::Mode
     sty InverseMask
@@ -650,7 +651,7 @@ Done:
 
 ;; The handlers' low bytes, less one, from <Control::FIRST_CODE>. The last five of them, the low bytes for
 ;; Control-[ to Control-_, are <Control::HandlersHigh>' first bytes.
-;; Also: CTRLLOW (UNKN), CTLADL (IIETRM85)
+;; Also: CTLADL (IIEROM82, IIETRM85), CTRLLOW (UNKN)
 HandlersLow:
 .repeat CODE_COUNT - 2 * FIRST_CODE, index
     .byte .ident(.sprintf("CONTROL_LOW_%d", FIRST_CODE + index))
@@ -659,7 +660,7 @@ HandlersLow:
 ;; The handlers' pages, with <Control::RUNS_WHEN_DISABLED> for bit 7, for codes $00-$1F; 0 means no handler. The
 ;; first <Control::FIRST_CODE> bytes, for codes without handlers, are never read as pages: they end
 ;; <Control::HandlersLow>.
-;; Also: CTRLPAGE (UNKN), CTLADH (IIETRM85)
+;; Also: CTLADH (IIEROM82, IIETRM85), CTRLPAGE (UNKN)
 HandlersHigh:
 .repeat FIRST_CODE, index
     .byte .ident(.sprintf("CONTROL_LOW_%d", CODE_COUNT - FIRST_CODE + index))
@@ -669,7 +670,7 @@ HandlersHigh:
 .endrepeat
 
 ;; Control-V: scrolls the window down a line.
-;; Also: SCROLLDN80 (UNKN), SCROLLDN (IIETRM85)
+;; Also: SCROLLDN (IIEROM82, IIETRM85), SCROLLDN80 (UNKN)
 .proc ScrollDown
     ; Y = 0: down. Always: Y is 0.
     ldy #0
@@ -677,7 +678,7 @@ HandlersHigh:
 .endproc
 
 ;; Control-J: moves the cursor down a line, scrolling the window up from its bottom line.
-;; Also: LF80 (UNKN), X_LF (IIETRM85)
+;; Also: X_LF (IIEROM82, IIETRM85), LF80 (UNKN)
 .proc LineFeed
     inc CV
     lda CV
@@ -687,7 +688,7 @@ HandlersHigh:
     jmp LineBase::Row
 
 ;; Below the window: back to its bottom line, then the window scrolled up.
-;; Also: SCROLL80 (UNKN), X_LF2 (IIETRM85)
+;; Also: X_LF2 (IIEROM82, IIETRM85), SCROLL80 (UNKN)
 AtBottom:
     dec EightyColumns::CursorLine
     dec CV

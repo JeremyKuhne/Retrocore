@@ -82,7 +82,7 @@ PASCAL10_READ_X = $C3
 ;; In: EightyColumns::CurrentCharacter = the character to print once started
 ;; Entry:
 ;;   Hang = loops forever with interrupts off; <CharacterIo::InputOrOutput> jumps here
-;; Also: BASICINIT (IIEROM82)
+;; Also: BASICINIT (IIEROM82, IIETRM85), C3INIT (UNKN)
 .proc Initialize
     ; The Monitor's version, with one try at copying the ROM's in.
     lda #MODEL_ID_IIE
@@ -190,7 +190,7 @@ Clear:
 ;;
 ;; <CharacterIo::Enter at BASICENT> jumps here for the hooks, with the caller's A, Y, X and status on the stack, the
 ;; status's carry set for input.
-;; Also: C8BASIC (IIEROM82)
+;; Also: C8BASIC (IIEROM82, IIETRM85)
 .proc InputOrOutput
     bit Columns80State
     bpl AdoptColumn
@@ -227,7 +227,7 @@ ByCarry:
 .endproc
 
 ;; BASIC's output: clears <MODE_INPUT>, then prints the character.
-;; Also: BOUT (IIEROM82)
+;; Also: BOUT (IIEROM82, IIETRM85), CHARIO80 (UNKN)
 .proc Output
     lda EightyColumns::Mode
     and #<~MODE_INPUT
@@ -239,7 +239,7 @@ ByCarry:
 ;;
 ;; A return while Control-S waits in the keyboard pauses until another key; a Control-C is left in the keyboard
 ;; for BASIC to find.
-;; Also: BPRINT (IIEROM82)
+;; Also: BPRINT (IIEROM82, IIETRM85)
 .proc Print
     ; A return with Control-S typed: wait for the next key.
     lda EightyColumns::CurrentCharacter
@@ -252,7 +252,7 @@ ByCarry:
     bit KeyboardStrobe
 
 ;; Waits for the key after Control-S, and clears it unless it is Control-C.
-;; Also: C8_KBDWAIT (UNKN), KBDWAIT (IIEROM82)
+;; Also: C8_KBDWAIT (UNKN), KBDWAIT (IIEROM82, IIETRM85)
 WaitForResume:
     ldy Keyboard
     bpl WaitForResume
@@ -261,7 +261,7 @@ WaitForResume:
     bit KeyboardStrobe
 
 ;; Performs a control character, below the space, or displays any other.
-;; Also: C8_NOWAIT (UNKN), NOWAIT (IIEROM82)
+;; Also: C8_NOWAIT (UNKN), NOWAIT (IIEROM82, IIETRM85)
 NoWait:
     and #ASCII_BITS
     cmp #' ' & ASCII_BITS
@@ -272,7 +272,7 @@ NoWait:
 
 ;; Displays <EightyColumns::CurrentCharacter> at the cursor, in the current video, and moves the cursor right,
 ;; starting a new line (<Control::CarriageReturn>) at the window's right edge.
-;; Also: BPNCTL (IIEROM82)
+;; Also: BPNCTL (IIEROM82, IIETRM85), PRINT80 (UNKN)
 .proc Display
     ldy EightyColumns::CursorColumn
     lda EightyColumns::CurrentCharacter
@@ -288,7 +288,7 @@ NoWait:
 ;; The common exit of BASIC's input and output: the cursor to the Monitor's <CursorColumn> and <Monitor:CV>, the
 ;; caller's X and Y back, and A = <EightyColumns::CurrentCharacter>. The caller's A, Y and X are on the stack.
 ;; Out: A = the character or key, X and Y = the caller's
-;; Also: BIORET (IIEROM82)
+;; Also: BIORET (IIEROM82, IIETRM85)
 .proc Finish
     lda EightyColumns::CursorColumn
     jsr SetCursorColumn
@@ -311,7 +311,7 @@ NoWait:
 ;; In: EightyColumns::CurrentCharacter = the character under the Monitor's cursor
 ;; Entry:
 ;;   NextKey = reads the next key; <CharacterIo::EscapeMode> returns here
-;; Also: BINPUT (IIEROM82)
+;; Also: BINPUT (IIEROM82, IIETRM85), INPUT80 (UNKN)
 .proc Input
     lda EightyColumns::Mode
     ora #MODE_INPUT
@@ -321,7 +321,7 @@ NoWait:
     sta (TextBase),y
 
 ;; Reads a key, with the character at the firmware's cursor inverted while it waits.
-;; Also: B_INPUT (IIEROM82)
+;; Also: B_INPUT (IIEROM82, IIETRM85)
 NextKey:
     jsr Screen::InvertCursor
     jsr WaitForKey
@@ -337,7 +337,7 @@ NextKey:
 ;;
 ;; Of the keys not in <CharacterIo::EscapeKeys>, Control-Q quits the firmware and returns Control-X as the key, R and
 ;; T turn <MODE_UPPERCASE> on and off, and any other ends escape mode.
-;; Also: ESCAPING (IIEROM82)
+;; Also: ESCAPING (IIEROM82, IIETRM85)
 .proc EscapeMode
     jsr Screen::ShowEscapeCursor
     jsr WaitForKey
@@ -357,7 +357,7 @@ Lookup:
     ldy #EscapeCodes - EscapeKeys
 
 ;; Compares the key with one entry.
-;; Also: ESC2 (IIEROM82)
+;; Also: ESC2 (IIEROM82, IIETRM85)
 Compare:
     cmp EscapeKeys,y
     beq Perform
@@ -366,7 +366,7 @@ Compare:
     bmi Special
 
 ;; Performs the entry's code, then stays in escape mode or reads the next key.
-;; Also: ESC3 (IIEROM82)
+;; Also: ESC3 (IIEROM82, IIETRM85)
 Perform:
     lda EscapeCodes,y
     and #ASCII_BITS
@@ -376,7 +376,7 @@ Perform:
     jmp Input::NextKey
 
 ;; Control-Q: quits the firmware, and returns Control-X as the key.
-;; Also: ESCSPEC (IIEROM82)
+;; Also: ESCSPEC (IIEROM82, IIETRM85)
 Special:
     cmp #CONTROL_Q
     bne UppercaseOn
@@ -395,7 +395,7 @@ UppercaseOn:
     sta EightyColumns::Mode
 
 ;; Leaves escape mode for the next key.
-;; Also: ESCNONE (IIEROM82)
+;; Also: ESCNONE (IIEROM82), ESCSP3 (IIETRM85)
 Done:
     jmp Input::NextKey
 
@@ -438,14 +438,14 @@ ESCAPE_STAY = $80
     EscapeEntry KEY_RIGHT_ARROW, CONTROL_BACKSLASH | ESCAPE_STAY ; the right arrow
 
 ;; The escape-mode keys, with their high bits clear, which <CharacterIo::EscapeMode> looks up.
-;; Also: ESCTAB (IIEROM82)
+;; Also: ESCTAB (IIEROM82, IIETRM85), ESCKEYS (UNKN)
 EscapeKeys:
 .repeat ESCAPE_ENTRIES, index
     .byte .ident(.sprintf("ESCAPE_KEY_%d", index))
 .endrepeat
 
 ;; The control code each of <CharacterIo::EscapeKeys> performs, with <CharacterIo::ESCAPE_STAY>.
-;; Also: ESCCHAR (IIEROM82)
+;; Also: ESCCHAR (IIEROM82, IIETRM85), ESCCODES (UNKN)
 EscapeCodes:
 .repeat ESCAPE_ENTRIES, index
     .byte .ident(.sprintf("ESCAPE_CODE_%d", index))

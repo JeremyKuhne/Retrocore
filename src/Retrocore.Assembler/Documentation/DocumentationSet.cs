@@ -494,6 +494,39 @@ public sealed class DocumentationSet
         return SymbolOf(topic);
     }
 
+    /// <summary>
+    ///  Gets every symbol a historical name reaches through a topic: one for each definition in a macro's body the
+    ///  build expands once whose own <c>Also:</c> gives the name, and the topic's own symbol where a definition
+    ///  outside macros' bodies gives it. More than one is ambiguous, as the assembler finds it.
+    /// </summary>
+    /// <param name="topic">The topic.</param>
+    /// <param name="name">The historical name.</param>
+    /// <param name="thisBuild">
+    ///  Whether only an outside definition in this set's build counts, as the assembler's does.
+    /// </param>
+    /// <returns>
+    ///  The symbols' names, at least one: <see cref="SymbolOf(DocumentationTopic, string)"/> where none is known.
+    /// </returns>
+    public IReadOnlyList<string> SymbolsOf(DocumentationTopic topic, string name, bool thisBuild = false)
+    {
+        if (topic.Comments.All(comment => comment.Macro is null)) { return [SymbolOf(topic)]; }
+        List<string> symbols = [];
+        foreach (DocumentationComment comment in topic.Comments)
+        {
+            if (comment.Macro is null || !Reaches(comment)) { continue; }
+            if (!DocumentationAlso.Of(comment.Sections).Any(also => also.Name == name)) { continue; }
+            if (ExpandedName([comment]) is { } expanded && !symbols.Contains(expanded)) { symbols.Add(expanded); }
+        }
+
+        bool outside = topic.Comments.Any(comment => comment.Macro is null);
+        if (outside && GivesOutsideMacros(topic, name, thisBuild) && !symbols.Contains(topic.Name))
+        {
+            symbols.Add(topic.Name);
+        }
+
+        return symbols.Count == 0 ? [SymbolOf(topic, name)] : symbols;
+    }
+
     // The name a macro body definition's only expansion gave it, or null; null too for a topic that also documents a
     // definition outside a macro's body, which is the symbol of its own name.
     private string? ExpandedName(IEnumerable<DocumentationComment> comments)

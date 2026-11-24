@@ -1648,6 +1648,74 @@ public sealed partial class HistoricalNameTests
         Check(Strict).Should().NotContain(diagnostic => diagnostic.Rule == DocumentationRules.UnlinkedName);
     }
 
+    /// <summary>
+    ///  An old name two definitions of one topic give, two macros' bodies or a body and a definition outside them, is
+    ///  ambiguous in a link, as the assembler finds it in code; one only the outside definition gives still reaches it.
+    /// </summary>
+    [TestMethod]
+    public void AnOldNameTwoDefinitionsOfATopicGiveIsAmbiguous()
+    {
+        const string TwoMacros = """
+            .macro A
+            ;; A reader.
+            ;; Also: OLD (TEST)
+            COMBYT:
+                rts
+            .endmacro
+            .macro B
+            ;; B reader.
+            ;; Also: OLD (TEST)
+            COMBYT:
+                rts
+            .endmacro
+            .scope SA
+                A
+            .endscope
+            .scope SB
+                B
+            .endscope
+            ;; Uses <OLD>.
+            Echo:
+                rts
+            """;
+
+        Assemble(TwoMacros + "\n    jsr OLD\n").Diagnostics.Should().ContainSingle().Which.Message.Should()
+            .Contain("SA::COMBYT and SB::COMBYT");
+
+        Linked(TwoMacros, "OLD").Kind.Should().Be(DocumentationTargetKind.Ambiguous);
+
+        const string Beside = """
+            .macro Lib
+            ;; A reader.
+            ;; Also: MOLD (TEST)
+            COMBYT:
+                rts
+            .endmacro
+            .scope Basic
+                Lib
+            .endscope
+            ;; The other reader.
+            ;; Also: MOLD (TEST), OWN (TEST)
+            COMBYT:
+                rts
+            ;; Uses <MOLD> and <OWN>.
+            Echo:
+                rts
+            """;
+
+        Assemble(Beside + "\n    jsr MOLD\n").Diagnostics.Should().ContainSingle().Which.Message.Should().Contain("MOLD");
+        Linked(Beside, "MOLD").Kind.Should().Be(DocumentationTargetKind.Ambiguous);
+        DocumentationTarget own = Linked(Beside, "OWN");
+        own.Kind.Should().NotBe(DocumentationTargetKind.Ambiguous);
+        own.Name.Should().Be("COMBYT");
+
+        static DocumentationTarget Linked(string text, string name)
+        {
+            DocumentationSet set = Set(text);
+            return new DocumentationResolver(set).Resolve(set.Find("Echo") ?? throw new AssertFailedException("No Echo."), name);
+        }
+    }
+
     private static List<DocumentationDiagnostic> Check(string text) =>
         new DocumentationResolver(Set(text)) { Bibliography = DocumentationBibliography.Parse(Bibliography) }.Check();
 }

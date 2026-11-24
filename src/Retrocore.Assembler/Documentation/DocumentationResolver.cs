@@ -264,9 +264,11 @@ public sealed partial class DocumentationResolver
         if (also.Count == 1)
         {
             // In a topic macros' bodies share with other definitions of the name, the old name reaches one symbol of
-            // them, which the target names, with its own value.
+            // them, which the target names, with its own value; one that two of them give is ambiguous, as in code.
             DocumentationTopic topic = also[0];
-            string symbol = set.SymbolOf(topic, name);
+            IReadOnlyList<string> symbols = set.SymbolsOf(topic, name, thisBuild: ReferenceEquals(set, Current));
+            if (symbols.Count > 1) { return new(DocumentationTargetKind.Ambiguous, name); }
+            string symbol = symbols[0];
             if (symbol == topic.Name) { return Found(topic); }
             long? value = set.Symbols.TryGetValue(symbol, out long found) ? found : null;
             return Found(topic) with { Name = symbol, Value = value };

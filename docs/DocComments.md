@@ -303,7 +303,8 @@ CharacterOut = $FDED
     reports an `also` error on each, whether or not the build expands the macro, and even where expansions are
     not known, since no build could give these names.
   - A definition outside the macro that shares the name keeps its own old names, whatever the macro's
-    expansions.
+    expansions, except one an expansion's `Also:` gives too: that old name is ambiguous, in code and in links,
+    like any old name two definitions give.
   - This holds for a `.macro` body, native or ca65. Don't give old names in a Merlin (`MAC`) or MACRO-10
     (`DEFINE`) macro's body: the assembler gives them nothing there. ca65's short `.mac` and `.endmac` count as
     `.macro` and `.endmacro`.

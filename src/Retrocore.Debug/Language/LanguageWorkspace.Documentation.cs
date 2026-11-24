@@ -67,9 +67,12 @@ internal sealed partial class LanguageWorkspace
         if (target.Topic is { } topic)
         {
             // Where macros' bodies share the topic with other definitions of the name, the target's symbol is one of
-            // them: its own comment.
+            // them: its own comment, a definition outside the bodies first, as without the macro, since a body the
+            // build doesn't expand once has no symbol of its own.
+            bool Gives(DocumentationComment comment) => topic.Set.SymbolOf(topic, comment) == target.Name;
             DocumentationComment? own = topic.Comments.Any(comment => comment.Macro is not null)
-                ? topic.Comments.FirstOrDefault(comment => topic.Set.SymbolOf(topic, comment) == target.Name)
+                ? topic.Comments.FirstOrDefault(comment => comment.Macro is null && Gives(comment))
+                    ?? topic.Comments.FirstOrDefault(Gives)
                 : null;
 
             return own is null ? FileLink(topic.Path, topic.Line) : FileLink(own.Path, own.Line);
@@ -164,8 +167,10 @@ internal sealed partial class LanguageWorkspace
                 // A name a root symbol has is never historical; one a scope defines is checked at each use, below.
                 if (analysis.Definitions.Any(site => site.Name == name)) { continue; }
 
-                IReadOnlyList<DocumentationTopic> topics = set.FindAlso(name, thisBuild: ReferenceEquals(set, analysis.Documentation));
-                string? replacement = topics.Count == 1 ? set.SymbolOf(topics[0], name) : null;
+                bool thisBuild = ReferenceEquals(set, analysis.Documentation);
+                IReadOnlyList<DocumentationTopic> topics = set.FindAlso(name, thisBuild);
+                IReadOnlyList<string> symbols = topics.Count == 1 ? set.SymbolsOf(topics[0], name, thisBuild) : [];
+                string? replacement = symbols.Count == 1 ? symbols[0] : null;
                 current[name] = current.TryGetValue(name, out string? earlier) && earlier != replacement ? null : replacement;
             }
         }

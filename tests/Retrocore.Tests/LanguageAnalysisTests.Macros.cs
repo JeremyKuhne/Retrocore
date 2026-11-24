@@ -222,4 +222,68 @@ public sealed partial class LanguageAnalysisTests
             Directory.Delete(folder, recursive: true);
         }
     }
+
+    // A macro never expanded beside a definition of the same name outside it.
+    private const string UnexpandedProbe = """
+        ; retrocore: style=strict
+        ;; A probe.
+
+        .cpu Mos6502
+        .org $0300
+
+        ;; Emits a reader.
+        .macro Library
+            ;; The macro's reader.
+        COMBYT:
+            rts
+        .endmacro
+
+        ;; The reader.
+        ;; Also: COMBYTE (A2RM78)
+        COMBYT:
+            rts
+
+        ;; Reads through <COMBYT>.
+        Echo:
+            jsr COMBYT
+            rts
+        """;
+
+    /// <summary>
+    ///  A link to a name a macro's body and a definition outside it share opens the outside definition, as without
+    ///  the macro, where the build doesn't expand the body.
+    /// </summary>
+    /// <returns>The test.</returns>
+    [TestMethod]
+    public async Task LinksBesideAnUnexpandedMacroOpenTheOutsideDefinition()
+    {
+        string folder = Directory.CreateTempSubdirectory("retrocore-macros").FullName;
+        try
+        {
+            string text = UnexpandedProbe.ReplaceLineEndings("\n");
+            string[] lines = text.Split('\n');
+            string probe = Directory.CreateDirectory(Path.Join(folder, "probe")).FullName;
+            string path = Path.GetFullPath(Path.Join(probe, "Probe.asm"));
+            File.WriteAllText(path, text);
+            File.WriteAllText(Path.Join(probe, "Bibliography.md"), MemberBibliography);
+            RecordingLanguageClient client = new();
+            LanguageWorkspace workspace = new(client);
+            workspace.Update(path, text);
+            SourceAnalysis? analysis = null;
+            for (int attempt = 0; attempt < 6 && analysis is null; attempt++)
+            {
+                analysis = await workspace.AnalysisOfAsync(path, CancellationToken.None);
+            }
+
+            DocumentationSet set = (analysis ?? throw new AssertFailedException("No analysis.")).Documentation;
+            DocumentationTopic echo = set.Find("Echo") ?? throw new AssertFailedException("No Echo.");
+            DocumentationTarget target = new DocumentationResolver(set).Resolve(echo, "COMBYT");
+            int comment = Array.FindIndex(lines, line => line.Contains(";; The reader.", StringComparison.Ordinal));
+            workspace.Href(target, path).Should().EndWith($"#L{comment + 1}");
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
 }

@@ -35,7 +35,8 @@ the comment is not copied into expansions.
 
 A `.macro`'s body, native or ca65, may hold documentation: a `;;` block above a definition in the body documents
 the symbol each expansion defines, as a shared module written as macros (Microsoft 6502 BASIC's) needs. Its topic
-has the name the body writes. When that body's definition is the only one of the name the build expands, and it
+has the name the body writes, in the scopes around the macro's definition (`Draw::name` for `name:` in a macro
+defined in `.scope Draw`), wherever it's expanded. When that body's definition is the only one of the name the build expands, and it
 expands the line once, the topic has the value of the symbol that expansion defines, which a scope around the
 expansion qualifies (`Basic::COMBYT` for `COMBYT` expanded in `.scope Basic`); otherwise, as when a definition
 outside the macro or another expanded macro's body shares the name, it has the value of a symbol of the name the
@@ -251,7 +252,7 @@ Two additions:
 A definition whose name differs from the one a manual, listing or other source gave it keeps the old name in an
 `Also:` section. A name from a document is never dropped: it is the definition's name, or in its `Also:`, or,
 where an `Also:` would clash with another definition or old name in the same assembly or can't apply (in a macro's
-body the build expands more than once, below), named in the definition's prose with the document that gives it.
+body, one the build expands more than once or whose name differs in each expansion, below), named in the definition's prose with the document that gives it.
 
 ```asm
 ;; Prints a character through the output hook.

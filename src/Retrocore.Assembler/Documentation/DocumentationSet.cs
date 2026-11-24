@@ -586,7 +586,7 @@ public sealed class DocumentationSet
 
     /// <summary>
     ///  Gets whether a topic's definition is in this set's assembly: false only for a label or equate the assembly
-    ///  leaves out, in a branch of an <c>.if</c> its build does not take.
+    ///  leaves out, in a branch of an <c>.if</c> its build does not take or in a macro's body it never expands.
     /// </summary>
     /// <param name="topic">The topic.</param>
     /// <returns>Whether it is assembled, or can't be told apart.</returns>

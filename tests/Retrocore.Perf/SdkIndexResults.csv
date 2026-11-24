@@ -19,3 +19,7 @@ f4,04904961,Type-line prefilter,Index,All,941.63,18.534,25.370,20000.0000,19000.
 f4,04904961,Type-line prefilter,Assemble,All,630.70,10.355,9.686,21000.0000,17000.0000,7000.0000,740.81,Default,artifacts/sdk-index-benchmarks/f4/results/Retrocore.Perf.SdkIndexBenchmarks-report.csv
 f4,04904961,Type-line prefilter,Index,AppleSoft,37.43,0.382,0.338,1312.5000,1250.0000,375.0000,48.51,Default,artifacts/sdk-index-benchmarks/f4/results/Retrocore.Perf.SdkIndexBenchmarks-report.csv
 f4,04904961,Type-line prefilter,Assemble,AppleSoft,23.80,0.355,0.332,843.7500,437.5000,250.0000,33.92,Default,artifacts/sdk-index-benchmarks/f4/results/Retrocore.Perf.SdkIndexBenchmarks-report.csv
+f5,d255b05c,Lines split once and shared,Index,All,893.89,17.465,26.141,18000.0000,17000.0000,0.0000,938.37,Default,artifacts/sdk-index-benchmarks/f5/results/Retrocore.Perf.SdkIndexBenchmarks-report.csv
+f5,d255b05c,Lines split once and shared,Assemble,All,618.49,11.679,13.450,18000.0000,13000.0000,5000.0000,694.84,Default,artifacts/sdk-index-benchmarks/f5/results/Retrocore.Perf.SdkIndexBenchmarks-report.csv
+f5,d255b05c,Lines split once and shared,Index,AppleSoft,37.60,0.523,0.489,1187.5000,1125.0000,312.5000,43.26,Default,artifacts/sdk-index-benchmarks/f5/results/Retrocore.Perf.SdkIndexBenchmarks-report.csv
+f5,d255b05c,Lines split once and shared,Assemble,AppleSoft,21.91,0.124,0.103,625.0000,468.7500,218.7500,30.61,Default,artifacts/sdk-index-benchmarks/f5/results/Retrocore.Perf.SdkIndexBenchmarks-report.csv

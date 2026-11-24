@@ -36,8 +36,9 @@ Indexing every SDK root:
 | 2 | 0fe00cc8 | Each file read once per build | 1,017 ms | 1,313 MB | −12% | −5% |
 | 3 | dcd63404 | One prefiltered pass for macros | 949 ms | 1,081 MB | −18% | −22% |
 | 4 | 04904961 | Type directives told by their words | 942 ms | 1,039 MB | −19% | −25% |
+| 5 | d255b05c | Each file split into lines once | 894 ms | 938 MB | −23% | −32% |
 
-AppleSoft's root alone: 50.1 ms and 67.7 MB at the baseline, 37.4 ms and 48.5 MB after step 4.
+AppleSoft's root alone: 50.1 ms and 67.7 MB at the baseline, 37.6 ms and 43.3 MB after step 5.
 
 ### 1. Each source path made full once
 
@@ -68,6 +69,15 @@ Steps 3 and 4 compare ignoring case where the parser lowers with `ToLowerInvaria
 character outside ASCII that lowers to an ASCII letter is the Kelvin sign (to `k`), which none of those words has, so
 the prefilters pass every line the full checks would accept.
 
+### 5. Each file split into lines once
+
+The analysis split every file it read; the editor's documentation parse joined those lines back together and split
+them again; and the assembler's `Also:` pass split each documented file once more. Every root repeated this for the
+files it shares. The preprocessor was never among them: it walks lines as slices of the text. Now
+`DocumentationParser.Lines` is the one split, `Parse` takes lines, an `AssemblySource` carries its lines, and
+`SourceFileCache` keeps each file's lines for the assembly, the analysis and the editor's parse of every root. The
+arrays are shared, so nothing writes into them. Allocations fell by 101 MB.
+
 ## Where the time and memory go now
 
 From the traces before steps 3 and 4 (ETW) and after step 3 (allocations):
@@ -80,10 +90,8 @@ From the traces before steps 3 and 4 (ETW) and after step 3 (allocations):
 
 ## Candidates
 
-- **Lines split up to four times.** The preprocessor, the assembler's `Also:` parse, `SourceText.Lines` for the
-  analysis, and the editor's parse each split the same text into lines, the last after `SourceAnalysis` joins its
-  lines back together to call it: about 15% of allocations. One split per file shared across them, perhaps as Touki
-  `StringSegment`s over the text, would remove most of it.
+- **Lines as `StringSegment`s over the text** (next): one string per file and no string per line, together with the
+  item below, since the parser trims, splits and takes substrings of lines throughout.
 - **Repeated `Split` of a line** in the parser's main loop, and substrings in `Define`, `ScopeTracker`, `Body`,
   `CommentIndent` and `Style`, which spans or `StringSegment`s could avoid.
 - **The documentation parsed twice.** The assembler's `Also:` pass parses without style checks and without the

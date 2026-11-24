@@ -647,11 +647,11 @@ Decisions and how the table was applied:
   between UNKN and no `Also:` (the table's introduction); UNKN is the one that keeps the old names working.
 - W3. Names two definitions shared in one file are one definition with both old names (INDEX1 and INDEX are
   `Pointer1`). KIMY is dropped into `Dimensioning`'s `Also:`.
-- W4. Names left in prose because they would clash with another definition in the same build: the BASIC 4
-  reconstructions' INCHR for `KernalCharacterIn` (BASIC 1's and 2's own INCHR is another routine, and the lineage rule
-  would cite the name there). Microsoft's REDDY and GOTK in AppleSoft (C-Q8), Q (the table counter, which the tables no
-  longer use) and AppleSoft's LINWID and NCMWID (D-Q3) are named in prose and not defined; NCMWID's one use is written
-  `FRETOP+1`, the same byte.
+- W4. Names left in prose because they would clash with another definition in the same build, or in a build the lineage
+  rule reaches: BASIC 4's INCHR (CBM4S79, HV4, HV4R) for `KernalCharacterIn` (BASIC 1's and 2's own INCHR is another
+  routine). Microsoft's REDDY and GOTK in AppleSoft (C-Q8), Q (the table counter, which the tables no longer use) and
+  AppleSoft's LINWID and NCMWID (D-Q3) are named in prose and not defined; NCMWID's one use is written `FRETOP+1`, the
+  same byte.
 - W5. The tokens and error offsets the PET's Equates copied for the math package (PLUSTK, MINUTK, ERROV, ERRDV0) are
   defined once, with their tables (X4), so an assembly of the math package with the Equates but without the tables
   must supply them, as the workspace test now does; `TOKEN_PI` stays in the Equates, since the table has no spelling for it.

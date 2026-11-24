@@ -37,9 +37,9 @@ Return:
 .endproc
 
 ;; PRINT's comma: starts a new line at or past <COMMA_NEWLINE_COLUMN>, and otherwise moves to the next 16-column
-;; zone. The enhanced IIe reads the column through <CompareCommaColumn>, which in 80 columns skips the new line below
-;; column 73, and prints spaces to the zone through <PrintTabOrSpace>; the II Plus and IIe only store the zone's column
-;; in <TerminalPosition>.
+;; zone. The enhanced IIe reads the column through its `CompareCommaColumn`, which in 80 columns skips the new line
+;; below column 73, and prints spaces to the zone through <PrintTabOrSpace>; the II Plus and IIe only store the zone's
+;; column in <TerminalPosition>.
 ;; Also: COMPRT (M6502)
 .proc PrintComma
 .if ENHNCD
@@ -54,8 +54,8 @@ Return:
     bne PrintSpaces::ContinuePrint
 
 .if ENHNCD
-;; Rounds the column up to the next zone and goes on to set it. The overlay's LINCHK is here; Microsoft's is PRINT's
-;; number item, <Statements::Print::NumberItem>.
+;; Rounds the column up to the next zone and goes on to set it. The overlay's LINCHK is here; Microsoft's is the
+;; PET's PRINT number item, `Statements::Print::NumberItem`, which AppleSoft does not have.
 ;; Also: LINCHK (UNKN)
 NextZone:
 .else

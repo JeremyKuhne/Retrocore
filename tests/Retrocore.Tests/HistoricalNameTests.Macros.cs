@@ -1889,6 +1889,60 @@ public sealed partial class HistoricalNameTests
         }
     }
 
+    /// <summary>
+    ///  Where macros' bodies in two files share a topic, each body's prose is held to its own file's style: a strict
+    ///  file's body has its unlinked names reported there, and a body in a file that isn't strict has none.
+    /// </summary>
+    [TestMethod]
+    public void MacroBodiesProseFollowsItsOwnFilesStyle()
+    {
+        const string Strict = "; retrocore: style=strict\n;; A probe.\n\n";
+        const string Tall = ";; Tall.\nTALL = 1\n\n";
+        const string First = ";; Emits one.\n.macro MA\n    ;; One.\nX:\n    rts\n.endmacro\n";
+        const string Second = ";; Emits two.\n.macro MB\n    ;; Two, which reads TALL.\nX:\n    rts\n.endmacro\n";
+        const string Main = ".scope S1\n    MA\n.endscope\n.scope S2\n    MB\n.endscope\n";
+
+        List<DocumentationDiagnostic> Unlinked(string firstText, string secondText)
+        {
+            string folder = Directory.CreateTempSubdirectory("retrocore-also").FullName;
+            try
+            {
+                string first = Path.Join(folder, "First.inc");
+                string second = Path.Join(folder, "Second.inc");
+                string main = Path.Join(folder, "Main.asm");
+                File.WriteAllText(first, firstText);
+                File.WriteAllText(second, secondText);
+                string text = ".include \"First.inc\"\n.include \"Second.inc\"\n" + Main;
+                File.WriteAllText(main, text);
+                AssemblyResult result = new Retrocore.Assembler.Assembler().Assemble(
+                    new AssemblySource(text, main),
+                    new AssemblyOptions(ProcessorVariant.Mos6502, origin: 0x1000, imageSize: 0x100)
+                    {
+                        SourceResolver = new FileAssemblySourceResolver()
+                    });
+
+                result.Diagnostics.Should().BeEmpty();
+                List<DocumentationFile> files =
+                    [.. ((string[])[main, first, second]).Select(path => DocumentationParser.Parse(File.ReadAllText(path), path))];
+
+                DocumentationSet set = DocumentationSet.Create(files, result);
+                return
+                [
+                    .. new DocumentationResolver(set).Check()
+                        .Where(item => item.Rule == DocumentationRules.UnlinkedName)
+                        .Select(item => item with { Path = Path.GetFileName(item.Path) })
+                ];
+            }
+            finally
+            {
+                Directory.Delete(folder, recursive: true);
+            }
+        }
+
+        Unlinked(Tall + First, Strict + Second).Should().ContainSingle().Which.Path.Should().Be("Second.inc");
+        Unlinked(Strict + Tall + First, Second).Should().BeEmpty();
+    }
+
     private static List<DocumentationDiagnostic> Check(string text) =>
         new DocumentationResolver(Set(text)) { Bibliography = DocumentationBibliography.Parse(Bibliography) }.Check();
 }

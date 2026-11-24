@@ -167,13 +167,21 @@ public sealed partial class DocumentationResolver
                 .SelectMany(section => section.Entries.Select(entry => entry.Name)),
             StringComparer.OrdinalIgnoreCase);
 
-        // In a file that follows the style guide, every documented definition the prose names is a link.
-        if (Current.Files.FirstOrDefault(file => SamePath(file.Path, topic.Path)) is { Strict: true })
+        // In a file that follows the style guide, every documented definition the prose names is a link; where
+        // macros' bodies share the topic, the file is each comment's own.
+        bool Strict(string path) => Current.Files.FirstOrDefault(file => SamePath(file.Path, path)) is { Strict: true };
+        if (macros || Strict(topic.Path))
         {
             CheckUnlinked(
                 topic,
                 entries,
-                (comment, message, line, name) => In(comment, DocumentationRules.UnlinkedName, message, line, name));
+                (comment, message, line, name) =>
+                {
+                    if (Strict(macros ? comment.Path : topic.Path))
+                    {
+                        In(comment, DocumentationRules.UnlinkedName, message, line, name);
+                    }
+                });
         }
 
         // Links and {references} anywhere in the topic's own text.

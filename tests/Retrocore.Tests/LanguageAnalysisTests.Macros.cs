@@ -249,7 +249,7 @@ public sealed partial class LanguageAnalysisTests
             rts
         """;
 
-    // A macro never expanded beside another macro's body that defines the same name and is expanded once.
+    // Two macros' bodies that define the same name: the build never expands the first and expands the second once.
     private const string ExpandedBesideProbe = """
         ; retrocore: style=strict
         ;; A probe.
@@ -283,8 +283,9 @@ public sealed partial class LanguageAnalysisTests
         """;
 
     /// <summary>
-    ///  A link to a name a macro's body and a definition outside it share opens the outside definition, as without
-    ///  the macro, where the build doesn't expand the body.
+    ///  A link to a name a macro's body shares with another definition opens the definition the build has, as without
+    ///  the macro, where the build doesn't expand the body: a definition outside the macros, or another macro's body
+    ///  the build expands once.
     /// </summary>
     /// <returns>The test.</returns>
     [TestMethod]
@@ -294,6 +295,15 @@ public sealed partial class LanguageAnalysisTests
 
         // Beside another macro's body the build does expand, the link opens that one.
         await LinkOpens(ExpandedBesideProbe, ";; The other reader.");
+
+        // So does a definition outside the macros in a branch the build leaves out.
+        string skipped = ExpandedBesideProbe.Replace(
+            ";; Emits a reader.\n.macro Library\n    ;; The macro's reader.\nCOMBYT:\n    rts\n.endmacro\n",
+            ".ifdef WIDE\n;; The wide reader.\nCOMBYT:\n    rts\n.endif\n",
+            StringComparison.Ordinal);
+
+        skipped.Should().Contain(";; The wide reader.");
+        await LinkOpens(skipped, ";; The other reader.");
     }
 
     private static async Task LinkOpens(string source, string opened)

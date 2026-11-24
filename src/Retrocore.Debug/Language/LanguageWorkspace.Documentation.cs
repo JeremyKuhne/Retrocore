@@ -67,12 +67,13 @@ internal sealed partial class LanguageWorkspace
         if (target.Topic is { } topic)
         {
             // Where macros' bodies share the topic with other definitions of the name, the target's symbol is one of
-            // them: its own comment, a definition outside the bodies first, as without the macro. A body counts only
-            // where the build expands it once, as one it doesn't defines nothing; a link by the topic's name opens
-            // the only definition the build has, if it has just one.
-            bool Defines(DocumentationComment comment) => comment.Macro is null || topic.Set.Reaches(comment);
-            bool Gives(DocumentationComment comment) => Defines(comment) && topic.Set.SymbolOf(topic, comment) == target.Name;
-            List<DocumentationComment> defining = [.. topic.Comments.Where(Defines)];
+            // them: its own comment, a definition outside the bodies first, as without the macro. Only a definition
+            // in the build counts: a body the build expands once, or one outside in the build's branch. Failing
+            // those, the link opens the only definition the build has, if it has just one.
+            bool Gives(DocumentationComment comment) =>
+                topic.Set.ReachesInBuild(comment) && topic.Set.SymbolOf(topic, comment) == target.Name;
+
+            List<DocumentationComment> defining = [.. topic.Comments.Where(topic.Set.ReachesInBuild)];
             DocumentationComment? own = topic.Comments.Any(comment => comment.Macro is not null)
                 ? topic.Comments.FirstOrDefault(comment => comment.Macro is null && Gives(comment))
                     ?? topic.Comments.FirstOrDefault(Gives)

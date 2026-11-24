@@ -73,6 +73,20 @@ internal sealed class SdkIndex
         }
     }
 
+    /// <summary>
+    ///  Indexes one of the SDK's root sources, from disk: its assembly, and its documentation parsed.
+    /// </summary>
+    /// <param name="root">The root's full path.</param>
+    /// <returns>The analysis.</returns>
+    internal static SourceAnalysis Index(string root)
+    {
+        SourceAnalysis analysis = SourceAnalysis.Assemble(root, _ => null);
+
+        // Parse its documentation now, so the first hover or completion that reaches the SDK isn't slowed.
+        _ = analysis.Documentation;
+        return analysis;
+    }
+
     private void Build(string roms)
     {
         IEnumerable<string> roots = Directory.Exists(roms) ? SourceIncludes.Roots(roms) : [];
@@ -80,10 +94,7 @@ internal sealed class SdkIndex
         {
             try
             {
-                SourceAnalysis analysis = SourceAnalysis.Assemble(root, _ => null);
-
-                // Parse its documentation now, so the first hover or completion that reaches the SDK isn't slowed.
-                _ = analysis.Documentation;
+                SourceAnalysis analysis = Index(root);
                 lock (_analyses) { _analyses.Add(analysis); }
             }
             catch (IOException exception)

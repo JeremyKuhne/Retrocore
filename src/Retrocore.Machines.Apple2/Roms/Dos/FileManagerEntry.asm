@@ -275,8 +275,9 @@ FileManagerAddressesStart:
 ;; <CallFileManager::ForDos>, with a parameter list laid out as <FileParameters>. The routine for each REQUEST_ code
 ;; (<FileManager::RequestHandlers>) works on the open file's state in <FileManager::FileControlBlock>, copied in from
 ;; the file's work area when the request starts, and ends at <FileManager::Succeed> or <FileManager::Fail>, which copy
-;; it back and return to the file manager's caller. Where DOS runs, the code is at $AAC1-$B396 and the data (the VTOC
-;; and catalog buffers, the file control block and the work cells) at $B397-$B5FD.
+;; it back and return to the file manager's caller. Where DOS runs, the addresses, dispatch tables and code are at
+;; $AAC1-$B396 (the code from $AAFD) and the data (the VTOC and catalog buffers, the file control block and the work
+;; cells) at $B397-$B5FD.
 .scope FileManager
 
 ;; The address of DOS's IOB, <DosIob>, which <AccessDisk> fills in for every disk access. The page-3 vector at

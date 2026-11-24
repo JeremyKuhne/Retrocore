@@ -77,7 +77,7 @@ DIAGNOSTIC_RWTS = 0
 ;; Also: DOS33B (DOS33)
 REVISION_B = YEAR >= 1983
 
-;; 1 builds the patch that lets commands be typed in lowercase (UPRCASE, in the boot loader's page); always 0 in
+;; 1 builds the patch that lets commands be typed in lowercase (<Uppercase>, in the boot loader's page); always 0 in
 ;; the masters.
 ;; Also: ULC (DOS33)
 LOWERCASE_INPUT = 0

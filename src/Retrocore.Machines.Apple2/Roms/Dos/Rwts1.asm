@@ -171,7 +171,7 @@ START_WAITS = 7
 ;; The passes of the motor wait's inner loop, about 100 cycles with the count.
 DELAY_PASSES = $12
 
-; The diagnostic build (DIAGMODE = 1) shows what RWTS is doing as inverse letters on the bottom line of the text
+; The diagnostic build (DIAGNOSTIC_RWTS = 1) shows what RWTS is doing as inverse letters on the bottom line of the text
 ; screen, each at its own place: a letter appears while the step is under way and a space replaces it. The
 ; LETTER_ constants are a letter's screen code and the At names its address. It also counts the wrong sectors that
 ; pass before the right one and shows the average as a hex digit at AverageAt. The diagnostic build leaves out the

@@ -41,7 +41,7 @@ HookDosJump = $03EA
 ;; Inherit: <Monitor:SOFT_ENTRY_CHECK>
 SOFT_ENTRY_CHECK = $A5
 
-; Which BASIC is active, as ASIBSW records it.
+; Which BASIC is active, as ActiveBasic records it.
 
 ;; <ActiveBasic>'s value while Integer BASIC is active.
 BASIC_INTEGER = 0
@@ -377,7 +377,7 @@ Enter:
     sta a:EchoFlags                    ; MON's echoes off
     sta a:OutputState
     plp
-    ror a                           ; the carry to bit 7: ISTATE = $80 after a cold start, else 0
+    ror a                           ; the carry to bit 7: InputState = $80 after a cold start, else 0
     sta a:InputState
     bmi ToColdBasic
     jmp (BasicWarmStart)
@@ -426,8 +426,8 @@ BuildBuffers:
     sta a:FileBufferCount
     jsr FileBuffers::Build
 
-    ; BLDFTB marked every buffer free by clearing the first byte of its file name. ESTATE, when an EXEC file is
-    ; open, is the first character of that file's name: it goes back in the EXEC file's buffer.
+    ; FileBuffers::Build marked every buffer free by clearing the first byte of its file name. ExecState, when an EXEC
+    ; file is open, is the first character of that file's name: it goes back in the EXEC file's buffer.
     lda a:ExecState
     beq ClearAndResume
     pha

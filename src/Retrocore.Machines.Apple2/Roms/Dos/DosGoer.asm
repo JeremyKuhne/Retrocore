@@ -73,7 +73,8 @@ EndOfData:
     jmp AppendFix::EndOfData
     nop                             ; not reached
 
-;; Revision B: <AppendFix::ClearUnlessAppend> (MsWait.asm) clears EOFFLAG unless the command is APPEND. Then a 0 byte.
+;; Revision B: <AppendFix::ClearUnlessAppend> (MsWait.asm) clears <AppendFix::EndOfFile> unless the command is APPEND.
+;; Then a 0 byte.
 ;; Also: DOSGO2A (DOS33)
 ReturnZero:
 .assert MASTER || * = $A6BB, "RunFileRequest::ReturnZero is at $A6BB where DOS runs."
@@ -110,7 +111,8 @@ Done:
 EndOfData:
     jmp AppendFix::EndOfData
 
-    ; Space the 1983 DOS's revision B patch fills with its call to MOVEOF; the first byte is not reached.
+    ; Space the 1983 DOS's revision B patch fills with its call to AppendFix::ClearUnlessAppend; neither byte is
+    ; reached.
     nop
     nop
 
@@ -364,7 +366,7 @@ Loop:
 ;; Looks for the buffer of the file named in <FileName>, noting a free one on the way.
 ;;
 ;; At $A764 where DOS runs. The chain goes down in memory, so the last free buffer passed is the lowest of those
-;; passed. <AppendFix::CloseOnError> (BootLoader.asm) calls it too.
+;; passed. In DOS 3.3, <AppendFix::CloseOnError> (BootLoader.asm) calls it too.
 ;; Out:   carry = clear if the file is open, set if not, WorkPointer = the file's buffer, if it is open, ParsedNumber
 ;;   = the last free buffer before the file's, or before the end of the chain if the file is not open, with its
 ;;   high byte 0 if there is none
@@ -426,7 +428,7 @@ NotFound:
 .assert MASTER || * = $A792, "FileBuffers::First is at $A792 where DOS runs."
     lda FileBuffersAddress
     ldx FileBuffersAddress+1
-    bne Next::Point                 ; always: DOS is never in page 0
+    bne Next::Point                 ; always: a buffer is never in page 0
 .endproc
 
 ;; Points <WorkPointer> at the next file buffer, from the link in the buffer's header.

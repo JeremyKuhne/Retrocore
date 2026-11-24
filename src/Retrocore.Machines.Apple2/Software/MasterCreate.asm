@@ -24,8 +24,8 @@
 ;; Also: GETLN (A2RM78, A2RM79, IIEROM82, IIETRM85)
 GetLine = $FD6A
 
-;; DOS's page-3 jump to RWTS, through DISKIO, which carries out the request in the IOB whose address is in A (high)
-;; and Y (low).
+;; DOS's page-3 jump to RWTS, through <Dos33:CallRwts>, which carries out the request in the IOB whose address is in A
+;; (high) and Y (low).
 RwtsJump = $03D9
 
 ;; DOS's page-3 routine that returns the address of DOS's own IOB in A (high) and Y (low).
@@ -46,14 +46,15 @@ RWTS_READ = 1
 RWTS_WRITE = 2
 
 ;; The offset of the last byte <PrepareRequest> copies, 17 ($11): the 17 bytes <RequestTemplate> holds and one more,
-;; the first byte of <DeviceCharacteristics>, which lands in the IOB's first spare byte.
+;; the first byte of <DeviceCharacteristics>, which lands in the filler after the request.
 REQUEST_LAST = $11
 
 ;; A pointer this program uses for messages, DOS's IOB and the boot ROM, and where it keeps the input's length.
 Pointer = $F0
 
-; The master image in memory, and the fields in it this program reads and changes. The image's relocator and DOS
-; are one page above their addresses in the master build.
+; The master image in memory, and the fields in it this program reads and changes. The boot pages, track 0 sectors
+; 0 to 9 ($3600-$3FFF in the master build), come first, at $1200-$1BFF; the relocator and the rest of DOS follow, one
+; page above their addresses in the master build.
 
 ;; The first of the 37 sector buffers.
 ImageBuffer = $1200

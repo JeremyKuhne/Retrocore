@@ -18,7 +18,7 @@
 ;; Without Applesoft in either, FP runs the System Master's APPLESOFT program, which loads Applesoft into lower RAM.
 ;; OpenClose.asm and LoadSave.asm hold the other handlers; docs/Dos.md describes the command interpreter.
 
-; The states these handlers set.
+; INIT's default.
 
 ;; The volume number INIT writes when V is not given, or is 0.
 DEFAULT_VOLUME = 254

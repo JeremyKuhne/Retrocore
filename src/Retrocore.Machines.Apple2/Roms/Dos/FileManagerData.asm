@@ -79,7 +79,7 @@ FREE_MAP_BYTES_PER_TRACK = 4
         .endstruct
     .endunion
     .union
-        ;; For a range transfer: the number of bytes.
+        ;; For a range transfer: the number of bytes READ reads; WRITE writes one more.
         RANGE_LENGTH .word
         .struct
             ;; For the requests that name a disk: the slot, 1 to 7.
@@ -179,8 +179,8 @@ TRANSFER_NONE = 0
 ;; Also: CRMNBT (DOS33, DOS31)
 TRANSFER_NEXT_BYTE = 1
 
-;; Transfer: the next range of bytes, <FileParameters::RANGE_LENGTH> of them at
-;; <FileParameters::RANGE_ADDRESS>. Apple's listing calls a range a block.
+;; Transfer: the next range of bytes at <FileParameters::RANGE_ADDRESS>, <FileParameters::RANGE_LENGTH> of them for
+;; READ and one more for WRITE. Apple's listing calls a range a block.
 ;; Also: CRMNBL (DOS33, DOS31)
 TRANSFER_NEXT_RANGE = 2
 
@@ -470,7 +470,8 @@ VOLUME_MESSAGE_LAST = * - VolumeMessage - 1
 ;; The VTOC buffer, laid out as <Vtoc>: one sector, read from and written to track 17 sector 0 (<FileManager::ReadVtoc>,
 ;; <FileManager::WriteVtoc>).
 ;;
-;; At $B3BB where DOS runs. The values assembled here are those of an empty 35-track disk. INIT
+;; At $B3BB where DOS runs. The named fields assembled here are those of an empty 35-track disk; the spare bytes are
+;; the master's leftovers. INIT
 ;; (<FileManager::InitDisk>) sets the volume number, the allocation fields and the bit map, zeroing everything from
 ;; <VtocBuffer::FreeSectors> on, then writes the buffer as the new disk's VTOC; the other fields go out as the buffer
 ;; holds them at the time.
@@ -492,7 +493,7 @@ CatalogTrack:
 ;; Also: VDIRSC (DOS33, DOS31)
 CatalogSector:
     .byte SECTORS_PER_TRACK - 1
-;; <Vtoc::DOS_RELEASE>: 4 here, and 2 in DOS 3.2, then two unused bytes.
+;; <Vtoc::DOS_RELEASE>: 4, or 2 in DOS 3.2, then two unused bytes.
 ;; Also: VDOSRN (DOS33, DOS31)
 DosRelease:
 .if DOS32

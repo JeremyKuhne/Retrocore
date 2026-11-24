@@ -206,8 +206,9 @@ StoreSlot:
 ;; The data sector and the track/sector list are written if they have changed, and the sectors still reserved on
 ;; the track the file was being given go back to the VTOC (<ReleaseTrack>). If anything at all was written to the
 ;; disk since OPEN (<WRITTEN>), the file's length in sectors goes into its catalog entry. To get the entry's sector
-;; back, CLOSE reads the VTOC for the catalog's start, then follows the catalog's links
-;; <FileControlBlock::EntryCatalogSector> times, the count <FindFile> kept when it found the file. Disk errors leave
+;; back, CLOSE reads the VTOC for the catalog's start and reads <FileControlBlock::EntryCatalogSector> catalog sectors,
+;; the first from there and each next one by the link in the one before: the count <FindFile> kept when it found the
+;; file, 1 for the first sector. Disk errors leave
 ;; the file manager (<AccessDisk>).
 ;; In: FileControlBlock = the file's work area
 ;; Out: DosFileParameters::ReturnCode = 0

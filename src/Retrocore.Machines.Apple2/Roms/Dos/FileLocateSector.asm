@@ -562,8 +562,8 @@ Done:
 ;;
 ;; It also clears $48. RWTS keeps its IOB pointer at $48 and $49, and $48 is also where the Monitor keeps the
 ;; processor status its G command loads (<SavedStatus>), so it is cleared rather than left holding part of an
-;; address. The caller gets the result in <DosFileParameters::ReturnCode> and the carry: A, X and Y hold what the
-;; copy left in them.
+;; address. The caller gets the result in <DosFileParameters::ReturnCode> and the carry: A and Y hold what the copy
+;; left in them, X the stack pointer restored.
 ;; In: A = the return code, carry = set for an error
 ;; Out: DosFileParameters::ReturnCode = A, carry = as it was, S = <EntryStack>
 ;; Also: RETURN (DOS33, DOS31)

@@ -29,7 +29,7 @@
 ;; master's value, then the 1980 DOS 3.3 master's, then the DOS 3.2 master's.
 ;;
 ;; <DOS32> picks the DOS 3.2 byte; otherwise <YEAR> picks between the DOS 3.3 masters. Code only DOS 3.3 assembles
-;; (the parts of BootLoader.asm and MsWait.asm under `.if DOS32 = 0`) leaves y32 out.
+;; (the DOS 3.3 arms of BootLoader.asm's and MsWait.asm's `.if DOS32`) leaves y32 out.
 ;; Parameters: y1983 = the byte in the 1983 build, y1980 = the byte in the 1980 build, y32 = the byte in the DOS 3.2
 ;;   build
 .macro Leftover y1983, y1980, y32
@@ -72,7 +72,7 @@ CharacterOut = $FDED
 ReadKey = $FD0C
 
 ;; Inherit: <Monitor:EnterMonitor>
-;; At $FF65. DOS's page-3 vectors send Control-Y, NMI and IRQ to it, and reset until DOS has started.
+;; At $FF65. DOS's page-3 vectors send Control-Y, NMI and IRQ to it.
 ;; Also: MON (A2RM78, A2RM79, IIEROM82, IIETRM85), MONRST (DOS33)
 EnterMonitor = $FF65
 

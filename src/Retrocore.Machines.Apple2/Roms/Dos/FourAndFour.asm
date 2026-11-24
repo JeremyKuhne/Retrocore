@@ -1,10 +1,10 @@
 ; retrocore: style=strict
 ;; DOS 3.3 and 3.2 RWTS: writing 4-and-4 bytes and address field nibbles
 ;;
-;; <DiskII::WriteFourAndFour> writes a byte of an address field as two 4-and-4 nibbles, and
-;; <DiskII::WriteFieldNibble> writes a nibble for the address field writer and the formatter. DOS 3.3 keeps them
-;; with its address field writer (WriteAddress.asm includes this file), at $BCC4-$BCDE where DOS runs; DOS 3.2 after
-;; its formatter (Formatter.asm includes it), at $BFBB-$BFD4. docs/DiskII.md explains the 4-and-4 encoding.
+;; <DiskII::WriteFourAndFour> writes a byte of an address field as two 4-and-4 nibbles, and <DiskII::WriteFieldNibble>
+;; writes a nibble for DOS 3.3's address field writer and DOS 3.2's formatter. DOS 3.3 keeps them with its address field
+;; writer (WriteAddress.asm includes this file), at $BCC4-$BCDE where DOS runs; DOS 3.2 after its formatter
+;; (Formatter.asm includes it), at $BFBB-$BFD4. docs/DiskII.md explains the 4-and-4 encoding.
 ;;
 ;; As in the data field writer, every store of a nibble must come exactly 32 cycles after the one before. These
 ;; routines go back to shift mode with `CMP DataLatch,X`, which leaves A alone. The two versions' routines differ

@@ -34,9 +34,9 @@ MOST_FILE_BUFFERS = 16
 ;; The command scanner: reads a command line in <InputBuffer>, finds the command in <CommandNames>, reads its file
 ;; names or number and its options, and runs its handler.
 ;;
-;; <Scanner::Scan> is the way in, from the output hook; CommandScan.asm describes the steps. The character routines
-;; the scanner reads the line with (GNBC, GNXTC, GETNUM) and the parameter list's clearing (CLRCCB) are its piece
-;; in OpenClose.asm.
+;; <Scanner::Scan> is the way in, from the output hook; CommandScan.asm describes the steps. The character routines the
+;; scanner reads the line with (<Scanner::NextNonBlank>, <Scanner::NextCharacter>, <Scanner::ParseNumber>) and the
+;; parameter list's clearing (<Scanner::ClearParameterList>) are its piece in OpenClose.asm.
 .scope Scanner
 
 ;; Scans the command line in <InputBuffer> and, if it is a DOS command, carries it out.
@@ -54,8 +54,8 @@ MOST_FILE_BUFFERS = 16
 .proc Scan
 .assert MASTER || * = $9FCD, "Scanner::Scan is at $9FCD where DOS runs."
 .if LOWERCASE_INPUT
-    ; The lowercase build: UPRCASE (BootLoader.asm) raises letters outside quotes to capitals and returns with
-    ; Y = CMDNO = $FF.
+    ; The lowercase build: Uppercase (BootLoader.asm) raises letters outside quotes to capitals and returns with
+    ; Y = CommandOffset = $FF.
     ldx #0
     jsr Uppercase
 .else
@@ -133,7 +133,7 @@ BadLine:
 ;; In: CommandOffset = the command's number, LineIndex = the index just past its name
 ;; Also: SYNTAX (DOS33, DOS31)
 .proc ReadOperands
-    asl a:CommandOffset                     ; CMDNO * 2 indexes CommandSyntax and CommandHandlers, two bytes an entry
+    asl a:CommandOffset             ; the number * 2 indexes CommandSyntax and CommandHandlers, two bytes an entry
     ldy a:CommandOffset
     jsr TestProgramRunning                      ; carry clear while a program is running
     bcc CheckRun
@@ -184,7 +184,7 @@ NextCharacter:
 StoreCharacter:
     sta a:FileName,y
     iny
-    cpy #2*CATALOG_NAME_LENGTH      ; FNAME2 follows FNAME1
+    cpy #2*CATALOG_NAME_LENGTH      ; SecondFileName follows FileName
     bcc NextCharacter
 
 ;; Also: SN5 (DOS33, DOS31)
@@ -320,8 +320,8 @@ SyntaxError:
     sta a:KeywordVolume                        ; volume 0: any volume
     sta a:KeywordLength
     sta a:KeywordLength+1
-    jsr ClearByteOption             ; TEMP1A = 0 and CB = 0 (DosPatches.asm)
-    lda a:LineIndex                     ; not used: TEMP1A stays 0
+    jsr ClearByteOption             ; InterpreterScratch = 0 and KeywordByte = 0 (DosPatches.asm)
+    lda a:LineIndex                     ; not used: InterpreterScratch stays 0
 
 ;; Also: SP1 (DOS33, DOS31)
 NextOption:
@@ -330,7 +330,7 @@ NextOption:
     cmp #KEY_RETURN
     bne NextOption                  ; a comma: go on
 
-    ; The end of the line. INOPTS OR allowed, EOR allowed, leaves the options given but not allowed.
+    ; The end of the line. GivenKeywords OR allowed, EOR allowed, leaves the options given but not allowed.
     ldx a:CommandOffset
     lda a:GivenKeywords
     ora a:CommandSyntax+CommandSyntaxEntry::OPTIONS,x
@@ -368,7 +368,8 @@ FoundLetter:
     jsr Scanner::ParseNumber
     bcs SyntaxError
 
-    ; Compare ParsedNumber with the option's lowest and highest values, its OptionRange, four bytes from TEMP2A * 4.
+    ; Compare ParsedNumber with the option's lowest and highest values, its OptionRange, four bytes from ScannerScratch
+    ; * 4.
     lda a:ScannerScratch
     asl a
     asl a
@@ -399,7 +400,7 @@ StoreValue:
     bne NextOption                  ; first pass: don't store (never taken)
     tya
     lsr a
-    tay                             ; the option's number * 2 indexes CUROPT
+    tay                             ; the option's number * 2 indexes KeywordValues
     lda ParsedNumber+1
     sta a:KeywordValues+1,y
     lda ParsedNumber
@@ -409,7 +410,7 @@ StoreValue:
 ToNextOption:
     jmp NextOption
 
-    ; C, I or O: OPTION_ECHO into INOPTS, and the rest of its OptionBits byte, its ECHO_ bit, into IMBITS.
+    ; C, I or O: OPTION_ECHO into GivenKeywords, and the rest of its OptionBits byte, its ECHO_ bit, into EchoOptions.
 
 ;; Also: SP8 (DOS33, DOS31)
 EchoOption:
@@ -419,7 +420,7 @@ EchoOption:
     sta a:GivenKeywords
     pla
     and #$FF^OPTION_ECHO
-    ora a:EchoOptions                    ; ECHO_INPUT, ECHO_OUTPUT or MC
+    ora a:EchoOptions               ; ECHO_INPUT, ECHO_OUTPUT or ECHO_COMMANDS
     sta a:EchoOptions
     bne ToNextOption                ; always
     beq NotLetter                   ; never reached
@@ -440,9 +441,8 @@ EchoOption:
 ;; The handler's address less one is pushed from <CommandHandlers>, and RTS goes to it; its own RTS returns to this
 ;; routine's caller. <FinishStart> (DosInit.asm) also jumps here, to run the greeting program after a boot or to
 ;; resume the command saved in <PendingCommand>.
-;; In: CommandOffset = the command's number * 2, KeywordValues = the options' values, GivenKeywords = the options given
-;;     (OPTION_ bits),
-;;   IMBITS = the ECHO_ bits given
+;; In: CommandOffset = the command's number * 2, KeywordValues = the options' values, GivenKeywords = the options
+;;   given (OPTION_ bits), EchoOptions = the ECHO_ bits given
 ;; Entry: CallHandler = calls the handler without clearing anything
 ;; Also: CMDGO1 (DOS33)
 .proc RunCommand

@@ -1,11 +1,11 @@
 ; retrocore: style=strict ignore=unlinked-name:RWTS -- the disk layer's name in prose
 ;; DOS 3.3 and 3.2: the patches at the top of DOS, and DOS's end
 ;;
-;; Fixes added after the rest of DOS was written, in its last bytes, $BFC8-$BFFF where DOS runs (Apple's DOSPTCH
-;; module): the end of the boot sequence, which resets the screen and the language card, and three short routines that
-;; existing code was changed to call. <DosEnd>, just after them, is where DOS ends: $C000 where it runs, $4000 in the
-;; master image. More patches live in spare space in the boot loader's page (BootLoader.asm) and after <DiskII::Wait>
-;; (MsWait.asm).
+;; Fixes added after the rest of DOS was written, in its last bytes (Apple's DOSPTCH module): in DOS 3.3, $BFC8-$BFFF
+;; where DOS runs, the end of the boot sequence, which resets the screen and the language card, and three short
+;; routines that existing code was changed to call; in DOS 3.2 only the three routines. <DosEnd>, just after them, is
+;; where DOS ends: $C000 where it runs, $4000 in the master image. DOS 3.3 has more patches in spare space in the boot
+;; loader's page (BootLoader.asm), and the 1983 DOS after <DiskII::Wait> (MsWait.asm).
 ;;
 ;; <ReportDiskFull> is the file manager's code, patched in here: it works on the file manager's state and leaves
 ;; through the file manager's error exit, so it reads as part of the file manager (FileLocateSector.asm), whose
@@ -23,7 +23,7 @@ TopPatchCodeStart:
 .if REVISION_B
 
 ;; The end of `BOOT 2`, reached from <Boot::StartDos> once DOS is in memory: resets the hardware, then goes back to
-;; RCBACK.
+;; <Boot::StartDos::AfterReset>.
 ;;
 ;; At $BFC8 where DOS runs. It points output at the screen and, on a machine with a language card, writes zero to
 ;; the card's RAM at $E000 while leaving the ROM selected for reading. Without a card the write goes nowhere. The
@@ -35,14 +35,14 @@ TopPatchCodeStart:
     lda LanguageCardRomWriteBank2   ; two reads in a row: read the ROM, write the card's RAM
     lda LanguageCardRomWriteBank2
     lda #0
-    sta RomBasicId                  ; the card's $E000 can't pass for a BASIC's first byte (see SWTST)
+    sta RomBasicId                  ; the card's $E000 can't pass for a BASIC's first byte (see Commands::FindBasic)
     jsr TurnOff80Columns
     jmp Boot::StartDos::AfterReset
 .endproc
 .else
 
 ;; The end of `BOOT 2`, reached from <Boot::StartDos> once DOS is in memory: resets the hardware, then goes back to
-;; RCBACK.
+;; <Boot::StartDos::AfterReset>.
 ;;
 ;; At $BFC8 where DOS runs. It points output at the screen and, on a machine with a language card, writes zero to
 ;; the card's RAM at $E000 while leaving the ROM selected for reading. Without a card the write goes nowhere. The
@@ -54,7 +54,7 @@ TopPatchCodeStart:
     lda LanguageCardRomWriteBank2   ; two reads in a row: read the ROM, write the card's RAM
     lda LanguageCardRomWriteBank2
     lda #0
-    sta RomBasicId                  ; the card's $E000 can't pass for a BASIC's first byte (see SWTST)
+    sta RomBasicId                  ; the card's $E000 can't pass for a BASIC's first byte (see Commands::FindBasic)
     jmp Boot::StartDos::AfterReset
 .endproc
 

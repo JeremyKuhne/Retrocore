@@ -336,9 +336,9 @@ MODE_INACTIVE = $FF
 ;; file manager through <FileManager::Succeed>.
 ;;
 ;; It copies the low byte of the parameter list's record length, which shares its bytes with the record number
-;; <NextRecord> may have just advanced, into the low bytes of the file control block's byte in the sector and record.
-;; <FileManager::Succeed> (FileLocateSector.asm) reloads the stack pointer from the file manager's entry stack before
-;; its RTS; saving S there first means the RTS returns as one from APPEND's handler would. It also uses what
+;; <NextRecord> may have just advanced, into the low bytes of the file control block's byte in the sector and its record
+;; number. <FileManager::Succeed> (FileLocateSector.asm) reloads the stack pointer from the file manager's entry stack
+;; before its RTS; saving S there first means the RTS returns as one from APPEND's handler would. It also uses what
 ;; <FileManager::Succeed> uses.
 ;; Uses:  A, X, FileManager::FileControlBlock::PositionByte, FileManager::FileControlBlock::PositionRecord,
 ;;   FileManager::EntryStack

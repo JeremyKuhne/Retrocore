@@ -77,7 +77,7 @@
 
 ;; The relocator's copy of the byte under test while it looks for the top of RAM.
 ;;
-;; It exclusive-ors the byte at the top of each page with each value from 0 to 255 in turn and does the same to
+;; It exclusive-ors the first byte of each page with each value from 0 to 255 in turn and does the same to
 ;; this copy; the page is RAM only if the two always agree. Apple's listing calls it LOC1, a name the Monitor
 ;; gives another byte.
 TestCopy = LowResBase
@@ -341,7 +341,7 @@ AddressRanges:
 ;; The code ranges to adjust: a count of bytes used, then <RelocationRange> entries, each a run of instructions.
 ;;
 ;; DOS 3.2's RWTS is laid out differently, its patches inside its RWTS range: its table has six entries and room for
-;; one more. The 1980 DOS 3.3 has no patch area after <DiskII::Wait>.
+;; one more. The 1980 DOS 3.3 has no patch code after <DiskII::Wait>, only leftover bytes.
 ;; Also: CDETAB (DOS33, DOS31)
 CodeRanges:
 .if DOS32
@@ -365,7 +365,7 @@ CodeRanges:
     Range WriteAddressCodeStart, WriteAddressCodeEnd            ; RWTS, in pieces between its tables
     Range LowLevelCodeStart, LowLevelCodeEnd
 .if REVISION_B
-    Range RwtsPatchCodeStart, RwtsPatchCodeEnd                ; the 1983 patch area after MSWAIT
+    Range RwtsPatchCodeStart, RwtsPatchCodeEnd                ; the 1983 patch area after DiskII::Wait
 .endif
     Range RwtsCodeStart, RwtsCodeEnd
     Range TopPatchCodeStart, TopPatchCodeLast

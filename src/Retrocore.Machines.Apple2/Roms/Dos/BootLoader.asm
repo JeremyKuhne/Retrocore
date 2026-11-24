@@ -541,8 +541,8 @@ NextGroup:
     Ldx SlotTimes16
     Rts
 
-;; The 51 bytes from $0399 that the ROM completes with bit 1 of each of the next 102 values' low bits: here, $FF
-;; but for the variables below. No code reads them as such.
+;; The 51 bytes from $0399 that the ROM completes with bit 1 of each of the next 102 values' low bits: here, the end
+;; of `BOOT 1`'s code and then $FF bytes. No code reads them as values.
 RomUpper = $0399
 
 ;; The 51 bytes from $03CC that the ROM completes with bit 0, <Stage1::FirstPage> the first of them.
@@ -909,7 +909,7 @@ SetFlag:
 ;; Turns the input line's lowercase letters into capitals, outside quotes, for the command scanner.
 ;;
 ;; A build option of Apple's source (ULC = 1), which no DOS 3.3 was built with; CommandScan.asm calls it under the
-;; same option. It ends at the line's return, setting CMDNO to $FF, no command found yet.
+;; same option. It ends at the line's return, setting <CommandOffset> to $FF, no command found yet.
 ;; In:    X = the first character's index in InputBuffer
 ;; Out:   Y = $FF
 ;; Uses:  A, X
@@ -1081,9 +1081,10 @@ DOS_LAST_SECTOR = 4
 
 ;; Starts DOS, now that it is in memory.
 ;;
-;; A new stack, the IOB's volume set to $FF as the file manager leaves it, the screen reset, the keyboard as input,
-;; then on to <StartDos::ToDos>. DOS 3.3 resets the screen and the language card through <ResetScreenAndCard>, in
-;; DosPatches.asm, which comes back to <StartDos::AfterReset>; DOS 3.2 sets the screen as output.
+;; A new stack, the IOB's volume set to $FF as the file manager leaves it, the screen reset or set as output, the
+;; keyboard as input, then on to <StartDos::ToDos>. DOS 3.3 resets the screen and the language card through
+;; <ResetScreenAndCard>, in DosPatches.asm, which comes back to <StartDos::AfterReset>; DOS 3.2 sets the screen as
+;; output.
 ;; Also: DOSINT (DOS33, DOS31)
 .proc StartDos
     ldx #$FF
@@ -1118,8 +1119,8 @@ ToDos:
 ;; RWTS. Before that, <FirstPage> is set to this DOS's boot page and <LastSector> to 9 (shifted, as `BOOT 1` needs
 ;; it), so the boot sector written loads to where this DOS is; <FirstDosPage>, <FirstDosSector> and <DosPages> are
 ;; set for `BOOT 2` to read the rest. Then the pages from DOS's first up to the boot page, from track 0 sector 10 on.
-;; The first pass leaves the IOB at sector 10.
-;; Errors: carry = set if RWTS failed on the last sector (<TransferPages> doesn't stop on an error)
+;; The first pass leaves the IOB at sector 10. The carry it returns says nothing: <TransferPages>' end-of-track test
+;; replaces RWTS's.
 ;; Also: WBOOT (DOS33, DOS31)
 .proc WriteDos
 
@@ -1160,8 +1161,8 @@ ToDos:
 ;; Reads or writes <PagesLeft> pages through RWTS, as the IOB says, from the page and sector it gives forwards.
 ;;
 ;; After each page, one page higher in memory and one sector higher on the disk, from sector 12 to sector 0 of the
-;; next track. It doesn't stop on an error: the carry it returns is that of the last page.
-;; Out:   carry = clear if the last page succeeded, set if not (the error in <DosIob::ReturnCode>)
+;; next track. It doesn't stop on an error, and the carry it returns is that of the end-of-track test, CPY, not
+;; RWTS's: an error is only in <DosIob::ReturnCode>.
 ;; Also: BOOTIO (DOS33, DOS31)
 .proc TransferPages
 

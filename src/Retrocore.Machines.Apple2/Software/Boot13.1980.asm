@@ -243,8 +243,6 @@ HIGH_BIT = $80
 
 ; The low-level routines, laid out as DOS 3.2's are from $B800, less $A000: DOS 3.2's nibble routines, included next,
 ; open the DiskII scope, and this program's own seek, wait, tables and 4-and-4 writer continue it.
-
-; The RWTS, from DOS 3.2's nibble routines on, at the addresses they have in DOS 3.2's layout less $A000.
 .include "../Roms/Dos/RwtsEquates.asm"
 .include "../Roms/Dos/PreNibble.asm"
 .include "../Roms/Dos/WriteSector.asm"

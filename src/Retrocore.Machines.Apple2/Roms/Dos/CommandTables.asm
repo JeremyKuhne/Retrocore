@@ -7,10 +7,10 @@
 ;; <CommandHandlers>, in DosInit.asm. Commands are numbered by their place in <CommandNames>, 0 for INIT to 27
 ;; for VERIFY (the COMMAND_ codes), and <CommandSyntax> and <CommandHandlers> are in the same order.
 
-; The commands' numbers, in the order of CommandNames. CMDNO holds a command's number times 2, its offset in
+; The commands' numbers, in the order of CommandNames. <CommandOffset> holds a command's number times 2, its offset in
 ; CommandSyntax and CommandHandlers.
 
-;; INIT, which formats a disk and writes DOS and a greeting program's name to it.
+;; INIT, which formats a disk and writes DOS and the greeting program to it.
 COMMAND_INIT = 0
 
 ;; LOAD, which loads a BASIC program.
@@ -129,7 +129,7 @@ SYNTAX_PROGRAM_ONLY = $02
 ;; Also: CREFLG (DOS33)
 SYNTAX_CREATES = $01
 
-; The second byte: the options the command allows. INOPTS has the same bits for the options given, and
+; The second byte: the options the command allows. <GivenKeywords> has the same bits for the options given, and
 ; OptionBits gives the bit for each letter.
 
 ;; ,V: the volume number.
@@ -167,7 +167,7 @@ OPTION_ECHO = $80
 ;; The options that pick the disk: volume, drive and slot.
 OPTIONS_DISK = OPTION_VOLUME|OPTION_DRIVE|OPTION_SLOT
 
-; The MON and NOMON options' bits in IMBITS and MONMOD. MC, for ,C, is $40, in FileManagerEntry.asm.
+; The MON and NOMON options' bits in EchoOptions and EchoFlags. ECHO_COMMANDS, for ,C, is $40, in FileManagerEntry.asm.
 
 ;; ,I: show what is read from disk.
 ;; Also: MI (DOS33, DOS31)
@@ -420,7 +420,7 @@ ErrorMessages:
     Message MESSAGE_FILE_TYPE_MISMATCH, "FILE TYPE MISMATCH"
     Message MESSAGE_PROGRAM_TOO_LARGE, "PROGRAM TOO LARGE"
     Message MESSAGE_NOT_DIRECT, "NOT DIRECT COMMAND"
-    .byte $8D                       ; never printed: EMPR stops at the D above
+    .byte $8D                       ; never printed: Errors::PrintMessage stops at the D above
 
 ;; Each error number's message, as its MESSAGE_ offset in <ErrorMessages>; entry 0 is the return, bell, return.
 ;; Also: EMDTB (DOS33, DOS31)

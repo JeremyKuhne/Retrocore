@@ -361,7 +361,7 @@ Integer:
 .proc ReadWord
 .assert MASTER || * = $A47A, "Commands::ReadWord is at $A47A where DOS runs."
 
-    ; Two bytes into SVBL.
+    ; Two bytes into FileHeaderWord.
     lda LoadFieldAddress
     sta a:DosFileParameters::RangeAddress
     lda LoadFieldAddress+1

@@ -36,7 +36,7 @@
 ;; INPUT's prompt). An EXEC file (<ExecState>) feeds <InputHandler> in place of the keyboard. docs/Dos.md describes the
 ;; whole interpreter.
 
-; The output states: OSTATE's values, which pick the handler in OutputHandlers for the next character printed.
+; The output states: OutputState's values, which pick the handler in OutputHandlers for the next character printed.
 
 ;; The first character of a line, where a Control-D starts a command: <Output::LineStart>.
 OUTPUT_STATE_LINE_START = 0
@@ -81,8 +81,8 @@ FLASHING_BLANK = $60
     lda a:HookA
     sta (TextBase),y                ; put back the character ReadKey replaced with a flashing cursor
     pla
-    bmi Starting                    ; ISTATE negative: DOS has just started
-    jmp TextFile::ReadCharacter                        ; ISTATE positive: READ is on; take the character from the file
+    bmi Starting                    ; InputState negative: DOS has just started
+    jmp TextFile::ReadCharacter     ; InputState positive: READ is on; take the character from the file
 
 ;; Also: CHIN0 (DOS33, DOS31)
 Starting:
@@ -141,13 +141,13 @@ ReadReal:
 
 ;; Saves the registers on entry to DOS and gives $36-$39 back to the real input and output routines.
 ;;
-;; SVSTK gets the stack pointer as it was before the JSR here, so that <ExitDos> can later return to the program
-;; that called <CharacterOut> or <ReadKey> whatever DOS has pushed in between. With the real routines back in
+;; <HookStackPointer> gets the stack pointer as it was before the JSR here, so that <ExitDos> can later return to the
+;; program that called <CharacterOut> or <ReadKey> whatever DOS has pushed in between. With the real routines back in
 ;; <OutputHook> and <InputHook>, what DOS prints or reads while it works does not come back into DOS.
 ;; In: A, X, Y = the caller's registers
 ;; Out:
-;;   SVA/SVX/SVY = A, X and Y
-;;   SVSTK = the stack pointer before the JSR here
+;;   HookA/HookX/HookY = A, X and Y
+;;   HookStackPointer = the stack pointer before the JSR here
 ;;   OutputHook/InputHook = <SavedOutputHook>/<SavedInputHook>
 ;; Keeps: Y
 ;; Entry: ExceptA = saves all but A
@@ -167,14 +167,14 @@ ExceptA:
 
 ;; Also: SVRB (DOS33, DOS31)
 RestoreHooks:
-    lda a:SavedOutputHook,x                  ; SVOUTS and SVINS lie in the same order as OutputHook and InputHook
+    lda a:SavedOutputHook,x         ; the saved hooks lie in the same order as OutputHook and InputHook
     sta OutputHook,x
     dex
     bpl RestoreHooks
     rts
 .endproc
 
-;; The handlers of DOS's output hook, one for each output state (OSTATE, an OUTPUT_STATE_ code), which
+;; The handlers of DOS's output hook, one for each output state (<OutputState>, an OUTPUT_STATE_ code), which
 ;; <OutputHandler> picks through <OutputHandlers> for each character printed.
 ;;
 ;; They collect command lines after a Control-D or from typed input, pass ordinary output on, write to a file
@@ -333,7 +333,7 @@ Write:
 ;;
 ;; <Commands::Run> (LoadSave.asm) sets <RunPending>, then loads the program, and an Applesoft load ends by jumping into
 ;; Applesoft through <BasicRelink> instead of returning. So the RUN is finished here, when Applesoft next prints at the
-;; start of a line: ERUN1 starts the program.
+;; start of a line: <Commands::Run::AfterLoad> starts the program.
 ;; Also: COS7 (DOS33)
 .proc FinishRun
     lda #0

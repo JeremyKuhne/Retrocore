@@ -45,8 +45,8 @@
     RETURN_CODE .byte
     ;; The volume found on the disk, which RWTS stores once it is on the right track.
     VOLUME_FOUND .byte
-    ;; The slot times 16 of the previous call. RWTS compares it with the new slot, waits for the old slot's drive to
-    ;; stop if they differ, then updates it.
+    ;; The slot times 16 of the previous call. RWTS compares it with the new slot, stores the new one, then waits for
+    ;; the old slot's drive to stop if they differ.
     PREVIOUS_SLOT .byte
     ;; The drive of the previous call, which RWTS reads and updates.
     PREVIOUS_DRIVE .byte

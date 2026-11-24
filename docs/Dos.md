@@ -11,8 +11,9 @@ in [`Roms/Dos`](../src/Retrocore.Machines.Apple2/Roms/Dos). It assumes some
 ## The sources
 
 The source covers both DOS 3.3 releases on Apple's System Masters, chosen by `YEAR`: 1983 (the default), the
-DOS on the 680-0210-A master, and 1980, the DOS on the 680-0051 masters. Its names and the order of its
-modules are Apple's, from Apple's DOS 3.3 C source listing (July 1983); its comments are the SDK's own.
+DOS on the 680-0210-A master, and 1980, the DOS on the 680-0051 masters. Its names are the SDK's, with Apple's kept
+as historical names; the order of its modules is Apple's, from Apple's DOS 3.3 C source listing (July 1983); its
+comments are the SDK's own.
 [`Dos33.asm`](../src/Retrocore.Machines.Apple2/Roms/Dos/Dos33.asm) includes the modules and builds
 either of two images of each, chosen by `MASTER`:
 
@@ -156,7 +157,7 @@ writer, `WriteAddress.asm`, is its own. Each root includes the modules in its ve
 
 The command interpreter and file manager are the 1980 DOS 3.3's, at the same addresses, apart from the disk's
 geometry (13 sectors, the catalog in sectors 12 to 1) and three places DOS 3.3 later changed: the end of APPEND,
-SAVE and BSAVE without DOS 3.3's verify, and DOSGO's handling of END OF DATA, which DOS 3.3's `AppendFix::EndOfData` (`EOFFIX`) patch
+SAVE and BSAVE without DOS 3.3's verify, and `RunFileRequest`'s (`DOSGO`) handling of END OF DATA, which DOS 3.3's `AppendFix::EndOfData` (`EOFFIX`) patch
 changes. The rest differs:
 
 - **Booting.** The 13-sector boot ROM decodes the boot sector only partly, in the order the nibbles arrive, so

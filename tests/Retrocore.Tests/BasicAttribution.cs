@@ -112,8 +112,9 @@ internal static partial class BasicAttribution
     {
         if (result.HistoricalNames.TryGetValue(name, out AssemblySymbol? definition))
         {
-            IsSharedPath(definition.Location?.Path).Should().BeFalse(
-                $"{name} must resolve only through its vendor's alias, not {definition.Name}");
+            string? path = definition.Location?.Path;
+            (!IsSharedPath(path) && path?.EndsWith(".HistoricalNames.asm", StringComparison.Ordinal) == true).Should().BeTrue(
+                $"{name} may be a historical name only on its vendor's alias in a HistoricalNames file, not on {definition.Name}");
         }
 
         Regex word = new($@"(?<![\w$]){Regex.Escape(name)}(?![\w$])");

@@ -285,9 +285,10 @@ Settled by the owner on 2026-11-23, each as recommended in the question below it
   interpreter copies, then AppleSoft's and Commodore's own files.
 - X9. B4's helper resolves either name through `Also:`, the debug hosts use the same lookup, and each moves to the
   new names in the PR that renames the definition.
-- X10. AppleSoft includes `IIeEquates.asm` and `MonitorEntries.asm`, which grows the entries AppleSoft calls;
-  AppleSoft.Equates keeps only BASIC's workspace. For the clashes this causes, RNDX is `RandomValue` and the unused KIMY
-  is dropped.
+- X10. Revised by the owner (2026-11-24), after including MonitorEntries.asm brought in Monitor names that clash with
+  AppleSoft's (E-8): DOS's X7 pattern. AppleSoft includes `IIeEquates.asm` only and defines the Monitor entries it
+  calls itself, with `Inherit:`; AppleSoft.Equates otherwise keeps only BASIC's workspace. For IIeEquates' clashes,
+  RNDX is `RandomValue` and the unused KIMY is dropped.
 - X11. The accumulators keep the field's short terms: `Fac`, `FacExponent`, `FacMantissa1`-`4`, `FacSign`,
   `FacExtension`, the same for `Arg`, and `ResultSign`; the `Float` routines name their operands by these
   (`AddPacked`, `AddArg`, `LoadFac`).
@@ -658,7 +659,7 @@ Decisions and how the table was applied:
   The AppleSoft error offsets are computed from their messages (`* - ERRTAB`), as the PET's were, each with an
   `.assert` of its value.
 - W6. AppleSoft's copies of the Monitor's, the IIe's and the firmware's names keep their names and definitions in
-  AppleSoft.Equates, in their own section, until AppleSoft includes IIeEquates.asm and MonitorEntries.asm (X10). Their
+  AppleSoft.Equates, in their own section, until X10 replaces them (E-8). Their
   trailing comments are moved above them, as the strict lint asks. This covers Microsoft's CQ* synonyms, BUF and OUTCH.
   The table's other names for them (ASTIL's HBAS for GBASL) join their `Also:` with X10.
 - W7. Switches (X15): the seven a test predefines and the Equates define (BUFPAG, BUFLEN, NULCMD, NUMLEV, STKEND,
@@ -1205,7 +1206,7 @@ Decisions and how the table was applied:
 - E-3. E-Q5 waits for X10. The engine still names the Monitor's bytes it borrows by the Monitor's names in
   AppleSoft.Equates (COLOR as the pixel mask, GBASL and GBASH as the screen byte's address), as the rest of the
   AppleSoft files name the Monitor's entries and soft switches (INPORT, MPLOT, HISCR). X10 replaces those copies with
-  IIeEquates and MonitorEntries.
+  IIeEquates' names and AppleSoft's own definitions of the Monitor's entries (E-8).
 - E-4. `AppleSoft.PlatformHelpers.asm` interleaved the enhanced IIe's code and the other builds' at the same
   addresses, sharing a `clc`, `pha`, `pla` and `rts` across `.if` boundaries. Each build's code is now written whole
   under one `.if ENHNCD`/`.else`, as whole routines; the shared instructions are written in each.
@@ -1231,13 +1232,17 @@ Decisions and how the table was applied:
     the switches and `HighRes::SetColor` (SETHCOL, which the overlay does not label); each old name cites only
     AppleSoft's documents, Microsoft's source or UNKN, all in the bibliography.
   - `BasicAppleRoutineTests` is new (below).
-- E-8. X10 is left for its own commit, the step's last item: it needs the converted IIeEquates (#130) and Monitor
-  (#125), which this stack's base predates. It is made after the stack is rebased onto main and before part E's
-  pull request opens.
+- E-8. X10 is not in this step. As decided, including MonitorEntries.asm brings in Apple's Monitor names INIT, WAIT,
+  PLOT and READ, which AppleSoft gives its own definitions (`ColdStart`, `Statements::Wait`, `Statements::Plot`,
+  `Statements::Read`); growing MonitorEntries with ReadPaddle clashes with the firmware's PREAD; and DOS defines
+  CharacterOut, ReadKey, SetInput and SetOutput itself. The owner decided (2026-11-24) that X10 takes its own
+  alternative, DOS's X7 pattern, in a pull request of its own after this step: AppleSoft includes IIeEquates.asm only,
+  defines the Monitor entries it calls in AppleSoft.Equates with `Inherit:`, citing Apple's names except those that
+  clash and adding AppleSoft's own spellings, and gives AppleSoft's spellings of IIeEquates' names as aliases in
+  AppleSoft.HistoricalNames; MonitorEntries.asm is unchanged.
 
-Checked: the full suite, the rename gate, the lint tests and `BasicAppleConversionTests`. The suite has
-4,026 passed, none failed and 665 skipped; the skipped tests are the ROM-dump comparisons, which need dumps that
-are not here.
+Checked: the full suite, the rename gate, the lint tests and `BasicAppleConversionTests`. The suite's skipped tests
+are the ROM-dump comparisons, which need dumps that are not here, so they did not run.
 
 `BasicAppleRoutineTests` runs these routines in the enhanced IIe's AppleSoft and checks what their documentation
 says:

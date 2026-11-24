@@ -291,9 +291,11 @@ CharacterOut = $FDED
   - **Not known:** where the documentation has no assembly's definitions (in the editor while the file has errors,
     or from a debug file), it can't count expansions, so these old names reach nothing there. Two expansions in
     the same scope are such an error: the assembler reports the duplicate symbol, and the lint can't count them.
-  - **Never expanded:** the old name reaches nothing, and there is no diagnostic: the build has no definition, as
-    for one in a branch it leaves out, and a build that expands the macro checks it. The exceptions are the names
-    below that no build could give, which the lint reports either way.
+  - **Never expanded:** the old name reaches nothing, and its `Also:` gets no diagnostic: the build has no
+    definition, as for one in a branch it leaves out, and a build that expands the macro checks it. The exceptions
+    are the names below that no build could give, which the lint reports either way. Unlike an old name in a
+    branch the build leaves out, a link by it reaches nothing either, and the lint reports the link; link by the
+    current name instead.
   - **Two macros' bodies that define the same name** share one topic, but each old name reaches the symbol its
     own macro's expansion defines. An old name that two definitions in the topic give (two macros' bodies, or one
     and a definition outside it) is a lint warning, as for any two definitions.

@@ -19,7 +19,8 @@ public static partial class DocumentationParser
 
         // The macro bodies open around the line, innermost last, with the names that differ in each expansion: the
         // macro's parameters and its .local names.
-        private readonly List<(string Name, HashSet<string> Parameters, HashSet<string> Locals)> _macros = [];
+        // Each open macro, with how many scopes were open where its definition began.
+        private readonly List<(string Name, HashSet<string> Parameters, HashSet<string> Locals, int Depth)> _macros = [];
 
         /// <summary>
         ///  Gets the names of the open named scopes, outermost first.
@@ -46,7 +47,10 @@ public static partial class DocumentationParser
 
             // A macro defined in another's body takes the outer one's parameters and .local names in each of its
             // expansions too.
-            string[] parts = name.Split(["::"], StringSplitOptions.None);
+            // The scopes around the outermost macro's definition aren't the expansion's: only what's written in it
+            // can vary.
+            string[] all = name.Split(["::"], StringSplitOptions.None);
+            string[] parts = [.. all.Skip(Math.Min(_macros[0].Depth, all.Length - 1))];
             string last = parts[parts.Length - 1];
             bool local = (last.Length != 0 && last[0] == '@')
                 || parts.Any(part => _macros.Any(macro => macro.Locals.Contains(part)));
@@ -97,7 +101,7 @@ public static partial class DocumentationParser
             {
                 IReadOnlyList<string> words = Words(code[word.Length..]);
                 HashSet<string> parameters = [with(StringComparer.Ordinal), .. words.Skip(1)];
-                _macros.Add((words.Count == 0 ? "" : words[0], parameters, [with(StringComparer.Ordinal)]));
+                _macros.Add((words.Count == 0 ? "" : words[0], parameters, [with(StringComparer.Ordinal)], Scopes.Count));
                 return;
             }
 

@@ -1035,6 +1035,25 @@ public sealed partial class HistoricalNameTests
         Assemble(Local + "\n    jsr OLD\n").Diagnostics.Should().ContainSingle().Which.Message.Should().Contain("OLD");
         Check(Local).Should().ContainSingle().Which.Message.Should().StartWith("Also: S::X is local to");
         Set(Local).FindAlso("OLD", thisBuild: true).Should().BeEmpty();
+
+        // A scope around the macro's definition isn't the expansion's, though a parameter has its name.
+        const string Around = """
+            .scope Draw
+            .macro Plot Draw
+            ;; An entry.
+            ;; Also: OLD (TEST)
+            X:
+                rts
+            .endmacro
+            .endscope
+            .scope Basic
+                Plot 1
+            .endscope
+            """;
+
+        Assemble(Around + "\n    jsr OLD\n").Diagnostics.Should().BeEmpty();
+        Check(Around).Should().BeEmpty();
+        Set(Around).FindAlso("OLD", thisBuild: true).Should().ContainSingle();
     }
 
     /// <summary>

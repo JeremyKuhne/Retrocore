@@ -1279,8 +1279,8 @@ The parts' notes list these, among others; each is a comment for the conversion,
 - The classic allocator, on a zero-length request that does not fit, collects twice and returns without
   allocating (B2).
 - VAL leaves a zero after the string and does not restore TextPointer when FIN fails (B2).
-- AppleSoft: 10 unreachable bytes at $F530; XDRAW's and DRAW's collision counts count different things; Apple's
-  DRWPNT and XDRPNT names are swapped (E).
+- AppleSoft: 10 unreachable bytes at $F530; XDRAW's and DRAW's collision counts count different things; the
+  overlay's DRWPNT and XDRPNT names are swapped (E).
 - BASIC 4: the original ROM recognizes DS$ by address alone; the disk-status read has no length limit; HEADER
   closes the unit's files before asking for confirmation (F).
 - Comments found wrong: MLTPL1's "implicit high bit" (it is the loop's end marker); VariableLookup's note on where
@@ -2460,7 +2460,7 @@ workspace" the comment says. That comment is wrong and should be fixed in the co
 - Shape number 0 is accepted. It reads the table's count byte and unused byte as an offset.
 - XDRAW's collision count (COLCNT) counts pixels that were clear before XDRAW toggled them. DRAW's counts pixels
   that already had the color.
-- Apple's DRWPNT is XDRAW's step and XDRPNT is DRAW's step: the old names are the wrong way round.
+- The overlay's DRWPNT is XDRAW's step and XDRPNT is DRAW's step: the names are the wrong way round for this code.
 - An HSCALE of 0 draws 256 steps per vector.
 - The enhanced IIe's uppercase conversion also folds $7B-$7F to $5B-$5F. When the byte after the current one has
   bit 7 set, UPNXT returns the current byte instead of the next (likely unreachable).

@@ -116,7 +116,7 @@ internal static partial class BasicAttribution
             DocumentationAlso.Of(topic.Sections).Select(also => also.Name)
                 .Should().NotContain(name, $"{topic.Name} is shared, so its Also: must not give the vendor's {name}");
 
-            word.IsMatch(string.Join(" ", [topic.Summary, .. topic.Remarks]))
+            word.IsMatch(string.Join(" ", topic.Comments.SelectMany(Text)))
                 .Should().BeFalse($"{topic.Name} is shared, so its documentation must not give the vendor's {name}");
         }
     }
@@ -162,6 +162,10 @@ internal static partial class BasicAttribution
 
         return false;
     }
+
+    // A comment's text: its summary, remarks and sections, in each of the comments a topic merges.
+    private static string[] Text(DocumentationComment comment) =>
+        [comment.Summary, .. comment.Remarks, .. comment.Sections.Select(section => section.Text)];
 
     // The build's definitions documented in the shared Microsoft modules, of which every build has some.
     private static List<DocumentationTopic> SharedTopics(DocumentationSet docs)

@@ -82,7 +82,7 @@ AuxRamTestOtherByte = $0800
     sta Columns80On
 
 ;; Turns the alternate characters on and clears the window, then prints the character.
-;; Also: CLEARIT (IIETRM85)
+;; Also: CLEARIT (IIEROM82, IIETRM85)
 Clear:
     sta AlternateCharactersOn
     jsr Control::HomeAndClear

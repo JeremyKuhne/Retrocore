@@ -451,7 +451,7 @@ StoreTop:
     sta WindowTop
 
 ;; The return <Columns40> and <Columns80> share.
-;; Also: X_DC1RTS (IIETRM85)
+;; Also: X_DC1RTS (IIEROM82, IIETRM85)
 Done:
     rts
 .endproc

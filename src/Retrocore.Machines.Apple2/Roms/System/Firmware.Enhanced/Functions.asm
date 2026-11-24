@@ -324,7 +324,7 @@ Done:
 
 ;; Puts the input hook back on slot 3's <BasicInput> while the output hook is in slot 3's page, <BasicOutput>'s;
 ;; otherwise gives the hook the Monitor's page, as <SetHook40> does.
-;; Also: CXPORTC3 (UNKN), ISC3 (IIETRM85)
+;; Also: CXPORTC3 (UNKN), IS0 (IIETRM85)
 .proc Slot3Input
     lda OutputHookHigh
     cmp #>BasicOutput
@@ -370,7 +370,7 @@ Done:
 ;; Also: B_ESCFIX (IIEROM82, IIETRM85), CXESCKEY (UNKN)
 .proc EscapeKey
     jsr Upshift
-    ldy #ARROW_COUNT - 1
+    ldy #ARROW_COUNT - 1            ; B.ESCFIX1 in Apple's listing
 
 ;; Compares the key with an arrow key, and takes its letter when they match.
 ;; Also: B_ESCFIX2 (IIEROM82, IIETRM85)
@@ -562,7 +562,7 @@ ByTable:
 ;;
 ;; The first half is used with the 80-column firmware inactive, or working for Pascal: the 40-column handlers and the
 ;; ones both halves share. The second half is the active 80-column firmware's.
-;; Also: CXFUNCTBL (UNKN), F_TABLE (IIETRM85)
+;; Also: CXFUNCTBL (UNKN), F_TABLE (IIEROM82, IIETRM85)
 Handlers:
     Handler FIRMWARE_HOME, Home40
     Handler FIRMWARE_SCROLL, Scroll40

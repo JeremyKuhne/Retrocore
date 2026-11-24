@@ -228,7 +228,7 @@ NotGotoXY:
     jmp Done
 
 ;; Control-^: sets <MODE_GOTOXY>, with the column not yet received.
-;; Also: STARTXY (IIEROM82)
+;; Also: STARTXY (IIEROM82, IIETRM85)
 StartGotoXY:
     lda EightyColumns::Mode
     ora #MODE_GOTOXY
@@ -261,7 +261,7 @@ Wrap:
     jsr Control::LineFeed
 
 ;; Shows the cursor again.
-;; Also: PWRITERET (IIEROM82)
+;; Also: PWRITERET (IIEROM82, IIETRM85)
 Done:
     jsr Screen::InvertCursor
     ldx #0
@@ -380,7 +380,7 @@ FromA:
     adc #TEXT_ODD_LINE - 1
 
 ;; Stores the low byte and multiplies its third by five.
-;; Also: BSCLC2 (IIEROM82)
+;; Also: BSCLC2 (IIEROM82, IIETRM85)
 StoreLow:
     sta TextBase
     asl a

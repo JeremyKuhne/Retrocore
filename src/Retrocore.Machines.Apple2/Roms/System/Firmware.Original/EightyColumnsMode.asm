@@ -415,7 +415,7 @@ Column40:
     pha
     bvc Done                        ; always: this is the read
 
-;; Also: STOR40 (IIEROM82)
+;; Also: STOR40 (IIEROM82, IIETRM85)
 Write40:
     pla
     pha
@@ -608,7 +608,7 @@ RestoreBase:
 ;;
 ;; Functions 6 and 7 never reach it, and function 8, <FIRMWARE_SET_WINDOW>, reads its entry from <Control::ScrollSteps>'
 ;; third byte.
-;; Also: F_TABLE (IIEROM82)
+;; Also: F_TABLE (IIEROM82, IIETRM85)
 Handlers40:
     FunctionHandler Handlers40, FIRMWARE_CLEAR_TO_END_OF_WINDOW, ClearToEndOfWindow40
     FunctionHandler Handlers40, FIRMWARE_HOME, Home40

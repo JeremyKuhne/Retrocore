@@ -302,7 +302,7 @@ RangeMask:
     rts
 
 ;; 40 columns: byte Y.
-;; Also: STOR40 (IIETRM85)
+;; Also: STOR40 (IIEROM82, IIETRM85)
 Write40:
     sta (TextBase),y
     pla

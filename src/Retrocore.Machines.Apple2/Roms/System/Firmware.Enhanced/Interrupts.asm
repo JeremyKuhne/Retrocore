@@ -558,7 +558,7 @@ ArrayBlock:
 ;; In: A = the tone's length, about A x 256 half cycles; carry = set (clear makes it 256 fewer)
 ;; Entry:
 ;;   WriteBit = writes one bit
-;; Also: TAPEHEADR (UNKN)
+;; Also: XHEADER (IIETRM85), TAPEHEADR (UNKN)
 .proc WriteCassetteHeader
 .assert * = $C567, "WriteCassetteHeader must stay at $C567."
     ; Wait counts X down: 256 half cycles a round.
@@ -663,7 +663,7 @@ Transition:
 ;; At $C5AA, which the Monitor's W command (<Monitor:WriteCassette>) calls.
 ;; In: A = the header's length, Address1/Address1High = the first address, Address2/Address2High = the last
 ;; Out: X = 0, zero = set
-;; Also: WRITETAPE (UNKN)
+;; Also: WRITE2 (IIETRM85), WRITETAPE (UNKN)
 .proc WriteCassetteData
 .assert * = $C5AA, "WriteCassetteData must stay at $C5AA."
     jsr WriteCassetteHeader
@@ -712,7 +712,7 @@ Done:
 ;; Out: zero = set when the checksum matches, X = 0
 ;; Entry:
 ;;   WithHeader = lets a header of A's length play, for <AppleSoftCassette::ShapeTable>
-;; Also: READTAPE (UNKN)
+;; Also: XREAD (IIETRM85), READTAPE (UNKN)
 .proc ReadCassetteData
 .assert * = $C5D1, "ReadCassetteData must stay at $C5D1."
 

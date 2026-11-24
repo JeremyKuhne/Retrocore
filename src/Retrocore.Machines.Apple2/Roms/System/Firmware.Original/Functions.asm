@@ -5,13 +5,14 @@
 
 ;; Performs the firmware function in Y for the Monitor: the original IIe's dispatcher.
 ;;
-;; At $C100, where <Monitor:CallFirmware> jumps with the internal ROM switched in and interrupts disabled. Functions
-;; 6 (<Functions::GetKey>) and 7 (<Functions::EscapeKey>) have one version. The screen functions, 0-5 and 8, have a
+;; At $C100, where <Monitor:CallFirmware> jumps with the internal ROM switched in and interrupts disabled. Functions 6
+;; (<Functions::GetKey>) and 7 (<Functions::EscapeKey>) have one version. The screen functions, 0-5 and 8, have a
 ;; 40-column version, through <Functions::Dispatch40>, and an 80-column one, through <Functions::Prepare80>: the
 ;; 80-column one when <TestAuxMemory> finds auxiliary memory and <EightyColumns::Mode> has none of
 ;; <Functions::HANDLERS40_MODE_BITS> set, which is when the 80-column firmware is active and neither working for Pascal
-;; nor waiting for a GOTOXY. Every function leaves through <Functions::Return>. The stack holds the caller's status and,
-;; above it, a status whose negative flag is <InternalCxRomState> from before the call.
+;; nor waiting for a GOTOXY. Every function but the reset, when it starts the self-test, leaves through
+;; <Functions::Return>. The stack holds the caller's status and, above it, a status whose negative flag is
+;; <InternalCxRomState> from before the call.
 ;; In: Y = the function number, A = the character under the cursor (function 6) or the key (function 7)
 ;; Also: B_FUNC (IIEROM82, IIETRM85)
 .proc DispatchFunction
@@ -31,7 +32,7 @@ NotGetKey:
 ;; one.
 ;; Also: B_FUNCNE (IIEROM82)
 ChooseWidth:
-    ; The function number is kept on the stack, since TESTCARD uses Y.
+    ; The function number is kept on the stack, since <TestAuxMemory> uses Y.
     tya
     pha
     jsr TestAuxMemory
@@ -467,7 +468,7 @@ ChooseSlot3Rom:
     jsr TestAuxMemory
     beq ToReturn
     sta SlotC3RomOn
-    ; Always: TESTCARD's result was not zero.
+    ; Always: <TestAuxMemory>'s result was not zero.
     bne ToReturn
 .endproc
 

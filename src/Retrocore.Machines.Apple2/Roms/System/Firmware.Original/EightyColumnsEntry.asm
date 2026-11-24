@@ -81,7 +81,8 @@ PASCAL10_READ_X = $C3
 ;; the stack.
 ;; In: EightyColumns::CurrentCharacter = the character to print once started
 ;; Entry:
-;;   Hang = loops forever with interrupts off; <CharacterIo::InputOrOutput> jumps here
+;;   Hang = loops forever: with interrupts off when this routine falls in, as the caller had them when
+;;     <CharacterIo::InputOrOutput> jumps here
 ;; Also: BASICINIT (IIEROM82, IIETRM85), C3INIT (UNKN)
 .proc Initialize
     ; The Monitor's version, with one try at copying the ROM's in.
@@ -93,7 +94,8 @@ PASCAL10_READ_X = $C3
     beq SetHooks
     sei
 
-;; Loops forever with interrupts off: the Monitor is not the IIe's.
+;; Loops forever: the Monitor is not the IIe's. Interrupts are off when the code above falls in, and as the caller
+;; had them when <CharacterIo::InputOrOutput> jumps here.
 ;; Also: HANG (IIEROM82)
 Hang:
     jmp Hang
@@ -147,8 +149,7 @@ SetTop:
 
 ;; Pascal 1.0's read hook: goes to <Pascal::ReadEntry at JPREAD>.
 ;;
-;; At $C84D, which Apple's Enhanced IIe listing labels Pascal 1.0's input hook. The original IIe's source called it
-;; unreferenced, as nothing in this ROM jumps here.
+;; At $C84D, which Apple's Enhanced IIe listing labels Pascal 1.0's input hook. Nothing in this ROM jumps here.
 ;; Also: C8PASREAD (UNKN)
 .proc Read10Entry
 .assert * = $C84D, "Pascal::Read10Entry must stay at $C84D."
@@ -173,7 +174,7 @@ SetTop:
     sta Columns80On
 
 ;; Turns the alternate characters on and clears the window.
-;; Also: CLEARIT (IIEROM82)
+;; Also: CLEARIT (IIEROM82, IIETRM85)
 Clear:
     sta AlternateCharactersOn
     jsr Control::HomeAndClear

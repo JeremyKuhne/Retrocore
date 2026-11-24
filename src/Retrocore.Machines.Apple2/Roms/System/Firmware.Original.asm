@@ -7,7 +7,8 @@
 ;;   <Monitor:CallFirmware>, with the internal ROM switched in and a function number in Y (FirmwareFunctions.asm):
 ;;   0 clear to the end of the window, 1 home, 2 scroll, 3 clear to the end of the line, 4 the same from a column,
 ;;   5 reset, 6 read a key with the cursor, 7 translate an escape key, 8 set the window. Functions 0-5 and 8 have a
-;;   40-column and an 80-column handler; every function returns through <Functions::Return>.
+;;   40-column and an 80-column handler; every function returns through <Functions::Return>, but the reset when it
+;;   starts the self-test.
 ;; - Firmware.Original/SlotEntry.asm, $C300-$C3FF: slot 3's entry points, <BasicInitialize> (`PR#3`), <BasicInput>
 ;;   and <BasicOutput>; the Pascal 1.1 signature and <PascalOffsets>; <AuxMove> and <AuxTransfer>.
 ;; - Firmware.Original/SelfTest.asm, $C400-$C7FF: the built-in self-test, which the reset function runs when
@@ -47,9 +48,9 @@ ENHANCED = 0
 
 ; A screen hole only this model's firmware uses.
 
-;; Slot 3's screen hole the original IIe's 80-column firmware uses as scratch: the status that says whether the internal
-;; ROM was in before a function's call (<Functions::Prepare80>), the character under the cursor (<Functions::GetKey>),
-;; and the code <Control::Perform> performs.
+;; Slot 0's screen hole, which the original IIe's 80-column firmware uses as scratch: the status that says whether the
+;; internal ROM was in before a function's call (<Functions::Prepare80>), the character under the cursor
+;; (<Functions::GetKey>), and the code <Control::Perform> performs.
 ;; Also: TEMP1 (IIEROM82)
 FirmwareScratch = $0478
 

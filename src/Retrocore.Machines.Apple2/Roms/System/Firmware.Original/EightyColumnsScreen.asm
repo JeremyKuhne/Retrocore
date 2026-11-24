@@ -40,7 +40,7 @@ SCROLL_UP = 1
 
 ;; Finishes a carriage return: column 0, then a line feed unless the Pascal protocol is active.
 ;;
-;; <Perform> runs into it from the code that clears the rest of the line during BASIC's input.
+;; <Control::CarriageReturn> falls into it.
 ;; Keeps: X
 ;; Also: X_CRPAS (IIEROM82)
 .proc FinishReturn
@@ -53,7 +53,7 @@ SCROLL_UP = 1
     bne Done
     jsr LineFeed
 
-;; Also: X_CRRET (IIEROM82)
+;; Also: X_CRRET (IIEROM82, IIETRM85)
 Done:
     rts
 .endproc
@@ -496,7 +496,7 @@ SetTop:
     bpl Done
     jsr Columns::To40
 
-;; Also: X_DC1RTS (IIEROM82)
+;; Also: X_DC1RTS (IIEROM82, IIETRM85)
 Done:
     rts
 .endproc

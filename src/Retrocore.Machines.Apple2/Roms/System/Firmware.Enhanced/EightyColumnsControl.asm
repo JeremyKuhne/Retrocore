@@ -136,7 +136,7 @@ SaveBase:
     sta EightyColumns::SavedTextBaseHigh
 
 ;; Shows the cursor and returns X = 0.
-;; Also: PWRITERET (IIETRM85)
+;; Also: PWRITERET (IIEROM82, IIETRM85)
 ShowCursor:
     jsr Screen::FlipCursor
     ldx #0
@@ -184,7 +184,7 @@ RangeMask:
     jmp Write::SaveBase
 
 ;; Control-^: sets <MODE_GOTOXY>, with the column not yet received.
-;; Also: STARTXY (IIETRM85)
+;; Also: STARTXY (IIEROM82, IIETRM85)
 StartGotoXY:
     lda #MODE_GOTOXY
     ora EightyColumns::Mode
@@ -313,7 +313,7 @@ Compare:
     adc #TEXT_ODD_LINE - 1
 
 ;; Stores the low byte and multiplies its third by five.
-;; Also: BSCLC2 (IIETRM85)
+;; Also: BSCLC2 (IIEROM82, IIETRM85)
 StoreLow:
     sta TextBase
     asl a
@@ -536,7 +536,7 @@ Done:
     jsr LineFeed
 
     ; Returns.
-;; Also: X_CRRET (IIETRM85)
+;; Also: X_CRRET (IIEROM82, IIETRM85)
 Done:
     rts
 .endproc
@@ -551,7 +551,8 @@ Done:
     jmp LineBase
 .endproc
 
-;; Control-\: moves the cursor right, to the next line's start at the window's right edge.
+;; Control-\: moves the cursor right, to the next line's start at the window's right edge, or in Pascal to its own
+;; line's start.
 ;; Also: X_FS (IIEROM82, IIETRM85), FWDSPACE80 (UNKN)
 .proc Right
     inc EightyColumns::CursorColumn

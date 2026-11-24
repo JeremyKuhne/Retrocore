@@ -110,7 +110,9 @@ public sealed class DocumentationSet
             symbols = moved;
         }
 
-        DocumentationSet set = Create(files, symbols, module, model, result?.SourceMap, result?.SkippedLines, result?.SymbolDefinitions);
+        // An assembly with errors may stop short of definitions it would make, so its macros' expansions aren't known.
+        IEnumerable<AssemblySymbol>? definitions = result is { Success: true } ? result.SymbolDefinitions : null;
+        DocumentationSet set = Create(files, symbols, module, model, result?.SourceMap, result?.SkippedLines, definitions);
         if (result is not null)
         {
             List<(string, string, int)> exports = [];

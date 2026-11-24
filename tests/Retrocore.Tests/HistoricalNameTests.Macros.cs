@@ -874,6 +874,18 @@ public sealed partial class HistoricalNameTests
 
         types.FindAlso("OLDT").Should().BeEmpty();
         types.AlsoOf(Required(types.Find("Block"))).Should().BeEmpty();
+        Check("""
+            .macro Types
+            ;; A block.
+            ;; Also: OLDT (TEST)
+            .struct Block
+                ;; Its type.
+                TYPE .byte
+            .endstruct
+            .endmacro
+                Types
+            """).Select(diagnostic => diagnostic.Message).Should().Equal(
+            "Also: Block is a scope or type, which an old name cannot reach; give old names to its members.");
     }
 
     /// <summary>
@@ -1433,6 +1445,14 @@ public sealed partial class HistoricalNameTests
         // Nor its links and references.
         Check(plainMacro + "\nTALL = 1\n.ifdef WIDE\n;; Reads <NOSUCH> and {x}.\nFOO = 1\n.endif\n").Should().BeEmpty();
 
+        // Nor what it inherits or includes.
+        foreach (string section in (string[])[";; Inherit: <NOSUCH>", ";; Inherit: <FOO>", ";; Include: nofile.txt"])
+        {
+            string outside = $"TALL = 1\n.ifdef WIDE\n;; One.\n{section}\nFOO = 1\n.endif\n";
+            Check(outside.Replace("TALL", "WIDE", StringComparison.Ordinal)).Should().NotBeEmpty();
+            Check(plainMacro + "\n" + outside).Should().BeEmpty();
+        }
+
         Check("""
             ;; One.
             ;; Uses: two words
@@ -1509,6 +1529,26 @@ public sealed partial class HistoricalNameTests
 
         Lint(Excluded).Should().BeEmpty();
         Lint(Excluded + "\n" + Macro).Should().BeEmpty();
+
+        // A macro's body's own Also: is still checked where its expansions aren't known, as any other.
+        string cited = ".macro Library\n;; A reader.\n;; Also: COUT (NOSUCH)\nREADER:\n    rts\n.endmacro\n    Library\n";
+        DocumentationSet unknown = DocumentationSet.Create(
+            [DocumentationParser.Parse(cited, "test.asm")],
+            new Dictionary<string, long> { ["READER"] = 0x1000 });
+
+        DocumentationBibliography bibliography = DocumentationBibliography.Parse(Bibliography);
+        DocumentationResolver resolver = new(unknown) { Bibliography = bibliography };
+        List<DocumentationDiagnostic> found = resolver.Check();
+        found.Select(diagnostic => diagnostic.Message).Should().Equal("Also: no document 'NOSUCH' in the bibliography.");
+
+        // An assembly with errors may stop short of its expansions, so they aren't known from it either.
+        string failing = cited + "    jmp NOWHERE\n";
+        AssemblyResult failed = Assemble(failing);
+        failed.Success.Should().BeFalse();
+        DocumentationSet partial = DocumentationSet.Create([DocumentationParser.Parse(failing, "test.asm")], failed);
+        DocumentationResolver checker = new(partial) { Bibliography = bibliography };
+        checker.Check().Select(diagnostic => diagnostic.Message).Should()
+            .Contain("Also: no document 'NOSUCH' in the bibliography.");
     }
 
     private static List<DocumentationDiagnostic> Check(string text) =>

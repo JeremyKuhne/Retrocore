@@ -108,7 +108,8 @@ public sealed partial class DocumentationResolver
 
         void Section(string message, int line) => Warn(DocumentationRules.Sections, message, line);
 
-        if (topic.Section("Inherit") is { } inherit)
+        // An outside definition the build leaves out, beside a macro's expansion, is checked by the build it's in.
+        if (topic.Section("Inherit") is { } inherit && !OtherBuildOutside(topic, inherit))
         {
             List<DocumentationLink> links = DocumentationText.Links(inherit.Text);
             DocumentationTopic? target = InheritTarget(topic, inherit);
@@ -136,7 +137,9 @@ public sealed partial class DocumentationResolver
             }
         }
 
-        if (topic.Section("Include") is { } include && Included(topic, include) is null)
+        if (topic.Section("Include") is { } include
+            && !OtherBuildOutside(topic, include)
+            && Included(topic, include) is null)
         {
             Section($"Include: '{include.Text}' names no file or topic that exists.", include.Line);
         }
@@ -547,16 +550,26 @@ public sealed partial class DocumentationResolver
         }
     }
 
-    // Whether only definitions in macros' bodies whose old names reach nothing write a section: one the build doesn't
-    // expand once, which says nothing about the build's definitions, or whose name varies, which CheckExpandedAlso
-    // reports.
+    // Whether only definitions in macros' bodies whose old names reach nothing write a section, and its checks would
+    // say nothing of use: the build defines the line other than once (never, which says nothing about the build's
+    // definitions, or more, which CheckExpandedAlso reports), or the name varies, which it reports too. A scope or
+    // type is still told so, and where the expansions aren't known the section is checked as any other.
     private bool OnlyUnreachedMacros(DocumentationTopic topic, DocumentationSection section)
     {
         IEnumerable<DocumentationComment> writers = topic.Comments.Where(comment => comment.Sections.Any(candidate =>
             candidate.Name.Equals(section.Name, StringComparison.OrdinalIgnoreCase) && candidate.Text == section.Text));
 
-        return writers.Any() && writers.All(comment => comment.Macro is not null && !Current.Reaches(comment));
+        return writers.Any() && writers.All(Unreached);
     }
+
+    // Whether a definition in a macro's body has old names no check of its section helps with.
+    private bool Unreached(DocumentationComment comment) =>
+        comment.Macro is not null
+            && comment.Kind is not (DocumentationKind.Scope or DocumentationKind.Struct or DocumentationKind.Enum)
+            && (comment.NamedByParameter
+                || comment.LocalToExpansion
+                || comment.Kind == DocumentationKind.Variable
+                || Current.Expansions(comment) is int count && count != 1);
 
     // Whether a definition outside macros' bodies, in a topic a macro's body shares, is another build's: the build has
     // none of the outside definitions, so without the macro the topic wouldn't be checked, though the macro's

@@ -286,9 +286,9 @@ Settled by the owner on 2026-11-23, each as recommended in the question below it
 - X9. B4's helper resolves either name through `Also:`, the debug hosts use the same lookup, and each moves to the
   new names in the PR that renames the definition.
 - X10. Revised by the owner (2026-11-24), after including MonitorEntries.asm brought in Monitor names that clash with
-  AppleSoft's (E-8): DOS's X7 pattern. AppleSoft includes `IIeEquates.asm` only and defines the Monitor entries it
-  calls itself, with `Inherit:`; AppleSoft.Equates otherwise keeps only BASIC's workspace. For IIeEquates' clashes,
-  RNDX is `RandomValue` and the unused KIMY is dropped.
+  AppleSoft's (E-8): after DOS's X7 pattern, AppleSoft defines the Monitor entries it calls itself, with `Inherit:`, but
+  unlike DOS it includes `IIeEquates.asm` only; AppleSoft.Equates otherwise keeps only BASIC's workspace. For
+  IIeEquates' clashes, RNDX is `RandomValue` and the unused KIMY is dropped.
 - X11. The accumulators keep the field's short terms: `Fac`, `FacExponent`, `FacMantissa1`-`4`, `FacSign`,
   `FacExtension`, the same for `Arg`, and `ResultSign`; the `Float` routines name their operands by these
   (`AddPacked`, `AddArg`, `LoadFac`).
@@ -1233,13 +1233,14 @@ Decisions and how the table was applied:
     AppleSoft's documents, Microsoft's source or UNKN, all in the bibliography.
   - `BasicAppleRoutineTests` is new (below).
 - E-8. X10 is not in this step. As decided, including MonitorEntries.asm, grown with the entries AppleSoft calls, brings
-  in Apple's Monitor names INIT, WAIT, PLOT and READ, which AppleSoft gives its own definitions (`ColdStart`,
-  `Statements::Wait`, `Statements::Plot`, `Statements::Read`); growing MonitorEntries with ReadPaddle clashes with the
-  firmware's PREAD; and DOS defines CharacterOut, ReadKey, SetInput and SetOutput itself. The owner decided (2026-11-24)
-  that X10 takes its own alternative, DOS's X7 pattern, in a pull request of its own after this step: AppleSoft includes
-  IIeEquates.asm only, defines the Monitor entries it calls in AppleSoft.Equates with `Inherit:`, citing Apple's names
-  except those that clash and adding AppleSoft's own spellings, and gives AppleSoft's spellings of IIeEquates' names as
-  aliases in AppleSoft.HistoricalNames; MonitorEntries.asm is unchanged.
+  in Apple's Monitor names INIT, WAIT, PLOT and READ, which AppleSoft's builds give other definitions (`ColdStart`,
+  `Statements::Wait`, `Statements::Plot`, `Statements::Read`); growing MonitorEntries with ReadPaddle clashes, in the
+  firmware's builds, with the firmware's PREAD; and DOS defines CharacterOut, ReadKey, SetInput and SetOutput itself.
+  The owner decided (2026-11-24) that X10 takes its own alternative, after DOS's X7 pattern, in a pull request of its
+  own after this step: unlike DOS, AppleSoft includes IIeEquates.asm only, and like DOS it defines the Monitor entries
+  it calls in AppleSoft.Equates with `Inherit:`, citing Apple's names except those that clash and adding AppleSoft's own
+  spellings, and gives AppleSoft's spellings of IIeEquates' names as aliases in AppleSoft.HistoricalNames;
+  MonitorEntries.asm is unchanged.
 
 Checked: the full suite, the rename gate, the lint tests and `BasicAppleConversionTests`. The suite's skipped tests
 are the ROM-dump comparisons, which need dumps that are not here, so they did not run.

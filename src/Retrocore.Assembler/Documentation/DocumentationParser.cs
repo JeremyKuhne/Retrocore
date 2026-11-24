@@ -499,6 +499,14 @@ public static partial class DocumentationParser
     // after it; the directive is empty on any other line.
     private static (string? Member, string Directive, string Name) TypeLine(string code)
     {
+        // Each directive has "enum", "struct" or "union" in it, so a line without them is not one; most lines aren't. No
+        // character other than ASCII's lowers to these letters, so ignoring case here finds every line the lowered
+        // comparison below does.
+        bool candidate = code.IndexOf("enum", StringComparison.OrdinalIgnoreCase) >= 0
+            || code.IndexOf("struct", StringComparison.OrdinalIgnoreCase) >= 0
+            || code.IndexOf("union", StringComparison.OrdinalIgnoreCase) >= 0;
+
+        if (!candidate) { return (null, "", ""); }
         string first = FirstWord(code);
         string? member = null;
         string rest = code[first.Length..].Trim();

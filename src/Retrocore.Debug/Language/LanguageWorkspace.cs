@@ -49,13 +49,15 @@ internal sealed partial class LanguageWorkspace
     {
         _server = server;
         _sdk = SdkIndex.For(SdkModules.RomDirectory);
-        // An index that failed part way has fewer modules, which the documentation checks still use.
+        // A failed index leaves the documentation checks off, as with modules missing every link to them would look
+        // broken; the failure is reported here, so it is observed.
         _ = _sdk.Completion.ContinueWith(
             indexing =>
             {
                 if (indexing.Exception is { } failure)
                 {
-                    Console.Error.WriteLine($"The SDK index is incomplete: {failure}");
+                    Console.Error.WriteLine($"The SDK's ROM sources could not be indexed: {failure.GetBaseException()}");
+                    return;
                 }
 
                 SdkIndexed();

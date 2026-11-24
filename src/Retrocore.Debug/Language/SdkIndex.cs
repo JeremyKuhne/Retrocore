@@ -14,8 +14,13 @@ namespace Retrocore.Debug.Language;
 ///  <para>
 ///   The SDK's sources are read from disk, never from open documents, so one index serves every workspace in the
 ///   process; it is built once for each ROM directory, on a thread of its own, as it takes seconds and would
-///   otherwise hold a thread pool thread that a request or an analysis needs. It is never rebuilt: the SDK's sources
-///   do not change while the process runs.
+///   otherwise hold a thread pool thread that a request or an analysis needs. A source changed on disk after it is
+///   indexed is not read again until the process restarts.
+///  </para>
+///  <para>
+///   An unreadable source is left out. Any other failure fails the whole index, as the documentation checks would
+///   take every link to the missing modules for a broken one; the workspace then leaves those checks off, and the
+///   next workspace to ask builds the index again.
 ///  </para>
 /// </remarks>
 internal sealed class SdkIndex
@@ -31,17 +36,29 @@ internal sealed class SdkIndex
         TaskScheduler.Default);
 
     /// <summary>
-    ///  Gets a task that completes once every source is indexed.
+    ///  Gets a task that completes once every source is indexed, or faults when the index failed.
     /// </summary>
     internal Task Completion { get; }
 
     /// <summary>
-    ///  Gets the index of a ROM directory, starting to build it on first use.
+    ///  Gets the index of a ROM directory, starting to build it on first use, or again after it failed.
     /// </summary>
     /// <param name="roms">The SDK's ROM source directory.</param>
     /// <returns>The index.</returns>
-    internal static SdkIndex For(string roms) =>
-        s_indexes.GetOrAdd(roms, directory => new(() => new(directory))).Value;
+    internal static SdkIndex For(string roms)
+    {
+        Lazy<SdkIndex> entry = s_indexes.GetOrAdd(roms, Start);
+        if (entry.Value.Completion.IsFaulted)
+        {
+            // Only the failed entry is replaced, so workspaces asking at once share one new build.
+            s_indexes.TryRemove(KeyValuePair.Create(roms, entry));
+            entry = s_indexes.GetOrAdd(roms, Start);
+        }
+
+        return entry.Value;
+
+        static Lazy<SdkIndex> Start(string directory) => new(() => new(directory));
+    }
 
     /// <summary>
     ///  Gets the sources indexed so far.
@@ -70,13 +87,8 @@ internal sealed class SdkIndex
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
             {
-                // An unreadable SDK file only means fewer search results.
-            }
-#pragma warning disable CA1031 // One source that fails to analyze only leaves its module out, for every workspace.
-            catch (Exception exception) when (exception is not OutOfMemoryException)
-#pragma warning restore CA1031
-            {
-                Console.Error.WriteLine($"The SDK source {root} was not indexed: {exception}");
+                // An unreadable SDK file leaves its module out of search and of other modules' links.
+                Console.Error.WriteLine($"The SDK source {root} could not be read: {exception.Message}");
             }
         }
     }

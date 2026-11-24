@@ -19,9 +19,9 @@ ToSyntaxError:
     ;; defaults to 1. The record number is left in <PokeAddress>, which <Disk::PositionRecord> reads as the record
     ;; number.
     ;; Out: LogicalFile = the file, RecordPosition = the position, PokeAddress = the record number
-    ;; Errors: ILLEGAL QUANTITY for file 0, a file over 255, a record outside 0 to 65535, or a position of 0 or 255;
-    ;;   SYNTAX for a missing record or text after the position; `FILE NOT OPEN` (from <Disk::PositionRecord>) for a
-    ;;   file that is not open
+    ;; Errors: ILLEGAL QUANTITY for file 0, a file over 255, a record outside 0 to 65535, or a position outside 1 to
+    ;;   254; SYNTAX for a missing record or text after the position; `FILE NOT OPEN` (from <Disk::PositionRecord>)
+    ;;   for a file that is not open
     ;; Also: RECORD (K4S79, HVK4)
     .proc Record
 

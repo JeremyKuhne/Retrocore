@@ -173,7 +173,7 @@ RAM_ORIGIN = $0400
 UserVector = $00
 .if TERMINAL_FIRST
 ;; Current logical channel number.
-;; Also: CHANNL (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: CHANNL (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R), CHANL (K4S79, HVK4)
 CurrentChannel = UserVector + 3
 .else
 ;; Current logical channel number, after the flags.

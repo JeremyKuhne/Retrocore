@@ -48,7 +48,7 @@ the address asked for. A bank's gaps show as `··`. The design for what comes n
   it goes there. Headings over the bytes name the columns, with each byte's offset in its row, and stay in view
   as the bytes scroll. A label counts where its code or data is in memory now, so a ROM's labels go when RAM is mapped over it.
   Equates that the CPU's instructions address memory through name those bytes too, whatever is mapped there: an
-  equate counts where an instruction's bytes access its value, while that code is installed, so the Monitor's `STA CH` names $24 `CH`, and the
+  equate counts where an instruction's bytes access its value, while that code is installed, so the Monitor's `STA CursorColumn` names $24 `CursorColumn`, and the
   6809's `LDA [Vector]` names `Vector`, but `CMP #CR` does not make `CR` a name for $0D, nor does an index's offset
   or a term added to another address. A label at the same address comes first.
 - **Align to labels**, the toggle in the Label heading, shown once there are labels, starts a row where each label starts, so a
@@ -71,7 +71,7 @@ the address asked for. A bank's gaps show as `··`. The design for what comes n
   and branches into undescribed memory, and lists what it reaches as code and the pointers and vectors those read
   as data, in italics, as guesses. It keeps out of the sources' data, never splits a Decode from here start's
   instruction, and never reads a pointer from bytes that cannot be read. Bytes nothing reaches are dimmed, as they
-  may not be code. Operands name their labels, such as `LDA KBD`, and
+  may not be code. Operands name their labels, such as `LDA Keyboard`, and
   clicking one goes to its address; clicking a line selects its bytes, and its source, such as `main.s:12`, opens
   beside the editor. Where the listing decodes from the wrong byte, **Decode from here** in the inspector
   (**Ctrl+D**) starts an instruction at the cursor, even in data, and it holds as the view scrolls. The listing
@@ -175,7 +175,7 @@ the address asked for. A bank's gaps show as `··`. The design for what comes n
   It says which part of the machine's map the address is in and where in it, such as *Text page 1, row 10,
   column 0* or *Hi-res page 1, line 83, byte 5*; on a machine with banks, what the memory map does with it now,
   such as *Reads main language card* or, in auxiliary RAM's editor, *Not mapped now*; the documentation of its
-  label from the sources, so `$24` explains `CH` and `$C030` the speaker; the source line that emitted it, which
+  label from the sources, so `$24` explains `CursorColumn` and `$C030` the speaker; the source line that emitted it, which
   opens on a click; and the BASIC's floating point number starting there (five bytes for AppleSoft and Color
   BASIC, four for Business BASIC, Level II's single and double). It says these in short lines under **Where**
   (the address, its name and what kind of name, such as a *named address* for an equate naming RAM), **Value**
@@ -186,7 +186,7 @@ the address asked for. A bank's gaps show as `··`. The design for what comes n
   rest, and right-clicking the bytes (or **Shift+F10**) lists them all by group, each acting on the selection.
 - **Bits, the instruction and references.** For a soft switch or flag byte, the inspector names the bits its
   documentation describes, with each one's value now: the masks it links to, as the CoCo 3's `INIT0` lists `MMUEN`
-  and the rest, and what it says of a bit by number, as the IIe's `RDRAMRD` "reports in bit 7 whether RAMRD is on".
+  and the rest, and what it says of a bit by number, as the IIe's `AuxReadState` "reports in bit 7 whether RAMRD is on".
   Where code is known to start, from the sources, analysis, **Decode from here** or **Mark code**, it shows the
   instruction there with its size, cycles (and when a branch is taken), the flags it changes and what it does; the
   Z80's and 8080's cycles come from their instruction sets, and the 6502's and 6809's, whose indexed operands and

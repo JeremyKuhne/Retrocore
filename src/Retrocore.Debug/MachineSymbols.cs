@@ -25,7 +25,7 @@ namespace Retrocore.Debug;
 ///   such a source's Equates.asm, which holds locations). Page zero takes only the Monitor's and the hardware's names,
 ///   as programs reuse BASIC's and DOS's page-zero storage for their own. In page zero a name in a scope, which is the
 ///   name one family of routines gives a byte, comes after every other name, so a program's use of the byte takes its
-///   shared name (<c>MASK</c>, not <c>Disassembler::FormatBits</c>).
+///   shared name (<c>PlotMask</c>, not <c>Disassembler::FormatBits</c>).
 ///  </para>
 /// </remarks>
 internal static partial class MachineSymbols
@@ -119,8 +119,7 @@ internal static partial class MachineSymbols
     // are PascalCase, so a value is one named in capitals (SCREEN_WIDTH, COLUMNS, AddressMode::ABSOLUTE) or a .set
     // variable, in either form. Such a source's Equates.asm holds only locations, keeping Apple's capital names for
     // them until they are converted (CV, B_FUNC), so only its .set variables are values. Other sources name their
-    // locations in capitals too, so the rule cannot tell their values from them and leaves both (IIeEquates.asm's KEY_
-    // names, until it follows the style guide).
+    // locations in capitals too, so the rule cannot tell their values from them and leaves both.
     private static bool IsValue(string name, AssemblyLocation location, Dictionary<string, string[]?> styled)
     {
         string path = location.Path;

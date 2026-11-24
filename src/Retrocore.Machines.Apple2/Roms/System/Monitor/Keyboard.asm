@@ -34,7 +34,7 @@ FIRMWARE_ESCAPE_KEY = $07
 .endif
 .endif
 
-;; Reads a key through the input hook, <KSWL>, with the cursor shown.
+;; Reads a key through the input hook, <InputHook>, with the cursor shown.
 ;;
 ;; At $FD0C. On the Apple II's Monitors and the original IIe the cursor is the character under it, flashing, and
 ;; the input routine puts the character back; on the Enhanced IIe the internal firmware shows the cursor, for 40 or
@@ -57,19 +57,19 @@ ToFirmware:
     nop
 .else
     ; The input routine gets the character in A and the cursor's column in Y.
-    ldy CH
-    lda (BASL),y
+    ldy CursorColumn
+    lda (TextBase),y
     pha
     and #CHARACTER_BITS
     ora #FLASHING
-    sta (BASL),y
+    sta (TextBase),y
     pla
 .endif
 
 ;; Reads the key through the input hook.
 ;; Also: RDKEYHOOK (UNKN)
 Hook:
-    jmp (KSWL)
+    jmp (InputHook)
 .endproc
 .if MONITOR = MONITOR_IIE
 
@@ -117,13 +117,13 @@ ToFirmware:
 .endproc
 .if ENHANCED
 
-;; Reads a key with the 80-column firmware taking escape sequences: clearing <MSLOT>'s bit 7 tells it to.
+;; Reads a key with the 80-column firmware taking escape sequences: clearing <ExpansionRomSlot>'s bit 7 tells it to.
 ;;
 ;; At $FD28.
 ;; Out: A = the key
 .proc ReadKeyAllowEscape
 .assert * = $FD28, "Escape::ReadKeyAllowEscape must stay at $FD28."
-    lsr MSLOT
+    lsr ExpansionRomSlot
     jmp ReadKey
 
     ; Unused.
@@ -142,7 +142,7 @@ ToFirmware:
 ;; Also: SLOTRTN (UNKN)
 .proc SlotRomReturn
 .assert * = $FD29, "SlotRomReturn must stay at $FD29."
-    sta SETSLOTCXROM
+    sta InternalCxRomOff
 
 ;; Returns with the saved status, the ROM left as it is; the firmware jumps here too.
 PullStatus:
@@ -159,27 +159,27 @@ PullStatus:
 ;; The keyboard's input routine, the input hook's default: waits for a key, then puts back the character the
 ;; cursor covered and clears the strobe.
 ;;
-;; At $FD1B. <RNDL>/<RNDH> count up while it waits, for programs to seed random numbers from.
-;; In: A = the character under the cursor, Y = <CH>
+;; At $FD1B. <RandomSeed>/<RandomSeedHigh> count up while it waits, for programs to seed random numbers from.
+;; In: A = the character under the cursor, Y = <CursorColumn>
 ;; Out: A = the key, with its high bit set
 ;; Keeps: X, Y
 ;; Also: KEYIN (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc KeyboardIn
 .assert * = $FD1B, "KeyboardIn must stay at $FD1B."
-    inc RNDL
+    inc RandomSeed
     bne Check
-    inc RNDH
+    inc RandomSeedHigh
 
 ;; Waits until a key is typed.
 ;; Also: KEYIN2 (A2RM78, A2RM79)
 Check:
-    bit KBD
+    bit Keyboard
     bpl KeyboardIn
 
     ; The key: the cursor's character back, then the strobe cleared.
-    sta (BASL),y
-    lda KBD
-    bit KBDSTRB
+    sta (TextBase),y
+    lda Keyboard
+    bit KeyboardStrobe
     rts
 .endproc
 .endif
@@ -224,7 +224,7 @@ Check:
     jsr ReadKey
 .endif
     ; ESC: the compare, equal, leaves the carry set, as Escape::Command needs.
-    cmp #KEY_ESC
+    cmp #KEY_ESCAPE
     beq Escape::Sequence
     rts
 .endproc

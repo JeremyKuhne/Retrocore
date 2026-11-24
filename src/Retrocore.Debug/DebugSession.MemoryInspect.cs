@@ -108,7 +108,7 @@ internal sealed partial class DebugSession
 
     // The bits of a flag byte or soft switch, as its documentation names them: the masks it links to, such as
     // INIT0's <MMUEN> = $40, whose own documentation speaks of a bit, then what its summary says of a bit by number,
-    // as RDRAMRD's "reports in bit 7 whether RAMRD is on" does. Only a constant's or variable's.
+    // as AuxReadState's "reports in bit 7 whether RAMRD is on" does. Only a constant's or variable's.
     private JsonArray? BitsOf(IDebugModule owner, string name, string? summary)
     {
         if (summary is null || owner.Documentation.Find(name) is not { } topic) { return null; }
@@ -167,7 +167,8 @@ internal sealed partial class DebugSession
         int stop = after.IndexOfAny(stops);
         string following = (stop < 0 ? after : after[..stop]).Trim();
 
-        // Another byte's bit, as KBDSTRB's "clears bit 7 of KBD" or "KBD's bit 7" speaks of, is not this one's.
+        // Another byte's bit, as KeyboardStrobe's "clears ... bit 7 of Keyboard" or "Keyboard's bit 7" speaks of, is
+        // not this one's.
         if (following.StartsWith("of ", StringComparison.Ordinal)) { return null; }
         string leading = text[..match.Index].TrimEnd();
         if (leading.EndsWith("'s", StringComparison.Ordinal)) { return null; }

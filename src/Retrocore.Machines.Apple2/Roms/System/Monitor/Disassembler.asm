@@ -3,7 +3,8 @@
 ;; IIe's slot 3 check between the two, then the hex and blank printers and the next instruction's address that
 ;; the disassembler and the rest of the Monitor share. Its tables are in DisassemblerTables.asm.
 
-;; The disassembler, which decodes the instruction at <PCL>/<PCH> and prints it as the L command lists it.
+;; The disassembler, which decodes the instruction at <ProgramCounter>/<ProgramCounterHigh> and prints it as the L
+;; command lists it.
 ;;
 ;; <Disassembler::Decode> hashes an opcode twice. The first hash picks its addressing mode from
 ;; <Disassembler::AddressingModes>, and the mode picks its operand format from <Disassembler::OperandFormats>; the
@@ -71,49 +72,50 @@ OPERAND_POSITION = 3
 ; The page zero bytes the disassembler borrows.
 
 ;; The operand format of the instruction being decoded, which <PrintInstruction> shifts left as it prints it: the
-;; lo-res routines' <MASK>.
+;; lo-res routines' <PlotMask>.
 ;; Also: FORMAT (A2RM78, A2RM79, IIEROM82, IIETRM85)
-FormatBits = MASK
+FormatBits = PlotMask
 
-;; The high byte of the packed mnemonic while <PrintInstruction> unpacks it: the lo-res lines' <H2>.
+;; The high byte of the packed mnemonic while <PrintInstruction> unpacks it: the lo-res lines' <HorizontalLineEnd>.
 ;; Also: LMNEM (A2RM78, A2RM79, IIEROM82, IIETRM85)
-MnemonicHigh = H2
+MnemonicHigh = HorizontalLineEnd
 
-;; The low byte of the packed mnemonic while <PrintInstruction> unpacks it: the lo-res lines' <V2>.
+;; The low byte of the packed mnemonic while <PrintInstruction> unpacks it: the lo-res lines' <VerticalLineEnd>.
 ;; Also: RMNEM (A2RM78, A2RM79, IIEROM82, IIETRM85)
-MnemonicLow = V2
+MnemonicLow = VerticalLineEnd
 
-;; Prints the address of the instruction at <PCL>/<PCH>, then decodes its opcode.
+;; Prints the address of the instruction at <ProgramCounter>/<ProgramCounterHigh>, then decodes its opcode.
 ;;
 ;; At $F882. It prints a Return, the address as "AAAA-" and three blanks, then falls into <Decode>.
-;; In: PCL/PCH = the instruction
+;; In: ProgramCounter/ProgramCounterHigh = the instruction
 ;; Inherit: <Decode> Out
 ;; Also: INSDS1 (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc PrintPcAndDecode
 .assert * = $F882, "PrintPcAndDecode must stay at $F882."
-    ldx PCL
-    ldy PCH
+    ldx ProgramCounter
+    ldy ProgramCounterHigh
     jsr PrintAddress::YX
     jsr PrintThreeBlanks
     ; Falls into Decode with X = 0.
 .endproc
 
-;; Decodes the opcode of the instruction at <PCL>/<PCH>: its operand's length and format, and its mnemonic.
+;; Decodes the opcode of the instruction at <ProgramCounter>/<ProgramCounterHigh>: its operand's length and format, and
+;; its mnemonic.
 ;;
 ;; At $F88C, and $F88E with the opcode in A (<Decode::Opcode>). Every build looks up the mode and the format here.
 ;; The Apple II's Monitors and the original IIe then compute the length and the mnemonic hash, leaving X = the
 ;; opcode's <GROUP_BITS>; the Enhanced IIe hands the opcode to the internal firmware, whose function $10 computes
 ;; them, which frees $F8B7-$F8CF for <CompareSlot3Rom>.
-;; In: X = 0, PCL/PCH = the instruction
-;; Out: A = the mnemonic's slot in <MnemonicsLeft> and <MnemonicsRight>, LENGTH = the operand's bytes (0-2),
-;;   MASK = the operand format, Y = 0
+;; In: X = 0, ProgramCounter/ProgramCounterHigh = the instruction
+;; Out: A = the mnemonic's slot in <MnemonicsLeft> and <MnemonicsRight>, OperandLength = the operand's bytes (0-2),
+;;   PlotMask = the operand format, Y = 0
 ;; Uses: X
 ;; Entry:
 ;;   Opcode = decodes the opcode in A; programs call it at $F88E (DOS's relocator, the Apple II's Integer BASIC
 ;;     mini-assembler and Programmer's Aid, and on the Enhanced IIe the firmware's mini-assembler)
 .proc Decode
 .assert * = $F88C, "Decode must stay at $F88C."
-    lda (PCL,x)
+    lda (ProgramCounter,x)
 
 ;; Decodes the opcode in A. Programs call it at $F88E: DOS's relocator, the Apple II's Integer BASIC mini-assembler
 ;; and Programmer's Aid, and on the Enhanced IIe the firmware's mini-assembler.
@@ -161,14 +163,14 @@ Format:
     lda OperandFormats,x
     sta FormatBits
 .if ENHANCED
-    ; The firmware takes the format in X and the opcode in BAS2L.
+    ; The firmware takes the format in X and the opcode in ScrollBase.
     tax
-    sty BAS2L
+    sty ScrollBase
     ldy #FIRMWARE_DECODE
     jmp CallFirmware
 .else
     and #LENGTH_BITS
-    sta LENGTH
+    sta OperandLength
 
     ; The mnemonic's slot, from the opcode: TXA's group skips the first step.
     tya
@@ -218,7 +220,7 @@ HashNext:
 ;; Out: zero = set when every comparison matched, and Y = 0 then
 .proc CompareSlot3Rom
 .assert * = $F8B7, "CompareSlot3Rom must stay at $F8B7, where the firmware calls it."
-    sta SETSLOTCXROM
+    sta InternalCxRomOff
 
     ; Compares $C307, then $C305.
 Repeat:
@@ -237,7 +239,7 @@ NextByte:
 
     ; The internal ROM again, keeping the flags.
 Done:
-    sta SETINTCXROM
+    sta InternalCxRomOn
     rts
 
     ; An unused byte, $F8CF.
@@ -252,12 +254,12 @@ Done:
     .byte $FF, $FF, $FF
 .endif
 
-;; Disassembles the instruction at <PCL>/<PCH> and prints it.
+;; Disassembles the instruction at <ProgramCounter>/<ProgramCounterHigh> and prints it.
 ;;
 ;; At $F8D0. It prints a Return, the address as "AAAA-", the instruction's bytes in hex, its mnemonic,
 ;; and its operand, with a branch's operand printed as the address it goes to.
-;; In: PCL/PCH = the instruction
-;; Out: LENGTH = the operand's bytes (0-2)
+;; In: ProgramCounter/ProgramCounterHigh = the instruction
+;; Out: OperandLength = the operand's bytes (0-2)
 ;; Entry:
 ;;   Operand = prints the operand's bytes, the last first, or for a branch the address it goes to
 ;; Also: INSTDSP (A2RM78, A2RM79, IIEROM82, IIETRM85)
@@ -269,7 +271,7 @@ Done:
 ;; Prints one of the instruction's bytes, from Y = 0, and a blank.
 ;; Also: PRNTOP (A2RM78, A2RM79, IIEROM82, IIETRM85)
 NextByte:
-    lda (PCL),y
+    lda (ProgramCounter),y
     jsr PrintHexByte
     ldx #1
 
@@ -277,7 +279,7 @@ NextByte:
 ;; Also: PRNTBL (A2RM78, A2RM79, IIEROM82, IIETRM85)
 PadBytes:
     jsr PrintBlanks
-    cpy LENGTH
+    cpy OperandLength
     iny
     bcc NextByte
     ldx #BYTE_COLUMNS
@@ -313,7 +315,7 @@ ShiftLetter:
 
     ; The operand, after three blanks: Y = the operand byte to print, X = the format position.
     jsr PrintThreeBlanks
-    ldy LENGTH
+    ldy OperandLength
     ldx #FORMAT_POSITIONS
 
 ;; Goes on to the operand's bytes at their position, or to the format's next character bit.
@@ -356,7 +358,7 @@ OperandByte:
 Operand:
     lda FormatBits
     cmp #<(RELATIVE_FORMAT << (FORMAT_POSITIONS - OPERAND_POSITION))
-    lda (PCL),y
+    lda (ProgramCounter),y
     bcc OperandByte
 
 ;; Prints a branch's target: the address after the branch, plus the displacement in A, sign-extended.
@@ -425,7 +427,7 @@ BranchTarget:
 ;;
 ;; At $F94A.
 ;; In: X = the count (1-255, or 0 for 256)
-;; Out: X = 0, A = a blank as the output hook returns it (the screen's applies <INVFLG>)
+;; Out: X = 0, A = a blank as the output hook returns it (the screen's applies <InverseMask>)
 ;; Keeps: Y
 ;; Also: PRBL2 (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc PrintBlanks
@@ -441,14 +443,15 @@ Print:
     rts
 .endproc
 
-;; Computes the address of the instruction after the one at <PCL>/<PCH>.
+;; Computes the address of the instruction after the one at <ProgramCounter>/<ProgramCounterHigh>.
 ;;
-;; At $F953. <PCL>/<PCH> are not changed.
-;; In: LENGTH = the instruction's operand bytes, as <Disassembler::Decode> leaves it
-;; Out: A = the address's low byte, Y = its high byte, X = LENGTH
+;; At $F953. <ProgramCounter>/<ProgramCounterHigh> are not changed.
+;; In: OperandLength = the instruction's operand bytes, as <Disassembler::Decode> leaves it
+;; Out: A = the address's low byte, Y = its high byte, X = OperandLength
 ;; Entry:
 ;;   AddLength = the same, adding the carry as given instead of one
-;;   AddA = adds A, sign-extended, and the carry to <PCL>/<PCH>, returning the sum without storing it
+;;   AddA = adds A, sign-extended, and the carry to <ProgramCounter>/<ProgramCounterHigh>, returning the sum without
+;;     storing it
 ;; Also: PCADJ (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc NextInstruction
 .assert * = $F953, "NextInstruction must stay at $F953."
@@ -456,19 +459,20 @@ Print:
 
 ;; The same, adding the carry as given instead of one.
 ;;
-;; In: LENGTH = the instruction's operand bytes, carry = set to add one more
-;; Out: A = the address's low byte, Y = its high byte, X = LENGTH
+;; In: OperandLength = the instruction's operand bytes, carry = set to add one more
+;; Out: A = the address's low byte, Y = its high byte, X = OperandLength
 ;; Also: PCADJ2 (A2RM78, A2RM79, IIEROM82, IIETRM85)
 AddLength:
-    lda LENGTH
+    lda OperandLength
 
-;; Adds A, sign-extended, and the carry to <PCL>/<PCH>, returning the sum in A and Y without storing it.
+;; Adds A, sign-extended, and the carry to <ProgramCounter>/<ProgramCounterHigh>, returning the sum in A and Y without
+;; storing it.
 ;;
 ;; In: A = the signed amount to add, carry = set to add one more
 ;; Out: A = the sum's low byte, Y = its high byte, X = the amount
 ;; Also: PCADJ3 (A2RM78, A2RM79, IIEROM82, IIETRM85)
 AddA:
-    ldy PCH
+    ldy ProgramCounterHigh
     tax
     bpl AddLow
     dey
@@ -476,7 +480,7 @@ AddA:
 ;; Adds the low bytes, carrying into Y.
 ;; Also: PCADJ4 (A2RM78, A2RM79, IIEROM82, IIETRM85)
 AddLow:
-    adc PCL
+    adc ProgramCounter
     bcc Done
     iny
 

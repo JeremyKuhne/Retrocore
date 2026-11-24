@@ -63,7 +63,7 @@ Inner:
     rts
 .endproc
 
-;; Steps <A4L>/<A4H> as well as A1, for the commands that copy or compare one range with another.
+;; Steps <Address4>/<Address4High> as well as A1, for the commands that copy or compare one range with another.
 ;;
 ;; At $FCB4.
 ;; Out: carry = set when A1 was at or past A2, the range finished
@@ -71,13 +71,13 @@ Inner:
 ;; Also: NXTA4 (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc NextInRangeAndTarget
 .assert * = $FCB4, "NextInRangeAndTarget must stay at $FCB4."
-    inc A4L
+    inc Address4
     bne NextInRange
-    inc A4H
+    inc Address4High
     ; Falls into NextInRange.
 .endproc
 
-;; Compares <A1L>/<A1H> with <A2L>/<A2H>, then steps A1.
+;; Compares <Address1>/<Address1High> with <Address2>/<Address2High>, then steps A1.
 ;;
 ;; At $FCBA.
 ;; Out: carry = set when A1 was at or past A2, the range finished
@@ -85,13 +85,13 @@ Inner:
 ;; Also: NXTA1 (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc NextInRange
 .assert * = $FCBA, "NextInRange must stay at $FCBA."
-    lda A1L
-    cmp A2L
-    lda A1H
-    sbc A2H
-    inc A1L
+    lda Address1
+    cmp Address2
+    lda Address1High
+    sbc Address2High
+    inc Address1
     bne Done
-    inc A1H
+    inc Address1High
 
 ;; Also: RTS4B (A2RM78, A2RM79, IIEROM82, IIETRM85)
 Done:
@@ -109,7 +109,7 @@ Done:
 ;; Also: HEADR (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc WriteHeader
 .assert * = $FCC9, "Cassette::WriteHeader must stay at $FCC9."
-    sta SETINTCXROM
+    sta InternalCxRomOn
     jsr TAPEHEADR
     jmp SelectSlotRom
 .endproc
@@ -126,7 +126,7 @@ Done:
 ;; In: X = how many blanks, to put the caret under the error
 .proc ShowError
 .assert * = $FCD2, "MiniAssembler::ShowError must stay at $FCD2."
-    sta SETSLOTCXROM
+    sta InternalCxRomOff
     jsr PrintBlanks
     lda #'^'
     jsr CharacterOut
@@ -139,11 +139,11 @@ Done:
 ;; At $FCE3.
 .proc ShowInstruction
 .assert * = $FCE3, "MiniAssembler::ShowInstruction must stay at $FCE3."
-    sta SETSLOTCXROM
+    sta InternalCxRomOff
     jsr Disassembler::PrintInstruction
     jsr NextInstruction
-    sty PCH
-    sta PCL
+    sty ProgramCounterHigh
+    sta ProgramCounter
     ; Falls into ReadLine.
 .endproc
 
@@ -153,9 +153,9 @@ Done:
 .proc ReadLine
 .assert * = $FCF0, "MiniAssembler::ReadLine must stay at $FCF0."
     lda #'!'
-    sta PROMPT
+    sta PromptCharacter
     jsr GetLineAfterReturn
-    sta SETINTCXROM
+    sta InternalCxRomOn
     jmp MINILINE
 .endproc
 
@@ -164,13 +164,13 @@ Done:
 ;; Takes the next character of the input line, made uppercase.
 ;;
 ;; At $FCFD.
-;; In: Y = its position in <IN>
+;; In: Y = its position in <InputBuffer>
 ;; Out: A = the character, Y = the next position
 ;; Keeps: X
 ;; Also: UPMON (IIETRM85)
 .proc NextInputCharacter
 .assert * = $FCFD, "NextInputCharacter must stay at $FCFD."
-    lda IN,y
+    lda InputBuffer,y
     iny
 
     ; a-z become A-Z.
@@ -190,9 +190,9 @@ Done:
 
 ; Page zero, under the name this scope gives it.
 
-;; The tape input's last level, which <ReadHalfCycle> compares the input with: <LENGTH>'s byte.
+;; The tape input's last level, which <ReadHalfCycle> compares the input with: <OperandLength>'s byte.
 ;; Also: LASTIN (A2RM78, A2RM79, IIEROM82)
-LastLevel = LENGTH
+LastLevel = OperandLength
 
 ;; Writes a cassette header tone, then the sync bit.
 ;;
@@ -254,10 +254,10 @@ OneDelay:
     dey
     bne OneDelay
 
-;; Toggles the output by reading <TAPEOUT>, and counts the half cycle in X.
+;; Toggles the output by reading <CassetteOut>, and counts the half cycle in X.
 ;; Also: WRTAPE (A2RM78, A2RM79, IIEROM82)
 Toggle:
-    ldy TAPEOUT
+    ldy CassetteOut
     ldy #NEXT_HALF_CYCLE_DELAY
     dex
     rts
@@ -310,7 +310,7 @@ NextBit:
 .assert * = $FCFD, "Cassette::ReadHalfCycle must stay at $FCFD."
     ; Until the input's level differs from the last one.
     dey
-    lda TAPEIN
+    lda CassetteIn
     eor LastLevel
     bpl ReadHalfCycle
 

@@ -197,17 +197,18 @@ internal sealed partial class SourceMapModule : IDebugModule
         return false;
     }
 
-    // The constants an instruction addresses memory through, as STA CH or LDA (BASL),Y do: a constant the operand
-    // names whose value is the address the instruction's bytes encode, its memory operand or pointer, or on the 6809
-    // an indirect or PC-relative postbyte's address. Matching the value leaves out an immediate value, an index's
+    // The constants an instruction addresses memory through, as STA CursorColumn or LDA (TextBase),Y do: a constant the
+    // operand names whose value is the address the instruction's bytes encode, its memory operand or pointer, or on the
+    // 6809 an indirect or PC-relative postbyte's address. Matching the value leaves out an immediate value, an index's
     // offset and a term added to another address, and picks the right one of names that differ only in case or scope.
     private static (string Name, long Value, IsaDescription Cpu, string? Path)[] AddressConstantsOf(
         AssemblyResult result,
         Dictionary<string, string> sourceNames,
         int relocation)
     {
-        // Each constant by the names an operand can spell it with: its own, the source's alias, and the last part of
-        // a scoped name.
+        // Each constant by the names an operand can spell it with: its own, the source's alias, the last part of a
+        // scoped name, and its historical names, from its Also: section, which code not yet converted still uses
+        // (the IIe firmware's STA LCBANK2 for LanguageCardBank2ReadWrite).
         Dictionary<string, List<AssemblySymbol>> byName = [with(StringComparer.OrdinalIgnoreCase)];
         void Add(string name, AssemblySymbol symbol)
         {
@@ -215,17 +216,33 @@ internal sealed partial class SourceMapModule : IDebugModule
             if (!list.Contains(symbol)) { list.Add(symbol); }
         }
 
+        bool Named(AssemblySymbol symbol, out string display)
+        {
+            string shown = sourceNames.TryGetValue(symbol.Name, out string? source) ? source : symbol.Name;
+            display = shown;
+            return symbol.IsConstant
+                && symbol.Value is >= 0 and <= 0xFFFF
+                && !s_internalMarkers.Any(marker => shown.Contains(marker, StringComparison.Ordinal));
+        }
+
         foreach (AssemblySymbol symbol in result.SymbolDefinitions)
         {
-            if (!symbol.IsConstant || symbol.Value is < 0 or > 0xFFFF) { continue; }
-            string display = sourceNames.TryGetValue(symbol.Name, out string? source) ? source : symbol.Name;
-            if (s_internalMarkers.Any(marker => display.Contains(marker, StringComparison.Ordinal))) { continue; }
+            if (!Named(symbol, out string display)) { continue; }
             foreach (string name in (string[])[symbol.Name, display])
             {
                 Add(name, symbol);
                 int separator = name.LastIndexOf("::", StringComparison.Ordinal);
                 if (separator >= 0) { Add(name[(separator + 2)..], symbol); }
             }
+        }
+
+        // A historical name's symbol is the definition's own, so code that uses both names finds it once.
+        Dictionary<string, AssemblySymbol> definitions = [with(StringComparer.Ordinal)];
+        foreach (AssemblySymbol symbol in result.SymbolDefinitions) { definitions.TryAdd(symbol.Name, symbol); }
+        foreach ((string name, AssemblySymbol symbol) in result.HistoricalNames)
+        {
+            AssemblySymbol definition = definitions.GetValueOrDefault(symbol.Name, symbol);
+            if (Named(definition, out _)) { Add(name, definition); }
         }
 
         if (byName.Count == 0) { return []; }

@@ -225,7 +225,8 @@ internal static class SourceText
     ///   Skips a macro's body, which names its parameters; a <c>.using</c> line, which names scopes; the body of
     ///   a <c>.struct</c>, <c>.union</c> or <c>.enum</c>, whose names are the type's own members; and the name a
     ///   <c>.scope</c> or <c>.proc</c> line declares, which is a definition, not a use. Nor does it take a name before
-    ///   or after <c>::</c>: the assembler resolves a historical name only as a plain name.
+    ///   <c>::</c> or after a scope's <c>A::</c>: the assembler resolves a historical name only as a plain name, which
+    ///   a root-qualified <c>::Name</c> is.
     ///  </para>
     /// </remarks>
     /// <param name="lines">The lines of a source file.</param>
@@ -323,10 +324,10 @@ internal static class SourceText
 
             int end = index;
             while (end < code.Length && IsNameCharacter(code[end])) { end++; }
-            bool qualified = index >= 2 && code[index - 1] == ':' && code[index - 2] == ':';
-
-            // A name before :: qualifies the one after it, and the assembler looks up a historical name only for a
-            // plain name (AssemblyPreprocessor.ConstantName), so a qualifier is never one.
+            // A name after a scope's :: (A::Name) is that scope's member, and a name before :: qualifies the one after
+            // it: the assembler looks up a historical name only for a plain name (AssemblyPreprocessor.ConstantName),
+            // so neither is one. A root-qualified ::Name is the plain name, and is taken.
+            bool qualified = index >= 3 && code[index - 1] == ':' && code[index - 2] == ':' && IsNameCharacter(code[index - 3]);
             bool qualifier = end + 1 < code.Length && code[end] == ':' && code[end + 1] == ':';
             if (index != 0 && !qualified && !qualifier && !char.IsAsciiDigit(code[index]) && code[index - 1] != '$')
             {

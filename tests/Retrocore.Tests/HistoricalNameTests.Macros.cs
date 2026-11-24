@@ -1334,6 +1334,79 @@ public sealed partial class HistoricalNameTests
 
         Required(set.Find("FOO")).Sections.Where(section => section.Name == "Also").Should().ContainSingle()
             .Which.Condition.Should().BeNull();
+
+        // A macro the build doesn't expand leaves the branches outside it as they would be without it.
+        DocumentationSet unexpanded = Set("""
+            .macro Library
+            ;; A reader.
+            FOO:
+                rts
+            .endmacro
+            X = 3
+            .if X = 1
+            ;; One.
+            ;; Also: MOLD (TEST)
+            FOO = 1
+            .elseif X = 2
+            ;; Two.
+            ;; Also: MOLD (TEST)
+            FOO = 2
+            .endif
+            """);
+
+        Required(unexpanded.Find("FOO")).Sections.Where(section => section.Name == "Also").Should().ContainSingle()
+            .Which.Condition.Should().BeNull();
+    }
+
+    /// <summary>
+    ///  Sections a macro's body shares a topic with are checked as without the macro: each definition's own, whatever
+    ///  their order, none of a branch the build leaves out, and a <c>.set</c> variable's assignments each their own.
+    /// </summary>
+    [TestMethod]
+    public void SectionsBesideAMacroAreCheckedAsWithoutIt()
+    {
+        const string Macro = """
+            .macro Library
+            ;; A reader.
+            ;; Uses: two words
+            FOO:
+                rts
+            .endmacro
+            .scope Basic
+                Library
+            .endscope
+            """;
+
+        const string Built = """
+            X = 1
+            .if X = 1
+            ;; One.
+            ;; Uses: two words
+            FOO = 1
+            .else
+            ;; Two.
+            FOO = 2
+            .endif
+            """;
+
+        Check(Macro + "\n" + Built).Count(diagnostic => diagnostic.Rule == DocumentationRules.Sections).Should().Be(2);
+
+        string skipped = "X = 2" + Built["X = 1".Length..];
+        skipped.Should().Contain(".if X = 1");
+        string plainMacro = Macro.Replace(";; Uses: two words\n", "", StringComparison.Ordinal);
+        plainMacro.Should().NotContain("Uses");
+        Check(plainMacro + "\n" + skipped).Should().BeEmpty();
+
+        Check("""
+            ;; One.
+            ;; Uses: two words
+            Count .set 0
+            ;; Two.
+            ;; Uses: two words
+            Count .set 1
+            ;; Three.
+            Count .set 2
+            """).Count(diagnostic => diagnostic.Rule == DocumentationRules.Sections).Should().Be(2);
     }
 
     private static List<DocumentationDiagnostic> Check(string text) =>

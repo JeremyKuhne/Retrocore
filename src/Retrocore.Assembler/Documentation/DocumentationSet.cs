@@ -703,7 +703,8 @@ public sealed class DocumentationSet
         // macros' expansions assemble it, so the outside ones are shared only while the build has one of them.
         bool mixed = comments.Any(comment => comment.Macro is not null);
         List<DocumentationComment> outside = [.. participants.Where(comment => comment.Macro is null)];
-        bool outsideBuilt = !mixed || comments.Any(comment => comment.Macro is null && set.CommentInBuild(comment));
+        bool expanded = comments.Any(comment => set.Expansions(comment) > 0);
+        bool outsideBuilt = !expanded || comments.Any(comment => comment.Macro is null && set.CommentInBuild(comment));
         foreach (DocumentationComment comment in participants)
         {
             List<DocumentationComment> peers = mixed && comment.Macro is null ? outside : participants;
@@ -718,9 +719,10 @@ public sealed class DocumentationSet
                         sections.Add(section);
                     }
                 }
-                else if (!sections.Any(existing => existing.Condition is null && Same(existing, section)))
+                else if (!(alike && sections.Any(existing => existing.Condition is null && Same(existing, section))))
                 {
-                    // A section a macro's body shares with every branch is there already, for every build.
+                    // A section the branches outside share, held back while the build has none of them, is there
+                    // already when a macro's body shares it with every branch, for every build.
                     sections.Add(section.WithCondition(comment.Condition, comment.Path, comment.TargetLine));
                 }
             }

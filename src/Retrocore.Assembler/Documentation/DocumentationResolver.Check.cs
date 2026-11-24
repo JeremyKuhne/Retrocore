@@ -146,7 +146,7 @@ public sealed partial class DocumentationResolver
         }
 
         // Links and {references} anywhere in the topic's own text.
-        foreach ((string text, int line, DocumentationComment comment) in Texts(topic))
+        foreach ((string text, int line, DocumentationComment comment) in Texts(topic).Where(item => !OtherBuildOutside(topic, item.Comment)))
         {
             foreach (DocumentationLink link in DocumentationText.Links(text))
             {
@@ -174,7 +174,7 @@ public sealed partial class DocumentationResolver
             }
         }
 
-        foreach (DocumentationSection section in topic.Sections)
+        foreach (DocumentationSection section in topic.Sections.Where(section => !OtherBuildOutside(topic, section)))
         {
             CheckSection(topic, section, Section, (message, line) => Warn(DocumentationRules.Also, message, line));
         }
@@ -550,6 +550,21 @@ public sealed partial class DocumentationResolver
         return writers.Any() && writers.All(comment => comment.Macro is not null && !Current.Reaches(comment));
     }
 
+    // Whether a definition outside macros' bodies, in a topic a macro's body shares, is in a branch the build leaves
+    // out: the macro's expansion makes the topic this build's, but the definition is another build's, which checks it,
+    // as without the macro.
+    private bool OtherBuildOutside(DocumentationTopic topic, DocumentationComment comment) =>
+        comment.Macro is null
+            && topic.Comments.Any(other => other.Macro is not null)
+            && !Current.ReachesInBuild(comment);
+
+    // Whether a section of a topic a macro's body shares is an outside definition's in a branch the build leaves out.
+    private bool OtherBuildOutside(DocumentationTopic topic, DocumentationSection section) =>
+        section.OriginPath is { } path
+            && topic.Comments.Any(comment => comment.TargetLine == section.OriginLine
+                && SamePath(comment.Path, path)
+                && OtherBuildOutside(topic, comment));
+
     // Whether another definition in this build gives a definition's old name too.
     private bool Clashes(DocumentationTopic topic, DocumentationTopic other, string name) =>
         !ReferenceEquals(other, topic)
@@ -597,7 +612,7 @@ public sealed partial class DocumentationResolver
     private void CheckUnlinked(DocumentationTopic topic, HashSet<string> entries, Action<string, int, string> warn)
     {
         HashSet<string> reported = [with(StringComparer.Ordinal)];
-        foreach ((string text, int line, DocumentationComment comment) in Prose(topic))
+        foreach ((string text, int line, DocumentationComment comment) in Prose(topic).Where(item => !OtherBuildOutside(topic, item.Comment)))
         {
             string prose = NotProse().Replace(text, " ");
             foreach (Match word in ProseName().Matches(prose))

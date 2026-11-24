@@ -168,20 +168,15 @@ public sealed partial class DocumentationResolver
             StringComparer.OrdinalIgnoreCase);
 
         // In a file that follows the style guide, every documented definition the prose names is a link; where
-        // macros' bodies share the topic, the file is each comment's own.
+        // macros' bodies share the topic, the file checked is each comment's own file.
         bool Strict(string path) => Current.Files.FirstOrDefault(file => SamePath(file.Path, path)) is { Strict: true };
         if (macros || Strict(topic.Path))
         {
             CheckUnlinked(
                 topic,
                 entries,
-                (comment, message, line, name) =>
-                {
-                    if (Strict(macros ? comment.Path : topic.Path))
-                    {
-                        In(comment, DocumentationRules.UnlinkedName, message, line, name);
-                    }
-                });
+                comment => !macros || Strict(comment.Path),
+                (comment, message, line, name) => In(comment, DocumentationRules.UnlinkedName, message, line, name));
         }
 
         // Links and {references} anywhere in the topic's own text.
@@ -671,10 +666,14 @@ public sealed partial class DocumentationResolver
     private void CheckUnlinked(
         DocumentationTopic topic,
         HashSet<string> entries,
+        Func<DocumentationComment, bool> checks,
         Action<DocumentationComment, string, int, string> warn)
     {
         HashSet<string> reported = [with(StringComparer.Ordinal)];
-        foreach ((string text, int line, DocumentationComment comment) in Prose(topic).Where(item => !OtherBuildOutside(topic, item.Comment)))
+        // A name is reported once at each place; where macros' bodies share the topic, the place is in its own file.
+        bool macros = topic.Comments.Any(comment => comment.Macro is not null);
+        foreach ((string text, int line, DocumentationComment comment) in Prose(topic)
+            .Where(item => !OtherBuildOutside(topic, item.Comment) && checks(item.Comment)))
         {
             string prose = NotProse().Replace(text, " ");
             foreach (Match word in ProseName().Matches(prose))
@@ -707,7 +706,7 @@ public sealed partial class DocumentationResolver
                 // calls it RESET", "starts BASIC"), not the current name left unlinked.
                 if (LastName(target.Name) != LastName(name)) { continue; }
 
-                if (reported.Add($"{line}:{name}"))
+                if (reported.Add(macros ? $"{comment.Path}:{line}:{name}" : $"{line}:{name}"))
                 {
                     warn(comment, $"Link {name} as <{name}>: it names a documented definition.", line, name);
                 }

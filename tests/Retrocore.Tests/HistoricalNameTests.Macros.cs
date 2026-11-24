@@ -1891,7 +1891,7 @@ public sealed partial class HistoricalNameTests
 
     /// <summary>
     ///  Where macros' bodies in two files share a topic, each body's prose is held to its own file's style: a strict
-    ///  file's body has its unlinked names reported there, and a body in a file that isn't strict has none.
+    ///  file's body has its unlinked names reported there, and a body in a file that isn't strict has no such report.
     /// </summary>
     [TestMethod]
     public void MacroBodiesProseFollowsItsOwnFilesStyle()
@@ -1941,6 +1941,13 @@ public sealed partial class HistoricalNameTests
 
         Unlinked(Tall + First, Strict + Second).Should().ContainSingle().Which.Path.Should().Be("Second.inc");
         Unlinked(Strict + Tall + First, Second).Should().BeEmpty();
+
+        // Each file's comment counts on its own, though two are on the same line of their files.
+        const string Plain = "; Not strict.\n;; A probe.\n\n";
+        string firstReads = First.Replace(";; One.", ";; One, which reads TALL.", StringComparison.Ordinal);
+        firstReads.Should().Contain("reads TALL");
+        Unlinked(Plain + Tall + firstReads, Strict + Tall.Replace("TALL", "WIDE", StringComparison.Ordinal) + Second)
+            .Should().ContainSingle().Which.Path.Should().Be("Second.inc");
     }
 
     private static List<DocumentationDiagnostic> Check(string text) =>

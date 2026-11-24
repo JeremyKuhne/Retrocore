@@ -149,6 +149,7 @@ SetTop:
 ;;
 ;; At $C84D, which Apple's Enhanced IIe listing labels Pascal 1.0's input hook. The original IIe's source called it
 ;; unreferenced, as nothing in this ROM jumps here.
+;; Also: C8PASREAD (UNKN)
 .proc Read10Entry
 .assert * = $C84D, "Pascal::Read10Entry must stay at $C84D."
     jmp ReadEntry

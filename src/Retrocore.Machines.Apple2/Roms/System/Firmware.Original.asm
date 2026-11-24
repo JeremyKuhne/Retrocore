@@ -56,6 +56,7 @@ FirmwareScratch = $0478
 ; The expansion ROM switch, a label in the Enhanced IIe's firmware, so not in IIeEquates.asm.
 
 ;; Inherit: <Monitor:ExpansionRomOff>
+;; Also: CLRROM (A2RM79, IIEROM82, IIETRM85)
 ExpansionRomOff = $CFFF
 
 .org $C100

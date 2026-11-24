@@ -87,6 +87,7 @@ COLON_CODE = ((':' ^ '0') + $89) & $FF
 
 ;; Computes the base of line A, with the window's left edge.
 ;; In: A = the line
+;; Also: BASCALC2 (IIEROM82)
 Row:
     jsr RowBase
     lda WindowLeft

@@ -456,7 +456,7 @@ ReadLine = $FCF0
     bmi Store
     lda #INVERSE_SPACE
 
-;; Stores the blank in each column, in the 80-column clearing's loop.
+;; Stores the blank in each column, in the 40-column clearing's loop.
 ;; Also: X_CLREOL2 (IIETRM85)
 Store:
     jmp Control::ClearLineFrom::Store40

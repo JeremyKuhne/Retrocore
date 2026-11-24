@@ -55,6 +55,7 @@ ChooseWidth:
 
 ;; The page every handler is in: <Dispatch40> and <Dispatch80> push it as the high byte of the handler's address minus
 ;; one.
+;; Also: CXFUNC_PAGE (UNKN), BFUNCPG (IIETRM85)
 HANDLER_PAGE = $C1
 
 ;; The bits of <EightyColumns::Mode> that send the screen functions to their 40-column versions even with an 80-column
@@ -508,6 +509,7 @@ ArrowKeys:
     .byte KEY_BACKSPACE, KEY_RIGHT_ARROW, KEY_LINE_FEED, KEY_CONTROL_K
 
 ;; The arrow keys in <ArrowKeys> and <ArrowLetters>.
+;; Also: ARROWS (UNKN)
 ARROW_COUNT = * - ArrowKeys
 
 ;; The letters <EscapeKey> makes the arrow keys: J, K, M and I.

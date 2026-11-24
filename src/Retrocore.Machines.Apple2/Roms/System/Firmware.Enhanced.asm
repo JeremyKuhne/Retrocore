@@ -7,12 +7,12 @@
 ;;   <Monitor:CallFirmware>, with the internal ROM switched in and a function number in Y (FirmwareFunctions.asm),
 ;;   performed by <DispatchFunction>; every function returns through <Functions::Return>. Also the reset hook,
 ;;   <Functions::ResetFirmware>.
-;; - Firmware.Enhanced/SlotEntry.asm, $C300-$C3FF: slot 3's entry points, <BasicInitialize> (`PR#3`), <BasicInput>
-;;   and <BasicOutput>; the Pascal 1.1 signature and <PascalOffsets>; <AuxMove> and <AuxTransfer>; and
-;;   <HandleInterrupt> at $C3FA, where the IRQ vector at $FFFE points.
-;; - Firmware.Enhanced/Interrupts.asm, $C400-$C5FF: the interrupt handling that saves and restores the memory
-;;   state, the mini-assembler's operand parser, and the cassette routines behind the Monitor's tape commands and
-;;   AppleSoft's `SHLOAD`, `STORE` and `RECALL` (<AppleSoftCassette>).
+;; - Firmware.Enhanced/SlotEntry.asm, $C300-$C3F9: slot 3's entry points, <BasicInitialize> (`PR#3`),
+;;   <BasicInput> and <BasicOutput>; the Pascal 1.1 signature and <PascalOffsets>; and <AuxMove> and <AuxTransfer>.
+;; - Firmware.Enhanced/Interrupts.asm, $C3FA-$C5FF: <HandleInterrupt> at $C3FA, where the IRQ vector at $FFFE points,
+;;   and the interrupt handling that saves and restores the memory state, the mini-assembler's operand parser, and the
+;;   cassette routines behind the Monitor's tape commands and AppleSoft's `SHLOAD`, `STORE` and `RECALL`
+;;   (<AppleSoftCassette>).
 ;; - Firmware.Enhanced/SelfTest.asm, $C600-$C7FF: the built-in self-test, which the reset function runs when
 ;;   Solid-Apple is held.
 ;; - Firmware.Enhanced/EightyColumnsEntry.asm, EightyColumnsControl.asm, EightyColumnsScreen.asm and

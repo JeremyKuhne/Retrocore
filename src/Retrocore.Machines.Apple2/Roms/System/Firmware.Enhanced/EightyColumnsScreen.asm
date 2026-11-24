@@ -142,21 +142,27 @@ CopyAux:
     bne CopyAux
 
 ;; Byte 0 of the auxiliary half, which is outside the window when its left edge is odd.
+;; Also: SCRLFT (IIETRM85)
 AuxColumn0:
     bvs MainHalf
     lda (TextBase),y
     sta (ScrollBase),y
 
 ;; Then the main half, one byte shorter when the left edge plus the width is odd.
+;; Also: SKPLFT (IIETRM85)
 MainHalf:
     lda Page2Off
     ldy WindowWidth
     bcs NextMain
 
+;; The main half's bytes.
+;; Also: SCRLODD (IIETRM85)
 CopyMain:
     lda (TextBase),y
     sta (ScrollBase),y
 
+;; The next byte of the main half.
+;; Also: SKPRT (IIETRM85)
 NextMain:
     dey
     bpl CopyMain
@@ -192,6 +198,7 @@ Finish:
     bpl CheckLine                   ; always: the line is 0-23
 
 ;; One line below.
+;; Also: X_VTLOOP (IIEROM82)
 NextLine:
     jsr LineBase::Row
     jsr ClearLine
@@ -368,6 +375,7 @@ Done:
     bmi SetWindowTop::Done
 
 ;; Converts the screen to 40 columns if 80 columns are on, whether or not the Pascal protocol is active.
+;; Also: X_DC1A (IIETRM85)
 Convert:
     jsr SetWindowTop
     bit Columns80State
@@ -394,6 +402,7 @@ Convert:
 ;; Finishes 40 or 80 columns: the window's left edge added into the cursor's column, which 40 columns keep at 39
 ;; at most, the Monitor's <::CursorColumn> to match, the line's base, and the full window and its top.
 ;; Keeps: X
+;; Also: X_DC1B (IIETRM85)
 .proc FinishColumns
     lda EightyColumns::CursorColumn
     clc
@@ -405,6 +414,7 @@ Convert:
     lda #COLUMNS_40 - 1
 
 ;; The column, for the firmware and the Monitor.
+;; Also: X_DC1C (IIETRM85)
 StoreColumn:
     sta EightyColumns::CursorColumn
     sta CursorColumn
@@ -412,12 +422,13 @@ StoreColumn:
     jsr RowBase
     bit Columns80State
     bpl Window40
-    jsr FullWindow80
+    jsr FullWindow80                ; DO80 in Apple's listing
     beq SetWindowTop                ; always: FullWindow80 leaves A = 0
 .endproc
 
 ;; Sets the full 40-column window, below the graphics when graphics are shown.
 ;; Keeps: X, Y
+;; Also: DO40 (IIETRM85)
 .proc Window40
     jsr FullWindow40
     ; Falls into SetWindowTop.
@@ -427,6 +438,7 @@ StoreColumn:
 ;; Keeps: X, Y
 ;; Entry:
 ;;   Done = the return <Columns40> and <Columns80> share
+;; Also: SETTOP (IIETRM85)
 .proc SetWindowTop
     lda #0
     bit TextState
@@ -434,17 +446,19 @@ StoreColumn:
     lda #MIXED_TEXT_TOP
 
 ;; Stores the top line.
+;; Also: DO40A (IIETRM85)
 StoreTop:
     sta WindowTop
 
 ;; The return <Columns40> and <Columns80> share.
+;; Also: X_DC1RTS (IIETRM85)
 Done:
     rts
 .endproc
 
 ;; Control-X: MouseText off, <MODE_MOUSETEXT_OFF>.
 ;; Keeps: X, Y
-;; Also: MTEXTOFF (UNKN)
+;; Also: MOUSEOFF (IIETRM85), MTEXTOFF (UNKN)
 .proc MouseTextOff
     lda EightyColumns::Mode
     ora #MODE_MOUSETEXT_OFF

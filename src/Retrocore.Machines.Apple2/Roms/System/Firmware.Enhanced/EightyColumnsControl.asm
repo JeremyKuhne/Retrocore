@@ -85,7 +85,8 @@ BELL_TOGGLES = $C0
 .scope Pascal continued
 
 ;; Pascal's write: takes a GOTOXY's column or line, performs a control character, or displays any other and moves
-;; the cursor right, to the next line at the window's right edge. Then the line's base is saved and the cursor shown.
+;; the cursor right, to the next line's start at the window's right edge. Then the line's base is saved and the
+;; cursor shown.
 ;;
 ;; <Pascal::WriteEntry at PASWRITE> jumps here.
 ;; In: A = the character
@@ -114,7 +115,7 @@ BELL_TOGGLES = $C0
     bpl Store
     ora #TEXT_HIGH_BIT
 
-;; Stores the character and moves the cursor right, to the next line at the window's right edge.
+;; Stores the character and moves the cursor right, to the next line's start at the window's right edge.
 ;; Also: PWRI (IIETRM85)
 Store:
     jsr Screen::WriteCharacter
@@ -158,7 +159,7 @@ RangeMask:
     bit EightyColumns::GotoXYColumn
     bmi StoreGotoColumn
 
-    ; The line: the cursor moves to it and the column.
+    ; The line (GETY in Apple's listing): the cursor moves to it and the column.
     sta EightyColumns::CursorLine
     sta CV
     jsr RowBase
@@ -548,7 +549,7 @@ Done:
     jmp LineBase
 .endproc
 
-;; Control-\: moves the cursor right, to the next line at the window's right edge.
+;; Control-\: moves the cursor right, to the next line's start at the window's right edge.
 ;; Also: X_FS (IIEROM82, IIETRM85), FWDSPACE80 (UNKN)
 .proc Right
     inc EightyColumns::CursorColumn
@@ -558,7 +559,7 @@ Done:
     jsr CarriageReturn
 
     ; Returns.
-;; Also: X_FSRET (IIEROM82)
+;; Also: X_FSRET (IIEROM82, IIETRM85)
 Done:
     rts
 .endproc
@@ -615,6 +616,7 @@ SetInverse:
     sty InverseMask
 
 ;; Returns.
+;; Also: X_USRET (IIETRM85)
 Done:
     rts
 .endproc

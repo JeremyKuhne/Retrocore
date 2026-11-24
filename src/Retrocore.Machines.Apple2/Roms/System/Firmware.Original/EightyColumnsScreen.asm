@@ -102,7 +102,7 @@ Loop:
     bcc Done
     jsr CarriageReturn
 
-;; Also: X_FSRET (IIEROM82)
+;; Also: X_FSRET (IIEROM82, IIETRM85)
 Done:
     rts
 .endproc

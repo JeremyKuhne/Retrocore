@@ -425,6 +425,7 @@ ControlsOff:
 ; The escape-mode keys and their codes.
 
 ;; On a code in <CharacterIo::EscapeCodes>: escape mode goes on after it.
+;; Also: ESC_STAY (UNKN)
 ESCAPE_STAY = $80
 
 ;; The escape keys <EscapeEntry> has added so far.

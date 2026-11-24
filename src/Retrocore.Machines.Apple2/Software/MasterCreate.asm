@@ -45,8 +45,8 @@ RWTS_READ = 1
 ;; Inherit: <Dos33:RWTS_WRITE>
 RWTS_WRITE = 2
 
-;; The size of an IOB less one, the last byte <PrepareRequest> copies, which is one more than the 17 that
-;; <RequestTemplate> holds.
+;; The offset of the last byte <PrepareRequest> copies, 17 ($11): the 17 bytes <RequestTemplate> holds and one more,
+;; the first byte of <DeviceCharacteristics>, which lands in the IOB's first spare byte.
 REQUEST_LAST = $11
 
 ;; A pointer this program uses for messages, DOS's IOB and the boot ROM, and where it keeps the input's length.

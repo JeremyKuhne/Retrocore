@@ -129,11 +129,11 @@ Done:
 .endproc
 .endif
 
-;; ;; DOS's error report: the routines that load an error number and report it, and <Errors::Report>, which prints the
-;; ;; message and goes back to BASIC.
-;; ;;
-;; ;; The error numbers are the ERROR_ codes, 1 to 15, and the messages are in <EMSG>. In DosGoer.asm, $A6C4-$A719 where
-;; ;; DOS runs.
+;; DOS's error report: the routines that load an error number and report it, and <Errors::Report>, which prints the
+;; message and goes back to BASIC.
+;;
+;; The error numbers are the ERROR_ codes, 1 to 15, and the messages are in <EMSG>. In DosGoer.asm, $A6C4-$A719 where
+;; DOS runs.
 .scope Errors
 
 ;; Reports SYNTAX ERROR.
@@ -262,11 +262,11 @@ FromOffset:
 
 .endscope
 
-;; ;; The DOS file buffers: building their chain below DOS, walking it, finding the buffer of a named file, and copying
-;; ;; a buffer's details into DOS's parameter list.
-;; ;;
-;; ;; Each buffer is laid out as <FileBuffer>, and <WorkPointer> points at the one being worked on. In DosGoer.asm
-;; ;; ($A71A-$A75A and $A764-$A7C3 where DOS runs) and BuildFileTables.asm ($A7D4-$A850).
+;; The DOS file buffers: building their chain below DOS, walking it, finding the buffer of a named file, and copying
+;; a buffer's details into DOS's parameter list.
+;;
+;; Each buffer is laid out as <FileBuffer>, and <WorkPointer> points at the one being worked on. In DosGoer.asm
+;; ($A71A-$A75A and $A764-$A7C3 where DOS runs) and BuildFileTables.asm ($A7D4-$A850).
 .scope FileBuffers
 
 ;; Fills in the parameter list for opening a file: the volume, drive and slot from the command's options and the

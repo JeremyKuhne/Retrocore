@@ -262,8 +262,9 @@ APPLESOFT_FILE_NAME_LENGTH = * - ApplesoftFileName
     .word routine - 1
 .endmacro
 
-;; The start of the first of the file manager's ranges the relocator adjusts: four addresses, which the relocator
-;; adjusts as words when it moves the master's DOS to the top of memory (Relocator.asm, <Relocator::AddressRanges>).
+;; The start of the file manager's range of addresses the relocator adjusts as words when it moves the master's DOS
+;; to the top of memory (Relocator.asm, <Relocator::AddressRanges>): four addresses, then the request, read and
+;; write dispatch tables, up to <FileManagerAddressesEnd>.
 ;; Also: SAT2 (DOS33, DOS31)
 FileManagerAddressesStart:
 

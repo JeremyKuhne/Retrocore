@@ -29,7 +29,8 @@ relocates debugs at the source's lines. The debugger maps both years' running bu
 Monitor and hardware addresses where DOS uses the SDK's shared names (`PROMPT`, `HOME`, `IORTS`) come from
 [`IIeEquates.asm`](../src/Retrocore.Machines.Apple2/Roms/System/IIeEquates.asm) and
 [`MonitorEntries.asm`](../src/Retrocore.Machines.Apple2/Roms/System/MonitorEntries.asm), included by
-`Equates.asm`; addresses where DOS uses its own names (`OutputHook` (`OUTSW`) for the output hook) live in `Equates.asm`.
+`Equates.asm`; DOS's own names for addresses those files define (`OUTSW` for `OutputHook`, the output hook) are
+historical names on those definitions.
 
 The two years differ in Apple's 1982 "revision B" patches, which the 1980 DOS lacks. Apple's source already
 has a switch for them, `REVISION_B` (`DOS33B`): off, it builds the 1980 code exactly. The revision changes three things: how
@@ -144,7 +145,7 @@ names in the same style. It builds the same two images, `MASTER = 1`
 byte for byte the master's tracks 0 to 2 and `MASTER = 0` DOS where it runs, both pinned by digest; the
 debugger maps the running build.
 
-The two versions share every module but RWTS itself: each root sets `DOS32`, and the places they differ are
+The two versions share every module but RWTS itself and DOS 3.3's address field writer: each root sets `DOS32`, and the places they differ are
 `.if DOS32` blocks. `Leftover` (`LEFTOVER`) takes three bytes, one for each master (1983, 1980, then DOS 3.2). In the
 boot loader, RWTS's low-level routines and the formatter, a routine both versions have is one definition, with `.if`
 where the two differ in places; one that differs throughout (`BOOT 1`, the prenibble and postnibble routines, the

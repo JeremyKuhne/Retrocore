@@ -166,7 +166,7 @@ MotorTimeHigh = SavedY
 
 ;; The half-track the seek routine is moving the head to, and after the seek the half-track it is on.
 ;;
-;; <DiskII::MoveHead> compares <CurrentTrack> with it to decide the direction and the steps left. <SeekTrack> sets it.
+;; <DiskII::MoveHead> sets it and compares <CurrentTrack> with it to decide the direction and the steps left.
 ;; See: <CurrentTrack>, <DiskII::MoveHead>, <SeekTrack>
 ;; Also: TRKN (DOS33, DOS31)
 TargetHalfTrack = ScrollBase

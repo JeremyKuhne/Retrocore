@@ -217,14 +217,14 @@ Shift:
 
 .endscope
 
-;; ;; The command handlers, one for each of DOS's 28 commands and named for its word (<Commands::Catalog>,
-;; ;; <Commands::PrNumber>), and the code they share to open, read, write and close files.
-;; ;;
-;; ;; The command table <CMDETB> lists the handlers; the scanner (<Scanner>) has left the command's file names, options
-;; ;; and number in the command interpreter's variables when one runs. A handler acts on files by filling in
-;; ;; <DosFileParameters> and calling <RunFileRequest>, mostly through <Commands::FileRequest>, which lends the file a
-;; ;; DOS buffer (<FileBuffers>). The handlers are in OpenClose.asm, LoadSave.asm and MiscCommands.asm, $A229-$A60D
-;; ;; where DOS runs, and <Commands::CheckFileType> is at $A7C4 (DosGoer.asm). docs/Dos.md describes the commands.
+;; The command handlers, one for each of DOS's 28 commands and named for its word (<Commands::Catalog>,
+;; <Commands::PrNumber>), and the code they share to open, read, write and close files.
+;;
+;; The command table <CMDETB> lists the handlers; the scanner (<Scanner>) has left the command's file names, options
+;; and number in the command interpreter's variables when one runs. A handler acts on files by filling in
+;; <DosFileParameters> and calling <RunFileRequest>, mostly through <Commands::FileRequest>, which lends the file a
+;; DOS buffer (<FileBuffers>). The handlers are in OpenClose.asm, LoadSave.asm and MiscCommands.asm, $A229-$A60D
+;; where DOS runs, and <Commands::CheckFileType> is at $A7C4 (DosGoer.asm). docs/Dos.md describes the commands.
 .scope Commands
 
 ;; PR#: sends output to the slot the scanner left in <ParsedNumber> (0-7), through the Monitor's <SetOutput>.

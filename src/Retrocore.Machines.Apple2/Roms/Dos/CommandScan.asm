@@ -31,12 +31,12 @@ SLOT_COUNT = 8
 ;; The most file buffers MAXFILES can ask for.
 MOST_FILE_BUFFERS = 16
 
-;; ;; The command scanner: reads a command line in <InputBuffer>, finds the command in <CommandNames>, reads its file
-;; ;; names or number and its options, and runs its handler.
-;; ;;
-;; ;; <Scanner::Scan> is the way in, from the output hook; CommandScan.asm describes the steps. The character routines
-;; ;; the scanner reads the line with (GNBC, GNXTC, GETNUM) and the parameter list's clearing (CLRCCB) are its piece
-;; ;; in OpenClose.asm.
+;; The command scanner: reads a command line in <InputBuffer>, finds the command in <CommandNames>, reads its file
+;; names or number and its options, and runs its handler.
+;;
+;; <Scanner::Scan> is the way in, from the output hook; CommandScan.asm describes the steps. The character routines
+;; the scanner reads the line with (GNBC, GNXTC, GETNUM) and the parameter list's clearing (CLRCCB) are its piece
+;; in OpenClose.asm.
 .scope Scanner
 
 ;; Scans the command line in <InputBuffer> and, if it is a DOS command, carries it out.
@@ -216,8 +216,8 @@ CheckFirstName:
     cmp #BLANK
     bne ReadOptions
 
-    ; No file name. Commands with SYNTAX_NONE_ALLOWED do without one; those with SYNTAX_NONE_TO_BASIC go to BASIC;
-    ; the rest are errors.
+    ; No file name. Commands with SYNTAX_NONE_ALLOWED alone do without one; the rest, SYNTAX_NONE_TO_BASIC's among
+    ; them, go through Reject to NotCommand, which gives a typed line to BASIC.
     ldy a:CommandOffset
     lda #SYNTAX_NONE_TO_BASIC|SYNTAX_NONE_ALLOWED
     and a:CommandSyntax+CommandSyntaxEntry::OPERANDS,y

@@ -34,7 +34,7 @@
 ;; READ5, as in DOS 3.3, since the file manager has labels RD1 to RD5 of its own. At $B8DC where DOS 3.3 runs ($B8FD
 ;; in DOS 3.2).
 ;; In:    X = slot * 16, the card in read mode
-;; Out:   carry = clear, <HighBits> and <LowBits> = the sector's values, A = $AA, Y = 0
+;; Out:   carry = clear, <HighBits> and <LowBits> = the sector's values, A = $AA, Y = the checksum nibble
 ;; Errors: carry = set if the prologue is not found, the checksum is wrong or the epilogue is missing
 ;; Uses:  A, Y
 ;; Keeps: X

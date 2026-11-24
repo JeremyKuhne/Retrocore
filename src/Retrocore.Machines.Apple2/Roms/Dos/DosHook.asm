@@ -174,12 +174,12 @@ RestoreHooks:
     rts
 .endproc
 
-;; ;; The handlers of DOS's output hook, one for each output state (OSTATE, an OUTPUT_STATE_ code), which
-;; ;; <OutputHandler> picks through <OutputHandlers> for each character printed.
-;; ;;
-;; ;; They collect command lines after a Control-D or from typed input, pass ordinary output on, write to a file
-;; ;; while WRITE is on, and hide or show echoes as MON asks. Each starts with A = the character and leaves DOS
-;; ;; through <EchoExit> or <ExitDos>. DosHook.asm explains the states.
+;; The handlers of DOS's output hook, one for each output state (OSTATE, an OUTPUT_STATE_ code), which
+;; <OutputHandler> picks through <OutputHandlers> for each character printed.
+;;
+;; They collect command lines after a Control-D or from typed input, pass ordinary output on, write to a file
+;; while WRITE is on, and hide or show echoes as MON asks. Each starts with A = the character and leaves DOS
+;; through <EchoExit> or <ExitDos>. DosHook.asm explains the states.
 .scope Output
 
 ;; State <OUTPUT_STATE_LINE_START>: the first character of a line. A Control-D here starts a DOS command.
@@ -362,7 +362,8 @@ Write:
     ; Falls into EchoExit.
 .endproc
 
-;; Leaves DOS from an output state, printing the character in <HookA> only if MON C is on.
+;; Leaves DOS from an output state, printing the character in <HookA> only if MON C is on; the other entries test
+;; MON O or MON I, or always print.
 ;;
 ;; Each entry prints the character only if its MON option is on (an ECHO_ bit of <EchoFlags>); <EchoExit::Always>
 ;; always prints it. All end at <ExitDos>.

@@ -1,5 +1,5 @@
 ; retrocore: style=strict
-;; DOS 3.2 RWTS: read or write a track and sector ($BD00-$BE9B where DOS runs)
+;; DOS 3.2 RWTS: read or write a track and sector ($BD00-$BE3A where DOS runs)
 ;;
 ;; RWTS, "read or write a track and sector", is the routine the rest of DOS calls for every disk access. The caller
 ;; describes the request in an IOB, laid out as <Iob>, and passes its address in A and Y. RWTS starts the drive: it
@@ -13,8 +13,9 @@
 ;; This is DOS 3.3's RWTS (its Rwts1.asm and Rwts2.asm) as it was before DOS 3.3 changed it: the names are DOS
 ;; 3.3's where the code is the same. DOS 3.2 differs in a few places. It reads the sector number the IOB gives as
 ;; the number on the disk, with no translation. It checks once, not eight times, whether the motor is turning; it
-;; reads the motor's start-up count from both of the DCT's bytes; it recalibrates only once; and its formatter is
-;; part of RWTS's code rather than a module of its own. RWTS reads the IOB's bytes from <Iob::SLOT_TIMES_16> to
+;; reads the motor's start-up count from both of the DCT's bytes; a seek that finds the head on the wrong track uses
+;; up one of its address tries, where DOS 3.3 counts up to four such seeks before it recalibrates; and its formatter
+;; is part of RWTS's code rather than a module of its own. RWTS reads the IOB's bytes from <Iob::SLOT_TIMES_16> to
 ;; <Iob::PREVIOUS_DRIVE> but the byte count, and writes the return code, the volume found and the previous slot and
 ;; drive; it reads the DCT's <DeviceTable::WHOLE_TRACKS> and both bytes of <DeviceTable::MOTOR_DELAY>.
 ;;
@@ -120,17 +121,17 @@ MotorCount = MotorTime
 RecalibrationsLeft = $04F8
 
 ;; The reads in a row that must see the same latch value before a drive counts as stopped.
-STOP_READS = 8
+LATCH_TESTS = 8
 
 ;; The passes of the delay loop, which with the count's step make about 100 cycles, 100 microseconds.
 DELAY_PASSES = $12
 
 ;; The address fields read after the first before RWTS gives up on finding the sector: 49 tries in all.
-ADDRESS_RETRIES = $30
+ADDRESS_TRIES = $30
 
 ;; The track RWTS records before it recalibrates: track 96, half-track 192, far enough beyond track 34 that the
 ;; seek to track 0 stops the head against the stop whatever its real place.
-RECALIBRATION_TRACK = $60
+RECALIBRATE_TRACK = $60
 
     ; The caller's IOB and slot.
     sty IobPointer
@@ -155,7 +156,7 @@ RECALIBRATION_TRACK = $60
 ;; Waits until the latch reads the same eight times in a row.
 ;; Also: STILLON (DOS33)
 WaitForStop:
-    ldy #STOP_READS
+    ldy #LATCH_TESTS
     lda DataLatch,x
 ;; Also: NOTSURE (DOS33)
 CompareLatch:
@@ -257,7 +258,7 @@ TryTrack:
     jsr DiskII::PreNibble
 ;; Also: TRYTRK2 (DOS33)
 StartTries:
-    ldy #ADDRESS_RETRIES
+    ldy #ADDRESS_TRIES
     sty RetriesLeft
 ;; Also: TRYADR (DOS33)
 TryAddress:
@@ -276,7 +277,7 @@ NextTry:
 Recalibrate:
     lda CurrentTrack
     pha
-    lda #RECALIBRATION_TRACK
+    lda #RECALIBRATE_TRACK
     jsr SetTrack
     dec RecalibrationsLeft
     bne DriveError

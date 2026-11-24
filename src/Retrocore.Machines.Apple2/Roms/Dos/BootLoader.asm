@@ -339,7 +339,7 @@ JumpVector = Address2
 READ_OFFSET = $5D
 
 ;; Added to a slot number to make the high byte of its ROM's page, $Cn00.
-SLOT_ROM_PAGE = $C0
+SLOT_ROM_HIGH = $C0
 
 ;; The sectors `BOOT 1` reads, 0 to 9: the boot page, `BOOT 2`'s page and RWTS's eight. DOS's other pages come after
 ;; them, from sector 10.
@@ -439,7 +439,7 @@ ShiftTranslate:
     Lsr a
     Lsr a
     Lsr a
-    Ora #SLOT_ROM_PAGE
+    Ora #SLOT_ROM_HIGH
     Sta JumpVector + 1
     Lda #READ_OFFSET
     Sta JumpVector
@@ -1160,7 +1160,7 @@ ToDos:
 ;;
 ;; After each page, one page higher in memory and one sector higher on the disk, from sector 12 to sector 0 of the
 ;; next track. It doesn't stop on an error: the carry it returns is that of the last page.
-;; Errors: carry = set if RWTS failed on the last page
+;; Out:   carry = clear if the last page succeeded, set if not (the error in <DosIob::ReturnCode>)
 ;; Also: BOOTIO (DOS33, DOS31)
 .proc TransferPages
 

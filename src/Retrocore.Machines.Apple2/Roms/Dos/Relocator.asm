@@ -312,11 +312,11 @@ StartDos:
     jmp VectorImage+DosColdStartJump-DosWarmStartJump
 .endproc
 
-;; ;; The master's relocator's tables and variables: the ranges of DOS it adjusts and the pages it moves DOS between.
-;; ;;
-;; ;; Only the System Master has them, at $1B00-$1CFF with <RelocateDos>, which uses them to move DOS to the top of
-;; ;; memory. <Relocator::AddressRanges> lists DOS's tables of addresses and <Relocator::CodeRanges> its code, each
-;; ;; range a <RelocationRange>.
+;; The master's relocator's tables and variables: the ranges of DOS it adjusts and the pages it moves DOS between.
+;;
+;; Only the System Master has them, at $1B00-$1CFF with <RelocateDos>, which uses them to move DOS to the top of
+;; memory. <Relocator::AddressRanges> lists DOS's tables of addresses and <Relocator::CodeRanges> its code, each
+;; range a <RelocationRange>.
 .scope Relocator
 
 ;; The address tables to adjust: a count of bytes used, then <RelocationRange> entries, each a run of two-byte

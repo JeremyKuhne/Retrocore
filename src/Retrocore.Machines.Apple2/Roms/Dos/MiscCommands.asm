@@ -320,11 +320,11 @@ Done:
 
 .endscope
 
-;; ;; The characters of an open READ, WRITE or EXEC file, which DOS's input and output hooks (DosHook.asm) call once
-;; ;; the command has set its state: what a program prints goes to the WRITE file, and what it reads comes from the
-;; ;; READ or EXEC file.
-;; ;;
-;; ;; In MiscCommands.asm, in two pieces around <TestProgramRunning>: $A60E-$A65D and $A679-$A6A7 where DOS runs.
+;; The characters of an open READ, WRITE or EXEC file, which DOS's input and output hooks (DosHook.asm) call once
+;; the command has set its state: what a program prints goes to the WRITE file, and what it reads comes from the
+;; READ or EXEC file.
+;;
+;; In MiscCommands.asm, in two pieces around <TestProgramRunning>: $A60E-$A65D and $A679-$A6A7 where DOS runs.
 .scope TextFile
 
 ;; Writes the character the program printed to the open file: the output hook's handling of a WRITE.

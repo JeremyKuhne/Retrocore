@@ -38,7 +38,7 @@ boot loader and formatter. Also converted with it: `Software/MasterCreate.asm`, 
   Monitor keeps CV, and DOS's `KeywordVolume` names it in prose; BASIC names wait for the BASICs' conversion.
 - X8. The 1978 listings' other spellings of the same routines (DOSLDR, WRITE, READ, RDADR, SEEKXIT, ICCFD2 ...) go in
   `Also:` with DOS31; RD1-RD5 clash with the file manager's RD1-RD5 and go in prose.
-- X9. The sixteen Disk II switches are defined once, in RwtsEquates.asm: Phase0Off, Phase0On, MotorOff, MotorOn,
+- X9. The Disk II's sixteen switch addresses are defined once, as ten names, in RwtsEquates.asm: Phase0Off, Phase0On, MotorOff, MotorOn,
   SelectDrive1, SelectDrive2, DataLatch, LoadLatch, ReadMode, WriteMode. The IOB, DCT and track/sector list, which
   both boot loaders repeat, move to one shared file.
 - X10. RWTS is one `.proc Rwts` spanning Rwts1.asm and Rwts2.asm (Apple split it for size).

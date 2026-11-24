@@ -183,47 +183,25 @@ Finish:
     jmp Succeed
 .endproc
 
+;; Marks one sector free in the VTOC in memory.
+;;
+;; <MergeFreeMap> builds the sector's bit in <FileControlBlock::ReservedMap> and merges it into the track's map in
+;; the VTOC; then the reservation is cleared, with <FileControlBlock::ReservedSector> and
+;; <FileControlBlock::ReservedTrack>, so the next sector starts from nothing. DOS 3.3 clears all four map bytes, as many
+;; as a track of 32 sectors would need; DOS 3.2 the first two, enough for its tracks of 13 sectors.
+;; In: A = the track, Y = the sector
+;; Also: FDSUB (DOS33, DOS31)
+.proc FreeSector
+    sec
+    jsr MergeFreeMap
+
+    ; Clear the reservation.
+    lda #0
 .if DOS32
-;; Marks one sector free in the VTOC in memory.
-;;
-;; <MergeFreeMap> builds the sector's bit in <FileControlBlock::ReservedMap> and merges it into the track's map in
-;; the VTOC; then the reservation is cleared, with <FileControlBlock::ReservedSector> and
-;; <FileControlBlock::ReservedTrack>, so the next sector starts from nothing. DOS 3.2 clears the first two map bytes,
-;; enough for its tracks of 13 sectors.
-;; In: A = the track, Y = the sector
-;; Also: FDSUB (DOS33, DOS31)
-.proc FreeSector
-    sec
-    jsr MergeFreeMap
-
-    ; Clear the reservation.
-    lda #0
     ldx #FileControlBlock::ReservedMap + 1 - FileControlBlock::ReservedSector
-
-;; Clears a byte of the reservation, the last first.
-;; Also: FDS1 (DOS33, DOS31)
-ClearMap:
-    sta FileControlBlock::ReservedSector,x
-    dex
-    bpl ClearMap
-    rts
-.endproc
 .else
-;; Marks one sector free in the VTOC in memory.
-;;
-;; <MergeFreeMap> builds the sector's bit in <FileControlBlock::ReservedMap> and merges it into the track's map in
-;; the VTOC; then the reservation is cleared, with <FileControlBlock::ReservedSector> and
-;; <FileControlBlock::ReservedTrack>, so the next sector starts from nothing. All four map bytes are cleared, as many
-;; as a track of 32 sectors would need.
-;; In: A = the track, Y = the sector
-;; Also: FDSUB (DOS33, DOS31)
-.proc FreeSector
-    sec
-    jsr MergeFreeMap
-
-    ; Clear the reservation.
-    lda #0
     ldx #FileControlBlock::ReservedMap + FREE_MAP_BYTES_PER_TRACK - 1 - FileControlBlock::ReservedSector
+.endif
 
 ;; Clears a byte of the reservation, the last first.
 ;; Also: FDS1 (DOS33, DOS31)
@@ -233,7 +211,6 @@ ClearMap:
     bpl ClearMap
     rts
 .endproc
-.endif
 
 ;; The CATALOG request: prints the disk's volume number and a line for each file in the catalog.
 ;;

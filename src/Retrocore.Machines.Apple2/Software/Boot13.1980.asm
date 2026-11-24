@@ -357,7 +357,7 @@ PHASE_MASK = 3
 
 ;; Waits about A times 100 microseconds (A = 0 waits 256 times), adding A to the motor-on count, <MotorTime>.
 ;;
-;; At $1A71. Each pass takes 101 cycles, about 100 microseconds.
+;; At $1A7B. Each pass takes 101 cycles, about 100 microseconds.
 ;; In: A = the time, in hundreds of microseconds
 ;; Out: A = 0, X = 0, carry = set
 ;; Keeps: Y
@@ -523,7 +523,8 @@ RECALIBRATIONS = 2
 ;; The reads in a row that must see the same latch value before a drive counts as stopped.
 STOP_READS = 8
 
-;; The waits of 25.6 milliseconds before a seek when the motor was off.
+;; The waits before a seek when the motor was off: <DiskII::Wait> with whatever A holds, 25.6 milliseconds once A is
+;; 0.
 START_WAITS = 7
 
 ;; The passes of the delay loop, which with the count's step make about 100 cycles, 100 microseconds.
@@ -901,7 +902,7 @@ GapLength = SavedY
 ;; Formats the disk in the IOB's drive with volume <FormatVolume>, track 0 to track 34, and returns through RWTS's
 ;; exits: DOS 3.2's (Formatter.asm).
 ;;
-;; At $1E9C. It moves the head to track 0 by seeking from half-track 128. Each track starts with about ten thousand
+;; At $1EA0. It moves the head to track 0 by seeking from half-track 128. Each track starts with about ten thousand
 ;; self-sync bytes, more than a turn of the disk, which erase it; then come the 13 sectors in the order 0, 10, 7, 4,
 ;; 1, 11, 8, 5, 2, 12, 9, 6, 3, each with <Formatter::GapLength> self-sync bytes, an address field and $FF nibbles where
 ;; the data field goes. After the track it waits, reads an address field, and expects sector 0; if not, it formats

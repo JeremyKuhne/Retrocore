@@ -269,7 +269,8 @@ ERROR_NOT_DIRECT = 15
     CATALOG_TRACK .byte
     ;; The sector of the first catalog sector, the track's last: 15, or 12 on DOS 3.2's disks.
     CATALOG_SECTOR .byte
-    ;; The release of DOS that initialized the disk; nothing reads it.
+    ;; The release of DOS that initialized the disk; nothing in DOS reads it, though the SDK's master copier checks
+    ;; it.
     DOS_RELEASE .byte
     .res 2
     ;; The disk's volume number, 1 to 254.

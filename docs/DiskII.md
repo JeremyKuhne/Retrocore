@@ -44,8 +44,8 @@ would drive the data bus at the same time as the 6502.
 | Q7 | $C08E: read | $C08F: write | `ReadMode`, `WriteMode`; Apple: Q7L, Q7H |
 
 Q6 and Q7 together choose the mode: read (Q7 off, Q6 off), sense write protect (Q7 off, Q6 on), write (Q7 on,
-Q6 off), and load the byte to write (Q7 on, Q6 on). The sources name the switches for what they do (`DRIVE1`,
-`DATALATCH`, `READMODE`) and give DOS's names in comments.
+Q6 off), and load the byte to write (Q7 on, Q6 on). The sources name the switches for what they do (`SelectDrive1`,
+`DataLatch`, `ReadMode`) and keep DOS's names as historical names.
 
 ## The drive
 

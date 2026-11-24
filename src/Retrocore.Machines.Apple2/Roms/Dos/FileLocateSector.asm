@@ -338,8 +338,8 @@ Release:
 ;; - <FreeSector>, for DELETE, with the map all zeros, the carry set and Y = a sector, builds a map of that one
 ;;   sector.
 ;;
-;; The map is then ORed into the track's map in the VTOC buffer; the caller writes the VTOC. Track 0, the DOS image,
-;; is never changed.
+;; The map is then ORed into the track's map in the VTOC buffer; the caller writes the VTOC. Track 0, which holds the
+;; start of the DOS image, is never changed.
 ;; In: A = the track, Y = the sector, carry = the first bit to shift in, FileControlBlock::ReservedMap = the map
 ;; Out: VtocBuffer::FreeSectors = the track's map, updated
 ;; Also: FRESEC (DOS33, DOS31)
@@ -383,7 +383,6 @@ Done:
     rts
 .endproc
 
-.if REVISION_B
 ;; Sets the file's position from a record number and a byte offset: record * record length + offset.
 ;;
 ;; A 16-by-16-bit shift-and-add multiply. The record number starts in <FileControlBlock::PositionSector> and
@@ -396,8 +395,8 @@ Done:
 ;; The 1982 revision (<REVISION_B>) adds the CLC before the addition. Without it, as in the 1980 DOS 3.3 and in DOS 3.2,
 ;; the carry left by the last shift (the record number's top bit) is added too, so a record number of $8000 or more
 ;; lands one byte too far: with a record length of 1, any position past $7FFF. The revision also carries into the
-;; relative sector's high byte with a branch, which leaves room for the CLC; two zero bytes pad it to the old length,
-;; so nothing after it moves.
+;; relative sector's high byte with a branch rather than an ADC, which leaves room for the CLC; two zero bytes pad it
+;; to the old length, so nothing after it moves.
 ;; In: DosFileParameters::Record = the record number, DosFileParameters::ByteOffset = the byte offset,
 ;;   FileControlBlock::RecordLength = the record length
 ;; Out: FileControlBlock::PositionSector = the relative sector, FileControlBlock::PositionByte = the byte in it,
@@ -444,8 +443,10 @@ Shift:
     dey
     bne MultiplyStep
 
-    ; Add the byte offset.
+    ; Add the byte offset: before the 1982 revision, with the carry the last shift left.
+.if REVISION_B
     clc
+.endif
     lda DosFileParameters::ByteOffset
     sta FileControlBlock::PositionRecordByte
     adc FileControlBlock::PositionByte
@@ -454,6 +455,7 @@ Shift:
     sta FileControlBlock::PositionRecordByte + 1
     adc FileControlBlock::PositionSector
     sta FileControlBlock::PositionSector
+.if REVISION_B
     bcc Done
     inc FileControlBlock::PositionSector + 1
 
@@ -462,74 +464,13 @@ Shift:
 Done:
     rts
     .res 2, $00
-.endproc
 .else
-;; Sets the file's position from a record number and a byte offset: record * record length + offset.
-;;
-;; The same as the 1982 revision's (<REVISION_B>) but for the addition, which has no CLC before it, so the carry left by
-;; the last shift, the record number's top bit, is added too. A record number of $8000 or more lands one byte too
-;; far: with a record length of 1, any position past $7FFF.
-;; In: DosFileParameters::Record = the record number, DosFileParameters::ByteOffset = the byte offset,
-;;   FileControlBlock::RecordLength = the record length
-;; Out: FileControlBlock::PositionSector = the relative sector, FileControlBlock::PositionByte = the byte in it,
-;;   FileControlBlock::PositionRecord = the record number, FileControlBlock::PositionRecordByte = the byte offset
-;; Also: LOCSEC (DOS33, DOS31)
-.proc SetPosition
-    lda DosFileParameters::Record
-    sta FileControlBlock::PositionByte
-    sta FileControlBlock::PositionRecord
-    lda DosFileParameters::Record + 1
-    sta FileControlBlock::PositionSector
-    sta FileControlBlock::PositionRecord + 1
-    lda #0
-    sta FileControlBlock::PositionSector + 1
-    ldy #16
-
-;; One step of the multiply: X holds the product's top byte while A tests the multiplier's low bit.
-;; Also: LS1 (DOS33, DOS31)
-MultiplyStep:
-    tax
-    lda FileControlBlock::PositionByte
-    lsr a
-    bcs AddLength
-    txa
-    bcc Shift                       ; always
-
-;; Adds the record length to the top half.
-;; Also: LS1A (DOS33, DOS31)
-AddLength:
-    clc
-    lda FileControlBlock::PositionSector + 1
-    adc FileControlBlock::RecordLength
-    sta FileControlBlock::PositionSector + 1
-    txa
-    adc FileControlBlock::RecordLength + 1
-
-;; Shifts the 32 bits right.
-;; Also: LS2 (DOS33, DOS31)
-Shift:
-    ror a
-    ror FileControlBlock::PositionSector + 1
-    ror FileControlBlock::PositionSector
-    ror FileControlBlock::PositionByte
-    dey
-    bne MultiplyStep
-
-    ; Add the byte offset, and the carry the last shift left.
-    lda DosFileParameters::ByteOffset
-    sta FileControlBlock::PositionRecordByte
-    adc FileControlBlock::PositionByte
-    sta FileControlBlock::PositionByte
-    lda DosFileParameters::ByteOffset + 1
-    sta FileControlBlock::PositionRecordByte + 1
-    adc FileControlBlock::PositionSector
-    sta FileControlBlock::PositionSector
     lda #0
     adc FileControlBlock::PositionSector + 1
     sta FileControlBlock::PositionSector + 1
     rts
-.endproc
 .endif
+.endproc
 
 ; The exits. Each error exit loads a return code, an ERROR_ code, and goes to Fail; the command interpreter prints
 ; each code's message.
@@ -624,7 +565,7 @@ Shift:
 ;; address. The caller gets the result in <DosFileParameters::ReturnCode> and the carry: A, X and Y hold what the
 ;; copy left in them.
 ;; In: A = the return code, carry = set for an error
-;; Out: DosFileParameters::ReturnCode = A, carry = as it was, OPTION_SLOT = <EntryStack>
+;; Out: DosFileParameters::ReturnCode = A, carry = as it was, S = <EntryStack>
 ;; Also: RETURN (DOS33, DOS31)
 .proc Leave
     php

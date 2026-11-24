@@ -355,7 +355,7 @@ GapLength = Address5High
 ;; The track the head is first said to be on, 80: half-track $A0, further in than any track.
 FAR_TRACK = $50
 
-;; The gap's length, less one, to start with: 40 self-sync nibbles.
+;; The gap's length, less one, to start with: 40, for 41 self-sync nibbles.
 FIRST_GAP = $28
 
 ;; The count <RetriesLeft> starts at to find sector 0 after a track checks, 48: 47 tries.
@@ -463,7 +463,7 @@ FIRST_SYNC = 128
 ;; at, which is positive: not read yet.
 CHECK_TRIES = $30
 
-;; The gap length above which a gap is cut by 2 rather than 1, 16; also the length track 0's check leaves it below.
+;; The gap length above which a gap is cut by 2 rather than 1, 16.
 LONG_GAP = $10
 
 ;; The shortest gap the check accepts, 5: shorter, and the format fails.

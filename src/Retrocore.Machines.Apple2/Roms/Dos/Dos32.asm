@@ -60,8 +60,8 @@ DOS32 = 1
 MASTER = 1
 .endif
 
-; Only the two builds DosSourceTests checks by digest. There is one DOS 3.2: the shared modules read YEAR only
-; when DOS32 is 0, so YEAR selects nothing here, and the digests are checked with either year.
+; Only the two builds DosSourceTests checks by digest. There is one DOS 3.2: the shared modules let YEAR choose
+; only when DOS32 is 0, so YEAR selects nothing here, and the digests are checked with either year.
 .assert MASTER = 0 || MASTER = 1, "MASTER is 1 for the System Master's image or 0 for DOS where it runs."
 
 ; Apple's DOS 3.3 build options, with the values that give DOS 3.2's code: no diagnostic RWTS, none of the 1982

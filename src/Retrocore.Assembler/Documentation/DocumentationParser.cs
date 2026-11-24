@@ -74,18 +74,18 @@ public static partial class DocumentationParser
         while (index < lines.Length)
         {
             string line = lines[index];
-            if (line.TrimStart().StartsWith(Marker, StringComparison.Ordinal))
+            if (IsDocumentationLine(line))
             {
                 int start = index;
                 List<(int, string)> body = [];
-                while (index < lines.Length && lines[index].TrimStart().StartsWith(Marker, StringComparison.Ordinal))
+                while (index < lines.Length && IsDocumentationLine(lines[index]))
                 {
                     body.Add((index, Strip(lines[index])));
                     index++;
                 }
 
                 // Conditional lines may separate a comment from its definition.
-                while (index < lines.Length && IsConditional(Split(lines[index]).Code))
+                while (index < lines.Length && IsConditional(lines[index].AsSpan(0, CodeLength(lines[index]))))
                 {
                     Condition(conditions, Split(lines[index]).Code);
                     index++;
@@ -180,14 +180,16 @@ public static partial class DocumentationParser
                 continue;
             }
 
-            (string code, string? comment) = Split(line);
-            string trimmed = code.Trim();
+            // Read in place: most lines document nothing, so only a trailing ;; comment's line is copied out.
+            int codeLength = CodeLength(line);
+            ReadOnlySpan<char> trimmed = line.AsSpan(0, codeLength).Trim();
             if (trimmed.Length != 0) { codeSeen = true; }
-            if (comment is not null && comment.StartsWith(Marker, StringComparison.Ordinal) && trimmed.Length != 0)
+            bool trailingMarker = codeLength + 1 < line.Length && line[codeLength + 1] == ';';
+            if (trailingMarker && trimmed.Length != 0)
             {
-                if (Qualify(Define(code, containers), scopes) is { } definition)
+                if (Qualify(Define(line[..codeLength], containers), scopes) is { } definition)
                 {
-                    List<(int, string)> body = [(index, Strip(comment))];
+                    List<(int, string)> body = [(index, Strip(line[codeLength..]))];
                     comments.Add(Documented(path, lines, index, index, definition, body, conditions, dataMacros, isTrailing: true, tracker));
                 }
                 else
@@ -203,7 +205,7 @@ public static partial class DocumentationParser
 
             if (IsConditional(trimmed))
             {
-                Condition(conditions, trimmed);
+                Condition(conditions, trimmed.ToString());
             }
             else
             {
@@ -278,7 +280,8 @@ public static partial class DocumentationParser
         for (int index = 0; index < lines.Count; index++)
         {
             result[index] = tracker.Current;
-            string trimmed = Split(lines[index]).Code.Trim();
+            string line = lines[index];
+            ReadOnlySpan<char> trimmed = line.AsSpan(0, CodeLength(line)).Trim();
             if (trimmed.Length != 0 && !IsConditional(trimmed))
             {
                 tracker.Advance(trimmed, index, assembled);
@@ -517,18 +520,19 @@ public static partial class DocumentationParser
         return members;
     }
 
+    // Whether code can be a type directive. Each has "enum", "struct" or "union" in it, so a line without them is not
+    // one; most lines aren't. No character other than ASCII's lowers to these letters, so ignoring case here finds
+    // every line TypeLine's lowered comparison does.
+    private static bool IsTypeCandidate(ReadOnlySpan<char> code) =>
+        code.IndexOf("enum".AsSpan(), StringComparison.OrdinalIgnoreCase) >= 0
+            || code.IndexOf("struct".AsSpan(), StringComparison.OrdinalIgnoreCase) >= 0
+            || code.IndexOf("union".AsSpan(), StringComparison.OrdinalIgnoreCase) >= 0;
+
     // A line's type directive, in lower case, with the member it may name first ("WHERE .struct") and the type's name
     // after it; the directive is empty on any other line.
     private static (string? Member, string Directive, string Name) TypeLine(string code)
     {
-        // Each directive has "enum", "struct" or "union" in it, so a line without them is not one; most lines aren't. No
-        // character other than ASCII's lowers to these letters, so ignoring case here finds every line the lowered
-        // comparison below does.
-        bool candidate = code.IndexOf("enum", StringComparison.OrdinalIgnoreCase) >= 0
-            || code.IndexOf("struct", StringComparison.OrdinalIgnoreCase) >= 0
-            || code.IndexOf("union", StringComparison.OrdinalIgnoreCase) >= 0;
-
-        if (!candidate) { return (null, "", ""); }
+        if (!IsTypeCandidate(code.AsSpan())) { return (null, "", ""); }
         string first = FirstWord(code);
         string? member = null;
         string rest = code[first.Length..].Trim();
@@ -559,6 +563,12 @@ public static partial class DocumentationParser
         definition is null || scopes.Count == 0 || definition.Kind is DocumentationKind.Macro or DocumentationKind.Definition
             ? definition
             : definition with { Name = $"{string.Join("::", scopes)}::{definition.Name}" };
+
+    // Container for code read in place, copied only when it can be a type directive, as TypeLine tells.
+    private static void Container(List<string?> containers, ReadOnlySpan<char> code)
+    {
+        if (IsTypeCandidate(code)) { Container(containers, code.ToString()); }
+    }
 
     private static void Container(List<string?> containers, string code)
     {

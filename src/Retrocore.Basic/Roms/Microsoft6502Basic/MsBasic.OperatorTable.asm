@@ -24,7 +24,7 @@ PRECEDENCE_NOT = $5A
 PRECEDENCE_RELATION = $64
 
 ;; Emits the operator table with independently selected precedence rules, pointing AND at the handler the vendor
-;; names (both now name <Operators::And>).
+;; names (both vendors pass <Operators::And>).
 ;; Parameters: powerBelowNegation = 1 for power below unary negation, 0 for power above it
 ;;   highNot = 1 for NOT at the unary precedence (with powerBelowNegation = 1), 0 for the original lower precedence
 ;;   andEntry = the AND operator's handler

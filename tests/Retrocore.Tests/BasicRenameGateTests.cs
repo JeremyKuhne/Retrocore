@@ -103,7 +103,7 @@ public sealed partial class BasicRenameGateTests
             Dictionary<string, int> renamed = CopyRenamed(BasicNames.Inputs, scratch);
             foreach ((string oldName, _, _, _) in s_renames)
             {
-                renamed[oldName].Should().BeGreaterThan(3, $"{oldName} is used across the AppleSoft and PET sources");
+                renamed[oldName].Should().BeGreaterThan(3, $"{oldName} is used across the native BASIC sources");
             }
 
             CheckRename(BasicNames.Inputs, scratch);

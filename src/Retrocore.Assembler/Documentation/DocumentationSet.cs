@@ -144,6 +144,8 @@ public sealed class DocumentationSet
         IEnumerable<AssemblySourceMapEntry> sourceMap,
         IEnumerable<(AssemblyLocation? Location, InstructionSet Cpu)>? cpuDirectives)
     {
+        // Every entry names one of a few files, so each path is made full once.
+        Dictionary<string, string> fullPaths = [with(StringComparer.Ordinal)];
         void Record(InstructionSet cpu, AssemblyLocation? location)
         {
             set._onlyCpu ??= cpu.Description;
@@ -155,7 +157,11 @@ public sealed class DocumentationSet
             for (; location is not null; location = location.ExpandedFrom)
             {
                 if (location.Path.Length == 0) { continue; }
-                string path = System.IO.Path.GetFullPath(location.Path);
+                if (!fullPaths.TryGetValue(location.Path, out string? path))
+                {
+                    fullPaths[location.Path] = path = System.IO.Path.GetFullPath(location.Path);
+                }
+
                 if (!set._cpus.TryGetValue(path, out List<(int Line, InstructionSet Cpu)>? runs))
                 {
                     set._cpus[path] = runs = [];

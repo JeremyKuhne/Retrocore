@@ -24,6 +24,9 @@ internal sealed partial class SourceAnalysis
         [with(StringComparer.OrdinalIgnoreCase)];
     private readonly Dictionary<string, AssemblyDialect> _dialects = [with(StringComparer.OrdinalIgnoreCase)];
     private readonly Dictionary<string, string[]> _lines = [with(StringComparer.OrdinalIgnoreCase)];
+
+    // Full paths by the path as the assembly gave it, filled while the constructor runs.
+    private readonly Dictionary<string, string> _fullPaths = [with(StringComparer.Ordinal)];
     private readonly Func<string, string?> _text;
 
     // Filled lazily, and language requests run in parallel: a cache entry is computed whole and then published.
@@ -73,7 +76,7 @@ internal sealed partial class SourceAnalysis
             {
                 if (location is { Path.Length: > 0, ExpandedFrom: { } from, IsMacroExpansion: false })
                 {
-                    string path = Path.GetFullPath(location.Path);
+                    string path = FullPath(location.Path);
                     if (!_includeCpus.TryGetValue(path, out Dictionary<AssemblyLocation, List<(int Line, InstructionSet Cpu)>>? contexts))
                     {
                         _includeCpus[path] = contexts = [];
@@ -95,14 +98,14 @@ internal sealed partial class SourceAnalysis
                 for (AssemblyLocation? location = statement.Location; location is not null; location = location.ExpandedFrom)
                 {
                     if (location is { Path.Length: > 0, ExpandedFrom: null }
-                        && string.Equals(Path.GetFullPath(location.Path), root, StringComparison.OrdinalIgnoreCase))
+                        && string.Equals(FullPath(location.Path), root, StringComparison.OrdinalIgnoreCase))
                     {
                         int line = ReferenceEquals(location, statement.Location) ? location.Line : location.Line + 1;
                         _rootCpus.Add((line, cpu));
                     }
 
                     if (location is { Path.Length: > 0, ExpandedFrom: { } from, IsMacroExpansion: false }
-                        && _includeCpus.TryGetValue(Path.GetFullPath(location.Path), out var contexts)
+                        && _includeCpus.TryGetValue(FullPath(location.Path), out var contexts)
                         && contexts.TryGetValue(from, out var runs))
                     {
                         int line = ReferenceEquals(location, statement.Location) ? location.Line : location.Line + 1;
@@ -126,7 +129,7 @@ internal sealed partial class SourceAnalysis
             AssemblyStatement statement = project.Statements[index];
             RecordScopeOrder(statement, index, opened);
             if (statement.Location is not { Path.Length: > 0 } location) { continue; }
-            string path = Path.GetFullPath(location.Path);
+            string path = FullPath(location.Path);
             if (_lines.ContainsKey(path))
             {
                 _dialects.TryAdd(path, statement.Dialect);
@@ -148,7 +151,7 @@ internal sealed partial class SourceAnalysis
                     _includedFrom[path] = sites = [];
                 }
 
-                (string Path, int Line) site = (Path.GetFullPath(from.Path), from.Line);
+                (string Path, int Line) site = (FullPath(from.Path), from.Line);
                 if (!sites.Contains(site)) { sites.Add(site); }
             }
 
@@ -210,7 +213,7 @@ internal sealed partial class SourceAnalysis
         foreach (AssemblySymbol symbol in result.SymbolDefinitions)
         {
             if (symbol.Location is not { } location || location.Path.Length == 0) { continue; }
-            string path = Path.GetFullPath(location.Path);
+            string path = FullPath(location.Path);
             int scopeEnd = symbol.Name.LastIndexOf("::", StringComparison.Ordinal);
             int qualifier = scopeEnd < 0 ? 0 : scopeEnd + 2;
             string suffix = symbol.Name[qualifier..];
@@ -726,7 +729,7 @@ internal sealed partial class SourceAnalysis
         AssemblyLocation invocation = location;
         while (invocation.IsMacroExpansion && invocation.ExpandedFrom is { } from) { invocation = from; }
         if (invocation.IsMacroExpansion || invocation.Path.Length == 0) { return; }
-        string path = Path.GetFullPath(invocation.Path);
+        string path = FullPath(invocation.Path);
         if (!_invokedUsings.TryGetValue(path, out Dictionary<int, List<string[]>>? lines))
         {
             _invokedUsings[path] = lines = [];
@@ -766,6 +769,14 @@ internal sealed partial class SourceAnalysis
         _usingOrder.TryGetValue((path.ToUpperInvariant(), directive.Line), out int at)
             ? scope => _scopeOpened.TryGetValue(scope, out int open) && open < at
             : null;
+
+    // A statement's, symbol's or include's path made full. The assembly names a few files many times over, so each
+    // path is made full once; only the constructor calls this, so the cache needs no lock.
+    private string FullPath(string path)
+    {
+        if (!_fullPaths.TryGetValue(path, out string? full)) { _fullPaths[path] = full = Path.GetFullPath(path); }
+        return full;
+    }
 
     private static string Qualify(string scope, string name) => name.Length == 0 ? scope : $"{scope}::{name}";
 

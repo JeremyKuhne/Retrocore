@@ -31,9 +31,9 @@ then Commodore's), in the module's source order within each. The columns:
 - **D3**: for shared code, whether the old names are vendor-only. "no" means Microsoft's name, valid in every build, and
   "no; alias X in V" adds vendor V's name X, in V's own file; "aliases: ..." lists the vendors' other names, which go in
   the vendor's own file (X5); "vendor" marks a definition in a vendor's own file, whose names are the vendor's anyway;
-  "yes: V" says the old name is valid only in vendor V's builds, with the definition it goes on where that differs by
-  build; "—" leaves the column empty: mostly the SDK's macros and their parameters, and some rows whose Builds column
-  already limits them to one vendor.
+  "yes: V" says the old name, or with "(on D)" its attachment to definition D, is valid only in vendor V's builds; "—"
+  leaves the column empty: mostly the SDK's macros and their parameters, and some rows whose Builds column already
+  limits them to one vendor.
 - **Reason**: one line from the code, then any note from drafting.
 
 The inventory and the document checks were made by script against the eight builds; the names were drafted in

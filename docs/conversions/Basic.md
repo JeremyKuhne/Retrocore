@@ -232,11 +232,11 @@ REVISD, ENHNCD, APLPLS, TIME, EXTIO, DISKO, REALIO; X15 settled the names tests 
 removes the definition: either nothing uses it and no document names it; or it duplicates another definition, whose
 `Also:` then takes its documented name (KIMY, TRMNO1); or its uses can do without it, and its documented name goes in
 prose (ZSTORD, whose WAIT call can pass STORDO's new name, A-Q6; Q, an assembly-time counter, C-Q8); or it is a question
-(REDDY and GOTK, C-Q8; LINWID, D-Q3). 316 renamed rows have no checked document name, 249 because no listed document
-gives the name and 67 because a document matches only its spelling; 272 of them are AppleSoft's: its copies of
-Monitor and IIe names (which carry the Apple manuals' names once they come from IIeEquates, decision X10),
-AppleSoft-only labels the damaged AS82 text could not confirm, and the SDK's own labels. The SDK's 138 renamed macros,
-macro parameters and switches cite no document either.
+(REDDY and GOTK, C-Q8; LINWID, D-Q3). Apart from the SDK's own definitions, 316 renamed rows have no checked document
+name, 249 because no listed document gives the name and 67 because a document matches only its spelling; 272 of them in
+the AppleSoft builds: AppleSoft's copies of Monitor and IIe names (which carry the Apple manuals' names once they come
+from IIeEquates, decision X10), AppleSoft-only labels the damaged AS82 text could not confirm, and the SDK's own labels.
+The SDK's 138 renamed macros, macro parameters and switches cite no document at all.
 
 The parts: A, the floating-point package; B1, the shared program and statement modules; B2, the shared expression,
 variable and string modules; C, the vendors' own copies of the interpreter (AppleSoft and Commodore side by side);
@@ -365,7 +365,7 @@ scope-level label.
     range bound (`TOKEN_FIRST_FUNCTION` for ONEFUN, `TOKEN_LAST_SIMPLE_FUNCTION` for LASNUM).
   - **Error codes:** `ERROR_<MESSAGE>` (`ERROR_NEXT_WITHOUT_FOR`, `ERROR_SYNTAX`). In BASIC the error code is the
     message's offset in the message table, so one set serves both, unlike DOS's ERROR_*/MESSAGE_* (X11 in the DOS log,
-    `docs/conversions/Dos.md` on the `claude/convert-dos` branch). The message labels are `<Name>Message`
+    `docs/conversions/Dos.md`, which comes with the DOS conversion). The message labels are `<Name>Message`
     (`ReadyMessage`, `BreakMessage`).
   - **Placement:** one definition each, in the dispatch-tables file where the table defines it. The workspace files'
     copies (PI, PLUSTK, MINUTK, ERROV, ERRDV0) join them.
@@ -639,11 +639,10 @@ Decisions and how the table was applied:
   dropped (the Equates and dispatch tables are vendor files, so each name already resolves only in its vendor's
   builds). The shared layouts cite Microsoft's source alone, since every build has them. The table's "other names here" go in the same `Also:`, each on one definition: the location where the
   table lists it on a location and its aliases (TEMP3 on `FunctionPointer`, ARRYPT on `DestinationEnd`).
-- W2. A row whose documents give no name (its Documents column "none found", or only "spelling only" or "other
-  names here") cites its old name as `UNKN`, so the unconverted files' uses of it still resolve. The bibliography
-  gains UNKN, the same row the Monitor and IIeEquates conversions add on their branch, and ASRM78, as proposed in
-  step 2. This is the owner's open choice between UNKN and no `Also:`
-  (the table's introduction); UNKN is the one that keeps the old names working.
+- W2. A row whose documents give no name (its Documents column "none found", or only "spelling only" or "other names
+  here") cites its old name as `UNKN`, so the unconverted files' uses of it still resolve. The bibliography has UNKN,
+  from the Monitor and IIeEquates conversions, and gains ASRM78, as proposed in step 2. This is the owner's open choice
+  between UNKN and no `Also:` (the table's introduction); UNKN is the one that keeps the old names working.
 - W3. Names two definitions shared in one file are one definition with both old names (INDEX1 and INDEX are
   `Pointer1`). KIMY is dropped into `Dimensioning`'s `Also:`.
 - W4. Names left in prose because they would clash with another definition in the same build: the BASIC 4 reconstructions' INCHR for
@@ -689,10 +688,10 @@ enhanced IIe's AppleSoft, built from these sources.
 
 ## Other dependents
 
-- **DOS** left BASIC's names unchanged until this conversion: X7 in the DOS conversion's log, `Dos.md` (on the
-  `claude/convert-dos` branch; "BASIC names wait for the BASICs' conversion"). P2 is DOS's BASIC vector: the labels for
-  the six live words, written with a BasicEntries macro. When AppleSoft's entries are renamed, DOS's vector should name
-  the entries it jumps to by their new names.
+- **DOS** left BASIC's names unchanged until this conversion: X7 in the DOS conversion's log, `docs/conversions/Dos.md`,
+  which comes with the DOS conversion ("BASIC names wait for the BASICs' conversion"). P2 is DOS's BASIC vector: the
+  labels for the six live words, written with a BasicEntries macro. When AppleSoft's entries are renamed, DOS's vector
+  should name the entries it jumps to by their new names.
 - **The disassembler** ([retrocore-disassembly](../../.claude/skills/retrocore-disassembly/SKILL.md)) names a
   program's uses of BASIC by these sources' names, so every program that calls AppleSoft's entries (`jsr FRMEVL`,
   `jsr HPOSN`) disassembles with the new names after the conversion. The ASTIL index's entries are what programs

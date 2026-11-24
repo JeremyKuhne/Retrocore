@@ -79,8 +79,9 @@ The Retrocore extension includes material from the projects below.
    listing is maintained in native Retrocore assembly. Microsoft's LICENSE file is beside the original source.
 
    The native MsBasic.*.asm modules in src/Retrocore.Basic/Roms/Microsoft6502Basic, shipped as
-   server/Sdk/Roms/Microsoft6502Basic, are derived from Microsoft's m6502.asm, and the license below applies to them.
-   Each module's first lines say so.
+   server/Sdk/Roms/Microsoft6502Basic, are derived from Microsoft's m6502.asm, and the license below applies to the
+   Microsoft code in them; the Apple and Commodore changes some of them carry are not Microsoft's. Each module's first
+   line says it is derived from m6502.asm.
 
    Copyright (c) Microsoft Corporation, 1976-1978.
 

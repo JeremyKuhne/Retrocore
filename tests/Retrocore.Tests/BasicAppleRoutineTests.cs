@@ -65,8 +65,8 @@ public sealed class BasicAppleRoutineTests
         BasicMathMachine machine = new(apple: true);
         machine.Memory[machine.Address("HighResPage")] = Page1;
         machine.Call("HighRes::Position", a: row, x: column & 0xFF, y: column >> 8);
-        Word(machine, "HighResX", 0);
-        machine.Memory[machine.Address("HighResY")] = 0;
+        Word(machine, "HighResX", 0xFFFF);
+        machine.Memory[machine.Address("HighResY")] = 0xFF;
 
         machine.Call("HighRes::FindCoordinates");
 

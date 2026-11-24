@@ -374,8 +374,7 @@ public sealed class BasicSharedFloatAliasesTests
             DocumentationTopic topic = docs.FindRoutineTopic(target)
                 ?? throw new AssertFailedException($"{target} has no shared documentation.");
 
-            // The target is a shared module's, or, for AppleSoft's spelling of a name of the IIe's, IIeEquates.asm's
-            // (X10).
+            // The target is a shared module's, or, for AppleSoft's spelling of an IIe name, IIeEquates.asm's (X10).
             string iieEquates = Path.GetFullPath(Path.Join(BasicNames.Inputs, "System", "IIeEquates.asm"));
             bool system = string.Equals(Path.GetFullPath(topic.Path), iieEquates, StringComparison.OrdinalIgnoreCase);
             if (!system)

@@ -447,8 +447,8 @@ public sealed class BasicSharedAliasConsistencyTests
 
             BasicAttribution.AssertNotShared(root.Result, docs, alias.Name);
         }
-        else if (target.Location?.Path is { } targetPath && string.Equals(
-            Path.GetFullPath(targetPath),
+        else if (string.Equals(
+            Path.GetFullPath(target.Location?.Path ?? throw new AssertFailedException($"{targetName}: no location")),
             Path.GetFullPath(Path.Join(root.Directory, "..", "System", "IIeEquates.asm")),
             StringComparison.OrdinalIgnoreCase))
         {

@@ -236,7 +236,7 @@ SetShapeTable:
     sta StringsBottom
     sta Address1
     jsr Cassette::ReadBit
-    lda #3                          ; Cassette::WriteHeader's delay count
+    lda #3                          ; the header tone's length for Cassette::WriteHeader
     jmp ReadCassette+5              ; ReadCassette at its jsr Cassette::WriteHeader
 .endproc
 

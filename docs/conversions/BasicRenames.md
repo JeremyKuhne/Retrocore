@@ -2277,9 +2277,9 @@ to K12, R1 to R10).
 | 1874 | `DRIVE2` | `SecondDrive` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | the disk command's second drive number |
 | 1875 | `DIDCHK` | `DiskIdSeen` | alias | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | set when the parser has read a disk ID; shares RecordLength |
 | 1876 | `LRECL` | `RecordLength` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | a relative file's record length (DOPEN L) |
-| 1877 | `PRSCHK` | `ParsedParameters` | location | P4 P4R | none found | vendor | bits for the disk parameters the parser has read — no document gives this name Converted: Also PRSCHK (UNKN). |
+| 1877 | `PRSCHK` | `ParsedParameters` | location | P4 P4R | none found | vendor | bits for the disk parameters the parser has read — no document gives this name Converted: Also PRSCHK (UNKN); the kernal listings (K4S79, HVK4) call the byte PARCHK, in prose, since `EvaluateParenthesized` has PARCHK. |
 | 1878 | `DISKID` | `DiskId` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | two-byte disk ID for HEADER |
-| 1879 | `KCOUNT` | `TemplateCount` | location | P4 P4R | none found | vendor | bytes left in the disk-command template SENDP expands — no document gives this name Converted: Also KCOUNT (UNKN). |
+| 1879 | `KCOUNT` | `TemplateCount` | location | P4 P4R | none found | vendor | bytes left in the disk-command template SENDP expands — no document gives this name Converted: Also KCOUNT (UNKN); the kernal listings (K4S79, HVK4) call the byte COUNT, in prose, since `Counter` has COUNT. |
 | 1880 | `TBUF2` | `FirstFilename` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | storage for the disk command's first filename |
 | 1881 | `TBUFF` | `DiskCommandBuffer` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | where SENDP builds the disk command sent to the drive |
 | 1882 | `USRCMD` | `MonitorUserCommandVector` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | the monitor jumps through it for an unknown command |
@@ -2318,7 +2318,7 @@ to K12, R1 to R10).
 | 1915 | `CHKIN` | `KernalSetInputChannel` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | selects a logical file for input |
 | 1916 | `CHKOUT` | `KernalSetOutputChannel` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R]; other names here: CKOUT (K4S79, HVK4) | vendor | selects a logical file for output Converted: CKOUT cites K4S79 as well as HVK4: the kernal listing gives the name at the same place (Basic.md F4). |
 | 1917 | `TWAIT` | `KernalWaitForTape` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | waits for the tape operation to finish |
-| 1918 | `SPERR` | `STATUS_LOAD_ERROR` | constant | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R]; other names here: CHANL (K4S79, HVK4) | vendor | IoStatus bit ($10) for a load or verify error — HVK4 calls it CHANL Converted: CHANL cites K4S79 as well as HVK4: the kernal listing gives the name at the same place (Basic.md F4). |
+| 1918 | `SPERR` | `STATUS_LOAD_ERROR` | constant | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R]; other names here: none | vendor | IoStatus bit ($10) for a load or verify error Converted: CHANL is not this bit: the kernal listings' CHANL (=$0010, under "CONSTANTS FROM BASIC") is BASIC 4's CHANNL location, so it is on `CurrentChannel` (Basic.md F4). |
 | 1919 | `CR` | `CHARACTER_RETURN` | constant | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | carriage return ($0D), the monitor's line end — other PET parts may name CR; one definition (see D-Q6) Converted: CR (K4S79, HVK4) joins `CARRIAGE_RETURN` in Commodore.ChannelPrint.asm (Basic.md F3). |
 | 1920 | `ONTK` | `TOKEN_ON` | token | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | BASIC's ON token; the disk parser reads ON as the unit keyword — should be the token table's TOKEN_ON (one definition) Converted: `TOKEN_ON`, defined with the token table in Commodore.DispatchTables.asm, Also ONTK (K4S79, HVK4) (Basic.md F3). |
 | 1921 | `NCMDS` | `MONITOR_COMMAND_COUNT` | constant | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | number of built-in monitor commands (8) — HVK4 calls it LBERR |
@@ -2548,7 +2548,7 @@ to K12, R1 to R10).
 | 2120 | `PI` | `TOKEN_PI` | token | PET | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | vendor | the PET's one-character pi token ($FF); LIST stops quoting at it — should be the token table's TOKEN_PI (one definition) |
 | 2121 | `RAMLOC` | `RAM_ORIGIN` | constant | PET | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | vendor | the Microsoft build's initial RAM origin ($0400) |
 | 2122 | `USRPOK` | `UserVector` | location | PET | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | vendor | three-byte JMP at $00 that USR calls |
-| 2123 | `CHANNL` | `CurrentChannel` | location | PET | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | vendor | logical file of CMD/INPUT#/PRINT#; 0 for the screen and keyboard — not in the glossary; shared code (VariableInput) reads it |
+| 2123 | `CHANNL` | `CurrentChannel` | location | PET | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | vendor | logical file of CMD/INPUT#/PRINT#; 0 for the screen and keyboard — not in the glossary; shared code (VariableInput) reads it Converted: BASIC 4's definition also cites CHANL (K4S79, HVK4), the kernal listings' name for it (Basic.md F4). |
 | 2124 | `NULCNT` | `NullCount` | location | P1 P1R | M6502, HV1, HV1R | vendor | NULL's count of nulls after each return (BASIC 1); CRDO prints them |
 | 2125 | `TRMPOS` | `TerminalPosition` | location | PET | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | vendor | BASIC's own output column (BASIC 1) or the editor's column $C6 |
 | 2126 | `CQPNTR` | `EditorCursorColumn` | location | P1 P1R | none found | vendor | the early editor's cursor column ($E2); BASIC 1's patch reads it when TerminalPosition wraps — Commodore's kernal name is PNTR |

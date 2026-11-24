@@ -177,7 +177,7 @@ UserVector = $00
 CurrentChannel = UserVector + 3
 .else
 ;; Current logical channel number, after the flags.
-;; Also: CHANNL (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: CHANNL (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R), CHANL (K4S79, HVK4)
 CurrentChannel = TangentSign + 2 + 2 * DISK_STATUS_STRING
 .endif
 .if NULL_COMMAND
@@ -796,6 +796,10 @@ GetCharacter = CheckStop + 3
 CloseAllFiles = GetCharacter + 3
 
 .if EXTENDED_DISK_VECTORS
+; BASIC 4's jump table (CBM4S79, HV4, HV4R) names these entries CONCAT, DOPEN, DCLOSE, RECORD, FORMAT, COLECT, BACKUP,
+; DCOPY, APPEND, DSAVE, DLOAD, DCAT, RENAME, SCRATC and READDS. The overlay and the kernal listings give all but the
+; last three to BASIC's handlers, so those twelve are named only here.
+
 ;; Concatenate two files.
 ;; Also: CQCONC (UNKN)
 KernalConcat = KernalOpen - 45

@@ -174,7 +174,8 @@ RecordLength = $033D
 ;; Also: DIDCHK (K4S79, HVK4)
 DiskIdSeen = RecordLength
 
-;; The bits of the disk parameters the parser has read.
+;; The bits of the disk parameters the parser has read. The kernal listings (K4S79, HVK4) call this byte PARCHK, which
+;; BASIC's `EvaluateParenthesized` already has, so it is named here only in prose.
 ;; Also: PRSCHK (UNKN)
 ParsedParameters = $033E
 
@@ -182,7 +183,8 @@ ParsedParameters = $033E
 ;; Also: DISKID (K4S79, HVK4)
 DiskId = $033F
 
-;; The bytes left in the disk-command template being expanded.
+;; The bytes left in the disk-command template being expanded. The kernal listings (K4S79, HVK4) call this byte COUNT,
+;; which BASIC's `Counter` already has, so it is named here only in prose.
 ;; Also: KCOUNT (UNKN)
 TemplateCount = $0341
 
@@ -232,7 +234,8 @@ KernalListen = $F0D5
 ;; Also: MSG (K4S79, HVK4)
 KernalPrintMessage = $F185
 
-;; Sends a secondary address after <KernalTalk>.
+;; Sends a secondary address after <KernalTalk>. The overlay's SECND is the kernal's name for another routine, the
+;; one that sends a secondary address after LISTEN.
 ;; Also: SECND (UNKN), TKSA (K4S79, HVK4)
 KernalSendSecondary = $F193
 
@@ -331,7 +334,7 @@ KernalWaitForTape = $F92B
 ; Values.
 
 ;; The bit of <IoStatus> that reports a load or verify error.
-;; Also: SPERR (K4S79, HVK4), CHANL (K4S79, HVK4)
+;; Also: SPERR (K4S79, HVK4)
 STATUS_LOAD_ERROR = $10
 
 ;; The number of command letters the monitor knows, in <Monitor::CommandKeys>.

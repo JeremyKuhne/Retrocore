@@ -2709,9 +2709,12 @@ Decisions and how the table was applied:
     is its RAM build's $3000, a value no PET build has; the lineage rule is read to cover it, as it covers BUFLEN's
     80 and 81.
   - The table's other names go on the definitions: PATCH1 to PATCH7 (HV1, HV1R) on BASIC 1's patches; PATCHG, PATH0,
-    PATH1, PATCHH and PATCHI (HV4R) on the revised chip's; T1, T2, RCNT, FSBLK, STAL, ZZZ1, TAPE2, TKSA, CKOUT and
-    CHANL, which the table gives as HVK4's but K4S79 gives at the same places too, so both are cited; PATCH5 (HVK4)
-    on `Disk::StoreStatusLink`.
+    PATH1, PATCHH and PATCHI (HV4R) on the revised chip's; T1, T2, RCNT, FSBLK, STAL, ZZZ1, TAPE2, TKSA and CKOUT,
+    which the table gives as HVK4's but K4S79 gives at the same places too, so both are cited; PATCH5 (HVK4) on
+    `Disk::StoreStatusLink`. The table's CHANL is not `STATUS_LOAD_ERROR`'s: the kernal listings define it as
+    $0010 under "CONSTANTS FROM BASIC" and store the current channel in it, so it is on BASIC 4's `CurrentChannel`.
+    The kernal listings' POS, PARCHK and COUNT for disk-workspace bytes, and BASIC 4's jump-table names (CONCAT ...),
+    clash with other definitions, so they are in prose.
 - F5. Part C's leftovers (I9): BASIC 4's ISVAR trampoline is `EvaluateVariable`, and the shared evaluator branches to
   `EvaluateVariable` in every build. BASIC 1's GETDTL, INPSTP, TISTR, TINUM and INCTRM are `GetDataLine`,
   `StopEmptyInput`, `CheckClockString`, `RouteNumericVariable` and `AdvanceTerminalPosition`; the revised BASIC 4's

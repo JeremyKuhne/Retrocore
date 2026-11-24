@@ -1,78 +1,114 @@
+; retrocore: style=strict
 ; COMMODORE BASIC: CLOCK-STRING ASSIGNMENT
-;
-; This block follows the shared <AssignString> entry and falls through to <StoreString>
-; when the destination is an ordinary string variable.
 
-;; Emits the TI$ assignment entry for a six-digit hours, minutes and seconds string.
-;;
-;; It converts the string to 60 Hz clock ticks and stores the low three bytes in <CQTIMR>. The
-;; interrupt-disabled store prevents the clock interrupt from observing a partially updated value.
-;; Parameters: longLengthError = 1 to use an absolute jump for a wrong length, 0 to use a nearby error branch
-;; In: FORPNT = destination variable, FACMO/FACLO = string descriptor
-;; Errors: ILLEGAL QUANTITY if the length is not six or a character is not a decimal digit
-.macro TIME_STRING_ASSIGNMENT longLengthError
+.include "../../Microsoft6502Basic/MsBasic.Families.asm"
+
+;; The number of digits a `TI$` assignment takes: hours, minutes and seconds, two digits each.
+CLOCK_STRING_LENGTH = 6
+
+;; Emits the `TI$` assignment, the PET's start of <AssignString>: every string assignment comes here first, and one to
+;; any other variable goes on to <StoreString>.
+;; Parameters: longLengthError = 1 to reach <IllegalQuantityError> by a jump over it for a wrong length (BASIC 1), 0 to
+;;   branch to the digit check's jump
+.macro TimeStringAssignment longLengthError
     .assert longLengthError = 0 || longLengthError = 1, "longLengthError must be 0 or 1."
 
-    ldy FORPNT+1
-    cpy #>ZERO
-    bne GETSPT
-    jsr FREFAC
-    cmp #$06
-.if longLengthError
-    beq *+5
-    jmp FCERR
-.else
-    bne FCERR2
-.endif
-    ldy #$00
-    sty FACEXP
-    sty FACSGN
+    ;; Assigns a string to `TI$`, setting the clock, or passes any other variable on to <StoreString>.
+    ;;
+    ;; The reserved variables' values are in ROM, in <ZeroValue>'s page, so a destination there is `TI$` (the only
+    ;; reserved string variable). The string must be six decimal digits, `HHMMSS`; it is converted to 60 Hz ticks
+    ;; (sixtieths of a second), and the low three bytes of the integer are stored in <JiffyClock>
+    ;; with interrupts off, so the clock interrupt never sees half of the new value. The value is not checked against
+    ;; 24 hours: `TI$ = "999999"` sets the clock past a day. Nor are the digits checked as digits: <ClassifyCharacter>
+    ;; is the reader's entry after its colon test, so it takes every byte from `0` up for a digit, with the value of
+    ;; its distance from `0` (`A` counts 17), and rejects only the bytes below `0`. A space it skips by reading on
+    ;; through <TextPointer>, so the digit's place takes the byte after the one <TextPointer> points to (past the
+    ;; statement's end, for `LET`), and <TextPointer> moves on by one.
+    ;; In: AssignedVariable = the destination variable, FacMantissa3 = the string descriptor's address (low byte),
+    ;;   FacMantissa4 = its high byte
+    ;; Errors: ILLEGAL QUANTITY if the length is not six or a character is below `0`
+    .proc AssignClockString
+    ldy AssignedVariable+1
+    cpy #>ZeroValue
+    bne StoreString
+    jsr Strings::ReleaseFac
+    cmp #CLOCK_STRING_LENGTH
+    .if longLengthError
+        beq Convert
+        jmp IllegalQuantityError
+    .else
+        bne AddClockDigit::ToIllegalQuantity
+    .endif
 
-TIMELP:
-    sty FBUFPT
-    jsr TIMNUM
-    jsr MUL10
-    inc FBUFPT
-    ldy FBUFPT
-    jsr TIMNUM
-    jsr MOVAF
+;; Starts the conversion: a zero <Fac>, with the digit offset in <NumberBufferPointer>.
+Convert:
+    ldy #$00
+    sty FacExponent
+    sty FacSign
+
+;; Adds the next two digits to <Fac>, as (<Fac> + first) * 10 + second, and multiplies it by 6 unless it is zero. With
+;; the last multiplication by 10, the clock gets HH * 216000 + MM * 3600 + SS * 60, the time in sixtieths of a second.
+;; Also: TIMELP (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+NextPair:
+    sty NumberBufferPointer
+    jsr AddClockDigit
+    jsr Float::MultiplyByTen
+    inc NumberBufferPointer
+    ldy NumberBufferPointer
+    jsr AddClockDigit
+    jsr Float::CopyFacToArg
     tax
-    beq NOML6
+    beq SkipScale
     inx
     txa
-    jsr FINML6
+    jsr Float::AddScaledArgAndDouble
 
-NOML6:
-    ldy FBUFPT
+;; Counts to six digits; then multiplies the last pair by 10 more, converts <Fac> to an integer and stores the clock.
+;; Also: NOML6 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+SkipScale:
+    ldy NumberBufferPointer
     iny
-    cpy #$06
-    bne TIMELP
-    jsr MUL10
-    jsr QINT
+    cpy #CLOCK_STRING_LENGTH
+    bne NextPair
+    jsr Float::MultiplyByTen
+    jsr Float::ToLongInteger
     ldx #$02
     sei
 
-TIMEST:
-    lda FACMOH,x
-    sta CQTIMR,x
+;; Stores the integer's three low bytes in <JiffyClock>, interrupts off.
+;; Also: TIMEST (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+StoreClock:
+    lda FacMantissa2,x
+    sta JiffyClock,x
     dex
-    bpl TIMEST
+    bpl StoreClock
     cli
     rts
 
-;; Adds the decimal digit at <INDEX>+Y to <FAC>.
-;; In: INDEX = string characters, Y = character offset
-;; Errors: ILLEGAL QUANTITY if the character is not a decimal digit
-TIMNUM:
-    lda (INDEX),y
-    jsr QNUM
-    bcc GOTNUM
+    ;; Adds the digit at <Pointer1>+Y to <Fac>: any byte from `0` up, counted from `0`
+    ;; (see <AssignClockString>).
+    ;; In: Pointer1 = the string's characters, Y = the digit's offset
+    ;; Errors: ILLEGAL QUANTITY if the character is below `0`
+    ;; Entry:
+    ;;   ToIllegalQuantity = jumps to <IllegalQuantityError>; the length check branches here where `longLengthError`
+    ;;     is 0
+    ;; Also: TIMNUM (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    .proc AddClockDigit
+    lda (Pointer1),y
+    jsr ClassifyCharacter
+    bcc Digit
 
-FCERR2:
-    jmp FCERR
+;; Jumps to <IllegalQuantityError>.
+;; Also: FCERR2 (M6502, CBM4S79, HV2, HV4, HV4R)
+ToIllegalQuantity:
+    jmp IllegalQuantityError
 
-GOTNUM:
+;; A digit, or any byte above it: subtracts the character `0` (the operand is one less, since the carry is clear)
+;; and adds the value with <Float::AddSignedByte>.
+;; Also: GOTNUM (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+Digit:
     sbc #('0'-1)
-    jmp FINLOG
-
+    jmp Float::AddSignedByte
+    .endproc
+    .endproc
 .endmacro

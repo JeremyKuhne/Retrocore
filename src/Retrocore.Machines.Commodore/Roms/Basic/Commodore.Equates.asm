@@ -696,15 +696,13 @@ JiffyClock = $8D
 .if STATUS_IN_PAGE2
 ;; I/O status byte in the early kernal's page-two workspace.
 ;;
-;; BASIC 4's kernal listings (K4S79, HVK4) call it `SATUS` at its page-zero location, which BASIC 4's system equates
-;; define.
-;; Also: CQSTAT (M6502), CSTAT (CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; BASIC 4's kernal listings call it `SATUS` at its page-zero location.
+;; Also: CQSTAT (M6502), CSTAT (CBM4S79, HV1, HV1R, HV2, HV4, HV4R), SATUS (K4S79, HVK4)
 IoStatus = $020C
 .else
 ;; I/O status byte in page zero.
 ;;
-;; The kernal listings (K4S79, HVK4) call it `SATUS`, which BASIC 4's system equates define.
-;; Also: CQSTAT (M6502), CSTAT (CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: CQSTAT (M6502), CSTAT (CBM4S79, HV1, HV1R, HV2, HV4, HV4R), SATUS (K4S79, HVK4)
 IoStatus = $96
 .endif
 .if RND_TIMER_9044

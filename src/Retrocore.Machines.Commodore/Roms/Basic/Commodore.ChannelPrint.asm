@@ -4,6 +4,7 @@
 .include "../../Microsoft6502Basic/MsBasic.Families.asm"
 
 ;; The carriage return, which ends a line on every channel.
+;; Also: CR (K4S79, HVK4)
 CARRIAGE_RETURN = $0D
 
 ;; The line feed, which follows a carriage return on the channels that take one.
@@ -136,11 +137,11 @@ CheckPrintable:
         cmp #' '
         bcc RestoreCharacter
 
-;; Advances the column through the editor ROM's `INCTRM`.
+;; Advances the column through BASIC 1's editor-ROM patch, `AdvanceTerminalPosition`.
 ;; Also: OUTDO1 (M6502, HV1, HV1R)
 Advance:
         lda CurrentChannel
-        jsr INCTRM
+        jsr AdvanceTerminalPosition
         nop
 
 ;; Recovers the character before sending it.

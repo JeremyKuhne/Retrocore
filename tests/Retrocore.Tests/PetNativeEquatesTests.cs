@@ -407,7 +407,7 @@ public sealed class PetNativeEquatesTests
             COMPOSED_LIST_END:
             .include "MsBasic.For.asm"
             COMPOSED_FOR_END:
-                CommodoreStatementFetch INPUT_BUFFER_PAGE, {(waitMessage ? 1 : 0)}, {(early ? 1 : 0)}, {(early ? 1 : 0)}, {(disk && !original ? "GONEGT" : "CHRGET")}
+                CommodoreStatementFetch {(waitMessage ? 1 : 0)}, {(early ? 1 : 0)}, {(early ? 1 : 0)}, {(disk && !original ? "GONEGT" : "CHRGET")}
                 CommodoreStatementDispatch {(early ? 1 : 0)}, {(disk ? 1 : 0)}
             COMPOSED_STATEMENT_DISPATCH_END:
                 RestoreStatement
@@ -430,9 +430,9 @@ public sealed class PetNativeEquatesTests
             COMPOSED_LINE_NUMBER_END:
             .org ${legacy.Symbol("LET"):X4}
                 AssignmentStart
-                TIME_STRING_ASSIGNMENT {(early ? 1 : 0)}
+                TimeStringAssignment {(early ? 1 : 0)}
                 StringAssignment {(disk ? 1 : 0)}, {(disk ? 1 : 0)}
-                {(disk ? $"STRING_LINK_ADJUST {(original ? 0 : 1)}" : "")}
+                {(disk ? $"StringLinkAdjust {(original ? 0 : 1)}" : "")}
             COMPOSED_ASSIGNMENT_END:
                 CommodorePrintChannels
             COMPOSED_CHANNEL_PRINT_END:
@@ -460,7 +460,7 @@ public sealed class PetNativeEquatesTests
             COMPOSED_EXPRESSION_END:
                 OperandEvaluation 1, 1, ISFUN
             COMPOSED_OPERAND_END:
-                {(disk ? $"COMMODORE_BASIC4_OPERAND_SPLIT {(original ? 0 : 1)}" : "")}
+                {(disk ? $"CommodoreBasic4OperandSplit {(original ? 0 : 1)}" : "")}
             COMPOSED_OPERAND_SPLIT_END:
                 CommodoreVariableValue {(disk ? 1 : 0)}, {(early ? 1 : 0)}, {(disk ? 1 : 0)}
             COMPOSED_VARIABLE_VALUE_END:
@@ -493,7 +493,7 @@ public sealed class PetNativeEquatesTests
                 StringStorage INPUT_BUFFER_PAGE, {(early ? 0 : 1)}
                 StringAllocation {(disk ? 1 : 0)}
             COMPOSED_STRING_STORAGE_END:
-                {(disk ? "LINKED_STRING_GARBAGE_COLLECTION" : $"StringGarbageCollection {(early ? 0 : 1)}, {(early ? 1 : 0)}, {(early ? 1 : 0)}")}
+                {(disk ? "LinkedStringGarbageCollection" : $"StringGarbageCollection {(early ? 0 : 1)}, {(early ? 1 : 0)}, {(early ? 1 : 0)}")}
             COMPOSED_COLLECTOR_END:
                 StringConcatenation {(disk ? 1 : 0)}
             COMPOSED_CONCATENATION_END:
@@ -509,17 +509,17 @@ public sealed class PetNativeEquatesTests
             .include "Commodore.FloatingPoint.asm"
                 CharacterReader {(early ? "$59" : "$58")}
             COMPOSED_READER_END:
-                CommodoreInitialize {(early ? 1 : 0)}, {(waitMessage ? 1 : 0)}, {(early ? 1 : 0)}, {(early ? 1 : 0)}, INPUT_BUFFER_PAGE, {(disk ? 1 : 0)}, {(early ? 1 : 0)}
+                CommodoreInitialize {(early ? 1 : 0)}, {(waitMessage ? 1 : 0)}, {(early ? 1 : 0)}, {(disk ? 1 : 0)}, {(early ? 1 : 0)}
                 CommodoreMemoryProbe {(early ? 1 : 0)}, {(early ? 1 : 0)}, {(early ? 0 : 1)}, {(disk ? 1 : 0)}, {(early ? 1 : 0)}, {(early ? "$92" : "$55")}
                 CommodoreStartProgram {(disk ? 0 : 1)}, {(early ? 1 : 0)}, {(disk ? 0 : 1)}, {(early ? 1 : 0)}, {(early ? "0" : disk ? "SIGNON" : "FREMES")}
             COMPOSED_INITIALIZATION_END:
                 CommodoreStartMessages {(early ? 1 : 0)}
             COMPOSED_MESSAGES_END:
-                {(early ? "COMMODORE_BASIC1_EDITOR_PATCHES" : "")}
+                {(early ? "CommodoreBasic1EditorPatches" : "")}
                 {(early ? "" : BasicNames.CurrentLabel("LASTWR"))}
             COMPOSED_BASIC1_PATCH_END:
             {(early ? ".org $E7F3" : "")}
-                {(early ? "COMMODORE_BASIC1_ARRAY_PATCH" : "")}
+                {(early ? "CommodoreBasic1ArrayPatch" : "")}
             COMPOSED_BASIC1_ARRAY_END:
             .include "Commodore.HistoricalNames.asm"
             """;
@@ -821,13 +821,16 @@ public sealed class PetNativeEquatesTests
             .cpu Mos6502
             .include "Commodore.StatementDispatch.asm"
             .org ${legacy.Symbol("NEWSTT"):X4}
-                CommodoreStatementFetch {(early ? 0 : 2)}, {(basic2 ? 1 : 0)}, {(early ? 1 : 0)}, {(early ? 1 : 0)}, CHRGET
+                CommodoreStatementFetch {(basic2 ? 1 : 0)}, {(early ? 1 : 0)}, {(early ? 1 : 0)}, CHRGET
             """;
 
         List<string> dependencies = ["ISCNTC", "TXTPTR", "OLDTXT", "ENDCON", "CURLIN", "SNERR", "CHRGET", "GONE3"];
         if (!early) { dependencies.Add("MORSTS"); }
         Dictionary<string, long> symbols = dependencies.ToDictionary(
             name => name, name => legacy.Symbol(name), StringComparer.Ordinal);
+
+        // The macro takes the direct buffer's page from the workspace's switch.
+        symbols.Add("INPUT_BUFFER_PAGE", early ? 0 : 2);
 
         AssemblyResult native = RequireSuccess(Assemble(source, symbols));
         RecordingBus bus = new();
@@ -1010,9 +1013,10 @@ public sealed class PetNativeEquatesTests
 
         string source = $"""
             .cpu Mos6502
+            .include "../../Microsoft6502Basic/MsBasic.Layouts.asm"
             .include "Commodore.Basic4Patches.asm"
             .org ${legacy.Symbol("ISVAR") - 1:X4}
-                COMMODORE_BASIC4_OPERAND_SPLIT 1
+                CommodoreBasic4OperandSplit 1
             """;
 
         return RequireSuccess(Assemble(source, symbols));

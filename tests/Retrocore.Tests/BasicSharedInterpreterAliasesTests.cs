@@ -114,9 +114,10 @@ public sealed class BasicSharedInterpreterAliasesTests
             .Where(symbol => symbol.Value < functionsStart || symbol.Value >= functionsEnd)
             .ToDictionary(symbol => symbol.Name, symbol => symbol.Value, StringComparer.Ordinal);
 
-        // The included files document the macros this test does not expand (LET's, for one), whose Also: names would
-        // otherwise be predefined second definitions.
-        foreach (string file in (string[])["MsBasic.Assignment.asm", "MsBasic.StringConversion.asm", "MsBasic.StringFunctions.asm"])
+        // The included files document the macros this test does not expand (LET's, for one), and the layouts their
+        // definitions, whose Also: names would otherwise be predefined second definitions.
+        foreach (string file in (string[])
+            ["MsBasic.Layouts.asm", "MsBasic.Assignment.asm", "MsBasic.StringConversion.asm", "MsBasic.StringFunctions.asm"])
         {
             string path = Path.Join(Shared, file);
             foreach (DocumentationAlso also in DocumentationParser.Parse(File.ReadAllText(path), path).Comments
@@ -131,7 +132,7 @@ public sealed class BasicSharedInterpreterAliasesTests
                 .include "Commodore.StringAssignment.asm"
                 .org ${assignmentStart:X4}
                     StringAssignment 1, 1
-                    STRING_LINK_ADJUST {(original ? 0 : 1)}
+                    StringLinkAdjust {(original ? 0 : 1)}
                 """
             : $"""
                 .org ${assignmentStart:X4}
@@ -140,6 +141,7 @@ public sealed class BasicSharedInterpreterAliasesTests
 
         string source = $"""
             .cpu Mos6502
+            .include "MsBasic.Layouts.asm"
             .include "MsBasic.Assignment.asm"
             .include "MsBasic.StringConversion.asm"
             .include "MsBasic.StringFunctions.asm"

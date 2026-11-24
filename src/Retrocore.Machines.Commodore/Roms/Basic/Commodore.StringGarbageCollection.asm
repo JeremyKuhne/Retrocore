@@ -1,200 +1,278 @@
+; retrocore: style=strict
 ; COMMODORE BASIC 4: LINKED STRING GARBAGE COLLECTION
 ;
-; Include this after Commodore.Equates.asm in a composed build, then emit LINKED_STRING_GARBAGE_COLLECTION
-; after the linked allocator. It cannot be used with the unlinked allocator or strings without link bytes.
+; Include this after Commodore.Equates.asm in a composed build, then emit LinkedStringGarbageCollection after the
+; linked allocator. It cannot be used with the unlinked allocator, or with strings that have no links.
 
-; Supply the BASIC 4 workspace when this definitions-only file is opened on its own.
-.ifndef INDEX
+; Supply BASIC 4's workspace when this file, which only defines a macro, is opened on its own.
+.ifndef Pointer1
 .ifndef LINE_WIDTH_STORAGE
-LINE_WIDTH_STORAGE = 0              ;; BASIC 4 reuses the line-width storage
+;; BASIC 4 reuses the line-width storage.
+LINE_WIDTH_STORAGE = 0
 .endif
 .ifndef DISK_STATUS_STRING
-DISK_STATUS_STRING = 1              ;; BASIC 4 has the disk-status string descriptor
+;; BASIC 4 has the disk-status string's descriptor.
+DISK_STATUS_STRING = 1
 .endif
 .include "Commodore.Equates.asm"
 .endif
 
-;; Emits BASIC 4's single-pass linked-string collector.
-;;
-;; Every nonempty allocated string ends in a two-byte link. A live link points back to its descriptor;
-;; garbage has its length in the first link byte and $FF in the second. Starting at <MEMSIZ>, the
-;; collector skips garbage, moves later live strings over it, and repairs their descriptor pointers.
-;; It does not scan variable or temporary tables, so a valid link is essential even for a temporary.
-;; The allocator initially marks a new string as garbage; collection before assignment links it to
-;; a variable can reclaim it while a temporary descriptor still points at its former contents.
-.macro LINKED_STRING_GARBAGE_COLLECTION
+;; The high byte of a garbage string's link, which marks it as garbage; a live string's link holds its descriptor's
+;; address, which on the PET is never in page $FF.
+GARBAGE_MARK = $FF
 
-.scope Strings continued
-;; Compacts linked strings and updates their descriptors: BASIC 4's <Strings::CollectGarbage>, by the classic
-;; collector's name (Basic.md E6).
-;; In: MEMSIZ = exclusive top of string space, FRETOP = first allocated byte, decimal = clear
-;; Out: FRETOP = new first allocated byte, FRESPC = new first allocated byte
-;; See: <ENDGRB>, <SETINX>
-;; Also: GARBA2 (M6502, CBM4S79, HV4, HV4R)
-CollectGarbage:
-.endscope
+;; The size of a string's link, after its characters.
+LINK_SIZE = 2
+
+;; Emits BASIC 4's collector, <Strings::CollectGarbage>, which compacts string space in one pass by the strings'
+;; links.
+.macro LinkedStringGarbageCollection
+
+    .scope Strings continued
+
+    ;; Compacts the linked strings toward <MemoryTop> in one pass, and repairs their descriptors: BASIC 4's
+    ;; <Strings::CollectGarbage>, by the classic collector's name (Basic.md E6).
+    ;;
+    ;; Every nonempty string in string space ends in a two-byte link. A live string's link holds its descriptor's
+    ;; address; a garbage string's holds its length and then <GARBAGE_MARK>. Starting at <MemoryTop>, the collector
+    ;; walks down through the strings by their links, skips the garbage, moves each live string below it up over the
+    ;; gap, and points its descriptor at the new place. It does not scan the variables or the temporary descriptors,
+    ;; so every string must have a valid link, even a temporary's. The allocator marks a new string as garbage until
+    ;; an assignment links it to a variable, so a collection before then reclaims it while a temporary descriptor
+    ;; still points at its old characters.
+    ;; In: MemoryTop = the top of string space (exclusive), StringsBottom = the lowest string, decimal = clear
+    ;; Out: StringsBottom = the new lowest string, NewString = the same
+    ;; See: <Strings::CollectGarbage::LoadDescriptorAddress>
+    ;; Also: GARBA2 (M6502, CBM4S79, HV4, HV4R)
+    .proc CollectGarbage
+
+    ;; The byte whose bit 7 is set while a gap is open: once garbage has been skipped, live strings must move.
+    GapOpen = DestinationEnd
+
+    ;; The address just past the next string to read, and its link.
+    Source = CollectorPointer
+
+    ;; The address just past where the next string kept goes, and its link.
+    Destination = CollectorTop
+
     ldy #$00
-    sty HIGHDS
-    lda MEMSIZ
-    ldy MEMSIZ+1
-    sta GRBTOP
-    sta GRBPNT
-    sta FRESPC
-    sty GRBTOP+1
-    sty GRBPNT+1
-    sty FRESPC+1
+    sty GapOpen
+    lda MemoryTop
+    ldy MemoryTop+1
+    sta Destination
+    sta Source
+    sta NewString
+    sty Destination+1
+    sty Source+1
+    sty NewString+1
 
-GLOOP:
-    cpy FRETOP+1
-    bcc GRBEND
-    bne COL00
-    cmp FRETOP
-    beq GRBEND
-    bcc GRBEND
+;; Stops at <StringsBottom>, the last string.
+;; Also: GLOOP (CBM4S79, HV4, HV4R)
+NextString:
+    cpy StringsBottom+1
+    bcc ToFinish
+    bne Examine
+    cmp StringsBottom
+    beq ToFinish
+    bcc ToFinish
 
-COL00:
-    ldx HIGHDS
-    bmi COL00B
-    lda #$02
-    jsr MOVTOP
+;; Lowers the destination past a link, unless a gap is open: then it still points at the link of the garbage that
+;; opened the gap, whose place the next string kept takes.
+;; Also: COL00 (CBM4S79, HV4, HV4R)
+Examine:
+    ldx GapOpen
+    bmi ReadLink
+    lda #LINK_SIZE
+    jsr LowerDestination
 
-COL00B:
-    jsr SKIP2A
+;; Lowers the source past the link and tests it for garbage.
+;; Also: COL00B (CBM4S79, HV4, HV4R)
+ReadLink:
+    jsr SkipSourceLink
     ldy #$01
-    lda (GRBPNT),y
-    cmp #$FF
-    bne COL01
+    lda (Source),y
+    cmp #GARBAGE_MARK
+    bne LiveString
 
-COL00A:
+;; Garbage: lowers the source past its characters, by the length in the link's low byte, and opens a gap.
+;; Also: COL00A (CBM4S79, HV4, HV4R)
+SkipGarbage:
     dey
-    lda (GRBPNT),y
-    jsr MOVPNT
+    lda (Source),y
+    jsr LowerSource
     sec
-    ror HIGHDS
-    bne GLOOP
+    ror GapOpen
+    bne NextString
 
-COL01:
-    jsr SETINX
-    ldx HIGHDS
-    bpl COL03
-    lsr HIGHDS
+;; A live string: loads its descriptor's address, and moves it only when a gap is open.
+;; Also: COL01 (CBM4S79, HV4, HV4R)
+LiveString:
+    jsr LoadDescriptorAddress
+    ldx GapOpen
+    bpl KeepString
+    lsr GapOpen
 
-COL02:
+;; Moves a live string up over the gap: copies its link and characters to the destination, and points its descriptor
+;; there; then, while live strings follow, goes on moving them.
+;; Also: COL02 (CBM4S79, HV4, HV4R)
+MoveString:
     ldy #$00
-    lda (GRBPNT),y
-    sta (GRBTOP),y
+    lda (Source),y
+    sta (Destination),y
     iny
-    lda (GRBPNT),y
-    sta (GRBTOP),y
+    lda (Source),y
+    sta (Destination),y
     dey
-    lda (INDEX),y
+    lda (Pointer1),y
     tax
-    jsr MOVTOP
-    sta FRESPC
-    sty FRESPC+1
+    jsr LowerDestination
+    sta NewString
+    sty NewString+1
     txa
-    jsr MOVPNT
+    jsr LowerSource
     txa
     tay
 
-GLOP1:
+;; Copies one character, the last first.
+;; Also: GLOP1 (CBM4S79, HV4, HV4R)
+CopyByte:
     dey
-    lda (GRBPNT),y
-    sta (GRBTOP),y
+    lda (Source),y
+    sta (Destination),y
     dex
-    bne GLOP1
-    ldy #$02
+    bne CopyByte
+    ldy #StringDescriptor::ADDRESS+1
 
-COL02B:
-    lda GRBTOP-1,y
-    sta (INDEX),y
+;; Points the descriptor at the destination: Y = 2, then 1, for the address's high and low bytes.
+;; Also: COL02B (CBM4S79, HV4, HV4R)
+UpdateDescriptor:
+    lda Destination-StringDescriptor::ADDRESS,y
+    sta (Pointer1),y
     dey
-    bne COL02B
-    lda GRBPNT
-    ldy GRBPNT+1
-    cpy FRETOP+1
-    bcc GRBEND
-    bne COL02A
-    cmp FRETOP
-    beq GRBEND
-    bcc GRBEND
+    bne UpdateDescriptor
+    lda Source
+    ldy Source+1
+    cpy StringsBottom+1
+    bcc ToFinish
+    bne NextMoved
+    cmp StringsBottom
+    beq ToFinish
+    bcc ToFinish
 
-COL02A:
-    jsr SKIP2
+;; The next string while moving: garbage opens the gap again; a live string is moved at once.
+;; Also: COL02A (CBM4S79, HV4, HV4R)
+NextMoved:
+    jsr SkipLinks
     ldy #$01
-    lda (GRBPNT),y
-    cmp #$FF
-    beq COL00A
-    jsr SETINX
-    bmi COL02
+    lda (Source),y
+    cmp #GARBAGE_MARK
+    beq SkipGarbage
+    jsr LoadDescriptorAddress
+    bmi MoveString
 
-GRBEND:
-    jmp ENDGRB
+;; Jumps on to <Strings::CollectGarbage::Finish>.
+;; Also: GRBEND (CBM4S79, HV4, HV4R)
+ToFinish:
+    jmp Finish
 
-COL03:
+;; A live string with no gap below it stays: both pointers go down past its characters.
+;; Also: COL03 (CBM4S79, HV4, HV4R)
+KeepString:
     ldy #$00
-    lda (INDEX),y
+    lda (Pointer1),y
     tax
-    jsr MOVTOP
-    sta FRESPC
-    sty FRESPC+1
+    jsr LowerDestination
+    sta NewString
+    sty NewString+1
     txa
-    jsr MOVPNT
-    jmp GLOOP
+    jsr LowerSource
+    jmp NextString
 
-;; Sets the final free-space boundary after the linked-string scan.
-ENDGRB:
-    lda FRESPC
-    ldy FRESPC+1
-    sta FRETOP
-    sty FRETOP+1
+;; Sets <StringsBottom> to <NewString>, the lowest string kept.
+;; Also: ENDGRB (CBM4S79, HV4, HV4R)
+Finish:
+    lda NewString
+    ldy NewString+1
+    sta StringsBottom
+    sty StringsBottom+1
     rts
 
-;; Skips link bytes in the destination and source pointers.
-SKIP2:
-    lda #$02
-    jsr MOVTOP
+    ;; Lowers the destination and then the source past a link.
+    ;; Out: A = the source's low byte, Y = its high byte
+    ;; Also: SKIP2 (CBM4S79, HV4, HV4R)
+    .proc SkipLinks
+    lda #LINK_SIZE
+    jsr LowerDestination
+    ; Falls into SkipSourceLink.
+    .endproc
 
-SKIP2A:
-    lda #$02
+    ;; Lowers the source past a link.
+    ;; Out: A = the source's low byte, Y = its high byte
+    ;; Also: SKIP2A (CBM4S79, HV4, HV4R)
+    .proc SkipSourceLink
+    lda #LINK_SIZE
+    ; Falls into LowerSource.
+    .endproc
 
-;; Subtracts A from the source pointer <GRBPNT>.
-MOVPNT:
+    ;; Subtracts A from the source pointer.
+    ;; In: A = the count
+    ;; Out: A = the source's low byte, Y = its high byte
+    ;; Keeps: X
+    ;; Also: MOVPNT (CBM4S79, HV4, HV4R)
+    .proc LowerSource
     eor #$FF
     sec
-    adc GRBPNT
-    ldy GRBPNT+1
-    bcs MOV00
+    adc Source
+    ldy Source+1
+    bcs Store
     dey
 
-MOV00:
-    sta GRBPNT
-    sty GRBPNT+1
+;; Stores the new pointer.
+;; Also: MOV00 (CBM4S79, HV4, HV4R)
+Store:
+    sta Source
+    sty Source+1
     rts
+    .endproc
 
-;; Subtracts A from the destination pointer <GRBTOP>.
-MOVTOP:
+    ;; Subtracts A from the destination pointer.
+    ;; In: A = the count
+    ;; Out: A = the destination's low byte, Y = its high byte
+    ;; Keeps: X
+    ;; Also: MOVTOP (CBM4S79, HV4, HV4R)
+    .proc LowerDestination
     eor #$FF
     sec
-    adc GRBTOP
-    ldy GRBTOP+1
-    bcs MOV01
+    adc Destination
+    ldy Destination+1
+    bcs Store
     dey
 
-MOV01:
-    sta GRBTOP
-    sty GRBTOP+1
+;; Stores the new pointer.
+;; Also: MOV01 (CBM4S79, HV4, HV4R)
+Store:
+    sta Destination
+    sty Destination+1
     rts
+    .endproc
 
-;; Loads <INDEX> from the link at <GRBPNT>.
-;; Out: INDEX = descriptor address, negative = set
-SETINX:
+    ;; Loads <Pointer1> from the link at the source: the live string's descriptor's address.
+    ;; Out: Pointer1 = the descriptor's address, Y = $FF, negative = set
+    ;; Keeps: X
+    ;; Also: SETINX (CBM4S79, HV4, HV4R)
+    .proc LoadDescriptorAddress
     ldy #$01
 
-SET00:
-    lda (GRBPNT),y
-    sta INDEX,y
+;; Copies one byte, the high first.
+;; Also: SET00 (CBM4S79, HV4, HV4R)
+NextByte:
+    lda (Source),y
+    sta Pointer1,y
     dey
-    bpl SET00
+    bpl NextByte
     rts
+    .endproc
+    .endproc
+
+    .endscope
 .endmacro

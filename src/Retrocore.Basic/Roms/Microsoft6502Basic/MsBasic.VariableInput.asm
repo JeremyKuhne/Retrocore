@@ -173,7 +173,7 @@ NextValue:
     bvc SetDelimiters
     .if patchedGetString
         lda #$00
-        jsr GETSTR
+        jsr BeginGetString
         nop
     .else
         inx

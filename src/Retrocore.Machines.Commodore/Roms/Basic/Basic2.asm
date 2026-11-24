@@ -1,7 +1,10 @@
+; retrocore: style=strict
 ;; COMMODORE PET BASIC 2
 ;;
 ;; The BASIC 2 interpreter starts at $C000 and ends in the first part of the editor ROM at $E1DD.
 ;; Its shared Microsoft and Commodore modules are emitted in ROM address order.
+;;
+;; It assembles byte-identically to Commodore's chips: `PetRomSourceTests` checks every build against their digests.
 
 .cpu Mos6502
 
@@ -22,13 +25,27 @@
 .assert .not .defined(PRECISE_FOUT_LIMIT), "Predefine PRECISE_OUTPUT_LIMIT, not PRECISE_FOUT_LIMIT."
 .assert .not .defined(ZERO_AT_FHALF), "Predefine ZERO_IN_HALF_CONSTANT, not ZERO_AT_FHALF."
 
-ROMLOC = $C000                      ;; start of the BASIC 2 ROM
-SHORT_MULTIPLY_ZERO = 0             ;; use the later multiply-by-zero branch
-EARLY_INPUT_EXPONENT_LIMIT = 0      ;; use the later decimal exponent limit
-PRECISE_OUTPUT_LIMIT = 0            ;; use the later decimal-output threshold
-ZERO_IN_HALF_CONSTANT = 1           ;; define <ZeroValue> within the half constant
-WAIT_EASTER_EGG = 1                 ;; include BASIC 2's hidden WAIT message
-BASIC4_OUTPUT_PADDING = 0           ;; omit BASIC 4's output patch space
+;; Start of the BASIC 2 ROM.
+;; Also: ROMLOC (M6502, HV1, HV1R, HV2, HV4, HV4R)
+ROM_ORIGIN = $C000
+
+;; Use the later multiply-by-zero branch.
+SHORT_MULTIPLY_ZERO = 0
+
+;; Use the later decimal exponent limit.
+EARLY_INPUT_EXPONENT_LIMIT = 0
+
+;; Use the later decimal-output threshold.
+PRECISE_OUTPUT_LIMIT = 0
+
+;; Define <ZeroValue> within the half constant.
+ZERO_IN_HALF_CONSTANT = 1
+
+;; Include BASIC 2's hidden WAIT message.
+WAIT_EASTER_EGG = 1
+
+;; Omit BASIC 4's output patch space.
+BASIC4_OUTPUT_PADDING = 0
 
 ; Define the shared and platform macros before emitting the interpreter.
 .include "Commodore.InterpreterMacros.asm"
@@ -48,33 +65,33 @@ BASIC4_OUTPUT_PADDING = 0           ;; omit BASIC 4's output patch space
     CommodoreTokenize 0, 0
 .include "../../Microsoft6502Basic/MsBasic.LineSearch.asm"
 
-; Program control, statement dispatch and assignment.
+    ; Program control, statement dispatch and assignment.
     ProgramReset 0, 0, 1, 1
-    ClearStatement STKRTS
+    ClearStatement ResetStack::Done
     ClearStorage 1, 0
     ExecutionReset 0, 0, $FA
-    ListRange 0, FLNRTS
-    ListLines 1, 1, 0, LINPRT, 0, READY
+    ListRange 0, FindLine::Done
+    ListLines 1, 1, 0, Float::PrintDecimalAX, 0, ReadyForCommand
     ListTokens 0, 1, 1, 0
 .include "../../Microsoft6502Basic/MsBasic.For.asm"
-    CommodoreStatementFetch INPUT_BUFFER_PAGE, 1, 0, 0, CHRGET
+    CommodoreStatementFetch 1, 0, 0, GetNextCharacter
     CommodoreStatementDispatch 0, 0
     RestoreStatement
     StopAndContinue 1, 1
     RunStatement
-    GosubAndGoto NEWSTT
+    GosubAndGoto NextStatement
     ReturnStatement 0, 0
     StatementScan 0, 0
     ConditionalStatements
     OnStatement
 .include "../../Microsoft6502Basic/MsBasic.LineNumber.asm"
     AssignmentStart
-    TIME_STRING_ASSIGNMENT 0
+    TimeStringAssignment 0
     StringAssignment 0, 0
 
-; Terminal and channel output, then READ and input.
+    ; Terminal and channel output, then READ and input.
     CommodorePrintChannels
-    PrintItems TABER, 1, 0, 1
+    PrintItems PrintTabOrSpace, 1, 0, 1
     CommodoreLineEnd INPUT_BUFFER_PAGE, 0, 0, 0
     CommodorePrintSpacing 0
 .include "../../Microsoft6502Basic/MsBasic.StringOutput.asm"
@@ -85,10 +102,10 @@ BASIC4_OUTPUT_PADDING = 0           ;; omit BASIC 4's output patch space
     VariableInput INPUT_BUFFER_PAGE, 0, 0, 0, 1, 0
     VariableInputMessages 0, 1
 
-; Expressions, variables, arrays and strings.
-    NextEntries 0, NEWSTT
+    ; Expressions, variables, arrays and strings.
+    NextEntries 0, NextStatement
     ExpressionCore 0
-    OperandEvaluation 1, 1, ISFUN
+    OperandEvaluation 1, 1, CallFunction
     CommodoreVariableValue 0, 0, 0
     FunctionDispatch
     LogicalOperators 1
@@ -98,7 +115,7 @@ BASIC4_OUTPUT_PADDING = 0           ;; omit BASIC 4's output patch space
     LetterTest
     SimpleVariableLookup 0, 0, 0, 1, 1, 0, 0, 0
     IntegerConversionBoundary
-    IntegerConversion FRMEVL, 1
+    IntegerConversion EvaluateExpression, 1
     ArrayLookup 0, 0, 1
 .include "../../Microsoft6502Basic/MsBasic.ArrayMultiplication.asm"
     SimpleFunctions 0
@@ -110,7 +127,7 @@ BASIC4_OUTPUT_PADDING = 0           ;; omit BASIC 4's output patch space
     StringConcatenation 0
     StringFunctions 0, 0, 0, 0
 
-; Memory access, floating point and cold startup.
+    ; Memory access, floating point and cold startup.
     AddressConversion 1
     PeekFunction 1, 1, 0, 1
     PokeStatement
@@ -118,10 +135,14 @@ BASIC4_OUTPUT_PADDING = 0           ;; omit BASIC 4's output patch space
 .include "Commodore.FloatingPoint.asm"
 .include "Commodore.HistoricalNames.asm"
     CharacterReader $58
-    CommodoreInitialize 0, 1, 0, 0, INPUT_BUFFER_PAGE, 0, 0
+    CommodoreInitialize 0, 1, 0, 0, 0
     CommodoreMemoryProbe 0, 0, 1, 0, 0, $55
-    CommodoreStartProgram 1, 0, 1, 0, FREMES
+    CommodoreStartProgram 1, 0, 1, 0, SignOnMessage
     CommodoreStartMessages 0
-LASTWR:
+
+;; The address after the interpreter's last byte, in the editor ROM. BASIC 2's `PEEK` has no ROM guard, so nothing
+;; uses it.
+;; Also: LASTWR (M6502, HV1, HV1R, HV2, HV4, HV4R, K4S79, HVK4)
+InterpreterEnd:
 
 .assert * = $E1DE, "BASIC 2 must end at $E1DD in the editor ROM."

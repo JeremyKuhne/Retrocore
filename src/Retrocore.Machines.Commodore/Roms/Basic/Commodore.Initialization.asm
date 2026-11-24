@@ -8,16 +8,14 @@
 ;; Parameters: markDirect = 1 to mark the current line as direct,
 ;;   setLineWidth = 1 to initialize the terminal width and comma zones,
 ;;   delayedSize = 1 to set the descriptor size after clearing the flags,
-;;   localPosition = 1 to initialize BASIC's terminal position,
-;;   bufferPage = zero for a page-zero buffer, or the nonzero buffer page,
 ;;   diskStatus = 1 to initialize the disk-status descriptor instead of the output-suppression flag,
 ;;   earlyBuffer = 1 to restore the page-zero buffer's comma and print a newline
-.macro CommodoreInitialize markDirect, setLineWidth, delayedSize, localPosition, bufferPage, diskStatus, earlyBuffer
+;; The workspace's <LOCAL_TERMINAL_POSITION> selects whether BASIC's own terminal position is cleared, and its
+;; <INPUT_BUFFER_PAGE> whether the bytes before a page-two buffer are set.
+.macro CommodoreInitialize markDirect, setLineWidth, delayedSize, diskStatus, earlyBuffer
     .assert markDirect = 0 || markDirect = 1, "markDirect is 0 or 1."
     .assert setLineWidth = 0 || setLineWidth = 1, "setLineWidth is 0 or 1."
     .assert delayedSize = 0 || delayedSize = 1, "delayedSize is 0 or 1."
-    .assert localPosition = 0 || localPosition = 1, "localPosition is 0 or 1."
-    .assert bufferPage >= 0 && bufferPage <= 255, "bufferPage must fit in a byte."
     .assert diskStatus = 0 || diskStatus = 1, "diskStatus is 0 or 1."
     .assert earlyBuffer = 0 || earlyBuffer = 1, "earlyBuffer is 0 or 1."
 
@@ -66,7 +64,7 @@ CopyCharacterReader:
     .if NULL_COMMAND
         sta NullCount
     .endif
-    .if localPosition
+    .if LOCAL_TERMINAL_POSITION
         sta TerminalPosition
     .endif
     .if diskStatus
@@ -85,7 +83,7 @@ CopyCharacterReader:
         sta LineNumber+1
         jsr PrintNewline
     .endif
-    .if bufferPage
+    .if INPUT_BUFFER_PAGE
         inx                         ; the bytes before the buffer nonzero, for the line chaining
         stx InputBuffer-3
         stx InputBuffer-4
@@ -127,8 +125,8 @@ CopyCharacterReader:
     .if diskFallback
         lda #$80                    ; nonzero, so the branch is always taken
         bne ProbeMemory
-        lda #<ROMLOC
-        ldy #>ROMLOC
+        lda #<ROM_ORIGIN
+        ldy #>ROM_ORIGIN
         jmp SetMemoryTop
     .endif
 

@@ -30,17 +30,16 @@ public sealed partial class BasicRenameGateTests
     private const string OldName = "ReservedWords";
     private const string NewName = "ReservedNames";
 
-    // A second rename, of a label BASIC 1 defines in a macro's body (its editor-ROM patches), whose Also: reaches it
-    // because each build expands the macro once; AppleSoft and BASIC 2 and 4 define it as a plain label.
-    private const string MacroOldName = "LASTWR";
-    private const string MacroNewName = "LastRomWord";
+    // A second rename, of a label every build defines in a shared macro's body (the end of AssignmentStart), whose
+    // Also: reaches it because each build expands the macro once.
+    private const string MacroOldName = "AssignString";
+    private const string MacroNewName = "AssignStringResult";
 
     // Each rename, with the files that define the name.
     private static readonly (string Old, string New, string[] Files, Regex Word)[] s_renames =
     [
         (OldName, NewName, ["AppleSoft.DispatchTables.asm", "Commodore.DispatchTables.asm"], OldNameWord()),
-        (MacroOldName, MacroNewName, ["AppleSoft.PlatformHelpers.asm", "Commodore.Basic1Patches.asm", "Basic2.asm", "Basic4.asm"],
-            MacroOldNameWord())
+        (MacroOldName, MacroNewName, ["MsBasic.Assignment.asm"], MacroOldNameWord())
     ];
 
     // The classes that assemble the native BASIC sources and look its names up, run against the renamed copy.
@@ -62,7 +61,9 @@ public sealed partial class BasicRenameGateTests
         typeof(BasicSharedStatementFlowTests), typeof(BasicSharedStringConcatenationTests),
         typeof(BasicSharedStringFunctionTests), typeof(BasicSharedStringStorageTests), typeof(BasicSharedUserFunctionsTests),
         typeof(BasicSharedVariableInputTests), typeof(BasicSharedVariableLookupTests), typeof(BasicTokenizerTests),
-        typeof(BasicVariableTests), typeof(BasicWorkspaceConversionTests), typeof(PetBasic4ExtensionTests),
+        typeof(BasicVariableTests), typeof(BasicWorkspaceConversionTests), typeof(BasicMonitorRoutineTests),
+        typeof(BasicDiskRoutineTests), typeof(BasicCommodoreConversionTests), typeof(BasicCommodoreRoutineTests),
+        typeof(PetBasic4ExtensionTests),
         typeof(PetBasic4RevisionTests), typeof(PetBasicConformanceTests), typeof(PetNativeEquatesTests),
         typeof(PetRomSourceTests), typeof(PetSharedFloatAssemblyTests)
     ];
@@ -88,10 +89,11 @@ public sealed partial class BasicRenameGateTests
     };
 
     // Helpers the renamed classes use, whose lookups are checked with theirs.
-    private static readonly string[] s_helpers = ["BasicAttribution.cs", "BasicMachines.cs", "BasicMathMachine.cs", "PetLegacyBasic.cs"];
+    private static readonly string[] s_helpers =
+        ["BasicAttribution.cs", "BasicMachines.cs", "BasicMathMachine.cs", "PetLegacyBasic.cs", "PetRoutineMachine.cs"];
 
     /// <summary>
-    ///  Renaming <c>ReservedWords</c> to <c>ReservedNames</c>, and <c>LASTWR</c> in a macro's body to <c>LastRomWord</c>, in a copy
+    ///  Renaming <c>ReservedWords</c> to <c>ReservedNames</c>, and <c>AssignString</c> in a macro's body to <c>AssignStringResult</c>, in a copy
     ///  of the native sources, each with its old name in <c>;; Also:</c>, keeps every ROM's bytes and leaves every
     ///  BASIC test green without changing it.
     /// </summary>

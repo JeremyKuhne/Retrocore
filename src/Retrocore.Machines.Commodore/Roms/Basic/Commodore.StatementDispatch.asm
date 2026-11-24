@@ -4,13 +4,12 @@
 .include "../../Microsoft6502Basic/MsBasic.Families.asm"
 
 ;; Emits the next-statement fetcher: <NextStatement> and <ExecuteStatement>.
-;; Parameters: bufferPage = zero for a page-zero direct buffer, or the nonzero buffer page,
-;;   spareByte = 1 to retain the later ROM's NOP before the direct-mode branch,
+;; The workspace's <INPUT_BUFFER_PAGE> is the direct buffer's page: zero for page zero.
+;; Parameters: spareByte = 1 to retain the later ROM's NOP before the direct-mode branch,
 ;;   earlySeparators = 1 to check separators before the line link,
 ;;   shortEnd = 1 to branch directly to <Statements::StopOrEnd::Finish>,
 ;;   fetchToken = character-reader entry, or the revised BASIC 4 PI-checking patch
-.macro CommodoreStatementFetch bufferPage, spareByte, earlySeparators, shortEnd, fetchToken
-    .assert bufferPage >= 0 && bufferPage <= 255, "bufferPage must fit in a byte."
+.macro CommodoreStatementFetch spareByte, earlySeparators, shortEnd, fetchToken
     .assert spareByte = 0 || spareByte = 1, "spareByte is 0 or 1."
     .assert earlySeparators = 0 || earlySeparators = 1, "earlySeparators is 0 or 1."
     .assert shortEnd = 0 || shortEnd = 1, "shortEnd is 0 or 1."
@@ -27,8 +26,8 @@
     jsr CheckStop
     lda TextPointer
     ldy TextPointer+1
-    .if bufferPage
-        cpy #bufferPage
+    .if INPUT_BUFFER_PAGE
+        cpy #INPUT_BUFFER_PAGE
     .endif
     .if spareByte
         nop
@@ -36,14 +35,14 @@
     beq TestSeparator
     sta StoppedText
     sty StoppedText+1
-    .if bufferPage
+    .if INPUT_BUFFER_PAGE
 
 ;; Reads the byte at <TextPointer>: a zero reads the next line, and anything else is checked as a separator.
 ;; Also: DIRCON (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 TestSeparator:
     .endif
     ldy #$00
-    .if .not bufferPage
+    .if .not INPUT_BUFFER_PAGE
 
 ;; Reads the byte at <TextPointer>: a zero reads the next line, and anything else is checked as a separator.
 ;; Also: DIRCON (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)

@@ -145,7 +145,7 @@ ReadArray:
     iny
     lda (Pointer1),y
     .if patchedArrayStep
-        jsr ARYINC
+        jsr ArrayHeaderSize
     .else
         ldy #$00
         asl a

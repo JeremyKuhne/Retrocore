@@ -1858,13 +1858,13 @@ to K12, R1 to R10).
 | 1510 | `INIT_DELAY_SIZE` | `KEEP` | switch | P1 P1R |  | vendor | 1 sets CollectorStep after clearing the flags — SDK name; fits the style |
 | 1511 | `INIT_EARLY_BUFFER_SETUP` | `KEEP` | switch | P1 P1R |  | vendor | 1 restores the page-zero buffer's comma and prints a newline — SDK name; fits the style |
 | 1512 | `PROBE_LOAD_ZERO` | `KEEP` | switch | P1 P1R |  | vendor | 1 loads zero before setting the first RAM address — SDK name; fits the style |
-| 1513 | `PROBE_LOAD_INDEX_ZERO` | `KEEP` | switch | P1 P1R |  | vendor | 1 loads Y with zero instead of copying A — SDK name; fits the style |
+| 1513 | `PROBE_LOAD_INDEX_ZERO` | `KEEP` | switch | P1 P1R |  | vendor | 1 loads Y with zero instead of copying A — SDK name; fits the style Converted: `PROBE_ZERO_INDEX`, so that BASIC 1's `CommodoreMemoryProbe` call fits in 120 columns; the root rejects the old name predefined (Basic.md F6). |
 | 1514 | `PROBE_SAVE_START` | `KEEP` | switch | P1 P1R |  | vendor | 1 saves the program start before probing RAM — SDK name; fits the style |
 | 1515 | `PROBE_STOP_AT_SCREEN` | `KEEP` | switch | P1 P1R |  | vendor | 1 stops the probe at the early screen boundary — SDK name; fits the style |
 | 1516 | `PROBE_TEST_BYTE` | `KEEP` | switch | P1 P1R |  | vendor | first byte written when testing RAM ($92 BASIC 1, $55 later) — SDK name; fits the style |
 | 1517 | `START_CARRY_PROGRAM_START` | `KEEP` | switch | P1 P1R |  | vendor | 1 carries the program-start increment into its high byte — SDK name; fits the style |
 | 1518 | `START_BANNER_AFTER_FREE` | `KEEP` | switch | P1 P1R |  | vendor | 1 prints the early sign-on after the free-memory count — SDK name; fits the style |
-| 1519 | `ROMLOC` | `ROM_ORIGIN` | constant | P1 P1R | M6502, HV1, HV1R | vendor | start of the BASIC ROM; PEEK's ROM guard starts here |
+| 1519 | `ROMLOC` | `ROM_ORIGIN` | constant | P1 P1R | M6502, HV1, HV1R | vendor | start of the BASIC ROM; PEEK's ROM guard starts here Converted: cites the PET line's documents, M6502, HV1, HV1R, HV2, HV4 and HV4R, under the lineage rule (Basic.md F4). |
 | 1520 | `BASIC4_OUTPUT_PADDING` | `KEEP` | switch | P1 P1R |  | vendor | 1 builds BASIC 4's checksum byte and patch space before INPRT — SDK name; fits the style |
 | 1521 | `RESET_STACK_POINTER` | `KEEP` | switch | P1 P1R |  | vendor | low byte of STACK_END - $101 - 2*RESET_STACK_EARLY: the reset stack pointer — SDK name; fits the style |
 
@@ -1872,14 +1872,14 @@ to K12, R1 to R10).
 
 | # | Old | New | Kind | Builds | Documents (checked) | D3 | Reason |
 | ---: | --- | --- | --- | --- | --- | --- | --- |
-| 1522 | `ROMLOC` | `ROM_ORIGIN` | constant | P2 | M6502, HV2 | vendor | start of the BASIC 2 ROM ($C000) |
+| 1522 | `ROMLOC` | `ROM_ORIGIN` | constant | P2 | M6502, HV2 | vendor | start of the BASIC 2 ROM ($C000) Converted: cites M6502, HV1, HV1R, HV2, HV4 and HV4R, under the lineage rule (Basic.md F4). |
 | 1523 | `SHORT_FMUL_ZERO` | `SHORT_MULTIPLY_ZERO` | switch | P2 |  | vendor | 1 uses BASIC 1's short multiply-by-zero branch in FMULTT — renamed for FMUL |
 | 1524 | `EARLY_FIN_LIMIT` | `EARLY_INPUT_EXPONENT_LIMIT` | switch | P2 |  | vendor | 1 keeps BASIC 1's exponent-12 test in FIN's exponent digits — renamed for FIN |
 | 1525 | `PRECISE_FOUT_LIMIT` | `PRECISE_OUTPUT_LIMIT` | switch | P2 |  | vendor | 1 uses BASIC 1's 999,999,999.5 output threshold — renamed for FOUT |
 | 1526 | `ZERO_AT_FHALF` | `ZERO_IN_HALF_CONSTANT` | switch | P2 |  | vendor | 1 defines ZERO inside the 0.5 constant (BASIC 2 and 4) — renamed for FHALF |
 | 1527 | `WAIT_EASTER_EGG` | `KEEP` | switch | P2 |  | vendor | 1 builds BASIC 2's hidden WAIT message and omitted-mask handler — SDK name; fits the style |
 | 1528 | `BASIC4_OUTPUT_PADDING` | `KEEP` | switch | P2 |  | vendor | 1 builds BASIC 4's checksum byte and patch space before INPRT — SDK name; fits the style |
-| 1529 | `LASTWR` | `InterpreterEnd` | entry | P2 | M6502, HV2 | vendor | label after the interpreter's last byte; PEEK's ROM guard ends at its page — Commodore.Basic1Patches defines BASIC 1's (other part): same name; BASIC 4's extension follows it |
+| 1529 | `LASTWR` | `InterpreterEnd` | entry | P2 | M6502, HV2 | vendor | label after the interpreter's last byte; PEEK's ROM guard ends at its page — Commodore.Basic1Patches defines BASIC 1's (other part): same name; BASIC 4's extension follows it Converted: cites M6502, HV1, HV1R, HV2, HV4, HV4R, K4S79 and HVK4, under the lineage rule (Basic.md F4). |
 
 ### Basic4
 
@@ -1889,36 +1889,36 @@ to K12, R1 to R10).
 | 1531 | `DISK_STATUS_STRING` | `KEEP` | switch | P4 P4R |  | vendor | 1: BASIC 4 reserves the DS$ descriptor — SDK name; fits the style |
 | 1532 | `LINE_WIDTH_STORAGE` | `KEEP` | switch | P4 P4R |  | vendor | 0: BASIC 4 omits LineWidth and LastCommaColumn — SDK name; fits the style |
 | 1533 | `EXTENDED_DISK_VECTORS` | `KEEP` | switch | P4 P4R |  | vendor | 1: BASIC 4 defines the disk-command jump table — SDK name; fits the style |
-| 1534 | `ROMLOC` | `ROM_ORIGIN` | constant | P4 P4R | M6502, HV4, HV4R; spelling only: CBM4S79 [P4 P4R] | vendor | start of the BASIC 4 ROM ($B000) |
+| 1534 | `ROMLOC` | `ROM_ORIGIN` | constant | P4 P4R | M6502, HV4, HV4R; spelling only: CBM4S79 [P4 P4R] | vendor | start of the BASIC 4 ROM ($B000) Converted: cites M6502, HV1, HV1R, HV2, HV4 and HV4R, under the lineage rule (Basic.md F4). |
 | 1535 | `SHORT_FMUL_ZERO` | `SHORT_MULTIPLY_ZERO` | switch | P4 P4R |  | vendor | 1 uses BASIC 1's short multiply-by-zero branch in FMULTT — renamed for FMUL |
 | 1536 | `EARLY_FIN_LIMIT` | `EARLY_INPUT_EXPONENT_LIMIT` | switch | P4 P4R |  | vendor | 1 keeps BASIC 1's exponent-12 test in FIN's exponent digits — renamed for FIN |
 | 1537 | `PRECISE_FOUT_LIMIT` | `PRECISE_OUTPUT_LIMIT` | switch | P4 P4R |  | vendor | 1 uses BASIC 1's 999,999,999.5 output threshold — renamed for FOUT |
 | 1538 | `ZERO_AT_FHALF` | `ZERO_IN_HALF_CONSTANT` | switch | P4 P4R |  | vendor | 1 defines ZERO inside the 0.5 constant (BASIC 2 and 4) — renamed for FHALF |
 | 1539 | `WAIT_EASTER_EGG` | `KEEP` | switch | P4 P4R |  | vendor | 1 builds BASIC 2's hidden WAIT message and omitted-mask handler — SDK name; fits the style |
 | 1540 | `BASIC4_OUTPUT_PADDING` | `KEEP` | switch | P4 P4R |  | vendor | 1 builds BASIC 4's checksum byte and patch space before INPRT — SDK name; fits the style |
-| 1541 | `LASTWR` | `InterpreterEnd` | entry | P4 P4R | M6502, K4S79 [P4 P4R], HV4, HV4R, HVK4 [P4 P4R] | vendor | label after the interpreter, where BASIC 4's extension begins ($D472); PEEK's guard ends here — same name as BASIC 2's and BASIC 1's |
+| 1541 | `LASTWR` | `InterpreterEnd` | entry | P4 P4R | M6502, K4S79 [P4 P4R], HV4, HV4R, HVK4 [P4 P4R] | vendor | label after the interpreter, where BASIC 4's extension begins ($D472); PEEK's guard ends here — same name as BASIC 2's and BASIC 1's Converted: cites M6502, HV1, HV1R, HV2, HV4, HV4R, K4S79 and HVK4, under the lineage rule (Basic.md F4). |
 
 ### Commodore.Basic1Patches
 
 | # | Old | New | Kind | Builds | Documents (checked) | D3 | Reason |
 | ---: | --- | --- | --- | --- | --- | --- | --- |
 | 1542 | `COMMODORE_BASIC1_EDITOR_PATCHES` | `CommodoreBasic1EditorPatches` | macro | P1 P1R |  | vendor | Emits BASIC 1's patch routines placed after the sign-on code in the editor ROM's spill area — D2: macro stays, renamed to PascalCase |
-| 1543 | `INPSTP` | `StopEmptyInput` | routine | P1 P1R | other names here: PATCH1 (HV1, HV1R) | vendor | Clears carry and jumps to STPEND, ending a blank terminal INPUT without BREAK — Same job as the INPSTP label ChannelInput defines in other builds (part C): same name; HV1 PATCH1 in Also Converted: unchanged here; part F converts BASIC 1's patch (Basic.md I9). |
-| 1544 | `TISTR` | `CheckClockString` | routine | P1 P1R | other names here: PATCH2 (HV1, HV1R) | vendor | Entered by jmp from ISVAR: a reserved-area string variable named T goes to TISTR1, else its rts ends the evaluation — HV1 PATCH2 in Also; the rts returns from the caller's evaluation, not to ISVAR |
-| 1545 | `TISTR2` | `CheckClockString::NotClock` | local | P1 P1R | none found | vendor | rts reached when the string variable is not TI$ — HV1 LE1AA in Also |
-| 1546 | `TINUM` | `RouteNumericVariable` | routine | P1 P1R | other names here: PATCH3 (HV1, HV1R) | vendor | Entered by jmp: ordinary variables go to GOMOVF, reserved ones to TINUM1 (T) or QSTATV (others) — HV1 PATCH3 in Also |
-| 1547 | `TINUM2` | `RouteNumericVariable::Reserved` | local | P1 P1R | none found | vendor | Reserved-area variable (FACLO negative): tests for T |
-| 1548 | `TINUM3` | `RouteNumericVariable::ToClockNumber` | local | P1 P1R | none found | vendor | Only jumps on to TINUM1, the TI handler — To + part C's name for TINUM1; see F-Q11 |
-| 1549 | `GETSTR` | `BeginGetString` | routine | P1 P1R | other names here: PATCH4 (HV1, HV1R) | vendor | Stores the GET delimiter in CHARAC, advances X past the buffer pointer and jumps to GETST1 — HV1 PATCH4 in Also |
-| 1550 | `GETDTL` | `GetDataLine` | routine | P1 P1R | spelling only: HV1, HV1R; other names here: PATCH5 (HV1, HV1R) | vendor | Returns DATLIN in A/Y when INPFLG is negative (READ), else Y = $FF (direct line), for the error's line number — Same job as GETDTL in ChannelInput/AppleSoft (part C): same name; HV1 PATCH5 in Also |
-| 1551 | `GETDT1` | `GetDataLine::NotRead` | local | P1 P1R | none found | vendor | GET case: loads Y = $FF and returns — HV1 LE1C9 in Also |
-| 1552 | `INCTRM` | `AdvanceTerminalPosition` | routine | P1 P1R | other names here: PATCH6 (HV1, HV1R) | vendor | Increments TRMPOS when zero is set (screen channel); a wrap to 0 restarts from the editor's CQPNTR — HV1 PATCH6 in Also |
-| 1553 | `INCTR1` | `AdvanceTerminalPosition::Increment` | local | P1 P1R | none found | vendor | Increments TRMPOS, retried after reloading it from CQPNTR on wrap — HV1 LE1CE in Also |
-| 1554 | `INCTR2` | `AdvanceTerminalPosition::Done` | local | P1 P1R | none found | vendor | Shared rts — HV1 LE1D8 in Also |
-| 1555 | `GETST1` | `ResumeGetString` | routine | P1 P1R | other names here: PATCH7 (HV1, HV1R) | vendor | Stores X in TXTPTR, discards BeginGetString's return address, A = Y and jumps to RESETC — HV1 PATCH7 in Also; reached by jmp from BeginGetString across INCTRM |
-| 1556 | `LASTWR` | `InterpreterEnd` | location | P1 P1R | M6502, HV1, HV1R | vendor | Marks the byte after BASIC 1's last ROM patch; MEMORY_ACCESS compares against its high byte — Must match part D's LASTWR (Basic2/Basic4) and part E's; see F-Q12 |
+| 1543 | `INPSTP` | `StopEmptyInput` | routine | P1 P1R | other names here: PATCH1 (HV1, HV1R) | vendor | Clears carry and jumps to STPEND, ending a blank terminal INPUT without BREAK — Same job as the INPSTP label ChannelInput defines in other builds (part C): same name; HV1 PATCH1 in Also Converted: Also INPSTP (UNKN), PATCH1 (HV1, HV1R) and, under the lineage rule, BUFFU1 (HV4R); BASIC 4's copy adds PATCH1 (Basic.md F4). |
+| 1544 | `TISTR` | `CheckClockString` | routine | P1 P1R | other names here: PATCH2 (HV1, HV1R) | vendor | Entered by jmp from ISVAR: a reserved-area string variable named T goes to TISTR1, else its rts ends the evaluation — HV1 PATCH2 in Also; the rts returns from the caller's evaluation, not to ISVAR Converted: Also TISTR (UNKN), PATCH2 (HV1, HV1R) (Basic.md F4). |
+| 1545 | `TISTR2` | `CheckClockString::NotClock` | local | P1 P1R | none found | vendor | rts reached when the string variable is not TI$ — HV1 LE1AA in Also Converted: Also TISTR2 (UNKN); HV1's address-generated name is dropped (X7). |
+| 1546 | `TINUM` | `RouteNumericVariable` | routine | P1 P1R | other names here: PATCH3 (HV1, HV1R) | vendor | Entered by jmp: ordinary variables go to GOMOVF, reserved ones to TINUM1 (T) or QSTATV (others) — HV1 PATCH3 in Also Converted: Also TINUM (UNKN), PATCH3 (HV1, HV1R) (Basic.md F4). |
+| 1547 | `TINUM2` | `RouteNumericVariable::Reserved` | local | P1 P1R | none found | vendor | Reserved-area variable (FACLO negative): tests for T Converted: Also TINUM2 (UNKN). |
+| 1548 | `TINUM3` | `RouteNumericVariable::ToClockNumber` | local | P1 P1R | none found | vendor | Only jumps on to TINUM1, the TI handler — To + part C's name for TINUM1; see F-Q11 Converted: Also TINUM3 (UNKN). |
+| 1549 | `GETSTR` | `BeginGetString` | routine | P1 P1R | other names here: PATCH4 (HV1, HV1R) | vendor | Stores the GET delimiter in CHARAC, advances X past the buffer pointer and jumps to GETST1 — HV1 PATCH4 in Also Converted: Also GETSTR (UNKN), PATCH4 (HV1, HV1R) (Basic.md F4). |
+| 1550 | `GETDTL` | `GetDataLine` | routine | P1 P1R | spelling only: HV1, HV1R; other names here: PATCH5 (HV1, HV1R) | vendor | Returns DATLIN in A/Y when INPFLG is negative (READ), else Y = $FF (direct line), for the error's line number — Same job as GETDTL in ChannelInput/AppleSoft (part C): same name; HV1 PATCH5 in Also Converted: Also GETDTL (UNKN), PATCH5 (HV1, HV1R) (Basic.md F4). |
+| 1551 | `GETDT1` | `GetDataLine::NotRead` | local | P1 P1R | none found | vendor | GET case: loads Y = $FF and returns — HV1 LE1C9 in Also Converted: Also GETDT1 (UNKN); HV1's address-generated name is dropped (X7). |
+| 1552 | `INCTRM` | `AdvanceTerminalPosition` | routine | P1 P1R | other names here: PATCH6 (HV1, HV1R) | vendor | Increments TRMPOS when zero is set (screen channel); a wrap to 0 restarts from the editor's CQPNTR — HV1 PATCH6 in Also Converted: Also INCTRM (UNKN), PATCH6 (HV1, HV1R) (Basic.md F4). |
+| 1553 | `INCTR1` | `AdvanceTerminalPosition::Increment` | local | P1 P1R | none found | vendor | Increments TRMPOS, retried after reloading it from CQPNTR on wrap — HV1 LE1CE in Also Converted: Also INCTR1 (UNKN); HV1's address-generated name is dropped (X7). |
+| 1554 | `INCTR2` | `AdvanceTerminalPosition::Done` | local | P1 P1R | none found | vendor | Shared rts — HV1 LE1D8 in Also Converted: Also INCTR2 (UNKN); HV1's address-generated name is dropped (X7). |
+| 1555 | `GETST1` | `ResumeGetString` | routine | P1 P1R | other names here: PATCH7 (HV1, HV1R) | vendor | Stores X in TXTPTR, discards BeginGetString's return address, A = Y and jumps to RESETC — HV1 PATCH7 in Also; reached by jmp from BeginGetString across INCTRM Converted: Also GETST1 (UNKN), PATCH7 (HV1, HV1R) (Basic.md F4). |
+| 1556 | `LASTWR` | `InterpreterEnd` | location | P1 P1R | M6502, HV1, HV1R | vendor | Marks the byte after BASIC 1's last ROM patch; MEMORY_ACCESS compares against its high byte — Must match part D's LASTWR (Basic2/Basic4) and part E's; see F-Q12 Converted: cites M6502, HV1, HV1R, HV2, HV4, HV4R, K4S79 and HVK4, under the lineage rule (Basic.md F4). |
 | 1557 | `COMMODORE_BASIC1_ARRAY_PATCH` | `CommodoreBasic1ArrayPatch` | macro | P1 P1R |  | vendor | Emits the six-byte array-header step at $E7F3 in the editor ROM |
-| 1558 | `ARYINC` | `ArrayHeaderSize` | routine | P1 P1R | none found | vendor | Returns A = dimensions * 2 + 5 (plus the shift's carry) and Y = 0, for the collector's array walk — Called from MsBasic.StringGarbageCollection under patchedArrayStep |
+| 1558 | `ARYINC` | `ArrayHeaderSize` | routine | P1 P1R | none found | vendor | Returns A = dimensions * 2 + 5 (plus the shift's carry) and Y = 0, for the collector's array walk — Called from MsBasic.StringGarbageCollection under patchedArrayStep Converted: Also ARYINC (UNKN). |
 
 ### Commodore.Basic4DiskCommands
 
@@ -1987,7 +1987,7 @@ to K12, R1 to R10).
 | 1619 | `DBACKU` | `Statements::Backup::CloseFiles` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Closes the unit's files and selects the D template — Unreferenced, kept for its K4S79 name |
 | 1620 | `TRANS` | `Disk::SendCommand` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Builds the command from the template (A = length, Y = offset) then falls into OpenCommandChannel |
 | 1621 | `TRANS1` | `Disk::OpenCommandChannel` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Opens the built command on secondary 15 ($6F) through LISTN and OPENIB — PositionRecord jumps here, so its own proc |
-| 1622 | `DCOPY` | `Statements::Copy` | routine | P4 P4R | spelling only: CBM4S79 [P4 P4R], HV4, HV4R | vendor | COPY: a whole-drive copy with both drives alone, else two names checked; sends the C template — Undocumented spelling DCOPY (the overlay's, to avoid m6502's COPY); see F-Q3 |
+| 1622 | `DCOPY` | `Statements::Copy` | routine | P4 P4R | spelling only: CBM4S79 [P4 P4R], HV4, HV4R | vendor | COPY: a whole-drive copy with both drives alone, else two names checked; sends the C template — Undocumented spelling DCOPY (the overlay's, to avoid m6502's COPY); see F-Q3 Converted: Also DCOPY (UNKN) (F-Q3). |
 | 1623 | `COPY2` | `Statements::Copy::CheckFiles` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Checks a file copy's parameters |
 | 1624 | `COPCON` | `Statements::Copy::LoadFlags` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Reloads PRSCHK — Unreferenced, kept for its K4S79 name |
 | 1625 | `COPY3` | `Statements::Copy::Send` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Sends the copy template — The whole-drive and file forms use one template; empty names drop their colons |
@@ -2007,7 +2007,7 @@ to K12, R1 to R10).
 | 1639 | `DLOAD2` | `Statements::DLoad::Load` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Builds the name and loads |
 | 1640 | `RENAME` | `Statements::Rename` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R]; spelling only: CBM4S79 [P4 P4R], HV4, HV4R | vendor | RENAME: needs two names, accepts drive and unit; sends R — K4S79 RENAME |
 | 1641 | `DREN` | `Statements::Rename::Send` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Sends the rename template — Unreferenced, kept for its K4S79 name |
-| 1642 | `DSCRTC` | `Statements::Scratch` | routine | P4 P4R | none found | vendor | SCRATCH: needs a name; confirms in direct mode, sends S and prints the drive's reply in direct mode — Undocumented spelling DSCRTC (the overlay's); see F-Q3 |
+| 1642 | `DSCRTC` | `Statements::Scratch` | routine | P4 P4R | none found | vendor | SCRATCH: needs a name; confirms in direct mode, sends S and prints the drive's reply in direct mode — Undocumented spelling DSCRTC (the overlay's); see F-Q3 Converted: Also DSCRTC (UNKN) (F-Q3). |
 | 1643 | `DSCRAT` | `Statements::Scratch::Confirm` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Asks; returns when declined — Unreferenced, kept for its K4S79 name |
 | 1644 | `NUMSCR` | `Statements::Scratch::ShowResult` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | In direct mode reads DS$ and prints it between carriage returns — Unreferenced, kept for its K4S79 name |
 | 1645 | `NUMLP` | `Statements::Scratch::NextCharacter` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Prints the next DS$ character |
@@ -2037,7 +2037,7 @@ to K12, R1 to R10).
 | 1669 | `RXDD` | `Disk::BuildCommandAt::DriveDigit` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Converts the drive number to ASCII |
 | 1670 | `RPLCE` | `Disk::BuildCommandAt::StoreByte` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Stores A in TBUFF and continues |
 | 1671 | `TRANR` | `Disk::SetCommandName` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Sets FNLEN = X and FNADR = TBUFF |
-| 1672 | `RWRT` | `Disk::ChooseFileType` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Returns L for a relative file, else S after storing W in LRECL |
+| 1672 | `RWRT` | `Disk::ChooseFileType` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Returns L for a relative file, else S after storing W in LRECL Converted: the reason is the other way round: with no record length it leaves S in RecordLength and returns W (Basic.md F2). |
 | 1673 | `RWRT1` | `Disk::ChooseFileType::Sequential` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Sequential write: S, with W for the record field |
 | 1674 | `RWRTS` | `Disk::ChooseFileType::Done` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | rts |
 
@@ -2080,7 +2080,7 @@ to K12, R1 to R10).
 | 1707 | `UNIT2` | `Disk::ParseParameters::SecondUnit` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Parses U in the second part |
 | 1708 | `NAME2` | `Disk::ParseParameters::SecondName` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Evaluates the second name into FNADR2/FNLEN2 |
 | 1709 | `DELIM2` | `Disk::ParseParameters::SecondDelimiter` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | After a second-part parameter: end, comma, ON or U |
-| 1710 | `SNER3` | `Disk::RejectParameter` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | jmp SNERR, shared by the parser, ParseOnUnit and EvaluateName — Scope-level label: three routines branch here |
+| 1710 | `SNER3` | `Disk::RejectParameter` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | jmp SNERR, shared by the parser, ParseOnUnit and EvaluateName — Scope-level label: three routines branch here Converted: the entry `Disk::ParseParameters::RejectParameter` (X2), since the parser's Done follows it (Basic.md F2). |
 | 1711 | `DONE` | `Disk::ParseParameters::Done` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Returns A = PRSCHK |
 | 1712 | `QTYERR` | `Disk::QuantityError` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Gives ILLEGAL QUANTITY (ERRFC) — Called from the parser and Record |
 | 1713 | `ON` | `Disk::ParseOnUnit` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Requires U after the ON token and falls into ParseUnit |
@@ -2093,7 +2093,7 @@ to K12, R1 to R10).
 | 1720 | `NXX5` | `Disk::EvaluateName::LoadAddress` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | X/Y = the name's address from INDEX1 |
 | 1721 | `GETVAL` | `Disk::ReadNextValue` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Advances with CHRGET and falls into ReadValue |
 | 1722 | `GTVL2` | `Disk::ReadValue` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Evaluates a byte parameter into X: a number, or an expression in parentheses; SYNTAX ERROR at the end of the statement — Record calls it |
-| 1723 | `GTVLCN` | `Disk::ReadValue::Present` | local | P4 P4R | none found | vendor | A non-digit must be (expression) — Undocumented (GTVLCN is the overlay's); not dropped since referenced |
+| 1723 | `GTVLCN` | `Disk::ReadValue::Present` | local | P4 P4R | none found | vendor | A non-digit must be (expression) — Undocumented (GTVLCN is the overlay's); not dropped since referenced Converted: Also GTVLCN (UNKN) (F-Q3). |
 | 1724 | `NUMERC` | `Disk::ReadValue::Number` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | A digit is read by GETBYT |
 
 ### Commodore.Basic4Extension
@@ -2141,7 +2141,7 @@ to K12, R1 to R10).
 | 1758 | `DSPLYM` | `Monitor::DisplayMemory` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | M: reads two addresses, prints eight-byte rows until past the end, STOP or wrap |
 | 1759 | `DSP1` | `Monitor::DisplayMemory::NextRow` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Checks STOP, wrap and the end address, prints a row |
 | 1760 | `BEQS1` | `Monitor::ToPrompt` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Only jumps on to Prompt; several commands branch here — Scope-level label |
-| 1761 | `ERRS1` | `Monitor::ToReportError` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Only jumps on to ReportError; several commands branch here — Scope-level label |
+| 1761 | `ERRS1` | `Monitor::ToReportError` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Only jumps on to ReportError; several commands branch here — Scope-level label Converted: `Monitor::ToShowError`, named for its target, `Monitor::ShowError` (Basic.md F2). |
 | 1762 | `ALTR` | `Monitor::AlterRegisters` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | ;: optionally sets PC and IRQ vector, then alters the five register bytes — Jumps into AlterBytes |
 | 1763 | `AL2` | `Monitor::AlterRegisters::ReadVector` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Reads an optional IRQ vector |
 | 1764 | `AL3` | `Monitor::AlterRegisters::AlterSaved` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Selects the register bytes and branches to AlterBytes |
@@ -2149,11 +2149,11 @@ to K12, R1 to R10).
 | 1766 | `A4` | `Monitor::AlterBytes` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Stores TMPC and alters bytes while present — AlterRegisters branches here, so its own proc |
 | 1767 | `A5` | `Monitor::AlterBytes::NextByte` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Alters the next byte |
 | 1768 | `A9` | `Monitor::AlterBytes::Done` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Branches to ToPrompt — Unreferenced, kept for its K4S79 name |
-| 1769 | `MGO` | `Monitor::Go` | routine | P4 P4R | none found | vendor | G: optionally sets PC, restores SP, CINV and registers, resumes by RTI — Undocumented spelling MGO (the overlay's); see F-Q3 |
+| 1769 | `MGO` | `Monitor::Go` | routine | P4 P4R | none found | vendor | G: optionally sets PC, restores SP, CINV and registers, resumes by RTI — Undocumented spelling MGO (the overlay's); see F-Q3 Converted: Also MGO (UNKN) (F-Q3). |
 | 1770 | `G1` | `Monitor::Go::Resume` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Restores the saved state and returns into the program |
 | 1771 | `EXIT` | `Monitor::Exit` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | X: restores the saved stack pointer and jumps to READY |
-| 1772 | `ERRL` | `Monitor::LoadOrSave::Fail` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Only jumps on to ReportError — Not ToReportError, which would shadow the scope-level label |
-| 1773 | `LD` | `Monitor::LoadOrSave` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | L and S: parses "name",device,start,end (device not 0 or 3), loads by LD15 or saves by SV5 |
+| 1772 | `ERRL` | `Monitor::LoadOrSave::Fail` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Only jumps on to ReportError — Not ToReportError, which would shadow the scope-level label Converted: the scope-level `Monitor::LoadOrSaveFail`: its code comes before LD's, which the command tables need as LoadOrSave's start (Basic.md F2). |
+| 1773 | `LD` | `Monitor::LoadOrSave` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | L and S: parses "name",device,start,end (device not 0 or 3), loads by LD15 or saves by SV5 Converted: the name takes at most 15 characters: a 16th fails. |
 | 1774 | `L1` | `Monitor::LoadOrSave::SkipSpaces` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Skips spaces before the name |
 | 1775 | `L2` | `Monitor::LoadOrSave::ToFail` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Branch relay to Fail |
 | 1776 | `L3` | `Monitor::LoadOrSave::NextNameCharacter` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Stores a name character in SAVNAM, at most 16 |
@@ -2195,15 +2195,15 @@ to K12, R1 to R10).
 | ---: | --- | --- | --- | --- | --- | --- | --- |
 | 1808 | `COMMODORE_BASIC4_OPERAND_SPLIT` | `CommodoreBasic4OperandSplit` | macro | P4 P4R |  | vendor | Emits the $B000 chip's checksum byte, the ISVAR trampoline, the revised ROM's patches and patch space to $BF8C |
 | 1809 | `revised` | `KEEP` | parameter of COMMODORE_BASIC4_OPERAND_SPLIT | P4 P4R |  | vendor | Selects the revised chip's checksum byte and patches — KEEP |
-| 1810 | `ISVAR` | `EvaluateVariable` | entry | P4 P4R | M6502; spelling only: CBM4S79 [P4 P4R], HV4, HV4R | vendor | Jumps to ISVAR1 past the patch area — Same job as ISVAR in VariableEvaluation (part C): same name; see F-Q11 |
-| 1811 | `ADJDS` | `TestStatusString` | routine | P4R | other names here: PATCHG (HV4R) | vendor | Revised ROM: for FindStringLink, a string whose high byte matches a live DS$ goes to CompareStatusLow, else AddLength — HV4R PATCHG in Also; fixes the original's match on a released DS$ address (documented, not changed) |
-| 1812 | `ADJDS2` | `TestStatusString::NoStatus` | local | P4R | other names here: PATH0 (HV4R) | vendor | DS$ empty: discards the saved byte — HV4R PATH0 in Also |
-| 1813 | `ADJDS3` | `TestStatusString::ToAddLength` | local | P4R | other names here: PATH1 (HV4R) | vendor | Only jumps on to FindStringLink::AddLength — HV4R PATH1 in Also |
-| 1814 | `GONEGT` | `FetchStatementCharacter` | routine | P4R | other names here: PATCHH (HV4R) | vendor | Revised ROM: gets the next character and gives SYNTAX ERROR for the PI token as a statement — HV4R PATCHH in Also |
-| 1815 | `GONEG1` | `FetchStatementCharacter::ToGetCurrentCharacter` | local | P4R | none found | vendor | Only jumps on to CHRGOT |
-| 1816 | `INPNUL` | `HandleBlankInput` | routine | P4R | other names here: PATCHI (HV4R) | vendor | Revised ROM: a blank INPUT line stops at the terminal, retries from a file, or continues at end of file — HV4R PATCHI in Also |
-| 1817 | `INPNU1` | `HandleBlankInput::FromFile` | local | P4R | none found | vendor | Tests the end-of-file bit; otherwise jumps to GETAGN |
-| 1818 | `INPNU2` | `HandleBlankInput::ToInputContinue` | local | P4R | none found | vendor | Only jumps on to INPCON — Name follows part B2's INPCON |
+| 1810 | `ISVAR` | `EvaluateVariable` | entry | P4 P4R | M6502; spelling only: CBM4S79 [P4 P4R], HV4, HV4R | vendor | Jumps to ISVAR1 past the patch area — Same job as ISVAR in VariableEvaluation (part C): same name; see F-Q11 Converted: cites ISVAR (M6502, HV1, HV1R, HV2), as the other builds' `EvaluateVariable` does, under the lineage rule; the shared evaluator branches to `EvaluateVariable` (Basic.md F5). |
+| 1811 | `ADJDS` | `TestStatusString` | routine | P4R | other names here: PATCHG (HV4R) | vendor | Revised ROM: for FindStringLink, a string whose high byte matches a live DS$ goes to CompareStatusLow, else AddLength — HV4R PATCHG in Also; fixes the original's match on a released DS$ address (documented, not changed) Converted: Also ADJDS (UNKN), PATCHG (HV4R). |
+| 1812 | `ADJDS2` | `TestStatusString::NoStatus` | local | P4R | other names here: PATH0 (HV4R) | vendor | DS$ empty: discards the saved byte — HV4R PATH0 in Also Converted: Also ADJDS2 (UNKN), PATH0 (HV4R). |
+| 1813 | `ADJDS3` | `TestStatusString::ToAddLength` | local | P4R | other names here: PATH1 (HV4R) | vendor | Only jumps on to FindStringLink::AddLength — HV4R PATH1 in Also Converted: Also ADJDS3 (UNKN), PATH1 (HV4R). |
+| 1814 | `GONEGT` | `FetchStatementCharacter` | routine | P4R | other names here: PATCHH (HV4R) | vendor | Revised ROM: gets the next character and gives SYNTAX ERROR for the PI token as a statement — HV4R PATCHH in Also Converted: Also GONEGT (UNKN), PATCHH (HV4R). |
+| 1815 | `GONEG1` | `FetchStatementCharacter::ToGetCurrentCharacter` | local | P4R | none found | vendor | Only jumps on to CHRGOT Converted: Also GONEG1 (UNKN). |
+| 1816 | `INPNUL` | `HandleBlankInput` | routine | P4R | other names here: PATCHI (HV4R) | vendor | Revised ROM: a blank INPUT line stops at the terminal, retries from a file, or continues at end of file — HV4R PATCHI in Also Converted: Also INPNUL (UNKN), PATCHI (HV4R). |
+| 1817 | `INPNU1` | `HandleBlankInput::FromFile` | local | P4R | none found | vendor | Tests the end-of-file bit; otherwise jumps to GETAGN Converted: Also INPNU1 (UNKN). |
+| 1818 | `INPNU2` | `HandleBlankInput::ToInputContinue` | local | P4R | none found | vendor | Only jumps on to INPCON — Name follows part B2's INPCON Converted: Also INPNU2 (UNKN); INPCON is `AssignInputList`. |
 
 ### Commodore.Basic4Record
 
@@ -2230,7 +2230,7 @@ to K12, R1 to R10).
 | ---: | --- | --- | --- | --- | --- | --- | --- |
 | 1833 | `COMMODORE_BASIC4_ROM_END` | `CommodoreBasic4RomEnd` | macro | P4 P4R |  | vendor | Emits the $D000 chip's checksum byte, StoreStatusLink, the sign-on and patch fill |
 | 1834 | `CKSUMD` | `ExtensionChecksum` | data | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | The $D000 chip's checksum-adjustment byte — Unreferenced, kept for its K4S79 name |
-| 1835 | `DSLINK` | `Disk::StoreStatusLink` | routine | P4 P4R | other names here: PATCH5 (HVK4) | vendor | Stores A in ST and in DS$'s buffer at Y, then decrements Y — HVK4 PATCH5 in Also; scope Disk continued at the ROM end |
+| 1835 | `DSLINK` | `Disk::StoreStatusLink` | routine | P4 P4R | other names here: PATCH5 (HVK4) | vendor | Stores A in ST and in DS$'s buffer at Y, then decrements Y — HVK4 PATCH5 in Also; scope Disk continued at the ROM end Converted: Also DSLINK (UNKN), PATCH5 (HVK4). |
 | 1836 | `SIGNON` | `Basic4SignOnMessage` | message | P4 P4R | HV4, HV4R, HVK4 [P4 P4R] | vendor | The BASIC 4 banner and two carriage returns |
 
 ### Commodore.Basic4SystemEquates
@@ -2238,7 +2238,7 @@ to K12, R1 to R10).
 | # | Old | New | Kind | Builds | Documents (checked) | D3 | Reason |
 | ---: | --- | --- | --- | --- | --- | --- | --- |
 | 1837 | `CINV` | `IrqVector` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | two-byte RAM IRQ vector; the monitor saves and restores it |
-| 1838 | `SATUS` | `IoStatus` | alias | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | the kernal's I/O status ST; the disk commands clear and test it — same byte as Commodore.Equates CQSTAT ($96 in BASIC 4): one definition with Also: CQSTAT, SATUS (see D-Q6) |
+| 1838 | `SATUS` | `IoStatus` | alias | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | the kernal's I/O status ST; the disk commands clear and test it — same byte as Commodore.Equates CQSTAT ($96 in BASIC 4): one definition with Also: CQSTAT, SATUS (see D-Q6) Converted: SATUS (K4S79, HVK4) joins `IoStatus`'s Also in Commodore.Equates.asm, on both branches (Basic.md F3). |
 | 1839 | `VERCK` | `LoadVerifyFlag` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | 0 for LOAD, 1 for VERIFY; the monitor and DLOAD clear it |
 | 1840 | `LDTND` | `OpenFileCount` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | number of entries in the kernal's file tables; DCLOSE scans them |
 | 1841 | `DFLTO` | `DefaultOutputDevice` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | the kernal's current output device; CATALOG saves it |
@@ -2257,7 +2257,7 @@ to K12, R1 to R10).
 | 1854 | `TMP0` | `MonitorAddress` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R]; other names here: STAL (HVK4) | vendor | two-byte address the monitor is working on — HVK4 calls it STAL |
 | 1855 | `TMP2` | `MonitorEndAddress` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | two-byte second address of a monitor command (range end) |
 | 1856 | `FNADR2` | `SecondFilenamePointer` | alias | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | second filename pointer for two-name disk commands; shares MonitorEndAddress |
-| 1857 | `BAD` | `MonitorHexByte` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | the monitor's hex-byte assembly scratch (RDOB) at $0100 — same address as NumberBuffer: an alias in BASIC 4 |
+| 1857 | `BAD` | `MonitorHexByte` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | the monitor's hex-byte assembly scratch (RDOB) at $0100 — same address as NumberBuffer: an alias in BASIC 4 Converted: `MonitorHexByte = NumberBuffer`, asserted $0100 (Basic.md F3). |
 | 1858 | `PCH` | `ProgramCounterHigh` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | the monitor's saved program counter, high byte (stored first) — matches IIeEquates' name for the Apple Monitor's same job; note high byte at the lower address |
 | 1859 | `PCL` | `ProgramCounter` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | the monitor's saved program counter, low byte — matches IIeEquates |
 | 1860 | `FLGS` | `SavedStatus` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | the monitor's saved processor status — matches IIeEquates |
@@ -2267,19 +2267,19 @@ to K12, R1 to R10).
 | 1864 | `SP` | `SavedStackPointer` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | the monitor's saved stack pointer — matches IIeEquates |
 | 1865 | `INVH` | `SavedIrqVectorHigh` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | high byte of IrqVector as BRK found it |
 | 1866 | `INVL` | `SavedIrqVector` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | low byte of IrqVector as BRK found it |
-| 1867 | `SAVNAM` | `MonitorFilename` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R]; other names here: ZZZ1 (HVK4) | vendor | buffer for the monitor's LOAD/SAVE filename — HVK4 calls it ZZZ1 |
+| 1867 | `SAVNAM` | `MonitorFilename` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R]; other names here: ZZZ1 (HVK4) | vendor | buffer for the monitor's LOAD/SAVE filename — HVK4 calls it ZZZ1 Converted: at most 15 characters: a 16th fails the command. |
 | 1868 | `LAT` | `LogicalFileTable` | table | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | the kernal's table of open logical file numbers |
 | 1869 | `FAT` | `DeviceTable` | table | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | the kernal's table of the open files' devices |
 | 1870 | `SAT` | `SecondaryAddressTable` | table | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | the kernal's table of the open files' secondary addresses |
 | 1871 | `FNLEN2` | `SecondFilenameLength` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R]; other names here: TAPE2 (HVK4) | vendor | length of a disk command's second filename — HVK4 calls it TAPE2 |
-| 1872 | `RECPOS` | `RecordPosition` | alias | P4 P4R | other names here: TAPE2 (HVK4) | vendor | RECORD's byte position; shares SecondFilenameLength — no document; HVK4 calls the address TAPE2 |
+| 1872 | `RECPOS` | `RecordPosition` | alias | P4 P4R | other names here: TAPE2 (HVK4) | vendor | RECORD's byte position; shares SecondFilenameLength — no document; HVK4 calls the address TAPE2 Converted: Also RECPOS (UNKN); TAPE2 (HVK4) is on SecondFilenameLength. |
 | 1873 | `DRIVE1` | `FirstDrive` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | the disk command's first drive number |
 | 1874 | `DRIVE2` | `SecondDrive` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | the disk command's second drive number |
 | 1875 | `DIDCHK` | `DiskIdSeen` | alias | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | set when the parser has read a disk ID; shares RecordLength |
 | 1876 | `LRECL` | `RecordLength` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | a relative file's record length (DOPEN L) |
-| 1877 | `PRSCHK` | `ParsedParameters` | location | P4 P4R | none found | vendor | bits for the disk parameters the parser has read — no document gives this name |
+| 1877 | `PRSCHK` | `ParsedParameters` | location | P4 P4R | none found | vendor | bits for the disk parameters the parser has read — no document gives this name Converted: Also PRSCHK (UNKN). |
 | 1878 | `DISKID` | `DiskId` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | two-byte disk ID for HEADER |
-| 1879 | `KCOUNT` | `TemplateCount` | location | P4 P4R | none found | vendor | bytes left in the disk-command template SENDP expands — no document gives this name |
+| 1879 | `KCOUNT` | `TemplateCount` | location | P4 P4R | none found | vendor | bytes left in the disk-command template SENDP expands — no document gives this name Converted: Also KCOUNT (UNKN). |
 | 1880 | `TBUF2` | `FirstFilename` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | storage for the disk command's first filename |
 | 1881 | `TBUFF` | `DiskCommandBuffer` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | where SENDP builds the disk command sent to the drive |
 | 1882 | `USRCMD` | `MonitorUserCommandVector` | location | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | the monitor jumps through it for an unknown command |
@@ -2292,7 +2292,7 @@ to K12, R1 to R10).
 | 1889 | `TALK` | `KernalTalk` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | addresses a device on the IEEE bus as talker |
 | 1890 | `LISTN` | `KernalListen` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | addresses a device on the IEEE bus as listener |
 | 1891 | `MSG` | `KernalPrintMessage` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | prints the kernal message at offset Y |
-| 1892 | `SECND` | `KernalSendSecondary` | routine | P4 P4R | spelling only: K4S79 [P4 P4R], HVK4 [P4 P4R]; other names here: TKSA (HVK4) | vendor | sends a secondary address after Talk |
+| 1892 | `SECND` | `KernalSendSecondary` | routine | P4 P4R | spelling only: K4S79 [P4 P4R], HVK4 [P4 P4R]; other names here: TKSA (HVK4) | vendor | sends a secondary address after Talk Converted: Also SECND (UNKN), TKSA (HVK4). |
 | 1893 | `UNTLK` | `KernalUntalk` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | sends UNTALK on the bus |
 | 1894 | `UNLSN` | `KernalUnlisten` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | sends UNLISTEN on the bus |
 | 1895 | `ACPTR` | `KernalReceiveByte` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | receives a byte from the bus talker |
@@ -2319,8 +2319,8 @@ to K12, R1 to R10).
 | 1916 | `CHKOUT` | `KernalSetOutputChannel` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R]; other names here: CKOUT (HVK4) | vendor | selects a logical file for output |
 | 1917 | `TWAIT` | `KernalWaitForTape` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | waits for the tape operation to finish |
 | 1918 | `SPERR` | `STATUS_LOAD_ERROR` | constant | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R]; other names here: CHANL (HVK4) | vendor | IoStatus bit ($10) for a load or verify error — HVK4 calls it CHANL |
-| 1919 | `CR` | `CHARACTER_RETURN` | constant | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | carriage return ($0D), the monitor's line end — other PET parts may name CR; one definition (see D-Q6) |
-| 1920 | `ONTK` | `TOKEN_ON` | token | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | BASIC's ON token; the disk parser reads ON as the unit keyword — should be the token table's TOKEN_ON (one definition) |
+| 1919 | `CR` | `CHARACTER_RETURN` | constant | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | carriage return ($0D), the monitor's line end — other PET parts may name CR; one definition (see D-Q6) Converted: CR (K4S79, HVK4) joins `CARRIAGE_RETURN` in Commodore.ChannelPrint.asm (Basic.md F3). |
+| 1920 | `ONTK` | `TOKEN_ON` | token | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | BASIC's ON token; the disk parser reads ON as the unit keyword — should be the token table's TOKEN_ON (one definition) Converted: `TOKEN_ON`, defined with the token table in Commodore.DispatchTables.asm, Also ONTK (K4S79, HVK4) (Basic.md F3). |
 | 1921 | `NCMDS` | `MONITOR_COMMAND_COUNT` | constant | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | number of built-in monitor commands (8) — HVK4 calls it LBERR |
 
 ### Commodore.ChannelInput
@@ -2804,19 +2804,19 @@ to K12, R1 to R10).
 | # | Old | New | Kind | Builds | Documents (checked) | D3 | Reason |
 | ---: | --- | --- | --- | --- | --- | --- | --- |
 | 2348 | `STRING_STATUS_CHECK` | `StringStatusCheck` | macro | P4 P4R |  | vendor | Emits AssignString's test that forces a copy when the source is DS$'s buffer |
-| 2349 | `NOTDS1` | `StoreString::RestoreOffset` | local | P4 P4R | other names here: DSKX1 (HV4, HV4R) | vendor | Not DS$: pulls the high byte and restores Y = 2 — HV4 DSKX1 in Also; qualifier follows part B2's GETSPT, see F-Q10 Converted: no Also and no alias; the overlay comparisons check the current name's address (BasicNames.OverlayOnlyLabels), since a Commodore alias must cite one of its build's documents (Basic.md E5). |
-| 2350 | `NOTDS` | `StoreString::NotStatus` | local | P4 P4R | other names here: DSKX2 (HV4, HV4R) | vendor | Ordinary assignment continues — HV4 DSKX2 in Also Converted: no Also and no alias; the overlay comparisons check the current name's address (BasicNames.OverlayOnlyLabels), since a Commodore alias must cite one of its build's documents (Basic.md E5). |
+| 2349 | `NOTDS1` | `StoreString::RestoreOffset` | local | P4 P4R | other names here: DSKX1 (HV4, HV4R) | vendor | Not DS$: pulls the high byte and restores Y = 2 — HV4 DSKX1 in Also; qualifier follows part B2's GETSPT, see F-Q10 Converted (part F): Also NOTDS1 (UNKN), DSKX1 (HV4, HV4R), now that the label is in Commodore's own file; `BasicNames.OverlayOnlyLabels` drops it (Basic.md F4). |
+| 2350 | `NOTDS` | `StoreString::NotStatus` | local | P4 P4R | other names here: DSKX2 (HV4, HV4R) | vendor | Ordinary assignment continues — HV4 DSKX2 in Also Converted (part F): Also NOTDS (UNKN), DSKX2 (HV4, HV4R), now that the label is in Commodore's own file; `BasicNames.OverlayOnlyLabels` drops it (Basic.md F4). |
 | 2351 | `LINKED_STRING_STORE` | `LinkedStringStore` | macro | P4 P4R |  | vendor | Emits BASIC 4's descriptor store that relinks the new string and releases the old |
 | 2352 | `COPYZC` | `StoreDescriptor` | entry | P4 P4R | M6502 | vendor | Frees a temporary, links its string to FORPNT, marks the destination's old string as garbage, copies the descriptor — Same entry as COPYZC in MsBasic.Assignment (part B2): same name Converted: BASIC 4's copy is `StoreLinkedDescriptor` (Also: COPYZC (M6502)), with `StoreDescriptor` an equate of it, until part C converts its file (Basic.md E6). |
-| 2353 | `COPY00` | `StoreString::ReleaseOld` | local | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | vendor | Marks the destination's previous string as garbage (length, $FF) |
-| 2354 | `COPY01` | `StoreString::CopyDescriptor` | local | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | vendor | Copies the three descriptor bytes |
-| 2355 | `COPY02` | `StoreString::CopyByte` | local | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | vendor | Copies one byte |
+| 2353 | `COPY00` | `StoreString::ReleaseOld` | local | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | vendor | Marks the destination's previous string as garbage (length, $FF) Converted: `StoreLinkedDescriptor::ReleaseOld`, a local of the routine it is in (Basic.md F8). |
+| 2354 | `COPY01` | `StoreString::CopyDescriptor` | local | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | vendor | Copies the three descriptor bytes Converted: `StoreLinkedDescriptor::CopyDescriptor` (Basic.md F8). |
+| 2355 | `COPY02` | `StoreString::CopyByte` | local | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | vendor | Copies one byte Converted: `StoreLinkedDescriptor::CopyByte` (Basic.md F8). |
 | 2356 | `STRING_LINK_ADJUST` | `StringLinkAdjust` | macro | P4 P4R |  | vendor | Emits FindStringLink |
 | 2357 | `patchedStatus` | `KEEP` | parameter of STRING_LINK_ADJUST | P4 P4R |  | vendor | 1 jumps to TestStatusString, 0 compares DS$'s high byte inline — KEEP |
 | 2358 | `STRADJ` | `FindStringLink` | routine | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | vendor | For a nonempty string in string space that is not DS$: INDEX = its link, X = length, carry set; else carry clear — Called from AssignString and the concatenation's release |
 | 2359 | `ADJ` | `FindStringLink::CheckStatus` | local | P4 P4R | HV4, HV4R; spelling only: CBM4S79 [P4 P4R] | vendor | Compares with DS$'s address (jump to TestStatusString in the revised ROM) |
-| 2360 | `ADJDS1` | `FindStringLink::CompareStatusLow` | entry | P4 P4R | none found | vendor | Compares the low byte with DS$'s — TestStatusString jumps here; see F-Q9. HV4R LBA70 in Also |
-| 2361 | `ADJ02` | `FindStringLink::AddLength` | entry | P4 P4R | none found | vendor | INDEX = string address + length — TestStatusString jumps here; HV4 LBA74 in Also |
+| 2360 | `ADJDS1` | `FindStringLink::CompareStatusLow` | entry | P4 P4R | none found | vendor | Compares the low byte with DS$'s — TestStatusString jumps here; see F-Q9. HV4R LBA70 in Also Converted: Also ADJDS1 (UNKN); HV4R's address-generated name is dropped (X7). |
+| 2361 | `ADJ02` | `FindStringLink::AddLength` | entry | P4 P4R | none found | vendor | INDEX = string address + length — TestStatusString jumps here; HV4 LBA74 in Also Converted: Also ADJ02 (UNKN); HV4's address-generated name is dropped (X7). |
 | 2362 | `ADJ00` | `FindStringLink::Found` | local | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | vendor | Sets carry |
 | 2363 | `ADJ01` | `FindStringLink::NoLink` | local | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | vendor | Discards the length and clears carry |
 
@@ -2827,7 +2827,7 @@ to K12, R1 to R10).
 | 2364 | `LINE_WIDTH_STORAGE` | `KEEP` | switch | none |  | vendor | Default for opening the file alone — SDK build switch, already UPPER_SNAKE |
 | 2365 | `DISK_STATUS_STRING` | `KEEP` | switch | none |  | vendor | Default for opening the file alone — SDK build switch, already UPPER_SNAKE |
 | 2366 | `LINKED_STRING_GARBAGE_COLLECTION` | `LinkedStringGarbageCollection` | macro | P4 P4R |  | vendor | Emits BASIC 4's one-pass linked collector |
-| 2367 | `GARBA2` | `Strings::CollectGarbage` | routine | P4 P4R | M6502, CBM4S79 [P4 P4R], HV4, HV4R | vendor | Walks string space down from MEMSIZ by links, sliding live strings over garbage and updating their descriptors; sets FRETOP — Must match part B2's GARBA2; see F-Q8 Converted: in BASIC 4, `Strings::CollectGarbage` is opened in Commodore.StringGarbageCollection.asm as `.scope Strings continued`, with Also: GARBA2 (M6502, CBM4S79, HV4, HV4R), until part C (Basic.md E6). |
+| 2367 | `GARBA2` | `Strings::CollectGarbage` | routine | P4 P4R | M6502, CBM4S79 [P4 P4R], HV4, HV4R | vendor | Walks string space down from MEMSIZ by links, sliding live strings over garbage and updating their descriptors; sets FRETOP — Must match part B2's GARBA2; see F-Q8 Converted: in BASIC 4, `Strings::CollectGarbage` is opened in Commodore.StringGarbageCollection.asm as `.scope Strings continued`, with Also: GARBA2 (M6502, CBM4S79, HV4, HV4R), until part C (Basic.md E6). Converted (part F): the `.proc`'s locals as drafted, with scoped aliases `GapOpen` (HIGHDS's byte, F-Q8), `Source` (GRBPNT's) and `Destination` (GRBTOP's). |
 | 2368 | `GLOOP` | `Strings::CollectGarbage::NextString` | local | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | vendor | Ends at FRETOP |
 | 2369 | `COL00` | `Strings::CollectGarbage::Examine` | local | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | vendor | Lowers the destination past a link unless a gap is open |
 | 2370 | `COL00B` | `Strings::CollectGarbage::ReadLink` | local | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R | vendor | Lowers the source past the link and tests for garbage ($FF) |
@@ -2855,12 +2855,12 @@ to K12, R1 to R10).
 | ---: | --- | --- | --- | --- | --- | --- | --- |
 | 2388 | `TIME_STRING_ASSIGNMENT` | `TimeStringAssignment` | macro | PET |  | vendor | Emits the TI$ assignment at the start of the string-assignment path |
 | 2389 | `longLengthError` | `KEEP` | parameter of TIME_STRING_ASSIGNMENT | PET |  | vendor | 1 reaches FCERR by jmp for a wrong length, 0 by a branch to ToIllegalQuantity — KEEP |
-| 2390 | `TIMELP` | `AssignString::NextPair` | local | PET | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | vendor | Accumulates two digits, then scales by 6 unless zero — Qualifier follows part B2's INPCOM, see F-Q10 |
-| 2391 | `NOML6` | `AssignString::SkipScale` | local | PET | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | vendor | Counts to six digits; then multiplies by 10, converts and stores |
-| 2392 | `TIMEST` | `AssignString::StoreClock` | local | PET | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | vendor | Stores the three low bytes in CQTIMR with interrupts off |
-| 2393 | `TIMNUM` | `AssignString::AddClockDigit` | routine | PET | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | vendor | Adds the digit at INDEX+Y to FAC; ILLEGAL QUANTITY for a non-digit — Nested routine |
-| 2394 | `FCERR2` | `AssignString::ToIllegalQuantity` | local | PET | M6502, CBM4S79 [P4 P4R], HV2, HV4, HV4R | vendor | Only jumps on to FCERR; used by the length check and AddClockDigit |
-| 2395 | `GOTNUM` | `AssignString::AddClockDigit::Digit` | local | PET | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | vendor | Converts and adds by FINLOG |
+| 2390 | `TIMELP` | `AssignString::NextPair` | local | PET | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | vendor | Accumulates two digits, then scales by 6 unless zero — Qualifier follows part B2's INPCOM, see F-Q10 Converted: `AssignClockString::NextPair`: `AssignString` is the shared macro's bare label, so the clock code is its own routine at the same address (Basic.md F8). |
+| 2391 | `NOML6` | `AssignString::SkipScale` | local | PET | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | vendor | Counts to six digits; then multiplies by 10, converts and stores Converted: `AssignClockString::SkipScale` (Basic.md F8). |
+| 2392 | `TIMEST` | `AssignString::StoreClock` | local | PET | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | vendor | Stores the three low bytes in CQTIMR with interrupts off Converted: `AssignClockString::StoreClock` (Basic.md F8). |
+| 2393 | `TIMNUM` | `AssignString::AddClockDigit` | routine | PET | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | vendor | Adds the digit at INDEX+Y to FAC; ILLEGAL QUANTITY for a non-digit — Nested routine Converted: `AssignClockString::AddClockDigit` (Basic.md F8). |
+| 2394 | `FCERR2` | `AssignString::ToIllegalQuantity` | local | PET | M6502, CBM4S79 [P4 P4R], HV2, HV4, HV4R | vendor | Only jumps on to FCERR; used by the length check and AddClockDigit Converted: `AssignClockString::AddClockDigit::ToIllegalQuantity`, inside the digit routine, where it is (Basic.md F8). |
+| 2395 | `GOTNUM` | `AssignString::AddClockDigit::Digit` | local | PET | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | vendor | Converts and adds by FINLOG Converted: `AssignClockString::AddClockDigit::Digit` (Basic.md F8). |
 
 ### Commodore.VariableEvaluation
 

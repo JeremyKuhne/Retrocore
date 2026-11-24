@@ -33,6 +33,19 @@ public sealed class PetBasic4ExtensionTests
         "Commodore.Basic4RomEnd.asm"
     ];
 
+    // The disk commands' own constants, which neither overlay names: the templates' offsets and lengths, the drive's
+    // channels, and the catalog's file, the screen's device, the status buffer's length and the position command's.
+    // A routine's scoped alias of a workspace byte is checked through the byte it names.
+    private static readonly HashSet<string> s_diskCommandConstants =
+    [
+        "TEMPLATE_CATALOG", "TEMPLATE_CATALOG_LENGTH", "TEMPLATE_OPEN", "TEMPLATE_NAME_LENGTH", "TEMPLATE_OPEN_LENGTH",
+        "TEMPLATE_APPEND", "TEMPLATE_APPEND_LENGTH", "TEMPLATE_HEADER", "TEMPLATE_HEADER_LENGTH", "TEMPLATE_COLLECT",
+        "TEMPLATE_COLLECT_LENGTH", "TEMPLATE_BACKUP", "TEMPLATE_BACKUP_LENGTH", "TEMPLATE_COPY", "TEMPLATE_COPY_LENGTH",
+        "TEMPLATE_CONCAT", "TEMPLATE_CONCAT_LENGTH", "TEMPLATE_RENAME", "TEMPLATE_RENAME_LENGTH", "TEMPLATE_SCRATCH",
+        "TEMPLATE_SCRATCH_LENGTH", "DIRECTORY_CHANNEL", "COMMAND_CHANNEL", "FILE_CHANNELS_BEFORE", "CATALOG_FILE",
+        "SCREEN_DEVICE", "STATUS_LENGTH", "POSITION_COMMAND_LENGTH"
+    ];
+
     /// <summary>
     ///  Both BASIC 4 revisions retain the complete extension, including every legacy label and the ROM padding.
     /// </summary>
@@ -76,6 +89,8 @@ public sealed class PetBasic4ExtensionTests
 
         foreach (AssemblySymbol definition in native.SymbolDefinitions.Where(symbol =>
             symbol.IsConstant
+                && !s_diskCommandConstants.Contains(symbol.Name)
+                && !symbol.Name.Contains("::", StringComparison.Ordinal)
                 && symbol.Location is { } location
                 && (Path.GetFileName(location.Path).Equals("Commodore.Basic4SystemEquates.asm", StringComparison.OrdinalIgnoreCase)
                     || Path.GetFileName(location.Path).Equals("Commodore.Basic4DiskCommands.asm", StringComparison.OrdinalIgnoreCase))))
@@ -108,12 +123,12 @@ public sealed class PetBasic4ExtensionTests
             .include "Commodore.Platform.asm"
             .include "Commodore.Basic4Extension.asm"
             .org ${legacy.Symbol("INIT"):X4}
-                CommodoreInitialize 0, 0, 0, 0, 2, 1, 0
+                CommodoreInitialize 0, 0, 0, 1, 0
                 CommodoreMemoryProbe 0, 0, 1, 1, 0, $55
                 CommodoreStartProgram 0, 0, 0, 0, SIGNON
                 CommodoreStartMessages 0
             {BasicNames.Label("LASTWR")}
-                COMMODORE_BASIC4_EXTENSION {(original ? 0 : 1)}
+                CommodoreBasic4Extension {(original ? 0 : 1)}
             COMPOSED_END:
             """;
 
@@ -822,14 +837,16 @@ public sealed class PetBasic4ExtensionTests
 
     private static AssemblyResult BuildExtension(AssemblyResult legacy, int revised, int? origin = null)
     {
+        // The carriage return is the platform's, which this source does not include.
         Dictionary<string, long> symbols = Dependencies(legacy);
+        symbols.Add("CR", legacy.Symbol("CR"));
         string source = $"""
             .cpu Mos6502
             .include "Commodore.Equates.asm"
             .include "Commodore.Basic4Extension.asm"
             .org ${(origin ?? legacy.Symbol("CALLE")):X4}
             {BasicNames.Label("LASTWR")}
-                COMMODORE_BASIC4_EXTENSION {revised}
+                CommodoreBasic4Extension {revised}
             EXTENSION_END:
             """;
 
@@ -847,7 +864,7 @@ public sealed class PetBasic4ExtensionTests
         string[] dependencies =
         [
             "READY", "SNERR", "SYNCHR", "CHKCOM", "CHKOPN", "CHKCLS", "FRMEVL", "GETADR",
-            "GETBYT", "GETSPA", "FRESTR", "LINPRT", "ERROR", "ERRFC", "ERRLS", "TOTK"
+            "GETBYT", "GETSPA", "FRESTR", "LINPRT", "ERROR", "ERRFC", "ERRLS", "TOTK", "ONTK"
         ];
 
         Dictionary<string, long> symbols = dependencies.ToDictionary(

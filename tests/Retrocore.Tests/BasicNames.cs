@@ -463,9 +463,7 @@ internal static partial class BasicNames
 
     private static readonly Dictionary<string, string> s_overlayOnlyLabels = new(StringComparer.Ordinal)
     {
-        ["LENFLT"] = "Functions::Len::ToFloat",
-        ["NOTDS"] = "StoreString::NOTDS",
-        ["NOTDS1"] = "StoreString::NOTDS1"
+        ["LENFLT"] = "Functions::Len::ToFloat"
     };
 
     /// <summary>

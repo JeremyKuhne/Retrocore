@@ -93,10 +93,12 @@ Release:
     ;;
     ;; An optional quoted prompt is printed first. Terminal input receives a question-mark prompt and a blank line stops
     ;; the program; a file error releases the channel and skips to the next statement. Where `revisedEof` is 1 (the
-    ;; revised BASIC 4), its patch `INPNUL`, in BASIC's patch area, takes the blank-line and end-of-file handling.
+    ;; revised BASIC 4), its patch `HandleBlankInput`, in BASIC's patch area, takes the blank-line and end-of-file
+    ;; handling.
     ;; Entry:
     ;;   CheckDirect = rejects direct mode and puts a comma before the buffer; <Statements::InputNumber> enters here
-    ;;   ReadLine = reads a line and checks the channel's status; the revised BASIC 4's `INPNUL` re-enters here
+    ;;   ReadLine = reads a line and checks the channel's status; the revised BASIC 4's `HandleBlankInput` re-enters
+    ;;     here
     ;; Also: INPUT (M6502, HV1, HV1R, HV2, HV4, HV4R, CBM4S79)
     .proc Input
     .if clearSuppression
@@ -134,16 +136,16 @@ CheckEmpty:
     lda InputBuffer
     bne AssignInputList
     .if revisedEof
-        jmp INPNUL
+        jmp HandleBlankInput
         nop
     .else
         lda CurrentChannel
         bne ReadLine
     .endif
     .if editorPatch
-        jmp INPSTP
+        jmp StopEmptyInput
     .elseif localStopLabel
-        ; Falls into StopEmptyInput, except in the revised BASIC 4, which jumped to INPNUL.
+        ; Falls into StopEmptyInput, except in the revised BASIC 4, which jumped to HandleBlankInput.
     .else
         clc
         jmp Statements::StopOrEnd::SaveLine
@@ -154,7 +156,7 @@ CheckEmpty:
 
     .if localStopLabel
         ;; Stops the program, as `END` does, after a blank terminal INPUT line.
-        ;; Also: INPSTP (UNKN), BUFFU1 (HV4R)
+        ;; Also: INPSTP (UNKN), PATCH1 (HV1, HV1R), BUFFU1 (HV4R)
         .proc StopEmptyInput
         clc
         jmp Statements::StopOrEnd::SaveLine
@@ -185,7 +187,7 @@ ToInputLine:
     ;;
     ;; READ reports the DATA line, GET reports a direct line, and file INPUT reports `FILE DATA` (`BAD DATA` in BASIC
     ;; 1). Terminal INPUT prints the retry message and restores <TextPointer> to the start of the current statement.
-    ;; Where `editorPatch` is 1 (BASIC 1), the editor ROM's <GETDTL> gives READ's line.
+    ;; Where `editorPatch` is 1 (BASIC 1), the editor ROM's `GetDataLine` gives READ's line.
     ;; In: InputMode = the input's source, CurrentChannel = the selected channel
     ;; Out: TextPointer = the restored statement position when retrying, CurrentLine = the error's line for READ or GET
     ;; Errors: SYNTAX for READ or GET; `FILE DATA` for file INPUT
@@ -196,7 +198,7 @@ ToInputLine:
     lda InputMode
     beq CheckChannel
     .if editorPatch
-        jsr GETDTL
+        jsr GetDataLine
         nop
     .else
         bmi UseDataLine

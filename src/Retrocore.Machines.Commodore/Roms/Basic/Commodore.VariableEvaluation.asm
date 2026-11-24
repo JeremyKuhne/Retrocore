@@ -32,8 +32,9 @@
     ;; <FacMantissa3> and <FacMantissa4>; loads `TI`, `ST` and, in BASIC 4, `DS` as numbers, and a numeric variable's
     ;; value, into <Fac>.
     ;;
-    ;; Where `clockPatch` is 1 (BASIC 1), the editor ROM's `TISTR` and `TINUM` test for `TI$` and `TI`, returning to
-    ;; this routine's `MatchClockString` and `MatchClockNumber`, and `TINUM` to `MatchStatus` and `LoadFloat`.
+    ;; Where `clockPatch` is 1 (BASIC 1), the editor ROM's `CheckClockString` and `RouteNumericVariable` test for
+    ;; `TI$` and `TI`, returning to this routine's `MatchClockString` and `MatchClockNumber`, and
+    ;; `RouteNumericVariable` to `MatchStatus` and `LoadFloat`.
     ;; In: A = the value's address (low byte), Y = its high byte, VariableName = the variable's name, ValueType = its
     ;;   type, IntegerType = negative for an integer variable
     ;; Out: Fac = the numeric value; for a string, FacMantissa3 = its descriptor's address (low byte), FacMantissa4 =
@@ -47,10 +48,10 @@
     ldx ValueType
     beq LoadNumericVariable
     .if clockPatch
-        jmp TISTR
+        jmp CheckClockString
         .byte $18                   ; original branch displacement left by the editor-ROM patch
 
-;; The editor ROM's `TISTR` returns here to check the `I` of `TI$`.
+;; BASIC 1's `CheckClockString` returns here to check the `I` of `TI$`.
 ;; Also: TISTR1 (UNKN)
 MatchClockString:
     .else
@@ -109,10 +110,10 @@ Return:
     IntegerVariableValue
 
     .if clockPatch
-        jmp TINUM
+        jmp RouteNumericVariable
         .byte $19                   ; original branch displacement left by the editor-ROM patch
 
-;; The editor ROM's `TINUM` returns here to check the `I` of `TI`.
+;; BASIC 1's `RouteNumericVariable` returns here to check the `I` of `TI`.
 ;; Also: TINUM1 (UNKN)
 MatchClockNumber:
     .else

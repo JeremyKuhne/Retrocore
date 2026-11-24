@@ -37,8 +37,9 @@ Indexing every SDK root:
 | 3 | dcd63404 | One prefiltered pass for macros | 949 ms | 1,081 MB | −18% | −22% |
 | 4 | 04904961 | Type directives told by their words | 942 ms | 1,039 MB | −19% | −25% |
 | 5 | d255b05c | Each file split into lines once | 894 ms | 938 MB | −23% | −32% |
+| 6 (`b1`) | f33ce65d | The parser reads each line in place | 874 ms | 834 MB | −25% | −40% |
 
-AppleSoft's root alone: 50.1 ms and 67.7 MB at the baseline, 37.6 ms and 43.3 MB after step 5.
+AppleSoft's root alone: 50.1 ms and 67.7 MB at the baseline, 33.7 ms and 38.4 MB after step 6.
 
 ### 1. Each source path made full once
 
@@ -78,22 +79,37 @@ files it shares. The preprocessor was never among them: it walks lines as slices
 `SourceFileCache` keeps each file's lines for the assembly, the analysis and the editor's parse of every root. The
 arrays are shared, so nothing writes into them. Allocations fell by 101 MB.
 
+### 6. The parser reads each line in place
+
+After step 5 the documentation parser made 41.5% of all allocations, half in the assembler's `Also:` pass and half
+in the editor's parse, and 28% of that in its main loop. Every line was copied by `TrimStart` for the `;;` test,
+split into code and comment, and trimmed; then `IsConditional`, the type check and the scope tracker each copied its
+first word and lowered the copy. Most lines document, open and close nothing. Now the loop finds where the comment
+starts, reads the trimmed code and its first word as spans, and copies only a line that documents or changes
+something. Words are compared by lowering one character at a time with `char.ToLowerInvariant`, which is exactly what
+`ToLowerInvariant` does to a string; `OrdinalIgnoreCase` would not be, as it takes `ı` for `I` and `ſ` for `S`. The
+scope tracker also reads a line's `.using` names without LINQ's `Concat`. Allocations fell by 104 MB.
+
 ## Where the time and memory go now
 
-From the traces before steps 3 and 4 (ETW) and after step 3 (allocations):
+From the ETW trace before steps 3 and 4, and the allocation trace after step 5:
 
 - **The GC is 27.5% of CPU**, nearly all of it compacting: objects live long enough to survive the first
   generation. Every allocation removed saves its GC work too.
-- **The documentation parser makes about half the allocations.** It runs twice for each file: once in the assembler,
-  for the `Also:` names (`AssemblyAlsoNames.Collect`), and once for the editor (`DocumentationSet.Create`).
+- **The documentation parser made 41.5% of the allocations** after step 5, before step 6. It runs twice for each
+  file: once in the assembler, for the `Also:` names (`AssemblyAlsoNames.Collect`, 21.6%), and once for the editor
+  (`DocumentationSet.Create`).
 - **The preprocessor** makes about a third, and the compiler about a fifth.
 
 ## Candidates
 
-- **Lines as `StringSegment`s over the text** (next): one string per file and no string per line, together with the
-  item below, since the parser trims, splits and takes substrings of lines throughout.
-- **Repeated `Split` of a line** in the parser's main loop, and substrings in `Define`, `ScopeTracker`, `Body`,
-  `CommentIndent` and `Style`, which spans or `StringSegment`s could avoid.
+- **The parser's style checks and sections** (B2, next): `CommentIndent`, `Body`, `Style` and `Section` copy lines
+  and words as the main loop did; they run only in the editor's parse.
+- **Reading definitions** (B3): `Define`, `DefinedName` and `LabelKind`.
+- **A lighter `Also:` pass.** The assembler's parse is about a fifth of all allocations, though it needs only the
+  comments with `Also:` sections. Finding exactly the same comments with less work needs care.
+- Spans have been enough so far, as the parser keeps only strings; Touki's `StringSegment` would pay where slices of a
+  line are kept.
 - **The documentation parsed twice.** The assembler's `Also:` pass parses without style checks and without the
   assembly's knowledge; the editor's with both. Sharing more than the lines needs care.
 - **The preprocessor's macro expansion and string building** (`StringBuilder.ToString`, `Substitute`, the ca65

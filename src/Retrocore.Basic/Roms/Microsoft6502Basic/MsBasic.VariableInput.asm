@@ -151,7 +151,7 @@ SETQUT:
     lda #','
 
 ;; Uses the current text position as the start of an unquoted or single-character GET string.
-;; In: A = ending delimiter, TXTPTR = first character
+;; In: A = ending delimiter, TextPointer = first character
 RESETC:
     clc
 
@@ -159,7 +159,7 @@ RESETC:
 ;;
 ;; Carry set skips an opening quote; carry clear starts at the current character. <STRLT2> makes the
 ;; descriptor, <ST2TXT> advances the input cursor, and <INPCOM> assigns the result.
-;; In: A = ending delimiter, TXTPTR = text position, carry = set to skip a quote, decimal = clear
+;; In: A = ending delimiter, TextPointer = text position, carry = set to skip a quote, decimal = clear
 NOWGET:
     sta ENDCHR
     lda TXTPTR

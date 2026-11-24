@@ -66,7 +66,7 @@ GONE1:
     beq ENDCON
 GONE3:
     beq ISCRTS
-; CHRGET leaves carry set for a non-digit; a digit here is a syntax error.
+; GetNextCharacter leaves carry set for a non-digit; a digit here is a syntax error.
 GONE2:
     sbc #ENDTK
     bcc GLET

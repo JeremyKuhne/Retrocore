@@ -161,7 +161,7 @@ BUFOFS .set $0200
 ;; Spaces outside literals and DATA are discarded. Quoted strings, DATA fields and REM text are copied without
 ;; tokenization; ? abbreviates PRINT. Enhanced IIe folds case outside quoted strings and DATA. AT is not matched
 ;; when followed by N or O, allowing ATN and TO to be recognized.
-;; Out: TXTPTR = address before the tokenized line, Y = encoded line length including its header
+;; Out: TextPointer = address before the tokenized line, Y = encoded line length including its header
 ;; See: <Statements::List>
 CRUNCH:
     ldx TXTPTR

@@ -5,7 +5,7 @@
 ; BASIC 1      1                      0, 0, 0, 0              1, 0                      0, 1
 ; BASIC 2      1                      1, 1, 1, 0              0, 0                      0, 0
 ; BASIC 4      0                      1, 1, 1, 1              0, 1                      1, 0
-; Both revisions of BASIC 1 and BASIC 4 use their version's same settings. The next entry is FNDLIN.
+; Both revisions of BASIC 1 and BASIC 4 use their version's same settings. The next entry is FindLine.
 
 .include "../../Microsoft6502Basic/MsBasic.CommandCore.asm"
 
@@ -140,7 +140,7 @@ FINI:
 ;; Rebuilds the linked program addresses by scanning each zero-terminated line.
 ;;
 ;; The earlier version enters <MAIN> at the end; later versions return to their caller.
-;; In: TXTTAB = first line, with a zero high link byte marking the end of the program
+;; In: ProgramStart = first line, with a zero high link byte marking the end of the program
 LNKPRG:
     lda TXTTAB
     ldy TXTTAB+1
@@ -252,8 +252,8 @@ INCRTS:
 ;; Spaces are retained. Quoted strings, DATA fields and REM text are copied without tokenization; a colon
 ;; ends a DATA field and ? abbreviates PRINT. High-bit characters other than PI are discarded outside
 ;; quoted strings and REM text, including in an unquoted DATA field. The early walker ignores spaces within a word.
-;; In: TXTPTR = address of the first input character
-;; Out: TXTPTR = address before <BUF>, Y = encoded line length including the link and line-number header
+;; In: TextPointer = address of the first input character
+;; Out: TextPointer = address before <BUF>, Y = encoded line length including the link and line-number header
 ;; See: <Statements::List>
 CRUNCH:
     ldx TXTPTR

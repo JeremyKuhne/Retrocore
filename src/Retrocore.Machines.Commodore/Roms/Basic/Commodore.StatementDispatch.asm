@@ -16,7 +16,7 @@
 ;;
 ;; The text position is saved for INPUT retry when execution is not in the direct buffer's page.
 ;; A zero line link ends the program. The earlier separator check accepts a colon before reading the link.
-;; In: TXTPTR = statement separator or line terminator
+;; In: TextPointer = statement separator or line terminator
 ;; See: <GONE>, <Statements::StopOrEnd::Finish>
 NEWSTT:
     jsr ISCNTC

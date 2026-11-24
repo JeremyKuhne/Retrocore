@@ -5,7 +5,7 @@
 
 ; MICROSOFT 6502 BASIC: ADDRESS CONVERSION AND MEMORY ACCESS
 ;
-; AddressConversion rejectNegative selects whether a negative FAC sign is an error.
+; AddressConversion rejectNegative selects whether a negative Fac sign is an error.
 ; PeekFunction preserveAddress, highFirst, guardRom, padGuard independently select whether PokeAddress is preserved,
 ;   the byte saved first, the page-granular ROM read guard, and eight bytes of padding.
 ; PokeStatement emits POKE.

@@ -54,7 +54,7 @@ Done:
 ;; Fetches the current character without first advancing the pointer; a space there is skipped, which does.
 ;; Also: CHZGOT (M6502)
 GetCurrent:
-    lda $EA60                       ; copied operand becomes TXTPTR
+    lda $EA60                       ; copied operand becomes TextPointer
     cmp #':'
     bcs Done
     cmp #' '

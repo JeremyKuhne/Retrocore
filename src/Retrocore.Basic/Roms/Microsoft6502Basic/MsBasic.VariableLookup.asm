@@ -30,9 +30,9 @@
 ;; address, or reports OUT OF DATA when the array is absent.
 ;; Entry: PTRGT1 = starts with A = first character and X = dimension flag
 ;; Entry: PTRGT2 = starts with A = first character, retaining the current dimension flag
-;; In: TXTPTR = first character, SUBFLG = subscript mode, decimal = clear
-;; Out: A = low value address and Y = high value address for a scalar, TXTPTR = next non-space character,
-;;   VALTYP = $FF for a string or 0 for a number, INTFLG = $80 for an integer or 0 otherwise
+;; In: TextPointer = first character, SubscriptMode = subscript mode, decimal = clear
+;; Out: A = low value address and Y = high value address for a scalar, TextPointer = next non-space character,
+;;   ValueType = $FF for a string or 0 for a number, IntegerType = $80 for an integer or 0 otherwise
 ;; Errors: SYNTAX for an invalid first character or a disallowed integer name
 ;; See: <IsLetter>, <NOTFNS>, <FINPTR>, <ISARY>
 PTRGET:
@@ -201,7 +201,7 @@ NOTIT:
 ;; The zero return does not update <VARPNT>. Otherwise reserved names are checked before insertion.
 ;; With clock support, TI is rejected and TI$ returns the zero; ST is rejected with channel status support.
 ;; BASIC 4 additionally rejects DS and DS$. Other names proceed to insertion.
-;; In: VARNAM = encoded name, Y = 0, decimal = clear
+;; In: VariableName = encoded name, Y = 0, decimal = clear
 ;; See: <LDZR>, <VAROK>
 NOTFNS:
     pla
@@ -285,8 +285,8 @@ QDSVAR:
 ;;
 ;; <MoveRangeUp> moves existing arrays upward and checks that the new end fits. When enabled, the linked-string
 ;; collector's array back-links are adjusted after the move. The entry's two name bytes precede five zero bytes.
-;; In: VARNAM = encoded name, decimal = clear
-;; Out: VARPNT = address of the new value
+;; In: VariableName = encoded name, decimal = clear
+;; Out: VariablePointer = address of the new value
 ;; Errors: OUT OF MEMORY if the enlarged tables cannot fit
 ;; See: <MoveRangeUp>, <FINPTR>
 VAROK:
@@ -321,7 +321,7 @@ NOTEVE:
 ;; String descriptors are three bytes. For a nonempty string, the descriptor address is stored immediately
 ;; after its characters. If that back-link address is at or above <FRETOP>, its value is increased by seven.
 ;; Numeric arrays, empty strings and back-links below <FRETOP> are left alone.
-;; In: ARYPNT = first moved array, STREND = end of array storage, decimal = clear
+;; In: ArrayPointer = first moved array, ArraysEnd = end of array storage, decimal = clear
 ARYVA2:
     lda ARYPNT
     ldx ARYPNT+1
@@ -429,8 +429,8 @@ ARYDON:
     sta (LOWTR),y
 
 ;; Returns the value address two bytes after the scalar entry at <LOWTR>.
-;; In: LOWTR = scalar entry address, decimal = clear
-;; Out: A = low value address, Y = high value address, VARPNT = value address
+;; In: SourceStart = scalar entry address, decimal = clear
+;; Out: A = low value address, Y = high value address, VariablePointer = value address
 FINPTR:
     lda LOWTR
     clc
@@ -445,15 +445,15 @@ FINNOW:
     rts
 
 ;; Computes the start of array values from the descriptor and dimension count.
-;; In: LOWTR = array descriptor, COUNT = number of dimensions, decimal = clear
-;; Out: ARYPNT = first value address
+;; In: SourceStart = array descriptor, Counter = number of dimensions, decimal = clear
+;; Out: ArrayPointer = first value address
 FMAPTR:
     lda COUNT
 .if arrayEntryAlias
 
 ;; Computes the start of array values with the dimension count already in A.
-;; In: A = number of dimensions, LOWTR = array descriptor, decimal = clear
-;; Out: ARYPNT = first value address
+;; In: A = number of dimensions, SourceStart = array descriptor, decimal = clear
+;; Out: ArrayPointer = first value address
 FMAPT1:
 .endif
     asl a
@@ -473,7 +473,7 @@ JSRGM:
 .macro EXISTING_ARRAY_ENTRY
 
 ;; Enters array parsing, or skips the subscripts for an existing-array lookup.
-;; In: SUBFLG = 0 for ordinary subscripts, nonzero for the existing-array path
+;; In: SubscriptMode = 0 for ordinary subscripts, nonzero for the existing-array path
 ;; See: <ISARY>, <INDLO1>
 QINTG1:
     lda SUBFLG

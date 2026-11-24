@@ -9,8 +9,8 @@
 ; choose the platform's side effects and the original or revised stack-reset sequence independently.
 
 ;; Emits the NEW and RUN reset entries.
-;; Parameters: resetLock = 1 to clear LOCK;
-;;   mirrorEnd = 1 to copy the new variable start to PRGEND; clearCarry = 1 to clear carry before adding two;
+;; Parameters: resetLock = 1 to clear <RunOnly>;
+;;   mirrorEnd = 1 to copy the new variable start to <ProgramEnd>; clearCarry = 1 to clear carry before adding two;
 ;;   runSetsZero = 1 to set zero before falling into the CLEAR entry
 .macro ProgramReset resetLock, mirrorEnd, clearCarry, runSetsZero
     .assert resetLock = 0 || resetLock = 1, "resetLock is 0 or 1."

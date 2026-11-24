@@ -1172,7 +1172,10 @@ small modules that compose the shared ones (`Arrays`, `Assignment`, `Functions`,
 AppleSoft files' references to part E's names follow (the dispatch table, `TrapError`, `ReadLowResCoordinates`,
 `Statements::Normal`, the enhanced IIe's tokenizer and PRINT helpers). The bytes are unchanged in all eight builds,
 the three AppleSoft and the five PET.
-Only AppleSoft's files changed; no shared module did.
+Of the shared modules, only the WAIT entry's comment changed: it links `Statements::Wait` rather than naming WAIT,
+which is now AppleSoft's alias (E-2). `BasicBuildLinkTests` found four links in these files to definitions only some
+AppleSoft builds have (`CompareCommaColumn`, `Statements::CallAppleSoftCassette`, `Statements::SetArrayBlock` and the
+PET's `Statements::Print::NumberItem`), now in backticks.
 
 Decisions and how the table was applied:
 

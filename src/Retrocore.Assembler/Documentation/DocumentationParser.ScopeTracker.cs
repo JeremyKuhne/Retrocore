@@ -18,7 +18,7 @@ public static partial class DocumentationParser
         private DocumentationScopes? _current;
 
         // The macro bodies open around the line, innermost last, with the names that differ in each expansion (the
-        // macro's parameters and its .local names) and how many scopes were open where its definition began.
+        // macro's parameters and its .local names) and how many named scopes were open where its definition began.
         private readonly List<(string Name, HashSet<string> Parameters, HashSet<string> Locals, int Depth)> _macros = [];
 
         /// <summary>
@@ -48,6 +48,7 @@ public static partial class DocumentationParser
             // expansions too. The scopes around each macro's definition aren't its expansion's: only the parts of the
             // name written in its body can be its parameters or .local names.
             string[] qualified = name.Split(["::"], StringSplitOptions.None);
+            // A macro's or a .define's name isn't qualified by the scopes around it, so it's written whole.
             IEnumerable<string> Written(int depth) => qualified.Skip(Math.Min(depth, qualified.Length - 1));
             string last = qualified[qualified.Length - 1];
             bool local = (last.Length != 0 && last[0] == '@')

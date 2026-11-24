@@ -1073,6 +1073,21 @@ public sealed partial class HistoricalNameTests
             .endscope
             """;
 
+        // A .define's name isn't qualified by the scopes around it, so a parameter that names it is still found.
+        const string Defined = """
+            .macro Outer
+            .scope S
+            .macro Inner P
+            ;; A count.
+            ;; Also: OLD (TEST)
+            .define P 5
+            .endmacro
+            .endscope
+            .endmacro
+            """;
+
+        Check(Defined).Should().ContainSingle().Which.Message.Should().StartWith("Also: P is named by a parameter");
+
         foreach (string text in (string[])[Around, Nested])
         {
             Assemble(text + "\n    jsr OLD\n").Diagnostics.Should().BeEmpty();

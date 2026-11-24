@@ -229,8 +229,10 @@ internal static class BasicNames
     internal static Dictionary<string, long> WithCurrentNames(
         IReadOnlyDictionary<string, long> symbols,
         IReadOnlyDictionary<string, IReadOnlyDictionary<string, string[]>> byBuild,
-        string? build) =>
-        new(CurrentNamesOf(symbols, byBuild, build).Where(pair => !IsScoped(pair.Key)), StringComparer.Ordinal);
+        string? build)
+    {
+        return new(CurrentNamesOf(symbols, byBuild, build).Where(pair => !IsScoped(pair.Key)), StringComparer.Ordinal);
+    }
 
     /// <summary>
     ///  Gets the predefined symbols as <see cref="WithCurrentNames(IReadOnlyDictionary{string, long})"/> does, but

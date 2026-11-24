@@ -124,7 +124,7 @@ CheckRange:
     cmp #$88
     bcc Reduce
 
-;; <Float::ExponentOutOfRange>: OVERFLOW for a large positive argument, zero for a large negative one.
+;; <Float::ExponentOutOfRange>: the <ERROR_OVERFLOW> error for a large positive argument, zero for a large negative one.
 ;; Also: GOMLDV (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 OutOfRange:
     jsr Float::ExponentOutOfRange

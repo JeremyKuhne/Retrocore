@@ -127,7 +127,9 @@ public sealed class BasicNamesBuildTests
             foreach ((string name, string[] targets) in table)
             {
                 Dictionary<string, long> own = BasicNames.WithCurrentNames(One(name), build);
-                own.Keys.Except([name]).Should().BeEquivalentTo(targets, $"{build} gives {name} only to its own names");
+                own.Keys.Except([name]).Should().BeEquivalentTo(
+                    targets.Where(target => !target.Contains("::", StringComparison.Ordinal)),
+                    $"{build} gives {name} only to its own names, those inside a scope left to ScopedNames");
             }
         }
 
@@ -137,7 +139,8 @@ public sealed class BasicNamesBuildTests
             Func<Dictionary<string, long>> all = () => BasicNames.WithCurrentNames(One(name));
             if (given.All(targets => targets.SequenceEqual(given[0], StringComparer.Ordinal)))
             {
-                all().Keys.Except([name]).Should().BeEquivalentTo(given[0]);
+                all().Keys.Except([name]).Should().BeEquivalentTo(
+                    given[0].Where(target => !target.Contains("::", StringComparison.Ordinal)));
             }
             else
             {

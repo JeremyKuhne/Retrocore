@@ -37,15 +37,15 @@ would drive the data bus at the same time as the 6502.
 
 | Switch | Off | On | DOS's names |
 | --- | --- | --- | --- |
-| Q0-Q3 | $C080, $C082, $C084, $C086: stepper phase 0-3 off | $C081, $C083, $C085, $C087: phase 0-3 on | PHASEOFF, PHASEON (+ phase * 2) |
-| Q4 | $C088: drive motor off | $C089: motor on | MOTOROFF, MOTORON |
-| Q5 | $C08A: select drive 1 | $C08B: select drive 2 | DRV0EN, DRV1EN |
-| Q6 | $C08C: shift (and read the latch) | $C08D: load | Q6L, Q6H |
-| Q7 | $C08E: read | $C08F: write | Q7L, Q7H |
+| Q0-Q3 | $C080, $C082, $C084, $C086: stepper phase 0-3 off | $C081, $C083, $C085, $C087: phase 0-3 on | `Phase0Off`, `Phase0On` (+ phase * 2); Apple: PHASEOFF, PHASEON |
+| Q4 | $C088: drive motor off | $C089: motor on | `MotorOff`, `MotorOn`; Apple: MOTOROFF, MOTORON |
+| Q5 | $C08A: select drive 1 | $C08B: select drive 2 | `SelectDrive1`, `SelectDrive2`; Apple: DRV1EN, DRV2EN |
+| Q6 | $C08C: shift (and read the latch) | $C08D: load | `DataLatch`, `LoadLatch`; Apple: Q6L, Q6H |
+| Q7 | $C08E: read | $C08F: write | `ReadMode`, `WriteMode`; Apple: Q7L, Q7H |
 
 Q6 and Q7 together choose the mode: read (Q7 off, Q6 off), sense write protect (Q7 off, Q6 on), write (Q7 on,
-Q6 off), and load the byte to write (Q7 on, Q6 on). The sources name the switches for what they do (`DRIVE1`,
-`DATALATCH`, `READMODE`) and give DOS's names in comments.
+Q6 off), and load the byte to write (Q7 on, Q6 on). The sources name the switches for what they do (`SelectDrive1`,
+`DataLatch`, `ReadMode`) and keep DOS's names as historical names.
 
 ## The drive
 

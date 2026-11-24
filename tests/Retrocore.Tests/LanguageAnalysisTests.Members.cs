@@ -11,7 +11,8 @@ namespace Retrocore.Tests;
 // The editor's handling of a struct member's historical name (docs/backlog/MemberDocumentation.md).
 public sealed partial class LanguageAnalysisTests
 {
-    // A strict file whose struct has an anonymous union of documented members, used by their old names.
+    // A strict file whose struct has an anonymous union of documented members, used by their old names. The probes' old
+    // names are their own: one the SDK also gives (DOS's IBCMD) would have two definitions, so no hint.
     private const string MemberProbe = """
         ; retrocore: style=strict
         ;; A probe.
@@ -22,21 +23,21 @@ public sealed partial class LanguageAnalysisTests
         ;; An I/O block.
         .struct Iob
             ;; The block's type.
-            ;; Also: IBTYPE (A2RM78)
+            ;; Also: QBTYPE (A2RM78)
             TYPE .byte
             .union
                 ;; The command, before the call.
-                ;; Also: IBCMD (A2RM78)
+                ;; Also: QBCMD (A2RM78)
                 COMMAND .byte
                 ;; The status, after it.
-                ;; Also: IBSTAT (A2RM78)
+                ;; Also: QBSTAT (A2RM78)
                 STATUS .byte
             .endunion
         .endstruct
 
-        ;; Echoes <IBCMD> and <Iob::STATUS>.
+        ;; Echoes <QBCMD> and <Iob::STATUS>.
         Echo:
-            lda #IBCMD
+            lda #QBCMD
             ldy #Iob::STATUS
             rts
         """;
@@ -81,8 +82,8 @@ public sealed partial class LanguageAnalysisTests
             analysis.Should().NotBeNull();
             DocumentUri uri = DocumentUri.FromFileSystemPath(path);
 
-            int use = Array.FindIndex(lines, line => line.Contains("lda #IBCMD", StringComparison.Ordinal));
-            int column = lines[use].IndexOf("IBCMD", StringComparison.Ordinal);
+            int use = Array.FindIndex(lines, line => line.Contains("lda #QBCMD", StringComparison.Ordinal));
+            int column = lines[use].IndexOf("QBCMD", StringComparison.Ordinal);
             int member = Array.FindIndex(lines, line => line.Contains("COMMAND .byte", StringComparison.Ordinal));
             LspParams at = Request(uri, use, column + 1);
 
@@ -95,7 +96,7 @@ public sealed partial class LanguageAnalysisTests
 
             Diagnostic hint = published.Should().ContainSingle().Which;
             hint.Code.Should().Be(DocumentationRules.HistoricalName);
-            hint.Message.Should().Be("IBCMD is a historical name of Iob::COMMAND.");
+            hint.Message.Should().Be("QBCMD is a historical name of Iob::COMMAND.");
             hint.Range.Start.Should().Be(new Position(use, column));
             JsonNode? actions = new CodeActionHandler(workspace, new BasicDocuments(client)).Handle(new JsonObject
             {
@@ -111,17 +112,17 @@ public sealed partial class LanguageAnalysisTests
             (edit?["newText"]?.GetValue<string>()).Should().Be("Iob::COMMAND");
 
             Hover? hover = await new HoverHandler(workspace, new BasicDocuments(client)).Handle(at);
-            (hover?.Contents.Value).Should().Contain("`IBCMD` is a historical name of `Iob::COMMAND`.");
+            (hover?.Contents.Value).Should().Contain("`QBCMD` is a historical name of `Iob::COMMAND`.");
 
             List<CompletionItem> completions = await new CompletionHandler(workspace, new BasicDocuments(client))
                 .Handle(Request(uri, use, column));
 
             CompletionItem completion = completions.Should().ContainSingle(item => item.Label == "Iob::COMMAND").Which;
-            completion.FilterText.Should().Contain("IBCMD");
+            completion.FilterText.Should().Contain("QBCMD");
 
-            LspParams query = Request(uri, 0, 0) with { Query = "IBCMD" };
+            LspParams query = Request(uri, 0, 0) with { Query = "QBCMD" };
             IEnumerable<WorkspaceSymbol> symbols = await new WorkspaceSymbolHandler(workspace).Handle(query);
-            symbols.Select(symbol => symbol.Name).Should().Contain("Iob::COMMAND (IBCMD)");
+            symbols.Select(symbol => symbol.Name).Should().Contain("Iob::COMMAND (QBCMD)");
 
             IEnumerable<LspLocation> definitions = await new DefinitionHandler(workspace, new BasicDocuments(client)).Handle(at);
             LspLocation definition = definitions.Should().ContainSingle().Which;
@@ -141,7 +142,7 @@ public sealed partial class LanguageAnalysisTests
             ;; Also: TYPE (A2RM78)
             TYPE .byte
             ;; The command.
-            ;; Also: IBCMD (A2RM78)
+            ;; Also: QBCMD (A2RM78)
             COMMAND .byte
         .endstruct
 
@@ -157,20 +158,20 @@ public sealed partial class LanguageAnalysisTests
             ;; Padding.
             PAD .byte
             ;; Its own field.
-            IBCMD .byte
+            QBCMD .byte
         .endstruct
 
         ;; Uses the name under a .using.
         .proc Shadowed
         .using Other
-            lda #IBCMD
+            lda #QBCMD
             rts
         .endproc
 
         ;; Uses the old name, which nothing shadows here, and the other field by its full name.
         .proc Plain
-            lda #IBCMD
-            lda #Other::IBCMD
+            lda #QBCMD
+            lda #Other::QBCMD
             rts
         .endproc
         """;
@@ -198,14 +199,14 @@ public sealed partial class LanguageAnalysisTests
             workspace.Update(path, text);
             DocumentUri uri = DocumentUri.FromFileSystemPath(path);
 
-            int shadowedLine = Array.FindIndex(lines, line => line.Contains("lda #IBCMD", StringComparison.Ordinal));
-            int plainLine = Array.FindLastIndex(lines, line => line.Contains("lda #IBCMD", StringComparison.Ordinal));
+            int shadowedLine = Array.FindIndex(lines, line => line.Contains("lda #QBCMD", StringComparison.Ordinal));
+            int plainLine = Array.FindLastIndex(lines, line => line.Contains("lda #QBCMD", StringComparison.Ordinal));
             List<Diagnostic> published = await client.Wait(uri, diagnostics => diagnostics.Count == 2);
             published.Select(diagnostic => (diagnostic.Code, diagnostic.Range.Start.Line, diagnostic.Message)).Should().BeEquivalentTo(
             [
                 (DocumentationRules.UsingShadow, shadowedLine,
-                    "IBCMD is a historical name of Iob::COMMAND, but the .using in effect here makes it Other::IBCMD."),
-                (DocumentationRules.HistoricalName, plainLine, "IBCMD is a historical name of Iob::COMMAND.")
+                    "QBCMD is a historical name of Iob::COMMAND, but the .using in effect here makes it Other::QBCMD."),
+                (DocumentationRules.HistoricalName, plainLine, "QBCMD is a historical name of Iob::COMMAND.")
             ]);
 
             Diagnostic shadowed = published.Single(diagnostic => diagnostic.Code == DocumentationRules.UsingShadow);
@@ -223,7 +224,7 @@ public sealed partial class LanguageAnalysisTests
                     action?["isPreferred"]?.GetValue<bool>() == true,
                     action?["edit"]?["changes"]?[uri.Text]?[0]?["newText"]?.GetValue<string>()))];
 
-            fixes.Should().Equal(("Use Other::IBCMD", true, "Other::IBCMD"), ("Use Iob::COMMAND", false, "Iob::COMMAND"));
+            fixes.Should().Equal(("Use Other::QBCMD", true, "Other::QBCMD"), ("Use Iob::COMMAND", false, "Iob::COMMAND"));
         }
         finally
         {
@@ -250,7 +251,7 @@ public sealed partial class LanguageAnalysisTests
                 ;; The block's type.
                 TYPE .byte
                 ;; The command.
-                ;; Also: IBCMD (A2RM78)
+                ;; Also: QBCMD (A2RM78)
                 COMMAND .byte
             .endstruct
 
@@ -258,23 +259,23 @@ public sealed partial class LanguageAnalysisTests
             .scope Other
             .if VARIANT
             ;; The first build's value.
-            IBCMD = 1
+            QBCMD = 1
             .else
             ;; The second build's value.
-            IBCMD = 2
+            QBCMD = 2
             .endif
             .endscope
 
             ;; Uses the old name, outside the scope.
             .proc Use
-                lda #IBCMD
+                lda #QBCMD
                 rts
             .endproc
 
             ;; Uses the name under a .using of the scope.
             .proc Shadowed
             .using Other
-                lda #IBCMD
+                lda #QBCMD
                 rts
             .endproc
             """;
@@ -301,18 +302,18 @@ public sealed partial class LanguageAnalysisTests
 
             // The taken branch is assembled; the other is found in the text, in its scope, where the assembled one
             // already defines the name. Neither is a root name.
-            int taken = Array.FindIndex(lines, line => line.Contains("IBCMD = 1", StringComparison.Ordinal));
-            (analysis?.Definitions ?? []).Where(site => site.Name.EndsWith("IBCMD", StringComparison.Ordinal))
-                .Select(site => (site.Name, site.Line)).Should().Equal(("Other::IBCMD", taken));
+            int taken = Array.FindIndex(lines, line => line.Contains("QBCMD = 1", StringComparison.Ordinal));
+            (analysis?.Definitions ?? []).Where(site => site.Name.EndsWith("QBCMD", StringComparison.Ordinal))
+                .Select(site => (site.Name, site.Line)).Should().Equal(("Other::QBCMD", taken));
 
-            int use = Array.FindIndex(lines, line => line.Contains("lda #IBCMD", StringComparison.Ordinal));
-            int shadowed = Array.FindLastIndex(lines, line => line.Contains("lda #IBCMD", StringComparison.Ordinal));
+            int use = Array.FindIndex(lines, line => line.Contains("lda #QBCMD", StringComparison.Ordinal));
+            int shadowed = Array.FindLastIndex(lines, line => line.Contains("lda #QBCMD", StringComparison.Ordinal));
             List<Diagnostic> published = await client.Wait(uri, diagnostics => diagnostics.Count == 2);
             published.Select(diagnostic => (diagnostic.Code, diagnostic.Range.Start.Line, diagnostic.Message)).Should().BeEquivalentTo(
             [
-                (DocumentationRules.HistoricalName, use, "IBCMD is a historical name of Iob::COMMAND."),
+                (DocumentationRules.HistoricalName, use, "QBCMD is a historical name of Iob::COMMAND."),
                 (DocumentationRules.UsingShadow, shadowed,
-                    "IBCMD is a historical name of Iob::COMMAND, but the .using in effect here makes it Other::IBCMD.")
+                    "QBCMD is a historical name of Iob::COMMAND, but the .using in effect here makes it Other::QBCMD.")
             ]);
         }
         finally

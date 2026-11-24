@@ -18,7 +18,7 @@ one entry.
 - C5. Keys are spelled out: KEY_BACKSPACE, KEY_LINE_FEED, KEY_RETURN, KEY_ESCAPE, KEY_RIGHT_ARROW, KEY_CONTROL_X.
 - C6. Every name a manual gives a location goes in its `Also:`; one that clashes with another definition in the same
   assembly is left out and noted.
-- C7. LOC1 and CV wait for DOS, whose names collide with them.
+- C7. LOC1 and CV waited for DOS, whose names collide with them (settled in [Dos.md](Dos.md): the Monitor keeps CV).
 - C8. The hardware's own short terms are allowed: Aux, Rom, Cx, Irq, Store80, Columns80, Annunciator0, Page2.
 
 ## Notes and names settled

@@ -1,46 +1,54 @@
-;; APPLE DOS 3.3 (1980 AND 1983)
+; retrocore: style=strict ignore=unlinked-name:INPUT -- the INPUT command in prose
+;; DOS 3.3, 1983 and 1980: the root that assembles the whole of it from its modules
 ;;
 ;; The disk operating system of the Apple II from 1980 until ProDOS: the code on tracks 0 to 2 of every DOS 3.3
-;; disk. This file assembles all of it from the modules below, in Apple's order. docs/Dos.md explains how DOS
-;; boots, what each part does and how a disk is laid out; docs/DiskII.md explains the hardware underneath.
+;; disk. This file assembles all of it from the modules below, in Apple's order, which is memory order.
+;; docs/Dos.md explains how DOS boots, what each part does and how a disk is laid out; docs/DiskII.md explains the
+;; hardware underneath.
 ;;
 ;; DOS has three layers, each built on the one below:
 ;;
-;; - The command interpreter (DosInit to CommandTables) hooks the Monitor's character input and output, so
-;;   that BASIC's PRINT and INPUT reach it, and carries out commands such as CATALOG, LOAD and OPEN.
-;; - The file manager (FileManagerEntry to FileManagerData) keeps the files on a disk: the VTOC, the catalog
-;;   and each file's track/sector list.
-;; - RWTS, "read or write a track and sector" (BootLoader to Formatter), drives the Disk II controller: it
-;;   moves the head, turns 256-byte sectors into nibbles and back, and formats disks.
+;; - The command interpreter (DosInit to CommandTables) hooks the Monitor's character input and output, so that
+;;   BASIC's PRINT and INPUT reach it, and carries out commands such as CATALOG, LOAD and OPEN.
+;; - The file manager (FileManagerEntry to FileManagerData) keeps the files on a disk: the VTOC, the catalog and
+;;   each file's track/sector list.
+;; - RWTS, "read or write a track and sector" (BootLoader to Formatter), drives the Disk II controller: it moves
+;;   the head, turns 256-byte sectors into nibbles and back, and formats disks.
 ;;
-;; YEAR chooses the DOS: 1983 (the default) is the one on the 680-0210-A System Master, and 1980 the one on
-;; the 680-0051 masters. They differ in Apple's 1982 "revision B" patches (DOS33B), which the 1980 DOS lacks,
-;; and in their leftover bytes. Two builds of each come from this source, chosen by MASTER:
+;; <YEAR> chooses the DOS: 1983 (the default) is the one on the 680-0210-A System Master, and 1980 the one on the
+;; 680-0051 masters. They differ in Apple's 1982 "revision B" patches (<REVISION_B>), which the 1980 DOS lacks, and
+;; in their leftover bytes. Two builds of each come from this source, chosen by <MASTER>:
 ;;
 ;; - MASTER = 1 (the default), with the origin at $1B00, is the image on a System Master's tracks 0 to 2: a
-;;   relocator at $1B00 and DOS at $1D00-$3FFF. The relocator moves DOS to the top of whatever memory the
-;;   machine has, adjusting every address in it, so one master boots on any Apple II. It assembles byte for
-;;   byte to the DOS on that year's master.
-;; - MASTER = 0, with the origin at $9D00, is DOS where it runs on a machine with 48K or more: $9D00-$BFFF.
-;;   This is the copy INIT writes to the disks it formats, and the one the debugger steps through.
+;;   relocator at $1B00 and DOS at $1D00-$3FFF. The relocator moves DOS to the top of whatever memory the machine
+;;   has, adjusting every address in it, so one master boots on any Apple II. It assembles byte for byte to the
+;;   DOS on that year's master.
+;; - MASTER = 0, with the origin at $9D00, is DOS where it runs on a machine with 48K or more: $9D00-$BFFF. This
+;;   is the copy INIT writes to the disks it formats, and the one the debugger steps through.
 ;;
-;; The names are Apple's, from its DOS 3.3 C source listing (July 1983), and so is the order of the modules.
-;; The 680-0210-A master differs from that listing in one patch, FIXIT2: it is shorter, and it sits in the
-;; patch area after MSWAIT ($BA84 where DOS runs) rather than in the boot loader's page. Where DOS reserves
-;; storage, the master holds whatever was in memory when it was written; the sources keep those bytes as data,
-;; marked "leftover" or written with the LEFTOVER macro where the masters differ, so each image is exact.
+;; The order of the modules is Apple's, from its DOS 3.3 C source listing (July 1983), and each definition keeps the
+;; listing's name in its historical names. The 680-0210-A master differs from that listing in one patch,
+;; <AppendFix::Finish>: it is shorter, and it sits in the patch area after <DiskII::Wait> ($BA84 where DOS runs) rather
+;; than in the boot loader's page. Where DOS reserves storage, the master holds whatever was in memory when it was
+;; written; the sources keep those bytes as data, marked "leftover" or written with the <Leftover> macro where the
+;; masters differ, so each image is exact.
 ;;
 ;; The modules are shared with DOS 3.2 (Dos32.asm), which has the same command interpreter and file manager:
 ;;
-;; - Shared: Equates, Relocator, the command interpreter and file manager modules, RwtsEquates and DosPatches.
-;;   They test DOS32, set to 0 here, where DOS 3.2 differs, and LEFTOVER picks each master's leftover byte.
-;; - DOS 3.3's own: BootLoader, PreNibble, WriteSector, PostNibbleRead, ReadAddressSeek, MsWait,
-;;   WriteAddress, Rwts1, Rwts2 and Formatter, its 16-sector boot loader, RWTS and formatter. DOS 3.2's
-;;   counterparts are the modules whose names end in 32.
+;; - Shared: every module but RWTS itself and the address field writer. They test <DOS32>, set to 0 here, where DOS
+;;   3.2 differs, and <Leftover> picks each master's leftover byte. A routine both versions have is one definition,
+;;   with `.if DOS32` where the two differ in places; one that differs throughout, such as `BOOT 1`, the prenibble
+;;   and postnibble routines and the formatter, has a definition for each version, side by side in its module.
+;; - DOS 3.3's own: Rwts1 and Rwts2, RWTS itself (DOS 3.2's is Rwts32), and WriteAddress, the address field writer,
+;;   which includes the 4-and-4 writer (FourAndFour, which DOS 3.2's formatter includes). The modules are in each
+;;   version's memory order, so PostNibble, after the address field reader in DOS 3.2, comes before the data field
+;;   reader here.
 ;;
 ;; Maintained by hand; DosSourceTests pin each build by digest.
 
 .cpu Mos6502
+
+; The SDK's build options, which the host may set.
 
 ;; 0: this root builds DOS 3.3. The shared modules test it where DOS 3.2 differs.
 DOS32 = 0
@@ -55,20 +63,44 @@ MASTER = 1
 YEAR = 1983
 .endif
 
+; Only the four builds DosSourceTests checks by digest: either image, of either year.
+.assert MASTER = 0 || MASTER = 1, "MASTER is 1 for the System Master's image or 0 for DOS where it runs."
+.assert YEAR = 1983 || YEAR = 1980, "YEAR is 1983 or 1980: the 680-0210-A master's DOS 3.3 or the 680-0051 masters'."
+
 ; Apple's build options. The 1980 DOS is the one without the revision B patches.
-DIAGMODE = 0                        ;; 1 builds a diagnostic RWTS without the formatter (Apple's)
-DOS33B = YEAR >= 1983               ;; 1 includes the 1982 "revision B" patches (Apple's)
-ULC = 0                             ;; 1 builds the lowercase-input patch (Apple's)
+
+;; 1 builds RWTS with an on-screen trace for diagnosing it, without the formatter; always 0 in the masters.
+;; Also: DIAGMODE (DOS33)
+DIAGNOSTIC_RWTS = 0
+
+;; 1 includes Apple's 1982 "revision B" patches, which the 1983 DOS has and the 1980 DOS does not.
+;; Also: DOS33B (DOS33)
+REVISION_B = YEAR >= 1983
+
+;; 1 builds the patch that lets commands be typed in lowercase (<Uppercase>, in the boot loader's page); always 0 in
+;; the masters.
+;; Also: ULC (DOS33)
+LOWERCASE_INPUT = 0
 
 .include "Equates.asm"
 
 .if MASTER
-ORIGIN = $1B00                      ;; where the master image starts: the relocator, then DOS two pages later
+;; Where the master image starts: the relocator, then DOS two pages later. The host sets the origin itself, so
+;; this only checks it; the editor, which knows no origin, assembles the source at 0.
+;; Also: ORIGIN (DOS33)
+MASTER_ORIGIN = $1B00
 .include "Relocator.asm"
+.assert ImageStart = MASTER_ORIGIN || ImageStart = 0, "The master image starts with the relocator, at MASTER_ORIGIN."
 .else
 ; Without the relocator, the names DOS uses for it point into DOS itself, as they do after relocation.
-BEGIN = START
-DOSREL = DBINIT
+
+;; Where `BOOT 2` reads DOS to, and where INIT writes it from: without the relocator, DOS's first byte.
+;; Also: BEGIN (DOS33, DOS31)
+ImageStart = DosStart
+
+;; Where `BOOT 2` ends: without the relocator, DOS's cold start, since this DOS is already where it runs.
+;; Also: DOSREL (DOS33, DOS31)
+RelocateDos = ColdStart
 .endif
 
 ; The command interpreter.
@@ -96,11 +128,14 @@ DOSREL = DBINIT
 .include "RwtsEquates.asm"
 .include "PreNibble.asm"
 .include "WriteSector.asm"
-.include "PostNibbleRead.asm"
-.include "ReadAddressSeek.asm"
+.include "PostNibble.asm"
+.include "ReadData.asm"
+.include "ReadAddress.asm"
+.include "Seek.asm"
 .include "MsWait.asm"
 .include "WriteAddress.asm"
 .include "Rwts1.asm"
 .include "Rwts2.asm"
+.include "DriveTracks.asm"
 .include "Formatter.asm"
 .include "DosPatches.asm"

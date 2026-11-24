@@ -1,75 +1,125 @@
-;; DOS 3.3 AND 3.2: PATCHES AT THE TOP OF DOS (DOSPTCH)
+; retrocore: style=strict ignore=unlinked-name:RWTS -- the disk layer's name in prose
+;; DOS 3.3 and 3.2: the patches at the top of DOS, and DOS's end
 ;;
-;; Fixes added after the rest of DOS was written, in its last bytes ($BFC8-$BFFF where DOS runs): the end of
-;; the boot sequence, which resets the screen and the language card, and three short routines that existing
-;; code was changed to call. ENDOFDOS, just after them, is where DOS ends: $C000 where it runs, $4000 in the
-;; master image. More patches live in spare space in the boot loader's page (BootLoader.asm) and after MSWAIT
-;; (MsWait.asm).
+;; Fixes added after the rest of DOS was written, in its last bytes (Apple's DOSPTCH module): in DOS 3.3, $BFC8-$BFFF
+;; where DOS runs, the end of the boot sequence, which resets the screen and the language card, and three short
+;; routines that existing code was changed to call; in DOS 3.2 only the three routines. <DosEnd>, just after them, is
+;; where DOS ends: $C000 where it runs, $4000 in the master image. DOS 3.3 has more patches in spare space in the boot
+;; loader's page (BootLoader.asm), and the 1983 DOS after <DiskII::Wait> (MsWait.asm).
 ;;
-;; SDP1 to EDP1 is one of the code ranges in the relocator's CDETAB, so the addresses in these instructions
-;; move with DOS.
+;; <ReportDiskFull> is the file manager's code, patched in here: it works on the file manager's state and leaves
+;; through the file manager's error exit, so it reads as part of the file manager (FileLocateSector.asm), whose
+;; names it uses.
 ;;
-;; DOS 3.2 has only the three routines, in $BFDC-$BFFF. They are inside ASC2 to AEC2, its relocator's last code
-;; range, so there AEC2 is defined here and SDP1 and EDP1 are not.
+;; In DOS 3.3, <TopPatchCodeStart> to <TopPatchCodeLast> is one of the code ranges in the relocator's
+;; <Relocator::CodeRanges>, so the addresses in these instructions move with DOS. DOS 3.2 has only the three
+;; routines, in $BFDC-$BFFF. They are inside the range of RWTS and the formatter, its relocator's last code range,
+;; which ends here at <RwtsCodeLast>.
 
-;; The end of BOOT 2, reached from DOSINT once DOS is in memory: resets the hardware, then goes back to RCBACK.
-;; It points output at the screen and, on a machine with a language card, writes zero to the card's RAM at
-;; $E000 while leaving the ROM selected for reading. Without a card the write goes nowhere. Not in DOS 3.2.
 .if DOS32 = 0
-SDP1:
-RCPATCH:
-    jsr SETVID
-    lda $C081                       ; two reads in a row: read the ROM, write the card's RAM
-    lda $C081
+;; The start of the relocator's range of the patches at the top of DOS, which runs to <TopPatchCodeLast>.
+;; Also: SDP1 (DOS33, DOS31)
+TopPatchCodeStart:
+.if REVISION_B
+
+;; The end of `BOOT 2`, reached from <Boot::StartDos> once DOS is in memory: resets the hardware, then goes back to
+;; <Boot::StartDos::AfterReset>.
+;;
+;; At $BFC8 where DOS runs. It points output at the screen and, on a machine with a language card, writes zero to
+;; the card's RAM at $E000 while leaving the ROM selected for reading. Without a card the write goes nowhere. The
+;; revision B DOS also turns off the IIe's 80-column display (<TurnOff80Columns>). Not in DOS 3.2.
+;; Also: RCPATCH (DOS33)
+.proc ResetScreenAndCard
+.assert MASTER || * = $BFC8, "ResetScreenAndCard is at $BFC8 where DOS runs."
+    jsr SetScreen
+    lda LanguageCardRomWriteBank2   ; two reads in a row: read the ROM, write the card's RAM
+    lda LanguageCardRomWriteBank2
     lda #0
-    sta $E000                       ; the card's $E000 can't pass for a BASIC's first byte (see SWTST)
-; Revision B (1982) also turns off the IIe's 80-column display; the original fills the space with zeros.
-.if DOS33B
-    jsr OFF80
-    jmp RCBACK
+    sta RomBasicId                  ; the card's $E000 can't pass for a BASIC's first byte (see Commands::FindBasic)
+    jsr TurnOff80Columns
+    jmp Boot::StartDos::AfterReset
+.endproc
 .else
-    jmp RCBACK
+
+;; The end of `BOOT 2`, reached from <Boot::StartDos> once DOS is in memory: resets the hardware, then goes back to
+;; <Boot::StartDos::AfterReset>.
+;;
+;; At $BFC8 where DOS runs. It points output at the screen and, on a machine with a language card, writes zero to
+;; the card's RAM at $E000 while leaving the ROM selected for reading. Without a card the write goes nowhere. The
+;; 1980 DOS fills the space the revision B DOS uses to turn off the 80-column display with zeros. Not in DOS 3.2.
+;; Also: RCPATCH (DOS33)
+.proc ResetScreenAndCard
+.assert MASTER || * = $BFC8, "ResetScreenAndCard is at $BFC8 where DOS runs."
+    jsr SetScreen
+    lda LanguageCardRomWriteBank2   ; two reads in a row: read the ROM, write the card's RAM
+    lda LanguageCardRomWriteBank2
+    lda #0
+    sta RomBasicId                  ; the card's $E000 can't pass for a BASIC's first byte (see Commands::FindBasic)
+    jmp Boot::StartDos::AfterReset
+.endproc
+
+    ; The three bytes revision B's JSR takes.
     .res 3,0
 .endif
 .endif
 
-;; Clears TEMP1A and CB, the B parameter's value, while the command scanner resets a command's options.
-;; In:    A = the value to store; its one caller passes 0
-CLRBYTE:
-    sta TEMP1A
-    sta CB
-    sta CB+1
-    rts
-
-;; Clears the input and output states, as CLRSTS does, and RSTATE too; DOS's error handler calls it.
-;; Out:   Y = 0
-CLRSTS1:
-    jsr CLRSTS
-    sty RSTATE
-    rts
-
-;; Reports DISK FULL (error 9), closing the open files first.
+;; Clears <InterpreterScratch> and <KeywordByte>, the B option's value, while the command scanner resets a command's
+;; options.
 ;;
-;; It saves the current file's control block back to its buffer, returns to the stack level at which the file
-;; manager was entered, closes the files, and records the stack level again, since CLALL used the file manager
-;; itself. ERRORA then leaves the file manager with the error.
-ERROR9X:
-    jsr RTNFCB
-    ldx ENTSTK
+;; At $BFDC where DOS runs. <Scanner::ReadOptions> calls it.
+;; In: A = the value to store; its one caller passes 0
+;; Keeps: A, X, Y
+;; Also: CLRBYTE (DOS33)
+.proc ClearByteOption
+.assert MASTER || * = $BFDC, "ClearByteOption is at $BFDC where DOS runs."
+    sta InterpreterScratch
+    sta KeywordByte
+    sta KeywordByte+1
+    rts
+.endproc
+
+;; Clears the input and output states, as <ClearStates> does, and <RunPending> too; DOS's error handler calls it.
+;; Out: Y = 0
+;; Keeps: A, X
+;; Also: CLRSTS1 (DOS33)
+.proc ClearAllStates
+    jsr ClearStates
+    sty RunPending
+    rts
+.endproc
+
+;; Reports DISK FULL, closing the open files first: the file manager's code, which its allocation reaches when no
+;; sector is free.
+;;
+;; It saves the current file's control block back to its buffer (<FileManager::SaveWorkArea>), returns to the stack
+;; level at which the file manager was entered, closes the files (<Commands::CloseAll>), and records the stack level
+;; again, since <Commands::CloseAll> used the file manager itself. <FileManager::Fail>, the file manager's error exit,
+;; then leaves the file manager with <ERROR_DISK_FULL>.
+;; Also: ERROR9X (DOS33)
+.proc ReportDiskFull
+    jsr FileManager::SaveWorkArea
+    ldx FileManager::EntryStack
     txs
-    jsr CLALL
+    jsr Commands::CloseAll
     tsx
-    stx ENTSTK
-    lda #9
-    jmp ERRORA
+    stx FileManager::EntryStack
+    lda #ERROR_DISK_FULL
+    jmp FileManager::Fail
+.endproc
 
 .if DOS32
-;; The last byte of DOS: the end of the relocator's last code range, which leaves it out.
-AEC2 = *-1
+;; The last byte of DOS: the end of the relocator's last code range, RWTS, the formatter and these patches, which
+;; leaves this byte out.
+;; Also: AEC2 (DOS33, DOS31)
+RwtsCodeLast = *-1
 .else
-;; The last byte of the patches: the end of the relocator's last code range.
-EDP1 = *-1
+;; The last byte of the patches: the end of the relocator's range from <TopPatchCodeStart>, which leaves this byte
+;; out.
+;; Also: EDP1 (DOS33, DOS31)
+TopPatchCodeLast = *-1
 .endif
 
-;; The address just after DOS: $C000 where DOS runs.
-ENDOFDOS:
+;; The address just after DOS: $C000 where DOS runs, $4000 in the master image.
+;; Also: ENDOFDOS (DOS33)
+DosEnd:
+.assert * - DosStart = $2300, "DOS is 35 pages long, $9D00-$BFFF where it runs."

@@ -279,7 +279,8 @@ EPILOGUE_SECOND = $AA
 ;; and halved again. Each address field read corrects CurrentTrack to the track it names, so a wrong guess costs one
 ;; more seek.
 ;; In: Track, Sector, SectorBuffer = the page, the drive's motor on
-;; Out: (SectorBuffer) = the sector's 256 bytes, carry = clear, X = slot * 16, CurrentTrack = Track
+;; Out: (SectorBuffer) = the sector's 256 bytes, carry = clear, X = $FF (from <DiskII::PostNibble>),
+;;   CurrentTrack = Track
 .proc ReadSector
 ;; The slot * 16 the sectors come from, this `ldx`'s operand.
 SectorSlot = * + 1

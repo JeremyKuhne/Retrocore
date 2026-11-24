@@ -244,7 +244,7 @@ DelayLoop:
 ;;
 ;; A write's sector is prepared first, while nothing is waiting; the carry, set to read or clear to write, waits on
 ;; the stack. A wrong track means a seek and a fresh count of tries.
-;; In: X = slot * 16, the motor test's flags on the stack
+;; In: X = slot * 16
 ;; Also: TRYTRK (DOS33)
 TryTrack:
     ldy #Iob::COMMAND

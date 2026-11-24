@@ -482,12 +482,11 @@ RetriesLeft = $0578
 
 ;; Reads, writes or formats as the IOB at A (high byte) and Y (low byte) asks, or only moves the head.
 ;;
-;; At $1D00. As DOS 3.3's RWTS (Rwts1.asm): if the slot is not the one used last, it waits until the old slot's
-;; drive has stopped, which it knows when the data latch stops changing. Then, as DOS 3.2's does (Rwts32.asm), it
-;; reads the latch once more to see whether this slot's motor is turning, and turns it on either way; a motor counts
-;; as off if the drive is not the one used last. If it was off, it waits seven of <DiskII::Wait>'s times 100
-;; microseconds before the seek and, after it, until the motor-on count reaches zero, without DOS 3.3's check that
-;; the count is already past it.
+;; At $1D00. As DOS 3.3's RWTS (Rwts1.asm): if the slot is not the one used last, it waits until the old slot's drive
+;; has stopped, which it knows when the data latch stops changing. Then, as DOS 3.2's does (Rwts32.asm), it reads the
+;; latch once more to see whether this slot's motor is turning, and turns it on either way; a motor counts as off if the
+;; drive is not the one used last. If it was off, it calls <DiskII::Wait> seven times before the seek and, after it,
+;; until the motor-on count reaches zero, without DOS 3.3's check that the count is already past it.
 ;; In: A = the IOB's address's high byte, Y = its low byte
 ;; Out: carry = clear, with the IOB's <Iob::VOLUME_FOUND> = the volume found (read, write), and its
 ;;   <Iob::PREVIOUS_SLOT> and <Iob::PREVIOUS_DRIVE> = this slot and drive, X = slot * 16, the motor off
@@ -660,8 +659,8 @@ DelayLoop:
 ;;
 ;; The address field's sector is compared as it is, without DOS 3.3's interleave, and the formatter gets the volume
 ;; in <FormatVolume>. A wrong sector costs a try against <RetriesLeft>, so running out of them recalibrates rather
-;; than failing. RWTS comes here with the motor running, the head on the IOB's track, and the flags from its motor
-;; test on the stack.
+;; than failing. RWTS comes here with the motor running and the head on the IOB's track, the flags from its motor
+;; test already taken off the stack.
 ;; In: X = slot * 16
 TryTrack:
     ldy #Iob::COMMAND

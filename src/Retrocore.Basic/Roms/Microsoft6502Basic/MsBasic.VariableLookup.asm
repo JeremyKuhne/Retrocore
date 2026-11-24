@@ -35,7 +35,8 @@
     ;; In: TextPointer = first character, SubscriptMode = subscript mode, decimal = clear
     ;; Out: A = low value address and Y = high value address for a scalar or an array element,
     ;;   TextPointer = next non-space character,
-    ;;   ValueType = $FF for a string or 0 for a number, IntegerType = $80 for an integer or 0 otherwise
+    ;;   ValueType = $FF for a string or 0 for a number, IntegerType = $80 for an integer or 0 otherwise; at the
+    ;;   dimensioning entry, an array `DIM` creates returns without an element address
     ;; Errors: SYNTAX for an invalid first character, a disallowed integer name or a name the PET reserves
     ;;   (<Variables::CheckReservedName>), OUT OF MEMORY when a new variable does not fit (<Variables::Create>), and
     ;;   the array path's: BAD SUBSCRIPT, REDIM'D ARRAY, ILLEGAL QUANTITY, OUT OF MEMORY, and OUT OF DATA for
@@ -228,7 +229,7 @@ Advance:
 
 ;; Emits the absent-variable handling, scalar insertion and array-data pointer calculation.
 ;; Parameters: callerHigh = 1 to check both bytes of the evaluator's return address,
-;;   inlineZero = 1 to emit two zero bytes here, ownZero = 1 for AppleSoft's own <ZeroVariable> rather than
+;;   inlineZero = 1 to emit two zero bytes here, ownZero = 1 for AppleSoft's own zero bytes rather than
 ;;   <ZeroValue>,
 ;;   clockNames = 1 to recognize TI and TI$, statusName = 1 to protect ST,
 ;;   diskNames = 1 to protect DS and DS$, linkedArrays = 1 to adjust BASIC 4's string back-links,

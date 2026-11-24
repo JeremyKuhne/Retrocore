@@ -40,7 +40,7 @@ FAMILIES_DECLARED = 1
 .endscope
 
 ;; The internals of variable and array lookup: creating a variable or an array, finding an array element's address,
-;; and the zero an absent variable reads.
+;; and returning the zero an absent variable reads.
 .scope Variables
 .endscope
 .endif

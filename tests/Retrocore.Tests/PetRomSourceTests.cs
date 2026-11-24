@@ -75,7 +75,7 @@ public sealed class PetRomSourceTests
                 || model == PetModel.Pet2001 && symbol.Value is >= 0xE7F3 and < 0xE7F9)))
         {
             // The labels only the SDK's own overlays give, which no document names, and which the rename table gives
-            // no Also: (Basic.md B2): their definitions keep the overlay's address under their new names.
+            // no Also: (Basic.md E5): their definitions keep the overlay's address under their new names.
             if (BasicNames.OverlayOnlyLabels.TryGetValue(label.Name, out string? current))
             {
                 native.Symbol(current).Should().Be(label.Value, $"{label.Name}'s definition must retain its ROM address");

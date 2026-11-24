@@ -158,10 +158,10 @@ Done:
 
     ;; Releases a descriptor if it is the latest temporary and returns its characters' address and length.
     ;;
-    ;; Only the latest temporary is removed. With unlinked strings, its character space is reclaimed only if
-    ;; it begins at <StringsBottom>. With linked strings, the platform's link helper marks eligible nonempty heap
-    ;; strings as garbage; a string at <StringsBottom> also returns its two link bytes. Literals and other ineligible
-    ;; strings are not marked. The character bytes themselves are left in place.
+    ;; Only the latest temporary is removed. With unlinked strings, its character space is reclaimed only if it begins
+    ;; at <StringsBottom>. With linked strings, the platform's link helper finds the link of an eligible nonempty heap
+    ;; string, and this routine marks it as garbage; a string at <StringsBottom> also returns its two link bytes.
+    ;; Literals and other ineligible strings are not marked. The character bytes themselves are left in place.
     ;; In: A = descriptor low byte, Y = descriptor high byte, decimal = clear
     ;; Out: A = length, X = character address low byte, Y = character address high byte, Pointer1 = character address
     ;; See: <Strings::ReleaseTemporary>

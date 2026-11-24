@@ -5,7 +5,7 @@
 
 ; MICROSOFT 6502 BASIC: EXPRESSION EVALUATION
 ;
-; The pending operations' stack holds five-byte packed values.
+; The pending operations' stack holds unpacked operands: a sign byte, the exponent and four mantissa bytes.
 
 ;; The number of relational tokens, `>`, `=` and `<`, which follow one another from <TOKEN_GREATER>.
 RELATION_TOKENS = 3
@@ -144,7 +144,7 @@ RelationBackUpLow:
     sta OperatorMask
     bne ComparePrecedence
 
-;; After a prefix operation: compares precedence with the operator at <OperatorPointer>.
+;; After an operation's handler returns: compares precedence with the operator at <OperatorPointer>.
 ;; Also: QPREC1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 CompareAfterPrefix:
     cmp OperatorTable + OperatorEntry::PRECEDENCE,y

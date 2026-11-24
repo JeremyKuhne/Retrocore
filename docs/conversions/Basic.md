@@ -990,11 +990,12 @@ Decisions and how the table was applied:
   `callerHigh`, `useSimzer` is `ownZero` and `arrayEntryAlias` is `countEntry`. The table keeps the SDK's own
   names (KEEP). Whether to wrap the line instead is a question for the owner.
 - E11. Tests and their helpers:
-  - `BasicNames` declares the three new scopes. In its `CurrentNamesOf`, an old name that names different
-    definitions in different builds (ANDOP) goes last and gives way to an old name that names only that definition.
-    Its `DefiningSymbol` follows an alias to its target. `BothVendorsNames` pins the names both vendors' files give,
-    and `VendorLabelNames` the one (GETRTS) that other builds still give to a label of their own unconverted code;
-    the vendor-leak checks exempt exactly those.
+  - `BasicNames` declares the three new scopes. An old name that names different definitions in different builds (ANDOP,
+    COPYZC) is predefined per build: the operator-table, interpreter-alias and decimal-input tests pass
+    `BasicNames.Build(...)` to `WithCurrentNames` and `ScopedNames`, and without a build both reject such a name. Its
+    `DefiningSymbol` follows an alias to its target. `BothVendorsNames` pins the names both vendors' files give, and
+    `VendorLabelNames` the one (GETRTS) that other builds still give to a label of their own unconverted code; the
+    vendor-leak checks exempt exactly those.
   - The standalone sources predefine `BasicNames.ScopedNames` and include `MsBasic.Layouts.asm`.
   - The region comparisons skip the vendors' names, as S10's do.
   - The rename gate now renames CRDO and NEWSTT, in the vendor files that use them (a `Files` list), since their

@@ -23,7 +23,7 @@
     ;; one. A new implicitly dimensioned array has bound <DEFAULT_BOUND>, indexes 0 to 10, in every
     ;; dimension. Subscripts and type flags are stacked while recursive expressions are evaluated.
     ;;
-    ;; Where `existingArrays` is 1 (AppleSoft), <Variables::ChooseArrayLookup> enters at `Search` to skip the
+    ;; Where `existingArrays` is 1 (AppleSoft), the existing-array lookup's chooser enters at `Search` to skip the
     ;; subscripts.
     ;; Also: ISARY (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc FindArray
@@ -154,7 +154,8 @@ ToError:
     ;; Where `existingArrays` is 1 (AppleSoft), a nonzero <SubscriptMode> (the existing-array lookup) returns at once
     ;; with carry set and the header at <SourceStart>.
     ;; In: SourceStart = the array's header, Counter = the number of subscripts on the stack
-    ;; Errors: REDIM'D ARRAY when dimensioning, BAD SUBSCRIPT for a different number of subscripts
+    ;; Errors: REDIM'D ARRAY when dimensioning, BAD SUBSCRIPT for a different number of subscripts or one out of
+    ;;   bounds, OUT OF MEMORY if the element offset overflows
     ;; Also: GOTARY (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc ArrayFound
     ldx #<ERROR_REDIMENSIONED_ARRAY
@@ -195,7 +196,8 @@ CheckDimensions:
     ;; checks for overflow while multiplying the dimensions by the element size. <Statements::Dim> returns after
     ;; allocation; a normal reference continues into <ElementAddress> to find the requested element.
     ;; In: SourceStart = where the header goes (<ArraysEnd>), Counter = the number of subscripts on the stack
-    ;; Errors: OUT OF MEMORY when the array does not fit
+    ;; Errors: OUT OF MEMORY when the array does not fit; for an element reference, then BAD SUBSCRIPT for a
+    ;;   subscript out of bounds
     ;; Also: NOTFDD (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc CreateArray
     jsr ElementsStart

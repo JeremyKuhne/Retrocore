@@ -124,7 +124,8 @@ SetLength:
 CheckPage:
     stx SecondStringPointer+1
     lda StringPointer+1
-    ; Where the input buffer is outside page zero (all but BASIC 1), text in page zero or the buffer's page is copied.
+    ; Where the input buffer is outside page zero (all but BASIC 1, by default), text in page zero or the buffer's page
+    ; is copied.
     .if bufferPage
         beq CopyText
         cmp #bufferPage

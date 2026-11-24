@@ -12,8 +12,8 @@
 .macro LinkedStringAllocation
     .scope Strings continued
 
-    ;; Reserves string space below <StringsBottom>, with a two-byte link below it, collecting garbage once if a
-    ;; nonempty request does not fit.
+    ;; Reserves string space below <StringsBottom>, with a two-byte link above the characters, collecting garbage once
+    ;; if a nonempty request does not fit.
     ;;
     ;; A nonempty string gets a link containing its length followed by $FF, marking it as garbage until assignment.
     ;; Equality with <ArraysEnd> fits. A zero-length request returns at once with X = 0 and Y unchanged, without

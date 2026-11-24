@@ -563,7 +563,7 @@ internal static partial class BasicNames
 
     /// <summary>
     ///  The labels only the SDK's own MACRO-10 overlays give, which no document names and the rename table gives no
-    ///  <c>;; Also:</c> (Basic.md B2), with the definition at each one's address in the native builds that have it.
+    ///  <c>;; Also:</c> (Basic.md E5), with the definition at each one's address in the native builds that have it.
     /// </summary>
     internal static IReadOnlyDictionary<string, string> OverlayOnlyLabels => s_overlayOnlyLabels;
 

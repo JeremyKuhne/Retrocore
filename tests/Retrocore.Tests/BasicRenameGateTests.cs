@@ -48,7 +48,8 @@ public sealed partial class BasicRenameGateTests
         typeof(AppleSoftTests), typeof(Basic1IndependentSwitchTests), typeof(BasicNativeRootSwitchTests),
         typeof(BasicSharedAliasConsistencyTests), typeof(BasicSharedArrayMultiplicationTests),
         typeof(BasicMathConversionTests), typeof(BasicMathRoutineTests), typeof(BasicSharedAssignmentTests),
-        typeof(BasicStatementsConversionTests), typeof(BasicStatementRoutineTests), typeof(BasicExpressionsConversionTests),
+        typeof(BasicStatementsConversionTests), typeof(BasicStatementRoutineTests),
+        typeof(BasicExpressionsConversionTests), typeof(BasicExpressionRoutineTests),
         typeof(BasicSharedFloatAliasesTests),
         typeof(BasicSharedInterpreterAliasesTests),
         typeof(BasicSharedCharacterReaderTests), typeof(BasicSharedCommandInputTests), typeof(BasicSharedExpressionTests),
@@ -102,7 +103,7 @@ public sealed partial class BasicRenameGateTests
             Dictionary<string, int> renamed = CopyRenamed(BasicNames.Inputs, scratch);
             foreach ((string oldName, _, _, _) in s_renames)
             {
-                renamed[oldName].Should().BeGreaterThan(3, $"{oldName} is used across the shared, AppleSoft and PET sources");
+                renamed[oldName].Should().BeGreaterThan(3, $"{oldName} is used across the AppleSoft and PET sources");
             }
 
             CheckRename(BasicNames.Inputs, scratch);

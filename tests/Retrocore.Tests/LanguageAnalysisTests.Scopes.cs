@@ -84,9 +84,15 @@ public sealed partial class LanguageAnalysisTests
                 uri,
                 diagnostics => diagnostics.Any(diagnostic => diagnostic.Code == DocumentationRules.HistoricalName));
 
+            // Again's lda CH and Use's lda ::CH, and not Use's lda CH, which is Local's own CH.
+            string[] lines = text.Split('\n');
+            int again = Array.FindIndex(lines, line => line.Contains("lda CH", StringComparison.Ordinal));
+            int root = Array.FindIndex(lines, line => line.Contains("lda ::CH", StringComparison.Ordinal));
             published.Where(diagnostic => diagnostic.Code == DocumentationRules.HistoricalName)
-                .Select(diagnostic => diagnostic.Message)
-                .Should().Equal("CH is a historical name of CursorColumn.", "CH is a historical name of CursorColumn.");
+                .Select(diagnostic => (diagnostic.Range.Start.Line, diagnostic.Message))
+                .Should().BeEquivalentTo([
+                    (again, "CH is a historical name of CursorColumn."),
+                    (root, "CH is a historical name of CursorColumn.")]);
         }
         finally
         {

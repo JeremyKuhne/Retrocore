@@ -157,11 +157,11 @@ public sealed class BasicSharedInterpreterAliasesTests
         {
             SourceResolver = new FileAssemblySourceResolver(),
             IncludePaths = [Shared],
-            PredefinedSymbols = BasicNames.WithCurrentNames(symbols)
+            PredefinedSymbols = BasicNames.WithCurrentNames(symbols, BasicNames.Build(model, original))
         };
 
         AssemblyResult native = RequireSuccess(new Retrocore.Assembler.Assembler().Assemble(
-            new AssemblySource(BasicNames.ScopedNames(symbols) + "\n" + source, Path.Join(Pet, "Basic", "InterpreterAliasTest.asm")),
+            new AssemblySource(BasicNames.ScopedNames(symbols, BasicNames.Build(model, original)) + "\n" + source, Path.Join(Pet, "Basic", "InterpreterAliasTest.asm")),
             options));
 
         native.Symbol("INTERPRETER_ASSIGNMENT_END").Should().Be(assignmentEnd);

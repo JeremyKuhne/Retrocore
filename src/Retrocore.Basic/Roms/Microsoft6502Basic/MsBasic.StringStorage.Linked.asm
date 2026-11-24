@@ -39,8 +39,8 @@ Try:
     bcs BelowLink
     dey
 
-;; Saves the link address in <Pointer1> and subtracts the length. BASIC 4's documents call it TRYAG3, Microsoft's
-;; name for the room check, so Commodore's historical names give it (Basic.md E4).
+;; Saves the link address in <Pointer1> and subtracts the length. BASIC 4's documents give it Microsoft's old name of
+;; the room check, so Commodore's historical names give it (Basic.md E4).
 BelowLink:
     sta Pointer1
     sty Pointer1+1
@@ -75,8 +75,8 @@ Take:
     stx StringsBottom
     sty StringsBottom+1
 
-;; Returns. BASIC 4's documents call it GETRTS, the name Microsoft gives the output routine's return, so
-;; Commodore's historical names give it (Basic.md E3).
+;; Returns. BASIC 4's documents give it Microsoft's old name of the output routine's return, so Commodore's
+;; historical names give it (Basic.md E3).
 Done:
     rts
 

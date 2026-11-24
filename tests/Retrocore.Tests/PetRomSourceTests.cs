@@ -395,7 +395,7 @@ public sealed class PetRomSourceTests
         string folder = Path.Join(BasicNames.Inputs, "Microsoft6502Basic");
         string source = $"""
             .cpu Mos6502
-            {BasicNames.ScopedNames(symbols)}
+            {BasicNames.ScopedNames(symbols, BasicNames.Build(model, original: false))}
             .include "MsBasic.DecimalInputCore.asm"
             .org ${origin:X4}
                 DecimalInput {(model == PetModel.Pet2001 ? 1 : 0)}
@@ -406,7 +406,7 @@ public sealed class PetRomSourceTests
             new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
             {
                 SourceResolver = new FileAssemblySourceResolver(),
-                PredefinedSymbols = BasicNames.WithCurrentNames(symbols)
+                PredefinedSymbols = BasicNames.WithCurrentNames(symbols, BasicNames.Build(model, original: false))
             });
 
         input.Success.Should().BeTrue(string.Join('\n', input.Diagnostics.Select(diagnostic => diagnostic.Message)));

@@ -33,8 +33,8 @@ Try:
     bcs CheckRoom
     dey
 
-;; Compares the new bottom with <ArraysEnd> (equality fits). Microsoft's name for it, TRYAG3, is BASIC 4's for another
-;; step, so each vendor's historical names give it (Basic.md E4).
+;; Compares the new bottom with <ArraysEnd> (equality fits). Its old name is another step's in BASIC 4, so each
+;; vendor's historical names give it (Basic.md E4).
 CheckRoom:
     cpy ArraysEnd+1
     bcc Collect

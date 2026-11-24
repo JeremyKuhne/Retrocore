@@ -302,22 +302,35 @@ internal static partial class BasicNames
     internal static string ScopedNames(IReadOnlyDictionary<string, long> symbols) => ScopedNames(symbols, Tables());
 
     /// <summary>
+    ///  Gets the source <see cref="ScopedNames(IReadOnlyDictionary{string, long})"/> gives, with the scoped names one
+    ///  native BASIC build gives the old names.
+    /// </summary>
+    /// <param name="symbols">The predefined symbols, by the names Microsoft's source has.</param>
+    /// <param name="build">The build whose names to define, from a <c>Build</c> overload.</param>
+    /// <returns>The declarations and definitions, one per line.</returns>
+    /// <exception cref="ArgumentException">The build is not a native BASIC build.</exception>
+    internal static string ScopedNames(IReadOnlyDictionary<string, long> symbols, string build) =>
+        ScopedNames(symbols, Tables(), build);
+
+    /// <summary>
     ///  Gets the source <see cref="ScopedNames(IReadOnlyDictionary{string, long})"/> gives, from given tables of each
     ///  build's historical names.
     /// </summary>
     /// <param name="symbols">The predefined symbols, by their old names.</param>
     /// <param name="byBuild">Each build's current names for its historical names, by build key.</param>
+    /// <param name="build">The build whose names to define; null for all of them.</param>
     /// <returns>The declarations and definitions, one per line.</returns>
-    /// <exception cref="InvalidOperationException">The builds give an old name to different definitions.</exception>
+    /// <exception cref="InvalidOperationException">With no build, the builds disagree on an old name.</exception>
     internal static string ScopedNames(
         IReadOnlyDictionary<string, long> symbols,
-        IReadOnlyDictionary<string, IReadOnlyDictionary<string, string[]>> byBuild)
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, string[]>> byBuild,
+        string? build = null)
     {
         List<string> source = [".ifndef FAMILIES_DECLARED", "FAMILIES_DECLARED = 1"];
         source.AddRange(s_families.SelectMany(family => (string[])[$".scope {family}", ".endscope"]));
         source.Add(".endif");
         string[] open = [];
-        foreach ((string name, long value) in CurrentNamesOf(symbols, byBuild, build: null)
+        foreach ((string name, long value) in CurrentNamesOf(symbols, byBuild, build)
             .Where(pair => IsScoped(pair.Key))
             .OrderBy(pair => pair.Key, StringComparer.Ordinal))
         {

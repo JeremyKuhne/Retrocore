@@ -26,7 +26,7 @@ namespace Retrocore.Debug.Language;
 /// </remarks>
 internal sealed class SdkIndex
 {
-    private static readonly ConcurrentDictionary<string, Lazy<SdkIndex>> s_indexes = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly ConcurrentDictionary<string, Lazy<SdkIndex>> s_indexes = new(StringComparer.Ordinal);
 
     private readonly List<SourceAnalysis> _analyses = [];
 
@@ -86,7 +86,7 @@ internal sealed class SdkIndex
                 _ = analysis.Documentation;
                 lock (_analyses) { _analyses.Add(analysis); }
             }
-            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            catch (IOException exception)
             {
                 // An unreadable SDK file leaves its module out of search and of other modules' links.
                 Console.Error.WriteLine($"The SDK source {root} could not be read: {exception.Message}");

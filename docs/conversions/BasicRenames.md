@@ -2404,7 +2404,7 @@ to K12, R1 to R10).
 | 1988 | `ASPAC` | `PrintSpaces` | routine | PET | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | vendor | Prints A spaces; PrintComma branches here and PrintTabOrSpace falls into it. — two definitions, one per variant of the macro (lines 213, 232) |
 | 1989 | `XSPAC` | `PrintSpaces::CountInX` | entry | PET | M6502, CBM4S79 [P4 P4R], HV2, HV4, HV4R; other names here: XSPAC1 (HV1, HV1R) | vendor | Prints X spaces. — BASIC 1: the loop itself |
 | 1990 | `NOTABR` | `ContinuePrint` | entry | PET | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | vendor | Reads the next character and continues PRINT at PRINTC. Converted: `PrintSpaces::ContinuePrint`, as X2 has it (Basic.md I4). |
-| 1991 | `XSPAC2` | `PrintSpaces::Next` | local | P2 P4 P4R | M6502, CBM4S79 [P4 P4R], HV2, HV4, HV4R | vendor | Counts down; zero goes on to ContinuePrint. |
+| 1991 | `XSPAC2` | `PrintSpaces::Next` | local | P2 P4 P4R | M6502, CBM4S79 [P4 P4R], HV2, HV4, HV4R | vendor | Counts down; zero goes on to ContinuePrint. Converted: BASIC 1 has it too, `PrintSpaces::Next` in its own branch, cited HV1 and HV1R (code6), which give it there (Basic.md I12). |
 | 1992 | `XSPAC1` | `PrintSpaces::One` | local | P2 P4 P4R | M6502, CBM4S79 [P4 P4R], HV2, HV4, HV4R | vendor | Prints one space and loops. |
 
 ### Commodore.CommandInput
@@ -2763,7 +2763,7 @@ to K12, R1 to R10).
 | 2317 | `COMMODORE_START_MESSAGES` | `CommodoreStartMessages` | macro | PET |  | vendor | Emits the free-bytes message and the sign-on. — SDK name: case only |
 | 2318 | `earlyBanner` | `KEEP` | parameter of COMMODORE_START_MESSAGES | PET |  | vendor | 1 for BASIC 1's sign-on after the free-bytes text. |
 | 2319 | `WORDS` | `BytesFreeMessage` | message | PET | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | vendor | The text " BYTES FREE", then a newline (BASIC 1: its sign-on). |
-| 2320 | `FREMES` | `SignOnMessage` | message | P2 P4 P4R | M6502, CBM4S79 [P4 P4R], HV2, HV4, HV4R | vendor | The ### COMMODORE BASIC ### sign-on printed before the free bytes (BASIC 2, or a BASIC 1 built with START_BANNER_AFTER_FREE = 0); BASIC 4 assembles it but prints its own SIGNON. |
+| 2320 | `FREMES` | `SignOnMessage` | message | P2 P4 P4R | M6502, CBM4S79 [P4 P4R], HV2, HV4, HV4R | vendor | The ### COMMODORE BASIC ### sign-on printed before the free bytes (BASIC 2, or a BASIC 1 built with START_BANNER_AFTER_FREE = 0); BASIC 4 assembles it but prints its own SIGNON. Converted: BASIC 1 has it too, `SignOnMessage` within BytesFreeMessage's string, cited HV1 and HV1R (code26) (Basic.md I12). |
 
 ### Commodore.InterpreterAliases
 
@@ -2797,8 +2797,8 @@ to K12, R1 to R10).
 | 2341 | `GONE3` | `DispatchStatement` | routine | PET | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | vendor | Returns at the end of a statement; otherwise dispatches a statement token through StatementTable, anything else is LET. |
 | 2342 | `GONE2` | `DispatchStatement::WithToken` | entry | PET | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | vendor | Subtracts TOKEN_END from A and dispatches; the shared ON code enters here. |
 | 2343 | `GONE4` | `DispatchStatement::LookUp` | local | P1 P1R P4 P4R | HV4, HV4R, CBM4S79 [P4 P4R] | vendor | BASIC 1: checks the statement range; BASIC 4: dispatches after mapping a disk token; then indexes StatementTable. — two definitions (lines 104, 115) at different steps |
-| 2344 | `GLET` | `DispatchStatement::ToLet` | local | P2 P4 P4R | M6502, CBM4S79 [P4 P4R], HV2, HV4, HV4R | vendor | Jumps on to LET. |
-| 2345 | `MORSTS` | `CheckStatementSeparator` | routine | P2 P4 P4R | M6502, CBM4S79 [P4 P4R], HV2, HV4, HV4R | vendor | NextStatement's nonzero-byte case: a colon runs the next statement; anything else is a syntax error. |
+| 2344 | `GLET` | `DispatchStatement::ToLet` | local | P2 P4 P4R | M6502, CBM4S79 [P4 P4R], HV2, HV4, HV4R | vendor | Jumps on to LET. Converted: BASIC 1 has it too, the same `DispatchStatement::ToLet` in its own branch, cited HV1 and HV1R (code4) (Basic.md I12). |
+| 2345 | `MORSTS` | `CheckStatementSeparator` | routine | P2 P4 P4R | M6502, CBM4S79 [P4 P4R], HV2, HV4, HV4R | vendor | NextStatement's nonzero-byte case: a colon runs the next statement; anything else is a syntax error. Converted: HV1 and HV1R give BASIC 1's own compare in NextStatement this name; it is in prose there, since a per-build name inside NextStatement would collide with sources that define NextStatement (Basic.md I12). |
 | 2346 | `GO` | `Statements::Go` | routine | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R; spelling only: K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | GO: requires TO and continues as GOTO (BASIC 4's table entry). |
 | 2347 | `SNERRX` | `CheckGoStatement` | routine | P2 | M6502, HV2 | vendor | BASIC 2: a token past the statements that is GO requires TO and continues as GOTO; anything else is a syntax error. — same job as BASIC 4's Statements::Go, reached from DispatchStatement instead of the table; see C-Q7 |
 

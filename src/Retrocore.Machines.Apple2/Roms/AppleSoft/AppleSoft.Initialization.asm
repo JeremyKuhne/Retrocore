@@ -14,9 +14,9 @@ PROGRAM_ORIGIN = $0800
 ;; Cold-starts AppleSoft, initializes its workspace and enters <CommandLoop>.
 ;;
 ;; It installs the restart and `USR` vectors, copies <CharacterReaderTemplate> and four bytes of the initial random
-;; value to page zero, probes RAM by complementing and restoring a byte on each page, rounds the upper limit down to a 4
-;; KB boundary, initializes the program at <PROGRAM_ORIGIN> and resets the interpreter. The probe stops at the first
-;; location that fails either test.
+;; value to page zero, leaving <OutputDelay> 1, probes RAM by complementing and restoring a byte on each page, rounds
+;; the upper limit down to a 4 KB boundary, initializes the program at <PROGRAM_ORIGIN> and resets the interpreter.
+;; The probe stops at the first location that fails either test.
 ;; Also: INIT (M6502)
 .proc ColdStart
     ldx #$FF
@@ -57,7 +57,7 @@ CopyCharacterReader:
     lda #DESCRIPTOR_SIZE
     sta CollectorStep
     jsr PrintNewline
-    lda #1
+    lda #1                          ; the bytes before the buffer nonzero, for the line chaining
     sta BUF-3
     sta BUF-4
     ldx #TemporaryDescriptors

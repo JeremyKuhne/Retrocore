@@ -38,12 +38,21 @@ public sealed class BasicInterpreterConversionTests
     private static readonly string[] s_commodoreKeys =
         ["M6502", "UNKN", "CBM4S79", "K4S79", "HV1", "HV1R", "HV2", "HV4", "HV4R", "HVK4"];
 
-    // The definitions that give no overlay name of their own: the new constants, the labels that were *+5 branches,
-    // and, each only where it needs it, AppleSoft's PrintTabOrSpace, whose old names are on its per-build ReadArgument
-    // label (Basic.md I3), and BASIC 1's PrintSpace::CursorRight, whose CRTSKP the overlay lacks.
-    private static readonly HashSet<string> s_sdkNames =
+    // The definitions that give no overlay name of their own, by vendor: the new constants, the labels that were
+    // *+5 branches, and, each only where it needs it, AppleSoft's PrintTabOrSpace, whose old names are on its
+    // per-build ReadArgument label (Basic.md I3), and BASIC 1's labels whose old names, from HV1 and HV1R, the
+    // overlay lacks there (CRTSKP, XSPAC2, GLET and FREMES).
+    private static readonly HashSet<string> s_appleSdkNames =
     [
         "CONTROL_C", "KEYBOARD_CONTROL_C", "COMMA_NEWLINE_COLUMN", "INPUT_LINE_LIMIT", "PROGRAM_ORIGIN",
+        "PrintTabOrSpace"
+    ];
+
+    private static readonly string[] s_basic1SdkNames =
+        ["PrintSpace::CursorRight", "PrintSpaces::Next", "DispatchStatement::ToLet", "SignOnMessage"];
+
+    private static readonly HashSet<string> s_commodoreSdkNames =
+    [
         "CARRIAGE_RETURN", "LINE_FEED", "CURSOR_RIGHT", "CURSOR_LEFT", "DELETE_CHARACTER", "CURSOR_HOME", "CURSOR_DOWN",
         "NextStatement::ReadLine", "LinkProgram::StoreLink"
     ];
@@ -65,7 +74,7 @@ public sealed class BasicInterpreterConversionTests
         AssemblyResult native = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(BasicNames.Inputs), model);
         AssemblyResult legacy = SdkModules.AssembleAppleSoft(Path.Join(AppleFolder, "applesoft.mac"), model);
         BasicWorkspaceConversionTests.CheckAgainstOverlay(
-            native, legacy, AppleFiles, minimum: MinimumOverlayNames, SdkNamesWith("PrintTabOrSpace"), scoped: true);
+            native, legacy, AppleFiles, minimum: MinimumOverlayNames, s_appleSdkNames, scoped: true);
     }
 
     /// <summary>
@@ -86,7 +95,8 @@ public sealed class BasicInterpreterConversionTests
         AssemblyResult legacy = PetLegacyBasic.Assemble(PetFolder, model, original);
         BasicWorkspaceConversionTests.CheckAgainstOverlay(
             native, legacy, CommodoreFiles, minimum: MinimumOverlayNames,
-            model == PetModel.Pet2001 ? SdkNamesWith("PrintSpace::CursorRight") : s_sdkNames, scoped: true);
+            model == PetModel.Pet2001 ? [.. s_commodoreSdkNames, .. s_basic1SdkNames] : s_commodoreSdkNames,
+            scoped: true);
     }
 
     /// <summary>
@@ -117,8 +127,6 @@ public sealed class BasicInterpreterConversionTests
 
         count.Should().BeGreaterThan(MinimumOldNames, "the converted files keep every old name they renamed");
     }
-
-    private static HashSet<string> SdkNamesWith(string name) => [.. s_sdkNames, name];
 
     private static string AppleFolder => Path.Join(BasicNames.Inputs, "AppleSoft");
     private static string PetFolder => Path.Join(BasicNames.Inputs, "Pet");

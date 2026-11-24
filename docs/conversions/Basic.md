@@ -1085,8 +1085,10 @@ Decisions and how the table was applied:
   names.
 - I8. New constants: AppleSoft's `CONTROL_C`, `KEYBOARD_CONTROL_C`, `COMMA_NEWLINE_COLUMN`, `INPUT_LINE_LIMIT` and
   `PROGRAM_ORIGIN` (with `INPUT_BUFFER_BASE` and `LAST_COMMA_COLUMN` from I2), and Commodore's `CARRIAGE_RETURN`,
-  `LINE_FEED`, `CURSOR_RIGHT`, `CURSOR_LEFT` and `DELETE_CHARACTER`. Two `*+5` branches are labels: `ReadLine` in
-  the statement fetch and `StoreLink` in the command loop's link pass.
+  `LINE_FEED`, `CURSOR_RIGHT`, `CURSOR_LEFT`, `DELETE_CHARACTER`, `CURSOR_HOME` and `CURSOR_DOWN`. Two `*+5`
+  branches are labels: `ReadLine` in
+  the statement fetch, where `shortEnd` is 0 (BASIC 2 and 4; DIRCN1 in their documents), and `StoreLink` in the
+  command loop's link pass, where `linkReturns` is 0 (BASIC 1).
 - I9. Part F's names stay as they are in the code: BASIC 4's trampoline ISVAR (the shared evaluator still branches
   to ISVAR), BASIC 1's GETDTL, INPSTP, TISTR, TINUM and INCTRM, and the revised BASIC 4's INPNUL. `StopEmptyInput`
   is BASIC 4's own INPSTP, under `.if localStopLabel`.
@@ -1110,11 +1112,18 @@ Decisions and how the table was applied:
     `Statements::On`.
   - `BasicInterpreterConversionTests` is new: in each of the eight builds, every old name the fourteen files give
     that the MACRO-10 overlay defines reaches its value, and every definition reaches the overlay by a name, apart
-    from the new constants, the two `*+5` labels, `PrintTabOrSpace`, whose old names are on its per-build label
-    (I3), and `PrintSpace::CursorRight`, whose CRTSKP the overlay does not define in BASIC 1.
+    from the new constants, the two `*+5` labels, AppleSoft's `PrintTabOrSpace`, whose old names are on its
+    per-build label (I3), and BASIC 1's labels whose HV1 names the overlay does not define there (I12).
     Each old name cites only its vendor's documents, Microsoft's source or UNKN (for Commodore, the BASIC 4 kernal
     listings too, as the workspace's do), all in the bibliography.
   - `BasicInterpreterRoutineTests` is new (below).
+- I12. Old names the table's rows give only for BASIC 2 and 4, which HV1 and HV1R also give to BASIC 1's own code:
+  XSPAC2 (`PrintSpaces::Next`), GLET (`DispatchStatement::ToLet`) and FREMES (`SignOnMessage`, inside
+  `BytesFreeMessage`'s string), each now a label in BASIC 1's branch, cited HV1 and HV1R. MORSTS, BASIC 1's own
+  compare inside `NextStatement`, is in prose: as a label it would be a per-build `NextStatement::` name, which the
+  standalone sources that define `NextStatement` cannot predefine. DIRCN1 (CBM4S79, HV2, HV4, HV4R) is now on
+  `NextStatement::ReadLine`. The overlay defines none of the BASIC 1 names at BASIC 1's addresses, so the
+  conversion test exempts those labels there.
 
 Checked: the full suite, the rename gate, the lint tests and `BasicInterpreterConversionTests`. The suite has
 3,987 passed, none failed and 665 skipped; the skipped tests are the ROM-dump comparisons, which need dumps that

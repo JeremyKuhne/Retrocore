@@ -339,6 +339,10 @@ SubtractZone:
 ;; Also: XSPAC (M6502, CBM4S79, HV2, HV4, HV4R), XSPAC1 (HV1, HV1R)
 CountInX:
         jsr PrintSpace
+
+;; Counts down and loops.
+;; Also: XSPAC2 (HV1, HV1R)
+Next:
         dex
         bne CountInX
 

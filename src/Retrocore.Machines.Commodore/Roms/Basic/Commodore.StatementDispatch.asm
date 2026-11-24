@@ -52,6 +52,7 @@ TestSeparator:
     lda (TextPointer),y
     .if earlySeparators
         beq NextLine
+        ; HV1 and HV1R call this compare MORSTS, the name CheckStatementSeparator has in the other builds.
         cmp #':'
         beq ExecuteStatement
 
@@ -76,6 +77,7 @@ NextLine:
         jmp Statements::StopOrEnd::Finish
 
 ;; A line follows: reads its number and moves <TextPointer> to its text.
+;; Also: DIRCN1 (CBM4S79, HV2, HV4, HV4R)
 ReadLine:
     .endif
     iny
@@ -134,6 +136,10 @@ WithToken:
     sbc #<TOKEN_END
     .if earlyDispatch
         bcs LookUp
+
+;; Jumps on to <Statements::Let>.
+;; Also: GLET (HV1, HV1R)
+ToLet:
         jmp Statements::Let
 
 ;; Checks the statement range and indexes <StatementTable>.

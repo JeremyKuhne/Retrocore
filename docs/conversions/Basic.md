@@ -232,11 +232,11 @@ REVISD, ENHNCD, APLPLS, TIME, EXTIO, DISKO, REALIO; X15 settled the names tests 
 removes the definition: either nothing uses it and no document names it; or it duplicates another definition, whose
 `Also:` then takes its documented name (KIMY, TRMNO1); or its uses can do without it, and its documented name goes in
 prose (ZSTORD, whose WAIT call can pass STORDO's new name, A-Q6; Q, an assembly-time counter, C-Q8); or it is a question
-(REDDY and GOTK, C-Q8; LINWID, D-Q3). Apart from the SDK's own definitions, 316 renamed rows have no checked document
-name, 249 because no listed document gives the name and 67 because a document matches only its spelling; 272 of them in
-the AppleSoft builds: AppleSoft's copies of Monitor and IIe names (which carry the Apple manuals' names once they come
-from IIeEquates, decision X10), AppleSoft-only labels the damaged AS82 text could not confirm, and the SDK's own labels.
-The SDK's 138 renamed macros, macro parameters and switches cite no document at all.
+(REDDY and GOTK, C-Q8; LINWID, D-Q3). Apart from the SDK's 138 renamed macros, macro parameters and switches, which cite
+no document at all, 316 renamed rows have no checked document name, 249 because no listed document gives the name and 67
+because a document matches only its spelling; 272 of them in AppleSoft's builds only: AppleSoft's copies of Monitor and
+IIe names (which carry the Apple manuals' names once they come from IIeEquates, decision X10), AppleSoft-only labels the
+damaged AS82 text could not confirm, and the SDK's own labels.
 
 The parts: A, the floating-point package; B1, the shared program and statement modules; B2, the shared expression,
 variable and string modules; C, the vendors' own copies of the interpreter (AppleSoft and Commodore side by side);
@@ -641,7 +641,7 @@ Decisions and how the table was applied:
   table lists it on a location and its aliases (TEMP3 on `FunctionPointer`, ARRYPT on `DestinationEnd`).
 - W2. A row whose documents give no name (its Documents column "none found", or only "spelling only" or "other names
   here") cites its old name as `UNKN`, so the unconverted files' uses of it still resolve. The bibliography has UNKN,
-  from the Monitor and IIeEquates conversions, and gains ASRM78, as proposed in step 2. This is the owner's open choice
+  which ConvertingSources.md describes (#120), and gains ASRM78, as proposed in step 2. This is the owner's open choice
   between UNKN and no `Also:` (the table's introduction); UNKN is the one that keeps the old names working.
 - W3. Names two definitions shared in one file are one definition with both old names (INDEX1 and INDEX are
   `Pointer1`). KIMY is dropped into `Dimensioning`'s `Also:`.

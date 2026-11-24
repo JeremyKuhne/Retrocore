@@ -282,6 +282,7 @@ internal static partial class AssemblyCompiler
             noOutputRegions |= operation == LayoutOperation.DummyStart;
         }
 
+        alsoNames?.ApplyExpanded(symbols);
         if (codes is null)
         {
             throw new AssemblyError(line: 0, "A known CPU is required.");

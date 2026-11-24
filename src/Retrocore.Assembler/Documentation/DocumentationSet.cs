@@ -25,6 +25,13 @@ public sealed class DocumentationSet
     // The lines the assembly's conditional assembly skipped: which branch of each .if it took.
     private AssemblySkippedLines? _skipped;
 
+    // The symbols each expansion of a macro body line defined, by the line's full path and zero-based line; null
+    // when the assembly's definitions are not known.
+    private Dictionary<string, Dictionary<int, List<string>>>? _expansions;
+
+    // The topics of the symbols once-expanded macros' bodies define, by symbol, built on first use.
+    private Dictionary<string, DocumentationTopic>? _bySymbol;
+
     private DocumentationSet(
         string? module,
         string? model,
@@ -103,7 +110,9 @@ public sealed class DocumentationSet
             symbols = moved;
         }
 
-        DocumentationSet set = Create(files, symbols, module, model, result?.SourceMap, result?.SkippedLines);
+        // An assembly with errors may stop short of definitions it would make, so its macros' expansions aren't known.
+        IEnumerable<AssemblySymbol>? definitions = result is { Success: true } ? result.SymbolDefinitions : null;
+        DocumentationSet set = Create(files, symbols, module, model, result?.SourceMap, result?.SkippedLines, definitions);
         if (result is not null)
         {
             List<(string, string, int)> exports = [];
@@ -187,6 +196,10 @@ public sealed class DocumentationSet
     ///  The lines the assembly's conditional assembly skipped, which tell which branch of each <c>.if</c> it took;
     ///  null when unknown, as for a debug file, which has no source.
     /// </param>
+    /// <param name="definitions">
+    ///  The assembly's symbol definitions, which count each macro body line's expansions for its historical names;
+    ///  null when unknown, as for a debug file. Pass none for an assembly with errors, so no line counts as expanded.
+    /// </param>
     /// <returns>The set.</returns>
     public static DocumentationSet Create(
         IEnumerable<DocumentationFile> files,
@@ -194,11 +207,31 @@ public sealed class DocumentationSet
         string? module = null,
         string? model = null,
         IEnumerable<AssemblySourceMapEntry>? sourceMap = null,
-        AssemblySkippedLines? skippedLines = null)
+        AssemblySkippedLines? skippedLines = null,
+        IEnumerable<AssemblySymbol>? definitions = null)
     {
         List<DocumentationFile> list = [.. files];
         DocumentationSet set = new(module, model, symbols, list) { _skipped = skippedLines };
         if (sourceMap is not null) { ReadCpus(set, sourceMap); }
+
+        // Each expansion of a macro's body defines its symbols again, at the body's line.
+        // Files are compared as the skipped-lines report compares them, so an editor's path matches the assembler's.
+        Dictionary<string, Dictionary<int, List<string>>>? expansions = definitions is null ? null : new(AssemblySkippedLines.PathComparer);
+        foreach (AssemblySymbol symbol in definitions ?? [])
+        {
+            bool expanded = symbol.Location is { Path.Length: > 0, IsMacroExpansion: true };
+            if (expansions is null || !expanded || symbol.Location is not { } location) { continue; }
+            string path = AssemblySkippedLines.FullPath(location.Path);
+            if (!expansions.TryGetValue(path, out Dictionary<int, List<string>>? lines))
+            {
+                expansions[path] = lines = [];
+            }
+
+            if (!lines.TryGetValue(location.Line, out List<string>? names)) { lines[location.Line] = names = []; }
+            names.Add(symbol.Name);
+        }
+
+        set._expansions = expansions;
 
         Dictionary<string, List<DocumentationComment>> byName = [with(StringComparer.Ordinal)];
         List<string> order = [];
@@ -243,6 +276,38 @@ public sealed class DocumentationSet
     public DocumentationTopic? Find(string name) => _topics.TryGetValue(name, out DocumentationTopic? topic) ? topic : null;
 
     /// <summary>
+    ///  Finds a topic by the symbol its definition is: its documented name, or, for a definition in a macro's body
+    ///  that the build expands once, the name the expansion gave it (see <see cref="SymbolOf(DocumentationTopic)"/>).
+    /// </summary>
+    /// <param name="symbol">The symbol's name, as the assembly has it.</param>
+    /// <returns>The topic, or null.</returns>
+    public DocumentationTopic? FindSymbol(string symbol)
+    {
+        if (Find(symbol) is { } topic) { return topic; }
+        Dictionary<string, DocumentationTopic>? bySymbol = _bySymbol;
+        if (bySymbol is null)
+        {
+            // Built before it is published, as requests can ask from more than one thread.
+            bySymbol = [with(StringComparer.Ordinal)];
+            foreach (DocumentationTopic candidate in _ordered)
+            {
+                // Each macro body that defines the topic's name defines its own symbol, as two macros' bodies may.
+                foreach (DocumentationComment comment in candidate.Comments.Where(comment => comment.Macro is not null && Reaches(comment)))
+                {
+                    if (ExpandedName([comment]) is { } expanded && expanded != candidate.Name)
+                    {
+                        bySymbol[expanded] = candidate;
+                    }
+                }
+            }
+
+            _bySymbol = bySymbol;
+        }
+
+        return bySymbol.TryGetValue(symbol, out topic) ? topic : null;
+    }
+
+    /// <summary>
     ///  Finds the topics that give a historical name in their <c>Also:</c> sections.
     /// </summary>
     /// <param name="name">The historical name, such as <c>COUT</c>.</param>
@@ -278,8 +343,206 @@ public sealed class DocumentationSet
     /// <param name="thisBuild">Whether only its sections in this set's build count, as the assembler's do.</param>
     /// <returns>Whether it gives the name.</returns>
     public bool Gives(DocumentationTopic topic, string name, bool thisBuild = false) =>
-        DocumentationAlso.Of(topic.Sections.Where(section => !thisBuild || InBuild(topic, section)))
-            .Any(also => also.Name == name);
+        topic.Comments.All(comment => comment.Macro is null)
+            ? DocumentationAlso.Of(topic.Sections.Where(section => !thisBuild || InBuild(topic, section)))
+                .Any(also => also.Name == name)
+            : GivesOutsideMacros(topic, name, thisBuild)
+                || topic.Comments.Where(comment => comment.Macro is not null && Reaches(comment))
+                    .Any(comment => DocumentationAlso.Of(comment.Sections).Any(also => also.Name == name));
+
+    // Whether a topic's definitions outside macros' bodies give a name, judged as if no macro's body shared the topic:
+    // the build's own branch gives it, or the build takes a bare Inherit: branch, which shares what the others give.
+    private bool GivesOutsideMacros(DocumentationTopic topic, string name, bool thisBuild)
+    {
+        List<DocumentationComment> outside = [.. topic.Comments.Where(comment => comment.Macro is null)];
+        List<DocumentationComment> participants = [.. outside.Where(comment => !BareInherit(comment))];
+        if (participants.Count == 0) { participants = outside; }
+        bool Gave(DocumentationComment comment) => DocumentationAlso.Of(comment.Sections).Any(also => also.Name == name);
+        bool Built(DocumentationComment comment) => !thisBuild || CommentInBuild(comment);
+        if (participants.Any(comment => Gave(comment) && Built(comment))) { return true; }
+
+        // As Merge does, a section every branch writes alike, documents and all, is shared, in every build, an inheriting
+        // branch's among them; while an expanded macro makes the topic this build's, only while the build has one of
+        // the definitions outside it.
+        bool Shared(DocumentationSection section) =>
+            participants.All(comment => comment.Sections.Any(candidate => Same(candidate, section)));
+
+        bool expanded = topic.Comments.Any(comment => Expansions(comment) > 0);
+        return participants.Count != 0
+            && (!thisBuild || !expanded || outside.Any(CommentInBuild))
+            && DocumentationAlso.Of(participants[0].Sections.Where(Shared)).Any(also => also.Name == name);
+    }
+
+    /// <summary>
+    ///  Gets whether a definition's own old names reach it in this set's build: <see cref="Reaches"/>, for a
+    ///  definition outside a macro's body in the branch of conditional assembly the build takes.
+    /// </summary>
+    /// <param name="comment">The definition's comment.</param>
+    /// <returns>Whether they reach it.</returns>
+    internal bool ReachesInBuild(DocumentationComment comment) => Reaches(comment) && CommentInBuild(comment);
+
+    /// <summary>
+    ///  Gets the symbol one of a topic's definitions is: the name its expansion gave a definition in a macro's body
+    ///  that the build expands once, otherwise the topic's name.
+    /// </summary>
+    /// <param name="topic">The topic.</param>
+    /// <param name="comment">One of its comments.</param>
+    /// <returns>The symbol's name.</returns>
+    public string SymbolOf(DocumentationTopic topic, DocumentationComment comment) =>
+        comment.Macro is null ? topic.Name : ExpandedName([comment]) ?? topic.Name;
+
+    // Whether a definition outside a macro's body is in this set's build, as InBuild tells for a merged section: the
+    // assembly didn't skip its line, or else its condition holds. A macro body's always counts here: Reaches counts its
+    // expansions.
+    private bool CommentInBuild(DocumentationComment comment) =>
+        comment.Macro is not null
+            || comment.Condition is null
+            || (_skipped?.InBuild(comment.Path, comment.TargetLine)
+                ?? DocumentationConditions.InBuild(comment.Condition, _symbols, IsDefined));
+
+    /// <summary>
+    ///  Gets the historical names a topic's <c>Also:</c> sections give it that reach it, as the assembler resolves
+    ///  them: in a macro's body, only the sections of definitions that <see cref="Reaches"/> says their names reach.
+    /// </summary>
+    /// <param name="topic">The topic.</param>
+    /// <returns>The names, with the documents that give them.</returns>
+    public IEnumerable<DocumentationAlso> AlsoOf(DocumentationTopic topic) =>
+        topic.Comments.All(comment => comment.Macro is null)
+            ? DocumentationAlso.Of(topic.Sections)
+            : topic.Comments.Where(Reaches)
+                .SelectMany(comment => DocumentationAlso.Of(comment.Sections))
+                .GroupBy(also => also.Name, StringComparer.Ordinal)
+                .Select(group => group.First());
+
+    /// <summary>
+    ///  Gets the historical names that reach one symbol of a topic: where macros' bodies define the topic's name, only
+    ///  those its own definition's <c>Also:</c> gives, as <c>Basic::COMBYT</c>'s, not another expansion's or a
+    ///  definition's outside the macro.
+    /// </summary>
+    /// <param name="topic">The topic.</param>
+    /// <param name="symbol">The symbol, as the assembly has it (see <see cref="FindSymbol"/>).</param>
+    /// <returns>The names, with the documents that give them.</returns>
+    public IEnumerable<DocumentationAlso> AlsoOf(DocumentationTopic topic, string symbol) =>
+        topic.Comments.All(comment => comment.Macro is null)
+            ? AlsoOf(topic)
+            : topic.Comments
+                .Where(comment => Reaches(comment) && (comment.Macro is null ? topic.Name : ExpandedName([comment])) == symbol)
+                .SelectMany(comment => DocumentationAlso.Of(comment.Sections))
+                .GroupBy(also => also.Name, StringComparer.Ordinal)
+                .Select(group => group.First());
+
+    /// <summary>
+    ///  Gets whether the historical names a definition's own <c>Also:</c> section gives reach it, as the assembler
+    ///  resolves them.
+    /// </summary>
+    /// <param name="comment">The definition's comment.</param>
+    /// <returns>
+    ///  For a definition in a macro's body, whether this set's build expands it exactly once and its name is the same
+    ///  in each expansion: not a parameter's, a <c>.local</c> or a cheap local, nor a <c>.set</c> variable, which
+    ///  has a version for each assignment. False when its expansions are not known. True outside a macro's body.
+    /// </returns>
+    public bool Reaches(DocumentationComment comment) =>
+        comment.Macro is null
+            || (comment.Kind is not (DocumentationKind.Scope or DocumentationKind.Struct or DocumentationKind.Enum)
+                && !comment.NamedByParameter
+                && !comment.LocalToExpansion
+                && comment.Kind != DocumentationKind.Variable
+                && Expansions(comment) == 1);
+
+    /// <summary>
+    ///  Gets how many times this set's build defined a definition in a macro's body: once for each expansion.
+    /// </summary>
+    /// <param name="comment">The definition's comment.</param>
+    /// <returns>The count; null outside a macro's body, or when the assembly's definitions are not known.</returns>
+    public int? Expansions(DocumentationComment comment) =>
+        comment.Macro is null || _expansions is null ? null : ExpansionsAt(comment)?.Count ?? 0;
+
+    // The symbols each expansion of a comment's line defined, or null when none did.
+    private List<string>? ExpansionsAt(DocumentationComment comment) =>
+        _expansions is not null
+            && _expansions.TryGetValue(AssemblySkippedLines.FullPath(comment.Path), out Dictionary<int, List<string>>? lines)
+            && lines.TryGetValue(comment.TargetLine, out List<string>? names)
+                ? names
+                : null;
+
+    /// <summary>
+    ///  Gets the symbol a topic's definition is: for a definition in a macro's body that the build expands once, the
+    ///  name the expansion gave it (<c>Library::COMBYT</c>, expanded in <c>.scope Library</c>); otherwise its name.
+    /// </summary>
+    /// <param name="topic">The topic.</param>
+    /// <returns>The symbol's name.</returns>
+    public string SymbolOf(DocumentationTopic topic) => ExpandedName(topic.Comments) ?? topic.Name;
+
+    /// <summary>
+    ///  Gets the symbol a historical name reaches through a topic: for a definition in a macro's body whose own
+    ///  <c>Also:</c> gives the name, the name its expansion gave it, though another macro's body defines the same
+    ///  name elsewhere (<c>A::COMBYT</c> and <c>B::COMBYT</c> share the topic <c>COMBYT</c>); otherwise
+    ///  <see cref="SymbolOf(DocumentationTopic)"/>.
+    /// </summary>
+    /// <param name="topic">The topic.</param>
+    /// <param name="name">The historical name.</param>
+    /// <returns>The symbol's name.</returns>
+    public string SymbolOf(DocumentationTopic topic, string name)
+    {
+        foreach (DocumentationComment comment in topic.Comments)
+        {
+            if (comment.Macro is null || !Reaches(comment)) { continue; }
+            if (!DocumentationAlso.Of(comment.Sections).Any(also => also.Name == name)) { continue; }
+            if (ExpandedName([comment]) is { } expanded) { return expanded; }
+        }
+
+        return SymbolOf(topic);
+    }
+
+    /// <summary>
+    ///  Gets every symbol a historical name reaches through a topic: one for each definition in a macro's body the
+    ///  build expands once whose own <c>Also:</c> gives the name, and the topic's own symbol where a definition
+    ///  outside macros' bodies gives it. More than one is ambiguous, as the assembler finds it.
+    /// </summary>
+    /// <param name="topic">The topic.</param>
+    /// <param name="name">The historical name.</param>
+    /// <param name="thisBuild">
+    ///  Whether only an outside definition in this set's build counts, as the assembler's does.
+    /// </param>
+    /// <returns>
+    ///  The symbols' names, at least one: <see cref="SymbolOf(DocumentationTopic, string)"/> where none is known.
+    /// </returns>
+    public IReadOnlyList<string> SymbolsOf(DocumentationTopic topic, string name, bool thisBuild = false)
+    {
+        if (topic.Comments.All(comment => comment.Macro is null)) { return [SymbolOf(topic)]; }
+        List<string> symbols = [];
+        foreach (DocumentationComment comment in topic.Comments)
+        {
+            if (comment.Macro is null || !Reaches(comment)) { continue; }
+            if (!DocumentationAlso.Of(comment.Sections).Any(also => also.Name == name)) { continue; }
+            if (ExpandedName([comment]) is { } expanded && !symbols.Contains(expanded)) { symbols.Add(expanded); }
+        }
+
+        bool outside = topic.Comments.Any(comment => comment.Macro is null);
+        if (outside && GivesOutsideMacros(topic, name, thisBuild) && !symbols.Contains(topic.Name))
+        {
+            symbols.Add(topic.Name);
+        }
+
+        return symbols.Count == 0 ? [SymbolOf(topic, name)] : symbols;
+    }
+
+    // The name a macro body definition's only expansion gave it, or null; null too for a topic that also documents a
+    // definition outside a macro's body, which is the symbol of its own name.
+    private string? ExpandedName(IEnumerable<DocumentationComment> comments)
+    {
+        if (_expansions is null) { return null; }
+        string? found = null;
+        foreach (DocumentationComment comment in comments)
+        {
+            if (comment.Macro is null) { return null; }
+            if (ExpansionsAt(comment) is not { } names) { continue; }
+            if (names.Count != 1 || (found is not null && found != names[0])) { return null; }
+            found = names[0];
+        }
+
+        return found;
+    }
 
     /// <summary>
     ///  Gets whether a topic's section, from one branch of an <c>.if</c> when topics from several were merged, is in
@@ -323,7 +586,7 @@ public sealed class DocumentationSet
 
     /// <summary>
     ///  Gets whether a topic's definition is in this set's assembly: false only for a label or equate the assembly
-    ///  leaves out, in a branch of an <c>.if</c> its build does not take.
+    ///  leaves out, in a branch of an <c>.if</c> its build does not take or in a macro's body it never expands.
     /// </summary>
     /// <param name="topic">The topic.</param>
     /// <returns>Whether it is assembled, or can't be told apart.</returns>
@@ -331,7 +594,8 @@ public sealed class DocumentationSet
         _symbols.Count == 0
             || topic.Kind is not (DocumentationKind.Routine or DocumentationKind.Table or DocumentationKind.Constant or DocumentationKind.Variable)
             || topic.Value is not null
-            || Defines(topic.Name);
+            || Defines(topic.Name)
+            || topic.Comments.Any(comment => Expansions(comment) > 0);
 
     /// <summary>
     ///  Gets every historical name the topics give.
@@ -345,10 +609,11 @@ public sealed class DocumentationSet
             Dictionary<string, List<DocumentationTopic>> also = [with(StringComparer.Ordinal)];
             foreach (DocumentationTopic topic in _ordered)
             {
-                // A scope or a named type has nothing for an old name to reach, as in the assembler.
+                // A scope or a named type has nothing for an old name to reach, as in the assembler, nor has a
+                // definition in a macro's body the build doesn't expand once.
                 bool scope = topic.Kind is DocumentationKind.Scope or DocumentationKind.Struct or DocumentationKind.Enum;
                 if (scope) { continue; }
-                foreach (DocumentationAlso item in DocumentationAlso.Of(topic.Sections))
+                foreach (DocumentationAlso item in AlsoOf(topic))
                 {
                     if (!also.TryGetValue(item.Name, out List<DocumentationTopic>? topics))
                     {
@@ -445,7 +710,11 @@ public sealed class DocumentationSet
     {
         DocumentationComment first = comments[0];
         string name = first.Name;
-        long? value = set._symbols.TryGetValue(name, out long found) ? found : null;
+
+        // A definition in a macro's body has the value of the symbol its expansion defined, which a scope around the
+        // expansion qualifies.
+        string symbol = set.ExpandedName(comments) ?? name;
+        long? value = set._symbols.TryGetValue(symbol, out long found) ? found : null;
         if (comments.Count == 1)
         {
             return new DocumentationTopic
@@ -466,11 +735,21 @@ public sealed class DocumentationSet
         List<DocumentationComment> participants = [.. comments.Where(comment => !BareInherit(comment))];
         if (participants.Count == 0) { participants = comments; }
         List<DocumentationSection> sections = [];
+
+        // Definitions outside macros' bodies share sections among themselves, as they would without the macros. Without
+        // the macros, a topic the build has none of isn't assembled, so nothing checks those sections; here the
+        // macros' expansions assemble it, so the outside ones are shared only while the build has one of them.
+        bool mixed = comments.Any(comment => comment.Macro is not null);
+        List<DocumentationComment> outside = [.. participants.Where(comment => comment.Macro is null)];
+        bool expanded = comments.Any(comment => set.Expansions(comment) > 0);
+        bool outsideBuilt = !expanded || comments.Any(comment => comment.Macro is null && set.CommentInBuild(comment));
         foreach (DocumentationComment comment in participants)
         {
+            List<DocumentationComment> peers = mixed && comment.Macro is null ? outside : participants;
             foreach (DocumentationSection section in comment.Sections)
             {
-                bool shared = participants.All(other => other.Sections.Any(candidate => Same(candidate, section)));
+                bool alike = peers.All(other => other.Sections.Any(candidate => Same(candidate, section)));
+                bool shared = alike && (comment.Macro is not null || outsideBuilt);
                 if (shared)
                 {
                     if (!sections.Any(existing => existing.Condition is null && Same(existing, section)))
@@ -483,6 +762,14 @@ public sealed class DocumentationSet
                     sections.Add(section.WithCondition(comment.Condition, comment.Path, comment.TargetLine));
                 }
             }
+        }
+
+        // A section the branches outside share, held back while the build has none of them, is there once already
+        // when a macro's body shares it with every branch, for every build.
+        if (!outsideBuilt)
+        {
+            sections.RemoveAll(section => section.Condition is not null
+                && sections.Any(other => other.Condition is null && Same(other, section)));
         }
 
         string summary = participants.Select(comment => comment.Summary).FirstOrDefault(text => text.Length != 0) ?? "";

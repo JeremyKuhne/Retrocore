@@ -2,8 +2,6 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-using Retrocore.Documentation;
-
 namespace Retrocore.Debug.Language;
 
 /// <summary>
@@ -60,8 +58,8 @@ internal sealed class WorkspaceSymbolHandler
     private static string? Matched(SourceAnalysis analysis, SymbolSite site, string query)
     {
         if (site.Name.Contains(query, StringComparison.OrdinalIgnoreCase)) { return site.Name; }
-        if (query.Length == 0 || analysis.Documentation.Find(site.Name) is not { } topic) { return null; }
-        return DocumentationAlso.Of(topic.Sections)
+        if (query.Length == 0 || analysis.Documentation.FindSymbol(site.Name) is not { } topic) { return null; }
+        return analysis.Documentation.AlsoOf(topic, site.Name)
             .Select(also => also.Name)
             .Where(name => name.Contains(query, StringComparison.OrdinalIgnoreCase))
             .OrderBy(name => Rank(name, query))

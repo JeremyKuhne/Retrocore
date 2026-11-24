@@ -31,8 +31,18 @@ PLOT:
 
 To every assembler and dialect we support, `;;` is still an ordinary comment, so documented sources stay
 valid for ca65, Merlin 32 and MACRO-10. In MACRO-10, `;;` inside a macro definition traditionally means
-the comment is not copied into expansions. Documentation never goes inside a macro body, so the two uses
-don't meet.
+the comment is not copied into expansions.
+
+A `.macro`'s body, native or ca65, may hold documentation: a `;;` block above a definition in the body documents
+the symbol each expansion defines, as a shared module written as macros (Microsoft 6502 BASIC's) needs. Its topic
+has the name the body writes, in the scopes around the macro's definition (`Draw::name` for `name:` in a macro
+defined in `.scope Draw`), wherever it's expanded. When that body's definition is the only one of the name the build expands, and it
+expands the line once, the topic has the value of the symbol that expansion defines, which a scope around the
+expansion qualifies (`Basic::COMBYT` for `COMBYT` expanded in `.scope Basic`); otherwise, as when a definition
+outside the macro or another expanded macro's body shares the name, it has the value of a symbol of the name the
+body writes, if any. A label or constant the build doesn't expand is not checked, as one in a branch of
+conditional assembly the build leaves out isn't; one it expands, in a named scope or more than once, is checked
+like any other. Historical names in a macro's body follow section 2.4.
 
 ### 1.2 What a comment documents
 
@@ -240,7 +250,9 @@ Two additions:
 ### 2.4 Historical names
 
 A definition whose name differs from the one a manual, listing or other source gave it keeps the old name in an
-`Also:` section. A name from a document is never dropped: it is either the definition's name or in its `Also:`.
+`Also:` section. A name from a document is never dropped: it is the definition's name, or in its `Also:`, or,
+where an `Also:` would clash with another definition or old name in the same assembly or can't apply (in a macro's
+body, one the build expands more than once or whose name differs in each expansion, below), named in the definition's prose with the document that gives it.
 
 ```asm
 ;; Prints a character through the output hook.
@@ -260,14 +272,49 @@ CharacterOut = $FDED
   plain: `Monitor::RDKEY` does not reach `Monitor::ReadKey`'s `RDKEY`. Conditional assembly sees old names as
   code does, for definitions earlier in the source (`.ifdef COUT`, `.if COUT = $FDED`).
 - **What can have one:** a label, constant or `.proc` entry, or a member of a `.struct`, `.union` or `.enum`,
-  outside a macro's body. An `Also:` on a `.scope` or a named `.struct`, `.union` or `.enum` is a lint error and
-  names nothing (`OLD::Member` does not resolve); one on a member that opens a nested type (`INNER .struct Inner`)
-  names the member. A member's own name may be its old name too (`;; Also: COMMAND (DOS33)` on `Iob::COMMAND`),
-  since it does not resolve outside its type without a `.using`; two types that both do that for the same name
-  clash, as any shared old name does. An `Also:` inside a macro's body is ignored, and `.sizeof` takes only a
-  `.proc`'s current name. An old name for a `.set` variable is the value it had where it was documented, not where
-  code uses it. Two definitions in different branches of conditional assembly (one model's routine and another's)
-  can share an old name: each build has only one of them.
+  including one in a macro's body (below). An `Also:` on a `.scope` or a named `.struct`, `.union` or `.enum` is a
+  lint error and names nothing (`OLD::Member` does not resolve); one on a member that opens a nested type
+  (`INNER .struct Inner`) names the member. A member's own name may be its old name too (`;; Also: COMMAND (DOS33)` on
+  `Iob::COMMAND`), since it does not resolve outside its type without a `.using`; two types that both do that for
+  the same name clash, as any shared old name does. `.sizeof` takes only a `.proc`'s current name. An old name for a
+  `.set` variable is the value it had where it was documented, not where code uses it. Two definitions in different
+  branches of conditional assembly (one model's routine and another's) can share an old name: each build has only
+  one of them.
+- **In a macro's body:** each expansion defines the definition again, so an old name reaches it only when the
+  build expands that line exactly once. It then reaches the symbol that expansion defines, qualified by any scope
+  around the expansion, wherever any other old name does: in the assembler (and in conditionals after the
+  expansion), links, the lint, the editor and the debugger; the quick fix writes the qualified name. An expansion in a branch
+  of conditional assembly the build leaves out doesn't count, and one inside another macro's expansion does.
+  - **Expanded more than once:** the old name reaches none of the definitions, and the lint reports an `also`
+    error saying how many times the build defines it: give the old name in prose instead. A conditional between
+    the first expansion and the second sees the first one's old name, since the assembler learns of the second
+    only when it gets there.
+  - **Not known:** where the documentation has no assembly's definitions (in the editor while the file has errors,
+    or from a debug file), it can't count expansions, so these old names reach nothing there. Two expansions in
+    the same scope are such an error: the assembler reports the duplicate symbol, and the lint can't count them.
+  - **Never expanded:** the old name reaches nothing, and its `Also:` gets no diagnostic: the build has no
+    definition, as for one in a branch it leaves out, and a build that expands the macro checks it. The exceptions
+    are the names below that no build could give, which the lint reports either way. Unlike an old name in a
+    branch the build leaves out, a link by it reaches nothing either, and the lint reports the link; link by the
+    current name instead.
+  - **Two macros' bodies that define the same name** share one topic, but each old name reaches the symbol its
+    own macro's expansion defines. An old name that two definitions in the topic give (two macros' bodies, or one
+    and a definition outside it) is a lint warning, as for any two definitions.
+  - **A name that differs in each expansion** gets no old name: one a parameter gives (`name:` in
+    `.macro Entry name`, or in the body of a macro defined in `Entry`'s), a `.local` name, or a cheap local
+    (`@loop`). Nor does a `.set` variable in a macro's body, which has a version for each assignment. The lint
+    reports an `also` error on each, whether or not the build expands the macro, and even where expansions are
+    not known, since no build could give these names.
+  - A definition outside the macro that shares the name keeps its own old names, whatever the macro's
+    expansions, except one an expansion's `Also:` gives too: that old name is ambiguous, in code and in links,
+    like any old name two definitions give.
+  - This holds for a `.macro` body, native or ca65. Don't give old names in a Merlin (`MAC`) or MACRO-10
+    (`DEFINE`) macro's body: the assembler gives them nothing there. In a ca65 source, the short `.mac` and
+    `.endmac` count as `.macro` and `.endmacro`.
+  - **In an anonymous `.scope`:** an expansion there defines a symbol the assembly doesn't publish. The assembler
+    still gives it the old name when the build expands the line once, but the documentation and the editor can't
+    see it, and the lint can't count such expansions: with one there and one elsewhere, the editor shows the old
+    name reaching the other while the assembler resolves nothing. Name such a definition's old name in prose.
 - **Members:** a member's old name reaches the qualified member: `;; Also: IBCMD (DOS33)` above `COMMAND .byte`
   in `.struct Iob` makes `lda #IBCMD` assemble as `lda #Iob::COMMAND`, and `<IBCMD>` link to it. Two types may
   have members of the same name (`Iob::VOLUME`, `FileParameters::VOLUME`), but not the same old name, as for any
@@ -410,8 +457,9 @@ broken link.
   - that each `;;` block sits directly above a definition it can document (section 1.2);
   - uses of a definition with a `Deprecated:` section, at each use;
   - `Also:` items: their form, that their keys are in the bibliography, and that an old name is not also a
-    definition or another definition's old name; and, as information with a quick fix, each use of an old
-    name in code;
+    definition or another definition's old name; in a macro's body, that the build doesn't define it more than once
+    and its name doesn't differ by expansion (section 2.4); and, as information with a quick fix, each use of an
+    old name in code;
   - in a source whose first line is `; retrocore: style=strict`, the style guide's checks
     ([AssemblyStyle.md](AssemblyStyle.md)), unlinked names of documented definitions in prose (other than scopes) among them;
   - that every exported symbol is documented, by its own comment or as an `Entry:` (or stacked label) of a
@@ -433,7 +481,7 @@ broken link.
   | `unlinked-name` | Prose naming a documented definition without a link. |
   | `link` | A link to no definition, file or address. |
   | `ambiguous-link` | A link that names definitions in more than one place. |
-  | `also` | Every `Also:` problem: its form, its bibliography keys, a name already taken. |
+  | `also` | Every `Also:` problem: its form, its bibliography keys, a name already taken, one in a macro's body that can't reach its definition. |
   | `sections` | The sections' form: `Entry:`, `Members:`, `Parameters:`, `Inherit:`, `Include:`, `Flags:`, register lists, `name = meaning` entries, `{name}` references. |
   | `historical-name` | Information on a use of an old name in code, with its quick fix. |
   | `deprecated` | A use of a definition with a `Deprecated:` section. |

@@ -37,7 +37,15 @@ public sealed partial class DocumentationResolver
         IEnumerable<string>? otherRules = null)
     {
         HashSet<string> run = [with(StringComparer.Ordinal), .. otherRules ?? []];
-        List<DocumentationComment> skipped = [.. Current.Topics.Where(OtherBuilds).SelectMany(topic => topic.Comments)];
+        // Another build's definitions are checked by that build, as are those outside a macro's body that the build has
+        // none of, though the macro's expansion makes their topic this build's.
+        List<DocumentationComment> skipped = [];
+        foreach (DocumentationTopic topic in Current.Topics)
+        {
+            bool other = OtherBuilds(topic);
+            skipped.AddRange(topic.Comments.Where(comment => other || OtherBuildOutside(topic, comment)));
+        }
+
         bool Checked(DocumentationExclusion exclusion) =>
             (!DocumentationRules.EditorRules.Contains(exclusion.Rule) || run.Contains(exclusion.Rule))
                 && !(DocumentationRules.TopicRules.Contains(exclusion.Rule) && skipped.Any(comment =>
@@ -59,8 +67,14 @@ public sealed partial class DocumentationResolver
         foreach (DocumentationTopic topic in Current.Topics)
         {
             // A definition in another build of a conditional source, such as a routine only one model has, is
-            // checked by the build that assembles it, where its links and entries are there.
-            if (OtherBuilds(topic)) { continue; }
+            // checked by the build that assembles it, where its links and entries are there. An old name in a
+            // macro's body that no build could give is reported all the same.
+            if (OtherBuilds(topic))
+            {
+                CheckExpandedAlso(topic, diagnostics);
+                continue;
+            }
+
             CheckTopic(topic, diagnostics);
         }
 
@@ -87,14 +101,31 @@ public sealed partial class DocumentationResolver
 
     private void CheckTopic(DocumentationTopic topic, List<DocumentationDiagnostic> diagnostics)
     {
-        void Warn(string rule, string message, int line, string? name = null)
+        // Where macros' bodies share a topic, a section is reported in the file of the definition that wrote it, which
+        // needn't be the topic's first: a branch's own section knows its origin, and one the definitions share is
+        // the first writer's.
+        bool macros = topic.Comments.Any(comment => comment.Macro is not null);
+        string PathOf(DocumentationSection section)
         {
-            diagnostics.Add(new(message, topic.Path, line, DocumentationSeverity.Warning, rule) { Name = name });
+            if (!macros) { return topic.Path; }
+            string? writer = topic.Comments
+                .FirstOrDefault(comment => comment.Sections.Any(own => ReferenceEquals(own, section)))?.Path;
+
+            return section.OriginPath ?? writer ?? topic.Path;
         }
 
-        void Section(string message, int line) => Warn(DocumentationRules.Sections, message, line);
+        void At(DocumentationSection section, string rule, string message, int line) =>
+            diagnostics.Add(new(message, PathOf(section), line, DocumentationSeverity.Warning, rule));
 
-        if (topic.Section("Inherit") is { } inherit)
+        // So is a diagnostic of a comment's own text, at the comment's line.
+        void In(DocumentationComment comment, string rule, string message, int line, string? name = null)
+        {
+            string path = macros ? comment.Path : topic.Path;
+            diagnostics.Add(new(message, path, line, DocumentationSeverity.Warning, rule) { Name = name });
+        }
+
+        // An outside definition the build leaves out, beside a macro's expansion, is checked by the build it's in.
+        if (topic.Section("Inherit") is { } inherit && !OtherBuildOutside(topic, inherit))
         {
             List<DocumentationLink> links = DocumentationText.Links(inherit.Text);
             DocumentationTopic? target = InheritTarget(topic, inherit);
@@ -104,13 +135,13 @@ public sealed partial class DocumentationResolver
                     ? $"Inherit: no documented definition named '{links[0].Target}'."
                     : $"Inherit: '{topic.Name}' is not an entry of a documented routine; name the topic to inherit.";
 
-                Section(message, inherit.Line);
+                At(inherit, DocumentationRules.Sections, message, inherit.Line);
             }
             else if (Cycles(topic))
             {
                 diagnostics.Add(new(
                     $"Inherit: '{topic.Name}' inherits from itself.",
-                    topic.Path,
+                    PathOf(inherit),
                     inherit.Line,
                     DocumentationSeverity.Error,
                     DocumentationRules.Sections));
@@ -118,13 +149,16 @@ public sealed partial class DocumentationResolver
 
             foreach (string item in inherit.Items.Where(item => !DocumentationSections.IsKnown(item)))
             {
-                Section($"Inherit: '{item}' is not a section.", inherit.Line);
+                At(inherit, DocumentationRules.Sections, $"Inherit: '{item}' is not a section.", inherit.Line);
             }
         }
 
-        if (topic.Section("Include") is { } include && Included(topic, include) is null)
+        if (topic.Section("Include") is { } include
+            && !OtherBuildOutside(topic, include)
+            && Included(topic, include) is null)
         {
-            Section($"Include: '{include.Text}' names no file or topic that exists.", include.Line);
+            string message = $"Include: '{include.Text}' names no file or topic that exists.";
+            At(include, DocumentationRules.Sections, message, include.Line);
         }
 
         DocumentationTopic effective = Effective(topic);
@@ -133,25 +167,33 @@ public sealed partial class DocumentationResolver
                 .SelectMany(section => section.Entries.Select(entry => entry.Name)),
             StringComparer.OrdinalIgnoreCase);
 
-        // In a file that follows the style guide, every documented definition the prose names is a link.
-        if (Current.Files.FirstOrDefault(file => SamePath(file.Path, topic.Path)) is { Strict: true })
+        // In a file that follows the style guide, every documented definition the prose names is a link; where
+        // macros' bodies share the topic, the file checked is each comment's own file.
+        bool Strict(string path) => Current.Files.FirstOrDefault(file => SamePath(file.Path, path)) is { Strict: true };
+        if (macros || Strict(topic.Path))
         {
-            CheckUnlinked(topic, entries, (message, line, name) => Warn(DocumentationRules.UnlinkedName, message, line, name));
+            CheckUnlinked(
+                topic,
+                entries,
+                comment => !macros || Strict(comment.Path),
+                (comment, message, line, name) => In(comment, DocumentationRules.UnlinkedName, message, line, name));
         }
 
         // Links and {references} anywhere in the topic's own text.
-        foreach ((string text, int line, DocumentationComment comment) in Texts(topic))
+        foreach ((string text, int line, DocumentationComment comment) in Texts(topic).Where(item => !OtherBuildOutside(topic, item.Comment)))
         {
             foreach (DocumentationLink link in DocumentationText.Links(text))
             {
                 DocumentationTarget target = Resolve(topic, link.Target, comment);
                 if (target.Kind == DocumentationTargetKind.Unresolved)
                 {
-                    Warn(DocumentationRules.Link, $"No definition, file or address named '{link.Target}'.", line, link.Target);
+                    string message = $"No definition, file or address named '{link.Target}'.";
+                    In(comment, DocumentationRules.Link, message, line, link.Target);
                 }
                 else if (target.Kind == DocumentationTargetKind.Ambiguous)
                 {
-                    Warn(
+                    In(
+                        comment,
                         DocumentationRules.AmbiguousLink,
                         $"'{link.Target}' names definitions in more than one place; qualify it with a module or model.",
                         line,
@@ -163,15 +205,95 @@ public sealed partial class DocumentationResolver
             {
                 if (!entries.Contains(name))
                 {
-                    Section($"{{{name}}} is not an entry of this topic's In, Out, Flags or Parameters.", line);
+                    string message = $"{{{name}}} is not an entry of this topic's In, Out, Flags or Parameters.";
+                    In(comment, DocumentationRules.Sections, message, line);
                 }
             }
         }
 
-        foreach (DocumentationSection section in topic.Sections)
+        foreach (DocumentationSection section in topic.Sections.Where(section => !OtherBuildOutside(topic, section)))
         {
-            CheckSection(topic, section, Section, (message, line) => Warn(DocumentationRules.Also, message, line));
+            CheckSection(
+                topic,
+                section,
+                (message, line) => At(section, DocumentationRules.Sections, message, line),
+                (message, line) => At(section, DocumentationRules.Also, message, line));
         }
+
+        CheckExpandedAlso(topic, diagnostics);
+
+        // A macro's body shares the topic of the name it defines with any other definition of that name, though each
+        // is its own symbol: an old name two of them give is ambiguous to the assembler, as one two topics give is.
+        // Branches of conditional assembly are one symbol, and only the build's branch counts.
+        if (topic.Comments.All(comment => comment.Macro is null)) { return; }
+        Dictionary<string, string> given = [with(StringComparer.Ordinal)];
+        foreach (DocumentationComment comment in topic.Comments.Where(Current.ReachesInBuild))
+        {
+            if (comment.Section("Also") is not { } also) { continue; }
+            string symbol = Current.SymbolOf(topic, comment);
+            foreach (DocumentationAlso item in DocumentationAlso.Of(comment.Sections))
+            {
+                if (given.TryGetValue(item.Name, out string? earlier) && earlier != symbol)
+                {
+                    // Each comment of the topic may be in a file of its own.
+                    diagnostics.Add(new(
+                        $"Also: {item.Name} is given by two definitions of {topic.Name}, {earlier} and {symbol}, so code "
+                            + "can't tell which it means; give it to one of them.",
+                        comment.Path,
+                        also.Line,
+                        DocumentationSeverity.Warning,
+                        DocumentationRules.Also));
+                }
+
+                given.TryAdd(item.Name, symbol);
+            }
+        }
+    }
+
+    // Reports each Also: in a macro's body that can't reach its definition, in the comment's own file.
+    private void CheckExpandedAlso(DocumentationTopic topic, List<DocumentationDiagnostic> diagnostics)
+    {
+        foreach (DocumentationComment comment in topic.Comments)
+        {
+            if (comment.Section("Also") is { } also && ExpandedAlso(topic, comment) is { } expanded)
+            {
+                diagnostics.Add(new(expanded, comment.Path, also.Line, DocumentationSeverity.Error, DocumentationRules.Also));
+            }
+        }
+    }
+
+    // Why the old names a definition in a macro's body gives itself reach nothing. In no build can they reach a name
+    // each expansion takes from an argument or makes its own local, nor a .set variable, which has a version for each
+    // assignment; those are reported whether or not this build expands the macro. Otherwise they reach nothing when
+    // this build defines the line more than once. Null when they reach it, or outside a macro's body.
+    private string? ExpandedAlso(DocumentationTopic topic, DocumentationComment comment)
+    {
+        // A scope or a type has no old name in any build, which CheckAlso reports.
+        if (comment.Macro is not { } macro) { return null; }
+        bool type = comment.Kind is DocumentationKind.Scope or DocumentationKind.Struct or DocumentationKind.Enum;
+        if (type) { return null; }
+        if (comment.NamedByParameter)
+        {
+            return $"Also: {topic.Name} is named by a parameter of the macro {macro}, so each expansion names it "
+                + "after its argument and an old name can't reach it; give the old name in prose.";
+        }
+
+        if (comment.LocalToExpansion)
+        {
+            return $"Also: {topic.Name} is local to each expansion of the macro {macro}, so an old name can't "
+                + "reach it; give the old name in prose.";
+        }
+
+        if (comment.Kind == DocumentationKind.Variable)
+        {
+            return $"Also: {topic.Name} is a .set variable in the macro {macro}, which each assignment gives a new "
+                + "version, so an old name can't reach it; give the old name in prose.";
+        }
+
+        return Current.Expansions(comment) is > 1 and int count
+            ? $"Also: {topic.Name} is defined {count} times, by expansions of the macro {macro}, so an old name "
+                + "can't reach any of them; give the old name in prose."
+            : null;
     }
 
     private void CheckSection(
@@ -225,7 +347,7 @@ public sealed partial class DocumentationResolver
                 break;
             case "Also":
                 // A routine written once per build gives each build's old names under its own condition.
-                if (!Current.InBuild(topic, section)) { break; }
+                if (!Current.InBuild(topic, section) || OnlyUnreachedMacros(topic, section)) { break; }
                 CheckAlso(topic, section, also);
                 break;
             case "Entry":
@@ -453,15 +575,56 @@ public sealed partial class DocumentationResolver
             {
                 warn($"Also: {also.Name} is also {sibling}, a member of the same type, which it would not mean.", section.Line);
             }
-            else if (Current.Topics.FirstOrDefault(other => !ReferenceEquals(other, topic)
-                && !OtherBuild(topic, other)
-                && !OtherBuilds(other)
-                && Current.Gives(other, also.Name, thisBuild: true)) is { } other)
+            else if (Current.AlsoOf(topic).Any(item => item.Name == also.Name)
+                && Current.Topics.FirstOrDefault(other => Clashes(topic, other, also.Name)) is { } other)
             {
                 warn($"Also: {other.Name} has the historical name {also.Name} too.", section.Line);
             }
         }
     }
+
+    // Whether only definitions in macros' bodies whose old names reach nothing write a section, and its checks would
+    // say nothing of use: the build defines the line other than once (never, which says nothing about the build's
+    // definitions, or more, which CheckExpandedAlso reports), or the name varies, which it reports too. A scope or
+    // type is still told so, and where the expansions aren't known the section is checked as any other.
+    private bool OnlyUnreachedMacros(DocumentationTopic topic, DocumentationSection section)
+    {
+        IEnumerable<DocumentationComment> writers = topic.Comments.Where(comment => comment.Sections.Any(candidate =>
+            candidate.Name.Equals(section.Name, StringComparison.OrdinalIgnoreCase) && candidate.Text == section.Text));
+
+        return writers.Any() && writers.All(Unreached);
+    }
+
+    // Whether a definition in a macro's body has old names no check of its section helps with.
+    private bool Unreached(DocumentationComment comment) =>
+        comment.Macro is not null
+            && comment.Kind is not (DocumentationKind.Scope or DocumentationKind.Struct or DocumentationKind.Enum)
+            && (comment.NamedByParameter
+                || comment.LocalToExpansion
+                || comment.Kind == DocumentationKind.Variable
+                || Current.Expansions(comment) is int count && count != 1);
+
+    // Whether a definition outside macros' bodies, in a topic a macro's body shares, is another build's: the build has
+    // none of the outside definitions, so without the macro the topic wouldn't be checked, though the macro's
+    // expansion makes it this build's. With one of them in the build, every branch is checked, as without the macro.
+    private bool OtherBuildOutside(DocumentationTopic topic, DocumentationComment comment) =>
+        comment.Macro is null
+            && topic.Comments.Any(other => other.Macro is not null)
+            && !topic.Comments.Any(other => other.Macro is null && Current.ReachesInBuild(other));
+
+    // Whether a section of a topic a macro's body shares is an outside definition's in a branch the build leaves out.
+    private bool OtherBuildOutside(DocumentationTopic topic, DocumentationSection section) =>
+        section.OriginPath is { } path
+            && topic.Comments.Any(comment => comment.TargetLine == section.OriginLine
+                && SamePath(comment.Path, path)
+                && OtherBuildOutside(topic, comment));
+
+    // Whether another definition in this build gives a definition's old name too.
+    private bool Clashes(DocumentationTopic topic, DocumentationTopic other, string name) =>
+        !ReferenceEquals(other, topic)
+            && !OtherBuild(topic, other)
+            && !OtherBuilds(other)
+            && Current.Gives(other, name, thisBuild: true);
 
     // Whether two definitions are in different builds: in opposite branches of conditional assembly, as one model's
     // routine and another's are (one's condition holds a test the other's negates). Each build has only one of them,
@@ -469,11 +632,19 @@ public sealed partial class DocumentationResolver
     private static bool OtherBuild(DocumentationTopic topic, DocumentationTopic other)
     {
         if (topic.Condition is not { } condition || other.Condition is not { } otherCondition) { return false; }
+
+        // A condition in a macro's body is each expansion's own, so it never sets a definition apart in another build:
+        // two expansions can take opposite branches of one, and an expansion can define what a branch outside leaves
+        // in. Which lines the build defines, Reaches and Gives already count.
+        if (InMacro(topic) || InMacro(other)) { return false; }
+
         string[] terms = condition.Split(" and ");
         string[] otherTerms = otherCondition.Split(" and ");
         return terms.Any(term => otherTerms.Contains($"not {term}") || term.StartsWith("not ", StringComparison.Ordinal)
             && otherTerms.Contains(term[4..]));
     }
+
+    private static bool InMacro(DocumentationTopic topic) => topic.Comments.Any(comment => comment.Macro is not null);
 
     private static string LastName(string name)
     {
@@ -492,10 +663,17 @@ public sealed partial class DocumentationResolver
     [GeneratedRegex("<[^>]*>|`[^`]*`|\\{[^}]*\\}|\"[^\"]*\"", RegexOptions.CultureInvariant)]
     private static partial Regex NotProse();
 
-    private void CheckUnlinked(DocumentationTopic topic, HashSet<string> entries, Action<string, int, string> warn)
+    private void CheckUnlinked(
+        DocumentationTopic topic,
+        HashSet<string> entries,
+        Func<DocumentationComment, bool> checks,
+        Action<DocumentationComment, string, int, string> warn)
     {
         HashSet<string> reported = [with(StringComparer.Ordinal)];
-        foreach ((string text, int line, DocumentationComment comment) in Prose(topic))
+        // A name is reported once at each place; where macros' bodies share the topic, the place is in its own file.
+        bool macros = topic.Comments.Any(comment => comment.Macro is not null);
+        foreach ((string text, int line, DocumentationComment comment) in Prose(topic)
+            .Where(item => !OtherBuildOutside(topic, item.Comment) && checks(item.Comment)))
         {
             string prose = NotProse().Replace(text, " ");
             foreach (Match word in ProseName().Matches(prose))
@@ -528,9 +706,9 @@ public sealed partial class DocumentationResolver
                 // calls it RESET", "starts BASIC"), not the current name left unlinked.
                 if (LastName(target.Name) != LastName(name)) { continue; }
 
-                if (reported.Add($"{line}:{name}"))
+                if (reported.Add(macros ? $"{comment.Path}:{line}:{name}" : $"{line}:{name}"))
                 {
-                    warn($"Link {name} as <{name}>: it names a documented definition.", line, name);
+                    warn(comment, $"Link {name} as <{name}>: it names a documented definition.", line, name);
                 }
             }
         }

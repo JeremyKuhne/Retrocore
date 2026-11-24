@@ -64,7 +64,25 @@ internal sealed partial class LanguageWorkspace
     /// <returns>A file URI with a line fragment, or null.</returns>
     internal string? Href(DocumentationTarget target, string path)
     {
-        if (target.Topic is { } topic) { return FileLink(topic.Path, topic.Line); }
+        if (target.Topic is { } topic)
+        {
+            // Where macros' bodies share the topic with other definitions of the name, the target's symbol is one of
+            // them: its own comment, a definition outside the bodies first, as without the macro. Only a definition
+            // in the build counts: a body the build expands once, or one outside in the build's branch. Failing
+            // those, the link opens the only definition the build has, if it has just one.
+            bool Gives(DocumentationComment comment) =>
+                topic.Set.ReachesInBuild(comment) && topic.Set.SymbolOf(topic, comment) == target.Name;
+
+            List<DocumentationComment> defining = [.. topic.Comments.Where(topic.Set.ReachesInBuild)];
+            DocumentationComment? own = topic.Comments.Any(comment => comment.Macro is not null)
+                ? topic.Comments.FirstOrDefault(comment => comment.Macro is null && Gives(comment))
+                    ?? topic.Comments.FirstOrDefault(Gives)
+                    ?? (defining.Count == 1 ? defining[0] : null)
+                : null;
+
+            return own is null ? FileLink(topic.Path, topic.Line) : FileLink(own.Path, own.Line);
+        }
+
         bool macro10 = AnalysisOf(path)?.UsesMacro10(path) ?? SourceText.Macro10Dialect(path, LinesOf(path)) == true;
         foreach (SourceAnalysis analysis in AllAnalyses())
         {
@@ -154,8 +172,10 @@ internal sealed partial class LanguageWorkspace
                 // A name a root symbol has is never historical; one a scope defines is checked at each use, below.
                 if (analysis.Definitions.Any(site => site.Name == name)) { continue; }
 
-                IReadOnlyList<DocumentationTopic> topics = set.FindAlso(name, thisBuild: ReferenceEquals(set, analysis.Documentation));
-                string? replacement = topics.Count == 1 ? topics[0].Name : null;
+                bool thisBuild = ReferenceEquals(set, analysis.Documentation);
+                IReadOnlyList<DocumentationTopic> topics = set.FindAlso(name, thisBuild);
+                IReadOnlyList<string> symbols = topics.Count == 1 ? set.SymbolsOf(topics[0], name, thisBuild) : [];
+                string? replacement = symbols.Count == 1 ? symbols[0] : null;
                 current[name] = current.TryGetValue(name, out string? earlier) && earlier != replacement ? null : replacement;
             }
         }

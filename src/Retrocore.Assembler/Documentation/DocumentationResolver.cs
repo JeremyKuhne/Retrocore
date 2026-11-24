@@ -250,7 +250,10 @@ public sealed partial class DocumentationResolver
         if (set.Find(name) is { } topic) { return Found(topic); }
         if (set.Symbols.TryGetValue(name, out long value))
         {
-            return new(DocumentationTargetKind.Symbol, name) { Set = set, Value = value };
+            // A symbol a macro's expansion defines is documented by its body's topic.
+            return set.FindSymbol(name) is { } expanded
+                ? Found(expanded) with { Name = name, Value = value }
+                : new(DocumentationTargetKind.Symbol, name) { Set = set, Value = value };
         }
 
         return also ? Also(set, name) : null;
@@ -261,7 +264,19 @@ public sealed partial class DocumentationResolver
     private DocumentationTarget? Also(DocumentationSet set, string name)
     {
         IReadOnlyList<DocumentationTopic> also = set.FindAlso(name, thisBuild: ReferenceEquals(set, Current));
-        if (also.Count == 1) { return Found(also[0]); }
+        if (also.Count == 1)
+        {
+            // In a topic macros' bodies share with other definitions of the name, the old name reaches one symbol of
+            // them, which the target names, with its own value; one that two of them give is ambiguous, as in code.
+            DocumentationTopic topic = also[0];
+            IReadOnlyList<string> symbols = set.SymbolsOf(topic, name, thisBuild: ReferenceEquals(set, Current));
+            if (symbols.Count > 1) { return new(DocumentationTargetKind.Ambiguous, name); }
+            string symbol = symbols[0];
+            if (symbol == topic.Name) { return Found(topic); }
+            long? value = set.Symbols.TryGetValue(symbol, out long found) ? found : null;
+            return Found(topic) with { Name = symbol, Value = value };
+        }
+
         return also.Count > 1 ? new(DocumentationTargetKind.Ambiguous, name) : null;
     }
 

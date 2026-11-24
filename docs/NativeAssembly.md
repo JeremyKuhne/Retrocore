@@ -333,6 +333,11 @@ CharacterOut = $FDED
 
 A symbol of the same name wins. An old name that two definitions give is an error where code uses it.
 
+In a macro's body, an `Also:` names the symbol the expansion defines, such as `Basic::COMBYT` for a macro
+expanded in `.scope Basic`, when the build expands that line exactly once. A definition expanded more than once
+gets no old name, and the documentation lint reports it, as it does for one whose name differs from one expansion
+to the next (named by a parameter, a `.local` name or a cheap local such as `@loop`) and for a `.set` variable.
+
 ## Data
 
 | Directive | Emits |

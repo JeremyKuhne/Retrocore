@@ -471,7 +471,7 @@ VOLUME_MESSAGE_LAST = * - VolumeMessage - 1
 ;; <FileManager::WriteVtoc>).
 ;;
 ;; At $B3BB where DOS runs. The fields DOS uses before <VtocBuffer::FreeSectors> are those of an empty 35-track disk;
-;; the unused bytes among them (<VtocBuffer::Spare> and the others) and the bit map hold the master's leftovers. INIT
+;; the 32 bytes after <VtocBuffer::Volume>, <VtocBuffer::Spare> and the bit map hold the master's leftovers. INIT
 ;; (<FileManager::InitDisk>) sets the volume number, the allocation fields and the bit map, zeroing everything from
 ;; <VtocBuffer::FreeSectors> on, then writes the buffer as the new disk's VTOC; the other fields go out as the buffer
 ;; holds them at the time.

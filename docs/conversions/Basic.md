@@ -1167,7 +1167,9 @@ Decisions and how the table was applied:
   - E-Q3: the Technical Information Library's HPLOT, HLIN, DRAW and XDRAW for the engine entries are in prose,
     since the statements have those names. The engine entries keep the overlay's HPLOT0, HGLIN, DRAW0 and XDRAW0
     (UNKN). SETHCOL is `HighRes::SetColor`, split out of `Statements::HColor`, which falls into it after its
-    `EvaluateByte`. RESUME cites ASTIL, with its address noted in prose.
+    `EvaluateByte`. RESUME cites UNKN, not ASTIL as I had recommended: ASTIL's RESUME is $F317, one less than the
+    handler, and the bibliography cites ASTIL only where its address is the build's value; the TIL's name is in
+    prose.
   - E-Q4: keywords split at their words (`HGr2`, `HColor`, `XDraw`, `PrNumber`).
   - E-Q6: the enhanced IIe's helpers that other modules call are top level.
   - E-Q7: `ToIllegalQuantity`, `RejectHighResArgument`, `Statements::SetArrayBlock` and
@@ -1199,10 +1201,12 @@ Decisions and how the table was applied:
   `COMMA_LIMIT_80`. The array header's offsets use `ArrayHeader::LENGTH` and `DIMENSIONS`.
 - E-6. Found in the code and documented, not fixed: those the part E proposal lists, and that
   `HighRes::StepHorizontal` and `StepVertical` take their direction from the negative flag the caller's load or
-  shift leaves, not from A.
+  shift leaves, not from A; and `RECALL` accepts a stored array one byte longer than the array, writing that byte
+  past it, since it compares the array's length with the stored length less one.
 - E-7. Tests and their helpers:
   - The rename gate's macro rename is now `AssignString`, the top-level label at the end of the shared
-    AssignmentStart macro: LASTWR, which it renamed, is converted here and in part F.
+    AssignmentStart macro: LASTWR, which it renamed, is converted here and in part F. The gate now exercises the
+    lookups of AssignString's old name, INPCOM, instead of LASTWR's.
   - `BasicSharedFloatAliasesTests` counts WAIT among AppleSoft's names, and `BasicSharedMemoryAccessTests` expects
     WAIT's topic to be the alias's.
   - `BasicMathMachine.Call` and `CallUntil` take an optional `negative`, for a routine that tests the flag its

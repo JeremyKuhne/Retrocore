@@ -182,7 +182,7 @@ Divide:
 ;; In: negative = set to step left, as the caller's load or shift of the direction leaves it, Y = <HighResByteIndex>
 ;; Entry:
 ;;   AdjustColor = flips <HighResColorByte>'s color bits when the pattern alternates, so the color stays in phase in
-;;     the next byte; <HighRes::Fill> and <HighRes::Position> call it
+;;     the next byte; <HighRes::Fill> calls it and <HighRes::Position> branches to it
 ;; Also: LFTRT (UNKN)
 .proc StepHorizontal
     bpl Right
@@ -542,8 +542,8 @@ PixelMasks:
 RowInGroupMask:
     .byte $1C
 
-;; Seventeen fractions, the cosine from 0 to 90 degrees, that scale a rotated shape vector along and across it; the
-;; last byte, $FF, is read as CosineTable+1,x for rotation 0.
+;; Sixteen fractions, the cosine at 0 to 84 degrees in steps of 90/16, that scale a rotated shape vector along and
+;; across it, and a 17th byte, $FF, read as CosineTable+1,x for rotation 0, so that its `iny` makes the sine 0.
 ;; Also: COSTBL (UNKN)
 CosineTable:
     .byte $FF, $FE, $FA, $F4, $EC

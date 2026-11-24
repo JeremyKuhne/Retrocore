@@ -353,8 +353,9 @@ SetMemoryTop:
 .scope Statements continued
 
 ;; `RESUME`: restores <CurrentLine>, <TextPointer> and the stack pointer saved at the error, then goes on to
-;; <NextStatementSavingStack>. ASTIL gives RESUME as $F317, the dispatch table's value, one less than this address.
-;; Also: RESUME (ASTIL)
+;; <NextStatementSavingStack>. Apple's Technical Information Library gives RESUME as $F317, the dispatch table's
+;; value, one less than this address, so it is not cited here.
+;; Also: RESUME (UNKN)
 .proc Resume
     lda ErrorLine
     sta CurrentLine
@@ -498,9 +499,10 @@ WriteLength:
     jmp MWRITE
 .endproc
 
-;; `RECALL`: finds the array and reads the length from cassette, then reads the data, unless the length is larger
-;; than the array's.
-;; Errors: OUT OF MEMORY for a stored array larger than the array
+;; `RECALL`: finds the array and reads the stored length less one, which `STORE` wrote, from cassette, then reads
+;; the data, unless that value is larger than the array's length. A stored array one byte longer than the array is
+;; accepted, and its last byte is written past the array.
+;; Errors: OUT OF MEMORY for a stored array two or more bytes longer than the array
 ;; Also: RECALL (UNKN)
 .proc Recall
     jsr FindCassetteArray

@@ -14,11 +14,11 @@
 ;; where the code is the same. DOS 3.2 differs in a few places. It reads the sector number the IOB gives as the number
 ;; on the disk, with no translation. It checks once, not eight times, whether the motor is turning; it reads the motor's
 ;; start-up count from both of the DCT's bytes; when an address field shows the head on the wrong track it seeks again
-;; with a fresh count of address tries, as often as that happens, where DOS 3.3 allows four such seeks before it
-;; recalibrates; and its formatter is part of RWTS's code rather than a module of its own. RWTS reads the IOB's slot,
-;; drive, volume, track, sector, DCT and buffer addresses, command and previous slot and drive, and writes the return
-;; code, the volume found and the previous slot and drive; it reads the DCT's <DeviceTable::WHOLE_TRACKS> and both bytes
-;; of <DeviceTable::MOTOR_DELAY>.
+;; with a fresh count of address tries, as often as that happens short of the last try, where DOS 3.3 seeks again at
+;; most three times before it recalibrates; and its formatter is part of RWTS's code rather than a module of its own.
+;; RWTS reads the IOB's slot, drive, volume, track, sector, DCT and buffer addresses, command and previous slot and
+;; drive, and writes the return code, the volume found and the previous slot and drive; it reads the DCT's
+;; <DeviceTable::WHOLE_TRACKS> and both bytes of <DeviceTable::MOTOR_DELAY>.
 ;;
 ;; Several values live in screen holes, at the address given plus the slot (<Drive1HalfTracks>,
 ;; <Drive2HalfTracks>) or at slot 0's byte (the counters); see RwtsEquates.asm.
@@ -290,8 +290,8 @@ SeekAgain:
     jmp StartTries
 
     ; An address field: is the head on the right track? If not, the drive's record of the track is corrected to
-    ; the one read, and it seeks again. The DEC is lost: SeekAgain goes on to StartTries, which starts the count
-    ; again, so only a count already run out (which a found address field cannot leave) would recalibrate.
+    ; the one read, and it seeks again. SeekAgain goes on to StartTries, which starts the count again, so the DEC
+    ; matters only on the last try: a wrong track found then goes on to recalibrate.
 ;; Also: RDRIGHT (DOS33)
 CheckTrack:
     ldy FoundTrack

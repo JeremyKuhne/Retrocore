@@ -77,11 +77,11 @@ ValidFirst:
     .if fixedVectors
         jmp AfterVectors
         .assert * = $E000, "AppleSoft's fixed vectors must start at $E000."
-        jmp INIT
-        jmp MAIN
+        jmp ColdStart
+        jmp CommandLoop
         .byte vectorByte
 
-;; The code after AppleSoft's fixed jumps at $E000 (to <INIT> and <MAIN>) and its model byte.
+;; The code after AppleSoft's fixed jumps at $E000 (to <ColdStart> and <CommandLoop>) and its model byte.
 AfterVectors:
     .endif
     jsr GetNextCharacter
@@ -248,7 +248,7 @@ Advance:
 
     ;; Handles a missing scalar, returning a shared zero to the expression evaluator or creating an entry.
     ;;
-    ;; The stacked return address is compared with <ISVRET>-1. PET compares only the low byte, so another
+    ;; The stacked return address is compared with <LoadVariableValue>-1. PET compares only the low byte, so another
     ;; caller with the same low byte also receives the zero; AppleSoft checks the high byte as well.
     ;; The zero return does not update <VariablePointer>. Otherwise reserved names are checked before insertion.
     ;; With clock support, TI is rejected and TI$ returns the zero; ST is rejected with channel status support.
@@ -259,12 +259,12 @@ Advance:
     .proc NotFound
     pla
     pha
-    cmp #<(ISVRET-1)
+    cmp #<(LoadVariableValue-1)
     bne CheckReservedName
     .if callerHigh
         tsx
         lda Stack + 2,x
-        cmp #>(ISVRET-1)
+        cmp #>(LoadVariableValue-1)
         bne CheckReservedName
     .endif
     ; Falls into ReturnZero.

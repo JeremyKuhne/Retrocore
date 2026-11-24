@@ -1,174 +1,247 @@
+; retrocore: style=strict
 ; COMMODORE BASIC: GET AND INPUT CHANNELS
 
-;; Emits GET, INPUT# and channel-release entries.
+.include "../../Microsoft6502Basic/MsBasic.Families.asm"
+
+;; Emits `GET`, `INPUT#` and the channel release: <Statements::Get>, <Statements::InputNumber> and <RestoreChannels>.
 ;; Parameters: bufferPage = zero for a page-zero input buffer, or the nonzero buffer page
-.macro COMMODORE_CHANNEL_INPUT bufferPage
+.macro CommodoreChannelInput bufferPage
     .assert bufferPage >= 0 && bufferPage <= 255, "bufferPage must fit in a byte."
 
-;; Reads characters into the variable list, optionally from a numbered input channel.
-;; Errors: ILLEGAL DIRECT when used in direct mode
-GET:
-    jsr ERRDIR
+    .scope Statements continued
+
+    ;; `GET`: reads characters into the variable list, from a numbered input channel when `#` follows.
+    ;; Errors: ILLEGAL DIRECT when used in direct mode
+    ;; Also: GET (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    .proc Get
+    jsr RejectDirectMode
     cmp #'#'
-    bne GETTTY
-    jsr CHRGET
-    jsr GETBYT
+    bne ReadCharacters
+    jsr GetNextCharacter
+    jsr EvaluateByte
     lda #','
-    jsr SYNCHR
-    jsr CQOIN
-    stx CHANNL
+    jsr CheckCharacter
+    jsr KernalSelectInput
+    stx CurrentChannel
 
-;; Starts GET with an empty input-buffer sentinel.
-GETTTY:
-    ldx #<(BUF+1)
-    ldy #>(BUF+1)
-.if bufferPage
-    lda #$00
-    sta BUF+1
-.else
-    sty BUF+1
-.endif
-    lda #$40
-    jsr INPCO1
-    ldx CHANNL
-    bne IORELE
+;; Sets up an empty buffer, reads through the shared input code in GET mode, then releases a selected channel.
+;; Also: GETTTY (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+ReadCharacters:
+    ldx #<(InputBuffer+1)
+    ldy #>(InputBuffer+1)
+    .if bufferPage
+        lda #$00
+        sta InputBuffer+1
+    .else
+        sty InputBuffer+1
+    .endif
+    lda #INPUT_MODE_GET
+    jsr AssignVariableList
+    ldx CurrentChannel
+    bne RestoreChannels::Release
     rts
+    .endproc
 
-;; Reads an INPUT# variable list and then restores the default channels.
-INPUTN:
-    jsr GETBYT
+    ;; `INPUT#`: selects the input channel, runs INPUT from its direct-mode check, then falls into <RestoreChannels>.
+    ;; Also: INPUTN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    .proc InputNumber
+    jsr EvaluateByte
     lda #','
-    jsr SYNCHR
-    jsr CQOIN
-    stx CHANNL
-    jsr NOTQTI
+    jsr CheckCharacter
+    jsr KernalSelectInput
+    stx CurrentChannel
+    jsr Statements::Input::CheckDirect
+    ; Falls into RestoreChannels.
+    .endproc
 
-;; Restores the default channels after channel input or output.
-IODONE:
-    lda CHANNL
+    .endscope
 
-;; Restores the default channels and clears <CHANNL>.
-IORELE:
-    jsr CQCCHN
+    ;; Restores the default channels after channel input or output, and clears <CurrentChannel>.
+    ;; Entry:
+    ;;   Release = restores the default channels and clears <CurrentChannel>; <Statements::Get> branches here after
+    ;;     reading a channel
+    ;; Also: IODONE (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    .proc RestoreChannels
+    lda CurrentChannel
+
+;; Restores the default channels and clears <CurrentChannel>.
+;; Also: IORELE (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+Release:
+    jsr KernalResetChannels
     ldx #$00
-    stx CHANNL
+    stx CurrentChannel
     rts
+    .endproc
 .endmacro
 
-;; Emits the INPUT statement through line acquisition.
-;; Parameters: suppressWait = 1 to clear the output-wait flag, statusMask = channel error bits,
-;;             revisedEof = 1 to use the revised BASIC 4 end-of-file helper,
-;;             editorPatch = 1 to use the BASIC 1 editor-ROM stop helper,
-;;             localStopLabel = 1 to expose the BASIC 4 stop entry
-.macro COMMODORE_INPUT_STATEMENT suppressWait, statusMask, revisedEof, editorPatch, localStopLabel
-    .assert suppressWait = 0 || suppressWait = 1, "suppressWait is 0 or 1."
+;; Emits the `INPUT` statement, <Statements::Input>, through its line reader, <PromptAndInputLine>.
+;; Parameters: clearSuppression = 1 to clear the output-suppression flag at INPUT's start;
+;;   statusMask = channel error bits;
+;;   revisedEof = 1 to use the revised BASIC 4 end-of-file helper;
+;;   editorPatch = 1 to use the BASIC 1 editor-ROM stop helper;
+;;   localStopLabel = 1 to define the blank-line stop, `StopEmptyInput`, here (BASIC 4)
+.macro CommodoreInputStatement clearSuppression, statusMask, revisedEof, editorPatch, localStopLabel
+    .assert clearSuppression = 0 || clearSuppression = 1, "clearSuppression is 0 or 1."
     .assert statusMask = 2 || statusMask = 3, "statusMask is 2 or 3."
     .assert revisedEof = 0 || revisedEof = 1, "revisedEof is 0 or 1."
     .assert editorPatch = 0 || editorPatch = 1, "editorPatch is 0 or 1."
     .assert localStopLabel = 0 || localStopLabel = 1, "localStopLabel is 0 or 1."
     .assert editorPatch = 0 || localStopLabel = 0, "The stop entry is either local or in the editor ROM."
 
-;; Reads values for an INPUT statement from the keyboard or the selected channel.
-;;
-;; An optional quoted prompt is printed first. Terminal input receives a question-mark prompt and a
-;; blank line stops the program; a file error releases the channel and skips to the next statement.
-;; The revised BASIC 4 ROM delegates blank-line and end-of-file handling to its editor-ROM helper.
-INPUT:
-.if suppressWait
-    lsr CNTWFL
-.endif
-    cmp #'"'
-    bne NOTQTI
-    jsr STRTXT
-    lda #';'
-    jsr SYNCHR
-    jsr STRPRT
-NOTQTI:
-    jsr ERRDIR
-    lda #','
-    sta BUF-1
-GETAGN:
-    jsr QINLIN
-    lda CHANNL
-    beq BUFFUL
-    lda CQSTAT
-    and #statusMask
-    beq BUFFUL
-    jsr IODONE
-    jmp DATA
-BUFFUL:
-    lda BUF
-    bne INPCON
-.if revisedEof
-    jmp INPNUL
-    nop
-.else
-    lda CHANNL
-    bne GETAGN
-.endif
-.if editorPatch
-    jmp INPSTP
-.else
-.if localStopLabel
-INPSTP:
-.endif
-    clc
-    jmp STPEND
-.endif
+    .scope Statements continued
 
-;; Reads an input line, prompting only when the keyboard is selected.
-QINLIN:
-    lda CHANNL
-    bne GINLIN
-    jsr OUTQST
-    jsr OUTSPC
-GINLIN:
-    jmp INLIN
+    ;; `INPUT`: reads values from the keyboard or the selected channel.
+    ;;
+    ;; An optional quoted prompt is printed first. Terminal input receives a question-mark prompt and a blank line stops
+    ;; the program; a file error releases the channel and skips to the next statement. Where `revisedEof` is 1 (the
+    ;; revised BASIC 4), its patch `INPNUL`, in BASIC's patch area, takes the blank-line and end-of-file handling.
+    ;; Entry:
+    ;;   CheckDirect = rejects direct mode and puts a comma before the buffer; <Statements::InputNumber> enters here
+    ;;   ReadLine = reads a line and checks the channel's status; the revised BASIC 4's `INPNUL` re-enters here
+    ;; Errors: ILLEGAL DIRECT when used in direct mode; SYNTAX when a quoted prompt is not followed by a semicolon
+    ;; Also: INPUT (M6502, HV1, HV1R, HV2, HV4, HV4R, CBM4S79)
+    .proc Input
+    .if clearSuppression
+        lsr OutputSuppressed
+    .endif
+    cmp #'"'
+    bne CheckDirect
+    jsr ReadQuotedString
+    lda #';'
+    jsr CheckCharacter
+    jsr PrintString
+
+;; Rejects direct mode and puts a comma before the buffer.
+;; Also: NOTQTI (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+CheckDirect:
+    jsr RejectDirectMode
+    lda #','
+    sta InputBuffer-1
+
+;; Reads a line and checks the channel's status: a file error releases the channel and skips the statement.
+;; Also: GETAGN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+ReadLine:
+    jsr PromptAndInputLine
+    lda CurrentChannel
+    beq CheckEmpty
+    lda IoStatus
+    and #statusMask
+    beq CheckEmpty
+    jsr RestoreChannels
+    jmp Statements::Data
+
+;; A nonempty line goes to the shared value parser; an empty one retries a channel or stops the program.
+;; Also: BUFFUL (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+CheckEmpty:
+    lda InputBuffer
+    bne AssignInputList
+    .if revisedEof
+        jmp INPNUL
+        nop
+    .else
+        lda CurrentChannel
+        bne ReadLine
+    .endif
+    .if editorPatch
+        jmp INPSTP
+    .elseif localStopLabel
+        ; Falls into StopEmptyInput, except in the revised BASIC 4, which jumped to INPNUL.
+    .else
+        clc
+        jmp Statements::StopOrEnd::SaveLine
+    .endif
+    .endproc
+
+    .endscope
+
+    .if localStopLabel
+        ;; Stops the program, as `END` does, after a blank terminal INPUT line.
+        ;; Also: INPSTP (UNKN), BUFFU1 (HV4R)
+        .proc StopEmptyInput
+        clc
+        jmp Statements::StopOrEnd::SaveLine
+        .endproc
+    .endif
+
+    ;; Reads an input line, printing `? ` first only when the keyboard is selected.
+    ;; Also: QINLIN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    .proc PromptAndInputLine
+    lda CurrentChannel
+    bne ToInputLine
+    jsr PrintQuestionMark
+    jsr PrintSpace
+
+;; Jumps on to <InputLine>.
+;; Also: GINLIN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+ToInputLine:
+    jmp InputLine
+    .endproc
 .endmacro
 
-;; Emits malformed-input handling before the GET entry.
+;; Emits the malformed-input handling, <HandleBadInput> and <RetryInput>, before the `GET` entry.
 ;; Parameters: editorPatch = 1 to select the earlier editor-ROM line-number helper
-.macro COMMODORE_INPUT_ERROR editorPatch
+.macro CommodoreInputError editorPatch
     .assert editorPatch = 0 || editorPatch = 1, "editorPatch is 0 or 1."
 
-;; Retries malformed terminal INPUT, or reports an error for READ, GET or file INPUT.
-;;
-;; READ reports the DATA line, GET reports a direct line, and file INPUT reports BAD DATA. Terminal
-;; INPUT prints the retry message and restores <TXTPTR> to the start of the current statement.
-;; In: INPFLG = input source, CHANNL = selected channel
-;; Out: TXTPTR = restored statement position when retrying, CURLIN = error line for READ or GET
-;; Errors: SYNTAX ERROR for READ or GET; BAD DATA for file INPUT
-TRMNOK:
-    lda INPFLG
-    beq TRMNO1
-.if editorPatch
-    jsr GETDTL
-    nop
-.else
-    bmi GETDTL
-    ldy #$FF
-    bne STCURL
-GETDTL:
-    lda DATLIN
-    ldy DATLIN+1
-.endif
-STCURL:
-    sta CURLIN
-    sty CURLIN+1
-SNERR4:
-    jmp SNERR
-TRMNO1:
-    lda CHANNL
-    beq DOAGIN
-    ldx #<ERRBD
-    jmp ERROR
-DOAGIN:
-    lda #<TRYAGN
-    ldy #>TRYAGN
-    jsr STROUT
-    lda OLDTXT
-    ldy OLDTXT+1
-    sta TXTPTR
-    sty TXTPTR+1
+    ;; Retries malformed terminal INPUT, or reports an error for READ, GET or file INPUT.
+    ;;
+    ;; READ reports the DATA line, GET reports a direct line, and file INPUT reports `FILE DATA` (`BAD DATA` in BASIC
+    ;; 1). Terminal INPUT prints the retry message and restores <TextPointer> to the start of the current statement.
+    ;; Where `editorPatch` is 1 (BASIC 1), the editor ROM's `GETDTL` gives READ's line.
+    ;; In: InputMode = the input's source, CurrentChannel = the selected channel
+    ;; Out: TextPointer = the restored statement position when retrying, CurrentLine = the error's line for READ or GET
+    ;; Errors: SYNTAX for READ or GET; `FILE DATA` (`BAD DATA` in BASIC 1) for file INPUT
+    ;; Entry:
+    ;;   ToSyntaxError = jumps to <SyntaxError>; <PrintTabOrSpace> branches here
+    ;; Also: TRMNOK (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    .proc HandleBadInput
+    lda InputMode
+    beq CheckChannel
+    .if editorPatch
+        jsr GETDTL
+        nop
+    .else
+        bmi UseDataLine
+        ldy #$FF
+        bne SetLine
+
+;; READ: takes <DataLine> as the error's line.
+;; Also: GETDTL (M6502, CBM4S79, HV2, HV4, HV4R)
+UseDataLine:
+        lda DataLine
+        ldy DataLine+1
+    .endif
+
+;; Stores the error's line in <CurrentLine>.
+;; Also: STCURL (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+SetLine:
+    sta CurrentLine
+    sty CurrentLine+1
+
+;; Jumps on to <SyntaxError>.
+;; Also: SNERR4 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+ToSyntaxError:
+    jmp SyntaxError
+
+;; INPUT: from a channel reports `FILE DATA` (`BAD DATA` in BASIC 1); from the keyboard retries.
+;; Also: TRMNO1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+CheckChannel:
+    lda CurrentChannel
+    beq RetryInput
+    ldx #<ERROR_FILE_DATA
+    jmp ReportError
+    .endproc
+
+    ;; Prints the retry message and restores <TextPointer> from <StoppedText>.
+    ;; Also: DOAGIN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    .proc RetryInput
+    lda #<RetryMessage
+    ldy #>RetryMessage
+    jsr PrintText
+    lda StoppedText
+    ldy StoppedText+1
+    sta TextPointer
+    sty TextPointer+1
     rts
+    .endproc
 .endmacro

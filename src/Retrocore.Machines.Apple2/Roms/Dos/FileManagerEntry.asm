@@ -1,4 +1,4 @@
-; retrocore: style=strict ignore=unlinked-name:INPUT -- commands, RWTS and Apple's names in prose
+; retrocore: style=strict
 ;; DOS 3.3 and 3.2: the command interpreter's variables, and the file manager's entry and dispatch tables
 ;;
 ;; Apple's FDOSENT module, at $AA4F-$AB21 where DOS runs. It begins with variables of the command interpreter, the

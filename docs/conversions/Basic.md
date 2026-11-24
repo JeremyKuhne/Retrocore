@@ -1041,6 +1041,126 @@ As a control, a false `Keeps: Y` added to `Strings::CopyBytes` was reported on P
 CI's later steps, run as CI runs them with an empty `RETROCORE_CACHE`, pass: the IIe sample assembles, every
 `tools/Test-*.mjs` script passes, and in `extension/` `check:grammar`, `compile` and `test:grammar` pass.
 
+### I. The vendors' interpreter files (X8 step 6)
+
+Converted, with `; retrocore: style=strict`, part C's twelve vendor files and both dispatch tables: AppleSoft's
+`ErrorAndInput`, `ControlFlow`, `Print`, `InputOutput`, `Expressions`, `Initialization` and `DispatchTables`, and
+Commodore's `CommandInput`, `StatementDispatch`, `ChannelPrint`, `ChannelInput`, `VariableEvaluation`,
+`Initialization` and `DispatchTables`. AppleSoft's and Commodore's names agree where the code does the same job
+(the table's "same job, one name" list). The shared modules' references to part C's names (ReportError,
+PrintNewline, PrintCharacter, ReservedWords, FunctionTable and the rest) follow. The bytes are unchanged in all
+eight builds.
+
+Decisions and how the table was applied:
+
+- I1. Commodore's macros take CamelCase names (`CommodoreErrorReady`, `CommodoreCommandLoop`,
+  `CommodoreTerminalInput`, `CommodoreTokenize`, `CommodoreStatementFetch`, `CommodoreStatementDispatch`,
+  `CommodorePrintChannels`, `CommodoreCharacterOutput`, `CommodoreLineEnd`, `CommodorePrintSpacing`,
+  `CommodoreChannelInput`, `CommodoreInputStatement`, `CommodoreInputError`, `CommodoreVariableValue`,
+  `CommodoreInitialize`, `CommodoreMemoryProbe`, `CommodoreStartProgram`, `CommodoreStartMessages`,
+  `CommodoreDispatchTables`). Every invocation, root and test follows. Their parameters follow C-Q10
+  (`clearSuppression`, `honorSuppression`, `setLineWidth`), and BASIC 1's `earlyBufferSetup` is `earlyBuffer` so
+  the macro's line fits in 120 columns.
+- I2. Owner questions, as I recommended: C-Q2 (`ReadyForCommand` in both vendors), C-Q4 (`EvaluateVariable` and
+  `EvaluateVariableBody`; `NextStatementSavingStack`), C-Q7 (`Statements::PrepareRun`, POP as a `Pop:` label in
+  `Statements` that falls into the shared RETURN), C-Q8 (REDDY, GOTK and Q dropped, in prose), C-Q9
+  (`INPUT_BUFFER_BASE`, Also BUFOFS, and `LAST_COMMA_COLUMN`, Also NCMPOS) and C-Q10.
+- I3. C-Q3, departed from for LINCHK and TABER. In the II Plus and IIe these fall inside instructions. I had
+  recommended dropping them, but every overlay label must resolve in the native build (the lister, string-function
+  and listing comparisons), so dropping them would weaken those tests. They are `PrintComma::ZoneMaskOperand` and
+  `PrintTabOrSpace::EvaluateCallHigh`, equates at the operand bytes, each documented as an address nothing enters.
+  `PrintComma::NextZone` carries LINCHK in the enhanced IIe and COMPR1 elsewhere. `PrintTabOrSpace::ReadArgument`
+  carries TABER in the enhanced IIe and LINCH1 elsewhere.
+- I4. NOTABR is `PrintSpaces::ContinuePrint`, as X2 has it, not a top-level label (C-Q3's draft). ERRCRD and ERROR1
+  are both `ReportError::PrintMessage`; the table gave the PET's as `ShowMessage`.
+- I5. The shared `IntegerVariableValue` expands inside each vendor's `LoadVariableValue`, so GOOO and GOOOOO are
+  `LoadVariableValue::LoadNumericVariable` and its labels, and the code after the macro stays the routine's.
+- I6. AppleSoft's ON is an alias in `AppleSoft.HistoricalNames.asm` (`On = Statements::On`, Also ON (UNKN)), since
+  the shared `OnStatement` defines `Statements::On`. BASIC 4's disk parser has a label of its own named ON (part
+  F), so `BasicNames.VendorLabelNames` adds ON beside GETRTS.
+- I7. The shared `ErrorFinish` now holds only `AddErrorSuffix` (TYPERR). The new `ReportMessageRoutine` emits
+  `ReportMessage`. Each vendor closes its own `ReportError` between them, since the documentation tracks a
+  routine's scope within one file. S8's locals of part C's routines now take their rows' names (EditLine,
+  SetMoveSource, MoveDown, ScanLine, StoreToken, StoreByte, SetTokenizeState, CheckRem, CopyLiteral, StoreLiteral),
+  each with its old name in `Also:`. Where a routine's start differs by build, each `.if` branch opens and closes its
+  own `.proc` (Commodore's `EvaluateVariableBody` and `EvaluateVariable`), or a per-build label carries the old
+  names.
+- I8. New constants: AppleSoft's `CONTROL_C`, `KEYBOARD_CONTROL_C`, `COMMA_NEWLINE_COLUMN`, `INPUT_LINE_LIMIT` and
+  `PROGRAM_ORIGIN` (with `INPUT_BUFFER_BASE` and `LAST_COMMA_COLUMN` from I2), and Commodore's `CARRIAGE_RETURN`,
+  `LINE_FEED`, `CURSOR_RIGHT`, `CURSOR_LEFT`, `DELETE_CHARACTER`, `CURSOR_HOME` and `CURSOR_DOWN`. Two `*+5`
+  branches are labels: `ReadLine` in the statement fetch, where `shortEnd` is 0 (BASIC 2 and 4; DIRCN1 in their
+  documents), and `StoreLink` in the command loop's link pass, where `linkReturns` is 0 (BASIC 1). Some values are
+  still numbers with a trailing comment: the JMP opcode both cold starts store, AppleSoft's carriage return and
+  16-column zone, the PET clock's reserved-variable threshold, digit count and digit mask, the screen's page and the
+  direct line's $FF; naming them is left for a later pass. The PET line reader's carriage return (`InputLine`) stays
+  `$0D`, since the tests assemble `Commodore.CommandInput.asm` without the file that defines `CARRIAGE_RETURN`.
+- I8a. The PET roots pass `PrintTabOrSpace` to the shared `PrintItems`. Their other macro arguments keep the old
+  names they had (CHRGET, NEWSTT, READY, LINPRT, FREMES and others), which resolve through `Also:`.
+- I9. Part F's names stay as they are in the code: BASIC 4's trampoline ISVAR (the shared evaluator still branches
+  to ISVAR), BASIC 1's GETDTL, INPSTP, TISTR, TINUM and INCTRM, and the revised BASIC 4's INPNUL. `StopEmptyInput`
+  is BASIC 4's own INPSTP, under `.if localStopLabel`.
+- I10. The C# debug hosts are unchanged: their old names resolve through `SymbolsWithHistoricalNames`.
+- I11. Tests and their helpers:
+  - The builds give NTHIS1 and NTHIS2 one step apart, and TABER to different definitions, so a test that predefines
+    one of them passes its build to `BasicNames` (E11): the PET math, alias and print tests now do. `VendorLabelNames`
+    adds ON, and those names may be a historical name on the vendor's own code, not only on an alias in its
+    historical-names file (`BasicAttribution.AssertNotShared`).
+  - Shared prose links the `ON` statement as `<Statements::On>` rather than naming it: ON is AppleSoft's alias, and
+    AppleSoft has no `TOKEN_ON` to mark it as a keyword.
+  - `BasicNames.CurrentLabel` labels a test's own definition by its current names alone. Defining the old name too
+    would be a second definition of a name a source's `Also:` gives; the rename gate found this in the composed
+    PET source.
+  - The standalone PET sources predefine `BasicNames.ScopedNames` in `PetNativeEquatesTests.Assemble` (and no longer
+    a second time in the array test), and the GET test includes `MsBasic.VariableInput.asm` for `INPUT_MODE_GET`.
+  - The rename gate renames `ReservedWords` (both dispatch tables) and LASTWR: the interpreter files are converted,
+    and LASTWR is the only label left that both vendors' unconverted files define (in BASIC 1, in a macro's body).
+  - `VendorOldNamesResolveOnlyInTheirVendorsBuilds` reads the interpreter files too, and counts a name a shared
+    module gives in one vendor's builds as that vendor's where the other's own files give it. It pins that set to
+    LINCHK.
+  - `BasicSharedFloatAliasesTests` allows BASIC 4's own ON, and checks that it is the overlay's ON, not
+    `Statements::On`.
+  - `BasicInterpreterConversionTests` is new: in each of the eight builds, every old name the fourteen files give
+    that the MACRO-10 overlay defines reaches its value, and every definition reaches the overlay by a name, apart
+    from the new constants, the two `*+5` labels, AppleSoft's `PrintTabOrSpace`, whose old names are on its
+    per-build label (I3), and BASIC 1's labels whose HV1 names the overlay does not define there (I12).
+    Each old name cites only its vendor's documents, Microsoft's source or UNKN (for Commodore, the BASIC 4 kernal
+    listings too, as the workspace's do), all in the bibliography.
+  - `BasicInterpreterRoutineTests` is new (below).
+  - `BasicBuildLinkTests` is new: in each of the eight builds, every link in a BASIC comment the build assembles names
+    a definition the build assembles. The lint resolves a link against every build's definitions of a conditional
+    source, so it passed links in all-builds comments to definitions only some builds have; the closing reviews found
+    nine of them in part C's files. The test found three more outside them: the shared RETURN's links to AppleSoft's
+    `Statements::PopFinish`, and AppleSoft's cassette comments' links to the enhanced IIe's `CALLC5` and the others'
+    `SETA2`, which are now described or in backticks. `DocumentationSet.CommentInBuild` is internal for it.
+- I12. Old names the table's rows give only for BASIC 2 and 4, which HV1 and HV1R also give to BASIC 1's own code:
+  XSPAC2 (`PrintSpaces::Next`), GLET (`DispatchStatement::ToLet`), FREMES (`SignOnMessage`, inside
+  `BytesFreeMessage`'s string) and CRTSKP (`PrintSpace::CursorRight`), each now a label in BASIC 1's branch, cited
+  HV1 and HV1R. Inside the two versions of `PrintSpaces`, which every build has, the labels cite only their own
+  builds' documents (E8a): BASIC 1's XSPAC cites M6502 beside HV1's XSPAC1, and each version's NOTABR its own
+  builds' documents. MORSTS, BASIC 1's own
+  compare inside `NextStatement`, is in prose: as a label it would be a per-build `NextStatement::` name, which the
+  standalone sources that define `NextStatement` cannot predefine. DIRCN1 (CBM4S79, HV2, HV4, HV4R) is now on
+  `NextStatement::ReadLine`. The overlay defines none of the BASIC 1 names at BASIC 1's addresses, so the
+  conversion test exempts those labels there.
+
+Checked: the full suite, the rename gate, the lint tests and `BasicInterpreterConversionTests`. The suite's
+skipped tests are the ROM-dump comparisons, which need dumps that are not here, so they did not run.
+
+`BasicInterpreterRoutineTests` runs these routines in the enhanced IIe's AppleSoft and PET BASIC 4 and checks
+their `Out:` values:
+
+- AppleSoft's `InputLine`: lines of 0, 3, 239 and 245 characters (cut to 239), bit 7 cleared, the zero after them,
+  the blank prompt, and A, X and Y.
+- `Tokenize` in both builds: the token, `TextPointer` and Y with the header.
+- AppleSoft's `CheckStop`: other keys return at once with the key in A; Control-C goes on to `InputCharacter`.
+- AppleSoft's `PrintCharacter`: bit 7 and `FlashMask` on a printable character only, and A with bit 7 clear.
+- BASIC 4's `PrintCharacter`: the kernal's A, with zero and negative from it.
+
+The existing tests run the rest. The debugger's contract checking ran clean on PET BASIC 2, PET BASIC 4 and the
+enhanced IIe's AppleSoft. The contract check's program adds PRINT's comma, `TAB(` and `SPC(` to the expression step's, and a
+GOSUB that AppleSoft leaves by POP. As a control, a false `Keeps: A` added to AppleSoft's `PrintNewline` was
+reported.
+
 ## Other dependents
 
 - **DOS** left BASIC's names unchanged until this conversion: X7 in the DOS conversion's log, `docs/conversions/Dos.md`,

@@ -16,9 +16,10 @@
 
 ;; Prints the string whose descriptor is addressed by <FacMantissa3>, releasing the temporary if applicable.
 ;;
-;; Each carriage return it prints is followed by the vendor's <CRFIN>. It ends at <PRTRTS>, Print's return.
+;; Each carriage return it prints is followed by the vendor's <PrintNewline::Finish>. It ends at
+;; <PrintNewline::Return>, Print's return.
 ;; In: FacMantissa3 = string descriptor address (low byte), FacMantissa4 = its high byte
-;; See: <Strings::ReleaseFac>, <OUTDO>
+;; See: <Strings::ReleaseFac>, <PrintCharacter>
 ;; Also: STRPRT (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 .proc PrintString
     jsr Strings::ReleaseFac
@@ -29,12 +30,12 @@
 ;; Also: STRPR2 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 NextCharacter:
     dex
-    beq PRTRTS
+    beq PrintNewline::Return
     lda (Pointer1),y
-    jsr OUTDO
+    jsr PrintCharacter
     iny
     cmp #$0D                    ; carriage return
     bne NextCharacter
-    jsr CRFIN
+    jsr PrintNewline::Finish
     jmp NextCharacter
 .endproc

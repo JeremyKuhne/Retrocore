@@ -590,8 +590,8 @@ to K12, R1 to R10).
 | 429 | `DOMIN` | `ApplyMinus` | routine | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Selects the unary-minus entry of OperatorTable and falls into ApplyPrefixOperator — Reached by branch from EvaluateOperand |
 | 430 | `GONPRC` | `ApplyPrefixOperator` | routine | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Drops EvaluateOperand's return address and jumps to EvaluateExpression::Prefix with Y = the operator's table offset |
 | 431 | `INTEGER_VARIABLE_VALUE` | `IntegerVariableValue` | macro | all |  | — | Emits the integer-variable load that the vendor's variable operand code reaches (GOOO, GOOOOO) |
-| 432 | `GOOO` | `LoadNumericVariable` | routine | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | For an integer variable, loads its two bytes (high first) at the address in FacMantissa3/4 and converts them with GIVAYF — The vendor's ISVAR branches here; a float falls out of the macro into the vendor's MOVFM jump |
-| 433 | `GOOOOO` | `LoadNumericVariable::NotInteger` | local | all | M6502, HV1, HV1R, HV2, HV4, HV4R, CBM4S79 [P4 P4R] | no | Float variable: falls out to the vendor's code that loads it |
+| 432 | `GOOO` | `LoadNumericVariable` | routine | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | For an integer variable, loads its two bytes (high first) at the address in FacMantissa3/4 and converts them with GIVAYF — The vendor's ISVAR branches here; a float falls out of the macro into the vendor's MOVFM jump Converted: `LoadVariableValue::LoadNumericVariable`, since the macro expands inside each vendor's LoadVariableValue (Basic.md I5). |
+| 433 | `GOOOOO` | `LoadNumericVariable::NotInteger` | local | all | M6502, HV1, HV1R, HV2, HV4, HV4R, CBM4S79 [P4 P4R] | no | Float variable: falls out to the vendor's code that loads it Converted: `LoadVariableValue::LoadNumericVariable::NotInteger` (Basic.md I5). |
 | 434 | `FUNCTION_DISPATCH` | `FunctionDispatch` | macro | all |  | — | Emits the built-in function dispatcher (ISFUN, OKNORM, FINGO) |
 | 435 | `ISFUN` | `CallFunction` | routine | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Parses a function's arguments (string and byte for LEFT$/RIGHT$/MID$, else one parenthesized expression) and calls its routine through FunctionJump — The PET passes it as functionEntry; AS's SCRN check falls into it |
 | 436 | `OKNORM` | `CallFunction::OneArgument` | local | all | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | no | Ordinary function: evaluates the parenthesized argument |
@@ -1229,8 +1229,8 @@ to K12, R1 to R10).
 | 941 | `VARTIO` | `SetCassetteLengthRange` | routine | AS | M6502; spelling only: AS82 [AS] | vendor | Points the Monitor's A1/A2 range at the two bytes of PokeAddress and clears LOCK. — also called from AppleSoft.PlatformHelpers |
 | 942 | `PROGIO` | `SetCassetteProgramRange` | routine | AS | M6502; spelling only: AS82 [AS] | vendor | Points the Monitor's A1/A2 range from ProgramStart to VariablesStart. |
 | 943 | `RUNSTM` | `Statements::PrepareRun` | routine | AS | none found | vendor | RUN's table entry: decrements CurrentLine's high byte keeping the flags, then falls into the shared RUN. — see C-Q7 |
-| 944 | `POP` | `Statements::Pop` | routine | AS | spelling only: AS82 [AS] | vendor | Discards the innermost GOSUB frame (and the FOR frames above it) without transferring; RETURN's table entry too. — STMDSP sends both POP and RETURN here |
-| 945 | `ON` | `Statements::On` | routine | AS | spelling only: AS82 [AS] | vendor | ON: evaluates the selector and takes the matching line of a GOTO or GOSUB list. |
+| 944 | `POP` | `Statements::Pop` | routine | AS | spelling only: AS82 [AS] | vendor | Discards the innermost GOSUB frame (and the FOR frames above it) without transferring; RETURN's table entry too. — STMDSP sends both POP and RETURN here Converted: a `Pop:` label in `Statements`, which falls into the shared RETURN (Basic.md I2). |
+| 945 | `ON` | `Statements::On` | routine | AS | spelling only: AS82 [AS] | vendor | ON: evaluates the selector and takes the matching line of a GOTO or GOSUB list. Converted: AppleSoft's alias `On = Statements::On`, Also ON (UNKN), since the shared OnStatement defines the routine; BASIC 4's disk parser keeps an ON of its own (Basic.md I6). |
 
 ### AppleSoft.DispatchTables
 
@@ -1769,17 +1769,17 @@ to K12, R1 to R10).
 | 1421 | `CRDO` | `PrintNewline` | routine | AS | M6502, ASTIL [AS]; spelling only: AS82 [AS] | vendor | Prints a carriage return, then complements A for callers that test it. — not PrintReturn: the Monitor's CROUT has that name |
 | 1422 | `CRFIN` | `PrintNewline::Finish` | entry | AS | M6502 | vendor | Complements A; the shared string printer enters here after printing a return from a string. |
 | 1423 | `PRTRTS` | `PrintNewline::Return` | entry | AS | M6502 | vendor | Return; shared PRINT and the string printer branch here to end. |
-| 1424 | `COMPRT` | `PrintComma` | routine | AS | M6502 | vendor | PRINT's comma: a new line past column $18, otherwise spaces to the next 16-column zone (IIeE via CHKCOL and TRMSET). |
-| 1425 | `LINCHK` | `PrintComma::NextZone` [IIeE]; DROP [II+ IIe] | local | AS | M6502 | vendor | IIeE: rounds the column up to the next zone and goes on to set it. — II+/IIe: this label falls inside an instruction ($DB11) and nothing uses it there: DROP in those builds; their NextZone is COMPR1; see C-Q3 |
+| 1424 | `COMPRT` | `PrintComma` | routine | AS | M6502 | vendor | PRINT's comma: a new line at or past column $18, otherwise spaces to the next 16-column zone (IIeE via CHKCOL and TRMSET). |
+| 1425 | `LINCHK` | `PrintComma::NextZone` [IIeE]; DROP [II+ IIe] | local | AS | M6502 | vendor | IIeE: rounds the column up to the next zone and goes on to set it. — II+/IIe: this label falls inside an instruction ($DB11) and nothing uses it there: DROP in those builds; their NextZone is COMPR1; see C-Q3 Converted: II+/IIe keep it as `PrintComma::ZoneMaskOperand`, an equate at the `and`'s operand, so the overlay's label still resolves (Basic.md I3). |
 | 1426 | `COMPR1` | `PrintComma::NextZone` | local | II+ IIe | none found | vendor | II+/IIe: adds the zone width; the following bytes overlap the TAB entry. — same job as IIeE's LINCHK |
-| 1427 | `TABER` | `PrintTabOrSpace` [IIeE]; DROP [II+ IIe] | routine | AS | M6502 | vendor | TAB( or SPC(: reads the byte argument and ), then prints spaces to the column (TAB) or the count (SPC); falls into PrintSpaces. — IIeE label; II+/IIe: this label falls inside JSR GTBYTC ($DB19), nothing uses it: DROP there, the routine is LINCH1; see C-Q3 |
-| 1428 | `LINCH1` | `PrintTabOrSpace` | routine | II+ IIe | none found | vendor | II+/IIe: PRINT_CORE's TAB/SPC entry (PHP), the same routine as IIeE's TABER. — same job, same name as row 1427 |
+| 1427 | `TABER` | `PrintTabOrSpace` [IIeE]; DROP [II+ IIe] | routine | AS | M6502 | vendor | TAB( or SPC(: reads the byte argument and ), then prints spaces to the column (TAB) or the count (SPC); falls into PrintSpaces. — IIeE label; II+/IIe: this label falls inside JSR GTBYTC ($DB19), nothing uses it: DROP there, the routine is LINCH1; see C-Q3 Converted: II+/IIe keep it as `PrintTabOrSpace::EvaluateCallHigh`, an equate at the `jsr`'s high byte; the routine's per-build `ReadArgument` label carries TABER or LINCH1 (Basic.md I3). |
+| 1428 | `LINCH1` | `PrintTabOrSpace` | routine | II+ IIe | none found | vendor | II+/IIe: PRINT_CORE's TAB/SPC entry (PHP), the same routine as IIeE's TABER. — same job, same name as row 1427 Converted: on the per-build label `PrintTabOrSpace::ReadArgument` (Basic.md I3). |
 | 1429 | `TABER1` | `PrintTabOrSpace::ClosedParenthesis` | local | AS | none found | vendor | After the ): SPC prints X spaces; TAB subtracts the column. |
 | 1430 | `TABER2` | `PrintTabOrSpace::MoveToColumn` | entry | IIeE | none found | vendor | IIeE: computes the spaces to the target column through TRMSET; PrintComma enters here. |
 | 1431 | `ASPAC` | `PrintSpaces` | routine | AS | M6502 | vendor | Prints A spaces. — unreferenced in AS; kept for its M6502 name |
 | 1432 | `XSPAC` | `PrintSpaces::CountInX` | entry | AS | M6502 | vendor | Prints X spaces (zero prints none); PrintTabOrSpace's SPC enters here. |
 | 1433 | `XSPAC2` | `PrintSpaces::Next` | local | AS | M6502 | vendor | Counts down; zero goes on to ContinuePrint. |
-| 1434 | `NOTABR` | `ContinuePrint` | entry | AS | M6502 | vendor | Rereads the current character and continues PRINT at PRINTC without a newline. — inside PrintSpaces' loop; PRINT's ; and the comma and TAB paths branch here; see C-Q3 |
+| 1434 | `NOTABR` | `ContinuePrint` | entry | AS | M6502 | vendor | Reads the next character and continues PRINT at PRINTC without a newline. — inside PrintSpaces' loop; PRINT's ; and the comma and TAB paths branch here; see C-Q3 Converted: `PrintSpaces::ContinuePrint`, as X2 has it (Basic.md I4). |
 | 1435 | `XSPAC1` | `PrintSpaces::One` | local | AS | M6502 | vendor | Prints one space and loops. |
 | 1436 | `OUTSPC` | `PrintSpace` | routine | AS | M6502, ASTIL [AS] | vendor | Loads a space and skips into PrintCharacter. — falls into PrintCharacter (over PrintQuestionMark's load) |
 | 1437 | `OUTQST` | `PrintQuestionMark` | routine | AS | M6502, ASTIL [AS] | vendor | Loads ? and falls into PrintCharacter. |
@@ -1906,7 +1906,7 @@ to K12, R1 to R10).
 | # | Old | New | Kind | Builds | Documents (checked) | D3 | Reason |
 | ---: | --- | --- | --- | --- | --- | --- | --- |
 | 1542 | `COMMODORE_BASIC1_EDITOR_PATCHES` | `CommodoreBasic1EditorPatches` | macro | P1 P1R |  | vendor | Emits BASIC 1's patch routines placed after the sign-on code in the editor ROM's spill area — D2: macro stays, renamed to PascalCase |
-| 1543 | `INPSTP` | `StopEmptyInput` | routine | P1 P1R | other names here: PATCH1 (HV1, HV1R) | vendor | Clears carry and jumps to STPEND, ending a blank terminal INPUT without BREAK — Same job as the INPSTP label ChannelInput defines in other builds (part C): same name; HV1 PATCH1 in Also |
+| 1543 | `INPSTP` | `StopEmptyInput` | routine | P1 P1R | other names here: PATCH1 (HV1, HV1R) | vendor | Clears carry and jumps to STPEND, ending a blank terminal INPUT without BREAK — Same job as the INPSTP label ChannelInput defines in other builds (part C): same name; HV1 PATCH1 in Also Converted: unchanged here; part F converts BASIC 1's patch (Basic.md I9). |
 | 1544 | `TISTR` | `CheckClockString` | routine | P1 P1R | other names here: PATCH2 (HV1, HV1R) | vendor | Entered by jmp from ISVAR: a reserved-area string variable named T goes to TISTR1, else its rts ends the evaluation — HV1 PATCH2 in Also; the rts returns from the caller's evaluation, not to ISVAR |
 | 1545 | `TISTR2` | `CheckClockString::NotClock` | local | P1 P1R | none found | vendor | rts reached when the string variable is not TI$ — HV1 LE1AA in Also |
 | 1546 | `TINUM` | `RouteNumericVariable` | routine | P1 P1R | other names here: PATCH3 (HV1, HV1R) | vendor | Entered by jmp: ordinary variables go to GOMOVF, reserved ones to TINUM1 (T) or QSTATV (others) — HV1 PATCH3 in Also |
@@ -2347,7 +2347,7 @@ to K12, R1 to R10).
 | 1936 | `NOTQTI` | `Statements::Input::CheckDirect` | entry | PET | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | vendor | Rejects direct mode and puts a comma before the buffer; INPUT# enters here. |
 | 1937 | `GETAGN` | `Statements::Input::ReadLine` | entry | PET | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | vendor | Reads a line and checks the channel's status; the revised BASIC 4 patch re-enters here. |
 | 1938 | `BUFFUL` | `Statements::Input::CheckEmpty` | local | PET | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | vendor | A nonempty line goes to the shared value parser; an empty one retries a channel or stops. |
-| 1939 | `INPSTP` | `StopEmptyInput` | routine | P4 P4R | other names here: BUFFU1 (HV4R) | vendor | Stops the program (STPEND, carry clear) after a blank terminal INPUT line. — BASIC 1's INPSTP (F part) does the same job; same name; P4 falls into it |
+| 1939 | `INPSTP` | `StopEmptyInput` | routine | P4 P4R | other names here: BUFFU1 (HV4R) | vendor | Stops the program (STPEND, carry clear) after a blank terminal INPUT line. — BASIC 1's INPSTP (F part) does the same job; same name; P4 falls into it Converted: `StopEmptyInput`, under `.if localStopLabel` (Basic.md I9). |
 | 1940 | `QINLIN` | `PromptAndInputLine` | routine | PET | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | vendor | Prints ? and a space on the keyboard only, then reads an input line. |
 | 1941 | `GINLIN` | `PromptAndInputLine::ToInputLine` | local | PET | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | vendor | Jumps on to InputLine. |
 | 1942 | `COMMODORE_INPUT_ERROR` | `CommodoreInputError` | macro | PET |  | vendor | Emits the bad-input handling. — SDK name: case only |
@@ -2373,7 +2373,7 @@ to K12, R1 to R10).
 | 1957 | `suppressOutput` | `honorSuppression` | parameter of COMMODORE_CHARACTER_OUTPUT | PET |  | vendor | 1 to skip output while OutputSuppressed is set. — renamed: suppressOutput reads as the opposite and means "clear" in CommodoreErrorReady |
 | 1958 | `returnAlias` | `KEEP` | parameter of COMMODORE_CHARACTER_OUTPUT | PET |  | vendor | 1 to define PrintCharacter::Return at the RTS. |
 | 1959 | `OUTSPC` | `PrintSpace` | routine | PET | M6502, CBM4S79 [P4 P4R], HV2, HV4, HV4R; other names here: CRTSKP (HV1, HV1R) | vendor | Loads a space for a file or cursor-right for the screen (always cursor-right in BASIC 1), skipping into PrintCharacter. |
-| 1960 | `CRTSKP` | `PrintSpace::CursorRight` | local | P2 P4 P4R | M6502, CBM4S79 [P4 P4R], HV2, HV4, HV4R | vendor | Loads the cursor-right code. |
+| 1960 | `CRTSKP` | `PrintSpace::CursorRight` | local | P2 P4 P4R | M6502, CBM4S79 [P4 P4R], HV2, HV4, HV4R | vendor | Loads the cursor-right code. Converted: BASIC 1 has it too, `PrintSpace::CursorRight` in its own branch, cited HV1 and HV1R (Basic.md I12). |
 | 1961 | `OUTQST` | `PrintQuestionMark` | routine | PET | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | vendor | Loads ? and falls into PrintCharacter. |
 | 1962 | `OUTDO` | `PrintCharacter` | routine | PET | M6502, HV1, HV1R, HV2, HV4, HV4R, CBM4S79 [P4 P4R] | vendor | Sends A to the selected channel (OUTCH) unless output is suppressed; BASIC 1 tracks the column; returns with zero set from A. |
 | 1963 | `DECTRM` | `PrintCharacter::MoveLeft` | local | P1 P1R | none found | vendor | BASIC 1: cursor-left or delete moves the screen column back. |
@@ -2403,8 +2403,8 @@ to K12, R1 to R10).
 | 1987 | `TABER` | `PrintTabOrSpace` | routine | PET | M6502, HV1, HV1R, HV2, HV4, HV4R, CBM4S79 [P4 P4R] | vendor | TAB( or SPC(: reads the byte argument and ), then prints spaces to the column or the count. — BASIC 1 tests the saved token, later ones the carry; BASIC 1's SPC(0) prints 256 spaces (bug, document) |
 | 1988 | `ASPAC` | `PrintSpaces` | routine | PET | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | vendor | Prints A spaces; PrintComma branches here and PrintTabOrSpace falls into it. — two definitions, one per variant of the macro (lines 213, 232) |
 | 1989 | `XSPAC` | `PrintSpaces::CountInX` | entry | PET | M6502, CBM4S79 [P4 P4R], HV2, HV4, HV4R; other names here: XSPAC1 (HV1, HV1R) | vendor | Prints X spaces. — BASIC 1: the loop itself |
-| 1990 | `NOTABR` | `ContinuePrint` | entry | PET | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | vendor | Rereads the current character and continues PRINT at PRINTC. |
-| 1991 | `XSPAC2` | `PrintSpaces::Next` | local | P2 P4 P4R | M6502, CBM4S79 [P4 P4R], HV2, HV4, HV4R | vendor | Counts down; zero goes on to ContinuePrint. |
+| 1990 | `NOTABR` | `ContinuePrint` | entry | PET | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | vendor | Reads the next character and continues PRINT at PRINTC. Converted: `PrintSpaces::ContinuePrint`, as X2 has it (Basic.md I4). |
+| 1991 | `XSPAC2` | `PrintSpaces::Next` | local | P2 P4 P4R | M6502, CBM4S79 [P4 P4R], HV2, HV4, HV4R | vendor | Counts down; zero goes on to ContinuePrint. Converted: BASIC 1 has it too, `PrintSpaces::Next` in its own branch, cited HV1 and HV1R (code6), which give it there (Basic.md I12). |
 | 1992 | `XSPAC1` | `PrintSpaces::One` | local | P2 P4 P4R | M6502, CBM4S79 [P4 P4R], HV2, HV4, HV4R | vendor | Prints one space and loops. |
 
 ### Commodore.CommandInput
@@ -2415,7 +2415,7 @@ to K12, R1 to R10).
 | 1994 | `suppressOutput` | `clearSuppression` | parameter of COMMODORE_ERROR_READY | PET |  | vendor | 1 to clear OutputSuppressed when reporting an error and at READY. — renamed: the same name means "honor" in CommodoreCharacterOutput |
 | 1995 | `OMERR` | `ReportOutOfMemory` | routine | PET | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | vendor | Loads ERROR_OUT_OF_MEMORY into X and falls into ReportError. |
 | 1996 | `ERROR` | `ReportError` | routine | PET | M6502, K4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R, HVK4 [P4 P4R], CBM4S79 [P4 P4R] | vendor | Closes a selected channel, prints ?, the message at X in ErrorMessages, ERROR and the line, and returns to the prompt. |
-| 1997 | `ERRCRD` | `ReportError::ShowMessage` | local | PET | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | vendor | Starts a new line and prints the question mark. |
+| 1997 | `ERRCRD` | `ReportError::ShowMessage` | local | PET | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | vendor | Starts a new line and prints the question mark. Converted: `ReportError::PrintMessage`, the same name as AppleSoft's ERROR1 for the same job (Basic.md I4). |
 | 1998 | `GETERR` | `ReportError::NextCharacter` | local | PET | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | vendor | Prints message characters until the one with bit 7 set. |
 | 1999 | `READY` | `ReadyForCommand` | routine | PET | M6502, K4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R, HVK4 [P4 P4R], CBM4S79 [P4 P4R] | vendor | Prints READY. and falls into CommandLoop. |
 | 2000 | `COMMODORE_COMMAND_LOOP` | `CommodoreCommandLoop` | macro | PET |  | vendor | Emits CommandLoop, ClearAndRelink and LinkProgram. — SDK name: case only |
@@ -2737,7 +2737,7 @@ to K12, R1 to R10).
 | 2291 | `localPosition` | `KEEP` | parameter of COMMODORE_INITIALIZE | PET |  | vendor | 1 to clear TerminalPosition (BASIC 1). |
 | 2292 | `bufferPage` | `KEEP` | parameter of COMMODORE_INITIALIZE | PET |  | vendor | Zero for a page-zero input buffer, else the buffer's page. |
 | 2293 | `diskStatus` | `KEEP` | parameter of COMMODORE_INITIALIZE | PET |  | vendor | 1 to clear the disk-status descriptor instead of OutputSuppressed (BASIC 4). — same name in CommodoreVariableValue |
-| 2294 | `earlyBufferSetup` | `KEEP` | parameter of COMMODORE_INITIALIZE | PET |  | vendor | 1 to set the page-zero buffer's comma and print a newline (BASIC 1). |
+| 2294 | `earlyBufferSetup` | `KEEP` | parameter of COMMODORE_INITIALIZE | PET |  | vendor | 1 to set the page-zero buffer's comma and print a newline (BASIC 1). Converted: `earlyBuffer`, so the macro's line fits in 120 columns (Basic.md I1). |
 | 2295 | `INIT` | `ColdStart` | routine | PET | M6502, CBM4S79 [P4 P4R], K4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R, HVK4 [P4 P4R] | vendor | Sets the stack and USR vector, copies the character reader, clears the workspace, finds the memory top, prints the sign-on and free bytes and enters ReadyForCommand. |
 | 2296 | `MOVCHG` | `ColdStart::CopyCharacterReader` | local | PET | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | vendor | Copies INITAT's character reader and random seed to page zero. |
 | 2297 | `COMMODORE_MEMORY_PROBE` | `CommodoreMemoryProbe` | macro | PET |  | vendor | Emits ColdStart's RAM probe. — SDK name: case only |
@@ -2763,7 +2763,7 @@ to K12, R1 to R10).
 | 2317 | `COMMODORE_START_MESSAGES` | `CommodoreStartMessages` | macro | PET |  | vendor | Emits the free-bytes message and the sign-on. — SDK name: case only |
 | 2318 | `earlyBanner` | `KEEP` | parameter of COMMODORE_START_MESSAGES | PET |  | vendor | 1 for BASIC 1's sign-on after the free-bytes text. |
 | 2319 | `WORDS` | `BytesFreeMessage` | message | PET | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | vendor | The text " BYTES FREE", then a newline (BASIC 1: its sign-on). |
-| 2320 | `FREMES` | `SignOnMessage` | message | P2 P4 P4R | M6502, CBM4S79 [P4 P4R], HV2, HV4, HV4R | vendor | The ### COMMODORE BASIC ### sign-on printed before the free bytes (BASIC 2, or a BASIC 1 built with START_BANNER_AFTER_FREE = 0); BASIC 4 assembles it but prints its own SIGNON. |
+| 2320 | `FREMES` | `SignOnMessage` | message | P2 P4 P4R | M6502, CBM4S79 [P4 P4R], HV2, HV4, HV4R | vendor | The ### COMMODORE BASIC ### sign-on printed before the free bytes (BASIC 2, or a BASIC 1 built with START_BANNER_AFTER_FREE = 0); BASIC 4 assembles it but prints its own SIGNON. Converted: BASIC 1 has it too, `SignOnMessage` within BytesFreeMessage's string, cited HV1 and HV1R (code26) (Basic.md I12). |
 
 ### Commodore.InterpreterAliases
 
@@ -2797,8 +2797,8 @@ to K12, R1 to R10).
 | 2341 | `GONE3` | `DispatchStatement` | routine | PET | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | vendor | Returns at the end of a statement; otherwise dispatches a statement token through StatementTable, anything else is LET. |
 | 2342 | `GONE2` | `DispatchStatement::WithToken` | entry | PET | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | vendor | Subtracts TOKEN_END from A and dispatches; the shared ON code enters here. |
 | 2343 | `GONE4` | `DispatchStatement::LookUp` | local | P1 P1R P4 P4R | HV4, HV4R, CBM4S79 [P4 P4R] | vendor | BASIC 1: checks the statement range; BASIC 4: dispatches after mapping a disk token; then indexes StatementTable. — two definitions (lines 104, 115) at different steps |
-| 2344 | `GLET` | `DispatchStatement::ToLet` | local | P2 P4 P4R | M6502, CBM4S79 [P4 P4R], HV2, HV4, HV4R | vendor | Jumps on to LET. |
-| 2345 | `MORSTS` | `CheckStatementSeparator` | routine | P2 P4 P4R | M6502, CBM4S79 [P4 P4R], HV2, HV4, HV4R | vendor | NextStatement's nonzero-byte case: a colon runs the next statement; anything else is a syntax error. |
+| 2344 | `GLET` | `DispatchStatement::ToLet` | local | P2 P4 P4R | M6502, CBM4S79 [P4 P4R], HV2, HV4, HV4R | vendor | Jumps on to LET. Converted: BASIC 1 has it too, the same `DispatchStatement::ToLet` in its own branch, cited HV1 and HV1R (code4) (Basic.md I12). |
+| 2345 | `MORSTS` | `CheckStatementSeparator` | routine | P2 P4 P4R | M6502, CBM4S79 [P4 P4R], HV2, HV4, HV4R | vendor | NextStatement's nonzero-byte case: a colon runs the next statement; anything else is a syntax error. Converted: HV1 and HV1R give BASIC 1's own compare in NextStatement this name; it is in prose there, since a per-build name inside NextStatement would collide with sources that define NextStatement (Basic.md I12). |
 | 2346 | `GO` | `Statements::Go` | routine | P4 P4R | CBM4S79 [P4 P4R], HV4, HV4R; spelling only: K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | GO: requires TO and continues as GOTO (BASIC 4's table entry). |
 | 2347 | `SNERRX` | `CheckGoStatement` | routine | P2 | M6502, HV2 | vendor | BASIC 2: a token past the statements that is GO requires TO and continues as GOTO; anything else is a syntax error. — same job as BASIC 4's Statements::Go, reached from DispatchStatement instead of the table; see C-Q7 |
 

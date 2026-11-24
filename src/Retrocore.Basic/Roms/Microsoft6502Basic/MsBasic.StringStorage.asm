@@ -150,7 +150,7 @@ CopyText:
     ;; Out: FacMantissa3 = temporary descriptor pointer (low byte), FacMantissa4 = 0, ValueType = string ($FF)
     ;; Errors: FORMULA TOO COMPLEX if no temporary descriptor is available
     ;; Entry:
-    ;;   ToError = jumps to <ERROR> with the error in X; both allocators branch here with OUT OF MEMORY
+    ;;   ToError = jumps to <ReportError> with the error in X; both allocators branch here with OUT OF MEMORY
     ;; Also: PUTNEW (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc PushTemporary
     ldx NextTemporary
@@ -158,10 +158,10 @@ CopyText:
     bne Store
     ldx #<ERROR_FORMULA_TOO_COMPLEX
 
-;; Jumps to <ERROR> with the error in X; both allocators branch here with OUT OF MEMORY.
+;; Jumps to <ReportError> with the error in X; both allocators branch here with OUT OF MEMORY.
 ;; Also: ERRGO2 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 ToError:
-    jmp ERROR
+    jmp ReportError
 
 ;; Stores the descriptor and advances <NextTemporary> and <LastTemporary>.
 ;; Also: PUTNW1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)

@@ -21,6 +21,19 @@ public sealed class BasicWorkspaceConversionTests
     // The sources the workspace step converted, by folder under the inputs.
     private static readonly string[] s_appleFiles = ["AppleSoft.Equates.asm", "AppleSoft.DispatchTables.asm"];
     private static readonly string[] s_commodoreFiles = ["Commodore.Equates.asm", "Commodore.DispatchTables.asm"];
+
+    // The vendors' interpreter files (part C), which give some of the workspace's old names too (NCMPOS).
+    private static readonly string[] s_appleInterpreterFiles =
+    [
+        "AppleSoft.ErrorAndInput.asm", "AppleSoft.ControlFlow.asm", "AppleSoft.Print.asm", "AppleSoft.InputOutput.asm",
+        "AppleSoft.Expressions.asm", "AppleSoft.Initialization.asm"
+    ];
+
+    private static readonly string[] s_commodoreInterpreterFiles =
+    [
+        "Commodore.CommandInput.asm", "Commodore.StatementDispatch.asm", "Commodore.ChannelPrint.asm",
+        "Commodore.ChannelInput.asm", "Commodore.VariableEvaluation.asm", "Commodore.Initialization.asm"
+    ];
     private const string LayoutsFile = "MsBasic.Layouts.asm";
 
     private static string AppleFolder => Path.Join(BasicNames.Inputs, "AppleSoft");
@@ -88,7 +101,8 @@ public sealed class BasicWorkspaceConversionTests
 
     /// <summary>
     ///  An old name only one vendor's converted files give resolves in none of the other vendor's builds, and the
-    ///  shared layouts give only Microsoft's names, citing with M6502 the PET documents of their lineage.
+    ///  shared layouts give only Microsoft's names, citing with M6502 the PET documents of their lineage. A name a
+    ///  shared module gives in one vendor's builds and the other vendor's own files give, LINCHK alone, is both's.
     /// </summary>
     [TestMethod]
     public void VendorOldNamesResolveOnlyInTheirVendorsBuilds()
@@ -97,10 +111,20 @@ public sealed class BasicWorkspaceConversionTests
         AssemblyResult[] pet =
             [.. s_pets.Select(build => PetSdkModules.AssembleBasic(PetFolder, build.Model, build.Original))];
 
-        HashSet<string> appleNames = OldNames(apple, Converted(AppleFolder, s_appleFiles));
-        HashSet<string> petNames = OldNames(pet, Converted(CommodoreFolder, s_commodoreFiles));
+        HashSet<string> appleNames = OldNames(apple, Converted(AppleFolder, [.. s_appleFiles, .. s_appleInterpreterFiles]));
+        HashSet<string> petNames = OldNames(pet, Converted(CommodoreFolder, [.. s_commodoreFiles, .. s_commodoreInterpreterFiles]));
         appleNames.Should().Contain(["TXTTAB", "CHRGET", "ERRSN", "ENDTK", "TEXTAB"]);
         petNames.Should().Contain(["TXTTAB", "CHRGET", "ERRSN", "ENDTK", "COPEN", "CQOPEN"]);
+
+        // A shared module gives some names in one vendor's builds that the other vendor's own files give (LINCHK:
+        // the PET's number item, AppleSoft's comma code); each is both vendors' name.
+        string[] sharedFiles = Directory.GetFiles(SharedFolder, "MsBasic.*.asm");
+        IEnumerable<string> petShared = OldNames(pet, sharedFiles).Intersect(appleNames);
+        IEnumerable<string> appleShared = OldNames(apple, sharedFiles).Intersect(petNames);
+        string[] bothVendors = [.. petShared.Union(appleShared)];
+        bothVendors.Should().BeEquivalentTo(["LINCHK"], "no other name is given this way");
+        petNames.UnionWith(bothVendors);
+        appleNames.UnionWith(bothVendors);
 
         foreach (string name in appleNames.Except(petNames))
         {

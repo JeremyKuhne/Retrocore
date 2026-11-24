@@ -1,4 +1,4 @@
-; retrocore: style=strict ignore=unlinked-name:PR|INPUT -- the PR# command, and BASIC's INPUT
+; retrocore: style=strict ignore=unlinked-name:PR -- the PR# command
 ;; DOS 3.3 and 3.2 command interpreter: the input and output hooks, and the output states
 ;;
 ;; How DOS hears BASIC (Apple's DOSHOOK module), at $9E81-$9FCC where DOS runs. Every character the Apple II prints goes

@@ -91,7 +91,8 @@ INPUT_MODE_READ = $98
     ;; an empty terminal numeric `INPUT`. On the PET, a selected file channel suppresses terminal prompts and warnings.
     ;; In: A = <INPUT_MODE_GET>, <INPUT_MODE_INPUT> or <INPUT_MODE_READ>, X = cursor low byte, Y = cursor high byte,
     ;;   decimal = clear
-    ;; Errors: OUT OF DATA when `READ` finds no more `DATA`, and the vendor's handling of a malformed value (<TRMNOK>)
+    ;; Errors: OUT OF DATA when `READ` finds no more `DATA`, and the vendor's handling of a malformed value
+    ;;   (<HandleBadInput>)
     ;; Entry:
     ;;   StringAtCursor = clears carry so the string starts at the current character; BASIC 1's `GETSTR` patch jumps
     ;;     back here
@@ -147,11 +148,11 @@ SourceEmpty:
         lda CurrentChannel
         bne ReadAnotherLine
     .endif
-    jsr OUTQST
-;; Reads a line with <QINLIN>.
+    jsr PrintQuestionMark
+;; Reads a line with <PromptAndInputLine>.
 ;; Also: GETNTH (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 ReadAnotherLine:
-    jsr QINLIN
+    jsr PromptAndInputLine
 ;; Sets <TextPointer> to X/Y.
 ;; Also: DATBK (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 SetCursor:
@@ -247,7 +248,7 @@ CheckTerminator:
     beq TerminatorOk
     cmp #','
     beq TerminatorOk
-    jmp TRMNOK
+    jmp HandleBadInput
 ;; Saves the input cursor, returns to the variable list and continues after a comma.
 ;; Also: TRMOK (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 TerminatorOk:
@@ -266,11 +267,11 @@ TerminatorOk:
     .if blankNumericRetry
 
 ;; Retries an empty numeric `INPUT`, or restores the saved character for `READ` and `GET`.
-;; See: <SNERR6>, <AssignVariableList::RestoreCharacter>
+;; See: <DiscardAndRetryInput>, <AssignVariableList::RestoreCharacter>
 EmptyNumber:
         lda InputMode
         bne RestoreCharacter
-        jmp SNERR6
+        jmp DiscardAndRetryInput
     .endif
 
 ;; Searches forward for a `DATA` statement, remembering each new line number in <DataLine>.

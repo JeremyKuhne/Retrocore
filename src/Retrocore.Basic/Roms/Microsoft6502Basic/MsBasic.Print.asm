@@ -37,16 +37,16 @@
     ;;   Item = prints the next item: at the end of the statement, returns without a carriage return; otherwise
     ;;     `TAB(`, `SPC(`, a comma, a semicolon, or an expression, a number formatted by <Float::FormatFac> through
     ;;     <Strings::FromText>; the `TAB(`, `SPC(`, comma and semicolon code, the vendors' included, returns here
-    ;; See: <PrintString>, <Float::FormatFac>, <COMPRT>
+    ;; See: <PrintString>, <Float::FormatFac>, <PrintComma>
     ;; Also: PRINT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc Print
-    beq CRDO
+    beq PrintNewline
 
 ;; Continues PRINT without adding a newline if the statement ends.
 ;; In: A = current character, zero = set at the end of the statement
 ;; Also: PRINTC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 Item:
-    beq PRTRTS
+    beq PrintNewline::Return
     cmp #TOKEN_TAB
     beq tabEntry
     cmp #TOKEN_SPC
@@ -58,9 +58,9 @@ Item:
     .if clearCommaCarry
         clc
     .endif
-    beq COMPRT
+    beq PrintComma
     cmp #';'
-    beq NOTABR
+    beq PrintSpaces::ContinuePrint
     jsr EvaluateExpression
     bit ValueType
     bmi PrintStringItem
@@ -72,7 +72,7 @@ Item:
 ;; Also: LINCHK (M6502)
 NumberItem:
         jsr PrintString
-        jsr OUTSPC
+        jsr PrintSpace
         bne PrintNextItem
     .else
         jmp PrintStringItem

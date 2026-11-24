@@ -55,11 +55,11 @@ internal static partial class BasicNames
     ];
 
     /// <summary>
-    ///  Gets the names a vendor's alias gives in some builds that other builds still give to a label of a vendor's own
-    ///  unconverted code, until part C converts it (Basic.md E3): BASIC 4's GETRTS, which is the output routine's
-    ///  return in AppleSoft and BASIC 1 and 2.
+    ///  Gets the names a vendor's alias gives in some builds that other builds give to their vendor's own code: BASIC
+    ///  4's GETRTS, which is the output routine's return in AppleSoft and BASIC 1 and 2 (Basic.md E3), and AppleSoft's
+    ///  ON, which BASIC 4's disk-command parser gives its ON U clause.
     /// </summary>
-    internal static string[] VendorLabelNames { get; } = ["GETRTS"];
+    internal static string[] VendorLabelNames { get; } = ["GETRTS", "ON"];
 
     /// <summary>
     ///  Gets whether a build defines a name as a label of a vendor's own code, in the folder of the vendor's historical
@@ -278,11 +278,16 @@ internal static partial class BasicNames
     ///  left to <see cref="ScopedNames(IReadOnlyDictionary{string, long})"/>.
     /// </summary>
     /// <param name="symbols">The predefined symbols, by the names Microsoft's source has.</param>
-    /// <param name="build">The build whose names to keep.</param>
+    /// <param name="build">The build whose names to add, from a <c>Build</c> overload.</param>
+    /// <param name="result">That build, whose names to keep.</param>
     /// <returns>The predefined symbols with the build's current names added.</returns>
-    /// <exception cref="InvalidOperationException">The builds give an old name to different definitions.</exception>
-    internal static Dictionary<string, long> WithCurrentNames(IReadOnlyDictionary<string, long> symbols, AssemblyResult build) =>
-        new(WithCurrentNames(symbols).Where(pair => symbols.ContainsKey(pair.Key) || build.HasSymbol(pair.Key)), StringComparer.Ordinal);
+    /// <exception cref="ArgumentException">The build is not a native BASIC build.</exception>
+    internal static Dictionary<string, long> WithCurrentNames(IReadOnlyDictionary<string, long> symbols, string build, AssemblyResult result)
+    {
+        return new(
+            WithCurrentNames(symbols, build).Where(pair => symbols.ContainsKey(pair.Key) || result.HasSymbol(pair.Key)),
+            StringComparer.Ordinal);
+    }
 
     /// <summary>
     ///  Gets the source that defines, for a standalone build, the current names
@@ -410,6 +415,20 @@ internal static partial class BasicNames
     /// <exception cref="InvalidOperationException">The builds give the name to different definitions.</exception>
     internal static string Label(string name) =>
         string.Join('\n', CurrentNames(name).Where(current => !IsScoped(current)).Prepend(name).Select(label => $"{label}:"));
+
+    /// <summary>
+    ///  Gets the source that defines a label a test's own source gives one of Microsoft's names, under the unscoped
+    ///  names the native BASIC builds now define it by, or under the old name where they define none. Unlike
+    ///  <see cref="Label(string)"/>, it never defines an old name that an <c>;; Also:</c> in the build's sources gives,
+    ///  which the documentation would report as a second definition.
+    /// </summary>
+    /// <param name="name">The label, as Microsoft's source has it.</param>
+    /// <returns>The label definitions, one per line.</returns>
+    internal static string CurrentLabel(string name)
+    {
+        string[] current = [.. CurrentNames(name).Where(current => !IsScoped(current))];
+        return string.Join('\n', (current.Length == 0 ? [name] : current).Select(label => $"{label}:"));
+    }
 
     /// <summary>
     ///  Gets the names the native BASIC builds define an old name by now, through their <c>;; Also:</c> sections.

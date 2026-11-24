@@ -46,11 +46,11 @@ public sealed class BasicSharedPrintTests
             name => name, name => legacy.Symbol(name), StringComparer.Ordinal);
 
         AssemblyResult native = new Assembler.Assembler().Assemble(
-            new AssemblySource(BasicNames.ScopedNames(symbols) + "\n" + source, Path.Join(folder, "PrintTest.asm")),
+            new AssemblySource(BasicNames.ScopedNames(symbols, BasicNames.Build(model, original: false)) + "\n" + source, Path.Join(folder, "PrintTest.asm")),
             new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
             {
                 SourceResolver = new FileAssemblySourceResolver(),
-                PredefinedSymbols = BasicNames.WithCurrentNames(symbols)
+                PredefinedSymbols = BasicNames.WithCurrentNames(symbols, BasicNames.Build(model, original: false))
             });
 
         native.Success.Should().BeTrue(string.Join(Environment.NewLine, native.Diagnostics.Select(diagnostic => diagnostic.Message)));
@@ -99,7 +99,7 @@ public sealed class BasicSharedPrintTests
             .cpu Mos6502
             .include "Commodore.ChannelPrint.asm"
             .org ${legacy.Symbol("FININL"):X4}
-                COMMODORE_LINE_END {(early ? 0 : 2)}, {(early ? 1 : 0)}, {(disk ? 1 : 0)}, {(early ? 1 : 0)}
+                CommodoreLineEnd {(early ? 0 : 2)}, {(early ? 1 : 0)}, {(disk ? 1 : 0)}, {(early ? 1 : 0)}
             """;
 
         List<string> dependencies = ["BUF", "CHANNL", "TRMPOS", "OUTDO"];
@@ -108,11 +108,11 @@ public sealed class BasicSharedPrintTests
             name => name, name => legacy.Symbol(name), StringComparer.Ordinal);
 
         AssemblyResult native = new Assembler.Assembler().Assemble(
-            new AssemblySource(BasicNames.ScopedNames(symbols) + "\n" + source, Path.Join(folder, "ChannelPrintTest.asm")),
+            new AssemblySource(BasicNames.ScopedNames(symbols, BasicNames.Build(model, original: false)) + "\n" + source, Path.Join(folder, "ChannelPrintTest.asm")),
             new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
             {
                 SourceResolver = new FileAssemblySourceResolver(),
-                PredefinedSymbols = BasicNames.WithCurrentNames(symbols)
+                PredefinedSymbols = BasicNames.WithCurrentNames(symbols, BasicNames.Build(model, original: false))
             });
 
         native.Success.Should().BeTrue(string.Join(Environment.NewLine, native.Diagnostics.Select(diagnostic => diagnostic.Message)));
@@ -166,7 +166,7 @@ public sealed class BasicSharedPrintTests
             .cpu Mos6502
             .include "Commodore.ChannelPrint.asm"
             .org ${legacy.Symbol("COMPRT"):X4}
-                COMMODORE_PRINT_SPACING {(early ? 1 : 0)}
+                CommodorePrintSpacing {(early ? 1 : 0)}
             """;
 
         string[] dependencies =
@@ -178,11 +178,11 @@ public sealed class BasicSharedPrintTests
             name => name, name => legacy.Symbol(name), StringComparer.Ordinal);
 
         AssemblyResult native = new Assembler.Assembler().Assemble(
-            new AssemblySource(BasicNames.ScopedNames(symbols) + "\n" + source, Path.Join(folder, "PrintSpacingTest.asm")),
+            new AssemblySource(BasicNames.ScopedNames(symbols, BasicNames.Build(model, original: false)) + "\n" + source, Path.Join(folder, "PrintSpacingTest.asm")),
             new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
             {
                 SourceResolver = new FileAssemblySourceResolver(),
-                PredefinedSymbols = BasicNames.WithCurrentNames(symbols)
+                PredefinedSymbols = BasicNames.WithCurrentNames(symbols, BasicNames.Build(model, original: false))
             });
 
         native.Success.Should().BeTrue(string.Join(Environment.NewLine, native.Diagnostics.Select(diagnostic => diagnostic.Message)));
@@ -247,7 +247,7 @@ public sealed class BasicSharedPrintTests
             .cpu Mos6502
             .include "Commodore.ChannelPrint.asm"
             .org ${legacy.Symbol("OUTSPC"):X4}
-                COMMODORE_CHARACTER_OUTPUT {(early ? 1 : 0)}, {(early ? 1 : 0)}, {(disk ? 0 : 1)}, {(disk ? 0 : 1)}
+                CommodoreCharacterOutput {(early ? 1 : 0)}, {(early ? 1 : 0)}, {(disk ? 0 : 1)}, {(disk ? 0 : 1)}
             """;
 
         List<string> dependencies = ["CHANNL", flagSlot, "TRMPOS", "OUTCH"];
@@ -256,11 +256,11 @@ public sealed class BasicSharedPrintTests
             name => name, name => legacy.Symbol(name), StringComparer.Ordinal);
 
         AssemblyResult native = new Assembler.Assembler().Assemble(
-            new AssemblySource(BasicNames.ScopedNames(symbols) + "\n" + source, Path.Join(folder, "CharacterOutputTest.asm")),
+            new AssemblySource(BasicNames.ScopedNames(symbols, BasicNames.Build(model, original: false)) + "\n" + source, Path.Join(folder, "CharacterOutputTest.asm")),
             new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
             {
                 SourceResolver = new FileAssemblySourceResolver(),
-                PredefinedSymbols = BasicNames.WithCurrentNames(symbols)
+                PredefinedSymbols = BasicNames.WithCurrentNames(symbols, BasicNames.Build(model, original: false))
             });
 
         native.Success.Should().BeTrue(string.Join(Environment.NewLine, native.Diagnostics.Select(diagnostic => diagnostic.Message)));

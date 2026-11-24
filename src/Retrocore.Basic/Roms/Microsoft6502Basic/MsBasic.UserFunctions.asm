@@ -19,7 +19,8 @@
     ;; routine: `FN` enters there to report UNDEF'D FUNCTION, and the direct-mode path's `BIT` skips its load.
     ;; Errors: ILLEGAL DIRECT when no program line is executing
     ;; Entry:
-    ;;   ToError = jumps to <ERROR> with the error in X; where `earlyCheck` is 1 (BASIC 1 by default), `FN` enters here
+    ;;   ToError = jumps to <ReportError> with the error in X; where `earlyCheck` is 1 (BASIC 1 by default), `FN`
+    ;;     enters here
     ;; Also: ERRDIR (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc RejectDirectMode
     ldx CurrentLine+1
@@ -35,10 +36,10 @@ UndefinedFunction:
         ldx #<ERROR_UNDEFINED_FUNCTION
     .endif
 
-;; Jumps to <ERROR> with the error in X; where `earlyCheck` is 1 (BASIC 1 by default), `FN` enters here.
+;; Jumps to <ReportError> with the error in X; where `earlyCheck` is 1 (BASIC 1 by default), `FN` enters here.
 ;; Also: ERRGO1 (M6502, HV1, HV1R)
 ToError:
-    jmp ERROR
+    jmp ReportError
     .endproc
 
     .scope Statements continued

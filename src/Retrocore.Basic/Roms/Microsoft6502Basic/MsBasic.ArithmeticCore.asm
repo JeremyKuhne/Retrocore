@@ -261,7 +261,7 @@ Ten:
     ;;
     ;; The divisor is rounded, then repeated comparisons and subtractions build the quotient a bit at a time.
     ;; In: A = low byte of packed dividend address, Y = high byte of packed dividend address
-    ;; Errors: divide by zero = jumps to <ERROR>, overflow = jumps to <Float::OverflowError>
+    ;; Errors: divide by zero = jumps to <ReportError>, overflow = jumps to <Float::OverflowError>
     ;; Also: FDIV (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc DividePacked
     jsr LoadArg
@@ -370,11 +370,11 @@ Finish:
     plp
     jmp NormalizeResult
 
-;; Reports division by zero through <ERROR>.
+;; Reports division by zero through <ReportError>.
 ;; Also: DV0ERR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 DivisionByZero:
     ldx #ERROR_DIVISION_BY_ZERO
-    jmp ERROR
+    jmp ReportError
     .endproc
     .endscope
 

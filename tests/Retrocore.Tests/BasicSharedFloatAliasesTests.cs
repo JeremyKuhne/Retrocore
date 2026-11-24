@@ -63,6 +63,7 @@ public sealed class BasicSharedFloatAliasesTests
         ["FMAPT1"] = ["UNKN"],
         ["QINTG1"] = ["UNKN"],
         ["TRYAG3"] = ["M6502"],
+        ["ON"] = ["UNKN"],
         ["ARYVA2"] = ["M6502"],
         ["ARYVA3"] = ["M6502"],
         ["ARYVGO"] = ["M6502"],
@@ -204,7 +205,7 @@ public sealed class BasicSharedFloatAliasesTests
         string source = $"""
             .cpu Mos6502
             .org ${start:X4}
-            {BasicNames.ScopedNames(symbols)}
+            {BasicNames.ScopedNames(symbols, BasicNames.Build(model, original))}
             .include "Commodore.FloatingPoint.asm"
             FLOAT_ALIAS_BEFORE:
             .include "Commodore.HistoricalNames.asm"
@@ -218,7 +219,7 @@ public sealed class BasicSharedFloatAliasesTests
         {
             SourceResolver = new FileAssemblySourceResolver(),
             IncludePaths = [Shared],
-            PredefinedSymbols = BasicNames.WithCurrentNames(symbols, PetSdkModules.AssembleBasic(Pet, model, original))
+            PredefinedSymbols = BasicNames.WithCurrentNames(symbols, BasicNames.Build(model, original), PetSdkModules.AssembleBasic(Pet, model, original))
         };
 
         AssemblyResult native = RequireSuccess(new Retrocore.Assembler.Assembler().Assemble(
@@ -251,9 +252,16 @@ public sealed class BasicSharedFloatAliasesTests
             native.Symbol(name).Should().Be(legacy.Symbol(name), $"{name} must keep the overlay's value");
         }
 
-        foreach (string appleName in s_appleNames.Keys)
+        // BASIC 4's disk parser defines a label of its own named ON, for a command's ON U device clause, where the
+        // MACRO-10 build has it, and not the shared ON statement AppleSoft's alias names.
+        foreach (string appleName in s_appleNames.Keys.Where(name => !(name == "ON" && model == PetModel.Pet4032)))
         {
             native.HasSymbol(appleName).Should().BeFalse($"{appleName} is an Apple name");
+        }
+
+        if (model == PetModel.Pet4032)
+        {
+            native.Symbol("ON").Should().Be(legacy.Symbol("ON")).And.NotBe(native.Symbol("Statements::On"));
         }
 
         Dictionary<string, string[]> names = s_petAddresses.Keys

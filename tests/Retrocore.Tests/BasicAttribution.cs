@@ -103,7 +103,8 @@ internal static partial class BasicAttribution
     /// <summary>
     ///  Asserts that a vendor's name for shared code is no historical name of a shared definition, which would make it
     ///  resolve in every vendor's builds: it may be a historical name only of a definition in a historical-names file
-    ///  outside the shared modules, where each build has its own vendor's aliases.
+    ///  outside the shared modules, where each build has its own vendor's aliases, or, for a
+    ///  <see cref="BasicNames.VendorLabelNames"/> name, of the build's own vendor code.
     /// </summary>
     /// <param name="result">A build.</param>
     /// <param name="docs">The build's documentation.</param>
@@ -112,9 +113,12 @@ internal static partial class BasicAttribution
     {
         if (result.HistoricalNames.TryGetValue(name, out AssemblySymbol? definition))
         {
+            // A name of BasicNames.VendorLabelNames, such as GETRTS, is also the build's own name for its vendor's code.
             string? path = definition.Location?.Path;
-            (!IsSharedPath(path) && path?.EndsWith(".HistoricalNames.asm", StringComparison.Ordinal) == true).Should().BeTrue(
-                $"{name} may be a historical name only on its vendor's alias in a HistoricalNames file, not on {definition.Name}");
+            bool aliasFile = path?.EndsWith(".HistoricalNames.asm", StringComparison.Ordinal) == true;
+            bool vendorFile = aliasFile || BasicNames.VendorLabelNames.Contains(name);
+            (!IsSharedPath(path) && vendorFile).Should().BeTrue(
+                $"{name} may be a historical name only on a vendor's alias or own vendor code, not on {definition.Name}");
         }
 
         // A vendor's name that is also one of the build's BASIC keywords, such as AppleSoft's NEW, is the keyword where

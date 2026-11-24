@@ -150,6 +150,12 @@ ElementsStartFromCount = Variables::ElementsStart::FromCount
 ;; Also: QINTG1 (UNKN)
 ChooseArrayLookup = Variables::ChooseArrayLookup
 
+; The statements whose dispatch entries the shared modules define.
+
+;; Inherit: <Statements::On>
+;; Also: ON (UNKN)
+On = Statements::On
+
 
 ; The unlinked allocator's room check and the classic collector's steps, whose Microsoft names BASIC 4 gives to other
 ; steps instead.

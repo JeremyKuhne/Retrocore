@@ -58,12 +58,12 @@ BASIC4_OUTPUT_PADDING = 1           ;; include BASIC 4's output patch space
 
 ; Dispatch tables, errors, command input and program editing.
 .org $B000
-    COMMODORE_DISPATCH_TABLES 1, 1, 0, 1
+    CommodoreDispatchTables 1, 1, 0, 1
     MemoryManagement $3E
-    COMMODORE_ERROR_READY 0
-    COMMODORE_COMMAND_LOOP 1, 1, 1, 1
-    COMMODORE_TERMINAL_INPUT 0, 1
-    COMMODORE_TOKENIZE 1, 0
+    CommodoreErrorReady 0
+    CommodoreCommandLoop 1, 1, 1, 1
+    CommodoreTerminalInput 0, 1
+    CommodoreTokenize 1, 0
 .include "../../Microsoft6502Basic/MsBasic.LineSearch.asm"
 
 ; Program control, statement dispatch and assignment.
@@ -76,11 +76,11 @@ BASIC4_OUTPUT_PADDING = 1           ;; include BASIC 4's output patch space
     ListTokens 1, 1, 1, 0
 .include "../../Microsoft6502Basic/MsBasic.For.asm"
 .if REVISD
-    COMMODORE_STATEMENT_FETCH INPUT_BUFFER_PAGE, 0, 0, 0, GONEGT
+    CommodoreStatementFetch INPUT_BUFFER_PAGE, 0, 0, 0, GONEGT
 .else
-    COMMODORE_STATEMENT_FETCH INPUT_BUFFER_PAGE, 0, 0, 0, CHRGET
+    CommodoreStatementFetch INPUT_BUFFER_PAGE, 0, 0, 0, CHRGET
 .endif
-    COMMODORE_STATEMENT_DISPATCH 0, 1
+    CommodoreStatementDispatch 0, 1
     RestoreStatement
     StopAndContinue 1, 0
     RunStatement
@@ -96,15 +96,15 @@ BASIC4_OUTPUT_PADDING = 1           ;; include BASIC 4's output patch space
     STRING_LINK_ADJUST REVISD
 
 ; Terminal and channel output, then READ and input.
-    COMMODORE_PRINT_CHANNELS
-    PrintItems TABER, 1, 0, 1
-    COMMODORE_LINE_END INPUT_BUFFER_PAGE, 0, 1, 0
-    COMMODORE_PRINT_SPACING 0
+    CommodorePrintChannels
+    PrintItems PrintTabOrSpace, 1, 0, 1
+    CommodoreLineEnd INPUT_BUFFER_PAGE, 0, 1, 0
+    CommodorePrintSpacing 0
 .include "../../Microsoft6502Basic/MsBasic.StringOutput.asm"
-    COMMODORE_CHARACTER_OUTPUT 0, 0, 0, 0
-    COMMODORE_INPUT_ERROR 0
-    COMMODORE_CHANNEL_INPUT INPUT_BUFFER_PAGE
-    COMMODORE_INPUT_STATEMENT 0, 3, REVISD, 0, 1
+    CommodoreCharacterOutput 0, 0, 0, 0
+    CommodoreInputError 0
+    CommodoreChannelInput INPUT_BUFFER_PAGE
+    CommodoreInputStatement 0, 3, REVISD, 0, 1
     VariableInput INPUT_BUFFER_PAGE, 0, 0, 0, 1, 0
     VariableInputMessages 0, 0
 
@@ -113,7 +113,7 @@ BASIC4_OUTPUT_PADDING = 1           ;; include BASIC 4's output patch space
     ExpressionCore 1
     OperandEvaluation 1, 1, ISFUN
     COMMODORE_BASIC4_OPERAND_SPLIT REVISD
-    COMMODORE_VARIABLE_VALUE 1, 0, 1
+    CommodoreVariableValue 1, 0, 1
     FunctionDispatch
     LogicalOperators 1
     RelationalOperators $FF
@@ -142,10 +142,10 @@ BASIC4_OUTPUT_PADDING = 1           ;; include BASIC 4's output patch space
 .include "Commodore.FloatingPoint.asm"
 .include "Commodore.HistoricalNames.asm"
     CharacterReader $58
-    COMMODORE_INITIALIZE 0, 0, 0, 0, INPUT_BUFFER_PAGE, 1, 0
-    COMMODORE_MEMORY_PROBE 0, 0, 1, 1, 0, $55
-    COMMODORE_START_PROGRAM 0, 0, 0, 0, SIGNON
-    COMMODORE_START_MESSAGES 0
+    CommodoreInitialize 0, 0, 0, 0, INPUT_BUFFER_PAGE, 1, 0
+    CommodoreMemoryProbe 0, 0, 1, 1, 0, $55
+    CommodoreStartProgram 0, 0, 0, 0, SIGNON
+    CommodoreStartMessages 0
 LASTWR:
     COMMODORE_BASIC4_EXTENSION REVISD
 .assert * = $E000, "BASIC 4 must end at $DFFF."

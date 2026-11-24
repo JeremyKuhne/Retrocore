@@ -106,7 +106,7 @@ NextCharacter:
     .scope Statements continued
 
     ;; Evaluates the condition; false skips the line, true executes the THEN statement or jumps to a line.
-    ;; See: <Statements::Rem>, <Statements::GoTo>, <GONE3>
+    ;; See: <Statements::Rem>, <Statements::GoTo>, <DispatchStatement>
     ;; Also: IF (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc If
     jsr EvaluateExpression
@@ -129,16 +129,16 @@ Test:
     beq AdvanceTextPointer
     .endproc
     ;; A digit after `THEN` goes to its line through <Statements::GoTo>; anything else, `GOTO` included, runs as a
-    ;; statement through <GONE3>.
+    ;; statement through <DispatchStatement>.
     ;; Also: DOCOND (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc IfTrue
     jsr GetCurrentCharacter
     bcs ToExecuteStatement
     jmp GoTo
-;; Jumps to <GONE3>.
+;; Jumps to <DispatchStatement>.
 ;; Also: DOCO (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 ToExecuteStatement:
-    jmp GONE3
+    jmp DispatchStatement
     .endproc
     .endscope
 
@@ -175,7 +175,7 @@ NextEntry:
     dec FacMantissa4
     bne SkipEntry
     pla
-    jmp GONE2
+    jmp DispatchStatement::WithToken
 ;; Reads a line number; a comma continues.
 ;; Also: ONGLP1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 SkipEntry:

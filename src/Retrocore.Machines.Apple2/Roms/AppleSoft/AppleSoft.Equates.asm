@@ -815,7 +815,7 @@ RNDH = $4F
 OURCH = $057B
 
 
-; Hardware switches and Monitor or firmware entry points, which also wait for X10.
+; Hardware switches and Monitor or firmware entry points, which X10 decides.
 ;; Keyboard data soft switch.
 KBD = $C000
 

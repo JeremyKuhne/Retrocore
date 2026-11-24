@@ -202,7 +202,8 @@ disassembly were not fetched; the sources' comments do not cite them, and no nam
 ### Proposed bibliography rows
 
 The rows as proposed. All are now in `docs/Bibliography.md`, whose rows, with some titles worded differently,
-are the ones that count: all but ASRM78 from #133, and ASRM78 from the workspace step, which first cites it.
+are the ones that count: all but ASRM78 from #133, and ASRM78 from the workspace step, whose AppleSoft.Equates.asm
+is the first converted source to cite it.
 
 | Key | Title | Year | Publisher | Link |
 | --- | --- | --- | --- | --- |

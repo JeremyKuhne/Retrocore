@@ -42,12 +42,27 @@ public sealed partial class LanguageAnalysisTests
         Caller:
             jsr KBD::Read
             rts
+
+        ;; A scope with a CH of its own.
+        .scope Local
+
+        ;; Its own.
+        CH = 1
+
+        ;; Uses its own CH, then the root's: the old name.
+        Use:
+            lda CH
+            lda ::CH
+            rts
+
+        .endscope
         """;
 
     /// <summary>
     ///  A source's own <c>.scope</c> named as an SDK definition's historical name is the source's definition, so the
     ///  editor does not report its <c>.scope</c> lines, or the scope's name in a qualified name, as uses of the old
-    ///  name, while a use of another old name still is.
+    ///  name, while a use of another old name still is, plain or root-qualified (<c>::CH</c>, even in a scope with a
+    ///  <c>CH</c> of its own).
     /// </summary>
     /// <returns>The test.</returns>
     [TestMethod]
@@ -71,7 +86,7 @@ public sealed partial class LanguageAnalysisTests
 
             published.Where(diagnostic => diagnostic.Code == DocumentationRules.HistoricalName)
                 .Select(diagnostic => diagnostic.Message)
-                .Should().Equal("CH is a historical name of CursorColumn.");
+                .Should().Equal("CH is a historical name of CursorColumn.", "CH is a historical name of CursorColumn.");
         }
         finally
         {

@@ -707,9 +707,8 @@ public sealed partial class LanguageAnalysisTests
 
     /// <summary>
     ///  A file's own old name takes precedence only for the definition the assembler gives it to, so the editor never
-    ///  hints a root routine that shares its name with the macro expansion the name belongs to, nor a definition where
-    ///  the assembler gives the name to none, as for a macro expanded twice. (For the first, the editor gives no hint
-    ///  at all, as before this precedence: the doc set names the expansion's topic by the root routine's name.)
+    ///  hints a root routine that shares its name with the macro expansion the name belongs to, but the expansion
+    ///  itself, nor a definition where the assembler gives the name to none, as for a macro expanded twice.
     /// </summary>
     /// <param name="twice">Whether to use the twice-expanded probe rather than the root and expansion.</param>
     /// <returns>The test.</returns>
@@ -741,7 +740,16 @@ public sealed partial class LanguageAnalysisTests
                 "the probe assembles");
 
             published.Should().Contain(diagnostic => diagnostic.Message == "PRBBYTE is a historical name of PRBBYT.");
-            published.Should().NotContain(diagnostic => diagnostic.Message.StartsWith("COMBYTE is a historical name", StringComparison.Ordinal));
+            IEnumerable<string> messages = published.Select(diagnostic => diagnostic.Message);
+            string[] combyte = [.. messages.Where(message => message.StartsWith("COMBYTE is", StringComparison.Ordinal))];
+            if (twice)
+            {
+                combyte.Should().BeEmpty("the assembler gives COMBYTE to neither expansion");
+            }
+            else
+            {
+                combyte.Should().Equal(["COMBYTE is a historical name of Basic::Reader."], "only the expansion has the name");
+            }
         }
         finally
         {

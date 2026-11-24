@@ -39,8 +39,9 @@ Done:
     ;; skips spaces. Five seed bytes follow the code, but startup copies only the first four to <RandomValue>. BASIC 1
     ;; stores $59 by default as the fifth byte; AppleSoft and the later PET BASICs store $58.
     ;;
-    ;; Commodore's BASIC 4 source and Martin Hoffmann-Vetter's reconstructions spell the labels CHZGOT and CHZRTS as
-    ;; `CHDGOT` and `CHDRTS`, which the PET builds take as Commodore's historical names.
+    ;; Commodore's BASIC 4 source and Martin Hoffmann-Vetter's reconstructions spell the labels CHZGOT and CHZRTS
+    ;; their own way; the PET builds take those spellings as Commodore's historical names, in
+    ;; Commodore.HistoricalNames.asm.
     ;; In: decimal = clear
     ;; Out: A = the non-space character, carry = clear for a digit and set otherwise, zero = set for a null or colon
     ;; Keeps: X, Y

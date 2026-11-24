@@ -134,8 +134,11 @@ internal sealed class BasicMathMachine
     /// <param name="x">The value in X.</param>
     /// <param name="y">The value in Y.</param>
     /// <param name="carry">Whether carry is set.</param>
-    public void Call(string routine, int a = 0, int x = 0, int y = 0, bool carry = false) =>
-        CallUntil(routine, [], a, x, y, carry);
+    /// <param name="negative">
+    ///  Whether negative is set, for a routine that tests the flag its caller's load left.
+    /// </param>
+    public void Call(string routine, int a = 0, int x = 0, int y = 0, bool carry = false, bool negative = false) =>
+        CallUntil(routine, [], a, x, y, carry, negative);
 
     /// <summary>
     ///  Calls a routine from page 3 and runs until it returns there or reaches one of the given addresses.
@@ -146,8 +149,10 @@ internal sealed class BasicMathMachine
     /// <param name="x">The value in X.</param>
     /// <param name="y">The value in Y.</param>
     /// <param name="carry">Whether carry is set.</param>
+    /// <param name="negative">Whether negative is set.</param>
     /// <returns>The address reached: a stop, or the caller's return.</returns>
-    public int CallUntil(string routine, int[] stops, int a = 0, int x = 0, int y = 0, bool carry = false)
+    public int CallUntil(
+        string routine, int[] stops, int a = 0, int x = 0, int y = 0, bool carry = false, bool negative = false)
     {
         ushort target = checked((ushort)_build.Symbol(routine));
         Memory[Caller] = 0x20;
@@ -163,7 +168,9 @@ internal sealed class BasicMathMachine
             X = (byte)x,
             Y = (byte)y,
             StackPointer = 0xF0,
-            Status = carry ? StatusRegister.Unused | StatusRegister.Carry : StatusRegister.Unused
+            Status = StatusRegister.Unused
+                | (carry ? StatusRegister.Carry : 0)
+                | (negative ? StatusRegister.Negative : 0)
         };
 
         for (int instruction = 0; instruction < 200_000; instruction++)

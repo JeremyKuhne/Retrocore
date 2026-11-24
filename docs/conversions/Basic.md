@@ -227,14 +227,16 @@ conversion moves them into `Also:` entries.
 
 [BasicRenames.md](BasicRenames.md) has all 2,411 rows. It was drafted in seven parts with one set of rules and one
 glossary for the shared workspace (below), then merged, then corrected after two independent reviews (below). Of the
-rows, 2,142 get a new name, 255 keep theirs (the SDK's own switches and macro parameters, and the names C# predefines:
-REVISD, ENHNCD, APLPLS, TIME, EXTIO, DISKO, REALIO; X15 settled the names tests predefine) and 14 are dropped. A DROP
+rows, 2,141 get a new name, 255 keep theirs (the SDK's own switches and macro parameters, and the names C# predefines:
+REVISD, ENHNCD, APLPLS, TIME, EXTIO, DISKO, REALIO; X15 settled the names tests predefine) and 15 are dropped. A DROP
 removes the definition: either nothing uses it and no document names it; or it duplicates another definition, whose
 `Also:` then takes its documented name (KIMY, TRMNO1); or its uses can do without it, and its documented name goes in
 prose (ZSTORD, whose WAIT call can pass STORDO's new name, A-Q6; Q, an assembly-time counter, C-Q8); or it is a question
-(REDDY and GOTK, C-Q8; LINWID, D-Q3). 297 renamed rows have no checked document name: mostly AppleSoft's copies of
+(REDDY and GOTK, C-Q8; LINWID, D-Q3). 316 renamed rows have no checked document name, 249 because no listed document
+gives the name and 67 because a document matches only its spelling; 272 of them are AppleSoft's: its copies of
 Monitor and IIe names (which carry the Apple manuals' names once they come from IIeEquates, decision X10),
-AppleSoft-only labels the damaged AS82 text could not confirm, and the SDK's own labels.
+AppleSoft-only labels the damaged AS82 text could not confirm, and the SDK's own labels. The SDK's 138 renamed macros,
+macro parameters and switches cite no document either.
 
 The parts: A, the floating-point package; B1, the shared program and statement modules; B2, the shared expression,
 variable and string modules; C, the vendors' own copies of the interpreter (AppleSoft and Commodore side by side);

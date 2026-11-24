@@ -555,7 +555,7 @@ SetMode:
 
 ;; Auxiliary memory answered: the mode, 80 columns and the window cleared, then the cursor shown through
 ;; <Pascal::Write::SaveBase>.
-;; Also: PIGOOD (IIETRM85)
+;; Also: PIGOOD (IIEROM82, IIETRM85)
 CardPresent:
     pla
     sta EightyColumns::Mode

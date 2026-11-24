@@ -219,12 +219,12 @@ ToInitialize:
 ;; Copies the bytes from A1 to A2 to A4, from main memory to auxiliary memory or back, for <AuxMove>.
 ;;
 ;; RAMRD and RAMWRT switch $0200-$BFFF, so the ranges lie there. Both switches are put back as they were. Apple's
-;; listing calls it MOVE, a name left out of Also: because the Monitor's <MoveMemory> has it.
+;; listing calls it MOVE, as the Monitor's <MoveMemory> is called in the Monitor's own listing.
 ;; In: Address1/Address1High = the first address, Address2/Address2High = the last, Address4/Address4High = the
 ;;     destination, carry = set to copy main to auxiliary memory, clear for auxiliary to main
 ;; Out: Address1/Address1High = the address after A2, Address4/Address4High = the address after the copy
 ;; Keeps: A, X, Y
-;; Also: C3_MOVE (UNKN), DOAUXMOVE (UNKN)
+;; Also: MOVE (IIEROM82), C3_MOVE (UNKN), DOAUXMOVE (UNKN)
 .proc CopyMainAux
     pha
     tya

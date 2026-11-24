@@ -137,7 +137,7 @@ SetMode:
     rts
 
 ;; A card answered: 80 columns, the window cleared and the cursor shown.
-;; Also: PIGOOD (IIETRM85)
+;; Also: PIGOOD (IIEROM82, IIETRM85)
 CardPresent:
     sta Store80On
     sta Columns80On

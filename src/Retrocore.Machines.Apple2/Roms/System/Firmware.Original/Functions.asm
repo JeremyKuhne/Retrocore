@@ -54,7 +54,7 @@ ChooseWidth:
 ; The handlers.
 
 ;; The page every handler is in: <Dispatch40> and <Dispatch80> push it as the high byte of the handler's address minus
-;; one.
+;; one. Apple's BFUNCPG is the address $C100, the page's start.
 ;; Also: CXFUNC_PAGE (UNKN), BFUNCPG (IIEROM82, IIETRM85)
 HANDLER_PAGE = $C1
 

@@ -157,9 +157,9 @@ ToReturnByte:
     ;; The optional second mask normally defaults to zero. The omitted-mask branch may instead enter a separately
     ;; placed extension; the ordinary path stores the mask at <WaitXorMask> and polls with <WaitAndMask>.
     ;; Entry:
-    ;;   StoreMask = Stores X as <WaitXorMask>; the hidden-message extension (ZSTORD; BASIC 2's, and BASIC 1's
-    ;;   when `WAIT_EASTER_EGG` is 1) continues here
-    ;;   Done = returns; the addition core (AdditionCore) branches here as its own return
+    ;;   StoreMask = Stores X as <WaitXorMask>; the hidden-message extension (BASIC 2's, and BASIC 1's when
+    ;;     `WAIT_EASTER_EGG` is 1) continues here
+    ;;   Done = returns; <Float::AlignAndAdd> branches here as its own return
     ;; See: <ReadAddressAndByte>, <ReadCommaAndByte>, <Statements::Wait::StoreMask>
     ;; Also: FNWAIT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc Wait
@@ -170,8 +170,8 @@ ToReturnByte:
     beq defaultTarget
     jsr ReadCommaAndByte
 
-;; Stores X as <WaitXorMask>; the hidden-message extension (ZSTORD; BASIC 2's, and BASIC 1's when `WAIT_EASTER_EGG`
-;; is 1) continues here.
+;; Stores X as <WaitXorMask>; the hidden-message extension (BASIC 2's, and BASIC 1's when `WAIT_EASTER_EGG` is 1)
+;; continues here.
 ;; Also: STORDO (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 StoreMask:
     stx WaitXorMask
@@ -185,7 +185,7 @@ Poll:
     and WaitAndMask
     beq Poll
 
-;; Returns; the addition core (AdditionCore) branches here as its own return.
+;; Returns; <Float::AlignAndAdd> branches here as its own return.
 ;; Also: ZERRTS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 Done:
     rts

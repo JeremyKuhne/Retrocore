@@ -647,10 +647,11 @@ Decisions and how the table was applied:
   between UNKN and no `Also:` (the table's introduction); UNKN is the one that keeps the old names working.
 - W3. Names two definitions shared in one file are one definition with both old names (INDEX1 and INDEX are
   `Pointer1`). KIMY is dropped into `Dimensioning`'s `Also:`.
-- W4. Names left in prose because they would clash with another definition in the same build: the BASIC 4 reconstructions' INCHR for
-  `KernalCharacterIn` (BASIC's own INCHR is another routine). Microsoft's REDDY and GOTK in AppleSoft (C-Q8), Q
-  (the table counter, which the tables no longer use) and AppleSoft's LINWID and NCMWID (D-Q3) are named in prose
-  and not defined; NCMWID's one use is written `FRETOP+1`, the same byte.
+- W4. Names left in prose because they would clash with another definition in the same build: the BASIC 4
+  reconstructions' INCHR for `KernalCharacterIn` (BASIC 1's and 2's own INCHR is another routine, and the lineage rule
+  would cite the name there). Microsoft's REDDY and GOTK in AppleSoft (C-Q8), Q (the table counter, which the tables no
+  longer use) and AppleSoft's LINWID and NCMWID (D-Q3) are named in prose and not defined; NCMWID's one use is written
+  `FRETOP+1`, the same byte.
 - W5. The tokens and error offsets the PET's Equates copied for the math package (PLUSTK, MINUTK, ERROV, ERRDV0) are
   defined once, with their tables (X4), so an assembly of the math package with the Equates but without the tables
   must supply them, as the workspace test now does; `TOKEN_PI` stays in the Equates, since the table has no spelling for it.
@@ -856,20 +857,20 @@ Decisions and how the table was applied:
     RND timer in `Commodore.Equates.asm` (from the workspace step); K4S79 to TIL; every PET document and M6502 to
     BUFLEN, in both BASIC 1's `Basic1.asm` and the other builds' `Commodore.Equates.asm`, and to the shared FORSIZ and
     STRSIZ in `MsBasic.Layouts.asm`; and the BASIC documents' CTIMR and CSTAT to the jiffy clock and I/O status. The
-    kernal's TIME and SATUS are in prose, since the builds define both names themselves. NUMLEV cites the whole line
-    on BASIC 1's 19 levels too, with prose saying the documents give it as 23: HV1 and HV1R write the build's 54-byte
-    stack reserve as 23 levels plus eight bytes. BASIC 4's INCHR (CBM4S79, HV4, HV4R) is in prose on the kernal's
-    character input, since BASIC gives the name to another routine. The workspace step's
-    `VendorOldNamesResolveOnlyInTheirVendorsBuilds` required the shared layouts to cite M6502 alone, which forbade the
-    lineage; it now requires exactly M6502 and the PET line's documents there. The bibliography's method states the
-    rule too. BASIC 1's own BUFPAG and NULCMD switches, like its BUFLEN, now cite what the Equates' do. A shared
-    module's comment that names a build describes it with its root's default switches, as the shared folder's README
-    now says; some say "by default" where the reviews asked.
-    The statement modules' and the historical names' citations already followed the rule. BASIC 1's ZERO is a definition
-    of its own in `MsBasic.VariableLookup.asm` (M4), whose step will cite the line on it. The AppleSoft documents
-    (ASTIL, AS82) are not available here to check. One test rule would forbid a lineage-only alias: a Commodore alias
-    without M6502 must cite one of its own build's documents (`BasicAttribution.PetKeys`). No alias needs that yet;
-    changing the rule is a question for the owner.
+    kernal's TIME and SATUS are in prose, since the builds define both names themselves. NUMLEV cites the whole line on
+    BASIC 1's 19 levels too, with prose saying the documents give it as 23: HV1 and HV1R write the build's 54-byte stack
+    reserve as 23 levels plus eight bytes. BASIC 4's INCHR (CBM4S79, HV4, HV4R) is in prose on the kernal's character
+    input, since BASIC 1 and 2 give the name to another routine and the lineage rule would cite it in their builds too.
+    The workspace step's `VendorOldNamesResolveOnlyInTheirVendorsBuilds` required the shared layouts to cite M6502
+    alone, which forbade the lineage; it now requires exactly M6502 and the PET line's documents there. The
+    bibliography's method states the rule too. BASIC 1's own BUFPAG and NULCMD switches, like its BUFLEN, now cite what
+    the Equates' do. A shared module's comment that names a build describes it with its root's default switches, as the
+    shared folder's README now says; some say "by default" where the reviews asked. The statement modules' and the
+    historical names' citations already followed the rule. BASIC 1's ZERO is a definition of its own in
+    `MsBasic.VariableLookup.asm` (M4), whose step will cite the line on it. The AppleSoft documents (ASTIL, AS82) are
+    not available here to check. One test rule would forbid a lineage-only alias: a Commodore alias without M6502 must
+    cite one of its own build's documents (`BasicAttribution.PetKeys`). No alias needs that yet; changing the rule is a
+    question for the owner.
 
 Checked: the full suite, the rename gate, the lint tests, and `BasicStatementsConversionTests`, which compares every old
 name in the fifteen files and the vendors' historical names with the MACRO-10 overlay's value in each of the eight

@@ -760,8 +760,8 @@ KernalResetChannels = KernalSelectOutput + 3
 
 ;; Read a character from the current input.
 ;;
-;; BASIC 4's source and reconstructions (CBM4S79, HV4, HV4R) also call it `INCHR`, which here is BASIC's own label
-;; for another routine.
+;; BASIC 4's source and reconstructions (CBM4S79, HV4, HV4R) also call it `INCHR`, which in BASIC 1 and 2 is BASIC's
+;; own label for another routine; the lineage rule would give the name to those builds too, so it stays in prose.
 ;; Also: CQINCH (M6502), CINCH (CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 KernalCharacterIn = KernalResetChannels + 3
 

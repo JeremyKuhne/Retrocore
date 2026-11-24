@@ -88,7 +88,7 @@ ROM guard and padding):
 | --- | --- | --- | --- |
 | AppleSoft | `0` | `1, 0, 0, 0` | `STORDO` (Microsoft's ZSTORDO) |
 | PET BASIC 1 | `1` | `0, 1, 1, 0` | `STORDO` |
-| PET BASIC 2 | `1` | `1, 1, 0, 1` | `ZSTORD`, its hidden-message extension |
+| PET BASIC 2 | `1` | `1, 1, 0, 1` | `WaitHiddenMessage`, its hidden-message extension (Microsoft's ZSTORD) |
 | PET BASIC 4 | `1` | `1, 1, 0, 0` | `STORDO` |
 
 `STRING_FUNCTIONS` takes the zero-slice check, indirect preamble return, shared LEN/ASC jump and VAL terminator
@@ -129,7 +129,7 @@ The [BASIC 1 root](../../../Retrocore.Machines.Commodore/Roms/Basic/Basic1.asm) 
 overridable `.ifndef` default. Supply symbols before including the root, or pass their values to the named
 macro parameters when composing another variant. Values are 0 or 1 unless stated otherwise. The existing
 workspace switches are documented in `Commodore.Equates.asm`; the root also uses `LOCAL_TERMINAL_POSITION` for output
-and initialization and derives `GETSTK`'s reserve from `STACK_LEVELS`. `RESET_STACK_POINTER`, `RANDOM_SEED_TAIL`
+and initialization and derives `CheckStack`'s reserve from `STACK_LEVELS`. `RESET_STACK_POINTER`, `RANDOM_SEED_TAIL`
 and `PROBE_TEST_BYTE` are bytes; `NULL_INCREMENT_LIMIT` is 2 through 255.
 
 | Choice | BASIC 1 default | Macro parameter or effect |

@@ -5,9 +5,10 @@
 ;; include this file. Each entry is an alias in <AppleSoft> that inherits its target's documentation and gives
 ;; Apple's name in its `Also:` section, citing the documents by their keys in docs/Bibliography.md: the Apple II
 ;; Technical Information Library's AppleSoft articles (ASTIL; PRNTFAC is in article 79, "Applesoft: Internals--Device
-;; I/O Routines", a2til228.txt, and COMBYTE in article 76, on the floating-point math package) and the 1982 AppleSoft
-;; disassembly (AS82), or UNKN for the names only the SDK's MACRO-10 overlay of AppleSoft gives, which its callers
-;; use. Including this file emits no bytes and does not change the origin.
+;; I/O Routines", a2til228.txt, and COMBYTE in article 76, "Applesoft: Internals--Floating Point Math Package (3 of
+;; 3)", a2til231.txt) and the 1982 AppleSoft disassembly (AS82), or UNKN for the names only the SDK's MACRO-10
+;; overlay of AppleSoft gives, which its callers use. Including this file emits no bytes and does not change the
+;; origin.
 
 ;; The aliases for Apple's names. Code uses the definitions' own names; these exist for the old names.
 .scope AppleSoft

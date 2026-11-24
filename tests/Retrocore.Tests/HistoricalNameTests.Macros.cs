@@ -965,6 +965,24 @@ public sealed partial class HistoricalNameTests
             unknown.Message.Should().Contain("NOSUCH");
             unknown.Path.Should().Be(second);
             unknown.Line.Should().Be(5);
+
+            // And a section two definitions share, written first in the second file after a bare Inherit: in the first.
+            File.WriteAllText(first, ".macro MA\n;; One.\n;; Inherit:\nX:\n    rts\n.endmacro\n");
+            File.WriteAllText(second, "; Second.\n;\n;\n.macro MB\n;; Two.\n;; Include: nofile.txt\nX:\n    rts\n.endmacro\n.macro MC\n;; Three.\n;; Include: nofile.txt\nX:\n    rts\n.endmacro\n");
+            string three = once + ".scope S3\n    MC\n.endscope\n";
+            File.WriteAllText(main, three);
+            AssemblyResult shared = new Retrocore.Assembler.Assembler().Assemble(
+                new AssemblySource(three, main),
+                new AssemblyOptions(ProcessorVariant.Mos6502, origin: 0x1000, imageSize: 0x100)
+                {
+                    SourceResolver = new FileAssemblySourceResolver()
+                });
+
+            shared.Diagnostics.Should().BeEmpty();
+            files = [.. ((string[])[main, first, second]).Select(path => DocumentationParser.Parse(File.ReadAllText(path), path))];
+            List<DocumentationDiagnostic> included = new DocumentationResolver(DocumentationSet.Create(files, shared)).Check();
+            DocumentationDiagnostic missing = included.Should().ContainSingle(item => item.Message.StartsWith("Include:")).Subject;
+            missing.Path.Should().Be(second);
         }
         finally
         {
@@ -1108,6 +1126,14 @@ public sealed partial class HistoricalNameTests
             """;
 
         Check(NamedScope).Should().ContainSingle().Which.Message.Should().Contain("is a scope or type");
+
+        // So is one expanded twice: a scope has no old name in any build, however many times it's expanded.
+        string twice = NamedScope.Replace("Entry name", "Entry", StringComparison.Ordinal)
+            .Replace(".scope name", ".scope Block", StringComparison.Ordinal)
+            .Replace("    Entry Foo", ".scope A\n    Entry\n.endscope\n.scope B\n    Entry\n.endscope", StringComparison.Ordinal);
+
+        Assemble(twice).Diagnostics.Should().BeEmpty();
+        Check(twice).Should().ContainSingle().Which.Message.Should().Contain("is a scope or type");
 
         // A .define's name isn't qualified by the scopes around it, so a parameter that names it is still found.
         const string Defined = """

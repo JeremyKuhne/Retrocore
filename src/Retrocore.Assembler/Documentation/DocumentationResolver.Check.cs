@@ -108,6 +108,13 @@ public sealed partial class DocumentationResolver
 
         void Section(string message, int line) => Warn(DocumentationRules.Sections, message, line);
 
+        // A section a macro's body writes is reported in the body's file, which needn't be the topic's first.
+        bool macros = topic.Comments.Any(comment => comment.Macro is not null);
+        string PathOf(DocumentationSection section) => macros ? section.OriginPath ?? topic.Path : topic.Path;
+
+        void At(DocumentationSection section, string rule, string message, int line) =>
+            diagnostics.Add(new(message, PathOf(section), line, DocumentationSeverity.Warning, rule));
+
         // An outside definition the build leaves out, beside a macro's expansion, is checked by the build it's in.
         if (topic.Section("Inherit") is { } inherit && !OtherBuildOutside(topic, inherit))
         {
@@ -119,13 +126,13 @@ public sealed partial class DocumentationResolver
                     ? $"Inherit: no documented definition named '{links[0].Target}'."
                     : $"Inherit: '{topic.Name}' is not an entry of a documented routine; name the topic to inherit.";
 
-                Section(message, inherit.Line);
+                At(inherit, DocumentationRules.Sections, message, inherit.Line);
             }
             else if (Cycles(topic))
             {
                 diagnostics.Add(new(
                     $"Inherit: '{topic.Name}' inherits from itself.",
-                    topic.Path,
+                    PathOf(inherit),
                     inherit.Line,
                     DocumentationSeverity.Error,
                     DocumentationRules.Sections));
@@ -133,7 +140,7 @@ public sealed partial class DocumentationResolver
 
             foreach (string item in inherit.Items.Where(item => !DocumentationSections.IsKnown(item)))
             {
-                Section($"Inherit: '{item}' is not a section.", inherit.Line);
+                At(inherit, DocumentationRules.Sections, $"Inherit: '{item}' is not a section.", inherit.Line);
             }
         }
 
@@ -141,7 +148,8 @@ public sealed partial class DocumentationResolver
             && !OtherBuildOutside(topic, include)
             && Included(topic, include) is null)
         {
-            Section($"Include: '{include.Text}' names no file or topic that exists.", include.Line);
+            string message = $"Include: '{include.Text}' names no file or topic that exists.";
+            At(include, DocumentationRules.Sections, message, include.Line);
         }
 
         DocumentationTopic effective = Effective(topic);
@@ -185,16 +193,13 @@ public sealed partial class DocumentationResolver
             }
         }
 
-        // A section a macro's body writes is reported in the body's file, which needn't be the topic's first.
-        bool macros = topic.Comments.Any(comment => comment.Macro is not null);
         foreach (DocumentationSection section in topic.Sections.Where(section => !OtherBuildOutside(topic, section)))
         {
-            string path = macros && section.OriginPath is { } origin ? origin : topic.Path;
-            void At(string rule, string message, int line) =>
-                diagnostics.Add(new(message, path, line, DocumentationSeverity.Warning, rule));
-
-            CheckSection(topic, section, (message, line) => At(DocumentationRules.Sections, message, line),
-                (message, line) => At(DocumentationRules.Also, message, line));
+            CheckSection(
+                topic,
+                section,
+                (message, line) => At(section, DocumentationRules.Sections, message, line),
+                (message, line) => At(section, DocumentationRules.Also, message, line));
         }
 
         CheckExpandedAlso(topic, diagnostics);

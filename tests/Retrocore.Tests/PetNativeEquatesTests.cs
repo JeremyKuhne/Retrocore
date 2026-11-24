@@ -436,7 +436,7 @@ public sealed class PetNativeEquatesTests
             COMPOSED_ASSIGNMENT_END:
                 CommodorePrintChannels
             COMPOSED_CHANNEL_PRINT_END:
-                PrintItems TABER, {(early ? 0 : 1)}, 0, 1
+                PrintItems PrintTabOrSpace, {(early ? 0 : 1)}, 0, 1
             COMPOSED_PRINT_END:
                 CommodoreLineEnd INPUT_BUFFER_PAGE, {(early ? 1 : 0)}, {(disk ? 1 : 0)}, {(early ? 1 : 0)}
             COMPOSED_LINE_END:

@@ -1,10 +1,9 @@
 ; retrocore: style=strict
-;; APPLESOFT: HANDLER TABLES, RESERVED WORDS AND MESSAGES
-;;
-;; These tables begin at $D000. <Tokenize> searches <ReservedWords> in order; <Statements::List> expands its token bytes
-;; back through the same list. <DispatchStatement> dispatches statement tokens with <StatementTable>, while expression
-;; evaluation uses <FunctionTable> and <OperatorTable>. <ReportError> indexes <ErrorMessages> by byte offset, not by an
-;; ordinal error number.
+; APPLESOFT: HANDLER TABLES, RESERVED WORDS AND MESSAGES
+;
+; These tables begin at $D000. Tokenize searches ReservedWords in order; LIST expands its token bytes back through
+; the same list. DispatchStatement dispatches statement tokens with StatementTable, while expression evaluation uses
+; FunctionTable and OperatorTable. ReportError indexes ErrorMessages by byte offset, not by an ordinal error number.
 
 ;; Handler addresses minus one for the 64 statements, indexed by token $80-$BF.
 ;;
@@ -363,103 +362,103 @@ TOKEN_LAST_SIMPLE_FUNCTION = $E7
 ;; all offsets fit in one byte.
 ;; Also: ERRTAB (M6502)
 ErrorMessages:
-;; Offset of `NEXT` WITHOUT `FOR` in <ErrorMessages>.
+;; Offset of "NEXT WITHOUT FOR" in <ErrorMessages>.
 ;; Also: ERRNF (M6502)
 ERROR_NEXT_WITHOUT_FOR = * - ErrorMessages
     .byte "NEXT WITHOUT FO", 'R' | $80
     .assert ERROR_NEXT_WITHOUT_FOR = $00, "ERROR_NEXT_WITHOUT_FOR must stay at its offset."
 
-;; Offset of `SYNTAX` in <ErrorMessages>.
+;; Offset of "SYNTAX" in <ErrorMessages>.
 ;; Also: ERRSN (M6502)
 ERROR_SYNTAX = * - ErrorMessages
     .byte "SYNTA", 'X' | $80
     .assert ERROR_SYNTAX = $10, "ERROR_SYNTAX must stay at its offset."
 
-;; Offset of `RETURN` WITHOUT `GOSUB` in <ErrorMessages>.
+;; Offset of "RETURN WITHOUT GOSUB" in <ErrorMessages>.
 ;; Also: ERRRG (M6502)
 ERROR_RETURN_WITHOUT_GOSUB = * - ErrorMessages
     .byte "RETURN WITHOUT GOSU", 'B' | $80
     .assert ERROR_RETURN_WITHOUT_GOSUB = $16, "ERROR_RETURN_WITHOUT_GOSUB must stay at its offset."
 
-;; Offset of OUT OF `DATA` in <ErrorMessages>.
+;; Offset of "OUT OF DATA" in <ErrorMessages>.
 ;; Also: ERROD (M6502)
 ERROR_OUT_OF_DATA = * - ErrorMessages
     .byte "OUT OF DAT", 'A' | $80
     .assert ERROR_OUT_OF_DATA = $2A, "ERROR_OUT_OF_DATA must stay at its offset."
 
-;; Offset of ILLEGAL QUANTITY in <ErrorMessages>.
+;; Offset of "ILLEGAL QUANTITY" in <ErrorMessages>.
 ;; Also: ERRFC (M6502)
 ERROR_ILLEGAL_QUANTITY = * - ErrorMessages
     .byte "ILLEGAL QUANTIT", 'Y' | $80
     .assert ERROR_ILLEGAL_QUANTITY = $35, "ERROR_ILLEGAL_QUANTITY must stay at its offset."
 
-;; Offset of OVERFLOW in <ErrorMessages>.
+;; Offset of "OVERFLOW" in <ErrorMessages>.
 ;; Also: ERROV (M6502, ASTIL)
 ERROR_OVERFLOW = * - ErrorMessages
     .byte "OVERFLO", 'W' | $80
     .assert ERROR_OVERFLOW = $45, "ERROR_OVERFLOW must stay at its offset."
 
-;; Offset of OUT OF MEMORY in <ErrorMessages>.
+;; Offset of "OUT OF MEMORY" in <ErrorMessages>.
 ;; Also: ERROM (M6502)
 ERROR_OUT_OF_MEMORY = * - ErrorMessages
     .byte "OUT OF MEMOR", 'Y' | $80
     .assert ERROR_OUT_OF_MEMORY = $4D, "ERROR_OUT_OF_MEMORY must stay at its offset."
 
-;; Offset of UNDEF'D STATEMENT in <ErrorMessages>.
+;; Offset of "UNDEF'D STATEMENT" in <ErrorMessages>.
 ;; Also: ERRUS (M6502)
 ERROR_UNDEFINED_STATEMENT = * - ErrorMessages
     .byte "UNDEF'D STATEMEN", 'T' | $80
     .assert ERROR_UNDEFINED_STATEMENT = $5A, "ERROR_UNDEFINED_STATEMENT must stay at its offset."
 
-;; Offset of BAD SUBSCRIPT in <ErrorMessages>.
+;; Offset of "BAD SUBSCRIPT" in <ErrorMessages>.
 ;; Also: ERRBS (M6502)
 ERROR_BAD_SUBSCRIPT = * - ErrorMessages
     .byte "BAD SUBSCRIP", 'T' | $80
     .assert ERROR_BAD_SUBSCRIPT = $6B, "ERROR_BAD_SUBSCRIPT must stay at its offset."
 
-;; Offset of REDIM'D ARRAY in <ErrorMessages>.
+;; Offset of "REDIM'D ARRAY" in <ErrorMessages>.
 ;; Also: ERRDD (M6502)
 ERROR_REDIMENSIONED_ARRAY = * - ErrorMessages
     .byte "REDIM'D ARRA", 'Y' | $80
     .assert ERROR_REDIMENSIONED_ARRAY = $78, "ERROR_REDIMENSIONED_ARRAY must stay at its offset."
 
-;; Offset of DIVISION BY `ZERO` in <ErrorMessages>.
+;; Offset of "DIVISION BY ZERO" in <ErrorMessages>.
 ;; Also: ERRDV0 (M6502)
 ERROR_DIVISION_BY_ZERO = * - ErrorMessages
     .byte "DIVISION BY ZER", 'O' | $80
     .assert ERROR_DIVISION_BY_ZERO = $85, "ERROR_DIVISION_BY_ZERO must stay at its offset."
 
-;; Offset of ILLEGAL DIRECT in <ErrorMessages>.
+;; Offset of "ILLEGAL DIRECT" in <ErrorMessages>.
 ;; Also: ERRID (M6502)
 ERROR_ILLEGAL_DIRECT = * - ErrorMessages
     .byte "ILLEGAL DIREC", 'T' | $80
     .assert ERROR_ILLEGAL_DIRECT = $95, "ERROR_ILLEGAL_DIRECT must stay at its offset."
 
-;; Offset of TYPE MISMATCH in <ErrorMessages>.
+;; Offset of "TYPE MISMATCH" in <ErrorMessages>.
 ;; Also: ERRTM (M6502)
 ERROR_TYPE_MISMATCH = * - ErrorMessages
     .byte "TYPE MISMATC", 'H' | $80
     .assert ERROR_TYPE_MISMATCH = $A3, "ERROR_TYPE_MISMATCH must stay at its offset."
 
-;; Offset of STRING TOO LONG in <ErrorMessages>.
+;; Offset of "STRING TOO LONG" in <ErrorMessages>.
 ;; Also: ERRLS (M6502)
 ERROR_STRING_TOO_LONG = * - ErrorMessages
     .byte "STRING TOO LON", 'G' | $80
     .assert ERROR_STRING_TOO_LONG = $B0, "ERROR_STRING_TOO_LONG must stay at its offset."
 
-;; Offset of FORMULA TOO COMPLEX in <ErrorMessages>.
+;; Offset of "FORMULA TOO COMPLEX" in <ErrorMessages>.
 ;; Also: ERRST (M6502)
 ERROR_FORMULA_TOO_COMPLEX = * - ErrorMessages
     .byte "FORMULA TOO COMPLE", 'X' | $80
     .assert ERROR_FORMULA_TOO_COMPLEX = $BF, "ERROR_FORMULA_TOO_COMPLEX must stay at its offset."
 
-;; Offset of CAN'T CONTINUE in <ErrorMessages>.
+;; Offset of "CAN'T CONTINUE" in <ErrorMessages>.
 ;; Also: ERRCN (M6502)
 ERROR_CANT_CONTINUE = * - ErrorMessages
     .byte "CAN'T CONTINU", 'E' | $80
     .assert ERROR_CANT_CONTINUE = $D2, "ERROR_CANT_CONTINUE must stay at its offset."
 
-;; Offset of UNDEF'D FUNCTION in <ErrorMessages>.
+;; Offset of "UNDEF'D FUNCTION" in <ErrorMessages>.
 ;; Also: ERRUF (M6502)
 ERROR_UNDEFINED_FUNCTION = * - ErrorMessages
     .byte "UNDEF'D FUNCTIO", 'N' | $80

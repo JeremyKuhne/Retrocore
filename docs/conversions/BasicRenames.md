@@ -2373,7 +2373,7 @@ to K12, R1 to R10).
 | 1957 | `suppressOutput` | `honorSuppression` | parameter of COMMODORE_CHARACTER_OUTPUT | PET |  | vendor | 1 to skip output while OutputSuppressed is set. — renamed: suppressOutput reads as the opposite and means "clear" in CommodoreErrorReady |
 | 1958 | `returnAlias` | `KEEP` | parameter of COMMODORE_CHARACTER_OUTPUT | PET |  | vendor | 1 to define PrintCharacter::Return at the RTS. |
 | 1959 | `OUTSPC` | `PrintSpace` | routine | PET | M6502, CBM4S79 [P4 P4R], HV2, HV4, HV4R; other names here: CRTSKP (HV1, HV1R) | vendor | Loads a space for a file or cursor-right for the screen (always cursor-right in BASIC 1), skipping into PrintCharacter. |
-| 1960 | `CRTSKP` | `PrintSpace::CursorRight` | local | P2 P4 P4R | M6502, CBM4S79 [P4 P4R], HV2, HV4, HV4R | vendor | Loads the cursor-right code. Converted: BASIC 1 has it too, `PrintSpace::CursorRight` in its own branch, cited HV1 and HV1R, whose code7 names it. |
+| 1960 | `CRTSKP` | `PrintSpace::CursorRight` | local | P2 P4 P4R | M6502, CBM4S79 [P4 P4R], HV2, HV4, HV4R | vendor | Loads the cursor-right code. Converted: BASIC 1 has it too, `PrintSpace::CursorRight` in its own branch, cited HV1 and HV1R (Basic.md I12). |
 | 1961 | `OUTQST` | `PrintQuestionMark` | routine | PET | M6502, CBM4S79 [P4 P4R], HV1, HV1R, HV2, HV4, HV4R | vendor | Loads ? and falls into PrintCharacter. |
 | 1962 | `OUTDO` | `PrintCharacter` | routine | PET | M6502, HV1, HV1R, HV2, HV4, HV4R, CBM4S79 [P4 P4R] | vendor | Sends A to the selected channel (OUTCH) unless output is suppressed; BASIC 1 tracks the column; returns with zero set from A. |
 | 1963 | `DECTRM` | `PrintCharacter::MoveLeft` | local | P1 P1R | none found | vendor | BASIC 1: cursor-left or delete moves the screen column back. |

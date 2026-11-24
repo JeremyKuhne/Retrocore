@@ -30,7 +30,7 @@ PrintMessage:
     jsr PrintNewline
     jsr PrintQuestionMark
 
-;; Prints the message's characters until the one with bit 7 set, then falls into `AddErrorSuffix`.
+;; Prints the message's characters until the one with bit 7 set, then falls into <ReportError::AddErrorSuffix>.
 ;; Also: GETERR (M6502)
 NextCharacter:
     lda ErrorMessages,x

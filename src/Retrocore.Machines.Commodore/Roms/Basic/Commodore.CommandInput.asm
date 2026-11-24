@@ -12,7 +12,7 @@
 
 ;; Emits error reporting and the READY prompt: <ReportOutOfMemory>, <ReportError> and <ReadyForCommand>, which falls
 ;; into the <CommandLoop> that <CommodoreCommandLoop> emits next.
-;; Parameters: clearSuppression = 1 to clear <OutputSuppressed> when reporting an error and at READY
+;; Parameters: clearSuppression = 1 to clear the output-suppression flag when reporting an error and at READY
 .macro CommodoreErrorReady clearSuppression
     .assert clearSuppression = 0 || clearSuppression = 1, "clearSuppression is 0 or 1."
 
@@ -23,9 +23,9 @@
     ; Falls into ReportError.
     .endproc
 
-    ;; Closes a selected channel and prints the error, then returns to the command prompt.
+    ;; Restores the default channels when one is selected and prints the error, then returns to the command prompt.
     ;;
-    ;; Where `clearSuppression` is 1 (BASIC 1 and 2), it first clears <OutputSuppressed>.
+    ;; Where `clearSuppression` is 1 (BASIC 1 and 2), it first clears the output-suppression flag.
     ;; In: X = the message's offset in <ErrorMessages>
     ;; See: <KernalResetChannels>, <PrintCharacter>, <ReportMessage>
     ;; Also: ERROR (M6502, K4S79, HV1, HV1R, HV2, HV4, HV4R, HVK4, CBM4S79)
@@ -45,7 +45,7 @@ PrintMessage:
     jsr PrintNewline
     jsr PrintQuestionMark
 
-;; Prints the message's characters until the one with bit 7 set, then falls into `AddErrorSuffix`.
+;; Prints the message's characters until the one with bit 7 set, then falls into <ReportError::AddErrorSuffix>.
 ;; Also: GETERR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 NextCharacter:
     lda ErrorMessages,x
@@ -62,7 +62,7 @@ NextCharacter:
 
     ;; Prints the READY message and falls into <CommandLoop>.
     ;;
-    ;; Where `clearSuppression` is 1 (BASIC 1 and 2), it first clears <OutputSuppressed>.
+    ;; Where `clearSuppression` is 1 (BASIC 1 and 2), it first clears the output-suppression flag.
     ;; See: <CommandLoop>
     ;; Also: READY (M6502, K4S79, HV1, HV1R, HV2, HV4, HV4R, HVK4, CBM4S79)
     .proc ReadyForCommand
@@ -103,7 +103,7 @@ NextCharacter:
         tax
     .endif
     beq CommandLoop
-    ldx #$FF
+    ldx #$FF                        ; a direct line: line number $FFxx
     stx CurrentLine+1
     bcc EditLine
     jsr Tokenize
@@ -214,7 +214,7 @@ Return:
     .endproc
 .endmacro
 
-;; Emits the terminal-line reader, <InputLine>, and, where present, its character-input wrapper, <InputCharacter>.
+;; Emits the terminal-line reader, <InputLine>, and, where `checkedInput` is 0, its character-input wrapper.
 ;; Parameters: earlyDelete = 1 to retain the early line-editing entries;
 ;;   checkedInput = 1 to reject a full buffer and call the kernal directly
 .macro CommodoreTerminalInput earlyDelete, checkedInput
@@ -247,7 +247,7 @@ Return:
     ;; Out: X/Y = address before <InputBuffer> after <FinishInputLine>
     ;; Errors: STRING TOO LONG for a full buffer where `checkedInput` is 1
     ;; Entry:
-    ;;   NextCharacter = reads and stores the next character; BASIC 1's <EraseInputCharacter> branches here
+    ;;   NextCharacter = reads and stores the next character; BASIC 1's erase step branches here
     ;; Also: INLIN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc InputLine
     ldx #$00

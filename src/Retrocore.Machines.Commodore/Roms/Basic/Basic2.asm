@@ -74,7 +74,7 @@ BASIC4_OUTPUT_PADDING = 0           ;; omit BASIC 4's output patch space
 
 ; Terminal and channel output, then READ and input.
     CommodorePrintChannels
-    PrintItems TABER, 1, 0, 1
+    PrintItems PrintTabOrSpace, 1, 0, 1
     CommodoreLineEnd INPUT_BUFFER_PAGE, 0, 0, 0
     CommodorePrintSpacing 0
 .include "../../Microsoft6502Basic/MsBasic.StringOutput.asm"

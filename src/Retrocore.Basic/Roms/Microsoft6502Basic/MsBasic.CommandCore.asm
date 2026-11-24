@@ -111,7 +111,7 @@ MoveDown:
 .macro LinkLine addHighToY
     .assert addHighToY = 0 || addHighToY = 1, "addHighToY is 0 or 1."
 
-    ldy #.sizeof(ProgramLine)        ; the scan starts past the link and the line number
+    ldy #.sizeof(ProgramLine)        ; Y at the text: the scan reads from the byte after it
 
 ;; Steps Y to the line's zero, then stores the next line's address, just past it, as the line's link.
 ;; Also: CZLOOP (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)

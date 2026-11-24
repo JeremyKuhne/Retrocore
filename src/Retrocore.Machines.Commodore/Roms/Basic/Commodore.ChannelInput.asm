@@ -75,10 +75,11 @@ Release:
 .endmacro
 
 ;; Emits the `INPUT` statement, <Statements::Input>, through its line reader, <PromptAndInputLine>.
-;; Parameters: clearSuppression = 1 to clear <OutputSuppressed> at INPUT's start, statusMask = channel error bits,
-;;   revisedEof = 1 to use the revised BASIC 4 end-of-file helper,
-;;   editorPatch = 1 to use the BASIC 1 editor-ROM stop helper,
-;;   localStopLabel = 1 to define <StopEmptyInput> here (BASIC 4)
+;; Parameters: clearSuppression = 1 to clear the output-suppression flag at INPUT's start;
+;;   statusMask = channel error bits;
+;;   revisedEof = 1 to use the revised BASIC 4 end-of-file helper;
+;;   editorPatch = 1 to use the BASIC 1 editor-ROM stop helper;
+;;   localStopLabel = 1 to define the blank-line stop, `StopEmptyInput`, here (BASIC 4)
 .macro CommodoreInputStatement clearSuppression, statusMask, revisedEof, editorPatch, localStopLabel
     .assert clearSuppression = 0 || clearSuppression = 1, "clearSuppression is 0 or 1."
     .assert statusMask = 2 || statusMask = 3, "statusMask is 2 or 3."
@@ -97,6 +98,7 @@ Release:
     ;; Entry:
     ;;   CheckDirect = rejects direct mode and puts a comma before the buffer; <Statements::InputNumber> enters here
     ;;   ReadLine = reads a line and checks the channel's status; the revised BASIC 4's `INPNUL` re-enters here
+    ;; Errors: ILLEGAL DIRECT when used in direct mode; SYNTAX when a quoted prompt is not followed by a semicolon
     ;; Also: INPUT (M6502, HV1, HV1R, HV2, HV4, HV4R, CBM4S79)
     .proc Input
     .if clearSuppression
@@ -185,10 +187,10 @@ ToInputLine:
     ;;
     ;; READ reports the DATA line, GET reports a direct line, and file INPUT reports `FILE DATA` (`BAD DATA` in BASIC
     ;; 1). Terminal INPUT prints the retry message and restores <TextPointer> to the start of the current statement.
-    ;; Where `editorPatch` is 1 (BASIC 1), the editor ROM's <GETDTL> gives READ's line.
+    ;; Where `editorPatch` is 1 (BASIC 1), the editor ROM's `GETDTL` gives READ's line.
     ;; In: InputMode = the input's source, CurrentChannel = the selected channel
     ;; Out: TextPointer = the restored statement position when retrying, CurrentLine = the error's line for READ or GET
-    ;; Errors: SYNTAX for READ or GET; `FILE DATA` for file INPUT
+    ;; Errors: SYNTAX for READ or GET; `FILE DATA` (`BAD DATA` in BASIC 1) for file INPUT
     ;; Entry:
     ;;   ToSyntaxError = jumps to <SyntaxError>; <PrintTabOrSpace> branches here
     ;; Also: TRMNOK (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
@@ -221,7 +223,7 @@ SetLine:
 ToSyntaxError:
     jmp SyntaxError
 
-;; INPUT: from a channel reports `FILE DATA`; from the keyboard retries.
+;; INPUT: from a channel reports `FILE DATA` (`BAD DATA` in BASIC 1); from the keyboard retries.
 ;; Also: TRMNO1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 CheckChannel:
     lda CurrentChannel

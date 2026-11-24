@@ -1080,15 +1080,22 @@ Decisions and how the table was applied:
   F), so `BasicNames.VendorLabelNames` adds ON beside GETRTS.
 - I7. The shared `ErrorFinish` now holds only `AddErrorSuffix` (TYPERR). The new `ReportMessageRoutine` emits
   `ReportMessage`. Each vendor closes its own `ReportError` between them, since the documentation tracks a
-  routine's scope within one file. Where a routine's start differs by build, each `.if` branch opens and closes its
+  routine's scope within one file. S8's locals of part C's routines now take their rows' names (EditLine,
+  SetMoveSource, MoveDown, ScanLine, StoreToken, StoreByte, SetTokenizeState, CheckRem, CopyLiteral, StoreLiteral),
+  each with its old name in `Also:`. Where a routine's start differs by build, each `.if` branch opens and closes its
   own `.proc` (Commodore's `EvaluateVariableBody` and `EvaluateVariable`), or a per-build label carries the old
   names.
 - I8. New constants: AppleSoft's `CONTROL_C`, `KEYBOARD_CONTROL_C`, `COMMA_NEWLINE_COLUMN`, `INPUT_LINE_LIMIT` and
   `PROGRAM_ORIGIN` (with `INPUT_BUFFER_BASE` and `LAST_COMMA_COLUMN` from I2), and Commodore's `CARRIAGE_RETURN`,
   `LINE_FEED`, `CURSOR_RIGHT`, `CURSOR_LEFT`, `DELETE_CHARACTER`, `CURSOR_HOME` and `CURSOR_DOWN`. Two `*+5`
-  branches are labels: `ReadLine` in
-  the statement fetch, where `shortEnd` is 0 (BASIC 2 and 4; DIRCN1 in their documents), and `StoreLink` in the
-  command loop's link pass, where `linkReturns` is 0 (BASIC 1).
+  branches are labels: `ReadLine` in the statement fetch, where `shortEnd` is 0 (BASIC 2 and 4; DIRCN1 in their
+  documents), and `StoreLink` in the command loop's link pass, where `linkReturns` is 0 (BASIC 1). Some values are
+  still numbers with a trailing comment: the JMP opcode both cold starts store, AppleSoft's carriage return and
+  16-column zone, the PET clock's reserved-variable threshold, digit count and digit mask, the screen's page and the
+  direct line's $FF; naming them is left for a later pass. The PET command loop's carriage return stays `$0D`, since
+  the tests assemble `Commodore.CommandInput.asm` without the file that defines `CARRIAGE_RETURN`.
+- I8a. The PET roots pass `PrintTabOrSpace` to the shared `PrintItems`. Their other macro arguments keep the old
+  names they had (CHRGET, NEWSTT, READY, LINPRT, FREMES and others), which resolve through `Also:`.
 - I9. Part F's names stay as they are in the code: BASIC 4's trampoline ISVAR (the shared evaluator still branches
   to ISVAR), BASIC 1's GETDTL, INPSTP, TISTR, TINUM and INCTRM, and the revised BASIC 4's INPNUL. `StopEmptyInput`
   is BASIC 4's own INPSTP, under `.if localStopLabel`.
@@ -1120,16 +1127,17 @@ Decisions and how the table was applied:
     listings too, as the workspace's do), all in the bibliography.
   - `BasicInterpreterRoutineTests` is new (below).
 - I12. Old names the table's rows give only for BASIC 2 and 4, which HV1 and HV1R also give to BASIC 1's own code:
-  XSPAC2 (`PrintSpaces::Next`), GLET (`DispatchStatement::ToLet`) and FREMES (`SignOnMessage`, inside
-  `BytesFreeMessage`'s string), each now a label in BASIC 1's branch, cited HV1 and HV1R. MORSTS, BASIC 1's own
+  XSPAC2 (`PrintSpaces::Next`), GLET (`DispatchStatement::ToLet`), FREMES (`SignOnMessage`, inside
+  `BytesFreeMessage`'s string) and CRTSKP (`PrintSpace::CursorRight`), each now a label in BASIC 1's branch, cited
+  HV1 and HV1R. Inside the two versions of `PrintSpaces`, which every build has, the labels cite only their own
+  builds' documents (E8a): BASIC 1's XSPAC cites M6502 beside HV1's XSPAC1, and each version's NOTABR its own
+  builds' documents. MORSTS, BASIC 1's own
   compare inside `NextStatement`, is in prose: as a label it would be a per-build `NextStatement::` name, which the
   standalone sources that define `NextStatement` cannot predefine. DIRCN1 (CBM4S79, HV2, HV4, HV4R) is now on
   `NextStatement::ReadLine`. The overlay defines none of the BASIC 1 names at BASIC 1's addresses, so the
   conversion test exempts those labels there.
 
-Checked: the full suite, the rename gate, the lint tests and `BasicInterpreterConversionTests`. The suite has
-3,987 passed, none failed and 665 skipped; the skipped tests are the ROM-dump comparisons, which need dumps that
-are not here.
+Checked: the full suite, the rename gate, the lint tests and `BasicInterpreterConversionTests`.
 
 `BasicInterpreterRoutineTests` runs these routines in the enhanced IIe's AppleSoft and PET BASIC 4 and checks
 their `Out:` values:
@@ -1142,7 +1150,7 @@ their `Out:` values:
 - BASIC 4's `PrintCharacter`: the kernal's A, with zero and negative from it.
 
 The existing tests run the rest. The debugger's contract checking ran clean on PET BASIC 2, PET BASIC 4 and the
-enhanced IIe's AppleSoft. Their program adds PRINT's comma, `TAB(` and `SPC(` to the expression step's, and a
+enhanced IIe's AppleSoft. The contract check's program adds PRINT's comma, `TAB(` and `SPC(` to the expression step's, and a
 GOSUB that AppleSoft leaves by POP. As a control, a false `Keeps: A` added to AppleSoft's `PrintNewline` was
 reported.
 

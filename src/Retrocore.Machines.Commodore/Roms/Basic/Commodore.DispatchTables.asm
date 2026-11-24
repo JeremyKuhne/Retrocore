@@ -296,66 +296,66 @@ ReservedWords:
 ;; Bit 7 on the last character ends each message; <ReportError> appends <ErrorSuffix>.
 ;; Also: ERRTAB (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 ErrorMessages:
-    ;; Offset of `NEXT` WITHOUT `FOR` in <ErrorMessages>.
+    ;; Offset of "NEXT WITHOUT FOR" in <ErrorMessages>.
     ;; Also: ERRNF (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     ERROR_NEXT_WITHOUT_FOR = * - ErrorMessages
     .byte "NEXT WITHOUT FO", 'R' | $80
-    ;; Offset of SYNTAX in <ErrorMessages>.
+    ;; Offset of "SYNTAX" in <ErrorMessages>.
     ;; Also: ERRSN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     ERROR_SYNTAX = * - ErrorMessages
     .byte "SYNTA", 'X' | $80
-    ;; Offset of `RETURN` WITHOUT `GOSUB` in <ErrorMessages>.
+    ;; Offset of "RETURN WITHOUT GOSUB" in <ErrorMessages>.
     ;; Also: ERRRG (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     ERROR_RETURN_WITHOUT_GOSUB = * - ErrorMessages
     .byte "RETURN WITHOUT GOSU", 'B' | $80
-    ;; Offset of OUT OF `DATA` in <ErrorMessages>.
+    ;; Offset of "OUT OF DATA" in <ErrorMessages>.
     ;; Also: ERROD (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     ERROR_OUT_OF_DATA = * - ErrorMessages
     .byte "OUT OF DAT", 'A' | $80
-    ;; Offset of ILLEGAL QUANTITY in <ErrorMessages>.
+    ;; Offset of "ILLEGAL QUANTITY" in <ErrorMessages>.
     ;; Also: ERRFC (M6502, CBM4S79, K4S79, HV1, HV1R, HV2, HV4, HV4R, HVK4)
     ERROR_ILLEGAL_QUANTITY = * - ErrorMessages
     .byte "ILLEGAL QUANTIT", 'Y' | $80
     .if ERROR_PADDING5
         .res 5, $00
     .endif
-    ;; Offset of OVERFLOW in <ErrorMessages>.
+    ;; Offset of "OVERFLOW" in <ErrorMessages>.
     ;; Also: ERROV (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     ERROR_OVERFLOW = * - ErrorMessages
     .byte "OVERFLO", 'W' | $80
-    ;; Offset of OUT OF MEMORY in <ErrorMessages>.
+    ;; Offset of "OUT OF MEMORY" in <ErrorMessages>.
     ;; Also: ERROM (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     ERROR_OUT_OF_MEMORY = * - ErrorMessages
     .byte "OUT OF MEMOR", 'Y' | $80
-    ;; Offset of UNDEF'D STATEMENT in <ErrorMessages>.
+    ;; Offset of "UNDEF'D STATEMENT" in <ErrorMessages>.
     ;; Also: ERRUS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     ERROR_UNDEFINED_STATEMENT = * - ErrorMessages
     .byte "UNDEF'D STATEMEN", 'T' | $80
-    ;; Offset of `BAD` SUBSCRIPT in <ErrorMessages>.
+    ;; Offset of "BAD SUBSCRIPT" in <ErrorMessages>.
     ;; Also: ERRBS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     ERROR_BAD_SUBSCRIPT = * - ErrorMessages
     .byte "BAD SUBSCRIP", 'T' | $80
-    ;; Offset of REDIM'D ARRAY in <ErrorMessages>.
+    ;; Offset of "REDIM'D ARRAY" in <ErrorMessages>.
     ;; Also: ERRDD (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     ERROR_REDIMENSIONED_ARRAY = * - ErrorMessages
     .byte "REDIM'D ARRA", 'Y' | $80
-    ;; Offset of DIVISION BY `ZERO` in <ErrorMessages>.
+    ;; Offset of "DIVISION BY ZERO" in <ErrorMessages>.
     ;; Also: ERRDV0 (M6502)
     ERROR_DIVISION_BY_ZERO = * - ErrorMessages
     .byte "DIVISION BY ZER", 'O' | $80
-    ;; Offset of ILLEGAL DIRECT in <ErrorMessages>.
+    ;; Offset of "ILLEGAL DIRECT" in <ErrorMessages>.
     ;; Also: ERRID (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     ERROR_ILLEGAL_DIRECT = * - ErrorMessages
     .byte "ILLEGAL DIREC", 'T' | $80
-    ;; Offset of TYPE MISMATCH in <ErrorMessages>.
+    ;; Offset of "TYPE MISMATCH" in <ErrorMessages>.
     ;; Also: ERRTM (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     ERROR_TYPE_MISMATCH = * - ErrorMessages
     .byte "TYPE MISMATC", 'H' | $80
-    ;; Offset of STRING TOO LONG in <ErrorMessages>.
+    ;; Offset of "STRING TOO LONG" in <ErrorMessages>.
     ;; Also: ERRLS (M6502, CBM4S79, K4S79, HV1, HV1R, HV2, HV4, HV4R, HVK4)
     ERROR_STRING_TOO_LONG = * - ErrorMessages
     .byte "STRING TOO LON", 'G' | $80
-    ;; Offset of the file-data message: `BAD` `DATA` in BASIC 1, FILE `DATA` later.
+    ;; Offset of the file-data message: "BAD DATA" in BASIC 1, "FILE DATA" later.
     ;; Also: ERRBD (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     ERROR_FILE_DATA = * - ErrorMessages
     .if badData
@@ -363,15 +363,15 @@ ErrorMessages:
     .else
         .byte "FILE DAT", 'A' | $80
     .endif
-    ;; Offset of FORMULA TOO COMPLEX in <ErrorMessages>.
+    ;; Offset of "FORMULA TOO COMPLEX" in <ErrorMessages>.
     ;; Also: ERRST (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     ERROR_FORMULA_TOO_COMPLEX = * - ErrorMessages
     .byte "FORMULA TOO COMPLE", 'X' | $80
-    ;; Offset of CAN'T CONTINUE in <ErrorMessages>.
+    ;; Offset of "CAN'T CONTINUE" in <ErrorMessages>.
     ;; Also: ERRCN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     ERROR_CANT_CONTINUE = * - ErrorMessages
     .byte "CAN'T CONTINU", 'E' | $80
-    ;; Offset of UNDEF'D FUNCTION in <ErrorMessages>.
+    ;; Offset of "UNDEF'D FUNCTION" in <ErrorMessages>.
     ;; Also: ERRUF (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     ERROR_UNDEFINED_FUNCTION = * - ErrorMessages
     .byte "UNDEF'D FUNCTIO", 'N' | $80
@@ -388,21 +388,21 @@ LineNumberPrefix:
 ;; Message shown when the interpreter is ready for another command.
 ;; Also: REDDY (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 ReadyMessage:
-    .byte $0D
+    .byte CARRIAGE_RETURN
     .if .not singleReturn
-        .byte $0A
+        .byte LINE_FEED
     .endif
-    .byte "READY.", $0D
+    .byte "READY.", CARRIAGE_RETURN
     .if .not singleReturn
-        .byte $0A
+        .byte LINE_FEED
     .endif
     .byte $00
 ;; Message shown when execution is stopped.
 ;; Also: BRKTXT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 BreakMessage:
-    .byte $0D
+    .byte CARRIAGE_RETURN
     .if .not singleReturn
-        .byte $0A
+        .byte LINE_FEED
     .endif
     .asciiz "BREAK"
 .endmacro

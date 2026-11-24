@@ -40,7 +40,7 @@ DELETE_CHARACTER = $14
     lda #','
     jsr CheckCharacter
 
-;; Opens the channel for output, records it in <CurrentChannel> and enters PRINT.
+;; Selects the channel for output, records it in <CurrentChannel> and enters PRINT.
 ;; Also: SAVEIT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 SelectChannel:
     php
@@ -57,7 +57,7 @@ SelectChannel:
 ;; <PrintCharacter>.
 ;; Parameters: alwaysSkip = 1 to use the cursor-right code for every channel;
 ;;   localPosition = 1 to track the screen column in BASIC;
-;;   honorSuppression = 1 to skip output while <OutputSuppressed> is set;
+;;   honorSuppression = 1 to skip output while the output-suppression flag is set;
 ;;   returnAlias = 1 to define <PrintCharacter>'s `Return` at the return instruction
 .macro CommodoreCharacterOutput alwaysSkip, localPosition, honorSuppression, returnAlias
     .assert alwaysSkip = 0 || alwaysSkip = 1, "alwaysSkip is 0 or 1."
@@ -154,7 +154,7 @@ RestoreCharacter:
 Send:
     jsr KernalCharacterOut
 
-;; Sets zero from A and returns; suppressed output branches here.
+;; Sets zero from A and returns; where output can be suppressed, suppressed output branches here.
 ;; Also: OUTRTS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 SetFlags:
     and #$FF
@@ -203,10 +203,10 @@ Return:
     ;;
     ;; Where `localPosition` is 1 (BASIC 1), the screen's return also resets the column; where `channelLineFeed` is 1
     ;; (BASIC 4), only a channel with bit 7 set gets the line feed; where `nullPadding` is 1 (BASIC 1), it sends
-    ;; <NullCount> zero bytes, and the other builds complement A instead.
+    ;; as many zero bytes as its null-padding count holds, and the other builds complement A instead.
     ;; Entry:
     ;;   Finish = finishes the newline (padding, column, or A complemented); the shared <PrintString> enters here
-    ;;   Return = returns; <FinishInputLine> and the shared PRINT branch here
+    ;;   Return = returns; <FinishInputLine>, the shared PRINT and <PrintString> branch here
     ;; Also: CRDO (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc PrintNewline
     .if localPosition
@@ -336,7 +336,7 @@ SubtractZone:
         tax
 
 ;; Prints X spaces, 256 for zero.
-;; Also: XSPAC (M6502, CBM4S79, HV2, HV4, HV4R), XSPAC1 (HV1, HV1R)
+;; Also: XSPAC (M6502), XSPAC1 (HV1, HV1R)
 CountInX:
         jsr PrintSpace
 
@@ -347,7 +347,7 @@ Next:
         bne CountInX
 
 ;; Reads the next character and continues PRINT without a newline.
-;; Also: NOTABR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: NOTABR (M6502, HV1, HV1R)
 ContinuePrint:
         jsr GetNextCharacter
         jmp Statements::Print::Item
@@ -374,7 +374,7 @@ Next:
         bne One
 
 ;; Reads the next character and continues PRINT without a newline.
-;; Also: NOTABR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: NOTABR (M6502, CBM4S79, HV2, HV4, HV4R)
 ContinuePrint:
         jsr GetNextCharacter
         jmp Statements::Print::Item

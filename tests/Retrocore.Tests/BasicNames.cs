@@ -57,7 +57,7 @@ internal static partial class BasicNames
     /// <summary>
     ///  Gets the names a vendor's alias gives in some builds that other builds give to their vendor's own code: BASIC
     ///  4's GETRTS, which is the output routine's return in AppleSoft and BASIC 1 and 2 (Basic.md E3), and AppleSoft's
-    ///  ON, which is BASIC 4's disk-command parser.
+    ///  ON, which BASIC 4's disk-command parser gives its ON U clause.
     /// </summary>
     internal static string[] VendorLabelNames { get; } = ["GETRTS", "ON"];
 

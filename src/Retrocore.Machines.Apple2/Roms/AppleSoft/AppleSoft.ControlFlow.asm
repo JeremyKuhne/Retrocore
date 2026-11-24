@@ -8,7 +8,8 @@
 .include "../Microsoft6502Basic/MsBasic.ProgramTransfers.asm"
 .include "../Microsoft6502Basic/MsBasic.StatementFlow.asm"
 
-;; The ASCII code of Control-C, which <HandleBreak> compares A with for the shared STOP code.
+;; The ASCII code of Control-C, which <HandleBreak> compares A with for the shared STOP code, and <Statements::Input>
+;; tests an input line's first character for.
 CONTROL_C = $03
 
 ;; Control-C as the keyboard reads it, with bit 7 set.
@@ -102,8 +103,8 @@ ToEndOfProgram:
     beq Statements::StopOrEnd::Finish
 .endproc
 
-;; Returns at the end of a statement; otherwise dispatches a statement token through <StatementTable>, and anything
-;; else is <Statements::Let>.
+;; Returns at the end of a statement; otherwise dispatches a statement token through <StatementTable>. A character
+;; below <TOKEN_END> is <Statements::Let>, and any other token is a syntax error.
 ;; In: A = the statement's first character, zero = set at the end of the statement, carry = set unless it is a digit
 ;;   (as <GetNextCharacter> leaves it)
 ;; Entry:
@@ -112,8 +113,8 @@ ToEndOfProgram:
 .proc DispatchStatement
     beq Statements::Restore::Done
 
-;; Subtracts <TOKEN_END> and dispatches; <GetNextCharacter> leaves carry set for a non-digit, and a digit here is a
-;; syntax error.
+;; Subtracts <TOKEN_END> and dispatches. <GetNextCharacter> leaves carry clear for a digit, so the subtraction
+;; borrows and the digit goes to `ToLet`, where LET reports the syntax error.
 ;; Also: GONE2 (M6502)
 WithToken:
     sbc #TOKEN_END
@@ -153,6 +154,7 @@ ToSyntaxError:
 
 ;; Checks the keyboard for Control-C without consuming any other key: returns at once unless the keyboard holds it,
 ;; and otherwise reads the key and falls into <HandleBreak>.
+;; Out: A = the keyboard byte, when it is not Control-C
 ;; See: <HandleBreak>, <Statements::Stop>
 ;; Also: ISCNTC (M6502, ASTIL)
 .proc CheckStop
@@ -170,7 +172,7 @@ ConsumeKey:
 
 ;; Handles a break: gives error code $FF to an active `ONERR` handler, and otherwise compares A with <CONTROL_C> and
 ;; falls into the shared STOP code, which reports BREAK when they match.
-;; In: A = the key read
+;; In: A = the Control-C character: the key read, or the first character of an INPUT line
 ;; Also: ISCCA1 (UNKN)
 .proc HandleBreak
     ldx #$FF
@@ -287,6 +289,7 @@ ToClearAndRelink:
 
 ;; POP: discards the innermost GOSUB frame, and the FOR frames above it, without transferring control. It is also
 ;; RETURN's dispatch entry: the shared <Statements::Return> that follows tells the two apart by Y.
+;; In: zero = set at the end of the statement, Y = the statement token's offset in the dispatch table
 ;; Also: POP (UNKN)
 Pop:
 

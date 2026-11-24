@@ -108,7 +108,7 @@ error and evaluator entries the other shared modules define.
 
 `PrintItems` takes the TAB handler and independent choices for clearing carry before SPC and comma, and for
 printing a separate trailing space after numbers. AppleSoft uses `PrintTabOrSpace`,
-then `1, 1, 0`; PET BASIC 1 uses `TABER, 0, 0, 1`, and BASIC 2/4 use `TABER, 1, 0, 1`.
+then `1, 1, 0`; PET BASIC 1 uses `PrintTabOrSpace, 0, 0, 1`, and BASIC 2/4 use `PrintTabOrSpace, 1, 0, 1`.
 
 The program-reset macros take the independent side effects documented in the source:
 

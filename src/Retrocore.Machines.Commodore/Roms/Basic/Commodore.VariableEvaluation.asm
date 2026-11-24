@@ -2,7 +2,7 @@
 ; COMMODORE BASIC: CLOCK, STATUS AND VARIABLE VALUES
 
 ;; Emits the PET's variable lookup and <LoadVariableValue>, after BASIC 4's trampoline where it has one.
-;; Parameters: splitEntry = 1 to enter at <EvaluateVariableBody> after a trampoline,
+;; Parameters: splitEntry = 1 to enter at the evaluator's body, `EvaluateVariableBody`, after a trampoline,
 ;;   clockPatch = 1 to use BASIC 1's editor-ROM clock checks,
 ;;   diskStatus = 1 to recognize BASIC 4's DS and DS$ variables
 .macro CommodoreVariableValue splitEntry, clockPatch, diskStatus
@@ -37,7 +37,7 @@
     ;; In: A = the value's address (low byte), Y = its high byte, VariableName = the variable's name, ValueType = its
     ;;   type, IntegerType = negative for an integer variable
     ;; Out: Fac = the numeric value; for a string, FacMantissa3 = its descriptor's address (low byte), FacMantissa4 =
-    ;;   its high byte; ValueType = the result's type
+    ;;   its high byte
     ;; Also: ISVRET (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc LoadVariableValue
     sta FacMantissa3
@@ -158,7 +158,7 @@ ReadClock:
     sty FacMantissa1
     rts
 
-;; `ST` returns the channel status as a number.
+;; `ST` returns the channel status as a number; BASIC 1's editor-ROM `TINUM` enters here.
 ;; Also: QSTATV (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 MatchStatus:
     cmp #'S'
@@ -201,7 +201,7 @@ DiskStatusNumber:
         jmp Float::ConvertSignedByte
     .endif
 
-;; Moves the real variable into <Fac>.
+;; Moves the real variable into <Fac>; BASIC 1's editor-ROM `TINUM` enters here too.
 ;; Also: GOMOVF (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 LoadFloat:
     lda FacMantissa3

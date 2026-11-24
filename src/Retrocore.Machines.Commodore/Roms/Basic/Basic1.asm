@@ -152,16 +152,16 @@ PRINT_TOKEN_SPACING = 1             ;; 1 distinguishes TAB and SPC by token and 
 ALWAYS_SKIP_CHARACTER = 1           ;; 1 sends cursor-right as a space on every channel
 .endif
 .ifndef INPUT_ERROR_EDITOR_PATCH
-INPUT_ERROR_EDITOR_PATCH = 1        ;; 1 calls the editor's <GET>/<Statements::Read> error-line helper
+INPUT_ERROR_EDITOR_PATCH = 1        ;; 1 calls the editor's <Statements::Get>/<Statements::Read> error-line helper
 .endif
 .ifndef INPUT_STOP_EDITOR_PATCH
-INPUT_STOP_EDITOR_PATCH = 1         ;; 1 calls the editor's stop helper for blank <INPUT>
+INPUT_STOP_EDITOR_PATCH = 1         ;; 1 calls the editor's stop helper for blank <Statements::Input>
 .endif
 .ifndef GET_POINTER_Y_FIRST
-GET_POINTER_Y_FIRST = 1             ;; 1 loads the <GET> buffer pointer's high byte first
+GET_POINTER_Y_FIRST = 1             ;; 1 loads the <Statements::Get> buffer pointer's high byte first
 .endif
 .ifndef GET_STRING_EDITOR_PATCH
-GET_STRING_EDITOR_PATCH = 1         ;; 1 calls the editor's <GET> string helper
+GET_STRING_EDITOR_PATCH = 1         ;; 1 calls the editor's <Statements::Get> string helper
 .endif
 
 ; Variable, array and string choices.
@@ -184,7 +184,7 @@ ARRAY_SAVE_OFFSET_HIGH = 0          ;; 1 saves the high element-offset byte and 
 USER_FN_LOW_CHECK = 1               ;; 1 tests the argument pointer's low byte for an undefined FN
 .endif
 .ifndef STRING_CLEAR_FACOV
-STRING_CLEAR_FACOV = 0              ;; 1 clears <FACOV> when making a temporary string
+STRING_CLEAR_FACOV = 0              ;; 1 clears <FacExtension> when making a temporary string
 .endif
 .ifndef GC_FULL_POINTER
 GC_FULL_POINTER = 0                 ;; 1 tests both bytes of the selected string descriptor pointer
@@ -208,7 +208,7 @@ ASC_SHARED_LEN_JUMP = 1             ;; 1 sends <Functions::Asc> through <Functio
 
 ; Memory-access, arithmetic and startup choices.
 .ifndef PEEK_PRESERVE_ADDRESS
-PEEK_PRESERVE_ADDRESS = 0           ;; 1 restores the previous <POKER> address after <Functions::Peek>
+PEEK_PRESERVE_ADDRESS = 0           ;; 1 restores the previous <PokeAddress> address after <Functions::Peek>
 .endif
 .ifndef PEEK_GUARD_ROM
 PEEK_GUARD_ROM = 1                  ;; 1 returns zero for protected ROM pages
@@ -322,7 +322,7 @@ RESET_STACK_POINTER = <(STACK_END-$101-2*RESET_STACK_EARLY) ;; stack pointer aft
 
 ; Terminal and channel output, then READ and input.
     CommodorePrintChannels
-    PrintItems TABER, PRINT_CLEAR_SPC_CARRY, 0, 1
+    PrintItems PrintTabOrSpace, PRINT_CLEAR_SPC_CARRY, 0, 1
     CommodoreLineEnd INPUT_BUFFER_PAGE, LOCAL_TERMINAL_POSITION, 0, PRINT_NULL_PADDING
     CommodorePrintSpacing PRINT_TOKEN_SPACING
 .include "../../Microsoft6502Basic/MsBasic.StringOutput.asm"

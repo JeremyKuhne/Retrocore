@@ -96,7 +96,7 @@ ReadCharacters:
 ;;
 ;; A literal prompt must be followed by a semicolon. Without one INPUT prints a question mark. A line that starts with
 ;; Control-C stops the program as the statement loop does, through <HandleBreak>.
-;; Errors: ILLEGAL DIRECT when used in direct mode
+;; Errors: ILLEGAL DIRECT when used in direct mode; SYNTAX when a quoted prompt is not followed by a semicolon
 ;; See: <InputLine>, <AssignVariableList::NextVariable>
 ;; Also: INPUT (M6502)
 .proc Input

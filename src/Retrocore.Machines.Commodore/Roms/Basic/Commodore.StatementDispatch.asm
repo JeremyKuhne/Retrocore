@@ -21,6 +21,8 @@
     ;; buffer's page. A zero line link ends the program. Where `earlySeparators` is 1 (BASIC 1), it checks for a colon
     ;; before reading the link, and a byte that is neither a colon nor a zero is a syntax error here.
     ;; In: TextPointer = the statement separator or line terminator
+    ;; Errors: SYNTAX for a byte that is neither a colon nor a zero, here where `earlySeparators` is 1 and otherwise
+    ;;   through the separator check that follows the dispatcher
     ;; See: <ExecuteStatement>, <Statements::StopOrEnd::Finish>
     ;; Also: NEWSTT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc NextStatement
@@ -118,9 +120,10 @@ ReadLine:
     ;; Where `diskCommands` is 1 (BASIC 4), the disk tokens after `GO` dispatch from the table's next entries.
     ;; In: A = statement token or first character, zero = set at the end of the statement, carry = set for a non-digit
     ;;   (where `earlyDispatch` is 1, BASIC 1, the routine sets carry itself)
-    ;; Errors: SYNTAX for a non-statement reserved word
+    ;; Errors: SYNTAX for a non-statement reserved word, and where `diskCommands` and `earlyDispatch` are 0
+    ;;   (BASIC 2) for `GO` without `TO`
     ;; Entry:
-    ;;   WithToken = subtracts <TOKEN_END> from A and dispatches; the shared `ON` code enters here
+    ;;   WithToken = subtracts <TOKEN_END> from A and dispatches; <Statements::On> enters here
     ;; Also: GONE3 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc DispatchStatement
     .if earlyDispatch
@@ -183,7 +186,9 @@ ToLet:
         ;; Runs the next statement after a colon; anything else is a syntax error.
         ;; In: A = the nonzero byte at <TextPointer>
         ;; Entry:
-        ;;   ToSyntaxError = jumps to <SyntaxError>; <DispatchStatement> branches here for a token beyond the statements
+        ;;   ToSyntaxError = jumps to <SyntaxError>; for a token beyond the statements, <DispatchStatement> branches
+        ;;     here where `diskCommands` is 1 (BASIC 4), and BASIC 2's `GO` check where it is 0
+        ;; Errors: SYNTAX for any byte other than a colon
         ;; Also: MORSTS (M6502, CBM4S79, HV2, HV4, HV4R)
         .proc CheckStatementSeparator
         cmp #':'

@@ -553,12 +553,9 @@ public class SdkDocumentationTests
 
         string appleSoft = SdkModules.AppleSoftPath(s_inputs);
         AssemblyResult basic = SdkModules.AssembleAppleSoft(appleSoft, Apple2Model.IIeEnhanced);
-        var appleSoftSources = Directory
-            .GetFiles(Path.Join(s_inputs, "AppleSoft"), "AppleSoft*.asm")
-            .Concat(Directory.GetFiles(Path.Join(s_inputs, "Microsoft6502Basic"), "MsBasic*.asm"))
-            .Select(path => DocumentationParser.Parse(File.ReadAllText(path), path));
 
-        sets.Add(DocumentationSet.Create(appleSoftSources, basic, "AppleSoft"));
+        // Every file the assembly reads, IIeEquates.asm among them, as DOS's set has.
+        sets.Add(Set(basic, "AppleSoft"));
 
         // The video ROM, the Disk II's ROMs and DOS, each with every file its assembly reads, named as the editor
         // names them.

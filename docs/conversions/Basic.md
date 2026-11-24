@@ -1264,6 +1264,35 @@ HTAB; SPEED=, TRACE and NOTRACE; ONERR GOTO; HIMEM: and LOMEM:; PR#0 and IN#0; a
 not be run that way: the debugger session's prompt check does not see its prompt. As a control, a false `Keeps: A`
 added to `HighRes::Plot` was reported.
 
+### X. AppleSoft's Monitor and IIe names (X10)
+
+AppleSoft now takes the IIe's names from `IIeEquates.asm`, as the owner decided after part E (E-8). Its copies of
+about 90 of the Monitor's, the IIe's and the firmware's names are gone from AppleSoft.Equates, and its files use the
+current names. The bytes are unchanged in all eight builds.
+
+- X-1. AppleSoft.Equates includes `IIeEquates.asm`, not `MonitorEntries.asm`. It defines the Monitor's entries
+  AppleSoft calls, after DOS's X7 pattern: each is an equate at the Monitor's address that inherits
+  `<Monitor:...>`'s documentation and cites Apple's names (A2RM78, A2RM79, IIEROM82, IIETRM85) and AppleSoft's and
+  Microsoft's own spellings (MPLOT, MWAIT, OUTPOR and the rest UNKN; CQINCH, CQINLN, CQCOUT, CQCSIN and OUTCH M6502).
+  Apple's PLOT, READ and WAIT are left out, since they are names of AppleSoft's statements. The low-resolution
+  routines and the cassette bit reader are in the Monitor's scopes, `LowRes` and `Cassette`. `CV`,
+  `EightyColumns::CursorColumn` (OURCH) and the enhanced IIe's `AppleSoftCassette` (C5ROM) inherit the Monitor's and
+  the firmware's documentation the same way.
+- X-2. AppleSoft's and Microsoft's spellings of names IIeEquates gives under Apple's are aliases in
+  `AppleSoft.HistoricalNames.asm`: BUF (M6502, ASTIL) and CQPRMP (M6502) on `InputBuffer` and `PromptCharacter`,
+  ASTIL's HBAS on `LowResBase`, and the overlay's WNDWDT, SETSLO, SETINT and RD80VI (UNKN).
+- X-3. The shared modules' BUF is `InputBuffer`, which both vendors define.
+- X-4. E-Q5: the hi-res engine names the Monitor's bytes it borrows `HighRes::PixelMask` (`PlotColor`),
+  `HighRes::ByteAddress` and `ByteAddressHigh` (`LowResBase`, `LowResBaseHigh`).
+- X-5. Tests:
+  - The AppleSoft documentation set in `SdkDocumentationTests.Sets` holds every file the assembly reads, as DOS's
+    does, so links to IIeEquates' definitions resolve; the alias test's resolver has the other modules' sets.
+  - BUF is both vendors' name: `BasicNames.VendorLabelNames` adds it, the vendor-leak checks count it with LINCHK,
+    and the PET's alias test checks that it is the PET's input buffer.
+  - The alias tests accept an AppleSoft alias whose target IIeEquates documents; such a location has no code for the
+    debugger's position check. AppleSoft.Equates may cite Apple's Monitor manuals.
+  - The E-Q5 names give no overlay name of their own; their old names are the Monitor's.
+
 ## Other dependents
 
 - **DOS** left BASIC's names unchanged until this conversion: X7 in the DOS conversion's log, `docs/conversions/Dos.md`,

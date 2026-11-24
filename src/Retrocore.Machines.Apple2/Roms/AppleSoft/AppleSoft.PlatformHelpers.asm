@@ -36,9 +36,9 @@ COMMA_LIMIT_80 = 73
 ;; Also: CALLC5 (UNKN)
 .proc CallAppleSoftCassette
     clc
-    sta SETINT
-    jsr C5ROM
-    sta SETSLO
+    sta InternalCxRomOn
+    jsr AppleSoftCassette
+    sta InternalCxRomOff
     bcs ToOutOfMemory
     rts
 
@@ -52,17 +52,17 @@ ToOutOfMemory:
 
 ;; Reads the input character after the current one, uppercased, for the tokenizer's `AT` check; with bit 7 set it
 ;; falls into <UppercaseInput> instead, which returns the current one. That case is likely unreachable.
-;; In: X = the current character's offset in <BUF>
+;; In: X = the current character's offset in <InputBuffer>
 ;; Also: UPNXT (UNKN)
 .proc UppercaseNextCharacter
-    lda BUF+1,x
+    lda InputBuffer+1,x
     bpl UppercaseCharacter
     ; Falls into UppercaseInput.
 .endproc
 
 ;; Returns the input character, uppercased unless the tokenizer is copying `REM` text (<EndDelimiter> zero), a quoted
 ;; string or a `DATA` field.
-;; In: X = the character's offset in <BUF>
+;; In: X = the character's offset in <InputBuffer>
 ;; Also: UPCASE (UNKN)
 .proc UppercaseInput
     lda EndDelimiter
@@ -76,10 +76,10 @@ ToOutOfMemory:
 .endproc
 
 ;; Loads the input character and falls into <UppercaseCharacter>.
-;; In: X = the character's offset in <BUF>
+;; In: X = the character's offset in <InputBuffer>
 ;; Also: UPBUF (UNKN)
 .proc UppercaseBufferCharacter
-    lda BUF,x
+    lda InputBuffer,x
     ; Falls into UppercaseCharacter.
 .endproc
 
@@ -102,10 +102,10 @@ RestoreFlags:
 .endproc
 
 ;; Loads the input character unchanged and returns.
-;; In: X = the character's offset in <BUF>
+;; In: X = the character's offset in <InputBuffer>
 ;; Also: UPBUF5 (UNKN)
 .proc ReadBufferCharacter
-    lda BUF,x
+    lda InputBuffer,x
     rts
 .endproc
 
@@ -119,18 +119,18 @@ RestoreFlags:
     jmp Float::PrintDecimalAX
 .endproc
 
-;; Compares the output column with the last comma column: <TerminalPosition> with <COMMA_LIMIT_40>, or, with 80
-;; columns (<RD80VI>), <OURCH> with <COMMA_LIMIT_80>. <PrintComma> uses only its negative flag, and compares A with
-;; <COMMA_NEWLINE_COLUMN> itself, so the carry has no effect on PRINT.
+;; Compares the output column with the last comma column: <TerminalPosition> with <COMMA_LIMIT_40>, or, with 80 columns
+;; (<Columns80State>), <EightyColumns::CursorColumn> with <COMMA_LIMIT_80>. <PrintComma> uses only its negative flag,
+;; and compares A with <COMMA_NEWLINE_COLUMN> itself, so the carry has no effect on PRINT.
 ;; Out: A = the column; carry = set at or past the limit; negative = with 80 columns, set below the limit, and with
-;;   40 columns clear (from <RD80VI>)
+;;   40 columns clear (from <Columns80State>)
 ;; Also: CHKCOL (UNKN)
 .proc CompareCommaColumn
     lda TerminalPosition
     cmp #COMMA_LIMIT_40
-    bit RD80VI
+    bit Columns80State
     bpl Done
-    lda OURCH
+    lda EightyColumns::CursorColumn
     cmp #COMMA_LIMIT_80
 
 ;; Returns.
@@ -138,9 +138,9 @@ RestoreFlags:
 Done:
     rts
 .endproc
-
-;; Returns X less the output column: <TerminalPosition>, subtracted with carry set, or, with 80 columns (<RD80VI>),
-;; <OURCH>, subtracted with the caller's carry.
+;;  Returns X less the output column: <TerminalPosition>, subtracted with carry set, or, with 80 columns
+;; (<Columns80State>),
+;; <EightyColumns::CursorColumn>, subtracted with the caller's carry.
 ;; In: X = the target column
 ;; Out: A = X less the column; carry = set where there is no borrow
 ;; Entry:
@@ -149,7 +149,7 @@ Done:
 ;; Also: TRMSET (UNKN)
 .proc DistanceToColumn
     txa
-    bit RD80VI
+    bit Columns80State
     bmi UseFirmwareColumn
     .byte $2C                       ; BIT absolute skips SetPosition's STA
 
@@ -166,10 +166,10 @@ SetPosition:
 Done:
     rts
 
-;; Subtracts <OURCH> with the caller's carry.
+;; Subtracts <EightyColumns::CursorColumn> with the caller's carry.
 ;; Also: TRMSE3 (UNKN)
 UseFirmwareColumn:
-    sbc OURCH
+    sbc EightyColumns::CursorColumn
     rts
 .endproc
 
@@ -187,18 +187,18 @@ UseFirmwareColumn:
 ;; Also: SHLOAD (ASTIL)
 .proc ShLoad
     lda #0
-    sta A1H
-    sta A2H
+    sta Address1High
+    sta Address2High
     ldy #LineNumber
-    sty A1L
+    sty Address1
     iny
-    sty A2L
-    jsr MREAD
+    sty Address2
+    jsr ReadCassette
     clc
     lda MemoryTop
     tax
     dex
-    stx A2L
+    stx Address2
     sbc LineNumber
     pha
     lda MemoryTop+1
@@ -207,10 +207,10 @@ UseFirmwareColumn:
     bne StoreEnd
     dey
 
-;; Stores the table's last address high byte in <A2H> and checks that its first page is above <ArraysEnd>'s.
+;; Stores the table's last address high byte in <Address2High> and checks that its first page is above <ArraysEnd>'s.
 ;; Also: SHLOD1 (UNKN)
 StoreEnd:
-    sty A2H
+    sty Address2High
     sbc LineNumber+1
     cmp ArraysEnd+1
     bcc ToOutOfMemory
@@ -222,21 +222,21 @@ ToOutOfMemory:
     jmp ReportOutOfMemory
 
 ;; Lowers <MemoryTop> and <StringsBottom> to the table's start, points <ShapeTable> and A1 there, and reads the
-;; table, entering the Monitor's <MREAD> past its edge search and delay count with a shorter delay.
+;; table, entering the Monitor's <ReadCassette> past its edge search and delay count with a shorter delay.
 ;; Also: SHLOD3 (UNKN)
 SetShapeTable:
     sta MemoryTop+1
     sta StringsBottom+1
-    sta A1H
+    sta Address1High
     sta ShapeTable+1
     pla
     sta ShapeTable
     sta MemoryTop
     sta StringsBottom
-    sta A1L
-    jsr RD2BIT
+    sta Address1
+    jsr Cassette::ReadBit
     lda #3                          ; HEADR's delay count
-    jmp MREAD+5                     ; READ at its JSR HEADR
+    jmp ReadCassette+5                     ; READ at its JSR HEADR
 .endproc
 
 ;; Points the Monitor's cassette range at an array's data: A1 at its first element, from the header at <SourceStart>,
@@ -246,17 +246,17 @@ SetShapeTable:
     clc
     lda SourceStart
     adc LineNumber
-    sta A2L
+    sta Address2
     lda SourceStart+1
     adc LineNumber+1
-    sta A2H
+    sta Address2High
     ldy #ArrayHeader::DIMENSIONS
     lda (SourceStart),y
     jsr Variables::ElementsStart::FromCount
     lda DestinationEnd
-    sta A1L
+    sta Address1
     lda DestinationEnd+1
-    sta A1H
+    sta Address1High
     rts
 .endproc
 
@@ -283,19 +283,19 @@ SetShapeTable:
 
 .if ENHNCD
 ;; `HTAB`: reads a one-based column and sets <TerminalPosition>, printing a return for each line width it passes;
-;; the width is the wider of 40 and <WNDWDT>.
+;; the width is the wider of 40 and <WindowWidth>.
 ;; Also: HTAB (UNKN)
 .proc HTab
     jsr EvaluateByte
     dex
 
-;; Starts a line: picks the width, the wider of 40 and <WNDWDT>.
+;; Starts a line: picks the width, the wider of 40 and <WindowWidth>.
 ;; Also: HTAB1 (UNKN)
 NextLine:
     lda #LINE_LENGTH
-    cmp WNDWDT
+    cmp WindowWidth
     bcs CompareWidth
-    lda WNDWDT
+    lda WindowWidth
 
 ;; Sets <TerminalPosition> to the column if it fits; otherwise subtracts the width and prints a return.
 ;; Also: HTAB12 (UNKN)

@@ -82,7 +82,7 @@ EditProgram:
 ;; After any deletion: an empty line relinks; otherwise opens space at the insertion point with <MoveRangeUp>.
 ;; Also: NODEL (M6502)
 InsertLine:
-    lda BUF
+    lda InputBuffer
     beq ClearAndRelink
     lda MemoryTop
     ldy MemoryTop+1
@@ -104,8 +104,8 @@ OpenGap:
     jsr MoveRangeUp
     lda LineNumber
     ldy LineNumber+1
-    sta BUF-2
-    sty BUF-1
+    sta InputBuffer-2
+    sty InputBuffer-1
     lda ArraysEnd
     ldy ArraysEnd+1
     sta VariablesStart
@@ -115,7 +115,7 @@ OpenGap:
 ;; Copies the tokenized line from the input buffer into the program.
 ;; Also: NODEL1 (UNKN)
 CopyLine:
-    lda BUF-5,y
+    lda InputBuffer-5,y
     dey
     sta (SourceStart),y
     bne CopyLine
@@ -167,10 +167,10 @@ INPUT_LINE_LIMIT = INPUT_BUFFER_LENGTH - 1
 ;;
 ;; The terminating byte is replaced with zero, the input is limited to <INPUT_LINE_LIMIT> characters, and bit 7 is
 ;; cleared from each character.
-;; Out: A = 0, X = the low byte of the address before <BUF>, Y = its high byte
+;; Out: A = 0, X = the low byte of the address before <InputBuffer>, Y = its high byte
 ;; Entry:
 ;;   WithPrompt = uses X as the Monitor's prompt character; <CommandLoop> enters here with `]`
-;; See: <GETLN>, <InputCharacter>
+;; See: <GetLine>, <InputCharacter>
 ;; Also: INLIN (M6502, ASTIL)
 .proc InputLine
     ldx #$80                        ; a prompt the Monitor prints as nothing
@@ -178,8 +178,8 @@ INPUT_LINE_LIMIT = INPUT_BUFFER_LENGTH - 1
 ;; Uses X as the Monitor's prompt character.
 ;; Also: INLIN1 (UNKN)
 WithPrompt:
-    stx PROMPT
-    jsr GETLN
+    stx PromptCharacter
+    jsr GetLine
     cpx #INPUT_LINE_LIMIT
     bcc Terminate
     ldx #INPUT_LINE_LIMIT
@@ -188,25 +188,25 @@ WithPrompt:
 ;; Also: GDBUFS (M6502, ASTIL)
 Terminate:
     lda #$00
-    sta BUF,x
+    sta InputBuffer,x
     txa
     beq Finish
 
 ;; Clears bit 7 of each input character.
 ;; Also: LOPBHT (M6502)
 ClearHighBits:
-    lda BUF-1,x
+    lda InputBuffer-1,x
     and #$7F
-    sta BUF-1,x
+    sta InputBuffer-1,x
     dex
     bne ClearHighBits
 
-;; Returns A = 0 and X/Y = the address before <BUF>.
+;; Returns A = 0 and X/Y = the address before <InputBuffer>.
 ;; Also: NOCHR (M6502)
 Finish:
     lda #$00
-    ldx #<(BUF-1)
-    ldy #>(BUF-1)
+    ldx #<(InputBuffer-1)
+    ldy #>(InputBuffer-1)
     rts
 .endproc
 
@@ -214,7 +214,7 @@ Finish:
 ;; Out: A = the character, with bit 7 clear
 ;; Also: INCHR (M6502, ASTIL)
 .proc InputCharacter
-    jsr CQINCH
+    jsr ReadKey
     and #$7F
 
 ;; Returns; nothing branches here, and the label is kept for its old name.
@@ -228,20 +228,21 @@ Return:
 ;; Also: BUFOFS (M6502)
 INPUT_BUFFER_BASE = $0200
 
-;; Tokenizes the line in <BUF> in place, replacing reserved words by their single-byte tokens from <ReservedWords>.
+;; Tokenizes the line in <InputBuffer> in place, replacing reserved words by their single-byte tokens from
+;; <ReservedWords>.
 ;;
 ;; Spaces outside literals and `DATA` are discarded. Quoted strings, `DATA` fields and `REM` text are copied without
 ;; tokenization; `?` abbreviates `PRINT`. The enhanced IIe folds case outside quoted strings, `DATA` and `REM`. `AT` is
 ;; not matched when followed by `N` or `O`, so that `ATN` and `TO` are recognized. Where the program is run-only
 ;; (<RunOnly>), it discards its caller and runs the program instead.
-;; In: TextPointer = the first character's address, whose low byte is its offset in <BUF>'s page
+;; In: TextPointer = the first character's address, whose low byte is its offset in <InputBuffer>'s page
 ;; Out: TextPointer = the address before the tokenized line, Y = the encoded line's length, header included
 ;; See: <Statements::List>
 ;; Also: CRUNCH (M6502)
 .proc Tokenize
     ldx TextPointer
     dex
-    ldy #$04                        ; the stores, to BUF-5,y after an increment, start at BUF
+    ldy #$04                        ; the stores, to InputBuffer-5,y after an increment, start at InputBuffer
     sty TokenizeState
     bit RunOnly
     bpl Advance
@@ -261,7 +262,7 @@ NextCharacter:
 .if ENHNCD
     jsr UppercaseInput
 .else
-    lda BUF,x
+    lda InputBuffer,x
 .endif
     bit TokenizeState
     bvs CheckQuote
@@ -324,7 +325,7 @@ CompareCharacter:
 .if ENHNCD
     jsr UppercaseInput
 .else
-    lda BUF,x
+    lda InputBuffer,x
 .endif
     cmp #' '
     beq AdvanceInput
@@ -339,14 +340,14 @@ CompareCharacter:
 .if ENHNCD
     jsr UppercaseNextCharacter
 .else
-    lda BUF+1,x
+    lda InputBuffer+1,x
 .endif
     cmp #'N'
     beq NextWord
     cmp #'O'
     beq NextWord
     lda #TOKEN_AT
-    TokenStore BUF, ENHNCD
+    TokenStore InputBuffer, ENHNCD
 
 ;; A mismatch: restores the input index, counts the word and skips to its end.
 ;; Also: NTHIS (M6502)
@@ -376,16 +377,16 @@ TestWordEnd:
 .if ENHNCD
     jsr UppercaseBufferCharacter
 .else
-    lda BUF,x
+    lda InputBuffer,x
 .endif
     bpl StoreToken
 
-;; Stores the line's end and sets <TextPointer> to the byte before <BUF>.
+;; Stores the line's end and sets <TextPointer> to the byte before <InputBuffer>.
 ;; Also: CRDONE (M6502)
 Finish:
-    sta BUF-3,y
+    sta InputBuffer-3,y
     dec TextPointer+1
-    lda #<(BUF-1)
+    lda #<(InputBuffer-1)
     sta TextPointer
 
 ;; Returns; nothing branches here, and the label is kept for its old name.

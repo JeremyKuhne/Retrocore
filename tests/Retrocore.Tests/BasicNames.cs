@@ -56,10 +56,11 @@ internal static partial class BasicNames
 
     /// <summary>
     ///  Gets the names a vendor's alias gives in some builds that other builds give to their vendor's own code: BASIC
-    ///  4's GETRTS, which is the output routine's return in AppleSoft and BASIC 1 and 2 (Basic.md E3), and AppleSoft's
-    ///  ON, which BASIC 4's disk-command parser gives its ON U clause.
+    ///  4's GETRTS, which is the output routine's return in AppleSoft and BASIC 1 and 2 (Basic.md E3); AppleSoft's
+    ///  ON, which BASIC 4's disk-command parser gives its ON U clause; and AppleSoft's BUF, Microsoft's name of the
+    ///  input buffer, which the PET's workspace gives its own <c>InputBuffer</c> (X10).
     /// </summary>
-    internal static string[] VendorLabelNames { get; } = ["GETRTS", "ON"];
+    internal static string[] VendorLabelNames { get; } = ["GETRTS", "ON", "BUF"];
 
     /// <summary>
     ///  Gets whether a build defines a name as a label of a vendor's own code, in the folder of the vendor's historical

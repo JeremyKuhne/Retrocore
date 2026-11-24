@@ -74,7 +74,7 @@ PrintRetry:
 
 ;; GET: reads individual keyboard characters into the variables in its list.
 ;; Errors: ILLEGAL DIRECT when used in direct mode
-;; See: <AssignVariableList>, <CQINCH>
+;; See: <AssignVariableList>, <ReadKey>
 ;; Also: GET (M6502)
 .proc Get
     jsr RejectDirectMode
@@ -83,10 +83,10 @@ PrintRetry:
 ;; nothing branches here.
 ;; Also: GETTTY (M6502)
 ReadCharacters:
-    ldx #<(BUF+1)
-    ldy #>(BUF+1)
+    ldx #<(InputBuffer+1)
+    ldy #>(InputBuffer+1)
     lda #$00
-    sta BUF+1
+    sta InputBuffer+1
     lda #INPUT_MODE_GET
     jsr AssignVariableList
     rts
@@ -118,14 +118,14 @@ NoPrompt:
 CheckDirect:
     jsr RejectDirectMode
     lda #','
-    sta BUF-1
+    sta InputBuffer-1
 
 ;; Reads the line; one that starts with Control-C goes to <HandleBreak>. Nothing branches here, and the label is kept
 ;; for its old name.
 ;; Also: GETAGN (M6502)
 ReadLine:
     jsr InputLine
-    lda BUF
+    lda InputBuffer
     cmp #CONTROL_C
     bne AssignInputList
     jmp HandleBreak

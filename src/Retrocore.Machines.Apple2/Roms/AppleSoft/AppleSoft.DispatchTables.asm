@@ -35,7 +35,7 @@ StatementTable:
     .word Statements::Draw - 1              ; $94 DRAW
     .word Statements::XDraw - 1             ; $95 XDRAW
     .word Statements::HTab - 1              ; $96 HTAB
-    .word HOME - 1                          ; $97 HOME
+    .word ::Home - 1                          ; $97 HOME
     .word Statements::Rot - 1               ; $98 ROT=
     .word Statements::Scale - 1             ; $99 SCALE=
     .word Statements::ShLoad - 1            ; $9A SHLOAD

@@ -77,7 +77,7 @@ FIRST_GROUP = 1
 ;; The index of the first switch of the second group: the language card's RAM read.
 SECOND_GROUP = 9
 
-;; The index of the first switch whose failure shows "IOU": TEXT. The second group's first switch is the MMU's.
+;; The index of the first switch whose failure shows "IOU": `TEXT`. The second group's first switch is the MMU's.
 FIRST_IOU_SWITCH = 10
 
 ;; The first of <SwitchTest>'s patterns, which count down to 0: a bit for each switch of a group, and one more.
@@ -467,7 +467,7 @@ HangChip:
 ;; A 0 bit sets the switch in <SwitchesOff> and a 1 the one in <SwitchesOn>; <SwitchStates> gives the status read
 ;; that must follow. The pattern is rotated right through the carry to set the switches, from the group's first, and
 ;; back left to check them, from its last. The first group is the language card's bank, the speaker (which only
-;; clicks), RAMRD, RAMWRT, ALTZP, SLOTC3ROM and 80STORE; the second the language card's RAM read, TEXT, MIXED, PAGE2,
+;; clicks), RAMRD, RAMWRT, ALTZP, SLOTC3ROM and 80STORE; the second the language card's RAM read, `TEXT`, MIXED, PAGE2,
 ;; HIRES, ALTCHAR and 80COL. A mismatch goes to <Failed::Switches>, which shows "MMU" for the first group and the
 ;; language card's RAM read, and "IOU" for the rest.
 ;; Also: SWITCHTEST (UNKN), SWCHTST (IIETRM85)

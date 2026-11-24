@@ -12,7 +12,7 @@
 ;;   <HandleInterrupt> at $C3FA, where the IRQ vector at $FFFE points.
 ;; - Firmware.Enhanced/Interrupts.asm, $C400-$C5FF: the interrupt handling that saves and restores the memory
 ;;   state, the mini-assembler's operand parser, and the cassette routines behind the Monitor's tape commands and
-;;   AppleSoft's SHLOAD, STORE and RECALL (<AppleSoftCassette>).
+;;   AppleSoft's `SHLOAD`, `STORE` and `RECALL` (<AppleSoftCassette>).
 ;; - Firmware.Enhanced/SelfTest.asm, $C600-$C7FF: the built-in self-test, which the reset function runs when
 ;;   Solid-Apple is held.
 ;; - Firmware.Enhanced/EightyColumnsEntry.asm, EightyColumnsControl.asm, EightyColumnsScreen.asm and
@@ -50,14 +50,14 @@ ENHANCED = 1
 ; The firmware's function numbers, which depend on the model.
 .include "FirmwareFunctions.asm"
 
-; AppleSoft's page zero, for the cassette and SHLOAD/STORE/RECALL helpers: AppleSoft's names, until AppleSoft is
+; AppleSoft's page zero, for the cassette and `SHLOAD`/`STORE`/`RECALL` helpers: AppleSoft's names, until AppleSoft is
 ; converted.
 
 ;; Applesoft's line number, which the cassette helper borrows for a length: of a shape table, or of an array.
 ;;
-;; <AppleSoftCassette> reads a shape table's two-byte length from the tape into <LINNUM>/<LINNUM>+1 for SHLOAD, and
-;; <AppleSoftCassette::ArrayBlock> adds an array's length, which Applesoft leaves here, to its address for STORE and
-;; RECALL.
+;; <AppleSoftCassette> reads a shape table's two-byte length from the tape into <LINNUM>/<LINNUM>+1 for `SHLOAD`, and
+;; <AppleSoftCassette::ArrayBlock> adds an array's length, which Applesoft leaves here, to its address for `STORE` and
+;; `RECALL`.
 ;; See: <AppleSoft:LINNUM>, <AppleSoftCassette>, <AppleSoftCassette::ArrayBlock>
 LINNUM = $50
 
@@ -81,21 +81,21 @@ FRETOP = $6F
 ;; See: <AppleSoft:MEMSIZ>, <FRETOP>, <SHPTBL>, <AppleSoftCassette::ShapeTable>
 MEMSIZ = $73
 
-;; Applesoft's block pointer, which the STORE and RECALL helper takes as the start of the array's data.
+;; Applesoft's block pointer, which the `STORE` and `RECALL` helper takes as the start of the array's data.
 ;;
 ;; <AppleSoftCassette::ArrayBlock> copies it, as Applesoft's routine at $E0EF leaves it, to <A1L>/<A1H>, the start of
 ;; the block the Monitor then writes or reads.
 ;; See: <AppleSoft:HIGHDS>, <AppleSoftCassette::ArrayBlock>, <LOWTR>
 HIGHDS = $94
 
-;; Applesoft's pointer to the array that STORE or RECALL names, from its search for the array.
+;; Applesoft's pointer to the array that `STORE` or `RECALL` names, from its search for the array.
 ;;
 ;; <AppleSoftCassette::ArrayBlock> adds the array's length in <LINNUM> to it for <A2L>/<A2H>, the end of the block on
 ;; tape, and reads the header's fifth byte through it.
 ;; See: <AppleSoft:LOWTR>, <AppleSoftCassette::ArrayBlock>, <HIGHDS>
 LOWTR = $9B
 
-;; Applesoft's pointer to the shape table that DRAW and XDRAW use.
+;; Applesoft's pointer to the shape table that `DRAW` and `XDRAW` use.
 ;;
 ;; <AppleSoftCassette::ShapeTable> sets it to the address where it loads the shape table, just below the new HIMEM.
 ;; See: <AppleSoft:SHPTBL>, <AppleSoftCassette::ShapeTable>, <MEMSIZ>

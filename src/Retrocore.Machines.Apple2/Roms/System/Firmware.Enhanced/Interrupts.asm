@@ -1,7 +1,7 @@
 ; retrocore: style=strict
 ;; The Enhanced IIe's internal firmware from $C3FA to $C5FF: the interrupt and BRK handler, which saves the memory
 ;; state and switches to main memory and ROM, the code that puts the state back after the user's handler, the line
-;; assembler's operand parser, AppleSoft's SHLOAD, STORE and RECALL helper, and the cassette routines that the
+;; assembler's operand parser, AppleSoft's `SHLOAD`, `STORE` and `RECALL` helper, and the cassette routines that the
 ;; Monitor's header, W and R call.
 
 ; The Monitor's and AppleSoft's entries this code jumps to, not in MonitorEntries.asm.
@@ -93,7 +93,7 @@ OPERAND_NUMBER_POSITION = 3
 ;; The offset in an AppleSoft array's header of its number of dimensions.
 ARRAY_DIMENSIONS = 4
 
-;; How long SHLOAD lets the header play, as a header length, once it hears the tape.
+;; How long `SHLOAD` lets the header play, as a header length, once it hears the tape.
 SHAPE_HEADER_DELAY = 3
 
 ; Cassette timing: delay counts, each a loop of 5 cycles, as the Monitor's own cassette code has them.
@@ -452,23 +452,23 @@ NextMode:
 
 .endscope
 
-;; AppleSoft's cassette helper for SHLOAD, STORE and RECALL, which AppleSoft's $F775 (SHLOAD, carry set) and $F777
-;; (STORE and RECALL, carry clear) call with the internal ROM switched in.
+;; AppleSoft's cassette helper for `SHLOAD`, `STORE` and `RECALL`, which AppleSoft's $F775 (`SHLOAD`, carry set) and
+;; $F777 (`STORE` and `RECALL`, carry clear) call with the internal ROM switched in.
 ;;
-;; At $C500. For SHLOAD it reads the shape table's two-byte length into <LINNUM> and, when the table fits between
+;; At $C500. For `SHLOAD` it reads the shape table's two-byte length into <LINNUM> and, when the table fits between
 ;; <STREND> and HIMEM (<MEMSIZ>), loads it just below HIMEM (<AppleSoftCassette::ShapeTable>); otherwise it returns
 ;; carry set, and AppleSoft reports that memory is full. The fit is checked on the high bytes only: the table must
-;; start in a page above <STREND>'s. For STORE and RECALL it sets A1 and A2 to the array's data
+;; start in a page above <STREND>'s. For `STORE` and `RECALL` it sets A1 and A2 to the array's data
 ;; (<AppleSoftCassette::ArrayBlock>), which AppleSoft then writes or reads with the Monitor.
-;; In: carry = set for SHLOAD, clear for STORE and RECALL, LOWTR = the array, LINNUM = its size less one (STORE and
-;;     RECALL)
+;; In: carry = set for `SHLOAD`, clear for `STORE` and `RECALL`, LOWTR = the array, LINNUM = its size less one
+;;     (`STORE` and `RECALL`)
 ;; Out: carry = set when the shape table does not fit
 ;; Also: BASTAPE (UNKN)
 .proc AppleSoftCassette
 .assert * = $C500, "AppleSoftCassette must stay at $C500, where AppleSoft calls it."
     bcc ArrayBlock
 
-    ; SHLOAD: the length, two bytes, into LINNUM.
+    ; `SHLOAD`: the length, two bytes, into LINNUM.
     lda #0
     sta Address1High
     sta Address2High
@@ -526,7 +526,7 @@ ShapeTable:
     clc
     rts
 
-;; STORE and RECALL: A2 = <LOWTR> + <LINNUM>, the array's last byte, and A1 = the start of its data, which
+;; `STORE` and `RECALL`: A2 = <LOWTR> + <LINNUM>, the array's last byte, and A1 = the start of its data, which
 ;; AppleSoft's <FMAPT1> leaves in <HIGHDS>.
 ;; In: carry = clear
 ;; Also: TAPEARRAY (UNKN)

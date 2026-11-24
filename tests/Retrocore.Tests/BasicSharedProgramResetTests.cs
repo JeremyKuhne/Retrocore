@@ -13,7 +13,7 @@ namespace Retrocore.Tests;
 [TestClass]
 public sealed class BasicSharedProgramResetTests
 {
-    private static readonly string s_inputs = Path.Join(AppContext.BaseDirectory, "Inputs");
+    private static string Inputs => BasicNames.Inputs;
 
     /// <summary>
     ///  Every PET stack-reset sequence returns to its caller with the stack and interpreter state reset.
@@ -28,11 +28,11 @@ public sealed class BasicSharedProgramResetTests
     [DataRow(PetModel.Pet4032, true)]
     public void StackResetKeepsItsReturnAddress(PetModel model, bool original)
     {
-        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(s_inputs, "Pet"), model, original);
+        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(Inputs, "Pet"), model, original);
         AssemblyResult native = AssembleReset(legacy, model, original);
         int start = Address(legacy, "STKINI");
         int end = Address(legacy, "LIST");
-        native.Symbols["RESET_END"].Should().Be(end);
+        native.Symbol("RESET_END").Should().Be(end);
         native.Sections[0].Bytes.Slice(start, end - start).ToArray()
             .Should().Equal(legacy.Sections[0].Bytes.Slice(start, end - start).ToArray());
 
@@ -45,7 +45,7 @@ public sealed class BasicSharedProgramResetTests
 
         byte expectedStack = model == PetModel.Pet2001 ? (byte)0xFE : (byte)0xFA;
         cpu.Registers.StackPointer.Should().Be(expectedStack);
-        bus.Memory[Address(native, "TEMPPT")].Should().Be((byte)native.Symbols["TEMPST"]);
+        bus.Memory[Address(native, "TEMPPT")].Should().Be((byte)native.Symbol("TEMPST"));
         bus.Memory[Address(native, "OLDTXT") + 1].Should().Be(0);
         bus.Memory[Address(native, "SUBFLG")].Should().Be(0);
     }
@@ -56,7 +56,7 @@ public sealed class BasicSharedProgramResetTests
     [TestMethod]
     public void OriginalStackResetStoresTheReturnBeforeMovingTheStack()
     {
-        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(s_inputs, "Pet"), PetModel.Pet2001, original: true);
+        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(Inputs, "Pet"), PetModel.Pet2001, original: true);
         AssemblyResult native = AssembleReset(legacy, PetModel.Pet2001, original: true);
         RecordingBus bus = new();
         native.Sections[0].Bytes.Span.CopyTo(bus.Memory);
@@ -76,7 +76,7 @@ public sealed class BasicSharedProgramResetTests
     [TestMethod]
     public void TextPointerStartsOneByteBeforeTheProgram()
     {
-        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(s_inputs, "Pet"), PetModel.Pet2001Basic2);
+        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(Inputs, "Pet"), PetModel.Pet2001Basic2);
         AssemblyResult native = AssembleReset(legacy, PetModel.Pet2001Basic2, original: false);
         RecordingBus bus = new();
         native.Sections[0].Bytes.Span.CopyTo(bus.Memory);
@@ -100,12 +100,12 @@ public sealed class BasicSharedProgramResetTests
     [DataRow(255, true)]
     public void NullCountRetainsTheIncrementWrap(int value, bool accepted)
     {
-        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(s_inputs, "Pet"), PetModel.Pet2001);
-        string folder = Path.Join(s_inputs, "Microsoft6502Basic");
+        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(Inputs, "Pet"), PetModel.Pet2001);
+        string folder = Path.Join(Inputs, "Microsoft6502Basic");
         string source = $"""
             .cpu Mos6502
             .include "MsBasic.ProgramReset.asm"
-            .org ${legacy.Symbols["NULL"]:X4}
+            .org ${legacy.Symbol("NULL"):X4}
                 NULL_STATEMENT 10
             NULL_END:
             """;
@@ -113,7 +113,7 @@ public sealed class BasicSharedProgramResetTests
         Dictionary<string, long> symbols = [];
         foreach (string name in (string[])["GETBYT", "CONTRT", "NULCNT", "FCERR"])
         {
-            symbols.Add(name, legacy.Symbols[name]);
+            symbols.Add(name, legacy.Symbol(name));
         }
 
         AssemblyResult native = new Assembler.Assembler().Assemble(
@@ -121,11 +121,11 @@ public sealed class BasicSharedProgramResetTests
             new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
             {
                 SourceResolver = new FileAssemblySourceResolver(),
-                PredefinedSymbols = symbols
+                PredefinedSymbols = BasicNames.WithCurrentNames(symbols)
             });
 
         native.Success.Should().BeTrue(string.Join(Environment.NewLine, native.Diagnostics.Select(diagnostic => diagnostic.Message)));
-        native.Symbols["NULL_END"].Should().Be(legacy.Symbols["CLEAR"]);
+        native.Symbol("NULL_END").Should().Be(legacy.Symbol("CLEAR"));
         RecordingBus bus = new();
         native.Sections[0].Bytes.Span.CopyTo(bus.Memory);
         bus.Memory[Address(native, "GETBYT")] = 0x60;
@@ -149,24 +149,24 @@ public sealed class BasicSharedProgramResetTests
     {
         bool early = model == PetModel.Pet2001;
         string top = early ? (original ? "$FC" : "$FE") : "$FA";
-        string folder = Path.Join(s_inputs, "Microsoft6502Basic");
+        string folder = Path.Join(Inputs, "Microsoft6502Basic");
         string source = $"""
             .cpu Mos6502
             .include "MsBasic.ProgramReset.asm"
-            .org ${legacy.Symbols["STKINI"]:X4}
+            .org ${legacy.Symbol("STKINI"):X4}
                 EXECUTION_RESET {(early && original ? 1 : 0)}, {(early && !original ? 1 : 0)}, {top}
             RESET_END:
             """;
 
         string[] dependencies = ["TEMPST", "TEMPPT", "OLDTXT", "SUBFLG", "TXTPTR", "TXTTAB", "STKEND"];
         Dictionary<string, long> symbols = [];
-        foreach (string name in dependencies) { symbols.Add(name, legacy.Symbols[name]); }
+        foreach (string name in dependencies) { symbols.Add(name, legacy.Symbol(name)); }
         AssemblyResult result = new Assembler.Assembler().Assemble(
             new AssemblySource(source, Path.Join(folder, "ProgramResetTest.asm")),
             new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
             {
                 SourceResolver = new FileAssemblySourceResolver(),
-                PredefinedSymbols = symbols
+                PredefinedSymbols = BasicNames.WithCurrentNames(symbols)
             });
 
         result.Success.Should().BeTrue(string.Join(Environment.NewLine, result.Diagnostics.Select(diagnostic => diagnostic.Message)));
@@ -182,7 +182,7 @@ public sealed class BasicSharedProgramResetTests
         {
             Registers = new()
             {
-                ProgramCounter = checked((ushort)result.Symbols[entry]),
+                ProgramCounter = checked((ushort)result.Symbol(entry)),
                 StackPointer = 0xFD,
                 Status = StatusRegister.Unused
             }
@@ -199,5 +199,5 @@ public sealed class BasicSharedProgramResetTests
         cpu.Registers.ProgramCounter.Should().Be(0x4000);
     }
 
-    private static int Address(AssemblyResult result, string name) => checked((int)result.Symbols[name]);
+    private static int Address(AssemblyResult result, string name) => checked((int)result.Symbol(name));
 }

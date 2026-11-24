@@ -1,3 +1,4 @@
+; Derived from Microsoft's BASIC for 6502 (m6502.asm, MIT license; see LICENSE in this folder).
 ; MICROSOFT 6502 BASIC: READ AND VARIABLE INPUT
 ;
 ; VARIABLE_INPUT follows the platform's GET and INPUT entries. VARIABLE_INPUT_MESSAGES emits the

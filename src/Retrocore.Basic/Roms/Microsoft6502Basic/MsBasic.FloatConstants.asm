@@ -1,3 +1,4 @@
+; Derived from Microsoft's BASIC for 6502 (m6502.asm, MIT license; see LICENSE in this folder).
 ; Microsoft's ADDPRC=1 constants, shared by AppleSoft and PET BASIC 1, 2 and 4.
 
 ;; Emits the five-byte floating-point constant 1.

@@ -18,7 +18,7 @@ namespace Retrocore.Tests;
 [TestClass]
 public sealed class BasicSharedSourceTests
 {
-    private static readonly string s_inputs = Path.GetFullPath(Path.Join(AppContext.BaseDirectory, "Inputs"));
+    private static string Inputs => Path.GetFullPath(BasicNames.Inputs);
     private static readonly string s_shipped = ShippedRoms();
 
     /// <summary>
@@ -31,7 +31,7 @@ public sealed class BasicSharedSourceTests
         foreach (string folder in (string[])
             [
                 RepositoryShared(repository),
-                Path.Join(s_inputs, "Microsoft6502Basic"),
+                Path.Join(Inputs, "Microsoft6502Basic"),
                 Path.Join(s_shipped, "Microsoft6502Basic")
             ])
         {
@@ -42,8 +42,9 @@ public sealed class BasicSharedSourceTests
     }
 
     /// <summary>
-    ///  The SDK ships Microsoft's LICENSE beside the shared sources derived from Microsoft's BASIC, and the
-    ///  extension's third-party notices name that BASIC and where the SDK keeps it.
+    ///  The SDK ships Microsoft's LICENSE beside the shared sources derived from Microsoft's BASIC, each derived
+    ///  module says it is derived from Microsoft's source, and the extension's third-party notices name that BASIC,
+    ///  where the SDK keeps it and the modules derived from it.
     /// </summary>
     [TestMethod]
     public void SdkShipsMicrosoftsLicenseBesideTheSharedSources()
@@ -66,8 +67,24 @@ public sealed class BasicSharedSourceTests
         notices.Should().Contain("Microsoft BASIC for 6502 Microprocessor")
             .And.Contain("https://github.com/microsoft/BASIC-M6502")
             .And.Contain("server/Sdk/Roms/Microsoft6502Basic/")
-            .And.Contain("Copyright (c) Microsoft Corporation, 1976-1978.");
+            .And.Contain("Copyright (c) Microsoft Corporation, 1976-1978.")
+            .And.Contain("The native MsBasic.*.asm modules in src/Retrocore.Basic/Roms/Microsoft6502Basic")
+            .And.Contain("server/Sdk/Roms/Microsoft6502Basic, are derived from Microsoft's m6502.asm, and the license below")
+            .And.Contain("Microsoft code in them;")
+            .And.Contain("Apple and Commodore code some of them carry is not Microsoft's.");
+
+        // Each module derived from Microsoft's source says so in its first lines, after any pragmas.
+        foreach (string module in Directory.EnumerateFiles(RepositoryShared(repository), "MsBasic.*.asm")
+            .Concat(Directory.EnumerateFiles(shipped, "MsBasic.*.asm")))
+        {
+            File.ReadLines(module).SkipWhile(line => line.StartsWith("; retrocore:", StringComparison.Ordinal)).First()
+                .Should().Be(DerivationLine, $"{Path.GetFileName(module)} must say it is derived from Microsoft's source");
+        }
     }
+
+    // The line each module derived from Microsoft's m6502.asm starts with.
+    private const string DerivationLine =
+        "; Derived from Microsoft's BASIC for 6502 (m6502.asm, MIT license; see LICENSE in this folder).";
 
     /// <summary>
     ///  Both AppleSoft selections assemble identically in either layout and map to that layout's shared files.
@@ -249,7 +266,7 @@ public sealed class BasicSharedSourceTests
     {
         string repository = RepositoryRoot();
         string from = Path.Join(repository, "src", "Retrocore.Machines.Apple2", "Roms", "AppleSoft", "AppleSoft.asm");
-        OverlayBaseResolver resolver = new(Path.Join(s_inputs, "Microsoft6502Basic"));
+        OverlayBaseResolver resolver = new(Path.Join(Inputs, "Microsoft6502Basic"));
         resolver.TryResolve(from, "../Microsoft6502Basic/MsBasic.FloatConstants.asm", out AssemblySource? source)
             .Should().BeTrue();
 
@@ -326,7 +343,7 @@ public sealed class BasicSharedSourceTests
         foreach ((string shared, string apple) in ((string, string)[])
             [
                 (RepositoryShared(repository), Path.Join(repository, "src", "Retrocore.Machines.Apple2", "Roms", "AppleSoft")),
-                (Path.Join(s_inputs, "Microsoft6502Basic"), Path.Join(s_inputs, "AppleSoft")),
+                (Path.Join(Inputs, "Microsoft6502Basic"), Path.Join(Inputs, "AppleSoft")),
                 (Path.Join(s_shipped, "Microsoft6502Basic"), Path.Join(s_shipped, "AppleSoft"))
             ])
         {
@@ -340,7 +357,7 @@ public sealed class BasicSharedSourceTests
     [TestMethod]
     public void SdkRootDiscoveryFindsTheShippedIncludes()
     {
-        foreach (string roms in (string[])[s_inputs, s_shipped])
+        foreach (string roms in (string[])[Inputs, s_shipped])
         {
             List<string> roots = SourceIncludes.Roots(roms);
             roots.Should().Contain(Path.Join(roms, "AppleSoft", "AppleSoft.asm"));
@@ -433,7 +450,7 @@ public sealed class BasicSharedSourceTests
     }
 
     private static byte OneByte(SourceAnalysis analysis) =>
-        analysis.Result.Sections[0].Bytes.Span[checked((int)analysis.Result.Symbols["FONE"])];
+        analysis.Result.Sections[0].Bytes.Span[checked((int)analysis.Result.Symbol("FONE"))];
 
     private static AssemblyResult Assemble(
         string path,
@@ -445,7 +462,7 @@ public sealed class BasicSharedSourceTests
         {
             SourceResolver = resolver,
             IncludePaths = includePaths ?? [],
-            PredefinedSymbols = symbols ?? new Dictionary<string, long>()
+            PredefinedSymbols = BasicNames.WithCurrentNames(symbols ?? new Dictionary<string, long>())
         };
 
         AssemblyResult result = new Assembler.Assembler().Assemble(new AssemblySource(File.ReadAllText(path), path), options);

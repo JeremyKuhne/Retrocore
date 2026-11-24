@@ -1,3 +1,5 @@
+; Derived from Microsoft's BASIC for 6502 (m6502.asm, MIT license; see LICENSE in this folder).
+
 ;; Emits the random-number constants and routine.
 ;; Parameters: useTimers = 1 to seed RND(0) from hardware timers, 0 to return the previous value
 .macro RANDOM_ROUTINE useTimers

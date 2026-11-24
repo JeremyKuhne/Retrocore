@@ -16,7 +16,7 @@ namespace Retrocore.Tests;
 [TestClass]
 public sealed class BasicSharedLineNumberTests
 {
-    private static readonly string s_inputs = Path.Join(AppContext.BaseDirectory, "Inputs");
+    private static string Inputs => BasicNames.Inputs;
 
     /// <summary>
     ///  Every AppleSoft model retains the line-number parser's bytes and labels.
@@ -29,14 +29,14 @@ public sealed class BasicSharedLineNumberTests
     public void AppleSoftUsesSharedLineNumber(Apple2Model model)
     {
         AssemblyResult legacy = SdkModules.AssembleAppleSoft(
-            SdkModules.AppleSoftPath(s_inputs, BasicSourceKind.Macro10),
+            SdkModules.AppleSoftPath(Inputs, BasicSourceKind.Macro10),
             model);
 
-        AssemblyResult native = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(s_inputs), model);
+        AssemblyResult native = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(Inputs), model);
         AssemblyResult standalone = AssembleShared(legacy);
         CompareRegion(legacy, native);
         CompareRegion(legacy, standalone);
-        standalone.Symbols["LINE_NUMBER_END"].Should().Be(legacy.Symbols["LET"]);
+        standalone.Symbol("LINE_NUMBER_END").Should().Be(legacy.Symbol("LET"));
     }
 
     /// <summary>
@@ -52,10 +52,10 @@ public sealed class BasicSharedLineNumberTests
     [DataRow(PetModel.Pet4032, true)]
     public void SharedLineNumberMatchesPet(PetModel model, bool original)
     {
-        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(s_inputs, "Pet"), model, original);
+        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(Inputs, "Pet"), model, original);
         AssemblyResult native = AssembleShared(legacy);
         CompareRegion(legacy, native);
-        native.Symbols["LINE_NUMBER_END"].Should().Be(legacy.Symbols["LET"]);
+        native.Symbol("LINE_NUMBER_END").Should().Be(legacy.Symbol("LET"));
     }
 
     /// <summary>
@@ -71,13 +71,13 @@ public sealed class BasicSharedLineNumberTests
     [DataRow("64000", 0, true)]
     public void ParsesLineNumbersAndEnforcesTheLimit(string digits, int number, bool error)
     {
-        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(s_inputs, "Pet"), PetModel.Pet2001Basic2);
+        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(Inputs, "Pet"), PetModel.Pet2001Basic2);
         const ushort reader = 0x5000;
         AssemblyResult native = AssembleShared(legacy, reader);
         RecordingBus bus = new();
         native.Sections[0].Bytes.Span.CopyTo(bus.Memory);
-        int text = checked((int)legacy.Symbols["TXTPTR"]);
-        int line = checked((int)native.Symbols["LINNUM"]);
+        int text = checked((int)legacy.Symbol("TXTPTR"));
+        int line = checked((int)native.Symbol("LINNUM"));
         bus.Memory[text] = 0x00;
         bus.Memory[text + 1] = 0x04;
         for (int offset = 0; offset < digits.Length; offset++)
@@ -94,13 +94,13 @@ public sealed class BasicSharedLineNumberTests
         ];
 
         characterReader.CopyTo(bus.Memory, reader);
-        ushort syntax = checked((ushort)native.Symbols["SNERR3"]);
-        ushort done = checked((ushort)native.Symbols["ONGRTS"]);
+        ushort syntax = checked((ushort)native.Symbol("SNERR3"));
+        ushort done = checked((ushort)native.Symbol("ONGRTS"));
         Processor<RecordingBus> cpu = new(bus)
         {
             Registers = new()
             {
-                ProgramCounter = checked((ushort)native.Symbols["LINGET"]),
+                ProgramCounter = checked((ushort)native.Symbol("LINGET")),
                 Accumulator = (byte)digits[0],
                 StackPointer = 0xFD,
                 Status = StatusRegister.Unused
@@ -130,13 +130,13 @@ public sealed class BasicSharedLineNumberTests
     [TestMethod]
     public void LineNumberRetainsDocumentationAndSourcePosition()
     {
-        AssemblyResult native = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(s_inputs), Apple2Model.IIeEnhanced);
-        int start = checked((int)native.Symbols["LINGET"]);
-        int end = checked((int)native.Symbols["LET"]);
+        AssemblyResult native = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(Inputs), Apple2Model.IIeEnhanced);
+        int start = checked((int)native.Symbol("LINGET"));
+        int end = checked((int)native.Symbol("LET"));
         DebugTestMemory memory = new();
         memory.Set((ushort)start, native.Sections[0].Bytes.Slice(start, end - start).ToArray());
         SourceMapModule module = new(native, area: null);
-        DocumentationTopic topic = module.Documentation.Find("LINGET")
+        DocumentationTopic topic = module.Documentation.FindTopic("LINGET")
             ?? throw new AssertFailedException("LINGET is not documented.");
 
         topic.Kind.Should().Be(DocumentationKind.Routine);
@@ -151,17 +151,17 @@ public sealed class BasicSharedLineNumberTests
 
     private static AssemblyResult AssembleShared(AssemblyResult legacy, ushort? reader = null)
     {
-        string folder = Path.Join(s_inputs, "Microsoft6502Basic");
+        string folder = Path.Join(Inputs, "Microsoft6502Basic");
         string source = $"""
             .cpu Mos6502
-            .org ${legacy.Symbols["LINGET"]:X4}
+            .org ${legacy.Symbol("LINGET"):X4}
             .include "MsBasic.LineNumber.asm"
             LINE_NUMBER_END:
             """;
 
         string[] dependencies = ["LINNUM", "ONGRTS", "CHARAC", "INDEX", "SNERR3", "CHRGET"];
         Dictionary<string, long> symbols = dependencies.ToDictionary(
-            name => name, name => legacy.Symbols[name], StringComparer.Ordinal);
+            name => name, name => legacy.Symbol(name), StringComparer.Ordinal);
 
         if (reader is { } address) { symbols["CHRGET"] = address; }
         AssemblyResult native = new Assembler.Assembler().Assemble(
@@ -169,7 +169,7 @@ public sealed class BasicSharedLineNumberTests
             new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
             {
                 SourceResolver = new FileAssemblySourceResolver(),
-                PredefinedSymbols = symbols
+                PredefinedSymbols = BasicNames.WithCurrentNames(symbols)
             });
 
         native.Success.Should().BeTrue(string.Join(Environment.NewLine, native.Diagnostics.Select(diagnostic =>
@@ -180,13 +180,13 @@ public sealed class BasicSharedLineNumberTests
 
     private static void CompareRegion(AssemblyResult legacy, AssemblyResult native)
     {
-        int start = checked((int)legacy.Symbols["LINGET"]);
-        int end = checked((int)legacy.Symbols["LET"]);
+        int start = checked((int)legacy.Symbol("LINGET"));
+        int end = checked((int)legacy.Symbol("LET"));
         foreach (AssemblySymbol label in legacy.SymbolDefinitions.Where(
             symbol => !symbol.IsConstant && symbol.Value >= start && symbol.Value < end))
         {
-            native.Symbols.Should().ContainKey(label.Name);
-            native.Symbols[label.Name].Should().Be(label.Value, $"{label.Name} must retain its ROM address");
+            native.SymbolsWithHistoricalNames.Should().ContainKey(label.Name);
+            native.Symbol(label.Name).Should().Be(label.Value, $"{label.Name} must retain its ROM address");
         }
 
         native.Sections[0].Bytes.Slice(start, end - start).ToArray()

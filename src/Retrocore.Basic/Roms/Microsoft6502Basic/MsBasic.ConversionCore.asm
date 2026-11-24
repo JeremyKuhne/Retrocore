@@ -1,3 +1,5 @@
+; Derived from Microsoft's BASIC for 6502 (m6502.asm, MIT license; see LICENSE in this folder).
+
 ;; Emits sign, comparison and integer conversion routines for five-byte precision.
 .macro SIGN_INTEGER_ROUTINES
 

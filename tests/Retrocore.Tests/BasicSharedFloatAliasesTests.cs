@@ -17,12 +17,12 @@ namespace Retrocore.Tests;
 [TestClass]
 public sealed class BasicSharedFloatAliasesTests
 {
-    private static readonly string s_inputs = Path.Join(AppContext.BaseDirectory, "Inputs");
-    private static readonly string s_apple = Path.Join(s_inputs, "AppleSoft");
-    private static readonly string s_pet = Path.Join(s_inputs, "Pet");
-    private static readonly string s_shared = Path.Join(s_inputs, "Microsoft6502Basic");
-    private static readonly string s_appleAliases = Path.Join(s_apple, "AppleSoft.FloatAliases.asm");
-    private static readonly string s_petAliases = Path.Join(s_pet, "Basic", "Commodore.FloatAliases.asm");
+    // The sources, from BasicNames.Inputs on each use, so the rename gate can run these tests on its copy.
+    private static string Apple => Path.Join(BasicNames.Inputs, "AppleSoft");
+    private static string Pet => Path.Join(BasicNames.Inputs, "Pet");
+    private static string Shared => Path.Join(BasicNames.Inputs, "Microsoft6502Basic");
+    private static string AppleAliases => Path.Join(Apple, "AppleSoft.FloatAliases.asm");
+    private static string PetAliases => Path.Join(Pet, "Basic", "Commodore.FloatAliases.asm");
 
     // Addresses in the independently assembled PET1, PET2 and PET4 listings:
     // https://github.com/ethandicks/cbmsymbols/tree/e3120427a32e8b066eb8afdc434af547fd0906f3/listings
@@ -48,28 +48,31 @@ public sealed class BasicSharedFloatAliasesTests
     [DataRow(Apple2Model.IIeEnhanced)]
     public void AppleSoftAliasesPreserveBytesAndDocumentation(Apple2Model model)
     {
-        string root = Path.Join(s_apple, "AppleSoft.asm");
+        string root = Path.Join(Apple, "AppleSoft.asm");
         AssemblyOptions options = new(ProcessorVariant.Mos6502, 0, 0x10000)
         {
             SourceResolver = new FileAssemblySourceResolver(),
-            IncludePaths = [s_shared],
-            PredefinedSymbols = new Dictionary<string, long>
+            IncludePaths = [Shared],
+            PredefinedSymbols = BasicNames.WithCurrentNames(new Dictionary<string, long>
             {
                 ["ENHNCD"] = model == Apple2Model.IIeEnhanced ? 1 : 0,
                 ["APLPLS"] = model == Apple2Model.IIPlus ? 1 : 0
-            }
+            })
         };
 
         AssemblyResult native = RequireSuccess(new Retrocore.Assembler.Assembler().Assemble(
             new AssemblySource(File.ReadAllText(root), root), options));
 
-        AssemblyResult legacy = SdkModules.AssembleAppleSoft(Path.Join(s_apple, "applesoft.mac"), model);
+        AssemblyResult legacy = SdkModules.AssembleAppleSoft(Path.Join(Apple, "applesoft.mac"), model);
         SdkModules.AppleSoftImage(native).ToArray().Should().Equal(SdkModules.AppleSoftImage(legacy).ToArray());
-        native.Symbols["PRNTFAC"].Should().Be(0xED2E, "Apple TIL 79 specifies this entry");
-        foreach (string petName in s_petAddresses.Keys) { native.Symbols.Should().NotContainKey(petName); }
+        native.Symbol("PRNTFAC").Should().Be(0xED2E, "Apple TIL 79 specifies this entry");
+        foreach (string petName in s_petAddresses.Keys)
+        {
+            native.HasSymbol(petName).Should().BeFalse($"{petName} is a PET name");
+        }
 
-        CheckAliases(native, s_appleAliases, ["PRNTFAC"], ["ASTIL"], ["ASTIL"]);
-        CheckDocumentation(native, s_appleAliases);
+        CheckAliases(native, AppleAliases, ["PRNTFAC"], ["ASTIL"], ["ASTIL"]);
+        CheckDocumentation(native, AppleAliases);
     }
 
     /// <summary>
@@ -85,9 +88,9 @@ public sealed class BasicSharedFloatAliasesTests
     [DataRow(PetModel.Pet4032, true)]
     public void PetAliasesPreserveBytesAndDocumentation(PetModel model, bool original)
     {
-        AssemblyResult legacy = PetLegacyBasic.Assemble(s_pet, model, original);
-        int start = checked((int)legacy.Symbols["FADDH"]);
-        int end = checked((int)legacy.Symbols["INITAT"]);
+        AssemblyResult legacy = PetLegacyBasic.Assemble(Pet, model, original);
+        int start = checked((int)legacy.Symbol("FADDH"));
+        int end = checked((int)legacy.Symbol("INITAT"));
         Dictionary<string, long> symbols = legacy.SymbolDefinitions
             .Where(symbol => symbol.Value < start || symbol.Value >= end)
             .ToDictionary(symbol => symbol.Name, symbol => symbol.Value, StringComparer.Ordinal);
@@ -113,15 +116,15 @@ public sealed class BasicSharedFloatAliasesTests
         AssemblyOptions options = new(ProcessorVariant.Mos6502, 0, 0x10000)
         {
             SourceResolver = new FileAssemblySourceResolver(),
-            IncludePaths = [s_shared],
-            PredefinedSymbols = symbols
+            IncludePaths = [Shared],
+            PredefinedSymbols = BasicNames.WithCurrentNames(symbols)
         };
 
         AssemblyResult native = RequireSuccess(new Retrocore.Assembler.Assembler().Assemble(
-            new AssemblySource(source, Path.Join(s_pet, "Basic", "FloatAliasTest.asm")), options));
+            new AssemblySource(source, Path.Join(Pet, "Basic", "FloatAliasTest.asm")), options));
 
-        native.Symbols["FLOAT_ALIAS_BEFORE"].Should().Be(end);
-        native.Symbols["FLOAT_ALIAS_AFTER"].Should().Be(end);
+        native.Symbol("FLOAT_ALIAS_BEFORE").Should().Be(end);
+        native.Symbol("FLOAT_ALIAS_AFTER").Should().Be(end);
         native.Sections[0].Bytes.Slice(start, end - start).ToArray()
             .Should().Equal(legacy.Sections[0].Bytes.Slice(start, end - start).ToArray());
 
@@ -138,12 +141,12 @@ public sealed class BasicSharedFloatAliasesTests
         int versionIndex = basic1 ? 0 : basic2 ? 1 : 2;
         foreach ((string name, int[] addresses) in s_petAddresses)
         {
-            native.Symbols[name].Should().Be(addresses[versionIndex], $"{name} must match the PET listing");
+            native.Symbol(name).Should().Be(addresses[versionIndex], $"{name} must match the PET listing");
         }
 
-        native.Symbols.Should().NotContainKey("PRNTFAC");
-        CheckAliases(native, s_petAliases, [.. s_petAddresses.Keys], BasicAttribution.PetKeys(model, original), BasicAttribution.CommodoreKeys);
-        CheckDocumentation(native, s_petAliases);
+        native.HasSymbol("PRNTFAC").Should().BeFalse("PRNTFAC is an Apple name");
+        CheckAliases(native, PetAliases, [.. s_petAddresses.Keys], BasicAttribution.PetKeys(model, original), BasicAttribution.CommodoreKeys);
+        CheckDocumentation(native, PetAliases);
     }
 
     private static void CheckAliases(
@@ -181,27 +184,27 @@ public sealed class BasicSharedFloatAliasesTests
 
         foreach ((string name, string target) in aliases)
         {
-            result.Symbols.Should().ContainKey(target);
-            result.Symbols[name].Should().Be(result.Symbols[target], $"{name} must alias {target}");
-            debug.Resolve(name, memory).Should().Be(result.Symbols[target]);
+            result.HasSymbol(target).Should().BeTrue($"{name}'s target {target} must be defined");
+            result.Symbol(name).Should().Be(result.Symbol(target), $"{name} must alias {target}");
+            debug.Resolve(name, memory).Should().Be(result.Symbol(target));
 
-            DocumentationTopic alias = docs.Find(name)
+            DocumentationTopic alias = docs.FindTopic(name)
                 ?? throw new AssertFailedException($"{name} has no alias documentation.");
 
             alias.Summary.Should().NotBeNullOrWhiteSpace();
             Path.GetFullPath(alias.Path).Should().Be(Path.GetFullPath(path));
-            alias.Value.Should().Be(result.Symbols[name]);
+            alias.Value.Should().Be(result.Symbol(name));
             BasicAttribution.AssertCites(alias, buildKeys, documentKeys, target);
 
-            DocumentationTopic topic = docs.Find(target)
+            DocumentationTopic topic = docs.FindTopic(target)
                 ?? throw new AssertFailedException($"{target} has no shared documentation.");
 
-            Path.GetFullPath(topic.Path).Should().StartWith(Path.GetFullPath(s_shared) + Path.DirectorySeparatorChar);
-            topic.Value.Should().Be(result.Symbols[target]);
+            Path.GetFullPath(topic.Path).Should().StartWith(Path.GetFullPath(Shared) + Path.DirectorySeparatorChar);
+            topic.Value.Should().Be(result.Symbol(target));
 
             BasicAttribution.AssertNotShared(result, docs, name);
 
-            DebugPosition position = debug.Position(memory, checked((ushort)result.Symbols[name]))
+            DebugPosition position = debug.Position(memory, checked((ushort)result.Symbol(name)))
                 ?? throw new AssertFailedException($"{name} has no debugger source position.");
 
             position.Chain[0].Path.Should().Be(topic.Path);

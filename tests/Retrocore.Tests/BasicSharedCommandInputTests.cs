@@ -19,10 +19,10 @@ namespace Retrocore.Tests;
 public sealed class BasicSharedCommandInputTests
 {
     private const ushort ReturnAddress = 0x4000;
-    private static readonly string s_inputs = Path.Join(AppContext.BaseDirectory, "Inputs");
-    private static readonly string s_pet = Path.Join(s_inputs, "Pet");
-    private static readonly string s_basic = Path.Join(s_pet, "Basic");
-    private static readonly string s_shared = Path.Join(s_inputs, "Microsoft6502Basic");
+    private static string Inputs => BasicNames.Inputs;
+    private static string PetInputs => Path.Join(Inputs, "Pet");
+    private static string BasicInputs => Path.Join(PetInputs, "Basic");
+    private static string SharedInputs => Path.Join(Inputs, "Microsoft6502Basic");
 
     /// <summary>
     ///  The complete standalone region has the same bytes, emitted span and every legacy label.
@@ -37,11 +37,11 @@ public sealed class BasicSharedCommandInputTests
     [DataRow(PetModel.Pet4032, true)]
     public void CompleteRegionMatchesEachLegacyBuild(PetModel model, bool original)
     {
-        AssemblyResult legacy = PetLegacyBasic.Assemble(s_pet, model, original);
+        AssemblyResult legacy = PetLegacyBasic.Assemble(PetInputs, model, original);
         AssemblyResult native = AssembleRegion(legacy, model);
         int start = Address(legacy, "OMERR");
         int end = Address(legacy, "FNDLIN");
-        native.Symbols["COMMAND_INPUT_END"].Should().Be(end);
+        native.Symbol("COMMAND_INPUT_END").Should().Be(end);
 
         int next = start;
         foreach (AssemblySourceMapEntry entry in native.SourceMap
@@ -65,9 +65,9 @@ public sealed class BasicSharedCommandInputTests
         labels.Should().NotBeEmpty();
         foreach (AssemblySymbol label in labels)
         {
-            native.Symbols.Should().ContainKey(label.Name);
-            native.Symbols[label.Name].Should().Be(label.Value, $"{label.Name} must retain its ROM address");
-            string? path = native.SymbolDefinitions.Single(symbol => symbol.Name == label.Name).Location?.Path;
+            native.SymbolsWithHistoricalNames.Should().ContainKey(label.Name);
+            native.Symbol(label.Name).Should().Be(label.Value, $"{label.Name} must retain its ROM address");
+            string? path = native.Definition(label.Name).Location?.Path;
             Path.GetFileName(path).Should().BeOneOf("MsBasic.CommandCore.asm", "Commodore.CommandInput.asm");
         }
 
@@ -94,10 +94,10 @@ public sealed class BasicSharedCommandInputTests
     public void AppleSoftRetainsItsImageAndSharedLabels(Apple2Model model)
     {
         AssemblyResult legacy = SdkModules.AssembleAppleSoft(
-            SdkModules.AppleSoftPath(s_inputs, BasicSourceKind.Macro10),
+            SdkModules.AppleSoftPath(Inputs, BasicSourceKind.Macro10),
             model);
 
-        AssemblyResult native = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(s_inputs), model);
+        AssemblyResult native = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(Inputs), model);
         SdkModules.AppleSoftImage(native).ToArray().Should().Equal(SdkModules.AppleSoftImage(legacy).ToArray());
         string[] labels =
         [
@@ -107,8 +107,8 @@ public sealed class BasicSharedCommandInputTests
 
         foreach (string name in labels)
         {
-            native.Symbols[name].Should().Be(legacy.Symbols[name], $"{name} must retain its ROM address");
-            native.SymbolDefinitions.Single(symbol => symbol.Name == name).Location?.Path
+            native.Symbol(name).Should().Be(legacy.Symbol(name), $"{name} must retain its ROM address");
+            native.Definition(name).Location?.Path
                 .Should().EndWith("MsBasic.CommandCore.asm");
         }
     }
@@ -196,7 +196,7 @@ public sealed class BasicSharedCommandInputTests
     [DataRow(PetModel.Pet2001Basic2, 1, 0x5A)]
     public void ControlOSuppressesOnlyTerminalOutput(PetModel model, int channel, int expected)
     {
-        AssemblyResult legacy = PetLegacyBasic.Assemble(s_pet, model);
+        AssemblyResult legacy = PetLegacyBasic.Assemble(PetInputs, model);
         AssemblyResult native = AssembleRegion(legacy, model);
         RecordingBus bus = CreateBus(legacy, native);
         byte[] character = [0xA9, 0x0F, 0x60];
@@ -220,14 +220,14 @@ public sealed class BasicSharedCommandInputTests
     [DataRow(data: true)]
     public void Basic4DoesNotTreatControlOAsAnOutputFlag(bool original)
     {
-        AssemblyResult legacy = PetLegacyBasic.Assemble(s_pet, PetModel.Pet4032, original);
+        AssemblyResult legacy = PetLegacyBasic.Assemble(PetInputs, PetModel.Pet4032, original);
         AssemblyResult native = AssembleRegion(legacy, PetModel.Pet4032);
         RecordingBus bus = CreateBus(legacy, native);
         byte[] character = [0xA9, 0x0F, 0x60];
         character.CopyTo(bus.Memory, Address(native, "CQINCH"));
         bus.Memory[Address(native, "DSDESC")] = 0x5A;
         Processor<RecordingBus> cpu = Start(bus, Address(native, "INLIN"));
-        ushort nextCharacter = checked((ushort)native.Symbols["INLINC"]);
+        ushort nextCharacter = checked((ushort)native.Symbol("INLINC"));
         for (int step = 0; step < 100 && (cpu.Registers.ProgramCounter != nextCharacter || cpu.Registers.X != 1); step++)
         {
             cpu.StepInstruction();
@@ -250,16 +250,16 @@ public sealed class BasicSharedCommandInputTests
     [DataRow(PetModel.Pet4032, true)]
     public void FullInputBufferUsesTheVariantLimit(PetModel model, bool reject)
     {
-        AssemblyResult legacy = PetLegacyBasic.Assemble(s_pet, model);
+        AssemblyResult legacy = PetLegacyBasic.Assemble(PetInputs, model);
         AssemblyResult native = AssembleRegion(legacy, model);
         RecordingBus bus = CreateBus(legacy, native);
         byte[] character = [0xA9, (byte)'A', 0x60];
         character.CopyTo(bus.Memory, Address(native, "CQINCH"));
         bus.Memory[Address(native, "CHANNL")] = 0;
         Processor<RecordingBus> cpu = Start(bus, Address(native, "INLIN"));
-        ushort error = checked((ushort)native.Symbols["ERROR"]);
-        ushort nextCharacter = checked((ushort)native.Symbols["INLINC"]);
-        byte limit = checked((byte)native.Symbols["BUFLEN"]);
+        ushort error = checked((ushort)native.Symbol("ERROR"));
+        ushort nextCharacter = checked((ushort)native.Symbol("INLINC"));
+        byte limit = checked((byte)native.Symbol("BUFLEN"));
         for (int step = 0; step < 5000 && cpu.Registers.ProgramCounter != error; step++)
         {
             if (!reject && cpu.Registers.ProgramCounter == nextCharacter && cpu.Registers.X == limit) { break; }
@@ -268,7 +268,7 @@ public sealed class BasicSharedCommandInputTests
 
         cpu.Registers.ProgramCounter.Should().Be(reject ? error : nextCharacter);
         bus.Memory[Address(native, "BUF") + limit - 1].Should().Be((byte)'A');
-        cpu.Registers.X.Should().Be(reject ? (byte)native.Symbols["ERRLS"] : limit);
+        cpu.Registers.X.Should().Be(reject ? (byte)native.Symbol("ERRLS") : limit);
     }
 
     /// <summary>
@@ -280,14 +280,14 @@ public sealed class BasicSharedCommandInputTests
     [DataRow(data: true)]
     public void FullCheckedInputAcceptsTheLastCarriageReturn(bool original)
     {
-        AssemblyResult legacy = PetLegacyBasic.Assemble(s_pet, PetModel.Pet4032, original);
+        AssemblyResult legacy = PetLegacyBasic.Assemble(PetInputs, PetModel.Pet4032, original);
         AssemblyResult native = AssembleRegion(legacy, PetModel.Pet4032);
         RecordingBus bus = CreateBus(legacy, native);
         byte[] character = [0xE0, 80, 0xD0, 3, 0xA9, 13, 0x60, 0xA9, (byte)'A', 0x60];
         character.CopyTo(bus.Memory, Address(native, "CQINCH"));
         Processor<RecordingBus> cpu = Start(bus, Address(native, "INLIN"));
-        ushort finish = checked((ushort)native.Symbols["FININL"]);
-        ushort error = checked((ushort)native.Symbols["ERROR"]);
+        ushort finish = checked((ushort)native.Symbol("FININL"));
+        ushort error = checked((ushort)native.Symbol("ERROR"));
         StepUntil(cpu, 5000, finish, error);
 
         cpu.Registers.ProgramCounter.Should().Be(finish);
@@ -307,7 +307,7 @@ public sealed class BasicSharedCommandInputTests
     [DataRow(PetModel.Pet4032, 1)]
     public void ErrorsRestoreChannelsAndOutputTheirMessage(PetModel model, int channel)
     {
-        AssemblyResult legacy = PetLegacyBasic.Assemble(s_pet, model);
+        AssemblyResult legacy = PetLegacyBasic.Assemble(PetInputs, model);
         AssemblyResult native = AssembleRegion(legacy, model);
         RecordingBus bus = CreateBus(legacy, native);
         string flag = model == PetModel.Pet4032 ? "DSDESC" : "CNTWFL";
@@ -319,10 +319,10 @@ public sealed class BasicSharedCommandInputTests
         }
 
         Processor<RecordingBus> cpu = Start(bus, Address(native, "ERROR"));
-        cpu.Registers = cpu.Registers with { X = checked((byte)native.Symbols["ERROM"]) };
-        ushort finish = checked((ushort)native.Symbols["TYPERR"]);
-        ushort close = checked((ushort)native.Symbols["CQCCHN"]);
-        ushort output = checked((ushort)native.Symbols["OUTDO"]);
+        cpu.Registers = cpu.Registers with { X = checked((byte)native.Symbol("ERROM")) };
+        ushort finish = checked((ushort)native.Symbol("TYPERR"));
+        ushort close = checked((ushort)native.Symbol("CQCCHN"));
+        ushort output = checked((ushort)native.Symbol("OUTDO"));
         List<byte> text = [];
         int closes = 0;
         for (int step = 0; step < 500 && cpu.Registers.ProgramCounter != finish; step++)
@@ -352,7 +352,7 @@ public sealed class BasicSharedCommandInputTests
     [DataRow(PetModel.Pet4032, 0x12, true)]
     public void ErrorSuffixDistinguishesDirectAndProgramMode(PetModel model, int highLine, bool printsLine)
     {
-        AssemblyResult legacy = PetLegacyBasic.Assemble(s_pet, model);
+        AssemblyResult legacy = PetLegacyBasic.Assemble(PetInputs, model);
         AssemblyResult native = AssembleRegion(legacy, model);
         RecordingBus bus = CreateBus(legacy, native);
         bus.Memory[Address(native, "CURLIN") + 1] = (byte)highLine;
@@ -360,9 +360,9 @@ public sealed class BasicSharedCommandInputTests
         bus.Memory[Address(native, "INPRT")] = 0x60;
         Processor<RecordingBus> cpu = Start(bus, Address(native, "ERRFIN"));
         cpu.Registers = cpu.Registers with { Accumulator = 0x34, Y = 0x56 };
-        ushort ready = checked((ushort)native.Symbols["READY"]);
-        ushort output = checked((ushort)native.Symbols["STROUT"]);
-        ushort printLine = checked((ushort)native.Symbols["INPRT"]);
+        ushort ready = checked((ushort)native.Symbol("READY"));
+        ushort output = checked((ushort)native.Symbol("STROUT"));
+        ushort printLine = checked((ushort)native.Symbol("INPRT"));
         int messages = 0;
         int numbers = 0;
         for (int step = 0; step < 100 && cpu.Registers.ProgramCounter != ready; step++)
@@ -396,14 +396,14 @@ public sealed class BasicSharedCommandInputTests
     [DataRow(PetModel.Pet4032, true)]
     public void RelinkingCarriesAcrossPages(PetModel model, bool original)
     {
-        AssemblyResult legacy = PetLegacyBasic.Assemble(s_pet, model, original);
+        AssemblyResult legacy = PetLegacyBasic.Assemble(PetInputs, model, original);
         AssemblyResult native = AssembleRegion(legacy, model);
         RecordingBus bus = CreateBus(legacy, native);
         byte[] program = [1, 1, 10, 0, 65, 66, 67, 68, 69, 70, 0, 1, 1, 20, 0, 88, 0, 0, 0];
         program.CopyTo(bus.Memory, 0x40F8);
         WriteWord(bus.Memory, Address(native, "TXTTAB"), 0x40F8);
         Processor<RecordingBus> cpu = Start(bus, Address(native, "LNKPRG"));
-        ushort destination = model == PetModel.Pet2001 ? checked((ushort)native.Symbols["MAIN"]) : ReturnAddress;
+        ushort destination = model == PetModel.Pet2001 ? checked((ushort)native.Symbol("MAIN")) : ReturnAddress;
         StepUntil(cpu, 300, destination);
 
         cpu.Registers.ProgramCounter.Should().Be(destination);
@@ -425,7 +425,7 @@ public sealed class BasicSharedCommandInputTests
     [DataRow(PetModel.Pet4032, true)]
     public void NumberedEditsInsertReplaceAndDelete(PetModel model, bool original)
     {
-        AssemblyResult legacy = PetLegacyBasic.Assemble(s_pet, model, original);
+        AssemblyResult legacy = PetLegacyBasic.Assemble(PetInputs, model, original);
         AssemblyResult native = AssembleRegion(legacy, model);
         RecordingBus bus = CreateBus(legacy, native);
         byte[] initial = [0xFE, 0x40, 10, 0, 65, 0, 0x04, 0x41, 30, 0, 66, 0, 0, 0];
@@ -490,7 +490,7 @@ public sealed class BasicSharedCommandInputTests
         Dictionary<string, long> symbols = [];
         foreach (string name in dependencies.Append(disk ? "ERRLS" : "ERROM").Distinct(StringComparer.Ordinal))
         {
-            AssemblySymbol definition = legacy.SymbolDefinitions.Single(symbol => symbol.Name == name);
+            AssemblySymbol definition = legacy.Definition(name);
             (definition.IsConstant || definition.Value < start || definition.Value >= end).Should().BeTrue(
                 $"{name} must not predefine a label in the region under test");
 
@@ -514,12 +514,12 @@ public sealed class BasicSharedCommandInputTests
         symbols.Add("EXTENDED_DISK_VECTORS", Flag(disk));
 
         AssemblyResult result = new Assembler.Assembler().Assemble(
-            new AssemblySource(source, Path.Join(s_basic, "CommandInputStandaloneTest.asm")),
+            new AssemblySource(source, Path.Join(BasicInputs, "CommandInputStandaloneTest.asm")),
             new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
             {
                 SourceResolver = new FileAssemblySourceResolver(),
-                IncludePaths = [s_shared],
-                PredefinedSymbols = symbols
+                IncludePaths = [SharedInputs],
+                PredefinedSymbols = BasicNames.WithCurrentNames(symbols)
             });
 
         result.Success.Should().BeTrue(string.Join(Environment.NewLine, result.Diagnostics.Select(diagnostic =>
@@ -530,7 +530,7 @@ public sealed class BasicSharedCommandInputTests
 
     private static void AssertTokenization(PetModel model, bool original, byte[] input, byte[] expected)
     {
-        AssemblyResult legacy = PetLegacyBasic.Assemble(s_pet, model, original);
+        AssemblyResult legacy = PetLegacyBasic.Assemble(PetInputs, model, original);
         AssemblyResult native = AssembleRegion(legacy, model);
         RecordingBus bus = CreateBus(legacy, native);
         int buffer = Address(native, "BUF");
@@ -577,12 +577,12 @@ public sealed class BasicSharedCommandInputTests
         cpu.Registers = cpu.Registers with
         {
             Accumulator = input[0],
-            StackPointer = checked((byte)(native.Symbols["STKEND"] - 0x101)),
+            StackPointer = checked((byte)(native.Symbol("STKEND") - 0x101)),
             Status = StatusRegister.Unused
         };
 
-        ushort main = checked((ushort)native.Symbols["MAIN"]);
-        ushort error = checked((ushort)native.Symbols["ERROR"]);
+        ushort main = checked((ushort)native.Symbol("MAIN"));
+        ushort error = checked((ushort)native.Symbol("ERROR"));
         Queue<ushort> trace = new();
         for (int step = 0; step < 50_000 && cpu.Registers.ProgramCounter != main && cpu.Registers.ProgramCounter != error; step++)
         {
@@ -617,7 +617,7 @@ public sealed class BasicSharedCommandInputTests
         }
     }
 
-    private static int Address(AssemblyResult result, string name) => checked((int)result.Symbols[name]);
+    private static int Address(AssemblyResult result, string name) => checked((int)result.Symbol(name));
     private static int Flag(bool value) => value ? 1 : 0;
     private static int ReadWord(byte[] memory, int address) => memory[address] | (memory[address + 1] << 8);
 

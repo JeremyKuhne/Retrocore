@@ -19,10 +19,10 @@ public sealed class PetNativeEquatesTests
     private const string EquatesFile = "Commodore.Equates.asm";
     private const string EndOfMath = "PET_EQUATES_TEST_END";
 
-    private static readonly string s_pet = Path.Join(AppContext.BaseDirectory, "Inputs", "Pet");
-    private static readonly string s_basic = Path.Join(s_pet, "Basic");
-    private static readonly string s_equates = Path.Join(s_basic, EquatesFile);
-    private static readonly string s_shared = Path.Join(AppContext.BaseDirectory, "Inputs", "Microsoft6502Basic");
+    private static string PetInputs => Path.Join(BasicNames.Inputs, "Pet");
+    private static string BasicInputs => Path.Join(PetInputs, "Basic");
+    private static string EquatesPath => Path.Join(BasicInputs, EquatesFile);
+    private static string SharedInputs => Path.Join(BasicNames.Inputs, "Microsoft6502Basic");
 
     // These are selectors introduced by the native module, not names in the Microsoft overlay.
     private static readonly HashSet<string> s_features =
@@ -45,27 +45,27 @@ public sealed class PetNativeEquatesTests
     [DataRow(PetModel.Pet4032, true)]
     public void WorkspaceDefinitionsMatchTheLegacyOverlay(PetModel model, bool original)
     {
-        AssemblyResult legacy = PetLegacyBasic.Assemble(s_pet, model, original);
+        AssemblyResult legacy = PetLegacyBasic.Assemble(PetInputs, model, original);
         AssemblyResult native = RequireSuccess(AssembleEquates(Features(model)));
         CheckEquates(native, legacy);
         foreach (string name in (string[])["REALIO", "INTPRC", "ADDPRC", "LNGERR", "TIME", "EXTIO", "DISKO"])
         {
-            native.Symbols[name].Should().Be(legacy.Symbols[name], $"{name} must match the Microsoft build");
+            native.Symbol(name).Should().Be(legacy.Symbol(name), $"{name} must match the Microsoft build");
         }
 
         bool early = model == PetModel.Pet2001;
         bool disk = model == PetModel.Pet4032;
-        native.Symbols.ContainsKey("NULCNT").Should().Be(early);
-        native.Symbols.ContainsKey("CQPNTR").Should().Be(early);
-        native.Symbols.ContainsKey("LINWID").Should().Be(!disk);
-        native.Symbols.ContainsKey("NCMWID").Should().Be(!disk);
-        native.Symbols.ContainsKey("CNTWFL").Should().Be(!disk);
-        native.Symbols.ContainsKey("DSDESC").Should().Be(disk);
-        native.Symbols.ContainsKey("CQCONC").Should().Be(disk);
-        native.Symbols.ContainsKey("CQRDDS").Should().Be(disk);
+        native.HasSymbol("NULCNT").Should().Be(early);
+        native.HasSymbol("CQPNTR").Should().Be(early);
+        native.HasSymbol("LINWID").Should().Be(!disk);
+        native.HasSymbol("NCMWID").Should().Be(!disk);
+        native.HasSymbol("CNTWFL").Should().Be(!disk);
+        native.HasSymbol("DSDESC").Should().Be(disk);
+        native.HasSymbol("CQCONC").Should().Be(disk);
+        native.HasSymbol("CQRDDS").Should().Be(disk);
 
         DocumentationSet docs = DocumentationSet.Create(
-            [DocumentationParser.Parse(File.ReadAllText(s_equates), s_equates)], native);
+            [DocumentationParser.Parse(File.ReadAllText(EquatesPath), EquatesPath)], native);
 
         IEnumerable<string> documented = NativeDefinitions(native).Select(symbol => symbol.Name)
             .Concat(s_features)
@@ -74,7 +74,7 @@ public sealed class PetNativeEquatesTests
 
         foreach (string name in documented)
         {
-            DocumentationTopic topic = docs.Find(name)
+            DocumentationTopic topic = docs.FindTopic(name)
                 ?? throw new AssertFailedException($"{name} has no workspace documentation.");
 
             topic.Summary.Should().NotBeNullOrWhiteSpace($"{name} needs a useful description");
@@ -101,14 +101,14 @@ public sealed class PetNativeEquatesTests
             """,
             Features(PetModel.Pet2001Basic2)));
 
-        native.Symbols["PLATFORM_AFTER"].Should().Be(native.Symbols["PLATFORM_BEFORE"]);
+        native.Symbol("PLATFORM_AFTER").Should().Be(native.Symbol("PLATFORM_BEFORE"));
         native.SourceMap.Where(entry => entry.Size > 0 && entry.Operation != ".ORG").Should().BeEmpty();
 
-        string root = Path.Join(s_basic, "Basic4.asm");
+        string root = Path.Join(BasicInputs, "Basic4.asm");
         foreach (string file in (string[])
             ["Commodore.DispatchTables.asm", "Commodore.TimeAssignment.asm", "Commodore.StringAssignment.asm"])
         {
-            SourceIncludes.RootOf(Path.Join(s_basic, file)).Should().Be(root);
+            SourceIncludes.RootOf(Path.Join(BasicInputs, file)).Should().Be(root);
         }
     }
 
@@ -119,7 +119,7 @@ public sealed class PetNativeEquatesTests
     public void DefaultsAreSelfContainedBasic2()
     {
         AssemblyResult native = RequireSuccess(AssembleEquates(new Dictionary<string, long>()));
-        AssemblyResult legacy = PetLegacyBasic.Assemble(s_pet, PetModel.Pet2001Basic2);
+        AssemblyResult legacy = PetLegacyBasic.Assemble(PetInputs, PetModel.Pet2001Basic2);
         CheckEquates(native, legacy);
     }
 
@@ -143,15 +143,15 @@ public sealed class PetNativeEquatesTests
         selectors.Add("VARTXT_IN_LINNUM", 1);
         AssemblyResult selected = RequireSuccess(AssembleEquates(selectors));
 
-        selected.Symbols["DSDESC"].Should().Be(baseline.Symbols["CNTWFL"]);
-        selected.Symbols.Should().NotContainKey("CNTWFL");
-        selected.Symbols["LINWID"].Should().Be(baseline.Symbols["LINWID"] + 2);
-        selected.Symbols.Should().NotContainKey("CQCONC", "the disk descriptor does not select disk vectors");
-        selected.Symbols["VARTXT"].Should().Be(selected.Symbols["LINNUM"]);
-        baseline.Symbols["VARTXT"].Should().Be(baseline.Symbols["OPPTR"]);
-        selected.Symbols["CQTIMR"].Should().Be(baseline.Symbols["CQTIMR"]);
-        selected.Symbols["CQSTAT"].Should().Be(baseline.Symbols["CQSTAT"]);
-        selected.Symbols["CQHTIM"].Should().Be(baseline.Symbols["CQHTIM"]);
+        selected.Symbol("DSDESC").Should().Be(baseline.Symbol("CNTWFL"));
+        selected.SymbolsWithHistoricalNames.Should().NotContainKey("CNTWFL");
+        selected.Symbol("LINWID").Should().Be(baseline.Symbol("LINWID") + 2);
+        selected.SymbolsWithHistoricalNames.Should().NotContainKey("CQCONC", "the disk descriptor does not select disk vectors");
+        selected.Symbol("VARTXT").Should().Be(selected.Symbol("LINNUM"));
+        baseline.Symbol("VARTXT").Should().Be(baseline.Symbol("OPPTR"));
+        selected.Symbol("CQTIMR").Should().Be(baseline.Symbol("CQTIMR"));
+        selected.Symbol("CQSTAT").Should().Be(baseline.Symbol("CQSTAT"));
+        selected.Symbol("CQHTIM").Should().Be(baseline.Symbol("CQHTIM"));
     }
 
     /// <summary>
@@ -237,9 +237,9 @@ public sealed class PetNativeEquatesTests
     [DataRow(PetModel.Pet4032, true)]
     public void MathUsesNativeWorkspaceAndMatchesTheLegacyBytes(PetModel model, bool original)
     {
-        AssemblyResult legacy = PetLegacyBasic.Assemble(s_pet, model, original);
-        int start = checked((int)legacy.Symbols["FADDH"]);
-        int end = checked((int)legacy.Symbols["INITAT"]);
+        AssemblyResult legacy = PetLegacyBasic.Assemble(PetInputs, model, original);
+        int start = checked((int)legacy.Symbol("FADDH"));
+        int end = checked((int)legacy.Symbol("INITAT"));
         bool early = model == PetModel.Pet2001;
         bool waitMessage = model == PetModel.Pet2001Basic2;
         bool disk = model == PetModel.Pet4032;
@@ -251,7 +251,7 @@ public sealed class PetNativeEquatesTests
         List<string> declarations = [];
         foreach (string name in externalLabels)
         {
-            AssemblySymbol label = legacy.SymbolDefinitions.Single(symbol => symbol.Name == name);
+            AssemblySymbol label = legacy.Definition(name);
             label.IsConstant.Should().BeFalse($"{name} must be a legacy ROM label, not a supplied constant");
             label.Value.Should().BeGreaterThanOrEqualTo(PetSdkModules.BasicOrigin(model),
                 $"{name} must be in the BASIC ROM");
@@ -278,7 +278,7 @@ public sealed class PetNativeEquatesTests
             """;
 
         AssemblyResult native = RequireSuccess(Assemble(source, selectors));
-        native.Symbols[EndOfMath].Should().Be(end);
+        native.Symbol(EndOfMath).Should().Be(end);
         AssertEmittedSpan(native, start, end);
 
         ReadOnlySpan<byte> expected = legacy.Sections[0].Bytes.Span.Slice(start, end - start);
@@ -286,11 +286,10 @@ public sealed class PetNativeEquatesTests
         int firstDifference = actual.CommonPrefixLength(expected);
         firstDifference.Should().Be(expected.Length, $"the first different byte is at ${start + firstDifference:X4}");
 
-        Dictionary<string, AssemblySymbol> definitions = native.SymbolDefinitions.ToDictionary(symbol => symbol.Name);
         foreach (AssemblySymbol legacyLabel in legacy.SymbolDefinitions.Where(symbol =>
             !symbol.IsConstant && symbol.Value >= start && symbol.Value < end))
         {
-            AssemblySymbol definition = definitions.GetValueOrDefault(legacyLabel.Name)
+            AssemblySymbol definition = native.FindDefinition(legacyLabel.Name)
                 ?? throw new AssertFailedException($"The math package does not define {legacyLabel.Name}.");
 
             definition.Value.Should().Be(legacyLabel.Value, $"{legacyLabel.Name} must retain its legacy address");
@@ -316,7 +315,7 @@ public sealed class PetNativeEquatesTests
     [DataRow(PetModel.Pet4032, true)]
     public void SharedSectionsComposeWithTheNativeWorkspace(PetModel model, bool original)
     {
-        AssemblyResult legacy = PetLegacyBasic.Assemble(s_pet, model, original);
+        AssemblyResult legacy = PetLegacyBasic.Assemble(PetInputs, model, original);
         bool early = model == PetModel.Pet2001;
         bool waitMessage = model == PetModel.Pet2001Basic2;
         bool disk = model == PetModel.Pet4032;
@@ -328,10 +327,10 @@ public sealed class PetNativeEquatesTests
         symbols.Add("WAIT_EASTER_EGG", waitMessage ? 1 : 0);
         symbols.Add("BASIC4_OUTPUT_PADDING", disk ? 1 : 0);
 
-        if (early || disk) { symbols.Add("ROMLOC", legacy.Symbols["ROMLOC"]); }
+        if (early || disk) { symbols.Add("ROMLOC", legacy.Symbol("ROMLOC")); }
         if (disk)
         {
-            symbols.Add("SIGNON", legacy.Symbols["SIGNON"]);
+            symbols.Add("SIGNON", legacy.Symbol("SIGNON"));
         }
 
         string source = $"""
@@ -362,10 +361,10 @@ public sealed class PetNativeEquatesTests
             .include "MsBasic.VariableInput.asm"
             .include "MsBasic.VariableLookup.asm"
             .include "MsBasic.Arrays.asm"
-            .org ${legacy.Symbols["STMDSP"]:X4}
+            .org ${legacy.Symbol("STMDSP"):X4}
                 COMMODORE_DISPATCH_TABLES {(early ? 0 : 1)}, {(disk ? 1 : 0)}, {(early ? 1 : 0)}, {(disk ? 1 : 0)}
             COMPOSED_TABLE_END:
-            .org ${legacy.Symbols["FNDFOR"]:X4}
+            .org ${legacy.Symbol("FNDFOR"):X4}
                 MEMORY_MANAGEMENT {(early ? "$36" : "$3E")}
             COMPOSED_MEMORY_MANAGEMENT_END:
                 COMMODORE_ERROR_READY {(disk ? 0 : 1)}
@@ -404,10 +403,10 @@ public sealed class PetNativeEquatesTests
                 CONDITIONAL_STATEMENTS
                 ON_STATEMENT
             COMPOSED_STATEMENT_FLOW_END:
-            .org ${legacy.Symbols["LINGET"]:X4}
+            .org ${legacy.Symbol("LINGET"):X4}
             .include "MsBasic.LineNumber.asm"
             COMPOSED_LINE_NUMBER_END:
-            .org ${legacy.Symbols["LET"]:X4}
+            .org ${legacy.Symbol("LET"):X4}
                 ASSIGNMENT_START
                 TIME_STRING_ASSIGNMENT {(early ? 1 : 0)}
                 STRING_ASSIGNMENT {(disk ? 1 : 0)}, {(disk ? 1 : 0)}
@@ -478,13 +477,13 @@ public sealed class PetNativeEquatesTests
             COMPOSED_CONCATENATION_END:
                 STRING_FUNCTIONS {(early ? 1 : 0)}, {(early ? 1 : 0)}, {(early ? 1 : 0)}, {(disk ? 1 : 0)}
             COMPOSED_STRING_FUNCTIONS_END:
-            .org ${legacy.Symbols["GETNUM"]:X4}
+            .org ${legacy.Symbol("GETNUM"):X4}
                 MEMORY_ACCESS_ADDRESS 1
                 MEMORY_ACCESS_PEEK {(early ? 0 : 1)}, 1, {(early ? 1 : 0)}, {(waitMessage ? 1 : 0)}
                 MEMORY_ACCESS_POKE
                 MEMORY_ACCESS_WAIT {(waitMessage ? "ZSTORD" : "STORDO")}
             COMPOSED_MEMORY_ACCESS_END:
-            .org ${legacy.Symbols["FADDH"]:X4}
+            .org ${legacy.Symbol("FADDH"):X4}
             .include "Commodore.FloatingPoint.asm"
                 CHARACTER_READER {(early ? "$59" : "$58")}
             COMPOSED_READER_END:
@@ -495,7 +494,7 @@ public sealed class PetNativeEquatesTests
                 COMMODORE_START_MESSAGES {(early ? 1 : 0)}
             COMPOSED_MESSAGES_END:
                 {(early ? "COMMODORE_BASIC1_EDITOR_PATCHES" : "")}
-                {(early ? "" : "LASTWR:")}
+                {(early ? "" : BasicNames.Label("LASTWR"))}
             COMPOSED_BASIC1_PATCH_END:
             {(early ? ".org $E7F3" : "")}
                 {(early ? "COMMODORE_BASIC1_ARRAY_PATCH" : "")}
@@ -503,60 +502,60 @@ public sealed class PetNativeEquatesTests
             """;
 
         AssemblyResult native = RequireSuccess(Assemble(source, symbols));
-        native.Symbols["COMPOSED_TABLE_END"].Should().Be(legacy.Symbols["FNDFOR"]);
-        native.Symbols["COMPOSED_MEMORY_MANAGEMENT_END"].Should().Be(legacy.Symbols["OMERR"]);
-        native.Symbols["COMPOSED_COMMAND_INPUT_END"].Should().Be(legacy.Symbols["FNDLIN"]);
-        native.Symbols["COMPOSED_LINE_SEARCH_END"].Should().Be(legacy.Symbols["SCRATH"]);
-        native.Symbols["COMPOSED_PROGRAM_RESET_END"].Should().Be(legacy.Symbols["LIST"]);
-        native.Symbols["COMPOSED_LIST_END"].Should().Be(legacy.Symbols["FOR"]);
-        native.Symbols["COMPOSED_FOR_END"].Should().Be(legacy.Symbols["NEWSTT"]);
-        native.Symbols["COMPOSED_STATEMENT_DISPATCH_END"].Should().Be(legacy.Symbols["RESTOR"]);
-        native.Symbols["COMPOSED_STOP_END"].Should().Be(legacy.Symbols[early ? "NULL" : "RUN"]);
-        native.Symbols["COMPOSED_EARLY_CLEAR_END"].Should().Be(legacy.Symbols["RUN"]);
-        native.Symbols["COMPOSED_PROGRAM_TRANSFER_END"].Should().Be(legacy.Symbols["DATA"]);
-        native.Symbols["COMPOSED_STATEMENT_FLOW_END"].Should().Be(legacy.Symbols["LINGET"]);
-        native.Symbols["COMPOSED_LINE_NUMBER_END"].Should().Be(legacy.Symbols["LET"]);
-        native.Symbols["COMPOSED_ASSIGNMENT_END"].Should().Be(legacy.Symbols["PRINTN"]);
-        native.Symbols["COMPOSED_CHANNEL_PRINT_END"].Should().Be(legacy.Symbols["STRDON"]);
-        native.Symbols["COMPOSED_PRINT_END"].Should().Be(legacy.Symbols["FININL"]);
-        native.Symbols["COMPOSED_LINE_END"].Should().Be(legacy.Symbols["COMPRT"]);
-        native.Symbols["COMPOSED_PRINT_SPACING_END"].Should().Be(legacy.Symbols["STROUT"]);
-        native.Symbols["COMPOSED_STRING_OUTPUT_END"].Should().Be(legacy.Symbols["OUTSPC"]);
-        native.Symbols["COMPOSED_CHARACTER_OUTPUT_END"].Should().Be(legacy.Symbols["TRMNOK"]);
-        native.Symbols["COMPOSED_INPUT_ERROR_END"].Should().Be(legacy.Symbols["GET"]);
-        native.Symbols["COMPOSED_CHANNEL_INPUT_END"].Should().Be(legacy.Symbols["INPUT"]);
-        native.Symbols["COMPOSED_INPUT_END"].Should().Be(legacy.Symbols["READ"]);
-        native.Symbols["COMPOSED_VARIABLE_INPUT_END"].Should().Be(legacy.Symbols["NEXT"]);
-        native.Symbols["COMPOSED_EXPRESSION_END"].Should().Be(legacy.Symbols["EVAL"]);
-        native.Symbols["COMPOSED_OPERAND_END"].Should().Be(legacy.Symbols["ISVAR"] - (disk ? 1 : 0));
-        native.Symbols["COMPOSED_OPERAND_SPLIT_END"].Should().Be(legacy.Symbols[disk ? "ISVAR1" : "ISVAR"]);
-        native.Symbols["COMPOSED_VARIABLE_VALUE_END"].Should().Be(legacy.Symbols["ISFUN"]);
-        native.Symbols["COMPOSED_FUNCTION_DISPATCH_END"].Should().Be(legacy.Symbols["DOREL"]);
-        native.Symbols["COMPOSED_INTEGER_CONVERSION_END"].Should().Be(legacy.Symbols["ISARY"]);
-        native.Symbols["COMPOSED_ARRAY_END"].Should().Be(legacy.Symbols["UMULT"]);
-        native.Symbols["COMPOSED_RELATIONAL_END"].Should().Be(legacy.Symbols["DIM3"]);
-        native.Symbols["COMPOSED_DIM_END"].Should().Be(legacy.Symbols["PTRGET"]);
-        native.Symbols["COMPOSED_VARIABLE_NAME_END"].Should().Be(legacy.Symbols["ISLETC"]);
-        native.Symbols["COMPOSED_LETTER_TEST_END"].Should().Be(legacy.Symbols["NOTFNS"]);
-        native.Symbols["COMPOSED_SCALAR_LOOKUP_END"].Should().Be(legacy.Symbols["N32768"]);
-        native.Symbols["COMPOSED_MULTIPLY_END"].Should().Be(legacy.Symbols["FRE"]);
-        native.Symbols["COMPOSED_SIMPLE_FUNCTIONS_END"].Should().Be(legacy.Symbols["ERRDIR"]);
-        native.Symbols["COMPOSED_USER_FUNCTIONS_END"].Should().Be(legacy.Symbols["STR"]);
-        native.Symbols["COMPOSED_STRING_CONVERSION_END"].Should().Be(legacy.Symbols["STRINI"]);
-        native.Symbols["COMPOSED_STRING_STORAGE_END"].Should().Be(legacy.Symbols["GARBA2"]);
-        native.Symbols["COMPOSED_COLLECTOR_END"].Should().Be(legacy.Symbols["CAT"]);
-        native.Symbols["COMPOSED_CONCATENATION_END"].Should().Be(legacy.Symbols["CHR"]);
-        native.Symbols["COMPOSED_STRING_FUNCTIONS_END"].Should().Be(legacy.Symbols["GETNUM"]);
-        native.Symbols["COMPOSED_MEMORY_ACCESS_END"].Should().Be(legacy.Symbols["FADDH"]);
-        native.Symbols["COMPOSED_READER_END"].Should().Be(legacy.Symbols["INIT"]);
-        native.Symbols["COMPOSED_INITIALIZATION_END"].Should().Be(legacy.Symbols["WORDS"]);
-        native.Symbols["COMPOSED_MESSAGES_END"].Should().Be(legacy.Symbols[early ? "INPSTP" : "LASTWR"]);
-        native.Symbols["COMPOSED_BASIC1_PATCH_END"].Should().Be(legacy.Symbols["LASTWR"]);
+        native.Symbol("COMPOSED_TABLE_END").Should().Be(legacy.Symbol("FNDFOR"));
+        native.Symbol("COMPOSED_MEMORY_MANAGEMENT_END").Should().Be(legacy.Symbol("OMERR"));
+        native.Symbol("COMPOSED_COMMAND_INPUT_END").Should().Be(legacy.Symbol("FNDLIN"));
+        native.Symbol("COMPOSED_LINE_SEARCH_END").Should().Be(legacy.Symbol("SCRATH"));
+        native.Symbol("COMPOSED_PROGRAM_RESET_END").Should().Be(legacy.Symbol("LIST"));
+        native.Symbol("COMPOSED_LIST_END").Should().Be(legacy.Symbol("FOR"));
+        native.Symbol("COMPOSED_FOR_END").Should().Be(legacy.Symbol("NEWSTT"));
+        native.Symbol("COMPOSED_STATEMENT_DISPATCH_END").Should().Be(legacy.Symbol("RESTOR"));
+        native.Symbol("COMPOSED_STOP_END").Should().Be(legacy.Symbol(early ? "NULL" : "RUN"));
+        native.Symbol("COMPOSED_EARLY_CLEAR_END").Should().Be(legacy.Symbol("RUN"));
+        native.Symbol("COMPOSED_PROGRAM_TRANSFER_END").Should().Be(legacy.Symbol("DATA"));
+        native.Symbol("COMPOSED_STATEMENT_FLOW_END").Should().Be(legacy.Symbol("LINGET"));
+        native.Symbol("COMPOSED_LINE_NUMBER_END").Should().Be(legacy.Symbol("LET"));
+        native.Symbol("COMPOSED_ASSIGNMENT_END").Should().Be(legacy.Symbol("PRINTN"));
+        native.Symbol("COMPOSED_CHANNEL_PRINT_END").Should().Be(legacy.Symbol("STRDON"));
+        native.Symbol("COMPOSED_PRINT_END").Should().Be(legacy.Symbol("FININL"));
+        native.Symbol("COMPOSED_LINE_END").Should().Be(legacy.Symbol("COMPRT"));
+        native.Symbol("COMPOSED_PRINT_SPACING_END").Should().Be(legacy.Symbol("STROUT"));
+        native.Symbol("COMPOSED_STRING_OUTPUT_END").Should().Be(legacy.Symbol("OUTSPC"));
+        native.Symbol("COMPOSED_CHARACTER_OUTPUT_END").Should().Be(legacy.Symbol("TRMNOK"));
+        native.Symbol("COMPOSED_INPUT_ERROR_END").Should().Be(legacy.Symbol("GET"));
+        native.Symbol("COMPOSED_CHANNEL_INPUT_END").Should().Be(legacy.Symbol("INPUT"));
+        native.Symbol("COMPOSED_INPUT_END").Should().Be(legacy.Symbol("READ"));
+        native.Symbol("COMPOSED_VARIABLE_INPUT_END").Should().Be(legacy.Symbol("NEXT"));
+        native.Symbol("COMPOSED_EXPRESSION_END").Should().Be(legacy.Symbol("EVAL"));
+        native.Symbol("COMPOSED_OPERAND_END").Should().Be(legacy.Symbol("ISVAR") - (disk ? 1 : 0));
+        native.Symbol("COMPOSED_OPERAND_SPLIT_END").Should().Be(legacy.Symbol(disk ? "ISVAR1" : "ISVAR"));
+        native.Symbol("COMPOSED_VARIABLE_VALUE_END").Should().Be(legacy.Symbol("ISFUN"));
+        native.Symbol("COMPOSED_FUNCTION_DISPATCH_END").Should().Be(legacy.Symbol("DOREL"));
+        native.Symbol("COMPOSED_INTEGER_CONVERSION_END").Should().Be(legacy.Symbol("ISARY"));
+        native.Symbol("COMPOSED_ARRAY_END").Should().Be(legacy.Symbol("UMULT"));
+        native.Symbol("COMPOSED_RELATIONAL_END").Should().Be(legacy.Symbol("DIM3"));
+        native.Symbol("COMPOSED_DIM_END").Should().Be(legacy.Symbol("PTRGET"));
+        native.Symbol("COMPOSED_VARIABLE_NAME_END").Should().Be(legacy.Symbol("ISLETC"));
+        native.Symbol("COMPOSED_LETTER_TEST_END").Should().Be(legacy.Symbol("NOTFNS"));
+        native.Symbol("COMPOSED_SCALAR_LOOKUP_END").Should().Be(legacy.Symbol("N32768"));
+        native.Symbol("COMPOSED_MULTIPLY_END").Should().Be(legacy.Symbol("FRE"));
+        native.Symbol("COMPOSED_SIMPLE_FUNCTIONS_END").Should().Be(legacy.Symbol("ERRDIR"));
+        native.Symbol("COMPOSED_USER_FUNCTIONS_END").Should().Be(legacy.Symbol("STR"));
+        native.Symbol("COMPOSED_STRING_CONVERSION_END").Should().Be(legacy.Symbol("STRINI"));
+        native.Symbol("COMPOSED_STRING_STORAGE_END").Should().Be(legacy.Symbol("GARBA2"));
+        native.Symbol("COMPOSED_COLLECTOR_END").Should().Be(legacy.Symbol("CAT"));
+        native.Symbol("COMPOSED_CONCATENATION_END").Should().Be(legacy.Symbol("CHR"));
+        native.Symbol("COMPOSED_STRING_FUNCTIONS_END").Should().Be(legacy.Symbol("GETNUM"));
+        native.Symbol("COMPOSED_MEMORY_ACCESS_END").Should().Be(legacy.Symbol("FADDH"));
+        native.Symbol("COMPOSED_READER_END").Should().Be(legacy.Symbol("INIT"));
+        native.Symbol("COMPOSED_INITIALIZATION_END").Should().Be(legacy.Symbol("WORDS"));
+        native.Symbol("COMPOSED_MESSAGES_END").Should().Be(legacy.Symbol(early ? "INPSTP" : "LASTWR"));
+        native.Symbol("COMPOSED_BASIC1_PATCH_END").Should().Be(legacy.Symbol("LASTWR"));
         if (early)
         {
-            native.Symbols["COMPOSED_BASIC1_ARRAY_END"].Should().Be(0xE7F9);
-            int arrayPatch = checked((int)legacy.Symbols["ARYINC"]);
-            native.Symbols["ARYINC"].Should().Be(arrayPatch);
+            native.Symbol("COMPOSED_BASIC1_ARRAY_END").Should().Be(0xE7F9);
+            int arrayPatch = checked((int)legacy.Symbol("ARYINC"));
+            native.Symbol("ARYINC").Should().Be(arrayPatch);
             native.Sections[0].Bytes.Slice(arrayPatch, 6).ToArray()
                 .Should().Equal(legacy.Sections[0].Bytes.Slice(arrayPatch, 6).ToArray());
         }
@@ -565,8 +564,8 @@ public sealed class PetNativeEquatesTests
 
         foreach ((string first, string after) in regions)
         {
-            int start = checked((int)legacy.Symbols[first]);
-            int end = checked((int)legacy.Symbols[after]);
+            int start = checked((int)legacy.Symbol(first));
+            int end = checked((int)legacy.Symbol(after));
             int next = start;
             foreach (AssemblySourceMapEntry entry in native.SourceMap
                 .Where(entry => entry.Size > 0 && entry.Operation != ".ORG" && entry.Address >= start && entry.Address < end)
@@ -583,8 +582,8 @@ public sealed class PetNativeEquatesTests
             foreach (AssemblySymbol label in legacy.SymbolDefinitions.Where(
                 symbol => !symbol.IsConstant && symbol.Value >= start && symbol.Value < end))
             {
-                native.Symbols.Should().ContainKey(label.Name);
-                native.Symbols[label.Name].Should().Be(label.Value, $"{label.Name} must retain its ROM address");
+                native.SymbolsWithHistoricalNames.Should().ContainKey(label.Name);
+                native.Symbol(label.Name).Should().Be(label.Value, $"{label.Name} must retain its ROM address");
             }
         }
 
@@ -597,31 +596,31 @@ public sealed class PetNativeEquatesTests
                 "ERRBS", "ERRDD", "ERRDV0", "ERRID", "ERRTM", "ERRLS", "ERRBD", "ERRST", "ERRCN", "ERRUF"
             ])
         {
-            native.Symbols[name].Should().Be(legacy.Symbols[name], $"{name} must retain its token or error offset");
+            native.Symbol(name).Should().Be(legacy.Symbol(name), $"{name} must retain its token or error offset");
         }
 
-        native.Symbols.ContainsKey("GOTK").Should().Be(!early);
-        if (!early) { native.Symbols["GOTK"].Should().Be(legacy.Symbols["GOTK"]); }
+        native.HasSymbol("GOTK").Should().Be(!early);
+        if (!early) { native.Symbol("GOTK").Should().Be(legacy.Symbol("GOTK")); }
 
         string[] documentedFiles =
         [
-            Path.Join(s_basic, "Commodore.DispatchTables.asm"),
-            Path.Join(s_basic, "Commodore.CommandInput.asm"),
-            Path.Join(s_basic, "Commodore.ChannelInput.asm"),
-            Path.Join(s_basic, "Commodore.Basic1Patches.asm"),
-            Path.Join(s_basic, "Commodore.Basic4Patches.asm"),
-            Path.Join(s_basic, "Commodore.VariableEvaluation.asm"),
-            Path.Join(s_basic, "Commodore.Initialization.asm"),
-            Path.Join(s_basic, "Commodore.StatementDispatch.asm"),
-            Path.Join(s_basic, "Commodore.StringGarbageCollection.asm"),
-            Path.Join(s_shared, "MsBasic.OperandEvaluation.asm"),
-            Path.Join(s_shared, "MsBasic.CommandCore.asm"),
-            Path.Join(s_shared, "MsBasic.StringConcatenation.asm"),
-            Path.Join(s_shared, "MsBasic.StringConversion.asm"),
-            Path.Join(s_shared, "MsBasic.StringGarbageCollection.asm"),
-            Path.Join(s_shared, "MsBasic.VariableInput.asm"),
-            Path.Join(s_shared, "MsBasic.VariableLookup.asm"),
-            Path.Join(s_shared, "MsBasic.Arrays.asm")
+            Path.Join(BasicInputs, "Commodore.DispatchTables.asm"),
+            Path.Join(BasicInputs, "Commodore.CommandInput.asm"),
+            Path.Join(BasicInputs, "Commodore.ChannelInput.asm"),
+            Path.Join(BasicInputs, "Commodore.Basic1Patches.asm"),
+            Path.Join(BasicInputs, "Commodore.Basic4Patches.asm"),
+            Path.Join(BasicInputs, "Commodore.VariableEvaluation.asm"),
+            Path.Join(BasicInputs, "Commodore.Initialization.asm"),
+            Path.Join(BasicInputs, "Commodore.StatementDispatch.asm"),
+            Path.Join(BasicInputs, "Commodore.StringGarbageCollection.asm"),
+            Path.Join(SharedInputs, "MsBasic.OperandEvaluation.asm"),
+            Path.Join(SharedInputs, "MsBasic.CommandCore.asm"),
+            Path.Join(SharedInputs, "MsBasic.StringConcatenation.asm"),
+            Path.Join(SharedInputs, "MsBasic.StringConversion.asm"),
+            Path.Join(SharedInputs, "MsBasic.StringGarbageCollection.asm"),
+            Path.Join(SharedInputs, "MsBasic.VariableInput.asm"),
+            Path.Join(SharedInputs, "MsBasic.VariableLookup.asm"),
+            Path.Join(SharedInputs, "MsBasic.Arrays.asm")
         ];
 
         DocumentationSet docs = DocumentationSet.Create(
@@ -629,7 +628,7 @@ public sealed class PetNativeEquatesTests
 
         foreach (string name in (string[])["GET", "INPUT", "TRMNOK", "ISFUN", "OROP", disk ? "ISVAR1" : "ISVAR"])
         {
-            docs.Find(name).Should().NotBeNull($"{name} must remain documented");
+            docs.FindTopic(name).Should().NotBeNull($"{name} must remain documented");
         }
 
         List<DocumentationDiagnostic> diagnostics = new DocumentationResolver(docs).Check();
@@ -649,12 +648,12 @@ public sealed class PetNativeEquatesTests
     [DataRow(PetModel.Pet4032, 1)]
     public void GetInitializesTheVariantBufferAndReleasesAChannel(PetModel model, int channel)
     {
-        AssemblyResult legacy = PetLegacyBasic.Assemble(s_pet, model);
+        AssemblyResult legacy = PetLegacyBasic.Assemble(PetInputs, model);
         bool early = model == PetModel.Pet2001;
         string source = $"""
             .cpu Mos6502
             .include "Commodore.ChannelInput.asm"
-            .org ${legacy.Symbols["GET"]:X4}
+            .org ${legacy.Symbol("GET"):X4}
                 COMMODORE_CHANNEL_INPUT {(early ? 0 : 2)}
             """;
 
@@ -665,15 +664,15 @@ public sealed class PetNativeEquatesTests
         ];
 
         Dictionary<string, long> symbols = dependencies.ToDictionary(
-            name => name, name => legacy.Symbols[name], StringComparer.Ordinal);
+            name => name, name => legacy.Symbol(name), StringComparer.Ordinal);
 
         AssemblyResult native = RequireSuccess(Assemble(source, symbols));
         RecordingBus bus = new();
         native.Sections[0].Bytes.Span.CopyTo(bus.Memory);
-        int buffer = checked((int)native.Symbols["BUF"]);
-        int channelAddress = checked((int)native.Symbols["CHANNL"]);
-        ushort input = checked((ushort)native.Symbols["INPCO1"]);
-        ushort release = checked((ushort)native.Symbols["CQCCHN"]);
+        int buffer = checked((int)native.Symbol("BUF"));
+        int channelAddress = checked((int)native.Symbol("CHANNL"));
+        ushort input = checked((ushort)native.Symbol("INPCO1"));
+        ushort release = checked((ushort)native.Symbol("CQCCHN"));
         bus.Memory[buffer + 1] = 0xAA;
         bus.Memory[channelAddress] = (byte)channel;
         bus.Memory[input] = 0x60;
@@ -685,7 +684,7 @@ public sealed class PetNativeEquatesTests
         {
             Registers = new()
             {
-                ProgramCounter = checked((ushort)native.Symbols["GETTTY"]),
+                ProgramCounter = checked((ushort)native.Symbol("GETTTY")),
                 StackPointer = 0xFD,
                 Status = StatusRegister.Unused
             }
@@ -736,7 +735,7 @@ public sealed class PetNativeEquatesTests
         AssemblyResult native = RequireSuccess(Assemble(source, Features(model)));
         RecordingBus bus = new();
         native.Sections[0].Bytes.Span.CopyTo(bus.Memory);
-        int pointer = checked((int)native.Symbols["LINNUM"]);
+        int pointer = checked((int)native.Symbol("LINNUM"));
         bus.Memory[pointer] = 0xFE;
         bus.Memory[pointer + 1] = 0x7F;
         bus.Memory[0x8000] = 0x7E;
@@ -744,13 +743,13 @@ public sealed class PetNativeEquatesTests
         {
             Registers = new()
             {
-                ProgramCounter = checked((ushort)native.Symbols["LOOPMM"]),
+                ProgramCounter = checked((ushort)native.Symbol("LOOPMM")),
                 Y = 0,
                 Status = StatusRegister.Unused
             }
         };
 
-        ushort end = checked((ushort)native.Symbols["PROBE_END"]);
+        ushort end = checked((ushort)native.Symbol("PROBE_END"));
         for (int instruction = 0; instruction < 50 && cpu.Registers.ProgramCounter != end; instruction++)
         {
             cpu.StepInstruction();
@@ -761,7 +760,7 @@ public sealed class PetNativeEquatesTests
         bus.Memory[0x8000].Should().Be(0x7E, "the screen must not be probed");
         foreach (string name in (string[])["MEMSIZ", "FRETOP"])
         {
-            int address = checked((int)native.Symbols[name]);
+            int address = checked((int)native.Symbol(name));
             bus.Memory[address].Should().Be(0);
             bus.Memory[address + 1].Should().Be(0x80);
         }
@@ -781,39 +780,39 @@ public sealed class PetNativeEquatesTests
     [DataRow(PetModel.Pet4032, false)]
     public void StatementFetchPreservesTheSavedPositionInDirectMode(PetModel model, bool direct)
     {
-        AssemblyResult legacy = PetLegacyBasic.Assemble(s_pet, model);
+        AssemblyResult legacy = PetLegacyBasic.Assemble(PetInputs, model);
         bool early = model == PetModel.Pet2001;
         bool basic2 = model == PetModel.Pet2001Basic2;
         string source = $"""
             .cpu Mos6502
             .include "Commodore.StatementDispatch.asm"
-            .org ${legacy.Symbols["NEWSTT"]:X4}
+            .org ${legacy.Symbol("NEWSTT"):X4}
                 COMMODORE_STATEMENT_FETCH {(early ? 0 : 2)}, {(basic2 ? 1 : 0)}, {(early ? 1 : 0)}, {(early ? 1 : 0)}, CHRGET
             """;
 
         List<string> dependencies = ["ISCNTC", "TXTPTR", "OLDTXT", "ENDCON", "CURLIN", "SNERR", "CHRGET", "GONE3"];
         if (!early) { dependencies.Add("MORSTS"); }
         Dictionary<string, long> symbols = dependencies.ToDictionary(
-            name => name, name => legacy.Symbols[name], StringComparer.Ordinal);
+            name => name, name => legacy.Symbol(name), StringComparer.Ordinal);
 
         AssemblyResult native = RequireSuccess(Assemble(source, symbols));
         RecordingBus bus = new();
         native.Sections[0].Bytes.Span.CopyTo(bus.Memory);
         int text = direct ? (early ? 0x0040 : 0x0240) : 0x4000;
-        int pointer = checked((int)native.Symbols["TXTPTR"]);
-        int saved = checked((int)native.Symbols["OLDTXT"]);
+        int pointer = checked((int)native.Symbol("TXTPTR"));
+        int saved = checked((int)native.Symbol("OLDTXT"));
         bus.Memory[pointer] = (byte)(text & 0xFF);
         bus.Memory[pointer + 1] = (byte)(text >> 8);
         bus.Memory[saved] = 0x34;
         bus.Memory[saved + 1] = 0x12;
         bus.Memory[text] = (byte)':';
-        bus.Memory[checked((int)native.Symbols["ISCNTC"])] = 0x60;
-        ushort destination = checked((ushort)native.Symbols[early ? "GONE" : "MORSTS"]);
+        bus.Memory[checked((int)native.Symbol("ISCNTC"))] = 0x60;
+        ushort destination = checked((ushort)native.Symbol(early ? "GONE" : "MORSTS"));
         Processor<RecordingBus> cpu = new(bus)
         {
             Registers = new()
             {
-                ProgramCounter = checked((ushort)native.Symbols["NEWSTT"]),
+                ProgramCounter = checked((ushort)native.Symbol("NEWSTT")),
                 StackPointer = 0xFF,
                 Status = StatusRegister.Unused
             }
@@ -843,16 +842,16 @@ public sealed class PetNativeEquatesTests
         AssemblyResult native = AssembleRevisedBasic4Patches();
         RecordingBus bus = new();
         native.Sections[0].Bytes.Span.CopyTo(bus.Memory);
-        int reader = checked((int)native.Symbols["CHRGET"]);
+        int reader = checked((int)native.Symbol("CHRGET"));
         bus.Memory[reader] = 0xA9;
         bus.Memory[reader + 1] = (byte)token;
         bus.Memory[reader + 2] = 0x60;
-        ushort finish = checked((ushort)native.Symbols[destination]);
+        ushort finish = checked((ushort)native.Symbol(destination));
         Processor<RecordingBus> cpu = new(bus)
         {
             Registers = new()
             {
-                ProgramCounter = checked((ushort)native.Symbols["GONEGT"]),
+                ProgramCounter = checked((ushort)native.Symbol("GONEGT")),
                 StackPointer = 0xFF,
                 Status = StatusRegister.Unused
             }
@@ -882,14 +881,14 @@ public sealed class PetNativeEquatesTests
         AssemblyResult native = AssembleRevisedBasic4Patches();
         RecordingBus bus = new();
         native.Sections[0].Bytes.Span.CopyTo(bus.Memory);
-        bus.Memory[checked((int)native.Symbols["CHANNL"])] = (byte)channel;
-        bus.Memory[checked((int)native.Symbols["CQSTAT"])] = (byte)status;
-        ushort finish = checked((ushort)native.Symbols[destination]);
+        bus.Memory[checked((int)native.Symbol("CHANNL"))] = (byte)channel;
+        bus.Memory[checked((int)native.Symbol("CQSTAT"))] = (byte)status;
+        ushort finish = checked((ushort)native.Symbol(destination));
         Processor<RecordingBus> cpu = new(bus)
         {
             Registers = new()
             {
-                ProgramCounter = checked((ushort)native.Symbols["INPNUL"]),
+                ProgramCounter = checked((ushort)native.Symbol("INPNUL")),
                 Status = StatusRegister.Unused
             }
         };
@@ -913,13 +912,13 @@ public sealed class PetNativeEquatesTests
     [DataRow(PetModel.Pet4032, 2)]
     public void ArrayIndexRetainsEachVersionsHighOffsetBehavior(PetModel model, int expectedHigh)
     {
-        AssemblyResult legacy = PetLegacyBasic.Assemble(s_pet, model);
+        AssemblyResult legacy = PetLegacyBasic.Assemble(PetInputs, model);
         bool early = model == PetModel.Pet2001;
         bool disk = model == PetModel.Pet4032;
         string source = $"""
             .cpu Mos6502
             .include "MsBasic.Arrays.asm"
-            .org ${legacy.Symbols["ISARY"]:X4}
+            .org ${legacy.Symbol("ISARY"):X4}
                 ARRAY_LOOKUP 0, {(disk ? 1 : 0)}, {(early ? 0 : 1)}
             """;
 
@@ -931,40 +930,40 @@ public sealed class PetNativeEquatesTests
         ];
 
         Dictionary<string, long> symbols = dependencies.ToDictionary(
-            name => name, name => legacy.Symbols[name], StringComparer.Ordinal);
+            name => name, name => legacy.Symbol(name), StringComparer.Ordinal);
 
         AssemblyResult native = RequireSuccess(Assemble(source, symbols));
         RecordingBus bus = new();
         native.Sections[0].Bytes.Span.CopyTo(bus.Memory);
-        bus.Memory[checked((int)native.Symbols["COUNT"])] = 1;
-        bus.Memory[checked((int)native.Symbols["INDICE"]) + 1] = 1;
-        bus.Memory[checked((int)native.Symbols["VARNAM"])] = (byte)'A';
+        bus.Memory[checked((int)native.Symbol("COUNT"))] = 1;
+        bus.Memory[checked((int)native.Symbol("INDICE")) + 1] = 1;
+        bus.Memory[checked((int)native.Symbol("VARNAM"))] = (byte)'A';
         Processor<RecordingBus> cpu = new(bus)
         {
             Registers = new()
             {
-                ProgramCounter = checked((ushort)native.Symbols["ADDIND"]),
+                ProgramCounter = checked((ushort)native.Symbol("ADDIND")),
                 Accumulator = 1,
                 X = 0x34,
                 Status = StatusRegister.Unused
             }
         };
 
-        ushort destination = checked((ushort)native.Symbols["UMULTD"]);
+        ushort destination = checked((ushort)native.Symbol("UMULTD"));
         for (int instruction = 0; instruction < 30 && cpu.Registers.ProgramCounter != destination; instruction++)
         {
             cpu.StepInstruction();
         }
 
         cpu.Registers.ProgramCounter.Should().Be(destination);
-        int offset = checked((int)native.Symbols["CURTOL"]);
+        int offset = checked((int)native.Symbol("CURTOL"));
         bus.Memory[offset].Should().Be(0x34);
         bus.Memory[offset + 1].Should().Be((byte)expectedHigh);
     }
 
     private static AssemblyResult AssembleRevisedBasic4Patches()
     {
-        AssemblyResult legacy = PetLegacyBasic.Assemble(s_pet, PetModel.Pet4032);
+        AssemblyResult legacy = PetLegacyBasic.Assemble(PetInputs, PetModel.Pet4032);
         string[] dependencies =
         [
             "ISVAR1", "DSDESC", "ADJDS1", "ADJ02", "CHRGET", "PI", "SNERR", "CHRGOT",
@@ -972,12 +971,12 @@ public sealed class PetNativeEquatesTests
         ];
 
         Dictionary<string, long> symbols = dependencies.ToDictionary(
-            name => name, name => legacy.Symbols[name], StringComparer.Ordinal);
+            name => name, name => legacy.Symbol(name), StringComparer.Ordinal);
 
         string source = $"""
             .cpu Mos6502
             .include "Commodore.Basic4Patches.asm"
-            .org ${legacy.Symbols["ISVAR"] - 1:X4}
+            .org ${legacy.Symbol("ISVAR") - 1:X4}
                 COMMODORE_BASIC4_OPERAND_SPLIT 1
             """;
 
@@ -1020,12 +1019,12 @@ public sealed class PetNativeEquatesTests
 
     private static AssemblyResult Assemble(string source, IReadOnlyDictionary<string, long> selectors) =>
         new Retrocore.Assembler.Assembler().Assemble(
-            new AssemblySource(source, Path.Join(s_basic, "NativeEquatesTest.asm")),
+            new AssemblySource(source, Path.Join(BasicInputs, "NativeEquatesTest.asm")),
             new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
             {
                 SourceResolver = new FileAssemblySourceResolver(),
-                IncludePaths = [s_shared],
-                PredefinedSymbols = selectors
+                IncludePaths = [SharedInputs],
+                PredefinedSymbols = BasicNames.WithCurrentNames(selectors)
             });
 
     private static AssemblyResult RequireSuccess(AssemblyResult result)
@@ -1043,7 +1042,7 @@ public sealed class PetNativeEquatesTests
 
     private static void CheckEquates(AssemblyResult native, AssemblyResult legacy)
     {
-        native.Symbols["EQUATES_AFTER"].Should().Be(native.Symbols["EQUATES_BEFORE"],
+        native.Symbol("EQUATES_AFTER").Should().Be(native.Symbol("EQUATES_BEFORE"),
             "including the workspace must not change the caller's origin");
 
         native.SourceMap.Where(entry => entry.Size > 0 && entry.Operation != ".ORG").Should().BeEmpty(
@@ -1053,7 +1052,7 @@ public sealed class PetNativeEquatesTests
         definitions.Should().NotBeEmpty("the included workspace must supply definitions");
         foreach (AssemblySymbol definition in definitions)
         {
-            legacy.Symbols.TryGetValue(definition.Name, out long expected).Should().BeTrue(
+            legacy.TryGetCounterpart(native, definition.Name, out long expected).Should().BeTrue(
                 $"{definition.Name} must have a corresponding assembled legacy symbol");
 
             definition.Value.Should().Be(expected, $"{definition.Name} must match the overlay");
@@ -1062,7 +1061,7 @@ public sealed class PetNativeEquatesTests
         // These Microsoft switches can be supplied before the include, so also compare them when predefined.
         foreach (string name in (string[])["BUFPAG", "BUFLEN", "NULCMD"])
         {
-            native.Symbols[name].Should().Be(legacy.Symbols[name], $"{name} must match the overlay");
+            native.Symbol(name).Should().Be(legacy.Symbol(name), $"{name} must match the overlay");
         }
 
         // $Z is the simulator's entry, not a PET workspace label; MACRO-10 gives it a native alias.
@@ -1078,7 +1077,7 @@ public sealed class PetNativeEquatesTests
         workspaceLabels.Should().NotBeEmpty("the legacy overlay must expose its RAM workspace");
         foreach (AssemblySymbol label in workspaceLabels)
         {
-            native.Symbols.TryGetValue(label.Name, out long value).Should().BeTrue(
+            native.TryGetSymbol(label.Name, out long value).Should().BeTrue(
                 $"legacy workspace label {label.Name} must be available to native roots");
 
             value.Should().Be(label.Value, $"{label.Name} must retain its RAM address");

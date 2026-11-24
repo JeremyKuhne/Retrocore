@@ -17,7 +17,7 @@ namespace Retrocore.Tests;
 [TestClass]
 public sealed class BasicSharedStatementFlowTests
 {
-    private static readonly string s_inputs = Path.Join(AppContext.BaseDirectory, "Inputs");
+    private static string Inputs => BasicNames.Inputs;
 
     /// <summary>
     ///  AppleSoft retains its bytes and labels with the POP unwind entry.
@@ -30,14 +30,14 @@ public sealed class BasicSharedStatementFlowTests
     public void AppleSoftUsesSharedStatementFlow(Apple2Model model)
     {
         AssemblyResult legacy = SdkModules.AssembleAppleSoft(
-            SdkModules.AppleSoftPath(s_inputs, BasicSourceKind.Macro10),
+            SdkModules.AppleSoftPath(Inputs, BasicSourceKind.Macro10),
             model);
 
-        AssemblyResult native = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(s_inputs), model);
+        AssemblyResult native = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(Inputs), model);
         AssemblyResult standalone = AssembleShared(legacy, quoteFirst: false, popExit: true);
         CompareRegion(legacy, native);
         CompareRegion(legacy, standalone);
-        standalone.Symbols["STATEMENT_FLOW_END"].Should().Be(legacy.Symbols["LINGET"]);
+        standalone.Symbol("STATEMENT_FLOW_END").Should().Be(legacy.Symbol("LINGET"));
         SdkModules.AppleSoftImage(native).ToArray().Should().Equal(SdkModules.AppleSoftImage(legacy).ToArray());
     }
 
@@ -54,10 +54,10 @@ public sealed class BasicSharedStatementFlowTests
     [DataRow(PetModel.Pet4032, true)]
     public void SharedStatementFlowMatchesPet(PetModel model, bool original)
     {
-        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(s_inputs, "Pet"), model, original);
+        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(Inputs, "Pet"), model, original);
         AssemblyResult native = AssembleShared(legacy, quoteFirst: model == PetModel.Pet2001, popExit: false);
         CompareRegion(legacy, native);
-        native.Symbols["STATEMENT_FLOW_END"].Should().Be(legacy.Symbols["LINGET"]);
+        native.Symbol("STATEMENT_FLOW_END").Should().Be(legacy.Symbol("LINGET"));
     }
 
     /// <summary>
@@ -77,12 +77,12 @@ public sealed class BasicSharedStatementFlowTests
     public void ScannerFindsTheCorrectTerminator(bool quoteFirst, string entry, string text, int terminator)
     {
         PetModel model = quoteFirst ? PetModel.Pet2001 : PetModel.Pet2001Basic2;
-        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(s_inputs, "Pet"), model);
+        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(Inputs, "Pet"), model);
         AssemblyResult native = AssembleShared(legacy, quoteFirst, popExit: false);
         RecordingBus bus = new();
         native.Sections[0].Bytes.Span.CopyTo(bus.Memory);
         const ushort textAddress = 0x0400;
-        int pointer = checked((int)native.Symbols["TXTPTR"]);
+        int pointer = checked((int)native.Symbol("TXTPTR"));
         bus.Memory[pointer] = (byte)(textAddress & 0xFF);
         bus.Memory[pointer + 1] = (byte)(textAddress >> 8);
         Encoding.ASCII.GetBytes(text).CopyTo(bus.Memory, textAddress);
@@ -91,13 +91,13 @@ public sealed class BasicSharedStatementFlowTests
         {
             Registers = new()
             {
-                ProgramCounter = checked((ushort)native.Symbols[entry]),
+                ProgramCounter = checked((ushort)native.Symbol(entry)),
                 StackPointer = 0xFD,
                 Status = StatusRegister.Unused
             }
         };
 
-        ushort finish = checked((ushort)native.Symbols["REMRTS"]);
+        ushort finish = checked((ushort)native.Symbol("REMRTS"));
         for (int instruction = 0; instruction < 200 && cpu.Registers.ProgramCounter != finish; instruction++)
         {
             cpu.StepInstruction();
@@ -114,20 +114,20 @@ public sealed class BasicSharedStatementFlowTests
     [TestMethod]
     public void SharedStatementsRetainDocumentationAndSourcePositions()
     {
-        AssemblyResult native = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(s_inputs), Apple2Model.IIeEnhanced);
-        int start = checked((int)native.Symbols["DATA"]);
-        int end = checked((int)native.Symbols["LINGET"]);
+        AssemblyResult native = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(Inputs), Apple2Model.IIeEnhanced);
+        int start = checked((int)native.Symbol("DATA"));
+        int end = checked((int)native.Symbol("LINGET"));
         DebugTestMemory memory = new();
         memory.Set((ushort)start, native.Sections[0].Bytes.Slice(start, end - start).ToArray());
         SourceMapModule module = new(native, area: null);
         foreach (string name in (string[])["DATA", "DATAN", "REMN", "IF", "REM", "ONGOTO"])
         {
-            DocumentationTopic topic = module.Documentation.Find(name)
+            DocumentationTopic topic = module.Documentation.FindTopic(name)
                 ?? throw new AssertFailedException($"{name} is not documented.");
 
             topic.Kind.Should().Be(DocumentationKind.Routine);
             topic.Path.Should().EndWith("MsBasic.StatementFlow.asm");
-            ushort address = checked((ushort)native.Symbols[name]);
+            ushort address = checked((ushort)native.Symbol(name));
             DebugPosition position = module.Position(memory, address)
                 ?? throw new AssertFailedException($"{name} has no debugger source position.");
 
@@ -140,14 +140,14 @@ public sealed class BasicSharedStatementFlowTests
 
     private static AssemblyResult AssembleShared(AssemblyResult legacy, bool quoteFirst, bool popExit)
     {
-        string folder = Path.Join(s_inputs, "Microsoft6502Basic");
+        string folder = Path.Join(Inputs, "Microsoft6502Basic");
         string source = $"""
             .cpu Mos6502
             .include "MsBasic.StatementFlow.asm"
-            .org ${legacy.Symbols["DATA"]:X4}
+            .org ${legacy.Symbol("DATA"):X4}
                 STATEMENT_SCAN {(quoteFirst ? 1 : 0)}, {(popExit ? 1 : 0)}
                 CONDITIONAL_STATEMENTS
-            {(popExit ? "ON:" : "")}
+            {(popExit ? BasicNames.Label("ON") : "")}
                 ON_STATEMENT
             STATEMENT_FLOW_END:
             """;
@@ -160,14 +160,14 @@ public sealed class BasicSharedStatementFlowTests
         ];
 
         Dictionary<string, long> symbols = dependencies.ToDictionary(
-            name => name, name => legacy.Symbols[name], StringComparer.Ordinal);
+            name => name, name => legacy.Symbol(name), StringComparer.Ordinal);
 
         AssemblyResult native = new Assembler.Assembler().Assemble(
             new AssemblySource(source, Path.Join(folder, "SharedStatementFlowTest.asm")),
             new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
             {
                 SourceResolver = new FileAssemblySourceResolver(),
-                PredefinedSymbols = symbols
+                PredefinedSymbols = BasicNames.WithCurrentNames(symbols)
             });
 
         native.Success.Should().BeTrue(string.Join(Environment.NewLine, native.Diagnostics.Select(diagnostic =>
@@ -178,13 +178,13 @@ public sealed class BasicSharedStatementFlowTests
 
     private static void CompareRegion(AssemblyResult legacy, AssemblyResult native)
     {
-        int start = checked((int)legacy.Symbols["DATA"]);
-        int end = checked((int)legacy.Symbols["LINGET"]);
+        int start = checked((int)legacy.Symbol("DATA"));
+        int end = checked((int)legacy.Symbol("LINGET"));
         foreach (AssemblySymbol label in legacy.SymbolDefinitions.Where(
             symbol => !symbol.IsConstant && symbol.Value >= start && symbol.Value < end))
         {
-            native.Symbols.Should().ContainKey(label.Name);
-            native.Symbols[label.Name].Should().Be(label.Value, $"{label.Name} must retain its ROM address");
+            native.SymbolsWithHistoricalNames.Should().ContainKey(label.Name);
+            native.Symbol(label.Name).Should().Be(label.Value, $"{label.Name} must retain its ROM address");
         }
 
         native.Sections[0].Bytes.Slice(start, end - start).ToArray()

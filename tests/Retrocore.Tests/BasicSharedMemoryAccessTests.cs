@@ -28,7 +28,7 @@ public sealed class BasicSharedMemoryAccessTests
 {
     private const ushort ReturnAddress = 0x4000;
     private const int TextAddress = 0x3000;
-    private static readonly string s_inputs = Path.Join(AppContext.BaseDirectory, "Inputs");
+    private static string Inputs => BasicNames.Inputs;
     private static readonly MemoryFeatures s_apple = (
         RejectNegative: false,
         PreserveAddress: true,
@@ -49,10 +49,10 @@ public sealed class BasicSharedMemoryAccessTests
     public void AppleSoftUsesSharedMemoryAccess(Apple2Model model)
     {
         AssemblyResult legacy = SdkModules.AssembleAppleSoft(
-            SdkModules.AppleSoftPath(s_inputs, BasicSourceKind.Macro10),
+            SdkModules.AppleSoftPath(Inputs, BasicSourceKind.Macro10),
             model);
 
-        AssemblyResult native = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(s_inputs), model);
+        AssemblyResult native = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(Inputs), model);
         AssemblyResult region = AssembleRegion(legacy, s_apple);
         CompareRegion(legacy, region);
         CompareRegion(legacy, native);
@@ -61,7 +61,7 @@ public sealed class BasicSharedMemoryAccessTests
         CheckNestedPokePeek(legacy, region, BasicDialect.AppleSoft, s_apple);
         CheckWaitMasks(legacy, region, BasicDialect.AppleSoft);
 
-        AssemblySymbol definition = native.SymbolDefinitions.Single(symbol => symbol.Name == "PEEK");
+        AssemblySymbol definition = native.Definition("PEEK");
         definition.Location?.Path.Should().EndWith("MsBasic.MemoryAccess.asm");
     }
 
@@ -78,7 +78,7 @@ public sealed class BasicSharedMemoryAccessTests
     [DataRow(PetModel.Pet4032, true)]
     public void SharedMemoryAccessMatchesPet(PetModel model, bool original)
     {
-        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(s_inputs, "Pet"), model, original);
+        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(Inputs, "Pet"), model, original);
         bool early = model == PetModel.Pet2001;
         bool message = model == PetModel.Pet2001Basic2;
         MemoryFeatures features = (
@@ -111,7 +111,7 @@ public sealed class BasicSharedMemoryAccessTests
     [TestMethod]
     public void SharedEntriesRetainDocumentationAndSourceChains()
     {
-        AssemblyResult native = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(s_inputs), Apple2Model.IIeEnhanced);
+        AssemblyResult native = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(Inputs), Apple2Model.IIeEnhanced);
         int start = Address(native, "GETNUM");
         int end = Address(native, "FADDH");
         DebugTestMemory memory = new();
@@ -120,7 +120,7 @@ public sealed class BasicSharedMemoryAccessTests
 
         foreach (string name in (string[])["GETNUM", "PEEK", "POKE", "FNWAIT"])
         {
-            ushort address = checked((ushort)native.Symbols[name]);
+            ushort address = checked((ushort)native.Symbol(name));
             DebugPosition position = module.Position(memory, address)
                 ?? throw new AssertFailedException($"{name} has no debugger source position.");
 
@@ -133,11 +133,11 @@ public sealed class BasicSharedMemoryAccessTests
 
         foreach (string name in (string[])["GETNUM", "COMBYT", "GETADR", "PEEK", "POKE", "FNWAIT", "WAIT"])
         {
-            DocumentationTopic topic = module.Documentation.Find(name)
+            DocumentationTopic topic = module.Documentation.FindTopic(name)
                 ?? throw new AssertFailedException($"{name} is not documented.");
 
             topic.Kind.Should().Be(DocumentationKind.Routine);
-            topic.Value.Should().Be(native.Symbols[name]);
+            topic.Value.Should().Be(native.Symbol(name));
             topic.Path.Should().EndWith(name == "WAIT" ? "AppleSoft.NumericConversion.asm" : "MsBasic.MemoryAccess.asm");
             topic.Summary.Should().NotBeNullOrWhiteSpace();
         }
@@ -161,7 +161,7 @@ public sealed class BasicSharedMemoryAccessTests
     public void PeekChoicesCanBeCombinedIndependently()
     {
         AssemblyResult legacy = SdkModules.AssembleAppleSoft(
-            SdkModules.AppleSoftPath(s_inputs, BasicSourceKind.Macro10),
+            SdkModules.AppleSoftPath(Inputs, BasicSourceKind.Macro10),
             Apple2Model.IIeEnhanced);
 
         foreach (bool highFirst in (bool[])[false, true])
@@ -172,11 +172,11 @@ public sealed class BasicSharedMemoryAccessTests
                 AssemblyResult peek = AssemblePeek(legacy, highFirst, padded);
                 if (!padded)
                 {
-                    unpaddedRead = peek.Symbols["GETCON"];
+                    unpaddedRead = peek.Symbol("GETCON");
                 }
                 else
                 {
-                    peek.Symbols["GETCON"].Should().Be(unpaddedRead + 8);
+                    peek.Symbol("GETCON").Should().Be(unpaddedRead + 8);
                 }
 
                 int start = Address(peek, "PEEK");
@@ -187,9 +187,9 @@ public sealed class BasicSharedMemoryAccessTests
                 SetWord(bus.Memory, poker, 0x5678);
                 bus.Memory[0xC000] = 0x5A;
                 Processor<RecordingBus> cpu = Start(bus, peek, "PEEK");
-                StepUntil(cpu, 100, checked((ushort)legacy.Symbols["GETADR"]));
+                StepUntil(cpu, 100, checked((ushort)legacy.Symbol("GETADR")));
                 CheckSavedOrder(cpu, bus, highFirst);
-                StepUntil(cpu, 3000, checked((ushort)legacy.Symbols["SNGFLT"]));
+                StepUntil(cpu, 3000, checked((ushort)legacy.Symbol("SNGFLT")));
                 cpu.Registers.Y.Should().Be(0, "negative $4000 wraps to guarded address $C000");
                 GetWord(bus.Memory, poker).Should().Be(0x5678);
                 bus.Accesses.Should().NotContain(access => access.Address == 0xC000 && access.Operation == BusOperation.Read);
@@ -204,7 +204,7 @@ public sealed class BasicSharedMemoryAccessTests
     [TestMethod]
     public void Basic2WaitExtensionIsOnlyForAnOmittedMask()
     {
-        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(s_inputs, "Pet"), PetModel.Pet2001Basic2);
+        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(Inputs, "Pet"), PetModel.Pet2001Basic2);
         MemoryFeatures features = (
             RejectNegative: true,
             PreserveAddress: true,
@@ -255,7 +255,7 @@ public sealed class BasicSharedMemoryAccessTests
             ("negative zero", 0x00, 0, 0, 0, 0, 0x80, 0)
         ];
 
-        ushort error = checked((ushort)legacy.Symbols["GOFUC"]);
+        ushort error = checked((ushort)legacy.Symbol("GOFUC"));
         int poker = Address(legacy, "POKER");
         foreach (var value in cases)
         {
@@ -289,7 +289,7 @@ public sealed class BasicSharedMemoryAccessTests
             SetWord(bus.Memory, poker, 0x5678);
             bus.Memory[address] = 0x5A;
             Processor<RecordingBus> cpu = Start(bus, region, "PEEK");
-            StepUntil(cpu, 3000, checked((ushort)legacy.Symbols["SNGFLT"]));
+            StepUntil(cpu, 3000, checked((ushort)legacy.Symbol("SNGFLT")));
             bool blocked = features.GuardRom && guardedPage;
             cpu.Registers.Y.Should().Be(blocked ? (byte)0 : (byte)0x5A);
             GetWord(bus.Memory, poker).Should().Be(features.PreserveAddress ? 0x5678 : address);
@@ -300,7 +300,7 @@ public sealed class BasicSharedMemoryAccessTests
         RecordingBus stack = CreateRegionBus(legacy, region);
         SetWord(stack.Memory, Address(legacy, "POKER"), 0x5678);
         Processor<RecordingBus> entry = Start(stack, region, "PEEK");
-        StepUntil(entry, 100, checked((ushort)legacy.Symbols["GETADR"]));
+        StepUntil(entry, 100, checked((ushort)legacy.Symbol("GETADR")));
         if (features.PreserveAddress)
         {
             CheckSavedOrder(entry, stack, features.HighFirst);
@@ -362,10 +362,10 @@ public sealed class BasicSharedMemoryAccessTests
         PrepareText(zeroMask, legacy, dialect, "1024,0");
         zeroMask.Memory[1024] = 0xFF;
         Processor<RecordingBus> waiting = Start(zeroMask, region, "FNWAIT");
-        ushort loop = checked((ushort)region.Symbols["WAITER"]);
+        ushort loop = checked((ushort)region.Symbol("WAITER"));
         StepUntil(waiting, 10000, loop);
         for (int instruction = 0; instruction < 50; instruction++) { waiting.StepInstruction(); }
-        waiting.Registers.ProgramCounter.Should().BeInRange(loop, checked((ushort)(region.Symbols["ZERRTS"] - 1)));
+        waiting.Registers.ProgramCounter.Should().BeInRange(loop, checked((ushort)(region.Symbol("ZERRTS") - 1)));
         zeroMask.Accesses.Count(access => access.Address == 1024 && access.Operation == BusOperation.Read)
             .Should().BeGreaterThan(1);
     }
@@ -373,7 +373,7 @@ public sealed class BasicSharedMemoryAccessTests
     private static AssemblyResult AssembleRegion(AssemblyResult legacy, MemoryFeatures features)
     {
         int start = Address(legacy, "GETNUM");
-        string folder = Path.Join(s_inputs, "Microsoft6502Basic");
+        string folder = Path.Join(Inputs, "Microsoft6502Basic");
         string target = features.WaitExtension ? "WAIT_DEFAULT" : "STORDO";
         string source = $"""
             .cpu Mos6502
@@ -382,7 +382,7 @@ public sealed class BasicSharedMemoryAccessTests
                 MEMORY_ACCESS_ADDRESS {(features.RejectNegative ? 1 : 0)}
                 MEMORY_ACCESS_PEEK {(features.PreserveAddress ? 1 : 0)}, {(features.HighFirst ? 1 : 0)}, {(features.GuardRom ? 1 : 0)}, {(features.PadGuard ? 1 : 0)}
                 MEMORY_ACCESS_POKE
-            {(features.WaitAlias ? "WAIT:" : "")}
+            {(features.WaitAlias ? BasicNames.Label("WAIT") : "")}
                 MEMORY_ACCESS_WAIT {target}
             MEMORY_ACCESS_END:
             """;
@@ -394,18 +394,18 @@ public sealed class BasicSharedMemoryAccessTests
         ];
 
         Dictionary<string, long> symbols = dependencies.ToDictionary(
-            name => name, name => legacy.Symbols[name], StringComparer.Ordinal);
+            name => name, name => legacy.Symbol(name), StringComparer.Ordinal);
 
-        if (features.WaitExtension) { symbols.Add(target, legacy.Symbols["ZSTORD"]); }
+        if (features.WaitExtension) { symbols.Add(target, legacy.Symbol("ZSTORD")); }
         AssemblyResult result = Assemble(source, folder, symbols);
-        result.Symbols["MEMORY_ACCESS_END"].Should().Be(legacy.Symbols["FADDH"]);
+        result.Symbol("MEMORY_ACCESS_END").Should().Be(legacy.Symbol("FADDH"));
         return result;
     }
 
     private static AssemblyResult AssemblePeek(AssemblyResult legacy, bool highFirst, bool padded)
     {
         int start = Address(legacy, "PEEK");
-        string folder = Path.Join(s_inputs, "Microsoft6502Basic");
+        string folder = Path.Join(Inputs, "Microsoft6502Basic");
         string source = $"""
             .cpu Mos6502
             .include "MsBasic.MemoryAccess.asm"
@@ -416,9 +416,9 @@ public sealed class BasicSharedMemoryAccessTests
 
         Dictionary<string, long> symbols = new(StringComparer.Ordinal)
         {
-            ["GETADR"] = legacy.Symbols["GETADR"],
-            ["POKER"] = legacy.Symbols["POKER"],
-            ["SNGFLT"] = legacy.Symbols["SNGFLT"],
+            ["GETADR"] = legacy.Symbol("GETADR"),
+            ["POKER"] = legacy.Symbol("POKER"),
+            ["SNGFLT"] = legacy.Symbol("SNGFLT"),
             ["ROMLOC"] = 0xC000,
             ["LASTWR"] = 0xE100
         };
@@ -431,7 +431,7 @@ public sealed class BasicSharedMemoryAccessTests
         AssemblyOptions options = new(ProcessorVariant.Mos6502, 0, 0x10000)
         {
             SourceResolver = new FileAssemblySourceResolver(),
-            PredefinedSymbols = symbols
+            PredefinedSymbols = BasicNames.WithCurrentNames(symbols)
         };
 
         AssemblyResult result = new Assembler.Assembler().Assemble(
@@ -451,8 +451,8 @@ public sealed class BasicSharedMemoryAccessTests
         foreach (AssemblySymbol label in legacy.SymbolDefinitions.Where(
             symbol => !symbol.IsConstant && symbol.Value >= start && symbol.Value < end))
         {
-            native.Symbols.Should().ContainKey(label.Name);
-            native.Symbols[label.Name].Should().Be(label.Value, $"{label.Name} must retain its ROM address");
+            native.SymbolsWithHistoricalNames.Should().ContainKey(label.Name);
+            native.Symbol(label.Name).Should().Be(label.Value, $"{label.Name} must retain its ROM address");
         }
 
         native.Sections[0].Bytes.Slice(start, end - start).ToArray()
@@ -508,7 +508,7 @@ public sealed class BasicSharedMemoryAccessTests
         {
             Registers = new()
             {
-                ProgramCounter = checked((ushort)region.Symbols[entry]),
+                ProgramCounter = checked((ushort)region.Symbol(entry)),
                 StackPointer = 0xFD,
                 Status = StatusRegister.Unused
             }
@@ -525,7 +525,7 @@ public sealed class BasicSharedMemoryAccessTests
         exits.Should().Contain(cpu.Registers.ProgramCounter, "the routine must reach an expected exit");
     }
 
-    private static int Address(AssemblyResult result, string name) => checked((int)result.Symbols[name]);
+    private static int Address(AssemblyResult result, string name) => checked((int)result.Symbol(name));
 
     private static int GetWord(byte[] memory, int address) => memory[address] | (memory[address + 1] << 8);
 

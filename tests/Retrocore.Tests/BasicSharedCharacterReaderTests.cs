@@ -16,7 +16,7 @@ namespace Retrocore.Tests;
 [TestClass]
 public sealed class BasicSharedCharacterReaderTests
 {
-    private static readonly string s_inputs = Path.Join(AppContext.BaseDirectory, "Inputs");
+    private static string Inputs => BasicNames.Inputs;
 
     /// <summary>
     ///  The native AppleSoft listing uses the shared template and preserves the ROM's bytes and labels.
@@ -29,17 +29,17 @@ public sealed class BasicSharedCharacterReaderTests
     public void AppleSoftUsesTheSharedReader(Apple2Model model)
     {
         AssemblyResult legacy = SdkModules.AssembleAppleSoft(
-            SdkModules.AppleSoftPath(s_inputs, BasicSourceKind.Macro10),
+            SdkModules.AppleSoftPath(Inputs, BasicSourceKind.Macro10),
             model);
 
-        AssemblyResult native = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(s_inputs), model);
+        AssemblyResult native = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(Inputs), model);
 
         CompareTemplate(legacy, AssembleTemplate(legacy, 0x58));
         CompareTemplate(legacy, native);
         VerifyStartupCopiesOnlyFourSeedBytes(native);
-        AssemblySymbol definition = native.SymbolDefinitions.Single(symbol => symbol.Name == "INITAT");
+        AssemblySymbol definition = native.Definition("INITAT");
         definition.Location?.Path.Should().EndWith("MsBasic.CharacterReader.asm");
-        DocumentationTopic? topic = new SourceMapModule(native, area: null).Documentation.Find("INITAT");
+        DocumentationTopic? topic = new SourceMapModule(native, area: null).Documentation.FindTopic("INITAT");
         topic.Should().NotBeNull();
         topic?.Path.Should().EndWith("MsBasic.CharacterReader.asm");
         topic?.Summary.Should().NotBeNullOrWhiteSpace();
@@ -58,7 +58,7 @@ public sealed class BasicSharedCharacterReaderTests
     [DataRow(PetModel.Pet4032, true)]
     public void SharedReaderMatchesPetTemplate(PetModel model, bool original)
     {
-        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(s_inputs, "Pet"), model, original);
+        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(Inputs, "Pet"), model, original);
         byte lastSeed = model == PetModel.Pet2001 ? (byte)0x59 : (byte)0x58;
         CompareTemplate(legacy, AssembleTemplate(legacy, lastSeed));
         VerifyStartupCopiesOnlyFourSeedBytes(legacy);
@@ -70,9 +70,9 @@ public sealed class BasicSharedCharacterReaderTests
     [TestMethod]
     public void ReaderRetainsBothSourceMapLocations()
     {
-        AssemblyResult native = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(s_inputs), Apple2Model.IIeEnhanced);
-        ushort start = checked((ushort)native.Symbols["INITAT"]);
-        int length = checked((int)(native.Symbols["INIT"] - start));
+        AssemblyResult native = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(Inputs), Apple2Model.IIeEnhanced);
+        ushort start = checked((ushort)native.Symbol("INITAT"));
+        int length = checked((int)(native.Symbol("INIT") - start));
         DebugTestMemory memory = new();
         memory.Set(start, native.Sections[0].Bytes.Slice(start, length).ToArray());
         SourceMapModule module = new(native, area: null);
@@ -101,13 +101,13 @@ public sealed class BasicSharedCharacterReaderTests
     [DataRow(0x41, true, false)]
     public void CopiedReaderReportsCharacterFlags(int character, bool carry, bool zero)
     {
-        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(s_inputs, "Pet"), PetModel.Pet2001Basic2);
+        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(Inputs, "Pet"), PetModel.Pet2001Basic2);
         AssemblyResult reader = AssembleTemplate(legacy, 0x58);
-        int start = checked((int)reader.Symbols["INITAT"]);
-        int length = checked((int)(legacy.Symbols["INIT"] - start));
-        int destination = checked((int)reader.Symbols["CHRGET"]);
-        int textPointer = checked((int)reader.Symbols["TXTPTR"]);
-        int exit = destination + checked((int)(reader.Symbols["CHZRTS"] - start));
+        int start = checked((int)reader.Symbol("INITAT"));
+        int length = checked((int)(legacy.Symbol("INIT") - start));
+        int destination = checked((int)reader.Symbol("CHRGET"));
+        int textPointer = checked((int)reader.Symbol("TXTPTR"));
+        int exit = destination + checked((int)(reader.Symbol("CHZRTS") - start));
 
         RecordingBus bus = new();
         reader.Sections[0].Bytes.Span.Slice(start, length).CopyTo(bus.Memory.AsSpan(destination));
@@ -144,8 +144,8 @@ public sealed class BasicSharedCharacterReaderTests
 
     private static AssemblyResult AssembleTemplate(AssemblyResult legacy, byte lastSeed)
     {
-        int start = checked((int)legacy.Symbols["INITAT"]);
-        string folder = Path.Join(s_inputs, "Microsoft6502Basic");
+        int start = checked((int)legacy.Symbol("INITAT"));
+        string folder = Path.Join(Inputs, "Microsoft6502Basic");
         string source = $"""
             .cpu Mos6502
             .include "MsBasic.CharacterReader.asm"
@@ -157,12 +157,12 @@ public sealed class BasicSharedCharacterReaderTests
         AssemblyOptions options = new(ProcessorVariant.Mos6502, 0, 0x10000)
         {
             SourceResolver = new FileAssemblySourceResolver(),
-            PredefinedSymbols = new Dictionary<string, long>
+            PredefinedSymbols = BasicNames.WithCurrentNames(new Dictionary<string, long>
             {
-                ["TXTPTR"] = legacy.Symbols["TXTPTR"],
-                ["CHRGET"] = legacy.Symbols["CHRGET"],
-                ["RNDX"] = legacy.Symbols["RNDX"]
-            }
+                ["TXTPTR"] = legacy.Symbol("TXTPTR"),
+                ["CHRGET"] = legacy.Symbol("CHRGET"),
+                ["RNDX"] = legacy.Symbol("RNDX")
+            })
         };
 
         AssemblyResult result = new Assembler.Assembler().Assemble(
@@ -172,17 +172,17 @@ public sealed class BasicSharedCharacterReaderTests
         result.Success.Should().BeTrue(string.Join(Environment.NewLine, result.Diagnostics.Select(diagnostic =>
             $"{diagnostic.Location?.Path}:{diagnostic.Location?.Line + 1}: {diagnostic.Message}")));
 
-        result.Symbols["READER_END"].Should().Be(legacy.Symbols["INIT"]);
+        result.Symbol("READER_END").Should().Be(legacy.Symbol("INIT"));
         return result;
     }
 
     private static void CompareTemplate(AssemblyResult legacy, AssemblyResult native)
     {
-        int start = checked((int)legacy.Symbols["INITAT"]);
-        int length = checked((int)(legacy.Symbols["INIT"] - start));
+        int start = checked((int)legacy.Symbol("INITAT"));
+        int length = checked((int)(legacy.Symbol("INIT") - start));
         foreach (string name in (string[])["INITAT", "CHZGOT", "CHZRTS"])
         {
-            native.Symbols[name].Should().Be(legacy.Symbols[name], $"{name} must retain its ROM address");
+            native.Symbol(name).Should().Be(legacy.Symbol(name), $"{name} must retain its ROM address");
         }
 
         native.Sections[0].Bytes.Slice(start, length).ToArray()
@@ -191,9 +191,9 @@ public sealed class BasicSharedCharacterReaderTests
 
     private static void VerifyStartupCopiesOnlyFourSeedBytes(AssemblyResult basic)
     {
-        int loop = checked((int)basic.Symbols["MOVCHG"]);
-        int seed = checked((int)basic.Symbols["RNDX"]);
-        int sourceSeed = checked((int)basic.Symbols["INIT"]) - 5;
+        int loop = checked((int)basic.Symbol("MOVCHG"));
+        int seed = checked((int)basic.Symbol("RNDX"));
+        int sourceSeed = checked((int)basic.Symbol("INIT")) - 5;
         RecordingBus bus = new();
         basic.Sections[0].Bytes.Span.CopyTo(bus.Memory);
         bus.Memory.AsSpan(seed, 5).Fill(0x55);

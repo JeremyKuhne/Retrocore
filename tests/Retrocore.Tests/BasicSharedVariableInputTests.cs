@@ -23,9 +23,9 @@ public sealed class BasicSharedVariableInputTests
     private const int Pet4 = 4;
     private const ushort ReturnAddress = 0x3000;
 
-    private static readonly string s_inputs = Path.Join(AppContext.BaseDirectory, "Inputs");
-    private static readonly string s_shared = Path.Join(s_inputs, "Microsoft6502Basic");
-    private static readonly string s_pet = Path.Join(s_inputs, "Pet");
+    private static string Inputs => BasicNames.Inputs;
+    private static string SharedInputs => Path.Join(Inputs, "Microsoft6502Basic");
+    private static string PetInputs => Path.Join(Inputs, "Pet");
 
     /// <summary>
     ///  Every native AppleSoft build uses the shared block without moving bytes or labels.
@@ -38,10 +38,10 @@ public sealed class BasicSharedVariableInputTests
     public void AppleSoftUsesSharedVariableInput(Apple2Model model)
     {
         AssemblyResult legacy = SdkModules.AssembleAppleSoft(
-            SdkModules.AppleSoftPath(s_inputs, BasicSourceKind.Macro10),
+            SdkModules.AppleSoftPath(Inputs, BasicSourceKind.Macro10),
             model);
 
-        AssemblyResult native = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(s_inputs), model);
+        AssemblyResult native = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(Inputs), model);
         AssemblyResult standalone = AssembleShared(legacy, Apple);
         CompareRegion(legacy, native);
         CompareRegion(legacy, standalone);
@@ -61,7 +61,7 @@ public sealed class BasicSharedVariableInputTests
     [DataRow(PetModel.Pet4032, true)]
     public void SharedVariableInputMatchesPet(PetModel model, bool original)
     {
-        AssemblyResult legacy = PetLegacyBasic.Assemble(s_pet, model, original);
+        AssemblyResult legacy = PetLegacyBasic.Assemble(PetInputs, model, original);
         int variant = model == PetModel.Pet2001 ? Pet1 : model == PetModel.Pet2001Basic2 ? Pet2 : Pet4;
         foreach (bool nativeWorkspace in (bool[])[false, true])
         {
@@ -70,7 +70,7 @@ public sealed class BasicSharedVariableInputTests
             AssertEmittedSpan(legacy, native);
             if (nativeWorkspace)
             {
-                native.SymbolDefinitions.Single(symbol => symbol.Name == "INPFLG").Location?.Path
+                native.Definition("INPFLG").Location?.Path
                     .Should().EndWith("Commodore.Equates.asm");
             }
 
@@ -103,16 +103,16 @@ public sealed class BasicSharedVariableInputTests
         RecordingBus bus = CreateBus(legacy, native);
         WriteWord(bus.Memory, Address(native, "DATPTR"), 0x0030);
         Processor<RecordingBus> read = Start(bus, Address(native, "READ"));
-        StepUntil(read, 20, checked((ushort)native.Symbols["INPCO1"]));
-        read.Registers.ProgramCounter.Should().Be((ushort)native.Symbols["INPCO1"]);
+        StepUntil(read, 20, checked((ushort)native.Symbol("INPCO1")));
+        read.Registers.ProgramCounter.Should().Be((ushort)native.Symbol("INPCO1"));
         read.Registers.Accumulator.Should().Be(0x98);
         read.Registers.X.Should().Be(0x30);
         read.Registers.Y.Should().Be(0);
 
         Processor<RecordingBus> input = Start(bus, Address(native, "INPCON"));
         input.Registers = input.Registers with { X = 0xA5, Y = variant == Pet1 ? (byte)0 : (byte)1 };
-        StepUntil(input, 5, checked((ushort)native.Symbols["INPCO1"]));
-        input.Registers.ProgramCounter.Should().Be((ushort)native.Symbols["INPCO1"]);
+        StepUntil(input, 5, checked((ushort)native.Symbol("INPCO1")));
+        input.Registers.ProgramCounter.Should().Be((ushort)native.Symbol("INPCO1"));
         input.Registers.Accumulator.Should().Be(0);
         input.Registers.X.Should().Be(0xA5);
         input.Registers.Y.Should().Be(variant == Pet1 ? (byte)0 : (byte)1);
@@ -144,7 +144,7 @@ public sealed class BasicSharedVariableInputTests
         WriteWord(bus.Memory, Address(native, "INPPTR"), buffer + 1);
         WriteWord(bus.Memory, Address(native, "TXTPTR"), 0x4000);
         Processor<RecordingBus> cpu = Start(bus, Address(native, "INLOOP"));
-        ushort finish = checked((ushort)native.Symbols["STRLT2"]);
+        ushort finish = checked((ushort)native.Symbol("STRLT2"));
         int getString = variant == Pet1 ? Address(legacy, "GETSTR") : -1;
         int getContinuation = variant == Pet1 ? Address(legacy, "GETST1") : -1;
         bool sawGetString = false;
@@ -193,9 +193,9 @@ public sealed class BasicSharedVariableInputTests
         bus.Memory[Address(native, "VALTYP")] = 0xFF;
         bus.Memory[Address(native, "INPFLG")] = 0x98;
         Processor<RecordingBus> cpu = Start(bus, Address(native, "DATBK1"));
-        StepUntil(cpu, 100, checked((ushort)native.Symbols["STRLT2"]));
+        StepUntil(cpu, 100, checked((ushort)native.Symbol("STRLT2")));
 
-        cpu.Registers.ProgramCounter.Should().Be((ushort)native.Symbols["STRLT2"]);
+        cpu.Registers.ProgramCounter.Should().Be((ushort)native.Symbol("STRLT2"));
         bus.Memory[Address(native, "CHARAC")].Should().Be(quoted ? (byte)'"' : (byte)':');
         bus.Memory[Address(native, "ENDCHR")].Should().Be(quoted ? (byte)'"' : (byte)',');
         (cpu.Registers.Accumulator | (cpu.Registers.Y << 8)).Should().Be(quoted ? 0x4100 : 0x40FF);
@@ -223,7 +223,7 @@ public sealed class BasicSharedVariableInputTests
         bus.Memory[Address(native, "INPFLG")] = (byte)flag;
         WriteWord(bus.Memory, Address(native, "TXTPTR"), buffer - 1);
         Processor<RecordingBus> cpu = Start(bus, Address(native, "DATBK1"));
-        ushort finish = checked((ushort)legacy.Symbols[retry ? "DOAGIN" : "FIN"]);
+        ushort finish = checked((ushort)legacy.Symbol(retry ? "DOAGIN" : "FIN"));
         StepUntil(cpu, 100, finish);
 
         cpu.Registers.ProgramCounter.Should().Be(finish);
@@ -262,7 +262,7 @@ public sealed class BasicSharedVariableInputTests
         WriteWord(bus.Memory, Address(legacy, "STREND"), 0x500E);
         WriteWord(bus.Memory, Address(legacy, "FRETOP"), 0x7000);
         Processor<RecordingBus> cpu = Start(bus, Address(native, "READ"));
-        StepUntil(cpu, 5000, ReturnAddress, checked((ushort)legacy.Symbols["ERROR"]));
+        StepUntil(cpu, 5000, ReturnAddress, checked((ushort)legacy.Symbol("ERROR")));
 
         cpu.Registers.ProgramCounter.Should().Be(ReturnAddress);
         bus.Memory.AsSpan(0x5002, 2).ToArray().Should().Equal(0, 1);
@@ -288,15 +288,15 @@ public sealed class BasicSharedVariableInputTests
         byte[] text =
         [
             (byte)'"', (byte)':', (byte)'"', (byte)':', 0x01, (byte)'X', 0,
-            0x00, 0x44, 0x34, 0x12, (byte)native.Symbols["DATATK"], (byte)'7', 0
+            0x00, 0x44, 0x34, 0x12, (byte)native.Symbol("DATATK"), (byte)'7', 0
         ];
 
         text.CopyTo(bus.Memory, 0x4400);
         WriteWord(bus.Memory, Address(native, "TXTPTR"), 0x4400);
         Processor<RecordingBus> cpu = Start(bus, Address(native, "DATLOP"));
-        StepUntil(cpu, 300, checked((ushort)native.Symbols["DATBK1"]));
+        StepUntil(cpu, 300, checked((ushort)native.Symbol("DATBK1")));
 
-        cpu.Registers.ProgramCounter.Should().Be((ushort)native.Symbols["DATBK1"]);
+        cpu.Registers.ProgramCounter.Should().Be((ushort)native.Symbol("DATBK1"));
         ReadWord(bus.Memory, Address(native, "TXTPTR")).Should().Be(0x440B);
         ReadWord(bus.Memory, Address(native, "DATLIN")).Should().Be(0x1234);
     }
@@ -318,11 +318,11 @@ public sealed class BasicSharedVariableInputTests
         bus.Memory[0x4402] = 0;
         WriteWord(bus.Memory, Address(native, "TXTPTR"), 0x4400);
         Processor<RecordingBus> cpu = Start(bus, Address(native, "DATLOP"));
-        ushort error = checked((ushort)native.Symbols["ERRGO5"]);
+        ushort error = checked((ushort)native.Symbol("ERRGO5"));
         StepUntil(cpu, 100, error);
 
         cpu.Registers.ProgramCounter.Should().Be(error);
-        cpu.Registers.X.Should().Be((byte)native.Symbols["ERROD"]);
+        cpu.Registers.X.Should().Be((byte)native.Symbol("ERROD"));
     }
 
     /// <summary>
@@ -349,7 +349,7 @@ public sealed class BasicSharedVariableInputTests
         WriteWord(bus.Memory, Address(native, "INPPTR"), 0x3333);
         WriteWord(bus.Memory, Address(native, "VARTXT"), 0x4500);
         Processor<RecordingBus> cpu = Start(bus, Address(native, "STRDN2"));
-        ushort finish = checked((ushort)native.Symbols[valid ? "VAREND" : "TRMNOK"]);
+        ushort finish = checked((ushort)native.Symbol(valid ? "VAREND" : "TRMNOK"));
         StepUntil(cpu, 100, finish);
 
         cpu.Registers.ProgramCounter.Should().Be(finish);
@@ -382,7 +382,7 @@ public sealed class BasicSharedVariableInputTests
         bus.Memory[Address(native, "INPFLG")] = 0;
         if (variant != Apple) { bus.Memory[Address(native, "CHANNL")] = (byte)channel; }
         Processor<RecordingBus> cpu = Start(bus, Address(native, "VAREND"));
-        ushort print = checked((ushort)native.Symbols["STROUT"]);
+        ushort print = checked((ushort)native.Symbol("STROUT"));
         StepUntil(cpu, 100, print, ReturnAddress);
 
         cpu.Registers.ProgramCounter.Should().Be(warning ? print : ReturnAddress);
@@ -423,7 +423,7 @@ public sealed class BasicSharedVariableInputTests
     public void SharedInputRetainsDocumentationAndSourcePositions()
     {
         AssemblyResult native = SdkModules.AssembleAppleSoft(
-            SdkModules.AppleSoftPath(s_inputs), Apple2Model.IIeEnhanced);
+            SdkModules.AppleSoftPath(Inputs), Apple2Model.IIeEnhanced);
 
         int start = Address(native, "READ");
         int end = Address(native, "NEXT");
@@ -432,12 +432,12 @@ public sealed class BasicSharedVariableInputTests
         SourceMapModule module = new(native, area: null);
         foreach (string name in (string[])["READ", "INPCON", "INPCO1", "DATBK1", "RESETC", "NOWGET", "STRDN2", "DATLOP", "VAREND"])
         {
-            DocumentationTopic topic = module.Documentation.Find(name)
+            DocumentationTopic topic = module.Documentation.FindTopic(name)
                 ?? throw new AssertFailedException($"{name} is not documented.");
 
             topic.Kind.Should().Be(DocumentationKind.Routine);
             topic.Path.Should().EndWith("MsBasic.VariableInput.asm");
-            ushort address = checked((ushort)native.Symbols[name]);
+            ushort address = checked((ushort)native.Symbol(name));
             DebugPosition position = module.Position(memory, address)
                 ?? throw new AssertFailedException($"{name} has no debugger source position.");
 
@@ -447,7 +447,7 @@ public sealed class BasicSharedVariableInputTests
             module.Entries(position.Chain[0].Path, position.Chain[0].Line).Should().Contain(address);
         }
 
-        SourceAnalysis analysis = SourceAnalysis.Assemble(Path.Join(s_inputs, "AppleSoft", "AppleSoft.asm"), _ => null);
+        SourceAnalysis analysis = SourceAnalysis.Assemble(Path.Join(Inputs, "AppleSoft", "AppleSoft.asm"), _ => null);
         DocumentationResolver resolver = new(
             analysis.Documentation,
             isDirective: name => DirectiveDocs.Describe(name) is not null,
@@ -463,10 +463,10 @@ public sealed class BasicSharedVariableInputTests
     private static AssemblyResult Legacy(int variant) => variant switch
     {
         Apple => SdkModules.AssembleAppleSoft(
-            SdkModules.AppleSoftPath(s_inputs, BasicSourceKind.Macro10), Apple2Model.IIeEnhanced),
-        Pet1 => PetLegacyBasic.Assemble(s_pet, PetModel.Pet2001),
-        Pet2 => PetLegacyBasic.Assemble(s_pet, PetModel.Pet2001Basic2),
-        Pet4 => PetLegacyBasic.Assemble(s_pet, PetModel.Pet4032),
+            SdkModules.AppleSoftPath(Inputs, BasicSourceKind.Macro10), Apple2Model.IIeEnhanced),
+        Pet1 => PetLegacyBasic.Assemble(PetInputs, PetModel.Pet2001),
+        Pet2 => PetLegacyBasic.Assemble(PetInputs, PetModel.Pet2001Basic2),
+        Pet4 => PetLegacyBasic.Assemble(PetInputs, PetModel.Pet4032),
         _ => throw new ArgumentOutOfRangeException(nameof(variant))
     };
 
@@ -479,7 +479,7 @@ public sealed class BasicSharedVariableInputTests
             .cpu Mos6502
             {(nativeWorkspace ? ".include \"Commodore.Equates.asm\"" : "")}
             .include "MsBasic.VariableInput.asm"
-            .org ${legacy.Symbols["READ"]:X4}
+            .org ${legacy.Symbol("READ"):X4}
                 VARIABLE_INPUT {(early ? 0 : 2)}, {Flag(apple)}, {Flag(early)}, {Flag(early)}, {Flag(!apple)}, {Flag(apple)}
                 VARIABLE_INPUT_MESSAGES {Flag(apple)}, {Flag(early || variant == Pet2)}
             VARIABLE_INPUT_END:
@@ -494,14 +494,14 @@ public sealed class BasicSharedVariableInputTests
         ];
 
         Dictionary<string, long> symbols = dependencies.ToDictionary(
-            name => name, name => legacy.Symbols[name], StringComparer.Ordinal);
+            name => name, name => legacy.Symbol(name), StringComparer.Ordinal);
 
-        if (apple) { symbols.Add("SNERR6", legacy.Symbols["SNERR6"]); }
-        else { symbols.Add("CHANNL", legacy.Symbols["CHANNL"]); }
+        if (apple) { symbols.Add("SNERR6", legacy.Symbol("SNERR6")); }
+        else { symbols.Add("CHANNL", legacy.Symbol("CHANNL")); }
         if (early)
         {
-            symbols.Add("GETSTR", legacy.Symbols["GETSTR"]);
-            symbols.Add("GETST1", legacy.Symbols["GETST1"]);
+            symbols.Add("GETSTR", legacy.Symbol("GETSTR"));
+            symbols.Add("GETST1", legacy.Symbol("GETST1"));
         }
 
         if (nativeWorkspace)
@@ -531,12 +531,12 @@ public sealed class BasicSharedVariableInputTests
         }
 
         AssemblyResult result = new Assembler.Assembler().Assemble(
-            new AssemblySource(source, Path.Join(s_shared, "VariableInputTest.asm")),
+            new AssemblySource(source, Path.Join(SharedInputs, "VariableInputTest.asm")),
             new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
             {
                 SourceResolver = new FileAssemblySourceResolver(),
-                IncludePaths = [Path.Join(s_pet, "Basic")],
-                PredefinedSymbols = symbols
+                IncludePaths = [Path.Join(PetInputs, "Basic")],
+                PredefinedSymbols = BasicNames.WithCurrentNames(symbols)
             });
 
         result.Success.Should().BeTrue(string.Join(Environment.NewLine, result.Diagnostics.Select(diagnostic =>
@@ -556,9 +556,9 @@ public sealed class BasicSharedVariableInputTests
         foreach (AssemblySymbol label in legacy.SymbolDefinitions.Where(
             symbol => !symbol.IsConstant && symbol.Value >= start && symbol.Value < end))
         {
-            native.Symbols.Should().ContainKey(label.Name);
-            native.Symbols[label.Name].Should().Be(label.Value, $"{label.Name} must retain its ROM address");
-            native.SymbolDefinitions.Single(symbol => symbol.Name == label.Name).Location?.Path
+            native.SymbolsWithHistoricalNames.Should().ContainKey(label.Name);
+            native.Symbol(label.Name).Should().Be(label.Value, $"{label.Name} must retain its ROM address");
+            native.Definition(label.Name).Location?.Path
                 .Should().EndWith("MsBasic.VariableInput.asm", $"{label.Name} must be defined by the shared block");
         }
     }
@@ -567,7 +567,7 @@ public sealed class BasicSharedVariableInputTests
     {
         int start = Address(legacy, "READ");
         int end = Address(legacy, "NEXT");
-        native.Symbols["VARIABLE_INPUT_END"].Should().Be(end);
+        native.Symbol("VARIABLE_INPUT_END").Should().Be(end);
         int next = start;
         foreach (AssemblySourceMapEntry entry in native.SourceMap
             .Where(entry => entry.Size > 0 && entry.Operation != ".ORG")
@@ -613,7 +613,7 @@ public sealed class BasicSharedVariableInputTests
         }
     }
 
-    private static int Address(AssemblyResult result, string name) => checked((int)result.Symbols[name]);
+    private static int Address(AssemblyResult result, string name) => checked((int)result.Symbol(name));
     private static int Flag(bool value) => value ? 1 : 0;
     private static int ReadWord(byte[] memory, int address) => memory[address] | (memory[address + 1] << 8);
 

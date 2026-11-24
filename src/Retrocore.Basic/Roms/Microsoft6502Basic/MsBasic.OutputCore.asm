@@ -1,3 +1,5 @@
+; Derived from Microsoft's BASIC for 6502 (m6502.asm, MIT license; see LICENSE in this folder).
+
 ;; Emits the line-number and decimal-output routines.
 ;; Parameters: omitPositiveSpace = 1 to omit the leading space for positive values, otherwise 0
 ;;   includeTime = 1 to use the time-conversion table, otherwise 0

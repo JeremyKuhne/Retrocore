@@ -1,3 +1,5 @@
+; Derived from Microsoft's BASIC for 6502 (m6502.asm, MIT license; see LICENSE in this folder).
+
 ;; MICROSOFT 6502 BASIC FLOATING-POINT ADDITION AND SUBTRACTION
 ;;
 ;; AppleSoft and PET BASIC store a number in five bytes: an exponent E biased by $80, then four mantissa bytes,

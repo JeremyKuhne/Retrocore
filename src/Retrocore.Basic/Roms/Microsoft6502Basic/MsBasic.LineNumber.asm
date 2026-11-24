@@ -1,3 +1,4 @@
+; Derived from Microsoft's BASIC for 6502 (m6502.asm, MIT license; see LICENSE in this folder).
 ; MICROSOFT 6502 BASIC: DECIMAL LINE NUMBERS
 
 ;; Reads a decimal line number from the current text position, rejecting values at or above 64000.

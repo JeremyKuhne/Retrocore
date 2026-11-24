@@ -1,3 +1,5 @@
+; Derived from Microsoft's BASIC for 6502 (m6502.asm, MIT license; see LICENSE in this folder).
+
 ;; Emits the decimal input routines.
 ;; Parameters: limitAt120 = 1 for the earlier exponent limit, 0 for the later limit
 .macro DECIMAL_INPUT limitAt120

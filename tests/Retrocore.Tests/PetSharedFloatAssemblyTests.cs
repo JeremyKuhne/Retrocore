@@ -18,9 +18,9 @@ public sealed class PetSharedFloatAssemblyTests
 {
     private const string EndLabel = "PET_TEST_END_OF_FLOAT";
 
-    private static readonly string s_inputs = Path.Join(AppContext.BaseDirectory, "Inputs");
-    private static readonly string s_pet = Path.Join(s_inputs, "Pet");
-    private static readonly string s_shared = Path.Join(s_inputs, "Microsoft6502Basic");
+    private static string Inputs => BasicNames.Inputs;
+    private static string PetInputs => Path.Join(Inputs, "Pet");
+    private static string SharedInputs => Path.Join(Inputs, "Microsoft6502Basic");
 
     /// <summary>
     ///  Every byte and legacy label from FADDH through the byte before INITAT comes from the native module.
@@ -38,11 +38,11 @@ public sealed class PetSharedFloatAssemblyTests
     public void NativeMathMatchesTheLegacyBuild(PetModel model, bool original, int expectedStart, int expectedEnd)
     {
         (AssemblyResult legacy, AssemblyResult native) = Assemble(model, original);
-        int start = checked((int)legacy.Symbols["FADDH"]);
-        int end = checked((int)legacy.Symbols["INITAT"]);
+        int start = checked((int)legacy.Symbol("FADDH"));
+        int end = checked((int)legacy.Symbol("INITAT"));
         start.Should().Be(expectedStart);
         end.Should().Be(expectedEnd);
-        native.Symbols[EndLabel].Should().Be(end, "the native module must end immediately before INITAT");
+        native.Symbol(EndLabel).Should().Be(end, "the native module must end immediately before INITAT");
 
         // Fixed-size sections are zero-filled, so both assemblies must actually emit the whole comparison range.
         AssertEmittedSpan(legacy, start, end, exact: false);
@@ -57,10 +57,9 @@ public sealed class PetSharedFloatAssemblyTests
             .ToArray();
 
         labels.Should().NotBeEmpty();
-        Dictionary<string, AssemblySymbol> definitions = native.SymbolDefinitions.ToDictionary(symbol => symbol.Name);
         foreach (AssemblySymbol label in labels)
         {
-            AssemblySymbol nativeLabel = definitions.GetValueOrDefault(label.Name)
+            AssemblySymbol nativeLabel = native.FindDefinition(label.Name)
                 ?? throw new AssertFailedException($"The native module does not define legacy label {label.Name}.");
 
             nativeLabel.Value.Should().Be(label.Value, $"{label.Name} must retain its legacy address");
@@ -73,31 +72,31 @@ public sealed class PetSharedFloatAssemblyTests
 
         bool basic1 = model == PetModel.Pet2001;
         bool basic2 = model == PetModel.Pet2001Basic2;
-        int zero = checked((int)native.Symbols["ZERO"]);
-        zero.Should().Be(checked((int)legacy.Symbols["ZERO"]));
+        int zero = checked((int)native.Symbol("ZERO"));
+        zero.Should().Be(checked((int)legacy.Symbol("ZERO")));
         if (basic1)
         {
             zero.Should().BeLessThan(start, "BASIC 1's ZERO is outside the math package");
         }
         else
         {
-            zero.Should().Be(checked((int)native.Symbols["FHALF"] + 2), "later BASICs share ZERO with FHALF");
+            zero.Should().Be(checked((int)native.Symbol("FHALF") + 2), "later BASICs share ZERO with FHALF");
         }
 
         ReadOnlySpan<byte> image = native.Sections[0].Bytes.Span;
-        image[checked((int)native.Symbols["FMULTT"])].Should().Be(basic1 ? (byte)0xF0 : (byte)0xD0);
-        image[checked((int)native.Symbols["FINEDG"]) + 3].Should().Be(basic1 ? (byte)12 : (byte)10);
-        image[checked((int)native.Symbols["NZ9999"]) + 4].Should().Be(basic1 ? (byte)0xFE : (byte)0xFD);
+        image[checked((int)native.Symbol("FMULTT"))].Should().Be(basic1 ? (byte)0xF0 : (byte)0xD0);
+        image[checked((int)native.Symbol("FINEDG")) + 3].Should().Be(basic1 ? (byte)12 : (byte)10);
+        image[checked((int)native.Symbol("NZ9999")) + 4].Should().Be(basic1 ? (byte)0xFE : (byte)0xFD);
 
-        int sineTail = checked((int)(legacy.Symbols["ATN"] - legacy.Symbols["SINCON"] - 31));
+        int sineTail = checked((int)(legacy.Symbol("ATN") - legacy.Symbol("SINCON") - 31));
         sineTail.Should().Be(basic2 ? 10 : 0, "only BASIC 2 has the WAIT message after the sine coefficients");
         if (basic2)
         {
-            native.Symbols["ZSTORD"].Should().Be(legacy.Symbols["FSUBT"] + 15);
+            native.Symbol("ZSTORD").Should().Be(legacy.Symbol("FSUBT") + 15);
         }
 
-        int paddingStart = checked((int)legacy.Symbols["NZMIL"] + 5);
-        int paddingLength = checked((int)legacy.Symbols["INPRT"] - paddingStart);
+        int paddingStart = checked((int)legacy.Symbol("NZMIL") + 5);
+        int paddingLength = checked((int)legacy.Symbol("INPRT") - paddingStart);
         if (model == PetModel.Pet4032)
         {
             paddingLength.Should().Be(0x80);
@@ -125,13 +124,13 @@ public sealed class PetSharedFloatAssemblyTests
     public void SharedAndWaitRoutinesRetainDocumentationAndSourceChains()
     {
         (AssemblyResult legacy, AssemblyResult native) = Assemble(PetModel.Pet2001Basic2, original: false);
-        int start = checked((int)legacy.Symbols["FADDH"]);
-        int end = checked((int)legacy.Symbols["INITAT"]);
+        int start = checked((int)legacy.Symbol("FADDH"));
+        int end = checked((int)legacy.Symbol("INITAT"));
         DebugTestMemory memory = new();
         memory.Set((ushort)start, native.Sections[0].Bytes.Slice(start, end - start).ToArray());
         SourceMapModule module = new(native, area: null);
 
-        ushort addition = checked((ushort)native.Symbols["FADDH"]);
+        ushort addition = checked((ushort)native.Symbol("FADDH"));
         DebugPosition shared = module.Position(memory, addition)
             ?? throw new AssertFailedException("FADDH has no debugger source position.");
 
@@ -140,7 +139,7 @@ public sealed class PetSharedFloatAssemblyTests
         module.Entries(shared.Chain[0].Path, shared.Chain[0].Line).Should().Contain(addition);
         module.Entries(invocation.Path, invocation.Line).Should().Contain(addition);
 
-        ushort wait = checked((ushort)native.Symbols["ZSTORD"]);
+        ushort wait = checked((ushort)native.Symbol("ZSTORD"));
         DebugPosition waitPosition = module.Position(memory, wait)
             ?? throw new AssertFailedException("BASIC 2's WAIT message has no debugger source position.");
 
@@ -151,9 +150,9 @@ public sealed class PetSharedFloatAssemblyTests
         foreach ((string name, string file) in ((string, string)[])
             [("FADDH", "MsBasic.AdditionCore.asm"), ("ZSTORD", "Commodore.FloatingPoint.asm")])
         {
-            DocumentationTopic topic = docs.Find(name) ?? throw new AssertFailedException($"{name} is not documented.");
+            DocumentationTopic topic = docs.FindTopic(name) ?? throw new AssertFailedException($"{name} is not documented.");
             topic.Kind.Should().Be(DocumentationKind.Routine);
-            topic.Value.Should().Be(native.Symbols[name]);
+            topic.Value.Should().Be(native.Symbol(name));
             topic.Path.Should().EndWith(file);
             topic.Summary.Should().NotBeNullOrWhiteSpace();
         }
@@ -191,9 +190,9 @@ public sealed class PetSharedFloatAssemblyTests
 
     private static (AssemblyResult Legacy, AssemblyResult Native) Assemble(PetModel model, bool original)
     {
-        AssemblyResult legacy = PetLegacyBasic.Assemble(s_pet, model, original);
-        int start = checked((int)legacy.Symbols["FADDH"]);
-        int end = checked((int)legacy.Symbols["INITAT"]);
+        AssemblyResult legacy = PetLegacyBasic.Assemble(PetInputs, model, original);
+        int start = checked((int)legacy.Symbol("FADDH"));
+        int end = checked((int)legacy.Symbol("INITAT"));
 
         // Also exclude address-valued assignments in this range: aliases must not satisfy local references for us.
         Dictionary<string, long> symbols = legacy.SymbolDefinitions
@@ -218,12 +217,12 @@ public sealed class PetSharedFloatAssemblyTests
         AssemblyOptions options = new(ProcessorVariant.Mos6502, 0, 0x10000)
         {
             SourceResolver = new FileAssemblySourceResolver(),
-            IncludePaths = [s_shared],
-            PredefinedSymbols = symbols
+            IncludePaths = [SharedInputs],
+            PredefinedSymbols = BasicNames.WithCurrentNames(symbols)
         };
 
         AssemblyResult native = new Retrocore.Assembler.Assembler().Assemble(
-            new AssemblySource(source, Path.Join(s_pet, "Basic", "FloatRegionTest.asm")),
+            new AssemblySource(source, Path.Join(PetInputs, "Basic", "FloatRegionTest.asm")),
             options);
 
         native.Success.Should().BeTrue(string.Join(Environment.NewLine, native.Diagnostics.Select(diagnostic =>

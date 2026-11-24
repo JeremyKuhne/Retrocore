@@ -16,7 +16,7 @@ namespace Retrocore.Tests;
 [TestClass]
 public sealed class BasicSharedArrayMultiplicationTests
 {
-    private static readonly string s_inputs = Path.Join(AppContext.BaseDirectory, "Inputs");
+    private static string Inputs => BasicNames.Inputs;
 
     /// <summary>
     ///  AppleSoft retains its original bytes and labels after moving the routine into the shared source.
@@ -29,13 +29,13 @@ public sealed class BasicSharedArrayMultiplicationTests
     public void AppleSoftUsesSharedArrayMultiplication(Apple2Model model)
     {
         AssemblyResult legacy = SdkModules.AssembleAppleSoft(
-            SdkModules.AppleSoftPath(s_inputs, BasicSourceKind.Macro10),
+            SdkModules.AppleSoftPath(Inputs, BasicSourceKind.Macro10),
             model);
 
-        AssemblyResult native = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(s_inputs), model);
+        AssemblyResult native = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(Inputs), model);
 
         CompareRegion(legacy, native);
-        AssemblySymbol definition = native.SymbolDefinitions.Single(symbol => symbol.Name == "UMULT");
+        AssemblySymbol definition = native.Definition("UMULT");
         definition.Location?.Path.Should().EndWith("MsBasic.ArrayMultiplication.asm");
     }
 
@@ -52,9 +52,9 @@ public sealed class BasicSharedArrayMultiplicationTests
     [DataRow(PetModel.Pet4032, true)]
     public void SharedArrayMultiplicationMatchesPet(PetModel model, bool original)
     {
-        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(s_inputs, "Pet"), model, original);
+        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(Inputs, "Pet"), model, original);
         AssemblyResult native = AssembleRegion(legacy);
-        native.Symbols["MULTIPLY_END"].Should().Be(legacy.Symbols["FRE"]);
+        native.Symbol("MULTIPLY_END").Should().Be(legacy.Symbol("FRE"));
         CompareRegion(legacy, native);
     }
 
@@ -64,9 +64,9 @@ public sealed class BasicSharedArrayMultiplicationTests
     [TestMethod]
     public void SharedRoutineRetainsDocumentationAndSourcePosition()
     {
-        AssemblyResult native = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(s_inputs), Apple2Model.IIeEnhanced);
-        ushort start = checked((ushort)native.Symbols["UMULT"]);
-        int length = checked((int)(native.Symbols["FRE"] - start));
+        AssemblyResult native = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(Inputs), Apple2Model.IIeEnhanced);
+        ushort start = checked((ushort)native.Symbol("UMULT"));
+        int length = checked((int)(native.Symbol("FRE") - start));
         DebugTestMemory memory = new();
         memory.Set(start, native.Sections[0].Bytes.Slice(start, length).ToArray());
         SourceMapModule module = new(native, area: null);
@@ -77,7 +77,7 @@ public sealed class BasicSharedArrayMultiplicationTests
         position.Chain[0].Path.Should().EndWith("MsBasic.ArrayMultiplication.asm");
         module.Entries(position.Chain[0].Path, position.Chain[0].Line).Should().Contain(start);
 
-        DocumentationTopic topic = module.Documentation.Find("UMULT")
+        DocumentationTopic topic = module.Documentation.FindTopic("UMULT")
             ?? throw new AssertFailedException("UMULT is not documented.");
 
         topic.Kind.Should().Be(DocumentationKind.Routine);
@@ -100,14 +100,14 @@ public sealed class BasicSharedArrayMultiplicationTests
     [DataRow(0xFFFF, 2, false, true)]
     public void MultiplicationHandlesProductsAndOverflow(int multiplicand, int multiplier, bool descriptor, bool overflow)
     {
-        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(s_inputs, "Pet"), PetModel.Pet2001Basic2);
+        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(Inputs, "Pet"), PetModel.Pet2001Basic2);
         AssemblyResult native = AssembleRegion(legacy);
-        int cursor = checked((int)native.Symbols["CURTOL"]);
-        int addend = checked((int)native.Symbols["ADDEND"]);
-        int lowtr = checked((int)native.Symbols["LOWTR"]);
-        int index = checked((int)native.Symbols["INDEX"]);
-        ushort complete = checked((ushort)native.Symbols["UMLRTS"]);
-        ushort error = checked((ushort)native.Symbols["OMERR1"]);
+        int cursor = checked((int)native.Symbol("CURTOL"));
+        int addend = checked((int)native.Symbol("ADDEND"));
+        int lowtr = checked((int)native.Symbol("LOWTR"));
+        int index = checked((int)native.Symbol("INDEX"));
+        ushort complete = checked((ushort)native.Symbol("UMLRTS"));
+        ushort error = checked((ushort)native.Symbol("OMERR1"));
 
         RecordingBus bus = new();
         native.Sections[0].Bytes.Span.CopyTo(bus.Memory);
@@ -126,7 +126,7 @@ public sealed class BasicSharedArrayMultiplicationTests
         {
             Registers = new()
             {
-                ProgramCounter = checked((ushort)native.Symbols[descriptor ? "UMULT" : "UMULTD"]),
+                ProgramCounter = checked((ushort)native.Symbol(descriptor ? "UMULT" : "UMULTD")),
                 Accumulator = (byte)(multiplier >> 8),
                 Y = 3,
                 Status = StatusRegister.Unused
@@ -161,8 +161,8 @@ public sealed class BasicSharedArrayMultiplicationTests
 
     private static AssemblyResult AssembleRegion(AssemblyResult legacy)
     {
-        int start = checked((int)legacy.Symbols["UMULT"]);
-        string folder = Path.Join(s_inputs, "Microsoft6502Basic");
+        int start = checked((int)legacy.Symbol("UMULT"));
+        string folder = Path.Join(Inputs, "Microsoft6502Basic");
         string source = $"""
             .cpu Mos6502
             .org ${start:X4}
@@ -173,15 +173,15 @@ public sealed class BasicSharedArrayMultiplicationTests
         AssemblyOptions options = new(ProcessorVariant.Mos6502, 0, 0x10000)
         {
             SourceResolver = new FileAssemblySourceResolver(),
-            PredefinedSymbols = new Dictionary<string, long>
+            PredefinedSymbols = BasicNames.WithCurrentNames(new Dictionary<string, long>
             {
-                ["INDEX"] = legacy.Symbols["INDEX"],
-                ["LOWTR"] = legacy.Symbols["LOWTR"],
-                ["ADDEND"] = legacy.Symbols["ADDEND"],
-                ["CURTOL"] = legacy.Symbols["CURTOL"],
-                ["DECCNT"] = legacy.Symbols["DECCNT"],
-                ["OMERR1"] = legacy.Symbols["OMERR1"]
-            }
+                ["INDEX"] = legacy.Symbol("INDEX"),
+                ["LOWTR"] = legacy.Symbol("LOWTR"),
+                ["ADDEND"] = legacy.Symbol("ADDEND"),
+                ["CURTOL"] = legacy.Symbol("CURTOL"),
+                ["DECCNT"] = legacy.Symbol("DECCNT"),
+                ["OMERR1"] = legacy.Symbol("OMERR1")
+            })
         };
 
         AssemblyResult native = new Assembler.Assembler().Assemble(
@@ -196,11 +196,11 @@ public sealed class BasicSharedArrayMultiplicationTests
 
     private static void CompareRegion(AssemblyResult legacy, AssemblyResult native)
     {
-        int start = checked((int)legacy.Symbols["UMULT"]);
-        int length = checked((int)(legacy.Symbols["FRE"] - start));
+        int start = checked((int)legacy.Symbol("UMULT"));
+        int length = checked((int)(legacy.Symbol("FRE") - start));
         foreach (string name in (string[])["UMULT", "UMULTD", "UMULTC", "UMLCNT", "UMLRTS"])
         {
-            native.Symbols[name].Should().Be(legacy.Symbols[name], $"{name} must retain its ROM address");
+            native.Symbol(name).Should().Be(legacy.Symbol(name), $"{name} must retain its ROM address");
         }
 
         native.Sections[0].Bytes.Slice(start, length).ToArray()

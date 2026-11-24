@@ -1040,7 +1040,7 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
                 directory,
                 out Assembler.AssemblyResult? integer,
                 Autostart,
-                BasicSource)?.Symbols,
+                BasicSource)?.SymbolsWithHistoricalNames,
             "MAIN",
             run: "RUN",
             resume: "CONT",

@@ -17,7 +17,7 @@ namespace Retrocore.Tests;
 public sealed class BasicSharedProgramTransfersTests
 {
     private const int ReturnAddress = 0x4000;
-    private static readonly string s_inputs = Path.Join(AppContext.BaseDirectory, "Inputs");
+    private static string Inputs => BasicNames.Inputs;
 
     /// <summary>
     ///  AppleSoft retains its program-transfer bytes and labels, including POP.
@@ -30,14 +30,14 @@ public sealed class BasicSharedProgramTransfersTests
     public void AppleSoftUsesSharedTransfers(Apple2Model model)
     {
         AssemblyResult legacy = SdkModules.AssembleAppleSoft(
-            SdkModules.AppleSoftPath(s_inputs, BasicSourceKind.Macro10),
+            SdkModules.AppleSoftPath(Inputs, BasicSourceKind.Macro10),
             model);
 
-        AssemblyResult native = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(s_inputs), model);
+        AssemblyResult native = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(Inputs), model);
         AssemblyResult standalone = AssembleShared(legacy, apple: true, searchLow: true);
         CompareRegion(legacy, native);
         CompareRegion(legacy, standalone);
-        standalone.Symbols["TRANSFER_END"].Should().Be(legacy.Symbols["DATA"]);
+        standalone.Symbol("TRANSFER_END").Should().Be(legacy.Symbol("DATA"));
         SdkModules.AppleSoftImage(native).ToArray().Should().Equal(SdkModules.AppleSoftImage(legacy).ToArray());
     }
 
@@ -54,10 +54,10 @@ public sealed class BasicSharedProgramTransfersTests
     [DataRow(PetModel.Pet4032, true)]
     public void SharedTransfersMatchPet(PetModel model, bool original)
     {
-        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(s_inputs, "Pet"), model, original);
+        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(Inputs, "Pet"), model, original);
         AssemblyResult native = AssembleShared(legacy, apple: false, searchLow: model == PetModel.Pet2001);
         CompareRegion(legacy, native);
-        native.Symbols["TRANSFER_END"].Should().Be(legacy.Symbols["DATA"]);
+        native.Symbol("TRANSFER_END").Should().Be(legacy.Symbol("DATA"));
     }
 
     /// <summary>
@@ -69,7 +69,7 @@ public sealed class BasicSharedProgramTransfersTests
     [DataRow(data: false)]
     public void GotoSearchesInBothDirections(bool forward)
     {
-        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(s_inputs, "Pet"), PetModel.Pet2001Basic2);
+        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(Inputs, "Pet"), PetModel.Pet2001Basic2);
         AssemblyResult native = AssembleShared(legacy, apple: false, searchLow: false);
         RecordingBus bus = CreateBus(legacy, native);
         byte[] program = forward
@@ -86,7 +86,7 @@ public sealed class BasicSharedProgramTransfersTests
         {
             Registers = new()
             {
-                ProgramCounter = checked((ushort)native.Symbols["GOTO"]),
+                ProgramCounter = checked((ushort)native.Symbol("GOTO")),
                 Accumulator = (byte)(forward ? '3' : '1'),
                 StackPointer = 0xFD,
                 Status = StatusRegister.Unused
@@ -107,7 +107,7 @@ public sealed class BasicSharedProgramTransfersTests
     [DataRow(PetModel.Pet4032)]
     public void ReturnRestoresTheCaller(PetModel model)
     {
-        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(s_inputs, "Pet"), model);
+        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(Inputs, "Pet"), model);
         bool searchLow = model == PetModel.Pet2001;
         AssemblyResult native = AssembleShared(legacy, apple: false, searchLow);
         RecordingBus bus = CreateBus(legacy, native);
@@ -127,14 +127,14 @@ public sealed class BasicSharedProgramTransfersTests
     [TestMethod]
     public void ReturnWithoutGosubReportsAnError()
     {
-        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(s_inputs, "Pet"), PetModel.Pet2001Basic2);
+        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(Inputs, "Pet"), PetModel.Pet2001Basic2);
         AssemblyResult native = AssembleShared(legacy, apple: false, searchLow: false);
         RecordingBus bus = CreateBus(legacy, native);
         bus.Memory[0x01F3] = 0;
         Processor<RecordingBus> cpu = StartReturn(bus, native, y: 0);
 
         StepTo(cpu, Address(native, "ERROR"));
-        cpu.Registers.X.Should().Be((byte)native.Symbols["ERRRG"]);
+        cpu.Registers.X.Should().Be((byte)native.Symbol("ERRRG"));
     }
 
     /// <summary>
@@ -148,15 +148,15 @@ public sealed class BasicSharedProgramTransfersTests
     [DataRow(PetModel.Pet4032, false)]
     public void ReturnRetainsTheEarlierForPointerQuirk(PetModel model, bool error)
     {
-        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(s_inputs, "Pet"), model);
+        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(Inputs, "Pet"), model);
         AssemblyResult native = AssembleShared(legacy, apple: false, searchLow: error);
         RecordingBus bus = CreateBus(legacy, native);
         const byte stack = 0xC0;
         int frame = 0x0100 + stack + 3;
-        bus.Memory[frame] = checked((byte)legacy.Symbols["FORTK"]);
+        bus.Memory[frame] = checked((byte)legacy.Symbol("FORTK"));
         SetWord(bus.Memory, frame + 1, 0x22FF);
         int gosub = frame + Address(legacy, "FORSIZ");
-        bus.Memory[gosub] = checked((byte)legacy.Symbols["GOSUTK"]);
+        bus.Memory[gosub] = checked((byte)legacy.Symbol("GOSUTK"));
         SetWord(bus.Memory, gosub + 1, 0x012A);
         SetWord(bus.Memory, gosub + 3, 0x3000);
         SetWord(bus.Memory, gosub + 5, ReturnAddress - 1);
@@ -167,7 +167,7 @@ public sealed class BasicSharedProgramTransfersTests
         {
             Registers = new()
             {
-                ProgramCounter = checked((ushort)native.Symbols["RETURN"]),
+                ProgramCounter = checked((ushort)native.Symbol("RETURN")),
                 StackPointer = stack,
                 Status = StatusRegister.Unused | StatusRegister.Zero
             }
@@ -176,7 +176,7 @@ public sealed class BasicSharedProgramTransfersTests
         StepTo(cpu, error ? Address(native, "ERROR") : ReturnAddress);
         if (error)
         {
-            cpu.Registers.X.Should().Be((byte)native.Symbols["ERRRG"]);
+            cpu.Registers.X.Should().Be((byte)native.Symbol("ERRRG"));
         }
         else
         {
@@ -196,14 +196,14 @@ public sealed class BasicSharedProgramTransfersTests
     [DataRow(PetModel.Pet4032, true)]
     public void StopRetainsTheDirectModeCheck(PetModel model, bool savesPosition)
     {
-        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(s_inputs, "Pet"), model);
+        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(Inputs, "Pet"), model);
         bool early = model == PetModel.Pet2001;
         bool disk = model == PetModel.Pet4032;
-        string folder = Path.Join(s_inputs, "Microsoft6502Basic");
+        string folder = Path.Join(Inputs, "Microsoft6502Basic");
         string source = $"""
             .cpu Mos6502
             .include "MsBasic.ProgramTransfers.asm"
-            .org ${legacy.Symbols["RESTOR"]:X4}
+            .org ${legacy.Symbol("RESTOR"):X4}
                 RESTORE_DATA
                 STOP_AND_CONTINUE {(early ? 0 : 1)}, {(disk ? 0 : 1)}
             """;
@@ -215,14 +215,14 @@ public sealed class BasicSharedProgramTransfersTests
         ];
 
         Dictionary<string, long> symbols = [];
-        foreach (string name in dependencies) { symbols.Add(name, legacy.Symbols[name]); }
-        if (!disk) { symbols.Add("CNTWFL", legacy.Symbols["CNTWFL"]); }
+        foreach (string name in dependencies) { symbols.Add(name, legacy.Symbol(name)); }
+        if (!disk) { symbols.Add("CNTWFL", legacy.Symbol("CNTWFL")); }
         AssemblyResult native = new Assembler.Assembler().Assemble(
             new AssemblySource(source, Path.Join(folder, "SharedStopTest.asm")),
             new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
             {
                 SourceResolver = new FileAssemblySourceResolver(),
-                PredefinedSymbols = symbols
+                PredefinedSymbols = BasicNames.WithCurrentNames(symbols)
             });
 
         native.Success.Should().BeTrue(string.Join(Environment.NewLine, native.Diagnostics.Select(diagnostic => diagnostic.Message)));
@@ -237,7 +237,7 @@ public sealed class BasicSharedProgramTransfersTests
         {
             Registers = new()
             {
-                ProgramCounter = checked((ushort)native.Symbols["STOP"]),
+                ProgramCounter = checked((ushort)native.Symbol("STOP")),
                 StackPointer = 0xFD,
                 Status = StatusRegister.Unused | StatusRegister.Carry | StatusRegister.Zero
             }
@@ -256,7 +256,7 @@ public sealed class BasicSharedProgramTransfersTests
     public void PopDiscardsTheFrameWithoutTransferring()
     {
         AssemblyResult legacy = SdkModules.AssembleAppleSoft(
-            SdkModules.AppleSoftPath(s_inputs, BasicSourceKind.Macro10),
+            SdkModules.AppleSoftPath(Inputs, BasicSourceKind.Macro10),
             Apple2Model.IIeEnhanced);
 
         AssemblyResult native = AssembleShared(legacy, apple: true, searchLow: true);
@@ -264,7 +264,7 @@ public sealed class BasicSharedProgramTransfersTests
         PrepareReturnFrame(bus.Memory, native);
         SetWord(bus.Memory, Address(native, "CURLIN"), 0x1234);
         SetWord(bus.Memory, Address(native, "TXTPTR"), 0x5678);
-        byte pop = checked((byte)((native.Symbols["POPTK"] - native.Symbols["ENDTK"]) * 2));
+        byte pop = checked((byte)((native.Symbol("POPTK") - native.Symbol("ENDTK")) * 2));
         Processor<RecordingBus> cpu = StartReturn(bus, native, pop);
 
         StepTo(cpu, ReturnAddress);
@@ -278,7 +278,7 @@ public sealed class BasicSharedProgramTransfersTests
     [TestMethod]
     public void TransfersRetainDocumentationAndSourcePositions()
     {
-        AssemblyResult native = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(s_inputs), Apple2Model.IIeEnhanced);
+        AssemblyResult native = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(Inputs), Apple2Model.IIeEnhanced);
         int start = Address(native, "RUN");
         int end = Address(native, "DATA");
         DebugTestMemory memory = new();
@@ -286,12 +286,12 @@ public sealed class BasicSharedProgramTransfersTests
         SourceMapModule module = new(native, area: null);
         foreach (string name in (string[])["RUN", "GOSUB", "GOTO", "RETURN"])
         {
-            DocumentationTopic topic = module.Documentation.Find(name)
+            DocumentationTopic topic = module.Documentation.FindTopic(name)
                 ?? throw new AssertFailedException($"{name} is not documented.");
 
             topic.Kind.Should().Be(DocumentationKind.Routine);
             topic.Path.Should().EndWith("MsBasic.ProgramTransfers.asm");
-            ushort address = checked((ushort)native.Symbols[name]);
+            ushort address = checked((ushort)native.Symbol(name));
             DebugPosition position = module.Position(memory, address)
                 ?? throw new AssertFailedException($"{name} has no debugger source position.");
 
@@ -304,14 +304,14 @@ public sealed class BasicSharedProgramTransfersTests
 
     private static AssemblyResult AssembleShared(AssemblyResult legacy, bool apple, bool searchLow)
     {
-        string folder = Path.Join(s_inputs, "Microsoft6502Basic");
+        string folder = Path.Join(Inputs, "Microsoft6502Basic");
         string source = $"""
             .cpu Mos6502
             .include "MsBasic.ProgramTransfers.asm"
-            .org ${legacy.Symbols["RUN"]:X4}
+            .org ${legacy.Symbol("RUN"):X4}
                 RUN_STATEMENT {(apple ? 1 : 0)}
                 GOSUB_AND_GOTO {(apple ? "NXTCO1" : "NEWSTT")}
-            {(apple ? "POP:" : "")}
+            {(apple ? BasicNames.Label("POP") : "")}
                 RETURN_STATEMENT {(searchLow ? 1 : 0)}, {(apple ? 1 : 0)}
             TRANSFER_END:
             """;
@@ -324,18 +324,18 @@ public sealed class BasicSharedProgramTransfersTests
         ];
 
         Dictionary<string, long> symbols = dependencies.ToDictionary(
-            name => name, name => legacy.Symbols[name], StringComparer.Ordinal);
+            name => name, name => legacy.Symbol(name), StringComparer.Ordinal);
 
         if (apple)
         {
             foreach (string name in (string[])["NXTCO1", "POPTK", "ENDTK", "REMER1"])
             {
-                symbols.Add(name, legacy.Symbols[name]);
+                symbols.Add(name, legacy.Symbol(name));
             }
         }
         else
         {
-            symbols.Add("NEWSTT", legacy.Symbols["NEWSTT"]);
+            symbols.Add("NEWSTT", legacy.Symbol("NEWSTT"));
         }
 
         AssemblyResult native = new Assembler.Assembler().Assemble(
@@ -343,7 +343,7 @@ public sealed class BasicSharedProgramTransfersTests
             new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
             {
                 SourceResolver = new FileAssemblySourceResolver(),
-                PredefinedSymbols = symbols
+                PredefinedSymbols = BasicNames.WithCurrentNames(symbols)
             });
 
         native.Success.Should().BeTrue(string.Join(Environment.NewLine, native.Diagnostics.Select(diagnostic =>
@@ -359,8 +359,8 @@ public sealed class BasicSharedProgramTransfersTests
         foreach (AssemblySymbol label in legacy.SymbolDefinitions.Where(
             symbol => !symbol.IsConstant && symbol.Value >= start && symbol.Value < end))
         {
-            native.Symbols.Should().ContainKey(label.Name);
-            native.Symbols[label.Name].Should().Be(label.Value, $"{label.Name} must retain its ROM address");
+            native.SymbolsWithHistoricalNames.Should().ContainKey(label.Name);
+            native.Symbol(label.Name).Should().Be(label.Value, $"{label.Name} must retain its ROM address");
         }
 
         native.Sections[0].Bytes.Slice(start, end - start).ToArray()
@@ -379,7 +379,7 @@ public sealed class BasicSharedProgramTransfersTests
 
     private static void PrepareReturnFrame(byte[] memory, AssemblyResult native)
     {
-        memory[0x01F3] = checked((byte)native.Symbols["GOSUTK"]);
+        memory[0x01F3] = checked((byte)native.Symbol("GOSUTK"));
         SetWord(memory, 0x01F4, 0x012A);
         SetWord(memory, 0x01F6, 0x3000);
         SetWord(memory, 0x01F8, ReturnAddress - 1);
@@ -391,7 +391,7 @@ public sealed class BasicSharedProgramTransfersTests
     {
         Registers = new()
         {
-            ProgramCounter = checked((ushort)native.Symbols["RETURN"]),
+            ProgramCounter = checked((ushort)native.Symbol("RETURN")),
             StackPointer = 0xF0,
             Y = y,
             Status = StatusRegister.Unused | StatusRegister.Zero
@@ -408,7 +408,7 @@ public sealed class BasicSharedProgramTransfersTests
         cpu.Registers.ProgramCounter.Should().Be((ushort)address);
     }
 
-    private static int Address(AssemblyResult result, string name) => checked((int)result.Symbols[name]);
+    private static int Address(AssemblyResult result, string name) => checked((int)result.Symbol(name));
     private static int GetWord(byte[] memory, int address) => memory[address] | (memory[address + 1] << 8);
 
     private static void SetWord(byte[] memory, int address, int value)

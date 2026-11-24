@@ -16,7 +16,7 @@ namespace Retrocore.Tests;
 [TestClass]
 public sealed class BasicSharedUserFunctionsTests
 {
-    private static readonly string s_inputs = Path.Join(AppContext.BaseDirectory, "Inputs");
+    private static string Inputs => BasicNames.Inputs;
 
     /// <summary>
     ///  The later undefined-function check preserves every AppleSoft model's bytes and labels.
@@ -29,14 +29,14 @@ public sealed class BasicSharedUserFunctionsTests
     public void AppleSoftUsesSharedUserFunctions(Apple2Model model)
     {
         AssemblyResult legacy = SdkModules.AssembleAppleSoft(
-            SdkModules.AppleSoftPath(s_inputs, BasicSourceKind.Macro10),
+            SdkModules.AppleSoftPath(Inputs, BasicSourceKind.Macro10),
             model);
 
-        AssemblyResult native = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(s_inputs), model);
+        AssemblyResult native = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(Inputs), model);
         AssemblyResult standalone = AssembleShared(legacy, earlyCheck: false);
         CompareRegion(legacy, native);
         CompareRegion(legacy, standalone);
-        standalone.Symbols["USER_FUNCTIONS_END"].Should().Be(legacy.Symbols["STR"]);
+        standalone.Symbol("USER_FUNCTIONS_END").Should().Be(legacy.Symbol("STR"));
     }
 
     /// <summary>
@@ -52,11 +52,11 @@ public sealed class BasicSharedUserFunctionsTests
     [DataRow(PetModel.Pet4032, true)]
     public void SharedUserFunctionsMatchPet(PetModel model, bool original)
     {
-        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(s_inputs, "Pet"), model, original);
+        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(Inputs, "Pet"), model, original);
         AssemblyResult native = AssembleShared(legacy, model == PetModel.Pet2001);
         CompareRegion(legacy, native);
-        native.Symbols["USER_FUNCTIONS_END"].Should().Be(legacy.Symbols["STR"]);
-        native.Symbols.ContainsKey("ERRGUF").Should().Be(model != PetModel.Pet2001);
+        native.Symbol("USER_FUNCTIONS_END").Should().Be(legacy.Symbol("STR"));
+        native.HasSymbol("ERRGUF").Should().Be(model != PetModel.Pet2001);
     }
 
     /// <summary>
@@ -77,28 +77,28 @@ public sealed class BasicSharedUserFunctionsTests
     public void UndefinedFunctionCheckUsesTheSelectedByte(bool early, int address, bool undefined)
     {
         PetModel model = early ? PetModel.Pet2001 : PetModel.Pet2001Basic2;
-        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(s_inputs, "Pet"), model);
+        AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(Inputs, "Pet"), model);
         AssemblyResult native = AssembleShared(legacy, early);
         RecordingBus bus = new();
         native.Sections[0].Bytes.Span.CopyTo(bus.Memory);
         foreach (string entry in (string[])["GETFNM", "PARCHK", "CHKNUM"])
         {
-            bus.Memory[checked((int)native.Symbols[entry])] = 0x60;
+            bus.Memory[checked((int)native.Symbol(entry))] = 0x60;
         }
 
-        int function = checked((int)native.Symbols["DEFPNT"]);
-        int variable = checked((int)native.Symbols["VARPNT"]);
+        int function = checked((int)native.Symbol("DEFPNT"));
+        int variable = checked((int)native.Symbol("VARPNT"));
         bus.Memory[function] = 0x00;
         bus.Memory[function + 1] = 0x04;
         bus.Memory[0x0402] = (byte)address;
         bus.Memory[0x0403] = (byte)(address >> 8);
-        ushort error = checked((ushort)native.Symbols["ERROR"]);
-        ushort defined = checked((ushort)native.Symbols["DEFSTF"]);
+        ushort error = checked((ushort)native.Symbol("ERROR"));
+        ushort defined = checked((ushort)native.Symbol("DEFSTF"));
         Processor<RecordingBus> cpu = new(bus)
         {
             Registers = new()
             {
-                ProgramCounter = checked((ushort)native.Symbols["FNDOER"]),
+                ProgramCounter = checked((ushort)native.Symbol("FNDOER")),
                 StackPointer = 0xFD,
                 Status = StatusRegister.Unused
             }
@@ -114,7 +114,7 @@ public sealed class BasicSharedUserFunctionsTests
         cpu.Registers.ProgramCounter.Should().Be(undefined ? error : defined);
         if (undefined)
         {
-            cpu.Registers.X.Should().Be((byte)native.Symbols["ERRUF"]);
+            cpu.Registers.X.Should().Be((byte)native.Symbol("ERRUF"));
         }
         else
         {
@@ -128,20 +128,20 @@ public sealed class BasicSharedUserFunctionsTests
     [TestMethod]
     public void UserFunctionsRetainDocumentationAndSourcePositions()
     {
-        AssemblyResult native = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(s_inputs), Apple2Model.IIeEnhanced);
-        int start = checked((int)native.Symbols["ERRDIR"]);
-        int end = checked((int)native.Symbols["STR"]);
+        AssemblyResult native = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(Inputs), Apple2Model.IIeEnhanced);
+        int start = checked((int)native.Symbol("ERRDIR"));
+        int end = checked((int)native.Symbol("STR"));
         DebugTestMemory memory = new();
         memory.Set((ushort)start, native.Sections[0].Bytes.Slice(start, end - start).ToArray());
         SourceMapModule module = new(native, area: null);
         foreach (string name in (string[])["ERRDIR", "ERRGUF", "DEF", "GETFNM", "FNDOER", "DEFFIN"])
         {
-            DocumentationTopic topic = module.Documentation.Find(name)
+            DocumentationTopic topic = module.Documentation.FindTopic(name)
                 ?? throw new AssertFailedException($"{name} is not documented.");
 
             topic.Kind.Should().Be(DocumentationKind.Routine);
             topic.Path.Should().EndWith("MsBasic.UserFunctions.asm");
-            ushort address = checked((ushort)native.Symbols[name]);
+            ushort address = checked((ushort)native.Symbol(name));
             DebugPosition position = module.Position(memory, address)
                 ?? throw new AssertFailedException($"{name} has no debugger source position.");
 
@@ -152,11 +152,11 @@ public sealed class BasicSharedUserFunctionsTests
 
     private static AssemblyResult AssembleShared(AssemblyResult legacy, bool earlyCheck)
     {
-        string folder = Path.Join(s_inputs, "Microsoft6502Basic");
+        string folder = Path.Join(Inputs, "Microsoft6502Basic");
         string source = $"""
             .cpu Mos6502
             .include "MsBasic.UserFunctions.asm"
-            .org ${legacy.Symbols["ERRDIR"]:X4}
+            .org ${legacy.Symbol("ERRDIR"):X4}
                 USER_FUNCTIONS {(earlyCheck ? 1 : 0)}
             USER_FUNCTIONS_END:
             """;
@@ -169,14 +169,14 @@ public sealed class BasicSharedUserFunctionsTests
         ];
 
         Dictionary<string, long> symbols = dependencies.ToDictionary(
-            name => name, name => legacy.Symbols[name], StringComparer.Ordinal);
+            name => name, name => legacy.Symbol(name), StringComparer.Ordinal);
 
         AssemblyResult native = new Assembler.Assembler().Assemble(
             new AssemblySource(source, Path.Join(folder, "SharedUserFunctionsTest.asm")),
             new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
             {
                 SourceResolver = new FileAssemblySourceResolver(),
-                PredefinedSymbols = symbols
+                PredefinedSymbols = BasicNames.WithCurrentNames(symbols)
             });
 
         native.Success.Should().BeTrue(string.Join(Environment.NewLine, native.Diagnostics.Select(diagnostic =>
@@ -187,13 +187,13 @@ public sealed class BasicSharedUserFunctionsTests
 
     private static void CompareRegion(AssemblyResult legacy, AssemblyResult native)
     {
-        int start = checked((int)legacy.Symbols["ERRDIR"]);
-        int end = checked((int)legacy.Symbols["STR"]);
+        int start = checked((int)legacy.Symbol("ERRDIR"));
+        int end = checked((int)legacy.Symbol("STR"));
         foreach (AssemblySymbol label in legacy.SymbolDefinitions.Where(
             symbol => !symbol.IsConstant && symbol.Value >= start && symbol.Value < end))
         {
-            native.Symbols.Should().ContainKey(label.Name);
-            native.Symbols[label.Name].Should().Be(label.Value, $"{label.Name} must retain its ROM address");
+            native.SymbolsWithHistoricalNames.Should().ContainKey(label.Name);
+            native.Symbol(label.Name).Should().Be(label.Value, $"{label.Name} must retain its ROM address");
         }
 
         native.Sections[0].Bytes.Slice(start, end - start).ToArray()

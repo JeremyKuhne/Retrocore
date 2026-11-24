@@ -22,7 +22,7 @@ namespace Retrocore.Tests;
 [TestClass]
 public sealed class PetRomSourceTests
 {
-    private static readonly string s_sources = Path.Join(AppContext.BaseDirectory, "Inputs", "Pet");
+    private static string PetSources => Path.Join(BasicNames.Inputs, "Pet");
 
     /// <summary>
     ///  BASIC builds byte-identically to each version's chips, <c>$C000-$DFFF</c>, or BASIC 4's <c>$B000-$DFFF</c>.
@@ -38,7 +38,7 @@ public sealed class PetRomSourceTests
     [DataRow(PetModel.Pet4032, true, "6F9702DCCCB86AE7F7A1A5FD4C89DF19799E1A05ADE462443948E48D2968CE44")]
     public void BasicMatchesTheChips(PetModel model, bool original, string expectedHash)
     {
-        ReadOnlySpan<byte> image = PetSdkModules.BasicImage(PetSdkModules.AssembleBasic(s_sources, model, original), model).Span;
+        ReadOnlySpan<byte> image = PetSdkModules.BasicImage(PetSdkModules.AssembleBasic(PetSources, model, original), model).Span;
         Check(image, expectedHash, model, original, PetSdkModules.BasicOrigin(model));
     }
 
@@ -55,20 +55,20 @@ public sealed class PetRomSourceTests
     [DataRow(PetModel.Pet4032, true)]
     public void NativeBasicMatchesTheOverlay(PetModel model, bool original)
     {
-        AssemblyResult native = PetSdkModules.AssembleBasic(s_sources, model, original, BasicSourceKind.Native);
-        AssemblyResult legacy = PetLegacyBasic.Assemble(s_sources, model, original);
-        AssemblyResult editor = PetSdkModules.AssembleEditor(s_sources, model);
+        AssemblyResult native = PetSdkModules.AssembleBasic(PetSources, model, original, BasicSourceKind.Native);
+        AssemblyResult legacy = PetLegacyBasic.Assemble(PetSources, model, original);
+        AssemblyResult editor = PetSdkModules.AssembleEditor(PetSources, model);
 
         PetSdkModules.BasicImage(native, model).ToArray().Should().Equal(PetSdkModules.BasicImage(legacy, model).ToArray());
         PetSdkModules.EditorImage(native, editor, model).Should().Equal(PetSdkModules.EditorImage(legacy, editor, model));
 
-        int end = model.BasicVersion() == 4 ? 0xE000 : checked((int)legacy.Symbols["LASTWR"]);
+        int end = model.BasicVersion() == 4 ? 0xE000 : checked((int)legacy.Symbol("LASTWR"));
         foreach (AssemblySymbol label in legacy.SymbolDefinitions.Where(symbol =>
             !symbol.IsConstant && (symbol.Value >= PetSdkModules.BasicOrigin(model) && symbol.Value < end
                 || model == PetModel.Pet2001 && symbol.Value is >= 0xE7F3 and < 0xE7F9)))
         {
-            native.Symbols.Should().ContainKey(label.Name);
-            native.Symbols[label.Name].Should().Be(label.Value, $"{label.Name} must retain its ROM address");
+            native.SymbolsWithHistoricalNames.Should().ContainKey(label.Name);
+            native.Symbol(label.Name).Should().Be(label.Value, $"{label.Name} must retain its ROM address");
         }
 
         native.SourceMap.Select(entry => entry.Location?.Path).OfType<string>()
@@ -80,7 +80,7 @@ public sealed class PetRomSourceTests
         foreach ((string name, string file) in ((string, string)[])
             [("PRINT", "MsBasic.Print.asm"), ("INIT", "Commodore.Initialization.asm")])
         {
-            DebugPosition position = module.Position(memory, checked((ushort)native.Symbols[name]))
+            DebugPosition position = module.Position(memory, checked((ushort)native.Symbol(name)))
                 ?? throw new AssertFailedException($"{name} has no native debugger position.");
 
             Path.GetFileName(position.Chain[0].Path).Should().Be(file);
@@ -101,8 +101,8 @@ public sealed class PetRomSourceTests
     [DataRow(PetModel.Pet4032, true)]
     public void SharedFloatConstantsMatchThePetRom(PetModel model, bool original)
     {
-        AssemblyResult basic = PetLegacyBasic.Assemble(s_sources, model, original);
-        string folder = Path.Join(AppContext.BaseDirectory, "Inputs", "Microsoft6502Basic");
+        AssemblyResult basic = PetLegacyBasic.Assemble(PetSources, model, original);
+        string folder = Path.Join(BasicNames.Inputs, "Microsoft6502Basic");
         AssemblyOptions options = new(ProcessorVariant.Mos6502, 0, 0x10000)
         {
             SourceResolver = new FileAssemblySourceResolver()
@@ -118,8 +118,8 @@ public sealed class PetRomSourceTests
                 ("ATN_CONSTANTS", "INITAT", ["ATNCON"])
             ])
         {
-            int origin = checked((int)basic.Symbols[names[0]]);
-            int expectedEnd = checked((int)basic.Symbols[end]);
+            int origin = checked((int)basic.Symbol(names[0]));
+            int expectedEnd = checked((int)basic.Symbol(end));
             if (macro == "SIN_CONSTANTS")
             {
                 // Bytes after the sine coefficients differ between variants.
@@ -152,22 +152,22 @@ public sealed class PetRomSourceTests
             constants.Success.Should().BeTrue(string.Join('\n', constants.Diagnostics.Select(diagnostic => diagnostic.Message)));
             foreach (string name in names)
             {
-                constants.Symbols[name].Should().Be(basic.Symbols[name], $"{name} must land at the PET BASIC address");
+                constants.Symbol(name).Should().Be(basic.Symbol(name), $"{name} must land at the PET BASIC address");
             }
 
             if (macro == "OUTPUT_TABLES")
             {
                 if (model == PetModel.Pet2001)
                 {
-                    constants.Symbols.Should().NotContainKey("ZERO");
+                    constants.SymbolsWithHistoricalNames.Should().NotContainKey("ZERO");
                 }
                 else
                 {
-                    constants.Symbols["ZERO"].Should().Be(basic.Symbols["ZERO"]);
+                    constants.Symbol("ZERO").Should().Be(basic.Symbol("ZERO"));
                 }
             }
 
-            constants.Symbols["END_OF_CONSTANTS"].Should().Be(expectedEnd, $"{macro} must emit the whole table");
+            constants.Symbol("END_OF_CONSTANTS").Should().Be(expectedEnd, $"{macro} must emit the whole table");
             int length = expectedEnd - origin;
             constants.Sections[0].Bytes.Slice(origin, length).ToArray()
                 .Should().Equal(basic.Sections[0].Bytes.Slice(origin, length).ToArray(), $"{macro} must match {model}");
@@ -187,8 +187,8 @@ public sealed class PetRomSourceTests
     [DataRow(PetModel.Pet4032, true)]
     public void SharedMathRoutinesMatchThePetRom(PetModel model, bool original)
     {
-        AssemblyResult basic = PetLegacyBasic.Assemble(s_sources, model, original);
-        string folder = Path.Join(AppContext.BaseDirectory, "Inputs", "Microsoft6502Basic");
+        AssemblyResult basic = PetLegacyBasic.Assemble(PetSources, model, original);
+        string folder = Path.Join(BasicNames.Inputs, "Microsoft6502Basic");
         foreach ((string file, string macro, string first, string end, string[] entries, string[] dependencies) in
             ((string, string, string, string, string[], string[])[])
             [
@@ -268,8 +268,8 @@ public sealed class PetRomSourceTests
                     ["FACSGN", "NEGOP", "FACEXP", "FONE", "FDIV", "ATNCON", "POLYX", "PI2", "FSUB"])
             ])
         {
-            int origin = checked((int)basic.Symbols[first]);
-            int expectedEnd = checked((int)basic.Symbols[end]);
+            int origin = checked((int)basic.Symbol(first));
+            int expectedEnd = checked((int)basic.Symbol(end));
             if (macro == "ADD_ENTRIES")
             {
                 // BASIC 2 inserts its hidden-message routine immediately after FSUBT's 15 bytes.
@@ -279,7 +279,7 @@ public sealed class PetRomSourceTests
             Dictionary<string, long> symbols = [];
             foreach (string name in dependencies)
             {
-                symbols.Add(name, basic.Symbols[name]);
+                symbols.Add(name, basic.Symbol(name));
             }
 
             string invocation = macro switch
@@ -301,7 +301,7 @@ public sealed class PetRomSourceTests
             AssemblyOptions options = new(ProcessorVariant.Mos6502, 0, 0x10000)
             {
                 SourceResolver = new FileAssemblySourceResolver(),
-                PredefinedSymbols = symbols
+                PredefinedSymbols = BasicNames.WithCurrentNames(symbols)
             };
 
             AssemblyResult routine = new Assembler.Assembler().Assemble(
@@ -310,10 +310,10 @@ public sealed class PetRomSourceTests
             routine.Success.Should().BeTrue(string.Join('\n', routine.Diagnostics.Select(diagnostic => diagnostic.Message)));
             foreach (string name in entries)
             {
-                routine.Symbols[name].Should().Be(basic.Symbols[name], $"{name} must land at the PET BASIC address");
+                routine.Symbol(name).Should().Be(basic.Symbol(name), $"{name} must land at the PET BASIC address");
             }
 
-            routine.Symbols["END_OF_ROUTINE"].Should().Be(expectedEnd, $"{macro} must emit the whole routine");
+            routine.Symbol("END_OF_ROUTINE").Should().Be(expectedEnd, $"{macro} must emit the whole routine");
             int length = expectedEnd - origin;
             routine.Sections[0].Bytes.Slice(origin, length).ToArray()
                 .Should().Equal(basic.Sections[0].Bytes.Slice(origin, length).ToArray(), $"{macro} must match {model}");
@@ -325,7 +325,7 @@ public sealed class PetRomSourceTests
                 AssemblyOptions misplacedOptions = new(ProcessorVariant.Mos6502, 0, 0x10000)
                 {
                     SourceResolver = options.SourceResolver,
-                    PredefinedSymbols = symbols
+                    PredefinedSymbols = BasicNames.WithCurrentNames(symbols)
                 };
 
                 AssemblyResult misplaced = new Assembler.Assembler().Assemble(
@@ -365,14 +365,14 @@ public sealed class PetRomSourceTests
     [DataRow(PetModel.Pet2001Basic2, 10, 9, 100)]
     public void DecimalInputPreservesNegativeExponentBehavior(PetModel model, int exponent, int digit, int expected)
     {
-        AssemblyResult basic = PetLegacyBasic.Assemble(s_sources, model);
-        int origin = checked((int)basic.Symbols["FIN"]);
-        int end = checked((int)basic.Symbols["NZ0999"]);
+        AssemblyResult basic = PetLegacyBasic.Assemble(PetSources, model);
+        int origin = checked((int)basic.Symbol("FIN"));
+        int end = checked((int)basic.Symbol("NZ0999"));
         Dictionary<string, long> symbols = basic.Symbols
             .Where(symbol => symbol.Value < origin || symbol.Value >= end)
             .ToDictionary(symbol => symbol.Key, symbol => symbol.Value);
 
-        string folder = Path.Join(AppContext.BaseDirectory, "Inputs", "Microsoft6502Basic");
+        string folder = Path.Join(BasicNames.Inputs, "Microsoft6502Basic");
         string source = $"""
             .cpu Mos6502
             .include "MsBasic.DecimalInputCore.asm"
@@ -385,28 +385,28 @@ public sealed class PetRomSourceTests
             new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
             {
                 SourceResolver = new FileAssemblySourceResolver(),
-                PredefinedSymbols = symbols
+                PredefinedSymbols = BasicNames.WithCurrentNames(symbols)
             });
 
         input.Success.Should().BeTrue(string.Join('\n', input.Diagnostics.Select(diagnostic => diagnostic.Message)));
         RecordingBus bus = new();
         input.Sections[0].Bytes.Span.CopyTo(bus.Memory);
-        int textPointer = checked((int)input.Symbols["TXTPTR"]);
-        int exponentAddress = checked((int)input.Symbols["TENEXP"]);
+        int textPointer = checked((int)input.Symbol("TXTPTR"));
+        int exponentAddress = checked((int)input.Symbol("TENEXP"));
         bus.Memory[textPointer] = 0;
         bus.Memory[textPointer + 1] = 2;
         bus.Memory[0x0200] = (byte)('0' + digit);
         bus.Memory[exponentAddress] = (byte)exponent;
-        bus.Memory[checked((int)input.Symbols["EXPSGN"])] = 0x80;
+        bus.Memory[checked((int)input.Symbol("EXPSGN"))] = 0x80;
 
         Processor<RecordingBus> cpu = new(bus);
         cpu.Registers = new()
         {
-            ProgramCounter = checked((ushort)input.Symbols["FINEDG"]),
+            ProgramCounter = checked((ushort)input.Symbol("FINEDG")),
             Status = StatusRegister.Unused
         };
 
-        ushort exit = checked((ushort)input.Symbols["FINEC"]);
+        ushort exit = checked((ushort)input.Symbol("FINEC"));
         for (int instruction = 0; instruction < 32 && cpu.Registers.ProgramCounter != exit; instruction++)
         {
             cpu.StepInstruction();
@@ -429,7 +429,7 @@ public sealed class PetRomSourceTests
     [DataRow(PetModel.Pet4032Business, "D3B7B8FD3405055DF62B265E01141464532FD0500B907BB9B9164740B2210BAC")]
     public void EditorMatchesTheChip(PetModel model, string expectedHash) =>
         Check(
-            PetSdkModules.EditorImage(PetSdkModules.AssembleBasic(s_sources, model), PetSdkModules.AssembleEditor(s_sources, model), model),
+            PetSdkModules.EditorImage(PetSdkModules.AssembleBasic(PetSources, model), PetSdkModules.AssembleEditor(PetSources, model), model),
             expectedHash,
             model,
             original: false,
@@ -445,7 +445,7 @@ public sealed class PetRomSourceTests
     [DataRow(PetModel.Pet2001Basic2, "056D5E84A6E4F2B5B40A4109F49515C2496A4BF99139A9F59ABE486DED5CD03D")]
     [DataRow(PetModel.Pet4032, "7CF8678B748BDA1FFEDEE69EA54888FEB3F5EC66DCA8143375CBDF8C3DE4D573")]
     public void KernalMatchesTheChips(PetModel model, string expectedHash) =>
-        Check(PetSdkModules.AssembleKernal(s_sources, model).Sections[0].Bytes.Span, expectedHash, model, original: false, PetSdkModules.KernalOrigin);
+        Check(PetSdkModules.AssembleKernal(PetSources, model).Sections[0].Bytes.Span, expectedHash, model, original: false, PetSdkModules.KernalOrigin);
 
     /// <summary>
     ///  The character ROM builds byte-identically to the 2001's 901447-08 and the 2001-N's 901447-10.
@@ -456,7 +456,7 @@ public sealed class PetRomSourceTests
     [DataRow(PetModel.Pet2001, "697390D9CD7DA9E77D71935B0BF71D1181F624E0BE802CBFB472803861443340")]
     [DataRow(PetModel.Pet2001Basic2, "DA3374C21D6EA440CEF5F338CE3F524E0A1E40DCB1EF64446C695F92C636F1FA")]
     public void CharactersMatchTheChip(PetModel model, string expectedHash) =>
-        Check(PetSdkModules.AssembleCharacters(s_sources, model).Sections[0].Bytes.Span, expectedHash, model, original: false, origin: null);
+        Check(PetSdkModules.AssembleCharacters(PetSources, model).Sections[0].Bytes.Span, expectedHash, model, original: false, origin: null);
 
     /// <summary>
     ///  With no dumps at all, each model boots from the SDK's builds to <c>READY.</c>.
@@ -470,7 +470,7 @@ public sealed class PetRomSourceTests
     [DataRow(PetModel.Pet4032Business, "*** COMMODORE BASIC 4.0 ***")]
     public void MachineBootsFromTheSdkBuilds(PetModel model, string banner)
     {
-        PetMachine machine = new(PetSdkModules.BuildRoms(model, s_sources), model);
+        PetMachine machine = new(PetSdkModules.BuildRoms(model, PetSources), model);
         string[] screen = PetMachineTests.RunToReady(machine);
         screen.Should().Contain(line => line.Trim() == banner, string.Join('\n', screen));
         screen.Should().Contain(line => line.StartsWith("READY.", StringComparison.Ordinal));

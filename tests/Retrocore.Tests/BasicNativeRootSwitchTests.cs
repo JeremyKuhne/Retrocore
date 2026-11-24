@@ -13,8 +13,8 @@ namespace Retrocore.Tests;
 [TestClass]
 public sealed class BasicNativeRootSwitchTests
 {
-    private static readonly string s_inputs = Path.Join(AppContext.BaseDirectory, "Inputs");
-    private static readonly string s_shared = Path.Join(s_inputs, "Microsoft6502Basic");
+    private static string Inputs => BasicNames.Inputs;
+    private static string SharedInputs => Path.Join(Inputs, "Microsoft6502Basic");
 
     /// <summary>
     ///  Each shipped root reports which alternate legacy setting it cannot support.
@@ -93,34 +93,34 @@ public sealed class BasicNativeRootSwitchTests
             """;
 
         AssemblyResult result = RequireSuccess(new Assembler.Assembler().Assemble(
-            new AssemblySource(source, Path.Join(s_shared, "CustomSwitchTest.asm")),
+            new AssemblySource(source, Path.Join(SharedInputs, "CustomSwitchTest.asm")),
             new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
             {
                 SourceResolver = new FileAssemblySourceResolver(),
-                PredefinedSymbols = new Dictionary<string, long>
+                PredefinedSymbols = BasicNames.WithCurrentNames(new Dictionary<string, long>
                 {
                     ["REALIO"] = realio,
                     ["TIME"] = legacyValue,
                     ["EXTIO"] = legacyValue,
                     ["DISKO"] = legacyValue
-                }
+                })
             }));
 
-        (result.Symbols["END_OF_TABLE"] - result.Symbols["FDCEND"]).Should().Be(includeTime * 24);
+        (result.Symbol("END_OF_TABLE") - result.Symbol("FDCEND")).Should().Be(includeTime * 24);
     }
 
     private static AssemblyResult AssembleRoot(string root, Dictionary<string, long> symbols)
     {
         string path = root == "AppleSoft"
-            ? Path.Join(s_inputs, "AppleSoft", "AppleSoft.asm")
-            : Path.Join(s_inputs, "Pet", "Basic", $"{root}.asm");
+            ? Path.Join(Inputs, "AppleSoft", "AppleSoft.asm")
+            : Path.Join(Inputs, "Pet", "Basic", $"{root}.asm");
 
         return new Assembler.Assembler().Assemble(
             new AssemblySource(File.ReadAllText(path), path),
             new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
             {
-                SourceResolver = new OverlayBaseResolver(s_shared),
-                PredefinedSymbols = symbols
+                SourceResolver = new OverlayBaseResolver(SharedInputs),
+                PredefinedSymbols = BasicNames.WithCurrentNames(symbols)
             });
     }
 

@@ -14,9 +14,9 @@ namespace Retrocore.Tests;
 public sealed class Basic1IndependentSwitchTests
 {
     private const ushort ReturnAddress = 0x3000;
-    private static readonly string s_inputs = Path.Join(AppContext.BaseDirectory, "Inputs");
-    private static readonly string s_root = Path.Join(s_inputs, "Pet", "Basic", "Basic1.asm");
-    private static readonly string s_shared = Path.Join(s_inputs, "Microsoft6502Basic");
+    private static string Inputs => BasicNames.Inputs;
+    private static string RootPath => Path.Join(Inputs, "Pet", "Basic", "Basic1.asm");
+    private static string SharedInputs => Path.Join(Inputs, "Microsoft6502Basic");
 
     /// <summary>
     ///  RETURN's search byte and the decimal-output threshold can be changed independently of each other and
@@ -41,14 +41,14 @@ public sealed class Basic1IndependentSwitchTests
         }));
 
         RecordingBus bus = BusFor(image);
-        int pointer = checked((int)image.Symbols["FORPNT"]);
+        int pointer = checked((int)image.Symbol("FORPNT"));
         bus.Memory[pointer] = 0x11;
         bus.Memory[pointer + 1] = 0x22;
         Processor<RecordingBus> cpu = new(bus)
         {
             Registers = new()
             {
-                ProgramCounter = checked((ushort)(image.Symbols["RETURN"] + 2)),
+                ProgramCounter = checked((ushort)(image.Symbol("RETURN") + 2)),
                 Status = StatusRegister.Unused
             }
         };
@@ -57,7 +57,7 @@ public sealed class Basic1IndependentSwitchTests
         cpu.StepInstruction();
         bus.Memory[pointer].Should().Be(searchLow == 1 ? (byte)0xFF : (byte)0x11);
         bus.Memory[pointer + 1].Should().Be(searchLow == 1 ? (byte)0x22 : (byte)0xFF);
-        int threshold = checked((int)image.Symbols["NZ9999"]);
+        int threshold = checked((int)image.Symbol("NZ9999"));
         bus.Memory[threshold + 4].Should().Be(precise == 1 ? (byte)0xFE : (byte)0xFD);
     }
 
@@ -79,9 +79,9 @@ public sealed class Basic1IndependentSwitchTests
         }));
 
         RecordingBus bus = BusFor(image);
-        int poker = checked((int)image.Symbols["POKER"]);
+        int poker = checked((int)image.Symbol("POKER"));
         byte[] addressStub = [0xA9, 0xC0, 0xA0, 0x00, 0x84, (byte)poker, 0x85, (byte)(poker + 1), 0x60];
-        addressStub.CopyTo(bus.Memory, checked((int)image.Symbols["GETADR"]));
+        addressStub.CopyTo(bus.Memory, checked((int)image.Symbol("GETADR")));
         bus.Memory[0xC000] = 0x42;
         Processor<RecordingBus> cpu = new(bus)
         {
@@ -145,10 +145,10 @@ public sealed class Basic1IndependentSwitchTests
         AssemblyResult image = RequireSuccess(Assemble(new() { ["NULL_INCREMENT_LIMIT"] = limit }));
         RecordingBus bus = BusFor(image);
         byte[] getByteStub = [0xA2, (byte)count, 0xA9, 0x00, 0x60];
-        getByteStub.CopyTo(bus.Memory, checked((int)image.Symbols["GETBYT"]));
+        getByteStub.CopyTo(bus.Memory, checked((int)image.Symbol("GETBYT")));
         bus.Memory[0x01FE] = (byte)((ReturnAddress - 1) & 0xFF);
         bus.Memory[0x01FF] = (byte)((ReturnAddress - 1) >> 8);
-        int nullCount = checked((int)image.Symbols["NULCNT"]);
+        int nullCount = checked((int)image.Symbol("NULCNT"));
         bus.Memory[nullCount] = 0x77;
         Processor<RecordingBus> cpu = new(bus)
         {
@@ -192,11 +192,11 @@ public sealed class Basic1IndependentSwitchTests
 
     private static AssemblyResult Assemble(Dictionary<string, long> symbols) =>
         new Assembler.Assembler().Assemble(
-            new AssemblySource(File.ReadAllText(s_root), s_root),
+            new AssemblySource(File.ReadAllText(RootPath), RootPath),
             new AssemblyOptions(ProcessorVariant.Mos6502, 0, 0x10000)
             {
-                SourceResolver = new OverlayBaseResolver(s_shared),
-                PredefinedSymbols = symbols
+                SourceResolver = new OverlayBaseResolver(SharedInputs),
+                PredefinedSymbols = BasicNames.WithCurrentNames(symbols)
             });
 
     private static AssemblyResult RequireSuccess(AssemblyResult result)
@@ -212,7 +212,7 @@ public sealed class Basic1IndependentSwitchTests
         return bus;
     }
 
-    private static ushort Address(AssemblyResult image, string name) => checked((ushort)image.Symbols[name]);
+    private static ushort Address(AssemblyResult image, string name) => checked((ushort)image.Symbol(name));
 
     private static void RunUntil(Processor<RecordingBus> cpu, ushort target, ushort? alternate = null)
     {

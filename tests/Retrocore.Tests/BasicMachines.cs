@@ -22,7 +22,7 @@ internal static class BasicMachines
     /// <summary>
     ///  Gets the test inputs, which hold the SDK's ROM sources.
     /// </summary>
-    internal static string Inputs { get; } = Path.Join(AppContext.BaseDirectory, "Inputs");
+    internal static string Inputs => BasicNames.Inputs;
 
     /// <summary>
     ///  Assembles AppleSoft for a model.

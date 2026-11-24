@@ -1,3 +1,4 @@
+; Derived from Microsoft's BASIC for 6502 (m6502.asm, MIT license; see LICENSE in this folder).
 ; MICROSOFT 6502 BASIC: VARIABLE NAMES AND SIMPLE-VARIABLE LOOKUP
 ;
 ; Emit VARIABLE_NAME, the separately shared LETTER_TEST, and SIMPLE_VARIABLE_LOOKUP in that order.

@@ -1,3 +1,5 @@
+; Derived from Microsoft's BASIC for 6502 (m6502.asm, MIT license; see LICENSE in this folder).
+
 ;; Emits the five-byte multiplication, division and decimal scaling routines.
 ;; Parameters: shortZeroBranch = 1 to branch directly from <FMULTT> to <MULTRT>, 0 for the long jump
 .macro FLOAT_ARITHMETIC shortZeroBranch

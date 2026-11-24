@@ -119,7 +119,7 @@ internal static partial class BasicAttribution
 
         // A vendor's name that is also one of the build's BASIC keywords, such as AppleSoft's NEW, is the keyword where
         // shared prose writes it, so only Also: sections are checked for it.
-        bool keyword = result.Symbols.ContainsKey("TOKEN_" + name);
+        bool keyword = result.HasSymbol("TOKEN_" + name);
         Regex word = new($@"(?<![\w$]){Regex.Escape(name)}(?![\w$])");
         foreach (DocumentationTopic topic in SharedTopics(docs))
         {

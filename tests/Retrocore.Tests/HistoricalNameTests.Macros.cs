@@ -1430,6 +1430,9 @@ public sealed partial class HistoricalNameTests
         string none = skipped[..skipped.IndexOf(".else", StringComparison.Ordinal)] + ".endif\n";
         Check(plainMacro + "\n" + none).Should().BeEmpty();
 
+        // Nor its links and references.
+        Check(plainMacro + "\nTALL = 1\n.ifdef WIDE\n;; Reads <NOSUCH> and {x}.\nFOO = 1\n.endif\n").Should().BeEmpty();
+
         Check("""
             ;; One.
             ;; Uses: two words

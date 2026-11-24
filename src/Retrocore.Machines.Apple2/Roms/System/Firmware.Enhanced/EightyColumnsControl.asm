@@ -398,11 +398,14 @@ NotHandled:
     bcs Done
 
     ; The page back.
+;; Also: CTLGO (IIETRM85)
 Reload:
     lda Code
 
 ;; Runs the handler, with its page's bit 7 back, then the carry clear.
-;; Also: CTLGO (IIEROM82, IIETRM85)
+;;
+;; The original IIe's listing calls it CTLGO, the Enhanced listing's name for <Reload>, so left out of Also: here.
+;; Also: CTLGO0 (IIETRM85)
 Handle:
     ora #RUNS_WHEN_DISABLED
     jsr Jump
@@ -697,7 +700,7 @@ HandlersHigh:
 AtBottom:
     dec EightyColumns::CursorLine
     dec CV
-    ; Falls into SCROLLUP80, Control::ScrollUp, at the start of EightyColumnsScreen.asm.
+    ; Falls into <Control::ScrollUp>, at the start of EightyColumnsScreen.asm.
 .endproc
 
 .endscope

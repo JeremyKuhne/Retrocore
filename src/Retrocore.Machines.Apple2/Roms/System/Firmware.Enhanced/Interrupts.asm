@@ -163,10 +163,9 @@ READ_NEXT_COUNT = $35
 ;; A BRK leaves the state byte in <Address5>, pulls the registers back and goes on at the Monitor's
 ;; <BreakFromFirmware>. With the auxiliary zero page on, the registers and the BRK's frame are on the auxiliary
 ;; stack, but this path pulls them from main's. An IRQ pushes the state byte and <ExpansionRomSlot>, and a frame that
-;; returns to <InterruptReturn>, and goes to the user's handler through the Monitor's <CallUserIrq>. Apple's listing
-;; calls it IRQ, a name left out of Also: because the Monitor's <Monitor:Interrupt> has it.
+;; returns to <InterruptReturn>, and goes to the user's handler through the Monitor's <CallUserIrq>.
 ;; In: A = the interrupted program's A, the stack as the interrupt left it
-;; Also: IRQHANDLER (UNKN)
+;; Also: IRQ (IIETRM85), IRQHANDLER (UNKN)
 .proc HandleInterrupt
 .assert * = $C3FA, "HandleInterrupt must stay at $C3FA, where the IRQ vector points."
     bit InternalCxRomState

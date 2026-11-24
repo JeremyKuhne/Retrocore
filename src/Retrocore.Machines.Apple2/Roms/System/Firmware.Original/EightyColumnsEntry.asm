@@ -1,5 +1,5 @@
 ; retrocore: style=strict
-;; The 80-column firmware's $C800-$C9FF, original IIe: Pascal 1.0's hooks at $C800, $C84D and $C9AA, BASIC's character
+;; The 80-column firmware's $C800-$CA01, original IIe: Pascal 1.0's hooks at $C800, $C84D and $C9AA, BASIC's character
 ;; input and output through slot 3 (starting the firmware, printing, reading keys with escape mode and quotes), and
 ;; Pascal's status request.
 
@@ -356,7 +356,7 @@ NextKey:
 ;; for which <Control::Perform> reads past its tables.
 ;; Also: C8_ESC1 (UNKN), ESC1 (IIEROM82)
 Lookup:
-    ldy #EscapeCodes - EscapeKeys
+    ldy #ESCAPE_COUNT
 
 ;; Compares the key with one entry.
 ;; Also: ESC2 (IIEROM82, IIETRM85)
@@ -452,6 +452,14 @@ EscapeCodes:
 .repeat ESCAPE_ENTRIES, index
     .byte .ident(.sprintf("ESCAPE_CODE_%d", index))
 .endrepeat
+
+;; How many escape keys there are: the length of <CharacterIo::EscapeKeys> and <CharacterIo::EscapeCodes>.
+;;
+;; Apple's listing starts the lookup at ESCNUM-1, the last key; the ROM's byte is ESCNUM, one past it
+;; (<CharacterIo::EscapeMode::Lookup>).
+;; Also: ESCNUM (IIEROM82, IIETRM85)
+ESCAPE_COUNT = EscapeCodes - EscapeKeys
+.assert ESCAPE_COUNT = ESCAPE_ENTRIES, "One code for each escape key."
 
 .endscope
 

@@ -209,7 +209,7 @@ HashNext:
 ;; Compares slot 3's ROM, Y times, with the bytes that identify a Pascal 1.1 firmware card: $38 at $C305 and $18
 ;; at $C307.
 ;;
-;; At $F8B7, which the internal firmware's <Firmware:SLOT3CHECK> calls; only the Enhanced IIe has it. It
+;; At $F8B7, which the internal firmware's <Firmware:TestSlot3Card@Enhanced> calls; only the Enhanced IIe has it. It
 ;; switches the slots' ROMs in, compares <BasicInput> and the byte two after it with the $38 and $18 of the sec and clc
 ;; that start the Monitor's <ClearToEndOfLine> and <ClearLineFrom>, and switches the internal ROM back. Why it compares
 ;; more than once is not in the code: presumably so that a slot whose reads float does not match by chance.

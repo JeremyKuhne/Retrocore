@@ -22,7 +22,7 @@ public sealed partial class ConvertedSourceTests
     // Names that mean different routines in the two IIe firmwares, each kept on its own model's definition
     // (docs/conversions/Firmware.md, F1), or that sit on different code in the two.
     private static readonly HashSet<string> s_firmwareOwnNames =
-        ["TESTFAIL", "BASCALC", "DIAGS", "STAY80", "X_USRET", "X_DC1B", "QUIT2"];
+        ["TESTFAIL", "BASCALC", "DIAGS", "STAY80", "X_USRET", "X_DC1B", "QUIT2", "CTLGO"];
 
     /// <summary>
     ///  A source that follows the style guide writes its code with the current names: a historical name, kept so

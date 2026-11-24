@@ -43,7 +43,7 @@ SelectInterruptRom = $FC7A
 ;;
 ;; At $C300. V comes from bit on an rts of the firmware's, at $CE43, whose $60 has bit 6 set.
 ;; In: A = the character to print
-;; Also: BASICINT (IIEROM82, IIETRM85)
+;; Also: BASICINT (IIEROM82, IIETRM85), CN00 (IIEROM82, IIETRM85)
 .proc BasicInitialize
 .assert * = $C300, "BasicInitialize must stay at $C300."
     bit Screen::OverflowByte
@@ -274,7 +274,7 @@ NotReady:
 ;;     destination, carry = set to copy main to auxiliary memory, clear for auxiliary to main
 ;; Out: Address1/Address1High = the address after A2, Address4/Address4High = the address after the copy
 ;; Keeps: A, X, Y
-;; Also: MOVE (IIEROM82), C3_MOVE (UNKN), DOAUXMOVE (UNKN)
+;; Also: MOVE (IIEROM82, IIETRM85), C3_MOVE (UNKN), DOAUXMOVE (UNKN)
 .proc CopyMainAux
     pha
     tya
@@ -309,7 +309,8 @@ Loop:
     bne NextSource
     inc Address4High
 
-    ; Compares A1 with A2, then steps A1.
+;; Compares A1 with A2, then steps A1. Apple's listing calls it NXTA1, a name left out of Also: because the
+;; Monitor's <NextInRange> has it.
 ;; Also: C3_NXTA1 (UNKN)
 NextSource:
     lda Address1
@@ -321,7 +322,7 @@ NextSource:
     inc Address1High
 
     ; Goes on until A1 was A2, then puts RAMWRT back.
-;; Also: C01 (IIEROM82)
+;; Also: C01 (IIEROM82, IIETRM85)
 CheckEnd:
     bcc Loop
     sta AuxWriteOff

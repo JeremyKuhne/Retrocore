@@ -38,7 +38,7 @@ TransferAddressHigh = $03EE
 ;;
 ;; At $C300. V comes from bit on the Monitor's rts at $FF58 (<SaveRegisters::Return>), whose $60 has bit 6 set.
 ;; In: A = the character to print
-;; Also: BASICINT (IIEROM82, IIETRM85)
+;; Also: BASICINT (IIEROM82, IIETRM85), CN00 (IIEROM82, IIETRM85)
 .proc BasicInitialize
 .assert * = $C300, "BasicInitialize must stay at $C300."
     bit SaveRegisters::Return
@@ -224,7 +224,7 @@ ToInitialize:
 ;;     destination, carry = set to copy main to auxiliary memory, clear for auxiliary to main
 ;; Out: Address1/Address1High = the address after A2, Address4/Address4High = the address after the copy
 ;; Keeps: A, X, Y
-;; Also: MOVE (IIEROM82), C3_MOVE (UNKN), DOAUXMOVE (UNKN)
+;; Also: MOVE (IIEROM82, IIETRM85), C3_MOVE (UNKN), DOAUXMOVE (UNKN)
 .proc CopyMainAux
     pha
     tya
@@ -272,7 +272,7 @@ NextSource:
     inc Address1High
 
 ;; Goes on until A1 was A2, then puts RAMWRT back.
-;; Also: C01 (IIEROM82)
+;; Also: C01 (IIEROM82, IIETRM85)
 CheckEnd:
     bcc Loop
     sta AuxWriteOff

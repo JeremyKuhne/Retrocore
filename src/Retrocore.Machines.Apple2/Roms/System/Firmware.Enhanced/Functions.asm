@@ -357,7 +357,7 @@ Done:
     tay
     lda PassedLine
     jsr RowBase
-    ; Always: ROWBASE leaves the carry clear.
+    ; Always: <RowBase> leaves the carry clear.
     bcc Return
 .endproc
 

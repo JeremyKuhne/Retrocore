@@ -451,7 +451,7 @@ ESCAPE_STAY = $80
     EscapeEntry KEY_RIGHT_ARROW, CONTROL_BACKSLASH | ESCAPE_STAY ; the right arrow
 
 ;; How many escape keys there are: the length of <CharacterIo::EscapeKeys> and <CharacterIo::EscapeCodes>.
-;; Also: ESCNUM (IIETRM85)
+;; Also: ESCNUM (IIEROM82, IIETRM85)
 ESCAPE_COUNT = ESCAPE_ENTRIES
 
 ;; The control code each of <CharacterIo::EscapeKeys> performs, with <CharacterIo::ESCAPE_STAY>.

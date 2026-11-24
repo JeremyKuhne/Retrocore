@@ -1,5 +1,5 @@
 ; retrocore: style=strict
-;; The 80-column firmware's $CA00-$CBFF, original IIe: the end of reading a key for BASIC, Pascal's init, read and
+;; The 80-column firmware's $CA02-$CBFC, original IIe: the end of reading a key for BASIC, Pascal's init, read and
 ;; write, the keyboard wait, the card test and the line base, and the first control characters: performing one,
 ;; the bell, the cursor left and the start of the carriage return.
 
@@ -456,7 +456,7 @@ NotHandled:
     bcs Done
 
 ;; Runs the handler, then the carry clear.
-;; Also: CTLGO (IIEROM82, IIETRM85)
+;; Also: CTLGO (IIEROM82), CTLGO0 (IIETRM85)
 Handle:
     jsr Jump
     clc

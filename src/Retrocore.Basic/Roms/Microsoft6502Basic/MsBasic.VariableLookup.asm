@@ -35,8 +35,8 @@
     ;; In: TextPointer = first character, SubscriptMode = subscript mode, decimal = clear
     ;; Out: A = low value address and Y = high value address for a scalar or an array element,
     ;;   TextPointer = next non-space character,
-    ;;   ValueType = $FF for a string or 0 for a number, IntegerType = $80 for an integer or 0 otherwise; at the
-    ;;   dimensioning entry, an array `DIM` creates returns without an element address
+    ;;   ValueType = $FF for a string or 0 for a number, IntegerType = $80 for an integer or 0 otherwise; at
+    ;;   WithDimensionFlag, an array `DIM` creates returns without an element address
     ;; Errors: SYNTAX for an invalid first character, a disallowed integer name or a name the PET reserves
     ;;   (<Variables::CheckReservedName>), OUT OF MEMORY when a new variable does not fit (<Variables::Create>), and
     ;;   the array path's: BAD SUBSCRIPT, REDIM'D ARRAY, ILLEGAL QUANTITY, OUT OF MEMORY, and OUT OF DATA for

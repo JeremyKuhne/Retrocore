@@ -9,8 +9,9 @@
 ;; each for its own build and, under the lineage rule, for the same definition in the other PET builds. In CBM4S79,
 ;; SQR05 and SQR20 are in code18, TENC in code19, N0999, N9999 and NMIL in code22, and RMULC and RADDC in code25;
 ;; COPYC is in code6, STRD in code14, and CHRD, LEFTD, RIGHTD and MIDD in code16. The room check and the classic
-;; collector's steps also have Microsoft's names here (M6502), and ANDOP its AND, since AppleSoft gives those names
-;; to other definitions (Basic.md E4). Including this file emits no bytes and does not change the origin.
+;; collector's steps also have Microsoft's names here (M6502), since BASIC 4 gives those names to other steps, and so
+;; does ANDOP on its AND, since AppleSoft gives it to its OR (Basic.md E4). Including this file emits no bytes and
+;; does not change the origin.
 
 ;; The aliases for Commodore's names. Code uses the definitions' own names; these exist for the old names.
 .scope Commodore

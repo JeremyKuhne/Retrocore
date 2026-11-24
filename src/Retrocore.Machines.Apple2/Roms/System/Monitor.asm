@@ -109,6 +109,11 @@ TEXT_NORMAL = $FF
 ;; Added to a slot number to make the high byte of its ROM's page, $Cn00.
 SLOT_ROM_PAGE = $C0
 
+; The internal firmware's function numbers, which the IIe's Monitor passes in Y; shared with the firmware.
+.if MONITOR = MONITOR_IIE
+.include "FirmwareFunctions.asm"
+.endif
+
 .org $F800
 
 .include "Monitor/LowRes.asm"

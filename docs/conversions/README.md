@@ -8,5 +8,6 @@ in [AssemblyStyle.md](../AssemblyStyle.md).
 | --- | --- | --- |
 | The Apple II Monitor (`Roms/System/Monitor.asm` and `Monitor/`) | Converted | [Monitor.md](Monitor.md) |
 | The IIe's shared equates (`Roms/System/IIeEquates.asm`) | Converted | [IIeEquates.md](IIeEquates.md) |
+| The IIe internal firmware (`Roms/System/Firmware.*`) | Converted | [Firmware.md](Firmware.md) |
 
 Each decision has an ID, which commit messages and comments may cite.

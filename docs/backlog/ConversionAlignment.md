@@ -249,10 +249,29 @@ For this effort the owner replaces the copilot-review-loop skill, its stacking r
 the steward skill that leads into it, with the following; `pre-pr-self-review` still applies to behavioral changes.
 Each session takes its branches to main this way:
 
-- **Self-review.** Three independent reviewers, one each on Opus, Sonnet and Haiku, run in parallel on the diff and
-  the contract, not the author's conclusions. Each finding is checked against the code: every real issue (a bug,
-  a wrong doc, a missing test) is fixed, and each nit is fixed or declined with a reason. The affected tests are
-  rerun and the round repeated, until a round finds no real issue.
+- **Self-review**, by the owner's cycle
+  ([An effective self-review cycle](https://claude.ai/artifact/VvBGDajXJzLwBxP6VvEfxs)).
+  Reviewers are given the diff, the files it touches and the brief below, not the author's conclusions, and they
+  only read: the session runs the checks and hands them the results.
+  1. *Scripted checks*, before any reviewer and after every fix: the build, the tests and the lint; CI's later steps
+     (every `node tools/Test-*.mjs`, the extension's `check:grammar`, `compile` and `test:grammar`); and the
+     mechanical checks (citations, lineage, old names left behind). A kind of check made by hand twice becomes a
+     test. Between fixes the targeted tests run; the full suite and CI's steps run before the closing pass and
+     before pushing.
+  2. *First pass*, once: Haiku, Sonnet and Opus in parallel on the whole diff, each starting from its own area.
+  3. *Delta review*, after each fix: Haiku alone on the fix's diff, with the findings it addresses. It checks that
+     the fix is right and broke nothing nearby; what it finds goes back to the fix.
+  4. *Closing pass*: Sonnet and Opus on the whole diff. A finding goes back to step 3, not step 2.
+
+  **The brief.** What counts: a wrong value, address or contract; a comment false for the code in a build it is in;
+  a lost or mis-keyed historical name; a broken build or test. What does not: a comment that leaves out a use,
+  names or switches that could also be defined, and what the scripted checks cover. Each finding gives its
+  evidence (file and line, and the code, listing line or output that proves it; a document lacking a name means
+  the whole text was searched) and a severity: must-fix (wrong behaviour or value, a broken build or test),
+  should-fix (a false comment, a lost name) or nit (wording). A round is clean with no must-fix or should-fix;
+  nits are fixed in passing and never cause another round. Each finding is verified before it is fixed, and the
+  false ones counted. Each step reports, per stage and model, the findings by severity and the false ones, the
+  tokens and minutes, the closing passes to clean, and anything found later.
 - **The PR.** Against main, following the repository's PR template if there is one. Its body gives the change, the
   evidence (commands and results, naming skipped tests) and the review rounds. No Copilot review is requested.
 - **CI.** The session waits for CI, subscribed to the PR's activity rather than polling, and squash-merges as soon as

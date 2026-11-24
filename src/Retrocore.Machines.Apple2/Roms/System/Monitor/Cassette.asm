@@ -102,7 +102,7 @@ Done:
 ;; The cassette routines. The Enhanced IIe keeps them in its internal firmware, and only this stub here.
 .scope Cassette
 
-;; Writes a cassette header tone, through the internal firmware's <TAPEHEADR>.
+;; Writes a cassette header tone, through the internal firmware's <WriteCassetteHeader>.
 ;;
 ;; At $FCC9.
 ;; In: A = the tone's length, in 256 half cycles
@@ -110,7 +110,7 @@ Done:
 .proc WriteHeader
 .assert * = $FCC9, "Cassette::WriteHeader must stay at $FCC9."
     sta InternalCxRomOn
-    jsr TAPEHEADR
+    jsr WriteCassetteHeader
     jmp SelectSlotRom
 .endproc
 
@@ -137,6 +137,7 @@ Done:
 ;; Shows the instruction just assembled, moves PC past it, then reads the next line.
 ;;
 ;; At $FCE3.
+;; Also: GETINST1 (IIETRM85)
 .proc ShowInstruction
 .assert * = $FCE3, "MiniAssembler::ShowInstruction must stay at $FCE3."
     sta InternalCxRomOff
@@ -147,16 +148,17 @@ Done:
     ; Falls into ReadLine.
 .endproc
 
-;; Prompts with "!", reads a line, and has the firmware's <MINILINE> assemble it.
+;; Prompts with "!", reads a line, and has the firmware's <AssembleLine> assemble it.
 ;;
 ;; At $FCF0.
+;; Also: MINI (IIETRM85)
 .proc ReadLine
 .assert * = $FCF0, "MiniAssembler::ReadLine must stay at $FCF0."
     lda #'!'
     sta PromptCharacter
     jsr GetLineAfterReturn
     sta InternalCxRomOn
-    jmp MINILINE
+    jmp AssembleLine
 .endproc
 
 .endscope

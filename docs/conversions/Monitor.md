@@ -21,7 +21,7 @@ digests check.
 6. Names that may be this source's own (MEMFIND, MINIASM, TITLE2E, RDKEYHOOK ...) stay in `Also:` as UNKN;
    XGOTOCX (IIEROM82) and DOCOUT1 (IIETRM85), which the IIe listings give, cite them. Obviously generated numbered
    locals (`GETLN_1`, `CLREOP_2`) are dropped with no `Also:`.
-7. The firmware's entry equates (B_FUNC, BASICIN, IRQHANDLER ...) wait for the firmware conversion.
+7. The firmware's entry equates (B_FUNC, BASICIN, IRQHANDLER ...) waited for the firmware conversion (since done).
 8. Families spread through the ROM are continued scopes: `Commands`, `Startup`, `Stepper` (the 1978 STEP's
    stepping; TRACE is `Commands::Trace`), each later piece `.scope X continued` with a plain comment saying which part.
 9. Widely called documented entry points are top level (SetKeyboard, SetScreen, GetLine, ReadHexNumber); family
@@ -54,3 +54,8 @@ digests check.
     build assembles.
 23. The IIe's escape-key reader is `Escape::ReadEscapeKey`, so `ReadKey` always means the top-level routine; for
     the same reason lo-res's row address is `LowRes::RowAddress` and line input's backspace `GetLine::TakeBack`.
+24. More of the IIe listings' Apple names are in `Also:`. On the Monitor's own routines: 10 only the 1985 listing
+    gives (IIETRM85: NEWBREAK, FUNCEXIT, RETCX1, NNBL, TSTROM ...), three the 1982 listing gives (IIEROM82: the
+    original IIe's FUNCEXIT, SNIFFIRQ, and IORTS in every build), and F8VERSION from both. On the firmware entry
+    equates (item 7): the 1985 listing's IRQFIX, XHEADER, WRITE2, XREAD and DOINST. `IORTS` ($FF58) is
+    `SaveRegisters::Return`.

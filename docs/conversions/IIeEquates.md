@@ -34,3 +34,5 @@ one entry.
 - U3-U6. LENGTH is OperandLength, INVFLG InverseMask, YSAV1 SavedOutputY, RDVBLBAR DrawingState.
 - U7. The language card's names carry the prefix LanguageCard (LanguageCardBank2ReadOnly ...).
 - U8. TXTCLR/TXTSET and LORES/HIRES follow the switch convention: TextOff/TextOn, HiResOff/HiResOn.
+- $C001 (Store80On) has `Also: SET80COL`, once the Enhanced firmware's label of that name was renamed
+  ([Firmware.md](Firmware.md), F7).

@@ -319,7 +319,7 @@ ResetVector:
 ;; Also: IRQVEC (UNKN)
 IrqVector:
 .if ENHANCED
-    .word IRQHANDLER
+    .word HandleInterrupt
 .else
     .word Interrupt
 .endif

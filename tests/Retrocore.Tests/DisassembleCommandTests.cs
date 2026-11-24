@@ -89,9 +89,9 @@ public sealed class DisassembleCommandTests
     ///  A Monitor routine in a family scope keeps its qualified name: the source calls it by that name and defines
     ///  it inside its scopes, each opened once, and assembles back to the program's bytes. A page-zero byte the
     ///  Monitor shares takes its shared name, not the name one routine gives it ($2E) or a value that equals it ($3A),
-    ///  and a .set variable's last value ($A0C0, MnemonicBits) names nothing. Apple's names in the Monitor's
-    ///  Equates.asm, for locations still to be converted, are kept ($25 CV, $C100 B_FUNC). The II Plus has no IIe
-    ///  firmware, so only the Monitor names those.
+    ///  and a .set variable's last value ($A0C0, MnemonicBits) names nothing. The Monitor's Equates.asm holds
+    ///  locations, which are kept ($25 CV, $C100 DispatchFunction); the II Plus has no IIe firmware, so only the
+    ///  Monitor names those.
     /// </summary>
     [TestMethod]
     public void DisassemblyNamesScopedRoutines()
@@ -131,7 +131,7 @@ public sealed class DisassembleCommandTests
                 """.ReplaceLineEndings("\n"));
 
             source.Should().Contain("LDA PlotMask").And.Contain("LDA ProgramCounter").And.NotContain("MnemonicBits");
-            source.Should().Contain("LDA CV").And.Contain("JSR B_FUNC");
+            source.Should().Contain("LDA CV").And.Contain("JSR DispatchFunction");
         }
         finally
         {

@@ -1,284 +1,378 @@
-;; INTEGER BASIC: THE COMMAND LOOP AND PROGRAM EDITING ($E2B0-$E3EC)
+; retrocore: style=strict
+;; Integer BASIC: the command loop and program editing
 ;;
 ;; The warm start and the loop that reads each line typed at the > prompt, has it tokenized, and either runs it at
 ;; once or stores it in the program; DEL, which removes lines; and the routines that print an error message and
 ;; return to the prompt.
 ;;
-;; A typed line goes into IN ($0200) and its tokens after it in the same buffer. A line that starts with a number is
-;; stored: its tokens already have the stored form, except that the constant marker of the line number becomes the
-;; line's length. Storing a line first deletes any line with the same number, then moves the lines below the place
-;; it goes down by its length and copies it into the gap. A number alone deletes the line.
+;; A typed line goes into <InputBuffer> ($0200) and its tokens after it in the same buffer. A line that starts with
+;; a number is stored: its tokens already have the stored form, except that the constant marker of the line number
+;; becomes the line's length. Storing a line first deletes any line with the same number, then moves the lines below
+;; the place it goes down by its length and copies it into the gap. A number alone deletes the line.
 ;;
-;; Part of IntegerBasic.asm; it follows Strings.asm, at $E2B0.
+;; Part of IntegerBasic.asm.
 
 ;; Sets up memory for a 4K machine, then falls into the warm start; nothing in the ROM calls it.
 ;; See: <SETMEM4K>
-COLD4K:
-    jsr SETMEM4K                    ; $E2B0
+;; Also: COLD4K (UNKN)
+.proc ColdStart4K
+    jsr SETMEM4K
+    ; Falls into WarmStart.
+.endproc
 
-;; The warm start: prints a return, then reads and handles lines typed at the > prompt, forever.
+;; The warm start: prints a Return, then reads and handles lines typed at the > prompt, forever.
 ;;
-;; In AUTO mode the prompt is followed by the next line number, which the line typed starts with as if it had been
-;; typed: <PRDEC> also puts the digits in <IN>.
-;; See: <CMDLINE>, <BASIC2>
-;; Entry: CMDPROMPT = without the return; the end of each line, and errors, come back here
-WARM:
-    jsr CROUT                       ; $E2B3
+;; In `AUTO` mode the prompt is followed by the next line number, which the line typed starts with as if it had been
+;; typed: <PRDEC> also puts the digits in <InputBuffer>.
+;; Entry:
+;;   Prompt = without the Return; the end of each line, and errors, come back here
+;; Also: WARM (IBSM)
+.proc WarmStart
+;; The high nibble of a byte: a constant's marker, $B0-$B9, gives $B0, the character 0.
+HIGH_NIBBLE = $F0
 
-CMDPROMPT:
-    lsr RUNFLAG                     ; $E2B6 not running a program
-    lda #'>'                        ; $E2B8
-    jsr SetPrompt                   ; $E2BA
-    ldy #$00                        ; $E2BD
-    sty LEADZR                      ; $E2BF no blanks before the line number
-    bit AUTOFLAG                    ; $E2C1
-    bpl CMDLINE                     ; $E2C3 not AUTO
-    ldx AUTOLN                      ; $E2C5
-    lda AUTOLN+1                    ; $E2C7
-    jsr PRDEC                       ; $E2C9
-    lda #BLANK+$80                  ; $E2CC
-    jsr COUT                        ; $E2CE
+    jsr PrintReturn
+
+;; Prompts for the next line: >, and the next line number in `AUTO` mode.
+;; Also: CMDPROMPT (UNKN)
+Prompt:
+    lsr Running                     ; not running a program
+    lda #'>'
+    jsr SetPrompt
+    ldy #0
+    sty LeadingZero                 ; no blanks before the line number
+    bit AutoNumbering
+    bpl ReadCommand                 ; not AUTO
+    ldx AutoLine
+    lda AutoLine+1
+    jsr PRDEC
+    lda #BLANK | $80
+    jsr CharacterOut
 
 ;; Reads a line and tokenizes it, then runs it or stores it.
 ;;
-;; The tokenizer starts at the top of the syntax table, $EDFF, with <TXTNDX> before the line's first character and
-;; <TOKNDX> at the end of its text, where the tokens will go. When it returns, <PX> is set to the first token.
-CMDLINE:
-    ldx #$FF                        ; $E2D1 a fresh 6502 stack
-    txs                             ; $E2D3
-    jsr GETCMD                      ; $E2D4 Y = the length of the line
-    sty TOKNDX                      ; $E2D7
-    txa                             ; $E2D9
-    sta TXTNDX                      ; $E2DA X = $FF: before the first character
-    ldx #$20                        ; $E2DC an empty syntax stack
-    jsr STARTRULE                   ; $E2DE A = $FF: the rule at $EDFF, a whole line
-    lda TXTNDX                      ; $E2E1 carry is set: PX = $0200 + TXTNDX + 1, the first token
-    adc #$00                        ; $E2E3
-    sta PX                          ; $E2E5
-    lda #$00                        ; $E2E7
-    tax                             ; $E2E9
-    adc #$02                        ; $E2EA
-    sta PX+1                        ; $E2EC
-    lda (PX,x)                      ; $E2EE the first token
-    and #$F0                        ; $E2F0
-    cmp #'0'                        ; $E2F2 a constant: the line starts with its number
-    beq STORELINE                   ; $E2F4
-    jmp RUNLOOP                     ; $E2F6 no number: run the line now
+;; The tokenizer starts at the top of the syntax table, $EDFF, with <TextIndex> before the line's first character and
+;; <TokenIndex> at the end of its text, where the tokens will go. When it returns, <TokenPointer> is set to the first
+;; token.
+;; Also: CMDLINE (UNKN)
+ReadCommand:
+    ldx #$FF                        ; a fresh 6502 stack
+    txs
+    jsr Editor::ReadLine            ; Y = the length of the line
+    sty TokenIndex
+    txa
+    sta TextIndex                   ; X = $FF: before the first character
+    ldx #EMPTY_STACK
+    jsr STARTRULE                   ; A = $FF: the rule at $EDFF, a whole line
+
+    ; TokenPointer = the first token, after the text. Carry is set.
+    lda TextIndex
+    adc #0
+    sta TokenPointer
+    lda #0
+    tax
+    adc #>InputBuffer
+    sta TokenPointer+1
+
+    ; A line that starts with a constant, its number, is stored; any other runs now.
+    lda (TokenPointer,x)
+    and #HIGH_NIBBLE
+    cmp #'0'
+    beq Editor::StoreLine
+    jmp RUNLOOP
+.endproc
+
+; The editor, continued: storing a line.
+.scope Editor continued
 
 ;; Stores a numbered line in the program, replacing any line with the same number, or deletes the line if nothing
 ;; follows its number.
-;; Errors: MEM FULL if the line would reach the variables
-STORELINE:
-    ldy #$02                        ; $E2F9
-
-STORELINE_1:
-    lda (PX),y                      ; $E2FB ACC = the line number, from the constant after its marker
-    sta ACC-1,y                     ; $E2FD
-    dey                             ; $E300
-    bne STORELINE_1                 ; $E301
-    jsr DELLINE                     ; $E303 delete the old line; P1 = where the new one goes
-    lda TOKNDX                      ; $E306 the line's length: its tokens, from the marker to the end
-    sbc TXTNDX                      ; $E308
-    cmp #$04                        ; $E30A only the number and the end of the line
-    beq CMDPROMPT                   ; $E30C
-    sta (PX),y                      ; $E30E the length replaces the marker: the stored form
-    lda PP                          ; $E310 the new start of the program, P2 = PP - length
-    sbc (PX),y                      ; $E312
-    sta P2                          ; $E314
-    lda PP+1                        ; $E316
-    sbc #$00                        ; $E318
-    sta P2+1                        ; $E31A
-    lda P2                          ; $E31C it must stay above the variables
-    cmp PV                          ; $E31E
-    lda P2+1                        ; $E320
-    sbc PV+1                        ; $E322
-    bcc MEMFULL                     ; $E324
-
-;; Moves each line below the insertion point down by the new line's length, from <PP> up to <P1>.
-STORELINE_2:
-    lda PP                          ; $E326
-    sbc (PX),y                      ; $E328
-    sta P3                          ; $E32A
-    lda PP+1                        ; $E32C
-    sbc #$00                        ; $E32E
-    sta P3+1                        ; $E330
-    lda (PP),y                      ; $E332
-    sta (P3),y                      ; $E334
-    inc PP                          ; $E336
-    bne STORELINE_3                 ; $E338
-    inc PP+1                        ; $E33A
-
-STORELINE_3:
-    lda P1                          ; $E33C
-    cmp PP                          ; $E33E
-    lda P1+1                        ; $E340
-    sbc PP+1                        ; $E342
-    bcs STORELINE_2                 ; $E344
-
-;; Sets <PP> to the new start of the program, then copies the new line into the gap at <P3>.
-STORELINE_4:
-    lda P2,x                        ; $E346
-    sta PP,x                        ; $E348
-    dex                             ; $E34A
-    bpl STORELINE_4                 ; $E34B
-    lda (PX),y                      ; $E34D
-    tay                             ; $E34F
-
-STORELINE_5:
-    dey                             ; $E350
-    lda (PX),y                      ; $E351
-    sta (P3),y                      ; $E353
-    tya                             ; $E355
-    bne STORELINE_5                 ; $E356
-    bit AUTOFLAG                    ; $E358
-    bpl STORELINE_6                 ; $E35A AUTO: the next line number
-@Loop:
-    lda AUTOLN+1,x                  ; $E35C
-    adc AUTOINC+1,x                 ; $E35E
-    sta AUTOLN+1,x                  ; $E360
-    inx                             ; $E362
-    beq @Loop                       ; $E363 X = $FF then 0: both bytes
-
-;; Goes back to the prompt for the next line; the branch reaches CMDPROMPT through <LEAVELINE>.
-STORELINE_6:
-    bpl LEAVELINE                   ; $E365
-    brk                             ; $E367 unused bytes
-    .byte $00, $00, $00             ; $E368
-
-;; The MEM FULL error.
-MEMFULL:
-    ldy #<ErrMsg03                  ; $E36B
-    bne ERRMESS                     ; $E36D
-
-;; The comma of DEL (token $0A): DEL m,n deletes the lines from where <DEL> left off through line n.
 ;;
-;; <DEL> has removed line m, if it existed, and left the address of the line after it in <P1>.
-;; In: X = the noun stack, its top entry the last line number
-;; See: <DEL>, <FINDP3POP>
-COMMA_DEL:
-    jsr GET16BIT                    ; $E36F
-    lda P1                          ; $E372
-    sta P3                          ; $E374
-    lda P1+1                        ; $E376
-    sta P3+1                        ; $E378
-    jsr FINDP3POP                   ; $E37A find line n, from P3; P3 = the line after it
-    lda P1                          ; $E37D
-    sta P2                          ; $E37F
-    lda P1+1                        ; $E381
-    sta P2+1                        ; $E383
-    bne CLOSEGAP                    ; $E385 always: the program is not in page 0
+;; It returns to the prompt. In `AUTO` mode it adds the step to the next line number first.
+;; In: TokenPointer = the line's first token, the constant marker of its number, TextIndex = the index in
+;;   <InputBuffer> before it, TokenIndex = the index of its last token, X = 0
+;; Errors: MEM FULL if the line would reach the variables
+;; Also: STORELINE (UNKN)
+.proc StoreLine
+;; The tokens of a line that is only a number: its marker, its two bytes and the end-of-line token.
+NUMBER_ONLY = 4
+
+    ; Accumulator = the line number, from the constant after its marker.
+    ldy #2
+CopyNumber:
+    lda (TokenPointer),y
+    sta Accumulator-1,y
+    dey
+    bne CopyNumber
+
+    ; Delete the old line. X becomes 1, as <FINDLINE> takes an entry off the noun stack; carry is set.
+    jsr DeleteLine
+
+    ; The line's length: its tokens, from the marker to the end.
+    lda TokenIndex
+    sbc TextIndex
+    cmp #NUMBER_ONLY
+    beq WarmStart::Prompt           ; only the number: the line is deleted
+    sta (TokenPointer),y            ; the length replaces the marker: the stored form
+
+    ; The new start of the program, Pointer2 = ProgramStart - length, must stay above the variables.
+    lda ProgramStart
+    sbc (TokenPointer),y
+    sta Pointer2
+    lda ProgramStart+1
+    sbc #0
+    sta Pointer2+1
+    lda Pointer2
+    cmp VariablesEnd
+    lda Pointer2+1
+    sbc VariablesEnd+1
+    bcc MemoryFullError
+
+;; Moves each byte from <ProgramStart> up to <Pointer1>, the lines below the insertion point, down by the new line's
+;; length.
+MoveDown:
+    lda ProgramStart
+    sbc (TokenPointer),y
+    sta Pointer3
+    lda ProgramStart+1
+    sbc #0
+    sta Pointer3+1
+    lda (ProgramStart),y
+    sta (Pointer3),y
+    inc ProgramStart
+    bne CheckMoved
+    inc ProgramStart+1
+CheckMoved:
+    lda Pointer1
+    cmp ProgramStart
+    lda Pointer1+1
+    sbc ProgramStart+1
+    bcs MoveDown
+
+;; Sets <ProgramStart> to the new start of the program, both bytes as X counts down from 1, then copies the new line
+;; into the gap at <Pointer3>.
+SetStart:
+    lda Pointer2,x
+    sta ProgramStart,x
+    dex
+    bpl SetStart
+    lda (TokenPointer),y
+    tay
+CopyLine:
+    dey
+    lda (TokenPointer),y
+    sta (Pointer3),y
+    tya
+    bne CopyLine
+
+    ; In AUTO mode, the next line number: X = $FF, then 0, adds both bytes. Carry is clear.
+    bit AutoNumbering
+    bpl Done
+NextAutoLine:
+    lda AutoLine+1,x
+    adc AutoIncrement+1,x
+    sta AutoLine+1,x
+    inx
+    beq NextAutoLine
+
+;; Goes back to the prompt for the next line; the branch reaches it through <ReportError::LeaveLine>.
+Done:
+    bpl ReportError::LeaveLine      ; always
+
+    ; Unused bytes.
+    .byte $00, $00, $00, $00
+.endproc
+
+.endscope
+
+;; Reports the MEM FULL error.
+;;
+;; At $E36B, which Programmer's Aid jumps to.
+;; Also: MEMFULL (IBSM)
+.proc MemoryFullError
+.assert * = $E36B, "MemoryFullError must stay at $E36B, where Programmer's Aid jumps."
+    ldy #<ErrMsg03
+    bne ReportError                 ; always
+.endproc
+
+; Statements: DEL and its comma.
+.scope Statements continued
+
+;; The comma of DEL (token $0A): DEL m,n deletes the lines from where <Statements::Del> left off through line n.
+;;
+;; <Statements::Del> has removed line m, if it existed, and left the address of the line after it in <Pointer1>.
+;; In: X = the noun stack, its top entry the last line number, Pointer1 = the first line to delete
+;; Out: X = the noun stack, two entries higher: <FINDP3POP> takes one more
+;; See: <FINDP3POP>
+;; Also: COMMA_DEL (IBSM)
+.proc DelComma
+    jsr GET16BIT
+    lda Pointer1
+    sta Pointer3
+    lda Pointer1+1
+    sta Pointer3+1
+    jsr FINDP3POP                   ; find line n, from Pointer3; Pointer3 = the line after it
+
+    ; Remove what lies from Pointer1 to Pointer3.
+    lda Pointer1
+    sta Pointer2
+    lda Pointer1+1
+    sta Pointer2+1
+    bne Editor::CloseGap            ; always: the program is not in page 0
+.endproc
 
 ;; DEL (token $09): deletes the line with the number on the noun stack, if there is one.
 ;; In: X = the noun stack, its top entry the line number
-;; See: <COMMA_DEL>
-DEL:
-    jsr GET16BIT                    ; $E387
+;; Out: X = the noun stack, two entries higher: <FINDLINE> takes one more, Pointer1 = the line after it
+;; See: <Statements::DelComma>
+;; Also: DEL (IBSM)
+.proc Del
+    jsr GET16BIT
+    ; Falls into Editor::DeleteLine.
+.endproc
 
-;; Deletes the line numbered ACC if it exists, leaving <P1> at the line after it: where a line numbered ACC goes.
+.endscope
+
+; The editor, continued: deleting a line.
+.scope Editor continued
+
+;; Deletes the line numbered <Accumulator> if it exists, leaving <Pointer1> at the line after it: where a line
+;; numbered <Accumulator> goes.
 ;;
-;; <FINDLINE> leaves <P3> after the line when it exists, and equal to <P2> when it does not, so then nothing moves.
-;; In: ACC = the line number
-;; Out: P1 = the line after it
-;; Uses: A, Y, P2, P3, PP
-DELLINE:
-    jsr FINDLINE                    ; $E38A
-    lda P3                          ; $E38D
-    sta P1                          ; $E38F
-    lda P3+1                        ; $E391
-    sta P1+1                        ; $E393
+;; <FINDLINE> leaves <Pointer3> after the line when it exists, and equal to <Pointer2> when it does not; then
+;; <Editor::CloseGap> only copies each byte onto itself.
+;; In: Accumulator = the line number, X = the noun stack
+;; Out: Pointer1 = the line after it, ProgramStart = the new start of the program, X = one higher (<FINDLINE> takes
+;;   an entry off the noun stack), Y = 0, carry = set
+;; Also: DELLINE (UNKN)
+.proc DeleteLine
+    jsr FINDLINE
+    lda Pointer3
+    sta Pointer1
+    lda Pointer3+1
+    sta Pointer1+1
+    ; Falls into CloseGap.
+.endproc
 
-;; Moves the bytes from <PP> up to <P2> to end at <P3>, from the top down, removing what lay between <P2> and <P3>.
-;; In: P2 = the end of what is kept, P3 = where it ends up
-;; Out: PP = the new start of the program, Y = 0
-;; Uses: A, P2, P3
-CLOSEGAP:
-    ldy #$00                        ; $E395
+;; Moves the bytes from <ProgramStart> up to <Pointer2> to end at <Pointer3>, from the top down, removing what lay
+;; between <Pointer2> and <Pointer3>.
+;; In: Pointer2 = the end of what is kept, Pointer3 = where it ends up
+;; Out: ProgramStart = Pointer3 = the new start of the program, Y = 0, carry = set
+;; Keeps: X
+;; Also: CLOSEGAP (UNKN)
+.proc CloseGap
+    ldy #0
+MoveByte:
+    lda ProgramStart
+    cmp Pointer2
+    lda ProgramStart+1
+    sbc Pointer2+1
+    bcs Moved                       ; everything is moved
 
-CLOSEGAP_1:
-    lda PP                          ; $E397
-    cmp P2                          ; $E399
-    lda PP+1                        ; $E39B
-    sbc P2+1                        ; $E39D
-    bcs CLOSEGAP_4                  ; $E39F everything is moved
-    lda P2                          ; $E3A1
-    bne CLOSEGAP_2                  ; $E3A3
-    dec P2+1                        ; $E3A5
+    ; Step both pointers down a byte, and move it.
+    lda Pointer2
+    bne DecrementSource
+    dec Pointer2+1
+DecrementSource:
+    dec Pointer2
+    lda Pointer3
+    bne DecrementDestination
+    dec Pointer3+1
+DecrementDestination:
+    dec Pointer3
+    lda (Pointer2),y
+    sta (Pointer3),y
+    bcc MoveByte                    ; always: the comparison above cleared carry
 
-CLOSEGAP_2:
-    dec P2                          ; $E3A7
-    lda P3                          ; $E3A9
-    bne CLOSEGAP_3                  ; $E3AB
-    dec P3+1                        ; $E3AD
+;; Sets <ProgramStart> to <Pointer3>, the new start of the program.
+Moved:
+    lda Pointer3
+    sta ProgramStart
+    lda Pointer3+1
+    sta ProgramStart+1
+    rts
+.endproc
 
-CLOSEGAP_3:
-    dec P3                          ; $E3AF
-    lda (P2),y                      ; $E3B1
-    sta (P3),y                      ; $E3B3
-    bcc CLOSEGAP_1                  ; $E3B5
+.endscope
 
-;; Sets <PP> to <P3>, the new start of the program.
-CLOSEGAP_4:
-    lda P3                          ; $E3B7
-    sta PP                          ; $E3B9
-    lda P3+1                        ; $E3BB
-    sta PP+1                        ; $E3BD
-    rts                             ; $E3BF
-
-;; Prints the characters of a message until its last one.
-;;
-;; The messages (<ErrMsg00>) have bit 7 set on every character but the last.
-ERRORMESS_1:
-    jsr COUT                        ; $E3C0
-    iny                             ; $E3C3
+;; The loop of <PrintMessage>, four bytes before its entry: prints a character of a message, then goes on with the
+;; next.
+;; In: A = the character, Y = its offset from <ErrMsg00>
+PrintMessageCharacter:
+    jsr CharacterOut
+    iny
+    ; Falls into PrintMessage.
 
 ;; Prints the message at offset Y in the message table.
+;;
+;; The messages (<ErrMsg00>) have bit 7 set on every character but the last.
 ;; In: Y = the message's offset from <ErrMsg00>
 ;; Out: Y = the offset of its last character
 ;; Keeps: X
-;; See: <ErrMsg00>, <PRINTERR>
-ERRORMESS:
-    lda ErrMsg00,y                  ; $E3C4
-    bmi ERRORMESS_1                 ; $E3C7
-    ora #$80                        ; $E3C9
-    jmp COUT                        ; $E3CB
+;; See: <PRINTERR>
+;; Also: ERRORMESS (IBSM)
+.proc PrintMessage
+    lda ErrMsg00,y
+    bmi PrintMessageCharacter
+    ora #$80
+    jmp CharacterOut
+.endproc
 
-;; Reads a line into <IN> from index Y, after the prompt has been printed, and marks its end with an underline.
+; The editor, continued: line input.
+.scope Editor continued
+
+;; Reads a line into <InputBuffer> from index Y, after the prompt has been printed, and marks its end with an
+;; underline.
 ;;
-;; The underline ($DF) replaces the return; the syntax table's last rule matches it as the end of the line.
-;; In: Y = where in <IN> the line starts
-;; Out: Y = the index of the underline, X = $FF
-;; Uses: A
-;; See: <NXTCHAR>, <WARM>, <GETQLINE>
-GETCMD:
-    tya                             ; $E3CE
-    tax                             ; $E3CF
-    jsr NXTCHAR                     ; $E3D0
-    txa                             ; $E3D3
-    tay                             ; $E3D4
-    lda #'_'                        ; $E3D5
-    sta IN,y                        ; $E3D7
-    ldx #$FF                        ; $E3DA
-    rts                             ; $E3DC
-    .byte $60                       ; $E3DD an unused byte (an RTS)
+;; The underline replaces the Return; the syntax table's last rule matches it as the end of the line.
+;; In: Y = where in <InputBuffer> the line starts
+;; Out: Y = the index of the underline, X = $FF, A = the underline
+;; See: <GetLine::NextCharacter>, <WarmStart>, <Editor::ReadInputLine>
+;; Also: GETCMD (IBSM)
+.proc ReadLine
+    tya
+    tax
+    jsr GetLine::NextCharacter
+    txa
+    tay
+    lda #LINE_END_MARK
+    sta InputBuffer,y
+    ldx #$FF
+    rts
 
-;; The TOO LONG error.
-ErrTooLong:
-    ldy #<ErrMsg01                  ; $E3DE
+    ; An unused byte (an RTS).
+    .byte $60
+.endproc
 
-;; Reports an error: prints *** and the message at offset Y, then ERR and a bell, and leaves the statement.
+.endscope
+
+;; Reports the TOO LONG error.
+;; Also: ErrTooLong (IBSM)
+.proc TooLongError
+    ldy #<ErrMsg01
+    ; Falls into ReportError.
+.endproc
+
+;; Reports an error: prints *** and the message at offset Y, then `ERR` and a bell, and leaves the statement.
 ;;
 ;; Typed lines go back to the prompt. In a running program <RUNERROR> decides: the error stops the program with the
 ;; line's number, unless INPUT is reading numbers, which asks for the line again.
 ;; In: Y = the message's offset from <ErrMsg00>
-;; See: <PRINTERR>, <RUNERROR>
-ERRMESS:
-    jsr PRINTERR                    ; $E3E0
-    bit RUNFLAG                     ; $E3E3
+;; Entry:
+;;   LeaveLine = leaves for the prompt, or for <RUNERROR> while a program runs
+;; See: <PRINTERR>
+;; Also: ERRMESS (IBSM)
+.proc ReportError
+    jsr PRINTERR
+    bit Running
 
-;; Leaves for the prompt, or for <RUNERROR> while a program runs (N set).
-LEAVELINE:
-    bmi LEAVELINE_1                 ; $E3E5
-    jmp CMDPROMPT                   ; $E3E7
+;; Leaves for the prompt, or for <RUNERROR> while a program runs.
+;; In: negative = set while a program runs
+;; Also: LEAVELINE (UNKN)
+LeaveLine:
+    bmi ToRunError
+    jmp WarmStart::Prompt
 
-LEAVELINE_1:
-    jmp RUNERROR                    ; $E3EA
+ToRunError:
+    jmp RUNERROR
+.endproc

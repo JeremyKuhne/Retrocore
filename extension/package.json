@@ -1751,6 +1751,12 @@
                 "type": "boolean",
                 "description": "IIe: whether the Mockingboard is in slot 4. Off unless sound is mockingboard; the Retro Devices view's Add Card puts it in while debugging."
               },
+              "softCard3": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 4,
+                "description": "Apple III: puts Microsoft's SoftCard /// in this slot (1-4; its boot disk looks from slot 4 down), so its CP/M disk boots. The Z80 shows as its own thread, SoftCard /// Z80. The slot must be free, not one of proFiles' slots. None unless given; the Retro Devices view's Add Card puts it in while debugging."
+              },
               "softCard": {
                 "type": "integer",
                 "minimum": 1,

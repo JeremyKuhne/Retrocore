@@ -746,8 +746,8 @@ internal sealed partial class DebugSession
         }
     }
 
-    // After a commit, tells the client how its drives are kept, and says in the console once that the journal cannot
-    // be written, and once that it can again. A checkpoint of a journal closed meanwhile says nothing.
+    // After a commit, tells the client how its drives are kept, and says in the console when the journal cannot be
+    // written, and when it can again. A checkpoint of a journal closed meanwhile says nothing.
     private void Kept(RecoveryJournal journal)
     {
         try

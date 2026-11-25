@@ -301,7 +301,26 @@ public static partial class DocumentationParser
     /// </remarks>
     /// <param name="text">The text.</param>
     /// <returns>The lines.</returns>
-    internal static string[] Lines(string text) => text.Replace("\r\n", "\n").Split('\n');
+    internal static string[] Lines(string text)
+    {
+        // As text.Replace("\r\n", "\n").Split('\n') splits it, without copying the whole text first: each line ends at
+        // a LF, less the one CR before it.
+        int count = 1;
+        for (int at = text.IndexOf('\n'); at >= 0; at = text.IndexOf('\n', at + 1)) { count++; }
+
+        string[] lines = new string[count];
+        int start = 0;
+        int line = 0;
+        for (int at = text.IndexOf('\n'); at >= 0; at = text.IndexOf('\n', start))
+        {
+            int end = at > start && text[at - 1] == '\r' ? at - 1 : at;
+            lines[line++] = text[start..end];
+            start = at + 1;
+        }
+
+        lines[line] = text[start..];
+        return lines;
+    }
 
     /// <summary>
     ///  Parses a documentation text file for <c>Include:</c>: topics in Natural Docs form, each starting with a

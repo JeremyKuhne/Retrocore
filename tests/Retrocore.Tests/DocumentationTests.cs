@@ -16,6 +16,25 @@ namespace Retrocore.Tests;
 public class DocumentationTests
 {
     /// <summary>
+    ///  A source splits into lines at LF and CRLF only, as replacing CRLF with LF and splitting at LF does: a lone CR
+    ///  stays in its line, and a terminator at the end leaves an empty last line.
+    /// </summary>
+    /// <param name="text">The source text.</param>
+    [TestMethod]
+    [DataRow("")]
+    [DataRow("one")]
+    [DataRow("one\ntwo")]
+    [DataRow("one\r\ntwo\r\n")]
+    [DataRow("\r\n\r\n")]
+    [DataRow("\n\n")]
+    [DataRow("one\rtwo\r")]
+    [DataRow("one\r\r\ntwo")]
+    [DataRow("\r")]
+    [DataRow("one\n\r\ntwo\r\n\r")]
+    public void LinesSplitAtLineFeedsLessOneCarriageReturn(string text) =>
+        CollectionAssert.AreEqual(text.Replace("\r\n", "\n").Split('\n'), DocumentationParser.Lines(text));
+
+    /// <summary>
     ///  A compact comment documents the label below it, with its summary and sections.
     /// </summary>
     [TestMethod]

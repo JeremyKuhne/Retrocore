@@ -139,52 +139,9 @@ ReadTranslate = NibbleValues - $80
 BootSector = $0800
 .endif
 
-; The controller's switches, at $C080-$C08F plus <SlotTimes16>. Reading an address flips its switch; each pair turns
-; one switch off (even address) or on (odd). Reading an even address also returns the data latch. DOS names all of
-; them, in Dos/RwtsEquates.asm; these are the ones the ROM reads.
-
-;; Reading it turns stepper phase 0 off; Phase0Off + n * 2, plus <SlotTimes16>, turns phase n off (n = 0-3).
-;;
-;; <Boot> turns the phase the head is on off and the next one down on, half a track at a time, enough times to drive
-;; the head out to track 0 from anywhere.
-;; See: <Phase0On>, <Boot>, <Dos33:Phase0Off>
-;; Also: PHASEOFF (DOS33, DOS31)
-Phase0Off = $C080
-
-;; Reading it turns stepper phase 0 on; Phase0On + n * 2, plus <SlotTimes16>, turns phase n on (n = 0-3).
-;;
-;; <Boot> turns on the phase for the next half-track out, then waits for the head to move.
-;; See: <Phase0Off>, <Boot>, <Dos33:Phase0On>
-;; Also: PHASEON (DOS33, DOS31)
-Phase0On = $C081
-
-;; Reading it, plus <SlotTimes16>, turns on the motor of the card's selected drive.
-;;
-;; The boot ROM reads it once, after it selects drive 1, and leaves the motor running for the boot sector.
-;; See: <SelectDrive1>, <Dos33:MotorOn>
-;; Also: MOTORON (DOS33)
-MotorOn = $C089
-
-;; Reading it, plus <SlotTimes16>, selects drive 1 of the card.
-;;
-;; The boot ROM always boots from drive 1.
-;; See: <MotorOn>, <Dos33:SelectDrive1>
-;; Also: DRV1EN (DOS33)
-SelectDrive1 = $C08A
-
-;; Reading it, plus <SlotTimes16>, turns Q6 off and returns the data latch: in read mode, the nibble being read.
-;;
-;; A nibble is complete when bit 7 is set, so each of <ReadSector>'s loops reads it until bit 7 is 1.
-;; See: <ReadMode>, <ReadSector>, <Dos33:DataLatch>
-;; Also: Q6L (DOS33, DOS31)
-DataLatch = $C08C
-
-;; Reading it, plus <SlotTimes16>, turns Q7 off: the controller reads from the disk rather than writing.
-;;
-;; <Boot> reads it, then <DataLatch> to turn Q6 off too, before it starts the motor.
-;; See: <DataLatch>, <Dos33:ReadMode>
-;; Also: Q7L (DOS33, DOS31)
-ReadMode = $C08E
+; The controller's switches, at $C080-$C08F plus <SlotTimes16>, from <Phase0Off> to <WriteMode>; the ROM reads
+; <Phase0Off>, <Phase0On>, <MotorOn>, <SelectDrive1>, <DataLatch> and <ReadMode>.
+.include "Switches.asm"
 
 ; The nibbles that mark the fields of a sector on the disk. Both kinds of field start D5 AA, a pair that never occurs
 ; inside one; the third nibble says which kind it is.

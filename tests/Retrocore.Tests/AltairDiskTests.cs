@@ -299,7 +299,8 @@ public sealed class AltairDiskTests
     }
 
     /// <summary>
-    ///  A disk put in mid-sector gives its own bytes, not the last disk's.
+    ///  A disk put in mid-sector gives its own bytes as they are assembled; until then, and while the head is
+    ///  loaded or stepped between them, the port keeps the byte it had, from the last disk.
     /// </summary>
     [TestMethod]
     public void ANewDiskGivesItsOwnBytes()
@@ -308,18 +309,29 @@ public sealed class AltairDiskTests
         ulong start = NextSector(machine.Processor.CycleCount);
         int sector = (int)(start / AltairDiskTiming.SectorCycles % AltairDisk.SectorsPerTrack);
         int before = (sector + AltairDisk.SectorsPerTrack - 1) % AltairDisk.SectorsPerTrack;
+        byte held = SectorBytes(0, before)[136];
         RunTo(machine, start + 100);
-        machine.Bus.PeekPort((byte)Data).Should().Be(SectorBytes(0, before)[136]);
+        machine.Bus.PeekPort((byte)Data).Should().Be(held);
 
         AltairDisk other = Disk();
         byte[] marked = new byte[AltairDisk.SectorBytes];
         Array.Fill(marked, (byte)0x99);
-        other.WriteSector(0, before, marked);
-        AltairDiskDrive drive = Drives(machine)[0];
-        drive.Insert(other, "other.dsk", AltairDiskCodec.Name);
+        other.WriteSector(0, sector, marked);
+        other.WriteSector(1, before, marked);
+        byte[] earlier = new byte[AltairDisk.SectorBytes];
+        Array.Fill(earlier, (byte)0x88);
+        other.WriteSector(0, before, earlier);
+        Drives(machine)[0].Insert(other, "other.dsk", AltairDiskCodec.Name);
         machine.Bus.Out(Status, 0);
         machine.Bus.Out(Control, 0x04);
-        machine.Bus.PeekPort((byte)Data).Should().Be(0x99, "the new disk's sector before this one");
+        machine.Bus.PeekPort((byte)Data).Should().Be(held, "nothing has been assembled from the new disk");
+        (machine.Bus.In(Status) & 0x80).Should().Be(0x80);
+        machine.Bus.Out(Control, 0x01);
+        machine.Bus.PeekPort((byte)Data).Should().Be(held, "nor from the track it stepped to");
+        machine.Bus.Out(Control, 0x02);
+        RunTo(machine, start + AltairDiskTiming.FirstByteCycles);
+        (machine.Bus.In(Status) & 0x80).Should().Be(0, "a byte has come");
+        machine.Bus.In(Data).Should().Be(0x99, "from the new disk");
     }
 
     /// <summary>

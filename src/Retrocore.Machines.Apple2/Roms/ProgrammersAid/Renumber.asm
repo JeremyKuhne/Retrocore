@@ -285,8 +285,7 @@ MemoryFull:
     jmp MEMFULL
 
 ;; A line above the range: its number must be above the last new number given, or the first new number when no
-;; line was in the range. Pass 1 ends here, as the lines after
-;; it are above the range too.
+;; line was in the range. Pass 1 ends here, as the lines after it are above the range too.
 ;; Also: P1C (PA1)
 AboveRange:
     INR LAST_NUMBER

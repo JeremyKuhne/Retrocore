@@ -83,7 +83,7 @@ jumps to $02CB. The root asserts it is 0 or 1.
 - Music's second half is the shifted period plus the second byte plus 1, the carry its subtraction leaves; the path
   where the length's low byte carries, once in 256 loops, takes 2 cycles more than the others.
 - The RAM test's gallop writes outside the block unless the block's length is a power of 2 and it starts on a
-  multiple of it; the chip's gallop error jumps to $02CB and doesn't come back to beep.
+  multiple of it; the chip's gallop error jumps to $02CB, into stale input-buffer bytes, and may not come back to beep.
 
 ## Open questions for the owner
 

@@ -107,7 +107,7 @@ LastY = $0322
 ;; Also: BXSAV (PA1)
 KeptX = $0323
 
-;; The color, as a byte of dots, that <Position> sets <ShiftedColor> from for <Plot> and <Line> to draw with.
+;; The color, as a byte of dots, that <Position> sets <ShiftedColor> from for <Plot>, <Line> and <Draw> to draw with.
 ;; Also: HCOLOR (PA1)
 Color = $0324
 

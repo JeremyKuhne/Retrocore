@@ -1409,13 +1409,11 @@ Decisions and how the table was applied:
     `.ifndef`, since the extension's tests include one without the other.
 - F9. Shared modules touched, minimally: `MsBasic.Assignment.asm` (the two Commodore macros it invokes),
   `MsBasic.OperandEvaluation.asm` (`EvaluateVariable`), `MsBasic.VariableInput.asm` (`BeginGetString`),
-  `MsBasic.StringGarbageCollection.asm` (`ArrayHeaderSize`) and the shared folder's README (the renamed macros and
-  switches). `MsBasic.MemoryAccess.asm` still names `ROMLOC` and `LASTWR`, which reach the PET builds' new names
-  through `Also:` and are AppleSoft's until part E converts AppleSoft's `LASTWR`.
+  `MsBasic.StringGarbageCollection.asm` (`ArrayHeaderSize`), `MsBasic.StringConcatenation.asm` (`FindStringLink`)
+  and the shared folder's README (the renamed macros and switches). `MsBasic.MemoryAccess.asm` still names `ROMLOC`
+  and `LASTWR`, which reach every build's new names through `Also:`.
 - F10. Tests and their helpers:
-  - The rename gate's second rename is now `AssignString` (the bare label at the end of the shared
-    `AssignmentStart`, in a macro's body in every build), which neither part E nor part F converts, agreed with
-    part E's session: LASTWR, its old one, is no longer a definition in the PET builds.
+  - The rename gate's second rename is `AssignString`, as E-7 records.
   - `BasicCommodoreConversionTests` is new: in each PET build, every old name the part's files give that the overlay
     defines reaches its value, every definition reaches the overlay by a name apart from the SDK's own switches,
     constants and scoped aliases, and every citation is Commodore's, Microsoft's or UNKN, in the bibliography; the

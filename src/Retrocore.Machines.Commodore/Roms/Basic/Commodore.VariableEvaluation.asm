@@ -159,7 +159,7 @@ ReadClock:
     sty FacMantissa1
     rts
 
-;; `ST` returns the channel status as a number; BASIC 1's editor-ROM `TINUM` enters here.
+;; `ST` returns the channel status as a number; BASIC 1's editor-ROM `RouteNumericVariable` enters here.
 ;; Also: QSTATV (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 MatchStatus:
     cmp #'S'
@@ -202,7 +202,7 @@ DiskStatusNumber:
         jmp Float::ConvertSignedByte
     .endif
 
-;; Moves the real variable into <Fac>; BASIC 1's editor-ROM `TINUM` enters here too.
+;; Moves the real variable into <Fac>; BASIC 1's editor-ROM `RouteNumericVariable` enters here too.
 ;; Also: GOMOVF (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 LoadFloat:
     lda FacMantissa3

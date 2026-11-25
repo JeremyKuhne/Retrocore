@@ -64,6 +64,7 @@ public sealed partial class BasicProgram
     {
         ArgumentNullException.ThrowIfNull(dialect);
         if (dialect is IntegerBasicDialect integer) { return integer.FromImage(bytes); }
+        if (dialect is AtariBasicDialect) { return AtariBasicDialect.FromImage(bytes); }
         if (dialect is BusinessBasicDialect business) { return business.FromImage(bytes); }
         if (dialect is BbcBasicDialect bbc) { return bbc.FromImage(bytes); }
         if ((dialect == BasicDialect.Level2 || dialect == BasicDialect.Mbasic) && bytes.Length > 0 && bytes[0] == 0xFF)
@@ -93,6 +94,7 @@ public sealed partial class BasicProgram
         ArgumentNullException.ThrowIfNull(dialect);
         ArgumentNullException.ThrowIfNull(memory);
         if (dialect is IntegerBasicDialect integer) { return integer.Read(memory); }
+        if (dialect is AtariBasicDialect atari) { return atari.Read(memory); }
         if (dialect is BusinessBasicDialect business) { return business.Read(memory); }
         if (dialect is BbcBasicDialect bbc) { return bbc.Read(memory); }
         int start = Word(memory, dialect.Pointers.ProgramStart);
@@ -136,6 +138,7 @@ public sealed partial class BasicProgram
     public byte[] ToImage(int? address = null)
     {
         if (Dialect is IntegerBasicDialect) { return IntegerBasicDialect.Image(this); }
+        if (Dialect is AtariBasicDialect) { return AtariBasicDialect.Image(this); }
         if (Dialect is BusinessBasicDialect) { return BusinessBasicDialect.Image(this); }
         if (Dialect is BbcBasicDialect) { return BbcBasicDialect.Image(this); }
         int at = address ?? Dialect.DefaultLoadAddress;
@@ -185,6 +188,12 @@ public sealed partial class BasicProgram
         if (Dialect is BbcBasicDialect bbc)
         {
             bbc.Write(this, memory);
+            return;
+        }
+
+        if (Dialect is AtariBasicDialect)
+        {
+            AtariBasicDialect.Write(this, memory);
             return;
         }
 

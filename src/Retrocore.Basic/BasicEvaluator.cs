@@ -98,6 +98,11 @@ public sealed partial class BasicEvaluator
             return new BbcBasicExpression(_variables, _memory, _functions).Evaluate(expression);
         }
 
+        if (_dialect is AtariBasicDialect)
+        {
+            return new AtariBasicExpression(_variables, _memory).Evaluate(expression);
+        }
+
         string trimmed = expression.Trim();
         if ((Mbasic ? MbasicBareName() : BareName()).IsMatch(trimmed)) { return Variable(trimmed, subscripts: null); }
         byte[] saved = _bytes;
@@ -154,6 +159,7 @@ public sealed partial class BasicEvaluator
     {
         if (_dialect is IntegerBasicDialect) { return IntegerBasicExpression.Format(result.Value); }
         if (_dialect == BasicDialect.BusinessBasic) { return BusinessBasicExpression.Format(result.Value); }
+        if (_dialect is AtariBasicDialect) { return AtariBasicExpression.Format(result.Value); }
         if (result.Value.Text is { } text)
         {
             StringBuilder builder = new("\"");

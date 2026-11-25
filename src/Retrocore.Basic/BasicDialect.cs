@@ -34,7 +34,8 @@ public abstract partial class BasicDialect
         ColorBasicDialect.Disk,
         MbasicDialect.Instance,
         PetBasicDialect.Basic4,
-        BbcBasicDialect.Instance
+        BbcBasicDialect.Instance,
+        AtariBasicDialect.Instance
     ];
 
     /// <summary>
@@ -83,6 +84,11 @@ public abstract partial class BasicDialect
     ///  Gets MBASIC, Microsoft's BASIC-80 5.21 for CP/M.
     /// </summary>
     public static BasicDialect Mbasic => MbasicDialect.Instance;
+
+    /// <summary>
+    ///  Gets Atari BASIC, as rev. C tokenizes it.
+    /// </summary>
+    public static BasicDialect AtariBasic => AtariBasicDialect.Instance;
 
     /// <summary>
     ///  Gets the Color Computer's BASIC as the ROMs fitted know it, which crunch only their own words.

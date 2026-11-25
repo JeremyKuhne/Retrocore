@@ -17,7 +17,7 @@ namespace Retrocore.Basic;
 /// <param name="ElementSize">The bytes in each element.</param>
 /// <param name="LowerBound">The first element's subscript: 0, or 1 in Apple-1 BASIC.</param>
 /// <param name="LastFastest">
-///  Whether the last subscript varies fastest in memory, as in BBC BASIC; elsewhere the first does.
+///  Whether the last subscript varies fastest in memory, as in BBC BASIC and Atari BASIC; elsewhere the first does.
 /// </param>
 public sealed record BasicArray(
     string Name,
@@ -35,7 +35,8 @@ public sealed record BasicArray(
     public int Count => Dimensions.Aggregate(1, (count, size) => count * size);
 
     /// <summary>
-    ///  Gets the address of an element; the first subscript varies fastest, as BASIC lays them out.
+    ///  Gets the address of an element; the first subscript varies fastest, as the Microsoft BASICs lay them out, or the
+    ///  last, as Atari BASIC does.
     /// </summary>
     /// <param name="subscripts">The subscripts, in order.</param>
     /// <returns>The element's address.</returns>

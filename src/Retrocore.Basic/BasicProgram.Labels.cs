@@ -18,6 +18,7 @@ public sealed partial class BasicProgram
         ("ELSE", false, false),
         ("RESUME", false, false),
         ("RESTORE", false, false),
+        ("TRAP", false, false),
         ("DELETE", false, false),
         ("LLIST", false, false),
         ("LIST", false, false),
@@ -138,10 +139,10 @@ public sealed partial class BasicProgram
             index = Targets(text, after, jump, labels, references) - 1;
         }
 
-        return dialect is IntegerBasicDialect ? Defined(references, labels) : references;
+        return dialect is IntegerBasicDialect or AtariBasicDialect ? Defined(references, labels) : references;
     }
 
-    // Integer BASIC's and BBC BASIC's GOTO and GOSUB take any expression, such as GOSUB T, so a name is a label only
+    // Integer BASIC's, BBC BASIC's and Atari BASIC's GOTO and GOSUB take any expression, such as GOSUB T, so a name is a label only
     // when one of that name is defined.
     private static List<(int, int, string, bool, string)> Defined(
         List<(int, int, string, bool, string)> references,
@@ -268,6 +269,8 @@ public sealed partial class BasicProgram
             bool spaced = Spaced(dialect);
             foreach ((string word, bool list, bool required) jump in s_jumps)
             {
+                // TRAP is Atari BASIC's alone; elsewhere it is letters of a name.
+                if (jump.word == "TRAP" && dialect is not AtariBasicDialect) { continue; }
                 int length = spaced
                     ? SpacedLength(text, index, jump.word)
                     : string.Compare(text, index, jump.word, 0, jump.word.Length, StringComparison.OrdinalIgnoreCase) == 0 ? jump.word.Length : -1;

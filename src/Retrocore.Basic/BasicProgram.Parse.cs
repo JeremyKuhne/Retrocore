@@ -62,7 +62,7 @@ public sealed partial class BasicProgram
                 diagnostics.Add(new(
                     Math.Max(first, 0),
                     BasicSeverity.Error,
-                    $"'{named}' is not a BASIC dialect; use applesoft, integer, apple1, level2, business, colorbasic, mbasic, petbasic or bbcbasic."));
+                    $"'{named}' is not a BASIC dialect; use applesoft, integer, apple1, level2, business, colorbasic, mbasic, petbasic, bbcbasic or atari."));
 
                 return Failed(diagnostics);
             }
@@ -85,6 +85,9 @@ public sealed partial class BasicProgram
         bool labeled = statements.Any(line => !line.Numbered) || marks.Count > 0;
         statements = Number(dialect, statements, step, labeled, diagnostics);
         Dictionary<string, BasicLabel> labels = Name(statements, marks, diagnostics);
+
+        // Atari BASIC numbers a program's variables as its lines are typed, so the program has a dialect of its own.
+        if (dialect is AtariBasicDialect) { dialect = AtariBasicDialect.Fresh(); }
 
         SortedDictionary<int, (BasicLine Line, int Source)> program = [];
         int previous = -1;

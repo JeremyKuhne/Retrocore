@@ -323,7 +323,7 @@ SIGNATURE_07 = $3C
     ; A format or above succeeds; a read or a write starts with a handshake for the command.
 Transfer:
     cmp #COMMAND_FORMAT
-    bcs Succeed                     ; format, which a ProFile needs none of
+    bcs Succeed                     ; a format or above, which a ProFile needs none of
     ldy #RESPONSE_READY_FOR_COMMAND
     bne Handshake
 .endproc

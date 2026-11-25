@@ -192,6 +192,9 @@ public sealed class Apple2Disk35Drive : IDiskDrive, IEjectingSlot
     }
 
     /// <inheritdoc/>
+    public bool HasEjected => _ejected.Count != 0;
+
+    /// <inheritdoc/>
     public IReadOnlyList<EjectedMedium> TakeEjected()
     {
         if (_ejected.Count == 0) { return []; }

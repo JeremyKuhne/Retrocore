@@ -443,12 +443,22 @@ internal sealed class BasicLineScanner
     private static readonly HashSet<string> s_bbcValues =
         ["FALSE", "TRUE", "PI", "PAGE", "TIME", "LOMEM", "HIMEM", "TOP", "COUNT", "ERL", "ERR", "POS", "VPOS", "RND", "GET", "GET$"];
 
-    // BBC BASIC's implied instructions, the mnemonics before BCC in Assembler.asm's table, which take no operand.
-    private static readonly HashSet<string> s_impliedMnemonics =
+    /// <summary>
+    ///  BBC BASIC's assembler's mnemonics, in the order of the table in Assembler.asm: the implied instructions, BRK to
+    ///  TYA, then the branches from BCC, the rest, and OPT and EQU.
+    /// </summary>
+    internal static readonly string[] BbcMnemonics =
     [
         "BRK", "CLC", "CLD", "CLI", "CLV", "DEX", "DEY", "INX", "INY", "NOP", "PHA", "PHP", "PLA", "PLP", "RTI", "RTS",
-        "SEC", "SED", "SEI", "TAX", "TAY", "TSX", "TXA", "TXS", "TYA"
+        "SEC", "SED", "SEI", "TAX", "TAY", "TSX", "TXA", "TXS", "TYA", "BCC", "BCS", "BEQ", "BMI", "BNE", "BPL", "BVC",
+        "BVS", "AND", "EOR", "ORA", "ADC", "CMP", "LDA", "SBC", "ASL", "LSR", "ROL", "ROR", "DEC", "INC", "CPX", "CPY",
+        "BIT", "JMP", "JSR", "LDX", "LDY", "STA", "STX", "STY", "OPT", "EQU"
     ];
+
+    private static readonly HashSet<string> s_bbcMnemonics = [.. BbcMnemonics];
+
+    // The implied instructions, which take no operand.
+    private static readonly HashSet<string> s_impliedMnemonics = [.. BbcMnemonics[..Array.IndexOf(BbcMnemonics, "BCC")]];
 
     // Whether a number is only the start of an expression, as in Integer BASIC's GOTO 1000+K*10, which has no
     // ON GOTO: a line is a number that ends the statement or comes before a comma.
@@ -639,7 +649,18 @@ internal sealed class BasicLineScanner
                     return true;
                 }
 
-                index = Mnemonic(index, out _assembly);
+                int first = index;
+                index = Mnemonic(index, out _assembly, out string? unknown, out int warned);
+                if (unknown is not null)
+                {
+                    diagnostics.Add(new(
+                        _line,
+                        BasicSeverity.Warning,
+                        $"BBC BASIC's assembler has no {unknown}: it stops with Syntax error.",
+                        Column(first),
+                        End(warned)));
+                }
+
                 return true;
             default:
                 if (value == ':')
@@ -673,19 +694,33 @@ internal sealed class BasicLineScanner
     // after it, as EQUB does. AND, EOR and OR are tokens, OR with the A after it. Returns the mnemonic's last byte, and
     // what follows it: the operand, or, after an implied instruction, which ASSEMBLE_INSTRUCTION_FOUND stores as it is,
     // nothing the assembler reads.
-    private int Mnemonic(int index, out BbcAssemblyPart next)
+    private int Mnemonic(int index, out BbcAssemblyPart next, out string? unknown, out int warned)
     {
         next = BbcAssemblyPart.Operand;
-        if (_bytes[index] >= 0x80)
-        {
-            bool or = _dialect.Word(_bytes[index]) == "OR";
-            return or && index + 1 < _bytes.Length && _bytes[index + 1] == 'A' ? index + 1 : index;
-        }
+        unknown = null;
 
+        // Up to three characters, ended early by a space, as ASSEMBLE_INSTRUCTION_LETTER packs them. A token at any of
+        // the three is the mnemonic, the characters before it dropped, as the tokeniser leaves AND after a symbol, a
+        // number or a colon: #AND #1 and A:AND #1 are AND #1.
         int last = index;
-        while (last - index < 2 && last + 1 < _bytes.Length && _bytes[last + 1] is not ((byte)' ' or (byte)':') and < 0x80)
+        while (_bytes[last] < 0x80 && last - index < 2 && last + 1 < _bytes.Length && _bytes[last + 1] != ' ')
         {
             last++;
+        }
+
+        // Otherwise a colon is packed like any other character, so LD: is no mnemonic; the scan stops before it, as it
+        // still ends the statement, and LD is no mnemonic either.
+        int colon = _bytes[last] < 0x80 ? Array.IndexOf(_bytes, (byte)':', index, last - index + 1) : -1;
+        if (colon > index) { last = colon - 1; }
+
+        warned = last;
+        if (_bytes[last] >= 0x80)
+        {
+            // ASSEMBLE_INSTRUCTION_TOKEN: AND, EOR, or OR with a capital A after it; any other token is no mnemonic.
+            string? word = _dialect.Word(_bytes[last]);
+            if (word == "OR" && last + 1 < _bytes.Length && _bytes[last + 1] == 'A') { return last + 1; }
+            if (word is not ("AND" or "EOR")) { unknown = Source(index, last); }
+            return last;
         }
 
         string letters = new([.. _bytes[index..(last + 1)].Select(value => (char)('@' + (value & 0x1F)))]);
@@ -697,12 +732,34 @@ internal sealed class BasicLineScanner
             _ => BbcAssemblyPart.Operand
         };
 
-        if (letters == "EQU" && last + 1 < _bytes.Length && _bytes[last + 1] is (byte)'B' or (byte)'W' or (byte)'D' or (byte)'S')
+        if (letters.Length < 3 || !s_bbcMnemonics.Contains(letters))
         {
-            last++;
+            unknown = Source(index, last);
+        }
+        else if (letters == "EQU")
+        {
+            // ASSEMBLE_EQU reads the next character, which must be a capital B, W, D or S; the warning names the
+            // character it read instead, unless that is a space or the statement's end.
+            byte following = last + 1 < _bytes.Length ? _bytes[last + 1] : (byte)':';
+            if (following is (byte)'B' or (byte)'W' or (byte)'D' or (byte)'S')
+            {
+                last++;
+            }
+            else
+            {
+                warned = following is (byte)' ' or (byte)':' ? last : last + 1;
+                unknown = Source(index, warned);
+            }
         }
 
         return last;
+    }
+
+    // The text of the bytes from first to last, as written.
+    private string Source(int first, int last)
+    {
+        int start = Column(first);
+        return _text[start..End(last)];
     }
 
     // A type suffix: $ and %, on Level II ! and # for single and double precision, and in Business BASIC & for a

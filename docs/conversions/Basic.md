@@ -570,7 +570,8 @@ code; these were wrong and are changed in the table:
 - DECCNT is `DigitCount`: FIN counts the digits after the point there, FOUT those before it.
 - RNDX is `RandomValue`, because of IIeEquates' `RandomSeed`.
 
-Still open (used as glossary names in the table, with scoped aliases proposed in the parts' notes):
+Still open (used as glossary names in the table, with scoped aliases proposed in the parts' notes). The owner decides
+these at B6 ([the alignment plan](../backlog/ConversionAlignment.md)), as each module that uses them is converted:
 
 - SIZE and OLDOV: the collector's offset and the math package's guard byte, not a jump's operand (D-Q3, A,
   B2).

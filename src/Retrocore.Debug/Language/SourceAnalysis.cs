@@ -368,7 +368,7 @@ internal sealed partial class SourceAnalysis
         _definitions.TryGetValue(name, out List<SymbolSite>? sites) && sites.Exists(site => site.Name == name);
 
     /// <summary>
-    ///  Assembles a root file over the whole address space.
+    ///  Assembles a root file over its declared ROM image or the whole address space.
     /// </summary>
     /// <param name="root">The full path of the root.</param>
     /// <param name="openText">Open documents' text by path, or null for files on disk.</param>
@@ -384,16 +384,26 @@ internal sealed partial class SourceAnalysis
         string configuration = Path.ChangeExtension(root, ".cfg");
         string? configurationText = openText(configuration) ?? (File.Exists(configuration) ? File.ReadAllText(configuration) : null);
         WorkspaceSourceResolver resolver = new(openText, files);
-        AssemblyOptions options = new(ProcessorVariant.Mos6502, 0, AddressSpaceSize)
-        {
-            SourceResolver = resolver,
-            SdkPaths = [SdkModules.SdkDirectory],
-            BuildTime = DateTimeOffset.UnixEpoch,
-            LinkerConfiguration = configurationText is null ? null : new(configurationText, configuration)
-        };
+        (string assemblyText, RomMetadata? rom, AssemblyDiagnostic? romError) = RomSource(text, root);
+        AssemblySource? linkerConfiguration = configurationText is not null
+            ? new(configurationText, configuration)
+            : null;
 
-        AssemblySource source = new(WithoutRomDeclaration(text), root);
+        AssemblyOptions options = Options(linkerConfiguration);
+        AssemblySource source = new(assemblyText, root);
         AssemblyParseResult parsed = Assembler.Assembler.Parse(source, options);
+        if (romError is not null)
+        {
+            parsed = new(parsed.Project, [romError, .. parsed.Diagnostics]);
+        }
+
+        if (rom is { } metadata
+            && linkerConfiguration is null
+            && parsed.Project.Statements.Any(statement => statement.Dialect == AssemblyDialect.Ca65))
+        {
+            options = Options(AssemblyLinker.ImageConfiguration(metadata.Origin, metadata.ImageSize));
+        }
+
         Assembler.Assembler assembler = new();
         AssemblyResult result = parsed.Success
             ? assembler.Assemble(parsed.Project, options)
@@ -406,6 +416,14 @@ internal sealed partial class SourceAnalysis
             resolver.Resolved,
             TextOf(openText),
             path => openText(path) is { } open ? SourceText.Lines(open) : files.ReadLinesIfExists(path));
+
+        AssemblyOptions Options(AssemblySource? linker) => new(ProcessorVariant.Mos6502, rom?.Origin ?? 0, rom?.ImageSize ?? AddressSpaceSize)
+        {
+            SourceResolver = resolver,
+            SdkPaths = [SdkModules.SdkDirectory],
+            BuildTime = DateTimeOffset.UnixEpoch,
+            LinkerConfiguration = linker
+        };
     }
 
     // The analysis keeps this function, so it is made apart from Assemble's lambdas: those share one closure, and
@@ -964,8 +982,50 @@ internal sealed partial class SourceAnalysis
         sites.Add(site);
     }
 
-    // The generator's .rom declaration is metadata for the C# source generator, not an instruction.
-    private static string WithoutRomDeclaration(string text) => RomDeclaration().Replace(text, "");
+    // The generator's .rom line supplies image bounds but is not an assembler instruction.
+    private static (string Text, RomMetadata? Metadata, AssemblyDiagnostic? Error) RomSource(string text, string path)
+    {
+        if (!text.Contains(".rom", StringComparison.OrdinalIgnoreCase)) { return (text, null, null); }
+        if (!path.EndsWith(".rom.asm", StringComparison.OrdinalIgnoreCase))
+        {
+            return (RomDeclaration().Replace(text, ""), null, null);
+        }
+
+        char[]? source = null;
+        RomMetadata? metadata = null;
+        AssemblyDiagnostic? error = null;
+        int offset = 0;
+        int line = 0;
+        foreach (ReadOnlyMemory<char> sourceLine in new AssemblyLines(text.AsMemory()))
+        {
+            int start = offset;
+            offset += sourceLine.Length;
+            if (offset < text.Length && text[offset] == '\r') { offset++; }
+            if (offset < text.Length && text[offset] == '\n') { offset++; }
+            int currentLine = line++;
+            ReadOnlyMemory<char> content = sourceLine[..AssemblySyntax.WithoutComment(sourceLine.Span).Length].Trim();
+            if (!RomMetadata.IsDeclaration(content.Span)) { continue; }
+
+            source ??= text.ToCharArray();
+            source.AsSpan(start, sourceLine.Length).Fill(' ');
+            if (error is not null) { continue; }
+            try
+            {
+                if (metadata is not null)
+                {
+                    throw new AssemblyError(currentLine, "Expected one '.rom Namespace.Type, origin, size' declaration.");
+                }
+
+                metadata = RomMetadata.Read(content, currentLine);
+            }
+            catch (AssemblyError failure)
+            {
+                error = new(failure.Message, new(path, failure.Line));
+            }
+        }
+
+        return (source is null ? text : new string(source), metadata, error);
+    }
 
     [GeneratedRegex(@"^[ \t]*\.rom[ \t][^\r\n]*", RegexOptions.Multiline | RegexOptions.IgnoreCase)]
     private static partial Regex RomDeclaration();

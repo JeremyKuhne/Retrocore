@@ -224,6 +224,9 @@ are found from the machine ROM roots across projects, as they are from the SDK's
 sibling folders. If the root has a same-named `.cfg` beside it, the server
 uses that linker configuration when assembling and reanalyzes on open-document
 edits and watched workspace file changes (subject to `files.watcherExclude`).
+In a `.rom.asm` source, `.rom` metadata supplies the image's origin and size, as
+it does for the source generator; a companion ca65 configuration takes precedence
+for linking. The metadata is read before conditional assembly.
 This is an editor-only convenience: CLI builds and debug launches require an
 explicit `--config` or `linkerConfiguration` respectively. Files the extension does
 not recognize as `retrocore-asm` (such
@@ -1350,8 +1353,8 @@ statement that called it; it shows **BASIC: ready** at the prompt.
   the heap and BASIC's stack. STOP is an error, and there is no CONT. Watches read memory
   with `?`, `!` and `$` as BASIC does. Between `[` and `]`, the assembler's mnemonics,
   registers, comments and the text it skips are highlighted and are not variables, while its
-  labels are; and
-  another BASIC's word, such as `HOME`, is warned of only as a statement of its own.
+  labels are, and an unknown mnemonic is warned of; another BASIC's word, such as `HOME`, is
+  warned of only as a statement of its own.
 
 ### BASIC files
 

@@ -6,6 +6,7 @@ using Retrocore.Assembler;
 using Retrocore.Documentation;
 using Retrocore.Isa;
 using Retrocore.Machines.Devices;
+using Retrocore.Media;
 using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -91,9 +92,16 @@ internal sealed partial class DebugSession
     private ulong _measureCycles;
     private double _measured = double.NaN;
 
-    // VS Code sends breakpoints and configurationDone in answer to the initialized event, which the server sends
-    // right after initialize, so they can arrive before launch has loaded the modules they bind to.
+    // Each launch sends the initialized event and waits for its own configurationDone, so the breakpoints and
+    // exception filters sent in answer to it are in place before the machine starts. A configurationDone that came
+    // before any launch is kept here for the next launch; a launch takes it, so a later launch on the same connection
+    // waits for its own.
     private bool _configured;
+
+    // Whether a launch has been asked for on this connection, and whether the last one finished, so that its
+    // configurationDone has a machine to start.
+    private bool _launchAttempted;
+    private bool _launchReady;
     private bool _started;
 
     // What the launch powers on to: the reset handler, a loaded program's entry, or (null) a BASIC launch already
@@ -129,10 +137,24 @@ internal sealed partial class DebugSession
             ? seconds * 1000
             : 30_000;
 
+    // How long a checkpoint waits for a drive that is writing to stop, before it takes the disk as it is, marked as
+    // caught mid-write; and how often it looks meanwhile, letting the machine run.
+    private const int IdleWaitMilliseconds = 5000;
+    private const int IdleLookMilliseconds = 50;
+
     // The machine's recovery journal, when its launch gave a recoveryId, and the timer that checkpoints it.
     private RecoveryJournal? _journal;
     private Timer? _checkpoints;
     private readonly Lock _checkpointing = new();
+
+    // Whether a checkpoint is asked for, as the timer or the machine's own eject asks, until one starts after it; and
+    // whether the console last said the journal cannot be written.
+    private int _checkpointWanted;
+    private bool _journalFailing;
+
+    // The run whose worker is running the machine now, under the lock: a stop the worker makes itself, at a
+    // breakpoint or an exception, ends it without cancelling the run.
+    private CancellationToken _running;
     private bool _stopOnContracts;
     private ushort _instructionStart;
 
@@ -185,8 +207,11 @@ internal sealed partial class DebugSession
         transport.On("retro/memory/variable", args => Reply(() => MemoryVariable(args)));
         transport.On("configurationDone", args => Reply(() =>
         {
-            _configured = true;
-            if (_target is not null) { Start(); }
+            // It starts the launch it configures. Before the first launch it waits for that launch; after a launch
+            // that failed there is no launched machine to start, and once the launch has started, nothing is left to
+            // configure.
+            if (!_launchAttempted) { _configured = true; }
+            else if (_launchReady) { Start(); }
             return [];
         }));
 
@@ -626,6 +651,7 @@ internal sealed partial class DebugSession
     // disks into it from then on. A journal that cannot be kept is said in the console; the machine runs without one.
     private void OpenJournal(JsonObject args)
     {
+        _journalFailing = false;
         if (args.String("recoveryId") is not { } id) { return; }
         List<string> problems = [];
         try
@@ -652,59 +678,124 @@ internal sealed partial class DebugSession
     }
 
     // Keeps the machine's changed disks in its journal: snapshots under the lock, written off the machine's thread. One
-    // checkpoint at a time, from taking its snapshots to committing them, so an older one never commits after a newer.
+    // checkpoint at a time, from taking its snapshots to committing them, so an older one never commits after a newer;
+    // one asked for while another runs follows it.
     private void Checkpoint()
     {
-        if (!_checkpointing.TryEnter()) { return; }
-        try
+        Volatile.Write(ref _checkpointWanted, 1);
+        do
         {
-            CheckpointOnce();
+            if (!_checkpointing.TryEnter()) { return; }
+            try
+            {
+                while (Interlocked.Exchange(ref _checkpointWanted, 0) == 1) { CheckpointOnce(); }
+            }
+            finally
+            {
+                _checkpointing.Exit();
+            }
         }
-        finally
-        {
-            _checkpointing.Exit();
-        }
+        while (Volatile.Read(ref _checkpointWanted) == 1);
     }
 
+    // A checkpoint soon, off the machine's thread, as the machine ejects a disk.
+    private void CheckpointSoon() => ThreadPool.QueueUserWorkItem(_ => Checkpoint());
+
+    // One checkpoint. A disk whose drive is writing waits for it to stop, while the machine runs, for up to five
+    // seconds; then, or at once when the machine is stopped, it is taken as it is, marked as caught mid-write. The
+    // disks that can be kept now are committed meanwhile, so a disk the machine ejected waits for no other drive.
     private void CheckpointOnce()
     {
-        RecoveryJournal? journal = null;
-        List<JournalDisk>? disks = null;
-        try
+        long deadline = Environment.TickCount64 + IdleWaitMilliseconds;
+        for (bool first = true; ; first = false)
         {
-            Reply(() =>
-            {
-                journal = _journal;
-                if (journal is not null && _target is not null && !_ended)
-                {
-                    disks = MediaActions.Journal(_target.Devices, journal);
-                }
-
-                return [];
-            });
-
-            if (journal is not null && disks is not null) { journal.Commit(disks); }
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-        {
-            // The previous commit stands; the next checkpoint tries again.
+            RecoveryJournal? journal = null;
+            List<JournalDisk>? disks = null;
             try
             {
                 Reply(() =>
                 {
-                    Say($"The recovery journal could not be written: {exception.Message}");
+                    journal = _journal;
+                    if (journal is not null && _target is not null && !_ended)
+                    {
+                        bool running = _running is { CanBeCanceled: true, IsCancellationRequested: false };
+                        disks = MediaActions.Journal(_target.Devices, journal, idle: running && Environment.TickCount64 < deadline);
+                    }
+
                     return [];
                 });
+
+                if (journal is null || disks is null) { return; }
+                bool waiting = disks.Any(disk => disk.Waiting);
+                if (first || disks.Any(disk => disk.Snapshot is not null))
+                {
+                    try
+                    {
+                        journal.Commit(disks);
+                    }
+                    finally
+                    {
+                        Kept(journal);
+                    }
+                }
+
+                if (!waiting) { return; }
             }
-            catch (Exception gone) when (gone is IOException or ObjectDisposedException or InvalidOperationException)
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
             {
-                // The client has gone.
+                // The previous commit stands; the next checkpoint tries again, and the drives say they are behind.
+                return;
             }
+            catch (Exception exception) when (exception is ObjectDisposedException or InvalidOperationException)
+            {
+                // The session is ending or between machines, which keeps the journal itself.
+                return;
+            }
+
+            Thread.Sleep(IdleLookMilliseconds);
         }
-        catch (Exception exception) when (exception is ObjectDisposedException or InvalidOperationException)
+    }
+
+    // After a commit, tells the client how its drives are kept, and says in the console when the journal cannot be
+    // written, and when it can again. A checkpoint of a journal closed meanwhile says nothing.
+    private void Kept(RecoveryJournal journal)
+    {
+        try
         {
-            // The session is ending or between machines, which keeps the journal itself.
+            Reply(() =>
+            {
+                if (!ReferenceEquals(journal, _journal)) { return []; }
+                string? failure = journal.Failure;
+                if ((failure is not null) != _journalFailing)
+                {
+                    Say(failure is null
+                        ? "The recovery journal can be written again."
+                        : $"The recovery journal could not be written: {failure}");
+
+                    _journalFailing = failure is not null;
+                }
+
+                if (_target is not null && !_ended) { NotifyDevices(); }
+                return [];
+            });
         }
+        catch (Exception gone) when (gone is IOException or ObjectDisposedException or InvalidOperationException)
+        {
+            // The client has gone.
+        }
+    }
+
+    // Whether the machine ejected a disk the host has not kept yet, which a checkpoint keeps at once.
+    private bool HasEjected()
+    {
+        if (_journal is null || _target is null) { return false; }
+        IReadOnlyList<IDevice> devices = _target.Devices;
+        for (int index = 0; index < devices.Count; index++)
+        {
+            if (devices[index] is IEjectingSlot { HasEjected: true }) { return true; }
+        }
+
+        return false;
     }
 
     // Keeps the machine's changed disks one last time and closes its journal as cleanly ended, as the machine stops or
@@ -715,6 +806,7 @@ internal sealed partial class DebugSession
         _checkpoints = null;
         if (_journal is not { } journal) { return; }
         _journal = null;
+        _journalFailing = false;
         try
         {
             // Every changed disk whole: a checkpoint still being written may drop a snapshot this one would reuse.
@@ -845,6 +937,11 @@ internal sealed partial class DebugSession
 
     private JsonObject Launch(JsonObject args)
     {
+        // The launch takes a configurationDone that came before it, even if it fails.
+        bool configured = _configured;
+        _configured = false;
+        _launchAttempted = true;
+        _launchReady = false;
         _run?.Cancel();
         args = LaunchMedia.WithSaved(args, args["machineState"]);
         string machine = DebugMachines.Require(args.String("machine"));
@@ -1064,12 +1161,20 @@ internal sealed partial class DebugSession
 
         Notify("initialized", []);
 
-        // A configurationDone that came first starts the machine once this response is on its way.
-        if (_configured)
+        _launchReady = true;
+
+        // A configurationDone that came before the launch starts the machine once the launch has returned. A launch
+        // after this one waits for a configurationDone of its own, and a launch that comes before the start runs,
+        // even one that fails, or the session ending, cancels that start.
+        if (configured)
         {
+            IDebugTarget launched = Target;
             _ = Task.Run(() =>
             {
-                lock (_gate) { Start(); }
+                lock (_gate)
+                {
+                    if (_launchReady && !_ended && ReferenceEquals(_target, launched)) { Start(); }
+                }
             });
         }
 
@@ -1796,6 +1901,7 @@ internal sealed partial class DebugSession
                 Target.TakeAudio();
                 paceCycles = Target.CycleCount;
                 StartMeasuring();
+                _running = token;
             }
 
             bool ahead = false;
@@ -1854,6 +1960,9 @@ internal sealed partial class DebugSession
 
                         if (token.IsCancellationRequested) { return; }
                         ahead = Target.CycleCount >= due;
+
+                        // A disk the machine ejected is kept in the journal as it goes, not at the next checkpoint.
+                        if (HasEjected()) { CheckpointSoon(); }
                         if (Stopwatch.GetElapsedTime(frameTime).TotalMilliseconds >= 33)
                         {
                             AddLoadedModules();
@@ -1905,6 +2014,14 @@ internal sealed partial class DebugSession
             catch (IOException exception)
             {
                 ExecutionFailed(exception, token);
+            }
+            finally
+            {
+                // However the worker ends, the machine it ran is not running; a later run's worker is its own.
+                lock (_gate)
+                {
+                    if (_running == token) { _running = default; }
+                }
             }
         }, token);
     }
@@ -2063,6 +2180,7 @@ internal sealed partial class DebugSession
         int? threadId = null)
     {
         Invalidate();
+        if (HasEjected()) { CheckpointSoon(); }
         int thread = threadId ?? (_target is null ? 1 : ThreadOf(Cpu));
         _stoppedThread = thread;
         _basicGoal = null;
@@ -2120,8 +2238,14 @@ internal sealed partial class DebugSession
         body["hardware"] = HardwareRow.Json(Target.Hardware());
         body["configuration"] = MachineConfiguration.Capture(Target);
 
-        // Whether its changed disks are kept past the session, which the client's stop notice says.
+        // Whether its changed disks are kept past the session, which the client's stop notice says, and how each
+        // changed disk is kept.
         body["recovery"] = _journal is not null;
+        if (_journal is { } journal)
+        {
+            MediaActions.Recovery(body, Target.Devices, journal, TimeSpan.FromMilliseconds(s_checkpointMilliseconds));
+        }
+
         return body;
     }
 

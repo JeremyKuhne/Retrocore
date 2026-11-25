@@ -26,6 +26,7 @@ local share = os.getenv("RETRO_SHARE")
 local next_entry = 1
 local done = false
 subscription = emu.add_machine_frame_notifier(function()
+  -- time.seconds counts whole seconds; as_double keeps the fraction of a time such as 2.5.
   local now = manager.machine.time:as_double()
   while next_entry <= #schedule and now >= schedule[next_entry].at do
     local text = schedule[next_entry].text

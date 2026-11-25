@@ -134,8 +134,10 @@ and Color BASIC do; the [extension's README](../extension/README.md#basic-progra
 - In a `.bbcbasic.bas` file, the assembler between `[` and `]` highlights its mnemonics, registers, labels and `\`
   comments, and what it skips: everything after an implied instruction, a register or the shifts' `A`, and a `;` or `\`
   after an operand. Its mnemonics, registers and skipped text are not variables to rename or find; its labels and the
-  names in its operands are. Another BASIC's word, such as `HOME`, is a variable like any other, as BBC BASIC keeps names whole;
-  it is warned of only as a statement of its own, where BASIC stops with Mistake.
+  names in its operands are. A mnemonic is its first three letters, whatever follows them (`LDAdest` is `LDA dest`),
+  and one that is not in the assembler's table, or an `EQU` without a capital `B`, `W`, `D` or `S`, is warned of,
+  as BASIC stops there with Syntax error. Another BASIC's word, such as `HOME`, is a variable like any other, as BBC
+  BASIC keeps names whole; it is warned of only as a statement of its own, where BASIC stops with Mistake.
 - STOP is error 0, and a program that runs off its last line returns to the prompt; BBC BASIC has no CONT.
 
 ## Testing

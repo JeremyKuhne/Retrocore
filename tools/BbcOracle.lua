@@ -20,7 +20,8 @@ debugger:command('trace ' .. output .. ',maincpu,noloop,{tracelog "%02x %02x %02
 debugger.execution_state = "run"
 
 subscription = emu.add_machine_frame_notifier(function()
-  local now = manager.machine.time.seconds
+  -- time.seconds counts whole seconds; as_double keeps the fraction of a time such as 2.5.
+  local now = manager.machine.time:as_double()
   if keys and not typed and now >= keysAt then
     manager.machine.natkeyboard:post(keys:gsub("\\r", "\r"))
     typed = true

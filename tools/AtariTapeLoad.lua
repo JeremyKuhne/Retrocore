@@ -17,7 +17,8 @@ local finish = tonumber(os.getenv("RETRO_END") or "70")
 local stage = 0
 
 subscription = emu.add_machine_frame_notifier(function()
-  local seconds = manager.machine.time.seconds
+  -- time.seconds counts whole seconds; as_double keeps the fraction of a time such as 2.5.
+  local seconds = manager.machine.time:as_double()
   if stage == 0 and seconds >= 3 then
     stage = 1
     manager.machine.natkeyboard:post("CLOAD\r")

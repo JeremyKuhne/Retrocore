@@ -16,7 +16,8 @@ debugger:command('trace ' .. output .. ',f3,noloop,{tracelog "%02x %02x %02x %02
 debugger.execution_state = "run"
 
 subscription = emu.add_machine_frame_notifier(function()
-  if manager.machine.time.seconds >= finish then
+  -- time.seconds counts whole seconds; as_double keeps the fraction of a time such as 2.5.
+  if manager.machine.time:as_double() >= finish then
     debugger:command("trace off,f3")
     manager.machine:exit()
   end

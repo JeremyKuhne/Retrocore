@@ -21,7 +21,8 @@ debugger.execution_state = "run"
 
 local typed = false
 subscription = emu.add_machine_frame_notifier(function()
-  local now = manager.machine.time.seconds
+  -- time.seconds counts whole seconds; as_double keeps the fraction of a time such as 2.5.
+  local now = manager.machine.time:as_double()
   if text and not typed and now >= typeAt then
     manager.machine.natkeyboard:post((text:gsub("\\n", "\n")))
     typed = true

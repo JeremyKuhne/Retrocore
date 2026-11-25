@@ -225,7 +225,13 @@ public class CocoOracleTests
         }
     }
 
-    private static string ScriptEntry((double At, string Text) entry)
+    /// <summary>
+    ///  Formats a schedule entry for the Lua script's <c>RETRO_SCRIPT</c>: the time in seconds, with a '.' before any
+    ///  fraction whatever the culture; <c>=</c>; then the text, with <c>\r</c> for ENTER.
+    /// </summary>
+    /// <param name="entry">The emulated second to type at, and the text to type.</param>
+    /// <returns>The entry as <c>seconds=text</c>.</returns>
+    internal static string ScriptEntry((double At, string Text) entry)
     {
         string at = entry.At.ToString(CultureInfo.InvariantCulture);
         return $"{at}={entry.Text.Replace("\r", "\\r", StringComparison.Ordinal)}";

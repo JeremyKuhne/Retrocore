@@ -14,7 +14,8 @@ local finish = tonumber(os.getenv("RETRO_END") or "120")
 local typed = false
 
 subscription = emu.add_machine_frame_notifier(function()
-  local seconds = manager.machine.time.seconds
+  -- time.seconds counts whole seconds; as_double keeps the fraction of a time such as 2.5.
+  local seconds = manager.machine.time:as_double()
   if not typed and seconds >= 3 then
     typed = true
     manager.machine.natkeyboard:post("LOAD\r")

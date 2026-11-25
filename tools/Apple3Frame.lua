@@ -12,7 +12,8 @@ local output = os.getenv("RETRO_OUT") or "frame.rgba"
 local finish = tonumber(os.getenv("RETRO_END") or "4")
 
 subscription = emu.add_machine_frame_notifier(function()
-  if manager.machine.time.seconds < finish then return end
+  -- time.seconds counts whole seconds; as_double keeps the fraction of a time such as 2.5.
+  if manager.machine.time:as_double() < finish then return end
   local screen = manager.machine.screens[":screen"]
   local pixels, width, height = screen:pixels()
   local rgba = {}

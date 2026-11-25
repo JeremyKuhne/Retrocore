@@ -45,6 +45,55 @@ public class Trs80OracleTests
     }
 
     /// <summary>
+    ///  Level II on a schedule and an end time in fractional seconds.
+    /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   The entries are far enough apart that the screen, cursor and program should come out the same whether MAME
+    ///   types each one at its fraction, at the next whole second, or early because the fraction was lost. So this
+    ///   checks that a fractional schedule runs end to end, not when each entry fires;
+    ///   <see cref="ScriptEntryKeepsFractionalSeconds"/> checks the text sent to MAME.
+    ///  </para>
+    /// </remarks>
+    [TestMethod]
+    [TestCategory("Conformance")]
+    public void LevelTwoBasicAtFractionalTimesMatchesMame()
+    {
+        (double At, string Text)[] script =
+        [
+            (2.5, "\r"),
+            (6.25, "10 FOR I=1 TO 3:PRINT I*I;:NEXT\r"),
+            (10.5, "RUN\r"),
+            (12.75, "PRINT MEM\r")
+        ];
+
+        Compare(script, finish: 15.5, disk: null, comparesProgram: true, landmark: "1  4  9");
+    }
+
+    /// <summary>
+    ///  The schedule's times reach the Lua scripts with their fraction and a decimal point, whatever the culture.
+    /// </summary>
+    [TestMethod]
+    public void ScriptEntryKeepsFractionalSeconds()
+    {
+        System.Globalization.CultureInfo culture = System.Globalization.CultureInfo.CurrentCulture;
+        try
+        {
+            // German writes 2,5; the Lua scripts read only digits and '.'.
+            System.Globalization.CultureInfo.CurrentCulture = new("de-DE");
+            ScriptEntry((2.5, "RUN\r")).Should().Be("2.5=RUN\\r");
+            ScriptEntry((12.125, "\r")).Should().Be("12.125=\\r");
+            ScriptEntry((3, "\r")).Should().Be("3=\\r");
+            CocoOracleTests.ScriptEntry((2.5, "RUN\r")).Should().Be("2.5=RUN\\r");
+            Trs80Model3OracleTests.ScriptEntry((2.5, "RUN\r")).Should().Be("2.5=RUN\\r");
+        }
+        finally
+        {
+            System.Globalization.CultureInfo.CurrentCulture = culture;
+        }
+    }
+
+    /// <summary>
     ///  NEWDOS/80 boots from drive 0 and lists its directory.
     /// </summary>
     [TestMethod]
@@ -182,7 +231,13 @@ public class Trs80OracleTests
         return machine;
     }
 
-    private static string ScriptEntry((double At, string Text) entry)
+    /// <summary>
+    ///  Formats a schedule entry for the Lua script's <c>RETRO_SCRIPT</c>: the time in seconds, with a '.' before any
+    ///  fraction whatever the culture; <c>=</c>; then the text, with <c>\r</c> for ENTER.
+    /// </summary>
+    /// <param name="entry">The emulated second to type at, and the text to type.</param>
+    /// <returns>The entry as <c>seconds=text</c>.</returns>
+    internal static string ScriptEntry((double At, string Text) entry)
     {
         string at = entry.At.ToString(System.Globalization.CultureInfo.InvariantCulture);
         return $"{at}={entry.Text.Replace("\r", "\\r", StringComparison.Ordinal)}";

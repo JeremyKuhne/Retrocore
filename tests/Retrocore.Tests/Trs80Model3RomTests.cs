@@ -247,6 +247,35 @@ public class Trs80Model3RomTests
     }
 
     /// <summary>
+    ///  Typed text comes out as written on the Model 4's DOSes, which start with caps lock off: an uppercase letter
+    ///  with shift, a lowercase one without.
+    /// </summary>
+    /// <param name="variant">The model.</param>
+    /// <param name="image">The image's file name.</param>
+    /// <param name="ready">The DOS's prompt.</param>
+    [TestMethod]
+    [DataRow(Trs80Model3Variant.Model4, "TRSDOS60.dmk", "TRSDOS Ready")]
+    [DataRow(Trs80Model3Variant.Model4, "TRSDOS62.imd", "TRSDOS Ready")]
+    [DataRow(Trs80Model3Variant.Model4, "LSDOS63J.dsk", "LS-DOS Ready")]
+    [DataRow(Trs80Model3Variant.Model4P, "LSDOS63J.dsk", "LS-DOS Ready")]
+    public void DosShowsTypedCase(Trs80Model3Variant variant, string image, string ready)
+    {
+        string path = Path.Join(ExternalTestData.Root, "trs80-disks", image);
+        if (!File.Exists(path)) { Assert.Inconclusive($"{path} is missing."); }
+
+        Trs80Model3Machine machine = Model3(variant, diskController: true);
+        (FloppyDisk disk, string format) = Trs80DiskImage.Read(File.ReadAllBytes(path), Path.GetExtension(path));
+        machine.Drives[0].Insert(disk, image, format);
+
+        ShowsWithin(machine, "Date", seconds: 20);
+        Type(machine, "11/14/86\r");
+        Type(machine, "\r");
+        ShowsWithin(machine, ready, seconds: 20);
+        Type(machine, "Dir MixedCase");
+        Text(machine).Should().Contain("Dir MixedCase");
+    }
+
+    /// <summary>
     ///  The 4P's boot ROM, with no disk in the drive, says so in English, German and French.
     /// </summary>
     [TestMethod]

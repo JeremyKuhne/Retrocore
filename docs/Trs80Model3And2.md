@@ -124,6 +124,29 @@ Internet Archive.
 The item names are the download pages' last path segment, `https://archive.org/details/<item>`. The Model II's
 TRSDOS-II and the Model I's NEWDOS/80 are not there.
 
+## Typed and pasted text
+
+Text typed or pasted through the debugger (the display panel's paste and the debug protocol's key requests, which
+call `Trs80Keyboard.Type`) comes out as written. On the Model III, 4 and 4P an uppercase letter is typed as its key
+with shift and a lowercase letter as its key alone, as MAME types them; ` is shift and @. That is how their Level II
+ROM and their DOSes read the keys:
+
+| Running | Caps lock at start | Letter alone | Shift and letter |
+| --- | --- | --- | --- |
+| Level II on the Model III and 4 ([`KBTAB`](../src/Retrocore.Machines.Trs80/Roms/Model3.asm)), TRSDOS 1.3, LDOS 5.1.3 | on | uppercase | uppercase |
+| TRSDOS 6.0 and 6.2, LS-DOS 6.3 (4 and 4P) | off | lowercase | uppercase |
+
+Turning caps lock off (shift and 0; the Model 4's CAPS) makes the letter alone lowercase; turning it on makes it
+uppercase. Shift and a letter is uppercase in every case, so an uppercase letter always comes out as written. A
+lowercase letter comes out in uppercase while caps lock is on, since no key then gives lowercase: Level II's table
+has uppercase in both its shift lock quarters, and the Model 4's shift cancels shift lock to reach its uppercase
+shifted quarter. The lock's state is in each DOS's own memory, so the keyboard does not follow it. The DOSes'
+behavior was found by booting each image here, and the comparison with MAME agrees with it.
+
+Two keyboards keep the Model I's way, a letter alone for uppercase and with shift for lowercase: the Model I, which
+has no lowercase, and the Model III running Level I, whose driver reads shift and a letter as its control code. The
+Model II types ASCII, as its keyboard sends it.
+
 ## ROMs
 
 The SDK's sources, in [`src/Retrocore.Machines.Trs80/Roms`](../src/Retrocore.Machines.Trs80/Roms), are maintained by
@@ -195,9 +218,9 @@ at Level II's addresses, so they have the BASIC thread as the Model I has.
 
 | Test | Checks |
 | --- | --- |
-| `Trs80Model3Tests` | The Model III's map, clock interrupt, keyboard and NMI; the Model 4's maps, paging, speed and 80x24; the 4P's boot ROM; the FD1793 with wait and NMI, INTRQ ending the wait; the cassette motor. |
+| `Trs80Model3Tests` | The Model III's map, clock interrupt, keyboard and NMI; typed letters' keys, with shift for uppercase, and on Level I as on the Model I; the Model 4's maps, paging, speed and 80x24; the 4P's boot ROM; the FD1793 with wait and NMI, INTRQ ending the wait; the cassette motor. |
 | `Trs80RomSourceTests` | Each source builds to its ROM's SHA-256, and with the dumps, byte for byte. |
-| `Trs80Model3RomTests` | The real ROMs, built from source: the Model III and Model 4 boot through `Cass?` and `Memory Size?` to BASIC and run a statement; the 4P, with no disk, says the drive is not ready; each Model II boot ROM asks for a diskette; `CSAVE` and `CLOAD` at 1500 and 500 baud, a hand-written 1500 baud CAS image loading; Level I booting to `READY` and saving and loading at 250 baud; and, with the [DOS images](#doses), each DOS booting to its prompt and listing its directory. |
+| `Trs80Model3RomTests` | The real ROMs, built from source: the Model III and Model 4 boot through `Cass?` and `Memory Size?` to BASIC and run a statement; the 4P, with no disk, says the drive is not ready; each Model II boot ROM asks for a diskette; `CSAVE` and `CLOAD` at 1500 and 500 baud, a hand-written 1500 baud CAS image loading; Level I booting to `READY` and saving and loading at 250 baud; and, with the [DOS images](#doses), each DOS booting to its prompt and listing its directory, and the Model 4's DOSes showing typed text in the case it was typed. |
 | `Trs80Model2Tests` | Banked RAM; the CTC's mode 2 keyboard interrupt with `RETI`, and an NMI's ignored fetch reading as `RETI`; the clock NMI; the 6845; the DMA reading a sector; IMD and DMK images. |
 | `Trs80Model3OracleTests` | Against MAME 0.264, video RAM cell for cell after the same keystrokes on the same ROMs: Model III and Model 4 BASIC running a program; with the [DOS images](#doses), TRSDOS 1.3, LDOS 5.1.3, TRSDOS 6.0 and 6.2 and LS-DOS 6.3 booting, taking the date and listing their directories; and the Model II's boot ROMs, versions 1, 2, 3 and 5, asking for a diskette. See [Comparing with MAME](#comparing-with-mame). |
 | [`tools/Test-Trs80Model3Dap.mjs`](../tools/Test-Trs80Model3Dap.mjs) | Each machine launching from stand-in dumps it writes, and the Model III and II from the SDK's sources, with source in the stack trace; the missing-dump error, threads, hardware rows, and the Model II's reset stop. |
@@ -218,8 +241,9 @@ What the comparison has to allow for:
   `$FF` and the ROM starts BASIC. The DOS tests turn the switch on. The BASIC tests run without the controller here.
   With the switch on and drive 0 empty, MAME's ROM waits at `Diskette?`, as this one does.
 - **Images.** MAME 0.264 does not read the TRSDOS 1.3 and 6.0 DMK images, so those tests use their IMD copies.
-- **Keys.** MAME types an uppercase letter with shift, and `Trs80Keyboard.Type` without it. The test swaps the case
-  on this side, so both press the same keys; TRSDOS 6.0 starts with caps lock off, where the two differ.
+- **Keys.** MAME types an uppercase letter with shift and a lowercase one without, as `Trs80Keyboard.Type` does on
+  the Model III family ([Typed and pasted text](#typed-and-pasted-text)), so both press the same keys. Where they
+  differed, TRSDOS 6.0, which starts with caps lock off, echoed `dir` here and `DIR` in MAME.
 - **The cursor.** A DOS blinks its cursor, so one cell may differ, where one side shows a space.
 - **The Model II's boot ROM** is chosen by MAME's BIOS name: `c8ff`, `2bff`, `2119` and `9733` for versions 1, 2, 3
   and 5.

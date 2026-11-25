@@ -222,6 +222,42 @@ public class Trs80MachineTests
     }
 
     /// <summary>
+    ///  The Model I has no lowercase: an uppercase letter is typed as its key alone, and a lowercase one with SHIFT,
+    ///  which Level II reads as the lowercase code.
+    /// </summary>
+    [TestMethod]
+    public void TypingLettersFollowsTheModelI()
+    {
+        Trs80Keyboard keyboard = Create(new()).Bus.Keyboard;
+        TypedKeys(keyboard, 'A').Should().Be((true, false));
+        TypedKeys(keyboard, 'z').Should().Be((true, true));
+        keyboard.Type((byte)'`').Should().BeFalse("the Model I has no key for it");
+    }
+
+    /// <summary>
+    ///  Types a character, reports whether its key and SHIFT are pressed, then lets the keyboard release them.
+    /// </summary>
+    /// <param name="keyboard">The keyboard.</param>
+    /// <param name="character">A letter, <c>@</c> or <c>`</c>.</param>
+    /// <returns>Whether the letter's key, or <c>@</c>'s, and SHIFT are down.</returns>
+    internal static (bool Key, bool Shift) TypedKeys(Trs80Keyboard keyboard, char character)
+    {
+        Trs80Key key = character switch
+        {
+            >= 'A' and <= 'Z' => (Trs80Key)((int)Trs80Key.A + character - 'A'),
+            >= 'a' and <= 'z' => (Trs80Key)((int)Trs80Key.A + character - 'a'),
+            _ => Trs80Key.At
+        };
+
+        // A key typed while the last is being released waits until the release ends.
+        keyboard.Type((byte)character).Should().BeTrue();
+        for (int ticks = 0; !keyboard.IsPressed(key) && ticks < 1_000_000; ticks++) { keyboard.Tick(); }
+        (bool, bool) pressed = (keyboard.IsPressed(key), keyboard.IsPressed(Trs80Key.Shift));
+        while (keyboard.IsTyping) { keyboard.Tick(); }
+        return pressed;
+    }
+
+    /// <summary>
     ///  The reset button raises one non-maskable interrupt, taken even with interrupts disabled, which runs the
     ///  handler at <c>$0066</c> once.
     /// </summary>

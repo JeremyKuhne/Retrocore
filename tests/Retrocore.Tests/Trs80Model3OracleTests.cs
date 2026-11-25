@@ -230,12 +230,12 @@ public class Trs80Model3OracleTests
             }
         }
 
-        // MAME types an uppercase letter with shift, and Type types it without: swapping the case presses the same
-        // keys, which matters where a DOS starts with caps lock off, as TRSDOS 6.0 does.
+        // Type, as MAME, types an uppercase letter with shift, which matters where a DOS starts with caps lock off, as
+        // TRSDOS 6 and LS-DOS do.
         foreach ((double at, string text) in script)
         {
             RunTo(at);
-            foreach (char character in text) { machine.Bus.Keyboard.Type((byte)SwapCase(character)); }
+            foreach (char character in text) { machine.Bus.Keyboard.Type((byte)character); }
         }
 
         RunTo(finish);
@@ -327,12 +327,6 @@ public class Trs80Model3OracleTests
         string? found = candidates.FirstOrDefault(File.Exists);
         if (found is null) { Assert.Inconclusive("MAME is missing."); }
         return found;
-    }
-
-    private static char SwapCase(char character)
-    {
-        if (char.IsAsciiLetterUpper(character)) { return char.ToLowerInvariant(character); }
-        return char.IsAsciiLetterLower(character) ? char.ToUpperInvariant(character) : character;
     }
 
     private static string ScriptEntry((double At, string Text) entry)

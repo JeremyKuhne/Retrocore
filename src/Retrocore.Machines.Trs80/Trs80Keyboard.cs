@@ -20,6 +20,7 @@ public sealed class Trs80Keyboard
     // release of a doubled letter.
     private readonly int _holdCycles;
     private readonly int _releaseCycles;
+    private readonly bool _shiftForUppercase;
 
     private readonly byte[] _rows = new byte[8];
     private readonly Queue<(Trs80Key Key, bool Shift)> _typed = new();
@@ -30,10 +31,15 @@ public sealed class Trs80Keyboard
     ///  Creates the keyboard.
     /// </summary>
     /// <param name="clockHertz">The rate <see cref="Tick"/> is called at: the Model I's Z80 clock by default.</param>
-    internal Trs80Keyboard(int clockHertz = Trs80Timing.ClockHertz)
+    /// <param name="shiftForUppercase">
+    ///  Whether an uppercase letter is typed with shift and a lowercase one without, and ` as shift and @, as the
+    ///  Model III's Level II keyboard table has them; otherwise the Model I's way, a lowercase letter with shift.
+    /// </param>
+    internal Trs80Keyboard(int clockHertz = Trs80Timing.ClockHertz, bool shiftForUppercase = false)
     {
         _holdCycles = 40 * (clockHertz / 1000);
         _releaseCycles = 60 * (clockHertz / 1000);
+        _shiftForUppercase = shiftForUppercase;
     }
 
     /// <summary>
@@ -62,7 +68,7 @@ public sealed class Trs80Keyboard
     /// <returns>Whether the keyboard has a key for it.</returns>
     public bool Type(byte code)
     {
-        if (Map(code) is not { } key) { return false; }
+        if (Map(code, _shiftForUppercase) is not { } key) { return false; }
         _typed.Enqueue(key);
         return true;
     }
@@ -110,12 +116,13 @@ public sealed class Trs80Keyboard
         _remaining = _holdCycles;
     }
 
-    // Shifted digits and punctuation follow the Model I keycaps.
-    private static (Trs80Key Key, bool Shift)? Map(byte code) => (char)code switch
+    // Shifted digits and punctuation follow the Model I keycaps, which the Model III's keep.
+    private static (Trs80Key Key, bool Shift)? Map(byte code, bool shiftForUppercase) => (char)code switch
     {
-        >= 'A' and <= 'Z' => ((Trs80Key)(code - 'A' + (int)Trs80Key.A), false),
-        >= 'a' and <= 'z' => ((Trs80Key)(code - 'a' + (int)Trs80Key.A), true),
+        >= 'A' and <= 'Z' => ((Trs80Key)(code - 'A' + (int)Trs80Key.A), shiftForUppercase),
+        >= 'a' and <= 'z' => ((Trs80Key)(code - 'a' + (int)Trs80Key.A), !shiftForUppercase),
         '@' => (Trs80Key.At, false),
+        '`' when shiftForUppercase => (Trs80Key.At, true),
         >= '0' and <= '9' => ((Trs80Key)(code - '0' + (int)Trs80Key.D0), false),
         >= '!' and <= ')' and not '"' => ((Trs80Key)(code - '!' + (int)Trs80Key.D1), true),
         '"' => (Trs80Key.D2, true),

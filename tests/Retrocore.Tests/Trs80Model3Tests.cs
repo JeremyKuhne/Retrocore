@@ -92,6 +92,48 @@ public class Trs80Model3Tests
     }
 
     /// <summary>
+    ///  Level II on the Model III, 4 and 4P, and their DOSes, read shift and a letter as uppercase and the letter alone
+    ///  as lowercase while caps lock is off, so an uppercase letter is typed with shift and a lowercase one without,
+    ///  and ` as shift and @.
+    /// </summary>
+    /// <param name="variant">The model.</param>
+    [TestMethod]
+    [DataRow(Trs80Model3Variant.Model3)]
+    [DataRow(Trs80Model3Variant.Model4)]
+    [DataRow(Trs80Model3Variant.Model4P)]
+    public void TypingLettersShiftsUppercase(Trs80Model3Variant variant)
+    {
+        Trs80Model3Bus bus = new(
+            new Trs80Model3Configuration { Variant = variant },
+            new Trs80Model3Roms(new byte[Trs80Model3Roms.SystemSize], new byte[Trs80Model3Roms.CharacterGeneratorSize]));
+
+        Trs80Keyboard keyboard = bus.Keyboard;
+
+        Trs80MachineTests.TypedKeys(keyboard, 'A').Should().Be((true, true));
+        Trs80MachineTests.TypedKeys(keyboard, 'z').Should().Be((true, false));
+        Trs80MachineTests.TypedKeys(keyboard, '`').Should().Be((true, true));
+        Trs80MachineTests.TypedKeys(keyboard, '@').Should().Be((true, false));
+    }
+
+    /// <summary>
+    ///  Level I reads shift and a letter as its control code, so on a Model III running Level I letters are typed as
+    ///  on the Model I: an uppercase letter alone.
+    /// </summary>
+    [TestMethod]
+    public void TypingLettersOnLevelIFollowsTheModelI()
+    {
+        Trs80Model3Bus bus = new(
+            new Trs80Model3Configuration { Rom = Trs80Rom.Level1 },
+            new Trs80Model3Roms(new byte[Trs80Model3Roms.BootSize], new byte[Trs80Model3Roms.CharacterGeneratorSize]));
+
+        Trs80Keyboard keyboard = bus.Keyboard;
+
+        Trs80MachineTests.TypedKeys(keyboard, 'A').Should().Be((true, false));
+        Trs80MachineTests.TypedKeys(keyboard, 'z').Should().Be((true, true));
+        keyboard.Type((byte)'`').Should().BeFalse();
+    }
+
+    /// <summary>
     ///  The clock interrupt does not reach the Z80 while port <c>$E0</c> masks it.
     /// </summary>
     [TestMethod]

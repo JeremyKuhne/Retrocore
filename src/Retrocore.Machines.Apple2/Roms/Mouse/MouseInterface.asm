@@ -23,7 +23,7 @@
 ;;   5  <LineBank>: writes BASIC's "X,Y,B" line into the input buffer.
 ;;   6  <ByteBank>: sends or receives one byte, and <ReadMouse>'s five.
 ;;   7  <ParameterBank>: sends a command with its parameters: <PositionMouse>, <ClampMouse>, <SetInterruptRate>
-;;      and the factory's $A0.
+;;      and the factory's other $9x commands and $A0.
 ;;
 ;; Every bank holds the same four instructions at $Cn70 (each bank's `Switch`): they put the bank in <NextBank> on
 ;; port B, which switches the EPROM under the 6502 as it runs, so the next instruction, at $Cn7B, is the new bank's.
@@ -459,7 +459,7 @@ SYNC_TIMEOUT = $01
 ;;
 ;; Slot 0's <MouseX> selects the byte, $47 to $4E, and slot 0's <MouseY> is 0. Apple's Mouse Technical Note #7 reads
 ;; all eight, from $4E (the Y maximum's low byte) down to $47 (the X minimum's high byte), and calls this the only
-;; supported use of the entry; the IIc and IIgs firmware have no such entry. With A = 1 it sends slot 0's
+;; supported use of the entry, which no other mouse firmware has. With A = 1 it sends slot 0's
 ;; <MouseXHigh> too and reads nothing back, which Apple does not document.
 ;; In:    A = 0, X = $Cn, Y = $n0
 ;; Out:   MouseXHigh = the byte (slot 0's), carry = clear
@@ -475,7 +475,8 @@ SYNC_TIMEOUT = $01
 ;; $Cn1C: sets the rate of the card's vertical-blanking interrupts, 60 Hz (the default) or 50 Hz, for European
 ;; Apples. Apple's Mouse Technical Note #2 says to call it just before <InitializeMouse>, which applies the rate.
 ;;
-;; A's other bits are reserved; with bit 2 or 3 set, it sends one of the factory's commands with parameters.
+;; Apple reserves A's other bits. Bits 4-7 are ignored; bits 1-3 pick the factory's other $9x commands, with
+;; parameters as bits 2 and 3 say.
 ;; In:    A = 0 for 60 Hz, 1 for 50 Hz, X = $Cn, Y = $n0
 ;; Out:   carry = clear
 ;; Also: TIMEDATA (MOUSETN)

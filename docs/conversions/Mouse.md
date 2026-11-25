@@ -14,7 +14,7 @@ Monitor's own keys (through the equates both files inherit), UNKN.
   same names only for the IIc's and the IIgs's own firmware, and are not cited. Two other Apple documents read in
   full give none: the Tech Info Library's "Apple II: Mouse Memory Locations" (article 8720, 1991) and the French
   AppleMouse user's manual (1983). The AppleMouse II User's Manual was not found.
-- **The EPROM dump** (342-0270-C, from the Apple II Documentation Project's mirror) matches the SHA-1 in the source's
+- **The EPROM dump** (`342-0270-C.bin`, of the 341-0270-C chip, from the Apple II Documentation Project's mirror) matches the SHA-1 in the source's
   header, and `MouseInterfaceSourceTests.SourceMatchesTheDump` passes against it.
 - M1. **The routines cite MOUSETN and IICTRM89** for the names each gives: SETMOUSE, SERVEMOUSE, READMOUSE,
   CLEARMOUSE, POSMOUSE, CLAMPMOUSE and INITMOUSE both, HOMEMOUSE IICTRM89 only. Apple's documents write them in mixed
@@ -66,5 +66,5 @@ Monitor's own keys (through the equates both files inherit), UNKN.
 - Apple's BASIC input returns the line's length in X and Y; the old `Keeps: X, Y` on its BASIC entry was false for
   input. Its comment now says output keeps A, X and Y.
 - Each bank's last byte ($C2, $C1, $C3, $C8, $CD, $C1, $CE) is never read by the firmware; its purpose is not known.
-- The emulator's card answers $Cn1A and $Cn1C with carry set, where Apple's answers GetClamp and TimeData with carry
-  clear; `FactoryEntry`'s comment says so. Changing that is a behavior change, outside a conversion.
+- The emulator's card answers $Cn1A-$Cn1F with carry set, where Apple's returns carry clear from all six (TimeData's
+  as Mouse Technical Note #2 documents, the others by their code); `FactoryEntry`'s comment says so. Changing that is a behavior change, outside a conversion.

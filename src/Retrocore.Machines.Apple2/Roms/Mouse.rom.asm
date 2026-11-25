@@ -33,8 +33,9 @@
 ;; BASIC reads the card after `IN#n`: the card writes the line "X,Y,B" into the input buffer and returns a RETURN, so
 ;; INPUT takes three numbers and nothing is echoed. It turns the mouse on or off after `PR#n` as the low bit of each
 ;; character printed says, as CHR$(1) and CHR$(0) do. As on Apple's card, the Pascal 1.1 entries at $Cn0D-$Cn10
-;; answer error 3. Of the entries at $Cn1A-$Cn1F, Apple's card documents two, reading a clamping bound's byte ($Cn1A)
-;; and setting the interrupt rate ($Cn1C); this card has neither, and every one returns carry set (<FactoryEntry>).
+;; answer error 3. Of the entries at $Cn1A-$Cn1F, Apple documents two of its card's, reading a clamping bound's byte
+;; ($Cn1A) and setting the interrupt rate ($Cn1C); this card has neither, and every one returns carry set
+;; (<FactoryEntry>).
 ;;
 ;; HOW A CALL CROSSES INTO C#
 ;;
@@ -310,8 +311,8 @@ BasicOutput = BasicInput + 2
 
 ;; The entries at $Cn1A-$Cn1F, which this card does not have.
 ;;
-;; Apple's card answers GetClamp at $Cn1A and TimeData at $Cn1C with carry clear (its Mouse Technical Notes #7 and
-;; #2); here they return carry set, as the factory's own entries do.
+;; On Apple's card every one of them returns carry clear: TimeData at $Cn1C, as Mouse Technical Note #2 documents,
+;; and GetClamp at $Cn1A and the factory's own, as its code does. On this card all six return carry set.
 ;; Out:   carry = set
 ;; Keeps: X, Y
 .proc FactoryEntry

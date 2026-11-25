@@ -98,8 +98,8 @@ public sealed partial class WesternDigitalFloppyDiskController
     /// </param>
     /// <param name="fd1771At1Megahertz">
     ///  Whether an FD1771's step rates and head-load delay are its data sheet's 1 MHz figures (12-40 ms and 20 ms), as
-    ///  the Atari 810's are, rather than the 2 MHz step rates (6-20 ms) and the FD179x's 15 ms delay the controller
-    ///  otherwise uses.
+    ///  the Atari 810's are, rather than the 2 MHz step rates (6-20 ms) and the 15 ms delay the controller otherwise
+    ///  uses.
     /// </param>
     internal WesternDigitalFloppyDiskController(
         int clockHertz,

@@ -12,8 +12,8 @@ namespace Retrocore.Tests;
 /// </summary>
 /// <remarks>
 ///  <para>
-///   Each test takes the CPU from the OS just after reset, with interrupts masked and ANTIC's DMA off, and runs a
-///   program from <c>$2000</c>.
+///   Each test but the Graphics 0 frame's takes the CPU from the OS just after reset, with interrupts masked and
+///   ANTIC's DMA off, and runs a program from <c>$2000</c>; that one counts the DMA of the OS's own screen.
 ///  </para>
 /// </remarks>
 [TestClass]

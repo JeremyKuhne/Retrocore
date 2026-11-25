@@ -204,7 +204,10 @@ public sealed class AtariMachine : IMachine, IVideoSource
     /// <summary>
     ///  Reads the text screen the OS's screen editor shows: 24 lines of 40 characters from <c>SAVMSC</c>.
     /// </summary>
-    /// <returns>The lines as ATASCII, with inverse video dropped and graphics characters as spaces.</returns>
+    /// <returns>
+    ///  The lines as ATASCII, with inverse video dropped and the control characters (<c>$00-$1F</c>, <c>$7D-$7F</c>)
+    ///  as spaces.
+    /// </returns>
     public string[] ReadTextScreen()
     {
         ushort screen = (ushort)(Bus.Peek(0x58) | (Bus.Peek(0x59) << 8));

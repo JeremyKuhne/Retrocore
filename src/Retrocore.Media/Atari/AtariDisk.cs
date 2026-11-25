@@ -109,7 +109,7 @@ public sealed class AtariDisk : IMedium
             }
 
             // Double density: the boot sectors are 128 bytes, or 256 padded.
-            if (body.Length % 256 == 0 && (body.Length - 384) % 256 != 0)
+            if (body.Length >= 768 && body.Length % 256 == 0 && (body.Length - 384) % 256 != 0)
             {
                 int count = body.Length / 256;
                 byte[] data = new byte[DataSize(256, count)];
@@ -122,7 +122,11 @@ public sealed class AtariDisk : IMedium
                 return new(256, count, data, writeProtected);
             }
 
-            if ((body.Length - 384) % 256 != 0) { throw new InvalidDataException("The ATR's sectors aren't whole."); }
+            if (body.Length < 384 || (body.Length - 384) % 256 != 0)
+            {
+                throw new InvalidDataException("The ATR's sectors aren't whole.");
+            }
+
             return new(256, 3 + ((body.Length - 384) / 256), body.ToArray(), writeProtected);
         }
 

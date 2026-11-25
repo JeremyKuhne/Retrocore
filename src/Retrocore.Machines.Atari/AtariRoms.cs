@@ -62,7 +62,8 @@ public sealed class AtariRoms
     /// <param name="diskDriveDirectory">
     ///  The folder holding MAME's <c>atari810</c> set, unzipped, for the 810's firmware: by default an
     ///  <c>atari810</c> folder beside <paramref name="directory"/>, or <paramref name="directory"/> itself. With no
-    ///  firmware, the machine's disk drives work at the command level.
+    ///  firmware, the machine's disk drives must work at the command level
+    ///  (<see cref="AtariDiskDriveKind.CommandLevel"/>).
     /// </param>
     /// <returns>The ROMs.</returns>
     /// <exception cref="FileNotFoundException">A chip is missing.</exception>

@@ -4,7 +4,6 @@
 
 using Retrocore.Machines.Atari;
 using Retrocore.Media.Atari;
-using Retrocore.Machines.Devices;
 
 namespace Retrocore.Tests;
 
@@ -158,6 +157,28 @@ public class AtariDiskTests
         single.SectorSize.Should().Be(128);
         single.SectorCount.Should().Be(720);
         AtariDisk.Load((AtariDiskCodec.For("xfd") ?? throw new AssertFailedException("XFD")).Encode(single.Snapshot()).Bytes).SectorCount.Should().Be(720);
+    }
+
+    /// <summary>
+    ///  A double-density ATR too short for its three boot sectors is refused as not whole.
+    /// </summary>
+    /// <param name="bodyLength">The bytes after the header.</param>
+    [TestMethod]
+    [DataRow(0)]
+    [DataRow(128)]
+    [DataRow(256)]
+    [DataRow(512)]
+    public void ShortDoubleDensityAtrIsRefused(int bodyLength)
+    {
+        byte[] image = new byte[16 + bodyLength];
+        image[0] = 0x96;
+        image[1] = 0x02;
+        image[2] = (byte)(bodyLength / 16);
+        image[3] = (byte)(bodyLength / 16 >> 8);
+        image[4] = 0x00;
+        image[5] = 0x01;
+        Action load = () => AtariDisk.Load(image);
+        load.Should().Throw<InvalidDataException>();
     }
 
     /// <summary>

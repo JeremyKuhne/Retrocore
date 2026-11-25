@@ -66,6 +66,8 @@ public class AtariCartridgeTests
         bus.Read(0xA000).Should().Be(0);
         bus.Read(0xD505);
         bus.Read(0xA000).Should().Be(5);
+        bus.Read(0xD518);
+        bus.Read(0xA000).Should().Be(5, "the cartridge decodes only $D500-$D50F");
         bus.Write(0xD508, 0);
         cartridge.Rd5.Should().BeFalse();
         bus.Area(0xA000).Should().Be(AtariMemoryArea.Ram);

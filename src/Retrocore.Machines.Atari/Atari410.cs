@@ -78,7 +78,7 @@ public sealed class Atari410 : ITapeDrive, IMediumSlot
     public AtariTape? Tape => _tape;
 
     /// <summary>
-    ///  Gets whether PLAY or RECORD is down.
+    ///  Gets which of PLAY and RECORD is down, if either.
     /// </summary>
     public TapeMode Mode => _mode;
 
@@ -309,8 +309,8 @@ public sealed class Atari410 : ITapeDrive, IMediumSlot
     {
         if (_tape is not AtariTape tape) { return; }
 
-        // Recording replaces the tape from the block it is at.
-        tape.Record(Math.Min(_block, tape.Blocks.Count), []);
+        // Recording replaces the tape from the block it is at, unless the tape was protected after RECORD went down.
+        if (!tape.IsWriteProtected) { tape.Record(Math.Min(_block, tape.Blocks.Count), []); }
         _block = tape.Blocks.Count;
         _cycles = 0;
         _recordedTo = _bus.Cycles;
@@ -329,6 +329,14 @@ public sealed class Atari410 : ITapeDrive, IMediumSlot
     private void EndRecord()
     {
         if (_bytes.Count == 0 || _tape is not AtariTape tape) { return; }
+        if (tape.IsWriteProtected)
+        {
+            // A tape protected after RECORD went down takes nothing: the bytes sent meanwhile are dropped.
+            _bytes.Clear();
+            _ends.Clear();
+            return;
+        }
+
         int baud = AtariTape.StandardBaud;
         if (_ends.Count >= 2)
         {

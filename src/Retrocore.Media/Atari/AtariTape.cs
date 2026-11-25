@@ -216,7 +216,8 @@ public sealed class AtariTape : IMedium
         Span<byte> header = stackalloc byte[8];
         type.CopyTo(header);
         BinaryPrimitives.WriteUInt16LittleEndian(header[4..], (ushort)data.Length);
-        BinaryPrimitives.WriteUInt16LittleEndian(header[6..], (ushort)aux);
+        // A gap longer than the field holds, 65.5 seconds, is cut to the longest it can.
+        BinaryPrimitives.WriteUInt16LittleEndian(header[6..], (ushort)Math.Clamp(aux, 0, ushort.MaxValue));
         stream.Write(header);
         stream.Write(data);
     }

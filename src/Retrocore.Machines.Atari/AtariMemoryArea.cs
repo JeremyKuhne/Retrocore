@@ -40,7 +40,7 @@ public enum AtariMemoryArea
     OperatingSystem,
 
     /// <summary>
-    ///  Nothing: reads <c>$FF</c>.
+    ///  Nothing: reads <c>$00</c> at <c>$C000-$CFFF</c> and <c>$FF</c> elsewhere.
     /// </summary>
     Empty
 }

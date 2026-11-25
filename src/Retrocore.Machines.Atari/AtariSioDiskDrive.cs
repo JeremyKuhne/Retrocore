@@ -49,7 +49,10 @@ public sealed class AtariSioDiskDrive : AtariDiskDrive, IAtariSioDevice
     public override DeviceActivity Activity => !Busy ? DeviceActivity.Idle : _lastWrite ? DeviceActivity.Writing : DeviceActivity.Reading;
 
     /// <inheritdoc/>
-    public override DiskHead Head => new(Motor, Busy, (_lastSector - 1) / 18, 0, ((_lastSector - 1) % 18) + 1);
+    public override DiskHead Head => new(Motor, Busy, (_lastSector - 1) / SectorsPerTrack, 0, ((_lastSector - 1) % SectorsPerTrack) + 1);
+
+    // Enhanced density puts 26 sectors on a track; single and double density, 18.
+    private int SectorsPerTrack => Disk?.SectorCount == 1040 ? 26 : 18;
 
     private bool Motor => _bus.Cycles - _lastAccess < MotorCycles;
 

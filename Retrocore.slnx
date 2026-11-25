@@ -28,8 +28,8 @@
   <Project Path="src/Retrocore.Machines.Apple2/Retrocore.Machines.Apple2.csproj" />
   <Project Path="src/Retrocore.Machines.Acorn/Retrocore.Machines.Acorn.csproj" />
   <Project Path="src/Retrocore.Machines.Apple3/Retrocore.Machines.Apple3.csproj" />
-  <Project Path="src/Retrocore.Machines.Chips/Retrocore.Machines.Chips.csproj" />
   <Project Path="src/Retrocore.Machines.Atari/Retrocore.Machines.Atari.csproj" />
+  <Project Path="src/Retrocore.Machines.Chips/Retrocore.Machines.Chips.csproj" />
   <Project Path="src/Retrocore.Machines.Coco/Retrocore.Machines.Coco.csproj" />
   <Project Path="src/Retrocore.Machines.Commodore/Retrocore.Machines.Commodore.csproj" />
   <Project Path="src/Retrocore.Machines.Kaypro/Retrocore.Machines.Kaypro.csproj" />

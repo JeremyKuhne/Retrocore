@@ -26,7 +26,7 @@ debugger.execution_state = "run"
 subscription = emu.add_machine_frame_notifier(function()
   local now = manager.machine.time.seconds
   if keys and not typed and now >= keysAt then
-    manager.machine.natkeyboard:post(keys:gsub("\\r", "\r"))
+    manager.machine.natkeyboard:post((keys:gsub("\\r", "\r")))
     typed = true
   end
 

@@ -455,8 +455,11 @@ public class AtariOracleTests
             foreach (string argument in arguments) { start.ArgumentList.Add(argument); }
             if (disk is not null)
             {
+                // MAME opens a disk for writing, which would lock the shared image and could change it: give it a copy.
+                string copy = Path.Join(work, Path.GetFileName(disk));
+                File.Copy(disk, copy);
                 start.ArgumentList.Add("-flop1");
-                start.ArgumentList.Add(disk);
+                start.ArgumentList.Add(copy);
             }
 
             if (cartridge is not null)

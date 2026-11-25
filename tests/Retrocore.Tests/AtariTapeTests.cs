@@ -77,6 +77,36 @@ public class AtariTapeTests
     }
 
     /// <summary>
+    ///  A gap longer than a <c>.cas</c> chunk's 16-bit field is saved as the longest it holds, not wrapped.
+    /// </summary>
+    [TestMethod]
+    public void LongGapIsCutToTheField()
+    {
+        AtariTape tape = new([new(Gap: 70_000, Baud: AtariTape.StandardBaud, Data: [0x55, 0x55, 0xFC], Durations: null)]);
+        AtariTape.Load(tape.ToCas()).Blocks[0].Gap.Should().Be(ushort.MaxValue);
+    }
+
+    /// <summary>
+    ///  A tape protected after RECORD goes down records nothing, and <c>CSAVE</c> runs on without the recorder failing.
+    /// </summary>
+    [TestMethod]
+    public void TapeProtectedAfterRecordKeepsItsBlocks()
+    {
+        AtariMachine machine = AtariMachineTests.Machine(basic: 'C');
+        AtariMachineTests.RunToReady(machine);
+        AtariMachineTests.Type(machine, "10 PRINT \"FROM TAPE\"\r");
+
+        AtariTape tape = new();
+        tape.Append(new(Gap: 1000, Baud: AtariTape.StandardBaud, Data: [0x55, 0x55, 0xFC], Durations: null));
+        machine.Cassette.Insert(tape);
+        machine.Cassette.Record();
+        tape.IsWriteProtected = true;
+        TapeCommand(machine, "CSAVE");
+        machine.Cassette.Stop();
+        tape.Blocks.Should().ContainSingle("the protected tape keeps the block it had");
+    }
+
+    /// <summary>
     ///  <c>SAVE "C:"</c> and <c>LOAD "C:"</c> go through CIO to the cassette, the same round trip.
     /// </summary>
     [TestMethod]

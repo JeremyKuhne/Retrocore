@@ -79,7 +79,7 @@ public sealed class Atari810 : AtariDiskDrive
     }
 
     /// <summary>
-    ///  Gets the firmware's revision: <c>'B'</c>, <c>'C'</c> or <c>'?'</c>.
+    ///  Gets the firmware's revision: <c>'B'</c>, <c>'C'</c>, <c>'E'</c> or <c>'?'</c>.
     /// </summary>
     public char Revision => _revision;
 
@@ -212,7 +212,8 @@ public sealed class Atari810 : AtariDiskDrive
 
         bool data = _bus?.Pokey.SerialOutputLevel ?? SerialInput;
         bool command = _bus?.Sio.CommandLine ?? CommandLine;
-        // PB1 is low while the computer is on: the firmware waits, with the motor off, while it reads high.
+        // PB1 is low while the computer is on: the firmware waits, with the motor off, while it reads high. (The HRM's
+        // Table 61 gives "1 = ready", but the firmware's poll loop treats a set PB1 as the computer off.)
         Riot.PortBInput = (byte)(0x3D | (data ? 0 : 0x80) | (command ? 0x40 : 0));
     }
 

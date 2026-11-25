@@ -3,7 +3,7 @@
 -- See LICENSE file in the project root for full license information
 --
 -- MAME autoboot script for the Atari tape oracle (AtariTapeTests). With BASIC in the left slot and a tape in the
--- recorder (-sio cassette -cass), it types CLOAD at 3 seconds, presses PLAY and, after the OS's beep, RETURN; types
+-- recorder (-sio cassette -cass), it types CLOAD at 3 seconds, presses PLAY and, at 6 seconds (after the OS's beep), RETURN; types
 -- RUN at the emulated second given; and at the end writes the 64K the CPU sees to a file, then exits.
 --
 -- RETRO_RUN: the emulated second to type RUN at.

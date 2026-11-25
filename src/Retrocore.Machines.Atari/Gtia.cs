@@ -239,7 +239,9 @@ public sealed class Gtia
     internal void EndLine(int line)
     {
         _ = line;
-        _triggerLatch &= (byte)~Triggers;
+
+        // With latching off (GRACTL bit 2 clear) the latches are held reset.
+        if ((GraphicsControl & 4) != 0) { _triggerLatch &= (byte)~Triggers; }
     }
 
     /// <summary>

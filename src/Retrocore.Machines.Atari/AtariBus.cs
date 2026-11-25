@@ -221,7 +221,7 @@ public sealed class AtariBus : IProcessorBus
     public bool InterruptRequested => Pokey.InterruptRequest || Pia.InterruptA || Pia.InterruptB;
 
     /// <summary>
-    ///  Gets the joysticks' directions, as port A and B read them: a clear bit for each direction pushed.
+    ///  Sets the joysticks' directions, as port A and B read them: a clear bit for each direction pushed.
     /// </summary>
     /// <param name="stick">The joystick, 0-3.</param>
     /// <param name="directions">Bits 0-3: up, down, left, right, set when pushed.</param>

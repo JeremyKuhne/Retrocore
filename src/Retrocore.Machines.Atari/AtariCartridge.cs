@@ -152,7 +152,7 @@ public sealed class AtariCartridge
         {
             case AtariCartridgeType.Williams32:
             case AtariCartridgeType.Williams64:
-                Select((low & 0x08) == 0, low & 7 & (banks - 1));
+                if ((low & 0xF0) == 0) { Select((low & 0x08) == 0, low & 7 & (banks - 1)); }
                 break;
             case AtariCartridgeType.Express64:
                 if ((low & 0xF0) == 0x70) { Select((low & 0x08) == 0, (low ^ 7) & 7); }

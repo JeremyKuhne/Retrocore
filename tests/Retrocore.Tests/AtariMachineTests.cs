@@ -193,8 +193,8 @@ public class AtariMachineTests
         }
         else
         {
-            // Text modes 1 and 2 draw ATARI in PF0; the bitmap modes' colour 1 is PF0 too, except 6 and 8 (PF1
-            // luminance on PF2 in mode 8, PF0 in mode 6).
+            // Text modes 1 and 2 draw ATARI in PF0; the bitmap modes' colour 1 is PF0 too, except mode 8,
+            // which shows PF1's luminance on PF2.
             byte register = mode == 8 ? (byte)((machine.Gtia.Color(6) & 0xF0) | (machine.Gtia.Color(5) & 0x0E)) : machine.Gtia.Color(4);
             colors.Should().Contain(machine.Gtia.Rgba(register), $"colour 1 shows in mode {mode}");
         }
@@ -268,6 +268,33 @@ public class AtariMachineTests
         Type(machine, "? PEEK(53279);\",\";STICK(0);\",\";STRIG(0)\r");
         string[] screen = machine.ReadTextScreen();
         screen.Should().Contain(line => line.Trim() == "6,7,0", Text(screen));
+    }
+
+    /// <summary>
+    ///  With <c>GRACTL</c> bit 2 set, a trigger reads pressed until latching is turned off again; a press made while
+    ///  latching is off doesn't stay latched.
+    /// </summary>
+    [TestMethod]
+    public void TriggersLatchOnlyWhileLatchingIsOn()
+    {
+        AtariMachine machine = Machine();
+        machine.Run(TimeSpan.FromSeconds(2));
+        machine.Bus.Write(0xD01D, 0);
+        machine.Gtia.Triggers = 1;
+        machine.RunFrame();
+        machine.Gtia.Triggers = 0;
+        machine.Bus.Write(0xD01D, 4);
+        machine.RunFrame();
+        machine.Bus.Read(0xD010).Should().Be(1, "a press made while latching was off isn't latched");
+
+        machine.Gtia.Triggers = 1;
+        machine.RunFrame();
+        machine.Gtia.Triggers = 0;
+        machine.RunFrame();
+        machine.Bus.Read(0xD010).Should().Be(0, "the press is latched");
+
+        machine.Bus.Write(0xD01D, 0);
+        machine.Bus.Read(0xD010).Should().Be(1, "turning latching off clears the latch");
     }
 
     /// <summary>

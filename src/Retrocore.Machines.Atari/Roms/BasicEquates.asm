@@ -18,7 +18,7 @@
 ; ---------------------------------------------------------------------------------------------------------------------
 
 ; The tables lie in this order from MEMLO up, each pointer the start of its table and the end of the one before. SAVE
-; writes LOMEM to STARP less LOMEM, LOAD adds MEMLO back, and the memory mover moves each pointer from the one that
+; writes LOMEM to STARP less LOMEM, LOAD adds LOMEM back, and the memory mover moves each pointer from the one that
 ; grows up to BASIC_MEMTOP.
 
 LOMEM = $80                         ;; the token output buffer, 256 bytes at MEMLO; the expression stacks while running
@@ -120,7 +120,7 @@ STOPLN = $BA                        ;; the line where the program stopped, by ST
 ;; the trap is taken (2 bytes).
 TRAP_LINE = $BC
 
-TRAP_OFF = $80                      ;; TRAP_LINE+1 once a trap is taken, or with no TRAP set
+TRAP_OFF = $80                      ;; TRAP_LINE+1 once a trap is taken (RUN and NEW's $FF also means no TRAP)
 
 STMCUR_SAVE = $BE                   ;; STMCUR before a line search, to go back to after it fails (2 bytes)
 IO_COMMAND = $C0                    ;; the CIO command for the next call
@@ -262,7 +262,7 @@ TOKEN_ERROR = $37                   ;; a line with a syntax error, its text kept
 STATEMENT_COUNT = $38               ;; how many statements there are
 
 ; The operators, $0E-$3C. $0E and $0F introduce constants; from $10 each is its entry in the operator name table,
-; from OPERATOR_NAMES_FIRST; from $1D each has an entry in the operator execution table, and a precedence.
+; from OPERATOR_NAMES_FIRST, and a precedence; from $1D each has an entry in the operator execution table too.
 
 TOKEN_NUMBER = $0E                  ;; a numeric constant: the token, then six bytes of floating point
 TOKEN_STRING = $0F                  ;; a string constant: the token, its length, then its characters
@@ -369,7 +369,7 @@ SYNTAX_ROUTINE = $01                ;; call the routine at the following word pl
 SYNTAX_OR = $02                     ;; the alternative matched, so the rule did; or the next alternative starts here
 SYNTAX_RETURN = $03                 ;; the rule matched
 SYNTAX_TOKEN = $0D                  ;; match the token in the next byte, from the input's current place
-SYNTAX_EXPRESSION = $0E             ;; match an expression (any of $05-$0C and $0E does)
+SYNTAX_EXPRESSION = $0E             ;; match an expression (any of $05-$0C and $0E does; $0D too in rev. A)
 SYNTAX_REPLACE = $0F                ;; replace the token just written with the next byte
 SYNTAX_RELATIVE = $80               ;; from here, match the rule at this code's address plus the code less SYNTAX_BIAS
 SYNTAX_BIAS = $C0                   ;; so $C1 is the next code and $80 64 bytes back
@@ -384,7 +384,7 @@ ERR_VALUE = 3                       ;; value error: a value out of range
 ERR_TOO_MANY_VARIABLES = 4          ;; too many variables, more than 128
 ERR_STRING_LENGTH = 5               ;; string length error: beyond the DIMensioned length
 ERR_OUT_OF_DATA = 6                 ;; out of data
-ERR_NUMBER_TOO_BIG = 7              ;; a number greater than 32767, or negative
+ERR_NUMBER_TOO_BIG = 7              ;; a number from 32768 to 65535 where one from 0 to 32767 is needed
 ERR_INPUT = 8                       ;; input statement error: not a number for a numeric variable
 ERR_DIM = 9                         ;; array or string DIM error
 ERR_STACK_OVERFLOW = 10             ;; argument stack overflow

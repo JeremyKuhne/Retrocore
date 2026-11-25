@@ -331,9 +331,25 @@ FIND_LINE_NEXT:
     jsr ADVANCE_STMCUR
     jmp FIND_LINE_LOOP
 
+.if VERSION = VERSION_A
 ;; Adds A to STMCUR, as to step to the next line by the line's length.
 ;;
-;; Rev. A's leaves Y = STMCUR's new low byte.
+;; Rev. A's leaves STMCUR's new low byte in Y too, where the later revisions keep Y.
+;; In: A = the bytes to step
+;; Out: STMCUR = STMCUR + A, Y = STMCUR's new low byte
+;; Uses: A, Y
+;; Keeps: X
+ADVANCE_STMCUR:
+    clc
+    adc STMCUR
+    sta STMCUR
+    tay
+    lda STMCUR+1
+    adc #$00
+    sta STMCUR+1
+    rts
+.else
+;; Adds A to STMCUR, as to step to the next line by the line's length.
 ;; In: A = the bytes to step
 ;; Out: STMCUR = STMCUR + A
 ;; Uses: A
@@ -342,13 +358,11 @@ ADVANCE_STMCUR:
     clc
     adc STMCUR
     sta STMCUR
-.if VERSION = VERSION_A             ; rev. A leaves the low byte in Y too
-    tay
-.endif
     lda STMCUR+1
     adc #$00
     sta STMCUR+1
     rts
+.endif
 
 ;; Reads the length of the line at STMCUR.
 ;; Out: A = the line's length, Y = LINE_LENGTH_OFFSET
@@ -391,14 +405,14 @@ STATEMENT_DOS:
     jsr SILENCE_CLOSE_ALL           ; silence the sound and close every IOCB
     jmp (DOSVEC)
 
+.if VERSION = VERSION_A
 ;; Tests whether BREAK has been pressed, and if so clears it.
 ;;
-;; Rev. A's gives the other way round: zero = clear when BREAK was pressed, then A = $FF.
-;; Out: zero = set when BREAK was pressed, then A = 0 and BRKKEY = $FF
+;; Rev. A's gives the other way round from the later revisions': A = $FF, not zero, for BREAK.
+;; Out: zero = clear when BREAK was pressed, then A = $FF and BRKKEY = $FF; otherwise A = 0
 ;; Uses: A, Y
 ;; Keeps: X
 CHECK_BREAK:
-.if VERSION = VERSION_A             ; rev. A gives A = $FF, not zero, for BREAK
     ldy #$00
     lda BRKKEY                      ; 0 when BREAK was pressed
     bne CHECK_BREAK_DONE            ; A = Y = 0: not pressed
@@ -406,14 +420,20 @@ CHECK_BREAK:
     sty BRKKEY
 CHECK_BREAK_DONE:
     tya
+    rts
 .else
+;; Tests whether BREAK has been pressed, and if so clears it.
+;; Out: zero = set when BREAK was pressed, then A = 0 and BRKKEY = $FF
+;; Uses: A, Y
+;; Keeps: X
+CHECK_BREAK:
     ldy BRKKEY                      ; 0 when BREAK was pressed
     bne CHECK_BREAK_DONE
     dec BRKKEY                      ; $FF again
     tya
 CHECK_BREAK_DONE:
-.endif
     rts
+.endif
 
 ; ---------------------------------------------------------------------------------------------------------------------
 ; The execution tables
@@ -486,7 +506,7 @@ STATEMENT_ROUTINES:
 ;; address less 1, high byte first, for <EXECUTE_OPERATOR> to push for an RTS.
 ;;
 ;; The string comparisons share the number comparisons' routines, which compare either kind; the function's ( shares
-;; ), DIM's string ( shares its array (, and unary + shares (, which does nothing.
+;; ), DIM's string ( shares its array (, and from rev. B unary + shares (, which does nothing.
 OPERATOR_ROUTINES:
     .dbyt OPERATOR_LE-1             ; OP_LE
     .dbyt OPERATOR_NE-1             ; OP_NE

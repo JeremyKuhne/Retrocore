@@ -798,11 +798,11 @@ CARTRIDGE_INIT:
 .endif
     .res CARTCS - *, $00            ; unused
 
-;; The left cartridge's header, which the OS reads at start-up: BASIC starts at its cold start, after booting the
-;; disk.
+;; The left cartridge's header, which the OS reads at start-up: BASIC starts at <CARTRIDGE_START>, which chooses the
+;; cold or warm start, after booting the disk.
 CARTRIDGE_HEADER:
     .assert * = CARTCS, "The header is at CARTCS."
-    .word CARTRIDGE_START           ; CARTCS: the start address, the cold start
+    .word CARTRIDGE_START           ; CARTCS: the start address
     .assert * = CART, "CART follows CARTCS."
     .byte $00                       ; CART: 0, a cartridge is present
     .assert * = CARTFG, "CARTFG follows CART."

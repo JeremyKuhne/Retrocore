@@ -335,7 +335,7 @@ FUNCTION_STR_FIND_END:
 
 ;; CHR$(aexp): the one-character string of a character code.
 ;;
-;; The character is kept in CHR_BUFFER, in LBUFF, so the next CHR$ or conversion overwrites it: two CHR$ in one
+;; The character is kept in CHR_BUFFER, in LBUFF, so the next CHR$ overwrites it: two CHR$ in one
 ;; comparison compare the second with itself. Only the code's low byte is used, so CHR$(321) is "A".
 ;; In: ARGUMENT_INDEX = the top entry: the code
 ;; Out: ARGUMENT_INDEX = the top entry: the string

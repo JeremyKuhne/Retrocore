@@ -120,7 +120,8 @@ POP_UNSIGNED:
 ;; In: STMCUR, TOKEN_OFFSET = the expression
 ;; Out: FR0 = the integer, A = 0
 ;; Uses: all
-;; Errors: 3 = value error, when it is beyond 255; and the expression's errors
+;; Errors: 3 = value error, when it is negative or beyond 255, except 7 = number greater than 32767 for 32768-65535;
+;;   and the expression's errors
 EVALUATE_BYTE:
     jsr EVALUATE_INTEGER
     bne EVALUATE_BYTE_ERROR
@@ -221,8 +222,10 @@ FIND_VARIABLE_ENTRY:
 ;; operator at the top of the operator stack. While the stacked one is at least as high, it pops that operator and
 ;; runs it; then it pushes the incoming operator. A stacked precedence of 0, which only the sentinel at the stack's
 ;; bottom has, ends the expression instead, when the incoming operator's is 0 too: every token that can't continue an
-;; expression has 0. Equal precedences make an operator work from left to right; a stacked precedence lower than the
-;; incoming one, from right to left, as NOT and unary minus do.
+;; expression has 0. Equal precedences make an operator work from left to right, as every operator's are; a stacked
+;; precedence lower than the incoming one lets what follows go over it, as the ( forms, the functions, the
+;; assignments and the array comma do. So a second unary operator would run before its operand: NOT NOT A can't
+;; work, and from rev. B the grammar allows only one.
 ;;
 ;; From the highest, the levels are: the string comparisons; NOT and unary + and -; ^; * and /; + and -; the
 ;; numeric comparisons; AND; OR; then the assignment and the brackets, which every other operator goes over. NOT
@@ -235,7 +238,7 @@ FIND_VARIABLE_ENTRY:
 ;; on the stack under its ( and is run the same way.
 ;; See: <EVALUATE_EXPRESSION>, <PRECEDENCE>
 PRECEDENCES:
-    PRECEDENCE 0, 0                 ; $10, the quote, which lists a string constant
+    PRECEDENCE 0, 0                 ; OP_QUOTE, a token no line holds
     PRECEDENCE 0, 0                 ; OP_SENTINEL
     PRECEDENCE 0, 0                 ; OP_COMMA
     PRECEDENCE 0, 0                 ; OP_DOLLAR
@@ -657,8 +660,8 @@ OPERATOR_DIM_ARRAY_PAREN:
 ;; The ( after an array's name: the array element its subscripts name, or the element an assignment stores in.
 ;;
 ;; The subscripts count from 0 to the sizes DIM gave. The element's address is STARP, plus the array's offset, plus
-;; six times the first subscript times the second size, plus the second subscript (the sizes are kept one more than
-;; DIM's). When ASSIGN_FLAGS bit 7 says the element is an assignment's target, the value to assign is above the
+;; six times the sum of the first subscript times the second size and the second subscript (the sizes are kept one
+;; more than DIM's). When ASSIGN_FLAGS bit 7 says the element is an assignment's target, the value to assign is above the
 ;; subscripts on the argument stack: the routine stores it there and pushes nothing. For DIM, it stops with the
 ;; sizes read.
 ;; In:

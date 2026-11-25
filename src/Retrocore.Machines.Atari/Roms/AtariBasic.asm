@@ -43,8 +43,9 @@
 ;; zeroed seven leftover bytes before the header.
 ;;
 ;; Bugs every revision has: AND tests the two numbers' exponent bytes against each other, so 1 AND 0.01 is 0; STR$
-;; and CHR$ build their results in one buffer, so STR$(1)=STR$(2) is true; SIN and COS keep too few digits of a large
-;; argument's remainder; and SQR returns the guess before its last step.
+;; and CHR$ each build their results in a fixed buffer of their own, so STR$(1)=STR$(2) is true; SIN and COS drop the
+;; last two digits of what is left of an angle of one to a million quarter turns; and SQR returns the guess before its
+;; last step.
 ;;
 ;; Maintained by hand; each build assembles byte-identically to its cartridge.
 

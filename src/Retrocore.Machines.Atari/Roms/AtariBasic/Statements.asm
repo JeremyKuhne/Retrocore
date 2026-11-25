@@ -28,8 +28,9 @@ STATEMENTS_TEN_DIGITS = $10         ;; FR0+1 from here up: the mantissa's first 
 ;; from STARP and the dimensioned bit.
 ;;
 ;; Only the result's bit 15 is checked: an array of 65536 bytes or more wraps to its size's low 16 bits.
-;; Errors: 9 (ERR_DIM) for a variable already dimensioned, a negative size or one of 32767, an array whose bytes
-;;   have bit 15 set, or a string of 0 characters; 2 (ERR_MEMORY) when the space does not fit below MEMTOP
+;; Errors: 9 (ERR_DIM) for a variable already dimensioned, a size from 32768, an array size of 32767, an array whose
+;;   bytes have bit 15 set, or a string of 0 characters; 3 (ERR_VALUE) for a negative size or one beyond 65535;
+;;   2 (ERR_MEMORY) when the space does not fit below MEMTOP
 ;; Entry: STATEMENT_COM = COM
 ;; Uses: A, X, Y, FR0, ZTEMP1, ZTEMP4, SECOND_INDEX, VARIABLE_ENTRY, MOVE_FROM, MOVE_TO, MOVE_LENGTH,
 ;;   SPACE_SIZE, NEW_SPACE, VALUE_TYPE, ARGUMENT_INDEX, OPERATOR_INDEX

@@ -372,7 +372,7 @@ LIST_TOKEN_END:
 
 ;; Prints a statement's name, from the statement name table, and a space.
 ;;
-;; The error report prints "ERROR- " this way, as TOKEN_ERROR's name.
+;; The error report prints "ERROR-" and its spaces this way, as TOKEN_ERROR's name.
 ;; In: A = the statement's token, OUTPUT_IOCB = the IOCB to write
 ;; Uses: A, X, Y, NAME_POINTER, NAME_OFFSET, ENTRY_NUMBER, LIST_COUNT, IOCB_NUMBER
 ;; See: <STATEMENT_NAMES>

@@ -950,7 +950,7 @@ public sealed partial class LanguageAnalysisTests
     ///  Text in ordinary assembly files does not supply the ROM generator's image bounds.
     /// </summary>
     /// <param name="file">The non-ROM source name.</param>
-    /// <param name="text">The source containing inactive or commented metadata text.</param>
+    /// <param name="text">The source containing ROM-like text.</param>
     [TestMethod]
     [DataRow("legacy.asm", ".rom Test.Firmware, $C400, $100\nEntry: nop\n")]
     [DataRow("conditional.asm", ".if 0\n.rom Test.Firmware, $C400, $100\n.endif\nEntry: nop\n")]

@@ -55,11 +55,11 @@ ReadCassette = $FEFD
 ;; Also: READX1 (PA1)
 ReadCassetteFromHeader = $FF02
 
-;; The end of the Monitor's <ReadCassette>: reads the checksum byte from the tape, then beeps if it matches A, or
-;; prints ERR and beeps if it does not.
+;; The end of the Monitor's <ReadCassette>: reads the checksum byte from the tape, then beeps if it matches the checksum
+;; kept in <PlotMask>'s byte, or prints ERR and beeps if it does not.
 ;;
 ;; At $FF26.
-;; In: A = the checksum of the bytes read
+;; In: PlotMask = the checksum of the bytes read
 ;; Also: FINISH (PA1)
 ReadCassetteChecksum = $FF26
 

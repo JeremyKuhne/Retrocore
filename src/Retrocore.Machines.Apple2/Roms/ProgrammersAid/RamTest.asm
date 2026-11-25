@@ -173,7 +173,8 @@ NextNeighbor:
     lda TestData
     jsr TestNeighbor
 
-    ; The next neighbor, twice as far, while it is inside the block.
+    ; The next neighbor, twice as far, while the mask is below the block's length; a block that doesn't start on a
+    ; multiple of its length puts some neighbors outside it.
     asl GallopMask
     rol GallopMaskHigh
     lda GallopMaskHigh

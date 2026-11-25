@@ -5,8 +5,8 @@
 ;; SAVE can be checked while the program is still there. CALL -10955 (<TapeVerify::VerifyProgram>) checks an Integer
 ;; BASIC program against the one in memory; for machine code or data, D52EG sets the Monitor's Control-Y up
 ;; (<TapeVerify::SetUp>), and `begin.end` Control-Y checks that block against the tape. A difference prints ERR, the
-;; address, and the byte in memory and then the byte from tape in parentheses, and stops the check; a bad checksum
-;; beeps and prints ERR, as `LOAD` does.
+;; address, and the byte in memory and then the byte from tape in parentheses, and stops that block's check (a program's
+;; check goes on from its header to the program); a bad checksum beeps and prints ERR, as `LOAD` does.
 ;;
 ;; The listing's names are those of Apple's listing in the Programmer's Aid #1 manual (1978,
 ;; https://archive.org/details/programmers-aid-1). Part of ProgrammersAid.asm.

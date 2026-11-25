@@ -45,7 +45,7 @@ Pitch = $02FF
 ;; One entry of <Music::NotePeriods>: a note's period, as two loop counts.
 ;; Parameters:
 ;;   first = the loops <Music::LookUp> splits between the cycle's halves as <Music::Timbre> says
-;;   second = the loops it adds to the second half
+;;   second = the loops it adds to the second half, with 1 more
 .macro NotePeriod first, second
     .byte first, second
 .endmacro
@@ -134,7 +134,8 @@ NextSecondHalf:
 ;; <NoteLength> from <Duration>; then plays it, or a rest for note 0.
 ;;
 ;; The second half gets the period's first byte shifted right once for each bit <Timbre> is shifted to reach 0, plus
-;; the period's second byte; the first half gets the first byte less the shifted part.
+;; the period's second byte, plus 1, the carry the subtraction leaves; the first half gets the first byte less the
+;; shifted part.
 ;; In: Pitch = the note, Duration = its length, Timbre = its duty cycle
 ;; Keeps: X
 ;; Also: LOOKUP (PA1)

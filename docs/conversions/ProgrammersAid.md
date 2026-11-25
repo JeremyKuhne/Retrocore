@@ -76,6 +76,13 @@ jumps to $02CB. The root asserts it is 0 or 1.
 - `HiResGraphics::DrawInverted` takes its steps at right angles through `Step::DrawTurned`, so those dots are set in
   the color rather than inverted; `Step` counts a collision when the inverted dot was dark.
 - Relocate's 1-byte instructions take the same path as 3-byte ones; only their opcode is stored.
+- Renumber's pass 1 never reports a new number past 65535: the SWEET16 no-op that skips its compare leaves the `ST`
+  before it as the last result, which has no carry, so the number wraps around.
+- `HiResGraphics::LineFromOrigin` (HLINRL) draws from the current point by an offset; the previous comment said from
+  (0,0).
+- Music's second half is the shifted period plus the second byte plus 1, the carry its subtraction leaves; the path
+  where the length's low byte carries, once in 256 loops, takes 2 cycles more than the others.
+- The RAM test's gallop can write outside a block that doesn't start on a multiple of its length.
 
 ## Open questions for the owner
 

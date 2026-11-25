@@ -265,7 +265,7 @@ NextFillByte:
     ora Page
     sta LineBaseHigh
 
-    ; X divided by 7: Y = the byte, A - 7 = the remainder, as 249 to 255. Past 255, start from 256 = 36 x 7 + 4.
+    ; X divided by 7: Y = the byte, A = the remainder - 7, 249 to 255. Past 255, start from 256 = 36 x 7 + 4.
     txa
     cpy #0
     beq Divide
@@ -319,7 +319,7 @@ AtPosition:
 
 ;; Moves the point one dot left or right, into the next byte at an edge of one, wrapping around the line.
 ;;
-;; Apple's listing calls the return RTS1.
+;; Apple's listing calls the return at Done RTS1.
 ;; In: negative = set for left, clear for right, Y = the byte index
 ;; Out: Y = the byte index, DotMask = the new dot's mask, ByteIndex = its byte, ShiftedColor = the color for that byte
 ;; Keeps: X
@@ -406,7 +406,7 @@ Right:
 ;;     when it was already that color, then moves along the direction
 ;;   DrawTurned = <Draw>'s, with the carry set, which moves at right angles; <DrawInverted> uses it too, so its
 ;;     turned steps plot in the color instead of inverting
-;;   UpOrDown = moves one line up, or down when negative is set, as <Line> steps
+;;   UpOrDown = moves one line up, or down when negative is set and the carry clear, as <Line> steps
 ;; Also: LRUDX1 (PA1)
 .proc Step
     clc
@@ -560,8 +560,9 @@ DownRotate:
     bcc StoreHigh
 .endproc
 
-;; Draws a line from (0,0) to a point: <Line> after clearing the last point.
-;; In: A = the X's low byte, X = its high byte, Y = the Y
+;; Draws a line from the point <Position> or the last line left, as if it were (0,0), to the point that many dots from
+;; it: <Line> with <LastX> and <LastY> cleared, which then hold the offset, not where the line ends.
+;; In: A = the X offset's low byte, X = its high byte, Y = the Y offset
 ;; Also: HLINRL (PA1)
 .proc LineFromOrigin
     pha
@@ -678,7 +679,7 @@ PixelMasks:
     .byte $81, $82, $84, $88, $90, $A0, $C0
 .assert * - PixelMasks = DOTS_PER_BYTE, "A mask for each of a byte's 7 dots."
 
-;; The byte $1C, which BIT tests for bits 2 to 4 of a line's address, its $400 block.
+;; The byte $1C, which BIT tests for bits 2 to 4 of a line's high byte, its $400 block.
 ;; Also: EQ1C (PA1)
 MaskBits2To4:
     .byte $1C

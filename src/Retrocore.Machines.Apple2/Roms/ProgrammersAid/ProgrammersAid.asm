@@ -13,10 +13,11 @@
 ;; - RAM Test ($D5BC, RamTest.asm): testing memory and naming the failing chips.
 ;; - Music ($D717, Music.asm): playing a note on the speaker.
 ;;
-;; Apple assembled each routine on its own, so each file is a scope of its own, and its old names are its listing's.
-;; <SetControlY>, in `SetControlY.asm`, which the Control-Y setups share, the macros that assemble SWEET16's
-;; instructions (Sweet16.mac) and the addresses of the Monitor and Integer BASIC (Equates.asm) are the routines' only
-;; common ground. Renumber and Relocate are partly written in SWEET16, the 16-bit interpreter in Integer BASIC's ROM.
+;; Apple assembled each routine on its own, so each is a scope of its own, in a file of its own (Renumber's BASIC
+;; entries continue its scope), and its old names are its listing's. <SetControlY>, in `SetControlY.asm`, which the
+;; Control-Y setups share, the macros that assemble SWEET16's instructions (Sweet16.mac) and the addresses of the
+;; Monitor and Integer BASIC (Equates.asm) are the routines' only common ground. Renumber and Relocate are partly
+;; written in SWEET16, the 16-bit interpreter in Integer BASIC's ROM.
 ;;
 ;; One predefined symbol chooses the build. RAMTESTFIX 0, the default, builds the chip and the 1980 System Masters'
 ;; INTBASIC. RAMTESTFIX 1 builds the 1983 System Master's (680-0210-A), whose RAM test prints the bad data byte at

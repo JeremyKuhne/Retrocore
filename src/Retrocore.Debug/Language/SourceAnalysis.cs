@@ -215,7 +215,8 @@ internal sealed partial class SourceAnalysis
         // The assembler knows native names; show the spelling the source used.
         Dictionary<string, string> spelling = [with(StringComparer.Ordinal)];
         foreach (KeyValuePair<string, string> alias in result.SymbolAliases) { spelling[alias.Value] = alias.Key; }
-        HashSet<(string Path, int Line)> assembled = [];
+        // The lines the assembler defined a name on, by the upper-cased path, so each line costs only its number.
+        Dictionary<string, HashSet<int>> assembled = [with(StringComparer.Ordinal)];
         foreach (AssemblySymbol symbol in result.SymbolDefinitions)
         {
             if (symbol.Location is not { } location || location.Path.Length == 0) { continue; }
@@ -243,14 +244,20 @@ internal sealed partial class SourceAnalysis
             }
 
             Add(new(name, path, location.Line, column, kind, symbol.Value, sourceLength));
-            assembled.Add((UpperPath(path), location.Line));
+            string upper = UpperPath(path);
+            if (!assembled.TryGetValue(upper, out HashSet<int>? assembledLines))
+            {
+                assembled[upper] = assembledLines = [];
+            }
+
+            assembledLines.Add(location.Line);
         }
 
         // Macros and .defines are expanded before assembly, so find their definitions in the text; so are the
         // definitions of a source that does not assemble yet, which the assembler reports none of.
         foreach ((string path, string[] lines) in _lines)
         {
-            string upperPath = UpperPath(path);
+            HashSet<int>? assembledHere = assembled.GetValueOrDefault(UpperPath(path));
             for (int line = 0; line < lines.Length; line++)
             {
                 Match match = MacroDefinition().Match(lines[line]);
@@ -263,11 +270,13 @@ internal sealed partial class SourceAnalysis
                     continue;
                 }
 
+                // A line the assembler defined a name on has it already, qualified by its scope: most lines that
+                // define one, so they are passed over before matching.
+                if (assembledHere?.Contains(line) == true) { continue; }
                 match = TextDefinition().Match(lines[line]);
                 bool bare = match.Success && !match.Groups["colon"].Success && !match.Groups["equate"].Success;
                 bool instruction = bare && InstructionDocs.IsMnemonic(match.Groups["name"].Value);
-                // A line the assembler defined a name on has it already, qualified by its scope.
-                if (!match.Success || instruction || assembled.Contains((upperPath, line))) { continue; }
+                if (!match.Success || instruction) { continue; }
 
                 // One it did not assemble (a branch of conditional assembly not taken, or a source with errors) is
                 // qualified by the scopes around it as the assembler would qualify it, so a name in a scope is not

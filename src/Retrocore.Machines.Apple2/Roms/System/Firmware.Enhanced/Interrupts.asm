@@ -556,7 +556,7 @@ ArrayBlock:
 ;; header, since it toggles <CassetteOut> in timed loops. It and its entries are the same as the original IIe
 ;; Monitor's.
 ;; In: A = the tone's length in rounds of 256 half cycles: A + 1 rounds with carry set, A with carry clear (one round
-;;   for A = 0 or 1); X = the first round's half cycles (0 for 256)
+;;   for A = 0 or 1), X = the first round's half cycles (0 for 256)
 ;; Entry:
 ;;   WriteBit = writes one bit
 ;; Also: XHEADER (IIETRM85), TAPEHEADR (UNKN)

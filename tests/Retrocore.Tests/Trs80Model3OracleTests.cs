@@ -157,9 +157,10 @@ public class Trs80Model3OracleTests
         Trs80Model3Machine machine = Create(variant, disk);
         Run(machine, script, finish);
 
-        // The Model III's screen, 64x16, fills its 1K of video RAM. The Model 4's 2K holds its 80x24 screen, which is
-        // compared in either mode, so that a mode this side failed to switch to cannot hide the cells past 64x16; past
-        // 80x24 a DOS's leftovers differ. The screens are shown as this side's mode lays them out.
+        // The Model III's screen, 64x16, fills its 1K of video RAM. The Model 4's first 1,920 bytes, its 80x24 screen
+        // while the 6845 starts at 0 as the DOSes here leave it, are compared in either mode, so that a mode this side
+        // failed to switch to cannot hide the cells past 64x16; past them a DOS's leftovers differ. The screens are
+        // shown as this side's mode lays them out.
         int cells = variant == Trs80Model3Variant.Model4 ? 80 * 24 : 64 * 16;
         int columns = machine.Bus.Video.Eighty ? 80 : 64;
         int shown = columns * machine.Bus.Video.Rows;

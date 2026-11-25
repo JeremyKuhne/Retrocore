@@ -28,7 +28,8 @@
 ;; port B, which switches the EPROM under the 6502 as it runs, so the next instruction, at $Cn7B, is the new bank's.
 ;; That instruction pulls an entry code (ENTRY_*) that the new bank acts on: <ENTRY_MAIN> for the bank's main
 ;; routine, others for its other routines, and <ENTRY_RETURN> to return through an address pushed earlier. A routine
-;; that must come back to the bank that called it finds that bank in <MouseMode>'s bits 4-6, which the caller set.
+;; that must come back to the bank that called it finds that bank, times 2, in <MouseMode>'s upper nibble, which the
+;; caller set.
 ;;
 ;; THE CALLS
 ;;
@@ -120,7 +121,7 @@ Argument = $06F8
 ;; Also: MOUSTAT (UNKN)
 MouseStatus = $0778
 
-;; The mouse's mode, with the MODE_* bits, and in bits 4-6 the bank to return to, times 2.
+;; The mouse's mode, with the MODE_* bits, and in its upper nibble the bank to return to, times 2.
 ;; Also: MOUMODE (UNKN)
 MouseMode = $07F8
 
@@ -159,7 +160,7 @@ MODE_FLAGS = $0F
 ;; The first mode <SetMouse> refuses.
 MODE_LIMIT = $10
 
-;; Mode: set by BASIC's entries. As a return bank (bits 4-6, times 2) it is also bank 4, <BasicBank>.
+;; Mode: set by BASIC's entries. As a return bank (the upper nibble, the bank times 2) it is also bank 4, <BasicBank>.
 MODE_BASIC = $80
 
 ;; How far the return bank is shifted in <MouseMode>.
@@ -254,7 +255,7 @@ ENTRY_RETURN = $80
 ;; $00-$0F: set the mode, <SetMouse>'s; $00 also turns BASIC's mouse off.
 COMMAND_SET_MODE = $00
 
-;; Read the status, Y and X: five bytes back.
+;; Read the position and status: five bytes back.
 COMMAND_READ = $10
 
 ;; Read the interrupt status, for <ServeMouse>.
@@ -287,7 +288,7 @@ COMMAND_FACTORY_9 = $90
 ;; The factory's $A0, with the caller's A.
 COMMAND_FACTORY_A = $A0
 
-;; The factory's $B0-$BF, as <COMMAND_FACTORY_9>.
+;; The factory's $B0-$BF, sent alone.
 COMMAND_FACTORY_B = $B0
 
 ;; The factory's $C0.
@@ -305,7 +306,7 @@ LOW_NIBBLE = $0F
 ;; The bits of a factory command that say how many parameters follow.
 FACTORY_PARAMETERS = $0C
 
-;; How many bytes <COMMAND_READ> answers: the status, Y high and low, X high and low.
+;; How many bytes <COMMAND_READ> answers: X low and high, Y low and high, and the status, in the order they come.
 READ_LENGTH = 5
 
 ; Page zero and the input buffer, which the firmware borrows and puts back.
@@ -1256,7 +1257,8 @@ Read:
 ;; Bank 4's switch. Its entry codes: <ENTRY_MAIN>, <FindHook>; <ENTRY_SECOND>, <Output>; <ENTRY_THIRD>, <Input>;
 ;; <ENTRY_RETURN>, return through the address pushed below the code.
 ;;
-;; The bank's routines go back to bank 0 at `Done`, with <ENTRY_SECOND>, which puts back <EnterBasic>'s registers.
+;; <Output> goes back to bank 0 at `Done`, with <ENTRY_SECOND>, which puts back <EnterBasic>'s registers; <Input>
+;; goes back through <LineBank>.
 .proc Switch
 .assert * = $C470, "Every bank's switch must be at $Cn70."
     lda PortB,y
@@ -1548,7 +1550,7 @@ Return:
 ;; Bank 6: sends or receives one byte, and <ReadMouse>'s bytes.
 .scope ByteBank
 
-;; Sends the byte on the stack, then returns to the bank in <MouseMode>'s bits 4-6, or to bank 0.
+;; Sends the byte on the stack, then returns to the bank in <MouseMode>'s upper nibble, or to bank 0.
 ;; In:    the stack = the byte, X = $Cn, Y = $n0
 .proc SendByte
     clv
@@ -1597,7 +1599,7 @@ WaitUntilTaken:
     ; Falls into Back.
 .endproc
 
-;; Returns to the bank in <MouseMode>'s bits 4-6, through the address its caller pushed, or to bank 0.
+;; Returns to the bank in <MouseMode>'s upper nibble, through the address its caller pushed, or to bank 0.
 ;; In:    overflow = clear, or set to go to the bank in A
 ;;
 ;; <Read> goes on at `SetBank`, which goes to the bank in A.
@@ -1712,8 +1714,8 @@ Finished:
 
 ;; Sends <Argument>'s command and its parameters: for <COMMAND_POSITION> the slot's <MouseX>, <MouseXHigh>,
 ;; <MouseY> and <MouseYHigh>; for <COMMAND_CLAMP> slot 0's <ClampMinimum>, <ClampMaximum>, <ClampMinimumHigh> and
-;; <ClampMaximumHigh>; for <COMMAND_FACTORY_A> the caller's A; for the factory's $9x and $Bx none to three of slot
-;; 0's <MouseX>, <MouseY> and <MouseXHigh>, as bits 2 and 3 say.
+;; <ClampMaximumHigh>; for <COMMAND_FACTORY_A> the caller's A; for the factory's $9x, as bits 2 and 3 say, none,
+;; slot 0's <MouseXHigh>, its <MouseX> and <MouseY>, or all three.
 ;; In:    Argument = the command, X = $Cn, Y = $n0
 .proc Send
     lda Argument - SLOT_PAGE,x

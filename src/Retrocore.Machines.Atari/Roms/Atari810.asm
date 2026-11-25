@@ -17,23 +17,28 @@
 ;;   as the controller sees it, complemented where it's stored (<(~FDC_READ_SECTOR)). The firmware keeps its track and
 ;;   sector numbers in that form too: HEAD_TRACK, TARGET_TRACK and TARGET_SECTOR hold the complement of the number.
 ;;
-;; The firmware runs from $0800 on reset and keeps nothing between commands but the head's track and the drive
-;; status. After each command it keeps the motor running for two of the FD1771's Restores (see RUN_ON), polling the
-;; bus all the while, parks the head and turns the motor off.
+;; The firmware runs from $0800 on reset and keeps nothing between commands but the head's track, the status block,
+;; its own flags (DRIVE_FLAGS) and RUN_ON_COUNT. After each command that runs the motor it keeps the motor running for
+;; two of the FD1771's Restores (see RUN_ON), polling the bus all the while, parks the head and turns the motor off.
 ;;
 ;; VERSION selects the build: VERSION_C (the default) for revision C, the most common, and VERSION_B for revision B,
-;; the earlier. They differ only in the order a format writes each track's sectors (FORMAT_ORDER), and in the order
-;; its verify reads them back (FORMAT_VERIFY_NEXT): revision B spaces the sectors 13 apart, revision C 9.
+;; the earlier. They differ only in the order a format writes each track's sectors (FORMAT_ORDER), revision B's
+;; spacing each sector 13 after the one before and revision C's 9 or 10, and in the direction its verify reads them
+;; back (FORMAT_VERIFY_NEXT), every fourth sector: revision C from sector 1 up, revision B from sector 17 down.
 ;;
-;; A bug both revisions have: the dispatch accepts the command $4F ('O') as Write, since it tests for the range from
-;; $4F, not from 'P', and $4F's low bits are 'W''s.
+;; Two bugs both revisions have:
+;;
+;; - The dispatch accepts the command $4F ('O') as Write, since it tests for the range from $4F, not from 'P', and
+;;   $4F's low bits are 'W''s.
+;; - Only a Write that reaches its check clears FLAG_VERIFY. After one that is refused or fails before the check, the
+;;   next Put verifies too, and the next Format, which shares the flag's bit (FLAG_BAD_SECTORS), ends with Error.
 ;;
 ;; Maintained by hand; each build assembles byte-identically to its ROM.
 
 .cpu Mos6502
 
 VERSION_B = 2                       ;; revision B, the earlier (12 sectors between consecutive ones on a track)
-VERSION_C = 3                       ;; revision C, the most common (8 sectors between)
+VERSION_C = 3                       ;; revision C, the most common (8 or 9 sectors between)
 
 .ifndef VERSION
 VERSION = VERSION_C
@@ -260,7 +265,12 @@ COMMAND_DONE:
 
 ;; Runs the motor on after a command: issues the FD1771 a Restore and polls the bus until it ends. With no stepper or
 ;; track 0 sensor wired to the controller, the Restore is only a timer: it steps nothing, and ends when the controller
-;; gives up on finding track 0. RUN_ON_COUNT+1 Restores run in all; then PARK steps the head to track 39.
+;; gives up on finding track 0. Restores run until RUN_ON_COUNT, less one after each, goes negative; then PARK steps
+;; the head to track 39.
+;;
+;; MOTOR_ON sets the count to 1, for two Restores, and the run-on leaves it at $FF. Status doesn't run the motor, so a
+;; Status that comes after a run-on has ended gets one Restore and leaves the count one lower; the 128th such Status
+;; in a row finds it at $80, which goes to $7F and runs 129 Restores.
 ;; See: <COMMAND_DONE>
 RUN_ON:
     lda #<(~FDC_RESTORE)
@@ -272,8 +282,8 @@ RUN_ON:
 
 ;; The order a format writes each track's sectors in, after sector 18, which is written first: complemented, as the
 ;; firmware keeps sector numbers. Revision C writes the odd sectors and then the even ones, so that the next of two
-;; sectors in a row passes the head 8 sectors after the last, in the time the computer takes to ask for it; revision
-;; B writes every 7th, which leaves 12 between.
+;; sectors in a row passes the head with 8 or 9 sectors between (8 after an odd sector, 9 after an even one), in the
+;; time the computer takes to ask for it; revision B writes every 7th, which leaves 12 between.
 ;; See: <WRITE_TRACK>
 FORMAT_ORDER:
 .if VERSION = VERSION_B
@@ -408,7 +418,8 @@ DELAY_LOOP:
 ;; 0 if not, so a caller sets it once to $80 for in or to a value from $00 for out and calls repeatedly. HEAD_TRACK
 ;; follows the head.
 ;; In: X = the direction, Y = the steps left
-;; Out: X incremented, Y decremented, zero = set and negative = clear when Y reaches 0, negative = set at $FF
+;; Out: X incremented, Y decremented, zero = set and negative = clear when Y reaches 0, negative = set when it reaches
+;;      $FF
 ;; Uses: A, STEP_PHASES
 STEP:
     lda #STEP_TIME
@@ -666,13 +677,14 @@ WRITE_TRACK_END:
     sta FDC_COMMAND
     rts
 
+WRITE_REPEAT_ENDED:
+    bvs FORMAT_FAILED
+
 ;; Writes Y copies of X to the FD1771 as it asks for them; if the controller ends the command, the format has failed.
 ;; In: X = the byte, complemented, Y = the count (0 for 256)
 ;; Out: Y = 0
 ;; Keeps: A, X
 ;; See: <WRITE_TRACK>
-WRITE_REPEAT_ENDED:
-    bvs FORMAT_FAILED
 WRITE_REPEAT:
     bit RIOT_PORTA
     bpl WRITE_REPEAT_ENDED
@@ -681,12 +693,13 @@ WRITE_REPEAT:
     bne WRITE_REPEAT
     rts
 
+WRITE_BYTE_ENDED:
+    bvs FORMAT_FAILED
+
 ;; Writes Y to the FD1771 when it asks for it; if the controller ends the command, the format has failed.
 ;; In: Y = the byte, complemented
 ;; Keeps: A, X, Y
 ;; See: <WRITE_TRACK>
-WRITE_BYTE_ENDED:
-    bvs FORMAT_FAILED
 WRITE_BYTE:
     bit RIOT_PORTA
     bpl WRITE_BYTE_ENDED
@@ -973,8 +986,7 @@ CHECKSUM_BYTES_DONE:
 ;;
 ;; It divides by 16, the number being 16 x q + r, then takes 16 back into r until 2 x q is less than r: the number is
 ;; then 18 x q + (r - 2 x q), with the sector from 1 to 18.
-;; In: carry = clear (from CHECK_SECTOR)
-;; Uses: A, X, FRAME_AUX1, FRAME_AUX2
+;; Uses: A, X, FRAME_AUX1, FRAME_AUX2, SAVED_AUX1, SAVED_AUX2
 SECTOR_POSITION:
     lda FRAME_AUX2
     sta SAVED_AUX2
@@ -1282,8 +1294,9 @@ SECTOR_NUMBER:
     adc NUMBER_HIGH
     jmp SECTOR_NUMBER_STORE
 
-;; Runs the command frame's command, or refuses it: a bad checksum, an unknown command or, from REFUSE, a sector
-;; number out of range. The commands from $4F to $57 go through COMMAND_TABLE by their low three bits.
+;; Runs the command frame's command, or refuses it for a bad checksum or an unknown command; Read, Put and Write go to
+;; REFUSE themselves for a sector number out of range. The commands from $4F to $57 go through COMMAND_TABLE by their
+;; low three bits.
 ;; See: <COMMAND_TABLE>, <REFUSE>
 DISPATCH:
     lda DRIVE_FLAGS
@@ -1331,9 +1344,9 @@ DISPATCH_FORMAT_DISK:
     .byte $01                           ; unreached
 
 ;; Ends SECTOR_NUMBER: adds the sector to the track's part and stores the number.
-;; In: Y = 18 x the track's low byte, A = its high byte, carry = clear, X = the index in BUFFER
+;; In: Y = 18 x the track's low byte, A = its high byte, X = the index in BUFFER
 ;; Out: X = the index of the high byte
-;; Uses: A
+;; Uses: A, NUMBER_HIGH
 ;; See: <SECTOR_NUMBER>
 SECTOR_NUMBER_STORE:
     sta NUMBER_HIGH
@@ -1553,7 +1566,7 @@ PUT_SECTOR_PROTECTED:
 
 ;; Steps the head Y times in X's direction, waiting each step's time, then waits 10 ms for it to settle.
 ;; In: X = the direction, as STEP takes it, Y = the steps, zero = set if there are none
-;; Out: Y = 0
+;; Out: Y = 0, X incremented once a step
 ;; Uses: A
 ;; See: <STEP>
 SEEK:

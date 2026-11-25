@@ -60,8 +60,10 @@ public sealed class Atari810SourceTests
         string path = Path.Join(Path.GetDirectoryName(AtariMachineTests.RomDirectory), "atari810", file);
         if (!File.Exists(path)) { Assert.Inconclusive($"The 810's firmware isn't at {path}."); }
 
+        byte[] expected = File.ReadAllBytes(path);
+        expected.Length.Should().Be(Size);
         ReadOnlySpan<byte> actual = Assemble(version).Sections[0].Bytes.Span;
-        int first = actual.CommonPrefixLength(File.ReadAllBytes(path));
+        int first = actual.CommonPrefixLength(expected);
         first.Should().Be(Size, $"the first difference is at ${Origin + first:X4}");
     }
 

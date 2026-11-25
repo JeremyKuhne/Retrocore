@@ -45,6 +45,48 @@ public class Trs80OracleTests
     }
 
     /// <summary>
+    ///  Level II on a schedule of fractional seconds: MAME's script must type each entry at its fraction, not at the
+    ///  next whole second.
+    /// </summary>
+    [TestMethod]
+    [TestCategory("Conformance")]
+    public void LevelTwoBasicAtFractionalTimesMatchesMame()
+    {
+        (double At, string Text)[] script =
+        [
+            (2.5, "\r"),
+            (6.25, "10 FOR I=1 TO 3:PRINT I*I;:NEXT\r"),
+            (10.5, "RUN\r"),
+            (12.75, "PRINT MEM\r")
+        ];
+
+        Compare(script, finish: 15.5, disk: null, comparesProgram: true, landmark: "1  4  9");
+    }
+
+    /// <summary>
+    ///  The schedule's times reach the Lua scripts with their fraction and a decimal point, whatever the culture.
+    /// </summary>
+    [TestMethod]
+    public void ScriptEntryKeepsFractionalSeconds()
+    {
+        System.Globalization.CultureInfo culture = System.Globalization.CultureInfo.CurrentCulture;
+        try
+        {
+            // German writes 2,5; the Lua scripts read only digits and '.'.
+            System.Globalization.CultureInfo.CurrentCulture = new("de-DE");
+            ScriptEntry((2.5, "RUN\r")).Should().Be("2.5=RUN\\r");
+            ScriptEntry((12.125, "\r")).Should().Be("12.125=\\r");
+            ScriptEntry((3, "\r")).Should().Be("3=\\r");
+            CocoOracleTests.ScriptEntry((2.5, "RUN\r")).Should().Be("2.5=RUN\\r");
+            Trs80Model3OracleTests.ScriptEntry((2.5, "RUN\r")).Should().Be("2.5=RUN\\r");
+        }
+        finally
+        {
+            System.Globalization.CultureInfo.CurrentCulture = culture;
+        }
+    }
+
+    /// <summary>
     ///  NEWDOS/80 boots from drive 0 and lists its directory.
     /// </summary>
     [TestMethod]
@@ -182,7 +224,7 @@ public class Trs80OracleTests
         return machine;
     }
 
-    private static string ScriptEntry((double At, string Text) entry)
+    internal static string ScriptEntry((double At, string Text) entry)
     {
         string at = entry.At.ToString(System.Globalization.CultureInfo.InvariantCulture);
         return $"{at}={entry.Text.Replace("\r", "\\r", StringComparison.Ordinal)}";

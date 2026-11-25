@@ -225,7 +225,7 @@ public class CocoOracleTests
         }
     }
 
-    private static string ScriptEntry((double At, string Text) entry)
+    internal static string ScriptEntry((double At, string Text) entry)
     {
         string at = entry.At.ToString(CultureInfo.InvariantCulture);
         return $"{at}={entry.Text.Replace("\r", "\\r", StringComparison.Ordinal)}";

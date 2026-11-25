@@ -15,6 +15,15 @@ internal readonly record struct RomMetadata(string TypeName, int Origin, int Ima
     private static readonly AssemblySymbols s_emptySymbols = new();
 
     /// <summary>
+    ///  Recognizes a complete metadata directive, not a longer name beginning with <c>.rom</c>.
+    /// </summary>
+    /// <param name="content">The trimmed, uncommented line.</param>
+    /// <returns>Whether the line starts with the directive.</returns>
+    internal static bool IsDeclaration(ReadOnlySpan<char> content) =>
+        content.StartsWith(".rom", StringComparison.OrdinalIgnoreCase)
+            && (content.Length == 4 || char.IsWhiteSpace(content[4]));
+
+    /// <summary>
     ///  Reads one trimmed, uncommented <c>.rom</c> line.
     /// </summary>
     /// <param name="content">The declaration.</param>
@@ -23,10 +32,7 @@ internal readonly record struct RomMetadata(string TypeName, int Origin, int Ima
     internal static RomMetadata Read(ReadOnlyMemory<char> content, int line)
     {
         ReadOnlySpan<char> span = content.Span;
-        if (!span.StartsWith(".rom", StringComparison.OrdinalIgnoreCase)
-            || span.Length <= 4
-            || !char.IsWhiteSpace(span[4])
-            || span[4..].Trim().IsEmpty)
+        if (!IsDeclaration(span) || span.Length == 4 || span[4..].Trim().IsEmpty)
         {
             throw new AssemblyError(line, "Expected one '.rom Namespace.Type, origin, size' declaration.");
         }

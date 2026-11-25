@@ -986,6 +986,10 @@ internal sealed partial class SourceAnalysis
     private static (string Text, RomMetadata? Metadata, AssemblyDiagnostic? Error) RomSource(string text, string path)
     {
         if (!text.Contains(".rom", StringComparison.OrdinalIgnoreCase)) { return (text, null, null); }
+        if (!path.EndsWith(".rom.asm", StringComparison.OrdinalIgnoreCase))
+        {
+            return (RomDeclaration().Replace(text, ""), null, null);
+        }
 
         char[]? source = null;
         RomMetadata? metadata = null;
@@ -1000,7 +1004,7 @@ internal sealed partial class SourceAnalysis
             if (offset < text.Length && text[offset] == '\n') { offset++; }
             int currentLine = line++;
             ReadOnlyMemory<char> content = sourceLine[..AssemblySyntax.WithoutComment(sourceLine.Span).Length].Trim();
-            if (!content.Span.StartsWith(".rom", StringComparison.OrdinalIgnoreCase)) { continue; }
+            if (!RomMetadata.IsDeclaration(content.Span)) { continue; }
 
             source ??= text.ToCharArray();
             source.AsSpan(start, sourceLine.Length).Fill(' ');
@@ -1022,6 +1026,9 @@ internal sealed partial class SourceAnalysis
 
         return (source is null ? text : new string(source), metadata, error);
     }
+
+    [GeneratedRegex(@"^[ \t]*\.rom[ \t][^\r\n]*", RegexOptions.Multiline | RegexOptions.IgnoreCase)]
+    private static partial Regex RomDeclaration();
 
     // A name in column 0: a label (with or without a colon) or an equate, whatever the source's dialect. Directives
     // start with a dot and match in any case, as the assembler reads them. So does Merlin's EQU, as the Merlin

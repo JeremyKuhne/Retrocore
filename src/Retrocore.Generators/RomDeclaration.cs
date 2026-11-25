@@ -58,7 +58,7 @@ internal sealed class RomDeclaration
             ReadOnlyMemory<char> contentMemory = original.AsMemory(span.Start, span.Length);
             contentMemory = contentMemory[..AssemblySyntax.WithoutComment(contentMemory.Span).Length].Trim();
             ReadOnlySpan<char> content = contentMemory.Span;
-            if (!content.StartsWith(".rom", StringComparison.OrdinalIgnoreCase)) { continue; }
+            if (!RomMetadata.IsDeclaration(content)) { continue; }
             if (name is not null)
             {
                 throw new AssemblyError(line, "Expected one '.rom Namespace.Type, origin, size' declaration.");

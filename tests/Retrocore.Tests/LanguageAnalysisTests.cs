@@ -932,6 +932,55 @@ public sealed partial class LanguageAnalysisTests
     }
 
     /// <summary>
+    ///  A MACRO-10 symbol starting with the ROM prefix is not generator metadata.
+    /// </summary>
+    [TestMethod]
+    public void Macro10RomPrefixIsASymbol()
+    {
+        string path = Path.GetFullPath("prefix.mac");
+        string text = "; retrocore: dialect=macro10\n.ROM1=1\nSTART: LDAI .ROM1\nEND\n";
+
+        SourceAnalysis analysis = SourceAnalysis.Assemble(path, candidate => candidate == path ? text : null);
+
+        analysis.Result.Diagnostics.Select(diagnostic => diagnostic.Message).Should().BeEmpty();
+        analysis.Find("START").Single().Value.Should().Be(0);
+    }
+
+    /// <summary>
+    ///  Text in ordinary assembly files does not supply the ROM generator's image bounds.
+    /// </summary>
+    /// <param name="file">The non-ROM source name.</param>
+    /// <param name="text">The source containing inactive or commented metadata text.</param>
+    [TestMethod]
+    [DataRow("legacy.asm", ".rom Test.Firmware, $C400, $100\nEntry: nop\n")]
+    [DataRow("conditional.asm", ".if 0\n.rom Test.Firmware, $C400, $100\n.endif\nEntry: nop\n")]
+    [DataRow("comment.mac", "; retrocore: dialect=macro10\nCOMMENT |\n.rom Test.Firmware, $C400, $100\n|\nEntry: NOP\nEND\n")]
+    public void OrdinarySourceDoesNotUseRomMetadata(string file, string text)
+    {
+        string path = Path.GetFullPath(file);
+
+        SourceAnalysis analysis = SourceAnalysis.Assemble(path, candidate => candidate == path ? text : null);
+
+        analysis.Result.Diagnostics.Select(diagnostic => diagnostic.Message).Should().BeEmpty();
+        analysis.Find("Entry").Single().Value.Should().Be(0);
+    }
+
+    /// <summary>
+    ///  A skipped longer name in a ROM source is not a second ROM declaration.
+    /// </summary>
+    [TestMethod]
+    public void RomMetadataRequiresACompleteDirective()
+    {
+        string path = Path.GetFullPath("prefix.rom.asm");
+        string text = ".if 0\n.rom Test.Firmware, $C400, $100\n.ROM1=1\n.endif\n.cpu Mos6502\nEntry: nop\n";
+
+        SourceAnalysis analysis = SourceAnalysis.Assemble(path, candidate => candidate == path ? text : null);
+
+        analysis.Result.Diagnostics.Select(diagnostic => diagnostic.Message).Should().BeEmpty();
+        analysis.Find("Entry").Single().Value.Should().Be(0xC400);
+    }
+
+    /// <summary>
     ///  ROM origins work at zero, outside the Apple II slot pages, and at the end of the address space.
     /// </summary>
     /// <param name="origin">The declared origin.</param>
@@ -963,6 +1012,7 @@ public sealed partial class LanguageAnalysisTests
     [DataRow(".rom Test.Firmware, Missing, $100", "Unresolved expression", 1)]
     [DataRow(".rom Test.Firmware, $C400, 0", "fit the 16-bit address space", 1)]
     [DataRow(".rom Test.Firmware, $C400,", "Empty or unbalanced", 1)]
+    [DataRow(".rom", "Expected one", 1)]
     [DataRow(".rom Test.Firmware, $C400, $100\n.rom Test.Other, $C500, $100", "Expected one", 2)]
     public void RomMetadataErrorsAreReported(string declaration, string message, int line)
     {

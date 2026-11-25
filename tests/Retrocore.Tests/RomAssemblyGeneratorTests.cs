@@ -37,6 +37,18 @@ public class RomAssemblyGeneratorTests
     }
 
     /// <summary>
+    ///  A skipped longer name is not a second ROM declaration.
+    /// </summary>
+    [TestMethod]
+    public void MetadataRequiresACompleteDirective()
+    {
+        GeneratorDriver driver = Run(".if 0\n.rom TestFirmware.Rom, $C400, $100\n.ROM1=1\n.endif\n.cpu Mos6502\n.byte 7\n");
+
+        Bytes(driver)[0].Should().Be(7);
+        driver.GetRunResult().GeneratedTrees.Single().ToString().Should().Contain("Origin = 0xC400");
+    }
+
+    /// <summary>
     ///  The <c>;;</c> summaries of exported symbols become the generated members' XML documentation, with links
     ///  to other exports as cref links and inherited summaries resolved.
     /// </summary>

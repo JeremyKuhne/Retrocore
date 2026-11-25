@@ -130,6 +130,34 @@ public class Apple2PlusTests
     }
 
     /// <summary>
+    ///  The II and II Plus's character generator has no lowercase: its $E0-$FF draw the symbols and digits of
+    ///  $A0-$BF, so they read as those, while the IIe's read as lowercase. With the IIe's alternate character set on,
+    ///  $60-$7F are inverse lowercase; the II and II Plus have no alternate set, so they still flash symbols.
+    /// </summary>
+    /// <param name="model">The model.</param>
+    /// <param name="lowercase">Whether its character generator has lowercase.</param>
+    [TestMethod]
+    [DataRow(Apple2Model.II, false)]
+    [DataRow(Apple2Model.IIPlus, false)]
+    [DataRow(Apple2Model.IIe, true)]
+    [DataRow(Apple2Model.IIeEnhanced, true)]
+    public void TopCodesReadAsTheGlyphsTheyDraw(Apple2Model model, bool lowercase)
+    {
+        const string Symbols = " !\"#$%&'()*+,-./0123456789:;<=>?";
+        const string Lowercase = "`abcdefghijklmnopqrstuvwxyz{|}~\u007F";
+        Apple2Machine machine = new(model, SdkModules.BuildRoms(model, s_inputs));
+        Read(0xE0).Should().Be(lowercase ? Lowercase : Symbols);
+
+        // ALTCHARSET on.
+        machine.Bus.Write(0xC00F, value: 0);
+        Read(0x60).Should().Be(lowercase ? Lowercase : Symbols);
+        Read(0xE0).Should().Be(lowercase ? Lowercase : Symbols);
+
+        string Read(int first) =>
+            new([.. Enumerable.Range(first, 32).Select(code => machine.Bus.Video.Character((byte)code))]);
+    }
+
+    /// <summary>
     ///  From its chip dumps, the II Plus powers on to AppleSoft's prompt, and a line typed in lowercase runs.
     /// </summary>
     [TestMethod]

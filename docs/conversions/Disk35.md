@@ -22,12 +22,13 @@ IIeEquates.asm and MonitorEntries.asm.
   error codes (BADCMD ... OFFLINE, BUSERR) and the IIgs's registers (SHADOW, CYAREG, STATEREG, HORIZCNT), IIGSFR87
   (Q3). The IWM switches, which the SDK named PH0L ... Q7H, take the Disk II's names (Dos.md X9) and no `Also:`.
 - C2. The Monitor's entries come from IIeEquates.asm and MonitorEntries.asm where they have them (the host code
-  includes both); the rest are defined with `Inherit:` and the Monitor's `Also:` (NextSlot, SetText, LOC1,
-  BasicColdStart, ExpansionRomOff, CarriageReturn, PrintHexByte ...), as Dos/Equates.asm does. Disk35.rom.asm defines
-  all of its own, because the source generator assembles it alone.
+  includes both); the rest are defined with `Inherit:` and the Monitor's `Also:` (`Startup::PowerUp::NextSlot`,
+  SetText, LOC1, BasicColdStart, ExpansionRomOff, CarriageReturn, PrintHexByte ...), as Dos/Equates.asm does.
+  Disk35.rom.asm defines all of its own, since the source generator assembles it with no other file but the shared
+  ProDOS include (BlockDeviceFirmware.md, B9).
 - C3. Same job, same name: the slot ROM's entries are the EPROM's slot page's, `Boot`, `DiagnosticsEntry`,
-  `ProDosEntry`, `SmartPortEntry` and `Call`. The slot ROM's exports, which C# reads as `Disk35Rom.*`, take those
-  names.
+  `Disk35Driver` (`ProDosEntry` before BlockDeviceFirmware.md's B10), `SmartPortEntry` and `CallCard` (`Call` before
+  its B11). The slot ROM's exports, which C# reads as `Disk35Rom.*`, take those names.
 - C4. Disk35Card.asm (5,700 lines) is split into subject files before the conversion, bytes unchanged: Disk35Card.asm
   (start-up, main loop, dispatch), Drives, Cache, Blocks, Gcr, Mfm, Control, Format and Bus.
 - C5. The SWIM's addresses are two scopes in Disk35Equates.asm: `Iwm` (the switches: `Iwm::Phase0Off` ...

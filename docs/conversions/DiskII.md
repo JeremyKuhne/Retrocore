@@ -51,8 +51,12 @@ Only published sources are cited: books, manuals and actual listings.
 
 - `ReadSector` searches for ever for a sector that is not on the track: nothing counts the tries.
 
-## Open questions for the owner
+## The open questions, settled by the owner
 
-- Q1. If a published listing of the boot ROM turns up, its names would go in `Also:` with a bibliography key.
-- Q2. `Hold` for Sather's NOP reads as "leave the latch alone"; `NoChange` or `Idle` would also fit.
-- Q3. A shared file of the Disk II's sixteen switches, included by DOS and the boot ROMs, would replace D2's copy.
+- D8 (was Q1). No published listing of the boot ROM is known, so nothing changes now; if one turns up, its names go in
+  `Also:` with a bibliography key.
+- D9 (was Q2). Sather's NOP stays `Hold` (D6).
+- D10 (was Q3). The Disk II's sixteen switches, `Phase0Off` to `WriteMode` with DOS's names and DOS's citations, are
+  one file, [DiskII/Switches.asm](../../src/Retrocore.Machines.Apple2/Roms/DiskII/Switches.asm), which the boot ROMs,
+  DOS's RwtsEquates.asm and Software/Boot13.1983.asm include; it replaces D2's copy and the program's. Its comments
+  describe the controller, linking the routines in DOS and the boot ROM that step the head.

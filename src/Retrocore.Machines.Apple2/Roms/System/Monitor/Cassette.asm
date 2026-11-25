@@ -105,7 +105,8 @@ Done:
 ;; Writes a cassette header tone, through the internal firmware's <WriteCassetteHeader>.
 ;;
 ;; At $FCC9.
-;; In: A = the tone's length, in 256 half cycles
+;; In: A = the tone's length in rounds of 256 half cycles, as <WriteCassetteHeader> takes it: A + 1 rounds with carry
+;;   set, A with carry clear (one round for A = 0 or 1); X = the first round's half cycles (0 for 256)
 ;; Also: HEADR (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc WriteHeader
 .assert * = $FCC9, "Cassette::WriteHeader must stay at $FCC9."
@@ -199,7 +200,8 @@ LastLevel = OperandLength
 ;; Writes a cassette header tone, then the sync bit.
 ;;
 ;; At $FCC9.
-;; In: A = the tone's length, about A x 256 half cycles; carry = set (clear makes it 256 fewer)
+;; In: A = the tone's length in rounds of 256 half cycles: A + 1 rounds with carry set, A with carry clear (one round
+;;   for A = 0 or 1); X = the first round's half cycles (0 for 256)
 ;; Also: HEADR (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc WriteHeader
 .assert * = $FCC9, "Cassette::WriteHeader must stay at $FCC9."

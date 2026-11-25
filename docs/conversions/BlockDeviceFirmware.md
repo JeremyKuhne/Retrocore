@@ -75,15 +75,25 @@ none. `Apple2ProFileTests.FirmwareBytesAreUnchanged` (added before the conversio
 | DriverEntry, ExecuteCommand, Success | Driver, Driver::Perform, Driver::Succeed | Slot 7 |
 | WriteCapabilityMask | CAPABILITY_WRITE | Slot 7 |
 
-## Open questions for the owner
+## The open questions, settled by the owner
 
-- Q1. The ProDOS mailbox, commands, errors and capability bits are defined in each card ROM (the 3.5 controller's and
-  the mouse's not yet converted). A shared include for every ProDOS block-device ROM would need the generator's
-  `AdditionalFiles` to take it; left for when the other card ROMs are converted.
-- Q2. With both named `Driver` (B3), the debugger resolves a typed `Driver` to the first module where it is
-  active: slot 7's, when a disk is mounted there, even with a ProFile card installed (before, slot 7's was
-  `DriverEntry`). Clashes between modules are allowed (ConvertingSources.md); a distinct name such as
-  `ProFileDriver` would avoid it.
-- Q3. The 3.5 controller's firmware, converted alongside, names its ProDOS entry `ProDosEntry` and the Monitor's SLOOP
-  a top-level `NextSlot`, where these name them `Driver` and `Startup::PowerUp::NextSlot` (the Monitor's own path). One
-  spelling for every card ROM would follow "same job, same name"; which is the owner's choice.
+- B9 (was Q1). The ProDOS block-device interface is one include,
+  [ProDosBlockDevice.asm](../../src/Retrocore.Machines.Apple2/Roms/ProDosBlockDevice.asm), in a scope `ProDos`: the
+  mailbox (`ProDos::Command`, `ProDos::UnitNumber`, `ProDos::Buffer`/`BufferHigh`, `ProDos::Block`/`BlockHigh`), the
+  commands `COMMAND_*`, the errors `ERROR_IO` and `ERROR_NO_DEVICE`, and the capability bits `CAPABILITY_*` with
+  `ONE_VOLUME`, `FOUR_VOLUMES` and `CAPABILITY_EVERY_COMMAND`. The ProFile, slot 7 and 3.5 card ROMs include it, and so
+  does the 3.5 controller's EPROM (Disk35Host.asm, whose `ProDosCommand` ... `ProDosBlock` it replaces): the scope keeps
+  its names apart from the EPROM's SmartPort `COMMAND_*` and `ERROR_*`, where `COMMAND_READ` is $08. The mouse's ROM
+  has none of these. The ProFile, which uses the names throughout, writes `.using ProDos`; slot 7 qualifies them, since
+  its exported `CAPABILITY_WRITE` stays a top-level alias for the C# card (`Slot7Rom.CAPABILITY_WRITE`). The source
+  generator takes the include as an `AdditionalFiles` item of Retrocore.Machines.Apple2.csproj, and the tests and the
+  debug host copy it beside the card ROMs. This replaces B4's equates in each file.
+- B10 (was Q2). Each card's ProDOS driver has its own name, so a typed name reaches the card meant: `ProFileDriver`,
+  `Slot7Driver` (`Slot7Rom.Slot7Driver`) and the 3.5 card's `Disk35Driver` (`Disk35Rom.Disk35Driver`, and the EPROM's
+  slot-page entry too, by Disk35.md's C3). No document gives the old names, so none has an `Also:`.
+- B11 (was Q3). Same job, same name across the card ROMs: the Monitor's SLOOP is `Startup::PowerUp::NextSlot`, the
+  Monitor's own path, in the ProFile, the 3.5 slot ROM and the EPROM's host code (whose card start-up, `Startup`
+  before, is `CardStartup`, beside `CardReset`, to leave the name to the Monitor's scope); $0801, where a boot block
+  runs, is `BootEntry` (the 3.5 slot ROM's `BootBlock` and the EPROM's `BootCode` before); the stack page is
+  `StackPage` (the mouse's `Stack` before); and the routine that carries a call to the card is `CallCard` (the 3.5
+  ROMs' `Call` before). The Monitor's names each card defines cite the Monitor's documents alike (LOC0, IORTS, SLOOP).

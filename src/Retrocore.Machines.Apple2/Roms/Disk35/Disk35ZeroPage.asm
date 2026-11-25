@@ -60,7 +60,7 @@ CountHigh:
     .byte $00
 
 ;; Each drive's head position ($FF unknown): the track sought (0 after a recalibration), or the one an address field
-;; named when it was the wrong track, with bit 6 from the field's side byte for tracks 64-79.
+;; named when it was the wrong track (a GCR field's with bit 6 from its side byte, for tracks 64-79).
 CurrentTrack:
     .byte $FF, $FF
 
@@ -198,8 +198,8 @@ SpanFirst:
 SpanCylinder:
     .byte $00
 
-;; Each drive's disk: $11 GCR, $32 MFM 720K, $54 MFM 1440K as <Drives::IdentifyMedia> finds it ($20 or $40 while a
-;; format runs); bits 5-6 = MFM.
+;; Each drive's disk: 0 none known (or a bus device), $11 GCR, $32 MFM 720K, $54 MFM 1440K as <Drives::IdentifyMedia>
+;; finds it ($20 or $40 while a format runs); bits 5-6 = MFM.
 MediaMode:
     .byte $00, $00, $00, $00, $00
 

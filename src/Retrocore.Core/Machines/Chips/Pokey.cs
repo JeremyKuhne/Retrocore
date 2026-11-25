@@ -41,12 +41,11 @@ namespace Retrocore.Machines.Chips;
 ///   channel 4) for SIO transmission and $13 (asynchronous input on channels 3+4, external output clock) for
 ///   reception. The external and bidirectional clock lines are not modeled, so modes with an external output clock
 ///   never shift. Reception is bit level from <see cref="SerialInputLevel"/>, clocked by channel 4 (modes 010 and
-///   110) or, in asynchronous mode (SKCTL bit 4), by channels 3+4 held in reset while the idle input is high. The
-///   first cycle the input reads low starts a frame (the level is tested, not an edge, so a line held low starts
-///   another frame at once). The start bit is sampled one timer period after that, mid-bit, and each bit after it
-///   two periods on; a
-///   stop bit sampled low is a framing error (SKSTAT bit 7). <see cref="ReceiveByte"/> also delivers a whole byte at
-///   once, for devices that work a byte at a time.
+///   110) or, in asynchronous mode (SKCTL bit 4), by channels 3+4 held in reset until a start bit's leading edge
+///   (the input reading low on the cycle after it read high), so a line held low starts no frame. The start bit is
+///   sampled one timer period after its edge, mid-bit, and each bit after it two periods on; SKSTAT bit 1 shows busy
+///   from the start bit's sample to the stop bit's, and a stop bit sampled low is a framing error (SKSTAT bit 7).
+///   <see cref="ReceiveByte"/> also delivers a whole byte at once, for devices that work a byte at a time.
 ///  </para>
 ///  <para>
 ///   Not modeled: the transitional AND values of a live pot counter (5.9), the gradual refill of RANDOM with ones
@@ -152,6 +151,9 @@ public sealed class Pokey
     private bool _keyboardOverrun;
 
     private bool _potScanning;
+    private bool _potClearing;
+    private bool _potPulsePending;
+    private int _potEndDelay;
     private int _potCounter;
     private byte _allPot;
 
@@ -164,7 +166,12 @@ public sealed class Pokey
     private bool _serialDataBit = true;
     private bool _serialOverrun;
     private bool _framingError;
+    // A frame has begun (the input read low); in asynchronous mode it lets timers 3+4 run.
     private bool _inBusy;
+    // SKSTAT bit 1: set when the start bit is sampled and cleared when the stop bit is (5.6, serial input).
+    private bool _inShifting;
+    // The input level the last Tick saw, to find a start bit's leading edge.
+    private bool _inputWasHigh = true;
     private int _inPulses;
     private int _inShift;
 
@@ -276,7 +283,7 @@ public sealed class Pokey
             if (_keyboardOverrun) { value &= ~0x40; }
             if (_framingError) { value &= ~0x80; }
             if (_serialOverrun) { value &= ~0x20; }
-            if (_inBusy) { value &= ~0x02; }
+            if (_inShifting) { value &= ~0x02; }
             if (!SerialInputLevel) { value &= ~0x10; }
             if (_shiftLatch) { value &= ~0x08; }
             if (_keyState >= 2) { value &= ~0x04; }
@@ -357,7 +364,9 @@ public sealed class Pokey
     ///  Sets the count at which a pot input reaches its threshold during a scan.
     /// </summary>
     /// <param name="index">The pot, 0-7.</param>
-    /// <param name="value">The count, 0-228; larger values never reach the threshold and read 228.</param>
+    /// <param name="value">
+    ///  The count, 0-228; larger values never reach the threshold and read 228 in the slow scan, 229 in the fast.
+    /// </param>
     public void SetPot(int index, byte value) => _potTarget[index & 7] = value;
 
     /// <summary>
@@ -515,12 +524,14 @@ public sealed class Pokey
             if (fire2) { Reload(1); }
         }
 
-        // Channels 3 and 4, held in reset by asynchronous receive while the input waits for a start bit; the first
-        // cycle the input reads low lets them run.
+        // Channels 3 and 4, held in reset by asynchronous receive while the input waits for a start bit; the start
+        // bit's leading edge (the input reading low the cycle after it read high) lets them run.
         bool fire3 = false;
         bool fire4 = false;
         bool asynchronous = (_skctl & 0x10) != 0;
-        if (asynchronous && !_inBusy && !SerialInputLevel && !InitializationMode)
+        bool startEdge = _inputWasHigh && !SerialInputLevel;
+        _inputWasHigh = SerialInputLevel;
+        if (asynchronous && !_inBusy && startEdge && !InitializationMode)
         {
             _inBusy = true;
             _inPulses = 0;
@@ -579,16 +590,12 @@ public sealed class Pokey
 
         StepTwoTone(fire1, fire2);
         StepSerialOutput(fire2, fire4);
-        StepSerialInput(fire4);
+        StepSerialInput(fire4, startEdge);
 
-        if ((_skctl & 0x04) != 0)
-        {
-            StepPots();
-        }
-        else if (pulse15)
-        {
-            StepPots();
-        }
+        // The slow scan's counter steps the cycle after each 15 kHz pulse (5.9, scan timing).
+        bool potClock = (_skctl & 0x04) != 0 || _potPulsePending;
+        _potPulsePending = pulse15;
+        StepPots(potClock);
 
         if (pulse15 && (_skctl & 0x02) != 0)
         {
@@ -758,20 +765,21 @@ public sealed class Pokey
     }
 
     // The input shift register: in asynchronous mode it counts timer 4's pulses from the start bit and samples on
-    // the odd ones (the middle of each bit); in synchronous mode a low level starts a byte the same way.
-    private void StepSerialInput(bool fire4)
+    // the odd ones (the middle of each bit); in synchronous mode a start bit's leading edge starts a byte the same way.
+    private void StepSerialInput(bool fire4, bool startEdge)
     {
         int mode = (_skctl >> 4) & 7;
         bool clocked = (mode & 1) != 0 || mode is 2 or 6;
         if (!clocked || InitializationMode)
         {
             _inBusy = false;
+            _inShifting = false;
             return;
         }
 
         if (!_inBusy)
         {
-            if (SerialInputLevel) { return; }
+            if (!startEdge) { return; }
             _inBusy = true;
             _inPulses = 0;
             _inShift = 0;
@@ -784,7 +792,15 @@ public sealed class Pokey
         if (bit == 0)
         {
             // A start bit that has gone high again by its middle was noise.
-            if (SerialInputLevel) { _inBusy = false; }
+            if (SerialInputLevel)
+            {
+                _inBusy = false;
+            }
+            else
+            {
+                _inShifting = true;
+            }
+
             return;
         }
 
@@ -797,6 +813,7 @@ public sealed class Pokey
         // The stop bit.
         _framingError |= !SerialInputLevel;
         _inBusy = false;
+        _inShifting = false;
         LoadSerin((byte)_inShift);
     }
 
@@ -805,15 +822,33 @@ public sealed class Pokey
         _potCounter = 0;
         _allPot = 0xFF;
         _potScanning = true;
+        _potClearing = true;
+        _potEndDelay = 0;
         LatchPots();
     }
 
-    private void StepPots()
+    // The scan counter: cleared during the cycle after POTGO, then stepped by each clock. Once it reaches its limit
+    // (228 slow, overrunning to 229 fast) the pots still counting latch it, and ALLPOT reads $00 two cycles after the
+    // slow scan's last step or one cycle after the fast scan's (5.9, scan timing).
+    private void StepPots(bool clock)
     {
+        if (_potEndDelay > 0)
+        {
+            if (--_potEndDelay == 0) { _allPot = 0; }
+            return;
+        }
+
         if (!_potScanning) { return; }
+        if (_potClearing)
+        {
+            _potClearing = false;
+            return;
+        }
+
+        if (!clock) { return; }
         _potCounter++;
-        int limit = (_skctl & 0x04) != 0 ? FastPotLimit : SlowPotLimit;
-        if (_potCounter >= limit)
+        bool fast = (_skctl & 0x04) != 0;
+        if (_potCounter >= (fast ? FastPotLimit : SlowPotLimit))
         {
             for (int pot = 0; pot < 8; pot++)
             {
@@ -823,8 +858,8 @@ public sealed class Pokey
                 }
             }
 
-            _allPot = 0;
             _potScanning = false;
+            _potEndDelay = fast ? 1 : 2;
             return;
         }
 
@@ -895,6 +930,8 @@ public sealed class Pokey
                 if (match && !keyDown) { _keyState = 2; }
                 break;
             case 2:
+                // The manual gives only the key-up path; a key down again on its next scan is taken as still held
+                // (a bounce on release), returning to state 3 without a second IRQ.
                 if (match) { _keyState = keyDown ? 3 : 0; }
                 break;
         }
@@ -985,5 +1022,7 @@ public sealed class Pokey
         _outShift = 0;
         _seroutPending = false;
         _inBusy = false;
+        _inShifting = false;
+        _potPulsePending = false;
     }
 }

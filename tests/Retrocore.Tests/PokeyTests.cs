@@ -106,7 +106,7 @@ public class PokeyTests
     ///  Verifies the low timer of a linked pair fires AUDF2+1 times per high timer period.
     /// </summary>
     [TestMethod]
-    public void LinkedLowTimerFiresEvery256()
+    public void LinkedLowTimerFiresPerHighCount()
     {
         Pokey pokey = Started();
         pokey.Write(Audctl, 0x50);
@@ -156,7 +156,8 @@ public class PokeyTests
     }
 
     /// <summary>
-    ///  Verifies STIMER written four cycles after a previous STIMER preempts the AUDF1=0 timer's first IRQ.
+    ///  Verifies STIMER written four cycles after a previous STIMER preempts the AUDF1=0 timer's first IRQ, and that
+    ///  one written five cycles after does not: the underflow already under way raises its IRQ.
     /// </summary>
     [TestMethod]
     public void StimerPreemptsUnderflow()
@@ -414,16 +415,26 @@ public class PokeyTests
         pokey.Read(Allpot).Should().Be(0xFD);
         pokey.Read(1).Should().Be(0);
 
-        Advance(pokey, 80 + (3 * 114));
+        // The first step comes 81 cycles after the SKCTL write that left initialization mode.
+        Advance(pokey, 80);
+        pokey.Read(0).Should().Be(0);
+        pokey.Tick();
+        pokey.Read(0).Should().Be(1);
+        Advance(pokey, 3 * 114);
         pokey.Read(0).Should().Be(4);
         (pokey.Read(Allpot) & 1).Should().Be(1);
         Advance(pokey, 114);
         pokey.Read(0).Should().Be(5);
         (pokey.Read(Allpot) & 1).Should().Be(0);
 
+        // The step to 228 comes 227 lines after the first; ALLPOT reads $00 two cycles later.
         Advance(pokey, 222 * 114);
-        pokey.Read(Allpot).Should().Be(0x04);
+        pokey.Read(2).Should().Be(227);
         Advance(pokey, 114);
+        pokey.Read(2).Should().Be(228);
+        pokey.Tick();
+        pokey.Read(Allpot).Should().Be(0x04);
+        pokey.Tick();
         pokey.Read(Allpot).Should().Be(0);
         pokey.Read(0).Should().Be(5);
         pokey.Read(2).Should().Be(228);
@@ -431,7 +442,8 @@ public class PokeyTests
     }
 
     /// <summary>
-    ///  Verifies fast pot scan counts each cycle and overruns to 229.
+    ///  Verifies fast pot scan clears the counter the cycle after POTGO, counts each cycle after that, overruns to 229
+    ///  and forces ALLPOT to $00 231 cycles after POTGO.
     /// </summary>
     [TestMethod]
     public void FastPotScan()
@@ -442,10 +454,16 @@ public class PokeyTests
         pokey.SetPot(1, 250);
         pokey.Write(Potgo, 0);
         Advance(pokey, 5);
+        (pokey.Read(Allpot) & 3).Should().Be(3);
+        pokey.Read(0).Should().Be(4);
+        pokey.Tick();
         (pokey.Read(Allpot) & 3).Should().Be(2);
         pokey.Read(0).Should().Be(5);
         Advance(pokey, 223);
+        pokey.Read(1).Should().Be(228);
+        pokey.Tick();
         pokey.Read(Allpot).Should().Be(2);
+        pokey.Read(1).Should().Be(229);
         pokey.Tick();
         pokey.Read(Allpot).Should().Be(0);
         pokey.Read(1).Should().Be(229);
@@ -646,7 +664,7 @@ public class PokeyTests
         HighPassLevels(audctl, tone, filter, filterAudf: 2).Should().Equal(0f, 15f);
     }
 
-    // The distinct output levels a 64 kHz pure tone (AUDF 1, volume 15) takes with its filter channel at filterAudf
+    // The distinct output levels a pure tone clocked at 64 kHz (AUDF 1, volume 15) takes with its filter channel at filterAudf
     // (silent itself), after the first periods have passed.
     private static List<float> HighPassLevels(int audctl, int tone, int filter, int filterAudf)
     {
@@ -711,13 +729,24 @@ public class PokeyTests
         pokey.Read(11).Should().Be(0xFF);
         pokey.Read(12).Should().Be(0xFF);
         pokey.Read(0x1C).Should().Be(0xFF);
-        pokey.Peek(Skstat).Should().Be(pokey.Read(Skstat));
+
+        // With an interrupt active, an overrun and a byte in SERIN, reading every register twice changes nothing.
+        pokey.Write(Irqen, Pokey.SerialInputReadyInterrupt);
+        pokey.ReceiveByte(0x41);
+        pokey.ReceiveByte(0x42);
+        byte[] before = [.. Enumerable.Range(0, 16).Select(register => pokey.Read(register))];
+        byte[] after = [.. Enumerable.Range(0, 16).Select(register => pokey.Read(register))];
+        after.Should().Equal(before);
+        before[Irqst].Should().Be(0xD7);
+        before[Serin].Should().Be(0x42);
+        (before[Skstat] & 0x20).Should().Be(0);
     }
 
     /// <summary>
     ///  Asynchronous receive at 600 baud, as the cassette handler sets it up (channels 3+4 linked at 1.79 MHz, $05CC,
-    ///  SKCTL $13): the start bit's edge starts the timers, each bit is sampled near its middle, SERIN takes the
-    ///  byte with IRQST bit 5, and a stop bit sampled low is a framing error until SKRES.
+    ///  SKCTL $13): the start bit's low level starts the timers, each bit is sampled near its middle, SKSTAT bit 1
+    ///  shows busy from the start bit's sample to the stop bit's, SERIN takes the byte with IRQST bit 5, and a stop
+    ///  bit sampled low is a framing error until SKRES.
     /// </summary>
     /// <param name="value">The byte sent.</param>
     /// <param name="stop">The stop bit's level.</param>
@@ -742,12 +771,18 @@ public class PokeyTests
         bool[] frame = new bool[10];
         frame[9] = stop;
         for (int bit = 0; bit < 8; bit++) { frame[bit + 1] = ((value >> bit) & 1) != 0; }
-        foreach (bool level in frame)
+        pokey.SerialInputLevel = false;
+        Advance(pokey, (bitCycles / 2) - 100);
+        (pokey.Read(Skstat) & 0x02).Should().Be(0x02, "the input isn't busy until the start bit is sampled");
+        Advance(pokey, bitCycles - ((bitCycles / 2) - 100));
+        (pokey.Read(Skstat) & 0x02).Should().Be(0, "the input is busy once the start bit is sampled");
+        foreach (bool level in frame[1..])
         {
             pokey.SerialInputLevel = level;
             Advance(pokey, bitCycles);
         }
 
+        (pokey.Read(Skstat) & 0x02).Should().Be(0x02, "the stop bit's sample ends busy");
         pokey.SerialInputLevel = true;
         Advance(pokey, bitCycles);
         (pokey.Read(Irqst) & Pokey.SerialInputReadyInterrupt).Should().Be(0, "the byte is in");
@@ -755,6 +790,38 @@ public class PokeyTests
         (pokey.Read(Skstat) & 0x80).Should().Be(stop ? 0x80 : 0, "a low stop bit is a framing error");
         pokey.Write(10, 0);
         (pokey.Read(Skstat) & 0x80).Should().Be(0x80, "SKRES clears it");
+    }
+
+    /// <summary>
+    ///  Verifies asynchronous receive starts a frame only on a start bit's leading edge: a line held low after a low
+    ///  stop bit (a break) receives nothing more until it goes high and low again.
+    /// </summary>
+    [TestMethod]
+    public void HeldLowLineStartsNoFrame()
+    {
+        Pokey pokey = Started();
+        pokey.Write(Audctl, 0x28);
+        pokey.Write(Audf3, 0xCC);
+        pokey.Write(Audf4, 0x05);
+        pokey.Write(Skctl, 0x13);
+        pokey.Write(Irqen, Pokey.SerialInputReadyInterrupt);
+        const int bitCycles = 2_983;
+        pokey.SerialInputLevel = false;
+        Advance(pokey, 10 * bitCycles);
+        (pokey.Read(Irqst) & Pokey.SerialInputReadyInterrupt).Should().Be(0, "the break's first frame is in");
+        pokey.Read(Serin).Should().Be(0);
+        Acknowledge(pokey, Pokey.SerialInputReadyInterrupt);
+        pokey.Write(Skres, 0);
+
+        Advance(pokey, 30 * bitCycles);
+        (pokey.Read(Irqst) & Pokey.SerialInputReadyInterrupt).Should().NotBe(0, "a held low line starts no frame");
+        (pokey.Read(Skstat) & 0x22).Should().Be(0x22, "neither busy nor overrun");
+
+        pokey.SerialInputLevel = true;
+        Advance(pokey, bitCycles);
+        pokey.SerialInputLevel = false;
+        Advance(pokey, bitCycles);
+        (pokey.Read(Skstat) & 0x02).Should().Be(0, "a new leading edge starts a frame");
     }
 
     private static Pokey Started()

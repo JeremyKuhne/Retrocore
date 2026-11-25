@@ -130,8 +130,22 @@ internal sealed partial class BbcDebugTarget
             case (BbcCassette, "insert"):
                 InsertTape(path ?? throw new ArgumentException("path is required."));
                 break;
-            case (BbcCassette, "record"):
-                RecordTape(path ?? throw new ArgumentException("path is required, for saving the recording."));
+            case (BbcCassette, "record") when path is not null:
+                RecordTape(path);
+                break;
+            case (BbcCassette cassette, "record"):
+                // RECORD over the tape in it at the head, or a blank one put in for it, saved later with Save As.
+                if (cassette.Tape is null) { cassette.Insert(new AcornTape(), "Blank tape", changed: true); }
+                cassette.Record();
+                break;
+            case (BbcCassette cassette, "play"):
+                cassette.Play();
+                break;
+            case (BbcCassette cassette, "stop"):
+                cassette.Stop();
+                break;
+            case (BbcCassette cassette, "rewind"):
+                cassette.Rewind();
                 break;
             case (BbcCassette cassette, "eject"):
                 cassette.Eject();
@@ -150,7 +164,7 @@ internal sealed partial class BbcDebugTarget
         }
     }
 
-    // retro/media: inserts, records and ejects tapes, and inserts and ejects disks.
+    // retro/media: inserts, records and ejects tapes, presses the recorder's keys, and inserts and ejects disks.
     private JsonObject Media(JsonObject args)
     {
         string action = args.String("action") ?? throw new ArgumentException("action is required.");

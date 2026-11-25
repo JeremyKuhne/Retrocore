@@ -36,7 +36,7 @@
 ; machine and searches for a bootable card. It recognizes our virtual card by
 ; particular bytes in its slot ROM, then executes the beginning of this program.
 ; Our 256-byte ROM appears at CPU memory addresses $C700-$C7FF; its disk-command
-; routine, Driver, starts at $C740. Numbers prefixed with $ are hexadecimal.
+; routine, Slot7Driver, starts at $C740. Numbers prefixed with $ are hexadecimal.
 ;
 ; HOW BOOTING WORKS
 ;
@@ -54,7 +54,7 @@
 ; HOW A DISK REQUEST CROSSES INTO C#
 ;
 ; The caller places the command, disk unit, RAM-buffer address, and block number
-; in agreed memory locations, called a mailbox, then calls Driver. The routine
+; in agreed memory locations, called a mailbox, then calls Slot7Driver. The routine
 ; reads the special address $C0F0. Unlike a normal RAM read, that access invokes
 ; Apple2Bus.DiskCommand in C#, which performs the transfer through IBlockDevice
 ; and returns an error code. A read copies a block into the caller's RAM buffer;
@@ -78,7 +78,7 @@
 ; machine library is built (docs/NativeAssembly.md describes the dialect; the .rom
 ; line names the generated C# type, its origin and its size). Slot7Rom.Bytes
 ; contains the complete image, including zero padding and the identification
-; trailer, and .export makes Driver, DeviceInfo and CAPABILITY_WRITE constants of
+; trailer, and .export makes Slot7Driver, DeviceInfo and CAPABILITY_WRITE constants of
 ; that type. At machine creation, C# copies that image into the card's ROM storage
 ; and adds the write-capability bit only if the mounted device permits writes. The
 ; CPU then executes these bytes normally; no assembler runs inside the emulator.
@@ -92,7 +92,7 @@
 ;   Reading $C0F0 performs the mailbox command and returns its error code.
 ;   $C0F1/$C0F2 report the device's 16-bit block count, at most 65535, ProDOS's limit.
 ;
-; Driver return ABI:
+; Slot7Driver return ABI:
 ;   A=0 and carry clear on success; A=error and carry set on failure.
 ;   Status returns block count in X/Y. Read/write preserve X/Y.
 ;   A, status flags and the mailbox/buffer contents are not preserved.
@@ -102,46 +102,17 @@
 
 .rom Retrocore.Machines.Apple2.Slot7Rom, $C700, $100
 .cpu Mos6502
-.export Driver, DeviceInfo, CAPABILITY_WRITE
+.export Slot7Driver, DeviceInfo, CAPABILITY_WRITE
 
-; The ProDOS block-device mailbox in page zero, which the caller fills before calling <Driver>.
-
-;; The ProDOS command: <COMMAND_STATUS>, <COMMAND_READ> or <COMMAND_WRITE>.
-Command = $42
-
-;; The ProDOS unit number: the drive in bit 7 (clear for drive 1) and the slot in bits 6-4.
-UnitNumber = $43
-
-;; The address of the caller's 512-byte buffer, low byte; <BufferHigh> is the high byte.
-Buffer = $44
-
-;; The high byte of <Buffer>.
-BufferHigh = $45
-
-;; The block number, low byte; <BlockHigh> is the high byte.
-Block = $46
-
-;; The high byte of <Block>.
-BlockHigh = $47
-
-; The ProDOS commands.
-
-;; Returns the device's size in blocks.
-COMMAND_STATUS = 0
-
-;; Reads a block into the buffer.
-COMMAND_READ = 1
-
-;; Writes the buffer to a block.
-COMMAND_WRITE = 2
+.include "ProDosBlockDevice.asm"
 
 ;; The ProDOS unit number of slot 7, drive 1.
 UNIT_SLOT_7_DRIVE_1 = $70
 
 ; Memory the boot uses.
 
-;; Three bytes below the boot buffer where the boot writes a JMP to <Driver>: a jump in RAM to the ROM's driver for
-;; the disk's bootstrap.
+;; Three bytes below the boot buffer where the boot writes a JMP to <Slot7Driver>: a jump in RAM to the ROM's driver
+;; for the disk's bootstrap.
 BootTrampoline = $07FD
 
 ;; The opcode of JMP absolute, for <BootTrampoline>.
@@ -167,28 +138,10 @@ BlockCount = $C0F1
 ;; Read: the high byte of <BlockCount>.
 BlockCountHigh = $C0F2
 
-; The ProDOS device-capability bits at $CnFE.
-
-;; Removable media.
-CAPABILITY_REMOVABLE = %10000000
-
-;; Interrupts.
-CAPABILITY_INTERRUPT = %01000000
-
-;; Bits 5-4: the number of volumes less one (ProDOS Technical Note #21).
-ONE_VOLUME = %00000000
-
-;; Formats.
-CAPABILITY_FORMAT = %00001000
-
-;; The capability bit the C# card sets in <DeviceInfo> for a writable device.
-CAPABILITY_WRITE = %00000100
-
-;; Reads.
-CAPABILITY_READ = %00000010
-
-;; Returns its status.
-CAPABILITY_STATUS = %00000001
+;; Inherit: <ProDos::CAPABILITY_WRITE>
+;;
+;; Exported for the C# card, which sets it in <DeviceInfo> for a writable device.
+CAPABILITY_WRITE = ProDos::CAPABILITY_WRITE
 
 ; The four signature bytes the Monitor and ProDOS look for in a disk controller's page, which Boot's first
 ; instructions carry as their operands.
@@ -206,7 +159,7 @@ SIGNATURE_05 = $03
 ;; check.
 SIGNATURE_07 = $3C
 
-;; Boots the mounted disk: reads blocks 0 and 1 to $0800-$0BFF through <Driver>, then runs the disk's bootstrap at
+;; Boots the mounted disk: reads blocks 0 and 1 to $0800-$0BFF through <Slot7Driver>, then runs the disk's bootstrap at
 ;; $0801.
 ;;
 ;; It doesn't check the reads' carry: the host checks the image when it is mounted.
@@ -218,35 +171,35 @@ SIGNATURE_07 = $3C
     lda #SIGNATURE_05
     lda #SIGNATURE_07
 
-    ; JMP Driver at $07FD-$07FF, outside the boot buffer, for the disk's bootstrap.
+    ; JMP Slot7Driver at $07FD-$07FF, outside the boot buffer, for the disk's bootstrap.
     lda #OPCODE_JMP
     sta BootTrampoline
-    lda #<Driver
+    lda #<Slot7Driver
     sta BootTrampoline + 1
-    lda #>Driver
+    lda #>Slot7Driver
     sta BootTrampoline + 2
 
     ; Block 0 to $0800-$09FF. The unit number stays in the mailbox for the disk's bootstrap.
-    lda #COMMAND_READ
-    sta Command
+    lda #ProDos::COMMAND_READ
+    sta ProDos::Command
     lda #UNIT_SLOT_7_DRIVE_1
-    sta UnitNumber
+    sta ProDos::UnitNumber
     lda #0
-    sta Buffer
-    sta Block
-    sta BlockHigh
+    sta ProDos::Buffer
+    sta ProDos::Block
+    sta ProDos::BlockHigh
     lda #BOOT_PAGE
-    sta BufferHigh
-    jsr Driver
+    sta ProDos::BufferHigh
+    jsr Slot7Driver
 
-    ; Block 1 to $0A00-$0BFF; Command is still COMMAND_READ.
+    ; Block 1 to $0A00-$0BFF; the command is still a read.
     lda #BOOT_SECOND_PAGE
-    sta BufferHigh
-    inc Block
-    jsr Driver
+    sta ProDos::BufferHigh
+    inc ProDos::Block
+    jsr Slot7Driver
 
     ; The disk's bootstrap, with its unit number in X.
-    ldx UnitNumber
+    ldx ProDos::UnitNumber
     jmp BootEntry
 .endproc
 
@@ -259,13 +212,14 @@ SIGNATURE_07 = $3C
 ;; At $C740; the low byte of its address is at $C7FF, where ProDOS finds it. Read and write keep X and Y. Status
 ;; reads <CommandPort> twice: once for the status and again through the read and write path, which earlier versions of
 ;; this driver also did; the second read is harmless.
-;; In:    Command = <COMMAND_STATUS>, <COMMAND_READ> or <COMMAND_WRITE>; UnitNumber = drive and slot,
-;;          Buffer/BufferHigh = the buffer, Block/BlockHigh = the block number
+;; In:    ProDos::Command = <ProDos::COMMAND_STATUS>, <ProDos::COMMAND_READ> or <ProDos::COMMAND_WRITE>;
+;;          ProDos::UnitNumber = drive and slot, ProDos::Buffer/ProDos::BufferHigh = the buffer,
+;;          ProDos::Block/ProDos::BlockHigh = the block number
 ;; Out:   A = 0 or a ProDOS error code, carry = clear on success, set on error; X/Y = the block count, for status
 ;; See:   <DeviceInfo>
-.proc Driver
+.proc Slot7Driver
     ; Status: the size from the emulator's ports.
-    lda Command
+    lda ProDos::Command
     bne Perform
     lda CommandPort
     ldx BlockCount
@@ -287,11 +241,11 @@ Succeed:
 ; Unused bytes between the driver and the identification trailer are zero padded.
 .org $C7FE
 
-;; The ProDOS device-capability byte at $CnFE, followed by the low byte of <Driver> at $CnFF.
+;; The ProDOS device-capability byte at $CnFE, followed by the low byte of <Slot7Driver> at $CnFF.
 ;;
 ;; One volume that reads and returns its status ($03), not removable and without interrupts; the C# card adds
 ;; <CAPABILITY_WRITE> only for a writable mounted device.
 DeviceInfo:
-    .byte ONE_VOLUME | CAPABILITY_READ | CAPABILITY_STATUS
-    .byte <Driver
+    .byte ProDos::ONE_VOLUME | ProDos::CAPABILITY_READ | ProDos::CAPABILITY_STATUS
+    .byte <Slot7Driver
 .assert * == $C800                  ; the image ends exactly after 256 bytes

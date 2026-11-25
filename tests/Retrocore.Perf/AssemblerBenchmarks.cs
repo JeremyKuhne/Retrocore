@@ -38,9 +38,12 @@ public class AssemblerBenchmarks
     [GlobalSetup]
     public void Setup()
     {
+        // The workload is one text in memory, so the shared ProDOS include is spliced in where the firmware includes it.
         string text = File.ReadAllText(Path.Join(AppContext.BaseDirectory, "Inputs", "Slot7.rom.asm"));
+        string include = File.ReadAllText(Path.Join(AppContext.BaseDirectory, "Inputs", "ProDosBlockDevice.asm"));
         string body = string.Join("\n", text.Split('\n').Select(line =>
-            line.TrimStart().StartsWith(".rom ", StringComparison.Ordinal) ? "" : line));
+            line.TrimStart().StartsWith(".rom ", StringComparison.Ordinal) ? ""
+                : line.TrimEnd() == ".include \"ProDosBlockDevice.asm\"" ? include : line));
 
         _source = new(body, "Slot7.rom.asm");
         AssemblyParseResult parsed = NativeAssembler.Parse(_source);
@@ -173,7 +176,7 @@ public class AssemblerBenchmarks
 
     private static void Verify(AssemblyResult result)
     {
-        if (!result.Success || result.Sections[0].Bytes.Length != 256 || result.Exports["Driver"] != 0xC740)
+        if (!result.Success || result.Sections[0].Bytes.Length != 256 || result.Exports["Slot7Driver"] != 0xC740)
         {
             throw new InvalidOperationException("ROM benchmark output was invalid.");
         }

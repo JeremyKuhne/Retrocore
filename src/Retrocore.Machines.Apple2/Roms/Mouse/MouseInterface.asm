@@ -67,8 +67,8 @@ CharacterOut = $FDED
 ;; Also: CLRROM (A2RM79, IIEROM82, IIETRM85)
 ExpansionRomOff = $CFFF
 
-;; The 6502's stack page: a routine finds the bytes it pushed at `Stack+1,x` and up after a TSX.
-Stack = $0100
+;; The 6502's stack page: a routine finds the bytes it pushed at `StackPage+1,x` and up after a TSX.
+StackPage = $0100
 
 ; The bytes the firmware is found by, as Apple's identification rules have them.
 
@@ -439,7 +439,7 @@ SYNC_TIMEOUT = $01
     ; The Monitor's RTS leaves its return address's high byte, $Cn, just below the stack.
     jsr SaveRegisters::Return
     tsx
-    lda Stack,x
+    lda StackPage,x
     tax                             ; X = $Cn
     php
     asl a
@@ -652,7 +652,7 @@ PushCode:
     jsr Pointer
     sty Pointer
     tsx
-    lda Stack,x                     ; $Cn, from the JSR
+    lda StackPage,x                 ; $Cn, from the JSR
     tax
     asl a
     asl a

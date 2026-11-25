@@ -30,7 +30,7 @@ public sealed class Apple2ProFileTests
     public void FirmwareBytesAreUnchanged()
     {
         Convert.ToHexString(SHA256.HashData(ProFileRom.Bytes)).Should().Be("E792470211E4C1F33A0078A18E3CF78C8ABB39CCF1EB2436C0C5C9672A4CAD0B");
-        ProFileRom.Driver.Should().Be(0xC500 | ProFileRom.Bytes[0xFF]);
+        ProFileRom.ProFileDriver.Should().Be(0xC500 | ProFileRom.Bytes[0xFF]);
         ProFileRom.DeviceInfo.Should().Be(0xC5FE);
     }
 
@@ -50,7 +50,7 @@ public sealed class Apple2ProFileTests
         machine.Bus.Peek((ushort)(page + 3)).Should().Be(0x00);
         machine.Bus.Peek((ushort)(page + 5)).Should().Be(0x03);
         machine.Bus.Peek((ushort)(page + 7)).Should().Be(0x3C, "not a SmartPort");
-        machine.Bus.Peek((ushort)(page + 0xFF)).Should().Be(ProFileRom.Driver & 0xFF);
+        machine.Bus.Peek((ushort)(page + 0xFF)).Should().Be(ProFileRom.ProFileDriver & 0xFF);
         machine.Bus.Peek((ushort)(page + 0xFE)).Should().Be(0x0F, "status, read, write and format, one volume");
         machine.Bus.ReadArea(page).Should().Be(Apple2MemoryArea.Slot1Rom + (slot - 1));
         machine.Bus.IsSlotFree(slot).Should().BeFalse();

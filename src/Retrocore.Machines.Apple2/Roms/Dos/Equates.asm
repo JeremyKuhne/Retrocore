@@ -200,7 +200,7 @@ ASHM1 = $73
 ;; See: <AppleSoft:StringsBottom>, <ASHM1>, <FileBuffers::Build>
 ASHM2 = $6F
 
-;; Applesoft's run-only flag: bit 7 set when the program is run-only.
+;; Applesoft's run-only flag: bit 7 set when the program can only be run, not listed or saved.
 ;;
 ;; SAVE (<Commands::Save>) refuses such a program, with PROGRAM TOO LARGE.
 ;; See: <AppleSoft:RunOnly>, <Commands::Save>

@@ -523,7 +523,7 @@ Execute = $D7D2
 .proc ApplesoftRamRun
 .assert MASTER || * = $A506, "Commands::ApplesoftRamRun is at $A506 where DOS runs."
 
-;; RAM Applesoft's `ResetProgramState`, as <ApplesoftRomRun::ResetProgram>.
+;; RAM Applesoft's <AppleSoft:ResetProgramState>, as <ApplesoftRomRun::ResetProgram>.
 ResetProgram = $0E65
 
 ;; RAM Applesoft's <AppleSoft:NextStatementSavingStack>, as <ApplesoftRomRun::Execute>.

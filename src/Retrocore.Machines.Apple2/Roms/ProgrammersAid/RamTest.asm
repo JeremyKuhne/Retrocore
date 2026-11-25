@@ -4,8 +4,9 @@
 ;; Steve Wozniak's memory test (1977), run from the Monitor: D5BCG sets the Monitor's Control-Y up
 ;; (<RamTest::SetUp>), and then `start.pages` Control-Y tests the given number of pages from the start page, which the
 ;; Monitor leaves in A1 and A2. With $00 and then with $FF, it fills the block and checks it, then gallops: each cell in
-;; turn holds the inverse of the data while every cell a power-of-2 distance from it is written and checked, which
-;; finds cells and address lines that disturb one another. It beeps at the end, whatever it found.
+;; turn holds the inverse of the data while the cell whose address differs from it in each one bit is written in turn,
+;; and the cell is checked after each write, which finds cells and address lines that disturb one another. It beeps at
+;; the end, whatever it found, unless the chip's gallop error has jumped away (below).
 ;;
 ;; An error in the fill prints `address expected bad ERR`, then each failing chip as its row and column, `r-c`: the
 ;; row is D if the block starts below $5000 and E otherwise, the column the socket of the data bit that failed. An
@@ -173,8 +174,8 @@ NextNeighbor:
     lda TestData
     jsr TestNeighbor
 
-    ; The next neighbor, twice as far, while the mask is below the block's length; a block that doesn't start on a
-    ; multiple of its length puts some neighbors outside it.
+    ; The next neighbor, the next bit up, while the mask is below the block's length. Unless the length is a power of
+    ; 2 and the block starts on a multiple of it, some neighbors fall outside the block.
     asl GallopMask
     rol GallopMaskHigh
     lda GallopMaskHigh

@@ -147,7 +147,7 @@ NextSecondHalf:
     sta SecondHalfCount
     lda Timbre
 
-;; Shifts the period right once for each bit the timbre still has.
+;; Shifts the period right once for each halving that takes the timbre down to 1.
 ;; Also: SHIFT (PA1)
 ShiftByTimbre:
     lsr

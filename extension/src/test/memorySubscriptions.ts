@@ -6,6 +6,7 @@ import * as assert from "node:assert/strict";
 import * as path from "node:path";
 import * as vscode from "vscode";
 import { openMemory } from "../memory";
+import { untilStopShown } from "./stops";
 
 export async function testMemorySubscriptions(workspace: vscode.WorkspaceFolder): Promise<void> {
     const root = workspace.uri.fsPath;
@@ -55,6 +56,7 @@ export async function testMemorySubscriptions(workspace: vscode.WorkspaceFolder)
         await wait(() => stopped && changesOnly, "the stopped session and cycle subscription");
         session = vscode.debug.activeDebugSession;
         if (session === undefined) throw new Error("No debug session.");
+        await untilStopShown(session);
         await openMemory(session, "0x4000");
         await wait(() => reads.length > 0, "the first editor's reads");
         const first = reads[0].subscriber;

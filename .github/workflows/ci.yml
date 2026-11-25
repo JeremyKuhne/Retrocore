@@ -152,5 +152,7 @@ jobs:
         run: |
           npm ci
           npm run compile
-          # The whole suite, which includes the language-only and memory-integration steps.
+          # The whole suite, which includes the language-only steps, and the memory step again on its own, as it
+          # runs first there, before anything else has opened an editor.
           xvfb-run -a npm run test:editor
+          xvfb-run -a npm run test:memory-integration

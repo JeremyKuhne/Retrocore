@@ -443,6 +443,10 @@ export function registerMemory(context: vscode.ExtensionContext): void {
             panel.onDidChangeViewState(() => { if (panel.active) lastEditor = editor; });
             panel.onDidDispose(() => {
                 disposed = true;
+                // A test that closes its editor, as switching to another space does, ends there: its page can't answer.
+                for (const settle of editor.tests.values()) settle({});
+                editor.tests.clear();
+                ready();
                 editors.delete(editor);
                 if (lastEditor === editor) lastEditor = undefined;
                 if (subscriber !== undefined && sessions.has(session.id)) {
@@ -468,7 +472,8 @@ export function registerMemory(context: vscode.ExtensionContext): void {
                     editor.tests.delete(received.id ?? 0);
                     return;
                 }
-                const reply = (result: unknown) => panel.webview.postMessage({ type: "reply", id: received.id, result });
+                // A closed editor's page is gone, and its webview throws if posted to.
+                const reply = async (result: unknown) => { if (!disposed) await panel.webview.postMessage({ type: "reply", id: received.id, result }); };
                 try {
                     switch (received.type) {
                         case "read":
@@ -791,7 +796,7 @@ export function registerMemory(context: vscode.ExtensionContext): void {
                             break;
                     }
                 } catch (error) {
-                    await panel.webview.postMessage({ type: "reply", id: received.id, error: message(error) });
+                    if (!disposed) await panel.webview.postMessage({ type: "reply", id: received.id, error: message(error) });
                 }
             });
             panel.webview.html = memoryEditorHtml(randomBytes(16).toString("hex"), {
@@ -930,6 +935,7 @@ export function registerMemory(context: vscode.ExtensionContext): void {
         const editor = lastEditor;
         if (editor === undefined) throw new Error("No Retrocore Memory editor is open.");
         await editor.ready;
+        if (!editors.has(editor)) throw new Error("The Retrocore Memory editor closed before it was ready.");
         const id = nextTest++;
         const reply = await new Promise<{ state?: unknown; error?: string }>(resolve => {
             editor.tests.set(id, resolve);

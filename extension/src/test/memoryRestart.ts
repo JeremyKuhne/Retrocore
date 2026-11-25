@@ -6,6 +6,7 @@ import * as assert from "node:assert/strict";
 import * as path from "node:path";
 import * as vscode from "vscode";
 import { openMemory } from "../memory";
+import { untilStopShown } from "./stops";
 
 /** The Retrocore Memory tabs open, each as its title and the session its URI names. */
 function memoryTabs(): string[] {
@@ -49,6 +50,7 @@ export async function testMemoryRestart(workspace: vscode.WorkspaceFolder): Prom
         assert.ok(await until(() => ready === 1, 15000), "the session starts");
         const session = vscode.debug.activeDebugSession;
         if (session === undefined) throw new Error("VS Code did not create the session.");
+        await untilStopShown(session);
         await openMemory(session, "0x4000");
         const open = [`Memory $4000 @${session.id}`];
         assert.deepEqual(memoryTabs(), open);
@@ -79,6 +81,7 @@ export async function testMemoryRestart(workspace: vscode.WorkspaceFolder): Prom
         assert.ok(await until(() => ready === 3, 20000), "the IIe starts");
         const apple = vscode.debug.activeDebugSession;
         if (apple === undefined) throw new Error("VS Code did not create the IIe session.");
+        await untilStopShown(apple);
         await openMemory(apple, "0x0400");
         assert.deepEqual(memoryTabs(), [`Memory $0400 @${apple.id}`]);
         await vscode.commands.executeCommand("retrocore.memory.test", [{ goto: 0x0410 }, { space: "aux" }]);

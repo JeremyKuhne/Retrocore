@@ -655,7 +655,7 @@ Done:
 ;; An offset is the table's start less the address, so the same subtraction turns it back into the address.
 ;; In: ArrayElementFound = negative for an array element
 ;; Out: AssignedVariable, AssignedVariable+1, AssignedVariableXByte = the offset, X = <ArrayElementFound>
-;; Errors: OUT OF MEMORY when an array element's offset passes 64K
+;; Errors: OUT OF MEMORY when the array element is not above <ArraysStart>
 ;; Entry:
 ;;   ArrayElement = takes <AssignedVariable> as an array element's; the table of routines for invokable modules lists it
 ;;   VariableError = ends the statement with the VARIABLE error; <AssignString> branches here
@@ -706,12 +706,6 @@ VariableError:
 ; PRINT
 ; ---------------------------------------------------------------------------------------------------------------------
 
-;; A RETURN, which ends a line of output.
-RETURN_CHARACTER = $0D
-
-;; A line feed, which follows a RETURN on the console and on devices.
-LINE_FEED_CHARACTER = $0A
-
 .scope Statements continued
 ; PRINT's list.
 
@@ -730,7 +724,7 @@ LINE_FEED_CHARACTER = $0A
 .endproc
 
 ;; Prints `PRINT`'s list: values, `TAB(` and `SPC(`, with commas and semicolons between; a list that does not end in a
-;; comma or semicolon ends with a RETURN.
+;; comma, a semicolon, `TAB(` or `SPC(` ends with a RETURN.
 ;;
 ;; A comma moves to the next column of 16; a semicolon prints nothing.
 ;; In: A = the character at <TextPointer>, flags as <GetCurrentCharacter> sets them
@@ -795,7 +789,7 @@ Real:
 ;;   Return = returns; `PRINT`'s list branches here
 ;; Also: CRDO (BB13)
 .proc PrintNewline
-    lda #RETURN_CHARACTER
+    lda #CHARACTER_RETURN
     jsr PrintCharacter
     stx Temporary
     sty KeptY
@@ -808,7 +802,7 @@ Real:
 ;; Prints the line feed.
 ;; Also: DOLF (BB13)
 LineFeed:
-    lda #LINE_FEED_CHARACTER
+    lda #CHARACTER_LINE_FEED
     jsr PrintCharacter
 
 ;; Sets the column back to 0 and takes X and Y back.

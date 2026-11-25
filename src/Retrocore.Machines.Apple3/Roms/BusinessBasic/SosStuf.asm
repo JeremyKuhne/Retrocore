@@ -325,7 +325,7 @@ WriteLength:
 NewlineParameters:
     .byte SosCalls::NEWLINE_COUNT
     .byte 0                                 ; the reference number
-    .byte NEWLINE_ON, RETURN
+    .byte NEWLINE_ON, CHARACTER_RETURN
 
 ;; `READ`'s parameter list for one key, into <LastKey>: the console's or, while `EXEC` runs, the `EXEC` file's reference
 ;; number goes in <Console::KeyReference>.

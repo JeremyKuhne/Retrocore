@@ -159,8 +159,8 @@ SOS_TERMINATE = $65
 ; ---------------------------------------------------------------------------------------------------------------------
 ; SOS errors
 ;
-; The codes SOS returns in A, with carry set, for a call that failed. <SosErrors> turns each into one of BASIC's
-; errors.
+; The codes SOS returns in A, with the negative and zero flags set from them, for a call that failed. <SosErrors> turns
+; each into one of BASIC's errors.
 ; ---------------------------------------------------------------------------------------------------------------------
 
 ;; SOS's error: no such device.

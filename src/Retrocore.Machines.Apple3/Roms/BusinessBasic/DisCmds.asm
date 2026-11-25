@@ -1095,9 +1095,6 @@ OpenFile:
 ;; See: <ReadTextLine::CatalogLine>, <Console::ReadKey>
 ;; Also: DSKLIN (BB13)
 .proc ReadTextLine
-;; A carriage return.
-CARRIAGE_RETURN = $0D
-
 ;; How many bytes of <CatalogBuffer> a catalog line copies to <InputBuffer>: the line, its 0 and what follows it.
 CATALOG_LINE_COPY = 79
 
@@ -1135,7 +1132,7 @@ ToEndOfFile:
 DropReturn:
     ldx Console::LineLength
     lda InputBuffer-1,X                     ; does a carriage return end the line?
-    cmp #CARRIAGE_RETURN
+    cmp #CHARACTER_RETURN
     beq Finish
     inx
 

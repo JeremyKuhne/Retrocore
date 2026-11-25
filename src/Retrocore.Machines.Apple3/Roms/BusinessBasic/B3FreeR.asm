@@ -228,7 +228,7 @@ Done:
     rts
 .endproc
 
-;; Unpacks a count of pages in A, as a string descriptor holds its address, into an X-byte and page.
+;; Unpacks a count of pages in A, as a string descriptor holds its distance below <MemoryTop>, into an X-byte and page.
 ;;
 ;; Bit 7 of A adds one to the X-byte in Y and the page is brought into range, keeping X-byte * $80 + page the same.
 ;; With Y = 0, as callers pass it, this undoes <Memory::PackPages> for a count below $100.
@@ -344,7 +344,7 @@ NestedIf:
 .endproc
 
 ;; Runs what follows `THEN` or `GOTO`: a line number goes to that line; anything else runs as statements.
-;; In: TextPointer = the `THEN` or `GOTO` token
+;; In: TextPointer = the `GOTO` token, or the first character after `THEN` or `ELSE`
 ;; Entry:
 ;;   ToGoTo = goes to the line number at <TextPointer>; <Statements::If> goes here for a line number after `ELSE`
 ;;   ToExecuteStatement = runs the statement at <TextPointer>; <Statements::If> goes here for statements after `ELSE`

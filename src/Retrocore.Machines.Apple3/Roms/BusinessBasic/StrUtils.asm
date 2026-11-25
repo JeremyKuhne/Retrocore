@@ -153,7 +153,7 @@ ScanPointer = DigitCount
 ;; <ScanPointer>'s X-byte.
 ScanPointerXByte = DigitCountXByte
 
-;; The free string's length, read with its information bytes.
+;; The string's length, read with its information bytes or from its descriptor.
 FreeLength = DigitsSeen
 
 ;; Set when a run of free space ends at the string just taken.
@@ -244,7 +244,7 @@ FindDescriptor:
     lda (StringInformationPointer),Y        ; the string's length
     sta FreeLength
 
-;; Moves the string's descriptor up by <CollectorDistance> bytes, closer to <MemoryTop>.
+;; Reduces the distance below <MemoryTop> in the string's descriptor by <CollectorDistance>, as the string moves up.
 ;; Also: GRBCMP2 (BB13)
 MoveDescriptor:
     ldy #1

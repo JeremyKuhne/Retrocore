@@ -100,7 +100,7 @@ Untrapped:
     sta OutputFileNumber+1
     lda #0
     jsr Segments::Grow                      ; All the memory there is
-    lda #Console::SCREEN_ON
+    lda #CHARACTER_SCREEN_ON
     jsr PrintCharacter
     jsr PrintNewline
     jsr PrintQuestionMark

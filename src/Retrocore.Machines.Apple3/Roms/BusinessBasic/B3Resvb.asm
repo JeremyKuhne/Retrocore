@@ -191,9 +191,9 @@ TOKEN_NEW = $E0
 
 ;; The keywords with one-byte tokens, from $80 to $E0, each with the last character's bit 7 set.
 ;;
-;; The statements' routines are in <StatementTable>, in the same order. `FRE` to `EOF` and the words to `EXFN%.` give
-;; a value with no parentheses, through <ValueWordTable>; some of them are statements as well. From `LOAD` on are the
-;; file commands, whose file names <Tokenize> leaves as typed.
+;; The statements' routines are in <StatementTable>, in the same order. `FRE` to `INDENT` (`PROGPREFIX$` in 1.3)
+;; give a value with no parentheses, through <ValueWordTable>; some of them are statements as well. From `LOAD` to
+;; <TOKEN_LAST_FILE_COMMAND> are the file commands, whose file names <Tokenize> leaves as typed.
 ;; See: <ExtendedReservedWords>, <StatementTable>, <Tokenize>
 ;; Also: RESLST (BB13)
 ReservedWords:

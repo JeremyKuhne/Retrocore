@@ -316,12 +316,6 @@ CLEAR_VIEWPORT = $1C
 ;; Turns the cursor off.
 CURSOR_OFF = 6
 
-;; Sounds the bell.
-BELL = 7
-
-;; Turns the screen on.
-SCREEN_ON = $0F
-
 ;; Normal video.
 NORMAL_VIDEO = $11
 
@@ -333,12 +327,6 @@ SET_COLUMN = $18
 
 ;; Moves the cursor to the line in the byte after it, counting from 0.
 SET_LINE = $19
-
-;; A carriage return, which ends a line.
-RETURN = $0D
-
-;; A line feed.
-LINE_FEED = $0A
 
 ;; Opens .CONSOLE and sets it up: copies its reference number and device number into BASIC's console parameter
 ;; lists, resets it, turns on the `CONTROL-C` attention event, makes reads end at a carriage return, and prints the
@@ -407,8 +395,8 @@ SignOn:
     .byte RESET_VIEWPORT
     .byte CLEAR_VIEWPORT
     .byte CURSOR_OFF
-    .byte BELL
-    .byte RETURN
+    .byte CHARACTER_BELL
+    .byte CHARACTER_RETURN
 .if RUNTIME
     .byte "    "
 .else
@@ -432,7 +420,7 @@ SignOn:
     .byte "       "
 .endif
     .byte 0, 0, 0
-    .byte RETURN, LINE_FEED, LINE_FEED
+    .byte CHARACTER_RETURN, CHARACTER_LINE_FEED, CHARACTER_LINE_FEED
 
 ;; The sign-on's length.
 ;; Also: SICLEN (BB13)

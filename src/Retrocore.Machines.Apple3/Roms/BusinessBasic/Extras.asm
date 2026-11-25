@@ -679,6 +679,6 @@ TextCodes:
     .byte Console::SET_TEXT_MODE, Console::TEXT_MODE_80_COLUMNS, Console::CURSOR_OFF
     .byte Console::SET_TEXT_OPTIONS, Console::TEXT_OPTIONS
     .byte Console::NORMAL_VIDEO, Console::RESET_VIEWPORT
-    .byte Console::SCREEN_ON, Console::RETURN, 0
+    .byte CHARACTER_SCREEN_ON, CHARACTER_RETURN, 0
 
 .endscope

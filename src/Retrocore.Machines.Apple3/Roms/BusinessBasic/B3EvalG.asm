@@ -265,7 +265,7 @@ ReturnOne:
 ;; Reads the cursor's position from the console into <Console::CursorColumn> and <Console::CursorLine>, with a SOS
 ;; D_STATUS call.
 ;; Out: Y = the cursor's line, from <Console::CursorLine>
-;; See: <Console::CursorParameters>, <Functions::VPos>, <Functions::Pos>
+;; See: <Console::CursorParameters>, <Functions::VPos>, <Functions::HPos>
 ;; Also: VPOS (BB13)
 .proc ReadCursorPosition
     brk
@@ -308,7 +308,7 @@ ReturnOne:
     jmp ReturnByte
 .endproc
 
-;; The value of `KBD`: the last key read on an interrupt, from <LastKey>.
+;; The value of `KBD`: the last key read, from <LastKey>.
 ;; Out: Fac = the key, as a real
 ;; Also: GIVKBD (BB13)
 .proc Kbd
@@ -399,10 +399,7 @@ ToSyntaxError:
 ;; See: <EvaluateExpression::KeepingStacks>, <FormulaTooComplexError>
 ;; Also: DOPAR (BB13)
 .proc EvaluateSubexpression
-;; The bytes of <OperatorStack>, two for each operator held.
-VERB_STACK_SIZE = 32
-
-    .assert EndOfFileHandlers - OperatorStack = VERB_STACK_SIZE, "VERB_STACK_SIZE must be VRBSTK's size."
+    .assert EndOfFileHandlers - OperatorStack = OPERATOR_STACK_SIZE, "OPERATOR_STACK_SIZE must be OperatorStack's size."
 
     lda #0
     ldy OperatorStackTop
@@ -410,7 +407,7 @@ VERB_STACK_SIZE = 32
     sta OperatorStack,Y                     ; precedence 0
     iny
     sty OperatorStackTop
-    cpy #VERB_STACK_SIZE                    ; too deep
+    cpy #OPERATOR_STACK_SIZE                    ; too deep
     bcs FormulaTooComplexError
     jsr EvaluateExpression::KeepingStacks
     dec OperatorStackTop
@@ -545,7 +542,8 @@ AfterOpen:
 ;; Takes the value of the variable at A, Y and bank X into the <Fac>, by its type: a long integer's eight bytes, a
 ;; real, an integer floated to a real, or, for a string, the pointer to its descriptor.
 ;; In: A, Y = the variable's address, X = its bank, <ValueType> and IntegerType = its type
-;; Out: FacMantissa3, FacMantissa3+1, FacMantissa3XByte = the variable's address
+;; Out: Fac = the value: for a string, the descriptor's address in <FacMantissa3>, <FacMantissa3>+1 and
+;;   <FacMantissa3XByte>
 ;; See: <LongInteger::LoadFac>, <Float::LoadFac>, <ReturnSignedWord>
 ;; Also: ISVRET2 (BB13)
 AtAddress:

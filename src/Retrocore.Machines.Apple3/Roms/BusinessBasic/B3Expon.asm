@@ -31,10 +31,10 @@ ExponentialPolynomial:
     .byte $71, $34, $58, $3E, $56           ; 0.0000214987636, for x^7
     .byte $74, $16, $7E, $B3, $1B           ; 0.00014352314036, for x^6
     .byte $77, $2F, $EE, $E3, $85           ; 0.0013422634824, for x^5
-    .byte $7A, $1D, $84, $1C, $2A           ; 0.0096140170119, for x^4
+    .byte $7A, $1D, $84, $1C, $2A           ; 0.009614017014, for x^4
     .byte $7C, $63, $59, $58, $0A           ; 0.055505126860, for x^3
-    .byte $7E, $75, $FD, $E7, $C6           ; 0.24022638462, for x^2
-    .byte $80, $31, $72, $18, $10           ; 0.69314718608, ln 2, for x
+    .byte $7E, $75, $FD, $E7, $C6           ; 0.2402263846, for x^2
+    .byte $80, $31, $72, $18, $10           ; 0.6931471862, near ln 2, for x
     .byte $81, $00, $00, $00, $00           ; 1.0
 .assert * - ExponentialPolynomial = 1 + 8 * PACKED_SIZE, "EXP's polynomial is a degree and eight coefficients."
 
@@ -246,7 +246,7 @@ Scale:
 ;; The exponent a negative argument's mantissa is given: from $90 to $9F, 2^15 to 2^31.
 SEED_EXPONENT = $90
 
-;; The bits of the argument's exponent kept in <SEED_EXPONENT>'s place.
+;; The bits of the argument's exponent kept in <SEED_EXPONENT>'s place; bit 4 is set by <SEED_EXPONENT> whatever it was.
 SEED_EXPONENT_BITS = $1F
 
     lda FacExponent
@@ -465,10 +465,10 @@ Quarter:
 ;; Also: SINCON (BB13)
 SinePolynomial:
     .byte 5                                 ; the degree
-    .byte $84, $E6, $1A, $2D, $1B           ; -14.381383816, for x^11
-    .byte $86, $28, $07, $FB, $F8           ; 42.07777095, for x^9
-    .byte $87, $99, $68, $89, $01           ; -76.704133676, for x^7
-    .byte $87, $23, $35, $DF, $E1           ; 81.605223690, for x^5
+    .byte $84, $E6, $1A, $2D, $1B           ; -14.38139067, for x^11
+    .byte $86, $28, $07, $FB, $F8           ; 42.00779712, for x^9
+    .byte $87, $99, $68, $89, $01           ; -76.70417026, for x^7
+    .byte $87, $23, $35, $DF, $E1           ; 81.60522369, for x^5
     .byte $86, $A5, $5D, $E7, $28           ; -41.34170209, for x^3
     .byte $83, $49, $0F, $DA, $A2           ; 6.2831853070, 2 * pi, for x
 .assert * - SinePolynomial = 1 + 6 * PACKED_SIZE, "SIN's polynomial is a degree and six coefficients."

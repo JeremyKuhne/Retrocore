@@ -26,6 +26,12 @@
 ;; the math files.
 .scope Float
 
+;; The unshifted operand's extension byte while two numbers are added: <Float::AddArg> saves <FacExtension> here,
+;; <Float::AlignAndAdd> clears it when <Fac> is the one shifted, and <Float::AddMantissas> adds it in or
+;; <Float::AlignAndAdd::Subtract> subtracts the shifted bits from it. The byte is <FunctionJumpHigh>, as in the shared
+;; Microsoft modules.
+UnshiftedExtension = FunctionJumpHigh
+
 ; The formats.
 
 ;; The bias on a real's exponent: an exponent of $80 is a number from 0.5 to below 1.
@@ -101,7 +107,7 @@ CONSTANT_SIZE = 5
     bne *+5                                 ; skip the jump for a Fac that is not zero
     jmp CopyArgToFac                        ; a zero Fac: the sum is Arg
     ldx FacExtension
-    stx FunctionJumpHigh
+    stx UnshiftedExtension
     ldx #ArgExponent                        ; shift Arg, unless the Fac is the smaller
     lda ArgExponent
     ; Falls into AlignAndAdd.
@@ -109,7 +115,8 @@ CONSTANT_SIZE = 5
 
 ;; Adds <Arg> to <Fac>, taking A as <Arg>'s exponent; a zero exponent leaves the <Fac> as it is.
 ;;
-;; <Float::MultiplyByTen> passes an exponent 2 above the <Fac>'s, so the <Fac>, shifted, is added as four times itself.
+;; <Float::MultiplyByTen> passes an exponent 2 above the <Fac>'s, so <Arg>, unshifted, counts as four times the <Fac>,
+;; which is shifted right two bits and added as itself.
 ;; In: A = <Arg>'s exponent, X = the address of the exponent of the operand to shift if <Arg> is the smaller
 ;;   (<ArgExponent>)
 ;; Entry:
@@ -130,7 +137,7 @@ CONSTANT_SIZE = 5
     eor #$FF                                ; the count, negated
     adc #0
     ldy #0
-    sty FunctionJumpHigh
+    sty UnshiftedExtension
     ldx #Fac                                ; and the Fac is the one to shift
     bne Align                               ; always
 
@@ -156,7 +163,7 @@ Align:
 Combine:
     bit ResultSign
     bpl AddMantissas                        ; the same signs: add
-    ldy #FacExponent                        ; the carry is clear
+    ldy #FacExponent                        ; the carry is clear, or set for equal exponents
     cpx #ArgExponent
     beq Subtract
     ldy #ArgExponent
@@ -167,7 +174,7 @@ Combine:
 Subtract:
     sec
     eor #$FF
-    adc FunctionJumpHigh
+    adc UnshiftedExtension
     sta FacExtension
     lda 4,y
     sbc 4,x
@@ -254,7 +261,7 @@ ShiftBytes:
 ;; See: <Float::NormalizeBits>
 ;; Also: FADD2 (BB13)
 .proc AddMantissas
-    adc FunctionJumpHigh
+    adc UnshiftedExtension
     sta FacExtension
     lda FacMantissa4
     adc ArgMantissa4

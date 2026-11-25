@@ -685,8 +685,8 @@ Half:
 
 .endscope
 
-;; Eight zero bytes: a real or long integer 0. <FindVariable> returns this for a variable that is read but was never
-;; set, rather than making one.
+;; Eight zero bytes: a real or long integer 0. An element of an array that doesn't exist, read in an expression, reads
+;; as this, rather than the array being made (<FindVariable>'s ForExpression entry).
 ;; Also: ZERO (BB13)
 ZeroValue:
     .byte $00, $00, $00, $00

@@ -612,7 +612,7 @@ ExtraIgnoredMessage:
 ;; Also: TRYAGN (BB13)
 RetryMessage:
     .byte "?REENTER"
-    .byte RETURN_CHARACTER, LINE_FEED_CHARACTER, 0
+    .byte CHARACTER_RETURN, CHARACTER_LINE_FEED, 0
 
 ;; Turns `GET`'s string into the variable's type: a real through <Functions::Val>, a long integer through
 ;; <LongInteger::StringToLong>.
@@ -758,7 +758,7 @@ AddAndCompare:
     adc StackTop + ForEntry::TEXT_BANK,x
     sta TextPointerXByte
 
-;; Goes on with the statement after the `FOR`.
+;; Goes on with the next statement: the one after the `FOR`, or after the `NEXT` when the loop ends.
 ;; Also: NEWSGO (BB13)
 ToNextStatement:
     jmp NextStatement
@@ -850,7 +850,7 @@ Mismatch:
 ; number, then its left operand's type (bits 7-6) with its precedence (bits 5-0); OperatorStackTop is the index past the
 ; top. A zero precedence at the bottom, or where EvaluateSubexpression starts a formula in parentheses, stops operators
 ; from below. The noun stack, OperandStack, holds each pending left operand, nine bytes: FacMantissa3XByte, then the
-; eight bytes from FacExponent; OperandStackTop is the index of the top's last byte.
+; eight bytes from FacExponent; OperandStackTop is the index past the top.
 ; ---------------------------------------------------------------------------------------------------------------------
 
 ;; Evaluates a formula: values joined by operators, taken in order of precedence.
@@ -998,7 +998,7 @@ ComparePrecedence:
 ;; Also: NT1 (BB13)
 KeepVerbTop:
     sty OperatorStackTop
-    cpy #VERB_STACK_SIZE
+    cpy #OPERATOR_STACK_SIZE
     bcc PushOperand
     jmp FormulaTooComplexError
 
@@ -1096,10 +1096,6 @@ PRECEDENCE_BITS = $3F
 
 ;; The bits of a verb stack entry's second byte that hold the left operand's type, as <ValueType>'s bits 7 and 6.
 TYPE_BITS = $C0
-
-;; The verb stack's size: two bytes for the bottom's entry and for each pending operator. The 15th is refused, so 14
-;; may be pending.
-VERB_STACK_SIZE = $20
 
 ;; The bytes of a noun stack entry: <FacMantissa3XByte>, then the eight bytes from <FacExponent>.
 NOUN_SIZE = 9

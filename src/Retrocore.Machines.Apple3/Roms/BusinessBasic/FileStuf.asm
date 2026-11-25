@@ -850,7 +850,7 @@ FILE_INFO_LENGTH = $B
 ;; Works out the start of the file's current record, the record number times the record length, as the displacement
 ;; from the start of the file for `SET_MARK` or `SET_EOF`, and sets the buffer's offset to 0.
 ;; In: FileControlBlockIndex = the file's index in <FileControlBlocks>
-;; Out: SosCalls::Displacement..Displacement+3 = the position, SosCalls::MarkBase = 0, Y = 0
+;; Out: SosCalls::Displacement..SosCalls::Displacement+3 = the position, SosCalls::MarkBase = 0, Y = 0
 ;; Uses: A, X
 ;; Entry:
 ;;   Return = returns; <SeekRecord> branches here

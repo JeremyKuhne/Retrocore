@@ -362,13 +362,13 @@ Done:
 
 .scope Functions continued
 
-;; The `POS` function: the cursor's column, counting from 1.
+;; The `HPOS` function: the cursor's column, counting from 1.
 ;; Out: Fac = the column, as a real
 ;; Entry:
 ;;   CountFromOne = adds 1 to Y and gives it as a real; <Functions::VPos> goes here
 ;; See: <Functions::VPos>, <ReadCursorPosition>
 ;; Also: POS (BB13)
-.proc Pos
+.proc HPos
     jsr ReadCursorPosition
     ldy Console::CursorColumn
 
@@ -396,12 +396,12 @@ CountFromOne:
 
 ;; The `VPOS` function: the cursor's line, counting from 1.
 ;; Out: Fac = the line, as a real
-;; See: <Functions::Pos>
+;; See: <Functions::HPos>
 ;; Also: DOVPOS (BB13)
 .proc VPos
     jsr ReadCursorPosition
     ldy Console::CursorLine
-    jmp Pos::CountFromOne
+    jmp HPos::CountFromOne
 .endproc
 
 .endscope
@@ -441,8 +441,8 @@ UndefinedFunction:
 ;; The `DEF` statement: notes the formula's address and the argument variable in the function's entry, and skips the
 ;; formula.
 ;;
-;; <RequireNumber> lets the argument be an integer variable as well as a real one, but `FN` stores a four-byte real into
-;; it and saves and restores four bytes, so an integer argument (two bytes) has the two bytes after it written over.
+;; The argument must be a real variable: with <SubscriptMode> bit 7 set, <FindVariable> refuses a type character after
+;; its name, so `DEF FN A(X%)` is a syntax error.
 ;; Errors: <ERROR_ILLEGAL_DIRECT> = in direct mode
 ;; See: <ReadFunctionName>, <Functions::Fn>, <Variables::SimpleVariableOffset>
 ;; Also: DEF (BB13)

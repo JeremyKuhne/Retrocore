@@ -7,10 +7,10 @@
 ;; A long integer is eight bytes of two's complement, most significant byte first, from -(2^63) to 2^63-1; a long
 ;; variable's value is those eight bytes as they are, and <ValueType> is <VALUE_TYPE_LONG_INTEGER> while one is in the
 ;; <Fac>. The arithmetic works on three eight-byte numbers in BASIC's zero page: <Fac> (over the real one's bytes),
-;; <Arg> and <Result1>, with the byte below <Result1> (<Result1>-1) catching a product's or quotient's overflow. Most
-;; routines reach their operands through <LongOperand1Pointer>, <LongOperand2Pointer> and <LongResultPointer>, which
-;; <LongInteger::PointAtOperands> points at <Fac>, <Arg> and <Fac>. A binary operator gets its left operand in <Arg> and
-;; its right in <Fac>.
+;; <Arg> and <Result1>, with the byte below <Result1> (<Result1>-1) catching a product's overflow (in division it marks
+;; the first subtraction). Most routines reach their operands through <LongOperand1Pointer>, <LongOperand2Pointer> and
+;; <LongResultPointer>, which <LongInteger::PointAtOperands> points at <Fac>, <Arg> and <Fac>. A binary operator gets
+;; its left operand in <Arg> and its right in <Fac>.
 ;;
 ;; Apple's listing calls this file LONGINT. Part of BusinessBasic.asm.
 
@@ -312,8 +312,8 @@ Done:
 
 ;; Moves a result from (<LongResultPointer>) to <Fac>, negating it first when <InputMode> says the result is negative.
 ;;
-;; Bit 7 of <Result1> is checked even when the result is elsewhere, so <LongInteger::Mod> gives an overflow error
-;; whenever the quotient's magnitude is 2^63 (`-(2^63) MOD 1`), though the remainder fits.
+;; Bit 7 of <Result1> is checked even when the result is elsewhere. A division makes at most 63 quotient bits, so only
+;; `/`'s rounding can set it there; `DIV` and `MOD` never give the overflow (`-(2^63) MOD 1` is -1).
 ;; In: LongResultPointer = the result's magnitude, in zero page, InputMode = bit 7 set for a negative result
 ;; Out: Fac = the result
 ;; Errors: <ERROR_OVERFLOW> = bit 7 of <Result1> is set
@@ -893,7 +893,7 @@ Done:
 .endproc
 
 ;; The `DIV` operator for long integers: <Fac> = <Arg> / <Fac>, the fraction dropped.
-;; Errors: <ERROR_DIVISION_BY_ZERO> = <Fac> is zero, <ERROR_OVERFLOW> = the quotient is out of range
+;; Errors: <ERROR_DIVISION_BY_ZERO> = <Fac> is zero
 ;; See: <LongInteger::DivideMagnitudes>, <LongInteger::Divide>
 ;; Also: LDIV (BB13)
 .proc Div
@@ -905,8 +905,7 @@ Done:
 ;;
 ;; The remainder of the two sizes is made negative when exactly one operand is, as a quotient would be, rather than
 ;; taking the dividend's sign: `-7 MOD 2` and `7 MOD -2` are both -1, and `-7 MOD -2` is 1.
-;; Errors: <ERROR_DIVISION_BY_ZERO> = <Fac> is zero, <ERROR_OVERFLOW> = the quotient's magnitude is 2^63
-;;   (<LongInteger::ReturnResult>)
+;; Errors: <ERROR_DIVISION_BY_ZERO> = <Fac> is zero
 ;; See: <LongInteger::DivideMagnitudes>
 ;; Also: LREM (BB13)
 .proc Mod
@@ -1256,7 +1255,7 @@ Done:
 ;; 2^56: from 2^56 on, the eight bytes are read from that page instead of from <Arg>, and the result is wrong. For a
 ;; zero, which skips the loop, Y is what <Int> left.
 ;; In: Fac = the value, ValueType = its type
-;; Out: Fac = the long integer, ValueType = <VALUE_TYPE_LONG_INTEGER>
+;; Out: Fac = the long integer, ValueType = <VALUE_TYPE_LONG_INTEGER> (for an empty string, a real 0)
 ;; Errors: <ERROR_OVERFLOW> = a real of 2^63 or more in size
 ;; Uses: Arg, SavedY
 ;; See: <LongInteger::ReadNumber>, <LongInteger::ToReal>

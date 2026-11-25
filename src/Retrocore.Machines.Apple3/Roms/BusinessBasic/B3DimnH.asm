@@ -187,13 +187,14 @@ SkipRest:
     cmp #'$'
     bcc LookUpType
 
-;; Turns the type character into an index in <Variables::ValueSizes>, refusing one on an `FN` name, and steps past it.
+;; Turns the type character into an index in <Variables::ValueSizes>, refusing one on an `FN` name or `DEF`'s argument,
+;; and steps past it.
 ;; Also: GOTTYP (BB13)
 TypeCharacter:
     adc #$100-'!'                           ; carry set: ! is 1, $ is 4, % is 5, & is 6
     tax
     bit SubscriptMode
-    bmi ToSyntaxError                       ; `FN` names are real
+    bmi ToSyntaxError                       ; `FN` names and `DEF`'s argument are real
     jsr GetNextCharacter
 
 ;; Looks up the type's value size and type byte, and works out the name's length.
@@ -544,7 +545,8 @@ PushSign:
 
 ;; Points <ArrayPointer> at an array's elements: past the entry's head and two bytes for each of <Counter> dimensions.
 ;; In: SourceStart = the array's entry, VariableSizes+1 = the name's length plus 3, Counter = the count of dimensions
-;; Out: ArrayPointer = the elements' address, with its bank in <ArrayPointerXByte>, carry = clear
+;; Out: ArrayPointer = the elements' address, with its bank in <ArrayPointerXByte>, carry = clear unless the elements
+;;   start in the next X-byte
 ;; Entry:
 ;;   SizesPlus = points <ArrayPointer> A bytes past the start of the array's sizes
 ;;   CountPlus = points <ArrayPointer> A bytes plus carry past the array's count of dimensions

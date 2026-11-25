@@ -103,14 +103,15 @@ the code (each needs the build switches the modules' README describes, and a per
 
 - **Byte for byte the same code, labels aside:** `Float::AddHalf`, the adder (FSUBT, FADDT, FADD1/FADD4/SUBIT, FADFLT,
   FADD2), `Float::Normalize`, the zeroing entries, the rounding and complement routines, the right shifter's body,
-  `Float::MultiplyArg`'s loop, `Float::MultiplyByTen` and `DivideByTen`, the division loop and its errors, the moves
-  between Fac and Arg, `SIGN`/`SGN`/`ABS`/`INT`, the 16-bit floats, and the constants (one, LOG's, the square roots,
-  -0.5, ten, a half); in the transcendentals, EXP, SIN, COS, ATN, the polynomial evaluators and their tables.
-- **The same job, different code:** the routines that load and store with a bank (CONUPK, MOVFM, MOVMF and the
-  five-byte forms), FADDC's return, the right shifter's entry (`Float::ShiftRight` here; Microsoft's `ShiftRight` is
-  this source's `Float::ShiftRightByCount`, so sharing needs one name for both), QINT, the comparison (by
-  subtraction here), FIN and FOUT (six digits, `e` accepted, Business BASIC's constants), FPWRT (`Float::RaiseArg`,
-  saving ARG around the comparison), TAN (banks) and POLY1 (the table's X-byte).
+  `Float::MultiplyArg`'s loop, `Float::MultiplyByTen` and `DivideByTen`, the moves between Fac and Arg,
+  `SIGN`/`SGN`/`ABS`/`INT`, the 16-bit floats, and the constants (one, LOG's, the square roots, -0.5, ten, a half); in
+  the transcendentals, EXP, SIN, COS, ATN, the polynomial evaluators and their tables.
+- **The same job, different code:** the routines that load and store with a bank (CONUPK, MOVFM, MOVMF and the five-byte
+  forms), FADDC's return, the right shifter's entry (`Float::ShiftRight` here; Microsoft's `ShiftRight` is this source's
+  `Float::ShiftRightByCount`, so sharing needs one name for both), QINT, the comparison (by subtraction here), FIN and
+  FOUT (six digits, `e` accepted, Business BASIC's constants), FPWRT (`Float::RaiseArg`, saving ARG around the
+  comparison), TAN (banks), POLY1 (the table's X-byte), the division (FDIVT's zero test and DIVNRM's rotates) and MULSHF
+  (it clears the shift fill).
 - **Business BASIC's own:** RND (a Lehmer generator on long integers), long integers, PRINT USING, files, modules and
   the banked memory.
 
@@ -118,11 +119,11 @@ the code (each needs the build switches the modules' README describes, and a per
 
 Documented in the code, not changed (the bytes stay). Found by reading; none was run.
 
-- **Arithmetic:** `CONV&` of a real of 2^56 or more is wrong (it loads from Arg without setting Y); `-(2^63) MOD 1`
-  gives OVERFLOW; negating -(2^63) gives -(2^63) with no error; `RND(-2147483647)` sets the seed to 0, after which
-  every `RND` is 0; QINT doesn't check its range (an exponent of $A0 or more gives a wrong result); `STR$` doesn't
-  round to a variable's precision as `PRINT` does, so the two can show different digits; long-integer comparison is
-  wrong when the top bytes differ by $80 or more (known).
+- **Arithmetic:** `CONV&` of a real of 2^56 or more is wrong (it loads from Arg without setting Y); negating -(2^63)
+  gives -(2^63) with no error; `RND(-2147483647)` sets the seed to 0, after which every `RND` is 0; QINT doesn't check
+  its range (an exponent of $A0 or more gives a wrong result); `STR$` doesn't round to a variable's precision as `PRINT`
+  does, so the two can show different digits; long-integer comparison is wrong when the top bytes differ by $80 or more
+  (known).
 - **The evaluator and memory:** backing the text pointer up from the first byte of a 32K window leaves page $01
   (`BackUpTextPointer` fixes the pointer the wrong way); the long-integer `NOT` test calls a routine with X unset, and
   works while X's bit 7 is clear; `ReadLineNumber`'s 64000 check misses $BA in the high byte (Microsoft's quirk).
@@ -137,8 +138,11 @@ Documented in the code, not changed (the bytes stay). Found by reading; none was
   writes the record in hand back; `REC` on a text file divides by the record length last used.
 
 Comments found wrong and fixed include TEMPF1 and TEMPF2's ("the fifth byte"; they are five-byte temporaries), XBLKS,
-BITS, the WINDOW bytes, RNFLG, CMDFLG and SOS call $65's in the equates, and others each group lists in its part of
-the work.
+BITS, the WINDOW bytes, RNFLG, CMDFLG and SOS call $65's in the equates, and others each group lists in its part of the
+work. The closing review found more that were wrong on main already, among them `DEF FN`'s argument (a typed argument is
+a syntax error, so the overwrite docs/BusinessBasic.md described can't happen), `PRINT USING`'s separators, `OPEN`'s
+access codes, SOS's error flags (negative and zero, not carry), and the sine and EXP constants' decimal values (now
+Microsoft's correct ones, as the shared modules give them).
 
 ## Verification
 
@@ -157,7 +161,7 @@ the work.
   `PRINT USING`, a text file (`CREATE`, `PRINT#`, `INPUT#`), a data file (`WRITE#`, `READ#`), `UNLOCK` and `DELETE`,
   `FRE`, and the disk's `VOLUMES.INV` module (`INVOKE`, `PERFORM`). A false `Keeps: X` added to `FindVariable` in a
   copy of the source, as a control, was reported every time it returned (164 times), and nothing else was: none of
-  the source's 94 `Keeps:` contracts was broken on the paths the run took. Not exercised: the 1.3, run-time and
+  the source's 93 `Keeps:` contracts was broken on the paths the run took. Not exercised: the 1.3, run-time and
   debugger builds (no binary or disk exists for them), `CHAIN`, `EXEC`, `OUTPUT#`, `CATALOG`'s other stages, events
   (`ON KBD`, `ON EOF#`), `ON ERR`, the module routine table's entries, and every error path but the ones the run hit.
 - **With the disk:** `InterpreterMatchesTheDisk` passes (the 1.23 build is byte for byte the disk's `SOS.INTERP`),
@@ -170,8 +174,9 @@ For the owner; each is as recommended unless the owner decides otherwise.
 
 - BBQ1. `ON ERR` is `Statements::OnErr`, by the keyword's words, as AppleSoft's is; `OnError` reads better.
 - BBQ2. `PROGPREFIX$`'s routines are `ProgPrefix`, by the keyword; `ProgramPrefix` (the scope's name) reads better.
-- BBQ3. OLDOV and SIZE take AppleSoft's names, `FunctionJumpHigh` and `CollectorOffset`, though Business BASIC's float
-  code also uses OLDOV's byte as the rounding byte of the operand shifted; a scoped alias could name that use.
+- BBQ3. OLDOV and SIZE take AppleSoft's names, `FunctionJumpHigh` and `CollectorOffset`, though nothing here uses SIZE;
+  the float code names its own use of OLDOV's byte, the unshifted operand's rounding byte, `Float::UnshiftedExtension`,
+  as the shared modules do.
 - BBQ4. `STKEND` is `STACK_END`, though it is a stack pointer's value, not an address.
 - BBQ5. `CHARACTER_SCREEN_ON` (15) comes from the source's comments, not checked against SOS's console documentation.
 - BBQ6. `Modules::OtherPointer` (POINT2) serves as a dictionary entry, a record and a value; a better name is welcome.
@@ -1414,8 +1419,8 @@ three 1.3 builds), **AppleSoft name** the converted AppleSoft or Microsoft name 
 | UMLRTS | Variables::MultiplyUnsigned::Done | entry | all | Variables::MultiplyUnsigned::Done | Returns. |
 | NOFREF | Functions::Fre | routine | all | Functions::Fre (AppleSoft's FRE; its NOFREF is a local) | The `FRE` function: collects the strings' garbage, then gives the bytes free between <STREND> and <FRETOP>. |
 | GIVAYF | ReturnSignedWord | routine | all | ReturnSignedWord | Puts a signed 16-bit integer in the FAC as a real. |
-| POS | Functions::Pos | routine | all | Functions::Pos | The `POS` function: the cursor's column, counting from 1. |
-| VPOS2 | Functions::Pos::CountFromOne | entry | all |  | Adds 1, to count from 1 as `TAB` and `HTAB` do, and gives Y as a real. |
+| POS | Functions::HPos | routine | all |  | The `HPOS` function: the cursor's column, counting from 1 (AppleSoft's POS counts from 0). |
+| VPOS2 | Functions::HPos::CountFromOne | entry | all |  | Adds 1, to count from 1 as `TAB` and `HTAB` do, and gives Y as a real. |
 | SNGFLT | ReturnByte | routine | all | ReturnByte | Puts Y, 0-255, in the FAC as a real. |
 | DOVPOS | Functions::VPos | routine | all |  | The `VPOS` function: the cursor's line, counting from 1. |
 | ERRDIR | RejectDirectMode | routine | all | RejectDirectMode | Refuses a statement in direct mode, where <CURLIN>'s high byte is $FF. |
@@ -1612,7 +1617,7 @@ three 1.3 builds), **AppleSoft name** the converted AppleSoft or Microsoft name 
 | FOUT17 | Float::FormatFacAtOffset::Terminate | local | all | Float::FormatFacAtOffset::Terminate | Ends the text with a zero |
 | FOUT20 | Float::FormatFacAtOffset::ReturnBuffer | local | all | Float::FormatFacAtOffset::ReturnBuffer | Returns the text's address |
 | FHALF | Float::Half | data | all | Float::Half | The real 0.5, five bytes, the last four shared with ZeroValue |
-| ZERO | ZeroValue | data | all | ZeroValue | Eight zero bytes: a real or long integer 0. PTRGET returns this for a variable that is read but was never set,; differs from Microsoft's: eight zero bytes, for a real or a long integer |
+| ZERO | ZeroValue | data | all | ZeroValue | Eight zero bytes: a real or long integer 0, which an element of an array that does not exist reads as,; differs from Microsoft's: eight zero bytes, for a real or a long integer |
 | FOUTBL | Float::PowersOfTen | table | all | Float::PowersOfTen | The powers of ten for Float::FormatFac's digits, as 32-bit integers, most significant byte first: -100000,...; differs from Microsoft's: six powers for six digits, not nine |
 | FDCEND | Float::PowersOfTenEnd | table | all | Float::PowersOfTenEnd | The end of Float::PowersOfTen; differs from Microsoft's: after six powers |
 | SQR | Functions::Sqr | routine | all | Functions::Sqr | Gives `SQR`: the square root of FAC, as FAC ^ 0.5; differs from Microsoft's: loads 0.5 with the bank in X |

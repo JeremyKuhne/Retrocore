@@ -32,11 +32,6 @@ READ_LINE_LIMIT = 255
 BACKSLASH = $5C
 ;; The console's control code that clears from the cursor to the end of the line.
 CLEAR_TO_LINE_END = 31
-;; A carriage return.
-CARRIAGE_RETURN = $0D
-;; A line feed.
-LINE_FEED = $0A
-
     txa
     sta Temporary                           ; the prompt, for a second try
     beq FromConsole
@@ -73,9 +68,9 @@ CheckLength:
 ClearRestOfLine:
     lda #CLEAR_TO_LINE_END
     jsr WriteConsoleCharacter
-    lda #CARRIAGE_RETURN
+    lda #CHARACTER_RETURN
     jsr WriteConsoleCharacter
-    lda #LINE_FEED
+    lda #CHARACTER_LINE_FEED
     ; Falls into WriteConsoleCharacter.
 .endproc
 

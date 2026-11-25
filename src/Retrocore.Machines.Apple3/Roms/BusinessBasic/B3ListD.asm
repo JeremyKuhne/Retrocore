@@ -749,7 +749,8 @@ ToBreak:
     jsr HandleBreak
 .endproc
 
-;; Runs a statement: a token from `END` to `NEW` goes to its handler from <StatementTable>, anything else is a `LET`.
+;; Runs a statement: a token from `END` to `NEW` goes to its handler from <StatementTable>, any other token is a syntax
+;; error, an empty statement does nothing, and anything else is a `LET`.
 ;;
 ;; The handler is reached through an RTS, after <GetNextCharacter>, with the statement's next character in A and the
 ;; flags set as <GetNextCharacter> sets them.

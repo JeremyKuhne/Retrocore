@@ -27,7 +27,7 @@ section, so Apple's names still assemble, link and resolve in the debugger: a br
 | `B3MathK.asm`, `B3MathL.asm`, `B3FinpM.asm`, `B3Expon.asm`, `B3DmpyT.asm`, `LongInt.asm` | Arithmetic: reals, integers and long integers, number input and output, and the functions. |
 | `B3FreeR.asm`, `B3DimnH.asm`, `B3UdefI.asm`, `StrngStuf.asm` | Freeing strings, banked-pointer arithmetic, IF and WINDOW; variables and arrays; user-defined functions; and the string functions. |
 | `Invoke.asm`, `Invoke1.asm` | INVOKE and PERFORM: loading and calling invokable modules. |
-| `B3Pru1.asm`, `B3Pru2.asm` | PRINT and PRINT USING. |
+| `B3Pru1.asm`, `B3Pru2.asm` | PRINT USING. |
 | `DiskStuf1.asm`, `DiskStuf2.asm`, `DisCmds.asm`, `FileStuf.asm`, `Catalog.asm` | Files: OPEN, READ#, WRITE#, LOAD, SAVE, the file commands and CATALOG. |
 | `BasicEnd.asm` | The end of the interpreter. |
 
@@ -50,11 +50,10 @@ but nothing exists to check them against; digests pin them, and the root rejects
 
 Where the PDF's reformatting stretched the spaces in four error messages and in the sign-on, the source follows the
 bytes. Its comments note what Apple's code does as found, among others: engineering-notation PRINT USING fills one
-place; `SUB$` into an empty string with a one-character result writes 256 spaces; DEF FN with an integer argument
-overwrites two bytes; long-integer comparison is wrong when the top bytes differ by `$80` or more, and negating
--2^56 overflows; a program file whose length's low byte is `$00` or `$01` loads its arrays 256 bytes high; CHAIN's
-room check ignores the variables it keeps; FLUSH always flushes every file. RND is a Lehmer generator, not
-Microsoft's, and "MICROSOFT!" sits hidden after the sine constants.
+place; `SUB$` into an empty string with a one-character result writes 256 spaces; long-integer comparison is wrong when
+the top bytes differ by `$80` or more, and negating -2^56 overflows; a program file whose length's low byte is `$00` or
+`$01` loads its arrays 256 bytes high; CHAIN's room check ignores the variables it keeps; FLUSH always flushes every
+file. RND is a Lehmer generator, not Microsoft's, and "MICROSOFT!" sits hidden after the sine constants.
 
 ## Programs
 

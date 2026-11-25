@@ -162,7 +162,7 @@ CHARACTER_SCREEN_ON = 15
 Delimiter:
     .res 1
 
-;; A one-byte integer, from <Float::ToLongInteger>.
+;; A one-byte integer: the low byte of <Functions::Int>'s result.
 ;; Also: INTEGR (BB13)
 SmallInteger = Delimiter
 
@@ -1427,7 +1427,7 @@ StatementTable:
 ;; Also: RESTBL (BB13)
 ValueWordTable:
     .word Functions::Fre                    ; $98 FRE
-    .word Functions::Pos                    ; $99 HPOS
+    .word Functions::HPos                    ; $99 HPOS
     .word Functions::VPos                   ; $9A VPOS
     .word Functions::ErrLin                 ; $9B ERRLIN
     .word Functions::Err                    ; $9C ERR

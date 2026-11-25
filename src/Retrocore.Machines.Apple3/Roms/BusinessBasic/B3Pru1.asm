@@ -249,12 +249,6 @@ COUNT_MARK = '9'
 ;; The bit that makes a letter lower case.
 LOWER_CASE_BIT = $20
 
-;; A carriage return, the first half of /'s new line.
-RETURN = $0D
-
-;; A line feed, the second half of /'s new line.
-LINE_FEED = $0A
-
 ;; A stored line's link and line number, before its tokens.
 LINE_HEADER_SIZE = 3
 
@@ -1105,10 +1099,10 @@ ToSyntaxError:
 ;;   SpaceLiteral = makes X a literal of a space
 ;; Also: UCRLIT (BB13)
 .proc NewLineLiteral
-    lda #LINE_FEED
+    lda #CHARACTER_LINE_FEED
     sta LiteralText+1
     ldy #2
-    lda #RETURN
+    lda #CHARACTER_RETURN
     bne Store
 
 ;; Makes X a literal of a space.

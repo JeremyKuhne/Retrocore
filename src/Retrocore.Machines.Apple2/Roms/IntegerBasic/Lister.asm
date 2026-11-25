@@ -1,4 +1,5 @@
-;; INTEGER BASIC: ENTRY POINTS AND THE LISTER ($E000-$E0FA)
+; retrocore: style=strict
+;; Integer BASIC: the entry points and the lister
 ;;
 ;; The two entry points at the start of the ROM, which the Monitor's Control-B and Control-C commands jump to, and
 ;; LIST, which turns a program's tokens back into text.
@@ -10,252 +11,376 @@
 ;; characters that follow as they are. It adds blanks around keywords that begin or end with a letter, and starts a
 ;; new line, indented, when a line would run past the screen's width.
 ;;
-;; Part of IntegerBasic.asm; it assembles at $E000.
+;; Part of IntegerBasic.asm.
 
-;; Starts Integer BASIC from scratch: the cold start, which the Monitor's Control-B command runs.
+; Shared constants: to move to Equates.asm at integration.
+
+;; The token that ends every line, stored or typed.
+TOKEN_END_OF_LINE = $01
+
+;; The token of the quote that opens a string constant; the string's characters follow it, then the closing quote's
+;; token, $29.
+TOKEN_OPEN_QUOTE = $28
+
+;; The token of REM; the remark's characters follow it to the end of the line.
+TOKEN_REM = $5D
+
+;; The index X holds when the tokenizer's syntax stack is empty: each frame pushed counts it down. The noun stack
+;; starts at the same index.
+SYNTAX_STACK_EMPTY = $20
+
+;; The character that marks the end of a typed line in <InputBuffer>: the underline, which takes the place of the
+;; Return, and which the syntax table's last rule matches.
+LINE_END_MARK = '_'
+
+;; The bits of a character byte in the syntax table that hold the character, less <SYNTAX_CHARACTER_BASE>.
+SYNTAX_CHARACTER_BITS = $3F
+
+;; What a syntax table character's low 6 bits are added to: the blank, with bit 7 set, so the table can hold $A0
+;; to $DF.
+SYNTAX_CHARACTER_BASE = BLANK | $80
+
+;; The least syntax table byte that is a keyword's last character: bit 7, a character, and bit 6, its alternative's
+;; last item.
+SYNTAX_LAST_CHARACTER = $80 | LAST
+
+;; The bit of a syntax table character that is set for the letters ($C0-$DF) and clear for punctuation and digits.
+SYNTAX_LETTER_BIT = $20
+
+;; Starts Integer BASIC from scratch, the cold start, which the Monitor's Control-B command runs.
 ;;
-;; <COLD> sets <LOMEM> and <HIMEM> and erases any program, then returns here to fall into the warm start.
-;; See: <COLD>, <BASIC2>
-BASIC:
-    jsr COLD                        ; $E000
+;; At $E000. <COLD> sets <LowMemory> and <HighMemory> and erases any program, then returns here to fall into the warm
+;; start.
+;; Also: BASIC (IBSM)
+.proc ColdEntry
+.assert * = $E000, "ColdEntry must stay at $E000."
+    jsr COLD
+    ; Falls into WarmEntry.
+.endproc
 
-;; Enters Integer BASIC keeping its program and variables: the warm start, which the Monitor's Control-C command
+;; Enters Integer BASIC keeping its program and variables, the warm start, which the Monitor's Control-C command
 ;; runs.
 ;;
-;; Typing Control-C while a program waits for INPUT also comes here (<CHKCTRLC>).
-;; See: <WARM>, <BASIC>
-BASIC2:
-    jmp WARM                        ; $E003
+;; At $E003. Typing Control-C in a line that INPUT reads also comes here (<CHKCTRLC>).
+;; Also: BASIC2 (IBSM)
+.proc WarmEntry
+.assert * = $E003, "WarmEntry must stay at $E003."
+    jmp WarmStart
+.endproc
 
-;; Sets the prompt character to A and prints it.
-;; In: A = the prompt character
+;; Sets the prompt character and prints it.
+;; In: A = the prompt character, with its high bit set
 ;; Keeps: X, Y
-;; See: <PROMPT>
-SetPrompt:
-    sta PROMPT                      ; $E006
-    jmp COUT                        ; $E008
-    .byte $60                       ; $E00B an unused byte (an RTS)
+.proc SetPrompt
+    sta PromptCharacter
+    jmp CharacterOut
 
-;; Prints a blank if the keyword character in X is a letter, to separate a keyword from what follows.
+    ; An unused byte (an RTS).
+    .byte $60
+.endproc
+
+;; The lister: the routines that print a stored line as text, and that walk its bytes.
+.scope Lister
+
+; The screen's width, as the lister uses it.
+
+;; The column past which the lister starts a new line before the next token or constant.
+WRAP_COLUMN = 32
+
+;; The column past which the lister starts a new line inside a name, a string or a remark.
+TEXT_WRAP_COLUMN = 37
+
+;; The blanks that indent a line the lister continues, so it goes on under the start of its text.
+INDENT = 6
+
+; The syntax table's two pages.
+
+;; The first byte of the syntax table's first page ($EC00), which that page's tokens count up from: a token above it
+;; has its keyword in that page, and the others in the second page ($ED00), whose tokens count up from 0.
+FIRST_PAGE_BASE = $50
+
+;; Prints a blank if a keyword's character is a letter, to separate the keyword from what follows.
 ;;
-;; In the syntax table a character is stored as its code less $A0 in the low 6 bits, so bit 5 of the byte is set
-;; for the letters ($C0-$DF) and clear for punctuation and digits ($A0-$BF).
-;; In: X = the syntax table byte of the character just printed
-;; Out: P2 = $A0 if a blank was printed
-;; Uses: A
+;; The syntax table stores a character as its code less $A0, so bit 5 of the byte is set for the letters and clear for
+;; punctuation and digits.
+;; In: X = the syntax table byte of the character
+;; Out: Pointer2 = $A0 if a blank was printed
 ;; Keeps: X, Y
-;; Entry: LISTBLANK = prints the blank whatever X holds
-BLANKIFLET:
-    txa                             ; $E00C
-    and #$20                        ; $E00D
-    beq NextByte_1                  ; $E00F
+;; Entry:
+;;   Blank = prints the blank whatever X holds
+;; Also: BLANKIFLET (UNKN)
+.proc BlankAfterLetter
+    txa
+    and #SYNTAX_LETTER_BIT
+    beq FetchByte::Done
 
-LISTBLANK:
-    lda #BLANK+$80                  ; $E011
-    sta P2                          ; $E013
-    jmp COUT                        ; $E015
+;; Prints a blank whatever X holds, and remembers it in <Pointer2>, so a keyword that follows gets no other.
+;; Also: LISTBLANK (UNKN)
+Blank:
+    lda #BLANK | $80
+    sta Pointer2
+    jmp CharacterOut
+.endproc
 
 ;; Fetches the next byte to list, first starting a new, indented line if the cursor is past column 32.
 ;;
-;; The new line is a return and six blanks, so a long line continues under the start of its text.
-;; Out: A = the byte at <P1>, Y = 0
-;; Uses: P1 (advanced)
+;; The new line is a Return and six blanks.
+;; In: Pointer1 = the byte
+;; Out: A = the byte, Y = 0, Pointer1 = the byte after it
+;; Entry:
+;;   PastColumn = takes the column past which to start a new line in A, instead of 32
+;; Also: LISTBYTE (UNKN)
+.proc NextByteWrapping
+    lda #WRAP_COLUMN
+
+;; Fetches the next byte to list, first starting a new line if the cursor is past the column in A.
+;; In: A = the column, Pointer1 = the byte
+;; Out: A = the byte, Y = 0, Pointer1 = the byte after it
+;; Also: LISTBYTECOL (UNKN)
+PastColumn:
+    cmp CursorColumn
+    bcs FetchByte                   ; still room on this line
+
+    ; A Return, then the blanks.
+    lda #CARRIAGE_RETURN | $80
+    ldy #INDENT + 1
+Indent:
+    jsr CharacterOut
+    lda #BLANK | $80
+    dey
+    bne Indent
+    ; Falls into FetchByte.
+.endproc
+
+;; Fetches the next byte to list from <Pointer1> and steps <Pointer1> past it.
+;; In: Pointer1 = the byte
+;; Out: A = the byte, Y = 0, Pointer1 = the byte after it
 ;; Keeps: X
-;; Entry: LISTBYTECOL = takes the last column allowed in A instead of 32
-LISTBYTE:
-    lda #32                         ; $E018
+;; Entry:
+;;   Done = returns; the routines around it branch here to return
+;; Also: NextByte (IBSM)
+.proc FetchByte
+    ldy #0
+    lda (Pointer1),y
+    inc Pointer1
+    bne Done
+    inc Pointer1+1
+Done:
+    rts
+.endproc
 
-LISTBYTECOL:
-    cmp CH                          ; $E01A
-    bcs NextByte                    ; $E01C still room on this line
-    lda #CR+$80                     ; $E01E
-    ldy #$07                        ; $E020 a return, then six blanks
-@Loop:
-    jsr COUT                        ; $E022
-    lda #BLANK+$80                  ; $E025
-    dey                             ; $E027
-    bne @Loop                       ; $E028
+.endscope
 
-;; Fetches the next byte to list from <P1> and steps <P1> past it.
-;; Out: A = the byte, Y = 0
-;; Keeps: X
-NextByte:
-    ldy #$00                        ; $E02A
-    lda (P1),y                      ; $E02C
-    inc P1                          ; $E02E
-    bne NextByte_1                  ; $E030
-    inc P1+1                        ; $E032
+; Statements: LIST's comma.
+.scope Statements continued
 
-NextByte_1:
-    rts                             ; $E034
-
-;; The comma of LIST with two numbers (token $75): lists from where <LISTNUM> stopped up to the second line number.
+;; The comma of LIST with two numbers (token $75): lists from where <Statements::ListLine> stopped up to the second
+;; line number.
 ;;
-;; <FINDFROMP3> finds the first line numbered at or above the number, starting where <LISTNUM>'s search ended, and leaves
-;; the address after it in <P3> when the number exists, so that line is listed too.
-;; In: X = the noun stack, its top entry the last line number to list
-;; See: <LISTNUM>, <LIST>
-COMMA_LIST:
-    jsr GET16BIT                    ; $E035
-    jsr FINDFROMP3                  ; $E038
+;; <FINDFROMP3> searches on from <Pointer3>, where the search of <Statements::ListLine> stopped, for the first line
+;; numbered at or above the number, and leaves <Pointer3> after that line when the number exists, so that line is
+;; listed too.
+;; In: X = the noun stack, its top entry the last line number to list, Pointer1 = the next line to list
+;; Out: X = the noun stack, one entry higher
+;; Also: COMMA_LIST (IBSM)
+.proc ListComma
+    jsr GET16BIT
+    jsr FINDFROMP3
+    ; Falls into Lister::ListLines.
+.endproc
 
-;; Lists the lines from <P1> up to, but not including, <P3>.
-;; Uses: A, Y, P1, P2, LEADZR, ACC
-LISTRANGE:
-    lda P1                          ; $E03B
-    cmp P3                          ; $E03D
-    lda P1+1                        ; $E03F
-    sbc P3+1                        ; $E041
-    bcs NextByte_1                  ; $E043
-    jsr UNPACK                      ; $E045
-    jmp LISTRANGE                   ; $E048
+.endscope
 
-;; LIST alone (token $76): lists the whole program, from <PP> up to <HIMEM>.
-;; See: <LISTNUM>, <UNPACK>
-LIST:
-    lda PP                          ; $E04B
-    sta P1                          ; $E04D
-    lda PP+1                        ; $E04F
-    sta P1+1                        ; $E051
-    lda HIMEM                       ; $E053
-    sta P3                          ; $E055
-    lda HIMEM+1                     ; $E057
-    sta P3+1                        ; $E059
-    bne LISTRANGE                   ; $E05B always: HIMEM is above page 0
+; The lister, continued: listing a range of lines.
+.scope Lister continued
 
-;; LIST with a number (token $74): lists that line, if it exists, and leaves <P1> ready for <COMMA_LIST>.
+;; Lists the lines from <Pointer1> up to, but not including, <Pointer3>.
+;; In: Pointer1 = the first line, Pointer3 = the line to stop at
+;; Out: Pointer1 = Pointer3 or past it
+;; Also: LISTRANGE (UNKN)
+.proc ListLines
+    lda Pointer1
+    cmp Pointer3
+    lda Pointer1+1
+    sbc Pointer3+1
+    bcs FetchByte::Done
+    jsr PrintLine
+    jmp ListLines
+.endproc
+
+.endscope
+
+; Statements: LIST, and LIST with a number.
+.scope Statements continued
+
+;; LIST alone (token $76): lists the whole program, from <ProgramStart> up to <HighMemory>.
+;; Also: LIST (IBSM)
+.proc List
+    lda ProgramStart
+    sta Pointer1
+    lda ProgramStart+1
+    sta Pointer1+1
+    lda HighMemory
+    sta Pointer3
+    lda HighMemory+1
+    sta Pointer3+1
+    bne Lister::ListLines           ; always: HIMEM is above page 0
+.endproc
+
+;; LIST with a number (token $74): lists that line, if it exists, and leaves <Pointer1> ready for
+;; <Statements::ListComma>.
 ;;
-;; When the line is missing, <P1> is left at the next line above the number, so LIST 5,30 lists from there.
+;; When the line is missing, <Pointer1> is left at the next line above the number, so LIST 5,30 lists from there.
 ;; In: X = the noun stack, its top entry the line number
-;; See: <COMMA_LIST>, <FINDLINE>
-LISTNUM:
-    jsr GET16BIT                    ; $E05D
-    jsr FINDLINE                    ; $E060
-    lda P2                          ; $E063
-    sta P1                          ; $E065
-    lda P2+1                        ; $E067
-    sta P1+1                        ; $E069
-    bcs NextByte_1                  ; $E06B the number is not a line: list nothing yet
+;; Out: X = the noun stack, two entries higher: <FINDLINE> takes one more, Pointer1 = the line after the one listed,
+;;   or the line above the number
+;; Also: LISTNUM (IBSM)
+.proc ListLine
+    jsr GET16BIT
+    jsr FINDLINE
+    lda Pointer2
+    sta Pointer1
+    lda Pointer2+1
+    sta Pointer1+1
+    bcs Lister::FetchByte::Done     ; the number is not a line: list nothing yet
+    ; Falls into Lister::PrintLine.
+.endproc
 
-;; Lists one line: prints its number, then its tokens as text, and a return.
+.endscope
+
+; The lister, continued: printing a line.
+.scope Lister continued
+
+;; Lists one line: prints its number, then its tokens as text, and a Return.
 ;;
-;; <P2> remembers what was printed last: 0 at the start of the line, a token, or a value with bit 7 set after a
-;; constant, a name or a blank. Only a name at the start of the line, where <P2> is 0, gets a blank before it, to
-;; separate it from the line number; a keyword that starts with a letter gets one unless a blank or a name came last
-;; (<KEYBLANK>).
-;; In: P1 = the line's length byte
-;; Out: P1 = the next line
-;; Uses: A, Y, P2, LEADZR, ACC
-;; Keeps: X
-UNPACK:
-    stx XSAVE                       ; $E06D
-    lda #BLANK+$80                  ; $E06F
-    sta LEADZR                      ; $E071 pad the line number to five places with blanks
-    jsr NextByte                    ; $E073
-    tya                             ; $E076 A = 0: nothing printed yet
+;; <Pointer2> remembers what was printed last: 0 after the line number, a constant's marker shifted left, the token
+;; that ended a name or text, a keyword's last character less $A0, or $A0 after a blank. Only a name right after the
+;; line number, where <Pointer2> is 0, gets a blank before it; a keyword that starts with a letter gets one unless a
+;; blank came last, the only value with bit 7 set (<KEYBLANK>). X is saved in <SavedX> and restored before the
+;; Return.
+;; In: Pointer1 = the line's length byte
+;; Out: Pointer1 = the next line
+;; Uses: A, Y, Pointer2, LeadingZero, Accumulator, DecimalNumber, DigitPlace, DigitCharacter
+;; Also: UNPACK (IBSM)
+.proc PrintLine
+    stx SavedX
+    lda #BLANK | $80
+    sta LeadingZero                 ; pad the line number to five places with blanks
+    jsr FetchByte                   ; the length byte
+    tya                             ; A = 0: nothing printed yet
+    ; Falls into PrintConstant, which prints the line number first.
 
 ;; Prints a constant: its value follows the digit that marks it.
 ;;
-;; A holds the marker shifted left, which is not 0, so <P2> no longer asks for a blank before a name.
-UNPACK_1:
-    sta P2                          ; $E077
-    jsr NextByte                    ; $E079
-    tax                             ; $E07C
-    jsr NextByte                    ; $E07D
-    jsr PRDEC                       ; $E080 print the value, or the line number the first time through
+;; A holds the marker shifted left, which is not 0, so <Pointer2> no longer asks for a blank before a name.
+PrintConstant:
+    sta Pointer2
+    jsr FetchByte
+    tax
+    jsr FetchByte
+    jsr PRDEC                       ; the value, or the line number the first time through
 
 ;; The loop over the line's bytes: fetches the next one and decides what it starts.
-UNPACK_2:
-    jsr LISTBYTE                    ; $E083
-    sty LEADZR                      ; $E086 no padding for constants after the line number
-    tax                             ; $E088
-    bpl LISTTOKEN                   ; $E089 bit 7 clear: a token
-    asl a                           ; $E08B
-    bpl UNPACK_1                    ; $E08C bit 6 clear: a digit, the start of a constant
-    lda P2                          ; $E08E
-    bne @NotEq                      ; $E090 a name: a blank before it only after the line number
-    jsr LISTBLANK                   ; $E092
-@NotEq:
-    txa                             ; $E095
+NextItem:
+    jsr NextByteWrapping
+    sty LeadingZero                 ; no padding for constants after the line number
+    tax
+    bpl PrintToken                  ; bit 7 clear: a token
+    asl a
+    bpl PrintConstant               ; bit 6 clear: a digit, the start of a constant
+
+    ; A name: a blank before it only after the line number.
+    lda Pointer2
+    bne PrintName
+    jsr BlankAfterLetter::Blank
+PrintName:
+    txa
 
 ;; Prints a name or text: the character in A, then every following byte with bit 7 set.
 ;;
-;; Text breaks onto a new line at column 37, later than tokens do.
-;; Entry: LISTTEXTNXT = starts by fetching the next byte, after REM or an opening quote
-LISTTEXT:
-    jsr COUT                        ; $E096
+;; Text breaks onto a new line past column 37, later than tokens do.
+PrintText:
+    jsr CharacterOut
 
-LISTTEXTNXT:
-    lda #$25                        ; $E099
-    jsr LISTBYTECOL                 ; $E09B
-    tax                             ; $E09E
-    bmi LISTTEXT                    ; $E09F
-    sta P2                          ; $E0A1 the token that ended the text
+;; Prints the text after REM or an opening quote: every byte with bit 7 set, up to the token that ends it.
+CopyText:
+    lda #TEXT_WRAP_COLUMN
+    jsr NextByteWrapping::PastColumn
+    tax
+    bmi PrintText
+    sta Pointer2                    ; the token that ended the text
 
-;; Lists a token: ends the line at $01; otherwise finds the token's text in the syntax table and prints it.
+;; Lists a token: ends the line at the end-of-line token; otherwise finds the token's text in the syntax table and
+;; prints it.
 ;;
 ;; Tokens below $51 are counted in the page at <SYNTABL2> ($ED00), the rest in the page at <SYNTABL> ($EC00), whose
 ;; count starts at $50. Each keyword is stored with its last character lowest, and the count goes down from the top
 ;; of the page: a keyword's first character is a character byte whose neighbor above is either not a character or
 ;; the last character of another keyword (bit 6 set). The X-th such character from the top starts token X's text.
-LISTTOKEN:
-    cmp #$01                        ; $E0A3
-    bne @NotEq                      ; $E0A5 not the end of the line
-    ldx XSAVE                       ; $E0A7
-    jmp CROUT                       ; $E0A9 end of line: a return
-@NotEq:
-    pha                             ; $E0AC
-    sty ACC                         ; $E0AD ACC = $ED00, Y = 0: the top byte is the first one read below
-    ldx #>SYNTABL2                  ; $E0AF
-    stx ACC+1                       ; $E0B1
-    cmp #$51                        ; $E0B3
-    bcc LISTTOKEN_1                 ; $E0B5 tokens below $51 are in the second page
-    dec ACC+1                       ; $E0B7
-    sbc #$50                        ; $E0B9 carry is set: the count in the first page starts at $50
+PrintToken:
+    cmp #TOKEN_END_OF_LINE
+    bne FindKeyword
+    ldx SavedX
+    jmp PrintReturn
 
-;; Counts keywords down the page until A reaches 0.
-LISTTOKEN_1:
-    pha                             ; $E0BB
-    lda (ACC),y                     ; $E0BC
-@Loop2:
-    tax                             ; $E0BE X = the byte above the one read next
-    dey                             ; $E0BF
-    lda (ACC),y                     ; $E0C0
-    bpl @Loop2                      ; $E0C2 skip bytes that are not characters
-    cpx #$C0                        ; $E0C4
-    bcs LISTTOKEN_2                 ; $E0C6 a character below a keyword's last character starts a keyword
-    cpx #$00                        ; $E0C8
-    bmi @Loop2                      ; $E0CA a character below another character: not a start
+    ; Y = 0, so the first byte read is the page's first, which is not a character: as if it were above the top.
+FindKeyword:
+    pha
+    sty Accumulator
+    ldx #>SYNTABL2
+    stx Accumulator+1
+    cmp #FIRST_PAGE_BASE + 1
+    bcc CountKeywords               ; tokens up to $50 are in the second page
+    dec Accumulator+1
+    sbc #FIRST_PAGE_BASE            ; carry is set: the count in the first page starts at $50
 
-;; Found the start of the token's keyword: Y indexes its first character, X holds it.
-LISTTOKEN_2:
-    tax                             ; $E0CC
-    pla                             ; $E0CD
-    sbc #$01                        ; $E0CE
-    bne LISTTOKEN_1                 ; $E0D0 not this keyword yet
-    bit P2                          ; $E0D2
-    bmi @Loop                       ; $E0D4 a blank or a name came last: no blank before the keyword
-    jsr KEYBLANK                    ; $E0D6 a blank before a keyword starting with a letter
-@Loop:
+;; Counts keywords down the page until the count in A reaches 0.
+CountKeywords:
+    pha
+    lda (Accumulator),y
+SkipToCharacter:
+    tax                             ; X = the byte above the one read next
+    dey
+    lda (Accumulator),y
+    bpl SkipToCharacter             ; skip bytes that are not characters
+    cpx #SYNTAX_LAST_CHARACTER
+    bcs KeywordStart                ; a character below a keyword's last character starts a keyword
+    cpx #0
+    bmi SkipToCharacter             ; a character below another character: not a start
+
+;; Found the start of a keyword: Y indexes its first character, A holds it.
+KeywordStart:
+    tax
+    pla
+    sbc #1                          ; carry is set
+    bne CountKeywords               ; not this keyword yet
+    bit Pointer2
+    bmi PrintKeyword                ; a blank came last: no other before the keyword
+    jsr KEYBLANK                    ; a blank before a keyword starting with a letter
+
     ; Print the keyword's characters, down the page, through the one with bit 6 set.
-    lda (ACC),y                     ; $E0D9
-    bpl LISTTOKEN_3                 ; $E0DB a byte that is not a character ends the keyword
-    tax                             ; $E0DD
-    and #$3F                        ; $E0DE P2 = the character, bit 7 clear: not a blank or a name
-    sta P2                          ; $E0E0
-    clc                             ; $E0E2
-    adc #BLANK+$80                  ; $E0E3 the table holds each character less $A0
-    jsr COUT                        ; $E0E5
-    dey                             ; $E0E8
-    cpx #$C0                        ; $E0E9 bit 6 clear: more characters
-    bcc @Loop                       ; $E0EB
+PrintKeyword:
+    lda (Accumulator),y
+    bpl AfterKeyword                ; a byte that is not a character ends the keyword
+    tax
+    and #SYNTAX_CHARACTER_BITS      ; Pointer2 = the character, bit 7 clear: not a blank
+    sta Pointer2
+    clc
+    adc #SYNTAX_CHARACTER_BASE
+    jsr CharacterOut
+    dey
+    cpx #SYNTAX_LAST_CHARACTER      ; bit 6 clear: more characters
+    bcc PrintKeyword
 
 ;; After the keyword: a blank if it ends with a letter, then the text that follows REM or an opening quote.
-LISTTOKEN_3:
-    jsr BLANKIFLET                  ; $E0ED
-    pla                             ; $E0F0
-    cmp #$5D                        ; $E0F1 REM: copy the remark
-    beq LISTTEXTNXT                 ; $E0F3
-    cmp #$28                        ; $E0F5 the opening quote: copy the string
-    bne UNPACK_2                    ; $E0F7 anything else: the next token
-    beq LISTTEXTNXT                 ; $E0F9 always
+AfterKeyword:
+    jsr BlankAfterLetter
+    pla
+    cmp #TOKEN_REM
+    beq CopyText                    ; REM: copy the remark
+    cmp #TOKEN_OPEN_QUOTE
+    bne NextItem                    ; anything but the opening quote: the next token
+    beq CopyText                    ; always: copy the string
+.endproc
+
+.endscope

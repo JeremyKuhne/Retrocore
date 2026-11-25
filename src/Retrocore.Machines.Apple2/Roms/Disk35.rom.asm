@@ -44,8 +44,8 @@
 
 .include "ProDosBlockDevice.asm"
 
-; The Monitor's and the IIe's names this ROM uses. The source generator assembles this file alone, so it defines
-; them here rather than including IIeEquates.asm and MonitorEntries.asm.
+; The Monitor's and the IIe's names this ROM uses. The source generator assembles this file with no other file but
+; ProDosBlockDevice.asm, so it defines them here rather than including IIeEquates.asm and MonitorEntries.asm.
 
 ;; Inherit: <Monitor:SlotPointer>
 ;; Also: LOC0 (A2RM78, A2RM79, IIEROM82, IIETRM85)

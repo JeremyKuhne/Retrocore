@@ -66,7 +66,7 @@ CAPABILITY_REMOVABLE = %10000000
 ;; Interrupts.
 CAPABILITY_INTERRUPT = %01000000
 
-;; Bits 5-4, the number of volumes less one: one volume.
+;; Bits 5-4, the number of volumes less one (ProDOS Technical Note #21): one volume.
 ONE_VOLUME = %00000000
 
 ;; Bits 5-4, the number of volumes less one: four volumes.

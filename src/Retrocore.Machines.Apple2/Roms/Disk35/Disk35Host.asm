@@ -46,8 +46,14 @@ ExpansionRomOff = $CFFF
 ;; Also: BASIC (A2RM78, A2RM79, IIEROM82, IIETRM85)
 BasicColdStart = $E000
 
-;; The Autostart and IIe Monitors' power-up, whose scan for a disk controller the boot goes back to when it fails.
+;; The Monitor's start-up: its reset, where a card that fails its self-test sends the host, and the Autostart and IIe
+;; Monitors' power-up, whose scan for a disk controller the boot goes back to when it fails.
 .scope Startup
+
+;; Inherit: <Monitor:Startup::ResetToMonitor>
+;; At $FF59, in the host's ROM: where a failed card's slot page sends the host.
+;; Also: OLDRST (A2RM79, IIEROM82, IIETRM85)
+ResetToMonitor = $FF59
 
 ;; The power-up routine that holds the scan.
 .scope PowerUp
@@ -779,7 +785,7 @@ Read:
     bcs Fail
 
     ; ProDOS's page zero, as for a read of block 0.
-    lda #COMMAND_READ_BLOCK
+    lda #ProDos::COMMAND_READ
     sta ProDos::Command
     stx ProDos::UnitNumber
     lda #>BootBuffer

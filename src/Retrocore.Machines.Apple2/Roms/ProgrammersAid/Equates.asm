@@ -50,8 +50,8 @@ ReadCassette = $FEFD
 ;;
 ;; At $FF02, where <ReadCassette> calls <Cassette::WriteHeader> as its delay; <ReadCassette> passes $16 there, and a
 ;; caller that has already waited for the tone can pass less.
-;; In: A = the wait in rounds of 256 half cycles: A + 1 rounds with carry set, A with carry clear (one round for A = 0
-;;   or 1), X = the first round's half cycles (0 for 256), Address1/Address1High = the first address,
+;; In: A = the wait in rounds of 256 half cycles: A + 1 rounds with carry set, A rounds with carry clear but one for A =
+;;   0 or 1, X = the first round's half cycles (0 for 256), Address1/Address1High = the first address,
 ;;   Address2/Address2High = the last
 ;; Also: READX1 (PA1)
 ReadCassetteFromHeader = $FF02

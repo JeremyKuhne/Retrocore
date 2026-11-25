@@ -101,7 +101,7 @@ Track = Address3High
 ; Pages 1, 3 and 8.
 
 ;; The 6502's stack, page 1.
-Stack = $0100
+StackPage = $0100
 .if SECTORS = 13
 
 ;; The 154 five-bit values that carry the bytes' low bits, $0800-$0899.
@@ -260,7 +260,7 @@ NotValid:
     ; with the low byte of PostNibble less one, for the RTS that ends the read.
     jsr SaveRegisters::Return
     tsx
-    lda Stack,x
+    lda StackPage,x
 .if SECTORS = 13
     pha
 .endif

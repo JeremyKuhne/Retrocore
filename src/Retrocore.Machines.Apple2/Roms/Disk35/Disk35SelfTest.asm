@@ -184,11 +184,6 @@ DiagnosticsZeroPage = DiagnosticsImage + $0600
 
 ; The host.
 
-;; Inherit: <Monitor:Startup::ResetToMonitor>
-;; At $FF59, in the host's ROM: where a failed card's slot page sends the host.
-;; Also: OLDRST (A2RM79, IIEROM82, IIETRM85)
-ResetToMonitor = $FF59
-
 ; The slot page's bytes the tests change.
 
 ;; $Cn05, the SmartPort signature's $03.
@@ -1653,21 +1648,21 @@ Recheck4000:
 .endproc
 
 ;; A failure of the start-up test: makes the slot page's start, its diagnostics entry and its call jump to the host's
-;; Monitor (<ResetToMonitor>), releases Boot::WaitForCard and SmartPortEntry::Wait into those jumps, clears the
+;; Monitor (<Startup::ResetToMonitor>), releases Boot::WaitForCard and SmartPortEntry::Wait into those jumps, clears the
 ;; SmartPort signature's $03 and the rest of the page, and blinks the LED, a long flash and a short one, for ever.
 .proc StartUpFailed
 
-    ; JMP ResetToMonitor at $Cn00, $Cn0D and $Cn23.
+    ; JMP Startup::ResetToMonitor at $Cn00, $Cn0D and $Cn23.
     stz SlotSignature
     lda #OPCODE_JMP
     sta SharedSlotPage
     sta SlotDiagnostics
     sta SlotCall
-    lda #<ResetToMonitor
+    lda #<Startup::ResetToMonitor
     sta SharedSlotPage+1
     sta SlotDiagnostics+1
     sta SlotCall+1
-    lda #>ResetToMonitor
+    lda #>Startup::ResetToMonitor
     sta SharedSlotPage+2
     sta SlotDiagnostics+2
     sta SlotCall+2
@@ -1729,7 +1724,7 @@ ZeroPageInverse:
 
 ;; The first 16 bytes of the ROM of Apple's factory fixture, in slot 1: a JMP to the Monitor, then its maker's name.
 FixtureSignature:
-    .byte OPCODE_JMP, <ResetToMonitor, >ResetToMonitor
+    .byte OPCODE_JMP, <Startup::ResetToMonitor, >Startup::ResetToMonitor
     .byte "AVEX Manufact"
 .assert * - FixtureSignature = 16, "The fixture's signature is 16 bytes."
 

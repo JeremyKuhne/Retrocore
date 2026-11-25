@@ -3,8 +3,9 @@
 `src/Retrocore.Machines.Apple2/Roms/ProFile.rom.asm` (the emulated ProFile interface card's ROM, in any slot,
 assembled at $C500) and `src/Retrocore.Machines.Apple2/Roms/Slot7.rom.asm` (the emulated slot 7 block device's ROM,
 $C700): two 256-byte ProDOS block-device ROMs the SDK wrote. Each is one build, with no switches. Documents cited:
-none. `Apple2ProFileTests.FirmwareBytesAreUnchanged` (added before the conversion, from the old source) and
-`Slot7RomTests` pin their bytes.
+none for the firmwares' own names; the Monitor's names the ProFile defines cite the Monitor's documents (A2RM78,
+A2RM79, IIEROM82, IIETRM85; B11). `Apple2ProFileTests.FirmwareBytesAreUnchanged` (added before the conversion, from
+the old source) and `Slot7RomTests` pin their bytes.
 
 ## Decisions
 
@@ -18,7 +19,7 @@ none. `Apple2ProFileTests.FirmwareBytesAreUnchanged` (added before the conversio
   so it carries only the names it uses.
 - B3. The same job has the same name in both firmwares: the entry ProDOS calls is `Driver` in both (slot 7's
   `DriverEntry` was renamed, with its C# export `Slot7Rom.Driver`), and the mailbox, commands and capability bits are
-  spelled alike.
+  spelled alike. B10 since gives each card's driver its own name.
 - B4. The ProDOS mailbox ($42-$47) is locations: `Command`, `UnitNumber`, and the two-byte `Buffer`/`BufferHigh` and
   `Block`/`BlockHigh` (the Name/NameHigh rule). It stays equates in each file, not a struct: the code addresses its
   bytes directly, and there is no copy of the layout to tie to one.
@@ -66,13 +67,13 @@ none. `Apple2ProFileTests.FirmwareBytesAreUnchanged` (added before the conversio
 | IoError, NoDevice | ERROR_IO, ERROR_NO_DEVICE | ProFile |
 | OneVolume, RemovableMask, InterruptibleMask, ...CapabilityMask | ONE_VOLUME, CAPABILITY_REMOVABLE, CAPABILITY_INTERRUPT, CAPABILITY_... | both |
 | NoDrive, Done, Failed | FailNoDevice, Succeed, Fail | ProFile |
-| Driver_Block | Driver::Transfer | ProFile |
+| Driver_Block | Driver::Transfer (now `ProFileDriver::Transfer`, B10) | ProFile |
 | SendData_Low/High, Result_Low/High | SendData::FirstPage/SecondPage, ReadResult::FirstPage/SecondPage | ProFile |
 | Handshake_Busy, Handshake_Ready | Handshake::WaitForResponse, Handshake::WaitForDone | ProFile |
 | Result, Result_Status, Result_Done | ReadResult, ReadResult::OtherStatus, ReadResult::Done | ProFile |
 | Refused | Refuse | ProFile |
 | BootRead, BootRead_Failed, BootRead_Stop | FinishBoot, FinishBoot::Failed, FinishBoot::Stop | ProFile |
-| DriverEntry, ExecuteCommand, Success | Driver, Driver::Perform, Driver::Succeed | Slot 7 |
+| DriverEntry, ExecuteCommand, Success | Driver, Driver::Perform, Driver::Succeed (now `Slot7Driver`, B10) | Slot 7 |
 | WriteCapabilityMask | CAPABILITY_WRITE | Slot 7 |
 
 ## The open questions, settled by the owner
@@ -95,5 +96,7 @@ none. `Apple2ProFileTests.FirmwareBytesAreUnchanged` (added before the conversio
   Monitor's own path, in the ProFile, the 3.5 slot ROM and the EPROM's host code (whose card start-up, `Startup`
   before, is `CardStartup`, beside `CardReset`, to leave the name to the Monitor's scope); $0801, where a boot block
   runs, is `BootEntry` (the 3.5 slot ROM's `BootBlock` and the EPROM's `BootCode` before); the stack page is
-  `StackPage` (the mouse's `Stack` before); and the routine that carries a call to the card is `CallCard` (the 3.5
-  ROMs' `Call` before). The Monitor's names each card defines cite the Monitor's documents alike (LOC0, IORTS, SLOOP).
+  `StackPage` (`Stack` before in the mouse's slot ROM, Apple's mouse EPROM in Mouse/MouseInterface.asm and the Disk
+  II boot ROM); and the routine that carries a call to the card is `CallCard` (the 3.5 ROMs' `Call` before). The
+  EPROM's `ResetToMonitor` joins its `Startup` scope too, as `Startup::ResetToMonitor`. The Monitor's names each card
+  defines cite the Monitor's documents alike (LOC0, IORTS, SLOOP).

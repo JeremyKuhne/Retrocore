@@ -92,9 +92,10 @@ jumps to $02CB. The root asserts it is 0 or 1.
 
 - P10 (was Q2). SWEET16's macros keep Apple's upper-case mnemonics (P3), as every SWEET16 listing writes them, rather
   than lower case like the 6502's.
-- P11. The finding that the Monitor's `Cassette::WriteHeader` (HEADR) with carry set waits A + 1 rounds of 256 half
-  cycles, not about A, is carried to the Monitor's and the Enhanced IIe firmware's comments: A + 1 rounds with carry
-  set, A with carry clear (one round for A = 0 or 1), the first round as many half cycles as X counts down from.
+- P11. Found in this conversion: the Monitor's `Cassette::WriteHeader` (HEADR) with carry set waits A + 1 rounds of
+  256 half cycles, where the Monitor's and the Enhanced IIe firmware's comments said about A. They now say A + 1
+  rounds with carry set, A rounds with carry clear but one for A = 0 or 1, the first round as many half cycles as X
+  counts down from.
 
 ## Renames
 

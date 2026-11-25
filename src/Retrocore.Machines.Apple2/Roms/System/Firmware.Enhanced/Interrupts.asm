@@ -555,8 +555,8 @@ ArrayBlock:
 ;; At $C567, which the Monitor's <Monitor:Cassette::WriteHeader> calls; <ReadCassetteData> calls it to wait out the
 ;; header, since it toggles <CassetteOut> in timed loops. It and its entries are the same as the original IIe
 ;; Monitor's.
-;; In: A = the tone's length in rounds of 256 half cycles: A + 1 rounds with carry set, A with carry clear (one round
-;;   for A = 0 or 1), X = the first round's half cycles (0 for 256)
+;; In: A = the tone's length in rounds of 256 half cycles: A + 1 rounds with carry set, A rounds with carry clear but
+;;   one for A = 0 or 1, X = the first round's half cycles (0 for 256)
 ;; Entry:
 ;;   WriteBit = writes one bit
 ;; Also: XHEADER (IIETRM85), TAPEHEADR (UNKN)

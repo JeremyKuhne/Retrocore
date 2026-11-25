@@ -17,9 +17,10 @@
 ;;   as the controller sees it, complemented where it's stored (<(~FDC_READ_SECTOR)). The firmware keeps its track and
 ;;   sector numbers in that form too: HEAD_TRACK, TARGET_TRACK and TARGET_SECTOR hold the complement of the number.
 ;;
-;; The firmware runs from $0800 on reset. Between commands it relies only on the head's track, the status block, its
-;; own flags (DRIVE_FLAGS) and RUN_ON_COUNT. After each command that runs the motor it keeps the motor running for two
-;; of the FD1771's Restores (see RUN_ON), polling the bus all the while, parks the head and turns the motor off.
+;; The firmware runs from $0800 on reset. Between commands it relies, in its RAM, only on the head's track, the status
+;; block, its own flags (DRIVE_FLAGS) and RUN_ON_COUNT. After each command that runs the motor it keeps the motor
+;; running for two of the FD1771's Restores (see RUN_ON), polling the bus all the while, parks the head and turns the
+;; motor off.
 ;;
 ;; VERSION selects the build: VERSION_C (the default) for revision C, the most common, and VERSION_B for revision B,
 ;; the earlier. They differ only in the order a format writes each track's sectors (FORMAT_ORDER), revision B's
@@ -163,11 +164,11 @@ STATUS_BAD_COMMAND = $01            ;; a command frame was refused
 STATUS_BAD_DATA = $02               ;; a data frame's checksum was wrong
 STATUS_FAILED = $04                 ;; an operation on the disk failed
 ;; The status's write-protect bit: set at reset if the disk is protected, and by a Put, Write or Format that fails for
-;; it. Whatever sets the whole status clears it: the motor's wait in every Read, Put, Write and Format (MOTOR_READY),
-;; a refused frame and a data frame with a bad checksum.
+;; it. Whatever sets the whole status clears it: the motor's wait in every Read, Put, Write and Format that reaches
+;; the disk (MOTOR_READY), a refused frame and a data frame with a bad checksum.
 STATUS_WRITE_PROTECTED = $08
 ;; The motor was running when a command or Status last set the status, so the first Status after a run-on can report
-;; it on.
+;; it on; reset clears it with the motor running.
 STATUS_MOTOR_ON = $10
 
 ; The firmware's flags (DRIVE_FLAGS).

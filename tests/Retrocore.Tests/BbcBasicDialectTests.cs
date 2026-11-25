@@ -268,6 +268,91 @@ public sealed class BbcBasicDialectTests
     }
 
     /// <summary>
+    ///  Between [ and ], over several lines, the assembler's mnemonics, registers and comments are not variables, while
+    ///  its labels and the names in its operands are: renaming loop renames .loop and BNE loop, and LDA is no variable.
+    ///  Nothing after an implied instruction is read, and LDX, LDY, STX and STY take their register in either case.
+    /// </summary>
+    [TestMethod]
+    public void AssemblerMnemonicsAreNotVariables()
+    {
+        const string Program = """
+            10 DIM code% 100:dest=&70:count=0:mask=1:start=0
+            20 FOR pass=0 TO 2 STEP 2:P%=code%
+            30 [OPT pass
+            40 .loop LDA dest,X:STA &71,Y \ copy X: INX
+            50 lda (dest),Y:ASL A:ROR count:ORA #1:AND mask:EOR #&FF:JMP (dest)
+            60 EQUB 1:EQUW start:BNE loop ; back to Y
+            65 . done RTS back to caller:LDX dest,y:STY count,x then more:CLC
+            70 ]:NEXT:X=1
+            80 PRINT X
+
+            """;
+
+        BasicSource source = BasicSource.Analyze(Program, BasicDialect.BbcBasic);
+        string[] names = [.. source.Sites.Where(site => site.Kind == BasicSiteKind.Variable).Select(site => $"{site.Text}@{site.Line}")];
+        names.Should().Equal(
+            "code%@0", "dest@0", "count@0", "mask@0", "start@0",
+            "pass@1", "P%@1", "code%@1",
+            "pass@2",
+            "loop@3", "dest@3",
+            "dest@4", "count@4", "mask@4", "dest@4",
+            "start@5", "loop@5",
+            "done@6", "dest@6", "count@6",
+            "X@7",
+            "X@8");
+
+        // The program assembles, and BASIC makes exactly those variables, the resident P% aside: none for LDA or X's
+        // register, though it makes the variable X later.
+        BbcMachine machine = Boot();
+        BbcMachineTests.Type(machine, Program.Replace("\n", "\r", StringComparison.Ordinal) + "RUN\r");
+        machine.Run(TimeSpan.FromSeconds(2));
+        string screen = string.Join("\n", machine.ReadTextScreen());
+        screen.Should().NotContainAny(["rror", "No such", "Mistake", "Index", "Byte", "range"]);
+        static bool Heap(string name) => !(name.Length == 2 && name[1] == '%');
+        BasicVariables variables = new(BasicDialect.BbcBasic, Memory(machine));
+        variables.Simple().Select(variable => variable.Name).Where(Heap).Should()
+            .BeEquivalentTo(names.Select(name => name[..name.IndexOf('@')]).Where(Heap).Distinct());
+    }
+
+    /// <summary>
+    ///  Another BASIC's word is an ordinary BBC variable, as names are kept whole, so HOME=1 and PRINT HOME are fine;
+    ///  only as a statement of its own, where BASIC stops with Mistake, is it warned of.
+    /// </summary>
+    [TestMethod]
+    public void ForeignWordsWarnOnlyAsStatements()
+    {
+        // Each statement, its foreign word, and whether BASIC II stops on it with Mistake: a ?, ! or ( must follow the
+        // name straight away, so after a space only = makes an assignment.
+        (string Statement, string Word, bool Mistake)[] statements =
+        [
+            ("HOME=&900", "HOME", false), ("PRINT HOME", "HOME", false), ("SET(1)=2", "SET", false),
+            ("HOME?0=1", "HOME", false), ("HOME!0=1", "HOME", false), ("HOME =&900", "HOME", false),
+            ("HOME", "HOME", true), ("IF 1 THEN HOME", "HOME", true), ("HOME ?0=1", "HOME", true),
+            ("HOME !0=1", "HOME", true), ("SET (1)=2", "SET", true)
+        ];
+
+        string program = "10 DIM SET(1)\n" + string.Concat(statements.Select((entry, index) => $"{index + 2}0 {entry.Statement}\n"));
+        BasicSource source = BasicSource.Analyze(program, BasicDialect.BbcBasic);
+        source.Diagnostics.Where(diagnostic => diagnostic.Severity == BasicSeverity.Warning).Select(diagnostic => $"{diagnostic.Line}: {diagnostic.Message}")
+            .Should().Equal(statements.Select((entry, index) => (entry, line: index + 1)).Where(pair => pair.entry.Mistake).Select(pair =>
+                $"{pair.line}: BBC BASIC has no {pair.entry.Word} statement: it reads {pair.entry.Word} as a variable to assign, and stops with Mistake."));
+
+        BbcMachine machine = Boot();
+        BbcMachineTests.Type(machine, "DIM SET(1):HOME=&900\r");
+        BbcMachineTests.RunToPrompt(machine);
+        foreach ((string statement, _, bool mistake) in statements)
+        {
+            BbcMachineTests.Type(machine, $"CLS:{statement}\r");
+            string screen = string.Join("\n", BbcMachineTests.RunToPrompt(machine));
+            screen.Contains("Mistake", StringComparison.Ordinal).Should().Be(mistake, statement);
+        }
+
+        // AppleSoft still warns of a word it lacks wherever it is, as it reads the name by its first two letters.
+        BasicSource appleSoft = BasicSource.Analyze("10 X=ELSE\n", BasicDialect.AppleSoft);
+        appleSoft.Diagnostics.Select(diagnostic => diagnostic.Message).Should().Contain("AppleSoft has no ELSE; it reads it as the variable EL.");
+    }
+
+    /// <summary>
     ///  An array's bracket must follow its name straight away: FIND_VARIABLE reads the next character, so A (1) is the
     ///  variable A and then (1), and only A(1) is the array.
     /// </summary>
@@ -843,6 +928,78 @@ public sealed class BbcBasicDialectTests
             double rom = variables.Read(array.Kind, array.ElementAddress([index])).Number;
             evaluator.Evaluate(expressions[index]).Value.Number.Should().Be(rom, expressions[index]);
         }
+    }
+
+    /// <summary>
+    ///  The indirections read memory as BASIC does: ?, ! and $ before a factor, and ? and ! straight after a variable
+    ///  or an array element, whose real value is truncated; $ stops at a carriage return, and without one in 256 bytes
+    ///  is empty.
+    /// </summary>
+    [TestMethod]
+    public void IndirectionsAsTheRomReadsThem()
+    {
+        BbcMachine machine = Boot();
+        string[] setup =
+        [
+            "DIM B% 300,C% 300,D% 300,A%(2):A%(1)=B%:R=B%+0.75:J%=8",
+            "?&70=200:!&80=-123456:B%?3=77:B%!8=&12345678:B%?77=99:$(B%+20)=\"HELLO\"",
+            "FOR I%=0 TO 299:C%?I%=65:NEXT:FOR I%=0 TO 254:D%?I%=66:NEXT:D%?255=13"
+        ];
+
+        string[] numbers =
+        [
+            "?&70", "!&80", "B%?3", "B%!8", "B%?3+1", "?&70*2", "A%(1)?3", "R?3", "?(B%+3)", "!(B%+8) AND &FF", "-?&70",
+            "?&70=200", "A%(1)!J%", "B%?B%?3", "LEN $(B%+20)", "LEN $C%", "LEN $D%", "?(&10000+&70)", "?-&FF90", "!&FFFF AND &FFFFFF", "!-1 AND &FFFF"
+        ];
+
+        string[] texts = ["$(B%+20)", "$(B%+20)+\"!\"", "LEFT$($D%,3)"];
+
+        BbcMachineTests.Type(machine, string.Join("\r", setup) + $"\rDIM N({numbers.Length}),T$({texts.Length})\r");
+        BbcMachineTests.RunToPrompt(machine);
+        for (int index = 0; index < numbers.Length; index++)
+        {
+            BbcMachineTests.Type(machine, $"N({index})={numbers[index]}\r");
+            BbcMachineTests.RunToPrompt(machine);
+        }
+
+        for (int index = 0; index < texts.Length; index++)
+        {
+            BbcMachineTests.Type(machine, $"T$({index})={texts[index]}\r");
+            BbcMachineTests.RunToPrompt(machine);
+        }
+
+        BasicVariables variables = new(BasicDialect.BbcBasic, Memory(machine));
+
+        // The watch reads through a memory that refuses an address outside 16 bits, so a read past &FFFF must wrap.
+        BasicEvaluator evaluator = new(BasicDialect.BbcBasic, new DelegateBasicMemory(
+            address => address is >= 0 and <= 0xFFFF ? machine.Bus.Peek((ushort)address) : throw new ArgumentOutOfRangeException(nameof(address)),
+            (address, value) => machine.Bus.Write((ushort)address, value)));
+
+        BasicArray stored = variables.Arrays().Single(found => found.Name == "N");
+        for (int index = 0; index < numbers.Length; index++)
+        {
+            double rom = variables.Read(stored.Kind, stored.ElementAddress([index])).Number;
+
+            // Only LEN $C%, a string with no carriage return, is 0: any other 0 would be BASIC refusing the line.
+            (rom == 0).Should().Be(numbers[index] == "LEN $C%", numbers[index]);
+            evaluator.Evaluate(numbers[index]).Value.Number.Should().Be(rom, numbers[index]);
+        }
+
+        BasicArray strings = variables.Arrays().Single(found => found.Name == "T$");
+        for (int index = 0; index < texts.Length; index++)
+        {
+            byte[]? rom = variables.Read(strings.Kind, strings.ElementAddress([index])).Text;
+            evaluator.Evaluate(texts[index]).Value.Text.Should().Equal(rom, texts[index]);
+        }
+
+        // The offset is a factor, so B%?B%?3 is B%?(B%?3); a space before the operator ends the variable,
+        // and $ refuses page zero, as BASIC does.
+        Action spaced = () => evaluator.Evaluate("B% ?3");
+        spaced.Should().Throw<FormatException>().WithMessage("Syntax error*");
+        Action zeroPage = () => evaluator.Evaluate("$&70");
+        zeroPage.Should().Throw<FormatException>().WithMessage("$ range.");
+        Action text = () => evaluator.Evaluate("T$(0)?1");
+        text.Should().Throw<FormatException>().WithMessage("Type mismatch*");
     }
 
     /// <summary>

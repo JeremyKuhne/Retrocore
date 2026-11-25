@@ -12,6 +12,9 @@ public sealed partial class BasicSource
         List<BasicDiagnostic> diagnostics = [.. Parse.Diagnostics];
         List<BasicSourceLine> numbered = [];
         HashSet<string> foreign = ForeignWords(dialect);
+
+        // BBC BASIC's assembler runs from a [ to a ], over as many lines as it takes.
+        bool assembling = false;
         IReadOnlyDictionary<string, BasicLabel> labels = Parse.Labels;
         foreach (BasicLabel label in labels.Values)
         {
@@ -45,7 +48,7 @@ public sealed partial class BasicSource
                 });
             }
 
-            ScanLine(dialect, index, line, text.Statements, sites, diagnostics, foreign, skip, out List<BasicStatement> starts);
+            ScanLine(dialect, index, line, text.Statements, sites, diagnostics, foreign, skip, ref assembling, out List<BasicStatement> starts);
             byte[] tokens = Stored(dialect, text, labels, starts);
             if (number < 0) { continue; }
             BasicSourceLine entry = new(index, number, start, end, tokens, starts);
@@ -160,6 +163,7 @@ public sealed partial class BasicSource
         List<BasicDiagnostic> diagnostics,
         HashSet<string> foreign,
         List<(int Start, int End)> skip,
+        ref bool assembling,
         out List<BasicStatement> starts)
     {
         int offset = line.Length - statements.Length;
@@ -179,7 +183,9 @@ public sealed partial class BasicSource
         IReadOnlyList<int> positions = output.Positions;
         int[] at = [.. columns.Select(column => column + offset)];
         BasicLineScanner scanner = new(dialect, index, line, bytes, positions, at, foreign, skip);
+        scanner.Assembling = assembling;
         scanner.Run(sites, diagnostics);
+        assembling = scanner.Assembling;
         starts = scanner.Statements();
         return bytes;
     }

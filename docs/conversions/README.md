@@ -15,5 +15,6 @@ in [AssemblyStyle.md](../AssemblyStyle.md).
 | The Apple II character generators (`Roms/System/CharacterGenerator.asm`) | Converted | [CharacterGenerator.md](CharacterGenerator.md) |
 | The mouse card's firmware (`Roms/Mouse.rom.asm` and Apple's `Roms/Mouse/MouseInterface.asm`) | Converted | [Mouse.md](Mouse.md) |
 | Integer BASIC, with the floating point, the Mini-Assembler and SWEET16 (`Roms/IntegerBasic/`) | Converted | [IntegerBasic.md](IntegerBasic.md) |
+| Programmer's Aid #1 (`Roms/ProgrammersAid/`) | Converted | [ProgrammersAid.md](ProgrammersAid.md) |
 
 Each decision has an ID, which commit messages and comments may cite.

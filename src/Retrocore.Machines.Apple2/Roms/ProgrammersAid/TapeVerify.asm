@@ -1,148 +1,151 @@
-;; PROGRAMMER'S AID #1: TAPE VERIFY ($D52E-$D5AF)
+; retrocore: style=strict
+;; Programmer's Aid #1: Tape Verify ($D52E-$D5AF)
 ;;
 ;; Steve Wozniak's tape verify (1978): it reads a recording back and compares it with memory, without loading it, so a
-;; SAVE can be checked while the program is still there. CALL -10955 (<TapeVerify::VFYBSC>) checks an Integer BASIC
-;; program against the one in memory; for machine code or data, D52EG sets the Monitor's Ctrl-Y up
-;; (<TapeVerify::TVSETUP>), and `begin.end` Ctrl-Y checks that block against the tape. A difference prints ERR, the
-;; address, and the byte in memory and then the byte from tape in parentheses; a bad checksum beeps and prints ERR, as
-;; LOAD does.
+;; SAVE can be checked while the program is still there. CALL -10955 (<TapeVerify::VerifyProgram>) checks an Integer
+;; BASIC program against the one in memory; for machine code or data, D52EG sets the Monitor's Control-Y up
+;; (<TapeVerify::SetUp>), and `begin.end` Control-Y checks that block against the tape. A difference prints ERR, the
+;; address, and the byte in memory and then the byte from tape in parentheses, and stops that block's check (a program's
+;; check goes on from its header to the program); a bad checksum beeps and prints ERR, as `LOAD` does.
 ;;
-;; Names follow Apple's listing in the Programmer's Aid #1 manual (1978,
+;; The listing's names are those of Apple's listing in the Programmer's Aid #1 manual (1978,
 ;; https://archive.org/details/programmers-aid-1). Part of ProgrammersAid.asm.
 
 .scope TapeVerify
 
-;; The running checksum of the bytes read, as the Monitor's tape READ keeps it.
-CHKSUM = $2E
+;; The running checksum of the bytes read, as the Monitor's <ReadCassette> keeps it: <PlotMask>'s byte.
+;; Also: CHKSUM (PA1)
+Checksum = PlotMask
 
-;; Inherit: <Monitor:A1L>
-A1 = $3C
+;; The program's length (2 bytes), <HighMemory> - <ProgramStart>, which the tape's header holds: <Accumulator>'s bytes,
+;; where Integer BASIC's `SAVE` and `LOAD` keep it.
+;; Also: PRLEN (PA1)
+ProgramLength = Accumulator
 
-;; Inherit: <IntegerBasic:HighMemory>
-HIMEM = $4C
+;; D52EG: points the Monitor's Control-Y command at <VerifyBlock>.
+;; Keeps: X
+;; Also: TVSETUP (UNKN)
+.proc SetUp
+.assert * = $D52E, "TapeVerify::SetUp must stay at $D52E, where the manual's D52EG enters it."
+    lda #<VerifyBlock
+    ldy #>VerifyBlock
+    jmp SetControlY
+.endproc
 
-;; Inherit: <IntegerBasic:ProgramStart>
-PP = $CA
+;; CALL -10955: checks the Integer BASIC program in memory against the one on tape, header first, as Integer BASIC's
+;; `LOAD` reads them.
+;; Keeps: X
+;; Also: VFYBSC (PA1)
+.proc VerifyProgram
+.assert * = $D535, "TapeVerify::VerifyProgram must stay at $D535, CALL -10955."
+    stx BasicSavedX
+    sec
+    ldx #$FF
 
-;; The program's length (2 bytes), HIMEM - PP, which the tape's header holds.
-PRLEN = $CE
+;; ProgramLength = <HighMemory> - <ProgramStart>, low byte with X = $FF, then high byte with X = 0.
+;; Also: GETLEN (PA1)
+GetLength:
+    lda HighMemory + 1,x
+    sbc ProgramStart + 1,x
+    sta ProgramLength + 1,x
+    inx
+    beq GetLength
 
-;; Where <VFYBSC> keeps X, which BASIC needs back.
-XSAVE = $D8
+    ; The header, then the program.
+    jsr Cassette::PointAtLength
+    jsr VerifyBlock
+    ldx #1
+    jsr Cassette::PointAtProgram
+    jsr VerifyBlock
+    ldx BasicSavedX
+    rts
+.endproc
 
-;; Integer BASIC's tape setup for the header: points A1 and A2 at <PRLEN>.
-HDRSET = $F11E
+;; Checks memory from A1 to A2 against the tape: the Monitor's <ReadCassette>, comparing instead of storing, with the
+;; same timing.
+;;
+;; A difference prints ERR, then `address-memory (tape)` on the line after, and ends the check. Otherwise, at the end,
+;; <ReadCassetteChecksum> checks the checksum, beeping, with ERR when it is wrong.
+;; In: Address1/Address1High = the first address, Address2/Address2High = the last
+;; Also: TAPEVFY (PA1)
+.proc VerifyBlock
 
-;; Integer BASIC's tape setup for the program: points A1 and A2 at PP and HIMEM.
-PRGSET = $F12C
+;; How long to let the header play once the tape is heard, as the Monitor's READ_HEADER_DELAY: about 3.5 seconds.
+HEADER_DELAY = $16
 
-;; Inherit: <Monitor:NXTA1>
-NXTA1 = $FCBA
+;; The count that tells the sync bit from the header, as the Monitor's READ_SYNC_COUNT.
+SYNC_COUNT = $24
 
-;; Inherit: <Monitor:HEADR>
-HEADR = $FCC9
+;; The count before the first data byte, as the Monitor's READ_FIRST_COUNT.
+FIRST_COUNT = $3B
 
-;; The Monitor's tape routine that reads a byte.
-RDBYTE = $FCEC
+;; The count before each later byte: the Monitor's READ_NEXT_COUNT less one, for the compare's extra time.
+NEXT_COUNT = $34
 
-;; The Monitor's tape routine that waits for two edges of the signal.
-RD2BIT = $FCFA
+    ; Waits for the tape's tone, then lets the header play.
+    jsr Cassette::ReadBit
+    lda #HEADER_DELAY
+    jsr Cassette::WriteHeader
+    ; Cassette::WriteHeader leaves A at $FF, where the checksum starts.
+    sta Checksum
+    jsr Cassette::ReadBit
 
-;; The Monitor's tape routine that reads a bit, into the carry.
-RDBIT = $FCFD
+;; Waits out the header's half cycles for the shorter one of the sync bit.
+;; Also: VRFY2 (PA1)
+FindSync:
+    ldy #SYNC_COUNT
+    jsr Cassette::ReadHalfCycle
+    bcs FindSync
+    jsr Cassette::ReadHalfCycle
+    ldy #FIRST_COUNT
 
-;; Inherit: <Monitor:PRA1>
-PRA1 = $FD92
+;; Reads a byte and compares it with the next in memory.
+;; Also: VRFY3 (PA1)
+NextByte:
+    jsr Cassette::ReadByte
+    ; Always taken: Cassette::ReadByte leaves X at 0.
+    beq Compare
 
-;; Inherit: <Monitor:PRBYTE>
-PRBYTE = $FDDA
+;; Adds the byte to the checksum and steps A1, until past A2; then checks the checksum.
+;; Also: VFYLOOP (PA1)
+Matched:
+    eor Checksum
+    sta Checksum
+    jsr NextInRange
+    ldy #NEXT_COUNT
+    bcc NextByte
+    jmp ReadCassetteChecksum
 
-;; Inherit: <Monitor:COUT>
-COUT = $FDED
+;; Compares the byte read with memory, after a delay that keeps the timing of the Monitor's read, which stores the
+;; byte here.
+;; Also: EXTDEL (PA1)
+Compare:
+    nop
+    nop
+    nop
+    cmp (Address1,x)
+    beq Matched
 
-;; The end of the Monitor's tape READ: checks the checksum, and beeps, with ERR if it is wrong.
-FINISH = $FF26
+    ; A difference: "ERR", then "address-memory (tape)"; <PrintAddress> leaves Y at 0, with the screen as the output.
+    pha
+    jsr PrintError
+    jsr PrintAddress
+    lda (Address1),y
+    jsr PrintHexByte
+    lda #' '
+    jsr CharacterOut
+    lda #'('
+    jsr CharacterOut
+    pla
+    jsr PrintHexByte
+    lda #')'
+    jsr CharacterOut
+    lda #KEY_RETURN
+    jmp CharacterOut
 
-;; Inherit: <Monitor:PRERR>
-PRERR = $FF2D
-
-;; D52EG: points the Monitor's Ctrl-Y command at <TAPEVFY>.
-TVSETUP:
-    lda #<TAPEVFY                   ; $D52E
-    ldy #>TAPEVFY                   ; $D530
-    jmp SETCTLY                     ; $D532
-
-;; CALL -10955: checks the Integer BASIC program in memory against the one on tape, header first.
-VFYBSC:
-    stx XSAVE                       ; $D535
-    sec                             ; $D537
-    ldx #$FF                        ; $D538
-
-GETLEN:
-    lda HIMEM+1,x                   ; $D53A PRLEN = HIMEM - PP
-    sbc PP+1,x                      ; $D53C
-    sta PRLEN+1,x                   ; $D53E
-    inx                             ; $D540
-    beq GETLEN                      ; $D541
-    jsr HDRSET                      ; $D543
-    jsr TAPEVFY                     ; $D546 the header
-    ldx #$01                        ; $D549
-    jsr PRGSET                      ; $D54B
-    jsr TAPEVFY                     ; $D54E the program
-    ldx XSAVE                       ; $D551
-    rts                             ; $D553
-
-;; Checks memory from A1 to A2 against the tape: the Monitor's tape READ, comparing instead of storing.
-TAPEVFY:
-    jsr RD2BIT                      ; $D554
-    lda #$16                        ; $D557
-    jsr HEADR                       ; $D559 find the header tone
-    sta CHKSUM                      ; $D55C
-    jsr RD2BIT                      ; $D55E
-
-VRFY2:
-    ldy #$24                        ; $D561
-    jsr RDBIT                       ; $D563
-    bcs VRFY2                       ; $D566
-    jsr RDBIT                       ; $D568
-    ldy #$3B                        ; $D56B
-
-VRFY3:
-    jsr RDBYTE                      ; $D56D
-    beq EXTDEL                      ; $D570 always
-
-VFYLOOP:
-    eor CHKSUM                      ; $D572
-    sta CHKSUM                      ; $D574
-    jsr NXTA1                       ; $D576
-    ldy #$34                        ; $D579
-    bcc VRFY3                       ; $D57B until past A2
-    jmp FINISH                      ; $D57D
-
-EXTDEL:
-    nop                             ; $D580 as long as READ takes to store a byte
-    nop                             ; $D581
-    nop                             ; $D582
-    cmp (A1,x)                      ; $D583
-    beq VFYLOOP                     ; $D585
-    pha                             ; $D587 a difference: "ERR", then "addr- mem (tape)"
-    jsr PRERR                       ; $D588
-    jsr PRA1                        ; $D58B
-    lda (A1),y                      ; $D58E
-    jsr PRBYTE                      ; $D590
-    lda #$A0                        ; $D593 " "
-    jsr COUT                        ; $D595
-    lda #$A8                        ; $D598 "("
-    jsr COUT                        ; $D59A
-    pla                             ; $D59D
-    jsr PRBYTE                      ; $D59E
-    lda #$A9                        ; $D5A1 ")"
-    jsr COUT                        ; $D5A3
-    lda #$8D                        ; $D5A6 return
-    jmp COUT                        ; $D5A8
-
-; A second copy of the last two instructions, which nothing reaches.
-    lda #$8D                        ; $D5AB
-    jmp COUT                        ; $D5AD
+    ; A second copy of the last two instructions, which nothing reaches.
+    lda #KEY_RETURN
+    jmp CharacterOut
+.endproc
 
 .endscope

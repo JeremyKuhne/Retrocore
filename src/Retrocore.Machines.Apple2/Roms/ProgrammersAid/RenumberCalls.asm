@@ -1,72 +1,99 @@
-;; PROGRAMMER'S AID #1: RENUMBER'S BASIC ENTRIES ($D6DD-$D716)
+; retrocore: style=strict
+;; Programmer's Aid #1: Renumber's BASIC entries ($D6DD-$D716)
 ;;
 ;; The CALLs that renumber an Integer BASIC program from BASIC's variables: they read the new numbering and the range,
-;; put them in Renumber's SWEET16 registers, and enter <Renumber::RENUM>. The variables must be the program's first,
-;; in this order, which `CLR` then `START=` and `STEP=` (and `FROM=` and `TO=`) give:
+;; put them in Renumber's SWEET16 registers, and enter <Renumber::RenumberRange>. The variables must be the program's
+;; first, in this order, which `CLR` then `START=` and `STEP=` (and `FROM=` and `TO=`) give:
 ;;
-;; - START, the first new line number, and STEP, the step between them;
-;; - FROM and TO, the lowest and highest line renumbered, for <RenumberCalls::RNMRNG> only.
+;; - `START`, the first new line number, and `STEP`, the step between them;
+;; - `FROM` and `TO`, the lowest and highest line renumbered, for <Renumber::BasicRenumberRange> only.
 ;;
-;; Apple's listings do not include this part; its names are this source's. Part of ProgrammersAid.asm.
+;; Apple's listings do not include this part, so its names have no historical names. Part of ProgrammersAid.asm.
 
-.scope RenumberCalls
+; Renumber: its entries from BASIC, after the RAM test.
+.scope Renumber continued
 
-;; Inherit: <IntegerBasic:LowMemory>
-LOMEM = $4A
+; Where each variable's value is, from LowMemory: its name, the byte after it and the 2-byte link come first.
 
-; Where each variable's value is, from LOMEM: its name, the byte after it and the 2-byte link come first.
-STARTVAL = $08                      ;; START, the first variable
-STEPVAL = $11                       ;; STEP, the second
-FROMVAL = $1A                       ;; FROM, the third
-TOVAL = $21                         ;; TO, the fourth
+;; `START`'s value, the first variable's.
+START_VALUE = $08
 
-; Renumber's SWEET16 registers, as the page-zero bytes they live in: register n is at 2n.
-NEWLOW = Renumber::NEWLOW * 2       ;; the first new number (2 bytes)
-NEWINCR = Renumber::NEWINCR * 2     ;; the step (2 bytes)
-LNLOW = Renumber::LNLOW * 2         ;; the lowest line renumbered (2 bytes)
-LNHI = Renumber::LNHI * 2           ;; the highest (2 bytes)
+;; `STEP`'s value, the second variable's.
+STEP_VALUE = $11
 
-;; CALL -10531: renumbers every line, from START by STEP.
-RNMALL:
-    ldy #$00                        ; $D6DD
-    sty LNLOW                       ; $D6DF from line 0
-    sty LNLOW+1                     ; $D6E1
-    dey                             ; $D6E3
-    tya                             ; $D6E4
-    bne RNMALL_1                    ; $D6E5 always: to line 65535
+;; `FROM`'s value, the third variable's.
+FROM_VALUE = $1A
 
-;; CALL -10521: renumbers the lines from FROM to TO, from START by STEP.
-RNMRNG:
-    ldy #FROMVAL                    ; $D6E7
-    jsr GETVAR                      ; $D6E9
-    sta LNLOW                       ; $D6EC
-    sty LNLOW+1                     ; $D6EE
-    ldy #TOVAL                      ; $D6F0
-    jsr GETVAR                      ; $D6F2
+;; `TO`'s value, the fourth variable's.
+TO_VALUE = $21
 
-RNMALL_1:
-    sta LNHI                        ; $D6F5
-    sty LNHI+1                      ; $D6F7
-    ldy #STARTVAL                   ; $D6F9
-    jsr GETVAR                      ; $D6FB
-    sta NEWLOW                      ; $D6FE
-    sty NEWLOW+1                    ; $D700
-    ldy #STEPVAL                    ; $D702
-    jsr GETVAR                      ; $D704
-    sta NEWINCR                     ; $D707
-    sty NEWINCR+1                   ; $D709
-    jmp Renumber::RENUM             ; $D70B
+; Renumber's SWEET16 registers, as the page-zero bytes they live in.
 
-;; Reads the value of the variable at an offset from LOMEM.
+;; <FIRST_NUMBER>'s bytes: the first new number.
+FirstNumber = Sweet16Registers + FIRST_NUMBER * SWEET16_REGISTER_SIZE
+
+;; <STEP>'s bytes: the step.
+Step = Sweet16Registers + STEP * SWEET16_REGISTER_SIZE
+
+;; <LOWEST_LINE>'s bytes: the lowest line renumbered.
+LowestLine = Sweet16Registers + LOWEST_LINE * SWEET16_REGISTER_SIZE
+
+;; <HIGHEST_LINE>'s bytes: the highest line renumbered.
+HighestLine = Sweet16Registers + HIGHEST_LINE * SWEET16_REGISTER_SIZE
+
+;; CALL -10531: renumbers every line, from `START` by `STEP`.
+.proc BasicRenumberAll
+.assert * = $D6DD, "Renumber::BasicRenumberAll must stay at $D6DD, CALL -10531."
+
+    ; From line 0 to line 65535.
+    ldy #0
+    sty LowestLine
+    sty LowestLine + 1
+    dey
+    tya
+    ; Always taken.
+    bne BasicRenumberRange::SetNumbering
+.endproc
+
+;; CALL -10521: renumbers the lines from `FROM` to `TO`, from `START` by `STEP`.
+;; Entry:
+;;   SetNumbering = takes the highest line from A (low) and Y (high), then `START` and `STEP`, and renumbers
+.proc BasicRenumberRange
+.assert * = $D6E7, "Renumber::BasicRenumberRange must stay at $D6E7, CALL -10521."
+    ldy #FROM_VALUE
+    jsr ReadVariable
+    sta LowestLine
+    sty LowestLine + 1
+    ldy #TO_VALUE
+    jsr ReadVariable
+
+;; Takes the highest line from A and Y, then `START` and `STEP`, and renumbers.
+SetNumbering:
+    sta HighestLine
+    sty HighestLine + 1
+    ldy #START_VALUE
+    jsr ReadVariable
+    sta FirstNumber
+    sty FirstNumber + 1
+    ldy #STEP_VALUE
+    jsr ReadVariable
+    sta Step
+    sty Step + 1
+    jmp RenumberRange
+.endproc
+
+;; Reads the value of the variable at an offset from <LowMemory>.
 ;; In: Y = the offset of its value
 ;; Out: A = the value's low byte, Y = its high byte
-GETVAR:
-    lda (LOMEM),y                   ; $D70E
-    pha                             ; $D710
-    iny                             ; $D711
-    lda (LOMEM),y                   ; $D712
-    tay                             ; $D714
-    pla                             ; $D715
-    rts                             ; $D716
+;; Keeps: X
+.proc ReadVariable
+    lda (LowMemory),y
+    pha
+    iny
+    lda (LowMemory),y
+    tay
+    pla
+    rts
+.endproc
 
 .endscope

@@ -1,13 +1,25 @@
-;; SWEET16 INSTRUCTIONS AS MACROS
+; retrocore: style=strict
+;; SWEET16 instructions as macros
 ;;
-;; Steve Wozniak's SWEET16 is a 16-bit interpreter in the Integer BASIC ROM (<IntegerBasic:Sweet16::Run>): a 6502 program
-;; does JSR SW16, and the bytes after it are SWEET16 instructions, up to an RTN, after which the 6502 carries on.
+;; Steve Wozniak's SWEET16 is a 16-bit interpreter in the Integer BASIC ROM (<Sweet16::Run>): a 6502 program calls it,
+;; and the bytes after it are SWEET16 instructions, up to an <RTN>, after which the 6502 carries on.
 ;; Renumber and Relocate are partly written in it. These macros assemble its instructions with Apple's mnemonics.
 ;;
-;; A register is a number from 0 to 15, usually a name for one. The instructions that go through a register, which
-;; Apple writes @R, take it in brackets here, as memory operands are written on the Z80: `LD [PRGNDX]` loads the byte
-;; PRGNDX points to, while `LD PRGNDX` copies the register. A branch takes its target and assembles the signed
-;; offset from the byte after it. Part of ProgrammersAid.asm.
+;; A register is a number from 0 to 15, usually a name for one. The instructions that go through a register, which Apple
+;; writes @R, take it in brackets here, as memory operands are written on the Z80: `LD [PASS1_LINE]` loads the byte that
+;; register points to, while `LD PASS1_LINE` copies the register. A branch takes its target and assembles the signed
+;; offset from the byte after it. The macros keep Apple's mnemonics as their names, as an instruction set's mnemonics
+;; are kept (the conversion log, docs/conversions/ProgrammersAid.md). Part of ProgrammersAid.asm.
+
+;; SWEET16's sixteen registers, two bytes each, low byte first: R0 at $00 up to R15 at $1E.
+;;
+;; R0 is the accumulator, R12 the stack pointer of SWEET16's subroutine calls, R13 the result of a compare, R14 the
+;; status and R15 the program counter. Programmer's Aid's 6502 routines also use these bytes for their own, and name
+;; them from this.
+Sweet16Registers = $00
+
+;; The size of a SWEET16 register, in bytes.
+SWEET16_REGISTER_SIZE = 2
 
 ;; SET Rn: loads a 16-bit constant into a register.
 ;; Parameters: register = the register, value = the constant
@@ -121,9 +133,22 @@
     .byte $00
 .endmacro
 
+;; NUL: does nothing, passing over the byte after it, as an untaken branch does; Apple's listings write it as the
+;; byte $0D to skip a 1-byte instruction.
+.macro NUL
+    .byte $0D
+.endmacro
+
+;; SET Rn without its constant: the 2 bytes after it become the register's value, so SWEET16 passes over them. Apple's
+;; listings write it as the byte to skip the next two bytes of instructions, at the cost of the register.
+;; Parameters: register = the register it overwrites
+.macro SetSkippingTwo register
+    .byte $10 | (register)
+.endmacro
+
 ;; Assembles a branch: the opcode and the signed offset to the target from the byte after the offset.
 ;; Parameters: opcode = the branch's opcode, target = where it goes
-.macro SW16BRANCH opcode, target
+.macro Sweet16Branch opcode, target
     .assert (target) - (* + 2) >= -128 && (target) - (* + 2) <= 127, "The SWEET16 branch is out of range."
     .byte (opcode)
     .byte <((target) - (* + 1))       ; the offset counts from the byte after it
@@ -132,59 +157,59 @@
 ;; BR: branches always.
 ;; Parameters: target = where it goes
 .macro BR target
-    SW16BRANCH $01, target
+    Sweet16Branch $01, target
 .endmacro
 
 ;; BNC: branches if the last result left no carry.
 ;; Parameters: target = where it goes
 .macro BNC target
-    SW16BRANCH $02, target
+    Sweet16Branch $02, target
 .endmacro
 
 ;; BC: branches if the last result carried.
 ;; Parameters: target = where it goes
 .macro BC target
-    SW16BRANCH $03, target
+    Sweet16Branch $03, target
 .endmacro
 
-;; BP: branches if the last result was positive.
+;; BP: branches if the last result was not negative.
 ;; Parameters: target = where it goes
 .macro BP target
-    SW16BRANCH $04, target
+    Sweet16Branch $04, target
 .endmacro
 
 ;; BM: branches if the last result was negative.
 ;; Parameters: target = where it goes
 .macro BM target
-    SW16BRANCH $05, target
+    Sweet16Branch $05, target
 .endmacro
 
 ;; BZ: branches if the last result was zero.
 ;; Parameters: target = where it goes
 .macro BZ target
-    SW16BRANCH $06, target
+    Sweet16Branch $06, target
 .endmacro
 
 ;; BNZ: branches if the last result was not zero.
 ;; Parameters: target = where it goes
 .macro BNZ target
-    SW16BRANCH $07, target
+    Sweet16Branch $07, target
 .endmacro
 
 ;; BM1: branches if the last result was -1.
 ;; Parameters: target = where it goes
 .macro BM1 target
-    SW16BRANCH $08, target
+    Sweet16Branch $08, target
 .endmacro
 
 ;; BNM1: branches if the last result was not -1.
 ;; Parameters: target = where it goes
 .macro BNM1 target
-    SW16BRANCH $09, target
+    Sweet16Branch $09, target
 .endmacro
 
 ;; BS: calls a SWEET16 subroutine, keeping the return address on the stack R12 points to.
 ;; Parameters: target = the subroutine
 .macro BS target
-    SW16BRANCH $0C, target
+    Sweet16Branch $0C, target
 .endmacro

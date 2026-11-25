@@ -31,20 +31,20 @@ Indexing every SDK root:
 
 | Step | Commit | Change | Time | Allocated | Time vs baseline | Allocated vs baseline |
 | --- | --- | --- | --- | --- | --- | --- |
-| Baseline | 29a687c1 | `main` after #141 | 1,162 ms | 1,389 MB | | |
-| 1 | be52d5dd | Each source path made full once | 1,054 ms | 1,388 MB | −9% | 0% |
-| 2 | 0fe00cc8 | Each file read once per build | 1,017 ms | 1,313 MB | −12% | −5% |
-| 3 | dcd63404 | One prefiltered pass for macros | 949 ms | 1,081 MB | −18% | −22% |
-| 4 | 04904961 | Type directives told by their words | 942 ms | 1,039 MB | −19% | −25% |
-| 5 | d255b05c | Each file split into lines once | 894 ms | 938 MB | −23% | −32% |
-| 6 (`b1`) | f33ce65d | The parser reads each line in place | 874 ms | 834 MB | −25% | −40% |
-| 7 (`b2`) | 83190f75 | The style checks read lines in place | 885 ms | 810 MB | −24% | −42% |
-| 8 (`a1`) | e886a86e | Each source's `Also:` names read once | 847 ms | 737 MB | −27% | −47% |
-| 9 (`m1`) | baf631e6 | Macro names looked up by their text | 819 ms | 705 MB | −30% | −49% |
-| 10 (`u1`) | c578ae00 | Each path upper-cased once | 798 ms | 682 MB | −31% | −51% |
-| 11 (`c1`) | fff4bbeb | Lines split without replacing CRLF first | 819 ms | 665 MB | −30% | −52% |
-| 12 (`r1`) | ab9c208a | Assembled lines passed over before matching | 813 ms | 641 MB | −30% | −54% |
-| 13 (`k1`) | 05910d6d | Less kept after the index is built | 815 ms | 641 MB | −30% | −54% |
+| Baseline | 9cc05eb0 | `main` after #141 | 1,162 ms | 1,389 MB | | |
+| 1 | 324a543e | Each source path made full once | 1,054 ms | 1,388 MB | −9% | 0% |
+| 2 | b4d421a9 | Each file read once per build | 1,017 ms | 1,313 MB | −12% | −5% |
+| 3 | c2c3bb00 | One prefiltered pass for macros | 949 ms | 1,081 MB | −18% | −22% |
+| 4 | 2cc20779 | Type directives told by their words | 942 ms | 1,039 MB | −19% | −25% |
+| 5 | 9172cc01 | Each file split into lines once | 894 ms | 938 MB | −23% | −32% |
+| 6 (`b1`) | 71166d67 | The parser reads each line in place | 874 ms | 834 MB | −25% | −40% |
+| 7 (`b2`) | fa3f687b | The style checks read lines in place | 885 ms | 810 MB | −24% | −42% |
+| 8 (`a1`) | 4ae959eb | Each source's `Also:` names read once | 847 ms | 737 MB | −27% | −47% |
+| 9 (`m1`) | b7ef37eb | Macro names looked up by their text | 819 ms | 705 MB | −30% | −49% |
+| 10 (`u1`) | 20a428c3 | Each path upper-cased once | 798 ms | 682 MB | −31% | −51% |
+| 11 (`c1`) | 8874a41b | Lines split without replacing CRLF first | 819 ms | 665 MB | −30% | −52% |
+| 12 (`r1`) | 2cd56e9c | Assembled lines passed over before matching | 813 ms | 641 MB | −30% | −54% |
+| 13 (`k1`) | 1f80ad25 | Less kept after the index is built | 815 ms | 641 MB | −30% | −54% |
 
 AppleSoft's root alone: 50.1 ms and 67.7 MB at the baseline, 27.2 ms and 26.5 MB after step 13.
 

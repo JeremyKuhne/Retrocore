@@ -147,9 +147,10 @@ The card caches a track (18 slots at $1000-$33FF) and reads ahead after a miss.
 
 ## Open questions
 
-- READ ($08) on Apple's card takes `ReadWriteTagged`'s write path ($DE50): it reads only for command 1, and its dead
-  read path copies from $0E00 though the sector was read into $0C00. The owner settled it as a firmware bug that the
-  compatible card does not copy (docs/conversions/Disk35.md, Q1); running the code would confirm it.
+- Settled: READ ($08) on Apple's card takes the write path of `ReadWriteTagged` ($DE50), which reads only for command
+  1, and its dead read path copies from $0E00 though the sector was read into $0C00. The owner settled it as a
+  firmware bug that the compatible card does not reproduce (docs/conversions/Disk35.md, Q1); running the code would
+  confirm it.
 - CONTROL $0C (poke) takes its value from $0C04, which looks like an off-by-one in the firmware.
 - `ReadWriteTagged`'s media check indexes `MediaKind` by a leftover Y, effectively drive 1's.
 - Should the hardware mode support UniDisk 3.5s on the bus (`Bus::PassCommand`, $F812)? That is a second processor

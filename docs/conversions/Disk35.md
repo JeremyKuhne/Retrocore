@@ -18,9 +18,9 @@ IIeEquates.asm and MonitorEntries.asm.
 
 - C1. The EPROM's and the slot ROM's names are the SDK's (Dos.md X12): they are renamed to the style with no `Also:`.
   `Also:` holds only names an Apple document or source gives: the ISM's registers as Apple's Macintosh sources
-  (SonyEqu.a) name them (wData ... rHandshake), UNKN, since Apple never published those sources; SmartPort's error codes
-  (BADCMD ... OFFLINE, BUSERR) and the IIgs's registers (SHADOW, CYAREG, STATEREG, HORIZCNT), IIGSFR87 (Q3). The IWM
-  switches, which the SDK named PH0L ... Q7H, take the Disk II's names (Dos.md X9) and no `Also:`.
+  (SonyEqu.a) name them (wData ... rHandshake), UNKN, since no document in the bibliography gives them; SmartPort's
+  error codes (BADCMD ... OFFLINE, BUSERR) and the IIgs's registers (SHADOW, CYAREG, STATEREG, HORIZCNT), IIGSFR87
+  (Q3). The IWM switches, which the SDK named PH0L ... Q7H, take the Disk II's names (Dos.md X9) and no `Also:`.
 - C2. The Monitor's entries come from IIeEquates.asm and MonitorEntries.asm where they have them (the host code
   includes both); the rest are defined with `Inherit:` and the Monitor's `Also:` (NextSlot, SetText, LOC1,
   BasicColdStart, ExpansionRomOff, CarriageReturn, PrintHexByte ...), as Dos/Equates.asm does. Disk35.rom.asm defines

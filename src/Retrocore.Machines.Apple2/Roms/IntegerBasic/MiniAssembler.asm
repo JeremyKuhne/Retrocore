@@ -133,8 +133,7 @@ ToError:
 ;; reads the next line.
 ;;
 ;; The instruction is the opcode in <Address1High> and the operand in <Address2> and <Address2High>, which follow it
-;; in page zero. The cursor goes up over the line typed, and <Disassembler::PrintInstruction> lists the instruction
-;; there.
+;; in page zero. <Disassembler::PrintInstruction> lists the instruction over the line typed.
 ;; In: OperandLength = the operand's bytes, as <Disassembler::Decode::Opcode> left it
 ;; Also: FINDOP (A2RM78)
 .proc StoreInstruction
@@ -151,7 +150,7 @@ NextByte:
     dey
     bpl NextByte
 
-    ; Up over the line typed and the Return, to list the instruction there.
+    ; Up two lines, as the listing starts with a Return, which brings it back down to the line typed.
     jsr CursorUp
     jsr CursorUp
     jsr Disassembler::PrintInstruction
@@ -357,8 +356,8 @@ PackBits:
 ;; its low two bits, with the "$" bit for a number that has no "$", "($" or "#$" before it. After the operand comes a
 ;; comment (";") or the end of the line.
 ;;
-;; A second character that is "$" may be left out; but as the bit then comes from the compare's carry, any character
-;; from "$" up counts as one, and only one below it as missing.
+;; The "$" of "($" and "#$" may be left out: a position whose first character matches gives a 1 when its second is
+;; "$" or it has none, whatever follows.
 ;; In: Y = the place in <InputBuffer>
 ;; Out: Address1High = 0, the first opcode <FindOpcode> tries, Address2/Address2High = the number,
 ;;   CommandPosition = the place of the end of the line

@@ -25,9 +25,9 @@ Only published sources are cited: books, manuals and actual listings.
   (X9), the marks `PROLOGUE_FIRST`, `PROLOGUE_SECOND`, `ADDRESS_MARK` and `DATA_MARK`, the table `ReadTranslate`
   (DNIBL), `LowBits`, `LOW_BITS_SIZE` and `GROUP_COUNT`, and the reader's locals (`WaitD5`, `CheckD5`, `WaitAA`,
   `WaitOdd`, `WaitEven`).
-- D2. The boot ROM defines its six switches itself rather than including Dos/RwtsEquates.asm, which brings RWTS's
-  variables and DOS's `DOS32` switch. Each switch's `Also:` cites DOS's name for the same switch with DOS's
-  documents (PHASEOFF, Q6L ...). D10 replaces the copy with a shared file.
+- D2. The boot ROM defined its six switches itself rather than including Dos/RwtsEquates.asm, which brings RWTS's
+  variables and DOS's `DOS32` switch, each citing DOS's name for it with DOS's documents (PHASEOFF, Q6L ...). Since
+  D10 it includes the shared switches file instead, and still not RwtsEquates.asm.
 - D3. Page-zero bytes are aliases of IIeEquates' names (`BufferPointer = LowResBase`), as in DOS (P14). BITS, which
   holds a nibble, a half byte or a count by turns, is `Scratch`.
 - D4. Three routines, each one definition for both ROMs with `.if SECTORS` where they differ (the owner's D5):

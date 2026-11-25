@@ -331,7 +331,7 @@ DISPLAY_READ_DONE:
 ;;
 ;; Of the control codes, only clear screen and EOL are obeyed; the rest are shown.
 ;; In: A = the ATASCII character, or the colour
-;; Out: Y = the status, A = ATACHR (Y again on an error), DSTAT = SUCCES
+;; Out: Y = the status, A = ATACHR, DSTAT = SUCCES
 ;; Errors: Y = CRSROR when the cursor is outside the screen, BRKABT for BREAK
 ;; Uses: X, ATACHR, CHAR, COLCRS, ROWCRS, LOGCOL, OLDROW, OLDCOL
 DISPLAY_PUT:
@@ -347,7 +347,7 @@ DISPLAY_PUT:
 ;;
 ;; <EDITOR_PUT_CHARACTER> joins here for a character it doesn't obey.
 ;; In: ATACHR = the character
-;; Out: Y = the status, A = ATACHR (Y again on an error), DSTAT = SUCCES
+;; Out: Y = the status, A = ATACHR, DSTAT = SUCCES
 ;; Uses: X, CHAR, COLCRS, ROWCRS, LOGCOL, OLDROW, OLDCOL
 DISPLAY_SHOW:
     lda ATACHR
@@ -413,7 +413,7 @@ DISPLAY_WRITE_MERGE:
 
 ;; Keeps the data under the cursor in OLDCHR and, in mode 0 unless CRSINH hides it, shows the cursor by inverting
 ;; it; then returns the status.
-;; Out: Y = the status, A = ATACHR (Y again on an error), DSTAT = SUCCES
+;; Out: Y = the status, A = ATACHR, DSTAT = SUCCES
 ;; Uses: X, OLDCHR, CHAR
 DISPLAY_SHOW_CURSOR:
     jsr DISPLAY_READ
@@ -426,7 +426,7 @@ DISPLAY_SHOW_CURSOR:
     jsr DISPLAY_WRITE
 
 ;; Returns the display handler's status and resets it: the end of each handler call, and the close of E:, S: and K:.
-;; Out: Y = the status, A = ATACHR (Y again on an error), DSTAT = SUCCES
+;; Out: Y = the status, A = ATACHR, DSTAT = SUCCES
 ;; Entry: DISPLAY_IGNORE = only returns: the SPECIAL of E: and K:, and K:'s PUT BYTE
 ;; Keeps: X
 DISPLAY_RETURN:
@@ -505,7 +505,7 @@ EDITOR_CALL_ADRESS:
 
 ;; The screen editor's (E:) put: obeys a control code, or shows any other character, in the text window.
 ;; In: A = the ATASCII character
-;; Out: Y = the status, A = ATACHR (Y again on an error), DSTAT = SUCCES
+;; Out: Y = the status, A = ATACHR, DSTAT = SUCCES
 ;; Errors: Y = CRSROR when the cursor is outside the screen, BRKABT for BREAK
 ;; Uses: X, ATACHR, ESCFLG, ROWCRS, COLCRS, LOGCOL, OLDCHR, SWPFLG
 ;; See: <EDITOR_PUT_CHARACTER>
@@ -520,7 +520,7 @@ EDITOR_PUT:
 ;; A control code is shown instead when DSPFLG is set or it follows ESC; either way ESCFLG is cleared. Its routine
 ;; comes from the control code table, <CONTROL_CODES>.
 ;; In: ATACHR = the character
-;; Out: Y = the status, A = ATACHR (Y again on an error), DSTAT = SUCCES
+;; Out: Y = the status, A = ATACHR, DSTAT = SUCCES
 ;; Uses: X, ESCFLG, ADRESS, ROWCRS, COLCRS, LOGCOL, OLDCHR, SWPFLG
 EDITOR_PUT_CHARACTER:
     jsr SCREEN_ERASE_CURSOR                      ; the cursor off

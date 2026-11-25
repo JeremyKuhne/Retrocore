@@ -136,7 +136,7 @@ NMIRES = NMIST                      ;; clears NMIST (write)
 
 LINZBS = $00                        ;; reserved for the linkage of multi-processor systems (2 bytes)
 CASINI = $02                        ;; where a cassette boot's program initializes, then on SYSTEM RESET (2 bytes)
-RAMLO = $04                         ;; the power-up clear's pointer; then the boot's load address (2 bytes)
+RAMLO = $04                         ;; the start-up's RAM clear and test pointer; then the boot's load address (2 bytes)
 TRAMSZ = $06                        ;; the start-up's RAM size, in pages; then whether a left cartridge is there
 TSTDAT = $07                        ;; rev. A's memory test's saved byte; then whether a right cartridge is there
 WARMST = $08                        ;; the warm start flag: 0 on power-up, $FF after SYSTEM RESET

@@ -290,8 +290,9 @@ FP_ONE:
 
 ;; Gives (x - c) / (x + c), for x in FR0 and the constant c at X/Y.
 ;;
-;; <LOG> uses it with sqrt(10); with <FP_ONE>, it gives the (x - 1) / (x + 1) that brings an arctangent's argument
-;; below 1, to go with <FP_PI_OVER_4> and <ATN_COEFFICIENTS>. The add's and subtract's errors are not checked.
+;; <LOG> uses it with sqrt(10). Atari BASIC's ATN uses it with the last of <ATN_COEFFICIENTS>, 0.9999999999, for
+;; about (x - 1) / (x + 1), which brings an arctangent's argument below 1, to go with <FP_PI_OVER_4>. The add's and
+;; subtract's errors are not checked.
 ;; In: FR0 = x, X = c's address, low byte, Y = its high byte
 ;; Out: FR0 = (x - c) / (x + c), carry = set when the divide is out of range
 ;; Uses: A, X, Y, FR1, FPTR2, FLPTR, PLYARG, FPSCR
@@ -458,8 +459,9 @@ LOG_COEFFICIENTS:
 
 ;; The coefficients of P, where atan(x) = x * P(x^2) for x from -1 to 1, highest power first.
 ;;
-;; The package never reads them; Atari BASIC reads them by address for its ATN. An argument beyond 1 can be brought
-;; below it with (x - 1) / (x + 1), adding <FP_PI_OVER_4>. The last is 0.9999999999, as in <EXP_COEFFICIENTS>.
+;; The package never reads them; Atari BASIC reads them by address for its ATN. The last is 0.9999999999, as in
+;; <EXP_COEFFICIENTS>, and BASIC also uses it as the c of <FP_DIFFERENCE_OVER_SUM>, so an argument beyond 1 is
+;; brought below it with (x - c) / (x + c), adding <FP_PI_OVER_4>.
 ;; See: <PLYEVL>, <FP_PI_OVER_4>, <FP_DIFFERENCE_OVER_SUM>
 ATN_COEFFICIENTS:
     .assert ATN_COEFFICIENTS = $DFAE, "The arctangent's coefficients are at $DFAE."

@@ -1034,7 +1034,8 @@ ReferencePointers:
 ; Page $1E
 ;
 ; Page $1E, above BASIC's stack, which BASIC takes for its own work space. The stack is page $1B, the page after its
-; zero page ($1A), which the 6502 reaches as page $01 while that zero page is in use; it runs from STACK_END down.
+; zero page ($1A), which the 6502 reaches as page $01 while that zero page is in use; BASIC resets the stack pointer to
+; STACK_END.
 ; ---------------------------------------------------------------------------------------------------------------------
 
     .dum 255

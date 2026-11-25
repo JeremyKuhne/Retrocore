@@ -1,7 +1,7 @@
 # Retrocore Assembly and Debugger
 
 Native Retrocore assembly highlighting, language features and source debugging on
-the Apple II family, the Apple-1, the TRS-80 Model I, III, 4, II, 12 and 16, the TRS-80 Color Computer, the Commodore PET 2001 and 4032, the BBC Micro and the MITS Altair 8800 in one extension. Highlighting is declarative and needs no C# process,
+the Apple II family, the Apple-1, the TRS-80 Model I, III, 4, II, 12 and 16, the TRS-80 Color Computer, the Commodore PET 2001 and 4032, the BBC Micro, the Atari 400 and 800 and the MITS Altair 8800 in one extension. Highlighting is declarative and needs no C# process,
 ROMs or debug session. Language features (errors as you type, go to definition,
 hover, completion and symbols) come from a language server in the .NET debug host,
 which starts when a `retrocore-asm` document opens; see
@@ -99,13 +99,14 @@ No launch.json is needed to start a machine. Without dumps, the Apple II family 
 TRS-80s run ROMs assembled from the SDK's sources, so there is nothing else to set up; the
 Color Computer 1, 2 and 3 run Color, Extended and Disk BASIC and the CoCo 3's ROM from
 their sources, the PET its BASIC, screen editor and kernal from theirs, the BBC Micro its MOS, BASIC, DFS and
-character ROM, and the Kaypro II its monitor ROM from its source.
+character ROM, the Atari 400 and 800 their OS, floating point package, Atari BASIC and the
+810's firmware, and the Kaypro II its monitor ROM from its source.
 
 The quickest way is the **Run and Debug** dropdown. Under Retrocore it lists each
 machine: Apple IIe (enhanced), Apple IIe, Apple II Plus, Apple II, Apple III, TRS-80
 Model I (Level II), TRS-80 Model I (Level I), TRS-80 Model III, Model III (Level I), Model 4, Model 4P,
 Model II, Model 12 and Model 16 (Z80 side), Apple-1, the TRS-80 Color Computer,
-Color Computer 2 and Color Computer 3, the Commodore PET 2001 (BASIC 2), PET 2001, PET 4032 and PET 4032 (business keyboard), the BBC Micro Model B and Model A, the MITS Altair 8800, and the Kaypro II. Pick one and press F5, and it boots as it is. **Debug: Select and Start Debugging** lists them too.
+Color Computer 2 and Color Computer 3, the Commodore PET 2001 (BASIC 2), PET 2001, PET 4032 and PET 4032 (business keyboard), the BBC Micro Model B and Model A, the Atari 800 and Atari 400, the MITS Altair 8800, and the Kaypro II. Pick one and press F5, and it boots as it is. **Debug: Select and Start Debugging** lists them too.
 
 To start a machine with something in it, run **Retrocore: Start Machine…**. It is in
 the Command Palette and on the **Machine** view's **...** menu. It asks three things:
@@ -118,8 +119,10 @@ the Command Palette and on the **Machine** view's **...** menu. It asks three th
      too, which loads where its first two bytes say);
    - a BASIC file, for the machine's own BASIC;
    - a disk image, booted from the first drive (on the BBC Micro with SHIFT-BREAK; on the PET, inserted in it);
-   - a tape, on the Model I, the Apple-1, the Color Computer, the BBC Micro and the PET (in
-     its built-in Datasette, with PLAY down);
+   - a tape, on the Model I, the Apple-1, the Color Computer, the BBC Micro, the Atari and
+     the PET (in its built-in Datasette, with PLAY down);
+   - on the Atari, an executable (`.xex`), booted from the first drive on a disk built
+     for it, or a cartridge (`.rom` or `.car`), in the left slot in place of BASIC;
    - on the Apple II family, a source file on a fresh DOS 3.3 disk, which boots and
      runs it.
 
@@ -129,7 +132,7 @@ the Command Palette and on the **Machine** view's **...** menu. It asks three th
      last ran with come back, as [Machine and Drives](#machine-and-drives) describes.
    - **Options…** lists that machine's own choices, such as the II's Monitor, the II
      and II Plus's memory and slot 0 card, the Mockingboard, the Model I's
-     Expansion Interface and lowercase, the Apple-1's memory and cassette interface, and the PET's memory, sound and snow. Each shows its current value; Esc goes back.
+     Expansion Interface and lowercase, the Apple-1's memory and cassette interface, the PET's memory, sound and snow, and the Atari's BASIC revision, video standard, disk drives and sound. Each shows its current value; Esc goes back.
    - **Save as Launch Configuration** adds the setup to the workspace's launch.json,
      under a name you confirm, replacing one of the same name.
 
@@ -1165,6 +1168,40 @@ take disks: `OPEN 15,8,15,"N0:NAME,ID"` formats one, and `SAVE "0:NAME",8` and
 initializes it. A disk the drive wrote is a changed disk, which saves back to its D64,
 D67 or G64 image. See the [PET guide](../docs/Pet.md) for what is emulated.
 
+## Debugging on the Atari 400 and 800
+
+`"machine": "atari800"` debugs an Atari 800 or 400, chosen by `model` (`atari800`, the
+default, or `atari400`), with the same source debugging, call stack, cycle counts and
+`Keeps:` checks. The machine is configured by:
+
+- `video` (`ntsc` or `pal`, which runs the PAL OS), `os` (`b` or `a`) and `chip`
+  (`gtia` or `ctia`);
+- `ramKilobytes`: 8 to 48 in steps of 8, 48 on the 800 and 16 on the 400 by default;
+- `basicCartridge`: Atari BASIC's revision in the left slot, `c`, `b`, `a` or `none`;
+- `cartridge`, a left cartridge (`.rom` or `.car`), which then holds no BASIC, and
+  `rightCartridge`, the 800's right slot (an 8 KB `.rom` or a right-slot `.car`);
+- `diskDrives` (0 to 4), `diskDrive` (`atari810`, the 810 at the hardware level, or
+  `sio`, at the command level) and `disks` (ATR or XFD images for D1:-D4:);
+- `executable`, an `.xex` that boots from drive 1 on a disk built for it;
+- `cassette`, a `.cas` tape or an `.xex` on a boot tape; `fastCassette` (on by
+  default) and `sound` (`speaker` or `off`).
+
+The OS, the floating point package, Atari BASIC and the 810's firmware are built from the
+SDK's sources, so both models need nothing else, and debugging steps into the sources.
+The OS, the floating point package and each cartridge slot are memory areas of their own,
+so a breakpoint in BASIC stops only while its cartridge is in. Dumps from `romDirectory`
+or `RETROCORE_ATARI_ROMS`, under MAME's names (such as `co12399b.rom`), replace the
+sources' ROMs when given; the 810's go in an `atari810` folder beside them, and BASIC's
+are `basic-revc.rom` (or `-revb` or `-reva`). A program (`source` or `program`) runs
+after the OS and BASIC have started for `bootSeconds` (2 by default);
+[the sample](../sample/atari/hello.asm) prints through CIO.
+
+The panel shows the screen and takes ATASCII: **Backspace** for BACK S, **Home** for
+CLEAR, **Tab** for TAB, arrows for the cursor keys and **Pause** for BREAK. VS Code keeps
+the function keys, so START, SELECT, OPTION, BREAK and SYSTEM RESET are on the key bar;
+each is held for a tenth of a second. **Ctrl+F12** or **Ctrl+Break** turns the machine
+off and on. See the [Atari guide](../docs/Atari800.md) for what is emulated.
+
 ## Debugging on the TRS-80 Model III, 4 and II
 
 `"machine": "trs80-model3"` debugs a Model III, 4 or 4P (`model` `3`, `4` or `4p`;
@@ -1273,7 +1310,7 @@ protocol.
 **Retrocore: Open BASIC Program** opens the BASIC program in the running machine as
 text: AppleSoft on the Apple II Plus and IIe, Integer BASIC on the II, Level II on the
 Model I, Color BASIC on the Color Computer 1 and 2, with Extended and Disk
-Extended Color BASIC's words when their ROMs are fitted, and BBC BASIC II on the BBC Micro. Level I and the CoCo 3's
+Extended Color BASIC's words when their ROMs are fitted, BBC BASIC II on the BBC Micro, and Atari BASIC on the Atari. Level I and the CoCo 3's
 BASIC are not supported yet. It is in three places besides the Command Palette:
 
 - the **BASIC program** button on the machine panel's key bar;
@@ -1303,7 +1340,7 @@ character, `{$84}` for any byte, and `{{` for a brace.
 
 ### The BASIC thread
 
-A session running AppleSoft, Integer BASIC, Level II, Color BASIC or BBC BASIC has a
+A session running AppleSoft, Integer BASIC, Level II, Color BASIC, BBC BASIC or Atari BASIC has a
 **BASIC** thread beside the CPU's.
 Its call stack is the statement running, then each GOSUB in progress at the
 statement that called it; it shows **BASIC: ready** at the prompt.
@@ -1355,13 +1392,18 @@ statement that called it; it shows **BASIC: ready** at the prompt.
   registers, comments and the text it skips are highlighted and are not variables, while its
   labels are, and an unknown mnemonic is warned of; another BASIC's word, such as `HOME`, is
   warned of only as a statement of its own.
+- **Atari BASIC** tokenizes a line as its syntax tables steer it: a statement's name
+  is found only where a statement starts, so `PRINTER=1` is PRINT ER=1, and a name may
+  hold other words, as `TOTAL` and `NOTE1` do. A name cut short by a dot is the first it
+  starts (`PR.` is PRINT). Its variables are numbered in the order the program names
+  them, and its errors stop unless TRAP takes them, which counts as handled.
 
 ### BASIC files
 
 `.applesoft.bas`, `.integer.bas`, `.apple1.bas`, `.business.bas`, `.level2.bas`,
-`.colorbasic.bas`, `.mbasic.bas` and `.bbcbasic.bas` files are AppleSoft, Integer BASIC, Apple-1 BASIC,
+`.colorbasic.bas`, `.mbasic.bas`, `.bbcbasic.bas` and `.atari.bas` files are AppleSoft, Integer BASIC, Apple-1 BASIC,
 Business BASIC, Level II BASIC, Color BASIC, MBASIC (BASIC-80 5.21, the Kaypro II's
-CP/M BASIC) and BBC BASIC. Business BASIC and MBASIC take a reserved word only between separators,
+CP/M BASIC), BBC BASIC and Atari BASIC. Business BASIC and MBASIC take a reserved word only between separators,
 so their highlighting leaves `PRINTER` a name, and their names count in full, dots
 included (MBASIC's to 40 characters). A Color BASIC file may use every word of Disk Extended Color BASIC; a
 machine without those ROMs stores the words they add as letters. A plain `.bas` file

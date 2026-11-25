@@ -7,7 +7,7 @@ import { readFileSync } from "node:fs";
 import * as path from "node:path";
 import { test } from "node:test";
 import { machineById, machines } from "../machines";
-import { describeSetup, isUsable, optionValue, removesDrives, runChoices, setupConfiguration, withOption, type Setup } from "../startFlow";
+import { crowdsCartridge, describeSetup, isUsable, optionValue, removesDrives, runChoices, setupConfiguration, withOption, type Setup } from "../startFlow";
 
 interface OptionSchema { type?: string; enum?: unknown[]; anyOf?: OptionSchema[] }
 
@@ -50,6 +50,12 @@ test("each machine offers what it can run: itself, sources and binaries, and its
     assert.match(runChoices(machine("pet2001")).find(choice => choice.kind === "basic")?.detail ?? "", /Commodore BASIC 1 \(PET\)/);
     assert.deepEqual(runChoices(machine("coco2")).find(choice => choice.kind === "program")?.extensions, ["bin"], "other machines load binaries");
     assert.deepEqual(kinds("kaypro2"), ["machine", "source", "program", "basic", "disk"], "the Kaypro II boots CP/M disks and runs MBASIC");
+    for (const id of ["atari800", "atari400"]) {
+        assert.deepEqual(kinds(id), ["machine", "source", "program", "basic", "executable", "cartridge", "disk", "tape"]);
+    }
+    assert.match(runChoices(machine("atari800")).find(choice => choice.kind === "basic")?.detail ?? "", /Atari BASIC/);
+    assert.deepEqual(runChoices(machine("atari800")).find(choice => choice.kind === "executable")?.extensions, ["xex"]);
+    assert.deepEqual(runChoices(machine("atari800")).find(choice => choice.kind === "cartridge")?.extensions, ["rom", "car"]);
     assert.match(runChoices(machine("coco1")).find(choice => choice.kind === "basic")?.detail ?? "", /Color BASIC/);
     assert.match(runChoices(machine("apple2-ii")).find(choice => choice.kind === "basic")?.detail ?? "", /Integer BASIC/);
     assert.match(runChoices(machine("apple1")).find(choice => choice.kind === "basic")?.detail ?? "", /Apple-1 BASIC/);
@@ -75,7 +81,15 @@ test("each kind of setup becomes the launch options that run it, which package.j
         [{ machineId: "pet4032", kind: "disk", path: "demo.d64", options: { ramKilobytes: 16 } }, { machine: "pet", model: "pet4032", disks: ["demo.d64"], ramKilobytes: 16 }],
         [{ machineId: "kaypro2", kind: "disk", path: "cpm.img", options: {} }, { machine: "kaypro2", disks: ["cpm.img"] }],
         [{ machineId: "kaypro2", kind: "basic", path: "a.mbasic.bas", basicDisk: "cpm.img", options: {} }, { machine: "kaypro2", basic: "a.mbasic.bas", disks: ["cpm.img"] }],
-        [{ machineId: "apple2-iie-enhanced", kind: "dosSource", path: "hi.s", options: {} }, { source: "hi.s", dos: "3.3", stopOnEntry: false }]
+        [{ machineId: "apple2-iie-enhanced", kind: "dosSource", path: "hi.s", options: {} }, { source: "hi.s", dos: "3.3", stopOnEntry: false }],
+        [{ machineId: "atari800", kind: "machine", options: {} }, { machine: "atari800", model: "atari800", stopOnEntry: false }],
+        [{ machineId: "atari800", kind: "source", path: "hello.asm", options: {} }, { machine: "atari800", source: "hello.asm", stopOnEntry: true }],
+        [{ machineId: "atari800", kind: "basic", path: "a.atari.bas", options: {} }, { machine: "atari800", basic: "a.atari.bas" }],
+        [{ machineId: "atari800", kind: "executable", path: "game.xex", options: {} }, { machine: "atari800", executable: "game.xex", stopOnEntry: false }],
+        [{ machineId: "atari800", kind: "cartridge", path: "star.rom", options: { basicCartridge: "b" } }, { cartridge: "star.rom", basicCartridge: "none" }],
+        [{ machineId: "atari400", kind: "disk", path: "dos.atr", options: { video: "pal", diskDrive: "sio" } },
+            { machine: "atari800", model: "atari400", disks: ["dos.atr"], video: "pal", diskDrive: "sio" }],
+        [{ machineId: "atari800", kind: "tape", path: "game.cas", options: { sound: "off" } }, { cassette: "game.cas", sound: "off" }]
     ];
 
     for (const [setup, expected] of cases) {
@@ -112,7 +126,7 @@ test("a kept setup is used only while it still names a machine and something it 
     assert.ok(!isUsable({ machineId: "apple4", kind: "machine", options: {} }), "an unknown machine");
     assert.ok(!isUsable({ machineId: "trs80-model1-level1", kind: "disk", path: "x.dsk", options: {} }), "Level I has no disks");
     assert.ok(!isUsable({ machineId: "apple2-iie", kind: "source", options: {} }), "a source needs its file");
-    assert.equal(machines.length, 26);
+    assert.equal(machines.length, 28);
 });
 
 test("a BBC Micro's disk boots from drive 0 with SHIFT held as it starts, as SHIFT-BREAK does", () => {
@@ -129,4 +143,13 @@ test("a setup that starts from a disk keeps the drives it needs", () => {
     assert.ok(removesDrives(disk, "diskInterface", false));
     assert.ok(!removesDrives(disk, "diskInterface", true));
     assert.ok(!removesDrives({ ...disk, kind: "machine" }, "diskInterface", false));
+});
+
+test("a cartridge keeps BASIC out of its slot", () => {
+    const atari = machine("atari800");
+    const cartridge: Setup = { machineId: "atari800", kind: "cartridge", path: "star.rom", options: {} };
+    assert.equal(optionValue(atari, cartridge, "basicCartridge"), "none");
+    assert.ok(crowdsCartridge(setupConfiguration(cartridge), "basicCartridge", "c"));
+    assert.ok(!crowdsCartridge(setupConfiguration(cartridge), "basicCartridge", "none"));
+    assert.ok(!crowdsCartridge(setupConfiguration({ ...cartridge, kind: "machine" }), "basicCartridge", "c"));
 });

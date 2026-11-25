@@ -124,6 +124,25 @@ internal static class KeyMap
             // The business keyboard's TAB; the graphics keyboard has none and ignores it.
             [Key.Tab] = 9
         },
+        // The Atari types ATASCII: BACK S is $7E, TAB $7F, CLEAR $7D and the cursor keys $1C-$1F; the keys that type
+        // nothing are the debug host's codes from $F0, F2-F4 for START, SELECT and OPTION, and Pause for BREAK.
+        ["atari800"] = new()
+        {
+            [Key.Enter] = 13,
+            [Key.Back] = 0x7E,
+            [Key.Delete] = 0x7E,
+            [Key.Tab] = 0x7F,
+            [Key.Escape] = 27,
+            [Key.Home] = 0x7D,
+            [Key.Up] = 0x1C,
+            [Key.Down] = 0x1D,
+            [Key.Left] = 0x1E,
+            [Key.Right] = 0x1F,
+            [Key.F2] = 0xF0,
+            [Key.F3] = 0xF1,
+            [Key.F4] = 0xF2,
+            [Key.Pause] = 0xF3
+        },
         ["altair"] = new()
         {
             [Key.Enter] = 13,

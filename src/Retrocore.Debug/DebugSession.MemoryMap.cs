@@ -95,10 +95,11 @@ internal sealed partial class DebugSession
     // What an area holds, from the names the machines give their areas.
     private static string AreaKind(Enum area) => area.ToString() switch
     {
-        "None" or "Unmapped" => "none",
+        "None" or "Unmapped" or "Empty" => "none",
         "Video" => "video",
         "Io" or "Pia" or "Vias" or "Keyboard" or "Printer" or "ExpansionInterface" or "CassetteInterface" => "io",
         "Monitor" or "ExtendedBasic" or "ColorBasic" or "Cartridge" => "rom",
+        "LeftCartridge" or "RightCartridge" or "OperatingSystem" or "FloatingPoint" => "rom",
         string name when name.EndsWith("Rom", StringComparison.Ordinal) => "rom",
         _ => "ram"
     };

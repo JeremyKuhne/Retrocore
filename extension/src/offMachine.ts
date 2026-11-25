@@ -13,7 +13,7 @@ import type { Device } from "./drives";
 import { languageRequest } from "./languageClient";
 import { catalogMachine, launchConfiguration, machineById, machines, startsWithDisks, withSetting, type Machine, type MachineChoice } from "./machines";
 import type { SavedMachines } from "./savedMachine";
-import { describeSetup, driveOptions, isUsable, setupConfiguration, setupFromConfiguration, startOrigin, withOption, type Setup } from "./startFlow";
+import { crowdsCartridge, describeSetup, driveOptions, isUsable, setupConfiguration, setupFromConfiguration, startOrigin, withOption, type Setup } from "./startFlow";
 
 /** Where an off machine came from, which decides how it boots. */
 export type OffSource =
@@ -315,6 +315,10 @@ export class OffMachine {
         // would have no drives to put them in.
         if (driveOptions.has(option) && value === false && startsWithDisks(target.configuration)) {
             throw new Error(`${this.name ?? "The machine"} starts with disks in its drives, so it keeps its ${choice.label.toLowerCase()}.`);
+        }
+        // A cartridge holds the left slot, where BASIC would go.
+        if (crowdsCartridge(target.configuration, option, value)) {
+            throw new Error(`${this.name ?? "The machine"} starts with a cartridge in BASIC's slot, so BASIC stays out.`);
         }
 
         let next: OffTarget;

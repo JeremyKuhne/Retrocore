@@ -55,7 +55,7 @@ internal static class BasicCommand
         BasicDialect? dialect = null;
         if (options.TryGetValue("--dialect", out string? name) && (dialect = BasicDialect.FromName(name)) is null)
         {
-            Console.Error.WriteLine($"'{name}' is not a BASIC dialect; use applesoft, integer, apple1, level2, business, colorbasic, mbasic, petbasic or bbcbasic.");
+            Console.Error.WriteLine($"'{name}' is not a BASIC dialect; use applesoft, integer, apple1, level2, business, colorbasic, mbasic, petbasic, bbcbasic or atari.");
             return 2;
         }
 
@@ -86,7 +86,7 @@ internal static class BasicCommand
         }
         else if (dialect is null)
         {
-            return Fail("A tokenized file does not say its dialect; give --dialect applesoft, integer, apple1, level2, business, colorbasic, mbasic, petbasic or bbcbasic.", 2);
+            return Fail("A tokenized file does not say its dialect; give --dialect applesoft, integer, apple1, level2, business, colorbasic, mbasic, petbasic, bbcbasic or atari.", 2);
         }
         else
         {

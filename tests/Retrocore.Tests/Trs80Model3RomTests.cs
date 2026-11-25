@@ -157,8 +157,9 @@ public class Trs80Model3RomTests
     }
 
     /// <summary>
-    ///  The Model III with Level I BASIC boots to READY, runs a statement, typed in either case, saves and loads a program on tape at 250
-    ///  baud, the leader zeros and the sync byte $A5, and the reset button stops a running program every time.
+    ///  The Model III with Level I BASIC boots to READY, runs a statement, typed in either case, saves and loads a
+    ///  program on tape at 250 baud, the leader zeros and the sync byte $A5, and the reset button stops a running
+    ///  program every time.
     /// </summary>
     [TestMethod]
     public void Level1BootsAndUsesTheTape()

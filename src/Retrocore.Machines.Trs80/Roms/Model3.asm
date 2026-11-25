@@ -151,8 +151,8 @@ KBTAB:
     .res 5, $00
 .else
 
-;; Tests whether the two shift keys are one key, as SHFEQU says: zero when they work separately, the right one
-;; being shift lock.
+;; Tests whether the two shift keys are one key, as SHFEQU says: Z when they work separately, the right one being
+;; shift lock.
 CHKEQU:
     LD A,[SHFEQU]
     OR A

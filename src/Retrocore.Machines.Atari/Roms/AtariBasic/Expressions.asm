@@ -784,7 +784,7 @@ OPERATOR_ARRAY_PAREN_FETCH_LOOP:
 ;;   COMMA_COUNT = 0
 ;; Uses: A, X, Y, ZTEMP1
 ;; Errors: 3 = value error, for an index beyond 65535; 5 = string length error, for an index of 0, a last index
-;;   beyond the length or the first beyond it; 9 = array or string DIM error, for a string never DIMensioned;
+;;   beyond the length or the first beyond it, and so for a string never DIMensioned, whose length and size are 0;
 ;;   10 = argument stack overflow
 OPERATOR_STRING_PAREN:
     lda COMMA_COUNT

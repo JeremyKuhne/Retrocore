@@ -355,8 +355,8 @@ ON_SKIP:
     jsr AT_STATEMENT_END
     bcc ON_SKIP
 .if VERSION = VERSION_A
-    ; Rev. A leaves ON ... GOSUB's entry on the run-time stack when the list runs out, so that a later RETURN comes
-    ; back to the ON's line; rev. B takes it back.
+    ; Rev. A leaves ON ... GOSUB's entry on the run-time stack when the list runs out, a bug: a later RETURN comes
+    ; back to the ON's line. Revs. B and C take it back.
     rts                             ; the list ran out
 ON_GO:
     jmp GO_TO_FR0_LINE              ; go to the line in FR0

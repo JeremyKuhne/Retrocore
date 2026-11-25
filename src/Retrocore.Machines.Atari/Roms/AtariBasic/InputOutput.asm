@@ -11,6 +11,7 @@
 ;;   <PRINT_EOL>; <PATCH_STRING_EOL> and <RESTORE_STRING_EOL>, which end a string with an EOL for the OS to read.
 ;; - <STATEMENT_RETURN>, with <RETURN_TO_ENTRY>, which NEXT shares (rev. A keeps both in Control.asm);
 ;;   <PROMPT_INPUT_LINE> and <READ_INPUT_LINE>, which read a line for INPUT and the line editor; and + (<OPERATOR_ADD>).
+;;   Rev. A keeps the line readers in Devices.asm and + in Expressions.asm.
 ;; - BASIC's own trigonometry and square root, which the floating point package lacks: <SINE> and <COSINE> with
 ;;   <SIN_COEFFICIENTS>, <ARCTANGENT> and <SQUARE_ROOT>.
 ;; - The cartridge's header, <CARTRIDGE_HEADER>, at CARTCS.
@@ -43,8 +44,8 @@ IO_SQR_STEPS = 7                    ;; the most Newton's method steps <SQUARE_RO
 ;; In: TOKEN_OFFSET = the # token
 ;; Out: IOCB_NUMBER = the number, X = the IOCB's offset from IOCB 0 (the number times 16), zero = IOCB 0
 ;; Uses: A, Y, FR0, TOKEN_OFFSET
-;; Errors: 20 (ERR_DEVICE_NUMBER) for 0, or 8 to 15; 3 (ERR_VALUE) or 7 (ERR_NUMBER_TOO_BIG) for a number not from
-;;   0 to 32767
+;; Errors: 20 (ERR_DEVICE_NUMBER) for a low byte of 0, or one with bit 3 set (8 to 15, 24 to 31, ...); 3 (ERR_VALUE)
+;;   or 7 (ERR_NUMBER_TOO_BIG) for a number not from 0 to 32767
 ;; See: <IOCB_OFFSET>
 IOCB_FROM_HASH:
     jsr NEXT_INTEGER_BYTE
@@ -79,7 +80,7 @@ IOCB_DEVICE_NUMBER_ERROR:
 ;; puts input and output back on the screen editor, and goes to the error handler with the status as the error's
 ;; number.
 ;; In: IOCB_NUMBER = the IOCB
-;; Out: X = the IOCB's offset from IOCB 0, A = its status
+;; Out: X = the IOCB's offset from IOCB 0, A = its status, or A = 0 and Y = 0 after a BREAK
 ;; Uses: Y
 ;; Errors: the status, 128 or more, as the error number; 20 (ERR_DEVICE_NUMBER) for IOCB 8 to 15
 ;; Entry: CHECK_STATUS = with the status in A and its negative flag

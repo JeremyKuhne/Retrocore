@@ -309,11 +309,12 @@ READ_CONTROLLER_ERROR:
 
 ;; STR$(aexp): a number as the string PRINT would show.
 ;;
-;; The FP package's FASC writes the number into LBUFF (from LBPR2, just before it, below 1), its last character with
-;; bit 7 set; the function clears that bit, counts the length and returns the string where it is. It isn't copied, so
-;; the next conversion that uses LBUFF overwrites it: of two STR$ in one expression, both have the second's text.
+;; The FP package's FASC writes the number into LBUFF (from LBPR2 or LBPR1, just before it, below 1), its last
+;; character with bit 7 set; the function clears that bit, counts the length and returns the string where it is. It
+;; isn't copied, so the next conversion that uses LBUFF overwrites it: of two STR$ in one expression, both have the
+;; second's text.
 ;; In: ARGUMENT_INDEX = the top entry: the number
-;; Out: ARGUMENT_INDEX = the top entry: the string, in LBUFF or from LBPR2
+;; Out: ARGUMENT_INDEX = the top entry: the string, in LBUFF or from just before it
 ;; Uses: all
 FUNCTION_STR:
     jsr POP_VALUE

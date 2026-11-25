@@ -8,7 +8,8 @@
 ;; - <STATEMENT_SETCOLOR>, <STATEMENT_SOUND>, <STATEMENT_POSITION>, <STATEMENT_COLOR>, <STATEMENT_DRAWTO>,
 ;;   <STATEMENT_GRAPHICS> and <STATEMENT_PLOT>; in revisions B and C, `NUMBER_HAS_FRACTION`, for ^.
 ;; - Character output straight through a handler: <PUT_CHARACTER>.
-;; - <STATEMENT_ENTER>, <OPEN_LIST_FILE> and <OPEN_FILE_IOCB>, which open IOCB 7 on a file; <FP_TWO>, for SQR.
+;; - <STATEMENT_ENTER>, <OPEN_LIST_FILE> and <OPEN_FILE_IOCB>, which open IOCB 7 on a file; <FP_TWO>, for SQR (rev. A's
+;;   is in InputOutput.asm).
 ;; - <STATEMENT_LOAD>, <LOAD_AND_RUN>, <STATEMENT_CLOAD>, <STATEMENT_SAVE> and <STATEMENT_CSAVE>, with
 ;;   <LOAD_PROGRAM>, <SAVE_PROGRAM> and <TRANSFER_TABLES>; <OPEN_CASSETTE> and <OPEN_DEVICE>.
 ;; - <STATEMENT_XIO>, <STATEMENT_OPEN>, <STATEMENT_CLOSE>, <STATEMENT_STATUS>, <STATEMENT_NOTE>, <STATEMENT_POINT>,
@@ -94,7 +95,7 @@ DIM_ERROR:
 ;; Errors: 8 (ERR_INPUT)
 INPUT_STATEMENT_ERROR:
     inc ERROR_NUMBER
-;; Raises error 7, number greater than 32767: a value that must be a positive integer isn't.
+;; Raises error 7, number greater than 32767: a value from 32768 to 65535 where one up to 32767 is needed.
 ;; Errors: 7 (ERR_NUMBER_TOO_BIG)
 NUMBER_TOO_BIG_ERROR:
     inc ERROR_NUMBER
@@ -159,7 +160,8 @@ HANDLE_ERROR_REPORT:
 ;; Ends an error's or STOP's message: prints " AT LINE" and the line's number for a program line, then goes back to
 ;; the line editor.
 ;;
-;; Clears ERROR_NUMBER for the next error, and takes INPUT and PRINT back to the screen and keyboard.
+;; Clears ERROR_NUMBER for the next error, and from rev. B takes INPUT and PRINT back to the screen and keyboard
+;; again, as <KEEP_STOP_LINE> has already done in every revision.
 ;; In: STMCUR = the line that was being run
 ;; See: <HANDLE_ERROR>, <STATEMENT_STOP>
 REPORT_AT_LINE:
@@ -182,7 +184,7 @@ REPORT_AT_LINE_DONE:
     lda #$00
     sta ERROR_NUMBER
 .if VERSION >= VERSION_B
-    jsr DEFAULT_IOCBS               ; not in rev. A, where KEEP_STOP_LINE has done it
+    jsr DEFAULT_IOCBS               ; again: KEEP_STOP_LINE has done it
 .endif
     jmp EDIT_LINE
 
@@ -190,7 +192,7 @@ REPORT_AT_LINE_DONE:
 ;;
 ;; It also uses what <FASC> uses.
 ;; In: FR0 = the integer, low byte first
-;; Out: INBUFF = LBUFF
+;; Out: INBUFF = the text's first character, LBUFF or the byte after it
 ;; Uses: A, X, Y, FR0, LBUFF, NAME_POINTER, LIST_COUNT
 PRINT_INTEGER:
     jsr IFP
@@ -673,7 +675,7 @@ STATEMENT_SAVE:
     lda #OWRIT
     jsr OPEN_FILE_IOCB
 ;; Writes the program to IOCB 7, which is open: the header of LOMEM to STARP less LOMEM, then the tables.
-;; Out: INBUFF = LBUFF
+;; Out: INBUFF = VNTP, where <TRANSFER_TABLES> leaves it
 ;; Errors: CIO's status when a write fails
 ;; See: <LOAD_PROGRAM>, <TRANSFER_TABLES>
 SAVE_PROGRAM:
@@ -809,7 +811,7 @@ STATEMENT_XIO:
 ;; aexp1 is the IOCB, 1-7; aexp2 the mode, ICAX1 (4 to read, 8 to write, 12 for both, 6 for a disk's directory, 9 to
 ;; append); aexp3 ICAX2, which the device may use.
 ;; In: TOKEN_OFFSET = the # token
-;; Errors: 20 (ERR_DEVICE_NUMBER) when the IOCB is 0 or above 7, 7 (ERR_NUMBER_TOO_BIG), and CIO's status when the
+;; Errors: those of <IOCB_FROM_HASH>, and CIO's status when the
 ;;   open fails
 ;; See: <STATEMENT_CLOSE>
 STATEMENT_OPEN:
@@ -853,7 +855,7 @@ STATEMENT_CLOSE:
 ;; Sends a CIO command to the IOCB after # in the statement, and checks it.
 ;; In: A = the command, TOKEN_OFFSET = the # token
 ;; Out: X = the IOCB's offset from IOCB 0
-;; Errors: 20 (ERR_DEVICE_NUMBER) when the IOCB is 0 or above 7, 7 (ERR_NUMBER_TOO_BIG), and CIO's status when the
+;; Errors: those of <IOCB_FROM_HASH>, and CIO's status when the
 ;;   command fails
 ;; Entry: COMMAND_HASH_IOCB_CALL = with IO_COMMAND and the IOCB set, and the IOCB's offset in X
 COMMAND_HASH_IOCB:
@@ -867,7 +869,7 @@ COMMAND_HASH_IOCB_CALL:
 ;;
 ;; The status is CIO's, 1 for success or an error number from 128, and is not an error itself.
 ;; In: TOKEN_OFFSET = the # token
-;; Errors: 20 (ERR_DEVICE_NUMBER) when the IOCB is 0 or above 7, 7 (ERR_NUMBER_TOO_BIG)
+;; Errors: those of <IOCB_FROM_HASH>
 STATEMENT_STATUS:
     jsr IOCB_FROM_HASH
     lda #CSTATUS
@@ -921,7 +923,7 @@ STATEMENT_POINT:
 ;;
 ;; The byte is aexp2 modulo 256, put straight through the handler as PRINT's characters are.
 ;; In: TOKEN_OFFSET = the # token
-;; Errors: those of <PUT_CHARACTER>, 20 (ERR_DEVICE_NUMBER) when the IOCB is 0 or above 7, 7 (ERR_NUMBER_TOO_BIG)
+;; Errors: those of <IOCB_FROM_HASH> and <PUT_CHARACTER>
 STATEMENT_PUT:
     jsr IOCB_FROM_HASH
     jsr EVALUATE_UNSIGNED
@@ -931,12 +933,12 @@ STATEMENT_PUT:
 
 ;; GET: reads one byte from an IOCB into a variable: GET #aexp, avar.
 ;; In: TOKEN_OFFSET = the # token
-;; Errors: 20 (ERR_DEVICE_NUMBER) when the IOCB is 0 or above 7, 7 (ERR_NUMBER_TOO_BIG), and CIO's status when
+;; Errors: those of <IOCB_FROM_HASH>, and CIO's status when
 ;;   the read fails
 ;; Entry: STATEMENT_GET_BYTE = with the IOCB set and its offset in X, for LOCATE
 STATEMENT_GET:
 .if VERSION >= VERSION_B
-    jsr FP_SET_INBUFF_LBUFF         ; rev. A reads the byte to wherever INBUFF was left, such as a file name's string
+    jsr FP_SET_INBUFF_LBUFF         ; rev. A reads the byte to wherever INBUFF was left, such as VAL's string
 .endif
     jsr IOCB_FROM_HASH
 STATEMENT_GET_BYTE:
@@ -952,7 +954,7 @@ STATEMENT_GET_BYTE:
 ;; LOCATE: reads the colour or character at a point of the screen into a variable: LOCATE aexp1, aexp2, avar.
 ;;
 ;; Moves the cursor there, as POSITION does, and reads a byte from IOCB 6 as GET would, which moves it on. Unlike
-;; GET, it doesn't point INBUFF at LBUFF first.
+;; rev. B's and C's GET, it doesn't point INBUFF at LBUFF first.
 ;; In: TOKEN_OFFSET = the first expression's token
 ;; Errors: those of <STATEMENT_POSITION>, and CIO's status when the read fails
 STATEMENT_LOCATE:

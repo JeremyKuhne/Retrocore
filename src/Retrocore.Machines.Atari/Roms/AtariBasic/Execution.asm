@@ -3,14 +3,14 @@
 ;; The heart of the running program, and the memory mover every table shares:
 ;;
 ;; - <OPEN_SPACE> and <CLOSE_SPACE> open or close space at one of the program's tables, moving that table and every
-;;   one above it and their pointers, up to BASIC_MEMTOP; <MOVE_MEMORY_DOWN> is their copy, which string assignment
-;;   uses too.
+;;   one above it and their pointers, up to BASIC_MEMTOP; <MOVE_MEMORY_DOWN> is CLOSE_SPACE's copy, which string
+;;   assignment uses too.
 ;; - <EXECUTE_LINE> runs the program's statements one after the other, through <STATEMENT_ROUTINES>, testing BREAK
 ;;   before each; <FIND_LINE> finds a line by its number, and small helpers step STMCUR and read a line's length and
 ;;   number.
 ;; - REM and DATA, BYE and DOS, the statements that do the least.
 ;; - <EVALUATE_EXPRESSION>, which is also LET: it reads each operand with <READ_OPERAND> onto the argument stack, and
-;;   runs each operator, through <OPERATOR_ROUTINES>, once the operators after it have lower precedence.
+;;   runs each operator, through <OPERATOR_ROUTINES>, once the operator after it has no higher precedence.
 ;;
 ;; Maintained by hand; assembles byte-identically to the cartridge.
 
@@ -383,8 +383,8 @@ GET_LINE_NUMBER_HIGH:
 .endif
 ;; REM and DATA: do nothing.
 ;;
-;; REM's remark and DATA's values are kept as typed to the end of the statement (a remark to the end of the line),
-;; and the statement's offset of the next statement steps over them; READ finds DATA's values for itself.
+;; REM's remark and DATA's values are kept as typed to the end of the line, and the statement's offset of the next
+;; statement steps over them; READ finds DATA's values for itself.
 ;; Keeps: A, X, Y
 STATEMENT_REM:
     rts

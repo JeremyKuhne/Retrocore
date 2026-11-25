@@ -2,10 +2,10 @@
 ;;
 ;; What Atari BASIC (rev. C) keeps in RAM: its zero page from $80 to $CA, with the pointers to the program's tables
 ;; that Atari's manuals name, and the working bytes of the line editor, the syntax checker, the expression evaluator
-;; and the statements; the syntax checker's stack in page four; and the parts of the floating point package's line
-;; buffer (LBUFF) that SAVE, LOAD and CHR$ borrow. Then the values every part of BASIC shares: the tokens of the
-;; statements, operators and functions, the codes of the syntax tables, the bits of a variable's type, the sizes of
-;; the run-time stack's entries, and the error numbers.
+;; and the statements; the syntax checker's stack in pages four and five; and the parts of the floating point
+;; package's line buffer (LBUFF) that SAVE, LOAD and CHR$ borrow. Then the values every part of BASIC shares: the
+;; tokens of the statements, operators and functions, the codes of the syntax tables, the bits of a variable's type,
+;; the sizes of the run-time stack's entries, and the error numbers.
 ;;
 ;; The names of the pointers LOMEM to STOPLN, ERRSAV and PTABW follow Atari's BASIC Reference Manual and De Re
 ;; Atari; Atari calls the pointer at $90 MEMTOP, which here is BASIC_MEMTOP, as the OS's MEMTOP is at $02E5. The
@@ -44,7 +44,7 @@ POKE_ADDRESS = $95                  ;; POKE's address (2 bytes)
 ;; The space the memory mover has just opened, which was where the table it grew began (2 bytes).
 NEW_SPACE = $97
 
-SECOND_INDEX = $97                  ;; an array's second subscript, a substring's last index or DIM's second size
+SECOND_INDEX = $97                  ;; an array's 2nd subscript, a substring's last index or DIM's 2nd size (2 bytes)
 PATCHED_CHARACTER = $97             ;; the byte that EOL_PATCHED's EOL replaced
 PATCHED_INDEX = $98                 ;; where that byte is, from the string's start
 MOVE_FROM = $99                     ;; the memory mover's source (2 bytes)
@@ -162,7 +162,7 @@ SYNTAX_STACK_RULE = $0482           ;; an entry's caller's place in the syntax t
 ;; reaches it indexed by the pointer's own address, as SAVE_HEADER-LOMEM,X.
 SAVE_HEADER = $0580
 
-CHR_BUFFER = $05C0                  ;; the one character CHR$ returns, in the upper half of LBUFF
+CHR_BUFFER = $05C0                  ;; the one character CHR$ returns, two thirds of the way into LBUFF
 
 ; ---------------------------------------------------------------------------------------------------------------------
 ; Sizes
@@ -272,7 +272,7 @@ OP_COMMA = $12                      ;; , between items
 OP_DOLLAR = $13                     ;; $, of a string variable's name
 TOKEN_STATEMENT_END = $14           ;; :, the end of a statement
 OP_SEMICOLON = $15                  ;; ;
-TOKEN_LINE_END = $16                ;; the end of the line, which lists as nothing
+TOKEN_LINE_END = $16                ;; the end of the line, which lists as its EOL
 OP_GOTO = $17                       ;; GOTO, in ON
 OP_GOSUB = $18                      ;; GOSUB, in ON
 OP_TO = $19                         ;; TO, in FOR

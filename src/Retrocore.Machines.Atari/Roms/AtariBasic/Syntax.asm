@@ -625,8 +625,9 @@ STOPPED_MESSAGE:
 ; alternative that matches nothing. A rule without a RETURN of its own continues into the rule after it.
 
 .if VERSION = VERSION_A
-; Rev. A's expression rule takes a unary operator before any expression, so NOT NOT A and - -1 pass; the later
-; revisions take one only before an operand or a parenthesis, with an unsigned-expression rule.
+; Rev. A's expression rule takes a unary operator before any expression, so NOT NOT A and - -A pass; the later
+; revisions take one only before an operand or a parenthesis, with an unsigned-expression rule. (- -1 passes in
+; every revision, the later ones reading -1 as a signed constant.)
 
 ;; The syntax tables' first rule, an expression's, which the other rules call by the code SYNTAX_EXPRESSION, as rev.
 ;; A has it.
@@ -663,7 +664,8 @@ RULE_EXPRESSION:
 ;;
 ;; A failed alternative's codes are skipped by their sizes, without knowing their meaning, to the next SYNTAX_OR or
 ;; SYNTAX_RETURN. Rules lie near the rules that call them, so that most calls are NEAR's one byte, and some rules
-;; have copies further on (<RULE_STATEMENT_END_2>, <RULE_FILESPEC>) to be near their callers too.
+;; have a copy further on (<RULE_STATEMENT_END_2>) or a stepping stone (<RULE_FILESPEC>) to be near their callers
+;; too.
 ;;
 ;; An expression's grammar: a string is a number in an expression only by a comparison of strings, and an operand
 ;; can't be a unary operator's, so NOT NOT A is a syntax error.
@@ -1102,7 +1104,7 @@ RULE_NOTE:
     RETURN
 
 ; filespec = string
-; A copy of string within the reach of NEAR.
+; A stepping stone to string, within the reach of NEAR.
 RULE_FILESPEC:
     FAR RULE_STRING
     RETURN
@@ -1340,7 +1342,7 @@ RULE_MORE_USR_ARGUMENTS:
 ;; Each name's last character has bit 7 set, and a zero byte ends the table. <MATCH_OPERATOR> searches it for the
 ;; token a rule wants, and the lister prints a token's name from it. The search finds the first of two equal names,
 ;; so the tokens from OP_ASSIGN_NUMBER on, which <REPLACE> writes, are found only by their tokens, for the lister.
-;; The names of $10, OP_SENTINEL, OP_ARRAY_PAREN and OP_DIM_ARRAY_PAREN are never matched or listed.
+;; The tokens $10, OP_SENTINEL, OP_ARRAY_PAREN and OP_DIM_ARRAY_PAREN are never wanted by a rule or listed.
 ;; See: <OPERATOR_ROUTINES>, <SEARCH_NAMES>
 OPERATOR_NAMES:
     OPERATOR_CHARACTER $10, $02     ; a token no line holds: its name appears to be a placeholder

@@ -236,12 +236,12 @@ EDIT_LINE_RESIZE:
     bne EDIT_LINE_STORE             ; always: no table is in page zero
 EDIT_LINE_SHRINK:
 .if VERSION = VERSION_A
-    pha                             ; shorter: close the difference at the old line's end (rev. A's ADVANCE_STMCUR
-    jsr ADVANCE_STMCUR              ; changes Y, so the size waits on the stack)
+    pha                             ; shorter: step STMCUR over the difference and close the bytes below it, the old
+    jsr ADVANCE_STMCUR              ; line's first (rev. A's ADVANCE_STMCUR changes Y, so the size waits on the stack)
     pla
     tay
 .else
-    tay                             ; shorter: close the difference at the old line's end
+    tay                             ; shorter: step STMCUR over the difference and close the bytes below it
     jsr ADVANCE_STMCUR
 .endif
     ldx #STMCUR
@@ -309,7 +309,7 @@ EDIT_LINE_DELETE:
 ;; which is then read again from its start.
 ;; In: INBUFF = the line, CIX = its first character after any spaces
 ;; Out: LINE_NUMBER = the line number, FR0+1 = A = its high byte, CIX = after the number, or 0 for the immediate line
-;; Errors: 3 (value error), for a negative number or one of 65536 or more; 14 (line too long)
+;; Errors: 3 (value error), for a negative number or one of 65536 or more
 ;; Uses: A, X, Y, FR0, TOKEN_INDEX
 READ_LINE_NUMBER:
     jsr AFP

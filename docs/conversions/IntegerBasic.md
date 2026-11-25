@@ -49,8 +49,8 @@ The root asserts that `FORFIX` is 0 or 1. `FORFIX` is the SDK's switch, which C#
   variable lookup branches back into it), `Variables`, `Lines` (the run loop), `Verbs` (the priority and routine
   tables), `Messages`, `Syntax`, `Memory`, `Display` (TRACE and DSP output), `Break` (Control-C and CON's saved
   place), `Cassette`, `Float`, `MiniAssembler`, `Sweet16` and `Registers` (I13). Top level: the entries and helpers
-  several subjects use (`ColdEntry`, `WarmEntry`, `ColdStart`, `WarmStart`, `PrintDecimal`, `FindLine`, `PushNoun`, `GetNumber`,
-  `GetByte`, `ReportError`, `MemoryFullError`, `RangeError` ...).
+  several subjects use (`ColdEntry`, `WarmEntry`, `ColdStart`, `WarmStart`, `PrintDecimal`, `FindLine`, `PushNoun`,
+  `GetNumber`, `GetByte`, `ReportError`, `MemoryFullError`, `RangeError` ...).
 - I4. Integer BASIC's own page zero: `LowMemory` and `HighMemory` (LOMEM and HIMEM, the names BASIC programmers know
   from LOMEM: and HIMEM:), `ProgramStart` (PP), `VariablesEnd` (PV), `Accumulator` (ACC), `Auxiliary` (AUX),
   `CurrentLine` (PR, the address of the line running), `TokenPointer` (PX), `Pointer1` to `Pointer3`, the stacks'
@@ -101,7 +101,8 @@ Documented in the code, not changed (the bytes stay):
 - After `INPUT` of numbers, `Running` is $FF whatever it was; in a line typed without a line number (`IF ... THEN
   INPUT A`) the run loop then goes on as if a program were running, from the line after `CurrentLine`, the last line a
   program ran, since the typed line never becomes `CurrentLine`. After a program stopped at line 10's `END`, line 20
-  runs; on a fresh machine, where `CurrentLine` is 0, BASIC runs page zero as a line and stops answering the keyboard.
+  runs; where nothing has run since power-on and `CurrentLine` is still 0, as in the emulator's cleared RAM, BASIC runs
+  page zero as a line.
   Confirmed on the emulated II with the SDK's ROMs; `IntegerBasicQuirkTests` pins the first (I16).
 - `NextTabStop` loops forever for a cursor column of $F8 or more, which a normal window never gives.
 - The floating point's FIX rounds a negative number toward 0 only when the fraction's top 8 bits are nonzero; a Return
@@ -120,7 +121,7 @@ The conversion left six questions; the owner settled each as recommended.
   `RULE_STATEMENTS_LIST_TO_IN` (rule 27) and `RULE_NUMBER_THEN_ARRAY` (rule 1, which nothing calls).
 - I13 (was Q2). The two register routines at $F669, which nothing in the ROM calls, are the scope `Registers`
   (`Registers::Stash`, `Registers::Recover`, `Registers::StashedA` ...): top level is for what everything reaches.
-- I14 (was Q3). The helpers that were top level only because their subject's scope was another converter's are in it:
+- I14 (was Q3). The helpers that were top level only because their subject's scope is in another file are in it:
   `Strings::CheckSubstringEnd`, `Lister::BlankBeforeKeyword`, `Tokenizer::WriteKeywordToken`,
   `Interpreter::ReadNextLineByte`, and the error printers `Messages::PrintError` and `Messages::PrintThenBeep`.
 - I15 (was Q4). The `Keeps: X` contracts that pass through the output routine stay: they hold with the Monitor's own

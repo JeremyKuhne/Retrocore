@@ -185,8 +185,9 @@ Retype:
 ;; The tokenizing leaves <Running> at $FF, as a running program has it, whatever it was before. A bug: in a line typed
 ;; without a line number, which reaches `INPUT` through `IF ... THEN`, the run loop (<Lines::RunLoop>) then goes on as
 ;; if a program were running, from the line after <CurrentLine>, the last line a program ran: the typed line never
-;; becomes <CurrentLine>. After a program that stopped at line 10, line 20 runs; on a fresh machine, where it
-;; is 0, it runs page zero as a line and hangs (IntegerBasicQuirkTests pins the first).
+;; becomes <CurrentLine>. After a program that stopped at line 10, line 20 runs; where nothing has run since power-on
+;; and it is still 0, as in the emulator's cleared RAM, it runs page zero as a line (IntegerBasicQuirkTests pins the
+;; first).
 ;; In: X = the noun stack, its top entry the first variable's address
 ;; Out: X = the noun stack, the variable popped
 ;; Uses: A, Y, Accumulator, Auxiliary, TextIndex, TokenIndex

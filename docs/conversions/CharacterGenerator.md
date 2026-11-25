@@ -43,5 +43,5 @@ cited: none. Glyph data, not code.
 ## Checks
 
 - Byte identity of all three builds: the digests named above.
-- No contract run: the chips are data the video circuit reads, with no code for the debugger to execute. Only the
-  digests check the glyphs.
+- No contract run: the chips are data the video circuit reads, with no code for the debugger to execute. The glyphs
+  are checked by the digests, and against the chips' dumps where those are present.

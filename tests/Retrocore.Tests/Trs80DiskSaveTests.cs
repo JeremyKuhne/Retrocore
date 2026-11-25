@@ -73,8 +73,8 @@ public sealed class Trs80DiskSaveTests
 
     /// <summary>
     ///  A written sector changes only its record, compressed where the image compressed it and its bytes are all one
-    ///  value; a track formatted anew
-    ///  keeps its track's data rate in the density it now has; and a new image's rate follows its tracks' size.
+    ///  value; a track formatted anew keeps its track's data rate in the density it now has; and a new image's rate
+    ///  follows its tracks' size.
     /// </summary>
     [TestMethod]
     public void ImdKeepsItsLayoutThroughChanges()

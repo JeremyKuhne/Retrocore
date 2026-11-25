@@ -33,7 +33,7 @@ NextCharacter:
 ToParseNumber:
     jmp Float::ReadNumber
 ;; Not a digit: a letter goes to the vendor's variable operand, <EvaluateVariable>, and where `piToken` is 1 the `PI`
-;; token loads <Pi>.
+;; token loads pi.
 ;; Also: EVAL2 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 NotDigit:
     jsr IsLetter

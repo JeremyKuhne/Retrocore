@@ -6,7 +6,7 @@
 ;; The bit of <IoStatus> that reports the end of a file.
 STATUS_END_OF_FILE = $40
 
-;; Where the variable operand resumes after the $B000 chip's patch area, at <EvaluateVariableBody>.
+;; Where the variable operand resumes after the $B000 chip's patch area, at `EvaluateVariableBody` (BASIC 4).
 PATCH_AREA_END = $BF8C
 
 .ifndef PATCH_FILL
@@ -16,7 +16,7 @@ PATCH_FILL = $AA
 .endif
 
 ;; Emits the $B000 chip's checksum byte, BASIC 4's variable-operand trampoline, the revised chip's patches and the
-;; unused patch space, up to <EvaluateVariableBody>.
+;; unused patch space, up to `EvaluateVariableBody`.
 ;; Parameters: revised = 1 for the revised chip's checksum byte and patches, 0 for the original chip's
 .macro CommodoreBasic4OperandSplit revised
     .assert revised = 0 || revised = 1, "revised is 0 or 1."

@@ -134,6 +134,7 @@ OPCODE_RTS = $60
 ;; In: $42 = the command (0 status, 1 read, 2 write, 3 format), $43 = the unit, $44/$45 = the buffer, $46/$47 = the
 ;;   block
 ;; Out: A = 0 or the error, carry = set on an error, X and Y = the block count after a status call
+;; Keeps: interrupt
 .proc ProDosEntry
 .assert * = $C51C, "ProDosEntry must stay at $Cn1C."
     clc
@@ -143,6 +144,7 @@ OPCODE_RTS = $60
 ;; The SmartPort entry, $Cn1F: JSR $Cn1F, then the command and the parameter list's address (four bytes for an
 ;; extended command), which the call steps over.
 ;; Out: A = 0 or the error, carry = set on an error, X and Y = the bytes moved
+;; Keeps: interrupt
 ;; Entry:
 ;;   Plain = a ProDOS call, with carry clear
 .proc SmartPortEntry

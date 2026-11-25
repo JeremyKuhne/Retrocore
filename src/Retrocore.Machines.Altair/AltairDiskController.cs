@@ -26,8 +26,8 @@ namespace Retrocore.Machines.Altair;
 ///   works out where the disk is from the cycle count. A sector's 137 bytes come one each
 ///   <see cref="AltairDiskTiming.ByteCycles"/>, each holding the data port until the next replaces it, which MITS's
 ///   two-bytes-a-pass read loops rely on; NRDA is asserted as each arrives and cleared by reading the port or by the
-///   sector's end, and the port keeps the last byte until another comes. An image holds a sector's 137 bytes and nothing of the gap after
-///   them, so nothing more comes until the next sector. A write takes the data port's value each byte time from a
+///   sector's end, and the port keeps the last byte until another comes. An image holds a sector's 137 bytes and
+///   nothing of the gap after them, so nothing more comes until the next sector. A write takes the data port's value each byte time from a
 ///   handshake that ENWD asserts, and keeps it as the sector's next byte, whether or not the 8080 has sent a new
 ///   one; the first 137 are the sector. After a write, head movement stays held off until the drive's trim erase
 ///   ends, <see cref="AltairDiskTiming.TrimEraseCycles"/> into the next sector.

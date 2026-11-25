@@ -36,7 +36,7 @@ A4L = $42
 ;; Inherit: <Monitor:IN>
 IN = $0200
 
-;; Inherit: <IntegerBasic:SW16>
+;; Inherit: <IntegerBasic:Sweet16::Run>
 SW16 = $F689
 
 ;; Inherit: <Monitor:INSDS2>

@@ -18,10 +18,10 @@ CHKSUM = $2E
 ;; Inherit: <Monitor:A1L>
 A1 = $3C
 
-;; Inherit: <IntegerBasic:HIMEM>
+;; Inherit: <IntegerBasic:HighMemory>
 HIMEM = $4C
 
-;; Inherit: <IntegerBasic:PP>
+;; Inherit: <IntegerBasic:ProgramStart>
 PP = $CA
 
 ;; The program's length (2 bytes), HIMEM - PP, which the tape's header holds.

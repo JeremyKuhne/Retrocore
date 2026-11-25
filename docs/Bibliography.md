@@ -15,7 +15,7 @@ workspace adds documents of its own, or replaces a key, with the same columns.
 | PA1 | Programmer's Aid #1 | 1978 | Apple Computer | <https://archive.org/details/programmers-aid-1> |
 | DOS31 | Apple II DOS source listings (Shepardson Microsystems' DOS and Wozniak and Wigginton's read/write routines), as the Computer History Museum released them | 1978 | Apple Computer | <https://computerhistory.org/blog/apple-ii-dos-source-code/> |
 | DOS33 | DOS 3.3 C source listing | July 1983 | Apple Computer | <https://elite.bbcelite.com/pdfs/apple2_SRC_DOS33C_1983.pdf> |
-| IBSM | Annotated listing of Integer BASIC, by Paul R. Santa-Maria | | | |
+| IBSM | Annotated listing of Integer BASIC, by Paul R. Santa-Maria, as Andy McFadden's SourceGen port of it gives it (2021) | | | <https://6502disassembly.com/a2-rom/> |
 | IIEROM82 | Apple IIe Reference Manual Addendum: Monitor ROM Listings, For //e Only | 1982 | Apple Computer | <https://archive.org/details/Reference_Manual_Addendum_Monitor_ROM_Listings> |
 | IIETRM85 | Apple IIe Technical Reference Manual | 1985 | Addison-Wesley | <https://archive.org/details/a2etrm> |
 | M6502 | BASIC M6502 8K version 1.1 source (MACRO-10), published under the MIT license | 1978 | Microsoft | <https://github.com/microsoft/BASIC-M6502> |
@@ -66,3 +66,15 @@ where the check found that the document gives that name for that thing:
   value cites the whole line, since each document names the same definition in its own build; NUMLEV's prose explains
   why BASIC 1's documents write its reserve as 23 levels. The rule and the names it reaches are recorded in
   `docs/conversions/Basic.md`, section S11.
+
+## How the Integer BASIC documents were checked
+
+- **IBSM:** the port's cc65 text was assembled with the repository's assembler; it reproduces the ROM's $E000-$F424
+  byte for byte, so each of its names has an address. A name is cited where the port defines it at the address
+  the native build gives it. The port keeps Santa-Maria's names, prefixes the Monitor's with `MON_` and adds a few
+  labels of McFadden's, mostly on loops; the generic ones (`Loop12`, `Return4`) and the address labels for routines
+  Santa-Maria left unnamed (`LE00C`, `TE801`) are not cited. The full method is in
+  [`docs/conversions/IntegerBasic.md`](conversions/IntegerBasic.md).
+- **A2RM78** for the floating-point routines, the Mini-Assembler and SWEET16: their listings in the manual, read from
+  the Internet Archive's OCR text and checked label by label.
+

@@ -1,4 +1,4 @@
-; retrocore: style=strict ignore=unlinked-name:PLUS -- the title's II PLUS
+; retrocore: style=strict
 ;; APPLE II CHARACTER GENERATORS: THE IIE'S VIDEO ROM, ORIGINAL AND ENHANCED, AND THE II AND II PLUS'S
 ;;
 ;; The IIe draws text from a 4 KiB video ROM: 342-0133 in the original IIe and 342-0265 in the Enhanced IIe.

@@ -1,336 +1,538 @@
-;; APPLE II MINI-ASSEMBLER ($F500-$F668), AND THE END OF THE FLOATING-POINT ROUTINES
+; retrocore: style=strict
+;; Integer BASIC: the Mini-Assembler, and the end of the floating point ($F500-$F668)
 ;;
-;; Steve Wozniak and Allen Baum's one-line assembler, which shares the Integer BASIC chips. From the Monitor, F666G
-;; starts it (MINIASM), and it prompts with !. Each line is an instruction to assemble at the current address:
+;; Steve Wozniak and Allen Baum's one-line assembler, which shares the Integer BASIC chips (<MiniAssembler>), and
+;; between its routines and its entry point the floating-point routines' last two, <Float::ShiftTowardInteger> and
+;; <Float::ToInteger> ($F63D-$F65D; FloatingPoint.asm has the rest).
 ;;
-;; - "addr:" first sets the address, as in 300: LDA #$01;
-;; - a line starting with a blank assembles at the address after the last instruction;
-;; - a line starting with $ runs a Monitor command, such as $300L.
+;; Names follow Apple's listing in the Apple II Reference Manual (1978), kept as each definition's historical names.
+;; Part of IntegerBasic.asm; it follows FloatingPoint.asm, at $F500.
+
+;; The Mini-Assembler: assembles one instruction a line, at the address the line gives or after the last one.
 ;;
-;; The Mini-Assembler packs the mnemonic's three letters as the Monitor's disassembler tables do (MNEML, MNEMR), reads
-;; the operand into the address mode characters the disassembler prints (CHAR1, CHAR2), and then tries every opcode:
-;; the Monitor's INSDS2 gives each one's mnemonic and format, and the first that matches both is the one. The
-;; instruction is stored, the line is shown again as the Monitor's disassembler lists it, and the address moves on.
-;; An error prints ^ under the place where reading stopped.
+;; From the Monitor, F666G starts it (<MiniAssembler::Run>), and it prompts with "!". A line is:
 ;;
-;; Between the Mini-Assembler and its entry point sit the floating-point routines' last two, FIX1 and FIX, with
-;; UNDFL ($F63D-$F65D; FloatingPoint.asm has the rest).
+;; - an address and a colon, then an instruction, as in "300: LDA #$01", which sets the address;
+;; - a blank, then an instruction, which assembles after the last instruction;
+;; - "$" and a Monitor command, such as "$300L" to list or "$FF69G" to go back to the Monitor.
 ;;
-;; Names follow Apple's listing in the Apple II Reference Manual (1978). Part of IntegerBasic.asm; it follows
-;; FloatingPoint.asm, at $F500.
+;; An instruction is a mnemonic and its operand written as the Monitor's disassembler writes it; "$" may be left out
+;; of a number, and a ";" starts a comment. The Mini-Assembler packs the mnemonic's three letters as the
+;; disassembler's tables do (<MnemonicsLeft>, <MnemonicsRight>), reads the operand into a format of the address mode
+;; characters the disassembler prints (<FormatCharacter1>, <FormatCharacter2>), and then tries every opcode:
+;; <Disassembler::Decode::Opcode> gives each one's mnemonic and format, and the first that matches both is the one.
+;; The instruction is stored, the line is shown again as the disassembler lists it, and the address moves on. An
+;; error prints a caret under the place where reading stopped and sounds the bell.
+.scope MiniAssembler
 
-;; The format the opcode being tried has, from the Monitor's <INSDS2>: its address mode bits.
+; Operand formats, as the Monitor's disassembler packs them.
+
+;; Inherit: <Monitor:Disassembler::OPERAND_DOLLAR>
+OPERAND_DOLLAR = $80
+
+;; Inherit: <Monitor:Disassembler::OPERAND_IMMEDIATE>
+OPERAND_IMMEDIATE = $20
+
+;; Inherit: <Monitor:Disassembler::RELATIVE_FORMAT>
+RELATIVE_FORMAT = $9D
+
+;; Inherit: <Monitor:Disassembler::FORMAT_POSITIONS>
+FORMAT_POSITIONS = 6
+
+;; The format position at which the operand's number is read: after "#$" and before ",X".
+NUMBER_POSITION = 3
+
+;; The format <MiniAssembler::ParseOperand> gives an operand of one byte with no other characters, "$" or not:
+;; a branch takes it, or the two-byte one after it.
+ADDRESS_FORMAT = OPERAND_DOLLAR | 1
+
+; Mnemonics.
+
+;; The letters of a mnemonic.
+MNEMONIC_LETTERS = 3
+
+;; Inherit: <Monitor:Disassembler::LETTER_BITS>
+LETTER_BITS = 5
+
+;; What <MiniAssembler::ParseMnemonic> takes from a letter shifted left: it leaves the letter's code, counted from "?"
+;; as the Monitor's mnemonics count it, in bits 1-5, below bits 6 and 7 set.
+LETTER_OFFSET = $BE
+
+;; What <MiniAssembler::LETTER_OFFSET> leaves for "@", the first character a mnemonic letter may be.
+FIRST_LETTER_CODE = $C2
+
+; The Monitor's command keys.
+
+;; The code <ReadHexNumber> leaves in A for a ":" after the address, as the Monitor's commands read their keys: the
+;; character, exclusive-or "0", plus $89.
+COLON_CODE = ((':' ^ '0') + $89) & $FF
+
+;; The keys in the Monitor's <Commands::Keys>.
+COMMAND_KEY_COUNT = 23
+
+;; The place of the Return key in <Commands::Keys>.
+RETURN_KEY_INDEX = 21
+
+; The Mini-Assembler's page zero: two of the Monitor's locations.
+
+;; The length of the operand typed: 1 or 2 bytes, or 0 for none.
 ;;
-;; It is the Monitor's location at $2E, which the IIe sources call MASK.
-;; See: <FMT>, <TRYNEXT>
-FORMAT = $2E
+;; <MiniAssembler::FindOpcode> counts it down to try a one-byte operand as two bytes. The location is the one the
+;; Monitor's listing calls YSAV1, at $35.
+;; Also: L (A2RM78)
+TypedLength = $35
 
-;; The length of the operand typed, 1 or 2 bytes (0 for none): the Mini-Assembler's L.
+;; The format of the operand typed: a bit for each address mode character matched, from "$" in bit 7 to ",Y" in bit
+;; 2, then the operand's length in the low two bits, as <Disassembler::FormatBits> has an opcode's.
 ;;
-;; It is the Monitor's YSAV1, at $35.
-;; See: <FORM6>, <NEXTOP>
-L = $35
+;; The location is the Monitor's A5L, at $44.
+;; Also: FMT (A2RM78)
+TypedFormat = $44
 
-;; The format of the operand typed: a bit for each address mode character matched, then the operand's length in the
-;; low two bits.
+;; Assembles a relative branch: the offset from the instruction after it to the target in <Address2>, or <Error> when
+;; the target is out of reach. Falls into <StoreInstruction>.
+;; In: A = the operand's format, carry = set, Address2/Address2High = the target
+;; Out: Address2 = the offset
+;; Also: REL (A2RM78)
+.proc Branch
+
+    ; The operand must be a plain address: ADDRESS_FORMAT, or the two-byte one after it.
+    sbc #ADDRESS_FORMAT
+    lsr a
+    bne ToError
+
+    ; The target less the instruction's address and its 2 bytes.
+    ldy Address2High
+    ldx Address2
+    bne Offset
+    dey
+
+;; Also: REL2 (A2RM78)
+Offset:
+    dex
+    txa
+    clc
+    sbc ProgramCounter
+    sta Address2
+    bpl Page
+    iny
+
+;; The high byte must say the offset fits in a signed byte: 0, or $FF for a branch backward.
+;; Also: REL3 (A2RM78)
+Page:
+    tya
+    sbc ProgramCounterHigh
+
+;; Also: ERR3 (A2RM78)
+ToError:
+    bne Error
+    ; Falls into StoreInstruction.
+.endproc
+
+;; Stores the assembled instruction at <ProgramCounter>, shows it over the line typed, moves the address past it and
+;; reads the next line.
 ;;
-;; It is the Monitor's A5L, at $44.
-;; See: <FORM5>, <FORM8>, <TRYNEXT>
-FMT = $44
+;; The instruction is the opcode in <Address1High> and the operand in <Address2> and <Address2High>, which follow it
+;; in page zero. <Disassembler::PrintInstruction> lists the instruction over the line typed.
+;; In: OperandLength = the operand's bytes, as <Disassembler::Decode::Opcode> left it
+;; Also: FINDOP (A2RM78)
+.proc StoreInstruction
 
-;; Assembles a branch: turns the target address into the offset from the instruction after it.
+;; The instruction as assembled: the opcode, then the operand.
+Instruction = Address1High
+
+    ldy OperandLength
+
+;; Also: FNDOP2 (A2RM78)
+NextByte:
+    lda Instruction,y
+    sta (ProgramCounter),y
+    dey
+    bpl NextByte
+
+    ; Up two lines, as the listing starts with a Return, which brings it back down to the line typed.
+    jsr CursorUp
+    jsr CursorUp
+    jsr Disassembler::PrintInstruction
+    jsr NextInstruction
+    sty ProgramCounterHigh
+    sta ProgramCounter
+    jmp ReadLine
+.endproc
+
+;; A "$" line: runs the Monitor command for the key found, then reads the next number and finds its key.
 ;;
-;; The operand typed must be a plain address (a format of $81 or $82), and the target must be within a byte's reach.
-;; In: A = FMT, carry set
-;; Errors: ERR if the format does not fit or the branch is too far
-REL:
-    sbc #$81                        ; $F500
-    lsr a                           ; $F502
-    bne ERR3                        ; $F503
-    ldy A2H                         ; $F505
-    ldx A2L                         ; $F507
-    bne REL2                        ; $F509 A2 - 1, then minus PC + 1: A2 - PC - 2
-    dey                             ; $F50B
+;; It reads the line as the Monitor's command line does: a number, then a key it looks up in <Commands::Keys> and runs
+;; through <Commands::RunCommand>. A Return ends the line as the Monitor's <Commands::ExamineNextOrBlank> handles it:
+;; alone, it examines the bytes after the last ones shown. A key that is not a command sounds the bell.
+;; In: Y = the key's place in <Commands::Keys>
+;; Entry:
+;;   ReadNumber = reads the first number, with Y at the place in <InputBuffer> after the "$": <ReadLine> enters here
+;; Also: FAKEMON3 (A2RM78)
+.proc RunMonitorCommand
+    jsr Commands::RunCommand
+    ldy CommandPosition
 
-REL2:
-    dex                             ; $F50C
-    txa                             ; $F50D
-    clc                             ; $F50E
-    sbc PCL                         ; $F50F
-    sta A2L                         ; $F511
-    bpl REL3                        ; $F513
-    iny                             ; $F515
+;; Reads a number and the key after it.
+;; In: Y = the place in <InputBuffer>
+;; Also: FAKEMON (A2RM78)
+ReadNumber:
+    jsr ReadHexNumber
+    sty CommandPosition
+    ldy #COMMAND_KEY_COUNT
 
-;; The high byte of the offset must be 0, or $FF for a branch backward.
-REL3:
-    tya                             ; $F516
-    sbc PCH                         ; $F517
+;; Looks the key up in <Commands::Keys>, from the end.
+;; Also: FAKEMON2 (A2RM78)
+FindKey:
+    dey
+    bmi Restart
+    cmp Commands::Keys,y
+    bne FindKey
+    cpy #RETURN_KEY_INDEX
+    bne RunMonitorCommand
 
-ERR3:
-    bne ERR                         ; $F519
+    ; The Return: the place before it, which ExamineNextOrBlank counts down once more to see whether it was alone.
+    lda CommandMode
+    ldy #0
+    dec CommandPosition
+    jsr Commands::ExamineNextOrBlank
+    jmp ReadLine
+.endproc
 
-;; Stores the instruction: the opcode in <A1H> and the operand in <A2L> and <A2H>, which follow it in page zero.
+;; Finds the opcode whose mnemonic and format the line has, and assembles it.
 ;;
-;; Then it lists the line again over the one typed and moves <PCL> past the instruction.
-;; See: <INSTDSP>, <PCADJ>
-FINDOP:
-    ldy LENGTH                      ; $F51B
+;; It tries the opcode in <Address1High>, then counts it down: <ParseOperand> leaves it 0, so the opcodes are tried
+;; from $00, then $FF down to $01. When none matches, a one-byte operand is tried again as two bytes, as a number
+;; below $100 can be either: "JMP 12" assembles as an absolute jump. Falls into <Error> when nothing matches.
+;; In: Address4/Address4High = the packed mnemonic, TypedFormat = the operand's format, TypedLength = its length
+;; Also: TRYNEXT (A2RM78)
+.proc FindOpcode
 
-FNDOP2:
-    lda A1H,y                       ; $F51D
-    sta (PCL),y                     ; $F520
-    dey                             ; $F522
-    bpl FNDOP2                      ; $F523
-    jsr UP                          ; $F525
-    jsr UP                          ; $F528 back over the line typed
-    jsr INSTDSP                     ; $F52B
-    jsr PCADJ                       ; $F52E
-    sty PCH                         ; $F531
-    sta PCL                         ; $F533
-    jmp NXTLINE                     ; $F535
+;; The opcode being tried.
+Opcode = Address1High
 
-;; A $ line: runs the Monitor command for the delimiter, then reads the next parameter.
+    lda Opcode
+    jsr Disassembler::Decode::Opcode
+    tax
+    lda MnemonicsRight,x
+    cmp Address4
+    bne NextOpcode
+    lda MnemonicsLeft,x
+    cmp Address4High
+    bne NextOpcode
+
+    ; The format: a branch's operand is worked out, any other's must be the same.
+    lda TypedFormat
+    ldy Disassembler::FormatBits
+    cpy #RELATIVE_FORMAT
+    beq Branch
+
+;; Also: NREL (A2RM78)
+CompareFormat:
+    cmp Disassembler::FormatBits
+    beq StoreInstruction
+
+;; The next opcode, then the two-byte format once.
+;; Also: NEXTOP (A2RM78)
+NextOpcode:
+    dec Opcode
+    bne FindOpcode
+    inc TypedFormat
+    dec TypedLength
+    beq FindOpcode
+    ; Falls into Error.
+.endproc
+
+;; Shows where the line went wrong: a caret under the character before the place in <CommandPosition>, then the bell,
+;; and reads a new line.
 ;;
-;; <TOSUB> runs the command whose delimiter is at index Y in <CHRTBL>.
-;; Entry: FAKEMON = reads the first parameter
-FAKEMON3:
-    jsr TOSUB                       ; $F538
-    ldy YSAV                        ; $F53B
+;; The line typed starts in the column after the "!", so the caret, after as many blanks as the place, falls under the
+;; character before it.
+;; Entry:
+;;   AtY = at the place in Y: <ReadLine> and <ParseMnemonic> enter here
+;; Also: ERR (A2RM78)
+.proc Error
+    ldy CommandPosition
 
-FAKEMON:
-    jsr GETNUM                      ; $F53D
-    sty YSAV                        ; $F540
-    ldy #$17                        ; $F542
+;; Shows where the line went wrong, under the character before the place in Y.
+;; In: Y = the place in <InputBuffer>
+;; Also: ERR2 (A2RM78)
+AtY:
+    tya
+    tax
+    jsr PrintBlanks
+    lda #'^'
+    jsr CharacterOut
+    ; Falls into Restart.
+.endproc
 
-;; Looks the delimiter up in <CHRTBL>; Return (index $15) ends the command line, as the Monitor's <BL1> handles it.
-FAKEMON2:
-    dey                             ; $F544
-    bmi RESETZ                      ; $F545 not a Monitor delimiter: an error
-    cmp CHRTBL,y                    ; $F547
-    bne FAKEMON2                    ; $F54A
-    cpy #$15                        ; $F54C
-    bne FAKEMON3                    ; $F54E
-    lda MODE                        ; $F550
-    ldy #$00                        ; $F552
-    dec YSAV                        ; $F554
-    jsr BL1                         ; $F556
-    jmp NXTLINE                     ; $F559
+;; Sounds the bell, then reads a new line.
+;; Also: RESETZ (A2RM78)
+.proc Restart
+    jsr Beep
+    ; Falls into ReadLine.
+.endproc
 
-;; Tries the opcode in <A1H>: its mnemonic must match the one typed, and its format the operand's.
+;; Reads a line after the "!" prompt and assembles it: an address and a colon, a blank, or a "$" line.
 ;;
-;; The opcodes are tried from 0, then $FF down to 1.
-;; See: <INSDS2>, <MNEML>, <MNEMR>
-TRYNEXT:
-    lda A1H                         ; $F55C
-    jsr INSDS2                      ; $F55E
-    tax                             ; $F561
-    lda MNEMR,x                     ; $F562
-    cmp A4L                         ; $F565
-    bne NEXTOP                      ; $F567
-    lda MNEML,x                     ; $F569
-    cmp A4H                         ; $F56C
-    bne NEXTOP                      ; $F56E
-    lda FMT                         ; $F570
-    ldy FORMAT                      ; $F572
-    cpy #$9D                        ; $F574 the format of a relative branch
-    beq REL                         ; $F576
+;; An address becomes <ProgramCounter>, through the Monitor's <SetPcFromA1::Loop>. A line that is none of the three,
+;; a Return alone among them, is an error.
+;; Entry:
+;;   ToError = <Error::AtY> unless the zero flag is set: <ParseOperand> enters here
+;; Also: NXTLINE (A2RM78)
+.proc ReadLine
+    lda #'!'
+    sta PromptCharacter
+    jsr GetLineAfterReturn
+    jsr ClearMode
 
-;; Compares the opcode's format with the operand's.
-NREL:
-    cmp FORMAT                      ; $F578
-    beq FINDOP                      ; $F57A
-
-;; Moves to the next opcode. When none is left, a one-byte operand is tried again as two bytes, as an operand below
-;; $100 can be either.
-NEXTOP:
-    dec A1H                         ; $F57C
-    bne TRYNEXT                     ; $F57E
-    inc FMT                         ; $F580
-    dec L                           ; $F582
-    beq TRYNEXT                     ; $F584
-
-;; An error: prints ^ under the character where reading stopped, sounds the bell and reads a new line.
-;; Entry: ERR2 = with that character's position in Y
-ERR:
-    ldy YSAV                        ; $F586
-
-ERR2:
-    tya                             ; $F588
-    tax                             ; $F589
-    jsr PRBL2                       ; $F58A
-    lda #$DE                        ; $F58D
-    jsr COUT                        ; $F58F
-
-;; Sounds the bell, then reads a new line (<NXTLINE>).
-RESETZ:
-    jsr BELL                        ; $F592
-
-;; Reads a line after the ! prompt and assembles it: an address and a colon, a blank, or a $ line.
-NXTLINE:
-    lda #$A1                        ; $F595
-    sta PROMPT                      ; $F597
-    jsr GETLNZ                      ; $F599
-    jsr ZMODE                       ; $F59C
-    lda IN                          ; $F59F
-    cmp #$A0                        ; $F5A2
-    beq SPACE                       ; $F5A4
-    iny                             ; $F5A6
-    cmp #$A4                        ; $F5A7
-    beq FAKEMON                     ; $F5A9
-    dey                             ; $F5AB
-    jsr GETNUM                      ; $F5AC
-    cmp #$93                        ; $F5AF $93: a colon, as GETNUM returns it
+    ; The first character: a blank, a "$", or the address.
+    lda InputBuffer
+    cmp #' '
+    beq ParseMnemonic
+    iny
+    cmp #'$'
+    beq RunMonitorCommand::ReadNumber
+    dey
+    jsr ReadHexNumber
+    cmp #COLON_CODE
 
 ;; An error unless the character after the address is the colon, and an address came before it.
-ERR4:
-    bne ERR2                        ; $F5B1
-    txa                             ; $F5B3
-    beq ERR2                        ; $F5B4
-    jsr A1PCLP                      ; $F5B6
+;; Also: ERR4 (A2RM78)
+ToError:
+    bne Error::AtY
+    txa
+    beq Error::AtY
+    jsr SetPcFromA1::Loop
+    ; Falls into ParseMnemonic.
+.endproc
 
-;; Reads the mnemonic: its three letters, five bits each, into <A4L> and <A4H>.
-SPACE:
-    lda #$03                        ; $F5B9
-    sta A1H                         ; $F5BB
+;; Reads the mnemonic: its three letters, five bits each, packed into <Address4> and <Address4High> as the Monitor's
+;; mnemonic tables hold them. Falls into <ParseOperand>.
+;; In: Y = the place in <InputBuffer>
+;; Also: SPACE (A2RM78)
+.proc ParseMnemonic
 
-NXTMN:
-    jsr GETNSP                      ; $F5BD
+;; The mnemonic's letters left to read.
+LettersLeft = Address1High
 
-;; Turns a letter into its 5-bit code and shifts it in.
-NXTM:
-    asl a                           ; $F5C0
-    sbc #$BE                        ; $F5C1
-    cmp #$C2                        ; $F5C3 not a letter
-    bcc ERR2                        ; $F5C5
-    asl a                           ; $F5C7
-    asl a                           ; $F5C8
-    ldx #$04                        ; $F5C9
+    lda #MNEMONIC_LETTERS
+    sta LettersLeft
 
-NXTM2:
-    asl a                           ; $F5CB
-    rol A4L                         ; $F5CC
-    rol A4H                         ; $F5CE
-    dex                             ; $F5D0
-    bpl NXTM2                       ; $F5D1
-    dec A1H                         ; $F5D3
-    beq NXTM2                       ; $F5D5 the third letter: one more shift
-    bpl NXTMN                       ; $F5D7
+;; Also: NXTMN (A2RM78)
+NextLetter:
+    jsr NextNonBlank
 
-;; Reads the operand: for each of the five address mode characters, a bit in <FMT> says whether it was there.
+;; Turns the letter into its 5-bit code, in A's top bits.
+;; Also: NXTM (A2RM78)
+LetterCode:
+    asl a
+    sbc #LETTER_OFFSET
+    cmp #FIRST_LETTER_CODE
+    bcc Error::AtY
+    asl a
+    asl a
+    ldx #LETTER_BITS - 1
+
+;; Shifts the letter's bits into the packed mnemonic; after the last letter, one bit more.
+;; Also: NXTM2 (A2RM78)
+PackBits:
+    asl a
+    rol Address4
+    rol Address4High
+    dex
+    bpl PackBits
+    dec LettersLeft
+    beq PackBits
+    bpl NextLetter
+    ; Falls into ParseOperand.
+.endproc
+
+;; Reads the operand into <TypedFormat>, then checks that the line ends, and finds the opcode (<FindOpcode>).
 ;;
-;; The number comes at the third, read by <GETNUM>; its length goes in <L>.
-FORM1:
-    ldx #$05                        ; $F5D9
+;; For each of the six format positions, from "$" to ",Y", it looks for the position's characters
+;; (<FormatCharacter1> and <FormatCharacter2>) and shifts a bit into the format: 1 when they are there. The number
+;; comes at <NUMBER_POSITION>, read by <ReadHexNumber>; its length goes in <TypedLength>, and the format takes it in
+;; its low two bits, with the "$" bit for a number that has no "$", "($" or "#$" before it. After the operand comes a
+;; comment (";") or the end of the line.
+;;
+;; The "$" of "($" and "#$" may be left out: a position whose first character matches gives a 1 when its second is
+;; "$" or it has none, whatever follows.
+;; In: Y = the place in <InputBuffer>
+;; Out: Address1High = 0, the first opcode <FindOpcode> tries, Address2/Address2High = the number,
+;;   CommandPosition = the place of the end of the line
+;; Also: FORM1 (A2RM78)
+.proc ParseOperand
+    ldx #FORMAT_POSITIONS - 1
 
-FORM2:
-    jsr GETNSP                      ; $F5DB
-    sty YSAV                        ; $F5DE
-    cmp CHAR1,x                     ; $F5E0
-    bne FORM3                       ; $F5E3
-    jsr GETNSP                      ; $F5E5
-    cmp CHAR2,x                     ; $F5E8
-    beq FORM5                       ; $F5EB
-    lda CHAR2,x                     ; $F5ED
-    beq FORM4                       ; $F5F0
-    cmp #$A4                        ; $F5F2
-    beq FORM4                       ; $F5F4
-    ldy YSAV                        ; $F5F6
+;; Looks for the position's first character.
+;; Also: FORM2 (A2RM78)
+NextPosition:
+    jsr NextNonBlank
+    sty CommandPosition
+    cmp FormatCharacter1,x
+    bne NoMatch
+    jsr NextNonBlank
+    cmp FormatCharacter2,x
+    beq ShiftBit
+    lda FormatCharacter2,x
+    beq BackUp
+    cmp #'$'
+    beq BackUp
+    ldy CommandPosition
 
-;; No match: a 0 bit.
-FORM3:
-    clc                             ; $F5F8
+;; No match: a 0 bit, and the character read again.
+;; Also: FORM3 (A2RM78)
+NoMatch:
+    clc
 
-FORM4:
-    dey                             ; $F5F9
+;; Backs up a character, so that the next position reads it.
+;; Also: FORM4 (A2RM78)
+BackUp:
+    dey
 
-FORM5:
-    rol FMT                         ; $F5FA
-    cpx #$03                        ; $F5FC
-    bne FORM7                       ; $F5FE
-    jsr GETNUM                      ; $F600
-    lda A2H                         ; $F603
-    beq FORM6                       ; $F605
-    inx                             ; $F607
+;; Shifts the bit into the format; at the number's position, reads the number.
+;; Also: FORM5 (A2RM78)
+ShiftBit:
+    rol TypedFormat
+    cpx #NUMBER_POSITION
+    bne NextFormatPosition
+    jsr ReadHexNumber
+    lda Address2High
+    beq StoreLength
+    inx
 
-FORM6:
-    stx L                           ; $F608
-    ldx #$03                        ; $F60A
-    dey                             ; $F60C
+;; Stores the length: <ReadHexNumber> leaves X 1 after a digit and 0 for none, and a high byte makes it 2.
+;; Also: FORM6 (A2RM78)
+StoreLength:
+    stx TypedLength
+    ldx #NUMBER_POSITION
+    dey
 
-FORM7:
-    stx A1H                         ; $F60D
-    dex                             ; $F60F
-    bpl FORM2                       ; $F610
-    lda FMT                         ; $F612
-    asl a                           ; $F614
-    asl a                           ; $F615
-    ora L                           ; $F616
-    cmp #$20                        ; $F618
-    bcs FORM8                       ; $F61A an address with no other mode characters: the $ bit
-    ldx L                           ; $F61C
-    beq FORM8                       ; $F61E
-    ora #$80                        ; $F620
+;; The next position. Storing X each time leaves <Address1High> 0 after the last.
+;; Also: FORM7 (A2RM78)
+NextFormatPosition:
+    stx Address1High
+    dex
+    bpl NextPosition
 
-;; Ends the format: <FMT>, with its length; after the operand comes a comment (;) or the end of the line.
-FORM8:
-    sta FMT                         ; $F622
-    sty YSAV                        ; $F624
-    lda IN,y                        ; $F626
-    cmp #$BB                        ; $F629
-    beq FORM9                       ; $F62B
-    cmp #$8D                        ; $F62D
-    bne ERR4                        ; $F62F
+    ; The format: the bits shifted to the top, the length below, and "$" for a bare number.
+    lda TypedFormat
+    asl a
+    asl a
+    ora TypedLength
+    cmp #OPERAND_IMMEDIATE
+    bcs StoreFormat
+    ldx TypedLength
+    beq StoreFormat
+    ora #OPERAND_DOLLAR
 
-FORM9:
-    jmp TRYNEXT                     ; $F631
+;; Stores the format; a comment or the end of the line must follow.
+;; Also: FORM8 (A2RM78)
+StoreFormat:
+    sta TypedFormat
+    sty CommandPosition
+    lda InputBuffer,y
+    cmp #';'
+    beq ToFind
+    cmp #CARRIAGE_RETURN | $80
+    bne ReadLine::ToError
+
+;; Goes to <FindOpcode>.
+;; Also: FORM9 (A2RM78)
+ToFind:
+    jmp FindOpcode
+.endproc
 
 ;; Returns the next character of the line that is not a blank.
-;; In: Y = the place in <IN>
-;; Out: A = the character, Y = the place after it
+;; In: Y = the place in <InputBuffer>
+;; Out: A = the character, Y = the place after it, zero = clear
 ;; Keeps: X
-GETNSP:
-    lda IN,y                        ; $F634
-    iny                             ; $F637
-    cmp #$A0                        ; $F638
-    beq GETNSP                      ; $F63A
-    rts                             ; $F63C
+;; Also: GETNSP (A2RM78)
+.proc NextNonBlank
+    lda InputBuffer,y
+    iny
+    cmp #' '
+    beq NextNonBlank
+    rts
+.endproc
 
-;; The floating-point routines' last two: FIX converts FP1 to a 16-bit integer in <M1> (high byte) and M1+1.
+.endscope
+
+; Float: the conversion to an integer, which follows the Mini-Assembler's routines.
+.scope Float continued
+
+;; Shifts FP1 right one place, then converts it to an integer as <Float::ToInteger> does.
 ;;
-;; It shifts the mantissa right until the exponent is 14 ($8E). A negative number with a fraction left over is moved
-;; one toward 0. A number below 1 in size gives 0 (<UNDFL>).
-;; In: X1/M1 = the number
-;; Out: M1, M1+1 = the integer
-;; Entry: FIX = without the first shift
-;; See: <FLOAT>
-FIX1:
-    jsr RTAR                        ; $F63D
+;; At $F63D. <Float::ToInteger> comes back here for each place the number must move.
+;; Errors: jumps to <Float::OverflowJump> as <Float::ToInteger> does
+;; Also: FIX1 (A2RM78)
+.proc ShiftTowardInteger
+.assert * = $F63D, "Float::ShiftTowardInteger must stay at $F63D, where FIX1 is."
+    jsr ShiftRight
+    ; Falls into ToInteger.
+.endproc
 
-FIX:
-    lda X1                          ; $F640
-    bpl UNDFL                       ; $F642
-    cmp #$8E                        ; $F644
-    bne FIX1                        ; $F646
-    bit M1                          ; $F648
-    bpl FIXRTS                      ; $F64A
-    lda M1+2                        ; $F64C
-    beq FIXRTS                      ; $F64E
-    inc M1+1                        ; $F650
-    bne FIXRTS                      ; $F652
-    inc M1                          ; $F654
+;; Converts FP1 to a 16-bit integer in <Float::Mantissa1> (high byte) and <Float::Mantissa1>+1.
+;;
+;; At $F640. It shifts the mantissa right (<Float::ShiftTowardInteger>) until the exponent is
+;; <Float::INTEGER_EXPONENT>, $8E (2^14). A negative number with a fraction left over is moved one toward 0, but only
+;; the fraction's top 8 bits, in <Float::Mantissa1>+2, are looked at: the shifting moves the rest into
+;; <Float::Extension>, so a negative number whose fraction is below 1/256 is rounded down instead. A number below 1 in
+;; size gives 0 (<Float::ToInteger::Zero>).
+;; In: Exponent1/Mantissa1 = the number
+;; Out: Mantissa1, Mantissa1+1 = the integer
+;; Keeps: Y
+;; Errors: jumps to <Float::OverflowJump> when the number is 32768 or more in size, but for -32768
+;; Entry:
+;;   Zero = returns 0
+;; See: <Float::FromInteger>
+;; Also: FIX (A2RM78)
+.proc ToInteger
+.assert * = $F640, "Float::ToInteger must stay at $F640, where programs call FIX."
+    lda Exponent1
+    bpl Zero
+    cmp #INTEGER_EXPONENT
+    bne ShiftTowardInteger
 
-FIXRTS:
-    rts                             ; $F656
+    ; Toward 0: a negative number with a fraction is one more.
+    bit Mantissa1
+    bpl Done
+    lda Mantissa1 + 2
+    beq Done
+    inc Mantissa1 + 1
+    bne Done
+    inc Mantissa1
 
-;; Returns 0: clears <M1> and M1+1.
-UNDFL:
-    lda #$00                        ; $F657
-    sta M1                          ; $F659
-    sta M1+1                        ; $F65B
-    rts                             ; $F65D
-    .byte $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF ; $F65E .fill 8,$FF unused bytes
+;; Also: FIXRTS (A2RM78)
+Done:
+    rts
+
+;; Returns 0: clears <Float::Mantissa1> and <Float::Mantissa1>+1.
+;; Out: A = 0
+;; Also: UNDFL (A2RM78)
+Zero:
+    lda #0
+    sta Mantissa1
+    sta Mantissa1 + 1
+    rts
+.endproc
+
+.endscope
+
+    ; Unused bytes, up to the Mini-Assembler's entry point.
+    .res $F666 - *, $FF
+
+; MiniAssembler: its entry point.
+.scope MiniAssembler continued
 
 ;; The Mini-Assembler's entry point, F666G from the Monitor: sounds the bell and reads the first line.
-;; See: <RESETZ>
-MINIASM:
-    jmp RESETZ                      ; $F666
+;;
+;; At $F666.
+;; Also: MINIASM (UNKN)
+.proc Run
+.assert * = $F666, "MiniAssembler::Run must stay at $F666, where F666G starts it."
+    jmp Restart
+.endproc
+
+.endscope

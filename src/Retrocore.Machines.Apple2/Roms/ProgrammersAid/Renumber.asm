@@ -34,28 +34,28 @@ R11L = $16
 ;; R11's high byte.
 R11H = $17
 
-;; Inherit: <IntegerBasic:HIMEM>
+;; Inherit: <IntegerBasic:HighMemory>
 HIMEM = $4C
 
-;; Inherit: <IntegerBasic:PP>
+;; Inherit: <IntegerBasic:ProgramStart>
 PPL = $CA
 
-;; Inherit: <IntegerBasic:PV>
+;; Inherit: <IntegerBasic:VariablesEnd>
 PVL = $CC
 
-;; Inherit: <IntegerBasic:MEMFULL>
+;; Inherit: <IntegerBasic:MemoryFullError>
 MEMFULL = $E36B
 
-;; Inherit: <IntegerBasic:PRDEC>
+;; Inherit: <IntegerBasic:PrintDecimal>
 PRDEC = $E51B
 
 ;; Integer BASIC's RANGE ERR.
 RANGERR = $EE68
 
-;; Inherit: <IntegerBasic:LOAD>
+;; Inherit: <IntegerBasic:Statements::Load>
 LOAD = $F0DF
 
-;; Inherit: <IntegerBasic:SW16>
+;; Inherit: <IntegerBasic:Sweet16::Run>
 SW16 = $F689
 
 ;; Inherit: <Monitor:CROUT>

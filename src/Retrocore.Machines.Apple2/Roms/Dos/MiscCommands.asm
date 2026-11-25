@@ -439,7 +439,7 @@ Leave:
 ;; The high byte of Applesoft's current line number (its <AppleSoft:CurrentLine>), $FF in immediate mode.
 ApplesoftLineHigh = $76
 
-;; Integer BASIC's run flag (its <IntegerBasic:RUNFLAG>): bit 7 is set while a program runs.
+;; Integer BASIC's run flag (its <IntegerBasic:Running>): bit 7 is set while a program runs.
 IntegerRunFlag = $D9
 
     pha

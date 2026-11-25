@@ -355,7 +355,8 @@ public sealed partial class LanguageAnalysisTests
         await LinkOpens(ExpandedBesideProbe, ";; The other reader.");
 
         // So does a definition outside the macros in a branch the build leaves out.
-        string skipped = ExpandedBesideProbe.Replace(
+        // In LF, so the replacement finds its lines in a checkout with CRLF endings.
+        string skipped = ExpandedBesideProbe.ReplaceLineEndings("\n").Replace(
             ";; Emits a reader.\n.macro Library\n    ;; The macro's reader.\nCOMBYT:\n    rts\n.endmacro\n",
             ".ifdef WIDE\n;; The wide reader.\nCOMBYT:\n    rts\n.endif\n",
             StringComparison.Ordinal);

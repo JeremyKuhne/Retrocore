@@ -57,8 +57,10 @@ export async function testMemoryRestart(workspace: vscode.WorkspaceFolder): Prom
         assert.ok(await until(() => ready === 2, 15000), "the session restarts");
         assert.equal(vscode.debug.activeDebugSession?.id, session.id, "a restart keeps the session's id");
         assert.deepEqual(memoryTabs(), open, "the editor stays open");
-        const state = await vscode.commands.executeCommand<{ ended: boolean; cursor: number }>("retrocore.memory.test", [{ goto: 0x4001 }]);
+        let state = await vscode.commands.executeCommand<{ ended: boolean; cursor: number; label?: string }>("retrocore.memory.test", [{ goto: 0x4001 }]);
         assert.deepEqual([state.ended, state.cursor], [false, 0x4001], "and reads the restarted machine");
+        state = await vscode.commands.executeCommand<{ ended: boolean; cursor: number; label?: string }>("retrocore.memory.test", [{ goto: 0x7002 }]);
+        assert.equal(state.label, "START+2", "the program's labels name its bytes");
 
         await vscode.commands.executeCommand("workbench.action.debug.stop");
         assert.ok(await until(() => memoryTabs().length === 0, 10000), "stopping closes the editor: " + JSON.stringify(memoryTabs()));

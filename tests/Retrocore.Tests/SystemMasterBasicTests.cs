@@ -56,6 +56,29 @@ public class SystemMasterBasicTests
     }
 
     /// <summary>
+    ///  The 1980 master's language card finder, the bytes HELLO POKEs into $0300-$0340, assembles byte-identically,
+    ///  pinned by digest so no disk image is needed.
+    /// </summary>
+    [TestMethod]
+    public void LanguageCardFinderSourceMatchesHello()
+    {
+        string path = Path.Join(s_inputs, "Software", "LanguageCardFinder.asm");
+        string source = File.ReadAllText(path);
+        AssemblyOptions options = new("Mos6502", origin: 0x0300, imageSize: 0x41)
+        {
+            SourceResolver = new FileAssemblySourceResolver()
+        };
+
+        AssemblyResult result = new NativeAssembler().Assemble(new AssemblySource(source, path), options);
+        result.Diagnostics.Should().BeEmpty();
+        Convert.ToHexString(SHA256.HashData(result.Sections[0].Bytes.Span))
+            .Should().Be("F8DB1A6DA35B4CDF54E7343CEF191AB1372940407E3727BA12CA43A5A5E30446");
+
+        DocumentationSet docs = DocumentationSet.Create([DocumentationParser.Parse(source, path)], result);
+        new DocumentationResolver(docs, SdkDocumentationTests.Sets()).Check().Should().BeEmpty();
+    }
+
+    /// <summary>
     ///  The 1980 masters' FPBASIC is the II Plus's AppleSoft and Autostart Monitor.
     /// </summary>
     /// <param name="master">The System Master's file.</param>

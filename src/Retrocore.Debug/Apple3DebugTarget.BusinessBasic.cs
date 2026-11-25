@@ -250,7 +250,7 @@ internal sealed partial class Apple3DebugTarget
     private void AddBusinessBasic(Assembler.AssemblyResult business)
     {
         _businessRom = BasicRom.From(
-            business.Symbols,
+            business.SymbolsWithHistoricalNames,
             "MAIN",
             run: "RUN",
             resume: "CONT",
@@ -259,8 +259,8 @@ internal sealed partial class Apple3DebugTarget
         if (_businessRom is not { } rom) { return; }
         int gone = rom.Gone - Apple3SdkModules.BusinessBasicOrigin;
         _businessGone = business.Sections[0].Bytes.Slice(gone, BusinessGoneLength).ToArray();
-        _businessErrors = (int)business.Symbols["ERRTAB"];
-        _businessBank = (int)business.Symbols["BASICBNK"];
+        _businessErrors = (int)business.SymbolsWithHistoricalNames["ERRTAB"];
+        _businessBank = (int)business.SymbolsWithHistoricalNames["BASICBNK"];
     }
 
     // One of BASIC's pointers in its zero page, as a flat address.

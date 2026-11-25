@@ -26,19 +26,19 @@ public sealed class BusinessBasicDialectTests
     {
         AssemblyResult result = Interpreter();
         byte[] image = result.Sections[0].Bytes.ToArray();
-        int Offset(string name) => (int)result.Symbols[name] - 0x51F2;
+        int Offset(string name) => (int)result.SymbolsWithHistoricalNames[name] - 0x51F2;
 
         Words(image, Offset("RESLST"), Offset("RESL2")).Should().Equal(Dialect.Keywords);
         Words(image, Offset("RESL2"), Offset("OPTAB")).Should().Equal(BusinessBasicDialect.Instance.Functions);
 
         // The tokens the tokenizer and listing depend on.
-        Dialect.Keywords[(int)result.Symbols["REMTK"] - 0x80].Should().Be("REM");
-        Dialect.Keywords[(int)result.Symbols["DATATK"] - 0x80].Should().Be("DATA");
-        Dialect.Keywords[(int)result.Symbols["PRINTK"] - 0x80].Should().Be("PRINT");
-        Dialect.Keywords[(int)result.Symbols["IMAGETK"] - 0x80].Should().Be("IMAGE");
-        Dialect.Keywords[(int)result.Symbols["EXFNSTK"] - 0x80].Should().Be("EXFN%.");
-        BusinessBasicDialect.Instance.Functions[(int)result.Symbols["FNTK"] - 0x80].Should().Be("FN");
-        result.Symbols["SCRATK"].Should().Be(0x80 + Dialect.Keywords.Count - 1);
+        Dialect.Keywords[(int)result.SymbolsWithHistoricalNames["REMTK"] - 0x80].Should().Be("REM");
+        Dialect.Keywords[(int)result.SymbolsWithHistoricalNames["DATATK"] - 0x80].Should().Be("DATA");
+        Dialect.Keywords[(int)result.SymbolsWithHistoricalNames["PRINTK"] - 0x80].Should().Be("PRINT");
+        Dialect.Keywords[(int)result.SymbolsWithHistoricalNames["IMAGETK"] - 0x80].Should().Be("IMAGE");
+        Dialect.Keywords[(int)result.SymbolsWithHistoricalNames["EXFNSTK"] - 0x80].Should().Be("EXFN%.");
+        BusinessBasicDialect.Instance.Functions[(int)result.SymbolsWithHistoricalNames["FNTK"] - 0x80].Should().Be("FN");
+        result.SymbolsWithHistoricalNames["SCRATK"].Should().Be(0x80 + Dialect.Keywords.Count - 1);
     }
 
     /// <summary>

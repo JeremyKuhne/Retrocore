@@ -400,7 +400,7 @@ public sealed class AltairDiskTests
     }
 
     /// <summary>
-    ///  An unload leaves a byte waiting, with NRDA, until it is read or its sector ends.
+    ///  An unload leaves a byte waiting, with NRDA, through a reload, until it is read or its sector ends.
     /// </summary>
     [TestMethod]
     public void AnUnloadLeavesAByteWaiting()
@@ -411,10 +411,19 @@ public sealed class AltairDiskTests
         RunTo(machine, start + AltairDiskTiming.FirstByteCycles + (5 * AltairDiskTiming.ByteCycles) + 10);
         machine.Bus.Out(Control, 0x08);
         (machine.Bus.In(Status) & 0x80).Should().Be(0, "byte 5 still waits");
-        machine.Bus.In(Data).Should().Be(SectorBytes(0, sector)[5]);
-        (machine.Bus.In(Status) & 0x80).Should().Be(0x80);
         machine.Bus.Out(Control, 0x04);
-        (machine.Bus.In(Status) & 0x80).Should().Be(0x80, "a reload gives nothing back");
+        (machine.Bus.In(Status) & 0x80).Should().Be(0, "and through the reload");
+        machine.Bus.In(Data).Should().Be(SectorBytes(0, sector)[5]);
+        (machine.Bus.In(Status) & 0x80).Should().Be(0x80, "reading it clears NRDA");
+
+        // Unread, it waits until its sector ends.
+        ulong next = start + AltairDiskTiming.SectorCycles;
+        RunTo(machine, next + AltairDiskTiming.FirstByteCycles + (5 * AltairDiskTiming.ByteCycles) + 10);
+        machine.Bus.Out(Control, 0x08);
+        RunTo(machine, next + AltairDiskTiming.EndOfSectorCycles - 1);
+        (machine.Bus.In(Status) & 0x80).Should().Be(0, "it waits to the sector's end");
+        RunTo(machine, next + AltairDiskTiming.EndOfSectorCycles);
+        (machine.Bus.In(Status) & 0x80).Should().Be(0x80, "the sector's end clears NRDA");
     }
 
     /// <summary>

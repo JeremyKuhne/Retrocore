@@ -310,16 +310,16 @@ public sealed class AltairDiskController
         return start + AltairDiskTiming.FirstByteCycles + delay + ((long)index * AltairDiskTiming.ByteCycles);
     }
 
-    // The head begins reading, or reads another track: the register keeps its byte, and a byte waiting to be read
-    // its NRDA, until the next is assembled.
+    // A head loaded begins reading: the register keeps its byte until the next is assembled, and a byte waiting to be
+    // read keeps its NRDA until it is read or its sector ends.
     private void BeginReading()
     {
         Hold();
         _readSince = _cycle;
     }
 
-    // Holds the register's byte, and when it was assembled, as the head stops reading or moves: a byte waiting
-    // stays waiting, with NRDA, until it is read or its sector ends.
+    // Holds the register's byte, and when it was assembled, as the head unloads: a byte waiting stays waiting, with
+    // NRDA, until it is read or its sector ends. (A step holds the byte from before it moved the head itself.)
     private void Hold() => _held = Data(out _heldArrival);
 
     // Holds the register's byte as the controller stops reading altogether, a drive deselected or a write begun;

@@ -1,6 +1,6 @@
 # Backlog: language server SDK index speed
 
-Status: **round in progress, started 2026-11-24.** The language server indexes every SDK ROM source when it starts,
+Status: **steps 1–13 done (2026-11-24 and 25) and going to review; the candidates below are left.** The language server indexes every SDK ROM source when it starts,
 for links to other modules and workspace search (`SdkIndex`, 69 roots). This page tracks where that time and memory
 go, every change measured, and the candidates left, so a later round starts from evidence.
 
@@ -226,10 +226,36 @@ are not profiled. Allocations are BenchmarkDotNet's, exact either way.
 
 ## Candidates
 
-- **What the analyses keep.** The source map is most of `Result`, about 55 MB, and the index's analyses read it
-  for little after the build: hover's assembled bytes, the symbols and diagnostics. Trimming it needs a decision on
-  what an SDK analysis must still answer. Strings, at 68 MB, may repeat across roots and could be shared.
-- **Reading definitions** (B3, next): `Define` and `LabelKind`, for each documented definition.
+- **What the SDK's analyses keep** (next). The index's analyses are reached only through `SdkAnalyses()` and
+  `AllAnalyses()`, never through `AnalysisOf`, so hover, completion and the outline never use them. Once
+  `SdkIndex.Index` has built an analysis's documentation, its readers need only these of `Result`:
+
+  | Reader | What it uses |
+  | --- | --- |
+  | Links, lint, historical names and deprecations (`ResolverFor`, `HistoricalNames`, `Deprecated`) | `Documentation` |
+  | Definitions in the SDK and links by name (`Find`) | the definitions, `Result.Success` |
+  | References and workspace symbols | the definitions, the lines |
+  | The documentation set it built | `Result.Symbols`, `Result.SkippedLines` |
+
+  The source map (entries, operands, locations: about 56 MB), the sections' bytes (4 MB), the symbol definitions,
+  files and usings are read only while the documentation is built. `Result.HistoricalNames` and the bytes by line
+  (`Emitted`) are read only from the workspace's own analyses. Two ways to shed the rest, about a third of what the
+  index keeps, which might also cut the GC's time, as every later root's collections would have less to keep:
+
+  - **A summary result.** `Index` replaces `Result` with one that keeps the diagnostics, symbols, skipped lines
+    and historical names and leaves the rest empty, before the analysis is published. Small, but a later reader of
+    an SDK analysis's source map or bytes would get nothing, silently.
+  - **A narrower type.** The index keeps only what it answers (root, members, lines, definitions, documentation,
+    success), and the shared readers take an interface both types implement. More churn (`SymbolReferences`, the
+    workspace symbols, `LanguageWorkspace`'s documentation and `LanguageHost`), but the compiler then says what the
+    index can answer, and a feature that needs an SDK module's bytes has to add them on purpose.
+
+  Agreed order: find what keeps about 14 MB of file text reachable from `Result` (not the locations, which hold only
+  paths) with a ClrMD root path, then try the summary result as a throwaway to measure the live heap and the GC's
+  time, then choose. `SdkIndexBenchmarks`' cleanup hashes `Result.Sections`, so it would hash in setup or check bytes
+  in the `Assemble` case only.
+- **Strings**, at 68 MB of what the index keeps, may repeat across roots and could be shared.
+- **Reading definitions** (B3): `Define` and `LabelKind`, for each documented definition.
 - **A lighter `Also:` pass.** Now one parse per file per build, it still builds every comment whole (summary,
   remarks, every section and its entries, label kinds, usings) though it reads only six things and the `Also:`
   names. A reader for the assembler could skip the rest; about three quarters of the SDK's documented definitions
@@ -238,7 +264,7 @@ are not profiled. Allocations are BenchmarkDotNet's, exact either way.
   line are kept.
 - **The documentation parsed twice.** The assembler's `Also:` pass parses without style checks and without the
   assembly's knowledge; the editor's with both. Sharing more than the lines needs care.
-- **Growing lists and dictionaries** (next): statement lists and name maps grow by resizing.
+- **Growing lists and dictionaries**: statement lists and name maps grow by resizing.
 - **The ca65 path's copies** (M2): `PrepareCa65` copies a line it expands, its operation and an upper-cased
   copy of that; `ExpandCa65Functions` copies every `.`-token.
 - **The rest of macro expansion**: each invocation's argument list, parameter dictionary and a location for every

@@ -3,6 +3,7 @@
 // See LICENSE file in the project root for full license information
 
 using Retrocore.Machines.Apple2;
+using System.Security.Cryptography;
 
 namespace Retrocore.Tests;
 
@@ -38,6 +39,14 @@ public sealed class Apple2MouseTests
         value.Should().Be(0xD6);
         MouseRom.Bytes.Length.Should().Be(256);
     }
+
+    /// <summary>
+    ///  The card's firmware, Mouse.rom.asm, is pinned by digest, so a change to its names or comments that moves a
+    ///  byte fails here.
+    /// </summary>
+    [TestMethod]
+    public void FirmwareBytesArePinned() =>
+        Convert.ToHexString(SHA256.HashData(MouseRom.Bytes)).Should().Be("D018CD4DB652C33D1BC97A314B6C0AA90B00899733EF5FC39E8DB2587E83489B");
 
     /// <summary>
     ///  INITMOUSE, SETMOUSE and READMOUSE: the mouse follows the host only once on, and READMOUSE puts the position,

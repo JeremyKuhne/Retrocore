@@ -27,3 +27,7 @@ b1,f33ce65d,Parser lines read in place,Index,All,873.94,16.973,27.409,16000.0000
 b1,f33ce65d,Parser lines read in place,Assemble,All,613.36,11.744,13.524,15000.0000,11000.0000,4000.0000,655.49,Default,artifacts/sdk-index-benchmarks/b1/results/Retrocore.Perf.SdkIndexBenchmarks-report.csv
 b1,f33ce65d,Parser lines read in place,Index,AppleSoft,33.65,0.446,0.417,937.5000,875.0000,312.5000,38.44,Default,artifacts/sdk-index-benchmarks/b1/results/Retrocore.Perf.SdkIndexBenchmarks-report.csv
 b1,f33ce65d,Parser lines read in place,Assemble,AppleSoft,20.81,0.122,0.114,593.7500,562.5000,218.7500,27.55,Default,artifacts/sdk-index-benchmarks/b1/results/Retrocore.Perf.SdkIndexBenchmarks-report.csv
+b2,83190f75,Style checks read in place,Index,All,885.13,17.586,25.777,15000.0000,14000.0000,0.0000,809.76,Default,artifacts/sdk-index-benchmarks/b2/results/Retrocore.Perf.SdkIndexBenchmarks-report.csv
+b2,83190f75,Style checks read in place,Assemble,All,626.37,10.533,9.853,15000.0000,11000.0000,4000.0000,655.14,Default,artifacts/sdk-index-benchmarks/b2/results/Retrocore.Perf.SdkIndexBenchmarks-report.csv
+b2,83190f75,Style checks read in place,Index,AppleSoft,32.71,0.651,0.869,875.0000,812.5000,250.0000,34.74,Default,artifacts/sdk-index-benchmarks/b2/results/Retrocore.Perf.SdkIndexBenchmarks-report.csv
+b2,83190f75,Style checks read in place,Assemble,AppleSoft,21.13,0.160,0.133,593.7500,562.5000,218.7500,27.5,Default,artifacts/sdk-index-benchmarks/b2/results/Retrocore.Perf.SdkIndexBenchmarks-report.csv

@@ -38,8 +38,9 @@ Indexing every SDK root:
 | 4 | 04904961 | Type directives told by their words | 942 ms | 1,039 MB | −19% | −25% |
 | 5 | d255b05c | Each file split into lines once | 894 ms | 938 MB | −23% | −32% |
 | 6 (`b1`) | f33ce65d | The parser reads each line in place | 874 ms | 834 MB | −25% | −40% |
+| 7 (`b2`) | 83190f75 | The style checks read lines in place | 885 ms | 810 MB | −24% | −42% |
 
-AppleSoft's root alone: 50.1 ms and 67.7 MB at the baseline, 33.7 ms and 38.4 MB after step 6.
+AppleSoft's root alone: 50.1 ms and 67.7 MB at the baseline, 32.7 ms and 34.7 MB after step 7.
 
 ### 1. Each source path made full once
 
@@ -90,6 +91,16 @@ something. Words are compared by lowering one character at a time with `char.ToL
 `ToLowerInvariant` does to a string; `OrdinalIgnoreCase` would not be, as it takes `ı` for `I` and `ſ` for `S`. The
 scope tracker also reads a line's `.using` names without LINQ's `Concat`. Allocations fell by 104 MB.
 
+### 7. The style checks read lines in place
+
+The style checks, which run only in the editor's parse of a strict source, split and trimmed every line, looked for
+characters outside ASCII with LINQ's `Any`, and for every comment line `CommentIndent` split and trimmed each line it
+looked at and built a `HashSet` of columns. `DefinedName` copied the rest of every line of code. Now whitespace and the
+comment's start are measured in place, a line's code is copied once when it has some, and a comment's columns are kept
+on the stack. Comment bodies and sections tell indentation and blank lines without copies. Allocations fell by 24 MB;
+the time, 11 ms more, is within the run's noise, as `Assemble`, which these checks barely touch, moved as much. The
+SDK's sources are clean, so the dump has none of these warnings: `StyleLintTests` covers them.
+
 ## Where the time and memory go now
 
 From the ETW trace before steps 3 and 4, and the allocation trace after step 5:
@@ -103,9 +114,7 @@ From the ETW trace before steps 3 and 4, and the allocation trace after step 5:
 
 ## Candidates
 
-- **The parser's style checks and sections** (B2, next): `CommentIndent`, `Body`, `Style` and `Section` copy lines
-  and words as the main loop did; they run only in the editor's parse.
-- **Reading definitions** (B3): `Define`, `DefinedName` and `LabelKind`.
+- **Reading definitions** (B3, next): `Define` and `LabelKind`, for each documented definition.
 - **A lighter `Also:` pass.** The assembler's parse is about a fifth of all allocations, though it needs only the
   comments with `Also:` sections. Finding exactly the same comments with less work needs care.
 - Spans have been enough so far, as the parser keeps only strings; Touki's `StringSegment` would pay where slices of a

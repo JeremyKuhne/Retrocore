@@ -200,7 +200,7 @@ manual where they differ.
   and no ROM. The screen scrolls one line after CONTROL-RESET, as a II Plus's does.
 
 Not checked: SOS and mode-test frames against MAME, frames in Apple II mode, the Emulation disk's configuration
-menu (its slot 5 and 7 serial cards), the paddles, breakpoints and disassembly qualified by bank, and the call stack
+menu (its slot 5 and 7 serial cards), the paddles in Apple II mode, breakpoints and disassembly qualified by bank, and the call stack
 across bank switches. Host game controllers are not wired to the joysticks, the equates name the hardware but not
 SOS's entry points, and beam breakpoints are not available on the Apple III.
 

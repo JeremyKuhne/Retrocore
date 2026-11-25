@@ -81,8 +81,9 @@ public sealed class Trs80Model3Bus : IProcessorBus, IIoBus
         _banked = _model4 && configuration.RamKilobytes == 128;
         _controller = configuration.DiskController;
         Video = new(roms.CharacterGenerator, _model4);
-        Keyboard = new(Trs80Model3Timing.ClockHertz);
         bool level1 = configuration.Rom == Trs80Rom.Level1;
+        Trs80TypedLetters letters = level1 ? Trs80TypedLetters.Unshifted : Trs80TypedLetters.ShiftForUppercase;
+        Keyboard = new(Trs80Model3Timing.ClockHertz, letters);
         Cassette = new(level1 ? 250 : 500, Trs80Model3Timing.ClockHertz, highSpeed: !level1);
         Disks = new(Trs80Model3Timing.ClockHertz, wd179x: true);
     }

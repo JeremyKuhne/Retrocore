@@ -259,6 +259,7 @@ EndLine:
 
 ;; Prints a byte in hexadecimal and a space.
 ;; In: A = the byte
+;; Uses: A
 ;; Also: PRBYSP (PA1)
 .proc PrintByteSpace
     jsr PrintHexByte
@@ -269,6 +270,7 @@ EndLine:
 ;; Prints the bad data, ERR, and then each failing chip as ` r-c`: its row, D if the block starts below $5000 and E
 ;; otherwise, and the socket of the data bit that differs; then a return.
 ;; In: A = the bad data, TestData = the data expected, FirstPage = the block's first page
+;; Keeps: Y
 ;; Also: ERRBITS (UNKN)
 .proc PrintFailingChips
 

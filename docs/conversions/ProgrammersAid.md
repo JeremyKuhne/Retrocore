@@ -95,6 +95,12 @@ jumps to $02CB. The root asserts it is 0 or 1.
 The names this conversion gave definitions that have historical names, by file. Integer BASIC's and the Monitor's own
 names, which the definitions in Equates.asm keep or inherit, are not listed.
 
+The listing names given in prose instead (P2): DOWN on `HiResGraphics::Step::Down` and on `Music::Play`'s second
+half, `Music::Play::SecondHalf`; UP on `HiResGraphics::Step::Up`; RTS1 on `HiResGraphics::StepHorizontal::Done` and
+`RamTest::TestBlock::Done`; DONE on `Renumber::Append::Done` and `Music::LookUp::SplitPeriod`; LENGTH on
+`Music::NoteLength`; ACC on `Renumber::ACCUMULATOR`; MODE on `Renumber::LINE_NUMBER_MODE`; INIT on
+`Relocate::Command::DefineBlocks`; and Integer BASIC's ACC on `ACL`.
+
 ### Equates.asm
 
 | Historical names | Name |

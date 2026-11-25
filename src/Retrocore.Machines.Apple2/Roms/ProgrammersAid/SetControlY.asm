@@ -7,6 +7,7 @@
 ;; Points the Monitor's Control-Y command at a routine: writes JMP and the routine's address to <UserJump>, where the
 ;; Monitor jumps for Control-Y.
 ;; In: A = the routine's address, low byte, Y = its high byte
+;; Uses: A
 ;; Keeps: X, Y
 ;; Also: SETCTLY (PA1)
 .proc SetControlY

@@ -175,6 +175,7 @@ SCALE_VALUE_HIGH = $32
 
 ;; INIT (CALL -12288): shows hi-res page 1 with four lines of text below, and clears page 1 to black.
 ;; Out: Page = page 1
+;; Uses: A, Y
 ;; Keeps: X
 ;; Also: SETHRL (PA1)
 .proc ShowAndClear
@@ -319,7 +320,7 @@ AtPosition:
 
 ;; Moves the point one dot left or right, into the next byte at an edge of one, wrapping around the line.
 ;;
-;; Apple's listing calls the return at Done RTS1.
+;; Apple's listing calls the return at <HiResGraphics::StepHorizontal::Done> RTS1.
 ;; In: negative = set for left, clear for right, Y = the byte index
 ;; Out: Y = the byte index, DotMask = the new dot's mask, ByteIndex = its byte, ShiftedColor = the color for that byte
 ;; Keeps: X

@@ -133,7 +133,7 @@ NextSecondHalf:
 ;; Looks the note up: splits its period between <FirstHalfCount> and <SecondHalfCount> as <Timbre> says, and sets
 ;; <NoteLength> from <Duration>; then plays it, or a rest for note 0.
 ;;
-;; The second half gets the period's first byte shifted right once for each bit <Timbre> is shifted to reach 0, plus
+;; The second half gets the period's first byte shifted right once for each halving that takes <Timbre> down to 1, plus
 ;; the period's second byte, plus 1, the carry the subtraction leaves; the first half gets the first byte less the
 ;; shifted part.
 ;; In: Pitch = the note, Duration = its length, Timbre = its duty cycle

@@ -1,6 +1,7 @@
 # Builds Retrocore and runs every test that needs nothing outside the repository: the .NET tests (those that need
 # ROM dumps, disk images or other external files report inconclusive), the debug adapter scripts, and the
-# extension's grammar and unit tests. The editor tests need VS Code and are not run here.
+# extension's grammar and unit tests. A second job runs the extension's editor tests in a pinned VS Code, which
+# they download, under xvfb, against the Release debug host, which also runs the language servers.
 
 name: CI
 
@@ -99,4 +100,68 @@ jobs:
         with:
           name: test-results
           path: ${{ github.workspace }}/test-results
+          if-no-files-found: ignore
+
+  editor-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      # An empty cache folder, so no test finds external files on the runner by accident.
+      RETROCORE_CACHE: ${{ github.workspace }}/cache
+    defaults:
+      run:
+        working-directory: Retrocore
+    steps:
+      - name: Check out Retrocore
+        uses: actions/checkout@v7
+        with:
+          path: Retrocore
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: Retrocore/global.json
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: Retrocore/extension/package-lock.json
+
+      - name: Install xvfb and VS Code's libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends xvfb libnss3 libatk1.0-0t64 libatk-bridge2.0-0t64 \
+            libgtk-3-0t64 libgbm1 libasound2t64 libxkbfile1 libsecret-1-0 libxss1 libdrm2 libnotify4
+
+      # The language server and debug host the tests run, and the IIe sample they load.
+      - name: Build
+        run: |
+          dotnet build Retrocore.slnx -c Release
+          mkdir -p artifacts/iie-sample
+          dotnet artifacts/AnyCPU/Release/Retrocore.Debug/net11.0/Retrocore.Debug.dll --assemble sample/iie/main.s artifacts/iie-sample/main.bin --dialect ca65 --config sample/iie/link.cfg
+
+      - name: Cache VS Code
+        uses: actions/cache@v5
+        with:
+          path: Retrocore/extension/.vscode-test
+          key: vscode-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Retrocore/extension/src/test/runTest.ts') }}
+
+      - name: Editor tests
+        working-directory: Retrocore/extension
+        run: |
+          npm ci
+          npm run compile
+          # The whole suite, which includes the language-only steps, and the memory step again on its own, as it
+          # runs first there, before anything else has opened an editor.
+          xvfb-run -a npm run test:editor
+          xvfb-run -a npm run test:memory-integration
+
+      - name: Upload VS Code logs
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: vscode-logs
+          path: Retrocore/artifacts/vscode-m1-tests/profile/logs
           if-no-files-found: ignore

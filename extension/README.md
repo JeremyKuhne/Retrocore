@@ -1583,8 +1583,14 @@ to test scopes, not a JavaScript approximation of the patterns.
 
 `test:language` launches an isolated VS Code extension-development host and checks
 language registration/detection without a debug session, word selection,
-comment toggling and bracket navigation. It needs VS Code but no ROMs or .NET
-build. Set `RETROCORE_VSCODE` to override the test host executable path.
+comment toggling and bracket navigation, and the assembly and BASIC language
+servers. It needs VS Code and the Release build of the debug host, which runs the
+language servers, but no ROMs.
+
+The editor tests (`test:language`, `test:memory-integration` and `test:editor`)
+download a pinned VS Code into `.vscode-test` the first time they run; set
+`RETROCORE_VSCODE` to run an installed VS Code instead. On Linux without a
+display, run them under `xvfb-run -a`, as CI does.
 
 `test:memory-integration` uses the isolated VS Code host and a Release debug host to check cycle subscriptions and
 multiple memory-editor subscriptions; it needs the SDK ROM sources but no external ROMs.

@@ -323,7 +323,7 @@ ChecksumFix:
 ;;
 ;; Its entry in the key table became the last Control-Y, which wins: in the Autostart Monitor it points at the
 ;; five NOPs after the rts, which run into <Commands::User>, and in the original IIe at the text that replaced
-;; them (<Commands::UserText>), which runs into it too. The Enhanced IIe gave the entry to its own S command, which
+;; them (`Commands::UserText`), which runs into it too. The Enhanced IIe gave the entry to its own S command, which
 ;; searches memory.
 ;; Also: STEPZ (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc Step
@@ -664,7 +664,7 @@ NextByte:
 ;; At $FF3F.
 ;; Out: A = <SavedA>, X = <SavedX>, Y = <SavedY>, P = <SavedStatus>
 ;; Entry:
-;;   Done = the return, which the Enhanced IIe's <Commands::LetterOrQuote> returns through too
+;;   Done = the return, which the Enhanced IIe's `Commands::LetterOrQuote` returns through too
 ;; Also: RESTORE (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc RestoreRegisters
 .assert * = $FF3F, "RestoreRegisters must stay at $FF3F."
@@ -680,7 +680,7 @@ ExceptA:
     ldy SavedY
     plp
 
-;; The return, which the Enhanced IIe's <Commands::LetterOrQuote> returns through too.
+;; The return, which the Enhanced IIe's `Commands::LetterOrQuote` returns through too.
 Done:
     rts
 .endproc

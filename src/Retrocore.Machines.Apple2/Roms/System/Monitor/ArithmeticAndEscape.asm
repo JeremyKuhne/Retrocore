@@ -356,7 +356,7 @@ Print:
 ;; Performs a cursor key's command, reads the next key, and goes on in escape mode (<Escape::NextKey>).
 ;;
 ;; The keys I, J, K and M become the commands D, B, A and C (<Escape::CursorKeyCommands>). The IIe reads the next key
-;; with <Escape::ReadEscapeKey>, the Autostart Monitor with <ReadKey>. The Apple II Monitor has no escape keys I, J, K
+;; with `Escape::ReadEscapeKey`, the Autostart Monitor with <ReadKey>. The Apple II Monitor has no escape keys I, J, K
 ;; and M: its <Escape::Sequence> hands every key to <Escape::Command>.
 ;; In: A = I, J, K or M
 ;; Also: ESCNOW (A2RM79, IIETRM85)
@@ -394,7 +394,7 @@ Print:
 ;; The model identification byte: $06 means an Apple IIe, and the byte at $FBC0 tells which.
 ;;
 ;; At $FBB3. Programs read the same address on the Apple II: the Autostart Monitor has $EA here, followed by
-;; unused $EA bytes up to $FBC0, and the Apple II Monitor $38, a SEC in <Arithmetic::MakePositive>.
+;; unused $EA bytes up to $FBC0, and the Apple II Monitor $38, a SEC in `Arithmetic::MakePositive`.
 ;; Also: VERSION (IIEROM82, IIETRM85), F8VERSION (IIEROM82, IIETRM85)
 ModelId:
 .assert * = $FBB3, "ModelId must stay at $FBB3."

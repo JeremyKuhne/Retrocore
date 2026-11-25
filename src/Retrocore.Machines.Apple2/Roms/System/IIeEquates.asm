@@ -552,9 +552,8 @@ AuxWriteOn = $C005
 ;; <InternalCxRomOn> maps the IIe's internal ROM there instead, and <InternalCxRomState> reports which is mapped in
 ;; bit 7. Slot 3's page, $C300, shows the card's ROM only while SLOTC3ROM is on too (<SlotC3RomOn>). The Monitor
 ;; writes it on its way back from the internal firmware: <Monitor:SelectSlotRom> on the Enhanced IIe,
-;; <Monitor:SlotRomReturn> on the original.
-;; See: <InternalCxRomOn>, <InternalCxRomState>, <Monitor:CallFirmware>, <Monitor:SelectSlotRom>,
-;;   <Monitor:SlotRomReturn>
+;; `SlotRomReturn` on the original.
+;; See: <InternalCxRomOn>, <InternalCxRomState>, <Monitor:CallFirmware>, <Monitor:SelectSlotRom>
 ;; Also: SETSLOTCXROM (IIEROM82, IIETRM85), SLOTCXROM (IIETRM85)
 InternalCxRomOff = $C006
 
@@ -684,7 +683,7 @@ AuxWriteState = $C014
 ;;
 ;; <Monitor:CallFirmware> pushes the state, through BIT and PHP, before it switches internal ROM in, and the
 ;; firmware's return pulls it to decide whether to switch slot ROM back (<Monitor:SelectSlotRom> on the Enhanced IIe,
-;; <Monitor:SlotRomReturn> on the original). <InternalCxRomOff> and <InternalCxRomOn> set the switch. On the Enhanced
+;; `SlotRomReturn` on the original). <InternalCxRomOff> and <InternalCxRomOn> set the switch. On the Enhanced
 ;; IIe, the interrupt handler, <Firmware:IRQHANDLER>, reads it first, so that it can restore the ROM the interrupted
 ;; program was using.
 ;; See: <InternalCxRomOff>, <InternalCxRomOn>, <Monitor:CallFirmware>
@@ -712,7 +711,7 @@ SlotC3RomState = $C017
 ;;
 ;; With 80STORE on, <Page2On> and <Page2Off> pick auxiliary or main memory for text page one instead of picking the
 ;; displayed page. <Store80Off> turns it off and <Store80On> on. The original IIe's
-;; <Monitor:RestoreAfterFirmware> reads it to tell how to restore the page.
+;; `RestoreAfterFirmware` reads it to tell how to restore the page.
 ;; See: <Store80Off>, <Store80On>, <Page2State>, <Page2On>
 ;; Also: RD80STORE (IIEROM82, IIETRM85), RD80COL (IIEROM82, IIETRM85)
 Store80State = $C018
@@ -744,7 +743,7 @@ MixedState = $C01B
 ;; Reading it reports in bit 7 whether PAGE2 is on.
 ;;
 ;; <Page2Off> turns PAGE2 off and <Page2On> on. With 80STORE on, PAGE2 on means text page one is mapped to auxiliary
-;; memory rather than page two being displayed. The original IIe's <Monitor:RestoreAfterFirmware> reads it to put
+;; memory rather than page two being displayed. The original IIe's `RestoreAfterFirmware` reads it to put
 ;; the page back.
 ;; See: <Page2Off>, <Page2On>, <Store80State>
 ;; Also: RDPAGE2 (IIEROM82, IIETRM85)

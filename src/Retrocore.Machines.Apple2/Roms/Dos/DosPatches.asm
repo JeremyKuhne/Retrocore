@@ -11,10 +11,10 @@
 ;; through the file manager's error exit, so it reads as part of the file manager (FileLocateSector.asm), whose
 ;; names it uses.
 ;;
-;; In DOS 3.3, <TopPatchCodeStart> to <TopPatchCodeLast> is one of the code ranges in the relocator's
+;; In DOS 3.3, `TopPatchCodeStart` to `TopPatchCodeLast` is one of the code ranges in the relocator's
 ;; <Relocator::CodeRanges>, so the addresses in these instructions move with DOS. DOS 3.2 has only the three
 ;; routines, in $BFDC-$BFFF. They are inside the range of RWTS and the formatter, its relocator's last code range,
-;; which ends here at <RwtsCodeLast>.
+;; which ends here at `RwtsCodeLast`.
 
 .if DOS32 = 0
 ;; The start of the relocator's range of the patches at the top of DOS, which runs to <TopPatchCodeLast>.

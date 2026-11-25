@@ -29,7 +29,7 @@
     VOLUME .byte
     ;; The track, 0 to 34.
     TRACK .byte
-    ;; The sector. In DOS 3.3, 0 to 15 as DOS numbers them, which the interleave table <PhysicalSectors> turns into the
+    ;; The sector. In DOS 3.3, 0 to 15 as DOS numbers them, which the interleave table `PhysicalSectors` turns into the
     ;; number on the disk; in DOS 3.2, 0 to 12, the number on the disk.
     SECTOR .byte
     ;; The address of the drive's DCT, laid out as <DeviceTable>.

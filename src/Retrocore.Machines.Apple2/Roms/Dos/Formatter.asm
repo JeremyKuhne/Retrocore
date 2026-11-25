@@ -5,7 +5,7 @@
 ;; sector an address field (<DiskII::WriteAddressField>, WriteAddress.asm) and a data field of zeros
 ;; (<DiskII::WriteDataField>, WriteSector.asm), and reads each track back to check it. Between sectors it writes a gap
 ;; of self-sync nibbles set by <Formatter::GapLength>, which starts at 40 and is cut whenever a check finds a sector
-;; other than 0 first after the end of the writing. At $BEAF-$BFB7 where DOS runs, followed by <PhysicalSectors>, the
+;; other than 0 first after the end of the writing. At $BEAF-$BFB7 where DOS runs, followed by `PhysicalSectors`, the
 ;; table RWTS uses to number sectors.
 ;;
 ;; DOS 3.2's writes 13 address fields on each track, with self-sync bytes between them, but no data fields: where

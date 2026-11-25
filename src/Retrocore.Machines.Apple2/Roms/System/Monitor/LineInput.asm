@@ -35,7 +35,7 @@ KEEP_CASE_MASK = $FF
 ;; Echoes a character typed into the line, other than Return, then performs the backspace key and Control-X, and
 ;; rings the bell near the buffer's end.
 ;;
-;; At $FD3D; on the Enhanced IIe, $FD47, after <PickUnderCursor>. The Apple II's Monitors echo in normal video, whatever
+;; At $FD3D; on the Enhanced IIe, $FD47, after `PickUnderCursor`. The Apple II's Monitors echo in normal video, whatever
 ;; <InverseMask> holds, and restore it; the original IIe keeps the save and restore but echoes with <InverseMask> as it
 ;; is; the Enhanced IIe echoes the character it is given, in A, and leaves <InverseMask> alone. The 256th character
 ;; cancels the line.
@@ -115,7 +115,7 @@ Next:
 ;;
 ;; At $FD6A. Backspace deletes a character, Control-X cancels the line, and the right arrow (Control-U) takes
 ;; the character under the cursor; on the Enhanced IIe, in 80 columns, the internal firmware gets it
-;; (<LineInput::PickUnderCursor>). The Apple II's Monitors store lowercase letters as capitals; the IIe's keep them.
+;; (`LineInput::PickUnderCursor`). The Apple II's Monitors store lowercase letters as capitals; the IIe's keep them.
 ;; Out: X = the line's length, InputBuffer,X = the Return that ends it
 ;; Entry:
 ;;   NoPrompt = reads a line without printing the prompt

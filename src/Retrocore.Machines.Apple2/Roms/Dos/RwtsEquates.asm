@@ -26,7 +26,7 @@
 ;; Software/Boot13.1980.asm includes this file too, with DOS 3.2's nibble routines.
 
 ;; The start of the first range of RWTS's code that the relocator adjusts, at $B800 where DOS runs: the low-level
-;; routines up to <LowLevelCodeEnd> (DOS 3.2's <DiskII::Wait::LowLevelCodeEnd>). See Relocator.asm.
+;; routines up to `LowLevelCodeEnd` (DOS 3.2's `DiskII::Wait::LowLevelCodeEnd`). See Relocator.asm.
 ;; Also: ASC1 (DOS33, DOS31)
 LowLevelCodeStart:
 

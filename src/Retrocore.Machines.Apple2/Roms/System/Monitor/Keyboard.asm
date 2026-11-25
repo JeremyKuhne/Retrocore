@@ -167,7 +167,7 @@ Check:
 ;; Escape mode: reads and performs escape commands, then reads the next character.
 ;;
 ;; At $FD2F. The Apple II Monitor performs one command and leaves escape mode; the others stay in it while
-;; the keys are I, J, K and M. The IIe's read the key through <Escape::ReadEscapeKey>, which takes lowercase and
+;; the keys are I, J, K and M. The IIe's read the key through `Escape::ReadEscapeKey`, which takes lowercase and
 ;; the arrow keys.
 ;; Also: ESC (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc Sequence
@@ -190,7 +190,7 @@ Check:
 ;; Reads a character, performing escape sequences (cursor moves) instead of returning them.
 ;;
 ;; At $FD35. On the Enhanced IIe it reads with the 80-column firmware taking escape sequences
-;; (<Escape::ReadKeyAllowEscape>).
+;; (`Escape::ReadKeyAllowEscape`).
 ;; Out: A = the character
 ;; Also: RDCHAR (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc ReadCharacter

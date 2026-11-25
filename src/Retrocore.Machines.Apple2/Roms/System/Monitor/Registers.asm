@@ -11,7 +11,7 @@ REGISTER_COUNT = 5
 
 ;; Prints a carriage return, then the registers saved by <SaveRegisters> as "A=xx X=xx Y=xx P=xx S=xx".
 ;;
-;; At $FAD7. In the Apple II Monitor, <Stepper::Finish> falls into it at the end of a step.
+;; At $FAD7. In the Apple II Monitor, `Stepper::Finish` falls into it at the end of a step.
 ;; In: SavedA..SavedStackPointer = the registers
 ;; Out: X = 0
 ;; Uses: A, Address3/Address3High
@@ -121,7 +121,7 @@ DiskSignature:
 
 ;; The title <Startup::ShowTitle> shows: "Apple ][" on the original IIe, "APPLE ][" in the Autostart Monitor.
 ;;
-;; The Enhanced IIe keeps it, but shows <Startup::TitleEnhanced> instead.
+;; The Enhanced IIe keeps it, but shows `Startup::TitleEnhanced` instead.
 ;; Also: TITLE (A2RM79, IIEROM82, IIETRM85)
 Title:
 .if MONITOR = MONITOR_IIE
@@ -139,7 +139,7 @@ Title:
 ;;
 ;; In the IIe Monitors it is in five pieces: <Escape::CursorKeyCommands> here, the cursor-key loop (<Escape::Perform>,
 ;; <Escape::CursorKey>, <Escape::NextKey>), the commands (<Escape::Command>), the IIe's key reader
-;; (<Escape::ReadEscapeKey>), and the escape sequence's start (<Escape::Sequence>). The Autostart Monitor has the same
+;; (`Escape::ReadEscapeKey`), and the escape sequence's start (<Escape::Sequence>). The Autostart Monitor has the same
 ;; but the key reader. The Apple II Monitor has only the commands and the escape sequence's start.
 .scope Escape
 

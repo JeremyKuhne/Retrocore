@@ -64,7 +64,7 @@ BITS = $3C
 ;;
 ;; BOOT 0 starts with sector 0. The 16-sector ROM counts it up after each sector until it reaches the count in
 ;; the boot sector's first byte, and a boot sector that calls <READ> again sets it first.
-;; See: <BUFFER>, <TRACK>, <READ>
+;; See: <BUFFER>, <READ>
 SECTOR = $3D
 .if SECTORS = 16
 

@@ -233,7 +233,7 @@ Pushed:
 ;; Prints a character on the screen as it is, without <InverseMask>.
 ;;
 ;; At $FDF6. The Apple II Monitor prints with <ScreenOutDirect at ScreenOutDirect>; the others with
-;; <ScreenOutPausing at ScreenOutPausing>, which adds the Control-S pause.
+;; `ScreenOutPausing`, which adds the Control-S pause.
 ;; In: A = the character, with its high bit set
 ;; Keeps: A, Y
 ;; Also: COUTZ (A2RM78, A2RM79, IIEROM82, IIETRM85)

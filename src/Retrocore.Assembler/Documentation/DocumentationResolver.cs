@@ -200,30 +200,43 @@ public sealed partial class DocumentationResolver
         }
 
         // The assembler's scope rules, from the topic's scope outward, then the scopes the .using directives in
-        // effect at the topic name, then historical names.
+        // effect at the topic name, then historical names. Only what this build assembles counts: a name the source
+        // defines only in another build's branch reaches nothing here, rather than a definition in another module.
         if (module is null && SetsFor(model).Contains(Current))
         {
+            DocumentationTarget? elsewhere = null;
             foreach (string candidate in Scoped(from.Name, name))
             {
-                if (Match(Current, candidate, also: false) is { } match) { return match; }
+                if (InBuild(Match(Current, candidate, also: false), ref elsewhere) is { } match) { return match; }
             }
 
-            if (Used(comment ?? (from.Comments.Count == 0 ? null : from.Primary), name) is { } used) { return used; }
-            if (Also(Current, name.StartsWith("::", StringComparison.Ordinal) ? name[2..] : name) is { } also)
+            if (Used(comment ?? (from.Comments.Count == 0 ? null : from.Primary), name, ref elsewhere) is { } used)
             {
-                return also;
+                return used;
             }
+
+            string plain = name.StartsWith("::", StringComparison.Ordinal) ? name[2..] : name;
+            if (InBuild(Also(Current, plain), ref elsewhere) is { } also) { return also; }
+            if (elsewhere is not null) { return elsewhere; }
         }
 
         List<DocumentationTarget> matches = [];
+        DocumentationTarget? otherBuild = null;
         foreach (DocumentationSet set in sets)
         {
             if (module is null && ReferenceEquals(set, Current)) { continue; }
-            if (Match(set, name.StartsWith("::", StringComparison.Ordinal) ? name[2..] : name) is { } match)
+            DocumentationTarget? found = Match(set, name.StartsWith("::", StringComparison.Ordinal) ? name[2..] : name);
+
+            // A link that names this source's own module means this build's definition, as a plain name does, before
+            // another build's of the module; one only another build has it reaches only through that build's set.
+            if (InBuild(found, ref otherBuild) is { } match)
             {
+                if (ReferenceEquals(set, Current)) { return match; }
                 matches.Add(match);
             }
         }
+
+        if (matches.Count == 0 && otherBuild is not null) { return otherBuild; }
 
         // The same model-dependent source documented in two builds is one definition.
         // An undocumented symbol with the same value in several modules (an equate such as KBD) is one definition.
@@ -242,9 +255,24 @@ public sealed partial class DocumentationResolver
             ? (Path.GetFileName(topic.Path).ToUpperInvariant(), topic.Line, target.Value)
             : ("", -1, target.Value);
 
+    // A match that only another build of the current source has is noted, the first of them, and passed over.
+    private static DocumentationTarget? InBuild(DocumentationTarget? match, ref DocumentationTarget? elsewhere)
+    {
+        if (match is not { OnlyInOtherBuilds: true }) { return match; }
+        elsewhere ??= match;
+        return null;
+    }
+
+    // In the current set, a definition only another build has is no match; the build doesn't define its name (see
+    // InOtherBuild), though an old name the name is may reach a definition it has.
     private DocumentationTarget? Match(DocumentationSet set, string name, bool also = true)
     {
-        if (set.Find(name) is { } topic) { return Found(topic); }
+        if (set.Find(name) is { } topic)
+        {
+            if (!ReferenceEquals(set, Current) || !Current.InOtherBuild(topic)) { return Found(topic); }
+            return (also ? Also(set, name) : null) is { OnlyInOtherBuilds: false } old ? old : OtherBuild(name);
+        }
+
         if (set.Symbols.TryGetValue(name, out long value))
         {
             // A symbol a macro's expansion defines is documented by its body's topic.
@@ -256,11 +284,21 @@ public sealed partial class DocumentationResolver
         return also ? Also(set, name) : null;
     }
 
+    private static DocumentationTarget OtherBuild(string name) =>
+        new(DocumentationTargetKind.Unresolved, name) { OnlyInOtherBuilds = true };
+
     // A historical name reaches the definition that gives it in an Also: section: in the set being checked, the one its
-    // build assembles; in another module, any of its builds', so a name two of them give is ambiguous.
+    // build assembles; in another module, any of its builds', so a name two of them give is ambiguous. In the set being
+    // checked, a name that only another build's definitions or branches give reaches nothing.
     private DocumentationTarget? Also(DocumentationSet set, string name)
     {
         IReadOnlyList<DocumentationTopic> also = set.FindAlso(name, thisBuild: ReferenceEquals(set, Current));
+        if (ReferenceEquals(set, Current) && Current.KnowsBuild && also.Count != 0)
+        {
+            also = [.. also.Where(topic => !Current.InOtherBuild(topic) && Current.Gives(topic, name, thisBuild: true))];
+            if (also.Count == 0) { return OtherBuild(name); }
+        }
+
         if (also.Count == 1)
         {
             // In a topic macros' bodies share with other definitions of the name, the old name reaches one symbol of
@@ -279,7 +317,7 @@ public sealed partial class DocumentationResolver
 
     // A plain name in the scopes the .using directives in effect at the comment name, innermost directive first; a
     // name two scopes of one directive define is ambiguous.
-    private DocumentationTarget? Used(DocumentationComment? at, string name)
+    private DocumentationTarget? Used(DocumentationComment? at, string name, ref DocumentationTarget? elsewhere)
     {
         if (name.Contains("::", StringComparison.Ordinal) || at is null) { return null; }
         foreach (DocumentationUsing directive in at.Usings)
@@ -295,7 +333,8 @@ public sealed partial class DocumentationResolver
 
             foreach (string scope in directive.Targets(Current.IsScope, OpenedBefore).Distinct(StringComparer.Ordinal))
             {
-                if (Match(Current, $"{scope}::{name}", also: false) is { } match) { matches.Add(match); }
+                DocumentationTarget? found = Match(Current, $"{scope}::{name}", also: false);
+                if (InBuild(found, ref elsewhere) is { } match) { matches.Add(match); }
             }
 
             if (matches.Count == 1) { return matches[0]; }

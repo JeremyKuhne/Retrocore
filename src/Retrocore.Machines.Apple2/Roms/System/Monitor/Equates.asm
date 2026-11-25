@@ -7,8 +7,8 @@
 
 ;; The high byte of the pointer at <SlotPointer>.
 ;;
-;; <Startup::PowerUp> counts it down from $C7 to $C1 as it tries each slot. On the Enhanced IIe, the interrupt return
-;; code in the bytes the original IIe's <RestoreAfterFirmware> uses points it briefly at a slot's $Cn00 page to select
+;; `Startup::PowerUp` counts it down from $C7 to $C1 as it tries each slot. On the Enhanced IIe, the interrupt return
+;; code in the bytes the original IIe's `RestoreAfterFirmware` uses points it briefly at a slot's $Cn00 page to select
 ;; that slot's $C800 ROM, then restores it.
 ;; See: <SlotPointer>, <ExpansionRomSlot>
 LOC1 = $01
@@ -25,11 +25,11 @@ CV = $25
 ; for what the firmware does there, the name its routine there takes when the firmware is converted.
 
 ;; The internal firmware's dispatcher, which runs the function whose number is in Y; both IIe models'
-;; <CallFirmware> jump here.
+;; `CallFirmware` jump here.
 ;; Also: B_FUNC (IIEROM82, IIETRM85)
 DispatchFunction = $C100
 
-;; Slot 3's input entry in the internal firmware's 80-column code; <CompareSlot3Rom> compares its bytes.
+;; Slot 3's input entry in the internal firmware's 80-column code; `CompareSlot3Rom` compares its bytes.
 ;; Also: BASICIN (IIEROM82, IIETRM85)
 BasicInput = $C305
 

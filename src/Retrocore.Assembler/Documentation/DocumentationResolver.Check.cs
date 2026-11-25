@@ -185,7 +185,17 @@ public sealed partial class DocumentationResolver
             foreach (DocumentationLink link in DocumentationText.Links(text))
             {
                 DocumentationTarget target = Resolve(topic, link.Target, comment);
-                if (target.Kind == DocumentationTargetKind.Unresolved)
+                if (target.OnlyInOtherBuilds)
+                {
+                    // A comment of a branch this build leaves out is checked by the build that takes it.
+                    if (!Current.CommentAssembled(comment)) { continue; }
+                    string message = $"'{link.Target}' is defined only in other builds of this source, in a branch of "
+                        + "conditional assembly this build leaves out; link what every build that assembles this "
+                        + "comment defines, and name the rest in backticks.";
+
+                    In(comment, DocumentationRules.Link, message, line, link.Target);
+                }
+                else if (target.Kind == DocumentationTargetKind.Unresolved)
                 {
                     string message = $"No definition, file or address named '{link.Target}'.";
                     In(comment, DocumentationRules.Link, message, line, link.Target);
@@ -421,15 +431,20 @@ public sealed partial class DocumentationResolver
                 return part;
             }
 
-            if (Resolve(topic, part).IsResolved) { continue; }
+            if (Known(topic, part)) { continue; }
 
             // Apple's A1 names the pair A1L/A1H.
-            if (Resolve(topic, part + "L").IsResolved && Resolve(topic, part + "H").IsResolved) { continue; }
+            if (Known(topic, part + "L") && Known(topic, part + "H")) { continue; }
             return part;
         }
 
         return null;
     }
+
+    // Whether an entry's name is a symbol: one the build has, or one this source defines in another build's branch, as
+    // a contract every build shares may list; an entry's name is not a link, which must reach this build's.
+    private bool Known(DocumentationTopic topic, string name) =>
+        Resolve(topic, name) is { IsResolved: true } or { OnlyInOtherBuilds: true };
 
     /// <summary>
     ///  Gets the CPUs whose registers and flags a topic may name: the one its routine was assembled for, or

@@ -2,7 +2,7 @@
 ;; DOS 3.3 and 3.2 RWTS: moving the head
 ;;
 ;; <DiskII::MoveHead> steps the head from half-track to half-track, speeding up and slowing down with the
-;; <DiskII::OnTimes> and <DiskII::OffTimes> delays (MsWait.asm). In DOS 3.3 it calls <DiskII::SetPhase> to turn the
+;; <DiskII::OnTimes> and <DiskII::OffTimes> delays (MsWait.asm). In DOS 3.3 it calls `DiskII::SetPhase` to turn the
 ;; stepper's phases on and off, and turns the last one off when it arrives; DOS 3.2's turns the phases on and off
 ;; itself and leaves the last one on, for <SeekHalfTrack> to turn off before the next seek. At $B9A0-$B9FC where DOS
 ;; 3.3 runs ($BA1E-$BA7E in DOS 3.2). docs/DiskII.md explains the stepper motor.
@@ -24,7 +24,7 @@ PHASE_MASK = 3
 ;; and slows down. <Wait> adds the time spent waiting to <MotorTime>, the count RWTS uses to know when a motor it
 ;; started is up to speed.
 ;;
-;; At the end, DOS 3.3's waits 25.6 milliseconds for the head to settle and falls into <SetPhase> to turn the last
+;; At the end, DOS 3.3's waits 25.6 milliseconds for the head to settle and falls into `SetPhase` to turn the last
 ;; phase off. DOS 3.2's waits 25.5 milliseconds and leaves the last phase on; <SeekHalfTrack> turns the phases off
 ;; before the next seek.
 ;; In:    A = the half-track to go to, X = slot * 16, CurrentTrack = the half-track the head is on

@@ -37,6 +37,13 @@ public sealed record DocumentationTarget(DocumentationTargetKind Kind, string Na
     public string? Address { get; init; }
 
     /// <summary>
+    ///  Gets whether an unresolved name is defined only in other builds of the current source, in a branch of
+    ///  conditional assembly this build leaves out or a macro's body it never expands (see
+    ///  <see cref="DocumentationSet.InOtherBuild"/>).
+    /// </summary>
+    public bool OnlyInOtherBuilds { get; init; }
+
+    /// <summary>
     ///  Gets whether the target resolved to something a reader can follow.
     /// </summary>
     public bool IsResolved => Kind is not (DocumentationTargetKind.Unresolved or DocumentationTargetKind.Ambiguous);

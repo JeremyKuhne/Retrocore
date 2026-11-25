@@ -3,7 +3,7 @@
 ;;
 ;; <SelfTest::StartUp> ($9649) runs at every reset, from the main firmware's reset at $D11D (<CardReset>):
 ;;   1. copies the slot page's first 35 bytes ($Cn00-$Cn22) from the EPROM, so the host sees the SmartPort
-;;      signature at once, and its entries wait on themselves (Boot::WaitForCard and SmartPortEntry::WaitForCard) until
+;;      signature at once, and its entries wait on themselves (Boot::WaitForCard and SmartPortEntry::Wait) until
 ;; the card is ready;
 ;;   2. the EPROM's checksum: the sum of every byte but $FFF9 is 0, and $FFF9 plus the carries is 0;
 ;;   3. the SWIM: as an IWM, its data register and three modes; as the ISM, its phases, its mode and its sixteen
@@ -199,13 +199,13 @@ BootWait = SharedSlotPage + <Boot::WaitForCard + 1
 ;; <WaitForDiagnostics>'s branch offset ($7B18).
 DiagnosticsWait = SharedSlotPage + <WaitForDiagnostics::Wait + 1
 
-;; SmartPortEntry::WaitForCard's branch offset ($7B22).
+;; SmartPortEntry::Wait's branch offset ($7B22).
 CallWait = SharedSlotPage + <SmartPortEntry::Wait + 1
 
 ;; $Cn0D, where a released Boot::WaitForCard goes.
 SlotDiagnostics = SharedSlotPage + <DiagnosticsEntry
 
-;; $Cn23, where a released SmartPortEntry::WaitForCard goes.
+;; $Cn23, where a released SmartPortEntry::Wait goes.
 SlotCall = SharedSlotPage + <Call
 
 ; Values.
@@ -1326,7 +1326,7 @@ OnWait:
 ;; firmware's start-up, <Startup>. A failure goes to <StartUpFailed>.
 .proc StartUp
 
-    ; The slot page's start, through SmartPortEntry::WaitForCard's offset.
+    ; The slot page's start, through SmartPortEntry::Wait's offset.
     ldy #<SmartPortEntry::Wait + 1
 Slot:
     lda SlotPageImage,y
@@ -1652,7 +1652,7 @@ Recheck4000:
 .endproc
 
 ;; A failure of the start-up test: makes the slot page's start, its diagnostics entry and its call jump to the host's
-;; Monitor (<ResetToMonitor>), releases Boot::WaitForCard and SmartPortEntry::WaitForCard into those jumps, clears the
+;; Monitor (<ResetToMonitor>), releases Boot::WaitForCard and SmartPortEntry::Wait into those jumps, clears the
 ;; SmartPort signature's $03 and the rest of the page, and blinks the LED, a long flash and a short one, for ever.
 .proc StartUpFailed
 

@@ -211,7 +211,7 @@ public sealed class Apple2Disk35Card
     }
 
     /// <summary>
-    ///  Writes UNABLE TO BOOT on the text screen's line 9, as Apple's firmware does.
+    ///  Writes UNABLE TO BOOT on the text screen's second line (row 1), as Apple's firmware does.
     /// </summary>
     private void ShowUnableToBoot()
     {
@@ -261,7 +261,7 @@ public sealed class Apple2Disk35Card
 
     /// <summary>
     ///  Runs a ProDOS call, with its parameters in $42-$47, turned into SmartPort's as Apple's host firmware turns them
-    ///  (Host::ProDosToSmartPort), and its errors into ProDOS's (Host::MapProDosError).
+    ///  (<c>Host::ProDosToSmartPort</c> in its decoded source), and its errors into ProDOS's (<c>Host::MapProDosError</c>).
     /// </summary>
     /// <returns>The error: 0, $2B, $28, $2F, or $27 for any other.</returns>
     private byte ProDOS()
@@ -400,7 +400,7 @@ public sealed class Apple2Disk35Card
 
     /// <summary>
     ///  Command $0A, which chooses the next FORMAT's kind. Its parameter is a count of bytes in the buffer, of which
-    ///  Apple's host firmware (Host::SetFormat) passes up to four, the rest zero, and the card (FormatOptions::Set) takes the first as
+    ///  Apple's host firmware (<c>Host::SetFormat</c>) passes up to four, the rest zero, and the card (<c>FormatOptions::Set</c>) takes the first as
     ///  the kind (0 for the disk's own, or an even kind below $0D), wants the second 0, and takes a third below $0D as
     ///  the interleave. This card checks them so and formats every disk as the kind it is.
     /// </summary>
@@ -494,7 +494,7 @@ public sealed class Apple2Disk35Card
 
     /// <summary>
     ///  CONTROL, whose list starts with its length, as Apple's card answers it. A drive takes 0 (forget the disk and
-    ///  look again, which, as Apple's Control::Reset checks the disk, is $2F with no disk and takes a changed disk, with $2E
+    ///  look again, which, as Apple's card's control 0 (<c>Control::Reset</c>) checks the disk, is $2F with no disk and takes a changed disk, with $2E
     ///  for an extended call) and 4 (eject); 9 (sides) and $0A (interleave), which take one byte, change nothing here. Codes $0C
     ///  to $13, which reach into the card's own 65C02, are taken and do nothing, but for $12, which would run code
     ///  there. Unit 0 takes only $0C and $0E-$13.

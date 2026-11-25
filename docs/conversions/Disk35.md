@@ -9,7 +9,7 @@ Two sources:
 - `src/Retrocore.Machines.Apple2/Roms/Disk35.rom.asm`: the emulator's own 256-byte slot ROM, which carries each call
   to the C# card. One build, checked by `Apple2Disk35Tests.SlotRomMatchesItsDigest`, added before the conversion.
 
-Documents cited: UNKN only. The EPROM's labels are the SDK's own, given as it was decoded; no Apple listing of the
+Documents cited by the converted names: UNKN only. The EPROM's labels are the SDK's own, given as it was decoded; no Apple listing of the
 card's firmware is known. The Monitor's and IIe's names it uses keep the Monitor's citations (A2RM78, A2RM79,
 IIEROM82, IIETRM85) through `Inherit:` or the shared IIeEquates.asm and MonitorEntries.asm.
 

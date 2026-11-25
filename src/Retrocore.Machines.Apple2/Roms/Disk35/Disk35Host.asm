@@ -114,7 +114,7 @@ BootBuffer = $0800
 ;; Where a boot block runs, after its first byte.
 BootCode = $0801
 
-;; Where the host says why it did not boot: the text screen's line 9, column 8.
+;; Where the host says why it did not boot: the text screen's second line (row 1), column 8.
 MessageAt = $0488
 
 ; ProDOS's block-device call, in page zero.
@@ -166,7 +166,7 @@ CallPageZeroStart = CallBuffer
 ;; The byte after the last page-zero byte the call saves.
 CallPageZeroEnd = $52
 
-;; How many rounds of 65536 the boot waits for a key, and then for the card.
+;; How many rounds of 65536 the boot waits for a key.
 BootTries = Address1
 
 ;; <CallCommand>'s bit for a ProDOS call.
@@ -235,7 +235,8 @@ DATA_TAKEN = $F0
 ;; <MailboxData>'s bank and half.
 DATA_WHERE = $1F
 
-;; The command's bits that go to <MailboxState>: <CallCommand> less its ProDOS and extended bits.
+;; The command's bits that go to <MailboxState>: <CallCommand> less its top three bits, the ProDOS and extended bits
+;; and bit 5, which no command has.
 COMMAND_BITS = $1F
 
 ;; <MailboxProgress> when the IIgs starts a write with interrupts off.
@@ -286,7 +287,8 @@ DiagnosticsCode = $CC00
 ;; The Control-D a held key gives, with its high bit set: three ask the boot for the diagnostics.
 KEY_CONTROL_D = $84
 
-;; How many Control-Ds start the diagnostics.
+;; How many Control-Ds start the diagnostics. The boot also starts <BootTries> at it, so it is the key wait's rounds
+;; too.
 CONTROL_D_COUNT = 3
 
 ; The 65816's instructions, which the 6502 assembler does not take. On a 65C02, PHX and PLX are its own.

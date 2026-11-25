@@ -226,10 +226,11 @@ MfmDataMark:
 
 ;; Reads an MFM data field through the ISM (A1 A1 A1 FB, 512 bytes, the CRC) into the pages at <BufferPointer> and
 ;; <SecondBufferPointer>, whose low bytes must be 0: it fills each page until its low byte comes round to 0 again.
-;; It starts where <ReadMfmAddressField> left the ISM, and leaves the SWIM in IWM mode.
-;; Out: carry = set if it failed: DiskErrors gains <DISK_ERROR_BAD_CHECKSUM> for a CRC or ISM error after the data,
-;;      and is unchanged when the data mark was not found; else DiskErrors = 0. <HeaderChecksum> and Checksum0 = the CRC
-;;      bytes, Checksum1 = the error register and Checksum2 = the handshake after them
+;; It starts where <ReadMfmAddressField> left the ISM, and leaves the SWIM in IWM mode. On a failure <DiskErrors> gains
+;; <DISK_ERROR_BAD_CHECKSUM> for a CRC or ISM error after the data, and is unchanged when the data mark was not found.
+;; The CRC bytes are left in <HeaderChecksum> and <Checksum0>, the error register in <Checksum1> and the handshake
+;; after them in <Checksum2>.
+;; Out: carry = set if it failed, DiskErrors = 0 when it did not
 .proc ReadMfmDataField
     bit Ism::ReadError
     lda #ISM_MODE_ACTION | ISM_MODE_WRITE

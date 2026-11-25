@@ -191,7 +191,7 @@ KIND_FDHD = $03
 ;; A UniDisk 3.5, an intelligent drive on the SmartPort bus.
 KIND_UNIDISK = $80
 
-; CardMediaKinds.
+; CardSense's bits.
 
 ;; In <CardSense>: the disk is write-protected.
 SENSE_LOCKED = $20

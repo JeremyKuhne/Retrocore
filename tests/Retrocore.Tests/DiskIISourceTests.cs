@@ -145,10 +145,13 @@ public sealed class DiskIISourceTests
         SdkModules.AddTo(debug, Apple2Model.IIeEnhanced, s_inputs);
 
         string boot = SdkModules.DiskIIPath("Boot.asm", s_inputs);
-        debug.Resolve("READ").Should().Be(0xC65C);
+        debug.Resolve("ReadSector").Should().Be(0xC65C);
+        debug.Resolve("READ").Should().Be(0xC65C, "the old name reaches the definition");
         DebugPosition? position = debug.Position(new Apple2TestMemory(machine.Bus), 0xC65C);
-        SourceLine line = position?.Chain[0] ?? throw new AssertFailedException("No source for READ.");
+        SourceLine line = position?.Chain[0] ?? throw new AssertFailedException("No source for ReadSector.");
         line.Path.Should().Be(Path.GetFullPath(boot));
-        File.ReadAllLines(boot)[line.Line - 2].Should().Be("READ:");
+        string[] lines = File.ReadAllLines(boot);
+        lines[line.Line - 1].Should().Be("    clc");
+        lines.Take(line.Line).Last(text => text.StartsWith(".proc", StringComparison.Ordinal)).Should().Be(".proc ReadSector");
     }
 }

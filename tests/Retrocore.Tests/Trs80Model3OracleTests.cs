@@ -466,8 +466,8 @@ public class Trs80Model3OracleTests
     }
 
     /// <summary>
-    ///  Formats a schedule entry for the Lua script's <c>RETRO_SCRIPT</c>: the time in seconds with a decimal point,
-    ///  fraction and all, whatever the culture; <c>=</c>; then the text, with <c>\r</c> for ENTER, or a key's
+    ///  Formats a schedule entry for the Lua script's <c>RETRO_SCRIPT</c>: the time in seconds, with a '.' before any
+    ///  fraction whatever the culture; <c>=</c>; then the text, with <c>\r</c> for ENTER, or a key's
     ///  <c>@port,field,state</c> (see <see cref="Key"/>).
     /// </summary>
     /// <param name="entry">The emulated second to act at, and the text to type or the key to set.</param>

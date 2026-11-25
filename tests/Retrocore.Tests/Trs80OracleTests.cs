@@ -50,9 +50,9 @@ public class Trs80OracleTests
     /// <remarks>
     ///  <para>
     ///   The entries are far enough apart that the screen, cursor and program should come out the same whether MAME
-    ///   types each one at its fraction, early or at the next whole second. So this checks that a fractional schedule
-    ///   runs end to end, not when each entry fires; <see cref="ScriptEntryKeepsFractionalSeconds"/> checks the text
-    ///   sent to MAME.
+    ///   types each one at its fraction, at the next whole second, or early because the fraction was lost. So this
+    ///   checks that a fractional schedule runs end to end, not when each entry fires;
+    ///   <see cref="ScriptEntryKeepsFractionalSeconds"/> checks the text sent to MAME.
     ///  </para>
     /// </remarks>
     [TestMethod]
@@ -232,8 +232,8 @@ public class Trs80OracleTests
     }
 
     /// <summary>
-    ///  Formats a schedule entry for the Lua script's <c>RETRO_SCRIPT</c>: the time in seconds with a decimal point,
-    ///  fraction and all, whatever the culture; <c>=</c>; then the text, with <c>\r</c> for ENTER.
+    ///  Formats a schedule entry for the Lua script's <c>RETRO_SCRIPT</c>: the time in seconds, with a '.' before any
+    ///  fraction whatever the culture; <c>=</c>; then the text, with <c>\r</c> for ENTER.
     /// </summary>
     /// <param name="entry">The emulated second to type at, and the text to type.</param>
     /// <returns>The entry as <c>seconds=text</c>.</returns>

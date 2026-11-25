@@ -41,8 +41,10 @@ namespace Retrocore.Machines.Chips;
 ///   channel 4) for SIO transmission and $13 (asynchronous input on channels 3+4, external output clock) for
 ///   reception. The external and bidirectional clock lines are not modeled, so modes with an external output clock
 ///   never shift. Reception is bit level from <see cref="SerialInputLevel"/>, clocked by channel 4 (modes 010 and
-///   110) or, in asynchronous mode (SKCTL bit 4), by channels 3+4 held in reset until a start bit's falling edge.
-///   The start bit is sampled one timer period after its edge, mid-bit, and each bit after it two periods on; a
+///   110) or, in asynchronous mode (SKCTL bit 4), by channels 3+4 held in reset while the idle input is high. The
+///   first cycle the input reads low starts a frame (the level is tested, not an edge, so a line held low starts
+///   another frame at once). The start bit is sampled one timer period after that, mid-bit, and each bit after it
+///   two periods on; a
 ///   stop bit sampled low is a framing error (SKSTAT bit 7). <see cref="ReceiveByte"/> also delivers a whole byte at
 ///   once, for devices that work a byte at a time.
 ///  </para>
@@ -513,8 +515,8 @@ public sealed class Pokey
             if (fire2) { Reload(1); }
         }
 
-        // Channels 3 and 4, held in reset by asynchronous receive while the input waits for a start bit; the start
-        // bit's falling edge lets them run.
+        // Channels 3 and 4, held in reset by asynchronous receive while the input waits for a start bit; the first
+        // cycle the input reads low lets them run.
         bool fire3 = false;
         bool fire4 = false;
         bool asynchronous = (_skctl & 0x10) != 0;
@@ -756,7 +758,7 @@ public sealed class Pokey
     }
 
     // The input shift register: in asynchronous mode it counts timer 4's pulses from the start bit and samples on
-    // the odd ones (the middle of each bit); in synchronous mode a falling level starts a byte the same way.
+    // the odd ones (the middle of each bit); in synchronous mode a low level starts a byte the same way.
     private void StepSerialInput(bool fire4)
     {
         int mode = (_skctl >> 4) & 7;

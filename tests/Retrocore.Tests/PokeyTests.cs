@@ -16,6 +16,7 @@ public class PokeyTests
     private const int Audf1 = 0;
     private const int Audc1 = 1;
     private const int Audf2 = 2;
+    private const int Audc2 = 3;
     private const int Audf3 = 4;
     private const int Audc3 = 5;
     private const int Audf4 = 6;
@@ -194,7 +195,7 @@ public class PokeyTests
     }
 
     /// <summary>
-    ///  Verifies RANDOM shifts right one bit per cycle in 17-bit mode and runs through 2^17-1 states.
+    ///  Verifies RANDOM shifts right one bit per cycle in 17-bit mode.
     /// </summary>
     [TestMethod]
     public void RandomShiftsEveryCycle()
@@ -212,6 +213,45 @@ public class PokeyTests
         }
 
         changes.Should().BeGreaterThan(900);
+    }
+
+    /// <summary>
+    ///  Verifies the noise generator's period: 2^17-1 cycles in 17-bit mode and 2^9-1 in 9-bit mode, with no shorter
+    ///  repeat.
+    /// </summary>
+    /// <param name="audctl">The AUDCTL value: 0 for 17 bits, $80 for 9 bits.</param>
+    /// <param name="period">The expected period in cycles.</param>
+    [TestMethod]
+    [DataRow(0x00, (1 << 17) - 1)]
+    [DataRow(0x80, (1 << 9) - 1)]
+    public void RandomPeriod(int audctl, int period)
+    {
+        Pokey pokey = new();
+        pokey.Write(Audctl, (byte)audctl);
+        pokey.Write(Skctl, 0x03);
+
+        // RANDOM shows the generator's low eight bits and shifts one bit a cycle, so 24 reads in a row cover the
+        // whole 17-bit state: the sequence repeats at the first offset where those 24 reads recur.
+        const int window = 24;
+        byte[] samples = new byte[period + window];
+        for (int cycle = 0; cycle < samples.Length; cycle++)
+        {
+            samples[cycle] = pokey.Read(Random);
+            pokey.Tick();
+        }
+
+        ReadOnlySpan<byte> start = samples.AsSpan(0, window);
+        int repeat = -1;
+        for (int offset = 1; offset <= period; offset++)
+        {
+            if (samples.AsSpan(offset, window).SequenceEqual(start))
+            {
+                repeat = offset;
+                break;
+            }
+        }
+
+        repeat.Should().Be(period);
     }
 
     /// <summary>
@@ -578,12 +618,54 @@ public class PokeyTests
     {
         Pokey pokey = Started();
         pokey.Write(Audc1, 0xA1);
+        pokey.Write(Audc2, 0xA2);
         pokey.Write(Audc3, 0xA4);
         pokey.Write(Audc4, 0xA8);
         pokey.Write(Stimer, 0);
         pokey.Output.Should().Be(12);
-        pokey.Write(Audc1, 0x13);
+        pokey.Write(Audc1, 0x11);
+        pokey.Output.Should().Be(13);
+        pokey.Write(Audc2, 0x12);
         pokey.Output.Should().Be(15);
+    }
+
+    /// <summary>
+    ///  Verifies the high-pass filters (AUDCTL bit 2 on channel 1, clocked by channel 3; bit 1 on channel 2, clocked by
+    ///  channel 4): a filter clocked at the tone's own rate latches each level as it appears and silences it, while a
+    ///  filter at another rate lets the tone through.
+    /// </summary>
+    /// <param name="audctl">The AUDCTL filter bit.</param>
+    /// <param name="tone">The filtered channel, 0 or 1.</param>
+    /// <param name="filter">The channel clocking its filter, 2 or 3.</param>
+    [TestMethod]
+    [DataRow(0x04, 0, 2)]
+    [DataRow(0x02, 1, 3)]
+    public void HighPassFilter(int audctl, int tone, int filter)
+    {
+        HighPassLevels(audctl, tone, filter, filterAudf: 1).Should().Equal(0f);
+        HighPassLevels(audctl, tone, filter, filterAudf: 2).Should().Equal(0f, 15f);
+    }
+
+    // The distinct output levels a 64 kHz pure tone (AUDF 1, volume 15) takes with its filter channel at filterAudf
+    // (silent itself), after the first periods have passed.
+    private static List<float> HighPassLevels(int audctl, int tone, int filter, int filterAudf)
+    {
+        Pokey pokey = Started();
+        pokey.Write(Audctl, (byte)audctl);
+        pokey.Write(tone * 2, 1);
+        pokey.Write((tone * 2) + 1, 0xAF);
+        pokey.Write(filter * 2, (byte)filterAudf);
+        pokey.Write((filter * 2) + 1, 0xA0);
+        pokey.Write(Stimer, 0);
+        Advance(pokey, 1_000);
+        HashSet<float> levels = [];
+        for (int cycle = 0; cycle < 2_000; cycle++)
+        {
+            pokey.Tick();
+            levels.Add(pokey.Output);
+        }
+
+        return [.. levels.Order()];
     }
 
     /// <summary>

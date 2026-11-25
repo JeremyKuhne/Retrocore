@@ -187,8 +187,9 @@ public sealed partial class DocumentationResolver
                 DocumentationTarget target = Resolve(topic, link.Target, comment);
                 if (target.OnlyInOtherBuilds)
                 {
-                    // A comment of a branch this build leaves out is checked by the build that takes it.
-                    if (!Current.CommentAssembled(comment)) { continue; }
+                    // A comment of a branch this build leaves out, or in a macro's body it doesn't expand there, is
+                    // checked by the build that does.
+                    if (!Current.CommentExpanded(comment)) { continue; }
                     string message = $"'{link.Target}' is defined only in other builds of this source, in a branch of "
                         + "conditional assembly this build leaves out; link what every build that assembles this "
                         + "comment defines, and name the rest in backticks.";

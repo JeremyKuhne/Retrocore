@@ -667,19 +667,33 @@ public sealed class DocumentationSet
     /// <summary>
     ///  Gets whether this set's build assembles a comment: one outside a macro's body in the branch of conditional
     ///  assembly the build takes (<see cref="CommentInBuild"/>), a macro's own among them; one in a macro's body on a
-    ///  line some expansion defined, or in the body of a macro the build defines.
+    ///  line some expansion defined, or in the body of a macro the build defines but never expands.
     /// </summary>
     /// <param name="comment">The comment.</param>
     /// <returns>Whether the build assembles it; true when the assembly's definitions are not known.</returns>
     internal bool CommentAssembled(DocumentationComment comment) =>
         comment.Macro is null
             ? CommentInBuild(comment)
-            : Expansions(comment) is not 0 || MacroInBuild(comment);
+            : Expansions(comment) is not 0 || DefinedNotExpanded(comment);
 
-    // Whether the build defines the macro whose body holds a comment: the assembly didn't skip its .macro line, which
-    // goes with the definition, not its expansions. A line the report can't tell counts.
-    private bool MacroInBuild(DocumentationComment comment) =>
-        comment.MacroLine < 0 || _skipped?.InBuild(comment.Path, comment.MacroLine) != false;
+    /// <summary>
+    ///  Gets whether this set's build assembles a comment's line: one outside a macro's body in the branch of
+    ///  conditional assembly the build takes (<see cref="CommentInBuild"/>), a macro's own among them, or one in a
+    ///  macro's body on a line some expansion defined.
+    /// </summary>
+    /// <param name="comment">The comment.</param>
+    /// <returns>Whether the build assembles it; true when the assembly's definitions are not known.</returns>
+    internal bool CommentExpanded(DocumentationComment comment) =>
+        comment.Macro is null ? CommentInBuild(comment) : Expansions(comment) is not 0;
+
+    // Whether the build defines the macro whose body holds a comment but never expands it: the assembly didn't skip
+    // its .macro line, which goes with the definition, but skipped its body's first line, which every expansion takes.
+    // In a macro it expands, a line no expansion defined is skipped, as by a branch of an .if in the body. Lines the
+    // report can't tell count as defined and not expanded.
+    private bool DefinedNotExpanded(DocumentationComment comment) =>
+        comment.MacroLine < 0
+            || (_skipped?.InBuild(comment.Path, comment.MacroLine) != false
+                && _skipped?.InBuild(comment.Path, comment.MacroLine + 1) != true);
 
     /// <summary>
     ///  Gets every historical name the topics give.

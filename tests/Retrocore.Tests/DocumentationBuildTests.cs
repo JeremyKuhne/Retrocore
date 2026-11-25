@@ -257,36 +257,90 @@ public sealed class DocumentationBuildTests
     }
 
     /// <summary>
-    ///  An old name a macro's body gives but that can't reach its definition, as one named by a parameter, resolves in
-    ///  a build as before.
+    ///  In a macro the build expands, a definition in a branch of the body that no expansion takes is not in the build.
     /// </summary>
     [TestMethod]
-    public void AnOldNameInAMacrosBodyResolvesAsBefore()
+    public void ABodysBranchNoExpansionTakesIsNotInTheBuild()
     {
-        const string Named = """
-            ;; Defines an entry.
-            .macro Entry name
-            ;; The entry.
-            ;; Also: OLD (TEST)
-            name:
-                rts
+        const string Body = """
+            ;; Defines a table, with a byte for mode 1.
+            .macro Table mode
+                .byte 0
+            .if mode = 1
+            ;; Mode 1's byte.
+            First:
+                .byte 1
+            .endif
             .endmacro
 
-            ;; Calls <OLD>.
-            Caller:
+            ;; Reads <First>.
+            Reader:
                 rts
 
-                Entry Start
+                Table MODEL
             """;
 
-        AssemblyResult result = Assemble(Named, model: 1);
-        DocumentationSet set = DocumentationSet.Create([DocumentationParser.Parse(Named, "test.asm")], result);
-        DocumentationSet unknown = DocumentationSet.Create([DocumentationParser.Parse(Named, "test.asm")], result.Symbols);
-        DocumentationTarget before = new DocumentationResolver(unknown).Resolve(Required(unknown.Find("Caller")), "OLD");
-        DocumentationTarget after = new DocumentationResolver(set).Resolve(Required(set.Find("Caller")), "OLD");
-        after.OnlyInOtherBuilds.Should().BeFalse();
-        after.Kind.Should().Be(before.Kind);
-        after.Topic?.Name.Should().Be(before.Topic?.Name);
+        Resolve(Build(Body, model: 1), "Reader", "First").Topic?.Name.Should().Be("First");
+        Resolve(Build(Body, model: 2), "Reader", "First").OnlyInOtherBuilds.Should().BeTrue();
+    }
+
+    /// <summary>
+    ///  A macro's documentation describes its whole body: its own comment, and those in its body, reach a definition in
+    ///  a branch of the body that this build's expansions leave out.
+    /// </summary>
+    [TestMethod]
+    public void AMacrosDocumentationReachesItsWholeBody()
+    {
+        const string Body = """
+            ;; Defines a table, with <First> for mode 1.
+            .macro Table mode
+            ;; The table's last byte, after <First> in mode 1.
+            Last:
+                .byte 0
+            .if mode = 1
+            ;; Mode 1's byte.
+            First:
+                .byte 1
+            .endif
+            .endmacro
+
+                Table 2
+            """;
+
+        DocumentationSet set = Build(Body, model: 1);
+        DocumentationTopic table = Required(set.Find("Table"));
+        DocumentationResolver resolver = new(set);
+        resolver.Resolve(table, "First").Topic?.Name.Should().Be("First");
+        DocumentationTopic last = Required(set.Find("Last"));
+        resolver.Resolve(last, "First", last.Comments[0]).Topic?.Name.Should().Be("First");
+        Links(set).Should().BeEmpty();
+    }
+
+    /// <summary>
+    ///  A comment in the body of a macro the build doesn't expand is checked by the builds that expand it.
+    /// </summary>
+    [TestMethod]
+    public void AnUnexpandedMacrosBodyIsCheckedWhereItIsExpanded()
+    {
+        string source = Source + """
+
+            ;; Calls model 1's start.
+            .macro Starter
+            ;; A common entry that jumps to <OnlyOne>.
+            Common:
+                jmp OnlyOne
+            .endmacro
+
+            .if MODEL = 1
+            .scope Started
+                Starter
+            .endscope
+            .endif
+            """;
+
+        source = source.Replace(", then <OnlyOne> on model 1.", ".", StringComparison.Ordinal);
+        Links(Build(source, model: 1)).Should().BeEmpty();
+        Links(Build(source, model: 2)).Should().BeEmpty();
     }
 
     /// <summary>

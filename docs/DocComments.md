@@ -433,7 +433,10 @@ reports the link in each build that lacks it. A link in a branch the build leave
 by the builds that take the branch. So in a comment every build assembles, link only what every build defines, and
 name the others in backticks or describe them. The names in a section's entries (`In:`, `Uses:`) are not links and may
 name another build's definitions. A macro the build defines but never expands keeps its body's definitions: a
-library's macro that no build expands looks the same as one that only another build expands. Documentation without
+library's macro that no build expands looks the same as one that only another build expands. A macro's own
+documentation, and the comments in its body, may link any definition in its body, which it describes whole. In a
+macro the build expands, a definition in a branch of the body that no expansion takes is another build's. A comment
+in the body of a macro the build doesn't expand is checked by the builds that do. Documentation without
 the assembly's report of what it skipped, such as a debug file's, links every branch as before, as does one whose
 assembly failed.
 

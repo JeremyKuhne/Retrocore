@@ -62,7 +62,8 @@ public sealed class Trs80Keyboard
     public bool IsPressed(Trs80Key key) => (_rows[(int)key >> 3] & (1 << ((int)key & 7))) != 0;
 
     /// <summary>
-    ///  Queues a typed character: ASCII, with 13 Enter, 8 left, 9 right, 10 down, 11 up, 31 Clear and 1 Break.
+    ///  Queues a typed character: ASCII, with 13 Enter, 8 left, 9 right, 10 down, 11 up, 31 Clear and 1 Break. A
+    ///  letter's case decides whether shift is pressed, as the keyboard was created to type it.
     /// </summary>
     /// <param name="code">The character.</param>
     /// <returns>Whether the keyboard has a key for it.</returns>

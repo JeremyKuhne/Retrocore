@@ -285,8 +285,7 @@ common ancestor follows these rules (the alignment plan's D1 and D3).
 ## Checks that make a conversion safe
 
 Byte identity proves the code is unchanged; it proves nothing about a name, a comment or a contract. These checks
-cover the rest. Each began as something reviewers did by hand, and a kind of check made by hand twice becomes a
-test.
+cover the rest.
 
 ### Routine tests
 
@@ -354,14 +353,14 @@ whose tests look names up, move them to such a lookup first (the alignment plan'
 
 ### The scripted checks
 
-Before the first review, and after every fix, script what reviewers used to check by hand:
+Run these by script after every change, rather than by eye:
 
 - **Historical names in prose**: scan the comments for any name that is a definition's `Also:` name, written as
   prose rather than the current name or a link; keep it only where it is history ("Apple's listing calls it
   SET80COL").
 - **Each comment's build condition**: list every changed comment with the builds that assemble it (the `.if`
-  branches around it), so each is read against those builds. A comment true of only one build is the finding
-  reviews meet most.
+  branches around it), so each is read against those builds: a comment must be true in every build that
+  assembles it.
 - **Links per build**: a link in a comment must name a definition in every build that assembles the comment. A
   check that resolves a conditional source's links against all its builds at once can accept a definition some
   builds lack, so check each build; [BasicBuildLinkTests](../tests/Retrocore.Tests/BasicBuildLinkTests.cs) does
@@ -372,22 +371,6 @@ Before the first review, and after every fix, script what reviewers used to chec
 - **Old names left behind**: code in a converted file uses the current names (`ConvertedSourcesUseCurrentNames`, for
   the Apple II's sources), and nothing else still uses an old one: other sources, `Software/`, C#, docs and the
   rename table.
-
-## Review
-
-A conversion reaches main through the owner's self-review cycle, set out in
-[the alignment plan's process](backlog/ConversionAlignment.md#order-and-ownership): the scripted checks; a first
-pass by several models in parallel on the whole diff; a delta review of each fix; a closing pass by Opus alone,
-split by area for a large diff; and the PR once a closing pass finds no must-fix or should-fix. What it has taught:
-
-- The findings that recur are comments true of only one build, and stack and register contracts. Hand reviewers
-  the list of comments with their build conditions, and ask them to check each comment against each build.
-- Reviewers get the diff and the brief, not the author's conclusions. Each finding is verified before it is
-  fixed, and the false ones counted; nits are fixed in passing and never cause another round.
-- A check a reviewer made by hand twice is scripted: the per-build link test came from nine findings in the
-  closing reviews of BASIC's interpreter files.
-- The logs record decisions, not progress: what was decided and why, with an ID, and what was found in the code
-  and documented. Review rounds, commands and their results go in the PR.
 
 ## For agents
 

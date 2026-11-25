@@ -13,8 +13,6 @@ namespace Retrocore.Generators;
 /// </summary>
 internal sealed class RomDeclaration
 {
-    private static readonly AssemblySymbols s_emptySymbols = new();
-
     /// <summary>
     ///  Gets the generated C# type identifier.
     /// </summary>
@@ -60,49 +58,15 @@ internal sealed class RomDeclaration
             ReadOnlyMemory<char> contentMemory = original.AsMemory(span.Start, span.Length);
             contentMemory = contentMemory[..AssemblySyntax.WithoutComment(contentMemory.Span).Length].Trim();
             ReadOnlySpan<char> content = contentMemory.Span;
-            if (!content.StartsWith(".rom", StringComparison.OrdinalIgnoreCase)) { continue; }
-            if (content.Length <= 4 || !char.IsWhiteSpace(content[4]) || content[4..].Trim().IsEmpty || name is not null)
+            if (!RomMetadata.IsDeclaration(content)) { continue; }
+            if (name is not null)
             {
                 throw new AssemblyError(line, "Expected one '.rom Namespace.Type, origin, size' declaration.");
             }
 
-            AssemblyOperands args = new(contentMemory[4..], line);
-            args.MoveNext();
-            ReadOnlyMemory<char> typeName = args.Current;
-            if (!args.MoveNext())
-            {
-                throw new AssemblyError(line, "Expected one '.rom Namespace.Type, origin, size' declaration.");
-            }
-
-            ReadOnlyMemory<char> originText = args.Current;
-            if (!args.MoveNext())
-            {
-                throw new AssemblyError(line, "Expected one '.rom Namespace.Type, origin, size' declaration.");
-            }
-
-            ReadOnlyMemory<char> lengthText = args.Current;
-            if (args.MoveNext())
-            {
-                throw new AssemblyError(line, "Expected one '.rom Namespace.Type, origin, size' declaration.");
-            }
-
-            name = typeName.ToString();
-            if (!AssemblySyntax.IsQualifiedIdentifier(typeName.Span))
-            {
-                throw new AssemblyError(line, "ROM type must be a namespace-qualified C# identifier.");
-            }
-
-            long origin = Constant(originText, line);
-            long length = Constant(lengthText, line);
-            if (origin < 0
-                || origin > ushort.MaxValue
-                || length <= 0
-                || length > InstructionEncoding.AddressSpaceSize - origin)
-            {
-                throw new AssemblyError(line, "ROM origin and size must fit the 16-bit address space.");
-            }
-
-            options = new(ProcessorVariant.Mos6502, (int)origin, (int)length);
+            RomMetadata metadata = RomMetadata.Read(contentMemory, line);
+            name = metadata.TypeName;
+            options = new(ProcessorVariant.Mos6502, metadata.Origin, metadata.ImageSize);
             // Deleting this line would shift source diagnostics; spaces preserve all original offsets.
             for (int offset = span.Start; offset < span.End; offset++) { source[offset] = ' '; }
         }
@@ -110,25 +74,5 @@ internal sealed class RomDeclaration
         return name is null || options is null
             ? throw new AssemblyError(line: 0, "Both .rom and .cpu declarations are required.")
             : new(name, options, new string(source));
-    }
-
-    /// <summary>
-    ///  Resolves metadata bounds before program assembly, without access to program symbols.
-    /// </summary>
-    /// <param name="text">The metadata expression.</param>
-    /// <param name="line">The physical metadata source line for diagnostics.</param>
-    /// <returns>The completely resolved integer value.</returns>
-    private static long Constant(ReadOnlyMemory<char> text, int line)
-    {
-        try
-        {
-            return !new ExpressionEvaluator(text, s_emptySymbols, address: 0, line).TryEvaluate(out long value)
-                ? throw new AssemblyError(line, $"Unresolved expression '{text}'.")
-                : value;
-        }
-        catch (OverflowException)
-        {
-            throw new AssemblyError(line, "Expression overflow.");
-        }
     }
 }

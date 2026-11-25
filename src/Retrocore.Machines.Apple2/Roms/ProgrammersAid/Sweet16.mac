@@ -172,7 +172,7 @@ SWEET16_REGISTER_SIZE = 2
     Sweet16Branch $03, target
 .endmacro
 
-;; BP: branches if the last result was positive.
+;; BP: branches if the last result was not negative.
 ;; Parameters: target = where it goes
 .macro BP target
     Sweet16Branch $04, target

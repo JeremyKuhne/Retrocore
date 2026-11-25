@@ -131,7 +131,8 @@ ShapeTable = $0328
 ;; Also: SHAPXH (PA1)
 ShapeTableHigh = $0329
 
-;; How many dots <Draw> and <DrawInverted> found already lit: their collision count.
+;; The collision count of <Draw> and <DrawInverted>: the dots <Draw> found already its color, and those
+;; <DrawInverted> found dark on its steps along the direction and already the color on its steps at right angles.
 ;; Also: COLLSN (PA1)
 Collisions = $032A
 

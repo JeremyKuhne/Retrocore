@@ -3,9 +3,9 @@
 ;;
 ;; Steve Wozniak's memory test (1977), run from the Monitor: D5BCG sets the Monitor's Control-Y up
 ;; (<RamTest::SetUp>), and then `start.pages` Control-Y tests the given number of pages from the start page, which the
-;; Monitor leaves in A1 and A2. It fills the block with $00 and checks it, then with $FF, and then gallops: each cell in
+;; Monitor leaves in A1 and A2. With $00 and then with $FF, it fills the block and checks it, then gallops: each cell in
 ;; turn holds the inverse of the data while every cell a power-of-2 distance from it is written and checked, which
-;; finds cells and address lines that disturb one another. It beeps after a test that finds nothing.
+;; finds cells and address lines that disturb one another. It beeps at the end, whatever it found.
 ;;
 ;; An error in the fill prints `address expected bad ERR`, then each failing chip as its row and column, `r-c`: the
 ;; row is D if the block starts below $5000 and E otherwise, the column the socket of the data bit that failed. An
@@ -274,7 +274,7 @@ EndLine:
 ;; The first page of the chips in row E; the pages below are row D's.
 ROW_E_PAGE = $50
 
-;; The last data bit, which <SocketDigits> starts with.
+;; The last index into <SocketDigits>, bit 0's; bit n's is 7 - n.
 LAST_BIT = 7
 
     sty KeptY

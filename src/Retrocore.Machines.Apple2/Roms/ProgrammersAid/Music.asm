@@ -62,8 +62,9 @@ Pitch = $02FF
 ;; Plays the note <LookUp> set up: toggles the speaker after <FirstHalfCount> loops and again after <SecondHalfCount>,
 ;; counting <NoteLength> up once a loop, and returns when it reaches 0.
 ;;
-;; Every path through a loop takes the same time: where <NoteLength>'s low byte does not carry, a NOP and a JMP stand
-;; for the INC of its high byte, and the JMPs to the next line stand for a taken branch. Apple's listing calls the
+;; The paths through a loop take nearly the same time: where <NoteLength>'s low byte does not carry, a NOP and a JMP
+;; stand for the INC of its high byte, and the JMPs to the next line stand for a taken branch; the carry, once in 256
+;; loops, takes 2 cycles more. Apple's listing calls the
 ;; second half DOWN, which here would clash with <HiResGraphics::Step::Down>'s.
 ;; In: FirstHalfCount = the loops of the first half, SecondHalfCount = of the second, NoteLength = the length, as a
 ;;   negative count

@@ -264,7 +264,8 @@ InRange:
     ST LAST_NUMBER
     ADD STEP
     ST NEXT_NUMBER
-    ; Skips the compare below, so BNC tests the add: a new number past 65535 is RANGE ERR.
+    ; Skips the compare below. ST left its own register as the last result, with no carry, so the BNC after the
+    ; compare always goes back to Pass1: a new number past 65535 wraps around.
     NUL
 
 ;; A line below the range: its number must be below the first new number, which the lines in the range start at.
@@ -315,7 +316,7 @@ Update:
     LD TABLE_START
     ST PASS2_TABLE_INDEX
     LD FIRST_NUMBER
-    ; Skips the next two instructions, so the first new number is the first number's.
+    ; Skips the next two instructions, so LAST_NUMBER starts as the first new number.
     SetSkippingTwo LAST_NUMBER
 
 ;; Also: UD2 (PA1)
@@ -378,7 +379,7 @@ CheckToken:
     ; GOSUB: the compare with REM's token left -1.
     .assert TOKEN_GOSUB = TOKEN_REM - 1, "GOSUB's token must be one below REM's."
     BM1 LineNumberNext
-    ; GOTO: two above GOSUB.
+    ; GOTO: two above REM's token, three above GOSUB's.
     .assert TOKEN_GOTO = TOKEN_GOSUB + 3, "GOTO's token must be three above GOSUB's."
     DCR COMPARE_RESULT
     DCR COMPARE_RESULT

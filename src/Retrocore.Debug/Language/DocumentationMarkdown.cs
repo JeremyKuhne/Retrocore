@@ -227,8 +227,17 @@ internal static class DocumentationMarkdown
         }
     }
 
-    private static string Uri(string address) =>
-        address.StartsWith("http", StringComparison.OrdinalIgnoreCase) ? address : new Uri(address.Split('#')[0]).AbsoluteUri;
+    /// <summary>
+    ///  Converts a document path to a file URI, retaining its anchor; web addresses are unchanged.
+    /// </summary>
+    /// <param name="address">The path or web address.</param>
+    /// <returns>The URI.</returns>
+    internal static string Uri(string address)
+    {
+        if (address.StartsWith("http", StringComparison.OrdinalIgnoreCase)) { return address; }
+        int anchor = address.IndexOf('#');
+        return anchor < 0 ? new Uri(address).AbsoluteUri : new Uri(address[..anchor]).AbsoluteUri + address[anchor..];
+    }
 
     // {NAME} references render as code, *bold* as Markdown bold; backticks pass through.
     private static string Inline(string text)

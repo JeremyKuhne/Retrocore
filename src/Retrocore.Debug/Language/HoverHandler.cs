@@ -4,7 +4,6 @@
 
 using Retrocore.Assembler;
 using Retrocore.Documentation;
-using Retrocore.Isa;
 
 namespace Retrocore.Debug.Language;
 
@@ -59,15 +58,17 @@ internal sealed class HoverHandler
             });
         }
 
-        if (line >= lines.Length || SourceText.WordAt(lines[line], request.Position.Character) is not { } word)
+        if (line >= lines.Length) { return Task.FromResult(none); }
+        SourceAnalysis? analysis = _workspace.AnalysisOf(path);
+        int comment = SourceText.CommentStart(lines[line]);
+        if (comment >= 0 && request.Position.Character >= comment)
         {
-            return Task.FromResult(none);
+            return Task.FromResult(LinkAt(analysis, lines, path, line, request.Position.Character, comment));
         }
 
-        SourceAnalysis? analysis = _workspace.AnalysisOf(path);
-        if (FlagAt(analysis, lines, path, line, request.Position.Character) is { } flag)
+        if (SourceText.WordAt(lines[line], request.Position.Character) is not { } word)
         {
-            return Task.FromResult<Hover?>(flag);
+            return Task.FromResult(none);
         }
 
         List<string> parts = [];
@@ -112,29 +113,206 @@ internal sealed class HoverHandler
         return Task.FromResult<Hover?>(hover);
     }
 
-    // A flag's word in a ;; comment, as "Out: carry = found" names it: the word, the CPU's letter and its meaning.
-    private static Hover? FlagAt(SourceAnalysis? analysis, string[] lines, string path, int line, int column)
+    private Hover? LinkAt(SourceAnalysis? analysis, string[] lines, string path, int line, int column, int commentStart)
     {
+        if (analysis is null) { return null; }
         string text = lines[line];
-        int comment = text.IndexOf(";;", StringComparison.Ordinal);
-        if (comment < 0 || column <= comment + 1) { return null; }
+        DocumentationLink? link = DocumentationText.Links(text[commentStart..])
+            .FirstOrDefault(link => column >= commentStart + link.Start && column < commentStart + link.Start + link.Length);
 
-        // Words are letters joined by hyphens, as in half-carry.
-        int start = Math.Min(column, text.Length);
-        while (start > comment + 2 && (char.IsAsciiLetter(text[start - 1]) || text[start - 1] == '-')) { start--; }
-        int end = Math.Min(column, text.Length);
-        while (end < text.Length && (char.IsAsciiLetter(text[end]) || text[end] == '-')) { end++; }
-        string word = text[start..end].Trim('-');
-        if (word.Length == 0) { return null; }
-        start = text.IndexOf(word, start, StringComparison.Ordinal);
+        if (link is null) { return null; }
+        bool ContainsCursor(DocumentationComment comment) =>
+            string.Equals(comment.Path, path, StringComparison.OrdinalIgnoreCase)
+                && line >= comment.Line
+                && line <= comment.TargetLine;
 
-        IsaDescription cpu = analysis?.Documentation.CpuAt(path, line) ?? SourceText.InstructionSetOf(lines, line).Description;
-        if (DocumentationCpu.For(cpu).Flag(word) is not { } flag) { return null; }
+        DocumentationResolver resolver = _workspace.ResolverFor(analysis);
+        DocumentationTopic? from = text.AsSpan(commentStart).StartsWith(";;")
+            ? analysis.Documentation.Topics.FirstOrDefault(topic => topic.Comments.Any(ContainsCursor))
+            : null;
+
+        DocumentationComment? original = from?.Comments.FirstOrDefault(ContainsCursor);
+        IReadOnlyList<DocumentationScopes> lexical = from is null ? [] : DocumentationParser.ScopesByLine(analysis.LinesOf(path));
+        string localScope = line < lexical.Count ? lexical[line].Scope : "";
+        DocumentationTarget[] targets = [.. analysis.ScopesAt(path, line).Select(scopes =>
+        {
+            if (from is not null && scopes.Scope == localScope)
+            {
+                return ResolveLink(analysis, resolver, from, original, scopes, link.Target);
+            }
+
+            string outer = localScope.Length == 0 ? scopes.Scope
+                : scopes.Scope == localScope ? "" : scopes.Scope[..^(localScope.Length + 2)];
+
+            IReadOnlyList<DocumentationUsing> usings = original is null ? scopes.Usings
+                : [.. original.Usings.Select(directive => new DocumentationUsing(
+                    outer.Length == 0 ? directive.Scope
+                        : directive.Scope.Length == 0 ? outer : $"{outer}::{directive.Scope}", directive.Names, directive.Line))];
+
+            string name = scopes.Scope.Length == 0 ? "__comment" : $"{scopes.Scope}::__comment";
+            DocumentationComment context = new()
+            {
+                Path = path, Line = line, TargetLine = line, Name = name, Kind = DocumentationKind.Topic, Usings = usings
+            };
+
+            DocumentationTopic topic = new()
+            {
+                Name = name, Kind = DocumentationKind.Topic, Set = analysis.Documentation, Comments = [context]
+            };
+
+            return ResolveLink(analysis, resolver, topic, context, scopes, link.Target);
+        }).Distinct()];
+
+        if (targets.Length != 1) { return null; }
+        DocumentationTarget target = targets[0];
+        string? description;
+        if (target.Kind == DocumentationTargetKind.Directive)
+        {
+            description = DirectiveDocs.Describe(target.Name) is { } directive ? $"**{target.Name}**: {directive}" : null;
+        }
+        else if (target.Kind == DocumentationTargetKind.Instruction)
+        {
+            description = InstructionDocs.Describe(target.Name,
+                analysis.Documentation.InstructionSetAt(path, line) ?? SourceText.InstructionSetOf(lines, line));
+        }
+        else if (target.Kind is DocumentationTargetKind.Document or DocumentationTargetKind.Url)
+        {
+            description = target.Address is { } address ? $"[{link.Text}]({DocumentationMarkdown.Uri(address)})" : null;
+        }
+        else if (target.Kind is DocumentationTargetKind.Topic or DocumentationTargetKind.Symbol)
+        {
+            SourceAnalysis? source = _workspace.AllAnalyses().Prepend(analysis)
+                .FirstOrDefault(candidate => ReferenceEquals(candidate.Documentation, target.Set));
+
+            bool macro10 = analysis.UsesMacro10(path)
+                || (target.Topic is { } definition && source?.UsesMacro10(definition.Path) == true);
+
+            IReadOnlyList<SymbolSite> sites = source?.Find(target.Name, macro10) ?? [];
+            SymbolSite? site = sites.FirstOrDefault(candidate => candidate.Name.Equals(target.Name, StringComparison.Ordinal))
+                ?? sites.FirstOrDefault(candidate => target.Topic?.Comments.Any(comment =>
+                    comment.TargetLine == candidate.Line && string.Equals(comment.Path, candidate.Path, StringComparison.OrdinalIgnoreCase)) == true);
+
+            DocumentationTopic? topic = target.Topic ?? (source is not null && site is not null
+                ? source.Documentation.Topics.FirstOrDefault(candidate => candidate.Comments.Any(comment =>
+                    comment.TargetLine == site.Line && string.Equals(comment.Path, site.Path, StringComparison.OrdinalIgnoreCase)))
+                : null);
+
+            if (topic is not null
+                && site is not null
+                && topic.Name != site.Name
+                && topic.Comments.FirstOrDefault(comment => comment.Macro is null
+                    && comment.TargetLine == site.Line
+                    && string.Equals(comment.Path, site.Path, StringComparison.OrdinalIgnoreCase)) is { } own)
+            {
+                topic = new DocumentationTopic
+                {
+                    Name = site.Name,
+                    Kind = own.Kind,
+                    Set = topic.Set,
+                    Comments = [own],
+                    Summary = own.Summary,
+                    Remarks = own.Remarks,
+                    Sections = own.Sections,
+                    Value = site.Value
+                };
+            }
+
+            (DocumentationTopic Topic, DocumentationResolver Resolver)? documented = topic is not null && source is not null
+                ? (topic, _workspace.ResolverFor(source)) : null;
+
+            description = site is not null ? Describe(site, documented)
+                : documented is { } found ? DescribeTopic(found.Topic, found.Resolver) : null;
+        }
+        else
+        {
+            description = null;
+        }
+
+        if (description is null) { return null; }
         return new Hover
         {
-            Contents = new MarkupContent { Kind = MarkupKind.Markdown, Value = DocumentationCpu.Describe(word, flag) },
-            Range = new LspRange(line, start, line, start + word.Length)
+            Contents = new MarkupContent { Kind = MarkupKind.Markdown, Value = description },
+            Range = new LspRange(line, commentStart + link.Start, line, commentStart + link.Start + link.Length)
         };
+    }
+
+    private static DocumentationTarget ResolveLink(
+        SourceAnalysis analysis,
+        DocumentationResolver resolver,
+        DocumentationTopic from,
+        DocumentationComment? context,
+        DocumentationScopes scopes,
+        string name)
+    {
+        bool absolute = name.StartsWith("::", StringComparison.Ordinal);
+        string target = absolute ? name[2..] : name;
+        string path = context?.Path ?? from.Path;
+        if (!absolute
+            && target.Length != 0
+            && target[0] is not ('.' or '$')
+            && target.All(character => char.IsAsciiLetterOrDigit(character) || character == '_')
+            && analysis.UsesMacro10(path))
+        {
+            string significant = target[..Math.Min(target.Length, 6)].ToUpperInvariant();
+            if (analysis.Bound(significant, path, scopes, exact: true) is { } found)
+            {
+                List<SymbolSite> bound = [.. found.Where(site => site.Kind != SymbolSiteKind.Macro)];
+                if (bound.Count > 1) { return new(DocumentationTargetKind.Ambiguous, name); }
+                if (bound.Count == 1)
+                {
+                    SymbolSite site = bound[0];
+                    DocumentationTopic? documented = analysis.Documentation.Topics.FirstOrDefault(topic =>
+                        topic.Comments.Any(comment => comment.TargetLine == site.Line
+                            && string.Equals(comment.Path, site.Path, StringComparison.OrdinalIgnoreCase)));
+
+                    return new(DocumentationTargetKind.Symbol, site.Name)
+                    {
+                        Set = analysis.Documentation, Topic = documented, Value = site.Value
+                    };
+                }
+            }
+        }
+
+        if (target.Split("::").All(part => part.Length != 0
+            && part.All(character => char.IsAsciiLetterOrDigit(character) || character == '_')))
+        {
+            for (string scope = absolute ? "" : scopes.Scope;;)
+            {
+                string qualified = scope.Length == 0 ? target : $"{scope}::{target}";
+                DocumentationTarget found = resolver.Resolve(from, $"::{qualified}", context);
+                if (found.Set == analysis.Documentation && found.Name == qualified) { return found; }
+
+                List<DocumentationComment> matching = [.. analysis.Documentation.Topics
+                    .SelectMany(topic => topic.Comments)
+                    .Where(comment => comment.Kind == DocumentationKind.Scope
+                        && analysis.Result.SkippedLines?.IsAssembled(comment.Path, comment.TargetLine) != false
+                        && analysis.ScopesAt(comment.Path, comment.TargetLine).Any(at =>
+                            (at.Scope.Length == 0 ? "" : $"{at.Scope}::")
+                                + comment.Name[(comment.Name.LastIndexOf(':') + 1)..] == qualified))];
+
+                if (matching.Count == 1)
+                {
+                    DocumentationComment comment = matching[0];
+                    DocumentationTopic topic = new()
+                    {
+                        Name = qualified, Kind = comment.Kind, Set = analysis.Documentation, Comments = [comment],
+                        Summary = comment.Summary, Remarks = comment.Remarks, Sections = comment.Sections
+                    };
+
+                    return new(DocumentationTargetKind.Topic, qualified)
+                    {
+                        Topic = topic, Set = analysis.Documentation
+                    };
+                }
+
+                if (matching.Count > 1) { return new(DocumentationTargetKind.Ambiguous, name); }
+                if (scope.Length == 0) { break; }
+                int separator = scope.LastIndexOf("::", StringComparison.Ordinal);
+                scope = separator < 0 ? "" : scope[..separator];
+            }
+        }
+
+        return resolver.Resolve(from, name, context);
     }
 
     // Whether a name is one of the definition's historical names.
@@ -144,7 +322,7 @@ internal sealed class HoverHandler
         return documented.Topic.Set.AlsoOf(documented.Topic, site.Name).Any(also => also.Name == name);
     }
 
-    private string Describe(SymbolSite site)
+    private string Describe(SymbolSite site, (DocumentationTopic Topic, DocumentationResolver Resolver)? documented = null)
     {
         string kind = site.Kind switch
         {
@@ -156,9 +334,10 @@ internal sealed class HoverHandler
         string value = site.Value is { } number ? $" = {LanguageHost.Hex(number)}" : "";
         string where = $"{Path.GetFileName(site.Path)}:{site.Line + 1}";
         string header = $"```\n({kind}) {site.Name}{value}\n```\n{where}";
-        if (_workspace.TopicOf(site) is { } documented)
+        documented ??= _workspace.TopicOf(site);
+        if (documented is { } found)
         {
-            string text = DocumentationMarkdown.Render(documented.Topic, documented.Resolver, target => _workspace.Href(target, documented.Topic.Path));
+            string text = DescribeTopic(found.Topic, found.Resolver);
             return text.Length == 0 ? header : $"{header}\n\n{text}";
         }
 
@@ -167,6 +346,9 @@ internal sealed class HoverHandler
         List<string> comment = SourceText.CommentFor(lines, site.Line);
         return comment.Count == 0 ? header : $"{header}\n\n{string.Join("  \n", comment)}";
     }
+
+    private string DescribeTopic(DocumentationTopic topic, DocumentationResolver resolver) =>
+        DocumentationMarkdown.Render(resolver.Effective(topic), resolver, target => _workspace.Href(target, topic.Path));
 
     private static string? Assembled(SourceAnalysis analysis, string path, int line)
     {

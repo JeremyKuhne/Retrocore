@@ -27,7 +27,8 @@ internal sealed partial class LanguageWorkspace
         readText: path => OpenText(path) ?? (File.Exists(path) ? File.ReadAllText(path) : null),
         root: RepositoryRoot(analysis.Root))
     {
-        Bibliography = SourceBibliography.For(analysis.Root, analysis.Members)
+        Bibliography = SourceBibliography.For(analysis.Root, analysis.Members),
+        IgnoreUnlinkedName = IgnoreUnlinkedName
     };
 
     /// <summary>

@@ -144,6 +144,37 @@ public class SdkDocumentationTests
     }
 
     /// <summary>
+    ///  The IIe equates use ROM as a word, not the Apple III boot ROM's definition of that name.
+    /// </summary>
+    [TestMethod]
+    public void IIeEquatesCanExcludeRomAsAnUnlinkedName()
+    {
+        SourceAnalysis monitor = SourceAnalysis.Assemble(Path.Join(s_inputs, "System", "Monitor.asm"), _ => null);
+        SourceAnalysis apple3 = SourceAnalysis.Assemble(Path.Join(s_inputs, "Apple3", "BootRom.asm"), _ => null);
+        DocumentationResolver resolver = new(monitor.Documentation, [apple3.Documentation]);
+        DocumentationTopic equate = monitor.Documentation.Find("LanguageCardRomOnly")
+            ?? throw new AssertFailedException("The IIe's language card ROM switch is not documented.");
+
+        DocumentationTopic rom = apple3.Documentation.Find("ROM")
+            ?? throw new AssertFailedException("The Apple III's ROM flag is not documented.");
+
+        resolver.Resolve(equate, "ROM").Topic.Should().BeSameAs(rom);
+
+        static bool RomInIIeEquates(DocumentationDiagnostic diagnostic) =>
+            Path.GetFileName(diagnostic.Path) == "IIeEquates.asm"
+                && diagnostic.Rule == DocumentationRules.UnlinkedName
+                && diagnostic.Name == "ROM";
+
+        resolver.Check().Where(RomInIIeEquates).Should().NotBeEmpty();
+        DocumentationResolver configured = new(monitor.Documentation, [apple3.Documentation])
+        {
+            IgnoreUnlinkedName = (_, name) => name == "ROM"
+        };
+
+        configured.Lint().Where(RomInIIeEquates).Should().BeEmpty();
+    }
+
+    /// <summary>
     ///  The TRS-80's ROM sources pass the lint as the editor runs it, Z80 registers and conditions included.
     ///  <c>Model3.asm</c> includes <c>Level2.asm</c>, so the editor reads Level II with the Model III's blocks; it is
     ///  checked on its own too, as the Model I's ROM.

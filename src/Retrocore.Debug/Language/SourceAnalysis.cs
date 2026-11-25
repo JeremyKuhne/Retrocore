@@ -4,6 +4,7 @@
 
 using Retrocore.Assembler;
 using Retrocore.Documentation;
+using Retrocore.Isa;
 using System.Collections.Concurrent;
 using System.Text.RegularExpressions;
 
@@ -17,6 +18,7 @@ internal sealed partial class SourceAnalysis
     private const int AddressSpaceSize = 0x10000;
 
     private readonly Dictionary<string, List<SymbolSite>> _definitions = [with(StringComparer.OrdinalIgnoreCase)];
+    private readonly List<(AssemblyLocation? Location, InstructionSet Cpu)> _cpuDirectives = [];
     private readonly Dictionary<string, AssemblyDialect> _dialects = [with(StringComparer.OrdinalIgnoreCase)];
     private readonly Dictionary<string, string[]> _lines = [with(StringComparer.OrdinalIgnoreCase)];
     private readonly Func<string, string?> _text;
@@ -44,6 +46,16 @@ internal sealed partial class SourceAnalysis
     {
         Root = root;
         Result = result;
+        foreach (AssemblyStatement statement in project.Statements)
+        {
+            if (statement.Kind == AssemblyStatementKind.Cpu
+                && statement.Label is null
+                && CpuCatalog.InstructionSets.TryGetValue(statement.Operand.Text.Trim(), out InstructionSet? cpu))
+            {
+                _cpuDirectives.Add((statement.Location, cpu));
+            }
+        }
+
         _text = text;
         Members = new(members, StringComparer.OrdinalIgnoreCase) { root };
         foreach (string member in Members)
@@ -241,7 +253,8 @@ internal sealed partial class SourceAnalysis
         Result.SkippedLines,
 
         // An assembly with errors may stop short of definitions it would make, so its macros' expansions aren't known.
-        Result.Success ? Result.SymbolDefinitions : null);
+        Result.Success ? Result.SymbolDefinitions : null,
+        _cpuDirectives);
 
     // The assembly's symbols, or while it has errors, the definitions found in the text.
     private IReadOnlyDictionary<string, long> Symbols()
@@ -416,7 +429,15 @@ internal sealed partial class SourceAnalysis
         return all.Count == 0 ? null : [.. all.Distinct()];
     }
 
-    private List<SymbolSite>? Bound(string name, string path, DocumentationScopes scopes, bool exact) =>
+    /// <summary>
+    ///  Finds a name in one specific inclusion's scopes and using directives.
+    /// </summary>
+    /// <param name="name">The name as the assembler stores it.</param>
+    /// <param name="path">The file of the use.</param>
+    /// <param name="scopes">The inclusion's scopes.</param>
+    /// <param name="exact">Whether names match case.</param>
+    /// <returns>The definitions, or null.</returns>
+    internal List<SymbolSite>? Bound(string name, string path, DocumentationScopes scopes, bool exact) =>
         Own(name, scopes, exact) ?? Used(name, path, scopes, exact);
 
     // What a plain name binds to in the code's own scopes, innermost first, or at the root.
@@ -498,9 +519,13 @@ internal sealed partial class SourceAnalysis
         }
     }
 
-    // The scope a line is in and the .using directives in effect on it: one for each distinct scope the file is
-    // included in.
-    private IReadOnlyList<DocumentationScopes> ScopesAt(string path, int line) => ScopesAt(path, line, depth: 0);
+    /// <summary>
+    ///  Gets the scopes and using directives in effect at a source line.
+    /// </summary>
+    /// <param name="path">The full path.</param>
+    /// <param name="line">The zero-based line.</param>
+    /// <returns>The contexts, one for each place the file is included.</returns>
+    internal IReadOnlyList<DocumentationScopes> ScopesAt(string path, int line) => ScopesAt(path, line, depth: 0);
 
     private IReadOnlyList<DocumentationScopes> ScopesAt(string path, int line, int depth)
     {

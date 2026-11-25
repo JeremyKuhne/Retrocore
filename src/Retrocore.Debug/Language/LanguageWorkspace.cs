@@ -29,6 +29,7 @@ internal sealed partial class LanguageWorkspace
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _pending = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, HashSet<string>> _published = new(StringComparer.OrdinalIgnoreCase);
     private readonly SdkIndex _sdk;
+    private volatile (string Folder, HashSet<string> Words)[] _unlinkedWords = [];
 
     // Set once the SDK's ROM sources are indexed; links to other modules resolve only after that.
     private volatile bool _sdkIndexed;
@@ -120,6 +121,40 @@ internal sealed partial class LanguageWorkspace
                 Schedule(root);
             }
         }
+    }
+
+    /// <summary>
+    ///  Updates the configured prose words and rechecks the open sources.
+    /// </summary>
+    /// <param name="common">User and workspace words.</param>
+    /// <param name="folders">Words for each workspace folder, including its user and workspace words.</param>
+    internal void SetUnlinkedWords(HashSet<string> common, IReadOnlyList<(string Folder, HashSet<string> Words)> folders)
+    {
+        _unlinkedWords = [("", common), .. folders];
+        foreach (string root in _analyses.Keys.Concat(_pending.Keys).Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            Schedule(root);
+        }
+    }
+
+    private bool IgnoreUnlinkedName(string path, string name)
+    {
+        (string Folder, HashSet<string> Words)[] words = _unlinkedWords;
+        string full = Path.GetFullPath(path);
+        (string Folder, HashSet<string> Words)? closest = null;
+        foreach ((string folder, HashSet<string> entries) in words)
+        {
+            string prefix = Path.EndsInDirectorySeparator(folder) ? folder : folder + Path.DirectorySeparatorChar;
+            if ((folder.Length == 0
+                    || full.Equals(folder, LaunchMedia.PathComparison)
+                    || full.StartsWith(prefix, LaunchMedia.PathComparison))
+                && (closest is null || folder.Length > closest.Value.Folder.Length))
+            {
+                closest = (folder, entries);
+            }
+        }
+
+        return closest?.Words.Contains(name) == true;
     }
 
     /// <summary>

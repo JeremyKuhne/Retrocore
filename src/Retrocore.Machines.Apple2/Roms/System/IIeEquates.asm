@@ -1,5 +1,5 @@
 ; retrocore: style=strict
-;; APPLE IIE EQUATES: PAGE `ZERO`, LOW MEMORY, SOFT SWITCHES AND KEYS
+;; Apple IIe equates: page `ZERO`, low memory, soft switches and keys.
 ;;
 ;; The IIe's page-zero locations, low-memory vectors and buffers, soft switches and I/O locations, and keyboard
 ;; characters. The Monitor, both models' internal firmware, the Disk II boot ROM, DOS and the SDK's card and program

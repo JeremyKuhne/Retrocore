@@ -705,6 +705,7 @@ public sealed partial class DocumentationResolver
                 // A historical name, found through an Also: section, is history or a plain word in prose ("the listing
                 // calls it RESET", "starts BASIC"), not the current name left unlinked.
                 if (LastName(target.Name) != LastName(name)) { continue; }
+                if (IgnoreUnlinkedName?.Invoke(comment.Path, name) == true) { continue; }
 
                 if (reported.Add(macros ? $"{comment.Path}:{line}:{name}" : $"{line}:{name}"))
                 {

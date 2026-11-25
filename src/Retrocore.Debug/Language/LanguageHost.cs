@@ -126,6 +126,7 @@ internal static partial class LanguageHost
         server.OnNotification("textDocument/didChange", parameters => sync.Change(LspParams.From(parameters)));
         server.OnNotification("textDocument/didClose", parameters => sync.Close(LspParams.From(parameters)));
         server.OnNotification("workspace/didChangeWatchedFiles", parameters => WatchedFilesChanged(workspace, parameters));
+        server.OnNotification("retrocore/unlinkedNameWords", parameters => UnlinkedNameWordsChanged(workspace, parameters));
         server.OnRequest("textDocument/definition", parameters => Answer(definition.Handle, parameters, Locations));
         server.OnRequest("textDocument/references", parameters => Answer(references.Handle, parameters, Locations));
         server.OnRequest("textDocument/hover", parameters => Answer(hover.Handle, parameters, found => found?.ToJson()));
@@ -169,6 +170,33 @@ internal static partial class LanguageHost
                 workspace.ConfigurationChanged(PathOf(new DocumentUri(uri)));
             }
         }
+    }
+
+    /// <summary>
+    ///  Applies the client's configured unlinked-name dictionaries.
+    /// </summary>
+    /// <param name="workspace">The workspace to recheck.</param>
+    /// <param name="parameters">The common and folder-specific words.</param>
+    internal static void UnlinkedNameWordsChanged(LanguageWorkspace workspace, JsonObject? parameters)
+    {
+        static HashSet<string> Words(JsonNode? node) =>
+            node is JsonArray array
+                ? new(array.Select(value => value?.GetValue<string>()
+                    ?? throw new InvalidOperationException("A lint word must be a string.")), StringComparer.Ordinal)
+                : throw new InvalidOperationException("The lint words must be an array.");
+
+        HashSet<string> common = Words(parameters?["words"]);
+        JsonArray folders = parameters?["folders"] as JsonArray ?? throw new InvalidOperationException("Missing lint word folders.");
+        List<(string Folder, HashSet<string> Words)> configured = [];
+        foreach (JsonNode? item in folders)
+        {
+            string uri = item.String("uri") ?? throw new InvalidOperationException("A lint word folder needs a URI.");
+            // Assembly documents use file URIs; a virtual workspace folder cannot contain one.
+            if (Uri.TryCreate(uri, UriKind.Absolute, out Uri? folder) && !folder.IsFile) { continue; }
+            configured.Add((PathOf(new DocumentUri(uri)), Words(item?["words"])));
+        }
+
+        workspace.SetUnlinkedWords(common, configured);
     }
 
     // What the server does, in its answer to initialize: whole-document sync, and the features the handlers serve.

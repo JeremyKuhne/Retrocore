@@ -169,7 +169,7 @@ AFP_DONE:
 
 ;; Writes FR0 as text in LBUFF, the OS User's Manual's floating point to ASCII conversion.
 ;;
-;; Numbers from 0.01 up to 10^10 are written plainly (123.45, 0.05); others in E notation with a sign and two
+;; Numbers from 0.01 up to below 10^10 are written plainly (123.45, 0.05); others in E notation with a sign and two
 ;; exponent digits (1.5E+12, 2.5E-05). Trailing zeros after the point, and the point when nothing follows it, are
 ;; left out, except that E notation writes a one-digit number with its point and a zero (1.0E-05). A negative
 ;; number starts with a minus sign, and zero is a single 0. The text can start just before LBUFF, at LBPR1 or LBPR2.
@@ -185,7 +185,7 @@ FASC:
     lda FR0
     beq FASC_ZERO
     and #<~FP_SIGN
-    cmp #FP_EXPONENT_BIAS - 1       ; 0.01 up to 10^10 are written plainly
+    cmp #FP_EXPONENT_BIAS - 1       ; 0.01 up to below 10^10 are written plainly
     bcc FASC_E_NOTATION
     cmp #FP_EXPONENT_BIAS + 5
     bcs FASC_E_NOTATION

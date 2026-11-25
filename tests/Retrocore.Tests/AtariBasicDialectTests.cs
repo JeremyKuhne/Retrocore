@@ -259,6 +259,10 @@ public sealed class AtariBasicDialectTests
     [DataRow("NOTAND=1")]
     [DataRow("NOTSIN")]
     [DataRow("SIN")]
+    [DataRow("NOTSIN ")]
+    [DataRow("SIN ")]
+    [DataRow("NOTASC(1)")]
+    [DataRow("NOTASC(A$)")]
     [DataRow("NOTOR+1")]
     [DataRow("NOTSIN(0)")]
     [DataRow("NOTCHR$(65)=\"A\"")]
@@ -331,6 +335,7 @@ public sealed class AtariBasicDialectTests
     [DataRow("NOT$")]
     [DataRow("OR+1")]
     [DataRow("SIN+1")]
+    [DataRow("SIN +1")]
     [DataRow("TO$")]
     public void RefusedExpressionsAreTheRoms(string expression)
     {
@@ -348,6 +353,7 @@ public sealed class AtariBasicDialectTests
         AtariMachine machine = Machine();
         AtariMachineTests.Type(machine, "DIM A$(9),B(3,2),NOTA$(5),NOTD$(5):A$=\"HELLO\":B(2,0)=7:B(1,1)=1.5:NOTA$=\"N\":NOTD$=\"N\":DEG\r");
         AtariMachineTests.Type(machine, "10 D$=\"\"\r");
+        AtariMachineTests.Type(machine, "DIM NOTASC(5)\r");
         return machine;
     }
 
@@ -356,7 +362,7 @@ public sealed class AtariBasicDialectTests
     {
         AtariMachineTests.Type(machine, $"PRINT {expression}\r");
         string[] screen = machine.ReadTextScreen();
-        int prompt = Array.FindLastIndex(screen, row => row.Trim() == $"PRINT {expression}");
+        int prompt = Array.FindLastIndex(screen, row => row.Trim() == $"PRINT {expression}".Trim());
         prompt.Should().BeGreaterThanOrEqualTo(0, "the statement is on the screen");
         return screen.Skip(prompt + 1).Select(row => row.Trim()).FirstOrDefault(row => row.Length > 0) ?? "";
     }

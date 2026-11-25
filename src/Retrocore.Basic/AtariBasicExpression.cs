@@ -23,8 +23,8 @@ namespace Retrocore.Basic;
 ///   NOT (A$="X"), though NOTA$ alone is the string, as the grammar falls back to it when NOT's operand fails, and
 ///   NOTSIN+1 is the name NOTSIN plus 1, SIN having no (, as NOTAND+1 is NOTAND plus 1. A function's name or an
 ///   operator word is a variable only before a character from '0' up, the end among them, as SYNTAX_VARIABLE takes
-///   it: SIN alone is a variable, NOTSIN alone NOT SIN and NOTAND=1 NOT AND=1, where OR+1 and TO$ are refused. A
-///   string that no DIM has given room is error 9, and its substring error 5, its length being 0.
+///   it: SIN alone is a variable, NOTSIN alone NOT SIN and NOTAND=1 (NOT AND)=1, where OR+1, SIN +1 and TO$ are
+///   refused. A string that no DIM has given room is error 9, and its substring error 5, its length being 0.
 ///   <c>A(i)</c> and <c>A(i,j)</c> are array elements, counting from 0, <c>A(i)</c> being <c>A(i,0)</c>;
 ///   <c>A$(i)</c> is the string from character i and <c>A$(i,j)</c> characters i to j, counting from 1, never empty.
 ///   Subscripts, indexes and the arguments of PEEK and CHR$ round to an integer from 0 to 65535, or are error 3; a
@@ -205,7 +205,7 @@ internal sealed class AtariBasicExpression
             // values.
             string rest = _tokens[at];
             bool bracketed = at + 1 < _tokens.Count && _tokens[at + 1] == "(";
-            bool operand = (bracketed && s_functions.Contains(rest)) || Nameable(at);
+            bool operand = (bracketed && s_functions.Contains(rest) && TakesArgument(rest, at + 2)) || Nameable(at);
             if (operand && (!whole.EndsWith('$') || ComparisonFollows(at))) { return Truth(Number(Operand()) == 0); }
             _tokens[at] = whole;
             return Operand();
@@ -228,9 +228,19 @@ internal sealed class AtariBasicExpression
         }
 
         if (!IsTableName(token)) { return true; }
+        // The end counts, spaces and all: the screen editor drops a line's trailing spaces, so SIN with one is SIN.
         int next = index + 1;
         if (next >= _tokens.Count) { return true; }
         return !_spaced.Contains(next) && _tokens[next][0] >= '0';
+    }
+
+    // Whether the function's argument at an index is of its kind: ASC, VAL, LEN and ADR take only a string
+    // (RULE_STRING_ARGUMENT), so NOTASC(1) is the array NOTASC's element. A string starts with a quote, or is a
+    // string's name or a string function.
+    private bool TakesArgument(string function, int index)
+    {
+        if (function is not ("ASC" or "VAL" or "LEN" or "ADR")) { return true; }
+        return index < _tokens.Count && (_tokens[index][0] == '"' || _tokens[index].EndsWith('$'));
     }
 
     private static bool IsTableName(string token) => s_words.Contains(token) || s_functions.Contains(token);

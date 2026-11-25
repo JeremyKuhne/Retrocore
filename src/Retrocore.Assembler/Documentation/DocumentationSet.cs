@@ -666,10 +666,12 @@ public sealed class DocumentationSet
                 || (topic.Kind == DocumentationKind.Member && !Defines(topic.Name))
                 || IsEmptyScope(topic));
 
-    // Whether a scope or named type is not in the assembly, which defines each one's name as a symbol.
+    // Whether a scope or named type has nothing in the assembly: neither its own symbol nor one qualified by it, as a
+    // scope whose name the assembly doesn't define as a symbol may still hold the build's definitions.
     private bool IsEmptyScope(DocumentationTopic topic) =>
         topic.Kind is DocumentationKind.Scope or DocumentationKind.Struct or DocumentationKind.Enum
-            && !_symbols.ContainsKey(topic.Name);
+            && !_symbols.ContainsKey(topic.Name)
+            && !_symbols.Keys.Any(name => name.StartsWith(topic.Name + "::", StringComparison.Ordinal));
 
     /// <summary>
     ///  Gets whether this set knows which definitions its build assembles: it was created from a successful assembly

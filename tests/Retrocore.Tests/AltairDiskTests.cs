@@ -3,6 +3,8 @@
 // See LICENSE file in the project root for full license information
 
 using System.Security.Cryptography;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using Retrocore.Assembler;
 using Retrocore.Cpu.I8080;
 using Retrocore.Debug;
@@ -65,6 +67,33 @@ public sealed class AltairDiskTests
         ReadOnlySpan<byte> built = result.Sections[0].Bytes.Span;
         built.CommonPrefixLength(prom).Should().Be(prom.Length, "the source should assemble to the PROM");
         built.Length.Should().Be(prom.Length);
+    }
+
+    /// <summary>
+    ///  A launch fits the PROMs its proms option lists, building only those, DBL by default with the 88-DCDD and none
+    ///  without, and refuses anything else.
+    /// </summary>
+    [TestMethod]
+    public void LaunchesFitThePromsTheyList()
+    {
+        string directory = JsonSerializer.Serialize(Inputs);
+
+        AltairRoms mbl = Roms($$"""{ "proms": ["mbl"], "romDirectory": {{directory}} }""");
+        mbl.Dbl.Should().BeNull();
+        mbl.Mbl.Should().HaveCount(AltairRoms.PromSize);
+        AltairRoms fitted = Roms($$"""{ "diskController": true, "romDirectory": {{directory}} }""");
+        fitted.Dbl.Should().HaveCount(AltairRoms.PromSize);
+        fitted.Mbl.Should().BeNull();
+        AltairRoms none = Roms("{}");
+        none.Dbl.Should().BeNull();
+        none.Mbl.Should().BeNull();
+
+        Action text = () => Roms("""{ "proms": "dbl" }""");
+        text.Should().Throw<ArgumentException>("proms is a list");
+        Action other = () => Roms("""{ "proms": ["hdbl"] }""");
+        other.Should().Throw<ArgumentException>();
+        Action number = () => Roms("""{ "proms": [1] }""");
+        number.Should().Throw<ArgumentException>();
     }
 
     /// <summary>
@@ -399,7 +428,7 @@ public sealed class AltairDiskTests
 
     /// <summary>
     ///  CP/M 2.2b, Burcon's CP/M 2.2, Disk BASIC 5.0 and Altair DOS boot through DBL from the SDK's source, from their
-    ///  images, as they do on SIMH's <c>altairz80</c>.
+    ///  images.
     /// </summary>
     /// <param name="image">The disk image's file name.</param>
     /// <param name="banner">What the system shows once it has booted.</param>
@@ -415,7 +444,7 @@ public sealed class AltairDiskTests
     }
 
     /// <summary>
-    ///  CP/M 2.2b lists its disk, saves a file, which writes and verifies sectors, and erases it.
+    ///  CP/M 2.2b lists its disk, saves a file, which writes its sectors, and STAT and ERA see the file.
     /// </summary>
     [TestMethod]
     public void CpmWritesAndReadsFiles()
@@ -430,6 +459,13 @@ public sealed class AltairDiskTests
         Type(machine, "ERA TEST.COM");
         Type(machine, "DIR TEST.COM");
         Screen(machine).Should().Contain("No file");
+    }
+
+    // The PROMs a launch with these arguments fits.
+    private static AltairRoms Roms(string json)
+    {
+        JsonObject args = JsonNode.Parse(json) as JsonObject ?? throw new InvalidOperationException("Not an object.");
+        return AltairDebugTarget.Launch(args).Machine.Roms;
     }
 
     private const ushort Status = AltairDiskController.Port;

@@ -12,9 +12,8 @@ namespace Retrocore.Machines.Altair;
 /// <remarks>
 ///  <para>
 ///   The figures are those Mike Douglas's FDC+ uses to reproduce MITS's controller (its firmware's
-///   <c>altair-8in.s</c>), and agree with his "Disk IO Timing" note on the read and write loops in MITS's software:
-///   the disk turns at 360 RPM, a revolution of 32 hard sectors in 166.67 ms, and data passes at 250 kbit/s, a byte
-///   every 32 µs.
+///   <c>altair-8in.s</c>): the disk turns at 360 RPM, a revolution of 32 hard sectors in 166.67 ms, and data passes
+///   a bit every 4 µs, a byte every 32 µs. His "Disk IO Timing" note on MITS's read loops agrees on the byte time.
 ///  </para>
 /// </remarks>
 public static class AltairDiskTiming

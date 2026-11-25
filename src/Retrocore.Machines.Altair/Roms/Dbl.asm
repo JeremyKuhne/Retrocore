@@ -17,7 +17,7 @@
 ;; code to every terminal board forever.
 ;;
 ;; The sector loop reads two bytes a pass, the second without waiting for NRDA: the controller holds each byte for one
-;; byte time, 32 us, and the second IN comes 66-90 cycles after the first byte's NRDA. MITS's other software has a NOP
+;; byte time, 32 us, and the second IN comes 66-90 cycles after the first byte's NRDA. Burcon's CP/M has a NOP
 ;; before that IN, which this PROM lacks, leaving little margin for a drive turning slowly.
 ;;
 ;; The labels follow Martin Eberhard's 2012 disassembly of an EPROM labeled "DBL 4.1" from a MITS turnkey board.
@@ -194,7 +194,7 @@ READ_CHECKED:
         xchg
         jnz BAD_SECTOR
 
-        ; Done once DE has passed the count in the sector's header.
+        ; Done once DE has reached the count in the sector's header.
         pop psw
         pop psw
         lhld BUFFER+1

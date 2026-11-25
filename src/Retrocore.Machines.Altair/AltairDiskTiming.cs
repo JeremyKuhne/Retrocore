@@ -35,7 +35,7 @@ public static class AltairDiskTiming
 
     /// <summary>
     ///  How far into a sector a write enable still starts writing that sector: the controller ignores read data for
-    ///  the first 212 µs, and a write it is told of in that time begins at once. One told of later is forgotten at
+    ///  the first 212 µs, and a write it is told of in that time writes this sector. One told of later is forgotten at
     ///  <see cref="EndOfSectorCycles"/>, so only one after that writes the next sector.
     /// </summary>
     public const int ReadClearCycles = 424;

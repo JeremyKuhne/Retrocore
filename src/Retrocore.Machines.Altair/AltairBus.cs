@@ -13,7 +13,8 @@ namespace Retrocore.Machines.Altair;
 /// </summary>
 /// <remarks>
 ///  <para>
-///   Addresses past the RAM, and ports no board answers, read $FF, as the bus's pull-ups leave it. The 88-2SIO's
+///   Addresses past the RAM and the PROMs, and ports no board answers, read $FF, as the bus's pull-ups leave it.
+///   DBL at $FF00 and MBL at $FE00, when fitted, answer their addresses in place of RAM, and writes there are lost. The 88-2SIO's
 ///   first ACIA is at ports $10 (control and status) and $11 (data), with the terminal on its line unless it is on
 ///   the 88-SIO, at ports $00 and $01; the second ACIA, at $12 and $13, has nothing connected. The 88-ACR is an
 ///   88-SIO at ports $06 and $07, at 300 baud, with a cassette recorder. <c>IN $FF</c> reads the sense switches, the

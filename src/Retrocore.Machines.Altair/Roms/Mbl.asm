@@ -14,9 +14,10 @@
 ;; load records, each $3C, a byte count, a load address and that many bytes, then their checksum (which includes the
 ;; address), and an end record, $78 and the program's start address, where the loader jumps.
 ;;
-;; On an error the loader stores a code at $0000 and the address involved at $0001, lights INTE with EI, and sends the
-;; code to every terminal board forever: 'I' for a device number above 6, 'M' for RAM that did not keep a byte or ended
-;; off a page, 'O' for a load that would overwrite the reading routine, and 'C' for a checksum that did not match.
+;; On an error the loader stores a code at $0000 and HL at $0001 (for 'M' the address that failed, otherwise the
+;; reading routine's), lights INTE with EI, and sends the code to every terminal board forever: 'I' for a device
+;; number above 6, 'M' for RAM that did not keep a byte or ended off a page, 'O' for a load that would overwrite the
+;; reading routine, and 'C' for a checksum that did not match.
 ;;
 ;; The labels follow Geoff Harrison's disassembly of a dump Grant Stockly provided.
 ;;

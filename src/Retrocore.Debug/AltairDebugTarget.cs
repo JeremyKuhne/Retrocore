@@ -100,7 +100,8 @@ internal sealed class AltairDebugTarget : DisposableBase, IDebugTarget, IRecordi
 
         configuration.DiskDrives = controller ? DiskDrives : 0;
 
-        AltairMachine machine = new(configuration, Proms(args, controller, args.String("romDirectory")));
+        string? sdkRoms = args.String("sdkRoms") is { } roms ? Path.GetFullPath(roms) : null;
+        AltairMachine machine = new(configuration, Proms(args, controller, sdkRoms));
         AltairDebugTarget target = new(machine)
         {
             FastCassette = args.Bool("fastCassette") ?? true
@@ -566,8 +567,8 @@ internal sealed class AltairDebugTarget : DisposableBase, IDebugTarget, IRecordi
         return MediaState();
     }
 
-    // The PROMs a launch fits: its proms option, or DBL with the 88-DCDD and none without, from the SDK's sources or a
-    // romDirectory of them.
+    // The PROMs a launch fits: its proms option, or DBL with the 88-DCDD and none without, from the SDK's sources, or
+    // from sdkRoms, the folder AddSdkModules maps them from too.
     private static AltairRoms Proms(JsonObject args, bool controller, string? directory)
     {
         string[] proms = args["proms"] switch

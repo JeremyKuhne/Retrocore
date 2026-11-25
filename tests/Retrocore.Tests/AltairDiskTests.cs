@@ -78,10 +78,10 @@ public sealed class AltairDiskTests
     {
         string directory = JsonSerializer.Serialize(Inputs);
 
-        AltairRoms mbl = Roms($$"""{ "proms": ["mbl"], "romDirectory": {{directory}} }""");
+        AltairRoms mbl = Roms($$"""{ "proms": ["mbl"], "sdkRoms": {{directory}} }""");
         mbl.Dbl.Should().BeNull();
         mbl.Mbl.Should().HaveCount(AltairRoms.PromSize);
-        AltairRoms fitted = Roms($$"""{ "diskController": true, "romDirectory": {{directory}} }""");
+        AltairRoms fitted = Roms($$"""{ "diskController": true, "sdkRoms": {{directory}} }""");
         fitted.Dbl.Should().HaveCount(AltairRoms.PromSize);
         fitted.Mbl.Should().BeNull();
         AltairRoms none = Roms("{}");
@@ -193,8 +193,9 @@ public sealed class AltairDiskTests
 
     /// <summary>
     ///  A sector's bytes come one a byte time from 452 µs into it, each asserting NRDA, which reading the data port
-    ///  clears, and each holding the port until the next replaces it: MITS's two-bytes-a-pass loop, which reads the
-    ///  second without waiting for NRDA, gets every byte, and a read a byte time late misses one.
+    ///  clears, and each holding the port until the next replaces it, as MITS's two-bytes-a-pass loop, which reads
+    ///  the second without waiting for NRDA, relies on; a read a byte time late misses one. After the last, the port
+    ///  keeps it.
     /// </summary>
     [TestMethod]
     public void BytesComeOneAByteTime()
@@ -227,6 +228,7 @@ public sealed class AltairDiskTests
         machine.Bus.In(Data).Should().Be(expected[136]);
         RunTo(machine, start + AltairDiskTiming.EndOfSectorCycles);
         (machine.Bus.In(Status) & 0x80).Should().Be(0x80, "the sector has ended");
+        machine.Bus.In(Data).Should().Be(expected[136], "the port keeps the last byte");
     }
 
     /// <summary>
@@ -252,6 +254,23 @@ public sealed class AltairDiskTests
         machine.Bus.In(Data).Should().Be(0x91, "$01 $23 from bit 7 of the first byte is 1001 0001 ...");
         RunTo(machine, first + AltairDiskTiming.ByteCycles);
         machine.Bus.In(Data).Should().Be(0x80);
+    }
+
+    /// <summary>
+    ///  A head command does not give back a byte already read: NRDA comes again only with the next byte.
+    /// </summary>
+    [TestMethod]
+    public void AHeadCommandKeepsAByteRead()
+    {
+        AltairMachine machine = LoadedOnTrack0();
+        ulong start = NextSector(machine.Processor.CycleCount);
+        RunTo(machine, start + AltairDiskTiming.FirstByteCycles);
+        machine.Bus.In(Data);
+        (machine.Bus.In(Status) & 0x80).Should().Be(0x80, "reading the port cleared NRDA");
+        machine.Bus.Out(Control, 0x04);
+        (machine.Bus.In(Status) & 0x80).Should().Be(0x80, "the head load gives nothing back");
+        RunTo(machine, start + AltairDiskTiming.FirstByteCycles + AltairDiskTiming.ByteCycles);
+        (machine.Bus.In(Status) & 0x80).Should().Be(0, "the next byte has come");
     }
 
     /// <summary>

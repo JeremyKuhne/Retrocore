@@ -55,7 +55,8 @@ tracks of 32 sectors of 137 bytes. Its timing is the one Mike Douglas's FDC+ boa
 
 - **The disk turns all the time**, a sector every 5.2 ms. Sector True is asserted for 32 µs after each sector's pulse.
 - **Reading.** A sector's bytes come one every 32 µs from 452 µs into it, each setting NRDA and holding the data port
-  until the next replaces it, which MITS's loops that read two bytes a pass rely on. Reading the port clears NRDA.
+  until the next replaces it, which MITS's loops that read two bytes a pass rely on. Reading the port clears NRDA,
+  and the port keeps the last byte until another comes; an image holds nothing of the gap after a sector's 137.
   The controller assembles bytes from the sector's first one bit, so a sector that does not start with bit 7 set
   reads shifted, its bytes that many 4 µs bit times later, and a blank sector gives no bytes at all.
 - **Writing.** A write enable in a sector's first 212 µs writes it, one after the sector's end (5.008 ms) writes the
@@ -67,9 +68,11 @@ tracks of 32 sectors of 137 bytes. Its timing is the one Mike Douglas's FDC+ boa
   them off while the head settles, until 43.5 ms. A head loaded, or stepped, is settled 50 ms later, and the sector
   position shows only from the first sector to begin with it settled.
 - **Selecting** a drive with no disk leaves the controller disabled, its status and position reading `$FF`.
-  Selecting a drive unloads its head and disables the controller's interrupts. Status bit 5 shows the 8080's INTE, as the controller reads it from the bus.
+  Selecting a drive unloads its head and disables the controller's interrupts. Status bit 5 shows the 8080's INTE,
+  as the controller reads it from the bus.
 
-The controller's sector interrupts are not modeled: none of the software here uses them.
+The controller's sector interrupts are not modeled, as none of the software here uses them, nor is the FD-400's
+wait for the index hole after a drive is selected: the sector position shows once the head has settled.
 
 **Disk images** ([`AltairDisk`](../src/Retrocore.Media/Altair/AltairDisk.cs)) are SIMH's `.dsk` files: the
 sectors in order, track by track, 337,568 bytes. Many archive images have 96 more bytes, which are kept, so an image
@@ -78,8 +81,9 @@ saves back byte for byte.
 **Boot PROMs.** [`Dbl.asm`](../src/Retrocore.Machines.Altair/Roms/Dbl.asm) is MITS's disk boot loader 4.1: it
 copies itself to `$2C00`, waits for drive 0, steps out to track 0, reads the disk from there into memory
 from `$0000`, as many bytes as its sectors say, and runs it.
-[`Mbl.asm`](../src/Retrocore.Machines.Altair/Roms/Mbl.asm) is the multi-boot loader, which loads a MITS tape from the device that sense switches A11-A8 name, skipping its leader and checksum loader. Both are
-documented sources that assemble byte-identically to the PROMs.
+[`Mbl.asm`](../src/Retrocore.Machines.Altair/Roms/Mbl.asm) is the multi-boot loader, which loads a MITS tape from
+the device that sense switches A11-A8 name, skipping its leader and checksum loader. Both are documented sources
+that assemble byte-identically to the PROMs.
 
 **Interrupts.** The serial boards' interrupt requests drive the 8080's INT line: on the 88-2SIO, a full receiver
 with control bit 7 set, or an empty transmitter with bits 5-6 at `01`; on the 88-SIO and 88-ACR, as their control
@@ -233,7 +237,8 @@ can be saved to its image, saved as another, reverted or undone, as for the othe
 CP/M.
 
 A launch with `diskController` and no disks has the drives empty; DBL waits for a disk in drive 0, so inserting one
-boots it. `proms` chooses the PROMs: `["dbl"]` by default with the controller, `["dbl", "mbl"]` to add MBL. The launch still starts at
+boots it. `proms` chooses the PROMs: `["dbl"]` by default with the controller, `["dbl", "mbl"]` to add MBL, both
+assembled from the SDK's sources, or from `sdkRoms` when the launch gives it. The launch still starts at
 DBL; to load a tape with MBL, set the program counter to `$FE00` in the debugger and continue.
 
 ## Debugging
@@ -247,8 +252,9 @@ on by default), `disks` (up to four `.dsk` images, for drives 0-3), `diskControl
 and `proms` (`dbl` and `mbl`).
 
 A `source` or `program` loads at `$0100` by default and starts there. With neither, the machine starts at DBL's
-`$FF00` when DBL is fitted, and otherwise at `$0000` in empty RAM, which executes `NOP`s. MBL's source, and DBL's copy
-loop, map to source lines; DBL's loader runs in RAM at `$2C00` once copied, which has no source map, so stepping it shows disassembly.
+`$FF00` when DBL is fitted, and otherwise at `$0000` in empty RAM, which executes `NOP`s. MBL's source, and DBL's
+copy loop, map to source lines; DBL's loader runs in RAM at `$2C00` once copied, which has no source map, so
+stepping it shows disassembly.
 
 ```asm
 .cpu I8080

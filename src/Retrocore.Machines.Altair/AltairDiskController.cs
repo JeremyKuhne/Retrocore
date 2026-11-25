@@ -25,15 +25,17 @@ namespace Retrocore.Machines.Altair;
 ///   The disk turns all the time, a sector every <see cref="AltairDiskTiming.SectorCycles"/>, so the controller
 ///   works out where the disk is from the cycle count. A sector's 137 bytes come one each
 ///   <see cref="AltairDiskTiming.ByteCycles"/>, each holding the data port until the next replaces it, which MITS's
-///   two-bytes-a-pass read loops rely on; NRDA is asserted as each arrives and cleared by reading the port. A write
-///   takes the data port's value each byte time from a handshake that ENWD asserts, and keeps it as the sector's next
-///   byte, whether or not the 8080 has sent a new one; the first 137 are the sector. After a write, head movement
-///   stays held off until the drive's trim erase ends, <see cref="AltairDiskTiming.TrimEraseCycles"/> into the next
-///   sector.
+///   two-bytes-a-pass read loops rely on; NRDA is asserted as each arrives and cleared by reading the port, and the
+///   port keeps the last byte until another comes. An image holds a sector's 137 bytes and nothing of the gap after
+///   them, so nothing more comes until the next sector. A write takes the data port's value each byte time from a
+///   handshake that ENWD asserts, and keeps it as the sector's next byte, whether or not the 8080 has sent a new
+///   one; the first 137 are the sector. After a write, head movement stays held off until the drive's trim erase
+///   ends, <see cref="AltairDiskTiming.TrimEraseCycles"/> into the next sector.
 ///  </para>
 ///  <para>
 ///   The controller's sector interrupts are not modeled: its interrupt enable is kept, but nothing is requested,
-///   as none of the software here uses them. Writes to a write-protected disk are lost, as the drive's write gate
+///   as none of the software here uses them. Nor is the wait for the index hole after a drive is selected: the
+///   sector position shows once the head has settled. Writes to a write-protected disk are lost, as the drive's write gate
 ///   would refuse them.
 ///  </para>
 /// </remarks>
@@ -65,6 +67,10 @@ public sealed class AltairDiskController
 
     // The sector whose bytes _sector holds, and the last of its bytes the 8080 has read, for NRDA.
     private long _readSector = -1;
+    private int _readTrack = -1;
+
+    // The byte the data register holds: the last one a sector gave it.
+    private byte _held;
     private int _readTaken = -1;
 
     // How many cycles after the first byte's time the sector's bytes come, as the controller assembles them from the
@@ -245,39 +251,47 @@ public sealed class AltairDiskController
         return (byte)(0xC0 | (Sector << 1) | sectorTrue);
     }
 
-    // The byte in the data register, and its index in the sector, or -1 while none of this sector's has arrived.
+    // The byte in the data register, and its index in the sector, or -1 while none of this sector's is arriving.
+    // The register keeps the last byte it was given until another comes.
     private byte Data(out int index)
     {
         index = -1;
         if (_selected is not { } drive || Writing || !drive.HeadLoaded || drive.Disk is not { } disk)
         {
-            return _sector[0];
+            return _held;
         }
 
         long sector = CurrentSector;
         int offset = CurrentOffset;
-        if (offset < AltairDiskTiming.FirstByteCycles || offset >= AltairDiskTiming.EndOfSectorCycles)
+        if (offset < AltairDiskTiming.FirstByteCycles)
         {
-            return _sector[0];
+            return _held;
         }
 
-        if (sector != _readSector)
+        if (sector != _readSector || drive.Track != _readTrack)
         {
             disk.ReadSector(drive.Track, Sector, _sector);
             int bit = Align(_sector);
             _readDelay = bit < 0 ? -1 : bit * AltairDiskTiming.BitCycles;
+            if (sector != _readSector) { _readTaken = -1; }
             _readSector = sector;
-            _readTaken = -1;
+            _readTrack = drive.Track;
         }
 
-        if (_readDelay < 0 || offset < AltairDiskTiming.FirstByteCycles + _readDelay)
+        int end = Math.Min(offset, AltairDiskTiming.EndOfSectorCycles - 1);
+        if (_readDelay < 0 || end < AltairDiskTiming.FirstByteCycles + _readDelay)
         {
-            return _sector[0];
+            return _held;
         }
 
-        int arrived = (offset - AltairDiskTiming.FirstByteCycles - _readDelay) / AltairDiskTiming.ByteCycles;
-        index = Math.Min(arrived, AltairDisk.SectorBytes - 1);
-        return _sector[index];
+        int arrived = (end - AltairDiskTiming.FirstByteCycles - _readDelay) / AltairDiskTiming.ByteCycles;
+        int last = Math.Min(arrived, AltairDisk.SectorBytes - 1);
+        _held = _sector[last];
+
+        // An image holds no bytes past a sector's 137, so the last stays the one arriving until the sector ends, and
+        // then the register keeps it with nothing new to read.
+        if (offset < AltairDiskTiming.EndOfSectorCycles) { index = last; }
+        return _held;
     }
 
     // The controller assembles bytes from the first one bit it sees, so a sector whose first byte lacks bit 7 reads
@@ -359,8 +373,6 @@ public sealed class AltairDiskController
                 // During a write the status shows the head unloaded at once; the write still ends with its sector.
                 drive.Unload();
             }
-
-            _readSector = -1;
         }
         else if ((value & 0x80) != 0 && !Writing)
         {

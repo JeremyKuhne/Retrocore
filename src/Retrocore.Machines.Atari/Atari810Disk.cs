@@ -15,8 +15,9 @@ namespace Retrocore.Machines.Atari;
 ///  <para>
 ///   Logical sector <c>n</c> (1-720) is sector <c>(n - 1) % 18 + 1</c> on track <c>(n - 1) / 18</c>. Each track is
 ///   in the order the firmware formats it, from the index: revision C writes sector 18, then the odd sectors, then
-///   the even ones (9:1); revision B writes 18, 7, 14, 3 and on, 13 apart (13:1). Each firmware's table of the order
-///   follows its reset code. Sectors past 720, and disks with 256-byte sectors, aren't on the 810's tracks.
+///   the even ones, so each sector follows the one before it 9 or 10 slots on, in turn (Altirra 10.9); revision B
+///   writes 18, 7, 14, 3 and on, 13 apart (13:1). Each firmware's table of the order follows its reset code. Sectors
+///   past 720, and disks with 256-byte sectors, aren't on the 810's tracks.
 ///  </para>
 ///  <para>
 ///   What the controller writes goes back to the image when its command ends (<see cref="Sync"/>), so the image is
@@ -95,8 +96,6 @@ internal sealed class Atari810Disk
         bool protect = Image.IsWriteProtected;
         if (Floppy.Version != _synced && Image.SectorSize == SectorSize)
         {
-            // A write the controller took before the image was protected is on the disk: it still goes to the image.
-            Image.IsWriteProtected = false;
             try
             {
                 CopyBack();
@@ -127,7 +126,12 @@ internal sealed class Atari810Disk
                 sector.Data.CopyTo(written);
                 Invert(written);
                 Image.ReadSector(logical, current);
-                if (!written.SequenceEqual(current)) { Image.WriteSector(logical, written); }
+                if (written.SequenceEqual(current)) { continue; }
+
+                // A write the controller took before the image was protected is on the disk: it still goes to the
+                // image, past the protection Sync puts back.
+                Image.IsWriteProtected = false;
+                Image.WriteSector(logical, written);
             }
         }
     }

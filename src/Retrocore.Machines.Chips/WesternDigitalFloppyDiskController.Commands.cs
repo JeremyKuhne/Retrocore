@@ -10,8 +10,9 @@ public sealed partial class WesternDigitalFloppyDiskController
 {
     private const int MaximumCylinder = 79;
 
-    // Step rates in milliseconds at a 1 MHz clock, by the command's low two bits (FD1771 manual, Table 1).
-    private static readonly int[] s_stepRates1771 = [12, 12, 20, 40];
+    // Step rates in milliseconds, by the command's low two bits: the FD1771's at 2 MHz (FD1771 manual, Table 1),
+    // doubled for one at 1 MHz.
+    private static readonly int[] s_stepRates1771 = [6, 6, 10, 20];
     private static readonly int[] s_stepRates1791 = [6, 12, 20, 30];
 
     private int _direction = 1;
@@ -107,8 +108,8 @@ public sealed partial class WesternDigitalFloppyDiskController
 
     private int StepCycles()
     {
-        int[] rates = Is179x ? s_stepRates1791 : s_stepRates1771;
-        return rates[_command & 3] * _cyclesPerMillisecond / (_eightInch ? 2 : 1);
+        int rate = Is179x ? s_stepRates1791[_command & 3] : s_stepRates1771[_command & 3] * (_fd1771At1Megahertz ? 2 : 1);
+        return rate * _cyclesPerMillisecond / (_eightInch ? 2 : 1);
     }
 
     private void Run()

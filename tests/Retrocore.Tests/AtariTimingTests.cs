@@ -144,8 +144,9 @@ public class AtariTimingTests
     }
 
     /// <summary>
-    ///  <c>NMIEN</c> must be written by cycle 7 to enable the vertical blank interrupt and by cycle 8 to disable it
-    ///  (Altirra 4.8).
+    ///  <c>NMIEN</c> must be written by cycle 7 to enable the vertical blank interrupt and by cycle 8 to disable it,
+    ///  and one enabled on cycle 7 itself starts a cycle late, on cycle 11 (Altirra 4.8). The sequence's first push is
+    ///  its third cycle, so 12 or 13 on time, 13 or 14 late.
     /// </summary>
     /// <param name="before">NMIEN before the write.</param>
     /// <param name="after">The value written.</param>
@@ -171,15 +172,20 @@ public class AtariTimingTests
         }
 
         machine.Bus.Write(0xD40E, (byte)after);
-        bool pushed = false;
-        for (int i = 0; i < 30 && !pushed; i++)
+        int push = -1;
+        for (int i = 0; i < 30 && push < 0; i++)
         {
             machine.StepCycle();
             ProcessorCycle step = machine.LastCycle;
-            pushed = step.Operation == BusOperation.Write && step.Address >> 8 == 1;
+            if (step.Operation == BusOperation.Write && step.Address >> 8 == 1) { push = Cycle(machine); }
         }
 
-        pushed.Should().Be(fires, $"NMIEN went from ${before:X2} to ${after:X2} on cycle {cycle}");
+        (push >= 0).Should().Be(fires, $"NMIEN went from ${before:X2} to ${after:X2} on cycle {cycle}");
+        if (fires)
+        {
+            int[] expected = before == 0 && cycle == 7 ? [13, 14] : [12, 13];
+            push.Should().BeOneOf(expected, "the interrupt sequence starts on cycle 10, or 11 after a cycle-7 enable");
+        }
     }
 
     /// <summary>

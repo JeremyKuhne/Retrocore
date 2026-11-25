@@ -104,10 +104,12 @@ public sealed class AtariDisk : IMedium
             body = body[..bytes];
             if (sectorSize == 128)
             {
-                if (body.Length < 384 || body.Length % 128 != 0)
+                if (body.Length < 384)
                 {
-                    throw new InvalidDataException("The ATR's sectors aren't whole.");
+                    throw new InvalidDataException("The ATR holds fewer than the three boot sectors.");
                 }
+
+                if (body.Length % 128 != 0) { throw new InvalidDataException("The ATR's sectors aren't whole."); }
 
                 return new(128, body.Length / 128, body.ToArray(), writeProtected);
             }
@@ -126,10 +128,12 @@ public sealed class AtariDisk : IMedium
                 return new(256, count, data, writeProtected);
             }
 
-            if (body.Length < 384 || (body.Length - 384) % 256 != 0)
+            if (body.Length < 384)
             {
-                throw new InvalidDataException("The ATR's sectors aren't whole.");
+                throw new InvalidDataException("The ATR holds fewer than the three boot sectors.");
             }
+
+            if ((body.Length - 384) % 256 != 0) { throw new InvalidDataException("The ATR's sectors aren't whole."); }
 
             return new(256, 3 + ((body.Length - 384) / 256), body.ToArray(), writeProtected);
         }

@@ -353,6 +353,8 @@ public sealed class Antic
     {
         NmiEnable = 0;
         DmaControl = 0;
+
+        // WSYNC isn't reset (Altirra 4.1, "Reset behavior"): a CPU held by it is still released on cycle 105.
     }
 
     private ushort PlayerMissileAddress(int twoLineOffset, int oneLineOffset)
@@ -410,7 +412,7 @@ public sealed class Antic
     }
 
     // Cycles 6 and 7: the address of an LMS or a jump, on the mode line's first scan line; a jump that vertical
-    // scrolling stretches over more scan lines fetches it again on each (Altirra 4.x, "Mode lines with unusual
+    // scrolling stretches over more scan lines fetches it again on each (Altirra 4.7, "Mode lines with unusual
     // height").
     private bool FetchAddress(int cycle)
     {

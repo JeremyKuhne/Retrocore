@@ -51,6 +51,7 @@ public sealed partial class WesternDigitalFloppyDiskController
     private readonly int _rotationCycles;
     private readonly int _indexPulseCycles;
     private readonly bool _sensorsWired;
+    private readonly bool _fd1771At1Megahertz;
     private bool _externalIndex;
     private bool _motorHeld;
     private int _selected = -1;
@@ -95,17 +96,23 @@ public sealed partial class WesternDigitalFloppyDiskController
     ///  comes from <see cref="IndexPulse"/>, its stepper is driven from outside (<see cref="SetCylinder"/>), READY is
     ///  always true, and there is no track 0 sensor.
     /// </param>
+    /// <param name="fd1771At1Megahertz">
+    ///  Whether an FD1771's step rates and head-load delay are its data sheet's 1 MHz figures (12-40 ms and 20 ms), as
+    ///  the Atari 810's are, rather than the 2 MHz ones (6-20 ms and 15 ms) the controller otherwise uses.
+    /// </param>
     internal WesternDigitalFloppyDiskController(
         int clockHertz,
         bool wd179x = false,
         bool eightInch = false,
         int rotationsPerMinute = 0,
-        bool sensorsWired = true)
+        bool sensorsWired = true,
+        bool fd1771At1Megahertz = false)
     {
         _clockHertz = clockHertz;
         _wd179x = wd179x;
         _eightInch = eightInch;
         _sensorsWired = sensorsWired;
+        _fd1771At1Megahertz = fd1771At1Megahertz;
         _cyclesPerMillisecond = clockHertz / 1000;
         int usual = eightInch ? clockHertz / 6 : 200 * _cyclesPerMillisecond;
         _rotationCycles = rotationsPerMinute == 0 ? usual : (int)((long)clockHertz * 60 / rotationsPerMinute);
@@ -357,9 +364,9 @@ public sealed partial class WesternDigitalFloppyDiskController
     // selected beside an FD1771.
     private bool Is179x => _wd179x || _doubleDensity;
 
-    // The head-load delay: the FD1771's 10 ms at 2 MHz is 20 ms at the usual 1 MHz (FD1771 manual; Altirra 10.8,
-    // Table 58); the FD179x's 15 ms.
-    private int SettleCycles => Is179x ? 15 * _cyclesPerMillisecond : 20 * _cyclesPerMillisecond / (_eightInch ? 2 : 1);
+    // The head-load delay: 15 ms, or for an FD1771 at 1 MHz its 10 ms at 2 MHz doubled (FD1771 manual; Altirra 10.8,
+    // Table 58).
+    private int SettleCycles => (_fd1771At1Megahertz && !Is179x ? 20 : 15) * _cyclesPerMillisecond;
 
     private byte Status()
     {

@@ -72,7 +72,7 @@ public sealed class Atari810 : AtariDiskDrive
         _bus = bus;
         _rom = rom.ToArray();
         _revision = Atari810Firmware.Revision(rom);
-        Fdc = new(ClockHertz, rotationsPerMinute: RotationsPerMinute, sensorsWired: false);
+        Fdc = new(ClockHertz, rotationsPerMinute: RotationsPerMinute, sensorsWired: false, fd1771At1Megahertz: true);
         Fdc.Control(drive: 0, side: 0, motor: false, doubleDensity: false);
         Bus = new(this);
         Processor = new(Bus, ProcessorVariant.Mos6502);

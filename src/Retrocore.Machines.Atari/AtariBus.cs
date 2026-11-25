@@ -37,11 +37,6 @@ public sealed class AtariBus : IProcessorBus
     private int _driveClock;
 
     /// <summary>
-    ///  Gets the CPU's clock in hertz, by the video standard.
-    /// </summary>
-    internal int CpuHertz => _cpuHertz;
-
-    /// <summary>
     ///  Converts a time given in cycles of the NTSC clock to cycles of this machine's, for the devices on the serial
     ///  bus, whose own clocks don't follow the computer's.
     /// </summary>

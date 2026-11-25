@@ -143,7 +143,7 @@ public sealed class AtariTape : IMedium
     {
         using MemoryStream stream = new();
         byte[] description = Encoding.Latin1.GetBytes(Description);
-        Chunk(stream, "FUJI"u8, 0, description.AsSpan(0, Math.Min(description.Length, ushort.MaxValue)));
+        Chunk(stream, "FUJI"u8, 0, description.AsSpan(0, Math.Min(description.Length, ushort.MaxValue - 1)));
         int baud = 0;
         foreach (AtariTapeBlock block in _blocks)
         {

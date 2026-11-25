@@ -19,8 +19,8 @@ namespace Retrocore.Machines.Atari;
 ///   Priority is the manual's gate logic (6.7), so the unofficial <c>PRIOR</c> combinations mix and black out as the
 ///   chip does. A write to a position or size register takes effect three colour clocks after the cycle that wrote
 ///   it, and to a graphics register one clock after, as section 6.10 times them. Other writes take effect from the
-///   next cycle's two clocks: a colour change shows a clock later than 6.10's table gives, and a <c>PRIOR</c> mode
-///   change one to three clocks earlier.
+///   two clocks of the cycle that wrote them: a colour change shows a clock later than 6.10's table gives, and a
+///   <c>PRIOR</c> mode change one to three clocks earlier.
 ///  </para>
 /// </remarks>
 public sealed class Gtia

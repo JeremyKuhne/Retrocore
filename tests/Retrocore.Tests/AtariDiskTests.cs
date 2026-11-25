@@ -161,23 +161,27 @@ public class AtariDiskTests
     }
 
     /// <summary>
-    ///  A double-density ATR too short for its three boot sectors is refused as not whole.
+    ///  An ATR too short for its three boot sectors is refused.
     /// </summary>
+    /// <param name="sectorSize">The ATR's sector size.</param>
     /// <param name="bodyLength">The bytes after the header.</param>
     [TestMethod]
-    [DataRow(0)]
-    [DataRow(128)]
-    [DataRow(256)]
-    [DataRow(512)]
-    public void ShortDoubleDensityAtrIsRefused(int bodyLength)
+    [DataRow(256, 0)]
+    [DataRow(256, 128)]
+    [DataRow(256, 256)]
+    [DataRow(256, 512)]
+    [DataRow(128, 0)]
+    [DataRow(128, 128)]
+    [DataRow(128, 256)]
+    public void ShortAtrIsRefused(int sectorSize, int bodyLength)
     {
         byte[] image = new byte[16 + bodyLength];
         image[0] = 0x96;
         image[1] = 0x02;
         image[2] = (byte)(bodyLength / 16);
         image[3] = (byte)(bodyLength / 16 >> 8);
-        image[4] = 0x00;
-        image[5] = 0x01;
+        image[4] = (byte)sectorSize;
+        image[5] = (byte)(sectorSize >> 8);
         Action load = () => AtariDisk.Load(image);
         load.Should().Throw<InvalidDataException>();
     }
@@ -207,7 +211,9 @@ public class AtariDiskTests
         device.Execute(0x50, 4, new byte[128], cycle: 0).Success.Should().BeFalse("the frame is short for the new sector");
 
         drive.Eject();
-        device.Execute(0x52, 1, [], cycle: 0).Success.Should().BeFalse("the drive is empty");
+        (bool success, byte[] frame, _) = device.Execute(0x52, 1, [], cycle: 0);
+        success.Should().BeFalse("the drive is empty");
+        frame.Should().BeEmpty("a failed read sends no data frame, not a format's bad sector list");
     }
 
     /// <summary>

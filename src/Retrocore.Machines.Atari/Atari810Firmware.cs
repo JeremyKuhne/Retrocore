@@ -10,8 +10,9 @@ namespace Retrocore.Machines.Atari;
 /// <remarks>
 ///  <para>
 ///   Revisions B and C differ only in the order they format a track's sectors: C writes sector 18, then the odd
-///   sectors, then the even ones (9:1); B writes them 13 apart (13:1). C is the common one and MAME's default.
-///   Revision E adds commands that run code on the drive (Altirra Hardware Reference Manual, 10.9).
+///   sectors, then the even ones, so that each follows the one before it 9 or 10 slots on, in turn; B writes them 13
+///   apart (13:1). C is the common one and MAME's default. Revision E adds commands that run code on the drive
+///   (Altirra Hardware Reference Manual, 10.9).
 ///  </para>
 /// </remarks>
 public static class Atari810Firmware

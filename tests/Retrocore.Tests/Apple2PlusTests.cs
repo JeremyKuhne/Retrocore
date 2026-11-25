@@ -153,6 +153,60 @@ public class Apple2PlusTests
         Screen(machine).Should().Contain("PRINT 6*7").And.Contain("42");
     }
 
+    /// <summary>
+    ///  The debugger's text rows read the II Plus's screen as it shows: its cursor, a flashing space, reads as a
+    ///  space, so the prompt row is a bare <c>]</c>, and a program typed through the debugger's keyboard lists back.
+    /// </summary>
+    [TestMethod]
+    public void TheDebuggersTextRowsReadThePromptAndATypedProgram()
+    {
+        Apple2Machine machine = new(Apple2Model.IIPlus, SdkModules.BuildRoms(Apple2Model.IIPlus, s_inputs));
+        machine.Bus.InstallLanguageCard();
+        Apple2DebugTarget target = new(machine, Apple2Model.IIPlus);
+        machine.Run(cycles: 2_000_000);
+
+        string[] rows = Rows(target);
+        int prompt = Array.FindIndex(rows, row => row.StartsWith(']'));
+        prompt.Should().BeGreaterThan(0, $"AppleSoft's prompt is below the banner:\n{string.Join("\n", rows)}");
+        machine.Bus.TextByte(prompt, 1).Should().Be(0x60, "the II Plus's cursor is a flashing space");
+        rows[prompt].TrimEnd().Should().Be("]", "the cursor reads as the space it flashes, not as ` ($60's ASCII)");
+
+        // Flashing and inverse text read as their characters: FLASH's digits are $70-$79, INVERSE's letters $01-$1A.
+        machine.Bus.Write(0x0400, 0x71);
+        machine.Bus.Write(0x0401, 0x01);
+        Rows(target)[0][..2].Should().Be("1A");
+
+        foreach (char key in "10 print \"hi\"\r20 end\rlist\r") { target.Key(key); }
+        machine.Run(cycles: 2_000_000);
+        string screen = string.Join("\n", Rows(target));
+        screen.Should().Contain("]10 PRINT \"HI\"").And.Contain("10  PRINT \"HI\"").And.Contain("20  END");
+        Rows(target).Last(row => row.StartsWith(']')).TrimEnd().Should().Be("]", "LIST ends at a bare prompt");
+    }
+
+    /// <summary>
+    ///  The enhanced IIe's rows read its flashing text as the II Plus's do, and otherwise as before: lowercase,
+    ///  inverse lowercase in the alternate character set, and MouseText, which has no character and keeps its
+    ///  seven-bit code's letter.
+    /// </summary>
+    [TestMethod]
+    public void TheIIesTextRowsKeepLowercaseAndMouseText()
+    {
+        Apple2Machine machine = new(Apple2Model.IIeEnhanced, SdkModules.BuildRoms(Apple2Model.IIeEnhanced, s_inputs));
+        Apple2DebugTarget target = new(machine, Apple2Model.IIeEnhanced);
+        machine.Bus.Write(0x0400, 0xE1);
+        machine.Bus.Write(0x0401, 0x61);
+        machine.Bus.Write(0x0402, 0x41);
+        machine.Bus.Write(0x0403, 0x71);
+        Rows(target)[0][..4].Should().Be("a!A1", "without the alternate set, $61 and $71 are a flashing ! and 1");
+
+        machine.Bus.Write(0xC00F, value: 0);
+        Rows(target)[0][..4].Should().Be("aaAq", "the alternate set's $61 and $71 are inverse lowercase, $41 MouseText");
+    }
+
+    private static string[] Rows(Apple2DebugTarget target) =>
+        [.. (target.DisplayState(running: false)["rows"]?.AsArray() ?? throw new InvalidOperationException("No rows."))
+            .Select(row => row?.GetValue<string>() ?? "")];
+
     private static Apple2Bus Bus() =>
         new(Apple2Model.IIPlus, Apple2Roms.FromBoardChips(new byte[12288], new byte[2048]));
 

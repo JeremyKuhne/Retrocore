@@ -74,8 +74,7 @@ The conversion logs record problems a reader found that a checker could have:
 
 ## What other tools do
 
-Read from each project's manual or source. Kick Assembler, Merlin 32, lwasm, Ghidra and IDA could not be checked
-from a primary source and are left out.
+Read from each project's manual or source, where the manual's site could not be reached, from its repository.
 
 ### Assemblers
 
@@ -105,6 +104,20 @@ from a primary source and are left out.
   code assembled over it; overwriting assembled code fails unless `CLEAR`ed; `SKIPTO` fails going backwards.
 - **Asar** ([warnings](https://raw.githubusercontent.com/RPGHacker/asar/master/docs/manual/warnings-list.html)):
   named warnings, `warnings enable|disable|push|pull` in source, `check bankcross` for bank crossings.
+- **Kick Assembler** ([manual](https://theweb.dk/KickAssembler/webhelp/content/cpt_QuickReference.html)): its
+  `.assert` and `.asserterror` are unit tests, comparing a value or two blocks' bytes, or expecting an error, and
+  counted at the end ([testing](https://theweb.dk/KickAssembler/webhelp/content/cpt_Testing.html)). The build's
+  checks are memory blocks overlapping in a segment (an error unless `allowOverlap`, a warning with `-aom`) and a
+  segment's `min=`/`max=` ([segments](https://theweb.dk/KickAssembler/webhelp/content/ch10s11.html)). `.errorif`
+  fails on a condition; `-warningsoff` is the only warning switch; `-asminfo` gives editors errors and syntax.
+- **Merlin 32** ([page](https://www.brutaldeluxe.fr/products/crossdevtools/merlin/)): duplicate labels and macros
+  and unknown lines; follows the 65816's M and X widths from `MX`, `SEP` and `REP` line by line, and asks for an
+  `MX` after `PLP`, where it can't know them. No warning categories.
+- **lwasm** ([pragmas](https://www.lwtools.ca/manual/x681.html), [listings](https://www.lwtools.ca/manual/x861.html)):
+  pragmas in source or on the command line, stackable. `operandsizewarning` warns of an addressing mode larger than
+  needed, such as a long branch that could be short; pragma `6809` makes 6309 instructions errors. Listings show
+  cycle counts (`opt c`, by mode with `opt cd`, running totals with `opt ct`, `+?` where they vary). `testmode`
+  checks each line against expected bytes or errors in `;.` comments.
 - **vasm** ([manual](https://raw.githubusercontent.com/StarWolf3000/vasm-mirror/master/doc/vasm_main.texi)):
   `-nowarn=n`, `-wfail`, `-x` for undefined symbols; **DASM**, **WLA-DX**, **z88dk z80asm** and **6502.Net** add
   little beyond strict modes, assertions and unused-symbol listings.
@@ -115,7 +128,19 @@ from a primary source and are left out.
   traces from entry points and carries each flag's state (N, V, M, X, D, Z, I, C), merging where paths join. A
   known flag prunes a branch, which is shown as never taken. It follows the 65816's M, X and E and the data bank.
   It does not track the stack; `PLP` makes the flags unknown unless "smart PLP" finds the `PHP`. Tags mark code
-  starts, stops and inline data; cycle counts show `+` where a page crossing can add one.
+  starts, stops and inline data; cycle counts show `+` where a page crossing can add one. (Its "NiftyList" is a
+  source of IIgs symbol names, from Dave Lyons' utility, not an analysis.)
+- **Regenerator 2000** ([analysis](https://raw.githubusercontent.com/ricardoquesada/regenerator2000/main/docs/analysis.md)):
+  five passes that classify operands, find address tables (split low and high too), name labels by how they are
+  reached (`s_` subroutine, `j_` jump, `b_` branch, zero-page `zpa_`, `zpp_` and so on), keep cross-references by
+  kind (read, write, call, jump), and resolve `JMP (ind)` through known tables. The zero-page labels and
+  cross-references amount to a zero-page usage map.
+- **Ghidra** ([processors](https://github.com/NationalSecurityAgency/ghidra/tree/master/Ghidra/Processors),
+  [auto analysis](https://raw.githubusercontent.com/NationalSecurityAgency/ghidra/master/Ghidra/Features/Base/src/main/help/help/topics/AutoAnalysisPlugin/AutoAnalysis.htm)):
+  6502 and 65C02 (not the 65816), Z80, 8085 and 6809. Its generic analyzers apply: functions from calls, stack
+  frames from stack references, data references and the decompiler's parameters. How well they serve the 6502 was
+  not checked. **IDA** ([6502](https://docs.hex-rays.com/core/disassembler/disassembly-gallery/6502-and-65c02-disassembler))
+  disassembles the 6502, 65C02, Z80 and 6809; which of its analyses apply to them was not found.
 - **DeZog** ([reverse engineering](https://raw.githubusercontent.com/maziac/DeZog/main/documentation/ReverseEngineeringUsage.md)):
   disassembles from the PC, redoes it when memory there changes (`JP (HL)`, interrupts and self-modifying code
   are beyond it), draws call graphs and flowcharts, and takes `ASSERTION`, `WPMEM` and `LOGPOINT` comments.
@@ -141,16 +166,18 @@ from a primary source and are left out.
 | Warning categories and switches | 64tass, RGBDS, sjasmplus, Asar, vasm | Lint only; the assembler has errors alone |
 | Per-line and per-region suppression | sjasmplus (`id-ok`); RGBDS, Asar (push and pop) | `ignore=` for a file, a line, a `;;` block |
 | Unused and shadowed symbols | 64tass, ca65 `-W2`, DASM | No |
+| Larger addressing than needed | 64tass `optimize`, lwasm `operandsizewarning` | No |
 | Range and truncation | All, as errors; RGBDS leveled | Errors |
-| Page crossing and timing | 64tass `branch-page`, `.page`; SourceGen | Cycle counts in the debugger and hover |
+| Page crossing and timing | 64tass `branch-page`, `.page`; SourceGen and lwasm cycle counts | Cycle counts in the debugger and hover |
 | CPU bugs and wraps | 64tass, ACME | The ISA knows `indirect-page-wrap`; nothing warns |
-| Memory map and overlap | BeebAsm, ACME, Asar, sjasmplus, go6asm | No |
-| Link-time assertions | ca65, RGBDS | `.assert` after layout |
-| Reachability, code and data | SourceGen, DeZog, go6asm | `AnalysisEngine`, for disassembly and memory |
-| Flag and register dataflow | SourceGen (flags), SixtyPical | No |
+| Memory map and overlap | BeebAsm, ACME, Asar, sjasmplus, go6asm, Kick Assembler (`min`/`max`, overlap) | No |
+| Link-time assertions | ca65, RGBDS (Kick Assembler's `.assert` is a unit test) | `.assert` after layout |
+| Reachability, code and data | SourceGen, DeZog, go6asm, Regenerator 2000, Ghidra | `AnalysisEngine`, for disassembly and memory |
+| Flag and register dataflow | SourceGen (flags), SixtyPical; register widths in ca65 `.smart`, Merlin 32 | No |
 | Stack balance | None | No |
 | Calling contracts | SixtyPical | `Keeps:`/`Uses:` at run time |
-| Call graph | DeZog | References from analysis, not shown as a graph |
+| Call graph | DeZog, Ghidra | References from analysis, not shown as a graph |
+| Zero-page usage | Regenerator 2000 (typed labels) | No |
 
 No mainstream assembler checks register liveness, stack balance, self-modifying code or calling contracts. Those
 exist only in SourceGen, SixtyPical, go6asm's plans and compilers.

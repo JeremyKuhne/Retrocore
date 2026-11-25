@@ -14,7 +14,7 @@ Master HELLO's POKEd test. Documents cited: DOS33 and DOS31 (on the switches onl
   commands as CLR, NOP, SL0, SL1, SR and LD, and says they are his own, "in the absence of any labels and formats
   published by Apple". They are named in prose (D6), so the bibliography has no key for it.
 - The macros `ENTRY`, `READING`, `WRITING` and `SEQUENCER`, the generated `SEQ_xx`, and the language card finder's
-  `Status`, `Finder` and its locals are the SDK's own: renamed with no `Also:`.
+  `Status`, `Finder` and its locals are the SDK's own: renamed (but `Status`) with no `Also:`.
 
 ## Decisions
 
@@ -25,13 +25,14 @@ Master HELLO's POKEd test. Documents cited: DOS33 and DOS31 (on the switches onl
   `WaitOdd`, `WaitEven`).
 - D2. The boot ROM defines its six switches itself rather than including Dos/RwtsEquates.asm, which brings RWTS's
   variables and DOS's `DOS32` switch. Each switch's `Also:` cites DOS's name for the same switch with DOS's
-  documents (PHASEOFF, Q6L ...), beside the source's old name as UNKN.
+  documents (PHASEOFF, Q6L ...), beside the source's old name as UNKN where it differs (MOTORON is both).
 - D3. Page-zero bytes are aliases of IIeEquates' names (`BufferPointer = LowResBase`), as in DOS (P14). BITS, which
   holds a nibble, a half byte or a count by turns, is `Scratch`.
 - D4. Three routines, each one definition for both ROMs with `.if SECTORS` where they differ (the owner's D5):
   `Boot` (BOOT0), which falls into `ReadSector` (READ), and the 13-sector ROM's `PostNibble` (DENIB), which
-  `ReadSector`'s RTS reaches through the address `Boot` pushed. None returns to a caller, so none has `Keeps:`.
-  READ2 is `ReadSector::NextField`, listed as an entry. `ReadSector` asserts $C65C in the 16-sector build only,
+  `ReadSector`'s RTS reaches through the address `Boot` pushed on the boot's own read. Only the 13-sector
+  `ReadSector` returns to a caller (DOS 3.2's boot sector calls it at $Cn5D); none has `Keeps:`. READ2 is the local
+  `ReadSector::NextField`. `ReadSector` asserts $C65C in the 16-sector build only,
   since the 13-sector ROM's reader is at $C65D (Dos.md, X14's BRETRY).
 - D5. `SECTORS`, the SDK's build switch, is unchanged; `Boot.asm` asserts it is 13 or 16, the builds the digest tests
   check.

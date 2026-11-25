@@ -4,8 +4,8 @@
 ;; The two pages before RWTS, $B600-$B7FF where DOS runs ($3600-$37FF in the master image), hold the stages of a
 ;; boot that come after the Disk II's ROM, and the code that writes DOS to a disk for INIT. The boot chain:
 ;;
-;; - `BOOT 0`, the controller's ROM at $Cn00 (docs/DiskII.md), reads track 0 sector 0 and jumps into it with
-;;   X = slot * 16. DOS 3.3's 16-sector ROM (Boot16.asm) reads it into $0800 and jumps to $0801; its sector reader,
+;; - `BOOT 0`, the controller's ROM at $Cn00 (docs/DiskII.md), reads track 0 sector 0 and jumps into it, leaving
+;;   slot * 16 in $2B. DOS 3.3's 16-sector ROM (Boot16.asm) reads it into $0800 and jumps to $0801; its sector reader,
 ;;   <Boot16:ReadSector> at $Cn5C, can be called again: it reads the sector in $3D into the page in $27 and comes back
 ;;   to $0801. DOS 3.2's 13-sector ROM (Boot13.asm) reads it into $0300, rebuilds its bytes from the 5-and-3 nibbles,
 ;;   and jumps to $0301; its reader, at $Cn5D, reads the sector in $3D into the page in $27 and $0800 as five-bit

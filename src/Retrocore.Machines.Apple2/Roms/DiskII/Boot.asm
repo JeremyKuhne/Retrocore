@@ -7,8 +7,8 @@
 ;; The 256 bytes a Disk II controller shows at $Cn00-$CnFF in slot n, the first stage of starting a disk,
 ;; "BOOT 0". `PR#n`, or the IIe's boot scan at power-on, runs it (<Boot>), and it runs from any slot. It turns on
 ;; drive 1, moves the head to track 0, reads track 0 sector 0, the boot sector ("BOOT 1"), into <BootSector> and
-;; jumps to the boot sector's second byte with X = slot * 16. For 16 sectors that is $0800-$08FF and $0801; for 13,
-;; $0300-$03FF and $0301.
+;; jumps to the boot sector's second byte. For 16 sectors that is $0800-$08FF and $0801, with X = slot * 16; for 13,
+;; $0300-$03FF and $0301, with X = 51, and the boot sector reads the slot from <SlotTimes16>.
 ;;
 ;; Everything on the disk is in nibbles: bytes with the top bit set, chosen so the hardware can always find
 ;; where each one starts. The ROM first builds the table that turns a nibble back into its bits, then reads.
@@ -247,7 +247,8 @@ LOW_BITS_SIZE = 86
 ;; Also: STEPDELAY (UNKN)
 STEP_DELAY = $56
 
-;; The half-track steps <Boot> takes toward track 0, 80 in all: more than the 35 tracks' 70 half-tracks.
+;; The count <Boot> starts its half-track steps from, 80: it counts down to 0, so it takes 81 steps toward track 0,
+;; more than the 35 tracks' 70 half-tracks.
 STEP_COUNT = 80
 
 .org $C600
@@ -353,7 +354,7 @@ NotValid:
     lda SelectDrive1,x
     lda MotorOn,x
 
-    ; Moves the head out to track 0. Nothing tells the card where the head is, so it steps outward 80 times, half a
+    ; Moves the head out to track 0. Nothing tells the card where the head is, so it steps outward 81 times, half a
     ; track each, more than the 35 tracks there are; the head stops against track 0 and stays there. Each step
     ; turns off the phase before (X still indexes it) and turns on the next phase down: 0, 3, 2, 1, 0, 3, ...
     ldy #STEP_COUNT
@@ -392,9 +393,12 @@ Seek:
 .endif
 .endproc
 
-;; Reads sector <Sector> into the page at <BufferPointer>, checking for 16 sectors that it is on track `Track`, and
-;; never returns: for 16 sectors it ends at the boot sector, $0801, and the boot sector calls it again for each
-;; sector it loads; for 13 it ends in `PostNibble`.
+;; Reads sector <Sector> into the page at <BufferPointer>, checking for 16 sectors that it is on track `Track`.
+;;
+;; For 16 sectors it never returns: it ends at the boot sector, $0801, and the boot sector jumps to it again for each
+;; sector it loads. For 13 it ends in an RTS, still holding the sector as five-bit values: on the boot's own read,
+;; the RTS goes to `PostNibble`, whose address <Boot> pushed, and DOS 3.2's boot sector calls it as a subroutine at
+;; $Cn5D, so there the RTS returns to the caller.
 ;;
 ;; It reads nibbles until it finds a field's prologue, D5 AA, and the mark that says which field it is. The carry,
 ;; saved on the stack, is clear while it looks for the sector's address field and set once it has found it, when the
@@ -404,8 +408,6 @@ Seek:
 ;; For 16 sectors, at the end, <BufferPointer> and <Sector> have moved on a page and a sector, and X is
 ;; <SlotTimes16>. While the sector count in <BootSector>'s first byte is not reached, it reads the next sector itself.
 ;; In: X = <SlotTimes16>
-;; Entry:
-;;   NextField = goes on to the field the carry asks for: set for the data field, clear for an address field
 ;; Also: READ (UNKN)
 .proc ReadSector
 .if SECTORS = 16
@@ -549,7 +551,7 @@ WaitChecksum:
     eor ReadTranslate,y
 .if SECTORS = 13
     bne ReadSector
-    rts                             ; to PostNibble, with A = 0
+    rts                             ; with A = 0: to PostNibble on the boot's read, or the caller
 .else
 
 ;; Reads the sector again after a bad checksum, or reads the next one.
@@ -581,7 +583,7 @@ NextLowBits:
     bne NextLowBits
 
     ; The next sector goes in the next page, until the boot sector's count is read; then the boot sector runs. While
-    ; there are more, ReadNext's BNE goes back to ReadSector: the CMP found Sector below the count, so they differ.
+    ; there are more, ReadNext's BNE goes back to ReadSector: the LDX of the slot times 16, never 0, clears zero.
     inc BufferPointer + 1
     inc Sector
     lda Sector
@@ -597,12 +599,12 @@ NextLowBits:
 
 ;; Rebuilds the first 153 bytes of the 13-sector ROM's boot sector and runs it, or prints ERR.
 ;;
-;; It makes three passes of <GROUP_COUNT>: each byte is its five-bit value shifted up three places, with bits 4-2 of
-;; its <LowBits> value below. Bits 0 and 1 of the <LowBits> value go to <SpareBit0> and <SpareBit1>, three to a byte
-;; over the passes, for the boot sector's code to finish the other bytes. The boot sector's first byte must be $99,
-;; the 153 bytes rebuilt, to show it was written for this ROM; then it runs at its second byte, and otherwise
-;; <PrintError> prints ERR. <ReadSector>'s RTS comes here, with the ROM's page and this routine's address less one
-;; pushed by <Boot>.
+;; It makes three passes of <GROUP_COUNT>: each byte is its five-bit value shifted up three places, with bits 4-2 of its
+;; <LowBits> value below. Bits 0 and 1 of the <LowBits> value go to <SpareBit0> and <SpareBit1>, three to a byte over
+;; the passes, for the boot sector's code to finish the other bytes. The boot sector's first byte must be $99, the 153
+;; bytes rebuilt, to show it was written for this ROM; then it runs at its second byte, and otherwise <PrintError>
+;; prints ERR. <ReadSector>'s RTS comes here on the boot's own read, with the ROM's page and this routine's address less
+;; one pushed by <Boot>.
 ;; In: A = 0, PassCount = 3
 ;; Also: DENIB (UNKN)
 .proc PostNibble

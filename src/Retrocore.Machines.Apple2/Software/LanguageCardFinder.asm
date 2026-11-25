@@ -7,7 +7,7 @@
 ;; its names are the SDK's own. SystemMasterBasicTests pin it by digest.
 ;;
 ;; A language card puts 16K of RAM in place of the ROM at $D000-$FFFF: two 4K banks at $D000-$DFFF and 8K at
-;; $E000-$FFFF. Its switches, at $C080-$C08F, are in ../Roms/System/IIeEquates.asm.
+;; $E000-$FFFF. Its switches are at $C080-$C08F; ../Roms/System/IIeEquates.asm names the ones this test reads.
 
 .cpu Mos6502
 
@@ -38,9 +38,9 @@ Status:
 ;; Tests whether language card bank 2 keeps two values written at <BankByte>.
 ;;
 ;; If the byte read at <SharedByte> under the current mapping differs from the ROM's, the write test is skipped. The
-;; test overwrites <BankByte> without restoring it. At the end it selects bank 2 RAM for reading, with writes off, if
-;; the byte first read at <SharedByte> is not the ROM's; otherwise it leaves the ROM selected, with bank 2 RAM
-;; write-enabled after a test that passed.
+;; test overwrites <BankByte> without restoring it. At the end it compares the byte first read at <SharedByte> with
+;; <SharedByte> under the mapping it has left: the ROM after a skipped or passed test, bank 2 RAM after a failed
+;; write. If they match it keeps that mapping; otherwise it selects bank 2 RAM for reading, with writes off.
 ;; Out:   Status = <STATUS_FOUND> if both values read back, otherwise <STATUS_NOT_FOUND>
 ;; Uses:  A, BankByte
 ;; Keeps: X, Y
@@ -80,7 +80,7 @@ Failed:
 StoreStatus:
     sta Status
 
-    ; Leave the ROM selected if the original byte was the ROM's; otherwise select bank 2 RAM.
+    ; Keep the current mapping if it shows the original byte; otherwise select bank 2 RAM.
     pla
     cmp SharedByte
     beq Done

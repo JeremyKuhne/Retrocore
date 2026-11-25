@@ -140,8 +140,8 @@ UNIT_SLOT_7_DRIVE_1 = $70
 
 ; Memory the boot uses.
 
-;; Three bytes below the boot buffer where the boot writes a JMP to <Driver>, which ProDOS's boot block calls to read
-;; the rest of its loader.
+;; Three bytes below the boot buffer where the boot writes a JMP to <Driver>: a trampoline into the driver in RAM for
+;; the disk's bootstrap.
 BootTrampoline = $07FD
 
 ;; The opcode of JMP absolute, for <BootTrampoline>.
@@ -202,7 +202,8 @@ SIGNATURE_03 = $00
 ;; At $C705: a disk controller.
 SIGNATURE_05 = $03
 
-;; At $C707: $3C, not $00: a disk controller that is not a SmartPort, which the original IIe's ROM checks.
+;; At $C707: $3C, not $00: a disk controller that is not a SmartPort, which the Autostart and original IIe Monitors
+;; check.
 SIGNATURE_07 = $3C
 
 ;; Boots the mounted disk: reads blocks 0 and 1 to $0800-$0BFF through <Driver>, then runs the disk's bootstrap at

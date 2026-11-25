@@ -182,17 +182,19 @@ BlockCountHigh = $C089
 
 ; The ProFile's responses, which say what it is ready for, and the card's answers.
 
-;; Ready for a command's six bytes.
-RESPONSE_COMMAND = 1
+;; The response while idle: ready for a command's six bytes (ProFileDrive.ReadyForCommand).
+RESPONSE_READY_FOR_COMMAND = 1
 
-;; Read the block: its status and data are ready.
+;; The response to a read command: the ProFile reads the block when the card goes on, then has its status and data
+;; ready (ProFileDrive.ReadResponse).
 RESPONSE_READ = 2
 
-;; Ready for a write's 512 bytes.
-RESPONSE_WRITE_DATA = 3
+;; The response to a write command: ready for the write's 512 bytes (ProFileDrive.WriteResponse).
+RESPONSE_WRITE = 3
 
-;; Wrote the block: its status is ready.
-RESPONSE_WRITTEN = 6
+;; The response once a write's data is in: the ProFile writes the block when the card goes on, then has its status
+;; ready (ProFileDrive.WriteDataResponse).
+RESPONSE_WRITE_DATA = 6
 
 ;; The card's answer to go on.
 ANSWER_GO_ON = $55
@@ -234,7 +236,7 @@ SIGNATURE_07 = $3C
 
 ;; Boots the ProFile: reads block 0 to $0800 through <Driver>, which returns to <FinishBoot>.
 ;;
-;; It finds its slot from the return address an RTS in the Monitor leaves on the stack, and pushes <FinishBoot> in
+;; It finds its slot from the return address its JSR to an RTS in the Monitor leaves just below the stack pointer, and pushes <FinishBoot> in
 ;; this slot's page as the driver's return address. It points <SlotPointer>/<LOC1> at this slot, as the startup scan
 ;; does, so that a failed boot can go on with the scan, however the card was started.
 .proc Boot
@@ -289,8 +291,9 @@ SIGNATURE_07 = $3C
 
 ;; The ProDOS block-device entry: performs the command in the zero-page mailbox.
 ;;
-;; Its address's low byte is at $CnFF, where ProDOS finds it. A format, which a ProFile needs none of, and the
-;; commands above it, which don't exist, succeed without doing anything.
+;; Its address's low byte is at $CnFF, where ProDOS finds it. With a ProFile, a format, which a ProFile needs none of,
+;; and the commands above it, which don't exist, succeed without doing anything; with none, every command returns
+;; <ERROR_NO_DEVICE> with X = the slot times 16.
 ;; In:    Command = <COMMAND_STATUS>, <COMMAND_READ>, <COMMAND_WRITE> or <COMMAND_FORMAT>; UnitNumber = the slot,
 ;;          Buffer/BufferHigh = the buffer, Block/BlockHigh = the block number
 ;; Out:   A = 0 or a ProDOS error code, carry = clear on success, set on error,
@@ -319,7 +322,7 @@ SIGNATURE_07 = $3C
 Transfer:
     cmp #COMMAND_FORMAT
     bcs Succeed
-    ldy #RESPONSE_COMMAND
+    ldy #RESPONSE_READY_FOR_COMMAND
     bne Handshake
 .endproc
 
@@ -340,7 +343,7 @@ Transfer:
     sta DataOut,x                   ; the retry count
     sta DataOut,x                   ; the sparing threshold
     ldy Command
-    iny                             ; RESPONSE_READ for a read, RESPONSE_WRITE_DATA for a write
+    iny                             ; RESPONSE_READ for a read, RESPONSE_WRITE for a write
     bne Handshake
 .endproc
 
@@ -360,7 +363,7 @@ SecondPage:
     iny
     bne SecondPage
     dec BufferHigh
-    ldy #RESPONSE_WRITTEN
+    ldy #RESPONSE_WRITE_DATA
     ; Falls into Handshake.
 .endproc
 
@@ -384,10 +387,10 @@ WaitForDone:
 
     ; Goes on from the response.
     dey
-    beq SendCommand                 ; RESPONSE_COMMAND
+    beq SendCommand                 ; RESPONSE_READY_FOR_COMMAND
     dey
     dey
-    beq SendData                    ; RESPONSE_WRITE_DATA
+    beq SendData                    ; RESPONSE_WRITE
     ; Falls into ReadResult.
 .endproc
 

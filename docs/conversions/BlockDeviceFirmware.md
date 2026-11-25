@@ -22,9 +22,9 @@ none. `Apple2ProFileTests.FirmwareBytesAreUnchanged` (added before the conversio
 - B4. The ProDOS mailbox ($42-$47) is locations: `Command`, `UnitNumber`, and the two-byte `Buffer`/`BufferHigh` and
   `Block`/`BlockHigh` (the Name/NameHigh rule). It stays equates in each file, not a struct: the code addresses its
   bytes directly, and there is no copy of the layout to tie to one.
-- B5. Codes are prefixed constants: `COMMAND_*`, `ERROR_*`, the ProFile's `RESPONSE_*` and `ANSWER_*`, the capability
-  bits `CAPABILITY_*` (with `ONE_VOLUME` for the volume-count field). Slot 7's exported write bit is
-  `CAPABILITY_WRITE` in C# too (`Slot7Rom.CAPABILITY_WRITE`).
+- B5. Codes are prefixed constants: `COMMAND_*`, `ERROR_*`, the ProFile's `RESPONSE_*` (named as ProFileDrive's C#
+  constants name the same responses) and `ANSWER_*`, and the capability bits `CAPABILITY_*` (with `ONE_VOLUME` for
+  the volume-count field). Slot 7's exported write bit is `CAPABILITY_WRITE` in C# too (`Slot7Rom.CAPABILITY_WRITE`).
 - B6. The signature bytes the boot's first loads carry are named by their offset in the page (`SIGNATURE_01` ...
   `SIGNATURE_07`), and the constants a value stands for are named (`OPCODE_LDY_IMMEDIATE`, `OPCODE_JMP`, `BOOT_PAGE`,
   `UNIT_SLOT_7_DRIVE_1`); the slot mask `$70` stays a number in the code, with the unit number's layout on
@@ -38,9 +38,12 @@ none. `Apple2ProFileTests.FirmwareBytesAreUnchanged` (added before the conversio
 
 ## Found in the conversion and documented
 
-- The ProFile `Driver`'s `Out:` said "otherwise X = the slot times 16" inside the status entry, so the debugger's
-  `Uses:` check didn't see that a read or write changes X. It is now an entry per register. The driver also keeps the
-  mailbox (`BufferHigh` is stepped and restored), which its `Keeps:` now says.
+- The ProFile `Driver`'s `Out:` gives each register its own entry (X is the block count's low byte for status, the
+  slot times 16 otherwise), replacing a `Uses: A, X, Y` that said less. The driver also keeps the mailbox
+  (`BufferHigh` is stepped and restored), which its `Keeps:` now says; a debugger run with contract and `Uses:`
+  checking on the IIe, Enhanced IIe and II Plus found nothing broken, and a false `Keeps:` added as a control was
+  reported.
+- With no ProFile, every command, format included, returns `ERROR_NO_DEVICE`.
 - Slot 7's status reads `CommandPort` twice, once through the read and write path; kept, as before.
 
 ## Renames
@@ -59,7 +62,7 @@ none. `Apple2ProFileTests.FirmwareBytesAreUnchanged` (added before the conversio
 | BootPage | BOOT_PAGE | both (Slot 7's was a number) |
 | Status | CardStatus | ProFile |
 | CommandLow, CommandHigh | CommandOff, CommandOn | ProFile |
-| ReadyResponse, ReadResponse, WriteResponse, WrittenResponse | RESPONSE_COMMAND, RESPONSE_READ, RESPONSE_WRITE_DATA, RESPONSE_WRITTEN | ProFile |
+| ReadyResponse, ReadResponse, WriteResponse, WrittenResponse | RESPONSE_READY_FOR_COMMAND, RESPONSE_READ, RESPONSE_WRITE, RESPONSE_WRITE_DATA | ProFile |
 | Acknowledge, Refuse | ANSWER_GO_ON, ANSWER_REFUSE | ProFile |
 | FormatCommand | COMMAND_FORMAT | ProFile |
 | IoError, NoDevice | ERROR_IO, ERROR_NO_DEVICE | ProFile |
@@ -79,3 +82,7 @@ none. `Apple2ProFileTests.FirmwareBytesAreUnchanged` (added before the conversio
 - Q1. The ProDOS mailbox, commands, errors and capability bits are defined in each card ROM (the 3.5 controller's and
   the mouse's not yet converted). A shared include for every ProDOS block-device ROM would need the generator's
   `AdditionalFiles` to take it; left for when the other card ROMs are converted.
+- Q2. With both named `Driver` (B3), the debugger resolves a typed `Driver` to the first module where it is
+  active: slot 7's, when a disk is mounted there, even with a ProFile card installed (before, slot 7's was
+  `DriverEntry`). Clashes between modules are allowed (ConvertingSources.md); a distinct name such as
+  `ProFileDriver` would avoid it.

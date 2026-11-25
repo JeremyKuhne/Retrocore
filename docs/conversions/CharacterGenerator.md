@@ -23,8 +23,8 @@ cited: none. Glyph data, not code.
 - G2. The build switches `IIBOARD` and `ENHANCED`, which C# predefines (`SdkModules.AssembleSystem`), are unchanged,
   as DOS's `MASTER` and `YEAR` were ([Dos.md](Dos.md), X13).
 - G3. The macros are PascalCase: `GLYPH` is `Glyph` and `ROW` is `Row`. The set macros are named for what they draw,
-  with `Glyphs` appended: `UppercaseGlyphs`, `SymbolGlyphs`, `LowercaseGlyphs`, and `MouseTextGlyphs`, which the
-  Enhanced IIe's set, written inline before, now is too. `MouseText` alone would be a definition the IIe firmware's
+  with `Glyphs` appended: `UppercaseGlyphs`, `SymbolGlyphs`, `LowercaseGlyphs`, and `MouseTextGlyphs` for the
+  Enhanced IIe's set, which was written inline before. `MouseText` alone would be a definition the IIe firmware's
   prose names as a plain word throughout, and the lint would ask it to be linked there.
 - G4. The drawing state's `.set` variables: `Row` (the row being drawn) is `GlyphRow`, clear of the `Row` macro; `Lit`
   is `Dots`; `Flash` is `HighBit`, which now holds the bit's value ($00 or $80) rather than 0 or 1, since the II's codes
@@ -43,5 +43,5 @@ cited: none. Glyph data, not code.
 ## Checks
 
 - Byte identity of all three builds: the digests named above.
-- No contract run: the chips are data the video circuit reads, with no code for the debugger to execute. Booting the
-  II and II Plus on the SDK's ROMs (`SdkRomsStartBasic`) draws text through the II's chip.
+- No contract run: the chips are data the video circuit reads, with no code for the debugger to execute. Only the
+  digests check the glyphs.

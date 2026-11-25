@@ -194,7 +194,7 @@ public class Apple2PlusTests
     ///  seven-bit code's letter.
     /// </summary>
     [TestMethod]
-    public void TheIIesTextRowsKeepLowercaseAndMouseText()
+    public void TheIIesTextRowsReadFlashingTextAndKeepLowercaseAndMouseText()
     {
         Apple2Machine machine = new(Apple2Model.IIeEnhanced, SdkModules.BuildRoms(Apple2Model.IIeEnhanced, s_inputs));
         using Apple2DebugTarget target = new(machine, Apple2Model.IIeEnhanced);

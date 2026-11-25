@@ -20,6 +20,10 @@ const roms = process.env.RETROCORE_IIPLUS_ROMS
     || join(process.env.RETROCORE_CACHE || join(homedir(), "Retrocore"), "apple2-roms", "APPLE II+");
 const dumps = existsSync(join(roms, "APPLE II+ - 341-0020 - APPLESOFT BASIC AUTOSTART MONITOR F800 - 2716.bin"));
 
+// The launches on the dumps name them; one without romDirectory must run the SDK's ROMs, not the dumps the adapter
+// would otherwise find through this variable.
+delete process.env.RETROCORE_IIPLUS_ROMS;
+
 const { request, event, events, fail, close, failure: failed } = startDap(root);
 const timeout = setTimeout(() => fail(new Error("II Plus DAP integration timed out.")), 60000);
 const screen = async () => (await request("apple2/text")).rows.join("\n");

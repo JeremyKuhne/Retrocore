@@ -105,10 +105,24 @@ internal static class Apple3SdkModules
     /// </summary>
     internal const int BusinessBasicSize = 25963;
 
-    private static AssemblyResult Assemble(string path, int origin, int size, string? text = null)
+    /// <summary>
+    ///  Assembles the SoftCard ///'s 256-byte address mapping PROM.
+    /// </summary>
+    /// <param name="path">The <c>SoftCard3Prom.asm</c> source.</param>
+    /// <returns>The PROM's bytes.</returns>
+    /// <exception cref="InvalidDataException">The source has errors.</exception>
+    internal static byte[] AssembleSoftCard3Prom(string path) =>
+        Assemble(path, 0, SoftCard3PromSize, cpu: "Z80").Sections[0].Bytes.ToArray();
+
+    /// <summary>
+    ///  The size of the SoftCard ///'s mapping PROM.
+    /// </summary>
+    internal const int SoftCard3PromSize = 0x100;
+
+    private static AssemblyResult Assemble(string path, int origin, int size, string? text = null, string cpu = "Mos6502")
     {
         string full = Path.GetFullPath(path);
-        AssemblyOptions options = new("Mos6502", origin, size)
+        AssemblyOptions options = new(cpu, origin, size)
         {
             SourceResolver = new FileAssemblySourceResolver()
         };

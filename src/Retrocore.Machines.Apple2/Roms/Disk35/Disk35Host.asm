@@ -75,15 +75,15 @@ SecondModelId = $FBC0
 IdentifyIIgs = $FE1F
 
 ;; The IIgs's shadowing register: 0 shadows every bank 0 and 1 display page in banks $E0 and $E1.
-;; Also: SHADOW (UNKN)
+;; Also: SHADOW (IIGSFR87)
 Shadow = $C035
 
 ;; The IIgs's speed register: bit 7 set for full speed.
-;; Also: CYAREG (UNKN)
+;; Also: CYAREG (IIGSFR87)
 SpeedRegister = $C036
 
 ;; The IIgs's state register, which holds what is written to it; a IIe has no register there.
-;; Also: STATEREG (UNKN)
+;; Also: STATEREG (IIGSFR87)
 StateRegister = $C068
 
 ;; The bit in <SpeedRegister> for full speed.

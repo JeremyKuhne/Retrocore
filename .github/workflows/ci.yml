@@ -156,3 +156,11 @@ jobs:
           # runs first there, before anything else has opened an editor.
           xvfb-run -a npm run test:editor
           xvfb-run -a npm run test:memory-integration
+
+      - name: Upload VS Code logs
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: vscode-logs
+          path: Retrocore/artifacts/vscode-m1-tests/profile/logs
+          if-no-files-found: ignore

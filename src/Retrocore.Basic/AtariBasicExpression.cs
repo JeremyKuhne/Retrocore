@@ -20,8 +20,11 @@ namespace Retrocore.Basic;
 ///   a number is the constant's (- -1 is 1, and - - 1 is refused); AND is above OR. A comparison is 1 or 0. AND, as
 ///   OPERATOR_AND, ANDs the exponent bytes, so 1 AND 0.5 is 0. A name that starts with NOT, AND or OR where that
 ///   operator can go is the operator and a name, as MATCH_OPERATOR reads it: NOTE1 is NOT E1, and NOTA$="X" is
-///   NOT (A$="X"), though NOTA$ alone is the string, as the grammar falls back to it when NOT's operand fails. A
-///   string that no DIM has given room is error 9, and its substring error 5, its length being 0.
+///   NOT (A$="X"), though NOTA$ alone is the string, as the grammar falls back to it when NOT's operand fails, and
+///   NOTSIN+1 is the name NOTSIN plus 1, SIN having no (. A function's name is never a variable here, where
+///   SYNTAX_VARIABLE takes one as a name before a character from '0' up, the end of the line among them, so that
+///   NOTSIN alone is NOT SIN on the machine and the name NOTSIN here. A string that no DIM has given room is error 9,
+///   and its substring error 5, its length being 0.
 ///   <c>A(i)</c> and <c>A(i,j)</c> are array elements, counting from 0, <c>A(i)</c> being <c>A(i,0)</c>;
 ///   <c>A$(i)</c> is the string from character i and <c>A$(i,j)</c> characters i to j, counting from 1, never empty.
 ///   Subscripts, indexes and the arguments of PEEK and CHR$ round to an integer from 0 to 65535, or are error 3; a
@@ -39,6 +42,13 @@ internal sealed class AtariBasicExpression
 
     private static readonly string[] s_operators = ["<>", ">=", "<=", "=", "<", ">", "+", "-", "*", "/", "^", "(", ")", ","];
     private static readonly HashSet<string> s_refused = ["RND", "USR", "FRE", "ADR", "PADDLE", "STICK", "PTRIG", "STRIG"];
+
+    // The functions' names, from the operator name table.
+    private static readonly HashSet<string> s_functions =
+    [
+        "STR$", "CHR$", "USR", "ASC", "VAL", "LEN", "ADR", "ATN", "COS", "PEEK", "SIN", "RND", "FRE", "EXP", "LOG",
+        "CLOG", "SQR", "SGN", "ABS", "INT", "PADDLE", "STICK", "PTRIG", "STRIG"
+    ];
 
     // DEGFLG, the OS's flag that DEG sets for SIN, COS and ATN: 0 for radians.
     private const int DegreesFlag = 0xFB;
@@ -180,17 +190,23 @@ internal sealed class AtariBasicExpression
         if (Take("+")) { return Rounded(Number(Operand())); }
         int at = _at;
         string? whole = Peek();
-        bool stringName = whole is { Length: > 3 } && whole.EndsWith('$');
-        if (TakeWord("NOT"))
+        if (TakeWord("NOT") && whole is { Length: > 3 })
         {
             // NOT$ is no name, as SYNTAX_VARIABLE refuses an operator's name with a character below '0' after it.
             if (whole == "NOT$") { throw Syntax("NOT$ is not a name"); }
 
-            // NOT and a string name, as NOTA$, is NOT's operand only in a comparison; otherwise RULE_EXPRESSION's
-            // NOT fails, and the grammar takes the whole name as a string. It decides by the grammar, not the values.
-            if (!stringName || whole is null || ComparisonFollows(at)) { return Truth(Number(Operand()) == 0); }
+            // The rest of the name is NOT's operand where the grammar takes it as one; otherwise RULE_EXPRESSION's
+            // NOT fails, and the grammar takes the whole name. A string name, as NOTA$, is an operand only with a
+            // relation after it and its indexes; a function's name, as NOTSIN or NOTCHR$, only with its (. It decides
+            // by the grammar, not the values.
+            string rest = _tokens[at];
+            bool function = s_functions.Contains(rest) && (at + 1 >= _tokens.Count || _tokens[at + 1] != "(");
+            if (!function && (!whole.EndsWith('$') || ComparisonFollows(at))) { return Truth(Number(Operand()) == 0); }
             _tokens[at] = whole;
+            return Operand();
         }
+
+        if (whole == "NOT" && _at > at) { return Truth(Number(Operand()) == 0); }
 
         return Operand();
     }

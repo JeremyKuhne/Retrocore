@@ -217,6 +217,79 @@ public sealed class DocumentationBuildTests
     }
 
     /// <summary>
+    ///  The body of a macro defined in a branch the build leaves out is only in other builds, though the build defines a
+    ///  macro of the same name in its own branch, and though the macro has no documentation.
+    /// </summary>
+    [TestMethod]
+    public void AMacrosBodyFollowsItsOwnDefinitionsBranch()
+    {
+        const string Branches = """
+            ;; Reads <First>, and <Second>.
+            Reader:
+                rts
+
+            .if MODEL = 1
+            ;; Defines model 1's table.
+            .macro Table
+            ;; Model 1's first byte.
+            First:
+                .byte 1
+            .endmacro
+            .else
+            ;; Defines model 2's table.
+            .macro Table
+                .byte 2
+            .endmacro
+            .macro Spare
+            ;; A byte only model 2's undocumented macro defines.
+            Second:
+                .byte 3
+            .endmacro
+            .endif
+            """;
+
+        DocumentationSet one = Build(Branches, model: 1);
+        DocumentationSet two = Build(Branches, model: 2);
+        Resolve(one, "Reader", "Second").OnlyInOtherBuilds.Should().BeTrue("model 1 skips the undocumented Spare");
+        Resolve(two, "Reader", "First").OnlyInOtherBuilds.Should().BeTrue("model 2 defines its own Table");
+        Resolve(one, "Reader", "First").Topic?.Name.Should().Be("First");
+        Resolve(two, "Reader", "Second").Topic?.Name.Should().Be("Second");
+    }
+
+    /// <summary>
+    ///  An old name a macro's body gives but that can't reach its definition, as one named by a parameter, resolves in
+    ///  a build as before.
+    /// </summary>
+    [TestMethod]
+    public void AnOldNameInAMacrosBodyResolvesAsBefore()
+    {
+        const string Named = """
+            ;; Defines an entry.
+            .macro Entry name
+            ;; The entry.
+            ;; Also: OLD (TEST)
+            name:
+                rts
+            .endmacro
+
+            ;; Calls <OLD>.
+            Caller:
+                rts
+
+                Entry Start
+            """;
+
+        AssemblyResult result = Assemble(Named, model: 1);
+        DocumentationSet set = DocumentationSet.Create([DocumentationParser.Parse(Named, "test.asm")], result);
+        DocumentationSet unknown = DocumentationSet.Create([DocumentationParser.Parse(Named, "test.asm")], result.Symbols);
+        DocumentationTarget before = new DocumentationResolver(unknown).Resolve(Required(unknown.Find("Caller")), "OLD");
+        DocumentationTarget after = new DocumentationResolver(set).Resolve(Required(set.Find("Caller")), "OLD");
+        after.OnlyInOtherBuilds.Should().BeFalse();
+        after.Kind.Should().Be(before.Kind);
+        after.Topic?.Name.Should().Be(before.Topic?.Name);
+    }
+
+    /// <summary>
     ///  A scope a <c>.using</c> directive names passes over a name only another build defines in it.
     /// </summary>
     [TestMethod]

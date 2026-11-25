@@ -672,15 +672,14 @@ public sealed class DocumentationSet
     /// <param name="comment">The comment.</param>
     /// <returns>Whether the build assembles it; true when the assembly's definitions are not known.</returns>
     internal bool CommentAssembled(DocumentationComment comment) =>
-        comment.Macro is not { } macro
+        comment.Macro is null
             ? CommentInBuild(comment)
-            : Expansions(comment) is not 0 || MacroInBuild(macro);
+            : Expansions(comment) is not 0 || MacroInBuild(comment);
 
-    // Whether the build defines a macro: a documented macro's definition is in the branch it takes. An undocumented
-    // one can't be told, so it counts.
-    private bool MacroInBuild(string macro) =>
-        Find(macro) is not { Kind: DocumentationKind.Macro } topic
-            || topic.Comments.Any(comment => comment.Macro is null && CommentInBuild(comment));
+    // Whether the build defines the macro whose body holds a comment: the assembly didn't skip its .macro line, which
+    // goes with the definition, not its expansions. A line the report can't tell counts.
+    private bool MacroInBuild(DocumentationComment comment) =>
+        comment.MacroLine < 0 || _skipped?.InBuild(comment.Path, comment.MacroLine) != false;
 
     /// <summary>
     ///  Gets every historical name the topics give.

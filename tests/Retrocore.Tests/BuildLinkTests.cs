@@ -100,10 +100,10 @@ public sealed class BuildLinkTests
         {
             foreach (DocumentationComment comment in topic.Comments)
             {
-                // A macro's own comment is in every build that includes its file; a comment in its body only where the
-                // build expands that line; any other only where the build takes its branch.
+                // A comment in a macro's body is assembled where the build expands its line; any other, a macro's own
+                // among them, where the build takes its branch.
                 bool assembled = comment.Macro is not null ? set.Expansions(comment) > 0 : set.CommentInBuild(comment);
-                if (topic.Kind != DocumentationKind.Macro && !assembled) { continue; }
+                if (!assembled) { continue; }
 
                 string[] texts = [comment.Summary, .. comment.Remarks, .. comment.Sections.Select(section => section.Text)];
                 foreach (DocumentationLink link in texts.SelectMany(DocumentationText.Links))

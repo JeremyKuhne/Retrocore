@@ -356,6 +356,7 @@ public static partial class DocumentationParser
             IsTrailing = isTrailing,
             Usings = tracker.Current.Usings,
             Macro = tracker.Macro,
+            MacroLine = tracker.MacroLine,
             NamedByParameter = parameter,
             LocalToExpansion = local
         };

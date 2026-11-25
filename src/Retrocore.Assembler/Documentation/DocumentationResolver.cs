@@ -293,9 +293,14 @@ public sealed partial class DocumentationResolver
     private DocumentationTarget? Also(DocumentationSet set, string name)
     {
         IReadOnlyList<DocumentationTopic> also = set.FindAlso(name, thisBuild: ReferenceEquals(set, Current));
-        if (ReferenceEquals(set, Current) && Current.KnowsBuild && also.Count != 0)
+        // A definition both builds have may give the name in a branch the build leaves out.
+        bool OnlyElsewhere(DocumentationTopic topic) =>
+            Current.InOtherBuild(topic)
+                || (Current.KnowsBuild && Current.Gives(topic, name) && !Current.Gives(topic, name, thisBuild: true));
+
+        if (ReferenceEquals(set, Current) && also.Any(OnlyElsewhere))
         {
-            also = [.. also.Where(topic => !Current.InOtherBuild(topic) && Current.Gives(topic, name, thisBuild: true))];
+            also = [.. also.Where(topic => !OnlyElsewhere(topic))];
             if (also.Count == 0) { return OtherBuild(name); }
         }
 

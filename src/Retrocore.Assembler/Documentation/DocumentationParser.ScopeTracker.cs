@@ -18,8 +18,9 @@ public static partial class DocumentationParser
         private DocumentationScopes? _current;
 
         // The macro bodies open around the line, innermost last, with the names that differ in each expansion (the
-        // macro's parameters and its .local names) and how many named scopes were open where its definition began.
-        private readonly List<(string Name, HashSet<string> Parameters, HashSet<string> Locals, int Depth)> _macros = [];
+        // macro's parameters and its .local names), how many named scopes were open where its definition began, and
+        // the line of its .macro directive.
+        private readonly List<(string Name, HashSet<string> Parameters, HashSet<string> Locals, int Depth, int Line)> _macros = [];
 
         /// <summary>
         ///  Gets the names of the open named scopes, outermost first.
@@ -30,6 +31,12 @@ public static partial class DocumentationParser
         ///  Gets the macro whose body the next line is in, innermost; null outside a macro's body.
         /// </summary>
         internal string? Macro => _macros.Count == 0 ? null : _macros[^1].Name;
+
+        /// <summary>
+        ///  Gets the zero-based line of the directive that opens the macro whose body the next line is in, innermost;
+        ///  -1 outside a macro's body.
+        /// </summary>
+        internal int MacroLine => _macros.Count == 0 ? -1 : _macros[^1].Line;
 
         /// <summary>
         ///  Gets how a definition's name, as the next line writes it, varies from one expansion of the macro around
@@ -100,7 +107,7 @@ public static partial class DocumentationParser
             {
                 IReadOnlyList<string> words = Words(code[word.Length..]);
                 HashSet<string> parameters = [with(StringComparer.Ordinal), .. words.Skip(1)];
-                _macros.Add((words.Count == 0 ? "" : words[0], parameters, [with(StringComparer.Ordinal)], Scopes.Count));
+                _macros.Add((words.Count == 0 ? "" : words[0], parameters, [with(StringComparer.Ordinal)], Scopes.Count, line));
                 return;
             }
 

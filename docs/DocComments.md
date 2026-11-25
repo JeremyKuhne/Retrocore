@@ -432,8 +432,8 @@ set, where the editor or the lint has one (`Firmware:SELFTEST@Original`). When n
 reports the link in each build that lacks it. A link in a branch the build leaves out is reported for this reason only
 by the builds that take the branch. So in a comment every build assembles, link only what every build defines, and
 name the others in backticks or describe them. The names in a section's entries (`In:`, `Uses:`) are not links and may
-name another build's definitions. A macro the build defines but never expands keeps its body's definitions, since
-nothing tells a macro only another build expands from a library's macro that no build does. Documentation without
+name another build's definitions. A macro the build defines but never expands keeps its body's definitions: a
+library's macro that no build expands looks the same as one that only another build expands. Documentation without
 the assembly's report of what it skipped, such as a debug file's, links every branch as before, as does one whose
 assembly failed.
 

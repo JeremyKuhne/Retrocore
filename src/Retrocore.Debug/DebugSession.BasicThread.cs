@@ -419,9 +419,10 @@ internal sealed partial class DebugSession
         IBasicMemory text = TextMemory;
         if (dialect is AtariBasicDialect)
         {
-            // An Atari BASIC statement is its offset byte, then the statement's token, which numbers its word.
+            // An Atari BASIC statement is its offset byte, then the statement's token, which numbers its word up to the
+            // implied LET's and ERROR-'s tokens, which have none.
             int code = text.Read(statement.Address + 1);
-            return code < dialect.Keywords.Count ? dialect.Keywords[code] : null;
+            return code < AtariBasicSyntax.ImpliedLet ? dialect.Keywords[code] : null;
         }
 
         int at = statement.Address;

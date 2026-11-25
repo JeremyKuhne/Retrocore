@@ -102,7 +102,8 @@ powers the machine off and on.
 `AtariMachineTests`, `PokeyTests`, `AtariTimingTests`, `AtariDiskTests`, `Atari810Tests`, `AtariTapeTests` and
 `AtariCartridgeTests` cover the machine. `AtariOsSourceTests`, `AtariFloatingPointSourceTests`, `AtariBasicSourceTests`
 and `Atari810SourceTests` pin each source's builds by digest, compare them with dumps when they are there, lint them,
-and run the machine on their builds. `AtariBasicDialectTests` checks the dialect against the ROM running on the machine.
+and run the machine on their builds (the OS's with the floating point dump). `AtariBasicDialectTests` checks the
+dialect against the ROM running on the machine.
 `AtariOracleTests` compares traces with MAME's when it finds MAME (`RETROCORE_MAME`, or `<cache>\mame\mame.exe`).
 
 [`tools/Test-AtariDap.mjs`](../tools/Test-AtariDap.mjs) runs the debugger on the SDK's sources with nothing external: an

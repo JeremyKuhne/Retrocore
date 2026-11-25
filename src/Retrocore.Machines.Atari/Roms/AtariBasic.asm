@@ -43,7 +43,7 @@
 ;; zeroed seven leftover bytes before the header.
 ;;
 ;; Bugs every revision has: AND tests the two numbers' exponent bytes against each other, so 1 AND 0.01 is 0; STR$
-;; and CHR$ each return their result in a fixed place (LBUFF, CHR_BUFFER), so STR$(1)=STR$(2) is true; SIN and COS
+;; and CHR$ each return their result in a fixed place (FASC's, CHR_BUFFER), so STR$(1)=STR$(2) is true; SIN and COS
 ;; drop the last two digits of what is left of an angle of one to a million quarter turns; and SQR returns the guess
 ;; before its last step.
 ;;

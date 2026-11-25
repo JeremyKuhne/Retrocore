@@ -95,7 +95,7 @@ public sealed class BuildLinkTests
             .Where(problem => problem.Rule is DocumentationRules.Link or DocumentationRules.AmbiguousLink)
             .Select(problem => $"{Shown(problem.Path)}:{problem.Line + 1}: {problem.Message}")];
 
-        // Independently of the lint: what each link in a comment the build assembles reaches is in the build.
+        // As the old per-build check did: what each link in a comment the build assembles reaches is in the build.
         foreach (DocumentationTopic topic in set.Topics.Where(set.Assembles))
         {
             foreach (DocumentationComment comment in topic.Comments)

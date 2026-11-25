@@ -635,7 +635,7 @@ public sealed class DocumentationSet
     ///  and every one of its definitions is left out, each outside a macro's body in a branch of conditional assembly
     ///  the build doesn't take (see <see cref="CommentInBuild"/>), and each in a macro's body on a line no expansion
     ///  defined, of a macro the build leaves out. A macro defined in a branch the build doesn't take is only in other
-    ///  builds too.
+    ///  builds too, as is a scope or named type there that holds none of the build's symbols.
     /// </summary>
     /// <param name="topic">The topic.</param>
     /// <returns>
@@ -655,8 +655,15 @@ public sealed class DocumentationSet
     /// </remarks>
     public bool InOtherBuild(DocumentationTopic topic) =>
         KnowsBuild
-            && (topic.Kind == DocumentationKind.Macro || !Assembles(topic))
+            && (topic.Kind == DocumentationKind.Macro || !Assembles(topic) || IsEmptyScope(topic))
             && topic.Comments.All(comment => !CommentAssembled(comment));
+
+    // Whether a scope or named type has nothing in the assembly: no symbol of the build is its own or qualified by it,
+    // so a scope a skipped branch opens and the build continues elsewhere stays.
+    private bool IsEmptyScope(DocumentationTopic topic) =>
+        topic.Kind is DocumentationKind.Scope or DocumentationKind.Struct or DocumentationKind.Enum
+            && !_symbols.ContainsKey(topic.Name)
+            && !_symbols.Keys.Any(name => name.StartsWith(topic.Name + "::", StringComparison.Ordinal));
 
     /// <summary>
     ///  Gets whether this set knows which definitions its build assembles: it was created from a successful assembly

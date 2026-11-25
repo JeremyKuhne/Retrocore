@@ -1,6 +1,6 @@
 ; retrocore: style=strict
 ;; The register display and the game paddle ($FAD7-$FB2E), with the data between them: the Apple II Monitor's
-;; third piece of <Stepper>, or in the other Monitors the power-up data of <Startup> and the first piece of
+;; third piece of `Stepper`, or in the other Monitors the power-up data of <Startup> and the first piece of
 ;; <Escape>.
 
 ; The registers the Monitor saves and shows.

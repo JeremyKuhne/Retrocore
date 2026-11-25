@@ -321,6 +321,58 @@ public sealed class DocumentationBuildTests
     }
 
     /// <summary>
+    ///  A scope only a branch the build leaves out opens is only in other builds, and one the build continues elsewhere
+    ///  is in it.
+    /// </summary>
+    [TestMethod]
+    public void AScopeOnlyAnotherBuildOpensIsOnlyInOtherBuilds()
+    {
+        const string Scopes = """
+            ;; Uses <Tools> and <Shared>.
+            Caller:
+                rts
+
+            .scope Shared
+            Last:
+                rts
+            .endscope
+
+            .if MODEL = 1
+            ;; Model 1's tools.
+            .scope Tools
+            Helper:
+                rts
+            .endscope
+
+            ;; The models' shared routines, documented in model 1's branch.
+            .scope Shared continued
+            First:
+                rts
+            .endscope
+            .endif
+            """;
+
+        Resolve(Build(Scopes, model: 1), "Caller", "Tools").Topic?.Name.Should().Be("Tools");
+        Resolve(Build(Scopes, model: 2), "Caller", "Tools").OnlyInOtherBuilds.Should().BeTrue();
+        Resolve(Build(Scopes, model: 2), "Caller", "Shared").Topic?.Name.Should().Be("Shared");
+    }
+
+    /// <summary>
+    ///  Documentation of an assembly that failed links every branch as before: its definitions aren't known.
+    /// </summary>
+    [TestMethod]
+    public void DocumentationOfAFailedAssemblyResolvesEveryBranch()
+    {
+        string broken = Source + "\n    jmp Nowhere\n";
+        AssemblyResult result = Assemble(broken, model: 2);
+        result.Success.Should().BeFalse();
+        DocumentationSet set = DocumentationSet.Create([DocumentationParser.Parse(broken, "test.asm")], result);
+        DocumentationTarget target = new DocumentationResolver(set).Resolve(Required(set.Find("Shared")), "OnlyOne");
+        target.OnlyInOtherBuilds.Should().BeFalse();
+        target.Topic?.Name.Should().Be("OnlyOne");
+    }
+
+    /// <summary>
     ///  A scope a <c>.using</c> directive names passes over a name only another build defines in it.
     /// </summary>
     [TestMethod]

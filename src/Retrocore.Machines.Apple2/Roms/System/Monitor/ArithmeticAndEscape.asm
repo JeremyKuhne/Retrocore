@@ -1,5 +1,5 @@
 ; retrocore: style=strict
-;; $FB60-$FBC0: the Apple II Monitor's 16-bit multiply and divide (<Arithmetic>), or in the other Monitors the
+;; $FB60-$FBC0: the Apple II Monitor's 16-bit multiply and divide (`Arithmetic`), or in the other Monitors the
 ;; title, the soft entry check, the Control-S pause, the escape cursor keys and, on the IIe, the model byte and
 ;; the call into the internal firmware.
 

@@ -2,7 +2,7 @@
 ;; The Monitor's interrupt and BRK entries ($FA40-$FAD6), with the Apple II Monitor's instruction stepper around them
 ;; and, in the other Monitors, the reset handler and power-up.
 ;;
-;; The Apple II Monitor has the first and second pieces of <Stepper> here, with <Interrupt>, <Break> and
+;; The Apple II Monitor has the first and second pieces of `Stepper` here, with <Interrupt>, <Break> and
 ;; <ShowBreak> between them. The Autostart and IIe Monitors have the same three routines at $FA40, then the first
 ;; piece of <Startup>: `Startup::Reset` and `Startup::PowerUp`.
 

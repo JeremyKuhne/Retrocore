@@ -58,6 +58,10 @@ public sealed partial class InstructionSet
             HasEffects = rules.Effects.Count != 0
         };
 
+        if (set.HasEffects && set._effects is { } list) { list.Capacity = entries.Count; }
+
+        // The :Form keys effects are looked up by, built once per form rather than once per encoding.
+        string?[] formKeys = new string?[description.Forms.Count];
         foreach (IsaEntry entry in entries.Values)
         {
             OperandForm form = description.Form(entry.Form)
@@ -67,18 +71,19 @@ public sealed partial class InstructionSet
                 ? entry.Instruction + ((entry.Opcode >> 4) & 7).ToString(CultureInfo.InvariantCulture)
                 : entry.Instruction;
 
+            string specificKey = $"{entry.Instruction}:{form.Name}";
             // A form-qualified flow class overrides the instruction's own.
-            InstructionFlow flow = rules.Flows.TryGetValue($"{entry.Instruction}:{form.Name}", out InstructionFlow specificFlow)
+            InstructionFlow flow = rules.Flows.TryGetValue(specificKey, out InstructionFlow specificFlow)
                 ? specificFlow
                 : rules.Flows.TryGetValue(entry.Instruction, out InstructionFlow generalFlow) ? generalFlow : InstructionFlow.Next;
 
             MemoryAccess access = rules.Access.TryGetValue(entry.Instruction, out MemoryAccess general) ? general : MemoryAccess.Read;
-            ushort? target = rules.Targets.TryGetValue($"{entry.Instruction}:{form.Name}", out ushort specificTarget)
+            ushort? target = rules.Targets.TryGetValue(specificKey, out ushort specificTarget)
                 ? specificTarget
                 : rules.Targets.TryGetValue(entry.Instruction, out ushort generalTarget) ? generalTarget : null;
 
             InstructionEffects effects = set.HasEffects
-                ? EffectsOf(rules, scopes, entry.Instruction, form.Name)
+                ? EffectsOf(rules, scopes, entry.Instruction, specificKey, formKeys[form.Id] ??= ":" + form.Name)
                     ?? throw new FormatException($"Instruction set '{name}': no effects line gives {entry.Instruction} {form.Name}.")
                 : default;
 
@@ -88,10 +93,10 @@ public sealed partial class InstructionSet
                 form,
                 flow,
                 access,
-                rules.Access.TryGetValue($"{entry.Instruction}:{form.Name}", out MemoryAccess specific) ? specific : access,
+                rules.Access.TryGetValue(specificKey, out MemoryAccess specific) ? specific : access,
                 rules.Preferred.Contains(entry.Opcode),
                 target,
-                rules.Conditional.Contains(entry.Instruction) || rules.Conditional.Contains($"{entry.Instruction}:{form.Name}"),
+                rules.Conditional.Contains(entry.Instruction) || rules.Conditional.Contains(specificKey),
                 effects);
         }
 
@@ -113,49 +118,52 @@ public sealed partial class InstructionSet
     }
 
     // The nearest scope's Instruction:Form or Instruction line, which a form's own line in its nearest scope
-    // adds to; null when no line gives the instruction.
-    private static InstructionEffects? EffectsOf(IsaRules rules, IReadOnlyList<string> scopes, string instruction, string form)
+    // adds to; null when no line gives the instruction. The keys are built once per encoding, not per scope.
+    private static InstructionEffects? EffectsOf(
+        IsaRules rules,
+        IReadOnlyList<string> scopes,
+        string instruction,
+        string instructionAndForm,
+        string formKey)
     {
-        InstructionEffects? effects = null;
+        EffectsLine? own = null;
         foreach (string scope in scopes)
         {
-            if (!rules.Effects.TryGetValue(scope, out Dictionary<string, (InstructionEffects Effects, int Line)>? lines))
+            if (rules.Effects.TryGetValue(scope, out Dictionary<string, EffectsLine>? lines)
+                && (lines.TryGetValue(instructionAndForm, out own) || lines.TryGetValue(instruction, out own)))
             {
-                continue;
-            }
-
-            if (lines.TryGetValue($"{instruction}:{form}", out var specific) || lines.TryGetValue(instruction, out specific))
-            {
-                effects = specific.Effects;
                 break;
             }
         }
 
-        if (effects is not { } own) { return null; }
+        if (own is null) { return null; }
+        own.Used = true;
+        InstructionEffects effects = own.Effects;
         foreach (string scope in scopes)
         {
-            if (!rules.Effects.TryGetValue(scope, out Dictionary<string, (InstructionEffects Effects, int Line)>? lines)
-                || !lines.TryGetValue($":{form}", out var added))
+            if (!rules.Effects.TryGetValue(scope, out Dictionary<string, EffectsLine>? lines)
+                || !lines.TryGetValue(formKey, out EffectsLine? added))
             {
                 continue;
             }
 
+            added.Used = true;
             InstructionEffects other = added.Effects;
-            return own with
+            return effects with
             {
-                RegistersRead = own.RegistersRead | other.RegistersRead,
-                RegistersWritten = own.RegistersWritten | other.RegistersWritten,
-                FlagsRead = (byte)(own.FlagsRead | other.FlagsRead),
-                FlagsWritten = (byte)(own.FlagsWritten | other.FlagsWritten),
-                FlagsSet = (byte)(own.FlagsSet | other.FlagsSet),
-                FlagsCleared = (byte)(own.FlagsCleared | other.FlagsCleared),
-                FlagsFromOperand = (byte)(own.FlagsFromOperand | other.FlagsFromOperand),
-                OperandBits = own.OperandBits | other.OperandBits,
-                Pushed = (byte)(own.Pushed + other.Pushed),
-                Pulled = (byte)(own.Pulled + other.Pulled)
+                RegistersRead = effects.RegistersRead | other.RegistersRead,
+                RegistersWritten = effects.RegistersWritten | other.RegistersWritten,
+                FlagsRead = (byte)(effects.FlagsRead | other.FlagsRead),
+                FlagsWritten = (byte)(effects.FlagsWritten | other.FlagsWritten),
+                FlagsSet = (byte)(effects.FlagsSet | other.FlagsSet),
+                FlagsCleared = (byte)(effects.FlagsCleared | other.FlagsCleared),
+                FlagsFromOperand = (byte)(effects.FlagsFromOperand | other.FlagsFromOperand),
+                OperandBits = effects.OperandBits | other.OperandBits,
+                Pushed = (byte)(effects.Pushed + other.Pushed),
+                Pulled = (byte)(effects.Pulled + other.Pulled)
             };
         }
 
-        return own;
+        return effects;
     }
 }

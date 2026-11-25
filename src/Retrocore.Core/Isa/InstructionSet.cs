@@ -41,8 +41,10 @@ public sealed partial class InstructionSet
     private uint[] _firstByteMap = [];
     private OperandForm[] _formArray = [];
     private readonly List<MemoryAccess> _access = [];
-    private readonly List<InstructionEffects> _effects = [];
+    // Only a set whose description has effects lines keeps them, one per encoding, without the list once built.
+    private List<InstructionEffects>? _effects = [];
     private InstructionEffects[] _effectsArray = [];
+    private static readonly InstructionEffects s_noEffects;
     private readonly List<MemoryAccess> _encodingAccess = [];
     private MemoryAccess[] _encodingAccessArray = [];
     private List<(uint Prefix, int PrefixLength, int OperandSize, int OpcodeLength)>? _splits;
@@ -289,31 +291,12 @@ public sealed partial class InstructionSet
     /// </summary>
     /// <param name="encoding">The encoding ID.</param>
     /// <returns>
-    ///  The effects; <see cref="InstructionEffects.IsKnown"/> is false when the set has none (see
-    ///  <see cref="HasEffects"/>).
+    ///  The effects, by reference into the set's table so a lookup copies nothing;
+    ///  <see cref="InstructionEffects.IsKnown"/> is false when the set has none (see <see cref="HasEffects"/>).
     /// </returns>
-    public InstructionEffects Effects(int encoding) => _effectsArray[encoding];
-
-    /// <summary>
-    ///  Gets whether some encoding is of an instruction, before any bit suffix, and when a form is named, of
-    ///  that form; an empty instruction matches any.
-    /// </summary>
-    /// <param name="instruction">The instruction name, or empty for any.</param>
-    /// <param name="form">The form name, or null for any.</param>
-    /// <returns>Whether an encoding matches.</returns>
-    internal bool HasInstruction(string instruction, string? form)
-    {
-        foreach (IsaEncoding encoding in _encodings)
-        {
-            if ((instruction.Length == 0 || string.Equals(_baseNames[encoding.Mnemonic], instruction, StringComparison.OrdinalIgnoreCase))
-                && (form is null || Description.Forms[encoding.Form].Name == form))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
+    /// <exception cref="IndexOutOfRangeException">The set has effects and no such encoding.</exception>
+    public ref readonly InstructionEffects Effects(int encoding) =>
+        ref HasEffects ? ref _effectsArray[encoding] : ref s_noEffects;
 
     /// <summary>
     ///  Finds the encoding whose opcode starts some bytes.
@@ -463,7 +446,8 @@ public sealed partial class InstructionSet
         _sizeArray = [.. _sizes];
         _flowArray = [.. _flows];
         _encodingAccessArray = [.. _encodingAccess];
-        _effectsArray = [.. _effects];
+        _effectsArray = HasEffects && _effects is { } effects ? [.. effects] : [];
+        _effects = null;
         _formArray = [.. Description.Forms];
         foreach (IsaEncoding encoding in _encodingArray)
         {
@@ -551,7 +535,7 @@ public sealed partial class InstructionSet
 
         _flows.Add(flow);
         _encodingAccess.Add(encodingAccess);
-        _effects.Add(effects);
+        if (HasEffects) { _effects?.Add(effects); }
         _sizes.Add(checked((byte)(entry.Length + form.Size)));
         if (entry.SplitAt != 0) { AddSplit(entry, form); }
 

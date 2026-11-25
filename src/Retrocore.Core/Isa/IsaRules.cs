@@ -32,9 +32,9 @@ internal sealed class IsaRules
 
     /// <summary>
     ///  Gets the register and flag effects by scope, the empty name for the description's and a set's name for
-    ///  its own, then by <c>Mnemonic</c>, <c>Mnemonic:Form</c> or <c>:Form</c>; with the line that gave each.
+    ///  its own, then by <c>Mnemonic</c>, <c>Mnemonic:Form</c> or <c>:Form</c>.
     /// </summary>
-    internal Dictionary<string, Dictionary<string, (InstructionEffects Effects, int Line)>> Effects { get; } =
+    internal Dictionary<string, Dictionary<string, EffectsLine>> Effects { get; } =
         [with(StringComparer.OrdinalIgnoreCase)];
 
     /// <summary>

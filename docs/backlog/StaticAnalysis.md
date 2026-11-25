@@ -256,11 +256,17 @@ name a known set and an instruction or form some set has, so a gap or a misspell
 
 ### The API
 
-`InstructionSet.Effects(encoding)` (and `DisassembledInstruction.Effects`) returns an `InstructionEffects`, a
-small value read from an array built with the set, so a lookup allocates nothing. It holds the registers read and
+`InstructionSet.Effects(encoding)` (and `DisassembledInstruction.Effects`) returns an `InstructionEffects` by
+reference into an array built with the set, so a lookup neither allocates nor copies. It holds the registers read and
 written as bits by index in `IsaDescription.Registers`; the flags read, written, set and cleared as bits of the
 flags register; the flags copied from the operand, with `OperandBit(flag)`; and the bytes pushed and pulled.
 `InstructionSet.HasEffects` says whether the description has them; without, `IsKnown` is false.
+
+What it costs, measured in Release on this change: a lookup about 1.3 ns, with nothing allocated; the tables 28
+bytes an encoding, about 29 KB for the four 6502 family sets, and nothing for a set whose description has no
+effects. Parsing the 6502 description, done once a process and only when first used, takes about 0.5 ms and
+290 KB of short-lived allocation more than without the lines (about 1.4 ms and 2.0 MB in all). The cores do not
+read the data, and the generator that builds them skips `[isa]`, so execution is unchanged.
 
 ### How it is checked
 

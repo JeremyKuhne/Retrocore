@@ -532,7 +532,7 @@ public static partial class IsaParser
             Pulled = pulled
         };
 
-        if (!rules.Effects.TryGetValue(scope, out Dictionary<string, (InstructionEffects, int)>? scoped))
+        if (!rules.Effects.TryGetValue(scope, out Dictionary<string, EffectsLine>? scoped))
         {
             scoped = [with(StringComparer.OrdinalIgnoreCase)];
             rules.Effects[scope] = scoped;
@@ -547,7 +547,7 @@ public static partial class IsaParser
                 throw Error(number, $"Effects for '{name}' are malformed or already given.");
             }
 
-            scoped[name] = (effects, number);
+            scoped[name] = new(effects, number);
         }
     }
 
@@ -563,29 +563,23 @@ public static partial class IsaParser
 
     private static bool IsEffectKeyword(string token) => token is "reads" or "writes" or "push" or "pull" or "none";
 
-    // Each effects line names a known set and instructions and forms some set has, so a misspelling fails.
+    // Each effects line names a known set, and some encoding takes it, so a misspelling or a line every set
+    // overrides fails.
     private static void CheckEffects(IsaRules rules, Dictionary<string, InstructionSet> sets)
     {
-        foreach (KeyValuePair<string, Dictionary<string, (InstructionEffects Effects, int Line)>> scope in rules.Effects)
+        foreach (KeyValuePair<string, Dictionary<string, EffectsLine>> scope in rules.Effects)
         {
             if (scope.Key.Length != 0 && !sets.ContainsKey(scope.Key))
             {
                 throw Error(0, $"Effects name an unknown instruction set '{scope.Key}'.");
             }
 
-            foreach (KeyValuePair<string, (InstructionEffects Effects, int Line)> entry in scope.Value)
+            foreach (KeyValuePair<string, EffectsLine> entry in scope.Value)
             {
-                int colon = entry.Key.IndexOf(':');
-                string instruction = colon < 0 ? entry.Key : entry.Key[..colon];
-                string? form = colon < 0 ? null : entry.Key[(colon + 1)..];
-                bool found = false;
-                foreach (InstructionSet set in sets.Values)
+                if (!entry.Value.Used)
                 {
-                    if (scope.Key.Length != 0 && !ReferenceEquals(set, sets[scope.Key])) { continue; }
-                    found |= set.HasInstruction(instruction, form);
+                    throw Error(entry.Value.Line, $"No encoding takes the effects for '{entry.Key}'.");
                 }
-
-                if (!found) { throw Error(entry.Value.Line, $"Effects for '{entry.Key}' match no instruction."); }
             }
         }
     }

@@ -12,7 +12,7 @@ import { catalogMachine, launchConfiguration, machineById, type Machine } from "
 export const startOrigin = "retrocoreOrigin";
 
 /** What a machine is started with. */
-export type RunKind = "machine" | "source" | "program" | "basic" | "disk" | "tape" | "dosSource";
+export type RunKind = "machine" | "source" | "program" | "basic" | "disk" | "tape" | "dosSource" | "executable" | "cartridge";
 
 /** A thing a machine can run, as the second quick pick lists it. */
 export interface RunChoice {
@@ -64,6 +64,24 @@ export function runChoices(machine: Machine): RunChoice[] {
         });
     }
 
+    if (machine.executableFormats !== undefined && machine.executableFormats.length !== 0) {
+        choices.push({
+            kind: "executable",
+            label: "An executable",
+            detail: "Boots it from the first drive, on a disk built for it",
+            extensions: machine.executableFormats
+        });
+    }
+
+    if (machine.cartridgeFormats !== undefined && machine.cartridgeFormats.length !== 0) {
+        choices.push({
+            kind: "cartridge",
+            label: "A cartridge",
+            detail: "Plugs it into the left slot in place of BASIC",
+            extensions: machine.cartridgeFormats
+        });
+    }
+
     if (machine.diskFormats.length !== 0) {
         // The BBC Micro boots a disk with SHIFT held as it starts, as SHIFT-BREAK does.
         const detail = machine.configuration.machine === "pet" ? "Puts it in drive 0 of the 4040 at device 8"
@@ -104,6 +122,7 @@ function dialectName(dialect: string, machine: Machine): string {
             return `Commodore BASIC ${version} (PET)`;
         }
         case "bbcbasic": return "BBC BASIC";
+        case "atari": return "Atari BASIC";
         default: return dialect;
     }
 }
@@ -141,6 +160,13 @@ export function setupConfiguration(setup: Setup): Record<string, unknown> {
             break;
         case "tape":
             configuration[machine.tapeOption ?? "cassette"] = path;
+            break;
+        case "executable":
+            Object.assign(configuration, { executable: path });
+            break;
+        case "cartridge":
+            // The cartridge takes the left slot, so BASIC comes out whatever revision the options chose.
+            Object.assign(configuration, { cartridge: path, basicCartridge: "none" });
             break;
         case "dosSource":
             Object.assign(configuration, { source: path, dos: setup.dos ?? "3.3", stopOnEntry: false });
@@ -237,6 +263,14 @@ export function setupFromConfiguration(configuration: Record<string, unknown>): 
     if (program !== undefined) return { machineId: machine.id, kind: "program", path: program, options };
     const basic = text("basic");
     if (basic !== undefined) return { machineId: machine.id, kind: "basic", path: basic, options };
+    const executable = text("executable");
+    if (executable !== undefined && machine.executableFormats !== undefined) return { machineId: machine.id, kind: "executable", path: executable, options };
+    // A cartridge's launch takes BASIC out itself, so the setup does not keep that as a choice.
+    const cartridge = text("cartridge");
+    if (cartridge !== undefined && machine.cartridgeFormats !== undefined) {
+        delete options.basicCartridge;
+        return { machineId: machine.id, kind: "cartridge", path: cartridge, options };
+    }
 
     // A disk or tape it starts with is what it runs, so the launch installs what takes it.
     const disk = text("diskImage") ?? disks[0];

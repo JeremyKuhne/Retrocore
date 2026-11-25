@@ -973,6 +973,7 @@ internal sealed partial class DebugSession
             DebugMachines.Altair => AltairDebugTarget.Launch(args),
             DebugMachines.Bbc => LaunchBbc(args, loads),
             DebugMachines.Kaypro2 => LaunchKaypro(args),
+            DebugMachines.Atari => LaunchAtari(args, loads),
             _ => Apple2DebugTarget.Launch(args)
         };
 
@@ -1238,6 +1239,15 @@ internal sealed partial class DebugSession
     private static BbcDebugTarget LaunchBbc(JsonObject args, bool loads)
     {
         BbcDebugTarget target = BbcDebugTarget.Launch(args);
+        target.Boot(args.Double("bootSeconds") ?? (loads ? 2 : 0));
+        return target;
+    }
+
+    // A program on an Atari calls the OS through its vectors, which the OS sets up as it starts, and BASIC builds its
+    // tables, so the ROMs run first.
+    private static AtariDebugTarget LaunchAtari(JsonObject args, bool loads)
+    {
+        AtariDebugTarget target = AtariDebugTarget.Launch(args);
         target.Boot(args.Double("bootSeconds") ?? (loads ? 2 : 0));
         return target;
     }

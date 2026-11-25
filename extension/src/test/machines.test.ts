@@ -54,7 +54,7 @@ test("the machines are the ones agreed, each with its own id and name, in order"
         "TRS-80 Model II", "TRS-80 Model 12", "TRS-80 Model 16 (Z80 side)", "Apple-1", "TRS-80 Color Computer",
         "TRS-80 Color Computer 2", "TRS-80 Color Computer 3", "Commodore PET 2001 (BASIC 2)", "Commodore PET 2001",
         "Commodore PET 4032", "Commodore PET 4032 (business keyboard)", "BBC Micro Model B", "BBC Micro Model A",
-        "MITS Altair 8800", "Kaypro II"
+        "Atari 800", "Atari 400", "MITS Altair 8800", "Kaypro II"
     ]);
     assert.deepEqual(machineById("altair")?.configuration, { machine: "altair" });
     assert.deepEqual(machineById("altair")?.diskFormats, []);
@@ -135,6 +135,16 @@ test("what each machine runs: Apple disks and DOS, the Model I's disks and tapes
     assert.deepEqual(machineById("bbcb")?.basicDialects, ["bbcbasic"]);
     assert.deepEqual(machineById("bbca")?.diskFormats, [], "the Model A has no disk interface");
     assert.deepEqual(machineById("bbca")?.tapeFormats, ["uef"]);
+    for (const id of ["atari800", "atari400"]) {
+        const atari = machineById(id);
+        assert.deepEqual(atari?.configuration, { machine: "atari800", model: id });
+        assert.deepEqual(atari?.diskFormats, ["atr", "xfd"]);
+        assert.deepEqual(atari?.tapeFormats, ["cas"]);
+        assert.deepEqual(atari?.basicDialects, ["atari"]);
+        assert.deepEqual(atari?.executableFormats, ["xex"]);
+        assert.deepEqual(atari?.cartridgeFormats, ["rom", "car"]);
+        assert.deepEqual(atari?.choices.map(choice => choice.option), ["basicCartridge", "video", "diskDrive", "sound"]);
+    }
 });
 
 test("a launch configuration finds its catalog machine as the host reads its model", () => {
@@ -146,6 +156,8 @@ test("a launch configuration finds its catalog machine as the host reads its mod
     assert.equal(catalogMachine({ machine: "apple2", model: "original" })?.id, "apple2-iie");
     assert.equal(catalogMachine({ machine: "coco" })?.id, "coco2", "the CoCo 2 is the Color Computer default");
     assert.equal(catalogMachine({ machine: "bbc" })?.id, "bbcb", "the Model B is the BBC Micro default");
+    assert.equal(catalogMachine({ machine: "atari800" })?.id, "atari800", "the 800 is the Atari default");
+    assert.equal(catalogMachine({ machine: "atari800", model: "atari400" })?.id, "atari400");
     assert.equal(catalogMachine({ machine: "trs80-model1" })?.id, "trs80-model1-level2");
     assert.equal(catalogMachine({ machine: "trs80-model1", rom: "level1" })?.id, "trs80-model1-level1");
     assert.equal(catalogMachine({ machine: "trs80-model3" })?.id, "trs80-model3", "the Model III is its machine's default");
@@ -191,4 +203,14 @@ test("a Color Computer given disks shows the disk controller they bring", () => 
     assert.equal(settingValue(controller, withDisks), true, "the controller its disks bring");
     assert.equal("diskController" in withSetting(withDisks, controller, true), false, "left out, as the disks imply it");
     assert.equal(withSetting(withDisks, controller, false).diskController, false, "turned off explicitly, not by leaving it out");
+});
+
+test("an Atari given a cartridge shows BASIC out of the left slot", () => {
+    const atari = machineById("atari800");
+    const basic = atari?.choices.find(choice => choice.option === "basicCartridge");
+    assert.ok(atari && basic);
+    const withCartridge = { ...launchConfiguration(atari), cartridge: "star.rom" };
+    assert.equal(settingValue(basic, launchConfiguration(atari)), "c", "rev. C without a cartridge");
+    assert.equal(settingValue(basic, withCartridge), "none", "the cartridge takes BASIC's place");
+    assert.equal("basicCartridge" in withSetting(withCartridge, basic, "none"), false, "left out, as the cartridge implies it");
 });

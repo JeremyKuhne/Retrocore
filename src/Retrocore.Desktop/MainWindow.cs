@@ -669,6 +669,14 @@ internal sealed class MainWindow : Window
                 Code("Clr", 147, "CLR, the shifted HOME: clears the screen");
                 Reset("Reset", "A reset switch (or Ctrl+F12 or Ctrl+Break): the kernal starts again, keeping memory");
                 break;
+            case "atari800":
+                Code("Start", 0xF0, "START (or F2)");
+                Code("Select", 0xF1, "SELECT (or F3)");
+                Code("Option", 0xF2, "OPTION (or F4)");
+                Code("Break", 0xF3, "BREAK (or Pause)");
+                Code("System Reset", 0xF4, "SYSTEM RESET: the OS starts warm, and BASIC keeps its program");
+                Reset("Power", "Power off and on (or Ctrl+F12 or Ctrl+Break): the OS starts cold");
+                break;
             case "coco":
                 Code("Break", 1, "BREAK (or Esc)");
                 Code("Clear", 31, "CLEAR (or Home)");
@@ -695,6 +703,7 @@ internal sealed class MainWindow : Window
                 "apple1" => "Backspace: the back arrow (_) · Esc: ESC · Ctrl+F12: RESET · letters arrive as capitals",
                 "altair" => "Ctrl+letter: control character · arrows: ^H ^J ^K ^L, as the ADM-3A sends them · Ctrl+F12: RESET",
                 "bbc" => "Esc: ESCAPE · End: COPY · arrows: the cursor keys · F1-F9 and F10: f1-f9 and f0 · Ctrl+F12: BREAK",
+                "atari800" => "Backspace: BACK S · Home: CLEAR · arrows: the cursor keys · F2-F4: START, SELECT, OPTION · Pause: BREAK · Ctrl+F12: power",
                 _ => "",
             };
 

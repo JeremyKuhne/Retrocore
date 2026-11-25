@@ -67,6 +67,15 @@ test("a launch configuration becomes the setup Start Machine would make", () => 
     assert.equal(favoriteSetup(favoriteFrom(dos32!, "D", undefined, undefined)).dos, "3.2", "and through a favorite");
     assert.deepEqual(setupFromConfiguration({ machine: "trs80-model1", cassette: "C:\\a.cas" }),
         { machineId: "trs80-model1-level2", kind: "tape", path: "C:\\a.cas", options: {} });
+
+    // An Atari's executable and cartridge are what it runs; the cartridge takes BASIC out itself.
+    assert.deepEqual(setupFromConfiguration({ machine: "atari800", model: "atari400", executable: "C:\\a.xex", video: "pal" }),
+        { machineId: "atari400", kind: "executable", path: "C:\\a.xex", options: { video: "pal" } });
+    assert.deepEqual(setupFromConfiguration({ machine: "atari800", cartridge: "C:\\star.rom", basicCartridge: "none" }),
+        { machineId: "atari800", kind: "cartridge", path: "C:\\star.rom", options: {} });
+    assert.deepEqual(setupFromConfiguration({ machine: "atari800", disks: ["C:\\dos.atr"], basicCartridge: "none" }),
+        { machineId: "atari800", kind: "disk", path: "C:\\dos.atr", options: { basicCartridge: "none" } });
+    assert.equal(setupFromConfiguration({ machine: "coco", cartridge: "C:\\pack.ccc" })?.kind, "machine", "a ROM pack is not a cartridge launch");
 });
 
 test("paths inside the workspace are kept as ${workspaceFolder} and come back as they were", () => {

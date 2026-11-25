@@ -423,6 +423,47 @@ internal sealed partial class DebugSession
         return dialect.KeywordAt(token, 0, out _);
     }
 
+    // Whether an Atari BASIC statement calls USR: its tokens after its offset byte and token, passing over constants
+    // and strings, to the ":" or the line's end. REM and DATA keep text, and an ERROR- line its text as typed.
+    private static bool AtariCallsMachine(IBasicMemory text, int address)
+    {
+        if (text.Read(address + 1) is AtariBasicDialect.RemStatement or AtariBasicDialect.DataStatement or 0x37)
+        {
+            return false;
+        }
+
+        for (int at = address + 2, count = 0; count < 256; count++)
+        {
+            byte value = text.Read(at);
+            if (value == AtariBasicDialect.NumberToken)
+            {
+                at += 1 + AtariNumbers.Size;
+            }
+            else if (value == AtariBasicDialect.StringToken)
+            {
+                at += 2 + text.Read(at + 1);
+            }
+            else if (value is AtariUsr)
+            {
+                return true;
+            }
+            else if (value is AtariStatementEnd or AtariBasicDialect.LineEnd)
+            {
+                return false;
+            }
+            else
+            {
+                at++;
+            }
+        }
+
+        return false;
+    }
+
+    // Atari BASIC's USR token, and the ":" that ends a statement.
+    private const byte AtariUsr = 0x3F;
+    private const byte AtariStatementEnd = 0x14;
+
     // Whether the statement that started last calls machine code: CALL, &, USR or SYSTEM, Business BASIC's PERFORM
     // and EXFN., or Color BASIC's EXEC.
     private bool CallsMachine()
@@ -437,6 +478,12 @@ internal sealed partial class DebugSession
             }
 
             return IntegerBasic.CallsMachine(tokens);
+        }
+
+        // Atari BASIC's machine code is USR's: its token, past the statement's offset and token.
+        if (dialect is AtariBasicDialect)
+        {
+            return AtariCallsMachine(TextMemory, statement.Address);
         }
 
         bool inString = false;

@@ -1342,7 +1342,8 @@ RULE_MORE_USR_ARGUMENTS:
 ;; Each name's last character has bit 7 set, and a zero byte ends the table. <MATCH_OPERATOR> searches it for the
 ;; token a rule wants, and the lister prints a token's name from it. The search finds the first of two equal names,
 ;; so the tokens from OP_ASSIGN_NUMBER on, which <REPLACE> writes, are found only by their tokens, for the lister.
-;; The tokens $10, OP_SENTINEL, OP_ARRAY_PAREN and OP_DIM_ARRAY_PAREN are never wanted by a rule, and list as nothing.
+;; No rule wants the tokens $10, OP_SENTINEL, OP_ARRAY_PAREN or OP_DIM_ARRAY_PAREN. No line holds $10; the others
+;; have empty names and list as nothing.
 ;; See: <OPERATOR_ROUTINES>, <SEARCH_NAMES>
 OPERATOR_NAMES:
     OPERATOR_CHARACTER $10, $02     ; a token no line holds: its name appears to be a placeholder

@@ -73,53 +73,59 @@ public static partial class DocumentationParser
             : new(string.Join("::", Scopes), [.. Enumerable.Reverse(_usings).Select(item => item.Using)]);
 
         /// <summary>
-        ///  Follows one line's code.
+        ///  Follows one line's code, reading it in place.
         /// </summary>
         /// <param name="code">The trimmed code, without its comment.</param>
         /// <param name="line">The line's zero-based number.</param>
         /// <param name="assembled">What the assembler took from the file, or null when not known.</param>
-        internal void Advance(string code, int line, DocumentationAssembled? assembled)
+        internal void Advance(ReadOnlySpan<char> code, int line, DocumentationAssembled? assembled)
         {
             // With the names the assembler took from each line, those stand for the line's text, which a .define may
             // have changed or given; without them, the text is read.
             bool namesKnown = assembled?.LineUsings is not null;
             AdvanceCode(code, line, !namesKnown && (assembled?.UsingAssembled(line) ?? true));
 
-            // A macro invoked on the line may itself have given a .using, which applies from the next line.
+            // A macro invoked on the line may itself have given a .using, which applies from the next line: the names
+            // written on the line first, then those of the macros it invoked.
             if (assembled is not null && _macros.Count == 0)
             {
-                IEnumerable<string[]> written = assembled.LineUsings is { } lineUsings ? lineUsings(line) : [];
-                foreach (string[] names in written.Concat(assembled.InvokedUsings(line)))
-                {
-                    _usings.Add((_named.Count, new(string.Join("::", Scopes), names, line)));
-                    _current = null;
-                }
+                IReadOnlyList<string[]> written = assembled.LineUsings is { } lineUsings ? lineUsings(line) : [];
+                IReadOnlyList<string[]> invoked = assembled.InvokedUsings(line);
+                for (int index = 0; index < written.Count; index++) { AddUsing(written[index], line); }
+                for (int index = 0; index < invoked.Count; index++) { AddUsing(invoked[index], line); }
             }
         }
 
-        private void AdvanceCode(string code, int line, bool assembled)
+        private void AddUsing(string[] names, int line)
         {
-            string word = FirstWord(code).ToLowerInvariant();
+            _usings.Add((_named.Count, new(string.Join("::", Scopes), names, line)));
+            _current = null;
+        }
+
+        // Only a line that opens or closes a macro, a scope or a .using is copied out of the text.
+        private void AdvanceCode(ReadOnlySpan<char> code, int line, bool assembled)
+        {
+            ReadOnlySpan<char> word = FirstWord(code);
 
             // A .using in a macro's body applies where the macro is invoked, not where it is defined.
             // ca65's short forms open and close a macro too.
-            if (word is ".macro" or ".mac")
+            if (IsLowered(word, ".macro") || IsLowered(word, ".mac"))
             {
-                IReadOnlyList<string> words = Words(code[word.Length..]);
+                IReadOnlyList<string> words = Words(code[word.Length..].ToString());
                 HashSet<string> parameters = [with(StringComparer.Ordinal), .. words.Skip(1)];
                 _macros.Add((words.Count == 0 ? "" : words[0], parameters, [with(StringComparer.Ordinal)], Scopes.Count, line));
                 return;
             }
 
-            if (word is ".endmacro" or ".endmac")
+            if (IsLowered(word, ".endmacro") || IsLowered(word, ".endmac"))
             {
                 if (_macros.Count != 0) { _macros.RemoveAt(_macros.Count - 1); }
                 return;
             }
 
-            if (word == ".local" && _macros.Count != 0)
+            if (IsLowered(word, ".local") && _macros.Count != 0)
             {
-                foreach (string local in Words(code[word.Length..])) { _macros[^1].Locals.Add(local); }
+                foreach (string local in Words(code[word.Length..].ToString())) { _macros[^1].Locals.Add(local); }
                 return;
             }
 
@@ -128,17 +134,17 @@ public static partial class DocumentationParser
             {
                 // A label may precede .proc on the same line.
                 code = code[(length + 1)..].TrimStart(':').Trim();
-                word = FirstWord(code).ToLowerInvariant();
+                word = FirstWord(code);
             }
 
-            if (word is ".proc" or ".scope")
+            if (IsLowered(word, ".proc") || IsLowered(word, ".scope"))
             {
-                string name = FirstWord(code[word.Length..].Trim());
+                string name = FirstWord(code[word.Length..].Trim()).ToString();
                 _named.Add(name.Length != 0);
                 if (name.Length != 0) { Scopes.Add(name); }
                 _current = null;
             }
-            else if (word is ".endproc" or ".endscope" && _named.Count != 0)
+            else if ((IsLowered(word, ".endproc") || IsLowered(word, ".endscope")) && _named.Count != 0)
             {
                 if (_named[^1]) { Scopes.RemoveAt(Scopes.Count - 1); }
                 _named.RemoveAt(_named.Count - 1);
@@ -147,9 +153,9 @@ public static partial class DocumentationParser
                 _usings.RemoveAll(item => item.Depth > _named.Count);
                 _current = null;
             }
-            else if (word == ".using" && _macros.Count == 0 && assembled)
+            else if (IsLowered(word, ".using") && _macros.Count == 0 && assembled)
             {
-                string[] names = [.. code[word.Length..].Split(',').Select(name => name.Trim()).Where(name => name.Length != 0)];
+                string[] names = [.. code[word.Length..].ToString().Split(',').Select(name => name.Trim()).Where(name => name.Length != 0)];
                 if (names.Length != 0)
                 {
                     _usings.Add((_named.Count, new(string.Join("::", Scopes), names, line)));

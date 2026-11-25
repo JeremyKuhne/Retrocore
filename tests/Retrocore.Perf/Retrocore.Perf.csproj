@@ -11,10 +11,14 @@
     <Using Include="Retrocore.Cpu" />
     <Using Include="Retrocore.Cpu.M6502" />
     <PackageReference Include="BenchmarkDotNet" Version="0.16.0-preview.2" />
+    <!-- BenchmarkDotNet's ETW profiler (-p ETW), for traces of where time and allocations go. -->
+    <PackageReference Include="BenchmarkDotNet.Diagnostics.Windows" Version="0.16.0-preview.2" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Retrocore.Assembler\Retrocore.Assembler.csproj" />
+    <!-- The language server's SDK index, with the SDK's ROM sources it copies to its output. -->
+    <ProjectReference Include="..\..\src\Retrocore.Debug\Retrocore.Debug.csproj" />
     <ProjectReference Include="..\..\src\Retrocore.Cpu.M6809\Retrocore.Cpu.M6809.csproj" />
     <ProjectReference Include="..\..\src\Retrocore.Media\Retrocore.Media.csproj" />
     <ProjectReference Include="..\..\src\Retrocore.Machines.Apple2\Retrocore.Machines.Apple2.csproj" />

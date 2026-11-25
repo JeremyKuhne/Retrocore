@@ -48,10 +48,21 @@ public static partial class DocumentationParser
     /// <param name="assembled">What the assembler took from the file, or null when not known.</param>
     /// <param name="style">Whether to check a strict source against the style guide.</param>
     /// <returns>The comments and any placement problems.</returns>
-    internal static DocumentationFile Parse(string text, string path, DocumentationAssembled? assembled, bool style)
+    internal static DocumentationFile Parse(string text, string path, DocumentationAssembled? assembled, bool style) =>
+        Parse(Lines(text), path, assembled, style);
+
+    /// <summary>
+    ///  Parses a source file's documentation comments from its lines, as <see cref="Lines(string)"/> splits them.
+    /// </summary>
+    /// <param name="lines">The source's lines, which are only read.</param>
+    /// <param name="path">The source path, recorded in comments and diagnostics.</param>
+    /// <param name="assembled">What the assembler took from the file, or null when not known.</param>
+    /// <param name="style">Whether to check a strict source against the style guide.</param>
+    /// <returns>The comments and any placement problems.</returns>
+    internal static DocumentationFile Parse(string[] lines, string path, DocumentationAssembled? assembled, bool style)
     {
-        string[] lines = text.Replace("\r\n", "\n").Split('\n');
-        HashSet<string> dataMacros = DataMacros(lines);
+        List<(int Line, string Name)> macros = MacroDefinitions(lines);
+        HashSet<string> dataMacros = DataMacros(lines, macros);
         List<DocumentationComment> comments = [];
         List<DocumentationDiagnostic> diagnostics = [];
         List<(string Text, bool Not)> conditions = [];
@@ -63,18 +74,18 @@ public static partial class DocumentationParser
         while (index < lines.Length)
         {
             string line = lines[index];
-            if (line.TrimStart().StartsWith(Marker, StringComparison.Ordinal))
+            if (IsDocumentationLine(line))
             {
                 int start = index;
                 List<(int, string)> body = [];
-                while (index < lines.Length && lines[index].TrimStart().StartsWith(Marker, StringComparison.Ordinal))
+                while (index < lines.Length && IsDocumentationLine(lines[index]))
                 {
                     body.Add((index, Strip(lines[index])));
                     index++;
                 }
 
                 // Conditional lines may separate a comment from its definition.
-                while (index < lines.Length && IsConditional(Split(lines[index]).Code))
+                while (index < lines.Length && IsConditional(lines[index].AsSpan(0, CodeLength(lines[index]))))
                 {
                     Condition(conditions, Split(lines[index]).Code);
                     index++;
@@ -169,14 +180,16 @@ public static partial class DocumentationParser
                 continue;
             }
 
-            (string code, string? comment) = Split(line);
-            string trimmed = code.Trim();
+            // Read in place: most lines document nothing, so only a trailing ;; comment's line is copied out.
+            int codeLength = CodeLength(line);
+            ReadOnlySpan<char> trimmed = line.AsSpan(0, codeLength).Trim();
             if (trimmed.Length != 0) { codeSeen = true; }
-            if (comment is not null && comment.StartsWith(Marker, StringComparison.Ordinal) && trimmed.Length != 0)
+            bool trailingMarker = codeLength + 1 < line.Length && line[codeLength + 1] == ';';
+            if (trailingMarker && trimmed.Length != 0)
             {
-                if (Qualify(Define(code, containers), scopes) is { } definition)
+                if (Qualify(Define(line[..codeLength], containers), scopes) is { } definition)
                 {
-                    List<(int, string)> body = [(index, Strip(comment))];
+                    List<(int, string)> body = [(index, Strip(line[codeLength..]))];
                     comments.Add(Documented(path, lines, index, index, definition, body, conditions, dataMacros, isTrailing: true, tracker));
                 }
                 else
@@ -192,7 +205,7 @@ public static partial class DocumentationParser
 
             if (IsConditional(trimmed))
             {
-                Condition(conditions, trimmed);
+                Condition(conditions, trimmed.ToString());
             }
             else
             {
@@ -203,7 +216,7 @@ public static partial class DocumentationParser
             index++;
         }
 
-        bool strict = IsStrict(text);
+        bool strict = IsStrict(lines);
         if (strict && style) { Style(lines, path, diagnostics); }
 
         // Without the style checks this is not the lint, so there is nothing for exclusions to apply to.
@@ -212,20 +225,36 @@ public static partial class DocumentationParser
         {
             Strict = strict,
             Exclusions = exclusions,
-            Macros = MacroNames(lines)
+            Macros = MacroNames(macros)
         };
     }
 
-    // The macros a source defines, in any dialect.
-    private static List<string> MacroNames(string[] lines)
+    // The macros a source defines, in any dialect, in source order with their lines. Only a line that writes .macro,
+    // .mac, Merlin's MAC or MACRO-10's DEFINE defines one, and each has "mac" or "define" in it, so no other line need
+    // be classified.
+    private static List<(int Line, string Name)> MacroDefinitions(string[] lines)
     {
-        List<string> names = [];
+        List<(int Line, string Name)> macros = [];
         List<string?> none = [];
-        foreach (string line in lines)
+        for (int index = 0; index < lines.Length; index++)
         {
-            if (Define(Split(line).Code, none) is { Kind: DocumentationKind.Macro } macro) { names.Add(macro.Name); }
+            string line = lines[index];
+            bool candidate = line.IndexOf("mac", StringComparison.OrdinalIgnoreCase) >= 0
+                || line.IndexOf("define", StringComparison.OrdinalIgnoreCase) >= 0;
+
+            if (candidate && Define(Split(line).Code, none) is { Kind: DocumentationKind.Macro } macro)
+            {
+                macros.Add((index, macro.Name));
+            }
         }
 
+        return macros;
+    }
+
+    private static List<string> MacroNames(List<(int Line, string Name)> macros)
+    {
+        List<string> names = [with(capacity: macros.Count)];
+        foreach ((_, string name) in macros) { names.Add(name); }
         return names;
     }
 
@@ -251,7 +280,8 @@ public static partial class DocumentationParser
         for (int index = 0; index < lines.Count; index++)
         {
             result[index] = tracker.Current;
-            string trimmed = Split(lines[index]).Code.Trim();
+            string line = lines[index];
+            ReadOnlySpan<char> trimmed = line.AsSpan(0, CodeLength(line)).Trim();
             if (trimmed.Length != 0 && !IsConditional(trimmed))
             {
                 tracker.Advance(trimmed, index, assembled);
@@ -259,6 +289,37 @@ public static partial class DocumentationParser
         }
 
         return result;
+    }
+
+    /// <summary>
+    ///  Splits a source's text into lines without their terminators, as the parser reads them.
+    /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   Only CRLF and LF end a line; a lone CR stays in its line. A terminating newline leaves an empty last line.
+    ///  </para>
+    /// </remarks>
+    /// <param name="text">The text.</param>
+    /// <returns>The lines.</returns>
+    internal static string[] Lines(string text)
+    {
+        // As text.Replace("\r\n", "\n").Split('\n') splits it, without copying the whole text first: each line ends at
+        // a LF, less the one CR before it.
+        int count = 1;
+        for (int at = text.IndexOf('\n'); at >= 0; at = text.IndexOf('\n', at + 1)) { count++; }
+
+        string[] lines = new string[count];
+        int start = 0;
+        int line = 0;
+        for (int at = text.IndexOf('\n'); at >= 0; at = text.IndexOf('\n', start))
+        {
+            int end = at > start && text[at - 1] == '\r' ? at - 1 : at;
+            lines[line++] = text[start..end];
+            start = at + 1;
+        }
+
+        lines[line] = text[start..];
+        return lines;
     }
 
     /// <summary>
@@ -270,7 +331,7 @@ public static partial class DocumentationParser
     /// <returns>The topics, named by their titles.</returns>
     public static IReadOnlyList<DocumentationComment> ParseTopics(string text, string path)
     {
-        string[] lines = text.Replace("\r\n", "\n").Split('\n');
+        string[] lines = Lines(text);
         List<DocumentationComment> topics = [];
         (string Keyword, string Title, int Line)? current = null;
         List<(int, string)> body = [];
@@ -422,18 +483,16 @@ public static partial class DocumentationParser
     }
 
     // Macros whose body starts with data make the labels they follow tables.
-    private static HashSet<string> DataMacros(string[] lines)
+    private static HashSet<string> DataMacros(string[] lines, List<(int Line, string Name)> definitions)
     {
         HashSet<string> macros = [with(StringComparer.OrdinalIgnoreCase)];
-        List<string?> none = [];
-        for (int index = 0; index < lines.Length; index++)
+        foreach ((int index, string name) in definitions)
         {
-            if (Define(Split(lines[index]).Code, none) is not { Kind: DocumentationKind.Macro } macro) { continue; }
             for (int body = index + 1; body < lines.Length; body++)
             {
                 string code = Split(lines[body]).Code.Trim();
                 if (code.Length == 0 || IsConditional(code)) { continue; }
-                if (IsData(code, macros)) { macros.Add(macro.Name); }
+                if (IsData(code, macros)) { macros.Add(name); }
                 break;
             }
         }
@@ -480,10 +539,19 @@ public static partial class DocumentationParser
         return members;
     }
 
+    // Whether code can be a type directive. Each has "enum", "struct" or "union" in it, so a line without them is not
+    // one; most lines aren't. No character other than ASCII's lowers to these letters, so ignoring case here finds
+    // every line TypeLine's lowered comparison does.
+    private static bool IsTypeCandidate(ReadOnlySpan<char> code) =>
+        code.IndexOf("enum".AsSpan(), StringComparison.OrdinalIgnoreCase) >= 0
+            || code.IndexOf("struct".AsSpan(), StringComparison.OrdinalIgnoreCase) >= 0
+            || code.IndexOf("union".AsSpan(), StringComparison.OrdinalIgnoreCase) >= 0;
+
     // A line's type directive, in lower case, with the member it may name first ("WHERE .struct") and the type's name
     // after it; the directive is empty on any other line.
     private static (string? Member, string Directive, string Name) TypeLine(string code)
     {
+        if (!IsTypeCandidate(code.AsSpan())) { return (null, "", ""); }
         string first = FirstWord(code);
         string? member = null;
         string rest = code[first.Length..].Trim();
@@ -514,6 +582,12 @@ public static partial class DocumentationParser
         definition is null || scopes.Count == 0 || definition.Kind is DocumentationKind.Macro or DocumentationKind.Definition
             ? definition
             : definition with { Name = $"{string.Join("::", scopes)}::{definition.Name}" };
+
+    // Container for code read in place, copied only when it can be a type directive, as TypeLine tells.
+    private static void Container(List<string?> containers, ReadOnlySpan<char> code)
+    {
+        if (IsTypeCandidate(code)) { Container(containers, code.ToString()); }
+    }
 
     private static void Container(List<string?> containers, string code)
     {

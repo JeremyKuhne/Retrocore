@@ -144,6 +144,8 @@ public sealed class DocumentationSet
         IEnumerable<AssemblySourceMapEntry> sourceMap,
         IEnumerable<(AssemblyLocation? Location, InstructionSet Cpu)>? cpuDirectives)
     {
+        // Every entry names one of a few files, so each path is made full once.
+        Dictionary<string, string> fullPaths = [with(StringComparer.Ordinal)];
         void Record(InstructionSet cpu, AssemblyLocation? location)
         {
             set._onlyCpu ??= cpu.Description;
@@ -155,7 +157,11 @@ public sealed class DocumentationSet
             for (; location is not null; location = location.ExpandedFrom)
             {
                 if (location.Path.Length == 0) { continue; }
-                string path = System.IO.Path.GetFullPath(location.Path);
+                if (!fullPaths.TryGetValue(location.Path, out string? path))
+                {
+                    fullPaths[location.Path] = path = System.IO.Path.GetFullPath(location.Path);
+                }
+
                 if (!set._cpus.TryGetValue(path, out List<(int Line, InstructionSet Cpu)>? runs))
                 {
                     set._cpus[path] = runs = [];
@@ -175,9 +181,19 @@ public sealed class DocumentationSet
             Record(cpu, location);
         }
 
+        // Each run of entries with one CPU keeps only its first: At's answer, the CPU of the last entry at or before a
+        // line, is the CPU of the run that entry is in.
         foreach (List<(int Line, InstructionSet Cpu)> runs in set._cpus.Values)
         {
             runs.Sort((left, right) => left.Line.CompareTo(right.Line));
+            int kept = 1;
+            for (int index = 1; index < runs.Count; index++)
+            {
+                if (runs[index].Cpu != runs[kept - 1].Cpu) { runs[kept++] = runs[index]; }
+            }
+
+            runs.RemoveRange(kept, runs.Count - kept);
+            runs.TrimExcess();
         }
     }
 

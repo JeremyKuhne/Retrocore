@@ -231,8 +231,9 @@ public class Trs80Model3RomTests
     }
 
     /// <summary>
-    ///  The Model III with Level I BASIC boots to READY, runs a statement, saves and loads a program on tape at 250
-    ///  baud, the leader zeros and the sync byte $A5, and the reset button stops a running program every time.
+    ///  The Model III with Level I BASIC boots to READY, runs a statement, typed in either case, saves and loads a
+    ///  program on tape at 250 baud, the leader zeros and the sync byte $A5, and the reset button stops a running
+    ///  program every time.
     /// </summary>
     [TestMethod]
     public void Level1BootsAndUsesTheTape()
@@ -251,6 +252,10 @@ public class Trs80Model3RomTests
         Screen(machine).Should().Contain("READY");
         Type(machine, "PRINT 6*7\r");
         Screen(machine).Should().Contain("42");
+
+        // Level I reads shift and a letter as its control code, so lowercase is typed unshifted, in uppercase.
+        Type(machine, "print 7*8\r");
+        Screen(machine).Should().Contain("PRINT 7*8").And.Contain("56");
         Type(machine, "10 PRINT \"HI\";6*7\r");
 
         CassetteImage tape = new();
@@ -318,6 +323,35 @@ public class Trs80Model3RomTests
         ShowsWithin(machine, ready, seconds: 20);
         Type(machine, "DIR\r");
         ShowsWithin(machine, listed, seconds: 20);
+    }
+
+    /// <summary>
+    ///  Typed text comes out as written on the Model 4's DOSes, which start with caps lock off: an uppercase letter
+    ///  with shift, a lowercase one without.
+    /// </summary>
+    /// <param name="variant">The model.</param>
+    /// <param name="image">The image's file name.</param>
+    /// <param name="ready">The DOS's prompt.</param>
+    [TestMethod]
+    [DataRow(Trs80Model3Variant.Model4, "TRSDOS60.dmk", "TRSDOS Ready")]
+    [DataRow(Trs80Model3Variant.Model4, "TRSDOS62.imd", "TRSDOS Ready")]
+    [DataRow(Trs80Model3Variant.Model4, "LSDOS63J.dsk", "LS-DOS Ready")]
+    [DataRow(Trs80Model3Variant.Model4P, "LSDOS63J.dsk", "LS-DOS Ready")]
+    public void DosShowsTypedCase(Trs80Model3Variant variant, string image, string ready)
+    {
+        string path = Path.Join(ExternalTestData.Root, "trs80-disks", image);
+        if (!File.Exists(path)) { Assert.Inconclusive($"{path} is missing."); }
+
+        Trs80Model3Machine machine = Model3(variant, diskController: true);
+        (FloppyDisk disk, string format) = Trs80DiskImage.Read(File.ReadAllBytes(path), Path.GetExtension(path));
+        machine.Drives[0].Insert(disk, image, format);
+
+        ShowsWithin(machine, "Date", seconds: 20);
+        Type(machine, "11/14/86\r");
+        Type(machine, "\r");
+        ShowsWithin(machine, ready, seconds: 20);
+        Type(machine, "Dir MixedCase");
+        Text(machine).Should().Contain("Dir MixedCase");
     }
 
     /// <summary>

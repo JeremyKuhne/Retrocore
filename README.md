@@ -372,6 +372,7 @@ Design notes for upcoming work live in [`docs/backlog`](docs/backlog):
 - [debugging BASIC programs](docs/backlog/BasicDebugging.md): Level I BASIC and disk-image import/export;
 - [choosing and starting a machine, next round](docs/backlog/MachineLaunch.md);
 - [CPU core and machine loop speed](docs/backlog/CoreOptimization.md), including what .NET 11 might offer;
+- [the language server's SDK index speed](docs/backlog/SdkIndexOptimization.md), with every change measured;
 - [exporting HTML documentation from `;;` comments](docs/backlog/DocExport.md);
 - [documented struct, union and enum members](docs/backlog/MemberDocumentation.md), with historical names;
 - [`.using`, names from another scope without qualifying them](docs/backlog/Using.md);
@@ -388,7 +389,7 @@ Design notes for upcoming work live in [`docs/backlog`](docs/backlog):
 - [the Intel 8080 and 8085](docs/backlog/I8080.md), and [the Altair 8800](docs/backlog/Altair8800.md): its disks and front panel view;
 - [the 3.5 disk controller at the hardware level](docs/backlog/Disk35Hardware.md), running Apple's EPROM on an emulated 65C02 and SWIM;
 - [SOS sources: the Apple III's kernel and drivers](docs/backlog/SosSources.md);
-- [debugging Business BASIC](docs/backlog/BusinessBasic.md);
+- [Business BASIC's other versions, modules and DEF FN view](docs/backlog/BusinessBasic.md);
 - [the Z80 SoftCards](docs/backlog/SoftCard.md): interrupts, the Premium SoftCard IIe and CP/M 3, CP/M sources, if wanted;
 - [the Commodore PET](docs/backlog/Pet.md): the 8032's 80 columns and CRTC, if wanted;
 - [the Kaypro II](docs/backlog/Kaypro.md): CP/M's sources and its disks as a file system;

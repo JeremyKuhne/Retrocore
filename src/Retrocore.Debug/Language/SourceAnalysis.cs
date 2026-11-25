@@ -24,6 +24,12 @@ internal sealed partial class SourceAnalysis
         [with(StringComparer.OrdinalIgnoreCase)];
     private readonly Dictionary<string, AssemblyDialect> _dialects = [with(StringComparer.OrdinalIgnoreCase)];
     private readonly Dictionary<string, string[]> _lines = [with(StringComparer.OrdinalIgnoreCase)];
+
+    // Full paths by the path as the assembly gave it, filled while the constructor runs.
+    private readonly Dictionary<string, string> _fullPaths = [with(StringComparer.Ordinal)];
+
+    // Full paths upper-cased for the keys of _usingOrder and the assembled lines, filled while the constructor runs.
+    private readonly Dictionary<string, string> _upperPaths = [with(StringComparer.Ordinal)];
     private readonly Func<string, string?> _text;
 
     // Filled lazily, and language requests run in parallel: a cache entry is computed whole and then published.
@@ -49,7 +55,8 @@ internal sealed partial class SourceAnalysis
         AssemblyResult result,
         AssemblyProject project,
         IEnumerable<string> members,
-        Func<string, string?> text)
+        Func<string, string?> text,
+        Func<string, string[]?> linesOf)
     {
         Root = root;
         Result = result;
@@ -73,7 +80,7 @@ internal sealed partial class SourceAnalysis
             {
                 if (location is { Path.Length: > 0, ExpandedFrom: { } from, IsMacroExpansion: false })
                 {
-                    string path = Path.GetFullPath(location.Path);
+                    string path = FullPath(location.Path);
                     if (!_includeCpus.TryGetValue(path, out Dictionary<AssemblyLocation, List<(int Line, InstructionSet Cpu)>>? contexts))
                     {
                         _includeCpus[path] = contexts = [];
@@ -95,14 +102,14 @@ internal sealed partial class SourceAnalysis
                 for (AssemblyLocation? location = statement.Location; location is not null; location = location.ExpandedFrom)
                 {
                     if (location is { Path.Length: > 0, ExpandedFrom: null }
-                        && string.Equals(Path.GetFullPath(location.Path), root, StringComparison.OrdinalIgnoreCase))
+                        && string.Equals(FullPath(location.Path), root, StringComparison.OrdinalIgnoreCase))
                     {
                         int line = ReferenceEquals(location, statement.Location) ? location.Line : location.Line + 1;
                         _rootCpus.Add((line, cpu));
                     }
 
                     if (location is { Path.Length: > 0, ExpandedFrom: { } from, IsMacroExpansion: false }
-                        && _includeCpus.TryGetValue(Path.GetFullPath(location.Path), out var contexts)
+                        && _includeCpus.TryGetValue(FullPath(location.Path), out var contexts)
                         && contexts.TryGetValue(from, out var runs))
                     {
                         int line = ReferenceEquals(location, statement.Location) ? location.Line : location.Line + 1;
@@ -114,9 +121,12 @@ internal sealed partial class SourceAnalysis
 
         _text = text;
         Members = new(members, StringComparer.OrdinalIgnoreCase) { root };
+
+        // The members' lines: an open document's split from its text, a file on disk's shared with the assembly through
+        // the file cache. Later lookups of other files read them afresh.
         foreach (string member in Members)
         {
-            if (text(member) is { } content) { _lines[member] = SourceText.Lines(content); }
+            if (linesOf(member) is { } split) { _lines[member] = split; }
         }
 
         List<string> scopes = [];
@@ -126,7 +136,7 @@ internal sealed partial class SourceAnalysis
             AssemblyStatement statement = project.Statements[index];
             RecordScopeOrder(statement, index, opened);
             if (statement.Location is not { Path.Length: > 0 } location) { continue; }
-            string path = Path.GetFullPath(location.Path);
+            string path = FullPath(location.Path);
             if (_lines.ContainsKey(path))
             {
                 _dialects.TryAdd(path, statement.Dialect);
@@ -148,7 +158,7 @@ internal sealed partial class SourceAnalysis
                     _includedFrom[path] = sites = [];
                 }
 
-                (string Path, int Line) site = (Path.GetFullPath(from.Path), from.Line);
+                (string Path, int Line) site = (FullPath(from.Path), from.Line);
                 if (!sites.Contains(site)) { sites.Add(site); }
             }
 
@@ -164,7 +174,7 @@ internal sealed partial class SourceAnalysis
                 if (statement.Kind == AssemblyStatementKind.Using && AssemblyNameResolver.ReadUsingNames(statement, out _) is not null)
                 {
                     usingLines.Add(location.Line);
-                    _usingOrder.TryAdd((path.ToUpperInvariant(), location.Line), index);
+                    _usingOrder.TryAdd((UpperPath(path), location.Line), index);
                 }
             }
             else if (statement.Kind == AssemblyStatementKind.Using && AssemblyNameResolver.ReadUsingNames(statement, out _) is { } names)
@@ -206,11 +216,12 @@ internal sealed partial class SourceAnalysis
         // The assembler knows native names; show the spelling the source used.
         Dictionary<string, string> spelling = [with(StringComparer.Ordinal)];
         foreach (KeyValuePair<string, string> alias in result.SymbolAliases) { spelling[alias.Value] = alias.Key; }
-        HashSet<(string Path, int Line)> assembled = [];
+        // The lines the assembler defined a name on, by the upper-cased path, so each line costs only its number.
+        Dictionary<string, HashSet<int>> assembled = [with(StringComparer.Ordinal)];
         foreach (AssemblySymbol symbol in result.SymbolDefinitions)
         {
             if (symbol.Location is not { } location || location.Path.Length == 0) { continue; }
-            string path = Path.GetFullPath(location.Path);
+            string path = FullPath(location.Path);
             int scopeEnd = symbol.Name.LastIndexOf("::", StringComparison.Ordinal);
             int qualifier = scopeEnd < 0 ? 0 : scopeEnd + 2;
             string suffix = symbol.Name[qualifier..];
@@ -234,13 +245,20 @@ internal sealed partial class SourceAnalysis
             }
 
             Add(new(name, path, location.Line, column, kind, symbol.Value, sourceLength));
-            assembled.Add((path.ToUpperInvariant(), location.Line));
+            string upper = UpperPath(path);
+            if (!assembled.TryGetValue(upper, out HashSet<int>? assembledLines))
+            {
+                assembled[upper] = assembledLines = [];
+            }
+
+            assembledLines.Add(location.Line);
         }
 
         // Macros and .defines are expanded before assembly, so find their definitions in the text; so are the
         // definitions of a source that does not assemble yet, which the assembler reports none of.
         foreach ((string path, string[] lines) in _lines)
         {
+            HashSet<int>? assembledHere = assembled.GetValueOrDefault(UpperPath(path));
             for (int line = 0; line < lines.Length; line++)
             {
                 Match match = MacroDefinition().Match(lines[line]);
@@ -253,11 +271,13 @@ internal sealed partial class SourceAnalysis
                     continue;
                 }
 
+                // A line the assembler defined a name on has it already, qualified by its scope: most lines that
+                // define one, so they are passed over before matching.
+                if (assembledHere?.Contains(line) == true) { continue; }
                 match = TextDefinition().Match(lines[line]);
                 bool bare = match.Success && !match.Groups["colon"].Success && !match.Groups["equate"].Success;
                 bool instruction = bare && InstructionDocs.IsMnemonic(match.Groups["name"].Value);
-                // A line the assembler defined a name on has it already, qualified by its scope.
-                if (!match.Success || instruction || assembled.Contains((path.ToUpperInvariant(), line))) { continue; }
+                if (!match.Success || instruction) { continue; }
 
                 // One it did not assemble (a branch of conditional assembly not taken, or a source with errors) is
                 // qualified by the scopes around it as the assembler would qualify it, so a name in a scope is not
@@ -307,7 +327,7 @@ internal sealed partial class SourceAnalysis
     private DocumentationSet CreateDocumentation() => DocumentationSet.Create(
         _lines.Keys
             .OrderBy(path => string.Equals(path, Root, StringComparison.OrdinalIgnoreCase) ? 0 : 1)
-            .Select(path => DocumentationParser.Parse(string.Join("\n", _lines[path]), path, AssembledUsing(path))),
+            .Select(path => DocumentationParser.Parse(SourceText.Rejoined(_lines[path]), path, AssembledUsing(path), style: true)),
         Symbols(),
         ModuleOf(Root),
         ModelOf(Root),
@@ -352,13 +372,18 @@ internal sealed partial class SourceAnalysis
     /// </summary>
     /// <param name="root">The full path of the root.</param>
     /// <param name="openText">Open documents' text by path, or null for files on disk.</param>
+    /// <param name="files">
+    ///  The files read from disk, shared with other analyses made at the same time, such as the SDK index's; null for a
+    ///  cache of this analysis's own.
+    /// </param>
     /// <returns>The analysis.</returns>
-    internal static SourceAnalysis Assemble(string root, Func<string, string?> openText)
+    internal static SourceAnalysis Assemble(string root, Func<string, string?> openText, SourceFileCache? files = null)
     {
-        string text = openText(root) ?? File.ReadAllText(root);
+        files ??= new();
+        string text = openText(root) ?? files.Read(root);
         string configuration = Path.ChangeExtension(root, ".cfg");
         string? configurationText = openText(configuration) ?? (File.Exists(configuration) ? File.ReadAllText(configuration) : null);
-        WorkspaceSourceResolver resolver = new(openText);
+        WorkspaceSourceResolver resolver = new(openText, files);
         AssemblyOptions options = new(ProcessorVariant.Mos6502, 0, AddressSpaceSize)
         {
             SourceResolver = resolver,
@@ -374,8 +399,19 @@ internal sealed partial class SourceAnalysis
             ? assembler.Assemble(parsed.Project, options)
             : Assembler.Assembler.Failed(parsed);
 
-        return new(root, result, parsed.Project, resolver.Resolved, path => openText(path) ?? (File.Exists(path) ? File.ReadAllText(path) : null));
+        return new(
+            root,
+            result,
+            parsed.Project,
+            resolver.Resolved,
+            TextOf(openText),
+            path => openText(path) is { } open ? SourceText.Lines(open) : files.ReadLinesIfExists(path));
     }
+
+    // The analysis keeps this function, so it is made apart from Assemble's lambdas: those share one closure, and
+    // the analysis would keep the build's whole file cache through it.
+    private static Func<string, string?> TextOf(Func<string, string?> openText) =>
+        path => openText(path) ?? (File.Exists(path) ? File.ReadAllText(path) : null);
 
     /// <summary>
     ///  Gets a member file's lines.
@@ -726,7 +762,7 @@ internal sealed partial class SourceAnalysis
         AssemblyLocation invocation = location;
         while (invocation.IsMacroExpansion && invocation.ExpandedFrom is { } from) { invocation = from; }
         if (invocation.IsMacroExpansion || invocation.Path.Length == 0) { return; }
-        string path = Path.GetFullPath(invocation.Path);
+        string path = FullPath(invocation.Path);
         if (!_invokedUsings.TryGetValue(path, out Dictionary<int, List<string[]>>? lines))
         {
             _invokedUsings[path] = lines = [];
@@ -734,7 +770,7 @@ internal sealed partial class SourceAnalysis
 
         if (!lines.TryGetValue(invocation.Line, out List<string[]>? list)) { lines[invocation.Line] = list = []; }
         list.Add(names);
-        _usingOrder.TryAdd((path.ToUpperInvariant(), invocation.Line), index);
+        _usingOrder.TryAdd((UpperPath(path), invocation.Line), index);
     }
 
     // Records where each scope is first opened in the assembled statements, so a .using operand binds, as the
@@ -766,6 +802,22 @@ internal sealed partial class SourceAnalysis
         _usingOrder.TryGetValue((path.ToUpperInvariant(), directive.Line), out int at)
             ? scope => _scopeOpened.TryGetValue(scope, out int open) && open < at
             : null;
+
+    // A statement's, symbol's or include's path made full. The assembly names a few files many times over, so each
+    // path is made full once; only the constructor calls this, so the cache needs no lock.
+    private string FullPath(string path)
+    {
+        if (!_fullPaths.TryGetValue(path, out string? full)) { _fullPaths[path] = full = Path.GetFullPath(path); }
+        return full;
+    }
+
+    // A full path upper-cased, as the keys that compare paths without case hold it, once per path; only the
+    // constructor calls this, so the cache needs no lock.
+    private string UpperPath(string path)
+    {
+        if (!_upperPaths.TryGetValue(path, out string? upper)) { _upperPaths[path] = upper = path.ToUpperInvariant(); }
+        return upper;
+    }
 
     private static string Qualify(string scope, string name) => name.Length == 0 ? scope : $"{scope}::{name}";
 

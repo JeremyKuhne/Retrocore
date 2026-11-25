@@ -366,7 +366,9 @@ public sealed class Apple2Disk35Card
     /// <summary>
     ///  READ and WRITE: a tagged block, its 12 tag bytes and then its data, of 400K and 800K Apple disks only, as
     ///  Apple's card moves them. The count must be 524, and the block is where READ and WRITE elsewhere take an
-    ///  address. This card keeps no tags: they read as zero and writing them changes nothing.
+    ///  address. This card keeps no tags: they read as zero and writing them changes nothing. Apple's firmware sends
+    ///  READ down its write path (<c>ReadWriteTagged</c> reads only for command 1); this card reads, as READ means
+    ///  (docs/conversions/Disk35.md, Q1).
     /// </summary>
     /// <param name="call">The parameter list: the count, then the block.</param>
     /// <param name="write">Whether to write the block rather than read it.</param>

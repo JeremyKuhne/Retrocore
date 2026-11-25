@@ -30,6 +30,7 @@
     <!-- Retrocore Desktop's spike runs the machines through the debug host's targets (docs/backlog/Desktop.md). -->
     <InternalsVisibleTo Include="retrocore-desktop" />
     <InternalsVisibleTo Include="Retrocore.Tests" />
+    <InternalsVisibleTo Include="Retrocore.Perf" />
     <!-- SDL3's native library, for game controllers, on each platform the extension runs on. -->
     <PackageReference Include="SDL3-CS.Windows" Version="3.4.20" />
     <PackageReference Include="SDL3-CS.Linux" Version="3.4.20" />

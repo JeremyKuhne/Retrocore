@@ -151,8 +151,8 @@ KBTAB:
     .res 5, $00
 .else
 
-;; Tests whether the two shift keys work separately, as SHFEQU says: zero when they are one key, as on early
-;; machines.
+;; Tests whether the two shift keys are one key, as SHFEQU says: Z when they work separately, the right one being
+;; shift lock.
 CHKEQU:
     LD A,[SHFEQU]
     OR A
@@ -1757,7 +1757,8 @@ SETTIM:
 
 .endif
 
-;; Nonzero when the two shift keys work separately, the right one being shift lock; the Model 4 has CAPS instead.
+;; Nonzero when the two shift keys are one key and shift and 0 is shift lock; zero when they work separately, the
+;; right one being shift lock. The Model 4 has CAPS instead.
 SHFEQU:
 .if MODEL = 4
     .byte $00

@@ -1,7 +1,7 @@
 # Builds Retrocore and runs every test that needs nothing outside the repository: the .NET tests (those that need
 # ROM dumps, disk images or other external files report inconclusive), the debug adapter scripts, and the
 # extension's grammar and unit tests. A second job runs the extension's editor tests in a pinned VS Code, which
-# they download, under xvfb, against a Release build of the language server and debug host.
+# they download, under xvfb, against the Release debug host, which also runs the language servers.
 
 name: CI
 

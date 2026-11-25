@@ -290,8 +290,8 @@ Apple2TS sources. `tools\Fetch-Trs80Font.ps1` fetches xtrs's font source to veri
 ## Building and testing
 
 With the `.NET 10 SDK` and Node.js in place, these build and test the repository.
-[CI](.github/workflows/ci.yml) runs the ones that need nothing external on every push to `main` and every pull
-request:
+[CI](.github/workflows/ci.yml) runs the ones that need nothing external, and the extension's editor tests in the
+VS Code they download, on every push to `main` and every pull request:
 
 ```powershell
 dotnet build Retrocore.slnx -c Release

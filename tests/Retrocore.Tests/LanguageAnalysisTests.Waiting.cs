@@ -9,7 +9,8 @@ using System.Text.Json.Nodes;
 
 namespace Retrocore.Tests;
 
-// How a request waits for a document's first analysis, and the SDK index the workspaces share.
+// How a request waits for a document's first analysis, the SDK index the workspaces share, and an analysis's one
+// documentation set.
 public sealed partial class LanguageAnalysisTests
 {
     /// <summary>
@@ -155,5 +156,35 @@ public sealed partial class LanguageAnalysisTests
         List<SourceAnalysis> sdk = [.. first.SdkAnalyses()];
         sdk.Should().NotBeEmpty();
         second.SdkAnalyses().Should().Equal(sdk, (one, other) => ReferenceEquals(one, other));
+    }
+
+    /// <summary>
+    ///  Threads that ask a new analysis for its documentation at once all get the same set. A hover resolves a link
+    ///  against the set and then finds the analysis it came from by reference, while publishing diagnostics reads the
+    ///  set on another thread; two sets left the link's hover empty.
+    /// </summary>
+    /// <returns>The test.</returns>
+    [TestMethod]
+    public async Task ConcurrentReadersShareOneDocumentationSet()
+    {
+        SourceAnalysis analysis = SourceAnalysis.Assemble(
+            Path.Join(SdkModules.RomDirectory, "System", "Monitor.asm"), _ => null);
+
+        const int Readers = 8;
+        using Barrier start = new(Readers);
+
+        // Threads of their own, so the barrier can't wait on a small thread pool; an exception fails the test.
+        Task<DocumentationSet>[] readers = [.. Enumerable.Range(0, Readers).Select(_ => Task.Factory.StartNew(
+            () =>
+            {
+                start.SignalAndWait(TimeSpan.FromMinutes(1)).Should().BeTrue("every reader starts together");
+                return analysis.Documentation;
+            },
+            CancellationToken.None,
+            TaskCreationOptions.LongRunning,
+            TaskScheduler.Default))];
+
+        DocumentationSet[] sets = await Task.WhenAll(readers);
+        sets.Distinct().Should().ContainSingle().Which.Should().BeSameAs(analysis.Documentation);
     }
 }

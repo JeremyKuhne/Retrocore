@@ -38,7 +38,11 @@ internal sealed partial class SourceAnalysis
 
     // Definitions found only in the text, such as in a branch the assembly skipped.
     private readonly HashSet<SymbolSite> _textOnly = [];
+
+    // Built once under the lock, as requests run in parallel with each other and with the publishing of diagnostics,
+    // and the resolver, the lint and a hover's link compare sets by reference: every caller gets the same instance.
     private DocumentationSet? _documentation;
+    private object? _documentationLock;
 
     private SourceAnalysis(
         string root,
@@ -297,7 +301,10 @@ internal sealed partial class SourceAnalysis
     /// <summary>
     ///  Gets the documentation comments of the root and every file it included, with values from the assembly.
     /// </summary>
-    internal DocumentationSet Documentation => _documentation ??= DocumentationSet.Create(
+    internal DocumentationSet Documentation =>
+        LazyInitializer.EnsureInitialized(ref _documentation, ref _documentationLock, CreateDocumentation);
+
+    private DocumentationSet CreateDocumentation() => DocumentationSet.Create(
         _lines.Keys
             .OrderBy(path => string.Equals(path, Root, StringComparison.OrdinalIgnoreCase) ? 0 : 1)
             .Select(path => DocumentationParser.Parse(string.Join("\n", _lines[path]), path, AssembledUsing(path))),

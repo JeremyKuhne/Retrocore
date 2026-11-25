@@ -8,7 +8,7 @@ cited: none. Glyph data, not code.
 
 | Build | `IIBOARD` | `ENHANCED` | Digest |
 | --- | --- | --- | --- |
-| II and II Plus (7341-0036, 2 KiB) | 1 | (not read) | `Apple2SourceTests` |
+| II and II Plus (7341-0036, 2 KiB) | 1 | (asserted, unused) | `Apple2SourceTests` |
 | Original IIe (342-0133, 4 KiB) | 0 | 0 | `SystemSourceTests` |
 | Enhanced IIe (342-0265, 4 KiB) | 0 | 1 (default) | `SystemSourceTests` |
 
@@ -26,12 +26,13 @@ cited: none. Glyph data, not code.
   with `Glyphs` appended: `UppercaseGlyphs`, `SymbolGlyphs`, `LowercaseGlyphs`, and `MouseTextGlyphs`, which the
   Enhanced IIe's set, written inline before, now is too. `MouseText` alone would be a definition the IIe firmware's
   prose names as a plain word throughout, and the lint would ask it to be linked there.
-- G4. The drawing state's `.set` variables: `Row` (the row being drawn) is `GlyphRow`, clear of the `Row` macro;
-  `Lit` is `Dots`; `Flash` is `HighBit`, which now holds the bit's value ($00 or $80) rather than 0 or 1, since the
-  II's codes $C0-$FF set it and are not flashing; `Low` and `High` are `LowNibble` and `HighNibble`. `Inverse` stays.
+- G4. The drawing state's `.set` variables: `Row` (the row being drawn) is `GlyphRow`, clear of the `Row` macro; `Lit`
+  is `Dots`; `Flash` is `HighBit`, which now holds the bit's value ($00 or $80) rather than 0 or 1, since the II's codes
+  $C0-$FF set it and are not flashing; `Low` and `High` are `LowNibble` and `HighNibble`; the table's `.repeat` counter
+  `Value` is `value`, lower case as most converted sources' counters are. `Inverse` stays.
 - G5. Named constants: `GLYPH_SIZE` (8), `GLYPHS_PER_SET` (32), `DOTS_PER_ROW` (7), `DOT_BITS` ($7F) and `HIGH_BIT`
-  ($80). The byte table's nibble arithmetic (`* $11`, the rotation by two) and the complement (`^ $FF`) stay inline,
-  explained in comments.
+  ($80). The byte table's nibble arithmetic (`* $11`, the rotation by two) and the complements (`Row`'s `^ $FF`, the
+  table's `~ ... & $FF` and `~value & DOT_BITS`) stay inline, explained in comments.
 - G6. `Row`'s seven dots are gathered with a `.repeat` over the columns instead of one 230-column expression per
   chip; the bytes are the same.
 - G7. No `.proc` or scope: there are no routines, and the macros are the only structure. The file's layout at the
@@ -44,7 +45,3 @@ cited: none. Glyph data, not code.
 - Byte identity of all three builds: the digests named above.
 - No contract run: the chips are data the video circuit reads, with no code for the debugger to execute. Booting the
   II and II Plus on the SDK's ROMs (`SdkRomsStartBasic`) draws text through the II's chip.
-- `FirmwareFunctions.asm` needs no historical names on the evidence in the repository: the firmware conversion
-  ([Firmware.md](Firmware.md), F2-F3), made against IIEROM82 and IIETRM85, put Apple's `F.` names on the handlers and
-  gave the function numbers none. The listings could not be re-read for this conversion, so this rests on that
-  conversion's check.

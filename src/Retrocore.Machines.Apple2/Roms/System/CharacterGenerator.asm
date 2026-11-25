@@ -1,4 +1,4 @@
-; retrocore: style=strict ignore=unlinked-name:PLUS
+; retrocore: style=strict ignore=unlinked-name:PLUS -- the title's II PLUS
 ;; APPLE II CHARACTER GENERATORS: THE IIE'S VIDEO ROM, ORIGINAL AND ENHANCED, AND THE II AND II PLUS'S
 ;;
 ;; The IIe draws text from a 4 KiB video ROM: 342-0133 in the original IIe and 342-0265 in the Enhanced IIe.
@@ -19,9 +19,9 @@
 ;; only through ALTCHARSET.
 ;;
 ;; The upper 2 KiB is the same in both chips: a table of 256 eight-byte patterns, one for each byte value.
-;; Rows 0, 1, 4 and 5 are the byte's seven low bits stored as normal dots, with bit 7 set; rows 2 and 3 repeat
-;; the low nibble's four dots twice across the row, the second time shifted by two dots, and rows 6 and 7 do
-;; the same with the high nibble. Retrocore's video reads only the text font.
+;; Rows 0, 1, 4 and 5 are the byte's seven low bits stored as normal dots, with bit 7 set; row 2 repeats the low
+;; nibble's four bits twice across the row's eight, inverted as normal dots are, row 3 is that pattern rotated by
+;; two dots, and rows 6 and 7 do the same with the high nibble. Retrocore's video reads only the text font.
 ;;
 ;; The Apple II and II Plus use a 2 KiB character generator, 7341-0036 on revision 7 and later boards, with the
 ;; same 64 glyphs as the IIe's uppercase and symbols but stored another way. Each glyph's top row is blank and
@@ -77,7 +77,7 @@ HighBit .set 0
 ;; The row of the glyph being drawn, 0-7: <Glyph> starts it at 0 and each <Row> adds 1.
 GlyphRow .set 0
 
-;; The dots of the row being drawn, as the chip's bits before bit 7 and the IIe's inversion: a lit dot is 1.
+;; The dots of the row being drawn, before bit 7 is added and, on the IIe, before the inversion: a lit dot is 1.
 Dots .set 0
 
 ;; The low four bits of the byte value whose pattern is being drawn, in the IIe's upper 2 KiB.
@@ -1112,8 +1112,8 @@ HighNibble .set 0
     Row "......."
 .endmacro
 
-;; The Enhanced IIe's 32 MouseText glyphs, for codes $40-$5F, stored normal: Apple's symbols for menus, windows
-;; and the mouse. Each comment gives the symbol's usual name.
+;; The Enhanced IIe's 32 MouseText glyphs, for codes $40-$5F, which the layout draws normal: Apple's symbols for
+;; menus, windows and the mouse. Each comment gives the symbol's usual name.
 .macro MouseTextGlyphs
     Glyph $40    ; closed apple
     Row "....#.."
@@ -1474,8 +1474,9 @@ HighNibble .set 0
     UppercaseGlyphs
     LowercaseGlyphs
 
-; $800-$FFF: a pattern for each byte value. Multiplying a nibble by $11 repeats its four dots across the row's
-; eight bits, and the rotation by two shifts the second copy two dots; the inversions make the dots normal.
+; $800-$FFF: a pattern for each byte value. Multiplying a nibble by $11 repeats its four bits across the row's eight;
+; in rows 3 and 7 the nibble is rotated by two first, which rotates that row's pattern two dots. Each row is inverted,
+; as a normal glyph's is, so a 1 bit in the value is a lit dot.
 .repeat 256, value
     .set LowNibble, value & $0F
     .set HighNibble, value >> 4

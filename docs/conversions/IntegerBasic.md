@@ -88,8 +88,9 @@ The root asserts that `FORFIX` is 0 or 1. `FORFIX` is the SDK's switch, which C#
 
 Documented in the code, not changed (the bytes stay):
 
-- Multiplication checks for overflow only when the partial product doubles, so the last addition is unchecked
-  (3 * 16000 gives -17536); `MOD`'s remainder takes the quotient's sign (7 MOD -2 is -1).
+- Multiplication checks for overflow only when the partial product doubles, and only for one that has reached
+  $4000, so an addition that carries into bit 15 can go through, and the last one always does (3 * 16000 gives
+  -17536, 6 * 12288 gives 8192); `MOD`'s remainder takes the quotient's sign (7 MOD -2 is -1).
 - `=`, `#`, `<>`, the comparisons and `NEXT`'s limit test subtract, so numbers more than 32767 apart give >32767
   (`FOR I = -20000 TO 20000` fails at `NEXT`); addition allows -32768, which only negating or printing reports.
 - While a false `IF`'s statement is skipped, constants and strings are pushed with an extra DEX and not popped until

@@ -98,14 +98,17 @@ PowersOfTenHigh:
 ;; The two comparisons of a line's number use the carry from the one before, so each is off by one in the way that
 ;; matters: the first returns with carry set for a number above Accumulator, the second with carry clear for
 ;; Accumulator itself.
+;; It falls through <FindLine::PopFromPointer3>'s INX, so it takes an entry off the noun stack too: `LIST` with a
+;; number, `DEL` and storing a line rely on that.
 ;; In: Accumulator = the line number
-;; Out: Pointer2 = the line found, or <HighMemory> if there is none, carry = clear if its number is Accumulator, set
-;;   if not, Pointer3 = the line after Pointer2 when the number is Accumulator, otherwise Pointer2
+;; Out: X = one entry higher, Pointer2 = the line found, or <HighMemory> if there is none, carry = clear if its
+;;   number is Accumulator, set if not, Pointer3 = the line after Pointer2 when the number is Accumulator, otherwise
+;;   Pointer2
 ;; Uses: A, Y
-;; Keeps: X, Accumulator
+;; Keeps: Accumulator
 ;; Entry:
 ;;   PopFromPointer3 = takes an entry off the noun stack (INX), then searches from Pointer3
-;;   FromPointer3 = searches from Pointer3
+;;   FromPointer3 = searches from Pointer3, keeping X
 ;; Also: FINDLINE (UNKN)
 .proc FindLine
     lda ProgramStart

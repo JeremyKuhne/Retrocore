@@ -104,7 +104,7 @@ SYNTAX_LETTER_BIT = $20
 
 ; The screens.
 
-;; The lo-res screen's rows: `PLOT`, `HLIN` and `SCRN(` take a row from 0 to 47.
+;; The lo-res screen's rows: `PLOT` and `HLIN` take a row from 0 to 47.
 LOW_RES_ROWS = 48
 
 ;; The lo-res screen's columns: `PLOT` and `VLIN` take a column from 0 to 39.
@@ -485,8 +485,9 @@ TextIndexStack = $A8
 ;; Also: TXTNDX (IBSM)
 TextIndex = $C8
 
-;; A count of digits: <PrintDecimal> counts down the places of a number it prints and keeps the first digit that is not
-;; 0 here; the tokenizer keeps the place in <InputBuffer> where a constant's digits start (<Tokenizer::RuleMatched>).
+;; A byte two routines use for digits: <PrintDecimal> sets its bit 7 once it has printed a digit that is not 0, so the
+;; zeros after it print; the tokenizer keeps the place in <InputBuffer> just before a constant's first digit
+;; (<Tokenizer::RuleMatched>).
 ;; See: <PrintDecimal>, <LeadingZero>
 ;; Also: LEADBL (IBSM)
 DigitPlace = $C9

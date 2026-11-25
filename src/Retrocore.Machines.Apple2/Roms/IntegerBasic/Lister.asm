@@ -244,7 +244,8 @@ Done:
 
 ;; Prints a constant: its value follows the digit that marks it.
 ;;
-;; A holds the marker shifted left, which is not 0, so <Pointer2> no longer asks for a blank before a name.
+;; A holds the marker shifted left, which is not 0, so <Pointer2> no longer asks for a blank before a name; for the
+;; line number, which <PrintLine> falls in with, A is 0.
 PrintConstant:
     sta Pointer2
     jsr FetchByte
@@ -271,10 +272,12 @@ PrintName:
 ;; Prints a name or text: the character in A, then every following byte with bit 7 set.
 ;;
 ;; Text breaks onto a new line past column 37, later than tokens do.
+;; Also: LISTTEXT (UNKN)
 PrintText:
     jsr CharacterOut
 
 ;; Prints the text after REM or an opening quote: every byte with bit 7 set, up to the token that ends it.
+;; Also: LISTTEXTNXT (UNKN)
 CopyText:
     lda #TEXT_WRAP_COLUMN
     jsr NextByteWrapping::PastColumn
@@ -290,6 +293,7 @@ CopyText:
 ;; from the top of the page: a keyword's first character is a character byte whose neighbor above is either not a
 ;; character or the last character of another keyword (bit 6 set). The X-th such character from the top starts token X's
 ;; text.
+;; Also: LISTTOKEN (UNKN)
 PrintToken:
     cmp #TOKEN_END_OF_LINE
     bne FindKeyword

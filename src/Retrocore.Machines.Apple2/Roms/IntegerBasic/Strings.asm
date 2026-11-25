@@ -412,11 +412,13 @@ CompareCharacters:
 ;;
 ;; <Operators::TakeMagnitudes> makes both numbers positive and keeps the product's sign. The product is built a bit of
 ;; the multiplier at a time, from the top: the partial product doubles each step and gains the multiplicand when the
-;; bit is 1. A bug: the overflow check comes only when the partial product doubles, so the last step's addition is
-;; not checked, and 3 * 16000 gives -17536 instead of the >32767 error.
+;; bit is 1. A bug: only the doublings are checked, each for a partial product that has reached $4000, so an addition
+;; that carries into bit 15 goes through whenever the next doubling does not see bit 14 set, and the last addition
+;; is never checked: 3 * 16000 gives -17536 and 6 * 12288 gives 8192 instead of the >32767 error.
 ;; In: X = the noun stack: two numbers
 ;; Out: X = the noun stack, one entry higher, its top entry the product
-;; Errors: >32767 if the product does not fit in 15 bits, or for an operand of -32768
+;; Errors: >32767 when a doubling would pass $7FFF (not every product that does not fit: above), or for an operand of
+;;   -32768
 ;; Uses: A, Y, Accumulator, Auxiliary, Pointer2, Pointer3
 ;; Entry:
 ;;   PushResult = pushes the result in <Pointer3>

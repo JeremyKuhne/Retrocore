@@ -244,8 +244,9 @@ common ancestor follows these rules (the alignment plan's D1 and D3).
   [BasicWorkspaceConversionTests](../tests/Retrocore.Tests/BasicWorkspaceConversionTests.cs).
 - **On a definition only one vendor's builds assemble, the lineage stays within that vendor's line.** A routine
   every PET build has, even in two versions, cites the whole PET line, but not Apple's documents: BASIC 4's string
-  allocator doesn't cite AppleSoft's ASTIL for GETSPA. Two routines that are different code under the same names
-  (BASIC's two string collectors) each cite only the documents of the builds that have them (Basic.md, E4 and
+  allocator doesn't cite AppleSoft's ASTIL for GETSPA. Where a routine has two versions that are different code
+  (BASIC's two string allocators and two collectors), the routine's own name still cites the whole line (GETSPA,
+  GARBA2), but the labels inside each version cite only the documents of the builds that have it (Basic.md, E4 and
   E8a).
 - **A name that exists in only some builds can't be named in a comment the other builds assemble too**: not as a
   link, an `Entry:` item or an `Inherit:` target. Write it in backticks or describe it ("BASIC 4's error-channel
@@ -267,7 +268,8 @@ common ancestor follows these rules (the alignment plan's D1 and D3).
   The firmware roots assert their `ENHANCED`, `Dos33.asm` its `MASTER` and `YEAR`, and `Dos32.asm` its `MASTER`
   alone, since `YEAR` selects nothing in DOS 3.2. A switch that is renamed has its old name rejected, since an
   `.ifndef` default isn't reached through `Also:` and a stale predefinition would silently get the default
-  (`AppleSoft.asm`: `.assert .not .defined(BUFPAG), ...`).
+  ([Basic1.asm](../src/Retrocore.Machines.Commodore/Roms/Basic/Basic1.asm):
+  `.assert .not .defined(BUFPAG), "Predefine INPUT_BUFFER_PAGE, not BUFPAG."`).
 - **Each source has a table of its builds and switches**: per build, its root and switch values; per switch or
   macro parameter, what it selects. [Basic.md](conversions/Basic.md) opens with the eight BASIC builds, and the
   shared folder's README gives each module's choices.

@@ -1,4 +1,4 @@
-; retrocore: style=strict ignore=unlinked-name:PR -- PR#, and the SYNTAX ERROR message
+; retrocore: style=strict
 ;; DOS 3.3 and 3.2 command interpreter: the command scanner, which reads a command line and runs its handler
 ;;
 ;; Parses the line in <InputBuffer> ($0200) that the output hook (DosHook.asm) has collected, either after a

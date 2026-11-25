@@ -8,9 +8,8 @@
 ;; The locations and routines Programmer's Aid shares with the Apple II's other sources come from
 ;; ../System/IIeEquates.asm and ../System/MonitorEntries.asm, which this file includes; the page-zero locations and soft
 ;; switches are the same on the II as on the IIe. The definitions here are the Monitor routines MonitorEntries.asm does
-;; not export and Integer BASIC's addresses. Integer BASIC's keep the names its source gives them, or Programmer's Aid's
-;; where it has none, until that source is converted (the conversion log, docs/conversions/ProgrammersAid.md),
-;; with Programmer's Aid's other names for them as historical names.
+;; not export and Integer BASIC's addresses, under Integer BASIC's names, with Programmer's Aid's names for them as
+;; historical names (the conversion log, docs/conversions/ProgrammersAid.md).
 
 .include "../System/IIeEquates.asm"
 .include "../System/MonitorEntries.asm"
@@ -87,69 +86,95 @@ ReadHalfCycle = $FCFD
 
 ; Integer BASIC's page zero.
 
-;; Inherit: <IntegerBasic:LOMEM>
-;; Also: LOMEML (PA1)
-LOMEM = $4A
+;; Inherit: <IntegerBasic:LowMemory>
+;; Also: LOMEM (IBSM), LOMEML (PA1)
+LowMemory = $4A
 
-;; The high byte of <LOMEM>.
-LOMEMH = LOMEM + 1
+;; The high byte of <LowMemory>.
+;; Also: LOMEMH (PA1)
+LowMemoryHigh = LowMemory + 1
 
-;; Inherit: <IntegerBasic:HIMEM>
-HIMEM = $4C
+;; Inherit: <IntegerBasic:HighMemory>
+;; Also: HIMEM (IBSM, PA1)
+HighMemory = $4C
 
-;; Inherit: <IntegerBasic:NOUNSTKL>
-NOUNSTKL = $50
+;; Inherit: <IntegerBasic:NounStackLow>
+;; Also: NOUNSTKL (IBSM)
+NounStackLow = $50
 
-;; Inherit: <IntegerBasic:PP>
-;; Also: PPL (PA1)
-PP = $CA
+;; Inherit: <IntegerBasic:ProgramStart>
+;; Also: PP (IBSM, PA1), PPL (PA1)
+ProgramStart = $CA
 
-;; The high byte of <PP>.
-PPH = PP + 1
+;; The high byte of <ProgramStart>.
+;; Also: PPH (PA1)
+ProgramStartHigh = ProgramStart + 1
 
-;; Inherit: <IntegerBasic:PV>
-;; Also: PVL (PA1)
-PV = $CC
+;; Inherit: <IntegerBasic:VariablesEnd>
+;; Also: PV (IBSM), PVL (PA1)
+VariablesEnd = $CC
 
-;; The high byte of <PV>.
-PVH = PV + 1
+;; The high byte of <VariablesEnd>.
+;; Also: PVH (PA1)
+VariablesEndHigh = VariablesEnd + 1
 
-;; Integer BASIC's main accumulator (2 bytes, low byte first), where its cassette routines keep a program's length.
-;;
-;; Integer BASIC's source calls it ACC, which here would clash with the Monitor's ACC, <SavedA>; this is Programmer's
-;; Aid's name for it.
-;; See: <IntegerBasic:ACC>
-ACL = $CE
+;; Inherit: <IntegerBasic:Accumulator>
+;; Integer BASIC's cassette routines keep a program's length here. Its old name ACC is given in prose, as here it would
+;; clash with the Monitor's ACC, <SavedA>.
+;; Also: ACL (PA1)
+Accumulator = $CE
 
-;; The high byte of <ACL>.
-ACH = ACL + 1
+;; The high byte of <Accumulator>.
+;; Also: ACH (PA1)
+AccumulatorHigh = Accumulator + 1
 
-;; Inherit: <IntegerBasic:XSAVE>
-XSAVE = $D8
+;; Inherit: <IntegerBasic:SavedX>
+;; Integer BASIC's own name for it here is the Monitor's, <SavedX>.
+;; Also: XSAVE (IBSM, PA1)
+BasicSavedX = $D8
 
 ; Integer BASIC's routines.
 
-;; Inherit: <IntegerBasic:MEMFULL>
-;; Also: MEMFUL (PA1)
-MEMFULL = $E36B
+;; Inherit: <IntegerBasic:MemoryFullError>
+;; Also: MEMFULL (IBSM, PA1), MEMFUL (PA1)
+MemoryFullError = $E36B
 
-;; Inherit: <IntegerBasic:PRDEC>
-PRDEC = $E51B
+;; Inherit: <IntegerBasic:PrintDecimal>
+;; Also: PRDEC (IBSM, PA1)
+PrintDecimal = $E51B
 
-;; Inherit: <IntegerBasic:RANGERR>
-;; Also: RNGERR (PA1)
-RANGERR = $EE68
+;; Inherit: <IntegerBasic:RangeError>
+;; Also: RANGERR (IBSM, PA1), RNGERR (PA1)
+RangeError = $EE68
 
-;; Inherit: <IntegerBasic:LOAD>
-LOAD = $F0DF
+;; Integer BASIC's statements Programmer's Aid calls, under the scope Integer BASIC gives them.
+.scope Statements
 
-;; Inherit: <IntegerBasic:SETHDR>
-;; Also: HDRSET (PA1), ACADR (PA1)
-SETHDR = $F11E
+;; Inherit: <IntegerBasic:Statements::Load>
+;; Also: LOAD (IBSM, PA1)
+Load = $F0DF
 
-;; Inherit: <IntegerBasic:SETPRG>
-;; Also: PRGSET (PA1)
-SETPRG = $F12C
+.endscope
 
-;; Inherit: <IntegerBasic:SW16>
-SW16 = $F689
+; Cassette: Integer BASIC's cassette setups, beside the Monitor's routines above, as Integer BASIC's scope of that
+; name holds them.
+.scope Cassette continued
+
+;; Inherit: <IntegerBasic:Cassette::PointAtLength>
+;; Also: SETHDR (IBSM), HDRSET (PA1), ACADR (PA1)
+PointAtLength = $F11E
+
+;; Inherit: <IntegerBasic:Cassette::PointAtProgram>
+;; Also: SETPRG (IBSM), PRGSET (PA1)
+PointAtProgram = $F12C
+
+.endscope
+
+;; SWEET16, the 16-bit interpreter in Integer BASIC's ROM, under the scope Integer BASIC gives it.
+.scope Sweet16
+
+;; Inherit: <IntegerBasic:Sweet16::Run>
+;; Also: SW16 (A2RM78, PA1)
+Run = $F689
+
+.endscope

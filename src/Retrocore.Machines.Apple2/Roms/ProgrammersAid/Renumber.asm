@@ -4,11 +4,12 @@
 ;; Steve Wozniak's renumbering of Integer BASIC programs (1978), and Append, which loads a program from tape in front
 ;; of the one in memory. Both are mostly SWEET16 (Sweet16.mac), with 6502 code where they print or call BASIC.
 ;;
-;; Renumber works in two passes over the program, which lies from <PP> up to <HIMEM>. The first gives each line in the
-;; range its new number, keeping the old numbers in a table between the variables (<PV>) and the program, and prints
-;; each change as `old->new`; MEM FULL if the table does not fit. The second rewrites every line number in the program,
-;; and every number after GOTO, GOSUB, THEN and LIST, that is in the table; DEL's numbers are left as they are. A line
-;; whose new number would not keep the program in order stops it with RANGE ERR before anything changes.
+;; Renumber works in two passes over the program, which lies from <ProgramStart> up to <HighMemory>. The first gives
+;; each line in the range its new number, keeping the old numbers in a table between the variables (<VariablesEnd>) and
+;; the program, and prints each change as `old->new`; MEM FULL if the table does not fit. The second rewrites every line
+;; number in the program, and every number after GOTO, GOSUB, THEN and LIST, that is in the table; DEL's numbers are
+;; left as they are. A line whose new number would not keep the program in order stops it with RANGE ERR before anything
+;; changes.
 ;;
 ;; BASIC calls the entries in RenumberCalls.asm, which read the new numbering from BASIC's variables `START` and `STEP`,
 ;; and the range from `FROM` and `TO`, and enter <Renumber::RenumberRange>. <Renumber::RenumberAll> is the listing's own
@@ -55,7 +56,7 @@ PASS1_TABLE_INDEX = $6
 ;; Also: TBLND (PA1)
 TABLE_END = $6
 
-;; R7: the end of the room for the table, <PP>.
+;; R7: the end of the room for the table, <ProgramStart>.
 ;; Also: TBLIM (PA1)
 TABLE_LIMIT = $7
 
@@ -63,7 +64,7 @@ TABLE_LIMIT = $7
 ;; Also: PRGNDX2 (PA1)
 PASS2_PROGRAM_INDEX = $7
 
-;; R8: <HIMEM>, the end of the program.
+;; R8: <HighMemory>, the end of the program.
 ;; Also: HMEM (PA1)
 PROGRAM_END = $8
 
@@ -111,7 +112,7 @@ LINE_NUMBER_MODE = $C
 ;; Also: REM (PA1)
 REM_TOKEN = $C
 
-;; R12: <Append>'s pointer into page zero, at <HIMEM>.
+;; R12: <Append>'s pointer into page zero, at <HighMemory>.
 ;; Also: SCRC (PA1)
 APPEND_POINTER = $C
 
@@ -174,7 +175,7 @@ NewNumberHigh = NewNumber + 1
 ;; Also: RENX (PA1)
 .proc RenumberAll
 .assert * = $D400, "Renumber::RenumberAll must stay at $D400."
-    jsr SW16
+    jsr Sweet16::Run
     SUB ACCUMULATOR
     ST LOWEST_LINE
     ST HIGHEST_LINE
@@ -187,29 +188,30 @@ NewNumberHigh = NewNumber + 1
 ;; <STEP>, printing each change; RANGE ERR if the new numbers would put the lines out of order, MEM FULL if the table
 ;; does not fit.
 ;;
-;; The table of old numbers, a word per line renumbered, grows up from <PV>, the end of the variables, toward <PP>.
+;; The table of old numbers, a word per line renumbered, grows up from <VariablesEnd>, the end of the variables, toward
+;; <ProgramStart>.
 ;; In: FIRST_NUMBER = the first new number, STEP = the step, LOWEST_LINE = the lowest line renumbered,
 ;;   HIGHEST_LINE = the highest, all in SWEET16's registers
 ;; Also: RENUM (PA1)
 .proc RenumberRange
 .assert * = $D408, "Renumber::RenumberRange must stay at $D408."
-    jsr SW16
-    SET PROGRAM_END, HIMEM
+    jsr Sweet16::Run
+    SET PROGRAM_END, HighMemory
     LDD [PROGRAM_END]
     ST PROGRAM_END
 
-;; Finds the room for the table: from <PV> up to <PP>.
+;; Finds the room for the table: from <VariablesEnd> up to <ProgramStart>.
 ;; Also: RNUM3 (PA1)
 FindTable:
-    SET POINTER, PV + 2
-    ; The table starts at PV.
+    SET POINTER, VariablesEnd + 2
+    ; The table starts at VariablesEnd.
     POPD [POINTER]
     ST TABLE_START
     ST PASS1_TABLE_INDEX
     LD FIRST_NUMBER
     ST NEXT_NUMBER
     ST LAST_NUMBER
-    ; And can grow up to PP, where the program starts.
+    ; And can grow up to ProgramStart, where the program starts.
     POPD [POINTER]
     ST TABLE_LIMIT
     ST PASS1_PROGRAM_INDEX
@@ -248,18 +250,18 @@ InRange:
     RTN
     lda OldNumberHigh
     ldx OldNumber
-    jsr PRDEC
+    jsr PrintDecimal
     lda #'-'
     jsr CharacterOut
     lda #'>'
     jsr CharacterOut
     lda NewNumberHigh
     ldx NewNumber
-    jsr PRDEC
+    jsr PrintDecimal
     jsr PrintReturn
 
-    ; Back to SWEET16, past SW16's save of the 6502's registers, so the ones it saved for the caller stay.
-    jsr SW16 + 3
+    ; Back to SWEET16, past Sweet16::Run's save of the 6502's registers, so the ones it saved for the caller stay.
+    jsr Sweet16::Run + 3
     LD NEXT_NUMBER
     ST LAST_NUMBER
     ADD STEP
@@ -275,14 +277,14 @@ BelowRange:
     BNC Pass1
 
 ;; Also: RERR (PA1)
-RangeError:
+OutOfOrder:
     RTN
-    jmp RANGERR
+    jmp RangeError
 
 ;; Also: MERR (PA1)
 MemoryFull:
     RTN
-    jmp MEMFULL
+    jmp MemoryFullError
 
 ;; A line above the range: its number must be above the last new number given, or the first new number when no
 ;; line was in the range. Pass 1 ends here, as the lines after it are above the range too.
@@ -290,7 +292,7 @@ MemoryFull:
 AboveRange:
     INR LAST_NUMBER
     CPR LAST_NUMBER
-    BNC RangeError
+    BNC OutOfOrder
 
 ;; Pass 2: every line number in the program, and every number after a token that takes one, that is in the table
 ;; becomes its new number.
@@ -409,31 +411,31 @@ SetMode:
 ;; APPEND (CALL -11076): loads a program from tape in front of the one in memory, whose lines must all be numbered
 ;; higher.
 ;;
-;; It sets <HIMEM> to <PP>, so Integer BASIC's <LOAD> puts the program from tape below the one in memory, then puts
-;; <HIMEM> back, so both show. After MEM FULL, CALL -11059 (<Renumber::Append::Restore>) brings the program in memory
-;; back.
+;; It sets <HighMemory> to <ProgramStart>, so Integer BASIC's <Statements::Load> puts the program from tape below the
+;; one in memory, then puts <HighMemory> back, so both show. After MEM FULL, CALL -11059 (<Renumber::Append::Restore>)
+;; brings the program in memory back.
 ;; Entry:
-;;   Restore = puts back the <HIMEM> Append kept, after a tape load or after MEM FULL
+;;   Restore = puts back the <HighMemory> Append kept, after a tape load or after MEM FULL
 ;;   Done = returns from SWEET16 and to the caller; <RenumberRange> ends here too
 ;; Also: APPEND (PA1)
 .proc Append
 .assert * = $D4BC, "Renumber::Append must stay at $D4BC, CALL -11076."
-    jsr SW16
-    SET APPEND_POINTER, HIMEM + 2
-    ; Keeps HIMEM.
+    jsr Sweet16::Run
+    SET APPEND_POINTER, HighMemory + 2
+    ; Keeps HighMemory.
     POPD [APPEND_POINTER]
     ST PROGRAM_END
-    SET POINTER, PP
+    SET POINTER, ProgramStart
     LDD [POINTER]
-    ; HIMEM = PP, which keeps the program in memory.
+    ; HighMemory = ProgramStart, which keeps the program in memory.
     STD [APPEND_POINTER]
     RTN
-    jsr LOAD
+    jsr Statements::Load
 
-;; After a tape load, or CALL -11059 after MEM FULL: puts back the <HIMEM> <Append> kept, so both programs show.
+;; After a tape load, or CALL -11059 after MEM FULL: puts back the <HighMemory> <Append> kept, so both programs show.
 Restore:
 .assert * = $D4CD, "Renumber::Append::Restore must stay at $D4CD, CALL -11059."
-    jsr SW16
+    jsr Sweet16::Run
     POPD [APPEND_POINTER]
     LD PROGRAM_END
     STD [APPEND_POINTER]

@@ -17,10 +17,10 @@
 ;; Also: CHKSUM (PA1)
 Checksum = PlotMask
 
-;; The program's length (2 bytes), <HIMEM> - <PP>, which the tape's header holds: <ACL>'s bytes, where Integer BASIC's
-;; `SAVE` and `LOAD` keep it.
+;; The program's length (2 bytes), <HighMemory> - <ProgramStart>, which the tape's header holds: <Accumulator>'s bytes,
+;; where Integer BASIC's `SAVE` and `LOAD` keep it.
 ;; Also: PRLEN (PA1)
-ProgramLength = ACL
+ProgramLength = Accumulator
 
 ;; D52EG: points the Monitor's Control-Y command at <VerifyBlock>.
 ;; Keeps: X
@@ -38,26 +38,26 @@ ProgramLength = ACL
 ;; Also: VFYBSC (PA1)
 .proc VerifyProgram
 .assert * = $D535, "TapeVerify::VerifyProgram must stay at $D535, CALL -10955."
-    stx XSAVE
+    stx BasicSavedX
     sec
     ldx #$FF
 
-;; ProgramLength = <HIMEM> - <PP>, low byte with X = $FF, then high byte with X = 0.
+;; ProgramLength = <HighMemory> - <ProgramStart>, low byte with X = $FF, then high byte with X = 0.
 ;; Also: GETLEN (PA1)
 GetLength:
-    lda HIMEM + 1,x
-    sbc PP + 1,x
+    lda HighMemory + 1,x
+    sbc ProgramStart + 1,x
     sta ProgramLength + 1,x
     inx
     beq GetLength
 
     ; The header, then the program.
-    jsr SETHDR
+    jsr Cassette::PointAtLength
     jsr VerifyBlock
     ldx #1
-    jsr SETPRG
+    jsr Cassette::PointAtProgram
     jsr VerifyBlock
-    ldx XSAVE
+    ldx BasicSavedX
     rts
 .endproc
 

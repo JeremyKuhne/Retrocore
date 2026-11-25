@@ -1046,7 +1046,7 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
             resume: "CONT",
             [("STOP", "STOP"), ("END", "END"), ("ENDCON", "ENDCON")]);
 
-        _integerRom = IntegerBasicRom(integer?.Symbols);
+        _integerRom = IntegerBasicRom(integer?.SymbolsWithHistoricalNames);
     }
 
     /// <inheritdoc/>

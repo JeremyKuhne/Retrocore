@@ -120,7 +120,7 @@ CopyInstruction:
 ;; Moves the operand with the block when it lies in the source block.
 ;; Also: XLATE (PA1)
 Translate:
-    jsr SW16
+    jsr Sweet16::Run
     LD SOURCE_END
     CPR OPERAND
     ; Past the source block.

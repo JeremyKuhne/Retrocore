@@ -8,7 +8,7 @@
 ;;
 ;; The routines BASIC calls, from $D2F9 on (POSN, PLOT, LINE, DRAW and the others), take their parameters from BASIC's
 ;; first variables, in the order a program must define them: `X0`, `Y0`, `COLR`, `SHAPE`, `ROT` and `SCALE`. They read
-;; each variable's value at a fixed offset from <LOMEM>, so a program starts with a line such as
+;; each variable's value at a fixed offset from <LowMemory>, so a program starts with a line such as
 ;; `0 X0 = Y0 = COLR = SHAPE = ROT = SCALE`. The routines under them take theirs in the 6502's registers, for
 ;; machine-language programs: <HiResGraphics::Position>, <HiResGraphics::Plot>, <HiResGraphics::Line>,
 ;; <HiResGraphics::Draw> and <HiResGraphics::DrawInverted>.
@@ -63,31 +63,31 @@ DotMask = PlotColor
 
 ;; The line's horizontal distance (2 bytes) for <Line>, and the step along the shape's direction for <Draw>.
 ;; Also: DXL (PA1)
-DistanceX = NOUNSTKL
+DistanceX = NounStackLow
 
 ;; The high byte of <DistanceX>.
 ;; Also: DXH (PA1)
-DistanceXHigh = NOUNSTKL + 1
+DistanceXHigh = NounStackLow + 1
 
 ;; The bits of the shape byte <Draw> has left to draw, three at a time: the same byte as <DistanceXHigh>.
 ;; Also: SHAPEX (PA1)
-ShapeBits = NOUNSTKL + 1
+ShapeBits = NounStackLow + 1
 
 ;; The line's vertical distance for <Line>, and the step at right angles to the shape's direction for <Draw>.
 ;; Also: DY (PA1)
-DistanceY = NOUNSTKL + 2
+DistanceY = NounStackLow + 2
 
 ;; The direction: the quadrant of a shape's rotation, or which way a line goes.
 ;; Also: QDRNT (PA1)
-Direction = NOUNSTKL + 3
+Direction = NounStackLow + 3
 
 ;; The error term (2 bytes) <Line> and <Draw> step by.
 ;; Also: EL (PA1)
-ErrorTerm = NOUNSTKL + 4
+ErrorTerm = NounStackLow + 4
 
 ;; The high byte of <ErrorTerm>.
 ;; Also: EH (PA1)
-ErrorTermHigh = NOUNSTKL + 5
+ErrorTermHigh = NounStackLow + 5
 
 ; The graphics' own variables, in page 3.
 
@@ -153,7 +153,7 @@ SCREEN_HEIGHT = 192
 ;; The screen's width, in dots: 280, $0118.
 SCREEN_WIDTH = BYTES_PER_LINE * DOTS_PER_BYTE
 
-; Where each BASIC variable's value is, from LOMEM: its name, the byte after it and the 2-byte link come first.
+; Where each BASIC variable's value is, from LowMemory: its name, the byte after it and the 2-byte link come first.
 
 ;; `X0`'s value, the first variable's: its low byte.
 X0_VALUE = $05
@@ -1036,13 +1036,13 @@ ToPoint:
     sta ShapePointerHigh
     ldy #SHAPE_VALUE_HIGH
     jsr ReadByteVariable
-    beq ReadX::RangeError
+    beq ReadX::OutOfRange
 
     ; The table's first byte is its count of shapes.
     ldx #0
     cmp (ShapePointer,x)
     beq FindShape
-    bcs ReadX::RangeError
+    bcs ReadX::OutOfRange
 
 ;; The shape's offset is the table's word at 2 x its number.
 ;; Also: BDRWX1 (PA1)
@@ -1076,15 +1076,15 @@ ShapeAddress:
 .endproc
 
 ;; Reads a BASIC variable as a byte; RANGE ERR if it is over 255.
-;; In: Y = the offset of its value's high byte from <LOMEM>
+;; In: Y = the offset of its value's high byte from <LowMemory>
 ;; Out: A = the value, zero = set when it is 0
 ;; Keeps: X
 ;; Also: PBYTE (PA1)
 .proc ReadByteVariable
-    lda (LOMEM),y
-    bne ReadX::RangeError
+    lda (LowMemory),y
+    bne ReadX::OutOfRange
     dey
-    lda (LOMEM),y
+    lda (LowMemory),y
 
 ;; Also: RTSB (PA1)
 Return:
@@ -1095,15 +1095,15 @@ Return:
 ;; In: X = BASIC's X, which it keeps in <KeptX>
 ;; Out: X = its low byte, Y = its high byte
 ;; Entry:
-;;   RangeError = Integer BASIC's RANGE ERR, for a BASIC variable out of range
+;;   OutOfRange = Integer BASIC's RANGE ERR, for a BASIC variable out of range
 ;; Also: GETX0 (PA1)
 .proc ReadX
     stx KeptX
     ldy #X0_VALUE
-    lda (LOMEM),y
+    lda (LowMemory),y
     tax
     iny
-    lda (LOMEM),y
+    lda (LowMemory),y
     tay
 
     ; Below 280: the compare's borrow with the high byte's.
@@ -1112,8 +1112,8 @@ Return:
     bcc ReadByteVariable::Return
 
 ;; Also: RERR1 (PA1)
-RangeError:
-    jmp RANGERR
+OutOfRange:
+    jmp RangeError
 .endproc
 
 ;; Reads `Y0`, BASIC's second variable; RANGE ERR if it is over 191.
@@ -1124,11 +1124,11 @@ RangeError:
     ldy #Y0_VALUE_HIGH
     jsr ReadByteVariable
     cmp #SCREEN_HEIGHT
-    bcs ReadX::RangeError
+    bcs ReadX::OutOfRange
     rts
 .endproc
 
-;; SHLOAD (CALL -11335): loads a shape table from tape to $0800, after a 2-byte length, and moves <LOMEM> above it;
+;; SHLOAD (CALL -11335): loads a shape table from tape to $0800, after a 2-byte length, and moves <LowMemory> above it;
 ;; MEM FULL if it would reach the program.
 ;; Out: ShapeTable/ShapeTableHigh = $0800
 ;; Keeps: X
@@ -1145,40 +1145,40 @@ SHAPE_HEADER_DELAY = $03
     stx KeptX
 
     ; The length, as Integer BASIC's LOAD reads it.
-    jsr SETHDR
+    jsr Cassette::PointAtLength
     jsr ReadCassette
 
-    ; A1 = $0800, A2 = $0800 + the length, which must stay below PP.
+    ; A1 = $0800, A2 = $0800 + the length, which must stay below ProgramStart.
     lda #0
     sta Address1
     sta ShapeTable
     clc
-    adc ACL
+    adc Accumulator
     tay
     lda #SHAPE_TABLE_PAGE
     sta Address1High
     sta ShapeTableHigh
-    adc ACH
+    adc AccumulatorHigh
     bcs MemoryFull
-    cpy PP
+    cpy ProgramStart
     pha
-    sbc PPH
+    sbc ProgramStartHigh
     pla
     bcs MemoryFull
     sty Address2
     sta Address2High
 
-    ; LOMEM and PV = the byte after the table.
+    ; LowMemory and VariablesEnd = the byte after the table.
     iny
     bne SetLomem
     adc #1
 
 ;; Also: SHLOD1 (PA1)
 SetLomem:
-    sty LOMEM
-    sta LOMEMH
-    sty PV
-    sta PVH
+    sty LowMemory
+    sta LowMemoryHigh
+    sty VariablesEnd
+    sta VariablesEndHigh
     jsr Cassette::ReadBit
     lda #SHAPE_HEADER_DELAY
     jsr ReadCassetteFromHeader
@@ -1187,7 +1187,7 @@ SetLomem:
 
 ;; Also: MFULL1 (PA1)
 MemoryFull:
-    jmp MEMFULL
+    jmp MemoryFullError
 .endproc
 
 .endscope

@@ -13,7 +13,7 @@
 ; Renumber: its entries from BASIC, after the RAM test.
 .scope Renumber continued
 
-; Where each variable's value is, from LOMEM: its name, the byte after it and the 2-byte link come first.
+; Where each variable's value is, from LowMemory: its name, the byte after it and the 2-byte link come first.
 
 ;; `START`'s value, the first variable's.
 START_VALUE = $08
@@ -82,15 +82,15 @@ SetNumbering:
     jmp RenumberRange
 .endproc
 
-;; Reads the value of the variable at an offset from <LOMEM>.
+;; Reads the value of the variable at an offset from <LowMemory>.
 ;; In: Y = the offset of its value
 ;; Out: A = the value's low byte, Y = its high byte
 ;; Keeps: X
 .proc ReadVariable
-    lda (LOMEM),y
+    lda (LowMemory),y
     pha
     iny
-    lda (LOMEM),y
+    lda (LowMemory),y
     tay
     pla
     rts

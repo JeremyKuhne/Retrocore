@@ -54,12 +54,15 @@ jumps to $02CB. The root asserts it is 0 or 1.
   `Address1`, SPEAKER (PA1) on `Speaker`. Names it gives the same way (A1L, COUT, PRERR) are already the definitions'
   old names and are not cited again. Its names for two points inside the Monitor's READ, READX1 ($FF02) and FINISH
   ($FF26), are `ReadCassetteFromHeader` and `ReadCassetteChecksum`.
-- P6. Integer BASIC's addresses keep the names Integer BASIC's source gives them (`HIMEM`, `PP`, `PV`, `LOMEM`,
-  `MEMFULL`, `RANGERR`, `SETHDR`, `SETPRG`, `SW16` ...), with `Inherit:` from it and Programmer's Aid's other names
-  (PPL, MEMFUL, RNGERR, HDRSET, ACADR ...) in `Also:`, until Integer BASIC is converted (the DOS precedent, X7). Where
-  Integer BASIC has no name, or its name would clash, Programmer's Aid's is used: the high bytes `LOMEMH`, `PPH`,
-  `PVH`, and `ACL`/`ACH` for Integer BASIC's ACC. Integer BASIC is being converted in parallel: when its renames land,
-  these definitions take its new names, keeping these as old names.
+- P6. Integer BASIC's addresses take the names Integer BASIC's conversion gave them, which landed first
+  (IntegerBasic.md): `LowMemory`, `HighMemory`, `NounStackLow`, `ProgramStart`, `VariablesEnd`, `Accumulator`,
+  `MemoryFullError`, `PrintDecimal`, `RangeError`, `Statements::Load`, `Cassette::PointAtLength`,
+  `Cassette::PointAtProgram` and `Sweet16::Run`, each with `Inherit:` from it and with Integer BASIC's old names (IBSM)
+  and Programmer's Aid's (PA1: PPL, MEMFUL, RNGERR, HDRSET, ACADR ...) in `Also:`. Its `SavedX` ($D8) is `BasicSavedX`
+  here, where `SavedX` is the Monitor's; the high bytes Programmer's Aid names are `LowMemoryHigh`, `ProgramStartHigh`,
+  `VariablesEndHigh` and `AccumulatorHigh`. Integer BASIC's cassette setups join the `Cassette` scope beside the
+  Monitor's routines, as Integer BASIC's own `Cassette` scope holds them. Two locals that would shadow
+  `RangeError` are `HiResGraphics::ReadX::OutOfRange` and `Renumber::RenumberRange::OutOfOrder`.
 - P7. Where a routine does the same job as AppleSoft's hi-res routine descended from it, it takes AppleSoft's
   converted name (Basic.md's renames): `Clear`, `Fill`, `Position`, `StepHorizontal`, `PixelMasks`,
   `FindCoordinates`. The lineage rule doesn't apply across the two vendors' sources, so the names are not cited across.
@@ -87,20 +90,19 @@ jumps to $02CB. The root asserts it is 0 or 1.
 
 ## Open questions for the owner
 
-- Q1. P6: Integer BASIC's names here wait for its conversion; the follow-up renames these definitions once it lands.
 - Q2. P3: SWEET16's macros keep Apple's upper-case mnemonics. The alternative is lower case, like the 6502's, which
   would read as instructions but differs from every SWEET16 listing.
 
 ## Renames
 
-The names this conversion gave definitions that have historical names, by file. Integer BASIC's and the Monitor's own
-names, which the definitions in Equates.asm keep or inherit, are not listed.
+The names this conversion gave definitions that have historical names from PA1 or UNKN, by file; the Monitor's own
+names, which the definitions in Equates.asm inherit, are not listed.
 
 The listing names given in prose instead (P2): DOWN on `HiResGraphics::Step::Down` and on `Music::Play`'s second
 half, `Music::Play::SecondHalf`; UP on `HiResGraphics::Step::Up`; RTS1 on `HiResGraphics::StepHorizontal::Done` and
 `RamTest::TestBlock::Done`; DONE on `Renumber::Append::Done` and `Music::LookUp::SplitPeriod`; LENGTH on
 `Music::NoteLength`; ACC on `Renumber::ACCUMULATOR`; MODE on `Renumber::LINE_NUMBER_MODE`; INIT on
-`Relocate::Command::DefineBlocks`; and Integer BASIC's ACC on `ACL`.
+`Relocate::Command::DefineBlocks`; and Integer BASIC's ACC on `Accumulator`.
 
 ### Equates.asm
 
@@ -108,13 +110,23 @@ half, `Music::Play::SecondHalf`; UP on `HiResGraphics::Step::Up`; RTS1 on `HiRes
 | --- | --- |
 | READX1 (PA1) | `ReadCassetteFromHeader` |
 | FINISH (PA1) | `ReadCassetteChecksum` |
-| LOMEML (PA1) | `LOMEM` |
-| PPL (PA1) | `PP` |
-| PVL (PA1) | `PV` |
-| MEMFUL (PA1) | `MEMFULL` |
-| RNGERR (PA1) | `RANGERR` |
-| HDRSET (PA1), ACADR (PA1) | `SETHDR` |
-| PRGSET (PA1) | `SETPRG` |
+| LOMEM (IBSM), LOMEML (PA1) | `LowMemory` |
+| LOMEMH (PA1) | `LowMemoryHigh` |
+| HIMEM (IBSM, PA1) | `HighMemory` |
+| PP (IBSM, PA1), PPL (PA1) | `ProgramStart` |
+| PPH (PA1) | `ProgramStartHigh` |
+| PV (IBSM), PVL (PA1) | `VariablesEnd` |
+| PVH (PA1) | `VariablesEndHigh` |
+| ACL (PA1) | `Accumulator` |
+| ACH (PA1) | `AccumulatorHigh` |
+| XSAVE (IBSM, PA1) | `BasicSavedX` |
+| MEMFULL (IBSM, PA1), MEMFUL (PA1) | `MemoryFullError` |
+| PRDEC (IBSM, PA1) | `PrintDecimal` |
+| RANGERR (IBSM, PA1), RNGERR (PA1) | `RangeError` |
+| LOAD (IBSM, PA1) | `Statements::Load` |
+| SETHDR (IBSM), HDRSET (PA1), ACADR (PA1) | `Cassette::PointAtLength` |
+| SETPRG (IBSM), PRGSET (PA1) | `Cassette::PointAtProgram` |
+| SW16 (A2RM78, PA1) | `Sweet16::Run` |
 
 ### HiResGraphics.asm
 
@@ -232,7 +244,7 @@ half, `Music::Play::SecondHalf`; UP on `HiResGraphics::Step::Up`; RTS1 on `HiRes
 | PBYTE (PA1) | `HiResGraphics::ReadByteVariable` |
 | RTSB (PA1) | `HiResGraphics::ReadByteVariable::Return` |
 | GETX0 (PA1) | `HiResGraphics::ReadX` |
-| RERR1 (PA1) | `HiResGraphics::ReadX::RangeError` |
+| RERR1 (PA1) | `HiResGraphics::ReadX::OutOfRange` |
 | GETY0 (PA1) | `HiResGraphics::ReadY` |
 | SHLOAD (PA1) | `HiResGraphics::LoadShapes` |
 | SHLOD1 (PA1) | `HiResGraphics::LoadShapes::SetLomem` |
@@ -277,7 +289,7 @@ half, `Music::Play::SecondHalf`; UP on `HiResGraphics::Step::Up`; RTS1 on `HiRes
 | PASS1 (PA1) | `Renumber::RenumberRange::Pass1` |
 | P1A (PA1) | `Renumber::RenumberRange::InRange` |
 | P1B (PA1) | `Renumber::RenumberRange::BelowRange` |
-| RERR (PA1) | `Renumber::RenumberRange::RangeError` |
+| RERR (PA1) | `Renumber::RenumberRange::OutOfOrder` |
 | MERR (PA1) | `Renumber::RenumberRange::MemoryFull` |
 | P1C (PA1) | `Renumber::RenumberRange::AboveRange` |
 | PASS2 (PA1) | `Renumber::RenumberRange::Pass2` |

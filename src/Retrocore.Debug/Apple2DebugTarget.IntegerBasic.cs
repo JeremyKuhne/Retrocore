@@ -9,30 +9,32 @@ namespace Retrocore.Debug;
 // Integer BASIC on the Apple II: which BASIC is in memory, and where Integer BASIC starts statements, keeps its
 // GOSUBs and reports errors, for the BASIC thread.
 //
-// Integer BASIC has no one place where every statement starts. A line's first statement starts at RUNLOOP, which runs a
-// line from PX; each one after a colon starts at WAITTOKEN, where the colon, arriving after the statement before it has
-// run, steps PX on. The line running is at PR, and its number follows the line's length.
+// Integer BASIC has no one place where every statement starts. A line's first statement starts at Lines::RunLoop, which runs
+// a line from TokenPointer; each one after a colon starts at Interpreter::RunLine::Wait, where the colon, arriving after
+// the statement before it has run, steps TokenPointer on. The line running is at CurrentLine, and its number follows
+// the line's length. The source's names are in IntegerBasic/*.asm; the lookups below use their historical names
+// (RUNLOOP, WAITTOKEN ...), which resolve through the definitions' Also: sections.
 internal sealed partial class Apple2DebugTarget
 {
     // How many cycles a finding of which BASIC is in memory stands: the language card and the firmware card switch it
     // only on a DOS command or a reset.
     private const ulong BasicCheckCycles = 2_000;
 
-    // Integer BASIC's VERBNOW, the token arriving at the interpreter.
+    // Integer BASIC's CurrentVerb (VERBNOW), the token arriving at the interpreter.
     private const ushort VerbNow = 0xD6;
 
-    // Integer BASIC's GOSUB stack in page 1: the return token addresses' low and high bytes (STK_00, STK_10) and the
-    // return lines' (STK_20, STK_30).
+    // Integer BASIC's GOSUB stack in page 1: the return token addresses' low and high bytes (GoSubTokenLow,
+    // GoSubTokenHigh) and the return lines' (GoSubLineLow, GoSubLineHigh).
     private const ushort GosubTokenLow = 0x0100;
     private const ushort GosubTokenHigh = 0x0110;
     private const ushort GosubLineLow = 0x0120;
     private const ushort GosubLineHigh = 0x0130;
 
-    // The stack pointer GETNEXT gives each line, and RUNFLAG while running.
+    // The stack pointer Lines::RunFromToken gives each line, and Running while a program runs.
     private const byte FreshStack = 0xFF;
     private const byte Running = 0xFF;
 
-    // Integer BASIC's error messages, by the offset in their page that ERRMESS is given in Y.
+    // Integer BASIC's error messages, by the offset in their page that ReportError (ERRMESS) is given in Y.
     private static readonly Dictionary<int, string> s_integerErrors = new()
     {
         [0x00] = ">32767",
@@ -161,7 +163,7 @@ internal sealed partial class Apple2DebugTarget
             });
     }
 
-    // The error ERRMESS reports: its message's offset is in Y.
+    // The error ReportError reports: its message's offset is in Y.
     private (int Code, string Message, bool Handled) IntegerError()
     {
         int code = _machine.Processor.Registers.Y;
@@ -169,8 +171,8 @@ internal sealed partial class Apple2DebugTarget
         return (code, message, false);
     }
 
-    // Runs a statement next: the line it is in at PR, its first token at PX, and the CPU where GETNEXT runs a line,
-    // with the fresh stack GETNEXT gives it.
+    // Runs a statement next: the line it is in at CurrentLine, its first token at TokenPointer, and the CPU where
+    // Lines::RunFromToken runs a line, with the fresh stack it gives it.
     private void SetIntegerStatement(int line, int textPointer)
     {
         int at = IntegerWord(IntegerBasicDialect.Pp);

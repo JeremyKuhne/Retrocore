@@ -1,305 +1,471 @@
-;; APPLE II FLOATING-POINT ROUTINES ($F425-$F4FF)
+; retrocore: style=strict
+;; Integer BASIC: Wozniak and Rankin's floating point ($F425-$F4FF)
 ;;
 ;; Steve Wozniak and Roy Rankin's floating-point arithmetic, which shares the Integer BASIC chips; Integer BASIC
 ;; itself never calls it. It adds, subtracts, multiplies and divides 32-bit numbers, and converts 16-bit integers to
-;; and from them. The last two routines, FIX1 and FIX, come after the Mini-Assembler, at $F63D (MiniAssembler.asm).
+;; and from them. The last two routines, <Float::ShiftTowardInteger> and <Float::ToInteger>, come after the
+;; Mini-Assembler, at $F63D (MiniAssembler.asm).
 ;;
-;; A number is 4 bytes in page zero: an exponent, biased by $80 (so $80 means 2^0), then a 24-bit two's complement
-;; mantissa, high byte first, with the binary point after its top two bits. A normalized mantissa has its top two
-;; bits different, so its size is from 1 up to 2. There are two such accumulators: FP1 (X1 and M1, $F8-$FB), which
-;; holds the result, and FP2 (X2 and M2, $F4-$F7). E ($FC-$FF) extends M1 while multiplying and dividing, and SIGN
-;; counts the operands made positive for them.
-;;
-;; On overflow the routines jump to OVLOC ($03F5), where the program using them puts a JMP to its handler.
-;;
-;; Names follow Apple's listing in the Apple II Reference Manual (1978). Part of IntegerBasic.asm; it follows
-;; Operators.asm, at $F425.
+;; Names follow Apple's listing in the Apple II Reference Manual (1978), kept as each definition's historical names.
+;; Part of IntegerBasic.asm; it follows Operators.asm, at $F425.
 
-;; The sign count for multiplying and dividing: its low bit is set when one operand was negative.
+;; Wozniak and Rankin's floating-point package: two accumulators in page zero and the routines that work on them.
 ;;
-;; <MD1> shifts it left and <ABSWAP> adds 1 for each negative operand it makes positive; <MDEND> shifts the bit out
-;; to decide whether to negate the result.
-;; See: <MD1>, <MDEND>
-SIGN = $F3
+;; A number is 4 bytes: an exponent, biased by <Float::EXPONENT_BIAS> (so $80 means 2^0), then a 24-bit two's
+;; complement mantissa, high byte first, with the binary point after its top two bits. A normalized mantissa has its
+;; top two bits different, so its size is from 1 up to 2. FP1 (<Float::Exponent1> and <Float::Mantissa1>) holds the
+;; first operand and the result, and FP2 (<Float::Exponent2> and <Float::Mantissa2>) the second. <Float::Extension>
+;; extends <Float::Mantissa1> while multiplying and dividing.
+;;
+;; The page-zero bytes are $F3-$FF, which Integer BASIC uses too (for <AutoIncrement>, <AutoNumbering>, <GoSubIndex>
+;; and others), so a program can use the package only while BASIC is not running. On overflow the routines jump to
+;; <Float::OverflowJump>, in page 3, where the program puts a JMP to its handler.
+.scope Float
 
-;; FP2's exponent, biased by $80.
-;; See: <M2>, <X1>
-X2 = $F4
+; The package's numbers.
+
+;; What the exponent byte adds to the power of 2, so that $80 is 2^0 and a byte below $80 a negative power.
+EXPONENT_BIAS = $80
+
+;; The exponent of a 16-bit integer in the mantissa's top two bytes: 2^14, as the binary point is after the
+;; mantissa's top two bits. <Float::FromInteger> starts from it, and <Float::ToInteger> shifts down to it.
+INTEGER_EXPONENT = EXPONENT_BIAS + 14
+
+;; The bytes of a mantissa.
+MANTISSA_BYTES = 3
+
+;; The bytes of a number: the exponent and the mantissa.
+NUMBER_BYTES = 1 + MANTISSA_BYTES
+
+;; The mantissa's top two bits: they differ in a normalized mantissa.
+TOP_TWO_BITS = $C0
+
+;; The steps of a division, one quotient bit each; a multiplication takes one more.
+DIVIDE_STEPS = 23
+
+; The package's page zero.
+
+;; How many operands <Float::MakeOperandsPositive> made positive: its low bit is set when one of the two was
+;; negative, so that the product or quotient must be negated.
+;;
+;; <Float::MakeOperandsPositive> shifts it left and <Float::PositiveAndSwap> adds 1 for each negative operand it makes
+;; positive; <Float::FinishMultiplyDivide> shifts the bit out to decide.
+;; Also: SIGN (A2RM78)
+SignCount = $F3
+
+;; FP2's exponent, biased by <Float::EXPONENT_BIAS>.
+;; Also: X2 (A2RM78)
+Exponent2 = $F4
 
 ;; FP2's mantissa (3 bytes, high byte first): the second operand.
-;; See: <X2>, <M1>
-M2 = $F5
+;; Also: M2 (A2RM78)
+Mantissa2 = $F5
 
-;; FP1's exponent, biased by $80.
-;; See: <M1>, <X2>
-X1 = $F8
+;; FP1's exponent, biased by <Float::EXPONENT_BIAS>.
+;; Also: X1 (A2RM78)
+Exponent1 = $F8
 
 ;; FP1's mantissa (3 bytes, high byte first): the first operand and the result.
 ;;
-;; <FLOAT> takes a 16-bit integer here, high byte first, and <FIX> leaves one here.
-;; See: <X1>, <M2>, <E>
-M1 = $F9
+;; <Float::FromInteger> takes a 16-bit integer in its first two bytes, high byte first, and <Float::ToInteger> leaves
+;; one there.
+;; Also: M1 (A2RM78)
+Mantissa1 = $F9
 
-;; The extension of <M1> (4 bytes): <SWAP> leaves a copy of a mantissa here, <FMUL> shifts the multiplier through it
-;; and <FDIV> holds the divisor in it.
-;; See: <SWAP>, <FMUL>, <FDIV>
-E = $FC
+;; The extension of <Float::Mantissa1> (4 bytes): <Float::Swap> leaves a copy of a mantissa here, and
+;; <Float::Multiply> shifts the multiplier through it while <Float::Divide> holds the divisor in it.
+;; Also: E (A2RM78)
+Extension = $FC
 
-;; Adds the mantissas: <M1> = <M1> + <M2>.
-;; Out:   carry = the carry out of the high bytes, overflow = their signed overflow
-;; Uses: A, X
-ADD:
-    clc                             ; $F425
-    ldx #$02                        ; $F426
-
-ADD1:
-    lda M1,x                        ; $F428
-    adc M2,x                        ; $F42A
-    sta M1,x                        ; $F42C
-    dex                             ; $F42E
-    bpl ADD1                        ; $F42F
-    rts                             ; $F431
-
-;; Prepares for multiplying or dividing: makes both mantissas positive and counts the negative ones in <SIGN>.
+;; Where the floating-point routines jump on overflow: a JMP the program using them stores in page 3.
 ;;
-;; It calls <ABSWAP> for FP1, which swaps the accumulators, then falls into it for the other, which swaps them back.
-;; Out: A = X2, carry set
-;; Uses: X, Y, E
-MD1:
-    asl SIGN                        ; $F432
-    jsr ABSWAP                      ; $F434
+;; It is the same location as AppleSoft's ampersand jump.
+;; See: <Float::Overflow>
+;; Also: OVLOC (A2RM78)
+OverflowJump = $03F5
 
-;; Makes <M1> positive, adding 1 to <SIGN> if it was negative, then swaps FP1 and FP2 with the carry set.
-;; Entry: ABSWAP1 = the swap with the carry set
-ABSWAP:
-    bit M1                          ; $F437
-    bpl ABSWAP1                     ; $F439
-    jsr FCOMPL                      ; $F43B
-    inc SIGN                        ; $F43E
+;; Adds the mantissas: <Mantissa1> = <Mantissa1> + <Mantissa2>.
+;; Out: carry = the carry out of the high bytes, overflow = set when the signed sum overflowed, X = $FF
+;; Uses: A
+;; Keeps: Y
+;; Also: ADD (A2RM78)
+.proc AddMantissas
+    clc
+    ldx #MANTISSA_BYTES - 1
 
-ABSWAP1:
-    sec                             ; $F440
+;; Also: ADD1 (A2RM78)
+NextByte:
+    lda Mantissa1,x
+    adc Mantissa2,x
+    sta Mantissa1,x
+    dex
+    bpl NextByte
+    rts
+.endproc
 
-;; Exchanges FP1 and FP2, leaving in <E> a copy of the mantissa that moves to <M1>.
+;; Prepares for multiplying or dividing: makes both mantissas positive and counts the negative ones in
+;; <Float::SignCount>.
 ;;
-;; X counts 4 to 1: SIGN,X and M2+2,X reach X2 to M2+2 and X1 to M1+2. Each byte moving to FP1 is also stored, on
-;; the next pass, at M1+2,X: E to E+2.
-;; Out: A = the new X2, X = 0
-;; Uses: Y
+;; It calls <Float::PositiveAndSwap> for FP1, which swaps the accumulators, then falls into it for the other, which
+;; swaps them back. A negative operand is negated and normalized, so its exponent may change.
+;; Out: A = <Exponent2>, Y = <Exponent1>, X = 0, carry = set, Extension..Extension+2 = <Mantissa1>
+;; Errors: jumps to <Float::OverflowJump> when an operand of -2 with the largest exponent is made positive
+;; Also: MD1 (A2RM78)
+.proc MakeOperandsPositive
+    asl SignCount
+    jsr PositiveAndSwap
+    ; Falls into PositiveAndSwap.
+.endproc
+
+;; Makes <Float::Mantissa1> positive, adding 1 to <Float::SignCount> if it was negative, then swaps FP1 and FP2 with
+;; the carry set.
+;; Out: A = the new <Exponent2>, Y = the new <Exponent1>, X = 0, carry = set,
+;;   Extension..Extension+2 = the new <Mantissa1>
+;; Errors: jumps to <Float::OverflowJump> as <Float::Negate> does
+;; Also: ABSWAP (A2RM78)
+.proc PositiveAndSwap
+    bit Mantissa1
+    bpl Positive
+    jsr Negate
+    inc SignCount
+
+;; Sets the carry for the multiply or divide that follows.
+;; Also: ABSWAP1 (A2RM78)
+Positive:
+    sec
+    ; Falls into Swap.
+.endproc
+
+;; Exchanges FP1 and FP2, leaving in <Float::Extension> a copy of the mantissa that moves to FP1.
+;;
+;; X counts 4 to 1, from the mantissas' low bytes to the exponents. Each byte that moves to FP1 is stored again on the
+;; next pass at <Extension>-1,X: <Extension>+2 down to <Extension>. <Extension>+3 gets Y.
+;; In: Y = what to store at <Extension>+3
+;; Out: A = the new <Exponent2>, Y = the new <Exponent1>, X = 0, Extension..Extension+2 = the new <Mantissa1>
 ;; Keeps: carry
-;; Entry: SWAP1 = the loop
-SWAP:
-    ldx #$04                        ; $F441
+;; Also: SWAP (A2RM78)
+.proc Swap
+    ldx #NUMBER_BYTES
 
-SWAP1:
-    sty M1+2,x                      ; $F443
-    lda M2+2,x                      ; $F445
-    ldy SIGN,x                      ; $F447
-    sty M2+2,x                      ; $F449
-    sta SIGN,x                      ; $F44B
-    dex                             ; $F44D
-    bne SWAP1                       ; $F44E
-    rts                             ; $F450
+;; Also: SWAP1 (A2RM78)
+NextByte:
+    sty Extension - 1,x
+    lda Exponent1 - 1,x
+    ldy Exponent2 - 1,x
+    sty Exponent1 - 1,x
+    sta Exponent2 - 1,x
+    dex
+    bne NextByte
+    rts
+.endproc
 
-;; Converts the 16-bit integer in <M1> (high byte) and M1+1 to floating point in FP1.
+;; Converts the 16-bit integer in <Mantissa1> (high byte) and <Mantissa1>+1 to floating point in FP1.
 ;;
-;; The exponent starts at 14 ($8E), the scale of an integer in the mantissa's top 16 bits; normalizing adjusts it.
-;; M1+2 is taken as the fraction, 0 for a whole number.
-;; In: M1, M1+1 = the integer
-;; Out: X1/M1 = the number
-FLOAT:
-    lda #$8E                        ; $F451
-    sta X1                          ; $F453
+;; At $F451. The exponent starts at <Float::INTEGER_EXPONENT>, the scale of an integer in the mantissa's top 16 bits,
+;; and normalizing adjusts it. <Mantissa1>+2 is taken as the fraction: 0 for a whole number.
+;; In: Mantissa1, Mantissa1+1 = the integer, Mantissa1+2 = its fraction
+;; Out: Exponent1/Mantissa1 = the number
+;; Keeps: X, Y
+;; Also: FLOAT (A2RM78)
+.proc FromInteger
+.assert * = $F451, "Float::FromInteger must stay at $F451, where programs call FLOAT."
+    lda #INTEGER_EXPONENT
+    sta Exponent1
+    ; Falls into Normalize.
+.endproc
 
-;; Normalizes FP1: shifts the mantissa left, one less in the exponent each time, until its top two bits differ or
-;; the exponent reaches 0.
-;; Entry: NORM = checks the exponent first
-NORM1:
-    lda M1                          ; $F455
-    cmp #$C0                        ; $F457
-    bmi RTS1                        ; $F459 normalized: the top two bits differ
-    dec X1                          ; $F45B
-    asl M1+2                        ; $F45D
-    rol M1+1                        ; $F45F
-    rol M1                          ; $F461
+;; Normalizes FP1: shifts the mantissa left, one less in the exponent each time, until its top two bits differ or the
+;; exponent reaches 0.
+;;
+;; A mantissa of 0 is shifted until the exponent is 0, which is how the package's 0 ends up with an exponent of 0.
+;; Out: Exponent1/Mantissa1 = the number, normalized
+;; Keeps: X, Y
+;; Entry:
+;;   CheckExponent = returns at once when the exponent is already 0
+;; Also: NORM1 (A2RM78)
+.proc Normalize
 
-NORM:
-    lda X1                          ; $F463
-    bne NORM1                       ; $F465
+    ; Mantissa1 less $C0 is negative exactly when its top two bits differ ($40 to $BF).
+    lda Mantissa1
+    cmp #TOP_TWO_BITS
+    bmi Done
+    dec Exponent1
+    asl Mantissa1 + 2
+    rol Mantissa1 + 1
+    rol Mantissa1
 
-;; The end of normalizing.
-RTS1:
-    rts                             ; $F467
+;; Normalizes unless the exponent is 0.
+;; Also: NORM (A2RM78)
+CheckExponent:
+    lda Exponent1
+    bne Normalize
+
+;; Also: RTS1 (A2RM78)
+Done:
+    rts
+.endproc
 
 ;; Subtracts: FP1 = FP2 - FP1.
 ;;
-;; It negates FP1 and adds.
-;; See: <FADD>, <FCOMPL>
-;; Entry: SWPALGN = aligns the operands, then adds
-FSUB:
-    jsr FCOMPL                      ; $F468
+;; At $F468. It negates FP1 and adds.
+;; Out: Exponent1/Mantissa1 = the difference
+;; Errors: jumps to <Float::OverflowJump> on overflow
+;; Entry:
+;;   Align = aligns the operands, then adds: <Float::Add> enters here while the exponents differ
+;; See: <Float::Add>, <Float::Negate>
+;; Also: FSUB (A2RM78)
+.proc Subtract
+.assert * = $F468, "Float::Subtract must stay at $F468, where programs call FSUB."
+    jsr Negate
 
-SWPALGN:
-    jsr ALGNSWP                     ; $F46B
+;; Swaps the operands or shifts FP1 right, as <Float::Align> does, then adds.
+;; Also: SWPALGN (A2RM78)
+Align:
+    jsr Float::Align
+    ; Falls into Add.
+.endproc
 
 ;; Adds: FP1 = FP1 + FP2.
 ;;
-;; The operand with the smaller exponent is shifted right until the exponents agree (<ALGNSWP>), then the mantissas
-;; are added and the sum normalized. An overflow of the sum is shifted back in from the right.
-;; Errors: jumps to OVLOC on overflow
-;; See: <FSUB>, <ADD>, <NORM>
-FADD:
-    lda X2                          ; $F46E
-    cmp X1                          ; $F470
-    bne SWPALGN                     ; $F472
-    jsr ADD                         ; $F474
+;; At $F46E. While the exponents differ, the operand with the smaller one goes to FP1 and is shifted right
+;; (<Float::Align>); then the mantissas are added and the sum normalized. A sum that overflows is shifted back right,
+;; with the carry as its sign.
+;; Out: Exponent1/Mantissa1 = the sum
+;; Errors: jumps to <Float::OverflowJump> on overflow
+;; Entry:
+;;   Finish = normalizes the mantissa, or after a signed overflow shifts it right with the carry as its sign:
+;;     <Float::Negate> ends here
+;; See: <Float::Subtract>, <Float::AddMantissas>, <Float::Normalize>
+;; Also: FADD (A2RM78)
+.proc Add
+.assert * = $F46E, "Float::Add must stay at $F46E, where programs call FADD."
+    lda Exponent2
+    cmp Exponent1
+    bne Subtract::Align
+    jsr AddMantissas
 
-;; After adding: normalizes, or on overflow shifts the mantissa right with the carry as its sign.
-ADDEND:
-    bvc NORM                        ; $F477
-    bvs RTLOG                       ; $F479
+;; Normalizes, or after a signed overflow shifts the mantissa right with the carry as its sign.
+;; Also: ADDEND (A2RM78)
+Finish:
+    bvc Normalize::CheckExponent
+    bvs ShiftRight::ShiftInCarry
+.endproc
 
-;; Aligns the operands for adding: swaps them if the carry is clear (FP2's exponent the smaller), otherwise shifts
-;; FP1 right one place.
-ALGNSWP:
-    bcc SWAP                        ; $F47B
+;; Aligns the operands for adding: swaps them if FP2's exponent is the smaller, otherwise shifts FP1 right one place.
+;; In: carry = set when <Exponent2> is not below <Exponent1>, as a compare of the two leaves it
+;; Also: ALGNSWP (A2RM78)
+.proc Align
+    bcc Swap
+    ; Falls into ShiftRight.
+.endproc
 
-;; Shifts FP1 right one place, arithmetically: the sign stays.
-;; Entry: RTLOG = shifts in the carry instead, RTLOG1 = shifts M1 and E without changing the exponent
-RTAR:
-    lda M1                          ; $F47D
-    asl a                           ; $F47F
+;; Shifts FP1 right one place, arithmetically (the sign stays), adding 1 to the exponent.
+;;
+;; The six bytes shifted are <Mantissa1> and the first three of <Extension>, so the bit shifted out of the mantissa
+;; goes into the extension, and the carry is the bit shifted out of <Extension>+2.
+;; Out: X = 0, carry = the bit shifted out
+;; Keeps: Y
+;; Errors: jumps to <Float::OverflowJump> when the exponent passes $FF
+;; Entry:
+;;   ShiftInCarry = shifts in the carry as the top bit instead of the sign
+;;   KeepExponent = shifts in the carry, without changing the exponent: <Float::Multiply> enters here
+;; Also: RTAR (A2RM78)
+.proc ShiftRight
+    lda Mantissa1
+    asl a
 
-RTLOG:
-    inc X1                          ; $F480
-    beq OVFL                        ; $F482 the exponent has overflowed
+;; Shifts in the carry as the top bit, adding 1 to the exponent.
+;; Also: RTLOG (A2RM78)
+ShiftInCarry:
+    inc Exponent1
+    beq Overflow
 
-RTLOG1:
-    ldx #$FA                        ; $F484 6 bytes, $F9-$FE: M1 and the first three of E
+;; Shifts in the carry as the top bit, without changing the exponent.
+;; Also: RTLOG1 (A2RM78)
+KeepExponent:
+    ; X runs from -6 to -1: Extension+3-6 wraps round page zero to Mantissa1.
+    ldx #$100 - 2 * MANTISSA_BYTES
 
-ROR1:
-    ror E+3,x                       ; $F486
-    inx                             ; $F488
-    bne ROR1                        ; $F489
-    rts                             ; $F48B
+;; Also: ROR1 (A2RM78)
+NextByte:
+    ror Extension + 3,x
+    inx
+    bne NextByte
+    rts
+.endproc
 
 ;; Multiplies: FP1 = FP1 x FP2.
 ;;
-;; The exponents are added (<MD2>). The multiplier, in E, is shifted right a bit at a time, and the multiplicand is
-;; added into the product, in M1, when the bit is 1; the product shifts right with it. 24 steps give the top 24
+;; At $F48C. The exponents are added (<Float::SetResultExponent>). The multiplier, a copy of FP1's mantissa in
+;; <Float::Extension>, is shifted right a bit at a time, together with the product in <Float::Mantissa1>, and the
+;; multiplicand, FP2's mantissa, is added into the product when the bit shifted out is 1. 24 steps give the top 24
 ;; bits of the product, which is negated if one operand was negative.
-;; Errors: jumps to OVLOC on overflow
-;; See: <MD1>, <MD2>, <MDEND>
-FMUL:
-    jsr MD1                         ; $F48C
-    adc X1                          ; $F48F
-    jsr MD2                         ; $F491
-    clc                             ; $F494
+;; Out: Exponent1/Mantissa1 = the product
+;; Errors: jumps to <Float::OverflowJump> on overflow; an underflow gives 0
+;; See: <Float::MakeOperandsPositive>, <Float::SetResultExponent>, <Float::FinishMultiplyDivide>
+;; Also: FMUL (A2RM78)
+.proc Multiply
+.assert * = $F48C, "Float::Multiply must stay at $F48C, where programs call FMUL."
+    jsr MakeOperandsPositive
+    adc Exponent1
+    jsr SetResultExponent
+    clc
 
-;; One step of the multiplication.
-MUL1:
-    jsr RTLOG1                      ; $F495
-    bcc MUL2                        ; $F498
-    jsr ADD                         ; $F49A
+;; One step: shifts the product and the multiplier right, and adds the multiplicand when the bit was 1.
+;; Also: MUL1 (A2RM78)
+Step:
+    jsr ShiftRight::KeepExponent
+    bcc NextStep
+    jsr AddMantissas
 
-MUL2:
-    dey                             ; $F49D
-    bpl MUL1                        ; $F49E
+;; Also: MUL2 (A2RM78)
+NextStep:
+    dey
+    bpl Step
+    ; Falls into FinishMultiplyDivide.
+.endproc
 
-;; Ends multiplying or dividing: normalizes the result, after negating it if the low bit of <SIGN> is set.
-;; Entry: NORMX = normalizes, or negates first if the carry is set
-MDEND:
-    lsr SIGN                        ; $F4A0
+;; Ends multiplying or dividing: normalizes the result, after negating it if the low bit of <Float::SignCount> is set.
+;; Errors: jumps to <Float::OverflowJump> as <Float::Negate> does
+;; Entry:
+;;   NormalizeOrNegate = normalizes, or with the carry set negates first: <Float::SetResultExponent> enters here with
+;;     the carry clear
+;; Also: MDEND (A2RM78)
+.proc FinishMultiplyDivide
+    lsr SignCount
 
-NORMX:
-    bcc NORM                        ; $F4A2
+;; Normalizes, or negates first when the carry is set.
+;; Also: NORMX (A2RM78)
+NormalizeOrNegate:
+    bcc Normalize::CheckExponent
+    ; Falls into Negate.
+.endproc
 
 ;; Negates FP1's mantissa (two's complement), then normalizes it.
 ;;
-;; The branch at the end is always taken (X is 0), into <ADDEND>, which also handles negating $800000.
-FCOMPL:
-    sec                             ; $F4A4
-    ldx #$03                        ; $F4A5
+;; The branch at the end is always taken (X is 0), into <Float::Add::Finish>, which also handles negating -2 ($800000),
+;; whose negation overflows: it is shifted right with the exponent one more.
+;; Out: Exponent1/Mantissa1 = the number negated
+;; Keeps: Y
+;; Errors: jumps to <Float::OverflowJump> when -2 with the largest exponent is negated
+;; Also: FCOMPL (A2RM78)
+.proc Negate
+    sec
+    ldx #MANTISSA_BYTES
 
-COMPL1:
-    lda #$00                        ; $F4A7
-    sbc X1,x                        ; $F4A9
-    sta X1,x                        ; $F4AB
-    dex                             ; $F4AD
-    bne COMPL1                      ; $F4AE
-    beq ADDEND                      ; $F4B0
+;; Subtracts one byte of the mantissa from 0, from the low byte up: X runs from 3 to 1.
+;; Also: COMPL1 (A2RM78)
+NextByte:
+    lda #0
+    sbc Mantissa1 - 1,x
+    sta Mantissa1 - 1,x
+    dex
+    bne NextByte
+    beq Add::Finish
+.endproc
 
 ;; Divides: FP1 = FP2 / FP1.
 ;;
-;; The exponents are subtracted (<MD2>). Each of the 23 steps subtracts the divisor, E, from the dividend, M2,
-;; keeping the difference if it is not negative, and shifts the result bit into the quotient in M1.
-;; Errors: jumps to OVLOC on overflow, which a divisor that is not normalized causes
-;; See: <MD1>, <MD2>, <MDEND>
-FDIV:
-    jsr MD1                         ; $F4B2
-    sbc X1                          ; $F4B5
-    jsr MD2                         ; $F4B7
+;; At $F4B2. The exponents are subtracted (<Float::SetResultExponent>). Each of the 23 steps subtracts the divisor,
+;; FP1's mantissa copied into <Float::Extension>, from the dividend, FP2's mantissa, keeping the difference if it
+;; is not negative, shifts the result bit into the quotient in <Float::Mantissa1>, and shifts the dividend left.
+;; Out: Exponent1/Mantissa1 = the quotient
+;; Errors: jumps to <Float::OverflowJump> on overflow, which a divisor that is not normalized (0 among them) also
+;;   causes; an underflow gives 0
+;; See: <Float::MakeOperandsPositive>, <Float::SetResultExponent>, <Float::FinishMultiplyDivide>
+;; Also: FDIV (A2RM78)
+.proc Divide
+.assert * = $F4B2, "Float::Divide must stay at $F4B2, where programs call FDIV."
+    jsr MakeOperandsPositive
+    sbc Exponent1
+    jsr SetResultExponent
 
-;; One step of the division.
-DIV1:
-    sec                             ; $F4BA
-    ldx #$02                        ; $F4BB
+;; One step: the dividend less the divisor, pushed a byte at a time from the low byte.
+;; Also: DIV1 (A2RM78)
+Step:
+    sec
+    ldx #MANTISSA_BYTES - 1
 
-DIV2:
-    lda M2,x                        ; $F4BD
-    sbc E,x                         ; $F4BF
-    pha                             ; $F4C1
-    dex                             ; $F4C2
-    bpl DIV2                        ; $F4C3
-    ldx #$FD                        ; $F4C5 X = -3: M2 to M2+2
+;; Also: DIV2 (A2RM78)
+SubtractByte:
+    lda Mantissa2,x
+    sbc Extension,x
+    pha
+    dex
+    bpl SubtractByte
 
-DIV3:
-    pla                             ; $F4C7
-    bcc DIV4                        ; $F4C8 the divisor did not fit: keep the dividend
-    sta X1,x                        ; $F4CA
+    ; X runs from -3 to -1 over the dividend, from its high byte.
+    ldx #$100 - MANTISSA_BYTES
 
-DIV4:
-    inx                             ; $F4CC
-    bne DIV3                        ; $F4CD
-    rol M1+2                        ; $F4CF
-    rol M1+1                        ; $F4D1
-    rol M1                          ; $F4D3
-    asl M2+2                        ; $F4D5
-    rol M2+1                        ; $F4D7
-    rol M2                          ; $F4D9
-    bcs OVFL                        ; $F4DB the dividend overflowed
-    dey                             ; $F4DD
-    bne DIV1                        ; $F4DE
-    beq MDEND                       ; $F4E0
+;; Takes a byte of the difference back, and keeps it as the dividend's when the divisor fitted.
+;; Also: DIV3 (A2RM78)
+NextByte:
+    pla
+    bcc SkipByte
+    sta Mantissa2 + MANTISSA_BYTES,x
 
-;; Sets the result's exponent for multiplying or dividing, and clears M1 for the result.
+;; Also: DIV4 (A2RM78)
+SkipByte:
+    inx
+    bne NextByte
+
+    ; The carry, set when the divisor fitted, is the quotient's next bit; then the dividend moves left.
+    rol Mantissa1 + 2
+    rol Mantissa1 + 1
+    rol Mantissa1
+    asl Mantissa2 + 2
+    rol Mantissa2 + 1
+    rol Mantissa2
+    bcs Overflow
+    dey
+    bne Step
+    beq FinishMultiplyDivide
+.endproc
+
+;; Sets the result's exponent for multiplying or dividing, and clears <Float::Mantissa1> for the result.
 ;;
-;; A carry from the exponents' sum or difference means an overflow if the exponent is positive. A result too small
-;; for the exponent is an underflow: MD2 drops its caller's return address and returns 0 instead.
-;; In: A = the exponents' sum or difference, X = 0
-;; Out: X1 = the exponent, Y = 23 (the steps)
-MD2:
-    stx M1+2                        ; $F4E2
-    stx M1+1                        ; $F4E4
-    stx M1                          ; $F4E6
-    bcs OVCHK                       ; $F4E8
-    bmi MD3                         ; $F4EA
-    pla                             ; $F4EC underflow: return 0 from FMUL or FDIV
-    pla                             ; $F4ED
-    bcc NORMX                       ; $F4EE
+;; The biased exponents' sum or difference carries the bias once too many or too few: with the carry set, a
+;; positive A is the exponent less the bias and a negative one an overflow; with the carry clear, a negative A is the
+;; exponent plus the bias and a positive one an underflow. On an underflow it drops its caller's return address and
+;; returns 0 from <Float::Multiply> or <Float::Divide> instead: the mantissa of 0 is normalized until the exponent is 0.
+;; In: A = the exponents' sum or difference, carry and negative = as the add or subtract left them, X = 0
+;; Out: Exponent1 = the exponent, Mantissa1 = 0, Y = 23, the steps of a division
+;; Errors: jumps to <Float::OverflowJump> on overflow
+;; Also: MD2 (A2RM78)
+.proc SetResultExponent
+    stx Mantissa1 + 2
+    stx Mantissa1 + 1
+    stx Mantissa1
+    bcs CheckOverflow
+    bmi Store
 
-;; Stores the result's exponent, with its top bit, the bias, put back.
-MD3:
-    eor #$80                        ; $F4F0
-    sta X1                          ; $F4F2
-    ldy #$17                        ; $F4F4
-    rts                             ; $F4F6
+    ; An underflow: 0 from the caller's caller.
+    pla
+    pla
+    bcc FinishMultiplyDivide::NormalizeOrNegate
+
+;; Stores the exponent, with the bias exclusive-ORed back.
+;; Also: MD3 (A2RM78)
+Store:
+    eor #EXPONENT_BIAS
+    sta Exponent1
+    ldy #DIVIDE_STEPS
+    rts
 
 ;; After a carry: an overflow unless the exponent is positive.
-OVCHK:
-    bpl MD3                         ; $F4F7
+;; Also: OVCHK (A2RM78)
+CheckOverflow:
+    bpl Store
+    ; Falls into Overflow.
+.endproc
 
-;; An overflow: jumps to the program's handler at <OVLOC>.
-OVFL:
-    jmp OVLOC                       ; $F4F9
-    .byte $FF, $FF, $FF, $FF        ; $F4FC .fill 4,$FF unused bytes
+;; An overflow: jumps to the program's handler at <Float::OverflowJump>.
+;; Also: OVFL (A2RM78)
+.proc Overflow
+    jmp OverflowJump
+.endproc
+
+.endscope
+
+    ; Unused bytes, up to the Mini-Assembler at $F500.
+    .res $F500 - *, $FF

@@ -128,8 +128,7 @@ public sealed class BusinessBasicDialectTests
         int end = start + program.ToImage().Length - 2;
         BasicProgram.Read(Dialect, memory).ToText().Should().Be("10 PRINT\"HELLO\"\n20 GOTO 10\n");
         int Pointer(int at) => BusinessBasicDialect.Pointer(memory, at);
-        (Pointer(0x1A3D), Pointer(0x1A3B), Pointer(0x1A3F)).Should().Be(
-            (end, end, end), "ArraysStart, VariablesStart and VariablesEnd");
+        (Pointer(0x1A3D), Pointer(0x1A3B), Pointer(0x1A3F)).Should().Be((end, end, end), "ArraysStart, VariablesStart and VariablesEnd");
         Pointer(0x1A41).Should().Be(top, "StringsBottom is HIMEM");
         Pointer(0x1A53).Should().Be(start - 1, "DATA reads from the start");
         memory.Read(0x1650).Should().Be(0, "CONT is not allowed");

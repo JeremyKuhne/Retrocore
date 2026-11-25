@@ -17,9 +17,9 @@
 ;;   as the controller sees it, complemented where it's stored (<(~FDC_READ_SECTOR)). The firmware keeps its track and
 ;;   sector numbers in that form too: HEAD_TRACK, TARGET_TRACK and TARGET_SECTOR hold the complement of the number.
 ;;
-;; The firmware runs from $0800 on reset and keeps nothing between commands but the head's track, the status block,
-;; its own flags (DRIVE_FLAGS) and RUN_ON_COUNT. After each command that runs the motor it keeps the motor running for
-;; two of the FD1771's Restores (see RUN_ON), polling the bus all the while, parks the head and turns the motor off.
+;; The firmware runs from $0800 on reset. Between commands it relies only on the head's track, the status block, its
+;; own flags (DRIVE_FLAGS) and RUN_ON_COUNT. After each command that runs the motor it keeps the motor running for two
+;; of the FD1771's Restores (see RUN_ON), polling the bus all the while, parks the head and turns the motor off.
 ;;
 ;; VERSION selects the build: VERSION_C (the default) for revision C, the most common, and VERSION_B for revision B,
 ;; the earlier. They differ only in the order a format writes each track's sectors (FORMAT_ORDER), revision B's
@@ -162,14 +162,19 @@ TRACK39_PHASES = $30                ;; the phases that hold the head on track 39
 STATUS_BAD_COMMAND = $01            ;; a command frame was refused
 STATUS_BAD_DATA = $02               ;; a data frame's checksum was wrong
 STATUS_FAILED = $04                 ;; an operation on the disk failed
-STATUS_WRITE_PROTECTED = $08        ;; the disk is write-protected: found so by a write or format, or at reset
-STATUS_MOTOR_ON = $10               ;; the motor is running
+;; The status's write-protect bit: set at reset if the disk is protected, and by a Put, Write or Format that fails for
+;; it. Whatever sets the whole status clears it: the motor's wait in every Read, Put, Write and Format (MOTOR_READY),
+;; a refused frame and a data frame with a bad checksum.
+STATUS_WRITE_PROTECTED = $08
+;; The motor was running when a command or Status last set the status, so the first Status after a run-on can report
+;; it on.
+STATUS_MOTOR_ON = $10
 
 ; The firmware's flags (DRIVE_FLAGS).
 
 FLAG_COMPUTER_OFF = $01             ;; the computer was off at the last poll
 FLAG_BAD_FRAME = $02                ;; the command frame's checksum was wrong
-FLAG_MOTOR_STARTING = $04           ;; the motor was started from rest and isn't yet up to speed
+FLAG_MOTOR_STARTING = $04           ;; the motor stopped, or the drive was reset, since MOTOR_READY last waited for it
 FLAG_VERIFY = $08                   ;; a write is a Write, which verifies
 FLAG_BAD_SECTORS = $08              ;; a format's verify found a bad sector
 FLAG_POLL_ONCE = $20                ;; POLL returns when no command is waiting, rather than waiting for one
@@ -253,8 +258,9 @@ RESET:
     ldx #$01
     stx RUN_ON_COUNT                    ; two Restores
 
-;; Ends every command: resets the stack, counts the steps to park the head on track 39, runs the motor on for RUN_ON's
-;; Restores while polling the bus, parks the head, and stops the motor to wait for the next command.
+;; Ends every command that runs (a refused one goes back to POLL instead): resets the stack, counts the steps to park
+;; the head on track 39, waits out RUN_ON's Restores while polling the bus (the motor running on, if it's running),
+;; parks the head, and stops the motor to wait for the next command.
 ;; See: <RUN_ON>, <PARK>, <POLL>
 COMMAND_DONE:
     ldx #$FF
@@ -325,8 +331,8 @@ FORMAT_ORDER:
 .endif
 .assert * = $0880, "WRITE_TRACK's pointer ends the table when its low byte reaches $80."
 
-;; Waits for one of RUN_ON's Restores to end, polling the bus all the while; a command that arrives runs from POLL
-;; and ends at COMMAND_DONE, so this never sees it.
+;; Waits for one of RUN_ON's Restores to end, polling the bus all the while. A command that arrives and runs ends at
+;; COMMAND_DONE, which starts the run-on again; a refused frame, or one for another drive, comes back here.
 ;; In: A = FLAG_POLL_ONCE
 ;; See: <RUN_ON>
 RUN_ON_WAIT:
@@ -355,8 +361,8 @@ PARK_WAIT:
     bpl PARK_WAIT                       ; the step's time
     bmi PARK
 
-;; Stops the motor and the stepper, and waits for a command. The next command waits for the motor to come up to
-;; speed.
+;; Stops the motor and the stepper, and waits for a command. A Read, Put, Write or Format then waits for the motor to
+;; come up to speed before it uses the disk (MOTOR_READY).
 ;; See: <POLL>
 MOTOR_OFF:
     lda #PA_HIGH
@@ -367,7 +373,7 @@ MOTOR_OFF:
     jsr CLEAR_FLAGS
     lda #FLAG_MOTOR_STARTING
     jsr SET_FLAGS
-    jmp POLL                            ; never returns: the command ends at COMMAND_DONE
+    jmp POLL                            ; never returns: a command that runs ends at COMMAND_DONE
 
 ;; Checks the command frame's sector number, from 1 to 720.
 ;; Out: carry = set if the number is out of range
@@ -1087,8 +1093,10 @@ MOTOR_ON_COUNT:
     sta RUN_ON_COUNT
     rts
 
-;; Waits for a motor started from rest to come up to speed, the end of MOTOR_ON's Seek, and sets the drive status to
-;; STATUS_MOTOR_ON alone.
+;; Waits for the motor to come up to speed if FLAG_MOTOR_STARTING says it may not be: waits for the FD1771's command
+;; to end: MOTOR_ON's Seek when the motor was started from rest, and otherwise whatever the FD1771 is running, a
+;; run-on's Restore, or nothing, when INTRQ is still set from the last. Then sets the drive status to STATUS_MOTOR_ON
+;; alone.
 ;; Uses: A
 ;; Keeps: X, Y
 ;; See: <MOTOR_ON>
@@ -1564,7 +1572,8 @@ PUT_SECTOR_PROTECTED:
     lda #SIO_ERROR
     jmp PUT_SECTOR_SEND
 
-;; Steps the head Y times in X's direction, waiting each step's time, then waits 10 ms for it to settle.
+;; Steps the head Y times in X's direction, waiting each step's time but the last's, then waits 10 ms for it to
+;; settle.
 ;; In: X = the direction, as STEP takes it, Y = the steps, zero = set if there are none
 ;; Out: Y = 0, X incremented once a step
 ;; Uses: A
@@ -1678,6 +1687,9 @@ READ_TO_CHECK_DONE:
 
 ;; Checks a Write: reads the sector back and compares it with BUFFER, in two tries if the read itself fails. A
 ;; difference fails at once. Clears FLAG_VERIFY.
+;;
+;; It counts in Y the tries after this one, from 1, where Read and Put count this one too, and tries again while
+;; CHECK_RESULT leaves Y not negative; so, like FORMAT_VERIFY, which gives each try Y = 1, it never recalibrates.
 ;; Out: carry = set if the check failed
 ;; Uses: A, X, Y
 VERIFY_WRITE:

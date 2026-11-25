@@ -395,7 +395,7 @@ repository root.
 | --- | --- |
 | `NAME` | A symbol, macro or definition (4.3) |
 | `Scope::NAME`, `::NAME` | A qualified symbol, as the assembler resolves it |
-| `Module:NAME` | A symbol in a named SDK module, from its root file's name: `Monitor:COUT`, `Firmware:B_FUNC`, `AppleSoft:CHRGET`, `Slot7:DriverEntry`, `Level2:READY` |
+| `Module:NAME` | A symbol in a named SDK module, from its root file's name: `Monitor:COUT`, `Firmware:B_FUNC`, `AppleSoft:CHRGET`, `Slot7:Driver`, `Level2:READY` |
 | `$F800` | The documented label at that address, in the topic's model and memory area |
 | `NAME@Original`, `NAME@Enhanced` | That model's version of a name that differs between models |
 | `NAME#Section` | A section of a topic: `<PLOT#Keeps>` |

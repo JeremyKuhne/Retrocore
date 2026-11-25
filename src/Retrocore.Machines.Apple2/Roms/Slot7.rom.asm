@@ -1,3 +1,4 @@
+; retrocore: style=strict
 ; Copyright (c) 2025 Jeremy W Kuhne
 ; SPDX-License-Identifier: MIT
 ; See LICENSE file in the project root for full license information
@@ -9,7 +10,8 @@
 ; This is a small program that lets the emulated Apple IIe start an operating
 ; system from a disk image and subsequently access that disk. It belongs to an
 ; invented, emulated storage device, not a reproduction of a historical card.
-; This is our firmware, not an Apple ROM dump or the ProDOS operating system.
+; This is our firmware, not an Apple ROM dump or the ProDOS operating system, so
+; its names are its own.
 ;
 ; ProDOS is an Apple II operating system. Among other things, it understands
 ; files and directories and decides where their contents live on a disk. This
@@ -34,7 +36,7 @@
 ; machine and searches for a bootable card. It recognizes our virtual card by
 ; particular bytes in its slot ROM, then executes the beginning of this program.
 ; Our 256-byte ROM appears at CPU memory addresses $C700-$C7FF; its disk-command
-; routine starts at $C740. Numbers prefixed with $ are hexadecimal, not decimal.
+; routine, Driver, starts at $C740. Numbers prefixed with $ are hexadecimal.
 ;
 ; HOW BOOTING WORKS
 ;
@@ -52,11 +54,11 @@
 ; HOW A DISK REQUEST CROSSES INTO C#
 ;
 ; The caller places the command, disk unit, RAM-buffer address, and block number
-; in agreed memory locations, called a mailbox, then calls DriverEntry. The
-; routine reads the special address $C0F0. Unlike a normal RAM read, that access
-; invokes Apple2Bus.DiskCommand in C#, which performs the transfer through
-; IBlockDevice and returns an error code. A read copies a block into the caller's
-; RAM buffer; a write copies the buffer's bytes to the corresponding disk block.
+; in agreed memory locations, called a mailbox, then calls Driver. The routine
+; reads the special address $C0F0. Unlike a normal RAM read, that access invokes
+; Apple2Bus.DiskCommand in C#, which performs the transfer through IBlockDevice
+; and returns an error code. A read copies a block into the caller's RAM buffer;
+; a write copies the buffer's bytes to the corresponding disk block.
 ;
 ; This is memory-mapped I/O: an address stands for a device operation rather than
 ; an ordinary stored byte. It is an intentional emulation shortcut for block
@@ -72,22 +74,15 @@
 ;
 ; BUILDING AND MODIFYING THIS FIRMWARE
 ;
-; The source generator uses the same Retrocore.Assembler implementation exposed by
-; the retrocore library, linked into the build tool to avoid a dependency cycle.
-; It extracts .rom metadata and passes the remaining source to that assembler,
-; which uses the CPU's canonical opcode definitions. Slot7Rom.Bytes contains the
-; complete image, including zero padding and the identification trailer. At
-; machine creation, C# copies that image into the card's ROM storage and adds
-; the write-capability bit only if the mounted device permits writes. The CPU
-; then executes these bytes normally; no assembler runs inside the emulator.
+; The source generator assembles this file with Retrocore's own assembler when the
+; machine library is built (docs/NativeAssembly.md describes the dialect; the .rom
+; line names the generated C# type, its origin and its size). Slot7Rom.Bytes
+; contains the complete image, including zero padding and the identification
+; trailer, and .export makes Driver, DeviceInfo and CAPABILITY_WRITE constants of
+; that type. At machine creation, C# copies that image into the card's ROM storage
+; and adds the write-capability bit only if the mounted device permits writes. The
+; CPU then executes these bytes normally; no assembler runs inside the emulator.
 ; The same firmware works with both original and enhanced IIe CPU configurations.
-;
-; Assembler dialect:
-;   .rom Namespace.Type, origin, size declares the generated constant byte span.
-;   .cpu selects the canonical opcode map. Labels and constants are case-sensitive.
-;   .org moves forward with zero padding; .res, .byte, .word and .assert are supported.
-;   < and > extract low/high bytes. Branches are range checked; forward labels resolve
-;   at build time. .export exposes addresses/constants to the C# device implementation.
 ;
 ; ProDOS mailbox ABI:
 ;   $42 command: 0=status, 1=read, 2=write.
@@ -107,96 +102,195 @@
 
 .rom Retrocore.Machines.Apple2.Slot7Rom, $C700, $100
 .cpu Mos6502
-.export DriverEntry, DeviceInfo, WriteCapabilityMask
+.export Driver, DeviceInfo, CAPABILITY_WRITE
 
+; The ProDOS block-device mailbox in page zero, which the caller fills before calling <Driver>.
+
+;; The ProDOS command: <COMMAND_STATUS>, <COMMAND_READ> or <COMMAND_WRITE>.
 Command = $42
-Unit = $43
-BufferLow = $44
+
+;; The ProDOS unit number: the drive in bit 7 (clear for drive 1) and the slot in bits 6-4.
+UnitNumber = $43
+
+;; The address of the caller's 512-byte buffer, low byte; <BufferHigh> is the high byte.
+Buffer = $44
+
+;; The high byte of <Buffer>.
 BufferHigh = $45
-BlockLow = $46
+
+;; The block number, low byte; <BlockHigh> is the high byte.
+Block = $46
+
+;; The high byte of <Block>.
 BlockHigh = $47
+
+; The ProDOS commands.
+
+;; Returns the device's size in blocks.
+COMMAND_STATUS = 0
+
+;; Reads a block into the buffer.
+COMMAND_READ = 1
+
+;; Writes the buffer to a block.
+COMMAND_WRITE = 2
+
+;; The ProDOS unit number of slot 7, drive 1.
+UNIT_SLOT_7_DRIVE_1 = $70
+
+; Memory the boot uses.
+
+;; Three bytes below the boot buffer where the boot writes a JMP to <Driver>, which ProDOS's boot block calls to read
+;; the rest of its loader.
 BootTrampoline = $07FD
+
+;; The opcode of JMP absolute, for <BootTrampoline>.
+OPCODE_JMP = $4C
+
+;; The page block 0 is read to: $0800-$09FF.
+BOOT_PAGE = $08
+
+;; The page block 1 is read to: $0A00-$0BFF.
+BOOT_SECOND_PAGE = $0A
+
+;; Where the boot block's code starts, after its first byte.
 BootEntry = $0801
+
+; The emulator's ports.
+
+;; Read: performs the mailbox's command and returns its ProDOS error code, 0 for success.
 CommandPort = $C0F0
-BlockCountLow = $C0F1
+
+;; Read: the device's size in blocks, low byte; <BlockCountHigh> is the high byte.
+BlockCount = $C0F1
+
+;; Read: the high byte of <BlockCount>.
 BlockCountHigh = $C0F2
 
-; ProDOS device-capability bits at $CnFE.
-RemovableMask = %10000000
-InterruptibleMask = %01000000
-OneVolume = %00000000                ; bits 5-4: the number of volumes less one (ProDOS Technical Note #21)
-FormatCapabilityMask = %00001000
-WriteCapabilityMask = %00000100      ;; The capability bit the C# card sets in <DeviceInfo> for a writable device.
-ReadCapabilityMask = %00000010
-StatusCapabilityMask = %00000001
+; The ProDOS device-capability bits at $CnFE.
 
-;; Boots the mounted disk: reads blocks 0 and 1 to $0800-$0BFF through <DriverEntry>, then runs the
-;; disk's bootstrap at $0801.
-;; Out: X = the unit number, as ProDOS's bootstrap expects
-Boot:
-    lda #$20                 ; C701: first disk-card identification byte.
-    lda #$00                 ; C703: second identification byte.
-    lda #$03                 ; C705: third identification byte.
-    lda #$3C                 ; C707: legacy disk device; original IIe ROM checks this.
+;; Removable media.
+CAPABILITY_REMOVABLE = %10000000
 
-    lda #$4C                 ; JMP opcode for the ProDOS bootstrap's RAM trampoline.
-    sta BootTrampoline       ; Install it at 07FD, outside the 0800 boot buffer.
-    lda #<DriverEntry        ; Resolve the low byte of the card's command entry.
-    sta BootTrampoline + 1   ; Set the trampoline's destination low byte.
-    lda #>DriverEntry        ; Resolve its high byte from the ROM load address.
-    sta BootTrampoline + 2   ; Complete JMP C740 at 07FD-07FF.
+;; Interrupts.
+CAPABILITY_INTERRUPT = %01000000
 
-    lda #1                   ; Boot starts with the ProDOS READ command.
-    sta Command              ; The command entry reads the zero-page mailbox.
-    lda #$70                 ; Slot seven, drive one, in ProDOS unit-number format.
-    sta Unit                 ; Keep it available to the disk's bootstrap code.
-    lda #0                   ; Buffer low byte and initial block number are zero.
-    sta BufferLow            ; First buffer begins at 0800.
-    sta BlockLow             ; Select block zero.
-    sta BlockHigh            ; Select its zero high byte.
-    lda #$08                 ; High byte of the first 512-byte buffer.
-    sta BufferHigh           ; Destination is 0800-09FF.
-    jsr DriverEntry          ; Read block zero through the emulator's block card.
+;; Bits 5-4: the number of volumes less one (ProDOS Technical Note #21).
+ONE_VOLUME = %00000000
 
-    lda #$0A                 ; The second contiguous boot buffer starts at 0A00.
-    sta BufferHigh           ; Destination is 0A00-0BFF.
-    inc BlockLow             ; Advance from block zero to block one.
-    jsr DriverEntry          ; Read the second boot block; Command remains READ.
-    ldx Unit                 ; ProDOS's disk bootstrap expects its unit number in X.
-    jmp BootEntry            ; Leave the card and execute the disk bootstrap at 0801.
+;; Formats.
+CAPABILITY_FORMAT = %00001000
 
-; Leave enough space for the existing C740 driver entry. A backwards .org or a
-; bootstrap that grows into this entry is a compile-time error, not truncated data.
+;; The capability bit the C# card sets in <DeviceInfo> for a writable device.
+CAPABILITY_WRITE = %00000100
+
+;; Reads.
+CAPABILITY_READ = %00000010
+
+;; Returns its status.
+CAPABILITY_STATUS = %00000001
+
+; The four signature bytes the Monitor and ProDOS look for in a disk controller's page, which Boot's first
+; instructions carry as their operands.
+
+;; At $C701: a disk controller.
+SIGNATURE_01 = $20
+
+;; At $C703: a disk controller.
+SIGNATURE_03 = $00
+
+;; At $C705: a disk controller.
+SIGNATURE_05 = $03
+
+;; At $C707: $3C, not $00: a disk controller that is not a SmartPort, which the original IIe's ROM checks.
+SIGNATURE_07 = $3C
+
+;; Boots the mounted disk: reads blocks 0 and 1 to $0800-$0BFF through <Driver>, then runs the disk's bootstrap at
+;; $0801.
+;;
+;; It doesn't check the reads' carry: the host checks the image when it is mounted.
+;; Out:   X = the unit number, as ProDOS's bootstrap expects
+.proc Boot
+    ; The signature: these loads are executed, but only their operands matter.
+    lda #SIGNATURE_01
+    lda #SIGNATURE_03
+    lda #SIGNATURE_05
+    lda #SIGNATURE_07
+
+    ; JMP Driver at $07FD-$07FF, outside the boot buffer, for the disk's bootstrap.
+    lda #OPCODE_JMP
+    sta BootTrampoline
+    lda #<Driver
+    sta BootTrampoline + 1
+    lda #>Driver
+    sta BootTrampoline + 2
+
+    ; Block 0 to $0800-$09FF. The unit number stays in the mailbox for the disk's bootstrap.
+    lda #COMMAND_READ
+    sta Command
+    lda #UNIT_SLOT_7_DRIVE_1
+    sta UnitNumber
+    lda #0
+    sta Buffer
+    sta Block
+    sta BlockHigh
+    lda #BOOT_PAGE
+    sta BufferHigh
+    jsr Driver
+
+    ; Block 1 to $0A00-$0BFF; Command is still COMMAND_READ.
+    lda #BOOT_SECOND_PAGE
+    sta BufferHigh
+    inc Block
+    jsr Driver
+
+    ; The disk's bootstrap, with its unit number in X.
+    ldx UnitNumber
+    jmp BootEntry
+.endproc
+
+; Leave enough space for the existing $C740 driver entry. A backwards .org or a boot that grows into this entry is
+; a compile-time error, not truncated data.
 .org $C740
-;; The ProDOS block-device command entry: performs the command in the zero-page mailbox.
-;; In:    Command = 0 for status, 1 to read, 2 to write; Unit = drive and slot, BufferLow/BufferHigh = the buffer,
-;;          BlockLow/BlockHigh = the block number
-;; Out:   A = 0 or a ProDOS error code; X/Y = the block count, for status, carry = clear on success, set on error
-;; See:   <DeviceInfo>
-DriverEntry:
-    lda Command              ; Decide whether status must return capacity in X/Y.
-    bne ExecuteCommand       ; READ/WRITE preserve the caller's X and Y registers.
-    lda CommandPort          ; STATUS performs no buffer transfer; A receives status.
-    ldx BlockCountLow        ; Return the low byte of device capacity.
-    ldy BlockCountHigh       ; Return the high byte of device capacity.
-; STATUS deliberately falls through for a second harmless status-port read,
-; preserving the previous driver's instruction and bus-access sequence.
-ExecuteCommand:
-    lda CommandPort          ; Dispatch mailbox command and receive zero/error in A.
-    cmp #0                   ; Test status without changing the returned A value.
-    beq Success              ; Zero means success.
-    sec                      ; Nonzero: report ProDOS error with carry set.
-    rts                      ; Return to the caller; X/Y remain as required above.
-Success:
-    clc                      ; Zero: report success with carry clear.
-    rts                      ; Return from the command entry.
 
-; Unused bytes between the driver and identification trailer are zero padded.
-; C7FE: one volume, readable, status supported; not removable or interruptible.
-; The C# card adds WriteCapabilityMask only for a writable mounted device.
+;; The ProDOS block-device entry: performs the command in the zero-page mailbox.
+;;
+;; At $C740; the low byte of its address is at $C7FF, where ProDOS finds it. Read and write keep X and Y. Status
+;; reads <CommandPort> twice: once for the status and again through the read and write path, which earlier versions of
+;; this driver also did; the second read is harmless.
+;; In:    Command = <COMMAND_STATUS>, <COMMAND_READ> or <COMMAND_WRITE>; UnitNumber = drive and slot,
+;;          Buffer/BufferHigh = the buffer, Block/BlockHigh = the block number
+;; Out:   A = 0 or a ProDOS error code, carry = clear on success, set on error; X/Y = the block count, for status
+;; See:   <DeviceInfo>
+.proc Driver
+    ; Status: the size from the emulator's ports.
+    lda Command
+    bne Perform
+    lda CommandPort
+    ldx BlockCount
+    ldy BlockCountHigh
+    ; Falls into Perform.
+
+    ; Performs the command, and returns its error code with the carry set, or 0 with the carry clear.
+Perform:
+    lda CommandPort
+    cmp #0                          ; zero for success
+    beq Succeed
+    sec
+    rts
+Succeed:
+    clc
+    rts
+.endproc
+
+; Unused bytes between the driver and the identification trailer are zero padded.
 .org $C7FE
-;; The ProDOS device-capability byte at $CnFE, followed by the low byte of <DriverEntry> at $CnFF.
+
+;; The ProDOS device-capability byte at $CnFE, followed by the low byte of <Driver> at $CnFF.
+;;
+;; One volume that reads and returns its status ($03), not removable and without interrupts; the C# card adds
+;; <CAPABILITY_WRITE> only for a writable mounted device.
 DeviceInfo:
-    .byte OneVolume | ReadCapabilityMask | StatusCapabilityMask ; Base read-only capabilities ($03).
-    .byte <DriverEntry       ; C7FF: ProDOS command-entry offset within the slot ROM.
-.assert * == $C800           ; Verify the complete image ends exactly after 256 bytes.
+    .byte ONE_VOLUME | CAPABILITY_READ | CAPABILITY_STATUS
+    .byte <Driver
+.assert * == $C800                  ; the image ends exactly after 256 bytes

@@ -103,7 +103,8 @@ public sealed class CardFirmwareSourceTests
         DebugInfo debug = new();
         SdkModules.AddTo(debug, Apple2Model.IIeEnhanced, s_inputs);
         string source = Path.GetFullPath(Path.Join(s_inputs, "ProFile.rom.asm"));
-        int line = Array.IndexOf(File.ReadAllLines(source), "Driver:") + 2;
+        string[] lines = File.ReadAllLines(source);
+        int line = Array.FindIndex(lines, Array.IndexOf(lines, ".proc Driver") + 1, IsCode) + 1;
         List<ushort> entries = [.. debug.Modules.SelectMany(module => module.Entries(source, line))];
         entries.Order().Should().Equal(Enumerable.Range(1, 7).Select(slot => (ushort)((0xC0 | slot) << 8 | (ProFileRom.Driver & 0xFF))));
     }
@@ -111,11 +112,18 @@ public sealed class CardFirmwareSourceTests
     private static bool MouseInSlotTwo(SourceMapModule module) =>
         module.Area is Apple2MemoryArea.Slot2Rom && module.TryResolve("SETMOUSE", out long _);
 
-    // The outermost line, the invocation where a routine is a macro call, follows the routine's label.
+    // The outermost line, the invocation where a routine is a macro call, is the routine's first code after its label or
+    // its .proc line, past any comments.
     private static void AtLabel(DebugInfo debug, Apple2TestMemory memory, ushort address, string file, string label)
     {
         SourceLine line = debug.Position(memory, address)?.Chain[^1] ?? throw new AssertFailedException("No source.");
         Path.GetFileName(line.Path).Should().Be(file);
-        File.ReadAllLines(line.Path)[line.Line - 2].Should().Be($"{label}:");
+        string[] lines = File.ReadAllLines(line.Path);
+        IsCode(lines[line.Line - 1]).Should().BeTrue();
+        int before = Array.FindLastIndex(lines, line.Line - 2, IsCode);
+        lines[before].Should().BeOneOf($"{label}:", $".proc {label}");
     }
+
+    // Whether a line holds code or a label, not only a comment or nothing.
+    private static bool IsCode(string line) => line.Trim() is { Length: > 0 } code && !code.StartsWith(';');
 }

@@ -24,7 +24,10 @@ namespace Retrocore.Basic;
 ///   NOTSIN+1 is the name NOTSIN plus 1, SIN having no (, as NOTAND+1 is NOTAND plus 1. A function's name or an
 ///   operator word is a variable only before a character from '0' up, the end among them, as SYNTAX_VARIABLE takes
 ///   it: SIN alone is a variable, NOTSIN alone NOT SIN and NOTAND=1 (NOT AND)=1, where OR+1, SIN +1 and TO$ are
-///   refused. A string that no DIM has given room is error 9, and its substring error 5, its length being 0.
+///   refused. Where the ROM backtracks through its whole grammar to read a name that starts with NOT, this decides
+///   from the tokens beside the name, so a few such names read differently, as NOTASC(A$="X"), an array's element
+///   there and an error here. A string that no DIM has given room is error 9, and its substring error 5, its length
+///   being 0.
 ///   <c>A(i)</c> and <c>A(i,j)</c> are array elements, counting from 0, <c>A(i)</c> being <c>A(i,0)</c>;
 ///   <c>A$(i)</c> is the string from character i and <c>A$(i,j)</c> characters i to j, counting from 1, never empty.
 ///   Subscripts, indexes and the arguments of PEEK and CHR$ round to an integer from 0 to 65535, or are error 3; a
@@ -235,8 +238,8 @@ internal sealed class AtariBasicExpression
     }
 
     // Whether the function's argument at an index is of its kind: ASC, VAL, LEN and ADR take only a string
-    // (RULE_STRING_ARGUMENT), so NOTASC(1) is the array NOTASC's element. A string starts with a quote, or is a
-    // string's name or a string function.
+    // (RULE_STRING_ARGUMENT), so NOTASC(1) is the array NOTASC's element. The argument counts as a string when its first
+    // token is a quoted constant or ends with $ (a string's name or function).
     private bool TakesArgument(string function, int index)
     {
         if (function is not ("ASC" or "VAL" or "LEN" or "ADR")) { return true; }

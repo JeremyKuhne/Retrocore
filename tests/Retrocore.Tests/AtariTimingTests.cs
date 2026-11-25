@@ -219,6 +219,30 @@ public class AtariTimingTests
         ((long)(machine.Processor.CycleCount - cpu)).Should().Be(19_030);
     }
 
+    /// <summary>
+    ///  A display list whose last line, 247, is a plain jump runs the jump on that line and fetches nothing in
+    ///  vertical blank, so each frame starts from the same display list.
+    /// </summary>
+    [TestMethod]
+    public void JumpIsNotFetchedInVerticalBlank()
+    {
+        AtariMachine machine = Display(0x22, 0x42);
+
+        // 239 blank lines (29 of 8 and one of 7) from line 8, then a plain jump to $3000 on line 247.
+        ushort at = 0x3000;
+        for (int i = 0; i < 29; i++) { machine.Bus.Poke(at++, 0x70); }
+        machine.Bus.Poke(at++, 0x60);
+        machine.Bus.Poke(at++, 0x01);
+        machine.Bus.Poke(at++, 0x00);
+        machine.Bus.Poke(at, 0x30);
+        machine.RunFrame();
+        machine.RunFrame();
+        while (machine.Antic.Line != AtariTiming.VerticalBlankLine) { machine.Run(1); }
+        machine.Antic.DisplayList.Should().Be(0x3000, "the jump on line 247 went to $3000");
+        while (machine.Antic.Line != AtariTiming.FirstDisplayLine) { machine.Run(1); }
+        machine.Antic.DisplayList.Should().Be(0x3000, "vertical blank fetches no display list");
+    }
+
     // A machine idling in a loop, with a display list at $3000: 24 blank lines, then the given mode lines from $4000,
     // then a jump and wait for vertical blank. ANTIC runs it with a normal playfield and the OS's character set.
     private static AtariMachine Display(byte dmaControl, params byte[] modeLines)

@@ -421,8 +421,11 @@ public sealed class Antic
         bool lms = _mode >= 2 && (_instruction & 0x40) != 0;
         if (!jump && !lms) { return false; }
 
-        // A fetched instruction is already in the register; JVB's address is fetched once.
-        if (!jump && (!_firstLine || Line != _dmaStartLine)) { return false; }
+        // A fetched instruction is already in the register; JVB's address is fetched once. A plain jump fetches again
+        // only on the scan lines its own mode line runs to, never in vertical blank.
+        bool display = Line >= AtariTiming.FirstDisplayLine && Line < AtariTiming.VerticalBlankLine;
+        bool again = jump && display && !_firstLine && !_modeLineDone;
+        if (!again && (!_firstLine || Line != _dmaStartLine)) { return false; }
 
         byte value = _bus.DmaRead(_displayList);
         _displayList = NextDisplayListAddress(_displayList);

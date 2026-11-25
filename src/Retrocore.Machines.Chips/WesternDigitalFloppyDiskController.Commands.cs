@@ -69,8 +69,8 @@ public sealed partial class WesternDigitalFloppyDiskController
             return;
         }
 
-        // The E bit adds the 15 ms head-load delay. Write track asks for its first byte at once, delay or not; writing
-        // starts at the index pulse once it's there.
+        // The E bit adds the head-load delay (SettleCycles). Write track asks for its first byte at once, delay or
+        // not; writing starts at the index pulse once it's there.
         _wait = (value & 0x04) != 0 ? SettleCycles : 1;
         _phase = Phase.Delaying;
         if ((value & 0xF0) == 0xF0) { _request = true; }

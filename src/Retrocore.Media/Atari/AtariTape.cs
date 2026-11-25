@@ -143,7 +143,7 @@ public sealed class AtariTape : IMedium
     {
         using MemoryStream stream = new();
         byte[] description = Encoding.Latin1.GetBytes(Description);
-        Chunk(stream, "FUJI"u8, 0, description.AsSpan(0, Math.Min(description.Length, ushort.MaxValue - 1)));
+        Chunk(stream, "FUJI"u8, 0, description.AsSpan(0, Math.Min(description.Length, ushort.MaxValue - 3)));
         int baud = 0;
         foreach (AtariTapeBlock block in _blocks)
         {
@@ -219,8 +219,9 @@ public sealed class AtariTape : IMedium
         type.CopyTo(header);
         do
         {
-            // 65,534, so an fsk chunk's two-byte durations stay whole.
-            int length = Math.Min(data.Length, ushort.MaxValue - 1);
+            // 65,532: whole two-byte durations, and an even number of them, so the next fsk chunk starts on space
+            // as the run it continues does.
+            int length = Math.Min(data.Length, ushort.MaxValue - 3);
             BinaryPrimitives.WriteUInt16LittleEndian(header[4..], (ushort)length);
             BinaryPrimitives.WriteUInt16LittleEndian(header[6..], (ushort)Math.Clamp(aux, 0, ushort.MaxValue));
             stream.Write(header);

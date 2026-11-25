@@ -94,6 +94,19 @@ public class AtariTapeTests
         blocks[0].Gap.Should().Be(100);
         blocks[1].Gap.Should().Be(0);
         blocks.Sum(block => block.Data.Length).Should().Be(70_000);
+
+        // Raw tone splits after an even number of runs, so the second chunk starts on space as its run does.
+        ushort[] durations = new ushort[40_001];
+        for (int i = 0; i < durations.Length; i++) { durations[i] = (ushort)(1 + (i % 3)); }
+        AtariTapeBlock tone = new(Gap: 0, Baud: AtariTape.StandardBaud, Data: [], Durations: durations);
+        blocks = AtariTape.Load(new AtariTape([tone]).ToCas()).Blocks;
+        blocks.Should().HaveCount(2);
+        double split = blocks[0].Duration;
+        foreach (double at in (double[])[split - 0.00005, split + 0.00005, split + 0.5, tone.Duration - 0.00005])
+        {
+            bool level = at < split ? blocks[0].LevelAt(at) : blocks[1].LevelAt(at - split);
+            level.Should().Be(tone.LevelAt(at), $"the level {at} s in");
+        }
     }
 
     /// <summary>

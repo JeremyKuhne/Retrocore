@@ -116,12 +116,10 @@ public sealed partial class BasicVariables
             throw new InvalidOperationException("ERROR- 9: the string has not been DIMensioned.");
         }
 
+        // ASSIGN_STRING cuts the copy to the room DIM gave the string.
         byte[] text = value.Text ?? [];
         int room = Word(address + 4);
-        if (text.Length > room)
-        {
-            throw new InvalidOperationException($"ERROR- 5: the string has room for {room} characters.");
-        }
+        if (text.Length > room) { text = text[..room]; }
 
         Store((Word(AtariBasicDialect.Starp) + Word(address)) & 0xFFFF, text);
         BasicProgram.WriteWord(_memory, address + 2, text.Length);

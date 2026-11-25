@@ -183,6 +183,49 @@ public sealed class AtariBasicDialectTests
     }
 
     /// <summary>
+    ///  A file rev. B saved after a LOAD, its pointers 16 bytes on, reads as the same program, as rev. C's LOAD
+    ///  reads it.
+    /// </summary>
+    [TestMethod]
+    public void RevisionBImagesRead()
+    {
+        BasicProgram program = Program(string.Join('\n', s_program));
+        byte[] image = program.ToImage();
+        for (int offset = 2; offset < 14; offset += 2)
+        {
+            int moved = image[offset] + (image[offset + 1] << 8) + 16;
+            image[offset] = (byte)moved;
+            image[offset + 1] = (byte)(moved >> 8);
+        }
+
+        BasicProgram.FromImage(BasicDialect.AtariBasic, image).ToText().Should().Be(program.ToText());
+    }
+
+    /// <summary>
+    ///  A REM's and a DATA item's trailing spaces are the program's, and are kept, as LIST and READ keep them.
+    /// </summary>
+    [TestMethod]
+    public void TextKeepsItsSpaces()
+    {
+        Program("10 DATA AB  \n20 REM X \n30 PRINT 1:END").ToText()
+            .Should().Be("10 DATA AB  \n20 REM X \n30 PRINT 1:END\n");
+    }
+
+    /// <summary>
+    ///  A string written longer than its DIM is cut to fit, as ASSIGN_STRING cuts it.
+    /// </summary>
+    [TestMethod]
+    public void LongStringsAreCut()
+    {
+        AtariMachine machine = EvaluationMachine();
+        BasicVariables variables = new(BasicDialect.AtariBasic, new AtariBasicMemory(machine));
+        BasicVariable a = variables.Find("A$") ?? throw new AssertFailedException("A$ is not a variable.");
+        variables.Write(BasicVariableKind.String, a.ValueAddress, BasicValue.Of("ABCDEFGHIJKL"u8.ToArray()));
+        variables.Read(BasicVariableKind.String, a.ValueAddress).Text.Should().Equal("ABCDEFGHI"u8.ToArray());
+        Printed(machine, "A$").Should().Be("ABCDEFGHI", "BASIC reads the string as written");
+    }
+
+    /// <summary>
     ///  The debugger's expressions give what PRINT gives on the machine: the string comparisons above NOT and the
     ///  arithmetic, an array's missing second subscript, subscripts and arguments rounded, and DEG's degrees.
     /// </summary>
@@ -201,7 +244,12 @@ public sealed class AtariBasicDialectTests
     [DataRow("ATN(-1)/ATN(-1)")]
     [DataRow("5/3")]
     [DataRow("--1")]
+    [DataRow("- -1")]
     [DataRow("NOT -1")]
+    [DataRow("1 AND .5")]
+    [DataRow("B(2) ANDB(1,1)")]
+    [DataRow("1 ORB(2)")]
+    [DataRow("NOTE1")]
     [DataRow("2*-.5")]
     [DataRow("1E50*1E40")]
     [DataRow("(-2)^3")]
@@ -234,6 +282,8 @@ public sealed class AtariBasicDialectTests
     [DataRow("LOG(0)", 3)]
     [DataRow("B(4)", 9)]
     [DataRow("B(40000)", 9)]
+    [DataRow("LEN(C$)", 9)]
+    [DataRow("C$=\"X\"", 9)]
     [DataRow("0^-1", 3)]
     [DataRow("(-8)^.5", 3)]
     [DataRow("1E50*1E50", 11)]
@@ -247,15 +297,19 @@ public sealed class AtariBasicDialectTests
     }
 
     /// <summary>
-    ///  Expressions with two unary operators are refused, as rev. C's grammar refuses them.
+    ///  Expressions rev. C's grammar refuses are refused: two unary operators, a sign apart from its number, what a
+    ///  number leaves over, and a string where a number goes.
     /// </summary>
     /// <param name="expression">The expression.</param>
     [TestMethod]
+    [DataRow("1.2.3")]
+    [DataRow("A$+1")]
+    [DataRow("1=A$")]
     [DataRow("- -A")]
     [DataRow("- - 1")]
     [DataRow("NOT - 1")]
     [DataRow("NOT NOT 1")]
-    public void SecondUnaryIsRefused(string expression)
+    public void RefusedExpressionsAreTheRoms(string expression)
     {
         AtariMachine machine = EvaluationMachine();
         Action evaluate = () => new BasicEvaluator(BasicDialect.AtariBasic, new AtariBasicMemory(machine)).Evaluate(expression);
@@ -283,23 +337,27 @@ public sealed class AtariBasicDialectTests
 
     /// <summary>
     ///  A line whose tokens would fill the 256-byte token buffer is refused, as WRITE_TOKEN refuses it, where one a
-    ///  byte shorter is taken.
+    ///  byte shorter is taken. Statements bring the line near the end, as they don't fill the syntax stack the way a
+    ///  long PRINT list does, and a string's characters, a byte each, then reach it one at a time; a constant's six
+    ///  bytes would skip WRITE_TOKEN's check.
     /// </summary>
     [TestMethod]
     public void TokenBufferLimitIsTheRoms()
     {
-        // Line header (3), statement header (2), then each ",1" adds a comma and a 7-byte constant; PRINT 1 starts it.
-        static string Line(int ones) => "10 PRINT 1" + string.Concat(Enumerable.Repeat(",1", ones));
+        static string Line(int number, int characters) =>
+            $"{number} " + string.Join(':', Enumerable.Repeat("A=1", 20)) + ":A$=\"" + new string('X', characters) + "\"";
 
-        int taken = Enumerable.Range(1, 40).Last(ones => Tokenizes(Line(ones)));
-        Tokenizes(Line(taken + 1)).Should().BeFalse();
+        int taken = Enumerable.Range(0, 40).Last(characters => Tokenizes(Line(10, characters)));
+        taken.Should().BeInRange(1, 38, "the buffer's end falls among the string's characters");
+        BasicProgram.Parse(Line(10, taken + 1), BasicDialect.AtariBasic).Diagnostics.Should()
+            .ContainSingle(diagnostic => diagnostic.Message.Contains("token buffer", StringComparison.Ordinal));
 
         AtariMachine machine = Machine();
-        AtariMachineTests.Type(machine, Line(taken) + "\r");
-        AtariMachineTests.Type(machine, Line(taken + 1).Replace("10 ", "20 ", StringComparison.Ordinal) + "\r");
+        AtariMachineTests.Type(machine, Line(10, taken) + "\r");
+        AtariMachineTests.Type(machine, Line(20, taken + 1) + "\r");
         BasicProgram typed = BasicProgram.Read(BasicDialect.AtariBasic, new AtariBasicMemory(machine));
-        typed.ToText().Should().Contain(Line(taken), "the ROM takes the longest line the dialect takes");
-        typed.ToText().Should().NotContain("20 PRINT", "the ROM refuses the line the dialect refuses");
+        typed.ToText().Should().Contain(Line(10, taken), "the ROM takes the longest line the dialect takes");
+        typed.ToText().Should().NotContain("20 A=1", "the ROM refuses the line the dialect refuses");
     }
 
     private static bool Tokenizes(string line) => BasicProgram.Parse(line, BasicDialect.AtariBasic).Program is not null;

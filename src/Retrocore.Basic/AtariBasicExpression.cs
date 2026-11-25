@@ -12,13 +12,16 @@ namespace Retrocore.Basic;
 /// </summary>
 /// <remarks>
 ///  <para>
-///   Numbers are Atari BASIC's ten significant digits. Results are .NET's, kept as
+///   Numbers are Atari BASIC's ten significant digits. Results are .NET's, kept to ten digits as
 ///   <see cref="AtariNumbers.FromDouble"/> keeps them, where the FP package drops the digits it shifts out and works
 ///   out its functions by series, so a last digit can differ: ATN(1) in degrees is 45 here and 45.0000003 on the
-///   machine. Rev. C's precedence holds: a string comparison binds above
-///   everything (NOT A$=B$ is NOT (A$=B$)); NOT, like a sign, takes the operand after it (NOT A=B is (NOT A)=B), and
-///   only one of them, though a sign before a number is the constant's (- -1 is 1); AND is above OR. A comparison is
-///   1 or 0. <c>A(i)</c> and <c>A(i,j)</c> are array elements, counting from 0, <c>A(i)</c> being <c>A(i,0)</c>;
+///   machine. Rev. C's precedence holds: a string comparison binds above everything (NOT A$=B$ is NOT (A$=B$)); NOT,
+///   like a sign, takes the operand after it (NOT A=B is (NOT A)=B), and only one of them, though a sign right before
+///   a number is the constant's (- -1 is 1, and - - 1 is refused); AND is above OR. A comparison is 1 or 0. AND, as
+///   OPERATOR_AND, ANDs the exponent bytes, so 1 AND 0.5 is 0. A name that starts with NOT, AND or OR where that
+///   operator can go is the operator and a name, as MATCH_OPERATOR reads it: NOTE1 is NOT E1. A string that no DIM
+///   has given room is error 9.
+///   <c>A(i)</c> and <c>A(i,j)</c> are array elements, counting from 0, <c>A(i)</c> being <c>A(i,0)</c>;
 ///   <c>A$(i)</c> is the string from character i and <c>A$(i,j)</c> characters i to j, counting from 1, never empty.
 ///   Subscripts, indexes and the arguments of PEEK and CHR$ round to an integer from 0 to 65535, or are error 3; a
 ///   subscript of 32768 up is error 9. SIN, COS and ATN work in degrees after DEG, as DEGFLG says. ASC of an empty
@@ -81,7 +84,7 @@ internal sealed class AtariBasicExpression
     /// <returns>The text.</returns>
     internal static string Format(BasicValue value)
     {
-        if (value.Text is not { } text) { return AtariNumbers.Format(AtariNumbers.FromDouble(value.Number)); }
+        if (value.Text is not { } text) { return AtariNumbers.Format(Atari(value.Number)); }
         System.Text.StringBuilder builder = new("\"");
         foreach (byte character in text) { BasicText.AppendCharacter(builder, character); }
         return builder.Append('"').ToString();
@@ -90,14 +93,15 @@ internal sealed class AtariBasicExpression
     private BasicValue Or()
     {
         BasicValue left = And();
-        while (Take("OR")) { left = Truth(Number(left) != 0 | Number(And()) != 0); }
+        while (TakeWord("OR")) { left = Truth(Number(left) != 0 | Number(And()) != 0); }
         return left;
     }
 
     private BasicValue And()
     {
         BasicValue left = Relation();
-        while (Take("AND")) { left = Truth(Number(left) != 0 & Number(Relation()) != 0); }
+        // OPERATOR_AND ANDs the exponent bytes, so 1 AND 0.01 is 0 ($40 and $3F).
+        while (TakeWord("AND")) { left = Truth((Atari(Number(left))[0] & Atari(Number(Relation()))[0]) != 0); }
         return left;
     }
 
@@ -111,7 +115,7 @@ internal sealed class AtariBasicExpression
             // A string's comparisons are Operand's, so a string here is compared with a number.
             if (right.IsString)
             {
-                throw new FormatException("ERROR- 8: a string compares only with a string.");
+                throw Syntax("a string compares only with a string");
             }
 
             left = Truth(Compare(relation, Number(left).CompareTo(Number(right))));
@@ -173,7 +177,7 @@ internal sealed class AtariBasicExpression
     {
         if (Take("-")) { return Rounded(-Number(Operand())); }
         if (Take("+")) { return Rounded(Number(Operand())); }
-        if (Take("NOT")) { return Truth(Number(Operand()) == 0); }
+        if (TakeWord("NOT")) { return Truth(Number(Operand()) == 0); }
         return Operand();
     }
 
@@ -185,7 +189,7 @@ internal sealed class AtariBasicExpression
         {
             string relation = _tokens[_at++];
             BasicValue right = Primary();
-            if (!right.IsString) { throw new FormatException("ERROR- 8: a string compares only with a string."); }
+            if (!right.IsString) { throw Syntax("a string compares only with a string"); }
             left = Truth(Compare(relation, string.CompareOrdinal(Text(left), Text(right))));
         }
 
@@ -262,7 +266,8 @@ internal sealed class AtariBasicExpression
     {
         int at = 0;
         byte[] text = [.. token.Select(character => (byte)character), AtariNumbers.EndOfLine];
-        return AtariNumbers.Parse(text, ref at) is { } number
+        // AFP stops where the number does; what follows it, as in 1.2.3, continues no expression.
+        return AtariNumbers.Parse(text, ref at) is { } number && at == token.Length
             ? AtariNumbers.ToDouble(number)
             : throw Syntax($"'{token}' is not a number");
     }
@@ -290,7 +295,8 @@ internal sealed class AtariBasicExpression
         bool text = name.EndsWith('$');
         if (!Take("("))
         {
-            if (_variables.Find(name) is not { } variable) { return text ? BasicValue.Of([]) : new(0); }
+            if (_variables.Find(name) is not { } variable) { return text ? throw NotDimensioned(name) : new(0); }
+            if (text && !Dimensioned(variable)) { throw NotDimensioned(name); }
             return _variables.Read(variable.Kind, variable.ValueAddress);
         }
 
@@ -299,9 +305,9 @@ internal sealed class AtariBasicExpression
         Expect(")");
         if (text)
         {
-            byte[] value = _variables.Find(name) is { } variable
+            byte[] value = _variables.Find(name) is { } variable && Dimensioned(variable)
                 ? _variables.Read(variable.Kind, variable.ValueAddress).Text ?? []
-                : [];
+                : throw NotDimensioned(name);
 
             // OPERATOR_STRING_PAREN: error 5 for an index of 0, a last beyond the length, or nothing between them.
             int last = second ?? value.Length;
@@ -315,7 +321,7 @@ internal sealed class AtariBasicExpression
 
         if (_variables.FindArray(name) is not { } array)
         {
-            throw new FormatException($"ERROR- 9: {name} is not DIMensioned.");
+            throw NotDimensioned(name);
         }
 
         // Every array has two sizes, a single one's second being 1 (the variables list it as one), and a missing
@@ -415,6 +421,38 @@ internal sealed class AtariBasicExpression
     private static bool Matches(string text, int at, string candidate) =>
         at + candidate.Length <= text.Length && text.AsSpan(at, candidate.Length).SequenceEqual(candidate);
 
+    // A string, or an array, that no DIM has given room: error 9, as POP_ABSOLUTE_VALUE gives it.
+    private bool Dimensioned(BasicVariable variable) => (_memory.Read((variable.ValueAddress - 2) & 0xFFFF) & 0x01) != 0;
+
+    private static FormatException NotDimensioned(string name) => new($"ERROR- 9: {name} is not DIMensioned.");
+
+    // A number's six bytes, or error 11 for one of 1E98 up, which only bytes written into a variable can hold.
+    private static byte[] Atari(double value)
+    {
+        try
+        {
+            return AtariNumbers.FromDouble(value);
+        }
+        catch (OverflowException)
+        {
+            throw new FormatException("ERROR- 11: the number is out of range.");
+        }
+    }
+
+    // NOT, AND or OR, also at the start of a name: MATCH_OPERATOR takes the first operator name the text starts with,
+    // so NOTE1 after an operator is NOT E1, and A ANDB is A AND B.
+    private bool TakeWord(string word)
+    {
+        if (Take(word)) { return true; }
+        if (Peek() is not { } token || token.Length <= word.Length || !token.StartsWith(word, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        _tokens[_at] = token[word.Length..];
+        return true;
+    }
+
     private string? Peek() => _at < _tokens.Count ? _tokens[_at] : null;
 
     private bool Take(string token)
@@ -467,16 +505,23 @@ internal sealed class AtariBasicExpression
     private static int Unsigned(BasicValue value)
     {
         double number = Number(value);
-        return Math.Abs(number) < 1E98 && AtariNumbers.ToInteger(AtariNumbers.FromDouble(number)) is { } integer
-            ? integer
-            : throw new FormatException("ERROR- 3: the value is not an integer from 0 to 65535.");
+        try
+        {
+            if (AtariNumbers.ToInteger(AtariNumbers.FromDouble(number)) is { } integer) { return integer; }
+        }
+        catch (OverflowException)
+        {
+            // A number of 1E98 up, which only bytes written into a variable can hold.
+        }
+
+        throw new FormatException("ERROR- 3: the value is not an integer from 0 to 65535.");
     }
 
     private static double Number(BasicValue value) =>
-        value.IsString ? throw new FormatException("ERROR- 8: a number is needed, not a string.") : value.Number;
+        value.IsString ? throw Syntax("a number is needed, not a string") : value.Number;
 
     private static string Text(BasicValue value) =>
-        value.Text is { } text ? System.Text.Encoding.Latin1.GetString(text) : throw new FormatException("ERROR- 8: a string is needed, not a number.");
+        value.Text is { } text ? System.Text.Encoding.Latin1.GetString(text) : throw Syntax("a string is needed, not a number");
 
     private static FormatException Syntax(string why) => new(string.Create(CultureInfo.InvariantCulture, $"ERROR- : {why}."));
 }

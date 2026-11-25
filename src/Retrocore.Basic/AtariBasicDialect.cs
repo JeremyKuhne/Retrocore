@@ -94,7 +94,7 @@ internal sealed class AtariBasicDialect : BasicDialect
     internal const int Stopln = 0xBA;
 
     /// <summary>
-    ///  APPMHI: the OS's lowest address the screen may not take (2 bytes).
+    ///  APPMHI: the top of the application's memory, at or below which the screen may not go (2 bytes).
     /// </summary>
     internal const int Appmhi = 0x0E;
 
@@ -337,22 +337,28 @@ internal sealed class AtariBasicDialect : BasicDialect
     /// <remarks>
     ///  <para>
     ///   The line as LIST writes it: each statement's name and a space, then its tokens, an operator that is a word
-    ///   spaced on both sides, without the trailing spaces.
+    ///   spaced on both sides, without the trailing spaces, except those of a REM's, DATA's or ERROR- line's text.
     ///  </para>
     /// </remarks>
     public override string Detokenize(ReadOnlySpan<byte> line)
     {
         StringBuilder text = new(line.Length * 2);
         int at = 0;
+        int kept = 0;
         while (at < line.Length)
         {
             int next = line[at] - Header;
             if (next <= at || next > line.Length) { next = line.Length; }
-            ListStatement(line, at + 1, next, text);
+            int before = text.Length;
+            bool written = ListStatement(line, at + 1, next, text);
+            if (written) { kept = text.Length; }
+            else if (text.Length != before) { kept = 0; }
             at = next;
         }
 
-        return text.ToString().TrimEnd();
+        // The text's own spaces are the program's, as READ reads a DATA item's; the others are LIST's.
+        string listed = text.ToString();
+        return kept == listed.Length ? listed : listed.TrimEnd();
     }
 
     /// <summary>
@@ -397,7 +403,8 @@ internal sealed class AtariBasicDialect : BasicDialect
         int stmtab = HeaderWord(bytes, Stmtab);
         int starp = HeaderWord(bytes, Starp);
         int data = bytes.Length - SaveHeaderSize;
-        if (HeaderWord(bytes, Lomem) != 0 || vntp != TokenBuffer || vntd < vntp || stmtab < vntd || starp < stmtab || starp - vntp > data)
+        // LOAD checks only LOMEM's offset: rev. B's files, saved after a LOAD, have VNTP 16 bytes on at each one.
+        if (HeaderWord(bytes, Lomem) != 0 || vntd < vntp || stmtab < vntd || starp < stmtab || starp - vntp > data)
         {
             throw new InvalidDataException("The header is not a saved Atari BASIC program's.");
         }
@@ -674,10 +681,11 @@ internal sealed class AtariBasicDialect : BasicDialect
         return [.. bytes];
     }
 
-    // LIST_STATEMENT: the statement whose token is at an index, to the next statement's offset.
-    private void ListStatement(ReadOnlySpan<byte> line, int token, int next, StringBuilder text)
+    // LIST_STATEMENT: the statement whose token is at an index, to the next statement's offset; true when it ends in
+    // a REM's, DATA's or ERROR- line's text, which keeps its spaces.
+    private bool ListStatement(ReadOnlySpan<byte> line, int token, int next, StringBuilder text)
     {
-        if (token >= next) { return; }
+        if (token >= next) { return false; }
         byte statement = line[token];
         if (statement != AtariBasicSyntax.ImpliedLet)
         {
@@ -685,12 +693,13 @@ internal sealed class AtariBasicDialect : BasicDialect
             text.Append(StatementName(statement)).Append(statement == AtariBasicSyntax.ErrorToken ? "   " : " ");
             if (statement is RemStatement or DataStatement or AtariBasicSyntax.ErrorToken)
             {
+                int start = text.Length;
                 for (int at = token + 1; at < next && line[at] != AtariNumbers.EndOfLine; at++)
                 {
                     BasicText.AppendCharacter(text, line[at]);
                 }
 
-                return;
+                return text.Length > start;
             }
         }
 
@@ -727,6 +736,8 @@ internal sealed class AtariBasicDialect : BasicDialect
                 text.Append(word ? $" {name} " : name);
             }
         }
+
+        return false;
     }
 
     private string VariableName(byte token) =>

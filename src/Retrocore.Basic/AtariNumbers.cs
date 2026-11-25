@@ -160,6 +160,7 @@ internal static class AtariNumbers
     {
         byte[] number = new byte[Size];
         if (value == 0 || double.IsNaN(value)) { return number; }
+        if (double.IsInfinity(value)) { throw new OverflowException("ERROR- 11: the number is 1E98 or more."); }
         string text = Math.Abs(value).ToString("E9", CultureInfo.InvariantCulture);
         int ePosition = text.IndexOf('E', StringComparison.Ordinal);
         string digits = text[..ePosition].Replace(".", "", StringComparison.Ordinal);

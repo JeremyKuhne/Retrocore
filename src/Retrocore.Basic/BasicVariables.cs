@@ -435,7 +435,7 @@ public sealed partial class BasicVariables
     public int ValueSize(BasicVariableKind kind) => kind switch
     {
         BasicVariableKind.Integer or BasicVariableKind.String when Bbc => 4,
-        BasicVariableKind.Real when AtariBasic => AtariNumbers.Size,
+        BasicVariableKind.Real or BasicVariableKind.String when AtariBasic => AtariNumbers.Size,
         BasicVariableKind.Integer => 2,
         BasicVariableKind.String => ColorBasic ? 5 : 3,
         BasicVariableKind.Single => 4,

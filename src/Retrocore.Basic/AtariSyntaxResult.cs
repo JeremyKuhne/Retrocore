@@ -13,5 +13,8 @@ namespace Retrocore.Basic;
 /// </param>
 /// <param name="Sources">Each token's character in the statements' text, or -1 for a statement's offset.</param>
 /// <param name="Error">What the ROM reports when it refuses the line, or null.</param>
-/// <param name="Column">Where in the statements' text the error is: the furthest place the checker reached.</param>
+/// <param name="Column">
+///  Where in the statements' text the error is: for a syntax error, the furthest place the checker reached; for
+///  error 4 or 14, where the checker was.
+/// </param>
 internal sealed record AtariSyntaxResult(byte[] Tokens, int[] Sources, string? Error, int Column);

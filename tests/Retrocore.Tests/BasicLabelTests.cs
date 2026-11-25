@@ -89,7 +89,8 @@ public sealed class BasicLabelTests
                 END
             """);
 
-        color.Program?.ToText().Should().NotContain("TRAP 20", "TRAP is no Color BASIC word");
+        BasicProgram program = color.Program ?? throw new AssertFailedException("The Color BASIC program has errors.");
+        program.ToText().Should().NotContain("TRAP 20", "TRAP is no Color BASIC word");
     }
 
     /// <summary>

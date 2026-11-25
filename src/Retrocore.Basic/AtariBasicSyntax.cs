@@ -144,7 +144,7 @@ internal sealed class AtariBasicSyntax
     /// <param name="names">
     ///  The variable name table's names, in order: a numeric variable's (<c>A</c>), a string's (<c>A$</c>) or an
     ///  array's (<c>A(</c>). The line's new variables are added at the end; when the line is refused, they are taken
-    ///  out again, as the line editor takes them out.
+    ///  out again, as the line editor takes them out after a syntax error (after error 4 or 14 it keeps them).
     /// </param>
     /// <returns>The line's tokens after its number and length, or the error the ROM reports.</returns>
     internal static AtariSyntaxResult Tokenize(ReadOnlySpan<byte> statements, List<string> names)
@@ -307,7 +307,12 @@ internal sealed class AtariBasicSyntax
     // CHECK_SYNTAX_PUSH: an entry for a rule as it starts.
     private void Push(int rule, ref int depth)
     {
-        if (++depth == StackEntries) { throw TooLong(); }
+        // CHECK_SYNTAX_TOO_LONG: a full syntax stack is error 14 too, as a long PRINT list or deep brackets fill it.
+        if (++depth == StackEntries)
+        {
+            throw new BasicSyntaxException("ERROR- 14: the line nests too deeply for Atari BASIC's syntax stack.");
+        }
+
         _stack[depth] = (_cix, _tokenIndex, _pointer);
         _pointer = rule;
     }
@@ -410,6 +415,8 @@ internal sealed class AtariBasicSyntax
         }
 
         _cix = at;
+        // SYNTAX_NUMERIC_CONSTANT writes the six bytes past WRITE_TOKEN's check, so on the machine a constant that
+        // runs past the buffer's end wraps into the line's start; here it is error 14, as the token before it would be.
         Write(TokenNumber, start);
         foreach (byte value in number) { Write(value, start); }
         return true;

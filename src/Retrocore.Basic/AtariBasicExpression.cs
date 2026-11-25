@@ -12,9 +12,10 @@ namespace Retrocore.Basic;
 /// </summary>
 /// <remarks>
 ///  <para>
-///   Numbers are Atari BASIC's ten significant digits. Results are .NET's, rounded to ten digits, where the FP
-///   package drops the digits it shifts out and works out its functions by series, so a last digit can differ: ATN(1)
-///   in degrees is 45 here and 45.0000003 on the machine. Rev. C's precedence holds: a string comparison binds above
+///   Numbers are Atari BASIC's ten significant digits. Results are .NET's, kept as
+///   <see cref="AtariNumbers.FromDouble"/> keeps them, where the FP package drops the digits it shifts out and works
+///   out its functions by series, so a last digit can differ: ATN(1) in degrees is 45 here and 45.0000003 on the
+///   machine. Rev. C's precedence holds: a string comparison binds above
 ///   everything (NOT A$=B$ is NOT (A$=B$)); NOT, like a sign, takes the operand after it (NOT A=B is (NOT A)=B), and
 ///   only one of them, though a sign before a number is the constant's (- -1 is 1); AND is above OR. A comparison is
 ///   1 or 0. <c>A(i)</c> and <c>A(i,j)</c> are array elements, counting from 0, <c>A(i)</c> being <c>A(i,0)</c>;
@@ -41,6 +42,9 @@ internal sealed class AtariBasicExpression
     private readonly BasicVariables _variables;
     private readonly IBasicMemory _memory;
     private readonly List<string> _tokens = [];
+
+    // The tokens with a space before them, by index.
+    private readonly HashSet<int> _spaced = [];
     private int _at;
     private int _depth;
 
@@ -104,8 +108,8 @@ internal sealed class AtariBasicExpression
         {
             string relation = _tokens[_at++];
             BasicValue right = Additive();
-            // A string's comparisons are Operand's; a string left here is compared with a number.
-            if (left.IsString || right.IsString)
+            // A string's comparisons are Operand's, so a string here is compared with a number.
+            if (right.IsString)
             {
                 throw new FormatException("ERROR- 8: a string compares only with a string.");
             }
@@ -215,8 +219,8 @@ internal sealed class AtariBasicExpression
             if (token[0] == '"') { return BasicValue.Of([.. token[1..^1].Select(character => (byte)character)]); }
             if (IsNumber(token)) { return new(Constant(token)); }
 
-            // SYNTAX_NUMERIC_CONSTANT reads with AFP, which takes a sign.
-            if (token is "-" or "+" && Peek() is { } digits && IsNumber(digits))
+            // SYNTAX_NUMERIC_CONSTANT reads with AFP, which takes a sign with the number right after it.
+            if (token is "-" or "+" && Peek() is { } digits && IsNumber(digits) && !_spaced.Contains(_at))
             {
                 _at++;
                 double constant = Constant(digits);
@@ -266,7 +270,9 @@ internal sealed class AtariBasicExpression
     private static BasicValue Ascii(BasicValue text)
     {
         byte[] characters = text.Text ?? [];
-        return characters.Length == 0 ? throw Syntax("ASC of an empty string reads past it, which BASIC allows but this refuses") : new(characters[0]);
+        return characters.Length == 0
+            ? throw Syntax("ASC of an empty string reads past it, which BASIC allows but this refuses")
+            : new(characters[0]);
     }
 
     private static BasicValue Value(BasicValue text)
@@ -349,12 +355,14 @@ internal sealed class AtariBasicExpression
     private void Scan(string expression)
     {
         _tokens.Clear();
+        _spaced.Clear();
         int at = 0;
         while (at < expression.Length)
         {
             char character = expression[at];
             if (character == ' ')
             {
+                _spaced.Add(_tokens.Count);
                 at++;
                 continue;
             }
@@ -456,9 +464,13 @@ internal sealed class AtariBasicExpression
     private double Radians => _memory.Read(DegreesFlag) == 0 ? 1 : Math.PI / 180;
 
     // POP_UNSIGNED: a number rounded to an integer from 0 to 65535 as FPI rounds it, or error 3.
-    private static int Unsigned(BasicValue value) =>
-        AtariNumbers.ToInteger(AtariNumbers.FromDouble(Number(value)))
-            ?? throw new FormatException("ERROR- 3: the value is not an integer from 0 to 65535.");
+    private static int Unsigned(BasicValue value)
+    {
+        double number = Number(value);
+        return Math.Abs(number) < 1E98 && AtariNumbers.ToInteger(AtariNumbers.FromDouble(number)) is { } integer
+            ? integer
+            : throw new FormatException("ERROR- 3: the value is not an integer from 0 to 65535.");
+    }
 
     private static double Number(BasicValue value) =>
         value.IsString ? throw new FormatException("ERROR- 8: a number is needed, not a string.") : value.Number;

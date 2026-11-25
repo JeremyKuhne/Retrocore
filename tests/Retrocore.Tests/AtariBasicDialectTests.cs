@@ -252,12 +252,15 @@ public sealed class AtariBasicDialectTests
     /// <param name="expression">The expression.</param>
     [TestMethod]
     [DataRow("- -A")]
+    [DataRow("- - 1")]
+    [DataRow("NOT - 1")]
     [DataRow("NOT NOT 1")]
     public void SecondUnaryIsRefused(string expression)
     {
         AtariMachine machine = EvaluationMachine();
         Action evaluate = () => new BasicEvaluator(BasicDialect.AtariBasic, new AtariBasicMemory(machine)).Evaluate(expression);
         evaluate.Should().Throw<FormatException>();
+        Printed(machine, expression).Should().StartWith("ERROR-", $"BASIC refuses PRINT {expression}");
     }
 
     // An 800 with strings, arrays and DEG set, for the expression tests.

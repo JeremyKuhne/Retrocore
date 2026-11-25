@@ -122,7 +122,8 @@ internal sealed partial class SourceAnalysis
         _text = text;
         Members = new(members, StringComparer.OrdinalIgnoreCase) { root };
 
-        // The members' lines as the assembly read them, shared with it; later lookups of other files read them afresh.
+        // The members' lines: an open document's split from its text, a file on disk's shared with the assembly through
+        // the file cache. Later lookups of other files read them afresh.
         foreach (string member in Members)
         {
             if (linesOf(member) is { } split) { _lines[member] = split; }
@@ -326,7 +327,7 @@ internal sealed partial class SourceAnalysis
     private DocumentationSet CreateDocumentation() => DocumentationSet.Create(
         _lines.Keys
             .OrderBy(path => string.Equals(path, Root, StringComparison.OrdinalIgnoreCase) ? 0 : 1)
-            .Select(path => DocumentationParser.Parse(_lines[path], path, AssembledUsing(path), style: true)),
+            .Select(path => DocumentationParser.Parse(SourceText.Rejoined(_lines[path]), path, AssembledUsing(path), style: true)),
         Symbols(),
         ModuleOf(Root),
         ModelOf(Root),

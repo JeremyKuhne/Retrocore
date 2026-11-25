@@ -89,6 +89,11 @@ files it shares. The preprocessor was never among them: it walks lines as slices
 `SourceFileCache` keeps each file's lines for the assembly, the analysis and the editor's parse of every root. The
 arrays are shared, so nothing writes into them. Allocations fell by 101 MB.
 
+Splitting the joined text again had one effect of its own: a line ending in a stray carriage return, from CR CR LF,
+reached the editor's parse without it. Review found that the step had lost it, so `SourceText.Rejoined` takes that
+carriage return off, copying the lines only when one has it; `EditorLinesAreTheRejoinedLines` pins it to the old
+join and split. The SDK's sources have no such line, so the measurements are unchanged.
+
 ### 6. The parser reads each line in place
 
 After step 5 the documentation parser made 41.5% of all allocations, half in the assembler's `Also:` pass and half

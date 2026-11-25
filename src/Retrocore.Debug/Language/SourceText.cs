@@ -47,6 +47,31 @@ internal static class SourceText
     internal static string[] Lines(string text) => Documentation.DocumentationParser.Lines(text);
 
     /// <summary>
+    ///  Gets the lines that joining lines with line feeds and splitting the text again gives: a carriage return left
+    ///  at the end of any line but the last, from a stray one before a CR LF, is taken off.
+    /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   The editor's documentation parse has always read a file's lines that way, so only a file's last line can
+    ///   end in a carriage return there. Lines without one are returned as they are.
+    ///  </para>
+    /// </remarks>
+    /// <param name="lines">The lines, which are not written to.</param>
+    /// <returns>The lines, or a copy with those carriage returns taken off.</returns>
+    internal static string[] Rejoined(string[] lines)
+    {
+        string[]? rejoined = null;
+        for (int line = 0; line < lines.Length - 1; line++)
+        {
+            if (lines[line] is not [.., '\r'] text) { continue; }
+            rejoined ??= [.. lines];
+            rejoined[line] = text[..^1];
+        }
+
+        return rejoined ?? lines;
+    }
+
+    /// <summary>
     ///  Gets a file's explicitly declared dialect, or its MACRO-10 extension when it has no pragma.
     /// </summary>
     /// <param name="path">The file's path.</param>

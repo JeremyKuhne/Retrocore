@@ -262,7 +262,8 @@ RoundUpToBlock:
 ;; Also: DOAPROC (BB13)
 .proc RelocateProcedure
 
-;; The procedure's dictionary entry, which gets its entry point's address; then the next procedure's place.
+;; The procedure's dictionary entry, which gets its entry point's address; at the end, <WalkPointer> is set from it
+;; to step down to the next procedure.
 DictionaryEntry = OtherPointer
 
 ;; <DictionaryEntry>'s X-byte.

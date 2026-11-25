@@ -511,9 +511,9 @@ AddSize:
 ;;
 ;; The random state is <RandomSeed>/<RandomSeedHigh>, which the Monitor's keyboard routine counts up while it waits
 ;; for a key. RND takes the state, cleared of bit 15, modulo n (<Operators::Mod>), and advances it 17 times as a shift
-;; register whose new low bit is bits 14 and 13 exclusive-ORed. A state of 0 becomes 1 first, but a state of $8000
-;; is cleared to 0 after that check, so that call gives 0 and leaves the state 0, which the next call makes 1 unless a
-;; wait for a key has counted it on.
+;; register whose new low bit is bits 14 and 13 exclusive-ORed. A state of 0 becomes $0100 first, but a state of
+;; $8000 is cleared to 0 after that check, so that call gives 0 and leaves the state 0, which the next call makes $0100
+;; unless a wait for a key has counted it on.
 ;; In: X = the noun stack, its top entry n
 ;; Out: X = the noun stack, its top entry the random number
 ;; Errors: >32767 for an n of 0
@@ -526,7 +526,7 @@ AddSize:
     lda RandomSeedHigh
     bne ClearTopBit
     cmp RandomSeed
-    adc #0                          ; a high byte of 0 becomes 1 if the low byte is 0 too
+    adc #0                          ; a high byte of 0 becomes 1 if the low byte is 0 too: a state of 0 is $0100
 
 ClearTopBit:
     and #RANDOM_HIGH_MASK

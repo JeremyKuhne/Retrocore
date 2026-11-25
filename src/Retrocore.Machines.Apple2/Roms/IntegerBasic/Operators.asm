@@ -292,8 +292,8 @@ Done:
 ;; Errors: >32767 if the difference overflows
 ;; Entry:
 ;;   Sign = turns the difference on the noun stack into the result; <LessOrEqual> branches here
-;;   ToNot = replaces the top number with NOT of it (<Operators::Not>); the other comparisons branch here, and AND
-;;   and OR reach it through <Operators::Or::Store>
+;;   ToNot = replaces the top number with NOT of it (<Operators::Not>); <Operators::Less> and <Operators::Greater>
+;;   branch here, and AND and OR reach it through <Operators::Or::Store>
 ;; Also: GREATEQ (UNKN)
 .proc GreaterOrEqual
     jsr Operators::Subtract
@@ -303,8 +303,8 @@ Sign:
     jsr Functions::Sgn
     lsr NounStackLow,x
 
-;; Replaces the top number with NOT of it (<Operators::Not>); the other comparisons branch here, and AND and
-;; OR reach it through <Operators::Or::Store>.
+;; Replaces the top number with NOT of it (<Operators::Not>); <Operators::Less> and <Operators::Greater> branch
+;; here, and AND and OR reach it through <Operators::Or::Store>.
 ;; Also: JmpNOT (IBSM)
 ToNot:
     jmp Operators::Not

@@ -42,7 +42,7 @@ FORMAT_POSITIONS = 6
 ;; The format position at which the operand's number is read: after "#$" and before ",X".
 NUMBER_POSITION = 3
 
-;; The format <MiniAssembler::ParseOperand> gives an operand of one byte written with "$" and no other characters:
+;; The format <MiniAssembler::ParseOperand> gives an operand of one byte with no other characters, "$" or not:
 ;; a branch takes it, or the two-byte one after it.
 ADDRESS_FORMAT = OPERAND_DOLLAR | 1
 

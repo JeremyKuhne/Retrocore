@@ -101,7 +101,7 @@ public sealed class DocumentationBuildTests
     [TestMethod]
     public void AnOldNameOfAnotherBuildsDefinitionReachesNothing()
     {
-        Resolve(Build(Source, model: 1), "Shared", "ONE").Topic?.Name.Should().Be("OnlyOne");
+        Required(Resolve(Build(Source, model: 1), "Shared", "ONE").Topic).Name.Should().Be("OnlyOne");
         Resolve(Build(Source, model: 2), "Shared", "ONE").OnlyInOtherBuilds.Should().BeTrue();
     }
 
@@ -131,8 +131,8 @@ public sealed class DocumentationBuildTests
                 rts
             """;
 
-        Resolve(Build(Scoped, model: 1), "Outer::Caller", "Helper").Topic?.Name.Should().Be("Outer::Helper");
-        Resolve(Build(Scoped, model: 2), "Outer::Caller", "Helper").Topic?.Name.Should().Be("Helper");
+        Required(Resolve(Build(Scoped, model: 1), "Outer::Caller", "Helper").Topic).Name.Should().Be("Outer::Helper");
+        Required(Resolve(Build(Scoped, model: 2), "Outer::Caller", "Helper").Topic).Name.Should().Be("Helper");
     }
 
     /// <summary>
@@ -179,8 +179,8 @@ public sealed class DocumentationBuildTests
 
         DocumentationSet one = Build(Expanded, model: 1);
         DocumentationSet two = Build(Expanded, model: 2);
-        Resolve(one, "Reader", "First").Topic?.Name.Should().Be("First");
-        Resolve(one, "Reader", "Table").Topic?.Name.Should().Be("Table");
+        Required(Resolve(one, "Reader", "First").Topic).Name.Should().Be("First");
+        Required(Resolve(one, "Reader", "Table").Topic).Name.Should().Be("Table");
         Resolve(two, "Reader", "First").OnlyInOtherBuilds.Should().BeTrue();
         Resolve(two, "Reader", "Table").OnlyInOtherBuilds.Should().BeTrue();
         Links(one).Should().BeEmpty();
@@ -212,7 +212,7 @@ public sealed class DocumentationBuildTests
             """;
 
         DocumentationSet two = Build(Library, model: 2);
-        Resolve(two, "Reader", "First").Topic?.Name.Should().Be("First");
+        Required(Resolve(two, "Reader", "First").Topic).Name.Should().Be("First");
         Links(two).Should().BeEmpty();
     }
 
@@ -252,8 +252,8 @@ public sealed class DocumentationBuildTests
         DocumentationSet two = Build(Branches, model: 2);
         Resolve(one, "Reader", "Second").OnlyInOtherBuilds.Should().BeTrue("model 1 skips the undocumented Spare");
         Resolve(two, "Reader", "First").OnlyInOtherBuilds.Should().BeTrue("model 2 defines its own Table");
-        Resolve(one, "Reader", "First").Topic?.Name.Should().Be("First");
-        Resolve(two, "Reader", "Second").Topic?.Name.Should().Be("Second");
+        Required(Resolve(one, "Reader", "First").Topic).Name.Should().Be("First");
+        Required(Resolve(two, "Reader", "Second").Topic).Name.Should().Be("Second");
     }
 
     /// <summary>
@@ -280,7 +280,7 @@ public sealed class DocumentationBuildTests
                 Table MODEL
             """;
 
-        Resolve(Build(Body, model: 1), "Reader", "First").Topic?.Name.Should().Be("First");
+        Required(Resolve(Build(Body, model: 1), "Reader", "First").Topic).Name.Should().Be("First");
         Resolve(Build(Body, model: 2), "Reader", "First").OnlyInOtherBuilds.Should().BeTrue();
 
         // The macro's own documentation is held to the same rule as any other comment.
@@ -328,7 +328,7 @@ public sealed class DocumentationBuildTests
     public void AScopeOnlyAnotherBuildOpensIsOnlyInOtherBuilds()
     {
         const string Scopes = """
-            ;; Uses <Tools> and <Shared>.
+            ;; Uses <Tools>, <Shared> and <Block>.
             Caller:
                 rts
 
@@ -344,6 +344,12 @@ public sealed class DocumentationBuildTests
                 rts
             .endscope
 
+            ;; Model 1's block.
+            .struct Block
+            ;; Its first byte.
+            First   .byte
+            .endstruct
+
             ;; The models' shared routines, documented in model 1's branch.
             .scope Shared continued
             First:
@@ -352,9 +358,34 @@ public sealed class DocumentationBuildTests
             .endif
             """;
 
-        Resolve(Build(Scopes, model: 1), "Caller", "Tools").Topic?.Name.Should().Be("Tools");
+        Required(Resolve(Build(Scopes, model: 1), "Caller", "Tools").Topic).Name.Should().Be("Tools");
         Resolve(Build(Scopes, model: 2), "Caller", "Tools").OnlyInOtherBuilds.Should().BeTrue();
-        Resolve(Build(Scopes, model: 2), "Caller", "Shared").Topic?.Name.Should().Be("Shared");
+        Resolve(Build(Scopes, model: 2), "Caller", "Block").OnlyInOtherBuilds.Should().BeTrue();
+        Resolve(Build(Scopes, model: 2), "Caller", "Block::First").OnlyInOtherBuilds.Should().BeTrue();
+        Links(Build(Scopes, model: 1)).Should().BeEmpty();
+        Links(Build(Scopes, model: 2)).Select(problem => problem.Name).Should().BeEquivalentTo(["Tools", "Block"]);
+        Required(Resolve(Build(Scopes, model: 2), "Caller", "Shared").Topic).Name.Should().Be("Shared");
+    }
+
+    /// <summary>
+    ///  A <c>.define</c> in a branch the build leaves out is only in other builds.
+    /// </summary>
+    [TestMethod]
+    public void ADefineInABranchTheBuildLeavesOutIsOnlyInOtherBuilds()
+    {
+        const string Defines = """
+            ;; Reads with <READER>.
+            Caller:
+                rts
+
+            .if MODEL = 1
+            ;; Model 1's reader.
+            .define READER lda $C000
+            .endif
+            """;
+
+        Resolve(Build(Defines, model: 1), "Caller", "READER").Topic.Should().NotBeNull();
+        Resolve(Build(Defines, model: 2), "Caller", "READER").OnlyInOtherBuilds.Should().BeTrue();
     }
 
     /// <summary>
@@ -369,7 +400,7 @@ public sealed class DocumentationBuildTests
         DocumentationSet set = DocumentationSet.Create([DocumentationParser.Parse(broken, "test.asm")], result);
         DocumentationTarget target = new DocumentationResolver(set).Resolve(Required(set.Find("Shared")), "OnlyOne");
         target.OnlyInOtherBuilds.Should().BeFalse();
-        target.Topic?.Name.Should().Be("OnlyOne");
+        Required(target.Topic).Name.Should().Be("OnlyOne");
     }
 
     /// <summary>
@@ -393,7 +424,7 @@ public sealed class DocumentationBuildTests
                 rts
             """;
 
-        Resolve(Build(Used, model: 1), "Caller", "Helper").Topic?.Name.Should().Be("Tools::Helper");
+        Required(Resolve(Build(Used, model: 1), "Caller", "Helper").Topic).Name.Should().Be("Tools::Helper");
         Resolve(Build(Used, model: 2), "Caller", "Helper").OnlyInOtherBuilds.Should().BeTrue();
     }
 
@@ -433,9 +464,9 @@ public sealed class DocumentationBuildTests
 
         DocumentationSet one = Build(Given, model: 1);
         DocumentationSet two = Build(Given, model: 2);
-        Resolve(one, "Caller", "START").Topic?.Name.Should().Be("StartOne");
-        Resolve(two, "Caller", "START").Topic?.Name.Should().Be("StartTwo");
-        Resolve(one, "Caller", "ONLYONE").Topic?.Name.Should().Be("Both");
+        Required(Resolve(one, "Caller", "START").Topic).Name.Should().Be("StartOne");
+        Required(Resolve(two, "Caller", "START").Topic).Name.Should().Be("StartTwo");
+        Required(Resolve(one, "Caller", "ONLYONE").Topic).Name.Should().Be("Both");
         Resolve(two, "Caller", "ONLYONE").OnlyInOtherBuilds.Should().BeTrue();
     }
 
@@ -476,7 +507,7 @@ public sealed class DocumentationBuildTests
         AssemblyResult result = Assemble(Source, model: 2);
         DocumentationSet set = DocumentationSet.Create([DocumentationParser.Parse(Source, "test.asm")], result.Symbols);
         DocumentationTarget target = new DocumentationResolver(set).Resolve(Required(set.Find("Shared")), "OnlyOne");
-        target.Topic?.Name.Should().Be("OnlyOne");
+        Required(target.Topic).Name.Should().Be("OnlyOne");
         target.OnlyInOtherBuilds.Should().BeFalse();
     }
 
@@ -508,8 +539,8 @@ public sealed class DocumentationBuildTests
             """;
 
         DocumentationSet set = Build(Single, model: 1);
-        Resolve(set, "Caller", "Helper").Topic?.Name.Should().Be("Helper");
-        Resolve(set, "Caller", "First").Topic?.Name.Should().Be("First");
+        Required(Resolve(set, "Caller", "Helper").Topic).Name.Should().Be("Helper");
+        Required(Resolve(set, "Caller", "First").Topic).Name.Should().Be("First");
         new DocumentationResolver(set).Check().Should().BeEmpty();
     }
 

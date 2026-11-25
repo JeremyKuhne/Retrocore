@@ -1,3 +1,4 @@
+; retrocore: style=strict ignore=unlinked-name:PLUS
 ;; APPLE II CHARACTER GENERATORS: THE IIE'S VIDEO ROM, ORIGINAL AND ENHANCED, AND THE II AND II PLUS'S
 ;;
 ;; The IIe draws text from a 4 KiB video ROM: 342-0133 in the original IIe and 342-0265 in the Enhanced IIe.
@@ -30,10 +31,15 @@
 ;; and $C0-$FF set bit 7. The board draws a code below $40 inverse and one from $40 to $7F flashing itself,
 ;; so the chip holds no inverse glyphs and no lowercase.
 ;;
+;; Each glyph is drawn as dots, a row at a time, with the macros <Glyph> and <Row>; <UppercaseGlyphs>,
+;; <SymbolGlyphs>, <LowercaseGlyphs> and <MouseTextGlyphs> each draw a set of 32 glyphs, and the end of the file
+;; lays the sets out for the chip being built. The chips are data the video circuit reads, not code: there are no
+;; routines.
+;;
 ;; Assembles byte-identically to each chip. IIBOARD selects the II and II Plus's 7341-0036 (1; 0, the default,
 ;; for the IIe's); for the IIe, ENHANCED selects the model (1, the default, for the Enhanced IIe's 342-0265; 0
-;; for the original's 342-0133). Maintained by hand; the SystemSourceTests digests check that all three
-;; assemble byte-identically.
+;; for the original's 342-0133). Maintained by hand; the digests in SystemSourceTests (the IIe's) and
+;; Apple2SourceTests (the II's) check that all three assemble byte-identically.
 
 .ifndef IIBOARD
 IIBOARD = 0
@@ -42,1030 +48,1392 @@ IIBOARD = 0
 ENHANCED = 1
 .endif
 
-; 1 while the glyphs being drawn are stored inverse.
+; Only the three builds the digest tests check: the II and II Plus's chip, and the original and Enhanced IIe's.
+.assert IIBOARD = 0 || IIBOARD = 1, "IIBOARD is 1 for the II and II Plus's chip or 0 for the IIe's."
+.assert ENHANCED = 0 || ENHANCED = 1, "ENHANCED is 1 for the Enhanced IIe or 0 for the original."
+
+;; The bytes in a glyph: one for each of its eight scanlines.
+GLYPH_SIZE = 8
+
+;; The glyphs in a set that <UppercaseGlyphs>, <SymbolGlyphs>, <LowercaseGlyphs> or <MouseTextGlyphs> draws.
+GLYPHS_PER_SET = 32
+
+;; The dots in a row.
+DOTS_PER_ROW = 7
+
+;; A row's dots: bits 6-0.
+DOT_BITS = $7F
+
+;; Bit 7 of a row: set in the IIe's normal glyphs and in the II's glyphs for codes $40-$7F and $C0-$FF.
+HIGH_BIT = $80
+
+;; 1 while the glyphs being drawn are the IIe's inverse ones, which store a lit dot as 1 and clear bit 7; 0 for
+;; normal ones, the complement.
 Inverse .set 0
 
-; 1 while the II's glyphs being drawn set bit 7, as those for codes $40-$7F and $C0-$FF do.
-Flash .set 0
+;; <HIGH_BIT> while the II's glyphs being drawn set bit 7, as those for codes $40-$7F and $C0-$FF do; 0 otherwise.
+HighBit .set 0
 
-; The row of the glyph being drawn, 0-7.
-Row .set 0
+;; The row of the glyph being drawn, 0-7: <Glyph> starts it at 0 and each <Row> adds 1.
+GlyphRow .set 0
 
-;; Starts a character: checks that it lands in the right place of its 32-character group.
+;; The dots of the row being drawn, as the chip's bits before bit 7 and the IIe's inversion: a lit dot is 1.
+Dots .set 0
+
+;; The low four bits of the byte value whose pattern is being drawn, in the IIe's upper 2 KiB.
+LowNibble .set 0
+
+;; The high four bits of the byte value whose pattern is being drawn, in the IIe's upper 2 KiB.
+HighNibble .set 0
+
+;; Starts a glyph: checks that it lands in its place in its set of 32.
 ;;
 ;; For the II and II Plus's chip, it also stores the cell's blank top row, which moves the glyph down one row.
-;; Parameters: code = the character's code, whose low five bits place it in its group
-;; See: <ROW>
-.macro GLYPH code
-    .assert ((* >> 3) & $1F) = ((code) & $1F), "A GLYPH is out of order."
-Row .set 0
-.if IIBOARD
-    .byte Flash << 7
-.endif
+;; Parameters:
+;;   code = the character's code, whose low five bits place it in its set
+.macro Glyph code
+    .assert (* / GLYPH_SIZE) .mod GLYPHS_PER_SET = (code) .mod GLYPHS_PER_SET, "A Glyph is out of order."
+    .set GlyphRow, 0
+    .if IIBOARD
+        .byte HighBit
+    .endif
 .endmacro
 
-;; One row of dots: seven characters from left to right, # for a lit dot and . for a dark one.
-.macro ROW dots
-    .assert .strlen(dots) = 7, "A ROW has seven dots."
-.if IIBOARD
-    ; The II's chip: bit 6 is the leftmost dot and a lit dot is 1. Its glyphs start a row lower, so the eighth
-    ; row, blank in every glyph, has no room.
-    Lit .set ((.strat(dots, 0) = '#') << 6) | ((.strat(dots, 1) = '#') << 5) | ((.strat(dots, 2) = '#') << 4) | ((.strat(dots, 3) = '#') << 3) | ((.strat(dots, 4) = '#') << 2) | ((.strat(dots, 5) = '#') << 1) | (.strat(dots, 6) = '#')
-.if Row < 7
-    .byte Lit | (Flash << 7)
-.else
-    .assert Lit = 0, "The II's glyphs have seven rows."
-.endif
-.else
-    Lit .set (.strat(dots, 0) = '#') | ((.strat(dots, 1) = '#') << 1) | ((.strat(dots, 2) = '#') << 2) | ((.strat(dots, 3) = '#') << 3) | ((.strat(dots, 4) = '#') << 4) | ((.strat(dots, 5) = '#') << 5) | ((.strat(dots, 6) = '#') << 6)
-.if Inverse
-    .byte Lit
-.else
-    .byte Lit ^ $FF
-.endif
-.endif
-Row .set Row + 1
+;; One row of a glyph's dots, from the top: a lit dot is 0 and bit 7 is set in the IIe's normal glyphs, a lit dot
+;; is 1 and bit 7 clear in its inverse ones, and on the II's chip a lit dot is 1, with bit 7 as <HighBit> says.
+;; The II's glyphs, a row lower, have no room for the eighth row, which must be blank.
+;; Parameters:
+;;   dots = seven characters from left to right, # for a lit dot and . for a dark one
+.macro Row dots
+    .assert .strlen(dots) = DOTS_PER_ROW, "A Row has seven dots."
+    .set Dots, 0
+    .repeat DOTS_PER_ROW, column
+        .if IIBOARD
+            ; The II's chip: bit 6 is the leftmost dot.
+            .set Dots, Dots | ((.strat(dots, column) = '#') << (DOTS_PER_ROW - 1 - column))
+        .else
+            ; The IIe's chip: bit 0 is the leftmost dot.
+            .set Dots, Dots | ((.strat(dots, column) = '#') << column)
+        .endif
+    .endrepeat
+    .if IIBOARD
+        .if GlyphRow < GLYPH_SIZE - 1
+            .byte Dots | HighBit
+        .else
+            .assert Dots = 0, "The II's glyphs have seven rows."
+        .endif
+    .elseif Inverse
+        .byte Dots
+    .else
+        ; A normal glyph is the inverse one's complement: a lit dot 0 and bit 7 set.
+        .byte Dots ^ $FF
+    .endif
+    .set GlyphRow, GlyphRow + 1
 .endmacro
 
 ;; @, A-Z and [ \ ] ^ _.
-.macro UPPERCASE
-    GLYPH $40    ; @
-    ROW "..###.."
-    ROW ".#...#."
-    ROW ".#.#.#."
-    ROW ".#.###."
-    ROW ".#.##.."
-    ROW ".#....."
-    ROW "..####."
-    ROW "......."
+.macro UppercaseGlyphs
+    Glyph $40    ; @
+    Row "..###.."
+    Row ".#...#."
+    Row ".#.#.#."
+    Row ".#.###."
+    Row ".#.##.."
+    Row ".#....."
+    Row "..####."
+    Row "......."
 
-    GLYPH $41    ; A
-    ROW "...#..."
-    ROW "..#.#.."
-    ROW ".#...#."
-    ROW ".#...#."
-    ROW ".#####."
-    ROW ".#...#."
-    ROW ".#...#."
-    ROW "......."
+    Glyph $41    ; A
+    Row "...#..."
+    Row "..#.#.."
+    Row ".#...#."
+    Row ".#...#."
+    Row ".#####."
+    Row ".#...#."
+    Row ".#...#."
+    Row "......."
 
-    GLYPH $42    ; B
-    ROW ".####.."
-    ROW ".#...#."
-    ROW ".#...#."
-    ROW ".####.."
-    ROW ".#...#."
-    ROW ".#...#."
-    ROW ".####.."
-    ROW "......."
+    Glyph $42    ; B
+    Row ".####.."
+    Row ".#...#."
+    Row ".#...#."
+    Row ".####.."
+    Row ".#...#."
+    Row ".#...#."
+    Row ".####.."
+    Row "......."
 
-    GLYPH $43    ; C
-    ROW "..###.."
-    ROW ".#...#."
-    ROW ".#....."
-    ROW ".#....."
-    ROW ".#....."
-    ROW ".#...#."
-    ROW "..###.."
-    ROW "......."
+    Glyph $43    ; C
+    Row "..###.."
+    Row ".#...#."
+    Row ".#....."
+    Row ".#....."
+    Row ".#....."
+    Row ".#...#."
+    Row "..###.."
+    Row "......."
 
-    GLYPH $44    ; D
-    ROW ".####.."
-    ROW ".#...#."
-    ROW ".#...#."
-    ROW ".#...#."
-    ROW ".#...#."
-    ROW ".#...#."
-    ROW ".####.."
-    ROW "......."
+    Glyph $44    ; D
+    Row ".####.."
+    Row ".#...#."
+    Row ".#...#."
+    Row ".#...#."
+    Row ".#...#."
+    Row ".#...#."
+    Row ".####.."
+    Row "......."
 
-    GLYPH $45    ; E
-    ROW ".#####."
-    ROW ".#....."
-    ROW ".#....."
-    ROW ".####.."
-    ROW ".#....."
-    ROW ".#....."
-    ROW ".#####."
-    ROW "......."
+    Glyph $45    ; E
+    Row ".#####."
+    Row ".#....."
+    Row ".#....."
+    Row ".####.."
+    Row ".#....."
+    Row ".#....."
+    Row ".#####."
+    Row "......."
 
-    GLYPH $46    ; F
-    ROW ".#####."
-    ROW ".#....."
-    ROW ".#....."
-    ROW ".####.."
-    ROW ".#....."
-    ROW ".#....."
-    ROW ".#....."
-    ROW "......."
+    Glyph $46    ; F
+    Row ".#####."
+    Row ".#....."
+    Row ".#....."
+    Row ".####.."
+    Row ".#....."
+    Row ".#....."
+    Row ".#....."
+    Row "......."
 
-    GLYPH $47    ; G
-    ROW "..####."
-    ROW ".#....."
-    ROW ".#....."
-    ROW ".#....."
-    ROW ".#..##."
-    ROW ".#...#."
-    ROW "..####."
-    ROW "......."
+    Glyph $47    ; G
+    Row "..####."
+    Row ".#....."
+    Row ".#....."
+    Row ".#....."
+    Row ".#..##."
+    Row ".#...#."
+    Row "..####."
+    Row "......."
 
-    GLYPH $48    ; H
-    ROW ".#...#."
-    ROW ".#...#."
-    ROW ".#...#."
-    ROW ".#####."
-    ROW ".#...#."
-    ROW ".#...#."
-    ROW ".#...#."
-    ROW "......."
+    Glyph $48    ; H
+    Row ".#...#."
+    Row ".#...#."
+    Row ".#...#."
+    Row ".#####."
+    Row ".#...#."
+    Row ".#...#."
+    Row ".#...#."
+    Row "......."
 
-    GLYPH $49    ; I
-    ROW "..###.."
-    ROW "...#..."
-    ROW "...#..."
-    ROW "...#..."
-    ROW "...#..."
-    ROW "...#..."
-    ROW "..###.."
-    ROW "......."
+    Glyph $49    ; I
+    Row "..###.."
+    Row "...#..."
+    Row "...#..."
+    Row "...#..."
+    Row "...#..."
+    Row "...#..."
+    Row "..###.."
+    Row "......."
 
-    GLYPH $4A    ; J
-    ROW ".....#."
-    ROW ".....#."
-    ROW ".....#."
-    ROW ".....#."
-    ROW ".....#."
-    ROW ".#...#."
-    ROW "..###.."
-    ROW "......."
+    Glyph $4A    ; J
+    Row ".....#."
+    Row ".....#."
+    Row ".....#."
+    Row ".....#."
+    Row ".....#."
+    Row ".#...#."
+    Row "..###.."
+    Row "......."
 
-    GLYPH $4B    ; K
-    ROW ".#...#."
-    ROW ".#..#.."
-    ROW ".#.#..."
-    ROW ".##...."
-    ROW ".#.#..."
-    ROW ".#..#.."
-    ROW ".#...#."
-    ROW "......."
+    Glyph $4B    ; K
+    Row ".#...#."
+    Row ".#..#.."
+    Row ".#.#..."
+    Row ".##...."
+    Row ".#.#..."
+    Row ".#..#.."
+    Row ".#...#."
+    Row "......."
 
-    GLYPH $4C    ; L
-    ROW ".#....."
-    ROW ".#....."
-    ROW ".#....."
-    ROW ".#....."
-    ROW ".#....."
-    ROW ".#....."
-    ROW ".#####."
-    ROW "......."
+    Glyph $4C    ; L
+    Row ".#....."
+    Row ".#....."
+    Row ".#....."
+    Row ".#....."
+    Row ".#....."
+    Row ".#....."
+    Row ".#####."
+    Row "......."
 
-    GLYPH $4D    ; M
-    ROW ".#...#."
-    ROW ".##.##."
-    ROW ".#.#.#."
-    ROW ".#.#.#."
-    ROW ".#...#."
-    ROW ".#...#."
-    ROW ".#...#."
-    ROW "......."
+    Glyph $4D    ; M
+    Row ".#...#."
+    Row ".##.##."
+    Row ".#.#.#."
+    Row ".#.#.#."
+    Row ".#...#."
+    Row ".#...#."
+    Row ".#...#."
+    Row "......."
 
-    GLYPH $4E    ; N
-    ROW ".#...#."
-    ROW ".#...#."
-    ROW ".##..#."
-    ROW ".#.#.#."
-    ROW ".#..##."
-    ROW ".#...#."
-    ROW ".#...#."
-    ROW "......."
+    Glyph $4E    ; N
+    Row ".#...#."
+    Row ".#...#."
+    Row ".##..#."
+    Row ".#.#.#."
+    Row ".#..##."
+    Row ".#...#."
+    Row ".#...#."
+    Row "......."
 
-    GLYPH $4F    ; O
-    ROW "..###.."
-    ROW ".#...#."
-    ROW ".#...#."
-    ROW ".#...#."
-    ROW ".#...#."
-    ROW ".#...#."
-    ROW "..###.."
-    ROW "......."
+    Glyph $4F    ; O
+    Row "..###.."
+    Row ".#...#."
+    Row ".#...#."
+    Row ".#...#."
+    Row ".#...#."
+    Row ".#...#."
+    Row "..###.."
+    Row "......."
 
-    GLYPH $50    ; P
-    ROW ".####.."
-    ROW ".#...#."
-    ROW ".#...#."
-    ROW ".####.."
-    ROW ".#....."
-    ROW ".#....."
-    ROW ".#....."
-    ROW "......."
+    Glyph $50    ; P
+    Row ".####.."
+    Row ".#...#."
+    Row ".#...#."
+    Row ".####.."
+    Row ".#....."
+    Row ".#....."
+    Row ".#....."
+    Row "......."
 
-    GLYPH $51    ; Q
-    ROW "..###.."
-    ROW ".#...#."
-    ROW ".#...#."
-    ROW ".#...#."
-    ROW ".#.#.#."
-    ROW ".#..#.."
-    ROW "..##.#."
-    ROW "......."
+    Glyph $51    ; Q
+    Row "..###.."
+    Row ".#...#."
+    Row ".#...#."
+    Row ".#...#."
+    Row ".#.#.#."
+    Row ".#..#.."
+    Row "..##.#."
+    Row "......."
 
-    GLYPH $52    ; R
-    ROW ".####.."
-    ROW ".#...#."
-    ROW ".#...#."
-    ROW ".####.."
-    ROW ".#.#..."
-    ROW ".#..#.."
-    ROW ".#...#."
-    ROW "......."
+    Glyph $52    ; R
+    Row ".####.."
+    Row ".#...#."
+    Row ".#...#."
+    Row ".####.."
+    Row ".#.#..."
+    Row ".#..#.."
+    Row ".#...#."
+    Row "......."
 
-    GLYPH $53    ; S
-    ROW "..###.."
-    ROW ".#...#."
-    ROW ".#....."
-    ROW "..###.."
-    ROW ".....#."
-    ROW ".#...#."
-    ROW "..###.."
-    ROW "......."
+    Glyph $53    ; S
+    Row "..###.."
+    Row ".#...#."
+    Row ".#....."
+    Row "..###.."
+    Row ".....#."
+    Row ".#...#."
+    Row "..###.."
+    Row "......."
 
-    GLYPH $54    ; T
-    ROW ".#####."
-    ROW "...#..."
-    ROW "...#..."
-    ROW "...#..."
-    ROW "...#..."
-    ROW "...#..."
-    ROW "...#..."
-    ROW "......."
+    Glyph $54    ; T
+    Row ".#####."
+    Row "...#..."
+    Row "...#..."
+    Row "...#..."
+    Row "...#..."
+    Row "...#..."
+    Row "...#..."
+    Row "......."
 
-    GLYPH $55    ; U
-    ROW ".#...#."
-    ROW ".#...#."
-    ROW ".#...#."
-    ROW ".#...#."
-    ROW ".#...#."
-    ROW ".#...#."
-    ROW "..###.."
-    ROW "......."
+    Glyph $55    ; U
+    Row ".#...#."
+    Row ".#...#."
+    Row ".#...#."
+    Row ".#...#."
+    Row ".#...#."
+    Row ".#...#."
+    Row "..###.."
+    Row "......."
 
-    GLYPH $56    ; V
-    ROW ".#...#."
-    ROW ".#...#."
-    ROW ".#...#."
-    ROW ".#...#."
-    ROW ".#...#."
-    ROW "..#.#.."
-    ROW "...#..."
-    ROW "......."
+    Glyph $56    ; V
+    Row ".#...#."
+    Row ".#...#."
+    Row ".#...#."
+    Row ".#...#."
+    Row ".#...#."
+    Row "..#.#.."
+    Row "...#..."
+    Row "......."
 
-    GLYPH $57    ; W
-    ROW ".#...#."
-    ROW ".#...#."
-    ROW ".#...#."
-    ROW ".#.#.#."
-    ROW ".#.#.#."
-    ROW ".##.##."
-    ROW ".#...#."
-    ROW "......."
+    Glyph $57    ; W
+    Row ".#...#."
+    Row ".#...#."
+    Row ".#...#."
+    Row ".#.#.#."
+    Row ".#.#.#."
+    Row ".##.##."
+    Row ".#...#."
+    Row "......."
 
-    GLYPH $58    ; X
-    ROW ".#...#."
-    ROW ".#...#."
-    ROW "..#.#.."
-    ROW "...#..."
-    ROW "..#.#.."
-    ROW ".#...#."
-    ROW ".#...#."
-    ROW "......."
+    Glyph $58    ; X
+    Row ".#...#."
+    Row ".#...#."
+    Row "..#.#.."
+    Row "...#..."
+    Row "..#.#.."
+    Row ".#...#."
+    Row ".#...#."
+    Row "......."
 
-    GLYPH $59    ; Y
-    ROW ".#...#."
-    ROW ".#...#."
-    ROW "..#.#.."
-    ROW "...#..."
-    ROW "...#..."
-    ROW "...#..."
-    ROW "...#..."
-    ROW "......."
+    Glyph $59    ; Y
+    Row ".#...#."
+    Row ".#...#."
+    Row "..#.#.."
+    Row "...#..."
+    Row "...#..."
+    Row "...#..."
+    Row "...#..."
+    Row "......."
 
-    GLYPH $5A    ; Z
-    ROW ".#####."
-    ROW ".....#."
-    ROW "....#.."
-    ROW "...#..."
-    ROW "..#...."
-    ROW ".#....."
-    ROW ".#####."
-    ROW "......."
+    Glyph $5A    ; Z
+    Row ".#####."
+    Row ".....#."
+    Row "....#.."
+    Row "...#..."
+    Row "..#...."
+    Row ".#....."
+    Row ".#####."
+    Row "......."
 
-    GLYPH $5B    ; [
-    ROW ".#####."
-    ROW ".##...."
-    ROW ".##...."
-    ROW ".##...."
-    ROW ".##...."
-    ROW ".##...."
-    ROW ".#####."
-    ROW "......."
+    Glyph $5B    ; [
+    Row ".#####."
+    Row ".##...."
+    Row ".##...."
+    Row ".##...."
+    Row ".##...."
+    Row ".##...."
+    Row ".#####."
+    Row "......."
 
-    GLYPH $5C    ; \
-    ROW "......."
-    ROW ".#....."
-    ROW "..#...."
-    ROW "...#..."
-    ROW "....#.."
-    ROW ".....#."
-    ROW "......."
-    ROW "......."
+    Glyph $5C    ; \
+    Row "......."
+    Row ".#....."
+    Row "..#...."
+    Row "...#..."
+    Row "....#.."
+    Row ".....#."
+    Row "......."
+    Row "......."
 
-    GLYPH $5D    ; ]
-    ROW ".#####."
-    ROW "....##."
-    ROW "....##."
-    ROW "....##."
-    ROW "....##."
-    ROW "....##."
-    ROW ".#####."
-    ROW "......."
+    Glyph $5D    ; ]
+    Row ".#####."
+    Row "....##."
+    Row "....##."
+    Row "....##."
+    Row "....##."
+    Row "....##."
+    Row ".#####."
+    Row "......."
 
-    GLYPH $5E    ; ^
-    ROW "......."
-    ROW "......."
-    ROW "...#..."
-    ROW "..#.#.."
-    ROW ".#...#."
-    ROW "......."
-    ROW "......."
-    ROW "......."
+    Glyph $5E    ; ^
+    Row "......."
+    Row "......."
+    Row "...#..."
+    Row "..#.#.."
+    Row ".#...#."
+    Row "......."
+    Row "......."
+    Row "......."
 
-    GLYPH $5F    ; _
-.if IIBOARD
-    ; The II's underscore is five dots wide, on the cell's bottom row.
-    ROW "......."
-    ROW "......."
-    ROW "......."
-    ROW "......."
-    ROW "......."
-    ROW "......."
-    ROW ".#####."
-    ROW "......."
-.else
-    ROW "......."
-    ROW "......."
-    ROW "......."
-    ROW "......."
-    ROW "......."
-    ROW "......."
-    ROW "......."
-    ROW "#######"
-.endif
+    Glyph $5F    ; _
+    .if IIBOARD
+        ; The II's underscore is five dots wide, on the cell's bottom row.
+        Row "......."
+        Row "......."
+        Row "......."
+        Row "......."
+        Row "......."
+        Row "......."
+        Row ".#####."
+        Row "......."
+    .else
+        Row "......."
+        Row "......."
+        Row "......."
+        Row "......."
+        Row "......."
+        Row "......."
+        Row "......."
+        Row "#######"
+    .endif
 .endmacro
 
 ;; Space, punctuation and digits.
-.macro SYMBOLS
-    GLYPH $20    ; space
-    ROW "......."
-    ROW "......."
-    ROW "......."
-    ROW "......."
-    ROW "......."
-    ROW "......."
-    ROW "......."
-    ROW "......."
+.macro SymbolGlyphs
+    Glyph $20    ; space
+    Row "......."
+    Row "......."
+    Row "......."
+    Row "......."
+    Row "......."
+    Row "......."
+    Row "......."
+    Row "......."
 
-    GLYPH $21    ; !
-    ROW "...#..."
-    ROW "...#..."
-    ROW "...#..."
-    ROW "...#..."
-    ROW "...#..."
-    ROW "......."
-    ROW "...#..."
-    ROW "......."
+    Glyph $21    ; !
+    Row "...#..."
+    Row "...#..."
+    Row "...#..."
+    Row "...#..."
+    Row "...#..."
+    Row "......."
+    Row "...#..."
+    Row "......."
 
-    GLYPH $22    ; "
-    ROW "..#.#.."
-    ROW "..#.#.."
-    ROW "..#.#.."
-    ROW "......."
-    ROW "......."
-    ROW "......."
-    ROW "......."
-    ROW "......."
+    Glyph $22    ; "
+    Row "..#.#.."
+    Row "..#.#.."
+    Row "..#.#.."
+    Row "......."
+    Row "......."
+    Row "......."
+    Row "......."
+    Row "......."
 
-    GLYPH $23    ; #
-    ROW "..#.#.."
-    ROW "..#.#.."
-    ROW ".#####."
-    ROW "..#.#.."
-    ROW ".#####."
-    ROW "..#.#.."
-    ROW "..#.#.."
-    ROW "......."
+    Glyph $23    ; #
+    Row "..#.#.."
+    Row "..#.#.."
+    Row ".#####."
+    Row "..#.#.."
+    Row ".#####."
+    Row "..#.#.."
+    Row "..#.#.."
+    Row "......."
 
-    GLYPH $24    ; $
-    ROW "...#..."
-    ROW "..####."
-    ROW ".#.#..."
-    ROW "..###.."
-    ROW "...#.#."
-    ROW ".####.."
-    ROW "...#..."
-    ROW "......."
+    Glyph $24    ; $
+    Row "...#..."
+    Row "..####."
+    Row ".#.#..."
+    Row "..###.."
+    Row "...#.#."
+    Row ".####.."
+    Row "...#..."
+    Row "......."
 
-    GLYPH $25    ; %
-    ROW ".##...."
-    ROW ".##..#."
-    ROW "....#.."
-    ROW "...#..."
-    ROW "..#...."
-    ROW ".#..##."
-    ROW "....##."
-    ROW "......."
+    Glyph $25    ; %
+    Row ".##...."
+    Row ".##..#."
+    Row "....#.."
+    Row "...#..."
+    Row "..#...."
+    Row ".#..##."
+    Row "....##."
+    Row "......."
 
-    GLYPH $26    ; &
-    ROW "..#...."
-    ROW ".#.#..."
-    ROW ".#.#..."
-    ROW "..#...."
-    ROW ".#.#.#."
-    ROW ".#..#.."
-    ROW "..##.#."
-    ROW "......."
+    Glyph $26    ; &
+    Row "..#...."
+    Row ".#.#..."
+    Row ".#.#..."
+    Row "..#...."
+    Row ".#.#.#."
+    Row ".#..#.."
+    Row "..##.#."
+    Row "......."
 
-    GLYPH $27    ; '
-    ROW "...#..."
-    ROW "...#..."
-    ROW "...#..."
-    ROW "......."
-    ROW "......."
-    ROW "......."
-    ROW "......."
-    ROW "......."
+    Glyph $27    ; '
+    Row "...#..."
+    Row "...#..."
+    Row "...#..."
+    Row "......."
+    Row "......."
+    Row "......."
+    Row "......."
+    Row "......."
 
-    GLYPH $28    ; (
-    ROW "...#..."
-    ROW "..#...."
-    ROW ".#....."
-    ROW ".#....."
-    ROW ".#....."
-    ROW "..#...."
-    ROW "...#..."
-    ROW "......."
+    Glyph $28    ; (
+    Row "...#..."
+    Row "..#...."
+    Row ".#....."
+    Row ".#....."
+    Row ".#....."
+    Row "..#...."
+    Row "...#..."
+    Row "......."
 
-    GLYPH $29    ; )
-    ROW "...#..."
-    ROW "....#.."
-    ROW ".....#."
-    ROW ".....#."
-    ROW ".....#."
-    ROW "....#.."
-    ROW "...#..."
-    ROW "......."
+    Glyph $29    ; )
+    Row "...#..."
+    Row "....#.."
+    Row ".....#."
+    Row ".....#."
+    Row ".....#."
+    Row "....#.."
+    Row "...#..."
+    Row "......."
 
-    GLYPH $2A    ; *
-    ROW "...#..."
-    ROW ".#.#.#."
-    ROW "..###.."
-    ROW "...#..."
-    ROW "..###.."
-    ROW ".#.#.#."
-    ROW "...#..."
-    ROW "......."
+    Glyph $2A    ; *
+    Row "...#..."
+    Row ".#.#.#."
+    Row "..###.."
+    Row "...#..."
+    Row "..###.."
+    Row ".#.#.#."
+    Row "...#..."
+    Row "......."
 
-    GLYPH $2B    ; +
-    ROW "......."
-    ROW "...#..."
-    ROW "...#..."
-    ROW ".#####."
-    ROW "...#..."
-    ROW "...#..."
-    ROW "......."
-    ROW "......."
+    Glyph $2B    ; +
+    Row "......."
+    Row "...#..."
+    Row "...#..."
+    Row ".#####."
+    Row "...#..."
+    Row "...#..."
+    Row "......."
+    Row "......."
 
-    GLYPH $2C    ; ,
-    ROW "......."
-    ROW "......."
-    ROW "......."
-    ROW "......."
-    ROW "...#..."
-    ROW "...#..."
-    ROW "..#...."
-    ROW "......."
+    Glyph $2C    ; ,
+    Row "......."
+    Row "......."
+    Row "......."
+    Row "......."
+    Row "...#..."
+    Row "...#..."
+    Row "..#...."
+    Row "......."
 
-    GLYPH $2D    ; -
-    ROW "......."
-    ROW "......."
-    ROW "......."
-    ROW ".#####."
-    ROW "......."
-    ROW "......."
-    ROW "......."
-    ROW "......."
+    Glyph $2D    ; -
+    Row "......."
+    Row "......."
+    Row "......."
+    Row ".#####."
+    Row "......."
+    Row "......."
+    Row "......."
+    Row "......."
 
-    GLYPH $2E    ; .
-    ROW "......."
-    ROW "......."
-    ROW "......."
-    ROW "......."
-    ROW "......."
-    ROW "......."
-    ROW "...#..."
-    ROW "......."
+    Glyph $2E    ; .
+    Row "......."
+    Row "......."
+    Row "......."
+    Row "......."
+    Row "......."
+    Row "......."
+    Row "...#..."
+    Row "......."
 
-    GLYPH $2F    ; /
-    ROW "......."
-    ROW ".....#."
-    ROW "....#.."
-    ROW "...#..."
-    ROW "..#...."
-    ROW ".#....."
-    ROW "......."
-    ROW "......."
+    Glyph $2F    ; /
+    Row "......."
+    Row ".....#."
+    Row "....#.."
+    Row "...#..."
+    Row "..#...."
+    Row ".#....."
+    Row "......."
+    Row "......."
 
-    GLYPH $30    ; 0
-    ROW "..###.."
-    ROW ".#...#."
-    ROW ".#..##."
-    ROW ".#.#.#."
-    ROW ".##..#."
-    ROW ".#...#."
-    ROW "..###.."
-    ROW "......."
+    Glyph $30    ; 0
+    Row "..###.."
+    Row ".#...#."
+    Row ".#..##."
+    Row ".#.#.#."
+    Row ".##..#."
+    Row ".#...#."
+    Row "..###.."
+    Row "......."
 
-    GLYPH $31    ; 1
-    ROW "...#..."
-    ROW "..##..."
-    ROW "...#..."
-    ROW "...#..."
-    ROW "...#..."
-    ROW "...#..."
-    ROW "..###.."
-    ROW "......."
+    Glyph $31    ; 1
+    Row "...#..."
+    Row "..##..."
+    Row "...#..."
+    Row "...#..."
+    Row "...#..."
+    Row "...#..."
+    Row "..###.."
+    Row "......."
 
-    GLYPH $32    ; 2
-    ROW "..###.."
-    ROW ".#...#."
-    ROW ".....#."
-    ROW "...##.."
-    ROW "..#...."
-    ROW ".#....."
-    ROW ".#####."
-    ROW "......."
+    Glyph $32    ; 2
+    Row "..###.."
+    Row ".#...#."
+    Row ".....#."
+    Row "...##.."
+    Row "..#...."
+    Row ".#....."
+    Row ".#####."
+    Row "......."
 
-    GLYPH $33    ; 3
-    ROW ".#####."
-    ROW ".....#."
-    ROW "....#.."
-    ROW "...##.."
-    ROW ".....#."
-    ROW ".#...#."
-    ROW "..###.."
-    ROW "......."
+    Glyph $33    ; 3
+    Row ".#####."
+    Row ".....#."
+    Row "....#.."
+    Row "...##.."
+    Row ".....#."
+    Row ".#...#."
+    Row "..###.."
+    Row "......."
 
-    GLYPH $34    ; 4
-    ROW "....#.."
-    ROW "...##.."
-    ROW "..#.#.."
-    ROW ".#..#.."
-    ROW ".#####."
-    ROW "....#.."
-    ROW "....#.."
-    ROW "......."
+    Glyph $34    ; 4
+    Row "....#.."
+    Row "...##.."
+    Row "..#.#.."
+    Row ".#..#.."
+    Row ".#####."
+    Row "....#.."
+    Row "....#.."
+    Row "......."
 
-    GLYPH $35    ; 5
-    ROW ".#####."
-    ROW ".#....."
-    ROW ".####.."
-    ROW ".....#."
-    ROW ".....#."
-    ROW ".#...#."
-    ROW "..###.."
-    ROW "......."
+    Glyph $35    ; 5
+    Row ".#####."
+    Row ".#....."
+    Row ".####.."
+    Row ".....#."
+    Row ".....#."
+    Row ".#...#."
+    Row "..###.."
+    Row "......."
 
-    GLYPH $36    ; 6
-    ROW "...###."
-    ROW "..#...."
-    ROW ".#....."
-    ROW ".####.."
-    ROW ".#...#."
-    ROW ".#...#."
-    ROW "..###.."
-    ROW "......."
+    Glyph $36    ; 6
+    Row "...###."
+    Row "..#...."
+    Row ".#....."
+    Row ".####.."
+    Row ".#...#."
+    Row ".#...#."
+    Row "..###.."
+    Row "......."
 
-    GLYPH $37    ; 7
-    ROW ".#####."
-    ROW ".....#."
-    ROW "....#.."
-    ROW "...#..."
-    ROW "..#...."
-    ROW "..#...."
-    ROW "..#...."
-    ROW "......."
+    Glyph $37    ; 7
+    Row ".#####."
+    Row ".....#."
+    Row "....#.."
+    Row "...#..."
+    Row "..#...."
+    Row "..#...."
+    Row "..#...."
+    Row "......."
 
-    GLYPH $38    ; 8
-    ROW "..###.."
-    ROW ".#...#."
-    ROW ".#...#."
-    ROW "..###.."
-    ROW ".#...#."
-    ROW ".#...#."
-    ROW "..###.."
-    ROW "......."
+    Glyph $38    ; 8
+    Row "..###.."
+    Row ".#...#."
+    Row ".#...#."
+    Row "..###.."
+    Row ".#...#."
+    Row ".#...#."
+    Row "..###.."
+    Row "......."
 
-    GLYPH $39    ; 9
-    ROW "..###.."
-    ROW ".#...#."
-    ROW ".#...#."
-    ROW "..####."
-    ROW ".....#."
-    ROW "....#.."
-    ROW ".###..."
-    ROW "......."
+    Glyph $39    ; 9
+    Row "..###.."
+    Row ".#...#."
+    Row ".#...#."
+    Row "..####."
+    Row ".....#."
+    Row "....#.."
+    Row ".###..."
+    Row "......."
 
-    GLYPH $3A    ; :
-    ROW "......."
-    ROW "......."
-    ROW "...#..."
-    ROW "......."
-    ROW "...#..."
-    ROW "......."
-    ROW "......."
-    ROW "......."
+    Glyph $3A    ; :
+    Row "......."
+    Row "......."
+    Row "...#..."
+    Row "......."
+    Row "...#..."
+    Row "......."
+    Row "......."
+    Row "......."
 
-    GLYPH $3B    ; ;
-    ROW "......."
-    ROW "......."
-    ROW "...#..."
-    ROW "......."
-    ROW "...#..."
-    ROW "...#..."
-    ROW "..#...."
-    ROW "......."
+    Glyph $3B    ; ;
+    Row "......."
+    Row "......."
+    Row "...#..."
+    Row "......."
+    Row "...#..."
+    Row "...#..."
+    Row "..#...."
+    Row "......."
 
-    GLYPH $3C    ; <
-    ROW "....#.."
-    ROW "...#..."
-    ROW "..#...."
-    ROW ".#....."
-    ROW "..#...."
-    ROW "...#..."
-    ROW "....#.."
-    ROW "......."
+    Glyph $3C    ; <
+    Row "....#.."
+    Row "...#..."
+    Row "..#...."
+    Row ".#....."
+    Row "..#...."
+    Row "...#..."
+    Row "....#.."
+    Row "......."
 
-    GLYPH $3D    ; =
-    ROW "......."
-    ROW "......."
-    ROW ".#####."
-    ROW "......."
-    ROW ".#####."
-    ROW "......."
-    ROW "......."
-    ROW "......."
+    Glyph $3D    ; =
+    Row "......."
+    Row "......."
+    Row ".#####."
+    Row "......."
+    Row ".#####."
+    Row "......."
+    Row "......."
+    Row "......."
 
-    GLYPH $3E    ; >
-    ROW "..#...."
-    ROW "...#..."
-    ROW "....#.."
-    ROW ".....#."
-    ROW "....#.."
-    ROW "...#..."
-    ROW "..#...."
-    ROW "......."
+    Glyph $3E    ; >
+    Row "..#...."
+    Row "...#..."
+    Row "....#.."
+    Row ".....#."
+    Row "....#.."
+    Row "...#..."
+    Row "..#...."
+    Row "......."
 
-    GLYPH $3F    ; ?
-    ROW "..###.."
-    ROW ".#...#."
-    ROW "....#.."
-    ROW "...#..."
-    ROW "...#..."
-    ROW "......."
-    ROW "...#..."
-    ROW "......."
+    Glyph $3F    ; ?
+    Row "..###.."
+    Row ".#...#."
+    Row "....#.."
+    Row "...#..."
+    Row "...#..."
+    Row "......."
+    Row "...#..."
+    Row "......."
 .endmacro
 
 ;; ` a-z { | } ~ and DEL.
-.macro LOWERCASE
-    GLYPH $60    ; `
-    ROW "..#...."
-    ROW "...#..."
-    ROW "....#.."
-    ROW "......."
-    ROW "......."
-    ROW "......."
-    ROW "......."
-    ROW "......."
+.macro LowercaseGlyphs
+    Glyph $60    ; `
+    Row "..#...."
+    Row "...#..."
+    Row "....#.."
+    Row "......."
+    Row "......."
+    Row "......."
+    Row "......."
+    Row "......."
 
-    GLYPH $61    ; a
-    ROW "......."
-    ROW "......."
-    ROW "..###.."
-    ROW ".....#."
-    ROW "..####."
-    ROW ".#...#."
-    ROW "..####."
-    ROW "......."
+    Glyph $61    ; a
+    Row "......."
+    Row "......."
+    Row "..###.."
+    Row ".....#."
+    Row "..####."
+    Row ".#...#."
+    Row "..####."
+    Row "......."
 
-    GLYPH $62    ; b
-    ROW ".#....."
-    ROW ".#....."
-    ROW ".####.."
-    ROW ".#...#."
-    ROW ".#...#."
-    ROW ".#...#."
-    ROW ".####.."
-    ROW "......."
+    Glyph $62    ; b
+    Row ".#....."
+    Row ".#....."
+    Row ".####.."
+    Row ".#...#."
+    Row ".#...#."
+    Row ".#...#."
+    Row ".####.."
+    Row "......."
 
-    GLYPH $63    ; c
-    ROW "......."
-    ROW "......."
-    ROW "..####."
-    ROW ".#....."
-    ROW ".#....."
-    ROW ".#....."
-    ROW "..####."
-    ROW "......."
+    Glyph $63    ; c
+    Row "......."
+    Row "......."
+    Row "..####."
+    Row ".#....."
+    Row ".#....."
+    Row ".#....."
+    Row "..####."
+    Row "......."
 
-    GLYPH $64    ; d
-    ROW ".....#."
-    ROW ".....#."
-    ROW "..####."
-    ROW ".#...#."
-    ROW ".#...#."
-    ROW ".#...#."
-    ROW "..####."
-    ROW "......."
+    Glyph $64    ; d
+    Row ".....#."
+    Row ".....#."
+    Row "..####."
+    Row ".#...#."
+    Row ".#...#."
+    Row ".#...#."
+    Row "..####."
+    Row "......."
 
-    GLYPH $65    ; e
-    ROW "......."
-    ROW "......."
-    ROW "..###.."
-    ROW ".#...#."
-    ROW ".#####."
-    ROW ".#....."
-    ROW "..####."
-    ROW "......."
+    Glyph $65    ; e
+    Row "......."
+    Row "......."
+    Row "..###.."
+    Row ".#...#."
+    Row ".#####."
+    Row ".#....."
+    Row "..####."
+    Row "......."
 
-    GLYPH $66    ; f
-    ROW "...##.."
-    ROW "..#..#."
-    ROW "..#...."
-    ROW ".####.."
-    ROW "..#...."
-    ROW "..#...."
-    ROW "..#...."
-    ROW "......."
+    Glyph $66    ; f
+    Row "...##.."
+    Row "..#..#."
+    Row "..#...."
+    Row ".####.."
+    Row "..#...."
+    Row "..#...."
+    Row "..#...."
+    Row "......."
 
-    GLYPH $67    ; g
-    ROW "......."
-    ROW "......."
-    ROW "..###.."
-    ROW ".#...#."
-    ROW ".#...#."
-    ROW "..####."
-    ROW ".....#."
-    ROW "..###.."
+    Glyph $67    ; g
+    Row "......."
+    Row "......."
+    Row "..###.."
+    Row ".#...#."
+    Row ".#...#."
+    Row "..####."
+    Row ".....#."
+    Row "..###.."
 
-    GLYPH $68    ; h
-    ROW ".#....."
-    ROW ".#....."
-    ROW ".####.."
-    ROW ".#...#."
-    ROW ".#...#."
-    ROW ".#...#."
-    ROW ".#...#."
-    ROW "......."
+    Glyph $68    ; h
+    Row ".#....."
+    Row ".#....."
+    Row ".####.."
+    Row ".#...#."
+    Row ".#...#."
+    Row ".#...#."
+    Row ".#...#."
+    Row "......."
 
-    GLYPH $69    ; i
-    ROW "...#..."
-    ROW "......."
-    ROW "..##..."
-    ROW "...#..."
-    ROW "...#..."
-    ROW "...#..."
-    ROW "..###.."
-    ROW "......."
+    Glyph $69    ; i
+    Row "...#..."
+    Row "......."
+    Row "..##..."
+    Row "...#..."
+    Row "...#..."
+    Row "...#..."
+    Row "..###.."
+    Row "......."
 
-    GLYPH $6A    ; j
-    ROW "....#.."
-    ROW "......."
-    ROW "...##.."
-    ROW "....#.."
-    ROW "....#.."
-    ROW "....#.."
-    ROW ".#..#.."
-    ROW "..##..."
+    Glyph $6A    ; j
+    Row "....#.."
+    Row "......."
+    Row "...##.."
+    Row "....#.."
+    Row "....#.."
+    Row "....#.."
+    Row ".#..#.."
+    Row "..##..."
 
-    GLYPH $6B    ; k
-    ROW ".#....."
-    ROW ".#....."
-    ROW ".#...#."
-    ROW ".#..#.."
-    ROW ".###..."
-    ROW ".#..#.."
-    ROW ".#...#."
-    ROW "......."
+    Glyph $6B    ; k
+    Row ".#....."
+    Row ".#....."
+    Row ".#...#."
+    Row ".#..#.."
+    Row ".###..."
+    Row ".#..#.."
+    Row ".#...#."
+    Row "......."
 
-    GLYPH $6C    ; l
-    ROW "..##..."
-    ROW "...#..."
-    ROW "...#..."
-    ROW "...#..."
-    ROW "...#..."
-    ROW "...#..."
-    ROW "..###.."
-    ROW "......."
+    Glyph $6C    ; l
+    Row "..##..."
+    Row "...#..."
+    Row "...#..."
+    Row "...#..."
+    Row "...#..."
+    Row "...#..."
+    Row "..###.."
+    Row "......."
 
-    GLYPH $6D    ; m
-    ROW "......."
-    ROW "......."
-    ROW ".##.##."
-    ROW ".#.#.#."
-    ROW ".#.#.#."
-    ROW ".#.#.#."
-    ROW ".#...#."
-    ROW "......."
+    Glyph $6D    ; m
+    Row "......."
+    Row "......."
+    Row ".##.##."
+    Row ".#.#.#."
+    Row ".#.#.#."
+    Row ".#.#.#."
+    Row ".#...#."
+    Row "......."
 
-    GLYPH $6E    ; n
-    ROW "......."
-    ROW "......."
-    ROW ".####.."
-    ROW ".#...#."
-    ROW ".#...#."
-    ROW ".#...#."
-    ROW ".#...#."
-    ROW "......."
+    Glyph $6E    ; n
+    Row "......."
+    Row "......."
+    Row ".####.."
+    Row ".#...#."
+    Row ".#...#."
+    Row ".#...#."
+    Row ".#...#."
+    Row "......."
 
-    GLYPH $6F    ; o
-    ROW "......."
-    ROW "......."
-    ROW "..###.."
-    ROW ".#...#."
-    ROW ".#...#."
-    ROW ".#...#."
-    ROW "..###.."
-    ROW "......."
+    Glyph $6F    ; o
+    Row "......."
+    Row "......."
+    Row "..###.."
+    Row ".#...#."
+    Row ".#...#."
+    Row ".#...#."
+    Row "..###.."
+    Row "......."
 
-    GLYPH $70    ; p
-    ROW "......."
-    ROW "......."
-    ROW ".####.."
-    ROW ".#...#."
-    ROW ".#...#."
-    ROW ".####.."
-    ROW ".#....."
-    ROW ".#....."
+    Glyph $70    ; p
+    Row "......."
+    Row "......."
+    Row ".####.."
+    Row ".#...#."
+    Row ".#...#."
+    Row ".####.."
+    Row ".#....."
+    Row ".#....."
 
-    GLYPH $71    ; q
-    ROW "......."
-    ROW "......."
-    ROW "..####."
-    ROW ".#...#."
-    ROW ".#...#."
-    ROW "..####."
-    ROW ".....#."
-    ROW ".....#."
+    Glyph $71    ; q
+    Row "......."
+    Row "......."
+    Row "..####."
+    Row ".#...#."
+    Row ".#...#."
+    Row "..####."
+    Row ".....#."
+    Row ".....#."
 
-    GLYPH $72    ; r
-    ROW "......."
-    ROW "......."
-    ROW ".#.###."
-    ROW ".##...."
-    ROW ".#....."
-    ROW ".#....."
-    ROW ".#....."
-    ROW "......."
+    Glyph $72    ; r
+    Row "......."
+    Row "......."
+    Row ".#.###."
+    Row ".##...."
+    Row ".#....."
+    Row ".#....."
+    Row ".#....."
+    Row "......."
 
-    GLYPH $73    ; s
-    ROW "......."
-    ROW "......."
-    ROW "..####."
-    ROW ".#....."
-    ROW "..###.."
-    ROW ".....#."
-    ROW ".####.."
-    ROW "......."
+    Glyph $73    ; s
+    Row "......."
+    Row "......."
+    Row "..####."
+    Row ".#....."
+    Row "..###.."
+    Row ".....#."
+    Row ".####.."
+    Row "......."
 
-    GLYPH $74    ; t
-    ROW "..#...."
-    ROW "..#...."
-    ROW ".####.."
-    ROW "..#...."
-    ROW "..#...."
-    ROW "..#..#."
-    ROW "...##.."
-    ROW "......."
+    Glyph $74    ; t
+    Row "..#...."
+    Row "..#...."
+    Row ".####.."
+    Row "..#...."
+    Row "..#...."
+    Row "..#..#."
+    Row "...##.."
+    Row "......."
 
-    GLYPH $75    ; u
-    ROW "......."
-    ROW "......."
-    ROW ".#...#."
-    ROW ".#...#."
-    ROW ".#...#."
-    ROW ".#..##."
-    ROW "..##.#."
-    ROW "......."
+    Glyph $75    ; u
+    Row "......."
+    Row "......."
+    Row ".#...#."
+    Row ".#...#."
+    Row ".#...#."
+    Row ".#..##."
+    Row "..##.#."
+    Row "......."
 
-    GLYPH $76    ; v
-    ROW "......."
-    ROW "......."
-    ROW ".#...#."
-    ROW ".#...#."
-    ROW ".#...#."
-    ROW "..#.#.."
-    ROW "...#..."
-    ROW "......."
+    Glyph $76    ; v
+    Row "......."
+    Row "......."
+    Row ".#...#."
+    Row ".#...#."
+    Row ".#...#."
+    Row "..#.#.."
+    Row "...#..."
+    Row "......."
 
-    GLYPH $77    ; w
-    ROW "......."
-    ROW "......."
-    ROW ".#...#."
-    ROW ".#...#."
-    ROW ".#.#.#."
-    ROW ".#.#.#."
-    ROW ".##.##."
-    ROW "......."
+    Glyph $77    ; w
+    Row "......."
+    Row "......."
+    Row ".#...#."
+    Row ".#...#."
+    Row ".#.#.#."
+    Row ".#.#.#."
+    Row ".##.##."
+    Row "......."
 
-    GLYPH $78    ; x
-    ROW "......."
-    ROW "......."
-    ROW ".#...#."
-    ROW "..#.#.."
-    ROW "...#..."
-    ROW "..#.#.."
-    ROW ".#...#."
-    ROW "......."
+    Glyph $78    ; x
+    Row "......."
+    Row "......."
+    Row ".#...#."
+    Row "..#.#.."
+    Row "...#..."
+    Row "..#.#.."
+    Row ".#...#."
+    Row "......."
 
-    GLYPH $79    ; y
-    ROW "......."
-    ROW "......."
-    ROW ".#...#."
-    ROW ".#...#."
-    ROW ".#...#."
-    ROW "..####."
-    ROW ".....#."
-    ROW "..###.."
+    Glyph $79    ; y
+    Row "......."
+    Row "......."
+    Row ".#...#."
+    Row ".#...#."
+    Row ".#...#."
+    Row "..####."
+    Row ".....#."
+    Row "..###.."
 
-    GLYPH $7A    ; z
-    ROW "......."
-    ROW "......."
-    ROW ".#####."
-    ROW "....#.."
-    ROW "...#..."
-    ROW "..#...."
-    ROW ".#####."
-    ROW "......."
+    Glyph $7A    ; z
+    Row "......."
+    Row "......."
+    Row ".#####."
+    Row "....#.."
+    Row "...#..."
+    Row "..#...."
+    Row ".#####."
+    Row "......."
 
-    GLYPH $7B    ; {
-    ROW "...###."
-    ROW "..##..."
-    ROW "..##..."
-    ROW ".##...."
-    ROW "..##..."
-    ROW "..##..."
-    ROW "...###."
-    ROW "......."
+    Glyph $7B    ; {
+    Row "...###."
+    Row "..##..."
+    Row "..##..."
+    Row ".##...."
+    Row "..##..."
+    Row "..##..."
+    Row "...###."
+    Row "......."
 
-    GLYPH $7C    ; |
-    ROW "...#..."
-    ROW "...#..."
-    ROW "...#..."
-    ROW "...#..."
-    ROW "...#..."
-    ROW "...#..."
-    ROW "...#..."
-    ROW "...#..."
+    Glyph $7C    ; |
+    Row "...#..."
+    Row "...#..."
+    Row "...#..."
+    Row "...#..."
+    Row "...#..."
+    Row "...#..."
+    Row "...#..."
+    Row "...#..."
 
-    GLYPH $7D    ; }
-    ROW ".###..."
-    ROW "...##.."
-    ROW "...##.."
-    ROW "....##."
-    ROW "...##.."
-    ROW "...##.."
-    ROW ".###..."
-    ROW "......."
+    Glyph $7D    ; }
+    Row ".###..."
+    Row "...##.."
+    Row "...##.."
+    Row "....##."
+    Row "...##.."
+    Row "...##.."
+    Row ".###..."
+    Row "......."
 
-    GLYPH $7E    ; ~
-    ROW "..##.#."
-    ROW ".#.##.."
-    ROW "......."
-    ROW "......."
-    ROW "......."
-    ROW "......."
-    ROW "......."
-    ROW "......."
+    Glyph $7E    ; ~
+    Row "..##.#."
+    Row ".#.##.."
+    Row "......."
+    Row "......."
+    Row "......."
+    Row "......."
+    Row "......."
+    Row "......."
 
-    GLYPH $7F    ; DEL
-    ROW "......."
-    ROW ".#.#.#."
-    ROW "..#.#.."
-    ROW ".#.#.#."
-    ROW "..#.#.."
-    ROW ".#.#.#."
-    ROW "......."
-    ROW "......."
+    Glyph $7F    ; DEL
+    Row "......."
+    Row ".#.#.#."
+    Row "..#.#.."
+    Row ".#.#.#."
+    Row "..#.#.."
+    Row ".#.#.#."
+    Row "......."
+    Row "......."
+.endmacro
+
+;; The Enhanced IIe's 32 MouseText glyphs, for codes $40-$5F, stored normal: Apple's symbols for menus, windows
+;; and the mouse. Each comment gives the symbol's usual name.
+.macro MouseTextGlyphs
+    Glyph $40    ; closed apple
+    Row "....#.."
+    Row "...#..."
+    Row ".##.##."
+    Row "#######"
+    Row "######."
+    Row "######."
+    Row ".######"
+    Row ".##.##."
+
+    Glyph $41    ; open apple
+    Row "....#.."
+    Row "...#..."
+    Row ".##.##."
+    Row "#.....#"
+    Row "#....#."
+    Row "#....#."
+    Row ".#.#..#"
+    Row ".##.##."
+
+    Glyph $42    ; mouse pointer
+    Row "......."
+    Row "......."
+    Row ".#....."
+    Row ".##...."
+    Row ".###..."
+    Row ".####.."
+    Row ".##.##."
+    Row ".#....#"
+
+    Glyph $43    ; hourglass
+    Row "#######"
+    Row ".#...#."
+    Row "..#.#.."
+    Row "...#..."
+    Row "...#..."
+    Row "..#.#.."
+    Row ".#.#.#."
+    Row "#######"
+
+    Glyph $44    ; checkmark
+    Row "......."
+    Row "......#"
+    Row ".....#."
+    Row "#...#.."
+    Row ".#.#..."
+    Row "..#...."
+    Row "..#...."
+    Row "......."
+
+    Glyph $45    ; inverse checkmark
+    Row "#######"
+    Row "######."
+    Row "#####.#"
+    Row "..##.##"
+    Row "#.#.###"
+    Row "##.####"
+    Row "##.####"
+    Row "#######"
+
+    Glyph $46    ; running man
+    Row "....###"
+    Row ".....##"
+    Row ".######"
+    Row "#...##."
+    Row "#..####"
+    Row "....##."
+    Row "######."
+    Row ".#....."
+
+    Glyph $47    ; running man, second half
+    Row "......."
+    Row "...##.."
+    Row "###...."
+    Row "......."
+    Row "###...."
+    Row "..##..."
+    Row "...#..."
+    Row "....###"
+
+    Glyph $48    ; left arrow
+    Row "...#..."
+    Row "..#...."
+    Row ".#....."
+    Row "#######"
+    Row ".#....."
+    Row "..#...."
+    Row "...#..."
+    Row "......."
+
+    Glyph $49    ; ellipsis
+    Row "......."
+    Row "......."
+    Row "......."
+    Row "......."
+    Row "......."
+    Row "......."
+    Row "......."
+    Row ".#.#.#."
+
+    Glyph $4A    ; down arrow
+    Row "...#..."
+    Row "...#..."
+    Row "...#..."
+    Row "...#..."
+    Row "#..#..#"
+    Row ".#.#.#."
+    Row "..###.."
+    Row "...#..."
+
+    Glyph $4B    ; up arrow
+    Row "...#..."
+    Row "..###.."
+    Row ".#.#.#."
+    Row "#..#..#"
+    Row "...#..."
+    Row "...#..."
+    Row "...#..."
+    Row "...#..."
+
+    Glyph $4C    ; top bar
+    Row "#######"
+    Row "......."
+    Row "......."
+    Row "......."
+    Row "......."
+    Row "......."
+    Row "......."
+    Row "......."
+
+    Glyph $4D    ; return arrow
+    Row "......#"
+    Row "......#"
+    Row "......#"
+    Row "..#...#"
+    Row ".##...#"
+    Row "#######"
+    Row ".##...."
+    Row "..#...."
+
+    Glyph $4E    ; solid block
+    Row "######."
+    Row "######."
+    Row "######."
+    Row "######."
+    Row "######."
+    Row "######."
+    Row "######."
+    Row "######."
+
+    Glyph $4F    ; scroll left
+    Row "##..#.."
+    Row "...##.."
+    Row "..###.."
+    Row ".######"
+    Row "..###.."
+    Row "...##.."
+    Row "....#.."
+    Row "####.##"
+
+    Glyph $50    ; scroll right
+    Row "..#..##"
+    Row "..##..."
+    Row "..###.."
+    Row "######."
+    Row "..###.."
+    Row "..##..."
+    Row "..#...."
+    Row "##.####"
+
+    Glyph $51    ; scroll down
+    Row "......#"
+    Row "...#..#"
+    Row "...#..."
+    Row "#######"
+    Row ".#####."
+    Row "..###.."
+    Row "...#..#"
+    Row "......#"
+
+    Glyph $52    ; scroll up
+    Row "......#"
+    Row "...#..#"
+    Row "..###.."
+    Row ".#####."
+    Row "#######"
+    Row "...#..."
+    Row "...#..#"
+    Row "......#"
+
+    Glyph $53    ; middle bar
+    Row "......."
+    Row "......."
+    Row "......."
+    Row "#######"
+    Row "......."
+    Row "......."
+    Row "......."
+    Row "......."
+
+    Glyph $54    ; lower-left corner
+    Row "#......"
+    Row "#......"
+    Row "#......"
+    Row "#......"
+    Row "#......"
+    Row "#......"
+    Row "#......"
+    Row "#######"
+
+    Glyph $55    ; right arrow
+    Row "...#..."
+    Row "....#.."
+    Row ".....#."
+    Row "#######"
+    Row ".....#."
+    Row "....#.."
+    Row "...#..."
+    Row "......."
+
+    Glyph $56    ; checkerboard
+    Row ".#.#.#."
+    Row "#.#.#.#"
+    Row ".#.#.#."
+    Row "#.#.#.#"
+    Row ".#.#.#."
+    Row "#.#.#.#"
+    Row ".#.#.#."
+    Row "#.#.#.#"
+
+    Glyph $57    ; checkerboard, shifted
+    Row "#.#.#.#"
+    Row ".#.#.#."
+    Row "#.#.#.#"
+    Row ".#.#.#."
+    Row "#.#.#.#"
+    Row ".#.#.#."
+    Row "#.#.#.#"
+    Row ".#.#.#."
+
+    Glyph $58    ; folder, left half
+    Row "......."
+    Row ".#####."
+    Row "#.....#"
+    Row "#......"
+    Row "#......"
+    Row "#......"
+    Row "#######"
+    Row "......."
+
+    Glyph $59    ; folder, right half
+    Row "......."
+    Row "......."
+    Row "######."
+    Row "......#"
+    Row "......#"
+    Row "......#"
+    Row "#######"
+    Row "......."
+
+    Glyph $5A    ; right bar
+    Row "......#"
+    Row "......#"
+    Row "......#"
+    Row "......#"
+    Row "......#"
+    Row "......#"
+    Row "......#"
+    Row "......#"
+
+    Glyph $5B    ; diamond
+    Row "...#..."
+    Row "..###.."
+    Row ".#####."
+    Row "#######"
+    Row ".#####."
+    Row "..###.."
+    Row "...#..."
+    Row "......."
+
+    Glyph $5C    ; top and bottom bars
+    Row "#######"
+    Row "......."
+    Row "......."
+    Row "......."
+    Row "......."
+    Row "......."
+    Row "......."
+    Row "#######"
+
+    Glyph $5D    ; crossing
+    Row "..#.#.."
+    Row "..#.#.."
+    Row "###.###"
+    Row "......."
+    Row "###.###"
+    Row "..#.#.."
+    Row "..#.#.."
+    Row "......."
+
+    Glyph $5E    ; box
+    Row "#######"
+    Row "......#"
+    Row "......#"
+    Row "..##..#"
+    Row "..##..#"
+    Row "......#"
+    Row "......#"
+    Row "#######"
+
+    Glyph $5F    ; left bar
+    Row "#......"
+    Row "#......"
+    Row "#......"
+    Row "#......"
+    Row "#......"
+    Row "#......"
+    Row "#......"
+    Row "#......"
 .endmacro
 
 .org $0000
@@ -1073,365 +1441,47 @@ Row .set Row + 1
 .if IIBOARD
 ; The II and II Plus: the 64 glyphs four times, bit 7 set in the second and fourth.
 .repeat 2
-Flash .set 0
-    UPPERCASE
-    SYMBOLS
-Flash .set 1
-    UPPERCASE
-    SYMBOLS
+    .set HighBit, 0
+    UppercaseGlyphs
+    SymbolGlyphs
+    .set HighBit, HIGH_BIT
+    UppercaseGlyphs
+    SymbolGlyphs
 .endrepeat
 .else
-; $00-$3F: inverse.
-Inverse .set 1
-    UPPERCASE
-    SYMBOLS
+    ; $00-$3F: inverse.
+    .set Inverse, 1
+    UppercaseGlyphs
+    SymbolGlyphs
 
 .if ENHANCED
-; $40-$5F: MouseText.
-Inverse .set 0
-    GLYPH $40    ; closed apple
-    ROW "....#.."
-    ROW "...#..."
-    ROW ".##.##."
-    ROW "#######"
-    ROW "######."
-    ROW "######."
-    ROW ".######"
-    ROW ".##.##."
-
-    GLYPH $41    ; open apple
-    ROW "....#.."
-    ROW "...#..."
-    ROW ".##.##."
-    ROW "#.....#"
-    ROW "#....#."
-    ROW "#....#."
-    ROW ".#.#..#"
-    ROW ".##.##."
-
-    GLYPH $42    ; mouse pointer
-    ROW "......."
-    ROW "......."
-    ROW ".#....."
-    ROW ".##...."
-    ROW ".###..."
-    ROW ".####.."
-    ROW ".##.##."
-    ROW ".#....#"
-
-    GLYPH $43    ; hourglass
-    ROW "#######"
-    ROW ".#...#."
-    ROW "..#.#.."
-    ROW "...#..."
-    ROW "...#..."
-    ROW "..#.#.."
-    ROW ".#.#.#."
-    ROW "#######"
-
-    GLYPH $44    ; checkmark
-    ROW "......."
-    ROW "......#"
-    ROW ".....#."
-    ROW "#...#.."
-    ROW ".#.#..."
-    ROW "..#...."
-    ROW "..#...."
-    ROW "......."
-
-    GLYPH $45    ; inverse checkmark
-    ROW "#######"
-    ROW "######."
-    ROW "#####.#"
-    ROW "..##.##"
-    ROW "#.#.###"
-    ROW "##.####"
-    ROW "##.####"
-    ROW "#######"
-
-    GLYPH $46    ; running man
-    ROW "....###"
-    ROW ".....##"
-    ROW ".######"
-    ROW "#...##."
-    ROW "#..####"
-    ROW "....##."
-    ROW "######."
-    ROW ".#....."
-
-    GLYPH $47    ; running man, second half
-    ROW "......."
-    ROW "...##.."
-    ROW "###...."
-    ROW "......."
-    ROW "###...."
-    ROW "..##..."
-    ROW "...#..."
-    ROW "....###"
-
-    GLYPH $48    ; left arrow
-    ROW "...#..."
-    ROW "..#...."
-    ROW ".#....."
-    ROW "#######"
-    ROW ".#....."
-    ROW "..#...."
-    ROW "...#..."
-    ROW "......."
-
-    GLYPH $49    ; ellipsis
-    ROW "......."
-    ROW "......."
-    ROW "......."
-    ROW "......."
-    ROW "......."
-    ROW "......."
-    ROW "......."
-    ROW ".#.#.#."
-
-    GLYPH $4A    ; down arrow
-    ROW "...#..."
-    ROW "...#..."
-    ROW "...#..."
-    ROW "...#..."
-    ROW "#..#..#"
-    ROW ".#.#.#."
-    ROW "..###.."
-    ROW "...#..."
-
-    GLYPH $4B    ; up arrow
-    ROW "...#..."
-    ROW "..###.."
-    ROW ".#.#.#."
-    ROW "#..#..#"
-    ROW "...#..."
-    ROW "...#..."
-    ROW "...#..."
-    ROW "...#..."
-
-    GLYPH $4C    ; top bar
-    ROW "#######"
-    ROW "......."
-    ROW "......."
-    ROW "......."
-    ROW "......."
-    ROW "......."
-    ROW "......."
-    ROW "......."
-
-    GLYPH $4D    ; return arrow
-    ROW "......#"
-    ROW "......#"
-    ROW "......#"
-    ROW "..#...#"
-    ROW ".##...#"
-    ROW "#######"
-    ROW ".##...."
-    ROW "..#...."
-
-    GLYPH $4E    ; solid block
-    ROW "######."
-    ROW "######."
-    ROW "######."
-    ROW "######."
-    ROW "######."
-    ROW "######."
-    ROW "######."
-    ROW "######."
-
-    GLYPH $4F    ; scroll left
-    ROW "##..#.."
-    ROW "...##.."
-    ROW "..###.."
-    ROW ".######"
-    ROW "..###.."
-    ROW "...##.."
-    ROW "....#.."
-    ROW "####.##"
-
-    GLYPH $50    ; scroll right
-    ROW "..#..##"
-    ROW "..##..."
-    ROW "..###.."
-    ROW "######."
-    ROW "..###.."
-    ROW "..##..."
-    ROW "..#...."
-    ROW "##.####"
-
-    GLYPH $51    ; scroll down
-    ROW "......#"
-    ROW "...#..#"
-    ROW "...#..."
-    ROW "#######"
-    ROW ".#####."
-    ROW "..###.."
-    ROW "...#..#"
-    ROW "......#"
-
-    GLYPH $52    ; scroll up
-    ROW "......#"
-    ROW "...#..#"
-    ROW "..###.."
-    ROW ".#####."
-    ROW "#######"
-    ROW "...#..."
-    ROW "...#..#"
-    ROW "......#"
-
-    GLYPH $53    ; middle bar
-    ROW "......."
-    ROW "......."
-    ROW "......."
-    ROW "#######"
-    ROW "......."
-    ROW "......."
-    ROW "......."
-    ROW "......."
-
-    GLYPH $54    ; lower-left corner
-    ROW "#......"
-    ROW "#......"
-    ROW "#......"
-    ROW "#......"
-    ROW "#......"
-    ROW "#......"
-    ROW "#......"
-    ROW "#######"
-
-    GLYPH $55    ; right arrow
-    ROW "...#..."
-    ROW "....#.."
-    ROW ".....#."
-    ROW "#######"
-    ROW ".....#."
-    ROW "....#.."
-    ROW "...#..."
-    ROW "......."
-
-    GLYPH $56    ; checkerboard
-    ROW ".#.#.#."
-    ROW "#.#.#.#"
-    ROW ".#.#.#."
-    ROW "#.#.#.#"
-    ROW ".#.#.#."
-    ROW "#.#.#.#"
-    ROW ".#.#.#."
-    ROW "#.#.#.#"
-
-    GLYPH $57    ; checkerboard, shifted
-    ROW "#.#.#.#"
-    ROW ".#.#.#."
-    ROW "#.#.#.#"
-    ROW ".#.#.#."
-    ROW "#.#.#.#"
-    ROW ".#.#.#."
-    ROW "#.#.#.#"
-    ROW ".#.#.#."
-
-    GLYPH $58    ; folder, left half
-    ROW "......."
-    ROW ".#####."
-    ROW "#.....#"
-    ROW "#......"
-    ROW "#......"
-    ROW "#......"
-    ROW "#######"
-    ROW "......."
-
-    GLYPH $59    ; folder, right half
-    ROW "......."
-    ROW "......."
-    ROW "######."
-    ROW "......#"
-    ROW "......#"
-    ROW "......#"
-    ROW "#######"
-    ROW "......."
-
-    GLYPH $5A    ; right bar
-    ROW "......#"
-    ROW "......#"
-    ROW "......#"
-    ROW "......#"
-    ROW "......#"
-    ROW "......#"
-    ROW "......#"
-    ROW "......#"
-
-    GLYPH $5B    ; diamond
-    ROW "...#..."
-    ROW "..###.."
-    ROW ".#####."
-    ROW "#######"
-    ROW ".#####."
-    ROW "..###.."
-    ROW "...#..."
-    ROW "......."
-
-    GLYPH $5C    ; top and bottom bars
-    ROW "#######"
-    ROW "......."
-    ROW "......."
-    ROW "......."
-    ROW "......."
-    ROW "......."
-    ROW "......."
-    ROW "#######"
-
-    GLYPH $5D    ; crossing
-    ROW "..#.#.."
-    ROW "..#.#.."
-    ROW "###.###"
-    ROW "......."
-    ROW "###.###"
-    ROW "..#.#.."
-    ROW "..#.#.."
-    ROW "......."
-
-    GLYPH $5E    ; box
-    ROW "#######"
-    ROW "......#"
-    ROW "......#"
-    ROW "..##..#"
-    ROW "..##..#"
-    ROW "......#"
-    ROW "......#"
-    ROW "#######"
-
-    GLYPH $5F    ; left bar
-    ROW "#......"
-    ROW "#......"
-    ROW "#......"
-    ROW "#......"
-    ROW "#......"
-    ROW "#......"
-    ROW "#......"
-    ROW "#......"
-
+    ; $40-$5F: MouseText.
+    .set Inverse, 0
+    MouseTextGlyphs
 .else
-; $40-$5F: inverse uppercase again.
-    UPPERCASE
+    ; $40-$5F: inverse uppercase again.
+    UppercaseGlyphs
 .endif
 
-; $60-$7F: inverse lowercase.
-Inverse .set 1
-    LOWERCASE
+    ; $60-$7F: inverse lowercase.
+    .set Inverse, 1
+    LowercaseGlyphs
 
-; $80-$FF: normal.
-Inverse .set 0
-    UPPERCASE
-    SYMBOLS
-    UPPERCASE
-    LOWERCASE
+    ; $80-$FF: normal.
+    .set Inverse, 0
+    UppercaseGlyphs
+    SymbolGlyphs
+    UppercaseGlyphs
+    LowercaseGlyphs
 
-; $800-$FFF: a pattern for each byte value.
-.repeat 256, Value
-    Low .set Value & $0F
-    High .set Value >> 4
-    .byte $80 | (~Value & $7F), $80 | (~Value & $7F)
-    .byte ~(Low * $11) & $FF, ~((((Low << 2) | (Low >> 2)) & $0F) * $11) & $FF
-    .byte $80 | (~Value & $7F), $80 | (~Value & $7F)
-    .byte ~(High * $11) & $FF, ~((((High << 2) | (High >> 2)) & $0F) * $11) & $FF
+; $800-$FFF: a pattern for each byte value. Multiplying a nibble by $11 repeats its four dots across the row's
+; eight bits, and the rotation by two shifts the second copy two dots; the inversions make the dots normal.
+.repeat 256, value
+    .set LowNibble, value & $0F
+    .set HighNibble, value >> 4
+    .byte HIGH_BIT | (~value & DOT_BITS), HIGH_BIT | (~value & DOT_BITS)
+    .byte ~(LowNibble * $11) & $FF, ~((((LowNibble << 2) | (LowNibble >> 2)) & $0F) * $11) & $FF
+    .byte HIGH_BIT | (~value & DOT_BITS), HIGH_BIT | (~value & DOT_BITS)
+    .byte ~(HighNibble * $11) & $FF, ~((((HighNibble << 2) | (HighNibble >> 2)) & $0F) * $11) & $FF
 .endrepeat
 .endif

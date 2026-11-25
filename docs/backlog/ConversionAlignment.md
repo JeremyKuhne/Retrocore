@@ -187,7 +187,9 @@ Exit for each PR: `EveryRepositorySourceIsCleanInTheEditor`, `SdkDocumentationIs
   - *Status:* pushed on `claude/basic-rename-table`, with X1 to X16 settled by the owner.
 - [ ] **B6. Convert, one PR per module or family** (step 4): `.proc`s, scopes, structs, named constants,
   `; retrocore: style=strict`, `Keeps:` worked out from the code. Shared modules first, then each vendor's. The
-  alias files become `Also:`.
+  alias files become `Also:`. The names [Basic.md](../conversions/Basic.md) still lists as open (SIZE and OLDOV,
+  GRBTOP and GRBPNT, COUNT, INTEGR and CURTOL, LOWTR, LINWID and NCMWID) are decided here, as each module that uses
+  them is converted.
   - *Status:* X8 step 2, the workspace, converted.
 - [ ] **B7. Update the dependents:**
   - DOS: `docs/conversions/Dos.md` (which lands with A2's DOS PR) says "BASIC names wait for the BASICs' conversion";

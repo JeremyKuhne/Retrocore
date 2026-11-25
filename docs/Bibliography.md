@@ -30,6 +30,9 @@ workspace adds documents of its own, or replaces a key, with the same columns.
 | HV4 | PET BASIC 4 (901465-19, -20, -21), reconstructed source | | Martin Hoffmann-Vetter | <https://github.com/mist64/cbmsrc/tree/01bd60f162ef92212ef0cb67546ae8f42be34168/BASIC_PET_V4_REC> |
 | HV4R | PET BASIC 4 revised (901465-23, -20, -21), reconstructed source | | Martin Hoffmann-Vetter | <https://github.com/mist64/cbmsrc/tree/01bd60f162ef92212ef0cb67546ae8f42be34168/BASIC_PET_V4R_REC> |
 | HVK4 | PET operating system 4.0 (901465-21, 901447-29, 901465-22), reconstructed source | | Martin Hoffmann-Vetter | <https://github.com/mist64/cbmsrc/tree/01bd60f162ef92212ef0cb67546ae8f42be34168/KERNAL_PET_4.0_REC> |
+| IIGSFR87 | Apple IIGS Firmware Reference | 1987 | Addison-Wesley | <https://archive.org/details/Apple_IIGS_Firmware_Reference_1987_Adn-Wesley_Publishing> |
+| MOUSETN | Apple II Technical Notes: Mouse #1-#7 (Developer Technical Support, revised 1985-1990) | 1990 | Apple Computer | <https://mirrors.apple2.org.za/Apple%20II%20Documentation%20Project/Interface%20Cards/Digitizers/Apple%20Mouse%20Interface%20Card/Documentation/Apple%20II%20Mouse%20Technical%20Notes.pdf> |
+| IICTRM89 | Apple IIc Technical Reference Manual, Second Edition | 1989 | Addison-Wesley | <https://archive.org/details/AppleIIcTechnicalReference2ndEd> |
 | UNKN | Unclear where this originated: a name no listed document gives | | | |
 
 ## How the BASIC documents were checked
@@ -78,3 +81,24 @@ where the check found that the document gives that name for that thing:
 - **A2RM78** for the floating-point routines, the Mini-Assembler and SWEET16: their listings in the manual, read from
   the Internet Archive's OCR text and checked label by label.
 
+## How the Apple IIGS Firmware Reference was checked
+
+- **IIGSFR87:** read from the Internet Archive's OCR text of the May 1987 first printing. SmartPort's error names
+  (BADCMD $01 ... OFFLINE $2F, BUSERR $06) are checked against Table 7-6, and the IIgs's SHADOW ($C035), CYAREG
+  ($C036), STATEREG ($C068) and HORIZCNT ($C02F) against Appendix E and its symbol table. The 3.5 controller's sources
+  cite it ([`docs/conversions/Disk35.md`](conversions/Disk35.md), Q3).
+
+## How the mouse documents were checked
+
+- **MOUSETN:** the text of the 12-page PDF (notes #1-#7), searched in full. It gives SetMouse, ServeMouse,
+  ReadMouse, ClearMouse, PosMouse, ClampMouse and InitMouse, TimeData for the AppleMouse card's $Cn1C (#2) and the
+  card's GetClamp entry at $Cn1A (#7: the name is on the sample's comment for the entry, "Mouse Card firmware GetClamp
+  entry"); not HomeMouse. Its MinXL ... MaxYH are the IIc's clamp holes in auxiliary memory, not the card's.
+- **IICTRM89:** read from the Internet Archive's OCR text. Table 9-3 gives all eight routines at $Cn12-$Cn19, and
+  Appendix D says the same calls drive the AppleMouse card in an Apple IIe. Its MouX1 and MouY1 are the IIc's soft
+  switches, not screen holes. The first edition (1985) gives the same routine names for the IIc's own firmware only,
+  so the mouse card's sources don't cite it ([`docs/conversions/Mouse.md`](conversions/Mouse.md), M1).
+- **IIGSFR87** for the mouse: Chapter 10 says applications must use its firmware calls only if they wish to be
+  compatible with the mouse in every Apple II, and Table 10-4 (Mouse firmware calls) gives SETMOUSE ... INITMOUSE at $C412-$C419, BINITENTRY,
+  BASICINPUT and BASICOUTPUT at $C400, $C405 and $C407, and, as "entry points compatible with AppleMouse card",
+  DIAGMOUSE, COPYRIGHT, TIMEDATA, SETVBLCNTS, OPTMOUSE and STARTTIMER at $C41A-$C41F.

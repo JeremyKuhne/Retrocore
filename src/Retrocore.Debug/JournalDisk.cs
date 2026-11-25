@@ -15,4 +15,15 @@ namespace Retrocore.Debug;
 /// <param name="Version">Its version.</param>
 /// <param name="Snapshot">Its snapshot, or null when the journal already holds this version.</param>
 /// <param name="Entry">Its drive, label, format, image and whether the machine ejected it.</param>
-internal sealed record JournalDisk(Guid Medium, string Type, long Version, MediumSnapshot? Snapshot, JsonObject Entry);
+/// <param name="MidWrite">Whether its drive was writing as the snapshot was taken.</param>
+/// <param name="Waiting">
+///  Whether its snapshot waits for its drive to stop writing: the journal keeps the version it holds already.
+/// </param>
+internal sealed record JournalDisk(
+    Guid Medium,
+    string Type,
+    long Version,
+    MediumSnapshot? Snapshot,
+    JsonObject Entry,
+    bool MidWrite = false,
+    bool Waiting = false);

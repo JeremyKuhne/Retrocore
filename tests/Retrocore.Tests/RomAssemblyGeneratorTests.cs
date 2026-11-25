@@ -20,6 +20,35 @@ public class RomAssemblyGeneratorTests
     private const string Header = ".rom TestFirmware.Rom, $C700, $100\n.cpu Mos6502\n";
 
     /// <summary>
+    ///  ROM metadata expressions use the same quoted literals and image bounds as editor analysis.
+    /// </summary>
+    [TestMethod]
+    public void MetadataExpressionsSetImageBounds()
+    {
+        GeneratorDriver driver = Run("""
+            .rom TestFirmware.Rom, ($C6C5 + ';'), ($80 * 2) ; image bounds
+            .cpu Mos6502
+            .export Entry
+            Entry: nop
+            """);
+
+        Bytes(driver).Should().HaveCount(0x100);
+        driver.GetRunResult().GeneratedTrees.Single().ToString().Should().Contain("const int Entry = 50944");
+    }
+
+    /// <summary>
+    ///  A skipped longer name is not a second ROM declaration.
+    /// </summary>
+    [TestMethod]
+    public void MetadataRequiresACompleteDirective()
+    {
+        GeneratorDriver driver = Run(".if 0\n.rom TestFirmware.Rom, $C400, $100\n.ROM1=1\n.endif\n.cpu Mos6502\n.byte 7\n");
+
+        Bytes(driver)[0].Should().Be(7);
+        driver.GetRunResult().GeneratedTrees.Single().ToString().Should().Contain("Origin = 0xC400");
+    }
+
+    /// <summary>
     ///  The <c>;;</c> summaries of exported symbols become the generated members' XML documentation, with links
     ///  to other exports as cref links and inherited summaries resolved.
     /// </summary>

@@ -3,19 +3,20 @@
 `src/Retrocore.Machines.Apple2/Roms/DiskII/`: the roots `Boot16.asm` (341-0027) and `Boot13.asm` (341-0009), which
 set `SECTORS` and include `Boot.asm`, and `Sequencer16.asm` (341-0028) and `Sequencer13.asm` (341-0010), which add
 their reading tables to `Sequencer.asm`. Also converted with them: `Software/LanguageCardFinder.asm`, the System
-Master HELLO's POKEd test. Documents cited: DOS33 and DOS31 (on the switches only), UNKN.
+Master HELLO's POKEd test. Documents cited: DOS33 and DOS31, on the switches only.
 
 ## Sources
 
-- No document in hand gives the boot ROM's names. Beneath Apple DOS's chapter 8 describes `BOOT 0` by address and
-  names none of its routines or page-zero bytes; Andy McFadden's commented disassembly (docs/DiskII.md) could not be
-  fetched to check. The names this source had before (BOOT0, READ, SLOTX16, DENIB ...) are kept in `Also:` as UNKN.
-- Sather's Understanding the Apple II (chapter 9, Table 9.3, checked against the archive's text) gives the sequencer
-  commands as CLR, NOP, SL0, SL1, SR and LD, and says they are his own, "in the absence of any labels and formats
-  published by Apple". They are named in prose (D6), so the bibliography has no key for it.
+Only published sources are cited: books, manuals and actual listings.
+
+- No published listing of the boot ROM is known. Beneath Apple DOS's chapter 8 describes `BOOT 0` by address and
+  names none of its routines or page-zero bytes. The names the source had before (BOOT0, READ, SLOTX16, DENIB ...)
+  were the SDK's own, so they are dropped, with no `Also:`.
+- Sather's Understanding the Apple II (1983, chapter 9, Table 9.3, checked against the archive's text) gives the
+  sequencer commands as CLR, NOP, SL0, SL1, SR and LD, and says they are his own, "in the absence of any labels and
+  formats published by Apple". They are named in prose (D6), since a `.define` can't carry `Also:`.
 - The macros `ENTRY`, `READING`, `WRITING` and `SEQUENCER`, the generated `SEQ_xx` and the variable `Logical`, and the
-  language card finder's `Status`, `Finder` and its locals are the SDK's own and get no `Also:`; all but `Status` are
-  renamed.
+  language card finder's `Finder` and its locals were the SDK's own too: renamed with no `Also:`.
 
 ## Decisions
 
@@ -24,9 +25,9 @@ Master HELLO's POKEd test. Documents cited: DOS33 and DOS31 (on the switches onl
   (X9), the marks `PROLOGUE_FIRST`, `PROLOGUE_SECOND`, `ADDRESS_MARK` and `DATA_MARK`, the table `ReadTranslate`
   (DNIBL), `LowBits`, `LOW_BITS_SIZE` and `GROUP_COUNT`, and the reader's locals (`WaitD5`, `CheckD5`, `WaitAA`,
   `WaitOdd`, `WaitEven`).
-- D2. The boot ROM defines its six switches itself rather than including Dos/RwtsEquates.asm, which brings RWTS's
-  variables and DOS's `DOS32` switch. Each switch's `Also:` cites DOS's name for the same switch with DOS's
-  documents (PHASEOFF, Q6L ...), beside the source's old name as UNKN where it differs (MOTORON is both).
+- D2. The boot ROM defined its six switches itself rather than including Dos/RwtsEquates.asm, which brings RWTS's
+  variables and DOS's `DOS32` switch, each citing DOS's name for it with DOS's documents (PHASEOFF, Q6L ...). Since
+  D10 it includes the shared switches file instead, and still not RwtsEquates.asm.
 - D3. Page-zero bytes are aliases of IIeEquates' names (`BufferPointer = LowResBase`), as in DOS (P14). BITS, which
   holds a nibble, a half byte or a count by turns, is `Scratch`.
 - D4. Three routines, each one definition for both ROMs with `.if SECTORS` where they differ (the owner's D5):
@@ -50,9 +51,13 @@ Master HELLO's POKEd test. Documents cited: DOS33 and DOS31 (on the switches onl
 
 - `ReadSector` searches for ever for a sector that is not on the track: nothing counts the tries.
 
-## Open questions for the owner
+## The open questions, settled by the owner
 
-- Q1. If McFadden's disassembly or another listing gives the boot ROM's old names, they could cite it instead of
-  UNKN.
-- Q2. `Hold` for Sather's NOP reads as "leave the latch alone"; `NoChange` or `Idle` would also fit.
-- Q3. A shared file of the Disk II's sixteen switches, included by DOS and the boot ROMs, would replace D2's copy.
+- D8 (was Q1). No published listing of the boot ROM is known, so nothing changes now; if one turns up, its names go in
+  `Also:` with a bibliography key.
+- D9 (was Q2). Sather's NOP stays `Hold` (D6).
+- D10 (was Q3). The Disk II's sixteen switches, `Phase0Off` to `WriteMode`, with DOS's names and citations where DOS
+  names them (it has none for phases 1 to 3), are one file,
+  [DiskII/Switches.asm](../../src/Retrocore.Machines.Apple2/Roms/DiskII/Switches.asm), which the boot ROMs, DOS's
+  RwtsEquates.asm and Software/Boot13.1983.asm include; it replaces D2's copy and the program's. Its comments describe
+  the controller, linking the routines in DOS and the boot ROM that step the head.

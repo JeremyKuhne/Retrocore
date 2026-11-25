@@ -28,8 +28,7 @@ Every Apple II slot has two address ranges that belong to it, where n is the slo
   configured with it) scans the slots from 7 down for a ROM whose bytes at $Cn01, $Cn03 and $Cn05 are $20, $00
   and $03, and runs the first it finds: that is how a disk starts by itself.
 - **$C080-$C08F plus n * 16**, sixteen addresses that work the card's switches. The code puts n * 16 in X and
-  reads `$C080,X` and the like, so the same code works in any slot. This value is `SlotTimes16` in the sources
-  (SLOTX16 before their conversion).
+  reads `$C080,X` and the like, so the same code works in any slot. This value is `SlotTimes16` in the sources.
 
 The switches are eight on/off controls. Reading the even address of a pair turns its switch off, the odd one
 turns it on; the value read back does not matter, except that every even address also returns the data latch,

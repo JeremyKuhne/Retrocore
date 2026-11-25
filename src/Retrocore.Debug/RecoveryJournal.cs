@@ -56,6 +56,10 @@ internal sealed partial class RecoveryJournal
     // The snapshot each disk's journaled version is in, so a disk unchanged since it was last kept is not copied again.
     private readonly ConcurrentDictionary<Guid, Written> _written = [];
 
+    // Each disk's version as the last commit holds it, and when that commit was written; a snapshot written by a
+    // commit that failed is not here.
+    private readonly ConcurrentDictionary<Guid, JournalKept> _committed = [];
+
     // What the journal held when opened that could not go back in a drive, carried into every commit as it was.
     private readonly List<JsonObject> _unplaced = [];
 
@@ -94,6 +98,23 @@ internal sealed partial class RecoveryJournal
     internal IReadOnlyList<JsonObject> Named => _named ?? Kept;
 
     private IReadOnlyList<JsonObject>? _named;
+
+    /// <summary>
+    ///  Gets why the last commit failed, or null when it went through: the previous commit stands meanwhile.
+    /// </summary>
+    internal string? Failure { get; private set; }
+
+    /// <summary>
+    ///  Gets when the last commit went through, in UTC, or when the journal was opened before any did.
+    /// </summary>
+    internal DateTime LastCommitted { get; private set; } = DateTime.UtcNow;
+
+    /// <summary>
+    ///  Gets a disk's version as the journal's last commit holds it.
+    /// </summary>
+    /// <param name="medium">The disk's medium id.</param>
+    /// <returns>Its version, when it was kept and whether mid-write; or null when the journal holds none.</returns>
+    internal JournalKept? KeptOf(Guid medium) => _committed.TryGetValue(medium, out JournalKept? kept) ? kept : null;
 
     /// <summary>
     ///  Gets the folder of the recovery journals, under local data.
@@ -234,7 +255,13 @@ internal sealed partial class RecoveryJournal
     internal void Placed(JsonObject disk, Guid medium, long version)
     {
         string file = disk.String("file") ?? "";
-        _written[medium] = new(version, file, disk.String("kind") ?? "", disk.Bool("writeProtected") == true);
+        bool midWrite = disk.Bool("midWrite") == true;
+        _written[medium] = new(version, file, disk.String("kind") ?? "", disk.Bool("writeProtected") == true, midWrite);
+        DateTime when = DateTime.TryParse(Text(disk, "kept"), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out DateTime kept)
+            ? kept.ToUniversalTime()
+            : DateTime.UtcNow;
+
+        _committed[medium] = new(version, when, midWrite);
         lock (_writing) { _removable.Add(file); }
     }
 
@@ -270,6 +297,13 @@ internal sealed partial class RecoveryJournal
 
                 // What the last commit holds is the machine's unsaved state.
                 if (close && _claimed) { WriteSession(clean: true); }
+                Failure = null;
+                LastCommitted = DateTime.UtcNow;
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                Failure = exception.Message;
+                throw;
             }
             finally
             {
@@ -282,21 +316,33 @@ internal sealed partial class RecoveryJournal
     // Writes a commit's snapshots, then the journal naming them, then removes the snapshots no longer named.
     private void Write(IReadOnlyList<JournalDisk> disks)
     {
+        DateTime now = DateTime.UtcNow;
         JsonArray entries = [];
+        Dictionary<Guid, JournalKept> committed = [];
         foreach (JournalDisk disk in disks)
         {
             Written? written;
+            JournalKept kept;
             if (disk.Snapshot is { } snapshot)
             {
                 string file = $"{disk.Medium:N}-{_next++}.{Extension(snapshot.Kind)}";
                 WriteDurably(Path.Join(_folder, MediaFolder, file), snapshot.Image.Span);
                 _removable.Add(file);
-                written = new(disk.Version, file, snapshot.Kind, snapshot.WriteProtected);
+                written = new(disk.Version, file, snapshot.Kind, snapshot.WriteProtected, disk.MidWrite);
                 _written[disk.Medium] = written;
+                kept = new(disk.Version, now, disk.MidWrite);
             }
             else if (!_written.TryGetValue(disk.Medium, out written))
             {
                 continue;
+            }
+            else
+            {
+                // A snapshot an earlier commit wrote: as of when that commit kept it, or now, when that commit failed
+                // and this one is the first to name it.
+                kept = _committed.TryGetValue(disk.Medium, out JournalKept? before) && before.Version == written.Version
+                    ? before
+                    : new(written.Version, now, written.MidWrite);
             }
 
             JsonObject entry = (JsonObject)disk.Entry.DeepClone();
@@ -305,8 +351,10 @@ internal sealed partial class RecoveryJournal
             entry["kind"] = written.Kind;
             entry["writeProtected"] = written.WriteProtected;
             entry["file"] = written.File;
-            entry["kept"] = DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture);
+            entry["kept"] = kept.When.ToString("O", CultureInfo.InvariantCulture);
+            if (written.MidWrite) { entry["midWrite"] = true; }
             entries.Add((JsonNode)entry);
+            committed[disk.Medium] = kept;
         }
 
         foreach (JsonObject unplaced in _unplaced) { entries.Add((JsonNode)unplaced.DeepClone()); }
@@ -315,6 +363,14 @@ internal sealed partial class RecoveryJournal
         WriteDurably(temporary, Utf8(new JsonObject { ["disks"] = entries }));
         File.Move(temporary, Path.Join(_folder, JournalFile), overwrite: true);
         _named = [.. entries.OfType<JsonObject>()];
+
+        // What the journal holds now, for the drives' rows.
+        foreach (Guid gone in _committed.Keys.Where(medium => !committed.ContainsKey(medium)).ToList())
+        {
+            _committed.TryRemove(gone, out _);
+        }
+
+        foreach ((Guid medium, JournalKept kept) in committed) { _committed[medium] = kept; }
 
         // Only now is an older snapshot no longer needed; a disk saved or let go leaves the journal with them.
         // An entry kept as it was may hold anything; only a file name it gives as text keeps a snapshot.

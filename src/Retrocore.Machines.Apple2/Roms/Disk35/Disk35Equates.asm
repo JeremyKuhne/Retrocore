@@ -217,50 +217,50 @@ COMMAND_NOT_IIGS = $7E
 ;; The host is a IIgs.
 COMMAND_IIGS = $7F
 
-; SmartPort's error codes, as Apple's Apple IIgs Firmware Reference names them.
+; SmartPort's error codes, as the Apple IIGS Firmware Reference (IIGSFR87) names them.
 
 ;; The command is not one the device knows.
-;; Also: BADCMD (UNKN)
+;; Also: BADCMD (IIGSFR87)
 ERROR_BAD_COMMAND = $01
 
 ;; The parameter list's count is wrong for the command.
-;; Also: BADPCNT (UNKN)
+;; Also: BADPCNT (IIGSFR87)
 ERROR_BAD_PARAMETER_COUNT = $04
 
 ;; The unit is not one there is.
-;; Also: BADUNIT (UNKN)
+;; Also: BADUNIT (IIGSFR87)
 ERROR_BAD_UNIT = $11
 
 ;; The control or status code is not one the device knows.
-;; Also: BADCTL (UNKN)
+;; Also: BADCTL (IIGSFR87)
 ERROR_BAD_CONTROL = $21
 
 ;; A control call's parameter is wrong.
-;; Also: BADCTLPARM (UNKN)
+;; Also: BADCTLPARM (IIGSFR87)
 ERROR_BAD_CONTROL_PARAMETER = $22
 
 ;; The disk could not be read or written.
-;; Also: IOERROR (UNKN)
+;; Also: IOERROR (IIGSFR87)
 ERROR_IO = $27
 
 ;; There is no drive.
-;; Also: NODRIVE (UNKN)
+;; Also: NODRIVE (IIGSFR87)
 ERROR_NO_DRIVE = $28
 
 ;; The disk is write-protected.
-;; Also: NOWRITE (UNKN)
+;; Also: NOWRITE (IIGSFR87)
 ERROR_WRITE_PROTECTED = $2B
 
 ;; The block number is past the disk's end.
-;; Also: BADBLOCK (UNKN)
+;; Also: BADBLOCK (IIGSFR87)
 ERROR_BAD_BLOCK = $2D
 
 ;; The disk was switched since the last call.
-;; Also: DISKSW (UNKN)
+;; Also: DISKSW (IIGSFR87)
 ERROR_DISK_SWITCHED = $2E
 
 ;; There is no disk in the drive.
-;; Also: OFFLINE (UNKN)
+;; Also: OFFLINE (IIGSFR87)
 ERROR_OFFLINE = $2F
 
 ; The bits of DiskErrors: what went wrong on the disk.

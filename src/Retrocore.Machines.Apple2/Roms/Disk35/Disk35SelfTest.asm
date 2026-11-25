@@ -10,7 +10,7 @@
 ;;      parameters; and as the IWM again;
 ;;   4. the RAM: the stack page with a rising and a falling count, and eight bytes from $0403 to $4003, for the
 ;;      address lines.
-;; Then it turns the LED off and goes on to the main firmware's start-up at $D129 (<Startup>). On a failure it makes
+;; Then it turns the LED off and goes on to the main firmware's start-up at $D129 (<CardStartup>). On a failure it makes
 ;; every entry of the slot page jump to the Monitor, clears the SmartPort signature and blinks the LED for ever.
 ;;
 ;; <SelfTest::CardDiagnostics> ($8F00) runs when the host sends <COMMAND_DIAGNOSTICS>. It tests page zero, puts the
@@ -184,11 +184,6 @@ DiagnosticsZeroPage = DiagnosticsImage + $0600
 
 ; The host.
 
-;; Inherit: <Monitor:Startup::ResetToMonitor>
-;; At $FF59, in the host's ROM: where a failed card's slot page sends the host.
-;; Also: OLDRST (A2RM79, IIEROM82, IIETRM85)
-ResetToMonitor = $FF59
-
 ; The slot page's bytes the tests change.
 
 ;; $Cn05, the SmartPort signature's $03.
@@ -207,7 +202,7 @@ CallWait = SharedSlotPage + <SmartPortEntry::Wait + 1
 SlotDiagnostics = SharedSlotPage + <DiagnosticsEntry
 
 ;; $Cn23, where a released SmartPortEntry::Wait goes.
-SlotCall = SharedSlotPage + <Call
+SlotCall = SharedSlotPage + <CallCard
 
 ; Values.
 
@@ -1324,7 +1319,7 @@ OnWait:
 
 ;; The start-up test, which the main firmware's reset (<CardReset>) jumps to. Puts the slot page's start in place,
 ;; and checks the EPROM's checksum, the SWIM and some of the RAM; then turns the LED off and goes on with the main
-;; firmware's start-up, <Startup>. A failure goes to <StartUpFailed>.
+;; firmware's start-up, <CardStartup>. A failure goes to <StartUpFailed>.
 .proc StartUp
 
     ; The slot page's start, through SmartPortEntry::Wait's offset.
@@ -1649,25 +1644,25 @@ Recheck4000:
 
     ; Passed.
     sta LedOff
-    jmp Startup
+    jmp CardStartup
 .endproc
 
 ;; A failure of the start-up test: makes the slot page's start, its diagnostics entry and its call jump to the host's
-;; Monitor (<ResetToMonitor>), releases Boot::WaitForCard and SmartPortEntry::Wait into those jumps, clears the
+;; Monitor (<Startup::ResetToMonitor>), releases Boot::WaitForCard and SmartPortEntry::Wait into those jumps, clears the
 ;; SmartPort signature's $03 and the rest of the page, and blinks the LED, a long flash and a short one, for ever.
 .proc StartUpFailed
 
-    ; JMP ResetToMonitor at $Cn00, $Cn0D and $Cn23.
+    ; JMP Startup::ResetToMonitor at $Cn00, $Cn0D and $Cn23.
     stz SlotSignature
     lda #OPCODE_JMP
     sta SharedSlotPage
     sta SlotDiagnostics
     sta SlotCall
-    lda #<ResetToMonitor
+    lda #<Startup::ResetToMonitor
     sta SharedSlotPage+1
     sta SlotDiagnostics+1
     sta SlotCall+1
-    lda #>ResetToMonitor
+    lda #>Startup::ResetToMonitor
     sta SharedSlotPage+2
     sta SlotDiagnostics+2
     sta SlotCall+2
@@ -1675,7 +1670,7 @@ Recheck4000:
     ; The waits released, and the rest of the page cleared.
     stz BootWait
     stz CallWait
-    ldx #<Call + 3
+    ldx #<CallCard + 3
 Clear:
     stz SharedSlotPage,x
     inx
@@ -1729,7 +1724,7 @@ ZeroPageInverse:
 
 ;; The first 16 bytes of the ROM of Apple's factory fixture, in slot 1: a JMP to the Monitor, then its maker's name.
 FixtureSignature:
-    .byte OPCODE_JMP, <ResetToMonitor, >ResetToMonitor
+    .byte OPCODE_JMP, <Startup::ResetToMonitor, >Startup::ResetToMonitor
     .byte "AVEX Manufact"
 .assert * - FixtureSignature = 16, "The fixture's signature is 16 bytes."
 

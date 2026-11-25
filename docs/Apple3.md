@@ -101,9 +101,6 @@ writing buffers at every alignment. Under SOS itself, `Apple3SosTests` boots the
 they format the ProFile as `/HARD`, copy `SOS.KERNEL` onto it, whose bytes match the floppy's, and list it, and a second
 boot lists the volume again from the ProFile.
 
-Phase by phase, how this was built and checked against MAME and the manual is in the
-[backlog plan](backlog/Apple3.md).
-
 ## The SoftCard ///
 
 Microsoft's SoftCard /// (1982) puts a Z80 on a slot card so the Apple III runs CP/M. The Z80 has no memory of its
@@ -169,6 +166,44 @@ debugs at that source where SOS loads it. Programs in Business BASIC debug on a 
 The display panel shows the screen, with **Fast disk**, **Sound** and its volume, and buttons for Ctrl, CONTROL-C,
 CONTROL-RESET, Esc and the Apple keys. Left Alt is Open Apple, right Alt Solid Apple, and Ctrl+F12 CONTROL-RESET.
 
+## Against MAME and the manual
+
+The machine was checked against MAME's `apple3` driver and Apple's Service Reference Manual (1982), and follows the
+manual where they differ.
+
+- **Power-on.** `Apple3OracleTests` matches MAME's instruction trace, registers included, from power-on to the
+  boot ROM's first disk access, through every diagnostic, except for the screen-blank bit the ROM reads at `$F60F`
+  and then masks off, which the test leaves out. What the hardware leaves to chance follows MAME so the two
+  run in step: RAM powers on as `$FF`, the beam starts at line 192, and the test takes MAME's power-on X, S and P.
+  The comparison stops at the drive check, where MAME's empty drive returns nothing and ours reads noise, as a real
+  drive does, so ours reaches RETRY a little later. MAME's tracer is unsafe here: a debugger read of zero page
+  latches an X-byte in its driver, so the oracle script (`tools\Apple3Oracle.lua`) traces registers only.
+- **Timing.** A line is 65 states of 1 MHz, 25 of them horizontal blanking, one stretched by 2 dots: 912 dots (MAME
+  uses 910). A frame is 262 lines, 70 of them vertical blanking. The 2 MHz clock is MAME's measured 1.905 MHz, a
+  little above the manual's 1.8 MHz maximum.
+- **Banks.** The memory board's decode equations (the 128K board's RAS and CAS PROMs) make bank number 7, 15 with
+  512K, bank 0 with the system RAM, from the bank register or an X-byte; MAME gives that view to X-byte `$8F` only,
+  and SOS's `CNVRT.ADR` relies on it. An extended access to the last bank wraps its partner to bank 0. What 128K
+  does with values 3-6 depends on which RAS PROM pairs with which board, which the manual does not say; here they
+  wrap to banks 0-2. The X-byte's bank is four bits, as in MAME, for 512K; Apple's board has three lines.
+- **Video.** The RETRY screen matches MAME pixel for pixel, but for the cursor. The mode bits follow the manual's
+  truth table, and so do three places MAME differs: page 2 of 280-dot color swaps dots and colors, and page 2 of 560
+  dots and of 140 colors is at `$6000`/`$8000`. 80-column text is white, where MAME draws it green. Our own choices:
+  140-dot color uses the graphics palette (MAME, the text palette), flashing toggles every 16 frames, smooth
+  scrolling moves graphics only, as in MAME, and a frame keeps each line's switches but reads memory when drawn.
+- **Disks.** The disk sequencer steps with the CPU, two clocks to a 1 MHz cycle and one to a 2 MHz cycle; SOS
+  writes at 1 MHz, and drift between the two clocks lost bits. While writing, a cell is exactly 8 sequencer
+  clocks, on the Apple II too.
+- **Keyboard.** A typed capital or shifted symbol holds SHIFT, since SOS makes lowercase itself, and queued keys
+  come 20 ms apart, since SOS takes keys by interrupt.
+- **Apple II mode.** The environment is `$FC` there: 1 MHz, I/O, video, NMI, write protection, the primary stack
+  and no ROM. The screen scrolls one line after CONTROL-RESET, as a II Plus's does.
+
+Not checked: SOS and mode-test frames against MAME, frames in Apple II mode, the Emulation disk's configuration
+menu (its slot 5 and 7 serial cards), the paddles in Apple II mode, breakpoints and disassembly qualified by bank, and the call stack
+across bank switches. Host game controllers are not wired to the joysticks, the equates name the hardware but not
+SOS's entry points, and beam breakpoints are not available on the Apple III.
+
 ## Testing
 
 - `Apple3BusTests` and `Apple3VideoTests` need no files.
@@ -176,7 +211,9 @@ CONTROL-RESET, Esc and the Apple keys. Left Alt is Open Apple, right Alt Solid A
 - `Apple3MachineTests`, `Apple3SosTests` and `Apple3EmulationTests` need MAME's `apple3` set
   (`RETROCORE_APPLE3_ROMS`, by default `<cache>\apple3-roms\mame\apple3`) and Apple's disks
   (`RETROCORE_APPLE3_DISKS`); the emulation test also needs the DOS 3.3 System Master in `<cache>\iie-disks`.
-- `Apple3OracleTests` runs MAME (`RETROCORE_MAME`).
+- `Apple3OracleTests` runs MAME (`RETROCORE_MAME`). Every archived MAME set (to 0.279) has an older dump of the
+  boot ROM (CRC `55e8eec9`), read from a running machine, so `$FFC0-$FFEF` holds RAM; the chip's contents (CRC
+  `1af7ec42`) have the copyright string there, which the SDK's source builds.
 - `Apple3ProFileTests` needs no files: it runs Apple's `.PROFILE` driver from the SDK on the SDK's boot ROM.
 - `SoftCard3Tests` needs no files but for its CP/M boot, which needs the SoftCard /// CP/M Master disk
   (`RETROCORE_SOFTCARD3`, by default `<cache>\softcard3`), and its PROM check, which needs MAME's `softcard3.rom` in

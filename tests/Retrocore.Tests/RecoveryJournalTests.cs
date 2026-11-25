@@ -11,6 +11,7 @@ using Retrocore.Media;
 using Retrocore.Media.Acorn;
 using Retrocore.Media.Floppy;
 using Retrocore.Media.Trs80;
+using System.Globalization;
 using System.Text.Json.Nodes;
 
 namespace Retrocore.Tests;
@@ -456,6 +457,173 @@ public sealed class RecoveryJournalTests
     }
 
     /// <summary>
+    ///  A checkpoint waits for a drive that is writing: the Disk II in its write mode is not snapshotted while the
+    ///  checkpoint can wait, and the journal keeps the version it held; once it cannot wait, the disk is taken as it is
+    ///  and marked as caught mid-write, in the journal and in the drive's row; once the drive stops, it is kept whole.
+    /// </summary>
+    [TestMethod]
+    public void ACheckpointWaitsForADriveThatIsWriting()
+    {
+        string id = Id();
+        string dsk = Path.Join(s_root, $"writing-{Guid.NewGuid():N}.dsk");
+        File.WriteAllBytes(dsk, new byte[35 * 4096]);
+        DiskIIController controller = new();
+        Apple2FloppyDrive floppy = Floppy(dsk, controller);
+        WozDisk disk = floppy.Disk ?? throw new InvalidOperationException("The drive is empty.");
+        Guid medium = MediaActions.Source(disk)?.Id ?? throw new InvalidOperationException("The disk has no source.");
+        RecoveryJournal journal = Open(id);
+        Change(disk);
+        journal.Commit(MediaActions.Journal([floppy], journal, idle: true));
+        long first = journal.KeptOf(medium)?.Version ?? throw new InvalidOperationException("Not kept.");
+
+        // The motor on and the card in its write mode: the drive is writing.
+        controller.Read(0x9, 0);
+        controller.Read(0xF, 0);
+        floppy.Activity.Should().Be(DeviceActivity.Writing);
+        Change(disk);
+        List<JournalDisk> waiting = MediaActions.Journal([floppy], journal, idle: true);
+        waiting.Single().Waiting.Should().BeTrue();
+        waiting.Single().Snapshot.Should().BeNull();
+        journal.Commit(waiting);
+        journal.KeptOf(medium)?.Version.Should().Be(first, "the journal keeps the version it held");
+        Disks(id).Single()?["midWrite"].Should().BeNull();
+
+        // It can wait no longer: taken as it is, and said so.
+        journal.Commit(MediaActions.Journal([floppy], journal, idle: false));
+        JournalKept caught = journal.KeptOf(medium) ?? throw new InvalidOperationException("Not kept.");
+        caught.Version.Should().Be(disk.Version);
+        caught.MidWrite.Should().BeTrue();
+        Disks(id).Single()?["midWrite"]?.GetValue<bool>().Should().BeTrue();
+        JsonObject body = DeviceJson.Write([floppy]);
+        MediaActions.Recovery(body, [floppy], journal, TimeSpan.FromSeconds(30));
+        JsonNode? recovery = body["devices"]?[0]?["media"]?["recovery"];
+        recovery?["midWrite"]?.GetValue<bool>().Should().BeTrue();
+        recovery?["behind"]?.GetValue<bool>().Should().BeFalse();
+
+        // The card out of its write mode: the next change is kept whole.
+        controller.Read(0xE, 0);
+        floppy.Activity.Should().NotBe(DeviceActivity.Writing);
+        Change(disk);
+        journal.Commit(MediaActions.Journal([floppy], journal, idle: true));
+        journal.KeptOf(medium)?.MidWrite.Should().BeFalse();
+        Disks(id).Single()?["midWrite"].Should().BeNull();
+        Stop(journal, floppy);
+    }
+
+    /// <summary>
+    ///  A commit that cannot be written leaves the previous one standing, says why, and the drive's row says recovery
+    ///  is behind, until a commit goes through again.
+    /// </summary>
+    [TestMethod]
+    public void AJournalThatCannotBeWrittenIsBehindUntilItCanAgain()
+    {
+        string id = Id();
+        (Apple2Disk35Drive drive, _) = Drive("failing.po");
+        Write(drive, block: 1, 0x61);
+        RecoveryJournal journal = Open(id);
+        journal.Commit(MediaActions.Journal([drive], journal));
+        string before = File.ReadAllText(Path.Join(RecoveryJournal.Root, id, "journal.json"));
+        Recovery(drive, journal)?["behind"]?.GetValue<bool>().Should().BeFalse();
+
+        // The journal's next version cannot be written, as when the disk is full or access is denied.
+        Write(drive, block: 2, 0x62);
+        using (new FileStream(Path.Join(RecoveryJournal.Root, id, "journal.json.tmp"), FileMode.Create, FileAccess.ReadWrite, FileShare.None))
+        {
+            Action commit = () => journal.Commit(MediaActions.Journal([drive], journal));
+            commit.Should().Throw<IOException>();
+        }
+
+        journal.Failure.Should().NotBeNull();
+        File.ReadAllText(Path.Join(RecoveryJournal.Root, id, "journal.json")).Should().Be(before, "the previous commit stands");
+        JsonNode? behind = Recovery(drive, journal);
+        behind?["behind"]?.GetValue<bool>().Should().BeTrue();
+        behind?["problem"]?.GetValue<string>().Should().Be(journal.Failure);
+        behind?["lastCheckpoint"].Should().NotBeNull("the changes up to the last commit are kept");
+
+        // Written again: the journal keeps the disk as it is now.
+        journal.Commit(MediaActions.Journal([drive], journal));
+        journal.Failure.Should().BeNull();
+        Recovery(drive, journal)?["behind"]?.GetValue<bool>().Should().BeFalse();
+        Stop(journal, drive);
+        Disks(id).Single().Should().NotBeNull();
+    }
+
+    /// <summary>
+    ///  A disk the journal held keeps when it was kept, and whether mid-write, as it goes back in its drive.
+    /// </summary>
+    [TestMethod]
+    public void ADiskPutBackKeepsWhenItWasKept()
+    {
+        string id = Id();
+        (Apple2Disk35Drive drive, string image) = Drive("when.po");
+        Write(drive, block: 3, 0x71);
+        Stop(Open(id), drive);
+        string kept = Disks(id).Single()?["kept"]?.GetValue<string>() ?? throw new InvalidOperationException("Not kept.");
+
+        Apple2Disk35Drive next = Again(image);
+        RecoveryJournal journal = Open(id);
+        MediaActions.Recover([next], journal).Should().BeEmpty();
+        Guid medium = MediaActions.Source(next.Disk ?? throw new InvalidOperationException("The drive is empty."))?.Id
+            ?? throw new InvalidOperationException("The disk has no source.");
+
+        journal.KeptOf(medium)?.When.Should().Be(DateTime.Parse(kept, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind).ToUniversalTime());
+        Recovery(next, journal)?["lastCheckpoint"]?.GetValue<string>().Should().Be(kept);
+        Stop(journal, next);
+    }
+
+    /// <summary>
+    ///  The 3.5 drive says it has a disk the machine ejected until the host takes it, so the host can keep it at once.
+    /// </summary>
+    [TestMethod]
+    public void TheDriveSaysItHasAnEjectedDiskUntilItIsTaken()
+    {
+        (Apple2Disk35Drive drive, _) = Drive("taken.po");
+        drive.HasEjected.Should().BeFalse();
+        Write(drive, block: 4, 0x81);
+        drive.EjectByProgram();
+        drive.HasEjected.Should().BeTrue();
+        MediaActions.Ejected(drive).Should().ContainSingle();
+        drive.HasEjected.Should().BeFalse();
+    }
+
+    // Changes a Disk II disk, as a write does: a new version, changed against its image.
+    private static void Change(WozDisk disk)
+    {
+        disk.IsWriteProtected = !disk.IsWriteProtected;
+        disk.IsWriteProtected = !disk.IsWriteProtected;
+        disk.MarkChanged();
+    }
+
+    /// <summary>
+    ///  Slot 7's disk, which only a launch can put in its drive, is not kept, so its row says nothing of recovery
+    ///  rather than that the journal keeps it.
+    /// </summary>
+    [TestMethod]
+    public void ADiskOnlyTheLaunchPutsInItsDriveSaysNothingOfRecovery()
+    {
+        byte[] bytes = new byte[280 * 512];
+        string path = Path.Join(s_root, $"slot7-{Guid.NewGuid():N}.po");
+        File.WriteAllBytes(path, bytes);
+        Apple2Machine machine = Apple2Loader.Load(Apple2Model.IIeEnhanced, s_roms.Value, path);
+        Apple2BlockStorage storage = machine.BlockStorage ?? throw new InvalidOperationException("Slot 7 is empty.");
+        IMedium disk = storage.Medium ?? throw new InvalidOperationException("Slot 7 is empty.");
+        MediaActions.Register(disk, path, BlockImageCodec.For(".po"), bytes);
+        disk.MarkChanged();
+        RecoveryJournal journal = Open(Id());
+        journal.Commit(MediaActions.Journal([storage], journal));
+        Recovery(storage, journal).Should().BeNull();
+        Stop(journal, storage);
+    }
+
+    // How the journal keeps a drive's disk, as its row in retro/devices says.
+    private static JsonNode? Recovery(IDevice drive, RecoveryJournal journal)
+    {
+        JsonObject body = DeviceJson.Write([drive]);
+        MediaActions.Recovery(body, [drive], journal, TimeSpan.FromSeconds(30));
+        return body["devices"]?[0]?["media"]?["recovery"];
+    }
+
+    /// <summary>
     ///  A recovery id is letters, digits, dashes and underscores, so it cannot name a folder elsewhere.
     /// </summary>
     [TestMethod]
@@ -584,9 +752,9 @@ public sealed class RecoveryJournalTests
     }
 
     // A Disk II drive with a sector image in it, read and registered as the debug host does.
-    private static Apple2FloppyDrive Floppy(string path)
+    private static Apple2FloppyDrive Floppy(string path, DiskIIController? card = null)
     {
-        DiskIIController controller = new();
+        DiskIIController controller = card ?? new();
         controller.SetFirmware(new DiskIIFirmware(new byte[256], new byte[256]));
         Apple2FloppyDrive floppy = new(controller, drive: 1, "disk1", "Drive 1", "drive", "controller");
         byte[] bytes = File.ReadAllBytes(path);

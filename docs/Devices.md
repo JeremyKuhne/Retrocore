@@ -218,6 +218,17 @@ launch configuration a `recoveryId` of its own, and `retro/devices` says `recove
 one. A disk a launch built, such as a `dos` launch's, is not kept: the next launch builds it again. A disk put back
 from the journal says `kept: true` in its `media` while it is still changed.
 
+A checkpoint waits for a drive that is writing (the Disk II in its write mode, a floppy controller in a write command,
+a recorder recording, a block device just after it wrote a block), letting the machine run, for up to five seconds;
+then, or at once when the machine is stopped, it takes the disk as it is and marks it `midWrite` in the journal. The
+disks that can be kept meanwhile are committed without waiting. A disk the machine ejects, as a program ejects a 3.5
+disk, is kept at once rather than at the next checkpoint. While a session keeps a journal, the `media` of each changed
+disk a checkpoint keeps (not slot 7's, which only a launch can put in its drive) has `recovery`: `{ lastCheckpoint, behind, midWrite, problem }`, when the journal last kept it (null before it
+has), whether that snapshot was caught mid-write, and `behind` when the journal does not hold its changes and its
+checkpoints are failing (with the `problem`, such as a full disk) or more than two intervals late. The Drives view
+marks such a disk with a warning and says in its tooltip what is kept. A journal that cannot be written leaves its last
+commit standing, and the Debug Console says when it cannot be written and when it can again.
+
 A session that did not stop cleanly, as when its host was killed, leaves its journal marked so, and its process's
 lock on it gone. The language server's `retrocore/recovery/list` answers `{ journals: [{ id, name, started, kept,
 disks }] }` for each such journal with disks: its recovery id, the machine's name (the launch's `name`), when the

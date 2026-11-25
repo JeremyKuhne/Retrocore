@@ -144,10 +144,40 @@ public static partial class DocumentationParser
     /// <summary>
     ///  Gets whether a line is a conditional-assembly directive.
     /// </summary>
-    private static bool IsConditional(string code)
+    private static bool IsConditional(string code) => IsConditional(code.AsSpan());
+
+    /// <summary>
+    ///  Gets whether a line's code is a conditional-assembly directive, without copying it.
+    /// </summary>
+    private static bool IsConditional(ReadOnlySpan<char> code)
     {
-        string word = FirstWord(code.Trim()).ToLowerInvariant();
-        return word.StartsWith(".if", StringComparison.Ordinal) || word is ".else" or ".elseif" or ".endif";
+        ReadOnlySpan<char> word = FirstWord(code.Trim());
+        return StartsLowered(word, ".if") || IsLowered(word, ".else") || IsLowered(word, ".elseif") || IsLowered(word, ".endif");
+    }
+
+    // Whether the text lowered with ToLowerInvariant is the ASCII lower-case word, lowering one character at a time
+    // instead of a copy. Invariant lowering maps each character alone and keeps the length, so this is exact.
+    private static bool IsLowered(ReadOnlySpan<char> text, string word) =>
+        text.Length == word.Length && StartsLowered(text, word);
+
+    // Whether the text lowered with ToLowerInvariant starts with the ASCII lower-case word.
+    private static bool StartsLowered(ReadOnlySpan<char> text, string word)
+    {
+        if (text.Length < word.Length) { return false; }
+        for (int index = 0; index < word.Length; index++)
+        {
+            if (char.ToLowerInvariant(text[index]) != word[index]) { return false; }
+        }
+
+        return true;
+    }
+
+    // Whether a line is a documentation comment line, ;; after any whitespace, as TrimStart().StartsWith(";;") reads it.
+    private static bool IsDocumentationLine(string line)
+    {
+        int start = 0;
+        while (start < line.Length && char.IsWhiteSpace(line[start])) { start++; }
+        return start + 1 < line.Length && line[start] == ';' && line[start + 1] == ';';
     }
 
     /// <summary>
@@ -162,7 +192,9 @@ public static partial class DocumentationParser
         return tail is ":" or "::" ? text[..length] : null;
     }
 
-    private static int IdentifierLength(string text)
+    private static int IdentifierLength(string text) => IdentifierLength(text.AsSpan());
+
+    private static int IdentifierLength(ReadOnlySpan<char> text)
     {
         int index = 0;
         if (index < text.Length && (char.IsLetter(text[index]) || text[index] is '_' or '@' or ']' or '.' or '?'))
@@ -212,7 +244,7 @@ public static partial class DocumentationParser
 
     // Where the assembler ends a line's operation (AssemblySyntax.OperationLength, which the source generator does not
     // compile): at whitespace, or for a directive, also at an opening parenthesis.
-    private static int OperationLength(string text)
+    private static int OperationLength(ReadOnlySpan<char> text)
     {
         bool directive = text.Length != 0 && text[0] == '.';
         int end = 0;
@@ -220,13 +252,17 @@ public static partial class DocumentationParser
         return end;
     }
 
-    private static string FirstWord(string text)
+    private static string FirstWord(string text) => text[..FirstWordLength(text.AsSpan())];
+
+    // The first word as a slice of the text.
+    private static ReadOnlySpan<char> FirstWord(ReadOnlySpan<char> text) => text[..FirstWordLength(text)];
+
+    private static int FirstWordLength(ReadOnlySpan<char> text)
     {
         // A directive's name ends at a parenthesis too, as the assembler reads it.
         int end = OperationLength(text);
-        int comma = text.IndexOf(',', 0, end);
-        if (comma >= 0) { end = comma; }
-        return text[..end];
+        int comma = text[..end].IndexOf(',');
+        return comma >= 0 ? comma : end;
     }
 
     private static IReadOnlyList<string> Words(string text) =>
@@ -236,6 +272,13 @@ public static partial class DocumentationParser
     ///  Splits a line into its code and its comment, ignoring semicolons in quotes.
     /// </summary>
     private static (string Code, string? Comment) Split(string line)
+    {
+        int end = CodeLength(line);
+        return end == line.Length ? (line, null) : (line[..end], line[end..]);
+    }
+
+    // Where a line's comment starts, as Split finds it, or the line's length when it has none.
+    private static int CodeLength(string line)
     {
         char quote = '\0';
         for (int index = 0; index < line.Length; index++)
@@ -256,9 +299,9 @@ public static partial class DocumentationParser
                 continue;
             }
 
-            if (character == ';') { return (line[..index], line[index..]); }
+            if (character == ';') { return index; }
         }
 
-        return (line, null);
+        return line.Length;
     }
 }

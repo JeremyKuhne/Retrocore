@@ -51,12 +51,12 @@ public static partial class DocumentationParser
             {
                 scope = DocumentationExclusionScope.Line;
             }
-            else if (index + 1 < lines.Length && lines[index + 1].TrimStart().StartsWith(Marker, StringComparison.Ordinal))
+            else if (index + 1 < lines.Length && IsDocumentationLine(lines[index + 1]))
             {
                 scope = DocumentationExclusionScope.Comment;
                 from = index + 1;
                 last = from;
-                while (last + 1 < lines.Length && lines[last + 1].TrimStart().StartsWith(Marker, StringComparison.Ordinal))
+                while (last + 1 < lines.Length && IsDocumentationLine(lines[last + 1]))
                 {
                     last++;
                 }

@@ -69,6 +69,14 @@ function bbcKeywords() {
     };
 }
 
+// BBC BASIC II's assembler mnemonics, from the table in the SDK's source of the ROM, OPT and EQU among them.
+function bbcMnemonics() {
+    const source = readFileSync(resolve(extension, "..", "src", "Retrocore.Machines.Acorn", "Roms", "Basic", "Assembler.asm"), "utf8");
+    const mnemonics = [...source.matchAll(/^\s*MNEMONIC part, "([A-Z]{3})"/gm)].map(match => match[1]);
+    if (mnemonics.length !== 58) throw new Error(`Assembler.asm has ${mnemonics.length} mnemonics, not 58.`);
+    return mnemonics;
+}
+
 // BBC BASIC's abbreviations, as its tokeniser finds them: letters then a full stop stand for the first word in the
 // table's order that starts with those letters, so P. is PRINT's only if no word before it starts with P. Each word
 // gets the prefixes shorter than itself that no word before it took.
@@ -96,8 +104,12 @@ function abbreviations(words) {
 // capital through letters and digits. BBC BASIC also finds words only in capitals; its names are whole, with _
 // and small letters, and its DATA, like its REM, runs to the end of the line. Its & starts a hexadecimal number,
 // whose capital digits are never searched for words, so &DEF is a number. A * where a statement starts is a command
-// for the MOS, which the tokeniser leaves as it is to the end of the line.
-function grammar(dialect, name, words, { names = "[A-Za-z][0-9]*[$%!#]?", ignoreCase = true, business = false, wholeLineData = false, conditional = new Set(), nameFollows = new Set(), abbreviated = new Map(), hex = null, starCommands = false } = {}) {
+// for the MOS, which the tokeniser leaves as it is to the end of the line. Its [ starts the assembler, up to a ] where
+// one of the assembler's statements starts, which may be lines later: a statement there starts with a . label, a
+// mnemonic in either case, or a \ comment. An implied instruction reads nothing after it. X and Y after a comma are
+// registers, in either case for LDX, LDY, STX and STY, and A is the accumulator for ASL, LSR, ROL and ROR. The
+// assembler skips anything after an operand, so a ; after one starts a comment.
+function grammar(dialect, name, words, { names = "[A-Za-z][0-9]*[$%!#]?", ignoreCase = true, business = false, wholeLineData = false, conditional = new Set(), nameFollows = new Set(), abbreviated = new Map(), hex = null, starCommands = false, mnemonics = null } = {}) {
     const matching = text => ignoreCase ? `(?i:${text})` : `(?:${text})`;
     const scope = `retrocore-${dialect}`;
     // One alternation in token order, as the tokenizer tries the words, with a group per word for its scope.
@@ -121,6 +133,77 @@ function grammar(dialect, name, words, { names = "[A-Za-z][0-9]*[$%!#]?", ignore
         [word, ...(abbreviated.get(word) ?? []).map(prefix => `${prefix}.`)]);
     const statementStart = `(?:(?<=:)|${starters.map(form => `(?<=${escape(form)})(?<![A-Za-z0-9_\`]${escape(form)})`).join("|")})`;
     const captures = Object.fromEntries(reserved.map((word, index) => [String(index + 1), { name: `${kind(word)}.${scope}` }]));
+    const statements = [
+        { include: "#remark" },
+        { include: "#data" },
+        { include: "#string" },
+        { include: "#escape" },
+        ...(starCommands ? [{ match: `${statementStart}\\s*\\*.*$`, name: `string.unquoted.command.${scope}` }] : []),
+        ...(hex ? [{ match: hex, name: `constant.numeric.hex.${scope}` }] : []),
+        { match: "@[A-Za-z_][A-Za-z0-9_]*", name: `entity.name.label.${scope}` },
+        ...[...nameFollows].map(word => ({
+            match: matching(`(${written(word, pattern(word))})([A-Za-z0-9_\`]*)`),
+            captures: { "1": { name: `${kind(word)}.${scope}` }, "2": { name: `entity.name.function.${scope}` } }
+        })),
+        { match: matching(reserved.map(word => `(${business ? separated(word) : (conditional.has(word) ? `${written(word, pattern(word))}(?![A-Za-z0-9_\`])` : written(word, pattern(word)))})`).join("|")), captures },
+        { match: "\\?", name: `keyword.other.${scope}` },
+        { match: "(?:\\d+\\.?\\d*|\\.\\d+)(?:[EeDd][+-]?\\d+)?", name: `constant.numeric.${scope}` },
+        { match: names, name: `variable.other.${scope}` },
+        { match: ":", name: `punctuation.separator.statement.${scope}` },
+        { match: "[;,]", name: `punctuation.separator.${scope}` }
+    ];
+    // Where one of the assembler's statements starts: after a line number, at the start of a line, or after [ or :.
+    const assemblyStart = "(?:^\\s*(\\d+)\\s*|^\\s*|(?<=[\\[:])\\s*)";
+    // A statement's start, then a label if it has one: captures 1 to 3 are the line number, the label's . and its name.
+    // FIND_VARIABLE_A skips spaces before the name, so . loop is a label too.
+    // The name is read whole, as FIND_VARIABLE reads it, so .restart is no label re before STA.
+    const labelled = `${assemblyStart}(?:(\\.)\\s*(?>(${names}))\\s*)?`;
+    // A keyword that starts with A, such as ABS or its AB., is a token, which the shifts do not take for the accumulator.
+    const notKeyword = `(?!${reserved.filter(word => word.startsWith("A"))
+        .flatMap(word => [word, ...(abbreviated.get(word) ?? []).map(prefix => `${prefix}.`)]).map(escape).join("|") || "$^"})`;
+    // The assembler packs a mnemonic's first three letters by their low five bits, whatever follows them, so
+    // LDAdest is LDA dest; the letter after EQU is compared in capitals only.
+    const mnemonic = mnemonics === null ? null
+        : `(?:(?i:EQU)[BWDS]|(?i:${mnemonics.filter(word => word !== "EQU").join("|")}))`;
+    // The implied instructions, which come before BCC in the table.
+    const implied = mnemonics === null ? null : `(?i:${mnemonics.slice(0, mnemonics.indexOf("BCC")).join("|")})`;
+    const lineNumber = { name: `entity.name.label.line-number.${scope}` };
+    const mnemonicName = { name: `keyword.other.mnemonic.${scope}` };
+    const register = { name: `variable.language.register.${scope}` };
+    const skipped = { name: `comment.line.assembler.${scope}` };
+    const label = { "1": lineNumber, "2": { name: `punctuation.definition.label.${scope}` }, "3": { name: `entity.name.label.${scope}` } };
+    const operand = [
+        { include: "#string" },
+        { match: "[\\\\;][^:]*", name: `comment.line.assembler.${scope}` },
+        ...statements.filter(pattern => pattern.include !== "#remark" && pattern.include !== "#data" && !(pattern.name ?? "").startsWith("string.unquoted.command"))
+    ];
+    const assembler = mnemonic === null ? null : {
+        begin: "\\[",
+        beginCaptures: { "0": { name: `punctuation.section.assembler.begin.${scope}` } },
+        end: `${assemblyStart}(\\])`,
+        endCaptures: { "1": lineNumber, "2": { name: `punctuation.section.assembler.end.${scope}` } },
+        patterns: [
+            // LDX, LDY, STX and STY compare their index register by its low five bits, so x and y are registers too;
+            // after a register, as after any operand, the assembler skips the rest of the statement.
+            {
+                begin: `${labelled}((?i:LDX|LDY|STX|STY))`,
+                beginCaptures: { ...label, "4": mnemonicName },
+                end: "(?=:|$)",
+                patterns: [{ match: "(?<=,)\\s*([XYxy])([^:]*)", captures: { "1": register, "2": skipped } }, { include: "#assemblerOperand" }]
+            },
+            // An implied instruction reads nothing after it.
+            { match: `${labelled}(${implied})([^:]*)`, captures: { ...label, "4": mnemonicName, "5": skipped } },
+            // The shifts take an operand starting with A as the accumulator: ASL ADDR is ASL A.
+            {
+                match: `${labelled}(?:(?i:(ASL|LSR|ROL|ROR))\\s*${notKeyword}(A)([^:]*)|(${mnemonic}))`,
+                captures: { ...label, "4": mnemonicName, "5": register, "6": skipped, "7": mnemonicName }
+            },
+            { match: `${assemblyStart}(\\.)\\s*(${names})`, captures: label },
+            { match: "^\\s*(\\d+)", captures: { "1": lineNumber } },
+            { match: "(?<=,)\\s*([XY])(\\)?)([^:]*)", captures: { "1": register, "3": skipped } },
+            { include: "#assemblerOperand" }
+        ]
+    };
     return {
         $schema: "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
         name,
@@ -137,27 +220,8 @@ function grammar(dialect, name, words, { names = "[A-Za-z][0-9]*[$%!#]?", ignore
         ],
         repository: {
             pragma: { match: "^\\s*(?:REM|')\\s*retrocore\\s+\\S+.*$", name: `comment.line.pragma.${scope}` },
-            statements: {
-                patterns: [
-                    { include: "#remark" },
-                    { include: "#data" },
-                    { include: "#string" },
-                    { include: "#escape" },
-                    ...(starCommands ? [{ match: `${statementStart}\\s*\\*.*$`, name: `string.unquoted.command.${scope}` }] : []),
-                    ...(hex ? [{ match: hex, name: `constant.numeric.hex.${scope}` }] : []),
-                    { match: "@[A-Za-z_][A-Za-z0-9_]*", name: `entity.name.label.${scope}` },
-                    ...[...nameFollows].map(word => ({
-                        match: matching(`(${written(word, pattern(word))})([A-Za-z0-9_\`]*)`),
-                        captures: { "1": { name: `${kind(word)}.${scope}` }, "2": { name: `entity.name.function.${scope}` } }
-                    })),
-                    { match: matching(reserved.map(word => `(${business ? separated(word) : (conditional.has(word) ? `${written(word, pattern(word))}(?![A-Za-z0-9_\`])` : written(word, pattern(word)))})`).join("|")), captures },
-                    { match: "\\?", name: `keyword.other.${scope}` },
-                    { match: "(?:\\d+\\.?\\d*|\\.\\d+)(?:[EeDd][+-]?\\d+)?", name: `constant.numeric.${scope}` },
-                    { match: names, name: `variable.other.${scope}` },
-                    { match: ":", name: `punctuation.separator.statement.${scope}` },
-                    { match: "[;,]", name: `punctuation.separator.${scope}` }
-                ]
-            },
+            statements: { patterns: assembler === null ? statements : [{ include: "#assembler" }, ...statements] },
+            ...(assembler === null ? {} : { assembler, assemblerOperand: { patterns: operand } }),
             remark: {
                 match: remark,
                 name: `comment.line.${scope}`,
@@ -197,7 +261,7 @@ const outputs = [
     ["business.tmLanguage.json", grammar("business", "Business BASIC", business, { names: "[A-Za-z][A-Za-z0-9.]*[$%&]?", business: true })],
     ["colorbasic.tmLanguage.json", grammar("colorbasic", "Color BASIC", colorBasic, { names: "[A-Z][A-Z0-9]*\\$?", ignoreCase: false })],
     ["mbasic.tmLanguage.json", grammar("mbasic", "MBASIC", mbasic, { names: "[A-Za-z][A-Za-z0-9.]*[$%!#]?", business: true })],
-    ["bbcbasic.tmLanguage.json", grammar("bbcbasic", "BBC BASIC", bbcBasic.words, { names: "@%|[A-Za-z_`][A-Za-z0-9_`]*[$%]?", starCommands: true, ignoreCase: false, wholeLineData: true, conditional: bbcBasic.conditional, nameFollows: bbcBasic.nameFollows, abbreviated: bbcBasic.abbreviations, hex: "&[0-9A-F]+" })],
+    ["bbcbasic.tmLanguage.json", grammar("bbcbasic", "BBC BASIC", bbcBasic.words, { names: "@%|[A-Za-z_`][A-Za-z0-9_`]*[$%]?", starCommands: true, ignoreCase: false, wholeLineData: true, conditional: bbcBasic.conditional, nameFollows: bbcBasic.nameFollows, abbreviated: bbcBasic.abbreviations, hex: "&[0-9A-F]+", mnemonics: bbcMnemonics() })],
     ["petbasic.tmLanguage.json", grammar("petbasic", "Commodore BASIC (PET)", petBasic)],
     ["basic.tmLanguage.json", grammar("basic", "Retrocore BASIC", union)]
 ];

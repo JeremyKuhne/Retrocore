@@ -144,6 +144,80 @@ test("BBC BASIC finds words only in capitals, keeps small letters in names, and 
     assert.ok(has(scopes("bbcbasic", "210 @%=&90A", "@%"), "variable.other"));
 });
 
+// The scopes of the first character of the nth occurrence of value on one of several lines, tokenized in turn so a
+// rule such as the assembler's carries from line to line.
+function linesScopes(dialect: string, lines: string[], line: number, value: string, occurrence = 0): string[] {
+    const grammar = grammars.get(dialect);
+    if (grammar === undefined) throw new Error(dialect);
+    let stack = INITIAL;
+    for (let index = 0; index < line; index++) stack = grammar.tokenizeLine(lines[index], stack).ruleStack;
+    const text = lines[line];
+    let start = -1;
+    for (let count = 0; count <= occurrence; count++) start = text.indexOf(value, start + 1);
+    assert.notEqual(start, -1, `Missing ${value} in ${text}`);
+    const token = grammar.tokenizeLine(text, stack).tokens.find(item => item.startIndex <= start && item.endIndex > start);
+    return token?.scopes ?? [];
+}
+
+test("BBC BASIC's assembler, from [ to ], highlights its mnemonics, registers, labels and comments", () => {
+    const program = [
+        "30 [OPT pass",
+        "40 .loop LDA dest,X:STA &71,Y \\ copy X: INX",
+        "50 lda (dest),Y:ASL A:ROR count:ORA #1 ; set A",
+        "60 EQUB 1:BNE loop",
+        "65 ASL ADDR:LDA &70,XX:INY",
+        "66 . done RTS back:LDY &70,x junk:STX &71,y:EQUb 1",
+        "67 LDAdest:RTSfoo:.restart:.install LDX &70,y",
+        "70 ]:NEXT:X=LDA+1"
+    ];
+    const at = (line: number, value: string, occurrence = 0) => linesScopes("bbcbasic", program, line, value, occurrence);
+    assert.ok(has(at(0, "OPT"), "keyword.other.mnemonic"));
+    assert.ok(has(at(0, "pass"), "variable.other"), "an operand's names are BASIC's");
+    assert.ok(has(at(1, "40"), "entity.name.label.line-number"), "the assembler goes on to the next line");
+    assert.ok(has(at(1, "loop"), "entity.name.label"));
+    assert.ok(has(at(1, "LDA"), "keyword.other.mnemonic"), "after a label");
+    assert.ok(has(at(1, "X"), "variable.language.register"));
+    assert.ok(has(at(1, "Y"), "variable.language.register"));
+    assert.ok(has(at(1, "copy"), "comment.line.assembler"));
+    assert.ok(has(at(1, "INX"), "keyword.other.mnemonic"), "a colon ends a comment");
+    assert.ok(has(at(2, "lda"), "keyword.other.mnemonic"), "in small letters too");
+    assert.ok(has(at(2, "A", 1), "variable.language.register"), "ASL A is the accumulator");
+    assert.ok(has(at(2, "count"), "variable.other"));
+    assert.ok(has(at(2, "ORA"), "keyword.other.mnemonic"), "ORA, not OR then A");
+    assert.ok(has(at(2, "set"), "comment.line.assembler"), "; after an operand");
+    assert.ok(has(at(3, "EQUB"), "keyword.other.mnemonic"));
+    assert.ok(has(at(3, "loop"), "variable.other"));
+    assert.ok(has(at(4, "A", 1), "variable.language.register"), "ASL ADDR is ASL A");
+    assert.ok(has(at(4, "DDR"), "comment.line.assembler"), "the rest of the statement is skipped");
+    assert.ok(has(at(4, "XX"), "variable.language.register"));
+    assert.ok(has(at(4, "X:"), "comment.line.assembler"), "after the register too");
+    assert.ok(has(at(4, "INY"), "keyword.other.mnemonic"), "a colon ends what is skipped");
+    assert.ok(has(at(5, "done"), "entity.name.label"));
+    assert.ok(has(at(5, "RTS"), "keyword.other.mnemonic"), "after a label");
+    assert.ok(has(at(5, "back"), "comment.line.assembler"), "an implied instruction reads nothing after it");
+    assert.ok(has(at(5, "LDY"), "keyword.other.mnemonic"));
+    assert.ok(has(at(5, "x"), "variable.language.register"), "LDY takes its register in either case");
+    assert.ok(has(at(5, "junk"), "comment.line.assembler"));
+    assert.ok(has(at(5, "y"), "variable.language.register"), "so does STX");
+    assert.ok(!has(at(5, "EQUb"), "keyword.other.mnemonic"), "EQU takes a capital letter");
+    assert.ok(has(at(6, "LDA"), "keyword.other.mnemonic"), "the first three letters, whatever follows them");
+    assert.ok(has(at(6, "dest"), "variable.other"), "LDAdest is LDA dest");
+    assert.ok(has(at(6, "RTS"), "keyword.other.mnemonic"));
+    assert.ok(has(at(6, "foo"), "comment.line.assembler"));
+    assert.ok(has(at(6, "start"), "entity.name.label"), "a label is read whole, STA inside it or not");
+    assert.ok(has(at(6, "stall"), "entity.name.label"));
+    assert.ok(has(at(6, "LDX"), "keyword.other.mnemonic"), "after a label read whole");
+    assert.ok(has(at(6, "y"), "variable.language.register"));
+    assert.ok(!has(scopes("bbcbasic", "10 [ASL ABS(x)", "ABS"), "variable.language.register"), "ABS is a keyword, not the accumulator");
+    assert.ok(!has(scopes("bbcbasic", "10 [ROL AB.(x)", "AB."), "variable.language.register"), "nor its abbreviation");
+    assert.ok(has(scopes("bbcbasic", "10 [ROL A", "A"), "variable.language.register"), "A alone is");
+    assert.ok(has(at(7, "]"), "punctuation.section.assembler.end"));
+    assert.ok(has(at(7, "NEXT"), "keyword.control"), "BASIC again after ]");
+    assert.ok(has(at(7, "LDA"), "variable.other"), "outside the assembler LDA is a name");
+    assert.ok(!has(at(7, "NEXT"), "meta") && !has(at(7, "LDA"), "keyword.other.mnemonic"));
+    assert.ok(has(scopes("bbcbasic", "10 PRINT LDA", "LDA"), "variable.other"), "no [, no assembler");
+});
+
 test("MBASIC finds reserved words only set apart from names", () => {
     const line = "20 WHILE PRINTER.COUNT% MOD 2 = 0 XOR A \\ 3: PRINT FNA(2);USR1(0);MID$(B$,1,1): WEND";
     assert.ok(has(scopes("mbasic", line, "WHILE"), "keyword.control"));

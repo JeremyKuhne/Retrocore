@@ -285,38 +285,6 @@ public sealed class DocumentationBuildTests
     }
 
     /// <summary>
-    ///  A macro's documentation describes its whole body: its own comment, and those in its body, reach a definition in
-    ///  a branch of the body that this build's expansions leave out.
-    /// </summary>
-    [TestMethod]
-    public void AMacrosDocumentationReachesItsWholeBody()
-    {
-        const string Body = """
-            ;; Defines a table, with <First> for mode 1.
-            .macro Table mode
-            ;; The table's last byte, after <First> in mode 1.
-            Last:
-                .byte 0
-            .if mode = 1
-            ;; Mode 1's byte.
-            First:
-                .byte 1
-            .endif
-            .endmacro
-
-                Table 2
-            """;
-
-        DocumentationSet set = Build(Body, model: 1);
-        DocumentationTopic table = Required(set.Find("Table"));
-        DocumentationResolver resolver = new(set);
-        resolver.Resolve(table, "First").Topic?.Name.Should().Be("First");
-        DocumentationTopic last = Required(set.Find("Last"));
-        resolver.Resolve(last, "First", last.Comments[0]).Topic?.Name.Should().Be("First");
-        Links(set).Should().BeEmpty();
-    }
-
-    /// <summary>
     ///  A comment in the body of a macro the build doesn't expand is checked by the builds that expand it.
     /// </summary>
     [TestMethod]
@@ -324,9 +292,15 @@ public sealed class DocumentationBuildTests
     {
         string source = Source + """
 
+            .if MODEL = 2
+            ;; Model 2's own start.
+            OnlyTwo:
+                rts
+            .endif
+
             ;; Calls model 1's start.
             .macro Starter
-            ;; A common entry that jumps to <OnlyOne>.
+            ;; A common entry that jumps to <OnlyOne>, not <OnlyTwo>.
             Common:
                 jmp OnlyOne
             .endmacro
@@ -339,7 +313,7 @@ public sealed class DocumentationBuildTests
             """;
 
         source = source.Replace(", then <OnlyOne> on model 1.", ".", StringComparison.Ordinal);
-        Links(Build(source, model: 1)).Should().BeEmpty();
+        Links(Build(source, model: 1)).Should().ContainSingle().Which.Name.Should().Be("OnlyTwo");
         Links(Build(source, model: 2)).Should().BeEmpty();
     }
 

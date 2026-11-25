@@ -205,13 +205,12 @@ public sealed partial class DocumentationResolver
         if (module is null && SetsFor(model).Contains(Current))
         {
             DocumentationTarget? elsewhere = null;
-            DocumentationComment? at = comment ?? (from.Comments.Count == 0 ? null : from.Primary);
             foreach (string candidate in Scoped(from.Name, name))
             {
-                if (InBuild(Match(Current, candidate, also: false, at), ref elsewhere) is { } match) { return match; }
+                if (InBuild(Match(Current, candidate, also: false), ref elsewhere) is { } match) { return match; }
             }
 
-            if (Used(at, name, ref elsewhere) is { } used)
+            if (Used(comment ?? (from.Comments.Count == 0 ? null : from.Primary), name, ref elsewhere) is { } used)
             {
                 return used;
             }
@@ -226,8 +225,7 @@ public sealed partial class DocumentationResolver
         foreach (DocumentationSet set in sets)
         {
             if (module is null && ReferenceEquals(set, Current)) { continue; }
-            string plainName = name.StartsWith("::", StringComparison.Ordinal) ? name[2..] : name;
-            DocumentationTarget? found = Match(set, plainName, at: comment ?? (from.Comments.Count == 0 ? null : from.Primary));
+            DocumentationTarget? found = Match(set, name.StartsWith("::", StringComparison.Ordinal) ? name[2..] : name);
 
             // A link that names this source's own module means this build's definition, as a plain name does, before
             // another build's of the module; one only another build has it reaches only through that build's set.
@@ -266,14 +264,12 @@ public sealed partial class DocumentationResolver
     }
 
     // In the current set, a definition only another build has is no match; the build doesn't define its name (see
-    // InOtherBuild), though an old name the name is may reach a definition it has. A macro's documentation describes
-    // its whole body, so a link in it reaches a definition there in every build.
-    private DocumentationTarget? Match(DocumentationSet set, string name, bool also = true, DocumentationComment? at = null)
+    // InOtherBuild), though an old name the name is may reach a definition it has.
+    private DocumentationTarget? Match(DocumentationSet set, string name, bool also = true)
     {
         if (set.Find(name) is { } topic)
         {
-            bool other = ReferenceEquals(set, Current) && Current.InOtherBuild(topic) && !InSameMacro(at, topic);
-            if (!other) { return Found(topic); }
+            if (!ReferenceEquals(set, Current) || !Current.InOtherBuild(topic)) { return Found(topic); }
             return (also ? Also(set, name) : null) is { OnlyInOtherBuilds: false } old ? old : OtherBuild(name);
         }
 
@@ -286,15 +282,6 @@ public sealed partial class DocumentationResolver
         }
 
         return also ? Also(set, name) : null;
-    }
-
-    // Whether a link's comment is a macro's, its own or one in its body, and every definition of a topic is in that body.
-    private static bool InSameMacro(DocumentationComment? at, DocumentationTopic topic)
-    {
-        if (at is null) { return false; }
-        int line = at.Macro is null ? at.Kind == DocumentationKind.Macro ? at.TargetLine : -1 : at.MacroLine;
-        return line >= 0 && topic.Comments.All(comment =>
-            comment.MacroLine == line && string.Equals(comment.Path, at.Path, StringComparison.OrdinalIgnoreCase));
     }
 
     private static DocumentationTarget OtherBuild(string name) =>
@@ -351,7 +338,7 @@ public sealed partial class DocumentationResolver
 
             foreach (string scope in directive.Targets(Current.IsScope, OpenedBefore).Distinct(StringComparer.Ordinal))
             {
-                DocumentationTarget? found = Match(Current, $"{scope}::{name}", also: false, at);
+                DocumentationTarget? found = Match(Current, $"{scope}::{name}", also: false);
                 if (InBuild(found, ref elsewhere) is { } match) { matches.Add(match); }
             }
 

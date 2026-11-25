@@ -64,7 +64,7 @@ public sealed class AltairDiskController
     private ulong _cycle;
     private AltairDiskDrive? _selected;
 
-    // The sector whose bytes _sector holds, and the last of its bytes the 8080 has read, for NRDA.
+    // The sector whose bytes _sector holds, and the track it was read from.
     private long _readSector = -1;
     private int _readTrack = -1;
 
@@ -77,12 +77,12 @@ public sealed class AltairDiskController
     // When the head last began reading the track it is on: loaded, stepped, or done writing.
     private ulong _readSince;
 
-    // A byte that was waiting, with NRDA, when the head began reading another track, and its sector, or -1.
-    private int _heldIndex = -1;
-    private long _heldSector = -1;
+    // When the byte _held was assembled, or long.MinValue for one that can't assert NRDA; and when the last byte the
+    // 8080 read was. NRDA is a byte assembled after the last one read, in this sector, before the sector's end.
+    private long _heldArrival = long.MinValue;
+    private long _taken = long.MinValue;
     private long _previousSector = -1;
     private int _previousTrack = -1;
-    private int _readTaken = -1;
 
     // How many cycles after the first byte's time the sector's bytes come, as the controller assembles them from the
     // sector's first one bit, or -1 for a sector with none, which never gives a byte.
@@ -160,8 +160,8 @@ public sealed class AltairDiskController
             case 1:
                 return SectorPosition();
             default:
-                byte value = Data(out int index);
-                if (index >= 0) { _readTaken = index; }
+                byte value = Data(out long arrival);
+                _taken = Math.Max(_taken, arrival);
                 return value;
         }
     }
@@ -243,11 +243,8 @@ public sealed class AltairDiskController
         if (drive.Settled(_cycle)) { status &= unchecked((byte)~HeadStatus); }
         if (_interruptEnable()) { status &= unchecked((byte)~InterruptsEnabled); }
         if (drive.AtTrackZero(_cycle)) { status &= unchecked((byte)~TrackZero); }
-        _ = Data(out int index);
-        if (!Writing && index >= 0 && index != _readTaken)
-        {
-            status &= unchecked((byte)~NewReadData);
-        }
+        _ = Data(out long arrival);
+        if (!Writing && Waiting(arrival)) { status &= unchecked((byte)~NewReadData); }
 
         return status;
     }
@@ -262,13 +259,22 @@ public sealed class AltairDiskController
         return (byte)(0xC0 | (Sector << 1) | sectorTrue);
     }
 
-    // The byte in the data register, and its index in the sector, or -1 while none of this sector's is arriving.
-    // The register holds the last byte assembled since the head began reading this track (_readSince): this
-    // sector's, or before its first, the last of the sector before; with none since then, the byte it held (_held).
-    // That depends only on where the disk is and what the head did, not on what has looked at the port.
-    private byte Data(out int index)
+    // Whether a byte assembled at a cycle asserts NRDA: it came after the last byte read, in this sector, and the
+    // sector has not ended, which deasserts NRDA.
+    private bool Waiting(long arrival)
     {
-        index = -1;
+        long sectorStart = CurrentSector * AltairDiskTiming.SectorCycles;
+        bool ended = CurrentOffset >= AltairDiskTiming.EndOfSectorCycles;
+        return arrival > _taken && arrival >= sectorStart && !ended;
+    }
+
+    // The byte in the data register, and when it was assembled (arrival), or long.MinValue. The register holds the
+    // last byte assembled since the head began reading this track (_readSince): this sector's, or before its first,
+    // the last of the sector before; with none since then, the byte it held (_held). That depends only on where the
+    // disk is and what the head did, not on what has looked at the port.
+    private byte Data(out long arrival)
+    {
+        arrival = _heldArrival;
         if (_selected is not { } drive || Writing || !drive.HeadLoaded || drive.Disk is not { } disk)
         {
             return _held;
@@ -279,20 +285,19 @@ public sealed class AltairDiskController
         if (offset >= AltairDiskTiming.FirstByteCycles)
         {
             Load(sector, drive, disk);
+            // An image holds no bytes past a sector's 137, so the last stays the one shown until the sector ends.
             if (LastArrived(_readDelay, offset) is int last && Arrival(sector, _readDelay, last) >= (long)_readSince)
             {
-                // An image holds no bytes past a sector's 137, so the last stays the one arriving until the sector
-                // ends, which deasserts NRDA, and then the register keeps it with nothing new to read.
-                if (offset < AltairDiskTiming.EndOfSectorCycles) { index = last; }
+                arrival = Arrival(sector, _readDelay, last);
                 return _sector[last];
             }
         }
 
-        byte previous = PreviousLast(sector, drive, disk, out long arrival);
-        if (arrival >= (long)_readSince) { return previous; }
-        if (_heldIndex >= 0 && sector == _heldSector && offset < AltairDiskTiming.EndOfSectorCycles)
+        byte previous = PreviousLast(sector, drive, disk, out long before);
+        if (before >= (long)_readSince)
         {
-            index = _heldIndex;
+            arrival = before;
+            return previous;
         }
 
         return _held;
@@ -305,22 +310,24 @@ public sealed class AltairDiskController
         return start + AltairDiskTiming.FirstByteCycles + delay + ((long)index * AltairDiskTiming.ByteCycles);
     }
 
-    // The head begins reading, or reads another track: the register keeps its byte until the next is assembled.
-    // A byte waiting to be read stays waiting, with NRDA, until it is read or its sector ends.
-    // In: held = the register's byte as reading began, waiting = its index if it was being assembled, or -1.
-    private void BeginReading(byte held, int waiting)
+    // The head begins reading, or reads another track: the register keeps its byte, and a byte waiting to be read
+    // its NRDA, until the next is assembled.
+    private void BeginReading()
     {
-        _held = held;
-        _heldIndex = waiting >= 0 && waiting != _readTaken ? waiting : -1;
-        _heldSector = CurrentSector;
+        Hold();
         _readSince = _cycle;
     }
 
-    // Holds the register's byte as reading stops: a head unloaded, a drive deselected or a write begun.
+    // Holds the register's byte, and when it was assembled, as the head stops reading or moves: a byte waiting
+    // stays waiting, with NRDA, until it is read or its sector ends.
+    private void Hold() => _held = Data(out _heldArrival);
+
+    // Holds the register's byte as the controller stops reading altogether, a drive deselected or a write begun;
+    // nothing is left waiting.
     private void Latch()
     {
-        _held = Data(out _);
-        _heldIndex = -1;
+        Hold();
+        _heldArrival = long.MinValue;
     }
 
     // Reads this sector's bytes as the controller assembles them, once for each sector and track.
@@ -330,7 +337,6 @@ public sealed class AltairDiskController
         disk.ReadSector(drive.Track, (int)(sector % AltairDisk.SectorsPerTrack), _sector);
         int bit = Align(_sector);
         _readDelay = bit < 0 ? -1 : bit * AltairDiskTiming.BitCycles;
-        if (sector != _readSector) { _readTaken = -1; }
         _readSector = sector;
         _readTrack = drive.Track;
     }
@@ -441,20 +447,25 @@ public sealed class AltairDiskController
         if (_selected is not { } drive) { return; }
         if ((value & 0x0F) != 0)
         {
-            // An unload holds the byte the head had, before any step in the same command moves it.
-            if ((value & 0x0C) == 0x08) { Latch(); }
+            // An unload holds the byte the head had, and leaves it waiting, before any step in the same command.
+            if ((value & 0x0C) == 0x08) { Hold(); }
 
             if ((value & 0x03) != 0)
             {
                 // The head reads the new track from its next byte. A step that cannot move it, out at track 0 or in at
                 // track 76, leaves what it reads alone, though the drive's step and settle times still start.
-                byte held = Data(out int waiting);
-                if (drive.Step(_cycle, inward: (value & 0x02) == 0)) { BeginReading(held, waiting); }
+                byte held = Data(out long arrival);
+                if (drive.Step(_cycle, inward: (value & 0x02) == 0))
+                {
+                    _held = held;
+                    _heldArrival = arrival;
+                    _readSince = _cycle;
+                }
             }
 
             if ((value & 0x04) != 0)
             {
-                if (!drive.HeadLoaded) { BeginReading(_held, waiting: -1); }
+                if (!drive.HeadLoaded) { BeginReading(); }
                 drive.Load(_cycle);
             }
             else if ((value & 0x08) != 0)

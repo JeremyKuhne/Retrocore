@@ -58,7 +58,7 @@ tracks of 32 sectors of 137 bytes. Its timing is the one Mike Douglas's FDC+ boa
   until the next replaces it, which MITS's loops that read two bytes a pass rely on. Reading the port clears NRDA,
   as does the sector's end, and the port keeps the last byte until another comes; an image holds nothing of the
   gap after a sector's 137. A head loaded, or stepped to another track, reads from the next byte; a byte waiting
-  when the head steps still waits.
+  when the head steps or unloads still waits, until it is read or its sector ends.
   The controller assembles bytes from the sector's first one bit, so a sector that does not start with bit 7 set
   reads shifted, its bytes that many 4 µs bit times later, and a blank sector gives no bytes at all.
 - **Writing.** A write enable in a sector's first 212 µs writes it, one after the sector's end (5.008 ms) writes the

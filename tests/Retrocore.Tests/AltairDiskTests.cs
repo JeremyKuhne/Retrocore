@@ -376,6 +376,48 @@ public sealed class AltairDiskTests
     }
 
     /// <summary>
+    ///  After a step, a byte the new track assembles is new even when a byte at the same place on the old track was
+    ///  read: the new track's sector here reads three bits late, so its byte 5 comes just after the step.
+    /// </summary>
+    [TestMethod]
+    public void ANewTracksByteIsNewWhereverItFalls()
+    {
+        AltairDisk disk = Disk();
+        byte[] shifted = new byte[AltairDisk.SectorBytes];
+        Array.Fill(shifted, (byte)0x11);
+        for (int sector = 0; sector < AltairDisk.SectorsPerTrack; sector++) { disk.WriteSector(1, sector, shifted); }
+
+        AltairMachine machine = LoadedOnTrack0(disk);
+        ulong start = NextSector(machine.Processor.CycleCount);
+        ulong fifth = start + AltairDiskTiming.FirstByteCycles + (5 * AltairDiskTiming.ByteCycles);
+        RunTo(machine, fifth + 10);
+        machine.Bus.In(Data);
+        machine.Bus.Out(Control, 0x01);
+        (machine.Bus.In(Status) & 0x80).Should().Be(0x80, "track 1's byte 5 has not come");
+        RunTo(machine, fifth + (3 * AltairDiskTiming.BitCycles));
+        (machine.Bus.In(Status) & 0x80).Should().Be(0, "track 1's byte 5 is new");
+        machine.Bus.In(Data).Should().Be(0x88, "$11 from its first one bit");
+    }
+
+    /// <summary>
+    ///  An unload leaves a byte waiting, with NRDA, until it is read or its sector ends.
+    /// </summary>
+    [TestMethod]
+    public void AnUnloadLeavesAByteWaiting()
+    {
+        AltairMachine machine = LoadedOnTrack0();
+        ulong start = NextSector(machine.Processor.CycleCount);
+        int sector = (int)(start / AltairDiskTiming.SectorCycles % AltairDisk.SectorsPerTrack);
+        RunTo(machine, start + AltairDiskTiming.FirstByteCycles + (5 * AltairDiskTiming.ByteCycles) + 10);
+        machine.Bus.Out(Control, 0x08);
+        (machine.Bus.In(Status) & 0x80).Should().Be(0, "byte 5 still waits");
+        machine.Bus.In(Data).Should().Be(SectorBytes(0, sector)[5]);
+        (machine.Bus.In(Status) & 0x80).Should().Be(0x80);
+        machine.Bus.Out(Control, 0x04);
+        (machine.Bus.In(Status) & 0x80).Should().Be(0x80, "a reload gives nothing back");
+    }
+
+    /// <summary>
     ///  A blank sector has no one bit to assemble bytes from, so it never gives one, and the register keeps the
     ///  byte it had from the track before.
     /// </summary>

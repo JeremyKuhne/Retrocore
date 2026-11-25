@@ -95,7 +95,7 @@ signature), and blinks the LED: one long flash and one short.
 - disk in place, write protect, tachometer, ready, two sides, high density (FDHD), and disk switched.
 
 The firmware tells an Apple 3.5 Drive (kind 1) from an FDHD (kind 3) by sense 5. It finds the drives at cold start in
-FINDDRIVES ($D362), and UniDisk 3.5s on the SmartPort bus in BUSINIT ($F8BA).
+`Drives::Find` ($D362), and UniDisk 3.5s on the SmartPort bus in `Bus::Initialize` ($F8BA).
 
 **The media the firmware reads.**
 - **GCR:** 400K (kind 2) and 800K (kinds 4 and 6, by interleave). Five speed zones: 12, 11, 10, 9 and 8 sectors per
@@ -106,10 +106,10 @@ FINDDRIVES ($D362), and UniDisk 3.5s on the SmartPort bus in BUSINIT ($F8BA).
 The card caches a track (18 slots at $1000-$33FF) and reads ahead after a miss.
 
 **Timing the firmware waits on:**
-- DELAY1MS ($F73C) is about 2,030 cycles;
+- `DelayMillisecond` ($F73C) is about 2,030 cycles;
 - the motor waits 500 ms the first time after a disk is found, 100 ms after that;
-- the ready wait gives up after about 1.2 s, and an eject waits up to about 2 s;
-- POLLDRIVES runs about every 1.4 s when idle;
+- the ready wait gives up after about 0.75 s, and an eject waits up to about 2 s;
+- `Drives::Poll` runs about every 1.4 s when idle;
 - the self-test takes about 0.25 s, almost all of it the EPROM checksum.
 
 ## Shape in the code base
@@ -135,7 +135,7 @@ The card caches a track (18 slots at $1000-$33FF) and reads ahead after a miss.
    signature with its waits released. With no drives, a ProDOS STATUS of unit 0 answers through Apple's own code.
 2. **The SWIM, IWM and ISM.** Mode switching, the parameter RAM, the FIFO, the phase register and the error
    register, checked against the self-test's SWIM test and MAME's model.
-3. **The drives' senses and commands.** Drive detection, motor, step, eject and the senses, until FINDDRIVES finds two
+3. **The drives' senses and commands.** Drive detection, motor, step, eject and the senses, until `Drives::Find` finds two
    FDHDs and a STATUS reports them as Apple's DIB does.
 4. **Reading.** GCR tracks with the speed zones and the tachometer, then MFM, from `Disk35Disk`. Done when ProDOS 8
    boots A2DeskTop's 800K image through Apple's firmware.
@@ -147,11 +147,11 @@ The card caches a track (18 slots at $1000-$33FF) and reads ahead after a miss.
 
 ## Open questions
 
-- READ ($08) on Apple's card copies its data from $0E00 though the sector was read into $0C00 (`READWRITE`, $DE50).
+- READ ($08) on Apple's card copies its data from $0E00 though the sector was read into $0C00 (`ReadWriteTagged`, $DE50).
   Is that a bug in the firmware, or a misreading? Running the code will tell.
 - CONTROL $0C (poke) takes its value from $0C04, which looks like an off-by-one in the firmware.
-- READWRITE's media check indexes MEDIAKIND by a leftover Y, effectively drive 1's.
-- Should the hardware mode support UniDisk 3.5s on the bus (`BUSCALL`, $F812)? That is a second processor per drive.
+- `ReadWriteTagged`'s media check indexes `MediaKind` by a leftover Y, effectively drive 1's.
+- Should the hardware mode support UniDisk 3.5s on the bus (`Bus::PassCommand`, $F812)? That is a second processor per drive.
 - A IIgs is not a Retrocore machine yet, so its paths ($C036 speed, `[dp],Y` transfers) would be tested only once one
   is.
 

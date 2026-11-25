@@ -38,6 +38,18 @@ public sealed class Apple2Disk35Tests
     }
 
     /// <summary>
+    ///  The emulator's own slot ROM, <c>Disk35.rom.asm</c>, assembles to the bytes it had before its conversion to the
+    ///  maintained style, pinned by digest.
+    /// </summary>
+    [TestMethod]
+    public void SlotRomMatchesItsDigest()
+    {
+        Disk35Rom.Bytes.Length.Should().Be(0x100);
+        Convert.ToHexString(SHA256.HashData(Disk35Rom.Bytes))
+            .Should().Be("AC3D1E3E23500D80D081BABB71DBEAB37D68D6F1B53A016914A6A34084958363");
+    }
+
+    /// <summary>
     ///  With the chip in <c>%USERPROFILE%\Retrocore\superdrive-roms</c> (or <c>RETROCORE_SUPERDRIVE_ROMS</c>), the source
     ///  also compares byte for byte, which names the first difference.
     /// </summary>
@@ -71,9 +83,9 @@ public sealed class Apple2Disk35Tests
             ours[offset].Should().Be(apple[offset], $"$Cn{offset:X2} identifies the card");
         }
 
-        (Disk35Rom.PRODOS & 0xFF).Should().Be(0x1C);
-        (Disk35Rom.SMARTPORT & 0xFF).Should().Be(0x1F);
-        (Disk35Rom.DIAG & 0xFF).Should().Be(0x0D);
+        (Disk35Rom.ProDosEntry & 0xFF).Should().Be(0x1C);
+        (Disk35Rom.SmartPortEntry & 0xFF).Should().Be(0x1F);
+        (Disk35Rom.DiagnosticsEntry & 0xFF).Should().Be(0x0D);
     }
 
     /// <summary>

@@ -17,5 +17,6 @@ in [AssemblyStyle.md](../AssemblyStyle.md).
 | The mouse card's firmware (`Roms/Mouse.rom.asm` and Apple's `Roms/Mouse/MouseInterface.asm`) | Converted | [Mouse.md](Mouse.md) |
 | Integer BASIC, with the floating point, the Mini-Assembler and SWEET16 (`Roms/IntegerBasic/`) | Converted | [IntegerBasic.md](IntegerBasic.md) |
 | Programmer's Aid #1 (`Roms/ProgrammersAid/`) | Converted | [ProgrammersAid.md](ProgrammersAid.md) |
+| The 3.5 disk controller (`Roms/Disk35/`, Apple's EPROM, and the emulator's `Roms/Disk35.rom.asm`) | Converted | [Disk35.md](Disk35.md) |
 
 Each decision has an ID, which commit messages and comments may cite.

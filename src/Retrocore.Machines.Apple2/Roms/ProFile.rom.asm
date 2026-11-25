@@ -185,15 +185,15 @@ BlockCountHigh = $C089
 ;; The response while idle: ready for a command's six bytes (ProFileDrive.ReadyForCommand).
 RESPONSE_READY_FOR_COMMAND = 1
 
-;; The response to a read command: the ProFile reads the block when the card goes on, then has its status and data
-;; ready (ProFileDrive.ReadResponse).
+;; The response to a read command: the ProFile reads the block when CMD drops after the card's <ANSWER_GO_ON>, then
+;; has its status and data ready (ProFileDrive.ReadResponse).
 RESPONSE_READ = 2
 
 ;; The response to a write command: ready for the write's 512 bytes (ProFileDrive.WriteResponse).
 RESPONSE_WRITE = 3
 
-;; The response once a write's data is in: the ProFile writes the block when the card goes on, then has its status
-;; ready (ProFileDrive.WriteDataResponse).
+;; The response once a write's data is in: the ProFile writes the block when CMD drops after the card's
+;; <ANSWER_GO_ON>, then has its status ready (ProFileDrive.WriteDataResponse).
 RESPONSE_WRITE_DATA = 6
 
 ;; The card's answer to go on.
@@ -236,9 +236,10 @@ SIGNATURE_07 = $3C
 
 ;; Boots the ProFile: reads block 0 to $0800 through <Driver>, which returns to <FinishBoot>.
 ;;
-;; It finds its slot from the return address its JSR to an RTS in the Monitor leaves just below the stack pointer, and pushes <FinishBoot> in
-;; this slot's page as the driver's return address. It points <SlotPointer>/<LOC1> at this slot, as the startup scan
-;; does, so that a failed boot can go on with the scan, however the card was started.
+;; It finds its slot by calling an RTS in the Monitor: the high byte of the return address that call pushed, this
+;; page's, stays at the stack pointer after it returns. It pushes <FinishBoot> in this slot's page as the driver's
+;; return address, and points <SlotPointer>/<LOC1> at this slot, as the startup scan does, so that a failed boot can
+;; go on with the scan, however the card was started.
 .proc Boot
     ; The signature: these loads are executed, but only their operands matter.
     ldx #SIGNATURE_01
@@ -297,8 +298,8 @@ SIGNATURE_07 = $3C
 ;; In:    Command = <COMMAND_STATUS>, <COMMAND_READ>, <COMMAND_WRITE> or <COMMAND_FORMAT>; UnitNumber = the slot,
 ;;          Buffer/BufferHigh = the buffer, Block/BlockHigh = the block number
 ;; Out:   A = 0 or a ProDOS error code, carry = clear on success, set on error,
-;;          X = the block count's low byte for status; otherwise the slot times 16,
-;;          Y = the block count's high byte for status
+;;          X = the block count's low byte for status with a ProFile; otherwise the slot times 16,
+;;          Y = the block count's high byte for status with a ProFile
 ;; Keeps: Command, UnitNumber, Buffer, BufferHigh, Block, BlockHigh
 .proc Driver
     ; The card's ports, through X; with no ProFile, no device.

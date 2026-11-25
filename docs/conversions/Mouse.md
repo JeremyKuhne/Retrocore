@@ -75,4 +75,5 @@ Firmware Reference), IIEROM82 and the Monitor's own keys (through the equates bo
 - Each bank's last byte ($C2, $C1, $C3, $C8, $CD, $C1, $CE) is never read by the firmware; its purpose is not known.
 - Apple's card returns carry clear from all six of $Cn1A-$Cn1F (TimeData's as Mouse Technical Note #2 documents, the
   others by their code). The emulator's card answered them with carry set; a later change (not part of the conversion)
-  made its `UnsupportedEntry` return carry clear too, keeping A, X and Y, and `PascalEntry` its own carry set.
+  made its `UnsupportedEntry` return carry clear too, keeping A, X and Y, and gave `PascalEntry` its own SEC, so the
+  Pascal entries still answer carry set.

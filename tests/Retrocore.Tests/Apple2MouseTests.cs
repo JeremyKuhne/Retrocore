@@ -342,7 +342,7 @@ public sealed class Apple2MouseTests
 
     /// <summary>
     ///  The Pascal entries answer error 3 with carry set, as on Apple's card. The entries at $Cn1A-$Cn1F do nothing here,
-    ///  but return carry clear, as Apple's GetClamp, TimeData and the others do, keeping A, X and Y.
+    ///  keeping A, X and Y, but return carry clear, as Apple's GetClamp, TimeData and the others do.
     /// </summary>
     [TestMethod]
     public void PascalAndFactoryEntries()

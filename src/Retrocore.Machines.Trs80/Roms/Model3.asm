@@ -1118,8 +1118,8 @@ PRTSC3:
 .endif
 
 ;; The real-time clock's interrupt, 30 times a second through CLOCK_VECTOR (60 on a Model 4 at 4 MHz, where the
-;; count of 30 makes two seconds of each): blinks the cursor every seven ticks, counts the time and date each second,
-;; and shows the time at the top right when CLOCKN has turned it on.
+;; count of 30 makes two seconds for each real second): blinks the cursor every seven ticks, counts the time and date
+;; each second, and shows the time at the top right when CLOCKN has turned it on.
 CLOCKZ:
     LD DE,CLKOUT
     PUSH DE

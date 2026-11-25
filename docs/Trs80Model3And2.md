@@ -46,9 +46,9 @@ The ports are:
 or 4P at 4 MHz takes every vertical sync, 60 times a second, as their technical references say ("Real Time Clock":
 FAST stops the divider). The interrupt latches only while `$E0` bit 2 enables it, as the 4P's reference describes, and
 holds until a read of `$EC`-`$EF`; reading `$E0` leaves it. The Model 4 ROM, written for the Model III, counts 30 to
-a second, so at 4 MHz its `TIME$` counts two seconds to each. The disk controller's INTRQ and the drives' motor
-timeout raise an NMI where `$E4` enables them. The reset button raises the NMI whatever the mask, with `$E4` bit 5
-showing why.
+a second, so at 4 MHz its `TIME$` counts two seconds for each real second. The disk controller's INTRQ and the
+drives' motor timeout raise an NMI where `$E4` enables them. The reset button raises the NMI whatever the mask, with
+`$E4` bit 5 showing why.
 
 **The Model 4's function keys.** Its ROM returns the codes at `FKEY1`, `FKEY2` and `FKEY3` (`$41EB`, `$41EC` and
 `$41F3`) for F1, F2 and F3, which it sets to `$60` (`` ` ``), `$1B` (escape) and `$08` (backspace); shift changes

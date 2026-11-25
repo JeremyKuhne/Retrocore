@@ -324,7 +324,7 @@ public sealed class DocumentationBuildTests
     ///  A scope or structure only a branch the build leaves out defines is only in other builds, its members with it.
     /// </summary>
     [TestMethod]
-    public void AScopeOnlyAnotherBuildOpensIsOnlyInOtherBuilds()
+    public void AScopeOrStructOnlyAnotherBuildDefinesIsOnlyInOtherBuilds()
     {
         const string Scopes = """
             ;; Uses <Tools> and <Block>.
@@ -371,7 +371,7 @@ public sealed class DocumentationBuildTests
             .endif
             """;
 
-        Resolve(Build(Defines, model: 1), "Caller", "READER").Topic.Should().NotBeNull();
+        Required(Resolve(Build(Defines, model: 1), "Caller", "READER").Topic).Name.Should().Be("READER");
         Resolve(Build(Defines, model: 2), "Caller", "READER").OnlyInOtherBuilds.Should().BeTrue();
     }
 

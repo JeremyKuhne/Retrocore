@@ -635,8 +635,7 @@ public sealed class DocumentationSet
     ///  and every one of its definitions is left out, each outside a macro's body in a branch of conditional assembly
     ///  the build doesn't take (see <see cref="CommentInBuild"/>), and each in a macro's body on a line no expansion
     ///  defined, of a macro the build leaves out. A macro defined in a branch the build doesn't take is only in other
-    ///  builds too, as is a <c>.define</c> there, a scope or named type there that holds none of the build's symbols,
-    ///  and a member the build doesn't define.
+    ///  builds too, as is a <c>.define</c> there, and a scope, named type or member there that the build doesn't define.
     /// </summary>
     /// <param name="topic">The topic.</param>
     /// <returns>
@@ -653,6 +652,11 @@ public sealed class DocumentationSet
     ///   A macro the build defines but never expands keeps its body's definitions, as a single build's library macro
     ///   does: nothing tells a macro only another build's branch expands from one no build does.
     ///  </para>
+    ///  <para>
+    ///   A macro or <c>.define</c> is judged by its documented definitions alone, as the assembly's symbols don't
+    ///   name them: one documented only in a branch the build leaves out counts as another build's, though the build
+    ///   defines one of the same name without documentation in its own branch.
+    ///  </para>
     /// </remarks>
     public bool InOtherBuild(DocumentationTopic topic) =>
         KnowsBuild
@@ -662,12 +666,10 @@ public sealed class DocumentationSet
                 || (topic.Kind == DocumentationKind.Member && !Defines(topic.Name))
                 || IsEmptyScope(topic));
 
-    // Whether a scope or named type has nothing in the assembly: no symbol of the build is its own or qualified by it,
-    // so a scope a skipped branch opens and the build continues elsewhere stays.
+    // Whether a scope or named type is not in the assembly, which defines each one's name as a symbol.
     private bool IsEmptyScope(DocumentationTopic topic) =>
         topic.Kind is DocumentationKind.Scope or DocumentationKind.Struct or DocumentationKind.Enum
-            && !_symbols.ContainsKey(topic.Name)
-            && !_symbols.Keys.Any(name => name.StartsWith(topic.Name + "::", StringComparison.Ordinal));
+            && !_symbols.ContainsKey(topic.Name);
 
     /// <summary>
     ///  Gets whether this set knows which definitions its build assembles: it was created from a successful assembly

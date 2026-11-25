@@ -30,6 +30,7 @@ workspace adds documents of its own, or replaces a key, with the same columns.
 | HV4 | PET BASIC 4 (901465-19, -20, -21), reconstructed source | | Martin Hoffmann-Vetter | <https://github.com/mist64/cbmsrc/tree/01bd60f162ef92212ef0cb67546ae8f42be34168/BASIC_PET_V4_REC> |
 | HV4R | PET BASIC 4 revised (901465-23, -20, -21), reconstructed source | | Martin Hoffmann-Vetter | <https://github.com/mist64/cbmsrc/tree/01bd60f162ef92212ef0cb67546ae8f42be34168/BASIC_PET_V4R_REC> |
 | HVK4 | PET operating system 4.0 (901465-21, 901447-29, 901465-22), reconstructed source | | Martin Hoffmann-Vetter | <https://github.com/mist64/cbmsrc/tree/01bd60f162ef92212ef0cb67546ae8f42be34168/KERNAL_PET_4.0_REC> |
+| IIGSFR87 | Apple IIGS Firmware Reference | 1987 | Addison-Wesley | <https://archive.org/details/Apple_IIGS_Firmware_Reference_1987_Adn-Wesley_Publishing> |
 | UNKN | Unclear where this originated: a name no listed document gives | | | |
 
 ## How the BASIC documents were checked
@@ -78,3 +79,9 @@ where the check found that the document gives that name for that thing:
 - **A2RM78** for the floating-point routines, the Mini-Assembler and SWEET16: their listings in the manual, read from
   the Internet Archive's OCR text and checked label by label.
 
+## How the Apple IIGS Firmware Reference was checked
+
+- **IIGSFR87:** read from the Internet Archive's OCR text of the May 1987 first printing. SmartPort's error names
+  (BADCMD $01 ... OFFLINE $2F, BUSERR $06) are checked against Table 7-6, and the IIgs's SHADOW ($C035), CYAREG
+  ($C036), STATEREG ($C068) and HORIZCNT ($C02F) against Appendix E and its symbol table. The 3.5 controller's sources
+  cite it ([`docs/conversions/Disk35.md`](conversions/Disk35.md), Q3).

@@ -372,6 +372,7 @@ Design notes for upcoming work live in [`docs/backlog`](docs/backlog):
 - [debugging BASIC programs](docs/backlog/BasicDebugging.md): Level I BASIC and disk-image import/export;
 - [choosing and starting a machine, next round](docs/backlog/MachineLaunch.md);
 - [CPU core and machine loop speed](docs/backlog/CoreOptimization.md), including what .NET 11 might offer;
+- [the language server's SDK index speed](docs/backlog/SdkIndexOptimization.md), with every change measured;
 - [exporting HTML documentation from `;;` comments](docs/backlog/DocExport.md);
 - [documented struct, union and enum members](docs/backlog/MemberDocumentation.md), with historical names;
 - [`.using`, names from another scope without qualifying them](docs/backlog/Using.md);

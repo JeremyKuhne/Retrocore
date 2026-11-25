@@ -4,4 +4,4 @@
 
 using BenchmarkDotNet.Running;
 
-BenchmarkSwitcher.FromAssembly(typeof(Program).Assembly).Run(args);
+BenchmarkSwitcher.FromAssembly(typeof(Retrocore.Perf.SdkIndexBenchmarks).Assembly).Run(args);

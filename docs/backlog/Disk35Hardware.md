@@ -147,11 +147,14 @@ The card caches a track (18 slots at $1000-$33FF) and reads ahead after a miss.
 
 ## Open questions
 
-- READ ($08) on Apple's card copies its data from $0E00 though the sector was read into $0C00 (`ReadWriteTagged`, $DE50).
-  Is that a bug in the firmware, or a misreading? Running the code will tell.
+- Settled: on Apple's card, `ReadWriteTagged` ($DE50) sends READ ($08) down its write path, since it reads only for
+  command 1, and its dead read path copies from $0E00 though the sector was read into $0C00. The owner settled it as a
+  firmware bug that the compatible card does not reproduce (docs/conversions/Disk35.md, Q1); running the code would
+  confirm it.
 - CONTROL $0C (poke) takes its value from $0C04, which looks like an off-by-one in the firmware.
 - `ReadWriteTagged`'s media check indexes `MediaKind` by a leftover Y, effectively drive 1's.
-- Should the hardware mode support UniDisk 3.5s on the bus (`Bus::PassCommand`, $F812)? That is a second processor per drive.
+- Should the hardware mode support UniDisk 3.5s on the bus (`Bus::PassCommand`, $F812)? That is a second processor
+  per drive.
 - A IIgs is not a Retrocore machine yet, so its paths ($C036 speed, `[dp],Y` transfers) would be tested only once one
   is.
 

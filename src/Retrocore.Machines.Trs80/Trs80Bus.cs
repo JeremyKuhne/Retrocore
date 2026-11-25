@@ -50,7 +50,9 @@ public sealed class Trs80Bus : IProcessorBus, IIoBus
         _expansion = configuration.ExpansionInterface;
         _controller = _expansion && configuration.DiskController;
         Video = new(roms.CharacterGenerator, configuration.LowercaseModification) { Snow = configuration.VideoSnow };
-        Cassette = new(configuration.Rom == Trs80Rom.Level1 ? 250 : 500);
+        bool level1 = configuration.Rom == Trs80Rom.Level1;
+        Keyboard = new(letters: level1 ? Trs80TypedLetters.Unshifted : Trs80TypedLetters.ShiftForLowercase);
+        Cassette = new(level1 ? 250 : 500);
         _doubler = configuration.Doubler;
         Disks = new(Trs80Timing.ClockHertz);
     }
@@ -63,7 +65,7 @@ public sealed class Trs80Bus : IProcessorBus, IIoBus
     /// <summary>
     ///  Gets the keyboard.
     /// </summary>
-    public Trs80Keyboard Keyboard { get; } = new();
+    public Trs80Keyboard Keyboard { get; }
 
     /// <summary>
     ///  Gets the video.

@@ -50,6 +50,14 @@ internal sealed class BasicLineScanner
         _foreign = foreign;
     }
 
+    private BbcAssemblyPart _assembly;
+
+    /// <summary>
+    ///  Gets or sets whether the line starts, and then ends, inside BBC BASIC's assembler: between a <c>[</c> where a
+    ///  statement starts and a <c>]</c> where one of the assembler's statements starts, which can be lines later.
+    /// </summary>
+    internal bool Assembling { get; set; }
+
     /// <summary>
     ///  Scans the line.
     /// </summary>
@@ -57,6 +65,7 @@ internal sealed class BasicLineScanner
     /// <param name="diagnostics">Receives warnings about names BASIC reads differently than they look.</param>
     internal void Run(List<BasicSite> sites, List<BasicDiagnostic> diagnostics)
     {
+        _assembly = BbcAssemblyPart.Statement;
         BasicJump jump = BasicJump.None;
         bool afterNumber = false;
         bool afterFunction = false;
@@ -90,6 +99,26 @@ internal sealed class BasicLineScanner
             }
 
             if (value == ' ') { continue; }
+
+            // BBC BASIC's assembler reads its mnemonics, registers and comments itself; its operands' names are
+            // BASIC's, and a . label is a variable set to P%. After its ] a statement starts.
+            if (Bbc && Assembling)
+            {
+                if (Assemble(ref index, value, sites, diagnostics))
+                {
+                    statementStart = !Assembling;
+                    name = null;
+                    continue;
+                }
+            }
+            else if (Bbc && statementStart && value == '[')
+            {
+                Assembling = true;
+                _assembly = BbcAssemblyPart.Statement;
+                statementStart = false;
+                name = null;
+                continue;
+            }
 
             // A BBC * command is the MOS's to read, to the end of the line: nothing in it is BASIC's.
             if (Bbc && statementStart && value == '*') { break; }
@@ -220,7 +249,7 @@ internal sealed class BasicLineScanner
             // takes digits and @ anywhere in a routine's name. It is a name, not a number or the resident @%.
             if (Bbc && afterFunction && (char.IsAsciiDigit((char)value) || value == '@'))
             {
-                index = Name(index, afterFunction, routine, sites, diagnostics, split, out name);
+                index = Name(index, afterFunction, routine, sites, diagnostics, split, statement: false, out name);
                 split = null;
                 afterFunction = false;
                 jump = BasicJump.None;
@@ -274,7 +303,7 @@ internal sealed class BasicLineScanner
             bool atPercent = value == '@' && index + 1 < _bytes.Length && _bytes[index + 1] == '%';
             if (char.IsAsciiLetter((char)value) || (Bbc && (bbcLetter || atPercent)))
             {
-                index = Name(index, afterFunction, routine, sites, diagnostics, split, out name);
+                index = Name(index, afterFunction, routine, sites, diagnostics, split, wasStart, out name);
                 split = null;
                 afterFunction = false;
                 jump = BasicJump.None;
@@ -414,6 +443,13 @@ internal sealed class BasicLineScanner
     private static readonly HashSet<string> s_bbcValues =
         ["FALSE", "TRUE", "PI", "PAGE", "TIME", "LOMEM", "HIMEM", "TOP", "COUNT", "ERL", "ERR", "POS", "VPOS", "RND", "GET", "GET$"];
 
+    // BBC BASIC's implied instructions, the mnemonics before BCC in Assembler.asm's table, which take no operand.
+    private static readonly HashSet<string> s_impliedMnemonics =
+    [
+        "BRK", "CLC", "CLD", "CLI", "CLV", "DEX", "DEY", "INX", "INY", "NOP", "PHA", "PHP", "PLA", "PLP", "RTI", "RTS",
+        "SEC", "SED", "SEI", "TAX", "TAY", "TSX", "TXA", "TXS", "TYA"
+    ];
+
     // Whether a number is only the start of an expression, as in Integer BASIC's GOTO 1000+K*10, which has no
     // ON GOTO: a line is a number that ends the statement or comes before a comma.
     private bool Computed(int last)
@@ -470,6 +506,7 @@ internal sealed class BasicLineScanner
         List<BasicSite> sites,
         List<BasicDiagnostic> diagnostics,
         BasicSite? split,
+        bool statement,
         out BasicSite? site)
     {
         int last = index;
@@ -529,7 +566,7 @@ internal sealed class BasicLineScanner
                 found.Start,
                 found.End));
         }
-        else if (_foreign.Contains(letters) && suffix.Length == 0)
+        else if (_foreign.Contains(letters) && suffix.Length == 0 && !Bbc)
         {
             diagnostics.Add(new(
                 _line,
@@ -537,6 +574,132 @@ internal sealed class BasicLineScanner
                 $"{_dialect.DisplayName} has no {letters}; it reads it as the variable {significant}.",
                 found.Start,
                 found.End));
+        }
+        else if (_foreign.Contains(letters) && suffix.Length == 0 && statement && !Assigned(last + 1))
+        {
+            // BBC BASIC keeps names whole, so HOME is as good a variable as any; only as a statement of its own is it
+            // likely meant as another BASIC's word, and there BASIC takes it for an assignment with no =.
+            diagnostics.Add(new(
+                _line,
+                BasicSeverity.Warning,
+                $"{_dialect.DisplayName} has no {letters} statement: it reads {letters} as a variable to assign, and stops with Mistake.",
+                found.Start,
+                found.End));
+        }
+
+        return last;
+    }
+
+    // Whether what follows a BBC name where a statement starts makes it an assignment's target: =, an array's
+    // subscripts, or an indirection, as in A=1, A(1)=1 and A?1=1. FIND_VARIABLE reads the (, ? or ! straight after the
+    // name, so only = may come after spaces: HOME ?0=1 stops with Mistake. An indirection works only on a variable that
+    // already exists, which the scanner cannot know, so HOME?0=1 is taken as an assignment either way.
+    private bool Assigned(int index)
+    {
+        if (index < _bytes.Length && _bytes[index] is (byte)'(' or (byte)'?' or (byte)'!') { return true; }
+        while (index < _bytes.Length && _bytes[index] == ' ') { index++; }
+        return index < _bytes.Length && _bytes[index] == '=';
+    }
+
+    // One character in BBC BASIC's assembler, as ASSEMBLER_NEXT_STATEMENT and ASSEMBLE_INSTRUCTION read it; false when
+    // it is an operand's, which the caller reads as BASIC's.
+    private bool Assemble(ref int index, byte value, List<BasicSite> sites, List<BasicDiagnostic> diagnostics)
+    {
+        switch (_assembly)
+        {
+            case BbcAssemblyPart.Skipped:
+                // Up to the colon that ends the statement, quotes and all.
+                if (value == ':') { _assembly = BbcAssemblyPart.Statement; }
+                return true;
+            case BbcAssemblyPart.Statement:
+                if (value == ':') { return true; }
+                if (value == ']')
+                {
+                    Assembling = false;
+                    return true;
+                }
+
+                if (value == '\\')
+                {
+                    _assembly = BbcAssemblyPart.Skipped;
+                    return true;
+                }
+
+                // A label: the variable after the . is set to P%, found as FIND_VARIABLE_A finds it, after any spaces;
+                // the statement goes on.
+                if (value == '.')
+                {
+                    int start = index + 1;
+                    while (start < _bytes.Length && _bytes[start] == ' ') { start++; }
+                    if (start < _bytes.Length && BbcBasicDialect.IsNameCharacter(_bytes[start]) && !char.IsAsciiDigit((char)_bytes[start]))
+                    {
+                        index = Name(start, function: false, "", sites, diagnostics, split: null, statement: false, out _);
+                    }
+
+                    return true;
+                }
+
+                index = Mnemonic(index, out _assembly);
+                return true;
+            default:
+                if (value == ':')
+                {
+                    _assembly = BbcAssemblyPart.Statement;
+                    return true;
+                }
+
+                // The assembler skips whatever follows an operand, so a \ or ; after one starts a comment, and an
+                // index register or the shifts' accumulator ends it.
+                bool register = (_assembly == BbcAssemblyPart.Register && value is (byte)'X' or (byte)'Y')
+                    || (_assembly == BbcAssemblyPart.IndexRegister && value is (byte)'X' or (byte)'Y' or (byte)'x' or (byte)'y');
+
+                bool accumulator = _assembly == BbcAssemblyPart.ShiftOperand && value == 'A';
+                if (value is (byte)'\\' or (byte)';' || register || accumulator)
+                {
+                    _assembly = BbcAssemblyPart.Skipped;
+                    return true;
+                }
+
+                bool indexed = _assembly is BbcAssemblyPart.IndexOperand or BbcAssemblyPart.IndexRegister;
+                _assembly = value == ','
+                    ? (indexed ? BbcAssemblyPart.IndexRegister : BbcAssemblyPart.Register)
+                    : (indexed ? BbcAssemblyPart.IndexOperand : BbcAssemblyPart.Operand);
+
+                return value == ',';
+        }
+    }
+
+    // A mnemonic: up to three characters, packed by their low five bits, so lda is LDA; EQU takes the B, W, D or S
+    // after it, as EQUB does. AND, EOR and OR are tokens, OR with the A after it. Returns the mnemonic's last byte, and
+    // what follows it: the operand, or, after an implied instruction, which ASSEMBLE_INSTRUCTION_FOUND stores as it is,
+    // nothing the assembler reads.
+    private int Mnemonic(int index, out BbcAssemblyPart next)
+    {
+        next = BbcAssemblyPart.Operand;
+        if (_bytes[index] >= 0x80)
+        {
+            bool or = _dialect.Word(_bytes[index]) == "OR";
+            return or && index + 1 < _bytes.Length && _bytes[index + 1] == 'A' ? index + 1 : index;
+        }
+
+        int last = index;
+        while (last - index < 2 && last + 1 < _bytes.Length && _bytes[last + 1] is not ((byte)' ' or (byte)':') and < 0x80)
+        {
+            last++;
+        }
+
+        string letters = new([.. _bytes[index..(last + 1)].Select(value => (char)('@' + (value & 0x1F)))]);
+        next = letters switch
+        {
+            "ASL" or "LSR" or "ROL" or "ROR" => BbcAssemblyPart.ShiftOperand,
+            "LDX" or "LDY" or "STX" or "STY" => BbcAssemblyPart.IndexOperand,
+            _ when s_impliedMnemonics.Contains(letters) => BbcAssemblyPart.Skipped,
+            _ => BbcAssemblyPart.Operand
+        };
+
+        if (letters == "EQU" && last + 1 < _bytes.Length && _bytes[last + 1] is (byte)'B' or (byte)'W' or (byte)'D' or (byte)'S')
+        {
+            last++;
         }
 
         return last;

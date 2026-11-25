@@ -72,7 +72,7 @@ CharacterOut = $FDED
 ResetVector = $FFFC
 
 ;; The IIgs's horizontal count; elsewhere the floating bus: either way a byte that varies.
-;; Also: HORIZCNT (UNKN)
+;; Also: HORIZCNT (IIGSFR87)
 HorizontalCount = $C02F
 
 ;; What <CaseMask> is on a II Plus: it turns lowercase letters into capitals.

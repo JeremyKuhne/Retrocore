@@ -133,6 +133,7 @@ public sealed class Pokey
     private bool _highPass1 = true;
     private bool _highPass2 = true;
     private int _resync;
+    private bool _resyncReloaded;
     private bool _twoToneLevel;
 
     private int _clock64 = Clock64FirstPulse;
@@ -510,13 +511,17 @@ public sealed class Pokey
         bool linked12 = (_audctl & 0x10) != 0;
         bool linked34 = (_audctl & 0x08) != 0;
 
-        // Channels 1 and 2.
+        // Channels 1 and 2. This model reloads a timer on the cycle it fires, a cycle after the hardware does; when
+        // the two-tone resync reloaded them the cycle before, that was the hardware's reload cycle, so the counters
+        // keep it.
+        bool resynced = _resyncReloaded;
+        _resyncReloaded = false;
         bool fire1 = Count(0, (_audctl & 0x40) != 0 || basePulse);
         bool fire2;
         if (linked12)
         {
             fire2 = Count(1, fire1);
-            if (fire2)
+            if (fire2 && !resynced)
             {
                 Reload(0);
                 Reload(1);
@@ -524,9 +529,9 @@ public sealed class Pokey
         }
         else
         {
-            if (fire1) { Reload(0); }
+            if (fire1 && !resynced) { Reload(0); }
             fire2 = Count(1, basePulse);
-            if (fire2) { Reload(1); }
+            if (fire2 && !resynced) { Reload(1); }
         }
 
         // Channels 3 and 4, held in reset by asynchronous receive while the input waits for a start bit; the start
@@ -717,14 +722,16 @@ public sealed class Pokey
 
     private void StepTwoTone(bool fire1, bool fire2)
     {
-        // The resync reload two cycles after the triggering timer's also cancels an underflow already under way, so a
-        // 1.79 MHz timer 1 that drives it runs two cycles longer each period (5.6, two-tone resync timing).
+        // The resync reload two cycles after the triggering timer's also preempts an underflow that would fire two or
+        // more cycles later, so a 1.79 MHz timer 1 that drives it runs two cycles longer each period; one due on the
+        // next cycle still fires (5.6, two-tone resync timing).
         if ((_resync & 1) != 0)
         {
             Reload(0);
             Reload(1);
-            _borrow[0] = 0;
-            _borrow[1] = 0;
+            if (_borrow[0] > 1) { _borrow[0] = 0; }
+            if (_borrow[1] > 1) { _borrow[1] = 0; }
+            _resyncReloaded = true;
         }
 
         _resync >>= 1;

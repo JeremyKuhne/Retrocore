@@ -738,6 +738,62 @@ public class PokeyTests
     }
 
     /// <summary>
+    ///  Verifies the manual's resync preemption example: with timer 2 resyncing every 84 cycles (64 kHz, AUDF2 = 2)
+    ///  and a space on the line, a 1.79 MHz timer 1 with a period of 85 cycles still fires each time, one of 86 never.
+    /// </summary>
+    /// <param name="audf1">The AUDF1 value: 80, 81 and 82 for periods of 84, 85 and 86 cycles.</param>
+    /// <param name="fires">Whether timer 1 keeps firing.</param>
+    [TestMethod]
+    [DataRow(80, true)]
+    [DataRow(81, true)]
+    [DataRow(82, false)]
+    public void TwoToneResyncPreemptsLaterTimer(int audf1, bool fires)
+    {
+        Pokey pokey = Started();
+        pokey.Write(Audctl, 0x40);
+        pokey.Write(Audf1, (byte)audf1);
+        pokey.Write(Audf2, 2);
+        pokey.Write(Skctl, 0x8B);
+        pokey.Write(Irqen, Pokey.Timer1Interrupt | Pokey.Timer2Interrupt);
+        pokey.Write(Stimer, 0);
+        Advance(pokey, 1_000);
+        int timer1 = 0;
+        int timer2 = 0;
+        for (int cycle = 0; cycle < 84 * 20; cycle++)
+        {
+            pokey.Tick();
+            byte status = pokey.Read(Irqst);
+            if ((status & Pokey.Timer1Interrupt) == 0) { timer1++; Acknowledge(pokey, Pokey.Timer1Interrupt); }
+            if ((status & Pokey.Timer2Interrupt) == 0) { timer2++; Acknowledge(pokey, Pokey.Timer2Interrupt); }
+        }
+
+        timer2.Should().BeInRange(20, 21);
+        if (fires)
+        {
+            timer1.Should().BeInRange(timer2 - 1, timer2 + 1);
+        }
+        else
+        {
+            timer1.Should().Be(0);
+        }
+    }
+
+    /// <summary>
+    ///  Verifies linked timers 1+2 in two-tone mode with a mark: the low timer's resync two cycles after it fires does
+    ///  not preempt the high timer's underflow due the cycle after, so timer 2 still fires N+11 cycles after STIMER.
+    /// </summary>
+    [TestMethod]
+    public void TwoToneResyncKeepsLinkedHighTimer()
+    {
+        Pokey pokey = Started();
+        pokey.Write(Audctl, 0x50);
+        pokey.Write(Skctl, 0x0B);
+        pokey.Write(Irqen, Pokey.Timer2Interrupt);
+        pokey.Write(Stimer, 0);
+        TicksUntilInterrupt(pokey, Pokey.Timer2Interrupt).Should().Be(11);
+    }
+
+    /// <summary>
     ///  Verifies a high-pass flip-flop is held at 1 while its filter is off, so turning the filter on leaves channel 1
     ///  sounding as before until channel 3 first fires.
     /// </summary>

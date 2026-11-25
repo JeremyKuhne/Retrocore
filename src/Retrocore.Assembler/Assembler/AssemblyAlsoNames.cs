@@ -38,28 +38,47 @@ internal sealed class AssemblyAlsoNames
         HashSet<string> seen = [with(StringComparer.Ordinal)];
         foreach (AssemblySource source in sources)
         {
-            // Only a source with the heading on a ;; line needs its documentation parsed, and without the style
-            // checks, which the assembly does not need.
-            if (!seen.Add(source.Path) || !HasHeading(source.Text)) { continue; }
-            foreach (DocumentationComment comment in DocumentationParser.Parse(source.Lines, source.Path, assembled: null, style: false).Comments)
+            // Each source reads its own once, for the preprocessor and the compiler alike.
+            if (!seen.Add(source.Path) || source.AlsoNames is not { } found) { continue; }
+            names ??= [];
+            foreach (KeyValuePair<int, (string[] Names, bool Macro)> line in found)
             {
-                // A scope has no address of its own: its line is lowered to a hidden start label, which an old name
-                // must not reach. A named type is a scope too.
-                bool scope = comment.Kind is DocumentationKind.Scope or DocumentationKind.Struct or DocumentationKind.Enum;
-
-                // A name that differs in each expansion of a macro has nothing one old name could reach, nor has a
-                // .set variable there, whose versions the documentation can't count as the assembler does.
-                bool variable = comment.Macro is not null && comment.Kind == DocumentationKind.Variable;
-                bool varies = comment.NamedByParameter || comment.LocalToExpansion || variable;
-                if (comment.Keyword is not null || scope || varies) { continue; }
-                string[] also = [.. DocumentationAlso.Of(comment.Sections).Select(item => item.Name)];
-                if (also.Length == 0) { continue; }
-                names ??= [];
-                names[(source.Path, comment.TargetLine)] = (also, comment.Macro is not null);
+                names[(source.Path, line.Key)] = line.Value;
             }
         }
 
         return names is null ? null : new(names);
+    }
+
+    /// <summary>
+    ///  Reads one source's <c>Also:</c> sections, as <see cref="AssemblySource.AlsoNames"/> keeps them.
+    /// </summary>
+    /// <param name="source">The source.</param>
+    /// <returns>The names by the line each definition is on, or null when the source gives none.</returns>
+    internal static Dictionary<int, (string[] Names, bool Macro)>? Read(AssemblySource source)
+    {
+        // Only a source with the heading on a ;; line needs its documentation parsed, and without the style checks,
+        // which the assembly does not need.
+        if (!HasHeading(source.Text)) { return null; }
+        Dictionary<int, (string[] Names, bool Macro)>? names = null;
+        foreach (DocumentationComment comment in DocumentationParser.Parse(source.Lines, source.Path, assembled: null, style: false).Comments)
+        {
+            // A scope has no address of its own: its line is lowered to a hidden start label, which an old name
+            // must not reach. A named type is a scope too.
+            bool scope = comment.Kind is DocumentationKind.Scope or DocumentationKind.Struct or DocumentationKind.Enum;
+
+            // A name that differs in each expansion of a macro has nothing one old name could reach, nor has a
+            // .set variable there, whose versions the documentation can't count as the assembler does.
+            bool variable = comment.Macro is not null && comment.Kind == DocumentationKind.Variable;
+            bool varies = comment.NamedByParameter || comment.LocalToExpansion || variable;
+            if (comment.Keyword is not null || scope || varies) { continue; }
+            string[] also = [.. DocumentationAlso.Of(comment.Sections).Select(item => item.Name)];
+            if (also.Length == 0) { continue; }
+            names ??= [];
+            names[comment.TargetLine] = (also, comment.Macro is not null);
+        }
+
+        return names;
     }
 
     /// <summary>

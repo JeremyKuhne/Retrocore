@@ -20,6 +20,10 @@ namespace Retrocore.Debug.Language;
 ///   The assembly's documentation pass, the analysis and the editor's documentation parse all read a file's lines, so
 ///   one split is shared by every one of them and every root that includes the file. The arrays are only read.
 ///  </para>
+///  <para>
+///   Every assembly that includes a file gets the same <see cref="AssemblySource"/>, which reads its <c>Also:</c>
+///   names once for all of them.
+///  </para>
 /// </remarks>
 internal sealed class SourceFileCache
 {
@@ -28,6 +32,9 @@ internal sealed class SourceFileCache
 
     // By the full path, for the texts above that have been split.
     private readonly Dictionary<string, string[]> _lines = [with(StringComparer.Ordinal)];
+
+    // By the full path, for the texts above that an assembly has included.
+    private readonly Dictionary<string, AssemblySource> _sources = [with(StringComparer.Ordinal)];
 
     /// <summary>
     ///  Reads a file the assembly includes, as <see cref="Assembler.FileAssemblySourceResolver"/> reads it.
@@ -74,12 +81,18 @@ internal sealed class SourceFileCache
         _texts.TryGetValue(path, out string? text) ? text : File.Exists(path) ? TryRead(path) : null;
 
     /// <summary>
-    ///  Reads a file the assembly includes as a source whose lines are this cache's, as <see cref="TryRead"/> reads it.
+    ///  Reads a file the assembly includes as a source shared by every assembly that includes it, as
+    ///  <see cref="TryRead"/> reads it.
     /// </summary>
     /// <param name="path">The full path, which the source is named by.</param>
     /// <returns>The source, or null when the file or its folder does not exist.</returns>
-    internal AssemblySource? TryReadSource(string path) =>
-        TryRead(path) is { } text ? new AssemblySource(text, LinesOf(path, text), path) : null;
+    internal AssemblySource? TryReadSource(string path)
+    {
+        if (_sources.TryGetValue(path, out AssemblySource? source)) { return source; }
+        if (TryRead(path) is not { } text) { return null; }
+        _sources[path] = source = new AssemblySource(text, LinesOf(path, text), path);
+        return source;
+    }
 
     /// <summary>
     ///  Reads a file's lines when it exists, as <see cref="ReadIfExists"/> reads it.

@@ -355,7 +355,7 @@ public sealed class AltairDiskTests
 
     /// <summary>
     ///  A step mid-sector keeps a byte waiting to be read, with NRDA, and the new track's bytes come from the next;
-    ///  a step out at track 0, which cannot move the head, changes nothing.
+    ///  a step out at track 0, which cannot move the head, leaves the waiting byte and what the head reads alone.
     /// </summary>
     [TestMethod]
     public void AStepKeepsAWaitingByte()
@@ -376,20 +376,31 @@ public sealed class AltairDiskTests
     }
 
     /// <summary>
-    ///  A blank sector has no one bit to assemble bytes from, so it never gives one.
+    ///  A blank sector has no one bit to assemble bytes from, so it never gives one, and the register keeps the
+    ///  byte it had from the track before.
     /// </summary>
     [TestMethod]
     public void ABlankSectorGivesNoBytes()
     {
-        AltairMachine machine = LoadedOnTrack0(AltairDisk.Blank());
+        AltairDisk disk = Disk();
+        byte[] blank = new byte[AltairDisk.SectorBytes];
+        for (int sector = 0; sector < AltairDisk.SectorsPerTrack; sector++) { disk.WriteSector(1, sector, blank); }
+
+        AltairMachine machine = LoadedOnTrack0(disk);
         ulong start = NextSector(machine.Processor.CycleCount);
-        for (ulong offset = 0; offset < AltairDiskTiming.SectorCycles; offset += AltairDiskTiming.ByteCycles / 2)
+        int first = (int)(start / AltairDiskTiming.SectorCycles % AltairDisk.SectorsPerTrack);
+        RunTo(machine, start + AltairDiskTiming.FirstByteCycles + (10 * AltairDiskTiming.ByteCycles));
+        byte held = machine.Bus.In(Data);
+        held.Should().Be(SectorBytes(0, first)[10]);
+        machine.Bus.Out(Control, 0x01);
+        ulong next = start + AltairDiskTiming.SectorCycles;
+        for (ulong offset = 0; offset < 2 * AltairDiskTiming.SectorCycles; offset += AltairDiskTiming.ByteCycles / 2)
         {
-            RunTo(machine, start + offset);
+            RunTo(machine, next + offset);
             (machine.Bus.In(Status) & 0x80).Should().Be(0x80, "no byte at {0} cycles", offset);
         }
 
-        machine.Bus.In(Data).Should().Be(0, "the register keeps the byte it had at power-on");
+        machine.Bus.In(Data).Should().Be(held, "the register keeps the byte it had");
     }
 
     /// <summary>

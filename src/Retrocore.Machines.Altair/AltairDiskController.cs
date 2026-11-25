@@ -446,7 +446,8 @@ public sealed class AltairDiskController
 
             if ((value & 0x03) != 0)
             {
-                // The head reads the new track from its next byte; a step that cannot move it changes nothing.
+                // The head reads the new track from its next byte. A step that cannot move it, out at track 0 or in at
+                // track 76, leaves what it reads alone, though the drive's step and settle times still start.
                 byte held = Data(out int waiting);
                 if (drive.Step(_cycle, inward: (value & 0x02) == 0)) { BeginReading(held, waiting); }
             }

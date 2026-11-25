@@ -61,6 +61,11 @@ public sealed partial class DocumentationResolver
     public DocumentationBibliography? Bibliography { get; init; }
 
     /// <summary>
+    ///  Gets a predicate for prose names that need no link, given the comment's path and the name.
+    /// </summary>
+    public Func<string, string, bool>? IgnoreUnlinkedName { get; init; }
+
+    /// <summary>
     ///  Maps a condition such as <c>ENHANCED</c> or <c>not ENHNCD</c> to the IIe model it selects.
     /// </summary>
     /// <param name="condition">The condition, or null.</param>

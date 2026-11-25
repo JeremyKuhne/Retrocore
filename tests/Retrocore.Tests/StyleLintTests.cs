@@ -241,6 +241,44 @@ public sealed class StyleLintTests
     }
 
     /// <summary>
+    ///  Configured prose words need no link, but names are case-sensitive and other names are still checked.
+    /// </summary>
+    [TestMethod]
+    public void ConfiguredWordsAreNotReportedAsUnlinkedNames()
+    {
+        string text = Pragma + """
+            .cpu Mos6502
+            .org $0300
+
+            ;; The ROM flag.
+            ROM = 1
+
+            ;; A differently cased name.
+            Rom = 2
+
+            ;; Reads ROM and Rom, then calls Print; see <ROM> and <Missing>.
+            .proc Start
+                rts
+            .endproc
+
+            ;; Prints.
+            .proc Print
+                rts
+            .endproc
+            """;
+
+        Lint(text).Where(diagnostic => diagnostic.Rule == DocumentationRules.UnlinkedName)
+            .Select(diagnostic => diagnostic.Name).Should().BeEquivalentTo("ROM", "Rom", "Print");
+
+        List<DocumentationDiagnostic> configured = Lint(text, new HashSet<string>(["ROM", "Missing"], StringComparer.Ordinal));
+        configured
+            .Where(diagnostic => diagnostic.Rule == DocumentationRules.UnlinkedName)
+            .Select(diagnostic => diagnostic.Name).Should().BeEquivalentTo("Rom", "Print");
+
+        configured.Should().ContainSingle(diagnostic => diagnostic.Rule == DocumentationRules.Link && diagnostic.Name == "Missing");
+    }
+
+    /// <summary>
     ///  Cheap-local and anonymous labels are labels: alone at column 0 they are clean, and with code after them
     ///  they belong on their own line.
     /// </summary>
@@ -837,6 +875,32 @@ public sealed class StyleLintTests
     }
 
     /// <summary>
+    ///  An unlinked name gets quick fixes that add it to the workspace's or the user's dictionary through the
+    ///  client's command, beside the exclusions.
+    /// </summary>
+    [TestMethod]
+    public void TheEditorOffersToAddAnUnlinkedNameToADictionary()
+    {
+        JsonObject unlinked = new()
+        {
+            ["range"] = new LspRange(1, 12, 1, 15).ToJson(),
+            ["severity"] = 2,
+            ["code"] = "unlinked-name",
+            ["data"] = new JsonObject { ["name"] = "RAM" }
+        };
+
+        JsonArray actions = LintEditor.Actions("file:///test.asm", ["Start:", ";; Copies to RAM."], [unlinked]);
+        actions
+            .Where(action => action?["command"] is not null)
+            .Select(action => $"{Required(action?["title"]).GetValue<string>()}: {Required(action?["command"]).ToJsonString()}")
+            .Should().Equal(
+            """Add RAM to the workspace dictionary: {"title":"Add RAM to the workspace dictionary","command":"retrocore.lint.addUnlinkedNameWord","arguments":["RAM","workspace"]}""",
+            """Add RAM to the user dictionary: {"title":"Add RAM to the user dictionary","command":"retrocore.lint.addUnlinkedNameWord","arguments":["RAM","user"]}""");
+
+        actions.Select(action => Required(action?["title"]).GetValue<string>()).Should().Contain("Ignore unlinked-name:RAM in this file");
+    }
+
+    /// <summary>
     ///  An exclusion's own mistakes are reported once each: a colon with no names, an empty list on the first line,
     ///  and a rule written twice.
     /// </summary>
@@ -931,11 +995,15 @@ public sealed class StyleLintTests
         value ?? throw new InvalidOperationException("A value was expected.");
 
     // The lint as the editor and the tests run it, exclusions applied.
-    private static List<DocumentationDiagnostic> Lint(string text)
+    private static List<DocumentationDiagnostic> Lint(string text, HashSet<string>? words = null)
     {
         DocumentationFile file = DocumentationParser.Parse(text, "test.asm");
         DocumentationSet set = DocumentationSet.Create([file], Assemble(text));
-        DocumentationResolver resolver = new(set, isInstruction: name => name.Equals("LDA", StringComparison.OrdinalIgnoreCase));
+        DocumentationResolver resolver = new(set, isInstruction: name => name.Equals("LDA", StringComparison.OrdinalIgnoreCase))
+        {
+            IgnoreUnlinkedName = words is null ? null : (_, name) => words.Contains(name)
+        };
+
         return resolver.Lint();
     }
 

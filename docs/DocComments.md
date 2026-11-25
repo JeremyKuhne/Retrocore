@@ -225,8 +225,11 @@ checked line by line:
 A flag's letter is reported with its word (`name the C flag by its word, 'carry'`), as are branch conditions
 such as `NZ`, which say the same as `zero` with its meaning turned around. The words come from the CPU's
 instruction-set description (the `flag` lines of `OpcodeTables.txt` and `Z80Isa.txt`), with what each flag
-means; hovering a flag's word in a `;;` comment shows its letter and meaning, as in **negative (N) flag**. A
-new CPU names its flags with the same words, adding one only for a flag no CPU has had.
+means. Comment hovers are shown only for explicit links, not for bare symbol or flag names. Hovering anywhere
+inside a link shows its target's documentation, including on its display text or module qualifier. A
+new CPU names its flags with the same words, adding one only for a flag no CPU has had. Instruction-link
+hovers use the CPU at the include site; when the same line is included under different CPUs, no instruction
+hover is shown until their CPUs agree.
 
 ### 2.3 Text formatting
 
@@ -515,6 +518,11 @@ broken link.
   `exclusion` is an error. An unknown ID is a warning, and an exclusion that turns nothing off is information. That is reported
   only where the lint looked: `historical-name`, `deprecated` and `using-shadow` run in the editor alone, and a `;;` block of a
   definition another build assembles is checked by that build.
+
+  For terms that should remain plain throughout a workspace, set `retrocore.lint.unlinkedNameWords` to a list of
+  case-sensitive names in VS Code's workspace or user settings. The editor combines the user, workspace and folder
+  lists; there are no default words. This affects `unlinked-name` warnings only, not explicit links or other rules.
+  The warning's quick fixes add its name to the workspace's or the user's list.
 
 ## 6. Open questions
 

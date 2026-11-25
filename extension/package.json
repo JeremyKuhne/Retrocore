@@ -343,6 +343,13 @@
           "default": "",
           "description": "Path to Retrocore.Debug.dll. Empty uses the workspace build under artifacts/AnyCPU/Release/Retrocore.Debug/net11.0."
         },
+        "retrocore.lint.unlinkedNameWords": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "scope": "resource",
+          "description": "Prose terms the unlinked-name lint does not require links for. User and workspace lists are combined."
+        },
         "retrocore.basic.dialect": {
           "type": "string",
           "enum": [
@@ -1019,6 +1026,10 @@
           "when": "false"
         },
         {
+          "command": "retrocore.lint.addUnlinkedNameWord",
+          "when": "false"
+        },
+        {
           "command": "retrocore.basic.open",
           "when": "debugType == retrocore || resourceScheme == retrocore-basic"
         },
@@ -1160,6 +1171,10 @@
       {
         "command": "retrocore.memory.test",
         "title": "Retrocore: Drive the Memory Editor"
+      },
+      {
+        "command": "retrocore.lint.addUnlinkedNameWord",
+        "title": "Retrocore: Add a Word to the Unlinked-Name Dictionary"
       },
       {
         "command": "retrocore.hardware.addCard",

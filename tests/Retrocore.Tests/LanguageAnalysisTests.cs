@@ -41,6 +41,786 @@ public sealed partial class LanguageAnalysisTests
         """;
 
     /// <summary>
+    ///  Comment hovers require an explicit link and resolve its complete target at every character of the link.
+    /// </summary>
+    /// <returns>The test.</returns>
+    [TestMethod]
+    public async Task CommentHoversResolveOnlyExplicitLinks()
+    {
+        string directory = Directory.CreateTempSubdirectory("retrocore-hover").FullName;
+        try
+        {
+            string path = Path.Join(directory, "Monitor.asm");
+            string text = """
+                .org $6000
+                ;; A decoy qualifier.
+                Monitor = 1
+                ;; The intended location.
+                LOC1 = $42
+                ;; Uses Monitor and LOC1 and carry; <Monitor:LOC1> and <location at Monitor:LOC1>.
+                ;; Also uses <Monitor:Missing> and <Missing at LOC1>.
+                Start:
+                    lda LOC1 ; LOC1 carry <Monitor:LOC1>
+                    rts
+                """.ReplaceLineEndings("\n");
+
+            File.WriteAllText(path, text);
+            RecordingLanguageClient client = new();
+            LanguageWorkspace workspace = new(client);
+            workspace.Update(path, text);
+            (await workspace.AnalysisOfAsync(path, CancellationToken.None)).Should().NotBeNull();
+            HoverHandler handler = new(workspace, new BasicDocuments(client));
+            DocumentUri uri = DocumentUri.FromFileSystemPath(path);
+            string[] lines = text.Split('\n');
+            foreach (int line in new[] { 5, 6, 8 })
+            {
+                int comment = SourceText.CommentStart(lines[line]);
+                List<DocumentationLink> links = DocumentationText.Links(lines[line]);
+                for (int column = comment; column < lines[line].Length; column++)
+                {
+                    DocumentationLink? link = links.FirstOrDefault(link => column >= link.Start && column < link.Start + link.Length);
+                    Hover? hover = await handler.Handle(Request(uri, line, column));
+                    if (link is null || link.Target == "Monitor:Missing")
+                    {
+                        hover.Should().BeNull($"line {line}, column {column} is not a resolved link");
+                        continue;
+                    }
+
+                    hover.Should().NotBeNull();
+                    (hover?.Contents.Value).Should().Contain("(constant) LOC1 = $42").And.Contain("The intended location.");
+                    hover?.Range.Should().Be(new LspRange(line, link.Start, line, link.Start + link.Length));
+                }
+            }
+
+            (await handler.Handle(Request(uri, 8, lines[8].IndexOf("LOC1", StringComparison.Ordinal))))
+                ?.Contents.Value.Should().Contain("(constant) LOC1");
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
+    ///  Links in plain comments use the scopes and using directives at the comment, and can describe directives,
+    ///  instructions and documented scopes.
+    /// </summary>
+    /// <returns>The test.</returns>
+    [TestMethod]
+    public async Task PlainCommentLinkHoversUseTheirOwnContext()
+    {
+        string directory = Directory.CreateTempSubdirectory("retrocore-hover").FullName;
+        try
+        {
+            string path = Path.Join(directory, "test.asm");
+            string text = """
+                .cpu Mos6502
+                .org $6000
+                Value = 1
+                ;; The imported scope.
+                .scope Imported
+                Target = 3
+                .endscope
+                .scope Inner
+                Value = 2
+                .using Imported
+                    lda #0 ; <Value> <Target> <.repeat> <LDA> <Imported>
+                .endscope
+                """.ReplaceLineEndings("\n");
+
+            File.WriteAllText(path, text);
+            RecordingLanguageClient client = new();
+            LanguageWorkspace workspace = new(client);
+            workspace.Update(path, text);
+            (await workspace.AnalysisOfAsync(path, CancellationToken.None)).Should().NotBeNull();
+            HoverHandler handler = new(workspace, new BasicDocuments(client));
+            DocumentUri uri = DocumentUri.FromFileSystemPath(path);
+            string line = text.Split('\n')[10];
+            foreach ((string link, string expected) in new (string, string)[]
+                {
+                    ("<Value>", "Inner::Value = $02"),
+                    ("<Target>", "Imported::Target = $03"),
+                    ("<.repeat>", ".repeat"),
+                    ("<LDA>", "Loads A from memory"),
+                    ("<Imported>", "The imported scope.")
+                })
+            {
+                Hover? hover = await handler.Handle(Request(uri, 10, line.IndexOf(link, StringComparison.Ordinal) + 1));
+                hover.Should().NotBeNull(link);
+                hover?.Contents.Value.Should().Contain(expected);
+            }
+
+            string undocumented = ".org $6000\nValue = 7\n    lda #0 ; <Value>\n";
+            workspace.Update(path, undocumented);
+            await workspace.IdleAsync(path, CancellationToken.None);
+            Hover? plain = await handler.Handle(Request(uri, 2, undocumented.Split('\n')[2].IndexOf("<Value>", StringComparison.Ordinal) + 1));
+            plain.Should().NotBeNull();
+            plain?.Contents.Value.Should().Contain("Value = $07");
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
+    ///  A link keeps its last successful definition and documentation when a later edit does not assemble.
+    /// </summary>
+    /// <returns>The test.</returns>
+    [TestMethod]
+    public async Task CommentLinkHoversSurviveAssemblyErrors()
+    {
+        string directory = Directory.CreateTempSubdirectory("retrocore-hover").FullName;
+        try
+        {
+            string path = Path.Join(directory, "test.asm");
+            string text = ".org $6000\n;; A documented value.\nValue = 42\n;; See <Value>.\nStart:\n    rts\n";
+            File.WriteAllText(path, text);
+            RecordingLanguageClient client = new();
+            LanguageWorkspace workspace = new(client);
+            workspace.Update(path, text);
+            (await workspace.AnalysisOfAsync(path, CancellationToken.None)).Should().NotBeNull();
+            HoverHandler handler = new(workspace, new BasicDocuments(client));
+            DocumentUri uri = DocumentUri.FromFileSystemPath(path);
+            int column = text.Split('\n')[3].IndexOf("<Value>", StringComparison.Ordinal) + 1;
+            (await handler.Handle(Request(uri, 3, column)))?.Contents.Value.Should().Contain("A documented value.");
+
+            workspace.Update(path, text + "    not_an_instruction\n");
+            await workspace.IdleAsync(path, CancellationToken.None);
+            Hover? hover = await handler.Handle(Request(uri, 3, column));
+            hover.Should().NotBeNull();
+            hover?.Contents.Value.Should().Contain("Value = $2A").And.Contain("A documented value.");
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
+    ///  A documentation link in an include uses the including scope and the exact case of its resolved name.
+    /// </summary>
+    /// <returns>The test.</returns>
+    [TestMethod]
+    public async Task DocumentationLinkHoverUsesIncludedScopeAndExactName()
+    {
+        string directory = Directory.CreateTempSubdirectory("retrocore-hover").FullName;
+        try
+        {
+            string path = Path.Join(directory, "root.asm");
+            string include = Path.Join(directory, "include.asm");
+            string root = """
+                .org $6000
+                ;; The outer value.
+                Value = 1
+                .scope Outer
+                .include "include.asm"
+                .endscope
+                """.ReplaceLineEndings("\n");
+
+            string text = """
+                ;; Upper case.
+                WORD = 3
+                ;; Mixed case.
+                Word = 4
+                ;; The included value.
+                Value = 2
+                ;; Uses <Value> and <Word>.
+                Start:
+                    rts
+                """.ReplaceLineEndings("\n");
+
+            File.WriteAllText(path, root);
+            File.WriteAllText(include, text);
+            RecordingLanguageClient client = new();
+            LanguageWorkspace workspace = new(client);
+            workspace.Update(path, root);
+            (await workspace.AnalysisOfAsync(path, CancellationToken.None)).Should().NotBeNull();
+            workspace.Update(include, text);
+            await workspace.IdleAsync(path, CancellationToken.None);
+            HoverHandler handler = new(workspace, new BasicDocuments(client));
+            DocumentUri uri = DocumentUri.FromFileSystemPath(include);
+            string line = text.Split('\n')[6];
+            Hover? value = await handler.Handle(Request(uri, 6, line.IndexOf("<Value>", StringComparison.Ordinal) + 1));
+            value.Should().NotBeNull();
+            value?.Contents.Value.Should().Contain("Outer::Value = $02").And.Contain("The included value.");
+            Hover? word = await handler.Handle(Request(uri, 6, line.IndexOf("<Word>", StringComparison.Ordinal) + 1));
+            word.Should().NotBeNull();
+            word?.Contents.Value.Should().Contain("Outer::Word = $04").And.Contain("Mixed case.");
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
+    ///  A scope documented in an include shadows a scope of the same name at the root.
+    /// </summary>
+    /// <returns>The test.</returns>
+    [TestMethod]
+    public async Task DocumentationLinkHoverFindsIncludedScope()
+    {
+        string directory = Directory.CreateTempSubdirectory("retrocore-hover").FullName;
+        try
+        {
+            string path = Path.Join(directory, "root.asm");
+            string include = Path.Join(directory, "include.asm");
+            string root = """
+                .org $6000
+                ;; The root scope.
+                .scope Local
+                .endscope
+                .scope Outer
+                .include "include.asm"
+                .endscope
+                ;; Uses <Outer::Local>.
+                RootEntry:
+                    rts
+                """.ReplaceLineEndings("\n");
+
+            string text = """
+                ;; The included scope.
+                .scope Local
+                    nop
+                .endscope
+                ;; Uses <Local>.
+                Entry:
+                    rts
+                """.ReplaceLineEndings("\n");
+
+            File.WriteAllText(path, root);
+            File.WriteAllText(include, text);
+            RecordingLanguageClient client = new();
+            LanguageWorkspace workspace = new(client);
+            workspace.Update(path, root);
+            (await workspace.AnalysisOfAsync(path, CancellationToken.None)).Should().NotBeNull();
+            workspace.Update(include, text);
+            await workspace.IdleAsync(path, CancellationToken.None);
+            HoverHandler handler = new(workspace, new BasicDocuments(client));
+            DocumentUri uri = DocumentUri.FromFileSystemPath(include);
+            int column = text.Split('\n')[4].IndexOf("<Local>", StringComparison.Ordinal) + 1;
+            Hover? hover = await handler.Handle(Request(uri, 4, column));
+            hover.Should().NotBeNull();
+            hover?.Contents.Value.Should().Contain("The included scope.");
+            int rootColumn = root.Split('\n')[7].IndexOf("<Outer::Local>", StringComparison.Ordinal) + 1;
+            Hover? qualified = await handler.Handle(Request(DocumentUri.FromFileSystemPath(path), 7, rootColumn));
+            qualified.Should().NotBeNull();
+            qualified?.Contents.Value.Should().Contain("The included scope.");
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
+    ///  A MACRO-10 link reaches the value stored under its six-character symbol.
+    /// </summary>
+    /// <returns>The test.</returns>
+    [TestMethod]
+    public async Task CommentLinkHoverUsesMacro10SignificantCharacters()
+    {
+        string directory = Directory.CreateTempSubdirectory("retrocore-hover").FullName;
+        try
+        {
+            string path = Path.Join(directory, "test.mac");
+            string text = """
+                ; retrocore: dialect=macro10
+                    ORG ^O10000
+                $Z:: NOP
+                ;; Stored value.
+                ZSTORDO=$Z
+                ;; Uses <ZSTORDO>.
+                SOME:: NOP
+                UNDOCUM=2
+                ; Uses <UNDOCUM>.
+                IFE 1,<
+                DEFINE VALUE,<NOP>
+                >
+                VALUE=3
+                ; Uses <VALUE>.
+                """.ReplaceLineEndings("\n");
+
+            File.WriteAllText(path, text);
+            RecordingLanguageClient client = new();
+            LanguageWorkspace workspace = new(client);
+            workspace.Update(path, text);
+            (await workspace.AnalysisOfAsync(path, CancellationToken.None)).Should().NotBeNull();
+            HoverHandler handler = new(workspace, new BasicDocuments(client));
+            DocumentUri uri = DocumentUri.FromFileSystemPath(path);
+            int column = text.Split('\n')[5].IndexOf("<ZSTORDO>", StringComparison.Ordinal) + 1;
+            Hover? hover = await handler.Handle(Request(uri, 5, column));
+            hover.Should().NotBeNull();
+            hover?.Contents.Value.Should().Contain("ZSTORD = $1000").And.Contain("Stored value.");
+            int undocumentedColumn = text.Split('\n')[8].IndexOf("<UNDOCUM>", StringComparison.Ordinal) + 1;
+            Hover? undocumented = await handler.Handle(Request(uri, 8, undocumentedColumn));
+            undocumented.Should().NotBeNull();
+            undocumented?.Contents.Value.Should().Contain("UNDOCU = $02");
+            int valueColumn = text.Split('\n')[13].IndexOf("<VALUE>", StringComparison.Ordinal) + 1;
+            Hover? value = await handler.Handle(Request(uri, 13, valueColumn));
+            value.Should().NotBeNull();
+            value?.Contents.Value.Should().Contain("VALUE = $03");
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
+    ///  A MACRO-10 include uses its own dialect for the value in its documentation link.
+    /// </summary>
+    /// <returns>The test.</returns>
+    [TestMethod]
+    public async Task CommentLinkHoverUsesIncludedMacro10Dialect()
+    {
+        string directory = Directory.CreateTempSubdirectory("retrocore-hover").FullName;
+        try
+        {
+            string path = Path.Join(directory, "root.asm");
+            string include = Path.Join(directory, "include.mac");
+            string root = """
+                .org $6000
+                ;; Mixed case.
+                Word = 2
+                ;; Upper case.
+                WORD = 1
+                ;; A native namesake.
+                ZSTORDO = 2
+                .include "include.mac" dialect=macro10
+                    rts
+                """.ReplaceLineEndings("\n");
+
+            string text = """
+                ;; Stored value.
+                ZSTORDO=1
+                ;; Uses <ZSTORDO> and <WORD>.
+                SOME:: NOP
+                """.ReplaceLineEndings("\n");
+
+            File.WriteAllText(path, root);
+            File.WriteAllText(include, text);
+            RecordingLanguageClient client = new();
+            LanguageWorkspace workspace = new(client);
+            workspace.Update(path, root);
+            (await workspace.AnalysisOfAsync(path, CancellationToken.None)).Should().NotBeNull();
+            workspace.Update(include, text);
+            await workspace.IdleAsync(path, CancellationToken.None);
+            HoverHandler handler = new(workspace, new BasicDocuments(client));
+            DocumentUri uri = DocumentUri.FromFileSystemPath(include);
+            int column = text.Split('\n')[2].IndexOf("<ZSTORDO>", StringComparison.Ordinal) + 1;
+            Hover? hover = await handler.Handle(Request(uri, 2, column));
+            hover.Should().NotBeNull();
+            hover?.Contents.Value.Should().Contain("ZSTORD = $01").And.Contain("Stored value.");
+            int wordColumn = text.Split('\n')[2].IndexOf("<WORD>", StringComparison.Ordinal) + 1;
+            Hover? word = await handler.Handle(Request(uri, 2, wordColumn));
+            word.Should().NotBeNull();
+            word?.Contents.Value.Should().Contain("WORD = $01").And.Contain("Upper case.");
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
+    ///  A MACRO-10 link uses significant characters inside the including scope.
+    /// </summary>
+    /// <returns>The test.</returns>
+    [TestMethod]
+    public async Task CommentLinkHoverUsesScopedMacro10Name()
+    {
+        string directory = Directory.CreateTempSubdirectory("retrocore-hover").FullName;
+        try
+        {
+            string path = Path.Join(directory, "root.asm");
+            string include = Path.Join(directory, "include.mac");
+            string root = ".org $6000\n.scope Outer\n.include \"include.mac\" dialect=macro10\n.endscope\n";
+            string text = """
+                ;; Stored value.
+                ZSTORDO=1
+                ;; Uses <ZSTORDO>, <Outer::ZSTORDO>, <Outer::zstordo>, <outer::zstordo> and <::Outer::ZSTORDO>.
+                SOME:: NOP
+                """.ReplaceLineEndings("\n");
+
+            File.WriteAllText(path, root);
+            File.WriteAllText(include, text);
+            RecordingLanguageClient client = new();
+            LanguageWorkspace workspace = new(client);
+            workspace.Update(path, root);
+            (await workspace.AnalysisOfAsync(path, CancellationToken.None)).Should().NotBeNull();
+            workspace.Update(include, text);
+            await workspace.IdleAsync(path, CancellationToken.None);
+            HoverHandler handler = new(workspace, new BasicDocuments(client));
+            DocumentUri uri = DocumentUri.FromFileSystemPath(include);
+            foreach (string link in (string[])["<ZSTORDO>", "<Outer::ZSTORDO>", "<Outer::zstordo>", "<outer::zstordo>", "<::Outer::ZSTORDO>"])
+            {
+                int column = text.Split('\n')[2].IndexOf(link, StringComparison.Ordinal) + 1;
+                Hover? hover = await handler.Handle(Request(uri, 2, column));
+                hover.Should().NotBeNull(link);
+                hover?.Contents.Value.Should().Contain("Outer::ZSTORD = $01").And.Contain("Stored value.");
+            }
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
+    ///  MACRO-10 special-character names use the same case and significant-character rules in links.
+    /// </summary>
+    /// <returns>The test.</returns>
+    [TestMethod]
+    public async Task CommentLinkHoverUsesSpecialMacro10Names()
+    {
+        string directory = Directory.CreateTempSubdirectory("retrocore-hover").FullName;
+        try
+        {
+            string path = Path.Join(directory, "root.asm");
+            string include = Path.Join(directory, "include.mac");
+            string root = ".org $6000\n.scope Native\n__m10_0 = $42\n.endscope\n"
+                + ".scope Outer\n.include \"include.mac\" dialect=macro10\n.endscope\n";
+
+            string text = "LONG$NAME=3\nLONG%NAME=4\nLONG.NAME=5\n.CPU=7\n"
+                + "; Uses <LONG$N>, <long$name>, <outer::long$name>, <long%name>, <long.name> and <.cpu>.\n";
+
+            File.WriteAllText(path, root);
+            File.WriteAllText(include, text);
+            RecordingLanguageClient client = new();
+            LanguageWorkspace workspace = new(client);
+            workspace.Update(path, root);
+            SourceAnalysis analysis = await workspace.AnalysisOfAsync(path, CancellationToken.None)
+                ?? throw new InvalidOperationException("The assembly was not analyzed.");
+
+            analysis.Definitions.Should().Contain(site => site.Name == "Native::__m10_0" && site.Value == 0x42);
+            workspace.Update(include, text);
+            await workspace.IdleAsync(path, CancellationToken.None);
+            HoverHandler handler = new(workspace, new BasicDocuments(client));
+            DocumentUri uri = DocumentUri.FromFileSystemPath(include);
+            foreach ((string link, string value) in ((string, string)[])
+                [("<LONG$N>", "$03"), ("<long$name>", "$03"), ("<outer::long$name>", "$03"), ("<long%name>", "$04"), ("<long.name>", "$05")])
+            {
+                int column = text.Split('\n')[4].IndexOf(link, StringComparison.Ordinal) + 1;
+                Hover? hover = await handler.Handle(Request(uri, 4, column));
+                hover.Should().NotBeNull(link);
+                hover?.Contents.Value.Should().Contain(value);
+            }
+
+            int directiveColumn = text.Split('\n')[4].IndexOf("<.cpu>", StringComparison.Ordinal) + 1;
+            Hover? directive = await handler.Handle(Request(uri, 4, directiveColumn));
+            directive.Should().NotBeNull();
+            directive?.Contents.Value.Should().Contain("Selects the CPU");
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
+    ///  A quoted semicolon does not turn a later code reference into a comment.
+    /// </summary>
+    /// <returns>The test.</returns>
+    [TestMethod]
+    public async Task CodeHoverIgnoresSemicolonsInsideStrings()
+    {
+        string directory = Directory.CreateTempSubdirectory("retrocore-hover").FullName;
+        try
+        {
+            string path = Path.Join(directory, "test.asm");
+            string text = ".org $6000\nTarget = 42\n.byte \"DON'T; \", Target\n";
+            File.WriteAllText(path, text);
+            RecordingLanguageClient client = new();
+            LanguageWorkspace workspace = new(client);
+            workspace.Update(path, text);
+            (await workspace.AnalysisOfAsync(path, CancellationToken.None)).Should().NotBeNull();
+            HoverHandler handler = new(workspace, new BasicDocuments(client));
+            int column = text.Split('\n')[2].IndexOf("Target", StringComparison.Ordinal);
+            Hover? hover = await handler.Handle(Request(DocumentUri.FromFileSystemPath(path), 2, column));
+            hover.Should().NotBeNull();
+            hover?.Contents.Value.Should().Contain("Target");
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
+    ///  The first declared CPU also applies to statements preceding its directive.
+    /// </summary>
+    /// <returns>The test.</returns>
+    [TestMethod]
+    public async Task CommentLinkHoverUsesFirstDeclaredCpuBeforeDirective()
+    {
+        string directory = Directory.CreateTempSubdirectory("retrocore-hover").FullName;
+        try
+        {
+            string path = Path.Join(directory, "root.asm");
+            string include = Path.Join(directory, "include.asm");
+            string root = ".org $6000\n.include \"include.asm\"\n.cpu Z80\n";
+            string text = ";; Uses <LDIR>.\nnop\n";
+            File.WriteAllText(path, root);
+            File.WriteAllText(include, text);
+            RecordingLanguageClient client = new();
+            LanguageWorkspace workspace = new(client);
+            workspace.Update(path, root);
+            SourceAnalysis analysis = await workspace.AnalysisOfAsync(path, CancellationToken.None)
+                ?? throw new InvalidOperationException("The assembly was not analyzed.");
+
+            analysis.Result.Success.Should().BeTrue();
+            var emitted = analysis.Result.SourceMap.Single(entry => entry.Location?.Path == include && entry.Size > 0);
+            emitted.InstructionSet?.Name.Should().Be("Z80");
+
+            workspace.Update(include, text);
+            await workspace.IdleAsync(path, CancellationToken.None);
+            HoverHandler handler = new(workspace, new BasicDocuments(client));
+            Hover? hover = await handler.Handle(Request(DocumentUri.FromFileSystemPath(include), 0, ";; Uses <".Length));
+            hover.Should().NotBeNull();
+            hover?.Contents.Value.Should().Contain("Repeats LDI until BC is zero.");
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
+    ///  A CPU switch in an include applies after the including line's comment.
+    /// </summary>
+    /// <returns>The test.</returns>
+    [TestMethod]
+    public async Task CommentLinkHoverUsesCpuBeforeIncludeSwitch()
+    {
+        string directory = Directory.CreateTempSubdirectory("retrocore-hover").FullName;
+        try
+        {
+            string path = Path.Join(directory, "root.asm");
+            string include = Path.Join(directory, "include.asm");
+            string root = ".cpu Z80\n.org $6000\n.include \"include.asm\" ; Uses <LDIR>.\n;; After <LDIR>.\nnop\n";
+            File.WriteAllText(path, root);
+            File.WriteAllText(include, ".cpu Mos6502\nrts\n");
+            RecordingLanguageClient client = new();
+            LanguageWorkspace workspace = new(client);
+            workspace.Update(path, root);
+            (await workspace.AnalysisOfAsync(path, CancellationToken.None)).Should().NotBeNull();
+            HoverHandler handler = new(workspace, new BasicDocuments(client));
+            int column = root.Split('\n')[2].IndexOf("<LDIR>", StringComparison.Ordinal) + 1;
+            Hover? hover = await handler.Handle(Request(DocumentUri.FromFileSystemPath(path), 2, column));
+            hover.Should().NotBeNull();
+            hover?.Contents.Value.Should().Contain("Repeats LDI until BC is zero.");
+            int afterColumn = root.Split('\n')[3].IndexOf("<LDIR>", StringComparison.Ordinal) + 1;
+            Hover? after = await handler.Handle(Request(DocumentUri.FromFileSystemPath(path), 3, afterColumn));
+            after.Should().BeNull();
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
+    ///  A comment at the top of an include sees the CPU inherited from its include site.
+    /// </summary>
+    /// <returns>The test.</returns>
+    [TestMethod]
+    public async Task CommentLinkHoverUsesCpuInheritedByInclude()
+    {
+        string directory = Directory.CreateTempSubdirectory("retrocore-hover").FullName;
+        try
+        {
+            string path = Path.Join(directory, "root.asm");
+            string include = Path.Join(directory, "include.asm");
+            string root = ".cpu Z80\n.org $6000\n.include \"include.asm\"\n";
+            string text = ";; Uses <LDIR>.\n.cpu Mos6502\nStart:\n    rts\n";
+            File.WriteAllText(path, root);
+            File.WriteAllText(include, text);
+            RecordingLanguageClient client = new();
+            LanguageWorkspace workspace = new(client);
+            workspace.Update(path, root);
+            (await workspace.AnalysisOfAsync(path, CancellationToken.None)).Should().NotBeNull();
+            workspace.Update(include, text);
+            await workspace.IdleAsync(path, CancellationToken.None);
+            HoverHandler handler = new(workspace, new BasicDocuments(client));
+            int column = text.IndexOf("<LDIR>", StringComparison.Ordinal) + 1;
+            Hover? hover = await handler.Handle(Request(DocumentUri.FromFileSystemPath(include), 0, column));
+            hover.Should().NotBeNull();
+            hover?.Contents.Value.Should().Contain("Repeats LDI until BC is zero.");
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
+    ///  An include also inherits its CPU when its first statement is in a nested include.
+    /// </summary>
+    /// <returns>The test.</returns>
+    [TestMethod]
+    public async Task CommentLinkHoverUsesCpuInheritedByNestedInclude()
+    {
+        string directory = Directory.CreateTempSubdirectory("retrocore-hover").FullName;
+        try
+        {
+            string path = Path.Join(directory, "root.asm");
+            string include = Path.Join(directory, "include.asm");
+            string nested = Path.Join(directory, "nested.asm");
+            string root = ".cpu Z80\n.org $6000\n.include \"include.asm\"\n";
+            string text = ";; Uses <LDIR>.\n.include \"nested.asm\" ; During <LDIR>.\n;; After <LDIR>.\n";
+            File.WriteAllText(path, root);
+            File.WriteAllText(include, text);
+            File.WriteAllText(nested, ".cpu Mos6502\nStart:\n    rts\n");
+            RecordingLanguageClient client = new();
+            LanguageWorkspace workspace = new(client);
+            workspace.Update(path, root);
+            (await workspace.AnalysisOfAsync(path, CancellationToken.None)).Should().NotBeNull();
+            workspace.Update(include, text);
+            await workspace.IdleAsync(path, CancellationToken.None);
+            HoverHandler handler = new(workspace, new BasicDocuments(client));
+            int column = text.IndexOf("<LDIR>", StringComparison.Ordinal) + 1;
+            Hover? hover = await handler.Handle(Request(DocumentUri.FromFileSystemPath(include), 0, column));
+            hover.Should().NotBeNull();
+            hover?.Contents.Value.Should().Contain("Repeats LDI until BC is zero.");
+            string[] lines = text.Split('\n');
+            Hover? during = await handler.Handle(Request(DocumentUri.FromFileSystemPath(include), 1,
+                lines[1].IndexOf("<LDIR>", StringComparison.Ordinal) + 1));
+
+            during.Should().NotBeNull();
+            Hover? after = await handler.Handle(Request(DocumentUri.FromFileSystemPath(include), 2,
+                lines[2].IndexOf("<LDIR>", StringComparison.Ordinal) + 1));
+
+            after.Should().BeNull();
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
+    ///  A comment-only include still inherits the CPU at its include site.
+    /// </summary>
+    /// <returns>The test.</returns>
+    [TestMethod]
+    public async Task CommentLinkHoverUsesCpuInheritedByCommentOnlyInclude()
+    {
+        string directory = Directory.CreateTempSubdirectory("retrocore-hover").FullName;
+        try
+        {
+            string path = Path.Join(directory, "root.asm");
+            string include = Path.Join(directory, "include.asm");
+            string root = ".cpu Z80\n.include \"include.asm\"\n.cpu Mos6502\n.org $6000\n.byte 0\n";
+            string text = ";; Uses <LDIR>.\n";
+            File.WriteAllText(path, root);
+            File.WriteAllText(include, text);
+            RecordingLanguageClient client = new();
+            LanguageWorkspace workspace = new(client);
+            workspace.Update(path, root);
+            (await workspace.AnalysisOfAsync(path, CancellationToken.None)).Should().NotBeNull();
+            workspace.Update(include, text);
+            await workspace.IdleAsync(path, CancellationToken.None);
+            HoverHandler handler = new(workspace, new BasicDocuments(client));
+            Hover? hover = await handler.Handle(Request(DocumentUri.FromFileSystemPath(include), 0, ";; Uses <".Length));
+            hover.Should().NotBeNull();
+            hover?.Contents.Value.Should().Contain("Repeats LDI until BC is zero.");
+            workspace.Update(path, ".cpu Z80\n.include \"include.asm\"\n.cpu Mos6502\n.include \"include.asm\"\n.org $6000\n.byte 0\n");
+            await workspace.IdleAsync(path, CancellationToken.None);
+            hover = await handler.Handle(Request(DocumentUri.FromFileSystemPath(include), 0, ";; Uses <".Length));
+            hover.Should().BeNull();
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
+    ///  A leading instruction link is ambiguous when an include starts under different CPUs.
+    /// </summary>
+    /// <returns>The test.</returns>
+    [TestMethod]
+    public async Task CommentLinkHoverDoesNotChooseBetweenIncludeCpus()
+    {
+        string directory = Directory.CreateTempSubdirectory("retrocore-hover").FullName;
+        try
+        {
+            string path = Path.Join(directory, "root.asm");
+            string include = Path.Join(directory, "include.asm");
+            string root = ".cpu Z80\n.org $6000\n.include \"include.asm\"\n.cpu Mos6502\n.include \"include.asm\"\n";
+            string text = ";; Before <LDIR>.\n.byte 0\n.cpu Z80\n;; After <LDIR>.\n.byte 0\n";
+            File.WriteAllText(path, root);
+            File.WriteAllText(include, text);
+            RecordingLanguageClient client = new();
+            LanguageWorkspace workspace = new(client);
+            workspace.Update(path, root);
+            (await workspace.AnalysisOfAsync(path, CancellationToken.None)).Should().NotBeNull();
+            workspace.Update(include, text);
+            await workspace.IdleAsync(path, CancellationToken.None);
+            HoverHandler handler = new(workspace, new BasicDocuments(client));
+            DocumentUri uri = DocumentUri.FromFileSystemPath(include);
+            Hover? before = await handler.Handle(Request(uri, 0, ";; Before <".Length));
+            Hover? after = await handler.Handle(Request(uri, 3, ";; After <".Length));
+            before.Should().BeNull();
+            after.Should().NotBeNull();
+            after?.Contents.Value.Should().Contain("Repeats LDI until BC is zero.");
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
+    ///  Instruction links use the assembled CPU, and document links point to a file URI with its anchor.
+    /// </summary>
+    /// <returns>The test.</returns>
+    [TestMethod]
+    public async Task CommentLinksUseTheAssembledCpuAndDocumentUri()
+    {
+        string directory = Directory.CreateTempSubdirectory("retrocore hover").FullName;
+        try
+        {
+            string path = Path.Join(directory, "test.asm");
+            string guide = Path.Join(directory, "guide.md");
+            string text = """
+                .cpu Mos6502
+                .org $6000
+                    nop
+                .cpu Z80
+                .if 0
+                .cpu Mos6502
+                .endif
+                ;; Uses <LDIR> and <guide at doc:guide.md#topic>.
+                Start:
+                    ldir
+                """.ReplaceLineEndings("\n");
+
+            File.WriteAllText(path, text);
+            File.WriteAllText(guide, "# Topic\n");
+            RecordingLanguageClient client = new();
+            LanguageWorkspace workspace = new(client);
+            workspace.Update(path, text);
+            (await workspace.AnalysisOfAsync(path, CancellationToken.None)).Should().NotBeNull();
+            HoverHandler handler = new(workspace, new BasicDocuments(client));
+            DocumentUri uri = DocumentUri.FromFileSystemPath(path);
+            string line = text.Split('\n')[7];
+            Hover? instruction = await handler.Handle(Request(uri, 7, line.IndexOf("<LDIR>", StringComparison.Ordinal) + 1));
+            instruction.Should().NotBeNull();
+            instruction?.Contents.Value.Should().Contain("Repeats LDI until BC is zero.");
+            Hover? document = await handler.Handle(Request(uri, 7, line.IndexOf("<guide", StringComparison.Ordinal) + 1));
+            document.Should().NotBeNull();
+            document?.Contents.Value.Should().Contain($"{new Uri(guide).AbsoluteUri}#topic");
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
     ///  Definitions come from the assembly, across includes, with the comment above them; open text overrides disk.
     /// </summary>
     [TestMethod]

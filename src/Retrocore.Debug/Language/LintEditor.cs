@@ -55,7 +55,8 @@ internal static class LintEditor
     /// <summary>
     ///  Gets the quick fixes for diagnostics: for each use of a historical name, one that writes the current name; for
     ///  each warning or information of a rule that can be ignored, ones that write an <c>ignore=</c> exclusion for
-    ///  the line (or the <c>;;</c> comment) and for the file.
+    ///  the line (or the <c>;;</c> comment) and for the file; and for each unlinked name, ones that add it to the
+    ///  workspace's or the user's dictionary through the client's <c>retrocore.lint.addUnlinkedNameWord</c> command.
     /// </summary>
     /// <param name="uri">The document.</param>
     /// <param name="lines">Its lines.</param>
@@ -82,6 +83,13 @@ internal static class LintEditor
                 actions.Add((JsonNode)Action($"Use {alternative}", uri, diagnostic, [edit], preferred: false));
             }
 
+            // A plain term can go in the editor's dictionary, which the client keeps in its settings.
+            if (code == DocumentationRules.UnlinkedName && diagnostic["data"]?["name"]?.GetValue<string>() is { } word)
+            {
+                actions.Add((JsonNode)Dictionary($"Add {word} to the workspace dictionary", word, "workspace", diagnostic));
+                actions.Add((JsonNode)Dictionary($"Add {word} to the user dictionary", word, "user", diagnostic));
+            }
+
             // Errors can't be ignored (DiagnosticSeverity.Error is 1).
             bool error = diagnostic["severity"] is JsonValue severity && severity.TryGetValue(out int level) && level == 1;
             if (error || code is null || DocumentationRules.Find(code) is not { Ignorable: true } rule) { continue; }
@@ -105,6 +113,20 @@ internal static class LintEditor
 
         return actions;
     }
+
+    // The client's command writes the word to the retrocore.lint.unlinkedNameWords setting.
+    private static JsonObject Dictionary(string title, string word, string scope, JsonObject diagnostic) => new()
+    {
+        ["title"] = title,
+        ["kind"] = "quickfix",
+        ["diagnostics"] = new JsonArray(diagnostic.DeepClone()),
+        ["command"] = new JsonObject
+        {
+            ["title"] = title,
+            ["command"] = "retrocore.lint.addUnlinkedNameWord",
+            ["arguments"] = new JsonArray(word, scope)
+        }
+    };
 
     private static JsonObject Action(string title, string uri, JsonObject diagnostic, JsonObject[] edits, bool preferred)
     {

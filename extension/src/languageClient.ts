@@ -82,6 +82,17 @@ export async function startLanguageClient(context: vscode.ExtensionContext): Pro
             textDocument: { uri: document.uri.toString(), languageId: document.languageId, version: document.version, text: document.getText() }
         });
     };
+    const wordsFor = (uri?: vscode.Uri): string[] => {
+        const values = vscode.workspace.getConfiguration("retrocore.lint", uri).inspect<string[]>("unlinkedNameWords");
+        return [...new Set([...(values?.globalValue ?? []), ...(values?.workspaceValue ?? []),
+            ...(values?.workspaceFolderValue ?? [])])];
+    };
+    const updateWords = (): void => notify("retrocore/unlinkedNameWords", {
+        words: wordsFor(),
+        folders: (vscode.workspace.workspaceFolders ?? []).map(folder => ({
+            uri: folder.uri.toString(), words: wordsFor(folder.uri)
+        }))
+    });
     context.subscriptions.push(configurations, vscode.workspace.onDidOpenTextDocument(opened),
         vscode.workspace.onDidChangeTextDocument(event => {
             if (isConfiguration(event.document)) notify("textDocument/didChange", {
@@ -91,10 +102,16 @@ export async function startLanguageClient(context: vscode.ExtensionContext): Pro
         }),
         vscode.workspace.onDidCloseTextDocument(document => {
             if (isConfiguration(document)) notify("textDocument/didClose", { textDocument: { uri: document.uri.toString() } });
-        }));
+        }),
+        vscode.workspace.onDidChangeConfiguration(event => {
+            if (event.affectsConfiguration("retrocore.lint.unlinkedNameWords")) updateWords();
+        }),
+        vscode.workspace.onDidChangeWorkspaceFolders(updateWords),
+        vscode.commands.registerCommand("retrocore.lint.addUnlinkedNameWord", addUnlinkedNameWord));
 
     const start = async (): Promise<void> => {
         await startFrom(context, host, configurations);
+        updateWords();
         for (const document of vscode.workspace.textDocuments) opened(document);
     };
     await start();
@@ -114,6 +131,23 @@ export async function startLanguageClient(context: vscode.ExtensionContext): Pro
     };
     context.subscriptions.push(watcher, watcher.onDidChange(changed), watcher.onDidCreate(changed),
         { dispose: () => { if (pending !== undefined) clearTimeout(pending); } });
+}
+
+/** Adds a word to the user's or the workspace's unlinked-name dictionary: the server's quick fix for the lint. */
+async function addUnlinkedNameWord(word?: unknown, scope?: unknown): Promise<boolean> {
+    if (typeof word !== "string" || word.length === 0) return false;
+    const workspace = scope === "workspace";
+    if (workspace && vscode.workspace.workspaceFolders === undefined) {
+        void vscode.window.showWarningMessage("Retrocore: open a folder or workspace to add words to its dictionary.");
+        return false;
+    }
+    const settings = vscode.workspace.getConfiguration("retrocore.lint");
+    const values = settings.inspect<string[]>("unlinkedNameWords");
+    const current = (workspace ? values?.workspaceValue : values?.globalValue) ?? [];
+    if (current.includes(word)) return true;
+    await settings.update("unlinkedNameWords", [...current, word],
+        workspace ? vscode.ConfigurationTarget.Workspace : vscode.ConfigurationTarget.Global);
+    return true;
 }
 
 async function startFrom(context: vscode.ExtensionContext, host: string, configurations: vscode.FileSystemWatcher): Promise<void> {

@@ -15,11 +15,13 @@ public sealed class DocumentationSet
     private readonly Dictionary<string, DocumentationTopic> _topics = [with(StringComparer.Ordinal)];
     private readonly List<DocumentationTopic> _ordered = [];
     private readonly IReadOnlyDictionary<string, long> _symbols;
-    private readonly Dictionary<string, List<(int Line, IsaDescription Cpu)>> _cpus = [with(StringComparer.OrdinalIgnoreCase)];
+    private readonly Dictionary<string, List<(int Line, InstructionSet Cpu)>> _cpus = [with(StringComparer.OrdinalIgnoreCase)];
 
     // The CPU every statement was assembled for, unless they were for more than one.
     private IsaDescription? _onlyCpu;
     private bool _mixed;
+    private InstructionSet? _onlyInstructionSet;
+    private bool _mixedInstructionSets;
     private HashSet<string>? _macros;
 
     // The lines the assembly's conditional assembly skipped: which branch of each .if it took.
@@ -137,29 +139,43 @@ public sealed class DocumentationSet
     }
 
     // Notes where each file's CPU changes, from the statements' own CPUs, in line order per file.
-    private static void ReadCpus(DocumentationSet set, IEnumerable<AssemblySourceMapEntry> sourceMap)
+    private static void ReadCpus(
+        DocumentationSet set,
+        IEnumerable<AssemblySourceMapEntry> sourceMap,
+        IEnumerable<(AssemblyLocation? Location, InstructionSet Cpu)>? cpuDirectives)
     {
-        foreach (AssemblySourceMapEntry entry in sourceMap)
+        void Record(InstructionSet cpu, AssemblyLocation? location)
         {
-            if (entry.InstructionSet is not { } cpu) { continue; }
             set._onlyCpu ??= cpu.Description;
             set._mixed |= set._onlyCpu != cpu.Description;
+            set._onlyInstructionSet ??= cpu;
+            set._mixedInstructionSets |= set._onlyInstructionSet != cpu;
 
             // A macro's statement counts for its definition and for each line that expanded it.
-            for (AssemblyLocation? location = entry.Location; location is not null; location = location.ExpandedFrom)
+            for (; location is not null; location = location.ExpandedFrom)
             {
                 if (location.Path.Length == 0) { continue; }
                 string path = System.IO.Path.GetFullPath(location.Path);
-                if (!set._cpus.TryGetValue(path, out List<(int Line, IsaDescription Cpu)>? runs))
+                if (!set._cpus.TryGetValue(path, out List<(int Line, InstructionSet Cpu)>? runs))
                 {
                     set._cpus[path] = runs = [];
                 }
 
-                runs.Add((location.Line, cpu.Description));
+                runs.Add((location.Line, cpu));
             }
         }
 
-        foreach (List<(int Line, IsaDescription Cpu)> runs in set._cpus.Values)
+        foreach (AssemblySourceMapEntry entry in sourceMap)
+        {
+            if (entry.InstructionSet is { } cpu) { Record(cpu, entry.Location); }
+        }
+
+        foreach ((AssemblyLocation? location, InstructionSet cpu) in cpuDirectives ?? [])
+        {
+            Record(cpu, location);
+        }
+
+        foreach (List<(int Line, InstructionSet Cpu)> runs in set._cpus.Values)
         {
             runs.Sort((left, right) => left.Line.CompareTo(right.Line));
         }
@@ -175,16 +191,31 @@ public sealed class DocumentationSet
     /// <returns>The CPU's description, or null.</returns>
     public IsaDescription? CpuAt(string path, int line)
     {
-        if (path.Length == 0 || !_cpus.TryGetValue(System.IO.Path.GetFullPath(path), out List<(int Line, IsaDescription Cpu)>? runs))
-        {
-            return _mixed ? null : _onlyCpu;
-        }
+        return path.Length == 0 || !_cpus.TryGetValue(System.IO.Path.GetFullPath(path), out List<(int Line, InstructionSet Cpu)>? runs)
+            ? _mixed ? null : _onlyCpu
+            : At(runs, line).Description;
+    }
 
-        IsaDescription cpu = runs[0].Cpu;
-        foreach ((int at, IsaDescription description) in runs)
+    /// <summary>
+    ///  Gets the exact instruction set assembled at a source line, or null when it cannot be determined.
+    /// </summary>
+    /// <param name="path">The source file.</param>
+    /// <param name="line">The zero-based line.</param>
+    /// <returns>The instruction set, or null.</returns>
+    public InstructionSet? InstructionSetAt(string path, int line)
+    {
+        return path.Length == 0 || !_cpus.TryGetValue(System.IO.Path.GetFullPath(path), out List<(int Line, InstructionSet Cpu)>? runs)
+            ? _mixedInstructionSets ? null : _onlyInstructionSet
+            : At(runs, line);
+    }
+
+    private static InstructionSet At(List<(int Line, InstructionSet Cpu)> runs, int line)
+    {
+        InstructionSet cpu = runs[0].Cpu;
+        foreach ((int at, InstructionSet set) in runs)
         {
             if (at > line) { break; }
-            cpu = description;
+            cpu = set;
         }
 
         return cpu;
@@ -206,6 +237,7 @@ public sealed class DocumentationSet
     ///  The assembly's symbol definitions, which count each macro body line's expansions for its historical names;
     ///  null when unknown, as for a debug file. Pass none for an assembly with errors, so no line counts as expanded.
     /// </param>
+    /// <param name="cpuDirectives">The assembled CPU directives, including those between emitted statements.</param>
     /// <returns>The set.</returns>
     public static DocumentationSet Create(
         IEnumerable<DocumentationFile> files,
@@ -214,11 +246,12 @@ public sealed class DocumentationSet
         string? model = null,
         IEnumerable<AssemblySourceMapEntry>? sourceMap = null,
         AssemblySkippedLines? skippedLines = null,
-        IEnumerable<AssemblySymbol>? definitions = null)
+        IEnumerable<AssemblySymbol>? definitions = null,
+        IEnumerable<(AssemblyLocation? Location, InstructionSet Cpu)>? cpuDirectives = null)
     {
         List<DocumentationFile> list = [.. files];
         DocumentationSet set = new(module, model, symbols, list) { _skipped = skippedLines };
-        if (sourceMap is not null) { ReadCpus(set, sourceMap); }
+        if (sourceMap is not null) { ReadCpus(set, sourceMap, cpuDirectives); }
 
         // Each expansion of a macro's body defines its symbols again, at the body's line.
         // Files are compared as the skipped-lines report compares them, so an editor's path matches the assembler's.

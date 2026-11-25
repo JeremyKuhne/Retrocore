@@ -255,6 +255,8 @@ public sealed class AtariBasicDialectTests
     [DataRow("NOTA$(1 AND1)")]
     [DataRow("NOTA$(1,1)")]
     [DataRow("NOTSIN+1")]
+    [DataRow("NOTAND+1")]
+    [DataRow("NOTOR+1")]
     [DataRow("NOTSIN(0)")]
     [DataRow("NOTCHR$(65)=\"A\"")]
     [DataRow("1 AND1.5")]
@@ -323,6 +325,7 @@ public sealed class AtariBasicDialectTests
     [DataRow("NOT - 1")]
     [DataRow("NOT NOT 1")]
     [DataRow("NOT$")]
+    [DataRow("OR+1")]
     public void RefusedExpressionsAreTheRoms(string expression)
     {
         AtariMachine machine = EvaluationMachine();

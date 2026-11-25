@@ -21,10 +21,10 @@ namespace Retrocore.Basic;
 ///   OPERATOR_AND, ANDs the exponent bytes, so 1 AND 0.5 is 0. A name that starts with NOT, AND or OR where that
 ///   operator can go is the operator and a name, as MATCH_OPERATOR reads it: NOTE1 is NOT E1, and NOTA$="X" is
 ///   NOT (A$="X"), though NOTA$ alone is the string, as the grammar falls back to it when NOT's operand fails, and
-///   NOTSIN+1 is the name NOTSIN plus 1, SIN having no (. A function's name is never a variable here, where
-///   SYNTAX_VARIABLE takes one as a name before a character from '0' up, the end of the line among them, so that
-///   NOTSIN alone is NOT SIN on the machine and the name NOTSIN here. A string that no DIM has given room is error 9,
-///   and its substring error 5, its length being 0.
+///   NOTSIN+1 is the name NOTSIN plus 1, SIN having no (, as NOTAND+1 is NOTAND plus 1. A function's name or an
+///   operator word is never a variable here, where SYNTAX_VARIABLE takes one as a name before a character from '0'
+///   up, the end of the line among them, so that NOTSIN alone is NOT SIN on the machine and the name NOTSIN here. A
+///   string that no DIM has given room is error 9, and its substring error 5, its length being 0.
 ///   <c>A(i)</c> and <c>A(i,j)</c> are array elements, counting from 0, <c>A(i)</c> being <c>A(i,0)</c>;
 ///   <c>A$(i)</c> is the string from character i and <c>A$(i,j)</c> characters i to j, counting from 1, never empty.
 ///   Subscripts, indexes and the arguments of PEEK and CHR$ round to an integer from 0 to 65535, or are error 3; a
@@ -49,6 +49,9 @@ internal sealed class AtariBasicExpression
         "STR$", "CHR$", "USR", "ASC", "VAL", "LEN", "ADR", "ATN", "COS", "PEEK", "SIN", "RND", "FRE", "EXP", "LOG",
         "CLOG", "SQR", "SGN", "ABS", "INT", "PADDLE", "STICK", "PTRIG", "STRIG"
     ];
+
+    // The operator name table's words that aren't functions, which no name is here.
+    private static readonly HashSet<string> s_words = ["GOTO", "GOSUB", "TO", "STEP", "THEN", "NOT", "OR", "AND"];
 
     // DEGFLG, the OS's flag that DEG sets for SIN, COS and ATN: 0 for radians.
     private const int DegreesFlag = 0xFB;
@@ -200,13 +203,14 @@ internal sealed class AtariBasicExpression
             // relation after it and its indexes; a function's name, as NOTSIN or NOTCHR$, only with its (. It decides
             // by the grammar, not the values.
             string rest = _tokens[at];
-            bool function = s_functions.Contains(rest) && (at + 1 >= _tokens.Count || _tokens[at + 1] != "(");
+            bool bracketed = at + 1 < _tokens.Count && _tokens[at + 1] == "(";
+            bool function = s_words.Contains(rest) || (s_functions.Contains(rest) && !bracketed);
             if (!function && (!whole.EndsWith('$') || ComparisonFollows(at))) { return Truth(Number(Operand()) == 0); }
             _tokens[at] = whole;
             return Operand();
         }
 
-        if (whole == "NOT" && _at > at) { return Truth(Number(Operand()) == 0); }
+        if (whole == "NOT") { return Truth(Number(Operand()) == 0); }
 
         return Operand();
     }
@@ -280,6 +284,7 @@ internal sealed class AtariBasicExpression
 
             if (!char.IsAsciiLetter(token[0])) { throw Syntax($"'{token}' does not start an expression"); }
             if (s_refused.Contains(token)) { throw Syntax($"{token} needs the running machine"); }
+            if (s_words.Contains(token)) { throw Syntax($"{token} is not a name"); }
             return token switch
             {
                 "ABS" => Rounded(Math.Abs(Number(Argument()))),

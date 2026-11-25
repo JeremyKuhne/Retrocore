@@ -1,64 +1,104 @@
-; B3INPUF: INPUT, GET and READ, which share one loop over their variables; NEXT; the type checks FRMNUM, CHKNUM and
-; CHKSTR; and the first half of FRMEVL, the formula evaluator, up to taking an operator off its stack (B3EvalG.asm
-; goes on from there).
-;
-; INPUT, GET and READ tell themselves apart by INPFLG: 0 for INPUT, $40 for GET, $98 for READ. Each keeps the place
-; in its data in INPPTR (with its bank in INPPTRB), pointing at the separator before the next item, and the place in
-; the statement's variable list in VARTXT while TXTPTR reads the data.
-;
-; Names follow Apple's Business BASIC 1.3 listing.
+; retrocore: style=strict
+;; B3INPUF: `INPUT`, `GET` and `READ`, which share one loop over their variables, <AssignVariableList>; `NEXT`; the type
+;; checks <EvaluateNumber>, <RequireNumber> and <RequireString>; and the first half of <EvaluateExpression>, the formula
+;; evaluator, up to taking an operator off its stack (B3EvalG.asm goes on from there).
+;;
+;; `INPUT`, `GET` and `READ` tell themselves apart by <INPFLG>: <INPUT_MODE_INPUT>, <INPUT_MODE_GET> or
+;; <INPUT_MODE_READ>. Each keeps the place in its data in <INPPTR> (with its X-byte in <INPPTRB>), pointing at the
+;; separator before the next item, and the place in the statement's variable list in <VARTXT> while <TXTPTR> reads the
+;; data.
+;;
+;; Apple's Business BASIC 1.3 listing (BB13) gives the names in `Also:`.
 
 ; ---------------------------------------------------------------------------------------------------------------------
 ; INPUT, GET and READ
 ; ---------------------------------------------------------------------------------------------------------------------
 
-;; Handles a data item that does not end in a comma or the end: INPUT asks again, READ and GET end with SYNTAX ERROR.
+;; <INPFLG> for `INPUT`.
+INPUT_MODE_INPUT = $00
+
+;; <INPFLG> for `GET`: bit 6 set.
+INPUT_MODE_GET = $40
+
+;; <INPFLG> for `READ`: bit 7 set.
+INPUT_MODE_READ = $98
+
+;; CONTROL-C, as the console reads it: a CONTROL-C at the start of `INPUT`'s line stops the program.
+CONTROL_C = $03
+
+;; The error number a bad answer to `INPUT` gives `ON ERR`, in <ERRNUM>.
+ERROR_REENTER = 254
+
+;; The error number data left over by `INPUT` or `GET` gives `ON ERR`, in <ERRNUM>.
+ERROR_EXTRA_IGNORED = 253
+
+;; Handles a data item that does not end in a comma or the end: `INPUT` asks again, `READ` and `GET` end with SYNTAX
+;; <ERROR>.
 ;;
-;; READ's error names the DATA statement's line, from <DATLIN>.
-TRMNOK:
+;; `READ`'s error names the `DATA` statement's line, from <DATLIN>.
+;; Entry:
+;;   ToSyntaxError = ends the statement with a syntax error
+;; Also: TRMNOK (BB13)
+.proc HandleBadInput
     lda INPFLG
-    beq TRMNO1                              ; INPUT
-    bpl SNERR4                              ; GET
+    beq RetryInput                          ; INPUT
+    bpl ToSyntaxError                       ; GET
     lda DATLIN
     ldy DATLIN+1
     sta CURLIN
     sty CURLIN+1
 
 ;; Ends the statement with a syntax error.
-SNERR4:
+;; Also: SNERR4 (BB13)
+ToSyntaxError:
     jmp SNERR
+.endproc
 
-;; Drops the byte <NUMINS> pushed, then asks again.
-TRMNO2:
+;; Drops the byte <AssignVariableList::ConvertNumber> pushed, then asks again.
+;; Also: TRMNO2 (BB13)
+.proc DiscardAndRetryInput
     pla
+    ; Falls into RetryInput.
+.endproc
 
-;; Asks again for INPUT's line: INPUT# from a file ends with TYPE MISMATCH, and with ON ERR the program goes to its line
-;; with error 254.
-TRMNO1:
+;; Asks again for `INPUT`'s line: `INPUT#` from a file ends with TYPE MISMATCH, and with `ON ERR` the program goes to
+;; its line with error <ERROR_REENTER>.
+;; Entry:
+;;   PrintReenter = prints ?REENTER and runs the `INPUT` statement again from its start
+;; Also: TRMNO1 (BB13)
+.proc RetryInput
     bit FILNO                               ; from the console?
-    bmi *+5
+    bmi FromConsole
     jmp TMERR
+
+;; Asks again, unless `ON ERR` takes the error.
+FromConsole:
     bit ERRFLG                              ; ON ERR on?
-    bpl DOAGIN
+    bpl PrintReenter
     ldy CURLIN+1
     iny
-    beq DOAGIN
-    ldx #254                                ; the error for a bad answer to INPUT
+    beq PrintReenter
+    ldx #ERROR_REENTER
     jmp ERROR
 
-;; Prints ?REENTER and runs the INPUT statement again from its start.
-DOAGIN:
-    lda #<(TRYAGN)
+;; Prints ?REENTER and runs the `INPUT` statement again from its start.
+;; Also: DOAGIN (BB13)
+PrintReenter:
+    lda #<(RetryMessage)
     ldx #0
-    ldy #>(TRYAGN)
-    jsr STROUT
-    jsr DOAG2
-    pla                                     ; NEWSTT's return address: NWSTT, which
+    ldy #>(RetryMessage)
+    jsr PrintText
+    jsr RewindInputStatement
+    pla                                     ; NextStatement's return address: SavePlace, which
     pla                                     ; needs no terminator, runs INPUT again
-    jmp NWSTT
+    jmp NextStatement::SavePlace
+.endproc
 
 ;; Points <TXTPTR> back at the statement's start, from <OLDTXT>.
-DOAG2:
+;; Entry:
+;;   Done = returns; `INPUT` branches here
+;; Also: DOAG2 (BB13)
+.proc RewindInputStatement
     lda OLDTXT
     ldy OLDTXT+1
     ldx OLDTXTB
@@ -66,158 +106,203 @@ DOAG2:
     sta TXTPTR
     sty TXTPTR+1
 
-;; An RTS for INPUT.
-GTRTS:
+;; Returns, for `INPUT`.
+;; Also: GTRTS (BB13)
+Done:
     rts
+.endproc
 
-;; The GET statement: reads one key, without echo, into each variable of its list, from the console, the EXEC file
-;; while EXEC runs, or a file after `#n;`.
+.scope Statements continued
+; GET and INPUT.
+
+;; The `GET` statement: reads one key, without echo, into each variable of its list, from the console, the <EXEC> file
+;; while `EXEC` runs, or a file after `#n;`.
 ;;
-;; A numeric variable takes the key's value as VAL would give it.
-;; In: A = the character after GET, flags as <CHRGOT> sets them
+;; A numeric variable takes the key's value as `VAL` would give it.
+;; In: A = the character after `GET`, flags as <CHRGOT> sets them
 ;; Errors: ILLEGAL DIRECT in a direct line
-;; See: <DOAGET>, <INLP2>
-GET:
+;; See: <DOAGET>, <AssignVariableList::SwitchToData>
+;; Also: GET (BB13)
+.proc Get
     jsr ERRDIR
     ldx INFLNO                              ; EXEC's file, if it runs
-    bne *+5
+    bne KeepReference
     ldx SLINTB+1                            ; else the console's
+
+;; Reads from the reference number in X, or from the file after `#`.
+KeepReference:
     stx GETREF
     cmp #'#'
-    bne GOTREF
+    bne StartLoop
     jsr GTFLNO
     sta GETREF
     jsr CHKSMC
 
-;; Starts the variable loop with no data, the zero at BUF+1, so each variable reads a key.
-GOTREF:
+;; Starts the variable loop with no data, the zero at <BUF>+1, so each variable reads a key.
+;; Also: GOTREF (BB13)
+StartLoop:
     ldx #<(BUF+1)
     ldy #>(BUF+1)
     lda #$80                                ; no terminators
     sta QUOTE
     lda #0
-    sta YSAVE                               ; the data's bank byte
+    sta YSAVE                               ; the data's X-byte
     sta BUF+1
     sta BUF
-    lda #64                                 ; INPFLG for GET
-    jmp INPCO1
+    lda #INPUT_MODE_GET
+    jmp AssignVariableList
+.endproc
 
-;; The INPUT statement: prints a prompt, reads a line from the console, or from a file after `#n;`, and assigns its
+;; The `INPUT` statement: prints a prompt, reads a line from the console, or from a file after `#n;`, and assigns its
 ;; items to the variables of the list.
 ;;
 ;; The prompt is the string given, or `?`. Items are separated by commas; the last variable, when a string, takes the
 ;; rest of the line, commas and all. When the line runs out, `??` asks for more. CONTROL-C at the start of the line
-;; stops the program, where CONT runs the INPUT again.
-;; In: A = the character after INPUT, flags as <CHRGOT> sets them
+;; stops the program, where `CONT` runs the `INPUT` again.
+;; In: A = the character after `INPUT`, flags as <CHRGOT> sets them
 ;; Errors: ILLEGAL DIRECT in a direct line
-;; See: <INLOOP>, <TRMNOK>, <VAREND>
-INPUT:
+;; See: <AssignVariableList>, <HandleBadInput>, <AssignVariableList::ListDone>
+;; Also: INPUT (BB13)
+.proc Input
     jsr ERRDIR
     jsr CHRGOT
-    cmp #34                                 ; a prompt?
-    bne NOTQT0
+    cmp #'"'                                ; a prompt?
+    bne CheckFile
     jsr STRTXT
     jsr CHRGOT
-    cmp #$2C
-    beq INPAOK
-    lda #59                                 ; not a comma: it must be a semicolon
+    cmp #','
+    beq PrintPrompt
+    lda #';'                                ; not a comma: it must be a semicolon
 
 ;; Checks the comma or semicolon after the prompt, prints the prompt, and reads the line.
-INPAOK:
+;; Also: INPAOK (BB13)
+PrintPrompt:
     jsr SYNCHR
-    jsr STRPRT
-    jmp NOTQTII
+    jsr PrintString
+    jmp ReadLine
 
-;; Takes INPUT# n; from a file, or prints the `?` prompt.
-NOTQT0:
+;; Takes `INPUT# n;` from a file, or prints the `?` prompt.
+;; Also: NOTQT0 (BB13)
+CheckFile:
     cmp #'#'
-    bne NOTQTI
+    bne QuestionPrompt
     ror IOFLG
     jsr FILNUM
     jsr CHRGOT
-    cmp #$3B
-    bne GTRTS                               ; no semicolon: NEWSTT gives the syntax error
+    cmp #';'
+    bne RewindInputStatement::Done          ; no semicolon: NextStatement gives the syntax error
     lda SVFLNO
     sta FILNO
     jsr CHRGET
     jsr DSKLIN
-    lda #44                                 ; a comma before the line, as the separator
+    lda #','                                ; a comma before the line, as the separator
     sta BUF-1
-    jmp INPCON
+    jmp AssignInputList
 
 ;; Prints the `?` prompt.
-NOTQTI:
-    jsr OUTQST
+;; Also: NOTQTI (BB13)
+QuestionPrompt:
+    jsr PrintQuestionMark
 
-;; Reads INPUT's line from the console into <BUF>, with a comma before it.
-NOTQTII:
+;; Reads `INPUT`'s line from the console into <BUF>, with a comma before it.
+;; Also: NOTQTII (BB13)
+ReadLine:
     ldx #0
     stx QUOTE                               ; commas end items
     dex
     stx FILNO                               ; from the console
-    lda #44
+    lda #','
     sta BUF-1
     jsr INLIN
     lda BUF
-    cmp #$03                                ; CONTROL-C at the start?
-    bne INPCON
-    jsr DOAG2                               ; so CONT runs the INPUT again
-    lda #3
-    jmp ISCNTC2
+    cmp #CONTROL_C                          ; CONTROL-C at the start?
+    bne AssignInputList
+    jsr RewindInputStatement                ; so CONT runs the INPUT again
+    lda #CONTROL_C
+    jmp HandleBreak::WithFlags
+.endproc
 
-;; Prints `?` and reads a line from the console, so a second `?` follows INPUT's.
-QINLIN:
-    jsr OUTQST
+.endscope
+
+;; Prints `?` and reads a line from the console, so a second `?` follows `INPUT`'s.
+;; Also: QINLIN (BB13)
+.proc PromptAndInputLine
+    jsr PrintQuestionMark
     jmp INLIN
+.endproc
 
-;; The READ statement: assigns the items of the program's DATA statements to the variables of the list, from
-;; <DATPTR> on; READ# reads from a file instead.
-;; In: A = the character after READ, flags as <CHRGOT> sets them
-;; Errors: OUT OF DATA when the DATA statements run out, SYNTAX ERROR for a bad item (on the DATA's line)
-;; See: <DATLOP>, <DREAD>, <RESTOR>
-READ:
+.scope Statements continued
+; READ.
+
+;; The `READ` statement: assigns the items of the program's `DATA` statements to the variables of the list, from
+;; <DATPTR> on; `READ#` reads from a file instead.
+;; In: A = the character after `READ`, flags as <CHRGOT> sets them
+;; Errors: OUT OF DATA when the `DATA` statements run out, SYNTAX ERROR for a bad item (on the `DATA`'s line)
+;; See: <AssignVariableList::SearchData>, <DREAD>, <Statements::Restore>
+;; Also: READ (BB13)
+.proc Read
     ldx DATPTRB
     stx YSAVE
     ldx DATPTR
     ldy DATPTR+1
     cmp #'#'
-    bne READON
+    bne StartLoop
     jmp DREAD
 
-;; Starts READ's variable loop.
-READON:
+;; Starts `READ`'s variable loop.
+;; Also: READON (BB13)
+StartLoop:
     lda #0
     sta QUOTE
-    lda #$98                                ; INPFLG for READ
-    .byte 44                                ; BIT abs, which skips the next LDA
+    lda #INPUT_MODE_READ
+    .byte $2C                               ; BIT absolute skips AssignInputList's LDA
+    ; Falls into AssignInputList.
+.endproc
 
-;; Starts INPUT's variable loop.
-INPCON:
-    lda #0
+.endscope
 
-;; Starts the variable loop with the flag and the data's place.
-;; In: A = INPFLG's value, X, Y = the data's place (low, high), YSAVE = its bank
-INPCO1:
+;; Starts `INPUT`'s variable loop.
+;; In: X, Y = the data's place (low, high), YSAVE = its X-byte
+;; Also: INPCON (BB13)
+.proc AssignInputList
+    lda #INPUT_MODE_INPUT
+    ; Falls into AssignVariableList.
+.endproc
+
+;; Assigns an item of the data to each variable of `INPUT`'s, `GET`'s or `READ`'s list.
+;;
+;; <INPPTR> keeps the place in the data while <VARTXT> keeps the place in the list. `GET` reads a key when its data,
+;; which starts empty, runs out; `READ` looks for the next `DATA` statement; `INPUT` reads another line.
+;; In: A = <INPFLG>'s value, X, Y = the data's place (low, high), YSAVE = its X-byte
+;; Errors: OUT OF DATA when `READ` finds no more `DATA`, and <HandleBadInput>'s for a bad item
+;; Entry:
+;;   SearchData = looks for the next `DATA` statement
+;;   ListDone = ends the loop
+;; See: <MYPTRGET>, <AssignString>, <StoreNumber>
+;; Also: INPCO1 (BB13)
+.proc AssignVariableList
     sta INPFLG
     stx INPPTR
     ldx YSAVE
     stx INPPTRB
     sty INPPTR+1
 
-;; Takes the next variable of the list; for INPUT and GET, the last one takes the data with no terminators.
-INLOOP:
+;; Takes the next variable of the list; for `INPUT` and `GET`, the last one takes the data with no terminators.
+;; Also: INLOOP (BB13)
+NextVariable:
     jsr MYPTRGET                            ; the variable's address in FORPNT
     bit INPFLG
-    bmi INLP2                               ; READ
+    bmi SwitchToData                        ; READ
     jsr CHRGOT
-    bne INLP2
+    bne SwitchToData
     lda #$80                                ; the last variable: no terminators
     sta QUOTE
 
 ;; Moves <TXTPTR> to the data, keeping the list's place in <VARTXT>, and takes the next item; at the end of the data,
-;; GET reads a key, READ finds the next DATA statement, and INPUT reads another line.
-INLP2:
-    jsr SVTXT
+;; `GET` reads a key, `READ` finds the next `DATA` statement, and `INPUT` reads another line.
+;; Also: INLP2 (BB13)
+SwitchToData:
+    jsr SaveTextPointer
     ldx INPPTR
     ldy INPPTR+1
     lda INPPTRB
@@ -225,10 +310,10 @@ INLP2:
     stx TXTPTR
     sty TXTPTR+1
     ldy #0
-    lda (TXTPTR),Y                          ; the separator, or the data's end
-    bne DATBK1
+    lda (TXTPTR),y                          ; the separator, or the data's end
+    bne NextValue
     bit INPFLG
-    bvc QDATA
+    bvc SourceEmpty
     jsr DOAGET                              ; GET: a key into KEYSAVE
     ldx #<(KEYSAVE)
     ldy #>(KEYSAVE)
@@ -242,228 +327,256 @@ INLP2:
     jsr STRCP
     pla
     sta VALTYP
-    jsr CHANGTP
-    jsr LETP2
-    jmp STRDN2
+    jsr ConvertKey
+    jsr AssignFac
+    jmp CheckTerminator
 
-;; Gets more data: READ looks for the next DATA, INPUT reads another line from its file or the console.
-QDATA:
-    bmi DTLP1                               ; READ
+;; Gets more data: `READ` looks for the next `DATA`, `INPUT` reads another line from its file or the console.
+;; Also: QDATA (BB13)
+SourceEmpty:
+    bmi ToSearchData                        ; READ
     bit FILNO
-    bmi QD11                                ; the console
+    bmi AskForMore                          ; the console
     jsr DSKLIN
-    jmp DATBK
+    jmp SetCursor
 
 ;; Asks for more with `??`.
-QD11:
-    jsr OUTQST
-    jsr QINLIN
+;; Also: QD11 (BB13)
+AskForMore:
+    jsr PrintQuestionMark
+    jsr PromptAndInputLine
 
 ;; Points <TXTPTR> at the new line.
 ;; In: X, Y = the line's place (low, high)
-DATBK:
+;; Also: DATBK (BB13)
+SetCursor:
     stx TXTPTR
     lda INPPTRB
     sta TXTPTRB
     sty TXTPTR+1
 
 ;; Takes the item after the separator: a number, or a string.
-DATBK1:
+;; Also: DATBK1 (BB13)
+NextValue:
     ldy #1
-    jsr ADDON                               ; past the separator
+    jsr AdvanceTextPointer                  ; past the separator
     bit VALTYP
-    bpl NUMINS                              ; a number
+    bpl ConvertNumber                       ; a number
     bit INPFLG
-    bvc SETQUT
+    bvc SetDelimiters
     inx                                     ; GET (never here: its data stays the zero)
     stx TXTPTR
 
 ;; Takes the string up to the data's end, with no terminators.
-NOTERMS:
+;; Also: NOTERMS (BB13)
+NoDelimiters:
     lda #0
     sta CHARAC
-    beq RESETC
+    beq StringAtCursor
 
-;; Goes on looking for READ's next DATA statement.
-DTLP1:
-    jmp DATLOP
+;; Goes on looking for `READ`'s next `DATA` statement.
+;; Also: DTLP1 (BB13)
+ToSearchData:
+    jmp SearchData
 
 ;; Chooses the string's terminators: a quote for a quoted string, a comma otherwise, none for the last variable of
-;; INPUT.
-SETQUT:
+;; `INPUT`.
+;; Also: SETQUT (BB13)
+SetDelimiters:
     ldy #0
-    lda (TXTPTR),Y
+    lda (TXTPTR),y
     sta CHARAC
     bit QUOTE
-    bmi NOTERMS
-    cmp #34                                 ; a quote: the string is inside it
-    beq NOWGET
-    lda #44
+    bmi NoDelimiters
+    cmp #'"'                                ; a quote: the string is inside it
+    beq MakeString
+    lda #','
     sta CHARAC
 
 ;; Starts the string at <TXTPTR> itself.
-RESETC:
+;; Also: RESETC (BB13)
+StringAtCursor:
     clc
 
 ;; Makes a string of the item and assigns it.
-;; In: A = ENDCHR's terminator, carry = set to start after TXTPTR (past a quote)
-NOWGET:
+;; In: A = <ENDCHR>'s terminator, carry = set to start after <TXTPTR> (past a quote)
+;; Also: NOWGET (BB13)
+MakeString:
     sta ENDCHR
     lda TXTPTR
     ldx TXTPTRB
     ldy TXTPTR+1
     adc #0
-    bcc NOWGE1
+    bcc HaveAddress
     iny
     cpy #MAXPG
-    bcc *+5
+    bcc HaveAddress
     inx
     ldy #MINPG
 
-;; Makes the string, moves TXTPTR past it and assigns it.
-NOWGE1:
+;; Makes the string, moves <TXTPTR> past it and assigns it.
+;; Also: NOWGE1 (BB13)
+HaveAddress:
     jsr STRLT2
     jsr ST2TXT
-    jsr INPCOM
-    jmp STRDN2
+    jsr AssignString
+    jmp CheckTerminator
 
-;; Takes a number: an empty INPUT line, or an INPUT item with no digits, asks again.
-;; In: overflow = set for a long integer, as VALTYP's BIT sets it
-NUMINS:
+;; Takes a number: an empty `INPUT` line, or an `INPUT` item with no digits, asks again.
+;; In: overflow = set for a long integer, as <VALTYP>'s BIT sets it
+;; Also: NUMINS (BB13)
+ConvertNumber:
     pha
     lda BUF
-    beq MAYBAD                              ; an empty line
+    beq EmptyNumber                         ; an empty line
 
 ;; Reads the number, a long integer through <LINP> or a real through <FIN>.
-NUMINS2:
+;; Also: NUMINS2 (BB13)
+ReadNumber:
     pla
-    bvs NUMBCD                              ; a long integer
+    bvs ReadLongInteger                     ; a long integer
     jsr FIN
     bit INPFLG
-    bvs NUMINS3                             ; GET
-    bmi NUMINS3                             ; READ
+    bvs StoreValue                          ; GET
+    bmi StoreValue                          ; READ
     pha
     lda ANYNUM
-    bmi MAYBAD                              ; no digits
+    bmi EmptyNumber                         ; no digits
     pla
 
 ;; Stores the number as a real or an integer, as the variable is.
-NUMINS3:
+;; Also: NUMINS3 (BB13)
+StoreValue:
     lda INTFLG
-    jsr QINTGR
+    jsr StoreNumber
 
 ;; Checks what ends the item, a terminator or a comma, then keeps the data's place and takes the next variable.
-STRDN2:
+;; Also: STRDN2 (BB13)
+CheckTerminator:
     jsr CHRGOT
-    beq TRMOK
-    cmp #44                                 ; a comma?
-    beq *+5
-    jmp TRMNOK
+    beq TerminatorOk
+    cmp #','
+    beq TerminatorOk
+    jmp HandleBadInput
 
 ;; Keeps the data's place in <INPPTR>, goes back to the list, and takes the next variable or ends.
-TRMOK:
+;; Also: TRMOK (BB13)
+TerminatorOk:
     lda TXTPTR
     ldx TXTPTRB
     ldy TXTPTR+1
     sta INPPTR
     stx INPPTRB
     sty INPPTR+1
-    jsr RSTTXT
+    jsr RestoreTextPointer
     jsr CHRGOT
-    beq VAREND
+    beq ListDone
     jsr CHKCOM
-    jmp INLOOP
+    jmp NextVariable
 
 ;; Reads a long integer and stores it.
-NUMBCD:
+;; Also: NUMBCD (BB13)
+ReadLongInteger:
     jsr LINP
-    jsr BMOVF1
-    jmp STRDN2
+    jsr StoreLongInteger
+    jmp CheckTerminator
 
-;; Handles a missing number: INPUT asks again; READ and GET go on to read it.
+;; Handles a missing number: `INPUT` asks again; `READ` and `GET` go on to read it.
 ;;
-;; The empty-line test reads BUF even for READ, whose data is elsewhere, so READ comes here for nothing at times.
-MAYBAD:
+;; The empty-line test reads <BUF> even for `READ`, whose data is elsewhere, so `READ` comes here for nothing at times.
+;; Also: MAYBAD (BB13)
+EmptyNumber:
     lsr ANYNUM
     lda INPFLG
-    bne NUMINS2
-    jmp TRMNO2
+    bne ReadNumber
+    jmp DiscardAndRetryInput
 
-;; Looks for the next DATA statement, from <TXTPTR>, keeping its line number in <DATLIN>.
+;; Looks for the next `DATA` statement, from <TXTPTR>, keeping its line number in <DATLIN>.
 ;; Errors: OUT OF DATA at the program's end
-DATLOP:
-    jsr DATAN                               ; the statement's end
+;; Also: DATLOP (BB13)
+SearchData:
+    jsr FindStatementEnd                    ; the statement's end
     iny
     tax
-    bne NOWLIN                              ; a colon: the next statement is on this line
+    bne CheckStatement                      ; a colon: the next statement is on this line
     ldx #ERROD
-    lda (TXTPTR),Y                          ; the next line's link
-    bne *+5
+    lda (TXTPTR),y                          ; the next line's link
+    bne NextDataLine
     jmp ERROR
+
+;; Takes the next line's number.
+NextDataLine:
     iny
-    lda (TXTPTR),Y                          ; the line number's low byte
+    lda (TXTPTR),y                          ; the line number's low byte
     sta DATLIN
     iny
-    lda (TXTPTR),Y                          ; and its high byte
+    lda (TXTPTR),y                          ; and its high byte
     iny
     sta DATLIN+1
 
-;; Checks the statement's first byte for DATA, and takes its first item when it is.
-NOWLIN:
-    lda (TXTPTR),Y
+;; Checks the statement's first byte for `DATA`, and takes its first item when it is.
+;; Also: NOWLIN (BB13)
+CheckStatement:
+    lda (TXTPTR),y
     tax
-    jsr ADDON
+    jsr AdvanceTextPointer
     cpx #DATATK
-    bne DATLOP
+    bne SearchData
     jsr CHRGET
     jsr DECTPT
-    jmp DATBK1
+    jmp NextValue
 
-;; Ends the variable loop: READ keeps its place in <DATPTR>; INPUT and GET check that the data is used up.
+;; Ends the variable loop: `READ` keeps its place in <DATPTR>; `INPUT` and `GET` check that the data is used up.
 ;;
-;; Data left over prints ?EXTRA IGNORED through <ERRFIN>, which ends at <READY>; with ON ERR the program goes to its
-;; line with error 253 instead.
-VAREND:
+;; Data left over prints ?EXTRA IGNORED through <ERRFIN>, which ends at <READY>; with `ON ERR` the program goes to its
+;; line with error <ERROR_EXTRA_IGNORED> instead.
+;; Also: VAREND (BB13)
+ListDone:
     lda #0
     sta QUOTE
     lda INPPTR
     ldy INPPTR+1
     ldx INPPTRB
     bit INPFLG
-    bpl VARY0
-    jmp RESFIN                              ; READ
+    bpl CheckExtra
+    jmp Statements::Restore::SetDataPointer ; READ
 
 ;; Checks for data left over.
-VARY0:
+;; Also: VARY0 (BB13)
+CheckExtra:
     ldy #0
-    lda (INPPTR),Y                          ; the end should be a zero
-    beq INPRTS
-    jsr INPRTS
+    lda (INPPTR),y                          ; the end should be a zero
+    beq RestoreOutput
+    jsr RestoreOutput
     bit ERRFLG                              ; ON ERR on?
-    bpl INPVAR0
-    ldx #253                                ; the error for data left over
+    bpl PrintExtraIgnored
+    ldx #ERROR_EXTRA_IGNORED
     ldy CURLIN+1
     iny
-    beq INPVAR0
+    beq PrintExtraIgnored
     jmp ERROR
 
 ;; Prints ?EXTRA IGNORED and the line.
-INPVAR0:
-    lda #<(EXIGNT)
+;; Also: INPVAR0 (BB13)
+PrintExtraIgnored:
+    lda #<(ExtraIgnoredMessage)
     ldx #0
-    ldy #>(EXIGNT)
+    ldy #>(ExtraIgnoredMessage)
     jmp ERRFIN
 
-;; Sends output back to its usual place, after INPUT#.
-INPRTS:
+;; Sends output back to its usual place, after `INPUT#`.
+;; Also: INPRTS (BB13)
+RestoreOutput:
     lda FILNO+1
     sta FILNO
     rts
+.endproc
 
 ;; Keeps <TXTPTR> in <VARTXT>.
 ;; Uses: A, X, Y
-;; See: <RSTTXT>
-SVTXT:
+;; See: <RestoreTextPointer>
+;; Also: SVTXT (BB13)
+.proc SaveTextPointer
     lda TXTPTR
     ldy TXTPTR+1
     ldx TXTPTRB
@@ -471,11 +584,14 @@ SVTXT:
     sta VARTXT
     sty VARTXT+1
     rts
+.endproc
 
 ;; Sets <TXTPTR> back from <VARTXT>.
 ;; Uses: A
-;; See: <SVTXT>
-RSTTXT:
+;; Keeps: X, Y
+;; See: <SaveTextPointer>
+;; Also: RSTTXT (BB13)
+.proc RestoreTextPointer
     lda VARTXT
     sta TXTPTR
     lda VARTXT+1
@@ -483,59 +599,71 @@ RSTTXT:
     lda VARTXTB
     sta TXTPTRB
     rts
+.endproc
 
 ;; The message for data left over, ending in a zero.
-EXIGNT:
+;; Also: EXIGNT (BB13)
+ExtraIgnoredMessage:
     .byte "?EXTRA IGNORED"
     .byte 0
 
-;; The message asking INPUT's line again, ending in a zero.
-TRYAGN:
+;; The message asking for `INPUT`'s line again, ending in a zero.
+;; Also: TRYAGN (BB13)
+RetryMessage:
     .byte "?REENTER"
-    .byte 13, 10, 0
+    .byte RETURN_CHARACTER, LINE_FEED_CHARACTER, 0
 
-;; Turns GET's string into the variable's type: a real through <VAL>, a long integer through <STR2LNG>.
+;; Turns `GET`'s string into the variable's type: a real through <VAL>, a long integer through <STR2LNG>.
 ;; In: VALTYP = the variable's type
-CHANGTP:
+;; Also: CHANGTP (BB13)
+.proc ConvertKey
     bit VALTYP
-    bmi ISSTRIN
-    bvs ISLONG
+    bmi IsString
+    bvs ToLongInteger
     jmp VAL
 
-;; An RTS: a string variable takes the string as it is.
-ISSTRIN:
+;; Returns: a string variable takes the string as it is.
+;; Also: ISSTRIN (BB13)
+IsString:
     rts
 
 ;; Turns the string into a long integer.
-ISLONG:
+;; Also: ISLONG (BB13)
+ToLongInteger:
     jmp STR2LNG
+.endproc
 
 ; ---------------------------------------------------------------------------------------------------------------------
 ; NEXT
 ; ---------------------------------------------------------------------------------------------------------------------
 
-;; The NEXT statement: adds the step to the loop's variable, and goes back after the FOR unless the variable has passed
-;; the limit.
+.scope Statements continued
+; NEXT.
+
+;; The `NEXT` statement: adds the step to the loop's variable, and goes back after the `FOR` unless the variable has
+;; passed the limit.
 ;;
-;; NEXT alone takes the newest FOR entry; NEXT with variables takes each one's entry in turn, dropping the newer FOR
-;; entries above it. The loop ends when the comparison of the new value with the limit (1 for greater, 0 for equal, $FF
-;; for less) equals the step's sign; then the entry comes off the stack. See <FOR> for the entry's layout.
-;; In: A = the character after NEXT, zero = set for a terminator
+;; `NEXT` alone takes the newest <ForEntry>; `NEXT` with variables takes each one's entry in turn, dropping the newer
+;; `FOR` entries above it. The loop ends when the comparison of the new value with the limit (1 for greater, 0 for
+;; equal, $FF for less) equals the step's sign; then the entry comes off the stack.
+;; In: A = the character after `NEXT`, zero = set for a terminator
 ;; Errors: NEXT WITHOUT FOR when there is no entry for the variable
-;; See: <FOR>, <FNDFOR>
-NEXT:
-    bne GETFOR
+;; See: <Statements::For>, <FNDFOR>
+;; Also: NEXT (BB13)
+.proc Next
+    bne WithVariable
     ldy #0
     sty FORPNT+1
     sty FORPNT
-    beq STXFOR                              ; FORPNT zero: the newest entry
+    beq SearchFrame                         ; FORPNT zero: the newest entry
 
-;; Finds the loop variable's offset and type, the key of its FOR entry.
-GETFOR:
+;; Finds the loop variable's offset and type, the key of its `FOR` entry.
+;; Also: GETFOR (BB13)
+WithVariable:
     jsr MYPTRGET
-    jsr RELPTR
+    jsr Variables::VariableOffset
     lda ISARA
-    rol
+    rol a
     lda INTFLG
     adc #0                                  ; an array element into bit 0
     sta TEMPFOR
@@ -544,35 +672,37 @@ GETFOR:
     jsr FIXAY
     sta FORPNT+1
 
-;; Finds the FOR entry.
-STXFOR:
+;; Finds the `FOR` entry.
+;; Also: STXFOR (BB13)
+SearchFrame:
     jsr FNDFOR
-    beq HAVFOR
+    beq AddStep
     ldx #ERRNF
     jmp ERROR
 
 ;; Cuts the stack to the entry, then adds the step to the variable's value.
 ;; In: X = the entry's place on the stack
-HAVFOR:
-    lda #$FE                                ; the packed offset's bank byte
+;; Also: HAVFOR (BB13)
+AddStep:
+    lda #$FE                                ; the packed offset's X-byte
     sta FORPNTB
     txs
     txa
     clc
-    adc #5                                  ; the step, at the entry's fifth byte
+    adc #<(StackTop + ForEntry::STEP)
     tay
-    adc #6
+    adc #ForEntry::LIMIT - ForEntry::STEP
     sta INDEX2                              ; the limit, for FCOMPN
     tya
-    ldy #1                                  ; in page 1
+    ldy #>(StackTop + ForEntry::STEP)       ; in page 1
     ldx #0
     jsr MOVFM                               ; the step into the FAC
     tsx
-    lda 257+7+2,X                           ; the step's sign
+    lda StackTop + ForEntry::STEP_SIGN,x
     sta FACSGN
-    jsr RELPTR                              ; the offset back into the variable's address
+    jsr Variables::VariableOffset           ; the offset back into the variable's address
     bit INTFLG
-    bpl HAVFLT
+    bpl RealVariable
     jsr MOVAF                               ; an integer: the step into ARG
     lda FORPNT
     sta FACMO
@@ -581,134 +711,169 @@ HAVFOR:
     lda FORPNTB
     sta FACMOB
     jsr GOOO2                               ; and the variable into the FAC
-    jmp HAVSUM
+    jmp AddAndCompare
 
-;; Takes a real variable's value into ARG.
-HAVFLT:
+;; Takes a real variable's value into <ARG>.
+;; Also: HAVFLT (BB13)
+RealVariable:
     ldy FORPNT+1
     ldx FORPNTB
     lda FORPNT
     jsr CONUPK
 
 ;; Adds, compares with the limit, stores the new value, and loops or ends.
-HAVSUM:
+;; Also: HAVSUM (BB13)
+AddAndCompare:
     lda ARGSGN
     eor FACSGN
     sta ARISGN
     lda FACEXP                              ; zero set for a zero FAC
     jsr FADDT
-    ldy #1
+    ldy #>(StackTop + ForEntry::LIMIT)
     jsr FCOMPN                              ; with the limit
     pha
     bit INTFLG
-    jsr QINTGR                              ; store it as LET does
+    jsr StoreNumber                         ; store it as LET does
     pla
     tsx
     sec
-    sbc 257+7+2,X                           ; less the step's sign
-    beq LOOPDN                              ; equal: the loop is done
-    lda 257+12+3,X
+    sbc StackTop + ForEntry::STEP_SIGN,x    ; less the step's sign
+    beq EndLoop                             ; equal: the loop is done
+    lda StackTop + ForEntry::LINE,x
     sta CURLIN
-    lda 257+13+3,X
+    lda StackTop + ForEntry::LINE + 1,x
     sta CURLIN+1
-    lda 257+16+3,X                          ; the FOR statement's end, an offset from TXTTAB
+    lda StackTop + ForEntry::TEXT_LOW,x     ; the FOR statement's end, an offset from TXTTAB
     clc
     adc TXTTAB
     sta TXTPTR
-    lda 257+15+3,X
+    lda StackTop + ForEntry::TEXT_HIGH,x
     adc TXTTAB+1
     ldy TXTTABB
     jsr FIXADC
     sta TXTPTR+1
     tya
-    adc 257+14+3,X
+    adc StackTop + ForEntry::TEXT_BANK,x
     sta TXTPTRB
 
-;; Goes on with the statement after the FOR.
-NEWSGO:
-    jmp NEWSTT
+;; Goes on with the statement after the `FOR`.
+;; Also: NEWSGO (BB13)
+ToNextStatement:
+    jmp NextStatement
 
 ;; Takes the entry off the stack; after a comma, goes on with the next variable.
 ;;
-;; The JSR to GETFOR stands in for <NEWSTT>'s return address, which <FNDFOR> passes over; GETFOR does not return.
+;; The JSR to <Statements::Next::WithVariable> stands in for <NextStatement>'s return address, which <FNDFOR> passes
+;; over; <WithVariable> does not return.
 ;; In: carry = set
-LOOPDN:
+;; Also: LOOPDN (BB13)
+EndLoop:
     txa
-    adc #16+3                               ; FORSIZ, with the carry
+    adc #FORSIZ-1                           ; FORSIZ, with the carry
     tax
     txs
     jsr CHRGOT
-    cmp #44                                 ; a comma?
-    bne NEWSGO
+    cmp #','
+    bne ToNextStatement
     jsr CHRGET
-    jsr GETFOR
+    jsr WithVariable
+.endproc
+
+.endscope
 
 ; ---------------------------------------------------------------------------------------------------------------------
 ; Type checks
 ; ---------------------------------------------------------------------------------------------------------------------
 
+;; <VALTYP> for a real, which a formula of numbers asks for and which marks a value as nothing to free.
+VALUE_TYPE_REAL = $00
+
+;; <VALTYP> before a formula, asking for any type.
+VALUE_TYPE_ANY = $20
+
 ;; Evaluates a numeric formula.
 ;; In: TXTPTR = the formula's first character
 ;; Out: FAC = the value
 ;; Errors: TYPE MISMATCH for a string or a long integer
-;; See: <DOPAR>, <CHKNUM>
-FRMNUM:
-    lda #0
+;; See: <DOPAR>, <RequireNumber>
+;; Also: FRMNUM (BB13)
+.proc EvaluateNumber
+    lda #VALUE_TYPE_REAL
     sta VALTYP                              ; a real wanted
     jsr DOPAR
+    ; Falls into RequireNumber.
+.endproc
 
 ;; Checks that the value is a number: a string or a long integer is a TYPE MISMATCH.
-;; Uses: carry
-;; See: <CHKSTR>
-CHKNUM:
+;; Errors: TYPE MISMATCH for a string or a long integer
+;; Keeps: A, X, Y
+;; See: <RequireString>
+;; Also: CHKNUM (BB13)
+.proc RequireNumber
     clc
-    .byte 36                                ; BIT zp, which skips CHKSTR's SEC
+    .byte $24                               ; BIT zero page skips RequireString's SEC
+    ; Falls into RequireString, past its SEC.
+.endproc
 
 ;; Checks that the value is a string: anything else is a TYPE MISMATCH.
-;; Uses: carry
-;; See: <CHKNUM>
-CHKSTR:
+;; Errors: TYPE MISMATCH for anything but a string
+;; Keeps: A, X, Y
+;; Entry:
+;;   Mismatch = ends the statement with TYPE MISMATCH
+;; See: <RequireNumber>
+;; Also: CHKSTR (BB13)
+.proc RequireString
     sec
     bit VALTYP
-    bmi DOCSTR
-    bvs CHKERR                              ; a long integer passes neither
-    bcs CHKERR
+    bmi IsString
+    bvs Mismatch                            ; a long integer passes neither
+    bcs Mismatch
 
-;; An RTS for the checks.
-CHKOK:
+;; Returns, for the checks.
+;; Also: CHKOK (BB13)
+Done:
     rts
-    bvc CHKERR                              ; never reached
+    bvc Mismatch                            ; never reached
 
 ;; Passes a string when a string is wanted.
-DOCSTR:
-    bcs CHKOK
+;; Also: DOCSTR (BB13)
+IsString:
+    bcs Done
 
 ;; Ends the statement with TYPE MISMATCH.
-CHKERR:
+;; Also: CHKERR (BB13)
+Mismatch:
     ldx #ERRTM
     jmp ERROR
+.endproc
 
 ; ---------------------------------------------------------------------------------------------------------------------
 ; The formula evaluator
 ;
-; FRMEVL keeps two stacks. The verb stack, VRBSTK, holds two bytes for each pending operator: its number, then its
-; left operand's type (bits 7-6) with its precedence (bits 5-0); VRBPT is the index past the top. A zero precedence
-; at the bottom, or where DOPAR starts a formula in parentheses, stops operators from below. The noun stack, NOUNSTK,
-; holds each pending left operand, nine bytes: FACMOB, then the eight bytes from FACEXP; NOUNPT is the index of the
-; top's last byte.
+; EvaluateExpression keeps two stacks. The verb stack, VRBSTK, holds two bytes for each pending operator: its number,
+; then its left operand's type (bits 7-6) with its precedence (bits 5-0); VRBPT is the index past the top. A zero
+; precedence at the bottom, or where DOPAR starts a formula in parentheses, stops operators from below. The noun stack,
+; NOUNSTK, holds each pending left operand, nine bytes: FACMOB, then the eight bytes from FACEXP; NOUNPT is the index of
+; the top's last byte.
 ; ---------------------------------------------------------------------------------------------------------------------
 
 ;; Evaluates a formula: values joined by operators, taken in order of precedence.
 ;;
-;; The precedences, high to low: ^ (8); * / DIV MOD (6); + - (5); the relational operators (4); AND (3); OR (2).
-;; A relational operator is any of the characters less-than, equals and greater-than, each at most once, combined as
-;; bits: greater-than 1, equals 2, less-than 4.
-;; In: TXTPTR = the formula's first character, VALTYP = the type wanted ($20 for any)
+;; The precedences, high to low: ^ (8); * / `DIV` `MOD` (6); + - (5); the relational operators (4); `AND` (3); `OR`
+;; (2). A relational operator is any of the characters less-than, equals and greater-than, each at most once, combined
+;; as bits: greater-than 1, equals 2, less-than 4. The routine goes on into B3EvalG.asm, which does the operator taken
+;; off the verb stack and comes back to <EvaluateExpression::WithOperator>.
+;; In: TXTPTR = the formula's first character, VALTYP = the type wanted (<VALUE_TYPE_ANY> for any)
 ;; Out: the FAC = the value, VALTYP = its type, TXTPTR = the character after the formula
 ;; Errors: TYPE MISMATCH when the result is not the type wanted, FORMULA TOO COMPLEX past 15 pending operators,
 ;;   SYNTAX ERROR for a relational operator given twice
-;; See: <EVAL>, <DOPAR>, <DOLAST>
-FRMEVL:
+;; Entry:
+;;   KeepingStacks = keeps both stacks as they are, so a formula in parentheses (from <DOPAR>) stacks on the one outside
+;;     it
+;;   WithOperator = goes on with the operator in A; B3EvalG.asm comes back here after doing one
+;; See: <EVAL>, <EvaluateExpression::PopOperand>
+;; Also: FRMEVL (BB13)
+.proc EvaluateExpression
     lda #0
     sta NAMPNT
     sta NOUNPT
@@ -718,43 +883,50 @@ FRMEVL:
     lda #2
     sta VRBPT
 
-;; Inherit: <FRMEVL>
 ;; Keeps both stacks as they are, so a formula in parentheses (from <DOPAR>) stacks on the one outside it.
-FRMEVL1A:
+;; Also: FRMEVL1A (BB13)
+KeepingStacks:
     lda VALTYP                              ; the type wanted, checked at the end
     pha
     jsr DECTPT                              ; back one, for EVAL's CHRGET
 
 ;; Takes a value, then the operator after it: a character of <OPTAB>, or an escape token's second byte; anything else
 ;; ends the formula.
-FRMEVL1:
+;; Also: FRMEVL1 (BB13)
+NextOperand:
     jsr EVAL
-EVALRET = *-1                               ;; the return address FRMEVL1's JSR pushes, which Invoke.asm checks for
+
+;; The return address <EvaluateExpression::NextOperand>'s JSR pushes, which <RESTNAM> checks for after a function.
+;; Also: EVALRET (BB13)
+OperandReturn = * - 1
     jsr CHRGOT
     ldy #0
     ldx #NUMOPS
-    cmp #$80
-    bcc FNDOPR                              ; a character
-    cmp #$FF
-    bne NOOPR                               ; another token: not an operator
+    cmp #FIRST_TOKEN
+    bcc FindOperator                        ; a character
+    cmp #ESCAPE_TOKEN
+    bne NoOperator                          ; another token: not an operator
     iny
-    lda (TXTPTR),Y                          ; the escape token's second byte
+    lda (TXTPTR),y                          ; the escape token's second byte
 
 ;; Looks the operator up in <OPTAB>, from its end.
-FNDOPR:
-    cmp OPTAB-1,X
-    beq FOUNDOP
+;; Also: FNDOPR (BB13)
+FindOperator:
+    cmp OPTAB-1,x
+    beq FoundOperator
     dex
-    bne FNDOPR
+    bne FindOperator
 
 ;; Takes the end of the formula as the operator.
-NOOPR:
+;; Also: NOOPR (BB13)
+NoOperator:
     ldx #NUMOPS
     dey
 
-;; Moves past the escape token's $FF, and gathers the relational operators into DOMASK.
-;; In: X = the operator's place in OPTAB, Y = 1 for an escape token
-FOUNDOP:
+;; Moves past the escape token's first byte, and gathers the relational operators into <DOMASK>.
+;; In: X = the operator's place in <OPTAB>, Y = 1 for an escape token
+;; Also: FOUNDOP (BB13)
+FoundOperator:
     pha
     clc
     txa
@@ -762,144 +934,173 @@ FOUNDOP:
     tax
     pla
     dey
-    bmi FOP2
-    jsr CHRGET                              ; the escape token's $FF
+    bmi CheckRelation
+    jsr CHRGET                              ; the escape token's first byte
 
 ;; Takes a relational operator's characters, or goes on with another operator.
-FOP2:
+;; Also: FOP2 (BB13)
+CheckRelation:
     cpx #RELOPS+1
-    bcs NOTREL
+    bcs ComparePrecedence
     ldx #0
     stx DOMASK
 
-;; Adds a relational character's bit to DOMASK; the same one twice is a syntax error.
-GTRLOP:
+;; Adds a relational character's bit to <DOMASK>; the same one twice is a syntax error.
+;; Also: GTRLOP (BB13)
+NextRelation:
     cmp #'>'+1
-    bcs NOGTRL
+    bcs EndRelations
     cmp #'<'
-    bcc NOGTRL
+    bcc EndRelations
     eor #$3F                                ; > 1, = 2, < 3
     cmp #3
     adc #0                                  ; and < 4
     eor DOMASK
     cmp DOMASK                              ; the bit must be new
-    bcc SNERR5
+    bcc ToSyntaxError
     sta DOMASK
     jsr CHRGET
-    jmp GTRLOP
+    jmp NextRelation
 
 ;; Ends the relational operator: its bits are its number.
-NOGTRL:
+;; Also: NOGTRL (BB13)
+EndRelations:
     jsr DECTPT
     lda DOMASK
 
 ;; Goes on with the operator in A; B3EvalG.asm comes back here after doing one.
-FRMEVLZ:
+;; Also: FRMEVLZ (BB13)
+WithOperator:
     tax
 
 ;; Does the pending operator first when its precedence is at least the new one's; otherwise pushes the new one and its
 ;; left operand, and takes the next value.
 ;; In: X = the operator's number
-NOTREL:
+;; Also: NOTREL (BB13)
+ComparePrecedence:
     ldy VRBPT
-    lda VRBSTK-1,Y
-    and #$3F                                ; the pending operator's precedence
-    cmp PRECTB-1,X
-    bcs DOLAST
+    lda VRBSTK-1,y
+    and #PRECEDENCE_BITS                    ; the pending operator's precedence
+    cmp PRECTB-1,x
+    bcs PopOperand
     lda VALTYP
-    and #$C0
-    ora PRECTB-1,X
-    sta VRBSTK+1,Y                          ; type and precedence
+    and #TYPE_BITS
+    ora PRECTB-1,x
+    sta VRBSTK+1,y                          ; type and precedence
     txa
-    sta VRBSTK,Y                            ; the operator
+    sta VRBSTK,y                            ; the operator
     iny
     iny
     cmp #ENDOP
-    bne NT1
-    lda VRBSTK-3,Y                          ; the formula's end over the bottom's zero: done
-    beq EXPRDN2
+    bne KeepVerbTop
+    lda VRBSTK-3,y                          ; the formula's end over the bottom's zero: done
+    beq CheckResultType
 
 ;; Keeps the verb stack's new top, unless it has grown too deep.
-NT1:
+;; Also: NT1 (BB13)
+KeepVerbTop:
     sty VRBPT
-    cpy #$20
-    bcc STKOK
+    cpy #VERB_STACK_SIZE
+    bcc PushOperand
     jmp CMPLXERR
 
-;; Pushes the FAC on the noun stack, nine bytes.
-STKOK:
+;; Pushes the <FAC> on the noun stack, nine bytes.
+;; Also: STKOK (BB13)
+PushOperand:
     lda NOUNPT
-    adc #9                                  ; carry is clear
+    adc #NOUN_SIZE                          ; carry is clear
     sta NOUNPT
     tay
-    ldx #7
+    ldx #NOUN_SIZE-2
 
-;; Copies the FAC's eight bytes, then FACMOB under them.
-PSHFAC:
-    lda FACEXP,X
-    sta NOUNSTK-1,Y
+;; Copies the <FAC>'s eight bytes, then <FACMOB> under them.
+;; Also: PSHFAC (BB13)
+PushFacByte:
+    lda FACEXP,x
+    sta NOUNSTK-1,y
     dey
     dex
-    bpl PSHFAC
+    bpl PushFacByte
     lda FACMOB
-    sta NOUNSTK-1,Y
-    jmp FRMEVL1
+    sta NOUNSTK-1,y
+    jmp NextOperand
 
 ;; Ends the statement with a syntax error.
-SNERR5:
+;; Also: SNERR5 (BB13)
+ToSyntaxError:
     jmp SNERR
 
 ;; Ends the formula, checking its type against the one wanted.
-EXPRDN2:
+;; Also: EXPRDN2 (BB13)
+CheckResultType:
     pla                                     ; the type wanted
-    cmp #$20
-    beq EXPRDN3                             ; any
+    cmp #VALUE_TYPE_ANY
+    beq Return                              ; any
     eor VALTYP
-    bne CANTFIX
+    bne ToTypeMismatch
 
-;; An RTS for FRMEVL.
-EXPRDN3:
+;; Returns, for <EvaluateExpression>.
+;; Also: EXPRDN3 (BB13)
+Return:
     rts
 
-;; Does the pending operator: pulls its left operand off the noun stack into ARG and the operator off the verb stack,
+;; Does the pending operator: pulls its left operand off the noun stack into <ARG> and the operator off the verb stack,
 ;; checking that the two operands' types agree; B3EvalG.asm goes on to do it.
 ;; In: X = the new operator, carry = set
 ;; Errors: TYPE MISMATCH when the operands' types differ
-DOLAST:
+;; Also: DOLAST (BB13)
+PopOperand:
     txa
     pha                                     ; the new operator, for later
     lda NOUNPT
     tay
-    sbc #9
+    sbc #NOUN_SIZE
     sta NOUNPT
-    ldx #8
+    ldx #NOUN_SIZE-1
 
-;; Copies the eight bytes into ARG, then FACMOB's byte into ARGMOB.
-PLLARG:
-    lda NOUNSTK-1,Y
-    sta ARG-1,X
+;; Copies the eight bytes into <ARG>, then <FACMOB>'s byte into <ARGMOB>.
+;; Also: PLLARG (BB13)
+PullArgByte:
+    lda NOUNSTK-1,y
+    sta ARG-1,x
     dey
     dex
-    bne PLLARG
-    lda NOUNSTK-1,Y
+    bne PullArgByte
+    lda NOUNSTK-1,y
     sta ARGMOB
     ldy VRBPT
     dey
     dey
     sty VRBPT
-    lda VRBSTK+1,Y
-    and #$C0                                ; the left operand's type
+    lda VRBSTK+1,y
+    and #TYPE_BITS                          ; the left operand's type
     sta TEMP
     lda VALTYP
-    and #$C0
+    and #TYPE_BITS
     eor TEMP
-    beq GETOP
+    beq TakeOperator
 
 ;; Ends the statement with TYPE MISMATCH.
-CANTFIX:
-    jmp CHKERR
+;; Also: CANTFIX (BB13)
+ToTypeMismatch:
+    jmp RequireString::Mismatch
 
-;; Takes the operator's number into A and DOMASK, for B3EvalG.asm's dispatch.
-GETOP:
-    lda VRBSTK,Y
+;; Takes the operator's number into A and <DOMASK>, for B3EvalG.asm's dispatch.
+;; Also: GETOP (BB13)
+TakeOperator:
+    lda VRBSTK,y
     sta DOMASK
+    ; Falls into the operator's dispatch, at the start of B3EvalG.asm.
+
+;; The bits of a verb stack entry's second byte that hold the operator's precedence.
+PRECEDENCE_BITS = $3F
+
+;; The bits of a verb stack entry's second byte that hold the left operand's type, as <VALTYP>'s bits 7 and 6.
+TYPE_BITS = $C0
+
+;; The verb stack's size, two bytes for each of 15 pending operators and the bottom's entry.
+VERB_STACK_SIZE = $20
+
+;; The bytes of a noun stack entry: <FACMOB>, then the eight bytes from <FACEXP>.
+NOUN_SIZE = 9
+.endproc

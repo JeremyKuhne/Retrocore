@@ -1,234 +1,292 @@
-; B3PRU2: PRINT USING's second part: the scanner that takes each format character from the image, the tables of
-; format characters, and the editor that writes a number into its field.
-;
-; Names follow Apple's Business BASIC 1.3 listing.
+; retrocore: style=strict
+;; `PRINT USING`'s second part: the reader that takes each format character from the image, the tables of format
+;; characters, and the editor that writes a number into its field.
+
+; PrintUsing, continued: the format characters and the number editor.
+.scope PrintUsing continued
 
 ; ---------------------------------------------------------------------------------------------------------------------
 ; Format characters
 ; ---------------------------------------------------------------------------------------------------------------------
 
-;; Takes the next format character from the image, with its repeat count, and returns its type from <STYPTBL>.
+;; Takes the next format character from the image, with its repeat count, and returns its type from <FormatTypes>.
 ;;
 ;; A count may come before the character (`3#`), and a run of the same character adds to it (`3##` is 4). A quote
-;; starts a literal and stops the scan at once. A comma before the character is skipped; at the end of the image GETDL
-;; drops its caller's return address and returns to the caller's caller.
-;; In: SPCNDX = the index of the last character of the image used, SPCPTR = the image, SPCLEN = its length
-;; Out: A = the type, negative = set for a literal or string field, Y = the character's index in <DLMTBL>,
-;;   DELIM = the character, REP = the count
-;; Errors: illegal quantity for a count of 0 or over 255; a syntax error for a character that isn't a format
+;; starts a literal and stops the reading at once. A comma before the character is skipped; at the end of the image
+;; this routine drops its caller's return address and returns to the caller's caller, with <SpecType> left as it was.
+;; In: ImageIndex = the index of the last character of the image used, ImagePointer = the image, ImageLength = its
+;;   length
+;; Out: A = the type, negative = set for a literal or string field, Y = the character's index in <FormatCharacters>,
+;;   SpecCharacter = the character, RepeatCount = the count
+;; Errors: ILLEGAL QUANTITY for a count of 0 or over 255; SYNTAX ERROR for a character that isn't a format
 ;;   character, or a run that takes the count past 255
-;; See: <IMSYNCK>, <UGETCHR>
-UGETDL:
+;; See: <ScanSpec>, <ReadNonSpace>
+;; Also: UGETDL (BB13)
+.proc ReadFormatCharacter
     ldy #0
-    sty DELIM
-    sty REP
-UCOMA:
-    jsr UGETCHR
-    bne UGOT1
+    sty SpecCharacter
+    sty RepeatCount
+
+;; Skips commas, or at the image's end returns to the caller's caller.
+;; Also: UCOMA (BB13)
+SkipCommas:
+    jsr ReadNonSpace
+    bne Take
     cmp #','
-    beq UCOMA
+    beq SkipCommas
     pla                                     ; the end of the image: return from the caller
     pla
     rts
 
 ;; Takes a digit of the count, or goes on to a format character.
 ;; In: A = the character, carry = clear for a digit
-UGOT1:
-    bcs UDLCHR
-    ldx DELIM
-    beq UG1STD                              ; nothing yet
-    cpx #'9'                                ; only digits so far?
-    bne UGVAL                               ; no: a digit after a format character ends it
+;; Also: UGOT1 (BB13)
+Take:
+    bcs FormatCharacter
+    ldx SpecCharacter
+    beq AddDigit                            ; nothing yet
+    cpx #COUNT_MARK                         ; only digits so far?
+    bne Back                                ; no: a digit after a format character ends it
 
-;; Adds a digit to the count: REP times 10, plus the digit.
-UG1STD:
-    ldy REP
-    cpy #26                                 ; would REP times 10 pass 255?
-    bcc *+8                                 ; no: past the error exit
+;; Adds a digit to the count: <RepeatCount> times 10, plus the digit.
+;; Also: UG1STD (BB13)
+AddDigit:
+    ldy RepeatCount
+    cpy #COUNT_LIMIT                        ; would RepeatCount times 10 pass 255?
+    bcc TimesTen
 
 ;; Frees the mask and ends the statement with an illegal quantity error.
-;; See: <UFRESPC>, <FCERR>
-UIQERR:
-    jsr UFRESPC
+;; See: <FreeMask>, <FCERR>
+;; Also: UIQERR (BB13)
+FreeMaskThenIllegalQuantity:
+    jsr FreeMask
     jmp FCERR
-    ldx #'9'
-    stx DELIM                               ; marks digits read
+
+;; Multiplies the count by 10 and adds the digit.
+TimesTen:
+    ldx #COUNT_MARK
+    stx SpecCharacter                       ; marks digits read
     tya
     asl
     asl
     asl
-    adc REP
-    adc REP                                 ; REP times 10
-    sta REP
-    ldy SPCNDX
-    lda (SPCPTR),Y
+    adc RepeatCount
+    adc RepeatCount                         ; RepeatCount times 10
+    sta RepeatCount
+    ldy ImageIndex
+    lda (ImagePointer),Y
     and #$0F                                ; the digit's value
-    adc REP
-    bcs UIQERR                              ; past 255
-    sta REP
+    adc RepeatCount
+    bcs FreeMaskThenIllegalQuantity         ; past 255
+    sta RepeatCount
 
 ;; Takes the next character of the image.
-UGNXTC:
-    jsr UGETCHR
-    beq UGEND                               ; the end of the field
-    bne UGOT1
+;; Also: UGNXTC (BB13)
+NextCharacter:
+    jsr ReadNonSpace
+    beq LookUp                              ; the end of the field
+    bne Take
 
 ;; Backs up so the character that ended the field is read again by the next call.
-UGVAL:
-    dec SPCNDX
+;; Also: UGVAL (BB13)
+Back:
+    dec ImageIndex
 
-;; Looks the format character up in <DLMTBL>, in upper case, and returns its type.
-UGEND:
-    lda DELIM
+;; Looks the format character up in <FormatCharacters>, in upper case, and returns its type.
+;; Also: UGEND (BB13)
+LookUp:
+    lda SpecCharacter
     cmp #'Z'+1
-    bcc *+4
-    sbc #$20                                ; lower case to upper
-    ldy #DLMCNT-1
-UVALOOP:
-    cmp a:DLMTBL,Y
-    beq UGETND
+    bcc Search
+    sbc #LOWER_CASE_BIT                     ; lower case to upper
+Search:
+    ldy #FORMAT_CHARACTER_COUNT-1
+
+;; Compares the next entry, from the last.
+;; Also: UVALOOP (BB13)
+SearchLoop:
+    cmp a:FormatCharacters,Y
+    beq Found
     dey
-    bpl UVALOOP
+    bpl SearchLoop
 
 ;; Frees the mask and ends the statement with a syntax error.
-;; See: <UFRESPC>, <USNERR>
-UGERRX:
-    jsr UFRESPC
-    jmp USNERR
+;; See: <FreeMask>, <ToSyntaxError>
+;; Also: UGERRX (BB13)
+FreeMaskThenSyntaxError:
+    jsr FreeMask
+    jmp ToSyntaxError
 
 ;; Returns the type of the format character found at Y.
-UGETND:
-    lda a:STYPTBL,Y
+;; Also: UGETND (BB13)
+Found:
+    lda a:FormatTypes,Y
     rts
 
 ;; Takes a format character: the first, the one after a count, or another of a run.
 ;; In: A = the character
-UDLCHR:
-    ldy DELIM
-    beq U1STDL
-    cpy #'9'                                ; after a count?
-    bne UDLCK
-    ldy REP
-    beq UIQERR                              ; a count of 0
-    bne USETDL
+;; Also: UDLCHR (BB13)
+FormatCharacter:
+    ldy SpecCharacter
+    beq First
+    cpy #COUNT_MARK                         ; after a count?
+    bne Run
+    ldy RepeatCount
+    beq FreeMaskThenIllegalQuantity         ; a count of 0
+    bne Record
 
 ;; Takes the first format character, with a count of 1.
-U1STDL:
+;; Also: U1STDL (BB13)
+First:
     ldy #1
-    sty REP
+    sty RepeatCount
 
-;; Records the format character; a quote ends the scan, as a literal follows it.
-USETDL:
-    sta DELIM
+;; Records the format character; a quote ends the reading, as a literal follows it.
+;; Also: USETDL (BB13)
+Record:
+    sta SpecCharacter
     cmp #'"'
-    beq UGEND
-    bne UGNXTC
+    beq LookUp
+    bne NextCharacter
 
 ;; Counts another of the same format character, or ends the field at a different one.
-UDLCK:
-    cmp DELIM
-    bne UGVAL
+;; Also: UDLCK (BB13)
+Run:
+    cmp SpecCharacter
+    bne Back
     cmp #'"'
-    beq UGERRX
-    inc REP
-    bne UGNXTC
-    beq UGERRX                              ; a run past 255
+    beq FreeMaskThenSyntaxError
+    inc RepeatCount
+    bne NextCharacter
+    beq FreeMaskThenSyntaxError             ; a run past 255
+.endproc
 
-;; The format characters, in upper case; <STYPTBL> gives each one's type.
-DLMTBL:
-    .byte $41, $58, $22, $2B, $2D, $26, $24, $2E, $45, $43, $52, $2F, $23, $5A, $2A  ; A X " + - & $ . E C R / # Z *
+;; The format characters, in upper case; <FormatTypes> gives each one's type.
+;; Also: DLMTBL (BB13)
+FormatCharacters:
+    .byte 'A', 'X', '"', '+', '-', '&', '$', '.', 'E', 'C', 'R', '/', '#', 'Z', '*'
 
-;; Each format character's type, in <DLMTBL>'s order.
+;; Each format character's type, in <FormatCharacters>' order: the FIELD_ codes, or for a digit its class.
 ;;
 ;; The top two bits give the class: 01 a digit, 00 an editing character, 10 a literal, 11 a string. An editing
-;; character's other bits say which it is: bit 5 a sign (with bit 0 set for `+`), bit 4 `$`, bit 3 `E`, bit 2 the
-;; point and bit 1 `*`. A digit's low bits rank its kind: <ZTYP>, <DTYP>, then <CMATYP>.
-STYPTBL:
-DLMCNT = STYPTBL-DLMTBL                     ;; the number of format characters
-    .byte $FF                               ; A: a string, from the left
-    .byte $80                               ; X: a space
-    .byte $80                               ; ": a literal, to the next quote
-    .byte $21                               ; +: a sign, + or -
-    .byte $20                               ; -: a sign, a space or -
-    .byte CMATYP                            ; &: a digit, with commas
-    .byte $10                               ; $
-    .byte $04                               ; .: the point
-    .byte $08                               ; E: the exponent
-    .byte $FF                               ; C: a string, centered
-    .byte $FF                               ; R: a string, to the right
-    .byte $80                               ; /: a RETURN and a line feed
-    .byte DTYP                              ; #: a digit, space filled
-    .byte ZTYP                              ; Z: a digit, zero filled
-    .byte $02                               ; *: asterisk fill
+;; character's other bits say which it is: <FIELD_SIGN> (with <PARTS_PLUS> for `+`), <FIELD_DOLLAR>,
+;; <FIELD_EXPONENT>, <FIELD_POINT> and <FIELD_ASTERISK>. A digit's low bits rank its kind: <FIELD_ZERO_FILLED>,
+;; <FIELD_SPACE_FILLED>, then <FIELD_COMMAS>.
+;; Also: STYPTBL (BB13)
+FormatTypes:
+    .byte FIELD_STRING                      ; A: a string, from the left
+    .byte FIELD_LITERAL                     ; X: a space
+    .byte FIELD_LITERAL                     ; ": a literal, to the next quote
+    .byte FIELD_PLUS                        ; +: a sign, + or -
+    .byte FIELD_SIGN                        ; -: a sign, a space or -
+    .byte FIELD_COMMAS                      ; &: a digit, with commas
+    .byte FIELD_DOLLAR                      ; $
+    .byte FIELD_POINT                       ; .: the point
+    .byte FIELD_EXPONENT                    ; E: the exponent
+    .byte FIELD_STRING                      ; C: a string, centered
+    .byte FIELD_STRING                      ; R: a string, to the right
+    .byte FIELD_LITERAL                     ; /: a RETURN and a line feed
+    .byte FIELD_SPACE_FILLED                ; #: a digit, space filled
+    .byte FIELD_ZERO_FILLED                 ; Z: a digit, zero filled
+    .byte FIELD_ASTERISK                    ; *: asterisk fill
+.assert * - FormatTypes = FORMAT_CHARACTER_COUNT, "A type for each format character."
 
-;; The fill character for the places before the point, by digit type less <ZTYP>: `0` for Z, a space for #, none
-;; for the type between, and a space for &.
-FILLTABL:
+;; The number of format characters.
+;; Also: DLMCNT (BB13)
+FORMAT_CHARACTER_COUNT = FormatTypes - FormatCharacters
+
+;; The fill character for the places before the point, by digit class less <FIELD_ZERO_FILLED>: `0` for Z, a space
+;; for #, a space for the class between, which no character has, and a space for &.
+;; Also: FILLTABL (BB13)
+FillCharacters:
     .byte "0   "
 
-;; The comma flag, by digit type less <ZTYP>: bit 7 set for &, which puts commas in.
-CMATBL:
-    .byte 0, 0, 0, $80
+;; The comma flag, by digit class less <FIELD_ZERO_FILLED>: <FILL_COMMAS> for &, which puts commas in.
+;; Also: CMATBL (BB13)
+CommaFlags:
+    .byte 0, 0, 0, FILL_COMMAS
+.assert CommaFlags - FillCharacters = FIELD_COMMAS - FIELD_ZERO_FILLED + 1, "A fill for each digit class."
 
 ; ---------------------------------------------------------------------------------------------------------------------
 ; Numeric fields
 ; ---------------------------------------------------------------------------------------------------------------------
 
-;; Unpacks the BCD mantissa in <FACT> into <BCDSTR>, one digit a byte from BCDSTR+2: 20 digits, then a 0.
+;; Unpacks the decimal mantissa in <FACT> into <BCDSTR>, one digit a byte from <DIGITS_START>: <DIGIT_COUNT> digits,
+;; then a 0.
 ;;
 ;; Leading zeros are dropped, each lowering the exponent in <ISARA> by one; ISARA holds the exponent doubled, with the
-;; sign in bit 0.
-;; Out: A = 0, zero = set, Y = 22
-;; Uses: X, HALF
+;; sign in bit 0. For a positive zero, the 20th zero brings ISARA to 0, and the loop goes on storing the digits it
+;; reads past the mantissa; <LUNPACK>'s copy in <ARG> holds the same zeros.
+;; In: FACT = <DIGIT_COUNT> digits, two a byte, the first in the high half, ISARA = the exponent doubled, with the sign
+;; Out: A = 0, zero = set, Y = <DIGITS_END>
+;; Uses: X, NextHalf
 ;; See: <LUNPACK>
-UUNPACK:
-    ldy #2
+;; Also: UUNPACK (BB13)
+.proc UnpackDecimal
+    ldy #DIGITS_START
     ldx #$FF
-    stx HALF                                ; the high digit first
+    stx NextHalf                            ; the high digit first
     inx
-UHLOOP:
+
+;; Takes the next digit.
+;; Also: UHLOOP (BB13)
+Loop:
     lda FACT,X
-    bit HALF
-    bpl UPUSELOW
-    inc HALF                                ; the low digit next
+    bit NextHalf
+    bpl LowDigit
+    inc NextHalf                            ; the low digit next
     lsr
     lsr
     lsr
     lsr
-    bpl UPUSEA
-UPUSELOW:
-    dec HALF                                ; the high digit of the next byte next
+    bpl Digit
+
+;; Takes the low digit; the next byte's high digit comes next.
+;; Also: UPUSELOW (BB13)
+LowDigit:
+    dec NextHalf                            ; the high digit of the next byte next
     inx
-    and #$F
-UPUSEA:
-    cpy #3
-    bcs UGTABYT                             ; past the first digit, zeros count
+    and #$0F
+
+;; Stores the digit, or drops a leading zero.
+;; Also: UPUSEA (BB13)
+Digit:
+    cpy #DIGITS_START+1
+    bcs Store                               ; past the first digit, zeros count
     cmp #0
-    bne UGTABYT
+    bne Store
     dec ISARA                               ; a leading zero: the exponent goes down one
     dec ISARA
-    bne UHLOOP                              ; always
-UGTABYT:
+    bne Loop                                ; always, but for a positive zero's 20th
+
+;; Stores the digit.
+;; Also: UGTABYT (BB13)
+Store:
     sta BCDSTR,Y
     iny
-    cpy #22
-    bne UHLOOP
+    cpy #DIGITS_END
+    bne Loop
     lda #0
     sta BCDSTR,Y
     rts
+.endproc
 
 ;; Writes a number into its field of the mask, as the image asks, and prints it.
 ;;
-;; The number is in <BCDSTR>, one digit a byte, with its exponent doubled in <FACEXP> and its sign in bit 0. UNUMEDIT
-;; makes FACEXP the power of ten of the first digit and adds the SCALE factor in <ISARA>; the result must lie between
-;; -99 and 99. The number is rounded at the last place shown, and one too big for its field prints as a field of `!`.
-;; A field with an exponent goes on to <UEEEDIT>.
-;; In: MASKPT = the mask, MSKNDX = the index of its last byte, and the field as <IMSYNCK> left it: DIGB4DPT, DIGAFDPT,
-;;   EMASK, FLTMSK, CMAFILL, TENZNDX, DPTNDX
-;; Errors: illegal quantity for an exponent out of range
-;; See: <UNUMVAR>, <USENDIT>
-UNUMEDIT:
-    inc MSKNDX                              ; now the field's length
+;; The number is in <BCDSTR>, one digit a byte, with its exponent doubled in <FACEXP> and its sign in bit 0. This
+;; routine makes <FACEXP> the power of ten of the first digit and adds the `SCALE` factor in <ISARA>; the result must
+;; lie between -99 and 99. The number is rounded at the last place shown, and one too big for its field prints as a
+;; field of `!`. A field with an exponent goes on to <FormatScientific>.
+;; In: MaskPointer = the mask, MaskIndex = the index of its last byte, and the field as <ScanSpec> left it:
+;;   <DigitsBeforePoint>, <DigitsAfterPoint>, <SpecParts>, <FloatingSymbols>, <FillCharacter>, <UnitsIndex>,
+;;   <PointIndex>
+;; Errors: ILLEGAL QUANTITY for an exponent out of range
+;; Entry:
+;;   WriteFraction = writes the digits after the point, then the exponent, and prints the field
+;; See: <PrintNumber>
+;; Also: UNUMEDIT (BB13)
+.proc FormatNumber
+    inc MaskIndex                           ; now the field's length
     lda FACEXP
     cmp #$80                                ; carry = the exponent's sign
     ror
@@ -240,369 +298,479 @@ UNUMEDIT:
     clc
     adc ISARA                               ; plus the SCALE factor
     sta FACEXP
-    cmp #MINSGN
-    bcs UROKNOW
-    cmp #MAXSGN+1
-    bcc UROKNOW
-    jsr UFRESPC
+    cmp #EXPONENT_MIN
+    bcs InRange
+    cmp #EXPONENT_MAX+1
+    bcc InRange
+    jsr FreeMask
     jmp FCERR
-MINSGN = $9D                                ;; the smallest exponent a field takes, -99
-MAXSGN = $63                                ;; the largest exponent a field takes, 99
 
-;; Fills in a fixed sign, then edits the field: with an exponent at <UEEEDIT>, otherwise here.
+;; Fills in a fixed sign, then edits the field: with an exponent at <FormatScientific>, otherwise here.
 ;;
 ;; With commas, the places before the point are cut to the digits they hold once the commas take their places.
-UROKNOW:
-    jsr USGNSCN
+;; Also: UROKNOW (BB13)
+InRange:
+    jsr FillFixedSign
     ldy #0
-    sty CMACTR
-    sty DIGCTR
-    lda #$08                                ; the E bit
-    bit EMASK
-    beq *+5
-    jmp UEEEDIT
-    bit CMAFILL
-    bpl UNOCMAS                             ; no commas
-    lda DIGB4DPT
+    sty CommaCounter
+    sty DigitCounter
+    lda #FIELD_EXPONENT
+    bit SpecParts
+    beq CheckCommas
+    jmp FormatScientific
+CheckCommas:
+    bit FillCharacter
+    bpl RoundFixed                          ; no commas
+    lda DigitsBeforePoint
     and #3
     cmp #1                                  ; carry = clear for a multiple of 4
-    lda DIGB4DPT
+    lda DigitsBeforePoint
     tax
-    bcc UNOSBC1
-    sbc #1
-UNOSBC1:
+    bcc Quarter
+    sbc #1                                  ; one off a count that is not a multiple of 4
+
+;; Takes a quarter of the count: the places the commas take.
+;; Also: UNOSBC1 (BB13)
+Quarter:
     lsr
     lsr                                     ; the places the commas take
-    sta DIGB4DPT
+    sta DigitsBeforePoint
     txa
     sec
-    sbc DIGB4DPT
-    sta DIGB4DPT
+    sbc DigitsBeforePoint
+    sta DigitsBeforePoint
 
 ;; Rounds the number at the last decimal place shown and checks the digits before the point fit.
-UNOCMAS:
+;; Also: UNOCMAS (BB13)
+RoundFixed:
     lda #<(0-1)
     sec
-    sbc DIGAFDPT                            ; the power of ten of the first place dropped
+    sbc DigitsAfterPoint                    ; the power of ten of the first place dropped
     tax
-    jsr UROUNDI
-    jsr UEXPLS1
+    jsr RoundAtPower
+    jsr RaiseExponent
     lda TENEXP
     bit FACEXP
-    bmi UDOLEFT                             ; below 1: it fits
-    cmp DIGB4DPT
-    bcc UDOLEFT
+    bmi WriteWhole                          ; below 1: it fits
+    cmp DigitsBeforePoint
+    bcc WriteWhole
 
 ;; Fills the field with `!`, for a number that doesn't fit, and prints it.
-UTOOBIG:
+;; Also: UTOOBIG (BB13)
+TooBig:
     lda #'!'
-    ldy MSKNDX
-UEXLOOP:
+    ldy MaskIndex
+
+;; Fills the next place, from the last.
+;; Also: UEXLOOP (BB13)
+TooBigLoop:
     dey
-    bmi UEXDONE
-    sta (MASKPT),Y
-    bne UEXLOOP                             ; always
-UEXDONE:
-    jmp USENDIT
+    bmi TooBigDone
+    sta (MaskPointer),Y
+    bne TooBigLoop                          ; always
+
+;; Prints the field.
+;; Also: UEXDONE (BB13)
+TooBigDone:
+    jmp PrintField
 
 ;; Writes the digits before the point, right to left from the units place, with a comma every three digits when
 ;; asked; the units place shows 0 for a number below 1.
-UDOLEFT:
-    lda DIGB4DPT
-    bne *+5
-    jmp URIGHTS                             ; no places before the point
+;; Also: UDOLEFT (BB13)
+WriteWhole:
+    lda DigitsBeforePoint
+    bne HasWholePlaces
+    jmp WriteFraction                       ; no places before the point
+HasWholePlaces:
     ldx #$FF
-    ldy TENZNDX
-ULEFTLP:
+    ldy UnitsIndex
+
+;; Writes the next place, from the units.
+;; Also: ULEFTLP (BB13)
+WholeLoop:
     inx
-    cpx DIGB4DPT
-    bcs UDOFLTS                             ; every place is done
-    jsr UGET10X
-    bpl UDOADIG
+    cpx DigitsBeforePoint
+    bcs FloatingSigns                       ; every place is done
+    jsr DigitAtPower
+    bpl PlaceDigit
     txa
-    bne UDOISGN                             ; past the first digit
+    bne MinusSign                           ; past the first digit
     lda #'0'                                ; the units place
-UDOADIG:
-    bit CMAFILL
-    bpl USTALFT                             ; no commas
+
+;; Puts in a comma first, every three digits.
+;; Also: UDOADIG (BB13)
+PlaceDigit:
+    bit FillCharacter
+    bpl StoreWhole                          ; no commas
     pha
-    lda CMACTR
-    cmp #3
-    bcc UINCMA
+    lda CommaCounter
+    cmp #DIGITS_PER_COMMA
+    bcc CountComma
     lda #','
-    sta (MASKPT),Y
+    sta (MaskPointer),Y
     dey
     lda #0
-    sta CMACTR
-UINCMA:
-    inc CMACTR
+    sta CommaCounter
+
+;; Counts the digit toward the next comma.
+;; Also: UINCMA (BB13)
+CountComma:
+    inc CommaCounter
     pla
-USTALFT:
-    sta (MASKPT),Y
+
+;; Stores the digit.
+;; Also: USTALFT (BB13)
+StoreWhole:
+    sta (MaskPointer),Y
     dey
-    bpl ULEFTLP
+    bpl WholeLoop
 
 ;; Puts a minus sign before a negative number whose image has no sign, in a spare digit place; with no place for it
 ;; the number doesn't fit.
-UDOISGN:
-    lda #$20                                ; the sign bit
-    bit EMASK
-    bne UDOFLTS                             ; the image has a sign
+;; Also: UDOISGN (BB13)
+MinusSign:
+    lda #FIELD_SIGN
+    bit SpecParts
+    bne FloatingSigns                       ; the image has a sign
     bit FACSGN
-    bpl UDOFLTS
+    bpl FloatingSigns
     tya
-    bmi UTOOBIG
-    lda (MASKPT),Y
-    bne UTOOBIG                             ; not a digit place
+    bmi TooBig
+    lda (MaskPointer),Y
+    bne TooBig                              ; not a digit place
     lda #'-'
-    sta (MASKPT),Y
+    sta (MaskPointer),Y
     dey
 
 ;; Writes the floating `$` and sign before the digits, right to left in the order the image gave them, from the bits
-;; of <FLTMSK>: bit 7 `$` after the sign, bit 6 the sign, bit 5 `$` before it.
-UDOFLTS:
-    lda FLTMSK
-    and #$E0
-    beq UDOFILL
+;; of <FloatingSymbols>: <FLOAT_DOLLAR_AFTER_SIGN>, <FLOAT_SIGN>, then <FLOAT_DOLLAR>.
+;; Also: UDOFLTS (BB13)
+FloatingSigns:
+    lda FloatingSymbols
+    and #FLOAT_DOLLAR_AFTER_SIGN | FLOAT_SIGN | FLOAT_DOLLAR
+    beq FillLeft
+    .assert FLOAT_DOLLAR_AFTER_SIGN = $80, "The first ASL takes the $ after the sign into carry."
     asl
-    bcc UNODL1
+    bcc CheckSign
     tax
     lda #'$'
-    sta (MASKPT),Y
+    sta (MaskPointer),Y
     dey
     txa
-UNODL1:
+
+;; Writes a floating sign: `-` for a negative number, `+` for a positive one when the image asks for one.
+;; Also: UNODL1 (BB13)
+CheckSign:
     asl
-    bcc UNOSIGN
+    bcc CheckDollar
     tax
-    lda EMASK
+    lda SpecParts
     lsr                                     ; carry = set for +
     lda #'-'
     bit FACSGN
-    bmi USTORMI
-    bcc USKPSI                              ; positive, and no + asked for
+    bmi StoreSign
+    bcc SignDone                            ; positive, and no + asked for
     lda #'+'
-USTORMI:
-    sta (MASKPT),Y
+
+;; Stores the sign.
+;; Also: USTORMI (BB13)
+StoreSign:
+    sta (MaskPointer),Y
     dey
-USKPSI:
+
+;; Goes on to a floating $ before the sign.
+;; Also: USKPSI (BB13)
+SignDone:
     txa
-UNOSIGN:
+
+;; Writes a floating $ before the sign, or with none.
+;; Also: UNOSIGN (BB13)
+CheckDollar:
     asl
-    bcc UDOFILL
+    bcc FillLeft
     lda #'$'
-    sta (MASKPT),Y
+    sta (MaskPointer),Y
     dey
 
 ;; Fills the digit places left before the number with the fill character: a space, `0` or `*`.
-UDOFILL:
+;; Also: UDOFILL (BB13)
+FillLeft:
     tya
-    bmi URIGHTS
-    lda CMAFILL
-    and #$7F                                ; without the comma flag
+    bmi WriteFraction
+    lda FillCharacter
+    and #$FF ^ FILL_COMMAS                  ; without the comma flag
     tax
-UFILLP:
-    lda (MASKPT),Y
-    bne URIGHTS                             ; not a digit place
+
+;; Fills the next place, until one that is not a digit place.
+;; Also: UFILLP (BB13)
+FillLoop:
+    lda (MaskPointer),Y
+    bne WriteFraction                       ; not a digit place
     txa
-    sta (MASKPT),Y
+    sta (MaskPointer),Y
     dey
-    bpl UFILLP
+    bpl FillLoop
 
 ;; Writes the digits after the point: the number's own places, or with an exponent its next digits.
-URIGHTS:
-    lda DIGAFDPT
-    beq UDOEXP
-    ldy DPTNDX
+;; Also: URIGHTS (BB13)
+WriteFraction:
+    lda DigitsAfterPoint
+    beq WriteExponent
+    ldy PointIndex
     iny
     ldx #0
     txa
     sec
-    sbc DIGAFDPT
-    sta DIGAFDPT                            ; the power of ten of the last place
-URITLOP:
+    sbc DigitsAfterPoint
+    sta DigitsAfterPoint                    ; the power of ten of the last place
+
+;; Writes the next place.
+;; Also: URITLOP (BB13)
+FractionLoop:
     dex
-    cpx DIGAFDPT
-    bcc UDOEXP
-    lda #8
-    bit EMASK
-    bne UEXPTYP
-    jsr UGET10X
-    bpl UDIGRIT
+    cpx DigitsAfterPoint
+    bcc WriteExponent
+    lda #FIELD_EXPONENT
+    bit SpecParts
+    bne NextOfDigits
+    jsr DigitAtPower
+    bpl StoreFraction
     lda #'0'
-    bpl UDIGRIT
-UEXPTYP:
-    jsr UGETNSD
-UDIGRIT:
-    sta (MASKPT),Y
+    bpl StoreFraction
+
+;; Takes the next of the number's digits, for a field with an exponent.
+;; Also: UEXPTYP (BB13)
+NextOfDigits:
+    jsr NextDigit
+
+;; Stores the digit.
+;; Also: UDIGRIT (BB13)
+StoreFraction:
+    sta (MaskPointer),Y
     iny
-    jmp URITLOP
+    jmp FractionLoop
 
 ;; Writes the exponent at the image's first E: an upper-case E, the exponent's sign, and two digits, or one when the
 ;; image has only three Es; an exponent that needs two digits there doesn't fit.
-UDOEXP:
-    lda #8
-    bit EMASK
-    beq USENDIT
+;; Also: UDOEXP (BB13)
+WriteExponent:
+    lda #FIELD_EXPONENT
+    bit SpecParts
+    beq PrintField
     ldy #0
-UDOEXP1:
-    lda (MASKPT),Y
-    and #$DF                                ; upper case
+
+;; Looks for the first E.
+;; Also: UDOEXP1 (BB13)
+FindE:
+    lda (MaskPointer),Y
+    and #$FF ^ LOWER_CASE_BIT               ; upper case
     iny
     cmp #'E'
-    bne UDOEXP1
+    bne FindE
     dey
-    sta (MASKPT),Y
+    sta (MaskPointer),Y
     iny
     lda #'+'
     bit FACEXP
-    bpl *+4
+    bpl StoreExponentSign
     lda #'-'
-    sta (MASKPT),Y
+StoreExponentSign:
+    sta (MaskPointer),Y
     iny
     lda TENEXP
     ldx #0
     sec
-USBCLP:
+
+;; Counts the tens.
+;; Also: USBCLP (BB13)
+TensLoop:
     sbc #10
-    bcc UGOTHI
+    bcc Units
     inx                                     ; the tens
-    bne USBCLP
-UGOTHI:
+    bne TensLoop
+
+;; Takes the units, and checks the room for two digits.
+;; Also: UGOTHI (BB13)
+Units:
     adc #10                                 ; the units
     iny
-    cpy MSKNDX                              ; room for two digits?
+    cpy MaskIndex                           ; room for two digits?
     dey
-    bcc UDO1STD
+    bcc TwoDigits
     cpx #0
-    beq UDO2NDD
-    jmp UTOOBIG
-UDO1STD:
+    beq UnitsDigit
+    jmp TooBig
+
+;; Writes the tens digit.
+;; Also: UDO1STD (BB13)
+TwoDigits:
     pha
     txa
-    ora #$30
-    sta (MASKPT),Y
+    ora #'0'
+    sta (MaskPointer),Y
     iny
     pla
-UDO2NDD:
-    ora #$30
-    sta (MASKPT),Y
 
-;; Prints the field: the mask, <MSKNDX> characters, as a string.
+;; Writes the units digit.
+;; Also: UDO2NDD (BB13)
+UnitsDigit:
+    ora #'0'
+    sta (MaskPointer),Y
+
+;; Prints the field: the mask, <MaskIndex> characters, as a string.
 ;; See: <STRPR3>
-USENDIT:
+;; Also: USENDIT (BB13)
+PrintField:
     lda #0
     sta VALTYP
-    lda MASKPT
+    lda MaskPointer
     sta INDEX
-    lda MASKPT+1
+    lda MaskPointer+1
     sta INDEX+1
     lda FRESPCB                             ; the mask's bank
     sta INDEXB
-    ldx MSKNDX
+    ldx MaskIndex
     jmp STRPR3
+.endproc
+
+;; The smallest exponent a field takes, -99.
+;; Also: MINSGN (BB13)
+EXPONENT_MIN = -99 & $FF
+
+;; The largest exponent a field takes, 99.
+;; Also: MAXSGN (BB13)
+EXPONENT_MAX = 99
 
 ;; Writes a number into a field with an exponent: `.DDDE+EE` with no places before the point, `D.DDDE+EE` with one,
-;; or engineering notation with three (<UENGNOT>).
+;; or engineering notation with three.
 ;;
-;; The number is rounded to the places shown. With one place before the point, its digit goes after a fixed sign at
-;; the field's start.
-;; See: <UNUMEDIT>
-UEEEDIT:
-    lda DIGB4DPT
+;; The number is rounded to the places shown. With one place before the point, its digit goes after whatever the
+;; field's first place holds, a fixed sign or `$`; only that one place is checked, so with both (`+$#.##EEEE`) the
+;; digit takes the `$`'s place and leaves its own place a zero byte.
+;; See: <FormatNumber>
+;; Also: UEEEDIT (BB13)
+.proc FormatScientific
+    lda DigitsBeforePoint
     clc
-    adc DIGAFDPT
+    adc DigitsAfterPoint
     tax                                     ; the index of the first place dropped
-    jsr UROUNDA
-    jsr UEXPLS1
-    ldx DIGB4DPT
-    beq UDOSCI0
+    jsr RoundAtPower::AtIndex
+    jsr RaiseExponent
+    ldx DigitsBeforePoint
+    beq NoWholePlaces
     dex
-    bne UENGNOT
+    bne Engineering
     ldy #0
-    lda (MASKPT),Y
-    beq UDOSCI1
+    lda (MaskPointer),Y
+    beq WholeDigits
     iny                                     ; after the sign
 
-;; Writes <DIGB4DPT> digits, then those after the point.
+;; Writes <DigitsBeforePoint> digits, then those after the point.
 ;; In: Y = the first digit's place
-UDOSCI1:
-    lda DIGB4DPT
-    beq UDOSCI2
-    jsr UGETNSD
-    sta (MASKPT),Y
-    dec DIGB4DPT
+;; Also: UDOSCI1 (BB13)
+WholeDigits:
+    lda DigitsBeforePoint
+    beq ToWriteFraction
+    jsr NextDigit
+    sta (MaskPointer),Y
+    dec DigitsBeforePoint
     iny
-    bne UDOSCI1
+    bne WholeDigits
 
 ;; With no places before the point, the exponent is one higher.
-UDOSCI0:
+;; Also: UDOSCI0 (BB13)
+NoWholePlaces:
     sec
-    jsr UEXPLS1
-UDOSCI2:
-    jmp URIGHTS
+    jsr RaiseExponent
+
+;; Writes the digits after the point.
+;; Also: UDOSCI2 (BB13)
+ToWriteFraction:
+    jmp FormatNumber::WriteFraction
 
 ;; Engineering notation: lowers the exponent to a multiple of three, which leaves one to three digits before the
 ;; point, and puts the floating sign and the fill character in the places left before them.
 ;;
-;; Only one place gets the fill character: the fill loop doesn't step Y, so after filling a place it finds it filled
-;; and stops, and any place further left keeps its 0.
-UENGNOT:
+;; Only one place gets the fill character (a bug of the original): the fill loop doesn't step Y, so after filling a
+;; place it finds it filled and stops, and any place further left keeps its zero byte. A floating sign's place keeps
+;; its zero byte too for a positive number without `+`, as the fill starts left of it.
+;; Also: UENGNOT (BB13)
+Engineering:
     lda FACEXP
-UMOD3LP:
-    bpl UCHKMD3
+
+;; Adds 3 to a negative exponent until it is not.
+;; Also: UMOD3LP (BB13)
+ModLoop:
+    bpl CheckMod
     clc
-    adc #3
-    bmi UMOD3LP
-UCHKMD3:
-    cmp #3
-    bcc UGOTMOD
-    sbc #3
-    bne UMOD3LP
-UGOTMOD:
+    adc #ENGINEERING_STEP
+    bmi ModLoop
+
+;; Takes 3 off until the remainder is below 3.
+;; Also: UCHKMD3 (BB13)
+CheckMod:
+    cmp #ENGINEERING_STEP
+    bcc GotMod
+    sbc #ENGINEERING_STEP
+    bne ModLoop
+
+;; Lowers the exponent by the remainder, which is the count of digits before the point less one.
+;; Also: UGOTMOD (BB13)
+GotMod:
     bit FACEXP                              ; the flags aren't used
-    sta DIGB4DPT
-    sta EXPADJ
+    sta DigitsBeforePoint
+    sta ExponentAdjustment
     lda FACEXP
     sec
-    sbc EXPADJ
+    sbc ExponentAdjustment
     sta FACEXP
-    jsr UABSEXP
-    lda #2
+    jsr RaiseExponent::Magnitude
+    lda #ENGINEERING_STEP-1
     sec
-    sbc DIGB4DPT                            ; the places before the digits: 2, 1 or 0
-    sta SPCB4DIG
-    inc DIGB4DPT                            ; the digits: 1, 2 or 3
-    ldy SPCB4DIG
-    lda FLTMSK
-    beq UDOEFIL
-    inc SPCB4DIG                            ; a floating sign takes the place before the digits
-    lda EMASK
+    sbc DigitsBeforePoint                   ; the places before the digits: 2, 1 or 0
+    sta FirstDigitPlace
+    inc DigitsBeforePoint                   ; the digits: 1, 2 or 3
+    ldy FirstDigitPlace
+    lda FloatingSymbols
+    beq Fill
+    inc FirstDigitPlace                     ; a floating sign takes the place before the digits
+    lda SpecParts
     lsr                                     ; carry = set for +
     lda #'-'
     bit FACSGN
-    bmi USTORM
-    bcc UDOEFIL
+    bmi StoreSign
+    bcc Fill
     lda #'+'
-USTORM:
-    sta (MASKPT),Y
-UDOEFIL:
-    dey
-    bmi UDODIGS
-    lda CMAFILL
-    and #$7F
-    tax
-UDOEFLL:
-    lda (MASKPT),Y
-    bne UDODIGS
-    txa
-    sta (MASKPT),Y
-    bne UDOEFLL                             ; and the place now reads filled
 
-;; Writes the digits from the place in <SPCB4DIG>.
-UDODIGS:
-    ldy SPCB4DIG
-    jmp UDOSCI1
+;; Stores the floating sign.
+;; Also: USTORM (BB13)
+StoreSign:
+    sta (MaskPointer),Y
+
+;; Fills the place before the digits, or the sign.
+;; Also: UDOEFIL (BB13)
+Fill:
+    dey
+    bmi Digits
+    lda FillCharacter
+    and #$FF ^ FILL_COMMAS
+    tax
+
+;; Fills the place, then finds it filled.
+;; Also: UDOEFLL (BB13)
+FillLoop:
+    lda (MaskPointer),Y
+    bne Digits
+    txa
+    sta (MaskPointer),Y
+    bne FillLoop                            ; and the place now reads filled
+
+;; Writes the digits from the place in <FirstDigitPlace>.
+;; Also: UDODIGS (BB13)
+Digits:
+    ldy FirstDigitPlace
+    jmp WholeDigits
+.endproc
 
 ; ---------------------------------------------------------------------------------------------------------------------
 ; Digits, signs and rounding
@@ -610,106 +778,150 @@ UDODIGS:
 
 ;; Returns the number's digit for a power of ten, in ASCII.
 ;;
-;; Indexes up to 21 are read, two past the 20 digits <UUNPACK> unpacks, so the furthest places come from <BCDSTR>'s
-;; end mark and the byte after it.
+;; Indexes up to 21 are read, two past the 20 digits from <DIGITS_START>, as the index from the first digit is
+;; compared with <DIGITS_END>, an index from the start of <BCDSTR>. So the furthest places come from <BCDSTR>+22, where
+;; <UnpackDecimal> writes its end mark (a real leaves it as it was), and <BCDSTR>+23, which nothing writes.
 ;; In: X = the power of ten
 ;; Out: A = the digit, `0` past the digits, negative = set (and A no digit) when the power is above the first digit
-;; Uses: DIGEXP
+;; Uses: DigitPower
 ;; Keeps: X, Y
-;; Entry: UGETITA = takes the digit's index from the first in A
-;; See: <UCVTX>, <UGETNSD>
-UGET10X:
-    jsr UCVTX
-    bmi UNODIGT
-UGETITA:
-    cmp #22
-    bcc UUSEIT
+;; Entry:
+;;   AtIndex = takes the digit's index from the first in A
+;; See: <PowerToIndex>, <NextDigit>
+;; Also: UGET10X (BB13)
+.proc DigitAtPower
+    jsr PowerToIndex
+    bmi Done
+
+;; Takes the digit's index from the first in A.
+;; Also: UGETITA (BB13)
+AtIndex:
+    cmp #DIGITS_END
+    bcc Read
     lda #'0'
-UNODIGT:
+
+;; Returns.
+;; Also: UNODIGT (BB13)
+Done:
     rts
-UUSEIT:
+
+;; Reads the digit.
+;; Also: UUSEIT (BB13)
+Read:
     tax
-    lda BCDSTR+2,X
-    ora #$30
-    ldx DIGEXP
+    lda BCDSTR+DIGITS_START,X
+    ora #'0'
+    ldx DigitPower
     and #$7F                                ; negative = clear
     rts
+.endproc
 
-;; Returns the number's next digit, counting from the first with <DIGCTR>, in ASCII.
+;; Returns the number's next digit, counting from the first with <DigitCounter>, in ASCII.
 ;; Out: A = the digit, or `0` past the digits
-;; Uses: DIGCTR, DIGEXP
+;; Uses: DigitCounter, DigitPower
 ;; Keeps: X, Y
-;; See: <UGET10X>
-UGETNSD:
-    stx DIGEXP
-    lda DIGCTR
-    inc DIGCTR
-    jmp UGETITA
+;; See: <DigitAtPower>
+;; Also: UGETNSD (BB13)
+.proc NextDigit
+    stx DigitPower
+    lda DigitCounter
+    inc DigitCounter
+    jmp DigitAtPower::AtIndex
+.endproc
 
 ;; Fills in the image's fixed sign by the number's: a `+` becomes `+` or `-`, a `-` becomes a space or `-`.
-;; In: FACSGN = bit 7 set for a negative number, EMASK = bit 5 set for a fixed sign, MSKNDX = the field's length,
-;;   MASKPT = the mask
+;;
+;; Only the mask's first `+` or `-` is filled in; a floating sign has none in the mask, so it is left alone.
+;; In: FACSGN = bit 7 set for a negative number, SpecParts = <FIELD_SIGN> set for a sign, MaskIndex = the field's
+;;   length, MaskPointer = the mask
 ;; Uses: A, Y
-USGNSCN:
-    lda #$20
-    bit EMASK
-    beq USGNRTS                             ; no fixed sign
-    ldy #$FF
-USIGNLP:
+;; Keeps: X
+;; Also: USGNSCN (BB13)
+.proc FillFixedSign
+    lda #FIELD_SIGN
+    bit SpecParts
+    beq Done                                ; no sign
+    ldy #NO_INDEX
+
+;; Looks at the mask's next place.
+;; Also: USIGNLP (BB13)
+Loop:
     iny
-    cpy MSKNDX
-    beq USGNRTS
-    lda (MASKPT),Y
+    cpy MaskIndex
+    beq Done
+    lda (MaskPointer),Y
     cmp #'-'
-    beq UDOMSIN
+    beq Minus
     cmp #'+'
-    bne USIGNLP
+    bne Loop
     lda #'+'
-    bne USTASIN
-UDOMSIN:
+    bne Store
+
+;; Makes a `-` a space for a positive number.
+;; Also: UDOMSIN (BB13)
+Minus:
     lda #' '
-USTASIN:
+
+;; Stores the sign, `-` for a negative number.
+;; Also: USTASIN (BB13)
+Store:
     bit FACSGN
-    bpl *+4
+    bpl StoreIt
     lda #'-'
-    sta (MASKPT),Y
-USGNRTS:
+StoreIt:
+    sta (MaskPointer),Y
+
+;; Returns.
+;; Also: USGNRTS (BB13)
+Done:
     rts
+.endproc
 
 ;; Adds one to the exponent in <FACEXP> when carry is set, then puts its size in <TENEXP>.
 ;; In: carry = set to add one
 ;; Out: TENEXP = the exponent without its sign
-;; Uses: A, REP
+;; Uses: A, RepeatCount
 ;; Keeps: X, Y
-;; Entry: UABSEXP = only sets TENEXP
-UEXPLS1:
+;; Entry:
+;;   Magnitude = only sets TENEXP
+;; Also: UEXPLS1 (BB13)
+.proc RaiseExponent
     lda #1
-    bcc UABSEXP
-    sta REP
+    bcc Magnitude
+    sta RepeatCount
     lda FACEXP
     clc
-    adc REP
+    adc RepeatCount
     sta FACEXP
-UABSEXP:
+
+;; Puts the exponent's size in <TENEXP>.
+;; Also: UABSEXP (BB13)
+Magnitude:
     lda FACEXP
-    bpl USTATEN
+    bpl Store
     eor #$FF
     clc
     adc #1
-USTATEN:
+
+;; Stores the size.
+;; Also: USTATEN (BB13)
+Store:
     sta TENEXP
     rts
+.endproc
 
-;; Turns a power of ten into its digit's index in <BCDSTR>, counting from BCDSTR+2.
+;; Turns a power of ten into its digit's index in <BCDSTR>, counting from <DIGITS_START>.
 ;; In: X = the power of ten
-;; Out: A = the index, negative = set when the power is above the first digit, DIGEXP = X
+;; Out: A = the index, negative = set when the power is above the first digit, DigitPower = X
 ;; Keeps: X, Y
-UCVTX:
-    stx DIGEXP
+;; Also: UCVTX (BB13)
+.proc PowerToIndex
+    stx DigitPower
     lda FACEXP
     sec
-    sbc DIGEXP
+    sbc DigitPower
     rts
+.endproc
 
 ;; Rounds the number at a power of ten: if that place's digit is 5 or more, it becomes 0 and one is carried into the
 ;; places before it.
@@ -717,41 +929,57 @@ UCVTX:
 ;; When every place before it is 9, the number becomes 1 followed by zeros and the exponent must go up one.
 ;; In: X = the power of ten of the first place dropped
 ;; Out: carry = set when the exponent must go up one
-;; Uses: A, X, DIGEXP
-;; Entry: UROUNDA = takes the place's index in X
-;; See: <UEXPLS1>
-UROUNDI:
-    jsr UCVTX
-    bmi UROUNDX                             ; above the first digit
-    cmp #22
-    bcs UROUNDX                             ; past the digits
+;; Uses: A, X, DigitPower
+;; Entry:
+;;   AtIndex = takes the place's index in X
+;; See: <RaiseExponent>
+;; Also: UROUNDI (BB13)
+.proc RoundAtPower
+    jsr PowerToIndex
+    bmi NoCarryOut                          ; above the first digit
+    cmp #DIGITS_END
+    bcs NoCarryOut                          ; past the digits
     tax
-UROUNDA:
-    lda BCDSTR+2,X
-    cmp #$05
-    bcc UROUNDX+1                           ; below 5: carry clear, to the RTS
+
+;; Rounds at the place with index X.
+;; Also: UROUNDA (BB13)
+AtIndex:
+    lda BCDSTR+DIGITS_START,X
+    cmp #ROUND_UP_DIGIT
+    bcc NoCarryOut+1                        ; below 5: carry clear, to the RTS
     lda #9                                  ; 9 plus the carry makes this place 0
-    bcs UROUNDB
-UROUNDL:
+    bcs AddCarry
+
+;; Carries into the place before.
+;; Also: UROUNDL (BB13)
+CarryLoop:
     dex
-    bmi UROUNDO                             ; carried out of the first digit
-    lda BCDSTR+2,X
-UROUNDB:
+    bmi CarryOut                            ; carried out of the first digit
+    lda BCDSTR+DIGITS_START,X
+
+;; Adds the carry to the place, in decimal.
+;; Also: UROUNDB (BB13)
+AddCarry:
     sed
     adc #0                                  ; plus the carry, in decimal
     cld
     cmp #$10                                ; carry = set for a carry on
     and #$0F
-    sta BCDSTR+2,X
-    bcs UROUNDL
+    sta BCDSTR+DIGITS_START,X
+    bcs CarryLoop
 
 ;; Returns with carry clear: the exponent stands.
-UROUNDX:
+;; Also: UROUNDX (BB13)
+NoCarryOut:
     clc
     rts
 
 ;; Makes the number 1 after a carry out of its first digit, the other places now 0, and returns with carry set.
-UROUNDO:
+;; Also: UROUNDO (BB13)
+CarryOut:
     lda #1
-    sta BCDSTR+2
+    sta BCDSTR+DIGITS_START
     rts
+.endproc
+
+.endscope

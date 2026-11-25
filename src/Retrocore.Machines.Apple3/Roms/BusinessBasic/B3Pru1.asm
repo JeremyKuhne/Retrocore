@@ -1,128 +1,376 @@
-; B3PRU1: PRINT USING's first half: finding the image, the loop over the expressions, printing literals and strings,
-; and the scanner that checks each spec and builds a number's edit mask.
-;
-; The image comes from a string literal, a string variable or an IMAGE statement, and is a list of specs separated by
-; commas:
-;
-; - A literal: text in quotes, X for a space or / for a new line.
-; - A string field: A to left-justify, C to center or R to right-justify, as wide as its count of letters.
-; - A number field: digit positions, # (leading zeros as spaces), Z (leading zeros printed) or & (spaces, with
-;   commas); ** for asterisk fill; $ or a floating $$; a sign, + or -, before or after the digits, or a floating ++
-;   or --; a decimal point; and EEE or EEEE for an exponent.
-;
-; A count before a character repeats it, so 5# is #####. The scanner keeps its state in the FAC's bytes, which are
-; free while it runs; the expression's value is kept as BCD digits in BCDSTR for the editor, UNUMEDIT, in B3Pru2.
-;
-; Names follow Apple's Business BASIC 1.3 listing.
+; retrocore: style=strict
+;; `PRINT USING`'s first half: finding the image, the loop over the expressions, printing literals and strings, and
+;; the scanner that checks each spec and builds a number's edit mask.
+;;
+;; The image comes from a string literal, a string variable or an `IMAGE` statement, and is a list of specs separated
+;; by commas:
+;;
+;; - A literal: text in quotes, X for a space or / for a new line.
+;; - A string field: A to left-justify, C to center or R to right-justify, as wide as its count of letters.
+;; - A number field: digit positions, # (leading zeros as spaces), Z (leading zeros printed) or & (spaces, with
+;;   commas); ** for asterisk fill; $ or a floating $$; a sign, + or -, before or after the digits, or a floating ++
+;;   or --; a decimal point; and EEE or EEEE for an exponent.
+;;
+;; A count before a character repeats it, so 5# is #####. The scanner keeps its state in the bytes of <FAC>, which are
+;; free while it runs; the expression's value is kept as decimal digits in <BCDSTR> for the editor,
+;; <PrintUsing::FormatNumber>, in B3Pru2.asm.
 
-DELIM = FAC+1                               ;; the spec character UGETDL found
-REP = FAC+2                                 ;; its count: the repeat count, or the run of the same character
-DIGB4DPT = FAC+24                           ;; the count of digit positions before the decimal point
-DIGAFDPT = FAC+25                           ;; the count of digit positions after it
-SAVLEN = FAC+6                              ;; the length of a literal, or of the string to print
-SPECTYP = FAC+7                             ;; the spec's type: 0 a number, $FF a string, $80 a literal, 1 none
-DIGCTR = FAC+8                              ;; the digit positions counted but not yet put in the mask
-DIGEXP = FAC+9                              ;; the exponent of the digit the editor wants
-USVSTRL = FAC+9                             ;; the string's length, kept while its spec is found
-DPTNDX = FAC+10                             ;; the decimal point's index in the mask, $FF for none
-NMASK = FAC+11                              ;; the digit class so far: <ZTYP>, <DTYP> or <CMATYP>, 0 for none
-EXPADJ = FAC+11                             ;; the editor's adjustment to the exponent
-EMASK = FAC+12                              ;; its parts: $80 digits, $20 a sign ($01 +), $10 $, $08 E, $04 a point
-FLTMSK = FAC+13                             ;; the floating symbols: $10 **, $20 $, $40 a sign, $80 a $ after the sign
-LITRLCH = FAC+14                            ;; the text X or / prints: a space, or a return and a line feed
-SPCB4DIG = FAC+14                           ;; the editor's index of the place before the digits
-MASKPT = FRESPC                             ;; the edit mask, <MSKLEN> bytes of string space from <GETSPA>
-VSPEC = FAC+29                              ;; $FF once a spec has taken a value, so the image may start over
-ENDFLG = VSPEC                              ;; how the statement ends: 0 with a new line, a semicolon without
-MSKNDX = FAC+16                             ;; the index of the mask's last byte, $FF while it is empty
-SPCPTR = FAC+17                             ;; the image's address
-SPCPTRH = FAC+17+1                          ;; the image's address's high byte
-SPCNDX = FAC+19                             ;; the index of the image's character last read
-SPCLEN = FAC+20                             ;; the image's length, 1 to 255
-TENZNDX = FAC+21                            ;; the mask index of the units digit, $FF for none
-CMACTR = FAC+22                             ;; the editor's count of digits since a comma
-HALF = FAC+22                               ;; which half of a BCD byte the unpacker takes next
-CMAFILL = FAC+23                            ;; the character for leading zeros, with bit 7 set to put in commas
-SPCPTRB = SPCPTR+SYSPAG                     ;; the image's bank byte
+;; `PRINT USING` and the `IMAGE` format it prints through: reading the image, checking each spec and building a number
+;; spec's edit mask, and writing numbers and strings into their fields.
+;;
+;; Business BASIC's own code, with no counterpart in Microsoft's BASIC. `IMAGE` itself is skipped like `REM` when it
+;; runs; only `PRINT USING` reads it.
+.scope PrintUsing
 
-STRTYP = $FF                                ;; PTRGET's type for a string variable
-ZTYP = $41                                  ;; Z's digit class: leading zeros printed
-CMATYP = $44                                ;; &'s digit class: commas put in
-DTYP = $42                                  ;; #'s digit class: leading zeros as spaces
-MSKLEN = 32                                 ;; the edit mask's size
+; ---------------------------------------------------------------------------------------------------------------------
+; The scanner's and the editor's state, in the bytes of FAC and the bytes after it
+; ---------------------------------------------------------------------------------------------------------------------
+
+;; The spec character <ReadFormatCharacter> found, as the image gives it (upper or lower case); `9` while it reads a
+;; count.
+;; Also: DELIM (BB13)
+SpecCharacter = FAC+1
+
+;; The spec character's count: the repeat count before it, or the run of the same character.
+;; Also: REP (BB13)
+RepeatCount = FAC+2
+
+;; The count of digit positions before the decimal point.
+;; Also: DIGB4DPT (BB13)
+DigitsBeforePoint = FAC+24
+
+;; The count of digit positions after the decimal point.
+;; Also: DIGAFDPT (BB13)
+DigitsAfterPoint = FAC+25
+
+;; The length of a literal, or of the string to print.
+;; Also: SAVLEN (BB13)
+TextLength = FAC+6
+
+;; The spec's type: <SPEC_NUMBER>, <FIELD_STRING>, <FIELD_LITERAL>, or <SPEC_END> when none was found.
+;; Also: SPECTYP (BB13)
+SpecType = FAC+7
+
+;; While a spec is scanned, the digit positions counted but not yet put in the mask; while a number is edited, the
+;; count of digits <NextDigit> has taken.
+;; Also: DIGCTR (BB13)
+DigitCounter = FAC+8
+
+;; The power of ten of the digit the editor wants.
+;; Also: DIGEXP (BB13)
+DigitPower = FAC+9
+
+;; The string's length, kept while its spec is found.
+;; Also: USVSTRL (BB13)
+StringLength = FAC+9
+
+;; The decimal point's index in the mask, <NO_INDEX> for none.
+;; Also: DPTNDX (BB13)
+PointIndex = FAC+10
+
+;; The digit class so far: <FIELD_ZERO_FILLED>, <FIELD_SPACE_FILLED> or <FIELD_COMMAS>, 0 for none.
+;; Also: NMASK (BB13)
+DigitClass = FAC+11
+
+;; The editor's adjustment to the exponent, for engineering notation.
+;; Also: EXPADJ (BB13)
+ExponentAdjustment = FAC+11
+
+;; The spec's parts: <PARTS_DIGITS>, and the codes of the editing characters it has (<FIELD_SIGN>, with <PARTS_PLUS>
+;; for +, <FIELD_DOLLAR>, <FIELD_EXPONENT> and <FIELD_POINT>).
+;; Also: EMASK (BB13)
+SpecParts = FAC+12
+
+;; The floating symbols: <FLOAT_ASTERISKS>, <FLOAT_DOLLAR>, <FLOAT_SIGN> and <FLOAT_DOLLAR_AFTER_SIGN>.
+;; Also: FLTMSK (BB13)
+FloatingSymbols = FAC+13
+
+;; The text X or / prints: a space, or a return and a line feed.
+;; Also: LITRLCH (BB13)
+LiteralText = FAC+14
+
+;; In engineering notation, the mask index of the first digit.
+;; Also: SPCB4DIG (BB13)
+FirstDigitPlace = FAC+14
+
+;; The edit mask, <MASK_SIZE> bytes of string space from <GETSPA>, with its X-byte at <FRESPCB>.
+;; Also: MASKPT (BB13)
+MaskPointer = FRESPC
+
+;; $FF once a spec has taken a value, so the image may start over.
+;; Also: VSPEC (BB13)
+ValueSpecSeen = FAC+29
+
+;; How the statement ends: 0 with a new line, a semicolon without one.
+;; Also: ENDFLG (BB13)
+EndingSeparator = ValueSpecSeen
+
+;; The index of the mask's last byte, <NO_INDEX> while it is empty; the editor makes it the mask's length.
+;; Also: MSKNDX (BB13)
+MaskIndex = FAC+16
+
+;; The image's address, with its X-byte at <ImagePointerXByte>.
+;; Also: SPCPTR (BB13)
+ImagePointer = FAC+17
+
+;; The image's address's high byte.
+;; Also: SPCPTRH (BB13)
+ImagePointerHigh = FAC+17+1
+
+;; The index of the image's character last read.
+;; Also: SPCNDX (BB13)
+ImageIndex = FAC+19
+
+;; The image's length, 1 to 255.
+;; Also: SPCLEN (BB13)
+ImageLength = FAC+20
+
+;; The mask index of the units digit, <NO_INDEX> for none.
+;; Also: TENZNDX (BB13)
+UnitsIndex = FAC+21
+
+;; The editor's count of digits since a comma.
+;; Also: CMACTR (BB13)
+CommaCounter = FAC+22
+
+;; Which half of a decimal byte <UnpackDecimal> takes next: bit 7 set for the high digit.
+;; Also: HALF (BB13)
+NextHalf = FAC+22
+
+;; The character for leading zeros, with <FILL_COMMAS> set to put in commas.
+;; Also: CMAFILL (BB13)
+FillCharacter = FAC+23
+
+;; The image's X-byte: its bank.
+;; Also: SPCPTRB (BB13)
+ImagePointerXByte = ImagePointer+SYSPAG
+
+; ---------------------------------------------------------------------------------------------------------------------
+; Values
+; ---------------------------------------------------------------------------------------------------------------------
+
+;; <PTRGET>'s type for a string variable, and <VALTYP>'s for a string.
+;; Also: STRTYP (BB13)
+TYPE_STRING = $FF
+
+;; The type <FRMEVL> is asked for when any type will do.
+TYPE_ANY = $20
+
+;; Z's digit class: leading zeros printed. The lowest class, and the class of every digit after the point.
+;; Also: ZTYP (BB13)
+FIELD_ZERO_FILLED = $41
+
+;; &'s digit class: leading zeros as spaces, with commas put in. The highest class.
+;; Also: CMATYP (BB13)
+FIELD_COMMAS = $44
+
+;; #'s digit class: leading zeros as spaces.
+;; Also: DTYP (BB13)
+FIELD_SPACE_FILLED = $42
+
+;; The edit mask's size, the widest number field.
+;; Also: MSKLEN (BB13)
+MASK_SIZE = 32
+
+; The format characters' types, from <FormatTypes>. The top two bits give the class: 01 a digit, 00 an editing
+; character, 10 a literal, 11 a string. An editing character's code is the bit it sets in SpecParts.
+
+;; A string field's type: A, C or R.
+FIELD_STRING = $FF
+
+;; A literal's type: a quote, X or /.
+FIELD_LITERAL = $80
+
+;; A sign's type, for -: a space or a minus.
+FIELD_SIGN = $20
+
+;; +'s type: a sign, with <PARTS_PLUS>.
+FIELD_PLUS = FIELD_SIGN | PARTS_PLUS
+
+;; $'s type.
+FIELD_DOLLAR = $10
+
+;; E's type: the exponent.
+FIELD_EXPONENT = $08
+
+;; The decimal point's type.
+FIELD_POINT = $04
+
+;; *'s type: asterisk fill.
+FIELD_ASTERISK = $02
+
+; The bits of SpecParts that are not an editing character's code.
+
+;; The spec has digit positions.
+PARTS_DIGITS = $80
+
+;; The sign is +, which prints + or -, rather than -, which prints a space or -.
+PARTS_PLUS = $01
+
+; The bits of FloatingSymbols.
+
+;; ** fills the places before the digits with asterisks.
+FLOAT_ASTERISKS = $10
+
+;; A floating $, before a floating sign or with none.
+FLOAT_DOLLAR = $20
+
+;; A floating sign.
+FLOAT_SIGN = $40
+
+;; A floating $ after a floating sign, so nearer the digits.
+FLOAT_DOLLAR_AFTER_SIGN = $80
+
+;; The bit of <FillCharacter> that puts commas in, for &.
+FILL_COMMAS = $80
+
+; The values of SpecType besides FIELD_STRING and FIELD_LITERAL.
+
+;; A number spec.
+SPEC_NUMBER = 0
+
+;; No spec: the image's end.
+SPEC_END = 1
+
+;; An index for none: no decimal point, no units digit, an empty mask; and an index one before the first.
+NO_INDEX = $FF
+
+;; The count of a doubled symbol, which floats: $$, ++, -- and **.
+FLOAT_RUN = 2
+
+;; The fewest & places, room for a comma: #,###.
+COMMA_MIN_PLACES = 5
+
+;; The digits between commas.
+DIGITS_PER_COMMA = 3
+
+;; The step of engineering notation's exponent.
+ENGINEERING_STEP = 3
+
+;; The largest count that a digit may still follow: one more digit would take it past 255.
+COUNT_LIMIT = 255 / 10 + 1
+
+;; What <SpecCharacter> holds while a count is read: no format character is a digit.
+COUNT_MARK = '9'
+
+;; The bit that makes a letter lower case.
+LOWER_CASE_BIT = $20
+
+;; A carriage return, the first half of /'s new line.
+RETURN = $0D
+
+;; A line feed, the second half of /'s new line.
+LINE_FEED = $0A
+
+;; A stored line's link and line number, before its tokens.
+LINE_HEADER_SIZE = 3
+
+; The number's digits in BCDSTR, one a byte.
+
+;; The index in <BCDSTR> of the first digit.
+DIGITS_START = 2
+
+;; The digits <UnpackDecimal> unpacks.
+DIGIT_COUNT = 20
+
+;; The index in <BCDSTR> just past the digits, where <UnpackDecimal> writes a 0.
+DIGITS_END = DIGITS_START + DIGIT_COUNT
+
+;; The lowest digit that rounds up.
+ROUND_UP_DIGIT = 5
 
 ; ---------------------------------------------------------------------------------------------------------------------
 ; PRINT USING
 ; ---------------------------------------------------------------------------------------------------------------------
 
-;; PRINT USING: prints each expression through the next number or string spec of the image, with the literals
+;; `PRINT USING`: prints each expression through the next number or string spec of the image, with the literals
 ;; between.
 ;;
-;; The image follows USING as a line number (of an IMAGE statement), a string literal or a string variable, then a
+;; The image follows `USING` as a line number (of an `IMAGE` statement), a string literal or a string variable, then a
 ;; semicolon and the expressions, separated by commas or semicolons. When the image runs out of specs it starts over;
 ;; when the expressions run out, the literals up to the next number or string spec are printed, and a spec left over
 ;; is a type mismatch. A semicolon at the end leaves the line open.
-;; In: TXTPTR = the end of USING
-;; See: <IMSYNCK>, <UNUMEDIT>
-PRUSING:
+;; In: TXTPTR = `USING`
+;; Errors: SYNTAX ERROR, UNDEF'D STATEMENT for a line that is not an `IMAGE`, TYPE MISMATCH, ILLEGAL QUANTITY
+;; See: <ScanSpec>, <FormatNumber>
+;; Also: PRUSING (BB13)
+.proc Statement
     jsr CHRGET
-    bcc UIMAGE                              ; a line number
+    bcc TakeImageStatement                  ; a line number
     cmp #'"'
-    beq ULITRL
+    beq TakeLiteral
     jsr ISLETC                              ; a variable?
-    bcc USNERR
+    bcc ToSyntaxError
     jsr PTRGET
-    cpx #STRTYP
-    bne USNERR
+    cpx #TYPE_STRING
+    bne ToSyntaxError
     sta INDEX
     sty INDEX+1
     lda VARPNTB
     sta INDEXB
     jsr NOTNOW                              ; the string itself
-    sta SPCLEN
-    stx SPCPTR
-    sty SPCPTRH
+    sta ImageLength
+    stx ImagePointer
+    sty ImagePointerHigh
     lda INDEXB
-    sta SPCPTRB
-    jmp UGOTSPT
+    sta ImagePointerXByte
+    jmp StartList
 
 ;; Takes the image from a string literal, which may not be empty.
-ULITRL:
+;; Also: ULITRL (BB13)
+TakeLiteral:
     ldy #0
-ULITS:
+
+;; Takes the literal's next character.
+;; Also: ULITS (BB13)
+LiteralLoop:
     jsr CHRGET
-    beq USNERR                              ; no closing quote
+    beq ToSyntaxError                       ; no closing quote
     cpy #0
-    bne ULITX
+    bne CheckQuote
     ldx TXTPTR                              ; the first character: the image starts here
-    stx SPCPTR
+    stx ImagePointer
     ldx TXTPTR+1
-    stx SPCPTR+1
+    stx ImagePointer+1
     ldx TXTPTRB
-    stx SPCPTRB
-ULITX:
+    stx ImagePointerXByte
+
+;; Ends the literal at its closing quote.
+;; Also: ULITX (BB13)
+CheckQuote:
     cmp #'"'
-    beq ULITE
+    beq LiteralEnd
     iny
-    bne ULITS
-ULITE:
-    sty SPCLEN
+    bne LiteralLoop
+
+;; Keeps the literal's length; an empty one, or the statement's end after it, is a syntax error.
+;; Also: ULITE (BB13)
+LiteralEnd:
+    sty ImageLength
     tya
-    beq USNERR                              ; empty
+    beq ToSyntaxError                       ; empty
     jsr CHRGET
-    bne UGOTSPT
+    bne StartList
+    ; Falls into ToSyntaxError.
+.endproc
 
 ;; Ends the statement with a syntax error.
-USNERR:
+;; Also: USNERR (BB13)
+.proc ToSyntaxError
     jmp SNERR
+.endproc
 
-;; Ends the statement with an undefined-statement error: the line is not an IMAGE statement, or the image is empty.
-UIMERR:
+;; Ends the statement with an undefined-statement error: the line is not an `IMAGE` statement, or the image is empty.
+;; Also: UIMERR (BB13)
+.proc NoImageError
     ldx #ERRUS
     jmp ERROR
+.endproc
 
-;; Takes the image from the IMAGE statement at the line number in the program text, the rest of its line.
-UIMAGE:
+;; Takes the image from the `IMAGE` statement at the line number in the program text, the rest of its line.
+;; Errors: UNDEF'D STATEMENT for no such line, or a line that is not an `IMAGE`, or an empty one
+;; Also: UIMAGE (BB13)
+.proc TakeImageStatement
     jsr LINGET
     lda TXTPTR
     pha
@@ -131,149 +379,181 @@ UIMAGE:
     lda TXTPTRB
     pha
     jsr GOTOB                               ; find the line
-    ldy #3
+    ldy #LINE_HEADER_SIZE
     jsr ADDON                               ; past its link and number
     jsr CHRGET
     tax
     cpx #IMAGETK
-    bne UIMERR
+    bne NoImageError
     jsr CHRGET
-    beq UIMERR
+    beq NoImageError
     lda TXTPTR
-    sta SPCPTR
+    sta ImagePointer
     lda TXTPTR+1
-    sta SPCPTR+1
+    sta ImagePointer+1
     lda TXTPTRB
-    sta SPCPTRB
+    sta ImagePointerXByte
     jsr REMN                                ; the length to the line's end
-    sty SPCLEN
+    sty ImageLength
     pla
     sta TXTPTRB
     pla
     sta TXTPTR+1
     pla
     sta TXTPTR
+    ; Falls into StartList.
+.endproc
 
-;; Starts on the expressions after the image's semicolon; an image that starts with a comma is a syntax error.
-UGOTSPT:
+;; Starts on the expressions after the image's semicolon; an image that is empty or starts with a comma is a syntax
+;; error.
+;; Entry:
+;;   SkipSeparator = skips a comma or semicolon between the expressions, then takes the next
+;; Also: UGOTSPT (BB13)
+.proc StartList
     jsr CHRGOT
     cmp #';'
-    bne USNERR
-    ldx #$FF
-    stx SPCNDX
-    jsr UGETCH
-    beq USNERR
-    stx SPCNDX                              ; back before the first character
+    bne ToSyntaxError
+    ldx #NO_INDEX
+    stx ImageIndex
+    jsr ReadNext
+    beq ToSyntaxError
+    stx ImageIndex                          ; back before the first character
     inx
-    stx VSPEC                               ; no spec has taken a value yet
+    stx ValueSpecSeen                       ; no spec has taken a value yet
 
 ;; Skips a comma or semicolon between the expressions.
-USKPNXT:
+;; Also: USKPNXT (BB13)
+SkipSeparator:
     jsr CHRGET
-    bne *+5                                 ; past the CHRGOT
+    bne NextExpression::CheckEnd            ; past NextExpression's CHRGOT
+    ; Falls into NextExpression.
+.endproc
 
-;; Takes the next expression, or at the statement's end, or a semicolon, prints the image's last literals.
-UNXTEXP:
+;; Takes the next expression; at the statement's end, or a semicolon, prints the image's last literals.
+;; Entry:
+;;   CheckEnd = takes the character in A, flags as <CHRGOT> sets them
+;; Also: UNXTEXP (BB13)
+.proc NextExpression
     jsr CHRGOT
-    bne UNXTEXC
+
+;; Takes the character in A.
+CheckEnd:
+    bne CheckSeparator
     lda #0
-    beq UTAILS
-UNXTEXC:
+    beq Finish
+
+;; Skips a comma, ends at a semicolon, or evaluates the next expression.
+;; Also: UNXTEXC (BB13)
+CheckSeparator:
     cmp #','
-    beq USKPNXT
+    beq StartList::SkipSeparator
     cmp #';'
-    bne UEVAL
+    bne Evaluate
+    ; Falls into Finish.
+.endproc
 
 ;; Ends the statement: prints the literals left before the next number or string spec, then a new line unless a
 ;; semicolon ended it. A number or string spec found there, with no value for it, is a type mismatch.
 ;; In: A = 0 at the statement's end, or a semicolon
-UTAILS:
-    sta ENDFLG
+;; Also: UTAILS (BB13)
+.proc Finish
+    sta EndingSeparator
     tax
-    beq *+5
+    beq CheckFollowing
     jsr CHRGET                              ; nothing may follow the semicolon
-    beq *+5
-    jmp USNERR
-    lda #MSKLEN
+CheckFollowing:
+    beq PrintTail
+    jmp ToSyntaxError
+PrintTail:
+    lda #MASK_SIZE
     jsr GETSPA                              ; the mask, for the scan
-    jsr UDOLITS
-    jsr UFRESPC
-    dec SPECTYP                             ; 1, the image's end, is the only good result
-    beq *+5
-    jmp UTMERR
-    lda ENDFLG
-    bne *+5
+    jsr PrintLiterals
+    jsr FreeMask
+    .assert SPEC_END = 1, "Finish takes SPEC_END to zero with a DEC."
+    dec SpecType                            ; SPEC_END, the image's end, is the only good result
+    beq EndLine
+    jmp FindValueSpec::ToTypeMismatchError
+EndLine:
+    lda EndingSeparator
+    bne Done
     jmp CRDO
+Done:
     rts
+.endproc
 
 ; ---------------------------------------------------------------------------------------------------------------------
 ; Each expression
 ; ---------------------------------------------------------------------------------------------------------------------
 
-;; Evaluates the next expression, or SCALE(n, expression), and makes it ready to print: a number as BCD digits in
-;; <BCDSTR>, a string as its pointer and length.
+;; Evaluates the next expression, or `SCALE(n, expression)`, and makes it ready to print: a number as decimal digits
+;; in <BCDSTR>, a string as its pointer and length.
 ;;
-;; The image's place is kept on the stack meanwhile, as the evaluator uses the FAC's bytes. SCALE's n, a signed byte,
-;; goes to the editor in <ISARA>; it is 0 otherwise.
-UEVAL:
-    lda SPCNDX
+;; The image's place is kept on the stack meanwhile, as the evaluator uses the bytes of <FAC>. `SCALE`'s n, a signed
+;; byte, goes to the editor in <ISARA>; it is 0 otherwise.
+;; Also: UEVAL (BB13)
+.proc Evaluate
+    lda ImageIndex
     pha
-    lda SPCLEN
+    lda ImageLength
     pha
-    lda SPCPTR
+    lda ImagePointer
     pha
-    lda SPCPTRH
+    lda ImagePointerHigh
     pha
-    lda VSPEC
+    lda ValueSpecSeen
     pha
     lda #0                                  ; no scale
     pha
     jsr CHRGOT
     cmp #SCALETK
-    bne UNOSCALE
+    bne NoScale
     jsr CHRGET
     jsr GETABYT
     pla                                     ; the scale in place of the 0
     txa
     pha
     jsr CHKCOM
-    lda #$20
-    sta VALTYP                              ; any type: GETABYT set it
+    lda #TYPE_ANY
+    sta VALTYP                              ; GETABYT set it
     jsr FRMEVL
     jsr CHKCLS
-    beq UGOTNUM                             ; then the end, a comma or a semicolon
+    beq Prepare                             ; then the end, a comma or a semicolon
     cmp #','
-    beq UGOTNUM
+    beq Prepare
     cmp #';'
-    beq UGOTNUM
+    beq Prepare
     jmp SNERR
 
 ;; Evaluates an expression of any type.
-UNOSCALE:
-    lda #$20
+;; Also: UNOSCALE (BB13)
+NoScale:
+    lda #TYPE_ANY
     sta VALTYP
     jsr FRMEVL
 
-;; Makes the value ready by its type: a string's pointer to <INDEX> and its length to <USVSTRL>, a long integer's
-;; digits by <LUNPACK>, or a real's by <UNTYPE>.
-UGOTNUM:
+;; Makes the value ready by its type: a string's pointer to <INDEX> and its length to <StringLength>, a long
+;; integer's digits by <LUNPACK>, or a real's from <FOUT>'s text.
+;; Also: UGOTNUM (BB13)
+Prepare:
     bit VALTYP
-    bpl UNTYPE
+    bpl UnpackReal
     jsr NOTFAC                              ; a string
-    sta USVSTRL
-    jmp USTKSAV
+    sta StringLength
+    jmp RestorePlace
 
 ;; Unpacks a long integer's digits into <BCDSTR>, its exponent to <FACEXP>.
-UDTYPE:
+;; Also: UDTYPE (BB13)
+UnpackLong:
     jsr LUNPACK
     lda ISARA
     sta FACEXP
-    jmp USTKSAV
+    jmp RestorePlace
 
-;; Turns a real into BCD digits in <BCDSTR>, from index 2, through FOUT's text; its exponent less 1, times 2, plus 1
-;; when negative, goes to <FACEXP>.
-UNTYPE:
-    bvs UDTYPE                              ; a long integer
+;; Turns a real into decimal digits in <BCDSTR>, from <DIGITS_START>, through <FOUT>'s text; its exponent less 1,
+;; times 2, plus 1 when negative, goes to <FACEXP>.
+;; Also: UNTYPE (BB13)
+UnpackReal:
+    bvs UnpackLong                          ; a long integer
     lda FACSGN
     pha
     jsr FOUT
@@ -286,211 +566,275 @@ UNTYPE:
     plp
     rol
     sta FACEXP
-    ldy #2
+    ldy #DIGITS_START
     ldx #0
 
-;; Copies FOUT's digits, skipping the point, a minus and leading zeros, up to the first other character.
-STRBCD0:
+;; Copies <FOUT>'s digits, skipping the point, a minus and leading zeros, up to the first other character.
+;; Also: STRBCD0 (BB13)
+CopyDigit:
     lda FBUFFR,X
     cmp #'.'
-    beq STRBCD1
+    beq SkipCharacter
     cmp #'-'
-    beq STRBCD1
-    cmp #':'
-    bcs STRBCD2
+    beq SkipCharacter
+    cmp #'9'+1
+    bcs DigitsDone
     sbc #'0'-1
-    bcc STRBCD2
-    bne *+6
-    cpy #2                                  ; a zero before any other digit
-    beq STRBCD1
+    bcc DigitsDone
+    bne StoreDigit
+    cpy #DIGITS_START                       ; a zero before any other digit
+    beq SkipCharacter
+StoreDigit:
     sta BCDSTR,Y
     iny
-STRBCD1:
+
+;; Goes on to <FOUT>'s next character.
+;; Also: STRBCD1 (BB13)
+SkipCharacter:
     inx
-    bne STRBCD0                             ; always
-STRBCD2:
-    lda #0                                  ; zeros to index 21
-STRBCD3:
+    bne CopyDigit                           ; always
+
+;; Fills the places after the digits with zeros, up to <DIGITS_END>.
+;; Also: STRBCD2 (BB13)
+DigitsDone:
+    lda #0
+
+;; Writes the next zero.
+;; Also: STRBCD3 (BB13)
+ZeroLoop:
     sta BCDSTR,Y
     iny
-    cpy #22
-    bne STRBCD3
+    cpy #DIGITS_END
+    bne ZeroLoop
 
 ;; Takes the image's place and the scale back off the stack, then finds the value's spec.
-USTKSAV:
+;; Also: USTKSAV (BB13)
+RestorePlace:
     pla
     sta ISARA
     pla
-    sta VSPEC
+    sta ValueSpecSeen
     pla
-    sta SPCPTRH
+    sta ImagePointerHigh
     pla
-    sta SPCPTR
+    sta ImagePointer
     pla
-    sta SPCLEN
+    sta ImageLength
     pla
-    sta SPCNDX
-    lda #MSKLEN
+    sta ImageIndex
+    lda #MASK_SIZE
     jsr GETSPA
+    ; Falls into FindValueSpec.
+.endproc
 
 ;; Prints the literals up to the next number or string spec; at the image's end starts over from its first spec,
 ;; unless no spec in it takes a value, which is a type mismatch.
-UNXTSPC:
-    jsr UDOLITS
-    ldx SPECTYP
-    beq UVSPEC                              ; a number
-    bmi UVSPEC                              ; a string
-    lda VSPEC
-    beq UTMERR2
-    sta SPCNDX                              ; $FF: start over
-    bne UNXTSPC                             ; always
+;; Entry:
+;;   ToTypeMismatchError = ends the statement with a type mismatch
+;; Also: UNXTSPC (BB13)
+.proc FindValueSpec
+    jsr PrintLiterals
+    ldx SpecType
+    beq CheckType                           ; a number
+    bmi CheckType                           ; a string
+    lda ValueSpecSeen
+    beq FreeMaskThenTypeMismatch
+    sta ImageIndex                          ; $FF: start over
+    bne FindValueSpec                       ; always
 
 ;; Checks the value's type against the spec's, then prints it.
-UVSPEC:
+;; Also: UVSPEC (BB13)
+CheckType:
     lda #$FF
-    sta VSPEC
+    sta ValueSpecSeen
     sec
     lda VALTYP
     tax
-    sbc SPECTYP
+    sbc SpecType
     lsr                                     ; carry = set when only one is a string
-    bcc *+8
+    bcc TypesMatch
 
 ;; Frees the mask, then ends the statement with a type mismatch.
-UTMERR2:
-    jsr UFRESPC
+;; Also: UTMERR2 (BB13)
+FreeMaskThenTypeMismatch:
+    jsr FreeMask
 
 ;; Ends the statement with a type mismatch.
-UTMERR:
+;; Also: UTMERR (BB13)
+ToTypeMismatchError:
     jmp TMERR
+
+;; Prints a string or a number.
+TypesMatch:
     txa
-    bpl *+5
-    jmp USTRVAR
-    jmp UNUMVAR
+    bpl ToPrintNumber
+    jmp PrintString
+ToPrintNumber:
+    jmp PrintNumber
+.endproc
 
 ;; Clears the mask, scans the next spec, and prints it when it is a literal, until a number or string spec or the
 ;; image's end.
-;; Out: SPECTYP = 0 for a number spec, $FF for a string spec, 1 at the image's end
-;; See: <IMSYNCK>
-UDOLITS:
-    ldy #MSKLEN-1
+;; Out: SpecType = <SPEC_NUMBER> for a number spec, <FIELD_STRING> for a string spec, <SPEC_END> at the image's end
+;; See: <ScanSpec>
+;; Also: UDOLITS (BB13)
+.proc PrintLiterals
+    ldy #MASK_SIZE-1
     lda #0
-UBLKMSK:
-    sta (MASKPT),Y
-    dey
-    bpl UBLKMSK
-    jsr IMSYNCK
-    bit SPECTYP
-    bmi ULITOUT
 
-;; Returns from <UDOLITS>.
-UDOXIT:
+;; Clears the mask's next byte, from the last.
+;; Also: UBLKMSK (BB13)
+ClearMask:
+    sta (MaskPointer),Y
+    dey
+    bpl ClearMask
+    jsr ScanSpec
+    bit SpecType
+    bmi PrintLiteral
+
+;; Returns.
+;; Also: UDOXIT (BB13)
+Done:
     rts
 
 ;; Prints a literal, unless the spec was a string's.
-ULITOUT:
-    bvs UDOXIT                              ; a string
+;; Also: ULITOUT (BB13)
+PrintLiteral:
+    bvs Done                                ; a string
 
-;; Prints the literal at <LOWTR>, <SAVLEN> bytes, <REP> times, then goes on to the next spec.
+;; Prints the literal at <LOWTR>, <TextLength> bytes, <RepeatCount> times, then goes on to the next spec.
 ;;
-;; An empty literal, "", has a length of 0, and prints 256 bytes.
-UREPEAT:
+;; An empty literal, "", has a length of 0, and prints 256 bytes (a bug of the original).
+;; Also: UREPEAT (BB13)
+Repeat:
     ldy #0
-    ldx SAVLEN
-UOUTLP:
+    ldx TextLength
+
+;; Prints the literal's next byte.
+;; Also: UOUTLP (BB13)
+OutputLoop:
     lda (LOWTR),Y
     jsr OUTDO
     iny
     dex
-    bne UOUTLP
-    dec REP
-    bne UREPEAT
-    beq UDOLITS
+    bne OutputLoop
+    dec RepeatCount
+    bne Repeat
+    beq PrintLiterals
+.endproc
 
 ;; Prints a string through its spec, cut to the field's width or padded with spaces: A puts the spaces after it, C
-;; half before, and R all before.
-USTRVAR:
-    lda USVSTRL
-    sta SAVLEN
-    lda REP                                 ; the width less the length
+;; half before, and R all before; then takes the next expression.
+;; In: INDEX = the string, StringLength = its length, RepeatCount = the field's width, SpecCharacter = the spec's
+;;   letter
+;; Also: USTRVAR (BB13)
+.proc PrintString
+    lda StringLength
+    sta TextLength
+    lda RepeatCount                         ; the width less the length
     sec
-    sbc SAVLEN
-    beq UEXACT
-    bcs USFITS
-    ldx REP                                 ; too long: cut it
-    stx SAVLEN
-    jmp UEXACT
+    sbc TextLength
+    beq PrintText
+    bcs Fits
+    ldx RepeatCount                         ; too long: cut it
+    stx TextLength
+    jmp PrintText
 
 ;; Prints the spaces before a string shorter than its field.
 ;; In: A = the spaces to spare
-USFITS:
-    ldy DELIM
+;; Also: USFITS (BB13)
+Fits:
+    ldy SpecCharacter
     cpy #'A'
-    beq UEXACT
-    cpy #'A'+$20
-    beq UEXACT
+    beq PrintText
+    cpy #'a'
+    beq PrintText
     cpy #'C'
-    beq *+6
-    cpy #'C'+$20
-    bne UEATME
-    ldx SAVLEN
-    beq UEATME
+    beq Center
+    cpy #'c'
+    bne PadBefore
+Center:
+    ldx TextLength
+    beq PadBefore
     lsr                                     ; centered: half before
-UEATME:
+
+;; Prints A spaces, counting them off the width.
+;; Also: UEATME (BB13)
+PadBefore:
     tax
     inx
-ULSPCS:
-    dex
-    beq UEXACT
-    jsr OUTSPC
-    dec REP
-    bne ULSPCS
 
-;; Prints the string's <SAVLEN> characters, then spaces to the field's end.
-UEXACT:
+;; Prints the next space.
+;; Also: ULSPCS (BB13)
+PadBeforeLoop:
+    dex
+    beq PrintText
+    jsr OUTSPC
+    dec RepeatCount
+    bne PadBeforeLoop
+
+;; Prints the string's <TextLength> characters, then spaces to the field's end.
+;; Also: UEXACT (BB13)
+PrintText:
     ldy #0
-    ldx SAVLEN
-    beq UNULL
-UEXACT2:
+    ldx TextLength
+    beq PadAfter
+
+;; Prints the string's next character.
+;; Also: UEXACT2 (BB13)
+TextLoop:
     lda (INDEX),Y
     jsr OUTDO
     iny
-    dec REP
+    dec RepeatCount
     dex
-    bne UEXACT2
+    bne TextLoop
 
 ;; Prints spaces to the field's end.
-UNULL:
-    ldx REP
-UFILL3:
-    beq UFRESTR
+;; Also: UNULL (BB13)
+PadAfter:
+    ldx RepeatCount
+
+;; Prints the next space, or frees the string at the field's end.
+;; Also: UFILL3 (BB13)
+PadAfterLoop:
+    beq FreeStringThenNext
     jsr OUTSPC
     dex
-    jmp UFILL3
+    jmp PadAfterLoop
+.endproc
 
 ;; Prints a number through its mask, then takes the next expression.
-;; See: <UNUMEDIT>
-UNUMVAR:
-    jsr UNUMEDIT
+;; See: <FormatNumber>
+;; Also: UNUMVAR (BB13)
+.proc PrintNumber
+    jsr FormatNumber
+    ; Falls into FreeMaskThenNext.
+.endproc
 
 ;; Frees the mask and takes the next expression.
-UFREMSK:
-    jsr UFRESPC
-    jmp UNXTEXP
+;; Also: UFREMSK (BB13)
+.proc FreeMaskThenNext
+    jsr FreeMask
+    jmp NextExpression
+.endproc
 
 ;; Frees the string, if it was a temporary one, and the mask, then takes the next expression.
-UFRESTR:
+;; Also: UFRESTR (BB13)
+.proc FreeStringThenNext
     jsr FRECNOW
-    jmp UFREMSK
+    jmp FreeMaskThenNext
+.endproc
 
 ; ---------------------------------------------------------------------------------------------------------------------
 ; Reading the image
 ; ---------------------------------------------------------------------------------------------------------------------
 
-;; Frees the mask's <MSKLEN> bytes of string space.
+;; Frees the mask's <MASK_SIZE> bytes of string space.
 ;; See: <FRESPA>
-UFRESPC:
-    lda #MSKLEN
+;; Also: UFRESPC (BB13)
+.proc FreeMask
+    lda #MASK_SIZE
     ldy FRESPC+1
     ldx FRESPC
     stx INDEX
@@ -498,473 +842,630 @@ UFRESPC:
     ldx FRESPCB
     stx INDEXB
     jmp FRESPA
+.endproc
 
-; UREGET drops UGETCHR's saved status and reads on past a space.
-UREGET:
+;; Drops <ReadNonSpace>'s saved status and reads on past a space.
+;; Also: UREGET (BB13)
+.proc SkipSpace
     pla
+    ; Falls into ReadNonSpace.
+.endproc
 
-;; Reads the image's next character other than a space, and classifies it as <IGOTCH> does.
-;; See: <UGETCH>
-UGETCHR:
-    jsr UGETCH
+;; Reads the image's next character other than a space, and classifies it as <ClassifyCharacter> does.
+;; Out: A = the character, Y and the flags as <ClassifyCharacter> sets them
+;; Keeps: X
+;; See: <ReadNext>
+;; Also: UGETCHR (BB13)
+.proc ReadNonSpace
+    jsr ReadNext
     php
     cmp #' '
-    beq UREGET
+    beq SkipSpace
     plp
     rts
+.endproc
 
-;; Moves <SPCNDX> to the image's next character, and classifies it as <IGOTCH> does.
-UGETCH:
-    inc SPCNDX
+;; Moves <ImageIndex> to the image's next character, and classifies it as <ClassifyCharacter> does.
+;; Out: A = the character, Y and the flags as <ClassifyCharacter> sets them
+;; Keeps: X
+;; Also: UGETCH (BB13)
+.proc ReadNext
+    inc ImageIndex
+    ; Falls into ClassifyCharacter.
+.endproc
 
-;; Classifies the image's character at <SPCNDX>.
+;; Classifies the image's character at <ImageIndex>.
 ;;
 ;; An index of $FF, past a 255-character image, reads as the end, and stays there.
-;; Out: A = the character (0 at the end), zero = set at the end or a comma, carry = clear for a digit,
-;;   overflow = set for an upper-case letter
-IGOTCH:
-    ldy SPCNDX
+;; In: ImageIndex = the character's index, ImagePointer = the image, ImageLength = its length
+;; Out: A = the character (0 at the end), Y = the character for one that is not a comma or a letter, zero = set at the
+;;   end or a comma, carry = clear for a digit, overflow = set for an upper-case letter
+;; Keeps: X
+;; Also: IGOTCH (BB13)
+.proc ClassifyCharacter
+    ldy ImageIndex
     lda #0
-    cpy #$FF
-    bne UGETCKL
-    dec SPCNDX
-    bne UGETNE
-UGETCKL:
-    cpy SPCLEN
-    bcs UGETNE                              ; the end
-    lda (SPCPTR),Y
+    cpy #NO_INDEX
+    bne InImage
+    dec ImageIndex
+    bne SetZero
+
+;; Reads the character, or the end past the image's length.
+;; Also: UGETCKL (BB13)
+InImage:
+    cpy ImageLength
+    bcs SetZero                             ; the end
+    lda (ImagePointer),Y
     cmp #','
-    beq UGETEND
+    beq Done
     cmp #'A'
-    bcc UGETCKD
+    bcc CheckDigit
     cmp #'Z'+1
-    bcc UGETVS
-UGETCKD:
-    cmp #':'
-    bcs UGETNE
+    bcc Letter
+
+;; Sets carry clear for a digit.
+;; Also: UGETCKD (BB13)
+CheckDigit:
+    cmp #'9'+1
+    bcs SetZero
     sec                                     ; carry = clear for a digit, and A as it was
     sbc #'0'
     sec
-    sbc #$D0
-UGETNE:
-    tay                                     ; zero = set for 0, the end
-UGETEND:
+    sbc #$100-'0'
+
+;; Sets zero for 0, the end.
+;; Also: UGETNE (BB13)
+SetZero:
+    tay
+
+;; Returns with overflow clear.
+;; Also: UGETEND (BB13)
+Done:
     clv
     rts
 
 ;; Returns an upper-case letter with overflow set and carry set.
-UGETVS:
-    bit *+4                                 ; the $40 in the next instruction sets overflow
+;; Also: UGETVS (BB13)
+Letter:
+    bit Compare+1                           ; the $40 of the CMP sets overflow
+Compare:
     cmp #$40
     rts
+.endproc
 
 ;; Adds A to the mask.
 ;;
-;; A mask longer than <MSKLEN> bytes is a syntax error.
-UATOMSK:
-    ldy MSKNDX
+;; A mask longer than <MASK_SIZE> bytes is a syntax error.
+;; In: A = the byte
+;; Out: Y = the byte's index, MaskIndex = Y
+;; Keeps: A, X
+;; Entry:
+;;   ToSyntaxError = ends the statement with a syntax error
+;; Also: UATOMSK (BB13)
+.proc AddToMask
+    ldy MaskIndex
     iny
-    cpy #MSKLEN
-    bcs USYERR
-    sta (MASKPT),Y
-    sty MSKNDX
+    cpy #MASK_SIZE
+    bcs ToSyntaxError
+    sta (MaskPointer),Y
+    sty MaskIndex
     rts
 
 ;; Ends the statement with a syntax error.
-USYERR:
-    jmp USNERR
+;; Also: USYERR (BB13)
+ToSyntaxError:
+    jmp PrintUsing::ToSyntaxError
+.endproc
 
-;; Puts the digit positions counted in <DIGCTR> into the mask as zeros, and adds them to <DIGB4DPT> or <DIGAFDPT>.
+;; Puts the digit positions counted in <DigitCounter> into the mask as zeros, and sets <DigitsBeforePoint> or
+;; <DigitsAfterPoint> to their count.
 ;;
-;; Before the decimal point, the last one's index is the units digit's, in <TENZNDX>. It is a syntax error for Z
-;; digits before the point in a field with a floating symbol, or for & digits fewer than 5.
-;; Out: A = as it was, Y = 2, NMASK = 0
-UDOMASK:
+;; Before the decimal point, the last one's index is the units digit's, in <UnitsIndex>. It is a syntax error for
+;; digits before the point that are all Z in a field with a floating symbol, or for fewer than <COMMA_MIN_PLACES> &
+;; places.
+;; Out: A = as it was, Y = 2, DigitClass = 0
+;; Also: UDOMASK (BB13)
+.proc PutDigitsInMask
     pha
-    ldy DIGCTR
-    beq UDONT
+    ldy DigitCounter
+    beq Done
     ldx #1                                  ; after the point
-    lda #4
-    bit EMASK
+    lda #FIELD_POINT
+    bit SpecParts
     php                                     ; zero = set before the point
-    bne UAFDPT
-    lda NMASK
-    cmp #ZTYP
-    bne UNOTZ
-    lda FLTMSK
-    bne USYERR
-UNOTZ:
-    dex                                     ; before the point
-UAFDPT:
+    bne CountDigits
+    lda DigitClass
+    cmp #FIELD_ZERO_FILLED
+    bne BeforePoint
+    lda FloatingSymbols
+    bne AddToMask::ToSyntaxError
+
+;; Counts the digits before the point.
+;; Also: UNOTZ (BB13)
+BeforePoint:
+    dex
+
+;; Sets the count, and checks the room for commas.
+;; Also: UAFDPT (BB13)
+CountDigits:
     tya
-    sta DIGB4DPT,X
-    ldx NMASK
-    beq USYERR
-    cpx #CMATYP
-    bne UANYSIZ
-    cmp #5                                  ; room for #,###
-    bcc USYERR
-UANYSIZ:
+    sta DigitsBeforePoint,X
+    ldx DigitClass
+    beq AddToMask::ToSyntaxError
+    cpx #FIELD_COMMAS
+    bne AddZeros
+    cmp #COMMA_MIN_PLACES                   ; room for #,###
+    bcc AddToMask::ToSyntaxError
+
+;; Puts the digits into the mask.
+;; Also: UANYSIZ (BB13)
+AddZeros:
     lda #0
-UDOMSKL:
-    jsr UATOMSK
-    dec DIGCTR
-    bne UDOMSKL
+
+;; Puts the next digit into the mask.
+;; Also: UDOMSKL (BB13)
+ZeroLoop:
+    jsr AddToMask
+    dec DigitCounter
+    bne ZeroLoop
     plp
-    bne UDONT
-    sty TENZNDX
-UDONT:
-    ldy #2
+    bne Done
+    sty UnitsIndex
+
+;; Returns.
+;; Also: UDONT (BB13)
+Done:
+    ldy #FLOAT_RUN
     lda #0
-    sta NMASK
+    sta DigitClass
     pla
     rts
+.endproc
 
 ; ---------------------------------------------------------------------------------------------------------------------
 ; The spec scanner
 ; ---------------------------------------------------------------------------------------------------------------------
 
-;; Scans the image's next spec, checking its syntax, and builds a number spec's edit mask at <MASKPT>, or points
-;; <LOWTR> and <SAVLEN> at a literal's text.
+;; Scans the image's next spec, checking its syntax, and builds a number spec's edit mask at <MaskPointer>, or points
+;; <LOWTR> and <TextLength> at a literal's text.
 ;;
 ;; A number spec's parts may come in this order: **, $ or a sign (a fixed $ or sign goes into the mask, a floating
 ;; one only reserves its place), $ again, the digits and decimal point, a trailing sign, then the exponent's E's. A
-;; spec must end at a comma or the image's end; anything else is a syntax error.
-;; Out: SPECTYP = 0 for a number, $FF for a string, $80 for a literal, 1 at the image's end, REP = its count,
-;;   DELIM = its character
-;; See: <UGETDL>, <UDOLITS>
-IMSYNCK:
-    ldy #1
-    sty SPECTYP                             ; none, until one is found
+;; spec must end at a comma or the image's end; anything else is a syntax error. A number spec returns from
+;; <FinishNumberSpec>, and the image's end from <ReadFormatCharacter>, straight to this routine's caller.
+;; Out: SpecType = <SPEC_NUMBER> for a number, <FIELD_STRING> for a string, <FIELD_LITERAL> for a literal, <SPEC_END>
+;;   at the image's end, RepeatCount = its count, SpecCharacter = its character
+;; See: <ReadFormatCharacter>, <PrintLiterals>
+;; Also: IMSYNCK (BB13)
+.proc ScanSpec
+    ldy #SPEC_END
+    sty SpecType                            ; none, until one is found
     dey
-    sty CMAFILL
-    sty DIGB4DPT
-    sty DIGAFDPT
-    sty FLTMSK
-    sty DIGCTR
-    sty EMASK
-    sty NMASK
+    sty FillCharacter
+    sty DigitsBeforePoint
+    sty DigitsAfterPoint
+    sty FloatingSymbols
+    sty DigitCounter
+    sty SpecParts
+    sty DigitClass
     dey
-    sty DPTNDX
-    sty TENZNDX
-    sty MSKNDX
-    jsr UGETDL
-    bpl UNUMTYP                             ; a number spec's character
-    sta SPECTYP
-    bit SPECTYP
-    bvs UCHEKCM                             ; a string: done
-    lda DELIM
+    sty PointIndex                          ; NO_INDEX
+    sty UnitsIndex
+    sty MaskIndex
+    jsr ReadFormatCharacter
+    bpl NumberSpec                          ; a number spec's character
+    sta SpecType
+    bit SpecType
+    bvs CheckSpecEnd                        ; a string: done
+    lda SpecCharacter
     cmp #'/'
-    beq UCRLIT
+    beq NewLineLiteral
     cmp #'X'
-    beq USPLIT
-    cmp #'X'+$20
-    beq USPLIT
-    lda SPCNDX                              ; a quoted literal: it starts after the quote
+    beq NewLineLiteral::SpaceLiteral
+    cmp #'x'
+    beq NewLineLiteral::SpaceLiteral
+    lda ImageIndex                          ; a quoted literal: it starts after the quote
     sec
-    adc SPCPTR
-    ldy SPCPTR+1
-    ldx SPCPTRB
-    bcc *+6
+    adc ImagePointer
+    ldy ImagePointer+1
+    ldx ImagePointerXByte
+    bcc Store
     iny
     jsr FIXYX
+Store:
     sta LOWTR
     sty LOWTR+1
     stx LOWTRB
     ldx #<(0-1)
 
 ;; Counts the literal's characters up to its closing quote; with none, it is a syntax error.
-UQSCAN:
+;; Also: UQSCAN (BB13)
+QuoteLoop:
     inx
-    jsr UGETCH
+    jsr ReadNext
     cmp #0
-    beq USNERRL
+    beq CheckSpecEnd::ToSyntaxError
     cmp #'"'
-    bne UQSCAN
-    stx SAVLEN
-    jsr UGETCHR
+    bne QuoteLoop
+    stx TextLength
+    jsr ReadNonSpace
+    ; Falls into CheckSpecEnd.
+.endproc
 
 ;; Returns when the spec ends at a comma or the image's end, or ends the statement with a syntax error.
-UCHEKCM:
-    jsr IGOTCH
-    bne *+3
+;; Entry:
+;;   ToSyntaxError = ends the statement with a syntax error
+;; Also: UCHEKCM (BB13)
+.proc CheckSpecEnd
+    jsr ClassifyCharacter
+    bne ToSyntaxError
     rts
 
 ;; Ends the statement with a syntax error.
-USNERRL:
-    jmp USNERR
+;; Also: USNERRL (BB13)
+ToSyntaxError:
+    jmp PrintUsing::ToSyntaxError
+.endproc
 
-;; Makes / a literal of a return and a line feed.
-UCRLIT:
-    lda #$0A
-    sta LITRLCH+1
+;; Makes / a literal of a return and a line feed, then checks the spec's end.
+;; Entry:
+;;   SpaceLiteral = makes X a literal of a space
+;; Also: UCRLIT (BB13)
+.proc NewLineLiteral
+    lda #LINE_FEED
+    sta LiteralText+1
     ldy #2
-    lda #$0D
-    bne *+6
+    lda #RETURN
+    bne Store
 
 ;; Makes X a literal of a space.
-USPLIT:
+;; Also: USPLIT (BB13)
+SpaceLiteral:
     lda #' '
     ldy #1
-    sta LITRLCH
-    ldx #>(LITRLCH)
-    lda #LITRLCH
+Store:
+    sta LiteralText
+    ldx #>(LiteralText)
+    lda #LiteralText
     sta LOWTR
     stx LOWTR+1
     sty LOWTRB                              ; 1 or 2: no bank, as for the zero page
-    sty SAVLEN
-    bne UCHEKCM
+    sty TextLength
+    bne CheckSpecEnd
+.endproc
 
 ;; Starts a number spec: takes **, which must be exactly two, for asterisk fill.
 ;; In: A = the spec character's type
-UNUMTYP:
-    ldy #2
-    cmp #$02                                ; *
-    bne UDOLLR
-    cpy REP
-    bne UNSERR
-    lda #$10
-    sta FLTMSK
-    lda DELIM
-    sta CMAFILL
-    jsr UENDERR
-    jmp UDOLLR
+;; Also: UNUMTYP (BB13)
+.proc NumberSpec
+    ldy #FLOAT_RUN
+    cmp #FIELD_ASTERISK
+    bne TakeLeadingSign
+    cpy RepeatCount
+    bne TakeLeadingSign::ToSyntaxError
+    lda #FLOAT_ASTERISKS
+    sta FloatingSymbols
+    lda SpecCharacter
+    sta FillCharacter
+    jsr RequireSpecCharacter
+    jmp TakeLeadingSign
+.endproc
 
 ;; Takes a $, or returns when A is not one: $$ floats; one $ floats after ** or a floating sign, and otherwise goes
 ;; into the mask. A second $ in the spec, or $$ after another floating symbol, is a syntax error.
 ;; In: A = the spec character's type, Y = 2
-UDOLAR:
-    cmp #$10
-    beq *+3
+;; Out: A = the next spec character's type after a $, as it was otherwise, Y = 2
+;; Also: UDOLAR (BB13)
+.proc TakeDollar
+    cmp #FIELD_DOLLAR
+    beq IsDollar
     rts
-    bit EMASK
-    bne UNSERR
-    ora EMASK
-    sta EMASK
-    cpy REP
-    bne UCK1DL
-    lda FLTMSK
-    bne UNSERR
-    beq UDLFLT
-UCK1DL:
+IsDollar:
+    bit SpecParts
+    bne TakeLeadingSign::ToSyntaxError
+    ora SpecParts
+    sta SpecParts
+    cpy RepeatCount
+    bne Single
+    lda FloatingSymbols
+    bne TakeLeadingSign::ToSyntaxError
+    beq Floating
+
+;; Takes a single $.
+;; Also: UCK1DL (BB13)
+Single:
     dey
-    cpy REP
-    bne UNSERR
-    lda FLTMSK
-    beq USTDLR
+    cpy RepeatCount
+    bne TakeLeadingSign::ToSyntaxError
+    lda FloatingSymbols
+    beq Fixed
 
 ;; Marks a floating $, after a floating sign or not, and reserves its place in the mask.
-UDLFLT:
-    cmp #$40                                ; after a floating sign?
-    lda #$20
-    bcc *+4
+;; Also: UDLFLT (BB13)
+Floating:
+    cmp #FLOAT_SIGN                         ; after a floating sign?
+    lda #FLOAT_DOLLAR
+    bcc Mark
+    .assert FLOAT_DOLLAR << 2 = FLOAT_DOLLAR_AFTER_SIGN, "Two shifts take a floating $ to after the sign."
     asl
     asl
-    ora FLTMSK
-    sta FLTMSK
-    inc MSKNDX
-    jmp UXDLR
+Mark:
+    ora FloatingSymbols
+    sta FloatingSymbols
+    inc MaskIndex
+    jmp Next
 
 ;; Puts a fixed $ into the mask.
-USTDLR:
-    lda DELIM
-    jsr UATOMSK
-UXDLR:
-    jmp UENDERR
+;; Also: USTDLR (BB13)
+Fixed:
+    lda SpecCharacter
+    jsr AddToMask
+
+;; Reads the spec's next character, which must be there.
+;; Also: UXDLR (BB13)
+Next:
+    jmp RequireSpecCharacter
+.endproc
 
 ;; Takes a $ and then a leading sign: ++ or -- floats; one sign floats after another floating symbol, and otherwise
-;; goes into the mask.
-UDOLLR:
-    jsr UDOLAR
-    bit UDOLLR                              ; its JSR's $20: a sign?
-    beq UTRYDL2
-    ora EMASK
-    sta EMASK
-    cpy REP
-    bne UCK1SIN
-    lda FLTMSK
-    bne UNSERR
-    beq UFLTSIN
-UCK1SIN:
+;; goes into the mask. Then a $ after the sign.
+;; In: A = the spec character's type, Y = 2
+;; Entry:
+;;   ToSyntaxError = ends the statement with a syntax error
+;; Also: UDOLLR (BB13)
+.proc TakeLeadingSign
+    jsr TakeDollar
+    .assert FIELD_SIGN = $20, "BIT TakeLeadingSign tests for a sign with the $20 of its JSR opcode."
+    bit TakeLeadingSign                     ; its JSR's $20: a sign?
+    beq DollarAfterSign
+    ora SpecParts
+    sta SpecParts
+    cpy RepeatCount
+    bne Single
+    lda FloatingSymbols
+    bne ToSyntaxError
+    beq Floating
+
+;; Takes a single sign.
+;; Also: UCK1SIN (BB13)
+Single:
     dey
-    cpy REP
-    bne UNSERR
-    lda FLTMSK
-    beq USETSIN
+    cpy RepeatCount
+    bne ToSyntaxError
+    lda FloatingSymbols
+    beq Fixed
 
 ;; Marks a floating sign and reserves its place in the mask.
-UFLTSIN:
-    lda #$40
-    ora FLTMSK
-    sta FLTMSK
-    inc MSKNDX
-    jmp UXSIN
+;; Also: UFLTSIN (BB13)
+Floating:
+    lda #FLOAT_SIGN
+    ora FloatingSymbols
+    sta FloatingSymbols
+    inc MaskIndex
+    jmp Next
 
 ;; Ends the statement with a syntax error.
-UNSERR:
-    jmp USNERR
+;; Also: UNSERR (BB13)
+ToSyntaxError:
+    jmp PrintUsing::ToSyntaxError
 
 ;; Puts a fixed leading sign into the mask.
-USETSIN:
-    lda DELIM
-    jsr UATOMSK
-UXSIN:
-    jsr UENDERR
+;; Also: USETSIN (BB13)
+Fixed:
+    lda SpecCharacter
+    jsr AddToMask
+
+;; Reads the spec's next character, which must be there.
+;; Also: UXSIN (BB13)
+Next:
+    jsr RequireSpecCharacter
 
 ;; Takes a $ after the sign.
-UTRYDL2:
-    jsr UDOLAR
+;; Also: UTRYDL2 (BB13)
+DollarAfterSign:
+    jsr TakeDollar
+    ; Falls into TakeDigits.
+.endproc
 
-;; Takes a run of digit positions, counting them in <DIGCTR> and noting the field's digit class and fill.
+;; Takes a run of digit positions, counting them in <DigitCounter> and noting the field's digit class and fill.
 ;;
 ;; The class is the highest of the digits' so far; after the decimal point it is Z's, as every digit there prints.
 ;; A string or literal character among them is a syntax error.
 ;; In: A = the spec character's type
-UTRYDIG:
-    cmp #ZTYP
-    bcc UBLDMK                              ; not a digit
+;; Entry:
+;;   More = reads the spec's next character, or finishes the spec at its end
+;; Also: UTRYDIG (BB13)
+.proc TakeDigits
+    cmp #FIELD_ZERO_FILLED
+    bcc TakePoint                           ; not a digit
     tax
-    bmi UNSERR
-    lda #$80
-    ora EMASK
-    sta EMASK
-    lda REP
+    bmi TakeLeadingSign::ToSyntaxError
+    lda #PARTS_DIGITS
+    ora SpecParts
+    sta SpecParts
+    lda RepeatCount
     clc
-    adc DIGCTR
-    sta DIGCTR
-    cpx NMASK
-    bcs *+4
-    ldx NMASK
-    lda #$04
-    bit EMASK
-    beq UB4DPT
-    ldx #ZTYP                               ; after the point
-    bne UXNMASK
+    adc DigitCounter
+    sta DigitCounter
+    cpx DigitClass
+    bcs Highest
+    ldx DigitClass
+Highest:
+    lda #FIELD_POINT
+    bit SpecParts
+    beq BeforePoint
+    ldx #FIELD_ZERO_FILLED                  ; after the point
+    bne SetClass
 
 ;; Sets the fill for leading zeros from the class, or keeps **'s asterisk, with the comma bit for &.
-UB4DPT:
-    lda CMAFILL
-    and #$7F
+;; Also: UB4DPT (BB13)
+BeforePoint:
+    lda FillCharacter
+    and #$FF ^ FILL_COMMAS
     cmp #'*'
-    beq USETCMA
-    lda a:FILLTABL-ZTYP,X
-USETCMA:
-    ora a:CMATBL-ZTYP,X
-    sta CMAFILL
-UXNMASK:
-    stx NMASK
+    beq SetFill
+    lda a:FillCharacters-FIELD_ZERO_FILLED,X
+
+;; Adds the comma bit and sets the fill.
+;; Also: USETCMA (BB13)
+SetFill:
+    ora a:CommaFlags-FIELD_ZERO_FILLED,X
+    sta FillCharacter
+
+;; Sets the class.
+;; Also: UXNMASK (BB13)
+SetClass:
+    stx DigitClass
 
 ;; Reads the spec's next character, or finishes the spec at its end.
-UXMORE:
-    jsr UCKDEND
-    jmp UTRYDIG
+;; Also: UXMORE (BB13)
+More:
+    jsr NextSpecCharacter
+    jmp TakeDigits
+.endproc
 
 ;; Puts the digits counted into the mask, then takes a decimal point, which must be single and the spec's only one.
-UBLDMK:
-    jsr UDOMASK
-    cmp #$04                                ; .
-    bne USGNCK
-    bit EMASK
-    bne UNSERR
+;; In: A = the spec character's type
+;; Also: UBLDMK (BB13)
+.proc TakePoint
+    jsr PutDigitsInMask
+    cmp #FIELD_POINT
+    bne TakeTrailingSign
+    bit SpecParts
+    bne TakeLeadingSign::ToSyntaxError
     dey
-    cpy REP
-    bne UNSERR
-    ora EMASK
-    sta EMASK
-    lda DELIM
-    jsr UATOMSK
-    lda MSKNDX
-    sta DPTNDX
-    jmp UXMORE
+    cpy RepeatCount
+    bne TakeLeadingSign::ToSyntaxError
+    ora SpecParts
+    sta SpecParts
+    lda SpecCharacter
+    jsr AddToMask
+    lda MaskIndex
+    sta PointIndex
+    jmp TakeDigits::More
+.endproc
 
 ;; Takes a trailing sign, which must be single and the spec's only one.
-USGNCK:
-    bit UDOLLR                              ; its JSR's $20: a sign?
-    beq UCKEXP
+;; In: A = the spec character's type, Y = 2
+;; Also: USGNCK (BB13)
+.proc TakeTrailingSign
+    bit TakeLeadingSign                     ; its JSR's $20: a sign?
+    beq TakeExponent
     dey
-    cpy REP
-    bne USTERR
-    bit EMASK
-    bne USTERR
-    ora EMASK
-    sta EMASK
-    lda DELIM
-    jsr UATOMSK
-    jsr UCKDEND
+    cpy RepeatCount
+    bne FreeMaskThenSyntaxError
+    bit SpecParts
+    bne FreeMaskThenSyntaxError
+    ora SpecParts
+    sta SpecParts
+    lda SpecCharacter
+    jsr AddToMask
+    jsr NextSpecCharacter
+    ; Falls into TakeExponent.
+.endproc
 
 ;; Takes the exponent, EEE or EEEE, which must end the spec; anything else is a syntax error.
 ;;
 ;; With an exponent, no floating symbol may come with 0 or 1 digit before the point, only a floating sign with 3, and
 ;; any other count is a syntax error.
-UCKEXP:
-    cmp #$08                                ; E
-    bne USTERR
+;; In: A = the spec character's type, Y = 2
+;; Also: UCKEXP (BB13)
+.proc TakeExponent
+    cmp #FIELD_EXPONENT
+    bne FreeMaskThenSyntaxError
     iny
-    cpy REP
-    beq UEEE
+    cpy RepeatCount
+    beq Mark
     iny
-    cpy REP
-    bne USTERR
-UEEE:
-    ora EMASK
-    sta EMASK
-    lda DELIM
-UEEELP:
-    jsr UATOMSK
-    dec REP
-    bne UEEELP
-    lda #$F0                                ; no floating symbol
-    ldx DIGB4DPT
-    beq UENOFLT
+    cpy RepeatCount
+    bne FreeMaskThenSyntaxError
+
+;; Marks the exponent and puts its E's into the mask.
+;; Also: UEEE (BB13)
+Mark:
+    ora SpecParts
+    sta SpecParts
+    lda SpecCharacter
+
+;; Puts the next E into the mask.
+;; Also: UEEELP (BB13)
+MaskLoop:
+    jsr AddToMask
+    dec RepeatCount
+    bne MaskLoop
+    lda #FLOAT_ASTERISKS | FLOAT_DOLLAR | FLOAT_SIGN | FLOAT_DOLLAR_AFTER_SIGN  ; no floating symbol
+    ldx DigitsBeforePoint
+    beq CheckFloating
     dex
-    beq UENOFLT
+    beq CheckFloating
     cpx #2
-    bne USTERR
-    lda #$B0                                ; only a floating sign
-UENOFLT:
-    and FLTMSK
-    bne USTERR
-    jsr UCHEKCM
-    jsr UDIGEND                             ; which does not return
+    bne FreeMaskThenSyntaxError
+    lda #FLOAT_ASTERISKS | FLOAT_DOLLAR | FLOAT_DOLLAR_AFTER_SIGN  ; only a floating sign
+
+;; Checks the floating symbols the count allows.
+;; Also: UENOFLT (BB13)
+CheckFloating:
+    and FloatingSymbols
+    bne FreeMaskThenSyntaxError
+    jsr CheckSpecEnd
+    jsr FinishNumberSpec                    ; which does not return
+.endproc
 
 ;; Reads the spec's next character, which must be there.
 ;; Out: A = its type, Y = 2
-UENDERR:
-    jsr IGOTCH
-    beq USTERR
-    bne UNXTGET
+;; Also: UENDERR (BB13)
+.proc RequireSpecCharacter
+    jsr ClassifyCharacter
+    beq FreeMaskThenSyntaxError
+    bne NextSpecCharacter::Read
+.endproc
 
-;; Reads the spec's next character, or at its end finishes the spec with <UDIGEND>.
+;; Reads the spec's next character, or at its end finishes the spec with <FinishNumberSpec>.
 ;; Out: A = its type, Y = 2
-UCKDEND:
-    jsr IGOTCH
-    beq UDIGEND
-UNXTGET:
-    jsr UGETDL
-    ldy #2
-    rts
+;; Entry:
+;;   Read = reads the spec's next character
+;; Also: UCKDEND (BB13)
+.proc NextSpecCharacter
+    jsr ClassifyCharacter
+    beq FinishNumberSpec
 
-;; Finishes a number spec: puts the last digits into the mask, and returns to <IMSYNCK>'s caller with SPECTYP 0.
+;; Reads the spec's next character.
+;; Also: UNXTGET (BB13)
+Read:
+    jsr ReadFormatCharacter
+    ldy #FLOAT_RUN
+    rts
+.endproc
+
+;; Finishes a number spec: puts the last digits into the mask, and returns to <ScanSpec>'s caller with <SpecType>
+;; <SPEC_NUMBER>, dropping the return address of the routine that called this one.
 ;;
 ;; A spec with no digits, or with a floating symbol and no digit before the point, is a syntax error.
-UDIGEND:
-    lda EMASK
-    bpl USTERR
-    jsr UDOMASK
-    lda FLTMSK
-    beq UCKXIT
-    lda DIGB4DPT
-    beq USTERR
+;; Also: UDIGEND (BB13)
+.proc FinishNumberSpec
+    lda SpecParts
+    bpl FreeMaskThenSyntaxError
+    jsr PutDigitsInMask
+    lda FloatingSymbols
+    beq Accept
+    lda DigitsBeforePoint
+    beq FreeMaskThenSyntaxError
 
 ;; Marks the spec a number's and returns past the caller.
-UCKXIT:
-    lda #0
-    sta SPECTYP
+;; Also: UCKXIT (BB13)
+Accept:
+    lda #SPEC_NUMBER
+    sta SpecType
     pla
     pla
     rts
+.endproc
 
 ;; Frees the mask, then ends the statement with a syntax error.
-USTERR:
-    jsr UFRESPC
-    jmp USNERR
+;; Also: USTERR (BB13)
+.proc FreeMaskThenSyntaxError
+    jsr FreeMask
+    jmp ToSyntaxError
+.endproc
+
+.endscope

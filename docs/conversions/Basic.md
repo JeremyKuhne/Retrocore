@@ -1302,12 +1302,12 @@ Monitor's), and its files use the current names. The bytes are unchanged in all 
 
 - B7-1. DOS's and the enhanced IIe firmware's links into AppleSoft name its definitions by their current names
   (`<AppleSoft:ProgramStart>`, `<AppleSoft:NextStatementSavingStack>` and the rest), and DOS's Equates describe in words
-  the AppleSoft locations its equates mirror. The firmware's own copies of AppleSoft's page-zero names, which its F8
-  kept until AppleSoft was converted, take AppleSoft's current names (`LineNumber`, `ArraysEnd`, `StringsBottom`,
-  `MemoryTop`, `DestinationEnd`, `SourceStart`, `ShapeTable`), with the old ones in `Also:` cited UNKN, as its SHAPEPTR
-  is; inside `AppleSoftCassette`, whose shape-table entry is also `ShapeTable`, the copy is `::ShapeTable`. DOS's BASIC
-  vector (P2) keeps DOS's own names for AppleSoft's entries (ASBRK1, ASCNTU1, ASRSEQ1 and the rest), which DOS's
-  listings give.
+  the AppleSoft locations its equates mirror. The firmware's own copies of AppleSoft's page-zero names, which
+  Firmware.md's F8 kept until AppleSoft was converted, take AppleSoft's current names (`LineNumber`, `ArraysEnd`,
+  `StringsBottom`, `MemoryTop`, `DestinationEnd`, `SourceStart`, `ShapeTable`), with the old ones in `Also:` cited UNKN,
+  as its SHAPEPTR is; inside `AppleSoftCassette`, whose shape-table entry is also `ShapeTable`, the copy is
+  `::ShapeTable`. DOS's BASIC vector (P2) keeps DOS's own labels for AppleSoft's entries (ASBRK1, ASCNTU1, ASRSEQ1 and
+  the rest).
 - B7-2. The disassembler takes its names from the sources (`MachineSymbols`), so it emits the current ones; only its
   example comments changed, in `MachineSymbols` and `DebugSession.Memory`.
 - B7-3. docs/Apple2.md and docs/Pet.md name the converted routines by their current names, where they first appear with

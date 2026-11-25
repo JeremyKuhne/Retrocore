@@ -23,7 +23,7 @@ one entry, and the last two points are notes without IDs.
 - F7. SET80COL goes to the switch (Store80On); the firmware's Control-R routine is `Control::Columns80`, with
   SET80COL in prose.
 - F8. AppleSoft's page-zero names stay until AppleSoft is converted (SHAPEPTR becomes SHPTBL). With AppleSoft
-  converted, they take its current names, with these as `Also:` (Basic.md B7-1).
+  converted, they take AppleSoft's current names, SHPTBL `ShapeTable`, and keep the old ones in `Also:` (Basic.md B7-1).
 - F10-F11. MonitorEntries exports scoped names (SetPcFromA1::Loop, SaveRegisters::Return) with their Apple names.
 - F12. An Apple name is left out of `Also:` (and given in prose) only when it clashes inside one assembly (WAIT,
   VTAB, VTABZ, NXTA1, XFER); clashes with other modules' names are kept.

@@ -166,7 +166,8 @@ internal static partial class MachineSymbols
     /// <remarks>
     ///  <para>
     ///   AppleSoft's <c>TerminalPosition</c> and the Monitor's <c>CursorColumn</c> both name $24, and
-    ///   <c>CursorColumn</c> comes first; names of one rank stay in the order given. Ranks are by module file name, as <see cref="ModuleFile(string)"/> gives it, so
+    ///   <c>CursorColumn</c> comes first; names of one rank stay in the order given. Ranks are by module file name, as
+    ///   <see cref="ModuleFile(string)"/> gives it, so
     ///   a name from a Monitor, firmware or BASIC source (<c>AppleSoft.*</c>, <c>MsBasic.*</c> or <c>m6502.asm</c>)
     ///   comes before one from any other source, such as PET BASIC's <c>Commodore.Equates.asm</c> or its kernal's.
     ///  </para>

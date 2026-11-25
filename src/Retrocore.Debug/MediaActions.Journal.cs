@@ -41,7 +41,8 @@ internal static partial class MediaActions
     ///  the version it holds already. Otherwise such a disk is taken as it is, marked as caught mid-write.
     /// </param>
     /// <returns>
-    ///  Each changed disk that came from an image, with its snapshot when the journal lacks this version.
+    ///  Each changed disk that came from an image, with its snapshot when the journal lacks this version and the disk
+    ///  does not wait for its drive.
     /// </returns>
     /// <remarks>
     ///  <para>

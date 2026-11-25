@@ -168,49 +168,49 @@ IBSOV = $CC
 
 ; Applesoft.
 
-;; Applesoft's <TXTTAB>, the start of the program, normally $0801 (2 bytes).
+;; Applesoft's start of the program, normally $0801 (2 bytes).
 ;;
 ;; SAVE (<Commands::Save>) writes the program from it up to <ASEOP>, and loading a program places it there and sets
 ;; <ASEOP> and <ASEOP2> to its end.
-;; See: <AppleSoft:TXTTAB>, <ASEOP>, <ASEOP2>, <Commands::Load>
+;; See: <AppleSoft:ProgramStart>, <ASEOP>, <ASEOP2>, <Commands::Load>
 ASSOP = $67
 
-;; Applesoft's <PRGEND>, the end of the program (2 bytes).
+;; Applesoft's end of the program (2 bytes).
 ;;
 ;; SAVE writes the program from <ASSOP> up to it, and loading a program sets it with <ASEOP2>.
-;; See: <AppleSoft:PRGEND>, <ASSOP>, <ASEOP2>
+;; See: <AppleSoft:ProgramEnd>, <ASSOP>, <ASEOP2>
 ASEOP = $AF
 
-;; Applesoft's <VARTAB>, the start of the variables, just after the program (2 bytes).
+;; Applesoft's start of the variables, just after the program (2 bytes).
 ;;
 ;; Loading a program sets it to the program's end, with <ASEOP>, which leaves no variables.
-;; See: <AppleSoft:VARTAB>, <ASEOP>, <ASSOP>
+;; See: <AppleSoft:VariablesStart>, <ASEOP>, <ASSOP>
 ASEOP2 = $69
 
-;; Applesoft's MEMSIZ, HIMEM, the top of the memory it may use (2 bytes).
+;; Applesoft's HIMEM, the top of the memory it may use (2 bytes).
 ;;
 ;; <FileBuffers::Build> sets it, and <ASHM2>, just below DOS's file buffers, and loading a program checks that it ends
 ;; below it.
-;; See: <AppleSoft:MEMSIZ>, <ASHM2>, <FileBuffers::Build>
+;; See: <AppleSoft:MemoryTop>, <ASHM2>, <FileBuffers::Build>
 ASHM1 = $73
 
-;; Applesoft's FRETOP, the bottom of the strings, which grow down from HIMEM (2 bytes).
+;; Applesoft's bottom of the strings, which grow down from HIMEM (2 bytes).
 ;;
 ;; <FileBuffers::Build> sets it to HIMEM, <ASHM1>, which clears the strings.
-;; See: <AppleSoft:FRETOP>, <ASHM1>, <FileBuffers::Build>
+;; See: <AppleSoft:StringsBottom>, <ASHM1>, <FileBuffers::Build>
 ASHM2 = $6F
 
-;; Applesoft's <LOCK> flag: bit 7 set when the program is run-only.
+;; Applesoft's run-only flag: bit 7 set when a program may not be listed or edited, so that a typed line runs it.
 ;;
 ;; SAVE (<Commands::Save>) refuses such a program, with PROGRAM TOO LARGE.
-;; See: <AppleSoft:LOCK>, <Commands::Save>
+;; See: <AppleSoft:RunOnly>, <Commands::Save>
 ASRNX = $D6
 
-;; Applesoft's <ERRFLG>: bit 7 set while an `ONERR` GOTO is in force.
+;; Applesoft's `ONERR` flag: bit 7 set while an `ONERR` GOTO is in force.
 ;;
 ;; DOS's <Errors::Report> prints no message while it is set, so that the program's handler deals with the error.
 ;; <Commands::ApplesoftRomRun> and <Commands::ApplesoftRamRun> clear it when DOS starts a program.
-;; See: <AppleSoft:ERRFLG>, <Errors::Report>, <Commands::ApplesoftRomRun>
+;; See: <AppleSoft:OnErrorActive>, <Errors::Report>, <Commands::ApplesoftRomRun>
 ASONERR = $D8
 
 ;; ROM Applesoft's error entry, where DOS goes to report a failed command.

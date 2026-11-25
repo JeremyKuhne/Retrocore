@@ -12,10 +12,10 @@ BreakFromFirmware = $FA47
 ;; Inherit: <Monitor:CallUserIrq>
 CallUserIrq = $FC74
 
-;; AppleSoft's routine that points <HIGHDS> at an array's data, past its header: two bytes for each dimension, A of
-;; them, and five more.
-;; In: A = the array's dimensions, LOWTR = the array
-;; See: <AppleSoft:FMAPT1>
+;; AppleSoft's routine that points <DestinationEnd> at an array's data, past its header: two bytes for each dimension, A
+;; of them, and five more.
+;; In: A = the array's dimensions, SourceStart = the array
+;; See: <AppleSoft:Variables::ElementsStart::FromCount>
 FMAPT1 = $E0EF
 
 ; The stack.
@@ -454,13 +454,13 @@ NextMode:
 ;; AppleSoft's cassette helper for `SHLOAD`, `STORE` and `RECALL`, which AppleSoft's $F775 (`SHLOAD`, carry set) and
 ;; $F777 (`STORE` and `RECALL`, carry clear) call with the internal ROM switched in.
 ;;
-;; At $C500. For `SHLOAD` it reads the shape table's two-byte length into <LINNUM> and, when the table fits between
-;; <STREND> and HIMEM (<MEMSIZ>), loads it just below HIMEM (<AppleSoftCassette::ShapeTable>); otherwise it returns
-;; carry set, meaning memory is full, but leaves the start's low byte on the stack, so the return goes astray: a bug
-;; in the ROM. The fit is checked on the high bytes only: the table must start in a page above <STREND>'s. For
-;; `STORE` and `RECALL` it sets A1 and A2 to the array's data (<AppleSoftCassette::ArrayBlock>), which AppleSoft
-;; then writes or reads with the Monitor.
-;; In: carry = set for `SHLOAD`, clear for `STORE` and `RECALL`, LOWTR = the array, LINNUM = its size less one
+;; At $C500. For `SHLOAD` it reads the shape table's two-byte length into <LineNumber> and, when the table fits between
+;; <ArraysEnd> and HIMEM (<MemoryTop>), loads it just below HIMEM (<AppleSoftCassette::ShapeTable>); otherwise it
+;; returns carry set, meaning memory is full, but leaves the start's low byte on the stack, so the return goes astray: a
+;; bug in the ROM. The fit is checked on the high bytes only: the table must start in a page above <ArraysEnd>'s. For
+;; `STORE` and `RECALL` it sets A1 and A2 to the array's data (<AppleSoftCassette::ArrayBlock>), which AppleSoft then
+;; writes or reads with the Monitor.
+;; In: carry = set for `SHLOAD`, clear for `STORE` and `RECALL`, SourceStart = the array, LineNumber = its size less one
 ;;     (`STORE` and `RECALL`)
 ;; Out: carry = set when the shape table does not fit (that return goes astray, as above)
 ;; Also: BASTAPE (UNKN)
@@ -468,11 +468,11 @@ NextMode:
 .assert * = $C500, "AppleSoftCassette must stay at $C500, where AppleSoft calls it."
     bcc ArrayBlock
 
-    ; `SHLOAD`: the length, two bytes, into LINNUM.
+    ; `SHLOAD`: the length, two bytes, into LineNumber.
     lda #0
     sta Address1High
     sta Address2High
-    ldy #LINNUM
+    ldy #LineNumber
     sty Address1
     iny
     sty Address2
@@ -481,23 +481,23 @@ NextMode:
     ; A2 = HIMEM less one, the table's end; A and the stack = HIMEM less the length less one,
     ; its start.
     clc
-    lda MEMSIZ
+    lda MemoryTop
     tax
     dex
     stx Address2
-    sbc LINNUM
+    sbc LineNumber
     pha
-    lda MEMSIZ+1
+    lda MemoryTop+1
     tay
     inx
     bne StoreEnd
     dey
 
-    ; A2's high byte; the start's must be above STREND's.
+    ; A2's high byte; the start's must be above ArraysEnd's.
 StoreEnd:
     sty Address2High
-    sbc LINNUM+1
-    cmp STREND+1
+    sbc LineNumber+1
+    cmp ArraysEnd+1
     bcc OutOfMemory
     bne ShapeTable
 
@@ -506,20 +506,21 @@ OutOfMemory:
     sec
     rts
 
-;; Lowers HIMEM and <FRETOP> to the table's start, points <SHPTBL> and A1 there, and reads the table from tape.
+;; Lowers HIMEM and <StringsBottom> to the table's start, points <::ShapeTable> and A1 there, and reads the table from
+;; tape.
 ;;
 ;; The read's checksum is not looked at: it returns carry clear in any case.
 ;; In: A = the start's high byte, the stack = its low byte
 ;; Also: TAPESHLOAD (UNKN)
 ShapeTable:
-    sta MEMSIZ+1
-    sta FRETOP+1
+    sta MemoryTop+1
+    sta StringsBottom+1
     sta Address1High
-    sta SHPTBL+1
+    sta ::ShapeTable+1
     pla
-    sta SHPTBL
-    sta MEMSIZ
-    sta FRETOP
+    sta ::ShapeTable
+    sta MemoryTop
+    sta StringsBottom
     sta Address1
     jsr ReadCassetteBit
     lda #SHAPE_HEADER_DELAY
@@ -527,23 +528,23 @@ ShapeTable:
     clc
     rts
 
-;; `STORE` and `RECALL`: A2 = <LOWTR> + <LINNUM>, the array's last byte, and A1 = the start of its data, which
-;; AppleSoft's <FMAPT1> leaves in <HIGHDS>.
+;; `STORE` and `RECALL`: A2 = <SourceStart> + <LineNumber>, the array's last byte, and A1 = the start of its data, which
+;; AppleSoft's <FMAPT1> leaves in <DestinationEnd>.
 ;; In: carry = clear
 ;; Also: TAPEARRAY (UNKN)
 ArrayBlock:
-    lda LOWTR
-    adc LINNUM
+    lda SourceStart
+    adc LineNumber
     sta Address2
-    lda LOWTR+1
-    adc LINNUM+1
+    lda SourceStart+1
+    adc LineNumber+1
     sta Address2High
     ldy #ARRAY_DIMENSIONS
-    lda (LOWTR),y
+    lda (SourceStart),y
     jsr FMAPT1
-    lda HIGHDS
+    lda DestinationEnd
     sta Address1
-    lda HIGHDS+1
+    lda DestinationEnd+1
     sta Address1High
     clc
     rts

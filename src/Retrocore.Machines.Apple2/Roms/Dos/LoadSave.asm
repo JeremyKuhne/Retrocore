@@ -502,11 +502,11 @@ AfterLoad:
 .proc ApplesoftRomRun
 .assert MASTER || * = $A4FC, "Commands::ApplesoftRomRun is at $A4FC where DOS runs."
 
-;; ROM Applesoft's `RUNC`: points the text pointer before the program's first line, clears the variables, the strings
-;; and the stack, and leaves A = 0.
+;; ROM Applesoft's <AppleSoft:ResetProgramState>: points the text pointer before the program's first line, clears the
+;; variables, the strings and the stack, and leaves A = 0.
 ResetProgram = $D665
 
-;; ROM Applesoft's <AppleSoft:NXTCO1>: runs statements from the text pointer on.
+;; ROM Applesoft's <AppleSoft:NextStatementSavingStack>: runs statements from the text pointer on.
 Execute = $D7D2
 
     jsr ResetProgram
@@ -523,10 +523,10 @@ Execute = $D7D2
 .proc ApplesoftRamRun
 .assert MASTER || * = $A506, "Commands::ApplesoftRamRun is at $A506 where DOS runs."
 
-;; RAM Applesoft's `RUNC`, as <ApplesoftRomRun::ResetProgram>.
+;; RAM Applesoft's <AppleSoft:ResetProgramState>, as <ApplesoftRomRun::ResetProgram>.
 ResetProgram = $0E65
 
-;; RAM Applesoft's <AppleSoft:NXTCO1>, as <ApplesoftRomRun::Execute>.
+;; RAM Applesoft's <AppleSoft:NextStatementSavingStack>, as <ApplesoftRomRun::Execute>.
 Execute = $0FD4
 
     jsr ResetProgram

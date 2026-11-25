@@ -55,52 +55,58 @@ ENHANCED = 1
 
 ;; Applesoft's line number, which the cassette helper borrows for a length: of a shape table, or of an array.
 ;;
-;; <AppleSoftCassette> reads a shape table's two-byte length from the tape into <LINNUM>/<LINNUM>+1 for `SHLOAD`, and
-;; <AppleSoftCassette::ArrayBlock> adds an array's length, which Applesoft leaves here, to its address for `STORE` and
-;; `RECALL`.
-;; See: <AppleSoft:LINNUM>, <AppleSoftCassette>, <AppleSoftCassette::ArrayBlock>
-LINNUM = $50
+;; <AppleSoftCassette> reads a shape table's two-byte length from the tape into <LineNumber>/<LineNumber>+1 for
+;; `SHLOAD`, and <AppleSoftCassette::ArrayBlock> adds an array's length, which Applesoft leaves here, to its address for
+;; `STORE` and `RECALL`.
+;; See: <AppleSoft:LineNumber>, <AppleSoftCassette>, <AppleSoftCassette::ArrayBlock>
+;; Also: LINNUM (UNKN)
+LineNumber = $50
 
 ;; Applesoft's end of the variables and arrays, the lowest address strings may grow down to.
 ;;
 ;; <AppleSoftCassette> refuses a shape table that would reach below it, returning carry set so that Applesoft reports
 ;; that memory is full.
-;; See: <AppleSoft:STREND>, <AppleSoftCassette>, <MEMSIZ>
-STREND = $6D
+;; See: <AppleSoft:ArraysEnd>, <AppleSoftCassette>, <MemoryTop>
+;; Also: STREND (UNKN)
+ArraysEnd = $6D
 
 ;; Applesoft's bottom of string space, where the next string is stored, just below the strings in use.
 ;;
-;; <AppleSoftCassette::ShapeTable> moves it down with HIMEM, <MEMSIZ>, to make room for the shape table it loads.
-;; See: <AppleSoft:FRETOP>, <MEMSIZ>, <AppleSoftCassette::ShapeTable>
-FRETOP = $6F
+;; <AppleSoftCassette::ShapeTable> moves it down with HIMEM, <MemoryTop>, to make room for the shape table it loads.
+;; See: <AppleSoft:StringsBottom>, <MemoryTop>, <AppleSoftCassette::ShapeTable>
+;; Also: FRETOP (UNKN)
+StringsBottom = $6F
 
 ;; Applesoft's HIMEM, the address just above the memory it uses.
 ;;
 ;; <AppleSoftCassette> checks that a shape table fits below it, and <AppleSoftCassette::ShapeTable> lowers it by the
 ;; table's length and loads the table there.
-;; See: <AppleSoft:MEMSIZ>, <FRETOP>, <SHPTBL>, <AppleSoftCassette::ShapeTable>
-MEMSIZ = $73
+;; See: <AppleSoft:MemoryTop>, <StringsBottom>, <ShapeTable>, <AppleSoftCassette::ShapeTable>
+;; Also: MEMSIZ (UNKN)
+MemoryTop = $73
 
 ;; Applesoft's block pointer, which the `STORE` and `RECALL` helper takes as the start of the array's data.
 ;;
 ;; <AppleSoftCassette::ArrayBlock> copies it, as Applesoft's routine at $E0EF leaves it, to <A1L>/<A1H>, the start of
 ;; the block the Monitor then writes or reads.
-;; See: <AppleSoft:HIGHDS>, <AppleSoftCassette::ArrayBlock>, <LOWTR>
-HIGHDS = $94
+;; See: <AppleSoft:DestinationEnd>, <AppleSoftCassette::ArrayBlock>, <SourceStart>
+;; Also: HIGHDS (UNKN)
+DestinationEnd = $94
 
 ;; Applesoft's pointer to the array that `STORE` or `RECALL` names, from its search for the array.
 ;;
-;; <AppleSoftCassette::ArrayBlock> adds the array's length in <LINNUM> to it for <A2L>/<A2H>, the end of the block on
-;; tape, and reads the header's fifth byte through it.
-;; See: <AppleSoft:LOWTR>, <AppleSoftCassette::ArrayBlock>, <HIGHDS>
-LOWTR = $9B
+;; <AppleSoftCassette::ArrayBlock> adds the array's length in <LineNumber> to it for <A2L>/<A2H>, the end of the block
+;; on tape, and reads the header's fifth byte through it.
+;; See: <AppleSoft:SourceStart>, <AppleSoftCassette::ArrayBlock>, <DestinationEnd>
+;; Also: LOWTR (UNKN)
+SourceStart = $9B
 
 ;; Applesoft's pointer to the shape table that `DRAW` and `XDRAW` use.
 ;;
 ;; <AppleSoftCassette::ShapeTable> sets it to the address where it loads the shape table, just below the new HIMEM.
-;; See: <AppleSoft:SHPTBL>, <AppleSoftCassette::ShapeTable>, <MEMSIZ>
-;; Also: SHAPEPTR (UNKN)
-SHPTBL = $E8
+;; See: <AppleSoft:ShapeTable>, <AppleSoftCassette::ShapeTable>, <MemoryTop>
+;; Also: SHPTBL (UNKN), SHAPEPTR (UNKN)
+ShapeTable = $E8
 
 ; A Monitor entry point not in MonitorEntries.asm, since DOS has a routine of its own by its old name, GETNUM.
 

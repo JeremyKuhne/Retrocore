@@ -28,7 +28,8 @@ Every Apple II slot has two address ranges that belong to it, where n is the slo
   configured with it) scans the slots from 7 down for a ROM whose bytes at $Cn01, $Cn03 and $Cn05 are $20, $00
   and $03, and runs the first it finds: that is how a disk starts by itself.
 - **$C080-$C08F plus n * 16**, sixteen addresses that work the card's switches. The code puts n * 16 in X and
-  reads `$C080,X` and the like, so the same code works in any slot. This value is SLOTX16 in the sources.
+  reads `$C080,X` and the like, so the same code works in any slot. This value is `SlotTimes16` in the sources (SLOTX16 before
+  their conversion).
 
 The switches are eight on/off controls. Reading the even address of a pair turns its switch off, the odd one
 turns it on; the value read back does not matter, except that every even address also returns the data latch,
@@ -104,7 +105,7 @@ data field that follows. The boot ROMs do exactly this, and check neither epilog
 1. **BOOT 0**, the boot ROM. It builds its nibble table, finds its slot (it calls an RTS in the Monitor and
    reads its own address off the stack), turns on drive 1, steps to track 0 and reads sector 0.
    - The 16-sector ROM reads it into $0800 and jumps to $0801. The first byte at $0800 says how many sectors
-     to read in all, one page each; DOS 3.3 and ProDOS say 1. The sector reader, `READ` at $Cn5C, is also a
+     to read in all, one page each; DOS 3.3 and ProDOS say 1. The sector reader, `ReadSector` at $Cn5C, is also a
      routine: BOOT 1 sets the sector (`$3D`) and page (`$27`) and jumps there for each sector it loads, and
      the ROM comes back to $0801.
    - The 13-sector ROM reads it into $0300, decodes only part of it, and jumps to $0301, where the sector's
@@ -127,21 +128,21 @@ The inputs:
 | QA | the latch's top bit |
 | RP | the read pulse from the drive: 0 while a flux transition passes, 1 otherwise. Sather's tables call the two cases RP and NO RP. |
 
-The commands, with Sather's mnemonics:
+The commands, with the sources' names and Sather's mnemonics:
 
-| Code | Name | Command |
-| --- | --- | --- |
-| $0-$7 | CLR | clear the latch |
-| $8, $C | NOP | nothing |
-| $9 | SL0 | shift left, bringing in a 0 |
-| $D | SL1 | shift left, bringing in a 1 |
-| $A, $E | SR | shift right, bringing in the write-protect sensor as bit 7 |
-| $B, $F | LD | load the latch from the data bus |
+| Code | Name | Sather | Command |
+| --- | --- | --- | --- |
+| $0-$7 | `Clear` | CLR | clear the latch |
+| $8, $C | `Hold` | NOP | nothing |
+| $9 | `Shift0` | SL0 | shift left, bringing in a 0 |
+| $D | `Shift1` | SL1 | shift left, bringing in a 1 |
+| $A, $E | `Sense` | SR | shift right, bringing in the write-protect sensor as bit 7 |
+| $B, $F | `Load` | LD | load the latch from the data bus |
 
 Apple's tables use only the first code of each, so the sources write each entry as a command and the state to
-go to, such as `SL1($2)`, and that gives back the exact byte. `READING` lists a state's entries in read and
-sense write protect modes, `WRITING` in the two write modes. Both pass each entry to `ENTRY`, which names it
-by its state and inputs, Q7 Q6 QA RP written as four binary digits such as `%0110`.
+go to, such as `Shift1($2)`, and that gives back the exact byte. `ReadState` lists a state's entries in read
+and sense write protect modes, `WriteState` in the two write modes. Both pass each entry to `Entry`, which
+names it by its state and inputs, Q7 Q6 QA RP written as four binary digits such as `%0110`.
 
 - **Reading.** The states time the gaps between read pulses: a pulse within a bit cell shifts in a 1, a cell
   with none a 0. Once QA is 1 the sequencer holds the byte for a while, long enough for a 6502 loop of 7
@@ -156,7 +157,7 @@ by its state and inputs, Q7 Q6 QA RP written as four binary digits such as `%011
 
 The PROM's pins are not in the order of the inputs: the board's designers assigned them to keep its traces
 short. Address pins A7-A0 carry state bits 3 and 2, state bit 0, RP, Q7, Q6, QA and state bit 1; data pins
-D7-D4 the next state and D3-D0 the command. The sources list the table in logical order, and `SEQUENCER` lays
+D7-D4 the next state and D3-D0 the command. The sources list the table in logical order, and `EmitChip` lays
 it out by pin.
 
 The known dump of the 13-sector sequencer, 341-0010, is not in the card's pin order. Its address lines A5 and

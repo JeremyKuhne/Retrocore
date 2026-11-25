@@ -1,64 +1,94 @@
-;; DOS 3.3 SYSTEM MASTER LANGUAGE CARD FINDER
+; retrocore: style=strict
+;; DOS 3.3 System Master: the language card finder
 ;;
-;; The Apple II Plus or ROMCARD System Master's HELLO program, dated 08/25/80, POKEs these bytes into
-;; $0300-$0340 in lines 90-125, then CALLs $0301 and checks the result at $0300. If the test passes, HELLO
-;; loads INTBASIC at $D000 and reads $C082 to write-protect the card. This source preserves the POKEd bytes.
+;; The Apple II Plus or ROMCARD System Master's HELLO program, dated 08/25/80, POKEs these bytes into $0300-$0340 in
+;; lines 90-125, then CALLs $0301 (<TestLanguageCard>) and checks the result at $0300 (<Status>). If the test passes,
+;; HELLO loads INTBASIC at $D000 and reads $C082 to write-protect the card. This source preserves the POKEd bytes;
+;; its names are the SDK's own. SystemMasterBasicTests pin it by digest.
+;;
+;; A language card puts 16K of RAM in place of the ROM at $D000-$FFFF: two 4K banks at $D000-$DFFF and 8K at
+;; $E000-$FFFF. Its switches, at $C080-$C08F, are in ../Roms/System/IIeEquates.asm.
 
 .cpu Mos6502
 
 .include "../Roms/System/IIeEquates.asm"
 
+;; The first byte of the language card's 4K banks, which the test writes.
+BankByte = $D000
+
+;; A byte of the language card's shared 8K, which tells the ROM from the card's RAM: the test compares it before and
+;; after it selects the ROM.
+SharedByte = $E000
+
+;; The first value the test writes; it shifts it right for the second, $52.
+TEST_PATTERN = $A5
+
+;; <Status> when both values read back: a language card is there.
+STATUS_FOUND = 1
+
+;; <Status> when the test fails or is skipped.
+STATUS_NOT_FOUND = 0
+
 .org $0300
 
-;; HELLO reads this byte after CALL: 1 if the test passes, otherwise 0.
+;; HELLO reads this byte after CALL: <STATUS_FOUND> if the test passes, otherwise <STATUS_NOT_FOUND>.
 Status:
     .byte 0
 
-;; Tests whether Language Card bank 2 retains two values at $D000.
+;; Tests whether language card bank 2 keeps two values written at <BankByte>.
 ;;
-;; If the byte initially read at $E000 differs from the ROM's, the write test is skipped. The test overwrites
-;; $D000 without restoring it. The saved $E000 byte also determines whether RAM is selected at the end.
-;; Out:   Status = 1 if both values read back, otherwise 0
-;; Uses:  A, $D000
+;; If the byte read at <SharedByte> under the current mapping differs from the ROM's, the write test is skipped. The
+;; test overwrites <BankByte> without restoring it. At the end it selects bank 2 RAM for reading, with writes off, if
+;; the byte first read at <SharedByte> is not the ROM's; otherwise it leaves the ROM selected, with bank 2 RAM
+;; write-enabled after a test that passed.
+;; Out:   Status = <STATUS_FOUND> if both values read back, otherwise <STATUS_NOT_FOUND>
+;; Uses:  A, BankByte
 ;; Keeps: X, Y
-Finder:
-    lda $E000                       ; save the byte under the current mapping
+.proc TestLanguageCard
+
+    ; Save the byte under the current mapping, then compare it with the ROM's.
+    lda SharedByte
     pha
-    lda ROMIN                       ; select ROM for reading
+    lda LanguageCardRomWriteBank2   ; select ROM for reading
     pla
     pha                             ; keep the original byte for the final comparison
-    cmp $E000                       ; compare the original byte with the ROM
-    bne Finder_Failed               ; skip the write test if they differ
+    cmp SharedByte
+    bne Failed                      ; skip the write test if they differ
 
-    lda LCBANK2                     ; select bank 2 RAM for reading
-    lda LCBANK2                     ; the second read enables writes
-    lda #$A5
-    sta $D000
-    cmp $D000                       ; check the first pattern
-    bne Finder_Failed
+    ; Write two values to bank 2 and read each back.
+    lda LanguageCardBank2ReadWrite  ; select bank 2 RAM for reading
+    lda LanguageCardBank2ReadWrite  ; the second read enables writes
+    lda #TEST_PATTERN
+    sta BankByte
+    cmp BankByte
+    bne Failed
 
-    lsr A                           ; $A5 becomes $52
-    sta $D000
-    cmp $D000                       ; check the second pattern
-    bne Finder_Failed
+    lsr a                           ; $A5 becomes $52
+    sta BankByte
+    cmp BankByte
+    bne Failed
 
-    lda ROMIN                       ; select ROM for reading
-    lda ROMIN                       ; keep bank 2 RAM write-enabled
-    lda #1
-    bne Finder_StoreStatus          ; always taken, as in HELLO
+    ; Passed: select the ROM again.
+    lda LanguageCardRomWriteBank2   ; select ROM for reading
+    lda LanguageCardRomWriteBank2   ; keep bank 2 RAM write-enabled
+    lda #STATUS_FOUND
+    bne StoreStatus                 ; always taken, as in HELLO
 
-Finder_Failed:
-    lda #0
+Failed:
+    lda #STATUS_NOT_FOUND
 
-Finder_StoreStatus:
+StoreStatus:
     sta Status
-    pla                             ; recover the original $E000 byte
-    cmp $E000
-    beq Finder_Done                 ; leave the current mapping if the byte matches
-    lda LCRAM2                      ; otherwise select bank 2 RAM, with writes off
 
-Finder_Done:
+    ; Leave the ROM selected if the original byte was the ROM's; otherwise select bank 2 RAM.
+    pla
+    cmp SharedByte
+    beq Done
+    lda LanguageCardBank2ReadOnly   ; select bank 2 RAM, with writes off
+
+Done:
     rts
+.endproc
 
-.assert Finder = $0301, "HELLO calls the finder at $0301."
+.assert TestLanguageCard = $0301, "HELLO calls the finder at $0301."
 .assert * = $0341, "HELLO pokes through $0340."

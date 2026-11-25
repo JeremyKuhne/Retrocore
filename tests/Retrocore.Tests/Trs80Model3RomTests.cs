@@ -42,6 +42,78 @@ public class Trs80Model3RomTests
     }
 
     /// <summary>
+    ///  The Model 4 ROM's clock (<c>CLOCKZ</c>) counts 30 interrupts to a second at <c>TICKIT</c> and acknowledges
+    ///  each by reading port <c>$EC</c>. At 2 MHz the interrupts come 30 times a second, so its time keeps up; at 4 MHz
+    ///  they come 60 times, as the Model 4's technical reference says, and the ROM, written for the Model III's rate,
+    ///  counts two seconds to each. An interrupt left unacknowledged would run again at once and count far faster.
+    /// </summary>
+    /// <param name="fast">
+    ///  Whether BASIC sets port <c>$EC</c> bit 6 first. The ROM's video driver rewrites the port from its copy at
+    ///  <c>IOSTAT</c> (16912), so the program sets both.
+    /// </param>
+    /// <param name="seconds">The seconds the ROM counts in ten seconds.</param>
+    [TestMethod]
+    [DataRow(false, 10)]
+    [DataRow(true, 20)]
+    public void Model4RomClockCountsTheInterrupts(bool fast, int seconds)
+    {
+        Trs80Model3Machine machine = Model3(Trs80Model3Variant.Model4);
+        machine.Run(Trs80Model3Timing.ClockHertz);
+        Type(machine, "\r");
+        Type(machine, "\r");
+        machine.Run(Trs80Model3Timing.ClockHertz * 2UL);
+
+        Type(machine, fast ? "POKE 16912,PEEK(16912) OR 64:OUT 236,PEEK(16912)\r" : "PRINT\r");
+        machine.Bus.Fast.Should().Be(fast);
+        int start = ClockTicks(machine);
+
+        // Ten seconds of device time: twice the T-states at 4 MHz.
+        machine.Run((ulong)Trs80Model3Timing.ClockHertz * 10 * (fast ? 2UL : 1UL));
+        (ClockTicks(machine) - start).Should().BeInRange((seconds * 30) - 1, (seconds * 30) + 1);
+    }
+
+    /// <summary>
+    ///  On a Model 4 the ROM's keyboard driver (<c>KEYBD</c>) returns the codes at <c>FKEY1</c>, <c>FKEY2</c> and
+    ///  <c>FKEY3</c> for F1, F2 and F3, which its start-up sets to <c>$60</c> (<c>`</c>), <c>$1B</c> (escape) and
+    ///  <c>$08</c> (backspace). It masks row 7 with <c>$7C</c>, leaving out both shift keys, so shift changes nothing.
+    ///  BASIC's <c>INKEY$</c> shows each code; but <c>$60</c> is also shift-@'s code, which pauses a running program
+    ///  (<c>CNTCCN</c>) until the next key, which it keeps for <c>INKEY$</c>. So F1 pauses, and a second F1 shows 96.
+    /// </summary>
+    [TestMethod]
+    public void Model4FunctionKeysReturnTheirCodes()
+    {
+        Trs80Model3Machine machine = Model3(Trs80Model3Variant.Model4);
+        machine.Run(Trs80Model3Timing.ClockHertz);
+        Type(machine, "\r");
+        Type(machine, "\r");
+        machine.Run(Trs80Model3Timing.ClockHertz * 2UL);
+        Type(machine, "CLS:PRINT\r");
+        Type(machine, "10 A$=INKEY$:IF A$=\"\" THEN 10\r");
+        Type(machine, "20 PRINT ASC(A$);:GOTO 10\r");
+        Type(machine, "RUN\r");
+
+        Trs80Key[] keys = [Trs80Key.F1, Trs80Key.F1, Trs80Key.F2, Trs80Key.F3];
+        Trs80Key?[] shifts = [null, Trs80Key.Shift, Trs80Key.RightShift];
+        foreach (Trs80Key? shift in shifts)
+        {
+            foreach (Trs80Key key in keys)
+            {
+                if (shift is { } held) { machine.Bus.Keyboard.Set(held, pressed: true); }
+                machine.Run(Trs80Model3Timing.ClockHertz / 10);
+                machine.Bus.Keyboard.Set(key, pressed: true);
+                machine.Run(Trs80Model3Timing.ClockHertz / 10);
+                machine.Bus.Keyboard.Set(key, pressed: false);
+                machine.Run(Trs80Model3Timing.ClockHertz / 10);
+                if (shift is { } released) { machine.Bus.Keyboard.Set(released, pressed: false); }
+            }
+        }
+
+        machine.Run(Trs80Model3Timing.ClockHertz / 10);
+        // The line under RUN: unshifted, with the left shift, then with the right; one code for each press.
+        Screen(machine).Substring(5 * 64, 64).TrimEnd().Should().Be(" 96  27  8  96  27  8  96  27  8");
+    }
+
+    /// <summary>
     ///  CSAVE records at the speed Cass? chose, H for 1500 baud and L for 500, and CLOAD reads the tape back. Each tape
     ///  is in the usual CAS layout for its speed: the leader ($55 bytes at 1500 baud, zeros at 500), the sync byte
     ///  ($7F or $A5), then the file.
@@ -343,6 +415,14 @@ public class Trs80Model3RomTests
         int columns = video.Eighty ? 80 : 64;
         return string.Join('\n', Enumerable.Range(0, video.Rows)
             .Select(row => new string([.. Enumerable.Range(0, columns).Select(column => (char)(video.Displayed(row, column) & 0x7F))])));
+    }
+
+    // The interrupts the ROM's clock has counted: TICKIT counts down from 30 in each second at SECOND, MINUTE and HOUR.
+    private static int ClockTicks(Trs80Model3Machine machine)
+    {
+        Trs80Model3Bus bus = machine.Bus;
+        int seconds = bus.Peek(0x4217) + (60 * (bus.Peek(0x4218) + (60 * bus.Peek(0x4219))));
+        return (seconds * 30) + 30 - bus.Peek(0x4216);
     }
 
     private static string Screen(Trs80Model3Machine machine) =>

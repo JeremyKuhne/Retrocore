@@ -8,6 +8,7 @@ using Retrocore.Media.Floppy;
 using Retrocore.Media.Trs80;
 using System.Diagnostics;
 using System.Globalization;
+using System.Security.Cryptography;
 
 namespace Retrocore.Tests;
 
@@ -20,7 +21,8 @@ namespace Retrocore.Tests;
 ///   MAME (<c>RETROCORE_MAME</c>; or <c>mame/mame</c> or <c>mame/mame.exe</c> under
 ///   <see cref="ExternalTestData.Root"/>; or a Linux package's) runs <c>tools/Trs80Model3Oracle.lua</c> with MAME's
 ///   ROM sets (<c>trs80m3</c> and <c>trs80m2</c>, as zip or 7z) in <c>trs80-roms/mame</c>. The machines here run the
-///   SDK's builds of the same ROMs, which are byte-identical to MAME's. The DOS tests use the images in
+///   SDK's builds of the same ROMs, which are byte-identical to MAME's; without the sets, the Model 4's tests give MAME
+///   its <c>trs80m4</c> set built from those sources. The DOS tests use the images in
 ///   <c>trs80-disks</c>. The tests are inconclusive without these.
 ///  </para>
 /// </remarks>
@@ -64,6 +66,66 @@ public class Trs80Model3OracleTests
         ];
 
         Compare(Trs80Model3Variant.Model4, script, finish: 16, disk: null, landmark: "1  4  9");
+    }
+
+    /// <summary>
+    ///  The Model 4's function keys in a BASIC program that shows each <c>INKEY$</c>'s code: F1 twice (its <c>$60</c>
+    ///  is shift-@'s code, so the first pauses the program and the second resumes it and is kept), F2 and F3,
+    ///  unshifted and with each shift key. MAME presses the keys as matrix switches, as here.
+    /// </summary>
+    [TestMethod]
+    [TestCategory("Conformance")]
+    public void Model4FunctionKeysMatchMame()
+    {
+        List<(double At, string Text)> script =
+        [
+            (2, "\r"),
+            (4, "\r"),
+            (8, "10 A$=INKEY$:IF A$=\"\" THEN 10\r"),
+            (11, "20 PRINT ASC(A$);:GOTO 10\r"),
+            (14, "RUN\r")
+        ];
+
+        // MAME's natural keyboard is still typing RUN for a while; the presses wait for it, and each is held 0.2 s.
+        double at = 18;
+        foreach (string? shift in new[] { null, "Left Shift", "Right Shift" })
+        {
+            foreach (string key in new[] { "F1", "F1", "F2", "F3" })
+            {
+                if (shift is not null) { script.Add((at, Key(shift, pressed: true))); }
+                script.Add((at + 0.1, Key(key, pressed: true)));
+                script.Add((at + 0.3, Key(key, pressed: false)));
+                if (shift is not null) { script.Add((at + 0.4, Key(shift, pressed: false))); }
+                at += 0.5;
+            }
+        }
+
+        Compare(Trs80Model3Variant.Model4, [.. script], finish: at + 1, disk: null, landmark: " 96  27  8  96  27  8  96  27  8");
+    }
+
+    /// <summary>
+    ///  The Model 4 ROM's clock at 2 MHz: after the same 20 seconds, its count of interrupts (<c>TICKIT</c> and the
+    ///  seconds and minutes at <c>$4216</c>-<c>$4218</c>) is MAME's, within a tick. MAME 0.264 keeps the clock at
+    ///  30 Hz at 4 MHz too, where the Model 4's technical reference gives 60 Hz, so the fast clock is tested against
+    ///  the reference instead (<c>Trs80Model3RomTests.Model4RomClockCountsTheInterrupts</c>).
+    /// </summary>
+    [TestMethod]
+    [TestCategory("Conformance")]
+    public void Model4ClockMatchesMame()
+    {
+        (double At, string Text)[] script =
+        [
+            (2, "\r"),
+            (4, "\r")
+        ];
+
+        (byte[] dump, Trs80Model3Machine machine) = Compare(Trs80Model3Variant.Model4, script, finish: 20, disk: null, landmark: "READY");
+        int Ticks(Func<int, byte> read) => (((read(0x4218) * 60) + read(0x4217)) * 30) + 30 - read(0x4216);
+        int mame = Ticks(address => dump[address]);
+        int ours = Ticks(address => machine.Bus.Peek((ushort)address));
+        Console.WriteLine($"Clock interrupts counted: {ours} here, {mame} in MAME.");
+        mame.Should().BeInRange(19 * 30, 20 * 30, "MAME's clock counted about 30 a second");
+        ours.Should().BeInRange(mame - 1, mame + 1);
     }
 
     /// <summary>
@@ -136,7 +198,8 @@ public class Trs80Model3OracleTests
 
     private static string Root => ExternalTestData.Root;
 
-    private static void Compare(
+    // Returns MAME's dump, the address space then video RAM, and the machine here, once their screens match.
+    private static (byte[] Dump, Trs80Model3Machine Machine) Compare(
         Trs80Model3Variant variant,
         (double At, string Text)[] script,
         double finish,
@@ -144,14 +207,24 @@ public class Trs80Model3OracleTests
         string landmark)
     {
         string mame = FindMame();
+        string driver = variant == Trs80Model3Variant.Model4 ? "trs80m4" : "trs80m3";
         string sets = Path.Join(Root, "trs80-roms", "mame");
+        string? built = null;
         if (!Directory.Exists(sets) || !Directory.EnumerateFiles(sets, "trs80m3.*").Any())
         {
-            Assert.Inconclusive("MAME's trs80m3 ROM set is missing.");
+            if (variant != Trs80Model3Variant.Model4) { Assert.Inconclusive("MAME's trs80m3 ROM set is missing."); }
+            built = sets = BuildModel4Set();
         }
 
-        string driver = variant == Trs80Model3Variant.Model4 ? "trs80m4" : "trs80m3";
-        byte[] dump = RunMame(mame, sets, driver, ":videoram", script, finish, disk);
+        byte[] dump;
+        try
+        {
+            dump = RunMame(mame, sets, driver, ":videoram", script, finish, disk);
+        }
+        finally
+        {
+            if (built is not null) { Directory.Delete(built, recursive: true); }
+        }
 
         Trs80Model3Machine machine = Create(variant, disk);
         Run(machine, script, finish);
@@ -174,7 +247,42 @@ public class Trs80Model3OracleTests
         }
 
         Match(oracle, ours, columns);
+        return (dump, machine);
     }
+
+    // Without MAME's sets, builds its trs80m4 set from the SDK's sources, which are byte-identical to its dumps: the
+    // hashes are those MAME lists for the set (mame -listroms trs80m4), so MAME runs the same bytes it would.
+    private static string BuildModel4Set()
+    {
+        string roms = Path.Join(AppContext.BaseDirectory, "Inputs", "Trs80");
+        byte[] system = Trs80SdkModules.AssembleModel3(Path.Join(roms, "Model3.asm"), 4).Sections[0].Bytes.ToArray();
+        byte[] characters = Trs80SdkModules
+            .AssembleModel3CharacterGenerator(Path.Join(roms, "Model3CharacterGenerator.asm"), model4P: false)
+            .Sections[0].Bytes.ToArray();
+
+        Convert.ToHexStringLower(SHA1.HashData(system)).Should().Be("752555fdd0ff23abc9f35c6e03d9d9b4c0e9677b");
+        Convert.ToHexStringLower(SHA1.HashData(characters)).Should().Be("c52ee41439bd5e57c3b113ebfd61c951e2af4446");
+
+        string root = Directory.CreateTempSubdirectory("retrocore-trs80m4").FullName;
+        string set = Directory.CreateDirectory(Path.Join(root, "trs80m4")).FullName;
+        File.WriteAllBytes(Path.Join(set, "trs80m4.rom"), system);
+        File.WriteAllBytes(Path.Join(set, "8044316a.u36"), characters);
+        return root;
+    }
+
+    // A script entry that presses or releases a key by MAME's name for it on row 7 (LINE7).
+    private static string Key(string field, bool pressed) => $"@:LINE7,{field},{(pressed ? 1 : 0)}";
+
+    // The key a MAME row 7 field name presses.
+    private static Trs80Key Row7Key(string field) => field switch
+    {
+        "Left Shift" => Trs80Key.Shift,
+        "Right Shift" => Trs80Key.RightShift,
+        "F1" => Trs80Key.F1,
+        "F2" => Trs80Key.F2,
+        "F3" => Trs80Key.F3,
+        _ => throw new ArgumentOutOfRangeException(nameof(field), field, "Not a row 7 key.")
+    };
 
     // Compares video RAM byte for byte, showing this side's screen and the first differing cell when they differ.
     private static void Match(byte[] oracle, byte[] ours, int columns)
@@ -235,6 +343,13 @@ public class Trs80Model3OracleTests
         foreach ((double at, string text) in script)
         {
             RunTo(at);
+            if (text.StartsWith("@:LINE7,", StringComparison.Ordinal))
+            {
+                string[] parts = text.Split(',');
+                machine.Bus.Keyboard.Set(Row7Key(parts[1]), pressed: parts[2] == "1");
+                continue;
+            }
+
             foreach (char character in text) { machine.Bus.Keyboard.Type((byte)SwapCase(character)); }
         }
 

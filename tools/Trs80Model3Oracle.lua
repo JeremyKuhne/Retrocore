@@ -6,7 +6,9 @@
 -- keystrokes and, at the end, writes the CPU's 64K address space and then a memory share, such as video RAM, to a
 -- file.
 --
--- RETRO_SCRIPT: entries "seconds=text" separated by '|', where text may contain \r for ENTER.
+-- RETRO_SCRIPT: entries "seconds=text" separated by '|', where text may contain \r for ENTER, or is
+--               "@port,field,state" to press (1) or release (0) a key the natural keyboard cannot type, such as
+--               "@:LINE7,F1,1".
 -- RETRO_END:    the emulated second to dump at.
 -- RETRO_OUT:    the dump file.
 -- RETRO_SHARE:  the memory share written after the address space, such as ":videoram".
@@ -24,9 +26,15 @@ local share = os.getenv("RETRO_SHARE")
 local next_entry = 1
 local done = false
 subscription = emu.add_machine_frame_notifier(function()
-  local now = manager.machine.time.seconds
+  local now = manager.machine.time:as_double()
   while next_entry <= #schedule and now >= schedule[next_entry].at do
-    manager.machine.natkeyboard:post(schedule[next_entry].text)
+    local text = schedule[next_entry].text
+    local port, field, state = string.match(text, "^@([^,]+),([^,]+),([01])$")
+    if port then
+      manager.machine.ioport.ports[port].fields[field]:set_value(tonumber(state))
+    else
+      manager.machine.natkeyboard:post(text)
+    end
     next_entry = next_entry + 1
   end
   if not done and now >= finish then

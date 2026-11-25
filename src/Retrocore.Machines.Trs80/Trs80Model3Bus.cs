@@ -20,7 +20,8 @@ namespace Retrocore.Machines.Trs80;
 ///   a 4K boot loader that port <c>$9C</c> bit 0 switches out.
 ///  </para>
 ///  <para>
-///   The ports are the interrupt mask and status (<c>$E0</c>: bit 2 the 30 Hz clock), the disk NMI mask and
+///   The ports are the interrupt mask and status (<c>$E0</c>: bit 2 the clock, 30 Hz, or 60 Hz on a Model 4 at
+///   4 MHz), the disk NMI mask and
 ///   status (<c>$E4</c>: bit 7 the controller's INTRQ, bit 6 the motor timeout, bit 5 reset), the RS-232 board's
 ///   UART (<c>$E8</c>-<c>$EB</c>, reading <c>$FF</c> as with no board fitted), the options latch (<c>$EC</c>: bit 1 cassette motor, bit 2
 ///   wide characters, bit 3 alternate characters, bit 6 the Model 4's 4 MHz; a read acknowledges the clock), the
@@ -48,6 +49,7 @@ public sealed class Trs80Model3Bus : IProcessorBus, IIoBus
     private readonly bool _controller;
 
     private int _tick;
+    private bool _oddFrame;
     private byte _interruptMask;
     private byte _interrupts;
     private byte _nmiMask;
@@ -332,10 +334,13 @@ public sealed class Trs80Model3Bus : IProcessorBus, IIoBus
             Cassette.TakeEdges();
         }
 
-        if (++_tick == Trs80Model3Timing.CyclesPerTick)
+        // The clock divides the 60 Hz vertical sync by two, except on a Model 4 at 4 MHz, which takes every one. It
+        // latches only while the mask enables it, until port $EC is read.
+        if (++_tick == Trs80Model3Timing.CyclesPerFrame)
         {
             _tick = 0;
-            _interrupts |= ClockInterrupt;
+            _oddFrame = !_oddFrame;
+            if (Fast || !_oddFrame) { _interrupts |= (byte)(ClockInterrupt & _interruptMask); }
         }
 
         if (!_controller) { return; }

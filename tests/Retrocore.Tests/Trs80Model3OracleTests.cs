@@ -23,7 +23,7 @@ namespace Retrocore.Tests;
 ///   ROM sets (<c>trs80m3</c>, <c>trs80m4</c> and <c>trs80m2</c>, as zip or 7z) in <c>trs80-roms/mame</c>. The machines here run the
 ///   SDK's builds of the same ROMs, which are byte-identical to MAME's; without the sets, the Model 4's tests give MAME
 ///   its <c>trs80m4</c> set built from those sources. The DOS tests use the images in
-///   <c>trs80-disks</c>. The tests are inconclusive without these.
+///   <c>trs80-disks</c>. The others are inconclusive without their sets, and the DOS tests without the images.
 ///  </para>
 /// </remarks>
 [TestClass]
@@ -70,7 +70,7 @@ public class Trs80Model3OracleTests
 
     /// <summary>
     ///  The Model 4's function keys in a BASIC program that shows each <c>INKEY$</c>'s code: F1 twice (its <c>$60</c>
-    ///  is shift-@'s code, so the first pauses the program and the second resumes it and is kept), F2 and F3,
+    ///  is shift-@'s code, so one press pauses the program and the next key resumes it and is kept), F2 and F3,
     ///  unshifted and with each shift key. MAME presses the keys as matrix switches, as here.
     /// </summary>
     [TestMethod]

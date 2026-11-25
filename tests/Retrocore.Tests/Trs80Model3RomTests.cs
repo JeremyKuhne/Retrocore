@@ -77,7 +77,9 @@ public class Trs80Model3RomTests
     ///  <c>FKEY3</c> for F1, F2 and F3, which its start-up sets to <c>$60</c> (<c>`</c>), <c>$1B</c> (escape) and
     ///  <c>$08</c> (backspace). It masks row 7 with <c>$7C</c>, leaving out both shift keys, so shift changes nothing.
     ///  BASIC's <c>INKEY$</c> shows each code; but <c>$60</c> is also shift-@'s code, which pauses a running program
-    ///  (<c>CNTCCN</c>) until the next key, which it keeps for <c>INKEY$</c>. So F1 pauses, and a second F1 shows 96.
+    ///  (<c>CNTCCN</c>) until the next key, which it keeps for <c>INKEY$</c>. So of two F1 presses one pauses
+    ///  and the other shows 96; which one pauses depends on whether the statement loop's scan or <c>INKEY$</c> sees
+    ///  the press first, and the line is the same either way.
     /// </summary>
     [TestMethod]
     public void Model4FunctionKeysReturnTheirCodes()

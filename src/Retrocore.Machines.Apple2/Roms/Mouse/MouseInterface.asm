@@ -37,9 +37,9 @@
 ;; The mouse routines ($Cn12-$Cn19) are called with X = $Cn and Y = $n0, and use them throughout: X to reach the
 ;; slot's screen holes, Y the PIA. They return carry clear, or set for an error; A is not kept. Only <ServeMouse>,
 ;; which an interrupt handler may call with the language card's RAM over the Monitor, finds the slot itself, with an
-;; RTS it writes at $06 rather than the Monitor's <SaveRegisters::Return>. BASIC's entries find it with that RTS
-;; and leave <ExpansionRomSlot> = $Cn. The Pascal entries, <PascalEntry>, all answer error 3, and $Cn1A-$Cn1F are the
-;; factory's own.
+;; RTS it writes at $06 rather than the Monitor's <SaveRegisters::Return>. BASIC's entries find it with the
+;; Monitor's RTS and leave <ExpansionRomSlot> = $Cn. The Pascal entries, <PascalEntry>, all answer error 3, and
+;; $Cn1A-$Cn1F are the factory's own.
 ;;
 ;; NAMES
 ;;
@@ -451,8 +451,8 @@ SYNC_TIMEOUT = $01
     bcs EnterBankThird              ; input
 .endproc
 
-;; $Cn1A, the factory's: sends command $F0 or $F1 with slot 0's holes and returns a byte in slot 0's <MouseXHigh>,
-;; through <CopyrightBank::SendRequest>.
+;; $Cn1A, the factory's: sends command $F0 or $F1 with slot 0's holes, through <CopyrightBank::SendRequest>: $F1
+;; also sends slot 0's <MouseXHigh>, and $F0 reads a byte back into it.
 ;; In:    A = 0 or 1, X = $Cn, Y = $n0
 .proc FactoryRequest
     and #FACTORY_SEND_HIGH

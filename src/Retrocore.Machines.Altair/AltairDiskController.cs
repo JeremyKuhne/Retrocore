@@ -12,30 +12,29 @@ namespace Retrocore.Machines.Altair;
 /// </summary>
 /// <remarks>
 ///  <para>
-///   Port $08 selects a drive when written (bit 7 deselects) and reads the drive status, whose bits are low when
-///   true: 0 ENWD (enter new write data), 1 head movement allowed, 2 head loaded and settled, 5 the 8080's INTE,
-///   6 track 0, 7 NRDA (new read data available); bits 3 and 4 read 0 while a drive is selected. Port $09 commands
-///   the drive when written (bit 0 step in, 1 step out, 2 load the head, 3 unload it, 4 and 5 enable and disable
-///   interrupts, 6 lower the head current, 7 start a write) and reads the sector position: bits 1-5 the sector
-///   under the head, bit 0 low for Sector True, bits 6 and 7 set, or $FF until the head is loaded and settled.
-///   Port $0A reads a sector's bytes and takes those to write. With no drive selected the status and position read
-///   $FF.
+///   Port $08 selects a drive when written (bit 7 deselects) and reads the drive status, whose bits are low when true:
+///   0 ENWD (enter new write data), 1 head movement allowed, 2 head loaded and settled, 5 the 8080's INTE, 6 track 0, 7
+///   NRDA (new read data available); bits 3 and 4 read 0 while a drive is selected. Port $09 commands the drive when
+///   written (bit 0 step in, 1 step out, 2 load the head, 3 unload it, 4 and 5 enable and disable interrupts, 6 lower
+///   the head current, 7 start a write) and reads the sector position: bits 1-5 the sector under the head, bit 0 low
+///   for Sector True, bits 6 and 7 set, or $FF until the head is loaded and settled. Port $0A reads a sector's bytes
+///   and takes those to write. With no drive selected the status and position read $FF.
 ///  </para>
 ///  <para>
-///   The disk turns all the time, a sector every <see cref="AltairDiskTiming.SectorCycles"/>, so the controller
-///   works out where the disk is from the cycle count. A sector's 137 bytes come one each
+///   The disk turns all the time, a sector every <see cref="AltairDiskTiming.SectorCycles"/>, so the controller works
+///   out where the disk is from the cycle count. A sector's 137 bytes come one each
 ///   <see cref="AltairDiskTiming.ByteCycles"/>, each holding the data port until the next replaces it, which MITS's
 ///   two-bytes-a-pass read loops rely on; NRDA is asserted as each arrives and cleared by reading the port or by the
 ///   sector's end, and the port keeps the last byte until another comes. An image holds a sector's 137 bytes and
-///   nothing of the gap after them, so nothing more comes until the next sector. A write takes the data port's value each byte time from a
-///   handshake that ENWD asserts, and keeps it as the sector's next byte, whether or not the 8080 has sent a new
-///   one; the first 137 are the sector. After a write, head movement stays held off until the drive's trim erase
-///   ends, <see cref="AltairDiskTiming.TrimEraseCycles"/> into the next sector.
+///   nothing of the gap after them, so nothing more comes until the next sector. A write takes the data port's value
+///   each byte time from a handshake that ENWD asserts, and keeps it as the sector's next byte, whether or not the 8080
+///   has sent a new one; the first 137 are the sector. After a write, head movement stays held off until the drive's
+///   trim erase ends, <see cref="AltairDiskTiming.TrimEraseCycles"/> into the next sector.
 ///  </para>
 ///  <para>
-///   The controller's sector interrupts are not modeled: its interrupt enable is kept, but nothing is requested,
-///   as none of the software here uses them. Nor is the wait for the index hole after a drive is selected: the
-///   sector position shows once the head has settled. Writes to a write-protected disk are lost, as the drive's write gate
+///   The controller's sector interrupts are not modeled: its interrupt enable is kept, but nothing is requested, as
+///   none of the software here uses them. Nor is the wait for the index hole after a drive is selected: the sector
+///   position shows once the head has settled. Writes to a write-protected disk are lost, as the drive's write gate
 ///   would refuse them.
 ///  </para>
 /// </remarks>
@@ -317,10 +316,12 @@ public sealed class AltairDiskController
         _previous = 0;
         for (int back = 1; back <= AltairDisk.SectorsPerTrack; back++)
         {
-            int earlier = (int)((sector - back) % AltairDisk.SectorsPerTrack + AltairDisk.SectorsPerTrack) % AltairDisk.SectorsPerTrack;
+            const int Sectors = AltairDisk.SectorsPerTrack;
+            int earlier = (int)(((sector - back) % Sectors) + Sectors) % Sectors;
             disk.ReadSector(drive.Track, earlier, bytes);
             int bit = Align(bytes);
-            if (LastArrived(bit < 0 ? -1 : bit * AltairDiskTiming.BitCycles, AltairDiskTiming.EndOfSectorCycles) is int last)
+            int delay = bit < 0 ? -1 : bit * AltairDiskTiming.BitCycles;
+            if (LastArrived(delay, AltairDiskTiming.EndOfSectorCycles) is int last)
             {
                 _previous = bytes[last];
                 break;

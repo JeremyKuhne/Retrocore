@@ -147,8 +147,8 @@ The card caches a track (18 slots at $1000-$33FF) and reads ahead after a miss.
 
 ## Open questions
 
-- Settled: READ ($08) on Apple's card takes the write path of `ReadWriteTagged` ($DE50), which reads only for command
-  1, and its dead read path copies from $0E00 though the sector was read into $0C00. The owner settled it as a
+- Settled: on Apple's card, `ReadWriteTagged` ($DE50) sends READ ($08) down its write path, since it reads only for
+  command 1, and its dead read path copies from $0E00 though the sector was read into $0C00. The owner settled it as a
   firmware bug that the compatible card does not reproduce (docs/conversions/Disk35.md, Q1); running the code would
   confirm it.
 - CONTROL $0C (poke) takes its value from $0C04, which looks like an off-by-one in the firmware.

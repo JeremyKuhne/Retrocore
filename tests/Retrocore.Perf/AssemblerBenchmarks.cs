@@ -173,7 +173,7 @@ public class AssemblerBenchmarks
 
     private static void Verify(AssemblyResult result)
     {
-        if (!result.Success || result.Sections[0].Bytes.Length != 256 || result.Exports["DriverEntry"] != 0xC740)
+        if (!result.Success || result.Sections[0].Bytes.Length != 256 || result.Exports["Driver"] != 0xC740)
         {
             throw new InvalidOperationException("ROM benchmark output was invalid.");
         }

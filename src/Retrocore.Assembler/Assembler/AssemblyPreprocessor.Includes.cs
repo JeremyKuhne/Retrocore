@@ -78,8 +78,26 @@ internal sealed partial class AssemblyPreprocessor
             return false;
         }
 
-        return ProcessSource(resolved, line.Dialect, line.Location, selected, includeDepth + 1, macroDepth);
+        // A .using does not reach into an included file, and an included file's does not leak out of it.
+        UsingDirective? usings = _constantUsings;
+        int depth = _constantScopes.Count;
+        _constantUsings = null;
+        MarkFile(enter: true);
+        try
+        {
+            return ProcessSource(resolved, line.Dialect, line.Location, selected, includeDepth + 1, macroDepth);
+        }
+        finally
+        {
+            MarkFile(enter: false);
+
+            // A file that closed scopes it did not open has already given back their .using directives.
+            if (_constantScopes.Count >= depth) { _constantUsings = usings; }
+        }
     }
+
+    // Marks where a source file's statements start or end, for the resolver's .using extents.
+    private void MarkFile(bool enter) => (_project.FileMarks ??= []).Add((_project.Statements.Count, enter));
 
     private void IncludeBinary(string operand, Line line)
     {
@@ -167,7 +185,7 @@ internal sealed partial class AssemblyPreprocessor
             IOException => $"Include could not be read: {error.Message}",
             AssemblyError => error.Message,
             UnauthorizedAccessException => $"Include access was denied: {error.Message}",
-            ArgumentException => $"Invalid include path: {error.Message}",
+            ArgumentException or NotSupportedException => $"Invalid include path: {error.Message}",
             _ => null
         };
 

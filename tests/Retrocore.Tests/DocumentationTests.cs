@@ -16,6 +16,49 @@ namespace Retrocore.Tests;
 public class DocumentationTests
 {
     /// <summary>
+    ///  A source splits into lines at LF and CRLF only, as replacing CRLF with LF and splitting at LF does: a lone CR
+    ///  stays in its line, and a terminator at the end leaves an empty last line.
+    /// </summary>
+    /// <param name="text">The source text.</param>
+    [TestMethod]
+    [DataRow("")]
+    [DataRow("one")]
+    [DataRow("one\ntwo")]
+    [DataRow("one\r\ntwo\r\n")]
+    [DataRow("\r\n\r\n")]
+    [DataRow("\n\n")]
+    [DataRow("one\rtwo\r")]
+    [DataRow("one\r\r\ntwo")]
+    [DataRow("\r")]
+    [DataRow("one\n\r\ntwo\r\n\r")]
+    public void LinesSplitAtLineFeedsLessOneCarriageReturn(string text) =>
+        CollectionAssert.AreEqual(text.Replace("\r\n", "\n").Split('\n'), DocumentationParser.Lines(text));
+
+    /// <summary>
+    ///  The editor's documentation parse reads a file's lines as joining them with line feeds and splitting again
+    ///  gives, as it did when it parsed the joined text: a carriage return left at the end of a line before the last,
+    ///  from a stray one before a CR LF, is taken off. Lines that need nothing taken off are not copied.
+    /// </summary>
+    /// <param name="text">The source text.</param>
+    [TestMethod]
+    [DataRow("")]
+    [DataRow("one\r\ntwo\r\n")]
+    [DataRow("one\r\r\ntwo")]
+    [DataRow("one\r\r\r\ntwo\r\r\n")]
+    [DataRow(";; doc\r\r\nLabel:\r\n")]
+    [DataRow("one\rtwo\r")]
+    [DataRow("one\n\r\ntwo\r\n\r")]
+    public void EditorLinesAreTheRejoinedLines(string text)
+    {
+        string[] lines = DocumentationParser.Lines(text);
+        string[] rejoined = Retrocore.Debug.Language.SourceText.Rejoined(lines);
+        CollectionAssert.AreEqual(DocumentationParser.Lines(string.Join("\n", lines)), rejoined);
+        if (CollectionsEqual(lines, rejoined)) { Assert.AreSame(lines, rejoined); }
+
+        static bool CollectionsEqual(string[] left, string[] right) => left.AsSpan().SequenceEqual(right);
+    }
+
+    /// <summary>
     ///  A compact comment documents the label below it, with its summary and sections.
     /// </summary>
     [TestMethod]
@@ -181,6 +224,60 @@ public class DocumentationTests
     }
 
     /// <summary>
+    ///  A constant or variable defined with a colon and <c>.equ</c> or <c>.set</c> is documented as one, not as a
+    ///  routine, and a label with code after it is still a routine.
+    /// </summary>
+    [TestMethod]
+    public void ColonDirectiveDefinitionsAreRecognized()
+    {
+        DocumentationFile file = Parse("""
+            ;; Return, with bit 7 set.
+            KEY_CR: .equ $8D
+            ;; A counter.
+            COUNT: .set 0
+            ;; Escape, with bit 7 set.
+            KEY_ESC: .EQU $9B
+            ;; Another counter.
+            TOTAL: .SET 0
+            ;; The routine.
+            START: rts
+            ;; Not a constant: the assembler rejects the line.
+            JOINED: .equ,3
+            ;; A constant: the parenthesis starts the operand.
+            PARENTHESIZED: .equ(4)
+            """);
+
+        file.Diagnostics.Should().BeEmpty();
+        file.Comments.Select(comment => (comment.Name, comment.Kind)).Should().Equal(
+            ("KEY_CR", DocumentationKind.Constant),
+            ("COUNT", DocumentationKind.Variable),
+            ("KEY_ESC", DocumentationKind.Constant),
+            ("TOTAL", DocumentationKind.Variable),
+            ("START", DocumentationKind.Routine),
+            ("JOINED", DocumentationKind.Routine),
+            ("PARENTHESIZED", DocumentationKind.Constant));
+    }
+
+    /// <summary>
+    ///  A constant defined with a colon and <c>.equ</c> is named and kinded as one defined with <c>=</c>, in a scope
+    ///  and in a type.
+    /// </summary>
+    /// <param name="open">The line that opens the block.</param>
+    /// <param name="close">The line that closes it.</param>
+    [TestMethod]
+    [DataRow(".scope Outer", ".endscope")]
+    [DataRow(".struct Outer", ".endstruct")]
+    public void ColonDirectiveConstantsMatchEquals(string open, string close)
+    {
+        DocumentationFile colon = Parse($"{open}\n;; Three.\nVALUE: .equ 3\n{close}\n");
+        DocumentationFile equals = Parse($"{open}\n;; Three.\nVALUE = 3\n{close}\n");
+
+        List<(string Name, DocumentationKind Kind)> expected = [.. equals.Comments.Select(comment => (comment.Name, comment.Kind))];
+        colon.Comments.Select(comment => (comment.Name, comment.Kind)).Should().Equal(expected);
+        colon.Comments.Should().Contain(comment => comment.Name.EndsWith("VALUE", StringComparison.Ordinal));
+    }
+
+    /// <summary>
     ///  Links, URLs and references are found, and comparisons are not links.
     /// </summary>
     [TestMethod]
@@ -227,6 +324,9 @@ public class DocumentationTests
         topic.SectionsNamed("Out").Should().ContainSingle().Which.Condition.Should().BeNull();
         topic.SectionsNamed("Keeps").Select(section => section.Condition).Should().Equal("ENHANCED", "not ENHANCED");
         DocumentationResolver.ModelOf("not ENHANCED").Should().Be("Original");
+        DocumentationResolver.ModelOf("MONITOR = MONITOR_IIE and not ENHANCED").Should().Be("Original");
+        DocumentationResolver.ModelOf("MONITOR = MONITOR_IIE and ENHANCED").Should().Be("Enhanced");
+        DocumentationResolver.ModelOf("MONITOR = MONITOR_II").Should().BeNull();
         topic.Value.Should().Be(0x1000);
     }
 
@@ -539,6 +639,163 @@ public class DocumentationTests
 
         new DocumentationResolver(set).Check().Select(diagnostic => (diagnostic.Message, diagnostic.Line)).Should().Equal(
             ("Exported 'Bare' has no ;; documentation.", 7));
+    }
+
+    /// <summary>
+    ///  An Entry: label of a .proc names its own local, even when the local has a ;; block of its own and other
+    ///  documented locals come before it.
+    /// </summary>
+    [TestMethod]
+    public void ProcEntriesAreItsLocals()
+    {
+        DocumentationSet set = Set("""
+            .cpu Mos6502
+            ;; Plots a block.
+            ;; Entry:
+            ;;   SameRow = plots in the row already set up
+            ;;   Done = returns
+            .proc Plot
+                lsr a
+            ;; Stores the mask.
+            Mask:
+                sta $2E
+            ;; Plots in the row already set up.
+            SameRow:
+                lda $30
+            Done:
+                rts
+            .endproc
+
+            ;; The next routine.
+            .proc Other
+                rts
+            .endproc
+            """);
+
+        new DocumentationResolver(set).Check().Should().BeEmpty();
+        Required(set.FindRoutine("Plot::SameRow")).Name.Should().Be("Plot::SameRow");
+        Required(set.FindRoutine("Plot::Done")).Name.Should().Be("Plot");
+
+        // A routine written once per build lists each build's entries; only the assembled build's are checked.
+        DocumentationSet builds = Set("""
+            .cpu Mos6502
+            WIDE = 1
+            .if WIDE
+            ;; Scrolls, wide.
+            ;; Entry:
+            ;;   Wide = the wide loop
+            .proc Scroll
+            Wide:
+                rts
+            .endproc
+            .else
+            ;; Scrolls, narrow.
+            ;; Entry:
+            ;;   Narrow = the narrow loop
+            .proc Scroll
+            Narrow:
+                rts
+            .endproc
+            .endif
+            """);
+
+        new DocumentationResolver(builds).Check().Should().BeEmpty();
+    }
+
+    /// <summary>
+    ///  A routine's Entry: section under a condition the build doesn't take is not checked, for the conditions the
+    ///  assembler writes: a negated test (<c>.not</c>) joined to another, and <c>.ifdef</c> and <c>.ifndef</c>, which
+    ///  count a macro as defined as the assembler does, but only one defined before them.
+    /// </summary>
+    [TestMethod]
+    public void EntriesOfOtherBuildsAreNotChecked()
+    {
+        foreach (string text in (string[])[
+            """
+            .cpu Mos6502
+            WIDE = 1
+            FAST = 1
+            .if WIDE && .not FAST
+            ;; Scrolls, slowly.
+            ;; Entry:
+            ;;   Slow = the slow loop
+            .proc Scroll
+            Slow:
+                rts
+            .endproc
+            .else
+            ;; Scrolls.
+            .proc Scroll
+                rts
+            .endproc
+            .endif
+            """,
+            """
+            .cpu Mos6502
+            .ifdef NARROW
+            ;; Scrolls, narrow.
+            ;; Entry:
+            ;;   Narrow = the narrow loop
+            .proc Scroll
+            Narrow:
+                rts
+            .endproc
+            .endif
+            ;; The next routine.
+            .proc Other
+                rts
+            .endproc
+            """,
+            """
+            .cpu Mos6502
+            ;; Marks a feature.
+            .macro WIDE
+            .endmacro
+            .ifdef WIDE
+            ;; Scrolls, wide.
+            ;; Entry:
+            ;;   Wide = the wide loop
+            .proc Scroll
+            Wide:
+                rts
+            .endproc
+            .else
+            ;; Scrolls, narrow.
+            ;; Entry:
+            ;;   Narrow = the narrow loop
+            .proc Scroll
+            Narrow:
+                rts
+            .endproc
+            .endif
+            """,
+            """
+            .cpu Mos6502
+            .ifdef WIDE
+            ;; Scrolls, wide.
+            ;; Entry:
+            ;;   Wide = the wide loop
+            .proc Scroll
+            Wide:
+                rts
+            .endproc
+            .else
+            ;; Scrolls, narrow.
+            ;; Entry:
+            ;;   Narrow = the narrow loop
+            .proc Scroll
+            Narrow:
+                rts
+            .endproc
+            .endif
+
+            ;; Marks a feature, after the .ifdef has been read: the assembler takes the narrow branch.
+            .macro WIDE
+            .endmacro
+            """])
+        {
+            new DocumentationResolver(Set(text)).Check().Should().BeEmpty(text);
+        }
     }
 
     private static T Required<T>(T? value) where T : class =>

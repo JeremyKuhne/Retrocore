@@ -13,13 +13,19 @@ namespace Retrocore.Debug.Language;
 internal sealed class WorkspaceSourceResolver : IAssemblySourceResolver, IAssemblyBinaryResolver
 {
     private readonly Func<string, string?> _openText;
+    private readonly SourceFileCache _texts;
     private readonly FileAssemblySourceResolver _files = new();
 
     /// <summary>
     ///  Creates a resolver over the open documents.
     /// </summary>
     /// <param name="openText">The text of an open document by full path, or null when it is not open.</param>
-    internal WorkspaceSourceResolver(Func<string, string?> openText) => _openText = openText;
+    /// <param name="texts">The files read from disk, read once and shared with the analysis.</param>
+    internal WorkspaceSourceResolver(Func<string, string?> openText, SourceFileCache texts)
+    {
+        _openText = openText;
+        _texts = texts;
+    }
 
     /// <summary>
     ///  Gets every path resolved so far, which the analysis treats as part of its root.
@@ -37,14 +43,16 @@ internal sealed class WorkspaceSourceResolver : IAssemblySourceResolver, IAssemb
             return true;
         }
 
-        if (_files.TryResolve(fromPath, request, out source))
+        // Disk, at the same path FileAssemblySourceResolver reads.
+        if (_texts.TryReadSource(path) is { } file)
         {
             Resolved.Add(path);
+            source = file;
             return true;
         }
 
-        // A BASIC overlay's base, where the shipped SDK keeps it rather than where the overlay names it.
-        if (OverlayBaseResolver.Fallback(request, OverlayBaseResolver.SdkFallback) is { } fallback)
+        // Shared BASIC sources can be in a different location in the repository and the SDK.
+        foreach (string fallback in OverlayBaseResolver.Fallbacks(fromPath, request, OverlayBaseResolver.SdkFallback))
         {
             if (_openText(fallback) is { } open)
             {
@@ -53,9 +61,11 @@ internal sealed class WorkspaceSourceResolver : IAssemblySourceResolver, IAssemb
                 return true;
             }
 
-            if (_files.TryResolve("", fallback, out source))
+            string resolved = LanguagePaths.Resolve("", fallback);
+            if (_texts.TryReadSource(resolved) is { } shared)
             {
                 Resolved.Add(fallback);
+                source = shared;
                 return true;
             }
         }

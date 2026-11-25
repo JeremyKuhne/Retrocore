@@ -36,7 +36,7 @@ export async function testLanguageServer(root: string): Promise<void> {
     fs.writeFileSync(path.join(folder, "equates.retrocore.asm"),
         "; Keyboard data, bit 7 set when a key is waiting.\nKBD = $C000\n\n.macro show value\n    lda #value\n.endmacro\n");
     const mainPath = path.join(folder, "main.retrocore.asm");
-    fs.writeFileSync(mainPath, ".include \"equates.retrocore.asm\"\n.org $6000\n;; Waits for a key; see <KBD>.\n;; Out:   A = the key, negative = a key is waiting\n;; Keeps: X, Y\nstart:\n    lda KBD\n    bpl start\n    show 1\n    jmp missing\n;; Documents nothing.\n\n");
+    fs.writeFileSync(mainPath, ".include \"equates.retrocore.asm\"\n.org $6000\n;; Waits for a key; see <KBD>, <keyboard at main:KBD>; KBD stays plain.\n;; Out:   A = the key, negative = a key is waiting\n;; Keeps: X, Y\nstart:\n    lda KBD\n    bpl start\n    show 1\n    jmp missing\n;; Documents nothing.\n\n");
     const document = await vscode.workspace.openTextDocument(vscode.Uri.file(mainPath));
     await vscode.window.showTextDocument(document);
 
@@ -63,10 +63,123 @@ export async function testLanguageServer(root: string): Promise<void> {
     assert.match(text(startHover[0]), /Waits for a key; see \[`KBD`\]\(file:/);
     assert.match(text(startHover[0]), /\*\*Keeps\*\*: `X`, `Y`/);
 
-    // A flag's word in a ;; comment shows the CPU's letter for it and what it means.
+    // Bare names and flags in comments do not produce hovers.
     const flag = await vscode.commands.executeCommand<vscode.Hover[]>(
         "vscode.executeHoverProvider", document.uri, new vscode.Position(3, document.lineAt(3).text.indexOf("negative") + 2));
-    assert.match(text(flag[0]), /^\*\*negative \(N\) flag\*\*: Set when a result's bit 7 is 1/);
+    assert.equal(flag.length, 0);
+    for (const link of ["<KBD>", "<keyboard at main:KBD>"]) {
+        const linkStart = document.lineAt(2).text.indexOf(link);
+        for (let column = linkStart; column < linkStart + link.length; column++) {
+            const linked = await vscode.commands.executeCommand<vscode.Hover[]>(
+                "vscode.executeHoverProvider", document.uri, new vscode.Position(2, column));
+            assert.match(text(linked[0]), /Keyboard data/);
+            assert.equal(linked[0].range?.start.character, linkStart);
+            assert.equal(linked[0].range?.end.character, linkStart + link.length);
+        }
+    }
+    const bare = await vscode.commands.executeCommand<vscode.Hover[]>(
+        "vscode.executeHoverProvider", document.uri, new vscode.Position(2, document.lineAt(2).text.lastIndexOf("KBD") + 1));
+    assert.equal(bare.length, 0);
+
+    const equates = await vscode.workspace.openTextDocument(vscode.Uri.file(
+        path.join(root, "src", "Retrocore.Machines.Apple2", "Roms", "System", "IIeEquates.asm")));
+    await vscode.window.showTextDocument(equates);
+    const monitorLine = equates.getText().split(/\r?\n/).findIndex(line => line.includes("<Monitor:LOC1>"));
+    assert.ok(monitorLine >= 0);
+    const monitorStart = equates.lineAt(monitorLine).text.indexOf("<Monitor:LOC1>");
+    await until("qualified Monitor link hover", async () => {
+        const found = await vscode.commands.executeCommand<vscode.Hover[]>(
+            "vscode.executeHoverProvider", equates.uri, new vscode.Position(monitorLine, monitorStart + 1));
+        return found.length > 0 ? true : undefined;
+    });
+    for (let column = monitorStart; column < monitorStart + "<Monitor:LOC1>".length; column++) {
+        const found = await vscode.commands.executeCommand<vscode.Hover[]>(
+            "vscode.executeHoverProvider", equates.uri, new vscode.Position(monitorLine, column));
+        assert.match(text(found[0]), /\(constant\) LOC1 = /);
+        assert.equal(found[0].range?.start.character, monitorStart);
+        assert.equal(found[0].range?.end.character, monitorStart + "<Monitor:LOC1>".length);
+    }
+    await vscode.commands.executeCommand("workbench.action.closeActiveEditor");
+    await vscode.window.showTextDocument(document);
+
+    // A lint diagnostic carries its rule as its code; the quick fix writes the exclusion, which turns it off; and
+    // the rule IDs complete after ignore= and describe themselves on hover.
+    const lintPath = path.join(folder, "lint.retrocore.asm");
+    const wide = "    .byte " + Array(26).fill("$C1").join(", ");
+    fs.writeFileSync(lintPath, `; retrocore: style=strict\n.org $6000\n;; A table.\nTable:\n${wide}\n`);
+    const lint = await vscode.workspace.openTextDocument(vscode.Uri.file(lintPath));
+    await vscode.window.showTextDocument(lint);
+    const long = await until("line-length diagnostic", () =>
+        vscode.languages.getDiagnostics(lint.uri).find(diagnostic => diagnostic.range.start.line === 4));
+    assert.equal(typeof long.code === "object" ? long.code.value : long.code, "line-length");
+    const actions = await vscode.commands.executeCommand<vscode.CodeAction[]>(
+        "vscode.executeCodeActionProvider", lint.uri, long.range, vscode.CodeActionKind.QuickFix.value);
+    const fix = actions.find(action => action.title === "Ignore line-length on this line");
+    assert.ok(fix?.edit, `Expected the line's quick fix, got ${actions.map(action => action.title).join(", ")}`);
+    assert.ok(actions.some(action => action.title === "Ignore line-length in this file"));
+    assert.ok(await vscode.workspace.applyEdit(fix.edit));
+    assert.equal(lint.lineAt(4).text, `${wide} ; retrocore: ignore=line-length`);
+    await until("the exclusion to turn the diagnostic off", () =>
+        vscode.languages.getDiagnostics(lint.uri).some(diagnostic => diagnostic.range.start.line === 4) ? undefined : true);
+
+    const typed = lint.lineAt(4).text.indexOf("ignore=") + "ignore=line-l".length;
+    const completions = await vscode.commands.executeCommand<vscode.CompletionList>(
+        "vscode.executeCompletionItemProvider", lint.uri, new vscode.Position(4, typed));
+    const rule = completions.items.find(item => item.label === "line-length");
+    assert.ok(rule, "Rule IDs complete after ignore=.");
+    const replaced = rule.range instanceof vscode.Range ? rule.range : rule.range?.replacing;
+    assert.equal(replaced?.start.character, lint.lineAt(4).text.indexOf("line-length"), "A completion replaces the whole rule typed.");
+    assert.ok(!completions.items.some(item => item.label === "lda"), "Only rules complete in an exclusion.");
+    const ruleHover = await vscode.commands.executeCommand<vscode.Hover[]>(
+        "vscode.executeHoverProvider", lint.uri, new vscode.Position(4, typed));
+    assert.match(text(ruleHover[0]), /^\*\*line-length\*\* \(lint rule\): A line is at most 120 columns/);
+    assert.ok(await lint.save());
+    await vscode.commands.executeCommand("workbench.action.closeActiveEditor");
+    await vscode.window.showTextDocument(document);
+
+    // User words add to the repository's workspace words and changes refresh existing diagnostics.
+    const wordPath = path.join(folder, "lint-words.retrocore.asm");
+    fs.writeFileSync(wordPath, "; retrocore: style=strict\n.org $6000\n"
+        + ";; A flag.\nROM = 1\n;; Another flag.\nPersonalTerm = 2\n;; A third flag.\nOtherTerm = 3\n"
+        + ";; Reads ROM and PersonalTerm and OtherTerm.\nStart:\n    rts\n");
+    const wordSettings = vscode.workspace.getConfiguration("retrocore.lint");
+    const originalUserWords = wordSettings.inspect<string[]>("unlinkedNameWords")?.globalValue;
+    try {
+        await wordSettings.update("unlinkedNameWords", ["PersonalTerm"], vscode.ConfigurationTarget.Global);
+        const words = await vscode.workspace.openTextDocument(vscode.Uri.file(wordPath));
+        await vscode.window.showTextDocument(words);
+        const unlinked = (): string[] => vscode.languages.getDiagnostics(words.uri)
+            .filter(diagnostic => diagnostic.code === "unlinked-name").map(diagnostic => diagnostic.message);
+        await until("combined word settings", () => {
+            const found = unlinked();
+            return found.some(message => message.includes("OtherTerm"))
+                && !found.some(message => message.includes("ROM") || message.includes("PersonalTerm")) ? true : undefined;
+        });
+        await wordSettings.update("unlinkedNameWords", [], vscode.ConfigurationTarget.Global);
+        await until("updated user words", () => {
+            const found = unlinked();
+            return found.some(message => message.includes("PersonalTerm"))
+                && !found.some(message => message.includes("ROM")) ? true : undefined;
+        });
+
+        // The quick fix adds the word to the user's dictionary, which turns the warning off.
+        const personal = vscode.languages.getDiagnostics(words.uri)
+            .find(diagnostic => diagnostic.code === "unlinked-name" && diagnostic.message.includes("PersonalTerm"));
+        assert.ok(personal);
+        const wordActions = await vscode.commands.executeCommand<vscode.CodeAction[]>(
+            "vscode.executeCodeActionProvider", words.uri, personal.range, vscode.CodeActionKind.QuickFix.value);
+        const addWord = wordActions.find(action => action.title === "Add PersonalTerm to the user dictionary");
+        assert.ok(addWord?.command, `Expected the dictionary quick fix, got ${wordActions.map(action => action.title).join(", ")}`);
+        await vscode.commands.executeCommand(addWord.command.command, ...(addWord.command.arguments ?? []));
+        assert.deepEqual(wordSettings.inspect<string[]>("unlinkedNameWords")?.globalValue, ["PersonalTerm"]);
+        await until("the dictionary word to turn the warning off", () =>
+            unlinked().some(message => message.includes("PersonalTerm")) ? undefined : true);
+        await vscode.commands.executeCommand("workbench.action.closeActiveEditor");
+    } finally {
+        await wordSettings.update("unlinkedNameWords", originalUserWords, vscode.ConfigurationTarget.Global);
+        fs.rmSync(wordPath, { force: true });
+    }
+    await vscode.window.showTextDocument(document);
 
     const lda = await vscode.commands.executeCommand<vscode.Hover[]>(
         "vscode.executeHoverProvider", document.uri, new vscode.Position(6, 5));
@@ -118,11 +231,11 @@ export async function testLanguageServer(root: string): Promise<void> {
     // The SDK's ROM sources beside the host are indexed for workspace search.
     const cout = await until("workspace symbols", async () => {
         const found = await vscode.commands.executeCommand<vscode.SymbolInformation[]>("vscode.executeWorkspaceSymbolProvider", "COUT");
-        return found.some(symbol => symbol.name === "COUT") ? found : undefined;
+        return found.some(symbol => symbol.name === "CharacterOut (COUT)") ? found : undefined;
     });
-    // The Apple III's boot ROM has a COUT too.
-    const homes = cout.filter(symbol => symbol.name === "COUT").map(symbol => path.basename(symbol.location.uri.fsPath));
-    assert.ok(homes.includes("Monitor.asm"), homes.join(", "));
+    // The Monitor's CharacterOut is found by its old name, COUT; the Apple III's boot ROM has a COUT too.
+    const homes = cout.filter(symbol => symbol.name === "CharacterOut (COUT)").map(symbol => path.basename(symbol.location.uri.fsPath));
+    assert.ok(homes.includes("Examine.asm"), homes.join(", "));
 
     await until("AppleSoft symbols", async () => {
         const found = await vscode.commands.executeCommand<vscode.SymbolInformation[]>("vscode.executeWorkspaceSymbolProvider", "INVERS");

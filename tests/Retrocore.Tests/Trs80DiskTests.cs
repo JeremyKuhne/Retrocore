@@ -169,6 +169,24 @@ public class Trs80DiskTests
     }
 
     /// <summary>
+    ///  Write track asks for its first byte at once; one not loaded by the index pulse ends it with lost data, and the
+    ///  track keeps its sectors.
+    /// </summary>
+    [TestMethod]
+    public void WriteTrackWithoutItsFirstByteLosesData()
+    {
+        FloppyDisk disk = Jv1(35);
+        Trs80Bus bus = Bus(disk);
+        byte[] before = disk.Track(0, 0)[3].Data.ToArray();
+
+        Issue(bus, 0xF4);
+        Wait(bus);
+        (bus.Disks.Peek(0) & 0x04).Should().NotBe(0, "lost data");
+        disk.Track(0, 0).Should().HaveCount(10);
+        disk.Track(0, 0)[3].Data.ToArray().Should().Equal(before);
+    }
+
+    /// <summary>
     ///  A Percom doubler's $FF selects double density, which reads double-density sectors twice as fast.
     /// </summary>
     [TestMethod]

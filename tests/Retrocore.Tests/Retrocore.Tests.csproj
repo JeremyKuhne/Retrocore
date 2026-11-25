@@ -33,123 +33,28 @@
     <ProjectReference Include="..\..\src\Retrocore.Machines.Apple2\Retrocore.Machines.Apple2.csproj" />
     <ProjectReference Include="..\..\src\Retrocore.Machines.Acorn\Retrocore.Machines.Acorn.csproj" />
     <ProjectReference Include="..\..\src\Retrocore.Machines.Apple3\Retrocore.Machines.Apple3.csproj" />
+    <ProjectReference Include="..\..\src\Retrocore.Machines.Atari\Retrocore.Machines.Atari.csproj" />
     <ProjectReference Include="..\..\src\Retrocore.Machines.Coco\Retrocore.Machines.Coco.csproj" />
     <ProjectReference Include="..\..\src\Retrocore.Machines.Commodore\Retrocore.Machines.Commodore.csproj" />
     <ProjectReference Include="..\..\src\Retrocore.Machines.Trs80\Retrocore.Machines.Trs80.csproj" />
     <ProjectReference Include="..\..\src\Retrocore.Machines.Kaypro\Retrocore.Machines.Kaypro.csproj" />
     <ProjectReference Include="..\..\src\Retrocore.Cpu.I8080\Retrocore.Cpu.I8080.csproj" />
     <ProjectReference Include="..\..\src\Retrocore.Cpu.M6809\Retrocore.Cpu.M6809.csproj" />
+    <ProjectReference Include="..\..\src\Retrocore.Debug\Retrocore.Debug.csproj" />
     <ProjectReference Include="..\..\tools\DosDisk\DosDisk.csproj" />
     <ProjectReference Include="..\..\src\Retrocore.Generators\Retrocore.Generators.csproj" Aliases="Generator" />
     <Compile Include="..\Retrocore.Perf\RamBus.cs" Link="RamBus.cs" />
     <Compile Include="..\Retrocore.Perf\CpuWorkload.cs" Link="CpuWorkload.cs" />
     <Compile Include="..\Retrocore.Perf\SystemRomWorkload.cs" Link="SystemRomWorkload.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\DapTransport.cs" Link="DapTransport.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\DisplayFrameWriter.cs" Link="DisplayFrameWriter.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\JsonArgs.cs" Link="JsonArgs.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\FileRevision.cs" Link="FileRevision.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\LocalData.cs" Link="LocalData.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\LaunchMedia.cs" Link="LaunchMedia.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\ImageWrite.cs" Link="ImageWrite.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\Overwrite.cs" Link="Overwrite.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\ImageWriter.cs" Link="ImageWriter.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\DiskSource.cs" Link="DiskSource.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\ImageCheck.cs" Link="ImageCheck.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\ImageWatcher.cs" Link="ImageWatcher.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\ImageWatch.cs" Link="ImageWatch.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\DeviceJson.cs" Link="DeviceJson.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\MediaActions.cs" Link="MediaActions.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\MediaActions.Kept.cs" Link="MediaActions.Kept.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\MediaActions.Differences.cs" Link="MediaActions.Differences.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\KeptDisk.cs" Link="KeptDisk.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\MediaActions.Journal.cs" Link="MediaActions.Journal.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\RecoveryJournal.cs" Link="RecoveryJournal.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\RecoveryJournal.Written.cs" Link="RecoveryJournal.Written.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\RecoveryJournal.Sessions.cs" Link="RecoveryJournal.Sessions.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\JournalDisk.cs" Link="JournalDisk.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\Apple2Loader.cs" Link="Apple2Loader.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\ProFileMedia.cs" Link="ProFileMedia.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\FloppyMedia.cs" Link="FloppyMedia.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\FloppyFamily.cs" Link="FloppyFamily.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\ListingOperands.cs" Link="ListingOperands.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\InstructionCycles.cs" Link="InstructionCycles.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\FlatBus.cs" Link="FlatBus.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\JsonNodes.cs" Link="JsonNodes.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\DebugScreens.cs" Link="DebugScreens.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\MessageFraming.cs" Link="MessageFraming.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\Language\Protocol\*.cs" Link="Language\Protocol\%(Filename)%(Extension)" />
-    <Compile Include="..\..\src\Retrocore.Debug\Language\JsonRpcServer.cs" Link="Language\JsonRpcServer.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\IDebugMemory.cs" Link="IDebugMemory.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\IDebugCallStack.cs" Link="IDebugCallStack.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\DebugFrame.cs" Link="DebugFrame.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\DebugFrameValues.cs" Link="DebugFrameValues.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\DebugRegisters.cs" Link="DebugRegisters.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\M6502Frames.cs" Link="M6502Frames.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\Z80CallStack.cs" Link="Z80CallStack.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\M6809CallStack.cs" Link="M6809CallStack.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\I8080CallStack.cs" Link="I8080CallStack.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\DebugCallStack.cs" Link="DebugCallStack.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\DebugCallCycles.cs" Link="DebugCallCycles.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\DebugContract.cs" Link="DebugContract.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\DebugContracts.cs" Link="DebugContracts.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\DebugDocumentation.cs" Link="DebugDocumentation.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\SymbolTable.cs" Link="SymbolTable.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\SymbolTable.LineComparer.cs" Link="SymbolTable.LineComparer.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\SourceLine.cs" Link="SourceLine.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\DebugPosition.cs" Link="DebugPosition.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\IDebugModule.cs" Link="IDebugModule.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\SourceMapModule.cs" Link="SourceMapModule.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\DebugFileModule.cs" Link="DebugFileModule.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\SourceMapModule.Statement.cs" Link="SourceMapModule.Statement.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\DebugInfo.cs" Link="DebugInfo.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\SdkModules.cs" Link="SdkModules.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\CommandAddress.cs" Link="CommandAddress.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\DosCommand.cs" Link="DosCommand.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\Apple2PascalMemory.cs" Link="Apple2PascalMemory.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\EmulatedPascalCompiler.cs" Link="EmulatedPascalCompiler.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\EmulatedPascalCompiler.Files.cs" Link="EmulatedPascalCompiler.Files.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\EmulatedPascalSystem.cs" Link="EmulatedPascalSystem.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\DiskImageFile.cs" Link="DiskImageFile.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\EmulatedPascalTools.cs" Link="EmulatedPascalTools.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\EmulatedApple3PascalSystem.cs" Link="EmulatedApple3PascalSystem.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\EmulatedApple3PascalTools.cs" Link="EmulatedApple3PascalTools.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\Apple3SdkModules.cs" Link="Apple3SdkModules.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\Apple3PascalMemory.cs" Link="Apple3PascalMemory.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\PascalRuntime.cs" Link="PascalRuntime.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\MachineSymbols.cs" Link="MachineSymbols.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\DisassembleCommand.cs" Link="DisassembleCommand.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\DisassemblyHints.cs" Link="DisassemblyHints.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\MemoryHints.cs" Link="MemoryHints.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\MemoryHintSpace.cs" Link="MemoryHintSpace.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\DebugRegion.cs" Link="DebugRegion.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\DisassemblyProgram.cs" Link="DisassemblyProgram.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\Trs80SdkModules.cs" Link="Trs80SdkModules.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\KayproSdkModules.cs" Link="KayproSdkModules.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\Apple1SdkModules.cs" Link="Apple1SdkModules.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\CocoSdkModules.cs" Link="CocoSdkModules.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\BbcSdkModules.cs" Link="BbcSdkModules.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\PetSdkModules.cs" Link="PetSdkModules.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\OverlayBaseResolver.cs" Link="OverlayBaseResolver.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\DefineArgument.cs" Link="DefineArgument.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\Coco3Assembly.cs" Link="Coco3Assembly.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\Language\SourceAnalysis.cs" Link="Language\SourceAnalysis.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\Language\SourceText.cs" Link="Language\SourceText.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\Language\SourceIncludes.cs" Link="Language\SourceIncludes.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\Language\SymbolSite.cs" Link="Language\SymbolSite.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\Language\SymbolSiteKind.cs" Link="Language\SymbolSiteKind.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\Language\SymbolReferences.cs" Link="Language\SymbolReferences.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\Language\WorkspaceSourceResolver.cs" Link="Language\WorkspaceSourceResolver.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\Language\LanguagePaths.cs" Link="Language\LanguagePaths.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\Language\InstructionDocs.cs" Link="Language\InstructionDocs.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\Language\InstructionDocs.M6809.cs" Link="Language\InstructionDocs.M6809.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\Language\InstructionDocs.Z80.cs" Link="Language\InstructionDocs.Z80.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\Language\InstructionDocs.I8080.cs" Link="Language\InstructionDocs.I8080.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\Language\DirectiveDocs.cs" Link="Language\DirectiveDocs.cs" />
     <None Include="..\..\src\Retrocore.Cpu.M6502\OpcodeTables.txt" Link="Inputs\OpcodeTables.txt" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\src\Retrocore.Pascal\Pcode.asm" Link="Inputs\Pcode.asm" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\src\Retrocore.Machines.Apple2\Roms\*.rom.asm" Link="Inputs\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\src\Retrocore.Machines.Apple2\Roms\AppleSoft\*" Link="Inputs\AppleSoft\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\src\Retrocore.Basic\Roms\Microsoft6502Basic\*" Link="Inputs\Microsoft6502Basic\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\src\Retrocore.Machines.Apple2\Roms\System\*.asm" Link="Inputs\System\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\src\Retrocore.Machines.Apple2\Roms\System\Monitor\*.asm" Link="Inputs\System\Monitor\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\src\Retrocore.Machines.Apple2\Roms\System\Firmware.Original\*.asm" Link="Inputs\System\Firmware.Original\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\src\Retrocore.Machines.Apple2\Roms\System\Firmware.Enhanced\*.asm" Link="Inputs\System\Firmware.Enhanced\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\src\Retrocore.Machines.Apple2\Roms\DiskII\*" Link="Inputs\DiskII\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\src\Retrocore.Machines.Apple2\Roms\Mouse\*.asm" Link="Inputs\Mouse\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\src\Retrocore.Machines.Apple2\Roms\Disk35\*.asm" Link="Inputs\Disk35\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
@@ -157,8 +62,9 @@
     <None Include="..\..\src\Retrocore.Machines.Apple2\Roms\IntegerBasic\*.asm" Link="Inputs\IntegerBasic\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\src\Retrocore.Machines.Apple2\Roms\ProgrammersAid\*" Link="Inputs\ProgrammersAid\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\src\Retrocore.Machines.Apple2\Software\MasterCreate.asm" Link="Inputs\Software\MasterCreate.asm" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\src\Retrocore.Machines.Apple2\Software\LanguageCardFinder.asm" Link="Inputs\Software\LanguageCardFinder.asm" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\src\Retrocore.Machines.Apple2\Software\Boot13.*.asm" Link="Inputs\Software\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="..\..\src\Retrocore.Machines.Apple2\Roms\Dos\RwtsEquates.asm;..\..\src\Retrocore.Machines.Apple2\Roms\Dos\PreNibble32.asm;..\..\src\Retrocore.Machines.Apple2\Roms\Dos\WriteSector32.asm;..\..\src\Retrocore.Machines.Apple2\Roms\Dos\ReadSector32.asm;..\..\src\Retrocore.Machines.Apple2\Roms\Dos\ReadAddress32.asm;..\..\src\Retrocore.Machines.Apple2\Roms\Dos\PostNibble32.asm" Link="Inputs\Roms\Dos\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\src\Retrocore.Machines.Apple2\Roms\Dos\RwtsEquates.asm;..\..\src\Retrocore.Machines.Apple2\Roms\Dos\PreNibble.asm;..\..\src\Retrocore.Machines.Apple2\Roms\Dos\WriteSector.asm;..\..\src\Retrocore.Machines.Apple2\Roms\Dos\ReadData.asm;..\..\src\Retrocore.Machines.Apple2\Roms\Dos\ReadAddress.asm;..\..\src\Retrocore.Machines.Apple2\Roms\Dos\PostNibble.asm" Link="Inputs\Roms\Dos\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\src\Retrocore.Machines.Apple2\Roms\Dos\Equates.asm" Link="Inputs\Roms\Dos\Equates.asm" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\src\Retrocore.Machines.Apple2\Roms\System\IIeEquates.asm" Link="Inputs\Roms\System\IIeEquates.asm" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\src\Retrocore.Machines.Apple2\Roms\System\MonitorEntries.asm" Link="Inputs\Roms\System\MonitorEntries.asm" CopyToOutputDirectory="PreserveNewest" />
@@ -180,6 +86,7 @@
     <None Include="..\..\src\Retrocore.Machines.Acorn\Roms\Dnfs\*.asm" Link="Inputs\Acorn\Dnfs\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\src\Retrocore.Machines.Commodore\Roms\**\*.asm;..\..\src\Retrocore.Machines.Commodore\Roms\**\*.mac" Link="Inputs\Pet\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\docs\NativeAssembly.md" Link="Inputs\Docs\NativeAssembly.md" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\docs\AssemblyStyle.md" Link="Inputs\Docs\AssemblyStyle.md" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\.claude\skills\retrocore-native-assembly\*.md" Link="Inputs\Docs\Skill\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\sample\iie\main.s" Link="Inputs\IIe\main.s" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\sample\iie\link.cfg" Link="Inputs\IIe\link.cfg" CopyToOutputDirectory="PreserveNewest" />

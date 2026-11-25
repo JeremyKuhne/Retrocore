@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
+using Retrocore.Documentation;
+
 namespace Retrocore.Debug.Language;
 
 /// <summary>
@@ -42,7 +44,32 @@ internal static class SourceText
     /// </summary>
     /// <param name="text">The text.</param>
     /// <returns>The lines.</returns>
-    internal static string[] Lines(string text) => text.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n');
+    internal static string[] Lines(string text) => Documentation.DocumentationParser.Lines(text);
+
+    /// <summary>
+    ///  Gets the lines that joining lines with line feeds and splitting the text again gives: a carriage return left
+    ///  at the end of any line but the last, from a stray one before a CR LF, is taken off.
+    /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   The editor's documentation parse has always read a file's lines that way: of the lines it parses, only a
+    ///   file's last can end in a carriage return. Lines without one are returned as they are.
+    ///  </para>
+    /// </remarks>
+    /// <param name="lines">The lines as <see cref="Lines(string)"/> splits them, never empty; not written to.</param>
+    /// <returns>The lines, or a copy with those carriage returns taken off.</returns>
+    internal static string[] Rejoined(string[] lines)
+    {
+        string[]? rejoined = null;
+        for (int line = 0; line < lines.Length - 1; line++)
+        {
+            if (lines[line] is not [.., '\r'] text) { continue; }
+            rejoined ??= [.. lines];
+            rejoined[line] = text[..^1];
+        }
+
+        return rejoined ?? lines;
+    }
 
     /// <summary>
     ///  Gets a file's explicitly declared dialect, or its MACRO-10 extension when it has no pragma.
@@ -84,6 +111,10 @@ internal static class SourceText
         return end > start ? (line[start..end], start) : null;
     }
 
+    // What ends an operation, and a directive's name, which also ends at a parenthesis.
+    private static readonly char[] s_operationEnds = [' ', '\t'];
+    private static readonly char[] s_directiveEnds = [' ', '\t', '('];
+
     /// <summary>
     ///  Gets whether text ends where an operation goes: the first word after an optional label in column 0 (a
     ///  directive may start in column 0 too).
@@ -100,8 +131,9 @@ internal static class SourceText
             rest = rest[end..];
         }
 
+        // A directive's name ends at a parenthesis too, as the assembler reads it: in ".if(", what follows is an operand.
         rest = rest.TrimStart();
-        return rest.IndexOfAny([' ', '\t']) < 0;
+        return rest.IndexOfAny(rest.StartsWith('.') ? s_directiveEnds : s_operationEnds) < 0;
     }
 
     /// <summary>
@@ -120,7 +152,8 @@ internal static class SourceText
             string text = lines[index].TrimStart();
             if (text.StartsWith(';'))
             {
-                above.Insert(0, text.TrimStart(';').Trim());
+                // A pragma, such as an exclusion above a ;; block, is for the tools, not the reader.
+                if (!IsPragma(text)) { above.Insert(0, text.TrimStart(';').Trim()); }
                 continue;
             }
 
@@ -143,28 +176,22 @@ internal static class SourceText
         int at = CommentStart(line);
         if (at <= 0) { return ""; }
 
-        // An address comment alone, as the SDK's ROM sources put on each line, says nothing the hover does not.
+        // An address comment alone, as the SDK's ROM sources put on each line, says nothing the hover does not, and a
+        // pragma is for the tools.
         string text = line[(at + 1)..].Trim();
-        return text.Length == 5 && text[0] == '$' ? "" : text;
+        return (text.Length == 5 && text[0] == '$') || IsPragma(line[at..]) ? "" : text;
     }
+
+    // Whether a comment is a "; retrocore:" pragma.
+    private static bool IsPragma(string comment) =>
+        comment.TrimStart().StartsWith("; retrocore:", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     ///  Gets where a line's comment starts, or -1.
     /// </summary>
     /// <param name="line">The line.</param>
     /// <returns>The semicolon's index.</returns>
-    internal static int CommentStart(string line)
-    {
-        bool quoted = false;
-        for (int index = 0; index < line.Length; index++)
-        {
-            char character = line[index];
-            if (character is '"' or '\'') { quoted = !quoted; }
-            if (character == ';' && !quoted) { return index; }
-        }
-
-        return -1;
-    }
+    internal static int CommentStart(string line) => DocumentationParser.CommentStart(line);
 
     /// <summary>
     ///  Finds a local label's definition: the nearest line in a file that defines the name.
@@ -204,5 +231,126 @@ internal static class SourceText
         bool next = index + 1 < line.Length && line[index + 1] == ':';
         bool previous = index > 0 && line[index - 1] == ':';
         return next || previous;
+    }
+
+    /// <summary>
+    ///  Finds the names code uses that could be historical names, with their lines and columns.
+    /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   Skips a macro's body, which names its parameters; a <c>.using</c> line, which names scopes; the body of
+    ///   a <c>.struct</c>, <c>.union</c> or <c>.enum</c>, whose names are the type's own members; and the name a
+    ///   <c>.scope</c> or <c>.proc</c> line declares, which is a definition, not a use. Nor does it take a name before
+    ///   <c>::</c> or after a scope's <c>A::</c>: the assembler resolves a historical name only as a plain name, which
+    ///   a root-qualified <c>::Name</c> is.
+    ///  </para>
+    /// </remarks>
+    /// <param name="lines">The lines of a source file.</param>
+    /// <returns>Each candidate name with its zero-based line and column.</returns>
+    internal static IEnumerable<(int Line, int Start, string Name)> CodeNames(string[] lines)
+    {
+        bool inMacro = false;
+        int types = 0;
+        for (int line = 0; line < lines.Length; line++)
+        {
+            int comment = CommentStart(lines[line]);
+            string code = comment < 0 ? lines[line] : lines[line][..comment];
+            string directive = code.TrimStart();
+            if (directive.StartsWith(".macro", StringComparison.OrdinalIgnoreCase)) { inMacro = true; }
+            if (directive.StartsWith(".endmacro", StringComparison.OrdinalIgnoreCase))
+            {
+                inMacro = false;
+                continue;
+            }
+
+            if (inMacro || directive.StartsWith(".using", StringComparison.OrdinalIgnoreCase)) { continue; }
+            string operation = TypeDirective(directive);
+            if (operation is ".struct" or ".union" or ".enum")
+            {
+                types++;
+                continue;
+            }
+
+            if (operation is ".endstruct" or ".endunion" or ".endenum")
+            {
+                types = Math.Max(0, types - 1);
+                continue;
+            }
+
+            if (types != 0) { continue; }
+            string? declared = operation is ".scope" or ".proc" ? DeclaredName(directive) : null;
+            foreach ((int start, string name) in Words(code))
+            {
+                if (declared is not null && string.Equals(name, declared, StringComparison.Ordinal))
+                {
+                    // The scope's or procedure's own name, once: the declaration, not a use.
+                    declared = null;
+                    continue;
+                }
+
+                yield return (line, start, name);
+            }
+        }
+    }
+
+    // The type directive a line holds, lower-cased, after any label: ".struct" for "Point .struct" or ".struct Point".
+    private static string TypeDirective(string directive)
+    {
+        foreach (string word in directive.Split(separator: (char[]?)null, 3, StringSplitOptions.RemoveEmptyEntries).Take(2))
+        {
+            if (word.StartsWith('.')) { return word.ToLowerInvariant(); }
+        }
+
+        return "";
+    }
+
+    // The name a .scope or .proc line declares: the word after the directive, after any label ("Name" in
+    // ".proc Name", ".scope Name continued" and ca65's "Label: .proc Name"), up to an address size ("Name: far").
+    private static string? DeclaredName(string directive)
+    {
+        string[] words = directive.Split(separator: (char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        int at = Array.FindIndex(words, word => word.StartsWith('.'));
+        if (at < 0 || at + 1 >= words.Length) { return null; }
+        string word = words[at + 1];
+        int end = 0;
+        while (end < word.Length && IsNameCharacter(word[end])) { end++; }
+        return end == 0 ? null : word[..end];
+    }
+
+    // The names in a line of code, with their columns, but not a label the line defines at its start.
+    private static IEnumerable<(int Start, string Name)> Words(string code)
+    {
+        int index = 0;
+        while (index < code.Length)
+        {
+            if (code[index] is '"' or '\'')
+            {
+                // Skip a quoted string or character.
+                char quote = code[index];
+                int close = code.IndexOf(quote, index + 1);
+                index = close < 0 ? code.Length : close + 1;
+                continue;
+            }
+
+            if (!IsNameCharacter(code[index]) || (index > 0 && IsNameCharacter(code[index - 1])))
+            {
+                index++;
+                continue;
+            }
+
+            int end = index;
+            while (end < code.Length && IsNameCharacter(code[end])) { end++; }
+            // A name after a scope's :: (A::Name) is that scope's member, and a name before :: qualifies the one after
+            // it: the assembler looks up a historical name only for a plain name (AssemblyPreprocessor.ConstantName),
+            // so neither is one. A root-qualified ::Name is the plain name, and is taken.
+            bool qualified = index >= 3 && code[index - 1] == ':' && code[index - 2] == ':' && IsNameCharacter(code[index - 3]);
+            bool qualifier = end + 1 < code.Length && code[end] == ':' && code[end + 1] == ':';
+            if (index != 0 && !qualified && !qualifier && !char.IsAsciiDigit(code[index]) && code[index - 1] != '$')
+            {
+                yield return (index, code[index..end]);
+            }
+
+            index = end;
+        }
     }
 }

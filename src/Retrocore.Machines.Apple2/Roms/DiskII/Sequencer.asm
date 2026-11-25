@@ -1,7 +1,8 @@
-;; DISK II LOGIC STATE SEQUENCER (P6): THE COMMANDS, THE TABLES AND THE CHIP'S WIRING
+; retrocore: style=strict
+;; Disk II logic state sequencer (P6): the commands, the tables and the chip's wiring
 ;;
 ;; Shared by Sequencer13.asm and Sequencer16.asm, which include it, add their own reading table and end with
-;; SEQUENCER. It holds the writing table, the same on both cards. docs/DiskII.md explains the controller as a
+;; <EmitChip>. It holds the writing table, the same on both cards. docs/DiskII.md explains the controller as a
 ;; whole.
 ;;
 ;; The Disk II controller has no microprocessor. A small state machine, the logic state sequencer, moves bits
@@ -11,14 +12,16 @@
 ;; current state and inputs. The entry's high four bits are the next state; its low four bits are a command for
 ;; the latch:
 ;;
-;;   CLR   clear the latch (codes $0-$7)
-;;   NOP   leave it alone ($8, also $C)
-;;   SL0   shift it left, bringing in a 0 ($9)
-;;   SL1   shift it left, bringing in a 1 ($D)
-;;   SR    shift it right, bringing in the write-protect sensor as bit 7 ($A, also $E)
-;;   LD    load it from the 6502's data bus ($B, also $F)
+;;   <Clear>    clear the latch (codes $0-$7)
+;;   <Hold>     leave it alone ($8, also $C)
+;;   <Shift0>   shift it left, bringing in a 0 ($9)
+;;   <Shift1>   shift it left, bringing in a 1 ($D)
+;;   <Sense>    shift it right, bringing in the write-protect sensor as bit 7 ($A, also $E)
+;;   <Load>     load it from the 6502's data bus ($B, also $F)
 ;;
-;; Apple's tables use only the first code of each, so a name gives back the exact byte. The inputs are:
+;; Apple's tables use only the first code of each, so a name gives back the exact byte. Sather's Understanding the
+;; Apple II (Table 9.3) calls the six commands CLR, NOP, SL0, SL1, SR and LD; they are his names, not Apple's, and
+;; this source used them before it was converted (docs/conversions/DiskII.md). The inputs are:
 ;;
 ;;   Q7, Q6  the mode the 6502 selected with the controller's Q6 and Q7 switches:
 ;;           Q7 off, Q6 off   read: shift in bits from the drive
@@ -40,81 +43,81 @@
 
 ;; A sequencer entry that clears the data latch to 0 and goes to {state}.
 ;;
-;; The entry is command code $0. The chip treats $1-$7 as the same command, but Apple's tables use only $0.
-;; The reading tables clear the latch once the 6502 has had time to read a complete nibble (QA set), so the
-;; next nibble starts shifting into an empty latch.
+;; The entry is command code $0 (Sather's CLR). The chip treats $1-$7 as the same command, but Apple's tables use only
+;; $0. The reading tables clear the latch once the 6502 has had time to read a complete nibble (QA set), so the next
+;; nibble starts shifting into an empty latch.
 ;;
 ;; Example:
-;; > CLR($A)   ; the byte $A0: clear the latch, then go to state $A
+;; > Clear($A)   ; the byte $A0: clear the latch, then go to state $A
 ;;
 ;; Parameters: state = the state to go to next, $0-$F; it becomes the entry's high nibble
-;; See: <NOP>, <SL0>, <SL1>, <SR>, <LD>, <READING>, <WRITING>
-.define CLR(state) ((state) << 4 | $0)
+;; See: <Hold>, <Shift0>, <Shift1>, <Sense>, <Load>, <ReadState>, <WriteState>
+.define Clear(state) ((state) << 4 | $0)
 
 ;; A sequencer entry that leaves the data latch alone and goes to {state}.
 ;;
-;; The entry is command code $8 (Sather's NOP); $C is the same command, unused by Apple. Most entries are
-;; NOP: while reading, the sequencer counts clocks from state to state waiting for the next read pulse, and
-;; while writing it steps through its loop of eight states between shifts. A nibble held with QA set also
-;; sits under NOP until the 6502 has read it.
+;; The entry is command code $8 (Sather's NOP); $C is the same command, unused by Apple. Most entries are this
+;; one: while reading, the sequencer counts clocks from state to state waiting for the next read pulse, and while
+;; writing it steps through its loop of eight states between shifts. A nibble held with QA set also stays in the
+;; latch through these entries until the 6502 has read it.
 ;;
 ;; Parameters: state = the state to go to next, $0-$F; it becomes the entry's high nibble
-;; See: <CLR>, <SL0>, <SL1>, <SR>, <LD>, <READING>, <WRITING>
-.define NOP(state) ((state) << 4 | $8)
+;; See: <Clear>, <Shift0>, <Shift1>, <Sense>, <Load>, <ReadState>, <WriteState>
+.define Hold(state) ((state) << 4 | $8)
 
 ;; A sequencer entry that shifts the data latch left, bringing in a 0 as bit 0, and goes to {state}.
 ;;
-;; The entry is command code $9. In reading, it records a bit time that passed with no read pulse: a 0 bit.
-;; In writing, it moves the next bit to write up into QA, the latch's bit 7, which decides whether the write
-;; signal changes at the end of the next bit time.
+;; The entry is command code $9 (Sather's SL0). In reading, it records a bit time that passed with no read pulse: a 0
+;; bit. In writing, it moves the next bit to write up into QA, the latch's bit 7, which decides whether the write signal
+;; changes at the end of the next bit time.
 ;;
 ;; Parameters: state = the state to go to next, $0-$F; it becomes the entry's high nibble
-;; See: <SL1>, <CLR>, <NOP>, <SR>, <LD>, <READING>, <WRITING>
-.define SL0(state) ((state) << 4 | $9)
+;; See: <Shift1>, <Clear>, <Hold>, <Sense>, <Load>, <ReadState>, <WriteState>
+.define Shift0(state) ((state) << 4 | $9)
 
 ;; A sequencer entry that shifts the data latch left, bringing in a 1 as bit 0, and goes to {state}.
 ;;
-;; The entry is command code $D. Only reading uses it: the read states reach it after the drive reported a
-;; read pulse, a flux transition, within the bit time, which is a 1 bit. Once the first 1 of a nibble reaches bit 7, QA is set
-;; and the 6502 sees a complete nibble.
+;; The entry is command code $D (Sather's SL1). Only reading uses it: the read states reach it after the drive
+;; reported a read pulse, a flux transition, within the bit time, which is a 1 bit. Once the first 1 of a nibble
+;; reaches bit 7, QA is set and the 6502 sees a complete nibble.
 ;;
 ;; Parameters: state = the state to go to next, $0-$F; it becomes the entry's high nibble
-;; See: <SL0>, <CLR>, <NOP>, <SR>, <LD>, <READING>
-.define SL1(state) ((state) << 4 | $D)
+;; See: <Shift0>, <Clear>, <Hold>, <Sense>, <Load>, <ReadState>
+.define Shift1(state) ((state) << 4 | $D)
 
 ;; A sequencer entry that shifts the data latch right, bringing in the write-protect sensor as bit 7, and goes
 ;; to {state}.
 ;;
-;; The entry is command code $A; $E is the same command, unused by Apple. The sense write protect mode (Q7
-;; off, Q6 on) uses it: after a few clocks every bit of the latch is the sensor, so the 6502 reads the latch
+;; The entry is command code $A (Sather's SR); $E is the same command, unused by Apple. The sense write protect
+;; mode (Q7 off, Q6 on) uses it: after a few clocks every bit of the latch is the sensor, so the 6502 reads the latch
 ;; and tests bit 7, set when the disk is write protected.
 ;;
 ;; Parameters: state = the state to go to next, $0-$F; it becomes the entry's high nibble
-;; See: <LD>, <CLR>, <NOP>, <SL0>, <SL1>, <READING>
-.define SR(state) ((state) << 4 | $A)
+;; See: <Load>, <Clear>, <Hold>, <Shift0>, <Shift1>, <ReadState>
+.define Sense(state) ((state) << 4 | $A)
 
 ;; A sequencer entry that loads the data latch from the 6502's data bus and goes to {state}.
 ;;
-;; The entry is command code $B; $F is the same command, unused by Apple. The write loading mode (Q7 on, Q6
-;; on) uses it in place of a shift, once per bit time, so the byte the 6502 stores to the controller becomes
+;; The entry is command code $B (Sather's LD); $F is the same command, unused by Apple. The write loading mode
+;; (Q7 on, Q6 on) uses it in place of a shift, once per bit time, so the byte the 6502 stores to the controller becomes
 ;; the next nibble to write, its bit 7 in QA first.
 ;;
 ;; Parameters: state = the state to go to next, $0-$F; it becomes the entry's high nibble
-;; See: <SR>, <CLR>, <NOP>, <SL0>, <SL1>, <WRITING>
-.define LD(state) ((state) << 4 | $B)
+;; See: <Sense>, <Clear>, <Hold>, <Shift0>, <Shift1>, <WriteState>
+.define Load(state) ((state) << 4 | $B)
 
-;; Names one sequencer entry by its state and inputs, so <SEQUENCER> can find it.
+;; Names one sequencer entry by its state and inputs, so <EmitChip> can find it.
 ;;
-;; The name is SEQ_ and two hex digits: the state, then the inputs as four bits, Q7 Q6 QA RP. RP is 0 while
+;; The name is ENTRY_ and two hex digits: the state, then the inputs as four bits, Q7 Q6 QA RP. RP is 0 while
 ;; the drive reports a read pulse.
 ;;
 ;; Parameters:
 ;;   state  = the current state, $0-$F
 ;;   inputs = Q7, Q6, QA and RP as bits 3-0, such as %1010 for write shifting with QA 1 and a read pulse
-;;   entry  = the entry byte, made with a command such as <NOP>($1)
-;; See: <READING>, <WRITING>, <SEQUENCER>
-.macro ENTRY state, inputs, entry
-    .ident(.sprintf("SEQ_%02X", (state) << 4 | (inputs))) = entry
+;;   entry  = the entry byte, made with a command such as <Hold>($1)
+;; See: <ReadState>, <WriteState>, <EmitChip>
+.macro Entry state, inputs, entry
+    .ident(.sprintf("ENTRY_%02X", (state) << 4 | (inputs))) = entry
 .endmacro
 
 ;; Defines one state's entries for the two reading modes: read, and sense write protect.
@@ -133,16 +136,16 @@
 ;;   sense01 = sense write protect mode, QA 0, no pulse
 ;;   sense10 = sense write protect mode, QA 1, a read pulse
 ;;   sense11 = sense write protect mode, QA 1, no pulse
-;; See: <WRITING>, <ENTRY>, <CLR>, <NOP>, <SL0>, <SL1>, <SR>
-.macro READING state, read00, read01, read10, read11, sense00, sense01, sense10, sense11
-    ENTRY state, %0000, read00
-    ENTRY state, %0001, read01
-    ENTRY state, %0010, read10
-    ENTRY state, %0011, read11
-    ENTRY state, %0100, sense00
-    ENTRY state, %0101, sense01
-    ENTRY state, %0110, sense10
-    ENTRY state, %0111, sense11
+;; See: <WriteState>, <Entry>, <Clear>, <Hold>, <Shift0>, <Shift1>, <Sense>
+.macro ReadState state, read00, read01, read10, read11, sense00, sense01, sense10, sense11
+    Entry state, %0000, read00
+    Entry state, %0001, read01
+    Entry state, %0010, read10
+    Entry state, %0011, read11
+    Entry state, %0100, sense00
+    Entry state, %0101, sense01
+    Entry state, %0110, sense10
+    Entry state, %0111, sense11
 .endmacro
 
 ;; Defines one state's entries for the two writing modes: shifting, and loading.
@@ -161,57 +164,57 @@
 ;;   load01  = write loading mode, QA 0, no pulse
 ;;   load10  = write loading mode, QA 1, a read pulse
 ;;   load11  = write loading mode, QA 1, no pulse
-;; See: <READING>, <ENTRY>, <NOP>, <SL0>, <LD>
-.macro WRITING state, shift00, shift01, shift10, shift11, load00, load01, load10, load11
-    ENTRY state, %1000, shift00
-    ENTRY state, %1001, shift01
-    ENTRY state, %1010, shift10
-    ENTRY state, %1011, shift11
-    ENTRY state, %1100, load00
-    ENTRY state, %1101, load01
-    ENTRY state, %1110, load10
-    ENTRY state, %1111, load11
+;; See: <ReadState>, <Entry>, <Hold>, <Shift0>, <Load>
+.macro WriteState state, shift00, shift01, shift10, shift11, load00, load01, load10, load11
+    Entry state, %1000, shift00
+    Entry state, %1001, shift01
+    Entry state, %1010, shift10
+    Entry state, %1011, shift11
+    Entry state, %1100, load00
+    Entry state, %1101, load01
+    Entry state, %1110, load10
+    Entry state, %1111, load11
 .endmacro
 
 ;; Emits the chip's 256 bytes, each entry at the address the chip's pins give it.
 ;;
-;; <ENTRY> names each entry by its state and inputs, in that order: state, Q7, Q6, QA, RP. The chip's address
+;; <Entry> names each entry by its state and inputs, in that order: state, Q7, Q6, QA, RP. The chip's address
 ;; pins take them in another order, chosen to simplify the circuit board: A7-A0 are state bits 3 and 2, state
 ;; bit 0, RP, Q7, Q6, QA and state bit 1. Its data pins hold the next state in D7-D4 and the command in D3-D0.
-;; For each address, SEQUENCER moves the pins' bits back into entry order and emits that entry.
+;; For each address, it moves the pins' bits back into entry order and emits that entry.
 ;;
-;; See: <ENTRY>, <READING>, <WRITING>
-.macro SEQUENCER
-.repeat 256, Pins
-    Logical .set Pins & $C0                     ; A7-A6: state bits 3 and 2
-    Logical .set Logical | ((Pins & $01) << 5)  ; A0: state bit 1
-    Logical .set Logical | ((Pins & $20) >> 1)  ; A5: state bit 0
-    Logical .set Logical | (Pins & $0E)         ; A3-A1: Q7, Q6, QA
-    Logical .set Logical | ((Pins & $10) >> 4)  ; A4: RP
-    .byte .ident(.sprintf("SEQ_%02X", Logical))
-.endrepeat
+;; See: <Entry>, <ReadState>, <WriteState>
+.macro EmitChip
+    .repeat 256, Pins
+        EntryIndex .set Pins & $C0                          ; A7-A6: state bits 3 and 2
+        EntryIndex .set EntryIndex | ((Pins & $01) << 5)    ; A0: state bit 1
+        EntryIndex .set EntryIndex | ((Pins & $20) >> 1)    ; A5: state bit 0
+        EntryIndex .set EntryIndex | (Pins & $0E)           ; A3-A1: Q7, Q6, QA
+        EntryIndex .set EntryIndex | ((Pins & $10) >> 4)    ; A4: RP
+        .byte .ident(.sprintf("ENTRY_%02X", EntryIndex))
+    .endrepeat
 .endmacro
 
-; Writing, the same on both cards; each card's source has its own reading table. Each state goes to the next,
-; around a loop of eight, 4 microseconds, one bit. At the end of the loop (state $7 or $F), the state's top bit,
-; the write signal, changes when QA is 1. Then the latch shifts left (SL0), or in loading mode loads the byte the
-; 6502 stores (LD), to put the next bit in QA.
-;
-;               shifting                              loading
-;  QA RP:       00       01       10       11         00       01       10       11
-    WRITING $0, NOP($1), NOP($1), NOP($1), NOP($1),   NOP($1), NOP($1), NOP($1), NOP($1)
-    WRITING $1, NOP($2), NOP($2), NOP($2), NOP($2),   NOP($2), NOP($2), NOP($2), NOP($2)
-    WRITING $2, SL0($3), SL0($3), SL0($3), SL0($3),   LD($3),  LD($3),  LD($3),  LD($3)
-    WRITING $3, NOP($4), NOP($4), NOP($4), NOP($4),   NOP($4), NOP($4), NOP($4), NOP($4)
-    WRITING $4, NOP($5), NOP($5), NOP($5), NOP($5),   NOP($5), NOP($5), NOP($5), NOP($5)
-    WRITING $5, NOP($6), NOP($6), NOP($6), NOP($6),   NOP($6), NOP($6), NOP($6), NOP($6)
-    WRITING $6, NOP($7), NOP($7), NOP($7), NOP($7),   NOP($7), NOP($7), NOP($7), NOP($7)
-    WRITING $7, NOP($0), NOP($0), NOP($8), NOP($8),   NOP($0), NOP($0), NOP($8), NOP($8)
-    WRITING $8, NOP($9), NOP($9), NOP($9), NOP($9),   NOP($9), NOP($9), NOP($9), NOP($9)
-    WRITING $9, NOP($A), NOP($A), NOP($A), NOP($A),   NOP($A), NOP($A), NOP($A), NOP($A)
-    WRITING $A, SL0($B), SL0($B), SL0($B), SL0($B),   LD($B),  LD($B),  LD($B),  LD($B)
-    WRITING $B, NOP($C), NOP($C), NOP($C), NOP($C),   NOP($C), NOP($C), NOP($C), NOP($C)
-    WRITING $C, NOP($D), NOP($D), NOP($D), NOP($D),   NOP($D), NOP($D), NOP($D), NOP($D)
-    WRITING $D, NOP($E), NOP($E), NOP($E), NOP($E),   NOP($E), NOP($E), NOP($E), NOP($E)
-    WRITING $E, NOP($F), NOP($F), NOP($F), NOP($F),   NOP($F), NOP($F), NOP($F), NOP($F)
-    WRITING $F, NOP($8), NOP($8), NOP($0), NOP($0),   NOP($8), NOP($8), NOP($0), NOP($0)
+    ; Writing, the same on both cards; each card's source has its own reading table. Each state goes to the next, around
+    ; a loop of eight, 4 microseconds, one bit. At the end of the loop (state $7 or $F), the state's top bit, the write
+    ; signal, changes when QA is 1. Then the latch shifts left (Shift0), or in loading mode loads the byte the 6502
+    ; stores (Load), to put the next bit in QA.
+    ;
+    ;              shifting                                         loading
+    ;  QA RP:      00          01          10          11           00          01          10          11
+    WriteState $0, Hold($1),   Hold($1),   Hold($1),   Hold($1),    Hold($1),   Hold($1),   Hold($1),   Hold($1)
+    WriteState $1, Hold($2),   Hold($2),   Hold($2),   Hold($2),    Hold($2),   Hold($2),   Hold($2),   Hold($2)
+    WriteState $2, Shift0($3), Shift0($3), Shift0($3), Shift0($3),  Load($3),   Load($3),   Load($3),   Load($3)
+    WriteState $3, Hold($4),   Hold($4),   Hold($4),   Hold($4),    Hold($4),   Hold($4),   Hold($4),   Hold($4)
+    WriteState $4, Hold($5),   Hold($5),   Hold($5),   Hold($5),    Hold($5),   Hold($5),   Hold($5),   Hold($5)
+    WriteState $5, Hold($6),   Hold($6),   Hold($6),   Hold($6),    Hold($6),   Hold($6),   Hold($6),   Hold($6)
+    WriteState $6, Hold($7),   Hold($7),   Hold($7),   Hold($7),    Hold($7),   Hold($7),   Hold($7),   Hold($7)
+    WriteState $7, Hold($0),   Hold($0),   Hold($8),   Hold($8),    Hold($0),   Hold($0),   Hold($8),   Hold($8)
+    WriteState $8, Hold($9),   Hold($9),   Hold($9),   Hold($9),    Hold($9),   Hold($9),   Hold($9),   Hold($9)
+    WriteState $9, Hold($A),   Hold($A),   Hold($A),   Hold($A),    Hold($A),   Hold($A),   Hold($A),   Hold($A)
+    WriteState $A, Shift0($B), Shift0($B), Shift0($B), Shift0($B),  Load($B),   Load($B),   Load($B),   Load($B)
+    WriteState $B, Hold($C),   Hold($C),   Hold($C),   Hold($C),    Hold($C),   Hold($C),   Hold($C),   Hold($C)
+    WriteState $C, Hold($D),   Hold($D),   Hold($D),   Hold($D),    Hold($D),   Hold($D),   Hold($D),   Hold($D)
+    WriteState $D, Hold($E),   Hold($E),   Hold($E),   Hold($E),    Hold($E),   Hold($E),   Hold($E),   Hold($E)
+    WriteState $E, Hold($F),   Hold($F),   Hold($F),   Hold($F),    Hold($F),   Hold($F),   Hold($F),   Hold($F)
+    WriteState $F, Hold($8),   Hold($8),   Hold($0),   Hold($0),    Hold($8),   Hold($8),   Hold($0),   Hold($0)

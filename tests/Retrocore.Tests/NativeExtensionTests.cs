@@ -54,11 +54,357 @@ public class NativeExtensionTests
     [DataRow("Known = 1\n.if .defined(Known) && Known = 1\n.byte 5\n.endif", new byte[] { 5 })]
     [DataRow(".out \"note\"\n.warning \"ignored\"\n.byte 1", new byte[] { 1 })]
     [DataRow("CPU_6502 = 7\n.byte CPU_6502", new byte[] { 7 })]
+    [DataRow("V := 5\nW:=V + Later\n.byte V, W\nLater = 2", new byte[] { 5, 7 })]
+    [DataRow("Entry:\n@cheap := 3\n.byte @cheap", new byte[] { 3 })]
+    [DataRow("V := 1\n.if V = 1\n.byte 9\n.endif", new byte[] { 9 })]
     public void NativeSourcesUseSharedFeatures(string text, byte[] expected)
     {
         AssemblyResult result = Assemble(text);
         result.Diagnostics.Should().BeEmpty();
         result.Sections[0].Bytes.Span[..expected.Length].ToArray().Should().Equal(expected);
+    }
+
+    /// <summary>
+    ///  An equate can name the size of a structure, a procedure or a scope, before or after it, as data can, though
+    ///  a procedure's or scope's size is known only once it is assembled.
+    /// </summary>
+    /// <param name="text">The source.</param>
+    /// <param name="expected">The leading output bytes.</param>
+    [TestMethod]
+    [DataRow(
+        ".struct Point\nx .byte\ny .word\n.endstruct\nSIZE = .sizeof(Point)\n.byte SIZE",
+        new byte[] { 3 })]
+    [DataRow(
+        "SIZE = .sizeof(Point)\n.struct Point\nx .byte\ny .word\n.endstruct\n.byte SIZE",
+        new byte[] { 3 })]
+    [DataRow(
+        ".proc Block\n.res 3, $EA\n.endproc\n.byte .sizeof(Block)\nSIZE = .sizeof(Block)\n.byte SIZE",
+        new byte[] { 0xEA, 0xEA, 0xEA, 3, 3 })]
+    [DataRow(
+        "SIZE = .sizeof(Block)\n.proc Block\n.res 3, $EA\n.endproc\n.byte SIZE",
+        new byte[] { 0xEA, 0xEA, 0xEA, 3 })]
+    [DataRow(
+        ".scope Table\nFirst: .byte 1\nSecond: .word 2\n.endscope\nSIZE = .sizeof(Table) * 2 + 1\n.byte SIZE",
+        new byte[] { 1, 2, 0, 7 })]
+    [DataRow(
+        "SIZE = .sizeof(Table)\n.scope Table\nFirst: .byte 1\nSecond: .word 2\n.endscope\n.byte SIZE",
+        new byte[] { 1, 2, 0, 3 })]
+    [DataRow(
+        ".scope Outer\nSIZE = .sizeof(Inner)\n.proc Inner\nnop\nnop\n.endproc\n.endscope\n.byte Outer::SIZE",
+        new byte[] { 0xEA, 0xEA, 2 })]
+    public void EquatesNameSizes(string text, byte[] expected)
+    {
+        AssemblyResult result = Assemble(text);
+        result.Diagnostics.Should().BeEmpty();
+        result.Sections[0].Bytes.Span[..expected.Length].ToArray().Should().Equal(expected);
+    }
+
+    /// <summary>
+    ///  Data can name the size of a structure or union defined later, including one nested in a scope, rather than
+    ///  the empty layout of the scope that holds its fields.
+    /// </summary>
+    [TestMethod]
+    public void DataNamesSizesOfLaterTypes()
+    {
+        AssemblyResult result = Assemble("""
+            .byte .sizeof(Point), .sizeof(Outer::Pair), .sizeof(Either)
+            .struct Point
+            x .byte
+            y .word
+            .endstruct
+            .scope Outer
+            .struct Pair
+            first .dword
+            second .tag Point
+            .endstruct
+            .endscope
+            .union Either
+            narrow .word
+            wide .dword
+            .endunion
+            .byte .sizeof(Point), .sizeof(Outer::Pair), .sizeof(Either)
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+        result.Sections[0].Bytes.Span[..6].ToArray().Should().Equal(3, 7, 4, 3, 7, 4);
+    }
+
+    /// <summary>
+    ///  A structure defined later has its size inside an anonymous scope, and in the ca65 dialect, whose statements
+    ///  go through the linker.
+    /// </summary>
+    /// <param name="text">The source.</param>
+    /// <param name="ca65">Whether the source is in the ca65 dialect.</param>
+    [TestMethod]
+    [DataRow(".scope\n.byte .sizeof(Point)\n.struct Point\nfirst .byte\nsecond .word\n.endstruct\n.endscope", false)]
+    [DataRow(".scope\n.scope Inner\n.byte .sizeof(Point)\n.struct Point\nfirst .byte\nsecond .word\n.endstruct\n.endscope\n.endscope", false)]
+    [DataRow(".byte .sizeof(Point)\n.struct Point\nfirst .byte\nsecond .word\n.endstruct", true)]
+    public void LaterTypesHaveTheirSizeInEveryLayout(string text, bool ca65)
+    {
+        AssemblyResult result = new NativeAssembler().Assemble(
+            new AssemblySource(text, "main.asm"),
+            new AssemblyOptions(ProcessorVariant.Mos6502, origin: 0x1000, imageSize: 32)
+            {
+                Dialect = ca65 ? AssemblyDialect.Ca65 : AssemblyDialect.Native
+            });
+
+        result.Diagnostics.Should().BeEmpty();
+        ReadOnlySpan<byte> bytes = ca65 ? result.Files["output.bin"].Span : result.Sections[0].Bytes.Span;
+        bytes[0].Should().Be(3);
+    }
+
+    /// <summary>
+    ///  Conditional assembly runs before a procedure is assembled, so its size, directly or through an equate, is not
+    ///  yet known there, and neither is it unknown for good: <c>.ifconst</c> refuses it rather than choose a branch.
+    /// </summary>
+    /// <param name="condition">The conditional directive and its operand.</param>
+    /// <param name="ca65">Whether the source is in the ca65 dialect.</param>
+    /// <param name="message">The error it reports.</param>
+    [TestMethod]
+    [DataRow(".if .sizeof(Block) = 2", false, "Conditional requires a constant known at this point in source order.")]
+    [DataRow(".if SIZE = 2", false, "Conditional requires a constant known at this point in source order.")]
+    [DataRow(".ifconst SIZE", false, "Conditional requires a constant known at this point in source order.")]
+    [DataRow(".ifnconst NEXT", false, "Conditional requires a constant known at this point in source order.")]
+    [DataRow(".ifconst .sizeof(Block)", false, "Conditional requires a constant known at this point in source order.")]
+    [DataRow(".ifconst SIZE", true, "ca65 directive requires a constant known at this point.")]
+    [DataRow(".if 1 || .sizeof(Block) = 2", false, "Conditional requires a constant known at this point in source order.")]
+    [DataRow(".if 1 || NEXT = 2", false, "Conditional requires a constant known at this point in source order.")]
+    public void ConditionsCannotUseAProcedureSize(string condition, bool ca65, string message)
+    {
+        AssemblyResult result = new NativeAssembler().Assemble(
+            new AssemblySource(
+                $".proc Block\nnop\nnop\n.endproc\nSIZE = .sizeof(Block)\nNEXT = SIZE + 1\n{condition}\n.byte 1\n.endif",
+                "main.asm"),
+            new AssemblyOptions(ProcessorVariant.Mos6502, origin: 0x1000, imageSize: 32)
+            {
+                Dialect = ca65 ? AssemblyDialect.Ca65 : AssemblyDialect.Native
+            });
+
+        result.Diagnostics.Select(diagnostic => diagnostic.Message).Should().Equal(message);
+    }
+
+    /// <summary>
+    ///  A <c>.repeat</c> count is read before a procedure is assembled and in source order, so a procedure's size, a
+    ///  label, or a name defined later or not at all is refused with an error that names <c>.repeat</c>, not a
+    ///  conditional.
+    /// </summary>
+    /// <param name="count">The repeat count.</param>
+    /// <param name="ca65">Whether the source is in the ca65 dialect.</param>
+    [TestMethod]
+    [DataRow("SIZE", false)]
+    [DataRow(".sizeof(Block)", false)]
+    [DataRow("Block", false)]
+    [DataRow("Later", false)]
+    [DataRow("Nope", false)]
+    [DataRow("SIZE", true)]
+    [DataRow(".sizeof(Block)", true)]
+    [DataRow("Block", true)]
+    [DataRow("Later", true)]
+    [DataRow("Nope", true)]
+    public void RepeatCountsMustBeKnownConstants(string count, bool ca65)
+    {
+        AssemblyResult result = new NativeAssembler().Assemble(
+            new AssemblySource(
+                $".proc Block\nnop\nnop\n.endproc\nSIZE = .sizeof(Block)\n.repeat {count}\nnop\n.endrepeat\nLater = 2",
+                "main.asm"),
+            new AssemblyOptions(ProcessorVariant.Mos6502, origin: 0x1000, imageSize: 32)
+            {
+                Dialect = ca65 ? AssemblyDialect.Ca65 : AssemblyDialect.Native
+            });
+
+        result.Diagnostics.Select(diagnostic => diagnostic.Message).Should().Equal(
+            ".repeat count requires a constant known at this point in source order.");
+    }
+
+    /// <summary>
+    ///  A variable's historical name keeps the procedure size it had when it was documented, so <c>.ifconst</c>
+    ///  refuses it too.
+    /// </summary>
+    [TestMethod]
+    public void AHistoricalNameOfAProcedureSizeIsNotYetKnown()
+    {
+        AssemblyResult result = Assemble("""
+            .proc Block
+            nop
+            nop
+            .endproc
+            ;; The width.
+            ;; Also: OLD (TEST)
+            Width .set .sizeof(Block)
+            Width .set 9
+            .ifconst OLD
+            .byte 1
+            .endif
+            """);
+
+        result.Diagnostics.Select(diagnostic => diagnostic.Message).Should().Equal(
+            "Conditional requires a constant known at this point in source order.");
+    }
+
+    /// <summary>
+    ///  <c>.const</c> refuses a procedure's size, directly or through an equate, rather than call it unknown.
+    /// </summary>
+    /// <param name="operand">The <c>.const</c> operand.</param>
+    [TestMethod]
+    [DataRow(".sizeof(Block)")]
+    [DataRow("NEXT")]
+    public void ConstRefusesAProcedureSize(string operand)
+    {
+        Assemble($".proc Block\nnop\n.endproc\nSIZE = .sizeof(Block)\nNEXT = SIZE + 1\n.byte .const({operand})")
+            .Diagnostics.Select(diagnostic => diagnostic.Message)
+            .Should().Equal(".const cannot test a size known only once the program is laid out.");
+    }
+
+    /// <summary>
+    ///  A variable given a procedure's size and then an ordinary value is a known constant again.
+    /// </summary>
+    [TestMethod]
+    public void AVariableReassignedFromASizeIsKnownAgain()
+    {
+        AssemblyResult result = Assemble("""
+            .proc Block
+            nop
+            .endproc
+            V .set .sizeof(Block)
+            .byte V
+            V .set 7
+            .ifconst V
+            .byte V, .const(V)
+            .endif
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+        result.Sections[0].Bytes.Span[..4].ToArray().Should().Equal(0xEA, 1, 7, 1);
+    }
+
+    /// <summary>
+    ///  A procedure or scope whose code is not one run of addresses has no one size: a <c>.logicalorg</c> in it, or a
+    ///  storage map across one of its ends, is refused wherever its size is used.
+    /// </summary>
+    /// <param name="body">The procedure's body and what follows it, up to the use of its size.</param>
+    /// <param name="use">The statement that uses its size.</param>
+    [TestMethod]
+    [DataRow("nop\n.logicalorg $0300\nnop\n.endproc", ".byte .sizeof(Block)")]
+    [DataRow("nop\n.dum $80\nZero: .res 4\n.endproc\n.dend", ".byte .sizeof(Block)")]
+    [DataRow("nop\n.dum $80\nZero: .res 4\n.endproc\n.dend", "SIZE = .sizeof(Block)\n.byte SIZE")]
+    [DataRow("nop\n.dum $80\nZero: .res 4\n.endproc\n.dend", ".assert .sizeof(Block) = 1")]
+    public void SizesNeedOneRunOfAddresses(string body, string use)
+    {
+        Assemble($".proc Block\n{body}\n{use}").Diagnostics.Select(diagnostic => diagnostic.Message)
+            .Should().Contain(".sizeof requires a contiguous scope or procedure: no section or .logicalorg changes, no storage map across its ends, and not a continued scope.");
+    }
+
+    /// <summary>
+    ///  A storage map that a procedure opened outside it ends inside it leaves the procedure without one size.
+    /// </summary>
+    [TestMethod]
+    public void AStorageMapEndingInsideAProcedureLeavesItWithoutASize()
+    {
+        Assemble(".dum $80\n.proc Block\nZero: .res 4\n.dend\nnop\n.endproc\n.byte .sizeof(Block)")
+            .Diagnostics.Select(diagnostic => diagnostic.Message)
+            .Should().Equal(".sizeof requires a contiguous scope or procedure: no section or .logicalorg changes, no storage map across its ends, and not a continued scope.");
+    }
+
+    /// <summary>
+    ///  A storage map that opens in one procedure and ends in the next leaves both without one size: the first ends
+    ///  inside the map, and the second starts inside it.
+    /// </summary>
+    /// <param name="use">The procedure whose size is used.</param>
+    [TestMethod]
+    [DataRow("First")]
+    [DataRow("Second")]
+    public void AStorageMapAcrossTwoProceduresLeavesBothWithoutASize(string use)
+    {
+        Assemble($".proc First\nnop\n.dum $80\nZero: .res 2\n.endproc\n.proc Second\nOne: .res 1\n.dend\nnop\n.endproc\n.byte .sizeof({use})")
+            .Diagnostics.Select(diagnostic => diagnostic.Message)
+            .Should().Equal(".sizeof requires a contiguous scope or procedure: no section or .logicalorg changes, no storage map across its ends, and not a continued scope.");
+    }
+
+    /// <summary>
+    ///  A scope is refused like a procedure when a storage map crosses its end or its start, including an inner
+    ///  scope inside a procedure.
+    /// </summary>
+    /// <param name="text">The source.</param>
+    [TestMethod]
+    [DataRow(".scope Ends\nnop\n.dum $80\nZero: .res 2\n.endscope\n.dend\n.byte .sizeof(Ends)")]
+    [DataRow(".dum $80\n.scope Starts\nZero: .res 2\n.dend\nnop\n.endscope\n.byte .sizeof(Starts)")]
+    [DataRow(".proc Outer\nnop\n.scope Inner\n.dum $80\nZero: .res 2\n.endscope\n.dend\nnop\n.endproc\n.byte .sizeof(Outer::Inner)")]
+    public void AStorageMapAcrossAScopeLeavesItWithoutASize(string text)
+    {
+        Assemble(text).Diagnostics.Select(diagnostic => diagnostic.Message).Should().Equal(
+            ".sizeof requires a contiguous scope or procedure: no section or .logicalorg changes, no storage map across its ends, and not a continued scope.");
+    }
+
+    /// <summary>
+    ///  A procedure around an inner scope that a storage map crosses keeps its size: the map opens and ends inside
+    ///  the procedure, so only the inner scope has an end in it.
+    /// </summary>
+    [TestMethod]
+    public void AProcedureAroundACrossedScopeKeepsItsSize()
+    {
+        AssemblyResult result = Assemble(
+            ".proc Outer\nnop\n.scope Inner\n.dum $80\nZero: .res 2\n.endscope\n.dend\nnop\n.endproc\n.byte .sizeof(Outer)");
+
+        result.Diagnostics.Should().BeEmpty();
+        result.Sections[0].Bytes.Span[..3].ToArray().Should().Equal(0xEA, 0xEA, 2);
+    }
+
+    /// <summary>
+    ///  An <c>.org</c> only moves forward, filling the gap, so like <c>.align</c> it leaves a procedure one run of
+    ///  addresses whose size counts the fill. A storage map wholly inside a procedure adds nothing to its size, even
+    ///  with an <c>.org</c> placing its fields, and a scope wholly inside a storage map has the size of the storage
+    ///  it lays out.
+    /// </summary>
+    [TestMethod]
+    public void OriginsAndStorageMapsWhollyInsideKeepSizes()
+    {
+        AssemblyResult result = Assemble("""
+            .proc Filled
+            nop
+            .org $1004
+            nop
+            .endproc
+            .proc Block
+            nop
+            .dum $80
+            Zero: .res 2
+            .org $90
+            Later: .res 1
+            .dend
+            nop
+            .endproc
+            .dum $A0
+            .scope Variables
+            Pointer: .res 2
+            .org $A4
+            Count: .res 1
+            .endscope
+            .dend
+            .byte .sizeof(Filled), .sizeof(Block), .sizeof(Variables), <Block::Later
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+        result.Sections[0].Bytes.Span[..11].ToArray().Should().Equal(
+            0xEA, 0, 0, 0, 0xEA, 0xEA, 0xEA, 5, 2, 5, 0x90);
+    }
+
+    /// <summary>
+    ///  A constant defined with <c>:=</c> is fixed once defined, as one defined with <c>=</c> is, and every spelling
+    ///  of a definition without a value reports the same one error.
+    /// </summary>
+    /// <param name="text">The source.</param>
+    /// <param name="message">The error it reports.</param>
+    [TestMethod]
+    [DataRow("V := 1\nV := 2", "Duplicate symbol 'V'.")]
+    [DataRow("V = 1\nV := 2", "Duplicate symbol 'V'.")]
+    [DataRow("V :=", "A constant definition requires an expression.")]
+    [DataRow("V:=", "A constant definition requires an expression.")]
+    [DataRow("V =", "A constant definition requires an expression.")]
+    [DataRow("V=", "A constant definition requires an expression.")]
+    [DataRow("V := ; no value", "A constant definition requires an expression.")]
+    public void ColonEqualsConstantMistakesAreReported(string text, string message)
+    {
+        Assemble(text).Diagnostics.Select(diagnostic => diagnostic.Message).Should().Equal(message);
     }
 
     /// <summary>

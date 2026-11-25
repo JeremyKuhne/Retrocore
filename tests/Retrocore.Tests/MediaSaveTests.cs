@@ -251,6 +251,89 @@ public sealed class MediaSaveTests
     }
 
     /// <summary>
+    ///  An image is still watched while every thread of the thread pool is busy and work waits behind them, as when a
+    ///  full test run fills the machine: the watch keeps its own time, not the pool's.
+    /// </summary>
+    [TestMethod]
+    [DoNotParallelize]
+    public void ImageIsWatchedWhileThePoolIsBusy()
+    {
+        (string image, _) = Image("busy.dsk");
+        Apple2FloppyDrive drive = Drive(image);
+        Until(() => { }, () => Source(drive)?.Bool("stale") == false);
+
+        // A pool that adds no threads, as one whose work keeps finishing does not, and work holding each of them until
+        // let go, so anything else queued waits.
+        ThreadPool.GetMaxThreads(out int workers, out int completions);
+        ThreadPool.GetMinThreads(out int least, out _);
+        ThreadPool.SetMaxThreads(least, completions).Should().BeTrue();
+        // Not disposed: work still waiting when this test ends must find it set, not disposed.
+        ManualResetEventSlim release = new();
+        int queued = least * 2;
+        int done = 0;
+        for (int i = 0; i < queued; i++)
+        {
+            ThreadPool.UnsafeQueueUserWorkItem(
+                _ =>
+                {
+                    release.Wait(TimeSpan.FromSeconds(30));
+                    Interlocked.Increment(ref done);
+                },
+                state: null);
+        }
+
+        try
+        {
+            byte[] outside = new byte[35 * 4096];
+            Until(() => File.WriteAllBytes(image, outside), () => Source(drive)?.Bool("stale") == true);
+        }
+        finally
+        {
+            release.Set();
+            ThreadPool.SetMaxThreads(workers, completions);
+            SpinWait.SpinUntil(() => Volatile.Read(ref done) == queued, TimeSpan.FromSeconds(30));
+        }
+    }
+
+    /// <summary>
+    ///  An image is still watched while something told of another image's change has not returned, as a debug session
+    ///  waiting for its machine: each image's check goes on.
+    /// </summary>
+    [TestMethod]
+    [DoNotParallelize]
+    public void ImageIsWatchedWhileAnotherChangeIsBeingTold()
+    {
+        (string first, _) = Image("first.dsk");
+        (string second, _) = Image("second.dsk");
+        Apple2FloppyDrive one = Drive(first);
+        Apple2FloppyDrive two = Drive(second, "disk2");
+        Until(() => { }, () => Source(one)?.Bool("stale") == false && Source(two)?.Bool("stale") == false);
+
+        // Not disposed: the event may still call the handler after it is removed, with the handlers it had.
+        ManualResetEventSlim release = new();
+        ManualResetEventSlim held = new();
+        void Held()
+        {
+            held.Set();
+            release.Wait(TimeSpan.FromSeconds(30));
+        }
+
+        MediaActions.SourcesChanged += Held;
+        try
+        {
+            byte[] outside = new byte[35 * 4096];
+            Until(() => File.WriteAllBytes(first, outside), () => Source(one)?.Bool("stale") == true);
+            held.Wait(TimeSpan.FromSeconds(10)).Should().BeTrue("the first image's change is being told");
+            Until(() => File.WriteAllBytes(second, outside), () => Source(two)?.Bool("stale") == true);
+        }
+        finally
+        {
+            MediaActions.SourcesChanged -= Held;
+            release.Set();
+        }
+    }
+
+    /// <summary>
     ///  A format that cannot hold all of the disk answers with what it would lose and writes nothing; accepted, it
     ///  saves and the disk stays changed.
     /// </summary>
@@ -563,7 +646,7 @@ public sealed class MediaSaveTests
     {
         using ManualResetEventSlim changed = new();
 
-        // A watcher's timer may raise the event it took before the handler was removed, after the wait is disposed.
+        // The event may be raised with the handlers it had before this one was removed, after the wait is disposed.
         void Changed()
         {
             try

@@ -194,7 +194,7 @@ internal sealed class DebugContracts
             if (kept.Count == 0 && memory.Count == 0 && changes is null) { continue; }
             DebugContract contract = new(topic.Name, kept, memory, changes);
             contracts.TryAdd((ushort)value, contract);
-            foreach (string label in topic.EntryLabels)
+            foreach (string label in topic.EntryLabels.Select(entry => set.EntrySymbol(documented, entry)))
             {
                 if (set.Symbols.TryGetValue(label, out long entry) && set.Find(label) is null)
                 {

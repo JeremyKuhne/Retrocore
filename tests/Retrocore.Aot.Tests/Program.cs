@@ -326,4 +326,23 @@ if (!altairImage.Success || altair.Terminal.Line(0).TrimEnd() != "ALTAIR" || !al
 }
 
 Console.WriteLine("Altair 8800: Native AOT machine, ACIA and terminal passed.");
+
+// The Atari 800: a ROM whose reset code stores a byte in RAM and loops runs on the 6502 beside ANTIC, which renders.
+byte[] atariImage = new byte[Retrocore.Machines.Atari.AtariRoms.Size];
+byte[] atariCode = [0xA9, 0x42, 0x8D, 0x00, 0x06, 0x4C, 0x05, 0xE0];
+atariCode.CopyTo(atariImage, 0xE000 - Retrocore.Machines.Atari.AtariRoms.Base);
+atariImage.AsSpan(0xFFFA - Retrocore.Machines.Atari.AtariRoms.Base).Fill(0xE0);
+atariImage[0xFFFA - Retrocore.Machines.Atari.AtariRoms.Base] = 0x05;
+atariImage[0xFFFC - Retrocore.Machines.Atari.AtariRoms.Base] = 0x00;
+atariImage[0xFFFE - Retrocore.Machines.Atari.AtariRoms.Base] = 0x05;
+Retrocore.Machines.Atari.AtariMachine atari = new(new Retrocore.Machines.Atari.AtariRoms(atariImage));
+atari.Run(20_000);
+byte[] atariPixels = new byte[atari.Width * atari.Height * 4];
+atari.Render(atariPixels, scanned: false);
+if (atari.Bus.Peek(0x0600) != 0x42)
+{
+    throw new InvalidOperationException("Native AOT Atari execution failed.");
+}
+
+Console.WriteLine("Atari 800: Native AOT machine, ANTIC and rendering passed.");
 return 0;

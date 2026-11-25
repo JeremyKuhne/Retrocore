@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
+using System.Globalization;
 using Retrocore.Isa;
 
 namespace Retrocore.Assembler;
@@ -23,6 +24,8 @@ internal sealed partial class AssemblyNameResolver
     private readonly Dictionary<string, int> _labelLines = [with(StringComparer.Ordinal)];
     private Dictionary<string, int>? _labelSizes;
     private CancellationToken _cancellation;
+    private List<Using> _usings = [];
+    private readonly HashSet<(int Index, string Name)> _ambiguous = [];
 
     private AssemblyNameResolver(AssemblyProject source, List<AssemblyError> errors, CancellationToken cancellation)
     {
@@ -53,11 +56,30 @@ internal sealed partial class AssemblyNameResolver
     internal static bool RequiresResolution(AssemblyStatement node)
     {
         return IsScopeDirective(node.Kind)
+            || node.Kind == AssemblyStatementKind.Using
             || (node.Label is { Length: > 0 } name && name[0] is '@' or ':')
             || (node.Operand.MayReferenceScopes && HasScopedReference(node.Operand.Memory));
     }
 
     private static readonly AssemblyOperand s_emptyOperand = new("");
+
+    /// <summary>
+    ///  Determines whether an operand uses <c>.sizeof</c> of a name the preprocessor left for the resolver: a scope,
+    ///  a procedure or a label, whose size is known only once the program is assembled.
+    /// </summary>
+    /// <param name="text">The operand text.</param>
+    /// <returns>Whether the operand contains a <c>.sizeof</c> reference.</returns>
+    internal static bool HasSizeReference(ReadOnlyMemory<char> text)
+    {
+        if (text.Span.IndexOf('.') < 0) { return false; }
+        AssemblyNameReferences references = new(text);
+        while (references.MoveNext())
+        {
+            if (references.Current.Span.Equals(".sizeof", StringComparison.OrdinalIgnoreCase)) { return true; }
+        }
+
+        return false;
+    }
 
     private static bool HasScopedReference(ReadOnlyMemory<char> text)
     {
@@ -117,7 +139,42 @@ internal sealed partial class AssemblyNameResolver
 
         image.Project = _source;
         image.SymbolExports = new(Exports.Values, StringComparer.Ordinal);
+        image.Information = UnusedUsings();
+        image.Usings = _usings.Count == 0 ? null : [.. _usings.Select(Published)];
     }
+
+    // The directives from one in effect down to, but not including, the one in effect again, end at a statement.
+    private static void EndUsings(Using? from, Using? to, int index)
+    {
+        for (Using? directive = from; directive is not null && !ReferenceEquals(directive, to); directive = directive.Next)
+        {
+            if (directive.End < 0) { directive.End = index; }
+        }
+    }
+
+    // A .using as the result reports it. One a macro gives applies from the invoking line unless its extent ends
+    // inside the same expansion, as when the expansion opens and closes the scope it is in.
+    private AssemblyUsing Published(Using directive)
+    {
+        AssemblyLocation? location = _source.Statements[directive.Index].Location;
+        bool atInvocation = true;
+        AssemblyLocation? end = directive.End < 0 ? null : _source.Statements[directive.End].Location;
+        if (location is { IsMacroExpansion: true } && end is { IsMacroExpansion: true })
+        {
+            atInvocation = !SameLocation(Invocation(end), Invocation(location));
+        }
+
+        return new(location, directive.Names, atInvocation);
+    }
+
+    private static AssemblyLocation Invocation(AssemblyLocation location)
+    {
+        while (location.IsMacroExpansion && location.ExpandedFrom is { } from) { location = from; }
+        return location;
+    }
+
+    private static bool SameLocation(AssemblyLocation first, AssemblyLocation second) =>
+        first.Line == second.Line && first.Column == second.Column && string.Equals(first.Path, second.Path, StringComparison.Ordinal);
 
     private static bool Mentions(AssemblyProject source, string prefix)
     {
@@ -147,16 +204,64 @@ internal sealed partial class AssemblyNameResolver
         string cheap = "";
         string FreshContext() => $"{_privatePrefix}cheap_{++contexts}";
 
+        // The scope a .dum opened in, while its storage map is open. A scope whose end falls in a map it opened,
+        // or that a map opened outside ends inside, has its ends in two address spaces, so it has no one size.
+        Scope? dummy = null;
+
+        // A .using applies to the end of its scope, or of its file at file level: each scope opened, and each
+        // file included, starts from the directives in effect where it opens and gives them back where it ends.
+        Using? usings = null;
+        List<Using> directives = [];
+        Stack<Using?> scopeUsings = [];
+        Stack<(Using? Usings, int Depth)> files = [];
+        List<(int Index, bool Enter)> marks = FileMarks();
+        int mark = 0;
+
         for (int index = 0; index < _source.Statements.Count; index++)
         {
             _cancellation.ThrowIfCancellationRequested();
             AssemblyStatement node = _source.Statements[index];
+            // Each file the preprocessor read, top-level or included, starts with no .using and gives back the
+            // ones in effect where it was included when it ends.
+            for (; mark < marks.Count && marks[mark].Index <= index; mark++)
+            {
+                if (marks[mark].Enter)
+                {
+                    files.Push((usings, scopeUsings.Count));
+                    usings = null;
+                }
+                else if (files.Count != 0)
+                {
+                    // A file that closed scopes it did not open has already given back their .using directives.
+                    (Using? saved, int depth) = files.Pop();
+                    if (scopeUsings.Count >= depth)
+                    {
+                        EndUsings(usings, saved, index);
+                        usings = saved;
+                    }
+                }
+            }
+
+            // An .org only moves forward, filling the gap, so like .align it keeps one run of addresses.
             if (node.Kind is AssemblyStatementKind.Section or AssemblyStatementKind.LogicalOrigin)
             {
                 for (Scope? enclosing = scope; enclosing is not null; enclosing = enclosing.Parent)
                 {
                     enclosing.Contiguous = false;
                 }
+            }
+            else if (node.Kind == AssemblyStatementKind.DummyStart)
+            {
+                dummy = scope;
+            }
+            else if (node.Kind == AssemblyStatementKind.DummyEnd && dummy is not null)
+            {
+                for (Scope? enclosing = scope; enclosing is not null && !Encloses(enclosing, dummy); enclosing = enclosing.Parent)
+                {
+                    enclosing.Contiguous = false;
+                }
+
+                dummy = null;
             }
 
             if (index != 0 && node.Dialect != dialect)
@@ -166,10 +271,52 @@ internal sealed partial class AssemblyNameResolver
             }
 
             dialect = node.Dialect;
+            if (node.Kind == AssemblyStatementKind.Using)
+            {
+                // The directive's own line is outside its extent.
+                _sites[index] = new(scope, cheap, unnamed, usings);
+                if (UsingNames(node, index) is { } names)
+                {
+                    usings = new(usings, index, scope, names);
+                    directives.Add(usings);
+                }
+
+                continue;
+            }
+
             if (node.Kind is AssemblyStatementKind.Procedure or AssemblyStatementKind.Scope)
             {
                 bool procedure = node.Kind == AssemblyStatementKind.Procedure;
                 string name = node.Operand.Text.Trim();
+
+                // ".scope Name continued" goes on with a scope this one already opened and closed.
+                if (!procedure && AssemblySyntax.ContinuedScope(name) is { } continuedName)
+                {
+                    _sites[index] = new(scope, cheap, unnamed, usings);
+                    if (node.Label is not null
+                        || !scope.Children.TryGetValue(continuedName, out Scope? continued)
+                        || continued.Procedure)
+                    {
+                        string message = node.Label is not null
+                            ? "A scope requires an unqualified name; .proc requires a name and neither takes a label."
+                            : $"No .scope {continuedName} here to continue: it must be opened earlier, in the same scope.";
+
+                        _errors.Add(new(index, message));
+                        _definitions[index] = scope.Qualify($"{_privatePrefix}continued_{index}");
+                        scope = new(scope, $"{_privatePrefix}continued_{index}", index, procedure: false);
+                        scopeUsings.Push(usings);
+                        continue;
+                    }
+
+                    // The scope is in pieces now, so it has no one size.
+                    continued.Contiguous = false;
+                    continued.Pieces++;
+                    _definitions[index] = continued.Qualify($"{_privatePrefix}continued_{index}");
+                    scope = continued;
+                    scopeUsings.Push(usings);
+                    continue;
+                }
+
                 if (node.Label is not null || (name.Length == 0 ? procedure : !AssemblySyntax.IsPlainIdentifier(name)))
                 {
                     _errors.Add(new(index, "A scope requires an unqualified name; .proc requires a name and neither takes a label."));
@@ -197,16 +344,17 @@ internal sealed partial class AssemblyNameResolver
                         _definitions[index] = scope.Qualify($"{name}::{_privatePrefix}start");
                     }
 
-                    _sites[index] = new(scope, cheap, unnamed);
+                    _sites[index] = new(scope, cheap, unnamed, usings);
                     Scope child = new(scope, name, index, procedure);
                     scope.Children[name] = child;
                     scope = child;
+                    scopeUsings.Push(usings);
                     continue;
                 }
             }
             else if (node.Kind is AssemblyStatementKind.EndProcedure or AssemblyStatementKind.EndScope)
             {
-                _sites[index] = new(scope, cheap, unnamed);
+                _sites[index] = new(scope, cheap, unnamed, usings);
                 if (scope.Parent is null || scope.Procedure != (node.Kind == AssemblyStatementKind.EndProcedure))
                 {
                     _errors.Add(new(index, "Scope terminator does not match an open .proc or .scope."));
@@ -218,13 +366,28 @@ internal sealed partial class AssemblyNameResolver
                         _errors.Add(new(index, "A scope terminator takes no operand or label."));
                     }
 
-                    string end = scope.Qualify($"{_privatePrefix}end");
+                    if (dummy is not null && Encloses(scope, dummy)) { scope.Contiguous = false; }
+
+                    // Each later piece of a continued scope ends with its own label.
+                    string end = scope.Qualify(scope.Pieces == 0 ? $"{_privatePrefix}end" : $"{_privatePrefix}end_{index}");
                     string start = scope.Procedure ? scope.Prefix : scope.Qualify($"{_privatePrefix}start");
                     _definitions[index] = end;
-                    _sizes[scope.Prefix] = scope.Contiguous ? $"({end}-{start})" : "";
+                    // A structure's scope holds only constants; its size is the one the preprocessor gave the type.
+                    // A structure's scope continued with code is in pieces like any other.
+                    _sizes[scope.Prefix] = !scope.Contiguous
+                        ? ""
+                        : _source.Statements[scope.Opening].TypeSize is { } typeSize
+                            ? typeSize.ToString(CultureInfo.InvariantCulture)
+                            : $"({end}-{start})";
 
                     scope = scope.Parent;
                     cheap = FreshContext();
+                    if (scopeUsings.Count != 0)
+                    {
+                        Using? restored = scopeUsings.Pop();
+                        EndUsings(usings, restored, index);
+                        usings = restored;
+                    }
                 }
 
                 continue;
@@ -251,7 +414,7 @@ internal sealed partial class AssemblyNameResolver
                 }
             }
 
-            _sites[index] = new(scope, cheap, unnamed);
+            _sites[index] = new(scope, cheap, unnamed, usings);
             if (_definitions[index] is { } sized && node.Label is not (null or ":") && HasSize(node.Kind))
             {
                 _labelLines.TryAdd(sized, index);
@@ -263,6 +426,8 @@ internal sealed partial class AssemblyNameResolver
             _errors.Add(new(scope.Opening, "Unterminated .proc or .scope."));
             scope = scope.Parent;
         }
+
+        ResolveUsings(directives);
     }
 
     private void Lower(AssemblyOptions options, IReadOnlyDictionary<string, InstructionSet> sets)
@@ -301,6 +466,7 @@ internal sealed partial class AssemblyNameResolver
             AssemblyStatementKind kind = node.Kind;
             ReadOnlyMemory<char> operation = node.OperationMemory;
             AssemblyOperand operand = node.Operand;
+            bool opensScope = false;
             if (kind == AssemblyStatementKind.Cpu)
             {
                 if (AssemblyCompiler.TryCpu(operand.Text, sets, out InstructionSet? selected))
@@ -308,8 +474,9 @@ internal sealed partial class AssemblyNameResolver
                     codes = selected;
                 }
             }
-            else if (IsScopeDirective(kind))
+            else if (IsScopeDirective(kind) || kind == AssemblyStatementKind.Using)
             {
+                opensScope = kind == AssemblyStatementKind.Scope;
                 kind = AssemblyStatementKind.Label;
                 operation = default;
                 operand = s_emptyOperand;
@@ -322,7 +489,7 @@ internal sealed partial class AssemblyNameResolver
                     {
                         if (!AssemblySyntax.IsPlainIdentifier(name.Span)) { continue; }
                         string exported = name.ToString();
-                        Exports.TryAdd(exported, ResolveName(exported, _sites[index], index));
+                        Exports.TryAdd(exported, ResolveName(exported, _sites[index], index, usings: false));
                     }
                 }
                 catch (AssemblyError error)
@@ -339,7 +506,8 @@ internal sealed partial class AssemblyNameResolver
             {
                 Location = node.Location,
                 WidthPolicy = node.WidthPolicy,
-                Dialect = node.Dialect
+                Dialect = node.Dialect,
+                OpensScope = opensScope
             });
         }
 
@@ -363,6 +531,17 @@ internal sealed partial class AssemblyNameResolver
         _ => false
     };
 
+    // Whether a scope is another or one of its parents.
+    private static bool Encloses(Scope outer, Scope inner)
+    {
+        for (Scope? scope = inner; scope is not null; scope = scope.Parent)
+        {
+            if (scope == outer) { return true; }
+        }
+
+        return false;
+    }
+
     private static string QualifyCheap(string prefix, string name) => prefix.Length == 0 ? name : $"{prefix}::{name}";
 
     private static bool IsScopeDirective(AssemblyStatementKind kind) => kind switch
@@ -374,20 +553,21 @@ internal sealed partial class AssemblyNameResolver
         _ => false
     };
 
-    private static string ResolveName(string name, Site site, int index)
+    private string ResolveName(string name, Site site, int index, bool usings = true)
     {
         if (name.StartsWith("::", StringComparison.Ordinal)) { return name[2..]; }
         if (name[0] == '@') { return QualifyCheap(site.CheapPrefix, name); }
         int separator = name.IndexOf("::", StringComparison.Ordinal);
         if (separator < 0)
         {
-            // Symbols resolve to the innermost scope that defines them anywhere, even later in source.
+            // Symbols resolve to the innermost scope that defines them anywhere, even later in source, then to the
+            // scopes the .using directives in effect name.
             for (Scope? scope = site.Scope; scope is not null; scope = scope.Parent)
             {
                 if (scope.Definitions.Contains(name)) { return scope.Qualify(name); }
             }
 
-            return name;
+            return !usings || site.Usings is null ? name : FindUsed(name, site, index) ?? name;
         }
 
         // As in ca65, a qualifying scope binds to one already opened at this point, so a later inner namespace
@@ -472,23 +652,28 @@ internal sealed partial class AssemblyNameResolver
                 const string SizeSuffix = "::__retro_size";
                 string scopedName = ResolveName(sizeName + SizeSuffix, site, index);
                 scopedName = scopedName[..^SizeSuffix.Length];
-                if (!_sizes.TryGetValue(scopedName, out string? size))
+
+                // As in ca65, a label's size is that of the statement on its own line. A label the enclosing scopes
+                // define wins over a scope a .using makes reachable by its plain name, which has its size too.
+                string label;
+                if (!_sizes.TryGetValue(scopedName, out string? size)
+                    && !_sizes.TryGetValue(label = ResolveName(sizeName, site, index), out size))
                 {
-                    // As in ca65, a label's size is that of the statement on its own line.
-                    string label = ResolveName(sizeName, site, index);
-                    if (!_labelLines.TryGetValue(label, out int line))
+                    if (_labelLines.TryGetValue(label, out int line))
+                    {
+                        size = $"{label}::{_privatePrefix}size";
+                        (_labelSizes ??= [with(StringComparer.Ordinal)])[size] = line;
+                    }
+                    else if (FindUsedScope(sizeName, site, index) is not { } used || !_sizes.TryGetValue(used, out size))
                     {
                         _errors.Add(new(index, $"Unknown size of '{sizeName}' in .sizeof."));
                         continue;
                     }
-
-                    size = $"{label}::{_privatePrefix}size";
-                    (_labelSizes ??= [with(StringComparer.Ordinal)])[size] = line;
                 }
 
                 if (size.Length == 0)
                 {
-                    _errors.Add(new(index, ".sizeof currently requires a contiguous procedure without section or origin changes."));
+                    _errors.Add(new(index, ".sizeof requires a contiguous scope or procedure: no section or .logicalorg changes, no storage map across its ends, and not a continued scope."));
                     continue;
                 }
 

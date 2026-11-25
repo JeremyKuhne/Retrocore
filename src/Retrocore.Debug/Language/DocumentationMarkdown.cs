@@ -37,6 +37,11 @@ internal static class DocumentationMarkdown
 
                 parts.Add($"{heading}\n{string.Join("\n", entries)}");
             }
+            else if (section.Name == "Also" && section.Items.Count != 0)
+            {
+                IEnumerable<string> items = section.Items.Select(item => Also(item, resolver.Bibliography));
+                parts.Add($"{heading}: {string.Join(", ", items)}");
+            }
             else if (section.Items.Count != 0)
             {
                 IEnumerable<string> items = section.Items.Select(item => Item(item, topic, resolver, href));
@@ -83,6 +88,18 @@ internal static class DocumentationMarkdown
         };
 
     private static string Title(string name) => name == "See" ? "See also" : name;
+
+    // A historical name, then the documents that give it: "`COUT` (Apple II Reference Manual, Apple Computer, 1978)".
+    private static string Also(string item, DocumentationBibliography? bibliography)
+    {
+        if (DocumentationAlso.Parse(item) is not { } also) { return $"`{item}`"; }
+        if (also.Sources.Count == 0) { return $"`{also.Name}`"; }
+        IEnumerable<string> sources = also.Sources.Select(key => bibliography?.Find(key) is { } source
+            ? source.Link.Length != 0 ? $"[{source.Description}]({source.Link})" : source.Description
+            : key);
+
+        return $"`{also.Name}` ({string.Join("; ", sources)})";
+    }
 
     private static string Item(
         string item,
@@ -210,8 +227,17 @@ internal static class DocumentationMarkdown
         }
     }
 
-    private static string Uri(string address) =>
-        address.StartsWith("http", StringComparison.OrdinalIgnoreCase) ? address : new Uri(address.Split('#')[0]).AbsoluteUri;
+    /// <summary>
+    ///  Converts a document path to a file URI, retaining its anchor; web addresses are unchanged.
+    /// </summary>
+    /// <param name="address">The path or web address.</param>
+    /// <returns>The URI.</returns>
+    internal static string Uri(string address)
+    {
+        if (address.StartsWith("http", StringComparison.OrdinalIgnoreCase)) { return address; }
+        int anchor = address.IndexOf('#');
+        return anchor < 0 ? new Uri(address).AbsoluteUri : new Uri(address[..anchor]).AbsoluteUri + address[anchor..];
+    }
 
     // {NAME} references render as code, *bold* as Markdown bold; backticks pass through.
     private static string Inline(string text)

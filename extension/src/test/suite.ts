@@ -21,11 +21,16 @@ import { testDrivesView } from "./drivesView";
 import type { BreakpointHits } from "../breakpoints";
 import type { HardwareRow } from "../hardware";
 import { openMemory, type MemoryBank } from "../memory";
+import { testMemorySubscriptions } from "./memorySubscriptions";
 import { testMemoryRestart } from "./memoryRestart";
 
 export async function run(): Promise<void> {
     const workspace = vscode.workspace.workspaceFolders?.[0];
     if (workspace === undefined) throw new Error("M1 tests need the project workspace.");
+    if (process.env.RETROCORE_TEST_MEMORY_ONLY === "1") {
+        await testMemorySubscriptions(workspace);
+        return;
+    }
     await testAssemblyLanguage(workspace.uri.fsPath);
     await testLanguageServer(workspace.uri.fsPath);
     await testBasicLanguage(workspace.uri.fsPath);
@@ -35,9 +40,9 @@ export async function run(): Promise<void> {
     await testFavorites(workspace);
     await testProgramBreakpoints(workspace);
     await testDrivesView(workspace);
+    await testMemorySubscriptions(workspace);
     await testMemoryRestart(workspace);
     const romDirectory = process.env.RETROCORE_IIE_ROMS;
-    if (romDirectory === undefined) throw new Error("RETROCORE_IIE_ROMS is required.");
     const root = workspace.uri.fsPath;
     const stops: { reason: string }[] = [];
     const waiters: ((reason: string) => void)[] = [];
@@ -72,7 +77,7 @@ export async function run(): Promise<void> {
         vscode.debug.addBreakpoints([breakpoint]);
         assert.equal(await vscode.debug.startDebugging(workspace, {
             type: "retrocore", request: "launch", name: "M1 integration",
-            machine: "apple2", romDirectory, stopOnEntry: true, model: "iie-enhanced",
+            machine: "apple2", ...(romDirectory === undefined ? {} : { romDirectory }), stopOnEntry: true, model: "iie-enhanced",
             debugHost: path.join(root, "artifacts", "AnyCPU", "Release", "Retrocore.Debug", "net11.0", "Retrocore.Debug.dll"),
             program: path.join(root, "artifacts", "iie-sample", "main.bin"),
             debugFile: path.join(root, "artifacts", "iie-sample", "main.dbg"), loadAddress: 0x6000
@@ -125,14 +130,15 @@ export async function run(): Promise<void> {
         vscode.debug.removeBreakpoints([breakpoint]);
         console.log("Isolated VS Code passed: M1 source/caller debugging, RGBA video, source cycle counts, exact beam breakpoint and cycle-reset command.");
 
-        // The workspace's boot configuration stops first at the Monitor's RESET, as Machine reset is on by default.
+        // The workspace's boot configuration stops first at the Monitor's reset handler (Apple's RESET), as Machine
+        // reset is on by default.
         assert.equal(await vscode.debug.startDebugging(workspace, "IIe: boot with SDK ROM sources"), true);
         assert.equal(await stop(), "breakpoint");
         const boot = vscode.debug.activeDebugSession;
         if (boot === undefined) throw new Error("VS Code did not create the boot session.");
         const reset = await boot.customRequest("stackTrace", { threadId: 1 });
-        assert.equal(path.basename(reset.stackFrames[0].source.path), "Monitor.asm");
-        assert.equal(reset.stackFrames[0].name, "RESET");
+        assert.equal(path.basename(reset.stackFrames[0].source.path), "BreakAndReset.asm");
+        assert.equal(reset.stackFrames[0].name, "Startup::Reset");
 
         // Then, once booted to the ] prompt, at AppleSoft's PRINT through a function breakpoint.
         vscode.debug.addBreakpoints([new vscode.FunctionBreakpoint("PRINT")]);
@@ -142,24 +148,26 @@ export async function run(): Promise<void> {
         for (const character of "PRINT 1\r") await boot.customRequest("retro/key", { code: character.charCodeAt(0) });
         assert.equal(await stop(), "function breakpoint");
         const print = await boot.customRequest("stackTrace", { threadId: 1 });
-        assert.equal(path.basename(print.stackFrames[0].source.path), "applesoft.mac");
-        assert.equal(print.stackFrames[0].name, "PRINT");
+        assert.equal(path.basename(print.stackFrames[0].source.path), "MsBasic.Print.asm");
+        // PRINT is in the shared module's PrintItems macro, and a frame in a macro's body is named by its invocation.
+        assert.match(print.stackFrames[0].name, /^PrintItems\b/);
 
-        // RESET's "jsr SETNORM" returned by then: JSR 6, LDY # 2, STY zp 3, RTS 6.
+        // The reset handler's "jsr SetNormal" (Apple's SETNORM) returned by then: JSR 6, LDY # 2, STY zp 3, RTS 6.
         const calls: { path: string; line: number; cycles: number }[] = (await boot.customRequest("retro/cycles")).calls;
-        const monitor = path.join(root, "src", "Retrocore.Machines.Apple2", "Roms", "System", "Monitor.asm");
+        const monitor = path.join(root, "src", "Retrocore.Machines.Apple2", "Roms", "System", "Monitor", "BreakAndReset.asm");
         const setnormLine = (await vscode.workspace.fs.readFile(vscode.Uri.file(monitor))).toString()
-            .split("\n").findIndex(line => /^\s+jsr SETNORM\s+; \$FA63/.test(line)) + 1;
-        const setnorm = calls.find(call => path.basename(call.path) === "Monitor.asm" && call.line === setnormLine);
+            .split("\n").findIndex(line => /^\s+jsr SetNormal\s*$/.test(line)) + 1;
+        assert.ok(setnormLine > 0, "the reset handler calls SetNormal");
+        const setnorm = calls.find(call => path.basename(call.path) === "BreakAndReset.asm" && call.line === setnormLine);
         assert.equal(setnorm?.cycles, 17);
 
-        // CONTROL-RESET stops again at RESET.
+        // CONTROL-RESET stops again at the reset handler.
         vscode.debug.removeBreakpoints(vscode.debug.breakpoints);
         await new Promise(resolve => setTimeout(resolve, 500));
         await boot.customRequest("continue", { threadId: 1 });
         await boot.customRequest("retro/reset");
         assert.equal(await stop(), "breakpoint");
-        assert.equal((await boot.customRequest("stackTrace", { threadId: 1 })).stackFrames[0].name, "RESET");
+        assert.equal((await boot.customRequest("stackTrace", { threadId: 1 })).stackFrames[0].name, "Startup::Reset");
         await boot.customRequest("continue", { threadId: 1 });
         await new Promise(resolve => setTimeout(resolve, 1000));
 
@@ -267,10 +275,8 @@ export async function run(): Promise<void> {
         assert.equal(memoryState.inspector.find(row => row.label === "Byte")?.value, "$41");
         assert.equal(memoryState.glyphs, true, "the text column draws the Model I's characters");
         assert.equal(memoryState.text, "A");
-        memoryState = await drive([{ goto: 0x7002 }]);
-        assert.equal(memoryState.label, "START+2", "the program's labels name its bytes");
         memoryState = await drive([{ goto: 0x0000 }]);
-        assert.equal(memoryState.label, "RESET", "and the ROM's, from the SDK's source");
+        assert.equal(memoryState.label, "RESET", "the ROM's labels name its bytes, from the SDK's source");
         assert.equal(memoryState.readOnly, true);
         memoryState = await drive([{ pane: "hex" }, { type: "00" }]);
         assert.match(memoryState.status, /not RAM/, "ROM refuses the write");

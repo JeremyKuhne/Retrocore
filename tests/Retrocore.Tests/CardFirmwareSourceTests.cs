@@ -35,15 +35,16 @@ public sealed class CardFirmwareSourceTests
         SdkModules.AddTo(debug, Apple2Model.IIeEnhanced, s_inputs);
         Apple2TestMemory memory = new(machine.Bus);
 
-        ushort setMouse = (ushort)debug.Resolve("SETMOUSE", memory);
+        ushort setMouse = (ushort)debug.Resolve("SetMouse", memory);
+        debug.Resolve("SETMOUSE", memory).Should().Be(setMouse, "the historical name resolves too");
         (setMouse >> 8).Should().Be(0xC0 | mouseSlot);
-        (setMouse & 0xFF).Should().Be(MouseRom.SETMOUSE & 0xFF);
-        AtLabel(debug, memory, setMouse, "Mouse.rom.asm", "SETMOUSE");
+        (setMouse & 0xFF).Should().Be(MouseRom.SetMouse & 0xFF);
+        AtLabel(debug, memory, setMouse, "Mouse.rom.asm", ".proc SetMouse");
 
         ushort driver = (ushort)debug.Resolve("Driver", memory);
         (driver >> 8).Should().Be(0xC0 | proFileSlot);
         (driver & 0xFF).Should().Be(ProFileRom.Driver & 0xFF);
-        AtLabel(debug, memory, driver, "ProFile.rom.asm", "Driver");
+        AtLabel(debug, memory, driver, "ProFile.rom.asm", ".proc Driver");
         debug.Label(memory, (ushort)(driver + 2)).Should().Be("Driver");
 
         machine.Bus.RemoveMouse();
@@ -90,7 +91,7 @@ public sealed class CardFirmwareSourceTests
         DebugInfo debug = new();
         SdkModules.AddTo(debug, Apple2Model.IIeEnhanced, s_inputs);
         SourceMapModule slot2 = debug.Modules.OfType<SourceMapModule>().First(MouseInSlotTwo);
-        slot2.Documentation.Symbols["SETMOUSE"].Should().Be(0xC200 | (MouseRom.SETMOUSE & 0xFF));
+        slot2.Documentation.Symbols["SetMouse"].Should().Be(0xC200 | (MouseRom.SetMouse & 0xFF));
         slot2.Documentation.Symbols["CommandPort"].Should().Be(0xC080, "constants stay");
     }
 
@@ -103,19 +104,27 @@ public sealed class CardFirmwareSourceTests
         DebugInfo debug = new();
         SdkModules.AddTo(debug, Apple2Model.IIeEnhanced, s_inputs);
         string source = Path.GetFullPath(Path.Join(s_inputs, "ProFile.rom.asm"));
-        int line = Array.IndexOf(File.ReadAllLines(source), "Driver:") + 2;
+        string[] lines = File.ReadAllLines(source);
+        int line = Array.FindIndex(lines, Array.IndexOf(lines, ".proc Driver") + 1, IsCode) + 1;
         List<ushort> entries = [.. debug.Modules.SelectMany(module => module.Entries(source, line))];
         entries.Order().Should().Equal(Enumerable.Range(1, 7).Select(slot => (ushort)((0xC0 | slot) << 8 | (ProFileRom.Driver & 0xFF))));
     }
 
     private static bool MouseInSlotTwo(SourceMapModule module) =>
-        module.Area is Apple2MemoryArea.Slot2Rom && module.TryResolve("SETMOUSE", out long _);
+        module.Area is Apple2MemoryArea.Slot2Rom && module.TryResolve("SetMouse", out long _);
 
-    // The outermost line, the invocation where a routine is a macro call, follows the routine's label.
+    // The outermost line, the invocation where a routine is a macro call, is the routine's first code after its
+    // defining line (a label or a .proc line), past any comments.
     private static void AtLabel(DebugInfo debug, Apple2TestMemory memory, ushort address, string file, string label)
     {
         SourceLine line = debug.Position(memory, address)?.Chain[^1] ?? throw new AssertFailedException("No source.");
         Path.GetFileName(line.Path).Should().Be(file);
-        File.ReadAllLines(line.Path)[line.Line - 2].Should().Be($"{label}:");
+        string[] lines = File.ReadAllLines(line.Path);
+        IsCode(lines[line.Line - 1]).Should().BeTrue();
+        int before = Array.FindLastIndex(lines, line.Line - 2, IsCode);
+        lines[before].Should().Be(label);
     }
+
+    // Whether a line holds code or a label, not only a comment or nothing.
+    private static bool IsCode(string line) => line.Trim() is { Length: > 0 } code && !code.StartsWith(';');
 }

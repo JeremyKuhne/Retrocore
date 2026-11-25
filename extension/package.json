@@ -23,8 +23,9 @@
     "generate:grammar": "node scripts/generate-grammar.mjs && node scripts/generate-basic-grammar.mjs",
     "compile": "npm run generate:grammar && tsc -p .",
     "check:grammar": "node scripts/generate-grammar.mjs --check && node scripts/generate-basic-grammar.mjs --check",
-    "test:grammar": "npm run check:grammar && node --test out/test/grammar.test.js out/test/basicGrammar.test.js out/test/pascalGrammar.test.js out/test/display.test.js out/test/pictures.test.js out/test/hardware.test.js out/test/machines.test.js out/test/startFlow.test.js out/test/favorite.test.js out/test/memory.test.js out/test/drives.test.js",
+    "test:grammar": "npm run check:grammar && node --test out/test/grammar.test.js out/test/basicGrammar.test.js out/test/pascalGrammar.test.js out/test/display.test.js out/test/pictures.test.js out/test/hardware.test.js out/test/machines.test.js out/test/startFlow.test.js out/test/favorite.test.js out/test/memory.test.js out/test/drives.test.js out/test/cycles.test.js",
     "test:language": "node out/test/runTest.js --language-only",
+    "test:memory-integration": "node out/test/runTest.js --memory-only",
     "test:editor": "node out/test/runTest.js",
     "test": "npm run compile && npm run test:grammar && npm run test:editor"
   },
@@ -341,6 +342,13 @@
           "type": "string",
           "default": "",
           "description": "Path to Retrocore.Debug.dll. Empty uses the workspace build under artifacts/AnyCPU/Release/Retrocore.Debug/net11.0."
+        },
+        "retrocore.lint.unlinkedNameWords": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "scope": "resource",
+          "description": "Prose terms the unlinked-name lint does not require links for. User and workspace lists are combined."
         },
         "retrocore.basic.dialect": {
           "type": "string",
@@ -1018,6 +1026,10 @@
           "when": "false"
         },
         {
+          "command": "retrocore.lint.addUnlinkedNameWord",
+          "when": "false"
+        },
+        {
           "command": "retrocore.basic.open",
           "when": "debugType == retrocore || resourceScheme == retrocore-basic"
         },
@@ -1159,6 +1171,10 @@
       {
         "command": "retrocore.memory.test",
         "title": "Retrocore: Drive the Memory Editor"
+      },
+      {
+        "command": "retrocore.lint.addUnlinkedNameWord",
+        "title": "Retrocore: Add a Word to the Unlinked-Name Dictionary"
       },
       {
         "command": "retrocore.hardware.addCard",
@@ -1735,6 +1751,12 @@
                 "type": "boolean",
                 "description": "IIe: whether the Mockingboard is in slot 4. Off unless sound is mockingboard; the Retro Devices view's Add Card puts it in while debugging."
               },
+              "softCard3": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 4,
+                "description": "Apple III: puts Microsoft's SoftCard /// in this slot (1-4; its boot disk looks from slot 4 down), so its CP/M disk boots. The Z80 shows as its own thread, SoftCard /// Z80. The slot must be free, not one of proFiles' slots. None unless given; the Retro Devices view's Add Card puts it in while debugging."
+              },
               "softCard": {
                 "type": "integer",
                 "minimum": 1,
@@ -1825,6 +1847,14 @@
                 ],
                 "default": 1983,
                 "description": "With dos 3.3, which DOS 3.3 to boot: 1983 (the 680-0210-A System Master's) or 1980 (the 680-0051 masters')."
+              },
+              "basicSource": {
+                "enum": [
+                  "native",
+                  "macro10"
+                ],
+                "default": "native",
+                "description": "Apple II and PET: source listing for BASIC's ROM and debugger map: native Retrocore modules by default, or Microsoft's MACRO-10 source with the machine's changes as an overlay."
               },
               "diskSectors": {
                 "enum": [
@@ -2078,7 +2108,7 @@
               },
               "sdkRoms": {
                 "type": "string",
-                "description": "Directory of the SDK's ROM sources to debug instead of the copy beside the debug host, so breakpoints set in those files bind: the Apple II's Roms directory (Slot7.rom.asm, AppleSoft, System, IntegerBasic, DiskII, Dos), the TRS-80's (Level2.asm, Level1.asm, CharacterGenerator.asm, Model3.asm, Model4PBoot.asm, Model2Boot.asm and their character generators), the Color Computer's (ColorBasic.asm, ExtendedBasic.asm, DiskBasic.asm and Coco3.asm), the PET's (Basic/Basic1.mac and Basic2.mac, Basic1/Editor1.asm and Kernal1.asm, Basic2/Editor2.asm and Kernal2.asm, CharacterGenerator.asm and PetEquates.asm), the Kaypro II's (Kaypro2.asm, Kaypro2CharacterGenerator.asm and MBASIC's modules in Mbasic), or the BBC Micro's (Mos.asm, BbcBasic.asm, Dnfs.asm and Saa5050.asm, with their Mos, Basic and Dnfs folders)."
+                "description": "Directory of the SDK's ROM sources to debug instead of the copy beside the debug host, so breakpoints set in those files bind: the Apple II's Roms directory (Slot7.rom.asm, AppleSoft, Microsoft6502Basic, System, IntegerBasic, DiskII, Dos), the TRS-80's (Level2.asm, Level1.asm, CharacterGenerator.asm, Model3.asm, Model4PBoot.asm, Model2Boot.asm and their character generators), the Color Computer's (ColorBasic.asm, ExtendedBasic.asm, DiskBasic.asm and Coco3.asm), the PET's (Basic/Basic1.asm, Basic2.asm and Basic4.asm, Basic1/Editor1.asm and Kernal1.asm, Basic2/Editor2.asm and Kernal2.asm, Basic4/Editor4.asm and Kernal4.asm, CharacterGenerator.asm and PetEquates.asm, with Microsoft6502Basic beside it as in the SDK), the Kaypro II's (Kaypro2.asm, Kaypro2CharacterGenerator.asm and MBASIC's modules in Mbasic), or the BBC Micro's (Mos.asm, BbcBasic.asm, Dnfs.asm and Saa5050.asm, with their Mos, Basic and Dnfs folders)."
               },
               "breakpoints": {
                 "type": "array",

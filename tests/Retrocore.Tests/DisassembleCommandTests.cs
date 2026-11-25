@@ -75,14 +75,127 @@ public sealed class DisassembleCommandTests
 
             DisassembleCommand.Run([input, output, "--origin", "$0800", "--hints", hints, "--sdk-roms", s_inputs]).Should().Be(0);
             string source = File.ReadAllText(output);
-            source.Should().Contain("; From Monitor.asm.").And.Contain("HOME = $FC58").And.Contain("COUT = $FDED");
-            source.Should().Contain("JSR HOME").And.Contain("JSR COUT").And.Contain("PrintLoop:").And.Contain("LDA Message,X");
+            source.Should().Contain("; From Monitor.asm.").And.Contain("Home = $FC58").And.Contain("CharacterOut = $FDED");
+            source.Should().Contain("JSR Home").And.Contain("JSR CharacterOut").And.Contain("PrintLoop:").And.Contain("LDA Message,X");
             source.Should().Contain("; Prints the message.");
         }
         finally
         {
             Directory.Delete(directory, recursive: true);
         }
+    }
+
+    /// <summary>
+    ///  A Monitor routine in a family scope keeps its qualified name: the source calls it by that name and defines
+    ///  it inside its scopes, each opened once, and assembles back to the program's bytes. A page-zero byte the
+    ///  Monitor shares takes its shared name, not the name one routine gives it ($2E) or a value that equals it ($3A),
+    ///  and a .set variable's last value ($A0C0, MnemonicBits) names nothing. The Monitor's Equates.asm holds
+    ///  locations, which are kept ($25 CV, $C100 DispatchFunction); the II Plus has no IIe firmware, so only the
+    ///  Monitor names those.
+    /// </summary>
+    [TestMethod]
+    public void DisassemblyNamesScopedRoutines()
+    {
+        // $0800 JSR $F800 (LowRes::Plot); JSR $F832 (LowRes::Clear); JSR $F88C (Disassembler::Decode);
+        // JSR $F88E (Disassembler::Decode::Opcode); JSR $FDED (CharacterOut); LDA $2E; LDA $3A; LDA $A0C0; LDA $25;
+        // JSR $C100; RTS
+        byte[] program =
+        [
+            0x20, 0x00, 0xF8, 0x20, 0x32, 0xF8, 0x20, 0x8C, 0xF8, 0x20, 0x8E, 0xF8, 0x20, 0xED, 0xFD, 0xA5, 0x2E, 0xA5,
+            0x3A, 0xAD, 0xC0, 0xA0, 0xA5, 0x25, 0x20, 0x00, 0xC1, 0x60
+        ];
+
+        string directory = Directory.CreateTempSubdirectory("retrocore-disassemble-").FullName;
+        try
+        {
+            string input = Path.Join(directory, "plot.bin");
+            string output = Path.Join(directory, "plot.asm");
+            File.WriteAllBytes(input, program);
+
+            string[] args = [input, output, "--origin", "$0800", "--machine", "iiplus", "--sdk-roms", s_inputs];
+            DisassembleCommand.Run(args).Should().Be(0);
+            string source = File.ReadAllText(output);
+            source.Should().Contain("JSR LowRes::Plot").And.Contain("JSR LowRes::Clear").And.Contain("JSR CharacterOut");
+            source.Should().Contain("JSR Disassembler::Decode\n").And.Contain("JSR Disassembler::Decode::Opcode");
+            source.Should().Contain("""
+                .scope Disassembler
+                Decode = $F88C
+                .scope Decode
+                Opcode = $F88E
+                .endscope
+                .endscope
+                .scope LowRes
+                Clear = $F832
+                Plot = $F800
+                .endscope
+                """.ReplaceLineEndings("\n"));
+
+            source.Should().Contain("LDA PlotMask").And.Contain("LDA ProgramCounter").And.NotContain("MnemonicBits");
+            source.Should().Contain("LDA CV").And.Contain("JSR DispatchFunction");
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
+    ///  A hint's name that looks like a scoped name's stand-in keeps its own address: the stand-ins are chosen apart
+    ///  from the hints' and the machine's names.
+    /// </summary>
+    [TestMethod]
+    public void HintNamedLikeAStandInKeepsItsAddress()
+    {
+        // $0800 STA $0300 (the hint's Scoped__0); JSR $F800 (LowRes::Plot); RTS
+        byte[] program = [0x8D, 0x00, 0x03, 0x20, 0x00, 0xF8, 0x60];
+        string directory = Directory.CreateTempSubdirectory("retrocore-disassemble-").FullName;
+        try
+        {
+            string input = Path.Join(directory, "store.bin");
+            string hints = Path.Join(directory, "hints.json");
+            string output = Path.Join(directory, "store.asm");
+            File.WriteAllBytes(input, program);
+            File.WriteAllText(hints, """{ "names": { "$0300": "Scoped__0" } }""");
+
+            string[] args = [input, output, "--origin", "$0800", "--hints", hints, "--sdk-roms", s_inputs];
+            DisassembleCommand.Run(args).Should().Be(0);
+            string source = File.ReadAllText(output);
+            source.Should().Contain("STA Scoped__0").And.Contain("Scoped__0 = $0300").And.Contain("JSR LowRes::Plot");
+            source.Should().Contain(".scope LowRes\nPlot = $F800\n.endscope\n");
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
+    ///  A scope two files' names share is opened in the first file's group and continued in the second's, so the
+    ///  source assembles, calling each by its qualified name.
+    /// </summary>
+    [TestMethod]
+    public void ScopeSharedByTwoFilesIsContinued()
+    {
+        string exported = ".cpu Mos6502\nScoped__0 = $F800\nScoped__1 = $C100\n.org $0800\n    JSR Scoped__0\n    JSR Scoped__1";
+        Dictionary<string, string> files = new(StringComparer.Ordinal)
+        {
+            ["Scoped__0"] = "Monitor.asm",
+            ["Scoped__1"] = "Firmware.asm"
+        };
+
+        ScopedNames scoped = new([]);
+        scoped.StandInFor("Escape::A").Should().Be("Scoped__0");
+        scoped.StandInFor("Escape::B").Should().Be("Scoped__1");
+
+        string source = DisassembleCommand.Arrange(exported, "A test.", files, [], scoped);
+
+        source.Should().Contain("; From Firmware.asm.\n.scope Escape\nB = $C100\n.endscope\n");
+        source.Should().Contain("; From Monitor.asm.\n.scope Escape continued\nA = $F800\n.endscope\n");
+        source.Should().Contain("JSR Escape::A\n    JSR Escape::B");
+        AssemblyOptions options = new(ProcessorVariant.Mos6502, 0x0800, 6);
+        AssemblyResult result = new Retrocore.Assembler.Assembler().Assemble(new AssemblySource(source, "shared.asm"), options);
+        result.Diagnostics.Should().BeEmpty();
+        result.Sections[0].Bytes.ToArray().Should().Equal(0x20, 0x00, 0xF8, 0x20, 0x00, 0xC1);
     }
 
     /// <summary>
@@ -150,11 +263,37 @@ public sealed class DisassembleCommandTests
             string output = Path.Join(directory, "MasterCreate.asm");
             string[] args = ["--disk", disk, "--file", "MASTER CREATE", output, "--dos", "3.3-1980", "--sdk-roms", s_inputs];
             DisassembleCommand.Run(args).Should().Be(0);
-            File.ReadAllText(output).Should().Contain("JSR GETLN").And.Contain("STA PWREDUP");
+            File.ReadAllText(output).Should().Contain("JSR GetLine").And.Contain("STA SoftEntryCheck");
         }
         finally
         {
             Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
+    ///  A definition in a module's part, in a folder beside the module's main file, is named as the module's when a
+    ///  disassembly picks between names at one address; a file with no such main file is its own module.
+    /// </summary>
+    [TestMethod]
+    public void PartsInAModuleFolderBelongToTheModule()
+    {
+        string folder = Directory.CreateTempSubdirectory("retrocore-module").FullName;
+        try
+        {
+            File.WriteAllText(Path.Join(folder, "Monitor.asm"), ".include \"Monitor/Screen.asm\"\n");
+            string part = Path.Join(Directory.CreateDirectory(Path.Join(folder, "Monitor")).FullName, "Screen.asm");
+            File.WriteAllText(part, "    rts\n");
+            string other = Path.Join(Directory.CreateDirectory(Path.Join(folder, "Other")).FullName, "Lone.asm");
+            File.WriteAllText(other, "    rts\n");
+
+            MachineSymbols.ModuleFile(part).Should().Be("Monitor.asm");
+            MachineSymbols.ModuleFile(other).Should().Be("Lone.asm");
+            MachineSymbols.ModuleFile(Path.Join(folder, "Monitor.asm")).Should().Be("Monitor.asm");
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
         }
     }
 

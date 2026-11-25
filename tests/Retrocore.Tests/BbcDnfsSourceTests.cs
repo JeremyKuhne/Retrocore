@@ -100,8 +100,8 @@ public sealed class BbcDnfsSourceTests
             isDirective: name => DirectiveDocs.Describe(name) is not null,
             isInstruction: InstructionDocs.IsMnemonic);
 
-        List<string> problems = [.. resolver.Check()
-            .Select(problem => $"{Path.GetFileName(problem.Path)}:{problem.Line + 1}: {problem.Message}")
+        List<string> problems = [.. resolver.Lint()
+            .Select(problem => $"{Path.GetFileName(problem.Path)}:{problem.Line + 1}: {problem.Text}")
             .Order()];
 
         problems.Should().BeEmpty($"the lint found:{Environment.NewLine}{string.Join(Environment.NewLine, problems)}");

@@ -285,8 +285,10 @@ const grammar = {
             ]
         },
         merlin: {
-            begin: "\\A[ \\t]*;[ \\t]*(?i:retrocore:[ \\t]*dialect=merlin)[ \\t]*$",
-            beginCaptures: { "0": { name: "comment.line.semicolon.retrocore" } },
+            // Spaced as the tools read it, the pragma may carry the documentation lint's words too, before or after the dialect:
+            // whole words separated by whitespace, up to a " -- " reason.
+            begin: "\\A[ \\t]*; (?i:retrocore:)(?![ \\t]* -- )[ \\t]*(?:[^\\s]+(?![ \\t]* -- )[ \\t]+)*?(?i:dialect=merlin)(?=[ \\t]|$).*$",
+            beginCaptures: { "0": { patterns: [{ include: "#comments" }] } },
             end: "(?!)",
             patterns: [
                 { match: "^[*;].*$", name: "comment.line.semicolon.retrocore" },
@@ -313,10 +315,13 @@ const grammar = {
             ]
         },
         "constant-definition": {
-            begin: `^[ \\t]*(${definition})[ \\t]*(=|(?i:\\.set)${boundary})`,
+            // Name = expr, Name := expr, Name .set expr, and Name: .equ expr or Name: .set expr.
+            begin: `^[ \\t]*(${definition})(?:[ \\t]*(:?=|(?i:\\.set)${boundary})|(:)[ \\t]*((?i:\\.(?:equ|set))${boundary}))`,
             beginCaptures: {
                 "1": { name: "variable.other.constant.definition.retrocore" },
-                "2": { name: "keyword.operator.assignment.retrocore" }
+                "2": { name: "keyword.operator.assignment.retrocore" },
+                "3": { name: "punctuation.separator.label.retrocore" },
+                "4": { name: "keyword.control.directive.retrocore" }
             },
             end: "$",
             patterns: operands
@@ -381,7 +386,7 @@ const grammar = {
                     patterns: operands
                 })),
                 {
-                    begin: `\\G[ \\t]*((?i:\\.(?:equ|set|byte|word|dword|res|org|logicalorg|align|dum|dend|checksum|assert|export|hiascii|section|include|incbin|macro|endmacro|local|exitmacro|if|elseif|else|endif|ifdef|ifndef|ifblank|repeat|endrepeat|proc|endproc|scope|endscope|setcpu|p02|pc02|psc02|segment|code|rodata|data|bss|zeropage|addr|endmac|endrep|define|undefine|struct|endstruct|union|endunion|enum|endenum|tag|charmap|asciiz|byt|dbyt|faraddr|lobytes|hibytes|ifconst|ifnconst|ifnblank|ifp02|ifp02x|ifpsc02|ifpc02|ifpwc02|ifpce02|ifp816|ifp4510|ifp45gs02|ifp6280|ifpdtv|ifpm740|ifpsweet16|ifref|ifnref|feature|debuginfo|list|smart|out|warning|error|fatal|global|globalzp|import|importzp|exportzp|macpack|reloc|mac)))${boundary}`,
+                    begin: `\\G[ \\t]*((?i:\\.(?:equ|set|byte|word|dword|res|org|logicalorg|align|dum|dend|checksum|assert|export|hiascii|section|include|incbin|macro|endmacro|local|exitmacro|if|elseif|else|endif|ifdef|ifndef|ifblank|repeat|endrepeat|proc|endproc|scope|endscope|using|setcpu|p02|pc02|psc02|segment|code|rodata|data|bss|zeropage|addr|endmac|endrep|define|undefine|struct|endstruct|union|endunion|enum|endenum|tag|charmap|asciiz|byt|dbyt|faraddr|lobytes|hibytes|ifconst|ifnconst|ifnblank|ifp02|ifp02x|ifpsc02|ifpc02|ifpwc02|ifpce02|ifp816|ifp4510|ifp45gs02|ifp6280|ifpdtv|ifpm740|ifpsweet16|ifref|ifnref|feature|debuginfo|list|smart|out|warning|error|fatal|global|globalzp|import|importzp|exportzp|macpack|reloc|mac)))${boundary}`,
                     beginCaptures: { "1": { name: "keyword.control.directive.retrocore" } },
                     end: "$",
                     patterns: operands
@@ -404,6 +409,29 @@ const grammar = {
                         { match: "<(?![\\s=\\d])[^<>]+>", name: "markup.underline.link.retrocore" },
                         { match: "\\{[\\w@.:]+\\}", name: "variable.parameter.documentation.retrocore" },
                         { match: "`[^`]*`", name: "markup.inline.raw.retrocore" }
+                    ]
+                },
+                {
+                    // A "; retrocore:" pragma (docs/NativeAssembly.md), spaced as the tools read it: its words, and an exclusion's rule IDs. The
+                    // reason after " -- " stays a plain comment.
+                    begin: "(;) ((?i:retrocore:))",
+                    beginCaptures: {
+                        "1": { name: "punctuation.definition.comment.retrocore" },
+                        "2": { name: "keyword.other.pragma.retrocore" }
+                    },
+                    end: "$",
+                    name: "comment.line.pragma.retrocore",
+                    patterns: [
+                        { match: " -- .*$", name: "comment.line.semicolon.retrocore" },
+                        {
+                            match: "(?<![\\w-])((?i:dialect|style|overlay|ignore))(=)",
+                            captures: {
+                                "1": { name: "keyword.other.pragma.retrocore" },
+                                "2": { name: "keyword.operator.assignment.retrocore" }
+                            }
+                        },
+                        { match: "(?<=[=,])[a-z]+(?:-[a-z]+)*", name: "constant.other.pragma.retrocore" },
+                        { match: "[:|,]", name: "punctuation.separator.pragma.retrocore" }
                     ]
                 },
                 {

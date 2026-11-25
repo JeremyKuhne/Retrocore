@@ -31,8 +31,18 @@ PLOT:
 
 To every assembler and dialect we support, `;;` is still an ordinary comment, so documented sources stay
 valid for ca65, Merlin 32 and MACRO-10. In MACRO-10, `;;` inside a macro definition traditionally means
-the comment is not copied into expansions. Documentation never goes inside a macro body, so the two uses
-don't meet.
+the comment is not copied into expansions.
+
+A `.macro`'s body, native or ca65, may hold documentation: a `;;` block above a definition in the body documents
+the symbol each expansion defines, as a shared module written as macros (Microsoft 6502 BASIC's) needs. Its topic
+has the name the body writes, in the scopes around the macro's definition (`Draw::name` for `name:` in a macro
+defined in `.scope Draw`), wherever it's expanded. When that body's definition is the only one of the name the build expands, and it
+expands the line once, the topic has the value of the symbol that expansion defines, which a scope around the
+expansion qualifies (`Basic::COMBYT` for `COMBYT` expanded in `.scope Basic`); otherwise, as when a definition
+outside the macro or another expanded macro's body shares the name, it has the value of a symbol of the name the
+body writes, if any. A label or constant the build doesn't expand is not checked, as one in a branch of
+conditional assembly the build leaves out isn't; one it expands, in a named scope or more than once, is checked
+like any other. Historical names in a macro's body follow section 2.4.
 
 ### 1.2 What a comment documents
 
@@ -47,10 +57,11 @@ documented is also a lint error.
 | --- | --- | --- |
 | A label followed by an instruction | Routine | Address in each model, and the model if under `.if` |
 | A label followed by data (`.byte`, `.word`, `.res`, a data macro, `.repeat`) | Table | Address and size |
-| `NAME = value` or `.equ` | Constant | Value |
-| `.set NAME, value` | Variable | First value |
+| `NAME = value`, `NAME := value` or `NAME: .equ value` | Constant | Value |
+| `NAME .set value`, `NAME: .set value` or `.set NAME, value` | Variable | First value |
 | `.macro NAME params` | Macro | Parameter list |
 | `.enum`, `.struct`, `.union` | Enum, Struct | Members and their values or offsets |
+| A member of a `.struct`, `.union` or `.enum` | Member | Its offset or value, named as the assembler names it (`Iob::COMMAND`) |
 | `.scope`, `.proc` | Scope | Members |
 | `.define NAME` | Definition | Parameter list |
 
@@ -60,7 +71,14 @@ Rules:
   `Entry:` below), unless they have their own comment.
 - **Trailing comments** document the definition on their own line when they start with `;;`: a constant in
   an equate list, or a member of an `.enum` or `.struct`. For example, `KEY_CR = $8D ;; Control-M, Return`.
-  The SDK sources' trailing address comments (`; $F800`) stay ordinary comments.
+  The SDK sources' trailing address comments (`; $F800`) stay ordinary comments. A member may have a trailing
+  `;;` comment or a `;;` block above it, not both.
+- **Members** of a `.struct`, `.union` or `.enum` are definitions like any other: a `;;` block above one
+  documents it, with every section a definition can have, `Also:` among them. Its topic has the name the
+  assembler gives the member: the type's (`Iob::COMMAND`), the members of an anonymous `.union` or `.struct`
+  inside a named type being the named type's, and those of a named nested type being in its scope too
+  (`Outer::Inner::FIELD`). A block above a member that opens a nested type (`INNER .struct Inner`) documents the
+  member, `Outer::INNER`; the nested type has no topic of its own.
 - **Headings over a group** are plain `;` comments. A `;;` block above a definition that has its own trailing
   `;;` comment is a lint error, because it reads as the group's heading but would document only the first
   definition:
@@ -78,8 +96,18 @@ Rules:
 - **Conditional code.** A definition documented in more than one branch of an `.if` is one topic. Each
   branch's sections apply to the builds that branch assembles for: the IIe's `ENHANCED` switch by the launched
   model, and any other condition by the symbol values the running build was assembled with, so `MODEL = 1`'s
-  `Keeps:` is checked in the Model I's Level II and not in the Model III's. A condition the debugger cannot
-  evaluate, such as one on a symbol the build lacks, applies. The tools label sections by model or condition.
+  `Keeps:` is checked in the Model I's Level II and not in the Model III's. Where the documentation comes from
+  an assembly of the source (the lint, the editor, the generated reference), the assembler says which lines it
+  skipped, so a branch's sections are the build's when the line they document was assembled, for any kind of
+  definition, as the assembler chose: an `.ifdef` of a macro defined after it is not taken, and a file the
+  assembly never opened has nothing in the build. Only sections that differ between branches depend on the
+  build; those every branch shares, and a definition documented once, apply to every build. The editor trusts
+  the assembler's answer while the source has errors too, as far as an error can't have changed it: what the root
+  file chose before the first error found while expanding the source (a line that doesn't parse counts), and what
+  any file assembled before it. An error found only once code is laid out, such as an undefined name, leaves the
+  answer whole. Where the assembler's answer can't be trusted, and for documentation from a debug file, which has
+  no source, the condition is evaluated from the build's symbols and the macros the files define. A condition that can't be evaluated, such as one on a symbol the build lacks, applies. The tools label
+  sections by model or condition.
 - **MACRO-10 sources** follow the same rules. Overlay markers (`;@REPLACE`, `;@END`) are plain comments and
   never part of a documentation comment. Microsoft's `m6502.asm` is pinned and can't gain `;;` lines, so its
   routines are documented from the overlay (an `;@INSERT BEFORE` block holding the `;;` comment) or with
@@ -155,10 +183,11 @@ Both forms parse to the same sections, so every tool treats them alike.
 | `Stack:` | | Bytes of stack used, including calls | |
 | `Model:` | | `Original`, `Enhanced`, or both (on IIe sources) | Generated from `.if` when omitted |
 | `Parameters:` | `<param>`, `<typeparam>` | Macro and `.define` parameters | Names must match the signature |
-| `Members:` | | Enum or struct members not documented with trailing comments | Names must be members |
+| `Members:` | | Enum or struct members documented by neither a block nor a trailing comment | Names must be members without documentation of their own |
 | `Example:` | `<example>` | Text and code blocks | |
 | `See:` (or `See also:`) | `<seealso>` | A comma list of links | Every link resolves |
 | `Deprecated:` | `[Obsolete]` | Why, and what to use instead | Callers get a warning |
+| `Also:` | | Historical names, each with the documents that give it: `COUT (A2RM78)` (section 2.4) | Keys are in the bibliography; uses get a quick fix |
 | `Inherit:` | `<inheritdoc>` | See section 3 | Target resolves; no cycles |
 | `Include:` | `<include>` | See section 3 | File and topic exist |
 
@@ -196,8 +225,11 @@ checked line by line:
 A flag's letter is reported with its word (`name the C flag by its word, 'carry'`), as are branch conditions
 such as `NZ`, which say the same as `zero` with its meaning turned around. The words come from the CPU's
 instruction-set description (the `flag` lines of `OpcodeTables.txt` and `Z80Isa.txt`), with what each flag
-means; hovering a flag's word in a `;;` comment shows its letter and meaning, as in **negative (N) flag**. A
-new CPU names its flags with the same words, adding one only for a flag no CPU has had.
+means. Comment hovers are shown only for explicit links, not for bare symbol or flag names. Hovering anywhere
+inside a link shows its target's documentation, including on its display text or module qualifier. A
+new CPU names its flags with the same words, adding one only for a flag no CPU has had. Instruction-link
+hovers use the CPU at the include site; when the same line is included under different CPUs, no instruction
+hover is shown until their CPUs agree.
 
 ### 2.3 Text formatting
 
@@ -217,6 +249,90 @@ Two additions:
 - A **register or parameter reference** in braces, such as `{A}`, refers to an entry of the routine's own
   `In:`, `Out:` or `Parameters:` section. This is the equivalent of `<paramref>`. The tools check the name,
   and the reference renders in code style.
+
+### 2.4 Historical names
+
+A definition whose name differs from the one a manual, listing or other source gave it keeps the old name in an
+`Also:` section. A name from a document is never dropped: it is the definition's name, or in its `Also:`, or,
+where an `Also:` would clash with another definition or old name in the same assembly or can't apply (in a macro's
+body, one the build expands more than once or whose name differs in each expansion, below), named in the definition's prose with the document that gives it.
+
+```asm
+;; Prints a character through the output hook.
+;; In: A = the character, with its high bit set
+;; Also: COUT (A2RM78)
+CharacterOut = $FDED
+```
+
+- **Items** are comma-separated: the name, then in parentheses the keys of the documents that use it, from
+  the bibliography (`COUT (A2RM78, A2RM79)`). A definition may have several names.
+- **The bibliography** is the table in [Bibliography.md](Bibliography.md), which the SDK ships. A
+  `Bibliography.md` in a source's folder, or any folder above it, adds documents of its own or replaces a key.
+  Hover shows each key's title, publisher and year.
+- **The assembler** reads `Also:` sections and resolves an old name to its definition wherever no symbol has
+  that name, so a listing typed in from a book (`jsr COUT`) assembles. A definition of the same name wins. An
+  old name that two definitions in the assembly give is an error where code uses it, naming both. Old names are
+  plain: `Monitor::RDKEY` does not reach `Monitor::ReadKey`'s `RDKEY`. Conditional assembly sees old names as
+  code does, for definitions earlier in the source (`.ifdef COUT`, `.if COUT = $FDED`).
+- **What can have one:** a label, constant or `.proc` entry, or a member of a `.struct`, `.union` or `.enum`,
+  including one in a macro's body (below). An `Also:` on a `.scope` or a named `.struct`, `.union` or `.enum` is a
+  lint error and names nothing (`OLD::Member` does not resolve); one on a member that opens a nested type
+  (`INNER .struct Inner`) names the member. A member's own name may be its old name too (`;; Also: COMMAND (DOS33)` on
+  `Iob::COMMAND`), since it does not resolve outside its type without a `.using`; two types that both do that for
+  the same name clash, as any shared old name does. `.sizeof` takes only a `.proc`'s current name. An old name for a
+  `.set` variable is the value it had where it was documented, not where code uses it. Two definitions in different
+  branches of conditional assembly (one model's routine and another's) can share an old name: each build has only
+  one of them.
+- **In a macro's body:** each expansion defines the definition again, so an old name reaches it only when the
+  build expands that line exactly once. It then reaches the symbol that expansion defines, qualified by any scope
+  around the expansion, wherever any other old name does: in the assembler (and in conditionals after the
+  expansion), links, the lint, the editor and the debugger; the quick fix writes the qualified name. An expansion in a branch
+  of conditional assembly the build leaves out doesn't count, and one inside another macro's expansion does.
+  - **Expanded more than once:** the old name reaches none of the definitions, and the lint reports an `also`
+    error saying how many times the build defines it: give the old name in prose instead. A conditional between
+    the first expansion and the second sees the first one's old name, since the assembler learns of the second
+    only when it gets there.
+  - **Not known:** where the documentation has no assembly's definitions (in the editor while the file has errors,
+    or from a debug file), it can't count expansions, so these old names reach nothing there. Two expansions in
+    the same scope are such an error: the assembler reports the duplicate symbol, and the lint can't count them.
+  - **Never expanded:** the old name reaches nothing, and its `Also:` gets no diagnostic: the build has no
+    definition, as for one in a branch it leaves out, and a build that expands the macro checks it. The exceptions
+    are the names below that no build could give, which the lint reports either way. Unlike an old name in a
+    branch the build leaves out, a link by it reaches nothing either, and the lint reports the link; link by the
+    current name instead.
+  - **Two macros' bodies that define the same name** share one topic, but each old name reaches the symbol its
+    own macro's expansion defines. An old name that two definitions in the topic give (two macros' bodies, or one
+    and a definition outside it) is a lint warning, as for any two definitions.
+  - **A name that differs in each expansion** gets no old name: one a parameter gives (`name:` in
+    `.macro Entry name`, or in the body of a macro defined in `Entry`'s), a `.local` name, or a cheap local
+    (`@loop`). Nor does a `.set` variable in a macro's body, which has a version for each assignment. The lint
+    reports an `also` error on each, whether or not the build expands the macro, and even where expansions are
+    not known, since no build could give these names.
+  - A definition outside the macro that shares the name keeps its own old names, whatever the macro's
+    expansions, except one an expansion's `Also:` gives too: that old name is ambiguous, in code and in links,
+    like any old name two definitions give.
+  - This holds for a `.macro` body, native or ca65. Don't give old names in a Merlin (`MAC`) or MACRO-10
+    (`DEFINE`) macro's body: the assembler gives them nothing there. In a ca65 source, the short `.mac` and
+    `.endmac` count as `.macro` and `.endmacro`.
+  - **In an anonymous `.scope`:** an expansion there defines a symbol the assembly doesn't publish. The assembler
+    still gives it the old name when the build expands the line once, but the documentation and the editor can't
+    see it, and the lint can't count such expansions: with one there and one elsewhere, the editor shows the old
+    name reaching the other while the assembler resolves nothing. Name such a definition's old name in prose.
+- **Members:** a member's old name reaches the qualified member: `;; Also: IBCMD (DOS33)` above `COMMAND .byte`
+  in `.struct Iob` makes `lda #IBCMD` assemble as `lda #Iob::COMMAND`, and `<IBCMD>` link to it. Two types may
+  have members of the same name (`Iob::VOLUME`, `FileParameters::VOLUME`), but not the same old name, as for any
+  two definitions. The quick fix writes the qualified name, since a member's own name does not resolve outside
+  its type unless a `.using` names the type.
+- **The debugger** resolves an old name in a watch or expression to its definition's value. A watch has no place
+  in the source, so no `.using` applies to it: an old name wins over a scoped member's plain name there.
+- **A `.using`** comes before old names: where `.using Iob` is in effect, `VOLUME` is `Iob::VOLUME` even if
+  another definition gives `VOLUME` as an old name. The editor warns at such a use (`using-shadow`), since code
+  typed in from a listing means the old name's definition; its quick fixes write either full name, the one the
+  `.using` gives first, which keeps the bytes the same.
+- **The editor** treats an old name as its definition: hover (which says it is a historical name), go to
+  definition, and links (`<COUT>`). Completion matches old names too, so typing `COUT` offers `CharacterOut`,
+  and workspace symbol search finds `CharacterOut (COUT)`. Each use in code gets an information message, with a
+  quick fix that writes the current name.
 
 ## 3. Inheriting and including documentation
 
@@ -279,7 +395,7 @@ repository root.
 | --- | --- |
 | `NAME` | A symbol, macro or definition (4.3) |
 | `Scope::NAME`, `::NAME` | A qualified symbol, as the assembler resolves it |
-| `Module:NAME` | A symbol in a named SDK module, from its root file's name: `Monitor:COUT`, `Firmware:B_FUNC`, `AppleSoft:CHRGET`, `Slot7:DriverEntry`, `Level2:READY` |
+| `Module:NAME` | A symbol in a named SDK module, from its root file's name: `Monitor:COUT`, `Firmware:B_FUNC`, `AppleSoft:CHRGET`, `Slot7:Driver`, `Level2:READY` |
 | `$F800` | The documented label at that address, in the topic's model and memory area |
 | `NAME@Original`, `NAME@Enhanced` | That model's version of a name that differs between models |
 | `NAME#Section` | A section of a topic: `<PLOT#Keeps>` |
@@ -293,15 +409,37 @@ A plain `NAME` is looked up in this order. The first match wins.
 
 1. The comment's own `{parameters}` and section entries, when written `{NAME}` (section 2.3).
 2. The assembler's scope rules, from the scope the definition is in, outward to the file's root.
+   Then the scopes named by the `.using` directives in effect at the comment, innermost directive first, as
+   code there would find them ([NativeAssembly.md](NativeAssembly.md), "Using a scope's names"); a name two
+   scopes of one directive define is ambiguous.
 3. The rest of the current assembly: other files included or composed into it, such as `m6502.asm` under
    `applesoft.mac`.
 4. The other SDK modules for the same machine (such as the Monitor, firmware, AppleSoft, Integer BASIC, DOS
    and slot ROMs on the Apple II, or the Model I's ROMs), using the build for the topic's model.
 5. Macros and `.define`s, then directives and instructions.
 
+At each step, a name that is no definition's but is a historical name in an `Also:` section (section 2.4)
+reaches that definition.
+
 If a step finds the name in more than one place, the link is **ambiguous**. Examples are a name defined in
 both firmware sources, or in both branches of an `.if` with different meanings. The lint reports it, the
 link renders to the first match, and the author qualifies it (`Monitor:`, `@Enhanced`).
+
+A source that builds several variants with `.if`, such as DOS 3.3 and 3.2, the Monitor's four models or
+AppleSoft's builds, is documented once and linted once per build. In each build a link reaches only what that build
+assembles. Steps 2 and 3 pass over a definition in a branch the build leaves out, a macro defined there and the
+definitions in its body, and a historical name only such a branch gives. If the build has no definition of the
+name there, the link reaches nothing: it does not fall through to another module. A link that names the source's own
+module (`Monitor:`) also reaches this build's definition first. It reaches another build's only through that build's
+set, where the editor or the lint has one (`Firmware:SELFTEST@Original`). When no set has the definition, the lint
+reports the link in each build that lacks it. A link in a branch the build leaves out is reported for this reason only
+by the builds that take the branch. So in a comment every build assembles, link only what every build defines, and
+name the others in backticks or describe them. The names in a section's entries (`In:`, `Uses:`) are not links and may
+name another build's definitions. A macro the build defines but never expands keeps its body's definitions: a
+library's macro that no build expands looks the same as one that only another build expands. In a macro the build
+expands, a definition in a branch of the body that no expansion takes is another build's. A comment in the body of a
+macro the build doesn't expand is checked by the builds that do. Documentation without the assembly's report of what
+it skipped, such as a debug file's, links every branch as before, as does one whose assembly failed.
 
 An unresolved link is a warning in the editor. It renders as plain text, never as a
 broken link.
@@ -337,8 +475,54 @@ broken link.
   - that `Entry:` labels lie inside the routine;
   - that each `;;` block sits directly above a definition it can document (section 1.2);
   - uses of a definition with a `Deprecated:` section, at each use;
+  - `Also:` items: their form, that their keys are in the bibliography, and that an old name is not also a
+    definition or another definition's old name; in a macro's body, that the build doesn't define it more than once
+    and its name doesn't differ by expansion (section 2.4); and, as information with a quick fix, each use of an
+    old name in code;
+  - in a source whose first line is `; retrocore: style=strict`, the style guide's checks
+    ([AssemblyStyle.md](AssemblyStyle.md)), unlinked names of documented definitions in prose (other than scopes) among them;
   - that every exported symbol is documented, by its own comment or as an `Entry:` (or stacked label) of a
     documented routine.
+
+  Each diagnostic names its rule, by an ID the editor shows as the diagnostic's code and messages printed outside
+  the editor end with in brackets (`Line is over 120 columns. [line-length]`):
+
+  | ID | What it reports |
+  | --- | --- |
+  | `line-length` | A line over 120 columns. |
+  | `ascii` | A character outside plain ASCII. |
+  | `trailing-doc` | A trailing `;;` comment, which goes above the definition instead (a type's member may have one). |
+  | `label-alone` | A label sharing its line with code. |
+  | `address-name` | A name that is only an address, such as `L_F8C2`. |
+  | `column-zero` | A definition, label or block directive not at column 0. |
+  | `indent` | Instructions and data not 4 columns in; a macro's body not one level in per block; a type's members not one level in, or a nested type's not one more. |
+  | `comment-indent` | A comment not indented like the code it describes. |
+  | `unlinked-name` | Prose naming a documented definition without a link. |
+  | `link` | A link to no definition, file or address. |
+  | `ambiguous-link` | A link that names definitions in more than one place. |
+  | `also` | Every `Also:` problem: its form, its bibliography keys, a name already taken, one in a macro's body that can't reach its definition. |
+  | `sections` | The sections' form: `Entry:`, `Members:`, `Parameters:`, `Inherit:`, `Include:`, `Flags:`, register lists, `name = meaning` entries, `{name}` references. |
+  | `historical-name` | Information on a use of an old name in code, with its quick fix. |
+  | `deprecated` | A use of a definition with a `Deprecated:` section. |
+  | `using-shadow` | A use of an old name that a `.using` makes mean another definition, with quick fixes for either name. |
+  | `undocumented-export` | An exported symbol with no `;;` documentation. |
+  | `placement` | A `;;` block that documents nothing it can (section 1.2): errors only. |
+  | `exclusion` | A problem with an exclusion itself: an unknown ID, a misplaced one, or one that turns nothing off. |
+
+  The IDs are a public contract: a rule may be split, with its old ID still covering both, but not renamed.
+
+  An `ignore=` exclusion (AssemblyStyle.md, [Turning a rule off](AssemblyStyle.md#turning-a-rule-off)) turns a
+  rule off for a file, a line of code or a `;;` block, and `unlinked-name`, `link`, `ambiguous-link`,
+  `address-name`, `label-alone`, `historical-name`, `deprecated` and `using-shadow` can be narrowed to names
+  (`ignore=link:Nowhere`); another rule with a name is an error. Errors can't be ignored, so naming `placement` or
+  `exclusion` is an error. An unknown ID is a warning, and an exclusion that turns nothing off is information. That is reported
+  only where the lint looked: `historical-name`, `deprecated` and `using-shadow` run in the editor alone, and a `;;` block of a
+  definition another build assembles is checked by that build.
+
+  For terms that should remain plain throughout a workspace, set `retrocore.lint.unlinkedNameWords` to a list of
+  case-sensitive names in VS Code's workspace or user settings. The editor combines the user, workspace and folder
+  lists; there are no default words. This affects `unlinked-name` warnings only, not explicit links or other rules.
+  The warning's quick fixes add its name to the workspace's or the user's list.
 
 ## 6. Open questions
 
@@ -352,10 +536,11 @@ broken link.
 | Parser and model (`;;` blocks, sections, links) | `src/Retrocore.Assembler/Documentation/DocumentationParser*.cs`, `DocumentationComment`, `DocumentationSection`, `DocumentationText` |
 | Topics with assembly values, `.if` merging | `DocumentationSet`, `DocumentationTopic` |
 | Links, `Inherit:`, `Include:`, the lint | `DocumentationResolver*.cs` |
-| Hover, completion, editor diagnostics | `src/Retrocore.Debug/Language/DocumentationMarkdown.cs`, `LanguageWorkspace.Documentation.cs` |
+| Rule IDs and exclusions | `DocumentationRules`, `DocumentationParser.Exclusions.cs`, `DocumentationExclusions` (the one filter the editor and the tests use) |
+| Hover, completion, editor diagnostics | `src/Retrocore.Debug/Language/DocumentationMarkdown.cs`, `LanguageWorkspace.Documentation.cs`, `LintEditor.cs` (rule codes, exclusion quick fixes, rule completion and hover) |
 | `Keeps:`/`Uses:` checks and the Variables scope | `src/Retrocore.Debug/DebugContracts.cs`, `DebugSession.cs` |
 | C# summaries for exports | `src/Retrocore.Generators/ExportDocumentation.cs` |
-| Highlighting | `extension/scripts/generate-grammar.mjs` (`comment.line.documentation.retrocore`) |
+| Highlighting | `extension/scripts/generate-grammar.mjs` (`comment.line.documentation.retrocore`, and `comment.line.pragma.retrocore` for `; retrocore:` words and rule IDs) |
 
 The SDK's ROM sources use the format, and `SdkDocumentationTests` keeps them free of lint problems. Its
 `EveryRepositorySourceIsCleanInTheEditor` lints every assembly source under `src` and `sample` as the editor reads

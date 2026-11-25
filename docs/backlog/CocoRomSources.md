@@ -81,5 +81,7 @@ assembles byte-identically, without describing how it was produced or linking lo
 
 ## After this
 
-A BASIC thread for Color BASIC, as Level II and AppleSoft have (statement breakpoints, stepping, variables), needs
-the sources' names for the interpreter's loop and pointers, so it follows this work as its own plan.
+A BASIC thread for Color BASIC, as Level II and AppleSoft have (statement breakpoints, stepping, variables), needed
+the sources' names for the interpreter's loop and pointers. It is built for the CoCo 1 and 2
+([debugging BASIC programs](BasicDebugging.md#color-basic)); the CoCo 3's Super Extended BASIC, now that its ROM is a
+source too, is what is left.

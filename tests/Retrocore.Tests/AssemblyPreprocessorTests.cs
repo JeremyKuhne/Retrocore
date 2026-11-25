@@ -124,6 +124,143 @@ public partial class AssemblyPreprocessorTests
     }
 
     /// <summary>
+    ///  On Windows, an include rooted without being fully qualified is reported, not read from wherever current-
+    ///  directory state points.
+    /// </summary>
+    /// <param name="request">The include request.</param>
+    [TestMethod]
+    [OSCondition(OperatingSystems.Windows)]
+    [DataRow(@"\lib\local.inc")]
+    [DataRow("C:local.inc")]
+    public void CurrentDirectoryIncludesAreReportedOnWindows(string request)
+    {
+        Resolver resolver = new();
+        AssemblyResult result = new NativeAssembler().Assemble(
+            new AssemblySource($".include \"{request}\"", @"C:\root\main.asm"),
+            Options(resolver));
+
+        result.Diagnostics.Single().Message.Should().Be($"Invalid include path: An include path must be relative or fully qualified, not '{request}'.");
+    }
+
+    /// <summary>
+    ///  On Windows, a search path rooted without being fully qualified is reported by its own name, not under a
+    ///  combined path the source never wrote.
+    /// </summary>
+    [TestMethod]
+    [OSCondition(OperatingSystems.Windows)]
+    public void CurrentDirectorySearchPathsAreReportedOnWindows()
+    {
+        AssemblyResult result = new NativeAssembler().Assemble(
+            new AssemblySource(".include \"local.inc\"", @"C:\root\main.asm"),
+            Options(new Resolver(), includePaths: [@"\search"]));
+
+        result.Diagnostics.Single().Message.Should().Be(@"Invalid include path: A search path must be relative or fully qualified, not '\search'.");
+    }
+
+    /// <summary>
+    ///  An include reports what its resolver throws for a path, including the <see cref="NotSupportedException"/>
+    ///  .NET Framework hosts throw for some paths, rather than letting it out of the assembler.
+    /// </summary>
+    [TestMethod]
+    public void IncludeResolverErrorsAreReported()
+    {
+        (Exception Error, string Message)[] cases =
+        [
+            (new ArgumentException("Bad name."), "Invalid include path: Bad name."),
+            (new NotSupportedException("Bad format."), "Invalid include path: Bad format."),
+            (new IOException("Unreadable."), "Include could not be read: Unreadable."),
+            (new UnauthorizedAccessException("Denied."), "Include access was denied: Denied."),
+        ];
+
+        foreach ((Exception error, string message) in cases)
+        {
+            AssemblyResult result = new NativeAssembler().Assemble(
+                new AssemblySource(".include \"part.inc\"", P("root/main.asm")),
+                Options(new ThrowingResolver(error)));
+
+            result.Diagnostics.Single().Message.Should().Be(message);
+        }
+
+        // A Merlin PUT probes the resolver before it becomes an include; the probe leaves an invalid path to it.
+        AssemblyOptions merlin = new(ProcessorVariant.Mos6502, origin: 0x1000, imageSize: 32)
+        {
+            Dialect = AssemblyDialect.Merlin,
+            SourceResolver = new ThrowingResolver(new NotSupportedException("Bad format."))
+        };
+
+        new NativeAssembler().Assemble(new AssemblySource("        PUT part\n", P("root/main.s")), merlin)
+            .Diagnostics.Single().Message.Should().Be("Invalid include path: Bad format.");
+    }
+
+    /// <summary>
+    ///  A MACRO-10 overlay reports what its resolver throws for the base, as an include does, rather than letting
+    ///  it out of the assembler.
+    /// </summary>
+    [TestMethod]
+    public void OverlayBaseResolverErrorsAreReported()
+    {
+        Exception[] errors =
+        [
+            new AssemblyError(line: 0, "Invalid RetrocoreDialect metadata 'z80'."),
+            new IOException("The base could not be read."),
+            new UnauthorizedAccessException("The base is denied."),
+            new NotSupportedException("The base's path format is not supported."),
+        ];
+
+        foreach (Exception error in errors)
+        {
+            AssemblyResult overlay = new NativeAssembler().Assemble(
+                new AssemblySource("; retrocore: dialect=macro10 overlay=base.mac\n", P("root/main.mac")),
+                Options(new ThrowingResolver(error)));
+
+            overlay.Diagnostics.Single().Message.Should().Be($"Cannot resolve overlay base 'base.mac': {error.Message}");
+        }
+    }
+
+    /// <summary>
+    ///  A name no path can hold, reached by a Merlin PUT or USE probe or a MACRO-10 overlay's base rather than an
+    ///  .include, is reported as a diagnostic, not thrown out of the assembler.
+    /// </summary>
+    /// <param name="request">The requested name.</param>
+    [TestMethod]
+    [DataRow("bad\0name")]
+    public void InvalidDialectRequestsAreReported(string request) => DialectRequestsAreReported(request);
+
+    /// <summary>
+    ///  On Windows, a Merlin PUT or USE name or a MACRO-10 overlay's base rooted without being fully qualified is
+    ///  reported as an .include's is, not thrown out of the assembler.
+    /// </summary>
+    /// <param name="request">The requested name.</param>
+    [TestMethod]
+    [OSCondition(OperatingSystems.Windows)]
+    [DataRow("C:part")]
+    [DataRow(@"\part")]
+    public void CurrentDirectoryDialectRequestsAreReportedOnWindows(string request) => DialectRequestsAreReported(request);
+
+    private static void DialectRequestsAreReported(string request)
+    {
+        Resolver resolver = new();
+        AssemblyOptions options = new(ProcessorVariant.Mos6502, origin: 0x1000, imageSize: 32)
+        {
+            Dialect = AssemblyDialect.Merlin,
+            SourceResolver = resolver
+        };
+
+        foreach (string operation in (string[])["PUT", "USE"])
+        {
+            AssemblyResult merlin = new NativeAssembler().Assemble(new AssemblySource($"        {operation} {request}\n", P("root/main.s")), options);
+
+            merlin.Diagnostics.Single().Message.Should().StartWith("Invalid include path: ");
+        }
+
+        AssemblyResult overlay = new NativeAssembler().Assemble(
+            new AssemblySource($"; retrocore: dialect=macro10 overlay={request}\n", P("root/main.mac")),
+            Options(resolver));
+
+        overlay.Diagnostics.Single().Message.Should().StartWith($"Cannot resolve overlay base '{request}': ");
+    }
+
+    /// <summary>
     ///  Runtime filesystem access is explicit and keeps relative include semantics.
     /// </summary>
     [TestMethod]
@@ -428,6 +565,157 @@ public partial class AssemblyPreprocessorTests
     }
 
     /// <summary>
+    ///  A condition whose line fails to expand, such as a function refusing its operand, reports only that error:
+    ///  the conditional still opens, false, so its <c>.else</c>, <c>.elseif</c> and <c>.endif</c> stay matched, as
+    ///  they do for a condition that is not a constant.
+    /// </summary>
+    /// <param name="dialect">The source dialect.</param>
+    /// <param name="text">The source.</param>
+    /// <param name="line">The zero-based line of the one expected error.</param>
+    /// <param name="message">The one expected error.</param>
+    [TestMethod]
+    [DataRow(AssemblyDialect.Native, ".if Undefined = 1\n.byte 1\n.endif", 0, "Conditional requires a constant known at this point in source order.")]
+    [DataRow(AssemblyDialect.Native, ".if .definedmacro(1+2)\n.byte 1\n.endif", 0, ".definedmacro requires one macro name.")]
+    [DataRow(AssemblyDialect.Native, ".if .const(.sizeof(Later))\n.byte 1\n.endif\nLater: .byte 0", 0, ".const cannot test a size known only once the program is laid out.")]
+    [DataRow(AssemblyDialect.Native, ".if 1\n.if .definedmacro(1+2)\n.else\n.byte 1\n.endif\n.endif", 1, ".definedmacro requires one macro name.")]
+    [DataRow(AssemblyDialect.Native, ".if 0\n.elseif .definedmacro(1+2)\n.byte 1\n.else\n.byte 2\n.endif", 1, ".definedmacro requires one macro name.")]
+    [DataRow(AssemblyDialect.Native, ".ifdef .definedmacro(1+2)\n.byte 1\n.endif", 0, ".definedmacro requires one macro name.")]
+    [DataRow(AssemblyDialect.Native, ".if 1\n.byte 1\n.endif .definedmacro(1+2)\n.byte 2", 2, ".definedmacro requires one macro name.")]
+    [DataRow(AssemblyDialect.Native, ".if 1\n.byte 1\n.else .definedmacro(1+2)\n.byte 2\n.endif", 2, ".definedmacro requires one macro name.")]
+    [DataRow(AssemblyDialect.Native, ".define COND .if\nCOND .definedmacro(1+2)\n.byte 1\n.endif", 1, ".definedmacro requires one macro name.")]
+    [DataRow(AssemblyDialect.Native, ".macro M\n.if .definedmacro(1+2)\n.endif\n.endmacro\nM", 1, ".definedmacro requires one macro name.")]
+    [DataRow(AssemblyDialect.Ca65, ".if .definedmacro(1+2)\n.byte 1\n.endif", 0, ".definedmacro requires one macro name.")]
+    [DataRow(AssemblyDialect.Ca65, ".define COND .if\nCOND .definedmacro(1+2)\n.byte 1\n.endif", 1, ".definedmacro requires one macro name.")]
+    [DataRow(AssemblyDialect.Ca65, ".if .const(.sizeof(Later))\n.byte 1\n.endif\nLater: .byte 0", 0, ".const cannot test a size known only once the program is laid out.")]
+    [DataRow(AssemblyDialect.Ca65, ".if 0\n.elseif .definedmacro(1+2)\n.byte 1\n.endif", 1, ".definedmacro requires one macro name.")]
+    [DataRow(AssemblyDialect.Merlin, " DO 1\n DO ]undefined+)\n DFB 1\n ELSE\n DFB 2\n FIN\n FIN", 1, "Invalid Merlin symbol.")]
+    [DataRow(AssemblyDialect.Merlin, " IF MX=1\n DFB 1\n ELSE\n DFB 2\n FIN", 0, "65816 IF MX is unsupported.")]
+    [DataRow(AssemblyDialect.Merlin, " DFB X+:a\n__merlin_0 DO 1\n DFB 1\n ELSE\n DFB 2\n FIN", 1, "Merlin label '__merlin_0' collides with a generated alias.")]
+    public void FailedConditionsStillOpenTheirConditional(AssemblyDialect dialect, string text, int line, string message)
+    {
+        AssemblyResult result = Assemble(text, dialect);
+        result.Diagnostics.Select(error => (error.Message, error.Location?.Line)).Should().Equal((message, line));
+    }
+
+    /// <summary>
+    ///  An <c>.elseif</c> after a taken branch is not tested, as in ca65, so a condition that would fail to expand
+    ///  there reports nothing and its branch is skipped. A failing condition inside an inactive block is not read
+    ///  either; those rows guard that the fix keeps it so.
+    /// </summary>
+    /// <param name="dialect">The source dialect.</param>
+    /// <param name="text">The source, which assembles the bytes 1 and 4.</param>
+    [TestMethod]
+    [DataRow(AssemblyDialect.Native, ".if 1\n.byte 1\n.elseif .definedmacro(1+2)\n.byte 2\n.else\n.byte 3\n.endif\n.byte 4")]
+    [DataRow(AssemblyDialect.Ca65, ".if 1\n.byte 1\n.elseif .definedmacro(1+2)\n.byte 2\n.else\n.byte 3\n.endif\n.byte 4")]
+    [DataRow(AssemblyDialect.Native, ".byte 1\n.if 0\n.if .definedmacro(1+2)\n.byte 2\n.elseif .definedmacro(1+2)\n.endif\n.endif\n.byte 4")]
+    [DataRow(AssemblyDialect.Ca65, ".byte 1\n.if 0\n.if .definedmacro(1+2)\n.byte 2\n.elseif .definedmacro(1+2)\n.endif\n.endif\n.byte 4")]
+    [DataRow(AssemblyDialect.Merlin, " DFB 1\n DO 0\n DO ]bad+)\n DFB 2\n FIN\n FIN\n DFB 4")]
+    public void UntestedFailingConditionsReportNothing(AssemblyDialect dialect, string text)
+    {
+        AssemblyResult result = Assemble(text, dialect);
+        result.Diagnostics.Should().BeEmpty();
+        result.Sections.Single(section => section.Bytes.Length != 0).Bytes.Span[..2].ToArray().Should().Equal(1, 4);
+    }
+
+    /// <summary>
+    ///  An <c>.elseif</c> with no conditional open, here at the top of a macro body, reports both its condition's
+    ///  error and that it is unexpected, as ca65 does.
+    /// </summary>
+    /// <param name="dialect">The source dialect.</param>
+    [TestMethod]
+    [DataRow(AssemblyDialect.Native)]
+    [DataRow(AssemblyDialect.Ca65)]
+    public void UnexpectedElseIfReportsItsFailedCondition(AssemblyDialect dialect)
+    {
+        AssemblyResult result = Assemble(".macro M\n.elseif .definedmacro(1+2)\n.endmacro\n.if 1\nM\n.endif", dialect);
+        result.Diagnostics.Select(error => (error.Message, error.Location?.Line)).Should().Equal(
+            (".definedmacro requires one macro name.", 1),
+            ("Unexpected .ELSEIF.", 1));
+    }
+
+    /// <summary>
+    ///  A conditional directive that a text definition spells keeps its place in the nesting inside an inactive block,
+    ///  as in ca65, which expands definitions everywhere: it opens, continues or closes there, and an
+    ///  <c>.elseif</c> it spells can take its branch. Other lines in the block stay unread.
+    /// </summary>
+    /// <param name="dialect">The source dialect.</param>
+    /// <param name="text">The source.</param>
+    /// <param name="expected">The one byte the source assembles.</param>
+    [TestMethod]
+    [DataRow(AssemblyDialect.Native, ".define COND .if\n.if 0\nCOND 1\n.byte 1\n.endif\n.byte 5\n.endif\n.byte 6", 6)]
+    [DataRow(AssemblyDialect.Ca65, ".define COND .if\n.if 0\nCOND 1\n.byte 1\n.endif\n.byte 5\n.endif\n.byte 6", 6)]
+    [DataRow(AssemblyDialect.Native, ".define EI .elseif\n.if 0\n.byte 1\nEI 1\n.byte 2\n.endif", 2)]
+    [DataRow(AssemblyDialect.Ca65, ".define EI .elseif\n.if 0\n.byte 1\nEI 1\n.byte 2\n.endif", 2)]
+    [DataRow(AssemblyDialect.Native, ".define EL .else\n.define EN .endif\n.if 0\n.byte 1\nEL\n.byte 2\nEN", 2)]
+    [DataRow(AssemblyDialect.Native, ".define COND .if\n.if 0\nCOND .definedmacro(1+2)\n.endif\n.endif\n.byte 7", 7)]
+    [DataRow(AssemblyDialect.Native, ".define IFX(x) .if x\n.if 0\nIFX(1)\n.byte 1\n.endif\n.byte 2\n.endif\n.byte 3", 3)]
+    [DataRow(AssemblyDialect.Ca65, ".define IFX(x) .if x\n.if 0\nIFX(1)\n.byte 1\n.endif\n.byte 2\n.endif\n.byte 3", 3)]
+    [DataRow(AssemblyDialect.Native, ".define K .byte\n.if 0\nK .definedmacro(1+2)\n.endif\n.byte 9", 9)]
+    public void DefinedConditionalsNestInInactiveBlocks(AssemblyDialect dialect, string text, int expected)
+    {
+        AssemblyResult result = Assemble(text, dialect);
+        result.Diagnostics.Should().BeEmpty();
+        result.Sections.Single(section => section.Bytes.Length != 0).Bytes.Span[0].Should().Be((byte)expected);
+    }
+
+    /// <summary>
+    ///  A label before a conditional directive that a text definition spells is defined, as on the directive written
+    ///  out, as ca65 does.
+    /// </summary>
+    /// <param name="dialect">The source dialect.</param>
+    [TestMethod]
+    [DataRow(AssemblyDialect.Native)]
+    [DataRow(AssemblyDialect.Ca65)]
+    public void LabelsOnDefinedConditionalsAreDefined(AssemblyDialect dialect)
+    {
+        AssemblyResult result = Assemble(".define IFX .if\nOpened: IFX 1\n.byte 1\n.endif\n.word Opened", dialect);
+        result.Diagnostics.Should().BeEmpty();
+        result.Symbols.Should().ContainKey("Opened");
+    }
+
+    /// <summary>
+    ///  As in ca65, an opening parenthesis right after a directive starts its operand, so <c>.if(1)</c> reads as
+    ///  <c>.if (1)</c>, for conditionals, data, repeats, assignments, structure members and one a definition spells.
+    /// </summary>
+    /// <param name="dialect">The source dialect.</param>
+    /// <param name="text">The source.</param>
+    /// <param name="first">The first byte assembled.</param>
+    /// <param name="second">The second byte assembled.</param>
+    [TestMethod]
+    [DataRow(AssemblyDialect.Native, ".if(1)\n.byte 1\n.endif\n.byte 2", 1, 2)]
+    [DataRow(AssemblyDialect.Ca65, ".if(1)\n.byte 1\n.endif\n.byte 2", 1, 2)]
+    [DataRow(AssemblyDialect.Native, ".if(0)\n.byte 1\n.elseif(1)\n.byte 3\n.endif\n.byte 2", 3, 2)]
+    [DataRow(AssemblyDialect.Ca65, ".if(0)\n.byte 1\n.elseif(1)\n.byte 3\n.endif\n.byte 2", 3, 2)]
+    [DataRow(AssemblyDialect.Native, ".byte(1)\n.word(2)", 1, 2)]
+    [DataRow(AssemblyDialect.Ca65, ".byte(1)\n.word(2)", 1, 2)]
+    [DataRow(AssemblyDialect.Native, ".repeat(2)\n.byte 7\n.endrepeat", 7, 7)]
+    [DataRow(AssemblyDialect.Ca65, ".res(2), $EA", 0xEA, 0xEA)]
+    [DataRow(AssemblyDialect.Native, ".define IFX .if\nIFX(1)\n.byte 1\n.endif\n.byte 2", 1, 2)]
+    [DataRow(AssemblyDialect.Native, "Value .set(3)\n.byte Value, 4", 3, 4)]
+    [DataRow(AssemblyDialect.Ca65, "Value .set(3)\n.byte Value, 4", 3, 4)]
+    [DataRow(AssemblyDialect.Ca65, "Value .set(1 <> 0)\n.byte Value, 4", 1, 4)]
+    [DataRow(AssemblyDialect.Ca65, "Value .set(2 | 1 + 1)\n.byte Value, 5", 4, 5)]
+    [DataRow(AssemblyDialect.Native, ".struct Pair\nFirst .byte\nSecond .res(2)\n.endstruct\n.byte .sizeof(Pair), Pair::Second", 3, 1)]
+    [DataRow(AssemblyDialect.Ca65, ".struct Pair\nFirst .byte\nSecond .res(2)\n.endstruct\n.byte .sizeof(Pair), Pair::Second", 3, 1)]
+    public void DirectivesTakeAParenthesizedOperandWithoutASpace(AssemblyDialect dialect, string text, int first, int second)
+    {
+        AssemblyResult result = Assemble(text, dialect);
+        result.Diagnostics.Should().BeEmpty();
+        result.Sections.Single(section => section.Bytes.Length != 0).Bytes.Span[..2].ToArray().Should().Equal((byte)first, (byte)second);
+    }
+
+    /// <summary>
+    ///  A parenthesized operand right after a directive that takes none is reported as its operand, as ca65 does, and
+    ///  the conditional still closes.
+    /// </summary>
+    [TestMethod]
+    public void ParenthesizedOperandOnEndIfIsReported()
+    {
+        AssemblyResult result = Assemble(".if(1)\n.byte 1\n.endif(1)", AssemblyDialect.Native);
+        result.Diagnostics.Select(error => (error.Message, error.Location?.Line)).Should().Equal((".endif takes no operand.", 2));
+    }
+
+    /// <summary>
     ///  Include depth is measured from the root and metadata collections are copied before use.
     /// </summary>
     [TestMethod]
@@ -547,6 +835,11 @@ public partial class AssemblyPreprocessorTests
     private static AssemblyResult Assemble(string text, IAssemblySourceResolver? resolver = null) =>
         new NativeAssembler().Assemble(new AssemblySource(text, "main.asm"), Options(resolver));
 
+    private static AssemblyResult Assemble(string text, AssemblyDialect dialect) =>
+        new NativeAssembler().Assemble(
+            new AssemblySource(text, "main.asm"),
+            new(ProcessorVariant.Mos6502, origin: 0x1000, imageSize: 32) { Dialect = dialect });
+
     private static AssemblyOptions Options(
         IAssemblySourceResolver? resolver = null,
         IReadOnlyList<string>? includePaths = null,
@@ -557,5 +850,4 @@ public partial class AssemblyPreprocessorTests
                 IncludePaths = includePaths ?? [],
                 SdkPaths = sdkPaths ?? []
             };
-
 }

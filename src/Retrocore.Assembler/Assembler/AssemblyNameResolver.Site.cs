@@ -12,7 +12,8 @@ internal sealed partial class AssemblyNameResolver
     /// <param name="scope">The enclosing lexical namespace.</param>
     /// <param name="cheapPrefix">The cheap-local context in effect.</param>
     /// <param name="anonymous">The unnamed-label group visible here.</param>
-    private readonly struct Site(Scope scope, string cheapPrefix, List<(int Index, string Name)> anonymous)
+    /// <param name="usings">The <c>.using</c> directives in effect, innermost first.</param>
+    private readonly struct Site(Scope scope, string cheapPrefix, List<(int Index, string Name)> anonymous, Using? usings)
     {
         /// <summary>
         ///  Gets the lexical scope.
@@ -28,5 +29,10 @@ internal sealed partial class AssemblyNameResolver
         ///  Gets unnamed-label definitions visible at this site.
         /// </summary>
         internal List<(int Index, string Name)> Anonymous { get; } = anonymous;
+
+        /// <summary>
+        ///  Gets the innermost <c>.using</c> in effect, which links to the ones outside it.
+        /// </summary>
+        internal Using? Usings { get; } = usings;
     }
 }

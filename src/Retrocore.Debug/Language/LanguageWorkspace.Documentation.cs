@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
+using Retrocore.Assembler;
 using Retrocore.Documentation;
 
 namespace Retrocore.Debug.Language;
@@ -24,7 +25,11 @@ internal sealed partial class LanguageWorkspace
         isDirective: name => DirectiveDocs.Describe(name) is not null,
         isInstruction: InstructionDocs.IsMnemonic,
         readText: path => OpenText(path) ?? (File.Exists(path) ? File.ReadAllText(path) : null),
-        root: RepositoryRoot(analysis.Root));
+        root: RepositoryRoot(analysis.Root))
+    {
+        Bibliography = SourceBibliography.For(analysis.Root, analysis.Members),
+        IgnoreUnlinkedName = IgnoreUnlinkedName
+    };
 
     /// <summary>
     ///  Finds the documentation of a definition.
@@ -61,7 +66,25 @@ internal sealed partial class LanguageWorkspace
     /// <returns>A file URI with a line fragment, or null.</returns>
     internal string? Href(DocumentationTarget target, string path)
     {
-        if (target.Topic is { } topic) { return FileLink(topic.Path, topic.Line); }
+        if (target.Topic is { } topic)
+        {
+            // Where macros' bodies share the topic with other definitions of the name, the target's symbol is one of
+            // them: its own comment, a definition outside the bodies first, as without the macro. Only a definition
+            // in the build counts: a body the build expands once, or one outside in the build's branch. Failing
+            // those, the link opens the only definition the build has, if it has just one.
+            bool Gives(DocumentationComment comment) =>
+                topic.Set.ReachesInBuild(comment) && topic.Set.SymbolOf(topic, comment) == target.Name;
+
+            List<DocumentationComment> defining = [.. topic.Comments.Where(topic.Set.ReachesInBuild)];
+            DocumentationComment? own = topic.Comments.Any(comment => comment.Macro is not null)
+                ? topic.Comments.FirstOrDefault(comment => comment.Macro is null && Gives(comment))
+                    ?? topic.Comments.FirstOrDefault(Gives)
+                    ?? (defining.Count == 1 ? defining[0] : null)
+                : null;
+
+            return own is null ? FileLink(topic.Path, topic.Line) : FileLink(own.Path, own.Line);
+        }
+
         bool macro10 = AnalysisOf(path)?.UsesMacro10(path) ?? SourceText.Macro10Dialect(path, LinesOf(path)) == true;
         foreach (SourceAnalysis analysis in AllAnalyses())
         {
@@ -77,40 +100,34 @@ internal sealed partial class LanguageWorkspace
     private static string FileLink(string path, int line) => $"{new Uri(path).AbsoluteUri}#L{line + 1}";
 
     /// <summary>
-    ///  Gets the documentation problems of an analysis as editor diagnostics, by file: the lint, and uses of
-    ///  deprecated definitions.
+    ///  Gets the documentation problems of an analysis as editor diagnostics, by file: the lint, uses of deprecated
+    ///  definitions and of historical names, less what the files' <c>ignore=</c> exclusions turn off. Each carries
+    ///  its rule's ID as its code.
     /// </summary>
     private Dictionary<string, List<Diagnostic>> DocumentationDiagnostics(SourceAnalysis analysis)
     {
+        Dictionary<DocumentationDiagnostic, (string Name, string? Alternative)> replacements = [];
+        List<DocumentationDiagnostic> own = [.. Deprecated(analysis), .. HistoricalNames(analysis, replacements)];
         Dictionary<string, List<Diagnostic>> byFile = [with(StringComparer.OrdinalIgnoreCase)];
-        void Add(string path, int line, string message, DiagnosticSeverity severity)
+        foreach (DocumentationDiagnostic diagnostic in ResolverFor(analysis).Lint(own, DocumentationRules.EditorRules))
         {
+            string path = Path.GetFullPath(diagnostic.Path);
             if (!byFile.TryGetValue(path, out List<Diagnostic>? list)) { byFile[path] = list = []; }
-            list.Add(new Diagnostic
-            {
-                Range = LineRange(path, line, 0),
-                Severity = severity,
-                Source = "retrocore docs",
-                Message = message
-            });
+            (string Name, string? Alternative)? fix = replacements.TryGetValue(diagnostic, out var found) ? found : null;
+            list.Add(LintEditor.ToDiagnostic(diagnostic, LineRange(path, diagnostic.Line, 0), fix?.Name, fix?.Alternative));
         }
 
-        DocumentationResolver resolver = ResolverFor(analysis);
-        foreach (DocumentationDiagnostic diagnostic in resolver.Check())
-        {
-            DiagnosticSeverity severity = diagnostic.Severity == DocumentationSeverity.Error
-                ? DiagnosticSeverity.Error
-                : DiagnosticSeverity.Warning;
+        return byFile;
+    }
 
-            Add(Path.GetFullPath(diagnostic.Path), diagnostic.Line, diagnostic.Message, severity);
-        }
-
-        // Code that uses a deprecated definition, here or in the SDK, gets a warning at each use.
+    // Code that uses a deprecated definition, here or in the SDK, gets a warning at each use.
+    private IEnumerable<DocumentationDiagnostic> Deprecated(SourceAnalysis analysis)
+    {
         List<DocumentationTopic> deprecated = [.. SdkAnalyses().Append(analysis)
             .SelectMany(source => source.Documentation.Topics)
             .Where(topic => topic.Section("Deprecated") is not null)];
 
-        if (deprecated.Count == 0) { return byFile; }
+        if (deprecated.Count == 0) { yield break; }
         foreach (string member in analysis.Members)
         {
             string[] lines = analysis.LinesOf(member);
@@ -125,13 +142,140 @@ internal sealed partial class LanguageWorkspace
                     if (!definition && Mentions(code, name))
                     {
                         string reason = topic.Section("Deprecated")?.Text ?? "";
-                        Add(member, line, $"{name} is deprecated. {reason}".Trim(), DiagnosticSeverity.Warning);
+                        yield return new(
+                            $"{name} is deprecated. {reason}".Trim(),
+                            member,
+                            line,
+                            DocumentationSeverity.Warning,
+                            DocumentationRules.Deprecated)
+                        {
+                            Name = name
+                        };
                     }
                 }
             }
         }
+    }
 
-        return byFile;
+    // Code written with a historical name gets an information message at each use, which a quick fix replaces with
+    // the definition's current name. A name that two definitions give is the assembler's error instead. Where a
+    // .using makes the name mean another definition, the use gets a warning, since code typed in from a listing
+    // would mean the old name's definition; its quick fixes write either name.
+    private List<DocumentationDiagnostic> HistoricalNames(
+        SourceAnalysis analysis,
+        Dictionary<DocumentationDiagnostic, (string Name, string? Alternative)> replacements)
+    {
+        List<DocumentationDiagnostic> diagnostics = [];
+        Dictionary<string, string?> current = [with(StringComparer.Ordinal)];
+        HashSet<string> own = [with(StringComparer.Ordinal)];
+        foreach (DocumentationSet set in analysis.OtherModules(SdkAnalyses()).Select(sdk => sdk.Documentation).Prepend(analysis.Documentation))
+        {
+            bool thisBuild = ReferenceEquals(set, analysis.Documentation);
+            foreach (string name in set.AlsoNames)
+            {
+                // A name a root symbol has is never historical; one a scope defines is checked at each use, below.
+                if (analysis.Defines(name)) { continue; }
+
+                // The file's own build gives its old names first: an SDK module's Also: of the same spelling, which
+                // the build does not include, neither replaces nor cancels one the build gives.
+                if (!thisBuild && own.Contains(name)) { continue; }
+
+                IReadOnlyList<DocumentationTopic> topics = set.FindAlso(name, thisBuild);
+                IReadOnlyList<string> symbols = topics.Count == 1 ? set.SymbolsOf(topics[0], name, thisBuild) : [];
+                string? replacement = symbols.Count == 1 ? symbols[0] : null;
+                current[name] = current.TryGetValue(name, out string? earlier) && earlier != replacement ? null : replacement;
+
+                // Only a name the build gives takes precedence, and only for the definition it gives it to: the
+                // assembler's own table of historical names says so. Anything else stays as ambiguous with the SDK's
+                // as before. While the file has errors there is no such table, and the text alone cannot say what
+                // the assembler would make of conditions, repeats, macros and scoped includes, so the merge behaves
+                // as before then.
+                bool given = replacement is not null
+                    && topics.Count == 1
+                    && analysis.Result.Success
+                    && analysis.Result.HistoricalNames.TryGetValue(name, out AssemblySymbol? target)
+                    && target.Name == replacement;
+
+                if (thisBuild && given)
+                {
+                    own.Add(name);
+                }
+            }
+        }
+
+        if (current.Count == 0) { return diagnostics; }
+        foreach (string member in analysis.Members)
+        {
+            string[] lines = analysis.LinesOf(member);
+            foreach ((int line, int start, string name) in SourceText.CodeNames(lines))
+            {
+                if (!current.TryGetValue(name, out string? replacement) || replacement is null) { continue; }
+
+                // A name the line's scopes or .using directives define binds there, not to the historical name; a
+                // .using that does so is reported, as the code may mean the old name. A root-qualified ::Name is the
+                // plain name at the root, which no scope or .using changes.
+                bool root = start >= 2 && lines[line].AsSpan(start - 2, 2) is "::";
+                if (!root && analysis.Bound(name, member, line) is not null)
+                {
+                    if (Shadowed(analysis, name, member, line, start, replacement) is { } shadowed)
+                    {
+                        diagnostics.Add(shadowed.Diagnostic);
+                        replacements[shadowed.Diagnostic] = (shadowed.Used, replacement);
+                    }
+
+                    continue;
+                }
+
+                DocumentationDiagnostic diagnostic = new(
+                    $"{name} is a historical name of {replacement}.",
+                    member,
+                    line,
+                    DocumentationSeverity.Information,
+                    DocumentationRules.HistoricalName)
+                {
+                    Name = name,
+                    Column = start,
+                    Length = name.Length
+                };
+
+                diagnostics.Add(diagnostic);
+                replacements[diagnostic] = (replacement, null);
+            }
+        }
+
+        return diagnostics;
+    }
+
+    // The warning for a historical name that a .using brings to another definition at a use, and that definition's
+    // name; null when the code's own scopes bind it, or the .using reaches more than one definition site (even of one
+    // name), so the fix would be a guess.
+    private static (DocumentationDiagnostic Diagnostic, string Used)? Shadowed(
+        SourceAnalysis analysis,
+        string name,
+        string member,
+        int line,
+        int start,
+        string replacement)
+    {
+        if (analysis.BoundThroughUsing(name, member, line) is not { } used) { return null; }
+
+        // A .using is native syntax only, and does not reach into an included file, so the names compare as the
+        // native dialect's do: case matters.
+        if (used.Count != 1 || used[0].Name == replacement) { return null; }
+        string target = used[0].Name;
+        DocumentationDiagnostic diagnostic = new(
+            $"{name} is a historical name of {replacement}, but the .using in effect here makes it {target}.",
+            member,
+            line,
+            DocumentationSeverity.Warning,
+            DocumentationRules.UsingShadow)
+        {
+            Name = name,
+            Column = start,
+            Length = name.Length
+        };
+
+        return (diagnostic, target);
     }
 
     // Whether code uses a name as a whole word in an operand or operation (not as the label it defines).

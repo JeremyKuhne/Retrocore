@@ -80,11 +80,10 @@ internal sealed partial class DebugSession
         };
     }
 
-    // The most memory references to keep sending memory events for.
+    // The most memory references without an editor subscriber to keep sending memory events for.
     private const int MemoryViewLimit = 32;
 
-    // The memory views that have read, oldest first, each by its reference as the view gave it: a memory event must
-    // name a view's reference exactly for VS Code to refresh it.
+    // The memory views that have read, least recently used first. Live editor subscribers are not evicted.
     private readonly List<MemoryView> _memoryViews = [];
 
     // Running frames since the last memory events, which go out every few frames while the machine runs.
@@ -195,7 +194,7 @@ internal sealed partial class DebugSession
             readOnly.Add(index, value is not null && !Writable(bank, (ushort)at));
         }
 
-        Track(reference, bank, address, offset, count);
+        Track(reference, bank, address, offset, count, args.String("subscriber"));
         return new JsonObject
         {
             ["address"] = $"0x{address + offset:X4}",
@@ -214,7 +213,10 @@ internal sealed partial class DebugSession
     ///   A label counts where its module's code or data is in memory now, as the call stack and disassembly decide,
     ///   so a ROM's labels go when the language card maps RAM over it. An address takes the first module's label,
     ///   and within a module the first name in order. Constants the CPU's instructions address memory through, such
-    ///   as the Monitor's <c>CH</c> at $24, name the bytes no label does, whatever is mapped there.
+    ///   as the Monitor's <c>CursorColumn</c> at $24, name the bytes no label does, whatever is mapped there. The
+    ///   program's constants come first; where the SDK's modules name one address differently, the one the
+    ///   disassembler's <c>MachineSymbols.Rank</c> puts first names it, as the Monitor's <c>CursorColumn</c> rather
+    ///   than AppleSoft's <c>TerminalPosition</c>.
     ///  </para>
     ///  <para>
     ///   Each has its <c>kind</c>: what its documentation declares it, such as <c>routine</c> or <c>table</c>; else
@@ -339,17 +341,18 @@ internal sealed partial class DebugSession
             labels[address] = name;
         }
 
-        // Then the constants the CPU's instructions address memory through, such as the Monitor's CH, which name RAM
-        // rather than code, so they apply whatever is mapped there, while the code that uses them is in memory; a
-        // label at the same address comes first.
+        // Then the constants the CPU's instructions address memory through, such as the Monitor's CursorColumn, which
+        // name RAM rather than code, so they apply whatever is mapped there, while the code that uses them is in
+        // memory; a label at the same address comes first.
         if (!constants) { return (labels, labels); }
         SortedDictionary<int, string> names = [];
         foreach ((int address, string name) in labels) { names.Add(address, name); }
         foreach ((int address, string name, bool _) in SourceNames(bank, memory, SourceNameKinds.Constants, names.ContainsKey))
         {
             // A constant names what the CPU's instructions reach at its address, so in a bank's view it names the
-            // bank's byte only where the CPU reads the bank there now: the Monitor's BRKV is main RAM's $03F0, not
-            // auxiliary RAM's, unless the machine reads auxiliary RAM there. A coprocessor's space is its own CPU's view.
+            // bank's byte only where the CPU reads the bank there now: the Monitor's BreakVector is main RAM's $03F0,
+            // not auxiliary RAM's, unless the machine reads auxiliary RAM there. A coprocessor's space is its own CPU's
+            // view.
             if (bank is { InstructionSet: null } && !bank.ReadBy(Target, (ushort)address)) { continue; }
             names[address] = name;
         }
@@ -357,8 +360,9 @@ internal sealed partial class DebugSession
         return (labels, names);
     }
 
-    // Each label the sources give an address in a space that applies now, and each constant the space's CPU addresses
-    // memory through, as kinds asks, in the modules' order, leaving out addresses skip says are already named.
+    // Each label the sources give an address in a space that applies now, in the modules' order, and each constant the
+    // space's CPU addresses memory through, the program's first and then the SDK's by MachineSymbols.Rank, as kinds
+    // asks, leaving out addresses skip says are already named.
     private IEnumerable<(int Address, string Name, bool Constant)> SourceNames(
         DebugMemoryBank? bank,
         IDebugMemory memory,
@@ -382,15 +386,26 @@ internal sealed partial class DebugSession
 
         if (!kinds.HasFlag(SourceNameKinds.Constants)) { yield break; }
         IsaDescription cpu = (bank?.InstructionSet ?? Target.InstructionSet).Description;
-        foreach (IDebugModule module in _debug.Modules)
+
+        List<(string Name, long Value, string? Path, bool Ranked)> constants = [];
+        for (int index = 0; index < _debug.Modules.Count; index++)
         {
+            IDebugModule module = _debug.Modules[index];
             if (!module.AddressConstants.Any() || !Installed(module)) { continue; }
-            foreach ((string name, long value, IsaDescription constantCpu) in module.AddressConstants)
+            foreach ((string name, long value, IsaDescription constantCpu, string? path) in module.AddressConstants)
             {
-                if (!ReferenceEquals(constantCpu, cpu) || value is < 0 or > 0xFFFF || skip((int)value)) { continue; }
+                if (!ReferenceEquals(constantCpu, cpu) || value is < 0 or > 0xFFFF) { continue; }
                 if (bank is not null && bank.AreaOf((ushort)value) is null) { continue; }
-                yield return ((int)value, name, true);
+                constants.Add((name, value, path, Ranked: index >= _firstSdkModule));
             }
+        }
+
+        // The program's names come first. Where the SDK's modules name one address differently, the Monitor's,
+        // the hardware's and the firmware's come before BASIC's and DOS's, by MachineSymbols.Rank as the
+        // disassembler ranks them. skip is asked as each is given, so a name given earlier takes the address.
+        foreach ((string name, long value) in MachineSymbols.ByRank(constants))
+        {
+            if (!skip((int)value)) { yield return ((int)value, name, true); }
         }
     }
 
@@ -508,41 +523,52 @@ internal sealed partial class DebugSession
         return new JsonObject { ["bytesWritten"] = written.Count };
     }
 
-    // Notes what a memory view has read, for the memory events that refresh it: the bytes from the lowest offset
-    // it has read to the highest, and what they are now.
-    private void Track(string reference, DebugMemoryBank? bank, long address, long offset, int count)
+    // Notes what a memory view has read, for the memory events that refresh it.
+    private void Track(string reference, DebugMemoryBank? bank, long address, long offset, int count, string? subscriber = null)
     {
-        MemoryView? view = _memoryViews.Find(item => item.Reference == reference);
+        MemoryView? view = _memoryViews.Find(item => item.Reference == reference && item.Subscriber == subscriber);
         if (view is null)
         {
-            view = new(reference) { First = offset, End = offset + count };
-            _memoryViews.Add(view);
-            if (_memoryViews.Count > MemoryViewLimit) { _memoryViews.RemoveAt(0); }
+            if (subscriber is null && _memoryViews.Count(item => item.Subscriber is null) >= MemoryViewLimit)
+            {
+                MemoryView oldest = _memoryViews.First(item => item.Subscriber is null);
+                _memoryViews.Remove(oldest);
+            }
+
+            view = new(reference, subscriber);
         }
         else if (view.Bank != bank || view.Address != address)
         {
             // An expression such as HL that now resolves elsewhere: the view starts over there.
-            view.First = offset;
-            view.End = offset + count;
+            view.Ranges.Clear();
+            _memoryViews.Remove(view);
         }
-        else
-        {
-            view.First = Math.Min(view.First, offset);
-            view.End = Math.Max(view.End, offset + count);
-        }
+        else { _memoryViews.Remove(view); }
 
         view.Bank = bank;
         view.Address = address;
+        view.Add(offset, offset + count);
         view.Seen = Hash(view);
+        _memoryViews.Add(view);
+    }
+
+    private JsonObject UnsubscribeMemory(JsonObject args)
+    {
+        string subscriber = Required(args, "subscriber");
+        _memoryViews.RemoveAll(view => view.Subscriber == subscriber);
+        return [];
     }
 
     // A hash of the bytes a view has read, as they are now, with unreadable bytes apart from every value.
     private ulong Hash(MemoryView view)
     {
         ulong hash = 14695981039346656037;
-        for (long offset = view.First; offset < view.End; offset++)
+        foreach ((long first, long end) in view.Ranges)
         {
-            hash = (hash ^ (ulong)(MemoryByte(view.Bank, view.Address + offset) ?? 0x100)) * 1099511628211;
+            for (long offset = first; offset < end; offset++)
+            {
+                hash = (hash ^ (ulong)(MemoryByte(view.Bank, view.Address + offset) ?? 0x100)) * 1099511628211;
+            }
         }
 
         return hash;
@@ -554,19 +580,27 @@ internal sealed partial class DebugSession
     {
         _memoryFrames = 0;
         NotifyBasic();
+        Dictionary<string, long>? changed = null;
         foreach (MemoryView view in _memoryViews)
         {
             ulong hash = Hash(view);
             if (hash == view.Seen) { continue; }
             view.Seen = hash;
             if (view.Reference == except) { continue; }
+            changed ??= [with(StringComparer.Ordinal)];
+            long end = Math.Max(view.Ranges.Count == 0 ? 0 : view.Ranges[^1].End, 0);
+            changed[view.Reference] = Math.Max(changed.GetValueOrDefault(view.Reference), end);
+        }
 
+        if (changed is null) { return; }
+        foreach ((string reference, long end) in changed)
+        {
             // The range starts at zero: VS Code 1.100 takes count as the end offset when it invalidates a region.
             Notify("memory", new JsonObject
             {
-                ["memoryReference"] = view.Reference,
+                ["memoryReference"] = reference,
                 ["offset"] = 0,
-                ["count"] = Math.Max(view.End, 0)
+                ["count"] = end
             });
         }
     }

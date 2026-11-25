@@ -13,4 +13,20 @@ namespace Retrocore.Documentation;
 public sealed record DocumentationFile(
     string Path,
     IReadOnlyList<DocumentationComment> Comments,
-    IReadOnlyList<DocumentationDiagnostic> Diagnostics);
+    IReadOnlyList<DocumentationDiagnostic> Diagnostics)
+{
+    /// <summary>
+    ///  Gets whether the file opts in to the style guide's checks (<c>; retrocore: style=strict</c>).
+    /// </summary>
+    public bool Strict { get; init; }
+
+    /// <summary>
+    ///  Gets the rules the file's <c>ignore=</c> pragmas turn off, and where.
+    /// </summary>
+    public IReadOnlyList<DocumentationExclusion> Exclusions { get; init; } = [];
+
+    /// <summary>
+    ///  Gets the macros the file defines, in any dialect: an <c>.ifdef</c> counts them as defined, as it does symbols.
+    /// </summary>
+    public IReadOnlyList<string> Macros { get; init; } = [];
+}

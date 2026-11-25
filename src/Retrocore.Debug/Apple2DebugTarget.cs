@@ -15,7 +15,7 @@ namespace Retrocore.Debug;
 ///  The Apple IIe as the debugger sees it: a 6502 or 65C02, the IIe's memory areas, and its text, video, beam
 ///  and Disk II views.
 /// </summary>
-internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
+internal sealed partial class Apple2DebugTarget : DisposableBase, IZ80CardHost
 {
     private const byte JsrOpcode = 0x20;
     private const byte BrkOpcode = 0x00;
@@ -144,6 +144,7 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
     ///   The ROMs are the dumps in <c>romDirectory</c> (or <c>RETROCORE_IIE_ROMS</c>). Without dumps they are
     ///   assembled from the SDK's sources in <c>sdkRoms</c>, or beside the debug host, which are byte-identical to
     ///   them.
+    ///   <c>basicSource</c> chooses the native source by default or the MACRO-10 overlay.
     ///  </para>
     /// </remarks>
     /// <param name="args">The arguments, such as <c>romDirectory</c>, <c>model</c> and <c>diskImage</c>.</param>
@@ -152,6 +153,12 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
     internal static Apple2DebugTarget Launch(JsonObject args)
     {
         Apple2Model model = Model(args.String("model"));
+        BasicSourceKind basicSource = args.String("basicSource") switch
+        {
+            null or "native" => BasicSourceKind.Native,
+            "macro10" => BasicSourceKind.Macro10,
+            _ => throw new ArgumentException("basicSource must be native or macro10.")
+        };
 
         string? sdk = args.String("sdkRoms") is { } sdkRoms ? Path.GetFullPath(sdkRoms) : null;
         string? diskImage = args.String("diskImage");
@@ -188,7 +195,7 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
         bool autostart = model != Apple2Model.II || monitor == "autostart";
 
         Apple2Roms roms = string.IsNullOrWhiteSpace(dumps)
-            ? SdkModules.BuildRoms(model, sdk, autostart)
+            ? SdkModules.BuildRoms(model, sdk, autostart, basicSource)
             : Apple2Roms.LoadFromDirectory(model, dumps, autostart);
 
         // Programmer's Aid #1 in the II's D0 socket, which is otherwise empty.
@@ -220,6 +227,7 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
         Apple2DebugTarget target = new(machine, model)
         {
             SdkRoms = sdk,
+            BasicSource = basicSource,
             Dos = dos,
             DosYear = dosYear,
             Autostart = autostart,
@@ -325,6 +333,11 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
     ///  Gets whether a II has the Autostart Monitor; the II Plus always does.
     /// </summary>
     internal bool Autostart { get; init; }
+
+    /// <summary>
+    ///  Gets the AppleSoft listing used for the ROM and debugger source map.
+    /// </summary>
+    internal BasicSourceKind BasicSource { get; init; }
 
     /// <summary>
     ///  Gets whether a II's D0 socket holds Programmer's Aid #1.
@@ -696,21 +709,19 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
         return _machine.Processor.FetchedOpcode;
     }
 
-    /// <summary>
-    ///  Advances by one of the SoftCard's Z80 T-states while it runs, else by a cycle, for the Z80's view.
-    /// </summary>
-    internal void StepTState() => Advance(halfCycle: true);
+    /// <inheritdoc/>
+    /// <remarks>
+    ///  <para>
+    ///   A T-state is half of the Apple's cycle.
+    ///  </para>
+    /// </remarks>
+    public void StepTState() => Advance(halfCycle: true);
 
-    /// <summary>
-    ///  Gets whether the next <see cref="StepTState"/> starts an Apple cycle, the half in which the 6502 runs.
-    /// </summary>
-    internal bool StartsCycle => !_machine.MidCycle;
+    /// <inheritdoc/>
+    public bool StartsCycle => !_machine.MidCycle;
 
-    /// <summary>
-    ///  Gets whether the last step ran a 6502 cycle, which it does beside the Z80 while the Z80 finishes its instruction
-    ///  after giving the bus back.
-    /// </summary>
-    internal bool Stepped { get; private set; }
+    /// <inheritdoc/>
+    public bool Stepped { get; private set; }
 
     // Steps the machine and observes what the 6502 ran, if it stepped: while the SoftCard holds it, its last cycle is
     // an old one, but it runs beside the Z80 while the Z80 finishes an instruction after giving the bus back.
@@ -761,7 +772,7 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
         get
         {
             if (_machine.Bus.SoftCard is not { } card) { return null; }
-            if (_softCard?.Card != card) { _softCard = new(this, card); }
+            if (_softCard?.Card != card) { _softCard = new(this, card, "SoftCard Z80", "The SoftCard Z80's memory"); }
             return _softCard;
         }
     }
@@ -769,10 +780,8 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
     /// <inheritdoc/>
     public bool CoprocessorActive => _machine.Bus.SoftCard is { OwnsBus: true };
 
-    /// <summary>
-    ///  Gets the SoftCard in the machine now, or null.
-    /// </summary>
-    internal SoftCard? InstalledSoftCard => _machine.Bus.SoftCard;
+    /// <inheritdoc/>
+    public Z80Card? InstalledZ80Card => _machine.Bus.SoftCard;
 
     /// <inheritdoc/>
     public (ushort Target, int Length)? CallAt(ushort address) =>
@@ -1021,13 +1030,19 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
     public void AddSdkModules(DebugInfo debug, string? directory)
     {
         _basicRom = BasicRom.From(
-            SdkModules.AddTo(debug, _model, directory, out Assembler.AssemblyResult? integer, Autostart)?.Symbols,
+            SdkModules.AddTo(
+                debug,
+                _model,
+                directory,
+                out Assembler.AssemblyResult? integer,
+                Autostart,
+                BasicSource)?.SymbolsWithHistoricalNames,
             "MAIN",
             run: "RUN",
             resume: "CONT",
             [("STOP", "STOP"), ("END", "END"), ("ENDCON", "ENDCON")]);
 
-        _integerRom = IntegerBasicRom(integer?.Symbols);
+        _integerRom = IntegerBasicRom(integer?.SymbolsWithHistoricalNames);
     }
 
     /// <inheritdoc/>
@@ -1293,8 +1308,13 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
             char[] chars = new char[columns];
             for (int column = 0; column < columns; column++)
             {
-                int value = _machine.Bus.TextByte(row, column) & 127;
-                chars[column] = (char)(value < 32 ? value + 64 : value);
+                // Each byte reads as the character the screen shows for it, so flashing text, such as the II Plus's
+                // cursor ($60, a flashing space), reads as itself rather than as its code's ASCII. A code with no
+                // character, such as the enhanced IIe's MouseText, keeps its seven-bit code.
+                byte code = _machine.Bus.TextByte(row, column);
+                char character = _machine.Bus.Video.Character(code);
+                int value = code & 127;
+                chars[column] = character != '\0' ? character : (char)(value < 32 ? value + 64 : value);
             }
 
             rows[row] = new(chars);
@@ -1635,7 +1655,11 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
                 Apple2Model other = _model == Apple2Model.II ? Apple2Model.IIPlus : Apple2Model.II;
                 byte[] card = FirmwareRoms is { } roms
                     ? Apple2Roms.LoadFirmwareCard(other, roms)
-                    : SdkModules.BuildBoardSystem(other, autostart: false, SdkRoms);
+                    : SdkModules.BuildBoardSystem(
+                        other,
+                        autostart: false,
+                        directory: SdkRoms,
+                        basicSource: BasicSource);
 
                 // The AppleSoft card's switch is up on a II, so its Autostart Monitor boots; the Integer card's is down
                 // on a II Plus, as its original Monitor would not boot.

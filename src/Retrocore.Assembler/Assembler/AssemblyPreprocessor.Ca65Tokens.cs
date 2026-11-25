@@ -104,6 +104,12 @@ internal sealed partial class AssemblyPreprocessor
 
     private bool Ca65IsConstant(string expression)
     {
+        // A size known only once the program is laid out is constant, but not known yet.
+        if (AwaitsLayoutSize(expression))
+        {
+            throw new AssemblyError(0, ".const cannot test a size known only once the program is laid out.");
+        }
+
         try
         {
             return Ca65TryValue(expression) is not null;

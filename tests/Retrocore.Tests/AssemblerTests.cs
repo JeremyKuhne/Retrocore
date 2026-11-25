@@ -275,7 +275,7 @@ public class AssemblerTests
 
         result.Success.Should().BeTrue();
         result.Sections[0].Bytes.ToArray().Should().Equal(Retrocore.Machines.Apple2.Slot7Rom.Bytes.ToArray());
-        result.Exports["DriverEntry"].Should().Be(Retrocore.Machines.Apple2.Slot7Rom.DriverEntry);
+        result.Exports["Driver"].Should().Be(Retrocore.Machines.Apple2.Slot7Rom.Driver);
         result.Exports["DeviceInfo"].Should().Be(Retrocore.Machines.Apple2.Slot7Rom.DeviceInfo);
     }
 }

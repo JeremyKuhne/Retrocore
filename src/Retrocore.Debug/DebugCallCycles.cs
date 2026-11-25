@@ -37,8 +37,10 @@ internal sealed class DebugCallCycles
     /// <param name="stack">The stack pointer.</param>
     /// <param name="cycles">The cycles run so far.</param>
     /// <param name="line">The next instruction's source line, if any.</param>
-    internal void Observe(ushort pc, int? callLength, int stack, ulong cycles, (string Path, int Line)? line)
+    /// <returns>Whether a completed call changed the recorded cycles.</returns>
+    internal bool Observe(ushort pc, int? callLength, int stack, ulong cycles, (string Path, int Line)? line)
     {
+        bool changed = false;
         // A call returns when the stack is back where the call found it and the PC is just after the call. A stack
         // popped past a call (a stack reset, or an exit that discards return addresses) abandons it uncounted.
         while (_pending.Count != 0)
@@ -49,7 +51,13 @@ internal sealed class DebugCallCycles
             _pending.RemoveAt(_pending.Count - 1);
             if (stack == callStack && pc == returnAddress)
             {
-                _last[caller] = cycles - start;
+                ulong duration = cycles - start;
+                if (!_last.TryGetValue(caller, out ulong previous) || previous != duration)
+                {
+                    _last[caller] = duration;
+                    changed = true;
+                }
+
                 break;
             }
         }
@@ -59,5 +67,7 @@ internal sealed class DebugCallCycles
             if (_pending.Count == MaximumPending) { _pending.RemoveAt(0); }
             _pending.Add((source, (ushort)(pc + length), stack, cycles));
         }
+
+        return changed;
     }
 }

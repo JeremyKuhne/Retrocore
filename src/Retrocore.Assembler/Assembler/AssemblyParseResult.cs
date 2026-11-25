@@ -31,6 +31,11 @@ public sealed class AssemblyParseResult
     public IReadOnlyList<AssemblyDiagnostic> Diagnostics { get; }
 
     /// <summary>
+    ///  Gets the lines conditional assembly skipped in each file parsing opened, or null when not known.
+    /// </summary>
+    public AssemblySkippedLines? SkippedLines => Project.SkippedLines;
+
+    /// <summary>
     ///  Gets whether parsing succeeded.
     /// </summary>
     public bool Success => Diagnostics.Count == 0;

@@ -1,209 +1,252 @@
-;; DOS 3.3 AND 3.2: THE APPLE II ADDRESSES DOS USES (FROM RELOCTR)
+; retrocore: style=strict
+;; DOS 3.3 and 3.2: the Apple II addresses DOS uses, and the macros its modules share
 ;;
-;; The Monitor routines, zero-page locations, BASIC entry points and page-3 vectors that DOS uses but does not
-;; own: the equates at the start of Apple's RELOCTR module, kept in a file of their own because both builds
-;; need them and only the master build includes Relocator.asm. They are fixed addresses in the machine's ROMs
-;; and low memory, the same wherever DOS runs, and the same in DOS 3.2. Addresses in a module of their own (the
-;; Disk II switches, RWTS's zero page) are in RwtsEquates.asm and Rwts1.asm (RwtsEquates32.asm and Rwts32.asm
-;; for DOS 3.2).
+;; The Monitor routines, zero-page locations, BASIC entry points and BASIC variables that DOS uses but does not own:
+;; the equates at the start of Apple's RELOCTR module, kept in a file of their own because both builds need them and
+;; only the master build includes Relocator.asm. They are fixed addresses in the machine's ROMs and low memory, the
+;; same wherever DOS runs ($9D00-$BFFF on a 48K machine), and the same in DOS 3.2. The Disk II controller's switches
+;; and the disk routines' shared zero page are in RwtsEquates.asm, and the layouts the disk routines share in
+;; IoBlock.asm.
 ;;
-;; "IB" in a name means Integer BASIC, the BASIC in the original Apple II's ROM; "AS" means Applesoft, the
-;; BASIC in the Apple II Plus's ROM or, on an older machine, loaded into RAM. The "1" names are the ROM
-;; Applesoft's addresses, the "2" names those of the RAM Applesoft a System Master can load.
+;; The locations and routines DOS shares with the IIe's other sources come from ../System/IIeEquates.asm and
+;; ../System/MonitorEntries.asm, which this file includes. DOS's names for those locations are in their definitions'
+;; historical names: OUTSW is <OutputHook>, INSW <InputHook>, LBUFF <InputBuffer>, ZRSET <SoftEntryVector> and
+;; PWCNST <SoftEntryCheck>. The definitions here are the Monitor routines MonitorEntries.asm does not export, DOS's
+;; purposes for the Monitor's general zero-page bytes, and the BASICs' addresses.
 ;;
-;; The addresses DOS shares with the IIe's other sources under the same names, such as PROMPT, HOME and IORTS, come
-;; from ../System/IIeEquates.asm and ../System/MonitorEntries.asm, which this file includes; the equates here are
-;; the ones under DOS's own names.
+;; "IB" in a name means Integer BASIC, the BASIC in the original Apple II's ROM; "AS" means Applesoft, the BASIC in
+;; the Apple II Plus's ROM or, on an older machine, loaded into RAM. The "1" names are the ROM Applesoft's
+;; addresses, the "2" names those of the RAM Applesoft a System Master can load. These keep Apple's names until the
+;; BASICs' sources are converted.
+;;
+;; Apple's equates also define two names DOS never uses, left out here: MULT, the Monitor's
+;; <Monitor:Arithmetic::Multiply>, and ASLMEM, the same byte as <ASSOP>. Their BOOTSL, a name for $2E, which DOS 3.1
+;; meant as the boot slot, is cited on <FoundTrack>, the track RWTS keeps in that byte.
 
-;; A byte that holds what was in memory when a master was written, which DOS does not depend on: the 1983
-;; DOS 3.3 master's value, then the 1980 DOS 3.3 master's, then the DOS 3.2 master's. DOS32 picks the DOS 3.2
-;; byte; otherwise YEAR picks between the DOS 3.3 masters. The modules only DOS 3.3 includes (BootLoader.asm,
-;; MsWait.asm) leave y32 out.
-;; Parameters: y1983 = the byte in the 1983 build, y1980 = the byte in the 1980 build, y32 = the byte in the
-;;             DOS 3.2 build
-.macro LEFTOVER y1983, y1980, y32
-.if DOS32
-    .byte y32
-.elseif YEAR = 1983
-    .byte y1983
-.else
-    .byte y1980
-.endif
+; The macros.
+
+;; A byte that holds what was in memory when a master was written, which DOS does not depend on: the 1983 DOS 3.3
+;; master's value, then the 1980 DOS 3.3 master's, then the DOS 3.2 master's.
+;;
+;; <DOS32> picks the DOS 3.2 byte; otherwise <YEAR> picks between the DOS 3.3 masters. Code only DOS 3.3 assembles
+;; (the DOS 3.3 arms of BootLoader.asm's and MsWait.asm's `.if DOS32`) leaves y32 out.
+;; Parameters: y1983 = the byte in the 1983 build, y1980 = the byte in the 1980 build, y32 = the byte in the DOS 3.2
+;;   build
+.macro Leftover y1983, y1980, y32
+    .if DOS32
+        .byte y32
+    .elseif YEAR = 1983
+        .byte y1983
+    .else
+        .byte y1980
+    .endif
 .endmacro
 
-;; Places a string's characters with bit 7 of the last one set, so code walking a list of words can tell
-;; where each ends. The name is that of Apple's EDASM directive. The other characters keep bit 7 clear.
+;; Places a string's characters with bit 7 of the last one set, so that code walking a list of words can tell where
+;; each ends; the other characters keep bit 7 clear.
+;;
+;; Apple's listing writes these strings with <MarkedText>, the directive of its EDASM assembler.
 ;; Parameters: text = the string
-.macro DCI text
+.macro MarkedText text
     .repeat .strlen(text) - 1, I
-    .byte .strat(text, I)
+        .byte .strat(text, I)
     .endrepeat
     .byte .strat(text, .strlen(text) - 1) | $80
 .endmacro
 
-; The IIe's page zero, soft switches and keys, PROMPT and LENGTH among them, and the Monitor's entry points: SETVID,
-; SETKBD, HOME (which DOS does not use) and IORTS among them.
+; The IIe's page zero, low memory, soft switches and keys, and the Monitor's entry points that the other sources
+; share.
 .include "../System/IIeEquates.asm"
 .include "../System/MonitorEntries.asm"
 
-; Zero page and the input buffer, under DOS's own names.
-;; DOS's name for the Monitor's output hook, <CSWL>: the address of the routine each character goes to
-;; (2 bytes).
-;;
-;; <MVCSW> and <MVOSW> point it at DOS's <CHROUT>, saving the routine that was there in SVOUTS, and do it again
-;; each time DOS returns control, since BASIC, PR# and IN# replace it. <SVREGS> puts the real routine back while
-;; DOS prints, and <ORTN1> jumps through it.
-;; See: <INSW>, <MVOSW>, <CHROUT>, <Monitor:COUT>
-OUTSW = $36
+; The Monitor's routines that MonitorEntries.asm does not export, with DOS's names for them.
 
-;; DOS's name for the Monitor's input hook, <KSWL>: the address of the routine each key comes from
-;; (2 bytes).
-;;
-;; <MVCSW> points it at DOS's <CHRIN>, saving the routine that was there in SVINS. <SVREGS> puts the real routine
-;; back while DOS works, and <GETIN> jumps through it.
-;; See: <OUTSW>, <MVCSW>, <CHRIN>, <Monitor:RDKEY>
-INSW = $38
+;; Inherit: <Monitor:CharacterOut>
+;; At $FDED. DOS's CATALOG prints through it.
+;; Also: COUT (A2RM78, A2RM79, IIEROM82, IIETRM85), PRINT (DOS33, DOS31)
+CharacterOut = $FDED
 
-;; DOS's general-purpose pointer (2 bytes), most often at the header of the file buffer being worked on.
+;; Inherit: <Monitor:ReadKey>
+;; At $FD0C. DOS's CATALOG waits on it when the screen is full.
+;; Also: RDKEY (A2RM78, A2RM79, IIEROM82, IIETRM85), GETKEY (DOS33, DOS31)
+ReadKey = $FD0C
+
+;; Inherit: <Monitor:EnterMonitor>
+;; At $FF65. DOS's page-3 vectors send Control-Y, NMI and IRQ to it.
+;; Also: MON (A2RM78, A2RM79, IIEROM82, IIETRM85), MONRST (DOS33)
+EnterMonitor = $FF65
+
+;; Inherit: <Monitor:ShowBreak>
+;; At $FA59. DOS puts it in the BRK vector, <BreakVector>.
+;; Also: XBRK (A2RM78, A2RM79), OLDBRK (A2RM79, IIEROM82, IIETRM85), MONBRK (DOS33)
+ShowBreak = $FA59
+
+;; Inherit: <Monitor:SetInput>
+;; At $FE8B. DOS's IN# calls it to point the input hook at a slot. Apple's DOS listings call it INPRT, the name the
+;; Monitor's listings give the entry two bytes later, <Monitor:SetInput::FromA2>.
+SetInput = $FE8B
+
+;; Inherit: <Monitor:SetOutput>
+;; At $FE95. DOS's PR# calls it to point the output hook at a slot. Apple's DOS listings call it OUTPRT, the name the
+;; Monitor's listings give the entry two bytes later, <Monitor:SetOutput::FromA2>.
+SetOutput = $FE95
+
+;; Inherit: <Monitor:Disassembler::Decode::Opcode>
+;; At $F88E. The relocator, <RelocateDos at DOSREL>, calls it to learn each instruction's length.
+;; Also: INSDS2 (DOS33)
+DecodeOpcode = $F88E
+
+; DOS's purposes for the Monitor's general zero-page pointers.
+
+;; DOS's general pointer (2 bytes), most often at the header of the file buffer being worked on.
 ;;
-;; <BLDFTB> builds the chain of file buffers through it, and <TSINIT> and <TSNXT> walk the chain, as
-;; <FILSRC> does to find a file's buffer. The relocator, <DOSREL>, uses it to step through DOS's code.
-;; See: <ZPGFCB>, <BLDFTB>, <FILSRC>, <TSNXT>
-ZPGWRK = $40
+;; <FileBuffers::Build> builds the chain of file buffers through it, and <FileBuffers::First> and <FileBuffers::Next>
+;; walk the chain, as <FileBuffers::Find> does to find a file's buffer. The relocator, <RelocateDos at DOSREL>, uses it
+;; to step through DOS's code.
+;; See: <FilePointer>, <FileBuffers::Build>, <FileBuffers::Find>, <FileBuffers::Next>
+;; Also: ZPGWRK (DOS33, DOS31)
+WorkPointer = Address3
+
+;; DOS's second pointer (2 bytes), usually at one of an open file's buffers.
+;;
+;; The file manager points it at the file's work area, its track/sector list or its data sector
+;; (<FileManager::PointAtWorkArea>, <FileManager::PointAtListBuffer>, <FileManager::PointAtDataBuffer>) and reads and
+;; writes the buffer through it. The relocator, <RelocateDos at DOSREL>, and the boot loader use it as a pointer too.
+;; See: <WorkPointer>, <FileManager::PointAtWorkArea>
+;; Also: ZPGFCB (DOS33, DOS31)
+FilePointer = Address4
 
 ;; A number from a command (2 bytes): the value of a decimal or hexadecimal parameter, or a count to print.
 ;;
-;; <GETNUM> converts a parameter into it, and the commands that take a number, such as MAXFILES, PR# and IN#,
-;; read it there. <FILSRC> also leaves the lowest free file buffer in it, and the catalog prints volume numbers
-;; and file sizes from it through <PRNUM>.
-;; See: <GETNUM>, <FILSRC>, <PRNUM>
-CNUM = $44
-
-LBUFF = $200                        ;; the input line buffer the Monitor's line reader fills
-
-MULT = $FB63                        ;; the Monitor's multiply routine; not used by DOS
-INPRT = $FE8B                       ;; the Monitor's IN#: points KSW at the slot in A
-OUTPRT = $FE95                      ;; the Monitor's PR#: points CSW at the slot in A
+;; <Scanner::ParseNumber> converts a parameter into it, and the commands that take a number, such as MAXFILES, PR# and
+;; IN#, read it there. <FileBuffers::Find> also leaves the lowest free file buffer in it, and the catalog prints volume
+;; numbers and file sizes from it through <FileManager::PrintNumber>.
+;; See: <Scanner::ParseNumber>, <FileBuffers::Find>, <FileManager::PrintNumber>
+;; Also: CNUM (DOS33, DOS31)
+ParsedNumber = Address5
 
 ; Integer BASIC.
-IBCHN = $E836                       ;; the entry DOS uses to run a program for CHAIN
+
+;; Integer BASIC's <IntegerBasic:Lines::RunFromStart>: runs the program from its first line, keeping the variables.
+;; DOS's CHAIN uses it.
+IBCHN = $E836
 
 ;; Integer BASIC's LOMEM, the bottom of its variables (2 bytes).
 ;;
-;; <IBRUN> sets the end of the variables, <IBSOV>, back to it to clear them, and loading a program (<ELOAD>)
-;; checks that the program stays above it.
-;; See: <IBSOV>, <IBHMEM>, <IBSOP>, <IBRUN>
+;; <Commands::IntegerRun> sets the end of the variables, <IBSOV>, back to it to clear them, and loading a program
+;; (<Commands::Load>) checks that the program stays above it.
+;; See: <IntegerBasic:LowMemory>, <IBSOV>, <IBHMEM>, <IBSOP>, <Commands::IntegerRun>
 IBLMEM = $4A
 
 ;; Integer BASIC's HIMEM, the top of the memory it may use (2 bytes).
 ;;
-;; <BLDFTB> sets it, and <IBSOP>, just below DOS's file buffers. SAVE (<ESAVE>) writes the program from <IBSOP>
-;; up to it, and loading a program places it to end there.
-;; See: <IBSOP>, <IBLMEM>, <BLDFTB>
+;; <FileBuffers::Build> sets it, and <IBSOP>, just below DOS's file buffers. SAVE (<Commands::Save>) writes the program
+;; from <IBSOP> up to it, and loading a program places it to end there.
+;; See: <IntegerBasic:HighMemory>, <IBSOP>, <IBLMEM>, <FileBuffers::Build>
 IBHMEM = $4C
 
 ;; The start of Integer BASIC's program (2 bytes), which grows down from HIMEM, <IBHMEM>.
 ;;
-;; <BLDFTB> sets it to HIMEM, an empty program, and loading a program sets it to HIMEM less the program's
+;; <FileBuffers::Build> sets it to HIMEM, an empty program, and loading a program sets it to HIMEM less the program's
 ;; length.
-;; See: <IBHMEM>, <IBLMEM>, <ESAVE>, <ELOAD>
+;; See: <IntegerBasic:ProgramStart>, <IBHMEM>, <IBLMEM>, <Commands::Save>, <Commands::Load>
 IBSOP = $CA
 
-IBBRK = $E3E3                       ;; the error entry DOS uses to report a failed command
-IBGO = $E000                        ;; cold start: clears the program
-IBCONT = $E003                      ;; warm start: keeps the program
+;; Integer BASIC's error entry, just after its message is printed, where DOS goes to report a failed command: the
+;; instruction after <IntegerBasic:ReportError>'s call that prints the message.
+IBBRK = $E3E3
+
+;; Integer BASIC's cold start, which clears the program: <IntegerBasic:ColdEntry>.
+IBGO = $E000
+
+;; Integer BASIC's warm start, which keeps the program: <IntegerBasic:WarmEntry>.
+IBCONT = $E003
 
 ;; The end of Integer BASIC's variables (2 bytes), which grow up from LOMEM, <IBLMEM>.
 ;;
-;; <IBRUN> sets it to LOMEM, clearing the variables, before it starts a program.
-;; See: <IBLMEM>, <IBRUN>
+;; <Commands::IntegerRun> sets it to LOMEM, clearing the variables, before it starts a program.
+;; See: <IntegerBasic:VariablesEnd>, <IBLMEM>, <Commands::IntegerRun>
 IBSOV = $CC
 
 ; Applesoft.
-;; Applesoft's TXTTAB, the start of the program, normally $0801 (2 bytes).
+
+;; Applesoft's start of the program, normally $0801 (2 bytes).
 ;;
-;; SAVE (<ESAVE>) writes the program from it up to <ASEOP>, and loading a program places it there and sets
+;; SAVE (<Commands::Save>) writes the program from it up to <ASEOP>, and loading a program places it there and sets
 ;; <ASEOP> and <ASEOP2> to its end.
-;; See: <AppleSoft:TXTTAB>, <ASEOP>, <ASEOP2>, <ELOAD>
+;; See: <AppleSoft:ProgramStart>, <ASEOP>, <ASEOP2>, <Commands::Load>
 ASSOP = $67
 
-;; Applesoft's PRGEND, the end of the program (2 bytes).
+;; Applesoft's end of the program (2 bytes).
 ;;
 ;; SAVE writes the program from <ASSOP> up to it, and loading a program sets it with <ASEOP2>.
-;; See: <AppleSoft:PRGEND>, <ASSOP>, <ASEOP2>
+;; See: <AppleSoft:ProgramEnd>, <ASSOP>, <ASEOP2>
 ASEOP = $AF
 
-;; Applesoft's VARTAB, the start of the variables, just after the program (2 bytes).
+;; Applesoft's start of the variables, just after the program (2 bytes).
 ;;
 ;; Loading a program sets it to the program's end, with <ASEOP>, which leaves no variables.
-;; See: <AppleSoft:VARTAB>, <ASEOP>, <ASSOP>
+;; See: <AppleSoft:VariablesStart>, <ASEOP>, <ASSOP>
 ASEOP2 = $69
 
-;; Applesoft's MEMSIZ, HIMEM, the top of the memory it may use (2 bytes).
+;; Applesoft's HIMEM, the top of the memory it may use (2 bytes).
 ;;
-;; <BLDFTB> sets it, and <ASHM2>, just below DOS's file buffers, and loading a program checks that it ends
+;; <FileBuffers::Build> sets it, and <ASHM2>, just below DOS's file buffers, and loading a program checks that it ends
 ;; below it.
-;; See: <AppleSoft:MEMSIZ>, <ASHM2>, <BLDFTB>
+;; See: <AppleSoft:MemoryTop>, <ASHM2>, <FileBuffers::Build>
 ASHM1 = $73
 
-;; Applesoft's FRETOP, the bottom of the strings, which grow down from HIMEM (2 bytes).
+;; Applesoft's bottom of the strings, which grow down from HIMEM (2 bytes).
 ;;
-;; <BLDFTB> sets it to HIMEM, <ASHM1>, which clears the strings.
-;; See: <AppleSoft:FRETOP>, <ASHM1>, <BLDFTB>
+;; <FileBuffers::Build> sets it to HIMEM, <ASHM1>, which clears the strings.
+;; See: <AppleSoft:StringsBottom>, <ASHM1>, <FileBuffers::Build>
 ASHM2 = $6F
 
-;; Applesoft's LOCK flag: bit 7 set when the program is run-only.
+;; Applesoft's run-only flag: bit 7 set when a program may not be listed or edited, so that a typed line runs it.
 ;;
-;; SAVE (<ESAVE>) refuses such a program, with PROGRAM TOO LARGE.
-;; See: <AppleSoft:LOCK>, <ESAVE>
+;; SAVE (<Commands::Save>) refuses such a program, with PROGRAM TOO LARGE.
+;; See: <AppleSoft:RunOnly>, <Commands::Save>
 ASRNX = $D6
 
-;; Applesoft's ERRFLG: bit 7 set while an ONERR GOTO is in force.
+;; Applesoft's `ONERR` flag: bit 7 set while an `ONERR` GOTO is in force.
 ;;
-;; DOS's <ERROR> prints no message while it is set, so that the program's handler deals with the error.
-;; <ASRUN1> and <ASRUN2> clear it when DOS starts a program.
-;; See: <AppleSoft:ERRFLG>, <ERROR>, <ASRUN1>
+;; DOS's <Errors::Report> prints no message while it is set, so that the program's handler deals with the error.
+;; <Commands::ApplesoftRomRun> and <Commands::ApplesoftRamRun> clear it when DOS starts a program.
+;; See: <AppleSoft:OnErrorActive>, <Errors::Report>, <Commands::ApplesoftRomRun>
 ASONERR = $D8
 
-;; The bottom of Applesoft's memory, the same byte as <ASSOP>; DOS does not use the name.
-;; See: <ASSOP>
-ASLMEM = ASSOP
+;; ROM Applesoft's error entry, where DOS goes to report a failed command.
+ASBRK1 = $D865
 
-ASBRK1 = $D865                      ;; ROM Applesoft's error entry, for DOS's errors
-ASBRK2 = $1067                      ;; RAM Applesoft's error entry
-ASCNTU1 = $D43C                     ;; ROM Applesoft's warm start
-ASCNTU2 = $C3C                      ;; RAM Applesoft's warm start
-ASRSEQ1 = $D4F2                     ;; ROM Applesoft's routine that rebuilds a loaded program's line links
-ASRSEQ2 = $CF2                      ;; the same in RAM Applesoft
+;; RAM Applesoft's error entry.
+ASBRK2 = $1067
 
-; Telling the BASICs apart: the first byte of the BASIC in ROM, at $E000, is a JMP in Applesoft and a JSR in
-; Integer BASIC.
-AITSTL = $E000                      ;; the byte that says which BASIC is in ROM
-ATSTV = $4C                         ;; its value with Applesoft (JMP)
-ITSTV = $20                         ;; its value with Integer BASIC (JSR)
+;; ROM Applesoft's warm start.
+ASCNTU1 = $D43C
 
-;; A name for $2E, which DOS defines but does not use.
+;; RAM Applesoft's warm start.
+ASCNTU2 = $0C3C
+
+;; ROM Applesoft's routine that rebuilds a loaded program's line links.
+ASRSEQ1 = $D4F2
+
+;; RAM Applesoft's routine that rebuilds a loaded program's line links.
+ASRSEQ2 = $0CF2
+
+; Telling the BASICs apart.
+
+;; The first byte of the BASIC in ROM, which tells DOS which BASIC that is: <APPLESOFT_ID> or
+;; <INTEGER_BASIC_ID>.
 ;;
-;; In DOS, $2E is <TRACK>, a byte of the address field RWTS has just read.
-;; See: <TRACK>
-BOOTSL = $2E
+;; Both BASICs start at $E000 (Integer BASIC's cold start is <IBGO>), with a JMP in Applesoft and a JSR in Integer
+;; BASIC. DOS reads it when it starts, and again when a command asks for the other BASIC.
+;; Also: AITSTL (DOS33, DOS31)
+RomBasicId = $E000
 
-;; DOS's second pointer (2 bytes), usually at one of an open file's buffers.
-;;
-;; The file manager points it at the file's work area, its track/sector list or its data sector (<MVFCBP>,
-;; <MVFCBD>, <MVFCBS>) and reads and writes the buffer through it. The relocator, <DOSREL>, and the boot loader
-;; use it as a pointer too.
-;; See: <ZPGWRK>, <MVFCBP>
-ZPGFCB = $42
+;; <RomBasicId>'s value when the ROM holds Applesoft: a JMP's opcode.
+;; Also: ATSTV (DOS33, DOS31)
+APPLESOFT_ID = $4C
 
-; More Monitor routines, under DOS's own names.
-MONRST = $FF65                      ;; the Monitor's command loop, entered with a beep
-MONBRK = $FA59                      ;; the Monitor's handler for BRK
-PRINT = $FDED                       ;; COUT: prints the character in A through CSW
-GETKEY = $FD0C                      ;; RDKEY: reads a key through KSW
-INSDS2 = $F88E                      ;; part of the disassembler: sets LENGTH from the opcode in A
-
-; The reset vector of the Autostart Monitor (the Apple II Plus and later). A reset goes through ZRSET only if
-; PWCNST holds ZRSET's high byte exclusive-ored with $A5; otherwise the machine cold starts.
-ZRSET = $3F2                        ;; where a reset goes (2 bytes)
-PWCNST = $3F4                       ;; the power-up byte that makes ZRSET valid
+;; <RomBasicId>'s value when the ROM holds Integer BASIC: a JSR's opcode.
+;; Also: ITSTV (DOS33, DOS31)
+INTEGER_BASIC_ID = $20

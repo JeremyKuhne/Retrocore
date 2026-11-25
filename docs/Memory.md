@@ -48,7 +48,7 @@ the address asked for. A bank's gaps show as `··`. The design for what comes n
   it goes there. Headings over the bytes name the columns, with each byte's offset in its row, and stay in view
   as the bytes scroll. A label counts where its code or data is in memory now, so a ROM's labels go when RAM is mapped over it.
   Equates that the CPU's instructions address memory through name those bytes too, whatever is mapped there: an
-  equate counts where an instruction's bytes access its value, while that code is installed, so the Monitor's `STA CH` names $24 `CH`, and the
+  equate counts where an instruction's bytes access its value, while that code is installed, so the Monitor's `STA CursorColumn` names $24 `CursorColumn`, and the
   6809's `LDA [Vector]` names `Vector`, but `CMP #CR` does not make `CR` a name for $0D, nor does an index's offset
   or a term added to another address. A label at the same address comes first.
 - **Align to labels**, the toggle in the Label heading, shown once there are labels, starts a row where each label starts, so a
@@ -71,7 +71,7 @@ the address asked for. A bank's gaps show as `··`. The design for what comes n
   and branches into undescribed memory, and lists what it reaches as code and the pointers and vectors those read
   as data, in italics, as guesses. It keeps out of the sources' data, never splits a Decode from here start's
   instruction, and never reads a pointer from bytes that cannot be read. Bytes nothing reaches are dimmed, as they
-  may not be code. Operands name their labels, such as `LDA KBD`, and
+  may not be code. Operands name their labels, such as `LDA Keyboard`, and
   clicking one goes to its address; clicking a line selects its bytes, and its source, such as `main.s:12`, opens
   beside the editor. Where the listing decodes from the wrong byte, **Decode from here** in the inspector
   (**Ctrl+D**) starts an instruction at the cursor, even in data, and it holds as the view scrolls. The listing
@@ -175,7 +175,7 @@ the address asked for. A bank's gaps show as `··`. The design for what comes n
   It says which part of the machine's map the address is in and where in it, such as *Text page 1, row 10,
   column 0* or *Hi-res page 1, line 83, byte 5*; on a machine with banks, what the memory map does with it now,
   such as *Reads main language card* or, in auxiliary RAM's editor, *Not mapped now*; the documentation of its
-  label from the sources, so `$24` explains `CH` and `$C030` the speaker; the source line that emitted it, which
+  label from the sources, so `$24` explains `CursorColumn` and `$C030` the speaker; the source line that emitted it, which
   opens on a click; and the BASIC's floating point number starting there (five bytes for AppleSoft and Color
   BASIC, four for Business BASIC, Level II's single and double). It says these in short lines under **Where**
   (the address, its name and what kind of name, such as a *named address* for an equate naming RAM), **Value**
@@ -186,7 +186,7 @@ the address asked for. A bank's gaps show as `··`. The design for what comes n
   rest, and right-clicking the bytes (or **Shift+F10**) lists them all by group, each acting on the selection.
 - **Bits, the instruction and references.** For a soft switch or flag byte, the inspector names the bits its
   documentation describes, with each one's value now: the masks it links to, as the CoCo 3's `INIT0` lists `MMUEN`
-  and the rest, and what it says of a bit by number, as the IIe's `RDRAMRD` "reports in bit 7 whether RAMRD is on".
+  and the rest, and what it says of a bit by number, as the IIe's `AuxReadState` "reports in bit 7 whether RAMRD is on".
   Where code is known to start, from the sources, analysis, **Decode from here** or **Mark code**, it shows the
   instruction there with its size, cycles (and when a branch is taken), the flags it changes and what it does; the
   Z80's and 8080's cycles come from their instruction sets, and the 6502's and 6809's, whose indexed operands and
@@ -295,11 +295,12 @@ place, which **Open in Retrocore Memory** shows on, and `retro/memory/variable` 
 `evaluate` result has its `memoryReference` except in the `watch`, `hover` and `variables` contexts; Retrocore
 Memory evaluates with the context `retrocore`.
 
-Retrocore Memory uses five more requests:
+Retrocore Memory uses these requests:
 
 | Request | Returns |
 | --- | --- |
 | `retro/memory/read` | For a `memoryReference`, `offset` and `count`, all `count` bytes in `data`, reading past unreadable bytes, which read as zero. `unreadable` lists their runs as `{ offset, count }`, so a bank shows where it is inside the CPU's 64K, and `readOnly` the runs a write cannot reach now. Memory events track its reads as they do `readMemory`'s. |
+| `retro/memory/unsubscribe` | Removes the reads associated with a `subscriber` supplied to `retro/memory/read`, without removing other subscribers or standard DAP reads. |
 | `retro/memory/labels` | For a `memoryReference`, the labels in its space as `{ address, name }`, from the debug modules that apply at each address now, then the equates its CPU's instructions address memory through, from the modules whose code is installed: in the bank its area is in, so a ROM's while RAM is mapped over it, but not a card's firmware without the card. |
 | `retro/memory/listing` | For a `memoryReference`, `address` and `count` of bytes, the `lines` of instructions and data from the nearest known instruction start at or before `address`, which `starts` adds to (a start in `starts` or a label up to 4096 bytes back still counts, and a start in `starts` decodes an instruction even in data): each line's `address`, `size`, `text`, `kind` (`code`, `data` or `unknown`), whether that kind is analysis's `guess` where no source describes the bytes, `label`, the `target` its operand names (a restart's implied address; for a 6809 direct-page operand, in the page DP holds at the stop, and none in another CPU's memory), the source `path` and `line`, the hints file's `comment` on the line's bytes, with `comments` giving each one's `address` and `text` (a comment starts a data line), and the ids of the `breakpoints` that stop at its address, a bank's only in that bank's listing, or null. |
 | `retro/memory/mark` | For a `memoryReference` and `address`, one of `kind` (`code`, `data` or `clear`, for `count` bytes), `name` or `comment`, an empty one taking it away; writes the launch's hints file as it is now and answers its `path`, or, where the launch has no file, `needsFile` until a request names one as `hints`; it also answers the `address` and `count` of the bytes the mark covers, a code mark's being its instruction's. The file is written beside the old and then takes its place, and one whose parts are not the shapes the disassembler takes is refused. |
@@ -314,10 +315,17 @@ Retrocore Memory uses five more requests:
 | `retro/memory/variable` | For a `variablesReference` and a variable's `name` in it, the `memoryReference` VS Code was not sent. An error for a variable that holds no address. |
 | `retro/memory/characters` | The machine's character set as its screen shows it now: each character's `width` and `height`, every code's rows in `glyphs` (one byte a row, leftmost pixel in bit 7), the other phase of flashing characters in `flashed`, and in `text` the character each code shows, NUL for graphics. Empty for a machine the debugger cannot draw. |
 
-The debugger keeps, for each reference a view has read, the range read and a hash of its bytes. After each stop,
-every eighth running frame and each `writeMemory`, it sends a `memory` event for each view whose bytes have
-changed, naming the view's reference exactly, as VS Code requires, with offset 0 and the end of the range read as
-its count. The view that wrote is not told. A `writeMemory` also
+The debugger keeps the disjoint ranges each view has read and a hash of their bytes. Retrocore Memory supplies an
+editor-specific `subscriber` with each `retro/memory/read`, and unsubscribes it when the editor closes. Reads without
+a subscriber, including standard `readMemory` reads, are tracked separately. The `initialize` capability
+`supportsRetrocoreMemorySubscriptions` advertises this support. Unscoped DAP reader references use a 32-entry
+least-recently used limit; live editor subscriptions remain until their editor closes. Each editor's ranges include
+all the pages it has cached, including pages scrolled out of view, so changes to those pages still invalidate the
+cache. Scrolling through the whole space or searching all of RAM can therefore leave the whole space tracked and
+hashed until the editor closes. After each stop, every eighth running frame and each `writeMemory`, the debugger
+sends a `memory` event for each reference whose tracked bytes have
+changed, with offset 0 and the end of the changed view's last range as its count, as VS Code requires. The view
+that wrote is not told. A `writeMemory` also
 sends `invalidated` for the variables. A `retro/hardware` change or `retro/reset` while stopped sends the same
 `memory` events and then `invalidated` for everything, which Retrocore Memory and the Machine view take as the
 sign to read their labels and banks again.

@@ -72,6 +72,11 @@ internal sealed partial class PetDebugTarget : IDebugTarget
     /// </summary>
     internal bool OriginalBasic { get; set; }
 
+    /// <summary>
+    ///  Gets the BASIC source used for the ROM build and debugger mapping.
+    /// </summary>
+    internal BasicSourceKind BasicSource { get; init; } = BasicSourceKind.Native;
+
     /// <inheritdoc/>
     public string ThreadName => _machine.Model switch
     {
@@ -259,25 +264,25 @@ internal sealed partial class PetDebugTarget : IDebugTarget
     /// <remarks>
     ///  <para>
     ///   Each of BASIC, the screen editor and the kernal debugs against its SDK source when the machine's ROM is that
-    ///   source's build: BASIC against <c>Basic/Basic1.mac</c>, <c>Basic2.mac</c> or <c>Basic4.mac</c>, which covers
-    ///   BASIC's end in the editor's chip too, and the editor and kernal against <c>Basic1/Editor1.asm</c> and
-    ///   <c>Kernal1.asm</c>, or BASIC 2's or 4's.
+    ///   source's build: BASIC against the selected native root or MACRO-10 overlay, including BASIC's end in the
+    ///   editor's chip, and the editor and kernal against <c>Basic1/Editor1.asm</c> and <c>Kernal1.asm</c>, or
+    ///   BASIC 2's or 4's.
     ///  </para>
     /// </remarks>
     public void AddSdkModules(DebugInfo debug, string? directory)
     {
         string sdk = SdkDirectory(directory);
         PetModel model = _machine.Model;
-        if (!File.Exists(Path.Join(sdk, "Basic", PetSdkModules.BasicFile(model)))) { return; }
+        if (!File.Exists(Path.Join(sdk, "Basic", PetSdkModules.BasicFile(model, BasicSource)))) { return; }
 
-        Assembler.AssemblyResult basic = PetSdkModules.AssembleBasic(sdk, model, OriginalBasic);
+        Assembler.AssemblyResult basic = PetSdkModules.AssembleBasic(sdk, model, OriginalBasic, BasicSource);
         Assembler.AssemblyResult editor = PetSdkModules.AssembleEditor(sdk, model);
         if (Matches(PetSdkModules.BasicImage(basic, model).Span, PetSdkModules.BasicOrigin(model))
             && Matches(PetSdkModules.EditorImage(basic, editor, model), PetSdkModules.EditorOrigin))
         {
             debug.Add(new SourceMapModule(basic, PetMemoryArea.Basic, collapseSingleStatementMacros: true));
             debug.Add(new SourceMapModule(editor, PetMemoryArea.Editor));
-            SetBasicSymbols(basic.Symbols);
+            SetBasicSymbols(basic.SymbolsWithHistoricalNames);
         }
 
         Assembler.AssemblyResult kernal = PetSdkModules.AssembleKernal(sdk, model);

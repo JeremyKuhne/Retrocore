@@ -4,6 +4,8 @@
 
 using System.Text.RegularExpressions;
 
+using Retrocore.Assembler;
+
 namespace Retrocore.Debug.Language;
 
 /// <summary>
@@ -37,29 +39,78 @@ internal static partial class SourceIncludes
     /// <returns>The full paths of the files it names.</returns>
     internal static IEnumerable<string> IncludesOf(string path)
     {
-        string directory = Path.GetDirectoryName(path) ?? "";
         string text;
         try
         {
             text = File.ReadAllText(path);
         }
-        catch (IOException)
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
+            // Gone (FileNotFoundException), unreadable, or replaced by a folder after it was listed, which Linux
+            // reports as an UnauthorizedAccessException: it includes nothing.
             yield break;
         }
 
         foreach (Match match in Include().Matches(text))
         {
-            yield return Path.GetFullPath(Path.Join(directory, match.Groups["file"].Value));
+            if (Resolve(path, match.Groups["file"].Value) is { } file) { yield return file; }
         }
 
         // An overlay's first line names the base it edits.
         int end = text.IndexOf('\n', StringComparison.Ordinal);
         string first = end < 0 ? text : text[..end];
         Match overlay = Overlay().Match(first);
-        if (overlay.Success && first.Contains("retrocore:", StringComparison.Ordinal))
+        if (overlay.Success
+            && first.Contains("retrocore:", StringComparison.Ordinal)
+            && Resolve(path, overlay.Groups["file"].Value) is { } overlaid)
         {
-            yield return Path.GetFullPath(Path.Join(directory, overlay.Groups["file"].Value));
+            yield return overlaid;
+        }
+    }
+
+    // The file a source names, or where the shared BASIC sources keep it when that is elsewhere: in the repository
+    // they are in Retrocore.Basic, and in the SDK beside the machines' sources. Null for a name no path can hold.
+    private static string? Resolve(string fromPath, string request)
+    {
+        if (Named(fromPath, request) is not { } direct) { return null; }
+        if (File.Exists(direct)) { return direct; }
+        foreach (string fallback in OverlayBaseResolver.Fallbacks(fromPath, request, OverlayBaseResolver.SdkFallback))
+        {
+            if (File.Exists(fallback)) { return fallback; }
+        }
+
+        return direct;
+    }
+
+    /// <summary>
+    ///  Gets the lines of a source that include another file with <c>.include</c>, and the files they name.
+    /// </summary>
+    /// <param name="path">The source's full path, which a relative name is resolved against.</param>
+    /// <param name="lines">The source's lines.</param>
+    /// <returns>Each including line's zero-based index and the full path of the file it names.</returns>
+    internal static IEnumerable<(int Line, string File)> IncludeLines(string path, IReadOnlyList<string> lines)
+    {
+        for (int line = 0; line < lines.Count; line++)
+        {
+            if (Include().Match(lines[line]) is not { Success: true } match) { continue; }
+            if (Resolve(path, match.Groups["file"].Value) is { } file) { yield return (line, file); }
+        }
+    }
+
+    // The full path of a file a source names, as the workspace's resolver finds it (LanguagePaths.Resolve): a fully
+    // qualified name as it is, a relative one from the source's folder. Null for a name the assembler rejects: one no
+    // path can hold, one that depends on current-directory state, or one too long for a full path.
+    private static string? Named(string path, string name)
+    {
+        bool invalid = name.AsSpan().IndexOfAny(Path.GetInvalidPathChars()) >= 0;
+        if (invalid || AssemblySourcePaths.DependsOnCurrentDirectory(name)) { return null; }
+        try
+        {
+            return LanguagePaths.Resolve(path, name);
+        }
+        catch (Exception error) when (error is ArgumentException or IOException or NotSupportedException)
+        {
+            return null;
         }
     }
 
@@ -81,23 +132,46 @@ internal static partial class SourceIncludes
 
     /// <summary>
     ///  Gets the root to analyze a file through: the outermost source that includes it, found in its own folder
-    ///  and the folders beside it, or the file itself when nothing includes it.
+    ///  and the folders beside it, or the file itself when nothing includes it. The repository's shared BASIC
+    ///  sources also search the other projects' ROM sources.
     /// </summary>
     /// <remarks>
     ///  <para>
-    ///   When several sources include the file, the one whose name sorts last is used, so the later of two
-    ///   versions (<c>Dos33.asm</c> over <c>Dos32.asm</c>, <c>Boot16.asm</c> over <c>Boot13.asm</c>) wins.
+    ///   The file's own folder is searched first, then neighboring folders; candidates within a folder are
+    ///   searched by descending name, so the later of two versions (<c>Dos33.asm</c> over <c>Dos32.asm</c>,
+    ///   <c>Boot16.asm</c> over <c>Boot13.asm</c>) wins. Shared BASIC also searches the other ROM projects.
     ///  </para>
     /// </remarks>
     /// <param name="path">The file's full path.</param>
     /// <returns>The root's full path.</returns>
-    internal static string RootOf(string path)
+    internal static string RootOf(string path) => RootOf(path, NeighborFolders(path));
+
+    /// <summary>
+    ///  Gets the root to analyze a file through, searching the given folders' sources.
+    /// </summary>
+    /// <param name="path">The file's full path.</param>
+    /// <param name="folders">The folders to search, its own first; one that no longer exists is skipped.</param>
+    /// <returns>The root's full path.</returns>
+    internal static string RootOf(string path, IEnumerable<string> folders)
     {
-        List<string> candidates = Neighbors(path);
+        List<string> candidates = [.. folders.SelectMany(SourcesIn)];
         HashSet<string> seen = [with(StringComparer.OrdinalIgnoreCase), path];
+
+        // Each step up the chain searches the same candidates, so each is read once. Keyed by the exact path, as two
+        // files whose names differ only in case can both exist where names match case.
+        Dictionary<string, HashSet<string>> includes = [with(StringComparer.Ordinal)];
+        HashSet<string> Includes(string candidate)
+        {
+            if (!includes.TryGetValue(candidate, out HashSet<string>? files))
+            {
+                includes[candidate] = files = [with(StringComparer.OrdinalIgnoreCase), .. IncludesOf(candidate)];
+            }
+
+            return files;
+        }
+
         string current = path;
-        while (candidates.FirstOrDefault(candidate =>
-            !seen.Contains(candidate) && IncludesOf(candidate).Contains(current, StringComparer.OrdinalIgnoreCase)) is { } includer)
+        while (candidates.FirstOrDefault(candidate => !seen.Contains(candidate) && Includes(candidate).Contains(current)) is { } includer)
         {
             seen.Add(includer);
             current = includer;
@@ -106,23 +180,94 @@ internal static partial class SourceIncludes
         return current;
     }
 
-    // The sources in a file's folder and in the folders beside it, its own folder first, each by name descending.
-    private static List<string> Neighbors(string path)
+    // A file's folder, the folders beside it and the folder above, its own first, the others by name and the folder
+    // above last. A module's parts may be in a folder of their own, included from the one above.
+    private static List<string> NeighborFolders(string path)
     {
         string? directory = Path.GetDirectoryName(path);
         if (directory is null || !Directory.Exists(directory)) { return []; }
-        IEnumerable<string> folders = [directory];
-        if (Path.GetDirectoryName(directory) is { } parent && Directory.Exists(parent))
+        List<string> folders = [directory];
+        if (Path.GetDirectoryName(directory) is not { } parent) { return folders; }
+        try
         {
-            folders = folders.Concat(Directory.EnumerateDirectories(parent, "*", s_searchOne)
+            folders.AddRange(Directory.EnumerateDirectories(parent, "*", s_searchOne)
                 .Where(folder => !string.Equals(Path.GetFullPath(folder), Path.GetFullPath(directory), StringComparison.OrdinalIgnoreCase))
                 .Order(StringComparer.OrdinalIgnoreCase));
         }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            // The parent went away, or became unreadable, while it was listed; the file's own folder is still searched.
+        }
 
-        return [.. folders.SelectMany(folder => Directory.EnumerateFiles(folder, "*", s_searchOne)
-            .Where(IsAssemblySource)
-            .Select(Path.GetFullPath)
-            .OrderDescending(StringComparer.OrdinalIgnoreCase))];
+        // SourcesIn finds nothing in the folder above if it went away too.
+        folders.Add(parent);
+        folders.AddRange(OtherRomFolders(directory));
+        return folders;
+    }
+
+    // The repository's shared BASIC, Retrocore.Basic/Roms/Microsoft6502Basic, is included by the other projects'
+    // ROM sources (AppleSoft, PET BASIC): their Roms folders and every folder within them, project by project.
+    private static List<string> OtherRomFolders(string directory)
+    {
+        string? roms = Path.GetDirectoryName(directory);
+        string? project = roms is null ? null : Path.GetDirectoryName(roms);
+        string? sources = project is null ? null : Path.GetDirectoryName(project);
+        if (!Path.GetFileName(directory).Equals("Microsoft6502Basic", StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(Path.GetFileName(roms), "Roms", StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(Path.GetFileName(project), "Retrocore.Basic", StringComparison.OrdinalIgnoreCase)
+            || sources is null)
+        {
+            return [];
+        }
+
+        List<string> folders = [];
+        try
+        {
+            foreach (string other in Directory.EnumerateDirectories(sources, "Retrocore.*", s_searchOne)
+                .Order(StringComparer.OrdinalIgnoreCase))
+            {
+                if (string.Equals(other, project, StringComparison.OrdinalIgnoreCase)) { continue; }
+                string otherRoms = Path.Join(other, "Roms");
+                if (!Directory.Exists(otherRoms)) { continue; }
+                folders.Add(otherRoms);
+                folders.AddRange(Directory.EnumerateDirectories(otherRoms, "*", s_searchAll)
+                    .Order(StringComparer.OrdinalIgnoreCase));
+            }
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            // A project went away, or became unreadable, while it was listed; the folders found so far are searched.
+        }
+
+        return folders;
+    }
+
+    /// <summary>
+    ///  Gets the assembly sources directly in a folder, by name descending.
+    /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   A folder can be deleted after it is listed and before it is read, by a build or a cleanup beside the
+    ///   sources; it then has no sources, rather than failing the analysis of the file being edited.
+    ///  </para>
+    /// </remarks>
+    /// <param name="folder">The folder.</param>
+    /// <returns>The sources' full paths; none when the folder no longer exists or can't be read.</returns>
+    internal static List<string> SourcesIn(string folder)
+    {
+        try
+        {
+            return [.. Directory.EnumerateFiles(folder, "*", s_searchOne)
+                .Where(IsAssemblySource)
+                .Select(Path.GetFullPath)
+                .OrderDescending(StringComparer.OrdinalIgnoreCase)];
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            // Deleted or replaced by a file, an IOException (on Linux, DirectoryNotFoundException for both), or made
+            // unreadable.
+            return [];
+        }
     }
 
     [GeneratedRegex(@"^[ \t]*(?:[A-Za-z_@][\w@]*:?[ \t]+)?\.include[ \t]+""(?<file>[^""]+)""", RegexOptions.Multiline | RegexOptions.IgnoreCase)]

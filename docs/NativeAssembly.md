@@ -43,7 +43,13 @@ Native is the default. A file's first line can name its dialect explicitly:
 ; retrocore: dialect=native
 ```
 
-The other values are `ca65`, `merlin` and `macro10`. An `.include` can also name the dialect of the file it
+The other values are `ca65`, `merlin` and `macro10`. The same line can also opt the file in to the
+[style guide's](AssemblyStyle.md) checks with `style=strict`, alone or after the dialect:
+`; retrocore: dialect=native style=strict`. The documentation lint's `ignore=` word, with the rule IDs it turns
+off, may follow (`; retrocore: style=strict ignore=line-length`), and text after ` -- ` is a reason for the
+reader. Neither word changes what the file assembles to, and either may stand without `dialect=`. The same
+`; retrocore: ignore=` comment can also end a line of code or sit above a `;;` block, for that line or block
+alone (see [AssemblyStyle.md](AssemblyStyle.md#turning-a-rule-off)). An `.include` can also name the dialect of the file it
 includes (see [Includes](#includes)). In VS Code, a file whose language is `retrocore-asm` is native unless its
 first line says otherwise.
 
@@ -132,7 +138,7 @@ as remainder.
 
 | Form | Defines |
 | --- | --- |
-| `Name = expr` or `Name: .equ expr` | A constant. It may use labels and later symbols, and is fixed once defined. |
+| `Name = expr`, `Name := expr` or `Name: .equ expr` | A constant. It may use labels and later symbols, and is fixed once defined. |
 | `Name .set expr`, `Name: .set expr` or `.set Name, expr` | A variable. Each assignment is a new value; a use sees the latest assignment before it in the source. |
 | `Name:` | A label: the address of what follows. |
 
@@ -185,6 +191,97 @@ The rules follow ca65:
 
 A `.scope` or `.proc` line cannot carry a label.
 
+#### Continued scopes
+
+`.scope Name continued` goes on with a scope opened and closed earlier in the same enclosing scope, for a family
+whose code is spread among other code, as in a ROM whose routines sit at fixed addresses. The pieces are one
+scope: a name defined in any piece is visible in all of them, `Name::Member` reaches it from outside, and a name
+defined in two pieces is a duplicate. A plain second `.scope Name` is still an error, and a `.proc` cannot be
+continued. A scope in pieces has no one size, so `.sizeof` refuses it, in an equate as anywhere else. Retrocore's own syntax: ca65 has no
+equivalent.
+
+```asm
+.cpu Mos6502
+.org $0300
+
+;; The Monitor's commands.
+.scope Commands
+
+;; Starts a program.
+.proc Go
+    jmp List
+.endproc
+
+.endscope
+
+;; Code between the pieces.
+.proc Other
+    rts
+.endproc
+
+; Commands: the listing command, after the other code.
+.scope Commands continued
+
+;; Lists memory.
+.proc List
+    jmp Go
+.endproc
+
+.endscope
+```
+
+#### Using a scope's names
+
+`.using Scope[, Scope ...]` makes the named scopes' names usable without their `Scope::` prefix, from the line
+after it to the end of the `.scope` or `.proc` that contains it, or to the end of its file at file level. It does
+not reach into an included file, an included file's `.using` does not leak out of it, and one in a continued
+scope's piece applies to that piece only. There is no `.endusing`: a stretch that needs one is a scope.
+
+Each operand names an existing scope or `.proc` (a named `.struct`, `.union` or `.enum` is a scope too, so
+`.using Iob` reaches `Iob`'s members), defined before or after the directive, as code at that point
+would write it: plain (`Columns`), qualified (`Firmware::Columns`) or absolute (`::Columns`), resolved as a
+qualified name's first part is. A plain name then resolves in this order:
+
+1. The scopes that contain the use, innermost first, as without `.using`: a name the code's own scopes define
+   wins, even later in the source.
+2. The scopes the `.using` directives in effect name, the innermost (latest) directive first. One directive's
+   scopes are searched together: a name two of them define is an error where it is used, "'N' is in both A and
+   B; qualify it".
+3. [Historical names](#historical-names).
+
+So a `.using` only lets an otherwise unresolved name be found; it never changes what a resolving name means.
+Qualified names, cheap locals and anonymous labels are not affected, and neither are definitions: a label defined
+after `.using A` is in the current scope, not in `A`, and `.export` and `.global` do not reach into a used scope.
+Conditional assembly sees the same names as code. A `.using` that names no scope is an error; one whose scopes give
+the code no name is not, but the editor shows it as unnecessary (code and conditionals count as uses; a `;;` link
+does not). A `.using` line cannot carry a label. Retrocore's own syntax, in the native dialect only: ca65 has no
+equivalent.
+
+```asm
+.cpu Mos6502
+.org $0300
+
+;; The 80-column firmware's state.
+.scope Columns
+
+;; The cursor's column.
+CursorColumn = $057B
+
+;; The display mode.
+Mode = $04FB
+
+.endscope
+
+;; Moves the cursor to the left edge.
+.proc Home
+    .using Columns
+    lda #0
+    sta CursorColumn            ; Columns::CursorColumn
+    lda Mode
+    rts
+.endproc
+```
+
 ### Cheap local labels
 
 A name starting with `@` belongs to the stretch of source since the last ordinary symbol was defined, so the
@@ -216,6 +313,30 @@ those before.
 
 A word in a register's place in an operand is the register, even when a symbol has that name: with `X = $12`,
 `lda X,x` loads from `$12` indexed by X.
+
+### Historical names
+
+A `;; Also:` section gives a definition its historical names ([DocComments.md](DocComments.md), section 2.4).
+Where no symbol has such a name, it resolves to the definition, so code written with the old name assembles:
+
+```asm
+.cpu Mos6502
+.org $0300
+    jsr COUT                    ; assembles as jsr CharacterOut
+    rts
+
+;; Prints a character through the output hook.
+;; In: A = the character, with its high bit set
+;; Also: COUT (A2RM78)
+CharacterOut = $FDED
+```
+
+A symbol of the same name wins. An old name that two definitions give is an error where code uses it.
+
+In a macro's body, an `Also:` names the symbol the expansion defines, such as `Basic::COMBYT` for a macro
+expanded in `.scope Basic`, when the build expands that line exactly once. A definition expanded more than once
+gets no old name, and the documentation lint reports it, as it does for one whose name differs from one expansion
+to the next (named by a parameter, a `.local` name or a cheap local such as `@loop`) and for a `.set` variable.
 
 ## Data
 
@@ -556,7 +677,9 @@ The CPU tests follow the latest `.cpu` before them, or the host's CPU before the
 6809, the 8080 and the 8085 none of them is true.
 
 A condition's value must be known at that point in the source: constants and variables count, labels and `*`
-do not. Inactive blocks are skipped without being read, and every file closes the conditionals it opens.
+do not. Inactive blocks are skipped without being read, except for the conditional directives in them, which
+keep the nesting, including one a [`.define`](#textual-definitions) spells. Every file closes the conditionals it
+opens.
 
 ```asm
 Model = 2
@@ -568,6 +691,30 @@ Model = 2
         rts
 .endif
 ```
+
+The assembly reports the lines it skipped, per file it opened (`AssemblyResult.SkippedLines`, also on a failed
+result and on `AssemblyParseResult`), which the documentation tools and the editor use to know which branch is in
+the build:
+
+- A line is assembled if any pass over it took it, so a file included twice, with a branch taken in one place and
+  not the other, has both branches assembled. A file only a skipped branch includes is never opened and has no
+  lines in the report.
+- A conditional directive's own line goes with the branch around the whole conditional, except that a label on it
+  (`Done: .endif`) is defined only when the branch it closes was taken, and its line goes with the label. Inside a
+  skipped branch, nested conditionals are skipped whole.
+- Each expansion of a macro is a pass over its body, so a body line is assembled where some expansion took it: a
+  branch no expansion took, and the body of a macro never invoked, are skipped. The `.macro` and `.endmacro` lines
+  go with the definition. A `.repeat` body is likewise assembled where an iteration took it, so one repeated no
+  times is skipped.
+- Branches are chosen while the source is expanded, so an error found once code is laid out (an undefined name, a
+  branch out of range) leaves the report whole. After an error found while expanding (a line that doesn't parse
+  counts), every line decided from that error on, or never reached, is undecided rather than skipped. A line
+  skipped before the error stays skipped only in a root source outside a macro's body: the error may have
+  prevented a later inclusion or expansion that would take it. Every line not assembled when expansion stops at
+  its line limit is undecided too.
+- A MACRO-10 source's conditionals are expanded with the rest of its text, so its lines its expander didn't pass on
+  are undecided, and every line of one whose expansion reported an error. A source without preprocessing directives
+  has no conditionals: its lines are assembled but for those that didn't parse, which are undecided.
 
 ## Repeats
 
@@ -621,6 +768,53 @@ Size = .sizeof(Point)          ; 4
         .byte Point::row, Color::GREEN   ; 2, 5
 ```
 
+**Names inside a type.** A named type is a scope, so its members are `Type::MEMBER`. An anonymous `.union` or
+`.struct` inside a named type opens no scope of its own: its members are the named type's, at offsets that go on
+from the members before it. A named type nested in another is a scope inside its parent's: its members are
+`Outer::Inner::MEMBER`, at offsets from the nested type's own start, and it takes its size in the parent. A field
+reserved with `.tag Type` is the containing type's member, the size of the tagged type; the tagged type's fields
+keep their own names, so an offset inside it is a sum (`Record::WHERE + Pair::HIGH`).
+
+```asm
+.struct Pair
+    LOW .byte
+    HIGH .byte
+.endstruct
+
+.struct Record
+    FIRST .byte                 ; Record::FIRST = 0
+    .union
+        CHOICE .word            ; Record::CHOICE = 1
+        OTHER .byte             ; Record::OTHER = 1
+    .endunion
+    WHERE .tag Pair             ; Record::WHERE = 3
+    .struct Inner
+        DEEP .byte              ; Record::Inner::DEEP = 0, from Inner's start
+    .endstruct
+.endstruct
+
+        .byte Record::WHERE + Pair::HIGH, Record::Inner::DEEP, .sizeof(Record)   ; 4, 0, 6
+```
+
+**Documented members.** Each member can have a `;;` block of its own, with every section a
+[documentation comment](#documentation-comments) can have. Its `Also:` section gives it the names a manual or
+listing used ([DocComments.md](DocComments.md), section 2.4), and code written with one assembles against the
+member wherever no symbol has that name:
+
+```asm
+;; The start of RWTS's I/O block.
+.struct Iob
+    ;; The table's type, always 1.
+    ;; Also: IBTYPE (DOS33)
+    TYPE .byte
+    ;; The slot, times 16.
+    ;; Also: IBSLOT (DOS33)
+    SLOT .byte
+.endstruct
+
+        lda #IBSLOT             ; 1, as lda #Iob::SLOT
+```
+
 ## Character maps
 
 `.charmap from, to` maps a character code to a byte for every later string and character literal. The Apple
@@ -671,12 +865,45 @@ Larger = .max(3, 7)             ; 7
 `.lobyte`, `.hibyte` and `.bankbyte` are part of [expressions](#operators) rather than functions, so they
 also work with values not yet known.
 
+A structure's or union's size is known as soon as it is defined, so after its definition `.sizeof` of it works
+everywhere, conditional assembly included. The size of a `.proc`, a `.scope` or a labeled statement is known
+only once it is assembled, as is that of a structure defined later. That `.sizeof` works wherever a value can
+wait for layout: in data, operands, `.assert`, and an equate, before or after what it names. Conditional
+assembly, `.repeat` counts and `.incbin` ranges are decided first, so they report such a size, directly or through
+an equate, as not yet known; `.ifconst`, `.ifnconst` and `.const` report it too rather than call it unknown.
+ca65 refuses `.sizeof` of anything defined later; Retrocore accepts it in both dialects.
+
+A `.proc` or `.scope` has a size only when its code is one run of addresses. `.sizeof` refuses one that changes
+section or holds a `.logicalorg`, and a continued scope. It also refuses one whose start or end falls inside a
+`.dum` storage map that the other end is outside. An `.org` only moves forward, filling the gap, so like `.align`
+it keeps one run, and the size counts the fill. A storage map wholly inside a procedure adds nothing to its size,
+and a scope wholly inside a storage map has the size of the storage it lays out.
+
+```asm
+.cpu Mos6502
+.org $0300
+FILE_CONTROL_SIZE = .sizeof(FileControl)   ; 3, before the procedure
+.proc FileControl
+Opcode:   .byte 0
+Buffer:   .word 0
+.endproc
+        .byte FILE_CONTROL_SIZE
+        .assert FILE_CONTROL_SIZE = 3
+```
+
 ## Includes
 
 `.include "file"` reads another source at that point. A quoted path is looked for beside the including file,
 then in the host's include paths. `.include <file>` looks only in the host's SDK paths. A suffix
 `dialect=native|ca65|merlin|macro10` names the included file's dialect. Includes nest up to the depth limit and
 cannot form a cycle.
+
+A path is either relative, joined to the folder it's looked for in, or fully qualified: `/lib/x.inc` on Linux and
+macOS, `C:\lib\x.inc`, `C:/lib/x.inc` or `\\server\share\x.inc` on Windows. On Windows, a path that's rooted but not
+fully qualified, such as `\lib\x.inc`, `/lib/x.inc` or `C:x.inc`, is an error, because where it points depends on
+the current directory; so is such a host include or SDK path. On Linux and macOS a backslash and a colon are
+ordinary file-name characters. The same rule applies to `.incbin`, Merlin's `PUT` and `USE`, and a MACRO-10
+overlay's base.
 
 `.incbin "file"[, start[, size]]` inserts a file's bytes.
 
@@ -807,6 +1034,7 @@ the assembler would encode differently export as `.byte`.
 | `.section` | [Layout](#layout-and-sections) |
 | `.set` | [Symbols](#constants-variables-and-labels) |
 | `.struct`, `.endstruct`, `.union`, `.endunion`, `.tag` | [Structures](#structures-and-enumerations) |
+| `.using` | [Using a scope's names](#using-a-scopes-names) |
 | `.word` | [Data](#data) |
 
 ca65's `.debuginfo`, `.list`, `.smart` and `.feature ubiquitous_idents` are accepted and ignored, so shared

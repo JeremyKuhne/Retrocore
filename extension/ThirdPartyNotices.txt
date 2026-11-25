@@ -74,9 +74,14 @@ The Retrocore extension includes material from the projects below.
 
 4. Microsoft BASIC for 6502 Microprocessor, Version 1.1 (https://github.com/microsoft/BASIC-M6502)
 
-   server/Sdk/Roms/AppleSoft/m6502.asm is Microsoft's m6502.asm, with its tabs expanded to spaces at its own
-   8 columns. The debug host assembles AppleSoft from it with applesoft.mac's edits. Microsoft's LICENSE file is
-   beside it.
+   server/Sdk/Roms/Microsoft6502Basic/m6502.asm is Microsoft's m6502.asm, with its tabs expanded to spaces at its own
+   8 columns. The legacy applesoft.mac overlay applies Apple's edits when selected; the SDK's default AppleSoft
+   listing is maintained in native Retrocore assembly. Microsoft's LICENSE file is beside the original source.
+
+   The native MsBasic.*.asm modules in src/Retrocore.Basic/Roms/Microsoft6502Basic, shipped as
+   server/Sdk/Roms/Microsoft6502Basic, are derived from Microsoft's m6502.asm, and the license below applies to the
+   Microsoft code in them; the Apple and Commodore code some of them carry is not Microsoft's. Each module's first
+   line says it is derived from m6502.asm.
 
    Copyright (c) Microsoft Corporation, 1976-1978.
 

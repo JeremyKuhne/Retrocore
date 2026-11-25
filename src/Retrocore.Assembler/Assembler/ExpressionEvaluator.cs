@@ -268,6 +268,13 @@ internal ref struct ExpressionEvaluator
             throw new AssemblyError(_line, $"Variable '{memory}' is used before assignment.");
         }
 
+        if (id == AssemblySymbols.AmbiguousAlias)
+        {
+            throw new AssemblyError(
+                _line,
+                $"'{memory}' is a historical name of {string.Join(" and ", _symbols.AliasTargets(memory))}: use one of those.");
+        }
+
         _recording?.Add(new(ExpressionOperationKind.Symbol, id));
         if (_symbols.TryGetValue(id, out long symbol)) { return symbol; }
 

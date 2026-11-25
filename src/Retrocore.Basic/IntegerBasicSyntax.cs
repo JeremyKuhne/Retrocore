@@ -12,7 +12,7 @@ namespace Retrocore.Basic;
 ///  <para>
 ///   Integer BASIC checks a line's syntax as it tokenizes it, and a keyword's token is the place in the syntax tables
 ///   where it matched, so tokenizing takes the grammar itself. This is the ROM's backtracking matcher step for step,
-///   over the ROM's own table bytes ($EC00-$EDFF, and SYNTABLNDX at $F197), with the page-zero locations it shares
+///   over the ROM's own table bytes ($EC00-$EDFF, and RuleStarts (SYNTABLNDX) at $F197), with the page-zero locations it shares
 ///   with the rest of BASIC modeled where the ROM keeps them, so even its overlaps behave as they do on the machine.
 ///   A test compares the tables with the SDK's build of the ROM, and the tokens with the ROM's own tokenizing.
 ///  </para>

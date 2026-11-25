@@ -23,7 +23,13 @@ public static partial class DocumentationParser
         string text = code.TrimStart();
         if (text.Length == 0) { return null; }
         bool columnZero = !char.IsWhiteSpace(code[0]);
-        string? container = containers.Count == 0 ? null : containers[^1];
+
+        // A member belongs to every named type around it, as the assembler scopes it: a named type opens a scope, and
+        // an anonymous .struct or .union opens none, so its members are the enclosing type's.
+        bool inType = containers.Count != 0;
+        string joined = string.Join("::", containers.OfType<string>());
+        string? container = joined.Length == 0 ? null : joined;
+        string Nested(string name) => container is null ? name : $"{container}::{name}";
         string first = FirstWord(text);
         string rest = text[first.Length..].Trim();
         if (first.StartsWith('.'))
@@ -36,13 +42,18 @@ public static partial class DocumentationParser
                 case ".mac":
                     return name.Length == 0 ? null : new(name, DocumentationKind.Macro, "", Words(after));
                 case ".enum":
-                    return name.Length == 0 ? null : new(name, DocumentationKind.Enum, "", []);
+                    return name.Length == 0 ? null : new(Nested(name), DocumentationKind.Enum, "", []);
                 case ".struct":
                 case ".union":
-                    return name.Length == 0 ? null : new(name, DocumentationKind.Struct, "", []);
+                    return name.Length == 0 ? null : new(Nested(name), DocumentationKind.Struct, "", []);
+                case ".scope" when after.Equals("continued", StringComparison.OrdinalIgnoreCase):
+                    return null;
                 case ".scope":
-                case ".proc":
                     return name.Length == 0 ? null : new(name, DocumentationKind.Scope, "", []);
+
+                // A .proc is a routine: its name is the address of its first statement.
+                case ".proc":
+                    return name.Length == 0 ? null : new(name, DocumentationKind.Routine, "", []);
                 case ".define":
                     int open = rest.IndexOf('(');
                     string defined = open < 0 ? name : rest[..open].Trim();
@@ -71,20 +82,31 @@ public static partial class DocumentationParser
         string qualified = container is null ? identifier : $"{container}::{identifier}";
         if (tail.StartsWith(':') && !tail.StartsWith(":=", StringComparison.Ordinal))
         {
+            // Name: .equ expr and Name: .set expr define a constant and a variable, not a label.
             string afterLabel = tail.TrimStart(':').Trim();
-            return new(identifier, DocumentationKind.Routine, afterLabel, []);
+            DocumentationKind constant = inType ? DocumentationKind.Member : DocumentationKind.Constant;
+            DocumentationKind? defined = ColonDefinition(tail) switch
+            {
+                ".equ" => constant,
+                ".set" => DocumentationKind.Variable,
+                _ => null,
+            };
+
+            return defined is { } kind
+                ? new(qualified, kind, "", [])
+                : new(identifier, DocumentationKind.Routine, afterLabel, []);
         }
 
         string spaced = tail.TrimStart();
         if (spaced.StartsWith('=') || spaced.StartsWith(":=", StringComparison.Ordinal))
         {
-            return new(qualified, container is null ? DocumentationKind.Constant : DocumentationKind.Member, "", []);
+            return new(qualified, inType ? DocumentationKind.Member : DocumentationKind.Constant, "", []);
         }
 
         string word = FirstWord(spaced);
         if (word.Equals(".equ", StringComparison.OrdinalIgnoreCase) || word.Equals("EQU", StringComparison.OrdinalIgnoreCase))
         {
-            return new(qualified, container is null ? DocumentationKind.Constant : DocumentationKind.Member, "", []);
+            return new(qualified, inType ? DocumentationKind.Member : DocumentationKind.Constant, "", []);
         }
 
         if (word.Equals(".set", StringComparison.OrdinalIgnoreCase))
@@ -92,7 +114,7 @@ public static partial class DocumentationParser
             return new(qualified, DocumentationKind.Variable, "", []);
         }
 
-        if (containers.Count != 0 && (spaced.Length == 0 || spaced.StartsWith('.')))
+        if (inType && (spaced.Length == 0 || spaced.StartsWith('.')))
         {
             // An enumeration member, or a structure field such as "x .byte".
             return new(qualified, DocumentationKind.Member, "", []);
@@ -122,10 +144,40 @@ public static partial class DocumentationParser
     /// <summary>
     ///  Gets whether a line is a conditional-assembly directive.
     /// </summary>
-    private static bool IsConditional(string code)
+    private static bool IsConditional(string code) => IsConditional(code.AsSpan());
+
+    /// <summary>
+    ///  Gets whether a line's code is a conditional-assembly directive, without copying it.
+    /// </summary>
+    private static bool IsConditional(ReadOnlySpan<char> code)
     {
-        string word = FirstWord(code.Trim()).ToLowerInvariant();
-        return word.StartsWith(".if", StringComparison.Ordinal) || word is ".else" or ".elseif" or ".endif";
+        ReadOnlySpan<char> word = FirstWord(code.Trim());
+        return StartsLowered(word, ".if") || IsLowered(word, ".else") || IsLowered(word, ".elseif") || IsLowered(word, ".endif");
+    }
+
+    // Whether the text lowered with ToLowerInvariant is the ASCII lower-case word, lowering one character at a time
+    // instead of a copy. Invariant lowering maps each character alone and keeps the length, so this is exact.
+    private static bool IsLowered(ReadOnlySpan<char> text, string word) =>
+        text.Length == word.Length && StartsLowered(text, word);
+
+    // Whether the text lowered with ToLowerInvariant starts with the ASCII lower-case word.
+    private static bool StartsLowered(ReadOnlySpan<char> text, string word)
+    {
+        if (text.Length < word.Length) { return false; }
+        for (int index = 0; index < word.Length; index++)
+        {
+            if (char.ToLowerInvariant(text[index]) != word[index]) { return false; }
+        }
+
+        return true;
+    }
+
+    // Whether a line is a documentation comment line, ;; after any whitespace, as TrimStart().StartsWith(";;") reads it.
+    private static bool IsDocumentationLine(string line)
+    {
+        int start = 0;
+        while (start < line.Length && char.IsWhiteSpace(line[start])) { start++; }
+        return start + 1 < line.Length && line[start] == ';' && line[start + 1] == ';';
     }
 
     /// <summary>
@@ -140,7 +192,9 @@ public static partial class DocumentationParser
         return tail is ":" or "::" ? text[..length] : null;
     }
 
-    private static int IdentifierLength(string text)
+    private static int IdentifierLength(string text) => IdentifierLength(text.AsSpan());
+
+    private static int IdentifierLength(ReadOnlySpan<char> text)
     {
         int index = 0;
         if (index < text.Length && (char.IsLetter(text[index]) || text[index] is '_' or '@' or ']' or '.' or '?'))
@@ -172,11 +226,43 @@ public static partial class DocumentationParser
         return index;
     }
 
-    private static string FirstWord(string text)
+    // The directive after a name and one colon that makes it a constant or variable rather than a label, as in
+    // "Name: .equ expr" or "Name: .set expr": ".equ" or ".set", or "" when the colon is a label's.
+    private static string ColonDefinition(string afterName)
     {
+        if (!afterName.StartsWith(':') || afterName.StartsWith("::", StringComparison.Ordinal)) { return ""; }
+
+        // The directive ends where the assembler ends it, at a space, a parenthesis or a comment: ".equ,3" is not
+        // one, ".equ(3)" is.
+        string rest = afterName[1..].TrimStart();
+        int end = OperationLength(rest);
+        int comment = rest.IndexOf(';', 0, end);
+        if (comment >= 0) { end = comment; }
+        string word = rest[..end].ToLowerInvariant();
+        return word is ".equ" or ".set" ? word : "";
+    }
+
+    // Where the assembler ends a line's operation (AssemblySyntax.OperationLength, which the source generator does not
+    // compile): at whitespace, or for a directive, also at an opening parenthesis.
+    private static int OperationLength(ReadOnlySpan<char> text)
+    {
+        bool directive = text.Length != 0 && text[0] == '.';
         int end = 0;
-        while (end < text.Length && !char.IsWhiteSpace(text[end]) && text[end] != ',') { end++; }
-        return text[..end];
+        while (end < text.Length && !char.IsWhiteSpace(text[end]) && !(directive && text[end] == '(')) { end++; }
+        return end;
+    }
+
+    private static string FirstWord(string text) => text[..FirstWordLength(text.AsSpan())];
+
+    // The first word as a slice of the text.
+    private static ReadOnlySpan<char> FirstWord(ReadOnlySpan<char> text) => text[..FirstWordLength(text)];
+
+    private static int FirstWordLength(ReadOnlySpan<char> text)
+    {
+        // A directive's name ends at a parenthesis too, as the assembler reads it.
+        int end = OperationLength(text);
+        int comma = text[..end].IndexOf(',');
+        return comma >= 0 ? comma : end;
     }
 
     private static IReadOnlyList<string> Words(string text) =>
@@ -186,6 +272,13 @@ public static partial class DocumentationParser
     ///  Splits a line into its code and its comment, ignoring semicolons in quotes.
     /// </summary>
     private static (string Code, string? Comment) Split(string line)
+    {
+        int end = CodeLength(line);
+        return end == line.Length ? (line, null) : (line[..end], line[end..]);
+    }
+
+    // Where a line's comment starts, as Split finds it, or the line's length when it has none.
+    private static int CodeLength(string line)
     {
         char quote = '\0';
         for (int index = 0; index < line.Length; index++)
@@ -206,9 +299,9 @@ public static partial class DocumentationParser
                 continue;
             }
 
-            if (character == ';') { return (line[..index], line[index..]); }
+            if (character == ';') { return index; }
         }
 
-        return (line, null);
+        return line.Length;
     }
 }

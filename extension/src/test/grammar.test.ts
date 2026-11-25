@@ -75,7 +75,7 @@ test("native directives, processor names and ROM declarations have dedicated sco
         "cpu", "rom", "equ", "set", "byte", "word", "dword", "res", "org",
         "logicalorg", "align", "dum", "dend", "checksum", "assert", "export", "hiascii", "section",
         "include", "incbin", "macro", "endmacro", "local", "exitmacro", "if", "elseif", "else", "endif",
-        "ifdef", "ifndef", "ifblank", "repeat", "endrepeat", "proc", "endproc", "scope", "endscope"
+        "ifdef", "ifndef", "ifblank", "repeat", "endrepeat", "proc", "endproc", "scope", "endscope", "using"
     ]) {
         assertScope(`  .${directive} operand`, "." + directive, scope.directive);
         assertScope(`Here: .${directive.toUpperCase()} operand`, "." + directive.toUpperCase(), scope.directive);
@@ -124,7 +124,16 @@ test("labels and assignments take priority over instruction-looking identifiers"
     assertScope("JSR = $42", "JSR", scope.constant);
     assertScope("A = $10", "A", scope.constant);
     assertScope("N .set 3", "N", scope.constant);
+    assertScope("N := 3", "N", scope.constant);
+    assertScope("N:=3", "N", scope.constant);
+    assertScope("N := 3", ":=", "keyword.operator.assignment.retrocore");
     assertScope(".set N, 3", "N", scope.constant);
+    for (const text of ["N: .equ 3", "N:.EQU 3", "N: .set 3"]) {
+        assertScope(text, "N", scope.constant);
+        assert.equal(tokens(text).some(token => token.scopes.includes(scope.label)), false, text);
+    }
+    assertScope("N: .equ 3", ".equ", "keyword.control.directive.retrocore");
+    assertScope("N: .equal 3", "N", scope.label);
     assertScope("Byte_\u00E9: LDA Byte_\u00E9", "Byte_\u00E9", scope.label);
     assertScope("Byte_\u00E9: LDA Byte_\u00E9", "Byte_\u00E9", scope.symbol, 1);
     for (const text of ["LDA:", "LDA = 1", "LDA_LABEL:", "  JSR LDA", "  LDA LDA_LABEL", "; LDA #1", ".byte LDA, X"]) {
@@ -208,6 +217,56 @@ test("ca65 SDK type, text and conditional directives have directive scopes", () 
     }
     for (const builtin of [".defined", ".def", ".strlen", ".ident", ".concat", ".string"]) {
         assertScope(`.byte ${builtin}(Value)`, builtin, "keyword.operator.retrocore");
+    }
+});
+
+test("retrocore pragma words and an exclusion's rule IDs have their own scopes", () => {
+    const pragma = "; retrocore: style=strict ignore=line-length,unlinked-name:Run|Stop -- the reason";
+    assertScope(pragma, "retrocore:", "keyword.other.pragma.retrocore");
+    assertScope(pragma, "style", "keyword.other.pragma.retrocore");
+    assertScope(pragma, "ignore", "keyword.other.pragma.retrocore");
+    assertScope(pragma, "line-length", "constant.other.pragma.retrocore");
+    assertScope(pragma, "unlinked-name", "constant.other.pragma.retrocore");
+    assertScope(pragma, "the reason", scope.comment);
+    assertScope("    lda #0 ; retrocore: ignore=indent", "indent", "constant.other.pragma.retrocore");
+    assertScope("    lda #0 ; retrocore: ignore=indent", "lda", scope.opcode);
+    assertScope("; a plain comment", "plain", scope.comment);
+    // Only "; retrocore:" is a pragma to the tools, so other spacing stays a plain comment.
+    assertScope(";retrocore: ignore=indent", "indent", scope.comment);
+    assert.ok(!tokens(";retrocore: ignore=indent").some(token => token.scopes.includes("constant.other.pragma.retrocore")));
+});
+
+test("Merlin pragma with the lint's words still selects Merlin", () => {
+    // The tools split a reason only at " -- ", so a tab around the dashes leaves the dialect a word.
+    for (const pragma of ["; retrocore: dialect=merlin ignore=line-length", "; retrocore: style=strict dialect=merlin",
+        "; retrocore: ignore=indent\t--\tdialect=merlin", "; retrocore:style=strict dialect=merlin", "; retrocore:-- dialect=merlin"]) {
+        const state = grammar.tokenizeLine(pragma, INITIAL).ruleStack;
+        const line = "Entry   LDA #1";
+        const result = grammar.tokenizeLine(line, state);
+        const token = result.tokens.find(item => item.startIndex === 0);
+        assert.ok(token?.scopes.includes(scope.label), `${pragma}: expected a Merlin label, got ${token?.scopes.join(" ")}`);
+    }
+});
+
+test("Merlin pragma's own words have the pragma scopes", () => {
+    const pragma = "; retrocore: dialect=merlin ignore=line-length -- the reason";
+    const found = grammar.tokenizeLine(pragma, INITIAL).tokens;
+    for (const [value, expected] of [["dialect", "keyword.other.pragma.retrocore"], ["line-length", "constant.other.pragma.retrocore"],
+        ["the reason", scope.comment]]) {
+        const start = pragma.indexOf(value);
+        const token = found.find(item => item.startIndex <= start && item.endIndex > start);
+        assert.ok(token?.scopes.includes(expected), `${value}: expected ${expected}, got ${token?.scopes.join(" ")}`);
+    }
+});
+
+test("A Merlin dialect the tools don't read selects nothing", () => {
+    for (const pragma of ["; retrocore: ignore=indent -- not dialect=merlin", ";retrocore: dialect=merlin", ";   retrocore: dialect=merlin",
+        "; retrocore: ignore=indent  --  dialect=merlin", "; retrocore: ignore=indent\t -- dialect=merlin",
+        "; retrocore: nodialect=merlin", "; retrocore: ignore=line-length,dialect=merlin", "; retrocore: -- dialect=merlin",
+        "; retrocore: dialect=merlinx"]) {
+        const state = grammar.tokenizeLine(pragma, INITIAL).ruleStack;
+        const token = grammar.tokenizeLine("Entry   LDA #1", state).tokens.find(item => item.startIndex === 0);
+        assert.ok(!token?.scopes.includes(scope.label), `${pragma}: expected no Merlin label, got ${token?.scopes.join(" ")}`);
     }
 });
 

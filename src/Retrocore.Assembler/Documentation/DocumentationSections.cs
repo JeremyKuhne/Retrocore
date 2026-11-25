@@ -10,7 +10,7 @@ namespace Retrocore.Documentation;
 public static class DocumentationSections
 {
     private static readonly string[] s_entries = ["In", "Out", "Flags", "Errors", "Entry", "Parameters", "Members"];
-    private static readonly string[] s_lists = ["Uses", "Keeps", "See", "Calls"];
+    private static readonly string[] s_lists = ["Uses", "Keeps", "See", "Calls", "Also"];
     private static readonly string[] s_text = ["Cycles", "Stack", "Model", "Inherit", "Include"];
     private static readonly string[] s_free = ["Example", "Deprecated"];
 

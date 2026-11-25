@@ -26,14 +26,30 @@ internal sealed partial class AssemblyPreprocessor
         if (PragmaValue(source.Text, "overlay") is { } request)
         {
             // An overlay edits a pinned base, so unchanged lines keep the base's file and line for debugging.
-            if (_options.SourceResolver is not { } resolver || !resolver.TryResolve(source.Path, request, out AssemblySource? baseSource))
+            AssemblySource? baseSource = null;
+            AssemblyLocation pragma = new(source.Path, line: 0, expandedFrom: parent);
+            try
             {
-                Error($"Cannot resolve overlay base '{request}'.", new(source.Path, line: 0, expandedFrom: parent));
+                IAssemblySourceResolver? resolver = _options.SourceResolver;
+                resolver?.TryResolve(source.Path, request, out baseSource);
+            }
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException or AssemblyError)
+            {
+                // What an include reports: unreadable, denied, a name no path can hold or that depends on
+                // current-directory state, or the resolver's own error, such as invalid dialect metadata.
+                Error($"Cannot resolve overlay base '{request}': {error.Message}", pragma);
+                return;
+            }
+
+            if (baseSource is null)
+            {
+                Error($"Cannot resolve overlay base '{request}'.", pragma);
                 return;
             }
 
             try
             {
+                OpenOpaqueLines(baseSource);
                 (string composed, Func<int, AssemblyLocation> location) = Macro10Overlay.Compose(source, baseSource, parent);
                 lines = expander.Expand(composed, location);
             }
@@ -48,13 +64,21 @@ internal sealed partial class AssemblyPreprocessor
             lines = expander.Expand(source.Text, source.Path, parent);
         }
 
+        // The expander chose every branch before reporting its errors, so its lines are trusted only without them.
+        int start = _visited;
         foreach ((string text, AssemblyLocation location) in lines)
         {
             _visited++;
+            MarkLine(location, assembled: true);
             Emit(new Line(text, location, AssemblyDialect.Macro10), text);
         }
 
-        foreach ((string message, AssemblyLocation location) in expander.Errors) { Error(message, location); }
+        foreach ((string message, AssemblyLocation location) in expander.Errors)
+        {
+            Error(message, location);
+            _untrustedFrom = Math.Min(_untrustedFrom, start);
+        }
+
         if (expander.Aliases.Count == 0) { return; }
         _macro10Aliases ??= [with(StringComparer.Ordinal)];
         foreach (KeyValuePair<string, string> alias in expander.Aliases) { _macro10Aliases[alias.Key] = alias.Value; }

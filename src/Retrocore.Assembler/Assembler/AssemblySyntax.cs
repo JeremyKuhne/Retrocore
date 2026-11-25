@@ -30,6 +30,22 @@ internal static class AssemblySyntax
         text.Length != 0 && IdentifierLength(text) == text.Length;
 
     /// <summary>
+    ///  Reads the operand of <c>.scope Name continued</c>, which goes on with a scope opened earlier.
+    /// </summary>
+    /// <param name="operand">The <c>.scope</c> directive's operand.</param>
+    /// <returns>The scope's name, or null when the operand is not a continuation.</returns>
+    internal static string? ContinuedScope(string operand)
+    {
+        const string Continued = "continued";
+        string text = operand.Trim();
+        if (!text.EndsWith(Continued, StringComparison.OrdinalIgnoreCase)) { return null; }
+        string name = text[..^Continued.Length];
+        if (name.Length == 0 || !char.IsWhiteSpace(name[^1])) { return null; }
+        name = name.Trim();
+        return IsPlainIdentifier(name) ? name : null;
+    }
+
+    /// <summary>
     ///  Matches an unqualified ordinary identifier suitable for an export or metadata name.
     /// </summary>
     /// <param name="text">The identifier.</param>
@@ -137,6 +153,25 @@ internal static class AssemblySyntax
     /// <returns>Whether the operand supplies one data element per character.</returns>
     internal static bool IsStringLiteral(ReadOnlySpan<char> text) =>
         text.Length >= 2 && text[0] == '"' && text[^1] == '"' && text[1..^1].IndexOf('"') < 0;
+
+    /// <summary>
+    ///  Measures a line's operation, after any label.
+    /// </summary>
+    /// <param name="text">The text from the operation on.</param>
+    /// <returns>The operation's length.</returns>
+    /// <remarks>
+    ///  <para>
+    ///   The operation ends at whitespace. A directive also ends at an opening parenthesis, as in ca65, which reads
+    ///   <c>.if(1)</c> as <c>.if (1)</c>.
+    ///  </para>
+    /// </remarks>
+    internal static int OperationLength(ReadOnlySpan<char> text)
+    {
+        bool directive = !text.IsEmpty && text[0] == '.';
+        int end = 0;
+        while (end < text.Length && !char.IsWhiteSpace(text[end]) && !(directive && text[end] == '(')) { end++; }
+        return end;
+    }
 
     /// <summary>
     ///  Measures a <c>.w</c> mnemonic suffix that forces absolute addressing.

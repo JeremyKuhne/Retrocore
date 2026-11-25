@@ -1,593 +1,910 @@
-;; INTEGER BASIC: THE RULE INDEX, DSP, COMPARISONS, AND, OR AND THE LAST STATEMENTS ($F197-$F424)
+; retrocore: style=strict
+;; Integer BASIC: the rule starts, DSP, comparisons, AND, OR and the last statements
 ;;
-;; SYNTABLNDX, the tokenizer's index of where each syntax rule starts; the display of a variable marked with DSP when
-;; a program assigns it; the comparisons less than, greater than, at most and at least, AND and OR; STEP, which finishes a FOR; DSP and NODSP;
-;; CON, ASC(, PDL, ^, PR# and IN#; the line input of INPUT; and a few small routines the other modules share.
+;; <RuleStarts>, the tokenizer's index of where each syntax rule starts; the display of a variable marked with DSP
+;; when a program assigns it; the comparisons less than, greater than, at most and at least, AND and OR; STEP, which
+;; sets a FOR's step; DSP and NODSP; CON, ASC(, PDL, ^, PR# and IN#; the line input of INPUT; and a few small routines
+;; the other modules share. It follows Memory.asm, at $F197.
 ;;
-;; Part of IntegerBasic.asm; it follows Memory.asm, at $F197.
+;; Part of IntegerBasic.asm.
 
-;; Where each of the 32 syntax rules starts, as the tokenizer's <STARTRULE> takes it: the address less $EC01, halved.
+;; How far a variable's display flag is before its value: the flag, then the next variable's address (2 bytes).
+DISPLAY_FLAG_BEFORE_VALUE = 3
+
+;; The first token that ends a variable's name: THEN, TO, STEP, AND, OR, MOD and AT at the bottom of the syntax table's
+;; first page are $85 and up, and are never written as tokens.
+FIRST_RESERVED_TOKEN = $85
+
+;; The bits of PDL's number that pick the paddle, 0 to 3.
+PADDLE_MASK = $03
+
+;; One entry of <RuleStarts>: where a syntax rule starts, as <Tokenizer::StartRule> takes it.
+;; Parameters:
+;;   number = the rule's number, which is its entry's place in the table
+;;   start = the rule's address in the syntax table
+.macro RuleStart number, start
+    .assert * - RuleStarts = number, "The rule starts are in the order of the rules' numbers."
+    .byte (start - Syntax::Table - 1) / 2
+.endmacro
+
+;; Where each of the 32 syntax rules starts, as the tokenizer's <Tokenizer::StartRule> takes it: the address less $EC01,
+;; halved.
 ;;
 ;; A rule therefore starts at an odd offset in its page; bit 7 selects the page at $ED00.
-;; See: <SYNTABL>, <CALLRULE>
-SYNTABLNDX:
-    .byte (RULE00 - SYNTABL - 1) / 2 ; $F197 SNUMBER
-    .byte (RULE01 - SYNTABL - 1) / 2 ; SUNUSED1
-    .byte (RULE02 - SYNTABL - 1) / 2 ; SSTMT
-    .byte (RULE03 - SYNTABL - 1) / 2 ; SDIMSTR
-    .byte (RULE04 - SYNTABL - 1) / 2 ; STHEN
-    .byte (RULE05 - SYNTABL - 1) / 2 ; SINVARS
-    .byte (RULE06 - SYNTABL - 1) / 2 ; SSUBSTR
-    .byte (RULE07 - SYNTABL - 1) / 2 ; SEXPR
-    .byte (RULE08 - SYNTABL - 1) / 2 ; SSTRING
-    .byte (RULE09 - SYNTABL - 1) / 2 ; SSTRVAR
-    .byte (RULE0A - SYNTABL - 1) / 2 ; SSTRDEST
-    .byte (RULE0B - SYNTABL - 1) / 2 ; SSTMT2
-    .byte (RULE0C - SYNTABL - 1) / 2 ; SSTRCHR
-    .byte (RULE0D - SYNTABL - 1) / 2 ; SDIMLIST
-    .byte (RULE0E - SYNTABL - 1) / 2 ; SPRLIST
-    .byte (RULE0F - SYNTABL - 1) / 2 ; SDIGIT
-    .byte (RULE10 - SYNTABL - 1) / 2 ; SDIMNUM
-    .byte (RULE11 - SYNTABL - 1) / 2 ; SRPAREN
-    .byte (RULE12 - SYNTABL - 1) / 2 ; SINNUMS
-    .byte (RULE13 - SYNTABL - 1) / 2 ; SSIGNED
-    .byte (RULE14 - SYNTABL - 1) / 2 ; SFUNC
-    .byte (RULE15 - SYNTABL - 1) / 2 ; SOPERAND
-    .byte (RULE16 - SYNTABL - 1) / 2 ; SUNUSED2
-    .byte (RULE17 - SYNTABL - 1) / 2 ; SNUMVAR
-    .byte (RULE18 - SYNTABL - 1) / 2 ; SASSIGN
-    .byte (RULE19 - SYNTABL - 1) / 2 ; SNAME
-    .byte (RULE1A - SYNTABL - 1) / 2 ; SIMMED
-    .byte (RULE1B - SYNTABL - 1) / 2 ; SSTMT3
-    .byte (RULE1C - SYNTABL - 1) / 2 ; SNAMEEND
-    .byte (RULE1D - SYNTABL - 1) / 2 ; SNAMECH
-    .byte (RULE1E - SYNTABL - 1) / 2 ; SOPER
-    .byte (RULE1F - SYNTABL - 1) / 2 ; SLINE
+;; See: <Syntax::Table>, <Tokenizer::CallRule>
+;; Also: SYNTABLNDX (IBSM)
+RuleStarts:
+    RuleStart Syntax::RULE_NUMBER, Syntax::NumberRule
+    RuleStart Syntax::RULE_NUMBER_THEN_ARRAY, Syntax::NumberThenArrayRule
+    RuleStart Syntax::RULE_STATEMENT, Syntax::StatementRule
+    RuleStart Syntax::RULE_DIM_STRING, Syntax::DimStringRule
+    RuleStart Syntax::RULE_THEN, Syntax::ThenRule
+    RuleStart Syntax::RULE_INPUT_NEXT, Syntax::InputNextRule
+    RuleStart Syntax::RULE_SUBSTRING, Syntax::SubstringRule
+    RuleStart Syntax::RULE_EXPRESSION, Syntax::ExpressionRule
+    RuleStart Syntax::RULE_STRING, Syntax::StringRule
+    RuleStart Syntax::RULE_STRING_VARIABLE, Syntax::StringVariableRule
+    RuleStart Syntax::RULE_STRING_DESTINATION, Syntax::StringDestinationRule
+    RuleStart Syntax::RULE_STATEMENTS_TEXT_TO_TAB, Syntax::StatementsTextToTabRule
+    RuleStart Syntax::RULE_STRING_CHARACTERS, Syntax::StringCharactersRule
+    RuleStart Syntax::RULE_DIM_NEXT, Syntax::DimNextRule
+    RuleStart Syntax::RULE_PRINT_NEXT, Syntax::PrintNextRule
+    RuleStart Syntax::RULE_DIGIT, Syntax::DigitRule
+    RuleStart Syntax::RULE_DIM_ARRAY, Syntax::DimArrayRule
+    RuleStart Syntax::RULE_RIGHT_PARENTHESIS, Syntax::RightParenthesisRule
+    RuleStart Syntax::RULE_INPUT_NUMBERS, Syntax::InputNumbersRule
+    RuleStart Syntax::RULE_SIGNED_NUMBER, Syntax::SignedNumberRule
+    RuleStart Syntax::RULE_FUNCTION_NAME, Syntax::FunctionNameRule
+    RuleStart Syntax::RULE_OPERAND, Syntax::OperandRule
+    RuleStart Syntax::RULE_UNSIGNED_OPERAND, Syntax::UnsignedOperandRule
+    RuleStart Syntax::RULE_NUMBER_VARIABLE, Syntax::NumberVariableRule
+    RuleStart Syntax::RULE_ASSIGNMENT, Syntax::AssignmentRule
+    RuleStart Syntax::RULE_NAME, Syntax::NameRule
+    RuleStart Syntax::RULE_IMMEDIATE_STATEMENT, Syntax::ImmediateStatementRule
+    RuleStart Syntax::RULE_STATEMENTS_LIST_TO_IN, Syntax::StatementsListToInRule
+    RuleStart Syntax::RULE_NAME_REST, Syntax::NameRestRule
+    RuleStart Syntax::RULE_NAME_CHARACTER, Syntax::NameCharacterRule
+    RuleStart Syntax::RULE_OPERATOR, Syntax::OperatorRule
+    RuleStart Syntax::RULE_LINE, Syntax::LineRule
+.assert * - RuleStarts = 32, "One start for each of the 32 rules."
 
-;; Prints the number in ACC and a blank: the value of a variable DSP shows.
-;; See: <PRINTACC>
-PRNUMBLANK:
-    ldy #$00                        ; $F1B7
-    jsr PRINTACC                    ; $F1B9
-    lda #$A0                        ; $F1BC
-    jmp COUT                        ; $F1BE
-    .byte $00, $00, $00, $00, $00, $00, $00, $00 ; $F1C1 unused bytes
+; Showing a variable that DSP marks.
+.scope Display continued
 
-;; Prints the name of the variable at <AUX>, then =: finds the last variable that starts below AUX.
+;; Prints the number in <Accumulator> and a blank: the value of a variable DSP shows.
+;; In: Accumulator = the number
+;; See: <Statements::PrintNumber::FromAccumulator>
+;; Also: PRNUMBLANK (UNKN)
+.proc PrintNumberAndBlank
+    ldy #0
+    jsr Statements::PrintNumber::FromAccumulator
+    lda #BLANK | $80
+    jmp CharacterOut
+.endproc
+
+    ; Unused bytes.
+    .res 8, $00
+
+;; Prints the name of the variable whose value is at <Auxiliary>, then =.
 ;;
-;; A string's $40 prints as $.
-;; In: AUX = the variable's value
-;; Uses: A, Y, SRCH
-PRVARNAME:
-    ldy LOMEM                       ; $F1C9
-    lda LOMEM+1                     ; $F1CB
-@Loop1:
-    pha                             ; $F1CD
-    cpy AUX                         ; $F1CE
-    sbc AUX+1                       ; $F1D0
-    bcs PRSRCHNAME                  ; $F1D2
-    pla                             ; $F1D4
-    sty SRCH                        ; $F1D5
-    sta SRCH+1                      ; $F1D7 SRCH = the variable to look at
-    ldy #$FF                        ; $F1D9
-@Loop2:
-    iny                             ; $F1DB
-    lda (SRCH),y                    ; $F1DC
-    bmi @Loop2                      ; $F1DE
-    cmp #$40                        ; $F1E0
-    beq @Loop2                      ; $F1E2 skip the name
-    iny                             ; $F1E4 the address of the next variable
-    iny                             ; $F1E5
-    lda (SRCH),y                    ; $F1E6
-    pha                             ; $F1E8
-    dey                             ; $F1E9
-    lda (SRCH),y                    ; $F1EA
-    tay                             ; $F1EC
-    pla                             ; $F1ED
-    bne @Loop1                      ; $F1EE
+;; It walks the variables from LOMEM to the last one that starts below Auxiliary. A string's $ token prints as $.
+;; In: Auxiliary = the address of the variable's value
+;; Out: SearchPointer = the variable's address
+;; Uses: A, Y
+;; Also: PRVARNAME (UNKN)
+.proc PrintVariableName
+    ; A (high) and Y (low) = the variable to look at, from the first one.
+    ldy LowMemory
+    lda LowMemory+1
 
-;; Prints the name of the variable at <SRCH>, up to its display flag.
-PRSRCHNAME:
-    pla                             ; $F1F0
-    ldy #$00                        ; $F1F1
+    ; Stop at the first variable that is not below Auxiliary; the one before it is the one.
+NextVariable:
+    pha
+    cpy Auxiliary
+    sbc Auxiliary+1
+    bcs PrintName
+    pla
+    sty SearchPointer
+    sta SearchPointer+1
 
-PRSRCHNAME_1:
-    lda (SRCH),y                    ; $F1F3
-    bmi PRSRCHNAME_2                ; $F1F5
-    lsr a                           ; $F1F7
-    beq PRSRCHNAME_3                ; $F1F8
-    lda #'$'                        ; $F1FA
+    ; Skip its name, then take the next variable's address.
+    ldy #$FF
+SkipName:
+    iny
+    lda (SearchPointer),y
+    bmi SkipName
+    cmp #TOKEN_DOLLAR
+    beq SkipName
+    iny
+    iny
+    lda (SearchPointer),y
+    pha
+    dey
+    lda (SearchPointer),y
+    tay
+    pla
+    bne NextVariable                ; always: no variable is in page zero
 
-PRSRCHNAME_2:
-    jsr COUT                        ; $F1FC
-    iny                             ; $F1FF
-    bne PRSRCHNAME_1                ; $F200
+;; Prints the name of the variable at <SearchPointer>, up to its display flag.
+;; Also: PRSRCHNAME (UNKN)
+PrintName:
+    pla
+    ldy #0
 
-;; Prints the = after the name.
-PRSRCHNAME_3:
-    lda #'='                        ; $F202
-    jmp COUT                        ; $F204
+NextCharacter:
+    lda (SearchPointer),y
+    bmi Print
+    lsr a
+    beq PrintEquals                 ; the display flag, 0 or 1, ends the name
+    lda #'$'
+
+Print:
+    jsr CharacterOut
+    iny
+    bne NextCharacter
+
+PrintEquals:
+    lda #'='
+    jmp CharacterOut
+.endproc
 
 ;; Stores the high byte of a numeric assignment and pops the variable; shows it if it is marked with DSP.
-;; In: A = the value's high byte, AUX = the variable's value, Y = 1
-;; See: <ASSIGN_NUM>, <TRYSHOWNUM>
-LETNUMEND:
-    sta (AUX),y                     ; $F207
-    inx                             ; $F209
-    lda NOUNSTKC-1,x                ; $F20A the display flag, which the lookup left in NOUNSTKC
-    beq LETNUMEND_1                 ; $F20C
-    jmp TRYSHOWNUM                  ; $F20E
-    .byte $A0                       ; $F211 an unused byte
+;; In: A = the value's high byte, Auxiliary = the variable's value, Y = 1, X = the noun stack, its top entry the
+;;   variable, whose display flag the lookup left in its high byte of numbers
+;; Out: X = the noun stack, one entry higher
+;; See: <Statements::AssignNumber>, <TryShowNumber>
+;; Also: LETNUMEND (UNKN)
+.proc FinishNumberAssignment
+    sta (Auxiliary),y
+    inx
+    lda NounStackNumberHigh-1,x
+    beq ShowString::Return
+    jmp TryShowNumber
+.endproc
+
+    ; An unused byte (an LDY immediate).
+    .byte $A0
 
 ;; Shows a numeric variable after an assignment: # and the line number unless TRACE has printed it, then the name,
 ;; = and the value.
-;; In: negative = set in TRACE mode
-SHOWNUM:
-    bmi SHOWNUM_1                   ; $F212
-    lda PR                          ; $F214
-    ldy PR+1                        ; $F216
-    jsr PRLINENUM                   ; $F218
+;;
+;; It loads <CurrentLine> into A and Y before printing the line number, though
+;; <Display::TraceLine::PrintLineNumber> reads the line itself.
+;; In: negative = set in TRACE mode, Accumulator = the value, Auxiliary = the variable's value
+;; Out: X = the noun stack index kept in <SavedX>
+;; See: <TryShowNumber>
+;; Also: SHOWNUM (UNKN)
+.proc ShowNumber
+    bmi PrintName
+    lda CurrentLine
+    ldy CurrentLine+1
+    jsr TraceLine::PrintLineNumber
 
-SHOWNUM_1:
-    jsr PRVARNAME                   ; $F21B
-    ldx XSAVE                       ; $F21E
-    jmp PRNUMBLANK                  ; $F220
+PrintName:
+    jsr PrintVariableName
+    ldx SavedX
+    jmp PrintNumberAndBlank
+.endproc
 
 ;; Pops a string assignment's variable, and shows it if it is marked with DSP.
-;; See: <LET_STR>, <TRYSHOWSTR>
-LETSTREND:
-    inx                             ; $F223
-    inx                             ; $F224
-    lda NOUNSTKC-1,x                ; $F225
-    beq GET16INC_1                  ; $F227
-    jmp TRYSHOWSTR                  ; $F229
+;; In: X = the noun stack, its top entries the variable's range and address
+;; Out: X = the noun stack, both popped
+;; See: <Statements::LetString>, <TryShowString>
+;; Also: LETSTREND (UNKN)
+.proc FinishStringAssignment
+    inx
+    inx
+    lda NounStackNumberHigh-1,x
+    beq GetNumberPlusOne::Done
+    jmp TryShowString
+.endproc
 
-;; Shows a string variable after an assignment, as <SHOWNUM> shows a number.
-SHOWSTR:
-    bmi SHOWSTR_1                   ; $F22C
-    lda PR                          ; $F22E
-    ldy PR+1                        ; $F230
-    jsr PRLINENUM                   ; $F232
+;; Shows a string variable after an assignment, as <ShowNumber> shows a number.
+;; In: negative = set in TRACE mode, Auxiliary = the variable's value
+;; Out: X = the noun stack index kept in <SavedX>
+;; See: <TryShowString>
+;; Entry:
+;;   Return = returns; <FinishNumberAssignment> branches here for a variable DSP does not mark
+;; Also: SHOWSTR (UNKN)
+.proc ShowString
+    bmi PrintName
+    lda CurrentLine
+    ldy CurrentLine+1
+    jsr TraceLine::PrintLineNumber
 
-SHOWSTR_1:
-    jsr PRVARNAME                   ; $F235
-    ldx XSAVE                       ; $F238
-    jmp PRSTRAUX                    ; $F23A
-    .byte $E8                       ; $F23D an unused byte
+PrintName:
+    jsr PrintVariableName
+    ldx SavedX
+    jmp PrintStringAt
 
-LETNUMEND_1:
-    rts                             ; $F23E
+    ; An unused byte (an INX).
+    .byte $E8
+
+Return:
+    rts
+.endproc
+
+.endscope
 
 ;; Takes a number off the noun stack and adds 1.
-;; Out: ACC = the number + 1
-;; See: <GET16BIT>
-GET16INC:
-    jsr GET16BIT                    ; $F23F
-    inc ACC                         ; $F242
-    bne GET16INC_1                  ; $F244
-    inc ACC+1                       ; $F246
+;; In: X = the noun stack
+;; Out: Accumulator = the number + 1, A = 0 for a number entry or the value's low byte for a variable's, X = the noun
+;;   stack, one entry higher, Y = 0
+;; Keeps: carry
+;; See: <GetNumber>
+;; Entry:
+;;   Done = returns; <Display::FinishStringAssignment> branches here for a variable DSP does not mark
+;; Also: GET16INC (UNKN)
+.proc GetNumberPlusOne
+    jsr GetNumber
+    inc Accumulator
+    bne Done
+    inc Accumulator+1
 
-GET16INC_1:
-    rts                             ; $F248
+Done:
+    rts
+.endproc
+
+; The comparisons, AND and OR.
+.scope Operators continued
 
 ;; < (token $1C): replaces two numbers with 1 if the lower is less than the top one, 0 if not: NOT >=.
 ;;
-;; <NOT> always ends with Z clear, so the branch is always taken.
-;; See: <GREATEQ>, <NOT>
-LESS:
-    jsr GREATEQ                     ; $F249
-    bne JmpNOT                      ; $F24C
+;; <Operators::Not> always ends with zero clear, so the branch is always taken.
+;; In: X = the noun stack: two numbers
+;; Out: X = the noun stack, its top entry the result
+;; Errors: >32767 if the difference overflows
+;; See: <GreaterOrEqual>
+;; Also: LESS (UNKN)
+.proc Less
+    jsr GreaterOrEqual
+    bne GreaterOrEqual::ToNot
+.endproc
 
 ;; > (token $19): 1 if the lower number is greater than the top one: NOT <=.
-GREATER:
-    jsr LESSEQ                      ; $F24E
-    bne JmpNOT                      ; $F251
+;; In: X = the noun stack: two numbers
+;; Out: X = the noun stack, its top entry the result
+;; Errors: >32767 if the difference overflows
+;; See: <LessOrEqual>
+;; Also: GREATER (UNKN)
+.proc Greater
+    jsr LessOrEqual
+    bne GreaterOrEqual::ToNot
+.endproc
 
 ;; <= (token $1A): 1 if the lower number is at most the top one: the difference, negated, is not negative.
-LESSEQ:
-    jsr SUBTRACT                    ; $F253
-    jsr NEGATE                      ; $F256
-    bvc GREATEQ_1                   ; $F259 always: an overflow is an error
+;; In: X = the noun stack: two numbers
+;; Out: X = the noun stack, its top entry the result
+;; Errors: >32767 if the difference overflows
+;; Also: LESSEQ (UNKN)
+.proc LessOrEqual
+    jsr Operators::Subtract
+    jsr Operators::Negate
+    bvc GreaterOrEqual::Sign        ; always: an overflow is an error
+.endproc
 
 ;; >= (token $18): 1 if the lower number is at least the top one: the difference is not negative.
 ;;
-;; The difference's sign (<SGN>) halved is 0 for 0 and 1, and $FF7F for -1; <NOT> turns that into 1, 1 and 0.
+;; The difference's sign (<Functions::Sgn>) halved is 0 for 0 and 1, and $FF7F for -1; <Operators::Not> turns that into
+;; 1, 1 and 0. As the difference must fit in 16 bits, comparing numbers more than 32767 apart is the >32767 error.
+;; In: X = the noun stack: two numbers
+;; Out: X = the noun stack, its top entry the result
 ;; Errors: >32767 if the difference overflows
-GREATEQ:
-    jsr SUBTRACT                    ; $F25B
+;; Entry:
+;;   Sign = turns the difference on the noun stack into the result; <LessOrEqual> branches here
+;;   ToNot = replaces the top number with NOT of it (<Operators::Not>); <Operators::Less> and <Operators::Greater>
+;;   branch here, and AND and OR reach it through <Operators::Or::Store>
+;; Also: GREATEQ (UNKN)
+.proc GreaterOrEqual
+    jsr Operators::Subtract
 
-GREATEQ_1:
-    jsr SGN                         ; $F25E
-    lsr NOUNSTKL,x                  ; $F261
+;; Turns the difference on the noun stack into the result; <LessOrEqual> branches here.
+Sign:
+    jsr Functions::Sgn
+    lsr NounStackLow,x
 
-;; Replaces the top number with NOT of it.
-JmpNOT:
-    jmp NOT                         ; $F263
+;; Replaces the top number with NOT of it (<Operators::Not>); <Operators::Less> and <Operators::Greater> branch
+;; here, and AND and OR reach it through <Operators::Or::Store>.
+;; Also: JmpNOT (IBSM)
+ToNot:
+    jmp Operators::Not
+.endproc
 
 ;; AND (token $1D): 1 if both numbers are not 0, else 0.
 ;;
-;; It works as NOT (NOT a OR NOT b) on the 0 and 1 that <NOTBOTH> leaves.
-;; See: <NOTBOTH>, <VOR>
-VAND:
-    jsr NOTBOTH                     ; $F266
-    ora NOUNSTKL-1,x                ; $F269
-    bpl VOR_1                       ; $F26B always: A is 0 or 1
+;; It works as NOT (NOT a OR NOT b) on the 0 and 1 that <InvertBoth> leaves.
+;; In: X = the noun stack: two numbers
+;; Out: X = the noun stack, its top entry the result
+;; See: <Or>
+;; Also: VAND (IBSM)
+.proc And
+    jsr InvertBoth
+    ora NounStackLow-1,x
+    bpl Or::Store                   ; always: A is 0 or 1
+.endproc
 
 ;; OR (token $1E): 1 if either number is not 0, else 0: NOT (NOT a AND NOT b).
-;; See: <NOTBOTH>, <VAND>
-VOR:
-    jsr NOTBOTH                     ; $F26D
-    and NOUNSTKL-1,x                ; $F270
+;; In: X = the noun stack: two numbers
+;; Out: X = the noun stack, its top entry the result
+;; See: <InvertBoth>, <And>
+;; Entry:
+;;   Store = stores A as the number, then replaces it with NOT of it; <And> branches here
+;; Also: VOR (IBSM)
+.proc Or
+    jsr InvertBoth
+    and NounStackLow-1,x
 
-VOR_1:
-    sta NOUNSTKL,x                  ; $F272
-    bpl JmpNOT                      ; $F274
-    jmp NOTBOTH                     ; $F276 unused: the branch before it is always taken
+;; Stores A as the number, then replaces it with NOT of it; <And> branches here.
+Store:
+    sta NounStackLow,x
+    bpl GreaterOrEqual::ToNot       ; always: A is 0 or 1
+    jmp InvertBoth                  ; unused: the branch before it is always taken
+.endproc
+
+.endscope
+
+; STEP.
+.scope Statements continued
 
 ;; STEP (token $58): sets the step of the FOR loop being set up, and the place to loop back to again, after STEP.
 ;; In: X = the noun stack, its top entry the step
-;; See: <TO>, <FOR>
-STEP:
-    jsr GET16BIT                    ; $F279
-    ldy FORNDX                      ; $F27C
-    lda ACC                         ; $F27E
-    sta STK_60-1,y                  ; $F280
-    lda ACC+1                       ; $F283
-    jmp SETFORPLACE                 ; $F285
+;; See: <Statements::To>, <Statements::For>, <Statements::To::SetPlace>
+;; Also: STEP (IBSM)
+.proc Step
+    jsr GetNumber
+    ldy ForIndex
+    lda Accumulator
+    sta ForStepLow-1,y
+    lda Accumulator+1
+    jmp Statements::To::SetPlace
+.endproc
 
-;; The rest of FOR: stores the variable's high byte, then removes any older FOR loop for the same variable,
-;; moving the loops above it down.
+.endscope
+
+;; The rest of FOR: stores the new loop's variable address high byte, then removes any older FOR loop for the same
+;; variable, moving the loops above it down.
 ;;
-;; The move copies the <STK_A0> column twice and never <STK_B0>, so a loop that moves keeps the high byte of the
-;; token address of the loop that was above it. The 1983 System Master's INTBASIC copies <STK_B0> instead, which
-;; FORFIX builds.
-;; See: <FOR>
-FORDROPOLD:
-    sta STK_50,y                    ; $F288
-@Loop1:
-    dey                             ; $F28B
-    bmi @Return                     ; $F28C
-    lda STK_40,y                    ; $F28E
-    cmp NOUNSTKL,x                  ; $F291
-    bne @Loop1                      ; $F293
-    lda STK_50,y                    ; $F295
-    cmp NOUNSTKH,x                  ; $F298
-    bne @Loop1                      ; $F29A
-    dec FORNDX                      ; $F29C one loop fewer
-@Loop2:
-    lda STK_40+1,y                  ; $F29E
-    sta STK_40,y                    ; $F2A1
-    lda STK_50+1,y                  ; $F2A4
-    sta STK_50,y                    ; $F2A7
-    lda STK_C0+1,y                  ; $F2AA
-    sta STK_C0,y                    ; $F2AD
-    lda STK_D0+1,y                  ; $F2B0
-    sta STK_D0,y                    ; $F2B3
-    lda STK_60+1,y                  ; $F2B6
-    sta STK_60,y                    ; $F2B9
-    lda STK_70+1,y                  ; $F2BC
-    sta STK_70,y                    ; $F2BF
-    lda STK_80+1,y                  ; $F2C2
-    sta STK_80,y                    ; $F2C5
-    lda STK_90+1,y                  ; $F2C8
-    sta STK_90,y                    ; $F2CB
-    lda STK_A0+1,y                  ; $F2CE
-    sta STK_A0,y                    ; $F2D1
+;; In the ROMs the move copies the <ForTokenLow> column twice and never <ForTokenHigh>, so each loop that moves down
+;; keeps the token address high byte of the loop that was in its new place; NEXT then goes back to the wrong token
+;; when the two addresses are in different pages. The 1983 System Master's INTBASIC copies <ForTokenHigh> instead,
+;; which FORFIX builds.
+;; In: A = the variable's address, high byte, Y = the new loop's index, X = the noun stack, its top entry the variable
+;; Keeps: X
+;; See: <Statements::For>
+;; Also: FORDROPOLD (UNKN)
+.proc DropOlderForLoop
+    sta ForVariableHigh,y
+
+    ; Look down the older loops for the same variable.
+FindOlder:
+    dey
+    bmi Done
+    lda ForVariableLow,y
+    cmp NounStackLow,x
+    bne FindOlder
+    lda ForVariableHigh,y
+    cmp NounStackHigh,x
+    bne FindOlder
+
+    ; One loop fewer: move each loop above it down one place.
+    dec ForIndex
+MoveDown:
+    lda ForVariableLow+1,y
+    sta ForVariableLow,y
+    lda ForVariableHigh+1,y
+    sta ForVariableHigh,y
+    lda ForLimitLow+1,y
+    sta ForLimitLow,y
+    lda ForLimitHigh+1,y
+    sta ForLimitHigh,y
+    lda ForStepLow+1,y
+    sta ForStepLow,y
+    lda ForStepHigh+1,y
+    sta ForStepHigh,y
+    lda ForLineLow+1,y
+    sta ForLineLow,y
+    lda ForLineHigh+1,y
+    sta ForLineHigh,y
+    lda ForTokenLow+1,y
+    sta ForTokenLow,y
 .if FORFIX
-    lda STK_B0+1,y                  ; $F2D4
-    sta STK_B0,y                    ; $F2D7
+    ; The 1983 System Master's INTBASIC copies the token addresses' high bytes.
+    lda ForTokenHigh+1,y
+    sta ForTokenHigh,y
 .else
-    lda STK_A0+1,y                  ; $F2D4 STK_A0 again, where STK_B0 would be
-    sta STK_A0,y                    ; $F2D7
+    ; The ROMs copy the token addresses' low bytes a second time instead.
+    lda ForTokenLow+1,y
+    sta ForTokenLow,y
 .endif
-    iny                             ; $F2DA
-    cpy FORNDX                      ; $F2DB
-    bcc @Loop2                      ; $F2DD
-@Return:
-    rts                             ; $F2DF
+    iny
+    cpy ForIndex
+    bcc MoveDown
+
+Done:
+    rts
+.endproc
+
+; NODSP.
+.scope Statements continued
 
 ;; NODSP of a string (token $78): stops showing the variable when it is assigned.
 ;; In: X = the noun stack, its top entries the variable's range and address
-;; See: <NODSP_NUM>, <DSP_STR>
-NODSP_STR:
-    inx                             ; $F2E0
+;; Out: X = the noun stack, both popped
+;; See: <DspString>
+;; Also: NODSP_STR (IBSM)
+.proc NoDspString
+    inx
+    ; Falls into NoDspNumber.
+.endproc
 
 ;; NODSP of a number (token $79): clears the variable's display flag.
 ;; In: X = the noun stack, its top entry the variable's address
-NODSP_NUM:
-    lda #$00                        ; $F2E1
+;; Out: X = the noun stack, popped
+;; Also: NODSP_NUM (IBSM)
+.proc NoDspNumber
+    lda #0
+    ; Falls into Display::SetFlag.
+.endproc
+
+.endscope
+
+.scope Display continued
 
 ;; Sets the display flag of the variable on the noun stack to A, and pops it.
 ;;
 ;; The flag is the byte 3 before the value, after the name and before the next variable's address.
-;; In: A = 0 or 1
-SETDSPFLAG:
-    pha                             ; $F2E3
-    lda NOUNSTKL,x                  ; $F2E4
-    sec                             ; $F2E6
-    sbc #$03                        ; $F2E7
-    sta ACC                         ; $F2E9
-    lda NOUNSTKH,x                  ; $F2EB
-    sbc #$00                        ; $F2ED
-    sta ACC+1                       ; $F2EF
-    pla                             ; $F2F1
-    ldy #$00                        ; $F2F2
-    sta (ACC),y                     ; $F2F4
-    inx                             ; $F2F6
-    rts                             ; $F2F7
+;; In: A = 0 or 1, X = the noun stack, its top entry the variable's address
+;; Out: X = the noun stack, popped, Accumulator = the flag's address, Y = 0
+;; Also: SETDSPFLAG (UNKN)
+.proc SetFlag
+    pha
+    lda NounStackLow,x
+    sec
+    sbc #DISPLAY_FLAG_BEFORE_VALUE
+    sta Accumulator
+    lda NounStackHigh,x
+    sbc #0
+    sta Accumulator+1
+    pla
+    ldy #0
+    sta (Accumulator),y
+    inx
+    rts
+.endproc
 
-;; A keyword matched (<GOTKEYWORD>): writes its token, or fails if it is a reserved word ($85 and up).
+.endscope
+
+; Tokenizer: writing a matched keyword's token.
+.scope Tokenizer continued
+
+;; A keyword matched (<Tokenizer::GotKeyword>): writes its token and goes on (<Tokenizer::PutTokenAndNext>), or fails if
+;; it is a reserved word, a token of $85 and up.
 ;;
-;; Failing with Y = 2, at the bottom of the first page, makes the name rule (<SNAMECH>) try a digit and end the name.
-;; In: A = the token
-KEYMATCHED:
-    cmp #$85                        ; $F2F8
-    bcs KEYMATCHED_1                ; $F2FA
-    jmp PUTTOKNEXT                  ; $F2FC
+;; Failing with Y = 2, at the bottom of the first page, makes the name rule (<Syntax::RULE_NAME_CHARACTER>) try a digit
+;; and end the name.
+;; In: A = the token, Y = the item
+;; Also: KEYMATCHED (UNKN)
+.proc WriteKeywordToken
+    cmp #FIRST_RESERVED_TOKEN
+    bcs Reserved
+    jmp Tokenizer::PutTokenAndNext
 
-KEYMATCHED_1:
-    ldy #$02                        ; $F2FF
-    jmp ITEMFAILED                  ; $F301
+Reserved:
+    ldy #2
+    jmp Tokenizer::ItemFailed
+.endproc
+
+.endscope
+
+; DSP and CON.
+.scope Statements continued
 
 ;; DSP of a string (token $7B): shows the variable each time it is assigned.
 ;; In: X = the noun stack, its top entries the variable's range and address
-;; See: <DSP_NUM>, <NODSP_STR>
-DSP_STR:
-    inx                             ; $F304
+;; Out: X = the noun stack, both popped
+;; See: <NoDspString>
+;; Also: DSP_STR (IBSM)
+.proc DspString
+    inx
+    ; Falls into DspNumber.
+.endproc
 
 ;; DSP of a number (token $7C): sets the variable's display flag.
 ;; In: X = the noun stack, its top entry the variable's address
-DSP_NUM:
-    lda #$01                        ; $F305
-    bne SETDSPFLAG                  ; $F307 always
-    .byte $E8                       ; $F309 an unused byte
+;; Out: X = the noun stack, popped
+;; Also: DSP_NUM (IBSM)
+.proc DspNumber
+    lda #1
+    bne Display::SetFlag            ; always
+.endproc
+
+    ; An unused byte (an INX).
+    .byte $E8
 
 ;; CON (token $06): continues a program stopped by Control-C, from the token where it stopped.
 ;;
-;; <CHKBREAK> saved the place in the noun stack's first entries.
-;; See: <CHKBREAK>, <GETNEXT>
-CON:
-    lda NOUNSTKH                    ; $F30A
-    sta PR                          ; $F30C
-    lda NOUNSTKH+1                  ; $F30E
-    sta PR+1                        ; $F310
-    lda NOUNSTKL                    ; $F312
-    ldy NOUNSTKL+1                  ; $F314
-    jmp GETNEXT                     ; $F316
+;; <Break::Check> saved the place in the noun stack's first entries.
+;; See: <Lines::RunFromToken>
+;; Also: CON (IBSM)
+.proc Con
+    lda Break::StoppedLine
+    sta CurrentLine
+    lda Break::StoppedLineHigh
+    sta CurrentLine+1
+    lda Break::StoppedToken
+    ldy Break::StoppedTokenHigh
+    jmp Lines::RunFromToken
+.endproc
+
+.endscope
+
+.scope Display continued
 
 ;; Sets a variable's display flag to 1, as DSP does; nothing in the ROM reaches it.
-DSPFLAGON:
-    lda #$01                        ; $F319
-    bne SETDSPFLAG                  ; $F31B
+;; In: X = the noun stack, its top entry the variable's address
+;; Out: X = the noun stack, popped
+;; Also: DSPFLAGON (UNKN)
+.proc SetFlagOn
+    lda #1
+    bne SetFlag                     ; always
+.endproc
+
+.endscope
+
+; ASC( and PDL.
+.scope Functions continued
 
 ;; ASC( (token $3C): replaces a string with its first character's code, bit 7 set as the Apple II keeps text: 193
 ;; for A.
+;;
+;; The routine then ends as a left parenthesis does (<Operators::LeftParenthesis>), as the token opens ASC's
+;; parenthesis.
 ;; In: X = the noun stack, its top entries the string's range and address
+;; Out: X = the noun stack, its top entry the code
 ;; Errors: RANGE for an empty string
-ASC:
-    lda NOUNSTKL,x                  ; $F31D
-    cmp NOUNSTKH,x                  ; $F31F
-    bcc ASC_1                       ; $F321
-    jmp RANGERR                     ; $F323
+;; Also: ASC (IBSM)
+.proc Asc
+    lda NounStackLow,x
+    cmp NounStackHigh,x
+    bcc ReadCharacter
+    jmp RangeError
 
-;; Reads the character and pushes it as a number.
-ASC_1:
-    tay                             ; $F326
-    lda NOUNSTKL+1,x                ; $F327
-    sta ACC                         ; $F329
-    lda NOUNSTKH+1,x                ; $F32B
-    sta ACC+1                       ; $F32D
-    lda (ACC),y                     ; $F32F
-    ldy #$00                        ; $F331
-    inx                             ; $F333
-    inx                             ; $F334
-    jsr PUSHNOUN                    ; $F335
-    jmp HIBYTEPAREN                 ; $F338
+    ; Read the first character, and push it as a number.
+ReadCharacter:
+    tay
+    lda NounStackLow+1,x
+    sta Accumulator
+    lda NounStackHigh+1,x
+    sta Accumulator+1
+    lda (Accumulator),y
+    ldy #0
+    inx
+    inx
+    jsr PushNoun
+    jmp StoreHighByteAndClose
+.endproc
 
 ;; PDL (token $32): replaces a paddle's number, 0 to 3, with its position, 0 to 255.
+;;
+;; Only the number's low two bits count.
 ;; In: X = the noun stack, its top entry the paddle
-;; See: <PREAD>
-PDL:
-    jsr GETBYTE                     ; $F33B
-    stx XSAVE                       ; $F33E
-    and #$03                        ; $F340
-    tax                             ; $F342
-    jsr PREAD                       ; $F343
-    ldx XSAVE                       ; $F346
-    tya                             ; $F348
-    ldy #$00                        ; $F349
-    jsr PUSHNOUN                    ; $F34B
-    sty NOUNSTKC,x                  ; $F34E
-    rts                             ; $F350
+;; Out: X = the noun stack, its top entry the position
+;; Errors: >255
+;; See: <ReadPaddle>
+;; Also: PDL (IBSM)
+.proc Pdl
+    jsr GetByte
+    stx SavedX
+    and #PADDLE_MASK
+    tax
+    jsr ReadPaddle
+    ldx SavedX
+    tya
+    ldy #0
+    jsr PushNoun
+    sty NounStackNumberHigh,x
+    rts
+.endproc
 
-;; Reads a line into <IN> from index X, after the prompt, and goes to the warm start if it holds a Control-C.
+.endscope
+
+;; Reads a line into <InputBuffer> from index X, after the prompt, and goes to the warm start if it holds a
+;; Control-C (<Break::CheckLine>).
 ;;
 ;; INPUT of a string reads with it.
-;; In: X = where the line starts in IN
+;; In: X = where the line starts in <InputBuffer>
 ;; Out: X = the index of the return that ends it
-;; See: <NXTCHAR>, <INPUTSTR>
-;; Entry: CHKCTRLC = checks the line already in IN up to index X
-RDKEY:
-    jsr NXTCHAR                     ; $F351
+;; See: <GetLine::NextCharacter>, <Strings::ReadLineInto>
+;; Also: RDKEY (IBSM)
+.proc ReadInputLine
+    jsr GetLine::NextCharacter
+    ; Falls into Break::CheckLine.
+.endproc
 
-CHKCTRLC:
-    txa                             ; $F354
-    pha                             ; $F355
+.scope Break continued
 
-CHKCTRLC_1:
-    lda IN,x                        ; $F356
-    cmp #ETX+$80                    ; $F359
-    bne CHKCTRLC_2                  ; $F35B
-    jmp BASIC2                      ; $F35D Control-C: back to BASIC's prompt
+;; Goes to the warm start (<WarmEntry>) if the line in <InputBuffer> holds a Control-C, from index X down to 0.
+;;
+;; The index counts down only while it is below $80, so when X is $81 or more only the character at X is checked.
+;; In: X = the last index to check
+;; Out: A = X
+;; Keeps: X, Y
+;; Also: CHKCTRLC (UNKN)
+.proc CheckLine
+    txa
+    pha
 
-CHKCTRLC_2:
-    dex                             ; $F360
-    bpl CHKCTRLC_1                  ; $F361
-    pla                             ; $F363
-    tax                             ; $F364
-    rts                             ; $F365
+NextCharacter:
+    lda InputBuffer,x
+    cmp #CONTROL_C | $80
+    bne NotControlC
+    jmp WarmEntry
 
-;; Reads a line for INPUT of numbers, with the ? prompt, and checks it for Control-C.
-;; Out: Y = the index of the underline that ends it
-;; See: <GETQLINE>, <INPUTNUM>
-INPUTNUMLN:
-    jsr GETQLINE                    ; $F366
-    tya                             ; $F369
-    tax                             ; $F36A
-    jsr CHKCTRLC                    ; $F36B
-    txa                             ; $F36E
-    tay                             ; $F36F
-    rts                             ; $F370
+NotControlC:
+    dex
+    bpl NextCharacter
+    pla
+    tax
+    rts
+.endproc
+
+.endscope
+
+;; Reads a line for INPUT of numbers, with the ? prompt, and checks it for Control-C (<Break::CheckLine>).
+;; Out: Y = the index of the underline that ends it, X = the same
+;; See: <Editor::ReadInputLine>, <Statements::InputNumber>
+;; Also: INPUTNUMLN (UNKN)
+.proc ReadNumberLine
+    jsr Editor::ReadInputLine
+    tya
+    tax
+    jsr Break::CheckLine
+    txa
+    tay
+    rts
+.endproc
+
+; ^.
+.scope Operators continued
 
 ;; ^ (token $20): replaces two numbers with the lower one raised to the power of the top one.
 ;;
-;; The power is repeated multiplication, starting from 1. A negative exponent gives 0: it pushes 0, leaving both
-;; operands below it on the noun stack.
+;; The power is repeated multiplication (<Operators::Multiply>), starting from 1: <SearchPointer> counts,
+;; <SearchPointer2> holds the base. A negative exponent gives 0, but pushes it above the exponent instead of replacing
+;; both operands, so they stay on the noun stack below it.
 ;; In: X = the noun stack: the base, then the exponent on top
 ;; Out: X = the noun stack, its top entry the power
 ;; Errors: >32767
-;; See: <MULT>
-EXP:
-    jsr GET16BIT                    ; $F371
-    lda ACC+1                       ; $F374
-    bpl EXP_2                       ; $F376
-    tya                             ; $F378
-    dex                             ; $F379
-    jsr PUSHNOUN                    ; $F37A
-    sty NOUNSTKC,x                  ; $F37D
+;; Also: EXP (IBSM)
+.proc Power
+    jsr GetNumber
+    lda Accumulator+1
+    bpl Positive
 
-EXP_1:
-    rts                             ; $F37F
+    ; A negative exponent: push 0.
+    tya
+    dex
+    jsr PushNoun
+    sty NounStackNumberHigh,x
 
-;; Multiplies 1 by the base as many times as the exponent says: <SRCH> counts, <SRCH2> holds the base.
-EXP_2:
-    sta SRCH+1                      ; $F380
-    lda ACC                         ; $F382
-    sta SRCH                        ; $F384
-    jsr GET16BIT                    ; $F386
-    lda ACC                         ; $F389
-    sta SRCH2                       ; $F38B
-    lda ACC+1                       ; $F38D
-    sta SRCH2+1                     ; $F38F
-    lda #$01                        ; $F391
-    jsr PUSHNOUN                    ; $F393
-    sty NOUNSTKC,x                  ; $F396
-@Loop:
-    lda SRCH                        ; $F398
-    bne @NoDec                      ; $F39A
-    dec SRCH+1                      ; $F39C
-    bmi EXP_1                       ; $F39E
-@NoDec:
-    dec SRCH                        ; $F3A0
-    lda SRCH2                       ; $F3A2
-    ldy #$00                        ; $F3A4
-    jsr PUSHNOUN                    ; $F3A6
-    lda SRCH2+1                     ; $F3A9
-    sta NOUNSTKC,x                  ; $F3AB
-    jsr MULT                        ; $F3AD
-    jmp @Loop                       ; $F3B0
+Done:
+    rts
+
+    ; SearchPointer = the exponent, SearchPointer2 = the base, and the result starts as 1.
+Positive:
+    sta SearchPointer+1
+    lda Accumulator
+    sta SearchPointer
+    jsr GetNumber
+    lda Accumulator
+    sta SearchPointer2
+    lda Accumulator+1
+    sta SearchPointer2+1
+    lda #1
+    jsr PushNoun
+    sty NounStackNumberHigh,x
+
+    ; Count the exponent down, multiplying by the base each time.
+Multiply:
+    lda SearchPointer
+    bne CountDown
+    dec SearchPointer+1
+    bmi Done
+CountDown:
+    dec SearchPointer
+    lda SearchPointer2
+    ldy #0
+    jsr PushNoun
+    lda SearchPointer2+1
+    sta NounStackNumberHigh,x
+    jsr Operators::Multiply
+    jmp Multiply
+.endproc
+
+.endscope
 
 ;; Takes a byte from the noun stack, less 1: VTAB's line counted from 0.
-;; Out: A = the byte - 1
-GETBYTEDEC:
-    jsr GETBYTE                     ; $F3B3
-    clc                             ; $F3B6
-    adc #$FF                        ; $F3B7
+;; In: X = the noun stack
+;; Out: A = the byte - 1, carry = clear for a byte of 0, X = the noun stack, one entry higher, Y = 0
+;; Errors: >255
+;; Entry:
+;;   Return = returns; <Display::TryShowNumber> and <Display::TryShowString> branch here when no program runs
+;; Also: GETBYTEDEC (UNKN)
+.proc GetByteMinusOne
+    jsr GetByte
+    clc
+    adc #$FF
 
-GETBYTEDEC_1:
-    rts                             ; $F3B9
+Return:
+    rts
+.endproc
+
+; PRINT's comma at the end.
+.scope Statements continued
 
 ;; PRINT's comma at the end of the statement (token $4A): moves to the next tab stop, and the line owes no return.
-COMMA_PREND:
-    jsr NEXTTAB                     ; $F3BA
-    lsr CRFLAG                      ; $F3BD
-    rts                             ; $F3BF
+;; Out: ReturnPending = bit 7 clear
+;; See: <NextTabStop>
+;; Also: COMMA_PREND (UNKN)
+.proc PrintCommaEnd
+    jsr NextTabStop
+    lsr ReturnPending
+    rts
+.endproc
 
-;; Runs a line's tokens with the run flag and the stack pointer set from X; nothing in the ROM reaches it.
-RUNTOKENS:
-    stx RUNFLAG                     ; $F3C0
-    txs                             ; $F3C2
-    jsr CHKBREAK                    ; $F3C3
-    jmp RUNLOOP                     ; $F3C6
+.endscope
+
+;; Runs a line's tokens with the run flag and the stack pointer set from X, checking for Control-C first; nothing in
+;; the ROM reaches it.
+;; In: X = the run flag and the stack pointer
+;; See: <Break::Check>, <Lines::RunLoop>
+;; Also: RUNTOKENS (UNKN)
+.proc RunWithStack
+    stx Running
+    txs
+    jsr Break::Check
+    jmp Lines::RunLoop
+.endproc
+
+; PR#.
+.scope Statements continued
 
 ;; PR# (token $7E): sends output to slot n's ROM, or to the screen for 0.
 ;; In: X = the noun stack, its top entry the slot
-;; See: <OUTPORT>, <INSLOT>
-PRSLOT:
-    jsr GETBYTE                     ; $F3C9
-    stx XSAVE                       ; $F3CC
-    jsr OUTPORT                     ; $F3CE
-    ldx XSAVE                       ; $F3D1
-    rts                             ; $F3D3
-    .byte $FE                       ; $F3D4 an unused byte
+;; Out: X = the noun stack, popped
+;; Errors: >255
+;; See: <SetOutput>, <InNumber>
+;; Also: PRSLOT (IBSM)
+.proc PrNumber
+    jsr GetByte
+    stx SavedX
+    jsr SetOutput
+    ldx SavedX
+    rts
+.endproc
 
-;; After a numeric assignment to a DSP variable: shows it, if a program is running.
-;; See: <SHOWNUM>
-TRYSHOWNUM:
-    bit RUNFLAG                     ; $F3D5
-    bpl GETBYTEDEC_1                ; $F3D7
-    stx XSAVE                       ; $F3D9
-    bit NOUNSTKC                    ; $F3DB
-    jmp SHOWNUM                     ; $F3DD
+    ; An unused byte.
+    .byte $FE
 
-;; After a string assignment to a DSP variable: shows it, if a program is running.
-;; See: <SHOWSTR>
-TRYSHOWSTR:
-    bit RUNFLAG                     ; $F3E0
-    bpl GETBYTEDEC_1                ; $F3E2
-    stx XSAVE                       ; $F3E4
-    bit NOUNSTKC                    ; $F3E6
-    jmp SHOWSTR                     ; $F3E8
+.endscope
 
-;; Reads the next byte of the line (<GETVERB>), with Y = 0.
-GETVERB0:
-    ldy #$00                        ; $F3EB
-    jmp GETVERB                     ; $F3ED
+.scope Display continued
 
-;; Moves to the next line for TAB.
-SETCURCOL_1:
-    tay                             ; $F3F0
-    jsr CROUT                       ; $F3F1
+;; After a numeric assignment to a variable DSP marks: shows it, if a program is running.
+;; In: X = the noun stack
+;; Out: X = the noun stack, as it was
+;; See: <ShowNumber>
+;; Also: TRYSHOWNUM (UNKN)
+.proc TryShowNumber
+    bit Running
+    bpl GetByteMinusOne::Return
+    stx SavedX
+    bit Tracing
+    jmp ShowNumber
+.endproc
+
+;; After a string assignment to a variable DSP marks: shows it, if a program is running.
+;; In: X = the noun stack
+;; Out: X = the noun stack, as it was
+;; See: <ShowString>
+;; Also: TRYSHOWSTR (UNKN)
+.proc TryShowString
+    bit Running
+    bpl GetByteMinusOne::Return
+    stx SavedX
+    bit Tracing
+    jmp ShowString
+.endproc
+
+.endscope
+
+; Interpreter: reading the next byte of a line.
+.scope Interpreter continued
+
+;; Reads the next byte of the line (<Interpreter::ReadNextByte>), with Y = 0.
+;; Out: A = the byte, Y = 0
+;; Keeps: X, carry
+;; Also: GETVERB0 (UNKN)
+.proc ReadNextLineByte
+    ldy #0
+    jmp Interpreter::ReadNextByte
+.endproc
+
+.endscope
+
+;; Moves down a line for <TabToColumn>, and takes the column less the window's width as the column on that line.
+;; In: A = the column less the window's width
+.proc TabNextLine
+    tay
+    jsr PrintReturn
+    ; Falls into TabToColumn.
+.endproc
 
 ;; Sets the cursor's column to Y, moving down a line for each window's width it passes.
 ;; In: Y = the column, from 0
-;; See: <TAB>, <NEXTTAB>
-SETCURCOL:
-    tya                             ; $F3F4
-    sec                             ; $F3F5
-    sbc WNDWDTH                     ; $F3F6
-    bcs SETCURCOL_1                 ; $F3F8
-    sty CH                          ; $F3FA
-    rts                             ; $F3FC
-    .byte $00, $00, $00, $FF, $FF, $FF, $FF ; $F3FD unused bytes
+;; Out: CursorColumn = the column on its line
+;; See: <Statements::Tab>, <NextTabStop>
+;; Also: SETCURCOL (UNKN)
+.proc TabToColumn
+    tya
+    sec
+    sbc WindowWidth
+    bcs TabNextLine
+    sty CursorColumn
+    rts
+.endproc
 
-;; Stores Y as the high byte of the number just pushed, then ends like a left parenthesis (<LEFT_PAREN>).
-HIBYTEPAREN:
-    sty NOUNSTKC,x                  ; $F404
-    jmp LEFT_PAREN                  ; $F406
+    ; Unused bytes.
+    .byte $00, $00, $00, $FF, $FF, $FF, $FF
 
-;; Prints the string at <AUX>, up to the byte with bit 7 clear that ends it, and sets <CRFLAG>.
-PRSTRAUX:
-    ldy #$00                        ; $F409
-    beq PRSTRAUX_2                  ; $F40B
+;; Stores Y as the high byte of the number just pushed, then ends as a left parenthesis does
+;; (<Operators::LeftParenthesis>).
+;; In: Y = the high byte, X = the noun stack
+;; Also: HIBYTEPAREN (UNKN)
+.proc StoreHighByteAndClose
+    sty NounStackNumberHigh,x
+    jmp Operators::LeftParenthesis
+.endproc
 
-PRSTRAUX_1:
-    jsr COUT                        ; $F40D
-    iny                             ; $F410
+.scope Display continued
 
-PRSTRAUX_2:
-    lda (AUX),y                     ; $F411
-    bmi PRSTRAUX_1                  ; $F413
-    lda #$FF                        ; $F415
-    sta CRFLAG                      ; $F417
-    rts                             ; $F419
+;; Prints the string at <Auxiliary>, up to the byte with bit 7 clear that ends it, and sets <ReturnPending>.
+;; In: Auxiliary = the string
+;; Out: ReturnPending = $FF
+;; Also: PRSTRAUX (UNKN)
+.proc PrintStringAt
+    ldy #0
+    beq Next                        ; always
+
+Print:
+    jsr CharacterOut
+    iny
+
+Next:
+    lda (Auxiliary),y
+    bmi Print
+    lda #$FF
+    sta ReturnPending
+    rts
+.endproc
+
+.endscope
+
+; IN#.
+.scope Statements continued
 
 ;; IN# (token $7F): takes input from slot n's ROM, or from the keyboard for 0.
 ;; In: X = the noun stack, its top entry the slot
-;; See: <INPORT>, <PRSLOT>
-INSLOT:
-    jsr GETBYTE                     ; $F41A
-    stx XSAVE                       ; $F41D
-    jsr INPORT                      ; $F41F
-    ldx XSAVE                       ; $F422
-    rts                             ; $F424
+;; Out: X = the noun stack, popped
+;; Errors: >255
+;; See: <SetInput>, <PrNumber>
+;; Also: INSLOT (IBSM)
+.proc InNumber
+    jsr GetByte
+    stx SavedX
+    jsr SetInput
+    ldx SavedX
+    rts
+.endproc
+
+.endscope

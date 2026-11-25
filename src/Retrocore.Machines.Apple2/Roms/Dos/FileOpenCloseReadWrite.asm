@@ -1,348 +1,489 @@
-;; DOS 3.3 AND 3.2 FILE MANAGER: OPEN, CLOSE, RENAME, READ AND WRITE (FOPCLRW)
+; retrocore: style=strict
+;; DOS 3.3 and 3.2 file manager: OPEN, CLOSE, RENAME, READ and WRITE
 ;;
-;; The file manager's requests for using a file's contents: OPEN, CLOSE, RENAME, and READ and WRITE with
-;; their subcodes. DOSENT (FileManagerEntry.asm) reaches each through CMDVT; READ and WRITE go on through RVT
-;; and WVT. Every request ends by jumping to GOODIO or one of the ERRORn routines (FileLocateSector.asm),
-;; which save the work area back into the file's buffer and return to DOSENT's caller. Where DOS runs, the
-;; module occupies $AB22-$ACEE.
+;; Apple's FOPCLRW module, at $AB22-$ACEE where DOS runs: the file manager's requests that use a file's contents.
+;; <CallFileManager::ForDos> reaches each through <FileManager::RequestHandlers>, and READ and WRITE go on through
+;; <FileManager::ReadHandlers> and <FileManager::WriteHandlers>. Every request ends at <FileManager::Succeed> or one
+;; of the error exits, which save the work area back into the file's buffer and return to the file manager's caller.
 ;;
-;; DOPEN, which every request on a named file starts with, works on the catalog (docs/Dos.md). Each catalog
-;; sector holds seven 35-byte entries from VDFILE; an entry has the track and sector of the file's first
-;; track/sector list at +0 and +1 (track 0 for an entry never used, $FF for a deleted file), the file type
-;; at +2 (bit 7 set when locked), the name at +3 to +32 and the length in sectors at +33 and +34.
-;;
-;; Reading and writing go a byte at a time through LOCNXB (FileLocateNextByte.asm), which keeps the right
-;; data sector in the file's data buffer, reading it, or for WRITE allocating it, when the position moves
-;; into another sector.
+;; <FileManager::OpenFile>, which every request on a named file starts with, works on the catalog (docs/Dos.md):
+;; each catalog sector holds seven file entries, laid out as <CatalogEntry>. Reading and writing go a byte at a time
+;; through <FileManager::LocateNextByte>, which keeps the right data sector in the file's data buffer, reading it,
+;; or for WRITE allocating it, when the position moves into another sector.
+
+; The file manager: opening, closing and renaming a file, and reading and writing it.
+.scope FileManager continued
+
+;; <FileControlBlock::DataRelativeSector>'s two bytes when no data sector is in the buffer: $FFFF.
+NO_DATA_SECTOR = $FF
 
 ;; The OPEN request: finds or creates the file and gets it ready for reading and writing.
-;; In:    CCB = the OPEN request
-;; Out:   CCBFUC = the file's type, CCBSTA = 0, or 6 when the file was created
-;; Errors: carry = set with CCBSTA = an error code, see DOPEN
-FOPEN:
-    jsr DOPEN
-    jmp GOODIO
+;; In: DosFileParameters = the request, as for <OpenFile>
+;; Out: DosFileParameters::FileType = the file's type, DosFileParameters::ReturnCode = 0, or
+;;   <ERROR_FILE_NOT_FOUND> with the carry clear when the file was created
+;; Errors: carry = set, with DosFileParameters::ReturnCode = an ERROR_ code from <OpenFile>
+;; Also: FOPEN (DOS33, DOS31)
+.proc Open
+    jsr OpenFile
+    jmp Succeed
+.endproc
 
-;; Finds the file CCBFN1 names in the catalog, creating it if the command may, and sets up the work area for
-;; it.
+;; Finds the file <DosFileParameters::Name> names in the catalog, creating it if the command may, and sets up the
+;; work area for it.
 ;;
-;; A file is created only when the CMDSTB entry for CMDNO has its create flag (bit 0) set: for DOS's
-;; commands that is INIT, SAVE, OPEN and BSAVE, and USERENT sets CMDNO to INIT's or LOAD's. A new file gets one
-;; sector, an empty track/sector list, and the type in CCBFUC. Its name is already in the catalog entry:
-;; FNDFIL puts it in the free entry it finds when the name is missing.
+;; A file is created only when the command <CommandOffset> names may create files (bit 0 of its entry in the
+;; command tables): for DOS's commands that is INIT, SAVE, OPEN and BSAVE, and <CallFileManager> sets the offset to
+;; INIT's or LOAD's. A new file gets one sector, for an empty track/sector list, and the type in
+;; <DosFileParameters::FileType>. Its name is in the catalog entry already: <FindFile> put it in the free entry it
+;; found when the name was missing.
 ;;
-;; On return the catalog sector holding the entry is in VOLDIR, at CVDTRK and CVDSEC on the disk, which lets
-;; the requests that change the entry write it back with WRVDIR.
-;; In:    CCBFN1 = address of the 30-character name, CCBRLN = record length (0 means 256), CCBVOL, CCBDRV,
-;;          CCBSLT = the disk, CCBFUC = the type for a new file
-;; Out:   carry = clear, TEMP1 = DCBVDI = the entry's offset in VDFILE, CCBFUC = DCBFUC = the file's type,
-;;          the first track/sector list sector in the file's buffer, CCBSTA = CREFNF when the file was made
-;; Errors: 6 (file not found) when the file is missing and may not be created, or 1 (language not
-;;          available) instead when FP was looking for the APPLESOFT file; 9 when the disk is full; the disk
-;;          errors of DCBIO
-;; Uses:  A, X, Y, ZPGFCB, TEMP2, TEMP3, FCB (the work area), VTOC, VOLDIR
-DOPEN:
-    jsr DCBSUP
-    lda #1                          ; RWTS moves 256 bytes a sector: DCBSDL = $0100
-    sta a:DCBSDL+1
-    ldx a:CCBRLN+1
-    lda a:CCBRLN
-    bne F02
+;; On return the catalog sector holding the entry is in <CatalogBuffer>, and <CurrentCatalogTrack> and
+;; <CurrentCatalogSector> say where it is on the disk, so the requests that change the entry can write it back with
+;; <WriteCatalogSector>. LOCK, UNLOCK, RENAME, DELETE and VERIFY start with it too. Errors leave the file manager:
+;; <ERROR_FILE_NOT_FOUND> when the file is missing and may not be created, or <ERROR_LANGUAGE_NOT_AVAILABLE> instead
+;; while FP looks for its APPLESOFT file (<INPUT_STATE_STARTING_RAM_APPLESOFT>); <ERROR_DISK_FULL>; and the disk
+;; errors of <AccessDisk>.
+;; In: DosFileParameters::Name = the address of the name, 30 characters, DosFileParameters::RecordLength = the
+;;   record length, 0 for 256, DosFileParameters::Volume/DosFileParameters::Drive/DosFileParameters::Slot = the
+;;   disk, DosFileParameters::FileType = the type for a new file
+;; Out: carry = clear, Scratch1 = the entry's offset in <CatalogBuffer::Entries>, FileControlBlock::EntryOffset = the
+;;   same, DosFileParameters::FileType = the file's type, FileControlBlock::FileType = the same,
+;;   DosFileParameters::ReturnCode = <ERROR_FILE_NOT_FOUND> when the file was created; the list buffer holds the
+;;   first track/sector list
+;; Also: DOPEN (DOS33, DOS31)
+.proc OpenFile
+    jsr SetUpWorkArea
+
+    ; RWTS moves 256 bytes a sector.
+    lda #>SECTOR_SIZE
+    sta FileControlBlock::SectorLength + 1
+
+    ; The record length, where 0 means 256.
+    ldx DosFileParameters::RecordLength + 1
+    lda DosFileParameters::RecordLength
+    bne StoreRecordLength
     cpx #0
-    bne F02
-    inx                             ; a record length of 0 becomes $0100, 256
-F02:
-    sta a:DCBRCL
-    stx a:DCBRCL+1
-    jsr FNDFIL
-    bcc F03                         ; found: X = its entry
-; Not found: X is the free entry FNDFIL put the name in. Create the file if the command may.
-    stx a:TEMP1
-    ldx CMDNO
-    lda CMDSTB,x
-    ldx a:TEMP1
-    lsr a                           ; the create flag, bit 0, into the carry
-    bcs F02B
-    lda ISTATE
-    cmp #$C0                        ; FP looking for the RAM Applesoft (MiscCommands.asm, EAS2)
-    bne F02A
-    jmp ERROR1
-F02A:
-    jmp ERROR6
-; Create it: one sector, the track/sector list, which also becomes the first and current list in the work
-; area.
-F02B:
+    bne StoreRecordLength
+    inx
+
+;; Stores the record length.
+;; Also: F02 (DOS33, DOS31)
+StoreRecordLength:
+    sta FileControlBlock::RecordLength
+    stx FileControlBlock::RecordLength + 1
+
+    ; Find the file. Carry clear: found, X = its entry.
+    jsr FindFile
+    bcc CopyEntry
+
+    ; Not found: X is the free entry FindFile put the name in. Create the file if the command may: bit 0 of its
+    ; entry in the command tables.
+    stx Scratch1
+    ldx CommandOffset
+    lda CommandSyntax,x
+    ldx Scratch1
+    lsr a
+    bcs Create
+
+    ; It may not. FP looking for the RAM Applesoft (MiscCommands.asm, EAS2) reports a missing language instead.
+    lda InputState
+    cmp #INPUT_STATE_STARTING_RAM_APPLESOFT
+    bne ToFileNotFound
+    jmp LanguageNotAvailable
+
+;; Goes on to <FileNotFound>.
+;; Also: F02A (DOS33)
+ToFileNotFound:
+    jmp FileNotFound
+
+;; Creates the file: one sector, for its track/sector list, which becomes its first and current list.
+;; Also: F02B (DOS33)
+Create:
     lda #0
-    sta a:VDFILE+34,x
+    sta CatalogBuffer::Entries + CatalogEntry::LENGTH + 1,x
     lda #1
-    sta a:VDFILE+33,x
-    stx a:TEMP1
-    jsr GETSEC                      ; A = the sector, DCBATK = its track
-    ldx a:TEMP1
-    sta a:VDFILE+1,x
-    sta a:DCBFDS
-    sta a:DCBCDS
-    lda a:DCBATK
-    sta a:VDFILE,x
-    sta a:DCBFDT
-    sta a:DCBCDT
-    lda a:CCBFUC
-    sta a:VDFILE+2,x
-    jsr WRVDIR                      ; the catalog sector with the new entry
-    jsr MVFCBD
-    jsr CLRSEC                      ; an empty track/sector list...
-    jsr WRFDGO                      ; ...written to the new sector
-    ldx a:TEMP1
-    lda #CREFNF                     ; report the file as not found, though it now exists
-    sta a:CCBSTA
-; Copy what the entry says about the file into the work area.
-F03:
-    lda a:VDFILE,x
-    sta a:DCBFDT
-    lda a:VDFILE+1,x
-    sta a:DCBFDS
-    lda a:VDFILE+2,x
-    sta a:CCBFUC
-    sta a:DCBFUC
-    lda a:VDFILE+33,x
-    sta a:DCBNSA
-    lda a:VDFILE+34,x
-    sta a:DCBNSA+1
-    stx a:DCBVDI
-    lda #255                        ; no data sector in the buffer yet
-    sta a:DCBCMS
-    sta a:DCBCMS+1
-    lda a:VTDMS                     ; sectors one track/sector list covers, 122
-    sta a:DCBDMS
-    clc                             ; read the first track/sector list
-    jmp RDFDIR
+    sta CatalogBuffer::Entries + CatalogEntry::LENGTH,x
+    stx Scratch1
+    jsr AllocateSector
+    ldx Scratch1
+    sta CatalogBuffer::Entries + CatalogEntry::LIST_SECTOR,x
+    sta FileControlBlock::FirstListSector
+    sta FileControlBlock::ListSector
+    lda FileControlBlock::ReservedTrack
+    sta CatalogBuffer::Entries + CatalogEntry::LIST_TRACK,x
+    sta FileControlBlock::FirstListTrack
+    sta FileControlBlock::ListTrack
+    lda DosFileParameters::FileType
+    sta CatalogBuffer::Entries + CatalogEntry::TYPE,x
+
+    ; Write the catalog sector with the new entry, then an empty track/sector list to the new sector.
+    jsr WriteCatalogSector
+    jsr PointAtListBuffer
+    jsr ClearSector
+    jsr WriteList
+
+    ; Report the file as not found, though it now exists.
+    ldx Scratch1
+    lda #ERROR_FILE_NOT_FOUND
+    sta DosFileParameters::ReturnCode
+
+;; Copies what the entry says about the file into the work area, then reads the first track/sector list.
+;; Also: F03 (DOS33, DOS31)
+CopyEntry:
+    lda CatalogBuffer::Entries + CatalogEntry::LIST_TRACK,x
+    sta FileControlBlock::FirstListTrack
+    lda CatalogBuffer::Entries + CatalogEntry::LIST_SECTOR,x
+    sta FileControlBlock::FirstListSector
+    lda CatalogBuffer::Entries + CatalogEntry::TYPE,x
+    sta DosFileParameters::FileType
+    sta FileControlBlock::FileType
+    lda CatalogBuffer::Entries + CatalogEntry::LENGTH,x
+    sta FileControlBlock::SectorCount
+    lda CatalogBuffer::Entries + CatalogEntry::LENGTH + 1,x
+    sta FileControlBlock::SectorCount + 1
+    stx FileControlBlock::EntryOffset
+
+    ; No data sector in the buffer yet.
+    lda #NO_DATA_SECTOR
+    sta FileControlBlock::DataRelativeSector
+    sta FileControlBlock::DataRelativeSector + 1
+
+    ; The sectors one track/sector list covers, 122. Only the low byte is copied: the high byte is 0 from
+    ; SetUpWorkArea.
+    lda VtocBuffer::PairsPerList
+    sta FileControlBlock::PairsPerList
+
+    ; Read the first track/sector list.
+    clc
+    jmp ReadList
+.endproc
 
 ;; Clears the work area and fills in the disk to use from the parameter list.
 ;;
-;; The volume number is kept complemented in DCBVOL; DCBIO complements it again for RWTS, so 0, any volume,
-;; is $FF here.
-;; In:    CCBVOL, CCBDRV, CCBSLT = the disk
-;; Out:   the work area FCB zeroed but for DCBVOL, DCBDRV, DCBSLT = slot * 16 and DCBVTN = 17, the VTOC's
-;;          track
-;; Uses:  A, X
-DCBSUP:
+;; The volume number is kept complemented in <FileControlBlock::VolumeComplement>; <AccessDisk> complements it
+;; again for RWTS, so 0, any volume, is $FF here.
+;; In: DosFileParameters::Volume, DosFileParameters::Drive, DosFileParameters::Slot = the disk
+;; Out: FileControlBlock = zeros, but for <FileControlBlock::VolumeComplement>, <FileControlBlock::Drive>,
+;;   <FileControlBlock::SlotTimes16> and FileControlBlock::VtocTrack = <VTOC_TRACK>
+;; Keeps: Y
+;; Also: DCBSUP (DOS33, DOS31)
+.proc SetUpWorkArea
     lda #0
     tax
-F01:
-    sta a:FCBDCB,x
+
+;; Clears the work area, a byte at a time.
+;; Also: F01 (DOS33, DOS31)
+ClearByte:
+    sta FileControlBlock,x
     inx
-    cpx #DCBLEN
-    bne F01
-    lda a:CCBVOL
+    cpx #FILE_CONTROL_SIZE
+    bne ClearByte
+
+    ; The disk.
+    lda DosFileParameters::Volume
     eor #$FF
-    sta a:DCBVOL
-    lda a:CCBDRV
-    sta a:DCBDRV
-    lda a:CCBSLT
+    sta FileControlBlock::VolumeComplement
+    lda DosFileParameters::Drive
+    sta FileControlBlock::Drive
+    lda DosFileParameters::Slot
     asl a
     asl a
     asl a
     asl a
     tax
-; F01A is a label with no use.
-F01A:
-    stx a:DCBSLT
-    lda #17
-    sta a:DCBVTN
-    rts
 
-;; The CLOSE request: writes out what is waiting in the file's buffers and brings the catalog up to date.
+;; Stores the slot times 16. Nothing refers to Apple's label.
+;; Also: F01A (DOS33, DOS31)
+StoreSlot:
+    stx FileControlBlock::SlotTimes16
+    lda #VTOC_TRACK
+    sta FileControlBlock::VtocTrack
+    rts
+.endproc
+
+;; The CLOSE request: writes out what waits in the file's buffers and brings the catalog entry up to date.
 ;;
-;; The data sector and the track/sector list are written if changed, and the sectors still reserved on the
-;; track the file was being given go back to the VTOC (FRETRK). If anything at all was written to the disk,
-;; which DCBIO marks with bit 1 of DCBWRF, the file's length in sectors is copied into its catalog entry. To
-;; get the entry's sector back, CLOSE reads the VTOC for the catalog's start and then follows the catalog's
-;; links DCBVDR times, the count FNDFIL kept when it found the file.
-;; In:    FCB = the file's work area
-;; Out:   CCBSTA = 0
-;; Errors: carry = set with CCBSTA = a disk error code
-FCLOSE:
-    jsr WRSECT
-    jsr WRFDIR
-    jsr FRETRK
-    lda #IBCWTS                     ; bit 1: something was written
-    and a:DCBWRF
-    beq FC2
-    jsr RDVTOC
-    lda #0                          ; (RDVDIR takes nothing in A)
-    clc                             ; the catalog's first sector, then each next one
-FC1:
-    jsr RDVDIR
+;; The data sector and the track/sector list are written if they have changed, and the sectors still reserved on
+;; the track the file was being given go back to the VTOC (<ReleaseTrack>). If anything at all was written to the
+;; disk since OPEN (<WRITTEN>), the file's length in sectors goes into its catalog entry. To get the entry's sector
+;; back, CLOSE reads the VTOC for the catalog's start and reads <FileControlBlock::EntryCatalogSector> catalog sectors,
+;; the first from there and each next one by the link in the one before: the count <FindFile> kept when it found the
+;; file, 1 for the first sector. Disk errors leave the file manager (<AccessDisk>).
+;; In: FileControlBlock = the file's work area
+;; Out: DosFileParameters::ReturnCode = 0
+;; Also: FCLOSE (DOS33, DOS31)
+.proc Close
+    jsr WriteDataIfChanged
+    jsr WriteListIfChanged
+    jsr ReleaseTrack
+
+    ; Nothing written since OPEN: nothing to update.
+    lda #WRITTEN
+    and FileControlBlock::WriteFlags
+    beq Done
+
+    ; Read the catalog's first sector, then each next one, until the entry's. (ReadCatalogSector takes nothing in A.)
+    jsr ReadVtoc
+    lda #0
+    clc
+
+;; Reads the next catalog sector, counting down to the entry's.
+;; Also: FC1 (DOS33, DOS31)
+FindEntrySector:
+    jsr ReadCatalogSector
     sec
-    dec a:DCBVDR
-    bne FC1
-    ldx a:DCBVDI
-    lda a:DCBNSA
-    sta a:VDFILE+33,x
-    lda a:DCBNSA+1
-    sta a:VDFILE+34,x
-    jsr WRVDIR
-FC2:
-    jmp GOODIO
+    dec FileControlBlock::EntryCatalogSector
+    bne FindEntrySector
 
-;; The RENAME request: gives the file CCBFN1 names the name CCBFN2 points to.
+    ; The length, into the entry, and the sector back to the disk.
+    ldx FileControlBlock::EntryOffset
+    lda FileControlBlock::SectorCount
+    sta CatalogBuffer::Entries + CatalogEntry::LENGTH,x
+    lda FileControlBlock::SectorCount + 1
+    sta CatalogBuffer::Entries + CatalogEntry::LENGTH + 1,x
+    jsr WriteCatalogSector
+
+;; Succeeds.
+;; Also: FC2 (DOS33, DOS31)
+Done:
+    jmp Succeed
+.endproc
+
+;; The RENAME request: gives the file <DosFileParameters::Name> names the name <DosFileParameters::NewName> points
+;; to.
 ;;
-;; The new name is not checked against the names already in the catalog.
-;; In:    CCBFN1 = address of the old name, CCBFN2 = address of the new one, 30 characters each, and the disk
-;;          as for OPEN
-;; Out:   CCBSTA = 0
-;; Errors: 10 when the file is locked, and those of DOPEN
-FRNME:
-    jsr DOPEN
-    lda a:DCBFUC
-    bmi ER10                        ; locked
-    lda a:CCBFN2
-    sta ZPGFCB
-    lda a:CCBFN2+1
-    sta ZPGFCB+1
-    ldx a:TEMP1
-    jsr MVFN                        ; into the entry, in the catalog sector DOPEN left in VOLDIR
-    jsr WRVDIR
-    jmp GOODIO
+;; The new name is not checked against the names already in the catalog. A locked file is refused with
+;; <ERROR_FILE_LOCKED>; the errors of <OpenFile> leave the file manager too.
+;; In: DosFileParameters::Name = the address of the old name, DosFileParameters::NewName = the address of the new
+;;   one, 30 characters each, and the disk, as for <OpenFile>
+;; Out: DosFileParameters::ReturnCode = 0
+;; Also: FRNME (DOS33, DOS31)
+.proc Rename
+    jsr OpenFile
+    lda FileControlBlock::FileType
+    bmi ToFileLocked
 
-;; The READ request: goes to the routine for the subcode in CCBRQM through RVT.
-;; In:    CCBRQM = the subcode, 0 to 4
-;; Errors: 3 when the subcode is 5 or more
-FREAD:
-    lda a:CCBRQM
-    cmp #CRMMAX
-    bcs ERR3A
+    ; The new name into the entry, in the catalog sector OpenFile left in the buffer, and the sector back.
+    lda DosFileParameters::NewName
+    sta FilePointer
+    lda DosFileParameters::NewName + 1
+    sta FilePointer + 1
+    ldx Scratch1
+    jsr StoreName
+    jsr WriteCatalogSector
+    jmp Succeed
+.endproc
+
+;; The READ request: goes to the routine for <DosFileParameters::Transfer> through <ReadHandlers>.
+;;
+;; A transfer code of <TRANSFER_COUNT> or more is refused with <ERROR_TRANSFER_RANGE>.
+;; In: DosFileParameters::Transfer = the transfer, a TRANSFER_ code
+;; Also: FREAD (DOS33, DOS31)
+.proc Read
+    lda DosFileParameters::Transfer
+    cmp #TRANSFER_COUNT
+    bcs ToBadTransfer
+
+    ; Push the routine's address less 1, and "return" to it.
     asl a
     tax
-    lda RVT+1,x                     ; push the routine's address less 1, and "return" to it
+    lda ReadHandlers + 1,x
     pha
-    lda RVT,x
+    lda ReadHandlers,x
     pha
     rts
-;; Returns error code 3, bad subcode.
-ERR3A:
-    jmp ERROR3
-;; Returns error code 10, file locked.
-ER10:
-    jmp ERRR10
+.endproc
 
-;; The WRITE request: checks the file isn't locked and goes to the routine for the subcode through WVT.
-;; In:    CCBRQM = the subcode, 0 to 4
-;; Errors: 10 when the file is locked, 3 when the subcode is 5 or more
-FWRITE:
-    lda a:DCBFUC
-    bmi ER10
-    lda a:CCBRQM
-    cmp #CRMMAX
-    bcs ERR3A
+;; Goes on to <BadTransfer>, for <Read> and <Write>, out of their branches' range.
+;; Also: ERR3A (DOS33, DOS31)
+ToBadTransfer:
+    jmp BadTransfer
+
+;; Goes on to <FileLocked>, for <Rename> and <Write>, out of their branches' range.
+;; Also: ER10 (DOS33, DOS31)
+ToFileLocked:
+    jmp FileLocked
+
+;; The WRITE request: unless the file is locked, goes to the routine for <DosFileParameters::Transfer> through
+;; <WriteHandlers>.
+;;
+;; A locked file is refused with <ERROR_FILE_LOCKED>, and a transfer code of <TRANSFER_COUNT> or more with
+;; <ERROR_TRANSFER_RANGE>.
+;; In: DosFileParameters::Transfer = the transfer, a TRANSFER_ code
+;; Also: FWRITE (DOS33, DOS31)
+.proc Write
+    lda FileControlBlock::FileType
+    bmi ToFileLocked
+    lda DosFileParameters::Transfer
+    cmp #TRANSFER_COUNT
+    bcs ToBadTransfer
+
+    ; Push the routine's address less 1, and "return" to it.
     asl a
     tax
-    lda WVT+1,x
+    lda WriteHandlers + 1,x
     pha
-    lda WVT,x
+    lda WriteHandlers,x
     pha
     rts
+.endproc
 
-;; READ subcodes 3 and 1: reads one byte into CCBDAT, at the position CCBRRN and CCBBYT give (subcode 3,
-;; RSPBYT) or the next one (subcode 1, RNXBYT).
-;; In:    CCBRRN = record number, CCBBYT = byte offset (RSPBYT only)
-;; Out:   CCBDAT = the byte, CCBRRN and CCBBYT = its position
-;; Errors: 5 at the end of the file
-;; Entry: RNXBYT = reads the next byte, without positioning
-RSPBYT:
-    jsr LOCSEC
-RNXBYT:
-    jsr GETBYT
-    sta a:CCBDAT
-    jmp GOODIO
+;; READ's <TRANSFER_POSITIONED_BYTE>: sets the position from <DosFileParameters::Record> and
+;; <DosFileParameters::ByteOffset>, then reads one byte.
+;; In: DosFileParameters::Record = the record number, DosFileParameters::ByteOffset = the byte in the record
+;; Out: DosFileParameters::Data = the byte, DosFileParameters::Record/DosFileParameters::ByteOffset = its
+;;   position
+;; Also: RSPBYT (DOS33, DOS31)
+.proc ReadByteAt
+    jsr SetPosition
+    ; Falls into ReadNextByte.
+.endproc
 
-;; READ subcodes 4 and 2: reads CCBBLN bytes into memory at CCBBBA, at the position CCBRRN and CCBBYT give
-;; (subcode 4, RSPBLK) or from the next byte (subcode 2, RNXBLK).
+;; READ's <TRANSFER_NEXT_BYTE>: reads the byte at the file's position into <DosFileParameters::Data>.
 ;;
-;; The loop has no exit of its own: DTBLN jumps to GOODIO once the count is used up.
-;; In:    CCBBBA = where to put the bytes, CCBBLN = how many, CCBRRN and CCBBYT = the position (RSPBLK)
-;; Out:   CCBBBA = one past the last byte stored, CCBBLN = 0
-;; Errors: 5 at the end of the file, with the bytes before it stored
-;; Entry: RNXBLK = reads from the next byte, without positioning
-RSPBLK:
-    jsr LOCSEC
-RNXBLK:
-    jsr DTBLN                       ; count one off, or finish
-    jsr GETBYT
-    pha                             ; held while ZPGFCB is moved from the data buffer to the destination
-    jsr MIBDA                       ; ZPGFCB = CCBBBA, and CCBBBA advanced
+;; At the end of the file the request ends with <ERROR_END_OF_DATA>.
+;; Out: DosFileParameters::Data = the byte, DosFileParameters::Record/DosFileParameters::ByteOffset = its
+;;   position
+;; Also: RNXBYT (DOS33, DOS31)
+.proc ReadNextByte
+    jsr GetByte
+    sta DosFileParameters::Data
+    jmp Succeed
+.endproc
+
+;; READ's <TRANSFER_POSITIONED_RANGE>: sets the position from <DosFileParameters::Record> and
+;; <DosFileParameters::ByteOffset>, then reads a range of bytes.
+;; In: DosFileParameters::Record = the record number, DosFileParameters::ByteOffset = the byte in the record,
+;;   DosFileParameters::RangeAddress = where to put the bytes, DosFileParameters::RangeLength = how many
+;; Out: DosFileParameters::RangeAddress = the address after the last byte stored, DosFileParameters::RangeLength = 0
+;; Also: RSPBLK (DOS33, DOS31)
+.proc ReadRangeAt
+    jsr SetPosition
+    ; Falls into ReadNextRange.
+.endproc
+
+;; READ's <TRANSFER_NEXT_RANGE>: reads <DosFileParameters::RangeLength> bytes from the file's position into memory
+;; at <DosFileParameters::RangeAddress>.
+;;
+;; The loop has no exit of its own: <CountDownRange> goes to <Succeed> once the count is used up, before each byte,
+;; so a range of n bytes reads n. At the end of the file the request ends with <ERROR_END_OF_DATA>, with the bytes
+;; before it stored. Apple's listing calls a range a block.
+;; In: DosFileParameters::RangeAddress = where to put the bytes, DosFileParameters::RangeLength = how many
+;; Out: DosFileParameters::RangeAddress = the address after the last byte stored, DosFileParameters::RangeLength = 0
+;; Also: RNXBLK (DOS33, DOS31)
+.proc ReadNextRange
+    jsr CountDownRange
+    jsr GetByte
+
+    ; Held while the pointer moves from the data buffer to the caller's memory.
+    pha
+    jsr NextRangeByte
     ldy #0
     pla
-    sta (ZPGFCB),y
-    jmp RNXBLK
+    sta (FilePointer),y
+    jmp ReadNextRange
+.endproc
 
 ;; Reads the byte at the file's position and moves the position on.
-;; Out:   A = the byte, CCBRRN and CCBBYT = its position
-;; Errors: 5 at the end of the file: the position is in no sector the track/sector lists name
-;; Uses:  X, Y, ZPGFCB (set to the data buffer)
-GETBYT:
-    jsr LOCNXB                      ; ZPGFCB = the data buffer, Y = the byte's offset in it
-    bcs EOFIN
-    lda (ZPGFCB),y
+;;
+;; At the end of the file, a position in no sector the track/sector lists name, the request ends with
+;; <ERROR_END_OF_DATA>.
+;; Out: A = the byte, DosFileParameters::Record/DosFileParameters::ByteOffset = its position, FilePointer = the
+;;   data buffer
+;; Also: GETBYT (DOS33, DOS31)
+.proc GetByte
+    jsr LocateNextByte
+    bcs ToEndOfData
+    lda (FilePointer),y
     pha
-    jsr INCRRB                      ; next record byte
-    jsr INCSCB                      ; next byte of the file
+    jsr AdvanceRecordByte
+    jsr AdvanceSectorByte
     pla
     rts
-;; Returns error code 5, end of data.
-EOFIN:
-    jmp ERROR5
 
-;; WRITE subcodes 3 and 1: writes the byte in CCBDAT at the position CCBRRN and CCBBYT give (subcode 3,
-;; WSPBYT) or the next one (subcode 1, WNXBYT).
-;; In:    CCBDAT = the byte, CCBRRN = record number and CCBBYT = byte offset (WSPBYT only)
-;; Out:   CCBRRN/CCBBYT = the byte's position
-;; Errors: 9 when the disk is full, and the disk errors of DCBIO
-;; Entry: WNXBYT = writes at the next byte, without positioning
-WSPBYT:
-    jsr LOCSEC
-WNXBYT:
-    lda a:CCBDAT
-    jsr PUTBYT
-    jmp GOODIO
+;; Goes on to <EndOfData>.
+;; Also: EOFIN (DOS33, DOS31)
+ToEndOfData:
+    jmp EndOfData
+.endproc
 
-;; WRITE subcodes 4 and 2: writes bytes from memory at CCBBBA, at the position CCBRRN and CCBBYT give
-;; (subcode 4, WSPBLK) or from the next byte (subcode 2, WNXBLK).
+;; WRITE's <TRANSFER_POSITIONED_BYTE>: sets the position from <DosFileParameters::Record> and
+;; <DosFileParameters::ByteOffset>, then writes one byte.
+;; In: DosFileParameters::Data = the byte, DosFileParameters::Record = the record number,
+;;   DosFileParameters::ByteOffset = the byte in the record
+;; Out: DosFileParameters::Record/DosFileParameters::ByteOffset = the byte's position
+;; Also: WSPBYT (DOS33, DOS31)
+.proc WriteByteAt
+    jsr SetPosition
+    ; Falls into WriteNextByte.
+.endproc
+
+;; WRITE's <TRANSFER_NEXT_BYTE>: writes <DosFileParameters::Data> at the file's position.
 ;;
-;; Unlike the read loop, this one writes a byte before counting, so it writes CCBBLN + 1 bytes and callers
-;; must pass the length less 1. SAVE and BSAVE pass the length itself (LoadSave.asm, SV2), so they write one
-;; byte more than the length they record at the start of the file.
-;; In:    CCBBBA = the bytes, CCBBLN = how many less 1, CCBRRN and CCBBYT = the position (WSPBLK)
-;; Out:   CCBBBA = one past the last byte written, CCBBLN = 0
-;; Errors: 9 when the disk is full, and the disk errors of DCBIO
-;; Entry: WNXBLK = writes from the next byte, without positioning
-WSPBLK:
-    jsr LOCSEC
-WNXBLK:
-    jsr MIBDA                       ; ZPGFCB = CCBBBA, and CCBBBA advanced
+;; A full disk ends the request with <ERROR_DISK_FULL>, and a disk error as <AccessDisk> says.
+;; In: DosFileParameters::Data = the byte
+;; Out: DosFileParameters::Record/DosFileParameters::ByteOffset = the byte's position
+;; Also: WNXBYT (DOS33, DOS31)
+.proc WriteNextByte
+    lda DosFileParameters::Data
+    jsr PutByte
+    jmp Succeed
+.endproc
+
+;; WRITE's <TRANSFER_POSITIONED_RANGE>: sets the position from <DosFileParameters::Record> and
+;; <DosFileParameters::ByteOffset>, then writes a range of bytes.
+;; In: DosFileParameters::Record = the record number, DosFileParameters::ByteOffset = the byte in the record,
+;;   DosFileParameters::RangeAddress = the bytes, DosFileParameters::RangeLength = how many, less 1
+;; Out: DosFileParameters::RangeAddress = the address after the last byte written, DosFileParameters::RangeLength = 0
+;; Also: WSPBLK (DOS33, DOS31)
+.proc WriteRangeAt
+    jsr SetPosition
+    ; Falls into WriteNextRange.
+.endproc
+
+;; WRITE's <TRANSFER_NEXT_RANGE>: writes bytes from memory at <DosFileParameters::RangeAddress> at the file's
+;; position.
+;;
+;; Unlike the read loop, this one writes a byte before it counts (<CountDownRange>), so it writes
+;; <DosFileParameters::RangeLength> + 1 bytes, and callers pass the length less 1. SAVE and BSAVE pass the length itself
+;; (LoadSave.asm, <Commands::WriteWord>), so they write one byte more than the length they record at the start of the
+;; file. A full disk ends the request with <ERROR_DISK_FULL>, and a disk error as <AccessDisk> says.
+;; In: DosFileParameters::RangeAddress = the bytes, DosFileParameters::RangeLength = how many, less 1
+;; Out: DosFileParameters::RangeAddress = the address after the last byte written, DosFileParameters::RangeLength = 0
+;; Also: WNXBLK (DOS33, DOS31)
+.proc WriteNextRange
+    jsr NextRangeByte
     ldy #0
-    lda (ZPGFCB),y
-    jsr PUTBYT
-    jsr DTBLN                       ; count one off, or finish
-    jmp WNXBLK
+    lda (FilePointer),y
+    jsr PutByte
+    jsr CountDownRange
+    jmp WriteNextRange
+.endproc
 
 ;; Writes a byte at the file's position and moves the position on.
 ;;
-;; The byte goes into the data buffer, which is marked to be written to the disk (bit 6 of DCBWRF) before
-;; another sector replaces it, or at CLOSE.
-;; In:    A = the byte
-;; Out:   CCBRRN/CCBBYT = its position
-;; Errors: 9 when a new sector is needed and the disk is full
-;; Uses:  A, X, Y, ZPGFCB (set to the data buffer)
-PUTBYT:
+;; The byte goes into the data buffer, which is marked (<WRITE_DATA>) to be written to the disk before another
+;; sector replaces it, or at CLOSE. When the position needs a new sector and the disk is full, the request ends with
+;; <ERROR_DISK_FULL>.
+;; In: A = the byte
+;; Out: DosFileParameters::Record/DosFileParameters::ByteOffset = its position, FilePointer = the data buffer
+;; Also: PUTBYT (DOS33, DOS31)
+.proc PutByte
     pha
-    jsr LOCNXB                      ; ZPGFCB = the data buffer, Y = the byte's offset in it
-; PB0 is a label with no use.
-PB0:
+    jsr LocateNextByte
+
+;; Stores the byte. Nothing refers to Apple's label.
+;; Also: PB0 (DOS33, DOS31)
+StoreByte:
     pla
-    sta (ZPGFCB),y
-    lda #$40                        ; the data sector has changed
-    ora a:DCBWRF
-    sta a:DCBWRF
-    jsr INCRRB
-    jmp INCSCB
+    sta (FilePointer),y
+
+    ; The data sector has changed.
+    lda #WRITE_DATA
+    ora FileControlBlock::WriteFlags
+    sta FileControlBlock::WriteFlags
+    jsr AdvanceRecordByte
+    jmp AdvanceSectorByte
+.endproc
+
+.endscope

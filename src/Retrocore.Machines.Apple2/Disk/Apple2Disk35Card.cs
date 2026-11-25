@@ -211,7 +211,7 @@ public sealed class Apple2Disk35Card
     }
 
     /// <summary>
-    ///  Writes UNABLE TO BOOT on the text screen's line 9, as Apple's firmware does.
+    ///  Writes UNABLE TO BOOT on the text screen's second line (row 1), as Apple's firmware does.
     /// </summary>
     private void ShowUnableToBoot()
     {
@@ -261,7 +261,7 @@ public sealed class Apple2Disk35Card
 
     /// <summary>
     ///  Runs a ProDOS call, with its parameters in $42-$47, turned into SmartPort's as Apple's host firmware turns them
-    ///  (PRODOSLIST), and its errors into ProDOS's (MAPERROR).
+    ///  (<c>Host::ProDosToSmartPort</c> in its decoded source), and its errors into ProDOS's (<c>Host::MapProDosError</c>).
     /// </summary>
     /// <returns>The error: 0, $2B, $28, $2F, or $27 for any other.</returns>
     private byte ProDOS()
@@ -366,7 +366,9 @@ public sealed class Apple2Disk35Card
     /// <summary>
     ///  READ and WRITE: a tagged block, its 12 tag bytes and then its data, of 400K and 800K Apple disks only, as
     ///  Apple's card moves them. The count must be 524, and the block is where READ and WRITE elsewhere take an
-    ///  address. This card keeps no tags: they read as zero and writing them changes nothing.
+    ///  address. This card keeps no tags: they read as zero and writing them changes nothing. Apple's firmware sends
+    ///  READ down its write path (<c>ReadWriteTagged</c> reads only for command 1); this card reads, as READ means
+    ///  (docs/conversions/Disk35.md, Q1).
     /// </summary>
     /// <param name="call">The parameter list: the count, then the block.</param>
     /// <param name="write">Whether to write the block rather than read it.</param>
@@ -400,7 +402,7 @@ public sealed class Apple2Disk35Card
 
     /// <summary>
     ///  Command $0A, which chooses the next FORMAT's kind. Its parameter is a count of bytes in the buffer, of which
-    ///  Apple's host firmware (COMMAND0A) passes up to four, the rest zero, and the card (SETFORMAT) takes the first as
+    ///  Apple's host firmware (<c>Host::SetFormat</c>) passes up to four, the rest zero, and the card (<c>FormatOptions::Set</c>) takes the first as
     ///  the kind (0 for the disk's own, or an even kind below $0D), wants the second 0, and takes a third below $0D as
     ///  the interleave. This card checks them so and formats every disk as the kind it is.
     /// </summary>
@@ -494,7 +496,7 @@ public sealed class Apple2Disk35Card
 
     /// <summary>
     ///  CONTROL, whose list starts with its length, as Apple's card answers it. A drive takes 0 (forget the disk and
-    ///  look again, which, as Apple's CTLRESET checks the disk, is $2F with no disk and takes a changed disk, with $2E
+    ///  look again, which, as Apple's card's control 0 (<c>Control::Reset</c>) checks the disk, is $2F with no disk and takes a changed disk, with $2E
     ///  for an extended call) and 4 (eject); 9 (sides) and $0A (interleave), which take one byte, change nothing here. Codes $0C
     ///  to $13, which reach into the card's own 65C02, are taken and do nothing, but for $12, which would run code
     ///  there. Unit 0 takes only $0C and $0E-$13.

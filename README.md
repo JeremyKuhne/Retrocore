@@ -106,7 +106,12 @@ The assembler reads four dialects:
 `;;` comments document routines, constants, structures, and tables in any dialect. The language server renders
 them in hovers and completions and checks their links and register lists; the debugger shows routine parameters in
 the Variables view and verifies `Keeps:` and `Uses:` contracts when calls return; and the source generator copies
-summaries into generated C# XML documentation ([DocComments.md](docs/DocComments.md)).
+summaries into generated C# XML documentation ([DocComments.md](docs/DocComments.md)). A definition's `Also:`
+section keeps the names manuals and listings gave it, so code written with them still assembles and the editor
+offers the current name. Sources maintained by hand follow [the assembly style guide](docs/AssemblyStyle.md),
+which the SDK's ROM sources are being converted to, for developers new to the old machines, with the old names
+kept as a bridge to the original documents. [ConvertingSources.md](docs/ConvertingSources.md) is why and how, and
+[the conversion logs](docs/conversions/README.md) record what was decided for each source converted.
 
 In VS Code, assembly files get syntax highlighting, live diagnostics as you type, go to definition, find all
 references, hovers (instruction summaries, flags, addressing modes, cycle counts, and emitted bytes),
@@ -177,7 +182,7 @@ code never shows stale source lines. The [extension README](extension/README.md)
 | [`Firmware.Original.asm`](src/Retrocore.Machines.Apple2/Roms/System/Firmware.Original.asm), [`Firmware.Enhanced.asm`](src/Retrocore.Machines.Apple2/Roms/System/Firmware.Enhanced.asm) | The IIe's internal `$C100`–`$CFFF` firmware, sharing [`FirmwareEquates.asm`](src/Retrocore.Machines.Apple2/Roms/System/FirmwareEquates.asm). |
 | [`IIeEquates.asm`](src/Retrocore.Machines.Apple2/Roms/System/IIeEquates.asm), [`MonitorEntries.asm`](src/Retrocore.Machines.Apple2/Roms/System/MonitorEntries.asm) | Shared IIe page-zero locations, soft switches, and key codes (`IIeEquates.asm`, included by the Monitor too) and Monitor entry points (`MonitorEntries.asm`), included by the firmware, Disk II boot ROMs, and DOS. |
 | [`Boot16.asm`](src/Retrocore.Machines.Apple2/Roms/DiskII/Boot16.asm), [`Sequencer16.asm`](src/Retrocore.Machines.Apple2/Roms/DiskII/Sequencer16.asm), [`Boot13.asm`](src/Retrocore.Machines.Apple2/Roms/DiskII/Boot13.asm), [`Sequencer13.asm`](src/Retrocore.Machines.Apple2/Roms/DiskII/Sequencer13.asm) | The Disk II controller's 16- and 13-sector boot ROMs and logic state sequencers, sharing [`Boot.asm`](src/Retrocore.Machines.Apple2/Roms/DiskII/Boot.asm) and [`Sequencer.asm`](src/Retrocore.Machines.Apple2/Roms/DiskII/Sequencer.asm); see [DiskII.md](docs/DiskII.md). |
-| [`applesoft.mac`](src/Retrocore.Machines.Apple2/Roms/AppleSoft/applesoft.mac) | AppleSoft II for the II Plus and IIe, as a MACRO-10 overlay over Microsoft's [`m6502.asm`](src/Retrocore.Machines.Apple2/Roms/AppleSoft/m6502.asm). |
+| [`AppleSoft.asm`](src/Retrocore.Machines.Apple2/Roms/AppleSoft/AppleSoft.asm), [`applesoft.mac`](src/Retrocore.Machines.Apple2/Roms/AppleSoft/applesoft.mac) | AppleSoft II for the II Plus and IIe, as native source or a MACRO-10 overlay over Microsoft's [`m6502.asm`](src/Retrocore.Basic/Roms/Microsoft6502Basic/m6502.asm). |
 | [`IntegerBasic.asm`](src/Retrocore.Machines.Apple2/Roms/IntegerBasic/IntegerBasic.asm) | The Apple II's Integer BASIC ROM, `$E000`–`$F7FF`, including its floating-point package, Mini-Assembler, and SWEET16. |
 | [`ProgrammersAid.asm`](src/Retrocore.Machines.Apple2/Roms/ProgrammersAid/ProgrammersAid.asm) | Programmer's Aid #1, the II's `$D000`–`$D7FF` ROM of Integer BASIC utilities. |
 | [`CharacterGenerator.asm`](src/Retrocore.Machines.Apple2/Roms/System/CharacterGenerator.asm) | The IIe's video ROM (both models, including MouseText) and the II and II Plus's character generator. |
@@ -206,7 +211,7 @@ code never shows stale source lines. The [extension README](extension/README.md)
 | [`BbcBasic.asm`](src/Retrocore.Machines.Acorn/Roms/BbcBasic.asm) | BBC BASIC II. |
 | [`Dnfs.asm`](src/Retrocore.Machines.Acorn/Roms/Dnfs.asm) | DNFS 1.20: the Acorn DFS and the Econet filing system. |
 | [`Saa5050.asm`](src/Retrocore.Machines.Acorn/Roms/Saa5050.asm) | The SAA5050 teletext character generator's 96 characters. |
-| [`Basic1.mac`](src/Retrocore.Machines.Commodore/Roms/Basic/Basic1.mac), [`Basic2.mac`](src/Retrocore.Machines.Commodore/Roms/Basic/Basic2.mac), [`Basic4.mac`](src/Retrocore.Machines.Commodore/Roms/Basic/Basic4.mac) | Commodore PET BASIC 1 (both first chips), BASIC 2 and BASIC 4 (both `$B000` chips, with the monitor and the disk commands), as Commodore's changes to Microsoft's `m6502.asm`. |
+| [`Basic1.asm`](src/Retrocore.Machines.Commodore/Roms/Basic/Basic1.asm), [`Basic2.asm`](src/Retrocore.Machines.Commodore/Roms/Basic/Basic2.asm), [`Basic4.asm`](src/Retrocore.Machines.Commodore/Roms/Basic/Basic4.asm) | Commodore PET BASIC 1 (both first chips), BASIC 2 and BASIC 4 (both `$B000` chips, with the monitor and disk commands), sharing native Microsoft BASIC modules with AppleSoft. MACRO-10 overlays remain selectable. |
 | [`Editor1.asm`](src/Retrocore.Machines.Commodore/Roms/Basic1/Editor1.asm), [`Kernal1.asm`](src/Retrocore.Machines.Commodore/Roms/Basic1/Kernal1.asm), [`Editor2.asm`](src/Retrocore.Machines.Commodore/Roms/Basic2/Editor2.asm), [`Kernal2.asm`](src/Retrocore.Machines.Commodore/Roms/Basic2/Kernal2.asm), [`Editor4.asm`](src/Retrocore.Machines.Commodore/Roms/Basic4/Editor4.asm), [`Kernal4.asm`](src/Retrocore.Machines.Commodore/Roms/Basic4/Kernal4.asm) | The PET's screen editors and kernals for BASIC 1, 2 and 4, with BASIC 2's machine-language monitor; BASIC 4's editor builds the graphics or the business keyboard's. |
 | [`CharacterGenerator.asm`](src/Retrocore.Machines.Commodore/Roms/CharacterGenerator.asm) | The PET's character ROMs, the 2001's 901447-08 and the 2001-N's 901447-10. |
 | [`Kaypro2.asm`](src/Retrocore.Machines.Kaypro/Roms/Kaypro2.asm), [`Kaypro2CharacterGenerator.asm`](src/Retrocore.Machines.Kaypro/Roms/Kaypro2CharacterGenerator.asm) | The Kaypro II's 81-149C monitor ROM and 81-146A character generator. |
@@ -257,7 +262,7 @@ launch are invisible to Explorer, VS Code, and normal terminals.
 | Variable | Holds |
 | --- | --- |
 | `RETROCORE_CACHE` | Base folder for cached external files (default `%USERPROFILE%\Retrocore`, shown as `<cache>` below). |
-| `RETROCORE_IIE_ROMS` | Apple IIe CD, EF, and video ROM dumps. Optional for debugging (which otherwise builds from the SDK); required by `AppleSharp`, the IIe chip/oracle tests, and `extension`'s full `npm test`. |
+| `RETROCORE_IIE_ROMS` | Apple IIe CD, EF, and video ROM dumps. Optional for debugging (which otherwise builds from the SDK); required by `AppleSharp` and the IIe chip/oracle tests; `extension`'s full `npm test` uses them when set and otherwise ROMs built from the SDK. |
 | `RETROCORE_IIPLUS_ROMS`, `RETROCORE_II_ROMS` | Apple II Plus and Apple II 2716 chip dumps (defaults `<cache>\apple2-roms\APPLE II+` and `<cache>\apple2-roms\APPLE II`); optional for debugging. |
 | `RETROCORE_DISKII_ROMS` | Disk II P5/P6 chip dumps under their `apple2.org.za` names (default `<cache>\disk2-roms`). |
 | `RETROCORE_APPLE1_ROMS` | Apple-1 Monitor, ACI and BASIC dumps, `wozmon.bin`, `aci.bin` and `basic.bin` (default `<cache>\apple1-roms` for the ROM source checks); optional for debugging. |
@@ -275,7 +280,7 @@ launch are invisible to Explorer, VS Code, and normal terminals.
 | `RETROCORE_ZEXDOC` | Set to any value to run ZEXDOC in addition to ZEXALL. Skipped by default because ZEXALL runs the same instructions and checks all flags; ZEXDOC only isolates whether a ZEXALL failure is in undocumented flags. |
 | `RETROCORE_CC65`, `RETROCORE_CA65_CORPUS`, `RETROCORE_CA65_ASMINC` | Directory containing `ca65` and `ld65`, optional `rom4x` ca65 source corpus, and `cc65`'s `asminc` header directory for the ca65 differential and SDK tests. |
 | `RETROCORE_MERLIN32`, `RETROCORE_MERLIN_CORPUS` | Merlin 32 executable and approved source corpus for the Merlin differential tests. |
-| `RETROCORE_VSCODE` | VS Code executable (`Code.exe`) override for the extension's editor tests. |
+| `RETROCORE_VSCODE` | VS Code executable (`Code.exe` on Windows) for the extension's editor tests; unset, they download a pinned VS Code. |
 
 `tools\Fetch-M1Dependencies.ps1` populates `<cache>\m1-dependencies` with `cc65` (compiled locally with Visual
 Studio's C++ tools), ProDOS 2.4.3, Microsoft's 6502 BASIC source and `msbasic` reference binaries, and pinned
@@ -285,8 +290,8 @@ Apple2TS sources. `tools\Fetch-Trs80Font.ps1` fetches xtrs's font source to veri
 ## Building and testing
 
 With the `.NET 10 SDK` and Node.js in place, these build and test the repository.
-[CI](.github/workflows/ci.yml) runs the ones that need nothing external on every push to `main` and every pull
-request:
+[CI](.github/workflows/ci.yml) runs the ones that need nothing external, and the extension's editor tests in the
+VS Code they download, on every push to `main` and every pull request:
 
 ```powershell
 dotnet build Retrocore.slnx -c Release
@@ -304,6 +309,7 @@ node tools/Test-PetBasicDap.mjs       # needs nothing external
 node tools/Test-IntegerBasicDap.mjs   # needs nothing external
 node tools/Test-Breakpoints.mjs       # needs nothing external
 node tools/Test-Memory.mjs            # needs nothing external; also checks IIe banks when RETROCORE_IIE_ROMS is set
+node tools/Test-CycleEvents.mjs       # needs nothing external; checks cycle snapshots and compatibility
 node tools/Test-OffMachine.mjs        # needs nothing external
 
 .\tools\Build-IIeSample.ps1           # needs cc65 from Fetch-M1Dependencies.ps1 (or assemble with Retrocore.Debug --assemble)
@@ -313,8 +319,8 @@ node tools/Test-ProDosBasicDap.mjs    # needs the ProDOS 2.4.3 image from Fetch-
 npm --prefix extension ci
 npm --prefix extension run compile
 npm --prefix extension run test:grammar   # needs nothing external
-npm --prefix extension run test:language  # needs VS Code
-npm --prefix extension test               # full editor + debugger suite: needs VS Code, RETROCORE_IIE_ROMS, and iie-sample
+npm --prefix extension run test:language  # needs the Release build; downloads a pinned VS Code
+npm --prefix extension test               # full editor + debugger suite: needs the Release build and iie-sample; downloads a pinned VS Code
 ```
 
 Without `cc65`, you can also build `artifacts\iie-sample\main.bin` and `main.dbg` with `Retrocore.Debug` itself:
@@ -366,7 +372,11 @@ Design notes for upcoming work live in [`docs/backlog`](docs/backlog):
 - [debugging BASIC programs](docs/backlog/BasicDebugging.md): Level I BASIC and disk-image import/export;
 - [choosing and starting a machine, next round](docs/backlog/MachineLaunch.md);
 - [CPU core and machine loop speed](docs/backlog/CoreOptimization.md), including what .NET 11 might offer;
+- [the language server's SDK index speed](docs/backlog/SdkIndexOptimization.md), with every change measured;
 - [exporting HTML documentation from `;;` comments](docs/backlog/DocExport.md);
+- [documented struct, union and enum members](docs/backlog/MemberDocumentation.md), with historical names;
+- [`.using`, names from another scope without qualifying them](docs/backlog/Using.md);
+- [lint exclusions](docs/backlog/LintExclusions.md): rule IDs, and ignoring a rule for a line, a comment or a file;
 - [the media library and explorers](docs/backlog/Media.md);
 - [saving media back to images](docs/backlog/MediaPersistence.md): changed disks and tapes on every machine;
 - [machine files, data folders and libraries](docs/backlog/MachineFiles.md), shared by VS Code and the standalone emulator;
@@ -380,15 +390,16 @@ Design notes for upcoming work live in [`docs/backlog`](docs/backlog):
 - [the 3.5 disk controller at the hardware level](docs/backlog/Disk35Hardware.md), running Apple's EPROM on an emulated 65C02 and SWIM;
 - [SOS sources: the Apple III's kernel and drivers](docs/backlog/SosSources.md);
 - [Business BASIC's other versions, modules and DEF FN view](docs/backlog/BusinessBasic.md);
-- [the Z80 SoftCards for the Apple II and Apple III](docs/backlog/SoftCard.md);
+- [the Z80 SoftCards](docs/backlog/SoftCard.md): interrupts, the Premium SoftCard IIe and CP/M 3, CP/M sources, if wanted;
 - [the Commodore PET](docs/backlog/Pet.md): the 8032's 80 columns and CRTC, if wanted;
 - [the Kaypro II](docs/backlog/Kaypro.md): CP/M's sources and its disks as a file system;
-- [the BBC Micro's later models and expansions](docs/backlog/BbcMicro.md).
+- [the BBC Micro's later models and expansions](docs/backlog/BbcMicro.md);
+- [aligning the conversion of the SDK's sources](docs/backlog/ConversionAlignment.md) with the shared BASIC modules.
 
 ## License
 
 MIT; see [LICENSE](LICENSE). Microsoft's `m6502.asm` carries its own MIT license in
-[`src/Retrocore.Machines.Apple2/Roms/AppleSoft/LICENSE`](src/Retrocore.Machines.Apple2/Roms/AppleSoft/LICENSE).
+[`src/Retrocore.Basic/Roms/Microsoft6502Basic/LICENSE`](src/Retrocore.Basic/Roms/Microsoft6502Basic/LICENSE).
 MBASIC's source ([`Mbasic/`](src/Retrocore.Machines.Kaypro/Roms/Mbasic/Mbasic.asm)) takes Microsoft's names for its routines and variables
 from [GW-BASIC's source](https://github.com/microsoft/GW-BASIC), also MIT-licensed.
 The Model I lowercase kit's font follows [xtrs](https://github.com/TimothyPMann/xtrs), whose notice is kept in

@@ -723,7 +723,7 @@ try {
     const sdkRoms = join(root, "src", "Retrocore.Machines.Apple2", "Roms");
     const firstLine = (file, label) => {
         const lines = readFileSync(file, "utf8").split(/\r?\n/);
-        let next = lines.indexOf(`${label}:`) + 1;
+        let next = Math.max(lines.indexOf(`${label}:`), lines.indexOf(`.proc ${label}`)) + 1;
         assert.ok(next > 0, `${label} is in ${file}`);
         while (/^\s*(;.*)?$/.test(lines[next])) next++;
         return next + 1;
@@ -741,7 +741,7 @@ try {
         const driver = firstLine(profileRom, "Driver");
         const set = await request("setBreakpoints", { source: { path: profileRom }, breakpoints: [{ line: driver }] });
         assert.equal(set.breakpoints[0].verified, true, "the ProFile firmware's source maps");
-        const mouse = await request("setBreakpoints", { source: { path: mouseRom }, breakpoints: [{ line: firstLine(mouseRom, "SETMOUSE") }] });
+        const mouse = await request("setBreakpoints", { source: { path: mouseRom }, breakpoints: [{ line: firstLine(mouseRom, "SetMouse") }] });
         assert.equal(mouse.breakpoints[0].verified, true, "the mouse firmware's source maps");
         await request("configurationDone");
         assert.equal((await event("stopped")).reason, "breakpoint", "the startup scan booted the ProFile");
@@ -749,6 +749,7 @@ try {
         assert.equal(top.source.path.toLowerCase(), profileRom.toLowerCase());
         assert.equal(top.line, driver);
         assert.match((await request("evaluate", { expression: "PC" })).result, /^\$C7/, "in slot 7's page");
+        // By its historical name, which resolves through the routine's Also:.
         assert.match((await request("evaluate", { expression: "SETMOUSE" })).result, /^\$C4/, "the mouse's routine, in slot 4");
     } finally {
         unlinkSync(bootImage);

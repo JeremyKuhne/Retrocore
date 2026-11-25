@@ -116,6 +116,13 @@ public sealed partial class Assembler
             project.Statements.Add(node);
         }
 
+        // A source without preprocessing directives has no conditionals: all of it is assembled, but for the lines
+        // that didn't parse.
+        project.SkippedLines = AssemblySkippedLines.Whole(
+            source.Path,
+            nextLine,
+            diagnostics?.Select(diagnostic => diagnostic.Location?.Line ?? -1).Where(line => line >= 0).ToArray());
+
         return new(project, diagnostics?.ToArray() ?? []);
     }
 
@@ -144,17 +151,30 @@ public sealed partial class Assembler
         ReadOnlyMemory<char> operand;
         int identifierLength = AssemblySyntax.IdentifierLength(text.Span);
         ReadOnlyMemory<char> suffix = text[identifierLength..].TrimStart();
-        if (identifierLength != 0 && !suffix.IsEmpty && suffix.Span[0] == '=' && !suffix[1..].Span.Trim().IsEmpty)
+
+        // ca65's := spells the same constant definition as =.
+        int assignment = 0;
+        if (suffix.Span.StartsWith(":=", StringComparison.Ordinal)) { assignment = 2; }
+        else if (!suffix.IsEmpty && suffix.Span[0] == '=') { assignment = 1; }
+
+        if (identifierLength != 0 && assignment != 0)
         {
+            // An empty right side is still a definition, so every spelling reports it alike.
+            operand = suffix[assignment..].Trim();
+            if (operand.IsEmpty)
+            {
+                error = "A constant definition requires an expression.";
+                return null;
+            }
+
             // Constants lower to the same typed statement kind as caller-constructed .EQU nodes.
             label = text[..identifierLength].ToString();
             operation = ".EQU".AsMemory();
-            operand = suffix[1..].Trim();
         }
         else if (identifierLength != 0
             && suffix.Length > 4
             && suffix.Span[..4].Equals(".SET", StringComparison.OrdinalIgnoreCase)
-            && char.IsWhiteSpace(suffix.Span[4]))
+            && (char.IsWhiteSpace(suffix.Span[4]) || suffix.Span[4] == '('))
         {
             label = text[..identifierLength].ToString();
             operation = ".SET".AsMemory();
@@ -184,7 +204,9 @@ public sealed partial class Assembler
                 end += wide;
             }
 
-            if ((!span.IsEmpty && end == start) || (end < span.Length && !char.IsWhiteSpace(span[end])))
+            // As in ca65, an opening parenthesis right after a directive starts its operand.
+            bool separated = end == span.Length || char.IsWhiteSpace(span[end]) || (start == 1 && span[end] == '(');
+            if ((!span.IsEmpty && end == start) || !separated)
             {
                 error = "Invalid assembly statement.";
                 return null;
@@ -251,7 +273,7 @@ public sealed partial class Assembler
     {
         ArgumentNullException.ThrowIfNull(options);
         AssemblyParseResult parsed = Parse(source, options, cancellationToken);
-        return parsed.Success ? Assemble(parsed.Project, options, cancellationToken) : new([.. parsed.Diagnostics]);
+        return parsed.Success ? Assemble(parsed.Project, options, cancellationToken) : Failed(parsed);
     }
 
     /// <summary>
@@ -267,7 +289,7 @@ public sealed partial class Assembler
         CancellationToken cancellationToken = default)
     {
         AssemblyParseResult parsed = Parse(sources, options, cancellationToken);
-        return parsed.Success ? Assemble(parsed.Project, options, cancellationToken) : new([.. parsed.Diagnostics]);
+        return parsed.Success ? Assemble(parsed.Project, options, cancellationToken) : Failed(parsed);
     }
 
     /// <summary>
@@ -320,7 +342,7 @@ public sealed partial class Assembler
             }
         }
 
-        if (diagnostics.Count != 0) { return new([.. diagnostics]); }
+        if (diagnostics.Count != 0) { return new([.. diagnostics]) { SkippedLines = project.SkippedLines }; }
         List<AssemblyError> errors = [];
         AssemblyImage? image = null;
         try
@@ -345,7 +367,7 @@ public sealed partial class Assembler
             errors.Add(error);
         }
 
-        if (image is not null && errors.Count == 0) { return new(image); }
+        if (image is not null && errors.Count == 0) { return new(image) { SkippedLines = project.SkippedLines }; }
 
         // Phases report in their own order; a stable sort presents diagnostics in statement order.
         foreach (AssemblyError error in errors.OrderBy(error => error.Line))
@@ -356,8 +378,16 @@ public sealed partial class Assembler
             diagnostics.Add(new(error.Message, location, index));
         }
 
-        return new([.. diagnostics]);
+        return new([.. diagnostics]) { SkippedLines = project.SkippedLines };
     }
+
+    /// <summary>
+    ///  Creates the result of a source that did not parse, keeping what its expansion skipped.
+    /// </summary>
+    /// <param name="parsed">The parse.</param>
+    /// <returns>The failed result.</returns>
+    internal static AssemblyResult Failed(AssemblyParseResult parsed) =>
+        new([.. parsed.Diagnostics]) { SkippedLines = parsed.SkippedLines };
 
     /// <summary>
     ///  Classifies operation syntax without normalization or checking the selected CPU's instruction set.
@@ -396,6 +426,7 @@ public sealed partial class Assembler
                 6 when operation.Equals(".DWORD", StringComparison.OrdinalIgnoreCase) => AssemblyStatementKind.Data,
                 6 when operation.Equals(".ALIGN", StringComparison.OrdinalIgnoreCase) => AssemblyStatementKind.Align,
                 6 when operation.Equals(".SCOPE", StringComparison.OrdinalIgnoreCase) => AssemblyStatementKind.Scope,
+                6 when operation.Equals(".USING", StringComparison.OrdinalIgnoreCase) => AssemblyStatementKind.Using,
                 7 when operation.Equals(".ASSERT", StringComparison.OrdinalIgnoreCase) => AssemblyStatementKind.Assertion,
                 8 when operation.Equals(".FARADDR", StringComparison.OrdinalIgnoreCase) => AssemblyStatementKind.Data,
                 7 when operation.Equals(".EXPORT", StringComparison.OrdinalIgnoreCase)

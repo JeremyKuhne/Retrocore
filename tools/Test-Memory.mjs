@@ -72,6 +72,7 @@ try {
     // VS Code's own memory icon opens only the Hex Editor, so VS Code is not told of readMemory; it still answers.
     assert.equal(capabilities.supportsReadMemoryRequest, true);
     assert.equal(capabilities.supportsWriteMemoryRequest, true);
+    assert.equal(capabilities.supportsRetrocoreMemorySubscriptions, true);
 
     // The Model I: one address space, memory as the CPU maps it, with 16K so RAM ends at $7FFF.
     at = "launching the Model I";
@@ -200,6 +201,65 @@ try {
     const told = queued("memory").map(body => body.memoryReference);
     assert.deepEqual(told, [message.memoryReference], "only views that read the byte written, except the writer, are told");
     assert.deepEqual(queued("invalidated").at(-1)?.areas, ["variables"]);
+
+    at = "tracking separate read ranges";
+    const low = (await read("0x4000", 1)).bytes[0];
+    await read("0x4000", 1, 0x1000);
+    const middle = (await read("0x4800", 1)).bytes[0];
+    drop("memory");
+    await write("0x4800", [middle ^ 0xFF]);
+    assert.equal(queued("memory").some(body => body.memoryReference === "0x4000"), false,
+        "a write between two read ranges does not invalidate either");
+    drop("memory");
+    await write("4000", [low ^ 0xFF]);
+    assert.deepEqual(queued("memory").find(body => body.memoryReference === "0x4000"),
+        { memoryReference: "0x4000", offset: 0, count: 0x1001 }, "a read range still notifies the view");
+    await write("0x4800", [middle]);
+    await write("4000", [low]);
+
+    at = "closing one memory subscriber";
+    const savedBytes = (await read("6100", 0x21)).bytes;
+    await request("retro/memory/read", { memoryReference: "0x6100", offset: 0, count: 1, subscriber: "first" });
+    await request("retro/memory/read", { memoryReference: "0x6100", offset: 0x10, count: 1, subscriber: "second" });
+    await read("0x6100", 1, 0x20);
+    await request("retro/memory/unsubscribe", { subscriber: "first" });
+    drop("memory");
+    await write("6100", [savedBytes[0] ^ 0xFF]);
+    assert.equal(queued("memory").some(body => body.memoryReference === "0x6100"), false,
+        "the closed editor no longer tracks its bytes");
+    await write("6110", [savedBytes[0x10] ^ 0xFF]);
+    assert.ok(queued("memory").some(body => body.memoryReference === "0x6100"), "the other editor remains subscribed");
+    await request("retro/memory/unsubscribe", { subscriber: "second" });
+    for (let index = 0; index < 33; index++) {
+        await request("retro/memory/read", { memoryReference: "0x6100", count: 1, subscriber: `extra-${index}` });
+    }
+    for (let index = 0; index < 33; index++) {
+        await request("retro/memory/unsubscribe", { subscriber: `extra-${index}` });
+    }
+    drop("memory");
+    await write("6120", [savedBytes[0x20] ^ 0xFF]);
+    assert.ok(queued("memory").some(body => body.memoryReference === "0x6100"),
+        "unsubscribing many editors does not evict a standard DAP reader of the same reference");
+    await write("6100", [savedBytes[0]]);
+    await write("6110", [savedBytes[0x10]]);
+    await write("6120", [savedBytes[0x20]]);
+
+    at = "retaining live subscriptions while limiting unscoped readers";
+    await read("0x6100", 1);
+    for (let index = 0; index < 33; index++) {
+        await request("retro/memory/read", { memoryReference: "0x6100", count: 1, subscriber: `live-${index}` });
+    }
+    for (let index = 0; index < 32; index++) {
+        await read(`0x${(0x7000 + index).toString(16)}`, 1);
+    }
+    drop("memory");
+    await write("6100", [savedBytes[0] ^ 0xFF]);
+    assert.ok(queued("memory").some(body => body.memoryReference === "0x6100"),
+        "adding unscoped references does not evict live editor subscriptions");
+    await write("6100", [savedBytes[0]]);
+    for (let index = 0; index < 33; index++) {
+        await request("retro/memory/unsubscribe", { subscriber: `live-${index}` });
+    }
 
     at = "writes that cannot finish";
     const rom = (await read("0x0000", 1)).bytes[0];
@@ -352,6 +412,8 @@ try {
         "    BNE @1loop",
         "    RTS",
         ".endproc",
+        "ROW = $25",
+        "    STA ROW",
     ];
     writeFileSync(switching, program.join("\n") + "\n");
     const hintsFile = join(root, "artifacts", "memory-tests", "language-card.hints.json");
@@ -364,14 +426,16 @@ try {
     assert.equal((await event("stopped")).reason, "breakpoint");
     assert.equal((await read("main:0xD000", 1)).bytes[0], 0x11, "bank 2 holds what the program wrote");
 
-    // The Monitor's equates name the bytes its instructions address, as STA CH and (BASL),Y do, but not a value it
-    // only compares with, as CMP #CR does.
+    // The Monitor's equates name the bytes its instructions address, as STA CursorColumn and (TextBase),Y do, but not a
+    // value it only compares with, as CMP #CR does.
     at = "naming RAM by the Monitor's equates";
     const named = new Map((await request("retro/memory/labels", { memoryReference: "0x0000" })).labels.map(label => [label.address, label.name]));
-    assert.equal(named.get(0x24), "CH");
-    assert.equal(named.get(0x28), "BASL");
-    assert.equal(named.get(0xC000), "KBD");
-    // $0D is the firmware's RamTest::R6H, which it stores to, but never CR, which is only compared with.
+    assert.equal(named.get(0x24), "CursorColumn");
+    // The program's own constants name an address before the SDK's: its ROW, not the SDK's CV.
+    assert.equal(named.get(0x25), "ROW");
+    assert.equal(named.get(0x28), "TextBase");
+    assert.equal(named.get(0xC000), "Keyboard");
+    // $0D is Programmer's Aid's RamTest::GallopMaskHigh, which it stores to, but never CR, which is only compared with.
     assert.notEqual(named.get(0x0D), "CR");
 
     // The listing starts at the statement around the address asked for, lists the program's lines with their
@@ -380,7 +444,7 @@ try {
     const listing = async (address, count, starts) => (await request("retro/memory/listing", { memoryReference: "0x0000", address, count, starts })).lines;
     let lines = await listing(0x0301, 40);
     assert.equal(lines[0].address, 0x0300, "the statement around $0301 starts at $0300");
-    assert.deepEqual([lines[0].text, lines[0].kind, lines[0].label, lines[0].line], ["LDA LCBANK2", "code", "BANK2", program.indexOf("BANK2:") + 2]);
+    assert.deepEqual([lines[0].text, lines[0].kind, lines[0].label, lines[0].line], ["LDA LanguageCardBank2ReadWrite", "code", "BANK2", program.indexOf("BANK2:") + 2]);
     assert.equal(lines[0].path, switching);
     assert.equal(lines[0].target, 0xC083, "the CPU's view goes to the soft switch");
     // A view of main RAM has no soft switches, so the operand goes nowhere from it.
@@ -400,7 +464,7 @@ try {
         [[table.address, "data", 2], [table.address + 2, "code", 1]], "the 65C02 runs $03 as a one-byte NOP");
     // The language card's RAM is mapped over the Monitor now, so its code lists from the ROM's bank.
     lines = (await request("retro/memory/listing", { memoryReference: "rom:0x0000", address: 0xFDED, count: 3 })).lines;
-    assert.deepEqual([lines[0].address, lines[0].label, lines[0].kind], [0xFDED, "COUT", "code"]);
+    assert.deepEqual([lines[0].address, lines[0].label, lines[0].kind], [0xFDED, "CharacterOut", "code"]);
     assert.equal((await listing(0xFDED, 3))[0].kind, "unknown", "RAM is mapped there, which no source describes");
     // Decode from here starts where it is told, inside the instruction at $0300.
     lines = await listing(0x0301, 2, [0x0301]);
@@ -569,7 +633,7 @@ try {
     assert.equal((await inspect(0x0478)).detail, "screen hole");
     assert.deepEqual([(await inspect(0x2D2D)).region, (await inspect(0x2D2D)).detail], ["Hi-res page 1", "line 83, byte 5 (dots 35-41)"]);
     inspected = await inspect(0x0024);
-    assert.deepEqual([inspected.region, inspected.label, inspected.offset], ["Zero page", "CH", 0]);
+    assert.deepEqual([inspected.region, inspected.label, inspected.offset], ["Zero page", "CursorColumn", 0]);
     assert.ok(inspected.summary?.length > 0, JSON.stringify(inspected));
     assert.match(inspected.mapped, /^Reads and writes /);
     inspected = await inspect(0x0301);
@@ -584,7 +648,7 @@ try {
     // inside one, nor in I/O or a table.
     at = "the instruction at the cursor";
     assert.deepEqual((await inspect(0x0300)).instruction,
-        { text: "LDA LCBANK2", size: 3, cycles: 4, cyclesTaken: null, flags: "N Z", summary: "Loads A from memory." });
+        { text: "LDA LanguageCardBank2ReadWrite", size: 3, cycles: 4, cyclesTaken: null, flags: "N Z", summary: "Loads A from memory." });
     assert.equal((await inspect(0x0317)).instruction.cycles, 3);
     for (const address of [0x0301, 0xC000, 0x0024, 0x031A]) {
         assert.equal((await inspect(address)).instruction, null, "no instruction at $" + address.toString(16));
@@ -632,24 +696,24 @@ try {
         { address: 0x0314, text: "STA $D000", label: "FROZEN+9", kind: "writes" }
     ]]);
     assert.deepEqual((await inspect(0x0317)).references, [{ address: 0x0317, text: "JMP SWITCHED", label: "SWITCHED", kind: "jumps" }]);
-    assert.ok((await inspect(0xC013)).references.some(reference => reference.text === "LDA RDRAMRD" && reference.kind === "reads"));
+    assert.ok((await inspect(0xC013)).references.some(reference => reference.text === "LDA AuxReadState" && reference.kind === "reads"));
     // A soft switch's bits, from what its documentation says of them.
     at = "named bits";
     assert.deepEqual((await inspect(0xC013)).bits, [{ bit: 7, name: null, meaning: "whether RAMRD is on" }]);
-    assert.equal((await inspect(0x0024)).bits, null, "CH says nothing of its bits");
-    // The IIe's KBDSTRB reports in bit 7 whether a key is down: its own bit, unlike "clears bit 7 of KBD".
+    assert.equal((await inspect(0x0024)).bits, null, "CursorColumn says nothing of its bits");
+    // The IIe's KeyboardStrobe reports in bit 7 whether a key is down: its own bit, unlike "clears bit 7 of Keyboard".
     assert.deepEqual((await inspect(0xC010)).bits, [{ bit: 7, name: null, meaning: "whether a key is down" }]);
     // Assembling in place: one line at an address, with the session's labels, written by the editor, not here.
     at = "assembling a line";
     const assemble = line => request("retro/memory/assemble", { memoryReference: "0x0000", address: 0x6560, line });
     const unassembled = (await read("0x6560", 3)).bytes;
-    assert.deepEqual(await assemble("LDA KBD"), { bytes: [0xAD, 0x00, 0xC0], text: "LDA KBD", nop: [0xEA] });
+    assert.deepEqual(await assemble("LDA KBD"), { bytes: [0xAD, 0x00, 0xC0], text: "LDA Keyboard", nop: [0xEA] });
     assert.deepEqual((await assemble("STA CH")).bytes, [0x85, 0x24], "a zero-page label assembles to zero page");
     assert.deepEqual((await assemble("JSR COUT")).bytes, [0x20, 0xED, 0xFD]);
     assert.deepEqual((await assemble("LDA BANK2,X")).bytes, [0xBD, 0x00, 0x03]);
     assert.deepEqual((await assemble("BNE *+4")).bytes, [0xD0, 0x02]);
-    // A scoped name stands in the line as an alias, as a constant cannot be called RamTest::R6H.
-    assert.deepEqual((await assemble("STA RamTest::R6H")).bytes, [0x85, 0x0D]);
+    // A scoped name stands in the line as an alias, as a constant cannot be called RamTest::GallopMaskHigh.
+    assert.deepEqual((await assemble("STA RamTest::GallopMaskHigh")).bytes, [0x85, 0x0D]);
     // A name with a combining mark, as a decomposed é is, assembles as the assembler reads it.
     await mark({ address: 0x6600, name: "CAFÉ" });
     assert.deepEqual((await assemble("LDA CAFÉ")).bytes, [0xAD, 0x00, 0x66]);
@@ -660,10 +724,10 @@ try {
     assert.deepEqual([(await assemble("JSR ::COUT")).bytes, (await assemble("LDA #(CH.mod 16)")).bytes], [[0x20, 0xED, 0xFD], [0xA9, 0x04]]);
     // An alias is never a name the line already has.
     await mark({ address: 0x6600, name: "__RETROCORE0" });
-    assert.deepEqual((await assemble(".word RamTest::R6H,__RETROCORE0")).bytes, [0x0D, 0x00, 0x00, 0x66]);
+    assert.deepEqual((await assemble(".word RamTest::GallopMaskHigh,__RETROCORE0")).bytes, [0x0D, 0x00, 0x00, 0x66]);
     await mark({ address: 0x6600, name: "" });
     // Quoted text stays as typed; a width prefix's name is still the session's.
-    assert.deepEqual((await assemble('.byte "RamTest::R6H"')).bytes, Array.from(Buffer.from("RamTest::R6H", "ascii")));
+    assert.deepEqual((await assemble('.byte "RamTest::KeptY"')).bytes, Array.from(Buffer.from("RamTest::KeptY", "ascii")));
     assert.deepEqual([(await assemble("STA z:CH")).bytes, (await assemble("LDA a:CH")).bytes], [[0x85, 0x24], [0xAD, 0x24, 0x00]]);
     // A label spelled as a register or condition is still the label where the register would not assemble.
     await mark({ address: 0x6600, name: "Z" });
@@ -679,9 +743,9 @@ try {
     const labelled = new Map((await request("retro/memory/labels", { memoryReference: "0x0000" })).labels.map(label => [label.name, label]));
     assert.deepEqual([labelled.get("TABLE").kind, labelled.get("TABLE").size], ["data", 11], JSON.stringify(labelled.get("TABLE")));
     assert.deepEqual([labelled.get("BANK2").kind, labelled.get("BANK2").size], ["code", null]);
-    assert.equal(labelled.get("CH").kind, "constant", JSON.stringify(labelled.get("CH")));
+    assert.equal(labelled.get("CursorColumn").kind, "constant", JSON.stringify(labelled.get("CursorColumn")));
     // A constant names main RAM's byte, which the CPU reads, not auxiliary RAM's at the same address.
-    assert.equal(labelled.get("BRKV")?.address, 0x03F0);
+    assert.equal(labelled.get("BreakVector")?.address, 0x03F0);
     const auxNames = (await request("retro/memory/labels", { memoryReference: "aux:0x0000" })).labels;
     assert.equal(auxNames.find(label => label.address === 0x03F0), undefined, JSON.stringify(auxNames.filter(label => label.address < 0x0400)));
     // Saving as assembly: the program as native source that assembles back to its bytes, by the session's labels.

@@ -22,6 +22,9 @@ internal sealed partial class AssemblyPreprocessor
     private readonly Func<string, bool> _isMacro;
     private readonly AssemblySymbols _constants = new();
     private readonly HashSet<string> _defined = [with(StringComparer.Ordinal)];
+
+    // Constants whose value is a size known only once the program is laid out; see AwaitsLayoutSize.
+    private HashSet<string>? _layoutSizes;
     private readonly HashSet<string> _activeIncludes = [with(
         Path.DirectorySeparatorChar == '\\' ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal)];
     private int _visited;
@@ -58,6 +61,10 @@ internal sealed partial class AssemblyPreprocessor
         foreach (AssemblySource source in sources)
         {
             ArgumentNullException.ThrowIfNull(source);
+
+            // A file-level .using ends with its file, so it does not reach the next top-level source.
+            processor._constantUsings = null;
+            processor.MarkFile(enter: true);
             processor.ProcessSource(
                 source,
                 options.Dialect,
@@ -65,6 +72,8 @@ internal sealed partial class AssemblyPreprocessor
                 explicitDialect: null,
                 depth: 1,
                 macroDepth: 0);
+
+            processor.MarkFile(enter: false);
 
             if (processor._stopped) { break; }
         }
@@ -74,10 +83,18 @@ internal sealed partial class AssemblyPreprocessor
         processor.FinishMacro10();
         if (processor._ca65State is { } ca65)
         {
-            foreach (TypeFrame type in ca65.Types) { processor.Error("Unterminated ca65 type.", type.Opening); }
+            foreach (TypeFrame type in ca65.Types)
+            {
+                processor.Error("Unterminated ca65 type.", type.Opening);
+
+                // The lines after an unclosed type were read as its members, so what was chosen from there is suspect.
+                processor._untrustedFrom = Math.Min(processor._untrustedFrom, type.Order);
+            }
         }
 
         AssemblyProject project = processor._project;
+        project.SkippedLines = processor.SkippedLines();
+        if (project.FileMarks is not null) { project.FileMarkStatements = [.. project.Statements]; }
         foreach (AssemblySource source in processor._sources) { project.Sources.Add(source); }
         return new(project, [.. processor._diagnostics.OrderBy(item => item.Order).Select(item => item.Diagnostic)]);
     }
@@ -92,10 +109,13 @@ internal sealed partial class AssemblyPreprocessor
     {
         if (HasPragma(source.Text))
         {
-            ReadOnlySpan<char> first = source.Text;
-            int end = first.IndexOfAny('\r', '\n');
-            first = (end < 0 ? first : first[..end]).Trim();
-            return !string.Equals(PragmaValue(source.Text, "dialect"), "native", StringComparison.OrdinalIgnoreCase);
+            // A pragma with only the documentation lint's words (style=, ignore=) selects no dialect.
+            string? dialect = PragmaValue(source.Text, "dialect");
+            bool lint = PragmaValue(source.Text, "style") is not null || PragmaValue(source.Text, "ignore") is not null;
+            if (dialect is not null || !lint)
+            {
+                return !string.Equals(dialect, "native", StringComparison.OrdinalIgnoreCase);
+            }
         }
 
         return (source.Dialect ?? options?.Dialect ?? AssemblyDialect.Native) != AssemblyDialect.Native;
@@ -208,8 +228,12 @@ internal sealed partial class AssemblyPreprocessor
     {
         if (!HasPragma(text)) { return null; }
         int end = text.IndexOfAny(['\r', '\n']);
-        string first = (end < 0 ? text : text[..end]).Trim();
-        foreach (string word in first["; retrocore:".Length..].Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries))
+        string first = (end < 0 ? text : text[..end]).Trim()["; retrocore:".Length..];
+
+        // An exclusion's reason, after " -- ", is prose for reviewers, not words.
+        int reason = first.IndexOf(" -- ", StringComparison.Ordinal);
+        if (reason >= 0) { first = first[..reason]; }
+        foreach (string word in first.Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries))
         {
             int separator = word.IndexOf('=');
             if (separator > 0 && word[..separator].Equals(key, StringComparison.OrdinalIgnoreCase))
@@ -232,9 +256,14 @@ internal sealed partial class AssemblyPreprocessor
     private AssemblyDialect? Pragma(AssemblySource source)
     {
         if (!HasPragma(source.Text)) { return null; }
-        ReadOnlySpan<char> first = source.Text;
-        int end = first.IndexOfAny('\r', '\n');
-        first = (end < 0 ? first : first[..end]).Trim();
+
+        // The documentation lint's words (style=, ignore=) need no dialect.
+        bool lint = PragmaValue(source.Text, "style") is not null || PragmaValue(source.Text, "ignore") is not null;
+        if (PragmaValue(source.Text, "dialect") is null && lint)
+        {
+            return null;
+        }
+
         if (PragmaValue(source.Text, "dialect") is { } name
             && Enum.TryParse(name, ignoreCase: true, out AssemblyDialect dialect)
             && Enum.IsDefined(dialect))
@@ -258,6 +287,9 @@ internal sealed partial class AssemblyPreprocessor
         AssemblyDialect dialect = explicitDialect ?? Pragma(source) ?? source.Dialect ?? inherited;
         if (dialect == AssemblyDialect.Merlin) { CollectMerlinEquates(source); }
 
+        // The assembler gives definitions their Also: names in every dialect, so conditionals see them in every one.
+        ReadHistoricalNames(source);
+
         if (dialect is not (AssemblyDialect.Native or AssemblyDialect.Ca65 or AssemblyDialect.Merlin or AssemblyDialect.Macro10))
         {
             Error($"The {dialect} dialect front end is not implemented yet.", new(source.Path, 0, expandedFrom: parent));
@@ -280,6 +312,7 @@ internal sealed partial class AssemblyPreprocessor
         _sources.Add(source);
         if (dialect == AssemblyDialect.Macro10)
         {
+            OpenOpaqueLines(source);
             ProcessMacro10(source, parent);
             if (identity.Length != 0) { _activeIncludes.Remove(identity); }
             return false;
@@ -293,6 +326,8 @@ internal sealed partial class AssemblyPreprocessor
         {
             lines.Add(new(line, new(source.Path, number++, expandedFrom: parent), dialect));
         }
+
+        OpenLines(source.Path, number, included: parent is not null);
 
         // As in ca65, conditionals are balanced per file: an include cannot close its includer's block.
         int floor = _conditions.Count;
@@ -321,6 +356,10 @@ internal sealed partial class AssemblyPreprocessor
                 break;
             }
 
+            // A conditional directive's own line counts with the branch around it, which it marks itself.
+            MarkLine(original.Location, _conditions.Count == 0 || _conditions[^1].Active);
+            _labeledDirective = false;
+
             ReadOnlyMemory<char> text = original.Dialect == AssemblyDialect.Merlin
                 ? original.Text
                 : Substitute(original.Text, substitutions, frame);
@@ -343,16 +382,12 @@ internal sealed partial class AssemblyPreprocessor
                 }
                 catch (AssemblyError failure)
                 {
-                    if (_conditions.Count == 0 || _conditions[^1].Active) { Error(failure.Message, original.Location); }
+                    ExpansionFailure(failure.Message, original, conditionFloor);
                     continue;
                 }
                 catch (OverflowException)
                 {
-                    if (_conditions.Count == 0 || _conditions[^1].Active)
-                    {
-                        Error("Expansion overflow.", original.Location);
-                    }
-
+                    ExpansionFailure("Expansion overflow.", original, conditionFloor);
                     continue;
                 }
             }
@@ -384,16 +419,12 @@ internal sealed partial class AssemblyPreprocessor
                 }
                 catch (AssemblyError failure)
                 {
-                    if (_conditions.Count == 0 || _conditions[^1].Active) { Error(failure.Message, original.Location); }
+                    ExpansionFailure(failure.Message, original, conditionFloor);
                     continue;
                 }
                 catch (OverflowException)
                 {
-                    if (_conditions.Count == 0 || _conditions[^1].Active)
-                    {
-                        Error("ca65 expansion overflow.", original.Location);
-                    }
-
+                    ExpansionFailure("ca65 expansion overflow.", original, conditionFloor);
                     continue;
                 }
             }
@@ -405,7 +436,7 @@ internal sealed partial class AssemblyPreprocessor
                 if (_conditions.Count != 0 && !_conditions[^1].Active) { continue; }
                 if (_macros.Count != 0
                     && !operationText.IsEmpty
-                    && _macros.TryGetValue(operationText.ToString(), out Macro? macro)
+                    && TryGetByText(_macros, operationText, out Macro? macro)
                     && (macro.Cpu is null || string.Equals(macro.Cpu, _cpu, StringComparison.OrdinalIgnoreCase)))
                 {
                     if (!labelText.IsEmpty) { Emit(original, labelText is ":" ? ":" : $"{labelText}:"); }
@@ -436,8 +467,11 @@ internal sealed partial class AssemblyPreprocessor
             if (directive == ".MACRO")
             {
                 IReadOnlyList<Line>? body = Capture(lines, ref index, ".MACRO", ".ENDMACRO", original.Location);
+
+                // The body's lines are marked by the expansions that take them; the closing line is the definition's.
                 if (body is not null)
                 {
+                    MarkLine(lines[index].Location, assembled: true);
                     DefineMacro(operand, body, original.Location, substitutions, frame);
                     if (original.Dialect == AssemblyDialect.Merlin)
                     {
@@ -463,10 +497,11 @@ internal sealed partial class AssemblyPreprocessor
             if (directive == ".REPEAT")
             {
                 IReadOnlyList<Line>? body = Capture(lines, ref index, ".REPEAT", ".ENDREPEAT", original.Location);
-                if (body is not null && Repeat(original, body, substitutions, includeDepth, macroDepth, frame))
-                {
-                    return true;
-                }
+
+                // The body's lines are marked by the iterations that take them; the closing line is the block's.
+                if (body is null) { continue; }
+                MarkLine(lines[index].Location, assembled: true);
+                if (Repeat(original, body, substitutions, includeDepth, macroDepth, frame)) { return true; }
 
                 continue;
             }
@@ -525,7 +560,8 @@ internal sealed partial class AssemblyPreprocessor
             return false;
         }
 
-        if (!Constant(Substitute(args[0], substitutions, frame), original.Location, out long count)) { return false; }
+        string countText = Substitute(args[0], substitutions, frame);
+        if (!Constant(countText, original.Location, out long count, ".repeat count")) { return false; }
         if (count < 0 || count > _options.MaximumRepeatCount)
         {
             Error("Repeat count exceeds the configured limit.", original.Location);
@@ -578,6 +614,9 @@ internal sealed partial class AssemblyPreprocessor
 
         bool active = _conditions.Count == 0 || _conditions[^1].Active;
         if (active) { Emit(original, label is ":" ? ":" : $"{label}:"); }
+
+        // The line is assembled as its label is, not as the conditional directive after it would be.
+        _labeledDirective = true;
         text = WithoutLabel(text);
         original = new(WithoutLabel(original.Text), original.Location, original.Dialect);
     }
@@ -638,24 +677,54 @@ internal sealed partial class AssemblyPreprocessor
 
         // As in ca65, the first definition of an ordinary symbol starts a cheap-local context.
         if (_defined.Add(name) && !cheap) { _constantCheap = name; }
+        string? snapshot = cheap ? null : RecordHistoricalNames(node, name);
         if (node.Kind is not (AssemblyStatementKind.Constant or AssemblyStatementKind.Variable))
         {
             _constants.Unset(name);
+            _layoutSizes?.Remove(name);
             return;
         }
 
+        // A scope's or procedure's size is known only once it is assembled, so an equate of one, directly or through
+        // another such equate, has no value yet; the resolver lowers its .sizeof as it does in data, and the compiler
+        // evaluates it. The name is remembered so that .ifconst and .const refuse it rather than call it unknown.
+        if (AwaitsLayoutSize(node.Operand.Text))
+        {
+            _constants.Unset(name);
+            _layoutSizes ??= [with(StringComparer.Ordinal)];
+            _layoutSizes.Add(name);
+
+            // A .set variable's old name keeps the size it had here, so it waits for layout too.
+            if (snapshot is not null) { _layoutSizes.Add(snapshot); }
+            return;
+        }
+
+        _layoutSizes?.Remove(name);
+
+        _nameAmbiguity = null;
         try
         {
             // Without scopes or local names the operand's own characters are the expression.
             ReadOnlyMemory<char> operand = node.Operand.Memory;
-            ReadOnlyMemory<char> expression = _constantScope.Length == 0 && operand.Span.IndexOfAny('@', ':') < 0
+            bool plain = _constantScope.Length == 0 && _constantUsings is null && _historicalNames is null;
+            ReadOnlyMemory<char> expression = plain && operand.Span.IndexOfAny('@', ':') < 0
                 ? operand
                 : ConstantExpression(node.Operand.Text).AsMemory();
 
             ExpressionEvaluator evaluator = new(expression, _constants, address: 0, line: 0);
-            if (evaluator.TryEvaluate(out long value) && !evaluator.ReadsAddress)
+
+            // A name that two definitions could mean has no one value; the resolver reports it where code uses it.
+            if (_nameAmbiguity is not null)
+            {
+                _nameAmbiguity = null;
+                _constants.Unset(name);
+            }
+            else if (evaluator.TryEvaluate(out long value) && !evaluator.ReadsAddress)
             {
                 _constants.SetValue(name, value);
+
+                // A .set variable's old name keeps the value it had here, as the assembler's alias does.
+                if (snapshot is not null) { _constants.SetValue(snapshot, value); }
             }
             else
             {
@@ -679,12 +748,30 @@ internal sealed partial class AssemblyPreprocessor
         }
     }
 
-    private bool Constant(string text, AssemblyLocation location, out long value, string purpose = "Conditional")
+    private bool Constant(string text, AssemblyLocation location, out long value, string purpose)
     {
         value = 0;
+
+        // A scope's or procedure's size is known only once it is assembled.
+        if (AwaitsLayoutSize(text))
+        {
+            Error($"{purpose} requires a constant known at this point in source order.", location);
+            return false;
+        }
+
+        _nameAmbiguity = null;
         try
         {
             ExpressionEvaluator evaluator = new(ConstantExpression(text).AsMemory(), _constants, address: 0, line: 0);
+
+            // A name that two definitions could mean has no one value, for a .repeat count or an .incbin range.
+            if (_nameAmbiguity is { } ambiguity)
+            {
+                _nameAmbiguity = null;
+                Error(ambiguity, location);
+                return false;
+            }
+
             if (evaluator.TryEvaluate(out value) && !evaluator.ReadsAddress) { return true; }
             Error($"{purpose} requires a constant known at this point in source order.", location);
         }

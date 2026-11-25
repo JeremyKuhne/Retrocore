@@ -53,6 +53,45 @@ public sealed class SystemSourceTests
     }
 
     /// <summary>
+    ///  The Monitor refuses a <c>MONITOR</c> or <c>ENHANCED</c> the digests don't check, with its own message: the
+    ///  digests here and in <see cref="Apple2SourceTests"/> check the Apple II and Autostart Monitors (<c>MONITOR</c>
+    ///  0 and 1) and the original and Enhanced IIe's (2, with <c>ENHANCED</c> 0 and 1). Without the check, an
+    ///  <c>ENHANCED</c> of 2 builds the Enhanced IIe's bytes, which nothing checks for that value, and a
+    ///  <c>MONITOR</c> of 3 fails only on its entry points' addresses, whose asserts still fail beside the message,
+    ///  so the message is looked for among the diagnostics. An enhanced model of a Monitor other than the IIe's is
+    ///  refused too. The options are built here, as <see cref="SdkModules.AssembleSystem"/> builds them, since it
+    ///  throws on the errors the test looks for.
+    /// </summary>
+    /// <param name="monitor">The value given for <c>MONITOR</c>.</param>
+    /// <param name="enhanced">The value given for <c>ENHANCED</c>.</param>
+    /// <param name="message">Part of the message the Monitor stops with.</param>
+    [TestMethod]
+    [DataRow(3, 0, "MONITOR is")]
+    [DataRow(-1, 0, "MONITOR is")]
+    [DataRow(2, 2, "ENHANCED is")]
+    [DataRow(0, 1, "Only the IIe's Monitor has an enhanced model.")]
+    [DataRow(1, 1, "Only the IIe's Monitor has an enhanced model.")]
+    public void UncheckedMonitorBuildIsRefused(int monitor, int enhanced, string message)
+    {
+        string path = Path.GetFullPath(s_monitor);
+        AssemblyOptions options = new(ProcessorVariant.Mos6502, SdkModules.MonitorOrigin, SdkModules.MonitorSize)
+        {
+            SourceResolver = new FileAssemblySourceResolver(),
+            PredefinedSymbols = new Dictionary<string, long>
+            {
+                ["ENHANCED"] = enhanced,
+                ["IIBOARD"] = 0,
+                ["MONITOR"] = monitor
+            }
+        };
+
+        AssemblyResult result = new Assembler.Assembler().Assemble(new AssemblySource(File.ReadAllText(path), path), options);
+
+        result.Success.Should().BeFalse();
+        result.Diagnostics.Should().Contain(diagnostic => diagnostic.Message.Contains(message, StringComparison.Ordinal));
+    }
+
+    /// <summary>
     ///  With the user's ROM dumps, each source also compares byte for byte, which names the first difference.
     /// </summary>
     /// <param name="model">The IIe model.</param>
@@ -149,8 +188,10 @@ public sealed class SystemSourceTests
         DebugPosition? position = debug.Position(new Apple2TestMemory(bus), 0xFDED);
         position.Should().NotBeNull();
         SourceLine line = position?.Chain[0] ?? throw new AssertFailedException("No source for COUT.");
-        line.Path.Should().Be(Path.GetFullPath(s_monitor));
-        File.ReadAllLines(s_monitor)[line.Line - 2].Should().Be("COUT:");
+        line.Path.Should().StartWith(Path.Join(Path.GetDirectoryName(Path.GetFullPath(s_monitor)), "Monitor") + Path.DirectorySeparatorChar);
+        string[] lines = File.ReadAllLines(line.Path);
+        lines[line.Line - 2].Should().StartWith(".assert * = $FDED");
+        lines[line.Line - 3].Should().Be(".proc CharacterOut");
 
         // Language-card RAM at $F800 is someone else's code.
         bus.Read(0xC080);

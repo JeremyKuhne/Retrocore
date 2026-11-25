@@ -8,6 +8,13 @@ namespace Retrocore.Basic;
 ///  One run of Integer BASIC's tokenizer over a line: page zero, the input buffer and the 6502's registers, as the
 ///  ROM's routine uses them.
 /// </summary>
+/// <remarks>
+///  <para>
+///   The comments name the ROM's routines and locations by Paul R. Santa-Maria's names (MATCHCHAR, TXTNDX ...),
+///   which the SDK's source, IntegerBasic/*.asm, keeps as historical names of its own (Tokenizer::MatchCharacter,
+///   TextIndex ...), so either finds the definition there.
+///  </para>
+/// </remarks>
 internal sealed class IntegerSyntaxMatcher
 {
     // The page-zero locations the tokenizer uses (Equates.asm).

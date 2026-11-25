@@ -1,422 +1,398 @@
-;; DOS 3.2 RWTS: READ OR WRITE A TRACK AND SECTOR
+; retrocore: style=strict
+;; DOS 3.2 RWTS: read or write a track and sector ($BD00-$BE3A where DOS runs)
 ;;
-;; RWTS, "read or write a track and sector", is the routine the rest of DOS calls for every disk access. The
-;; caller describes the request in an IOB (input/output control block) and passes its address in A and Y. RWTS
-;; starts the drive: it waits for another slot's drive to stop if the slot has changed, checks whether the
-;; motor is already turning, turns it on, selects the drive, moves the head to the track and, if the motor was
-;; off, waits for it to come up to speed. Then it reads address fields until it finds the sector, and reads or
-;; writes its data field, or it formats the disk (Formatter32.asm). RWTS runs at $BD00-$BE9B where DOS runs. The
-;; file manager, and programs using the vector at $03D9, call it through DISKIO (BootLoader32.asm), which disables
-;; interrupts for the call; DOS's own IOB is at $B7E8 and its DCT at $B7FB.
+;; RWTS, "read or write a track and sector", is the routine the rest of DOS calls for every disk access. The caller
+;; describes the request in an IOB, laid out as <Iob>, and passes its address in A and Y. RWTS starts the drive: it
+;; waits for another slot's drive to stop if the slot has changed, checks whether the motor is already turning,
+;; turns it on, selects the drive, moves the head to the track and, if the motor was off, waits for it to come up
+;; to speed. Then it reads address fields until it finds the sector, and reads or writes its data field, or it
+;; formats the disk (<Formatter::Format>, Formatter.asm). The file manager, and programs using the vector at
+;; $03D9, call it through <CallRwts> (BootLoader.asm), which disables interrupts for the call; DOS's own IOB is
+;; <DosIob> and its DCT <DosDeviceTable>. docs/Dos.md explains the IOB, and docs/DiskII.md the drive.
 ;;
-;; This is DOS 3.3's RWTS (its Rwts1.asm and Rwts2.asm) as it was before DOS 3.3 changed it: the names are DOS
-;; 3.3's where the code is the same. DOS 3.2 differs in a few places. It reads the sector number the IOB gives
-;; as the number on the disk, with no translation. It checks once, not eight times, whether the motor is
-;; turning; it reads the motor's start-up count from both of the DCT's bytes; it recalibrates only once; and
-;; its formatter is part of RWTS rather than a module of its own.
+;; This is DOS 3.3's RWTS (its Rwts1.asm and Rwts2.asm) as it was before DOS 3.3 changed it: the names are DOS 3.3's
+;; where the code is the same. DOS 3.2 differs in a few places. It reads the sector number the IOB gives as the number
+;; on the disk, with no translation. It checks once, not eight times, whether the motor is turning; it reads the motor's
+;; start-up count from both of the DCT's bytes; when an address field shows the head on the wrong track it seeks again
+;; with a fresh count of address tries, as often as that happens short of the last try, where DOS 3.3 seeks again at
+;; most three times before it recalibrates; and its formatter writes no data fields (Formatter.asm).
+;; RWTS reads the IOB's slot, drive, volume, track, sector, DCT and buffer addresses, command and previous slot and
+;; drive, and writes the return code, the volume found and the previous slot and drive; it reads the DCT's
+;; <DeviceTable::WHOLE_TRACKS> and both bytes of <DeviceTable::MOTOR_DELAY>.
 ;;
-;; The IOB, as RWTS uses it (offsets in hex):
+;; Several values live in screen holes, at the address given plus the slot (<Drive1HalfTracks>,
+;; <Drive2HalfTracks>) or at slot 0's byte (the counters); see RwtsEquates.asm.
+
+;; The start of the relocator's range of RWTS's code from here to <RwtsCodeLast>: RWTS, the formatter and the patches
+;; after it, $BD00-$BFFE where DOS runs. See Relocator.asm.
+;; Also: ASC2 (DOS33, DOS31)
+RwtsCodeStart:
+
+; RWTS's variables, which the formatter and the head helpers share with it.
+
+;; The half-track drive 1 of each slot's card is on: the table's byte for slot n is at $0478 + n, a screen hole.
 ;;
-;; - 01: the slot times 16, such as $60 for slot 6.
-;; - 02: the drive, 1 or 2.
-;; - 03: the volume expected; 0 accepts any. For FORMAT, the volume to write.
-;; - 04: the track, 0 to 34.
-;; - 05: the sector, 0 to 12, as it is numbered on the disk.
-;; - 06-07: the address of the DCT.
-;; - 08-09: the address of the 256-byte buffer.
-;; - 0C: the command: 0 seeks only, 1 reads, 2 writes, 4 formats.
-;; - 0D: the return code RWTS stores: $10 write-protected, $20 wrong volume, $40 drive error or a format that
-;;   failed, $80 the sector couldn't be found.
-;; - 0E: the volume found on the disk, stored by RWTS.
-;; - 0F, 10: the slot times 16 and the drive of the last access, which RWTS reads and updates.
+;; <SeekHalfTrack> reads and updates it, <SetTrack> sets it, and `BOOT 2` clears the boot slot's.
+;; Also: DRV1TRK (DOS33)
+Drive1HalfTracks = $0478
+
+;; The half-track drive 2 of each slot's card is on, at $04F8 + n.
+;; Also: DRV2TRK (DOS33)
+Drive2HalfTracks = $04F8
+
+;; The address of the caller's IOB (2 bytes), which RWTS reads and writes through.
+;; Also: IOBPL (DOS33)
+IobPointer = SavedStatus
+
+;; The high byte of <IobPointer>.
+;; Also: IOBPH (DOS33)
+IobPointerHigh = SavedStackPointer
+
+;; The address of the DCT (2 bytes), copied from the IOB's <Iob::DEVICE_TABLE>.
+;; Also: DEVCTBL (DOS33)
+DctPointer = Address1
+
+;; The drive RWTS has selected: bit 7 set for drive 1, clear for drive 2.
+;; Also: DRIVNO (DOS33)
+SelectedDrive = SavedOutputY
+
+;; The sector number in the address field just read, <AddressField>'s second byte.
 ;;
-;; Byte 00 (the IOB's type, 1) and 0A-0B (a byte count) are not read by this RWTS.
+;; DOS 3.2's RWTS compares it with the IOB's sector as it is, since its sector numbers are the ones on the disk.
+;; Also: SECT (DOS33)
+FoundSector = AddressField + 1
+
+;; The track number in the address field just read.
 ;;
-;; The DCT (device characteristics table) describes the drive. RWTS reads three of its four bytes: byte 01,
-;; whose bit 0 set means each track is two half-track steps (1 for the Disk II), and bytes 02 and 03, the
-;; motor's start-up count ($D8EF for the Disk II). Byte 00, the device type, 0, is not read.
-;;
-;; Several values live in screen holes, at the address given plus the slot (DRV1TRK, DRV2TRK) or at slot 0's
-;; byte (the counters); see RwtsEquates.asm.
+;; <SeekHalfTrack> also borrows the byte to hold the half-track it seeks to. Apple's DOS equates also call the byte
+;; BOOTSL, a name DOS 3.1 used for the boot slot.
+;; Also: TRACK (DOS33), BOOTSL (DOS33, DOS31)
+FoundTrack = AddressField + 2
 
-;; The start of the relocator's range ASC2 to AEC2: RWTS, the formatter and the patches after it ($BD00-$BFFE).
-ASC2:
+;; The volume number in the address field just read.
+;; Also: VOLUME (DOS33)
+FoundVolume = AddressField + 3
 
-;; Inherit: <Dos33:MOTOROFF>
-MOTOROFF = $C088
-
-;; Inherit: <Dos33:MOTORON>
-MOTORON = $C089
-
-;; Inherit: <Dos33:DRV1EN>
-DRV1EN = $C08A
-
-;; Inherit: <Dos33:DRV2EN>
-;; DOS 3.2's RWTS reads <DRV1EN> first and then this one to select drive 2.
-DRV2EN = $C08B
-
-DRV1TRK = $478                      ;; plus the slot: the half-track drive 1 of that slot's card is on
-DRV2TRK = $4F8                      ;; plus the slot: the half-track drive 2 is on
-
-;; Inherit: <Dos33:IOBPL>
-IOBPL = $48
-
-;; Inherit: <Dos33:IOBPH>
-IOBPH = $49
-
-SLOT = $5F8                         ;; slot * 16 for this call
-
-;; Inherit: <Dos33:PTRSDEST>
-PTRSDEST = $3C
-
-;; Inherit: <Dos33:DEVCTBL>
-DEVCTBL = PTRSDEST
-
-;; Inherit: <Dos33:DRIVNO>
-DRIVNO = $35
-
-;; The motor-on count, <MONTIMEL> and <MONTIMEH>: it counts up to 0 in steps of 100 microseconds.
-;;
-;; DOS 3.2's <RWTS> sets both bytes from DCT bytes 02-03 ($D8EF for the Disk II) before it seeks. If the motor
-;; was off, it then counts the rest up to 0 itself (<MOTOF>); <MSWAIT>, called while seeking, has already added
-;; the seek's time.
-;; See: <MONTIMEL>, <MONTIMEH>, <MSWAIT>, <DEVCTBL>
-MONTIME = $46
-
-;; The sector number in the address field just read, <CSSTV>'s second byte.
-;;
-;; DOS 3.2's RWTS compares it with IOB byte 05 as it is, since its sector numbers are the ones on the disk.
-;; See: <CSSTV>, <TRACK>, <VOLUME>
-SECT = CSSTV+1
-
-;; Inherit: <Dos33:TRACK>
-;; DOS 3.2's <MYSEEK> also borrows it for the half-track it seeks to.
-TRACK = CSSTV+2
-
-;; Inherit: <Dos33:VOLUME>
-VOLUME = CSSTV+3
-
-RECALCNT = $4F8                     ;; recalibrations left (slot 0's DRV2TRK byte)
-RETRYCNT = $578                     ;; address fields, and seeks, left before giving up on the track
+;; The address fields left before RWTS gives up on the track (slot 0's screen-hole byte at $0578).
+;; Also: RETRYCNT (DOS33)
+RetriesLeft = $0578
 
 ;; Reads, writes, seeks or formats as the IOB at A and Y says.
 ;;
-;; If the slot differs from the last call's, it first waits for the old slot's drive to stop: the data latch
-;; changes while a disk turns, so it waits until eight reads in a row see the same value. Then the same test,
-;; once, on this slot tells whether its motor is already on; the answer stays on the stack, in the Z flag, until
-;; after the seek, and a change of drive counts as off. A motor that was off gets its start-up time: MONTIME
-;; starts at the DCT's count and counts up to zero, and the time SEEK spends counts toward it. It also uses the
-;; zero page and screen-hole bytes RWTS's routines use.
-;; In:    A = the IOB's address's high byte, Y = its low byte
-;; Out:   carry = clear on success, with IOB 0D = A (see ALLDONE) and, after a read, the sector in the IOB's buffer
-;; Errors: carry set, IOB 0D = the error: IBWPER, IBVMME, IBDERR or IBRERR (BootLoader32.asm)
-;; Uses:  A, X, Y
-RWTS:
-    sty IOBPL
-    sta IOBPH
-    ldy #1
-    lda (IOBPL),y                   ; the slot
+;; At $BD00 where DOS runs. If the slot differs from the last call's, it first waits for the old slot's drive to
+;; stop: the data latch changes while a disk turns, so it waits until eight reads in a row see the same value.
+;; Then the same test, once, on this slot tells whether its motor is already on; the answer stays on the stack, in
+;; the zero flag, until after the seek, and a change of drive counts as off. A motor that was off gets its start-up
+;; time: <Rwts::MotorCount> starts at the DCT's count and counts up to zero, and the time <DiskII::MoveHead> spends
+;; counts toward it.
+;; In: A = the IOB's address's high byte, Y = its low byte
+;; Out: carry = clear on success, with the IOB's <Iob::RETURN_CODE> = A (see <Rwts::Succeed>) and, after a read,
+;;   the sector in the IOB's buffer
+;; Errors: carry = set, with the IOB's <Iob::RETURN_CODE> = the error: <RWTS_WRITE_PROTECTED>, <RWTS_VOLUME_MISMATCH>,
+;;   <RWTS_DRIVE_ERROR> or <RWTS_READ_ERROR>
+;; Entry:
+;;   TryTrack = carries out the command, with the head on the track
+;;   Succeed = the success exit
+;;   Fail = the failure exit
+;; Also: RWTS (DOS33)
+.proc Rwts
+.assert MASTER || * = $BD00, "RWTS is at $BD00 where DOS runs."
+
+;; The slot times 16 for this call (slot 0's screen-hole byte at $05F8).
+;; Also: SLOT (DOS33)
+SlotTimes16 = $05F8
+
+;; Where the IOB's <Iob::DEVICE_TABLE> and <Iob::BUFFER> are copied (4 bytes): <DctPointer>, then
+;; <SectorBuffer>.
+;; Also: PTRSDEST (DOS33)
+Pointers = DctPointer
+
+;; The motor-on count, <MotorTime> and <MotorTimeHigh>: it counts up to 0 in steps of 100 microseconds.
+;;
+;; DOS 3.2's RWTS sets both bytes from the DCT's <DeviceTable::MOTOR_DELAY>, $D8EF for the Disk II, before it
+;; seeks. If the motor was off, it then counts the rest up to 0 itself (<Rwts::WaitForMotor>); <DiskII::Wait>,
+;; called while seeking, has already added the seek's time.
+;; Also: MONTIME (DOS33)
+MotorCount = MotorTime
+
+;; The recalibrations left (slot 0's screen-hole byte at $04F8, its <Drive2HalfTracks> byte): RWTS sets it to 1, so
+;; that it recalibrates once.
+;; Also: RECALCNT (DOS33)
+RecalibrationsLeft = $04F8
+
+;; The reads in a row that must see the same latch value before a drive counts as stopped.
+LATCH_TESTS = 8
+
+;; The passes of the delay loop, which with the count's step make about 100 cycles, 100 microseconds.
+DELAY_PASSES = $12
+
+;; The address fields read after the first before RWTS gives up on finding the sector: 49 tries in all.
+ADDRESS_TRIES = $30
+
+;; The track RWTS records before it recalibrates: track 96, half-track 192, far enough beyond track 34 that the
+;; seek to track 0 stops the head against the stop whatever its real place.
+RECALIBRATE_TRACK = $60
+
+    ; The caller's IOB and slot.
+    sty IobPointer
+    sta IobPointerHigh
+    ldy #Iob::SLOT_TIMES_16
+    lda (IobPointer),y
     tax
-    sty RECALCNT                    ; one recalibration
-    ldy #$0F
-    cmp (IOBPL),y                   ; the last call's slot
-    beq SAMESLOT
+    sty RecalibrationsLeft          ; Y = 1: one recalibration
+    ldy #Iob::PREVIOUS_SLOT
+    cmp (IobPointer),y
+    beq SameSlot
+
+    ; Another slot: note the new one as the previous, then wait until the old slot's drive has stopped.
     txa
     pha
-    lda (IOBPL),y
+    lda (IobPointer),y
     tax                             ; X = the old slot, to watch
     pla
     pha
-    sta (IOBPL),y                   ; the new slot becomes the last one
-    lda Q7L,x
-STILLON:
-    ldy #$08
-    lda Q6L,x
-NOTSURE:
-    cmp Q6L,x
-    bne STILLON                     ; it changed: still turning
+    sta (IobPointer),y
+    lda ReadMode,x
+;; Waits until the latch reads the same eight times in a row.
+;; Also: STILLON (DOS33)
+WaitForStop:
+    ldy #LATCH_TESTS
+    lda DataLatch,x
+;; Also: NOTSURE (DOS33)
+CompareLatch:
+    cmp DataLatch,x
+    bne WaitForStop                 ; it changed: still turning
     dey
-    bne NOTSURE
+    bne CompareLatch
     pla
     tax
 
-; Is this slot's motor on? The latch is read, and read again a few cycles later: a turning disk changes it.
-SAMESLOT:
-    lda Q7L,x
-    lda Q6L,x
-    lda Q6L,x
+    ; Is this slot's motor on? The latch is read, and read again a few cycles later: a turning disk changes it.
+;; The test of this slot's motor, then the motor on.
+;; Also: SAMESLOT (DOS33)
+SameSlot:
+    lda ReadMode,x
+    lda DataLatch,x
+    lda DataLatch,x
     pha
     pla
-    stx SLOT
-    cmp Q6L,x
-    php                             ; Z set if the motor is off
-    lda MOTORON,x
+    stx SlotTimes16
+    cmp DataLatch,x
+    php                             ; zero set if the motor is off
+    lda MotorOn,x
 
-; IOB bytes 06-09 to PTRSDEST: the DCT's address, then the buffer's in BUF.
-    ldy #6
-PTRMOV:
-    lda (IOBPL),y
-    sta PTRSDEST-6,y
+    ; The IOB's DCT and buffer addresses to Pointers: the DCT's to DctPointer, the buffer's to SectorBuffer.
+    ldy #Iob::DEVICE_TABLE
+;; Also: PTRMOV (DOS33)
+CopyPointers:
+    lda (IobPointer),y
+    sta Pointers - Iob::DEVICE_TABLE,y
     iny
-    cpy #$0A
-    bne PTRMOV
+    cpy #Iob::BUFFER + 2
+    bne CopyPointers
 
-; If the drive isn't the last call's, it is recorded, and the motor counts as off.
-    ldy #2
-    lda (IOBPL),y                   ; the drive
-    ldy #$10
-    cmp (IOBPL),y
-    beq OK
-    sta (IOBPL),y
+    ; If the drive isn't the last call's, it is recorded, and the motor counts as off.
+    ldy #Iob::DRIVE
+    lda (IobPointer),y
+    ldy #Iob::PREVIOUS_DRIVE
+    cmp (IobPointer),y
+    beq SameDrive
+    sta (IobPointer),y
     plp
-    ldy #$00                        ; Z set: off
+    ldy #0                          ; zero set: off
     php
-OK:
-    ror a                           ; drive 1 sets the carry
-    lda DRV1EN,x
-    bcs DRVSEL
-    lda DRV2EN,x
-DRVSEL:
-    ror DRIVNO                      ; bit 7: drive 1
+;; Selects the drive: drive 1 sets the carry.
+;; Also: OK (DOS33)
+SameDrive:
+    ror a
+    lda SelectDrive1,x
+    bcs DriveSelected
+    lda SelectDrive2,x
+;; Also: DRVSEL (DOS33)
+DriveSelected:
+    ror SelectedDrive
 
-; The start-up count, from DCT bytes 2 and 3, then the seek to the IOB's track.
-    ldy #2
-    lda (DEVCTBL),y
-    sta MONTIME
+    ; The start-up count, from the DCT's motor delay, then the seek to the IOB's track, the byte after.
+    ldy #DeviceTable::MOTOR_DELAY
+    lda (DctPointer),y
+    sta MotorCount
     iny
-    lda (DEVCTBL),y
-    sta MONTIME+1
+    lda (DctPointer),y
+    sta MotorCount + 1
     iny
-    lda (IOBPL),y                   ; the track
-    jsr MYSEEK
+.assert Iob::TRACK = DeviceTable::MOTOR_DELAY + 2, "The IOB's track follows the DCT's motor delay's offset."
+    lda (IobPointer),y
+    jsr SeekTrack
     plp
-    bne TRYTRK                      ; the motor was on
+    bne TryTrack                    ; the motor was on
 
-; The motor was off: waits for MONTIME to count up to 0, 100 microseconds a step.
-MOTOF:
-    ldy #$12
-CONWAIT:
+    ; The motor was off: waits for MotorCount to count up to 0, 100 microseconds a step.
+;; Also: MOTOF (DOS33)
+WaitForMotor:
+    ldy #DELAY_PASSES
+;; Also: CONWAIT (DOS33)
+DelayLoop:
     dey
-    bne CONWAIT
-    inc MONTIME
-    bne MOTOF
-    inc MONTIME+1
-    bne MOTOF
+    bne DelayLoop
+    inc MotorCount
+    bne WaitForMotor
+    inc MotorCount + 1
+    bne WaitForMotor
+    ; Falls into TryTrack.
 
-; The command: 0 seeks only, 4 formats, odd reads and even writes. A write's sector is prepared first, while
-; nothing is waiting; the carry, read or write, waits on the stack.
-TRYTRK:
-    ldy #$0C
-    lda (IOBPL),y
-    beq GALLDONE
-    cmp #$04
-    beq FORMDSK
+;; Carries out the IOB's command with the head on the track: 0 seeks only, 4 formats, odd reads and even writes.
+;;
+;; A write's sector is prepared first, while nothing is waiting; the carry, set to read or clear to write, waits on
+;; the stack. A wrong track means a seek and a fresh count of tries.
+;; In: X = slot * 16
+;; Also: TRYTRK (DOS33)
+TryTrack:
+    ldy #Iob::COMMAND
+    lda (IobPointer),y
+    beq SeekOnly
+    cmp #RWTS_FORMAT
+    beq Format
     ror a
     php
-    bcs TRYTRK2
-    jsr PRENIB13
-TRYTRK2:
-    ldy #$30                        ; 48 address fields
-    sty RETRYCNT
-TRYADR:
-    ldx SLOT
-    jsr RDADR13
-    bcc RDRIGHT
-TRYADR2:
-    dec RETRYCNT
-    bpl TRYADR
+    bcs StartTries
+    jsr DiskII::PreNibble
+;; Also: TRYTRK2 (DOS33)
+StartTries:
+    ldy #ADDRESS_TRIES
+    sty RetriesLeft
+;; Also: TRYADR (DOS33)
+TryAddress:
+    ldx SlotTimes16
+    jsr DiskII::ReadAddressField
+    bcc CheckTrack
+;; Also: TRYADR2 (DOS33)
+NextTry:
+    dec RetriesLeft
+    bpl TryAddress
 
-; No good address field in 48 tries: recalibrates. SETTRK records the head at track 48 (half-track 96), so
-; the seek to track 0 steps out far enough to stop against track 0 whatever the head's real place, then it
-; seeks the track again. The second time this happens, it's a drive error.
-RECAL:
-    lda CURTRK
+    ; No good address field in 49 tries: recalibrates. SetTrack records the head at track 96 (half-track 192), so
+    ; the seek to track 0 steps out far enough to stop against track 0 whatever the head's real place, then it
+    ; seeks the track again. The second time this happens, it is a drive error.
+;; Also: RECAL (DOS33)
+Recalibrate:
+    lda CurrentTrack
     pha
-    lda #$60
-    jsr SETTRK
-    dec RECALCNT
-    bne DRVERR
-    lda #$00
-    jsr MYSEEK
+    lda #RECALIBRATE_TRACK
+    jsr SetTrack
+    dec RecalibrationsLeft
+    bne DriveError
+    lda #0
+    jsr SeekTrack
     pla
-RESEEK:
-    jsr MYSEEK
-    jmp TRYTRK2
+;; Also: RESEEK (DOS33)
+SeekAgain:
+    jsr SeekTrack
+    jmp StartTries
 
-; An address field: is the head on the right track? If not, the drive's record of the track is corrected to
-; the one read, and it seeks again, counting the seeks against RETRYCNT too.
-RDRIGHT:
-    ldy TRACK
-    cpy CURTRK
-    beq RTTRK
-    lda CURTRK
+    ; An address field: is the head on the right track? If not, the drive's record of the track is corrected to
+    ; the one read, and it seeks again. SeekAgain goes on to StartTries, which starts the count again, so the DEC
+    ; matters only on the last try: a wrong track found then goes on to recalibrate.
+;; Also: RDRIGHT (DOS33)
+CheckTrack:
+    ldy FoundTrack
+    cpy CurrentTrack
+    beq RightTrack
+    lda CurrentTrack
     pha
     tya
-    jsr SETTRK
+    jsr SetTrack
     pla
-    dec RETRYCNT
-    bpl RESEEK
-    bmi TRYADR2                     ; always: on to recalibrating
-DRVERR:
+    dec RetriesLeft
+    bpl SeekAgain
+    bmi NextTry                     ; always: on to recalibrating
+;; Also: DRVERR (DOS33)
+DriveError:
     pla
-    lda #IBDERR
-JMPTO1:
+    lda #RWTS_DRIVE_ERROR
+;; Drops the read or write flags from the stack and fails with the error in A.
+;; Also: JMPTO1 (DOS33)
+FailWithFlags:
     plp
-    jmp HNDLERR
-GALLDONE:
-    beq ALLDONE                     ; always
-FORMDSK:
-    ldy #3
-    lda (IOBPL),y
-    sta NVOL                        ; the volume to write
-    jmp DSKFORM
+    jmp Fail
+;; Also: GALLDONE (DOS33)
+SeekOnly:
+    beq Succeed                     ; always
+;; Also: FORMDSK (DOS33)
+Format:
+    ldy #Iob::VOLUME
+    lda (IobPointer),y
+    sta FormatVolume                ; the volume to write
+    jmp Formatter::Format
 
-; The right track. The volume found goes to IOB 0E; it must match the one asked for, unless that is 0.
-RTTRK:
-    ldy #3
-    lda (IOBPL),y
+    ; The right track. The volume found goes to the IOB; it must match the one asked for, unless that is 0.
+;; Also: RTTRK (DOS33)
+RightTrack:
+    ldy #Iob::VOLUME
+    lda (IobPointer),y
     pha
-    lda VOLUME
-    ldy #$0E
-    sta (IOBPL),y
+    lda FoundVolume
+    ldy #Iob::VOLUME_FOUND
+    sta (IobPointer),y
     pla
-    beq CORRECTVOL
-    cmp VOLUME
-    beq CORRECTVOL
-    lda #IBVMME
-    bne JMPTO1
+    beq RightVolume
+    cmp FoundVolume
+    beq RightVolume
+    lda #RWTS_VOLUME_MISMATCH
+    bne FailWithFlags               ; always
 
-; The right sector? If not, on to the next address field; after RETRYCNT of them, a read error.
-CORRECTVOL:
-    ldy #5
-    lda SECT
-    cmp (IOBPL),y
-    beq GOTSECT
-    dec RETRYCNT
-    bpl TRYADR
-    lda #IBRERR
-    bne JMPTO1
+    ; The right sector? If not, on to the next address field; after RetriesLeft of them, a read error.
+;; Also: CORRECTVOL (DOS33)
+RightVolume:
+    ldy #Iob::SECTOR
+    lda FoundSector
+    cmp (IobPointer),y
+    beq GotSector
+    dec RetriesLeft
+    bpl TryAddress
+    lda #RWTS_READ_ERROR
+    bne FailWithFlags               ; always
 
-; The sector is under the head: reads or writes its data field.
-GOTSECT:
+    ; The sector is under the head: reads or writes its data field.
+;; Also: GOTSECT (DOS33)
+GotSector:
     plp
-    bcc WRIT
-    jsr READ13
+    bcc Write
+    jsr DiskII::ReadDataField
     php
-    bcs TRYADR2                     ; a bad read: tries again, the carry on the stack again
+    bcs NextTry                     ; a bad read: tries again, the carry on the stack again
     plp
-    jsr POSTNB13
-    ldx SLOT
+    jsr DiskII::PostNibble
+    ldx SlotTimes16
+    ; Falls into Succeed.
 
-;; RWTS's exits: store A in IOB 0D as the return code, turn the motor off and return, with the carry clear
-;; (ALLDONE) or set (HNDLERR).
+;; RWTS's success exit: stores A in the IOB's return code, turns the motor off and returns with the carry clear.
 ;;
-;; `.byte $24` is the opcode of BIT zero page: with the SEC that follows as its operand, it reads byte $38 and
-;; skips the SEC, changing only N, V and Z. ALLDONE stores whatever A holds, which is 0 only for a seek: after a
-;; read it is the sector's last byte, after a write a byte read from the card. The file manager reads IOB 0D
-;; only when the carry is set.
-;; In:    A = the return code, X = slot * 16
-;; Out:   carry = clear at ALLDONE, set at HNDLERR
-;; Uses:  A, Y
-;; Entry: HNDLERR = the error exit
-ALLDONE:
+;; `.byte $24` is the opcode of `bit` zero page: with the `sec` that follows as its operand, it reads byte $38 and
+;; skips the `sec`, changing only the negative, overflow and zero flags. It stores whatever A holds: 0 for a seek;
+;; after a read the sector's last byte, after a write a byte read from the card. The file
+;; manager reads the return code only when the carry is set. The formatter ends here too.
+;; In: A = the return code, X = slot * 16
+;; Out: carry = clear
+;; Also: ALLDONE (DOS33)
+Succeed:
     clc
-    .byte $24                       ; BIT $38: skips the SEC
-HNDLERR:
+    .byte $24                       ; bit $38: skips the sec
+;; RWTS's failure exit: stores the error in the IOB's return code, turns the motor off and returns with the carry
+;; set.
+;; In: A = the error, X = slot * 16
+;; Out: carry = set
+;; Also: HNDLERR (DOS33)
+Fail:
     sec
-    ldy #$0D
-    sta (IOBPL),y
-    lda MOTOROFF,x
+    ldy #Iob::RETURN_CODE
+    sta (IobPointer),y
+    lda MotorOff,x
     rts
-WRIT:
-    jsr WRITE13
-    bcc ALLDONE
-    lda #IBWPER
-    bcs HNDLERR                     ; always
-
-;; Seeks the drive in DRIVNO to track A, for a drive whose DCT says a track is one step or two.
-;;
-;; With two half-tracks to a track (the Disk II), the track is doubled for SEEK and CURTRK halved afterwards,
-;; so that RWTS can compare it with the track an address field gives. It also uses SEEK's variables.
-;; In:    A = the track, X = slot * 16, DEVCTBL, DRIVNO
-;; Out:   CURTRK = the track
-;; Uses:  A, Y
-;; Keeps: X
-MYSEEK:
-    pha
-    ldy #$01
-    lda (DEVCTBL),y
-    ror a                           ; bit 0 of DCT byte 1: two steps a track
-    pla
-    bcc MYSEEK2
-    asl a
-    jsr MYSEEK2
-    lsr CURTRK
-    rts
-
-;; Seeks to half-track A, keeping a record of each drive's place. All four phases go off first. The drive's
-;; record, DRV1TRK or DRV2TRK plus the slot, becomes CURTRK for SEEK and then the new half-track.
-;;
-;; It also uses SEEK's variables.
-;; In:    A = the half-track, X = slot * 16, DRIVNO
-;; Uses:  A, Y, TRACK
-;; Keeps: X
-MYSEEK2:
-    sta TRACK                       ; held in the address field's byte while the phases go off
-    lda PHASEOFF,x
-    lda PHASEOFF+2,x
-    lda PHASEOFF+4,x
-    lda PHASEOFF+6,x
-    jsr XTOY
-    lda DRV1TRK,y
-    bit DRIVNO
-    bmi WASD0
-    lda DRV2TRK,y
-WASD0:
-    sta CURTRK
-    lda TRACK
-    bit DRIVNO
-    bmi ISDRV1
-    sta DRV2TRK,y
-    bpl GOSEEK                      ; always
-ISDRV1:
-    sta DRV1TRK,y
-GOSEEK:
-    jmp SEEK
-
-;; Gives the slot number: slot * 16 shifted right four places.
-;; In:    X = slot * 16
-;; Out:   A = Y = the slot
-;; Keeps: X
-XTOY:
-    txa
-    lsr a
-    lsr a
-    lsr a
-    lsr a
-    tay
-    rts
-
-;; Records the drive in the IOB as being on track A, without moving it: the half-track, track * 2, goes in its
-;; DRV1TRK or DRV2TRK byte.
-;; In:    A = the track, X = slot * 16
-;; Out:   DRIVNO = the IOB's drive
-;; Uses:  A, Y
-;; Keeps: X
-SETTRK:
-    pha
-    ldy #$02
-    lda (IOBPL),y
-    ror a
-    ror DRIVNO
-    jsr XTOY
-    pla
-    asl a
-    bit DRIVNO
-    bmi ONDRV1
-    sta DRV2TRK,y
-    bpl SETRTS                      ; always
-ONDRV1:
-    sta DRV1TRK,y
-SETRTS:
-    rts
+;; Writes the data field, failing if the disk is write-protected.
+;; Also: WRIT (DOS33)
+Write:
+    jsr DiskII::WriteDataField
+    bcc Succeed
+    lda #RWTS_WRITE_PROTECTED
+    bcs Fail                        ; always
+.endproc

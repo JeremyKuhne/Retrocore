@@ -21,6 +21,7 @@ public sealed class AssemblyResult
         Sections = Array.AsReadOnly(image.Sections);
         Symbols = new ReadOnlyDictionary<string, long>(image.Symbols);
         Exports = new ReadOnlyDictionary<string, long>(image.Exports);
+        HistoricalNames = HistoricalNamesOf(image);
         Files = image.Files is { } files ? new ReadOnlyDictionary<string, ReadOnlyMemory<byte>>(files) : EmptyFiles;
         SymbolAliases = image.Project.SymbolAliases is { } aliases
             ? new ReadOnlyDictionary<string, string>(new Dictionary<string, string>(aliases, StringComparer.Ordinal))
@@ -41,6 +42,8 @@ public sealed class AssemblyResult
 
         SymbolDefinitions = Array.AsReadOnly(symbols);
         Diagnostics = [];
+        Information = image.Information is { } information ? information.AsReadOnly() : [];
+        Usings = image.Usings is { } usings ? usings.AsReadOnly() : [];
         // Copy final values rather than retaining editable nodes or pass state for later model edits to change.
         AssemblySourceMapEntry[] mappings = new AssemblySourceMapEntry[image.StatementCount];
         for (int index = 0; index < mappings.Length; index++)
@@ -63,14 +66,30 @@ public sealed class AssemblyResult
     internal AssemblyResult(AssemblyDiagnostic[] diagnostics)
     {
         Diagnostics = Array.AsReadOnly(diagnostics);
+        Information = [];
+        Usings = [];
         Sections = Array.AsReadOnly(Array.Empty<AssemblySection>());
         SourceMap = Array.AsReadOnly(Array.Empty<AssemblySourceMapEntry>());
         Symbols = new ReadOnlyDictionary<string, long>(new Dictionary<string, long>());
         Exports = Symbols;
+        HistoricalNames = EmptyHistoricalNames;
         SymbolDefinitions = Array.AsReadOnly(Array.Empty<AssemblySymbol>());
         Files = EmptyFiles;
         SymbolAliases = EmptyAliases;
     }
+
+    /// <summary>
+    ///  Gets the lines conditional assembly skipped in each file the assembly opened, also when it failed; null for a
+    ///  project not made by parsing.
+    /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   Branches are chosen while sources are expanded, so this is the expansion's report even when assembly
+    ///   failed later; see <see cref="AssemblySkippedLines"/> for what an expansion error leaves undecided. A parsed
+    ///   project whose statements were edited before assembling keeps the report of the source it was parsed from.
+    ///  </para>
+    /// </remarks>
+    public AssemblySkippedLines? SkippedLines { get; internal init; }
 
     /// <summary>
     ///  Gets whether valid bytes were emitted.
@@ -98,6 +117,52 @@ public sealed class AssemblyResult
     public IReadOnlyDictionary<string, long> Exports { get; }
 
     /// <summary>
+    ///  Gets the definitions that the historical names in <c>;; Also:</c> sections reach, by historical name, each
+    ///  with the value the name has; a name two definitions give is not here.
+    /// </summary>
+    public IReadOnlyDictionary<string, AssemblySymbol> HistoricalNames { get; }
+
+    /// <summary>
+    ///  Gets the value of every name code reaches: each symbol by its name, and each name in
+    ///  <see cref="HistoricalNames"/> that no symbol has, as code resolves them.
+    /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   A lookup by a definition's old name keeps working when the definition is renamed and keeps the old name in its
+    ///   <c>;; Also:</c> section. A name that is neither a symbol nor an unambiguous historical name is not here.
+    ///  </para>
+    /// </remarks>
+    public IReadOnlyDictionary<string, long> SymbolsWithHistoricalNames =>
+        _symbolsWithHistoricalNames ??= SymbolsWithHistoricalNamesOf(Symbols, HistoricalNames);
+
+    private IReadOnlyDictionary<string, long>? _symbolsWithHistoricalNames;
+
+    private static IReadOnlyDictionary<string, long> SymbolsWithHistoricalNamesOf(
+        IReadOnlyDictionary<string, long> symbols,
+        IReadOnlyDictionary<string, AssemblySymbol> historical)
+    {
+        if (historical.Count == 0) { return symbols; }
+        Dictionary<string, long> names = [with(StringComparer.Ordinal)];
+        foreach (KeyValuePair<string, long> symbol in symbols) { names.Add(symbol.Key, symbol.Value); }
+
+        // Code reaches an old name only where no symbol has it.
+        foreach (KeyValuePair<string, AssemblySymbol> name in historical.Where(name => !names.ContainsKey(name.Key)))
+        {
+            names.Add(name.Key, name.Value.Value);
+        }
+
+        return new ReadOnlyDictionary<string, long>(names);
+    }
+
+    private static IReadOnlyDictionary<string, AssemblySymbol> EmptyHistoricalNames { get; } =
+        new ReadOnlyDictionary<string, AssemblySymbol>(new Dictionary<string, AssemblySymbol>());
+
+    private static IReadOnlyDictionary<string, AssemblySymbol> HistoricalNamesOf(AssemblyImage image) =>
+        image.HistoricalNames is null
+            ? EmptyHistoricalNames
+            : new ReadOnlyDictionary<string, AssemblySymbol>(image.HistoricalNames);
+
+    /// <summary>
     ///  Gets immutable output/source mappings.
     /// </summary>
     public IReadOnlyList<AssemblySourceMapEntry> SourceMap { get; }
@@ -106,6 +171,17 @@ public sealed class AssemblyResult
     ///  Gets assembly errors.
     /// </summary>
     public IReadOnlyList<AssemblyDiagnostic> Diagnostics { get; }
+
+    /// <summary>
+    ///  Gets notes about a successful assembly that are not errors, such as a <c>.using</c> whose scopes give the
+    ///  code no name, which an editor shows as unnecessary.
+    /// </summary>
+    public IReadOnlyList<AssemblyDiagnostic> Information { get; }
+
+    /// <summary>
+    ///  Gets the <c>.using</c> directives a successful assembly took, so documentation follows the same ones.
+    /// </summary>
+    public IReadOnlyList<AssemblyUsing> Usings { get; }
 
     private static IReadOnlyDictionary<string, ReadOnlyMemory<byte>> EmptyFiles { get; } =
         new ReadOnlyDictionary<string, ReadOnlyMemory<byte>>(new Dictionary<string, ReadOnlyMemory<byte>>());

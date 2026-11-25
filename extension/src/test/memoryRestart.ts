@@ -6,6 +6,7 @@ import * as assert from "node:assert/strict";
 import * as path from "node:path";
 import * as vscode from "vscode";
 import { openMemory } from "../memory";
+import { untilStopShown } from "./stops";
 
 /** The Retrocore Memory tabs open, each as its title and the session its URI names. */
 function memoryTabs(): string[] {
@@ -49,6 +50,7 @@ export async function testMemoryRestart(workspace: vscode.WorkspaceFolder): Prom
         assert.ok(await until(() => ready === 1, 15000), "the session starts");
         const session = vscode.debug.activeDebugSession;
         if (session === undefined) throw new Error("VS Code did not create the session.");
+        await untilStopShown(session);
         await openMemory(session, "0x4000");
         const open = [`Memory $4000 @${session.id}`];
         assert.deepEqual(memoryTabs(), open);
@@ -57,8 +59,10 @@ export async function testMemoryRestart(workspace: vscode.WorkspaceFolder): Prom
         assert.ok(await until(() => ready === 2, 15000), "the session restarts");
         assert.equal(vscode.debug.activeDebugSession?.id, session.id, "a restart keeps the session's id");
         assert.deepEqual(memoryTabs(), open, "the editor stays open");
-        const state = await vscode.commands.executeCommand<{ ended: boolean; cursor: number }>("retrocore.memory.test", [{ goto: 0x4001 }]);
+        let state = await vscode.commands.executeCommand<{ ended: boolean; cursor: number; label?: string }>("retrocore.memory.test", [{ goto: 0x4001 }]);
         assert.deepEqual([state.ended, state.cursor], [false, 0x4001], "and reads the restarted machine");
+        state = await vscode.commands.executeCommand<{ ended: boolean; cursor: number; label?: string }>("retrocore.memory.test", [{ goto: 0x7002 }]);
+        assert.equal(state.label, "START+2", "the program's labels name its bytes");
 
         await vscode.commands.executeCommand("workbench.action.debug.stop");
         assert.ok(await until(() => memoryTabs().length === 0, 10000), "stopping closes the editor: " + JSON.stringify(memoryTabs()));
@@ -77,6 +81,7 @@ export async function testMemoryRestart(workspace: vscode.WorkspaceFolder): Prom
         assert.ok(await until(() => ready === 3, 20000), "the IIe starts");
         const apple = vscode.debug.activeDebugSession;
         if (apple === undefined) throw new Error("VS Code did not create the IIe session.");
+        await untilStopShown(apple);
         await openMemory(apple, "0x0400");
         assert.deepEqual(memoryTabs(), [`Memory $0400 @${apple.id}`]);
         await vscode.commands.executeCommand("retrocore.memory.test", [{ goto: 0x0410 }, { space: "aux" }]);

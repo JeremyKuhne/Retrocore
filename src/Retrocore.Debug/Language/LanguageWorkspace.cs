@@ -13,16 +13,13 @@ namespace Retrocore.Debug.Language;
 /// <remarks>
 ///  <para>
 ///   Each file is assembled as a root unless a root already assembled includes it (or, for a MACRO-10 base,
-///   an overlay beside it names it), in which case the root is assembled instead. Open documents override disk
-///   for every include.
+///   an overlay names it), in which case the root is assembled instead. Open documents override disk for every
+///   include.
 ///  </para>
 /// </remarks>
 internal sealed partial class LanguageWorkspace
 {
     private static readonly TimeSpan s_settle = TimeSpan.FromMilliseconds(250);
-
-    // The longest a request waits for a file's first assembly.
-    private static readonly TimeSpan s_firstAnalysis = TimeSpan.FromSeconds(10);
 
     private readonly ILanguageClient _server;
     private readonly ConcurrentDictionary<string, string> _open = new(StringComparer.OrdinalIgnoreCase);
@@ -31,22 +28,44 @@ internal sealed partial class LanguageWorkspace
     private readonly ConcurrentDictionary<string, string> _owners = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _pending = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, HashSet<string>> _published = new(StringComparer.OrdinalIgnoreCase);
-    private readonly List<SourceAnalysis> _sdk = [];
+    private readonly SdkIndex _sdk;
+    private volatile (string Folder, HashSet<string> Words)[] _unlinkedWords = [];
 
     // Set once the SDK's ROM sources are indexed; links to other modules resolve only after that.
     private volatile bool _sdkIndexed;
 
-    // Requests waiting for a root's first assembly, completed when it is stored.
+    // Each root's latest scheduled analysis, from when it is scheduled until it ends: stored, failed, skipped, or
+    // replaced by a newer one, which then takes its place.
+    private readonly ConcurrentDictionary<string, CancellationTokenSource> _inFlight = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Lock _scheduling = new();
+
+    // Requests waiting on a root, released each time an analysis of it is stored and when its latest attempt ends.
     private readonly ConcurrentDictionary<string, TaskCompletionSource> _assembled = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
-    ///  Creates the workspace and starts indexing the SDK's ROM sources.
+    ///  Creates the workspace and starts indexing the SDK's ROM sources, unless another workspace already has.
     /// </summary>
     /// <param name="server">The connection, for publishing diagnostics.</param>
     public LanguageWorkspace(ILanguageClient server)
     {
         _server = server;
-        _ = Task.Run(IndexSdk);
+        _sdk = SdkIndex.For(SdkModules.RomDirectory);
+        // A failed index leaves the documentation checks off, because missing modules would make every link to them
+        // look broken. The failure is reported here, so it is observed.
+        _ = _sdk.Completion.ContinueWith(
+            indexing =>
+            {
+                if (indexing.Exception is { } failure)
+                {
+                    Console.Error.WriteLine($"The SDK's ROM sources could not be indexed: {failure.GetBaseException()}");
+                    return;
+                }
+
+                SdkIndexed();
+            },
+            CancellationToken.None,
+            TaskContinuationOptions.None,
+            TaskScheduler.Default);
     }
 
     /// <summary>
@@ -105,6 +124,40 @@ internal sealed partial class LanguageWorkspace
     }
 
     /// <summary>
+    ///  Updates the configured prose words and rechecks the open sources.
+    /// </summary>
+    /// <param name="common">User and workspace words.</param>
+    /// <param name="folders">Words for each workspace folder, including its user and workspace words.</param>
+    internal void SetUnlinkedWords(HashSet<string> common, IReadOnlyList<(string Folder, HashSet<string> Words)> folders)
+    {
+        _unlinkedWords = [("", common), .. folders];
+        foreach (string root in _analyses.Keys.Concat(_pending.Keys).Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            Schedule(root);
+        }
+    }
+
+    private bool IgnoreUnlinkedName(string path, string name)
+    {
+        (string Folder, HashSet<string> Words)[] words = _unlinkedWords;
+        string full = Path.GetFullPath(path);
+        (string Folder, HashSet<string> Words)? closest = null;
+        foreach ((string folder, HashSet<string> entries) in words)
+        {
+            string prefix = Path.EndsInDirectorySeparator(folder) ? folder : folder + Path.DirectorySeparatorChar;
+            if ((folder.Length == 0
+                    || full.Equals(folder, LaunchMedia.PathComparison)
+                    || full.StartsWith(prefix, LaunchMedia.PathComparison))
+                && (closest is null || folder.Length > closest.Value.Folder.Length))
+            {
+                closest = (folder, entries);
+            }
+        }
+
+        return closest?.Words.Contains(name) == true;
+    }
+
+    /// <summary>
     ///  Gets the analysis a file belongs to, preferring one whose definitions are complete.
     /// </summary>
     /// <param name="path">The full path.</param>
@@ -125,54 +178,65 @@ internal sealed partial class LanguageWorkspace
     ///   For requests whose empty answer a client keeps, such as VS Code's outline: it asks for a document's
     ///   symbols as the document opens, and asks again only when the document changes.
     ///  </para>
+    ///  <para>
+    ///   The wait has no fixed limit: a large root, such as AppleSoft's, takes seconds on a slow or busy machine, and
+    ///   an answer given up early stays empty though the analysis goes on. It lasts while an analysis of the root is
+    ///   scheduled or running, and ends when one is stored or the latest attempt ends without one, as when it fails
+    ///   or the file is gone; with nothing scheduled, it answers at once.
+    ///  </para>
     /// </remarks>
     /// <param name="path">The full path.</param>
     /// <param name="cancellation">Cancels the wait.</param>
-    /// <returns>The analysis, or null when none arrives in time.</returns>
+    /// <returns>The analysis, or null when the file has none and none is coming.</returns>
     internal async Task<SourceAnalysis?> AnalysisOfAsync(string path, CancellationToken cancellation)
     {
-        if (AnalysisOf(path) is { } analysis) { return analysis; }
-        TaskCompletionSource assembled = _assembled.GetOrAdd(
-            RootOf(path),
-            _ => new(TaskCreationOptions.RunContinuationsAsynchronously));
-
-        // The assembly may have finished between the first look and registering the wait.
-        if (AnalysisOf(path) is { } finished) { return finished; }
-        try
+        string root = RootOf(path);
+        while (true)
         {
-            await assembled.Task.WaitAsync(s_firstAnalysis, cancellation).ConfigureAwait(continueOnCapturedContext: false);
-        }
-        catch (TimeoutException)
-        {
-            // Answer with what there is.
-        }
+            if (AnalysisOf(path) is { } analysis) { return analysis; }
+            TaskCompletionSource released = Released(root);
 
-        return AnalysisOf(path);
+            // The assembly may have finished between the first look and registering the wait.
+            if (AnalysisOf(path) is { } finished) { return finished; }
+            if (!_inFlight.ContainsKey(root)) { return null; }
+            await released.Task.WaitAsync(cancellation).ConfigureAwait(continueOnCapturedContext: false);
+        }
     }
+
+    /// <summary>
+    ///  Waits until no analysis of a file's root is scheduled or running: every edit made so far is analyzed, or its
+    ///  attempt has ended.
+    /// </summary>
+    /// <param name="path">The full path.</param>
+    /// <param name="cancellation">Cancels the wait.</param>
+    /// <returns>A task that completes when the root is idle.</returns>
+    internal async Task IdleAsync(string path, CancellationToken cancellation)
+    {
+        string root = RootOf(path);
+        while (true)
+        {
+            TaskCompletionSource released = Released(root);
+            if (!_inFlight.ContainsKey(root)) { return; }
+            await released.Task.WaitAsync(cancellation).ConfigureAwait(continueOnCapturedContext: false);
+        }
+    }
+
+    // The task Release completes next for a root. A waiter takes it before checking whether an attempt is in flight,
+    // and an attempt leaves _inFlight before it releases, so a waiter that saw one in flight is released.
+    private TaskCompletionSource Released(string root) =>
+        _assembled.GetOrAdd(root, _ => new(TaskCreationOptions.RunContinuationsAsynchronously));
 
     /// <summary>
     ///  Gets every analysis, including the SDK's ROM sources, for workspace-wide search.
     /// </summary>
     /// <returns>The analyses.</returns>
-    internal IEnumerable<SourceAnalysis> AllAnalyses()
-    {
-        lock (_sdk)
-        {
-            return [.. _analyses.Values, .. _sdk];
-        }
-    }
+    internal IEnumerable<SourceAnalysis> AllAnalyses() => [.. _analyses.Values, .. _sdk.Analyses()];
 
     /// <summary>
     ///  Gets the analyses of the SDK's ROM sources.
     /// </summary>
     /// <returns>The analyses.</returns>
-    internal IEnumerable<SourceAnalysis> SdkAnalyses()
-    {
-        lock (_sdk)
-        {
-            return [.. _sdk];
-        }
-    }
+    internal IEnumerable<SourceAnalysis> SdkAnalyses() => _sdk.Analyses();
 
     /// <summary>
     ///  Gets a file's lines: the open text, or disk.
@@ -191,8 +255,17 @@ internal sealed partial class LanguageWorkspace
     private void Schedule(string root)
     {
         CancellationTokenSource next = new();
-        if (_pending.TryGetValue(root, out CancellationTokenSource? previous)) { previous.Cancel(); }
-        _pending[root] = next;
+
+        // Edits and the reanalysis after the SDK is indexed schedule from different threads; one at a time, each
+        // replaces the one before. The new attempt is in flight before the old one is canceled, so the old one's end,
+        // which may run inline in Cancel, does not release the waiters.
+        lock (_scheduling)
+        {
+            _inFlight[root] = next;
+            if (_pending.TryGetValue(root, out CancellationTokenSource? previous)) { previous.Cancel(); }
+            _pending[root] = next;
+        }
+
         _ = Task.Run(async () =>
         {
             try
@@ -204,7 +277,18 @@ internal sealed partial class LanguageWorkspace
             {
                 // A newer edit replaced this one.
             }
+            finally
+            {
+                // Waiters go on with what there is once the latest attempt ends, whether or not it stored one.
+                if (_inFlight.TryRemove(KeyValuePair.Create(root, next))) { Release(root); }
+            }
         });
+    }
+
+    // Lets the requests waiting on a root look again.
+    private void Release(string root)
+    {
+        if (_assembled.TryRemove(root, out TaskCompletionSource? waiting)) { waiting.TrySetResult(); }
     }
 
     private void Analyze(string root, CancellationToken cancellation)
@@ -215,7 +299,7 @@ internal sealed partial class LanguageWorkspace
         _analyses[root] = analysis;
         if (analysis.Result.Success) { _lastGood[root] = analysis; }
         foreach (string member in analysis.Members) { _owners[member] = root; }
-        if (_assembled.TryRemove(root, out TaskCompletionSource? waiting)) { waiting.TrySetResult(); }
+        Release(root);
         Publish(analysis);
     }
 
@@ -230,7 +314,15 @@ internal sealed partial class LanguageWorkspace
             list.Add(item);
         }
 
-        // Before the SDK is indexed, every link to another module would look broken; IndexSdk checks again.
+        // Notes that are not errors, such as a .using nothing needs, show as unnecessary code.
+        foreach (AssemblyDiagnostic note in analysis.Result.Information)
+        {
+            (string path, Diagnostic item) = Convert(note, analysis.Root);
+            if (!byFile.TryGetValue(path, out List<Diagnostic>? list)) { byFile[path] = list = []; }
+            list.Add(item.Unnecessary());
+        }
+
+        // Before the SDK is indexed, every link to another module would look broken; SdkIndexed checks again.
         IEnumerable<KeyValuePair<string, List<Diagnostic>>> documentationDiagnostics = _sdkIndexed
             ? DocumentationDiagnostics(analysis)
             : [];
@@ -302,26 +394,8 @@ internal sealed partial class LanguageWorkspace
         return new LspRange(line, start, line, Math.Max(length, start));
     }
 
-    private void IndexSdk()
+    private void SdkIndexed()
     {
-        string roms = SdkModules.RomDirectory;
-        IEnumerable<string> roots = Directory.Exists(roms) ? SourceIncludes.Roots(roms) : [];
-        foreach (string root in roots)
-        {
-            try
-            {
-                SourceAnalysis analysis = SourceAnalysis.Assemble(root, _ => null);
-
-                // Parse its documentation now, so the first hover or completion that reaches the SDK isn't slowed.
-                _ = analysis.Documentation;
-                lock (_sdk) { _sdk.Add(analysis); }
-            }
-            catch (IOException)
-            {
-                // An unreadable SDK file only means fewer search results.
-            }
-        }
-
         // Check the documentation of what was analyzed while the index was building.
         _sdkIndexed = true;
         foreach (string root in _pending.Keys) { Schedule(root); }

@@ -31,7 +31,7 @@ namespace Retrocore.Debug;
 ///   ranges it left as bytes, which are where hints help.
 ///  </para>
 /// </remarks>
-internal static class DisassembleCommand
+internal static partial class DisassembleCommand
 {
     private const string Usage = """
         Usage: --disassemble input.bin output.asm --origin $0800
@@ -129,15 +129,21 @@ internal static class DisassembleCommand
 
         Dictionary<string, string> files = [with(StringComparer.Ordinal)];
         HashSet<string> hinted = new(program.Hints.Names.Values, StringComparer.Ordinal);
+
+        // The analysis takes only plain names, so a name in a scope, such as LowRes::Plot, goes in as a stand-in
+        // that the written source turns back into the qualified name.
+        ScopedNames scoped = new(hinted.Concat(machine.Values.Select(symbol => symbol.Name)));
         foreach (ushort target in found.References.Select(reference => reference.Target).Distinct())
         {
             if (program.Contains(target) || program.Hints.Names.ContainsKey(target)) { continue; }
             if (!machine.TryGetValue(target, out var symbol) || hinted.Contains(symbol.Name)) { continue; }
-            names[target] = symbol.Name;
-            files[symbol.Name] = symbol.File;
+            string name = ScopedNames.IsScoped(symbol.Name) ? scoped.StandInFor(symbol.Name) : symbol.Name;
+
+            names[target] = name;
+            files[name] = symbol.File;
         }
 
-        // A name the analysis refuses as a symbol, such as one that is also a mnemonic, is left out.
+        // A name the analysis refuses as a symbol, one that is not a plain identifier or is another's, is left out.
         DisassemblyResult result = Disassembler.Analyze(program.Project(names));
         ushort[] refused = Refused(result, names);
         while (refused.Length > 0)
@@ -158,7 +164,7 @@ internal static class DisassembleCommand
                 : $"\nNames outside the program are the SDK sources' for the {named.DisplayName()}"
                     + (dos == "none" ? "." : $" and DOS {dos}."));
 
-        string source = Arrange(result.ExportSource(), heading, files, hinted);
+        string source = Arrange(result.ExportSource(), heading, files, hinted, scoped);
         File.WriteAllText(output, source);
         string? difference = Difference(source, output, program);
         Report(result, output, names.Count, difference);
@@ -174,8 +180,23 @@ internal static class DisassembleCommand
             .Select(diagnostic => diagnostic.Address)
             .Where(names.ContainsKey)];
 
-    // The exported source under a heading, its equates grouped by the file that names them.
-    private static string Arrange(string exported, string heading, Dictionary<string, string> files, HashSet<string> hinted)
+    /// <summary>
+    ///  Arranges the exported source under a heading, its equates grouped by the file that names them. A scoped
+    ///  name's stand-in becomes its qualified name in the code, and its equate is defined inside its scopes, each
+    ///  scope opened once in a group and continued in a later one.
+    /// </summary>
+    /// <param name="exported">The analysis's exported source.</param>
+    /// <param name="heading">The heading's lines.</param>
+    /// <param name="files">For each machine name or stand-in, the file that names it.</param>
+    /// <param name="hinted">The hints' names.</param>
+    /// <param name="scoped">The stand-ins and the qualified names they stand for.</param>
+    /// <returns>The source to write.</returns>
+    internal static string Arrange(
+        string exported,
+        string heading,
+        Dictionary<string, string> files,
+        HashSet<string> hinted,
+        ScopedNames scoped)
     {
         string[] lines = exported.Split('\n');
         int code = Array.FindIndex(lines, line => line.StartsWith(".org ", StringComparison.Ordinal));
@@ -188,6 +209,7 @@ internal static class DisassembleCommand
             equates.Add((name, line[(equals + 3)..], group));
         }
 
+        HashSet<string> opened = [with(StringComparer.Ordinal)];
         using ValueStringBuilder source = new(exported.Length + 1024, CultureInfo.InvariantCulture);
         foreach (string line in heading.Split('\n')) { source.Append($"; {line}\n"); }
         source.Append($"\n{lines[0]}\n");
@@ -203,16 +225,22 @@ internal static class DisassembleCommand
                 string file => $"\n; From {file}.\n"
             });
 
-            foreach ((string name, string value, _) in group.OrderBy(equate => equate.Value, StringComparer.Ordinal))
+            foreach ((string name, string value, _) in group
+                .Where(equate => !scoped.TryGetQualified(equate.Name, out _))
+                .OrderBy(equate => equate.Value, StringComparer.Ordinal))
             {
                 source.Append($"{name} = {value}\n");
             }
+
+            source.Append(scoped.ScopedEquates(
+                group.Where(equate => scoped.TryGetQualified(equate.Name, out _)).Select(equate => (equate.Name, equate.Value)),
+                opened));
         }
 
         source.Append('\n');
         for (int index = code; index < lines.Length; index++)
         {
-            source.Append(lines[index]);
+            source.Append(scoped.Qualify(lines[index]));
             if (index + 1 < lines.Length) { source.Append('\n'); }
         }
 

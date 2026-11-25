@@ -45,6 +45,11 @@ internal sealed class AssemblyImage
     internal IReadOnlyList<InstructionSet> InstructionSets { get; init; } = [];
 
     /// <summary>
+    ///  Gets the definitions the historical names that <c>Also:</c> sections give reach, or null when there are none.
+    /// </summary>
+    internal Dictionary<string, AssemblySymbol>? HistoricalNames { get; init; }
+
+    /// <summary>
     ///  Gets all resolved labels and constants.
     /// </summary>
     internal Dictionary<string, long> Symbols { get; }
@@ -73,6 +78,16 @@ internal sealed class AssemblyImage
     ///  Gets or sets resolved symbol names exported through plain public aliases.
     /// </summary>
     internal HashSet<string>? SymbolExports { get; set; }
+
+    /// <summary>
+    ///  Gets or sets notes about the source that are not errors, such as an unnecessary <c>.using</c>.
+    /// </summary>
+    internal List<AssemblyDiagnostic>? Information { get; set; }
+
+    /// <summary>
+    ///  Gets or sets the <c>.using</c> directives the assembly took.
+    /// </summary>
+    internal List<AssemblyUsing>? Usings { get; set; }
 
     /// <summary>
     ///  Gets the assembled sections in declaration order, the options' section first.

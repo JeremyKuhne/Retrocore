@@ -47,6 +47,11 @@ public sealed class AssemblyProject
     internal IReadOnlyList<AssemblySectionDefinition>? DeclaredSections => _sectionDefinitions;
 
     /// <summary>
+    ///  Gets or sets the lines the preprocessing that made this project skipped; null for a project built by hand.
+    /// </summary>
+    internal AssemblySkippedLines? SkippedLines { get; set; }
+
+    /// <summary>
     ///  Gets or sets the linker's implicit starting segment.
     /// </summary>
     internal string? InitialSection { get; set; }
@@ -75,4 +80,23 @@ public sealed class AssemblyProject
     ///  Gets or sets the in-memory Merlin output name.
     /// </summary>
     internal string? MerlinOutput { get; set; }
+
+    /// <summary>
+    ///  Gets or sets, for each <c>.using</c> statement, the operands whose scopes gave a conditional a name while
+    ///  preprocessing, so the resolver does not report them as unnecessary.
+    /// </summary>
+    internal Dictionary<AssemblyStatement, HashSet<int>>? UsedUsings { get; set; }
+
+    /// <summary>
+    ///  Gets or sets where each source file's statements start and end, as the preprocessor read them: a top-level
+    ///  source or one <c>.include</c> of a file, by the index of its first statement and of the one after its last.
+    ///  A <c>.using</c> at a file's level ends with its file.
+    /// </summary>
+    internal List<(int Index, bool Enter)>? FileMarks { get; set; }
+
+    /// <summary>
+    ///  Gets or sets the statements as they were when <see cref="FileMarks"/> was recorded, so that marks can follow
+    ///  their statements when statements are added or removed afterward.
+    /// </summary>
+    internal AssemblyStatement[]? FileMarkStatements { get; set; }
 }

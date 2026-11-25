@@ -1,179 +1,293 @@
-;; INTEGER BASIC: THE SYNTAX TABLE ($EC00-$EDFF)
+; retrocore: style=strict
+;; Integer BASIC: the syntax table
 ;;
-;; Integer BASIC's grammar, which the tokenizer (Tokenizer.asm) matches each typed line against, and from which
-;; the keywords get their tokens. It fills two pages, and each rule is a list of alternatives, each a list of
-;; items; the item encoding is explained in Tokenizer.asm and below. SYNTABLNDX (Operators.asm) gives the address
-;; where each of the 32 rules starts.
+;; Integer BASIC's grammar, which the tokenizer (Tokenizer.asm) matches each typed line against, and from which the
+;; keywords get their tokens. It fills the two pages at $EC00-$EDFF, and each rule is a list of alternatives, each a
+;; list of items; the items are the ITEM_ codes below, and <RuleStarts> (Operators.asm) gives the address where each
+;; of the 32 rules starts.
 ;;
 ;; The tokenizer reads a rule downward, from the higher address to the lower. This source lists the table in
-;; address order, so a rule reads from the line where its RULEnn equate stands up toward the top of the file, and a
-;; keyword is written in its usual spelling but stored backward: KEY "LIST" places T, S, I, L at increasing
-;; addresses, so the tokenizer meets L first. Each rule ends where its last alternative ends, and many rules end in
-;; the middle of another rule's bytes, sharing that rule's later alternatives: the statements allowed in immediate
-;; mode (rule SIMMED) are the last alternatives of the statement rule (SSTMT), for example.
+;; address order, so a rule reads from the line where its label stands up toward the top of the file, and a keyword
+;; is written in its usual spelling but stored backward: `Keyword "LIST"` places T, S, I, L at increasing addresses,
+;; so the tokenizer meets L first. Each rule ends where its last alternative ends, and many rules end in the middle
+;; of another rule's bytes, sharing that rule's later alternatives: the statements allowed in immediate mode
+;; (<Syntax::RULE_IMMEDIATE_STATEMENT>) are the last alternatives of the statement rule
+;; (<Syntax::RULE_STATEMENT>), for example.
 ;;
 ;; Tokens. A keyword's token is its place in the table: the number of keywords between it and the top of its page,
-;; plus the first byte of the page ($50 here, 0 at $ED00). Each place where a word appears gives it a different
-;; token, which is how the interpreter knows, for instance, which of the dozen commas it has: the comma between
-;; INPUT's variables is $27, the comma of PLOT $68. The tokens of THEN, TO, STEP, AND, OR, MOD and AT at the
-;; bottom of the first page are $85 and up: these words cannot be part of a variable's name, and matching one there
-;; ends the name.
+;; counting itself, plus the first byte of the page (<Syntax::FIRST_PAGE_TOKEN_BASE> at $EC00,
+;; <Syntax::SECOND_PAGE_TOKEN_BASE> at $ED00). Each place where a word appears gives it a different token, which is
+;; how the interpreter knows, for instance, which of the dozen commas it has: the comma between INPUT's variables is
+;; $27, the comma of PLOT $68. The tokens of `THEN`, `TO`, `STEP`, `AND`, `OR`, `MOD` and `AT` at the bottom of the
+;; first page are $85 and up: these words cannot be part of a variable's name, and matching one there ends the name.
 ;;
 ;; In the grammar of each rule, given with the rule's number below, a keyword is followed by its token in
-;; parentheses, and the other names are rules or the items LETTER, DIGIT, STRCHAR and REMCHAR; [ ] encloses what may
-;; be left out and { } what may repeat, zero or more times. Alternatives are tried in order and the first
-;; that matches is kept: when an item after a rule's call fails, the tokenizer does not go back into that rule for
-;; another alternative, but tries the caller's next one. The grammars leave out the alternatives a rule reaches only
-;; by running on into another rule's bytes, where no text can match that an earlier alternative did not.
+;; parentheses, a rule is written as its RULE_ name in lower case without the prefix (expression is
+;; <Syntax::RULE_EXPRESSION>), and LETTER, DIGIT, STRING_CHARACTER and REMARK_CHARACTER are the items of those
+;; ITEM_ names; [ ] encloses what may be left out and { } what may repeat, zero or more times. Alternatives are
+;; tried in order and the first that matches is kept: when an item after a rule's call fails, the tokenizer does not
+;; go back into that rule for another alternative, but tries the caller's next one. The grammars leave out the
+;; alternatives a rule reaches only by running on into another rule's bytes, where no text can match that an earlier
+;; alternative did not.
 ;;
 ;; Part of IntegerBasic.asm; it follows Messages.asm, at $EC00.
 
-; The item encoding, as the tokenizer reads it (Tokenizer.asm).
-LAST = $40                          ;; bit 6 of an item: the last item of its alternative
-LETTER = $80                        ;; an item matching any letter, which is copied into the tokens
-DIGIT = $81                         ;; an item matching any digit, which is copied into the tokens
-SYNERR = $00                        ;; an item that is a SYNTAX error: none of the alternatives before it matched
-STRCHAR = $01                       ;; copies one character of a string constant, up to a quote or the line's end
-REMCHAR = $02                       ;; copies one character of a remark, up to the line's end
-ENDLINE = $03                       ;; the end of the match: the tokenizer returns
-AGAIN = $7F                         ;; repeats the item before it while it matches
-AGAIN2 = $7E                        ;; repeats the two items before it while they match
-USE = $00                           ;; calls the rule in the low 5 bits
-USEOPT = $20                        ;; calls a rule; if the item after it fails, the rule has matched without the rest
-USEEND = $40                        ;; calls a rule as the last item of the rule's last alternative
-USEALT = $60                        ;; calls a rule as the last item of an alternative that has more after it
+;; Integer BASIC's grammar: the syntax table, its items and its rules.
+.scope Syntax
+
+; The items, as the tokenizer reads them (Tokenizer.asm).
+
+;; An item that is a SYNTAX error: none of the alternatives before it matched.
+;; Also: SYNERR (UNKN)
+ITEM_SYNTAX_ERROR = $00
+
+;; An item that copies one character of a string constant into the tokens, up to a quote or the line's end.
+;; Also: STRCHAR (UNKN)
+ITEM_STRING_CHARACTER = $01
+
+;; An item that copies one character of a remark into the tokens, up to the line's end.
+;; Also: REMCHAR (UNKN)
+ITEM_REMARK_CHARACTER = $02
+
+;; The end of the match: the tokenizer returns.
+;; Also: ENDLINE (UNKN)
+ITEM_LINE_MATCHED = $03
+
+;; Repeats the two items before it (at the two higher addresses) while they match.
+;;
+;; When a repeated item fails, the item before it decides, as for any failure: a call with
+;; <ITEM_CALL_THEN_OPTIONAL> there lets the rule match.
+;; Also: AGAIN2 (UNKN)
+ITEM_REPEAT_TWO = $7E
+
+;; Repeats the item before it while it matches, as <ITEM_REPEAT_TWO> does.
+;; Also: AGAIN (UNKN)
+ITEM_REPEAT = $7F
+
+;; Bit 7 of an item: a character, which the line's next character must be, after blanks.
+ITEM_CHARACTER = $80
+
+;; What a character item's low 6 bits hold its character less: they hold $A0 to $DF.
+CHARACTER_OFFSET = $A0
+
+;; Bit 6 of an item: the last item of its alternative.
+;;
+;; On a character, it also ends the keyword, and another alternative always follows.
+;; Also: LAST (UNKN)
+ITEM_LAST = $40
+
+;; An item matching any letter, which is copied into the tokens: the character item of a blank.
+;; Also: LETTER (UNKN)
+ITEM_LETTER = ITEM_CHARACTER | (' ' - CHARACTER_OFFSET)
+
+;; An item matching any digit, which is copied into the tokens: the character item of !.
+;; Also: DIGIT (UNKN)
+ITEM_DIGIT = ITEM_CHARACTER | ('!' - CHARACTER_OFFSET)
+
+; The calls of a rule: one of these, ORed with the rule's number. The items $00 to $03 are not calls, so rules 0
+; to 3 can be called only with the last three.
+
+;; A call of a rule, an item that the next item follows.
+;; Also: USE (UNKN)
+ITEM_CALL = $00
+
+;; A call of a rule after which the rest of the alternative is optional: if the item after it fails, the rule has
+;; matched without the rest.
+;; Also: USEOPT (UNKN)
+ITEM_CALL_THEN_OPTIONAL = $20
+
+;; A call of a rule as the last item of the rule's last alternative: if it fails, the rule fails.
+;; Also: USEEND (UNKN)
+ITEM_CALL_ENDING_RULE = ITEM_LAST
+
+;; A call of a rule as the last item of an alternative that has another after it: bit 5, which before the last
+;; item makes the rest optional, here says another alternative follows.
+;; Also: USEALT (UNKN)
+ITEM_CALL_ENDING_ALTERNATIVE = ITEM_LAST | ITEM_CALL_THEN_OPTIONAL
 
 ;; Places a keyword or a punctuation character in the syntax table, stored backward.
 ;;
-;; Each character is stored less $A0, with bit 7 set: the low 6 bits hold $A0-$DF. The last character is stored
-;; first, at the lowest address.
-;; Parameters: text = the keyword
-.macro KEY text
+;; Each character is stored less <Syntax::CHARACTER_OFFSET>, with bit 7 set (<Syntax::ITEM_CHARACTER>). The last
+;; character is stored first, at the lowest address. Earlier versions of this source called it KEY.
+;; Parameters:
+;;   text = the keyword
+.macro Keyword text
     .repeat .strlen(text), I
-    .byte (.strat(text, .strlen(text) - 1 - I) - $A0) | $80
+        .byte (.strat(text, .strlen(text) - 1 - I) - Syntax::CHARACTER_OFFSET) | Syntax::ITEM_CHARACTER
     .endrepeat
 .endmacro
 
-;; Places a keyword, stored backward as <KEY> does, that is the last item of its alternative.
+;; Places a keyword, stored backward as <Keyword> does, that is the last item of its alternative.
 ;;
-;; Its last character, at the lowest address, has bit 6 set (<LAST>).
-;; Parameters: text = the keyword
-.macro KEYEND text
-    .byte (.strat(text, .strlen(text) - 1) - $A0) | $C0
+;; Its last character, at the lowest address, has <Syntax::ITEM_LAST> set. Earlier versions of this source called
+;; it KEYEND.
+;; Parameters:
+;;   text = the keyword
+.macro KeywordEndingAlternative text
+    .byte (.strat(text, .strlen(text) - 1) - Syntax::CHARACTER_OFFSET) | Syntax::ITEM_CHARACTER | Syntax::ITEM_LAST
     .repeat .strlen(text) - 1, I
-    .byte (.strat(text, .strlen(text) - 2 - I) - $A0) | $80
+        .byte (.strat(text, .strlen(text) - 2 - I) - Syntax::CHARACTER_OFFSET) | Syntax::ITEM_CHARACTER
     .endrepeat
 .endmacro
 
-; The rules, by number: an item's low 5 bits. Rules 0 to 3 can only be called with USEOPT, USEEND or USEALT, as
-; their CALL bytes are other items.
+;; Places a call of a rule (<Syntax::ITEM_CALL>), which the next item follows.
+;; Parameters:
+;;   rule = the RULE_ number, 4 or more
+.macro CallRule rule
+    .assert rule > Syntax::ITEM_LINE_MATCHED && rule <= Syntax::RULE_LINE, "A plain call is of rule 4 to 31."
+    .byte Syntax::ITEM_CALL | rule
+.endmacro
+
+;; Places a call of a rule after which the rest of the alternative is optional (<Syntax::ITEM_CALL_THEN_OPTIONAL>).
+;; Parameters:
+;;   rule = the RULE_ number
+.macro CallRuleThenOptional rule
+    .byte Syntax::ITEM_CALL_THEN_OPTIONAL | rule
+.endmacro
+
+;; Places a call of a rule that ends the rule's last alternative (<Syntax::ITEM_CALL_ENDING_RULE>).
+;; Parameters:
+;;   rule = the RULE_ number
+.macro CallRuleEndingRule rule
+    .byte Syntax::ITEM_CALL_ENDING_RULE | rule
+.endmacro
+
+;; Places a call of a rule that ends an alternative another follows (<Syntax::ITEM_CALL_ENDING_ALTERNATIVE>).
+;; Parameters:
+;;   rule = the RULE_ number
+.macro CallRuleEndingAlternative rule
+    .byte Syntax::ITEM_CALL_ENDING_ALTERNATIVE | rule
+.endmacro
+
+; The rules, by number: an item's low 5 bits.
+
 ;; Rule 0: a numeric constant, one or more digits.
 ;;
 ;; When it returns, the tokenizer turns the digits it copied into the constant's form: the first digit, then the
-;; value (<RULEMATCHED>).
-;; > SDIGIT { SDIGIT }
-SNUMBER = $00
+;; value (<Tokenizer::RuleMatched>).
+;; > digit { digit }
+;; Also: SNUMBER (UNKN)
+RULE_NUMBER = $00
 
 ;; Rule 1: no rule or routine calls it.
-;; > SNUMBER [SDIMNUM]
-SUNUSED1 = $01
+;; > number [dim_array]
+;; Also: SUNUSED1 (UNKN)
+RULE_NUMBER_THEN_ARRAY = $01
 
-;; Rule 2: a statement in a numbered line: the statements only a program can use, then those of <SIMMED>, whose
-;; bytes it shares.
+;; Rule 2: a statement in a numbered line: the statements only a program can use, then those of
+;; <RULE_IMMEDIATE_STATEMENT>, whose bytes it shares.
 ;; > END ($51)
-;; > INPUT ($52) SSTRDEST { SINVARS }
-;; > INPUT ($53) SSTRING { SINVARS }
-;; > INPUT ($54) SNUMVAR { SINVARS }
-;; > FOR ($55) SNAME = ($56) SEXPR TO ($57) SEXPR [STEP ($58) SEXPR]
-;; > NEXT ($59) SNAME { , ($5A) SNAME }
+;; > INPUT ($52) string_destination { input_next }
+;; > INPUT ($53) string { input_next }
+;; > INPUT ($54) number_variable { input_next }
+;; > FOR ($55) name = ($56) expression TO ($57) expression [STEP ($58) expression]
+;; > NEXT ($59) name { , ($5A) name }
 ;; > RETURN ($5B)
-;; > GOSUB ($5C) SEXPR
-;; > and the alternatives of SIMMED
-SSTMT = $02
+;; > GOSUB ($5C) expression
+;; > and the alternatives of immediate_statement
+;; Also: SSTMT (UNKN)
+RULE_STATEMENT = $02
 
 ;; Rule 3: a string variable with its size, in DIM.
-;; > SSTRVAR ( ($22) SEXPR SRPAREN
-SDIMSTR = $03
+;; > string_variable ( ($22) expression right_parenthesis
+;; Also: SDIMSTR (UNKN)
+RULE_DIM_STRING = $03
 
 ;; Rule 4: what follows IF's condition: THEN and a line number, or THEN and a statement.
-;; > THEN ($24) SNUMBER
-;; > THEN ($25) SSTMT
-STHEN = $04
+;; > THEN ($24) number
+;; > THEN ($25) statement
+;; Also: STHEN (UNKN)
+RULE_THEN = $04
 
 ;; Rule 5: a further variable of INPUT.
-;; > , ($26) SSTRDEST
-;; > , ($27) SNUMVAR
-SINVARS = $05
+;; > , ($26) string_destination
+;; > , ($27) number_variable
+;; Also: SINVARS (UNKN)
+RULE_INPUT_NEXT = $05
 
 ;; Rule 6: a substring's positions.
-;; > SEXPR [, ($23) SEXPR]
-SSUBSTR = $06
+;; > expression [, ($23) expression]
+;; Also: SSUBSTR (UNKN)
+RULE_SUBSTRING = $06
 
 ;; Rule 7: a numeric expression: operands with operators between them.
-;; > SOPERAND { SOPER SOPERAND }
-SEXPR = $07
+;; > operand { operator operand }
+;; Also: SEXPR (UNKN)
+RULE_EXPRESSION = $07
 
 ;; Rule 8: a string: a constant, or a variable with an optional substring.
-;; > " ($28) SSTRCHR " ($29)
-;; > SSTRVAR [( ($2A) SSUBSTR SRPAREN]
-SSTRING = $08
+;; > " ($28) string_characters " ($29)
+;; > string_variable [( ($2A) substring right_parenthesis]
+;; Also: SSTRING (UNKN)
+RULE_STRING = $08
 
 ;; Rule 9: a string variable's name, which ends in $ (token $40).
-;; > SNAME $ ($40)
-SSTRVAR = $09
+;; > name $ ($40)
+;; Also: SSTRVAR (UNKN)
+RULE_STRING_VARIABLE = $09
 
 ;; Rule 10: a string variable to store into, with an optional position.
-;; > SSTRVAR [( ($42) SEXPR SRPAREN]
-SSTRDEST = $0A
+;; > string_variable [( ($42) expression right_parenthesis]
+;; Also: SSTRDEST (UNKN)
+RULE_STRING_DESTINATION = $0A
 
 ;; Rule 11: TEXT, GR, CALL, DIM and TAB.
 ;; > TEXT ($4B)
 ;; > GR ($4C)
-;; > CALL ($4D) SEXPR
-;; > DIM ($4E) SDIMSTR { SDIMLIST }
-;; > DIM ($4F) SDIMNUM { SDIMLIST }
-;; > TAB ($50) SEXPR
-SSTMT2 = $0B
+;; > CALL ($4D) expression
+;; > DIM ($4E) dim_string { dim_next }
+;; > DIM ($4F) dim_array { dim_next }
+;; > TAB ($50) expression
+;; Also: SSTMT2 (UNKN)
+RULE_STATEMENTS_TEXT_TO_TAB = $0B
 
 ;; Rule 12: the characters of a string constant, up to the closing quote.
-;; > { STRCHAR }
-SSTRCHR = $0C
+;; > { STRING_CHARACTER }
+;; Also: SSTRCHR (UNKN)
+RULE_STRING_CHARACTERS = $0C
 
 ;; Rule 13: a further variable of DIM.
-;; > , ($43) SDIMSTR
-;; > , ($44) SDIMNUM
-SDIMLIST = $0D
+;; > , ($43) dim_string
+;; > , ($44) dim_array
+;; Also: SDIMLIST (UNKN)
+RULE_DIM_NEXT = $0D
 
 ;; Rule 14: what follows the first value of PRINT: a semicolon or a comma, then a string, a number or nothing.
-;; > ; ($45) SSTRING
-;; > ; ($46) SEXPR
+;; > ; ($45) string
+;; > ; ($46) expression
 ;; > ; ($47)
-;; > , ($48) SSTRING
-;; > , ($49) SEXPR
+;; > , ($48) string
+;; > , ($49) expression
 ;; > , ($4A)
-SPRLIST = $0E
+;; Also: SPRLIST (UNKN)
+RULE_PRINT_NEXT = $0E
 
 ;; Rule 15: one digit.
 ;; > DIGIT
-SDIGIT = $0F
+;; Also: SDIGIT (UNKN)
+RULE_DIGIT = $0F
 
 ;; Rule 16: a numeric array with its size, in DIM.
-;; > SNAME ( ($34) SEXPR SRPAREN
-SDIMNUM = $10
+;; > name ( ($34) expression right_parenthesis
+;; Also: SDIMNUM (UNKN)
+RULE_DIM_ARRAY = $10
 
 ;; Rule 17: a right parenthesis.
 ;; > ) ($72)
-SRPAREN = $11
+;; Also: SRPAREN (UNKN)
+RULE_RIGHT_PARENTHESIS = $11
 
-;; Rule 18: the numbers of a line typed for INPUT, separated by commas; <SYNINPUT> calls it.
-;; > SSIGNED { , ($81) SSIGNED }
-SINNUMS = $12
+;; Rule 18: the numbers of a line typed for INPUT, separated by commas; <InputLineStart> calls it.
+;; > signed_number { , ($81) signed_number }
+;; Also: SINNUMS (UNKN)
+RULE_INPUT_NUMBERS = $12
 
 ;; Rule 19: a number with an optional sign.
-;; > + ($82) SNUMBER
-;; > - ($83) SNUMBER
-;; > SNUMBER
-SSIGNED = $13
+;; > + ($82) number
+;; > - ($83) number
+;; > number
+;; Also: SSIGNED (UNKN)
+RULE_SIGNED_NUMBER = $13
 
 ;; Rule 20: the names of the functions that take a number in parentheses.
 ;;
@@ -183,458 +297,591 @@ SSIGNED = $13
 ;; > SGN ($30)
 ;; > ABS ($31)
 ;; > PDL ($32)
-SFUNC = $14
+;; Also: SFUNC (UNKN)
+RULE_FUNCTION_NAME = $14
 
 ;; Rule 21: an operand of a numeric expression.
-;; > + ($35) SOPERAND
-;; > - ($36) SOPERAND
-;; > NOT ($37) SOPERAND
-;; > SNUMBER
-;; > ( ($38) SEXPR SRPAREN
-;; > SSTRING = ($39) SSTRING
-;; > SSTRING # ($3A) SSTRING
-;; > LEN( ($3B) SSTRING SRPAREN
-;; > ASC( ($3C) SSTRING SRPAREN
-;; > SCRN( ($3D) SEXPR , ($3E) SEXPR SRPAREN
-;; > SFUNC ( ($3F) SEXPR SRPAREN
-;; > SNUMVAR
-SOPERAND = $15
+;; > + ($35) operand
+;; > - ($36) operand
+;; > NOT ($37) operand
+;; > number
+;; > ( ($38) expression right_parenthesis
+;; > string = ($39) string
+;; > string # ($3A) string
+;; > LEN( ($3B) string right_parenthesis
+;; > ASC( ($3C) string right_parenthesis
+;; > SCRN( ($3D) expression , ($3E) expression right_parenthesis
+;; > function_name ( ($3F) expression right_parenthesis
+;; > number_variable
+;; Also: SOPERAND (UNKN)
+RULE_OPERAND = $15
 
-;; Rule 22: <SOPERAND> without the signs and NOT; no rule or routine calls it.
-SUNUSED2 = $16
+;; Rule 22: <RULE_OPERAND> without the signs and NOT; no rule or routine calls it.
+;; Also: SUNUSED2 (UNKN)
+RULE_UNSIGNED_OPERAND = $16
 
 ;; Rule 23: a numeric variable, or an element of an array.
-;; > SNAME [( ($2D) SEXPR SRPAREN]
-SNUMVAR = $17
+;; > name [( ($2D) expression right_parenthesis]
+;; Also: SNUMVAR (UNKN)
+RULE_NUMBER_VARIABLE = $17
 
 ;; Rule 24: an assignment, with or without LET.
-;; > SSTRDEST = ($70) SSTRING
-;; > SNUMVAR = ($71) SEXPR
-SASSIGN = $18
+;; > string_destination = ($70) string
+;; > number_variable = ($71) expression
+;; Also: SASSIGN (UNKN)
+RULE_ASSIGNMENT = $18
 
-;; Rule 25: a variable's name: a letter, then the rest of the name (<SNAMEEND>).
-;; > LETTER SNAMEEND
-SNAME = $19
+;; Rule 25: a variable's name: a letter, then the rest of the name (<RULE_NAME_REST>).
+;; > LETTER name_rest
+;; Also: SNAME (UNKN)
+RULE_NAME = $19
 
-;; Rule 26: a statement allowed in a line without a number, and the rest of the statements of <SSTMT>.
-;; > REM ($5D) { REMCHAR }
-;; > SSTMT2
-;; > LET ($5E) SASSIGN
-;; > GOTO ($5F) SEXPR
-;; > IF ($60) SEXPR STHEN
-;; > PRINT ($61) SSTRING { SPRLIST }
-;; > PRINT ($62) SEXPR { SPRLIST }
+;; Rule 26: a statement allowed in a line without a number, and the rest of the statements of <RULE_STATEMENT>.
+;; > REM ($5D) { REMARK_CHARACTER }
+;; > statements_text_to_tab
+;; > LET ($5E) assignment
+;; > GOTO ($5F) expression
+;; > IF ($60) expression then
+;; > PRINT ($61) string { print_next }
+;; > PRINT ($62) expression { print_next }
 ;; > PRINT ($63)
-;; > POKE ($64) SEXPR , ($65) SEXPR
-;; > COLOR= ($66) SEXPR
-;; > PLOT ($67) SEXPR , ($68) SEXPR
-;; > HLIN ($69) SEXPR , ($6A) SEXPR AT ($6B) SEXPR
-;; > VLIN ($6C) SEXPR , ($6D) SEXPR AT ($6E) SEXPR
-;; > VTAB ($6F) SEXPR
-;; > SSTMT3
-;; > SASSIGN
-SIMMED = $1A
+;; > POKE ($64) expression , ($65) expression
+;; > COLOR= ($66) expression
+;; > PLOT ($67) expression , ($68) expression
+;; > HLIN ($69) expression , ($6A) expression AT ($6B) expression
+;; > VLIN ($6C) expression , ($6D) expression AT ($6E) expression
+;; > VTAB ($6F) expression
+;; > statements_list_to_in
+;; > assignment
+;; Also: SIMMED (UNKN)
+RULE_IMMEDIATE_STATEMENT = $1A
 
 ;; Rule 27: LIST, POP, NODSP, NOTRACE, DSP, TRACE, PR# and IN#.
-;; > LIST ($74) SNUMBER [, ($75) SNUMBER]
+;; > LIST ($74) number [, ($75) number]
 ;; > LIST ($76)
 ;; > POP ($77)
-;; > NODSP ($78) SSTRVAR
-;; > NODSP ($79) SNAME
+;; > NODSP ($78) string_variable
+;; > NODSP ($79) name
 ;; > NOTRACE ($7A)
-;; > DSP ($7B) SSTRVAR
-;; > DSP ($7C) SNAME
+;; > DSP ($7B) string_variable
+;; > DSP ($7C) name
 ;; > TRACE ($7D)
-;; > PR# ($7E) SEXPR
-;; > IN# ($7F) SEXPR
-SSTMT3 = $1B
+;; > PR# ($7E) expression
+;; > IN# ($7F) expression
+;; Also: SSTMT3 (UNKN)
+RULE_STATEMENTS_LIST_TO_IN = $1B
 
 ;; Rule 28: the rest of a variable's name: letters and digits, up to a reserved word.
 ;;
-;; The byte above where it starts is <USEOPT>, so when its first item fails it matches nothing: a name can be one
-;; letter.
-;; > { SNAMECH }
-SNAMEEND = $1C
+;; The byte above where it starts is an <ITEM_CALL_THEN_OPTIONAL> call, so when its first item fails it matches
+;; nothing: a name can be one letter.
+;; > { name_character }
+;; Also: SNAMEEND (UNKN)
+RULE_NAME_REST = $1C
 
 ;; Rule 29: a character of a name after the first: a letter or a digit, unless a reserved word starts there.
 ;;
-;; A reserved word matches with a token of $85 or above, which the tokenizer treats as a failure (<KEYMATCHED>).
+;; A reserved word matches with a token of $85 or above, which the tokenizer treats as a failure
+;; (<Tokenizer::WriteKeywordToken>).
 ;; > THEN ($85) | TO ($86) | STEP ($87) | AND ($88) | OR ($89) | MOD ($8A) | AT ($8B), which fail
 ;; > LETTER
-;; > SDIGIT
-SNAMECH = $1D
+;; > digit
+;; Also: SNAMECH (UNKN)
+RULE_NAME_CHARACTER = $1D
 
 ;; Rule 30: an operator between two operands.
 ;; > + ($12) | - ($13) | * ($14) | / ($15)
 ;; > = ($16) | # ($17) | >= ($18) | > ($19) | <= ($1A) | <> ($1B) | < ($1C)
 ;; > AND ($1D) | OR ($1E) | MOD ($1F) | ^ ($20)
-SOPER = $1E
+;; Also: SOPER (UNKN)
+RULE_OPERATOR = $1E
 
-;; Rule 31: a whole line: a numbered line of statements, a statement of <SIMMED>, or a command.
-;; > SNUMBER SSTMT { : ($03) SSTMT }
-;; > SIMMED
+;; Rule 31: a whole line: a numbered line of statements, a statement of <RULE_IMMEDIATE_STATEMENT>, or a command.
+;; > number [statement { : ($03) statement }]
+;; > immediate_statement
 ;; > LOAD ($04) | SAVE ($05) | CON ($06)
-;; > RUN ($07) SNUMBER
+;; > RUN ($07) number
 ;; > RUN ($08)
-;; > DEL ($09) SNUMBER [, ($0A) SNUMBER]
+;; > DEL ($09) number [, ($0A) number]
 ;; > NEW ($0B) | CLR ($0C)
-;; > AUTO ($0D) SNUMBER [, ($0E) SNUMBER]
+;; > AUTO ($0D) number [, ($0E) number]
 ;; > MAN ($0F)
-;; > HIMEM: ($10) SEXPR
-;; > LOMEM: ($11) SEXPR
-SLINE = $1F
+;; > HIMEM: ($10) expression
+;; > LOMEM: ($11) expression
+;; Also: SLINE (UNKN)
+RULE_LINE = $1F
+
+; The two pages' first bytes, which the tokens of their keywords count from.
+
+;; The first byte of the first page: its keywords have the tokens $51 (END, at the top) to $8B.
+;;
+;; Rule 1, which starts at the next byte, reads it as its second item: a call of <RULE_DIM_ARRAY> ending the rule.
+FIRST_PAGE_TOKEN_BASE = $50
+.assert FIRST_PAGE_TOKEN_BASE = ITEM_CALL_ENDING_RULE | RULE_DIM_ARRAY, "Rule 1 reads the token base as an item."
+
+;; The first byte of the second page: its keywords have the tokens $01 to $50.
+SECOND_PAGE_TOKEN_BASE = $00
 
 ;; The syntax table's first page: rules for statements, names and INPUT's numbers, and the reserved words.
 ;;
-;; Its first byte, $50, is the number its tokens count from, so its keywords have the tokens $51 (END, at the top)
-;; to $8B. <SYNLINE> and <SYNINPUT> are where the tokenizer starts, and RULEnn where each rule starts.
-;; See: <SYNTABL2>, <SYNTABLNDX>, <STARTRULE>
-SYNTABL:
-    .byte $50                       ; $EC00 the count the tokens of this page start from
-RULE01 = *                          ;; where rule <SUNUSED1> starts
-    .byte USEOPT | SNUMBER          ; $EC01
-    .byte USEEND | SDIGIT           ; $EC02
-    .byte LETTER | LAST             ; $EC03
-    KEYEND "AT"                     ; $EC04 token $8B, a reserved word
-    KEYEND "MOD"                    ; $EC06 token $8A, a reserved word
-    KEYEND "OR"                     ; $EC09 token $89, a reserved word
-    KEYEND "AND"                    ; $EC0B token $88, a reserved word
-    KEYEND "STEP"                   ; $EC0E token $87, a reserved word
-    KEYEND "TO"                     ; $EC12 token $86, a reserved word
-RULE1D = * + 3                      ;; where rule <SNAMECH> starts
-    KEYEND "THEN"                   ; $EC14 token $85, a reserved word
-    .byte USEEND | SNAMEEND         ; $EC18
-RULE19 = *                          ;; where rule <SNAME> starts
-    .byte LETTER                    ; $EC19
-    .byte SYNERR                    ; $EC1A
-    .byte USEEND | SNUMBER          ; $EC1B
-    .byte USEALT | SNUMBER          ; $EC1C
-    KEY "-"                         ; $EC1D token $83
-    .byte USEALT | SNUMBER          ; $EC1E
-RULE13 = *                          ;; where rule <SSIGNED> starts
-    KEY "+"                         ; $EC1F token $82
-    .byte AGAIN                     ; $EC20
-RULE1C = *                          ;; where rule <SNAMEEND> starts
-    .byte USE | SNAMECH             ; $EC21
-    .byte USEOPT | SNUMBER          ; $EC22
-    .byte AGAIN2                    ; $EC23
-    KEY ","                         ; $EC24 token $81
-RULE12 = *                          ;; where rule <SINNUMS> starts
-    .byte USEOPT | SSIGNED          ; $EC25
-    .byte SYNERR                    ; $EC26
-    .byte SYNERR                    ; $EC27
-    .byte USEALT | SNUMBER          ; $EC28
-    .byte ENDLINE                   ; $EC29
-    KEY "_"                         ; $EC2A token $80
-SYNINPUT = *                        ;; where it starts on a line INPUT reads
-    .byte USE | SINNUMS             ; $EC2B
-    .byte USEEND | SEXPR            ; $EC2C
-    KEY "IN#"                       ; $EC2D token $7F
-    .byte USEALT | SEXPR            ; $EC30
-    KEY "PR#"                       ; $EC31 token $7E
-    KEYEND "TRACE"                  ; $EC34 token $7D
-    .byte USEALT | SNAME            ; $EC39
-    KEY "DSP"                       ; $EC3A token $7C
-    .byte USEALT | SSTRVAR          ; $EC3D
-    KEY "DSP"                       ; $EC3E token $7B
-    KEYEND "NOTRACE"                ; $EC41 token $7A
-    .byte USEALT | SNAME            ; $EC48
-    KEY "NODSP"                     ; $EC49 token $79
-    .byte USEALT | SSTRVAR          ; $EC4E
-    KEY "NODSP"                     ; $EC4F token $78
-    KEYEND "POP"                    ; $EC54 token $77
-    KEYEND "LIST"                   ; $EC57 token $76
-    .byte USEALT | SNUMBER          ; $EC5B
-    KEY ","                         ; $EC5C token $75
-    .byte USEOPT | SNUMBER          ; $EC5D
-RULE1B = * + 3                      ;; where rule <SSTMT3> starts
-    KEY "LIST"                      ; $EC5E token $74
-    .byte SYNERR                    ; $EC62
-    .byte USEEND | SNUMBER          ; $EC63
-    KEY ")"                         ; $EC64 token $73
-RULE11 = *                          ;; where rule <SRPAREN> starts
-    KEYEND ")"                      ; $EC65 token $72
-    .byte USEEND | SEXPR            ; $EC66
-    KEY "="                         ; $EC67 token $71
-    .byte USE | SNUMVAR             ; $EC68
-    .byte USEALT | SSTRING          ; $EC69
-    KEY "="                         ; $EC6A token $70
-RULE18 = *                          ;; where rule <SASSIGN> starts
-    .byte USE | SSTRDEST            ; $EC6B
-    .byte USEEND | SASSIGN          ; $EC6C
-    .byte USEALT | SSTMT3           ; $EC6D
-    .byte USEALT | SEXPR            ; $EC6E
-    KEY "VTAB"                      ; $EC6F token $6F
-    .byte USEALT | SEXPR            ; $EC73
-    KEY "AT"                        ; $EC74 token $6E
-    .byte USE | SEXPR               ; $EC76
-    KEY ","                         ; $EC77 token $6D
-    .byte USE | SEXPR               ; $EC78
-    KEY "VLIN"                      ; $EC79 token $6C
-    .byte USEALT | SEXPR            ; $EC7D
-    KEY "AT"                        ; $EC7E token $6B
-    .byte USE | SEXPR               ; $EC80
-    KEY ","                         ; $EC81 token $6A
-    .byte USE | SEXPR               ; $EC82
-    KEY "HLIN"                      ; $EC83 token $69
-    .byte USEALT | SEXPR            ; $EC87
-    KEY ","                         ; $EC88 token $68
-    .byte USE | SEXPR               ; $EC89
-    KEY "PLOT"                      ; $EC8A token $67
-    .byte USEALT | SEXPR            ; $EC8E
-    KEY "COLOR="                    ; $EC8F token $66
-    .byte USEALT | SEXPR            ; $EC95
-    KEY ","                         ; $EC96 token $65
-    .byte USE | SEXPR               ; $EC97
-    KEY "POKE"                      ; $EC98 token $64
-    KEYEND "PRINT"                  ; $EC9C token $63
-    .byte AGAIN                     ; $ECA1
-    .byte USE | SPRLIST             ; $ECA2
-    .byte USEOPT | SEXPR            ; $ECA3
-    KEY "PRINT"                     ; $ECA4 token $62
-    .byte AGAIN                     ; $ECA9
-    .byte USE | SPRLIST             ; $ECAA
-    .byte USEOPT | SSTRING          ; $ECAB
-    KEY "PRINT"                     ; $ECAC token $61
-    .byte USEALT | STHEN            ; $ECB1
-    .byte USE | SEXPR               ; $ECB2
-    KEY "IF"                        ; $ECB3 token $60
-    .byte USEALT | SEXPR            ; $ECB5
-    KEY "GOTO"                      ; $ECB6 token $5F
-    .byte USEALT | SASSIGN          ; $ECBA
-    KEY "LET"                       ; $ECBB token $5E
-    .byte USEALT | SSTMT2           ; $ECBE
-    .byte AGAIN                     ; $ECBF
-    .byte REMCHAR                   ; $ECC0
-RULE1A = * + 2                      ;; where rule <SIMMED> starts
-    KEY "REM"                       ; $ECC1 token $5D
-    .byte USEALT | SEXPR            ; $ECC4
-    KEY "GOSUB"                     ; $ECC5 token $5C
-    KEYEND "RETURN"                 ; $ECCA token $5B
-    .byte AGAIN2                    ; $ECD0
-    KEY ","                         ; $ECD1 token $5A
-    .byte USEOPT | SNAME            ; $ECD2
-    KEY "NEXT"                      ; $ECD3 token $59
-    .byte USEALT | SEXPR            ; $ECD7
-    KEY "STEP"                      ; $ECD8 token $58
-    .byte USEOPT | SEXPR            ; $ECDC
-    KEY "TO"                        ; $ECDD token $57
-    .byte USE | SEXPR               ; $ECDF
-    KEY "="                         ; $ECE0 token $56
-    .byte USE | SNAME               ; $ECE1
-    KEY "FOR"                       ; $ECE2 token $55
-    .byte AGAIN                     ; $ECE5
-    .byte USE | SINVARS             ; $ECE6
-    .byte USEOPT | SNUMVAR          ; $ECE7
-    KEY "INPUT"                     ; $ECE8 token $54
-    .byte AGAIN                     ; $ECED
-    .byte USE | SINVARS             ; $ECEE
-    .byte USEOPT | SSTRING          ; $ECEF
-    KEY "INPUT"                     ; $ECF0 token $53
-    .byte AGAIN                     ; $ECF5
-    .byte USE | SINVARS             ; $ECF6
-    .byte USEOPT | SSTRDEST         ; $ECF7
-    KEY "INPUT"                     ; $ECF8 token $52
-RULE02 = * + 2                      ;; where rule <SSTMT> starts
-    KEYEND "END"                    ; $ECFD token $51
+;; Its first byte is <FIRST_PAGE_TOKEN_BASE>. <LineStart> and <InputLineStart> are where the tokenizer starts, and
+;; the labels ending in Rule where each rule starts. The tokenizer finds the page as <Table>'s high byte halved
+;; (<Tokenizer::StartRule>), so the table starts an even page.
+;; See: <SecondPage>, <RuleStarts>, <Tokenizer::StartRule>
+;; Also: SYNTABL (IBSM)
+Table:
+    .assert <Table = 0 && (>Table & 1) = 0, "The syntax table starts an even page."
+    .byte FIRST_PAGE_TOKEN_BASE
+
+;; Where <RULE_NUMBER_THEN_ARRAY> starts.
+;; Also: RULE01 (UNKN)
+NumberThenArrayRule:
+    CallRuleThenOptional RULE_NUMBER
+    CallRuleEndingRule RULE_DIGIT
+    .byte ITEM_LETTER | ITEM_LAST
+    KeywordEndingAlternative "AT"           ; token $8B, a reserved word
+    KeywordEndingAlternative "MOD"          ; token $8A, a reserved word
+    KeywordEndingAlternative "OR"           ; token $89, a reserved word
+    KeywordEndingAlternative "AND"          ; token $88, a reserved word
+    KeywordEndingAlternative "STEP"         ; token $87, a reserved word
+    KeywordEndingAlternative "TO"           ; token $86, a reserved word
+
+;; Where <RULE_NAME_CHARACTER> starts: the first character of the keyword below, its highest byte.
+;; Also: RULE1D (UNKN)
+NameCharacterRule = * + .strlen("THEN") - 1
+    KeywordEndingAlternative "THEN"         ; token $85, a reserved word
+    CallRuleEndingRule RULE_NAME_REST
+
+;; Where <RULE_NAME> starts.
+;; Also: RULE19 (UNKN)
+NameRule:
+    .byte ITEM_LETTER
+    .byte ITEM_SYNTAX_ERROR
+    CallRuleEndingRule RULE_NUMBER
+    CallRuleEndingAlternative RULE_NUMBER
+    Keyword "-"                             ; token $83
+    CallRuleEndingAlternative RULE_NUMBER
+
+;; Where <RULE_SIGNED_NUMBER> starts.
+;; Also: RULE13 (UNKN)
+SignedNumberRule:
+    Keyword "+"                             ; token $82
+    .byte ITEM_REPEAT
+
+;; Where <RULE_NAME_REST> starts.
+;; Also: RULE1C (UNKN)
+NameRestRule:
+    CallRule RULE_NAME_CHARACTER
+    CallRuleThenOptional RULE_NUMBER        ; only read as the item before NAME_REST's: its first item is optional
+    .byte ITEM_REPEAT_TWO
+    Keyword ","                             ; token $81
+
+;; Where <RULE_INPUT_NUMBERS> starts.
+;; Also: RULE12 (UNKN)
+InputNumbersRule:
+    CallRuleThenOptional RULE_SIGNED_NUMBER
+    .byte ITEM_SYNTAX_ERROR
+    .byte ITEM_SYNTAX_ERROR
+    CallRuleEndingAlternative RULE_NUMBER
+    .byte ITEM_LINE_MATCHED
+    Keyword "_"                             ; token $80
+
+;; Where the tokenizer starts on a line INPUT reads (<Statements::InputNumber>): the numbers, then
+;; the underline that ends the line (token $80) and <ITEM_LINE_MATCHED>.
+;; Also: SYNINPUT (UNKN)
+InputLineStart:
+    CallRule RULE_INPUT_NUMBERS
+    CallRuleEndingRule RULE_EXPRESSION
+    Keyword "IN#"                           ; token $7F
+    CallRuleEndingAlternative RULE_EXPRESSION
+    Keyword "PR#"                           ; token $7E
+    KeywordEndingAlternative "TRACE"        ; token $7D
+    CallRuleEndingAlternative RULE_NAME
+    Keyword "DSP"                           ; token $7C
+    CallRuleEndingAlternative RULE_STRING_VARIABLE
+    Keyword "DSP"                           ; token $7B
+    KeywordEndingAlternative "NOTRACE"      ; token $7A
+    CallRuleEndingAlternative RULE_NAME
+    Keyword "NODSP"                         ; token $79
+    CallRuleEndingAlternative RULE_STRING_VARIABLE
+    Keyword "NODSP"                         ; token $78
+    KeywordEndingAlternative "POP"          ; token $77
+    KeywordEndingAlternative "LIST"         ; token $76
+    CallRuleEndingAlternative RULE_NUMBER
+    Keyword ","                             ; token $75
+    CallRuleThenOptional RULE_NUMBER
+
+;; Where <RULE_STATEMENTS_LIST_TO_IN> starts: the first character of the keyword below, its highest byte.
+;; Also: RULE1B (UNKN)
+StatementsListToInRule = * + .strlen("LIST") - 1
+    Keyword "LIST"                          ; token $74
+    .byte ITEM_SYNTAX_ERROR
+    CallRuleEndingRule RULE_NUMBER
+    Keyword ")"                             ; token $73
+
+;; Where <RULE_RIGHT_PARENTHESIS> starts.
+;; Also: RULE11 (UNKN)
+RightParenthesisRule:
+    KeywordEndingAlternative ")"            ; token $72
+    CallRuleEndingRule RULE_EXPRESSION
+    Keyword "="                             ; token $71
+    CallRule RULE_NUMBER_VARIABLE
+    CallRuleEndingAlternative RULE_STRING
+    Keyword "="                             ; token $70
+
+;; Where <RULE_ASSIGNMENT> starts.
+;; Also: RULE18 (UNKN)
+AssignmentRule:
+    CallRule RULE_STRING_DESTINATION
+    CallRuleEndingRule RULE_ASSIGNMENT
+    CallRuleEndingAlternative RULE_STATEMENTS_LIST_TO_IN
+    CallRuleEndingAlternative RULE_EXPRESSION
+    Keyword "VTAB"                          ; token $6F
+    CallRuleEndingAlternative RULE_EXPRESSION
+    Keyword "AT"                            ; token $6E
+    CallRule RULE_EXPRESSION
+    Keyword ","                             ; token $6D
+    CallRule RULE_EXPRESSION
+    Keyword "VLIN"                          ; token $6C
+    CallRuleEndingAlternative RULE_EXPRESSION
+    Keyword "AT"                            ; token $6B
+    CallRule RULE_EXPRESSION
+    Keyword ","                             ; token $6A
+    CallRule RULE_EXPRESSION
+    Keyword "HLIN"                          ; token $69
+    CallRuleEndingAlternative RULE_EXPRESSION
+    Keyword ","                             ; token $68
+    CallRule RULE_EXPRESSION
+    Keyword "PLOT"                          ; token $67
+    CallRuleEndingAlternative RULE_EXPRESSION
+    Keyword "COLOR="                        ; token $66
+    CallRuleEndingAlternative RULE_EXPRESSION
+    Keyword ","                             ; token $65
+    CallRule RULE_EXPRESSION
+    Keyword "POKE"                          ; token $64
+    KeywordEndingAlternative "PRINT"        ; token $63
+    .byte ITEM_REPEAT
+    CallRule RULE_PRINT_NEXT
+    CallRuleThenOptional RULE_EXPRESSION
+    Keyword "PRINT"                         ; token $62
+    .byte ITEM_REPEAT
+    CallRule RULE_PRINT_NEXT
+    CallRuleThenOptional RULE_STRING
+    Keyword "PRINT"                         ; token $61
+    CallRuleEndingAlternative RULE_THEN
+    CallRule RULE_EXPRESSION
+    Keyword "IF"                            ; token $60
+    CallRuleEndingAlternative RULE_EXPRESSION
+    Keyword "GOTO"                          ; token $5F
+    CallRuleEndingAlternative RULE_ASSIGNMENT
+    Keyword "LET"                           ; token $5E
+    CallRuleEndingAlternative RULE_STATEMENTS_TEXT_TO_TAB
+    .byte ITEM_REPEAT
+    .byte ITEM_REMARK_CHARACTER
+
+;; Where <RULE_IMMEDIATE_STATEMENT> starts: the first character of the keyword below, its highest byte.
+;; Also: RULE1A (UNKN)
+ImmediateStatementRule = * + .strlen("REM") - 1
+    Keyword "REM"                           ; token $5D
+    CallRuleEndingAlternative RULE_EXPRESSION
+    Keyword "GOSUB"                         ; token $5C
+    KeywordEndingAlternative "RETURN"       ; token $5B
+    .byte ITEM_REPEAT_TWO
+    Keyword ","                             ; token $5A
+    CallRuleThenOptional RULE_NAME
+    Keyword "NEXT"                          ; token $59
+    CallRuleEndingAlternative RULE_EXPRESSION
+    Keyword "STEP"                          ; token $58
+    CallRuleThenOptional RULE_EXPRESSION
+    Keyword "TO"                            ; token $57
+    CallRule RULE_EXPRESSION
+    Keyword "="                             ; token $56
+    CallRule RULE_NAME
+    Keyword "FOR"                           ; token $55
+    .byte ITEM_REPEAT
+    CallRule RULE_INPUT_NEXT
+    CallRuleThenOptional RULE_NUMBER_VARIABLE
+    Keyword "INPUT"                         ; token $54
+    .byte ITEM_REPEAT
+    CallRule RULE_INPUT_NEXT
+    CallRuleThenOptional RULE_STRING
+    Keyword "INPUT"                         ; token $53
+    .byte ITEM_REPEAT
+    CallRule RULE_INPUT_NEXT
+    CallRuleThenOptional RULE_STRING_DESTINATION
+    Keyword "INPUT"                         ; token $52
+
+;; Where <RULE_STATEMENT> starts: the first character of the keyword below, its highest byte.
+;; Also: RULE02 (UNKN)
+StatementRule = * + .strlen("END") - 1
+    KeywordEndingAlternative "END"          ; token $51
 
 ;; The syntax table's second page: rules for expressions, strings, PRINT, DIM and the commands, and the operators.
 ;;
-;; Its first byte, 0, is the number its tokens count from, so its keywords have the tokens $01 to $50. The top of the
-;; page is where the tokenizer starts on a typed line (<SYNLINE>): the rule for a line, then the underline that ends
-;; it (token $01), then <ENDLINE>; a line with nothing on it matches the underline at $EDFB instead (token $02).
-;; See: <SYNTABL>, <SYNLINE>
-SYNTABL2:
-    .byte $00                       ; $ED00 the count the tokens of this page start from
-    .byte USEEND | SEXPR            ; $ED01
-    KEY "TAB"                       ; $ED02 token $50
-    .byte AGAIN                     ; $ED05
-    .byte USE | SDIMLIST            ; $ED06
-    .byte USEOPT | SDIMNUM          ; $ED07
-    KEY "DIM"                       ; $ED08 token $4F
-    .byte AGAIN                     ; $ED0B
-    .byte USE | SDIMLIST            ; $ED0C
-    .byte USEOPT | SDIMSTR          ; $ED0D
-    KEY "DIM"                       ; $ED0E token $4E
-    .byte USEALT | SEXPR            ; $ED11
-    KEY "CALL"                      ; $ED12 token $4D
-    KEYEND "GR"                     ; $ED16 token $4C
-RULE0B = * + 3                      ;; where rule <SSTMT2> starts
-    KEYEND "TEXT"                   ; $ED18 token $4B
-    .byte SYNERR                    ; $ED1C
-    .byte USEEND | SDIMLIST         ; $ED1D
-    KEYEND ","                      ; $ED1E token $4A
-    .byte USEALT | SEXPR            ; $ED1F
-    KEY ","                         ; $ED20 token $49
-    .byte USEALT | SSTRING          ; $ED21
-    KEY ","                         ; $ED22 token $48
-    KEYEND ";"                      ; $ED23 token $47
-    .byte USEALT | SEXPR            ; $ED24
-    KEY ";"                         ; $ED25 token $46
-    .byte USEALT | SSTRING          ; $ED26
-RULE0E = *                          ;; where rule <SPRLIST> starts
-    KEY ";"                         ; $ED27 token $45
-    .byte USEEND | SDIMNUM          ; $ED28
-    KEY ","                         ; $ED29 token $44
-    .byte USEALT | SDIMSTR          ; $ED2A
-RULE0D = *                          ;; where rule <SDIMLIST> starts
-    KEY ","                         ; $ED2B token $43
-    .byte AGAIN                     ; $ED2C
-RULE0C = *                          ;; where rule <SSTRCHR> starts
-    .byte STRCHAR                   ; $ED2D
-    .byte USEEND | SRPAREN          ; $ED2E
-    .byte USE | SEXPR               ; $ED2F
-    KEY "("                         ; $ED30 token $42
-RULE0A = *                          ;; where rule <SSTRDEST> starts
-    .byte USEOPT | SSTRVAR          ; $ED31
-    KEY "$"                         ; $ED32 token $41
-    .byte LETTER                    ; $ED33
-    KEYEND "$"                      ; $ED34 token $40
-RULE09 = *                          ;; where rule <SSTRVAR> starts
-    .byte USE | SNAME               ; $ED35
-    .byte USEEND | SNUMVAR          ; $ED36
-    .byte USEALT | SRPAREN          ; $ED37
-    .byte USE | SEXPR               ; $ED38
-    KEY "("                         ; $ED39 token $3F
-    .byte USE | SFUNC               ; $ED3A
-    .byte USEALT | SRPAREN          ; $ED3B
-    .byte USE | SEXPR               ; $ED3C
-    KEY ","                         ; $ED3D token $3E
-    .byte USE | SEXPR               ; $ED3E
-    KEY "SCRN("                     ; $ED3F token $3D
-    .byte USEALT | SRPAREN          ; $ED44
-    .byte USE | SSTRING             ; $ED45
-    KEY "ASC("                      ; $ED46 token $3C
-    .byte USEALT | SRPAREN          ; $ED4A
-    .byte USE | SSTRING             ; $ED4B
-    KEY "LEN("                      ; $ED4C token $3B
-    .byte USEALT | SSTRING          ; $ED50
-    KEY "#"                         ; $ED51 token $3A
-    .byte USE | SSTRING             ; $ED52
-    .byte USEALT | SSTRING          ; $ED53
-    KEY "="                         ; $ED54 token $39
-    .byte USE | SSTRING             ; $ED55
-    .byte USEALT | SRPAREN          ; $ED56
-    .byte USE | SEXPR               ; $ED57
-    KEY "("                         ; $ED58 token $38
-RULE16 = *                          ;; where rule <SUNUSED2> starts
-    .byte USEALT | SNUMBER          ; $ED59
-    .byte USEALT | SOPERAND         ; $ED5A
-    KEY "NOT"                       ; $ED5B token $37
-    .byte USEALT | SOPERAND         ; $ED5E
-    KEY "-"                         ; $ED5F token $36
-    .byte USEALT | SOPERAND         ; $ED60
-RULE15 = *                          ;; where rule <SOPERAND> starts
-    KEY "+"                         ; $ED61 token $35
-    .byte USEEND | SRPAREN          ; $ED62
-    .byte USE | SEXPR               ; $ED63
-    KEY "("                         ; $ED64 token $34
-RULE10 = *                          ;; where rule <SDIMNUM> starts
-    .byte USE | SNAME               ; $ED65
-    KEY "RNDX"                      ; $ED66 token $33
-    KEYEND "PDL"                    ; $ED6A token $32
-    KEYEND "ABS"                    ; $ED6D token $31
-    KEYEND "SGN"                    ; $ED70 token $30
-    KEYEND "RND"                    ; $ED73 token $2F
-RULE14 = * + 3                      ;; where rule <SFUNC> starts
-    KEYEND "PEEK"                   ; $ED76 token $2E
-    .byte USEEND | SRPAREN          ; $ED7A
-    .byte USE | SEXPR               ; $ED7B
-    KEY "("                         ; $ED7C token $2D
-RULE17 = *                          ;; where rule <SNUMVAR> starts
-    .byte USEOPT | SNAME            ; $ED7D
-    .byte DIGIT                     ; $ED7E
-RULE0F = *                          ;; where rule <SDIGIT> starts
-    .byte DIGIT | LAST              ; $ED7F
-    .byte USEEND | SDIGIT           ; $ED80
-    .byte AGAIN                     ; $ED81
-    .byte USE | SDIGIT              ; $ED82
-RULE00 = *                          ;; where rule <SNUMBER> starts
-    .byte USEOPT | SDIGIT           ; $ED83
-    .byte SYNERR                    ; $ED84
-    .byte USEEND | SRPAREN          ; $ED85
-    .byte USE | SSUBSTR             ; $ED86
-    KEY "("                         ; $ED87 token $2A
-    .byte USEOPT | SSTRVAR          ; $ED88
-    .byte $C2                       ; $ED89 " (last), token $29
-    .byte USE | SSTRCHR             ; $ED8A
-RULE08 = *                          ;; where rule <SSTRING> starts
-    .byte $82                       ; $ED8B ", token $28
-    .byte USEEND | SNUMVAR          ; $ED8C
-    KEY ","                         ; $ED8D token $27
-    .byte USEALT | SSTRDEST         ; $ED8E
-RULE05 = *                          ;; where rule <SINVARS> starts
-    KEY ","                         ; $ED8F token $26
-    .byte USEEND | SSTMT            ; $ED90
-    KEY "THEN"                      ; $ED91 token $25
-    .byte USEALT | SNUMBER          ; $ED95
-RULE04 = * + 3                      ;; where rule <STHEN> starts
-    KEY "THEN"                      ; $ED96 token $24
-    .byte USEEND | SDIGIT           ; $ED9A
-    .byte AGAIN2                    ; $ED9B
-    .byte USE | SOPER               ; $ED9C
-RULE07 = *                          ;; where rule <SEXPR> starts
-    .byte USEOPT | SOPERAND         ; $ED9D
-    KEY ","                         ; $ED9E token $23
-RULE06 = *                          ;; where rule <SSUBSTR> starts
-    .byte USEOPT | SEXPR            ; $ED9F
-    .byte USEEND | SRPAREN          ; $EDA0
-    .byte USE | SEXPR               ; $EDA1
-    KEY "("                         ; $EDA2 token $22
-RULE03 = *                          ;; where rule <SDIMSTR> starts
-    .byte USE | SSTRVAR             ; $EDA3
-    KEY "+"                         ; $EDA4 token $21
-    KEYEND "^"                      ; $EDA5 token $20
-    KEYEND "MOD"                    ; $EDA6 token $1F
-    KEYEND "OR"                     ; $EDA9 token $1E
-    KEYEND "AND"                    ; $EDAB token $1D
-    KEYEND "<"                      ; $EDAE token $1C
-    KEYEND "<>"                     ; $EDAF token $1B
-    KEYEND "<="                     ; $EDB1 token $1A
-    KEYEND ">"                      ; $EDB3 token $19
-    KEYEND ">="                     ; $EDB4 token $18
-    KEYEND "#"                      ; $EDB6 token $17
-    KEYEND "="                      ; $EDB7 token $16
-    KEYEND "/"                      ; $EDB8 token $15
-    KEYEND "*"                      ; $EDB9 token $14
-    KEYEND "-"                      ; $EDBA token $13
-RULE1E = *                          ;; where rule <SOPER> starts
-    KEYEND "+"                      ; $EDBB token $12
-    .byte SYNERR                    ; $EDBC
-    .byte USEEND | SEXPR            ; $EDBD
-    KEY "LOMEM:"                    ; $EDBE token $11
-    .byte USEALT | SEXPR            ; $EDC4
-    KEY "HIMEM:"                    ; $EDC5 token $10
-    KEYEND "MAN"                    ; $EDCB token $0F
-    .byte USEALT | SNUMBER          ; $EDCE
-    KEY ","                         ; $EDCF token $0E
-    .byte USEOPT | SNUMBER          ; $EDD0
-    KEY "AUTO"                      ; $EDD1 token $0D
-    KEYEND "CLR"                    ; $EDD5 token $0C
-    KEYEND "NEW"                    ; $EDD8 token $0B
-    .byte USEALT | SNUMBER          ; $EDDB
-    KEY ","                         ; $EDDC token $0A
-    .byte USEOPT | SNUMBER          ; $EDDD
-    KEY "DEL"                       ; $EDDE token $09
-    KEYEND "RUN"                    ; $EDE1 token $08
-    .byte USEALT | SNUMBER          ; $EDE4
-    KEY "RUN"                       ; $EDE5 token $07
-    KEYEND "CON"                    ; $EDE8 token $06
-    KEYEND "SAVE"                   ; $EDEB token $05
-    KEYEND "LOAD"                   ; $EDEF token $04
-    .byte USEALT | SIMMED           ; $EDF3
-    .byte AGAIN2                    ; $EDF4
-    KEY ":"                         ; $EDF5 token $03
-    .byte USEOPT | SSTMT            ; $EDF6
-RULE1F = *                          ;; where rule <SLINE> starts
-    .byte USEOPT | SNUMBER          ; $EDF7
-    .byte SYNERR                    ; $EDF8
-    .byte USEALT | SNUMBER          ; $EDF9
-    .byte ENDLINE                   ; $EDFA
-    KEY "_"                         ; $EDFB token $02
-    .byte USEALT | SNUMBER          ; $EDFC
-    .byte ENDLINE                   ; $EDFD
-    KEY "_"                         ; $EDFE token $01
-SYNLINE = *                         ;; where the tokenizer starts on a typed line
-    .byte USE | SLINE               ; $EDFF
-    .assert * = $EE00, "The syntax table fills two pages."
+;; Its first byte is <SECOND_PAGE_TOKEN_BASE>. The top of the page is where the tokenizer starts on a typed line
+;; (<LineStart>): the rule for a line, then the underline that ends it (token $01), then <ITEM_LINE_MATCHED>; a line
+;; with nothing on it matches the underline below them instead (token $02).
+;; See: <Table>, <LineStart>
+;; Also: SYNTABL2 (IBSM)
+SecondPage:
+    .byte SECOND_PAGE_TOKEN_BASE
+    CallRuleEndingRule RULE_EXPRESSION
+    Keyword "TAB"                           ; token $50
+    .byte ITEM_REPEAT
+    CallRule RULE_DIM_NEXT
+    CallRuleThenOptional RULE_DIM_ARRAY
+    Keyword "DIM"                           ; token $4F
+    .byte ITEM_REPEAT
+    CallRule RULE_DIM_NEXT
+    CallRuleThenOptional RULE_DIM_STRING
+    Keyword "DIM"                           ; token $4E
+    CallRuleEndingAlternative RULE_EXPRESSION
+    Keyword "CALL"                          ; token $4D
+    KeywordEndingAlternative "GR"           ; token $4C
+
+;; Where <RULE_STATEMENTS_TEXT_TO_TAB> starts: the first character of the keyword below, its highest byte.
+;; Also: RULE0B (UNKN)
+StatementsTextToTabRule = * + .strlen("TEXT") - 1
+    KeywordEndingAlternative "TEXT"         ; token $4B
+    .byte ITEM_SYNTAX_ERROR
+    CallRuleEndingRule RULE_DIM_NEXT
+    KeywordEndingAlternative ","            ; token $4A
+    CallRuleEndingAlternative RULE_EXPRESSION
+    Keyword ","                             ; token $49
+    CallRuleEndingAlternative RULE_STRING
+    Keyword ","                             ; token $48
+    KeywordEndingAlternative ";"            ; token $47
+    CallRuleEndingAlternative RULE_EXPRESSION
+    Keyword ";"                             ; token $46
+    CallRuleEndingAlternative RULE_STRING
+
+;; Where <RULE_PRINT_NEXT> starts.
+;; Also: RULE0E (UNKN)
+PrintNextRule:
+    Keyword ";"                             ; token $45
+    CallRuleEndingRule RULE_DIM_ARRAY
+    Keyword ","                             ; token $44
+    CallRuleEndingAlternative RULE_DIM_STRING
+
+;; Where <RULE_DIM_NEXT> starts.
+;; Also: RULE0D (UNKN)
+DimNextRule:
+    Keyword ","                             ; token $43
+    .byte ITEM_REPEAT
+
+;; Where <RULE_STRING_CHARACTERS> starts.
+;; Also: RULE0C (UNKN)
+StringCharactersRule:
+    .byte ITEM_STRING_CHARACTER
+    CallRuleEndingRule RULE_RIGHT_PARENTHESIS
+    CallRule RULE_EXPRESSION
+    Keyword "("                             ; token $42
+
+;; Where <RULE_STRING_DESTINATION> starts.
+;; Also: RULE0A (UNKN)
+StringDestinationRule:
+    CallRuleThenOptional RULE_STRING_VARIABLE
+    Keyword "$"                             ; token $41
+    .byte ITEM_LETTER
+    KeywordEndingAlternative "$"            ; token $40
+
+;; Where <RULE_STRING_VARIABLE> starts.
+;; Also: RULE09 (UNKN)
+StringVariableRule:
+    CallRule RULE_NAME
+    CallRuleEndingRule RULE_NUMBER_VARIABLE
+    CallRuleEndingAlternative RULE_RIGHT_PARENTHESIS
+    CallRule RULE_EXPRESSION
+    Keyword "("                             ; token $3F
+    CallRule RULE_FUNCTION_NAME
+    CallRuleEndingAlternative RULE_RIGHT_PARENTHESIS
+    CallRule RULE_EXPRESSION
+    Keyword ","                             ; token $3E
+    CallRule RULE_EXPRESSION
+    Keyword "SCRN("                         ; token $3D
+    CallRuleEndingAlternative RULE_RIGHT_PARENTHESIS
+    CallRule RULE_STRING
+    Keyword "ASC("                          ; token $3C
+    CallRuleEndingAlternative RULE_RIGHT_PARENTHESIS
+    CallRule RULE_STRING
+    Keyword "LEN("                          ; token $3B
+    CallRuleEndingAlternative RULE_STRING
+    Keyword "#"                             ; token $3A
+    CallRule RULE_STRING
+    CallRuleEndingAlternative RULE_STRING
+    Keyword "="                             ; token $39
+    CallRule RULE_STRING
+    CallRuleEndingAlternative RULE_RIGHT_PARENTHESIS
+    CallRule RULE_EXPRESSION
+    Keyword "("                             ; token $38
+
+;; Where <RULE_UNSIGNED_OPERAND> starts.
+;; Also: RULE16 (UNKN)
+UnsignedOperandRule:
+    CallRuleEndingAlternative RULE_NUMBER
+    CallRuleEndingAlternative RULE_OPERAND
+    Keyword "NOT"                           ; token $37
+    CallRuleEndingAlternative RULE_OPERAND
+    Keyword "-"                             ; token $36
+    CallRuleEndingAlternative RULE_OPERAND
+
+;; Where <RULE_OPERAND> starts.
+;; Also: RULE15 (UNKN)
+OperandRule:
+    Keyword "+"                             ; token $35
+    CallRuleEndingRule RULE_RIGHT_PARENTHESIS
+    CallRule RULE_EXPRESSION
+    Keyword "("                             ; token $34
+
+;; Where <RULE_DIM_ARRAY> starts.
+;; Also: RULE10 (UNKN)
+DimArrayRule:
+    CallRule RULE_NAME
+    Keyword "RNDX"                          ; token $33
+    KeywordEndingAlternative "PDL"          ; token $32
+    KeywordEndingAlternative "ABS"          ; token $31
+    KeywordEndingAlternative "SGN"          ; token $30
+    KeywordEndingAlternative "RND"          ; token $2F
+
+;; Where <RULE_FUNCTION_NAME> starts: the first character of the keyword below, its highest byte.
+;; Also: RULE14 (UNKN)
+FunctionNameRule = * + .strlen("PEEK") - 1
+    KeywordEndingAlternative "PEEK"         ; token $2E
+    CallRuleEndingRule RULE_RIGHT_PARENTHESIS
+    CallRule RULE_EXPRESSION
+    Keyword "("                             ; token $2D
+
+;; Where <RULE_NUMBER_VARIABLE> starts.
+;; Also: RULE17 (UNKN)
+NumberVariableRule:
+    CallRuleThenOptional RULE_NAME
+    .byte ITEM_DIGIT
+
+;; Where <RULE_DIGIT> starts.
+;; Also: RULE0F (UNKN)
+DigitRule:
+    .byte ITEM_DIGIT | ITEM_LAST
+    CallRuleEndingRule RULE_DIGIT
+    .byte ITEM_REPEAT
+    CallRule RULE_DIGIT
+
+;; Where <RULE_NUMBER> starts.
+;; Also: RULE00 (UNKN)
+NumberRule:
+    CallRuleThenOptional RULE_DIGIT
+    .byte ITEM_SYNTAX_ERROR
+    CallRuleEndingRule RULE_RIGHT_PARENTHESIS
+    CallRule RULE_SUBSTRING
+    Keyword "("                             ; token $2A
+    CallRuleThenOptional RULE_STRING_VARIABLE
+    .byte ('"' - Syntax::CHARACTER_OFFSET) | Syntax::ITEM_CHARACTER | Syntax::ITEM_LAST; ", closing, token $29
+    CallRule RULE_STRING_CHARACTERS
+
+;; Where <RULE_STRING> starts.
+;; Also: RULE08 (UNKN)
+StringRule:
+    .byte ('"' - CHARACTER_OFFSET) | ITEM_CHARACTER         ; ", opening, token $28
+    CallRuleEndingRule RULE_NUMBER_VARIABLE
+    Keyword ","                             ; token $27
+    CallRuleEndingAlternative RULE_STRING_DESTINATION
+
+;; Where <RULE_INPUT_NEXT> starts.
+;; Also: RULE05 (UNKN)
+InputNextRule:
+    Keyword ","                             ; token $26
+    CallRuleEndingRule RULE_STATEMENT
+    Keyword "THEN"                          ; token $25
+    CallRuleEndingAlternative RULE_NUMBER
+
+;; Where <RULE_THEN> starts: the first character of the keyword below, its highest byte.
+;; Also: RULE04 (UNKN)
+ThenRule = * + .strlen("THEN") - 1
+    Keyword "THEN"                          ; token $24
+    CallRuleEndingRule RULE_DIGIT
+    .byte ITEM_REPEAT_TWO
+    CallRule RULE_OPERATOR
+
+;; Where <RULE_EXPRESSION> starts.
+;; Also: RULE07 (UNKN)
+ExpressionRule:
+    CallRuleThenOptional RULE_OPERAND
+    Keyword ","                             ; token $23
+
+;; Where <RULE_SUBSTRING> starts.
+;; Also: RULE06 (UNKN)
+SubstringRule:
+    CallRuleThenOptional RULE_EXPRESSION
+    CallRuleEndingRule RULE_RIGHT_PARENTHESIS
+    CallRule RULE_EXPRESSION
+    Keyword "("                             ; token $22
+
+;; Where <RULE_DIM_STRING> starts.
+;; Also: RULE03 (UNKN)
+DimStringRule:
+    CallRule RULE_STRING_VARIABLE
+    Keyword "+"                             ; token $21
+    KeywordEndingAlternative "^"            ; token $20
+    KeywordEndingAlternative "MOD"          ; token $1F
+    KeywordEndingAlternative "OR"           ; token $1E
+    KeywordEndingAlternative "AND"          ; token $1D
+    KeywordEndingAlternative "<"            ; token $1C
+    KeywordEndingAlternative "<>"           ; token $1B
+    KeywordEndingAlternative "<="           ; token $1A
+    KeywordEndingAlternative ">"            ; token $19
+    KeywordEndingAlternative ">="           ; token $18
+    KeywordEndingAlternative "#"            ; token $17
+    KeywordEndingAlternative "="            ; token $16
+    KeywordEndingAlternative "/"            ; token $15
+    KeywordEndingAlternative "*"            ; token $14
+    KeywordEndingAlternative "-"            ; token $13
+
+;; Where <RULE_OPERATOR> starts.
+;; Also: RULE1E (UNKN)
+OperatorRule:
+    KeywordEndingAlternative "+"            ; token $12
+    .byte ITEM_SYNTAX_ERROR
+    CallRuleEndingRule RULE_EXPRESSION
+    Keyword "LOMEM:"                        ; token $11
+    CallRuleEndingAlternative RULE_EXPRESSION
+    Keyword "HIMEM:"                        ; token $10
+    KeywordEndingAlternative "MAN"          ; token $0F
+    CallRuleEndingAlternative RULE_NUMBER
+    Keyword ","                             ; token $0E
+    CallRuleThenOptional RULE_NUMBER
+    Keyword "AUTO"                          ; token $0D
+    KeywordEndingAlternative "CLR"          ; token $0C
+    KeywordEndingAlternative "NEW"          ; token $0B
+    CallRuleEndingAlternative RULE_NUMBER
+    Keyword ","                             ; token $0A
+    CallRuleThenOptional RULE_NUMBER
+    Keyword "DEL"                           ; token $09
+    KeywordEndingAlternative "RUN"          ; token $08
+    CallRuleEndingAlternative RULE_NUMBER
+    Keyword "RUN"                           ; token $07
+    KeywordEndingAlternative "CON"          ; token $06
+    KeywordEndingAlternative "SAVE"         ; token $05
+    KeywordEndingAlternative "LOAD"         ; token $04
+    CallRuleEndingAlternative RULE_IMMEDIATE_STATEMENT
+    .byte ITEM_REPEAT_TWO
+    Keyword ":"                             ; token $03
+    CallRuleThenOptional RULE_STATEMENT
+
+;; Where <RULE_LINE> starts.
+;; Also: RULE1F (UNKN)
+LineRule:
+    CallRuleThenOptional RULE_NUMBER
+    .byte ITEM_SYNTAX_ERROR
+    CallRuleEndingAlternative RULE_NUMBER
+    .byte ITEM_LINE_MATCHED
+    Keyword "_"                             ; token $02
+    CallRuleEndingAlternative RULE_NUMBER
+    .byte ITEM_LINE_MATCHED
+    Keyword "_"                             ; token $01
+
+;; Where the tokenizer starts on a typed line (<WarmStart::ReadCommand>): a call of <RULE_LINE>, the top of the table.
+;; Also: SYNLINE (UNKN)
+LineStart:
+    CallRule RULE_LINE
+    .assert * = Table + $200, "The syntax table fills two pages."
+
+.endscope

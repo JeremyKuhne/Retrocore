@@ -105,23 +105,28 @@ internal sealed partial class AssemblyPreprocessor
         }
 
         if (operation == "--^") { return ".endrepeat"; }
-        if (operation == "DO")
+        if (operation is "DO" or "IF")
         {
-            EmitLabel();
-            return active ? $".if {Expression(operand)}" : ".if 0";
-        }
-
-        if (operation == "IF")
-        {
-            if (operand.StartsWith("MX", StringComparison.OrdinalIgnoreCase))
+            if (!active) { return ".if 0"; }
+            try
             {
-                throw new AssemblyError(0, "65816 IF MX is unsupported.");
-            }
+                EmitLabel();
+                if (operation == "DO") { return $".if {Expression(operand)}"; }
+                if (operand.StartsWith("MX", StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new AssemblyError(0, "65816 IF MX is unsupported.");
+                }
 
-            string characters = new([.. operand.Where(character => !char.IsWhiteSpace(character))]);
-            bool equal = active && characters.Length >= 3 && characters[0] == characters[2];
-            EmitLabel();
-            return equal ? ".if 1" : ".if 0";
+                string characters = new([.. operand.Where(character => !char.IsWhiteSpace(character))]);
+                return characters.Length >= 3 && characters[0] == characters[2] ? ".if 1" : ".if 0";
+            }
+            catch (AssemblyError failure)
+            {
+                // The conditional still opens, false, so its ELSE and FIN stay matched; the error, from the label or
+                // the condition, is reported where the condition is tested.
+                _conditionFailure = failure.Message;
+                return ".if 0";
+            }
         }
 
         if (operation == "ELSE") { return ".else"; }
@@ -404,6 +409,12 @@ internal sealed partial class AssemblyPreprocessor
         }
         catch (UnauthorizedAccessException)
         {
+            return request;
+        }
+        catch (Exception error) when (error is ArgumentException or NotSupportedException)
+        {
+            // A name no path can hold, or one that depends on current-directory state: the include it becomes
+            // reports it.
             return request;
         }
     }

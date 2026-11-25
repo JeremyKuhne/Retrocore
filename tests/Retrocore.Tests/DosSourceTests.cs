@@ -45,19 +45,56 @@ public sealed class DosSourceTests
 
     /// <summary>
     ///  DOS 3.2's builds are pinned by digest too: the System Master's image at $1B00, which is its tracks 0 to 2
-    ///  as they load, and DOS where it runs at $9D00.
+    ///  as they load, and DOS where it runs at $9D00. DOS 3.2 reads no <c>YEAR</c>, so the year the host gives, which
+    ///  the debugger can give as either, builds the same bytes.
     /// </summary>
     /// <param name="master">Whether to build the master's image.</param>
+    /// <param name="year">The year the host gives, which DOS 3.2 ignores.</param>
     /// <param name="expectedHash">The SHA-256 of the build.</param>
     [TestMethod]
-    [DataRow(true, "4FF1541783B21A69942C248EB9202B04CBD26BF8A81F51721F47A7C76AD40AFA")]
-    [DataRow(false, "1C99E125C8A90ACA5EAD5DB0C733C1936E7102FC12D8FA179442D2CF792E07E2")]
-    public void Dos32BuildMatchesItsDigest(bool master, string expectedHash)
+    [DataRow(true, 1983, "4FF1541783B21A69942C248EB9202B04CBD26BF8A81F51721F47A7C76AD40AFA")]
+    [DataRow(false, 1983, "1C99E125C8A90ACA5EAD5DB0C733C1936E7102FC12D8FA179442D2CF792E07E2")]
+    [DataRow(true, 1980, "4FF1541783B21A69942C248EB9202B04CBD26BF8A81F51721F47A7C76AD40AFA")]
+    [DataRow(false, 1980, "1C99E125C8A90ACA5EAD5DB0C733C1936E7102FC12D8FA179442D2CF792E07E2")]
+    public void Dos32BuildMatchesItsDigest(bool master, int year, string expectedHash)
     {
-        AssemblyResult result = SdkModules.AssembleDos(SdkModules.DosPath("Dos32.asm", s_inputs), master);
+        AssemblyResult result = SdkModules.AssembleDos(SdkModules.DosPath("Dos32.asm", s_inputs), master, year);
 
         result.Diagnostics.Should().BeEmpty();
         Convert.ToHexString(SHA256.HashData(result.Sections[0].Bytes.Span)).Should().Be(expectedHash);
+    }
+
+    /// <summary>
+    ///  Each root refuses a value the digests above don't check, with its own message, instead of building bytes
+    ///  nothing checks: DOS 3.3 a <c>MASTER</c> other than 0 or 1 or a <c>YEAR</c> other than 1983 or 1980, and
+    ///  DOS 3.2, which ignores <c>YEAR</c>, a <c>MASTER</c> other than 0 or 1. The options are built here, as
+    ///  <see cref="SdkModules.AssembleDos"/> builds them, since it takes <c>MASTER</c> only as 0 or 1.
+    /// </summary>
+    /// <param name="root">The root's file, in the Dos folder.</param>
+    /// <param name="master">The value given for <c>MASTER</c>.</param>
+    /// <param name="year">The value given for <c>YEAR</c>.</param>
+    /// <param name="message">Part of the message the root stops with.</param>
+    [TestMethod]
+    [DataRow("Dos33.asm", 2, 1983, "MASTER is 1")]
+    [DataRow("Dos33.asm", 1, 1981, "YEAR is 1983 or 1980:")]
+    [DataRow("Dos33.asm", 0, 1982, "YEAR is 1983 or 1980:")]
+    [DataRow("Dos32.asm", 2, 1983, "MASTER is 1")]
+    public void UncheckedBuildIsRefused(string root, int master, int year, string message)
+    {
+        string path = Path.GetFullPath(SdkModules.DosPath(root, s_inputs));
+        AssemblyOptions options = new(
+            ProcessorVariant.Mos6502,
+            master != 0 ? SdkModules.DosMasterOrigin : SdkModules.DosOrigin,
+            master != 0 ? SdkModules.DosMasterSize : SdkModules.DosSize)
+        {
+            SourceResolver = new FileAssemblySourceResolver(),
+            PredefinedSymbols = new Dictionary<string, long> { ["MASTER"] = master, ["YEAR"] = year }
+        };
+
+        AssemblyResult result = new Assembler.Assembler().Assemble(new AssemblySource(File.ReadAllText(path), path), options);
+
+        result.Success.Should().BeFalse();
+        result.Diagnostics.Should().ContainSingle().Which.Message.Should().Contain(message);
     }
 
     /// <summary>
@@ -100,7 +137,7 @@ public sealed class DosSourceTests
             machine.Bus.Write((ushort)(SdkModules.DosOrigin + offset), dos[offset]);
         }
 
-        AssertMapped(machine, "RDADR16", "ReadAddressSeek.asm");
+        AssertMapped(machine, "DiskII::ReadAddressField", "ReadAddress.asm", "RDADR16");
     }
 
     /// <summary>
@@ -123,16 +160,19 @@ public sealed class DosSourceTests
         }
 
         HasPrompt(machine).Should().BeTrue("DOS loaded and AppleSoft is waiting at its prompt");
-        AssertMapped(machine, "RDADR16", "ReadAddressSeek.asm");
-        AssertMapped(machine, "DOSENT", "FileManagerEntry.asm");
+        AssertMapped(machine, "DiskII::ReadAddressField", "ReadAddress.asm", "RDADR16");
+        AssertMapped(machine, "CallFileManager::ForDos", "FileManagerEntry.asm", "DOSENT");
     }
 
-    // Asserts that a DOS label resolves where DOS runs and maps to its line in the named source.
-    private static void AssertMapped(Apple2Machine machine, string label, string file)
+    // Asserts that a DOS label resolves where DOS runs, maps to its definition in the named source, and is reached by
+    // Apple's name for it too.
+    private static void AssertMapped(Apple2Machine machine, string label, string file, string appleName)
     {
+        string name = label[(label.LastIndexOf(':') + 1)..];
         DebugInfo debug = new();
         SdkModules.AddTo(debug, Apple2Model.IIeEnhanced, s_inputs);
         long address = debug.Resolve(label);
+        debug.Resolve(appleName).Should().Be(address, $"{appleName} is {label}'s historical name");
         address.Should().BeInRange(SdkModules.DosOrigin, SdkModules.DosOrigin + SdkModules.DosSize - 1);
 
         DebugPosition? position = debug.Position(new Apple2TestMemory(machine.Bus), (ushort)address);
@@ -140,9 +180,10 @@ public sealed class DosSourceTests
         line.Path.Should().Be(Path.GetFullPath(SdkModules.DosPath(file, s_inputs)));
         File.ReadAllLines(line.Path)
             .Take(line.Line)
-            .Last(text => text.Length > 1 && text[^1] == ':' && text[..^1].All(char.IsAsciiLetterOrDigit))
+            .Last(text => text.Length > 1 && (text[^1] == ':' && text[..^1].All(char.IsAsciiLetterOrDigit)
+                || text.StartsWith(".proc ", StringComparison.Ordinal)))
             .Should()
-            .Be($"{label}:");
+            .BeOneOf($"{name}:", $".proc {name}");
     }
 
     // A System Master's image, or inconclusive.

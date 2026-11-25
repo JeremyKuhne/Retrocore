@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-// Commodore PET DAP integration: boots BASIC 2 to READY. from the SDK's sources, shows the 320x200 screen in the
-// monitor's phosphor, stops at a breakpoint in the SDK's kernal source with the 6502 call stack, stops where the
+// Commodore PET DAP integration: boots BASIC 2 to READY. from the SDK's sources, stops in the native shared BASIC
+// and editor-spill sources and the MACRO-10 source, shows the 320x200 screen in the monitor's phosphor,
+// stops at a breakpoint in the SDK's kernal source with the 6502 call stack, stops where the
 // machine resets, records a program onto a blank tape in cassette 1 and saves it as a TAP image, loads it back, and
 // launches a .prg BASIC program and an assembly source that prints through the kernal. With MAME's c4040 ROM set (in
 // RETROCORE_PET_ROMS or %USERPROFILE%\Retrocore\pet-roms\extract), a 4040 on device 8 formats a blank disk, saves a
@@ -20,6 +21,10 @@ import { startDap } from "./DapClient.mjs";
 const root = resolve(import.meta.dirname, "..");
 const sdkRoms = join(root, "src", "Retrocore.Machines.Commodore", "Roms");
 const kernal = join(sdkRoms, "Basic2", "Kernal2.asm");
+const sharedBasic = join(root, "src", "Retrocore.Basic", "Roms", "Microsoft6502Basic");
+const nativeInit = join(sdkRoms, "Basic", "Commodore.Initialization.asm");
+const nativeOutput = join(sharedBasic, "MsBasic.OutputCore.asm");
+const macroBasic = join(sharedBasic, "m6502.asm");
 const petRoms = process.env.RETROCORE_PET_ROMS || join(homedir(), "Retrocore", "pet-roms", "extract");
 const driveRoms = join(petRoms, "c4040");
 
@@ -28,10 +33,10 @@ let last = "";
 const timeout = setTimeout(() => fail(new Error(`PET DAP integration timed out; the screen was:
 ${last}`)), Number(process.env.RETROCORE_DAP_TIMEOUT ?? 240000));
 
-// The line after a label: its first instruction.
+// The line after a label or a routine's .proc: its first instruction.
 function lineOf(file, label) {
     const lines = readFileSync(file, "utf8").split(/\r?\n/);
-    const index = lines.findIndex(line => line === `${label}:`);
+    const index = lines.findIndex(line => line === `${label}:` || line.trim() === `.proc ${label}`);
     assert.ok(index >= 0, `${label} is in ${file}`);
     return index + 2;
 }
@@ -89,6 +94,9 @@ const hello = join(tmpdir(), `retrocore-pet-${process.pid}.asm`);
 const disk = join(tmpdir(), `retrocore-pet-${process.pid}.d64`);
 try {
     await request("initialize", { adapterID: "retrocore", linesStartAt1: true, columnsStartAt1: true });
+    await assert.rejects(
+        request("launch", { machine: "pet", sdkRoms, basicSource: "other" }),
+        /basicSource must be native or macro10/);
 
     // Boot: BASIC 2's banner and READY.
     await launch({});
@@ -103,6 +111,31 @@ try {
     assert.equal(hardware.ieee8.value, "empty");
     assert.equal(hardware.rom.value, "BASIC 2, from the SDK's sources");
     assert.deepEqual(devices.devices.map(device => device.id), ["cassette1", "cassette2"]);
+
+    // The default native BASIC maps its cold start inside the editor chip back to the source.
+    const initLine = lineOf(nativeInit, "ColdStart");
+    const setInit = await request("setBreakpoints", { source: { path: nativeInit }, breakpoints: [{ line: initLine }] });
+    assert.equal(setInit.breakpoints[0].verified, true, JSON.stringify(setInit.breakpoints[0]));
+    await request("retro/reset");
+    assert.equal((await event("stopped")).reason, "breakpoint");
+    const initFrame = (await request("stackTrace", { threadId: 1 })).stackFrames[0];
+    assert.equal(initFrame.source.path.toLowerCase(), nativeInit.toLowerCase());
+    const initPc = parseInt((await request("evaluate", { expression: "PC" })).result.slice(1), 16);
+    assert.ok(initPc >= 0xE000 && initPc < 0xE1DE, "BASIC 2's cold start is in the editor ROM");
+    await request("setBreakpoints", { source: { path: nativeInit }, breakpoints: [] });
+    await request("continue", { threadId: 1 });
+    await screen(ready, "READY. after native BASIC's cold start");
+
+    // A numeric PRINT stops in the shared Microsoft source, not at a root's macro invocation.
+    const outputLine = lineOf(nativeOutput, "FormatFac");
+    const setOutput = await request("setBreakpoints", { source: { path: nativeOutput }, breakpoints: [{ line: outputLine }] });
+    assert.equal(setOutput.breakpoints[0].verified, true, JSON.stringify(setOutput.breakpoints[0]));
+    await type("PRINT 42\r");
+    assert.equal((await event("stopped")).reason, "breakpoint");
+    assert.equal((await request("stackTrace", { threadId: 1 })).stackFrames[0].source.path.toLowerCase(), nativeOutput.toLowerCase());
+    await request("setBreakpoints", { source: { path: nativeOutput }, breakpoints: [] });
+    await request("continue", { threadId: 1 });
+    await screen(ready, "READY. after native BASIC's PRINT");
 
     // A stop shows the 320x200 picture in the 2001-N's green.
     await request("pause", { threadId: 1 });
@@ -194,6 +227,35 @@ try {
     assert.equal((await request("evaluate", { expression: "PC" })).result, "$800 (2048)");
     await request("continue", { threadId: 1 });
     await screen(screen => screen.includes("HELLO"), "the program's output");
+
+    // Explicit MACRO-10 selection builds the same ROM while mapping execution to Microsoft's source.
+    await launch({ basicSource: "macro10" });
+    await screen(ready, "READY. from the MACRO-10 BASIC");
+    const macroOutputLine = readFileSync(macroBasic, "utf8").split(/\r?\n/).findIndex(line => /^FOUT:\s+LDYI\b/.test(line)) + 1;
+    assert.ok(macroOutputLine > 0, "FOUT is in Microsoft's source");
+    const setMacro = await request("setBreakpoints", { source: { path: macroBasic }, breakpoints: [{ line: macroOutputLine }] });
+    assert.equal(setMacro.breakpoints[0].verified, true, JSON.stringify(setMacro.breakpoints[0]));
+    await type("PRINT 42\r");
+    assert.equal((await event("stopped")).reason, "breakpoint");
+    assert.equal((await request("stackTrace", { threadId: 1 })).stackFrames[0].source.path.toLowerCase(), macroBasic.toLowerCase());
+    await request("setBreakpoints", { source: { path: macroBasic }, breakpoints: [] });
+    await request("continue", { threadId: 1 });
+    await screen(ready, "READY. after the MACRO-10 BASIC's PRINT");
+
+    // Explicit native selection also maps BASIC 1's original chip and editor spill.
+    await launch({ model: "pet2001", basicRevision: "original", basicSource: "native" });
+    await screen(ready, "BASIC 1's READY.");
+    const setBasic1 = await request("setBreakpoints", { source: { path: nativeInit }, breakpoints: [{ line: initLine }] });
+    assert.equal(setBasic1.breakpoints[0].verified, true, JSON.stringify(setBasic1.breakpoints[0]));
+    await request("retro/reset");
+    assert.equal((await event("stopped")).reason, "breakpoint");
+    const basic1Frame = (await request("stackTrace", { threadId: 1 })).stackFrames[0];
+    assert.equal(basic1Frame.source.path.toLowerCase(), nativeInit.toLowerCase());
+    const basic1Pc = parseInt((await request("evaluate", { expression: "PC" })).result.slice(1), 16);
+    assert.ok(basic1Pc >= 0xE000 && basic1Pc < 0xE1E1, "BASIC 1's cold start is in the editor ROM");
+    await request("setBreakpoints", { source: { path: nativeInit }, breakpoints: [] });
+    await request("continue", { threadId: 1 });
+    await screen(ready, "READY. after BASIC 1's cold start");
 
     // A 4040 on device 8: a blank disk formatted, a program saved on it, the disk saved as a D64 image and listed.
     if (existsSync(join(driveRoms, "901468-14.uj1"))) {

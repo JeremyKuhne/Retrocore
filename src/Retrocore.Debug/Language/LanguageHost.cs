@@ -10,7 +10,7 @@ namespace Retrocore.Debug.Language;
 /// <summary>
 ///  Runs the retrocore language server over standard input and output, and holds what its handlers share.
 /// </summary>
-internal static class LanguageHost
+internal static partial class LanguageHost
 {
     /// <summary>
     ///  The VS Code language the server serves.
@@ -98,6 +98,9 @@ internal static class LanguageHost
         or PetBasicId
         or BasicId;
 
+    // Serves the requests about a machine that is off (LanguageHost.Machine.cs).
+    static partial void ServeMachine(JsonRpcServer server);
+
     /// <summary>
     ///  Serves until the client disconnects.
     /// </summary>
@@ -114,6 +117,7 @@ internal static class LanguageHost
         CompletionHandler completion = new(workspace, basic);
         DocumentSymbolHandler documentSymbols = new(workspace, basic);
         WorkspaceSymbolHandler workspaceSymbols = new(workspace);
+        CodeActionHandler codeActions = new(workspace, basic);
 
         server.OnRequest("initialize", _ => Capabilities());
         server.OnRequest("shutdown", (JsonObject? _) => (JsonNode?)null);
@@ -122,6 +126,7 @@ internal static class LanguageHost
         server.OnNotification("textDocument/didChange", parameters => sync.Change(LspParams.From(parameters)));
         server.OnNotification("textDocument/didClose", parameters => sync.Close(LspParams.From(parameters)));
         server.OnNotification("workspace/didChangeWatchedFiles", parameters => WatchedFilesChanged(workspace, parameters));
+        server.OnNotification("retrocore/unlinkedNameWords", parameters => UnlinkedNameWordsChanged(workspace, parameters));
         server.OnRequest("textDocument/definition", parameters => Answer(definition.Handle, parameters, Locations));
         server.OnRequest("textDocument/references", parameters => Answer(references.Handle, parameters, Locations));
         server.OnRequest("textDocument/hover", parameters => Answer(hover.Handle, parameters, found => found?.ToJson()));
@@ -137,13 +142,13 @@ internal static class LanguageHost
             "workspace/symbol",
             parameters => Answer(workspaceSymbols.Handle, parameters, symbols => Array(symbols, symbol => symbol.ToJson())));
 
+        server.OnRequest("textDocument/codeAction", codeActions.Handle);
         server.OnRequest("retrocore/basic/renumber", parameters => BasicFiles.Renumber(parameters ?? []));
         server.OnRequest("retrocore/basic/list", parameters => BasicFiles.List(parameters ?? []));
         server.OnRequest("retrocore/basic/store", parameters => BasicFiles.Store(parameters ?? []));
 
         // A machine set up while it is off, for the Machine and Drives views with no debug session.
-        server.OnRequest("retrocore/machine/describe", parameters => OffMachine.Describe(parameters ?? []));
-        server.OnRequest("retrocore/machine/change", parameters => OffMachine.Change(parameters ?? []));
+        ServeMachine(server);
 
         // The recovery journals of sessions that did not end cleanly, and what a person decides for one.
         server.OnRequest("retrocore/recovery/list", parameters => new JsonObject
@@ -167,6 +172,33 @@ internal static class LanguageHost
         }
     }
 
+    /// <summary>
+    ///  Applies the client's configured unlinked-name dictionaries.
+    /// </summary>
+    /// <param name="workspace">The workspace to recheck.</param>
+    /// <param name="parameters">The common and folder-specific words.</param>
+    internal static void UnlinkedNameWordsChanged(LanguageWorkspace workspace, JsonObject? parameters)
+    {
+        static HashSet<string> Words(JsonNode? node) =>
+            node is JsonArray array
+                ? new(array.Select(value => value?.GetValue<string>()
+                    ?? throw new InvalidOperationException("A lint word must be a string.")), StringComparer.Ordinal)
+                : throw new InvalidOperationException("The lint words must be an array.");
+
+        HashSet<string> common = Words(parameters?["words"]);
+        JsonArray folders = parameters?["folders"] as JsonArray ?? throw new InvalidOperationException("Missing lint word folders.");
+        List<(string Folder, HashSet<string> Words)> configured = [];
+        foreach (JsonNode? item in folders)
+        {
+            string uri = item.String("uri") ?? throw new InvalidOperationException("A lint word folder needs a URI.");
+            // Assembly documents use file URIs; a virtual workspace folder cannot contain one.
+            if (Uri.TryCreate(uri, UriKind.Absolute, out Uri? folder) && !folder.IsFile) { continue; }
+            configured.Add((PathOf(new DocumentUri(uri)), Words(item?["words"])));
+        }
+
+        workspace.SetUnlinkedWords(common, configured);
+    }
+
     // What the server does, in its answer to initialize: whole-document sync, and the features the handlers serve.
     // The client sends only the retrocore languages' documents.
     private static JsonObject Capabilities() => new()
@@ -184,11 +216,12 @@ internal static class LanguageHost
             ["hoverProvider"] = true,
             ["completionProvider"] = new JsonObject
             {
-                ["triggerCharacters"] = new JsonArray("."),
+                ["triggerCharacters"] = new JsonArray(".", "=", ","),
                 ["resolveProvider"] = false
             },
             ["documentSymbolProvider"] = true,
-            ["workspaceSymbolProvider"] = true
+            ["workspaceSymbolProvider"] = true,
+            ["codeActionProvider"] = new JsonObject { ["codeActionKinds"] = new JsonArray("quickfix") }
         },
         ["serverInfo"] = new JsonObject { ["name"] = "retrocore" }
     };
@@ -258,7 +291,7 @@ internal static class LanguageHost
 
         SourceAnalysis? analysis = workspace.AnalysisOf(path);
         bool macro10 = analysis?.UsesMacro10(path) ?? SourceText.Macro10Dialect(path, lines) == true;
-        if (analysis?.Find(word.Word, macro10) is { Count: > 0 } sites) { return sites; }
+        if (analysis?.Find(word.Word, path, position.Line, macro10) is { Count: > 0 } sites) { return sites; }
 
         // A local label: the nearest line in this file that defines it.
         if (SourceText.LocalDefinition(lines, word.Word, position.Line) is { } local)

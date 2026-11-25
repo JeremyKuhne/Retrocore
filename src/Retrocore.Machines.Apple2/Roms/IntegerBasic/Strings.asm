@@ -1,425 +1,606 @@
-;; INTEGER BASIC: STRINGS, MULTIPLICATION AND SCRN( ($E0FB-$E2AF)
+; retrocore: style=strict
+;; Integer BASIC: strings, multiplication and SCRN(
 ;;
 ;; The routines for string tokens: substrings, DIM of a string, string INPUT, string assignment and the string
 ;; comparisons; then multiplication and MOD, the line input INPUT uses for numbers, and SCRN(.
 ;;
 ;; On the noun stack a string takes two entries. The lower one is the string's address (the variable's first
 ;; character, or $0200 for a line just typed). The one above it is a range: the index of the first character in
-;; NOUNSTKL and the index just past the last in NOUNSTKH. Indexes count from 0, so A$(2,3) is the range 1 to 3. A
-;; string variable holds its characters and, after them, a byte with bit 7 clear; how many characters it can hold
-;; is fixed by DIM and found from the address of the next variable.
+;; <NounStackLow> and the index just past the last in <NounStackHigh>. Indexes count from 0, so A$(2,3) is the range 1
+;; to 3. A string variable holds its characters and, after them, a byte with bit 7 clear; how many characters it can
+;; hold is fixed by DIM and found from the address of the next variable.
 ;;
-;; Part of IntegerBasic.asm; it follows Lister.asm, at $E0FB.
+;; Part of IntegerBasic.asm.
+
+;; The routines of the operator tokens: arithmetic, comparisons and `AND`, `OR` and `NOT`, for numbers and strings,
+;; and the parentheses, which mark where a substring, an array element or a string being stored to starts.
+;;
+;; Each takes its operands off the noun stack and pushes its result. The scope is in pieces through the ROM, in
+;; address order; this first piece is a substring's parenthesis and comma.
+.scope Operators
 
 ;; The opening parenthesis of a substring in an expression (token $2A): A$(n) starts the string at character n.
 ;;
-;; The range's end stays where it was, and the start must stay before it: A$(0), or a start past the end, is a
-;; STRING error.
-;; In: X = the noun stack: the index, above the string's range and address
-;; See: <COMMA_SUBSTR>, <GETSTRNDX>
-PAREN_SUBSTR:
-    jsr GETSTRNDX                   ; $E0FB
-    sta NOUNSTKL,x                  ; $E0FE
-    cmp NOUNSTKH,x                  ; $E100
+;; The range's end stays where it was, and the start must stay before it: A$(0), or a start past the end, is a STRING
+;; error.
+;; In: X = the noun stack: the position, above the string's range and address
+;; Out: X = the noun stack, its top entry the string's range, VerbPriority = $FF
+;; Errors: STRING, >255 for a position above 255
+;; Entry:
+;;   CheckRange = checks a range
+;;   StringError = the STRING error
+;;   ToReportError = reports the error whose message's offset is in Y
+;; Also: PAREN_SUBSTR (IBSM)
+.proc Substring
+    jsr Strings::GetPosition
+    sta NounStackLow,x
+    cmp NounStackHigh,x
 
-;; Checks a substring range: carry clear passes, carry set is a STRING error.
-;; Entry: PrintErr05 = the STRING error, STRERRMESS = an error with the message offset in Y
-CHKSTRRNG:
-    bcc SUBSTRDONE                  ; $E102
+;; Checks a substring's range: carry clear passes, and ends the token as <Operators::SubstringComma> does; carry set
+;; is the STRING error.
+;; In: carry = clear if the range is good
+;; Also: CHKSTRRNG (UNKN)
+CheckRange:
+    bcc SubstringComma::Finish
 
-PrintErr05:
-    ldy #<ErrMsg05                  ; $E104
+;; The STRING error.
+;; Also: PrintErr05 (IBSM)
+StringError:
+    ldy #<Messages::String
 
-STRERRMESS:
-    jmp ERRMESS                     ; $E106
+;; Reports the error whose message's offset is in Y, for the branches nearby.
+;; In: Y = the message's offset from <Messages::GreaterThan32767>
+;; Also: STRERRMESS (UNKN)
+ToReportError:
+    jmp ReportError
+.endproc
 
 ;; The comma of a substring (token $23): A$(m,n) ends the string after character n.
 ;;
-;; The end must not come before the start, nor past the string's present end.
-;; In: X = the noun stack: the second index, above the string's range
-;; See: <PAREN_SUBSTR>, <CHKSTREND>
-COMMA_SUBSTR:
-    jsr GETBYTE                     ; $E109
-    cmp NOUNSTKL,x                  ; $E10C
-    bcc PrintErr05                  ; $E10E
-    jsr CHKSTREND                   ; $E110
-    sta NOUNSTKH,x                  ; $E113
+;; n may not be less than m - 1, which leaves the string empty, nor past the string's present end.
+;; In: X = the noun stack: the second position, above the string's range
+;; Out: X = the noun stack, its top entry the string's range, VerbPriority = $FF
+;; Errors: STRING, >255 for a position above 255
+;; Entry:
+;;   Finish = ends the token as a left parenthesis does
+;; Also: COMMA_SUBSTR (IBSM)
+.proc SubstringComma
+    jsr GetByte
+    cmp NounStackLow,x
+    bcc Substring::StringError
+    jsr Strings::CheckSubstringEnd
+    sta NounStackHigh,x
 
-;; Ends a substring token the way a left parenthesis ends, so the operators before it wait (<LEFT_PAREN>).
-SUBSTRDONE:
-    jmp LEFT_PAREN                  ; $E115
+;; Ends a substring token the way a left parenthesis ends, so the operators before it wait
+;; (<Operators::LeftParenthesis>).
+;; Also: SUBSTRDONE (UNKN)
+Finish:
+    jmp Operators::LeftParenthesis
+.endproc
 
-;; Takes a 1-based character position from the noun stack and returns it counted from 0.
-;; Out: A = the position less 1
-;; Errors: STRING for 0
-;; Uses: ACC, X (popped)
-GETSTRNDX:
-    jsr GETBYTE                     ; $E118
-    beq PrintErr05                  ; $E11B
-    sec                             ; $E11D
-    sbc #$01                        ; $E11E
-    rts                             ; $E120
+.endscope
+
+;; The helpers of the string tokens.
+.scope Strings
+
+;; Takes a character position, counted from 1, off the noun stack and returns it counted from 0.
+;; In: X = the noun stack, its top entry the position
+;; Out: A = the position less 1, X = the noun stack, one entry higher, Accumulator = the position, Y = 0, carry = set
+;; Errors: STRING for 0, >255 for a position above 255
+;; Also: GETSTRNDX (UNKN)
+.proc GetPosition
+    jsr GetByte
+    beq Operators::Substring::StringError
+    sec
+    sbc #1
+    rts
+.endproc
+
+.endscope
+
+; Operators: the position of a string being assigned to.
+.scope Operators continued
 
 ;; The opening parenthesis of a string being assigned to (token $42): A$(n)="..." stores from character n on.
 ;;
 ;; The position can be anywhere in the string or just after its end, so the string cannot get a gap.
 ;; In: X = the noun stack: the position, above the variable's range and address
-;; See: <LET_STR>
-PAREN_STRDEST:
-    jsr GETSTRNDX                   ; $E121
-    sta NOUNSTKL,x                  ; $E124
-    clc                             ; $E126
-    sbc NOUNSTKH,x                  ; $E127 carry is clear: position - end - 1
-    jmp CHKSTRRNG                   ; $E129
+;; Out: X = the noun stack, its top entry the variable's range, VerbPriority = $FF
+;; Errors: STRING, >255 for a position above 255
+;; See: <Statements::LetString>
+;; Also: PAREN_STRDEST (UNKN)
+.proc StringDestination
+    jsr Strings::GetPosition
+    sta NounStackLow,x
+    clc
+    sbc NounStackHigh,x             ; carry is clear: position - end - 1
+    jmp Substring::CheckRange
+.endproc
 
-;; The MEM FULL error.
-PrintErr03:
-    ldy #<ErrMsg03                  ; $E12C
-    bne STRERRMESS                  ; $E12E
+.endscope
+
+; The string helpers, continued.
+.scope Strings continued
+
+;; Reports the MEM FULL error, for <SetVariableSize>.
+;; Also: PrintErr03 (IBSM)
+.proc MemoryFull
+    ldy #<Messages::MemoryFull
+    bne Operators::Substring::ToReportError ; always
+.endproc
+
+.endscope
+
+; Statements: DIM of a string.
+.scope Statements continued
 
 ;; DIM of a string (token $4E, and $43 after a comma): reserves room for a string of n characters.
 ;;
-;; A new variable gets 2 bytes for its value (<CMPVARNAME>), so DIM can only size the variable created last, the one
-;; whose next-variable address is still <PV>; DIM of any other is a DIM error. It moves <PV>, and that address, past
-;; n + 1 bytes: the characters and the byte that ends them.
-;; In: X = the noun stack: the length, above the variable's address
-;; See: <DIMNUM>, <SETVARSIZE>
-DIMSTR:
-    jsr GETSTRNDX                   ; $E130
-    inx                             ; $E133 drop the range entry: the variable's address is on top
+;; A new variable gets 2 bytes for its value (<Variables::CompareName>), so DIM can only size the variable created last,
+;; the one whose next-variable address is still <VariablesEnd>; DIM of any other is a DIM error. It moves
+;; <VariablesEnd>, and that address, past n + 1 bytes: the characters and the byte that ends them.
+;; In: X = the noun stack: the length, above the variable's range and address
+;; Out: X = the noun stack, all three entries taken off
+;; Errors: STRING for a length of 0, >255 for one above 255, MEM FULL, DIM
+;; Also: DIMSTR (IBSM)
+.proc DimString
+    jsr Strings::GetPosition
+    inx                             ; drop the range entry: the variable's address is on top; carry is set
+    ; Falls into SetVariableSize.
+.endproc
 
-;; Makes the newest variable's value ACC + 1 bytes long (carry set) or ACC bytes (carry clear).
+.endscope
+
+;; Makes the newest variable's value Accumulator bytes long, plus 1 with carry set.
 ;;
-;; The address after the value goes in both the variable's next-variable field and <PV>, if it stays below <PP>.
-;; In: X = the noun stack: the variable's address, ACC = the size, carry = 1 to add a byte
+;; The address after the value goes in both the variable's next-variable field, the two bytes before its value, and
+;; <VariablesEnd>, if it stays below <ProgramStart>.
+;; In: X = the noun stack, its top entry the variable's value's address, Accumulator = the size, carry = set to add a
+;;   byte
+;; Out: X = the noun stack, one entry higher, VariablesEnd = the end of the value, Auxiliary = the variable's
+;;   next-variable field, Y = $FF
 ;; Errors: MEM FULL, DIM for a variable that is not the newest
-;; Uses: A, Y, AUX
-;; Entry: DimErr = the DIM error
-SETVARSIZE:
-    lda NOUNSTKL,x                  ; $E134
-    sta AUX                         ; $E136
-    adc ACC                         ; $E138
-    pha                             ; $E13A
-    tay                             ; $E13B
-    lda NOUNSTKH,x                  ; $E13C
-    sta AUX+1                       ; $E13E
-    adc ACC+1                       ; $E140
-    pha                             ; $E142
-    cpy PP                          ; $E143
-    sbc PP+1                        ; $E145 the new end must stay below the program
-    bcs PrintErr03                  ; $E147
-    lda AUX                         ; $E149
-    adc #$FE                        ; $E14B carry clear: AUX - 2, the variable's next-variable address
-    sta AUX                         ; $E14D
-    lda #$FF                        ; $E14F
-    tay                             ; $E151
-    adc AUX+1                       ; $E152
-    sta AUX+1                       ; $E154
-@Loop1:
-    iny                             ; $E156
-    lda (AUX),y                     ; $E157
-    cmp PV,y                        ; $E159 compare it with PV, both bytes
-    bne DimErr                      ; $E15C
-    tya                             ; $E15E
-    beq @Loop1                      ; $E15F Y = 0: compare the high byte too
-@Loop2:
-    pla                             ; $E161 store the new end in both
-    sta (AUX),y                     ; $E162
-    sta PV,y                        ; $E164
-    dey                             ; $E167
-    bpl @Loop2                      ; $E168
-    inx                             ; $E16A
-    rts                             ; $E16B
-    .byte $EA                       ; $E16C an unused byte
+;; Entry:
+;;   DimError = the DIM error
+;;   ToReportError = reports the error whose message's offset is in Y
+;; Also: SETVARSIZE (UNKN)
+.proc SetVariableSize
+    lda NounStackLow,x
+    sta Auxiliary
+    adc Accumulator
+    pha
+    tay
+    lda NounStackHigh,x
+    sta Auxiliary+1
+    adc Accumulator+1
+    pha
+    cpy ProgramStart
+    sbc ProgramStart+1              ; the new end must stay below the program
+    bcs Strings::MemoryFull
 
-DimErr:
-    ldy #<ErrMsg17                  ; $E16D
+    ; Auxiliary = the value's address less 2: the next-variable field. Carry is clear.
+    lda Auxiliary
+    adc #<-2
+    sta Auxiliary
+    lda #$FF
+    tay
+    adc Auxiliary+1
+    sta Auxiliary+1
 
-SETVARSIZE_1:
-    bne STRERRMESS                  ; $E16F
+    ; The field must hold VariablesEnd, both bytes.
+CompareEnd:
+    iny
+    lda (Auxiliary),y
+    cmp VariablesEnd,y
+    bne DimError
+    tya
+    beq CompareEnd                  ; Y = 0: compare the high byte too
 
-;; INPUT of a string: reads a line with the ? prompt, then assigns it to the variable as <LET_STR> does.
+    ; Store the new end in both, high byte first.
+StoreEnd:
+    pla
+    sta (Auxiliary),y
+    sta VariablesEnd,y
+    dey
+    bpl StoreEnd
+    inx
+    rts
+
+    ; An unused byte (a NOP).
+    .byte $EA
+
+;; The DIM error.
+;; Also: DimErr (IBSM)
+DimError:
+    ldy #<Messages::Dim
+
+;; Reports the error whose message's offset is in Y, for the branches nearby.
+ToReportError:
+    bne Operators::Substring::ToReportError ; always
+.endproc
+
+; The string helpers, continued: INPUT of a string.
+.scope Strings continued
+
+;; Reads a line with the ? prompt, then assigns it to the string variable as <Statements::LetString> does.
 ;;
-;; It pushes the typed line as a string: address $0200 (<IN>) and the range 0 to the line's length.
+;; It pushes the typed line as a string: address $0200 (<InputBuffer>) and the range 0 to the line's length. A
+;; Control-C in the line goes to the warm start (<ReadInputLine>).
 ;; In: X = the noun stack: the variable's range and address
-;; See: <INPUT_STRVAR>, <RDKEY>, <LET_STR>
-INPUTSTR:
-    lda #$00                        ; $E171
-    jsr PUSHNOUNLO                  ; $E173 push a range starting at 0
-    ldy #$02                        ; $E176 and give it the address $0200
-    sty NOUNSTKH,x                  ; $E178
-    jsr PUSHNOUNLO                  ; $E17A the range entry; its end comes from the line
-    stx XSAVE                       ; $E17D
-    tax                             ; $E17F
-    inc PROMPT                      ; $E180 the prompt becomes ?
-    jsr RDKEY                       ; $E182
-    dec PROMPT                      ; $E185
-    txa                             ; $E187
-    ldx XSAVE                       ; $E188
-    sta NOUNSTKH,x                  ; $E18A
+;; Out: X = the noun stack, the variable's two entries taken off
+;; Errors: `STR OVFL`
+;; Also: INPUTSTR (IBSM)
+.proc ReadLineInto
+    ; The line's address: $0200.
+    lda #0
+    jsr PushNoun::LowOnly
+    ldy #>InputBuffer
+    sty NounStackHigh,x
+
+    ; The range, from 0; its end comes from the line.
+    jsr PushNoun::LowOnly
+    stx SavedX
+    tax                             ; the line starts at index 0
+    inc PromptCharacter             ; > becomes ?
+    jsr ReadInputLine
+    dec PromptCharacter
+    txa
+    ldx SavedX
+    sta NounStackHigh,x
+    ; Falls into Statements::LetString.
+.endproc
+
+.endscope
+
+; Statements: string assignment.
+.scope Statements continued
 
 ;; String assignment (token $70): copies the source string's range into the variable, from the variable's start
 ;; position, and ends it there.
 ;;
-;; A character past the room DIM gave is a STR OVFL error.
+;; A character past the room DIM gave is a `STR OVFL` error.
 ;; In: X = the noun stack: the source's range and address above the variable's range and address
-;; Errors: STR OVFL
-;; See: <GETSTRROOM>, <PAREN_STRDEST>
-LET_STR:
-    lda NOUNSTKL+1,x                ; $E18C
-    sta ACC                         ; $E18E
-    lda NOUNSTKH+1,x                ; $E190
-    sta ACC+1                       ; $E192
-    inx                             ; $E194 pop the source; ACC = its address
-    inx                             ; $E195
-    jsr GETSTRROOM                  ; $E196
+;; Out: X = the noun stack, all four entries taken off
+;; Errors: `STR OVFL`
+;; See: <Strings::FindRoom>, <Operators::StringDestination>
+;; Also: LET_STR (UNKN)
+.proc LetString
+    lda NounStackLow+1,x
+    sta Accumulator
+    lda NounStackHigh+1,x
+    sta Accumulator+1
+    inx                             ; pop the source; Accumulator = its address
+    inx
+    jsr Strings::FindRoom
 
 ;; The copy loop, until the source's range is empty.
-LET_STR_1:
-    lda NOUNSTKL-2,x                ; $E199
-    cmp NOUNSTKH-2,x                ; $E19B
-    bcs LET_STR_3                   ; $E19D
-    inc NOUNSTKL-2,x                ; $E19F
-    tay                             ; $E1A1
-    lda (ACC),y                     ; $E1A2
-    ldy NOUNSTKL,x                  ; $E1A4
-    cpy P2                          ; $E1A6 past the room the variable has?
-    bcc LET_STR_2                   ; $E1A8
-    ldy #<ErrMsg18                  ; $E1AA
-    bne SETVARSIZE_1                ; $E1AC
+CopyCharacter:
+    lda NounStackLow-2,x
+    cmp NounStackHigh-2,x
+    bcs EndString
+    inc NounStackLow-2,x
+    tay
+    lda (Accumulator),y
+    ldy NounStackLow,x
+    cpy Pointer2                    ; past the room the variable has?
+    bcc StoreCharacter
+    ldy #<Messages::StringOverflow
+    bne SetVariableSize::ToReportError ; always
 
-LET_STR_2:
-    sta (AUX),y                     ; $E1AE
-    inc NOUNSTKL,x                  ; $E1B0
-    bcc LET_STR_1                   ; $E1B2
+StoreCharacter:
+    sta (Auxiliary),y
+    inc NounStackLow,x
+    bcc CopyCharacter               ; always: the CPY above cleared carry
 
-;; Ends the string with X, which is below $80, then pops the variable and shows it if DSP is on (<LETSTREND>).
-LET_STR_3:
-    ldy NOUNSTKL,x                  ; $E1B4
-    txa                             ; $E1B6
-    sta (AUX),y                     ; $E1B7
-    jmp LETSTREND                   ; $E1B9
+;; Ends the string with X, which is below $80, then pops the variable and shows it if DSP is on
+;; (<Display::FinishStringAssignment>).
+EndString:
+    ldy NounStackLow,x
+    txa
+    sta (Auxiliary),y
+    jmp Display::FinishStringAssignment
+.endproc
 
-;; Points AUX at the destination string and works out how many characters it can hold.
+.endscope
+
+; The string helpers, continued: the room a string variable has.
+.scope Strings continued
+
+;; Points <Auxiliary> at the destination string and works out how many characters it can hold.
 ;;
 ;; The two bytes before a value are the next variable's address, so the low byte of that address, less the value's
 ;; address, less 1 for the ending byte, is the room DIM gave.
 ;; In: X = the noun stack, with the variable's address at X+1
-;; Out: AUX = the variable's address, P2 = the number of characters it can hold
-;; Uses: A, Y
+;; Out: Auxiliary = the variable's address, Pointer2 = the number of characters it can hold, Y = 0
 ;; Keeps: X
-GETSTRROOM:
-    lda NOUNSTKL+1,x                ; $E1BC
-    sta AUX                         ; $E1BE
-    sec                             ; $E1C0
-    sbc #$02                        ; $E1C1
-    sta P2                          ; $E1C3
-    lda NOUNSTKH+1,x                ; $E1C5
-    sta AUX+1                       ; $E1C7
-    sbc #$00                        ; $E1C9
-    sta P2+1                        ; $E1CB
-    ldy #$00                        ; $E1CD
-    lda (P2),y                      ; $E1CF
-    clc                             ; $E1D1
-    sbc AUX                         ; $E1D2
-    sta P2                          ; $E1D4
-    rts                             ; $E1D6
+;; Also: GETSTRROOM (UNKN)
+.proc FindRoom
+    lda NounStackLow+1,x
+    sta Auxiliary
+    sec
+    sbc #2
+    sta Pointer2
+    lda NounStackHigh+1,x
+    sta Auxiliary+1
+    sbc #0
+    sta Pointer2+1
+    ldy #0
+    lda (Pointer2),y
+    clc
+    sbc Auxiliary
+    sta Pointer2
+    rts
+.endproc
+
+.endscope
+
+; Operators: the string comparisons, multiplication and MOD.
+.scope Operators continued
 
 ;; String comparison with = (token $39): replaces two strings with 1 if they are the same, 0 if not.
 ;;
 ;; The strings are compared a character at a time over their ranges; they are equal only if both ranges run out
 ;; together.
 ;; In: X = the noun stack: two strings, each a range above an address
-;; Out: X = the noun stack, its top entry the result
-;; See: <NE_STR>
-EQ_STR:
-    lda NOUNSTKL+3,x                ; $E1D7
-    sta ACC                         ; $E1D9
-    lda NOUNSTKH+3,x                ; $E1DB
-    sta ACC+1                       ; $E1DD
-    lda NOUNSTKL+1,x                ; $E1DF
-    sta AUX                         ; $E1E1
-    lda NOUNSTKH+1,x                ; $E1E3
-    sta AUX+1                       ; $E1E5
-    inx                             ; $E1E7
-    inx                             ; $E1E8
-    inx                             ; $E1E9 pop to the result entry
-    ldy #$00                        ; $E1EA
-    sty NOUNSTKH,x                  ; $E1EC
-    sty NOUNSTKC,x                  ; $E1EE the result is a number
-    iny                             ; $E1F0
-    sty NOUNSTKL,x                  ; $E1F1 1: equal so far
+;; Out: X = the noun stack, three entries higher, its top entry the result
+;; Uses: A, Y, Accumulator, Auxiliary, Pointer2
+;; See: <Operators::StringNotEqual>
+;; Also: EQ_STR (UNKN)
+.proc StringEqual
+    lda NounStackLow+3,x
+    sta Accumulator
+    lda NounStackHigh+3,x
+    sta Accumulator+1               ; the left string's address
+    lda NounStackLow+1,x
+    sta Auxiliary
+    lda NounStackHigh+1,x
+    sta Auxiliary+1                 ; the right string's address
+    inx
+    inx
+    inx                             ; pop to the result's entry, the left string's address
+    ldy #0
+    sty NounStackHigh,x
+    sty NounStackNumberHigh,x       ; the result is a number
+    iny
+    sty NounStackLow,x              ; 1: equal so far
 
 ;; Compares the next pair of characters.
-EQ_STR_1:
-    lda NOUNSTKL-3,x                ; $E1F3
-    cmp NOUNSTKH-3,x                ; $E1F5 the first string's range
-    php                             ; $E1F7
-    pha                             ; $E1F8
-    lda NOUNSTKL-1,x                ; $E1F9
-    cmp NOUNSTKH-1,x                ; $E1FB the second string's range
-    bcc EQ_STR_4                    ; $E1FD the second has a character left
-    pla                             ; $E1FF
-    plp                             ; $E200
-    bcs EQ_STR_3                    ; $E201 both ran out together: equal
+Compare:
+    lda NounStackLow-3,x
+    cmp NounStackHigh-3,x           ; the right string's range
+    php
+    pha
+    lda NounStackLow-1,x
+    cmp NounStackHigh-1,x           ; the left string's range
+    bcc CompareCharacters           ; the left one has a character left
+    pla
+    plp
+    bcs Done                        ; both ran out together: equal
 
 ;; The strings differ: the result becomes 0.
-EQ_STR_2:
-    lsr NOUNSTKL,x                  ; $E203
+Differ:
+    lsr NounStackLow,x
+Done:
+    rts
 
-EQ_STR_3:
-    rts                             ; $E205
+CompareCharacters:
+    tay
+    lda (Accumulator),y
+    sta Pointer2
+    pla
+    tay
+    plp
+    bcs Differ                      ; the right one ran out first
+    lda (Auxiliary),y
+    cmp Pointer2
+    bne Differ
+    inc NounStackLow-1,x
+    inc NounStackLow-3,x
+    bcs Compare                     ; always: the CMP found them equal
+.endproc
 
-EQ_STR_4:
-    tay                             ; $E206
-    lda (ACC),y                     ; $E207
-    sta P2                          ; $E209
-    pla                             ; $E20B
-    tay                             ; $E20C
-    plp                             ; $E20D
-    bcs EQ_STR_2                    ; $E20E the first ran out first
-    lda (AUX),y                     ; $E210
-    cmp P2                          ; $E212
-    bne EQ_STR_2                    ; $E214
-    inc NOUNSTKL-1,x                ; $E216
-    inc NOUNSTKL-3,x                ; $E218
-    bcs EQ_STR_1                    ; $E21A
-
-;; String comparison with # (token $3A, not equal): the opposite of <EQ_STR>.
-NE_STR:
-    jsr EQ_STR                      ; $E21C
-    jmp NOT                         ; $E21F
+;; String comparison with # (token $3A, not equal): the opposite of <Operators::StringEqual>.
+;; In: X = the noun stack: two strings, each a range above an address
+;; Out: X = the noun stack, three entries higher, its top entry the result
+;; Also: NE_STR (UNKN)
+.proc StringNotEqual
+    jsr StringEqual
+    jmp Operators::Not
+.endproc
 
 ;; Multiplication (token $14): replaces the top two numbers with their product.
 ;;
-;; <MDARGS> makes both numbers positive and keeps the product's sign. The product is built a bit of the multiplier at
-;; a time, from the top: the partial product doubles each step and gains the multiplicand when the bit is 1.
+;; <Operators::TakeMagnitudes> makes both numbers positive and keeps the product's sign. The product is built a bit of
+;; the multiplier at a time, from the top: the partial product doubles each step and gains the multiplicand when the
+;; bit is 1. A bug: only the doublings are checked, each for a partial product whose bit 14 is set, so an addition
+;; that carries into bit 15 goes through unless the doubling after it finds bit 14 set, and an addition for the
+;; multiplier's last bit has no doubling after it: 3 * 16000 gives -17536 and 6 * 12288 gives 8192 instead of the
+;; >32767 error.
 ;; In: X = the noun stack: two numbers
-;; Out: X = the noun stack, its top entry the product
-;; Errors: >32767 if the product does not fit in 15 bits
-;; Uses: A, Y, ACC, AUX, P2, P3
-;; See: <MDARGS>, <MultEnd>
-MULT:
-    jsr MDARGS                      ; $E222
+;; Out: X = the noun stack, one entry higher, its top entry the product
+;; Errors: >32767 when a doubling finds bit 14 of the partial product set, or for an operand of -32768
+;; Uses: A, Y, Accumulator, Auxiliary, Pointer2, Pointer3
+;; Entry:
+;;   PushResult = pushes the result in <Pointer3>
+;; Also: MULT (IBSM)
+.proc Multiply
+    jsr TakeMagnitudes
 
-MULT_1:
-    asl ACC                         ; $E225
-    rol ACC+1                       ; $E227 the multiplier's next bit, from the top
-    bcc MULT_2                      ; $E229
-    clc                             ; $E22B add the multiplicand
-    lda P3                          ; $E22C
-    adc AUX                         ; $E22E
-    sta P3                          ; $E230
-    lda P3+1                        ; $E232
-    adc AUX+1                       ; $E234
-    sta P3+1                        ; $E236
+    ; The multiplier's next bit, from the top.
+NextBit:
+    asl Accumulator
+    rol Accumulator+1
+    bcc NextStep
+    clc                             ; a 1: add the multiplicand
+    lda Pointer3
+    adc Auxiliary
+    sta Pointer3
+    lda Pointer3+1
+    adc Auxiliary+1
+    sta Pointer3+1
 
-MULT_2:
-    dey                             ; $E238
-    beq MultEnd                     ; $E239
-    asl P3                          ; $E23B
-    rol P3+1                        ; $E23D
-    bpl MULT_1                      ; $E23F the product must stay below $8000
-    jmp Err32767                    ; $E241
+NextStep:
+    dey
+    beq PushResult
+    asl Pointer3
+    rol Pointer3+1
+    bpl NextBit                     ; the product must stay below $8000
+    jmp Operators::Negate::OverflowError
 
-;; Pushes <P3> as the result, negated when the sign kept in <P2>+1 says so.
+;; Pushes <Pointer3> as the result, negated when the sign kept in the high byte of <Pointer2> says so.
 ;;
 ;; MOD and division end here too.
-;; In: P3 = the magnitude, P2+1 = bit 7 set for a negative result
-MultEnd:
-    lda P3                          ; $E244
-    jsr PUSHNOUN                    ; $E246
-    lda P3+1                        ; $E249 Y = 0: a number
-    sta NOUNSTKC,x                  ; $E24B
-    asl P2+1                        ; $E24D
-    bcc POPABS_2                    ; $E24F
-    jmp NEGATE                      ; $E251
+;; In: Pointer3 = the magnitude, Pointer2+1 = bit 7 set for a negative result, Y = 0, X = the noun stack
+;; Out: X = the noun stack, its top entry the result
+;; Errors: >32767 for a negative result whose magnitude is $8000
+;; Also: MultEnd (IBSM)
+PushResult:
+    lda Pointer3
+    jsr PushNoun
+    lda Pointer3+1                  ; Y = 0: a number
+    sta NounStackNumberHigh,x
+    asl Pointer2+1
+    bcc TakeMagnitudes::Done
+    jmp Operators::Negate
+.endproc
 
 ;; Takes two numbers off the noun stack as positive values for multiplication or division.
 ;;
-;; <P2>+1 starts as $55 (%01010101) and is shifted left for each negative operand, so its top bit, set after one
-;; shift and clear after none or two, ends up as the sign of the result.
-;; Out: AUX = the top number's magnitude, ACC = the one below's magnitude, P3 = 0, Y = 16 (the bits to work)
-;; Uses: A, X (both popped), P2+1
-MDARGS:
-    lda #$55                        ; $E254
-    sta P2+1                        ; $E256
-    jsr POPABS                      ; $E258
+;; The high byte of <Pointer2> starts as $55 (%01010101) and is shifted left for each negative operand, so its top
+;; bit, set after one shift and clear after none or two, ends up as the sign of the result.
+;; In: X = the noun stack: two numbers
+;; Out: Auxiliary = the top number's magnitude, Accumulator = the one below's magnitude, Pointer3 = 0, Y = 16 (the bits
+;;   to work), Pointer2+1 = bit 7 set for a negative result, X = the noun stack, two entries higher
+;; Errors: >32767 for an operand of -32768
+;; Entry:
+;;   Done = returns; <Operators::Multiply::PushResult> branches here
+;; Also: MDARGS (UNKN)
+.proc TakeMagnitudes
+;; The sign's seed: alternate bits, so each shift left flips bit 7.
+SIGN_SEED = %01010101
 
-;; Moves ACC to AUX and takes the next number off the noun stack into ACC, made positive.
-POPABS:
-    lda ACC                         ; $E25B
-    sta AUX                         ; $E25D
-    lda ACC+1                       ; $E25F
-    sta AUX+1                       ; $E261
-    jsr GET16BIT                    ; $E263
-    sty P3                          ; $E266
-    sty P3+1                        ; $E268
-    lda ACC+1                       ; $E26A
-    bpl POPABS_1                    ; $E26C
-    dex                             ; $E26E negative: push it back
-    asl P2+1                        ; $E26F one more negative operand
-    jsr NEGATE                      ; $E271 negate it on the stack and take it again
-    jsr GET16BIT                    ; $E274
+;; The bits a multiplication or division works.
+BITS = 16
 
-POPABS_1:
-    ldy #$10                        ; $E277
+    lda #SIGN_SEED
+    sta Pointer2+1
+    jsr TakeOne
 
-POPABS_2:
-    rts                             ; $E279
+;; Moves <Accumulator> to <Auxiliary> and takes the next number off the noun stack into <Accumulator>, made positive.
+;; Also: POPABS (UNKN)
+TakeOne:
+    lda Accumulator
+    sta Auxiliary
+    lda Accumulator+1
+    sta Auxiliary+1
+    jsr GetNumber
+    sty Pointer3
+    sty Pointer3+1
+    lda Accumulator+1
+    bpl Positive
+
+    ; Negative: push it back, negate it on the stack and take it again.
+    dex
+    asl Pointer2+1                  ; one more negative operand
+    jsr Operators::Negate
+    jsr GetNumber
+
+Positive:
+    ldy #BITS
+Done:
+    rts
+.endproc
 
 ;; MOD (token $1F): replaces two numbers with the remainder of dividing the lower by the top.
 ;;
-;; <DIVMOD> divides, leaving the remainder in P3 and Y = 0, so the branch always goes to <MultEnd>.
+;; <DivideWithRemainder> divides, leaving the remainder in <Pointer3> and Y = 0, so the branch always goes to
+;; <Operators::Multiply::PushResult>. The remainder takes the sign a quotient would have: 7 MOD -2 is -1.
 ;; In: X = the noun stack: two numbers
-;; Out: X = the noun stack, its top entry the remainder
-;; See: <DIVMOD>, <DIVIDE>
-MOD:
-    jsr DIVMOD                      ; $E27A
-    beq MultEnd                     ; $E27D
-    .byte $FF                       ; $E27F an unused byte
+;; Out: X = the noun stack, one entry higher, its top entry the remainder
+;; Errors: >32767 for a division by 0, or for an operand of -32768
+;; See: <DivideWithRemainder>, <Operators::Divide>
+;; Also: MOD (IBSM)
+.proc Mod
+    jsr DivideWithRemainder
+    beq Multiply::PushResult        ; always
 
-;; Reads a line for INPUT of numbers into <IN>, with the ? prompt.
-;; Out: X = the index of the return that ends the line
-;; See: <GETCMD>, <INPUTNUMLN>
-GETQLINE:
-    inc PROMPT                      ; $E280
-    ldy #$00                        ; $E282
-    jsr GETCMD                      ; $E284
-    dec PROMPT                      ; $E287
-    rts                             ; $E289
+    ; An unused byte.
+    .byte $FF
+.endproc
+
+.endscope
+
+;; The line input of the command loop and of INPUT, and the routines that store and delete program lines.
+.scope Editor
+
+;; Reads a line for INPUT of numbers into <InputBuffer>, with the ? prompt.
+;;
+;; INPUT has printed the ? already; the prompt character becomes ? so a line cancelled with Control-X is prompted
+;; again with it.
+;; Out: Y = the index of the underline that ends the line, X = $FF
+;; See: <ReadNumberLine>
+;; Also: GETQLINE (UNKN)
+.proc ReadInputLine
+    inc PromptCharacter             ; > becomes ?
+    ldy #0
+    jsr Editor::ReadLine
+    dec PromptCharacter
+    rts
+.endproc
+
+.endscope
+
+;; The routines of the function tokens: `ABS`, `SGN`, `PEEK`, `RND`, `PDL`, `LEN(`, `ASC(` and `SCRN(`.
+;;
+;; Each takes its argument off the noun stack and pushes its value. The scope is in pieces through the ROM, in
+;; address order.
+.scope Functions
 
 ;; SCRN( (token $3D): replaces a column and a row with the color of that lo-res block, 0 to 15.
 ;;
-;; A text byte holds two lo-res blocks: the even row in the low nibble, the odd row in the high nibble. The row
-;; is not checked against the screen.
+;; A text byte holds two lo-res blocks: the even row in the low nibble, the odd row in the high nibble. The row is not
+;; checked against the screen.
 ;; In: X = the noun stack: the column, then the row on top
-;; Out: X = the noun stack, its top entry the color
-;; See: <COMMA_SCRN>, <GBASCALC>
-SCRN:
-    jsr GETBYTE                     ; $E28A
-    lsr a                           ; $E28D
-    php                             ; $E28E carry = the row's lowest bit
-    jsr GBASCALC                    ; $E28F
-    jsr GETBYTE                     ; $E292
-    tay                             ; $E295
-    lda (GBASL),y                   ; $E296
-    plp                             ; $E298
-    bcc SCRN_1                      ; $E299
-    lsr a                           ; $E29B
-    lsr a                           ; $E29C odd row: the upper nibble
-    lsr a                           ; $E29D
-    lsr a                           ; $E29E
+;; Out: X = the noun stack, one entry higher, its top entry the color, VerbPriority = $FF
+;; Errors: >255 for a column or row above 255
+;; Also: SCRN (IBSM)
+.proc Scrn
+;; The low nibble of a screen byte: one block's color.
+COLOR_BITS = $0F
 
-SCRN_1:
-    and #$0F                        ; $E29F
-    ldy #$00                        ; $E2A1
-    jsr PUSHNOUN                    ; $E2A3
-    sty NOUNSTKC,x                  ; $E2A6
-    dey                             ; $E2A8 PRFLAG = $FF, as a left parenthesis sets it
-    sty PRFLAG                      ; $E2A9
+    jsr GetByte
+    lsr a
+    php                             ; carry = the row's lowest bit
+    jsr LowRes::RowAddress
+    jsr GetByte
+    tay
+    lda (LowResBase),y
+    plp
+    bcc EvenRow
 
-;; The comma of SCRN( (token $3E): nothing to do, as <SCRN> takes both numbers.
-COMMA_SCRN:
-    rts                             ; $E2AB
-    .byte $FF, $FF, $FF, $FF        ; $E2AC unused bytes
+    ; An odd row: the upper nibble.
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+
+EvenRow:
+    and #COLOR_BITS
+    ldy #0
+    jsr PushNoun
+    sty NounStackNumberHigh,x
+    dey                             ; VerbPriority = $FF, as a left parenthesis sets it
+    sty VerbPriority
+    ; Falls into ScrnComma.
+.endproc
+
+;; The comma of SCRN( (token $3E): nothing to do, as <Functions::Scrn> takes both numbers.
+;; Also: COMMA_SCRN (IBSM)
+.proc ScrnComma
+    rts
+
+    ; Unused bytes.
+    .byte $FF, $FF, $FF, $FF
+.endproc
+
+.endscope

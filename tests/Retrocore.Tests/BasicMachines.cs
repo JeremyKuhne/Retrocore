@@ -22,7 +22,7 @@ internal static class BasicMachines
     /// <summary>
     ///  Gets the test inputs, which hold the SDK's ROM sources.
     /// </summary>
-    internal static string Inputs { get; } = Path.Join(AppContext.BaseDirectory, "Inputs");
+    internal static string Inputs => BasicNames.Inputs;
 
     /// <summary>
     ///  Assembles AppleSoft for a model.
@@ -30,7 +30,7 @@ internal static class BasicMachines
     /// <param name="model">The model.</param>
     /// <returns>The assembly, for its symbols.</returns>
     internal static AssemblyResult AppleSoft(Apple2Model model) =>
-        SdkModules.AssembleAppleSoft(Path.Join(Inputs, "AppleSoft", "applesoft.mac"), model);
+        SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(Inputs), model);
 
     /// <summary>
     ///  Assembles Level II for a revision.

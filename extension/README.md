@@ -28,10 +28,12 @@ A `files.associations` entry settles it either way: map `*.asm` to
 extension's language where it should not. This extension does not edit your
 settings automatically.
 
-MACRO-10 sources, such as the SDK's AppleSoft (`m6502.asm` and its `applesoft.mac`
-overlay), can use **MACRO-10 Assembly** (`retrocore-macro10`) instead: it is the
-same assembly language, highlighting and language server, with its own red `MAC`
-file icon. The BASIC
+MACRO-10 sources, including the retained AppleSoft source (`m6502.asm` and
+its `applesoft.mac` overlay), can use **MACRO-10 Assembly** (`retrocore-macro10`)
+instead: it is the same assembly language, highlighting and language server,
+with its own red `MAC` file icon. AppleSoft and PET BASIC default to native,
+documented listings; set `basicSource` to `macro10` in an Apple II or PET launch to
+build and debug with the MACRO-10 source. The BASIC
 languages show a green `BAS` icon. Language icons appear only where your file
 icon theme has none of its own for the file.
 
@@ -216,8 +218,10 @@ includes and macros:
   the host, so `COUT` finds the Monitor's.
 
 Each file is assembled as its own root unless an assembly already analysed
-includes it; a MACRO-10 base such as `m6502.asm` is analysed through the overlay
-beside it that names it. If the root has a same-named `.cfg` beside it, the server
+includes it; a MACRO-10 base such as `m6502.asm` is analysed through an overlay
+that names it. The shared Microsoft BASIC sources in `src/Retrocore.Basic/Roms`
+are found from the machine ROM roots across projects, as they are from the SDK's
+sibling folders. If the root has a same-named `.cfg` beside it, the server
 uses that linker configuration when assembling and reanalyzes on open-document
 edits and watched workspace file changes (subject to `files.watcherExclude`).
 This is an editor-only convenience: CLI builds and debug launches require an
@@ -585,13 +589,20 @@ Line numbers are the base's, one-based. The base is found through the
 Every dialect sees them, and MACRO-10 `IFDEF` does too, so a source can default a
 switch with `IFNDEF NAME,<NAME==1>` that a build overrides.
 
-The SDK's AppleSoft II (`src/Retrocore.Machines.Apple2/Roms/AppleSoft`) is Microsoft's
-`m6502.asm` (MIT, with its `LICENSE`) plus `applesoft.mac`, an overlay with Apple's
-changes. Both have their tabs expanded to spaces at the original's 8 columns, so they
-align in any editor. It assembles byte-identically to the IIe ROM at $D000-$F7FF for both
-models: `ENHNCD` is 1 for the Enhanced IIe (the default) and 0 for the original.
-`AppleSoftTests` pin both ROMs by digest, and compare against your dumps when
+The SDK's default AppleSoft II (`src/Retrocore.Machines.Apple2/Roms/AppleSoft`) is a
+fully documented, modular listing in Retrocore's native assembly. It assembles
+byte-identically to the IIe ROM at $D000-$F7FF for both models: `ENHNCD` is 1 for the
+Enhanced IIe (the default) and 0 for the original. Set `basicSource` to `macro10`
+in an Apple II launch to assemble and debug Microsoft's `m6502.asm` (MIT, with its
+`LICENSE` in `Microsoft6502Basic`) plus `applesoft.mac`, Apple's changes as an overlay. `AppleSoftTests` pin
+the II Plus and both IIe ROMs by digest, and compare against your dumps when
 `RETROCORE_IIE_ROMS` is set.
+
+The shared sources live in `src/Retrocore.Basic/Roms/Microsoft6502Basic` in the
+repository and `Sdk/Roms/Microsoft6502Basic` when shipped. The debug host resolves
+both layouts, including when assembling a repository source directly; see the
+[shared-source README](../src/Retrocore.Basic/Roms/Microsoft6502Basic/README.md)
+for using the plain file resolver on the repository's native root.
 
 With the Monitor, the internal firmware and the video ROM
 (`Roms/System/CharacterGenerator.asm`, the font for either model, MouseText included),
@@ -636,23 +647,26 @@ Immediates that are characters, tokens or error codes use m6502.asm's spellings
 The SDK's native sources for the rest of the system ROM are in
 `src/Retrocore.Machines.Apple2/Roms/System`:
 
-- **`Monitor.asm`** covers $F800-$FFFF for both models. Lines that differ sit
-  under `.if ENHANCED`, which defaults to 1 for the Enhanced IIe; 0 selects the
-  original.
+- **`Monitor.asm`** covers $F800-$FFFF, including its subject files in the
+  `Monitor` folder, for four Monitors: `MONITOR` 0 the Apple II's, 1 the
+  Autostart Monitor, 2 the IIe's, where `ENHANCED` 1 (the default) selects the
+  Enhanced IIe and 0 the original. Its names say what each routine does, and
+  Apple's names are kept as historical names (`;; Also:`).
 - **`Firmware.Original.asm`** and **`Firmware.Enhanced.asm`** cover $C100-$CFFF,
   the 80-column firmware and the routines the Monitor calls with internal ROM
-  switched in.
+  switched in, with their subject files in the `Firmware.Original` and
+  `Firmware.Enhanced` folders. Their names say what each routine does
+  (`Control::ScrollUp`, `AssembleLine`), and Apple's are historical names.
 - **`IIeEquates.asm`** names the IIe's page zero, soft switches and keys, and
   **`MonitorEntries.asm`** the Monitor's entry points, for the other sources. The
   firmware, the Disk II boot ROM and DOS (`Roms/Dos`) include both, and the Monitor
   the first, so each name is defined and documented once.
 
-Each assembles byte-identically to its model's ROM, and `SystemSourceTests` pins
-all four builds by digest. Apple's documented entry points, tables, page-zero
-locations and soft switches have their Apple names. Every routine and table has a
-comment describing what it does, with its inputs and outputs where known, and the
-firmware's routines have descriptive names (`SCROLLUP80`, `MINILINE`). Other labels
-are named after their routine (`PLOT_1`) or their address (`L_C9A4`).
+Each assembles byte-identically to its model's ROM, and `SystemSourceTests` and
+`Apple2SourceTests` pin the builds by digest. In the other sources, Apple's
+documented entry points, tables, page-zero locations and soft switches have their
+Apple names. Every routine and table has a comment describing what it does, with
+its inputs and outputs where known.
 
 The sources are maintained by hand. They assemble Apple II text through a high-bit
 `.charmap`, so characters read as `'A'` and `"Apple //e"`, and they build their
@@ -752,6 +766,9 @@ call line, as AppleSoft does, since MACRO-10 sources define instructions as macr
 
 While debugging, the gutter shows the CPU cycles of each source line's latest
 run. Consecutive instructions on one line, such as a macro's, add up.
+The extension asks for full cycle snapshots only when their lines or calls change;
+stops always send a full snapshot. `changesOnly` changes the cycle-event stream
+for the whole debug session, so it affects every consumer of that session's events.
 
 A `JSR` line also shows its latest call's cycles after the line's text, for
 example `⤷ 17c`. That count covers the `JSR`, the subroutine with any calls it
@@ -902,6 +919,13 @@ remembers it while it stays open.
 byte-identical to it and debugs as a ROM module. Memory references can name a bank:
 `system`, `bank0` and up, `rom`, or an X-byte such as `x81` for SOS's extended
 addresses. See [the Apple III guide](../docs/Apple3.md).
+
+`softCard3` puts Microsoft's SoftCard /// in a slot, 1 to 4 (its boot disk looks from
+slot 4 down), so its own CP/M disk boots from `disks`. The Z80 shows as its own thread,
+**SoftCard /// Z80**, and `z80:` names memory as it sees it, through the card's mapping
+PROM: Z80 `$0000` is the Apple's `$2000`, the I/O page is at `$A000` and zero page at
+`$F000`. A `.cpu Z80` source loads at `z80:$0100` and starts there with the Z80 holding
+the bus, until its `OUT ($00),A` gives it back.
 
 ## Debugging on the TRS-80 Model I
 
@@ -1100,11 +1124,12 @@ by:
   its own DOS 2.0 and controller ROMs, MAME's `c4040` set, and a 2040 DOS 1.2, its
   `c2040` set, from `driveRomDirectory`, else `romDirectory` or `RETROCORE_PET_ROMS`.
 
-BASIC, the screen editor and the kernal are the SDK sources `Basic1.mac`,
-`Basic2.mac` and `Basic4.mac`, `Editor1.asm`, `Editor2.asm` and `Editor4.asm`, and
+BASIC, the screen editor and the kernal are the SDK sources `Basic1.asm`,
+`Basic2.asm` and `Basic4.asm`, `Editor1.asm`, `Editor2.asm` and `Editor4.asm`, and
 `Kernal1.asm`, `Kernal2.asm` and `Kernal4.asm`, which assemble byte-identically to the
 chips, so the PET needs no external files, and debugging steps into the sources as ROM
-modules. Dumps from `romDirectory` or `RETROCORE_PET_ROMS`, MAME's `pet2001`,
+modules. `basicSource: "macro10"` instead selects the original Microsoft source with the
+PET's `Basic1.mac`, `Basic2.mac` or `Basic4.mac` overlay. Dumps from `romDirectory` or `RETROCORE_PET_ROMS`, MAME's `pet2001`,
 `pet2001n`, `pet4016` and `pet4032b` chips, in the folder or its folder for the set,
 replace the sources' ROMs when given.
 
@@ -1322,7 +1347,11 @@ statement that called it; it shows **BASIC: ready** at the prompt.
   typed. Its call stack shows each PROC and FN beside the GOSUBs, and Step Over and Step
   Out step over them; its Variables are the resident integers A%-Z% that are not zero,
   then the variables in the order BASIC made them, and its Program scope is PAGE to TOP,
-  the heap and BASIC's stack. STOP is an error, and there is no CONT.
+  the heap and BASIC's stack. STOP is an error, and there is no CONT. Watches read memory
+  with `?`, `!` and `$` as BASIC does. Between `[` and `]`, the assembler's mnemonics,
+  registers, comments and the text it skips are highlighted and are not variables, while its
+  labels are; and
+  another BASIC's word, such as `HOME`, is warned of only as a statement of its own.
 
 ### BASIC files
 
@@ -1457,7 +1486,8 @@ takes the mouse card (one per machine), as the `mouse` launch option does: click
 display to move it with your mouse, and press Escape to let go. Any free slot also takes
 a ProFile card, as the `proFiles` launch option does, with Apple's ProFile hard disk:
 insert a `.po` or `.hdv` image in its drive, and ProDOS boots it and lists it. On the
-Apple III, slots 1 to 4 take ProFile cards, which SOS reaches through `.PROFILE`.
+Apple III, slots 1 to 4 take ProFile cards, which SOS reaches through `.PROFILE`, and the
+SoftCard ///, one at a time, as the `softCard3` launch option does.
 Any free Apple II slot also takes the 3.5 disk controller (one per machine), as the
 `disk35` launch option does: a SmartPort with two SuperDrives that answers as Apple's
 Apple II 3.5 Disk Controller Card, for 400K and 800K Apple disks and 720K and 1.44 MB
@@ -1473,7 +1503,7 @@ Each launch configuration remembers its machine. The cards you add or remove and
 the disks and tapes you insert, eject or write-protect come back the next time you
 launch the same configuration, by its `name`. launch.json stays as written: it sets
 up the first launch, and changing one of its hardware or media options (such as
-`diskImage`, `dos`, `model`, `mockingboard` or `softCard`) starts that configuration afresh.
+`diskImage`, `dos`, `model`, `mockingboard`, `softCard` or `softCard3`) starts that configuration afresh.
 **Retrocore: Reset Saved Machine** (also on the Machine view's **...** menu) does the same by
 hand. A disk a `dos` launch builds, and a tape being recorded, are not remembered;
 the launch makes them again. Each drive shows its media, its
@@ -1552,6 +1582,7 @@ npm ci
 npm run compile
 npm run test:grammar
 npm run test:language
+npm run test:memory-integration
 ```
 
 `compile` regenerates [the TextMate grammar](syntaxes/retrocore.tmLanguage.json)
@@ -1564,13 +1595,22 @@ to test scopes, not a JavaScript approximation of the patterns.
 
 `test:language` launches an isolated VS Code extension-development host and checks
 language registration/detection without a debug session, word selection,
-comment toggling and bracket navigation. It needs VS Code but no ROMs or .NET
-build. Set `RETROCORE_VSCODE` to override the test host executable path.
+comment toggling and bracket navigation, and the assembly and BASIC language
+servers. It needs VS Code and the Release build of the debug host, which runs the
+language servers, but no ROMs.
+
+The editor tests (`test:language`, `test:memory-integration` and `test:editor`)
+download a pinned VS Code into `.vscode-test` the first time they run; set
+`RETROCORE_VSCODE` to run an installed VS Code instead. On Linux without a
+display, run them under `xvfb-run -a`, as CI does.
+
+`test:memory-integration` uses the isolated VS Code host and a Release debug host to check cycle subscriptions and
+multiple memory-editor subscriptions; it needs the SDK ROM sources but no external ROMs.
 
 `npm test` builds and runs both tokenization and the full debugger integration
 tests, which include booting the Model I to Level II's READY. The full integration suite also needs
-`RETROCORE_IIE_ROMS`, a built Release debug host and the existing sample binary/debug
-metadata. It checks source breakpoints with a `retrocore-asm` document alongside the
+a built Release debug host and the existing sample binary/debug metadata; it runs the IIe
+on `RETROCORE_IIE_ROMS` when that is set, and otherwise on ROMs built from the SDK. It checks source breakpoints with a `retrocore-asm` document alongside the
 existing call-stack, video, cycle and beam behavior, and a function breakpoint's hit
 count on the Model I, and reads and writes memory through VS Code's debug memory file
 system. `node tools/Test-Breakpoints.mjs` checks every breakpoint kind through the

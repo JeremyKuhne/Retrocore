@@ -28,25 +28,42 @@ internal sealed class WorkspaceSymbolHandler
     {
         string query = request.Query;
         IEnumerable<WorkspaceSymbol> symbols = _workspace.AllAnalyses()
-            .SelectMany(analysis => analysis.Definitions)
-            .Where(site => site.Name.Contains(query, StringComparison.OrdinalIgnoreCase))
-            .DistinctBy(site => (site.Name, site.Path, site.Line))
-            .OrderBy(site => Rank(site.Name, query))
-            .ThenBy(site => site.Name, StringComparer.OrdinalIgnoreCase)
+            .SelectMany(analysis => analysis.Definitions.Select(site => (Site: site, Name: Matched(analysis, site, query))))
+            .Where(found => found.Name is not null)
+            .DistinctBy(found => (found.Site.Name, found.Site.Path, found.Site.Line))
+            .OrderBy(found => Rank(found.Name ?? "", query))
+            .ThenBy(found => found.Site.Name, StringComparer.OrdinalIgnoreCase)
             .Take(MaximumResults)
-            .Select(site => new WorkspaceSymbol
+            .Select(found => new WorkspaceSymbol
             {
-                Name = site.Name,
-                Kind = LanguageHost.KindOf(site),
-                ContainerName = Path.GetFileName(site.Path),
+                // A definition found by a historical name shows it, so the client's own filter keeps it.
+                Name = found.Name == found.Site.Name ? found.Site.Name : $"{found.Site.Name} ({found.Name})",
+                Kind = LanguageHost.KindOf(found.Site),
+                ContainerName = Path.GetFileName(found.Site.Path),
                 Location = new LspLocation
                 {
-                    Uri = DocumentUri.FromFileSystemPath(site.Path),
-                    Range = new LspRange(site.Line, site.Column, site.Line, site.Column + (site.SourceLength ?? site.Name.Length))
+                    Uri = DocumentUri.FromFileSystemPath(found.Site.Path),
+                    Range = new LspRange(
+                        found.Site.Line,
+                        found.Site.Column,
+                        found.Site.Line,
+                        found.Site.Column + (found.Site.SourceLength ?? found.Site.Name.Length))
                 }
             });
 
         return Task.FromResult(symbols);
+    }
+
+    // The name the query matched: the definition's own, else one of its historical names; null when neither.
+    private static string? Matched(SourceAnalysis analysis, SymbolSite site, string query)
+    {
+        if (site.Name.Contains(query, StringComparison.OrdinalIgnoreCase)) { return site.Name; }
+        if (query.Length == 0 || analysis.Documentation.FindSymbol(site.Name) is not { } topic) { return null; }
+        return analysis.Documentation.AlsoOf(topic, site.Name)
+            .Select(also => also.Name)
+            .Where(name => name.Contains(query, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(name => Rank(name, query))
+            .FirstOrDefault();
     }
 
     // Exact names first, then names that start with the query.

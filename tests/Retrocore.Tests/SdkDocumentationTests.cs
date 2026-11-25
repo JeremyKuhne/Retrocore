@@ -8,6 +8,7 @@ using Retrocore.Debug;
 using Retrocore.Debug.Language;
 using Retrocore.Documentation;
 using Retrocore.Machines.Apple2;
+using Retrocore.Machines.Commodore;
 
 namespace Retrocore.Tests;
 
@@ -36,11 +37,68 @@ public class SdkDocumentationTests
                 isDirective: name => DirectiveDocs.Describe(name) is not null,
                 isInstruction: InstructionDocs.IsMnemonic);
 
-            problems.AddRange(resolver.Check().Select(problem =>
-                $"{Path.GetFileName(problem.Path)}:{problem.Line + 1}: {problem.Message}"));
+            problems.AddRange(resolver.Lint().Select(problem =>
+                $"{Path.GetFileName(problem.Path)}:{problem.Line + 1}: {problem.Text}"));
         }
 
         problems.Should().BeEmpty($"the lint found:{Environment.NewLine}{string.Join(Environment.NewLine, problems)}");
+    }
+
+    /// <summary>
+    ///  AppleSoft's documentation references resolve for each ROM variant.
+    /// </summary>
+    /// <param name="model">The Apple II model.</param>
+    [TestMethod]
+    [DataRow(Apple2Model.IIPlus)]
+    [DataRow(Apple2Model.IIe)]
+    [DataRow(Apple2Model.IIeEnhanced)]
+    public void AppleSoftDocumentationIsCleanForEachModel(Apple2Model model)
+    {
+        AssemblyResult result = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(s_inputs), model);
+        DocumentationSet basic = Set(result, "AppleSoft");
+        foreach (string name in (string[])
+            ["FADD", "NORMAL", "SHIFTR", "FONE", "LOGCN2", "LOG", "Functions::Log::MultiplyByLogOfTwo", "FMULT", "FDIV", "MOVFM", "MOVMF", "ROUND", "SIGN", "FCOMP",
+             "QINT", "INT", "FIN", "FINEDG", "NZ9999", "FOUT", "FHALF", "FOUTBL", "SQR", "EXPCON", "EXP",
+             "POLY", "RND", "RMULZC", "SIN", "Functions::Tan::ToDividePacked", "SINCON", "ATN", "ATNCON"])
+        {
+            basic.FindTopic(name).Should().NotBeNull($"the shared macro must retain {name}'s documentation");
+        }
+
+        DocumentationResolver resolver = new(
+            basic,
+            Sets().Where(set => set.Module != "AppleSoft"),
+            isDirective: name => DirectiveDocs.Describe(name) is not null,
+            isInstruction: InstructionDocs.IsMnemonic);
+
+        var problems = resolver.Check();
+        problems.Should().BeEmpty($"AppleSoft documentation must resolve for {model}");
+    }
+
+    /// <summary>
+    ///  Each native PET BASIC listing resolves its documentation against its own build.
+    /// </summary>
+    /// <param name="model">The PET model.</param>
+    /// <param name="original">Whether BASIC 1 or 4 uses its original first chip.</param>
+    [TestMethod]
+    [DataRow(PetModel.Pet2001, false)]
+    [DataRow(PetModel.Pet2001, true)]
+    [DataRow(PetModel.Pet2001Basic2, false)]
+    [DataRow(PetModel.Pet4032, false)]
+    [DataRow(PetModel.Pet4032, true)]
+    public void PetBasicDocumentationIsClean(PetModel model, bool original)
+    {
+        AssemblyResult result = PetSdkModules.AssembleBasic(
+            Path.Join(s_inputs, "Pet"), model, original, BasicSourceKind.Native);
+
+        DocumentationSet basic = Set(result, "PetBasic");
+        DocumentationResolver resolver = new(
+            basic,
+            isDirective: name => DirectiveDocs.Describe(name) is not null,
+            isInstruction: InstructionDocs.IsMnemonic);
+
+        var problems = resolver.Check();
+        problems.Should().BeEmpty(string.Join(Environment.NewLine, problems.Select(problem =>
+            $"{Path.GetFileName(problem.Path)}:{problem.Line + 1}: {problem.Message}")));
     }
 
     /// <summary>
@@ -61,10 +119,13 @@ public class SdkDocumentationTests
         {
             foreach (string folder in s_sdkFolders)
             {
-                foreach (string file in Directory.EnumerateFiles(Path.Join(s_inputs, folder)))
+                // A module's parts may be in a folder of their own, as the Monitor's are.
+                string source = Path.Join(s_inputs, folder);
+                foreach (string file in Directory.EnumerateFiles(source, "*", SearchOption.AllDirectories))
                 {
-                    Directory.CreateDirectory(Path.Join(repository, folder));
-                    File.Copy(file, Path.Join(repository, folder, Path.GetFileName(file)));
+                    string copy = Path.Join(repository, folder, Path.GetRelativePath(source, file));
+                    Directory.CreateDirectory(Path.GetDirectoryName(copy) ?? repository);
+                    File.Copy(file, copy);
                 }
             }
 
@@ -80,6 +141,37 @@ public class SdkDocumentationTests
         }
 
         problems.Should().BeEmpty($"the editor's lint found:{Environment.NewLine}{string.Join(Environment.NewLine, problems.Order())}");
+    }
+
+    /// <summary>
+    ///  The IIe equates use ROM as a word, not the Apple III boot ROM's definition of that name.
+    /// </summary>
+    [TestMethod]
+    public void IIeEquatesCanExcludeRomAsAnUnlinkedName()
+    {
+        SourceAnalysis monitor = SourceAnalysis.Assemble(Path.Join(s_inputs, "System", "Monitor.asm"), _ => null);
+        SourceAnalysis apple3 = SourceAnalysis.Assemble(Path.Join(s_inputs, "Apple3", "BootRom.asm"), _ => null);
+        DocumentationResolver resolver = new(monitor.Documentation, [apple3.Documentation]);
+        DocumentationTopic equate = monitor.Documentation.Find("LanguageCardRomOnly")
+            ?? throw new AssertFailedException("The IIe's language card ROM switch is not documented.");
+
+        DocumentationTopic rom = apple3.Documentation.Find("ROM")
+            ?? throw new AssertFailedException("The Apple III's ROM flag is not documented.");
+
+        resolver.Resolve(equate, "ROM").Topic.Should().BeSameAs(rom);
+
+        static bool RomInIIeEquates(DocumentationDiagnostic diagnostic) =>
+            Path.GetFileName(diagnostic.Path) == "IIeEquates.asm"
+                && diagnostic.Rule == DocumentationRules.UnlinkedName
+                && diagnostic.Name == "ROM";
+
+        resolver.Check().Where(RomInIIeEquates).Should().NotBeEmpty();
+        DocumentationResolver configured = new(monitor.Documentation, [apple3.Documentation])
+        {
+            IgnoreUnlinkedName = (_, name) => name == "ROM"
+        };
+
+        configured.Lint().Where(RomInIIeEquates).Should().BeEmpty();
     }
 
     /// <summary>
@@ -124,16 +216,48 @@ public class SdkDocumentationTests
     public void EveryRepositorySourceIsCleanInTheEditor()
     {
         string repository = RepositoryRoot();
-        Dictionary<string, List<SourceAnalysis>> projects = [];
-        foreach (string project in Directory.EnumerateDirectories(Path.Join(repository, "src")))
+        string src = Path.Join(repository, "src");
+        string[] projectFolders = [.. Directory.EnumerateDirectories(src)];
+        Dictionary<string, HashSet<string>> projectRoots = [];
+        foreach (string project in projectFolders)
         {
-            projects[Path.GetFileName(project)] = [.. Sources(project).Select(file => SourceAnalysis.Assemble(file, _ => null))];
+            projectRoots[Path.GetFileName(project)] = [with(StringComparer.OrdinalIgnoreCase)];
         }
+
+        foreach (string project in projectFolders)
+        {
+            foreach (string root in Sources(project))
+            {
+                string owner = Path.GetRelativePath(src, root).Split(Path.DirectorySeparatorChar)[0];
+                if (!projectRoots.TryGetValue(owner, out HashSet<string>? roots))
+                {
+                    roots = projectRoots[Path.GetFileName(project)];
+                }
+
+                roots.Add(root);
+            }
+        }
+
+        Dictionary<string, List<SourceAnalysis>> projects = projectRoots.ToDictionary(
+            pair => pair.Key,
+            pair => pair.Value.Select(file => SourceAnalysis.Assemble(file, _ => null)).ToList());
 
         List<string> problems = [];
         foreach ((string name, List<SourceAnalysis> sources) in projects)
         {
-            problems.AddRange(sources.SelectMany(analysis => OwnProblems(analysis, sources, name)));
+            List<SourceAnalysis> machineSources = name == "Retrocore.Machines.Apple2"
+                ? [.. sources.Where(source =>
+                    !Path.GetFileName(source.Root).Equals("applesoft.mac", StringComparison.OrdinalIgnoreCase))]
+                : sources;
+
+            foreach (SourceAnalysis analysis in sources)
+            {
+                List<SourceAnalysis> linked = Path.GetFileName(analysis.Root).Equals("applesoft.mac", StringComparison.OrdinalIgnoreCase)
+                    ? sources
+                    : machineSources;
+
+                problems.AddRange(OwnProblems(analysis, linked, name));
+            }
         }
 
         foreach (string sample in Directory.EnumerateDirectories(Path.Join(repository, "sample")))
@@ -158,6 +282,15 @@ public class SdkDocumentationTests
         List<string> roots = [.. SourceIncludes.Roots(folder)
             .Where(file => !file.Contains(bin, StringComparison.Ordinal) && !file.Contains(obj, StringComparison.Ordinal))];
 
+        // The shared BASIC files are included by roots in other projects; lint them in those assemblies.
+        if (Path.GetFileName(folder).Equals("Retrocore.Basic", StringComparison.OrdinalIgnoreCase))
+        {
+            string shared = Path.GetFullPath(Path.Join(folder, "Roms", "Microsoft6502Basic"));
+            roots = [.. roots.Select(file => string.Equals(Path.GetDirectoryName(file), shared, StringComparison.OrdinalIgnoreCase)
+                ? SourceIncludes.RootOf(file)
+                : file).Distinct(StringComparer.OrdinalIgnoreCase)];
+        }
+
         foreach (string name in s_includedRoots)
         {
             roots.AddRange(Directory.EnumerateFiles(folder, name, SearchOption.AllDirectories).Select(Path.GetFullPath));
@@ -177,9 +310,9 @@ public class SdkDocumentationTests
 
         string root = Path.GetFullPath(analysis.Root);
         string folder = Path.GetDirectoryName(root) ?? "";
-        return resolver.Check()
+        return resolver.Lint()
             .Where(problem => Path.GetFullPath(problem.Path) == root || SourceIncludes.RootOf(Path.GetFullPath(problem.Path)) == root)
-            .Select(problem => $"{label} {Path.GetRelativePath(folder, problem.Path)}:{problem.Line + 1}: {problem.Message}");
+            .Select(problem => $"{label} {Path.GetRelativePath(folder, problem.Path)}:{problem.Line + 1}: {problem.Text}");
     }
 
     private static string RepositoryRoot()
@@ -255,12 +388,17 @@ public class SdkDocumentationTests
         problems.Should().BeEmpty($"the editor's lint found:{Environment.NewLine}{string.Join(Environment.NewLine, problems)}");
     }
 
-    private static readonly string[] s_sdkFolders =["AppleSoft", "DiskII", "Dos", "IntegerBasic", "ProgrammersAid", "System"];
+    private static readonly string[] s_sdkFolders =
+        ["AppleSoft", "DiskII", "Dos", "IntegerBasic", "Microsoft6502Basic", "ProgrammersAid", "System"];
 
-    // The SDK's modules as the editor indexes them: the roots among the IIe's ROM sources.
+    // The SDK's modules as the editor indexes them: the roots among the IIe's ROM sources. AppleSoft.asm is the
+    // default module; the overlay is a mutually exclusive MACRO-10 source.
     private static IEnumerable<string> SdkRoots(string roms) =>
         s_sdkFolders
             .SelectMany(folder => SourceIncludes.Roots(Path.Join(roms, folder)))
+            .Where(root => !Path.GetFileName(root).Equals("applesoft.mac", StringComparison.OrdinalIgnoreCase))
+            .Where(root => !Path.GetFileName(root).StartsWith("MsBasic.", StringComparison.Ordinal))
+            .Where(root => !Path.GetFileName(root).Equals("m6502.asm", StringComparison.OrdinalIgnoreCase))
             .Append(Path.GetFullPath(Path.Join(roms, "Slot7.rom.asm")));
 
     // The lint's findings for one module, its links reaching the SDK's other modules as the editor's do.
@@ -272,12 +410,13 @@ public class SdkDocumentationTests
             isDirective: name => DirectiveDocs.Describe(name) is not null,
             isInstruction: InstructionDocs.IsMnemonic);
 
-        return resolver.Check().Select(problem => $"{copy} {Path.GetFileName(problem.Path)}:{problem.Line + 1}: {problem.Message}");
+        return resolver.Lint().Select(problem => $"{copy} {Path.GetFileName(problem.Path)}:{problem.Line + 1}: {problem.Text}");
     }
 
     /// <summary>
     ///  The Monitor's other builds pass the lint too: the II's, the II Plus's and the original IIe's own routines'
-    ///  documentation, and the links in it, with the other modules as the Enhanced IIe's Monitor sees them.
+    ///  documentation, and the links in it, with the other modules as the Enhanced IIe's Monitor sees them. The
+    ///  Monitor's own problems are Monitor.asm's and its Monitor folder's.
     /// </summary>
     /// <param name="model">The II (the original Monitor), II Plus (the Autostart Monitor) or original IIe.</param>
     [TestMethod]
@@ -296,9 +435,10 @@ public class SdkDocumentationTests
             isDirective: name => DirectiveDocs.Describe(name) is not null,
             isInstruction: InstructionDocs.IsMnemonic);
 
-        List<string> problems = [.. resolver.Check()
-            .Where(problem => Path.GetFileName(problem.Path) == "Monitor.asm")
-            .Select(problem => $"{Path.GetFileName(problem.Path)}:{problem.Line + 1}: {problem.Message}")];
+        string folder = Path.Join(Path.GetDirectoryName(path), "Monitor") + Path.DirectorySeparatorChar;
+        List<string> problems = [.. resolver.Lint()
+            .Where(problem => problem.Path == path || problem.Path.StartsWith(folder, StringComparison.Ordinal))
+            .Select(problem => $"{Path.GetFileName(problem.Path)}:{problem.Line + 1}: {problem.Text}")];
 
         problems.Should().BeEmpty($"the lint found:{Environment.NewLine}{string.Join(Environment.NewLine, problems)}");
     }
@@ -334,7 +474,7 @@ public class SdkDocumentationTests
         List<DocumentationSet> sets = Sets();
         DocumentationSet monitor = sets.Single(set => set.Module == "Monitor");
         monitor.Topics.Count(topic => topic.Kind == DocumentationKind.Routine).Should().BeGreaterThan(100);
-        DocumentationTopic plot = monitor.Find("PLOT") ?? throw new AssertFailedException("PLOT is not documented.");
+        DocumentationTopic plot = monitor.Find("LowRes::Plot") ?? throw new AssertFailedException("LowRes::Plot is not documented.");
         plot.Summary.Should().StartWith("Plots one lo-res block");
         plot.Value.Should().Be(0xF800);
 
@@ -347,14 +487,14 @@ public class SdkDocumentationTests
     }
 
     /// <summary>
-    ///  An entry inside a routine with its own <c>;;</c> block has its own contract: FLIPCURSOR overwrites A with its
-    ///  cursor-off test and keeps only Y, while FLIPCURSOR_1, past that test, keeps A and Y.
+    ///  A routine that falls into another has its own contract: Screen::FlipCursor overwrites A with its cursor-off
+    ///  test and keeps only Y, while Screen::InvertCursor, which it falls into, keeps A and Y.
     /// </summary>
     [TestMethod]
-    public void InnerEntryHasItsOwnContract()
+    public void FallThroughRoutineHasItsOwnContract()
     {
         List<DocumentationSet> sets = Sets();
-        DocumentationSet firmware = sets.Single(set => set.Module == "Firmware" && set.Find("FLIPCURSOR") is not null);
+        DocumentationSet firmware = sets.Single(set => set.Find("Screen::FlipCursor") is not null);
         Dictionary<ushort, DebugContract> contracts = DebugContracts.Build(
             new DocumentationResolver(firmware, sets),
             "Enhanced",
@@ -409,7 +549,11 @@ public class SdkDocumentationTests
         }
     }
 
-    private static List<DocumentationSet> Sets()
+    /// <summary>
+    ///  The SDK's modules' documentation, as the editor sees it, for checking a source whose links reach into them.
+    /// </summary>
+    /// <returns>A set per module.</returns>
+    internal static List<DocumentationSet> Sets()
     {
         List<DocumentationSet> sets = [];
         foreach ((string file, int origin, int size, Apple2Model model, string module) in (
@@ -438,14 +582,22 @@ public class SdkDocumentationTests
         card.Success.Should().BeTrue();
         sets.Add(DocumentationSet.Create([DocumentationParser.Parse(slot7Text, slot7)], card, "Slot7"));
 
-        string appleSoft = Path.GetFullPath(Path.Join(s_inputs, "AppleSoft", "applesoft.mac"));
-        string m6502 = Path.GetFullPath(Path.Join(s_inputs, "AppleSoft", "m6502.asm"));
+        string appleSoft = SdkModules.AppleSoftPath(s_inputs);
         AssemblyResult basic = SdkModules.AssembleAppleSoft(appleSoft, Apple2Model.IIeEnhanced);
+
+        // Every AppleSoft and shared BASIC file, those the assembly only expands macros from among them, and every other
+        // file it reads, IIeEquates.asm among them.
+        IEnumerable<string> appleSoftSources = Directory
+            .GetFiles(Path.Join(s_inputs, "AppleSoft"), "AppleSoft*.asm")
+            .Concat(Directory.GetFiles(Path.Join(s_inputs, "Microsoft6502Basic"), "MsBasic*.asm"))
+            .Concat(basic.SourceMap.Select(entry => entry.Location?.Path).OfType<string>())
+            .Concat(basic.SymbolDefinitions.Select(symbol => symbol.Location?.Path).OfType<string>())
+            .Where(File.Exists)
+            .Select(Path.GetFullPath)
+            .Distinct(StringComparer.OrdinalIgnoreCase);
+
         sets.Add(DocumentationSet.Create(
-            [
-                DocumentationParser.Parse(File.ReadAllText(appleSoft), appleSoft),
-                DocumentationParser.Parse(File.ReadAllText(m6502), m6502)
-            ],
+            [.. appleSoftSources.Select(path => DocumentationParser.Parse(File.ReadAllText(path), path))],
             basic,
             "AppleSoft"));
 

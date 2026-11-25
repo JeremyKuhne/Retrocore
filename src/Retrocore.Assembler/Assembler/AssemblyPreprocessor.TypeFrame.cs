@@ -32,6 +32,11 @@ internal sealed partial class AssemblyPreprocessor
         internal string Qualified { get; } = qualified;
 
         /// <summary>
+        ///  Gets or sets the <c>.scope</c> statement that holds a named type's fields.
+        /// </summary>
+        internal AssemblyStatement? Scope { get; set; }
+
+        /// <summary>
         ///  Gets the initial offset.
         /// </summary>
         internal long Start { get; } = start;
@@ -55,5 +60,10 @@ internal sealed partial class AssemblyPreprocessor
         ///  Gets the opening location.
         /// </summary>
         internal AssemblyLocation Opening { get; } = opening;
+
+        /// <summary>
+        ///  Gets or sets the expansion position of the opening, where an unterminated type's error belongs.
+        /// </summary>
+        internal int Order { get; init; }
     }
 }

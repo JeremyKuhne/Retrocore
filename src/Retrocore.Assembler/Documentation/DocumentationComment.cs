@@ -84,6 +84,36 @@ public sealed class DocumentationComment
     public bool IsTrailing { get; init; }
 
     /// <summary>
+    ///  Gets the macro whose body holds the definition, such as <c>Library</c>; null outside a
+    ///  macro's body. Each expansion of the macro defines it again, as the assembler names it there.
+    /// </summary>
+    public string? Macro { get; init; }
+
+    /// <summary>
+    ///  Gets the zero-based line of the <c>.macro</c> directive that opens the body holding the definition, in its file;
+    ///  -1 outside a macro's body.
+    /// </summary>
+    public int MacroLine { get; init; } = -1;
+
+    /// <summary>
+    ///  Gets whether the definition's name, in a macro's body, is or holds one of the macro's parameters, so each
+    ///  expansion names it after its own argument.
+    /// </summary>
+    public bool NamedByParameter { get; init; }
+
+    /// <summary>
+    ///  Gets whether the definition's name, in a macro's body, is local to each expansion: a <c>.local</c> name or a
+    ///  cheap local (<c>@name</c>), which the assembler renames in every expansion.
+    /// </summary>
+    public bool LocalToExpansion { get; init; }
+
+    /// <summary>
+    ///  Gets the <c>.using</c> directives in effect at the comment, innermost first, whose scopes its plain links
+    ///  reach after the enclosing scopes.
+    /// </summary>
+    public IReadOnlyList<DocumentationUsing> Usings { get; init; } = [];
+
+    /// <summary>
     ///  Gets a section by its canonical name.
     /// </summary>
     /// <param name="name">The name, such as <c>Keeps</c>.</param>

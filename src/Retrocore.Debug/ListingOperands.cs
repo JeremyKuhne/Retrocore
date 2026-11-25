@@ -57,7 +57,7 @@ internal static class ListingOperands
     }
 
     /// <summary>
-    ///  Gets an instruction's text with the address its operand names given by its label, as <c>LDA KBD</c> for
+    ///  Gets an instruction's text with the address its operand names given by its label, as <c>LDA Keyboard</c> for
     ///  <c>LDA $C000</c>.
     /// </summary>
     /// <param name="text">The instruction's text.</param>

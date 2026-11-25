@@ -130,6 +130,58 @@ public class Apple2PlusTests
     }
 
     /// <summary>
+    ///  The II and II Plus's character generator has no lowercase: its $E0-$FF draw the symbols and digits of
+    ///  $A0-$BF, so they read as those, while the IIe's read as lowercase. With the IIe's alternate character set on,
+    ///  $60-$7F are inverse lowercase; the II and II Plus have no alternate set, so they still flash symbols.
+    /// </summary>
+    /// <param name="model">The model.</param>
+    /// <param name="lowercase">Whether its character generator has lowercase.</param>
+    [TestMethod]
+    [DataRow(Apple2Model.II, false)]
+    [DataRow(Apple2Model.IIPlus, false)]
+    [DataRow(Apple2Model.IIe, true)]
+    [DataRow(Apple2Model.IIeEnhanced, true)]
+    public void TopCodesReadAsTheGlyphsTheyDraw(Apple2Model model, bool lowercase)
+    {
+        const string Symbols = " !\"#$%&'()*+,-./0123456789:;<=>?";
+        const string Lowercase = "`abcdefghijklmnopqrstuvwxyz{|}~\u007F";
+        Apple2Machine machine = new(model, SdkModules.BuildRoms(model, s_inputs));
+        Read(0xE0).Should().Be(lowercase ? Lowercase : Symbols);
+
+        // ALTCHARSET on.
+        machine.Bus.Write(0xC00F, value: 0);
+        Read(0x60).Should().Be(lowercase ? Lowercase : Symbols);
+        Read(0xE0).Should().Be(lowercase ? Lowercase : Symbols);
+
+        string Read(int first) =>
+            new([.. Enumerable.Range(first, 32).Select(code => machine.Bus.Video.Character((byte)code))]);
+    }
+
+    /// <summary>
+    ///  With the alternate character set on, $40-$5F reach the character generator's own $40-$5F: on the original
+    ///  IIe these are inverse uppercase again, so they read as uppercase, while the Enhanced IIe's are MouseText,
+    ///  which has no character. Its $C0-$DF are normal uppercase on both.
+    /// </summary>
+    /// <param name="model">The model.</param>
+    /// <param name="mouseText">Whether its alternate set's $40-$5F are MouseText.</param>
+    [TestMethod]
+    [DataRow(Apple2Model.IIe, false)]
+    [DataRow(Apple2Model.IIeEnhanced, true)]
+    public void AlternateSetsUppercaseCodesReadAsTheirGlyphs(Apple2Model model, bool mouseText)
+    {
+        const string Uppercase = "@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_";
+        Apple2Machine machine = new(model, SdkModules.BuildRoms(model, s_inputs));
+
+        // ALTCHARSET on.
+        machine.Bus.Write(0xC00F, value: 0);
+        Read(0x40).Should().Be(mouseText ? new string('\0', 32) : Uppercase);
+        Read(0xC0).Should().Be(Uppercase);
+
+        string Read(int first) =>
+            new([.. Enumerable.Range(first, 32).Select(code => machine.Bus.Video.Character((byte)code))]);
+    }
+
+    /// <summary>
     ///  From its chip dumps, the II Plus powers on to AppleSoft's prompt, and a line typed in lowercase runs.
     /// </summary>
     [TestMethod]
@@ -152,6 +204,65 @@ public class Apple2PlusTests
         machine.Run(cycles: 1_000_000);
         Screen(machine).Should().Contain("PRINT 6*7").And.Contain("42");
     }
+
+    /// <summary>
+    ///  The debugger's text rows read the II Plus's screen as it shows: its cursor, a flashing space, reads as a
+    ///  space, so the prompt row is a bare <c>]</c>, and a program typed through the debugger's keyboard lists back.
+    /// </summary>
+    [TestMethod]
+    public void TheDebuggersTextRowsReadThePromptAndATypedProgram()
+    {
+        Apple2Machine machine = new(Apple2Model.IIPlus, SdkModules.BuildRoms(Apple2Model.IIPlus, s_inputs));
+        machine.Bus.InstallLanguageCard();
+        using Apple2DebugTarget target = new(machine, Apple2Model.IIPlus);
+        machine.Run(cycles: 2_000_000);
+
+        string[] rows = Rows(target);
+        int prompt = Array.FindIndex(rows, row => row.StartsWith(']'));
+        prompt.Should().BeGreaterThan(0, $"AppleSoft's prompt is below the banner:\n{string.Join("\n", rows)}");
+        machine.Bus.TextByte(prompt, 1).Should().Be(0x60, "the II Plus's cursor is a flashing space");
+        rows[prompt].TrimEnd().Should().Be("]", "the cursor reads as the space it flashes, not as ` ($60's ASCII)");
+
+        // Flashing and inverse text read as their characters: FLASH's digits are $70-$79, its letters $41-$5A, and
+        // INVERSE's letters $01-$1A. With no lowercase, $E0-$FF show $A0-$BF's symbols.
+        machine.Bus.Write(0x0400, 0x71);
+        machine.Bus.Write(0x0401, 0x41);
+        machine.Bus.Write(0x0402, 0x01);
+        machine.Bus.Write(0x0403, 0xE1);
+        Rows(target)[0][..4].Should().Be("1AA!");
+        new string([.. Enumerable.Range(0xE0, 32).Select(code => machine.Bus.Video.Character((byte)code))])
+            .Should().Be(" !\"#$%&'()*+,-./0123456789:;<=>?");
+
+        foreach (char key in "10 print \"hi\"\r20 end\rlist\r") { target.Key(key); }
+        machine.Run(cycles: 2_000_000);
+        string screen = string.Join("\n", Rows(target));
+        screen.Should().Contain("]10 PRINT \"HI\"").And.Contain("10  PRINT \"HI\"").And.Contain("20  END");
+        Rows(target).Last(row => row.StartsWith(']')).TrimEnd().Should().Be("]", "LIST ends at a bare prompt");
+    }
+
+    /// <summary>
+    ///  The enhanced IIe's rows read its flashing text as the II Plus's do, and otherwise as before: lowercase,
+    ///  inverse lowercase in the alternate character set, and MouseText, which has no character and keeps its
+    ///  seven-bit code's letter.
+    /// </summary>
+    [TestMethod]
+    public void TheIIesTextRowsReadFlashingTextAndKeepLowercaseAndMouseText()
+    {
+        Apple2Machine machine = new(Apple2Model.IIeEnhanced, SdkModules.BuildRoms(Apple2Model.IIeEnhanced, s_inputs));
+        using Apple2DebugTarget target = new(machine, Apple2Model.IIeEnhanced);
+        machine.Bus.Write(0x0400, 0xE1);
+        machine.Bus.Write(0x0401, 0x61);
+        machine.Bus.Write(0x0402, 0x41);
+        machine.Bus.Write(0x0403, 0x71);
+        Rows(target)[0][..4].Should().Be("a!A1", "without the alternate set, $61 and $71 are a flashing ! and 1");
+
+        machine.Bus.Write(0xC00F, value: 0);
+        Rows(target)[0][..4].Should().Be("aaAq", "the alternate set's $61 and $71 are inverse lowercase, $41 MouseText");
+    }
+
+    private static string[] Rows(Apple2DebugTarget target) =>
+        [.. (target.DisplayState(running: false)["rows"]?.AsArray() ?? throw new InvalidOperationException("No rows."))
+            .Select(row => row?.GetValue<string>() ?? "")];
 
     private static Apple2Bus Bus() =>
         new(Apple2Model.IIPlus, Apple2Roms.FromBoardChips(new byte[12288], new byte[2048]));

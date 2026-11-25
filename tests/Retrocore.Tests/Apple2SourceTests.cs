@@ -19,7 +19,9 @@ public class Apple2SourceTests
     private static readonly string s_inputs = Path.Join(AppContext.BaseDirectory, "Inputs");
 
     /// <summary>
-    ///  Each source, built for the II or II Plus, matches its chip's SHA-256.
+    ///  Each source, built for the II or II Plus, matches its chip's SHA-256; Integer BASIC with FORFIX matches the
+    ///  1983 DOS 3.3 System Master's INTBASIC from $E000, and Programmer's Aid #1 with RAMTESTFIX its $D000-$D7FF,
+    ///  which SystemMasterBasicTests checks against the image where one is present.
     /// </summary>
     /// <param name="part">Which ROM.</param>
     /// <param name="expectedHash">The SHA-256 of the chip.</param>
@@ -28,8 +30,10 @@ public class Apple2SourceTests
     [DataRow("Autostart Monitor", "29465303E7844FA56A8C846D0565E45F5EE082F98F2CCF1B261DE4A7E902201B")]
     [DataRow("character generator", "08F5D22230481019844492DDE0A29A018CB193712A9E4A43770A3870608F28DE")]
     [DataRow("Integer BASIC", "189C95FF289A186108580D3E416F3EC3D8C636246A9AEED9814E769257EB8A19")]
+    [DataRow("Integer BASIC with FORFIX", "59CB3033BDCA24E3EC6CF9107CB56C99D3AEB7FBC7CFF5955C19C2D5430EF2B3")]
     [DataRow("II Plus AppleSoft", "ED8D83176BB9445B3EAA815E07956777BDFAA9E4892A8D7F5019DEAD62434C4C")]
     [DataRow("Programmer's Aid #1", "E35D2E96D7B395DD3C035726E76C417B05813AE9675CA7108D5988DC980110A3")]
+    [DataRow("Programmer's Aid #1 with RAMTESTFIX", "8C5ECC1EE76132F8309DEE97DF03D6F1C2E2F9C6750FDD245CBB574C21C67685")]
     public void SourceMatchesTheChip(string part, string expectedHash)
     {
         Convert.ToHexString(SHA256.HashData(Build(part))).Should().Be(expectedHash);
@@ -97,8 +101,10 @@ public class Apple2SourceTests
                 Apple2Model.IIPlus),
             "character generator" => SdkModules.AssembleCharacterGenerator(Path.Join(system, "CharacterGenerator.asm"), Apple2Model.II),
             "Integer BASIC" => SdkModules.AssembleIntegerBasic(SdkModules.IntegerBasicPath(s_inputs)),
+            "Integer BASIC with FORFIX" => SdkModules.AssembleIntegerBasic(SdkModules.IntegerBasicPath(s_inputs), forFix: true),
             "Programmer's Aid #1" => SdkModules.AssembleProgrammersAid(SdkModules.ProgrammersAidPath(s_inputs)),
-            _ => SdkModules.AssembleAppleSoft(Path.Join(s_inputs, "AppleSoft", "applesoft.mac"), Apple2Model.IIPlus)
+            "Programmer's Aid #1 with RAMTESTFIX" => SdkModules.AssembleProgrammersAid(SdkModules.ProgrammersAidPath(s_inputs), ramTestFix: true),
+            _ => SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(s_inputs), Apple2Model.IIPlus)
         };
 
         result.Diagnostics.Should().BeEmpty();

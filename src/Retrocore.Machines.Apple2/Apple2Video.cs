@@ -237,16 +237,24 @@ public sealed class Apple2Video : IVideoSource, ICharacterSet
     {
         int glyph = Glyph(code, flashed: true);
 
-        // MouseText, in the alternate set's $40-$5F.
-        if (glyph is >= 0x40 and < 0x60) { return '\0'; }
+        // The alternate set's $40-$5F: the original IIe's draw inverse uppercase again, as $00-$1F do, and read as
+        // uppercase; the Enhanced IIe's are MouseText, which has no character.
+        if (glyph is >= 0x40 and < 0x60)
+        {
+            return SameGlyph(glyph, glyph - 0x40) ? (char)glyph : '\0';
+        }
+
         int low = glyph & 0x7F;
         return (low & 0x60) switch
         {
             0x00 => (char)(low + 0x40),
 
-            // $60-$7F and $E0-$FF are lowercase where the character generator has it, and otherwise repeat
-            // uppercase.
-            0x60 => (char)(SameGlyph(glyph, glyph - 0x20) ? low - 0x20 : low),
+            // $60-$7F and $E0-$FF are lowercase where the character generator has it. Otherwise they repeat
+            // uppercase, or on the II and II Plus, whose generator holds its 64 glyphs four times, the symbols and
+            // digits of $A0-$BF.
+            0x60 => SameGlyph(glyph, glyph - 0x20)
+                ? (char)(low - 0x20)
+                : SameGlyph(glyph, glyph - 0x40) ? (char)(low - 0x40) : (char)low,
             _ => (char)low
         };
     }

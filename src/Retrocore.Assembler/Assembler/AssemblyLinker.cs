@@ -104,7 +104,11 @@ internal sealed partial class AssemblyLinker
         {
             InitialSection = "CODE",
             SymbolAliases = source.SymbolAliases,
-            MerlinOutput = source.MerlinOutput
+            MerlinOutput = source.MerlinOutput,
+
+            // Statements keep their order, so .using file extents and conditional uses carry over.
+            FileMarks = source.FileMarks,
+            UsedUsings = source.UsedUsings
         };
 
         foreach (AssemblySource document in source.Sources) { project.Sources.Add(document); }
@@ -136,6 +140,9 @@ internal sealed partial class AssemblyLinker
 
             project.Statements.Add(node);
         }
+
+        // One statement for each of the source's, in order, so the file marks fall where they did.
+        if (project.FileMarks is not null) { project.FileMarkStatements = [.. project.Statements]; }
 
         if (source.DeclaredSections is { Count: > 0 })
         {

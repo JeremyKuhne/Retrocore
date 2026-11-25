@@ -28,7 +28,7 @@ public sealed class PetBasicConformanceTests
     private const ushort Sentinel = 0xFFF0;
     private const int MaximumSteps = 200_000;
 
-    private static readonly string s_roms = Path.Join(AppContext.BaseDirectory, "Inputs", "Pet");
+    private static string PetRoms => Path.Join(BasicNames.Inputs, "Pet");
 
     // Each quirk the tokenizers reproduce. None is longer than the 80 characters of the screen editor's line, which
     // is all BASIC 1's buffer holds.
@@ -88,7 +88,7 @@ public sealed class PetBasicConformanceTests
     [DataRow(PetModel.Pet4032, 4)]
     public void BasicStoresWhatTheLibraryTokenizes(PetModel model, int version)
     {
-        AssemblyResult rom = PetSdkModules.AssembleBasic(s_roms, model);
+        AssemblyResult rom = PetSdkModules.AssembleBasic(PetRoms, model);
         BasicDialect dialect = BasicDialect.PetBasicVersion(version);
         foreach (string line in s_lines)
         {
@@ -109,12 +109,12 @@ public sealed class PetBasicConformanceTests
     [DataRow(PetModel.Pet4032, 4)]
     public void WordsAndPointersMatchTheRom(PetModel model, int version)
     {
-        AssemblyResult rom = PetSdkModules.AssembleBasic(s_roms, model);
+        AssemblyResult rom = PetSdkModules.AssembleBasic(PetRoms, model);
         BasicDialect dialect = BasicDialect.PetBasicVersion(version);
         ReadOnlySpan<byte> image = rom.Sections[0].Bytes.Span;
         List<string> words = [];
         List<char> word = [];
-        for (int at = (int)rom.Symbols["RESLST"]; image[at] != 0; at++)
+        for (int at = (int)rom.Symbol("RESLST"); image[at] != 0; at++)
         {
             word.Add((char)(image[at] & 0x7F));
             if (image[at] >= 0x80)
@@ -127,7 +127,7 @@ public sealed class PetBasicConformanceTests
         words.Should().Equal(dialect.Keywords);
         BasicPointers pointers = dialect.Pointers;
         string[] names = ["TXTTAB", "VARTAB", "ARYTAB", "STREND", "FRETOP", "MEMSIZ", "CURLIN", "OLDTXT", "DATPTR"];
-        names.Select(name => (int)rom.Symbols[name]).Should().Equal(
+        names.Select(name => (int)rom.Symbol(name)).Should().Equal(
             pointers.ProgramStart,
             pointers.Variables,
             pointers.Arrays,
@@ -138,7 +138,7 @@ public sealed class PetBasicConformanceTests
             pointers.ContinueText,
             pointers.DataPointer);
 
-        ((int)rom.Symbols["RAMLOC"] + 1).Should().Be(dialect.DefaultLoadAddress);
+        ((int)rom.Symbol("RAMLOC") + 1).Should().Be(dialect.DefaultLoadAddress);
     }
 
     /// <summary>
@@ -149,7 +149,7 @@ public sealed class PetBasicConformanceTests
     [TestMethod]
     public void EditedStringsSurviveBasic4sCollector()
     {
-        PetMachine machine = new(PetSdkModules.BuildRoms(PetModel.Pet4032, s_roms), PetModel.Pet4032);
+        PetMachine machine = new(PetSdkModules.BuildRoms(PetModel.Pet4032, PetRoms), PetModel.Pet4032);
         PetMachineTests.RunToReady(machine);
         PetMachineTests.Type(machine, "A$=\"HELLO\"+\"\":DIM B$(2):B$(1)=\"WORLD\"+\"\"\r");
 
@@ -173,8 +173,8 @@ public sealed class PetBasicConformanceTests
     {
         RecordingBus bus = new();
         rom.Sections[0].Bytes.Span.CopyTo(bus.Memory);
-        int buffer = (int)rom.Symbols["BUF"];
-        int pointer = (int)rom.Symbols["TXTPTR"];
+        int buffer = (int)rom.Symbol("BUF");
+        int pointer = (int)rom.Symbol("TXTPTR");
         byte[] text = [.. BasicText.Parse(line).Select(unit => (byte)unit), 0];
         text.CopyTo(bus.Memory, buffer);
         bus.Memory[pointer] = (byte)buffer;
@@ -186,7 +186,7 @@ public sealed class PetBasicConformanceTests
         Processor<RecordingBus> processor = new(bus);
         ProcessorRegisters registers = processor.Registers;
         registers.StackPointer = 0xFD;
-        registers.ProgramCounter = (ushort)rom.Symbols["CRUNCH"];
+        registers.ProgramCounter = (ushort)rom.Symbol("CRUNCH");
         processor.Registers = registers;
         for (int steps = 0; processor.Registers.ProgramCounter != Sentinel; steps++)
         {

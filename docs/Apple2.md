@@ -115,7 +115,7 @@ the tests pin every build by digest.
 | [`Monitor.asm`](../src/Retrocore.Machines.Apple2/Roms/System/Monitor.asm) | `MONITOR` 0: the II's original Monitor (341-0004); 1: the Autostart Monitor (341-0020); 2, the default: the IIe's, with `ENHANCED` choosing the model |
 | [`IntegerBasic.asm`](../src/Retrocore.Machines.Apple2/Roms/IntegerBasic/IntegerBasic.asm) | The II's Integer BASIC ROM, $E000-$F7FF (341-0001 to 341-0003), with the floating point, the Mini-Assembler and SWEET16; `FORFIX` 1 for the 1983 DOS 3.3 System Master's INTBASIC, which fixes FOR to shift both bytes of an enclosing loop's token address (the ROM shifts the low byte twice) |
 | [`ProgrammersAid.asm`](../src/Retrocore.Machines.Apple2/Roms/ProgrammersAid/ProgrammersAid.asm) | Programmer's Aid #1, $D000-$D7FF (341-0016), the II's D0-socket ROM of Integer BASIC utilities: hi-res graphics, renumber and append, relocate, tape verify, a RAM test and music; `RAMTESTFIX` 1 for the 1983 DOS 3.3 System Master's INTBASIC, whose RAM test prints the bad byte where the chip jumps to $02CB |
-| [`applesoft.mac`](../src/Retrocore.Machines.Apple2/Roms/AppleSoft) | AppleSoft II: `APLPLS` 1 for the II Plus (341-0011 to 341-0015), whose AppleSoft is the original IIe's but for its last byte; `ENHNCD` for the enhanced IIe |
+| [`AppleSoft.asm`](../src/Retrocore.Machines.Apple2/Roms/AppleSoft/AppleSoft.asm) and its modules | AppleSoft II, fully documented in Retrocore's native assembly; shared interpreter and floating-point routines are in [`Microsoft6502Basic`](../src/Retrocore.Basic/Roms/Microsoft6502Basic). `APLPLS` 1 selects the II Plus (341-0011 to 341-0015), whose AppleSoft differs from the original IIe only in its last byte; `ENHNCD` selects the enhanced IIe. The launch option `basicSource: "macro10"` selects the retained [`applesoft.mac`](../src/Retrocore.Machines.Apple2/Roms/AppleSoft/applesoft.mac) overlay and Microsoft's original source for ROM assembly and debugger mapping. |
 | [`CharacterGenerator.asm`](../src/Retrocore.Machines.Apple2/Roms/System/CharacterGenerator.asm) | `IIBOARD` 1: the II and II Plus's 7341-0036; else the IIe's video ROM, with `ENHANCED` |
 | [`Firmware.Original.asm`, `Firmware.Enhanced.asm`](../src/Retrocore.Machines.Apple2/Roms/System) | The IIe's internal firmware, $C100-$CFFF |
 | [`Slot7.rom.asm`](../src/Retrocore.Machines.Apple2/Roms/Slot7.rom.asm) | The emulated slot-7 ProDOS block device's firmware, $C700-$C7FF |
@@ -127,8 +127,8 @@ the tests pin every build by digest.
 Each of the emulated cards' firmware debugs at its source: a breakpoint in it stops there, and the call stack shows its
 lines. The mouse, ProFile and 3.5 controller cards' firmware reaches nothing inside itself by an absolute address, so
 the same bytes work in any slot, and the debugger maps the source to whichever slot holds the card, its labels (such
-as `SETMOUSE`, `Driver` or `SMARTPORT`) resolving to that slot's page. Apple's 3.5 controller EPROM is a reference;
-the emulator doesn't run it.
+as `SetMouse`, `Driver` or `SmartPortEntry`, and a historical name such as `SETMOUSE`) resolving to that slot's
+page. Apple's 3.5 controller EPROM is a reference; the emulator doesn't run it.
 
 Names follow Apple's listings where Apple published them: the Apple II Reference Manual of 1978
 ([archive.org](https://archive.org/details/Apple_II_Redbook)) for the original Monitor, the Mini-Assembler, SWEET16
@@ -148,8 +148,8 @@ Each model is in the Run and Debug dropdown, and **Retrocore: Start Machine…**
 file, a disk or a source on a fresh DOS disk, all without a launch.json; the extension README's
 **The mouse card** goes in any free slot (`mouse`, or Add Card), one per machine. Its 256-byte firmware (`Mouse.rom.asm`)
 is the SDK's own, not Apple's: it has the AppleMouse II's identification bytes ($38 at $Cn05, $18 at $Cn07, $01 and
-$20 at $Cn0B-$Cn0C, $D6 at $CnFB) and its routines at the offsets in $Cn12-$Cn19 (SETMOUSE, SERVEMOUSE, READMOUSE,
-CLEARMOUSE, POSMOUSE, CLAMPMOUSE, HOMEMOUSE and INITMOUSE), which use the slot's screen holes as Apple documents. Each
+$20 at $Cn0B-$Cn0C, $D6 at $CnFB) and its routines at the offsets in $Cn12-$Cn19 (`SetMouse`, `ServeMouse`, `ReadMouse`,
+`ClearMouse`, `PositionMouse`, `ClampMouse`, `HomeMouse` and `InitializeMouse`: Apple's SETMOUSE ... INITMOUSE), which use the slot's screen holes as Apple documents. Each
 routine hands the call to the card through its ports at $C080 plus 16 times the slot, as slot 7's block storage does,
 so it runs in any slot. Position starts clamped to 0-1023. Interrupts come as vertical blanking starts: every frame
 with mode bit 3, and when the mouse moved or its button changed with bits 1 and 2. After `IN#n`, BASIC's `INPUT X,Y,B`
@@ -193,15 +193,16 @@ reference the emulator's firmware follows:
 
 | | Apple's card | The emulator's |
 | --- | --- | --- |
-| Finding the slot | The mouse routines use X = $Cn and Y = $n0 as given; SERVEMOUSE writes an RTS at $06 and calls it, so it works with the language card's RAM over the Monitor; BASIC's entries call the Monitor's IORTS | The same |
+| Finding the slot | The mouse routines use X = $Cn and Y = $n0 as given; `ServeMouse` writes an RTS at $06 and calls it, so it works with the language card's RAM over the Monitor; BASIC's entries call the Monitor's `SaveRegisters::Return` (IORTS) | The same |
 | BASIC input | Writes `+XXXXX,+YYYYY,+BB` into $0200 and returns a RETURN with X = $11, so nothing is echoed; with the mouse off, 0, 0 and B 1 | The same |
 | BASIC output | A RETURN does nothing; any other character's low bit turns the mouse on or off, and mode bit 7 marks BASIC | The same |
-| BASIC's registers | Keeps A, X and Y for output; input returns Y = $11; MSLOT is left at $Cn | Keeps Y for input too |
-| READMOUSE with the mouse off | Changes nothing | The same |
-| Pascal entries, $Cn1A-$Cn1F | Error 3; the factory's own commands (and the copyright message at $Cn1B) | Error 3; nothing, with carry set |
-| Mouse routines' registers | X and Y as given; A not kept; SERVEMOUSE returns X = $Cn, Y = $n0 | A, X and Y kept |
-| INITMOUSE | Waits for vertical blanking; on the II and II Plus clears hi-res page 1 and leaves the display in text, lo-res, page 1 | Returns at once and leaves memory and the display alone |
-| Screen holes $0678+n and $06F8+n, and MOUMODE's bits 4-6 | Its own scratch space | Not used |
+| BASIC's registers | Keeps A, X and Y for output; input returns X = Y = $11; `ExpansionRomSlot` (MSLOT) is left at $Cn | Keeps Y for input too |
+| `ReadMouse` with the mouse off | Changes nothing | The same |
+| Pascal entries, $Cn0D-$Cn10 | Error 3, with carry set | The same |
+| $Cn1A-$Cn1F | The factory's own commands, and the copyright message at $Cn1B | Nothing, with carry set |
+| Mouse routines' registers | X and Y as given; A not kept; `ServeMouse` returns X = $Cn, Y = $n0 | A, X and Y kept |
+| `InitializeMouse` | Waits for vertical blanking; on the II and II Plus clears hi-res page 1 and leaves the display in text, lo-res, page 1 | Returns at once and leaves memory and the display alone |
+| Screen holes $0678+n and $06F8+n, and `MouseMode`'s bits 5-7, the bank to return to (its upper nibble reads as the bank times 2) | Its own scratch space (bit 7 is also BASIC's mode) | Not used, but for bit 7 as BASIC's mode |
 | Timing | Calls take hundreds of cycles, passing bytes to the microcontroller | About a hundred |
 
 **The 3.5 disk controller** goes in any free slot (`disk35`, or Add Card), one per machine, and answers as Apple's Apple
@@ -339,7 +340,7 @@ their programs debug on a Pascal thread, by source line through the compiler's l
 | `IntegerBasicTests`, `IntegerBasicSyntaxTests` | Listing Integer BASIC, and tokenizing with `IntegerBasicSyntax` against the ROM and back |
 | `SdkDocumentationTests` | The documentation lint over every source, each Monitor build linted on its own |
 | `tools/Test-IIeDap.mjs`, `tools/Test-IIDap.mjs`, `tools/Test-IIPlusDap.mjs`, `tools/Test-IntegerBasicDap.mjs` | Each model and Integer BASIC through the debug adapter, from dumps and from the SDK's ROMs |
-| `tools/Test-ProDosBasicDap.mjs` | AppleSoft's BASIC thread under ProDOS's BASIC.SYSTEM, which runs statements past `GONE`: breakpoints, stepping, Set Next Statement, errors and interrupts, on the ProDOS 2.4.3 image from `Fetch-M1Dependencies.ps1` |
+| `tools/Test-ProDosBasicDap.mjs` | AppleSoft's BASIC thread under ProDOS's BASIC.SYSTEM, which runs statements past `ExecuteStatement` (GONE): breakpoints, stepping, Set Next Statement, errors and interrupts, on the ProDOS 2.4.3 image from `Fetch-M1Dependencies.ps1` |
 
 Dumps are looked for in `RETROCORE_IIE_ROMS`, `RETROCORE_IIPLUS_ROMS` and `RETROCORE_II_ROMS` (or `apple2-roms` under
 `RETROCORE_CACHE`, default `%USERPROFILE%\Retrocore`, for the II and II Plus); without them dump-dependent tests are

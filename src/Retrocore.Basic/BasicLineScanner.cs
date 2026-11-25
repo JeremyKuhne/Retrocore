@@ -311,7 +311,7 @@ internal sealed class BasicLineScanner
             }
 
             // A comma continues a list of lines, and Integer BASIC's LIST 10,20; anything else ends it.
-            bool commaRange = jump == BasicJump.Range && _dialect is IntegerBasicDialect;
+            bool commaRange = jump == BasicJump.Range && _dialect is IntegerBasicDialect or AtariBasicDialect;
             bool next = value == ',' && afterNumber && (jump == BasicJump.List || commaRange);
             if (!next) { jump = BasicJump.None; }
             afterNumber = false;
@@ -395,7 +395,7 @@ internal sealed class BasicLineScanner
     private static BasicJump JumpAfter(string word) => word switch
     {
         "GOTO" or "GOSUB" => BasicJump.List,
-        "THEN" or "ELSE" or "RUN" or "RESUME" or "EDIT" => BasicJump.Single,
+        "THEN" or "ELSE" or "RUN" or "RESUME" or "EDIT" or "TRAP" => BasicJump.Single,
         "LIST" or "LLIST" or "DEL" or "DELETE" => BasicJump.Range,
         _ => BasicJump.None
     };
@@ -464,7 +464,7 @@ internal sealed class BasicLineScanner
     // ON GOTO: a line is a number that ends the statement or comes before a comma.
     private bool Computed(int last)
     {
-        if (_dialect is not IntegerBasicDialect) { return false; }
+        if (_dialect is not (IntegerBasicDialect or AtariBasicDialect)) { return false; }
         int next = last + 1;
         while (next < _bytes.Length && _bytes[next] == ' ') { next++; }
         return next < _bytes.Length && _bytes[next] is not ((byte)':' or (byte)',');
@@ -543,9 +543,10 @@ internal sealed class BasicLineScanner
         int next = last + 1;
         while (!Bbc && next < _bytes.Length && _bytes[next] == ' ') { next++; }
         bool array = !function && next < _bytes.Length && _bytes[next] == '(';
-        // The Microsoft BASICs keep a name's first two characters, MBASIC its first 40; Integer BASIC, Business BASIC
-        // and BBC BASIC keep all of it.
-        int kept = Mbasic ? MbasicSignificant : _dialect is IntegerBasicDialect || Business || Bbc ? letters.Length : 2;
+        // The Microsoft BASICs keep a name's first two characters, MBASIC its first 40; Integer BASIC, Business BASIC,
+        // BBC BASIC and Atari BASIC keep all of it.
+        bool keepsAll = _dialect is IntegerBasicDialect or AtariBasicDialect || Business || Bbc;
+        int kept = Mbasic ? MbasicSignificant : keepsAll ? letters.Length : 2;
         string significant = letters[..Math.Min(letters.Length, kept)];
         BasicSite found = Site(function ? BasicSiteKind.Function : BasicSiteKind.Variable, index, End(last)) with
         {

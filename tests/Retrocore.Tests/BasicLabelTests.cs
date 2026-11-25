@@ -59,6 +59,41 @@ public sealed class BasicLabelTests
     }
 
     /// <summary>
+    ///  Atari BASIC's TRAP takes a label, as GOTO does; TRAP is no jump in the other BASICs, which have no such word.
+    /// </summary>
+    [TestMethod]
+    public void TrapTakesALabelInAtariBasicOnly()
+    {
+        BasicParseResult atari = BasicProgram.Parse("""
+            REM retrocore atari
+                TRAP @oops
+                X=1/0
+                END
+            @oops
+                PRINT "OOPS"
+            """);
+
+        atari.Diagnostics.Should().BeEmpty();
+        atari.Program?.ToText().Should().Be("""
+            10 TRAP 40
+            20 X=1/0
+            30 END
+            40 PRINT "OOPS"
+
+            """.ReplaceLineEndings("\n"));
+
+        BasicParseResult color = BasicProgram.Parse("""
+            ' retrocore colorbasic
+                PRINT TRAP @done
+            @done
+                END
+            """);
+
+        BasicProgram program = color.Program ?? throw new AssertFailedException("The Color BASIC program has errors.");
+        program.ToText().Should().NotContain("TRAP 20", "TRAP is no Color BASIC word");
+    }
+
+    /// <summary>
     ///  Integer BASIC files take labels too; as its GOTO and GOSUB take expressions, a name there that is no label
     ///  stays a variable.
     /// </summary>

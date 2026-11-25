@@ -3,9 +3,11 @@
 // See LICENSE file in the project root for full license information
 
 using Retrocore.Debug;
+using Retrocore.Machines.Chips;
 using Retrocore.Machines.Trs80;
 using Retrocore.Media.Floppy;
 using Retrocore.Media.Trs80;
+using System.Text.Json.Nodes;
 
 namespace Retrocore.Tests;
 
@@ -16,6 +18,9 @@ namespace Retrocore.Tests;
 [TestClass]
 public class Trs80Model3RomTests
 {
+    // TRSDOS 6's and LS-DOS's command that saves 256 bytes of memory as a program.
+    private const string Dump = "DUMP SAVED/CMD (START=X'7000',END=X'70FF',TRA=X'7000')";
+
     /// <summary>
     ///  The Model III and Model 4 boot without a disk controller to BASIC, through Cass? and Memory Size?, and run a
     ///  statement.
@@ -326,6 +331,73 @@ public class Trs80Model3RomTests
     }
 
     /// <summary>
+    ///  Each DOS writes a new file, <c>SAVED/CMD</c>: TRSDOS 6 and LS-DOS dump memory to it, and SMAL-LDOS, which has
+    ///  no <c>DUMP</c>, copies a file to it. The host saves the disk to its image in its own format, and the image
+    ///  boots in a new machine and lists the file. The images are in <c>trs80-disks</c> under
+    ///  <see cref="ExternalTestData.Root"/>, copied before they change; the test is inconclusive without one.
+    /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   TRSDOS 1.3 is not here: its <c>DUMP</c> stops with <c>ERROR 11</c> after reading its directory, before it
+    ///   writes a sector, and its <c>COPY</c> does not finish.
+    ///  </para>
+    /// </remarks>
+    /// <param name="variant">The model.</param>
+    /// <param name="image">The image's file name.</param>
+    /// <param name="ready">The DOS's prompt.</param>
+    /// <param name="command">The command that writes the file.</param>
+    [TestMethod]
+    [DataRow(Trs80Model3Variant.Model3, "LDOS513.dsk", "LDOS Ready", "COPY ALEDIT/CMD TO SAVED/CMD")]
+    [DataRow(Trs80Model3Variant.Model4, "TRSDOS60.dmk", "TRSDOS Ready", Dump)]
+    [DataRow(Trs80Model3Variant.Model4, "TRSDOS60.imd", "TRSDOS Ready", Dump)]
+    [DataRow(Trs80Model3Variant.Model4, "TRSDOS62.imd", "TRSDOS Ready", Dump)]
+    [DataRow(Trs80Model3Variant.Model4, "LSDOS63J.dsk", "LS-DOS Ready", Dump)]
+    public void DosSavesAFile(Trs80Model3Variant variant, string image, string ready, string command)
+    {
+        string source = Path.Join(ExternalTestData.Root, "trs80-disks", image);
+        if (!File.Exists(source)) { Assert.Inconclusive($"{source} is missing."); }
+
+        string path = Path.Join(Path.GetTempPath(), $"retrocore-dos-{Guid.NewGuid():N}{Path.GetExtension(image)}");
+        File.Copy(source, path);
+        try
+        {
+            Trs80Model3Machine machine = Model3(variant, diskController: true);
+            FloppyDrive drive = machine.Drives[0];
+            FloppyMedia.Insert(drive, path, FloppyFamily.Trs80);
+            string format = drive.Media?.Format ?? throw new InvalidOperationException("The drive is empty.");
+            Boot(machine, ready);
+            Type(machine, command + "\r");
+            machine.Run(Trs80Model3Timing.ClockHertz * 20UL);
+            Type(machine, "DIR\r");
+            string verb = command.Split(' ')[0];
+            RunUntil(machine, () => Listed(machine, "SAVED", verb), seconds: 20);
+            drive.Media?.Changed.Should().BeTrue();
+
+            JsonObject answer = MediaActions.Save(drive, new() { ["supportsRetrocoreMedia"] = true });
+            answer.String("outcome").Should().Be("saved");
+            Trs80DiskImage.Read(File.ReadAllBytes(path), Path.GetExtension(path)).Format.Should().Be(format);
+            byte[] before = File.ReadAllBytes(source);
+            byte[] after = File.ReadAllBytes(path);
+            if (format == "DMK") { after.Length.Should().Be(before.Length, "the image keeps its tracks"); }
+            if (format == "IMD")
+            {
+                int comment = Array.IndexOf(before, (byte)0x1A) + 1;
+                after.AsSpan(0, comment).SequenceEqual(before.AsSpan(0, comment)).Should().BeTrue("the image keeps its comment");
+            }
+
+            Trs80Model3Machine again = Model3(variant, diskController: true);
+            FloppyMedia.Insert(again.Drives[0], path, FloppyFamily.Trs80);
+            Boot(again, ready);
+            Type(again, "DIR\r");
+            ShowsWithin(again, "SAVED", seconds: 20);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    /// <summary>
     ///  Typed text comes out as written on the Model 4's DOSes, which start with caps lock off: an uppercase letter
     ///  with shift, a lowercase one without.
     /// </summary>
@@ -411,6 +483,19 @@ public class Trs80Model3RomTests
         };
 
         return new(configuration, new Trs80Model3Roms(system, characters));
+    }
+
+    // Whether a line other than the command's, which starts with its verb, shows the text.
+    private static bool Listed(Trs80Model3Machine machine, string text, string verb) =>
+        Text(machine).Split('\n').Any(line => line.Contains(text, StringComparison.Ordinal) && !line.Contains(verb, StringComparison.OrdinalIgnoreCase));
+
+    // Boots a DOS from drive 0 to its prompt, giving it a date.
+    private static void Boot(Trs80Model3Machine machine, string ready)
+    {
+        ShowsWithin(machine, "Date", seconds: 20);
+        Type(machine, "11/14/86\r");
+        Type(machine, "\r");
+        ShowsWithin(machine, ready, seconds: 20);
     }
 
     // Types the keys, waits until the keyboard has pressed them all, then lets the ROM act on the last.

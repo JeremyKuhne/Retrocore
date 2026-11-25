@@ -379,8 +379,8 @@ internal static partial class MediaActions
     }
 
     // The codec that writes a drive's medium as an extension says, among the formats the drive saves: a Disk II disk
-    // as WOZ or sectors, a TRS-80 or Color Computer floppy as JV1, JV3, JVC or DMK, a Commodore tape as TAP or WAV, a
-    // block device as bare blocks or 2MG, a Commodore disk as G64, D64 or D67.
+    // as WOZ or sectors, a TRS-80, Color Computer or Kaypro floppy as JV1, JV3, JVC, DMK, IMD or a raw Kaypro image, a
+    // Commodore tape as TAP or WAV, a block device as bare blocks or 2MG, a Commodore disk as G64, D64 or D67.
     private static IImageCodec? CodecFor(IDevice device, IMedium medium, string extension)
     {
         bool saves = device.Info.SaveFormats.Contains(extension.TrimStart('.'), StringComparer.OrdinalIgnoreCase);

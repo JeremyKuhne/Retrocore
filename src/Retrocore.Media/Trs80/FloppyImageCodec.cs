@@ -7,23 +7,28 @@ using Retrocore.Media.Floppy;
 namespace Retrocore.Media.Trs80;
 
 /// <summary>
-///  Writes a TRS-80, Color Computer or Kaypro floppy disk as an image: JV1, JV3, JVC, DMK or a raw Kaypro image (IMG).
+///  Writes a TRS-80, Color Computer or Kaypro floppy disk as an image: JV1, JV3, JVC, DMK, IMD or a raw Kaypro image
+///  (IMG).
 /// </summary>
 /// <remarks>
 ///  <para>
-///   A disk's snapshot is a DMK image, which holds all of it, so a DMK save is the snapshot itself. The others read
-///   the snapshot back and list what their format cannot hold. A JVC codec for an image that was read keeps that
-///   image's header, and so its geometry. IMD has no writer yet: a disk read from IMD saves as another format.
+///   A disk's snapshot is a DMK image, which holds all of it, so a new DMK image is the snapshot itself. The others
+///   read the snapshot back and list what their format cannot hold. A codec for an image that was read keeps what
+///   that image says beyond its sectors: a JVC image's header, and so its geometry, and a DMK or IMD image's layout
+///   (<see cref="DmkFormat.Layout"/>, <see cref="ImdFormat.Layout"/>), so the disk saves back to the same tracks,
+///   gaps, ID offsets, modes and compression.
 ///  </para>
 /// </remarks>
 public sealed class FloppyImageCodec : IImageCodec
 {
     private readonly byte[]? _jvcHeader;
+    private readonly byte[]? _layout;
 
-    private FloppyImageCodec(string format, byte[]? jvcHeader)
+    private FloppyImageCodec(string format, byte[]? jvcHeader, byte[]? layout = null)
     {
         Format = format;
         _jvcHeader = jvcHeader;
+        _layout = layout;
     }
 
     /// <inheritdoc/>
@@ -33,6 +38,12 @@ public sealed class FloppyImageCodec : IImageCodec
     ///  Gets the header a JVC image was read with, which saving it back keeps; null for another format or a new image.
     /// </summary>
     public byte[]? JvcHeader => _jvcHeader is null ? null : [.. _jvcHeader];
+
+    /// <summary>
+    ///  Gets the layout a DMK or IMD image was read with, which saving it back keeps; null for another format or a new
+    ///  image.
+    /// </summary>
+    public byte[]? Layout => _layout is null ? null : [.. _layout];
 
     /// <summary>
     ///  Gets the codec that writes an image with an extension, for a drive that saves some formats.
@@ -55,21 +66,46 @@ public sealed class FloppyImageCodec : IImageCodec
             format = jvc ? "JVC" : kaypro ? "IMG" : "JV1";
         }
 
-        return format is "JV1" or "JV3" or "JVC" or "DMK" or "IMG" ? new(format, jvcHeader: null) : null;
+        return format is "JV1" or "JV3" or "JVC" or "DMK" or "IMD" or "IMG" ? new(format, jvcHeader: null) : null;
     }
 
     /// <summary>
     ///  Gets the codec that writes a disk back to the image it was read from.
     /// </summary>
     /// <param name="format">The format the image was read as, such as <c>JV3</c>.</param>
-    /// <param name="image">The image's bytes, whose header a JVC codec keeps.</param>
-    /// <returns>The codec, or null for a format with no writer, IMD.</returns>
+    /// <param name="image">
+    ///  The image's bytes, whose header a JVC codec keeps and whose layout a DMK or IMD codec does.
+    /// </param>
+    /// <returns>The codec, or null for a format with no writer.</returns>
+    /// <exception cref="InvalidDataException">A DMK or IMD image is not in its format.</exception>
     public static FloppyImageCodec? ForImage(string format, ReadOnlySpan<byte> image) => format switch
     {
-        "JV1" or "JV3" or "DMK" or "IMG" => new(format, jvcHeader: null),
+        "JV1" or "JV3" or "IMG" => new(format, jvcHeader: null),
         "JVC" => new(format, JvcFormat.Header(image).ToArray()),
+        "DMK" => new(format, jvcHeader: null, DmkFormat.Layout(image)),
+        "IMD" => new(format, jvcHeader: null, ImdFormat.Layout(image)),
         _ => null,
     };
+
+    /// <summary>
+    ///  Gets the codec that writes a disk back in a layout kept from an image (<see cref="Layout"/>), as a recovery
+    ///  journal keeps it.
+    /// </summary>
+    /// <param name="format">The format, <c>DMK</c> or <c>IMD</c>.</param>
+    /// <param name="layout">The layout.</param>
+    /// <returns>The codec, or null for another format.</returns>
+    /// <exception cref="InvalidDataException">The layout is not in its format.</exception>
+    public static FloppyImageCodec? ForLayout(string format, byte[] layout)
+    {
+        ArgumentNullException.ThrowIfNull(layout);
+        return format switch
+        {
+            "DMK" when DmkFormat.IsDmk(layout) => new(format, jvcHeader: null, [.. layout]),
+            "IMD" => new(format, jvcHeader: null, ImdFormat.Layout(layout)),
+            "DMK" => throw new InvalidDataException("The layout is not DMK."),
+            _ => null,
+        };
+    }
 
     /// <inheritdoc/>
     public EncodedImage Encode(MediumSnapshot snapshot)
@@ -83,7 +119,9 @@ public sealed class FloppyImageCodec : IImageCodec
         FloppyDisk disk = DmkFormat.ReadSnapshot(snapshot.Image.Span);
         return Format switch
         {
+            "DMK" when _layout is not null => DmkFormat.Encode(disk, _layout),
             "DMK" => DmkFormat.Encode(disk),
+            "IMD" => ImdFormat.Encode(disk, _layout),
             "JV1" => Jv1Format.Encode(disk),
             "JV3" => Jv3Format.Encode(disk),
             "IMG" => KayproFormat.Encode(disk),

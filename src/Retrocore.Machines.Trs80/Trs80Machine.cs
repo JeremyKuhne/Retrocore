@@ -70,7 +70,7 @@ public sealed class Trs80Machine : IMachine
             _ => "FD1771 in the Expansion Interface"
         },
         Formats = ["dsk", "jv1", "jv3", "dmk", "imd"],
-        SaveFormats = ["jv3", "dmk", "dsk", "jv1"],
+        SaveFormats = ["jv3", "dmk", "imd", "dsk", "jv1"],
         Operations = MediaOperations.Insert | MediaOperations.Eject | MediaOperations.WriteProtect | MediaOperations.Save,
         Tracks = 40,
 

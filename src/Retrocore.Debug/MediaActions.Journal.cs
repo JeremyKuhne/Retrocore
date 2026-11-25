@@ -9,6 +9,7 @@ using Retrocore.Media.Commodore;
 using Retrocore.Media.Floppy;
 using Retrocore.Media.Trs80;
 using System.Globalization;
+using System.IO.Compression;
 using System.Runtime.CompilerServices;
 using System.Text.Json.Nodes;
 
@@ -289,6 +290,7 @@ internal static partial class MediaActions
             ["kind"] = "floppy",
             ["format"] = floppy.Format,
             ["jvcHeader"] = floppy.JvcHeader is { } header ? Convert.ToBase64String(header) : null,
+            ["layout"] = floppy.Layout is { } layout ? Convert.ToBase64String(Compress(layout)) : null,
         },
         AcornTapeCodec => new() { ["kind"] = "acornTape" },
         AcornDiskCodec acorn => new() { ["kind"] = "acornDisk", ["format"] = acorn.Format },
@@ -306,6 +308,7 @@ internal static partial class MediaActions
             "woz" => new WozCodec(codec.Int("version") ?? 2),
             "block" => BlockImageCodec.For(codec.Bool("twoImg") == true ? "2MG" : format),
             "floppy" when codec.String("jvcHeader") is { } header => FloppyImageCodec.ForImage("JVC", Convert.FromBase64String(header)),
+            "floppy" when codec.String("layout") is { } layout => FloppyImageCodec.ForLayout(format, Decompress(Convert.FromBase64String(layout))),
             "floppy" => FloppyImageCodec.For(format, [format]),
             "acornTape" => new AcornTapeCodec(),
             "acornDisk" => new AcornDiskCodec(format),
@@ -313,5 +316,20 @@ internal static partial class MediaActions
             "commodoreTape" => new CommodoreTapeCodec(format),
             _ => null,
         };
+    }
+
+    // A DMK or IMD layout, which is mostly zeros and gaps, kept compressed in the journal.
+    private static byte[] Compress(byte[] bytes)
+    {
+        using MemoryStream output = new();
+        using (GZipStream zip = new(output, CompressionLevel.Optimal, leaveOpen: true)) { zip.Write(bytes); }
+        return output.ToArray();
+    }
+
+    private static byte[] Decompress(byte[] bytes)
+    {
+        using MemoryStream output = new();
+        using (GZipStream zip = new(new MemoryStream(bytes), CompressionMode.Decompress)) { zip.CopyTo(output); }
+        return output.ToArray();
     }
 }

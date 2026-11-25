@@ -322,7 +322,7 @@ public sealed class FloppyMediaSaveTests
 
     /// <summary>
     ///  A format's codec comes from its extension: <c>.dsk</c> is JVC on a drive that saves JVC and JV1 on one that
-    ///  does not; IMD has no writer; and every codec writes from the DMK snapshot.
+    ///  does not; and every codec writes from the DMK snapshot.
     /// </summary>
     [TestMethod]
     public void CodecsComeFromTheExtension()
@@ -331,8 +331,9 @@ public sealed class FloppyMediaSaveTests
         FloppyImageCodec.For("dsk", ["jv3", "dmk", "dsk", "jv1"])?.Format.Should().Be("JV1");
         FloppyImageCodec.For(".JV3", [])?.Format.Should().Be("JV3");
         FloppyImageCodec.For(".dmk", [])?.Format.Should().Be("DMK");
-        FloppyImageCodec.For(".imd", []).Should().BeNull();
-        FloppyImageCodec.ForImage("IMD", []).Should().BeNull();
+        FloppyImageCodec.For(".imd", [])?.Format.Should().Be("IMD");
+        FloppyImageCodec.For(".hfe", []).Should().BeNull();
+        FloppyImageCodec.ForImage("HFE", []).Should().BeNull();
 
         FloppyDisk disk = Varied();
         MediumSnapshot snapshot = disk.Snapshot();
@@ -351,7 +352,8 @@ public sealed class FloppyMediaSaveTests
 
     /// <summary>
     ///  A drive's disk saves through the host as other drives' do: a changed disk holds back an eject, saves to its own
-    ///  format, and saves as another, after which it comes from that image; a disk read from IMD saves only as another.
+    ///  format, and saves as another, after which it comes from that image; a disk whose image this drive cannot write
+    ///  saves only as another.
     /// </summary>
     [TestMethod]
     public void DriveSavesThroughTheHost()
@@ -391,7 +393,7 @@ public sealed class FloppyMediaSaveTests
         losses.String("outcome").Should().Be("losses");
         losses.String("format").Should().Be("JVC");
 
-        // A disk read from IMD, which has no writer, saves only as another format.
+        // A disk whose image this drive cannot write saves only as another format.
         string imd = Path.ChangeExtension(path, ".imd");
         byte[] bytes = [.. "IMD"u8];
         File.WriteAllBytes(imd, bytes);

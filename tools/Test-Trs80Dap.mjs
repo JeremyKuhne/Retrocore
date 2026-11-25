@@ -299,7 +299,7 @@ try {
         assert.equal(drive.kind, "floppyDrive");
         assert.match(drive.controller, /Percom/);
         assert.deepEqual(drive.operations, ["insert", "eject", "writeProtect", "save"]);
-        assert.deepEqual(drive.saveFormats, ["jv3", "dmk", "dsk", "jv1"]);
+        assert.deepEqual(drive.saveFormats, ["jv3", "dmk", "imd", "dsk", "jv1"]);
         assert.equal(drive.media.format, "JV1");
         assert.equal(drive.media.label.toLowerCase(), resolve(dos).toLowerCase());
         assert.equal(drive.media.writeProtected, false);

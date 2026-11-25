@@ -31,13 +31,13 @@ LETTER_OFFSET = 'A' - '9' - 1
 ;;
 ;; Only the string's last four characters count, right-aligned over zeros, so `TEN("12345")` is $2345 and `TEN("")`
 ;; is 0. Letters may be either case. The value is signed: `TEN("FFFF")` is -1.
-;; In: FACMO = the string's temporary descriptor
-;; Out: FAC = the value, VALTYP = 0
-;; Errors: ERRFC = a character in the last four that is not a hexadecimal digit
+;; In: FacMantissa3 = the string's temporary descriptor
+;; Out: Fac = the value, ValueType = 0
+;; Errors: <ERROR_ILLEGAL_QUANTITY> = a character in the last four that is not a hexadecimal digit
 ;; See: <Functions::Hex>, <Hexadecimal::DigitValue>, <ReturnSignedWord>
 ;; Also: DECER (BB13)
 .proc Ten
-    jsr FindArgument                                ; Y = the length; VALTYP = 0
+    jsr FindArgument                        ; Y = the length; ValueType = 0
     lda #0
     sta FacMantissa3
     sta FacMantissa4
@@ -89,7 +89,7 @@ ConvertByte:
     lda FacMantissa3
     ldy FacMantissa4
     jsr ReturnSignedWord
-    jmp Len::FreeArgument                                ; free the string
+    jmp Len::FreeArgument                   ; free the string
 .endproc
 
 .endscope
@@ -100,7 +100,7 @@ ConvertByte:
 ;; Turns one hexadecimal character into its value, 0 to 15, stepping Y back first.
 ;; In: A = the character, Y = one past its index
 ;; Out: A = the value, Y = Y - 1
-;; Errors: ERRFC = not a hexadecimal digit
+;; Errors: <ERROR_ILLEGAL_QUANTITY> = not a hexadecimal digit
 ;; Keeps: X
 ;; Also: DNNIB (BB13)
 .proc DigitValue
@@ -133,17 +133,17 @@ Done:
 ;; The `HEX$` function: a 16-bit number as four hexadecimal digits.
 ;;
 ;; A negative number gives its two's complement: `HEX$(-1)` is "FFFF".
-;; In: FAC = the number, which must be below 65536 in size
-;; Out: FAC = a temporary string of four digits, upper case
-;; Errors: ERRFC = the number is too large
+;; In: Fac = the number, which must be below 65536 in size
+;; Out: Fac = a temporary string of four digits, upper case
+;; Errors: <ERROR_ILLEGAL_QUANTITY> = the number is too large
 ;; See: <Functions::Ten>, <Hexadecimal::Digit>, <ConvertToAddress>
 ;; Also: HEXS (BB13)
 .proc Hex
-    jsr ConvertToAddress                              ; the number into FACMO and FACLO
+    jsr ConvertToAddress                    ; the number into FacMantissa3 and FacMantissa4
     lda #Hexadecimal::DIGITS
     jsr Strings::Allocate
     ldy #Hexadecimal::DIGITS - 1            ; the last digit first
-    ldx #2                                  ; FACLO first, then FACMO
+    ldx #2                                  ; FacMantissa4 first, then FacMantissa3
 
 ;; Writes one byte of the number as two digits, right to left.
 ;; Also: MAKHEX (BB13)
@@ -209,30 +209,31 @@ Done:
 ;;
 ;; The two values' bytes are exchanged in place. For strings, that exchanges their descriptors, and then the info bytes
 ;; after each string's text, which point back at its descriptor, must follow: when both strings have text, their info
-;; bytes are exchanged too; when only one has, its back pointer is rebuilt by <AssignString::SetBackPointer>. Nothing in string space moves,
-;; so `SWAP` needs no room for a copy. After two strings with text, <ValueType> is left at <STRING_INFORMATION_SIZE> - 1 rather than $FF.
-;; In: TXTPTR = past the `SWAP` token
-;; Out: TXTPTR = the statement's end
-;; Errors: ERRTM = the variables' types differ
+;; bytes are exchanged too; when only one has, its back pointer is rebuilt by <AssignString::SetBackPointer>. Nothing in
+;; string space moves, so `SWAP` needs no room for a copy. After two strings with text, <ValueType> is left at
+;; <STRING_INFORMATION_SIZE> - 1 rather than $FF.
+;; In: TextPointer = past the `SWAP` token
+;; Out: TextPointer = the statement's end
+;; Errors: <ERROR_TYPE_MISMATCH> = the variables' types differ
 ;; Entry:
 ;;   ToTypeMismatch = ends the statement with a type mismatch error; `IF` jumps here for a string condition
 ;; See: <FindVariable>, <AssignString::SetBackPointer>
 ;; Also: SWAP (BB13)
 .proc Swap
-    jsr FindVariable                              ; the first variable
+    jsr FindVariable                        ; the first variable
     pha                                     ; its address and bank
     tya
     pha
     lda VariablePointerXByte
     pha
-    lda ArrayElementFound                               ; array or simple
+    lda ArrayElementFound                   ; array or simple
     pha
-    txa                                     ; its VALTYP, as PTRGET leaves X
+    txa                                     ; its ValueType, as FindVariable leaves X
     pha
     lda IntegerType
     pha
     jsr CheckComma
-    jsr FindVariable                              ; the second variable
+    jsr FindVariable                        ; the second variable
     pla
     cmp IntegerType
     beq SameType
@@ -249,14 +250,14 @@ SameType:
     cmp ValueType
     bne ToTypeMismatch
     pla
-    sta Temporary                                ; the first variable's array flag
+    sta Temporary                           ; the first variable's array flag
     pla
     sta Pointer1XByte
     pla
     sta Pointer1+1
     pla
     sta Pointer1
-    ldy VariableSizes                              ; PTRGET leaves the value's size here
+    ldy VariableSizes                       ; FindVariable leaves the value's size here
     dey
 
 ;; Exchanges Y + 1 bytes between (<Pointer1>) and (<VariablePointer>).
@@ -270,7 +271,7 @@ Exchange:
     sta (VariablePointer),Y
     dey
     bpl Exchange
-    ldx ValueType                              ; $FF for a string
+    ldx ValueType                           ; $FF for a string
     inx
     bne Done
     iny                                     ; Y = 0: the strings' lengths
@@ -278,15 +279,15 @@ Exchange:
     bne FirstHasText
     lda (VariablePointer),Y
     beq Done                                ; both empty: nothing points back
-    lda VariablePointer                              ; only VARPNT's string has text: keep its descriptor
+    lda VariablePointer                     ; only VariablePointer's string has text: keep its descriptor
     pha
     lda VariablePointer+1
     pha
     lda VariablePointerXByte
     pha
-    lda ArrayElementFound                               ; and its array flag
+    lda ArrayElementFound                   ; and its array flag
     pha
-    jsr Strings::SwapPointers               ; then put it in INDEX
+    jsr Strings::SwapPointers               ; then put it in Pointer1
     jmp RebuildBackPointer
 
 ;; The first descriptor's string has text: exchanges info bytes if the second's has too, or else rebuilds the first's
@@ -295,22 +296,22 @@ Exchange:
 FirstHasText:
     lda (VariablePointer),Y
     bne BothHaveText
-    lda Pointer1                               ; only INDEX's string has text: keep its descriptor
+    lda Pointer1                            ; only Pointer1's string has text: keep its descriptor
     pha
     lda Pointer1+1
     pha
     lda Pointer1XByte
     pha
-    lda Temporary                                ; and its array flag
+    lda Temporary                           ; and its array flag
     pha
 
 ;; Points the string in <Pointer1>'s descriptor back at that descriptor, from the descriptor address and array flag on
 ;; the stack (<AssignString::SetBackPointer>).
 ;; Also: MAKNUL (BB13)
 RebuildBackPointer:
-    jsr Strings::PointAtInfoBytes           ; INDEX to the string's info bytes
+    jsr Strings::PointAtInfoBytes           ; Pointer1 to the string's info bytes
     lda Pointer1
-    sta DestinationEnd                              ; where FIXBAK writes them
+    sta DestinationEnd                      ; where AssignString::SetBackPointer writes them
     lda Pointer1+1
     sta DestinationEnd+1
     lda Pointer1XByte
@@ -320,7 +321,7 @@ RebuildBackPointer:
     pla
     sta AssignedVariableXByte
     pla
-    sta AssignedVariable+1                            ; the descriptor
+    sta AssignedVariable+1                  ; the descriptor
     pla
     sta AssignedVariable
     jmp AssignString::SetBackPointer
@@ -328,11 +329,11 @@ RebuildBackPointer:
 ;; Both strings have text: exchanges their three info bytes, so each points back at its new descriptor.
 ;; Also: OLDSWAP (BB13)
 BothHaveText:
-    jsr Strings::PointAtInfoBytes           ; INDEX to the first string's info bytes
-    jsr Strings::SwapPointers               ; and over to VARPNT
-    jsr Strings::PointAtInfoBytes           ; INDEX to the second string's
+    jsr Strings::PointAtInfoBytes           ; Pointer1 to the first string's info bytes
+    jsr Strings::SwapPointers               ; and over to VariablePointer
+    jsr Strings::PointAtInfoBytes           ; Pointer1 to the second string's
     ldy #STRING_INFORMATION_SIZE-1
-    sty ValueType                              ; anything but $FF, so Exchange stops after these
+    sty ValueType                           ; anything but $FF, so Exchange stops after these
     bne Exchange                            ; always
 
 ;; Returns.
@@ -365,19 +366,19 @@ Done:
 .endproc
 
 ;; Points <Pointer1> past a string's text, at its info bytes, from the descriptor it points to.
-;; In: INDEX = the descriptor
-;; Out: INDEX, INDEXB = the info bytes
+;; In: Pointer1 = the descriptor
+;; Out: Pointer1, Pointer1XByte = the info bytes
 ;; See: <FindFromDescriptor>
 ;; Also: INCNDX (BB13)
 .proc PointAtInfoBytes
-    jsr FindFromDescriptor                              ; INDEX to the text; A = the length
+    jsr FindFromDescriptor                  ; Pointer1 to the text; A = the length
     clc
     adc Pointer1
     sta Pointer1
     bcc Done
     inc Pointer1+1
     lda Pointer1+1
-    cmp #POINTER_PAGE_LIMIT                              ; past the bank's window: on to the next bank
+    cmp #POINTER_PAGE_LIMIT                 ; past the bank's window: on to the next bank
     bcc Done
     sbc #POINTER_PAGE_LIMIT-POINTER_PAGE_FIRST
     inc Pointer1XByte

@@ -10,24 +10,28 @@
 ;; BASIC's own constants and its temporaries in its own bank have a fifth byte, more mantissa; the routines that load
 ;; and store reals take a bank of 0 to mean the five-byte form.
 ;;
-;; <Fac> and <ArgExponent> hold reals unpacked: the exponent, four mantissa bytes with the leading 1 present, then the sign
-;; byte, 0 for positive and $FF for negative (only its top bit counts). <FacExtension>, below <FacMantissa4>, holds the bits that are
-;; rounded off; <ResultSign> holds the sign of a sum, product or quotient, <ArgExponent>'s sign exclusive-ored with the <Fac>'s.
-;; A two-operand routine takes the left operand in <ArgExponent> and the right in the <Fac>, and leaves the result in the
-;; <Fac>; the ones named for a packed operand unpack the left operand from memory first, with <Float::LoadArg>.
+;; <Fac> and <Arg> hold reals unpacked: the exponent, four mantissa bytes with the leading 1 present, then the sign
+;; byte, 0 for positive and $FF for negative (only its top bit counts). <FacExtension>, below <FacMantissa4>, holds the
+;; bits that are rounded off; <ResultSign> holds the sign of a sum, product or quotient, <Arg>'s sign exclusive-ored
+;; with the <Fac>'s. A two-operand routine takes the left operand in <Arg> and the right in the <Fac>, and leaves the
+;; result in the <Fac>; the ones named for a packed operand unpack the left operand from memory first, with
+;; <Float::LoadArg>.
 ;;
 ;; This is the float package of Microsoft's 6502 BASIC, as AppleSoft has it, with five-byte constants, banks and
 ;; Business BASIC's rounding; its routines have AppleSoft's names where they do the same job.
 
 ; Floating point, part one: addition, normalizing and shifting.
-.scope Float continued
+;; The floating-point package: Microsoft's 6502 BASIC's, as AppleSoft has it, with Business BASIC's five-byte
+;; constants and banks; its routines have AppleSoft's names where they do the same job. The scope is in pieces through
+;; the math files.
+.scope Float
 
 ; The formats.
 
 ;; The bias on a real's exponent: an exponent of $80 is a number from 0.5 to below 1.
 EXPONENT_BIAS = $80
 
-;; The bytes of a real unpacked in <Fac> or <ArgExponent>: the exponent, four mantissa bytes and the sign.
+;; The bytes of a real unpacked in <Fac> or <Arg>: the exponent, four mantissa bytes and the sign.
 UNPACKED_SIZE = 6
 
 ;; The bytes of a real in BASIC's own bank, a constant or temporary: the exponent and four mantissa bytes.
@@ -56,7 +60,7 @@ CONSTANT_SIZE = 5
     ; Falls into SubtractFromArg.
 .endproc
 
-;; Subtracts <Fac> from <ArgExponent>, into the <Fac>, by negating the <Fac> and adding.
+;; Subtracts <Fac> from <Arg>, into the <Fac>, by negating the <Fac> and adding.
 ;; See: <Float::AddArg>
 ;; Also: FSUBT (BB13)
 .proc SubtractFromArg
@@ -65,7 +69,7 @@ CONSTANT_SIZE = 5
     sta FacSign
     eor ArgSign
     sta ResultSign
-    lda FacExponent                              ; with zero set for a zero FAC, as AddArg wants
+    lda FacExponent                         ; with zero set for a zero Fac, as AddArg wants
     jmp AddArg
 .endproc
 
@@ -88,25 +92,26 @@ CONSTANT_SIZE = 5
     ; Falls into AddArg.
 .endproc
 
-;; Adds <ArgExponent> to <Fac>: lines up the binary points by shifting the smaller number right, then adds the mantissas, or
+;; Adds <Arg> to <Fac>: lines up the binary points by shifting the smaller number right, then adds the mantissas, or
 ;; subtracts them when the signs differ, and normalizes.
-;; In: A = <FacExponent>, zero = set for a zero <Fac>, ARISGN = <ArgExponent>'s sign exclusive-ored with the <Fac>'s
+;; In: A = <FacExponent>, zero = set for a zero <Fac>, ResultSign = <Arg>'s sign exclusive-ored with the <Fac>'s
 ;; See: <Float::AlignAndAdd>, <Float::Normalize>
 ;; Also: FADDT (BB13)
 .proc AddArg
-    bne *+5                                 ; skip the jump for a FAC that is not zero
-    jmp CopyArgToFac                        ; a zero FAC: the sum is ARG
+    bne *+5                                 ; skip the jump for a Fac that is not zero
+    jmp CopyArgToFac                        ; a zero Fac: the sum is Arg
     ldx FacExtension
     stx FunctionJumpHigh
-    ldx #ArgExponent                             ; shift ARG, unless the FAC is the smaller
+    ldx #ArgExponent                        ; shift Arg, unless the Fac is the smaller
     lda ArgExponent
     ; Falls into AlignAndAdd.
 .endproc
 
-;; Adds <ArgExponent> to <Fac>, taking A as <ArgExponent>'s exponent; a zero exponent leaves the <Fac> as it is.
+;; Adds <Arg> to <Fac>, taking A as <Arg>'s exponent; a zero exponent leaves the <Fac> as it is.
 ;;
 ;; <Float::MultiplyByTen> passes an exponent 2 above the <Fac>'s, so the <Fac>, shifted, is added as four times itself.
-;; In: A = <ArgExponent>'s exponent, X = the address of the exponent of the operand to shift if <ArgExponent> is the smaller (<ArgExponent>)
+;; In: A = <Arg>'s exponent, X = the address of the exponent of the operand to shift if <Arg> is the smaller
+;;   (<ArgExponent>)
 ;; Entry:
 ;;   Combine = adds or subtracts the operands once they are lined up, with X the shifted one and A its rounding bits
 ;; See: <Float::MultiplyByTen>
@@ -119,17 +124,17 @@ CONSTANT_SIZE = 5
     sbc FacExponent
     beq Combine                             ; the same exponent: no shift
     bcc ArgSmaller
-    sty FacExponent                              ; ARG is the larger: its exponent and sign win
+    sty FacExponent                         ; Arg is the larger: its exponent and sign win
     ldy ArgSign
     sty FacSign
     eor #$FF                                ; the count, negated
     adc #0
     ldy #0
     sty FunctionJumpHigh
-    ldx #Fac                                ; and the FAC is the one to shift
+    ldx #Fac                                ; and the Fac is the one to shift
     bne Align                               ; always
 
-;; <ArgExponent> is the smaller: clears <FacExtension>, so that the bits shifted out of <ArgExponent> are the only rounding bits.
+;; <Arg> is the smaller: clears <FacExtension>, so that the bits shifted out of <Arg> are the only rounding bits.
 ;; Also: FADDA (BB13)
 ArgSmaller:
     ldy #0
@@ -151,7 +156,7 @@ Align:
 Combine:
     bit ResultSign
     bpl AddMantissas                        ; the same signs: add
-    ldy #FacExponent                             ; the carry is clear
+    ldy #FacExponent                        ; the carry is clear
     cpx #ArgExponent
     beq Subtract
     ldy #ArgExponent
@@ -330,8 +335,9 @@ Done:
 
 ;; Negates <Fac>'s mantissa and rounding bits as a two's complement, leaving its sign.
 ;;
-;; X is kept in <DecimalPointSeen>, which <Float::ReadNumber> uses for its decimal point; its own additions never negate.
-;; Uses: DPTFLG
+;; X is kept in <DecimalPointSeen>, which <Float::ReadNumber> uses for its decimal point; its own additions never
+;; negate.
+;; Uses: DecimalPointSeen
 ;; Keeps: X, Y
 ;; Also: NEGFCH (BB13)
 .proc ComplementMantissa
@@ -340,7 +346,7 @@ Done:
 KeptX = DecimalPointSeen
 
     stx KeptX
-    ldx #3                                  ; FACHO's offset to FACLO
+    ldx #3                                  ; FacMantissa1's offset to FacMantissa4
 
 ;; Complements a byte of the mantissa, from the lowest.
 ;; Also: NEGFCH1 (BB13)
@@ -395,19 +401,20 @@ Done:
 ;;
 ;; With A = 0 and carry set, <Float::ShiftRightByCount> returns after the byte; with carry clear it shifts one bit
 ;; more. <Float::MultiplyByte>'s zero path passes on whatever carry it was given: set after a nonzero multiplier byte,
-;; clear after a zero one. So a second zero byte in a row shifts <Result1> nine bits, halving the partial product so far.
+;; clear after a zero one. So a second zero byte in a row shifts <Result1> nine bits, halving the partial product so
+;; far.
 ;; In: A = 0
 ;; See: <Float::MultiplyArg>
 ;; Also: MULSHF (BB13)
 .proc ShiftProductByte
     ldx #Result1-1
     ldy #0
-    sty ShiftFill                                ; zeros come in
+    sty ShiftFill                           ; zeros come in
     ; Falls into ShiftRightByte.
 .endproc
 
-;; Shifts the mantissa at X+1 right a byte, filling with <ShiftFill>, the low byte going to <FacExtension>, then goes on with
-;; <Float::ShiftRightByCount>.
+;; Shifts the mantissa at X+1 right a byte, filling with <ShiftFill>, the low byte going to <FacExtension>, then goes on
+;; with <Float::ShiftRightByCount>.
 ;; In: X = the address before the mantissa
 ;; Also: SHFTR2 (BB13)
 .proc ShiftRightByte

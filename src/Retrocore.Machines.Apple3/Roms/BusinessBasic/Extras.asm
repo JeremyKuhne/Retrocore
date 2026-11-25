@@ -1,11 +1,11 @@
-; retrocore: style=strict ignore=unlinked-name:DATA -- DATA in the message OUT OF DATA
+; retrocore: style=strict
 ; EXTRAS: statements Business BASIC adds to Applesoft's: OUTREC, INDENT, HPOS and VPOS as statements, NORMAL,
 ; INVERSE, TRACE and NOTRACE, ON ERR and RESUME, ON KBD, ON EOF# and OFF, DEL, TEXT and HOME, with the routines
 ; that test for two-byte tokens and that send a program to its ON KBD or ON EOF# handler.
 ;
-; ON KBD and ON EOF# keep their handlers in EOFPTRS and EOFLINS, three bytes and two each, by number: 1 to 10 for
-; the files #1 to #10, 11 for the keyboard. A handler is where its statement continues, as an offset from TXTTAB so
-; it survives the program moving, and the line it is in. A zero first byte means no handler.
+; ON KBD and ON EOF# keep their handlers in EndOfFileHandlers and EndOfFileHandlerLines, three bytes and two each, by
+; number: 1 to 10 for the files #1 to #10, 11 for the keyboard. A handler is where its statement continues, as an offset
+; from ProgramStart so it survives the program moving, and the line it is in. A zero first byte means no handler.
 
 ; ---------------------------------------------------------------------------------------------------------------------
 ; Screen and listing settings
@@ -46,7 +46,7 @@
 ;; Also: HTAB (BB13)
 .proc HPos
     jsr MoveToColumn
-    sta TerminalPosition                              ; The column, from 0
+    sta TerminalPosition                    ; The column, from 0
     rts
 .endproc
 
@@ -149,9 +149,9 @@ Done:
 ;; The `ON ERR statements` statement: makes the statements after `ERR`, to the end of the line, the program's error
 ;; handler, then skips them.
 ;;
-;; It keeps where they start in <OnErrorText> (the address of the `ERR` token, with its X-byte in <OnErrorTextXByte>) and the line's
-;; number in <OnErrorText>+3 and +4, and sets bit 7 of <OnErrorActive>. `OFF ERR` clears the bit; `RUN`, `NEW`, `LOAD` and editing
-;; the program clear <OnErrorActive>.
+;; It keeps where they start in <OnErrorText> (the address of the `ERR` token, with its X-byte in <OnErrorTextXByte>)
+;; and the line's number in <OnErrorText>+3 and +4, and sets bit 7 of <OnErrorActive>. `OFF ERR` clears the bit; `RUN`,
+;; `NEW`, `LOAD` and editing the program clear <OnErrorActive>.
 ;; Errors: ILLEGAL DIRECT outside a program
 ;; See: <TrapError>, <ReportError>, <Statements::Off>
 ;; Also: ONERR (BB13)
@@ -166,11 +166,11 @@ Done:
     lda OnErrorActive
     ora #$80
     sta OnErrorActive
-    lda CurrentLine                              ; The line, for the handler to run in
+    lda CurrentLine                         ; The line, for the handler to run in
     sta OnErrorText+3
     lda CurrentLine+1
     sta OnErrorText+4
-    jsr FindLineEnd                                ; Skip the handler for now
+    jsr FindLineEnd                         ; Skip the handler for now
     jmp AdvanceTextPointer
 .endproc
 
@@ -179,9 +179,9 @@ Done:
 ;; Runs the `ON ERR` handler: <ReportError> comes here when bit 7 of <OnErrorActive> is set.
 ;;
 ;; It puts the stack pointer back to <StatementStack>, where the failing statement started, so `FOR` and `GOSUB` entries
-;; stay; keeps <StoppedText>, the failing statement's start, in <ErrorText> and <ErrorTextXByte> for `RESUME`; then sets <TextPointer>
-;; and <CurrentLine> from <OnErrorText> and goes on at the statement after `ON ERR`, through <NextStatement::CheckEvents>. <ReportError> has
-;; already set <ErrorCode> and <ErrorLine>. The handler stays in force.
+;; stay; keeps <StoppedText>, the failing statement's start, in <ErrorText> and <ErrorTextXByte> for `RESUME`; then sets
+;; <TextPointer> and <CurrentLine> from <OnErrorText> and goes on at the statement after `ON ERR`, through
+;; <NextStatement::CheckEvents>. <ReportError> has already set <ErrorCode> and <ErrorLine>. The handler stays in force.
 ;; See: <Statements::OnErr>, <Statements::Resume>
 ;; Also: HNDLERR (BB13)
 .proc TrapError
@@ -257,7 +257,7 @@ Done:
     lda (TextPointer),Y
     cmp #TWO_BYTE_TOKEN
     bne Reread
-    jsr GetNextCharacter                              ; Step over the TWO_BYTE_TOKEN
+    jsr GetNextCharacter                    ; Step over the TWO_BYTE_TOKEN
     lda #$00                                ; Found
 
 ;; Reads the character at <TextPointer> again, keeping the flags.
@@ -329,10 +329,10 @@ KEYBOARD = 11
     jsr RejectDirectMode
     jsr Files::TakeFileNumber
     inx                                     ; The file's number, from 1
-    jsr BackUpTextPointer                              ; Back to the character before the statements
+    jsr BackUpTextPointer                   ; Back to the character before the statements
 
-;; Records handler X: where the statements start, relative to <ProgramStart>, in <EndOfFileHandlers>, and the line in <EndOfFileHandlerLines>;
-;; then skips the statements.
+;; Records handler X: where the statements start, relative to <ProgramStart>, in <EndOfFileHandlers>, and the line in
+;; <EndOfFileHandlerLines>; then skips the statements.
 ;; Also: ONEOF2 (BB13)
 SetHandler:
     txa
@@ -352,7 +352,7 @@ SetHandler:
     sta EndOfFileHandlerLines-3,X
     lda CurrentLine+1
     sta EndOfFileHandlerLines-2,X
-    jsr FindLineEnd                                ; Skip the handler for now
+    jsr FindLineEnd                         ; Skip the handler for now
     jmp AdvanceTextPointer
 .endproc
 
@@ -403,7 +403,7 @@ SetHandler:
     beq OffEof
     cmp #TOKEN_ERR
     bne Done
-    lda OnErrorActive                              ; OFF ERR
+    lda OnErrorActive                       ; OFF ERR
     and #$7F
     sta OnErrorActive
 
@@ -454,12 +454,13 @@ ClearHandler:
 ; Going to a handler.
 .scope Handlers continued
 
-;; Goes to the `ON EOF#` handler of the file in <CurrentFileNumber>, which reached its end, or ends with OUT OF DATA when it has
-;; none.
+;; Goes to the `ON EOF#` handler of the file in <CurrentFileNumber>, which reached its end, or ends with OUT OF DATA
+;; when it has none.
 ;;
-;; It keeps the file's number, from 1, in <EndOfFileNumber> for the `EOF` function, puts the stack pointer back to <StatementStack>,
-;; sends output back to the `OUTPUT#` device, and goes on at the handler's statements in its line, through <ExecuteStatement>.
-;; In: SVFLNO = the file's number, from 0
+;; It keeps the file's number, from 1, in <EndOfFileNumber> for the `EOF` function, puts the stack pointer back to
+;; <StatementStack>, sends output back to the `OUTPUT#` device, and goes on at the handler's statements in its line,
+;; through <ExecuteStatement>.
+;; In: CurrentFileNumber = the file's number, from 0
 ;; Entry: GoToHandler = goes to handler X/3, without setting EOF or the stack
 ;; See: <Statements::OnEof>, <Files::ReadTextLine::ReadFailed>
 ;; Also: CHKEOF (BB13)
@@ -469,7 +470,7 @@ ClearHandler:
     sta EndOfFileNumber
     asl
     adc CurrentFileNumber
-    ldx StatementStack                              ; The stack as the statement started
+    ldx StatementStack                      ; The stack as the statement started
     txs
     tax
 
@@ -510,7 +511,7 @@ NoHandler:
     and #$7F
     sta PendingEvents
     jsr PushGoSubEntryHereChecked
-    ldx #END_OF_FILE_HANDLERS_SIZE                             ; Handler 11, times 3
+    ldx #END_OF_FILE_HANDLERS_SIZE          ; Handler 11, times 3
     bne EndOfFile::GoToHandler              ; Always
 .endproc
 
@@ -597,7 +598,7 @@ FindEnd:
 FindNext:
     jsr FindLine
     lda SourceStart
-    sta Pointer1                              ; Move from here
+    sta Pointer1                            ; Move from here
     lda SourceStart+1
     sta Pointer1+1
     lda SourceStartXByte
@@ -607,7 +608,7 @@ FindNext:
     pla
     sta SourceStart+1
     pla
-    sec                                     ; DELTA = the range's start less its end
+    sec                                     ; MoveDistance = the range's start less its end
     sta SourceStart
     sbc Pointer1
     sta MoveDistance

@@ -18,7 +18,7 @@
 ;;   length
 ;; Out: A = the type, negative = set for a literal or string field, Y = the character's index in <FormatCharacters>,
 ;;   SpecCharacter = the character, RepeatCount = the count
-;; Errors: ILLEGAL QUANTITY for a count of 0 or over 255; SYNTAX ERROR for a character that isn't a format
+;; Errors: ILLEGAL QUANTITY for a count of 0 or over 255; SYNTAX <ReportError> for a character that isn't a format
 ;;   character, or a run that takes the count past 255
 ;; See: <ScanSpec>, <ReadNonSpace>
 ;; Also: UGETDL (BB13)
@@ -211,13 +211,15 @@ CommaFlags:
 ; Numeric fields
 ; ---------------------------------------------------------------------------------------------------------------------
 
-;; Unpacks the decimal mantissa in <FacDecimalDigits> into <UsingDigits>, one digit a byte from <DIGITS_START>: <DIGIT_COUNT> digits,
-;; then a 0.
+;; Unpacks the decimal mantissa in <FacDecimalDigits> into <UsingDigits>, one digit a byte from <DIGITS_START>:
+;; <DIGIT_COUNT> digits, then a 0.
 ;;
-;; Leading zeros are dropped, each lowering the exponent in <ArrayElementFound> by one; ISARA holds the exponent doubled, with the
-;; sign in bit 0. For a positive zero, the 20th zero brings ISARA to 0, and the loop goes on storing the digits it
-;; reads past the mantissa; <LongInteger::FacToDigits>'s copy in <ArgExponent> holds the same zeros.
-;; In: FACT = <DIGIT_COUNT> digits, two a byte, the first in the high half, ISARA = the exponent doubled, with the sign
+;; Leading zeros are dropped, each lowering the exponent in <ArrayElementFound> by one; <ArrayElementFound> holds the
+;; exponent doubled, with the sign in bit 0. For a positive zero, the 20th zero brings <ArrayElementFound> to 0, and the
+;; loop goes on storing the digits it reads past the mantissa; <LongInteger::FacToDigits>'s copy in <Arg> holds the same
+;; zeros.
+;; In: FacDecimalDigits = <DIGIT_COUNT> digits, two a byte, the first in the high half, ArrayElementFound = the exponent
+;;   doubled, with the sign
 ;; Out: A = 0, zero = set, Y = <DIGITS_END>
 ;; Uses: X, NextHalf
 ;; See: <LongInteger::FacToDigits>
@@ -255,7 +257,7 @@ Digit:
     bcs Store                               ; past the first digit, zeros count
     cmp #0
     bne Store
-    dec ArrayElementFound                               ; a leading zero: the exponent goes down one
+    dec ArrayElementFound                   ; a leading zero: the exponent goes down one
     dec ArrayElementFound
     bne Loop                                ; always, but for a positive zero's 20th
 
@@ -273,10 +275,10 @@ Store:
 
 ;; Writes a number into its field of the mask, as the image asks, and prints it.
 ;;
-;; The number is in <UsingDigits>, one digit a byte, with its exponent doubled in <FacExponent> and its sign in bit 0. This
-;; routine makes <FacExponent> the power of ten of the first digit and adds the `SCALE` factor in <ArrayElementFound>; the result must
-;; lie between -99 and 99. The number is rounded at the last place shown, and one too big for its field prints as a
-;; field of `!`. A field with an exponent goes on to <FormatScientific>.
+;; The number is in <UsingDigits>, one digit a byte, with its exponent doubled in <FacExponent> and its sign in bit 0.
+;; This routine makes <FacExponent> the power of ten of the first digit and adds the `SCALE` factor in
+;; <ArrayElementFound>; the result must lie between -99 and 99. The number is rounded at the last place shown, and one
+;; too big for its field prints as a field of `!`. A field with an exponent goes on to <FormatScientific>.
 ;; In: MaskPointer = the mask, MaskIndex = the index of its last byte, and the field as <ScanSpec> left it:
 ;;   <DigitsBeforePoint>, <DigitsAfterPoint>, <SpecParts>, <FloatingSymbols>, <FillCharacter>, <UnitsIndex>,
 ;;   <PointIndex>
@@ -296,7 +298,7 @@ Store:
     sec
     sbc #1                                  ; the power of the first digit
     clc
-    adc ArrayElementFound                               ; plus the SCALE factor
+    adc ArrayElementFound                   ; plus the SCALE factor
     sta FacExponent
     cmp #EXPONENT_MIN
     bcs InRange
@@ -627,7 +629,7 @@ PrintField:
     sta Pointer1
     lda MaskPointer+1
     sta Pointer1+1
-    lda NewStringXByte                             ; the mask's bank
+    lda NewStringXByte                      ; the mask's bank
     sta Pointer1XByte
     ldx MaskIndex
     jmp Output::WriteString
@@ -717,7 +719,7 @@ CheckMod:
 ;; Lowers the exponent by the remainder, which is the count of digits before the point less one.
 ;; Also: UGOTMOD (BB13)
 GotMod:
-    bit FacExponent                              ; the flags aren't used
+    bit FacExponent                         ; the flags aren't used
     sta DigitsBeforePoint
     sta ExponentAdjustment
     lda FacExponent
@@ -779,8 +781,9 @@ Digits:
 ;; Returns the number's digit for a power of ten, in ASCII.
 ;;
 ;; Indexes up to 21 are read, two past the 20 digits from <DIGITS_START>, as the index from the first digit is
-;; compared with <DIGITS_END>, an index from the start of <UsingDigits>. So the furthest places come from <UsingDigits>+22, where
-;; <UnpackDecimal> writes its end mark (a real leaves it as it was), and <UsingDigits>+23, which nothing writes.
+;; compared with <DIGITS_END>, an index from the start of <UsingDigits>. So the furthest places come from
+;; <UsingDigits>+22, where <UnpackDecimal> writes its end mark (a real leaves it as it was), and <UsingDigits>+23, which
+;; nothing writes.
 ;; In: X = the power of ten
 ;; Out: A = the digit, `0` past the digits, negative = set (and A no digit) when the power is above the first digit
 ;; Uses: DigitPower
@@ -832,7 +835,7 @@ Read:
 ;; Fills in the image's fixed sign by the number's: a `+` becomes `+` or `-`, a `-` becomes a space or `-`.
 ;;
 ;; Only the mask's first `+` or `-` is filled in; a floating sign has none in the mask, so it is left alone.
-;; In: FACSGN = bit 7 set for a negative number, SpecParts = <FIELD_SIGN> set for a sign, MaskIndex = the field's
+;; In: FacSign = bit 7 set for a negative number, SpecParts = <FIELD_SIGN> set for a sign, MaskIndex = the field's
 ;;   length, MaskPointer = the mask
 ;; Uses: A, Y
 ;; Keeps: X
@@ -879,11 +882,11 @@ Done:
 
 ;; Adds one to the exponent in <FacExponent> when carry is set, then puts its size in <DecimalExponent>.
 ;; In: carry = set to add one
-;; Out: TENEXP = the exponent without its sign
+;; Out: DecimalExponent = the exponent without its sign
 ;; Uses: A, RepeatCount
 ;; Keeps: X, Y
 ;; Entry:
-;;   Magnitude = only sets TENEXP
+;;   Magnitude = only sets <DecimalExponent>
 ;; Also: UEXPLS1 (BB13)
 .proc RaiseExponent
     lda #1

@@ -1,4 +1,4 @@
-; retrocore: style=strict ignore=unlinked-name:READ|CREATE|RENAME -- SOS's calls, not BASIC's statements
+; retrocore: style=strict
 ; SOSSTUF: BASIC's SOS calls. The parameter lists for the console, the console's events, and the one parameter list
 ; every file call shares, with SosCalls::Call and SosCalls::SetUp to make a call from it.
 ;
@@ -15,13 +15,13 @@
 
 ; The parameter counts of the calls BASIC makes.
 
-;; CREATE's parameter count.
+;; `CREATE`'s parameter count.
 CREATE_COUNT = 3
 
 ;; DESTROY's parameter count.
 DESTROY_COUNT = 1
 
-;; RENAME's parameter count.
+;; `RENAME`'s parameter count.
 RENAME_COUNT = 2
 
 ;; GET_FILE_INFO's and SET_FILE_INFO's parameter count.
@@ -33,7 +33,7 @@ OPEN_COUNT = 4
 ;; NEWLINE's parameter count.
 NEWLINE_COUNT = 3
 
-;; READ's parameter count.
+;; `READ`'s parameter count.
 READ_COUNT = 4
 
 ;; WRITE's parameter count.
@@ -92,13 +92,13 @@ SOS_JOYSTICK = $64
     LENGTH .word                            ;; the count of bytes to write
 .endstruct
 
-;; READ's parameters; WRITE takes the first four too.
+;; `READ`'s parameters; WRITE takes the first four too.
 .struct ReadList
     COUNT .byte                             ;; <SosCalls::READ_COUNT>
     REFERENCE .byte                         ;; the file's reference number
     BUFFER .word                            ;; where the bytes go
     REQUEST .word                           ;; the count of bytes to read
-    TRANSFERRED .word                       ;; the count READ really read
+    TRANSFERRED .word                       ;; the count `READ` really read
 .endstruct
 
 ;; NEWLINE's parameters.
@@ -155,7 +155,7 @@ SOS_JOYSTICK = $64
     LENGTH .byte                            ;; the information list's length
 .endstruct
 
-;; CREATE's parameters.
+;; `CREATE`'s parameters.
 .struct CreateList
     COUNT .byte                             ;; <SosCalls::CREATE_COUNT>
     PATHNAME .word                          ;; the pathname's address, its length first
@@ -163,7 +163,7 @@ SOS_JOYSTICK = $64
     OPTIONS_LENGTH .byte                    ;; the option list's length
 .endstruct
 
-;; RENAME's parameters.
+;; `RENAME`'s parameters.
 .struct RenameList
     COUNT .byte                             ;; <SosCalls::RENAME_COUNT>
     PATHNAME .word                          ;; the old pathname's address
@@ -215,7 +215,7 @@ SOS_JOYSTICK = $64
     LENGTH .byte                            ;; GET_PREFIX's buffer length
 .endstruct
 
-;; CREATE's option list.
+;; `CREATE`'s option list.
 .struct FileOptions
     FILE_TYPE .byte                         ;; the file type
     AUX_TYPE .word                          ;; the auxiliary type
@@ -327,7 +327,7 @@ NewlineParameters:
     .byte 0                                 ; the reference number
     .byte NEWLINE_ON, RETURN
 
-;; READ's parameter list for one key, into <LastKey>: the console's or, while `EXEC` runs, the `EXEC` file's reference
+;; `READ`'s parameter list for one key, into <LastKey>: the console's or, while `EXEC` runs, the `EXEC` file's reference
 ;; number goes in <Console::KeyReference>.
 ;;
 ;; Its request, one byte, is also <Console::FlushAllParameters>.
@@ -349,28 +349,28 @@ KeyReference:
 FlushAllParameters:
     .byte SosCalls::FLUSH_COUNT, 0
 
-;; READ's count of bytes read, in <Console::KeyParameters>, which BASIC ignores.
+;; `READ`'s count of bytes read, in <Console::KeyParameters>, which BASIC ignores.
 ;; Also: RNDGOT (BB13)
 KeyTransferred:
     .word 0
 
 ;; WRITE's parameter list for one character, <Console::Character>, to the console.
 ;;
-;; Its count is set when it is used; READ's count of bytes read follows, for a READ through it.
+;; Its count is set when it is used; `READ`'s count of bytes read follows, for a `READ` through it.
 ;; Also: SCHRTB (BB13)
 CharacterParameters:
     .byte 0                                 ; the parameter count, set when it is used
     .byte 0                                 ; the reference number
     .word Character
     .word 1                                 ; one byte
-    .word 0                                 ; the bytes read, for a READ through it
+    .word 0                                 ; the bytes read, for a `READ` through it
 
 ;; The character <Console::CharacterParameters> writes.
 ;; Also: OUTCHAR (BB13)
 Character:
     .byte 0
 
-;; READ's parameter list for a line from the console into <InputBuffer>, up to <READ_LINE_LIMIT> characters.
+;; `READ`'s parameter list for a line from the console into <InputBuffer>, up to <READ_LINE_LIMIT> characters.
 ;; Also: SLINTB (BB13)
 LineParameters:
     .byte SosCalls::READ_COUNT
@@ -378,7 +378,7 @@ LineParameters:
     .word InputBuffer
     .word READ_LINE_LIMIT
 
-;; The count of characters <Console::LineParameters>'s READ returned.
+;; The count of characters <Console::LineParameters>'s `READ` returned.
 ;; Also: SNOCHRS (BB13)
 LineLength:
     .word 0
@@ -599,7 +599,7 @@ CursorLine:
     ldx KeyReference                        ; EXEC's file, or GET#'s?
     cpx ExecFile
     beq ExecFailed
-    jmp Files::ReadTextLine::ReadFailed                              ; GET#'s: ON EOF# may take it
+    jmp Files::ReadTextLine::ReadFailed     ; GET#'s: ON EOF# may take it
 
 ;; Closes the `EXEC` file, and reads the key from the console.
 ExecFailed:
@@ -681,7 +681,7 @@ Reference = Parameters + ReadList::REFERENCE
 ;; Also: NWLNB (BB13)
 NewlineEnabled = Parameters + NewlineList::ENABLED
 
-;; READ's and WRITE's buffer address.
+;; `READ`'s and WRITE's buffer address.
 ;; Also: SBFPTR (BB13)
 Buffer = Parameters + ReadList::BUFFER
 
@@ -709,12 +709,12 @@ ReleasedSegment = Parameters + ReleaseSegmentList::SEGMENT
 ;; Also: JMODE (BB13)
 JoystickMode = Parameters + JoystickList::MODE
 
-;; The second parameter: CREATE's option list's address, or another call's.
+;; The second parameter: `CREATE`'s option list's address, or another call's.
 ;; Also: CRTLST (BB13)
 CreateOptions:
     .word 0
 
-;; RENAME's new pathname.
+;; `RENAME`'s new pathname.
 ;; Also: NWPTHNM (BB13)
 NewPathname = Parameters + RenameList::NEW_PATHNAME
 
@@ -746,7 +746,7 @@ Displacement = Parameters + MarkList::DISPLACEMENT
 ;; Also: IOPGCN (BB13)
 PageCount = Parameters + FindSegmentList::PAGE_COUNT
 
-;; The third parameter: CREATE's option list's length.
+;; The third parameter: `CREATE`'s option list's length.
 ;; Also: INLNGTH (BB13)
 CreateOptionsLength:
     .byte 0
@@ -779,26 +779,26 @@ SegmentNumber:
 ;; The storage type of a seedling file, a file of one block.
 STORAGE_SEEDLING = 1
 
-;; CREATE's option list: the file type, the auxiliary type and the storage type, a <SosCalls::FileOptions>.
+;; `CREATE`'s option list: the file type, the auxiliary type and the storage type, a <SosCalls::FileOptions>.
 ;; Also: CRTTBL (BB13)
 NewFileOptions:
 
-;; The file type CREATE gives the file.
+;; The file type `CREATE` gives the file.
 ;; Also: INFLID (BB13)
 NewFileType:
     .byte 0
 
-;; The auxiliary type CREATE gives the file; BASIC puts a data file's record length here.
+;; The auxiliary type `CREATE` gives the file; BASIC puts a data file's record length here.
 ;; Also: INAUXID (BB13)
 NewFileAuxType:
     .word 0
 
-;; The storage type CREATE gives the file: a seedling.
+;; The storage type `CREATE` gives the file: a seedling.
 ;; Also: INSTRTYP (BB13)
 NewFileStorageType:
     .byte STORAGE_SEEDLING
 
-;; CREATE's end of file, which BASIC never sets.
+;; `CREATE`'s end of file, which BASIC never sets.
 ;;
 ;; Its initial contents are whatever was in memory when Apple built SOS.INTERP.
 ;; Also: INEOF (BB13)
@@ -920,7 +920,7 @@ Done:
 
 ; The file calls' indexes in CallNumbers and ParameterCounts.
 
-;; CREATE's index.
+;; `CREATE`'s index.
 ;; Also: CRT (BB13)
 CALL_CREATE = 0
 
@@ -928,7 +928,7 @@ CALL_CREATE = 0
 ;; Also: DST (BB13)
 CALL_DESTROY = CALL_CREATE+1
 
-;; RENAME's index.
+;; `RENAME`'s index.
 ;; Also: RNM (BB13)
 CALL_RENAME = CALL_DESTROY+1
 
@@ -948,7 +948,7 @@ CALL_OPEN = CALL_GET_FILE_INFO+1
 ;; Also: NWL (BB13)
 CALL_NEWLINE = CALL_OPEN+1
 
-;; READ's index.
+;; `READ`'s index.
 ;; Also: RED (BB13)
 CALL_READ = CALL_NEWLINE+1
 
@@ -1050,7 +1050,7 @@ ParameterCounts:
 ; 1.3's program prefix
 ;
 ; With a program selector, a program runs with its own volume's prefix while BASIC's own files keep SOS's prefix.
-; BASIC keeps both, in SOSPATH and PROGPATH, and sets the one each command needs.
+; BASIC keeps both, in SosPrefix and ProgramPath, and sets the one each command needs.
 ; ---------------------------------------------------------------------------------------------------------------------
 
 ;; 1.3's two prefixes, SOS's own in <SosPrefix> and the program's in <ProgramPath>, and setting SOS's prefix to either.
@@ -1099,7 +1099,7 @@ Done:
 ;; Also: SETPROG (BB13)
 .proc UseProgram
     lda ProgramLoading
-    beq SetProgramPrefix                    ; no RUN or CHAIN: PROGPATH stands
+    beq SetProgramPrefix                    ; no RUN or CHAIN: ProgramPath stands
     jsr TakeFromName
 
 ;; Points the call at <ProgramPath>.
@@ -1111,7 +1111,8 @@ SetProgramPrefix:
     ; Falls into ProgramPrefix::Set.
 .endproc
 
-;; Sets SOS's prefix to the pathname <ProgramPrefix::Pathname> points to, ending the statement with an error if it fails.
+;; Sets SOS's prefix to the pathname <ProgramPrefix::Pathname> points to, ending the statement with an error if it
+;; fails.
 ;; Entry: Failed = ends the statement with the SOS error in A
 ;; Also: SETPFX (BB13)
 .proc Set
@@ -1133,7 +1134,7 @@ Failed:
     .byte SOS_GET_PREFIX
     .word Functions::PrefixList
     bne Set::Failed
-    ldy CatalogBuffer+1                            ; the prefix's length
+    ldy CatalogBuffer+1                     ; the prefix's length
 
 ;; Copies the prefix, with its length, last byte first.
 CopyPrefix:

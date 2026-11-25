@@ -48,9 +48,9 @@ ExponentialPolynomial:
 ;; e^x is 2^y, with y = x * log2(e). The integer part of y becomes the result's exponent, and
 ;; <Float::ExponentialPolynomial> gives 2 to the power of the fraction. A y of 128 or more in size is an overflow error
 ;; when positive and gives 0 when negative; an integer part of 127 is an overflow error too.
-;; In: FAC = x
-;; Out: FAC = e^x
-;; Errors: ERROV = the result is too large
+;; In: Fac = x
+;; Out: Fac = e^x
+;; Errors: <ERROR_OVERFLOW> = the result is too large
 ;; See: <Log>, <Float::RaiseArg>
 ;; Also: EXP (BB13)
 .proc Exp
@@ -60,9 +60,9 @@ ExponentialPolynomial:
     lda FacExtension
     adc #$50
     bcc CheckRange
-    jsr Float::Round::Increment                              ; round the product up
+    jsr Float::Round::Increment             ; round the product up
 
-;; Keeps the product's extra low byte, biased by $50, while the product is copied to <ArgExponent> unrounded; an exponent of
+;; Keeps the product's extra low byte, biased by $50, while the product is copied to <Arg> unrounded; an exponent of
 ;; $88 or more is a y of 128 or more in size.
 ;; Also: STOLD (BB13)
 CheckRange:
@@ -81,7 +81,7 @@ OutOfRange:
 ;; Also: EXP1 (BB13)
 Reduce:
     jsr Int
-    lda SmallInteger                              ; the integer part's low byte
+    lda SmallInteger                        ; the integer part's low byte
     clc
     adc #$81
     beq OutOfRange                          ; 127: too large
@@ -90,7 +90,7 @@ Reduce:
     pha                                     ; the scale, as an exponent byte
     ldx #FacSign - FacExponent
 
-;; Exchanges <Fac> and <ArgExponent>, exponent to sign: <Fac> = y again, <ArgExponent> = `INT(y)`.
+;; Exchanges <Fac> and <Arg>, exponent to sign: <Fac> = y again, <Arg> = `INT(y)`.
 ;; Also: SWAPLP (BB13)
 SwapLoop:
     lda ArgExponent,X
@@ -101,16 +101,16 @@ SwapLoop:
     bpl SwapLoop
     lda FunctionJumpHigh
     sta FacExtension
-    jsr Float::SubtractFromArg                               ; INT(y) - y
-    jsr Float::Negate                               ; y - INT(y), from 0 to 1
+    jsr Float::SubtractFromArg              ; INT(y) - y
+    jsr Float::Negate                       ; y - INT(y), from 0 to 1
     lda #<(Float::ExponentialPolynomial)
     ldy #>(Float::ExponentialPolynomial)
     jsr Float::EvaluatePolynomial
     lda #0
     sta ResultSign
     pla
-    jsr Float::AddExponent                              ; add the scale to the exponent
-    rts                                     ; a JSR, not a JMP: MLDEXP's underflow drops a return address
+    jsr Float::AddExponent                  ; add the scale to the exponent
+    rts                                     ; a JSR, not a JMP: Float::AddExponent's underflow drops a return address
 .endproc
 
 .endscope
@@ -122,29 +122,29 @@ SwapLoop:
 ;;
 ;; The table is a degree byte, then degree + 1 packed coefficients, highest power first, so the terms run from
 ;; x^(2 * degree + 1) down to x.
-;; In: FAC = x, A = the table's low byte, Y = its high byte
-;; Out: FAC = the polynomial's value
-;; Uses: TEMPF1, TEMPF2, POLYPT, DEGREE
+;; In: Fac = x, A = the table's low byte, Y = its high byte
+;; Out: Fac = the polynomial's value
+;; Uses: FloatTemporary1, FloatTemporary2, PolynomialPointer, PolynomialDegree
 ;; See: <Float::EvaluatePolynomial>
 ;; Also: POLYX (BB13)
 .proc EvaluateOddPolynomial
     sta PolynomialPointer
     sty PolynomialPointer+1
-    jsr StoreFacInTemporary1                               ; x into TEMPF1
+    jsr StoreFacInTemporary1                ; x into FloatTemporary1
     lda #FloatTemporary1
-    jsr MultiplyPacked                               ; x^2
+    jsr MultiplyPacked                      ; x^2
     jsr EvaluateStoredPolynomial
     lda #FloatTemporary1
     ldy #>(FloatTemporary1)
-    jmp MultiplyPacked                               ; times x
+    jmp MultiplyPacked                      ; times x
 .endproc
 
 ;; Evaluates a polynomial of <Fac> by Horner's rule.
 ;;
 ;; The table is a degree byte, then degree + 1 packed coefficients, highest power first, in BASIC's own bank.
-;; In: FAC = x, A = the table's low byte, Y = its high byte
-;; Out: FAC = the polynomial's value
-;; Uses: TEMPF2, POLYPT, DEGREE
+;; In: Fac = x, A = the table's low byte, Y = its high byte
+;; Out: Fac = the polynomial's value
+;; Uses: FloatTemporary2, PolynomialPointer, PolynomialDegree
 ;; See: <Float::EvaluateOddPolynomial>
 ;; Also: POLY (BB13)
 .proc EvaluatePolynomial
@@ -154,12 +154,12 @@ SwapLoop:
 .endproc
 
 ;; Evaluates the polynomial at <PolynomialPointer> with x in <Fac>, as <Float::EvaluatePolynomial> does.
-;; In: FAC = x, POLYPT = the table
-;; Out: FAC = the polynomial's value
+;; In: Fac = x, PolynomialPointer = the table
+;; Out: Fac = the polynomial's value
 ;; Also: POLY1 (BB13)
 .proc EvaluateStoredPolynomial
-    jsr StoreFacInTemporary2                               ; x into TEMPF2; Y = 0
-    sty PolynomialPointerXByte                             ; the table is in bank 0
+    jsr StoreFacInTemporary2                ; x into FloatTemporary2; Y = 0
+    sty PolynomialPointerXByte              ; the table is in bank 0
     lda (PolynomialPointer),Y
     sta PolynomialDegree
     ldy PolynomialPointer
@@ -174,8 +174,8 @@ SetPointer:
     sta PolynomialPointer
     ldy PolynomialPointer+1
 
-;; Multiplies by the coefficient at Y and A on the first pass, and by x (<FloatTemporary2>) on later ones, and steps to the
-;; next coefficient.
+;; Multiplies by the coefficient at Y and A on the first pass, and by x (<FloatTemporary2>) on later ones, and steps to
+;; the next coefficient.
 ;; Also: POLY2 (BB13)
 NextTerm:
     jsr MultiplyPacked
@@ -192,7 +192,7 @@ AddTerm:
     sta PolynomialPointer
     sty PolynomialPointer+1
     jsr AddPacked
-    lda #FloatTemporary2                             ; x, for the next multiply
+    lda #FloatTemporary2                    ; x, for the next multiply
     ldy #>(FloatTemporary2)
     dec PolynomialDegree
     bne NextTerm
@@ -203,8 +203,8 @@ AddTerm:
 
 ;; The random number generator behind `RND`: the Lehmer "minimal standard".
 ;;
-;; The seed, a long integer in <RandomValue>, is multiplied by 16807 and reduced modulo 2^31-1, and `RND` gives the new seed
-;; times 2^-31, between 0 and 1. (Apple's comments describe Microsoft's older generator, which swapped bytes of the
+;; The seed, a long integer in <RandomValue>, is multiplied by 16807 and reduced modulo 2^31-1, and `RND` gives the new
+;; seed times 2^-31, between 0 and 1. (Apple's comments describe Microsoft's older generator, which swapped bytes of the
 ;; mantissa.) A seed of 0 or of a multiple of 2^31-1 becomes 0 and stays 0, so every `RND` after it gives 0.
 .scope Random
 
@@ -237,8 +237,8 @@ Scale:
 ;; forced between $90 and $9F, becomes the seed, which is put through the generator three times. A positive argument
 ;; puts the seed through once. An argument whose seed is 2^31-1 (`RND(-2147483647)`) makes the seed 0, and every `RND`
 ;; after it 0, until a negative argument seeds it again.
-;; In: FAC = the argument
-;; Out: FAC = the number, VALTYP = 0
+;; In: Fac = the argument
+;; Out: Fac = the number, ValueType = 0
 ;; See: <Random>, <RandomValue>
 ;; Also: RND (BB13)
 .proc Rnd
@@ -253,7 +253,7 @@ SEED_EXPONENT_BITS = $1F
     beq ReturnSeed
     bit FacSign
     bpl Next
-    lsr FacSign                              ; positive
+    lsr FacSign                             ; positive
     and #SEED_EXPONENT_BITS
     ora #SEED_EXPONENT
     sta FacExponent
@@ -283,7 +283,7 @@ ReturnSeed:
 .scope Random continued
 
 ;; Loads the seed, <RandomValue>, into <Fac> as a long integer.
-;; Out: FAC = the seed
+;; Out: Fac = the seed
 ;; Also: RNDONE (BB13)
 .proc LoadSeed
     lda #RandomValue
@@ -293,17 +293,18 @@ ReturnSeed:
 .endproc
 
 ;; Puts the seed in <RandomValue> through the generator once.
-;; Out: FAC = the new seed, RNDX = the new seed
+;; Out: Fac = the new seed, RandomValue = the new seed
 ;; Also: RNDIT (BB13)
 .proc Advance
     jsr LoadSeed
     ; Falls into AdvanceFac.
 .endproc
 
-;; Puts the long integer in <Fac> through the generator, storing the result in <RandomValue>: <Fac> * 16807 `MOD` (2^31-1).
-;; In: FAC = the long integer, from 0 to 2^31
-;; Out: FAC = the new seed, RNDX = the new seed
-;; Uses: ARG, RES
+;; Puts the long integer in <Fac> through the generator, storing the result in <RandomValue>: <Fac> * 16807 `MOD`
+;; (2^31-1).
+;; In: Fac = the long integer, from 0 to 2^31
+;; Out: Fac = the new seed, RandomValue = the new seed
+;; Uses: Arg, Result1
 ;; Also: RNDAT (BB13)
 .proc AdvanceFac
     jsr LongInteger::CopyFacToArg
@@ -344,8 +345,8 @@ ReturnSeed:
 ;; The angle is divided by 2 * pi and its integer part dropped, leaving a fraction of a turn. Symmetries fold that into
 ;; the quarter turn from -1/4 to 1/4, which <Float::SinePolynomial> takes. In the second and third quarters it flips
 ;; <TangentSign>, for `TAN`.
-;; In: FAC = the angle
-;; Out: FAC = the sine, TEMPF1 = the folded fraction of a turn
+;; In: Fac = the angle
+;; Out: Fac = the sine, FloatTemporary1 = the folded fraction of a turn
 ;; Entry:
 ;;   Reflect = negates <Fac>, then goes on with the fold; <Functions::Tan> enters here for the cosine
 ;; See: <Functions::Cos>, <Functions::Tan>, <Float::EvaluateOddPolynomial>
@@ -355,15 +356,15 @@ ReturnSeed:
     lda #<(Float::TwoPi)
     ldy #>(Float::TwoPi)
     ldx ArgSign
-    jsr Float::DivideArgByPacked                               ; turns
+    jsr Float::DivideArgByPacked            ; turns
     jsr Float::CopyFacToArg
     jsr Int
     lda #0
     sta ResultSign
-    jsr Float::SubtractFromArg                               ; the fraction of a turn
+    jsr Float::SubtractFromArg              ; the fraction of a turn
     lda #<(Float::Quarter)
     ldy #>(Float::Quarter)
-    jsr Float::SubtractFromPacked                                ; 1/4 - the fraction
+    jsr Float::SubtractFromPacked           ; 1/4 - the fraction
     lda FacSign
     pha
     bpl Reflect                             ; the first quarter
@@ -372,7 +373,7 @@ ReturnSeed:
     bmi AddQuarter
     lda TangentSign
     eor #$FF
-    sta TangentSign                              ; the second and third quarters
+    sta TangentSign                         ; the second and third quarters
 
 ;; Negates <Fac> (<Float::Negate>), the start of the fold.
 ;; Also: SIN1 (BB13)
@@ -399,12 +400,12 @@ Approximate:
 
 ;; The `TAN` function: the tangent of <Fac>, in radians, as the sine over the cosine.
 ;;
-;; After <Functions::Sin>, the folded fraction it leaves in <FloatTemporary1> is folded again through Cosine to give the cosine,
-;; with <TangentSign> as its sign. <FloatTemporary1> is read back with <FLOAT_TEMPORARY3_X_BYTE> as its X-byte, which is <FloatTemporary1>'s too: both are
-;; in zero page.
-;; In: FAC = the angle
-;; Out: FAC = the tangent
-;; Errors: ERRDV0 = the cosine is zero
+;; After <Functions::Sin>, the folded fraction it leaves in <FloatTemporary1> is folded again through Cosine to give the
+;; cosine, with <TangentSign> as its sign. <FloatTemporary1> is read back with <FLOAT_TEMPORARY3_X_BYTE> as its X-byte,
+;; which is <FloatTemporary1>'s too: both are in zero page.
+;; In: Fac = the angle
+;; Out: Fac = the tangent
+;; Errors: <ERROR_DIVISION_BY_ZERO> = the cosine is zero
 ;; See: <Functions::Sin>
 ;; Also: TAN (BB13)
 .proc Tan
@@ -415,21 +416,21 @@ Approximate:
     ldx #FloatTemporary3
     lda #FLOAT_TEMPORARY3_X_BYTE
     ldy #>(FloatTemporary3)
-    jsr Float::StoreFac                               ; the sine into TEMPF3
+    jsr Float::StoreFac                     ; the sine into FloatTemporary3
     lda #FloatTemporary1
     ldx #FLOAT_TEMPORARY3_X_BYTE
     ldy #>(FloatTemporary1)
-    jsr Float::LoadFac                               ; the folded fraction from Sin
+    jsr Float::LoadFac                      ; the folded fraction from Sin
     lda #0
     sta FacSign
     lda TangentSign
     jsr Cosine
     lda #FloatTemporary3
     ldy #>(FloatTemporary3)
-    jmp Float::DividePacked                                ; the sine over the cosine
+    jmp Float::DividePacked                 ; the sine over the cosine
 
 ;; Finishes the cosine through <Functions::Sin>'s fold, with the sign in A.
-;; In: FAC = the folded fraction's size, A = bit 7 set to negate the result
+;; In: Fac = the folded fraction's size, A = bit 7 set to negate the result
 ;; Also: COSC (BB13)
 Cosine:
     pha
@@ -485,8 +486,8 @@ SinePolynomial:
 ;;
 ;; Uses `ATN(-x) = -ATN(x)` to work on a positive x, and `ATN(x) = pi/2 - ATN(1/x)` to bring an x of 1 or more below 1,
 ;; where <Float::ArctangentPolynomial> takes it.
-;; In: FAC = x
-;; Out: FAC = the angle, from -pi/2 to pi/2
+;; In: Fac = x
+;; Out: Fac = the angle, from -pi/2 to pi/2
 ;; See: <Float::EvaluateOddPolynomial>
 ;; Also: ATN (BB13)
 .proc Atn
@@ -504,7 +505,7 @@ Positive:
     bcc Approximate                         ; below 1
     lda #<(Float::One)
     ldy #>(Float::One)
-    jsr Float::DividePacked                                ; 1/x
+    jsr Float::DividePacked                 ; 1/x
 
 ;; Evaluates the arctangent polynomial, then takes it from pi/2 if the reciprocal was taken.
 ;; Also: ATN2 (BB13)
@@ -517,7 +518,7 @@ Approximate:
     bcc RestoreSign                         ; x was below 1
     lda #<(Float::HalfPi)
     ldy #>(Float::HalfPi)
-    jsr Float::SubtractFromPacked                                ; pi/2 - the result
+    jsr Float::SubtractFromPacked           ; pi/2 - the result
 
 ;; Gives the result the argument's sign.
 ;; Also: ATN3 (BB13)

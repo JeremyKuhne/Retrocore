@@ -5,10 +5,11 @@
 ;;
 ;; A program line in memory is a <ProgramLine>: a one-byte link (the line's length, from this byte to the next line's
 ;; link), the line number (low byte, high byte), the tokenized text, and a zero. A zero link ends the program, and a
-;; zero stands just before the first line, at <ProgramStart>-1. Pointers into the program carry a bank byte, their X-byte, at
-;; their address plus <X_BYTE_OFFSET>, as <TextPointer> does in <TextPointerXByte>, and keep their page in <POINTER_PAGE_FIRST> to <POINTER_PAGE_LIMIT>-1 ($02-$81).
-;; Pages $82 and up of one bank are the same memory as pages $02 and up of the next, so a pointer may run past the top
-;; and still read the right byte; the code brings it back into range where a line starts.
+;; zero stands just before the first line, at <ProgramStart>-1. Pointers into the program carry a bank byte, their
+;; X-byte, at their address plus <X_BYTE_OFFSET>, as <TextPointer> does in <TextPointerXByte>, and keep their page in
+;; <POINTER_PAGE_FIRST> to <POINTER_PAGE_LIMIT>-1 ($02-$81). Pages $82 and up of one bank are the same memory as pages
+;; $02 and up of the next, so a pointer may run past the top and still read the right byte; the code brings it back into
+;; range where a line starts.
 ;;
 ;; Apple's Business BASIC 1.3 listing (BB13) gives the names in `Also:`.
 
@@ -36,7 +37,8 @@
     ;; The limit, packed, its sign in bit 7 of the first mantissa byte.
     LIMIT .res 5
     LINE .word ;; The `FOR` statement's line number, low byte first.
-    ;; The text pointer to the `FOR` statement's end, as an offset from <ProgramStart>: its bank, then its high and low bytes.
+    ;; The text pointer to the `FOR` statement's end, as an offset from <ProgramStart>: its bank, then its high and low
+    ;; bytes.
     TEXT_BANK .byte
     TEXT_HIGH .byte ;; The text offset's high byte.
     TEXT_LOW .byte ;; The text offset's low byte.
@@ -47,7 +49,8 @@
 .struct GoSubEntry
     TOKEN .byte ;; <TOKEN_GOSUB>, which marks the entry as a `GOSUB` entry.
     LINE .word ;; The line number of the `GOSUB`, low byte first.
-    ;; The text pointer to where `RETURN` goes on, as an offset from <ProgramStart>: its bank, then its high and low bytes.
+    ;; The text pointer to where `RETURN` goes on, as an offset from <ProgramStart>: its bank, then its high and low
+    ;; bytes.
     TEXT_BANK .byte
     TEXT_HIGH .byte ;; The text offset's high byte.
     TEXT_LOW .byte ;; The text offset's low byte.
@@ -72,19 +75,19 @@ StackTop = $0101
 ;; The `LIST` statement: lists the program, or the lines in a range, turning tokens back into words.
 ;;
 ;; The range is `LIST`, `LIST n`, `LIST n-`, `LIST -m` or `LIST n-m`, where a comma or `TO` may stand for the dash.
-;; Each line is printed as a space, its number, <ListIndent> spaces times one more than the `FOR`s open, and its text; text
-;; wraps at <OutputRecordLength> to the column the text started in. A `FOR` adds a level for the lines after it and each variable
-;; of a `NEXT` takes one away. CONTROL-C stops the listing with BREAK.
+;; Each line is printed as a space, its number, <ListIndent> spaces times one more than the `FOR`s open, and its text;
+;; text wraps at <OutputRecordLength> to the column the text started in. A `FOR` adds a level for the lines after it and
+;; each variable of a `NEXT` takes one away. CONTROL-C stops the listing with BREAK.
 ;; In: A = the character after `LIST`, flags as <GetCurrentCharacter> sets them
-;; Uses: A, X, Y, LINNUM, LOWTR, VARNAM, DELTA, FAC, FORPNT, INPFLG
+;; Uses: A, X, Y, LineNumber, SourceStart, VariableSizes, MoveDistance, Fac, AssignedVariable, InputMode
 ;; See: <Lister::WrapCharacter>, <Statements::List::CheckToken>, <FindLine>
 ;; Also: LIST (BB13)
 .proc List
     php                                     ; zero set: nothing follows LIST
     ldx #0
-    stx MoveDistance                               ; no FOR open yet
+    stx MoveDistance                        ; no FOR open yet
     jsr ReadLineNumber                      ; the first line's number, or 0
-    jsr FindLine                              ; LOWTR = the first line at or after it
+    jsr FindLine                            ; SourceStart = the first line at or after it
     plp
     bne CheckRange
 
@@ -128,13 +131,13 @@ StartListing:
     sta VariableSizesXByte
 
 ;; Lists the line at <VariableSizes>, unless it is past the last line asked for or the program has ended.
-;; In: VARNAM = the line's link byte, LINNUM = the last line to list
+;; In: VariableSizes = the line's link byte, LineNumber = the last line to list
 ;; Also: LIST4 (BB13)
 NextLine:
     ldy #ProgramLine::LINK
-    lda (VariableSizes),y                          ; a zero link ends the program
+    lda (VariableSizes),y                   ; a zero link ends the program
     beq Finish
-    bit PendingEvents                            ; CONTROL-C?
+    bit PendingEvents                       ; CONTROL-C?
     bvc NoBreak
     jmp HandleBreak
 
@@ -142,10 +145,10 @@ NextLine:
 NoBreak:
     jsr PrintNewline
     iny
-    lda (VariableSizes),y                          ; the line number's low byte
+    lda (VariableSizes),y                   ; the line number's low byte
     tax
     iny
-    lda (VariableSizes),y                          ; and its high byte
+    lda (VariableSizes),y                   ; and its high byte
     cmp LineNumber+1
     bne CheckPastEnd
     cpx LineNumber
@@ -189,7 +192,7 @@ IndentSpace:
 ;; with no indentation, the 0 that SOS's WRITE left after the line number.
 ;; Also: PLOOP3 (BB13)
 SetMargin:
-    ldy TerminalPosition                              ; the margin for Lister::WrapCharacter's wrap
+    ldy TerminalPosition                    ; the margin for Lister::WrapCharacter's wrap
     sty MoveDistance+1
     ldy ListOffset
 
@@ -212,7 +215,8 @@ NextByte:
     lda (VariableSizes),y
     bne CheckToken                          ; not the end: a character or a token
 
-;; Moves <VariableSizes> past the line's zero to the next line's link, into the next bank past <POINTER_PAGE_LIMIT>, and lists it.
+;; Moves <VariableSizes> past the line's zero to the next line's link, into the next bank past <POINTER_PAGE_LIMIT>, and
+;; lists it.
 ;; Also: PLOOP8 (BB13)
 NextLineLink:
     sec                                     ; the zero's index, plus one
@@ -224,7 +228,7 @@ NextLineLink:
     inx
     cpx #POINTER_PAGE_LIMIT
     bcc StorePage
-    ldx #POINTER_PAGE_FIRST                              ; page $82 is the next bank's page $02
+    ldx #POINTER_PAGE_FIRST                 ; page $82 is the next bank's page $02
     inc VariableSizesXByte
 
 ;; Stores the link's page and lists the line.
@@ -270,10 +274,11 @@ QuotedString:
 
 ;; Prints a character, or a token as its reserved word.
 ;;
-;; A token is one byte, $80-$FE, for a word of <ReservedWords>, or <ESCAPE_TOKEN> and a second byte for a word of <ExtendedReservedWords>. A
-;; space goes before the word unless it starts the line or follows a token or a colon (or, for an escape token, unless
-;; it is a function); a space goes after a word that ends in a letter when a token, a letter, a digit or a period
-;; follows. `FOR` and `NEXT` change the indentation of the lines after them in <MoveDistance>.
+;; A token is one byte, $80-$FE, for a word of <ReservedWords>, or <ESCAPE_TOKEN> and a second byte for a word of
+;; <ExtendedReservedWords>. A space goes before the word unless it starts the line or follows a token or a colon (or,
+;; for an escape token, unless it is a function); a space goes after a word that ends in a letter when a token, a
+;; letter, a digit or a period follows. `FOR` and `NEXT` change the indentation of the lines after them in
+;; <MoveDistance>.
 ;; In: A = the byte, negative = set for a token, Y = its index in the line
 ;; See: <Statements::List::NextTableByte>, <Tokenizer::IsSeparator>
 ;; Also: QPLOP (BB13)
@@ -281,11 +286,11 @@ CheckToken:
     bpl CheckQuote                          ; a character
     cmp #TOKEN_FOR
     bne CheckNext
-    inc MoveDistance                               ; FOR: one level more
+    inc MoveDistance                        ; FOR: one level more
 
 ;; Checks for `NEXT`'s token.
 CheckNext:
-    cmp #TOKEN_FOR+1                            ; NEXT?
+    cmp #TOKEN_FOR+1                        ; NEXT?
     bne PointAtWords
     sty SavedY
 
@@ -314,7 +319,8 @@ ReloadToken:
     ldy SavedY
     lda (VariableSizes),y
 
-;; Points <Fac> at the reserved words: <ReservedWords> for a one-byte token, <ExtendedReservedWords> for an escape token's second byte.
+;; Points <Fac> at the reserved words: <ReservedWords> for a one-byte token, <ExtendedReservedWords> for an escape
+;; token's second byte.
 ;;
 ;; <Fac> is set a page below the list, as <Statements::List::NextTableByte>'s first INY takes Y from $FF to 0 and
 ;; carries into the page.
@@ -327,12 +333,12 @@ PointAtWords:
     ldx #RESERVED_WORDS_X_BYTE
     stx FacXByte
     tax
-    inx                                     ; INPFLG = 0 for an escape token, negative for another
+    inx                                     ; InputMode = 0 for an escape token, negative for another
     stx InputMode
     cmp #ESCAPE_TOKEN
     bne CountWords
     iny
-    lda (VariableSizes),y                          ; the escape token's second byte
+    lda (VariableSizes),y                   ; the escape token's second byte
     ldx #<(ExtendedReservedWords)
     stx Fac
     ldx #>(ExtendedReservedWords-256)
@@ -377,11 +383,11 @@ SpaceBefore:
     pha
     ldy ListOffset
     dey
-    bit InputMode                              ; an escape token?
+    bit InputMode                           ; an escape token?
     bmi CheckPrevious
     dey                                     ; yes: look before its escape byte
     lda ListToken
-    cmp #TOKEN_FIRST_FUNCTION-FIRST_TOKEN                 ; a function: no space
+    cmp #TOKEN_FIRST_FUNCTION-FIRST_TOKEN   ; a function: no space
     bcs SpaceUnlessCarry
 
 ;; Looks at the byte before the token: carry is set for a colon or a token.
@@ -448,15 +454,18 @@ CHARACTER_BITS = $7F
 ; FOR
 ; ---------------------------------------------------------------------------------------------------------------------
 
-.scope Variables continued
+;; Variables and arrays: finding and making them, their entries, and `FOR`'s variable; the scope is in pieces through
+;; the files.
+.scope Variables
 ; Variables' offsets, which survive the variable table moving.
 
-;; Turns the variable pointer in <AssignedVariable> into an offset from the simple variables' start, <VariablesStart>, or back again.
+;; Turns the variable pointer in <AssignedVariable> into an offset from the simple variables' start, <VariablesStart>,
+;; or back again.
 ;;
-;; The offset is <VariablesStart> less the address, so the same subtraction undoes it. Loops and strings' back pointers keep
-;; offsets, which stay right when the variable table moves.
-;; Out: FORPNT, FORPNT+1, FORPNTB = the offset (or the address)
-;; Uses: A, Y, KIMY
+;; The offset is <VariablesStart> less the address, so the same subtraction undoes it. Loops and strings' back pointers
+;; keep offsets, which stay right when the variable table moves.
+;; Out: AssignedVariable, AssignedVariable+1, AssignedVariableXByte = the offset (or the address)
+;; Uses: A, Y, KeptY
 ;; Entry:
 ;;   OfPointerAtX = takes the pointer at the zero-page address in X, and returns with X = <KeptY>
 ;; See: <Variables::VariableOffset>
@@ -479,7 +488,7 @@ OfPointerAtX:
     jsr Memory::NormalizeAfterSubtract
     sta 1,x
     tya
-    sbc X_BYTE_OFFSET,x                            ; the pointer's X-byte
+    sbc X_BYTE_OFFSET,x                     ; the pointer's X-byte
     sta X_BYTE_OFFSET,x
     ldx KeptY
     rts
@@ -503,7 +512,7 @@ OfPointerAtX:
     jsr Statements::Let
     lda ValueType
     beq IsNumber
-    jmp TypeMismatchError                               ; only a real or an integer
+    jmp TypeMismatchError                   ; only a real or an integer
 
 ;; Notes the variable's type and turns its address into an offset.
 IsNumber:
@@ -555,9 +564,9 @@ BuildFrame:
     pla                                     ; NextStatement's return address: FOR falls into NextStatement instead
     pla
     lda #FOR_FRAME_SIZE / 2
-    jsr CheckStack                              ; room for the entry
+    jsr CheckStack                          ; room for the entry
     jsr SaveTextPointer
-    jsr SkipStatement                       ; TXTPTR to the FOR statement's end
+    jsr SkipStatement                       ; TextPointer to the FOR statement's end
     jsr PushGoSubEntryHere
     pla                                     ; the GOSUB entry's token: not a FOR entry's
     jsr RestoreTextPointer
@@ -565,7 +574,7 @@ BuildFrame:
     jsr RequireTwoByteToken
     jsr RequireNumber
     jsr EvaluateNumber                      ; the limit
-    lda FacSign                              ; pack the sign into the mantissa
+    lda FacSign                             ; pack the sign into the mantissa
     ora #$7F
     and FacMantissa1
     sta FacMantissa1
@@ -573,7 +582,7 @@ BuildFrame:
     ldy #>(ReadStep)
     sta Pointer1
     sty Pointer1+1
-    jmp PushFac                              ; push the limit and go on at ReadStep
+    jmp PushFac                             ; push the limit and go on at ReadStep
 
 ;; Pushes the rest of the entry: the step (1 when there is no `STEP`) and its sign, the variable's offset, its type and
 ;; <TOKEN_FOR>, then falls into <NextStatement>.
@@ -613,16 +622,16 @@ PushStep:
 
 ;; The statement loop: runs the next statement, from where <TextPointer> stands.
 ;;
-;; On entry <TextPointer> points at the terminator of the statement just run: a colon, or the zero that ends a line (for a
-;; `GOTO`, the zero before the line's link). Anything else is a syntax error. In a program, <StoppedText> and <StoppedTextXByte> take
-;; its value, the place to go on from for `CONT`. At a zero, the next line's link is read at <TextPointer>+1: a zero link
-;; ends the program (or the direct line) at <ReadyForCommand>; otherwise the line number at <TextPointer>+2 goes into <CurrentLine> and the
-;; pointer moves to <TextPointer>+3, the number's high byte, so <GetNextCharacter> reads the text's first byte. When the page reaches
-;; <POINTER_PAGE_LIMIT>, <TextPointerXByte> goes up by one and the page down by a bank's $80 pages. The line number's high byte is $FF while
-;; a direct line runs.
+;; On entry <TextPointer> points at the terminator of the statement just run: a colon, or the zero that ends a line (for
+;; a `GOTO`, the zero before the line's link). Anything else is a syntax error. In a program, <StoppedText> and
+;; <StoppedTextXByte> take its value, the place to go on from for `CONT`. At a zero, the next line's link is read at
+;; <TextPointer>+1: a zero link ends the program (or the direct line) at <ReadyForCommand>; otherwise the line number at
+;; <TextPointer>+2 goes into <CurrentLine> and the pointer moves to <TextPointer>+3, the number's high byte, so
+;; <GetNextCharacter> reads the text's first byte. When the page reaches <POINTER_PAGE_LIMIT>, <TextPointerXByte> goes
+;; up by one and the page down by a bank's $80 pages. The line number's high byte is $FF while a direct line runs.
 ;;
-;; CONTROL-C (bit 6 of <PendingEvents>) stops the program, and a key with `ON KBD` (bit 7) goes to its line, before the next
-;; statement.
+;; CONTROL-C (bit 6 of <PendingEvents>) stops the program, and a key with `ON KBD` (bit 7) goes to its line, before the
+;; next statement.
 ;; Entry:
 ;;   SavePlace = keeps <TextPointer> for `CONT` without checking for a terminator; `RETURN`, `CONT`, `INPUT`'s retry and
 ;;     `IF` come here
@@ -632,13 +641,13 @@ PushStep:
 ;; Also: NEWSTT (BB13)
 .proc NextStatement
     lda #0
-    sta ProgramLoading                              ; no RUN or CHAIN pending
+    sta ProgramLoading                      ; no RUN or CHAIN pending
 .if VERSION >= 130
-    jsr ProgramPrefix::UseSos                              ; 1.3: BASIC's own prefix again
+    jsr ProgramPrefix::UseSos               ; 1.3: BASIC's own prefix again
 .endif
     tsx
-    stx StatementStack                              ; the stack to go back to on an error
-    lda OutputFileNumber+1                             ; output back to its usual place
+    stx StatementStack                      ; the stack to go back to on an error
+    lda OutputFileNumber+1                  ; output back to its usual place
     sta OutputFileNumber
     jsr GetCurrentCharacter
     bne ExecuteStatement::ToSyntaxError     ; no terminator
@@ -666,7 +675,7 @@ CheckEvents:
     lda (TextPointer),y
     bne ExecuteStatement                    ; a colon: the next statement is on this line
     iny
-    lda (TextPointer),y                          ; the next line's link
+    lda (TextPointer),y                     ; the next line's link
     clc
     beq DispatchStatement::ToEndOfProgram   ; zero: the program has ended
     iny
@@ -676,7 +685,7 @@ CheckEvents:
     lda (TextPointer),y
     sta CurrentLine+1
     tya
-    adc TextPointer                              ; TXTPTR to the number's high byte
+    adc TextPointer                         ; TextPointer to the number's high byte
     sta TextPointer
     bcc KeepPageInRange
     inc TextPointer+1
@@ -698,7 +707,7 @@ KeepPageInRange:
 ;; With `TRACE`, every statement of a program (not of a direct line) prints `#` and its line number and a space. The
 ;; statement's handler is called with <ExecuteStatement::StatementReturn> on the stack, which returns to
 ;; <NextStatement>. The debugger stops here for each statement.
-;; In: TXTPTR = the byte before the statement, CURLIN = its line number
+;; In: TextPointer = the byte before the statement, CurrentLine = its line number
 ;; See: <DispatchStatement>
 ;; Also: GONE (BB13)
 .proc ExecuteStatement
@@ -745,17 +754,18 @@ ToBreak:
 
 ;; Runs a statement: a token from `END` to `NEW` goes to its handler from <StatementTable>, anything else is a `LET`.
 ;;
-;; The handler is reached through an RTS, after <GetNextCharacter>, with the statement's next character in A and the flags set as
-;; <GetNextCharacter> sets them.
+;; The handler is reached through an RTS, after <GetNextCharacter>, with the statement's next character in A and the
+;; flags set as <GetNextCharacter> sets them.
 ;; In: A = the statement's first byte, flags as <GetNextCharacter> sets them
 ;; Entry:
 ;;   ToEndOfProgram = ends the program at a zero link, as `END` does; <NextStatement> branches here with carry clear
 ;; Also: GONE3 (BB13)
 .proc DispatchStatement
     beq Statements::Restore::Done           ; an empty statement
-    ; Carry is already set: CHRGET sets it for anything but a digit, and a digit is a syntax error, as it should be.
+    ; Carry is already set: GetNextCharacter sets it for anything but a digit, and a digit is a syntax error, as it
+    ; should be.
     sbc #TOKEN_END
-    ldx #TemporaryDescriptors                             ; no string temporaries in use
+    ldx #TemporaryDescriptors               ; no string temporaries in use
     stx NextTemporary
     bcc ToLet                               ; not a token: a LET
     cmp #TOKEN_NEW-TOKEN_END+1
@@ -787,10 +797,12 @@ ToLet:
 .scope Statements continued
 ; RESTORE.
 
-;; The `RESTORE` statement: points <DataPointer> at the zero before the program, so `READ` starts at the first `DATA` again.
+;; The `RESTORE` statement: points <DataPointer> at the zero before the program, so `READ` starts at the first `DATA`
+;; again.
 ;;
-;; The borrow out of the page goes through <Memory::WrapPage>, which only checks the top of the range: a program starting at the
-;; start of page <POINTER_PAGE_FIRST> would leave <DataPointer> in page 1, below the usual range (the same byte, by the banks' overlap).
+;; The borrow out of the page goes through <Memory::WrapPage>, which only checks the top of the range: a program
+;; starting at the start of page <POINTER_PAGE_FIRST> would leave <DataPointer> in page 1, below the usual range (the
+;; same byte, by the banks' overlap).
 ;; Entry:
 ;;   SetDataPointer = sets <DataPointer> from A, Y and X; `READ` comes here with where its data ended
 ;;   Done = returns; <DispatchStatement> branches here for an empty statement
@@ -837,7 +849,7 @@ Done:
 ;; Also: ISCNTC2 (BB13)
 WithFlags:
     and #<(~KEY_CONTROL_C)
-    sta PendingEvents                            ; CONTROL-C taken
+    sta PendingEvents                       ; CONTROL-C taken
     ldx #ERROR_BREAK
     cmp #KEY_ANY
     bcs Stop
@@ -849,7 +861,7 @@ WithFlags:
     stx ErrorCode
     ldy CurrentLine
     sty ErrorLine
-    bit OnErrorActive                              ; ON ERR on?
+    bit OnErrorActive                       ; ON ERR on?
     bpl Stop
     jmp TrapError
 
@@ -881,26 +893,26 @@ ERROR_BREAK = $FF
 .endproc
 
 ;; The `STOP` statement: stops the program with BREAK.
-;; In: A = the character after the keyword, zero = set for a terminator, carry = set for BREAK (<GetNextCharacter> sets it after
-;;   `STOP`; `END` clears it)
+;; In: A = the character after the keyword, zero = set for a terminator, carry = set for BREAK (<GetNextCharacter> sets
+;;   it after `STOP`; `END` clears it)
 ;; Also: STOP (BB13)
 .proc Stop
     bne Statements::Cont::Done              ; not a terminator: NextStatement gives the syntax error
     ; Falls into StopOrEnd.
 .endproc
 
-;; Stops the program: keeps <TextPointer> and <CurrentLine> in <StoppedText> and <StoppedLine> for `CONT` (not for a direct line), then goes
-;; to <ReadyForCommand>, with BREAK and its line first when carry is set.
+;; Stops the program: keeps <TextPointer> and <CurrentLine> in <StoppedText> and <StoppedLine> for `CONT` (not for a
+;; direct line), then goes to <ReadyForCommand>, with BREAK and its line first when carry is set.
 ;;
 ;; The debugger stops here for `STOP`, `END` and CONTROL-C.
 ;; In: carry = set to print BREAK
 ;; Entry:
-;;   Finish = goes to <ReadyForCommand>, through BREAK's message when carry is set; the end of the program comes here, and the
-;;     debugger watches it
+;;   Finish = goes to <ReadyForCommand>, through BREAK's message when carry is set; the end of the program comes here,
+;;   and the debugger watches it
 ;; Also: STOP2 (BB13)
 .proc StopOrEnd
     lda #$FF
-    sta OutputFileNumber                               ; output to the console
+    sta OutputFileNumber                    ; output to the console
     sta OutputFileNumber+1
     lda TextPointer
     ldy TextPointer+1
@@ -944,9 +956,9 @@ ToReady:
 
 ;; The `CONT` statement: goes on from where `STOP`, `END`, CONTROL-C or an error stopped the program.
 ;;
-;; It runs only in a direct line (in a program it does nothing). It clears <PendingEvents>, sets the any-key event again,
-;; and goes on at <StoppedText> on line <StoppedLine>. A zero <StoppedTextXByte> means there is nothing to go on with: CAN'T CONTINUE.
-;; Entering or changing a line clears it.
+;; It runs only in a direct line (in a program it does nothing). It clears <PendingEvents>, sets the any-key event
+;; again, and goes on at <StoppedText> on line <StoppedLine>. A zero <StoppedTextXByte> means there is nothing to go on
+;; with: CAN'T CONTINUE. Entering or changing a line clears it.
 ;; In: zero = set for a terminator after `CONT`
 ;; Entry:
 ;;   Done = returns; the statements' checks branch here
@@ -964,7 +976,7 @@ ToReady:
     ldx #ERROR_CANT_CONTINUE
     ldy StoppedTextXByte
     bne Resume
-    jmp ReportError                               ; nothing to continue
+    jmp ReportError                         ; nothing to continue
 
 ;; Goes on from the place kept.
 Resume:
@@ -1024,22 +1036,22 @@ CloseAndRestart:
 ;; Also: RUN (BB13)
 .proc Run
     bne WithArgument
-    jmp ResetProgramState                                ; RUN alone: from the start
+    jmp ResetProgramState                   ; RUN alone: from the start
 
 ;; Takes a line number, a comma and a line number, or a pathname.
 WithArgument:
     bcc FromLine                            ; a digit: from that line
     cmp #','
     beq AfterComma
-    jsr Files::OpenProgramToRun                               ; a pathname
+    jsr Files::OpenProgramToRun             ; a pathname
     lda #1
     sta StartupDone
     jsr Files::LoadProgram
     jsr ClearVariables
 .if VERSION >= 130
-    jsr ProgramPrefix::ToVolumeName                            ; 1.3: name the program's prefix by its volume
+    jsr ProgramPrefix::ToVolumeName         ; 1.3: name the program's prefix by its volume
 .endif
-    lsr TraceMode                              ; TRACE off
+    lsr TraceMode                           ; TRACE off
     jmp Files::StartProgram
 
 ;; Runs from the line after the comma.
@@ -1047,8 +1059,8 @@ WithArgument:
 AfterComma:
     jsr CheckComma
 
-;; Clears the variables and the stack (<ClearVariables> resets it, taking <NextStatement>'s return address), then goes to the
-;; line.
+;; Clears the variables and the stack (<ClearVariables> resets it, taking <NextStatement>'s return address), then goes
+;; to the line.
 ;; Also: RUNL (BB13)
 FromLine:
     jsr ClearVariables
@@ -1063,8 +1075,8 @@ FromLine:
 ;; The entry holds the text pointer as an offset from <ProgramStart>. For `GOSUB`, the second return address is
 ;; <ExecuteStatement::StatementReturn>, so the entry goes under it; `FOR` and `ON KBD` call through
 ;; <PushGoSubEntryHere> and <PushGoSubEntryHereChecked>, so the entry goes at their own level.
-;; In: TXTPTR = where `RETURN` goes on from, CURLIN = the line
-;; Uses: A, X, Y, INDEX, PNTSAV
+;; In: TextPointer = where `RETURN` goes on from, CurrentLine = the line
+;; Uses: A, X, Y, Pointer1, ListSavedPointer
 ;; Entry:
 ;;   WithoutRoomCheck = does not check for room
 ;;   Done = returns; <Statements::GoTo> branches here
@@ -1072,7 +1084,7 @@ FromLine:
 ;; Also: PSHTXT (BB13)
 .proc PushGoSubEntry
     lda #4
-    jsr CheckStack                              ; room for 8 bytes
+    jsr CheckStack                          ; room for 8 bytes
 
 ;; Does not check for room.
 ;; Also: PSHTXT2 (BB13)
@@ -1085,7 +1097,7 @@ WithoutRoomCheck:
     sta Pointer1
     pla
     sta Pointer1+1
-    sec                                     ; TXTPTR, less TXTTAB
+    sec                                     ; TextPointer, less ProgramStart
     lda TextPointer
     sbc ProgramStart
     pha
@@ -1103,7 +1115,7 @@ WithoutRoomCheck:
     pha
     lda #TOKEN_GOSUB
     pha
-    lda Pointer1+1                             ; the return addresses back on top
+    lda Pointer1+1                          ; the return addresses back on top
     pha
     lda Pointer1
     pha

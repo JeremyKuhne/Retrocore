@@ -16,9 +16,9 @@
 
 ;; Checks, before a binary read or write, that the file is open and holds binary data, as <PrepareTextFile> does
 ;; for text.
-;; In: FCBNDX = the file's control block index
+;; In: FileControlBlockIndex = the file's control block index
 ;; Out: Y = the control block index
-;; Uses: A, X, TYPSAV
+;; Uses: A, X, SavedFileType
 ;; See: <CheckWriteAccess>, <Statements::Open>
 ;; Also: PREBIN (BB13)
 .proc PrepareDataFile
@@ -35,9 +35,10 @@
 ;;
 ;; If the file has been given a type since it was opened, SOS's is left alone, but the control block still takes the
 ;; type asked for, so the check passes whatever the file holds.
-;; In: FCBNDX = the file's control block index, A = the type asked for when <PrepareDataFile> skips the LDA
+;; In: FileControlBlockIndex = the file's control block index, A = the type asked for when <PrepareDataFile> skips the
+;;   LDA
 ;; Out: Y = the control block index
-;; Uses: A, X, TYPSAV
+;; Uses: A, X, SavedFileType
 ;; See: <CheckWriteAccess>, <Statements::Open>
 ;; Also: PRETXT (BB13)
 .proc PrepareTextFile
@@ -58,9 +59,9 @@
     jsr PointAtItem                         ; OPEN left the file's name in its buffer
     lda SosCalls::Reference
     pha
-    lda #<(DataBufferPointer)                          ; the name's address, through NDXPTR
+    lda #<(DataBufferPointer)               ; the name's address, through DataBufferPointer
     sta SosCalls::Pathname
-    lda #>(DataBufferPointer+1)                        ; the same zero page as NDXPTR
+    lda #>(DataBufferPointer+1)             ; the same zero page as DataBufferPointer
     sta SosCalls::Pathname+1
     jsr SosCalls::GetFileInfo
     lda SosCalls::FileType
@@ -229,7 +230,7 @@ WrongType:
 ;; Opens the file, creating it when it may, and fills in its control block.
 ;; Also: NOTAS2 (BB13)
 OpenFile:
-    lda #FILE_TYPE_UNKNOWN                             ; a new file's type is decided later
+    lda #FILE_TYPE_UNKNOWN                  ; a new file's type is decided later
     sta SavedFileType
     jsr Files::OpenNamed::WithName
     ldy FileControlBlockIndex
@@ -332,9 +333,9 @@ TextFile:
 
 ;; Records the buffer and its segment in the control block, then, `AS EXTENSION`, moves the file to its end.
 ;;
-;; The buffer's address goes in BASIC's form: the bank with bit 7 set, and the page less $20. <Memory::NormalizeAfterSubtract>'s result isn't
-;; stored, so that call changes nothing; <Files::PointAtItem> adjusts the address when it adds the offset. A text file
-;; has no buffer, and gets whatever <SosCalls::SegmentBase> holds.
+;; The buffer's address goes in BASIC's form: the bank with bit 7 set, and the page less $20.
+;; <Memory::NormalizeAfterSubtract>'s result isn't stored, so that call changes nothing; <Files::PointAtItem> adjusts
+;; the address when it adds the offset. A text file has no buffer, and gets whatever <SosCalls::SegmentBase> holds.
 ;;
 ;; At the end of a binary data file, the last record is read and the offset set to its last byte, to write over the
 ;; record's end mark, or to a new record when the last one is full. A text file's mark is set to its end. Any other
@@ -351,7 +352,7 @@ Opened:
     sbc #BUFFER_PAGE_BIAS
     sta FileControlBlocks+FileControlBlock::BUFFER+1,X
     jsr Memory::NormalizeAfterSubtract
-    lda SosCalls::SegmentNumber                              ; for CLOSE to release
+    lda SosCalls::SegmentNumber             ; for CLOSE to release
     sta FileControlBlocks+FileControlBlock::SEGMENT,X
     lda FileControlBlocks+FileControlBlock::REFERENCE_NUMBER,X
     sta SosCalls::Reference
@@ -376,7 +377,7 @@ Opened:
     bne BackOne
     dec Remainder+1
 BackOne:
-    dec Remainder                               ; back to the record's end mark
+    dec Remainder                           ; back to the record's end mark
 
 ;; Reads the last record and sets the buffer's offset to the place in <Remainder>.
 ;; Also: OPGOT (BB13)
@@ -393,7 +394,8 @@ ReadLast:
     sta FileControlBlocks+FileControlBlock::BUFFER_OFFSET+1,Y
     rts
 
-;; Copies the file's name, with its length first, from <NameBuffer> to the start of its buffer, unless it is a text file.
+;; Copies the file's name, with its length first, from <NameBuffer> to the start of its buffer, unless it is a text
+;; file.
 ;; See: <Files::PrepareTextFile>
 ;; Also: NOEXT (BB13)
 CopyName:
@@ -430,10 +432,10 @@ TextAtEnd:
 ;; Clears the base and the four-byte displacement, from the top.
 ;; Also: TE1 (BB13)
 ClearPosition:
-    sta SosCalls::Displacement-1,Y                         ; the base and the four-byte displacement
+    sta SosCalls::Displacement-1,Y          ; the base and the four-byte displacement
     dey
     bpl ClearPosition
-    inc SosCalls::Displacement-1                           ; base 1: back from the end of file
+    inc SosCalls::Displacement-1            ; base 1: back from the end of file
     ldy #SosCalls::CALL_SET_MARK
     jsr SosCalls::MakeFileCall
     jmp CopyName
@@ -456,10 +458,11 @@ ClearPosition:
 ;; (`SETPROG`) before the name is looked up.
 ;; In: A = `OPEN`'s access: <OPEN_READ> to read (`LOAD`), <OPEN_WRITE> to write (`SAVE`), X = the type a new file
 ;;   gets
-;; Out: A and RWRFNM = the file's reference number, FID = its type, FSTYP = its storage type, FAUX = its auxiliary
-;;   type
+;; Out: A and SosCalls::Reference = the file's reference number, SosCalls::FileType = its type,
+;;   SosCalls::FileStorageType = its storage type, SosCalls::FileAuxType = its auxiliary type
 ;; Entry:
-;;   WithName = takes the name already in <SosCalls::Pathname>, the access in <SosCalls::OpenAccess> and the type in <SavedFileType>
+;;   WithName = takes the name already in <SosCalls::Pathname>, the access in <SosCalls::OpenAccess> and the type in
+;;   <SavedFileType>
 ;; See: <TakeName>, <CreateFile>, <Statements::Open>
 ;; Also: OPNPRTB (BB13)
 .proc OpenNamed
@@ -473,7 +476,7 @@ OPEN_PAGES = 4
     stx SavedFileType
     jsr TakeName
 .if VERSION >= 130
-    jsr ProgramPrefix::UseProgram                             ; 1.3: SOS's prefix becomes the program's
+    jsr ProgramPrefix::UseProgram           ; 1.3: SOS's prefix becomes the program's
 .endif
 
 ;; Takes the name already in <SosCalls::Pathname>, the access in <SosCalls::OpenAccess> and the type in <SavedFileType>.
@@ -481,13 +484,13 @@ OPEN_PAGES = 4
 WithName:
     jsr PrepareGetFileInfo
     jsr SosCalls::SetUp
-    jsr SosCalls::Call                               ; GET_FILE_INFO
+    jsr SosCalls::Call                      ; GET_FILE_INFO
     beq Open
     cmp #SOS_ERROR_NOT_BLOCK_DEVICE
     bne NotFound
-    lda #FILE_TYPE_TEXT                             ; a character device: text
+    lda #FILE_TYPE_TEXT                     ; a character device: text
     sta SosCalls::FileType
-    sta SosCalls::FileStorageType                               ; and a storage type that isn't a directory's
+    sta SosCalls::FileStorageType           ; and a storage type that isn't a directory's
     bne Open
 
 ;; Creates the file when `GET_FILE_INFO` didn't find it and the access isn't read only; any other error ends the

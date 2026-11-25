@@ -4,11 +4,11 @@
 ;; <Float::ToLongInteger>, the `INT` function, line number printing, and the `^` operator and `SQR`.
 ;;
 ;; A real is a binary floating-point number. In the <Fac> it is an exponent byte (<FacExponent>), four mantissa bytes
-;; (<FacMantissa1>, <FacMantissa2>, <FacMantissa3>, <FacMantissa4>), the sign (bit 7 of <FacSign>) and a rounding byte (<FacExtension>). The exponent is
-;; biased by $80, and an exponent of 0 means the number is zero whatever the other bytes hold. The mantissa is a
-;; fraction from 1/2 to 1, its top bit always 1, so the value is mantissa * 2^(exponent - $80). In memory the top bit's
-;; place holds the sign instead: a real variable is four bytes, the exponent and then the mantissa's top three bytes,
-;; rounded; a constant in BASIC's own bank keeps the fourth mantissa byte as a fifth byte.
+;; (<FacMantissa1>, <FacMantissa2>, <FacMantissa3>, <FacMantissa4>), the sign (bit 7 of <FacSign>) and a rounding byte
+;; (<FacExtension>). The exponent is biased by $80, and an exponent of 0 means the number is zero whatever the other
+;; bytes hold. The mantissa is a fraction from 1/2 to 1, its top bit always 1, so the value is mantissa * 2^(exponent -
+;; $80). In memory the top bit's place holds the sign instead: a real variable is four bytes, the exponent and then the
+;; mantissa's top three bytes, rounded; a constant in BASIC's own bank keeps the fourth mantissa byte as a fifth byte.
 
 ; Float::ToLongInteger, part two, inside the scope Float that B3MathL.asm opened.
 
@@ -23,7 +23,7 @@ ShortShift:
     lda FacSign
     and #$80
     lsr FacMantissa1
-    ora FacMantissa1                               ; the sign into the top bit
+    ora FacMantissa1                        ; the sign into the top bit
     sta FacMantissa1
     jmp ShiftRightByCount::ShiftLow
 .endproc
@@ -40,8 +40,8 @@ ShortShift:
 ;; Gives `INT`: the greatest integer not above <Fac>.
 ;;
 ;; A real of 2^31 or more in size has no fraction bits and is returned as it is, leaving <SmallInteger> alone.
-;; In: FAC = the real
-;; Out: FAC = its integer part, rounded down, INTEGR = the integer's low byte
+;; In: Fac = the real
+;; Out: Fac = its integer part, rounded down, SmallInteger = the integer's low byte
 ;; See: <Float::ToLongInteger>
 ;; Also: INT (BB13)
 .proc Int
@@ -49,7 +49,7 @@ ShortShift:
     cmp #Float::LONG_INTEGER_EXPONENT
     bcs Float::ClearMantissa::Done          ; already an integer
     jsr Float::ToLongInteger
-    sty FacExtension                               ; Y = 0
+    sty FacExtension                        ; Y = 0
     lda FacSign
     sty FacSign
     eor #$80                                ; the sign, inverted, into the carry for NormalizeSigned
@@ -95,27 +95,28 @@ FRACTION_DIGITS = 9
 ;; Reads a real from the text at <TextPointer> into <Fac>.
 ;;
 ;; The number is an optional sign, digits with at most one period, and an optional exponent: `E` or `e`, an optional
-;; sign and digits. The digits are gathered into the <Fac> as an integer, counting those after the period in <DigitCount>;
-;; then the <Fac> is multiplied or divided by 10 as many times as the exponent less that count says. Only nine digits
-;; after the period are taken; the rest are skipped. An exponent of 100 or more is an overflow error, even when the
-;; digits would bring the number back in range; a negative one of that size is taken as -100.
-;; In: TXTPTR = the number's first character
-;; Out: FAC = the number, TXTPTR = the first character after it, ANYNUM = $FF when there were no digits
+;; sign and digits. The digits are gathered into the <Fac> as an integer, counting those after the period in
+;; <DigitCount>; then the <Fac> is multiplied or divided by 10 as many times as the exponent less that count says. Only
+;; nine digits after the period are taken; the rest are skipped. An exponent of 100 or more is an overflow error, even
+;; when the digits would bring the number back in range; a negative one of that size is taken as -100.
+;; In: TextPointer = the number's first character
+;; Out: Fac = the number, TextPointer = the first character after it, DigitsSeen = $FF when there were no digits
 ;; Errors: OVERFLOW = the number or its exponent is too large
-;; Uses: DECCNT, TENEXP, DPTFLG, EXPSGN, SGNFLG, CNTDIGS, ARG
+;; Uses: DigitCount, DecimalExponent, DecimalPointSeen, ExponentSign, InputSign, DigitsLeft, Arg
 ;; Entry:
 ;;   NextExponentCharacter = takes the exponent's next character
 ;; See: <Float::FormatFac>, <LongInteger::ReadNumber>
 ;; Also: FIN (BB13)
 .proc ReadNumber
 
-;; The bytes the routine clears from <DigitCount>: <DigitCount> and <DecimalExponent>, <DecimalPointSeen> and <ExponentSign>, <Fac>'s six and <InputSign>.
+;; The bytes the routine clears from <DigitCount>: <DigitCount> and <DecimalExponent>, <DecimalPointSeen> and
+;; <ExponentSign>, <Fac>'s six and <InputSign>.
 CLEARED_BYTES = 11
 
     jsr GetCurrentCharacter
     ldy #0
-    sty DigitsLeft                             ; no limit before the period
-    sty DigitsSeen                              ; no digits yet
+    sty DigitsLeft                          ; no limit before the period
+    sty DigitsSeen                          ; no digits yet
     ldx #CLEARED_BYTES - 1
 
 ;; Zeros <DigitCount> and the bytes after it, leaving the carry from <GetCurrentCharacter>.
@@ -124,10 +125,10 @@ ClearLoop:
     sty DigitCount,x
     dex
     bpl ClearLoop
-    bcc TestDigit                           ; CHRGOT's carry: a digit
+    bcc TestDigit                           ; GetCurrentCharacter's carry: a digit
     cmp #'-'
     bne CheckPlus
-    stx InputSign                              ; X = $FF: negative
+    stx InputSign                           ; X = $FF: negative
     beq NextCharacter                       ; always
 
 ;; Skips a plus sign.
@@ -156,7 +157,7 @@ CheckPoint:
     eor #'E'
     and #$DF                                ; either case
     bne EndOfNumber
-    sta DigitsLeft                             ; 0, though the exponent's digits don't count
+    sta DigitsLeft                          ; 0, though the exponent's digits don't count
     lda DigitsSeen
     beq NoDigits                            ; an E with no digits before it
     jsr GetNextCharacter
@@ -170,7 +171,7 @@ CheckPoint:
 ;; Notes a negative exponent.
 ;; Also: FINEC1 (BB13)
 NegativeExponent:
-    ror ExponentSign                              ; the carry from the CMP: set
+    ror ExponentSign                        ; the carry from the Directory::FileLine: set
 
 ;; Takes the exponent's next character.
 ;; Also: FINEC (BB13)
@@ -195,7 +196,7 @@ ExponentDone:
 ;; Takes the period, with nine digits after it; a second period ends the number.
 ;; Also: FINDP (BB13)
 DecimalPoint:
-    ror DecimalPointSeen                              ; bit 7 for the first, bit 6 too for a second
+    ror DecimalPointSeen                    ; bit 7 for the first, bit 6 too for a second
     lda #FRACTION_DIGITS + 1
     sta DigitsLeft
     bit DecimalPointSeen
@@ -262,14 +263,14 @@ SkipDigits:
     bcc SkipDigit
     bcs CheckPoint
 
-;; Takes a digit: FAC = <Fac> * 10 + the digit, counting it when after the period.
+;; Takes a digit: <Fac> = <Fac> * 10 + the digit, counting it when after the period.
 ;; In: A = the digit's character
 ;; Also: FINDIG (BB13)
 Digit:
     pha
     bit DecimalPointSeen
     bpl AddDigit
-    inc DigitCount                              ; a digit after the period
+    inc DigitCount                          ; a digit after the period
 
 ;; Multiplies <Fac> by 10 and adds the digit.
 ;; Also: FINDG1 (BB13)
@@ -285,8 +286,8 @@ AddDigit:
 
 ;; Adds a small integer to <Fac>.
 ;; In: A = the integer, from -128 to 127
-;; Out: FAC = <Fac> + A
-;; Uses: ARG
+;; Out: Fac = <Fac> + A
+;; Uses: Arg
 ;; Also: FINLOG (BB13)
 .proc AddSignedByte
     pha
@@ -300,8 +301,9 @@ AddDigit:
     jmp AddArg
 .endproc
 
-;; Takes an exponent digit for <Float::ReadNumber>: TENEXP = <DecimalExponent> * 10 + the digit, with no more than two digits.
-;; In: TXTPTR = the digit
+;; Takes an exponent digit for <Float::ReadNumber>: <DecimalExponent> = <DecimalExponent> * 10 + the digit, with no more
+;; than two digits.
+;; In: TextPointer = the digit
 ;; Errors: OVERFLOW = a positive exponent of 100 or more
 ;; Also: FINEDG (BB13)
 .proc AccumulateExponentDigit
@@ -323,7 +325,7 @@ TimesTen:
     asl a
     asl a
     clc
-    adc DecimalExponent                              ; times 5
+    adc DecimalExponent                     ; times 5
     asl a                                   ; times 10
     clc
     ldy #0
@@ -394,10 +396,10 @@ Million:
 ;; and the period with them when nothing follows it. A number from 0.01 to below 999999.5 is written out, one below 0.1
 ;; as `.0` and its digits; any other is written with one digit before the period and a two-digit exponent with its
 ;; sign, as in `1.5E+07`. Zero is `0`.
-;; In: FAC = the number
-;; Out: FBUFFR = the text, ending in a zero, A = its address's low byte, Y = its high byte, X = 0, its bank,
-;;   ISARA = 7 more than the power of ten of the last digit, for `PRINT USING`
-;; Uses: DECCNT, TENEXP, FBUFPT, FDECPT, ARG
+;; In: Fac = the number
+;; Out: NumberBuffer = the text, ending in a zero, A = its address's low byte, Y = its high byte, X = 0, its bank,
+;;   ArrayElementFound = 7 more than the power of ten of the last digit, for `PRINT USING`
+;; Uses: DigitCount, DecimalExponent, NumberBufferPointer, PowerTablePointer, Arg
 ;; See: <Float::ReadNumber>, <LongInteger::FormatFac>
 ;; Also: FOUT (BB13)
 .proc FormatFac
@@ -406,8 +408,8 @@ Million:
     ; Falls into FormatFacAtOffset.
 .endproc
 
-;; Writes <Fac> as text from <NumberBuffer> + Y - 1, as <Float::FormatFac> does but without rounding the <Fac> to a variable's
-;; precision first: `STR$` calls it with Y = 0, for text one byte earlier, at <NumberBufferPrefix>.
+;; Writes <Fac> as text from <NumberBuffer> + Y - 1, as <Float::FormatFac> does but without rounding the <Fac> to a
+;; variable's precision first: `STR$` calls it with Y = 0, for text one byte earlier, at <NumberBufferPrefix>.
 ;; In: Y = one more than the place to start at
 ;; Also: FOUTC (BB13)
 .proc FormatFacAtOffset
@@ -421,12 +423,12 @@ Million:
 ;; Makes <Fac> positive and checks for zero.
 ;; Also: FOUT1_1 (BB13)
 SignDone:
-    sta FacSign                              ; '-', $2D: positive
+    sta FacSign                             ; '-', $2D: positive
     sty NumberBufferPointer
     iny
     lda #'0'
     ldx FacExponent
-    bne *+5                                 ; skip the jump for a FAC that is not zero
+    bne *+5                                 ; skip the jump for a Fac that is not zero
     jmp StoreZero
     lda #0
     cpx #EXPONENT_BIAS
@@ -511,7 +513,7 @@ UseExponent:
 SetExponent:
     sbc #2
     sta DecimalExponent
-    stx DigitCount                              ; the digits before the period
+    stx DigitCount                          ; the digits before the period
     txa
     beq LeadingPoint
     bpl FirstPower
@@ -649,9 +651,9 @@ ExponentTens:
     sbc #10
     bcs ExponentTens
     adc #'0'+10
-    sta NumberBuffer-1+4,y                        ; the ones digit
+    sta NumberBuffer-1+4,y                  ; the ones digit
     txa
-    sta NumberBuffer-1+3,y                        ; the tens digit
+    sta NumberBuffer-1+3,y                  ; the tens digit
     lda #0
     sta NumberBuffer-1+5,y
     beq ReturnBuffer                        ; always
@@ -683,8 +685,8 @@ Half:
 
 .endscope
 
-;; Eight zero bytes: a real or long integer 0. <FindVariable> returns this for a variable that is read but was never set,
-;; rather than making one.
+;; Eight zero bytes: a real or long integer 0. <FindVariable> returns this for a variable that is read but was never
+;; set, rather than making one.
 ;; Also: ZERO (BB13)
 ZeroValue:
     .byte $00, $00, $00, $00
@@ -738,16 +740,16 @@ PowersOfTenEnd:
 ; Floating point, part three: ^ and negation.
 .scope Float continued
 
-;; The `^` operator: <ArgExponent> to the power of <Fac>, as `EXP(FAC * LOG(ARG))`.
+;; The `^` operator: <Arg> to the power of <Fac>, as `EXP(FAC * LOG(ARG))`.
 ;;
-;; Anything to the power 0 is 1, even 0; 0 to any other power is 0. A negative <ArgExponent> needs an integer power, else
+;; Anything to the power 0 is 1, even 0; 0 to any other power is 0. A negative <Arg> needs an integer power, else
 ;; <Functions::Log> gives an ILLEGAL QUANTITY error; the power of its size is negated when the power is odd. For a
 ;; power of 2^31 or more, <Functions::Int> leaves <SmallInteger> alone, so whether it counts as odd comes from whatever
 ;; <SmallInteger> held.
-;; In: ARG = the base, FAC = the power, zero = set for a zero power
-;; Out: FAC = the result
+;; In: Arg = the base, Fac = the power, zero = set for a zero power
+;; Out: Fac = the result
 ;; Errors: ILLEGAL QUANTITY = a negative base with a power that is not an integer, OVERFLOW = the result is too large
-;; Uses: TEMPF3, KIMY
+;; Uses: FloatTemporary3, KeptY
 ;; See: <Functions::Exp>, <Functions::Log>, <Functions::Sqr>
 ;; Also: FPWRT (BB13)
 .proc RaiseArg
@@ -766,16 +768,16 @@ NonzeroBase:
     ldx #FloatTemporary3
     lda #FLOAT_TEMPORARY3_X_BYTE
     ldy #>(FloatTemporary3)
-    jsr StoreFac                            ; the power into TEMPF3; Y = 0, an even power
+    jsr StoreFac                            ; the power into FloatTemporary3; Y = 0, an even power
     lda ArgSign
     bpl TakeLog
     jsr Functions::Int
     ldx #UNPACKED_SIZE - 1
 
-;; Saves <ArgExponent>, which <Float::Compare> overwrites.
+;; Saves <Arg>, which <Float::Compare> overwrites.
 ;; Also: FPLP1 (BB13)
 SaveArg:
-    lda ArgExponent,x
+    lda Arg,x
     pha
     dex
     bpl SaveArg
@@ -785,19 +787,19 @@ SaveArg:
     jsr Compare
     bne SetBaseSign                         ; not an integer: A is $FF, so Log refuses the negative base
     tya                                     ; an integer: make the base positive
-    ldy SmallInteger                              ; and keep whether the power is odd
+    ldy SmallInteger                        ; and keep whether the power is odd
 
-;; Takes the base's sign from A and restores <ArgExponent>.
+;; Takes the base's sign from A and restores <Arg>.
 ;; Also: FPLP3 (BB13)
 SetBaseSign:
     ldx #$100-UNPACKED_SIZE
     sta BaseSign
 
-;; Restores a byte of <ArgExponent>.
+;; Restores a byte of <Arg>.
 ;; Also: FPLP2 (BB13)
 RestoreArg:
     pla
-    sta ArgExponent+UNPACKED_SIZE,x
+    sta Arg+UNPACKED_SIZE,x
     inx
     bne RestoreArg
     lda BaseSign
@@ -805,7 +807,7 @@ RestoreArg:
 ;; Works out `EXP(power * LOG(base))`, then negates it for an odd power.
 ;; Also: FPWR1 (BB13)
 TakeLog:
-    jsr CopyArgToFacWithSign                ; the base into FAC, with the sign in A
+    jsr CopyArgToFacWithSign                ; the base into Fac, with the sign in A
     tya
     pha                                     ; bit 0 set for an odd power
     jsr Functions::Log

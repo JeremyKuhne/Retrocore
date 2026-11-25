@@ -33,7 +33,7 @@
         .assert token = $80 + KeywordCount, "A keyword's token is its place in its table plus $80."
     .endif
     .set KeywordCount, KeywordCount + 1
-    DCI text
+    TextEndingHigh text
 .endmacro
 
 ;; How many messages <ErrorMessage> has placed, which gives the next message's error number.
@@ -46,7 +46,7 @@
 .macro ErrorMessage error, text
     .set ErrorMessageCount, ErrorMessageCount + 1
     .assert error = ErrorMessageCount, "ErrorMessages is in the order of the ERROR_ numbers, from 1."
-    DCI text
+    TextEndingHigh text
 .endmacro
 
 ;; One entry of <SosErrors>: a SOS error's code and the BASIC error it gives.
@@ -756,7 +756,7 @@ ErrorMessages:
     ErrorMessage ERROR_DIRECTORY_FULL, "DIRECTORY FULL"
     ErrorMessage ERROR_DUPLICATE_VOLUME, "DUPLICATE VOLUME"
 
-;; " ERROR" and a bell, which follow every error message, ending in a zero.
+;; " <ReportError>" and a bell, which follow every error message, ending in a zero.
 ;; Also: ERR (BB13)
 ErrorSuffix:
     .byte " ERROR"
@@ -786,7 +786,8 @@ BreakMessage:
 ; SOS errors
 ; ---------------------------------------------------------------------------------------------------------------------
 
-;; Pairs of a SOS error code and the BASIC error <ReportSosError> gives for it, in rising order of the code, ending with $FF.
+;; Pairs of a SOS error code and the BASIC error <ReportSosError> gives for it, in rising order of the code, ending with
+;; $FF.
 ;;
 ;; The search stops at the first code higher than the one it has. A code not here gives `SOS CALL`
 ;; (<ERROR_SOS_CALL>), with the code in <SosError>. SOS's not a block device gives a `TYPE MISMATCH`.
@@ -856,7 +857,8 @@ TEN_X_BYTE = 0
 ;; Also: INTXTB (BB13)
 LINE_NUMBER_PREFIX_X_BYTE = 0
 
-;; The X-byte for <Float::LowerOutputLimit> and <Float::UpperOutputLimit>, the limits <Float::FormatFac> scales a number between.
+;; The X-byte for <Float::LowerOutputLimit> and <Float::UpperOutputLimit>, the limits <Float::FormatFac> scales a number
+;; between.
 ;; Also: N_MILB (BB13)
 NUMBER_LIMITS_X_BYTE = 0
 

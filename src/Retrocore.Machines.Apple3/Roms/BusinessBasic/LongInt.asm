@@ -7,9 +7,10 @@
 ;; A long integer is eight bytes of two's complement, most significant byte first, from -(2^63) to 2^63-1; a long
 ;; variable's value is those eight bytes as they are, and <ValueType> is <VALUE_TYPE_LONG_INTEGER> while one is in the
 ;; <Fac>. The arithmetic works on three eight-byte numbers in BASIC's zero page: <Fac> (over the real one's bytes),
-;; <ArgExponent> and <Result1>, with the byte below RES (RES-1) catching a product's or quotient's overflow. Most routines reach
-;; their operands through <LongOperand1Pointer>, <LongOperand2Pointer> and <LongResultPointer>, which <LongInteger::PointAtOperands> points at <Fac>, <ArgExponent> and
-;; <Fac>. A binary operator gets its left operand in <ArgExponent> and its right in <Fac>.
+;; <Arg> and <Result1>, with the byte below <Result1> (<Result1>-1) catching a product's or quotient's overflow. Most
+;; routines reach their operands through <LongOperand1Pointer>, <LongOperand2Pointer> and <LongResultPointer>, which
+;; <LongInteger::PointAtOperands> points at <Fac>, <Arg> and <Fac>. A binary operator gets its left operand in <Arg> and
+;; its right in <Fac>.
 ;;
 ;; Apple's listing calls this file LONGINT. Part of BusinessBasic.asm.
 
@@ -25,7 +26,7 @@ SIZE = 8
 ;; The bits of a long integer.
 BITS = 8 * SIZE
 
-;; The bytes of the binary-coded decimal number <LongInteger::FacToDigits> builds in <ArgExponent> and the two bytes after it.
+;; The bytes of the binary-coded decimal number <LongInteger::FacToDigits> builds in <Arg> and the two bytes after it.
 DECIMAL_SIZE = SIZE + 2
 
 ;; The decimal digits <LongInteger::FacToDigits> makes, two to each of <DECIMAL_SIZE>'s bytes.
@@ -33,13 +34,13 @@ DECIMAL_DIGITS = 2 * DECIMAL_SIZE
 
 ; The relations <RelationMask> asks <LongInteger::Compare> for.
 
-;; <ArgExponent> is less than <Fac>.
+;; <Arg> is less than <Fac>.
 RELATION_LESS = 4
 
-;; <ArgExponent> equals <Fac>.
+;; <Arg> equals <Fac>.
 RELATION_EQUAL = 2
 
-;; <ArgExponent> is greater than <Fac>.
+;; <Arg> is greater than <Fac>.
 RELATION_GREATER = 1
 
 ; ---------------------------------------------------------------------------------------------------------------------
@@ -51,24 +52,24 @@ RELATION_GREATER = 1
 ;; An optional sign and then digits; a fraction after a period rounds the number to the nearest integer, an exact half
 ;; to the even one. There is no exponent. -(2^63) itself can't be read: its digits are an overflow before the sign is
 ;; applied.
-;; In: TXTPTR = the number's first character
-;; Out: FAC = the number, VALTYP = <VALUE_TYPE_LONG_INTEGER>, TXTPTR = the first character after it
-;; Errors: ERROV = the number is out of range
-;; Uses: ARG, KIMY, YSAVE, PTR1, PTR2, PTR3
+;; In: TextPointer = the number's first character
+;; Out: Fac = the number, ValueType = <VALUE_TYPE_LONG_INTEGER>, TextPointer = the first character after it
+;; Errors: <ERROR_OVERFLOW> = the number is out of range
+;; Uses: Arg, KeptY, SavedY, LongOperand1Pointer, LongOperand2Pointer, LongResultPointer
 ;; See: <Float::ReadNumber>, <LongInteger::FormatFac>
 ;; Also: LINP (BB13)
 .proc ReadNumber
     lda #VALUE_TYPE_LONG_INTEGER
     sta ValueType
     lda #0
-    sta KeptY                                ; bit 7 set for a minus sign
+    sta KeptY                               ; bit 7 set for a minus sign
     ldx #SIZE - 1
 
-;; Zeros <Fac> and <ArgExponent>.
+;; Zeros <Fac> and <Arg>.
 ;; Also: LZFAC1 (BB13)
 ClearLoop:
     sta Fac,X
-    sta ArgExponent,X
+    sta Arg,X
     dex
     bpl ClearLoop
     jsr GetCurrentCharacter
@@ -91,8 +92,8 @@ TakeDigit:
     jsr MultiplyFacByTen
     jsr ClearArg
     lda SavedY
-    sta ArgExponent+SIZE-1
-    jsr AddAt                               ; FAC = FAC + ARG, through MultiplyFacByTen's pointers
+    sta Arg+SIZE-1
+    jsr AddAt                               ; Fac = Fac + Arg, through MultiplyFacByTen's pointers
 
 ;; Goes on to the next character, taking it if it is a digit.
 ;; Also: LTRYN2 (BB13)
@@ -152,8 +153,8 @@ ApplySign:
 ;; The overflow test in <LongInteger::IncrementFac> misfires here: negating $FF00000000000000 (-(2^56)) or
 ;; $7F00000000000000 gives an overflow error though the result fits, so -(2^56) can be neither printed nor converted to
 ;; a real; and negating -(2^63), which doesn't fit, gives -(2^63) with no error.
-;; Out: FAC = -<Fac>
-;; Errors: ERROV = see above
+;; Out: Fac = -<Fac>
+;; Errors: <ERROR_OVERFLOW> = see above
 ;; Uses: A, X
 ;; Keeps: Y
 ;; See: <LongInteger::NegateAt>
@@ -178,8 +179,8 @@ ComplementLoop:
 ;; <LongInteger::NegateFac>, A is the top byte before the increment, and an error comes when it was $00 or $80, which
 ;; is not the overflow case; from <LongInteger::ReadNumber>'s rounding, A is never zero there, so rounding
 ;; 9223372036854775807.5 up wraps to -(2^63) with no error.
-;; Out: FAC = <Fac> + 1
-;; Errors: ERROV = see above
+;; Out: Fac = <Fac> + 1
+;; Errors: <ERROR_OVERFLOW> = see above
 ;; Uses: X
 ;; Keeps: Y
 ;; Entry:
@@ -197,7 +198,7 @@ IncrementLoop:
     dex
     bne IncrementLoop
     inc Fac
-    and #$7F                                ; tests A, not FAC
+    and #$7F                                ; tests A, not Fac
     bne Done
 
 ;; Ends with an overflow error.
@@ -212,10 +213,10 @@ Done:
 .endproc
 
 ;; Multiplies <Fac> by 10, as <Fac> * 2 + <Fac> * 8, and leaves <LongInteger::PointAtOperands>'s pointers set.
-;; In: FAC = a positive number
-;; Out: FAC = <Fac> * 10, ARG = <Fac> * 2
-;; Errors: ERROV = the product is out of range
-;; Uses: PTR1, PTR2, PTR3
+;; In: Fac = a positive number
+;; Out: Fac = <Fac> * 10, Arg = <Fac> * 2
+;; Errors: <ERROR_OVERFLOW> = the product is out of range
+;; Uses: LongOperand1Pointer, LongOperand2Pointer, LongResultPointer
 ;; Also: LTIMES10 (BB13)
 .proc MultiplyFacByTen
     jsr PointAtOperands
@@ -231,7 +232,7 @@ Done:
     rts
 .endproc
 
-;; Copies <Fac> to <ArgExponent>.
+;; Copies <Fac> to <Arg>.
 ;; Out: X = 0
 ;; Keeps: A, Y
 ;; Also: FACTOARG (BB13)
@@ -239,11 +240,11 @@ Done:
     pha
     ldx #SIZE
 
-;; Copies <Fac>'s bytes to <ArgExponent>, from the last.
+;; Copies <Fac>'s bytes to <Arg>, from the last.
 ;; Also: FAC2AR2 (BB13)
 CopyLoop:
     lda Fac-1,X
-    sta ArgExponent-1,X
+    sta Arg-1,X
     dex
     bne CopyLoop
     pla
@@ -255,8 +256,8 @@ CopyLoop:
 ; ---------------------------------------------------------------------------------------------------------------------
 
 ;; Makes the two operands positive for a multiply or divide, noting the result's sign.
-;; In: PTR1, PTR2 = the operands, in zero page
-;; Out: INPFLG = bit 7 set when the result is negative (the signs differ)
+;; In: LongOperand1Pointer, LongOperand2Pointer = the operands, in zero page
+;; Out: InputMode = bit 7 set when the result is negative (the signs differ)
 ;; Uses: A, X, Y
 ;; See: <LongInteger::ReturnResult>
 ;; Also: LSGNPOS (BB13)
@@ -285,10 +286,10 @@ Done:
     rts
 .endproc
 
-;; Moves a product from <Result1> to <Fac> with its sign, or ends with an overflow error when it grew past RES.
-;; In: RES-1, RES = the product's magnitude, INPFLG = bit 7 set for a negative result
-;; Out: FAC = the product
-;; Errors: ERROV = the product is out of range
+;; Moves a product from <Result1> to <Fac> with its sign, or ends with an overflow error when it grew past <Result1>.
+;; In: <Result1>-1, Result1 = the product's magnitude, InputMode = bit 7 set for a negative result
+;; Out: Fac = the product
+;; Errors: <ERROR_OVERFLOW> = the product is out of range
 ;; See: <LongInteger::Multiply>
 ;; Also: LRESPOS (BB13)
 .proc ReturnProduct
@@ -298,9 +299,9 @@ Done:
 .endproc
 
 ;; Moves a quotient from <Result1> to <Fac> with its sign.
-;; In: RES = the quotient's magnitude, INPFLG = bit 7 set for a negative result
-;; Out: FAC = the quotient
-;; Errors: ERROV = the quotient is out of range
+;; In: Result1 = the quotient's magnitude, InputMode = bit 7 set for a negative result
+;; Out: Fac = the quotient
+;; Errors: <ERROR_OVERFLOW> = the quotient is out of range
 ;; Also: LRESDIV (BB13)
 .proc ReturnQuotient
     lda #<(Result1)
@@ -310,11 +311,11 @@ Done:
 
 ;; Moves a result from (<LongResultPointer>) to <Fac>, negating it first when <InputMode> says the result is negative.
 ;;
-;; Bit 7 of <Result1> is checked even when the result is elsewhere, so <LongInteger::Mod> gives an overflow error whenever
-;; the quotient's magnitude is 2^63 (`-(2^63) MOD 1`), though the remainder fits.
-;; In: PTR3 = the result's magnitude, in zero page, INPFLG = bit 7 set for a negative result
-;; Out: FAC = the result
-;; Errors: ERROV = bit 7 of RES is set
+;; Bit 7 of <Result1> is checked even when the result is elsewhere, so <LongInteger::Mod> gives an overflow error
+;; whenever the quotient's magnitude is 2^63 (`-(2^63) MOD 1`), though the remainder fits.
+;; In: LongResultPointer = the result's magnitude, in zero page, InputMode = bit 7 set for a negative result
+;; Out: Fac = the result
+;; Errors: <ERROR_OVERFLOW> = bit 7 of <Result1> is set
 ;; Also: LRESDV (BB13)
 .proc ReturnResult
     lda #<(Fac)
@@ -364,7 +365,7 @@ ClearLoop:
 
 ;; Stores <Fac> as a long integer in memory.
 ;; In: A = the address's low byte, Y = its high byte, X = its bank
-;; Uses: INDEX, INDEXB, Y
+;; Uses: Pointer1, Pointer1XByte, Y
 ;; Keeps: X
 ;; See: <LongInteger::LoadFac>
 ;; Also: STFACT (BB13)
@@ -384,8 +385,9 @@ StoreLoop:
     rts
 .endproc
 
-;; Points <LongOperand1Pointer> and <LongResultPointer> at <Fac> and <LongOperand2Pointer> at <ArgExponent>, all in zero page, for <Fac> = <Fac> op <ArgExponent>.
-;; Out: A = <ArgExponent>'s address, Y = 0
+;; Points <LongOperand1Pointer> and <LongResultPointer> at <Fac> and <LongOperand2Pointer> at <Arg>, all in zero page,
+;; for <Fac> = <Fac> op <Arg>.
+;; Out: A = <Arg>'s address, Y = 0
 ;; Keeps: X
 ;; Also: LPTRS (BB13)
 .proc PointAtOperands
@@ -399,13 +401,13 @@ StoreLoop:
     lda #<(Fac)
     sta LongOperand1Pointer
     sta LongResultPointer
-    lda #<(ArgExponent)
+    lda #<(Arg)
     sta LongOperand2Pointer
     rts
 .endproc
 
-;; The `+` operator for long integers: <Fac> = <ArgExponent> + <Fac>.
-;; Errors: ERROV = the sum is out of range
+;; The `+` operator for long integers: <Fac> = <Arg> + <Fac>.
+;; Errors: <ERROR_OVERFLOW> = the sum is out of range
 ;; Also: LADD (BB13)
 .proc Add
     jsr PointAtOperands
@@ -413,7 +415,7 @@ StoreLoop:
 .endproc
 
 ;; Adds two long integers: (<LongResultPointer>) = (<LongOperand1Pointer>) + (<LongOperand2Pointer>).
-;; Errors: ERROV = the sum is out of range
+;; Errors: <ERROR_OVERFLOW> = the sum is out of range
 ;; Keeps: X
 ;; Also: LADDPTR (BB13)
 .proc AddAt
@@ -439,7 +441,7 @@ AddLoop:
     jmp ReportError
 .endproc
 
-;; Subtracts with the pointers set: <Fac> = <ArgExponent> - <Fac>, with no overflow check.
+;; Subtracts with the pointers set: <Fac> = <Arg> - <Fac>, with no overflow check.
 ;; Out: overflow = set when the result is out of range
 ;; Also: LSUBB (BB13)
 .proc SubtractUnchecked
@@ -447,7 +449,8 @@ AddLoop:
     ; Falls into SubtractAt.
 .endproc
 
-;; Subtracts two long integers: (<LongResultPointer>) = (<LongOperand2Pointer>) - (<LongOperand1Pointer>), with no overflow check.
+;; Subtracts two long integers: (<LongResultPointer>) = (<LongOperand2Pointer>) - (<LongOperand1Pointer>), with no
+;; overflow check.
 ;; Out: carry = clear for a borrow, overflow = set when the result is out of range
 ;; Keeps: X
 ;; Also: LSUBER (BB13)
@@ -466,8 +469,8 @@ SubtractLoop:
     rts
 .endproc
 
-;; The `-` operator for long integers: <Fac> = <ArgExponent> - <Fac>.
-;; Errors: ERROV = the difference is out of range
+;; The `-` operator for long integers: <Fac> = <Arg> - <Fac>.
+;; Errors: <ERROR_OVERFLOW> = the difference is out of range
 ;; Also: LSUB (BB13)
 .proc Subtract
     jsr SubtractUnchecked
@@ -516,44 +519,45 @@ Done:
 ; Multiplication
 ; ---------------------------------------------------------------------------------------------------------------------
 
-;; The `*` operator for long integers: <Fac> = <ArgExponent> * <Fac>.
+;; The `*` operator for long integers: <Fac> = <Arg> * <Fac>.
 ;;
 ;; Multiplies the magnitudes a byte by a byte into <Result1>, skipping zero bytes, then gives the product its sign.
-;; Errors: ERROV = the product is out of range
-;; Uses: ARG, RES, INDEX, KIMY, INPFLG, PTR1, PTR2, PTR3
+;; Errors: <ERROR_OVERFLOW> = the product is out of range
+;; Uses: Arg, Result1, Pointer1, KeptY, InputMode, LongOperand1Pointer, LongOperand2Pointer,
+;;   LongResultPointer
 ;; See: <LongInteger::MultiplyBytes>, <LongInteger::ReturnProduct>
 ;; Also: LMULT (BB13)
 .proc Multiply
     jsr PointAtOperands
     jsr MakeOperandsPositive
     lda #<(Fac+SIZE-1)
-    sta LongOperand1Pointer                                ; the row: FAC's bytes, from the last
-    lda #<(ArgExponent+SIZE-1)
-    sta LongOperand2Pointer                                ; the column: ARG's bytes, from the last
+    sta LongOperand1Pointer                 ; the row: Fac's bytes, from the last
+    lda #<(Arg+SIZE-1)
+    sta LongOperand2Pointer                 ; the column: Arg's bytes, from the last
     lda #<(Result1+SIZE-2)
-    sta LongResultPointer                                ; where the first byte product goes
+    sta LongResultPointer                   ; where the first byte product goes
     jsr ClearResult
 
-;; Multiplies the row's byte of <Fac> by each byte of <ArgExponent>.
+;; Multiplies the row's byte of <Fac> by each byte of <Arg>.
 ;; Also: LMULT1 (BB13)
 Row:
     ldy #0
     lda (LongOperand1Pointer),Y
     beq NextRow                             ; a zero byte: skip the row
 
-;; Multiplies the row's byte by one byte of <ArgExponent>, unless it is zero.
+;; Multiplies the row's byte by one byte of <Arg>, unless it is zero.
 ;; Also: LMULT2 (BB13)
 Column:
     lda (LongOperand2Pointer),Y
     beq *+5
     jsr MultiplyBytes
-    dec LongResultPointer                                ; the next product a byte higher
+    dec LongResultPointer                   ; the next product a byte higher
     dec LongOperand2Pointer
     lda LongOperand2Pointer
-    cmp #ArgExponent
+    cmp #Arg
     bcs Column
-    lda #<(ArgExponent+SIZE-1)
-    sta LongOperand2Pointer                                ; back to ARG's last byte
+    lda #<(Arg+SIZE-1)
+    sta LongOperand2Pointer                 ; back to Arg's last byte
     lda LongResultPointer
     clc
     adc #SIZE
@@ -570,15 +574,16 @@ NextRow:
     jmp ReturnProduct
 .endproc
 
-;; Multiplies the byte at (<LongOperand1Pointer>) by the byte at (<LongOperand2Pointer>) and adds the 16-bit product into <Result1> at (<LongResultPointer>).
-;; In: Y = 0, PTR3 = where the product's high byte goes
+;; Multiplies the byte at (<LongOperand1Pointer>) by the byte at (<LongOperand2Pointer>) and adds the 16-bit product
+;; into <Result1> at (<LongResultPointer>).
+;; In: Y = 0, LongResultPointer = where the product's high byte goes
 ;; Out: Y = 0
-;; Errors: ERROV = the product or its carry would go above RES-1
-;; Uses: A, X, INDEX, KIMY
+;; Errors: <ERROR_OVERFLOW> = the product or its carry would go above <Result1>-1
+;; Uses: A, X, Pointer1, KeptY
 ;; Keeps: Y
 ;; Also: LMULTBYT (BB13)
 .proc MultiplyBytes
-    sty Pointer1                               ; the product: INDEX high, INDEX+1 low
+    sty Pointer1                            ; the product: Pointer1 high, Pointer1+1 low
     sty Pointer1+1
     lda (LongOperand1Pointer),Y
     sta KeptY
@@ -619,7 +624,7 @@ ToOverflowError:
     sta 0,X
     bcc Done
 
-;; Carries into the bytes above, as far as RES-1.
+;; Carries into the bytes above, as far as <Result1>-1.
 ;; Also: LMULTB4 (BB13)
 CarryLoop:
     dex
@@ -715,16 +720,16 @@ MoveLoop:
 ; Division
 ; ---------------------------------------------------------------------------------------------------------------------
 
-;; Divides the magnitude of <ArgExponent> by that of <Fac>, the work of `DIV`, `/` and `MOD`.
+;; Divides the magnitude of <Arg> by that of <Fac>, the work of `DIV`, `/` and `MOD`.
 ;;
-;; <Fac>, the divisor, is shifted left until its top 1 bit is bit 62, <KeptY> times. The dividend in <ArgExponent> is then
-;; compared with it and shifted left <KeptY> + 1 times, the divisor subtracted whenever it fits, and each step's quotient
-;; bit shifted into <Result1>. RES-1 has bit 7 set from the first subtraction on; RES is not shifted before it, as its bits
-;; are all zero.
-;; Out: RES = the quotient's magnitude, ARG = the remainder shifted left <KeptY> + 1 bits,
-;;   carry = set when twice the remainder is at least the divisor, INPFLG = bit 7 set for a negative result
-;; Errors: ERRDV0 = <Fac> is zero
-;; Uses: YSAVE, PTR1, PTR2, PTR3
+;; <Fac>, the divisor, is shifted left until its top 1 bit is bit 62, <KeptY> times. The dividend in <Arg> is then
+;; compared with it and shifted left <KeptY> + 1 times, the divisor subtracted whenever it fits, and each step's
+;; quotient bit shifted into <Result1>. <Result1>-1 has bit 7 set from the first subtraction on; <Result1> is not
+;; shifted before it, as its bits are all zero.
+;; Out: Result1 = the quotient's magnitude, Arg = the remainder shifted left <KeptY> + 1 bits,
+;;   carry = set when twice the remainder is at least the divisor, InputMode = bit 7 set for a negative result
+;; Errors: <ERROR_DIVISION_BY_ZERO> = <Fac> is zero
+;; Uses: SavedY, LongOperand1Pointer, LongOperand2Pointer, LongResultPointer
 ;; See: <LongInteger::Div>, <LongInteger::Divide>, <LongInteger::Mod>
 ;; Also: LDIVER (BB13)
 .proc DivideMagnitudes
@@ -734,9 +739,9 @@ MoveLoop:
     jsr NormalizeFac
     ldx KeptY
     stx SavedY
-    lda #<(ArgExponent)
-    sta LongResultPointer                                ; differences go to ARG
-    inc SavedY                               ; KIMY + 1 steps
+    lda #<(Arg)
+    sta LongResultPointer                   ; differences go to Arg
+    inc SavedY                              ; KeptY + 1 steps
     bne Step                                ; always
 
 ;; Shifts the quotient bit in the carry into <Result1>, once a subtraction has been made, and the dividend left.
@@ -750,7 +755,7 @@ ShiftQuotient:
 ;; Shifts the dividend left.
 ;; Also: LRESOK (BB13)
 ShiftDividend:
-    lda #<(ArgExponent)
+    lda #<(Arg)
     jsr ShiftLeft
 
 ;; Compares the dividend with the divisor and subtracts it when it fits, until the steps are done.
@@ -762,7 +767,7 @@ Step:
     bcc ShiftQuotient                       ; doesn't fit: a 0 bit
     jsr SubtractAt
     lda #$80
-    sta Result1-1                               ; a subtraction made
+    sta Result1-1                           ; a subtraction made
     bcs ShiftQuotient                       ; always: a 1 bit
 
 ;; Returns.
@@ -771,18 +776,18 @@ Done:
     rts
 .endproc
 
-;; The `/` operator for long integers: <Fac> = <ArgExponent> / <Fac>, rounded to the nearest integer, an exact half to the
+;; The `/` operator for long integers: <Fac> = <Arg> / <Fac>, rounded to the nearest integer, an exact half to the
 ;; even one.
-;; Errors: ERRDV0 = <Fac> is zero, ERROV = the quotient is out of range
+;; Errors: <ERROR_DIVISION_BY_ZERO> = <Fac> is zero, <ERROR_OVERFLOW> = the quotient is out of range
 ;; See: <LongInteger::DivideMagnitudes>, <LongInteger::Div>
 ;; Also: LDIVT (BB13)
 .proc Divide
     jsr DivideMagnitudes
     bcc Finish                              ; under a half: no rounding
-    jsr SubtractAt                          ; ARG = 0 when exactly a half
-    lda #<(ArgExponent)
+    jsr SubtractAt                          ; Arg = 0 when exactly a half
+    lda #<(Arg)
     ldx #0
-    ldy #>(ArgExponent)
+    ldy #>(Arg)
     jsr IsZero
     sta SavedY
     lda Result1+SIZE-1
@@ -808,9 +813,9 @@ Finish:
 ;; Shifts <Fac> left until its top 1 bit is bit 62, counting the shifts.
 ;;
 ;; A negative <Fac>, only ever -(2^63), is shifted right once instead.
-;; In: FAC = a positive number
-;; Out: KIMY = the bits shifted left, -1 for the one right
-;; Errors: ERRDV0 = <Fac> is zero
+;; In: Fac = a positive number
+;; Out: KeptY = the bits shifted left, -1 for the one right
+;; Errors: <ERROR_DIVISION_BY_ZERO> = <Fac> is zero
 ;; Also: LNRMFAC (BB13)
 .proc NormalizeFac
     ldy #0
@@ -828,7 +833,7 @@ ByteLoop:
     sta KeptY
     cmp #BITS
     bcc ByteLoop
-    jmp Float::DivideArg::DivisionByZero                              ; all 64 bits zero
+    jmp Float::DivideArg::DivisionByZero    ; all 64 bits zero
 
 ;; Shifts a bit at a time until bit 6 of the top byte is set.
 ;; Also: LDIVE3 (BB13)
@@ -853,8 +858,8 @@ Done:
     rts
 .endproc
 
-;; Compares <ArgExponent> with <Fac> as unsigned numbers.
-;; Out: carry = set when <ArgExponent> >= <Fac>, zero = set when they are equal
+;; Compares <Arg> with <Fac> as unsigned numbers.
+;; Out: carry = set when <Arg> >= <Fac>, zero = set when they are equal
 ;; Uses: A, X
 ;; Keeps: Y
 ;; Entry:
@@ -865,10 +870,10 @@ Done:
 
 ;; Compares from the byte at X on.
 ;; In: X = the first byte to compare
-;; Out: carry = set when <ArgExponent> >= <Fac>, zero = set when they are equal
+;; Out: carry = set when <Arg> >= <Fac>, zero = set when they are equal
 ;; Also: LCMP2 (BB13)
 FromByte:
-    lda ArgExponent,X
+    lda Arg,X
     cmp Fac,X
     bne Done
     inx
@@ -881,8 +886,8 @@ Done:
     rts
 .endproc
 
-;; The `DIV` operator for long integers: <Fac> = <ArgExponent> / <Fac>, the fraction dropped.
-;; Errors: ERRDV0 = <Fac> is zero, ERROV = the quotient is out of range
+;; The `DIV` operator for long integers: <Fac> = <Arg> / <Fac>, the fraction dropped.
+;; Errors: <ERROR_DIVISION_BY_ZERO> = <Fac> is zero, <ERROR_OVERFLOW> = the quotient is out of range
 ;; See: <LongInteger::DivideMagnitudes>, <LongInteger::Divide>
 ;; Also: LDIV (BB13)
 .proc Div
@@ -890,17 +895,18 @@ Done:
     jmp ReturnQuotient
 .endproc
 
-;; The `MOD` operator for long integers: <Fac> = the remainder of <ArgExponent> / <Fac>.
+;; The `MOD` operator for long integers: <Fac> = the remainder of <Arg> / <Fac>.
 ;;
 ;; The remainder of the two sizes is made negative when exactly one operand is, as a quotient would be, rather than
 ;; taking the dividend's sign: `-7 MOD 2` and `7 MOD -2` are both -1, and `-7 MOD -2` is 1.
-;; Errors: ERRDV0 = <Fac> is zero, ERROV = the quotient's magnitude is 2^63 (<LongInteger::ReturnResult>)
+;; Errors: <ERROR_DIVISION_BY_ZERO> = <Fac> is zero, <ERROR_OVERFLOW> = the quotient's magnitude is 2^63
+;;   (<LongInteger::ReturnResult>)
 ;; See: <LongInteger::DivideMagnitudes>
 ;; Also: LREM (BB13)
 .proc Mod
     jsr DivideMagnitudes
     ldy #0
-    lda #<(ArgExponent)
+    lda #<(Arg)
 
 ;; Shifts the remainder back right <KeptY> + 1 bits.
 ;; Also: LREM2 (BB13)
@@ -915,7 +921,7 @@ ShiftBack:
 ;; Tells whether a long integer is zero, by ORing its bytes.
 ;; In: A = the address's low byte, Y = its high byte, X = its bank
 ;; Out: A = 0 and zero = set when all eight bytes are zero
-;; Uses: Y, INDEX, INDEXB
+;; Uses: Y, Pointer1, Pointer1XByte
 ;; Keeps: X, overflow
 ;; Also: LORALL (BB13)
 .proc IsZero
@@ -947,22 +953,23 @@ Done:
 ;; Turns <Fac>'s long integer into decimal digits in <LongText>, for <LongInteger::FormatFac> and `PRINT USING`.
 ;;
 ;; The magnitude is converted to <DECIMAL_DIGITS> binary-coded decimal digits by doubling: each bit, from the top 1 bit
-;; down, doubles the decimal number in <ArgExponent> and the two bytes after it and adds the bit. <PrintUsing::UnpackDecimal> then spreads the
-;; digits out, one a byte, dropping the leading zeros. <Fac> is used up. For zero, no 1 bit is found and the count of
-;; bits is left from <KeptY>'s last value, which only changes how many times the zero is doubled.
-;; In: FAC = the number
-;; Out: NUMSTR+2.. = the digits, values 0 to 9, ISARA = twice the count of digits, plus 1 for a negative number,
-;;   FACSGN = bit 7 set for a negative number
-;; Errors: ERROV = <Fac> is -(2^56), from <LongInteger::NegateFac>
-;; Uses: ARG, KIMY
+;; down, doubles the decimal number in <Arg> and the two bytes after it and adds the bit. <PrintUsing::UnpackDecimal>
+;; then spreads the digits out, one a byte, dropping the leading zeros. <Fac> is used up. For zero, no 1 bit is found
+;; and the count of bits is left from <KeptY>'s last value, which only changes how many times the zero is doubled.
+;; In: Fac = the number
+;; Out: LongText+2.. = the digits, values 0 to 9, ArrayElementFound = twice the count of digits, plus 1 for a negative
+;;   number,
+;;   FacSign = bit 7 set for a negative number
+;; Errors: <ERROR_OVERFLOW> = <Fac> is -(2^56), from <LongInteger::NegateFac>
+;; Uses: Arg, KeptY
 ;; See: <LongInteger::FormatFac>, <PrintUsing::UnpackDecimal>
 ;; Also: LUNPACK (BB13)
 .proc FacToDigits
-    lda FacExponent                              ; FAC's top byte
+    lda FacExponent                         ; Fac's top byte
     cmp #$80
     lda #DECIMAL_DIGITS
     rol
-    sta ArrayElementFound                               ; 40, or 41 for a negative number
+    sta ArrayElementFound                   ; 40, or 41 for a negative number
     lda Fac
     pha
     bpl *+5
@@ -976,7 +983,7 @@ Done:
     lda #BITS
     sec
     sbc KeptY
-    sta KeptY                                ; the bits to convert, from bit 63
+    sta KeptY                               ; the bits to convert, from bit 63
     jsr ClearArg
 
 ;; Converts one bit: shifts it out of <Fac> and doubles the decimal number with the bit added.
@@ -990,9 +997,9 @@ ConvertBit:
 ;; Doubles a byte of the decimal number with the carry, from the last.
 ;; Also: LADDBCD (BB13)
 DoubleLoop:
-    lda ArgExponent-1,X
-    adc ArgExponent-1,X
-    sta ArgExponent-1,X
+    lda Arg-1,X
+    adc Arg-1,X
+    sta Arg-1,X
     dex
     bne DoubleLoop
     cld
@@ -1003,7 +1010,7 @@ DoubleLoop:
 ;; Copies the decimal number to <FacDecimalDigits>, where <PrintUsing::UnpackDecimal> reads it.
 ;; Also: LABCD2 (BB13)
 CopyLoop:
-    lda ArgExponent-1,X
+    lda Arg-1,X
     sta FacDecimalDigits-1,X
     dex
     bne CopyLoop
@@ -1013,7 +1020,7 @@ CopyLoop:
     rts
 .endproc
 
-;; Zeros <ArgExponent> and the two bytes after it, RES-1 and <Result1>.
+;; Zeros <Arg> and the two bytes after it, <Result1>-1 and <Result1>.
 ;; Out: A = 0, X = 0
 ;; Keeps: Y
 ;; Also: LZIPARG (BB13)
@@ -1024,24 +1031,24 @@ CopyLoop:
 ;; Zeros a byte, from the last.
 ;; Also: LZIPAR2 (BB13)
 ClearLoop:
-    sta ArgExponent-1,X
+    sta Arg-1,X
     dex
     bne ClearLoop
     rts
 .endproc
 
 ;; Writes <Fac>'s long integer as text in <LongText>: a minus sign if negative, then the digits, then a zero.
-;; In: FAC = the number
-;; Out: NUMSTR = the text, LENUM = its length, X = its length
-;; Errors: ERROV = <Fac> is -(2^56), from <LongInteger::NegateFac>
+;; In: Fac = the number
+;; Out: LongText = the text, LongTextLength = its length, X = its length
+;; Errors: <ERROR_OVERFLOW> = <Fac> is -(2^56), from <LongInteger::NegateFac>
 ;; See: <LongInteger::FacToDigits>, <Functions::ConvString>
 ;; Also: LOUT (BB13)
 .proc FormatFac
     jsr FacToDigits
     ldx #0
     lda #'0'
-    sta LongText                              ; for zero, which has no digits
-    lsr ArrayElementFound                               ; the count of digits
+    sta LongText                            ; for zero, which has no digits
+    lsr ArrayElementFound                   ; the count of digits
     ldy #1
 
 ;; Takes the next digit, ending when there are no more.
@@ -1124,8 +1131,8 @@ FillLoop:
 
 ;; Loads a long integer from memory into <Fac>.
 ;; In: A = the address's low byte, Y = its high byte, X = its bank
-;; Out: FAC = the number
-;; Uses: Y, INDEX, INDEXB
+;; Out: Fac = the number
+;; Uses: Y, Pointer1, Pointer1XByte
 ;; Keeps: X
 ;; See: <LongInteger::StoreFac>
 ;; Also: LDFACT (BB13), DMOVFM (BB13)
@@ -1157,8 +1164,8 @@ LoadLoop:
 ;; The `CONV` function: the <Fac>'s value as a real.
 ;;
 ;; A string is read as `VAL` reads it; a long integer is converted; a real stays as it is.
-;; In: FAC = the value, VALTYP = its type
-;; Out: FAC = the real, VALTYP = 0
+;; In: Fac = the value, ValueType = its type
+;; Out: Fac = the real, ValueType = 0
 ;; See: <LongInteger::ToReal>, <Val>
 ;; Also: CONV2FLT (BB13)
 .proc Conv
@@ -1175,10 +1182,11 @@ LoadLoop:
 
 ;; Converts <Fac>'s long integer to a real.
 ;;
-;; The real takes the magnitude's top 40 bits, the last 8 of them in <FacExtension>, so it is rounded when it is next stored.
-;; Out: FAC = the real, VALTYP = 0
-;; Errors: ERROV = <Fac> is -(2^56), from <LongInteger::NegateFac>
-;; Uses: KIMY
+;; The real takes the magnitude's top 40 bits, the last 8 of them in <FacExtension>, so it is rounded when it is next
+;; stored.
+;; Out: Fac = the real, ValueType = 0
+;; Errors: <ERROR_OVERFLOW> = <Fac> is -(2^56), from <LongInteger::NegateFac>
+;; Uses: KeptY
 ;; Entry:
 ;;   Done = returns; <Functions::Conv> branches here for a real
 ;; See: <Functions::ConvLong>
@@ -1194,9 +1202,9 @@ LoadLoop:
     jsr IsZero
     bne *+6
     pla
-    jmp Operators::And::LoadFalse                               ; zero
+    jmp Operators::And::LoadFalse           ; zero
     jsr NormalizeFac                        ; the top 1 bit to bit 62
-    jsr ShiftLeft                           ; and to bit 63, which KIMY does not count
+    jsr ShiftLeft                           ; and to bit 63, which KeptY does not count
     lda Fac+4
     sta FacExtension
     lda Fac+3
@@ -1214,7 +1222,7 @@ LoadLoop:
     pla
     sta FacSign
     lda #0
-    sta ValueType                              ; a real
+    sta ValueType                           ; a real
 
 ;; Returns.
 ;; Also: CONV2RTS (BB13)
@@ -1237,14 +1245,14 @@ Done:
 ;;
 ;; A real is rounded to the nearest integer, a half upward; a string is read as a long integer, as `VAL` reads a real.
 ;;
-;; <LongInteger::LoadFac> is called to move the integer from <ArgExponent> without Y, the address's high byte, being set. After
-;; the bit loop Y is <ArgExponent>'s top byte, as <LongInteger::ShiftLeftWithCarry> leaves it, which is 0 only for a size below
-;; 2^56: from 2^56 on, the eight bytes are read from that page instead of from <ArgExponent>, and the result is wrong. For a
+;; <LongInteger::LoadFac> is called to move the integer from <Arg> without Y, the address's high byte, being set. After
+;; the bit loop Y is <Arg>'s top byte, as <LongInteger::ShiftLeftWithCarry> leaves it, which is 0 only for a size below
+;; 2^56: from 2^56 on, the eight bytes are read from that page instead of from <Arg>, and the result is wrong. For a
 ;; zero, which skips the loop, Y is what <Int> left.
-;; In: FAC = the value, VALTYP = its type
-;; Out: FAC = the long integer, VALTYP = <VALUE_TYPE_LONG_INTEGER>
-;; Errors: ERROV = a real of 2^63 or more in size
-;; Uses: ARG, YSAVE
+;; In: Fac = the value, ValueType = its type
+;; Out: Fac = the long integer, ValueType = <VALUE_TYPE_LONG_INTEGER>
+;; Errors: <ERROR_OVERFLOW> = a real of 2^63 or more in size
+;; Uses: Arg, SavedY
 ;; See: <LongInteger::ReadNumber>, <LongInteger::ToReal>
 ;; Also: CONV2LNG (BB13)
 .proc ConvLong
@@ -1263,9 +1271,9 @@ Done:
     cmp #LongInteger::BITS
     bcc *+5
     jmp Float::OverflowError
-    lda #<(ArgExponent)
+    lda #<(Arg)
 
-;; Moves the integer's bits from the real's mantissa into <ArgExponent>, one at a time.
+;; Moves the integer's bits from the real's mantissa into <Arg>, one at a time.
 ;; Also: PASSABIT (BB13)
 MoveBit:
     jsr LongInteger::ShiftRealLeft
@@ -1273,12 +1281,12 @@ MoveBit:
     dec SavedY
     bne MoveBit
 
-;; Moves the magnitude in <ArgExponent> to <Fac> and gives it the real's sign.
+;; Moves the magnitude in <Arg> to <Fac> and gives it the real's sign.
 ;; Also: GTFACNA (BB13)
 Finish:
     lda #VALUE_TYPE_LONG_INTEGER
     sta ValueType
-    lda #<(ArgExponent)
+    lda #<(Arg)
     ldx #0
     jsr LongInteger::LoadFac
     pla
@@ -1325,8 +1333,8 @@ Done:
 .scope Functions continued
 
 ;; The `CONV%` function: the <Fac>'s value rounded to an integer, as a real.
-;; In: FAC = the value, VALTYP = its type
-;; Out: FAC = the rounded real, VALTYP = 0
+;; In: Fac = the value, ValueType = its type
+;; Out: Fac = the rounded real, ValueType = 0
 ;; See: <Functions::Conv>
 ;; Also: CONV2INT (BB13)
 .proc ConvInteger
@@ -1352,8 +1360,8 @@ Done:
 .scope Functions continued
 
 ;; The `CONV$` function: the <Fac>'s value as a string, as `STR$` writes it.
-;; In: FAC = the value, VALTYP = its type
-;; Out: FAC = the string
+;; In: Fac = the value, ValueType = its type
+;; Out: Fac = the string
 ;; See: <Str>, <LongInteger::FormatFac>
 ;; Also: CONV2STR (BB13)
 .proc ConvString
@@ -1381,7 +1389,7 @@ FromLong:
 ; The logical and relational operators.
 .scope LongInteger continued
 
-;; The `AND` operator for long integers: 1 when <ArgExponent> and <Fac> are both nonzero, else 0.
+;; The `AND` operator for long integers: 1 when <Arg> and <Fac> are both nonzero, else 0.
 ;; Also: LAND (BB13)
 .proc And
     lda #<(Fac)
@@ -1389,10 +1397,10 @@ FromLong:
     ldy #>(Fac)
     jsr IsZero
     bne *+3
-    rts                                     ; FAC is 0: so is the result
-    lda #<(ArgExponent)
+    rts                                     ; Fac is 0: so is the result
+    lda #<(Arg)
     ldx #0
-    ldy #>(ArgExponent)
+    ldy #>(Arg)
     jsr IsZero
     ; Falls into SetFacToTruth.
 .endproc
@@ -1412,7 +1420,7 @@ ToSetFacToZero:
     jmp SetFacToZero
 .endproc
 
-;; The `OR` operator for long integers: 1 when <ArgExponent> or <Fac> is nonzero, else 0.
+;; The `OR` operator for long integers: 1 when <Arg> or <Fac> is nonzero, else 0.
 ;;
 ;; The first test reads <Fac> with whatever X the operator's dispatch left, an index below $80, which selects no bank.
 ;; Also: LONGOR (BB13)
@@ -1421,8 +1429,8 @@ ToSetFacToZero:
     ldy #>(Fac)
     jsr IsZero
     sta KeptY
-    lda #<(ArgExponent)
-    ldy #>(ArgExponent)
+    lda #<(Arg)
+    ldy #>(Arg)
     ldx #0
     jsr IsZero
     ora KeptY
@@ -1430,16 +1438,16 @@ ToSetFacToZero:
     jmp SetFacToOne
 .endproc
 
-;; The relational operators for long integers: 1 when the comparison of <ArgExponent> with <Fac> holds, else 0.
+;; The relational operators for long integers: 1 when the comparison of <Arg> with <Fac> holds, else 0.
 ;;
 ;; The top bytes are compared by the sign of their difference, which is wrong when they differ by $80 or more: 2^62
 ;; then reads as less than -(2^62). The call to <LongInteger::CompareMagnitudes::FromByte> is redundant, as
 ;; <LongInteger::CompareMagnitudes> compares all the bytes again.
-;; In: DOMASK = the relations that are true: <RELATION_LESS>, <RELATION_EQUAL> and <RELATION_GREATER>
-;; Out: FAC = 1 or 0
+;; In: RelationMask = the relations that are true: <RELATION_LESS>, <RELATION_EQUAL> and <RELATION_GREATER>
+;; Out: Fac = 1 or 0
 ;; Also: LDOCOMP (BB13)
 .proc Compare
-    lda ArgExponent
+    lda Arg
     cmp Fac
     bmi Less
     bne Greater
@@ -1449,19 +1457,19 @@ ToSetFacToZero:
     beq Equal
     bcs Greater
 
-;; <ArgExponent> is less than <Fac>.
+;; <Arg> is less than <Fac>.
 ;; Also: LISL (BB13)
 Less:
     lda #RELATION_LESS
     .byte 44                                ; BIT abs, which skips the next LDA
 
-;; <ArgExponent> equals <Fac>.
+;; <Arg> equals <Fac>.
 ;; Also: LISEQ (BB13)
 Equal:
     lda #RELATION_EQUAL
     .byte 44                                ; BIT abs, which skips the next LDA
 
-;; <ArgExponent> is greater than <Fac>.
+;; <Arg> is greater than <Fac>.
 ;; Also: LISG (BB13)
 Greater:
     lda #RELATION_GREATER

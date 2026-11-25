@@ -15,13 +15,13 @@ READ_LINE_LIMIT = 255
 
 ;; Prints a prompt, then reads a line into <InputBuffer> from the console or, while `EXEC` runs, from the `EXEC` file.
 ;;
-;; Control-C is turned off for the read (<Console::AttentionOff>) and on again after it. A line that fills all <READ_LINE_LIMIT>
-;; characters is cancelled: BASIC prints a backslash, moves to a new line and asks again. Otherwise it clears the rest
-;; of the screen line and moves the cursor to the next one. When the `EXEC` file runs out, it is closed and the line
-;; comes from the console instead.
+;; Control-C is turned off for the read (<Console::AttentionOff>) and on again after it. A line that fills all
+;; <READ_LINE_LIMIT> characters is cancelled: BASIC prints a backslash, moves to a new line and asks again. Otherwise it
+;; clears the rest of the screen line and moves the cursor to the next one. When the `EXEC` file runs out, it is closed
+;; and the line comes from the console instead.
 ;; In: X = the prompt character, 0 for none
 ;; Out: X = the index of the line's last character, its carriage return, in <InputBuffer>
-;; Uses: A, Y, TEMP, TRMPOS
+;; Uses: A, Y, Temporary, TerminalPosition
 ;; Entry:
 ;;   FromConsole = reads the line, with the prompt already printed; <Files::ReadExecLine> comes back here
 ;;   CheckLength = takes the line SOS has read; <Files::ReadExecLine> comes back here with the `EXEC` file's line
@@ -38,7 +38,7 @@ CARRIAGE_RETURN = $0D
 LINE_FEED = $0A
 
     txa
-    sta Temporary                                ; the prompt, for a second try
+    sta Temporary                           ; the prompt, for a second try
     beq FromConsole
     jsr WriteConsoleCharacter
 
@@ -52,7 +52,7 @@ FromConsole:
     .byte SOS_READ
     .word Console::LineParameters
     bne Files::CloseExecFile::ToReportSosError
-    sta TerminalPosition                              ; A = 0: the cursor is back at the left
+    sta TerminalPosition                    ; A = 0: the cursor is back at the left
     jsr Console::AttentionOn
 
 ;; Cancels a line that filled the whole read, or finishes it.
@@ -102,9 +102,9 @@ WRITE_PARAMETERS = 3
 ;; The shared file machinery: finding a file's control block from its number, opening, the record buffer and its
 ;; items, reading and writing records, and loading and saving programs.
 ;;
-;; BASIC keeps a control block of <FILE_CONTROL_BLOCK_SIZE> bytes in <FileControlBlocks> for each of its files, 1 to 10. A data file is read and
-;; written a record at a time, through a buffer SOS gives it; a text file is read and written a line at a time,
-;; through SOS's new-line mode.
+;; BASIC keeps a control block of <FILE_CONTROL_BLOCK_SIZE> bytes in <FileControlBlocks> for each of its files, 1 to 10.
+;; A data file is read and written a record at a time, through a buffer SOS gives it; a text file is read and written a
+;; line at a time, through SOS's new-line mode.
 .scope Files
 
 ;; <OutputFileNumber>'s value while output goes to the console: no file.
@@ -113,7 +113,8 @@ FILE_CONSOLE = $FF
 ;; The bits of a control block's <FileControlBlock::TYPE_AND_ACCESS> that hold the file's type.
 TYPE_MASK = $0F
 
-;; The bits of a control block's <FileControlBlock::TYPE_AND_ACCESS> that hold the access `OPEN` asked for; none means any access.
+;; The bits of a control block's <FileControlBlock::TYPE_AND_ACCESS> that hold the access `OPEN` asked for; none means
+;; any access.
 ACCESS_MASK = $F0
 
 ;; <FileControlBlock::TYPE_AND_ACCESS>'s bit for a file opened `AS INPUT`, to read only.
@@ -128,7 +129,8 @@ ACCESS_END = $40
 ;; <FileControlBlock::FLAGS>'s bit for a record buffer changed and not yet written.
 FLAG_CHANGED = $80
 
-;; <FileControlBlock::FLAGS>'s bit for an open not yet complete: the first read or write decides whether the file holds text or data.
+;; <FileControlBlock::FLAGS>'s bit for an open not yet complete: the first read or write decides whether the file holds
+;; text or data.
 FLAG_OPENING = $40
 
 ;; The segment number <FileControlBlock::SEGMENT> holds for a text file, which has no buffer; a catalog's is 0.
@@ -176,14 +178,15 @@ SOS_ERROR_POSITION = $4D
 ;; SOS's error for a memory segment it can't give.
 SOS_ERROR_SEGMENT_DENIED = $E1
 
-;; Reads a line from the `EXEC` file through <Console::LineParameters>, putting the console's reference number back afterwards.
+;; Reads a line from the `EXEC` file through <Console::LineParameters>, putting the console's reference number back
+;; afterwards.
 ;;
 ;; When the read fails, the file is closed (<CloseExecFile>). At the end of the file the line is then read from the
 ;; console; any other error ends the statement.
 ;; In: X = the `EXEC` file's reference number, from <ExecFile>
 ;; Also: DSEXEC (BB13)
 .proc ReadExecLine
-    ldy Console::LineParameters+1                            ; the console's reference number
+    ldy Console::LineParameters+1           ; the console's reference number
     stx Console::LineParameters+1
     brk                                     ; SOS's READ, from the `EXEC` file
     .byte SOS_READ
@@ -235,7 +238,7 @@ Return:
 ;; descriptor in the record buffer, reading on through records that are used up, and returns
 ;; <Files::DescriptorTypNumbers>'s value for it: 1 a real, 2 an integer, 3 a long integer, 4 a string, or 5 at the
 ;; end of the data.
-;; In: FAC = the file number
+;; In: Fac = the file number
 ;; See: <Rec>, <Files::DescriptorType>, <Files::PrepareDataFile>
 ;; Also: TYP (BB13)
 .proc Typ
@@ -259,10 +262,10 @@ Return:
 ;; Also: TYP1 (BB13)
 NextItem:
     jsr Files::PointAtItem
-    lda (DataBufferPointer),Y                          ; the next item's descriptor
+    lda (DataBufferPointer),Y               ; the next item's descriptor
     bne Classify
     ldy FileControlBlockIndex
-    lda FileControlBlocks+FileControlBlock::BUFFER_OFFSET,Y                       ; the end of the record: was anything read from it?
+    lda FileControlBlocks+FileControlBlock::BUFFER_OFFSET,Y ; the end of the record: was anything read from it?
     ora FileControlBlocks+FileControlBlock::BUFFER_OFFSET+1,Y
     beq Classify                            ; no, so this is the end of the data
     jsr Files::NextRecord
@@ -289,7 +292,7 @@ Classify:
 ;;
 ;; For a text file, other than a catalog, the number is worked out from the file's mark first
 ;; (<Files::RecordFromMark>).
-;; In: FAC = the file number
+;; In: Fac = the file number
 ;; See: <Typ>, <Files::RecordFromMark>
 ;; Also: REC (BB13)
 .proc Rec
@@ -333,9 +336,10 @@ ReturnRecord:
 ;;
 ;; Nothing here sets <Divisor>; it holds the record length of whichever file was last positioned (<RecordPosition>) or
 ;; opened.
-;; In: FCBNDX = the file's control block index
-;; Out: the file's record number in its control block, RMNDR = the offset in that record, Y = FCBNDX
-;; Uses: A, X, DVDND, QUOTNT
+;; In: FileControlBlockIndex = the file's control block index
+;; Out: the file's record number in its control block, Remainder = the offset in that record, Y =
+;;   <FileControlBlockIndex>
+;; Uses: A, X, Dividend, Quotient
 ;; See: <RecordFromEnd>, <Divide>
 ;; Also: GETRN (BB13)
 .proc RecordFromMark
@@ -358,9 +362,11 @@ CopyMark:
 
 ;; Sets a file's record number from its end of file, as <RecordFromMark> does from the mark: the end of file in
 ;; <SosCalls::FileEnd> divided by <Divisor>.
-;; In: FCBNDX = the file's control block index, FEOF = the end of file, DVSR = the record length
-;; Out: the file's record number in its control block, RMNDR = the bytes in its last record, Y = FCBNDX
-;; Uses: A, X, DVDND, QUOTNT
+;; In: FileControlBlockIndex = the file's control block index, SosCalls::FileEnd = the end of file, Divisor = the record
+;;   length
+;; Out: the file's record number in its control block, Remainder = the bytes in its last record, Y =
+;;   <FileControlBlockIndex>
+;; Uses: A, X, Dividend, Quotient
 ;; Entry:
 ;;   DivideByLength = divides the position already in <Dividend>; <RecordFromMark> branches here
 ;; See: <Statements::Open>
@@ -411,7 +417,7 @@ DivideByLength:
     beq Files::CloseAll
     jsr Files::TakeFileNumber
     lda #0
-    sta SubscriptMode                              ; no write error yet
+    sta SubscriptMode                       ; no write error yet
     jsr Files::CloseFile
 
 ;; Ends the statement with the write error <Files::CloseFile> kept in <SubscriptMode>, if there was one, and clears it.
@@ -462,7 +468,7 @@ Skip:
 ;;
 ;; Closing the `OUTPUT#` file sends output back to the console. A write error is kept in <SubscriptMode> for
 ;; <Statements::Close::Finish>; a file that isn't open ends the statement with an error.
-;; In: X = the file number less one, Y and FCBNDX = the file's control block index
+;; In: X = the file number less one, Y and FileControlBlockIndex = the file's control block index
 ;; See: <CloseControlBlock>, <WriteRecord>
 ;; Also: CLOSEM (BB13)
 .proc CloseFile
@@ -478,7 +484,7 @@ WriteBack:
     sty SavedY
     jsr WriteRecord
     beq Written
-    sta SubscriptMode                              ; the write failed
+    sta SubscriptMode                       ; the write failed
 Written:
     ldy SavedY
     lda FileControlBlocks+FileControlBlock::REFERENCE_NUMBER,Y
@@ -533,9 +539,9 @@ Clear:
 ;; Takes a file number, `#` and an expression, from the statement and finds its control block.
 ;;
 ;; The number must be 1 to 10, or the statement ends with an illegal quantity error.
-;; Out: X = the file number less one, Y = the control block index, also in <FileControlBlockIndex>, A = the file's reference number,
-;;   also in <SosCalls::Reference>, zero = set when the file is not open
-;; Uses: SVFLNO, TEMPFOR
+;; Out: X = the file number less one, Y = the control block index, also in <FileControlBlockIndex>, A = the file's
+;;   reference number, also in <SosCalls::Reference>, zero = set when the file is not open
+;; Uses: CurrentFileNumber, ForVariableType
 ;; Entry:
 ;;   FromNumber = takes the file number in X
 ;;   FromIndex = takes the file number less one in X
@@ -558,7 +564,7 @@ FromIndex:
     cpx #FILE_COUNT
     bcs ToIllegalQuantityError
     stx CurrentFileNumber
-    ldy #FILE_CONTROL_BLOCK_SIZE-1                           ; the index is the number times FCBLEN
+    ldy #FILE_CONTROL_BLOCK_SIZE-1          ; the index is the number times FILE_CONTROL_BLOCK_SIZE
     sta ForVariableType
 
 ;; Adds the number in once for each byte of a control block.
@@ -600,7 +606,7 @@ JOYSTICK_AXES = 2
 ;;
 ;; `PDL(0)` and `PDL(1)` read the X and Y axes with the mode's port bit clear (port B), `PDL(2)` and `PDL(3)` with it
 ;; set (port A): the modes 1, 2, 5 and 6.
-;; In: FAC = the paddle number, 0-3
+;; In: Fac = the paddle number, 0-3
 ;; See: <Button>, <ReadJoystick>
 ;; Also: PDLHNDL (BB13)
 .proc Pdl
@@ -620,7 +626,8 @@ JOYSTICK_AXES = 2
     ; Falls into ReadJoystick.
 .endproc
 
-;; Makes the `JOYSTICK` call with the mode in <SosCalls::JoystickMode> and returns one byte of its result as the function's value.
+;; Makes the `JOYSTICK` call with the mode in <SosCalls::JoystickMode> and returns one byte of its result as the
+;; function's value.
 ;; In: A = the byte's index in the result: 0-1 the switches, 2-3 the axes
 ;; See: <Pdl>, <Button>
 ;; Also: READJOY (BB13)
@@ -639,7 +646,7 @@ JOYSTICK_AXES = 2
 ;;
 ;; `BUTTON(0)` and `BUTTON(1)` read the two switches with the mode's port bit clear (port B), `BUTTON(2)` and
 ;; `BUTTON(3)` with it set (port A).
-;; In: FAC = the button number, 0-3
+;; In: Fac = the button number, 0-3
 ;; See: <Pdl>, <ReadJoystick>
 ;; Also: BUTTON (BB13)
 .proc Button
@@ -664,15 +671,15 @@ JOYSTICK_AXES = 2
 ; Files: file names, and moving to a record.
 .scope Files continued
 
-;; Takes a file name from the statement into <NameBuffer>, with its length first as SOS wants it, and points <SosCalls::Pathname> at
-;; it.
+;; Takes a file name from the statement into <NameBuffer>, with its length first as SOS wants it, and points
+;; <SosCalls::Pathname> at it.
 ;;
 ;; In a program, and in immediate mode when the name starts with a quote or a token, the name is a string expression
 ;; (<TakeNameExpression>). Otherwise, in immediate mode, it is the text up to the next colon, comma, space or end of
 ;; line, as typed. Nothing checks the name fits <NameBuffer>.
 ;; In: X = where the name's length goes in <NameBuffer>, for AtIndex; from the top, the name goes first
 ;; Out: X = the index of the name's last character in <NameBuffer>, one more for a name as typed
-;; Uses: Y, FORPNT
+;; Uses: Y, AssignedVariable
 ;; Entry:
 ;;   AtIndex = takes the name's place in X, for a second name
 ;; See: <Statements::Rename>, <OpenNamed>
@@ -685,7 +692,7 @@ JOYSTICK_AXES = 2
 ;; Also: GETNAM2 (BB13)
 AtIndex:
     ldy CurrentLine+1
-    stx AssignedVariable                              ; where the length goes
+    stx AssignedVariable                    ; where the length goes
     iny
     bne TakeNameExpression                  ; a program is running
     jsr GetCurrentCharacter
@@ -721,7 +728,8 @@ EndOfName:
     ; Falls into SetNameLength.
 .endproc
 
-;; Puts the name's length before it in <NameBuffer>, at the place in <AssignedVariable>, and points <SosCalls::Pathname> at it.
+;; Puts the name's length before it in <NameBuffer>, at the place in <AssignedVariable>, and points <SosCalls::Pathname>
+;; at it.
 ;; In: A = the length
 ;; Out: A = the next character of the statement, from <GetCurrentCharacter>
 ;; Entry:
@@ -745,7 +753,7 @@ AtY:
 .endproc
 
 ;; Takes the name as a string expression and copies it into <NameBuffer>, freeing the string if it was a temporary one.
-;; In: FORPNT = where the length goes
+;; In: AssignedVariable = where the length goes
 ;; Out: X = the index of the name's last character in <NameBuffer>
 ;; Entry:
 ;;   Return = returns; <TakeFileAndRecord> branches here
@@ -754,12 +762,12 @@ AtY:
     ldy #VALUE_TYPE_STRING                  ; a string is wanted
     sty ValueType
     jsr EvaluateExpression
-    jsr Strings::FindFacString                              ; A = its length, INDEX = its address
+    jsr Strings::FindFacString              ; A = its length, Pointer1 = its address
     ldx AssignedVariable
     pha
     jsr SetNameLength
     pla
-    sta AssignedVariable                              ; now the count to copy
+    sta AssignedVariable                    ; now the count to copy
     beq Copied
     ldy #$FF
 
@@ -794,7 +802,7 @@ Return:
 ;; in hand if it was changed and moves the file to the new one (<LoadRecord>).
 ;;
 ;; A file that isn't open ends the statement with an error.
-;; Out: FCBNDX = the file's control block index, SVFLNO = the file number less one
+;; Out: FileControlBlockIndex = the file's control block index, CurrentFileNumber = the file number less one
 ;; See: <TakeFileNumber>, <LoadRecord>
 ;; Also: FILNUM (BB13)
 .proc TakeFileAndRecord
@@ -821,7 +829,7 @@ IsOpen:
 ;; its buffer.
 ;;
 ;; A read that finds the end of the file leaves an empty record: a <DATA_ITEM_END_OF_RECORD> at the buffer's start.
-;; In: FCBNDX = the file's control block index
+;; In: FileControlBlockIndex = the file's control block index
 ;; See: <SeekRecord>, <SetRecordTransfer>, <NextRecord>
 ;; Also: RPOSN (BB13)
 .proc LoadRecord

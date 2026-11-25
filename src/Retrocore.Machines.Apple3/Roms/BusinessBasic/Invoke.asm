@@ -118,11 +118,11 @@ AddendPointerXByte = AddendPointer+X_BYTE_OFFSET
 
 ;; Loads, relocates and links each module the statement names, then moves the records kept up against the code.
 ;;
-;; The free memory runs from <ModulesStart> to <ModulesEnd>, in one bank. Each module's code goes at the top of what is left,
-;; below the module before it, and its linker records at <ModuleLoadPointer>, after those kept from the module before. Only the
-;; .PROC and .FUNC records are kept, for <Modules::FindRecord>.
-;; In: TXTPTR = the first file name, INVTAB = the free memory's start, PROCTAB = its end
-;; Out: INVPNT = the start of the records kept, which end just below the code
+;; The free memory runs from <ModulesStart> to <ModulesEnd>, in one bank. Each module's code goes at the top of what is
+;; left, below the module before it, and its linker records at <ModuleLoadPointer>, after those kept from the module
+;; before. Only the .PROC and .FUNC records are kept, for <Modules::FindRecord>.
+;; In: TextPointer = the first file name, ModulesStart = the free memory's start, ModulesEnd = its end
+;; Out: ModuleLoadPointer = the start of the records kept, which end just below the code
 ;; See: <Statements::Invoke>, <Modules::RelocateProcedure>, <Modules::ResolveProcedures>, <Modules::LinkReferences>,
 ;;   <Modules::MoveRecordsUp>
 ;; Also: DOINVO (BB13)
@@ -151,19 +151,19 @@ AddendPointerXByte = AddendPointer+X_BYTE_OFFSET
 ;; The file's first block is read at <ModuleLoadPointer> for the code's length; the code is read to just below
 ;; <Modules::WalkPointer>; then the linker information, from the next block boundary to the end of the file, is read at
 ;; <ModuleLoadPointer>.
-;; In: TXTPTR = the next file name, or the statement's end, WalkPointer = the top of the free memory
-;; Errors: ERROM = no room for the first block; the errors of opening and reading the file
+;; In: TextPointer = the next file name, or the statement's end, WalkPointer = the top of the free memory
+;; Errors: <ERROR_OUT_OF_MEMORY> = no room for the first block; the errors of opening and reading the file
 ;; Also: DOFILE (BB13)
 .proc LoadFile
     jsr GetCurrentCharacter
     bne *+5
     jmp MoveRecordsUp                       ; no more names
     lda #1
-    jsr Files::OpenNamed                             ; open it to read
+    jsr Files::OpenNamed                    ; open it to read
     jsr GetCurrentCharacter
     beq *+5
-    jsr CheckComma                              ; another name follows a comma
-    lda #<(ModuleLoadPointer)                          ; read through the pointer in INVPNT
+    jsr CheckComma                          ; another name follows a comma
+    lda #<(ModuleLoadPointer)               ; read through the pointer in ModuleLoadPointer
     sta SosCalls::Buffer
     lda #>(ModuleLoadPointer)
     sta SosCalls::Buffer+1
@@ -179,14 +179,14 @@ AddendPointerXByte = AddendPointer+X_BYTE_OFFSET
     ldy #SosCalls::CALL_READ
     jsr SosCalls::MakeFileCall
     ldy #CODE_LENGTH+1
-    lda (ModuleLoadPointer),Y                          ; the code's length
+    lda (ModuleLoadPointer),Y               ; the code's length
     sta SosCalls::Request+1
     dey
     lda (ModuleLoadPointer),Y
     sta SosCalls::Request
     sec
     lda WalkPointer
-    sbc SosCalls::Request                             ; the code goes just below WalkPointer
+    sbc SosCalls::Request                   ; the code goes just below WalkPointer
     sta CodeStart
     lda WalkPointer+1
     sbc SosCalls::Request+1
@@ -197,26 +197,26 @@ AddendPointerXByte = AddendPointer+X_BYTE_OFFSET
     sta SosCalls::Buffer
     lda #>(CodeStart)
     sta SosCalls::Buffer+1
-    ldy #SosCalls::CALL_READ                                ; the code alone
+    ldy #SosCalls::CALL_READ                ; the code alone
     jsr SosCalls::MakeFileCall
     ldy #SosCalls::CALL_GET_MARK
     jsr SosCalls::MakeFileCall
-    lda SosCalls::Mark                              ; round the mark up to a page
+    lda SosCalls::Mark                      ; round the mark up to a page
     beq RoundUpToBlock
     inc SosCalls::Mark+1
 
 ;; Rounds the mark's page up to a block, and sets the mark there.
 ;; Also: MARKLOW (BB13)
 RoundUpToBlock:
-    lda SosCalls::Mark+1                            ; then up to a block
+    lda SosCalls::Mark+1                    ; then up to a block
     lsr
     adc #0
     asl
-    sta SosCalls::Mark+1+1                          ; SET_MARK's displacement starts a byte later than GET_MARK's mark
+    sta SosCalls::Mark+1+1                  ; SET_MARK's displacement starts a byte later than GET_MARK's mark
     lda #0
     sta SosCalls::Mark+1
     sta SosCalls::Mark+1+3
-    sta SosCalls::MarkBase                                ; from the start of the file
+    sta SosCalls::MarkBase                  ; from the start of the file
     ldy #SosCalls::CALL_SET_MARK
     jsr SosCalls::MakeFileCall
     sec
@@ -230,13 +230,13 @@ RoundUpToBlock:
     sta SosCalls::Request+1
     lda #>(ModuleLoadPointer)
     sta SosCalls::Buffer+1
-    ldy #SosCalls::CALL_READ                                ; to the end of the file
+    ldy #SosCalls::CALL_READ                ; to the end of the file
     jsr SosCalls::MakeFileCall
     jsr Files::CloseSosFile
     jsr StepBack                            ; the code's last word
     ldy #1
     lda (WalkPointer),Y
-    sta KeptY                                ; the count of procedures
+    sta KeptY                               ; the count of procedures
     lda WalkPointer                         ; kept for ResolveProcedures
     pha
     lda WalkPointer+1
@@ -254,8 +254,8 @@ RoundUpToBlock:
 ;; A nonzero count of base-relative or interpreter-relative relocations is an invoke error. When the last procedure
 ;; is done, linking goes on at <Modules::ResolveProcedures>. A module that gives a count of 0 procedures goes round
 ;; 256 times.
-;; In: WalkPointer = the word above the procedure's dictionary entry, KIMY = the count of procedures left
-;; Errors: ERRIN = a relocation BASIC can't apply
+;; In: WalkPointer = the word above the procedure's dictionary entry, KeptY = the count of procedures left
+;; Errors: <ERROR_INVOKE> = a relocation BASIC can't apply
 ;; See: <Modules::FollowPointer>, <Modules::ApplyRelocations>, <Modules::CheckNoRelocations>
 ;; Also: DOAPROC (BB13)
 .proc RelocateProcedure
@@ -273,11 +273,11 @@ RoundUpToBlock:
     jsr FollowPointer                       ; the entry point
     ldy #0
     lda Target
-    sta SourceEnd                              ; the base for procedure-relative relocation
+    sta SourceEnd                           ; the base for procedure-relative relocation
     sta (OtherPointer),Y                    ; and the dictionary entry's new value
     iny
     lda Target+1
-    cmp #POINTER_PAGE_LIMIT                              ; keep the page in BASIC's range, $02-$81
+    cmp #POINTER_PAGE_LIMIT                 ; keep the page in BASIC's range, $02-$81
     bcc *+4
     sbc #POINTER_PAGE_LIMIT-POINTER_PAGE_FIRST
     sta SourceEnd+1
@@ -288,7 +288,7 @@ RoundUpToBlock:
     lda #>(CodeStart)
     sta AddendPointer+1
     jsr ApplyRelocations
-    lda #>(SourceEnd)                          ; procedure-relative: add the entry point
+    lda #>(SourceEnd)                       ; procedure-relative: add the entry point
     sta AddendPointer+1
     lda #<(SourceEnd)
     sta AddendPointer
@@ -312,8 +312,8 @@ RoundUpToBlock:
 ;;
 ;; A record of any type but these, .REF and the end is an invoke error. The procedure dictionary's top is on the
 ;; stack, from <Modules::LoadFile>.
-;; In: INVPNT = the module's records
-;; Errors: ERRIN = a record of a type BASIC doesn't know
+;; In: ModuleLoadPointer = the module's records
+;; Errors: <ERROR_INVOKE> = a record of a type BASIC doesn't know
 ;; Entry:
 ;;   SkipReferences = moves <WalkPointer> past a .REF record's list of references; <Modules::CompactRecords> and
 ;;     <Modules::FindRecord> call it
@@ -352,7 +352,7 @@ TakeRecord:
 ;;
 ;; Only the count's low byte is taken.
 ;; In: WalkPointer = the .REF record
-;; Uses: A, Y, TEMP
+;; Uses: A, Y, Temporary
 ;; Keeps: X
 ;; Also: DOPA13 (BB13)
 SkipReferences:
@@ -406,9 +406,9 @@ Advance:
 ;; Linking's second pass: for each .REF record, finds the .DEF of the same name and adds the label's offset in the
 ;; code to each word that refers to it.
 ;;
-;; A name with no .DEF is an invoke error. <Modules::FindRecord> searches from <ModulesStart>, where the modules before this
-;; one have kept only their .PROC and .FUNC records, so the .DEF must be in the same module.
-;; Errors: ERRIN = a name with no .DEF
+;; A name with no .DEF is an invoke error. <Modules::FindRecord> searches from <ModulesStart>, where the modules before
+;; this one have kept only their .PROC and .FUNC records, so the .DEF must be in the same module.
+;; Errors: <ERROR_INVOKE> = a name with no .DEF
 ;; Also: DOPAS2 (BB13)
 .proc LinkReferences
     lda ModuleLoadPointer
@@ -434,7 +434,7 @@ CheckType:
     lda WalkPointer+1
     sta OtherPointer+1
     lda #RECORD_DEF
-    sta ProcedureKind                             ; look for a .DEF of this name
+    sta ProcedureKind                       ; look for a .DEF of this name
     jsr FindRecord
     bne AddOffset
     jmp InvokeError
@@ -506,7 +506,7 @@ AddToWord:
     jsr AddToWalkPointer
     dex
     bne AddToWord
-    lda KeptY                                ; skip the padding to a multiple of 8 words
+    lda KeptY                               ; skip the padding to a multiple of 8 words
     eor #$7
     clc
     adc #1
@@ -585,13 +585,13 @@ CopyByte:
 ; Finishing
 ; ---------------------------------------------------------------------------------------------------------------------
 
-;; Moves the records kept, from <ModulesStart> to <ModuleLoadPointer>, up against the lowest module's code, so the free memory left is
-;; all below them.
+;; Moves the records kept, from <ModulesStart> to <ModuleLoadPointer>, up against the lowest module's code, so the free
+;; memory left is all below them.
 ;;
 ;; The two bytes after the last record move with them. <Modules::FindRecord> stops at a record whose type, at offset
 ;; 8, is 0; after the last record that byte is the lowest module's seventh byte of code, so the search ends there only
 ;; when that byte is 0, and otherwise goes on to read the code as records.
-;; Out: INVPNT = the records' new start
+;; Out: ModuleLoadPointer = the records' new start
 ;; See: <MoveRangeUp::Unchecked>
 ;; Also: DOCRNCH (BB13)
 .proc MoveRecordsUp
@@ -632,7 +632,7 @@ CopyByte:
 ; ---------------------------------------------------------------------------------------------------------------------
 
 ;; Moves <Modules::WalkPointer> down two bytes, to the next word of a dictionary or attribute table.
-;; Uses: A, TEMP
+;; Uses: A, Temporary
 ;; Keeps: X, Y
 ;; Also: DEC2PROC (BB13)
 .proc StepBack
@@ -649,8 +649,8 @@ CopyByte:
 
 ;; Moves <Modules::WalkPointer> down to the next word, which must be zero (an empty relocation list BASIC can't apply),
 ;; or ends the statement with an invoke error.
-;; Errors: ERRIN = a nonzero count
-;; Uses: A, Y, TEMP
+;; Errors: <ERROR_INVOKE> = a nonzero count
+;; Uses: A, Y, Temporary
 ;; Keeps: X
 ;; Also: MAKESUR0 (BB13)
 .proc CheckNoRelocations
@@ -678,7 +678,7 @@ CopyByte:
 ;; bank-switched window at $2000-$9FFF.
 ;; In: WalkPointer = the word above the list's count
 ;; Out: WalkPointer = the list's last pointer
-;; Uses: A, Y, TEMP, RelocationsLeft, Target
+;; Uses: A, Y, Temporary, RelocationsLeft, Target
 ;; Keeps: X
 ;; Also: DOAREL (BB13)
 .proc ApplyRelocations
@@ -725,7 +725,7 @@ Done:
 
 ;; Moves <Modules::WalkPointer> down to the next word and follows it as a self-relative pointer.
 ;; Out: Target = <WalkPointer> less the word there
-;; Uses: A, Y, TEMP
+;; Uses: A, Y, Temporary
 ;; Keeps: X
 ;; Also: RELPROC (BB13)
 .proc FollowPointer
@@ -744,7 +744,7 @@ Done:
 
 ;; Adds A to <Modules::WalkPointer>.
 ;; In: A = the count of bytes
-;; Uses: TEMP
+;; Uses: Temporary
 ;; Keeps: X, Y
 ;; Also: ADDPROC (BB13)
 .proc AddToWalkPointer
@@ -760,7 +760,7 @@ Done:
 
 ;; Moves <Modules::WalkPointer> to the next 16-byte linker record and loads its type.
 ;; Out: A = the type, zero = set at the records' end, Y = 8
-;; Uses: TEMP
+;; Uses: Temporary
 ;; Keeps: X
 ;; Also: NXTPROC (BB13)
 .proc NextRecord
@@ -787,16 +787,19 @@ Done:
 ;; pushed must match the .PROC's count of parameter words, or it is a type mismatch:
 ;;
 ;; - `@name` passes a variable's address, high byte first: one word. It also goes, with its bank byte, into
-;;   <ReferencePointers> (the first such argument at <ReferencePointers>, the next 2 bytes on), so the procedure can reach the variable
-;;   through extended addressing. Nothing stops a ninth, which goes past the 16 bytes of <ReferencePointers>.
+;;   <ReferencePointers> (the first such argument at <ReferencePointers>, the next 2 bytes on), so the procedure can
+;;   reach the variable through extended addressing. Nothing stops a ninth, which goes past the 16 bytes of
+;;   <ReferencePointers>.
 ;; - `%` and a formula passes an integer, high byte first: one word.
 ;; - `&` and a formula passes a long integer's 8 bytes, the <Fac>'s first byte first: four words.
 ;; - Any other formula passes a real, rounded and pushed exponent first, then the sign with the mantissa's top 7 bits,
 ;;   then the next two bytes: two words.
 ;; - A string is a type mismatch.
 ;;
-;; The name is up to 8 letters and digits, upper-cased into <NameBuffer>; a name not found is an undefined-function error.
-;; Errors: ERRSN = no name, ERRTM = the wrong count of words or a string, ERRUF = the name not found
+;; The name is up to 8 letters and digits, upper-cased into <NameBuffer>; a name not found is an undefined-function
+;; error.
+;; Errors: <ERROR_SYNTAX> = no name, <ERROR_TYPE_MISMATCH> = the wrong count of words or a string,
+;;   <ERROR_UNDEFINED_FUNCTION> = the name not found
 ;; See: <Modules::CallByName>, <Modules::FindRecord>, <Modules::CallModule>
 ;; Also: PERFORM (BB13)
 .proc Perform
@@ -813,13 +816,14 @@ Done:
 
 ;; Reads a procedure's or function's name and arguments, finds it, and calls it through <Modules::CallModule>.
 ;;
-;; The caller's return address is set aside in <PerformSavedReturn>, so the arguments lie right under the routine's own return
-;; address; <CallModule> returns to the caller from <PerformSavedReturn>. For a .FUNC, four placeholder bytes are pushed after the
-;; arguments, as Pascal does. <ParameterByteCount>, <PointerParameterCount>, <ProcedureKind> and <PerformSavedReturn> are single copies, so an `EXFN.` in another
-;; call's arguments overwrites the outer call's.
-;; In: A = the name's offset in <NameBuffer> (8 for each `EXFN.` nested in another's arguments), PROCFLG = <RECORD_PROC> for
-;;   a .PROC or <RECORD_FUNC> for a .FUNC, TXTPTR = the name's first character
-;; Errors: ERRSN = no name, ERRTM = the wrong count of words or a string, ERRUF = the name not found
+;; The caller's return address is set aside in <PerformSavedReturn>, so the arguments lie right under the routine's own
+;; return address; <CallModule> returns to the caller from <PerformSavedReturn>. For a .FUNC, four placeholder bytes are
+;; pushed after the arguments, as Pascal does. <ParameterByteCount>, <PointerParameterCount>, <ProcedureKind> and
+;; <PerformSavedReturn> are single copies, so an `EXFN.` in another call's arguments overwrites the outer call's.
+;; In: A = the name's offset in <NameBuffer> (8 for each `EXFN.` nested in another's arguments), ProcedureKind =
+;;   <RECORD_PROC> for a .PROC or <RECORD_FUNC> for a .FUNC, TextPointer = the name's first character
+;; Errors: <ERROR_SYNTAX> = no name, <ERROR_TYPE_MISMATCH> = the wrong count of words or a string,
+;;   <ERROR_UNDEFINED_FUNCTION> = the name not found
 ;; See: <Statements::Perform>, <Functions::ExFn>, <Functions::ExFnInteger>
 ;; Also: PERFEXF (BB13)
 .proc CallByName
@@ -860,8 +864,8 @@ ToFind:
 ;; Reads the name's next character.
 ;;
 ;; A character that is not a letter, a digit or an opening parenthesis ends the name, and is skipped. Nothing limits
-;; the name to 8 characters: a longer one runs on past its 8 bytes of <NameBuffer>, though only the first 8 are compared.
-;; An empty name is a syntax error only for the outermost call, where X is 0.
+;; the name to 8 characters: a longer one runs on past its 8 bytes of <NameBuffer>, though only the first 8 are
+;; compared. An empty name is a syntax error only for the outermost call, where X is 0.
 ;; Also: PERFE2 (BB13)
 NextCharacter:
     jsr GetNextCharacter
@@ -905,13 +909,13 @@ ReadArgument:
     beq LongArgument
     cmp #'$'
     bne *+5
-    jmp TypeMismatchError                               ; no strings
-    jsr EvaluateSubexpression                               ; a real
+    jmp TypeMismatchError                   ; no strings
+    jsr EvaluateSubexpression               ; a real
     jsr Functions::Conv
     jsr Float::RoundForVariable
     lda FacExponent
     pha
-    lda FacSign                              ; the sign over the mantissa's top bit
+    lda FacSign                             ; the sign over the mantissa's top bit
     ora #$7F
     and FacMantissa1
     pha
@@ -1045,7 +1049,7 @@ LONG_SIZE = 8
 .scope Functions continued
 
 ;; The `EXFN%.` function: calls a .FUNC and takes the integer it leaves on the stack, low byte on top.
-;; Out: FAC = the result
+;; Out: Fac = the result
 ;; See: <Functions::ExFn>, <Modules::CallByName>
 ;; Also: EXFNS (BB13)
 .proc ExFnInteger
@@ -1080,7 +1084,7 @@ LONG_SIZE = 8
 
 ;; The `EXFN.` function: calls a .FUNC and takes the real it leaves on the stack, in the order a real argument is
 ;; pushed.
-;; Out: FAC = the result
+;; Out: Fac = the result
 ;; See: <Functions::ExFnInteger>, <Modules::CallByName>
 ;; Also: EXFN (BB13)
 .proc ExFn
@@ -1106,12 +1110,13 @@ LONG_SIZE = 8
 ; Modules: finishing a function call, and finding a record.
 .scope Modules continued
 
-;; Finishes a function call: checks the stack, frees the name's place in <NameBuffer>, and backs <TextPointer> up one character
-;; unless it is at the statement's end.
+;; Finishes a function call: checks the stack, frees the name's place in <NameBuffer>, and backs <TextPointer> up one
+;; character unless it is at the statement's end.
 ;;
-;; The function must leave the stack as it found it, with the return into the evaluator, <EvaluateExpression::OperandReturn>, on top; anything
-;; else is an undefined-function error. Only the return's low byte is compared.
-;; Errors: ERRUF = the stack not as it was
+;; The function must leave the stack as it found it, with the return into the evaluator,
+;; <EvaluateExpression::OperandReturn>, on top; anything else is an undefined-function error. Only the return's low byte
+;; is compared.
+;; Errors: <ERROR_UNDEFINED_FUNCTION> = the stack not as it was
 ;; Also: RESTNAM (BB13)
 .proc FinishFunction
     pla
@@ -1137,7 +1142,7 @@ LONG_SIZE = 8
 ;; Finds the linker record of type <ProcedureKind> whose 8-character name matches the one at <Modules::OtherPointer>,
 ;; searching from <ModulesStart>.
 ;; Out: zero = clear when found (set when not, or when nothing is invoked), WalkPointer = the record found
-;; Uses: A, Y, TEMP
+;; Uses: A, Y, Temporary
 ;; Keeps: X
 ;; Also: PERFIND (BB13)
 .proc FindRecord

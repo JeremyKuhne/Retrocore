@@ -23,7 +23,7 @@
 .scope PrintUsing
 
 ; ---------------------------------------------------------------------------------------------------------------------
-; The scanner's and the editor's state, in the bytes of FAC and the bytes after it
+; The scanner's and the editor's state, in the bytes of Fac and the bytes after it
 ; ---------------------------------------------------------------------------------------------------------------------
 
 ;; The spec character <ReadFormatCharacter> found, as the image gives it (upper or lower case); `9` while it reads a
@@ -258,7 +258,7 @@ LINE_FEED = $0A
 ;; A stored line's link and line number, before its tokens.
 LINE_HEADER_SIZE = 3
 
-; The number's digits in BCDSTR, one a byte.
+; The number's digits in UsingDigits, one a byte.
 
 ;; The index in <UsingDigits> of the first digit.
 DIGITS_START = 2
@@ -283,8 +283,8 @@ ROUND_UP_DIGIT = 5
 ;; semicolon and the expressions, separated by commas or semicolons. When the image runs out of specs it starts over;
 ;; when the expressions run out, the literals up to the next number or string spec are printed, and a spec left over
 ;; is a type mismatch. A semicolon at the end leaves the line open.
-;; In: TXTPTR = `USING`
-;; Errors: SYNTAX ERROR, UNDEF'D STATEMENT for a line that is not an `IMAGE`, TYPE MISMATCH, ILLEGAL QUANTITY
+;; In: TextPointer = `USING`
+;; Errors: SYNTAX <ReportError>, UNDEF'D STATEMENT for a line that is not an `IMAGE`, TYPE MISMATCH, ILLEGAL QUANTITY
 ;; See: <ScanSpec>, <FormatNumber>
 ;; Also: PRUSING (BB13)
 .proc Statement
@@ -292,7 +292,7 @@ ROUND_UP_DIGIT = 5
     bcc TakeImageStatement                  ; a line number
     cmp #'"'
     beq TakeLiteral
-    jsr IsLetter                              ; a variable?
+    jsr IsLetter                            ; a variable?
     bcc ToSyntaxError
     jsr FindVariable
     cpx #VALUE_TYPE_STRING
@@ -301,7 +301,7 @@ ROUND_UP_DIGIT = 5
     sty Pointer1+1
     lda VariablePointerXByte
     sta Pointer1XByte
-    jsr Strings::FindFromDescriptor                              ; the string itself
+    jsr Strings::FindFromDescriptor         ; the string itself
     sta ImageLength
     stx ImagePointer
     sty ImagePointerHigh
@@ -321,7 +321,7 @@ LiteralLoop:
     beq ToSyntaxError                       ; no closing quote
     cpy #0
     bne CheckQuote
-    ldx TextPointer                              ; the first character: the image starts here
+    ldx TextPointer                         ; the first character: the image starts here
     stx ImagePointer
     ldx TextPointer+1
     stx ImagePointer+1
@@ -371,9 +371,9 @@ LiteralEnd:
     pha
     lda TextPointerXByte
     pha
-    jsr Statements::GoTo::ToLineNumber                               ; find the line
+    jsr Statements::GoTo::ToLineNumber      ; find the line
     ldy #LINE_HEADER_SIZE
-    jsr AdvanceTextPointer                               ; past its link and number
+    jsr AdvanceTextPointer                  ; past its link and number
     jsr GetNextCharacter
     tax
     cpx #TOKEN_IMAGE
@@ -386,7 +386,7 @@ LiteralEnd:
     sta ImagePointer+1
     lda TextPointerXByte
     sta ImagePointerXByte
-    jsr FindLineEnd                                ; the length to the line's end
+    jsr FindLineEnd                         ; the length to the line's end
     sty ImageLength
     pla
     sta TextPointerXByte
@@ -418,7 +418,7 @@ LiteralEnd:
 ;; Also: USKPNXT (BB13)
 SkipSeparator:
     jsr GetNextCharacter
-    bne NextExpression::CheckEnd            ; past NextExpression's CHRGOT
+    bne NextExpression::CheckEnd            ; past NextExpression's GetCurrentCharacter
     ; Falls into NextExpression.
 .endproc
 
@@ -453,13 +453,13 @@ CheckSeparator:
     sta EndingSeparator
     tax
     beq CheckFollowing
-    jsr GetNextCharacter                              ; nothing may follow the semicolon
+    jsr GetNextCharacter                    ; nothing may follow the semicolon
 CheckFollowing:
     beq PrintTail
     jmp ToSyntaxError
 PrintTail:
     lda #MASK_SIZE
-    jsr Strings::ReserveSpace                              ; the mask, for the scan
+    jsr Strings::ReserveSpace               ; the mask, for the scan
     jsr PrintLiterals
     jsr FreeMask
     .assert SPEC_END = 1, "Finish takes SPEC_END to zero with a DEC."
@@ -507,7 +507,7 @@ Done:
     pha
     jsr CheckComma
     lda #VALUE_TYPE_ANY
-    sta ValueType                              ; GETABYT set it
+    sta ValueType                           ; EvaluateSignedByte set it
     jsr EvaluateExpression
     jsr CheckCloseParenthesis
     beq Prepare                             ; then the end, a comma or a semicolon
@@ -530,7 +530,7 @@ NoScale:
 Prepare:
     bit ValueType
     bpl UnpackReal
-    jsr Strings::FindFacString                              ; a string
+    jsr Strings::FindFacString              ; a string
     sta StringLength
     jmp RestorePlace
 
@@ -542,8 +542,8 @@ UnpackLong:
     sta FacExponent
     jmp RestorePlace
 
-;; Turns a real into decimal digits in <UsingDigits>, from <DIGITS_START>, through <Float::FormatFac>'s text; its exponent less 1,
-;; times 2, plus 1 when negative, goes to <FacExponent>.
+;; Turns a real into decimal digits in <UsingDigits>, from <DIGITS_START>, through <Float::FormatFac>'s text; its
+;; exponent less 1, times 2, plus 1 when negative, goes to <FacExponent>.
 ;; Also: UNTYPE (BB13)
 UnpackReal:
     bvs UnpackLong                          ; a long integer
@@ -553,7 +553,7 @@ UnpackReal:
     pla
     cmp #$80                                ; carry = the sign
     php
-    lda ArrayElementFound                               ; FOUT's exponent
+    lda ArrayElementFound                   ; Float::FormatFac's exponent
     sec
     sbc #1
     plp
@@ -718,7 +718,7 @@ OutputLoop:
 
 ;; Prints a string through its spec, cut to the field's width or padded with spaces: A puts the spaces after it, C
 ;; half before, and R all before; then takes the next expression.
-;; In: INDEX = the string, StringLength = its length, RepeatCount = the field's width, SpecCharacter = the spec's
+;; In: Pointer1 = the string, StringLength = its length, RepeatCount = the field's width, SpecCharacter = the spec's
 ;;   letter
 ;; Also: USTRVAR (BB13)
 .proc FormatString
@@ -920,7 +920,7 @@ Done:
 ;; Returns an upper-case letter with overflow set and carry set.
 ;; Also: UGETVS (BB13)
 Letter:
-    bit Compare+1                           ; the $40 of the CMP sets overflow
+    bit Compare+1                           ; the $40 of the Directory::FileLine sets overflow
 Compare:
     cmp #$40
     rts
@@ -1122,7 +1122,7 @@ Store:
     lda #LiteralText
     sta SourceStart
     stx SourceStart+1
-    sty SourceStartXByte                              ; 1 or 2: no bank, as for the zero page
+    sty SourceStartXByte                    ; 1 or 2: no bank, as for the zero page
     sty TextLength
     bne CheckSpecEnd
 .endproc
@@ -1386,14 +1386,14 @@ MaskLoop:
     jsr AddToMask
     dec RepeatCount
     bne MaskLoop
-    lda #FLOAT_ASTERISKS | FLOAT_DOLLAR | FLOAT_SIGN | FLOAT_DOLLAR_AFTER_SIGN  ; no floating symbol
+    lda #FLOAT_ASTERISKS | FLOAT_DOLLAR | FLOAT_SIGN | FLOAT_DOLLAR_AFTER_SIGN ; no floating symbol
     ldx DigitsBeforePoint
     beq CheckFloating
     dex
     beq CheckFloating
     cpx #2
     bne FreeMaskThenSyntaxError
-    lda #FLOAT_ASTERISKS | FLOAT_DOLLAR | FLOAT_DOLLAR_AFTER_SIGN  ; only a floating sign
+    lda #FLOAT_ASTERISKS | FLOAT_DOLLAR | FLOAT_DOLLAR_AFTER_SIGN ; only a floating sign
 
 ;; Checks the floating symbols the count allows.
 ;; Also: UENOFLT (BB13)

@@ -9,23 +9,24 @@
 
 .scope Variables continued
 
-;; Writes a new array's entry, which <Variables::CreateArray> has made room for at <SourceStart>, and zeroes its elements;
-;; then, unless in `DIM`, finds the element the subscripts name.
-;; In: HIGHDS = the simple variables' new start, LOWTR = the entry, COUNT = the count of subscripts, the subscripts
-;;   on the stack, CURTOL = the entry's size, VARNAM+1 = the name's length plus 3, TMPPTR = the name in the program
-;; Out: VARPNT = the value's address, and the rest as from <FindVariable>
+;; Writes a new array's entry, which <Variables::CreateArray> has made room for at <SourceStart>, and zeroes its
+;; elements; then, unless in `DIM`, finds the element the subscripts name.
+;; In: DestinationEnd = the simple variables' new start, SourceStart = the entry, Counter = the count of subscripts, the
+;;   subscripts on the stack, LinearIndex = the entry's size, VariableSizes+1 = the name's length plus 3,
+;;   VariableNamePointer = the name in the program
+;; Out: VariablePointer = the value's address, and the rest as from <FindVariable>
 ;; See: <Variables::ElementAddress>
 .proc InitializeArray
-    ldx DestinationEnd+1                            ; the simple variables now start at HIGHDS
+    ldx DestinationEnd+1                    ; the simple variables now start at DestinationEnd
     ldy DestinationEndXByte
     lda DestinationEnd
     sta VariablesStart
     stx VariablesStart+1
     sty VariablesStartXByte
     lda Counter
-    sta Pointer1+1                             ; the dimensions left
+    sta Pointer1+1                          ; the dimensions left
     lda #0
-    jsr ElementsStart::SizesPlus            ; ARYPNT: where the sizes go
+    jsr ElementsStart::SizesPlus            ; ArrayPointer: where the sizes go
     ldy #0
 
 ;; Writes each dimension's size, high byte first: one more than its subscript in `DIM`, or 11.
@@ -63,7 +64,7 @@ StoreSize:
     ldx VariableSizes+1
     dex
     dex
-    stx Pointer1                               ; the offset of the name's last character
+    stx Pointer1                            ; the offset of the name's last character
 
 ;; Copies the name from the program into the entry, upper-casing it, then writes the type byte and the count of
 ;; dimensions.
@@ -86,7 +87,7 @@ Upper:
     iny
     lda Counter
     sta (SourceStart),Y
-    jsr ElementsStart                       ; ARYPNT: the elements
+    jsr ElementsStart                       ; ArrayPointer: the elements
     ldx VariablesStart+1
     ldy ArrayPointer
 
@@ -100,11 +101,11 @@ ClearLoop:
     sta (ArrayPointer),Y
     iny
     bne CheckEnd
-    inc ArrayPointer+1                            ; the next page
+    inc ArrayPointer+1                      ; the next page
     lda ArrayPointer+1
     cmp #POINTER_PAGE_LIMIT
     bcc CheckEnd
-    sbc #POINTER_PAGE_LIMIT-POINTER_PAGE_FIRST                        ; page 2 through the next X-byte
+    sbc #POINTER_PAGE_LIMIT-POINTER_PAGE_FIRST ; page 2 through the next X-byte
     sta ArrayPointer+1
     inc ArrayPointerXByte
 
@@ -127,28 +128,31 @@ CheckEnd:
 ; Finding an element
 ; ---------------------------------------------------------------------------------------------------------------------
 
-;; Points VARPNT at the element the subscripts on the stack name, checking each against its dimension's size.
+;; Points <VariablePointer> at the element the subscripts on the stack name, checking each against its dimension's size.
 ;;
 ;; The offset is built from the last subscript to the first: at each, it is multiplied by that dimension's size and
 ;; the subscript added, so the first subscript varies fastest. Times the element's size, it is added to the elements'
 ;; address.
-;; In: LOWTR = the array's entry, COUNT = the count of subscripts, on the stack (the low byte on top, the last first)
-;; Out: VARPNT = the element's address (<VariablePointerXByte> its bank), ISARA = $80, A = VARPNT's low byte, Y = its page
-;; Errors: ERRBS = a subscript not below its size, ERROM = an offset of 64K or more
+;; In: SourceStart = the array's entry, Counter = the count of subscripts, on the stack (the low byte on top, the last
+;;   first)
+;; Out: VariablePointer = the element's address (<VariablePointerXByte> its bank), ArrayElementFound = $80, A =
+;;   <VariablePointer>'s low byte, Y = its page
+;; Errors: <ERROR_BAD_SUBSCRIPT> = a subscript not below its size, <ERROR_OUT_OF_MEMORY> = an offset of 64K or more
 ;; Entry:
 ;;   ToOutOfMemoryError = ends with OUT OF MEMORY; <Variables::MultiplyUnsigned> branches here
-;;   SetArrayFlags = sets <VariablePointerXByte> from A, and ISARA, and finishes; <Variables::ArrayNotFound> goes here
+;;   SetArrayFlags = sets <VariablePointerXByte> from A, and <ArrayElementFound>, and finishes;
+;;   <Variables::ArrayNotFound> goes here
 ;;   ToSetIntegerFlag = finishes as <FindVariable::SetIntegerFlag> does; <Variables::InitializeArray> branches here
 ;;     for `DIM`
 ;; See: <Variables::MultiplyUnsigned>, <Variables::ElementsStart>
 ;; Also: GETDEF (BB13)
 .proc ElementAddress
     lda Counter
-    sta Pointer1+1                             ; the subscripts left
+    sta Pointer1+1                          ; the subscripts left
     lda #0
-    jsr ElementsStart::SizesPlus            ; ARYPNT: the sizes
+    jsr ElementsStart::SizesPlus            ; ArrayPointer: the sizes
     ldy #0
-    sty LinearIndex                              ; the offset so far
+    sty LinearIndex                         ; the offset so far
     sty LinearIndex+1
 
 ;; Takes the next subscript off the stack and checks it is below its dimension's size.
@@ -159,12 +163,12 @@ NextSubscript:
     sta ArrayIndex
     pla                                     ; the high byte
     sta ArrayIndex+1
-    cmp (ArrayPointer),Y                          ; against the size's high byte
+    cmp (ArrayPointer),Y                    ; against the size's high byte
     bcc SkipLow
     bne ToBadSubscriptError
     iny
     txa
-    cmp (ArrayPointer),Y                          ; and low byte
+    cmp (ArrayPointer),Y                    ; and low byte
     bcc InBounds
 
 ;; Ends the statement with BAD SUBSCRIPT.
@@ -190,10 +194,10 @@ InBounds:
     clc
     beq AddSubscript
     sty Pointer1
-    lda (ArrayPointer),Y                          ; the size's low byte
+    lda (ArrayPointer),Y                    ; the size's low byte
     pha
     dey
-    lda (ArrayPointer),Y                          ; and high byte
+    lda (ArrayPointer),Y                    ; and high byte
     tax
     pla
     tay
@@ -213,12 +217,12 @@ AddSubscript:
     sta LinearIndex+1
     dec Pointer1+1
     bne NextSubscript
-    jsr ElementsStart                       ; ARYPNT: the elements
+    jsr ElementsStart                       ; ArrayPointer: the elements
     ldx #0
-    ldy VariableSizes                              ; the element's size
+    ldy VariableSizes                       ; the element's size
     jsr MultiplyUnsigned
     txa
-    adc ArrayPointer                              ; carry is clear after MultiplyUnsigned
+    adc ArrayPointer                        ; carry is clear after MultiplyUnsigned
     sta VariablePointer
     tya
     adc ArrayPointer+1
@@ -228,9 +232,10 @@ AddSubscript:
     tya
     adc #0
 
-;; Sets <VariablePointerXByte> and <ArrayElementFound> ($80, an array element), then finishes as <FindVariable::SetIntegerFlag> does.
-;; In: A = the element's bank, VARPNT = its address
-;; Out: A = VARPNT's low byte, Y = its page
+;; Sets <VariablePointerXByte> and <ArrayElementFound> ($80, an array element), then finishes as
+;; <FindVariable::SetIntegerFlag> does.
+;; In: A = the element's bank, VariablePointer = its address
+;; Out: A = <VariablePointer>'s low byte, Y = its page
 ;; Also: DIMRTS2 (BB13)
 SetArrayFlags:
     sta VariablePointerXByte
@@ -249,11 +254,11 @@ ToSetIntegerFlag:
 ; Unsigned multiply
 ; ---------------------------------------------------------------------------------------------------------------------
 
-;; Multiplies CURTOL by a 16-bit number, for array sizes and offsets.
-;; In: Y = the number's low byte, X = its high byte, CURTOL = the other factor
+;; Multiplies <LinearIndex> by a 16-bit number, for array sizes and offsets.
+;; In: Y = the number's low byte, X = its high byte, LinearIndex = the other factor
 ;; Out: X = the product's low byte, Y = its high byte, carry = clear
-;; Uses: A, CURTOL (left zero), DECCNT, ADDEND
-;; Errors: ERROM = a product of 64K or more
+;; Uses: A, LinearIndex (left zero), DigitCount, Addend
+;; Errors: <ERROR_OUT_OF_MEMORY> = a product of 64K or more
 ;; Entry:
 ;;   Done = returns; <RejectDirectMode> branches here as the nearest RTS
 ;; See: <Variables::ElementAddress>, <Variables::CreateArray>
@@ -311,11 +316,12 @@ Done:
 
 .scope Functions continued
 
-;; The `FRE` function: collects the strings' garbage, then gives the bytes free between <VariablesEnd> and <StringsBottom>.
+;; The `FRE` function: collects the strings' garbage, then gives the bytes free between <VariablesEnd> and
+;; <StringsBottom>.
 ;;
 ;; <Segments::Grow>, with A = 0, first grows BASIC's memory segment as far as SOS lets it. The count is made as a long
 ;; integer, up to 24 bits, and turned into a real.
-;; Out: FAC = the bytes free, as a real
+;; Out: Fac = the bytes free, as a real
 ;; See: <Strings::CollectGarbage>, <LongInteger::ToReal>
 ;; Also: NOFREF (BB13)
 .proc Fre
@@ -325,7 +331,7 @@ Done:
     jsr Segments::Grow
     jsr Strings::CollectGarbage
     sec
-    lda StringsBottom                              ; FRETOP - STREND
+    lda StringsBottom                       ; StringsBottom - VariablesEnd
     sbc VariablesEnd
     sta Fac+7
     lda StringsBottom+1
@@ -340,9 +346,9 @@ Done:
 
 .endscope
 
-;; Puts a signed 16-bit integer in the FAC as a real.
+;; Puts a signed 16-bit integer in the <Fac> as a real.
 ;; In: A = the high byte, Y = the low byte
-;; Out: FAC = the real, VALTYP = 0
+;; Out: Fac = the real, ValueType = 0
 ;; See: <ReturnByte>
 ;; Also: GIVAYF (BB13)
 .proc ReturnSignedWord
@@ -357,7 +363,7 @@ Done:
 .scope Functions continued
 
 ;; The `POS` function: the cursor's column, counting from 1.
-;; Out: FAC = the column, as a real
+;; Out: Fac = the column, as a real
 ;; Entry:
 ;;   CountFromOne = adds 1 to Y and gives it as a real; <Functions::VPos> goes here
 ;; See: <Functions::VPos>, <ReadCursorPosition>
@@ -375,9 +381,9 @@ CountFromOne:
 
 .endscope
 
-;; Puts Y, 0-255, in the FAC as a real.
+;; Puts Y, 0-255, in the <Fac> as a real.
 ;; In: Y = the number
-;; Out: FAC = the real, VALTYP = 0
+;; Out: Fac = the real, ValueType = 0
 ;; See: <ReturnSignedWord>
 ;; Also: SNGFLT (BB13)
 .proc ReturnByte
@@ -389,7 +395,7 @@ CountFromOne:
 .scope Functions continued
 
 ;; The `VPOS` function: the cursor's line, counting from 1.
-;; Out: FAC = the line, as a real
+;; Out: Fac = the line, as a real
 ;; See: <Functions::Pos>
 ;; Also: DOVPOS (BB13)
 .proc VPos
@@ -406,14 +412,15 @@ CountFromOne:
 ; `DEF FN` names a function of one numeric argument with a one-line formula, as in `DEF FN A(X) = X * X + 1`. Its
 ; entry is a simple variable of type Variables::TYPE_FUNCTION and its name (the letters after `FN`, without a type
 ; character), whose six-byte value is the formula's address in the program (three bytes, just past the `=`) and the
-; argument variable's (three bytes, relative to SMVARS, as `FOR` keeps its variable). An entry `DEF` has not filled
-; is all zero.
+; argument variable's (three bytes, relative to VariablesStart, as `FOR` keeps its variable). An entry `DEF` has not
+; filled is all zero.
 ; ---------------------------------------------------------------------------------------------------------------------
 
 ;; Refuses a statement in direct mode, where <CurrentLine>'s high byte is $FF.
-;; Errors: ERRID = in direct mode
+;; Errors: <ERROR_ILLEGAL_DIRECT> = in direct mode
 ;; Entry:
-;;   UndefinedFunction = ends the statement with UNDEF'D FUNCTION; <Functions::Fn> and <Modules::ToUndefinedFunctionError> go here
+;;   UndefinedFunction = ends the statement with UNDEF'D FUNCTION; <Functions::Fn> and
+;;   <Modules::ToUndefinedFunctionError> go here
 ;; Also: ERRDIR (BB13)
 .proc RejectDirectMode
     ldx CurrentLine+1
@@ -434,9 +441,9 @@ UndefinedFunction:
 ;; The `DEF` statement: notes the formula's address and the argument variable in the function's entry, and skips the
 ;; formula.
 ;;
-;; <RequireNumber> lets the argument be an integer variable as well as a real one, but `FN` stores a four-byte real into it
-;; and saves and restores four bytes, so an integer argument (two bytes) has the two bytes after it written over.
-;; Errors: ERRID = in direct mode
+;; <RequireNumber> lets the argument be an integer variable as well as a real one, but `FN` stores a four-byte real into
+;; it and saves and restores four bytes, so an integer argument (two bytes) has the two bytes after it written over.
+;; Errors: <ERROR_ILLEGAL_DIRECT> = in direct mode
 ;; See: <ReadFunctionName>, <Functions::Fn>, <Variables::SimpleVariableOffset>
 ;; Also: DEF (BB13)
 .proc Def
@@ -444,9 +451,9 @@ UndefinedFunction:
     jsr RejectDirectMode
     jsr CheckOpenParenthesis
     lda #$80
-    sta SubscriptMode                              ; no subscripts on the argument
+    sta SubscriptMode                       ; no subscripts on the argument
     jsr FindVariableToAssign
-    jsr Variables::SimpleVariableOffset                              ; FORPNT relative to SMVARS
+    jsr Variables::SimpleVariableOffset     ; AssignedVariable relative to VariablesStart
     jsr RequireNumber
     jsr CheckCloseParenthesis
     lda #'='
@@ -463,7 +470,7 @@ UndefinedFunction:
     pha
     lda TextPointer
     pha
-    jsr SkipStatement                                ; skips the formula
+    jsr SkipStatement                       ; skips the formula
     ldx #Variables::SIZE_FUNCTION-1         ; six bytes to the entry
     jmp PopToFunctionPointer
 .endproc
@@ -471,8 +478,8 @@ UndefinedFunction:
 .endscope
 
 ;; Reads `FN` and the function's name, finding or making its entry.
-;; Out: DEFPNT = the entry's value (<FunctionPointerXByte> its bank), VALTYP = 0
-;; Errors: ERRSN = no `FN`, or a bad name
+;; Out: FunctionPointer = the entry's value (<FunctionPointerXByte> its bank), ValueType = 0
+;; Errors: <ERROR_SYNTAX> = no `FN`, or a bad name
 ;; Entry:
 ;;   AfterFn = finds or makes the entry of the function named at <TextPointer>; <Functions::Fn> enters here
 ;; Also: GETFNM (BB13)
@@ -485,7 +492,7 @@ UndefinedFunction:
 ;; <SubscriptMode> gets the name's first character with bit 7 set: bits 7 and 6 both set for a letter, which
 ;; <FindVariable::KeepDimensionFlag> takes as an `FN` name.
 ;; In: A = the name's first character
-;; Out: DEFPNT = the entry's value (<FunctionPointerXByte> its bank), VALTYP = 0
+;; Out: FunctionPointer = the entry's value (<FunctionPointerXByte> its bank), ValueType = 0
 ;; Also: GETFN1 (BB13)
 AfterFn:
     ora #$80
@@ -508,8 +515,8 @@ AfterFn:
 ;; The old value, the text pointer and the variable's address are kept on the stack, so a function's formula can use
 ;; `FN` itself. A function whose `DEF` has not run, or whose `DEF` line is gone (no `=` where the formula was), is an
 ;; UNDEF'D FUNCTION error.
-;; Out: FAC = the function's value
-;; Errors: ERRUF = no `DEF`, ERRSN = more after the formula
+;; Out: Fac = the function's value
+;; Errors: <ERROR_UNDEFINED_FUNCTION> = no `DEF`, <ERROR_SYNTAX> = more after the formula
 ;; See: <Statements::Def>, <ReadFunctionName::AfterFn>, <Float::StoreFac::AtPointer>
 ;; Also: FNDOER (BB13)
 .proc Fn
@@ -530,7 +537,7 @@ AfterFn:
     pla
     sta FunctionPointerXByte
     ldy #3
-    lda (FunctionPointer),Y                          ; the argument variable, relative to SMVARS
+    lda (FunctionPointer),Y                 ; the argument variable, relative to VariablesStart
     sta Pointer1
     iny
     lda (FunctionPointer),Y
@@ -546,7 +553,7 @@ ToUndefinedFunction:
 Defined:
     sta Pointer1XByte
     ldx #Pointer1
-    jsr Variables::SimpleVariableOffset::OfPointerAtX                              ; makes INDEX an address again
+    jsr Variables::SimpleVariableOffset::OfPointerAtX ; makes Pointer1 an address again
     ldy #Variables::SIZE_REAL-1
 
 ;; Pushes the argument variable's old value, four bytes.
@@ -557,14 +564,14 @@ SaveArgument:
     dey
     bpl SaveArgument
     lda Pointer1XByte
-    jsr Float::StoreFac::AtPointer                             ; the argument into the variable, leaving Y = 0
+    jsr Float::StoreFac::AtPointer          ; the argument into the variable, leaving Y = 0
     lda TextPointerXByte
     pha
     lda TextPointer+1
     pha
     lda TextPointer
     pha
-    lda (FunctionPointer),Y                          ; the formula
+    lda (FunctionPointer),Y                 ; the formula
     sta TextPointer
     iny
     lda (FunctionPointer),Y
@@ -584,7 +591,7 @@ SaveArgument:
     bne ToUndefinedFunction                 ; the `DEF` line is gone
     jsr GetNextCharacter
     jsr EvaluateNumber
-    pla                                     ; DEFPNT: the argument variable now
+    pla                                     ; FunctionPointer: the argument variable now
     sta FunctionPointer
     pla
     sta FunctionPointer+1
@@ -606,8 +613,9 @@ RestoreText:
 
 .endscope
 
-;; Pulls X+1 bytes off the stack into DEFPNT's bytes 0 up: `DEF`'s entry, or `FN`'s argument variable's old value.
-;; In: X = the count less 1, DEFPNT = where they go
+;; Pulls X+1 bytes off the stack into <FunctionPointer>'s bytes 0 up: `DEF`'s entry, or `FN`'s argument variable's old
+;; value.
+;; In: X = the count less 1, FunctionPointer = where they go
 ;; Also: DEFFIN (BB13)
 .proc PopToFunctionPointer
     ldy #$FF

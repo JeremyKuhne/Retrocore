@@ -25,15 +25,16 @@
 ;;
 ;; An error part way, such as a file that can't be opened or no segment found, leaves the released segment's number
 ;; in <Segments::ModulesSegment>, so `PERFORM` and `EXFN.` still search the released memory for records.
-;; In: TXTPTR = the file names, separated by commas, or the statement's end
-;; Errors: ERROM = the files too big for one segment, or none found; the errors of opening a file and loading it
+;; In: TextPointer = the file names, separated by commas, or the statement's end
+;; Errors: <ERROR_OUT_OF_MEMORY> = the files too big for one segment, or none found; the errors of opening a file and
+;;   loading it
 ;; See: <Modules::Load>, <Segments::FindModulesList>, <Modules::FindRecord>
 ;; Also: INVOKE (BB13)
 .proc Invoke
     lda #0                                  ; not RUN or CHAIN
     sta ProgramLoading
 .if VERSION >= 130
-    jsr ProgramPrefix::UseProgram                             ; 1.3: use the program's prefix
+    jsr ProgramPrefix::UseProgram           ; 1.3: use the program's prefix
 .endif
     lda #0
     jsr Segments::Shrink                    ; all the free memory back to SOS
@@ -56,7 +57,7 @@ AddSizes:
     lda #0
     sta ReferencePointers
     sta ReferencePointers+1
-    jsr SaveTextPointer                               ; to read the names again
+    jsr SaveTextPointer                     ; to read the names again
 
 ;; Opens the next file, adds its size less the first block, and closes it again.
 ;;
@@ -64,9 +65,9 @@ AddSizes:
 ;; Also: INVOK4 (BB13)
 AddSize:
     lda #1                                  ; to read
-    ldx #FILE_TYPE_PASCAL_CODE                            ; a code file
+    ldx #FILE_TYPE_PASCAL_CODE              ; a code file
     jsr Files::OpenOfType
-    lda SosCalls::FileEnd                                ; the file's size, from OPENIT
+    lda SosCalls::FileEnd                   ; the file's size, from Files::OpenOfType
     clc
     adc ReferencePointers+1
     sta ReferencePointers+1
@@ -82,7 +83,7 @@ AddSize:
     beq *+8                                 ; the last name
     jsr CheckComma
     jmp AddSize
-    ldx ReferencePointers                             ; one more page, for the bytes past the last
+    ldx ReferencePointers                   ; one more page, for the bytes past the last
     inx
     beq Modules::ToOutOfMemoryErrorForInvoke
     stx a:Segments::ModulesPages
@@ -90,7 +91,7 @@ AddSize:
     stx a:Segments::ModulesPages+1
     jsr RestoreTextPointer
     brk
-    .byte SOS_FIND_SEGMENT                              ; a segment in one bank
+    .byte SOS_FIND_SEGMENT                  ; a segment in one bank
     .word Segments::FindModulesList
     bne Modules::ToOutOfMemoryErrorForInvoke
     lda a:Segments::FoundModulesSegment
@@ -117,13 +118,13 @@ AddSize:
     cpy ModulesStartXByte
     beq *+5
     clc
-    adc #POINTER_PAGE_LIMIT-POINTER_PAGE_FIRST                        ; in the next bank: count it from the base's
+    adc #POINTER_PAGE_LIMIT-POINTER_PAGE_FIRST ; in the next bank: count it from the base's
     sta ModulesEnd+1
     lda #0
     sta ModulesEnd
     sta ModulesStart
     jsr Modules::Load
-    lda ModuleLoadPointer                              ; the whole pages left below the records
+    lda ModuleLoadPointer                   ; the whole pages left below the records
     cmp ModulesStart
     lda ModuleLoadPointer+1
     sbc ModulesStart+1
@@ -176,12 +177,12 @@ PAGES_PER_BANK = $80
 ;; The bit of an X-byte that turns extended addressing on, set over the bank's number.
 X_BYTE_ON = $80
 
-;; Finds the largest free segment for BASIC's program and data, anywhere in memory, and sets <SegmentStart> and <MemoryTop>
-;; from it.
+;; Finds the largest free segment for BASIC's program and data, anywhere in memory, and sets <SegmentStart> and
+;; <MemoryTop> from it.
 ;;
 ;; The first FIND_SEG asks for $FFFF pages, which fails, and SOS leaves the most it can give in the count; the second
 ;; asks for that. The call is made until it works.
-;; Out: RAMLOC = the segment's start plus 1, MEMSIZ = the page after its end
+;; Out: SegmentStart = the segment's start plus 1, MemoryTop = the page after its end
 ;; See: <Segments::FindBasicList>, <ColdStart>
 ;; Also: TRYSEG (BB13)
 .proc FindForBasic
@@ -202,7 +203,7 @@ X_BYTE_ON = $80
     lda a:BasicBase+1
     sec
     sbc #WINDOW_PAGE
-    jsr Memory::NormalizePage                              ; into BASIC's range, $02-$81
+    jsr Memory::NormalizePage               ; into BASIC's range, $02-$81
     sta SegmentStart+1
     sty SegmentStartXByte
     lda a:BasicLimit
@@ -510,14 +511,14 @@ CatalogPrefixList:
 ; Segments: shrinking and growing BASIC's segment.
 .scope Segments continued
 
-;; Gives free memory back to SOS: moves the strings and buffers, from <StringsBottom> to <MemoryTop>, down by A pages, or by all
-;; the free space when A is 0, and shrinks BASIC's segment by as much.
+;; Gives free memory back to SOS: moves the strings and buffers, from <StringsBottom> to <MemoryTop>, down by A pages,
+;; or by all the free space when A is 0, and shrinks BASIC's segment by as much.
 ;;
-;; The strings' garbage is collected first, so the free space runs from <VariablesEnd> to <StringsBottom>. <MoveDistance> is zero, so the
-;; move adjusts no pointers. With no free page it is an out-of-memory error, and a CHANGE_SEG that fails ends the
-;; statement with SOS's error.
+;; The strings' garbage is collected first, so the free space runs from <VariablesEnd> to <StringsBottom>.
+;; <MoveDistance> is zero, so the move adjusts no pointers. With no free page it is an out-of-memory error, and a
+;; CHANGE_SEG that fails ends the statement with SOS's error.
 ;; In: A = the pages, 0 for all the free space; more than there are gives all of it
-;; Errors: ERROM = no free page; SOS's error from CHANGE_SEG
+;; Errors: <ERROR_OUT_OF_MEMORY> = no free page; SOS's error from CHANGE_SEG
 ;; See: <Segments::Grow>, <Segments::ShrinkBasicList>
 ;; Also: SCRUNCH (BB13)
 .proc Shrink
@@ -525,7 +526,7 @@ CatalogPrefixList:
     jsr Strings::CollectGarbage
     pla
     tax
-    lda StringsBottom                              ; the free space, in pages and banks
+    lda StringsBottom                       ; the free space, in pages and banks
     cmp VariablesEnd
     lda StringsBottom+1
     sbc VariablesEnd+1
@@ -533,7 +534,7 @@ CatalogPrefixList:
     lda StringsBottomXByte
     sbc VariablesEndXByte
     sta Pointer2+1
-    asl Pointer2                              ; banks are 128 pages: make it a count of pages
+    asl Pointer2                            ; banks are 128 pages: make it a count of pages
     lsr Pointer2+1
     ror Pointer2
     txa
@@ -556,9 +557,9 @@ Move:
     lda Pointer2
     ora Pointer2+1
     bne *+5
-    jmp ReportOutOfMemory                               ; no free page
+    jmp ReportOutOfMemory                   ; no free page
     lda Pointer2
-    asl                                     ; HEADER = the count as pages and banks
+    asl                                     ; StringInformationPointer = the count as pages and banks
     tax
     lda Pointer2+1
     rol
@@ -576,7 +577,7 @@ Move:
     sec
     sbc StringInformationPointer
     jsr Memory::NormalizeAfterSubtract
-    sta SourceStart+1                             ; LOWTR = where the strings go
+    sta SourceStart+1                       ; SourceStart = where the strings go
     tya
     sbc StringInformationPointer+1
     sta SourceStartXByte
@@ -586,7 +587,7 @@ Move:
     pha
     lda VariablesEndXByte
     pha
-    lda MemoryTop                               ; MVDWN moves up to STREND: here, HIMEM
+    lda MemoryTop                           ; CloseGap moves up to VariablesEnd: here, MemoryTop
     sta VariablesEnd
     lda MemoryTop+1
     sta VariablesEnd+1
@@ -637,7 +638,7 @@ Move:
 ;; <Segments::GrowBasicPages>, until it works, so fewer pages than A may be taken. When SOS gives none, it is an
 ;; out-of-memory error if A was not 0.
 ;; In: A = the pages, 0 for as many as SOS gives
-;; Errors: ERROM = no page given, when A was not 0
+;; Errors: <ERROR_OUT_OF_MEMORY> = no page given, when A was not 0
 ;; See: <Segments::Shrink>, <Segments::GrowBasicList>
 ;; Also: EXPAND (BB13)
 .proc Grow

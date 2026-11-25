@@ -12,17 +12,17 @@
 ;; The Apple III's bank register: which bank of memory shows at $2000-$9FFF.
 BankRegister = $FFEF
 
-;; Calls one of BASIC's routines for an invokable module, by its number in <ModuleRoutineNumber>, with BASIC's bank switched in,
-;; then switches the modules' bank back.
+;; Calls one of BASIC's routines for an invokable module, by its number in <ModuleRoutineNumber>, with BASIC's bank
+;; switched in, then switches the modules' bank back.
 ;;
-;; A module reaches it with a JSR to <ModuleCallJump>. The routine's address is the number's entry in <ModuleRoutines>, which ends
-;; just before this routine. A number past the table's end ends the statement with an ILLEGAL QUANTITY error, with
-;; BASIC's bank already switched in. The number is doubled in a byte, so its bit 7 is lost: a number from 128 up
+;; A module reaches it with a JSR to <ModuleCallJump>. The routine's address is the number's entry in <ModuleRoutines>,
+;; which ends just before this routine. A number past the table's end ends the statement with an ILLEGAL QUANTITY error,
+;; with BASIC's bank already switched in. The number is doubled in a byte, so its bit 7 is lost: a number from 128 up
 ;; calls the routine 128 below it.
-;; In: PASSAREG = the routine's number, A, X, Y = passed on to the routine
+;; In: ModuleRoutineNumber = the routine's number, A, X, Y = passed on to the routine
 ;; Out: A, X, Y = as the routine left them
-;; Uses: JMPER
-;; Errors: ERRFC = a number past the table's end
+;; Uses: FunctionJump
+;; Errors: <ERROR_ILLEGAL_QUANTITY> = a number past the table's end
 ;; Entry:
 ;;   ToIllegalQuantityError = ends the statement with ILLEGAL QUANTITY
 ;; See: <ModuleRoutines>, <Modules::CallModule>
@@ -58,14 +58,14 @@ ToIllegalQuantityError:
     jmp IllegalQuantityError
 .endproc
 
-;; Calls the module routine whose address `PERFORM` or `EXFN.` put in <FunctionJump>, with the modules' bank switched in,
-;; then returns to the statement that called `PERFORM` or `EXFN.`.
+;; Calls the module routine whose address `PERFORM` or `EXFN.` put in <FunctionJump>, with the modules' bank switched
+;; in, then returns to the statement that called `PERFORM` or `EXFN.`.
 ;;
 ;; The address is a pointer through the modules' bank pair; clearing bit 7 of its high byte and adding $20 makes it
-;; the address in the switched bank. The return address was kept in <PerformSavedReturn> before the call, and the bank that was
-;; switched in is kept in <PerformSavedReturn>+2 and switched back after.
+;; the address in the switched bank. The return address was kept in <PerformSavedReturn> before the call, and the bank
+;; that was switched in is kept in <PerformSavedReturn>+2 and switched back after.
 ;; Out: A = what the routine left in A
-;; Uses: TEMP, YSAVE, JMPER
+;; Uses: Temporary, SavedY, FunctionJump
 ;; See: <Modules::CallByName>, <Modules::CallBasic>
 ;; Also: JUMPDO (BB13)
 .proc CallModule
@@ -82,9 +82,9 @@ ToIllegalQuantityError:
     sta FunctionJump+2
     jsr FunctionJump
     sta SavedY
-    lda PerformSavedReturn+2                              ; back to the bank that was in
+    lda PerformSavedReturn+2                ; back to the bank that was in
     sta BankRegister
-    lda PerformSavedReturn+1                              ; return to the caller of `PERFORM` or `EXFN.`
+    lda PerformSavedReturn+1                ; return to the caller of `PERFORM` or `EXFN.`
     pha
     lda PerformSavedReturn
     pha

@@ -18,11 +18,12 @@
 ;; <CurrentLine>. It goes under <ExecuteStatement::StatementReturn>, the return address to <NextStatement>.
 ;; In: A = the character after `GOSUB`, flags as <GetCurrentCharacter> sets them
 ;; Entry:
-;;   Transfer = goes to the line whose number is at <TextPointer>, returning to <NextStatement> to run it; `RUN n` comes here
+;;   Transfer = goes to the line whose number is at <TextPointer>, returning to <NextStatement> to run it; `RUN n` comes
+;;   here
 ;; See: <Statements::Return>, <Statements::GoTo>
 ;; Also: GOSUB (BB13)
 .proc GoSub
-    jsr SaveTextPointer                     ; TXTPTR at the line number
+    jsr SaveTextPointer                     ; TextPointer at the line number
     jsr GetCurrentCharacter
     jsr ReadLineNumber                      ; pass the number
     jsr PushGoSubEntry
@@ -36,7 +37,8 @@ Transfer:
     rts
 .endproc
 
-;; The `GOTO` statement: points <TextPointer> at the zero before the line with the number given, so <NextStatement> runs it.
+;; The `GOTO` statement: points <TextPointer> at the zero before the line with the number given, so <NextStatement> runs
+;; it.
 ;;
 ;; When more follows the number, `GOTO` does nothing and <NextStatement> gives the syntax error.
 ;; In: A = the character after `GOTO`, flags as <GetCurrentCharacter> sets them
@@ -44,7 +46,8 @@ Transfer:
 ;; Entry:
 ;;   ToLineNumber = finds the line numbered <LineNumber> and points <TextPointer> at the zero before its link; `ON`,
 ;;     `PRINT USING`'s image line and the table of routines for invokable modules come here
-;;   SearchFromStart = searches from the program's first line; <Files::StartProgram> comes here to start a program at a line
+;;   SearchFromStart = searches from the program's first line; <Files::StartProgram> comes here to start a program at a
+;;   line
 ;; See: <FindLine::FromLine>
 ;; Also: GOTO (BB13)
 .proc GoTo
@@ -56,8 +59,8 @@ Transfer:
 ;;
 ;; A line after the current one is looked for from the next line on; any other, from the program's start (always, in
 ;; a direct line, whose <CurrentLine> is $FFxx).
-;; In: LINNUM = the line number, TXTPTR = in the current line
-;; Uses: A, X, Y, LOWTR
+;; In: LineNumber = the line number, TextPointer = in the current line
+;; Uses: A, X, Y, SourceStart
 ;; Also: GOTOB (BB13)
 ToLineNumber:
     jsr FindLineEnd                         ; Y = the end of the line
@@ -66,7 +69,7 @@ ToLineNumber:
     lda CurrentLine+1
     sbc LineNumber+1
     bcs SearchFromStart                     ; not later than this line: from the start
-    tya                                     ; the next line's link: TXTPTR + Y + 1
+    tya                                     ; the next line's link: TextPointer + Y + 1
     ldy TextPointerXByte
     sec
     adc TextPointer
@@ -131,7 +134,7 @@ Done:
 .proc Return
     bne Statements::GoTo::Done              ; more follows: NextStatement gives the syntax error
     lda #$FF
-    sta ForVariableType                             ; matches no FOR entry
+    sta ForVariableType                     ; matches no FOR entry
     jsr FindForFrame
     cmp #TOKEN_GOSUB
     beq RestoreCaller
@@ -150,7 +153,7 @@ UndefinedStatement:
 ;; Also: RETU1 (BB13)
 RestoreCaller:
     txs
-    pla                                     ; GOSUTK
+    pla                                     ; TOKEN_GOSUB
     pla                                     ; the line number's low byte
     cpy #<(TOKEN_POP*2)
     beq Statements::PopFinish
@@ -158,7 +161,7 @@ RestoreCaller:
     pla
     sta CurrentLine+1
     pla
-    sta TextPointerXByte                             ; the offset's bank
+    sta TextPointerXByte                    ; the offset's bank
     clc
     pla
     tay                                     ; its high byte
@@ -230,9 +233,9 @@ ToSyntaxError:
 .endscope
 
 ;; Finds the end of the statement: a colon or a zero, outside quotes.
-;; In: TXTPTR = where to start
-;; Out: Y = the terminator's index from TXTPTR, A = the terminator, zero = set
-;; Uses: X, CHARAC, ENDCHR
+;; In: TextPointer = where to start
+;; Out: Y = the terminator's index from TextPointer, A = the terminator, zero = set
+;; Uses: X, Delimiter, EndDelimiter
 ;; See: <FindLineEnd>
 ;; Also: DATAN (BB13)
 .proc FindStatementEnd
@@ -243,11 +246,11 @@ ToSyntaxError:
 
 ;; Finds the end of the line: its zero.
 ;;
-;; <Delimiter> and <EndDelimiter> hold the two characters that end the scan besides the zero; a quote swaps them, so inside
-;; quotes only the zero ends it.
-;; In: TXTPTR = where to start
-;; Out: Y = the zero's index from TXTPTR, A = 0, zero = set
-;; Uses: X, CHARAC, ENDCHR
+;; <Delimiter> and <EndDelimiter> hold the two characters that end the scan besides the zero; a quote swaps them, so
+;; inside quotes only the zero ends it.
+;; In: TextPointer = where to start
+;; Out: Y = the zero's index from TextPointer, A = 0, zero = set
+;; Uses: X, Delimiter, EndDelimiter
 ;; See: <FindStatementEnd>
 ;; Also: REMN (BB13)
 .proc FindLineEnd
@@ -316,7 +319,7 @@ NextCharacter:
 ;; Reads n and the `GOTO` or `GOSUB` after it.
 ;; Also: ONGOTO2 (BB13)
 ReadIndex:
-    jsr EvaluateByte                              ; n into FACLO
+    jsr EvaluateByte                        ; n into FacMantissa4
     pha                                     ; the token after it
     cmp #TOKEN_GOSUB
     beq NextEntry
@@ -345,7 +348,7 @@ NextEntry:
 ;; Reads the line number after <TextPointer> and goes to it through <Statements::GoTo::ToLineNumber>.
 ;; Also: DOONGT (BB13)
 GoToEntry:
-    jsr GetNextCharacter                              ; the token or the comma
+    jsr GetNextCharacter                    ; the token or the comma
     jsr ReadLineNumber
     jmp Statements::GoTo::ToLineNumber
 
@@ -380,15 +383,17 @@ ToOnKeyboard:
 ; Line numbers
 ; ---------------------------------------------------------------------------------------------------------------------
 
-;; Reads a line number, 0 to 63999, from the text into <LineNumber>; with no digit there, LINNUM is 0.
+;; Reads a line number, 0 to 63999, from the text into <LineNumber>; with no digit there, <LineNumber> is 0.
 ;;
 ;; A number of 64000 or more is a syntax error through <Statements::On::RequireGoto>, which compares A, the high byte
 ;; so far, with `GOTO`'s token: when that byte is $BA, as for a number whose first five digits are 47616 to 47871, the
-;; error is missed, and the code goes on in `ON`'s loop, counting down <FacMantissa4> and pulling a byte `ON` never pushed.
-;; In: A = the character at TXTPTR, carry = clear for a digit, as <GetCurrentCharacter> leaves them
-;; Out: LINNUM = the number, TXTPTR = the character after it, A = that character, flags as <GetNextCharacter> sets them
-;; Errors: SYNTAX ERROR for 64000 or more
-;; Uses: X, CHARAC, INDEX
+;; error is missed, and the code goes on in `ON`'s loop, counting down <FacMantissa4> and pulling a byte `ON` never
+;; pushed.
+;; In: A = the character at TextPointer, carry = clear for a digit, as <GetCurrentCharacter> leaves them
+;; Out: LineNumber = the number, TextPointer = the character after it, A = that character, flags as <GetNextCharacter>
+;;   sets them
+;; Errors: SYNTAX <ReportError> for 64000 or more
+;; Uses: X, Delimiter, Pointer1
 ;; Also: LINGET (BB13)
 .proc ReadLineNumber
     ldx #0
@@ -405,7 +410,7 @@ NextDigit:
     sta Pointer1
     cmp #TENTH_LIMIT_HIGH                   ; 6400 or more would pass 63999
     bcs Statements::On::RequireGoto
-    lda LineNumber                              ; LINNUM times 10: times 4, plus itself, times 2
+    lda LineNumber                          ; LineNumber times 10: times 4, plus itself, times 2
     asl a
     rol Pointer1
     asl a
@@ -441,12 +446,12 @@ TENTH_LIMIT_HIGH = 25
 ; LET.
 
 ;; The `LET` statement, and any statement without a keyword: evaluates the formula after `=` and assigns it.
-;; In: TXTPTR = before the variable's name
+;; In: TextPointer = before the variable's name
 ;; Errors: TYPE MISMATCH, from <EvaluateExpression>, when the formula's type is not the variable's
 ;; See: <AssignFac>, <AssignString>
 ;; Also: LET (BB13)
 .proc Let
-    jsr FindVariableToAssign                            ; the variable's address in FORPNT
+    jsr FindVariableToAssign                ; the variable's address in AssignedVariable
     jsr CheckEquals
     lda IntegerType
     pha
@@ -458,8 +463,10 @@ TENTH_LIMIT_HIGH = 25
 
 .endscope
 
-;; Assigns the value in the <Fac> to the variable at <AssignedVariable>, as `LET` does; the disk statements and `INPUT` use it.
-;; In: FORPNT, FORPNTB = the variable, <ValueType>, <IntegerType>, ISARA = its type, the FAC = the value
+;; Assigns the value in the <Fac> to the variable at <AssignedVariable>, as `LET` does; the disk statements and `INPUT`
+;; use it.
+;; In: AssignedVariable, AssignedVariableXByte = the variable, <ValueType>, <IntegerType>, ArrayElementFound = its type,
+;;   the Fac = the value
 ;; Entry:
 ;;   ByType = takes <ArrayElementFound> and <IntegerType> back off the stack; `LET` comes here with them pushed
 ;; Also: LETP2 (BB13)
@@ -483,7 +490,8 @@ ByType:
     ; Falls into StoreNumber.
 .endproc
 
-;; Stores the <Fac> in the variable at <AssignedVariable>: a real as it is, an integer rounded to two bytes, high byte first.
+;; Stores the <Fac> in the variable at <AssignedVariable>: a real as it is, an integer rounded to two bytes, high byte
+;; first.
 ;; In: negative = set for an integer, as <IntegerType> sets it
 ;; Also: QINTGR (BB13)
 .proc StoreNumber
@@ -539,11 +547,13 @@ ToPackFac:
 
 ;; Assigns the string whose descriptor <FacMantissa3> points to, to the string variable at <AssignedVariable>.
 ;;
-;; A variable's string is copied to new room; a temporary's (one in BASIC's own bank, <FacMantissa3XByte> zero) is taken over. The
-;; variable's old string is freed, the descriptor copied in, and the string's information bytes, at <DestinationEnd>, are set
-;; to point back at the variable: its type (<STRING_TYPE_SIMPLE_VARIABLE> for a simple variable, <STRING_TYPE_ARRAY_ELEMENT> for an array element) and its
-;; offset from <Variables::VariableOffset>. An empty string gets no back pointer.
-;; In: FACMO, FACMOB = the descriptor, <AssignedVariable>, FORPNTB = the variable, ISARA = negative for an array element
+;; A variable's string is copied to new room; a temporary's (one in BASIC's own bank, <FacMantissa3XByte> zero) is taken
+;; over. The variable's old string is freed, the descriptor copied in, and the string's information bytes, at
+;; <DestinationEnd>, are set to point back at the variable: its type (<STRING_TYPE_SIMPLE_VARIABLE> for a simple
+;; variable, <STRING_TYPE_ARRAY_ELEMENT> for an array element) and its offset from <Variables::VariableOffset>. An empty
+;; string gets no back pointer.
+;; In: FacMantissa3, FacMantissa3XByte = the descriptor, <AssignedVariable>, AssignedVariableXByte = the variable,
+;;   ArrayElementFound = negative for an array element
 ;; Errors: VARIABLE error when the offset does not fit in 16 bits
 ;; Entry:
 ;;   MoveCharacters = moves the string into the room <DescriptorPointer> gives and makes its temporary descriptor; the
@@ -551,7 +561,7 @@ ToPackFac:
 ;;   SetBackPointer = points the string's information bytes back at its variable; `SWAP` comes here
 ;; Also: INPCOM (BB13)
 .proc AssignString
-    ldy FacMantissa3XByte                              ; zero for a temporary
+    ldy FacMantissa3XByte                   ; zero for a temporary
     bne CopyCharacters
     lda FacMantissa3
     ldy FacMantissa3+1
@@ -562,7 +572,7 @@ ToPackFac:
 ;; Also: COPY (BB13)
 CopyCharacters:
     ldy #0
-    lda (FacMantissa3),y                           ; the length
+    lda (FacMantissa3),y                    ; the length
     jsr Strings::AllocateForFac
 
 ;; Moves the string into the room and makes its temporary descriptor.
@@ -591,7 +601,7 @@ StoreDescriptor:
     lda AssignedVariable
     ldy AssignedVariable+1
     ldx AssignedVariableXByte
-    jsr Strings::FindFromDescriptorAt                              ; the old string into INDEX
+    jsr Strings::FindFromDescriptorAt       ; the old string into Pointer1
     jsr Strings::FreeSpace
     ldy #DESCRIPTOR_SIZE-1
 
@@ -611,7 +621,7 @@ SetBackPointer:
     jsr Variables::VariableOffset
     lda AssignedVariable+1
     ldy AssignedVariableXByte
-    jsr Memory::PackPages                               ; the offset, packed to 16 bits
+    jsr Memory::PackPages                   ; the offset, packed to 16 bits
     cpy #$FF
     bcc Variables::VariableOffset::VariableError
     ldy #2
@@ -619,7 +629,7 @@ SetBackPointer:
     dey
     lda AssignedVariable
     sta (DestinationEnd),y
-    txa                                     ; ISARA, as VariableOffset leaves X
+    txa                                     ; ArrayElementFound, as VariableOffset leaves X
     bmi ArrayElement
     lda #STRING_TYPE_SIMPLE_VARIABLE
     .byte $2C                               ; BIT absolute skips the LDA
@@ -639,12 +649,12 @@ Done:
 .scope Variables continued
 ; A variable's offset.
 
-;; Turns the variable pointer in <AssignedVariable> into an offset: from <ArraysStart> for an array element, otherwise from the simple
-;; variables' start through <Variables::SimpleVariableOffset>.
+;; Turns the variable pointer in <AssignedVariable> into an offset: from <ArraysStart> for an array element, otherwise
+;; from the simple variables' start through <Variables::SimpleVariableOffset>.
 ;;
 ;; An offset is the table's start less the address, so the same subtraction turns it back into the address.
-;; In: ISARA = negative for an array element
-;; Out: FORPNT, FORPNT+1, FORPNTB = the offset, X = ISARA
+;; In: ArrayElementFound = negative for an array element
+;; Out: AssignedVariable, AssignedVariable+1, AssignedVariableXByte = the offset, X = <ArrayElementFound>
 ;; Errors: OUT OF MEMORY when an array element's offset passes 64K
 ;; Entry:
 ;;   ArrayElement = takes <AssignedVariable> as an array element's; the table of routines for invokable modules lists it
@@ -757,7 +767,7 @@ Value:
     bit ValueType
     bmi Statements::PrintStringItem         ; a string
     bvc Real                                ; a real
-    jsr LongInteger::FormatFac                                ; a long integer, as text in NUMSTR
+    jsr LongInteger::FormatFac              ; a long integer, as text in LongText
     lda #<(LongText)
     sta Pointer1
     lda #>(LongText)
@@ -780,7 +790,7 @@ Real:
 
 ;; Ends the output line: a RETURN, then a line feed when the output goes to the console or another device rather than
 ;; a disk file; <TerminalPosition> goes back to 0.
-;; Uses: A, TEMP, KIMY
+;; Uses: A, Temporary, KeptY
 ;; Entry:
 ;;   Return = returns; `PRINT`'s list branches here
 ;; Also: CRDO (BB13)
@@ -792,7 +802,7 @@ Real:
     ldx OutputFileNumber
     bmi LineFeed                            ; the console
     jsr Files::TakeFileNumber::FromIndex
-    lda FileControlBlocks+FileControlBlock::REFERENCE_NUMBER,y                         ; the reference number: bit 7 set for a device
+    lda FileControlBlocks+FileControlBlock::REFERENCE_NUMBER,y ; the reference number: bit 7 set for a device
     bpl ResetColumn                         ; a disk file: no line feed
 
 ;; Prints the line feed.
@@ -819,7 +829,7 @@ Return:
 ; The output routines Business BASIC adds to Microsoft's.
 
 ;; Frees the string just printed, if it was one.
-;; In: VALTYP = the printed value's type
+;; In: ValueType = the printed value's type
 ;; Also: PRTRTS1 (BB13)
 .proc FreePrintedString
     bit ValueType
@@ -852,10 +862,10 @@ COMMA_ZONE = 16
 ;; Also: TABER (BB13)
 .proc PrintTabOrSpace
     php
-    jsr SkipAndEvaluateByte                              ; n into X
+    jsr SkipAndEvaluateByte                 ; n into X
     stx Temporary
     jsr CheckCloseParenthesis
-    jsr BackUpTextPointer                              ; back one, for ContinuePrint's CHRGET
+    jsr BackUpTextPointer                   ; back one, for ContinuePrint's GetNextCharacter
     plp
     ldx Temporary
     bcc PrintSpaces                         ; SPC(
@@ -920,17 +930,19 @@ One:
 .scope Output continued
 ; Writing a string.
 
-;; Prints X characters from <Pointer1>, to the console or the output file, with one SOS WRITE through <Console::WriteParameters>.
+;; Prints X characters from <Pointer1>, to the console or the output file, with one SOS WRITE through
+;; <Console::WriteParameters>.
 ;;
-;; <Console::WriteParameters>'s reference number is the console's; for a file, the file's goes in for the call and the console's comes
-;; back. The WRITE's buffer address is <Pointer1> itself, a zero-page pointer, which SOS reads with its X-byte.
-;; In: X = the length, INDEX = the string, with its X-byte, VALTYP = negative for a string to free afterwards
+;; <Console::WriteParameters>'s reference number is the console's; for a file, the file's goes in for the call and the
+;; console's comes back. The WRITE's buffer address is <Pointer1> itself, a zero-page pointer, which SOS reads with its
+;; X-byte.
+;; In: X = the length, Pointer1 = the string, with its X-byte, ValueType = negative for a string to free afterwards
 ;; Also: STRPR3 (BB13)
 .proc WriteString
     stx Console::WriteLength
     txa
     beq Finish
-    ldy Console::WriteParameters+1                             ; the console's reference number
+    ldy Console::WriteParameters+1          ; the console's reference number
     bit OutputFileNumber
     bmi Write                               ; the console
     pha
@@ -938,7 +950,7 @@ One:
     jsr Files::TakeFileNumber::FromIndex
     jsr Files::PrepareTextFile
     jsr Files::CheckWriteAccess
-    lda FileControlBlocks+FileControlBlock::REFERENCE_NUMBER,y                         ; the file's reference number
+    lda FileControlBlocks+FileControlBlock::REFERENCE_NUMBER,y ; the file's reference number
     ldy Console::WriteParameters+1
     sta Console::WriteParameters+1
     pla
@@ -956,7 +968,7 @@ Write:
     brk
     .byte SOS_WRITE
     .word Console::WriteParameters
-    sty Console::WriteParameters+1                             ; the console's reference number back
+    sty Console::WriteParameters+1          ; the console's reference number back
     bne PrintCharacter::WriteError
 
 ;; Frees the string, if it was one.
@@ -986,9 +998,9 @@ Finish:
 
 ;; Prints the character in A, to the console or the output file, and counts it in <TerminalPosition>.
 ;;
-;; A file's character goes out with a one-byte SOS WRITE through <Console::CharacterParameters>, with the file's reference number put in for
-;; the call.
-;; In: A = the character, FILNO = the output file, negative for the console
+;; A file's character goes out with a one-byte SOS WRITE through <Console::CharacterParameters>, with the file's
+;; reference number put in for the call.
+;; In: A = the character, OutputFileNumber = the output file, negative for the console
 ;; Out: A = the character
 ;; Entry:
 ;;   WriteError = ends the statement with the WRITE's error; <Output::WriteString> branches here
@@ -1079,7 +1091,7 @@ List:
 ;; Also: GPRNT2 (BB13)
 ReadColumn:
     bit OutputFileNumber
-    bpl ToCheckUsing                        ; to a file: leave TRMPOS
+    bpl ToCheckUsing                        ; to a file: leave TerminalPosition
     jsr ReadCursorPosition
     lda Console::CursorColumn
     sta TerminalPosition
@@ -1136,10 +1148,10 @@ Count:
 
 ;; Prints a character for `LIST`, first wrapping the line when the output has reached <OutputRecordLength>'s width.
 ;;
-;; A wrapped line goes on after spaces to the column in <MoveDistance>+1, where the listed line's text started. <OutputRecordLength> 0
-;; turns the wrap off.
-;; In: A = the character, DELTA+1 = the margin
-;; Errors: RANGE ERROR when the margin leaves no room in the width
+;; A wrapped line goes on after spaces to the column in <MoveDistance>+1, where the listed line's text started.
+;; <OutputRecordLength> 0 turns the wrap off.
+;; In: A = the character, MoveDistance+1 = the margin
+;; Errors: RANGE <ReportError> when the margin leaves no room in the width
 ;; See: <Statements::List>, <PrintCharacter>
 ;; Also: ROUTDO (BB13)
 .proc WrapCharacter
@@ -1147,7 +1159,7 @@ Count:
     lda OutputRecordLength
     beq Print                               ; no wrap
     clc
-    sbc TerminalPosition                              ; OUTREC less TRMPOS, less one
+    sbc TerminalPosition                    ; OUTREC less TerminalPosition, less one
     beq Wrap
     bcs Print                               ; room left
 

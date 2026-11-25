@@ -4,9 +4,9 @@
 ;; evaluator, up to taking an operator off its stack (B3EvalG.asm goes on from there).
 ;;
 ;; `INPUT`, `GET` and `READ` tell themselves apart by <InputMode>: <INPUT_MODE_INPUT>, <INPUT_MODE_GET> or
-;; <INPUT_MODE_READ>. Each keeps the place in its data in <InputPointer> (with its X-byte in <InputPointerXByte>), pointing at the
-;; separator before the next item, and the place in the statement's variable list in <VariableListPointer> while <TextPointer> reads the
-;; data.
+;; <INPUT_MODE_READ>. Each keeps the place in its data in <InputPointer> (with its X-byte in <InputPointerXByte>),
+;; pointing at the separator before the next item, and the place in the statement's variable list in
+;; <VariableListPointer> while <TextPointer> reads the data.
 ;;
 ;; Apple's Business BASIC 1.3 listing (BB13) gives the names in `Also:`.
 
@@ -67,13 +67,13 @@ ToSyntaxError:
 ;;   PrintReenter = prints ?REENTER and runs the `INPUT` statement again from its start
 ;; Also: TRMNO1 (BB13)
 .proc RetryInput
-    bit OutputFileNumber                               ; from the console?
+    bit OutputFileNumber                    ; from the console?
     bmi FromConsole
     jmp TypeMismatchError
 
 ;; Asks again, unless `ON ERR` takes the error.
 FromConsole:
-    bit OnErrorActive                              ; ON ERR on?
+    bit OnErrorActive                       ; ON ERR on?
     bpl PrintReenter
     ldy CurrentLine+1
     iny
@@ -125,9 +125,9 @@ Done:
 ;; Also: GET (BB13)
 .proc Get
     jsr RejectDirectMode
-    ldx ExecFile                              ; EXEC's file, if it runs
+    ldx ExecFile                            ; EXEC's file, if it runs
     bne KeepReference
-    ldx Console::LineParameters+1                            ; else the console's
+    ldx Console::LineParameters+1           ; else the console's
 
 ;; Reads from the reference number in X, or from the file after `#`.
 KeepReference:
@@ -146,7 +146,7 @@ StartLoop:
     lda #$80                                ; no terminators
     sta InQuotes
     lda #0
-    sta SavedY                               ; the data's X-byte
+    sta SavedY                              ; the data's X-byte
     sta InputBuffer+1
     sta InputBuffer
     lda #INPUT_MODE_GET
@@ -208,9 +208,9 @@ QuestionPrompt:
 ;; Also: NOTQTII (BB13)
 ReadInputLine:
     ldx #0
-    stx InQuotes                               ; commas end items
+    stx InQuotes                            ; commas end items
     dex
-    stx OutputFileNumber                               ; from the console
+    stx OutputFileNumber                    ; from the console
     lda #','
     sta InputBuffer-1
     jsr InputLine
@@ -237,7 +237,7 @@ ReadInputLine:
 ;; The `READ` statement: assigns the items of the program's `DATA` statements to the variables of the list, from
 ;; <DataPointer> on; `READ#` reads from a file instead.
 ;; In: A = the character after `READ`, flags as <GetCurrentCharacter> sets them
-;; Errors: OUT OF DATA when the `DATA` statements run out, SYNTAX ERROR for a bad item (on the `DATA`'s line)
+;; Errors: OUT OF DATA when the `DATA` statements run out, SYNTAX <ReportError> for a bad item (on the `DATA`'s line)
 ;; See: <AssignVariableList::SearchData>, <ReadFile>, <Statements::Restore>
 ;; Also: READ (BB13)
 .proc Read
@@ -262,7 +262,7 @@ StartLoop:
 .endscope
 
 ;; Starts `INPUT`'s variable loop.
-;; In: X, Y = the data's place (low, high), YSAVE = its X-byte
+;; In: X, Y = the data's place (low, high), SavedY = its X-byte
 ;; Also: INPCON (BB13)
 .proc AssignInputList
     lda #INPUT_MODE_INPUT
@@ -271,9 +271,9 @@ StartLoop:
 
 ;; Assigns an item of the data to each variable of `INPUT`'s, `GET`'s or `READ`'s list.
 ;;
-;; <InputPointer> keeps the place in the data while <VariableListPointer> keeps the place in the list. `GET` reads a key when its data,
-;; which starts empty, runs out; `READ` looks for the next `DATA` statement; `INPUT` reads another line.
-;; In: A = <InputMode>'s value, X, Y = the data's place (low, high), YSAVE = its X-byte
+;; <InputPointer> keeps the place in the data while <VariableListPointer> keeps the place in the list. `GET` reads a key
+;; when its data, which starts empty, runs out; `READ` looks for the next `DATA` statement; `INPUT` reads another line.
+;; In: A = <InputMode>'s value, X, Y = the data's place (low, high), SavedY = its X-byte
 ;; Errors: OUT OF DATA when `READ` finds no more `DATA`, and <HandleBadInput>'s for a bad item
 ;; Entry:
 ;;   SearchData = looks for the next `DATA` statement
@@ -290,7 +290,7 @@ StartLoop:
 ;; Takes the next variable of the list; for `INPUT` and `GET`, the last one takes the data with no terminators.
 ;; Also: INLOOP (BB13)
 NextVariable:
-    jsr FindVariableToAssign                            ; the variable's address in FORPNT
+    jsr FindVariableToAssign                ; the variable's address in AssignedVariable
     bit InputMode
     bmi SwitchToData                        ; READ
     jsr GetCurrentCharacter
@@ -298,8 +298,8 @@ NextVariable:
     lda #$80                                ; the last variable: no terminators
     sta InQuotes
 
-;; Moves <TextPointer> to the data, keeping the list's place in <VariableListPointer>, and takes the next item; at the end of the data,
-;; `GET` reads a key, `READ` finds the next `DATA` statement, and `INPUT` reads another line.
+;; Moves <TextPointer> to the data, keeping the list's place in <VariableListPointer>, and takes the next item; at the
+;; end of the data, `GET` reads a key, `READ` finds the next `DATA` statement, and `INPUT` reads another line.
 ;; Also: INLP2 (BB13)
 SwitchToData:
     jsr SaveTextPointer
@@ -310,11 +310,11 @@ SwitchToData:
     stx TextPointer
     sty TextPointer+1
     ldy #0
-    lda (TextPointer),y                          ; the separator, or the data's end
+    lda (TextPointer),y                     ; the separator, or the data's end
     bne NextValue
     bit InputMode
     bvc SourceEmpty
-    jsr Console::ReadKey                              ; GET: a key into KEYSAVE
+    jsr Console::ReadKey                    ; GET: a key into LastKey
     ldx #<(LastKey)
     ldy #>(LastKey)
     stx StringPointer
@@ -323,7 +323,7 @@ SwitchToData:
     sta StringPointerXByte
     lda ValueType
     pha
-    ldy Console::KeyTransferred                              ; the count read: one
+    ldy Console::KeyTransferred             ; the count read: one
     jsr Strings::CopyText
     pla
     sta ValueType
@@ -483,7 +483,8 @@ ReadLongInteger:
 
 ;; Handles a missing number: `INPUT` asks again; `READ` and `GET` go on to read it.
 ;;
-;; The empty-line test reads <InputBuffer> even for `READ`, whose data is elsewhere, so `READ` comes here for nothing at times.
+;; The empty-line test reads <InputBuffer> even for `READ`, whose data is elsewhere, so `READ` comes here for nothing at
+;; times.
 ;; Also: MAYBAD (BB13)
 EmptyNumber:
     lsr DigitsSeen
@@ -500,17 +501,17 @@ SearchData:
     tax
     bne CheckStatement                      ; a colon: the next statement is on this line
     ldx #ERROR_OUT_OF_DATA
-    lda (TextPointer),y                          ; the next line's link
+    lda (TextPointer),y                     ; the next line's link
     bne NextDataLine
     jmp ReportError
 
 ;; Takes the next line's number.
 NextDataLine:
     iny
-    lda (TextPointer),y                          ; the line number's low byte
+    lda (TextPointer),y                     ; the line number's low byte
     sta DataLine
     iny
-    lda (TextPointer),y                          ; and its high byte
+    lda (TextPointer),y                     ; and its high byte
     iny
     sta DataLine+1
 
@@ -528,8 +529,8 @@ CheckStatement:
 
 ;; Ends the variable loop: `READ` keeps its place in <DataPointer>; `INPUT` and `GET` check that the data is used up.
 ;;
-;; Data left over prints ?EXTRA IGNORED through <ReportMessage>, which ends at <ReadyForCommand>; with `ON ERR` the program goes to its
-;; line with error <ERROR_EXTRA_IGNORED> instead.
+;; Data left over prints ?EXTRA IGNORED through <ReportMessage>, which ends at <ReadyForCommand>; with `ON ERR` the
+;; program goes to its line with error <ERROR_EXTRA_IGNORED> instead.
 ;; Also: VAREND (BB13)
 ListDone:
     lda #0
@@ -545,10 +546,10 @@ ListDone:
 ;; Also: VARY0 (BB13)
 CheckExtra:
     ldy #0
-    lda (InputPointer),y                          ; the end should be a zero
+    lda (InputPointer),y                    ; the end should be a zero
     beq RestoreOutput
     jsr RestoreOutput
-    bit OnErrorActive                              ; ON ERR on?
+    bit OnErrorActive                       ; ON ERR on?
     bpl PrintExtraIgnored
     ldx #ERROR_EXTRA_IGNORED
     ldy CurrentLine+1
@@ -613,8 +614,9 @@ RetryMessage:
     .byte "?REENTER"
     .byte RETURN_CHARACTER, LINE_FEED_CHARACTER, 0
 
-;; Turns `GET`'s string into the variable's type: a real through <Functions::Val>, a long integer through <LongInteger::StringToLong>.
-;; In: VALTYP = the variable's type
+;; Turns `GET`'s string into the variable's type: a real through <Functions::Val>, a long integer through
+;; <LongInteger::StringToLong>.
+;; In: ValueType = the variable's type
 ;; Also: CHANGTP (BB13)
 .proc ConvertKey
     bit ValueType
@@ -655,7 +657,7 @@ ToLongInteger:
     ldy #0
     sty AssignedVariable+1
     sty AssignedVariable
-    beq SearchFrame                         ; FORPNT zero: the newest entry
+    beq SearchFrame                         ; AssignedVariable zero: the newest entry
 
 ;; Finds the loop variable's offset and type, the key of its `FOR` entry.
 ;; Also: GETFOR (BB13)
@@ -692,28 +694,28 @@ AddStep:
     adc #<(StackTop + ForEntry::STEP)
     tay
     adc #ForEntry::LIMIT - ForEntry::STEP
-    sta Pointer2                              ; the limit, for FCOMPN
+    sta Pointer2                            ; the limit, for Float::CompareAtPointer2
     tya
     ldy #>(StackTop + ForEntry::STEP)       ; in page 1
     ldx #0
-    jsr Float::LoadFac                               ; the step into the FAC
+    jsr Float::LoadFac                      ; the step into the Fac
     tsx
     lda StackTop + ForEntry::STEP_SIGN,x
     sta FacSign
     jsr Variables::VariableOffset           ; the offset back into the variable's address
     bit IntegerType
     bpl RealVariable
-    jsr Float::CopyFacToArg                               ; an integer: the step into ARG
+    jsr Float::CopyFacToArg                 ; an integer: the step into Arg
     lda AssignedVariable
     sta FacMantissa3
     lda AssignedVariable+1
     sta FacMantissa3+1
     lda AssignedVariableXByte
     sta FacMantissa3XByte
-    jsr LoadNumericVariable::FloatInteger                               ; and the variable into the FAC
+    jsr LoadNumericVariable::FloatInteger   ; and the variable into the Fac
     jmp AddAndCompare
 
-;; Takes a real variable's value into <ArgExponent>.
+;; Takes a real variable's value into <Arg>.
 ;; Also: HAVFLT (BB13)
 RealVariable:
     ldy AssignedVariable+1
@@ -727,10 +729,10 @@ AddAndCompare:
     lda ArgSign
     eor FacSign
     sta ResultSign
-    lda FacExponent                              ; zero set for a zero FAC
+    lda FacExponent                         ; zero set for a zero Fac
     jsr Float::AddArg
     ldy #>(StackTop + ForEntry::LIMIT)
-    jsr Float::CompareAtPointer2                              ; with the limit
+    jsr Float::CompareAtPointer2            ; with the limit
     pha
     bit IntegerType
     jsr StoreNumber                         ; store it as LET does
@@ -743,7 +745,7 @@ AddAndCompare:
     sta CurrentLine
     lda StackTop + ForEntry::LINE + 1,x
     sta CurrentLine+1
-    lda StackTop + ForEntry::TEXT_LOW,x     ; the FOR statement's end, an offset from TXTTAB
+    lda StackTop + ForEntry::TEXT_LOW,x     ; the FOR statement's end, an offset from ProgramStart
     clc
     adc ProgramStart
     sta TextPointer
@@ -763,13 +765,13 @@ ToNextStatement:
 
 ;; Takes the entry off the stack; after a comma, goes on with the next variable.
 ;;
-;; The JSR to <Statements::Next::WithVariable> stands in for <NextStatement>'s return address, which <FindForFrame> passes
-;; over; <WithVariable> does not return.
+;; The JSR to <Statements::Next::WithVariable> stands in for <NextStatement>'s return address, which <FindForFrame>
+;; passes over; <WithVariable> does not return.
 ;; In: carry = set
 ;; Also: LOOPDN (BB13)
 EndLoop:
     txa
-    adc #FOR_FRAME_SIZE-1                           ; FORSIZ, with the carry
+    adc #FOR_FRAME_SIZE-1                   ; FOR_FRAME_SIZE, with the carry
     tax
     txs
     jsr GetCurrentCharacter
@@ -786,14 +788,14 @@ EndLoop:
 ; ---------------------------------------------------------------------------------------------------------------------
 
 ;; Evaluates a numeric formula.
-;; In: TXTPTR = the formula's first character
-;; Out: FAC = the value
+;; In: TextPointer = the formula's first character
+;; Out: Fac = the value
 ;; Errors: TYPE MISMATCH for a string or a long integer
 ;; See: <EvaluateSubexpression>, <RequireNumber>
 ;; Also: FRMNUM (BB13)
 .proc EvaluateNumber
     lda #VALUE_TYPE_REAL
-    sta ValueType                              ; a real wanted
+    sta ValueType                           ; a real wanted
     jsr EvaluateSubexpression
     ; Falls into RequireNumber.
 .endproc
@@ -844,11 +846,11 @@ Mismatch:
 ; ---------------------------------------------------------------------------------------------------------------------
 ; The formula evaluator
 ;
-; EvaluateExpression keeps two stacks. The verb stack, VRBSTK, holds two bytes for each pending operator: its number,
-; then its left operand's type (bits 7-6) with its precedence (bits 5-0); VRBPT is the index past the top. A zero
-; precedence at the bottom, or where DOPAR starts a formula in parentheses, stops operators from below. The noun stack,
-; NOUNSTK, holds each pending left operand, nine bytes: FACMOB, then the eight bytes from FACEXP; NOUNPT is the index of
-; the top's last byte.
+; EvaluateExpression keeps two stacks. The verb stack, OperatorStack, holds two bytes for each pending operator: its
+; number, then its left operand's type (bits 7-6) with its precedence (bits 5-0); OperatorStackTop is the index past the
+; top. A zero precedence at the bottom, or where EvaluateSubexpression starts a formula in parentheses, stops operators
+; from below. The noun stack, OperandStack, holds each pending left operand, nine bytes: FacMantissa3XByte, then the
+; eight bytes from FacExponent; OperandStackTop is the index of the top's last byte.
 ; ---------------------------------------------------------------------------------------------------------------------
 
 ;; Evaluates a formula: values joined by operators, taken in order of precedence.
@@ -857,13 +859,13 @@ Mismatch:
 ;; (2). A relational operator is any of the characters less-than, equals and greater-than, each at most once, combined
 ;; as bits: greater-than 1, equals 2, less-than 4. The routine goes on into B3EvalG.asm, which does the operator taken
 ;; off the verb stack and comes back to <EvaluateExpression::WithOperator>.
-;; In: TXTPTR = the formula's first character, VALTYP = the type wanted (<VALUE_TYPE_ANY> for any)
-;; Out: the FAC = the value, VALTYP = its type, TXTPTR = the character after the formula
+;; In: TextPointer = the formula's first character, ValueType = the type wanted (<VALUE_TYPE_ANY> for any)
+;; Out: the Fac = the value, ValueType = its type, TextPointer = the character after the formula
 ;; Errors: TYPE MISMATCH when the result is not the type wanted, FORMULA TOO COMPLEX past 15 pending operators,
-;;   SYNTAX ERROR for a relational operator given twice
+;;   SYNTAX <ReportError> for a relational operator given twice
 ;; Entry:
-;;   KeepingStacks = keeps both stacks as they are, so a formula in parentheses (from <EvaluateSubexpression>) stacks on the one outside
-;;     it
+;;   KeepingStacks = keeps both stacks as they are, so a formula in parentheses (from <EvaluateSubexpression>) stacks on
+;;   the one outside it
 ;;   WithOperator = goes on with the operator in A; B3EvalG.asm comes back here after doing one
 ;; See: <EvaluateOperand>, <EvaluateExpression::PopOperand>
 ;; Also: FRMEVL (BB13)
@@ -871,26 +873,28 @@ Mismatch:
     lda #0
     sta ExfnNameOffset
     sta OperandStackTop
-    sta OperatorStack+1                            ; the bottom's zero precedence
+    sta OperatorStack+1                     ; the bottom's zero precedence
     sta StringFlag
     sta IntegerType
     lda #2
     sta OperatorStackTop
 
-;; Keeps both stacks as they are, so a formula in parentheses (from <EvaluateSubexpression>) stacks on the one outside it.
+;; Keeps both stacks as they are, so a formula in parentheses (from <EvaluateSubexpression>) stacks on the one outside
+;; it.
 ;; Also: FRMEVL1A (BB13)
 KeepingStacks:
-    lda ValueType                              ; the type wanted, checked at the end
+    lda ValueType                           ; the type wanted, checked at the end
     pha
-    jsr BackUpTextPointer                              ; back one, for EVAL's CHRGET
+    jsr BackUpTextPointer                   ; back one, for EvaluateOperand's GetNextCharacter
 
-;; Takes a value, then the operator after it: a character of <OperatorSymbols>, or an escape token's second byte; anything else
-;; ends the formula.
+;; Takes a value, then the operator after it: a character of <OperatorSymbols>, or an escape token's second byte;
+;; anything else ends the formula.
 ;; Also: FRMEVL1 (BB13)
 NextOperand:
     jsr EvaluateOperand
 
-;; The return address <EvaluateExpression::NextOperand>'s JSR pushes, which <Modules::FinishFunction> checks for after a function.
+;; The return address <EvaluateExpression::NextOperand>'s JSR pushes, which <Modules::FinishFunction> checks for after a
+;; function.
 ;; Also: EVALRET (BB13)
 OperandReturn = * - 1
     jsr GetCurrentCharacter
@@ -901,7 +905,7 @@ OperandReturn = * - 1
     cmp #ESCAPE_TOKEN
     bne NoOperator                          ; another token: not an operator
     iny
-    lda (TextPointer),y                          ; the escape token's second byte
+    lda (TextPointer),y                     ; the escape token's second byte
 
 ;; Looks the operator up in <OperatorSymbols>, from its end.
 ;; Also: FNDOPR (BB13)
@@ -924,12 +928,12 @@ FoundOperator:
     pha
     clc
     txa
-    adc #OPERATOR_NUMBER_OFFSET                             ; past the combined relational operators' numbers
+    adc #OPERATOR_NUMBER_OFFSET             ; past the combined relational operators' numbers
     tax
     pla
     dey
     bmi CheckRelation
-    jsr GetNextCharacter                              ; the escape token's first byte
+    jsr GetNextCharacter                    ; the escape token's first byte
 
 ;; Takes a relational operator's characters, or goes on with another operator.
 ;; Also: FOP2 (BB13)
@@ -950,7 +954,7 @@ NextRelation:
     cmp #3
     adc #0                                  ; and < 4
     eor RelationMask
-    cmp RelationMask                              ; the bit must be new
+    cmp RelationMask                        ; the bit must be new
     bcc ToSyntaxError
     sta RelationMask
     jsr GetNextCharacter
@@ -980,14 +984,14 @@ ComparePrecedence:
     lda ValueType
     and #TYPE_BITS
     ora PrecedenceTable-1,x
-    sta OperatorStack+1,y                          ; type and precedence
+    sta OperatorStack+1,y                   ; type and precedence
     txa
-    sta OperatorStack,y                            ; the operator
+    sta OperatorStack,y                     ; the operator
     iny
     iny
     cmp #OPERATOR_END
     bne KeepVerbTop
-    lda OperatorStack-3,y                          ; the formula's end over the bottom's zero: done
+    lda OperatorStack-3,y                   ; the formula's end over the bottom's zero: done
     beq CheckResultType
 
 ;; Keeps the verb stack's new top, unless it has grown too deep.
@@ -1038,7 +1042,7 @@ CheckResultType:
 Return:
     rts
 
-;; Does the pending operator: pulls its left operand off the noun stack into <ArgExponent> and the operator off the verb stack,
+;; Does the pending operator: pulls its left operand off the noun stack into <Arg> and the operator off the verb stack,
 ;; checking that the two operands' types agree; B3EvalG.asm goes on to do it.
 ;; In: X = the new operator, carry = set
 ;; Errors: TYPE MISMATCH when the operands' types differ
@@ -1052,11 +1056,11 @@ PopOperand:
     sta OperandStackTop
     ldx #NOUN_SIZE-1
 
-;; Copies the eight bytes into <ArgExponent>, then <FacMantissa3XByte>'s byte into <ArgMantissa3XByte>.
+;; Copies the eight bytes into <Arg>, then <FacMantissa3XByte>'s byte into <ArgMantissa3XByte>.
 ;; Also: PLLARG (BB13)
 PullArgByte:
     lda OperandStack-1,y
-    sta ArgExponent-1,x
+    sta Arg-1,x
     dey
     dex
     bne PullArgByte
@@ -1079,12 +1083,13 @@ PullArgByte:
 ToTypeMismatch:
     jmp RequireString::Mismatch
 
-;; Takes the operator's number into A and <RelationMask>, for B3EvalG.asm's dispatch.
+;; Takes the operator's number into A and <RelationMask>, for <Operators::Apply>.
 ;; Also: GETOP (BB13)
 TakeOperator:
     lda OperatorStack,y
     sta RelationMask
-    ; Falls into the operator's dispatch, at the start of B3EvalG.asm.
+    .assert * = Operators::Apply, "TakeOperator must fall into Operators::Apply, at the start of B3EvalG.asm."
+    ; Falls into Operators::Apply.
 
 ;; The bits of a verb stack entry's second byte that hold the operator's precedence.
 PRECEDENCE_BITS = $3F

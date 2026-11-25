@@ -2,9 +2,10 @@
 ; B3MAINC: the error handler, the prompt and the lines typed at it, tokenizing, finding a line, and NEW and CLEAR
 ; with the routines that reset the program's state.
 ;
-; A program is a list of lines from TXTTAB, in order of their numbers. Each line is its length in bytes (the whole
+; A program is a list of lines from ProgramStart, in order of their numbers. Each line is its length in bytes (the whole
 ; line, this byte included), its number (low byte first), its tokens, and a zero; a length of zero ends the
-; program. The byte before TXTTAB is a zero, which the statement fetcher reads as the end of a line before the first.
+; program. The byte before ProgramStart is a zero, which the statement fetcher reads as the end of a line before the
+; first.
 
 ; ---------------------------------------------------------------------------------------------------------------------
 ; Errors
@@ -21,20 +22,21 @@
 ;; Reports error X: through `ON ERR` when the program has it in force, otherwise with a message, then goes back to
 ;; the prompt.
 ;;
-;; It clears <ProgramLoading>, sends output back to the `OUTPUT#` device (<OutputFileNumber> from <OutputFileNumber>+1, in case the error came
-;; during `PRINT#`), keeps the number in <ErrorCode> (the `ERR` function) and frees the string temporaries.
+;; It clears <ProgramLoading>, sends output back to the `OUTPUT#` device (<OutputFileNumber> from <OutputFileNumber>+1,
+;; in case the error came during `PRINT#`), keeps the number in <ErrorCode> (the `ERR` function) and frees the string
+;; temporaries.
 ;;
-;; When a program is running (<CurrentLine> is not direct), it copies <CurrentLine> to <ErrorLine> (the `ERRLIN` function) and
-;; to <StoppedLine>, and when bit 7 of <OnErrorActive> is set (`ON ERR`) goes to <TrapError>. Otherwise, at
-;; <ReportError::Untrapped>, it resets output to the console, takes back all memory, turns the screen on, starts a
-;; new line and prints `?`, puts the stack pointer back to <StatementStack>, where the failing statement started, and prints
-;; the message and <ErrorSuffix> (` ERROR` with a beep), and ` IN ` and the line when a program was running; then it closes
-;; any `EXEC` file and goes to <ReadyForCommand>.
+;; When a program is running (<CurrentLine> is not direct), it copies <CurrentLine> to <ErrorLine> (the `ERRLIN`
+;; function) and to <StoppedLine>, and when bit 7 of <OnErrorActive> is set (`ON ERR`) goes to <TrapError>. Otherwise,
+;; at <ReportError::Untrapped>, it resets output to the console, takes back all memory, turns the screen on, starts a
+;; new line and prints `?`, puts the stack pointer back to <StatementStack>, where the failing statement started, and
+;; prints the message and <ErrorSuffix> (` ERROR` with a beep), and ` IN ` and the line when a program was running; then
+;; it closes any `EXEC` file and goes to <ReadyForCommand>.
 ;;
-;; The number is the message's place in <ErrorMessages>, from 1 (<ERROR_NEXT_WITHOUT_FOR>). A SOS error with no number of BASIC's own comes
-;; through <ReportSosError> as SOS CALL (<ERROR_SOS_CALL>), with SOS's code in <SosError>. `INPUT`'s errors 253 (extra ignored) and
-;; 254 (bad input) come here only when `ON ERR` can take them, and CONTROL-C's 255 goes to <TrapError> from
-;; <HandleBreak>.
+;; The number is the message's place in <ErrorMessages>, from 1 (<ERROR_NEXT_WITHOUT_FOR>). A SOS error with no number
+;; of BASIC's own comes through <ReportSosError> as SOS CALL (<ERROR_SOS_CALL>), with SOS's code in <SosError>.
+;; `INPUT`'s errors 253 (extra ignored) and 254 (bad input) come here only when `ON ERR` can take them, and CONTROL-C's
+;; 255 goes to <TrapError> from <HandleBreak>.
 ;;
 ;; In 1.3, before a program has reached the prompt (<StartupDone> clear), it first prints the name of the program the
 ;; selector started.
@@ -62,7 +64,7 @@ NameDone:
 .endif
     lda #0
     sta ProgramLoading
-    lda OutputFileNumber+1                             ; Output back to the OUTPUT# device
+    lda OutputFileNumber+1                  ; Output back to the OUTPUT# device
     sta OutputFileNumber
     stx ErrorCode
 
@@ -77,7 +79,7 @@ FreeTemporaries:
     cmp NextTemporary
     bcc FreeTemporaries
     ldx ErrorCode
-    ldy CurrentLine+1                            ; Direct: no ON ERR, and no line to keep
+    ldy CurrentLine+1                       ; Direct: no ON ERR, and no line to keep
     iny
     beq Untrapped
     dey
@@ -97,7 +99,7 @@ Untrapped:
     sta OutputFileNumber
     sta OutputFileNumber+1
     lda #0
-    jsr Segments::Grow                              ; All the memory there is
+    jsr Segments::Grow                      ; All the memory there is
     lda #Console::SCREEN_ON
     jsr PrintCharacter
     jsr PrintNewline
@@ -125,7 +127,7 @@ SkipMessage:
     lda (Pointer1),Y
     iny
     bne SkipNext
-    inc Pointer1+1                             ; The table never crosses into another bank
+    inc Pointer1+1                          ; The table never crosses into another bank
 
 ;; Tests the character just read.
 SkipNext:
@@ -173,9 +175,9 @@ PrintMessageCharacter:
 ;; Ends the line, then closes any `EXEC` file.
 Direct:
     jsr PrintNewline
-    ldx ExecFile                              ; An EXEC file?
+    ldx ExecFile                            ; An EXEC file?
     beq ReadyForCommand
-    lda #SOS_ERROR_END_OF_FILE                              ; Close it, with an error EXCCLS accepts
+    lda #SOS_ERROR_END_OF_FILE              ; Close it, with an error Files::CloseExecFile accepts
     jsr Files::CloseExecFile
     ; Falls into ReadyForCommand.
 .endproc
@@ -190,10 +192,10 @@ Direct:
 ;; Also: READY (BB13)
 .proc ReadyForCommand
 .if VERSION >= 130
-    jsr ProgramPrefix::UseSos                      ; 1.3: SOS's own prefix
+    jsr ProgramPrefix::UseSos               ; 1.3: SOS's own prefix
 .endif
 .if RUNTIME
-    lda ErrorCode                              ; Zero: the program ended
+    lda ErrorCode                           ; Zero: the program ended
     beq Restart
     lda #<(RunTimeEndMessage)
     ldy #>(RunTimeEndMessage)
@@ -226,21 +228,21 @@ Restart:
 
 ;; The prompt: reads a line, then runs it at once or, when it starts with a line number, puts it into the program.
 ;;
-;; Each time round, it sets <CurrentLine> direct and <StartupDone>, starts a new screen line unless the cursor is at the left
-;; (from <ReadCursorPosition>, which reads <Console::CursorColumn>), and turns the console's any-key event off for the prompt: it
-;; calls D_CONTROL with priority zero in <Console::AnyKeyEvent>, then puts `ON KBD`'s priority back there for `CONT`
-;; to turn it on again. It clears <PendingEvents> and reads the line with the prompt `)` through
+;; Each time round, it sets <CurrentLine> direct and <StartupDone>, starts a new screen line unless the cursor is at the
+;; left (from <ReadCursorPosition>, which reads <Console::CursorColumn>), and turns the console's any-key event off for
+;; the prompt: it calls D_CONTROL with priority zero in <Console::AnyKeyEvent>, then puts `ON KBD`'s priority back there
+;; for `CONT` to turn it on again. It clears <PendingEvents> and reads the line with the prompt `)` through
 ;; <InputLine::WithPrompt>.
 ;;
-;; A blank line is ignored. A direct line is tokenized in place by <Tokenize> and run from <InputBuffer> through <ExecuteStatement>;
-;; after its last statement the statement fetcher comes back through <ReadyForCommand>. A numbered line goes to
-;; <CommandLoop::EditLine>.
+;; A blank line is ignored. A direct line is tokenized in place by <Tokenize> and run from <InputBuffer> through
+;; <ExecuteStatement>; after its last statement the statement fetcher comes back through <ReadyForCommand>. A numbered
+;; line goes to <CommandLoop::EditLine>.
 ;;
 ;; It puts a numbered line into the program, replacing any line with its number, or deletes the line when nothing
-;; follows the number. It reads the number into <LineNumber>, tokenizes the line, and forbids `CONT` (<StoppedText>'s X-byte
-;; zero). <FindLine> finds the line or where it goes. An old line is removed with <CloseGap>; a new one is made room
-;; for with <OpenGap>, and its length and number are put in the three bytes before <InputBuffer> so the whole line copies
-;; from <InputBuffer>-3. Both moves take the variables and arrays along, so they keep their values. At the end,
+;; follows the number. It reads the number into <LineNumber>, tokenizes the line, and forbids `CONT` (<StoppedText>'s
+;; X-byte zero). <FindLine> finds the line or where it goes. An old line is removed with <CloseGap>; a new one is made
+;; room for with <OpenGap>, and its length and number are put in the three bytes before <InputBuffer> so the whole line
+;; copies from <InputBuffer>-3. Both moves take the variables and arrays along, so they keep their values. At the end,
 ;; <RewindTextPointer> and <ClearVariables::RestoreData> reset the text pointer, the `ON ERR`, `ON KBD` and `ON EOF`
 ;; handlers, the `DATA` pointer and the stack, and it goes back to the prompt.
 ;; See: <ReadyForCommand>, <Tokenize>, <FindLine>
@@ -253,9 +255,9 @@ PROMPT = ')'
     lda #DIRECT_LINE                        ; Direct
     sta CurrentLine+1
     lda #1
-    sta StartupDone                               ; The prompt has been reached
+    sta StartupDone                         ; The prompt has been reached
 .if VERSION >= 130
-    jsr ProgramPrefix::UseSos                      ; 1.3: SOS's prefix, and the program's prefix
+    jsr ProgramPrefix::UseSos               ; 1.3: SOS's prefix, and the program's prefix
 .endif
 .if VERSION >= 130
     jsr ProgramPrefix::StripFileName
@@ -278,7 +280,7 @@ AtLeft:
     pla
     sta a:Console::AnyKeyEvent
     ldx #PROMPT
-    stx PendingEvents                            ; which also clears bits 7 and 6: no key, no CONTROL-C
+    stx PendingEvents                       ; which also clears bits 7 and 6: no key, no CONTROL-C
     jsr InputLine::WithPrompt
     stx TextPointer
     sty TextPointer+1
@@ -289,9 +291,9 @@ AtLeft:
     ldx #DIRECT_LINE
     stx CurrentLine+1
     bcc EditLine                            ; A digit: a line number
-    stx SourceStart+1                             ; Tells Tokenize the line is direct
+    stx SourceStart+1                       ; Tells Tokenize the line is direct
     jsr Tokenize
-    jmp ExecuteStatement                                ; Run it
+    jmp ExecuteStatement                    ; Run it
 
 ;; Puts a numbered line into the program: deletes any old line with its number first.
 ;; Also: MAIN1 (BB13)
@@ -299,13 +301,13 @@ EditLine:
     jsr ReadLineNumber
     lda #0                                  ; Tells Tokenize the line is in a program
     sta SourceStart+1
-    sta StoppedTextXByte                             ; No CONT now
+    sta StoppedTextXByte                    ; No CONT now
     jsr Tokenize
-    sty Counter                               ; The stored line's length
+    sty Counter                             ; The stored line's length
     sty InputBuffer-3
     jsr FindLine
     bcc InsertLine                          ; No line to delete
-    ldy #00                                 ; DELTA = minus the old line's length
+    ldy #00                                 ; MoveDistance = minus the old line's length
     lda #$7F
     sta MoveDistance+1
     lda #$FF
@@ -313,7 +315,7 @@ EditLine:
     eor (SourceStart),Y
     sta MoveDistance
     inc MoveDistance
-    lda (SourceStart),Y                           ; The next line starts here
+    lda (SourceStart),Y                     ; The next line starts here
     clc
     adc SourceStart
     sta Pointer1
@@ -330,9 +332,9 @@ EditLine:
 ;; Inserts the new line, unless it is empty.
 ;; Also: NODEL (BB13)
 InsertLine:
-    lda InputBuffer                                 ; Nothing after the number?
+    lda InputBuffer                         ; Nothing after the number?
     beq ResetAndPrompt
-    lda #0                                  ; DELTA = the new line's length
+    lda #0                                  ; MoveDistance = the new line's length
     sta MoveDistance+1
     sta MoveDistanceXByte
     lda Counter
@@ -364,7 +366,8 @@ ResetAndPrompt:
 ;;
 ;; It reads from the console, or from the `EXEC` file while one runs, through <ReadLine>. Lines read from a file with
 ;; `INPUT#` end at <InputLine::Terminate> too.
-;; Out: X = the low byte of <InputBuffer>-1, Y = its high byte, A = 0 (its bank), BUF = the line, ending in a zero
+;; Out: X = the low byte of <InputBuffer>-1, Y = its high byte, A = 0 (its bank), InputBuffer = the line, ending in a
+;;   zero
 ;; Entry:
 ;;   WithPrompt = prints the prompt character in X first, or none for zero
 ;;   Terminate = ends the line in <InputBuffer> with a zero at X, its length, and returns <InputBuffer>-1
@@ -408,25 +411,28 @@ TWO_BYTE_TOKEN = $FF
 
 .endscope
 
-;; Tokenizes the line in <InputBuffer> in place, from <TextPointer> on, and points <TextPointer> at <InputBuffer>-1 to run it.
+;; Tokenizes the line in <InputBuffer> in place, from <TextPointer> on, and points <TextPointer> at <InputBuffer>-1 to
+;; run it.
 ;;
-;; Keywords from <ReservedWords> become one-byte tokens, $80 to <TOKEN_NEW>; those of the second list, from <ExtendedReservedWords>, become
-;; two bytes, <TWO_BYTE_TOKEN> and the token. A word is a keyword only with a separator (anything but a letter, digit
-;; or period) before and after it, or when it ends in one, as `TAB(` does, so long variable names can hold keywords.
-;; Letters may be in either case, and spaces inside a keyword are skipped. Spaces outside quotes are dropped, `?`
-;; becomes `PRINT` and `!` becomes `REM`. Quoted text, and everything after `REM`, is copied as it is.
+;; Keywords from <ReservedWords> become one-byte tokens, $80 to <TOKEN_NEW>; those of the second list, from
+;; <ExtendedReservedWords>, become two bytes, <TWO_BYTE_TOKEN> and the token. A word is a keyword only with a separator
+;; (anything but a letter, digit or period) before and after it, or when it ends in one, as `TAB(` does, so long
+;; variable names can hold keywords. Letters may be in either case, and spaces inside a keyword are skipped. Spaces
+;; outside quotes are dropped, `?` becomes `PRINT` and `!` becomes `REM`. Quoted text, and everything after `REM`, is
+;; copied as it is.
 ;;
-;; <TokenizeState> says when to copy: bit 7 set copies characters unchanged; a colon always turns tokenizing back on, and a
-;; comma does when bit 6 is clear. `DATA`, `IMAGE` and `CAT` copy up to the colon. In a direct line (<SourceStart>+1 =
-;; $FF), `INVOKE` and `RENAME` copy up to the colon, the other disk commands from `LOAD` to `CATALOG` up to the next
-;; comma or colon, and `OPEN` tokenizes up to its first comma and copies after it, which bit 7 of <IntegerType> marks.
+;; <TokenizeState> says when to copy: bit 7 set copies characters unchanged; a colon always turns tokenizing back on,
+;; and a comma does when bit 6 is clear. `DATA`, `IMAGE` and `CAT` copy up to the colon. In a direct line
+;; (<SourceStart>+1 = $FF), `INVOKE` and `RENAME` copy up to the colon, the other disk commands from `LOAD` to `CATALOG`
+;; up to the next comma or colon, and `OPEN` tokenizes up to its first comma and copies after it, which bit 7 of
+;; <IntegerType> marks.
 ;;
-;; The tokens go from <InputBuffer> on, behind the characters still to read, with <TokenizePointer> counting from 3. They end with
-;; two zeros: the line's end, and a zero where a next line's length would be, which ends a direct line when it
-;; runs. The three bytes before <InputBuffer> are left for the line's length and number.
-;; In: TXTPTR = the first character to tokenize, LOWTR+1 = $FF for a direct line, 0 for a numbered one
+;; The tokens go from <InputBuffer> on, behind the characters still to read, with <TokenizePointer> counting from 3.
+;; They end with two zeros: the line's end, and a zero where a next line's length would be, which ends a direct line
+;; when it runs. The three bytes before <InputBuffer> are left for the line's length and number.
+;; In: TextPointer = the first character to tokenize, SourceStart+1 = $FF for a direct line, 0 for a numbered one
 ;; Out: Y = the line's length as stored in a program (its tokens and zero, and three bytes for its length and
-;;   number), TXTPTR = <InputBuffer>-1, TXTPTRB = 0
+;;   number), TextPointer = <InputBuffer>-1, TextPointerXByte = 0
 ;; See: <CommandLoop>, <CommandLoop::EditLine>, <Tokenizer::IsSeparator>
 ;; Also: CRUNCH (BB13)
 .proc Tokenize
@@ -437,20 +443,20 @@ UPPER_CASE_MASK = $DF
     lda TextPointer
     sec
     sbc #<(InputBuffer)
-    tax                                     ; X = the input's index in BUF
+    tax                                     ; X = the input's index in InputBuffer
     lda #3
     sta TokenizePointer
-    sta TokenizeState                               ; Tokenizing on
+    sta TokenizeState                       ; Tokenizing on
     sta IntegerType
-    sta InputBuffer-1,X                             ; A separator before the first word
+    sta InputBuffer-1,X                     ; A separator before the first word
 
 ;; Starts on the next input character, at the top of the keyword list.
 ;; Also: CLOOP (BB13)
 NextInput:
     ldy #0
-    sty Counter+1                             ; One-byte tokens first
+    sty Counter+1                           ; One-byte tokens first
     lda #FIRST_TOKEN
-    sta Counter                               ; The first token
+    sta Counter                             ; The first token
     lda #<(ReservedWords)
     sta Fac
     lda #>(ReservedWords)
@@ -466,7 +472,7 @@ NextInput:
     bne Classify
     bit IntegerType
     bpl CheckForComma
-    ror TokenizeState                               ; After OPEN: copy from here
+    ror TokenizeState                       ; After OPEN: copy from here
     bmi Classify
 
 ;; Does a comma turn tokenizing back on?
@@ -513,7 +519,7 @@ ToNextKeyword:
 ;; Compares the input from X with the keyword at <Fac>.
 ;; Also: NPRNT (BB13)
 SearchKeywords:
-    stx Temporary                                ; Where the word starts
+    stx Temporary                           ; Where the word starts
 
 ;; Starts the comparison again, with the next keyword.
 ;; Also: NPR2 (BB13)
@@ -549,7 +555,7 @@ CompareCharacter:
     asl                                     ; The low seven bits must match
     bne ToNextKeyword
     bcc CompareNext                         ; Bit 7 clear: not the keyword's last character
-    lda InputBuffer,X                               ; The whole keyword matches: is a separator after it?
+    lda InputBuffer,X                       ; The whole keyword matches: is a separator after it?
     and #$7F
     jsr Tokenizer::IsSeparator
     bcc CheckBefore
@@ -558,14 +564,14 @@ CompareCharacter:
     and #$7F
     jsr Tokenizer::IsSeparator
     bcc CheckBefore
-    lda Counter                               ; Or is it EXFN. or EXFN%., or FN?
+    lda Counter                             ; Or is it EXFN. or EXFN%., or FN?
     cmp #TOKEN_EXFN_INTEGER-1
     beq CheckBefore
     cmp #TOKEN_EXFN_INTEGER
     beq CheckBefore
     cmp #TOKEN_FN
     bne ToNextKeyword
-    bit Counter+1                             ; FN is in the second list
+    bit Counter+1                           ; FN is in the second list
     bpl ToNextKeyword
 
 ;; Takes the keyword when a separator comes before it too.
@@ -614,10 +620,10 @@ Advance:
     beq CopyUntil
     cmp #TOKEN_IMAGE+2
     bcs ToNextInput
-    ldy SourceStart+1                             ; A direct line?
+    ldy SourceStart+1                       ; A direct line?
     iny
     beq CheckOpen
-    cmp #TOKEN_LAST_FILE_COMMAND+1                          ; In a program, only IMAGE and CAT go on
+    cmp #TOKEN_LAST_FILE_COMMAND+1          ; In a program, only IMAGE and CAT go on
     bcc ToNextInput
 
 ;; Checks `OPEN`, `INVOKE` and the disk commands, and `IMAGE` and `CAT`.
@@ -625,7 +631,7 @@ Advance:
 CheckOpen:
     cmp #TOKEN_OPEN
     bne CheckDiskCommand
-    ror IntegerType                              ; Copy after OPEN's first comma
+    ror IntegerType                         ; Copy after OPEN's first comma
     bmi ToNextInput                         ; Always
 
 ;; Checks `INVOKE` and the disk commands.
@@ -642,7 +648,7 @@ CheckDiskCommand:
 ;; Also: ITDIR15 (BB13)
 CopyToColon:
     sec
-    .byte $2C                               ; BIT abs, which skips the CMP
+    .byte $2C                               ; BIT abs, which skips the Directory::FileLine
 
 ;; Copies up to the next comma or colon after a disk command (bit 6 clear), or up to the colon after `IMAGE` and
 ;; `CAT` (bit 6 set).
@@ -712,7 +718,7 @@ NextToken:
     ldy #0
     ldx Counter
     inx
-    cpx #TOKEN_NEW+1                           ; Past the statements?
+    cpx #TOKEN_NEW+1                        ; Past the statements?
     bne CheckListEnd
     ldx #TWO_BYTE_TOKEN                     ; The second list: two-byte tokens from FIRST_TOKEN
     stx Counter+1
@@ -724,7 +730,7 @@ CheckListEnd:
     stx Counter
     lda (Fac),Y
     bne ToTryKeyword
-    ldx Temporary                                ; No keyword: store the character
+    ldx Temporary                           ; No keyword: store the character
     lda InputBuffer,X
     and #$7F
     jmp StoreToken
@@ -734,7 +740,7 @@ CheckListEnd:
 Finish:
     ldy TokenizePointer
     sta InputBuffer-3,Y
-    sta InputBuffer-2,Y                             ; A zero length after the line: a direct line ends there
+    sta InputBuffer-2,Y                     ; A zero length after the line: a direct line ends there
     lda #0
     sta TextPointerXByte
     lda #>(InputBuffer-1)
@@ -788,15 +794,15 @@ Done:
 
 ;; Finds the line numbered <LineNumber>, or where it would go.
 ;;
-;; It searches from <ProgramStart>; <FindLine::FromLine> searches from the line at Y, X and A (X-byte, page, low byte), as
-;; `GOTO` does when the line is after the current one. Invokable modules can call both through <ModuleRoutines>.
-;; In: LINNUM = the line's number
-;; Out: carry = set when found, LOWTR = the line's length byte, or the first line with a higher number, or the
+;; It searches from <ProgramStart>; <FindLine::FromLine> searches from the line at Y, X and A (X-byte, page, low byte),
+;; as `GOTO` does when the line is after the current one. Invokable modules can call both through <ModuleRoutines>.
+;; In: LineNumber = the line's number
+;; Out: carry = set when found, SourceStart = the line's length byte, or the first line with a higher number, or the
 ;;   program's end
 ;; Entry:
 ;;   FromLine = searches from the line at Y, X and A
 ;;   FromPage = from the X-byte in <SourceStartXByte> and the page in X
-;;   FromAddress = from the X-byte and page in LOWTR and the low byte in A
+;;   FromAddress = from the X-byte and page in <SourceStart> and the low byte in A
 ;; Also: FNDLIN (BB13)
 .proc FindLine
     lda ProgramStart
@@ -818,7 +824,7 @@ FromPage:
 FromAddress:
     sta SourceStart
     ldy #0
-    lda (SourceStart),Y                           ; The line's length
+    lda (SourceStart),Y                     ; The line's length
     beq NotFound                            ; Zero: the program's end
     ldy #2
     tax
@@ -868,7 +874,10 @@ Done:
 ; ---------------------------------------------------------------------------------------------------------------------
 
 ; NEW and CLEAR.
-.scope Statements continued
+;; BASIC's statements: a routine for each keyword's statement, named for the keyword split at its words, as
+;; AppleSoft's are (`Statements::GoSub`, `Statements::OnErr`), and the parts they share. <StatementTable> holds
+;; their addresses by token. The scope is in pieces through the files, in Apple's order.
+.scope Statements
 
 ;; The `NEW` statement: deletes the program and its variables, closing all files.
 ;;
@@ -892,8 +901,8 @@ Done:
     ; Falls into ResetProgramState.
 .endproc
 
-;; Gets ready to run the program from its start, for `RUN`: points <TextPointer> before the first line, marks <CurrentLine> as
-;; not direct so the statement fetcher goes on to the first line, and clears as `CLEAR` does.
+;; Gets ready to run the program from its start, for `RUN`: points <TextPointer> before the first line, marks
+;; <CurrentLine> as not direct so the statement fetcher goes on to the first line, and clears as `CLEAR` does.
 ;; See: <RewindTextPointer>, <ClearVariables>
 ;; Also: RUNC (BB13)
 .proc ResetProgramState
@@ -923,8 +932,8 @@ Done:
 ;; all memory, points `DATA` at the program's start and resets the stack.
 ;;
 ;; The strings start again at <MemoryTop>, and the simple variables and the end of the variables (<VariablesStart> and
-;; <VariablesEnd>) go back to <ArraysStart>, the program's end. Memory comes back with <Segments::Grow>, `DATA` with <Statements::Restore>, and it
-;; falls into <ResetStack>.
+;; <VariablesEnd>) go back to <ArraysStart>, the program's end. Memory comes back with <Segments::Grow>, `DATA` with
+;; <Statements::Restore>, and it falls into <ResetStack>.
 ;; Entry:
 ;;   KeepFiles = clears without closing the files, for `LOAD`
 ;;   RestoreData = only takes back the memory and resets `DATA` and the stack
@@ -938,12 +947,12 @@ Done:
 KeepFiles:
     lda MemoryTop
     ldx MemoryTopXByte
-    ldy MemoryTop+1                            ; No strings
+    ldy MemoryTop+1                         ; No strings
     sta StringsBottom
     sty StringsBottom+1
     stx StringsBottomXByte
     lda ArraysStart
-    ldy ArraysStart+1                            ; No variables or arrays
+    ldy ArraysStart+1                       ; No variables or arrays
     ldx ArraysStartXByte
     sta VariablesStart
     sty VariablesStart+1
@@ -953,12 +962,13 @@ KeepFiles:
     stx VariablesEndXByte
     lda #0
     sta LastKey                             ; KBD
-    sta ErrorCode                              ; ERR
-    sta ErrorLine                              ; ERRLIN
+    sta ErrorCode                           ; ERR
+    sta ErrorLine                           ; ERRLIN
     sta ErrorLine+1
-    sta EndOfFileNumber                               ; EOF
+    sta EndOfFileNumber                     ; EOF
 
-;; Takes back all memory with <Segments::Grow>, points `DATA` at the program's start with <Statements::Restore>, and resets the stack.
+;; Takes back all memory with <Segments::Grow>, points `DATA` at the program's start with <Statements::Restore>, and
+;; resets the stack.
 ;; Also: FLOAD (BB13)
 RestoreData:
     lda #0
@@ -969,8 +979,8 @@ RestoreData:
 
 ;; Empties the stack, keeping only the caller's return address, and resets the formula evaluator's stacks.
 ;;
-;; The stack pointer goes to <STACK_END> and into <StatementStack>; `GOSUB` and `FOR` entries are gone. The byte above, the
-;; zero <ColdStart> pushed, stays at the bottom for <FindForFrame>. Apple's comment said it also frees the string
+;; The stack pointer goes to <STACK_END> and into <StatementStack>; `GOSUB` and `FOR` entries are gone. The byte above,
+;; the zero <ColdStart> pushed, stays at the bottom for <FindForFrame>. Apple's comment said it also frees the string
 ;; temporaries and forbids `CONT`; the code does neither.
 ;; Entry: Done = returns, for `CLEAR` with something after it
 ;; Also: STKINI (BB13)
@@ -985,11 +995,11 @@ RestoreData:
     tya
     pha
     lda #2
-    sta OperatorStackTop                               ; Past the end-of-line entry
+    sta OperatorStackTop                    ; Past the end-of-line entry
     lda #0
-    sta OperatorStack+1                            ; The end-of-line precedence
+    sta OperatorStack+1                     ; The end-of-line precedence
     sta OperandStackTop
-    sta SubscriptMode                              ; Subscripts allowed
+    sta SubscriptMode                       ; Subscripts allowed
 
 ;; Returns.
 ;; Also: STKRTS (BB13)
@@ -1016,14 +1026,15 @@ Done:
     sta TextPointerXByte
     ldy #0
     tya
-    sta (TextPointer),Y                          ; The zero before the first line
+    sta (TextPointer),Y                     ; The zero before the first line
     ; Falls into ClearHandlers.
 .endproc
 
-;; Turns off `ON KBD`, `ON EOF` and `ON ERR`, clears any key waiting in <PendingEvents>, and leaves nothing for `RESUME`.
+;; Turns off `ON KBD`, `ON EOF` and `ON ERR`, clears any key waiting in <PendingEvents>, and leaves nothing for
+;; `RESUME`.
 ;;
-;; It turns off the console's any-key event with <Statements::OffKbd>, clears every handler in <EndOfFileHandlers>, and clears
-;; <OnErrorActive> and <ErrorTextXByte>. `LOAD` calls it too.
+;; It turns off the console's any-key event with <Statements::OffKbd>, clears every handler in <EndOfFileHandlers>, and
+;; clears <OnErrorActive> and <ErrorTextXByte>. `LOAD` calls it too.
 ;; Out: A = 0, Y = 0
 ;; Also: CLEARONS (BB13)
 .proc ClearHandlers
@@ -1038,7 +1049,7 @@ ClearNext:
     sta EndOfFileHandlers-1,Y
     dey
     bne ClearNext
-    sty OnErrorActive                              ; No ON ERR
-    sty ErrorTextXByte                             ; No error to RESUME
+    sty OnErrorActive                       ; No ON ERR
+    sty ErrorTextXByte                      ; No error to RESUME
     rts
 .endproc

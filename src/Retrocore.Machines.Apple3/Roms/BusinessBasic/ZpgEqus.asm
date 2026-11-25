@@ -13,8 +13,8 @@
 ;; X-byte, $80 plus the bank pair. Through bank pair $80+n, addresses $0000-$7FFF are bank n's $2000-$9FFF and
 ;; addresses from $8000 are the next bank's. BASIC keeps the high byte from <POINTER_PAGE_FIRST> to
 ;; <POINTER_PAGE_LIMIT>-1 ($02-$81): pages 0 and 1 of a bank pair can't be reached this way, so a pointer that passes
-;; page $81 goes on at page $02 of the next bank pair (one more in the X-byte), the same memory. <Memory::NormalizeAfterAdd> and
-;; <Memory::NormalizeAfterSubtract> keep pointers in that form after arithmetic.
+;; page $81 goes on at page $02 of the next bank pair (one more in the X-byte), the same memory.
+;; <Memory::NormalizeAfterAdd> and <Memory::NormalizeAfterSubtract> keep pointers in that form after arithmetic.
 ;;
 ;; Much of zero page has several names, one for each job the byte does at a different time: writing one overwrites
 ;; the others.
@@ -61,8 +61,8 @@ STACK_LEVELS = 19
 
 ; The values of <ValueType>, the type of the value just evaluated.
 
-;; <ValueType> for a real, or for an integer, which <IntegerType> tells apart; a formula of numbers asks for it, and it marks a
-;; value as nothing to free.
+;; <ValueType> for a real, or for an integer, which <IntegerType> tells apart; a formula of numbers asks for it, and it
+;; marks a value as nothing to free.
 ;; Also: VREAL (BB13)
 VALUE_TYPE_REAL = 0
 
@@ -73,8 +73,8 @@ VALUE_TYPE_ANY = $20
 ;; Also: VLNT (BB13)
 VALUE_TYPE_LONG_INTEGER = $40
 
-;; <ValueType> for a string: bit 7, which `BIT` of <ValueType> copies into the negative flag; <FindVariable>'s type for a string
-;; variable too.
+;; <ValueType> for a string: bit 7, which `BIT` of <ValueType> copies into the negative flag; <FindVariable>'s type for
+;; a string variable too.
 ;; Also: STRTYP (BB13), VSTR (BB13)
 VALUE_TYPE_STRING = $FF
 
@@ -152,7 +152,7 @@ CHARACTER_SCREEN_ON = 15
 ; ---------------------------------------------------------------------------------------------------------------------
 
     .dum 0
-    jmp ColdStart                                ; Nothing is assembled here: locations 0-2 are left free
+    jmp ColdStart                           ; Nothing is assembled here: locations 0-2 are left free
 
 ; This storage changes as BASIC runs; none of it could be in ROM.
 
@@ -277,8 +277,8 @@ FunctionJump:
 MoveDistance:
     .res 2
 
-;; Used by the variable search, <FindVariable>: the value's size for the variable's type, then the size of the variable's
-;; entry.
+;; Used by the variable search, <FindVariable>: the value's size for the variable's type, then the size of the
+;; variable's entry.
 ;;
 ;; Microsoft's BASICs keep the variable's name here; Business BASIC's names are longer, and are compared where they
 ;; are.
@@ -286,7 +286,8 @@ MoveDistance:
 VariableSizes:
     .res 2
 
-;; The address of the value of the variable <FindVariable> just found or made, with its X-byte at <VariablePointerXByte>.
+;; The address of the value of the variable <FindVariable> just found or made, with its X-byte at
+;; <VariablePointerXByte>.
 ;; Also: VARPNT (BB13)
 VariablePointer:
     .res 2
@@ -394,7 +395,8 @@ Pointer2:
 ;;
 ;; The first line starts here. Each line is one byte of length, which is the offset to the next line, the two-byte
 ;; line number, the line's tokens, then a zero; a length of zero ends the program. The byte before ProgramStart is
-;; always zero, which <RewindTextPointer> sees to. <ColdStart> sets ProgramStart one byte into the memory segment SOS gives BASIC.
+;; always zero, which <RewindTextPointer> sees to. <ColdStart> sets ProgramStart one byte into the memory segment SOS
+;; gives BASIC.
 ;; See: <ArraysStart>, <FindLine>
 ;; Also: TXTTAB (BB13)
 ProgramStart:
@@ -691,8 +693,13 @@ DigitsLeft:
     .byte 0
     .byte 0                                 ; Unused
 
-;; The argument's exponent: the argument is a second floating-point value, laid out like <Fac>.
-;; Also: ARGEXP (BB13), ARG (BB13)
+;; The argument: a second floating-point accumulator, laid out like <Fac>, which holds the left operand of a
+;; two-operand routine.
+;; Also: ARG (BB13)
+Arg:
+
+;; The argument's exponent.
+;; Also: ARGEXP (BB13)
 ArgExponent:
     .byte 0
 
@@ -958,10 +965,10 @@ TextPointer = * + 7
 
 ;; Takes the next character of the program or the line, skipping spaces.
 ;;
-;; <ColdStart> copies the routine here from <CharacterReaderTemplate>; what is assembled here only sets out the addresses. The character is
-;; read with an absolute LDA whose address, <TextPointer>, is the instruction's own operand in zero page. The Apple III
-;; extends an access whose address is read from zero page, so this LDA reads through <TextPointerXByte>'s bank like an
-;; indirect one would.
+;; <ColdStart> copies the routine here from <CharacterReaderTemplate>; what is assembled here only sets out the
+;; addresses. The character is read with an absolute LDA whose address, <TextPointer>, is the instruction's own operand
+;; in zero page. The Apple III extends an access whose address is read from zero page, so this LDA reads through
+;; <TextPointerXByte>'s bank like an indirect one would.
 ;; Out: A = the character, zero = set at the end of a statement (a zero or a colon), carry = clear for a digit
 ;; Also: CHRGET (BB13)
 .proc GetNextCharacter
@@ -1006,7 +1013,8 @@ ProgramLoading:
 
     .dum $E4
 
-;; A JMP to <Modules::CallBasic>, through which a module calls a routine of BASIC's by its number in <ModuleRoutineNumber>.
+;; A JMP to <Modules::CallBasic>, through which a module calls a routine of BASIC's by its number in
+;; <ModuleRoutineNumber>.
 ;; Also: DISPATCH (BB13)
 ModuleCallJump:
     .res 3
@@ -1035,7 +1043,7 @@ ReferencePointers:
 WorkPage = $1E00
     .dend
     .dum WorkPage
-    jmp Modules::CallBasic                              ; Three bytes set out as a JMP to SWCHGO, which nothing here writes
+    jmp Modules::CallBasic                  ; A JMP to Modules::CallBasic; nothing here writes it
     .byte 0
 
 ;; The return address `PERFORM`'s caller left, kept here while the module runs, then the bank that was switched in.
@@ -1220,8 +1228,8 @@ CatalogBuffer:
 LongTextLength:
     .byte 0
 
-;; The digits of a number for `PRINT USING`, one to a byte; <Float::FormatFac>'s output buffer, <NumberBuffer>, is in its upper
-;; part.
+;; The digits of a number for `PRINT USING`, one to a byte; <Float::FormatFac>'s output buffer, <NumberBuffer>, is in
+;; its upper part.
 ;;
 ;; Its initial contents are whatever was in memory when Apple built SOS.INTERP.
 ;; Also: BCDSTR (BB13)
@@ -1297,117 +1305,117 @@ LastKey:
 ;; Each statement's routine, less one, by its token from `END` ($80) to `NEW` ($E0): the statement loop pushes the
 ;; address and returns to it.
 ;;
-;; A keyword that isn't a statement, such as `FRE` or a token with no keyword, gives a syntax error (<SyntaxError>). Some
-;; keywords share a routine: `POP`'s is `RETURN`'s, `CAT`'s is `CATALOG`'s, and `IMAGE` and `ELSE` are skipped like
+;; A keyword that isn't a statement, such as `FRE` or a token with no keyword, gives a syntax error (<SyntaxError>).
+;; Some keywords share a routine: `POP`'s is `RETURN`'s, `CAT`'s is `CATALOG`'s, and `IMAGE` and `ELSE` are skipped like
 ;; `REM`.
 ;; See: <ReservedWords>, <ValueWordTable>
 ;; Also: STMDSP (BB13)
 StatementTable:
-    .word Statements::End-1                             ; $80 END
-    .word Statements::For-1                             ; $81 FOR
-    .word Statements::Next-1                            ; $82 NEXT
-    .word Statements::Input-1                           ; $83 INPUT
-    .word Statements::OutputFile-1                          ; $84 OUTPUT
-    .word Statements::Dim-1                             ; $85 DIM
-    .word Statements::Read-1                            ; $86 READ
-    .word Statements::Write-1                          ; $87 WRITE
-    .word Statements::Open-1                           ; $88 OPEN
-    .word Statements::Close-1                          ; $89 CLOSE
-    .word SyntaxError-1                           ; $8A
-    .word Statements::Text-1                         ; $8B TEXT
-    .word SyntaxError-1                           ; $8C
-    .word Statements::Bye-1                            ; $8D BYE
-    .word SyntaxError-1                           ; $8E
-    .word SyntaxError-1                           ; $8F
-    .word SyntaxError-1                           ; $90
-    .word SyntaxError-1                           ; $91
-    .word SyntaxError-1                           ; $92
-    .word Statements::Window-1                          ; $93 WINDOW
-    .word Statements::Invoke-1                          ; $94 INVOKE
-    .word Statements::Perform-1                         ; $95 PERFORM
-    .word SyntaxError-1                           ; $96
-    .word SyntaxError-1                           ; $97
-    .word SyntaxError-1                           ; $98 FRE
-    .word Statements::HPos-1                            ; $99 HPOS, as a statement
-    .word Statements::VPos-1                            ; $9A VPOS, as a statement
-    .word SyntaxError-1                           ; $9B ERRLIN
-    .word SyntaxError-1                           ; $9C ERR
-    .word SyntaxError-1                           ; $9D KBD
-    .word SyntaxError-1                           ; $9E EOF
-    .word SyntaxError-1                           ; $9F TIME$
-    .word SyntaxError-1                           ; $A0 DATE$
-    .word Statements::Prefix-1                       ; $A1 PREFIX$, as a statement
-    .word SyntaxError-1                           ; $A2 EXFN.
-    .word SyntaxError-1                           ; $A3 EXFN%.
-    .word Statements::OutRec-1                         ; $A4 OUTREC
-    .word Statements::Indent-1                         ; $A5 INDENT
+    .word Statements::End-1                 ; $80 END
+    .word Statements::For-1                 ; $81 FOR
+    .word Statements::Next-1                ; $82 NEXT
+    .word Statements::Input-1               ; $83 INPUT
+    .word Statements::OutputFile-1          ; $84 OUTPUT
+    .word Statements::Dim-1                 ; $85 DIM
+    .word Statements::Read-1                ; $86 READ
+    .word Statements::Write-1               ; $87 WRITE
+    .word Statements::Open-1                ; $88 OPEN
+    .word Statements::Close-1               ; $89 CLOSE
+    .word SyntaxError-1                     ; $8A
+    .word Statements::Text-1                ; $8B TEXT
+    .word SyntaxError-1                     ; $8C
+    .word Statements::Bye-1                 ; $8D BYE
+    .word SyntaxError-1                     ; $8E
+    .word SyntaxError-1                     ; $8F
+    .word SyntaxError-1                     ; $90
+    .word SyntaxError-1                     ; $91
+    .word SyntaxError-1                     ; $92
+    .word Statements::Window-1              ; $93 WINDOW
+    .word Statements::Invoke-1              ; $94 INVOKE
+    .word Statements::Perform-1             ; $95 PERFORM
+    .word SyntaxError-1                     ; $96
+    .word SyntaxError-1                     ; $97
+    .word SyntaxError-1                     ; $98 FRE
+    .word Statements::HPos-1                ; $99 HPOS, as a statement
+    .word Statements::VPos-1                ; $9A VPOS, as a statement
+    .word SyntaxError-1                     ; $9B ERRLIN
+    .word SyntaxError-1                     ; $9C ERR
+    .word SyntaxError-1                     ; $9D KBD
+    .word SyntaxError-1                     ; $9E EOF
+    .word SyntaxError-1                     ; $9F TIME$
+    .word SyntaxError-1                     ; $A0 DATE$
+    .word Statements::Prefix-1              ; $A1 PREFIX$, as a statement
+    .word SyntaxError-1                     ; $A2 EXFN.
+    .word SyntaxError-1                     ; $A3 EXFN%.
+    .word Statements::OutRec-1              ; $A4 OUTREC
+    .word Statements::Indent-1              ; $A5 INDENT
 .if VERSION >= 130
-    .word Statements::ProgPrefix-1                         ; $A6 PROGPREFIX$
+    .word Statements::ProgPrefix-1          ; $A6 PROGPREFIX$
 .else
-    .word SyntaxError-1                           ; $A6
+    .word SyntaxError-1                     ; $A6
 .endif
-    .word SyntaxError-1                           ; $A7
-    .word SyntaxError-1                           ; $A8
-    .word SyntaxError-1                           ; $A9
-    .word SyntaxError-1                           ; $AA
-    .word SyntaxError-1                           ; $AB
-    .word SyntaxError-1                           ; $AC
-    .word Statements::Return-1                          ; $AD POP
-    .word Statements::Home-1                            ; $AE HOME
+    .word SyntaxError-1                     ; $A7
+    .word SyntaxError-1                     ; $A8
+    .word SyntaxError-1                     ; $A9
+    .word SyntaxError-1                     ; $AA
+    .word SyntaxError-1                     ; $AB
+    .word SyntaxError-1                     ; $AC
+    .word Statements::Return-1              ; $AD POP
+    .word Statements::Home-1                ; $AE HOME
 .if DEBUG
     .word $A1FF                             ; $AF, the debugger's command, in the debugger build
 .else
-    .word SyntaxError-1                           ; $AF
+    .word SyntaxError-1                     ; $AF
 .endif
-    .word Statements::Sub-1                         ; $B0 SUB$(
-    .word Statements::Off-1                             ; $B1 OFF
-    .word Statements::Trace-1                        ; $B2 TRACE
-    .word Statements::NoTrace-1                        ; $B3 NOTRACE
-    .word Statements::Normal-1                         ; $B4 NORMAL
-    .word Statements::Inverse-1                         ; $B5 INVERSE
-    .word SyntaxError-1                           ; $B6 SCALE(
-    .word Statements::Resume-1                          ; $B7 RESUME
-    .word SyntaxError-1                           ; $B8
-    .word Statements::Let-1                             ; $B9 LET
-    .word Statements::GoTo-1                            ; $BA GOTO
-    .word Statements::If-1                              ; $BB IF
-    .word Statements::Restore-1                          ; $BC RESTORE
-    .word Statements::Swap-1                            ; $BD SWAP
-    .word Statements::GoSub-1                           ; $BE GOSUB
-    .word Statements::Return-1                          ; $BF RETURN
-    .word Statements::Rem-1                             ; $C0 REM
-    .word Statements::Stop-1                            ; $C1 STOP
-    .word Statements::On-1                          ; $C2 ON
-    .word SyntaxError-1                           ; $C3
-    .word Statements::Load-1                            ; $C4 LOAD
-    .word Statements::Save-1                            ; $C5 SAVE
-    .word Statements::Delete-1                         ; $C6 DELETE, of a file
-    .word Statements::Run-1                             ; $C7 RUN
-    .word Statements::Rename-1                          ; $C8 RENAME
-    .word Statements::Lock-1                            ; $C9 LOCK
-    .word Statements::Unlock-1                          ; $CA UNLOCK
-    .word Statements::Create-1                          ; $CB CREATE
-    .word Statements::Exec-1                            ; $CC EXEC
-    .word Statements::Chain-1                           ; $CD CHAIN
-    .word SyntaxError-1                           ; $CE
-    .word SyntaxError-1                           ; $CF
-    .word SyntaxError-1                           ; $D0
-    .word Statements::Catalog-1                         ; $D1 CATALOG
-    .word SyntaxError-1                           ; $D2
-    .word SyntaxError-1                           ; $D3
-    .word Statements::Data-1                          ; $D4 DATA
-    .word Statements::Rem-1                             ; $D5 IMAGE
-    .word Statements::Catalog-1                         ; $D6 CAT
-    .word Statements::Def-1                             ; $D7 DEF
-    .word SyntaxError-1                           ; $D8
-    .word Statements::Print-1                         ; $D9 PRINT
-    .word Statements::Del-1                          ; $DA DEL, of program lines
-    .word Statements::Rem-1                             ; $DB ELSE
-    .word Statements::Cont-1                            ; $DC CONT
-    .word Statements::List-1                            ; $DD LIST
-    .word Statements::Clear-1                           ; $DE CLEAR
-    .word Statements::Get-1                             ; $DF GET
-    .word Statements::New-1                          ; $E0 NEW
+    .word Statements::Sub-1                 ; $B0 SUB$(
+    .word Statements::Off-1                 ; $B1 OFF
+    .word Statements::Trace-1               ; $B2 TRACE
+    .word Statements::NoTrace-1             ; $B3 NOTRACE
+    .word Statements::Normal-1              ; $B4 NORMAL
+    .word Statements::Inverse-1             ; $B5 INVERSE
+    .word SyntaxError-1                     ; $B6 SCALE(
+    .word Statements::Resume-1              ; $B7 RESUME
+    .word SyntaxError-1                     ; $B8
+    .word Statements::Let-1                 ; $B9 LET
+    .word Statements::GoTo-1                ; $BA GOTO
+    .word Statements::If-1                  ; $BB IF
+    .word Statements::Restore-1             ; $BC RESTORE
+    .word Statements::Swap-1                ; $BD SWAP
+    .word Statements::GoSub-1               ; $BE GOSUB
+    .word Statements::Return-1              ; $BF RETURN
+    .word Statements::Rem-1                 ; $C0 REM
+    .word Statements::Stop-1                ; $C1 STOP
+    .word Statements::On-1                  ; $C2 ON
+    .word SyntaxError-1                     ; $C3
+    .word Statements::Load-1                ; $C4 LOAD
+    .word Statements::Save-1                ; $C5 SAVE
+    .word Statements::Delete-1              ; $C6 DELETE, of a file
+    .word Statements::Run-1                 ; $C7 RUN
+    .word Statements::Rename-1              ; $C8 RENAME
+    .word Statements::Lock-1                ; $C9 LOCK
+    .word Statements::Unlock-1              ; $CA UNLOCK
+    .word Statements::Create-1              ; $CB CREATE
+    .word Statements::Exec-1                ; $CC EXEC
+    .word Statements::Chain-1               ; $CD CHAIN
+    .word SyntaxError-1                     ; $CE
+    .word SyntaxError-1                     ; $CF
+    .word SyntaxError-1                     ; $D0
+    .word Statements::Catalog-1             ; $D1 CATALOG
+    .word SyntaxError-1                     ; $D2
+    .word SyntaxError-1                     ; $D3
+    .word Statements::Data-1                ; $D4 DATA
+    .word Statements::Rem-1                 ; $D5 IMAGE
+    .word Statements::Catalog-1             ; $D6 CAT
+    .word Statements::Def-1                 ; $D7 DEF
+    .word SyntaxError-1                     ; $D8
+    .word Statements::Print-1               ; $D9 PRINT
+    .word Statements::Del-1                 ; $DA DEL, of program lines
+    .word Statements::Rem-1                 ; $DB ELSE
+    .word Statements::Cont-1                ; $DC CONT
+    .word Statements::List-1                ; $DD LIST
+    .word Statements::Clear-1               ; $DE CLEAR
+    .word Statements::Get-1                 ; $DF GET
+    .word Statements::New-1                 ; $E0 NEW
 .assert * - StatementTable = 2 * (TOKEN_NEW - TOKEN_END + 1), "A routine for each one-byte token."
 
 ;; The routines of the keywords that give a value without parentheses, by token from `FRE` (<TOKEN_FRE>) to
@@ -1417,22 +1425,22 @@ StatementTable:
 ;; `PREFIX$`, `EXFN.`, `EXFN%.`, `OUTREC` and `INDENT`, and in 1.3 `PROGPREFIX$`.
 ;; Also: RESTBL (BB13)
 ValueWordTable:
-    .word Functions::Fre                            ; $98 FRE
-    .word Functions::Pos                               ; $99 HPOS
-    .word Functions::VPos                            ; $9A VPOS
-    .word Functions::ErrLin                           ; $9B ERRLIN
-    .word Functions::Err                            ; $9C ERR
-    .word Functions::Kbd                            ; $9D KBD
-    .word Functions::Eof                            ; $9E EOF
-    .word Functions::Time                             ; $9F TIME$
-    .word Functions::Date                             ; $A0 DATE$
-    .word Functions::Prefix                           ; $A1 PREFIX$
-    .word Functions::ExFn                              ; $A2 EXFN.
-    .word Functions::ExFnInteger                             ; $A3 EXFN%.
-    .word Functions::OutRec                         ; $A4 OUTREC
-    .word Functions::Indent                         ; $A5 INDENT
+    .word Functions::Fre                    ; $98 FRE
+    .word Functions::Pos                    ; $99 HPOS
+    .word Functions::VPos                   ; $9A VPOS
+    .word Functions::ErrLin                 ; $9B ERRLIN
+    .word Functions::Err                    ; $9C ERR
+    .word Functions::Kbd                    ; $9D KBD
+    .word Functions::Eof                    ; $9E EOF
+    .word Functions::Time                   ; $9F TIME$
+    .word Functions::Date                   ; $A0 DATE$
+    .word Functions::Prefix                 ; $A1 PREFIX$
+    .word Functions::ExFn                   ; $A2 EXFN.
+    .word Functions::ExFnInteger            ; $A3 EXFN%.
+    .word Functions::OutRec                 ; $A4 OUTREC
+    .word Functions::Indent                 ; $A5 INDENT
 .if VERSION >= 130
-    .word Functions::ProgPrefix                          ; $A6 PROGPREFIX$
+    .word Functions::ProgPrefix             ; $A6 PROGPREFIX$
 .endif
 
 ;; The functions' routines, by their tokens in <ExtendedReservedWords> from `SGN(` (<TOKEN_FIRST_FUNCTION>) to
@@ -1441,61 +1449,61 @@ ValueWordTable:
 ;; A token with no function, and `USR`, which Business BASIC doesn't have, give a syntax error.
 ;; Also: FUNDSP (BB13)
 FunctionTable:
-    .word Functions::Sgn                               ; $9D SGN(
-    .word Functions::Int                               ; $9E INT(
-    .word Functions::Abs                               ; $9F ABS(
-    .word SyntaxError                             ; $A0, USR's place, which Business BASIC doesn't have
-    .word Functions::Typ                               ; $A1 TYP(
-    .word Functions::Rec                               ; $A2 REC(
-    .word SyntaxError                             ; $A3
-    .word SyntaxError                             ; $A4
-    .word SyntaxError                             ; $A5
-    .word SyntaxError                             ; $A6
-    .word SyntaxError                             ; $A7
-    .word SyntaxError                             ; $A8
-    .word SyntaxError                             ; $A9
-    .word SyntaxError                             ; $AA
-    .word SyntaxError                             ; $AB
-    .word SyntaxError                             ; $AC
-    .word Functions::Pdl                           ; $AD PDL(
-    .word Functions::Button                            ; $AE BUTTON(
-    .word Functions::Sqr                               ; $AF SQR(
-    .word Functions::Rnd                               ; $B0 RND(
-    .word Functions::Log                               ; $B1 LOG(
-    .word Functions::Exp                               ; $B2 EXP(
-    .word Functions::Cos                               ; $B3 COS(
-    .word Functions::Sin                               ; $B4 SIN(
-    .word Functions::Tan                               ; $B5 TAN(
-    .word Functions::Atn                               ; $B6 ATN(
-    .word SyntaxError                             ; $B7
-    .word SyntaxError                             ; $B8
-    .word SyntaxError                             ; $B9
-    .word SyntaxError                             ; $BA
-    .word SyntaxError                             ; $BB
-    .word SyntaxError                             ; $BC
-    .word SyntaxError                             ; $BD
-    .word SyntaxError                             ; $BE
-    .word SyntaxError                             ; $BF
-    .word SyntaxError                             ; $C0
-    .word SyntaxError                             ; $C1
-    .word SyntaxError                             ; $C2
-    .word Functions::Str                              ; $C3 STR$(
-    .word Functions::Hex                              ; $C4 HEX$(
-    .word Functions::Chr                              ; $C5 CHR$(
-    .word Functions::Len                               ; $C6 LEN(
-    .word Functions::Val                               ; $C7 VAL(
-    .word Functions::Asc                               ; $C8 ASC(
-    .word Functions::Ten                             ; $C9 TEN(
-    .word SyntaxError                             ; $CA
-    .word SyntaxError                             ; $CB
-    .word Functions::Conv                          ; $CC CONV(
-    .word Functions::ConvLong                          ; $CD CONV&(
-    .word Functions::ConvString                          ; $CE CONV$(
-    .word Functions::ConvInteger                          ; $CF CONV%(
-    .word Functions::Left                             ; $D0 LEFT$(
-    .word Functions::Right                            ; $D1 RIGHT$(
-    .word Functions::Mid                              ; $D2 MID$(
-    .word Functions::InStr                             ; $D3 INSTR(
+    .word Functions::Sgn                    ; $9D SGN(
+    .word Functions::Int                    ; $9E INT(
+    .word Functions::Abs                    ; $9F ABS(
+    .word SyntaxError                       ; $A0, USR's place, which Business BASIC doesn't have
+    .word Functions::Typ                    ; $A1 TYP(
+    .word Functions::Rec                    ; $A2 REC(
+    .word SyntaxError                       ; $A3
+    .word SyntaxError                       ; $A4
+    .word SyntaxError                       ; $A5
+    .word SyntaxError                       ; $A6
+    .word SyntaxError                       ; $A7
+    .word SyntaxError                       ; $A8
+    .word SyntaxError                       ; $A9
+    .word SyntaxError                       ; $AA
+    .word SyntaxError                       ; $AB
+    .word SyntaxError                       ; $AC
+    .word Functions::Pdl                    ; $AD PDL(
+    .word Functions::Button                 ; $AE BUTTON(
+    .word Functions::Sqr                    ; $AF SQR(
+    .word Functions::Rnd                    ; $B0 RND(
+    .word Functions::Log                    ; $B1 LOG(
+    .word Functions::Exp                    ; $B2 EXP(
+    .word Functions::Cos                    ; $B3 COS(
+    .word Functions::Sin                    ; $B4 SIN(
+    .word Functions::Tan                    ; $B5 TAN(
+    .word Functions::Atn                    ; $B6 ATN(
+    .word SyntaxError                       ; $B7
+    .word SyntaxError                       ; $B8
+    .word SyntaxError                       ; $B9
+    .word SyntaxError                       ; $BA
+    .word SyntaxError                       ; $BB
+    .word SyntaxError                       ; $BC
+    .word SyntaxError                       ; $BD
+    .word SyntaxError                       ; $BE
+    .word SyntaxError                       ; $BF
+    .word SyntaxError                       ; $C0
+    .word SyntaxError                       ; $C1
+    .word SyntaxError                       ; $C2
+    .word Functions::Str                    ; $C3 STR$(
+    .word Functions::Hex                    ; $C4 HEX$(
+    .word Functions::Chr                    ; $C5 CHR$(
+    .word Functions::Len                    ; $C6 LEN(
+    .word Functions::Val                    ; $C7 VAL(
+    .word Functions::Asc                    ; $C8 ASC(
+    .word Functions::Ten                    ; $C9 TEN(
+    .word SyntaxError                       ; $CA
+    .word SyntaxError                       ; $CB
+    .word Functions::Conv                   ; $CC CONV(
+    .word Functions::ConvLong               ; $CD CONV&(
+    .word Functions::ConvString             ; $CE CONV$(
+    .word Functions::ConvInteger            ; $CF CONV%(
+    .word Functions::Left                   ; $D0 LEFT$(
+    .word Functions::Right                  ; $D1 RIGHT$(
+    .word Functions::Mid                    ; $D2 MID$(
+    .word Functions::InStr                  ; $D3 INSTR(
 .assert * - FunctionTable = 2 * (TOKEN_INSTR - TOKEN_FIRST_FUNCTION + 1), "A routine for each function's token."
 
 ;; Each operator's precedence, higher binding tighter, by the operator's number less one.
@@ -1524,29 +1532,29 @@ OperatorRoutineTable:
 ;; The relational operators' entry, the first.
 ;; Also: RELNUM (BB13)
 OPERATOR_RELATIONAL_ENTRY = 1
-    .word Float::RaiseArg                             ; ^
-    .word Operators::And                             ; AND
-    .word Operators::Or                              ; OR
+    .word Float::RaiseArg                   ; ^
+    .word Operators::And                    ; AND
+    .word Operators::Or                     ; OR
     .word TypeMismatchError                 ; MOD, on reals
     .word TypeMismatchError                 ; DIV, on reals
-    .word Float::DivideArg                             ; /
-    .word Float::MultiplyArg                            ; *
-    .word Float::SubtractFromArg                             ; -
-    .word Float::AddArg                             ; +
+    .word Float::DivideArg                  ; /
+    .word Float::MultiplyArg                ; *
+    .word Float::SubtractFromArg            ; -
+    .word Float::AddArg                     ; +
 
 ;; The offset of the long-integer routines, and of + for a string.
 ;; Also: NUMDSP (BB13)
 OPERATOR_LONG_ROUTINES = * - OperatorRoutineTable
-    .word LongInteger::Compare                           ; The relational operators
+    .word LongInteger::Compare              ; The relational operators
     .word TypeMismatchError                 ; ^ on long integers
-    .word LongInteger::And                              ; AND
-    .word LongInteger::Or                            ; OR
-    .word LongInteger::Mod                              ; MOD
-    .word LongInteger::Div                              ; DIV
-    .word LongInteger::Divide                             ; /
-    .word LongInteger::Multiply                             ; *
-    .word LongInteger::Subtract                              ; -
-    .word LongInteger::Add                              ; +
+    .word LongInteger::And                  ; AND
+    .word LongInteger::Or                   ; OR
+    .word LongInteger::Mod                  ; MOD
+    .word LongInteger::Div                  ; DIV
+    .word LongInteger::Divide               ; /
+    .word LongInteger::Multiply             ; *
+    .word LongInteger::Subtract             ; -
+    .word LongInteger::Add                  ; +
 
 ; ---------------------------------------------------------------------------------------------------------------------
 ; X-bytes

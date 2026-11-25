@@ -27,12 +27,13 @@ Stack = $0100
 ; The cold start
 ; ---------------------------------------------------------------------------------------------------------------------
 
-;; The model of <GetNextCharacter> and the random number seed, which <ColdStart> copies to zero page; this copy never runs.
+;; The model of <GetNextCharacter> and the random number seed, which <ColdStart> copies to zero page; this copy never
+;; runs.
 ;;
 ;; The copy steps <TextPointer> to the next character of the program and reads it, skipping spaces. Its LDA's operand is
-;; the pointer itself, in zero page, so the Apple III's extended addressing reads it through its X-byte, <TextPointerXByte>,
-;; as it would a (zp),Y pointer; <CharacterReaderTemplate::GetCurrent> reads the same character again. The eight
-;; bytes after the code become <RandomValue>.
+;; the pointer itself, in zero page, so the Apple III's extended addressing reads it through its X-byte,
+;; <TextPointerXByte>, as it would a (zp),Y pointer; <CharacterReaderTemplate::GetCurrent> reads the same character
+;; again. The eight bytes after the code become <RandomValue>.
 ;;
 ;; Apple's listing marks its start, INITAT, as the start of the code that runs only at start and may later be reused
 ;; as buffer space, up to the end of <ColdStart>.
@@ -49,7 +50,7 @@ Stack = $0100
 ;; Reads the character at <TextPointer> again, without stepping first.
 ;; Also: CHSGOT (BB13)
 GetCurrent:
-    lda $EA60                               ; The copy's operand is TXTPTR
+    lda $EA60                               ; The copy's operand is TextPointer
     cmp #':'                                ; Most characters are at or above the colon
     bcs Done
     cmp #' '
@@ -63,7 +64,7 @@ GetCurrent:
 ;; Also: CHSRT (BB13)
 Done:
     rts
-    .byte 0, 0, 0, 0                        ; The random number seed, for RNDX; ColdStart replaces two bytes of it
+    .byte 0, 0, 0, 0                        ; The random seed; ColdStart replaces two bytes of it
     .byte $10, $D6, $3A, $F1
 .endproc
 
@@ -73,19 +74,22 @@ Done:
 ;; In order, it:
 ;; - records the bank BASIC runs in, from <ColdStart::BankRegister>, in <BasicBank> and in the console events'
 ;;   <Console::AnyKeyBank> and <Console::AttentionBank>;
-;; - reserves bank 0's $2000-$21FF with REQUEST_SEG (<Segments::ReserveList>), as BASIC's bank-pair pointers can't reach it;
+;; - reserves bank 0's $2000-$21FF with REQUEST_SEG (<Segments::ReserveList>), as BASIC's bank-pair pointers can't reach
+;;   it;
 ;; - pushes a zero, the byte at the bottom of the stack that stops <FindForFrame>;
 ;; - clears zero page from $01 up, and the X-bytes of its pointers at <X_BYTE_OFFSET>;
-;; - asks SOS for the program's memory with <Segments::FindForBasic>, which sets <SegmentStart> to its start and <MemoryTop> to its end;
+;; - asks SOS for the program's memory with <Segments::FindForBasic>, which sets <SegmentStart> to its start and
+;;   <MemoryTop> to its end;
 ;; - copies <CharacterReaderTemplate> and the seed to <GetNextCharacter> and <RandomValue>, with their X-bytes zero;
 ;; - clears <TerminalPosition>, <TraceMode> (trace off) and <ExecFile> (no `EXEC` file);
-;; - sets <StringsBottom>, the bottom of the strings, to <MemoryTop>, and <ProgramStart>, the program's start, to <SegmentStart>;
+;; - sets <StringsBottom>, the bottom of the strings, to <MemoryTop>, and <ProgramStart>, the program's start, to
+;;   <SegmentStart>;
 ;; - seeds two bytes of <RandomValue> from timers;
 ;; - calls <ResetInterpreter>, <Console::Initialize> (which opens the console and prints the sign-on) and
 ;;   <EraseProgram> (which leaves an empty program, no variables and the stack pointer at <STACK_END>);
 ;; - points the <ModuleCallJump> jump at <Modules::CallBasic>, for invokable modules;
-;; - runs `HELLO` as the direct command `RUN HELLO`, through <Statements::Run>, when GET_FILE_INFO finds it, and otherwise
-;;   goes to <CommandLoop> without a message.
+;; - runs `HELLO` as the direct command `RUN HELLO`, through <Statements::Run>, when GET_FILE_INFO finds it, and
+;;   otherwise goes to <CommandLoop> without a message.
 ;;
 ;; 1.3 first takes a program name the program selector left in zero page and runs that program instead.
 ;; See: <ResetInterpreter>, <Console::Initialize>, <EraseProgram>, <SosCalls::HelloInformation>
@@ -118,7 +122,7 @@ SelectorMark = 0
 SelectorPathname = 2
 
     ; 1.3: when the program selector started BASIC, it left $EE in locations 0 and 1 and a pointer to the program's
-    ; pathname in 2 and 3. Copy the pathname to PROGPATH and set SELECTOR.
+    ; pathname in 2 and 3. Copy the pathname to ProgramPath and set StartedBySelector.
     lda #SELECTOR_SIGNATURE
     cmp SelectorMark
     bne ClearZeroPage
@@ -134,7 +138,7 @@ CopyPathname:
     sta ProgramPath,Y
     dey
     bpl CopyPathname
-    sty StartedBySelector                            ; $FF: the selector started BASIC
+    sty StartedBySelector                   ; $FF: the selector started BASIC
 .endif
 
 ;; Clears zero page and its X-bytes, then carries on with the start.
@@ -147,13 +151,14 @@ ClearZeroPage:
 ;; Clears a zero-page byte and its X-byte.
 ClearNext:
     sta 0,X                                 ; $01-$FF
-    sta X_BYTE_OFFSET-1,X                          ; and their X-bytes
+    sta X_BYTE_OFFSET-1,X                   ; and their X-bytes
     inx
     bne ClearNext
-    jsr Segments::FindForBasic                              ; The program's memory
+    jsr Segments::FindForBasic              ; The program's memory
     ldx #.sizeof(CharacterReaderTemplate)
 
-;; Copies <CharacterReaderTemplate> and the seed to <GetNextCharacter> and <RandomValue>, last byte first, clearing their X-bytes.
+;; Copies <CharacterReaderTemplate> and the seed to <GetNextCharacter> and <RandomValue>, last byte first, clearing
+;; their X-bytes.
 ;; Also: MOVCHG (BB13)
 CopyCharacterReader:
     lda CharacterReaderTemplate-1,X
@@ -163,16 +168,16 @@ CopyCharacterReader:
     dex
     bne CopyCharacterReader
     stx TerminalPosition
-    stx TraceMode                              ; Trace off
-    stx ExecFile                              ; No EXEC file
+    stx TraceMode                           ; Trace off
+    stx ExecFile                            ; No EXEC file
     ldy MemoryTop
-    lda MemoryTop+1                            ; The strings start at the top of memory
+    lda MemoryTop+1                         ; The strings start at the top of memory
     ldx MemoryTopXByte
     sty StringsBottom
     sta StringsBottom+1
     stx StringsBottomXByte
     ldx SegmentStart
-    ldy SegmentStart+1                            ; The program starts at the bottom
+    ldy SegmentStart+1                      ; The program starts at the bottom
     lda SegmentStartXByte
     stx ProgramStart
     sty ProgramStart+1
@@ -186,7 +191,7 @@ CopyCharacterReader:
     jsr Console::Initialize
     jsr EraseProgram
 .if VERSION >= 130
-    jsr ProgramPrefix::SaveSos                     ; 1.3: keep SOS's prefix in SOSPATH
+    jsr ProgramPrefix::SaveSos              ; 1.3: keep SOS's prefix in SosPrefix
 .endif
     lda #<(Modules::CallBasic)
     sta ModuleCallJump+1
@@ -199,7 +204,7 @@ CopyCharacterReader:
     beq RunHello
     lda ProgramPath
     beq NoProgramName
-    lda #<(ProgramPath)                        ; GET_FILE_INFO on PROGPATH
+    lda #<(ProgramPath)                     ; GET_FILE_INFO on ProgramPath
     sta a:SosCalls::HelloInformation+SosCalls::FileInfoList::PATHNAME
     lda #>(ProgramPath)
     sta a:SosCalls::HelloInformation+SosCalls::FileInfoList::PATHNAME+1
@@ -218,7 +223,7 @@ ReportDirect:
 ;; Runs the program the selector named, as <ColdStart::RunHello> runs `HELLO`.
 ;; Also: SELLO (BB13)
 RunSelected:
-    sta LineNumber                              ; RUN the program, as RunHello runs HELLO
+    sta LineNumber                          ; RUN the program, as RunHello runs HELLO
     sta LineNumber+1
     sta TextPointerXByte
     dec CurrentLine+1
@@ -250,7 +255,7 @@ NoProgramName:
 ;; Also: BOOTRUN (BB13)
 RunHello:
 .if VERSION >= 130
-    jsr ProgramPrefix::CopySosToProgram            ; 1.3: the program's prefix is SOS's
+    jsr ProgramPrefix::CopySosToProgram     ; 1.3: the program's prefix is SOS's
 .endif
     brk                                     ; GET_FILE_INFO on HELLO
     .byte SOS_GET_FILE_INFO
@@ -261,14 +266,14 @@ RunHello:
     stx CurrentLine+1
     jmp ReportSosError
 .else
-    ldx CurrentLine+1                            ; Does nothing
+    ldx CurrentLine+1                       ; Does nothing
     stx CurrentLine+1
     jmp CommandLoop
 .endif
 
 ;; Runs `HELLO`, found: line 0 of the direct command at <SosCalls::HelloName>.
 Found:
-    sta LineNumber                              ; A = 0: line 0
+    sta LineNumber                          ; A = 0: line 0
     sta LineNumber+1
     sta TextPointerXByte
     dec CurrentLine+1
@@ -276,7 +281,7 @@ Found:
     sta TextPointer
     lda #>(SosCalls::HelloName)
     sta TextPointer+1
-    jsr GetCurrentCharacter                              ; Reads the H
+    jsr GetCurrentCharacter                 ; Reads the H
     jmp Statements::Run
 .endproc
 
@@ -442,11 +447,12 @@ SIGN_ON_LENGTH = * - SignOn
 
 ;; Resets BASIC's state for a new program: no files, an empty program, nothing to report.
 ;;
-;; It sets <CurrentLine> direct (for any error message) and output to the console (<OutputFileNumber>), gives <StoppedText> the X-byte of
-;; bank pair 0, stores the JMP opcodes of <ModuleCallJump> and <FunctionJump>, clears <OnErrorActive> (no `ON ERR`), <StartupDone> and the
-;; high byte of <LastTemporary>, sets up the string temporaries (<NextTemporary>, <CollectorStep>), sets the defaults `OUTREC` = 80 and
-;; `INDENT` = 2, takes all memory back with <Segments::Grow>, clears the ten file control blocks at <FileControlBlocks>, and writes an
-;; empty program, three zeros, at <ProgramStart>, with <ArraysStart> just after them.
+;; It sets <CurrentLine> direct (for any error message) and output to the console (<OutputFileNumber>), gives
+;; <StoppedText> the X-byte of bank pair 0, stores the JMP opcodes of <ModuleCallJump> and <FunctionJump>, clears
+;; <OnErrorActive> (no `ON ERR`), <StartupDone> and the high byte of <LastTemporary>, sets up the string temporaries
+;; (<NextTemporary>, <CollectorStep>), sets the defaults `OUTREC` = 80 and `INDENT` = 2, takes all memory back with
+;; <Segments::Grow>, clears the ten file control blocks at <FileControlBlocks>, and writes an empty program, three
+;; zeros, at <ProgramStart>, with <ArraysStart> just after them.
 ;;
 ;; <ColdStart> calls it, and `NEW` through <EraseProgram>.
 ;; See: <EraseProgram>
@@ -466,8 +472,8 @@ DEFAULT_INDENT = 2
 EMPTY_PROGRAM_SIZE = 3
 
     ldx #DIRECT_LINE
-    stx CurrentLine+1                            ; Direct
-    stx OutputFileNumber                               ; Output to the console
+    stx CurrentLine+1                       ; Direct
+    stx OutputFileNumber                    ; Output to the console
     stx OutputFileNumber+1
     lda #XBYTE_BANK_PAIR_0
     sta StoppedTextXByte
@@ -480,28 +486,28 @@ EMPTY_PROGRAM_SIZE = 3
     lda #DESCRIPTOR_SIZE
     sta CollectorStep
     ldx #TemporaryDescriptors
-    stx NextTemporary                              ; No string temporaries in use
+    stx NextTemporary                       ; No string temporaries in use
     lda #DEFAULT_OUTREC
-    sta OutputRecordLength                              ; LIST's right margin
+    sta OutputRecordLength                  ; LIST's right margin
     lda #DEFAULT_INDENT
-    sta ListIndent                              ; LIST's indent for each FOR
+    sta ListIndent                          ; LIST's indent for each FOR
     lda #0
-    jsr Segments::Grow                              ; All the memory there is
+    jsr Segments::Grow                      ; All the memory there is
     ldy #0
     sty StartupDone
     tya
     sty OnErrorActive
     dey
-    sty OutputFileNumber                               ; Output to the console again
+    sty OutputFileNumber                    ; Output to the console again
     sty OutputFileNumber+1
-    ldy #FILE_CONTROL_BLOCK_SIZE*FILE_COUNT                  ; The ten files' control blocks
+    ldy #FILE_CONTROL_BLOCK_SIZE*FILE_COUNT ; The ten files' control blocks
 
 ;; Clears the control blocks, from the top.
 ClearControlBlocks:
     sta FileControlBlocks-1,Y
     dey
     bne ClearControlBlocks
-    sta (ProgramStart),Y                          ; The empty program
+    sta (ProgramStart),Y                    ; The empty program
     iny
     sta (ProgramStart),Y
     iny
@@ -536,13 +542,14 @@ FOR_FRAME_SIZE = $14
     VARIABLE .word                          ;; the variable's address
 .endstruct
 
-;; Finds the `FOR` entry for the variable in <AssignedVariable> on the stack, or the topmost `FOR` entry when <AssignedVariable> is zero.
+;; Finds the `FOR` entry for the variable in <AssignedVariable> on the stack, or the topmost `FOR` entry when
+;; <AssignedVariable> is zero.
 ;;
-;; It starts above its caller's and the statement fetcher's return addresses. A `FOR` entry starts with <TOKEN_FOR>, then
-;; the variable's type and its address (<ForFrame>); the search stops at the first entry that isn't a `FOR` (a `GOSUB`
-;; entry, or the zero <ColdStart> pushed at the bottom). When <AssignedVariable> is zero, it takes the top entry's variable
-;; into <AssignedVariable>, <ForVariableType>, <IntegerType> and <ArrayElementFound>.
-;; In: FORPNT = the variable's address, or zero, TEMPFOR = its type
+;; It starts above its caller's and the statement fetcher's return addresses. A `FOR` entry starts with <TOKEN_FOR>,
+;; then the variable's type and its address (<ForFrame>); the search stops at the first entry that isn't a `FOR` (a
+;; `GOSUB` entry, or the zero <ColdStart> pushed at the bottom). When <AssignedVariable> is zero, it takes the top
+;; entry's variable into <AssignedVariable>, <ForVariableType>, <IntegerType> and <ArrayElementFound>.
+;; In: AssignedVariable = the variable's address, or zero, ForVariableType = its type
 ;; Out: zero = set when found, X = the entry's offset from the stack's page, less 1 (its <TOKEN_FOR> is at $0101,X)
 ;; Keeps: Y
 ;; See: <FOR_FRAME_SIZE>
@@ -604,20 +611,22 @@ Done:
 ; ---------------------------------------------------------------------------------------------------------------------
 ; Moving memory
 ;
-; BASIC's pointers into its memory are three bytes: an address whose page stays in MINPG to MAXPG-1 ($02-$81), and
-; an X-byte at SYSPAG beside it. FIXADC and FIXSBC keep the page in range as they add and subtract.
+; BASIC's pointers into its memory are three bytes: an address whose page stays in POINTER_PAGE_FIRST to
+; POINTER_PAGE_LIMIT-1 ($02-$81), and an X-byte at X_BYTE_OFFSET beside it. Memory::NormalizeAfterAdd and
+; Memory::NormalizeAfterSubtract keep the page in range as they add and subtract.
 ; ---------------------------------------------------------------------------------------------------------------------
 
 ;; Moves a block of memory up, after checking with <CheckFreeMemory> that its new top is below the strings, and
 ;; makes that top the new <VariablesEnd>.
 ;;
-;; The block runs from <SourceStart> to just below <SourceEnd>, and moves to end just below <DestinationEnd>. It moves from the top
-;; down, so the two may overlap.
-;; In: A = the new end of the variables' low byte, Y = its high byte, X = its X-byte, LOWTR = the block's start,
-;;   HIGHTR = its end, HIGHDS = where its end goes
-;; Out: HIGHDS = where the block now starts, LOWTR = unchanged, HIGHTR = within a page of LOWTR
+;; The block runs from <SourceStart> to just below <SourceEnd>, and moves to end just below <DestinationEnd>. It moves
+;; from the top down, so the two may overlap.
+;; In: A = the new end of the variables' low byte, Y = its high byte, X = its X-byte, SourceStart = the block's start,
+;;   SourceEnd = its end, DestinationEnd = where its end goes
+;; Out: DestinationEnd = where the block now starts, SourceStart = unchanged, SourceEnd = within a page of <SourceStart>
 ;; Errors: OUT OF MEMORY, from <CheckFreeMemory>
-;; Entry: Unchecked = moves without the check or setting <VariablesEnd>; invokable modules can call it through <ModuleRoutines>
+;; Entry: Unchecked = moves without the check or setting <VariablesEnd>; invokable modules can call it through
+;;   <ModuleRoutines>
 ;; See: <OpenGap>, <CloseGap>
 ;; Also: BLTU (BB13)
 .proc MoveRangeUp
@@ -629,7 +638,7 @@ Done:
 ;; Moves the block: whole pages while a page or more is left, then the rest.
 ;; Also: BLTUC (BB13)
 Unchecked:
-    ldy SourceEnd                              ; How much is left to move
+    ldy SourceEnd                           ; How much is left to move
     cpy SourceStart
     lda SourceEnd+1
     sbc SourceStart+1
@@ -657,7 +666,7 @@ CopyPage:
     sta (DestinationEnd),Y
     dey
     bne CopyPage
-    lda (SourceEnd),Y                          ; And its first byte
+    lda (SourceEnd),Y                       ; And its first byte
     sta (DestinationEnd),Y
     jmp Unchecked
 
@@ -670,7 +679,7 @@ MoveRest:
     beq Done                                ; Nothing left
     pha                                     ; The bytes left
     ldy DestinationEndXByte
-    sta DestinationEndXByte                             ; Briefly holds the count
+    sta DestinationEndXByte                 ; Briefly holds the count
     lda DestinationEnd
     sec
     sbc DestinationEndXByte
@@ -679,7 +688,7 @@ MoveRest:
     sbc #0
     cpy #XBYTE_BANK_PAIR_0                  ; A bank-pair pointer?
     bcc StoreDestinationPage
-    jsr Memory::NormalizePage                              ; Keep its page in range
+    jsr Memory::NormalizePage               ; Keep its page in range
 
 ;; Stores <DestinationEnd>'s page and X-byte, then copies the bytes.
 StoreDestinationPage:
@@ -709,7 +718,7 @@ Done:
 ;; Also: SUB256 (BB13)
 .proc SubtractPage
     lda 1,X
-    ldy X_BYTE_OFFSET,X                            ; The X-byte
+    ldy X_BYTE_OFFSET,X                     ; The X-byte
     sec
     sbc #1
     jsr Memory::NormalizeAfterSubtract
@@ -719,15 +728,16 @@ Done:
     rts
 .endproc
 
-;; Closes a gap: moves the memory from <Pointer1> up to <VariablesEnd> down to <SourceStart>, then adds <MoveDistance> to <VariablesStart>,
-;; <ArraysStart> and <VariablesEnd>.
+;; Closes a gap: moves the memory from <Pointer1> up to <VariablesEnd> down to <SourceStart>, then adds <MoveDistance>
+;; to <VariablesStart>, <ArraysStart> and <VariablesEnd>.
 ;;
-;; The caller sets <MoveDistance> (and <MoveDistanceXByte>) to the distance, negative, in BASIC's three-byte form. The move goes from
-;; the bottom up, so the two may overlap. Apple's comment said it adjusts every table pointer and buffer; it adjusts
-;; just these three.
-;; In: INDEX1 = the first byte to move, LOWTR = where it goes, DELTA = LOWTR less INDEX1
-;; Out: LOWTR = unchanged
-;; Entry: AdjustPointers = adds <MoveDistance> to the pointers alone, from X = 5 (all three) or 3 (<ArraysStart> and <VariablesStart>)
+;; The caller sets <MoveDistance> (and <MoveDistanceXByte>) to the distance, negative, in BASIC's three-byte form. The
+;; move goes from the bottom up, so the two may overlap. Apple's comment said it adjusts every table pointer and buffer;
+;; it adjusts just these three.
+;; In: Pointer1 = the first byte to move, SourceStart = where it goes, MoveDistance = <SourceStart> less <Pointer1>
+;; Out: SourceStart = unchanged
+;; Entry: AdjustPointers = adds <MoveDistance> to the pointers alone, from X = 5 (all three) or 3 (<ArraysStart> and
+;;   <VariablesStart>)
 ;; See: <OpenGap>, <MoveRangeUp>
 ;; Also: MVDWN (BB13)
 .proc CloseGap
@@ -763,7 +773,7 @@ MoveByte:
     inx
     cpx #POINTER_PAGE_LIMIT
     bcc StoreSourcePage
-    ldx #POINTER_PAGE_FIRST                              ; Into the next bank pair
+    ldx #POINTER_PAGE_FIRST                 ; Into the next bank pair
     inc Pointer1XByte
 
 ;; Stores <Pointer1>'s page.
@@ -796,7 +806,7 @@ RestoreDestination:
     sta SourceStart+1
     pla
     sta SourceStart
-    ldx #5                                  ; STREND, ARYTAB, VARTAB
+    ldx #5                                  ; VariablesEnd, ArraysStart, VariablesStart
 
 ;; Adds <MoveDistance> to the pointer at <VariablesStart>-1+X, then to those below it.
 ;; Also: MVDWN2 (BB13)
@@ -819,10 +829,10 @@ AdjustPointers:
     rts
 .endproc
 
-;; Opens a gap: moves the memory from <SourceStart> up to <VariablesEnd> up by <MoveDistance>, and adds <MoveDistance> to <VariablesEnd>, <ArraysStart>
-;; and <VariablesStart>.
-;; In: LOWTR = the first byte to move, DELTA = the distance, positive
-;; Out: LOWTR = unchanged
+;; Opens a gap: moves the memory from <SourceStart> up to <VariablesEnd> up by <MoveDistance>, and adds <MoveDistance>
+;; to <VariablesEnd>, <ArraysStart> and <VariablesStart>.
+;; In: SourceStart = the first byte to move, MoveDistance = the distance, positive
+;; Out: SourceStart = unchanged
 ;; Errors: OUT OF MEMORY when the new top would reach the strings
 ;; See: <MoveRangeUp>, <CloseGap>
 ;; Also: MVUP (BB13)
@@ -832,9 +842,9 @@ AdjustPointers:
     lda VariablesEndXByte
     sta SourceEndXByte
     lda VariablesEnd
-    sta SourceEnd                              ; The top of what moves
+    sta SourceEnd                           ; The top of what moves
     clc
-    adc MoveDistance                               ; and where it goes
+    adc MoveDistance                        ; and where it goes
     sta DestinationEnd
     lda VariablesEnd+1
     adc MoveDistance+1
@@ -848,7 +858,7 @@ AdjustPointers:
     ldy DestinationEnd+1
     lda DestinationEnd
     jsr MoveRangeUp
-    ldx #3                                  ; MoveRangeUp set STREND: just ARYTAB and VARTAB
+    ldx #3                                  ; MoveRangeUp set VariablesEnd: just ArraysStart and VariablesStart
     jmp CloseGap::AdjustPointers
 .endproc
 
@@ -875,10 +885,11 @@ AdjustPointers:
     rts
 .endproc
 
-;; Checks that an address is below <StringsBottom>, the bottom of the strings, collecting the strings' garbage once if it
-;; is not.
+;; Checks that an address is below <StringsBottom>, the bottom of the strings, collecting the strings' garbage once if
+;; it is not.
 ;;
-;; Around the collection it keeps <DestinationEnd> through <SourceStart> and their X-bytes, which a block move may be using.
+;; Around the collection it keeps <DestinationEnd> through <SourceStart> and their X-bytes, which a block move may be
+;; using.
 ;; In: A = the address's low byte, Y = its high byte, X = its X-byte
 ;; Keeps: A, X, Y
 ;; Errors: OUT OF MEMORY when the address is still too high

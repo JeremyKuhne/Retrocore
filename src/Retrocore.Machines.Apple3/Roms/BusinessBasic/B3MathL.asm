@@ -1,6 +1,6 @@
 ; retrocore: style=strict
 ;; Business BASIC's floating point, part two (Apple's B3MATHL): `LOG`, multiplication and division, the routines that
-;; move reals between <Fac>, <ArgExponent> and memory, rounding, `SGN` and `ABS`, comparison, and the start of
+;; move reals between <Fac>, <Arg> and memory, rounding, `SGN` and `ABS`, comparison, and the start of
 ;; <Float::ToLongInteger>, which goes on in B3FinpM.asm.
 ;;
 ;; The formats are described in B3MathK.asm. The constants here are five-byte reals in BASIC's own bank.
@@ -78,7 +78,7 @@ Reduce:
     sbc #Float::EXPONENT_BIAS - 1           ; the carry is clear: less the bias
     pha                                     ; n
     lda #Float::EXPONENT_BIAS
-    sta FacExponent                              ; f, from 0.5 to 1
+    sta FacExponent                         ; f, from 0.5 to 1
     lda #<(Float::SquareRootOfHalf)
     ldy #>(Float::SquareRootOfHalf)
     jsr Float::AddPacked
@@ -98,7 +98,7 @@ Reduce:
     jsr Float::AddSignedByte                ; add n
     lda #<(Float::LogOfTwo)
     ldy #>(Float::LogOfTwo)
-    ldx #LOG_CONSTANTS_X_BYTE                              ; left over: MultiplyPacked sets X itself
+    ldx #LOG_CONSTANTS_X_BYTE               ; left over: MultiplyPacked sets X itself
     ; Falls into Float::MultiplyPacked.
 .endproc
 
@@ -121,14 +121,14 @@ Reduce:
     ; Falls into MultiplyArg.
 .endproc
 
-;; Multiplies <Fac> by <ArgExponent>, into the <Fac>: <ArgExponent>'s mantissa times each byte of the <Fac>'s, the rounding byte first,
+;; Multiplies <Fac> by <Arg>, into the <Fac>: <Arg>'s mantissa times each byte of the <Fac>'s, the rounding byte first,
 ;; summed in <Result1>.
-;; In: A = <FacExponent>, zero = set for a zero <Fac>, ARISGN = the product's sign
+;; In: A = <FacExponent>, zero = set for a zero <Fac>, ResultSign = the product's sign
 ;; See: <Float::CombineExponents>, <Float::MultiplyByte>, <Float::NormalizeResult>
 ;; Also: FMULTT (BB13)
 .proc MultiplyArg
-    bne *+5                                 ; skip the jump for a FAC that is not zero
-    jmp MultiplyByte::Done                  ; a zero FAC is the product
+    bne *+5                                 ; skip the jump for a Fac that is not zero
+    jmp MultiplyByte::Done                  ; a zero Fac is the product
     jsr CombineExponents
     lda #0
     sta Result1
@@ -148,8 +148,8 @@ Reduce:
     jmp NormalizeResult
 .endproc
 
-;; Adds <ArgExponent> times the multiplier byte in A into <Result1>, shifting <Result1> right a bit for each of its bits; a zero byte
-;; just shifts <Result1> a byte.
+;; Adds <Arg> times the multiplier byte in A into <Result1>, shifting <Result1> right a bit for each of its bits; a zero
+;; byte just shifts <Result1> a byte.
 ;; In: A = the multiplier byte
 ;; Entry:
 ;;   NonZero = skips the test for zero, for a byte that is never zero
@@ -166,7 +166,7 @@ NonZero:
     lsr a
     ora #$80
 
-;; Adds <ArgExponent> to <Result1> when the bit shifted out is set.
+;; Adds <Arg> to <Result1> when the bit shifted out is set.
 ;; In: carry = the bit, A = the bits left
 ;; Also: MLTPL2 (BB13)
 NextBit:
@@ -208,11 +208,11 @@ Done:
 ; Unpacking and exponents
 ; ---------------------------------------------------------------------------------------------------------------------
 
-;; Unpacks a real from memory into <ArgExponent>: five bytes from BASIC's own bank, or a variable's four from another.
+;; Unpacks a real from memory into <Arg>: five bytes from BASIC's own bank, or a variable's four from another.
 ;; In: A = the real's address, low byte, Y = its high byte, X = its bank, 0 for BASIC's own
-;; Out: ARG = the real, ARISGN = <ArgExponent>'s sign exclusive-ored with the <Fac>'s, A = <FacExponent>,
+;; Out: Arg = the real, ResultSign = <Arg>'s sign exclusive-ored with the <Fac>'s, A = <FacExponent>,
 ;;   zero = set for a zero <Fac>, Y = 0
-;; Uses: INDEX1
+;; Uses: Pointer1
 ;; Keeps: X
 ;; See: <Float::LoadFac>
 ;; Also: CONUPK (BB13)
@@ -234,7 +234,7 @@ Done:
     sta ArgMantissa2
     dey
     lda (Pointer1),y
-    sta ArgSign                              ; the sign is the top bit
+    sta ArgSign                             ; the sign is the top bit
     eor FacSign
     sta ResultSign
     lda ArgSign
@@ -247,12 +247,12 @@ Done:
     rts
 .endproc
 
-;; Adds <ArgExponent>'s exponent to <Fac>'s for a multiplication or division, and sets the result's sign.
+;; Adds <Arg>'s exponent to <Fac>'s for a multiplication or division, and sets the result's sign.
 ;;
-;; A zero <ArgExponent>, or a result too small to hold, makes the <Fac> zero and returns from the routine that called this
+;; A zero <Arg>, or a result too small to hold, makes the <Fac> zero and returns from the routine that called this
 ;; one; a result too large ends the statement with OVERFLOW. A result exponent of exactly 0 makes the <Fac> zero, its
 ;; sign too, and returns to the caller.
-;; Out: FACEXP = the sum, less the bias, FACSGN = <ResultSign>
+;; Out: FacExponent = the sum, less the bias, FacSign = <ResultSign>
 ;; See: <Float::AddExponent>
 ;; Also: MULDIV (BB13)
 .proc CombineExponents
@@ -310,7 +310,7 @@ NoCarry:
 .endproc
 
 ;; Multiplies <Fac> by 10: four times itself, plus itself, doubled.
-;; Out: ARG = the <Fac> as it was, rounded
+;; Out: Arg = the <Fac> as it was, rounded
 ;; Errors: OVERFLOW = the product is too large
 ;; Entry:
 ;;   Done = returns
@@ -325,7 +325,7 @@ NoCarry:
     ldx #0
     stx ResultSign
     jsr AlignAndAdd                         ; plus itself
-    inc FacExponent                              ; doubled
+    inc FacExponent                         ; doubled
     beq ToOverflowError
 
 ;; Returns.
@@ -356,7 +356,7 @@ Ten:
     ; Falls into DivideArgByPacked.
 .endproc
 
-;; Divides <ArgExponent> by the five-byte real at A, Y, giving the quotient the sign in X.
+;; Divides <Arg> by the five-byte real at A, Y, giving the quotient the sign in X.
 ;; In: A = the divisor's address, low byte, Y = its high byte, in BASIC's own bank, X = the quotient's sign
 ;; Also: FDIVF (BB13)
 .proc DivideArgByPacked
@@ -376,32 +376,32 @@ Ten:
     ; Falls into DivideArg.
 .endproc
 
-;; Divides <ArgExponent> by <Fac>, into the <Fac>, a bit of the quotient at a time; a zero <Fac> ends the statement with
-;; DIVISION BY ZERO.
-;; In: A = <FacExponent>, zero = set for a zero <Fac>, ARISGN = the quotient's sign
-;; Errors: DIVISION BY ZERO = the <Fac> is zero, OVERFLOW = the quotient is too large
+;; Divides <Arg> by <Fac>, into the <Fac>, a bit of the quotient at a time; a zero <Fac> ends the statement with
+;; DIVISION BY <ZeroValue>.
+;; In: A = <FacExponent>, zero = set for a zero <Fac>, ResultSign = the quotient's sign
+;; Errors: DIVISION BY <ZeroValue> = the <Fac> is zero, OVERFLOW = the quotient is too large
 ;; See: <Float::CombineExponents>, <Float::NormalizeResult>
 ;; Also: FDIVT (BB13)
 .proc DivideArg
     bne NotZero
     jmp DivisionByZero
 
-;; Divides by a <Fac> that is not zero: rounds it, subtracts its exponent from <ArgExponent>'s, and sets the marker bit that
+;; Divides by a <Fac> that is not zero: rounds it, subtracts its exponent from <Arg>'s, and sets the marker bit that
 ;; counts each quotient byte's eight bits.
 ;; Also: NO0ERR (BB13)
 NotZero:
     jsr Round
-    lda #0                                  ; negate the FAC's exponent, so CombineExponents subtracts it
+    lda #0                                  ; negate the Fac's exponent, so CombineExponents subtracts it
     sec
     sbc FacExponent
     sta FacExponent
     jsr CombineExponents
     inc FacExponent
     beq ToOverflowError
-    ldx #$100-3-1                           ; RES's bytes, from RESHO
+    ldx #$100-3-1                           ; Result1's bytes, from Result1
     lda #1                                  ; a marker bit, to count eight bits
 
-;; Compares <ArgExponent>'s mantissa with <Fac>'s, the divisor.
+;; Compares <Arg>'s mantissa with <Fac>'s, the divisor.
 ;; Also: DIVIDE (BB13)
 Compare:
     ldy ArgMantissa1
@@ -416,9 +416,9 @@ Compare:
     ldy ArgMantissa4
     cpy FacMantissa4
 
-;; Shifts the comparison's result, as the next bit of the quotient, into A; each full byte goes to <Result1>, and the last
-;; two bits to <FacExtension>.
-;; In: carry = set when the divisor goes into <ArgExponent>
+;; Shifts the comparison's result, as the next bit of the quotient, into A; each full byte goes to <Result1>, and the
+;; last two bits to <FacExtension>.
+;; In: carry = set when the divisor goes into <Arg>
 ;; Also: SAVQUO (BB13)
 SaveBit:
     php
@@ -426,17 +426,17 @@ SaveBit:
     bcc TestSubtract                        ; the byte is not full yet
     inx
     sta Result4,x
-    beq LastBits                            ; RESLO is done: two more bits
+    beq LastBits                            ; Result4 is done: two more bits
     bpl Finish                              ; the two more bits are done
     lda #1
 
-;; Subtracts the divisor when it went into <ArgExponent>, then shifts <ArgExponent> left a bit.
+;; Subtracts the divisor when it went into <Arg>, then shifts <Arg> left a bit.
 ;; Also: QSHFT (BB13)
 TestSubtract:
     plp
     bcs Subtract
 
-;; Shifts <ArgExponent> left a bit, then compares again; a bit carried out of <ArgExponent>'s top means the divisor goes in, and a clear
+;; Shifts <Arg> left a bit, then compares again; a bit carried out of <Arg>'s top means the divisor goes in, and a clear
 ;; top bit that it does not.
 ;; Also: SHFARG (BB13)
 ShiftDividend:
@@ -448,7 +448,7 @@ ShiftDividend:
     bmi Compare
     bpl SaveBit
 
-;; Subtracts the divisor from <ArgExponent>.
+;; Subtracts the divisor from <Arg>.
 ;; In: carry = set
 ;; Also: DIVSUB (BB13)
 Subtract:
@@ -485,7 +485,7 @@ Finish:
     plp
     jmp NormalizeResult
 
-;; Ends the statement with DIVISION BY ZERO, through <ReportError>.
+;; Ends the statement with DIVISION BY <ZeroValue>, through <ReportError>.
 ;; Also: DV0ERR (BB13)
 DivisionByZero:
     ldx #ERROR_DIVISION_BY_ZERO
@@ -513,8 +513,8 @@ DivisionByZero:
 
 ;; Unpacks a real from memory into <Fac>: five bytes from BASIC's own bank, or a variable's four from another.
 ;; In: A = the real's address, low byte, Y = its high byte, X = its bank, 0 for BASIC's own
-;; Out: A = <FacExponent>, zero = set for a zero <Fac>, FACOV = 0, Y = 0
-;; Uses: INDEX1
+;; Out: A = <FacExponent>, zero = set for a zero <Fac>, FacExtension = 0, Y = 0
+;; Uses: Pointer1
 ;; Keeps: X
 ;; Also: MOVFM (BB13)
 .proc LoadFac
@@ -535,7 +535,7 @@ DivisionByZero:
     sta FacMantissa2
     dey
     lda (Pointer1),y
-    sta FacSign                              ; the sign is the top bit
+    sta FacSign                             ; the sign is the top bit
     ora #$80                                ; the implied 1
     sta FacMantissa1
     dey
@@ -578,11 +578,11 @@ DivisionByZero:
 ;; mantissa bytes, in another.
 ;;
 ;; In BASIC's own bank the fifth byte is stored and the variable's rounding skipped, except that a fifth byte of zero
-;; doesn't skip it: <Float::RoundForVariable> then rounds once more by the next bit of <FacExtension>, which can only make
-;; <FacMantissa4> 1, and clears <FacMantissa4> again, so the bytes stored are the same.
+;; doesn't skip it: <Float::RoundForVariable> then rounds once more by the next bit of <FacExtension>, which can only
+;; make <FacMantissa4> 1, and clears <FacMantissa4> again, so the bytes stored are the same.
 ;; In: X = the address, low byte, Y = its high byte, A = the bank, 0 for BASIC's own
-;; Out: X = the bank, Y = 0, FACOV = 0
-;; Uses: INDEX1
+;; Out: X = the bank, Y = 0, FacExtension = 0
+;; Uses: Pointer1
 ;; Entry:
 ;;   AtPointer = stores at the address and bank already in <Pointer1> and its X-byte, with the bank in A as well
 ;; See: <Float::Round>, <Float::RoundForVariable>
@@ -601,7 +601,7 @@ AtPointer:
     bne ToVariable                          ; a variable
     jsr Round
     lda FacMantissa4
-    sta (Pointer1),y                           ; the fifth byte
+    sta (Pointer1),y                        ; the fifth byte
     bne *+5                                 ; skip ToVariable's rounding (not for a fifth byte of zero)
 
 ;; Rounds <Fac> to a variable's three mantissa bytes, then stores the first four bytes.
@@ -615,7 +615,7 @@ ToVariable:
     lda FacMantissa2
     sta (Pointer1),y
     dey
-    lda FacSign                              ; the sign, in place of the implied 1
+    lda FacSign                             ; the sign, in place of the implied 1
     ora #$7F
     and FacMantissa1
     sta (Pointer1),y
@@ -627,7 +627,7 @@ ToVariable:
 .endproc
 
 ;; Rounds <Fac> to the three mantissa bytes a variable keeps, to the nearest, a half to even, and clears <FacMantissa4>.
-;; Out: FACLO = 0
+;; Out: FacMantissa4 = 0
 ;; Keeps: X, Y
 ;; See: <Float::Round>
 ;; Also: ROUNDER (BB13)
@@ -639,10 +639,10 @@ ToVariable:
     sta Temporary
     lda FacMantissa3
     and #1
-    ora Temporary                                ; above a half, or a half with FACMO odd: up
+    ora Temporary                           ; above a half, or a half with FacMantissa3 odd: up
     beq ClearLow
     lda #$FF
-    sta FacMantissa4                               ; so that adding one carries into FACMO
+    sta FacMantissa4                        ; so that adding one carries into FacMantissa3
     jsr Round::Increment
 
 ;; Clears <FacMantissa4>.
@@ -653,8 +653,8 @@ ClearLow:
     rts
 .endproc
 
-;; Moves <ArgExponent> into <Fac>.
-;; Out: X = 0, FACOV = 0
+;; Moves <Arg> into <Fac>.
+;; Out: X = 0, FacExtension = 0
 ;; Keeps: Y
 ;; Also: MOVFA (BB13)
 .proc CopyArgToFac
@@ -662,9 +662,9 @@ ClearLow:
     ; Falls into CopyArgToFacWithSign.
 .endproc
 
-;; Moves <ArgExponent>'s exponent and mantissa into <Fac>, with A as its sign.
+;; Moves <Arg>'s exponent and mantissa into <Fac>, with A as its sign.
 ;; In: A = the sign
-;; Out: X = 0, FACOV = 0
+;; Out: X = 0, FacExtension = 0
 ;; Keeps: Y
 ;; Also: MOVFA1 (BB13)
 .proc CopyArgToFacWithSign
@@ -682,8 +682,8 @@ Loop:
     rts
 .endproc
 
-;; Rounds <Fac> and copies it, with its sign, into <ArgExponent>.
-;; Out: A = <FacExponent>, X = 0, FACOV = 0
+;; Rounds <Fac> and copies it, with its sign, into <Arg>.
+;; Out: A = <FacExponent>, X = 0, FacExtension = 0
 ;; Keeps: Y
 ;; See: <Float::Round>
 ;; Also: MOVAF (BB13)
@@ -692,8 +692,8 @@ Loop:
     ; Falls into CopyFacToArgUnrounded.
 .endproc
 
-;; Copies <Fac>, with its sign, into <ArgExponent> without rounding it.
-;; Out: A = <FacExponent>, X = 0, FACOV = 0
+;; Copies <Fac>, with its sign, into <Arg> without rounding it.
+;; Out: A = <FacExponent>, X = 0, FacExtension = 0
 ;; Keeps: Y
 ;; Also: MOVEF (BB13)
 .proc CopyFacToArgUnrounded
@@ -865,12 +865,12 @@ RELATION_MATCH_BITS = 25
 ;; The bits <Float::Compare> compares in, plus one: a 32-bit mantissa, a constant's.
 PACKED_MATCH_BITS = 33
 
-;; Compares <ArgExponent> with <Fac>, taking them as equal when they match to 24 bits.
+;; Compares <Arg> with <Fac>, taking them as equal when they match to 24 bits.
 ;;
-;; It subtracts the <Fac> from <ArgExponent> and calls them equal when the difference's exponent is at least 25 below the
-;; <Fac>'s. The <Fac> is kept, but <ArgExponent> and <FacExtension> are not.
-;; Out: A = 1 when <ArgExponent> is less, 0 when equal, $FF when <ArgExponent> is greater
-;; Uses: KIMY, TEMP
+;; It subtracts the <Fac> from <Arg> and calls them equal when the difference's exponent is at least 25 below the
+;; <Fac>'s. The <Fac> is kept, but <Arg> and <FacExtension> are not.
+;; Out: A = 1 when <Arg> is less, 0 when equal, $FF when <Arg> is greater
+;; Uses: KeptY, Temporary
 ;; See: <Float::Compare>
 ;; Also: FCOMPARG (BB13)
 .proc CompareArg
@@ -879,10 +879,10 @@ PACKED_MATCH_BITS = 33
     ; Falls into CompareArgWithin.
 .endproc
 
-;; Compares <ArgExponent> with <Fac>, as <Float::CompareArg> does, with <Float::MatchBits> bits that must match.
+;; Compares <Arg> with <Fac>, as <Float::CompareArg> does, with <Float::MatchBits> bits that must match.
 ;; In: MatchBits = the bits that must match, plus one
-;; Out: A = 1 when <ArgExponent> is less, 0 when equal, $FF when <ArgExponent> is greater
-;; Uses: TEMP
+;; Out: A = 1 when <Arg> is less, 0 when equal, $FF when <Arg> is greater
+;; Uses: Temporary
 ;; Also: FCOMPA1 (BB13)
 .proc CompareArgWithin
 
@@ -891,7 +891,7 @@ DifferenceExponent = Temporary
 
     lda FacSign
     eor ArgSign
-    bmi GetSign::FromSignByte               ; the signs differ: the FAC's sign is the answer
+    bmi GetSign::FromSignByte               ; the signs differ: the Fac's sign is the answer
     ldx #UNPACKED_SIZE - 1
 
 ;; Saves <Fac> on the stack.
@@ -902,7 +902,7 @@ SaveFac:
     dex
     bpl SaveFac
     jsr SubtractFromArg
-    ldy FacSign                              ; the difference's sign
+    ldy FacSign                             ; the difference's sign
     lda FacExponent
     sta DifferenceExponent
     ldx #$100-UNPACKED_SIZE
@@ -911,7 +911,7 @@ SaveFac:
 ;; Also: PHFAC35 (BB13)
 RestoreFac:
     pla
-    sta Fac+UNPACKED_SIZE,x                 ; FAC to FAC+5, as zero page wraps
+    sta Fac+UNPACKED_SIZE,x                 ; Fac to Fac+5, as zero page wraps
     inx
     bne RestoreFac
     lda DifferenceExponent
@@ -919,7 +919,7 @@ RestoreFac:
     lda FacExponent
     sec
     sbc DifferenceExponent
-    bcc Unequal                             ; the difference is larger than the FAC
+    bcc Unequal                             ; the difference is larger than the Fac
     cmp MatchBits
     bcs Equal                               ; so small it counts as none
 
@@ -951,7 +951,7 @@ Equal:
 ;; Compares the real at A, Y with <Fac>, taking them as equal when they match to 32 bits.
 ;; In: A = the real's address, low byte, Y = its high byte, X = its bank, 0 for BASIC's own
 ;; Out: A = 1 when the real is less, 0 when equal, $FF when it is greater
-;; Uses: KIMY, TEMP
+;; Uses: KeptY, Temporary
 ;; See: <Float::CompareArg>, <Float::LoadArg>
 ;; Also: FCOMP (BB13)
 .proc Compare
@@ -965,19 +965,19 @@ Equal:
 ; Integer part
 ; ---------------------------------------------------------------------------------------------------------------------
 
-;; Turns <Fac> into a signed 32-bit integer in <FacMantissa1>, <FacMantissa2>, <FacMantissa3> and <FacMantissa4>, high byte first: the greatest
-;; integer not above it.
+;; Turns <Fac> into a signed 32-bit integer in <FacMantissa1>, <FacMantissa2>, <FacMantissa3> and <FacMantissa4>, high
+;; byte first: the greatest integer not above it.
 ;;
 ;; A negative number is negated into two's complement first, then shifted with ones coming in from the left. The
 ;; <Fac> must be below 2^31 in size, an exponent below <Float::LONG_INTEGER_EXPONENT>: a larger one isn't checked, and
 ;; gives a wrong result. The exponent and sign are left as they were. The routine goes on in B3FinpM.asm.
 ;; Out: Y = 0
-;; Uses: BITS
+;; Uses: ShiftFill
 ;; See: <Functions::Int>, <Float::ShiftRightFilled>
 ;; Also: QINT (BB13)
 .proc ToLongInteger
     lda #0
-    sta ShiftFill                                ; zeros come in for a positive number
+    sta ShiftFill                           ; zeros come in for a positive number
     lda FacExponent
     beq ClearMantissa
     sec
@@ -986,7 +986,7 @@ Equal:
     bpl Shift
     tax
     lda #$FF
-    sta ShiftFill                                ; ones come in for a negative number
+    sta ShiftFill                           ; ones come in for a negative number
     jsr ComplementMantissa
     txa
 

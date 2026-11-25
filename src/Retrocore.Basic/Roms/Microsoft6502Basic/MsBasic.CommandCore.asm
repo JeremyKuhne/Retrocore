@@ -156,8 +156,8 @@ StoreToken:
 StoreByte:
     inx
     iny
-    sta BUF-5,y
-    lda BUF-5,y
+    sta InputBuffer-5,y
+    lda InputBuffer-5,y
     beq Finish
     sec
     sbc #':'
@@ -194,7 +194,7 @@ CopyLiteral:
 ;; Also: STRNG (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 StoreLiteral:
     iny
-    sta BUF-5,y
+    sta InputBuffer-5,y
     inx
     bne CopyLiteral
 .endmacro

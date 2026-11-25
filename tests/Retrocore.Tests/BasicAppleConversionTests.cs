@@ -29,14 +29,15 @@ public sealed class BasicAppleConversionTests
     private static readonly string[] s_appleKeys = ["M6502", "UNKN", "ASTIL", "AS82", "ASRM78"];
 
     // The definitions that give no overlay name of their own: the new constants, the build switches' defaults, and
-    // HighRes::SetColor, the Technical Information Library's SETHCOL, which the overlay does not label (Basic.md E-Q3).
+    // HighRes::SetColor, the Technical Information Library's SETHCOL, which the overlay does not label (Basic.md E-Q3),
+    // and the hi-res engine's names for the Monitor's bytes it borrows, whose old names are the Monitor's (E-Q5).
     private static readonly HashSet<string> s_sdkNames =
     [
         "LOW_RES_ROWS", "LOW_RES_COLUMNS", "TEXT_ROWS", "INVERSE_MASK_NORMAL", "INVERSE_MASK_INVERSE",
         "INVERSE_MASK_FLASH", "FLASH_MASK_FLASH", "HIGH_RES_PAGE1", "HIGH_RES_PAGE2", "PIXELS_PER_BYTE",
         "HIGH_RES_ROW_BYTES", "HIGH_RES_COLUMNS", "HIGH_RES_ROWS", "HIGH_RES_COLORS", "FIRST_PIXEL_MASK",
         "LAST_PIXEL_MASK", "SHAPE_PLOT_BIT", "COMMA_LIMIT_40", "COMMA_LIMIT_80", "ENHNCD", "APLPLS",
-        "HighRes::SetColor"
+        "HighRes::SetColor", "HighRes::PixelMask", "HighRes::ByteAddress", "HighRes::ByteAddressHigh"
     ];
 
     private const int MinimumOverlayNames = 100;
@@ -57,6 +58,12 @@ public sealed class BasicAppleConversionTests
         AssemblyResult legacy = SdkModules.AssembleAppleSoft(Path.Join(AppleFolder, "applesoft.mac"), model);
         BasicWorkspaceConversionTests.CheckAgainstOverlay(
             native, legacy, Files, minimum: MinimumOverlayNames, s_sdkNames, scoped: true);
+
+        // The hi-res engine's names for the Monitor's bytes, which the comparison leaves out, are those bytes (E-Q5).
+        native.Symbol("HighRes::PixelMask").Should().Be(native.Symbol("PlotColor"));
+        native.Symbol("HighRes::ByteAddress").Should().Be(native.Symbol("LowResBase"));
+        native.Symbol("HighRes::ByteAddressHigh").Should().Be(native.Symbol("LowResBaseHigh"));
+        native.DefinitionName("HBAS").Should().Be("HighRes::ByteAddress", "ASTIL's HBAS is the hi-res byte address");
     }
 
     /// <summary>

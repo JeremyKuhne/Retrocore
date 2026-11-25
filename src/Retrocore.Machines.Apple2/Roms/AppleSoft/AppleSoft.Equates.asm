@@ -165,7 +165,7 @@ TangentSign = $16
 ;; Also: CNTWFL (M6502)
 OutputSuppressed = $8F
 
-;; Terminal position alias of <CH>.
+;; BASIC's name for the Monitor's cursor column, <CursorColumn>.
 ;; Also: TRMPOS (M6502)
 TerminalPosition = $24
 
@@ -665,245 +665,118 @@ ShapeRotation = $F9
 ;; Also: AMPERV (UNKN)
 AmpersandJump = $03F5
 
-; AppleSoft's copies of the Monitor's, the IIe's and the firmware's names, which keep their names until AppleSoft
-; includes IIeEquates.asm and MonitorEntries.asm (decision X10). Microsoft's LINWID names $25, which is the
-; Monitor's CV and not a width; it is not defined.
-;; Monitor line-input entry used by the Microsoft build.
-CQINLN = $FD67
+; The IIe's page zero, low memory, soft switches and keys (decision X10), in every AppleSoft build, the II Plus's too.
+.include "../System/IIeEquates.asm"
 
-;; Monitor prompt character location.
-CQPRMP = $33
+; The Monitor's and the firmware's definitions that AppleSoft uses or that carry its old names, at their addresses, as
+; DOS defines the Monitor's routines it calls. Each cites Apple's names and AppleSoft's and Microsoft's own spellings,
+; except Apple's PLOT, READ and WAIT, which are names of AppleSoft's statements.
 
-;; Monitor character-input entry.
-CQINCH = $FD0C
+;; The Monitor's low-resolution graphics routines, in its <Monitor:LowRes> family, that the graphics statements call.
+.scope LowRes
 
-;; Monitor cassette-write entry in the Microsoft build.
-CQCOUT = $FECD
+;; Inherit: <Monitor:LowRes::Plot>
+;; Also: MPLOT (UNKN)
+Plot = $F800
 
-;; Monitor cassette-read entry in the Microsoft build.
-CQCSIN = $FEFD
+;; Inherit: <Monitor:LowRes::HorizontalLine>
+;; Also: HLINE (A2RM78, A2RM79, IIEROM82, IIETRM85)
+HorizontalLine = $F819
 
-;; Line input and tokenization buffer in page two.
-BUF = $0200
+;; Inherit: <Monitor:LowRes::VerticalLine>
+;; Also: VLINE (A2RM78, A2RM79, IIEROM82, IIETRM85)
+VerticalLine = $F828
 
-;; Monitor character-output entry.
-OUTCH = $FDED
+;; Inherit: <Monitor:LowRes::SetColor>
+;; Also: SETCOL (A2RM78, A2RM79, IIEROM82, IIETRM85)
+SetColor = $F864
 
-;; Monitor text window's left edge.
-WNDLFT = $20
+;; Inherit: <Monitor:LowRes::ReadColor>
+;; Also: SCRN (A2RM78, A2RM79, IIEROM82, IIETRM85), MSCRN (UNKN)
+ReadColor = $F871
 
-;; Monitor text window width.
-WNDWDT = $21
+.endscope
 
-;; Monitor text window's top edge.
-WNDTOP = $22
+;; Inherit: <Monitor:ReadPaddle>
+;; Also: PREAD (A2RM78, A2RM79, IIEROM82, IIETRM85)
+ReadPaddle = $FB1E
 
-;; Monitor text window's bottom edge.
-WNDBTM = $23
+;; Inherit: <Monitor:SetText>
+;; Also: SETTXT (A2RM78, A2RM79, IIEROM82, IIETRM85)
+SetText = $FB39
 
-;; Monitor cursor column, shared with <TerminalPosition>.
-CH = $24
+;; Inherit: <Monitor:SetGraphics>
+;; Also: SETGR (A2RM78, A2RM79, IIEROM82, IIETRM85)
+SetGraphics = $FB40
 
-;; Monitor cursor row.
+;; Inherit: <Monitor:VerticalTabTo>
+;; Also: TABV (A2RM78, A2RM79, IIEROM82, IIETRM85)
+VerticalTabTo = $FB5B
+
+;; Inherit: <Monitor:Home>
+;; Also: HOME (A2RM78, A2RM79, IIEROM82, IIETRM85)
+Home = $FC58
+
+;; Inherit: <Monitor:Delay>
+;; Also: MWAIT (UNKN)
+Delay = $FCA8
+
+;; The Monitor's cassette bit reader, in its <Monitor:Cassette> family, that the shape-table load calls.
+.scope Cassette
+
+;; Inherit: <Monitor:Cassette::ReadBit>
+;; Also: RD2BIT (A2RM78, A2RM79, IIEROM82)
+ReadBit = $FCFA
+
+.endscope
+
+;; Inherit: <Monitor:ReadKey>
+;; Also: RDKEY (A2RM78, A2RM79, IIEROM82, IIETRM85), CQINCH (M6502)
+ReadKey = $FD0C
+
+;; Inherit: <Monitor:GetLineAfterReturn>
+;; Also: GETLNZ (A2RM78, A2RM79, IIEROM82, IIETRM85), CQINLN (M6502)
+GetLineAfterReturn = $FD67
+
+;; Inherit: <Monitor:GetLine>
+;; Also: GETLN (A2RM78, A2RM79, IIEROM82, IIETRM85)
+GetLine = $FD6A
+
+;; Inherit: <Monitor:CharacterOut>
+;; Also: COUT (A2RM78, A2RM79, IIEROM82, IIETRM85), OUTCH (M6502)
+CharacterOut = $FDED
+
+;; Inherit: <Monitor:SetInput>
+;; Also: INPORT (A2RM78, A2RM79, IIEROM82, IIETRM85)
+SetInput = $FE8B
+
+;; Inherit: <Monitor:SetOutput>
+;; Also: OUTPORT (A2RM78, A2RM79, IIEROM82, IIETRM85), OUTPOR (UNKN)
+SetOutput = $FE95
+
+;; Inherit: <Monitor:WriteCassette>
+;; Also: WRITE (A2RM78, A2RM79, IIEROM82, IIETRM85), MWRITE (UNKN), CQCOUT (M6502)
+WriteCassette = $FECD
+
+;; Inherit: <Monitor:ReadCassette>
+;; Also: MREAD (UNKN), CQCSIN (M6502)
+ReadCassette = $FEFD
+
+; Microsoft's LINWID names $25 too, but it is the Monitor's cursor line, not a width; LINWID is not defined.
+;; Inherit: <Monitor:CV>
 CV = $25
 
-;; Low byte of the Monitor lo-res graphics base address.
-GBASL = $26
+;; The 80-column firmware's state that AppleSoft reads.
+.scope EightyColumns
 
-;; High byte of <GBASL>.
-GBASH = $27
+;; Inherit: <Firmware:EightyColumns::CursorColumn>
+;; Also: OURCH (IIEROM82, IIETRM85)
+CursorColumn = $057B
 
-;; Low byte of the Monitor text row base address.
-BASL = $28
+.endscope
 
-;; High byte of <BASL>.
-BASH = $29
+;; Inherit: <Firmware:AppleSoftCassette>
+;; Also: BASTAPE (UNKN), C5ROM (UNKN)
+AppleSoftCassette = $C500
 
-;; Monitor lo-res horizontal line endpoint.
-H2 = $2C
-
-;; Monitor lo-res vertical line endpoint.
-V2 = $2D
-
-;; Monitor lo-res color mask.
-MASK = $2E
-
-;; Monitor length scratch.
-LENGTH = $2F
-
-;; Monitor lo-res color.
-COLOR = $30
-
-;; Monitor mode scratch.
-MODE = $31
-
-;; Monitor normal, inverse or flashing text mask.
-INVFLG = $32
-
-;; Monitor prompt character.
-PROMPT = $33
-
-;; Monitor Y-register scratch.
-YSAV = $34
-
-;; Additional Monitor Y-register scratch.
-YSAV1 = $35
-
-;; Low byte of the Monitor character-output vector.
-CSWL = $36
-
-;; High byte of <CSWL>.
-CSWH = $37
-
-;; Low byte of the Monitor character-input vector.
-KSWL = $38
-
-;; High byte of <KSWL>.
-KSWH = $39
-
-;; Low byte of the Monitor program counter.
-PCL = $3A
-
-;; High byte of <PCL>.
-PCH = $3B
-
-;; Low byte of the Monitor first address parameter.
-A1L = $3C
-
-;; High byte of <A1L>.
-A1H = $3D
-
-;; Low byte of the Monitor second address parameter.
-A2L = $3E
-
-;; High byte of <A2L>.
-A2H = $3F
-
-;; Low byte of the Monitor third address parameter.
-A3L = $40
-
-;; High byte of <A3L>.
-A3H = $41
-
-;; Low byte of the Monitor fourth address parameter.
-A4L = $42
-
-;; High byte of <A4L>.
-A4H = $43
-
-;; Low byte of the Monitor fifth address parameter.
-A5L = $44
-
-;; High byte of <A5L>.
-A5H = $45
-
-;; Monitor saved X register.
-XREG = $46
-
-;; Monitor saved Y register.
-YREG = $47
-
-;; Monitor saved processor status.
-STATUS = $48
-
-;; Low byte of the Monitor keyboard timing counter.
-RNDL = $4E
-
-;; High byte of <RNDL>.
-RNDH = $4F
-
-;; 80-column firmware horizontal cursor position.
-OURCH = $057B
-
-
-; Hardware switches and Monitor or firmware entry points, which X10 decides.
-;; Keyboard data soft switch.
-KBD = $C000
-
-;; Select slot ROMs at $C100-$CFFF on the IIe.
-SETSLO = $C006
-
-;; Select internal ROM at $C100-$CFFF on the IIe.
-SETINT = $C007
-
-;; IIe 80-column display status, in bit 7.
-RD80VI = $C01F
-
-;; Select graphics display.
-TXTCLR = $C050
-
-;; Select text display.
-TXTSET = $C051
-
-;; Select full-screen graphics.
-MIXCLR = $C052
-
-;; Select mixed text and graphics.
-MIXSET = $C053
-
-;; Select display page one.
-LOWSCR = $C054
-
-;; Select display page two.
-HISCR = $C055
-
-;; Select lo-res graphics.
-LORES = $C056
-
-;; Select hi-res graphics.
-HIRES = $C057
-
-;; Monitor lo-res plot entry.
-MPLOT = $F800
-
-;; Monitor lo-res horizontal line entry.
-HLINE = $F819
-
-;; Monitor lo-res vertical line entry.
-VLINE = $F828
-
-;; Monitor lo-res color entry.
-SETCOL = $F864
-
-;; Monitor lo-res screen-read entry.
-MSCRN = $F871
-
-;; Monitor paddle-read entry.
-PREAD = $FB1E
-
-;; Monitor text-mode entry.
-SETTXT = $FB39
-
-;; Monitor graphics-mode entry.
-SETGR = $FB40
-
-;; Monitor vertical-tab entry.
-TABV = $FB5B
-
-;; Monitor home and clear-screen entry.
-HOME = $FC58
-
-;; Monitor delay entry.
-MWAIT = $FCA8
-
-;; Monitor cassette bit-read entry.
-RD2BIT = $FCFA
-
-;; Monitor line-input entry.
-GETLN = $FD6A
-
-;; Monitor input-slot selection entry.
-INPORT = $FE8B
-
-;; Monitor output-slot selection entry.
-OUTPOR = $FE95
-
-;; Monitor cassette-write entry.
-MWRITE = $FECD
-
-;; Monitor cassette-read entry.
-MREAD = $FEFD
-
-;; Enhanced IIe internal firmware at $C500.
-C5ROM = $C500
 .org $D000

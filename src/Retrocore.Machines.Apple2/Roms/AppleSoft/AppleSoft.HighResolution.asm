@@ -3,8 +3,8 @@
 ;
 ; The graphics engine, the scope HighRes, selects and clears pages, positions pixels, draws lines and draws rotated
 ; and scaled shapes. The statement handlers for coordinates, colors, plotting and shapes follow it. The engine borrows
-; Monitor bytes: COLOR is its pixel mask, GBASL and GBASH the screen byte's address. This module follows
-; AppleSoft.AppleCommands.asm.
+; Monitor bytes, under its own names for them: PixelMask is the Monitor's PlotColor, and ByteAddress and
+; ByteAddressHigh its LowResBase and LowResBaseHigh. This module follows AppleSoft.AppleCommands.asm.
 
 ;; The first high-resolution page's high byte.
 HIGH_RES_PAGE1 = $20
@@ -43,8 +43,8 @@ SHAPE_PLOT_BIT = 4
 ;; `HGR2`: shows page 2 full screen and selects drawing page <HIGH_RES_PAGE2> through <HighRes::SelectPage>.
 ;; Also: HGR2 (ASTIL)
 .proc HGr2
-    bit HISCR
-    bit MIXCLR
+    bit Page2On
+    bit MixedOff
     lda #HIGH_RES_PAGE2
     bne HighRes::SelectPage
 .endproc
@@ -53,8 +53,8 @@ SHAPE_PLOT_BIT = 4
 ;; Also: HGR (ASTIL)
 .proc HGr
     lda #HIGH_RES_PAGE1
-    bit LOWSCR
-    bit MIXSET
+    bit Page2Off
+    bit MixedOn
     ; Falls into HighRes::SelectPage.
 .endproc
 
@@ -62,14 +62,24 @@ SHAPE_PLOT_BIT = 4
 
 .scope HighRes
 
+;; The pixel mask: the Monitor's <::PlotColor>, which the engine borrows for the bit of the pixel in its byte.
+PixelMask = ::PlotColor
+
+;; The address of the screen byte the cursor is in: the Monitor's <::LowResBase>, which the engine borrows.
+;; Also: HBAS (ASTIL)
+ByteAddress = ::LowResBase
+
+;; The address's high byte: the Monitor's <::LowResBaseHigh>.
+ByteAddressHigh = ::LowResBaseHigh
+
 ;; Stores the page's high byte in <HighResPage>, switches to high-resolution graphics, and falls into
 ;; <HighRes::Clear>.
 ;; In: A = the page's high byte
 ;; Also: HGR1 (UNKN)
 .proc SelectPage
     sta HighResPage
-    lda HIRES
-    lda TXTCLR
+    lda HiResOn
+    lda TextOff
     ; Falls into Clear.
 .endproc
 
@@ -105,8 +115,8 @@ NextByte:
     rts
 .endproc
 
-;; Positions the cursor at a pixel: sets <GBASL> and <GBASH> to its row's address, <HighResByteIndex> to its byte, and
-;; <COLOR> to its pixel mask, and puts <HighResColor> in phase for that byte in <HighResColorByte>.
+;; Positions the cursor at a pixel: sets <ByteAddress> and <ByteAddressHigh> to its row's address, <HighResByteIndex> to
+;; its byte, and <PixelMask> to its pixel mask, and puts <HighResColor> in phase for that byte in <HighResColorByte>.
 ;; In: A = the row, X = the column's low byte, Y = its high byte
 ;; Out: HighResX = the column, HighResY = the row, HighResByteIndex = the byte, Y = the byte
 ;; Also: HPOSN (ASTIL)
@@ -116,25 +126,25 @@ NextByte:
     sty HighResX+1
     pha
     and #$C0
-    sta GBASL
+    sta ByteAddress
     lsr a
     lsr a
-    ora GBASL
-    sta GBASL
+    ora ByteAddress
+    sta ByteAddress
     pla
-    sta GBASH
+    sta ByteAddressHigh
     asl a
     asl a
     asl a
-    rol GBASH
+    rol ByteAddressHigh
     asl a
-    rol GBASH
+    rol ByteAddressHigh
     asl a
-    ror GBASL
-    lda GBASH
+    ror ByteAddress
+    lda ByteAddressHigh
     and #$1F
     ora HighResPage
-    sta GBASH
+    sta ByteAddressHigh
     txa
     cpy #0
     beq Divide
@@ -154,7 +164,7 @@ Divide:
     sty HighResByteIndex
     tax
     lda PixelMasks-$F9,x            ; X is $F9-$FF after the division
-    sta COLOR
+    sta PixelMask
     tya
     lsr a
     lda HighResColor
@@ -163,21 +173,21 @@ Divide:
     rts
 .endproc
 
-;; Positions the cursor and sets the pixel to <HighResColorByte> under the mask in <COLOR>. Apple's Technical
+;; Positions the cursor and sets the pixel to <HighResColorByte> under the mask in <PixelMask>. Apple's Technical
 ;; Information Library calls this entry HPLOT, the name the statement has.
 ;; In: A = the row, X = the column's low byte, Y = its high byte
 ;; Also: HPLOT0 (UNKN)
 .proc Plot
     jsr Position
     lda HighResColorByte
-    eor (GBASL),y
-    and COLOR
-    eor (GBASL),y
-    sta (GBASL),y
+    eor (ByteAddress),y
+    and PixelMask
+    eor (ByteAddress),y
+    sta (ByteAddress),y
     rts
 .endproc
 
-;; Moves the pixel mask in <COLOR> one pixel left (negative set) or right, changing <HighResByteIndex> and wrapping
+;; Moves the pixel mask in <PixelMask> one pixel left (negative set) or right, changing <HighResByteIndex> and wrapping
 ;; within the row (0 to 39) rather than stopping at its edge.
 ;; In: negative = set to step left, as the caller's load or shift of the direction leaves it, Y = <HighResByteIndex>
 ;; Entry:
@@ -186,15 +196,15 @@ Divide:
 ;; Also: LFTRT (UNKN)
 .proc StepHorizontal
     bpl Right
-    lda COLOR
+    lda PixelMask
     lsr a
     bcs PreviousByte
     eor #$C0                        ; clears the phase bit the shift moved into bit 6, and sets bit 7
 
-;; Stores the new mask in <COLOR> and returns.
+;; Stores the new mask in <PixelMask> and returns.
 ;; Also: LFTRT1 (UNKN)
 SetMask:
-    sta COLOR
+    sta PixelMask
     rts
 
 ;; Steps <HighResByteIndex> back a byte, from 0 to 39.
@@ -212,7 +222,7 @@ LastPixel:
 ;; Stores the mask and <HighResByteIndex> for the new byte, and falls into `AdjustColor` with <HighResColorByte>.
 ;; Also: LFTRT4 (UNKN)
 NewByte:
-    sta COLOR
+    sta PixelMask
     sty HighResByteIndex
     lda HighResColorByte
 
@@ -234,7 +244,7 @@ Done:
 ;; Moves the mask right; past the byte's last pixel, takes the next byte's first, from 39 to 0.
 ;; Also: LFTRT7 (UNKN)
 Right:
-    lda COLOR
+    lda PixelMask
     asl a
     eor #$80
     bmi SetMask
@@ -264,12 +274,12 @@ Across:
     and #SHAPE_PLOT_BIT
     beq PlotStep::Move
     lda #$7F                        ; the pixel bits
-    and COLOR
-    and (GBASL),y
+    and PixelMask
+    and (ByteAddress),y
     bne PlotStep::WritePixel
     inc CollisionCount
     lda #$7F
-    and COLOR
+    and PixelMask
     bpl PlotStep::WritePixel
 .endproc
 
@@ -292,17 +302,17 @@ Across:
     lda HighResDeltaX+1
     and #SHAPE_PLOT_BIT
     beq Move
-    lda (GBASL),y
+    lda (ByteAddress),y
     eor HighResColorByte
-    and COLOR
+    and PixelMask
     bne WritePixel
     inc CollisionCount
 
 ;; Writes the masked change into the screen byte.
 ;; Also: XDRPN2 (UNKN)
 WritePixel:
-    eor (GBASL),y
-    sta (GBASL),y
+    eor (ByteAddress),y
+    sta (ByteAddress),y
 
 ;; Adds <HighResQuadrant> and carry to the vector's direction and steps horizontally or, falling through, vertically.
 ;; Also: XDRPN3 (UNKN)
@@ -320,20 +330,21 @@ LowTwoBitsMask = * + 1
     ; Falls into StepVertical.
 .endproc
 
-;; Moves the cursor's <GBASL> and <GBASH> one row up (negative clear) or down through the interleaved screen layout.
+;; Moves the cursor's <ByteAddress> and <ByteAddressHigh> one row up (negative clear) or down through the interleaved
+;; screen layout.
 ;;
 ;; The 10 bytes after its last `bcc` are unreachable: that branch is always taken, since the `asl` clears bit 0 of
-;; <GBASL> and the `ror` moves it into carry. They would zero <HighResX> and <HighResY> and fall into
+;; <ByteAddress> and the `ror` moves it into carry. They would zero <HighResX> and <HighResY> and fall into
 ;; <HighRes::Line>, drawing a line from (0,0).
 ;; In: negative = set to step down, as the caller's load or shift of the direction leaves it
 ;; Also: UPDWN (UNKN)
 .proc StepVertical
     bmi Down
     clc
-    lda GBASH
+    lda ByteAddressHigh
     bit RowInGroupMask
     bne UpRow
-    asl GBASL
+    asl ByteAddress
     bcs UpGroup
     bit PlotStep::LowTwoBitsMask
     beq UpThird
@@ -341,20 +352,20 @@ LowTwoBitsMask = * + 1
     sec
     bcs UpRotate
 
-;; Moving up out of a third of the screen: adjusts the high byte and moves <GBASL> back across the third.
+;; Moving up out of a third of the screen: adjusts the high byte and moves <ByteAddress> back across the third.
 ;; Also: UPDWN1 (UNKN)
 UpThird:
     adc #$23
     pha
-    lda GBASL
+    lda ByteAddress
     adc #$B0
     bcs UpThirdStore
     adc #$F0
 
-;; Stores the adjusted <GBASL>.
+;; Stores the adjusted <ByteAddress>.
 ;; Also: UPDWN2 (UNKN)
 UpThirdStore:
-    sta GBASL
+    sta ByteAddress
     pla
     bcs UpRotate
 
@@ -363,10 +374,10 @@ UpThirdStore:
 UpGroup:
     adc #$1F
 
-;; Rotates the group bit back into <GBASL>.
+;; Rotates the group bit back into <ByteAddress>.
 ;; Also: UPDWN4 (UNKN)
 UpRotate:
-    ror GBASL
+    ror ByteAddress
 
 ;; Subtracts 4 from the high byte: the previous row in the group.
 ;; Also: UPDWN5 (UNKN)
@@ -376,14 +387,14 @@ UpRow:
 ;; Stores the high byte and returns.
 ;; Also: UPDWN6 (UNKN)
 StoreHigh:
-    sta GBASH
+    sta ByteAddressHigh
     rts
     .byte $18                       ; unused
 
 ;; Moving down: adds 4 to the high byte, the next row in the group, crossing groups and thirds when it overflows.
 ;; Also: UPDWN7 (UNKN)
 Down:
-    lda GBASH
+    lda ByteAddressHigh
 
 ;; The `adc`'s operand, 4, which the later `bit BitTwoMask` also reads to test bit 2 of the high byte.
 ;; Also: MASK04 (UNKN)
@@ -391,22 +402,22 @@ BitTwoMask = * + 1
     adc #4
     bit RowInGroupMask
     bne StoreHigh
-    asl GBASL
+    asl ByteAddress
     bcc DownGroup
     adc #$E0
     clc
     bit BitTwoMask
     beq DownRotate
-    lda GBASL
+    lda ByteAddress
     adc #$50
     eor #$F0
     beq DownThirdStore
     eor #$F0
 
-;; Stores <GBASL> for the next third, or the page's top, and reloads <HighResPage>.
+;; Stores <ByteAddress> for the next third, or the page's top, and reloads <HighResPage>.
 ;; Also: UPDWN8 (UNKN)
 DownThirdStore:
-    sta GBASL
+    sta ByteAddress
     lda HighResPage
     bcc DownRotate
 
@@ -415,10 +426,10 @@ DownThirdStore:
 DownGroup:
     adc #$E0
 
-;; Rotates the group bit back into <GBASL>, then returns through `StoreHigh`.
+;; Rotates the group bit back into <ByteAddress>, then returns through `StoreHigh`.
 ;; Also: UPDW10 (UNKN)
 DownRotate:
-    ror GBASL
+    ror ByteAddress
     bcc StoreHigh
     ; Unreachable: zeroes HighResX and HighResY and falls into Line.
     pha
@@ -505,11 +516,11 @@ AddDeltaY:
 ;; Also: HGLIN5 (UNKN)
 PlotPoint:
     sta HighResError+1
-    lda (GBASL),y
+    lda (ByteAddress),y
     eor HighResColorByte
-    and COLOR
-    eor (GBASL),y
-    sta (GBASL),y
+    and PixelMask
+    eor (ByteAddress),y
+    sta (ByteAddress),y
     inx
     bne ChooseStep
     inc HighResLineCount
@@ -551,23 +562,23 @@ CosineTable:
     .byte $8D, $78, $61, $49, $31
     .byte $18, $FF
 
-;; Rebuilds <HighResX> and <HighResY> from <GBASL> and <GBASH>, <HighResByteIndex> and the pixel mask in <COLOR>.
+;; Rebuilds <HighResX> and <HighResY> from <ByteAddress> and <ByteAddressHigh>, <HighResByteIndex> and <PixelMask>.
 ;; Out: HighResX = the column, HighResY = the row
 ;; Entry:
 ;;   Done = returns; <HighRes::Line> branches here
 ;; Also: HFIND (ASTIL)
 .proc FindCoordinates
-    lda GBASL
+    lda ByteAddress
     asl a
-    lda GBASH
+    lda ByteAddressHigh
     and #3
     rol a
-    ora GBASL
+    ora ByteAddress
     asl a
     asl a
     asl a
     sta HighResY
-    lda GBASH
+    lda ByteAddressHigh
     lsr a
     lsr a
     and #7
@@ -579,7 +590,7 @@ CosineTable:
     asl a
     tax
     dex
-    lda COLOR
+    lda PixelMask
     and #$7F                        ; the pixel bits
 
 ;; Counts pixels in the column until the mask shifts out.

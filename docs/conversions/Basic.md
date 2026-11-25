@@ -661,7 +661,8 @@ Decisions and how the table was applied:
 - W6. AppleSoft's copies of the Monitor's, the IIe's and the firmware's names keep their names and definitions in
   AppleSoft.Equates, in their own section, until X10 replaces them (E-8). Their
   trailing comments are moved above them, as the strict lint asks. This covers Microsoft's CQ* synonyms, BUF and OUTCH.
-  The table's other names for them (ASTIL's HBAS for GBASL) join their `Also:` with X10.
+  The table's other names for them join their `Also:` with X10; ASTIL's HBAS, its name for the hi-res byte address,
+  went to `HighRes::ByteAddress` (X-4).
 - W7. Switches (X15): the seven a test predefines and the Equates define (BUFPAG, BUFLEN, NULCMD, NUMLEV, STKEND,
   LOCAL_TRMPOS, VARTXT_IN_LINNUM) are renamed as drafted everywhere they are used, since an `.ifndef` default is
   not reached through `Also:`, and the tests predefine the new names. Microsoft's five keep `Also:`; the SDK's two
@@ -1264,6 +1265,39 @@ HTAB; SPEED=, TRACE and NOTRACE; ONERR GOTO; HIMEM: and LOMEM:; PR#0 and IN#0; a
 not be run that way: the debugger session's prompt check does not see its prompt. As a control, a false `Keeps: A`
 added to `HighRes::Plot` was reported.
 
+### X. AppleSoft's Monitor and IIe names (X10)
+
+AppleSoft now takes the IIe's names from `IIeEquates.asm`, as the owner decided after part E (E-8). Its copies of 78
+of the Monitor's, the IIe's and the firmware's names are gone from AppleSoft.Equates (CV stays, inheriting the
+Monitor's), and its files use the current names. The bytes are unchanged in all eight builds.
+
+- X-1. AppleSoft.Equates includes `IIeEquates.asm`, not `MonitorEntries.asm`. It defines the Monitor's entries
+  AppleSoft calls, after DOS's X7 pattern: each is an equate at the Monitor's address that inherits
+  `<Monitor:...>`'s documentation and cites Apple's names (A2RM78, A2RM79, IIEROM82, IIETRM85) and AppleSoft's and
+  Microsoft's own spellings (MPLOT, MWAIT, OUTPOR and the rest UNKN; CQINCH, CQINLN, CQCOUT, CQCSIN and OUTCH M6502).
+  Apple's PLOT, READ and WAIT are left out, since they are names of AppleSoft's statements. The low-resolution
+  routines and the cassette bit reader are in the Monitor's scopes, `LowRes` and `Cassette`. `CV`,
+  `EightyColumns::CursorColumn` (OURCH) and the enhanced IIe's `AppleSoftCassette` (C5ROM) inherit the Monitor's and
+  the firmware's documentation the same way.
+- X-2. AppleSoft's and Microsoft's spellings of names IIeEquates gives under Apple's are aliases in
+  `AppleSoft.HistoricalNames.asm`: BUF (M6502, ASTIL) and CQPRMP (M6502) on `InputBuffer` and `PromptCharacter`,
+  and the overlay's WNDWDT, SETSLO, SETINT and RD80VI (UNKN). Every AppleSoft build includes IIeEquates, the II
+  Plus's too, as it had the copies; `EightyColumns::CursorColumn` is AppleSoft.Equates' own equate (D-Q1).
+- X-3. The shared modules' BUF is `InputBuffer`, which both vendors define.
+- X-4. E-Q5: the hi-res engine names the Monitor's bytes it borrows `HighRes::PixelMask` (`PlotColor`),
+  `HighRes::ByteAddress` and `ByteAddressHigh` (`LowResBase`, `LowResBaseHigh`). ASTIL's HBAS, its name for the
+  hi-res byte address, is on `HighRes::ByteAddress` (row 1144).
+- X-5. Tests:
+  - The AppleSoft documentation set in `SdkDocumentationTests.Sets` holds every file the assembly reads as well as
+    every AppleSoft and shared BASIC file, so links to IIeEquates' definitions resolve; the AppleSoft alias test's
+    resolver has the other modules' sets. The E-Q5 names, which the overlay comparison leaves out, are checked to be
+    the Monitor's bytes.
+  - BUF is both vendors' name: `BasicNames.VendorLabelNames` adds it, the vendor-leak checks count it with LINCHK,
+    and the PET's alias test checks that it is the PET's input buffer.
+  - The alias tests accept an AppleSoft alias whose target IIeEquates documents; such a location has no code for the
+    debugger's position check. AppleSoft.Equates may cite Apple's Monitor manuals.
+  - The E-Q5 names give no overlay name of their own; `HighRes::ByteAddress` gives ASTIL's HBAS.
+
 ## Other dependents
 
 - **DOS** left BASIC's names unchanged until this conversion: X7 in the DOS conversion's log, `docs/conversions/Dos.md`,
@@ -1330,6 +1364,7 @@ Answered:
 | C-Q5 | X4 (`ERROR_FILE_DATA`; ERROR_* for the offsets) |
 | C-Q6 | K2 |
 | C-Q11 | X5 |
+| D-Q1 | X10 (IIeEquates in every build; AppleSoft's own `EightyColumns::CursorColumn`) |
 | D-Q2 | X10 (`RandomValue`) |
 | D-Q6 | X4 for the token and error copies; the method's one old name per definition for the rest |
 | D-Q7 | R6 (the DOS log's X7: the Monitor keeps CV) |
@@ -1356,7 +1391,6 @@ Answered in part (what is left is the owner's):
 | A-Q5 | X11 (the operand names) | `ToLongInteger` or `Truncate` for QINT |
 | A-Q7 | K7 | Where `ZeroValue` sits (Float closed around it, or `Float::ZeroValue` with an alias) |
 | A-Q10 | X15 and D4 | Renaming the parameter `limitAt120` |
-| D-Q1 | X10 | Where `EightyColumns::CursorColumn` comes from; whether the II Plus build sees IIe-only names |
 | D-Q5 | X14 | `Statements::Load = KernalLoad` aliases; OUTCH as `CharacterOut` in both vendors |
 | F-Q11 | K6 and K12 | `EvaluateVariable` waits on C-Q4; the names of TINUM1 and INPCON |
 

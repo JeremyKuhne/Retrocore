@@ -44,6 +44,9 @@ public sealed class BasicWorkspaceConversionTests
 
     // The documents that give each vendor's names: a vendor's file cites only these, Microsoft's source and UNKN.
     private static readonly string[] s_appleKeys = ["M6502", "UNKN", "ASTIL", "AS82", "ASRM78"];
+
+    // Apple's Monitor and IIe manuals, which AppleSoft's definitions of the Monitor's routines cite.
+    private static readonly string[] s_monitorKeys = ["A2RM78", "A2RM79", "IIEROM82", "IIETRM85"];
     private static readonly string[] s_commodoreKeys =
         ["M6502", "UNKN", "CBM4S79", "K4S79", "HV1", "HV1R", "HV2", "HV4", "HV4R", "HVK4"];
 
@@ -117,12 +120,15 @@ public sealed class BasicWorkspaceConversionTests
         petNames.Should().Contain(["TXTTAB", "CHRGET", "ERRSN", "ENDTK", "COPEN", "CQOPEN"]);
 
         // A shared module gives some names in one vendor's builds that the other vendor's own files give (LINCHK:
-        // the PET's number item, AppleSoft's comma code); each is both vendors' name.
+        // the PET's number item, AppleSoft's comma code), and AppleSoft's alias of the IIe's InputBuffer gives
+        // Microsoft's BUF, which the PET's workspace gives its own (X10); each is both vendors' name.
         string[] sharedFiles = Directory.GetFiles(SharedFolder, "MsBasic.*.asm");
         IEnumerable<string> petShared = OldNames(pet, sharedFiles).Intersect(appleNames);
         IEnumerable<string> appleShared = OldNames(apple, sharedFiles).Intersect(petNames);
-        string[] bothVendors = [.. petShared.Union(appleShared)];
-        bothVendors.Should().BeEquivalentTo(["LINCHK"], "no other name is given this way");
+        string appleAliasFile = Path.Join(AppleFolder, "AppleSoft.HistoricalNames.asm");
+        IEnumerable<string> appleAliases = OldNames(apple, [appleAliasFile]).Intersect(petNames);
+        string[] bothVendors = [.. petShared.Union(appleShared).Union(appleAliases)];
+        bothVendors.Should().BeEquivalentTo(["LINCHK", "BUF"], "no other name is given this way");
         petNames.UnionWith(bothVendors);
         appleNames.UnionWith(bothVendors);
 
@@ -177,8 +183,10 @@ public sealed class BasicWorkspaceConversionTests
             // A vendor's file cites its vendor's documents; the shared layouts, Microsoft's (checked above).
             string name = Path.GetFileName(path);
             string[]? vendor = null;
-            if (s_appleFiles.Contains(name)) { vendor = s_appleKeys; }
-            if (s_commodoreFiles.Contains(name)) { vendor = s_commodoreKeys; }
+            // AppleSoft's Equates also define the Monitor's routines it calls, citing Apple's Monitor manuals (X10).
+            if (name == "AppleSoft.Equates.asm") { vendor = [.. s_appleKeys, .. s_monitorKeys]; }
+            else if (s_appleFiles.Contains(name)) { vendor = s_appleKeys; }
+            else if (s_commodoreFiles.Contains(name)) { vendor = s_commodoreKeys; }
 
             foreach (DocumentationAlso also in OldNamesIn(Parse(path)))
             {

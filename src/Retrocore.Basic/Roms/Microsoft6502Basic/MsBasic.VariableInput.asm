@@ -29,13 +29,13 @@ INPUT_MODE_GET = $40
 INPUT_MODE_READ = $98
 
 ;; Emits `READ` and the common `GET`, `INPUT` and `READ` variable-processing loop.
-;; Parameters: bufferPage = the page containing <BUF>, maskGetBit7 = 1 to clear bit 7 of a `GET` character,
+;; Parameters: bufferPage = the page containing <InputBuffer>, maskGetBit7 = 1 to clear bit 7 of a `GET` character,
 ;;   getPointerYFirst = 1 to load the `GET` buffer pointer's high byte before its low byte,
 ;;   patchedGetString = 1 to use the early `GETSTR` patch, channelInput = 1 to honor input channels,
 ;;   blankNumericRetry = 1 to retry an empty terminal `INPUT` numeric value
 .macro VariableInput bufferPage, maskGetBit7, getPointerYFirst, patchedGetString, channelInput, blankNumericRetry
     .assert bufferPage >= 0 && bufferPage <= 255, "bufferPage must fit in a byte."
-    .assert BUF > 0 && BUF / 256 = bufferPage, "BUF must be in bufferPage and have a preceding byte."
+    .assert InputBuffer > 0 && InputBuffer / 256 = bufferPage, "InputBuffer must be in bufferPage, after a byte."
     .assert maskGetBit7 = 0 || maskGetBit7 = 1, "maskGetBit7 must be 0 or 1."
     .assert getPointerYFirst = 0 || getPointerYFirst = 1, "getPointerYFirst must be 0 or 1."
     .assert patchedGetString = 0 || patchedGetString = 1, "patchedGetString must be 0 or 1."
@@ -43,9 +43,9 @@ INPUT_MODE_READ = $98
     .assert blankNumericRetry = 0 || blankNumericRetry = 1, "blankNumericRetry must be 0 or 1."
     .assert patchedGetString = 0 || bufferPage = 0, "The early GETSTR patch requires a page-zero buffer."
     .if getPointerYFirst
-        .assert <(BUF-1) != 0, "The GET buffer pointer's low byte must make its branch unconditional."
+        .assert <(InputBuffer-1) != 0, "The GET buffer pointer's low byte must make its branch unconditional."
     .elseif bufferPage
-        .assert >(BUF-1) != 0, "The GET buffer pointer's high byte must make its branch unconditional."
+        .assert >(InputBuffer-1) != 0, "The GET buffer pointer's high byte must make its branch unconditional."
     .endif
 
     .scope Statements continued
@@ -125,14 +125,14 @@ NextVariable:
     .if maskGetBit7
         and #$7F
     .endif
-    sta BUF
+    sta InputBuffer
     .if getPointerYFirst
-        ldy #>(BUF-1)
-        ldx #<(BUF-1)
+        ldy #>(InputBuffer-1)
+        ldx #<(InputBuffer-1)
         bne SetCursor
     .else
-        ldx #<(BUF-1)
-        ldy #>(BUF-1)
+        ldx #<(InputBuffer-1)
+        ldy #>(InputBuffer-1)
         .if bufferPage
             bne SetCursor
         .else
@@ -224,7 +224,7 @@ HaveAddress:
 ;; Saves the numeric character while checking whether the input line is empty.
 CheckEmptyLine:
         pha
-        lda BUF
+        lda InputBuffer
         beq EmptyNumber
 ;; Pulls the saved character back.
 RestoreCharacter:

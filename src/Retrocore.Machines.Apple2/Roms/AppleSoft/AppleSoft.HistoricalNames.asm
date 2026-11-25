@@ -1,17 +1,19 @@
 ; retrocore: style=strict
 ;; APPLESOFT: APPLE'S NAMES OF SHARED DEFINITIONS
 ;;
-;; Apple's names for definitions of the shared Microsoft modules, which resolve only in the AppleSoft builds that
-;; include this file. Each entry is an alias in <AppleSoft> that inherits its target's documentation and gives
-;; Apple's name in its `Also:` section, citing the documents by their keys in docs/Bibliography.md: the Apple II
-;; Technical Information Library's AppleSoft articles (ASTIL; PRNTFAC is in article 79, "Applesoft: Internals--Device
-;; I/O Routines", a2til228.txt, and COMBYTE in article 76, "Applesoft: Internals--Floating Point Math Package (3 of
-;; 3)", a2til231.txt) and the May 1982 Applesoft source listing (AS82), or UNKN for the names only the SDK's MACRO-10
-;; overlay of AppleSoft gives, which its callers use. The room check and the classic collector's steps also have
+;; Apple's names for definitions of the shared Microsoft modules, and AppleSoft's and Microsoft's spellings of the IIe's
+;; names, which resolve only in the AppleSoft builds that include this file. Each entry is an alias in <AppleSoft> that
+;; inherits its target's documentation and gives the old name in its `Also:` section, citing the documents by their keys
+;; in docs/Bibliography.md: the Apple II Technical Information Library's AppleSoft articles (ASTIL; PRNTFAC is in
+;; article 79, "Applesoft: Internals--Device I/O Routines", a2til228.txt, and COMBYTE in article 76, "Applesoft:
+;; Internals--Floating Point Math Package (3 of 3)", a2til231.txt) and the May 1982 Applesoft source listing (AS82), or
+;; UNKN for the names only the SDK's MACRO-10 overlay of AppleSoft gives, which its callers use. Microsoft's own
+;; spellings of the IIe's names cite its source (M6502). The room check and the classic collector's steps also have
 ;; Microsoft's names here (M6502), since BASIC 4 gives those names to other definitions (Basic.md E4). Including this
 ;; file emits no bytes and does not change the origin.
 
-;; The aliases for Apple's names. Code uses the definitions' own names; these exist for the old names.
+;; The aliases for Apple's, Microsoft's and the overlay's names. Code uses the definitions' own names; these exist for
+;; the old names.
 .scope AppleSoft
 
 ;; Inherit: <Float::PrintFac>
@@ -192,5 +194,31 @@ CollectorCheckElement = Strings::CollectGarbage::CheckElement
 ;; Inherit: <Strings::CollectGarbage::Advance>
 ;; Also: DVARTS (M6502)
 CollectorAdvance = Strings::CollectGarbage::Advance
+
+; The IIe's definitions in IIeEquates.asm, under AppleSoft's and Microsoft's spellings of them (decision X10).
+
+;; Inherit: <::InputBuffer>
+;; Also: BUF (M6502, ASTIL)
+InputBuffer = ::InputBuffer
+
+;; Inherit: <::PromptCharacter>
+;; Also: CQPRMP (M6502)
+PromptCharacter = ::PromptCharacter
+
+;; Inherit: <::WindowWidth>
+;; Also: WNDWDT (UNKN)
+WindowWidth = ::WindowWidth
+
+;; Inherit: <::InternalCxRomOff>
+;; Also: SETSLO (UNKN)
+InternalCxRomOff = ::InternalCxRomOff
+
+;; Inherit: <::InternalCxRomOn>
+;; Also: SETINT (UNKN)
+InternalCxRomOn = ::InternalCxRomOn
+
+;; Inherit: <::Columns80State>
+;; Also: RD80VI (UNKN)
+Columns80State = ::Columns80State
 
 .endscope

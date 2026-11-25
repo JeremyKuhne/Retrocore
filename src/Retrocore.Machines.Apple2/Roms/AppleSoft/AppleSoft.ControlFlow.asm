@@ -158,7 +158,7 @@ ToSyntaxError:
 ;; See: <HandleBreak>, <Statements::Stop>
 ;; Also: ISCNTC (M6502, ASTIL)
 .proc CheckStop
-    lda KBD
+    lda Keyboard
     cmp #KEYBOARD_CONTROL_C
     beq ConsumeKey
     rts
@@ -204,9 +204,9 @@ NoHandler:
     sbc ProgramStart+1
     sta PokeAddress+1
     jsr SetCassetteLengthRange
-    jsr MWRITE
+    jsr WriteCassette
     jsr SetCassetteProgramRange
-    jmp MWRITE
+    jmp WriteCassette
 .endproc
 
 ;; LOAD: reads a cassette program's three-byte header and text, sets <VariablesStart> from the length and <RunOnly> from
@@ -215,7 +215,7 @@ NoHandler:
 ;; Also: LOAD (M6502)
 .proc Load
     jsr SetCassetteLengthRange
-    jsr MREAD
+    jsr ReadCassette
     clc
     lda ProgramStart
     adc PokeAddress
@@ -226,7 +226,7 @@ NoHandler:
     lda NextTemporary
     sta RunOnly
     jsr SetCassetteProgramRange
-    jsr MREAD
+    jsr ReadCassette
     bit RunOnly
     bpl ToClearAndRelink
     jmp ResetProgramState
@@ -245,11 +245,11 @@ ToClearAndRelink:
 .proc SetCassetteLengthRange
     lda #<PokeAddress
     ldy #$00
-    sta A1L
-    sty A1H
+    sta Address1
+    sty Address1High
     lda #<(PokeAddress+2)
-    sta A2L
-    sty A2H
+    sta Address2
+    sty Address2High
     sty RunOnly
     rts
 .endproc
@@ -259,12 +259,12 @@ ToClearAndRelink:
 .proc SetCassetteProgramRange
     lda ProgramStart
     ldy ProgramStart+1
-    sta A1L
-    sty A1H
+    sta Address1
+    sty Address1High
     lda VariablesStart
     ldy VariablesStart+1
-    sta A2L
-    sty A2H
+    sta Address2
+    sty Address2High
     rts
 .endproc
 

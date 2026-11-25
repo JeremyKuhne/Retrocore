@@ -447,6 +447,14 @@ public sealed class BasicSharedAliasConsistencyTests
 
             BasicAttribution.AssertNotShared(root.Result, docs, alias.Name);
         }
+        else if (string.Equals(
+            Path.GetFullPath(target.Location?.Path ?? throw new AssertFailedException($"{targetName}: no location")),
+            Path.GetFullPath(Path.Join(root.Directory, "..", "System", "IIeEquates.asm")),
+            StringComparison.OrdinalIgnoreCase))
+        {
+            // AppleSoft's spelling of a name of the IIe's, whose definition IIeEquates.asm documents (Basic.md X10).
+            docs.FindTopic(targetName).Should().NotBeNull($"{root.Name}: {alias.Name}'s IIe target {targetName} must be documented");
+        }
         else
         {
             IsVendorOnly(target, topic, active, root.Directory, sharedSymbols, foreignSymbols)

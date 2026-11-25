@@ -59,7 +59,7 @@ LoadFloat:
     jsr ReadLowResCoordinates
     txa
     ldy LowResFirst
-    jsr MSCRN
+    jsr LowRes::ReadColor
     tay
     jsr ReturnByte
     jmp CheckCloseParenthesis
@@ -89,7 +89,7 @@ LoadFloat:
 ;; Also: PDL (UNKN)
 .proc Pdl
     jsr ConvertToByte
-    jsr PREAD
+    jsr ReadPaddle
     jmp ReturnByte
 .endproc
 

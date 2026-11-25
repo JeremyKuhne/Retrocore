@@ -188,7 +188,7 @@ One:
 ;; Printable characters also receive <FlashMask>; output is passed with bit 7 set.
 ;; In: A = character
 ;; Out: A = the character returned by the Monitor, with bit 7 cleared
-;; See: <OUTCH>, <MWAIT>, <OutputDelay>
+;; See: <CharacterOut>, <Delay>, <OutputDelay>
 ;; Also: OUTDO (M6502, ASTIL)
 .proc PrintCharacter
     ora #$80
@@ -196,14 +196,14 @@ One:
     bcc Send
     ora FlashMask
 
-;; Sends the character through <OUTCH> and applies the output delay.
+;; Sends the character through <CharacterOut> and applies the output delay.
 ;; Also: OUTLOC (M6502), TRYOUT (M6502)
 Send:
-    jsr OUTCH
+    jsr CharacterOut
     and #$7F
     pha
     lda OutputDelay
-    jsr MWAIT
+    jsr Delay
     pla
 
 ;; Returns; nothing in AppleSoft branches here, and the label is kept for its old name.

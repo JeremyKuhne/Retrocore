@@ -58,8 +58,8 @@ CopyCharacterReader:
     sta CollectorStep
     jsr PrintNewline
     lda #1                          ; the bytes before the buffer nonzero, for the line chaining
-    sta BUF-3
-    sta BUF-4
+    sta InputBuffer-3
+    sta InputBuffer-4
     ldx #TemporaryDescriptors
     stx NextTemporary
     lda #<PROGRAM_ORIGIN

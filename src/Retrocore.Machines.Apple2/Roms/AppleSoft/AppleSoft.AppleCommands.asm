@@ -14,13 +14,13 @@ LOW_RES_COLUMNS = 40
 ;; Text screen rows; VTAB's row less one must be below it.
 TEXT_ROWS = 24
 
-;; <INVFLG> for normal text: every bit kept.
+;; <InverseMask> for normal text: every bit kept.
 INVERSE_MASK_NORMAL = $FF
 
-;; <INVFLG> for inverse text: bits 6 and 7 cleared.
+;; <InverseMask> for inverse text: bits 6 and 7 cleared.
 INVERSE_MASK_INVERSE = $3F
 
-;; <INVFLG> for flashing text: bit 7 cleared.
+;; <InverseMask> for flashing text: bit 7 cleared.
 INVERSE_MASK_FLASH = $7F
 
 ;; <FlashMask> for flashing text: bit 6 set on printable characters.
@@ -39,26 +39,26 @@ FLASH_MASK_FLASH = $40
     jmp (LineNumber)
 .endproc
 
-;; `IN#`: reads a byte and selects that slot for input through the Monitor's <INPORT>.
+;; `IN#`: reads a byte and selects that slot for input through the Monitor's <SetInput>.
 ;; Also: INNUM (UNKN)
 .proc InNumber
     jsr EvaluateByte
     txa
-    jmp INPORT
+    jmp SetInput
 .endproc
 
-;; `PR#`: reads a byte and selects that slot for output through the Monitor's <OUTPOR>.
+;; `PR#`: reads a byte and selects that slot for output through the Monitor's <SetOutput>.
 ;; Also: PRNUM (UNKN)
 .proc PrNumber
     jsr EvaluateByte
     txa
-    jmp OUTPOR
+    jmp SetOutput
 .endproc
 
 .endscope
 
 ;; Reads two comma-separated low-resolution coordinates, each below <LOW_RES_ROWS>.
-;; Out: LowResFirst = the first coordinate, X = the second, H2 = V2 = the second
+;; Out: LowResFirst = the first coordinate, X = the second, HorizontalLineEnd = VerticalLineEnd = the second
 ;; Errors: ILLEGAL QUANTITY for a coordinate of 48 or more
 ;; Also: PLOTFN (UNKN), PLOTFNS (ASTIL)
 .proc ReadLowResCoordinates
@@ -71,8 +71,8 @@ FLASH_MASK_FLASH = $40
     jsr EvaluateByte
     cpx #LOW_RES_ROWS
     bcs ToIllegalQuantity
-    stx H2
-    stx V2
+    stx HorizontalLineEnd
+    stx VerticalLineEnd
     rts
 .endproc
 
@@ -86,7 +86,7 @@ FLASH_MASK_FLASH = $40
 .scope Statements continued
 
 ;; Reads a low-resolution line's two endpoints, ordering them, then `AT` and its coordinate.
-;; Out: LowResFirst = the lower endpoint, H2 = V2 = the higher, X = the `AT` coordinate
+;; Out: LowResFirst = the lower endpoint, HorizontalLineEnd = VerticalLineEnd = the higher, X = the `AT` coordinate
 ;; Errors: ILLEGAL QUANTITY for a coordinate of 48 or more
 ;; Also: LINFNS (UNKN)
 .proc ReadLowResLine
@@ -94,8 +94,8 @@ FLASH_MASK_FLASH = $40
     cpx LowResFirst
     bcs ReadAt
     lda LowResFirst
-    sta H2
-    sta V2
+    sta HorizontalLineEnd
+    sta VerticalLineEnd
     stx LowResFirst
 
 ;; Requires the `AT` token and reads the line's row or column, below <LOW_RES_ROWS>, into X.
@@ -110,7 +110,7 @@ ReadAt:
 .endproc
 
 ;; `PLOT`: reads the coordinates, checks that the column is below <LOW_RES_COLUMNS>, and plots through the Monitor's
-;; <MPLOT>.
+;; <LowRes::Plot>.
 ;; Errors: ILLEGAL QUANTITY for a column of 40 or more or a row of 48 or more
 ;; Also: PLOT (UNKN)
 .proc Plot
@@ -119,25 +119,25 @@ ReadAt:
     ldy LowResFirst
     cpy #LOW_RES_COLUMNS
     bcs ToIllegalQuantity
-    jmp MPLOT
+    jmp LowRes::Plot
 .endproc
 
 ;; `HLIN`: reads the line, checks that its right end is below <LOW_RES_COLUMNS>, and draws it through the Monitor's
-;; <HLINE>.
+;; <LowRes::HorizontalLine>.
 ;; Errors: ILLEGAL QUANTITY for an endpoint of 40 or more or a row of 48 or more
 ;; Also: HLIN (UNKN)
 .proc HLin
     jsr ReadLowResLine
     txa
-    ldy H2
+    ldy HorizontalLineEnd
     cpy #LOW_RES_COLUMNS
     bcs ToIllegalQuantity
     ldy LowResFirst
-    jmp HLINE
+    jmp LowRes::HorizontalLine
 .endproc
 
 ;; `VLIN`: reads the line, checks that the `AT` column is below <LOW_RES_COLUMNS>, and draws it through the Monitor's
-;; <VLINE>.
+;; <LowRes::VerticalLine>.
 ;; Errors: ILLEGAL QUANTITY for a row of 48 or more or a column of 40 or more
 ;; Also: VLIN (UNKN)
 .proc VLin
@@ -147,18 +147,18 @@ ReadAt:
     cpy #LOW_RES_COLUMNS
     bcs ToIllegalQuantity
     lda LowResFirst
-    jmp VLINE
+    jmp LowRes::VerticalLine
 .endproc
 
-;; `COLOR=`: reads a byte and passes it to the Monitor's <SETCOL>.
+;; `COLOR=`: reads a byte and passes it to the Monitor's <LowRes::SetColor>.
 ;; Also: COLSTM (UNKN)
 .proc Color
     jsr EvaluateByte
     txa
-    jmp SETCOL
+    jmp LowRes::SetColor
 .endproc
 
-;; `VTAB`: reads a row from 1 to 24 and moves the cursor there through the Monitor's <TABV>.
+;; `VTAB`: reads a row from 1 to 24 and moves the cursor there through the Monitor's <VerticalTabTo>.
 ;; Errors: ILLEGAL QUANTITY for a row of 0 or more than 24
 ;; Also: VTAB (UNKN)
 .proc VTab
@@ -167,7 +167,7 @@ ReadAt:
     txa
     cmp #TEXT_ROWS
     bcs ToIllegalQuantity
-    jmp TABV
+    jmp VerticalTabTo
 .endproc
 
 ;; `SPEED=`: reads a byte and stores its negation, its two's complement, in <OutputDelay>.
@@ -198,7 +198,7 @@ ReadAt:
     rts
 .endproc
 
-;; `NORMAL`: sets <INVFLG> to <INVERSE_MASK_NORMAL> and clears <FlashMask> through <Statements::SetInverseMask>.
+;; `NORMAL`: sets <InverseMask> to <INVERSE_MASK_NORMAL> and clears <FlashMask> through <Statements::SetInverseMask>.
 ;; The cold start calls it too.
 ;; Also: NRMSTM (UNKN)
 .proc Normal
@@ -222,15 +222,15 @@ ReadAt:
 .endproc
 
 ;; Stores the masks output applies to text.
-;; In: A = the inverse mask, for <INVFLG>; X = the flash mask, for <FlashMask>
+;; In: A = the inverse mask, for <InverseMask>; X = the flash mask, for <FlashMask>
 ;; Also: INVER2 (UNKN)
 .proc SetTextMasks
-    sta INVFLG
+    sta InverseMask
     stx FlashMask
     rts
 .endproc
 
-;; `FLASH`: sets <INVFLG> to <INVERSE_MASK_FLASH> and <FlashMask> to <FLASH_MASK_FLASH> through
+;; `FLASH`: sets <InverseMask> to <INVERSE_MASK_FLASH> and <FlashMask> to <FLASH_MASK_FLASH> through
 ;; <Statements::SetTextMasks>.
 ;; Also: FLASH (UNKN)
 .proc Flash
@@ -455,24 +455,24 @@ SetVariablesStart:
 
 ; Display modes and cassette arrays
 
-;; `GR`: reads <LORES> and <MIXSET>, then the Monitor's <SETGR> shows and clears the low-resolution screen.
+;; `GR`: reads <HiResOff> and <MixedOn>, then the Monitor's <SetGraphics> shows and clears the low-resolution screen.
 ;; Also: GR (UNKN)
 .proc Gr
-    lda LORES
-    lda MIXSET
-    jmp SETGR
+    lda HiResOff
+    lda MixedOn
+    jmp SetGraphics
 .endproc
 
-;; `TEXT`: reads <LOWSCR>, then the Monitor's <SETTXT> selects full-screen text.
+;; `TEXT`: reads <Page2Off>, then the Monitor's <SetText> selects full-screen text.
 ;; Also: TEXT (UNKN)
 .proc Text
-    lda LOWSCR
-    jmp SETTXT
+    lda Page2Off
+    jmp SetText
 .endproc
 
 ;; `STORE`: finds the array, writes its three-byte header (the length less one, from <LineNumber>, and the byte after
-;; it) to cassette, then its data, both through the Monitor's <MWRITE>. The enhanced IIe sets the data's range through
-;; its `Statements::CallAppleSoftCassette`, the others through `Statements::SetArrayBlock`.
+;; it) to cassette, then its data, both through the Monitor's <WriteCassette>. The enhanced IIe sets the data's range
+;; through its `Statements::CallAppleSoftCassette`, the others through `Statements::SetArrayBlock`.
 ;; Also: STORE (UNKN)
 .proc Store
     jsr FindCassetteArray
@@ -490,13 +490,13 @@ SetVariablesStart:
 WriteLength:
     sta LineNumber
     stx LineNumber+1
-    jsr MWRITE
+    jsr WriteCassette
 .if ENHNCD
     jsr CallAppleSoftCassette
 .else
     jsr SetArrayBlock
 .endif
-    jmp MWRITE
+    jmp WriteCassette
 .endproc
 
 ;; `RECALL`: finds the array and reads the stored length less one, which `STORE` wrote, from cassette, then reads
@@ -506,7 +506,7 @@ WriteLength:
 ;; Also: RECALL (UNKN)
 .proc Recall
     jsr FindCassetteArray
-    jsr MREAD
+    jsr ReadCassette
     ldy #ArrayHeader::LENGTH
     lda (SourceStart),y
     cmp LineNumber
@@ -524,7 +524,7 @@ ReadData:
 .else
     jsr SetArrayBlock
 .endif
-    jmp MREAD
+    jmp ReadCassette
 .endproc
 
 .endscope

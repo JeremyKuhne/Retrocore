@@ -56,19 +56,20 @@ internal static partial class BasicNames
 
     /// <summary>
     ///  Gets the names a vendor's alias gives in some builds that other builds give to their vendor's own code: BASIC
-    ///  4's GETRTS, which is the output routine's return in AppleSoft and BASIC 1 and 2 (Basic.md E3), and AppleSoft's
-    ///  ON, which BASIC 4's disk-command parser gives its ON U clause.
+    ///  4's GETRTS, which is the output routine's return in AppleSoft and BASIC 1 and 2 (Basic.md E3); AppleSoft's
+    ///  ON, which BASIC 4's disk-command parser gives its ON U clause; and AppleSoft's BUF, Microsoft's name of the
+    ///  input buffer, which the PET's workspace gives its own <c>InputBuffer</c> (X10).
     /// </summary>
-    internal static string[] VendorLabelNames { get; } = ["GETRTS", "ON"];
+    internal static string[] VendorLabelNames { get; } = ["GETRTS", "ON", "BUF"];
 
     /// <summary>
-    ///  Gets whether a build defines a name as a label of a vendor's own code, in the folder of the vendor's historical
-    ///  names but outside them, as it does the <see cref="VendorLabelNames"/>.
+    ///  Gets whether a build gives a name to a definition of a vendor's own code, as its label or an old name, in the
+    ///  folder of the vendor's historical names but outside them, as it does the <see cref="VendorLabelNames"/>.
     /// </summary>
     /// <param name="result">The build.</param>
     /// <param name="name">The name.</param>
     /// <param name="historicalNames">The vendor's historical-names file.</param>
-    /// <returns>Whether the name is one of those and its definition is such a label.</returns>
+    /// <returns>Whether the name is one of those and its definition is in such a file.</returns>
     internal static bool IsVendorLabel(AssemblyResult result, string name, string historicalNames)
     {
         string folder = Path.GetDirectoryName(Path.GetFullPath(historicalNames)) ?? historicalNames;

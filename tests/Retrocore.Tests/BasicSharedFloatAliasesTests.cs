@@ -70,7 +70,13 @@ public sealed class BasicSharedFloatAliasesTests
         ["ARYVGO"] = ["M6502"],
         ["ARYGET"] = ["M6502"],
         ["GOGO"] = ["M6502"],
-        ["DVARTS"] = ["M6502"]
+        ["DVARTS"] = ["M6502"],
+        ["BUF"] = ["M6502", "ASTIL"],
+        ["CQPRMP"] = ["M6502"],
+        ["WNDWDT"] = ["UNKN"],
+        ["SETSLO"] = ["UNKN"],
+        ["SETINT"] = ["UNKN"],
+        ["RD80VI"] = ["UNKN"]
     };
 
     // The names Microsoft's source gives only in its Commodore builds, with the documents that give each.
@@ -149,7 +155,7 @@ public sealed class BasicSharedFloatAliasesTests
         }
 
         CheckAliases(native, AppleAliases, s_appleNames, pet: null);
-        CheckDocumentation(native, AppleAliases);
+        CheckDocumentation(native, AppleAliases, apple: true);
     }
 
     /// <summary>
@@ -254,11 +260,18 @@ public sealed class BasicSharedFloatAliasesTests
         }
 
         // BASIC 4's disk parser defines a label of its own named ON, for a command's ON U device clause, where the
-        // MACRO-10 build has it, and not the shared ON statement AppleSoft's alias names.
-        foreach (string appleName in s_appleNames.Keys.Where(name => !(name == "ON" && model == PetModel.Pet4032)))
+        // MACRO-10 build has it, and not the shared ON statement AppleSoft's alias names. Microsoft's BUF is also the
+        // PET workspace's own name of its input buffer (X10).
+        bool PetGivesIt(string name) => (name == "ON" && model == PetModel.Pet4032) || name == "BUF";
+        foreach (string appleName in s_appleNames.Keys.Where(name => !PetGivesIt(name)))
         {
             native.HasSymbol(appleName).Should().BeFalse($"{appleName} is an Apple name");
         }
+
+        native.Symbol("BUF").Should().Be(native.Symbol("InputBuffer"), "BUF is the PET's own name of its input buffer");
+        AssemblySymbol buffer = native.FindDefinition("BUF") ?? throw new AssertFailedException("BUF must be defined.");
+        (buffer.Location?.Path).Should().NotBeNull()
+            .And.NotContain("AppleSoft", "the PET's BUF must not be AppleSoft's alias");
 
         if (model == PetModel.Pet4032)
         {
@@ -274,7 +287,7 @@ public sealed class BasicSharedFloatAliasesTests
         }
 
         CheckAliases(native, PetAliases, names, (model, original));
-        CheckDocumentation(native, PetAliases);
+        CheckDocumentation(native, PetAliases, apple: false);
     }
 
     /// <summary>
@@ -361,7 +374,14 @@ public sealed class BasicSharedFloatAliasesTests
             DocumentationTopic topic = docs.FindRoutineTopic(target)
                 ?? throw new AssertFailedException($"{target} has no shared documentation.");
 
-            Path.GetFullPath(topic.Path).Should().StartWith(Path.GetFullPath(Shared) + Path.DirectorySeparatorChar);
+            // The target is a shared module's, or, for AppleSoft's spelling of an IIe name, IIeEquates.asm's (X10).
+            string iieEquates = Path.GetFullPath(Path.Join(BasicNames.Inputs, "System", "IIeEquates.asm"));
+            bool system = string.Equals(Path.GetFullPath(topic.Path), iieEquates, StringComparison.OrdinalIgnoreCase);
+            if (!system)
+            {
+                Path.GetFullPath(topic.Path).Should().StartWith(Path.GetFullPath(Shared) + Path.DirectorySeparatorChar);
+            }
+
             topic.Value.Should().Be(result.Symbol(target));
             docs.FindTopic(name).Should().BeSameAs(aliasTopic, $"{name} must lead to its vendor's alias");
 
@@ -380,6 +400,9 @@ public sealed class BasicSharedFloatAliasesTests
 
             BasicAttribution.AssertNotShared(result, docs, name);
 
+            // A location of the IIe's has no code of its own to place the debugger at.
+            if (system) { continue; }
+
             DebugPosition position = debug.Position(memory, checked((ushort)result.Symbol(name)))
                 ?? throw new AssertFailedException($"{name} has no debugger source position.");
 
@@ -387,11 +410,15 @@ public sealed class BasicSharedFloatAliasesTests
         }
     }
 
-    private static void CheckDocumentation(AssemblyResult result, string aliases)
+    private static void CheckDocumentation(AssemblyResult result, string aliases, bool apple)
     {
         DocumentationSet docs = Documents(result, aliases);
+        // AppleSoft's IIeEquates.asm and its definitions of the Monitor's entries link the other modules (X10); this
+        // build's own documentation is docs, so the SDK's AppleSoft set is left out. The PET's links resolve in its
+        // own.
         List<DocumentationDiagnostic> diagnostics = new DocumentationResolver(
             docs,
+            apple ? SdkDocumentationTests.Sets().Where(set => set.Module != "AppleSoft") : [],
             isDirective: name => DirectiveDocs.Describe(name) is not null,
             isInstruction: InstructionDocs.IsMnemonic).Check();
 

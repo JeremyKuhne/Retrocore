@@ -749,6 +749,7 @@ try {
         assert.equal(top.source.path.toLowerCase(), profileRom.toLowerCase());
         assert.equal(top.line, driver);
         assert.match((await request("evaluate", { expression: "PC" })).result, /^\$C7/, "in slot 7's page");
+        // By its historical name, which resolves through the routine's Also:.
         assert.match((await request("evaluate", { expression: "SETMOUSE" })).result, /^\$C4/, "the mouse's routine, in slot 4");
     } finally {
         unlinkSync(bootImage);

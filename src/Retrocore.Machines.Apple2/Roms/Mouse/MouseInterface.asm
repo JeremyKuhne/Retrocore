@@ -17,12 +17,13 @@
 ;;   0  Identification, the entry points, and the dispatch every call starts and ends in (top level).
 ;;   1  <CopyrightBank>: the copyright message ($Cn1B), and a factory request with slot 0's holes ($Cn1A).
 ;;   2  <InitializeBank>: <InitializeMouse>, which resets the microcontroller and times it to vertical blanking.
-;;   3  <CommandBank>: sends one command byte: <SetMouse>, <ClearMouse>, <HomeMouse> and <ServeMouse>, which reads
-;;      one back.
+;;   3  <CommandBank>: sends one command byte: <SetMouse>, <ClearMouse>, <HomeMouse>, the factory's $Bx and $C0,
+;;      and <ServeMouse>, which reads one back.
 ;;   4  <BasicBank>: BASIC's `IN#` and `PR#`: the hooks, turning the mouse on or off, and reading it for INPUT.
 ;;   5  <LineBank>: writes BASIC's "X,Y,B" line into the input buffer.
 ;;   6  <ByteBank>: sends or receives one byte, and <ReadMouse>'s five.
-;;   7  <ParameterBank>: sends a command with its parameters: <PositionMouse> and <ClampMouse>.
+;;   7  <ParameterBank>: sends a command with its parameters: <PositionMouse>, <ClampMouse>, and the factory's $9x
+;;      and $A0.
 ;;
 ;; Every bank holds the same four instructions at $Cn70 (each bank's `Switch`): they put the bank in <NextBank> on
 ;; port B, which switches the EPROM under the 6502 as it runs, so the next instruction, at $Cn7B, is the new bank's.
@@ -125,13 +126,13 @@ MouseStatus = $0778
 ;; Also: MOUMODE (UNKN)
 MouseMode = $07F8
 
-;; The slot's bounds for <ClampMouse>, in slot 0's holes.
+;; <ClampMouse>'s minimum, low byte, in slot 0's holes.
 ClampMinimum = MouseX
 
 ;; The high byte of <ClampMinimum>.
 ClampMinimumHigh = MouseXHigh
 
-;; The slot's upper bound for <ClampMouse>, in slot 0's holes.
+;; <ClampMouse>'s maximum, low byte, in slot 0's holes.
 ClampMaximum = MouseY
 
 ;; The high byte of <ClampMaximum>.
@@ -371,7 +372,7 @@ FirstSyncMark = $3FD0
 ;; The second mark.
 SecondSyncMark = $3FE0
 
-;; The value of <CountTop> at which <InitializeMouse> stops looking for the marks.
+;; The value of <CountTop> at or above which, after a carry into it, <InitializeMouse> stops looking for the marks.
 SYNC_TIMEOUT = $01
 
 ; Bank 0: identification, the entry points, and the dispatch every call starts and ends in.
@@ -413,8 +414,8 @@ SYNC_TIMEOUT = $01
     .byte <PositionMouse, <ClampMouse, <HomeMouse, <InitializeMouse
     .byte <FactoryRequest, <ShowCopyright, <FactoryCommand9, <FactoryCommandA, <FactoryCommandB, <FactoryCommandC
 
-;; Finds the slot for BASIC's entries, keeps the registers and <ExpansionRomSlot>, and goes to <BasicBank> as
-;; overflow and carry say.
+;; Finds the slot for BASIC's entries, keeps the registers, sets <ExpansionRomSlot> to $Cn, and goes to <BasicBank>
+;; as overflow and carry say.
 ;; In:    overflow = set from $Cn00, else carry = set for input, clear for output
 ;; Out:   ExpansionRomSlot = $Cn
 .proc EnterBasic
@@ -471,8 +472,8 @@ SYNC_TIMEOUT = $01
 
     .res 2, $FF                     ; unused
 
-;; Readies port B, with its bank and strobe bits as outputs, and switches to the bank in <NextBank>, which pulls its
-;; entry code.
+;; Readies port B, with its bank, acknowledgment and strobe bits as outputs, and switches to the bank in
+;; <NextBank>, which pulls its entry code.
 ;;
 ;; `Switch`, at $Cn70, is where every bank switches: the code after it is bank 0's, run when a bank switches back
 ;; to it. Its entry codes: <ENTRY_MAIN>, the call is done; <ENTRY_SECOND>, a BASIC call is done, with A, Y and X
@@ -958,7 +959,7 @@ ToSend:
 .endproc
 
 ;; The II and II Plus: shows the cleared page with its two marks, and reads the sync latch, in a loop timed to the
-;; cycle, until bit 0 of the latched video byte is 0, or a 24-bit count runs out; then sends the reset.
+;; cycle, until bit 0 of the latched video byte is 0, or the count gives up (<SYNC_TIMEOUT>); then sends the reset.
 ;;
 ;; The stack holds the old <CountTop> on top of the old <Pointer>, high byte then low, which it puts back.
 ;; In:    X = $Cn, Y = $n0
@@ -972,7 +973,7 @@ ToSend:
     lda TextOff
     nop
 
-    ; The counter starts from what the switch's read left in A.
+    ; The counter's three bytes start from the byte TextOff's read left in A, the video's floating bus.
     sta Pointer
     sta Pointer + 1
     sta CountTop
@@ -1038,8 +1039,8 @@ ShowText:
 ;; Bank 3: sends one command byte, and for <ServeMouse> reads the interrupt status back.
 .scope CommandBank
 
-;; Sends <Argument>'s command. For <COMMAND_SERVE> it reads the answer and merges its bits 1-3 into
-;; <MouseStatus>; for <COMMAND_CLEAR> it clears the position's holes.
+;; Sends <Argument>'s command. For <COMMAND_SERVE> it reads the answer and ORs it into <MouseStatus> in place of
+;; its interrupt bits; for <COMMAND_CLEAR> it clears the position's holes.
 ;; In:    Argument = the command, X = $Cn, Y = $n0
 ;; Out:   carry = clear, or set when the serve command finds no interrupt (as it returns to bank 0)
 .proc Send
@@ -1109,8 +1110,8 @@ Done:
     beq Switch
 .endproc
 
-;; Reads the interrupt status and merges it into <MouseStatus>; goes back to bank 0 with <ENTRY_THIRD>, carry set,
-;; when the interrupt was not the mouse's.
+;; Reads the interrupt status and ORs it into <MouseStatus> in place of its interrupt bits; goes back to bank 0
+;; with <ENTRY_THIRD>, carry set, when the interrupt was not the mouse's.
 ;; In:    X = $Cn, Y = $n0
 .proc ReadAnswer
     lda PortAControl,y
@@ -1138,7 +1139,7 @@ WaitUntilSeen:
     and #<~PORT_B_ACKNOWLEDGE
     sta PortB,y
 
-    ; The answer's interrupt bits, in place of the status's.
+    ; The answer, ORed in place of the status's interrupt bits.
     lda MouseStatus - SLOT_PAGE,x
     and #<~STATUS_INTERRUPTS
     ora Argument - SLOT_PAGE,x

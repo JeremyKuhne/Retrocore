@@ -41,8 +41,8 @@ public sealed class Apple2MouseTests
     }
 
     /// <summary>
-    ///  The card's firmware, Mouse.rom.asm, is pinned by digest, so a change to its names or comments that moves a
-    ///  byte fails here.
+    ///  The card's firmware, Mouse.rom.asm, is pinned by digest, so a change that moves a byte, even by
+    ///  mistake, fails here.
     /// </summary>
     [TestMethod]
     public void FirmwareBytesArePinned() =>

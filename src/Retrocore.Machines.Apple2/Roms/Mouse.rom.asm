@@ -55,8 +55,8 @@
 ;;
 ;; NAMES
 ;;
-;; The mouse routines' names follow the calls Apple's documentation gives (SETMOUSE ...), which no document in hand
-;; gives, so they cite UNKN; every other name is the SDK's own.
+;; The mouse routines' names follow the calls Apple's AppleMouse II documentation gives programs (SETMOUSE ...).
+;; That documentation is not in hand, so the old names cite UNKN; every other name is the SDK's own.
 
 .rom Retrocore.Machines.Apple2.MouseRom, $C400, $100
 .cpu Mos6502
@@ -244,7 +244,8 @@ BasicOutput = BasicInput + 2
     EnterCommand COMMAND_SERVE_MOUSE
 .endproc
 
-;; Copies the position, button and movement into the screen holes and clears the interrupt bits, if the mouse is on.
+;; Copies the position, button and movement into the screen holes, if the mouse is on, clearing the status hole's
+;; interrupt bits; a pending interrupt stays pending until <ServeMouse>.
 ;; In:    X = $Cn, Y = $n0
 ;; Out:   carry = clear
 ;; Keeps: Y
@@ -333,7 +334,7 @@ BasicOutput = BasicInput + 2
     asl a
     bmi FromMonitor
     lda Stack + 2,x                 ; the caller's X, $Cn
-    bne HaveSlot                    ; always
+    bne HaveSlot                    ; always: X = $Cn is never 0
 
     ; ... from an RTS at ZeroPageRts, whose JSR leaves its return address's high byte just below the stack, ...
 FromZeroPage:

@@ -196,9 +196,10 @@ reference the emulator's firmware follows:
 | Finding the slot | The mouse routines use X = $Cn and Y = $n0 as given; `ServeMouse` writes an RTS at $06 and calls it, so it works with the language card's RAM over the Monitor; BASIC's entries call the Monitor's `SaveRegisters::Return` (IORTS) | The same |
 | BASIC input | Writes `+XXXXX,+YYYYY,+BB` into $0200 and returns a RETURN with X = $11, so nothing is echoed; with the mouse off, 0, 0 and B 1 | The same |
 | BASIC output | A RETURN does nothing; any other character's low bit turns the mouse on or off, and mode bit 7 marks BASIC | The same |
-| BASIC's registers | Keeps A, X and Y for output; input returns Y = $11; `ExpansionRomSlot` (MSLOT) is left at $Cn | Keeps Y for input too |
+| BASIC's registers | Keeps A, X and Y for output; input returns X = Y = $11; `ExpansionRomSlot` (MSLOT) is left at $Cn | Keeps Y for input too |
 | `ReadMouse` with the mouse off | Changes nothing | The same |
-| Pascal entries, $Cn1A-$Cn1F | Error 3; the factory's own commands (and the copyright message at $Cn1B) | Error 3; nothing, with carry set |
+| Pascal entries, $Cn0D-$Cn10 | Error 3, with carry set | The same |
+| $Cn1A-$Cn1F | The factory's own commands, and the copyright message at $Cn1B | Nothing, with carry set |
 | Mouse routines' registers | X and Y as given; A not kept; `ServeMouse` returns X = $Cn, Y = $n0 | A, X and Y kept |
 | `InitializeMouse` | Waits for vertical blanking; on the II and II Plus clears hi-res page 1 and leaves the display in text, lo-res, page 1 | Returns at once and leaves memory and the display alone |
 | Screen holes $0678+n and $06F8+n, and `MouseMode`'s upper nibble | Its own scratch space | Not used |

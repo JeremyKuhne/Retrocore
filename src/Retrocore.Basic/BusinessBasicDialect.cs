@@ -13,10 +13,10 @@ namespace Retrocore.Basic;
 ///  <para>
 ///   A line is its length (from its length byte to the next line's), its number, its tokens and a zero; a zero
 ///   length ends the program. Reserved words are one-byte tokens from $80, or $FF and a token from a second list,
-///   from $80 again. The tokenizer is the interpreter's <c>CRUNCH</c>: a word is a reserved word only with a
-///   separator (anything but a letter, a digit or a period) before and after it, or when it ends in one, so long
-///   variable names can hold reserved words. Letters may be either case, spaces outside quotes are dropped, and
-///   <c>?</c> is PRINT and <c>!</c> is REM.
+///   from $80 again. The tokenizer is the interpreter's <c>Tokenize</c> (Apple's <c>CRUNCH</c>): a word is a reserved
+///   word only with a separator (anything but a letter, a digit or a period) before and after it, or when it ends in
+///   one, so long variable names can hold reserved words. Letters may be either case, spaces outside quotes are
+///   dropped, and <c>?</c> is PRINT and <c>!</c> is REM.
 ///  </para>
 ///  <para>
 ///   Programs and variables live in the Apple III's switchable banks, which BASIC reaches through extended
@@ -132,8 +132,9 @@ internal sealed partial class BusinessBasicDialect : BasicDialect
     /// <remarks>
     ///  <para>
     ///   Each is the address of a pointer's low byte in BASIC's zero page; the pointer's X-byte is
-    ///   <see cref="XByteOffset"/> below. The program runs from TXTTAB to ARYTAB: Business BASIC keeps its arrays
-    ///   before its simple variables, which run from VARTAB to STREND.
+    ///   <see cref="XByteOffset"/> below. The program runs from ProgramStart to ArraysStart (Apple's TXTTAB and
+    ///   ARYTAB): Business BASIC keeps its arrays before its simple variables, which run from VariablesStart to
+    ///   VariablesEnd (VARTAB and STREND).
     ///  </para>
     /// </remarks>
     public override BasicPointers Pointers { get; } = new()

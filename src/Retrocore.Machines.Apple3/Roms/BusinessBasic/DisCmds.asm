@@ -1,846 +1,1170 @@
-; DISCMDS: the data file statements READ# and WRITE#, CHAIN, OUTPUT#, EXEC and INPUT#'s line read, with the helpers
-; the file code shares: the file buffer's pointer and offset, a 16-bit multiply and divide, and the tables of a data
-; file's item descriptors.
+; retrocore: style=strict
+; DISCMDS: the data file statements `READ#` and `WRITE#`, `CHAIN`, `OUTPUT#`, `EXEC` and `INPUT#`'s line read, with
+; the helpers the file code shares: the file buffer's pointer and offset, a 16-bit multiply and divide, and the tables
+; of a data file's item descriptors.
 ;
 ; A BASIC data file is read and written a record at a time through the file's buffer. Each item in a record is a
 ; descriptor byte followed by the value, and a 0 after the last item marks the record's end when there is room for it.
 ;
-; Names follow Apple's Business BASIC 1.3 listing.
+; Each definition keeps the name Apple's Business BASIC 1.3 listing gives it in its `Also:` (BB13).
 
 ; ---------------------------------------------------------------------------------------------------------------------
 ; The file buffer
 ; ---------------------------------------------------------------------------------------------------------------------
 
-;; Points <NDXPTR> at the file buffer's current byte: the buffer's address plus the offset in the record.
+; Files: the record buffer, multiplying and dividing, and the item descriptors.
+.scope Files continued
+
+;; Points <DataBufferPointer> at the file buffer's current byte: the buffer's address plus the offset in the record.
 ;;
 ;; The buffer starts on a page boundary, so the offset's low byte is the pointer's low byte.
-;; In: FCBNDX = the file's index in <FCB>
-;; Out: NDXPTR/NDXPTRB = the byte's extended address, Y = 0
+;; In: FileControlBlockIndex = the file's index in <FileControlBlocks>
+;; Out: DataBufferPointer/DataBufferPointerXByte = the byte's extended address, Y = 0
 ;; Uses: A, X
-;; See: <UPOFS>
-GETNDX:
-    ldx FCBNDX
-    lda FCB+XBUFOFS,X
-    sta NDXPTR
+;; See: <AdvanceOffset>
+;; Also: GETNDX (BB13)
+.proc PointAtItem
+    ldx FileControlBlockIndex
+    lda FileControlBlocks+FileControlBlock::BUFFER_OFFSET,X
+    sta DataBufferPointer
     clc
-    lda FCB+XBUFPT+1,X                      ; the buffer's page
-    adc FCB+XBUFOFS+1,X
-    ldy FCB+XBUFPT,X                        ; and its bank
-    jsr FIXADC
-    sta NDXPTR+1
-    sty NDXPTRB
+    lda FileControlBlocks+FileControlBlock::BUFFER+1,X ; the buffer's page
+    adc FileControlBlocks+FileControlBlock::BUFFER_OFFSET+1,X
+    ldy FileControlBlocks+FileControlBlock::BUFFER,X ; and its bank
+    jsr Memory::NormalizeAfterAdd
+    sta DataBufferPointer+1
+    sty DataBufferPointerXByte
     ldy #0
     rts
+.endproc
 
 ;; Tests whether one more byte, the end-of-record mark, fits in the record.
-;; In: FCBNDX = the file's index in <FCB>
+;; In: FileControlBlockIndex = the file's index in <FileControlBlocks>
 ;; Out: carry = set if it fits
-;; See: <TSTFIT>
-TSTFTX:
+;; See: <ItemFits>
+;; Also: TSTFTX (BB13)
+.proc EndMarkFits
     lda #1
+    ; Falls into ItemFits.
+.endproc
 
 ;; Tests whether an item of A bytes fits in the rest of the record.
 ;;
 ;; A length of 0 stands for 256, a 255-character string with its descriptor. Only offsets in the record are compared,
 ;; so no bank arithmetic is needed.
-;; In: A = the item's length, FCBNDX = the file's index in <FCB>
-;; Out: carry = set if it fits, LENSAV = the length
-;; Uses: A, X, Y, TMPPTR
-;; See: <TSTFTX>
-TSTFIT:
+;; In: A = the item's length, FileControlBlockIndex = the file's index in <FileControlBlocks>
+;; Out: carry = set if it fits, DataItemLength = the length
+;; Uses: A, X, Y, VariableNamePointer
+;; See: <EndMarkFits>
+;; Also: TSTFIT (BB13)
+.proc ItemFits
     clc
-    sta LENSAV
-    ldy FCBNDX
-    adc FCB+XBUFOFS,Y
-    sta TMPPTR
-    lda FCB+XBUFOFS+1,Y
-    ldx LENSAV                              ; a length of 0 is 256
-    bne *+3
+    sta DataItemLength
+    ldy FileControlBlockIndex
+    adc FileControlBlocks+FileControlBlock::BUFFER_OFFSET,Y
+    sta VariableNamePointer
+    lda FileControlBlocks+FileControlBlock::BUFFER_OFFSET+1,Y
+    ldx DataItemLength                      ; a length of 0 is 256
+    bne AddCarry
     sec
+AddCarry:
     adc #0
-    sta TMPPTR+1
-    lda FCB+XRECL,Y                         ; the record length against the item's end
-    cmp TMPPTR
-    lda FCB+XRECL+1,Y
-    sbc TMPPTR+1
+    sta VariableNamePointer+1
+    lda FileControlBlocks+FileControlBlock::RECORD_LENGTH,Y ; the record length against the item's end
+    cmp VariableNamePointer
+    lda FileControlBlocks+FileControlBlock::RECORD_LENGTH+1,Y
+    sbc VariableNamePointer+1
     rts
+.endproc
 
-;; Moves the file buffer's offset past the item just read or written, by <LENSAV> bytes.
-;; In: LENSAV = the item's length (0 for 256), FCBNDX = the file's index in <FCB>
-;; Out: Y = FCBNDX, A = the new offset's high byte
+;; Moves the file buffer's offset past the item just read or written, by <DataItemLength> bytes.
+;; In: DataItemLength = the item's length (0 for 256), FileControlBlockIndex = the file's index in <FileControlBlocks>
+;; Out: Y = FileControlBlockIndex, A = the new offset's high byte
 ;; Uses: X
-;; See: <GETNDX>
-UPOFS:
+;; See: <PointAtItem>
+;; Also: UPOFS (BB13)
+.proc AdvanceOffset
     clc
-    lda LENSAV
-    ldy FCBNDX
-    adc FCB+XBUFOFS,Y
-    sta FCB+XBUFOFS,Y
-    lda FCB+XBUFOFS+1,Y
-    ldx LENSAV
-    bne *+3
+    lda DataItemLength
+    ldy FileControlBlockIndex
+    adc FileControlBlocks+FileControlBlock::BUFFER_OFFSET,Y
+    sta FileControlBlocks+FileControlBlock::BUFFER_OFFSET,Y
+    lda FileControlBlocks+FileControlBlock::BUFFER_OFFSET+1,Y
+    ldx DataItemLength
+    bne AddCarry
     sec
+AddCarry:
     adc #0
-    sta FCB+XBUFOFS+1,Y
+    sta FileControlBlocks+FileControlBlock::BUFFER_OFFSET+1,Y
     rts
+.endproc
 
 ; ---------------------------------------------------------------------------------------------------------------------
 ; Multiply and divide
 ; ---------------------------------------------------------------------------------------------------------------------
 
-;; Multiplies <MLTPLR> by <MLTPLR2>, 16 bits by 16, into the 32-bit product at <RSLT>.
+;; Multiplies <Multiplier> by <Multiplicand>, 16 bits by 16, into the 32-bit product at <Product>.
 ;;
-;; The product's high word builds in <RMNDR> while the multiplier shifts out of MLTPLR and the product's low word
-;; shifts in. The add indexes MLTPLR2 with X from $FE, counting on zero page wrapping round to reach RMNDR, so these
-;; locations must be in zero page and in this order.
-;; In: MLTPLR = the multiplier, MLTPLR2 = the multiplicand
-;; Out: RSLT..RSLT+3 = the product
+;; The product's high word builds in <Remainder> while the multiplier shifts out of <Multiplier> and the product's low
+;; word shifts in. The add indexes <Multiplicand> with X from $FE, counting on zero page wrapping round to reach
+;; <Remainder>, so these locations must be in zero page and in this order.
+;; In: Multiplier = the multiplier, Multiplicand = the multiplicand
+;; Out: Product..Product+3 = the product
 ;; Uses: A, X, Y
-;; See: <SETDSP>
-MUL:
+;; See: <RecordPosition>
+;; Also: MUL (BB13)
+.proc Multiply
     lda #0                                  ; clear the product's high word
-    sta RSLT+2
-    sta RSLT+3
-    ldy #$10                                ; 16 bits
-MUL2:
-    lda MLTPLR                              ; the multiplier's low bit
+    sta Product+2
+    sta Product+3
+    ldy #16                                 ; 16 bits
+
+;; Adds the multiplicand into the high word when the multiplier's low bit is 1.
+;; Also: MUL2 (BB13)
+NextBit:
+    lda Multiplier                          ; the multiplier's low bit
     lsr
-    bcc MUL4                                ; 0: nothing to add
+    bcc Shift                               ; 0: nothing to add
     clc
     ldx #$FE
-MUL3:
-    lda MLTPLR2,X                           ; MLTPLR2-2, by zero page wrapping: RMNDR
-    adc MLTPLR2+2,X
-    sta MLTPLR2,X
-    inx
-    bne MUL3
-MUL4:
-    ldx #3                                  ; shift the 32-bit product right
-MUL5:
-    ror RSLT,X
-    dex
-    bpl MUL5
-    dey
-    bne MUL2
-    rts
 
-;; Divides the 32-bit <DVDND> by <DVSR>, giving a 16-bit quotient in <QUOTNT> and the remainder in <RMNDR>.
+;; Adds one byte of the multiplicand.
+;; Also: MUL3 (BB13)
+AddByte:
+    lda Multiplicand,X                      ; Multiplicand-2, by zero page wrapping: Remainder
+    adc Multiplicand+2,X
+    sta Multiplicand,X
+    inx
+    bne AddByte
+
+;; Shifts the 32-bit product right.
+;; Also: MUL4 (BB13)
+Shift:
+    ldx #3
+
+;; Shifts one byte of the product.
+;; Also: MUL5 (BB13)
+ShiftByte:
+    ror Product,X
+    dex
+    bpl ShiftByte
+    dey
+    bne NextBit
+    rts
+.endproc
+
+;; Divides the 32-bit <Dividend> by <Divisor>, giving a 16-bit quotient in <Quotient> and the remainder in <Remainder>.
 ;;
-;; The dividend's low word is in QUOTNT and its high word in RMNDR, which must be below the divisor. Each of the 16
-;; steps shifts the pair left and takes the divisor from RMNDR when it fits, as the Apple II Monitor's divide does.
+;; The dividend's low word is in <Quotient> and its high word in <Remainder>, which must be below the divisor. Each of
+;; the 16 steps shifts the pair left and takes the divisor from <Remainder> when it fits, as the Apple II Monitor's
+;; divide does.
 ;;
 ;; The low bytes are subtracted twice, the second time with the first's borrow, so when the low bytes borrow and the
 ;; subtraction still fits, the remainder's low byte is kept one too small, which can throw the later quotient bits
 ;; off.
-;; In: DVDND = the dividend, DVSR = the divisor
-;; Out: QUOTNT = the quotient, RMNDR = the remainder
+;; In: Dividend = the dividend, Divisor = the divisor
+;; Out: Quotient = the quotient, Remainder = the remainder
 ;; Uses: A, X, Y
-;; See: <GETRN>
-DIV:
-    ldy #$10
-DIV2:
-    asl QUOTNT
-    rol QUOTNT+1
-    rol RMNDR
-    rol RMNDR+1
+;; See: <RecordFromMark>
+;; Also: DIV (BB13)
+.proc Divide
+    ldy #16
+
+;; Shifts the dividend left and takes the divisor off when it fits.
+;; Also: DIV2 (BB13)
+NextBit:
+    asl Quotient
+    rol Quotient+1
+    rol Remainder
+    rol Remainder+1
     sec
-    lda RMNDR
-    sbc DVSR
+    lda Remainder
+    sbc Divisor
     tax
-    lda RMNDR
-    sbc DVSR
+    lda Remainder
+    sbc Divisor
     tax                                     ; the low byte again, with the first's borrow
-    lda RMNDR+1
-    sbc DVSR+1
-    bcc DIV3
-    stx RMNDR
-    sta RMNDR+1
-    inc QUOTNT                              ; a 1 in the quotient
-DIV3:
+    lda Remainder+1
+    sbc Divisor+1
+    bcc Count
+    stx Remainder
+    sta Remainder+1
+    inc Quotient                            ; a 1 in the quotient
+
+;; Counts the step.
+;; Also: DIV3 (BB13)
+Count:
     dey
-    bne DIV2
+    bne NextBit
     rts
+.endproc
 
 ; ---------------------------------------------------------------------------------------------------------------------
 ; Item descriptors
 ; ---------------------------------------------------------------------------------------------------------------------
 
-VREAL = $0                                  ;; VALTYP of a real number
-VLNT = $40                                  ;; VALTYP of a long integer
-VSTR = $FF                                  ;; VALTYP of a string
-VINT = $08                                  ;; an integer, in <VTABLE>; bit 3 tells READ# to set INTFLG
+;; An integer, in <DescriptorValueTypes> beside the <ValueType> values (<VALUE_TYPE_REAL> ...); bit 3 tells `READ#` to
+;; set <IntegerType>.
+;; Also: VINT (BB13)
+VALUE_TYPE_INTEGER = $08
+
+;; The value type <DescriptorValueTypes> gives the end-of-record mark: no type.
+VALUE_TYPE_NONE = $01
+
+;; The bits of a number's descriptor that hold its value's length.
+DESCRIPTOR_SIZE_MASK = $0F
+
+;; The index of the 255-character string's descriptor, <DATA_ITEM_LONGEST_STRING>, in <Descriptors>;
+;; <DATA_ITEM_STRING>'s is one less.
+MAX_STRING_INDEX = 4
+
+;; What the `TYP` function gives for a real.
+TYP_REAL = 1
+
+;; What `TYP` gives for an integer.
+TYP_INTEGER = 2
+
+;; What `TYP` gives for a long integer.
+TYP_LONG = 3
+
+;; What `TYP` gives for a string.
+TYP_STRING = 4
+
+;; What `TYP` gives at the end of the data.
+TYP_END = 5
+
+;; What `TYP` gives for a text file.
+TYP_TEXT = 8
 
 ;; The descriptor byte of each kind of item in a data file: integer, real, long integer, string, 255-character string
 ;; and the end-of-record mark.
 ;;
 ;; A number's descriptor has its value's length in the low nibble: 2, 4 or 8 bytes. A string's is followed by its
 ;; length byte and characters, except a 255-character string's, which has no length byte.
-;; See: <VTABLE>, <TYPFNT>, <GETVAL>
-DTABLE:
-    .byte DDINT, DDFP, DDLNT, DDSTR
-    .byte DDMXSTR, DDEOR
+;; See: <DescriptorValueTypes>, <DescriptorTypNumbers>, <DescriptorType>
+;; Also: DTABLE (BB13)
+Descriptors:
+    .byte DATA_ITEM_INTEGER, DATA_ITEM_REAL, DATA_ITEM_LONG_INTEGER, DATA_ITEM_STRING
+    .byte DATA_ITEM_LONGEST_STRING, DATA_ITEM_END_OF_RECORD
 
-;; The VALTYP of each descriptor in <DTABLE>, at the same index; both kinds of string are $FF, and the end-of-record
-;; mark's 1 is no type.
-VTABLE:
-    .byte VINT, VREAL, VLNT, $FF
-    .byte VSTR, $01
-TBLLEN = VTABLE-DTABLE-1                    ;; the last index of <DTABLE> and <VTABLE>
+;; The <ValueType> of each descriptor in <Descriptors>, at the same index; both kinds of string are $FF, and the
+;; end-of-record mark's 1 is no type.
+;; Also: VTABLE (BB13)
+DescriptorValueTypes:
+    .byte VALUE_TYPE_INTEGER, VALUE_TYPE_REAL, VALUE_TYPE_LONG_INTEGER, VALUE_TYPE_STRING
+    .byte VALUE_TYPE_STRING, VALUE_TYPE_NONE
 
-;; What the TYP function gives for each descriptor in <DTABLE>: 2 for an integer, 1 a real, 3 a long integer, 4 a
-;; string and 5 the end of a record.
-TYPFNT:
-    .byte 2, 1, 3, 4
-    .byte 4, 5
+;; The last index of <Descriptors> and <DescriptorValueTypes>.
+;; Also: TBLLEN (BB13)
+DESCRIPTOR_LAST = DescriptorValueTypes-Descriptors-1
+
+;; What the `TYP` function gives for each descriptor in <Descriptors>: 2 for an integer, 1 a real, 3 a long integer,
+;; 4 a string and 5 the end of a record.
+;; Also: TYPFNT (BB13)
+DescriptorTypNumbers:
+    .byte TYP_INTEGER, TYP_REAL, TYP_LONG, TYP_STRING
+    .byte TYP_STRING, TYP_END
+.assert * - DescriptorTypNumbers = DESCRIPTOR_LAST + 1, "The descriptor tables have one entry per descriptor."
+.assert Descriptors + MAX_STRING_INDEX + 1 = DescriptorValueTypes - 1, "MAX_STRING_INDEX is next to last."
+
+.endscope
 
 ; ---------------------------------------------------------------------------------------------------------------------
-; CHAIN
+; `CHAIN`
 ; ---------------------------------------------------------------------------------------------------------------------
 
-;; CHAIN: runs another program, keeping the variables; `CHAIN name [, line]`.
+; Statements: `CHAIN`.
+.scope Statements continued
+
+;; `CHAIN`: runs another program, keeping the variables; `CHAIN name [, line]`.
 ;;
-;; The variables and arrays move up under the strings, out of the new program's way; the program loads with <DOLD2>,
-;; and the variables move back down to follow it. The load checks the new program against the top of memory only, not
-;; against the variables moved up under the strings, so a program longer than the room left loads over them.
-;; See: <LDRUN>, <FRUN>
-CHAIN:
-    jsr LDRUN
-    jsr GARBA2                              ; collect the strings first
+;; The variables and arrays move up under the strings, out of the new program's way; the program loads with
+;; <Files::LoadProgram>, and the variables move back down to follow it. The load checks the new program against the
+;; top of memory only, not against the variables moved up under the strings, so a program longer than the room left
+;; loads over them.
+;; See: <Files::OpenProgramToRun>, <Files::StartProgram>
+;; Also: CHAIN (BB13)
+.proc Chain
+    jsr Files::OpenProgramToRun
+    jsr Strings::CollectGarbage             ; collect the strings first
     clc                                     ; the gap between the arrays and the strings, less 1
-    lda FRETOP
-    sbc STREND
-    sta DELTA
-    lda FRETOP+1
-    sbc STREND+1
-    ldy FRETOPB
-    jsr FIXSBC
-    sta DELTA+1
+    lda StringsBottom
+    sbc VariablesEnd
+    sta MoveDistance
+    lda StringsBottom+1
+    sbc VariablesEnd+1
+    ldy StringsBottomXByte
+    jsr Memory::NormalizeAfterSubtract
+    sta MoveDistance+1
     tya
-    sbc STRENDB
-    sta DELTAB
-    lda ARYTAB                              ; move up from the variables' start
-    sta LOWTR
-    lda ARYTAB+1
-    sta LOWTR+1
-    lda ARYTABB
-    sta LOWTRB
-    jsr MVUP
-    lda ARYTAB                              ; keep where the variables now start, in the FAC
-    sta FAC
-    lda ARYTAB+1
-    sta FAC+1
-    lda ARYTABB
-    sta FAC+2
-    jsr DOLD2
-    jsr FLOAD
-    lda ARYTAB                              ; move the variables down to the new program's end
-    sta LOWTR
+    sbc VariablesEndXByte
+    sta MoveDistanceXByte
+    lda ArraysStart                         ; move up from the variables' start
+    sta SourceStart
+    lda ArraysStart+1
+    sta SourceStart+1
+    lda ArraysStartXByte
+    sta SourceStartXByte
+    jsr OpenGap
+    lda ArraysStart                         ; keep where the variables now start, in the Fac
+    sta Fac
+    lda ArraysStart+1
+    sta Fac+1
+    lda ArraysStartXByte
+    sta Fac+2
+    jsr Files::LoadProgram
+    jsr ClearVariables::RestoreData         ; take back memory, and reset DATA and the stack
+    lda ArraysStart                         ; move the variables down to the new program's end
+    sta SourceStart
     sec
-    sbc FAC
-    sta DELTA
-    lda ARYTAB+1
-    sta LOWTR+1
-    sbc FAC+1
-    ldy ARYTABB
-    sty LOWTRB
-    jsr FIXSBC
-    sta DELTA+1
+    sbc Fac
+    sta MoveDistance
+    lda ArraysStart+1
+    sta SourceStart+1
+    sbc Fac+1
+    ldy ArraysStartXByte
+    sty SourceStartXByte
+    jsr Memory::NormalizeAfterSubtract
+    sta MoveDistance+1
     tya
-    sbc FAC+2
-    sta DELTAB
-    lda FAC
-    sta ARYTAB
-    sta INDEX1
-    lda FAC+1
-    sta ARYTAB+1
-    sta INDEX1+1
-    lda FAC+2
-    sta INDEX1B
-    sta ARYTABB
-    jsr MVDWN
+    sbc Fac+2
+    sta MoveDistanceXByte
+    lda Fac
+    sta ArraysStart
+    sta Pointer1
+    lda Fac+1
+    sta ArraysStart+1
+    sta Pointer1+1
+    lda Fac+2
+    sta Pointer1XByte
+    sta ArraysStartXByte
+    jsr CloseGap
+    ; Falls into Files::StartProgram.
+.endproc
 
-;; Starts the program from its beginning, or from the line in <LINNUM> when that is not 0.
-;; In: LINNUM = the line to start at, or 0
-;; See: <CHAIN>, <LUK4IT>
-FRUN:
-    jsr STXTPT
-    jsr STKINI
-    lda LINNUM
-    ora LINNUM+1
-    beq *+5
-    jsr LUK4IT
-    jmp NEWSTT
+.endscope
 
-;; Opens the program file RUN or CHAIN names, for reading, then reads the line number after a comma, if any.
+; Files: starting a program, and opening the one to run.
+.scope Files continued
+
+;; Starts the program from its beginning, or from the line in <LineNumber> when that is not 0.
+;; In: LineNumber = the line to start at, or 0
+;; See: <Statements::Chain>, <Statements::GoTo::SearchFromStart>
+;; Also: FRUN (BB13)
+.proc StartProgram
+    jsr RewindTextPointer
+    jsr ResetStack
+    lda LineNumber
+    ora LineNumber+1
+    beq Run
+    jsr Statements::GoTo::SearchFromStart
+Run:
+    jmp NextStatement
+.endproc
+
+;; Opens the program file `RUN` or `CHAIN` names, for reading, then reads the line number after a comma, if any.
 ;;
-;; It sets <CMDFLG>, which 1.3 takes as the sign to use the new program's prefix, and <RNFLG>, which says a program
-;; has run.
-;; Out: LINNUM = the line, or 0
-;; See: <OPENIT>, <CHAIN>
-LDRUN:
-    lda #1                                  ; read only, and RUN's or CHAIN's flag
-    sta CMDFLG
-    ldx #PRGTY
-    jsr OPENIT
+;; It sets <ProgramLoading>, which 1.3 takes as the sign to use the new program's prefix, and <StartupDone>, which says
+;; a program has run.
+;; Out: LineNumber = the line, or 0
+;; See: <OpenOfType>, <Statements::Chain>
+;; Also: LDRUN (BB13)
+.proc OpenProgramToRun
+    lda #OPEN_READ                          ; read only, and the value of `RUN`'s or `CHAIN`'s flag
+    sta ProgramLoading
+    ldx #FILE_TYPE_BASIC_PROGRAM
+    jsr OpenOfType
     lda #1
-    sta RNFLG
-    jsr CHRGOT
-    beq DATSALL                             ; no line number
-    jsr CHKCOM
-    jmp LINGET
-DATSALL:
+    sta StartupDone
+    jsr GetCurrentCharacter
+    beq NoLine                              ; no line number
+    jsr CheckComma
+    jmp ReadLineNumber
+
+;; Sets the line to start at to 0, for the program's beginning.
+;; Also: DATSALL (BB13)
+NoLine:
     lda #0
-    sta LINNUM
-    sta LINNUM+1
+    sta LineNumber
+    sta LineNumber+1
     rts
+.endproc
+
+.endscope
 
 ; ---------------------------------------------------------------------------------------------------------------------
 ; READ#
 ; ---------------------------------------------------------------------------------------------------------------------
 
-;; READ#: reads items from a data file's record into variables; `READ# file [, record] [; variables]`.
+; Statements: READ#.
+.scope Statements continued
+
+;; `READ#`: reads items from a data file's record into variables; `READ# file [, record] [; variables]`.
 ;;
 ;; Each item must match its variable's kind: a string into a string variable, a number into a numeric one, converted
 ;; to the variable's type. At an end-of-record mark the next record is read in; a record that starts with the mark
-;; ends the data (<CHKEOF>).
-;; See: <DWRITE>, <FILNUM>, <DRDNXT>
-DREAD:
+;; ends the data (<Handlers::EndOfFile>).
+;; Entry:
+;;   ToEndOfData = goes to the end-of-file handling; <Write> ends here for an item too long for any record
+;;   StepOver = moves past the item just read, and on to the next; <ReadFileString> goes on here
+;; See: <Write>, <Files::TakeFileAndRecord>, <ReadFile::NextRecordOrEnd>
+;; Also: DREAD (BB13)
+.proc ReadFile
     sec                                     ; reading
-    ror IOFLG
-    jsr FILNUM
-    jsr PREBIN
-    jsr TSTIN
-    jsr CHRGOT
-    cmp #$3B                                ; a semicolon: variables follow
-    bne RDRTS
-    jsr CHRGET
-    bne DRD2                                ; always
-RDRTS:
+    ror FileAccessMode
+    jsr Files::TakeFileAndRecord
+    jsr Files::PrepareDataFile
+    jsr Files::CheckReadAccess
+    jsr GetCurrentCharacter
+    cmp #';'                                ; a semicolon: variables follow
+    bne Return
+    jsr GetNextCharacter
+    bne ReadItem                            ; always
+
+;; Returns.
+;; Also: RDRTS (BB13)
+Return:
     rts
-DRD1:
-    jsr CHRGOT
-    beq RDRTS
-    jsr CHKCOM
-DRD2:
-    jsr GETNDX
-    lda (NDXPTR),Y                          ; the item's descriptor
-    bne DRD3
-    jsr DRDNXT                              ; the end of the record
-    jmp DRD2
 
-;; Ends the data: goes to the end-of-file handling in <CHKEOF>.
-ODERR:
-    jmp CHKEOF
+;; Takes the comma before the next variable, or ends at the statement's end.
+;; Also: DRD1 (BB13)
+NextItem:
+    jsr GetCurrentCharacter
+    beq Return
+    jsr CheckComma
 
-;; At an end-of-record mark, moves to the next record, unless the mark is the record's first byte, which ends the data.
-;; See: <NXRCD>, <ODERR>
-DRDNXT:
-    ldy FCBNDX
-    lda FCB+XBUFOFS,Y
-    ora FCB+XBUFOFS+1,Y
-    beq ODERR
-    jmp NXRCD
-DRD3:
-    jsr GETVAL
-    sta VALTYP
-    bmi RDSTRI                              ; a string
+;; Reads the item at the buffer's offset, moving to the next record at an end-of-record mark.
+;; Also: DRD2 (BB13)
+ReadItem:
+    jsr Files::PointAtItem
+    lda (DataBufferPointer),Y               ; the item's descriptor
+    bne TakeItem
+    jsr NextRecordOrEnd                     ; the end of the record
+    jmp ReadItem
+
+;; Ends the data: goes to the end-of-file handling in <Handlers::EndOfFile>.
+;; Also: ODERR (BB13)
+ToEndOfData:
+    jmp Handlers::EndOfFile
+
+;; At an end-of-record mark, moves to the next record, unless the mark is the record's first byte, which ends the
+;; data.
+;; See: <Files::NextRecord>, <ToEndOfData>
+;; Also: DRDNXT (BB13)
+NextRecordOrEnd:
+    ldy FileControlBlockIndex
+    lda FileControlBlocks+FileControlBlock::BUFFER_OFFSET,Y
+    ora FileControlBlocks+FileControlBlock::BUFFER_OFFSET+1,Y
+    beq ToEndOfData
+    jmp Files::NextRecord
+
+;; Takes a numeric item into the numeric variable next in the statement; a string item goes to <ReadFileString>.
+;; Also: DRD3 (BB13)
+TakeItem:
+    jsr Files::DescriptorType
+    sta ValueType
+    bmi ReadFileString                      ; a string
     pha
-    jsr MYPTRGET
-    bit VALTYP                              ; a number needs a numeric variable
-    bmi MSMTCH
-    jsr NTINT3
+    jsr FindVariableToAssign
+    bit ValueType                           ; a number needs a numeric variable
+    bmi Files::ToTypeMismatchError
+    jsr Files::ItemDescriptor
     tay                                     ; the variable's descriptor
     pla                                     ; the item's type
-    cmp #VINT
+    cmp #Files::VALUE_TYPE_INTEGER
     clc
-    bne *+3
+    bne SetInteger
     sec
-    ror INTFLG
-    sta VALTYP
+SetInteger:
+    ror IntegerType
+    sta ValueType
     tya
     pha
-    lda NDXPTR                              ; the value, after the descriptor
-    ldy NDXPTR+1
-    ldx NDXPTRB
+    lda DataBufferPointer                   ; the value, after the descriptor
+    ldy DataBufferPointer+1
+    ldx DataBufferPointerXByte
     clc
     adc #1
-    bcc *+3
+    bcc LoadValue
     iny
-    jsr ISVRET2                             ; into the FAC
+LoadValue:
+    jsr EvaluateVariable::AtAddress         ; into the Fac
     pla
     pha
-    cmp #DDLNT                              ; a long integer variable?
-    bne NTLNT
-    jsr CONV2LNG
-DRD5:
+    cmp #DATA_ITEM_LONG_INTEGER             ; a long integer variable?
+    bne ToReal
+    jsr Functions::ConvLong
+
+;; Assigns the value to the variable, as the variable's type.
+;; Also: DRD5 (BB13)
+Assign:
     pla
-    jsr GETVAL
-    sta VALTYP
+    jsr Files::DescriptorType
+    sta ValueType
     lsr
     lsr
     lsr
-    lsr                                     ; VINT's bit 3 into carry
-    ror INTFLG
-    jsr LETP2
-DRD6:
-    jsr GETNDX
-    lda (NDXPTR),Y
-    sta DSCRPT
-    jsr CALCLEN
-    jsr UPOFS
-    cmp FCB+XRECL+1,Y                       ; at the end of the record?
-    bcc DRD7
-    lda FCB+XBUFOFS,Y
-    cmp FCB+XRECL,Y
-    bcc DRD7
-    jsr DRDNXT
-DRD7:
-    jmp DRD1
-NTLNT:
-    jsr CONV2FLT
-    jmp DRD5
+    lsr                                     ; VALUE_TYPE_INTEGER's bit 3 into carry
+    ror IntegerType
+    jsr AssignFac
+
+;; Moves past the item just read, and to the next record when the item ends this one.
+;; Also: DRD6 (BB13)
+StepOver:
+    jsr Files::PointAtItem
+    lda (DataBufferPointer),Y
+    sta DataItemDescriptor
+    jsr Files::ItemLength
+    jsr Files::AdvanceOffset
+    cmp FileControlBlocks+FileControlBlock::RECORD_LENGTH+1,Y ; at the end of the record?
+    bcc ToNextItem
+    lda FileControlBlocks+FileControlBlock::BUFFER_OFFSET,Y
+    cmp FileControlBlocks+FileControlBlock::RECORD_LENGTH,Y
+    bcc ToNextItem
+    jsr NextRecordOrEnd
+
+;; Goes on to the next variable.
+;; Also: DRD7 (BB13)
+ToNextItem:
+    jmp NextItem
+
+;; Converts the value to a real for a real or integer variable.
+;; Also: NTLNT (BB13)
+ToReal:
+    jsr Functions::Conv
+    jmp Assign
+.endproc
+
+.endscope
+
+; Files: a type mismatch.
+.scope Files continued
 
 ;; Ends the statement with a type mismatch.
-MSMTCH:
-    jmp ERTYP
+;; See: <ReportTypeMismatch>
+;; Also: MSMTCH (BB13)
+.proc ToTypeMismatchError
+    jmp ReportTypeMismatch
+.endproc
 
-;; Finds a variable as <PTRGET> does, and puts its address in <FORPNT> as well.
-;; Out: A/Y = the variable's address, FORPNT/FORPNTB = the same
-;; See: <PTRGET>
-MYPTRGET:
-    jsr PTRGET
-    sta FORPNT
-    sty FORPNT+1
-    ldx VARPNTB
-    stx FORPNTB
+.endscope
+
+;; Finds a variable as <FindVariable> does, and puts its address in <AssignedVariable> as well, for the statements that
+;; assign to it.
+;; Out: A/Y = the variable's address, AssignedVariable/AssignedVariableXByte = the same, X = its X-byte, from
+;;   <VariablePointerXByte>
+;; See: <FindVariable>
+;; Also: MYPTRGET (BB13)
+.proc FindVariableToAssign
+    jsr FindVariable
+    sta AssignedVariable
+    sty AssignedVariable+1
+    ldx VariablePointerXByte
+    stx AssignedVariableXByte
     rts
+.endproc
 
-;; Reads a string item into the string variable next in the statement.
+; Statements: READ#'s strings, and WRITE#.
+.scope Statements continued
+
+;; Reads a string item into the string variable next in the statement, for `READ#`.
 ;;
 ;; A 255-character string's descriptor has no length byte after it.
-;; See: <DREAD>
-RDSTRI:
-    jsr MYPTRGET
-    bit VALTYP                              ; a string needs a string variable
-    bpl MSMTCH
+;; See: <ReadFile>
+;; Also: RDSTRI (BB13)
+.proc ReadFileString
+;; The length of a string whose descriptor is <DATA_ITEM_LONGEST_STRING>.
+MAX_STRING_LENGTH = 255
+
+    jsr FindVariableToAssign
+    bit ValueType                           ; a string needs a string variable
+    bpl Files::ToTypeMismatchError
     ldy #0
-    lda (NDXPTR),Y
+    lda (DataBufferPointer),Y
     iny
-    cmp #DDMXSTR
-    bne NTMXSTR
-    lda #$FF
+    cmp #DATA_ITEM_LONGEST_STRING
+    bne TakeLength
+    lda #MAX_STRING_LENGTH
     dey
-    .byte 44                                ; BIT abs, which skips the length byte's LDA
-NTMXSTR:
-    lda (NDXPTR),Y                          ; the length
+    .byte $2C                               ; BIT absolute skips the length byte's LDA
+
+;; Takes the string's length from the byte after its descriptor.
+;; Also: NTMXSTR (BB13)
+TakeLength:
+    lda (DataBufferPointer),Y               ; the length
     pha
     iny                                     ; the characters follow
     tya
     clc
-    adc NDXPTR
-    sta STRNG1
-    lda NDXPTR+1
+    adc DataBufferPointer
+    sta StringPointer
+    lda DataBufferPointer+1
     adc #0
-    sta STRNG1+1
-    lda NDXPTRB
-    sta STRNG1B
+    sta StringPointer+1
+    lda DataBufferPointerXByte
+    sta StringPointerXByte
     pla
     tay
-    jsr STRFI1
-    jsr INPCOM
-    jmp DRD6
+    jsr Strings::FromTextUntil::AtZero
+    jsr AssignString
+    jmp ReadFile::StepOver
+.endproc
 
 ; ---------------------------------------------------------------------------------------------------------------------
 ; WRITE#
 ; ---------------------------------------------------------------------------------------------------------------------
 
-;; WRITE#: writes expressions as items into a data file's record; `WRITE# file [, record] [; expressions]`.
+;; `WRITE#`: writes expressions as items into a data file's record; `WRITE# file [, record] [; expressions]`.
 ;;
 ;; An item that does not fit in the rest of the record goes in the next one; one too long for any record goes to the
-;; end-of-file handling (<CHKEOF>). Starting a record first writes the whole record, to reserve its space on the disk.
-;; A 0 follows the items as the end-of-record mark, when there is room.
-;; See: <DREAD>, <GETXPR>, <WRTRCD>
-DWRITE:
-    lsr IOFLG                               ; writing
-    jsr FILNUM
-    jsr PREBIN
-    jsr TSTOUT
-    jsr CHRGOT
-    cmp #$3B                                ; a semicolon: expressions follow
-    bne WRRTS
-    jsr CHRGET
-    bne DWR2                                ; always
-WRRTS:
-    rts
-DWR1:
-    jsr CHRGOT
-    beq WRRTS
-    jsr CHKCOM
-DWR2:
-    jsr GETXPR
-DWR3:
-    ldx FCBNDX
-    lda FCB+XBUFOFS,X                       ; at the record's start?
-    ora FCB+XBUFOFS+1,X
-    bne DWR4
-    jsr POSREC
-    jsr SETPARMS                            ; write the whole record, to reserve the space
-    ldy #WRT
-    jsr SETGO
-    jsr POSREC
-DWR4:
-    jsr GETNDX
-    jsr CALCLEN
-    jsr TSTFIT
-    bcs ITFITS
-    ldy FCBNDX                              ; would it fit in an empty record?
-    lda FCB+XRECL+1,Y
-    bne NXREC                               ; a record of 256 bytes or more: yes
-    lda LENSAV
-    beq DNTFIT                              ; a 256-byte item: no
-    lda FCB+XRECL,Y
-    cmp LENSAV
-    bcc DNTFIT
-NXREC:
-    jsr NXRCD
-    jmp DWR3
-DNTFIT:
-    jmp ODERR
-ITFITS:
-    ldy #0
-    ldx LENSAV
-    dex
-    stx XSAV                                ; the bytes after the descriptor
-    lda DSCRPT
-    sta (NDXPTR),Y
-    iny
-    dex
-    cmp #DDSTR
-    bne ITF1
-    stx XSAV                                ; a string: its length byte, then its characters
-    txa
-    sta (NDXPTR),Y
-    beq DATDON                              ; an empty string
-    iny
-ITF1:
-    ldx #0
-    lda (VARPNT,X)
-    sta (NDXPTR),Y
-    iny
-    inc VARPNT
-    bne *+4
-    inc VARPNT+1
-    dec XSAV
-    bne ITF1
-DATDON:
-    jsr UPOFS
-    jsr SETOUT
-    jsr TSTFTX                              ; room for the end-of-record mark?
-    bcc GODWR1
-    jsr GETNDX
-    lda #DDEOR
-    sta (NDXPTR),Y                          ; the offset stays before it
-GODWR1:
-    bit VALTYP
-    bpl *+5
-    jsr FRECNOW                             ; free a string's temporary
-    jmp DWR1
+;; end-of-file handling (<ReadFile::ToEndOfData>). Starting a record first writes the whole record, to reserve its
+;; space on the disk. A 0 follows the items as the end-of-record mark, when there is room.
+;; See: <ReadFile>, <Files::EvaluateItem>, <Files::WriteRecord>
+;; Also: DWRITE (BB13)
+.proc Write
+    lsr FileAccessMode                      ; writing
+    jsr Files::TakeFileAndRecord
+    jsr Files::PrepareDataFile
+    jsr Files::CheckWriteAccess
+    jsr GetCurrentCharacter
+    cmp #';'                                ; a semicolon: expressions follow
+    bne Return
+    jsr GetNextCharacter
+    bne TakeItem                            ; always
 
-;; Marks the file's buffer as changed, to be written back: bit 7 of the FCB's flags.
-;; In: FCBNDX = the file's index in <FCB>
-;; Out: Y = FCBNDX
-;; Uses: A
-;; See: <WRTRCD>
-SETOUT:
-    ldy FCBNDX
-    lda FCB+XFLGS,Y
-    ora #$80
-    sta FCB+XFLGS,Y
+;; Returns.
+;; Also: WRRTS (BB13)
+Return:
     rts
+
+;; Takes the comma before the next expression, or ends at the statement's end.
+;; Also: DWR1 (BB13)
+NextItem:
+    jsr GetCurrentCharacter
+    beq Return
+    jsr CheckComma
+
+;; Evaluates the next expression.
+;; Also: DWR2 (BB13)
+TakeItem:
+    jsr Files::EvaluateItem
+
+;; Starts a record by writing it whole, when the item is the first in it.
+;; Also: DWR3 (BB13)
+Place:
+    ldx FileControlBlockIndex
+    lda FileControlBlocks+FileControlBlock::BUFFER_OFFSET,X ; at the record's start?
+    ora FileControlBlocks+FileControlBlock::BUFFER_OFFSET+1,X
+    bne CheckFit
+    jsr Files::SeekRecord
+    jsr Files::SetRecordTransfer            ; write the whole record, to reserve the space
+    ldy #SosCalls::CALL_WRITE
+    jsr SosCalls::MakeFileCall
+    jsr Files::SeekRecord
+
+;; Moves to the next record when the item doesn't fit in this one, unless it would fit in none.
+;; Also: DWR4 (BB13)
+CheckFit:
+    jsr Files::PointAtItem
+    jsr Files::ItemLength
+    jsr Files::ItemFits
+    bcs Store
+    ldy FileControlBlockIndex               ; would it fit in an empty record?
+    lda FileControlBlocks+FileControlBlock::RECORD_LENGTH+1,Y
+    bne ToNextRecord                        ; a record of 256 bytes or more: yes
+    lda DataItemLength
+    beq TooLong                             ; a 256-byte item: no
+    lda FileControlBlocks+FileControlBlock::RECORD_LENGTH,Y
+    cmp DataItemLength
+    bcc TooLong
+
+;; Writes the record back and moves to the next.
+;; Also: NXREC (BB13)
+ToNextRecord:
+    jsr Files::NextRecord
+    jmp Place
+
+;; Goes to the end-of-file handling for an item too long for any record.
+;; Also: DNTFIT (BB13)
+TooLong:
+    jmp ReadFile::ToEndOfData
+
+;; Stores the descriptor and the value's bytes in the buffer.
+;; Also: ITFITS (BB13)
+Store:
+    ldy #0
+    ldx DataItemLength
+    dex
+    stx SavedX                              ; the bytes after the descriptor
+    lda DataItemDescriptor
+    sta (DataBufferPointer),Y
+    iny
+    dex
+    cmp #DATA_ITEM_STRING
+    bne CopyValue
+    stx SavedX                              ; a string: its length byte, then its characters
+    txa
+    sta (DataBufferPointer),Y
+    beq Stored                              ; an empty string
+    iny
+
+;; Copies the value's next byte.
+;; Also: ITF1 (BB13)
+CopyValue:
+    ldx #0
+    lda (VariablePointer,X)
+    sta (DataBufferPointer),Y
+    iny
+    inc VariablePointer
+    bne Counted
+    inc VariablePointer+1
+Counted:
+    dec SavedX
+    bne CopyValue
+
+;; Moves past the item and marks the buffer changed, with the end-of-record mark after it when it fits.
+;; Also: DATDON (BB13)
+Stored:
+    jsr Files::AdvanceOffset
+    jsr Files::MarkChanged
+    jsr Files::EndMarkFits                  ; room for the end-of-record mark?
+    bcc FreeString
+    jsr Files::PointAtItem
+    lda #DATA_ITEM_END_OF_RECORD
+    sta (DataBufferPointer),Y               ; the offset stays before it
+
+;; Frees a string's temporary, and goes on to the next expression.
+;; Also: GODWR1 (BB13)
+FreeString:
+    bit ValueType
+    bpl Next
+    jsr Strings::FreeFacTemporary           ; free a string's temporary
+Next:
+    jmp NextItem
+.endproc
+
+.endscope
+
+; Files: an item's descriptor and length, and the access checks.
+.scope Files continued
+
+;; Marks the file's buffer as changed, to be written back: <FLAG_CHANGED> in the control block's flags.
+;;
+;; Nothing clears the flag again but closing the file, so once a file has been written, each move to another record
+;; writes the record in hand back first (<WriteRecord>), whether or not it changed since.
+;; In: FileControlBlockIndex = the file's index in <FileControlBlocks>
+;; Out: Y = <FileControlBlockIndex>
+;; Uses: A
+;; Keeps: X
+;; See: <WriteRecord>
+;; Also: SETOUT (BB13)
+.proc MarkChanged
+    ldy FileControlBlockIndex
+    lda FileControlBlocks+FileControlBlock::FLAGS,Y
+    ora #FLAG_CHANGED
+    sta FileControlBlocks+FileControlBlock::FLAGS,Y
+    rts
+.endproc
 
 ;; Works out an item's length in the file from its descriptor: the descriptor and the value, with a string's length
 ;; byte and characters.
-;; In: DSCRPT = the descriptor, FACMO = the string, for a string
-;; Out: A = the length, 0 for a 255-character string's 256, LENSAV = the same
+;; In: DataItemDescriptor = the descriptor, FacMantissa3 = the string, for a string
+;; Out: A = the length, 0 for a 255-character string's 256, DataItemLength = the same
 ;; Uses: Y
-CALCLEN:
-    lda DSCRPT
-    eor #DDMXSTR                            ; a 255-character string: 0, for 256
-    beq GOTLEN
-    eor #DDSTR-DDMXSTR
-    bne CANUM
+;; Also: CALCLEN (BB13)
+.proc ItemLength
+    lda DataItemDescriptor
+    eor #DATA_ITEM_LONGEST_STRING           ; a 255-character string: 0, for 256
+    beq Done
+    eor #DATA_ITEM_STRING-DATA_ITEM_LONGEST_STRING
+    bne Number
     tay                                     ; a string: A and Y are 0
-    lda (FACMO),Y                           ; its length
+    lda (FacMantissa3),Y                    ; its length
     sec
-    bcs ADJLEN                              ; always; with ADJLEN's add, the length plus 2
-CANUM:
-    lda DSCRPT
-    and #$0F                                ; a number's length
-    clc
-ADJLEN:
-    adc #1
-GOTLEN:
-    sta LENSAV
-    rts
+    bcs AddOne                              ; always; with AddOne's add, the length plus 2
 
-;; Evaluates WRITE#'s next expression and works out its descriptor, pointing <VARPNT> at the bytes to write.
+;; Takes a number's length from its descriptor.
+;; Also: CANUM (BB13)
+Number:
+    lda DataItemDescriptor
+    and #DESCRIPTOR_SIZE_MASK               ; a number's length
+    clc
+
+;; Adds the descriptor's byte.
+;; Also: ADJLEN (BB13)
+AddOne:
+    adc #1
+
+;; Keeps the length.
+;; Also: GOTLEN (BB13)
+Done:
+    sta DataItemLength
+    rts
+.endproc
+
+;; Evaluates `WRITE#`'s next expression and works out its descriptor, pointing <VariablePointer> at the bytes to write.
 ;;
 ;; A lone integer variable, followed by the end of the statement or a comma, is written as an integer from the
-;; variable itself. Anything else is evaluated into the FAC; a real is rounded and packed, its sign in the top bit of
+;; variable itself. Anything else is evaluated into the <Fac>; a real is rounded and packed, its sign in the top bit of
 ;; the mantissa, and a string's bytes are its characters.
-;; Out: A = the descriptor, DSCRPT = the same, VARPNT/VARPNTB = the value's bytes
-;; See: <NTINT3>, <CALCLEN>
-GETXPR:
-    jsr CHRGOT
-    bcc GETX2                               ; a digit: not a variable
-    jsr ISLETC
-    bcc GETX2                               ; not a letter: not a variable
-    jsr SVTXT                               ; a lone integer variable?
-    jsr PTRGET
-    bit INTFLG
-    bpl NOTINT
-    jsr CHRGOT                              ; only if the end or a comma follows
-    beq NTINT3
-    cmp #$2C
-    beq NTINT3
-NOTINT:
-    jsr RSTTXT                              ; no: evaluate the expression
-GETX2:
-    lda #$20                                ; any type
-    sta VALTYP
-    jsr FRMEVL
-    lda #>(FAC)                             ; a number's bytes are the FAC's
-    ldy #<(FAC)
-    ldx #0
-    bit VALTYP
-    bpl GTX3
-    jsr NOTFAC
-    lda INDEX+1                             ; a string's are its characters
-    ldy INDEX
-    ldx INDEXB
-GTX3:
-    sta VARPNT+1
-    sty VARPNT
-    stx VARPNTB
-    bit VALTYP
-    bmi NTINT2                              ; a string
-    bvs NTINT2                              ; a long integer
-    jsr ROUND                               ; a real: round it, and pack the sign into the mantissa
-    lda FACSGN
-    ora #$7F
-    and FACHO
-    sta FACHO
-NTINT2:
-    lsr INTFLG                              ; not an integer
+;; Out: A = the descriptor, DataItemDescriptor = the same, VariablePointer/VariablePointerXByte = the value's bytes
+;; See: <ItemDescriptor>, <ItemLength>
+;; Also: GETXPR (BB13)
+.proc EvaluateItem
+;; The mantissa's bits below the sign.
+MANTISSA_MASK = $7F
 
-;; Works out the descriptor for <VALTYP> and <INTFLG>: an integer's, else the type's in <VTABLE>, with a string's by
-;; its length.
+    jsr GetCurrentCharacter
+    bcc Evaluate                            ; a digit: not a variable
+    jsr IsLetter
+    bcc Evaluate                            ; not a letter: not a variable
+    jsr SaveTextPointer                     ; a lone integer variable?
+    jsr FindVariable
+    bit IntegerType
+    bpl NotInteger
+    jsr GetCurrentCharacter                 ; only if the end or a comma follows
+    beq ItemDescriptor
+    cmp #','
+    beq ItemDescriptor
+
+;; Goes back to the expression's start, to evaluate it.
+;; Also: NOTINT (BB13)
+NotInteger:
+    jsr RestoreTextPointer                  ; no: evaluate the expression
+
+;; Evaluates the expression and points <VariablePointer> at its bytes.
+;; Also: GETX2 (BB13)
+Evaluate:
+    lda #VALUE_TYPE_ANY
+    sta ValueType
+    jsr EvaluateExpression
+    lda #>(Fac)                             ; a number's bytes are the Fac's
+    ldy #<(Fac)
+    ldx #0
+    bit ValueType
+    bpl SetPointer
+    jsr Strings::FindFacString
+    lda Pointer1+1                          ; a string's are its characters
+    ldy Pointer1
+    ldx Pointer1XByte
+
+;; Points <VariablePointer> at the bytes, then packs a real.
+;; Also: GTX3 (BB13)
+SetPointer:
+    sta VariablePointer+1
+    sty VariablePointer
+    stx VariablePointerXByte
+    bit ValueType
+    bmi NotIntegerItem                      ; a string
+    bvs NotIntegerItem                      ; a long integer
+    jsr Float::Round                        ; a real: round it, and pack the sign into the mantissa
+    lda FacSign
+    ora #MANTISSA_MASK
+    and FacMantissa1
+    sta FacMantissa1
+
+;; Clears <IntegerType>: the item is no integer.
+;; Also: NTINT2 (BB13)
+NotIntegerItem:
+    lsr IntegerType                         ; not an integer
+    ; Falls into ItemDescriptor.
+.endproc
+
+;; Works out the descriptor for <ValueType> and <IntegerType>: an integer's, else the type's in <DescriptorValueTypes>,
+;; with a string's by its length.
 ;;
-;; WRITE# uses it for the expression, and READ# for the variable it reads into.
-;; In: VALTYP = the type, INTFLG = bit 7 set for an integer, FACMO = the string, for a string
-;; Out: A = the descriptor, DSCRPT = the same, X = its index in <DTABLE>
+;; `WRITE#` uses it for the expression, and `READ#` for the variable it reads into.
+;; In: ValueType = the type, IntegerType = bit 7 set for an integer, FacMantissa3 = the string, for a string
+;; Out: A = the descriptor, DataItemDescriptor = the same, X = its index in <Descriptors>
 ;; Errors: a type mismatch for a type not in the table
-NTINT3:
-    lda VALTYP
+;; Also: NTINT3 (BB13)
+.proc ItemDescriptor
+    lda ValueType
     ldx #0
-    bit INTFLG
-    bmi GOTDSC                              ; an integer
-    ldx #TBLLEN
-GTDSC1:
-    cmp VTABLE,X
-    beq NTDONE
-    dex
-    bpl GTDSC1
-    bmi ERRMIS                              ; always
-NTDONE:
-    cpx #4                                  ; a string?
-    bne GOTDSC
-    ldy #0
-    lda (FACMO),Y                           ; its length
-    adc #0                                  ; plus the carry the compare set: 0 for 255 characters
-    beq GOTDSC
-    dex                                     ; shorter: DDSTR, with a length byte
-GOTDSC:
-    lda DTABLE,X
-    sta DSCRPT
-    rts
-ERRMIS:
-    jmp ERTYP
+    bit IntegerType
+    bmi Found                               ; an integer
+    ldx #DESCRIPTOR_LAST
 
-;; Checks that the file may be read, ending the statement with a type mismatch if not.
-;;
-;; A file with no access bits in its FCB's type byte passes.
-;; In: FCBNDX = the file's index in <FCB>
-;; Out: Y = FCBNDX
-;; See: <TSTOUT>
-TSTIN:
-    lda #$10                                ; the read bit
-    .byte 44                                ; BIT abs, which skips TSTOUT's LDA
+;; Looks the type up in <DescriptorValueTypes>, from the end.
+;; Also: GTDSC1 (BB13)
+Search:
+    cmp DescriptorValueTypes,X
+    beq Matched
+    dex
+    bpl Search
+    bmi ToTypeMismatchError                 ; always
+
+;; Gives a string shorter than 255 characters <DATA_ITEM_STRING>, the descriptor before.
+;; Also: NTDONE (BB13)
+Matched:
+    cpx #MAX_STRING_INDEX                   ; a string?
+    bne Found
+    ldy #0
+    lda (FacMantissa3),Y                    ; its length
+    adc #0                                  ; plus the carry the compare set: 0 for 255 characters
+    beq Found
+    dex                                     ; shorter: DATA_ITEM_STRING, with a length byte
+
+;; Takes the descriptor at the index.
+;; Also: GOTDSC (BB13)
+Found:
+    lda Descriptors,X
+    sta DataItemDescriptor
+    rts
+
+;; Ends the statement with a type mismatch.
+;; Also: ERRMIS (BB13)
+ToTypeMismatchError:
+    jmp ReportTypeMismatch
+.endproc
+
+;; Checks that the file may be read, as <CheckWriteAccess> does for writing.
+;; In: FileControlBlockIndex = the file's index in <FileControlBlocks>
+;; Out: Y = <FileControlBlockIndex>
+;; Keeps: X
+;; See: <CheckWriteAccess>
+;; Also: TSTIN (BB13)
+.proc CheckReadAccess
+    lda #ACCESS_READ                        ; the read bit
+    .byte $2C                               ; BIT absolute skips CheckWriteAccess's LDA
+    ; Falls into CheckWriteAccess.
+.endproc
 
 ;; Checks that the file may be written, ending the statement with a type mismatch if not.
 ;;
-;; A file with no access bits in its FCB's type byte passes.
-;; In: FCBNDX = the file's index in <FCB>
-;; Out: Y = FCBNDX
-;; See: <TSTIN>
-TSTOUT:
-    lda #$20                                ; the write bit
-    ldy FCBNDX
-    sta TEMP
-    lda FCB+XUID,Y
-    and #$F0
-    beq TSTRTS
-    and TEMP
-    beq BADMD
-TSTRTS:
-    rts
+;; A file with no access bits in its control block's type byte passes.
+;; In: FileControlBlockIndex = the file's index in <FileControlBlocks>, A = the access bit when <CheckReadAccess> skips
+;;   the LDA
+;; Out: Y = <FileControlBlockIndex>
+;; Uses: Temporary
+;; Keeps: X
+;; See: <CheckReadAccess>
+;; Also: TSTOUT (BB13)
+.proc CheckWriteAccess
+    lda #ACCESS_WRITE                       ; the write bit
+    ldy FileControlBlockIndex
+    sta Temporary
+    lda FileControlBlocks+FileControlBlock::TYPE_AND_ACCESS,Y
+    and #ACCESS_MASK
+    beq Return
+    and Temporary
+    beq DescriptorType::ToTypeMismatchError
 
-;; Finds a descriptor in <DTABLE> and gives its type from <VTABLE>; an unknown descriptor is a type mismatch.
+;; Returns.
+;; Also: TSTRTS (BB13)
+Return:
+    rts
+.endproc
+
+;; Finds a descriptor in <Descriptors> and gives its type from <DescriptorValueTypes>; an unknown descriptor is a type
+;; mismatch.
 ;; In: A = the descriptor
 ;; Out: A = the type, Y = the descriptor's index
-;; See: <TYPFNT>
-GETVAL:
-    ldy #TBLLEN
-GTVAL1:
-    cmp DTABLE,Y
-    beq GOTVAL
+;; Keeps: X
+;; Entry:
+;;   ToTypeMismatchError = ends the statement with a type mismatch; <CheckWriteAccess> branches here
+;; See: <DescriptorTypNumbers>
+;; Also: GETVAL (BB13)
+.proc DescriptorType
+    ldy #DESCRIPTOR_LAST
+
+;; Compares the descriptor with the next entry, from the end.
+;; Also: GTVAL1 (BB13)
+Search:
+    cmp Descriptors,Y
+    beq Found
     dey
-    bpl GTVAL1
+    bpl Search
 
 ;; Ends the statement with a type mismatch.
-BADMD:
-    jmp ERTYP
-GOTVAL:
-    lda VTABLE,Y
+;; Also: BADMD (BB13)
+ToTypeMismatchError:
+    jmp ReportTypeMismatch
+
+;; Gives the descriptor's type.
+;; Also: GOTVAL (BB13)
+Found:
+    lda DescriptorValueTypes,Y
     rts
+.endproc
+
+.endscope
 
 ; ---------------------------------------------------------------------------------------------------------------------
 ; Text files
 ; ---------------------------------------------------------------------------------------------------------------------
 
-;; OUTPUT#: sends PRINT's output to a text file, or back to the console; `OUTPUT# file`, 0 for the console.
+; Statements: `OUTPUT#` and `EXEC`.
+.scope Statements continued
+
+;; `OUTPUT#`: sends `PRINT`'s output to a text file, or back to the console; `OUTPUT# file`, 0 for the console.
 ;;
-;; <FILNO> and FILNO+1 get the file number less one, $FF for the console.
+;; <OutputFileNumber> and the byte after it get the file number less one, <Files::FILE_CONSOLE> for the console.
 ;; Errors: an illegal quantity for a file number above 10
-OUTPUT:
-    jsr CHKPND
-    jsr GETBYT
-    cpx #11
-    bcc *+5
-    jmp FCERR
+;; Entry:
+;;   Return = returns; <Exec> and <Files::SetNewlineMode> branch here
+;; Also: OUTPUT (BB13)
+.proc OutputFile
+    jsr CheckNumberSign
+    jsr EvaluateByte
+    cpx #FILE_COUNT+1
+    bcc InRange
+    jmp IllegalQuantityError
+InRange:
     dex
     txa
-    sta FILNO
-    sta FILNO+1
-    bmi OUTRTS                              ; OUTPUT# 0: the console
-    jsr GTFLNO1
-    jsr PRETXT                              ; a text file only
-OUTRTS:
+    sta OutputFileNumber
+    sta OutputFileNumber+1
+    bmi Return                              ; `OUTPUT#` 0: the console
+    jsr Files::TakeFileNumber::FromIndex
+    jsr Files::PrepareTextFile              ; a text file only
+
+;; Returns.
+;; Also: OUTRTS (BB13)
+Return:
     rts
+.endproc
 
-;; EXEC: closes any EXEC file and opens the named text file for BASIC to take its input from.
+;; `EXEC`: closes any `EXEC` file and opens the named text file for BASIC to take its input from.
 ;;
-;; The file's reads end at a RETURN. A file of unknown type ($00) is closed and quietly ignored; any other type but
-;; text is a type mismatch.
-;; Out: INFLNO = the file's reference number, or 0
-;; See: <EXCCLS>, <DOAGET>
-EXEC:
-    lda INFLNO
-    beq EXEC2
-    sta RWRFNM                              ; close the one before
-    jsr CLSEND
-EXEC2:
-    lda #1                                  ; read only
-    jsr OPNPRTB
-    sta INFLNO
-    lda FID
-    cmp #TXTTYP
-    beq EXRTS
-    jsr CLSEND                              ; not text: close it
-    sta INFLNO                              ; A = 0
-    lda FID
-    cmp #UNKNTY
-    beq OUTRTS
-    jmp CHKERR
+;; The file's reads end at a carriage return. A file of unknown type is closed and quietly ignored; any other type
+;; but text is a type mismatch.
+;; Out: ExecFile = the file's reference number, or 0
+;; See: <Files::CloseExecFile>, <Console::ReadKey>
+;; Also: EXEC (BB13)
+.proc Exec
+    lda ExecFile
+    beq OpenFile
+    sta SosCalls::Reference                 ; close the one before
+    jsr Files::CloseSosFile
 
-;; Turns NEWLINE on at RETURN for the EXEC file, closing it with the error if that fails.
-;; In: RWRFNM = the file's reference number
-EXRTS:
-    lda RWRFNM
-    sta ISNLTB+1
-    brk
-    .byte SNWL
-    .word ISNLTB
-    beq OUTRTS
+;; Opens the named file.
+;; Also: EXEC2 (BB13)
+OpenFile:
+    lda #Files::OPEN_READ                   ; read only
+    jsr Files::OpenNamed
+    sta ExecFile
+    lda SosCalls::FileType
+    cmp #FILE_TYPE_TEXT
+    beq Files::SetNewlineMode
+    jsr Files::CloseSosFile                 ; not text: close it
+    sta ExecFile                            ; A = 0
+    lda SosCalls::FileType
+    cmp #FILE_TYPE_UNKNOWN
+    beq OutputFile::Return
+    jmp RequireString::Mismatch
+.endproc
 
-;; Closes the file in <RWRFNM>, then ends the statement with the SOS error in A.
-;; In: A = the SOS error code, RWRFNM = the file's reference number
-;; See: <SERROR>
-CLTERR:
+.endscope
+
+; Files: text files' new-line mode, and INPUT#'s line read.
+.scope Files continued
+
+;; Turns SOS's new-line mode on, at a carriage return, for a text file, closing it with the error if that fails.
+;; In: SosCalls::Reference = the file's reference number
+;; Also: EXRTS (BB13)
+.proc SetNewlineMode
+    lda SosCalls::Reference
+    sta Console::NewlineParameters+1
+    brk                                     ; SOS's NEWLINE
+    .byte SOS_NEWLINE
+    .word Console::NewlineParameters
+    beq Statements::OutputFile::Return
+    ; Falls into CloseWithError.
+.endproc
+
+;; Closes the file in <SosCalls::Reference>, then ends the statement with the SOS error in A.
+;; In: A = the SOS error code, SosCalls::Reference = the file's reference number
+;; See: <ReportSosError>
+;; Also: CLTERR (BB13)
+.proc CloseWithError
     pha
-    jsr CLSEND
+    jsr CloseSosFile
     pla
-    jmp SERROR
+    jmp ReportSosError
+.endproc
 
-;; Reads a line for INPUT# from the text file in <FILNO> into <BUF>, or the next catalog line from a directory opened
-;; as a file.
+;; Reads a line for `INPUT#` from the text file in <OutputFileNumber> into <InputBuffer>, or the next catalog line from
+;; a directory opened as a file.
 ;;
-;; The read uses the console's list, <SLINTB>, with the file's reference number in place of the console's for the
-;; call. A RETURN ending the line is dropped.
-;; Out: X = the low byte of BUF-1, Y = its high byte, as <GDBUFS> leaves them
-;; See: <LINCAT>, <DSKEOF>
-DSKLIN:
-    ldx FILNO
-    jsr GTFLNO1
-    lda FCB+XSEGNM,Y                        ; no buffer segment: a directory
-    beq LINCAT
-    jsr PRETXT
-    jsr TSTIN
-    lda FCB,Y
-    ldx SLINTB+1
-    sta SLINTB+1
-    brk
-    .byte SRED
-    .word SLINTB
-    stx SLINTB+1                            ; the console's reference number back
-    beq DSKLRT
+;; The read uses the console's list, <Console::LineParameters>, with the file's reference number in place of the
+;; console's for the call. A carriage return ending the line is dropped.
+;; Out: X = the low byte of the address before <InputBuffer>, Y = its high byte, as <InputLine::Terminate> leaves them
+;; Entry:
+;;   ReadFailed = takes a failed read's SOS error in A; `GET#` ends here when its read fails
+;; See: <ReadTextLine::CatalogLine>, <Console::ReadKey>
+;; Also: DSKLIN (BB13)
+.proc ReadTextLine
+;; How many bytes of <CatalogBuffer> a catalog line copies to <InputBuffer>: the line, its 0 and what follows it.
+CATALOG_LINE_COPY = 79
 
-;; Takes a failed read: the end of the file goes to ON EOF#'s handling in <CHKEOF>; any other error ends the statement.
+    ldx OutputFileNumber
+    jsr TakeFileNumber::FromIndex
+    lda FileControlBlocks+FileControlBlock::SEGMENT,Y ; no buffer segment: a directory
+    beq CatalogLine
+    jsr PrepareTextFile
+    jsr CheckReadAccess
+    lda FileControlBlocks+FileControlBlock::REFERENCE_NUMBER,Y
+    ldx Console::LineParameters+1
+    sta Console::LineParameters+1
+    brk                                     ; SOS's READ, from the file
+    .byte SOS_READ
+    .word Console::LineParameters
+    stx Console::LineParameters+1           ; the console's reference number back
+    beq DropReturn
+
+;; Takes a failed read: the end of the file goes to `ON EOF#`'s handling in <Handlers::EndOfFile>; any other error ends
+;; the statement.
 ;; In: A = the SOS error code
-;; See: <DOAGET>
-DSKEOF:
-    cmp #SEEOF
-    beq *+5
-    jmp SERROR
+;; Also: DSKEOF (BB13)
+ReadFailed:
+    cmp #SOS_ERROR_END_OF_FILE
+    beq ToEndOfFile
+    jmp ReportSosError
 
-;; Goes to the end-of-file handling in <CHKEOF>.
-NMOR:
-    jmp CHKEOF
-DSKLRT:
-    ldx SNOCHRS
-    lda BUF-1,X                             ; does a RETURN end the line?
-    cmp #$0D
-    beq DSKLRT1
+;; Goes to the end-of-file handling in <Handlers::EndOfFile>.
+;; Also: NMOR (BB13)
+ToEndOfFile:
+    jmp Handlers::EndOfFile
+
+;; Drops the carriage return that ends the line.
+;; Also: DSKLRT (BB13)
+DropReturn:
+    ldx Console::LineLength
+    lda InputBuffer-1,X                     ; does a carriage return end the line?
+    cmp #CHARACTER_RETURN
+    beq Finish
     inx
-DSKLRT1:
+
+;; Ends the line in <InputBuffer>.
+;; Also: DSKLRT1 (BB13)
+Finish:
     dex
-    jmp GDBUFS
+    jmp InputLine::Terminate
 
-;; Makes the next catalog line with <NCLN> and copies it to <BUF>, as INPUT# reads from a directory.
+;; Makes the next catalog line with <Directory::NextLine> and copies it to <InputBuffer>, as `INPUT#` reads from a
+;; directory.
 ;;
-;; At the catalog's end, VALTYP is left on the stack; <CHKEOF> resets the stack, which discards it.
-LINCAT:
-    lda VALTYP
+;; At the catalog's end, <ValueType> is left on the stack; <Handlers::EndOfFile> resets the stack, which discards it.
+;; Also: LINCAT (BB13)
+CatalogLine:
+    lda ValueType
     pha
-    jsr NCLN
-    bcs NMOR                                ; the end of the catalog
+    jsr Directory::NextLine
+    bcs ToEndOfFile                         ; the end of the catalog
     pla
-    sta VALTYP
+    sta ValueType
     ldx #0
-MVCATL:
-    lda CATBUF,X
-    sta BUF,X
+
+;; Copies the line's next byte.
+;; Also: MVCATL (BB13)
+CopyLine:
+    lda CatalogBuffer,X
+    sta InputBuffer,X
     inx
-    cpx #79
-    bcc MVCATL
-    bcs DSKLRT1                             ; always
+    cpx #CATALOG_LINE_COPY
+    bcc CopyLine
+    bcs Finish                              ; always
+.endproc
+
+.endscope

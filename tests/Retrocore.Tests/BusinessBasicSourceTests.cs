@@ -34,6 +34,12 @@ public sealed class BusinessBasicSourceTests
     private const int ListingSize = 14 + 0x6752;
     private const int ListingOrigin = 0x4FF2;
 
+    // The 1.3 listing's run-time and debugger variants, unchecked against any binary: they pin those builds' paths,
+    // from the header up to BASICEND. The debugger build loads at $3A00.
+    private const string RunTimeHash = "69D669078F168BC999556B7C74AFFF83047E32E34C364A05F2C9FDD75080BCAB";
+    private const string DebugHash = "6D5A41AA86221E7B9EFD752E61467CF49C7D3E455748B95970C19C75F964E4EB";
+    private const int DebugOrigin = 0x39F2;
+
     /// <summary>
     ///  The source assembles without diagnostics to 1.23's SOS.INTERP.
     /// </summary>
@@ -64,6 +70,29 @@ public sealed class BusinessBasicSourceTests
     {
         byte[] bytes = Assemble("VERSION = 130", ListingOrigin, ListingSize);
         Convert.ToHexString(SHA256.HashData(bytes)).Should().Be(ListingHash);
+    }
+
+    /// <summary>
+    ///  With <c>VERSION = 130</c> and <c>RUNTIME = 1</c>, the source assembles Apple's run-time variant of the 1.3
+    ///  listing (its <c>BASIC.RT</c>), unchecked against any binary: the digest pins the run-time paths.
+    /// </summary>
+    [TestMethod]
+    public void RunTimeBuildMatchesItsDigest()
+    {
+        byte[] bytes = AssembleToEnd("VERSION = 130\nRUNTIME = 1", ListingOrigin);
+        Convert.ToHexString(SHA256.HashData(bytes)).Should().Be(RunTimeHash);
+    }
+
+    /// <summary>
+    ///  With <c>VERSION = 130</c> and <c>DEBUG = 1</c>, the source assembles Apple's debugger variant of the 1.3
+    ///  listing (its <c>BASIC.D</c>), loading at $3A00, unchecked against any binary: the digest pins the debugger
+    ///  paths.
+    /// </summary>
+    [TestMethod]
+    public void DebugBuildMatchesItsDigest()
+    {
+        byte[] bytes = AssembleToEnd("VERSION = 130\nDEBUG = 1", DebugOrigin);
+        Convert.ToHexString(SHA256.HashData(bytes)).Should().Be(DebugHash);
     }
 
     /// <summary>
@@ -101,6 +130,22 @@ public sealed class BusinessBasicSourceTests
 
         result.Diagnostics.Should().BeEmpty();
         return result.Sections[0].Bytes[..size].ToArray();
+    }
+
+    // Assembles a build from its header up to BASICEND, the end its header's length gives.
+    private static byte[] AssembleToEnd(string definition, int origin)
+    {
+        string root = SourcePath("BusinessBasic.asm");
+        AssemblyResult result = new Assembler.Assembler().Assemble(
+            new AssemblySource($"{definition}\n.include \"BusinessBasic.asm\"\n", Path.Join(Path.GetDirectoryName(root), "_Build.asm")),
+            new AssemblyOptions(ProcessorVariant.Mos6502, origin, 0x10000 - origin)
+            {
+                SourceResolver = new FileAssemblySourceResolver()
+            });
+
+        result.Diagnostics.Should().BeEmpty();
+        int end = (int)result.SymbolsWithHistoricalNames["BASICEND"];
+        return result.Sections[0].Bytes[..(end - origin)].ToArray();
     }
 
     // The test inputs' copy when the project links one, otherwise the repository's.

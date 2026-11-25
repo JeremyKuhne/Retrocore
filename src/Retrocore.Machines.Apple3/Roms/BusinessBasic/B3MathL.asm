@@ -1,813 +1,999 @@
-; B3MATHL: the floating-point package's LOG, multiplication and division, the routines that move reals between the
-; FAC, ARG and memory, rounding, SGN and ABS, comparison, and the start of QINT.
-;
-; The formats are described in B3MathK.asm. The constants here are five-byte reals in BASIC's own bank.
-;
-; Names follow Apple's Business BASIC 1.3 listing.
+; retrocore: style=strict
+;; Business BASIC's floating point, part two (Apple's B3MATHL): `LOG`, multiplication and division, the routines that
+;; move reals between <Fac>, <Arg> and memory, rounding, `SGN` and `ABS`, comparison, and the start of
+;; <Float::ToLongInteger>, which goes on in B3FinpM.asm.
+;;
+;; The formats are described in B3MathK.asm. The constants here are five-byte reals in BASIC's own bank.
+
+; Floating point, part two: LOG's constants.
+.scope Float continued
 
 ; ---------------------------------------------------------------------------------------------------------------------
 ; LOG
 ; ---------------------------------------------------------------------------------------------------------------------
 
 ;; 1.0.
-FONE:
-    .byte $81
-    .byte 000
-    .byte 000
-    .byte 000
-    .byte 0
+;; Also: FONE (BB13)
+One:
+    .byte $81, $00, $00, $00, $00
 
-;; The polynomial <LOG> uses for the base-2 logarithm of its fraction, in odd powers: the count of terms less one, then
-;; the coefficients, highest power first: 0.43425594188, 0.57658454134, 0.96180075921 and 2.8853900728.
-;; See: <POLYX>
-LOGCN2:
+;; The polynomial <Functions::Log> uses for the base-2 logarithm of its fraction, in odd powers: the count of terms less
+;; one, then the coefficients, highest power first.
+;; See: <EvaluateOddPolynomial>
+;; Also: LOGCN2 (BB13)
+LogPolynomial:
     .byte 3
-    .byte $7F                               ; 0.43425594188
-    .byte $5E
-    .byte $56
-    .byte $CB
-    .byte $79
-    .byte $80                               ; 0.57658454134
-    .byte $13
-    .byte $9B
-    .byte $0B
-    .byte $64
-    .byte $80                               ; 0.96180075921
-    .byte $76
-    .byte $38
-    .byte $93
-    .byte $16
-    .byte $82                               ; 2.8853900728
-    .byte $38
-    .byte $AA
-    .byte $3B
-    .byte $20
+    .byte $7F, $5E, $56, $CB, $79           ; 0.43425594188
+    .byte $80, $13, $9B, $0B, $64           ; 0.57658454134
+    .byte $80, $76, $38, $93, $16           ; 0.96180075921
+    .byte $82, $38, $AA, $3B, $20           ; 2.8853900728
 
 ;; The square root of 0.5.
-SQR0_5:
-    .byte $80
-    .byte $35
-    .byte $04
-    .byte $F3
-    .byte $34
+;; Also: SQR0_5 (BB13)
+SquareRootOfHalf:
+    .byte $80, $35, $04, $F3, $34
 
 ;; The square root of 2.
-SQR2_0:
-    .byte $81
-    .byte $35
-    .byte $04
-    .byte $F3
-    .byte $34
+;; Also: SQR2_0 (BB13)
+SquareRootOfTwo:
+    .byte $81, $35, $04, $F3, $34
 
 ;; -0.5.
-NEGHLF:
-    .byte $80
-    .byte $80
-    .byte 000
-    .byte 000
-    .byte 0
+;; Also: NEGHLF (BB13)
+MinusHalf:
+    .byte $80, $80, $00, $00, $00
 
 ;; The natural logarithm of 2.
-LOG2:
-    .byte $80
-    .byte $31
-    .byte $72
-    .byte $17
-    .byte $F8
+;; Also: LOG2 (BB13)
+LogOfTwo:
+    .byte $80, $31, $72, $17, $F8
 
-;; Gives LOG, the natural logarithm of the FAC.
+.endscope
+
+; The LOG function.
+.scope Functions continued
+
+;; Gives `LOG`, the natural logarithm of <Fac>.
 ;;
-;; For a <FAC> of f times 2^n, with f from 0.5 to 1, it works out the base-2 logarithm of f from a polynomial in
-;; (f - SQR(0.5)) / (f + SQR(0.5)), adds n and multiplies by the logarithm of 2. A FAC of zero or less is an illegal
+;; For a <Fac> of f times 2^n, with f from 0.5 to 1, it works out the base-2 logarithm of f from a polynomial in
+;; `(f - SQR(0.5)) / (f + SQR(0.5))`, adds n and multiplies by the logarithm of 2. A <Fac> of zero or less is an illegal
 ;; quantity.
-;; See: <LOGCN2>, <POLYX>, <FINLOG>
-LOG:
-    jsr SIGN
-    beq LOGERR
-    bpl LOG1
+;; Errors: ILLEGAL QUANTITY = the <Fac> is zero or negative
+;; See: <Float::LogPolynomial>, <Float::EvaluateOddPolynomial>, <Float::AddSignedByte>
+;; Also: LOG (BB13)
+.proc Log
+    jsr Float::GetSign
+    beq ToIllegalQuantity
+    bpl Reduce
 
 ;; Ends the statement with ILLEGAL QUANTITY.
-LOGERR:
-    jmp FCERR
+;; Also: LOGERR (BB13)
+ToIllegalQuantity:
+    jmp IllegalQuantityError
 
-;; Takes the logarithm of a positive <FAC>, for <LOG>.
-LOG1:
-    lda FACEXP
-    sbc #$7F                                ; the carry is clear: less $80, the bias
+;; Takes the logarithm of a positive <Fac>: keeps its exponent as n and makes it a fraction from 0.5 to 1.
+;; Also: LOG1 (BB13)
+Reduce:
+    lda FacExponent
+    sbc #Float::EXPONENT_BIAS - 1           ; the carry is clear: less the bias
     pha                                     ; n
-    lda #$80
-    sta FACEXP                              ; f, from 0.5 to 1
-    lda #<(SQR0_5)
-    ldy #>(SQR0_5)
-    jsr FADD
-    lda #<(SQR2_0)
-    ldy #>(SQR2_0)
-    jsr FDIV
-    lda #<(FONE)
-    ldy #>(FONE)
-    jsr FSUB                                ; 1 - SQR(2) / (f + SQR(0.5))
-    lda #<(LOGCN2)
-    ldy #>(LOGCN2)
-    jsr POLYX
-    lda #<(NEGHLF)
-    ldy #>(NEGHLF)
-    jsr FADD
+    lda #Float::EXPONENT_BIAS
+    sta FacExponent                         ; f, from 0.5 to 1
+    lda #<(Float::SquareRootOfHalf)
+    ldy #>(Float::SquareRootOfHalf)
+    jsr Float::AddPacked
+    lda #<(Float::SquareRootOfTwo)
+    ldy #>(Float::SquareRootOfTwo)
+    jsr Float::DividePacked
+    lda #<(Float::One)
+    ldy #>(Float::One)
+    jsr Float::SubtractFromPacked           ; 1 - SQR(2) / (f + SQR(0.5))
+    lda #<(Float::LogPolynomial)
+    ldy #>(Float::LogPolynomial)
+    jsr Float::EvaluateOddPolynomial
+    lda #<(Float::MinusHalf)
+    ldy #>(Float::MinusHalf)
+    jsr Float::AddPacked
     pla
-    jsr FINLOG                              ; add n
-    lda #<(LOG2)
-    ldy #>(LOG2)
-    ldx #SQR0B                              ; left over: FMULT sets X itself
+    jsr Float::AddSignedByte                ; add n
+    lda #<(Float::LogOfTwo)
+    ldy #>(Float::LogOfTwo)
+    ldx #LOG_CONSTANTS_X_BYTE               ; left over: MultiplyPacked sets X itself
+    ; Falls into Float::MultiplyPacked.
+.endproc
+
+.endscope
+
+; Floating point, part two: multiplication, division, moves, signs and comparison.
+.scope Float continued
 
 ; ---------------------------------------------------------------------------------------------------------------------
 ; Multiplication
 ; ---------------------------------------------------------------------------------------------------------------------
 
-;; Multiplies the <FAC> by the five-byte real at A, Y.
-;; In: A, Y = the real's address, in BASIC's own bank
-;; See: <FMULTT>, <CONUPK>
-FMULT:
-    ldx #0
-    jsr CONUPK
+;; Multiplies <Fac> by the five-byte real at A, Y.
+;; In: A = the real's address, low byte, Y = its high byte, in BASIC's own bank
+;; See: <Float::MultiplyArg>, <Float::LoadArg>
+;; Also: FMULT (BB13)
+.proc MultiplyPacked
+    ldx #0                                  ; BASIC's own bank
+    jsr LoadArg
+    ; Falls into MultiplyArg.
+.endproc
 
-;; Multiplies the <FAC> by <ARG>, into the FAC: ARG's mantissa times each byte of the FAC's, the rounding byte first,
-;; summed in RES.
-;; In: A = FACEXP, zero = set for a zero FAC, ARISGN = the product's sign
-;; See: <MULDIV>, <MLTPLY>, <MOVFR>
-FMULTT:
-    bne *+5
-    jmp MULTRT                              ; a zero FAC is the product
-    jsr MULDIV
+;; Multiplies <Fac> by <Arg>, into the <Fac>: <Arg>'s mantissa times each byte of the <Fac>'s, the rounding byte first,
+;; summed in <Result1>.
+;; In: A = <FacExponent>, zero = set for a zero <Fac>, ResultSign = the product's sign
+;; See: <Float::CombineExponents>, <Float::MultiplyByte>, <Float::NormalizeResult>
+;; Also: FMULTT (BB13)
+.proc MultiplyArg
+    bne *+5                                 ; skip the jump for a Fac that is not zero
+    jmp MultiplyByte::Done                  ; a zero Fac is the product
+    jsr CombineExponents
     lda #0
-    sta RESHO
-    sta RESMOH
-    sta RESMO
-    sta RESLO
-    lda FACOV
-    jsr MLTPLY
-    lda FACLO
-    jsr MLTPLY
-    lda FACMO
-    jsr MLTPLY
-    lda FACMOH
-    jsr MLTPLY
-    lda FACHO
-    jsr MLTPL1
-    jmp MOVFR
+    sta Result1
+    sta Result2
+    sta Result3
+    sta Result4
+    lda FacExtension
+    jsr MultiplyByte
+    lda FacMantissa4
+    jsr MultiplyByte
+    lda FacMantissa3
+    jsr MultiplyByte
+    lda FacMantissa2
+    jsr MultiplyByte
+    lda FacMantissa1
+    jsr MultiplyByte::NonZero               ; the high byte is never zero
+    jmp NormalizeResult
+.endproc
 
-;; Adds <ARG> times the multiplier byte in A into <RES>, shifting RES right a bit for each of its bits; a zero byte just
-;; shifts RES a byte.
+;; Adds <Arg> times the multiplier byte in A into <Result1>, shifting <Result1> right a bit for each of its bits; a zero
+;; byte just shifts <Result1> a byte.
 ;; In: A = the multiplier byte
-;; See: <MULSHF>
-MLTPLY:
-    bne *+5
-    jmp MULSHF
+;; Entry:
+;;   NonZero = skips the test for zero, for a byte that is never zero
+;;   Done = returns
+;; See: <Float::ShiftProductByte>
+;; Also: MLTPLY (BB13)
+.proc MultiplyByte
+    bne *+5                                 ; skip the jump for a byte that is not zero
+    jmp ShiftProductByte
 
 ;; Multiplies by a non-zero byte, with a marker bit above it to count the eight bits.
-MLTPL1:
-    lsr
+;; Also: MLTPL1 (BB13)
+NonZero:
+    lsr a
     ora #$80
 
-;; Adds <ARG> to <RES> when the bit shifted out is set.
+;; Adds <Arg> to <Result1> when the bit shifted out is set.
 ;; In: carry = the bit, A = the bits left
-MLTPL2:
+;; Also: MLTPL2 (BB13)
+NextBit:
     tay
-    bcc MLTPL3
+    bcc Shift
     clc
-    lda RESLO
-    adc ARGLO
-    sta RESLO
-    lda RESMO
-    adc ARGMO
-    sta RESMO
-    lda RESMOH
-    adc ARGMOH
-    sta RESMOH
-    lda RESHO
-    adc ARGHO
-    sta RESHO
+    lda Result4
+    adc ArgMantissa4
+    sta Result4
+    lda Result3
+    adc ArgMantissa3
+    sta Result3
+    lda Result2
+    adc ArgMantissa2
+    sta Result2
+    lda Result1
+    adc ArgMantissa1
+    sta Result1
 
-;; Shifts <RES> right a bit, into <FACOV>, and goes on while bits are left.
-MLTPL3:
-    ror RESHO
-    ror RESMOH
-    ror RESMO
-    ror RESLO
-    ror FACOV
+;; Shifts <Result1> right a bit, into <FacExtension>, and goes on while bits are left.
+;; Also: MLTPL3 (BB13)
+Shift:
+    ror Result1
+    ror Result2
+    ror Result3
+    ror Result4
+    ror FacExtension
     tya
-    lsr
-    bne MLTPL2
+    lsr a
+    bne NextBit
 
-;; An RTS for the multiplication.
-MULTRT:
+;; Returns.
+;; Also: MULTRT (BB13)
+Done:
     rts
+.endproc
 
 ; ---------------------------------------------------------------------------------------------------------------------
 ; Unpacking and exponents
 ; ---------------------------------------------------------------------------------------------------------------------
 
-;; Unpacks a real from memory into <ARG>: five bytes from BASIC's own bank, or a variable's four from another.
-;; In: A, Y = the real's address, X = its bank, 0 for BASIC's own
-;; Out: ARG = the real, ARISGN = ARG's sign exclusive-ored with the FAC's, A = FACEXP, zero = set for a zero FAC
-;; Uses: INDEX1
-CONUPK:
-    sta INDEX1
-    stx INDEX1B
-    sty INDEX1+1
-    ldy #3+1
-    lda (INDEX1),Y
+;; Unpacks a real from memory into <Arg>: five bytes from BASIC's own bank, or a variable's four from another.
+;; In: A = the real's address, low byte, Y = its high byte, X = its bank, 0 for BASIC's own
+;; Out: Arg = the real, ResultSign = <Arg>'s sign exclusive-ored with the <Fac>'s, A = <FacExponent>,
+;;   zero = set for a zero <Fac>, Y = 0
+;; Uses: Pointer1
+;; Keeps: X
+;; See: <Float::LoadFac>
+;; Also: CONUPK (BB13)
+.proc LoadArg
+    sta Pointer1
+    stx Pointer1XByte
+    sty Pointer1+1
+    ldy #CONSTANT_SIZE - 1
+    lda (Pointer1),y
     cpx #0
-    beq *+4
+    beq *+4                                 ; BASIC's own bank: keep the fifth byte
     lda #0                                  ; a variable: no fifth byte
-    sta ARGLO
+    sta ArgMantissa4
     dey
-    lda (INDEX1),Y
-    sta ARGMO
+    lda (Pointer1),y
+    sta ArgMantissa3
     dey
-    lda (INDEX1),Y
-    sta ARGMOH
+    lda (Pointer1),y
+    sta ArgMantissa2
     dey
-    lda (INDEX1),Y
-    sta ARGSGN                              ; the sign is the top bit
-    eor FACSGN
-    sta ARISGN
-    lda ARGSGN
+    lda (Pointer1),y
+    sta ArgSign                             ; the sign is the top bit
+    eor FacSign
+    sta ResultSign
+    lda ArgSign
     ora #$80                                ; the implied 1
-    sta ARGHO
+    sta ArgMantissa1
     dey
-    lda (INDEX1),Y
-    sta ARGEXP
-    lda FACEXP
+    lda (Pointer1),y
+    sta ArgExponent
+    lda FacExponent
     rts
+.endproc
 
-;; Adds <ARG>'s exponent to the <FAC>'s for a multiplication or division, and sets the result's sign.
+;; Adds <Arg>'s exponent to <Fac>'s for a multiplication or division, and sets the result's sign.
 ;;
-;; A result too small to hold makes the FAC zero and returns from the routine that called <MULDIV>; one too large ends
-;; the statement with OVERFLOW.
-;; Out: FACEXP = the sum, less the bias, FACSGN = ARISGN
-;; See: <MLDEXP>
-MULDIV:
-    lda ARGEXP
+;; A zero <Arg>, or a result too small to hold, makes the <Fac> zero and returns from the routine that called this
+;; one; a result too large ends the statement with OVERFLOW. A result exponent of exactly 0 makes the <Fac> zero, its
+;; sign too, and returns to the caller.
+;; Out: FacExponent = the sum, less the bias, FacSign = <ResultSign>
+;; See: <Float::AddExponent>
+;; Also: MULDIV (BB13)
+.proc CombineExponents
+    lda ArgExponent
+    ; Falls into AddExponent.
+.endproc
 
-;; Adds the exponent in A to the <FAC>'s, as <MULDIV> does.
+;; Adds the exponent in A to <Fac>'s, as <Float::CombineExponents> does.
 ;; In: A = the exponent
-MLDEXP:
-    beq ZEREMV                              ; times zero
+;; Also: MLDEXP (BB13)
+.proc AddExponent
+    beq Underflow                           ; times zero
     clc
-    adc FACEXP
-    bcc TRYOFF
-    bmi GOOVER                              ; past $17F: too large
+    adc FacExponent
+    bcc NoCarry
+    bmi ToOverflowError                     ; past $17F: too large
     clc
-    .byte 44                                ; BIT abs, which skips TRYOFF's BPL
+    .byte $2C                               ; BIT absolute, which skips NoCarry's BPL
 
-;; Takes a sum with no carry: below $80 is too small.
-TRYOFF:
-    bpl ZEREMV
-    adc #$80                                ; the bias
-    sta FACEXP
-    bne *+5
-    jmp ZEROML
-    lda ARISGN
-    sta FACSGN
+;; Takes a sum with no carry: below $80 is too small; otherwise takes off the bias.
+;; Also: TRYOFF (BB13)
+NoCarry:
+    bpl Underflow
+    adc #EXPONENT_BIAS
+    sta FacExponent
+    bne *+5                                 ; skip the jump for an exponent that is not zero
+    jmp SetSign                             ; zero: the sign is 0 too
+    lda ResultSign
+    sta FacSign
     rts
+.endproc
 
-;; For a result whose exponent is out of range: too large when the <FAC> is positive, and zero when it is negative.
-;; See: <EXP>
-MLDVEX:
-    lda FACSGN
+;; For a result whose exponent is out of range: too large when <Fac> is positive, and zero when it is negative.
+;; See: <Functions::Exp>
+;; Also: MLDVEX (BB13)
+.proc ExponentOutOfRange
+    lda FacSign
     eor #$FF
-    bmi GOOVER
+    bmi ToOverflowError
+    ; Falls into Underflow.
+.endproc
 
-;; Makes the <FAC> zero and returns from the routine that called the exponent check.
-ZEREMV:
+;; Makes <Fac> zero and returns from the routine that called the exponent check.
+;; Also: ZEREMV (BB13)
+.proc Underflow
     pla
     pla
-    jmp ZEROFC
+    jmp SetZero
+.endproc
 
 ;; Ends the statement with OVERFLOW.
-GOOVER:
-    jmp OVERR
+;; Also: GOOVER (BB13)
+.proc ToOverflowError
+    jmp OverflowError
+.endproc
 
-;; Multiplies the <FAC> by 10: four times itself, plus itself, doubled.
-;; Out: ARG = the FAC as it was, rounded
-MUL10:
-    jsr MOVAF
+;; Multiplies <Fac> by 10: four times itself, plus itself, doubled.
+;; Out: Arg = the <Fac> as it was, rounded
+;; Errors: OVERFLOW = the product is too large
+;; Entry:
+;;   Done = returns
+;; Also: MUL10 (BB13)
+.proc MultiplyByTen
+    jsr CopyFacToArg
     tax
-    beq MUL10R                              ; zero stays zero
+    beq Done                                ; zero stays zero
     clc
     adc #2                                  ; four times
-    bcs GOOVER
+    bcs ToOverflowError
     ldx #0
-    stx ARISGN
-    jsr FADDC                               ; plus itself
-    inc FACEXP                              ; doubled
-    beq GOOVER
+    stx ResultSign
+    jsr AlignAndAdd                         ; plus itself
+    inc FacExponent                         ; doubled
+    beq ToOverflowError
 
-;; An RTS for <MUL10>.
-MUL10R:
+;; Returns.
+;; Also: MUL10R (BB13)
+Done:
     rts
+.endproc
 
 ; ---------------------------------------------------------------------------------------------------------------------
 ; Division
 ; ---------------------------------------------------------------------------------------------------------------------
 
 ;; 10.0.
-TEN_C:
-    .byte $84
-    .byte $20
-    .byte 000
-    .byte 000
-    .byte 0
+;; Also: TEN_C (BB13)
+Ten:
+    .byte $84, $20, $00, $00, $00
 
-;; Divides the <FAC> by 10.
+;; Divides <Fac> by 10.
 ;;
-;; The result is always positive: <FIN>, which uses it, sets the sign afterward.
-DIV10:
-    jsr MOVAF
-    lda #<(TEN_C)
-    ldy #>(TEN_C)
+;; The quotient is positive whatever the <Fac>'s sign: <Float::ReadNumber> and <Float::FormatFac>, which use it, work on
+;; a positive number and set the sign themselves.
+;; Also: DIV10 (BB13)
+.proc DivideByTen
+    jsr CopyFacToArg
+    lda #<(Ten)
+    ldy #>(Ten)
     ldx #0                                  ; the quotient's sign
+    ; Falls into DivideArgByPacked.
+.endproc
 
-;; Divides <ARG> by the five-byte real at A, Y, giving the quotient the sign in X.
-;; In: A, Y = the divisor's address, X = the quotient's sign
-FDIVF:
-    stx ARISGN
-    ldx #TEN_CB
-    jsr MOVFM
-    jmp FDIVT
+;; Divides <Arg> by the five-byte real at A, Y, giving the quotient the sign in X.
+;; In: A = the divisor's address, low byte, Y = its high byte, in BASIC's own bank, X = the quotient's sign
+;; Also: FDIVF (BB13)
+.proc DivideArgByPacked
+    stx ResultSign
+    ldx #TEN_X_BYTE
+    jsr LoadFac
+    jmp DivideArg
+.endproc
 
-;; Divides the five-byte real at A, Y by the <FAC>, into the FAC.
-;; In: A, Y = the real's address, in BASIC's own bank
-;; See: <FDIVT>, <CONUPK>
-FDIV:
-    ldx #0
-    jsr CONUPK
+;; Divides the five-byte real at A, Y by <Fac>, into the <Fac>.
+;; In: A = the real's address, low byte, Y = its high byte, in BASIC's own bank
+;; See: <Float::DivideArg>, <Float::LoadArg>
+;; Also: FDIV (BB13)
+.proc DividePacked
+    ldx #0                                  ; BASIC's own bank
+    jsr LoadArg
+    ; Falls into DivideArg.
+.endproc
 
-;; Divides <ARG> by the <FAC>, into the FAC, a bit of the quotient at a time; a zero FAC ends the statement with
+;; Divides <Arg> by <Fac>, into the <Fac>, a bit of the quotient at a time; a zero <Fac> ends the statement with
 ;; DIVISION BY ZERO.
-;; In: A = FACEXP, zero = set for a zero FAC, ARISGN = the quotient's sign
-;; See: <MULDIV>, <MOVFR>
-FDIVT:
-    bne NO0ERR
-    jmp DV0ERR
+;; In: A = <FacExponent>, zero = set for a zero <Fac>, ResultSign = the quotient's sign
+;; Errors: DIVISION BY ZERO = the <Fac> is zero, OVERFLOW = the quotient is too large
+;; See: <Float::CombineExponents>, <Float::NormalizeResult>
+;; Also: FDIVT (BB13)
+.proc DivideArg
+    bne NotZero
+    jmp DivisionByZero
 
-;; Divides by a <FAC> that is not zero, for <FDIVT>.
-NO0ERR:
-    jsr ROUND
-    lda #0                                  ; negate the FAC's exponent, so MULDIV subtracts it
+;; Divides by a <Fac> that is not zero: rounds it, subtracts its exponent from <Arg>'s, and sets the marker bit that
+;; counts each quotient byte's eight bits.
+;; Also: NO0ERR (BB13)
+NotZero:
+    jsr Round
+    lda #0                                  ; negate the Fac's exponent, so CombineExponents subtracts it
     sec
-    sbc FACEXP
-    sta FACEXP
-    jsr MULDIV
-    inc FACEXP
-    beq GOOVER
-    ldx #$100-3-1                           ; RES's bytes, from RESHO
+    sbc FacExponent
+    sta FacExponent
+    jsr CombineExponents
+    inc FacExponent
+    beq ToOverflowError
+    ldx #$100-3-1                           ; Result1's bytes, from Result1
     lda #1                                  ; a marker bit, to count eight bits
 
-;; Compares <ARG>'s mantissa with the <FAC>'s, the divisor.
-DIVIDE:
-    ldy ARGHO
-    cpy FACHO
-    bne SAVQUO
-    ldy ARGMOH
-    cpy FACMOH
-    bne SAVQUO
-    ldy ARGMO
-    cpy FACMO
-    bne SAVQUO
-    ldy ARGLO
-    cpy FACLO
+;; Compares <Arg>'s mantissa with <Fac>'s, the divisor.
+;; Also: DIVIDE (BB13)
+Compare:
+    ldy ArgMantissa1
+    cpy FacMantissa1
+    bne SaveBit
+    ldy ArgMantissa2
+    cpy FacMantissa2
+    bne SaveBit
+    ldy ArgMantissa3
+    cpy FacMantissa3
+    bne SaveBit
+    ldy ArgMantissa4
+    cpy FacMantissa4
 
-;; Shifts the comparison's result, as the next bit of the quotient, into A; each full byte goes to <RES>, and the last
-;; two bits to FACOV.
-;; In: carry = set when the divisor goes into ARG
-SAVQUO:
+;; Shifts the comparison's result, as the next bit of the quotient, into A; each full byte goes to <Result1>, and the
+;; last two bits to <FacExtension>.
+;; In: carry = set when the divisor goes into <Arg>
+;; Also: SAVQUO (BB13)
+SaveBit:
     php
-    rol
-    bcc QSHFT                               ; the byte is not full yet
+    rol a
+    bcc TestSubtract                        ; the byte is not full yet
     inx
-    sta RESLO,X
-    beq LD100                               ; RESLO is done: two more bits
-    bpl DIVNRM                              ; the two more bits are done
+    sta Result4,x
+    beq LastBits                            ; Result4 is done: two more bits
+    bpl Finish                              ; the two more bits are done
     lda #1
 
-;; Subtracts the divisor when it went into <ARG>, then shifts ARG left a bit.
-QSHFT:
+;; Subtracts the divisor when it went into <Arg>, then shifts <Arg> left a bit.
+;; Also: QSHFT (BB13)
+TestSubtract:
     plp
-    bcs DIVSUB
+    bcs Subtract
 
-;; Shifts <ARG> left a bit, then compares again; a bit carried out of ARG's top means the divisor goes in.
-SHFARG:
-    asl ARGLO
-    rol ARGMO
-    rol ARGMOH
-    rol ARGHO
-    bcs SAVQUO
-    bmi DIVIDE
-    bpl SAVQUO
+;; Shifts <Arg> left a bit, then compares again; a bit carried out of <Arg>'s top means the divisor goes in, and a clear
+;; top bit that it does not.
+;; Also: SHFARG (BB13)
+ShiftDividend:
+    asl ArgMantissa4
+    rol ArgMantissa3
+    rol ArgMantissa2
+    rol ArgMantissa1
+    bcs SaveBit
+    bmi Compare
+    bpl SaveBit
 
-;; Subtracts the divisor from ARG.
+;; Subtracts the divisor from <Arg>.
 ;; In: carry = set
-DIVSUB:
+;; Also: DIVSUB (BB13)
+Subtract:
     tay
-    lda ARGLO
-    sbc FACLO
-    sta ARGLO
-    lda ARGMO
-    sbc FACMO
-    sta ARGMO
-    lda ARGMOH
-    sbc FACMOH
-    sta ARGMOH
-    lda ARGHO
-    sbc FACHO
-    sta ARGHO
+    lda ArgMantissa4
+    sbc FacMantissa4
+    sta ArgMantissa4
+    lda ArgMantissa3
+    sbc FacMantissa3
+    sta ArgMantissa3
+    lda ArgMantissa2
+    sbc FacMantissa2
+    sta ArgMantissa2
+    lda ArgMantissa1
+    sbc FacMantissa1
+    sta ArgMantissa1
     tya
-    jmp SHFARG
+    jmp ShiftDividend
 
 ;; Sets the marker bit for the last two bits of the quotient.
-LD100:
+;; Also: LD100 (BB13)
+LastBits:
     lda #$40
-    bne QSHFT                               ; always
+    bne TestSubtract                        ; always
 
-;; Puts the last two bits of the quotient at the top of <FACOV>, then moves the quotient into the FAC.
-DIVNRM:
-    ror
-    ror
-    ror
+;; Puts the last two bits of the quotient at the top of <FacExtension>, then moves the quotient into <Fac>.
+;; Also: DIVNRM (BB13)
+Finish:
+    ror a
+    ror a
+    ror a
     and #$C0
-    sta FACOV
+    sta FacExtension
     plp
-    jmp MOVFR
+    jmp NormalizeResult
 
-;; Ends the statement with DIVISION BY ZERO.
-DV0ERR:
-    ldx #ERRDV0
-    jmp ERROR
+;; Ends the statement with DIVISION BY ZERO, through <ReportError>.
+;; Also: DV0ERR (BB13)
+DivisionByZero:
+    ldx #ERROR_DIVISION_BY_ZERO
+    jmp ReportError
+.endproc
 
 ; ---------------------------------------------------------------------------------------------------------------------
 ; Moving reals
 ; ---------------------------------------------------------------------------------------------------------------------
 
-;; Moves the result of a multiplication or division, <RES>, into the <FAC>'s mantissa and normalizes it.
-;; See: <NORMAL>
-MOVFR:
-    lda RESHO
-    sta FACHO
-    lda RESMOH
-    sta FACMOH
-    lda RESMO
-    sta FACMO
-    lda RESLO
-    sta FACLO
-    jmp NORMAL
+;; Moves the result of a multiplication or division, <Result1>, into <Fac>'s mantissa and normalizes it.
+;; See: <Float::Normalize>
+;; Also: MOVFR (BB13)
+.proc NormalizeResult
+    lda Result1
+    sta FacMantissa1
+    lda Result2
+    sta FacMantissa2
+    lda Result3
+    sta FacMantissa3
+    lda Result4
+    sta FacMantissa4
+    jmp Normalize
+.endproc
 
-;; Unpacks a real from memory into the <FAC>: five bytes from BASIC's own bank, or a variable's four from another.
-;; In: A, Y = the real's address, X = its bank, 0 for BASIC's own
-;; Out: A = FACEXP, zero = set for a zero FAC, FACOV = 0, Y = 0
-;; Uses: INDEX1
-MOVFM:
-    sta INDEX1
-    stx INDEXB
-    sty INDEX1+1
-    ldy #4
+;; Unpacks a real from memory into <Fac>: five bytes from BASIC's own bank, or a variable's four from another.
+;; In: A = the real's address, low byte, Y = its high byte, X = its bank, 0 for BASIC's own
+;; Out: A = <FacExponent>, zero = set for a zero <Fac>, FacExtension = 0, Y = 0
+;; Uses: Pointer1
+;; Keeps: X
+;; Also: MOVFM (BB13)
+.proc LoadFac
+    sta Pointer1
+    stx Pointer1XByte
+    sty Pointer1+1
+    ldy #CONSTANT_SIZE - 1
     lda #0
     cpx #0
     bne *+4                                 ; a variable: no fifth byte
-    lda (INDEX),Y
-    sta FACLO
+    lda (Pointer1),y
+    sta FacMantissa4
     dey
-    lda (INDEX1),Y
-    sta FACMO
+    lda (Pointer1),y
+    sta FacMantissa3
     dey
-    lda (INDEX1),Y
-    sta FACMOH
+    lda (Pointer1),y
+    sta FacMantissa2
     dey
-    lda (INDEX1),Y
-    sta FACSGN                              ; the sign is the top bit
+    lda (Pointer1),y
+    sta FacSign                             ; the sign is the top bit
     ora #$80                                ; the implied 1
-    sta FACHO
+    sta FacMantissa1
     dey
-    lda (INDEX1),Y
-    sta FACEXP
-    sty FACOV
+    lda (Pointer1),y
+    sta FacExponent
+    sty FacExtension
     rts
+.endproc
 
-;; Packs the <FAC> into <TEMPF2>, five bytes.
-;; See: <MOVMF>
-MOV2F:
-    ldx #TEMPF2
-    .byte 44                                ; BIT abs, which skips MOV1F's LDX
+;; Packs <Fac> into <FloatTemporary2>, five bytes.
+;; See: <Float::StoreFac>
+;; Also: MOV2F (BB13)
+.proc StoreFacInTemporary2
+    ldx #FloatTemporary2
+    .byte $2C                               ; BIT absolute, which skips StoreFacInTemporary1's LDX
+    ; Falls into StoreFacInTemporary1.
+.endproc
 
-;; Packs the <FAC> into <TEMPF1>, five bytes.
-;; See: <MOVMF>
-MOV1F:
-    ldx #TEMPF1
+;; Packs <Fac> into <FloatTemporary1>, five bytes.
+;; See: <Float::StoreFac>
+;; Also: MOV1F (BB13)
+.proc StoreFacInTemporary1
+    ldx #FloatTemporary1
     ldy #0
-    tya
-    beq MOVMF                               ; always
+    tya                                     ; BASIC's own bank
+    beq StoreFac                            ; always
+.endproc
 
-;; Packs the <FAC> into the variable <FORPNT> points to.
-;; See: <MOVMF>
-MOVVF:
-    ldx FORPNT
-    lda FORPNTB
-    ldy FORPNT+1
+;; Packs <Fac> into the variable <AssignedVariable> points to.
+;; See: <Float::StoreFac>
+;; Also: MOVVF (BB13)
+.proc StoreFacInVariable
+    ldx AssignedVariable
+    lda AssignedVariableXByte
+    ldy AssignedVariable+1
+    ; Falls into StoreFac.
+.endproc
 
-;; Rounds the <FAC> and packs it into memory: five bytes in BASIC's own bank, or a variable's four, rounded to three
+;; Rounds <Fac> and packs it into memory: five bytes in BASIC's own bank, or a variable's four, rounded to three
 ;; mantissa bytes, in another.
-;; In: X, Y = the address, A = the bank, 0 for BASIC's own
-;; Out: Y = 0, FACOV = 0
-;; Uses: INDEX1
-;; See: <ROUNDER>
-MOVMF:
-    stx INDEX1
-    sty INDEX1+1
-    sta INDEX1B
+;;
+;; In BASIC's own bank the fifth byte is stored and the variable's rounding skipped, except that a fifth byte of zero
+;; doesn't skip it: <Float::RoundForVariable> then rounds once more by the next bit of <FacExtension>, which can only
+;; make <FacMantissa4> 1, and clears <FacMantissa4> again, so the bytes stored are the same.
+;; In: X = the address, low byte, Y = its high byte, A = the bank, 0 for BASIC's own
+;; Out: X = the bank, Y = 0, FacExtension = 0
+;; Uses: Pointer1
+;; Entry:
+;;   AtPointer = stores at the address and bank already in <Pointer1> and its X-byte, with the bank in A as well
+;; See: <Float::Round>, <Float::RoundForVariable>
+;; Also: MOVMF (BB13)
+.proc StoreFac
+    stx Pointer1
+    sty Pointer1+1
+    sta Pointer1XByte
 
-;; Stores the <FAC>'s five or four bytes, for <MOVMF>.
-FOURBYT:
-    ldy #4
+;; Stores <Fac>'s five or four bytes at <Pointer1>.
+;; In: A = the bank
+;; Also: FOURBYT (BB13)
+AtPointer:
+    ldy #CONSTANT_SIZE - 1
     tax
-    bne FURBYT                              ; a variable
-    jsr ROUND
-    lda FACLO
-    sta (INDEX),Y                           ; the fifth byte
-    bne *+5                                 ; FURBYT's rounding is not needed
+    bne ToVariable                          ; a variable
+    jsr Round
+    lda FacMantissa4
+    sta (Pointer1),y                        ; the fifth byte
+    bne *+5                                 ; skip ToVariable's rounding (not for a fifth byte of zero)
 
-;; Rounds the <FAC> to a variable's three mantissa bytes, then stores the first four bytes.
-FURBYT:
-    jsr ROUNDER
+;; Rounds <Fac> to a variable's three mantissa bytes, then stores the first four bytes.
+;; Also: FURBYT (BB13)
+ToVariable:
+    jsr RoundForVariable
     dey
-    lda FACMO
-    sta (INDEX),Y
+    lda FacMantissa3
+    sta (Pointer1),y
     dey
-    lda FACMOH
-    sta (INDEX),Y
+    lda FacMantissa2
+    sta (Pointer1),y
     dey
-    lda FACSGN                              ; the sign, in place of the implied 1
+    lda FacSign                             ; the sign, in place of the implied 1
     ora #$7F
-    and FACHO
-    sta (INDEX),Y
+    and FacMantissa1
+    sta (Pointer1),y
     dey
-    lda FACEXP
-    sta (INDEX),Y
-    sty FACOV
+    lda FacExponent
+    sta (Pointer1),y
+    sty FacExtension
     rts
+.endproc
 
-;; Rounds the <FAC> to the three mantissa bytes a variable keeps, to the nearest, a half to even, and clears FACLO.
-;; See: <ROUND>
-ROUNDER:
-    jsr ROUND
-    lda FACLO
-    bpl RONDRTS                             ; below a half: down
-    asl
-    sta TEMP
-    lda FACMO
+;; Rounds <Fac> to the three mantissa bytes a variable keeps, to the nearest, a half to even, and clears <FacMantissa4>.
+;; Out: FacMantissa4 = 0
+;; Keeps: X, Y
+;; See: <Float::Round>
+;; Also: ROUNDER (BB13)
+.proc RoundForVariable
+    jsr Round
+    lda FacMantissa4
+    bpl ClearLow                            ; below a half: down
+    asl a
+    sta Temporary
+    lda FacMantissa3
     and #1
-    ora TEMP                                ; above a half, or a half with FACMO odd: up
-    beq RONDRTS
+    ora Temporary                           ; above a half, or a half with FacMantissa3 odd: up
+    beq ClearLow
     lda #$FF
-    sta FACLO
-    jsr INCRND
+    sta FacMantissa4                        ; so that adding one carries into FacMantissa3
+    jsr Round::Increment
 
-;; Clears <FACLO>, for <ROUNDER>.
-RONDRTS:
+;; Clears <FacMantissa4>.
+;; Also: RONDRTS (BB13)
+ClearLow:
     lda #0
-    sta FACLO
+    sta FacMantissa4
     rts
+.endproc
 
-;; Moves <ARG> into the FAC.
-;; Out: X = 0, FACOV = 0
-MOVFA:
-    lda ARGSGN
+;; Moves <Arg> into <Fac>.
+;; Out: X = 0, FacExtension = 0
+;; Keeps: Y
+;; Also: MOVFA (BB13)
+.proc CopyArgToFac
+    lda ArgSign
+    ; Falls into CopyArgToFacWithSign.
+.endproc
 
-;; Moves <ARG>'s exponent and mantissa into the <FAC>, with A as its sign.
+;; Moves <Arg>'s exponent and mantissa into <Fac>, with A as its sign.
 ;; In: A = the sign
-;; Out: X = 0, FACOV = 0
-MOVFA1:
-    sta FACSGN
-    ldx #4+1
+;; Out: X = 0, FacExtension = 0
+;; Keeps: Y
+;; Also: MOVFA1 (BB13)
+.proc CopyArgToFacWithSign
+    sta FacSign
+    ldx #UNPACKED_SIZE - 1                  ; the exponent and the mantissa
 
-;; Moves a byte, for <MOVFA1>.
-MOVFAL:
-    lda ARGEXP-1,X
-    sta FACEXP-1,X
+;; Moves a byte, from the lowest.
+;; Also: MOVFAL (BB13)
+Loop:
+    lda ArgExponent-1,x
+    sta FacExponent-1,x
     dex
-    bne MOVFAL
-    stx FACOV
+    bne Loop
+    stx FacExtension
     rts
+.endproc
 
-;; Rounds the <FAC> and copies it, with its sign, into ARG.
-;; Out: A = FACEXP, zero = set for a zero FAC, X = 0, FACOV = 0
-;; See: <ROUND>
-MOVAF:
-    jsr ROUND
+;; Rounds <Fac> and copies it, with its sign, into <Arg>.
+;; Out: A = <FacExponent>, X = 0, FacExtension = 0
+;; Keeps: Y
+;; See: <Float::Round>
+;; Also: MOVAF (BB13)
+.proc CopyFacToArg
+    jsr Round
+    ; Falls into CopyFacToArgUnrounded.
+.endproc
 
-;; Copies the <FAC>, with its sign, into <ARG> without rounding it.
-;; Out: A = FACEXP, zero = set for a zero FAC, X = 0, FACOV = 0
-MOVEF:
-    ldx #5+1
+;; Copies <Fac>, with its sign, into <Arg> without rounding it.
+;; Out: A = <FacExponent>, X = 0, FacExtension = 0
+;; Keeps: Y
+;; Also: MOVEF (BB13)
+.proc CopyFacToArgUnrounded
+    ldx #UNPACKED_SIZE
 
-;; Copies a byte, for <MOVEF>.
-MOVAFL:
-    lda FACEXP-1,X
-    sta ARGEXP-1,X
+;; Copies a byte, from the sign down.
+;; Also: MOVAFL (BB13)
+Loop:
+    lda FacExponent-1,x
+    sta ArgExponent-1,x
     dex
-    bne MOVAFL
-    stx FACOV
+    bne Loop
+    stx FacExtension
     rts
+.endproc
 
-;; Rounds the <FAC>'s mantissa by the top bit of <FACOV>, taking a carry out of the top into the exponent.
+;; Rounds <Fac>'s mantissa by the top bit of <FacExtension>, taking a carry out of the top into the exponent.
 ;; Uses: A
-ROUND:
-    lda FACEXP
-    beq RONRTS                              ; zero
-    asl FACOV
-    bcc RONRTS                              ; below a half
+;; Keeps: X, Y
+;; Entry:
+;;   Increment = adds one to the mantissa, taking a carry out of the top into the exponent
+;;   Done = returns
+;; Also: ROUND (BB13)
+.proc Round
+    lda FacExponent
+    beq Done                                ; zero
+    asl FacExtension
+    bcc Done                                ; below a half
 
-;; Adds one to the <FAC>'s mantissa, taking a carry out of the top into the exponent.
-;; See: <INCFAC>, <RNDSHF>
-INCRND:
-    jsr INCFAC
-    bne RONRTS
-    jsr RNDSHF
+;; Adds one to <Fac>'s mantissa, taking a carry out of the top into the exponent.
+;; See: <Float::IncrementMantissa>, <Float::ShiftInCarry>
+;; Also: INCRND (BB13)
+Increment:
+    jsr IncrementMantissa
+    bne Done
+    jsr ShiftInCarry
 
-;; An RTS for <ROUND>.
-RONRTS:
+;; Returns.
+;; Also: RONRTS (BB13)
+Done:
     rts
+.endproc
 
 ; ---------------------------------------------------------------------------------------------------------------------
 ; Signs
 ; ---------------------------------------------------------------------------------------------------------------------
 
-;; Gives the <FAC>'s sign.
+;; Gives <Fac>'s sign.
 ;; Out: A = 0 for zero, 1 for positive, $FF for negative
-SIGN:
-    lda FACEXP
-    beq SIGNRT
+;; Keeps: X, Y
+;; Entry:
+;;   FromSignByte = gives the sign of <FacSign>, as a non-zero <Fac>'s, with carry = set for negative
+;;   FromBit7 = gives 1 or $FF by the top bit of A, with carry = set for $FF
+;;   Done = returns
+;; Also: SIGN (BB13)
+.proc GetSign
+    lda FacExponent
+    beq Done
 
-;; Gives the sign of <FACSGN>, as a non-zero <FAC>'s.
-;; Out: A = 1 for positive, $FF for negative, carry = set for negative
-FCSIGN:
-    lda FACSGN
+;; Gives the sign of <FacSign>, as a non-zero <Fac>'s.
+;; Also: FCSIGN (BB13)
+FromSignByte:
+    lda FacSign
 
 ;; Gives 1 or $FF by the top bit of A.
-;; In: A = the sign
-;; Out: A = 1 for positive, $FF for negative, carry = set for negative
-FCOMPS:
-    rol
+;; Also: FCOMPS (BB13)
+FromBit7:
+    rol a
     lda #$100-1
-    bcs SIGNRT
+    bcs Done
     lda #1
 
-;; An RTS for <SIGN>.
-SIGNRT:
+;; Returns.
+;; Also: SIGNRT (BB13)
+Done:
     rts
+.endproc
 
-;; Gives SGN, replacing the <FAC> with its sign: -1, 0 or 1.
-;; See: <SIGN>, <FLOAT>
-SGN:
-    jsr SIGN
+.endscope
 
-;; Floats the signed byte in A into the FAC.
+; The SGN function.
+.scope Functions continued
+
+;; Gives `SGN`, replacing <Fac> with its sign: -1, 0 or 1.
+;; See: <Float::GetSign>, <Float::ConvertSignedByte>
+;; Also: SGN (BB13)
+.proc Sgn
+    jsr Float::GetSign
+    ; Falls into Float::ConvertSignedByte.
+.endproc
+
+.endscope
+
+; Floating point, part two: integers to reals.
+.scope Float continued
+
+;; The exponent of a real whose mantissa, taken as a 32-bit integer, is its value: from 2^31 to below 2^32.
+LONG_INTEGER_EXPONENT = EXPONENT_BIAS + 32
+
+;; The exponent of a real whose mantissa's top two bytes, taken as a 16-bit integer, are its value.
+WORD_EXPONENT = EXPONENT_BIAS + 16
+
+;; The exponent of a real whose mantissa's top byte, taken as an 8-bit integer, is its value.
+BYTE_EXPONENT = EXPONENT_BIAS + 8
+
+;; Floats the signed byte in A into <Fac>.
 ;; In: A = the byte
-FLOAT:
-    sta FACHO
+;; Also: FLOAT (BB13)
+.proc ConvertSignedByte
+    sta FacMantissa1
     lda #0
-    sta FACHO+1
-    ldx #$88
+    sta FacMantissa1+1
+    ldx #BYTE_EXPONENT
+    ; Falls into ConvertSignedWord.
+.endproc
 
-;; Floats the signed 16-bit number in <FACHO> and FACHO+1, high byte first, into the FAC.
-;; In: X = the exponent: $90 for an integer
-FLOATS:
-    lda FACHO
+;; Floats the signed 16-bit number in <FacMantissa1> and <FacMantissa1>+1, high byte first, into <Fac>.
+;; In: X = the exponent: <Float::WORD_EXPONENT> for an integer
+;; Also: FLOATS (BB13)
+.proc ConvertSignedWord
+    lda FacMantissa1
     eor #$FF
-    rol                                     ; the carry is set for positive
+    rol a                                   ; the carry is set for positive
+    ; Falls into ConvertWord.
+.endproc
 
-;; Floats the number in <FACHO> and FACHO+1 into the <FAC>, negating it when the carry is clear.
+;; Floats the number in <FacMantissa1> and <FacMantissa1>+1 into <Fac>, negating it when the carry is clear.
 ;; In: X = the exponent, carry = set for a positive number
-;; See: <FADFLT>
-FLOATC:
+;; See: <Float::NormalizeSigned>
+;; Also: FLOATC (BB13)
+.proc ConvertWord
     lda #0
-    sta FACLO
-    sta FACMO
-    stx FACEXP
-    sta FACOV
-    sta FACSGN
-    jmp FADFLT
+    sta FacMantissa4
+    sta FacMantissa3
+    stx FacExponent
+    sta FacExtension
+    sta FacSign
+    jmp NormalizeSigned
+.endproc
 
-;; Gives ABS, making the <FAC> positive.
-ABS:
-    lsr FACSGN
+.endscope
+
+; The ABS function.
+.scope Functions continued
+
+;; Gives `ABS`, making <Fac> positive.
+;; Keeps: A, X, Y
+;; Also: ABS (BB13)
+.proc Abs
+    lsr FacSign
     rts
+.endproc
+
+.endscope
+
+; Floating point, part two: comparison and the integer part.
+.scope Float continued
 
 ; ---------------------------------------------------------------------------------------------------------------------
 ; Comparison
 ; ---------------------------------------------------------------------------------------------------------------------
 
-;; Compares <ARG> with the <FAC>, taking them as equal when they match to 24 bits.
+;; How many bits two reals must match in, plus one, to count as equal: <Float::CompareArgWithin> takes it here.
+MatchBits = KeptY
+
+;; The bits the relational operators compare in, plus one: a 24-bit mantissa, a variable's.
+RELATION_MATCH_BITS = 25
+
+;; The bits <Float::Compare> compares in, plus one: a 32-bit mantissa, a constant's.
+PACKED_MATCH_BITS = 33
+
+;; Compares <Arg> with <Fac>, taking them as equal when they match to 24 bits.
 ;;
-;; It subtracts the FAC from ARG and calls them equal when the difference's exponent is at least 25 below the FAC's.
-;; The FAC is kept, but ARG and <FACOV> are not.
-;; Out: A = 1 when ARG is less, 0 when equal, $FF when ARG is greater
-;; Uses: KIMY, TEMP
-;; See: <FCOMP>
-FCOMPARG:
-    lda #25
-    sta KIMY
+;; It subtracts the <Fac> from <Arg> and calls them equal when the difference's exponent is at least 25 below the
+;; <Fac>'s. The <Fac> is kept, but <Arg> and <FacExtension> are not.
+;; Out: A = 1 when <Arg> is less, 0 when equal, $FF when <Arg> is greater
+;; Uses: KeptY, Temporary
+;; See: <Float::Compare>
+;; Also: FCOMPARG (BB13)
+.proc CompareArg
+    lda #RELATION_MATCH_BITS
+    sta MatchBits
+    ; Falls into CompareArgWithin.
+.endproc
 
-;; Compares, with <KIMY> bits that must match.
-;; In: KIMY = the bits that must match, plus one
-FCOMPA1:
-    lda FACSGN
-    eor ARGSGN
-    bmi FCSIGN                              ; the signs differ: the FAC's sign is the answer
-    ldx #5
+;; Compares <Arg> with <Fac>, as <Float::CompareArg> does, with <Float::MatchBits> bits that must match.
+;; In: MatchBits = the bits that must match, plus one
+;; Out: A = 1 when <Arg> is less, 0 when equal, $FF when <Arg> is greater
+;; Uses: Temporary
+;; Also: FCOMPA1 (BB13)
+.proc CompareArgWithin
 
-;; Saves the <FAC> on the stack.
-PHFAC34:
-    lda FAC,X
+;; The difference's exponent.
+DifferenceExponent = Temporary
+
+    lda FacSign
+    eor ArgSign
+    bmi GetSign::FromSignByte               ; the signs differ: the Fac's sign is the answer
+    ldx #UNPACKED_SIZE - 1
+
+;; Saves <Fac> on the stack.
+;; Also: PHFAC34 (BB13)
+SaveFac:
+    lda Fac,x
     pha
     dex
-    bpl PHFAC34
-    jsr FSUBT
-    ldy FACSGN                              ; the difference's sign
-    lda FACEXP
-    sta TEMP
-    ldx #$FA                                ; -6
+    bpl SaveFac
+    jsr SubtractFromArg
+    ldy FacSign                             ; the difference's sign
+    lda FacExponent
+    sta DifferenceExponent
+    ldx #$100-UNPACKED_SIZE
 
-;; Restores the <FAC> from the stack.
-PHFAC35:
+;; Restores <Fac> from the stack.
+;; Also: PHFAC35 (BB13)
+RestoreFac:
     pla
-    sta FAC+6,X                             ; FAC to FAC+5, as zero page wraps
+    sta Fac+UNPACKED_SIZE,x                 ; Fac to Fac+5, as zero page wraps
     inx
-    bne PHFAC35
-    lda TEMP
-    beq ISEQU37                             ; no difference
-    lda FACEXP
+    bne RestoreFac
+    lda DifferenceExponent
+    beq Equal                               ; no difference
+    lda FacExponent
     sec
-    sbc TEMP
-    bcc NTEQU36                             ; the difference is larger than the FAC
-    cmp KIMY
-    bcs ISEQU37                             ; so small it counts as none
+    sbc DifferenceExponent
+    bcc Unequal                             ; the difference is larger than the Fac
+    cmp MatchBits
+    bcs Equal                               ; so small it counts as none
 
 ;; Gives the result by the difference's sign.
 ;; In: Y = the difference's sign
-NTEQU36:
+;; Also: NTEQU36 (BB13)
+Unequal:
     tya
     eor #$FF
-    jmp FCOMPS
+    jmp GetSign::FromBit7
 
 ;; Gives 0, equal.
-ISEQU37:
+;; Also: ISEQU37 (BB13)
+Equal:
     lda #0
     rts
+.endproc
 
-;; Compares a five-byte real in BASIC's own bank, at <INDEX2>'s low byte and the page in Y, with the <FAC>, for NEXT.
-;; In: Y = the page, 1 for a FOR entry on the stack
-;; See: <FCOMP>
-FCOMPN:
-    lda INDEX2
-    ldx #0
+;; Compares a five-byte real in BASIC's own bank, at <Pointer2>'s low byte and the page in Y, with <Fac>, for `NEXT`.
+;; In: Y = the page, 1 for a `FOR` entry on the stack
+;; See: <Float::Compare>
+;; Also: FCOMPN (BB13)
+.proc CompareAtPointer2
+    lda Pointer2
+    ldx #0                                  ; BASIC's own bank
+    ; Falls into Compare.
+.endproc
 
-;; Compares the real at A, Y with the <FAC>, taking them as equal when they match to 32 bits.
-;; In: A, Y = the real's address, X = its bank, 0 for BASIC's own
+;; Compares the real at A, Y with <Fac>, taking them as equal when they match to 32 bits.
+;; In: A = the real's address, low byte, Y = its high byte, X = its bank, 0 for BASIC's own
 ;; Out: A = 1 when the real is less, 0 when equal, $FF when it is greater
-;; See: <FCOMPARG>, <CONUPK>
-FCOMP:
-    jsr CONUPK
-    lda #33
-    sta KIMY
-    jmp FCOMPA1
+;; Uses: KeptY, Temporary
+;; See: <Float::CompareArg>, <Float::LoadArg>
+;; Also: FCOMP (BB13)
+.proc Compare
+    jsr LoadArg
+    lda #PACKED_MATCH_BITS
+    sta MatchBits
+    jmp CompareArgWithin
+.endproc
 
 ; ---------------------------------------------------------------------------------------------------------------------
 ; Integer part
 ; ---------------------------------------------------------------------------------------------------------------------
 
-;; Turns the <FAC> into a signed 32-bit integer in <FACHO>, <FACMOH>, <FACMO> and <FACLO>, high byte first: the greatest
-;; integer not above it.
+;; Turns <Fac> into a signed 32-bit integer in <FacMantissa1>, <FacMantissa2>, <FacMantissa3> and <FacMantissa4>, high
+;; byte first: the greatest integer not above it.
 ;;
-;; The FAC must be below 2^31 in size, an exponent below $A0; callers check. A negative number is negated into two's
-;; complement first, then shifted with ones coming in from the left. <QINT> goes on in B3FinpM.asm.
-;; Uses: BITS
-;; See: <INT>, <SHFTR1>
-QINT:
+;; A negative number is negated into two's complement first, then shifted with ones coming in from the left. The
+;; <Fac> must be below 2^31 in size, an exponent below <Float::LONG_INTEGER_EXPONENT>: a larger one isn't checked, and
+;; gives a wrong result. The exponent and sign are left as they were. The routine goes on in B3FinpM.asm.
+;; Out: Y = 0
+;; Uses: ShiftFill
+;; See: <Functions::Int>, <Float::ShiftRightFilled>
+;; Also: QINT (BB13)
+.proc ToLongInteger
     lda #0
-    sta BITS                                ; zeros come in for a positive number
-    lda FACEXP
-    beq CLRFAC
+    sta ShiftFill                           ; zeros come in for a positive number
+    lda FacExponent
+    beq ClearMantissa
     sec
-    sbc #$A0                                ; minus the bits to shift
-    bit FACSGN
-    bpl QISHFT
+    sbc #LONG_INTEGER_EXPONENT              ; minus the bits to shift
+    bit FacSign
+    bpl Shift
     tax
     lda #$FF
-    sta BITS                                ; ones come in for a negative number
-    jsr NEGFCH
+    sta ShiftFill                           ; ones come in for a negative number
+    jsr ComplementMantissa
     txa
 
-;; Shifts the integer into place: a byte at a time with <SHFTR1>, or by up to seven bits with <QINT1>.
-QISHFT:
-    ldx #FAC
+;; Shifts the integer into place: eight bits or more with <Float::ShiftRightFilled>, which shifts whole bytes first,
+;; fewer with <Float::ToLongInteger::ShortShift>.
+;; Also: QISHFT (BB13)
+Shift:
+    ldx #Fac
     cmp #$100-7
-    bpl QINT1
+    bpl ShortShift

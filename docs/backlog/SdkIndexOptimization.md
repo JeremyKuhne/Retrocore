@@ -158,14 +158,32 @@ fell by 24 MB.
 
 ## Where the time and memory go now
 
-From the ETW trace before steps 3 and 4, and the allocation trace after step 5:
+ETW traces of `Index` over every root, through filtrace's `Capture-BenchmarkTrace.ps1 -Profiler ETW` and
+`filtrace classify --native-symbols`, at the baseline (run `20261124-183310-87def9d1`) and after step 12 (run
+`20261125-041157-d3315fd5`). Profiling slows each run, so the times below are the profiled runs'; the progress table's
+are not profiled. Allocations are BenchmarkDotNet's, exact either way.
 
-- **The GC is 27.5% of CPU**, nearly all of it compacting: objects live long enough to survive the first
-  generation. Every allocation removed saves its GC work too.
-- **The documentation parser made 41.5% of the allocations** after step 5, before step 6. It runs twice for each
-  file: once in the assembler, for the `Also:` names (`AssemblyAlsoNames.Collect`, 21.6%), and once for the editor
-  (`DocumentationSet.Create`).
-- **The preprocessor** makes about a third, and the compiler about a fifth.
+| | Baseline | After step 12 |
+| --- | --- | --- |
+| Profiled time per index | 1,338 ms | 1,056 ms |
+| The GC's share of CPU | 27.5% | 34.7% |
+| **The GC's time per index** | **368 ms** | **366 ms** |
+| **Everything else** | **970 ms** | **690 ms** (−29%) |
+| Allocated | 1,389 MB | 641 MB |
+| Collections per index: gen 0, gen 1 | 27, 19 | 12, 11 |
+
+- **The GC costs what it did before the round.** Halving the allocations halved the collections, but nearly every
+  collection is now a gen 1 one, and each costs twice as much: its time goes on what survives, not on what was
+  allocated. In the GC, planning the compaction (`plan_phase`) is 28% of all CPU and moving the survivors
+  (`relocate_phase`) 15%; marking is 8%, of which 6% is `mark_through_cards_for_uoh_objects`, large arrays on the
+  large object heap that point at young objects.
+- What survives is what the index keeps: every root's analysis, with its lines, statements and documentation, and
+  during a build, the cache's texts and lines. Allocating less no longer cuts the GC's time; keeping less, or keeping
+  it where the GC does not scan it again, would.
+- **Our own work** fell 29% across the round. Of all CPU now, the preprocessor is 48% (macro expansion 24%, the ca65
+  path 11%), the documentation 21%, the compiler 14%, the analysis's constructor 14% and reading the files 5%,
+  each including its share of the GC.
+- AppleSoft's root alone is 22.8% GC: one root keeps less.
 
 ## Candidates
 

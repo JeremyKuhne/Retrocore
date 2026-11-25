@@ -436,7 +436,7 @@ Leave:
 .proc TestProgramRunning
 .assert MASTER || * = $A65E, "TestProgramRunning is at $A65E where DOS runs."
 
-;; The high byte of Applesoft's current line number (its <AppleSoft:CURLIN>), $FF in immediate mode.
+;; The high byte of Applesoft's current line number (its <AppleSoft:CurrentLine>), $FF in immediate mode.
 ApplesoftLineHigh = $76
 
 ;; Integer BASIC's run flag (its <IntegerBasic:RUNFLAG>): bit 7 is set while a program runs.

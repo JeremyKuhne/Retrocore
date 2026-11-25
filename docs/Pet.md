@@ -151,9 +151,9 @@ Every ROM the PET runs is an SDK source, maintained by hand and byte-identical t
 modules. Set `basicSource` to `macro10` to build and debug the PET overlays on Microsoft's original
 [`m6502.asm`](../src/Retrocore.Basic/Roms/Microsoft6502Basic/m6502.asm) instead. BASIC 2 is that source's own
 Commodore build (`REALIO` 3) with three changes: long error messages,
-a spare byte in NEWSTT, and PEEK reading BASIC's own ROM. BASIC 1 is an earlier Microsoft version: another page-zero
+a spare byte in `NextStatement` (NEWSTT), and PEEK reading BASIC's own ROM. BASIC 1 is an earlier Microsoft version: another page-zero
 layout, no GO or NULL keyword, the code from before the fixes in the source's change log, and Commodore's patches into
-the editor's chip. The revised first chip fixes STKINI, which in the original stored a return address before moving
+the editor's chip. The revised first chip fixes `ResetStack` (STKINI), which in the original stored a return address before moving
 the stack pointer, so the 60 Hz interrupt could overwrite it. BASIC runs past `$DFFF`, so each editor chip starts with
 BASIC's last bytes: the end of the math package, its start-up and its sign-on.
 
@@ -238,12 +238,12 @@ included. BASIC's source covers its end in the editor's chip, which the debugger
 
 **BASIC programs.** PET BASIC programs have the BASIC thread, the program document and `basic` launches, as
 AppleSoft and Color BASIC do; the [extension's README](../extension/README.md#basic-programs) describes them. The
-dialect is `petbasic` (files named `*.petbasic.bas`, or with `REM retrocore petbasic`), tokenized as each ROM's CRUNCH
-does: BASIC 1 skips spaces inside reserved words and has no GO, BASIC 2 crunches `GO TO` as GO and TO, and BASIC 4
+dialect is `petbasic` (files named `*.petbasic.bas`, or with `REM retrocore petbasic`), tokenized as each ROM's `Tokenize`
+(CRUNCH) does: BASIC 1 skips spaces inside reserved words and has no GO, BASIC 2 crunches `GO TO` as GO and TO, and BASIC 4
 adds its fifteen disk commands after GO. A file's dialect is BASIC 4, which has every word; a running machine reads a
 program with its own version. Lowercase
 outside strings, DATA and REM is made capitals, the PET's unshifted letters. PETSCII that cannot be typed is written
-as escapes, such as `{$93}` for CLR. The BASIC thread follows NEWSTT and GONE, as for AppleSoft: BASIC 1, 2 and 4 are
+as escapes, such as `{$93}` for CLR. The BASIC thread follows `NextStatement` and `ExecuteStatement` (NEWSTT and GONE), as for AppleSoft: BASIC 1, 2 and 4 are
 the same Microsoft code, and every page-zero address comes from the running BASIC's assembly, as they keep page zero
 in different places. A GOSUB takes seven bytes of the stack, a FOR eighteen, and an error's message comes from BASIC's
 own error table. Comparisons give -1 for true, and AND, OR and NOT work bit by bit, as on the PET.
@@ -257,7 +257,7 @@ own error table. Comparisons give -1 for true, and AND, OR and NOT work bit by b
 | `PetTapeTests` | SAVE, LOAD and VERIFY on both ports of both models; a tape built from a program file; MAME's quickload and a 1980 WAV recording; TAP and WAV kept and rounded; the Datasette's saves; and MAME loading our saved tape as TAP and WAV ([`tools/PetTapeLoad.lua`](../tools/PetTapeLoad.lua)). |
 | `PetRomSourceTests` | Every chip's source by digest, and against the dumps; every model booting from the SDK's builds. |
 | `PetBasicDialectTests` | Each BASIC's tokens, lines crunched byte for byte, listings that round-trip, lowercase, pointers and variables in memory, and help for every word. |
-| `PetBasicConformanceTests` | Lines crunched by each ROM's own CRUNCH, run on a 6502 from the SDK's build, against the library's tokenizer; the keyword tables and page-zero pointers against the ROMs'. |
+| `PetBasicConformanceTests` | Lines crunched by each ROM's own `Tokenize`, run on a 6502 from the SDK's build, against the library's tokenizer; the keyword tables and page-zero pointers against the ROMs'. |
 | `PetDiskTests` | A 4040 on BASIC 2: `LOAD "$0",8` lists the 2040 demo disk; a blank disk formats; programs save, load and run; `S`, `R` and `V` answer on the command channel; the disk written back as D64 and G64; write protection refuses a SAVE. On BASIC 4, with both keyboards: `DIRECTORY` lists the demo disk and keeps the program; `HEADER`, `DSAVE`, `DLOAD`, `RENAME`, `SCRATCH` and `DS$`. |
 | `Pet2040DiskTests` | A 2040 on BASIC 2: MAME's DOS 1 demo disk, a G64 of the real disk, read as D67 sectors, initialized with `I` and listed as MAME lists it; a blank disk formatted as DOS 1, with programs saved, loaded and run, `S`, `R` and `V`, and the disk written back as D67. |
 | `Cbm4040FdcTests` | The read/write electronics alone: every byte of a track read back in each zone, and bytes written and read back. |

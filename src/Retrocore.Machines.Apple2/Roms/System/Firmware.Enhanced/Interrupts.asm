@@ -15,7 +15,7 @@ CallUserIrq = $FC74
 ;; AppleSoft's routine that points <HIGHDS> at an array's data, past its header: two bytes for each dimension, A of
 ;; them, and five more.
 ;; In: A = the array's dimensions, LOWTR = the array
-;; See: <AppleSoft:FMAPT1>
+;; See: <AppleSoft:Variables::ElementsStart::FromCount>
 FMAPT1 = $E0EF
 
 ; The stack.

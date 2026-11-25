@@ -2053,7 +2053,7 @@
               },
               "rightCartridge": {
                 "type": "string",
-                "description": "Atari 800: a right-slot cartridge (an 8 KB .rom, or a .car of the right-slot type), in the right slot, which the 400 does not have."
+                "description": "Atari 800: a cartridge for the right slot, which the 400 does not have: an 8 KB .rom, or a .car of the right-slot type."
               },
               "basicCartridge": {
                 "enum": [

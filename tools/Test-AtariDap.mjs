@@ -207,7 +207,7 @@ try {
     await request("configurationDone");
     await screen(text => text.includes("HELLO FROM THE 6502"), "the sample's line");
 
-    console.log("Atari DAP passed: an Atari BASIC file stops on entry, steps, stops in a GOSUB with its caller below, shows its variables and FOR loop, reads and writes its program and stops on an error; breakpoints in AtariBasic.asm and Os.asm stop; and the machine runs an .xex with a raw ROM in the right slot and a locked tape, boots a disk through the 810 and runs the 6502 sample, all from the SDK's sources.");
+    console.log("Atari DAP passed: an Atari BASIC file stops on entry, steps, stops in a GOSUB with its caller below, shows its variables and FOR loop, reads and writes its program and stops on an error; breakpoints in AtariBasic/Execution.asm and Os/Editor.asm stop; and the machine runs an .xex with a raw ROM in the right slot and a locked tape, boots a disk through the 810 and runs the 6502 sample, all from the SDK's sources.");
 } catch (error) {
     fail(error);
 } finally {

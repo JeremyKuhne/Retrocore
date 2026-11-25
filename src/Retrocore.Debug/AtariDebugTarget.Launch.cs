@@ -228,7 +228,8 @@ internal sealed partial class AtariDebugTarget
     }
 
     // The OS's and the floating point package's dumps, and the 810's beside them, or null when the directory lacks
-    // the chips.
+    // the chips. A folder holding the PAL chips loads those whatever the revision, so an NTSC launch skips it and
+    // tries its a800 folder; one mixing both sets gives an NTSC launch the sources' OS.
     private static AtariRoms? Dumps(string directory, int os)
     {
         string full = Path.GetFullPath(directory);

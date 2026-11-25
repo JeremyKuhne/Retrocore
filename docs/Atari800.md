@@ -104,5 +104,5 @@ and run the machine on the SDK's builds alone. `AtariBasicDialectTests` checks t
 the machine. `AtariOracleTests` compares traces with MAME's when `RETROCORE_MAME` names it.
 
 [`tools/Test-AtariDap.mjs`](../tools/Test-AtariDap.mjs) runs the debugger on the SDK's sources with nothing external:
-an Atari BASIC file on the BASIC thread, breakpoints in `AtariBasic.asm`'s and `Os.asm`'s modules, an `.xex`, a disk booted
+an Atari BASIC file on the BASIC thread, breakpoints in the modules of `AtariBasic.asm` and `Os.asm`, an `.xex`, a disk booted
 through the 810, and the 6502 sample.

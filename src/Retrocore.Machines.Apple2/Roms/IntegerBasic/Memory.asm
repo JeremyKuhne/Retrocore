@@ -84,8 +84,9 @@ StoppedLineHigh = NounStackHigh + 1
     jmp Display::TraceLine
 .endproc
 
-;; Checks for Control-C with the place to stop in X (low) and A (high), then runs from that token
-;; (<Statements::Return::ContinueAt>); nothing in the ROM reaches it.
+;; Checks for Control-C with the place to stop in X (low) and A (high), then, with `TRACE` off, runs from
+;; that token (<Statements::Return::ContinueAt>); with `TRACE` on, printing the line number changes A and X first, so
+;; it would run from the wrong place. Nothing in the ROM reaches it.
 ;; In: X = the token address, low byte, A = its high byte
 ;; Also: CHKBRKRUN (UNKN)
 .proc CheckThenRun
@@ -394,7 +395,7 @@ StepLow:
 ;; SAVE (token $05): writes the program to the cassette: its length, then its bytes.
 ;;
 ;; Santa-Maria's listing calls it SAVE. The program's record gets a shorter header tone than the length's: $1A
-;; against the Monitor's usual $40. SAVE ends by loading X from <SavedX>, which only <Cassette::SaveKeepingX>
+;; against the Monitor's usual $40. SAVE ends by loading X from <SavedX>, which nothing on SAVE's own path
 ;; sets, so it returns with whatever X a routine before it saved there.
 ;; See: <Load>, <WriteCassette>, <WriteCassetteWithHeader>
 ;; Also: VSAVE (UNKN)

@@ -476,8 +476,8 @@ ToFind:
 ;; Converts FP1 to a 16-bit integer in <Float::Mantissa1> (high byte) and <Float::Mantissa1>+1.
 ;;
 ;; At $F640. It shifts the mantissa right (<Float::ShiftTowardInteger>) until the exponent is
-;; <Float::INTEGER_EXPONENT>, 14. A negative number with a fraction left over is moved one toward 0, but only the
-;; fraction's top 8 bits, in <Float::Mantissa1>+2, are looked at: the shifting moves the rest into
+;; <Float::INTEGER_EXPONENT>, $8E (2^14). A negative number with a fraction left over is moved one toward 0, but only
+;; the fraction's top 8 bits, in <Float::Mantissa1>+2, are looked at: the shifting moves the rest into
 ;; <Float::Extension>, so a negative number whose fraction is below 1/256 is rounded down instead. A number below 1 in
 ;; size gives 0 (<Float::ToInteger::Zero>).
 ;; In: Exponent1/Mantissa1 = the number

@@ -507,7 +507,7 @@ AddSize:
 ; RND.
 .scope Functions continued
 
-;; RND (token $2F): replaces n with a random number from 0 to n - 1 (from 0 to -(n - 1) for a negative n).
+;; RND (token $2F): replaces n with a random number from 0 to n - 1 (from 0 down to n + 1 for a negative n).
 ;;
 ;; The random state is <RandomSeed>/<RandomSeedHigh>, which the Monitor's keyboard routine counts up while it waits
 ;; for a key. RND takes the state, cleared of bit 15, modulo n (<Operators::Mod>), and advances it 17 times as a shift

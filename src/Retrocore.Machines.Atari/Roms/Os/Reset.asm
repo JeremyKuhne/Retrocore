@@ -285,9 +285,9 @@ INIT_RIGHT_CART:
 ;; starts through CARTAD and never returns. The memory test then complements the first byte of each 4K block from
 ;; $1000 up, restoring it, until one doesn't change.
 ;;
-;; Rev. A decrements CART even when it is nonzero, so with RAM in the left slot each SYSTEM RESET takes 1 from that
-;; byte of RAM; rev. B leaves it alone. Rev. A also keeps the byte under test in TSTDAT and its complement in RAMLO,
-;; where rev. B compares with the byte in memory and complements it back.
+;; Rev. A and PAL decrement CART even when it is nonzero, so with RAM in the left slot each SYSTEM RESET takes 1 from
+;; that byte of RAM; rev. B leaves it alone. They also keep the byte under test in TSTDAT and its complement in
+;; RAMLO, where rev. B compares with the byte in memory and complements it back.
 ;; Out: TRAMSZ = the page where RAM ends, a multiple of $10
 ;; Uses: A, Y, RAMLO, RAMLO+1, TSTDAT
 ;; Keeps: X

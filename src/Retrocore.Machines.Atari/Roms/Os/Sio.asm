@@ -76,7 +76,7 @@ SIO_READ_LEADER = 120               ;; the tape skipped before reading a record 
 SIO_READ_SHORT_LEADER = 10          ;; the tape skipped before reading a record with short gaps
 SIO_LINE_PAIRS = 131                ;; the line pairs in a frame, as VCOUNT counts them (NTSC)
 .endif
-SIO_SPEED_BYTE = $55               ;; each of a record's first two bytes, alternate bits for the baud measurement
+SIO_SPEED_BYTE = $55                ;; each of a record's first two bytes, alternate bits for the baud measurement
 SIO_BAUD_EDGES = 10                 ;; the input's changes timed for the baud rate: ten bits
 SIO_VBLANK_LINE = $7C               ;; the VCOUNT at which the vertical blank counts RTCLOK up
 SIO_DIVIDER_STEP = 11               ;; the divider's change for each line pair the ten bits take
@@ -844,7 +844,7 @@ SIO_MEASURE_BAUD_DONE:
     sta SKCTL                       ; resets the serial port
     lda SSKCTL
     sta SKCTL
-    lda #SIO_SPEED_BYTE            ; Y = 0
+    lda #SIO_SPEED_BYTE             ; Y = 0
     sta (BUFRLO),y
     iny
     sta (BUFRLO),y

@@ -62,7 +62,7 @@ CHECKSUM:
 
 ;; The 6502's vectors: NMI, reset and IRQ.
 ;;
-;; Rev. A's reset vector points at COLDSV, rev. B's straight at <COLD_START>.
+;; Rev. A's and PAL's reset vector points at COLDSV, rev. B's straight at <COLD_START>.
 ;; See: <NMI_HANDLER>, <COLD_START>, <IRQ_ENTRY>
 CPU_VECTORS:
     .assert CPU_VECTORS = $FFFA, "The 6502's vectors are at $FFFA."

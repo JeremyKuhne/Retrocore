@@ -376,6 +376,7 @@ Design notes for upcoming work live in [`docs/backlog`](docs/backlog):
 - [documented struct, union and enum members](docs/backlog/MemberDocumentation.md), with historical names;
 - [`.using`, names from another scope without qualifying them](docs/backlog/Using.md);
 - [lint exclusions](docs/backlog/LintExclusions.md): rule IDs, and ignoring a rule for a line, a comment or a file;
+- [static analysis](docs/backlog/StaticAnalysis.md): what we check, what other assemblers check, and what's next;
 - [the media library and explorers](docs/backlog/Media.md);
 - [saving media back to images](docs/backlog/MediaPersistence.md): changed disks and tapes on every machine;
 - [machine files, data folders and libraries](docs/backlog/MachineFiles.md), shared by VS Code and the standalone emulator;

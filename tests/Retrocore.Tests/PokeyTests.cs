@@ -739,7 +739,8 @@ public class PokeyTests
 
     /// <summary>
     ///  Verifies the manual's resync preemption example: with timer 2 resyncing every 84 cycles (64 kHz, AUDF2 = 2)
-    ///  and a space on the line, a 1.79 MHz timer 1 with a period of 85 cycles still fires each time, one of 86 never.
+    ///  and force break (SKCTL bit 7) keeping timer 1 out of the resync, a 1.79 MHz timer 1 with a period of 85 cycles
+    ///  still fires each time, one of 86 never.
     /// </summary>
     /// <param name="audf1">The AUDF1 value: 80, 81 and 82 for periods of 84, 85 and 86 cycles.</param>
     /// <param name="fires">Whether timer 1 keeps firing.</param>
@@ -780,7 +781,8 @@ public class PokeyTests
 
     /// <summary>
     ///  Verifies linked timers 1+2 in two-tone mode with a mark: the low timer's resync two cycles after it fires does
-    ///  not preempt the high timer's underflow due the cycle after, so timer 2 still fires N+11 cycles after STIMER.
+    ///  not preempt the high timer's underflow due the cycle after, so with AUDF1 = AUDF2 = 0 timer 2 still
+    ///  fires 11 cycles after STIMER.
     /// </summary>
     [TestMethod]
     public void TwoToneResyncKeepsLinkedHighTimer()

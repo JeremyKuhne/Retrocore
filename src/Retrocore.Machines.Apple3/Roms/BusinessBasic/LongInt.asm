@@ -313,7 +313,7 @@ Done:
 ;; Moves a result from (<LongResultPointer>) to <Fac>, negating it first when <InputMode> says the result is negative.
 ;;
 ;; Bit 7 of <Result1> is checked even when the result is elsewhere. A division makes at most 63 quotient bits, so only
-;; `/`'s rounding can set it there; `DIV` and `MOD` never give the overflow. For a dividend of -(2^63) they are wrong
+;; `/`'s rounding can set it there; `DIV` and `MOD` never give the overflow. For a dividend of -(2^63) they can be wrong
 ;; instead: `-(2^63) DIV 1` gives -(2^63)+1 and `-(2^63) MOD 1` gives -1 (seen on the emulated Apple III).
 ;; In: LongResultPointer = the result's magnitude, in zero page, InputMode = bit 7 set for a negative result
 ;; Out: Fac = the result

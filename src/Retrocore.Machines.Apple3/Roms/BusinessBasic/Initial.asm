@@ -69,7 +69,7 @@ Done:
 .endproc
 
 ;; BASIC's cold start, where SOS starts the interpreter: sets up memory, zero page and the console, then runs the
-;; program `HELLO` or, when there is none, waits at the prompt.
+;; program `HELLO` or, when there is none, waits at the prompt (the run-time build reports the error instead).
 ;;
 ;; In order, it:
 ;; - records the bank BASIC runs in, from <ColdStart::BankRegister>, in <BasicBank> and in the console events'
@@ -89,7 +89,7 @@ Done:
 ;;   <EraseProgram> (which leaves an empty program, no variables and the stack pointer at <STACK_END>);
 ;; - points the <ModuleCallJump> jump at <Modules::CallBasic>, for invokable modules;
 ;; - runs `HELLO` as the direct command `RUN HELLO`, through <Statements::Run>, when GET_FILE_INFO finds it, and
-;;   otherwise goes to <CommandLoop> without a message.
+;;   otherwise goes to <CommandLoop> without a message (the run-time build reports the SOS error).
 ;;
 ;; 1.3 first takes a program name the program selector left in zero page and runs that program instead.
 ;; See: <ResetInterpreter>, <Console::Initialize>, <EraseProgram>, <SosCalls::HelloInformation>

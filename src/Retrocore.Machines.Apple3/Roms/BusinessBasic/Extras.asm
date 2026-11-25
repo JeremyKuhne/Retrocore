@@ -1,6 +1,6 @@
 ; retrocore: style=strict
-; EXTRAS: statements Business BASIC adds to Applesoft's: OUTREC, INDENT, HPOS and VPOS as statements, NORMAL,
-; INVERSE, TRACE and NOTRACE, ON ERR and RESUME, ON KBD, ON EOF# and OFF, DEL, TEXT and HOME, with the routines
+; EXTRAS: OUTREC, INDENT, HPOS and VPOS as statements, ON KBD, ON EOF# and OFF, which Business BASIC adds to
+; Applesoft's, and NORMAL, INVERSE, TRACE and NOTRACE, ON ERR and RESUME, DEL, TEXT and HOME, with the routines
 ; that test for two-byte tokens and that send a program to its ON KBD or ON EOF# handler.
 ;
 ; ON KBD and ON EOF# keep their handlers in EndOfFileHandlers and EndOfFileHandlerLines, three bytes and two each, by
@@ -389,7 +389,7 @@ SetHandler:
 
 ;; The `OFF` statement: `OFF KBD`, `OFF EOF#n` or `OFF ERR` turns that handler off.
 ;;
-;; Any other word after `OFF` is ignored here, and left for the statement fetcher.
+;; Any other one-byte word after `OFF` is stepped past and ignored, with no error: `OFF X` does nothing.
 ;; In: A = the token after `OFF`
 ;; See: <Statements::OffKbd>, <Statements::OffEof>
 ;; Also: OFF (BB13)

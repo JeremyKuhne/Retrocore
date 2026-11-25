@@ -59,7 +59,7 @@ ToIllegalQuantityError:
 .endproc
 
 ;; Calls the module routine whose address `PERFORM` or `EXFN.` put in <FunctionJump>, with the modules' bank switched
-;; in, then returns to the statement that called `PERFORM` or `EXFN.`.
+;; in, then returns to `PERFORM`'s statement, or into `EXFN.`'s function, which takes the result.
 ;;
 ;; The address is a pointer through the modules' bank pair; clearing bit 7 of its high byte and adding $20 makes it
 ;; the address in the switched bank. The return address was kept in <PerformSavedReturn> before the call, and the bank
@@ -84,7 +84,7 @@ ToIllegalQuantityError:
     sta SavedY
     lda PerformSavedReturn+2                ; back to the bank that was in
     sta BankRegister
-    lda PerformSavedReturn+1                ; return to the caller of `PERFORM` or `EXFN.`
+    lda PerformSavedReturn+1                ; return to PERFORM's statement or EXFN.'s function
     pha
     lda PerformSavedReturn
     pha

@@ -677,7 +677,7 @@ CopyByte:
 ;; BASIC's addresses are offsets in a bank; the $2000 makes each relocated word the address the code runs at, in the
 ;; bank-switched window at $2000-$9FFF.
 ;; In: WalkPointer = the word above the list's count
-;; Out: WalkPointer = the list's last pointer
+;; Out: WalkPointer = the list's last pointer, or the count word for an empty list
 ;; Uses: A, Y, Temporary, RelocationsLeft, Target
 ;; Keeps: X
 ;; Also: DOAREL (BB13)
@@ -820,7 +820,7 @@ Done:
 ;; return address; <CallModule> returns to the caller from <PerformSavedReturn>. For a .FUNC, four placeholder bytes are
 ;; pushed after the arguments, as Pascal does. <ParameterWordCount>, <PointerParameterCount>, <ProcedureKind> and
 ;; <PerformSavedReturn> are single copies, so an `EXFN.` in another call's arguments overwrites the outer call's.
-;; In: A = the name's offset in <NameBuffer> (8 for each `EXFN.` nested in another's arguments), ProcedureKind =
+;; In: A = the name's offset in <NameBuffer> (0 for `PERFORM`, 8 more for each level of `EXFN.`), ProcedureKind =
 ;;   <RECORD_PROC> for a .PROC or <RECORD_FUNC> for a .FUNC, TextPointer = the name's first character
 ;; Errors: <ERROR_SYNTAX> = no name, <ERROR_TYPE_MISMATCH> = the wrong count of words or a string,
 ;;   <ERROR_UNDEFINED_FUNCTION> = the name not found

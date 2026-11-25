@@ -210,7 +210,7 @@ WaitForSpace:
     cmp #' '                                ; The space bar?
     bne WaitForSpace
 
-;; Starts SOS again.
+;; Leaves BASIC through SOS's TERMINATE call.
 ;; Also: READYGO (BB13)
 Restart:
     jmp Statements::Bye::CloseAndTerminate
@@ -257,7 +257,7 @@ PROMPT = ')'
     lda #1
     sta StartupDone                         ; The prompt has been reached
 .if VERSION >= 130
-    jsr ProgramPrefix::UseSos               ; 1.3: SOS's prefix, and the program's prefix
+    jsr ProgramPrefix::UseSos               ; 1.3: SOS's prefix, and the program's file name stripped
 .endif
 .if VERSION >= 130
     jsr ProgramPrefix::StripFileName
@@ -556,7 +556,7 @@ CompareCharacter:
     and #$7F
     jsr Tokenizer::IsSeparator
     bcc CheckBefore
-    dey                                     ; Or does the keyword end in one, as DEC( does?
+    dey                                     ; Or does the keyword end in one, as TAB( does?
     lda (Fac),Y
     and #$7F
     jsr Tokenizer::IsSeparator

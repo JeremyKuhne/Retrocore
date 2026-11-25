@@ -3,7 +3,7 @@
 ; directory opened as a file. Each line is built in CatalogBuffer from the directory file's entries. Then the table of
 ; BASIC's routines for invokable modules.
 ;
-; Names follow Apple's Business BASIC 1.3 listing (BB13), kept in each definition's `Also:`.
+; Each definition keeps the name Apple's Business BASIC 1.3 listing gives it in its `Also:` (BB13).
 
 ; ---------------------------------------------------------------------------------------------------------------------
 ; `CATALOG`
@@ -986,9 +986,9 @@ BANK_PAIR_OFFSET = $2000
 ;; The routines BASIC lends invokable modules and `PERFORM`, by number: <Modules::CallBasic> calls entry n for routine
 ;; n.
 ;;
-;; Modules use the numbers, so no entry may move. Three entries are data rather than routines, the two keyword
-;; lists, <ReservedWords> and <ExtendedReservedWords>, and <NumberBuffer>, given <BANK_PAIR_OFFSET> lower than BASIC's
-;; own addresses. The last entry is the table's own address. The table must end where <Modules::CallBasic> starts, as
+;; Modules use the numbers, so no entry may move. Four entries are data rather than routines: the two keyword lists,
+;; <ReservedWords> and <ExtendedReservedWords>, and <NumberBuffer>, given <BANK_PAIR_OFFSET> lower than BASIC's own
+;; addresses, and the last, the table's own address. The table must end where <Modules::CallBasic> starts, as
 ;; <Modules::CallBasic> takes that for the table's end and refuses a number past it.
 ;; Also: JMPRTAB (BB13)
 ModuleRoutines:
@@ -1038,4 +1038,4 @@ ModuleRoutines:
     ModuleRoutine 43, SosCalls::MakeFileCall
     ModuleRoutine 44, Functions::ConvString
     ModuleRoutine 45, ModuleRoutines
-.assert * = Modules::CallBasic, "ModuleRoutines must end where SWCHGO starts: SWCHGO takes that as the table's end."
+.assert * = Modules::CallBasic, "ModuleRoutines must end where Modules::CallBasic starts, which takes that as its end."

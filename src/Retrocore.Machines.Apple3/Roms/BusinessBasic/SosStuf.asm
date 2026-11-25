@@ -535,7 +535,7 @@ CursorLine:
 ; Keys and CONTROL-C
 ; ---------------------------------------------------------------------------------------------------------------------
 
-;; Turns the attention event off, so `CONTROL-C` reads as a key, then arms it with <Console::AttentionOn>'s call.
+;; Turns the attention event off, so `CONTROL-C` reads as a key, with priority 0 through <Console::AttentionOn>'s call.
 ;; See: <Console::AttentionOn>, <Console::AttentionEvent>
 ;; Also: CTCOFF (BB13)
 .proc AttentionOff
@@ -582,7 +582,8 @@ CursorLine:
 
 ;; Reads one key into <LastKey> with echo and `CONTROL-C` off, from <Console::KeyReference>'s file.
 ;;
-;; When the read fails while `EXEC` is reading, the `EXEC` file is closed and the key is read from the console instead;
+;; When `EXEC`'s file reaches its end, it is closed and the key is read from the console instead (another error is
+;; reported);
 ;; when it fails in `GET#`, the error goes to the end-of-file handling in <Files::ReadTextLine::ReadFailed>.
 ;; Out: zero = set for a key read
 ;; Also: DOAGET (BB13)
@@ -798,7 +799,7 @@ NewFileAuxType:
 NewFileStorageType:
     .byte STORAGE_SEEDLING
 
-;; `CREATE`'s end of file, which BASIC never sets.
+;; `CREATE`'s end of file, which `CREATE` sets from its size (zero without one).
 ;;
 ;; Its initial contents are whatever was in memory when Apple built SOS.INTERP.
 ;; Also: INEOF (BB13)
@@ -852,7 +853,8 @@ FileBlocks:
 .assert FileEnd = FileAccess + FileInformation::EOF, "FileEnd is the information's end of file."
 .assert FileBlocks = FileAccess + FileInformation::BLOCKS, "FileBlocks is the information's count of blocks."
 
-;; `OPEN`'s option list: the access requested, 1 to read, from `LOAD`, or 2 to read and write, from `SAVE`.
+;; `OPEN`'s option list: the access requested, 1 to read (`LOAD`, `CATALOG`, `EXEC`, `INVOKE`), 2 to write (`SAVE`), or
+;; 3 to read and write (`OPEN`).
 ;; Also: INREQ (BB13)
 OpenAccess:
     .byte 0

@@ -5,7 +5,7 @@
 ; A data file opens without knowing whether it is text or binary data: the first read or write decides, and sets the
 ; type of a new file.
 ;
-; Names follow Apple's Business BASIC 1.3 listing (BB13), kept in each definition's `Also:`.
+; Each definition keeps the name Apple's Business BASIC 1.3 listing gives it in its `Also:` (BB13).
 
 ; ---------------------------------------------------------------------------------------------------------------------
 ; The type check

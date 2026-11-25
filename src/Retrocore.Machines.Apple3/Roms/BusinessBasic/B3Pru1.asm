@@ -240,7 +240,7 @@ DIGITS_PER_COMMA = 3
 ;; The step of engineering notation's exponent.
 ENGINEERING_STEP = 3
 
-;; The largest count that a digit may still follow: one more digit would take it past 255.
+;; The smallest count no digit may follow: 26 or more, times ten, is past 255.
 COUNT_LIMIT = 255 / 10 + 1
 
 ;; What <SpecCharacter> holds while a count is read: no format character is a digit.
@@ -280,9 +280,9 @@ ROUND_UP_DIGIT = 5
 ;; between.
 ;;
 ;; The image follows `USING` as a line number (of an `IMAGE` statement), a string literal or a string variable, then a
-;; semicolon and the expressions, separated by commas or semicolons. When the image runs out of specs it starts over;
-;; when the expressions run out, the literals up to the next number or string spec are printed, and a spec left over
-;; is a type mismatch. A semicolon at the end leaves the line open.
+;; semicolon and the expressions, separated by commas; a semicolon may only end the statement. When the image runs out
+;; of specs it starts over; when the expressions run out, the literals up to the next number or string spec are printed,
+;; and a spec left over is a type mismatch. A semicolon at the end leaves the line open.
 ;; In: TextPointer = `USING`
 ;; Errors: SYNTAX ERROR, UNDEF'D STATEMENT for a line that is not an `IMAGE`, TYPE MISMATCH, ILLEGAL QUANTITY
 ;; See: <ScanSpec>, <FormatNumber>
@@ -400,7 +400,7 @@ LiteralEnd:
 ;; Starts on the expressions after the image's semicolon; an image that is empty or starts with a comma is a syntax
 ;; error.
 ;; Entry:
-;;   SkipSeparator = skips a comma or semicolon between the expressions, then takes the next
+;;   SkipSeparator = skips the image's semicolon or a comma between the expressions, then takes the next
 ;; Also: UGOTSPT (BB13)
 .proc StartList
     jsr GetCurrentCharacter
@@ -414,7 +414,7 @@ LiteralEnd:
     inx
     stx ValueSpecSeen                       ; no spec has taken a value yet
 
-;; Skips a comma or semicolon between the expressions.
+;; Skips the image's semicolon or a comma between the expressions.
 ;; Also: USKPNXT (BB13)
 SkipSeparator:
     jsr GetNextCharacter

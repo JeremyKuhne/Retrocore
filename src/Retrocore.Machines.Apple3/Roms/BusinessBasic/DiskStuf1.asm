@@ -3,7 +3,7 @@
 ; the `PDL` and `BUTTON` functions, and the routines that find a file's control block from its number, take a file
 ; name from the statement and move a file to a record.
 ;
-; Names follow Apple's Business BASIC 1.3 listing (BB13), kept in each definition's `Also:`.
+; Each definition keeps the name Apple's Business BASIC 1.3 listing gives it in its `Also:` (BB13).
 
 ; ---------------------------------------------------------------------------------------------------------------------
 ; Character I/O
@@ -171,9 +171,6 @@ FILE_ACCESS_LOCKED = $01
 
 ;; A file's SOS access when it is unlocked: read, write, rename and destroy.
 FILE_ACCESS_UNLOCKED = $C3
-
-;; SOS's error for a position past the end of the file.
-SOS_ERROR_POSITION = $4D
 
 ;; SOS's error for a memory segment it can't give.
 SOS_ERROR_SEGMENT_DENIED = $E1

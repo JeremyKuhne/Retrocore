@@ -2,7 +2,7 @@
 ; FILESTUF: the file commands `CREATE`, `SAVE`, `LOAD`, `RENAME`, `LOCK`, `UNLOCK` and `DELETE`, and the plumbing of
 ; record files: writing a record back, moving to a record, and turning SOS's errors into BASIC's.
 ;
-; Names follow Apple's Business BASIC 1.3 listing (BB13), kept in each definition's `Also:`.
+; Each definition keeps the name Apple's Business BASIC 1.3 listing gives it in its `Also:` (BB13).
 
 ; ---------------------------------------------------------------------------------------------------------------------
 ; `CREATE`
@@ -850,7 +850,7 @@ FILE_INFO_LENGTH = $B
 ;; Works out the start of the file's current record, the record number times the record length, as the displacement
 ;; from the start of the file for `SET_MARK` or `SET_EOF`, and sets the buffer's offset to 0.
 ;; In: FileControlBlockIndex = the file's index in <FileControlBlocks>
-;; Out: SosCalls::Displacement..DSPLMNT+3 = the position, SosCalls::MarkBase = 0, Y = 0
+;; Out: SosCalls::Displacement..Displacement+3 = the position, SosCalls::MarkBase = 0, Y = 0
 ;; Uses: A, X
 ;; Entry:
 ;;   Return = returns; <SeekRecord> branches here
@@ -902,7 +902,7 @@ Return:
     beq RecordPosition::Return
     cmp #SOS_ERROR_NOT_BLOCK_DEVICE         ; not a block device
     beq RecordPosition::Return
-    cmp #SOS_ERROR_POSITION                 ; a position past the end of file
+    cmp #SOS_ERROR_POSITION_OUT_OF_RANGE    ; a position past the end of file
     beq PastEnd
     jmp ReportSosError
 PastEnd:

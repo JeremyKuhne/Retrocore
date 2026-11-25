@@ -412,7 +412,8 @@ ToSosError:
 ; Statements: 1.3's `PROGPREFIX$ =`.
 .scope Statements continued
 
-;; 1.3's `PROGPREFIX$` statement, `PROGPREFIX$ = pathname`: sets the program's prefix.
+;; 1.3's `PROGPREFIX$` statement, `PROGPREFIX$ = pathname`: sets the program's prefix to a full pathname (one starting
+;; with `.` or `/`); a partial pathname leaves the program's prefix as it was.
 ;;
 ;; A slash is added at the end when the name has none, and the prefix names the volume rather than the device. SOS's
 ;; prefix is then set back to BASIC's.
@@ -430,7 +431,7 @@ ToSosError:
     sta NameBuffer,Y
     sty NameBuffer
 
-;; Keeps the name as the program's prefix.
+;; Keeps the name as the program's prefix, when it is a full pathname.
 ;; Also: PROGPFX1 (BB13)
 EndsInSlash:
     jsr ProgramPrefix::TakeFromName

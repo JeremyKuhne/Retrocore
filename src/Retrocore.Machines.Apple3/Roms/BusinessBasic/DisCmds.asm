@@ -6,7 +6,7 @@
 ; A BASIC data file is read and written a record at a time through the file's buffer. Each item in a record is a
 ; descriptor byte followed by the value, and a 0 after the last item marks the record's end when there is room for it.
 ;
-; Names follow Apple's Business BASIC 1.3 listing (BB13), kept in each definition's `Also:`.
+; Each definition keeps the name Apple's Business BASIC 1.3 listing gives it in its `Also:` (BB13).
 
 ; ---------------------------------------------------------------------------------------------------------------------
 ; The file buffer
@@ -265,7 +265,7 @@ DescriptorTypNumbers:
     .byte TYP_INTEGER, TYP_REAL, TYP_LONG, TYP_STRING
     .byte TYP_STRING, TYP_END
 .assert * - DescriptorTypNumbers = DESCRIPTOR_LAST + 1, "The descriptor tables have one entry per descriptor."
-.assert Descriptors + MAX_STRING_INDEX + 1 = DescriptorValueTypes - 1, "DDMXSTR is the next to last descriptor."
+.assert Descriptors + MAX_STRING_INDEX + 1 = DescriptorValueTypes - 1, "MAX_STRING_INDEX is next to last."
 
 .endscope
 

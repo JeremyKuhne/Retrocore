@@ -51,7 +51,7 @@ CheckNames:
     bne AddSizes
     jmp ReleaseAll
 
-;; Adds up the files' sizes, in pages, in <ReferencePointers> (pages) and <ReferencePointers>+1 (bytes).
+;; Adds up the files' sizes in <ReferencePointers> (pages) and <ReferencePointers>+1 (bytes).
 ;; Also: INVOK3 (BB13)
 AddSizes:
     lda #0
@@ -83,7 +83,7 @@ AddSize:
     beq *+8                                 ; the last name
     jsr CheckComma
     jmp AddSize
-    ldx ReferencePointers                   ; one more page, for the bytes past the last
+    ldx ReferencePointers                   ; one more page: SOS's limit is the segment's last page
     inx
     beq Modules::ToOutOfMemoryErrorForInvoke
     stx a:Segments::ModulesPages
@@ -648,7 +648,7 @@ Move:
     ldy #>GROW_ALL                          ; A is 0: ask for $FFF pages
     lda #<GROW_ALL
 
-;; Asks for A pages, Y above 256.
+;; Asks for A pages plus Y times 256.
 ;; Also: EXPAN0 (BB13)
 SetCount:
     sta GrowBasicPages

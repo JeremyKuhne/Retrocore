@@ -277,7 +277,8 @@ Store:
 ;;
 ;; The number is in <UsingDigits>, one digit a byte, with its exponent doubled in <FacExponent> and its sign in bit 0.
 ;; This routine makes <FacExponent> the power of ten of the first digit and adds the `SCALE` factor in
-;; <ArrayElementFound>; the result must lie between -99 and 99. The number is rounded at the last place shown, and one
+;; <ArrayElementFound>; the result must lie between -99 and 99. The number is rounded at the last place shown (but see
+;; <FormatScientific> for engineering notation), and one
 ;; too big for its field prints as a field of `!`. A field with an exponent goes on to <FormatScientific>.
 ;; In: MaskPointer = the mask, MaskIndex = the index of its last byte, and the field as <ScanSpec> left it:
 ;;   <DigitsBeforePoint>, <DigitsAfterPoint>, <SpecParts>, <FloatingSymbols>, <FillCharacter>, <UnitsIndex>,
@@ -427,8 +428,9 @@ StoreWhole:
     dey
     bpl WholeLoop
 
-;; Puts a minus sign before a negative number whose image has no sign, in a spare digit place; with no place for it
-;; the number doesn't fit.
+;; Puts a minus sign before a negative number whose image has no sign, in a spare digit place. When the digits fill
+;; every place before the point, <WholeLoop> goes past this to <FloatingSigns> and the sign is dropped: -123 through
+;; `###` prints 123 (Apple's code as found).
 ;; Also: UDOISGN (BB13)
 MinusSign:
     lda #FIELD_SIGN
@@ -646,9 +648,11 @@ EXPONENT_MAX = 99
 ;; Writes a number into a field with an exponent: `.DDDE+EE` with no places before the point, `D.DDDE+EE` with one,
 ;; or engineering notation with three.
 ;;
-;; The number is rounded to the places shown. With one place before the point, its digit goes after whatever the
-;; field's first place holds, a fixed sign or `$`; only that one place is checked, so with both (`+$#.##EEEE`) the
-;; digit takes the `$`'s place and leaves its own place a zero byte.
+;; The number is rounded at the places of a three-place field: in engineering notation with one or two digits before
+;; the point, it is rounded one or two places further right than the last place shown, and the shown digits are cut
+;; off (1.2996 shows as 1.29 with two decimals; Apple's code as found). With one place before the point, its digit goes
+;; after whatever the field's first place holds, a fixed sign or `$`; only that one place is checked, so with both
+;; (`+$#.##EEEE`) the digit takes the `$`'s place and leaves its own place a zero byte.
 ;; See: <FormatNumber>
 ;; Also: UEEEDIT (BB13)
 .proc FormatScientific

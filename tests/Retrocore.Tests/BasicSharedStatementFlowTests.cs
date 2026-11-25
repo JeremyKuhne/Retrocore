@@ -55,7 +55,7 @@ public sealed class BasicSharedStatementFlowTests
     public void SharedStatementFlowMatchesPet(PetModel model, bool original)
     {
         AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(Inputs, "Pet"), model, original);
-        AssemblyResult native = AssembleShared(legacy, quoteFirst: model == PetModel.Pet2001, popExit: false);
+        AssemblyResult native = AssembleShared(legacy, quoteFirst: model == PetModel.Pet2001, popExit: false, build: null);
         CompareRegion(legacy, native);
         native.Symbol("STATEMENT_FLOW_END").Should().Be(legacy.Symbol("LINGET"));
     }
@@ -78,7 +78,7 @@ public sealed class BasicSharedStatementFlowTests
     {
         PetModel model = quoteFirst ? PetModel.Pet2001 : PetModel.Pet2001Basic2;
         AssemblyResult legacy = PetLegacyBasic.Assemble(Path.Join(Inputs, "Pet"), model);
-        AssemblyResult native = AssembleShared(legacy, quoteFirst, popExit: false);
+        AssemblyResult native = AssembleShared(legacy, quoteFirst, popExit: false, build: null);
         RecordingBus bus = new();
         native.Sections[0].Bytes.Span.CopyTo(bus.Memory);
         const ushort textAddress = 0x0400;
@@ -139,7 +139,7 @@ public sealed class BasicSharedStatementFlowTests
     }
 
     // ON's labels are the AppleSoft build's: the PET's BASIC 4 gives ON to its disk parser's ON U clause.
-    private static AssemblyResult AssembleShared(AssemblyResult legacy, bool quoteFirst, bool popExit, string build = "")
+    private static AssemblyResult AssembleShared(AssemblyResult legacy, bool quoteFirst, bool popExit, string? build)
     {
         string folder = Path.Join(Inputs, "Microsoft6502Basic");
         string source = $"""
@@ -148,7 +148,7 @@ public sealed class BasicSharedStatementFlowTests
             .org ${legacy.Symbol("DATA"):X4}
                 StatementScan {(quoteFirst ? 1 : 0)}, {(popExit ? 1 : 0)}
                 ConditionalStatements
-            {(popExit ? BasicNames.Label("ON", build) : "")}
+            {(popExit ? BasicNames.Label("ON", build ?? throw new ArgumentNullException(nameof(build))) : "")}
                 OnStatement
             STATEMENT_FLOW_END:
             """;

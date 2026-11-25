@@ -39,7 +39,7 @@ public sealed class BasicWorkspaceConversionTests
     private static readonly string[] s_commodoreRoots = ["Basic1.asm", "Basic2.asm", "Basic4.asm"];
 
     // AppleSoft's file that gives the interpreter's end its old name (LASTWR), as the PET roots do.
-    private static readonly string[] s_appleRoots = ["AppleSoft.PlatformHelpers.asm"];
+    private static readonly string[] s_appleEndFiles = ["AppleSoft.PlatformHelpers.asm"];
     private const string LayoutsFile = "MsBasic.Layouts.asm";
 
     private static string AppleFolder => Path.Join(BasicNames.Inputs, "AppleSoft");
@@ -128,7 +128,7 @@ public sealed class BasicWorkspaceConversionTests
         AssemblyResult[] pet =
             [.. s_pets.Select(build => PetSdkModules.AssembleBasic(PetFolder, build.Model, build.Original))];
 
-        HashSet<string> appleNames = OldNames(apple, Converted(AppleFolder, [.. s_appleFiles, .. s_appleInterpreterFiles, .. s_appleRoots]));
+        HashSet<string> appleNames = OldNames(apple, Converted(AppleFolder, [.. s_appleFiles, .. s_appleInterpreterFiles, .. s_appleEndFiles]));
         string[] petFiles = [.. s_commodoreFiles, .. s_commodoreInterpreterFiles, .. s_commodoreRoots];
         HashSet<string> petNames = OldNames(pet, Converted(CommodoreFolder, petFiles));
         appleNames.Should().Contain(["TXTTAB", "CHRGET", "ERRSN", "ENDTK", "TEXTAB"]);

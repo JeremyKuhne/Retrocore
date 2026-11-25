@@ -9,7 +9,7 @@
 ;;   variable.
 ;; - <SILENCE_CLOSE_ALL> and <DEFAULT_IOCBS>, for the warm start and the end of a program; <PRINT_READY> and
 ;;   <PRINT_EOL>; <PATCH_STRING_EOL> and <RESTORE_STRING_EOL>, which end a string with an EOL for the OS to read.
-;; - <STATEMENT_RETURN> (rev. A's is in Control.asm), with <RETURN_TO_ENTRY>, which NEXT shares;
+;; - <STATEMENT_RETURN>, with <RETURN_TO_ENTRY>, which NEXT shares (rev. A keeps both in Control.asm);
 ;;   <PROMPT_INPUT_LINE> and <READ_INPUT_LINE>, which read a line for INPUT and the line editor; and + (<OPERATOR_ADD>).
 ;; - BASIC's own trigonometry and square root, which the floating point package lacks: <SINE> and <COSINE> with
 ;;   <SIN_COEFFICIENTS>, <ARCTANGENT> and <SQUARE_ROOT>.
@@ -236,8 +236,8 @@ SET_VARIABLE_INTEGER:
 
 ;; Silences the sound and closes IOCBs 1 to 7, for the warm start and when a program ends.
 ;;
-;; The loop clears every one of POKEY's audio registers from AUDC1 to AUDC4 but stops short of AUDF1, which AUDC1's
-;; volume of 0 leaves silent anyway.
+;; The loop clears POKEY's audio registers from AUDC1 to AUDC4, AUDF2 to AUDF4 among them, but stops short of AUDF1,
+;; which AUDC1's volume of 0 leaves silent anyway.
 ;; Out: IOCB_NUMBER = 0
 ;; Uses: A, X, Y
 SILENCE_CLOSE_ALL:

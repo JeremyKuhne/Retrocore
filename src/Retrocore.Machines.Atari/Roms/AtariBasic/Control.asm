@@ -327,9 +327,9 @@ STATEMENT_TRAP:
 ;; An aexp of 0, or more than the list holds, goes on with the next statement. Only the line numbers up to the one
 ;; picked are evaluated.
 ;; In: TOKEN_OFFSET = aexp's first token
-;; Errors: 3 (ERR_VALUE) when aexp isn't from 0 to 255, except 7 (ERR_NUMBER_TOO_BIG) for 32768-65535; 7 for a line
-;;   from 32768,
-;;   12 (ERR_LINE_NOT_FOUND), 2 (ERR_MEMORY) for the GOSUB entry
+;; Errors: 7 (ERR_NUMBER_TOO_BIG) when aexp or a line number is from 32768 to 65535; otherwise 3 (ERR_VALUE) when
+;;   aexp isn't from 0 to 255 or a line number is negative or beyond 65535; 12 (ERR_LINE_NOT_FOUND); 2 (ERR_MEMORY)
+;;   for the GOSUB entry
 ;; See: <STATEMENT_GOTO>, <STATEMENT_GOSUB>
 STATEMENT_ON:
     jsr SAVE_STATEMENT_OFFSET

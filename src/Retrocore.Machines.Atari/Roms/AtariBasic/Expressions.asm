@@ -87,7 +87,8 @@ PUSH_VALUE_OVERFLOW:
 ;; In: STMCUR, TOKEN_OFFSET = the expression
 ;; Out: FR0 = the integer (2 bytes), A = its high byte, zero = set when it is below 256
 ;; Uses: all
-;; Errors: 3 = value error, when it is beyond 65535; 7 = number greater than 32767; and the expression's errors
+;; Errors: 3 = value error, when it is negative or beyond 65535; 7 = number greater than 32767; and the expression's
+;;   errors
 EVALUATE_INTEGER:
     jsr EVALUATE_UNSIGNED
     lda FR0+1
@@ -222,10 +223,10 @@ FIND_VARIABLE_ENTRY:
 ;; operator at the top of the operator stack. While the stacked one is at least as high, it pops that operator and
 ;; runs it; then it pushes the incoming operator. A stacked precedence of 0, which only the sentinel at the stack's
 ;; bottom has, ends the expression instead, when the incoming operator's is 0 too: every token that can't continue an
-;; expression has 0. Equal precedences make an operator work from left to right, as every operator's are; a stacked
-;; precedence lower than the incoming one lets what follows go over it, as the ( forms, the functions, the
-;; assignments and the array comma do. So a second unary operator would run before its operand: NOT NOT A can't
-;; work, and from rev. B the grammar allows only one.
+;; expression has 0. Equal precedences make an operator work from left to right, as the arithmetic, comparison and
+;; logical operators' are; a stacked precedence lower than the incoming one lets what follows go over it, as the (
+;; forms, the functions, the assignments and the array comma do. So a second unary operator runs the first before
+;; its operand: rev. A's grammar accepts NOT NOT A and runs it so, and from rev. B the grammar allows only one.
 ;;
 ;; From the highest, the levels are: the string comparisons; NOT and unary + and -; ^; * and /; + and -; the
 ;; numeric comparisons; AND; OR; then the assignment and the brackets, which every other operator goes over. NOT

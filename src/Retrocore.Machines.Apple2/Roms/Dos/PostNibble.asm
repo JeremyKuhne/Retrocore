@@ -9,7 +9,7 @@
 ;; The two versions' routines differ throughout, and sit in different places: DOS 3.3's at $B8C2, before the reader
 ;; (Dos33.asm includes this file before ReadData.asm), and DOS 3.2's at $B9C1, after the address field reader
 ;; (Dos32.asm and Software/Boot13.1980.asm include it after ReadAddress.asm). `BOOT 1` in DOS 3.2 has its own copy
-;; of DOS 3.2's, <Boot::Stage1::PostNibble> (BootLoader.asm), for the values the 13-sector ROM's reader leaves.
+;; of DOS 3.2's, `Boot::Stage1::PostNibble` (BootLoader.asm), for the values the 13-sector ROM's reader leaves.
 
 ; DiskII: the postnibble routine.
 .scope DiskII continued

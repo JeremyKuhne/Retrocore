@@ -43,7 +43,7 @@
 ;; Writes the nibble in A after a delay that keeps the stores 32 cycles apart.
 ;;
 ;; From the JSR to the store takes 17 cycles here, 15 at <WriteFieldNibble::Shorter> (and 6 at DOS 3.3's
-;; <WriteFieldNibble::Now>); the store, the CMP and the RTS take 15 more. A store in one call and the store in the
+;; `WriteFieldNibble::Now`); the store, the CMP and the RTS take 15 more. A store in one call and the store in the
 ;; next, with only an `LDA #nibble` between the calls, are 32 cycles apart through Shorter.
 ;; In:    A = the nibble, X = slot * 16, the card in write mode
 ;; Keeps: A, X, Y

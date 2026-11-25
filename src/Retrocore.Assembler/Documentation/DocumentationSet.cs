@@ -631,6 +631,86 @@ public sealed class DocumentationSet
             || topic.Comments.Any(comment => Expansions(comment) > 0);
 
     /// <summary>
+    ///  Gets whether a topic's definition is only in other builds of this set's source: the assembly doesn't define it,
+    ///  and every one of its definitions is left out, each outside a macro's body in a branch of conditional assembly
+    ///  the build doesn't take (see <see cref="CommentInBuild"/>), and each in a macro's body on a line no expansion
+    ///  defined, of a macro the build leaves out. A macro defined in a branch the build doesn't take is only in other
+    ///  builds too, as is a <c>.define</c> there, and a scope, named type or member there that the build doesn't define.
+    /// </summary>
+    /// <param name="topic">The topic.</param>
+    /// <returns>
+    ///  Whether only other builds have it; false when the set wasn't created from a successful assembly with source, as
+    ///  for a debug file's documentation, whose build isn't known.
+    /// </returns>
+    /// <remarks>
+    ///  <para>
+    ///   A link to such a definition reaches nothing in this build, though another build of the same source has it:
+    ///   a source that builds several variants with <c>.if</c> links, in a comment every build assembles, only what
+    ///   every build defines.
+    ///  </para>
+    ///  <para>
+    ///   A macro the build defines but never expands keeps its body's definitions, as a single build's library macro
+    ///   does: nothing tells a macro only another build's branch expands from one no build does.
+    ///  </para>
+    ///  <para>
+    ///   A macro or <c>.define</c> is judged by its documented definitions alone, as the assembly's symbols don't
+    ///   name them: one documented only in a branch the build leaves out counts as another build's, though the build
+    ///   defines one of the same name without documentation in its own branch.
+    ///  </para>
+    /// </remarks>
+    public bool InOtherBuild(DocumentationTopic topic) =>
+        KnowsBuild
+            && topic.Comments.All(comment => !CommentAssembled(comment))
+            && (topic.Kind is DocumentationKind.Macro or DocumentationKind.Definition
+                || !Assembles(topic)
+                || (topic.Kind == DocumentationKind.Member && !Defines(topic.Name))
+                || IsEmptyScope(topic));
+
+    // Whether a scope or named type has nothing in the assembly: neither its own symbol nor one qualified by it, as a
+    // scope whose name the assembly doesn't define as a symbol may still hold the build's definitions.
+    private bool IsEmptyScope(DocumentationTopic topic) =>
+        topic.Kind is DocumentationKind.Scope or DocumentationKind.Struct or DocumentationKind.Enum
+            && !_symbols.ContainsKey(topic.Name)
+            && !_symbols.Keys.Any(name => name.StartsWith(topic.Name + "::", StringComparison.Ordinal));
+
+    /// <summary>
+    ///  Gets whether this set knows which definitions its build assembles: it was created from a successful assembly
+    ///  with the report of the lines it skipped.
+    /// </summary>
+    internal bool KnowsBuild => _skipped is not null && _expansions is not null;
+
+    /// <summary>
+    ///  Gets whether this set's build assembles a comment: one outside a macro's body in the branch of conditional
+    ///  assembly the build takes (<see cref="CommentInBuild"/>), a macro's own among them; one in a macro's body on a
+    ///  line some expansion defined, or in the body of a macro the build defines but never expands.
+    /// </summary>
+    /// <param name="comment">The comment.</param>
+    /// <returns>Whether the build assembles it; true when the assembly's definitions are not known.</returns>
+    internal bool CommentAssembled(DocumentationComment comment) =>
+        comment.Macro is null
+            ? CommentInBuild(comment)
+            : Expansions(comment) is not 0 || DefinedNotExpanded(comment);
+
+    /// <summary>
+    ///  Gets whether this set's build assembles a comment's line: one outside a macro's body in the branch of
+    ///  conditional assembly the build takes (<see cref="CommentInBuild"/>), a macro's own among them, or one in a
+    ///  macro's body on a line some expansion defined.
+    /// </summary>
+    /// <param name="comment">The comment.</param>
+    /// <returns>Whether the build assembles it; true when the assembly's definitions are not known.</returns>
+    internal bool CommentExpanded(DocumentationComment comment) =>
+        comment.Macro is null ? CommentInBuild(comment) : Expansions(comment) is not 0;
+
+    // Whether the build defines the macro whose body holds a comment but never expands it: the assembly didn't skip
+    // its .macro line, which goes with the definition, but skipped its body's first line, which every expansion takes.
+    // In a macro it expands, a line no expansion defined is skipped, as by a branch of an .if in the body. Lines the
+    // report can't tell count as defined and not expanded.
+    private bool DefinedNotExpanded(DocumentationComment comment) =>
+        comment.MacroLine < 0
+            || (_skipped?.InBuild(comment.Path, comment.MacroLine) != false
+                && _skipped?.InBuild(comment.Path, comment.MacroLine + 1) != true);
+
+    /// <summary>
     ///  Gets every historical name the topics give.
     /// </summary>
     public IEnumerable<string> AlsoNames => AlsoIndex().Keys;

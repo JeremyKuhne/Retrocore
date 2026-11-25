@@ -28,7 +28,7 @@
 ;;
 ;; The order of the modules is Apple's, from its DOS 3.3 C source listing (July 1983), and each definition keeps the
 ;; listing's name in its historical names. The 680-0210-A master differs from that listing in one patch,
-;; <AppendFix::Finish>: it is shorter, and it sits in the patch area after <DiskII::Wait> ($BA84 where DOS runs) rather
+;; `AppendFix::Finish`: it is shorter, and it sits in the patch area after <DiskII::Wait> ($BA84 where DOS runs) rather
 ;; than in the boot loader's page. Where DOS reserves storage, the master holds whatever was in memory when it was
 ;; written; the sources keep those bytes as data, marked "leftover" or written with the <Leftover> macro where the
 ;; masters differ, so each image is exact.
@@ -77,7 +77,7 @@ DIAGNOSTIC_RWTS = 0
 ;; Also: DOS33B (DOS33)
 REVISION_B = YEAR >= 1983
 
-;; 1 builds the patch that lets commands be typed in lowercase (<Uppercase>, in the boot loader's page); always 0 in
+;; 1 builds the patch that lets commands be typed in lowercase (`Uppercase`, in the boot loader's page); always 0 in
 ;; the masters.
 ;; Also: ULC (DOS33)
 LOWERCASE_INPUT = 0

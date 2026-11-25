@@ -23,7 +23,7 @@
 ;;   every disk INIT writes boots straight into DOS.
 ;;
 ;; DOS 3.3's boot reads its sectors backwards; DOS 3.2's reads them forwards. In DOS 3.3, between `BOOT 1` and the
-;; end of its page are patches made to DOS 3.3 later (AppendFix, <SaveAndVerify>). After `BOOT 2` come
+;; end of its page are patches made to DOS 3.3 later (AppendFix, `SaveAndVerify`). After `BOOT 2` come
 ;; <Boot::WriteDos>, which INIT calls, <CallRwts>, the entry DOS and programs call RWTS through, a helper of the file
 ;; manager's, and the IOB and DCT that DOS passes to RWTS (IoBlock.asm). docs/Dos.md explains how DOS boots.
 ;;
@@ -754,13 +754,13 @@ BootCodeStart:
 ;; When a read for APPEND reaches the end of a file whose position is not 0, <AppendFix::EndOfData> sets
 ;; <AppendFix::EndOfFile>, so that <AppendFix::NextRecord> moves the record number on by one at the end of APPEND;
 ;; <AppendFix::CloseOnError> clears it on other errors. The 1980 DOS has these; the 1983 DOS's revision B patches add
-;; <AppendFix::ClearUnlessAppend>, which clears the flag for every command but APPEND, and <AppendFix::Finish>.
+;; `AppendFix::ClearUnlessAppend`, which clears the flag for every command but APPEND, and `AppendFix::Finish`.
 .scope AppendFix
 
 ;; Set when a read reaches the end of a file whose position is not 0, so that the end of APPEND moves the record
 ;; number on by one.
 ;;
-;; <EndOfData> sets it, and <CloseOnError>, <NextRecord> and, in the 1983 DOS, <ClearUnlessAppend> clear it;
+;; <EndOfData> sets it, and <CloseOnError>, <NextRecord> and, in the 1983 DOS, `ClearUnlessAppend` clear it;
 ;; <NextRecord> reads it.
 ;; Also: EOFFLAG (DOS33)
 EndOfFile:
@@ -1025,8 +1025,8 @@ DOS_LAST_SECTOR = 4
 ;; `BOOT 2`, which reads the rest of DOS through RWTS and starts it; `BOOT 1` jumps here.
 ;;
 ;; It reads <DosPages> pages: in DOS 3.3 from track 2 sector 4 backwards to track 0 sector 12 (the master: sector
-;; 10), into the pages from just below <Stage1> down; in DOS 3.2 from track 0 sector <FirstDosSector>, 10, upwards,
-;; into the pages from <FirstDosPage> up. `BOOT 1` left RWTS and this page in place. It records the boot slot and
+;; 10), into the pages from just below <Stage1> down; in DOS 3.2 from track 0 sector `FirstDosSector`, 10, upwards,
+;; into the pages from `FirstDosPage` up. `BOOT 1` left RWTS and this page in place. It records the boot slot and
 ;; drive 1 in the IOB, and tells RWTS that the drive's head is on track 0 (RWTS keeps each drive's half-track at
 ;; <Drive1HalfTracks> and <Drive2HalfTracks> plus the slot; `BOOT 0` left the head on track 0). Falls into
 ;; <StartDos>. At $B700 where DOS runs (the master: $3700).
@@ -1083,7 +1083,7 @@ DOS_LAST_SECTOR = 4
 ;;
 ;; A new stack, the IOB's volume set to $FF as the file manager leaves it, the screen reset or set as output, the
 ;; keyboard as input, then on to <StartDos::ToDos>. DOS 3.3 resets the screen and the language card through
-;; <ResetScreenAndCard>, in DosPatches.asm, which comes back to <StartDos::AfterReset>; DOS 3.2 sets the screen as
+;; `ResetScreenAndCard`, in DosPatches.asm, which comes back to `StartDos::AfterReset`; DOS 3.2 sets the screen as
 ;; output.
 ;; Also: DOSINT (DOS33, DOS31)
 .proc StartDos

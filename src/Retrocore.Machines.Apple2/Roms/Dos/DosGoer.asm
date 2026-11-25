@@ -366,7 +366,7 @@ Loop:
 ;; Looks for the buffer of the file named in <FileName>, noting a free one on the way.
 ;;
 ;; At $A764 where DOS runs. The chain goes down in memory, so the last free buffer passed is the lowest of those
-;; passed. In DOS 3.3, <AppendFix::CloseOnError> (BootLoader.asm) calls it too.
+;; passed. In DOS 3.3, `AppendFix::CloseOnError` (BootLoader.asm) calls it too.
 ;; Out:   carry = clear if the file is open, set if not, WorkPointer = the file's buffer, if it is open, ParsedNumber
 ;;   = the last free buffer before the file's, or before the end of the chain if the file is not open, with its
 ;;   high byte 0 if there is none

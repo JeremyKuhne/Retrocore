@@ -102,7 +102,7 @@ MnemonicLow = VerticalLineEnd
 ;; At $F88C, and $F88E with the opcode in A (<Decode::Opcode>). Every build looks up the mode and the format here.
 ;; The Apple II's Monitors and the original IIe then compute the length and the mnemonic hash, leaving X = the
 ;; opcode's <GROUP_BITS>; the Enhanced IIe hands the opcode to the internal firmware, whose function $10 computes
-;; them, which frees $F8B7-$F8CF for <CompareSlot3Rom>.
+;; them, which frees $F8B7-$F8CF for `CompareSlot3Rom`.
 ;; In: X = 0, ProgramCounter/ProgramCounterHigh = the instruction
 ;; Out: A = the mnemonic's slot in <MnemonicsLeft> and <MnemonicsRight>, OperandLength = the operand's bytes (0-2),
 ;;   PlotMask = the operand format, Y = 0

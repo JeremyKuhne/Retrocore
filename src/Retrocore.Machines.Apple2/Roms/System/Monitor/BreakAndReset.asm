@@ -2,9 +2,9 @@
 ;; The Monitor's interrupt and BRK entries ($FA40-$FAD6), with the Apple II Monitor's instruction stepper around them
 ;; and, in the other Monitors, the reset handler and power-up.
 ;;
-;; The Apple II Monitor has the first and second pieces of <Stepper> here, with <Interrupt>, <Break> and
+;; The Apple II Monitor has the first and second pieces of `Stepper` here, with <Interrupt>, <Break> and
 ;; <ShowBreak> between them. The Autostart and IIe Monitors have the same three routines at $FA40, then the first
-;; piece of <Startup>: <Startup::Reset> and <Startup::PowerUp>.
+;; piece of <Startup>: `Startup::Reset` and `Startup::PowerUp`.
 
 .if MONITOR = MONITOR_II
 
@@ -268,7 +268,7 @@ StoreByte:
 ;; without printing it), shows the registers on the same line, and enters the Monitor.
 ;;
 ;; At $FA59, reached through <BreakVector>; in the Apple II Monitor, $FA9C, which <Break> falls into and
-;; <Stepper::RunInstruction> jumps to when the instruction to run is a BRK.
+;; `Stepper::RunInstruction` jumps to when the instruction to run is a BRK.
 ;; In: ProgramCounter/ProgramCounterHigh = the address to show, SavedA..SavedStackPointer = the registers to show
 ;; Also: XBRK (A2RM78, A2RM79), OLDBRK (A2RM79, IIEROM82, IIETRM85)
 .proc ShowBreak

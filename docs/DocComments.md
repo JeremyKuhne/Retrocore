@@ -422,6 +422,22 @@ If a step finds the name in more than one place, the link is **ambiguous**. Exam
 both firmware sources, or in both branches of an `.if` with different meanings. The lint reports it, the
 link renders to the first match, and the author qualifies it (`Monitor:`, `@Enhanced`).
 
+A source that builds several variants with `.if`, such as DOS 3.3 and 3.2, the Monitor's four models or
+AppleSoft's builds, is documented once and linted once per build. In each build a link reaches only what that build
+assembles. Steps 2 and 3 pass over a definition in a branch the build leaves out, a macro defined there and the
+definitions in its body, and a historical name only such a branch gives. If the build has no definition of the
+name there, the link reaches nothing: it does not fall through to another module. A link that names the source's own
+module (`Monitor:`) also reaches this build's definition first. It reaches another build's only through that build's
+set, where the editor or the lint has one (`Firmware:SELFTEST@Original`). When no set has the definition, the lint
+reports the link in each build that lacks it. A link in a branch the build leaves out is reported for this reason only
+by the builds that take the branch. So in a comment every build assembles, link only what every build defines, and
+name the others in backticks or describe them. The names in a section's entries (`In:`, `Uses:`) are not links and may
+name another build's definitions. A macro the build defines but never expands keeps its body's definitions: a
+library's macro that no build expands looks the same as one that only another build expands. In a macro the build
+expands, a definition in a branch of the body that no expansion takes is another build's. A comment in the body of a
+macro the build doesn't expand is checked by the builds that do. Documentation without the assembly's report of what
+it skipped, such as a debug file's, links every branch as before, as does one whose assembly failed.
+
 An unresolved link is a warning in the editor. It renders as plain text, never as a
 broken link.
 

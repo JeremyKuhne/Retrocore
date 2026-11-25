@@ -90,6 +90,12 @@ public sealed class DocumentationComment
     public string? Macro { get; init; }
 
     /// <summary>
+    ///  Gets the zero-based line of the <c>.macro</c> directive that opens the body holding the definition, in its file;
+    ///  -1 outside a macro's body.
+    /// </summary>
+    public int MacroLine { get; init; } = -1;
+
+    /// <summary>
     ///  Gets whether the definition's name, in a macro's body, is or holds one of the macro's parameters, so each
     ///  expansion names it after its own argument.
     /// </summary>

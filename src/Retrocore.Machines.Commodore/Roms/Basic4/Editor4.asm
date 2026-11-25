@@ -16,7 +16,7 @@
 ;; - Scrolling (<SCROL>) and opening a line (<NEWLN>).
 ;; - The interrupt entry (<PULS>) and the retrace interrupt (<KEY>): the jiffy clock, the cursor's blink,
 ;;   the cassette motors and the keyboard scan.
-;; - On the business keyboard, the tab stops (<TABKEY>, <SETTAB>).
+;; - On the business keyboard, the tab stops (`TABKEY`, `SETTAB`).
 ;; - At $E600, the end of an interrupt (<PREND>), the store to the screen (<DSPP>), the keyboard's table
 ;;   (<CHAR>), the rows' addresses (<LDTB2>) and shifted RUN's text (<RUNTB>).
 ;;

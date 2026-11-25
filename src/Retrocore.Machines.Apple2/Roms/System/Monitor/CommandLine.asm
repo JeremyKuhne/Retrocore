@@ -28,7 +28,7 @@ HEX_LETTER_CODE = (('A' ^ '0') + KEY_CODE_OFFSET) & $FF
 ;;
 ;; At $FF59. It is the Apple II Monitor's reset handler, which <ResetVector> points at and which the 1978 listing names
 ;; `RESET`; that name stays in prose here, as the later Monitors' listings give it to their own reset handler,
-;; <Startup::Reset>. That handler does the same set-up itself, and programs jump here to enter the Monitor.
+;; `Startup::Reset`. That handler does the same set-up itself, and programs jump here to enter the Monitor.
 ;; Also: OLDRST (A2RM79, IIEROM82, IIETRM85)
 .proc ResetToMonitor
 .assert * = $FF59, "Startup::ResetToMonitor must stay at $FF59."
@@ -141,7 +141,7 @@ Next:
 ;; At $FFA7. Each digit also copies the number to A1 and A3 unless a command is waiting (<CommandMode>). The
 ;; code is (character EOR "0") + $89, as <Commands::Keys> holds them. On the Enhanced IIe it reads the line in
 ;; uppercase, so a to f are digits too, and an apostrophe makes the character after it 8 bits of the number
-;; (<Commands::LetterOrQuote>).
+;; (`Commands::LetterOrQuote`).
 ;; In: Y = the index in <InputBuffer>
 ;; Out: A = the code, Y = the index after the character, Address2/Address2High = the number, X = 1 after a digit, 0 when
 ;;     none
@@ -302,7 +302,7 @@ NmiVector:
 .assert * = $FFFA, "NmiVector must be at $FFFA, the 6502's NMI vector."
     .word NmiJump
 
-;; The 6502's reset vector: <Startup::ResetToMonitor> on the Apple II Monitor, <Startup::Reset> on the others.
+;; The 6502's reset vector: <Startup::ResetToMonitor> on the Apple II Monitor, `Startup::Reset` on the others.
 ;;
 ;; At $FFFC.
 ;; Also: RESETVEC (UNKN)

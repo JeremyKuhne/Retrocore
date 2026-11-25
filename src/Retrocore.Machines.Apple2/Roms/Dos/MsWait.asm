@@ -9,8 +9,8 @@
 ;;
 ;; In DOS 3.3 the delay starts the page at $BA00. <DiskII::ReadTranslate> is indexed by the nibble itself, and only
 ;; nibbles $96-$FF are valid, so its entries need only the last $6A bytes of the page: the code and tables before them
-;; share it. In the 1983 DOS the space between holds three patches added to DOS later: <AppendFix::ClearUnlessAppend>
-;; and <AppendFix::Finish>, for the APPEND command, and <TurnOff80Columns>, for the Apple IIe's 80-column display; the
+;; share it. In the 1983 DOS the space between holds three patches added to DOS later: `AppendFix::ClearUnlessAppend`
+;; and `AppendFix::Finish`, for the APPEND command, and `TurnOff80Columns`, for the Apple IIe's 80-column display; the
 ;; 1980 DOS has leftover bytes there. In the 1983 master the APPEND fix's last part lives here; Apple's listing has a
 ;; longer version in the boot loader's page (see Dos33.asm).
 ;;
@@ -79,7 +79,7 @@ LowLevelCodeEnd:
 
 .if DOS32 = 0
 ;; The end of the relocator's first range of code in RWTS, from <LowLevelCodeStart>, the byte after it; the tables
-;; after it hold no addresses. See Relocator.asm. DOS 3.2's is <DiskII::Wait::LowLevelCodeEnd>.
+;; after it hold no addresses. See Relocator.asm. DOS 3.2's is `DiskII::Wait::LowLevelCodeEnd`.
 ;; Also: AEC1 (DOS33, DOS31)
 LowLevelCodeEnd:
 .endif

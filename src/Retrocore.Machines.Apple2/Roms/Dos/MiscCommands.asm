@@ -58,7 +58,7 @@ DEFAULT_VOLUME = 254
 ;; In:    KeywordRecord = the record, KeywordByte = the byte, if <GivenKeywords> has R or B
 ;; Out:   WorkPointer = the file's buffer, whose work areas are in the parameter list
 ;; Entry: CallPosition = makes the POSITION request with the parameter list as it is (DOS 3.2's APPEND, the 1980
-;;   DOS 3.3's <AppendFix::NextRecord>)
+;;   DOS 3.3's `AppendFix::NextRecord`)
 ;; Also: RWPOSN (DOS33, DOS31)
 .proc FindAndPosition
 .assert MASTER || * = $A526, "Commands::FindAndPosition is at $A526 where DOS runs."

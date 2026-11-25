@@ -29,13 +29,13 @@
 ;;   CommandTables.asm.
 ;; - <FileManagerCodeStart> to <FileManagerCodeEnd>: the file manager's code.
 ;; - <BootCodeStart> to <BootCodeEnd>: `BOOT 2` and the patches in the boot loader's pages.
-;; - <EmptyCodeStart> to <EmptyCodeEnd>: DOS 3.2's empty range before its boot page.
+;; - `EmptyCodeStart` to `EmptyCodeEnd`: DOS 3.2's empty range before its boot page.
 ;; - <WriteAddressCodeStart> to <WriteAddressCodeEnd> (DOS 3.3): the formatter's address field writer.
-;; - <LowLevelCodeStart> to <LowLevelCodeEnd>: RWTS's nibble, read, write and seek routines.
-;; - <RwtsPatchCodeStart> to <RwtsPatchCodeEnd> (the 1983 DOS 3.3): the patches after <DiskII::Wait>.
-;; - <RwtsCodeStart> to <RwtsCodeEnd> in DOS 3.3: RWTS itself and the formatter. In DOS 3.2 the range runs to
-;;   <RwtsCodeLast>, the last byte of DOS, since its patches at the top of DOS come right after the formatter.
-;; - <TopPatchCodeStart> to <TopPatchCodeLast> (DOS 3.3): the patches at the top of DOS (DosPatches.asm).
+;; - <LowLevelCodeStart> to `LowLevelCodeEnd`: RWTS's nibble, read, write and seek routines.
+;; - `RwtsPatchCodeStart` to `RwtsPatchCodeEnd` (the 1983 DOS 3.3): the patches after <DiskII::Wait>.
+;; - <RwtsCodeStart> to `RwtsCodeEnd` in DOS 3.3: RWTS itself and the formatter. In DOS 3.2 the range runs to
+;;   `RwtsCodeLast`, the last byte of DOS, since its patches at the top of DOS come right after the formatter.
+;; - `TopPatchCodeStart` to `TopPatchCodeLast` (DOS 3.3): the patches at the top of DOS (DosPatches.asm).
 
 ; The tables' layout.
 

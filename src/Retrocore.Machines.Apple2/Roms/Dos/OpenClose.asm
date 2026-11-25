@@ -367,8 +367,8 @@ RequestAndClose:
 
 ;; VERIFY: has the file manager read every sector of the file named in <FileName>, then closes it.
 ;;
-;; At $A27D where DOS runs. In DOS 3.3, SAVE and BSAVE end here too (<SaveAndVerify>), to check what they wrote; DOS
-;; 3.2, which has no <SaveAndVerify>, does not verify them.
+;; At $A27D where DOS runs. In DOS 3.3, SAVE and BSAVE end here too (`SaveAndVerify`), to check what they wrote; DOS
+;; 3.2, which has no `SaveAndVerify`, does not verify them.
 ;; Also: EVAR (DOS33, DOS31)
 .proc Verify
 .assert MASTER || * = $A27D, "Commands::Verify is at $A27D where DOS runs."
@@ -420,7 +420,7 @@ ReadToEnd:
 ;; At $A298 where DOS runs. A text file ends at its first zero byte, and <RunFileRequest> also hands back a zero when
 ;; the file manager reports the end of the data. <AppendFix::NextRecord>, a patch in the boot loader's page
 ;; (BootLoader.asm), then steps the record number on when the end flag <AppendFix::EndOfFile> is set, and finishes: in
-;; the 1980 DOS with the file manager's POSITION request, in the 1983 DOS through <AppendFix::Finish>, which sets the
+;; the 1980 DOS with the file manager's POSITION request, in the 1983 DOS through `AppendFix::Finish`, which sets the
 ;; file's position itself.
 ;; Also: EAPND (DOS33, DOS31)
 .proc Append

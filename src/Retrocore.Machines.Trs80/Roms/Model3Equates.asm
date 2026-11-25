@@ -27,7 +27,7 @@ CASSETTE_PORT = $FF                 ;; read: bit 7 the 500 baud latch, bit 0 the
 ; Bits of INTERRUPT_PORT, read active low and written to enable.
 INT_CASSETTE_RISE = $01             ;; a 1500 baud tape's signal rose
 INT_CASSETTE_FALL = $02             ;; a 1500 baud tape's signal fell
-INT_CLOCK = $04                     ;; the real-time clock, 30 times a second
+INT_CLOCK = $04                     ;; the real-time clock, 30 times a second (60 on a Model 4 at 4 MHz)
 
 ; Bits of NMI_PORT.
 NMI_DISK = $80                      ;; the disk controller's INTRQ

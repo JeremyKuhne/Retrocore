@@ -94,8 +94,8 @@ public class Trs80Model3Tests
     /// <summary>
     ///  The clock interrupt does not latch while port <c>$E0</c> masks it, as the Model 4P's technical reference says
     ///  ("If the real time clock is enabled (ENRTC ...), the interrupt is latched"); once enabled it holds until a
-    ///  read of <c>$EC</c>-<c>$EF</c>, which the Model III and 4 references call clearing it, and reading the status
-    ///  does not clear it.
+    ///  read of <c>$EC</c>-<c>$EF</c> (the Model III's reference names <c>$EC</c>, RTCIN*, and the Model 4's any of
+    ///  the four, as clearing it), and reading the status does not clear it.
     /// </summary>
     [TestMethod]
     public void ClockInterruptFollowsTheMask()

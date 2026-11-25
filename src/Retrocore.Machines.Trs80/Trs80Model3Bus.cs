@@ -335,7 +335,7 @@ public sealed class Trs80Model3Bus : IProcessorBus, IIoBus
         }
 
         // The clock divides the 60 Hz vertical sync by two, except on a Model 4 at 4 MHz, which takes every one. It
-        // latches only while the mask enables it, until port $EC is read.
+        // latches only while the mask enables it, until a read of ports $EC-$EF.
         if (++_tick == Trs80Model3Timing.CyclesPerFrame)
         {
             _tick = 0;

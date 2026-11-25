@@ -13,8 +13,9 @@ Master HELLO's POKEd test. Documents cited: DOS33 and DOS31 (on the switches onl
 - Sather's Understanding the Apple II (chapter 9, Table 9.3, checked against the archive's text) gives the sequencer
   commands as CLR, NOP, SL0, SL1, SR and LD, and says they are his own, "in the absence of any labels and formats
   published by Apple". They are named in prose (D6), so the bibliography has no key for it.
-- The macros `ENTRY`, `READING`, `WRITING` and `SEQUENCER`, the generated `SEQ_xx`, and the language card finder's
-  `Status`, `Finder` and its locals are the SDK's own and get no `Also:`; all but `Status` are renamed.
+- The macros `ENTRY`, `READING`, `WRITING` and `SEQUENCER`, the generated `SEQ_xx` and the variable `Logical`, and the
+  language card finder's `Status`, `Finder` and its locals are the SDK's own and get no `Also:`; all but `Status` are
+  renamed.
 
 ## Decisions
 

@@ -73,7 +73,8 @@ SlotTimes16 = ScrollBaseHigh
 ;; The ROM's scratch byte: the nibble or bits being tested, the odd-bits half of a 4-and-4 pair, or a count.
 ;;
 ;; While <Boot> builds <ReadTranslate> it holds the nibble tried or the bits under test; <ReadSector> keeps the first
-;; nibble of each address field byte here, and its data field loops keep their count here while Y holds the nibble.
+;; nibble of each address field byte here, rotated left, and its data field loops keep their count here while Y holds
+;; the nibble.
 ;; See: <ReadSector>, <ReadTranslate>
 ;; Also: BITS (UNKN)
 Scratch = Address1
@@ -249,7 +250,7 @@ LOW_BITS_SIZE = 86
 STEP_DELAY = $56
 
 ;; The count <Boot> starts its half-track steps from, 80: it counts down to 0, so it takes 81 steps toward track 0,
-;; more than the 35 tracks' 70 half-tracks.
+;; more than the 68 half-tracks from track 34 to track 0.
 STEP_COUNT = 80
 
 .org $C600

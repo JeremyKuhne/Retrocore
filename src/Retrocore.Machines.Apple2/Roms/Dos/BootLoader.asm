@@ -1,20 +1,20 @@
-; retrocore: style=strict ignore=unlinked-name:PR|RWTS|INIT|APPEND|SAVE|BSAVE|VERIFY|READ|BUFFER|SLOTX16 -- in prose
+; retrocore: style=strict ignore=unlinked-name:PR|RWTS|INIT|APPEND|SAVE|BSAVE|VERIFY|READ -- in prose
 ;; DOS 3.3 and 3.2: the boot loader, the boot page's patches and RWTS's entry
 ;;
 ;; The two pages before RWTS, $B600-$B7FF where DOS runs ($3600-$37FF in the master image), hold the stages of a
 ;; boot that come after the Disk II's ROM, and the code that writes DOS to a disk for INIT. The boot chain:
 ;;
-;; - `BOOT 0`, the controller's ROM at $Cn00 (docs/DiskII.md), reads track 0 sector 0 and jumps into it with X =
-;;   slot * 16. DOS 3.3's 16-sector ROM (Boot16.asm) reads it into $0800 and jumps to $0801; its sector reader, READ
-;;   at $Cn5C, can be called again: it reads the sector in $3D into the page in $27 and comes back to $0801. DOS
-;;   3.2's 13-sector ROM (Boot13.asm) reads it into $0300, rebuilds its bytes from the 5-and-3 nibbles, and jumps to
-;;   $0301; its reader, at $Cn5D, reads the sector in $3D into the page in $27 and $0800 as five-bit values, without
-;;   making bytes of them, and returns.
-;; - `BOOT 1`, <Boot::Stage1>, is that sector, a copy of the boot page. DOS 3.3's, running at $0800, calls READ once
-;;   for each of track 0's first ten sectors, reading them backwards into $BF00 down to $B600 (the master: $3F00 to
-;;   $3600). DOS 3.2's, running at $0300, calls the ROM's reader for track 0 sectors 0 to 9 and decodes each into a
-;;   page, from $B600 up to $BFFF (the master: $3600 to $3FFF). Then it jumps to the page after its own copy: $B700,
-;;   or the master's $3700.
+;; - `BOOT 0`, the controller's ROM at $Cn00 (docs/DiskII.md), reads track 0 sector 0 and jumps into it, leaving
+;;   slot * 16 in $2B. DOS 3.3's 16-sector ROM (Boot16.asm) reads it into $0800 and jumps to $0801; its sector reader,
+;;   <Boot16:ReadSector> at $Cn5C, can be called again: it reads the sector in $3D into the page in $27 and comes back
+;;   to $0801. DOS 3.2's 13-sector ROM (Boot13.asm) reads it into $0300, rebuilds its bytes from the 5-and-3 nibbles,
+;;   and jumps to $0301; its reader, at $Cn5D, reads the sector in $3D into the page in $27 and $0800 as five-bit
+;;   values, without making bytes of them, and returns.
+;; - `BOOT 1`, <Boot::Stage1>, is that sector, a copy of the boot page. DOS 3.3's, running at $0800, calls the ROM's
+;;   reader once for each of track 0's first ten sectors, reading them backwards into $BF00 down to $B600 (the master:
+;;   $3F00 to $3600). DOS 3.2's, running at $0300, calls the ROM's reader for track 0 sectors 0 to 9 and decodes each
+;;   into a page, from $B600 up to $BFFF (the master: $3600 to $3FFF). Then it jumps to the page after its own copy:
+;;   $B700, or the master's $3700.
 ;; - `BOOT 2`, <Boot::Stage2>, uses RWTS, which `BOOT 1` has just loaded with it, to read the rest of DOS from tracks 0
 ;;   to 2: $9D00-$B5FF, or the master's $1B00-$35FF. It resets the screen and keyboard and ends at
 ;;   <Boot::StartDos::ToDos>.
@@ -312,13 +312,13 @@ EmptyCodeEnd:
 ;; explains the boot.
 .scope Boot
 
-;; The page the ROM's sector reader fills (2 bytes), the one the ROM (Boot.asm) calls BUFFER.
+;; The page the ROM's sector reader fills (2 bytes), the 13-sector ROM's <Boot13:BufferPointer>.
 ;;
 ;; DOS 3.2's `BOOT 1` points it at <Stage1::RomHighBits>, $0900, where the reader puts each sector's top five bits.
 ;; Also: POINTA (DOS33)
 BufferPointer = LowResBase
 
-;; The slot times 16, the ROM's SLOTX16 (Boot.asm), which `BOOT 0` leaves for `BOOT 1`.
+;; The slot times 16, the ROM's <Boot13:SlotTimes16>, which `BOOT 0` leaves for `BOOT 1`.
 ;; Also: BSLOT (DOS33)
 SlotTimes16 = ScrollBaseHigh
 
@@ -611,38 +611,38 @@ BootCodeStart:
 ;; listing makes each from $800 plus the byte's offset in the page (BHERE2 to BHERE5).
 RunAddress = $0800
 
-;; The pointer to the page the boot ROM's sector reader fills, the ROM's <Boot16:BUFFER> (2 bytes).
+;; The pointer to the page the boot ROM's sector reader fills, the ROM's <Boot16:BufferPointer> (2 bytes).
 ;;
-;; `BOOT 1` sets its high byte to each page in turn, down from $BF, before it calls READ. On the first entry the ROM
-;; has left it at $09, the page after the boot sector, which is how `BOOT 1` knows it has just started.
-;; See: <Sector>, <JumpVector>, <Boot16:BUFFER>
+;; `BOOT 1` sets its high byte to each page in turn, down from $BF, before it calls the ROM's reader. On the first entry
+;; the ROM has left it at $09, the page after the boot sector, which is how `BOOT 1` knows it has just started.
+;; See: <Sector>, <JumpVector>, <Boot16:BufferPointer>
 ;; Also: POINTA (DOS33)
 BufferPointer = LowResBase
 
-;; The slot times 16, which the boot ROM keeps here as <Boot16:SLOTX16>.
+;; The slot times 16, which the boot ROM keeps here as <Boot16:SlotTimes16>.
 ;;
-;; `BOOT 1` makes READ's address, $Cn5C, from it, and passes it on in X, to READ and to `BOOT 2`.
-;; See: <JumpVector>, <Boot16:SLOTX16>
+;; `BOOT 1` makes the reader's address, $Cn5C, from it, and passes it on in X, to the reader and to `BOOT 2`.
+;; See: <JumpVector>, <Boot16:SlotTimes16>
 ;; Also: BSLOT (DOS33)
 SlotTimes16 = ScrollBaseHigh
 
-;; The sector the boot ROM's sector reader reads next, the ROM's <Boot16:SECTOR>.
+;; The sector the boot ROM's sector reader reads next, the ROM's <Boot16:Sector>.
 ;;
 ;; `BOOT 1` sets it from <Stage1::SectorOrder> before each call, reading DOS's sectors backwards from the last page
 ;; down.
-;; See: <BufferPointer>, <Stage1::SectorOrder>, <Boot16:SECTOR>
+;; See: <BufferPointer>, <Stage1::SectorOrder>, <Boot16:Sector>
 ;; Also: BSECTR (DOS33)
 Sector = Address1High
 
-;; The address `BOOT 1` jumps through to call the ROM's sector reader, READ at $Cn5C (2 bytes).
+;; The address `BOOT 1` jumps through to call the ROM's sector reader, <Boot16:ReadSector> at $Cn5C (2 bytes).
 ;;
-;; `BOOT 1` sets it on its first entry from <SlotTimes16> and <READ_OFFSET>. READ returns to $0801, `BOOT 1`'s own
+;; `BOOT 1` sets it on its first entry from <SlotTimes16> and <READ_OFFSET>. The reader returns to $0801, `BOOT 1`'s own
 ;; entry, rather than to the jump.
 ;; See: <SlotTimes16>, <READ_OFFSET>
 ;; Also: BTEMP (DOS33)
 JumpVector = Address2
 
-;; The offset of READ, the boot ROM's sector reader, in the ROM's page: READ is at $Cn5C.
+;; The offset of the boot ROM's sector reader, <Boot16:ReadSector>, in the ROM's page: it is at $Cn5C.
 ;; Also: BRETRY (DOS33)
 READ_OFFSET = $5C
 
@@ -651,12 +651,12 @@ SLOT_ROM_HIGH = $C0
 
 ;; `BOOT 1`, the boot sector, track 0 sector 0, which `BOOT 0` loads at $0800 and enters at $0801.
 ;;
-;; DOS keeps this copy of it at $B600 so that INIT can write it to new disks; it only runs at <RunAddress>, where
-;; its absolute addresses point into the copy there. The first byte, 1, tells `BOOT 0` to read just this sector. On
-;; the first entry, `BOOT 1` points <JumpVector> at READ in the ROM, and <Stage1::LoadAddress> at the last page to fill:
-;; <FirstPage> (the boot page's own page number, $B6) plus <LastSector> (9). Each entry after that reads the next
-;; sector down, until all ten are in; the last is sector 0 again, this sector, into $B600. Then it resets the
-;; input and output hooks and the screen and jumps to <Stage2> with X = slot * 16. At $B600 where DOS runs.
+;; DOS keeps this copy of it at $B600 so that INIT can write it to new disks; it only runs at <RunAddress>, where its
+;; absolute addresses point into the copy there. The first byte, 1, tells `BOOT 0` to read just this sector. On the
+;; first entry, `BOOT 1` points <JumpVector> at the ROM's reader, and <Stage1::LoadAddress> at the last page to fill:
+;; <FirstPage> (the boot page's own page number, $B6) plus <LastSector> (9). Each entry after that reads the next sector
+;; down, until all ten are in; the last is sector 0 again, this sector, into $B600. Then it resets the input and output
+;; hooks and the screen and jumps to <Stage2> with X = slot * 16. At $B600 where DOS runs.
 ;; In:    X = slot * 16, BufferPointer+1 = the page after the last one read ($09 on the first entry)
 ;; Also: TRK0LDR (DOS33), DOSLDR (DOS31)
 .proc Stage1
@@ -667,12 +667,12 @@ SLOT_ROM_HIGH = $C0
 SectorCount = RunAddress + (* - Stage1)
     .byte 1
 
-    ; `BOOT 0` enters here, at $0801, and READ comes back here after each sector.
+    ; `BOOT 0` enters here, at $0801, and the ROM's reader comes back here after each sector.
     lda BufferPointer+1
     cmp #>RunAddress + 1
     bne NextSector
 
-    ; The first entry: point JumpVector at READ, $Cn5C, and LoadAddress at the last page to fill.
+    ; The first entry: point JumpVector at the ROM's reader, $Cn5C, and LoadAddress at the last page to fill.
     lda SlotTimes16
     lsr a
     lsr a
@@ -689,7 +689,8 @@ SectorCount = RunAddress + (* - Stage1)
 
     ; LastSector counts DOS's logical sectors down from 9 to 0; SectorOrder gives the physical sector to read for
     ; each.
-;; Reads the next sector down into the next page down, through READ, which returns to $0801 and so comes back here.
+;; Reads the next sector down into the next page down, through the ROM's reader, which returns to $0801 and so comes
+;; back here.
 ;; Also: READNEXT (DOS33)
 NextSector:
     ldx a:LastSector
@@ -719,8 +720,8 @@ ToStage2:
 ;; The physical sector holding each of DOS's logical sectors 0 to 15 on track 0, as `BOOT 1` reads the table at
 ;; <RunAddress>.
 ;;
-;; The address field of each sector holds its physical number, which READ looks for; DOS numbers sectors in a
-;; different order, so that sectors it reads one after another are spread around the track. The order is
+;; The address field of each sector holds its physical number, which the ROM's reader looks for; DOS numbers sectors in
+;; a different order, so that sectors it reads one after another are spread around the track. The order is
 ;; <PhysicalSectors>'.
 ;; Also: TABLE (DOS33)
 SectorOrder = RunAddress + (* - Stage1)

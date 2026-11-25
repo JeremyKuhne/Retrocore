@@ -32,7 +32,7 @@ jumps to $02CB. The root asserts it is 0 or 1.
 - P1. Each routine Apple assembled on its own stays a file and a scope (`HiResGraphics`, `Renumber`, `Relocate`,
   `TapeVerify`, `RamTest`, `Music`); each routine in it is a `.proc`, and a label another routine enters is an
   `Entry:` of the routine it sits in (`Position::SetColor`, `Plot::AtPosition`, `StepHorizontal::AlternateColor`,
-  `Step::Draw`, `Step::DrawTurned`, `Step::UpOrDown`, `ReadX::RangeError`, `Append::Restore`, `Append::Done`).
+  `Step::Draw`, `Step::DrawTurned`, `Step::UpOrDown`, `ReadX::OutOfRange`, `Append::Restore`, `Append::Done`).
   Renumber's BASIC entries, at $D6DD, are `.scope Renumber continued` in `RenumberCalls.asm`. `SetControlY`, which the
   three Control-Y setups share, is the only top-level routine.
 - P2. One scope's old names can't repeat another's in the one assembly, though Apple assembled them apart: an old name
@@ -47,7 +47,7 @@ jumps to $02CB. The root asserts it is 0 or 1.
   it: Renumber's and Relocate's as registers (`Sweet16Registers + FIRST_NUMBER * SWEET16_REGISTER_SIZE`), and the RAM
   test's, Music's and the graphics' as the bytes they borrow. The Monitor's bytes the routines use for their own get
   scoped aliases (`HiResGraphics::LineBase = LowResBase`, `TapeVerify::Checksum = PlotMask`), as do Integer BASIC's
-  noun stack bytes the graphics borrow (`DistanceX = NOUNSTKL`).
+  noun stack bytes the graphics borrow (`DistanceX = NounStackLow`).
 - P5. The root includes `Equates.asm`, which includes `../System/IIeEquates.asm` and `../System/MonitorEntries.asm`
   as DOS's does (Dos.md, X7), and defines the Monitor routines MonitorEntries.asm lacks with `Inherit:`. Programmer's
   Aid's names for Monitor locations that differ from the Monitor's join IIeEquates' definitions: A1 (PA1) on

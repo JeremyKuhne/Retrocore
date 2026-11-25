@@ -119,8 +119,8 @@ VariablesEnd = $CC
 VariablesEndHigh = VariablesEnd + 1
 
 ;; Inherit: <IntegerBasic:Accumulator>
-;; Integer BASIC's cassette routines keep a program's length here. Its old name ACC is given in prose, as here it would
-;; clash with the Monitor's ACC, <SavedA>.
+;; Integer BASIC leaves a noun's value here, and its cassette routines a program's length. Its old name ACC is given in
+;; prose, as here it would clash with the Monitor's ACC, <SavedA>.
 ;; Also: ACL (PA1)
 Accumulator = $CE
 

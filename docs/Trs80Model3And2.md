@@ -46,8 +46,9 @@ The ports are:
 or 4P at 4 MHz takes every vertical sync, 60 times a second, as their technical references say ("Real Time Clock":
 FAST stops the divider). The interrupt latches only while `$E0` bit 2 enables it, as the 4P's reference describes, and
 holds until a read of `$EC`-`$EF`; reading `$E0` leaves it. The Model 4 ROM, written for the Model III, counts 30 to
-a second, so its `TIME$` runs twice as fast at 4 MHz, as on the real machine. The disk controller's INTRQ and the drives' motor timeout raise an NMI where `$E4` enables them. The reset button
-raises the NMI whatever the mask, with `$E4` bit 5 showing why.
+a second, so its `TIME$` runs twice as fast at 4 MHz, as on the real machine. The disk controller's INTRQ and the
+drives' motor timeout raise an NMI where `$E4` enables them. The reset button raises the NMI whatever the mask, with
+`$E4` bit 5 showing why.
 
 **The Model 4's function keys.** Its ROM returns the codes at `FKEY1`, `FKEY2` and `FKEY3` (`$41EB`, `$41EC` and
 `$41F3`) for F1, F2 and F3, which it sets to `$60` (`` ` ``), `$1B` (escape) and `$08` (backspace); shift changes
@@ -233,7 +234,9 @@ What the comparison has to allow for:
   field names, such as `@:LINE7,F1,1`, for the function and shift keys.
 - **Time.** The script schedules by `machine.time:as_double()`; `machine.time.seconds` is only the whole seconds.
 - **The Model 4's clock at 4 MHz.** MAME 0.264 keeps it at 30 Hz, where the technical references give 60 Hz, so the
-  clock is compared at 2 MHz only.
+  clock's count is compared at 2 MHz only. The Model 4 DOSes run at 4 MHz, so their comparisons run with the two
+  clocks at different rates; their screens after `DIR` show no time, but the cursor's blink, which the clock drives,
+  may be in a different phase.
 - **The cursor.** A DOS blinks its cursor, so one cell may differ, where one side shows a space.
 - **The Model II's boot ROM** is chosen by MAME's BIOS name: `c8ff`, `2bff`, `2119` and `9733` for versions 1, 2, 3
   and 5.

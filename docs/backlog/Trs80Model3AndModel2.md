@@ -4,7 +4,8 @@ The [Model III, 4, 4P, II, 12 and 16](../Trs80Model3And2.md) run the SDK's sourc
 byte-identical to MAME's dumps, and boot to their prompts. This is what remains for them to match the Model I.
 
 **Status:** every stage is built; what each still lacks is listed with it: TRSDOS-II on the Model II and its oracle,
-which need an image, and MAME's `cpu_fc86` Model II boot ROM.
+and a rerun of the Model 4 DOSes' oracle after the clock's fix, which need images, and MAME's `cpu_fc86` Model II boot
+ROM.
 
 ## Stages
 
@@ -14,9 +15,10 @@ which need an image, and MAME's `cpu_fc86` Model II boot ROM.
    wrong, now fixed: the Model III's RS-232 ports read `$FF`, as with no board, and the Model II's hard disk board's
    ports read zero, so versions 2 and 3 of its boot ROM boot from the floppy. The Model 4's real-time clock and
    function keys are tested against its ROM, MAME and the technical references (see
-   [the Model III, 4 and 4P](../Trs80Model3And2.md#the-model-iii-4-and-4p)): F1, F2 and F3 give `$60`, `$1B` and `$08`, with or
-   without shift, and match MAME. The clock was 30 Hz at both speeds; a Model 4 at 4 MHz now interrupts 60 times a
-   second, as the references say (MAME 0.264 keeps 30), and the interrupt latches only while its mask enables it.
+   [the Model III, 4 and 4P](../Trs80Model3And2.md#the-model-iii-4-and-4p)): F1, F2 and F3 give `$60`, `$1B` and
+   `$08`, with or without shift, and match MAME. The clock was 30 Hz at both speeds; a Model 4 at 4 MHz now
+   interrupts 60 times a second, as the references say (MAME 0.264 keeps 30), and the interrupt latches only while
+   its mask enables it. Still open: rerunning the Model 4 DOS comparisons with MAME, which need the images.
 2. **Boot their DOSes.** Done for the Model III family: TRSDOS 1.3 and LDOS 5.1.3 on the Model III, TRSDOS 6.0 and
    6.2 and LS-DOS 6.3 on the Model 4, and LS-DOS 6.3 on the 4P boot from DMK, JV3 and IMD images, take the date and
    list their directories (see [DOSes](../Trs80Model3And2.md#doses)). Booting them found that drive select's wait

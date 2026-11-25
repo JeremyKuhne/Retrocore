@@ -9,7 +9,7 @@ using System.Text.Json.Nodes;
 
 namespace Retrocore.Tests;
 
-// How a request waits for a document's first analysis, and the SDK index the workspaces share.
+// How a request waits for a document's first analysis, the SDK index the workspaces share, and what threads share.
 public sealed partial class LanguageAnalysisTests
 {
     /// <summary>
@@ -155,5 +155,28 @@ public sealed partial class LanguageAnalysisTests
         List<SourceAnalysis> sdk = [.. first.SdkAnalyses()];
         sdk.Should().NotBeEmpty();
         second.SdkAnalyses().Should().Equal(sdk, (one, other) => ReferenceEquals(one, other));
+    }
+
+    /// <summary>
+    ///  Threads that ask a new analysis for its documentation at once all get the same set. A hover resolves a link
+    ///  against the set and then finds the analysis it came from by reference, while publishing diagnostics reads the
+    ///  set on another thread; two sets left the link's hover empty.
+    /// </summary>
+    [TestMethod]
+    public void ConcurrentReadersShareOneDocumentationSet()
+    {
+        SourceAnalysis analysis = SourceAnalysis.Assemble(Path.Join(SdkModules.RomDirectory, "System", "Monitor.asm"), _ => null);
+        const int Readers = 8;
+        using Barrier start = new(Readers);
+        DocumentationSet[] sets = new DocumentationSet[Readers];
+        Thread[] threads = [.. Enumerable.Range(0, Readers).Select(index => new Thread(() =>
+        {
+            start.SignalAndWait();
+            sets[index] = analysis.Documentation;
+        }))];
+
+        foreach (Thread thread in threads) { thread.Start(); }
+        foreach (Thread thread in threads) { thread.Join(); }
+        sets.Should().AllSatisfy(set => set.Should().BeSameAs(analysis.Documentation));
     }
 }

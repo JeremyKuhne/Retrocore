@@ -257,7 +257,7 @@ export async function testLanguageServer(root: string): Promise<void> {
     // The card ROMs' declared origins put their entries at the same addresses as the generated firmware.
     for (const [file, routine, address] of [
         ["Mouse.rom.asm", "BasicInput", "$C405"],
-        ["Disk35.rom.asm", "ProDosEntry", "$C51C"]
+        ["Disk35.rom.asm", "Disk35Driver", "$C51C"]
     ] as const) {
         const romPath = path.join(root, "src", "Retrocore.Machines.Apple2", "Roms", file);
         const rom = await vscode.workspace.openTextDocument(vscode.Uri.file(romPath));

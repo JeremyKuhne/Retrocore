@@ -27,7 +27,7 @@ Only published sources are cited: books, manuals and actual listings.
   `WaitOdd`, `WaitEven`).
 - D2. The boot ROM defines its six switches itself rather than including Dos/RwtsEquates.asm, which brings RWTS's
   variables and DOS's `DOS32` switch. Each switch's `Also:` cites DOS's name for the same switch with DOS's
-  documents (PHASEOFF, Q6L ...).
+  documents (PHASEOFF, Q6L ...). D10 replaces the copy with a shared file.
 - D3. Page-zero bytes are aliases of IIeEquates' names (`BufferPointer = LowResBase`), as in DOS (P14). BITS, which
   holds a nibble, a half byte or a count by turns, is `Scratch`.
 - D4. Three routines, each one definition for both ROMs with `.if SECTORS` where they differ (the owner's D5):

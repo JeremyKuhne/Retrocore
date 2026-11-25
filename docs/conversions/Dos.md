@@ -40,7 +40,8 @@ boot loader and formatter. Also converted with it: `Software/MasterCreate.asm`, 
   `Also:` with DOS31; RD1-RD5 clash with the file manager's RD1-RD5 and go in prose.
 - X9. The Disk II's sixteen switch addresses are defined once, as ten names, in RwtsEquates.asm: Phase0Off, Phase0On, MotorOff, MotorOn,
   SelectDrive1, SelectDrive2, DataLatch, LoadLatch, ReadMode, WriteMode. The IOB, DCT and track/sector list, which
-  both boot loaders repeat, move to one shared file.
+  both boot loaders repeat, move to one shared file. Since [DiskII.md](DiskII.md)'s D10, the switches are all sixteen,
+  in Roms/DiskII/Switches.asm, which RwtsEquates.asm includes.
 - X10. RWTS is one `.proc Rwts` spanning Rwts1.asm and Rwts2.asm (Apple split it for size).
 - X11. One ERROR_* set for DOS's errors 1-15, the file manager's return codes included; the messages' offsets are
   MESSAGE_*, written with a macro that asserts each position.

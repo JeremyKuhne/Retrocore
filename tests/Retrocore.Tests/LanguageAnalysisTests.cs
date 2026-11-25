@@ -917,7 +917,7 @@ public sealed partial class LanguageAnalysisTests
     /// <param name="address">The entry's expected address.</param>
     [TestMethod]
     [DataRow("Mouse.rom.asm", "BasicInput", 0xC405)]
-    [DataRow("Disk35.rom.asm", "ProDosEntry", 0xC51C)]
+    [DataRow("Disk35.rom.asm", "Disk35Driver", 0xC51C)]
     [DataRow("ProFile.rom.asm", "Boot", 0xC500)]
     [DataRow("Slot7.rom.asm", "Boot", 0xC700)]
     public void CardRomMetadataSetsEditorAddresses(string file, string symbol, int address)

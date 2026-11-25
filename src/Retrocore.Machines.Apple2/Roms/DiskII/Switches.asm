@@ -8,8 +8,8 @@
 ;; drive and the controller.
 ;;
 ;; The boot ROMs, DOS's RWTS (Dos/RwtsEquates.asm) and the programs that talk to the controller themselves
-;; (Software/Boot13.1983.asm) include this file. The names are DOS's; each switch DOS names cites the documents that
-;; give its name.
+;; (Software/Boot13.1983.asm) include this file. The names are DOS's, but for phases 1 to 3, which DOS reaches as
+;; <Phase0Off> and <Phase0On> plus twice the phase; each switch DOS names cites the documents that give its name.
 
 ;; Turns stepper phase 0 off; Phase0Off + n * 2 turns phase n off (n = 0-3).
 ;;

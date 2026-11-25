@@ -218,8 +218,8 @@ types the same keystrokes at the same emulated seconds and dumps the screen's vi
 `:video_ram` share. The machine here runs the SDK's builds of the same ROMs over the same devices' time, counting 2 MHz
 T-states while the Model 4 runs at 4 MHz. The screens must then match, cell for cell. MAME comes from
 `RETROCORE_MAME`, `mame/mame` or `mame/mame.exe` in the external data folder, or a Linux package's (`apt install
-mame` puts it in `/usr/games`). Its ROM sets, `trs80m3` and `trs80m2`, are in `trs80-roms/mame`. Without them the
-Model 4's tests build MAME's `trs80m4` set from the SDK's sources, after checking that the builds have the SHA-1s
+mame` puts it in `/usr/games`). Its ROM sets, `trs80m3`, `trs80m4` and `trs80m2`, are in `trs80-roms/mame`. Without
+its set the Model 4's tests build MAME's `trs80m4` set from the SDK's sources, after checking that the builds have the SHA-1s
 MAME lists for it (`mame -listroms trs80m4`), and the others are inconclusive.
 
 What the comparison has to allow for:

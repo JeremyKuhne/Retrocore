@@ -20,7 +20,7 @@ namespace Retrocore.Tests;
 ///  <para>
 ///   MAME (<c>RETROCORE_MAME</c>; or <c>mame/mame</c> or <c>mame/mame.exe</c> under
 ///   <see cref="ExternalTestData.Root"/>; or a Linux package's) runs <c>tools/Trs80Model3Oracle.lua</c> with MAME's
-///   ROM sets (<c>trs80m3</c> and <c>trs80m2</c>, as zip or 7z) in <c>trs80-roms/mame</c>. The machines here run the
+///   ROM sets (<c>trs80m3</c>, <c>trs80m4</c> and <c>trs80m2</c>, as zip or 7z) in <c>trs80-roms/mame</c>. The machines here run the
 ///   SDK's builds of the same ROMs, which are byte-identical to MAME's; without the sets, the Model 4's tests give MAME
 ///   its <c>trs80m4</c> set built from those sources. The DOS tests use the images in
 ///   <c>trs80-disks</c>. The tests are inconclusive without these.
@@ -212,9 +212,17 @@ public class Trs80Model3OracleTests
         string driver = variant == Trs80Model3Variant.Model4 ? "trs80m4" : "trs80m3";
         string sets = Path.Join(Root, "trs80-roms", "mame");
         string? built = null;
-        if (!Directory.Exists(sets) || !Directory.EnumerateFiles(sets, "trs80m3.*").Any())
+
+        // Each driver needs its own set, as a zip, 7z or folder: trs80m4's ROM is not in trs80m3's.
+        bool installed = Directory.Exists(Path.Join(sets, driver));
+        installed |= Directory.Exists(sets) && Directory.EnumerateFiles(sets, driver + ".*").Any();
+        if (!installed)
         {
-            if (variant != Trs80Model3Variant.Model4) { Assert.Inconclusive("MAME's trs80m3 ROM set is missing."); }
+            if (variant != Trs80Model3Variant.Model4)
+            {
+                Assert.Inconclusive($"MAME's {driver} ROM set is missing.");
+            }
+
             built = sets = BuildModel4Set();
         }
 

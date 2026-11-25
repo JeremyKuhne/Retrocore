@@ -443,7 +443,8 @@ export function registerMemory(context: vscode.ExtensionContext): void {
             panel.onDidChangeViewState(() => { if (panel.active) lastEditor = editor; });
             panel.onDidDispose(() => {
                 disposed = true;
-                // A test that closes its editor, as switching to another space does, ends there: its page can't answer.
+                // A test that closes its editor, as switching to another space does, ends there with no state: its page
+                // can't answer.
                 for (const settle of editor.tests.values()) settle({});
                 editor.tests.clear();
                 ready();

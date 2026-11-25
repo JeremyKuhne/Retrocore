@@ -20,7 +20,10 @@ export async function untilStopShown(session: vscode.DebugSession, milliseconds 
     }
     if (frame === undefined) throw new Error("VS Code did not focus the stopped frame.");
     const trace = await session.customRequest("stackTrace", { threadId: frame.threadId, levels: 1 });
-    const source: string | undefined = trace.stackFrames?.[0]?.source?.path;
+    const top: { source?: { path?: string } | null } | undefined = trace.stackFrames?.[0];
+    if (top === undefined) throw new Error("The stopped thread has no frames.");
+    // A frame with no source line, such as one in unlabeled memory, opens no editor, so there is nothing to wait for.
+    const source = top.source?.path;
     if (source === undefined) return;
     const key = (file: string) => process.platform === "win32" ? path.resolve(file).toLowerCase() : path.resolve(file);
     const shown = () => vscode.window.activeTextEditor !== undefined

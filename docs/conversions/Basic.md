@@ -2805,7 +2805,8 @@ LASTWR. Alternative: `BasicEnd`, or `RomCodeEnd` per DOS X5's `<Range>End`.
   - LoadOrSave's L2 through L14 are branch relays. I named each for the test at the relay rather than `To...`,
     because each relay also tests something.
 - **Basic4Patches / RomEnd.** The unlabeled first byte of the $B000 patch area is that chip's checksum byte. It
-  could take a name, `InterpreterChecksum`, beside `ExtensionChecksum` (CKSUMD), but it is not a row here.
+  could take a name, `InterpreterChecksum`, beside `ExtensionChecksum` (CKSUMD), but it is not a row here. (Part F
+  gave it that name, with HV4's and HV4R's CKSUMB: F8.)
   SIGNON becomes `SignOnMessage`, which should match whatever parts C and D call BASIC 1/2's banner (FREMES etc.).
 - **Switches and parameters.** DISK_STATUS_STRING, LINE_WIDTH_STORAGE and EXTENDED_DISK_VECTORS are KEEP. They are
   the SDK's names, and their `.ifndef` defaults here duplicate Basic4.asm's. `revised`, `patchedStatus` and

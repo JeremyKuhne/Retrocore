@@ -2025,7 +2025,7 @@ to K12, R1 to R10).
 | 1654 | `ANSYES` | `Disk::Confirm::Accepted` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Clears carry |
 | 1655 | `ANSBYE` | `Disk::Return` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Shared rts, ending Confirm and BadDisk outside direct mode — Scope-level label: BadDisk branches into Confirm here |
 | 1656 | `BADDIS` | `Disk::BadDisk` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Prints the BAD DISK message in direct mode |
-| 1657 | `OLDCLR` | `ForgetDiskStatus` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Marks DS$'s buffer as garbage (length 40, $FF) and zeroes its length and ST; keeps Y — Kernal4's TALK and LISTEN call it, so top level; see F-Q2 |
+| 1657 | `OLDCLR` | `ForgetDiskStatus` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Marks DS$'s buffer as garbage (length 40, $FF) and zeroes its length and ST; keeps Y — Kernal4's TALK and LISTEN call it, so top level; see F-Q2 Converted: top level; it is the kernal's channel selectors (CHKIN and CHKOUT) that call it, before TALK and LISTEN (Basic.md F1). |
 | 1658 | `OLDCL1` | `ForgetDiskStatus::Clear` | local | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Zeroes ST and DSDESC |
 | 1659 | `SENDP` | `Disk::BuildCommand` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Starts the command at TBUFF+0 and falls into BuildCommandAt |
 | 1660 | `SENDP1` | `Disk::BuildCommandAt` | routine | P4 P4R | K4S79 [P4 P4R], HVK4 [P4 P4R] | vendor | Forgets DS$, expands A template bytes from Y+1 into TBUFF at X, then names it the kernal filename — DOpen and DSave enter here after @; falls into SetCommandName |

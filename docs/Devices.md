@@ -152,16 +152,15 @@ the header, comment and creator data of the 2MG the disk was read from (a save t
 writes the lock as its locked flag. The TRS-80's and the Color Computer's floppies save to JV1, JV3, JVC, DMK or IMD:
 DMK holds everything, every ID, mark, density, CRC error and sector order, and a disk read from DMK saves back in its
 image's layout: a track whose sectors are still the image's keeps its gaps, ID offsets and fields it could not read,
-each sector written where it was, and any other track is laid out afresh (all of them, for a single-density-only
-image given a double-density sector); IMD holds a
-track of one density and sector size, writes `$F9` and `$FA` as deleted, and a disk read from IMD keeps its comment,
-each track's mode and maps, which sectors were compressed and the sectors with no data, so an unchanged disk saves
-byte for byte; JV1 holds single-density tracks of
-sectors 0-9 on one side, with `$FA` on track 17 and `$FB` elsewhere; JV3 cannot hold a sector whose ID names another
-track or side, or a double-density mark other than `$FB` and `$F8`; JVC keeps the header it was read with, and holds
-tracks of that geometry in double density with `$FB`. On a TRS-80 `.dsk` saves as JV1, and on the Color Computer as
-JVC. A disk saved as another format then comes from that image. A
-drive's `saveFormats` lists what it saves as. Other drives don't save yet.
+each sector written where it was, and any other track, or one that no longer reads back as the disk has it once written
+in place or grown to a longer track length, is laid out afresh (all of them, for a single-density-only image given a
+double-density sector); IMD holds a track of one density and sector size, writes `$F9` and `$FA` as deleted, and a disk
+read from IMD keeps its comment, each track's mode and maps, which sectors were compressed and the sectors with no data,
+so an unchanged disk saves byte for byte; JV1 holds single-density tracks of sectors 0-9 on one side, with `$FA` on
+track 17 and `$FB` elsewhere; JV3 cannot hold a sector whose ID names another track or side, or a double-density mark
+other than `$FB` and `$F8`; JVC keeps the header it was read with, and holds tracks of that geometry in double density
+with `$FB`. On a TRS-80 `.dsk` saves as JV1, and on the Color Computer as JVC. A disk saved as another format then comes
+from that image. A drive's `saveFormats` lists what it saves as. Other drives don't save yet.
 
 A save is safe ([the media persistence plan](backlog/MediaPersistence.md#saving)): it writes a temporary file beside
 the image and replaces the image with it, follows a link to its target, retries a file another program holds for a

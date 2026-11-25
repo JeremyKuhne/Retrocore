@@ -281,6 +281,7 @@ public sealed class Trs80DiskSaveTests
         disk.Format(2, 0, [.. Enumerable.Range(1, 12).Select(number => Sector(2, 0, number, 512, doubleDensity: true))]);
         byte[] grown = DmkFormat.Encode(disk, layout).Bytes;
         (grown[2] | (grown[3] << 8)).Should().BeGreaterThan(length, "the new track is longer");
+        grown.AsSpan(16, length).SequenceEqual(image.AsSpan(16, length)).Should().BeFalse("track 0 is laid out again");
         Describe(DmkFormat.Read(grown)).Should().Equal(Describe(disk));
     }
 
@@ -405,6 +406,7 @@ public sealed class Trs80DiskSaveTests
         EncodedImage encoded = codec.Encode(disk.Snapshot());
         encoded.IsLossless.Should().BeTrue();
         if (format is "DMK" or "IMD") { encoded.Bytes.Should().Equal(bytes); }
+        else { format.Should().Be("JV3"); }
         Describe(Trs80DiskImage.Read(encoded.Bytes, Path.GetExtension(path)).Disk).Should().Equal(Describe(disk));
     }
 

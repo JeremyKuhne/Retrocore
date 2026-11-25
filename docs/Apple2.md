@@ -202,7 +202,7 @@ reference the emulator's firmware follows:
 | $Cn1A-$Cn1F | The factory's own commands, and the copyright message at $Cn1B | Nothing, with carry set |
 | Mouse routines' registers | X and Y as given; A not kept; `ServeMouse` returns X = $Cn, Y = $n0 | A, X and Y kept |
 | `InitializeMouse` | Waits for vertical blanking; on the II and II Plus clears hi-res page 1 and leaves the display in text, lo-res, page 1 | Returns at once and leaves memory and the display alone |
-| Screen holes $0678+n and $06F8+n, and `MouseMode`'s bits 4-6 (with bit 7, BASIC's mode, the bank to return to, times 2) | Its own scratch space | Not used |
+| Screen holes $0678+n and $06F8+n, and `MouseMode`'s bits 5-7 as the bank to return to, times 2 | Its own scratch space (bit 7 is also BASIC's mode) | Not used, but for bit 7 as BASIC's mode |
 | Timing | Calls take hundreds of cycles, passing bytes to the microcontroller | About a hundred |
 
 **The 3.5 disk controller** goes in any free slot (`disk35`, or Add Card), one per machine, and answers as Apple's Apple

@@ -93,7 +93,8 @@ public sealed class DebugRelaunchTests
     }
 
     /// <summary>
-    ///  A configurationDone after a launch that failed configures nothing: the next launch waits for its own.
+    ///  A configurationDone after a launch that failed configures nothing, whether the launch failed before building
+    ///  its machine or after: the next launch waits for its own.
     /// </summary>
     [TestMethod]
     public void ConfigurationDoneAfterFailedLaunchIsNotKept()
@@ -108,6 +109,17 @@ public sealed class DebugRelaunchTests
 
         client.Request("launch", IIPlus());
         client.NoStop(TimeSpan.FromMilliseconds(500), "the launch waits for its own configurationDone");
+
+        // A relaunch, before that launch is configured, that fails once its machine is built: throttle is refused
+        // after the machine is.
+        failing = IIPlus();
+        failing["throttle"] = true;
+        client.Fails("launch", failing).Should().Contain("throttle");
+        client.Request("configurationDone", []);
+        client.NoStop(TimeSpan.FromMilliseconds(500), "the failed launch's machine does not start");
+
+        client.Request("launch", IIPlus());
+        client.NoStop(TimeSpan.FromMilliseconds(500), "the next launch waits for its own configurationDone");
         client.Request("configurationDone", []);
         client.Event("stopped").String("description").Should().Be(PowerOn);
     }

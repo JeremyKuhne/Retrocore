@@ -96,7 +96,11 @@ internal sealed partial class DebugSession
     // before any launch is kept here for the next launch; a launch takes it, so a later launch on the same connection
     // waits for its own.
     private bool _configured;
-    private bool _launched;
+
+    // Whether a launch has been asked for on this connection, and whether the last one finished, so that its
+    // configurationDone has a machine to start.
+    private bool _launchAttempted;
+    private bool _launchReady;
     private bool _started;
 
     // What the launch powers on to: the reset handler, a loaded program's entry, or (null) a BASIC launch already
@@ -189,9 +193,9 @@ internal sealed partial class DebugSession
         transport.On("configurationDone", args => Reply(() =>
         {
             // It starts the launch it configures. Before the first launch it waits for that launch; after a launch that
-            // failed, or once the launch has started, there is nothing to configure.
-            if (!_launched) { _configured = true; }
-            else if (_target is not null) { Start(); }
+            // failed there is no machine to start, and once the launch has started, nothing is left to configure.
+            if (!_launchAttempted) { _configured = true; }
+            else if (_launchReady) { Start(); }
             return [];
         }));
 
@@ -850,7 +854,8 @@ internal sealed partial class DebugSession
 
     private JsonObject Launch(JsonObject args)
     {
-        _launched = true;
+        _launchAttempted = true;
+        _launchReady = false;
         _run?.Cancel();
         args = LaunchMedia.WithSaved(args, args["machineState"]);
         string machine = DebugMachines.Require(args.String("machine"));
@@ -1070,9 +1075,11 @@ internal sealed partial class DebugSession
 
         Notify("initialized", []);
 
+        _launchReady = true;
+
         // A configurationDone that came before the launch starts the machine once this response is on its way. The
-        // launch takes it: a launch after this one waits for a configurationDone of its own, and one that comes
-        // before the start runs replaces the machine it would have started.
+        // launch takes it: a launch after this one waits for a configurationDone of its own, and a launch that
+        // replaces the machine before the start runs, or the session ending, cancels that start.
         if (_configured)
         {
             _configured = false;
@@ -1081,7 +1088,7 @@ internal sealed partial class DebugSession
             {
                 lock (_gate)
                 {
-                    if (ReferenceEquals(_target, launched)) { Start(); }
+                    if (!_ended && ReferenceEquals(_target, launched)) { Start(); }
                 }
             });
         }

@@ -175,9 +175,16 @@ internal sealed class DapTestClient : DisposableBase
         if (!disposing) { return; }
         _toHost.Dispose();
         _host.Join(s_timeout);
-        _session.End();
-        _hostOutput.Dispose();
-        _reader.Join(s_timeout);
+        try
+        {
+            _session.End();
+        }
+        finally
+        {
+            _hostOutput.Dispose();
+            _reader.Join(s_timeout);
+        }
+
         _hostInput.Dispose();
         _fromHost.Dispose();
         _responses.Dispose();

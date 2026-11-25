@@ -1036,7 +1036,10 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
     const act = async (node: Node | undefined, action: string, args: Record<string, unknown> = {}): Promise<void> => {
         if (node !== undefined && "device" in node) await send("device", { id: node.device.id, action, ...args });
     };
-    const filters = (device: Device): Record<string, string[]> => ({ [`${device.name} images`]: device.formats });
+    // Record offers the formats the deck saves its tapes as, or, on a deck that writes the recording itself, the ones
+    // it takes. An Atari's .xex goes in but is not written.
+    const filters = (device: Device): Record<string, string[]> =>
+        ({ [`${device.name} images`]: device.saveFormats?.length ? device.saveFormats : device.formats });
 
     context.subscriptions.push(vscode.commands.registerCommand("retrocore.device.insert", async (node?: Node) => {
         if (node === undefined || !("device" in node)) return;

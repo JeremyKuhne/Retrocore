@@ -102,6 +102,29 @@ public class AtariMachineTests
     private static string Text(string[] screen) => string.Join('\n', screen.Select(line => line.TrimEnd()));
 
     /// <summary>
+    ///  The recorder and the disk drives take a binary load file (<c>.xex</c>), which goes in on media that boot it,
+    ///  but save only their own images.
+    /// </summary>
+    [TestMethod]
+    public void DrivesTakeBinaryLoadFiles()
+    {
+        if (!File.Exists(Path.Join(RomDirectory, "co12399b.rom")))
+        {
+            Assert.Inconclusive("Set RETROCORE_ATARI_ROMS to a folder with MAME's a800 set unzipped.");
+        }
+
+        AtariMachine machine = new(
+            AtariRoms.LoadFromDirectory(RomDirectory),
+            diskDrives: 1,
+            driveKind: AtariDiskDriveKind.CommandLevel);
+
+        machine.Cassette.Info.Formats.Should().Equal("cas", "xex");
+        machine.Cassette.Info.SaveFormats.Should().Equal("cas");
+        machine.Drives[0].Info.Formats.Should().Equal("atr", "xfd", "xex");
+        machine.Drives[0].Info.SaveFormats.Should().Equal("atr", "xfd");
+    }
+
+    /// <summary>
     ///  With no cartridge and no disk drive, each model gives up on booting a disk and opens Memo Pad.
     /// </summary>
     /// <param name="model">The model.</param>

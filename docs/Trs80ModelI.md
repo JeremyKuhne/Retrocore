@@ -52,7 +52,7 @@ tape loads or saves in a fraction of its playing time.
 Neither Level reads the other's tapes: a Level I tape in Level II plays to its end with nothing loaded. The CAS image
 does not say its speed, but its first recording says which BASIC wrote it. After the leader of zero bytes and the
 `$A5` sync byte, Level II's `CSAVE` writes three `$D3` bytes (`ST_CSAVE` in `Level2.asm`), a `SYSTEM` tape has the
-`$55` that begins its name, and Level I writes its block's start and end addresses, high bytes first
+`$55` that begins its header, then a six-character name and its first `$3C` block, and Level I writes its block's start and end addresses, high bytes first
 (`TAPE_WRITE_BLOCK` in `Level1.asm`). A tape put in a machine whose ROM cannot read it still goes in, and the debug
 console and the cassette's row in the Drives view say so, for example: *This tape was recorded by Level I BASIC
 (250 baud); Level II can't read it. Switch the ROM to Level I.* The row also says what a tape holds: a Level I tape,

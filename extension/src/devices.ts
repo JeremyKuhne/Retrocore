@@ -1203,27 +1203,40 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
     // tape (and disks, where the new ROM has drives), and it starts again as it was started.
     const changeRunningRom = async (session: vscode.DebugSession, choice: MachineChoice, value: string | number | boolean, confirmed: boolean): Promise<void> => {
         const configuration = session.configuration as Record<string, unknown>;
+        // The machine its start noted, which becomes the off one once it stops; with another started since, the
+        // setting would go to that one, so nothing is stopped. What the new ROM cannot run is refused first too.
+        const matches = (): boolean => {
+            const shown = off.target?.configuration;
+            return shown?.name === configuration.name && shown?.recoveryId === configuration.recoveryId;
+        };
+        if (!matches()) throw new Error(`${session.name} is not the machine started last, so its ROM can be changed only once it stops.`);
+        const refused = off.refusal(choice.option, value);
+        if (refused !== undefined) throw new Error(refused);
+
         const label = choice.values.find(candidate => candidate.value === value)?.label ?? String(value);
         const level1 = isLevel1(withSetting(configuration, choice, value));
         const restart = `Restart with ${label}`;
         const detail = `${session.name} starts afresh with ${label}: what is only in its memory, such as a program not saved `
-            + `to tape${level1 ? "" : " or disk"}, is lost. Its tape stays in${level1 ? "; Level I has no disks, so they come out" : ", and so do its disks"}. `
+            + `to tape${level1 ? "" : " or disk"}, is lost. Its tape stays in${level1 ? "; Level I has no disks, so any disks come out" : ", and so do its disks"}. `
             + "Its later starts have this ROM too.";
-        if (!confirmed && await vscode.window.showWarningMessage(`Restart ${session.name} with ${label}?`, { modal: true, detail }, restart) !== restart) return;
+        // Its end is watched from before the question, so a session that ends while it is asked is seen to.
+        let listener: vscode.Disposable | undefined;
+        let over = false;
         const ended = new Promise<void>(resolve => {
-            const listener = vscode.debug.onDidTerminateDebugSession(stopped => {
+            listener = vscode.debug.onDidTerminateDebugSession(stopped => {
                 if (stopped.id !== session.id) return;
-                listener.dispose();
+                over = true;
                 resolve();
             });
         });
-        await vscode.debug.stopDebugging(session);
-        await ended;
-        // The ended session's machine is the off one now, as its start noted it.
-        const shown = off.target?.configuration;
-        if (shown?.name !== configuration.name || shown?.recoveryId !== configuration.recoveryId) {
-            throw new Error(`${session.name} stopped, but another machine is shown now, so its ROM was not changed.`);
+        try {
+            if (!confirmed && await vscode.window.showWarningMessage(`Restart ${session.name} with ${label}?`, { modal: true, detail }, restart) !== restart) return;
+            if (!over) await vscode.debug.stopDebugging(session);
+            await ended;
+        } finally {
+            listener?.dispose();
         }
+        if (!matches()) throw new Error(`${session.name} stopped, but another machine is shown now, so its ROM was not changed.`);
         await off.setSetting(choice.option, value);
         if (!await off.boot()) throw new Error(`${session.name} has the new ROM, but did not start again.`);
     };

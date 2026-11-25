@@ -81,8 +81,10 @@ async function testRomAndMemory(): Promise<void> {
         assert.ok(await vscode.commands.executeCommand<boolean>("retrocore.machine.boot"), "the Model I starts");
         const running = vscode.debug.activeDebugSession;
         if (running?.type !== "retrocore") throw new Error("Start This Machine did not start a Retrocore session.");
-        await until("the running machine in the views", async () =>
-            (await rows()).find(row => row.id === "rom")?.value === "Level II BASIC 1.3" && await offName() === undefined ? true : undefined);
+        await until("the running machine in the views", async () => {
+            if (vscode.debug.activeDebugSession?.id !== running.id || await offName() !== undefined) return undefined;
+            return (await rows()).find(row => row.id === "rom")?.value === "Level II BASIC 1.3" ? true : undefined;
+        });
         await vscode.commands.executeCommand("retrocore.machine.setting", "rom", "level1", true);
         const restarted = await until("the machine started again with Level I", () => {
             const session = vscode.debug.activeDebugSession;

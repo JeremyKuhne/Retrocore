@@ -907,8 +907,8 @@ function dropImplied(configuration: Record<string, unknown>, choice: MachineChoi
 
 /**
  * A launch configuration with one choice set, leaving the option out when it is what it would be without it, and
- * keeping what still fits: a Model I given more than 16 KB gets its Expansion Interface, and one whose interface comes
- * out gets 16 KB. A change of ROM keeps the tape; Level I takes out the disks and their controller, as it has none,
+ * keeping what still fits: a Model I given more than 16 KB gets its Expansion Interface, and one given more whose
+ * interface comes out gets 16 KB; with no size given, its memory is what the host gives without the interface. A change of ROM keeps the tape; Level I takes out the disks and their controller, as it has none,
  * and the memory follows the new ROM's unless the launch gives its own.
  */
 export function withSetting(configuration: Record<string, unknown>, choice: MachineChoice, value: string | number | boolean): Record<string, unknown> {

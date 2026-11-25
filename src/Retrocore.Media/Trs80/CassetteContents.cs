@@ -25,7 +25,7 @@ public enum CassetteContents
     Level2Basic,
 
     /// <summary>
-    ///  A 500 baud Level II <c>SYSTEM</c> tape of machine language: <c>$A5</c>, then the <c>$55</c> that begins its name.
+    ///  A 500 baud Level II <c>SYSTEM</c> tape of machine language: <c>$A5</c>, then the <c>$55</c> that begins its header.
     /// </summary>
     Level2System
 }

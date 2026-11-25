@@ -46,6 +46,10 @@ public class Trs80TapeContentsTests
     {
         byte[] tape = [.. s_leader, 0xA5, 0x42, 0x00, 0x42, 0x04, 0x01, 0x02, 0x03, 0x04, 0xF6];
         CassetteFormat.Detect(tape).Should().Be(CassetteContents.Level1);
+
+        // A block at $5500 starts with the $55 a SYSTEM tape's header does, but no data block follows a name.
+        byte[] high = [.. s_leader, 0xA5, 0x55, 0x00, 0x55, 0x08, 1, 2, 3, 4, 5, 6, 7, 8, 0xDC];
+        CassetteFormat.Detect(high).Should().Be(CassetteContents.Level1);
     }
 
     /// <summary>
@@ -105,7 +109,7 @@ public class Trs80TapeContentsTests
         Loaded(drive).Warning.Should().Be(
             "This tape was recorded by Level II BASIC (500 baud); Level I can't read it. Switch the ROM to Level II.");
 
-        drive.Play(new CassetteImage([.. s_leader, 0xA5, 0x55, .. "GAME  "u8]), "game.cas");
+        drive.Play(new CassetteImage([.. s_leader, 0xA5, 0x55, .. "GAME  "u8, 0x78, 0x00, 0x70]), "game.cas");
         Loaded(drive).Warning.Should().Be(
             "This is a Level II SYSTEM tape (500 baud); Level I can't read it. Switch the ROM to Level II.");
 

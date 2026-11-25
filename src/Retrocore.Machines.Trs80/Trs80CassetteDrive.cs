@@ -25,10 +25,11 @@ public sealed class Trs80CassetteDrive : ITapeDrive
     /// </summary>
     /// <param name="cassette">The cassette interface.</param>
     /// <param name="baud">The ROM's rate: 500 for Level II, 250 for Level I.</param>
+    /// <param name="highSpeed">Whether the ROM also plays and records 1500 baud tapes, as the Model III's does.</param>
     /// <param name="motorPort">Where the motor relay is driven.</param>
     /// <param name="rom">The ROM, as a warning names it, such as <c>Level II</c> or <c>the Model 4's ROM</c>.</param>
     /// <param name="romSwitches">Whether the machine's launch can switch it to the other Level's ROM.</param>
-    internal Trs80CassetteDrive(Trs80Cassette cassette, int baud, string motorPort, string rom, bool romSwitches)
+    internal Trs80CassetteDrive(Trs80Cassette cassette, int baud, string motorPort, string rom, bool romSwitches, bool highSpeed = false)
     {
         _cassette = cassette;
         _level1 = baud == 250;
@@ -37,7 +38,7 @@ public sealed class Trs80CassetteDrive : ITapeDrive
         Info = new()
         {
             Name = "Cassette",
-            Description = $"Cassette recorder, {baud} baud",
+            Description = highSpeed ? $"Cassette recorder, {baud} or 1500 baud" : $"Cassette recorder, {baud} baud",
             Controller = $"the cassette port, with the motor relay on port {motorPort}",
             Formats = ["cas"],
             Operations = MediaOperations.Insert | MediaOperations.Eject | MediaOperations.Record

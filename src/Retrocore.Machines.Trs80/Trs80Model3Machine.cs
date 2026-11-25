@@ -66,7 +66,7 @@ public sealed class Trs80Model3Machine : IMachine
             // Only the Model III has Level I; the Model 4 has the Model III ROM.
             bool model3 = configuration.Variant == Trs80Model3Variant.Model3;
             string rom = level1 ? "Level I" : model3 ? "the Model III ROM" : "the Model 4's ROM";
-            Cassette = new(Bus.Cassette, level1 ? 250 : 500, "$EC", rom, romSwitches: model3);
+            Cassette = new(Bus.Cassette, level1 ? 250 : 500, "$EC", rom, romSwitches: model3, highSpeed: !level1);
             devices.Add(Cassette);
         }
 

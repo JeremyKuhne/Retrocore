@@ -11,7 +11,7 @@ namespace Retrocore.Media.Trs80;
 ///  <para>
 ///   Every TRS-80 ROM writes a leader of zero bytes and the <c>$A5</c> sync byte; what follows differs. Level II's
 ///   <c>CSAVE</c> writes three <c>$D3</c> bytes and a one-character name (<c>ST_CSAVE</c> in Level2.asm), and its
-///   <c>SYSTEM</c> tapes open with <c>$55</c> and a six-character name. Level I writes the block's start and end
+///   <c>SYSTEM</c> tapes open with <c>$55</c>, a six-character name and a <c>$3C</c> data block (or the <c>$78</c> entry address). Level I writes the block's start and end
 ///   addresses, high bytes first, then the bytes between and a checksum (<c>TAPE_WRITE_BLOCK</c> in Level1.asm).
 ///  </para>
 /// </remarks>
@@ -20,8 +20,11 @@ public static class CassetteFormat
     private const byte Sync = 0xA5;
     private const byte BasicHeader = 0xD3;
     private const byte SystemHeader = 0x55;
+    private const int SystemNameLength = 6;
+    private const byte SystemData = 0x3C;
+    private const byte SystemEntry = 0x78;
 
-    // Level I's memory starts at $4000, where its video and work areas are; a program is saved from above them.
+    // Level I's RAM starts at $4000, above its video at $3C00; its CSAVE saves the program from $4200.
     private const int Level1RamStart = 0x4000;
 
     /// <summary>
@@ -41,7 +44,13 @@ public static class CassetteFormat
 
         if (Repeats(bytes, index, BasicHeader, 3)) { return CassetteContents.Level2Basic; }
 
-        if (index < bytes.Count && bytes[index] == SystemHeader) { return CassetteContents.Level2System; }
+        // A SYSTEM tape's $55 and six-character name are followed by its first data block or its entry address, so a
+        // Level I block that starts at $55xx is not taken for one.
+        int first = index + 1 + SystemNameLength;
+        if (first < bytes.Count && bytes[index] == SystemHeader && bytes[first] is SystemData or SystemEntry)
+        {
+            return CassetteContents.Level2System;
+        }
 
         // Level I's addresses: a block in RAM, with its bytes on the tape after them.
         if (index + 4 > bytes.Count) { return CassetteContents.Unknown; }

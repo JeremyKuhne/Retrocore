@@ -35,7 +35,8 @@ MFM_720_SECTORS = 9
 ;; track, needs no disk access.
 .scope Cache
 
-;; Marks every cache slot not kept for a write (<CACHE_KEPT>) as empty.
+;; Marks every cache slot empty: each owner byte without <CACHE_KEPT>, which only the table's bytes past the slots
+;; have.
 ;; Out: A = <CACHE_EMPTY>, X = 0
 ;; Keeps: Y
 .proc Flush
@@ -169,7 +170,7 @@ Done:
 ; The cache, continued: forgetting and finding sectors.
 .scope Cache continued
 
-;; Drops a drive's sectors from the cache; slots kept for a write stay.
+;; Drops a drive's sectors from the cache.
 ;; In: X = the drive
 ;; Out: SavedDrive = the drive, Y = 0
 ;; Keeps: X

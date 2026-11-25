@@ -55,7 +55,8 @@ IIEROM82, IIETRM85) through `Inherit:` or the shared IIeEquates.asm and MonitorE
 
 - SmartPort READ ($08) takes the write path: `ReadWriteTagged` reads only when `CardState` is 1, which READ, arriving
   as $08, never is, so a READ writes the buffer to the block. The dead read path also copies from $0E00, past the
-  buffer it read into.
+  buffer it read into. Its media check reads `MediaKind` at a leftover Y (0, or a media kind after a fresh
+  identification), so it checks drive 1's kind whatever the drive.
 - READAHEAD stores the run's high byte in `ParameterLow`, and on a failed check leaves two bytes on the stack that
   `SetError`'s RTS returns through. READSPAN's skip pause tests a byte it has just cleared, and its list clear misses
   `InterleaveMap + 2`.

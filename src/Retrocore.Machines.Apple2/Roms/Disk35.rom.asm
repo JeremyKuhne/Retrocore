@@ -16,10 +16,10 @@
 ;;
 ;; HOW PROGRAMS FIND AND CALL IT
 ;;
-;; As on Apple's card: $Cn01 = $20, $Cn03 = $00, $Cn05 = $03 and $Cn07 = $00 mark a SmartPort; $CnFB = $C0, $CnFC-$CnFD
-;; = 0 (ask STATUS for the size), $CnFE = $BF (removable, interruptible, four volumes, format, write, read, status) and
-;; $CnFF = $1C put the ProDOS entry at $Cn1C and the SmartPort entry at $Cn1F. $Cn00 boots the first drive. Apple's card
-;; starts its diagnostics from $Cn0D; this one has none, so $Cn0D returns.
+;; As on Apple's card: $Cn01 = $20, $Cn03 = $00, $Cn05 = $03 and $Cn07 = $00 mark a SmartPort; $CnFB = $C0,
+;; $CnFC-$CnFD = 0 (ask STATUS for the size), $CnFE = $BF (removable, not interruptible, four volumes, format, write,
+;; read, status) and $CnFF = $1C put the ProDOS entry at $Cn1C and the SmartPort entry at $Cn1F. $Cn00 boots the
+;; first drive. Apple's card starts its diagnostics from $Cn0D; this one has none, so $Cn0D returns.
 ;;
 ;; HOW A CALL CROSSES INTO C#
 ;;
@@ -227,6 +227,6 @@ Unable:
 Signature:
     .byte $C0                       ; $CnFB: extended SmartPort calls
     .word 0                         ; $CnFC: ask STATUS for the block count
-    .byte $BF                       ; $CnFE: removable, interruptible, four volumes, format, write, read, status
+    .byte $BF                       ; $CnFE: removable, not interruptible, four volumes, format, write, read, status
     .byte <ProDosEntry              ; $CnFF: the ProDOS entry
 .assert * = $C600, "The ROM must fill its page."

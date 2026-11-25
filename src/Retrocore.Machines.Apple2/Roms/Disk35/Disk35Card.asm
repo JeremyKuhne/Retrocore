@@ -85,7 +85,8 @@ CacheCylinders = $0B00
 ;; Each cache slot's sector, indexed from slot 1.
 CacheSectors = $0B20
 
-;; Each cache slot's owner: its drive, <CACHE_EMPTY>, $8E not a 3.5 sector, $8F filling, or <CACHE_KEPT>.
+;; Each cache slot's owner: its drive, <CACHE_EMPTY>, $8E not a 3.5 sector, or $8F filling; the bytes past the slots
+;; hold <CACHE_KEPT>.
 CacheOwners = $0B40
 
 ;; The host's hook for unit 1, an RTS until something is loaded there.

@@ -44,11 +44,11 @@ ParameterHigh:
 Parameter3:
     .byte $00
 
-;; Commands $0D/$0E: the extra blocks, low byte.
+;; Commands $0D and $0E: the run's length, low byte: READAHEAD's blocks after the first, READSPAN's blocks with it.
 Parameter4:
     .byte $00
 
-;; Commands $0D/$0E: the extra blocks, high byte.
+;; Commands $0D and $0E: the run's length, high byte.
 Parameter5:
     .byte $00
 
@@ -169,7 +169,7 @@ BufferCode:
 CacheSlot:
     .byte $00
 
-;; The unit less one: 0-1 the 3.5 drives, more a bus device, $FF the controller.
+;; The drive: 0-1 the 3.5 drives (the unit less one), $FF the controller; during a call to a bus device, the unit.
 Drive:
     .byte $00
 
@@ -273,7 +273,8 @@ TagError:
 CacheOption:
     .byte $00
 
-;; A read's state: 7 the cache full, 6 the block handed over.
+;; A read's state: bit 7 = read the block asked for and no more of its track (<READ_STATE_BLOCK_ONLY>), bit 6 = the
+;; block was handed over.
 ReadState:
     .byte $00
 

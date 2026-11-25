@@ -127,7 +127,7 @@ the tests pin every build by digest.
 Each of the emulated cards' firmware debugs at its source: a breakpoint in it stops there, and the call stack shows its
 lines. The mouse, ProFile and 3.5 controller cards' firmware reaches nothing inside itself by an absolute address, so
 the same bytes work in any slot, and the debugger maps the source to whichever slot holds the card, its labels (such
-as `SETMOUSE`, `Driver` or `SMARTPORT`) resolving to that slot's page. Apple's 3.5 controller EPROM is a reference;
+as `SETMOUSE`, `Driver` or `SmartPortEntry`) resolving to that slot's page. Apple's 3.5 controller EPROM is a reference;
 the emulator doesn't run it.
 
 Names follow Apple's listings where Apple published them: the Apple II Reference Manual of 1978

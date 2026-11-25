@@ -6,8 +6,6 @@
 ;; block's track (<Cache>), handing the host its block as soon as it is read; <BlockMap::Locate> finds where a block
 ;; is.
 
-; What went wrong in the last disk access, the bits of DiskErrors.
-
 ; Other values.
 
 ;; The tag bytes before a block's data in SmartPort's READ and WRITE.
@@ -75,7 +73,9 @@ Again:
 Fail:
     jmp SetError
 
-    ; A 400K or 800K disk, its format found again if it was switched. Y is the drive, as Drives::CheckDisk leaves it.
+    ; A 400K or 800K disk, its format found again if it was switched. The check reads MediaKind at Y, which
+    ; Drives::CheckDisk leaves 0 and Drives::IdentifyMedia leaves a media kind, so it reads drive 1's kind, or a byte
+    ; past it, whatever the drive.
 CheckDisk:
     jsr Drives::CheckDisk
     bpl Known
@@ -778,10 +778,10 @@ Done:
     rts
 .endproc
 
-;; Command <COMMAND_READ_SPAN>: reads the sectors of a run of blocks (<Parameter4> and <Parameter5> more after the
-;; first) that share a cylinder, and lists them in <InterleaveMap> for the host: at $0600 how many were read, at $0601 1
-;; if one failed, and from $0602 each one's buffer code (<SPAN_FAILED> for one that failed). The sectors' cache slots
-;; stay claimed (filling) until the cache is next flushed.
+;; Command <COMMAND_READ_SPAN>: reads the sectors of a run of blocks (<Parameter4> and <Parameter5> blocks, the
+;; first included) that share a cylinder, and lists them in <InterleaveMap> for the host: at $0600 how many were read,
+;; at $0601 1 if one failed, and from $0602 each one's buffer code (<SPAN_FAILED> for one that failed). The
+;; sectors' cache slots stay claimed (filling) until the cache is next flushed.
 ;; Out: carry = set when all were read (the host's next command is run at once); otherwise ErrorCode = the error
 .proc ReadSpan
     lda #ERROR_BAD_UNIT

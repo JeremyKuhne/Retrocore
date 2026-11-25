@@ -10,7 +10,7 @@
 ;; THE SLOT PAGE
 ;;
 ;; $Cn01 = $20, $Cn03 = $00, $Cn05 = $03 and $Cn07 = $00 mark a SmartPort. $CnFB = $C0 (extended calls), $CnFC-$CnFD
-;; = 0 (ask STATUS for the size), $CnFE = $BF (removable, interruptible, four volumes, format, write, read and
+;; = 0 (ask STATUS for the size), $CnFE = $BF (removable, not interruptible, four volumes, format, write, read and
 ;; status) and $CnFF = $1C: ProDOS calls $Cn1C and SmartPort $Cn1F. The page holds three waits, each a branch to
 ;; itself, whose offsets the card rewrites once it is ready: the boot's at $Cn0B (to $Cn23, as a call with overflow
 ;; set), the diagnostics' at $Cn17, and the calls' at $Cn21. Until then a boot or a call waits; a card that fails its
@@ -545,7 +545,7 @@ Loop:
 Signature:
     .byte $C0                       ; $CnFB: extended SmartPort calls
     .word 0                         ; $CnFC: ask STATUS for the block count
-    .byte $BF                       ; $CnFE: removable, interruptible, four volumes, format, write, read, status
+    .byte $BF                       ; $CnFE: removable, not interruptible, four volumes, format, write, read, status
     .byte <ProDosEntry              ; $CnFF: the ProDOS entry
 .assert * = $C600, "The slot page must end at $CnFF."
 

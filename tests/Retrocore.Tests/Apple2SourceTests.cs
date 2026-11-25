@@ -19,7 +19,9 @@ public class Apple2SourceTests
     private static readonly string s_inputs = Path.Join(AppContext.BaseDirectory, "Inputs");
 
     /// <summary>
-    ///  Each source, built for the II or II Plus, matches its chip's SHA-256.
+    ///  Each source, built for the II or II Plus, matches its chip's SHA-256; Programmer's Aid #1 with RAMTESTFIX
+    ///  matches the $D000-$D7FF of the 1983 DOS 3.3 System Master's INTBASIC, which SystemMasterBasicTests checks
+    ///  against the image where one is present.
     /// </summary>
     /// <param name="part">Which ROM.</param>
     /// <param name="expectedHash">The SHA-256 of the chip.</param>
@@ -30,6 +32,7 @@ public class Apple2SourceTests
     [DataRow("Integer BASIC", "189C95FF289A186108580D3E416F3EC3D8C636246A9AEED9814E769257EB8A19")]
     [DataRow("II Plus AppleSoft", "ED8D83176BB9445B3EAA815E07956777BDFAA9E4892A8D7F5019DEAD62434C4C")]
     [DataRow("Programmer's Aid #1", "E35D2E96D7B395DD3C035726E76C417B05813AE9675CA7108D5988DC980110A3")]
+    [DataRow("Programmer's Aid #1 with RAMTESTFIX", "8C5ECC1EE76132F8309DEE97DF03D6F1C2E2F9C6750FDD245CBB574C21C67685")]
     public void SourceMatchesTheChip(string part, string expectedHash)
     {
         Convert.ToHexString(SHA256.HashData(Build(part))).Should().Be(expectedHash);
@@ -98,6 +101,7 @@ public class Apple2SourceTests
             "character generator" => SdkModules.AssembleCharacterGenerator(Path.Join(system, "CharacterGenerator.asm"), Apple2Model.II),
             "Integer BASIC" => SdkModules.AssembleIntegerBasic(SdkModules.IntegerBasicPath(s_inputs)),
             "Programmer's Aid #1" => SdkModules.AssembleProgrammersAid(SdkModules.ProgrammersAidPath(s_inputs)),
+            "Programmer's Aid #1 with RAMTESTFIX" => SdkModules.AssembleProgrammersAid(SdkModules.ProgrammersAidPath(s_inputs), ramTestFix: true),
             _ => SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(s_inputs), Apple2Model.IIPlus)
         };
 

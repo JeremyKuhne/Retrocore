@@ -62,8 +62,8 @@ ReadCommand:
     sty TokenIndex
     txa
     sta TextIndex                   ; X = $FF: before the first character
-    ldx #EMPTY_STACK
-    jsr STARTRULE                   ; A = $FF: the rule at $EDFF, a whole line
+    ldx #SYNTAX_STACK_EMPTY
+    jsr Tokenizer::StartRule        ; A = $FF: the rule at $EDFF, a whole line
 
     ; TokenPointer = the first token, after the text. Carry is set.
     lda TextIndex

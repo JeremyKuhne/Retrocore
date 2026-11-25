@@ -25,8 +25,9 @@ TOKEN_OPEN_QUOTE = $28
 ;; The token of REM; the remark's characters follow it to the end of the line.
 TOKEN_REM = $5D
 
-;; The index X holds when the noun stack, or the tokenizer's syntax stack, is empty: each push counts it down.
-EMPTY_STACK = $20
+;; The index X holds when the tokenizer's syntax stack is empty: each frame pushed counts it down. The noun stack
+;; starts at the same index.
+SYNTAX_STACK_EMPTY = $20
 
 ;; The character that marks the end of a typed line in <InputBuffer>: the underline, which takes the place of the
 ;; Return, and which the syntax table's last rule matches.
@@ -64,7 +65,7 @@ SYNTAX_LETTER_BIT = $20
 ;; Also: BASIC2 (IBSM)
 .proc WarmEntry
 .assert * = $E003, "WarmEntry must stay at $E003."
-    jmp WARM
+    jmp WarmStart
 .endproc
 
 ;; Sets the prompt character and prints it.
@@ -259,7 +260,7 @@ Done:
 ;; Return.
 ;; In: Pointer1 = the line's length byte
 ;; Out: Pointer1 = the next line
-;; Uses: A, Y, Pointer2, LeadingZero, Accumulator
+;; Uses: A, Y, Pointer2, LeadingZero, Accumulator, DecimalNumber, DigitPlace, DigitCharacter
 ;; Also: UNPACK (IBSM)
 .proc PrintLine
     stx SavedX

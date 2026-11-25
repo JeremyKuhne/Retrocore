@@ -48,7 +48,7 @@ StringError:
 ;; In: Y = the message's offset from <ErrMsg00>
 ;; Also: STRERRMESS (UNKN)
 ToReportError:
-    jmp ERRMESS
+    jmp ReportError
 .endproc
 
 ;; The comma of a substring (token $23): A$(m,n) ends the string after character n.
@@ -135,7 +135,7 @@ Finish:
 ;; whose next-variable address is still <VariablesEnd>; DIM of any other is a DIM error. It moves <VariablesEnd>, and
 ;; that address, past n + 1 bytes: the characters and the byte that ends them.
 ;; In: X = the noun stack: the length, above the variable's range and address
-;; Out: X = the noun stack, the variable's two entries taken off
+;; Out: X = the noun stack, all three entries taken off
 ;; Errors: STRING for a length of 0, >255 for one above 255, MEM FULL, DIM
 ;; Also: DIMSTR (IBSM)
 .proc DimString
@@ -444,7 +444,7 @@ NextStep:
 ;; MOD and division end here too.
 ;; In: Pointer3 = the magnitude, Pointer2+1 = bit 7 set for a negative result, Y = 0, X = the noun stack
 ;; Out: X = the noun stack, its top entry the result
-;; Errors: >32767 for a negative result of -32768
+;; Errors: >32767 for a negative result whose magnitude is $8000
 ;; Also: MultEnd (IBSM)
 PushResult:
     lda Pointer3

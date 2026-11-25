@@ -36,6 +36,10 @@ public class Trs80TapeContentsTests
     {
         byte[] tape = [.. s_leader, 0xA5, 0x55, .. "GAME  "u8, 0x3C, 0x01, 0x00, 0x70, 0xC9, 0xB9, 0x78, 0x00, 0x70];
         CassetteFormat.Detect(tape).Should().Be(CassetteContents.Level2System);
+
+        // The loader compares only the characters typed, so a short name may be padded with $00.
+        byte[] padded = [.. s_leader, 0xA5, 0x55, .. "GO"u8, 0, 0, 0, 0, 0x78, 0x00, 0x70];
+        CassetteFormat.Detect(padded).Should().Be(CassetteContents.Level2System);
     }
 
     /// <summary>
@@ -52,7 +56,7 @@ public class Trs80TapeContentsTests
         CassetteFormat.Detect(high).Should().Be(CassetteContents.Level1);
 
         // Nor is one whose fourth byte is $3C, when its first six are not a printable name.
-        byte[] block = [.. s_leader, 0xA5, 0x55, 0x00, 0x55, 0x08, 1, 2, 3, 0x3C, 5, 6, 7, 8, 0xA5];
+        byte[] block = [.. s_leader, 0xA5, 0x55, 0x00, 0x55, 0x08, 1, 2, 3, 0x3C, 5, 6, 7, 8, 0xA4];
         CassetteFormat.Detect(block).Should().Be(CassetteContents.Level1);
     }
 
@@ -69,6 +73,11 @@ public class Trs80TapeContentsTests
         CassetteFormat.Detect([0xA5, 0xD3, 0xD3, 0xD3, 0x41]).Should().Be(CassetteContents.Unknown);
         CassetteFormat.Detect([.. s_leader, 0xA5, 0x42, 0x00, 0x43, 0x00, 0x01]).Should().Be(CassetteContents.Unknown);
         CassetteFormat.Detect([.. s_leader, 0xA5, 0x10, 0x00, 0x10, 0x02, 0x01, 0x02]).Should().Be(CassetteContents.Unknown);
+
+        // Level II's PRINT #-1 records strings after the sync byte, so a data tape's first letters can look like Level
+        // I's addresses; Level I's checksum tells them apart.
+        byte[] record = [.. s_leader, 0xA5, .. "ABCD"u8, 0x0D];
+        CassetteFormat.Detect([.. record, .. record, .. record]).Should().Be(CassetteContents.Unknown);
     }
 
     /// <summary>

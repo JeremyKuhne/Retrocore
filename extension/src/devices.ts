@@ -286,7 +286,9 @@ class MachineTree implements vscode.TreeDataProvider<Node> {
         item.description = off ? "" : "fixed while it runs";
         item.tooltip = off
             ? "What the machine is built with. A change keeps the cards and media you added, where they still fit."
-            : "What the machine was built with. Stop it to change them; a ROM setting starts it again with the other ROM.";
+            : catalogMachine(this.configuration())?.choices.some(choice => choice.option === "rom") === true
+                ? "What the machine was built with. Stop it to change them; the ROM setting starts it again with the other ROM."
+                : "What the machine was built with. Stop it to change them.";
         return item;
     }
 
@@ -1217,7 +1219,7 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
         const level1 = isLevel1(withSetting(configuration, choice, value));
         const restart = `Restart with ${label}`;
         const detail = `${session.name} starts afresh with ${label}: what is only in its memory, such as a program not saved `
-            + `to tape${level1 ? "" : " or disk"}, is lost. Its tape stays in${level1 ? "; Level I has no disks, so any disks come out" : ", and so do its disks"}. `
+            + `to tape${level1 ? "" : " or disk"}, is lost. Any tape stays in${level1 ? "; Level I has no disks, so any disks come out" : ", and so do any disks"}. `
             + "Its later starts have this ROM too.";
         // Its end is watched from before the question, so a session that ends while it is asked is seen to.
         let listener: vscode.Disposable | undefined;

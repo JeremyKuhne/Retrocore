@@ -65,8 +65,8 @@ TRIES = $03
 ;; Only Apple 3.5 drives call <FormatHook>, whose carry set refuses the format.
 ;; Out: carry = clear, ErrorCode = 0, or <ERROR_BAD_COMMAND> for the controller, <ERROR_OFFLINE>,
 ;;      <ERROR_DISK_SWITCHED> or <ERROR_WRITE_PROTECTED> from <Drives::CheckDisk>, <ERROR_BAD_CONTROL> for a kind the
-;; drive or
-;;      disk cannot take, <ERROR_IO> for a track that fails, or <Drives::IdentifyMedia>'s error for the formatted disk
+;;      drive or disk cannot take, <ERROR_IO> for a track that fails, or <Drives::IdentifyMedia>'s error for the
+;;      formatted disk
 .proc FormatDisk
     .using Format
 
@@ -327,7 +327,7 @@ EPILOGUE_LENGTH = 2
 ENCODED_ZERO = $96
 
 ;; The IWM's handshake bit that is clear once it has run out of bytes to write.
-ISM_HANDSHAKE_NO_UNDERRUN = $40
+IWM_HANDSHAKE_NO_UNDERRUN = $40
 
     jsr Drives::Seek
     jsr Format::MakeAddressField
@@ -454,9 +454,9 @@ WaitEpilogue:
 
     ; An underrun so far (bit 6 of the handshake clear) is an error; then a last $FF, and the wait for it to go out.
 Finish:
-    lda #ISM_HANDSHAKE_NO_UNDERRUN
+    lda #IWM_HANDSHAKE_NO_UNDERRUN
     and Iwm::DataLatch
-    eor #ISM_HANDSHAKE_NO_UNDERRUN
+    eor #IWM_HANDSHAKE_NO_UNDERRUN
     tsb DiskErrors
 WaitLast:
     lda Iwm::DataLatch
@@ -540,7 +540,9 @@ Failed:
 ;; <AddressSide>'s bit for the second side.
 SIDE_BIT = $20
 
-;; <AddressSide>'s bit for tracks 64 and up, which <AddressTrack>'s six bits cannot hold.
+;; <AddressSide>'s bit for tracks 64 and up, which <AddressTrack>'s six bits cannot hold. <MakeAddressField> makes it
+;; by an INC of the track's bit 6, so the byte holds $41 (or $61); the GCR encode table, which repeats every 64
+;; bytes, writes only its low six bits.
 SIDE_HIGH_TRACK = $01
 
 ;; Works out a GCR track's sectors and interleave, and its first address field: sector 0, with the side, the

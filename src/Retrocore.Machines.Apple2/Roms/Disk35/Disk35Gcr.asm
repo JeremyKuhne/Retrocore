@@ -13,8 +13,6 @@
 ;; reads and writes in the middle of a group take or give a byte without waiting for the IWM's handshake, because
 ;; the loop's own cycles leave the byte there. A change to these loops' instructions would break that.
 
-; What DiskErrors records, bit by bit, as the field routines set it.
-
 ; The 3.5 drive's registers this file reads (see <Drives::SenseLine>).
 
 ;; The drive register that gives the read data; <Drives::SelectHead> then picks the head.
@@ -28,7 +26,7 @@ FIRST_DISK_BYTE = $96
 ;; How long <ReadGcrAddressField> looks for an address mark: this many times 256 disk bytes.
 ADDRESS_SEARCH_PAGES = $08
 
-;; How many disk bytes <ReadGcrDataField> looks at for the data mark.
+;; One more than the disk bytes <ReadGcrDataField> looks at for the data mark: it counts down before each byte.
 DATA_MARK_SEARCH = $19
 
 ;; The tag bytes of a GCR sector, which come before its 512 data bytes.
@@ -46,9 +44,6 @@ LAST_DATA_GROUP = LAST_GROUP - TAG_GROUPS
 
 ; How a IIgs host reports, in WriteProgress, its copy of a block it writes into the card while the card
 ; nibblizes it.
-
-;; The host is copying the block's first half.
-PROGRESS_FIRST_HALF = $C0
 
 ;; The host is copying the block's second half.
 PROGRESS_SECOND_HALF = $C1
@@ -496,7 +491,7 @@ WaitForHost:
     beq HostDone
     cmp #PROGRESS_SECOND_HALF
     beq Start
-    cmp #PROGRESS_FIRST_HALF
+    cmp #PROGRESS_STARTED
     bne WaitForHost
     ldy #FIRST_HALF_DELAY
 Delay:

@@ -9,9 +9,6 @@
 ;; The buffer code of <TransferBuffer>: its card address divided by $200.
 TRANSFER_BUFFER_CODE = TransferBuffer / $200
 
-; The 3.5 drive's registers this file reads and the commands it gives (see <Drives::SenseLine> and
-; <Drives::SendCommand>).
-
 ; The card's own errors.
 
 ;; Control $0A's interleave is 13 or more.
@@ -582,9 +579,10 @@ FdhdInformation:
 ;; The kinds are even numbers below this.
 KIND_LIMIT = $0D
 
-;; Lists the formats a drive can write, after an eight-byte header: 400K and 800K on an Apple 3.5 <Drive>, and on an
-;; FDHD drive 1440K (twice), 800K, 400K and 720K. The default is 1440K when <MediaMode> says the disk is high density,
-;; else 800K.
+;; Lists the formats a drive can write, after an eight-byte header, following each kind's link in <Kinds>: 800K at
+;; both interleaves (kinds 6 and 4) on an Apple 3.5 <Drive>, and on an FDHD drive 1440K twice (kinds $0A and $0C),
+;; 800K twice and 720K (kind 8). 400K (kind 2) is never listed. The default is 1440K when <MediaMode> says the
+;; disk is high density, else 800K.
 ;; Out: carry = clear; Count, CountHigh = the list's length and CardData = <TRANSFER_BUFFER_CODE>, or ErrorCode =
 ;;      <ERROR_BAD_UNIT> for unit 0, or the error <FailBadParameter> gives when <ParameterLow> and <ParameterMiddle> ask
 ;;      for fewer bytes than the list has

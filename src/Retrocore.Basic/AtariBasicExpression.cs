@@ -22,8 +22,8 @@ namespace Retrocore.Basic;
 ///   operator can go is the operator and a name, as MATCH_OPERATOR reads it: NOTE1 is NOT E1, and NOTA$="X" is
 ///   NOT (A$="X"), though NOTA$ alone is the string, as the grammar falls back to it when NOT's operand fails, and
 ///   NOTSIN+1 is the name NOTSIN plus 1, SIN having no (, as NOTAND+1 is NOTAND plus 1. A function's name or an
-///   operator word is never a variable here, where SYNTAX_VARIABLE takes one as a name before a character from '0'
-///   up, the end of the line among them, so that NOTSIN alone is NOT SIN on the machine and the name NOTSIN here. A
+///   operator word is a variable only before a character from '0' up, the end among them, as SYNTAX_VARIABLE takes
+///   it: SIN alone is a variable, NOTSIN alone NOT SIN and NOTAND=1 NOT AND=1, where OR+1 and TO$ are refused. A
 ///   string that no DIM has given room is error 9, and its substring error 5, its length being 0.
 ///   <c>A(i)</c> and <c>A(i,j)</c> are array elements, counting from 0, <c>A(i)</c> being <c>A(i,0)</c>;
 ///   <c>A$(i)</c> is the string from character i and <c>A$(i,j)</c> characters i to j, counting from 1, never empty.
@@ -199,13 +199,14 @@ internal sealed class AtariBasicExpression
             if (whole == "NOT$") { throw Syntax("NOT$ is not a name"); }
 
             // The rest of the name is NOT's operand where the grammar takes it as one; otherwise RULE_EXPRESSION's
-            // NOT fails, and the grammar takes the whole name. A string name, as NOTA$, is an operand only with a
-            // relation after it and its indexes; a function's name, as NOTSIN or NOTCHR$, only with its (. It decides
-            // by the grammar, not the values.
+            // NOT fails, and the grammar takes the whole name. The rest is an operand as a function with its (, or as
+            // a name where SYNTAX_VARIABLE takes one (NOTAND=1 is NOT AND=1, NOTAND+1 the name NOTAND plus 1); a
+            // string, as NOTA$, only with a relation after it and its indexes. It decides by the grammar, not the
+            // values.
             string rest = _tokens[at];
             bool bracketed = at + 1 < _tokens.Count && _tokens[at + 1] == "(";
-            bool function = s_words.Contains(rest) || (s_functions.Contains(rest) && !bracketed);
-            if (!function && (!whole.EndsWith('$') || ComparisonFollows(at))) { return Truth(Number(Operand()) == 0); }
+            bool operand = (bracketed && s_functions.Contains(rest)) || Nameable(at);
+            if (operand && (!whole.EndsWith('$') || ComparisonFollows(at))) { return Truth(Number(Operand()) == 0); }
             _tokens[at] = whole;
             return Operand();
         }
@@ -214,6 +215,25 @@ internal sealed class AtariBasicExpression
 
         return Operand();
     }
+
+    // SYNTAX_VARIABLE: whether the token at an index can be a name. MATCH_OPERATOR finds any operator's name the
+    // text starts with, and a function's name or an operator word is a name only with a character from '0' up after
+    // it, the line's end among them: SIN at the end is a variable, SIN+1 or TO$ none.
+    private bool Nameable(int index)
+    {
+        string token = _tokens[index];
+        if (token.Length > 1 && token.EndsWith('$') && !s_functions.Contains(token) && IsTableName(token[..^1]))
+        {
+            return false;
+        }
+
+        if (!IsTableName(token)) { return true; }
+        int next = index + 1;
+        if (next >= _tokens.Count) { return true; }
+        return !_spaced.Contains(next) && _tokens[next][0] >= '0';
+    }
+
+    private static bool IsTableName(string token) => s_words.Contains(token) || s_functions.Contains(token);
 
     // Whether a relation follows the name at an index and the bracketed indexes after it.
     private bool ComparisonFollows(int name)
@@ -283,8 +303,14 @@ internal sealed class AtariBasicExpression
             }
 
             if (!char.IsAsciiLetter(token[0])) { throw Syntax($"'{token}' does not start an expression"); }
+
+            // RULE_OPERAND tries a function, with its (, before a name.
+            if (!(s_functions.Contains(token) && Peek() == "("))
+            {
+                return Nameable(_at - 1) ? Variable(token) : throw Syntax($"{token} is not a name here");
+            }
+
             if (s_refused.Contains(token)) { throw Syntax($"{token} needs the running machine"); }
-            if (s_words.Contains(token)) { throw Syntax($"{token} is not a name"); }
             return token switch
             {
                 "ABS" => Rounded(Math.Abs(Number(Argument()))),

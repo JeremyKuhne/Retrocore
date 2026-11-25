@@ -61,6 +61,14 @@ FORFIX = 0
 .include "Equates.asm"
 .include "../System/MonitorEntries.asm"
 
+; Temporary: opens the token routines' scopes, which the modules continue (removed at integration).
+.scope Statements
+.endscope
+.scope Functions
+.endscope
+.scope Operators
+.endscope
+
 .org $E000
 
 ; Integer BASIC.

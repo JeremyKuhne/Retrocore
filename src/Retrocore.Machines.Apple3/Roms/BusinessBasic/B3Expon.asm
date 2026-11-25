@@ -469,7 +469,7 @@ SinePolynomial:
     .byte $86, $28, $07, $FB, $F8           ; 42.00779712, for x^9
     .byte $87, $99, $68, $89, $01           ; -76.70417026, for x^7
     .byte $87, $23, $35, $DF, $E1           ; 81.60522369, for x^5
-    .byte $86, $A5, $5D, $E7, $28           ; -41.34170209, for x^3
+    .byte $86, $A5, $5D, $E7, $28           ; -41.3417021, for x^3
     .byte $83, $49, $0F, $DA, $A2           ; 6.2831853070, 2 * pi, for x
 .assert * - SinePolynomial = 1 + 6 * PACKED_SIZE, "SIN's polynomial is a degree and six coefficients."
 

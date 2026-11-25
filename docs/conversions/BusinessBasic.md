@@ -117,11 +117,13 @@ the code (each needs the build switches the modules' README describes, and a per
 
 ## Found in the conversion
 
-Documented in the code, not changed (the bytes stay). Found by reading; none was run.
+Documented in the code, not changed (the bytes stay). Found by reading; only the long-integer
+`DIV` and `MOD` results were run.
 
-- **Arithmetic:** `CONV&` of a real of 2^56 or more is wrong (it loads from Arg without setting Y); negating -(2^63)
-  gives -(2^63) with no error; `RND(-2147483647)` sets the seed to 0, after which every `RND` is 0; QINT doesn't check
-  its range (an exponent of $A0 or more gives a wrong result); `STR$` doesn't round to a variable's precision as `PRINT`
+- **Arithmetic:** `CONV&` of a real of 2^56 or more is wrong (it loads from Arg without setting Y); `-(2^63) DIV 1`
+  gives -(2^63)+1 and `-(2^63) MOD 1` gives -1, with no error (seen on the emulated Apple III); negating -(2^63) gives
+  -(2^63) with no error; `RND(-2147483647)` sets the seed to 0, after which every `RND` is 0; QINT doesn't check its
+  range (an exponent of $A0 or more gives a wrong result); `STR$` doesn't round to a variable's precision as `PRINT`
   does, so the two can show different digits; long-integer comparison is wrong when the top bytes differ by $80 or more
   (known).
 - **The evaluator and memory:** backing the text pointer up from the first byte of a 32K window leaves page $01
@@ -332,7 +334,7 @@ three 1.3 builds), **AppleSoft name** the converted AppleSoft or Microsoft name 
 | DSCPNT | DescriptorPointer | location | all | DescriptorPointer | A pointer to a string descriptor, with its X-byte at <DescriptorPointerXByte>. |
 | FOUR6 | CollectorStep | location | all | CollectorStep | The size of a string descriptor, <DESCRIPTOR_SIZE>, kept here for the garbage collector; other routines use it |
 | SIZE | CollectorOffset | alias | all | CollectorOffset | A size, in <FunctionJump>'s address bytes. |
-| OLDOV | FunctionJumpHigh | alias | all | FunctionJumpHigh | The overflow byte of the earlier multiplication step, in <FunctionJump>'s address bytes. |
+| OLDOV | FunctionJumpHigh | alias | all | FunctionJumpHigh | The last of FunctionJump's address bytes, which the float code borrows as a rounding byte (in addition, Float::UnshiftedExtension; in EXP). |
 | TEMPF3 | FloatTemporary3 | alias | all | FloatTemporary3 | A third temporary for a packed real, five bytes, which run over <FunctionPointer> and the `WINDOW` bytes from |
 | TEMPF1 | FloatTemporary1 | location | all | FloatTemporary1 | A temporary for a packed real, five bytes: this one, then <DestinationEnd>'s and <DataBufferPointer>'s. |
 | HIGHDS | DestinationEnd | location | all | DestinationEnd | Where a block move puts its highest byte, with its X-byte at <DestinationEndXByte>. |
@@ -1617,7 +1619,7 @@ three 1.3 builds), **AppleSoft name** the converted AppleSoft or Microsoft name 
 | FOUT17 | Float::FormatFacAtOffset::Terminate | local | all | Float::FormatFacAtOffset::Terminate | Ends the text with a zero |
 | FOUT20 | Float::FormatFacAtOffset::ReturnBuffer | local | all | Float::FormatFacAtOffset::ReturnBuffer | Returns the text's address |
 | FHALF | Float::Half | data | all | Float::Half | The real 0.5, five bytes, the last four shared with ZeroValue |
-| ZERO | ZeroValue | data | all | ZeroValue | Eight zero bytes: a real or long integer 0, which an element of an array that does not exist reads as,; differs from Microsoft's: eight zero bytes, for a real or a long integer |
+| ZERO | ZeroValue | data | all | ZeroValue | Eight zero bytes: a real or long integer 0, which an element of an array that does not exist reads as; differs from Microsoft's: eight zero bytes, for a real or a long integer |
 | FOUTBL | Float::PowersOfTen | table | all | Float::PowersOfTen | The powers of ten for Float::FormatFac's digits, as 32-bit integers, most significant byte first: -100000,...; differs from Microsoft's: six powers for six digits, not nine |
 | FDCEND | Float::PowersOfTenEnd | table | all | Float::PowersOfTenEnd | The end of Float::PowersOfTen; differs from Microsoft's: after six powers |
 | SQR | Functions::Sqr | routine | all | Functions::Sqr | Gives `SQR`: the square root of FAC, as FAC ^ 0.5; differs from Microsoft's: loads 0.5 with the bank in X |

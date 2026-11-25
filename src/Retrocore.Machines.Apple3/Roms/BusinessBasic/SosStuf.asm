@@ -582,7 +582,7 @@ CursorLine:
 
 ;; Reads one key into <LastKey> with echo and `CONTROL-C` off, from <Console::KeyReference>'s file.
 ;;
-;; When `EXEC`'s file reaches its end, it is closed and the key is read from the console instead (another error is
+;; When `EXEC`'s file reaches its end, it is closed and the key is read from the console instead (other errors are
 ;; reported);
 ;; when it fails in `GET#`, the error goes to the end-of-file handling in <Files::ReadTextLine::ReadFailed>.
 ;; Out: zero = set for a key read
@@ -853,8 +853,9 @@ FileBlocks:
 .assert FileEnd = FileAccess + FileInformation::EOF, "FileEnd is the information's end of file."
 .assert FileBlocks = FileAccess + FileInformation::BLOCKS, "FileBlocks is the information's count of blocks."
 
-;; `OPEN`'s option list: the access requested, 1 to read (`LOAD`, `CATALOG`, `EXEC`, `INVOKE`), 2 to write (`SAVE`), or
-;; 3 to read and write (`OPEN`).
+;; `OPEN`'s option list: the access requested: 1 to read (`LOAD`, `CATALOG`, `EXEC`, `INVOKE`, `RUN`, `CHAIN`, and
+;; `OPEN ... AS INPUT`), 2 to write (`SAVE`), 3 to read and write (`OPEN ... AS OUTPUT` or `AS EXTENSION`), or 0 for
+;; any (`OPEN` without `AS`).
 ;; Also: INREQ (BB13)
 OpenAccess:
     .byte 0

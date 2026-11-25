@@ -17,8 +17,8 @@
 .struct ProgramLine
     ;; The line's length, from this byte to the next line's link; zero ends the program.
     LINK .byte
-    NUMBER .word ;; The line number, low byte first.
-    TEXT .byte ;; The first byte of the tokenized text, which ends in a zero.
+    NUMBER .word                            ;; The line number, low byte first.
+    TEXT .byte                              ;; The first byte of the tokenized text, which ends in a zero.
 .endstruct
 
 ;; A `FOR` loop's entry on the stack, from its top (the lowest address) down.
@@ -31,29 +31,29 @@
     TYPE .byte
     ;; The variable's offset (low, high), from <Variables::VariableOffset>, packed to 16 bits by <Memory::PackPages>.
     VARIABLE .word
-    STEP .res 5 ;; The step, unpacked, as <PushSignedFac> pushes it.
+    STEP .res 5                             ;; The step, unpacked, as <PushSignedFac> pushes it.
     ;; The step's sign: 1 for positive, 0 for zero, $FF for negative.
     STEP_SIGN .byte
     ;; The limit, packed, its sign in bit 7 of the first mantissa byte.
     LIMIT .res 5
-    LINE .word ;; The `FOR` statement's line number, low byte first.
+    LINE .word                              ;; The `FOR` statement's line number, low byte first.
     ;; The text pointer to the `FOR` statement's end, as an offset from <ProgramStart>: its bank, then its high and low
     ;; bytes.
     TEXT_BANK .byte
-    TEXT_HIGH .byte ;; The text offset's high byte.
-    TEXT_LOW .byte ;; The text offset's low byte.
+    TEXT_HIGH .byte                         ;; The text offset's high byte.
+    TEXT_LOW .byte                          ;; The text offset's low byte.
 .endstruct
 .assert .sizeof(ForEntry) = FOR_FRAME_SIZE, "A FOR entry is FOR_FRAME_SIZE bytes."
 
 ;; A `GOSUB` entry on the stack, from its top (the lowest address) down, as <PushGoSubEntry> builds it.
 .struct GoSubEntry
-    TOKEN .byte ;; <TOKEN_GOSUB>, which marks the entry as a `GOSUB` entry.
-    LINE .word ;; The line number of the `GOSUB`, low byte first.
+    TOKEN .byte                             ;; <TOKEN_GOSUB>, which marks the entry as a `GOSUB` entry.
+    LINE .word                              ;; The line number of the `GOSUB`, low byte first.
     ;; The text pointer to where `RETURN` goes on, as an offset from <ProgramStart>: its bank, then its high and low
     ;; bytes.
     TEXT_BANK .byte
-    TEXT_HIGH .byte ;; The text offset's high byte.
-    TEXT_LOW .byte ;; The text offset's low byte.
+    TEXT_HIGH .byte                         ;; The text offset's high byte.
+    TEXT_LOW .byte                          ;; The text offset's low byte.
 .endstruct
 
 ;; The lowest token, which the first word of <ReservedWords> or <ExtendedReservedWords> stands for.

@@ -428,9 +428,10 @@ StoreWhole:
     dey
     bpl WholeLoop
 
-;; Puts a minus sign before a negative number whose image has no sign, in a spare digit place. When the digits fill
-;; every place before the point, <WholeLoop> goes past this to <FloatingSigns> and the sign is dropped: -123 through
-;; `###` prints 123 (Apple's code as found).
+;; Puts a minus sign before a negative number whose image has no sign, in a spare digit place; with no place left the
+;; number doesn't fit (-123 through `###` prints `!!!`). When another place of the mask comes before the digits, as a
+;; `$` does, <WholeLoop> goes past this to <FloatingSigns> and the sign is dropped: -123 through `$###` prints `$123`
+;; (Apple's code as found, seen on the emulated Apple III).
 ;; Also: UDOISGN (BB13)
 MinusSign:
     lda #FIELD_SIGN
@@ -649,7 +650,7 @@ EXPONENT_MAX = 99
 ;; or engineering notation with three.
 ;;
 ;; The number is rounded at the places of a three-place field: in engineering notation with one or two digits before
-;; the point, it is rounded one or two places further right than the last place shown, and the shown digits are cut
+;; the point, it is rounded two or one places further right than the last place shown, and the shown digits are cut
 ;; off (1.2996 shows as 1.29 with two decimals; Apple's code as found). With one place before the point, its digit goes
 ;; after whatever the field's first place holds, a fixed sign or `$`; only that one place is checked, so with both
 ;; (`+$#.##EEEE`) the digit takes the `$`'s place and leaves its own place a zero byte.

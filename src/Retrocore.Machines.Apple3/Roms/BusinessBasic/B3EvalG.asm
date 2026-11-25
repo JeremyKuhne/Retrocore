@@ -407,7 +407,7 @@ ToSyntaxError:
     sta OperatorStack,Y                     ; precedence 0
     iny
     sty OperatorStackTop
-    cpy #OPERATOR_STACK_SIZE                    ; too deep
+    cpy #OPERATOR_STACK_SIZE                ; too deep
     bcs FormulaTooComplexError
     jsr EvaluateExpression::KeepingStacks
     dec OperatorStackTop

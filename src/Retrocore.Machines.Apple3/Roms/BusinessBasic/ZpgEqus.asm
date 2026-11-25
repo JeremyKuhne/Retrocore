@@ -535,7 +535,8 @@ CollectorStep:
 ;; Also: SIZE (BB13)
 CollectorOffset = FunctionJump + 1
 
-;; The overflow byte of the earlier multiplication step, in <FunctionJump>'s address bytes.
+;; The last of <FunctionJump>'s address bytes, which the float code borrows: in addition the unshifted operand's
+;; rounding byte (<Float::UnshiftedExtension>), and in `EXP` the rounding byte of its first multiplication.
 ;; Also: OLDOV (BB13)
 FunctionJumpHigh = FunctionJump + 2
 
@@ -1427,7 +1428,7 @@ StatementTable:
 ;; Also: RESTBL (BB13)
 ValueWordTable:
     .word Functions::Fre                    ; $98 FRE
-    .word Functions::HPos                    ; $99 HPOS
+    .word Functions::HPos                   ; $99 HPOS
     .word Functions::VPos                   ; $9A VPOS
     .word Functions::ErrLin                 ; $9B ERRLIN
     .word Functions::Err                    ; $9C ERR

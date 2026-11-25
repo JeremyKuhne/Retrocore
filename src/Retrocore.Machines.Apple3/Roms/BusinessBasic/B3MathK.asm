@@ -163,7 +163,7 @@ Align:
 Combine:
     bit ResultSign
     bpl AddMantissas                        ; the same signs: add
-    ldy #FacExponent                        ; the carry is clear, or set for equal exponents
+    ldy #FacExponent
     cpx #ArgExponent
     beq Subtract
     ldy #ArgExponent

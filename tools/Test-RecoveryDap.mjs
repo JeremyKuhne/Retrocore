@@ -103,6 +103,10 @@ async function crash(program) {
     await type(dap, `10 PRINT "${program}"\rSAVE "${program}"\r`);
     await screen(dap, text => new RegExp(`SAVE "${program}"\\s*\\nOK`).test(text), "SAVE's OK");
     await kept(before);
+    // The drive says when the journal kept its disk, and that recovery is not behind.
+    const recovery = (await dap.request("retro/devices")).devices.find(device => device.id === "disk0").media.recovery;
+    assert.ok(recovery?.lastCheckpoint, JSON.stringify(recovery));
+    assert.equal(recovery.behind, false);
     dap.close();
     await new Promise(resolve => setTimeout(resolve, 500));
 }

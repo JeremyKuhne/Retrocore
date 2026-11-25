@@ -8,7 +8,7 @@ import { test } from "node:test";
 import {
     changeWords, crashedMessage, discardKept, discardKeptQuestion, letGoQuestion, saveAllKept, keptSummary, leaveQuestion, revertedMessage, stoppedMessage, unsavedDisks,
     conflictQuestion, contextWords, form, hasTapeKeys, iconName, iconNames, iconSvg, lossless, lossyQuestion, mark, readOnlyQuestion,
-    savedMessage, summary, tooltipLines, type Device, type MediaSource
+    savedMessage, summary, tooltipLines, type Device, type MediaRecovery, type MediaSource
 } from "../drives";
 
 // The image's path as this system writes one.
@@ -82,6 +82,34 @@ test("the tooltip names the image, whether the disk changed, when the image chan
     assert.equal(tooltipLines(drive(false, { stale: true, current: null }), now)[1], "Not changed by the machine; its image is gone");
     assert.ok(tooltipLines(drive(false, { readOnly: "file" }), now).includes("Read-only file: Save As saves the disk under another name"));
     assert.ok(tooltipLines(drive(false, {}, true), now).includes("Locked: the machine cannot write it"));
+});
+
+test("a changed disk says when the recovery journal kept it, and warns when the journal is behind", () => {
+    const now = new Date(2026, 10, 14, 11, 0);
+    const kept = new Date(2026, 10, 14, 10, 52).toISOString();
+    const withRecovery = (recovery: MediaRecovery, changed = true): Device => ({ ...drive(changed), media: { ...drive(changed).media!, recovery } });
+
+    // Kept, and kept mid-write: said in the tooltip, with no warning.
+    const upToDate = withRecovery({ lastCheckpoint: kept, behind: false });
+    assert.equal(mark(upToDate), "changed");
+    assert.match(tooltipLines(upToDate, now).find(line => line.startsWith("Kept")) ?? "", /^Kept for recovery at .*10:52.* today$/);
+    assert.match(tooltipLines(withRecovery({ lastCheckpoint: kept, behind: false, midWrite: true }), now).join("\n"),
+        /Kept for recovery at .*10:52.* today, caught while the drive was writing/);
+
+    // Behind: the row warns, the summary says so, and the tooltip says why and what is kept.
+    const failing = withRecovery({ lastCheckpoint: kept, behind: true, problem: "There is not enough space on the disk." });
+    assert.equal(mark(failing), "behind");
+    assert.equal(summary(failing), "work.woz · track 17 sector 4 · recovery behind · writing");
+    assert.match(tooltipLines(failing, now).join("\n"),
+        /Recovery behind: the journal could not be written: There is not enough space on the disk\. Changes up to .*10:52.* today are kept/);
+    assert.match(tooltipLines(withRecovery({ lastCheckpoint: null, behind: true }), now).join("\n"),
+        /Recovery behind: checkpoints are late\. None of the changes are kept/);
+
+    // A conflict still marks as one, and an unchanged disk says nothing of recovery.
+    assert.equal(mark({ ...failing, media: { ...failing.media!, source: { ...failing.media!.source!, stale: true } } }), "conflict");
+    const same = withRecovery({ lastCheckpoint: null, behind: true }, false);
+    assert.equal(mark(same), undefined);
+    assert.ok(!tooltipLines(same, now).some(line => line.startsWith("Recovery") || line.startsWith("Kept")));
 });
 
 test("the menus offer Save for a changed disk, a Save that will ask for a changed image, and Save As for a read-only one", () => {

@@ -36,6 +36,10 @@ internal static partial class MediaActions
     /// <param name="whole">
     ///  Whether to take every changed disk's snapshot, as the last checkpoint does, whatever the journal holds already.
     /// </param>
+    /// <param name="idle">
+    ///  Whether a disk whose drive is writing waits for it to stop: its snapshot is not taken now, and the journal keeps
+    ///  the version it holds already. Otherwise such a disk is taken as it is, marked as caught mid-write.
+    /// </param>
     /// <returns>
     ///  Each changed disk that came from an image, with its snapshot when the journal lacks this version.
     /// </returns>
@@ -43,8 +47,17 @@ internal static partial class MediaActions
     ///  <para>
     ///   A disk the launch built, with no image, is not kept: the next launch builds it again.
     ///  </para>
+    ///  <para>
+    ///   A drive is writing while its controller is part way through a write: the Disk II in its write mode, a floppy
+    ///   controller in a write command, a recorder recording, a block device just after it wrote a block. A disk the
+    ///   machine ejected is never being written.
+    ///  </para>
     /// </remarks>
-    internal static List<JournalDisk> Journal(IReadOnlyList<IDevice> devices, RecoveryJournal journal, bool whole = false)
+    internal static List<JournalDisk> Journal(
+        IReadOnlyList<IDevice> devices,
+        RecoveryJournal journal,
+        bool whole = false,
+        bool idle = false)
     {
         List<JournalDisk> disks = [];
         foreach (IDevice device in devices)
@@ -55,18 +68,18 @@ internal static partial class MediaActions
                 && device.Media is { } media
                 && device.Info.Operations.HasFlag(MediaOperations.Insert))
             {
-                Add(device, disk, media.Label, media.Format, ejected: null);
+                Add(device, disk, media.Label, media.Format, ejected: null, device.Activity == DeviceActivity.Writing);
             }
 
             foreach (KeptDisk kept in Ejected(device).Where(kept => kept.Medium.IsDirty))
             {
-                Add(device, kept.Medium, kept.Label, kept.Format, kept);
+                Add(device, kept.Medium, kept.Label, kept.Format, kept, writing: false);
             }
         }
 
         return disks;
 
-        void Add(IDevice device, IMedium medium, string label, string format, KeptDisk? ejected)
+        void Add(IDevice device, IMedium medium, string label, string format, KeptDisk? ejected, bool writing)
         {
             if (Source(medium) is not { } source) { return; }
             JsonObject entry = new()
@@ -93,7 +106,55 @@ internal static partial class MediaActions
             }
 
             long version = medium.Version;
-            disks.Add(new(source.Id, medium.GetType().Name, version, !whole && journal.Holds(source.Id, version) ? null : medium.Snapshot(), entry));
+            if (!whole && journal.Holds(source.Id, version))
+            {
+                disks.Add(new(source.Id, medium.GetType().Name, version, Snapshot: null, entry));
+            }
+            else if (writing && idle)
+            {
+                disks.Add(new(source.Id, medium.GetType().Name, version, Snapshot: null, entry, Waiting: true));
+            }
+            else
+            {
+                disks.Add(new(source.Id, medium.GetType().Name, version, medium.Snapshot(), entry, MidWrite: writing));
+            }
+        }
+    }
+
+    /// <summary>
+    ///  Says in each changed disk's <c>media</c> how the recovery journal keeps it: <c>recovery</c>, with
+    ///  <c>lastCheckpoint</c>, when the journal last kept it (null when it holds none of it yet), <c>midWrite</c> when
+    ///  that snapshot was caught while its drive was writing, and <c>behind</c>, with the <c>problem</c> when there is
+    ///  one, when the journal does not hold its changes and checkpoints are failing or late.
+    /// </summary>
+    /// <param name="body">The <c>retro/devices</c> body, whose devices' media it adds to.</param>
+    /// <param name="devices">The machine's devices, as the body describes them.</param>
+    /// <param name="journal">The machine's journal.</param>
+    /// <param name="interval">How often checkpoints are taken; one twice as late as that is behind.</param>
+    internal static void Recovery(JsonObject body, IReadOnlyList<IDevice> devices, RecoveryJournal journal, TimeSpan interval)
+    {
+        if (body["devices"] is not JsonArray written) { return; }
+        bool late = DateTime.UtcNow - journal.LastCommitted > interval * 2;
+        foreach (JsonObject row in written.OfType<JsonObject>())
+        {
+            IDevice? device = devices.FirstOrDefault(candidate => candidate.Id == row.String("id"));
+            IMedium? disk = (device as IMediumSlot)?.Medium;
+            if (row["media"] is not JsonObject media || disk is not { IsDirty: true } || Source(disk) is not { } source)
+            {
+                continue;
+            }
+
+            JournalKept? kept = journal.KeptOf(source.Id);
+            bool behind = kept?.Version != disk.Version && (journal.Failure is not null || late);
+            JsonObject recovery = new()
+            {
+                ["lastCheckpoint"] = kept?.When.ToString("O", CultureInfo.InvariantCulture),
+                ["behind"] = behind,
+            };
+
+            if (kept is { MidWrite: true }) { recovery["midWrite"] = true; }
+            if (behind && journal.Failure is { } failure) { recovery["problem"] = failure; }
+            media["recovery"] = recovery;
         }
     }
 

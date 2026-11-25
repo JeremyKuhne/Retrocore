@@ -3,7 +3,8 @@
 ;;
 ;; <SelfTest::StartUp> ($9649) runs at every reset, from the main firmware's reset at $D11D (<CardReset>):
 ;;   1. copies the slot page's first 35 bytes ($Cn00-$Cn22) from the EPROM, so the host sees the SmartPort
-;;      signature at once, and its entries wait on themselves (Boot::WaitForCard and SmartPortEntry::WaitForCard) until the card is ready;
+;;      signature at once, and its entries wait on themselves (Boot::WaitForCard and SmartPortEntry::WaitForCard) until
+;; the card is ready;
 ;;   2. the EPROM's checksum: the sum of every byte but $FFF9 is 0, and $FFF9 plus the carries is 0;
 ;;   3. the SWIM: as an IWM, its data register and three modes; as the ISM, its phases, its mode and its sixteen
 ;;      parameters; and as the IWM again;
@@ -13,9 +14,9 @@
 ;; every entry of the slot page jump to the Monitor, clears the SmartPort signature and blinks the LED for ever.
 ;;
 ;; <SelfTest::CardDiagnostics> ($8F00) runs when the host sends <COMMAND_DIAGNOSTICS>. It tests page zero, puts the
-;; diagnostics' page zero and host code in place, sends the host to Diagnostics::Start (Disk35Diagnostics.asm) and reports to
-;; it, through $0002, each of: the slot page ("Card pseudoROM"), the EPROM's CRCs, its checksum, the SWIM and the
-;; RAM. Then it leaves a sum of its RAM for the host to check ("Host/Card shared data"), finds its units, and, only
+;; diagnostics' page zero and host code in place, sends the host to <Diagnostics::Start> (Disk35Diagnostics.asm) and
+;; reports to it, through $0002, each of: the slot page ("Card pseudoROM"), the EPROM's CRCs, its checksum, the SWIM and
+;; the RAM. Then it leaves a sum of its RAM for the host to check ("Host/Card shared data"), finds its units, and, only
 ;; with Apple's factory fixture in slot 1, writes and reads back a block on units 1 and 2. It then reads memory
 ;; until the host says to restart. A failure before the RAM's sum is reported to the host and blinks the LED until
 ;; the host says to restart.
@@ -59,38 +60,38 @@
 ;; Parameters:
 ;;   first = 1 for the byte's first bit, read from the EPROM; 0 for the others, kept in Y
 .macro CrcBit first
-    .local high, apply, done
+    .local High, Apply, Done
     clc
     rol SelfTest::Crc
     rol SelfTest::Crc+1
-    bcs high
-.if first
-    lda (SelfTest::RomPointer)
-.else
-    tya
-.endif
+    bcs High
+    .if first
+        lda (SelfTest::RomPointer)
+    .else
+        tya
+    .endif
     ror a
     tay
-    bcc done
-apply:
+    bcc Done
+Apply:
     lda #<SelfTest::CRC_POLYNOMIAL
     eor SelfTest::Crc
     sta SelfTest::Crc
     lda #>SelfTest::CRC_POLYNOMIAL
     eor SelfTest::Crc+1
     sta SelfTest::Crc+1
-    bra done
-high:
-.if first
-    lda (SelfTest::RomPointer)
-.else
-    tya
-.endif
+    bra Done
+High:
+    .if first
+        lda (SelfTest::RomPointer)
+    .else
+        tya
+    .endif
     ror a
     tay
-    bcs done
-    bra apply
-done:
+    bcs Done
+    bra Apply
+Done:
 .endmacro
 
 ;; Waits about outer times 2030 cycles: 1 ms at 2 MHz for each count. Uses X and A, and keeps the flags of neither.
@@ -195,7 +196,7 @@ SlotSignature = SharedSlotPage + 5
 ;; Boot::WaitForCard's branch offset ($7B0C).
 BootWait = SharedSlotPage + <Boot::WaitForCard + 1
 
-;; WaitForDiagnostics's branch offset ($7B18).
+;; <WaitForDiagnostics>'s branch offset ($7B18).
 DiagnosticsWait = SharedSlotPage + <WaitForDiagnostics::Wait + 1
 
 ;; SmartPortEntry::WaitForCard's branch offset ($7B22).
@@ -484,9 +485,9 @@ CheckInverseStep:
     NextRamPattern CheckInverseWord
 .endproc
 
-;; Puts the host's $CA00-$CBFF code at $0200-$03FF, then sums the RAM the host can see, as Diagnostics::CheckSharedData does,
-;; and leaves the sum's complement in <SharedSum>: $0006-$07FF, $0C00-$3FFF, $7C00-$7FFE, $0B00-$0BFF, the slot
-;; page and $0800-$09FF. Reports "Card RAM" passed and waits for the host's check.
+;; Puts the host's $CA00-$CBFF code at $0200-$03FF, then sums the RAM the host can see, as
+;; <Diagnostics::CheckSharedData> does, and leaves the sum's complement in <SharedSum>: $0006-$07FF, $0C00-$3FFF,
+;; $7C00-$7FFE, $0B00-$0BFF, the slot page and $0800-$09FF. Reports "Card RAM" passed and waits for the host's check.
 .proc SumSharedRam
     ldy #0
 Copy:
@@ -1155,7 +1156,7 @@ Ok:
     rts
 .endproc
 
-;; Checks that the slot page is the EPROM's, but for WaitForDiagnostics's offset, which must be 0.
+;; Checks that the slot page is the EPROM's, but for <WaitForDiagnostics>'s offset, which must be 0.
 ;; Out: carry = set on a difference
 .proc VerifySlotPage
     ldx #0
@@ -1651,8 +1652,8 @@ Recheck4000:
 .endproc
 
 ;; A failure of the start-up test: makes the slot page's start, its diagnostics entry and its call jump to the host's
-;; Monitor (<ResetToMonitor>), releases Boot::WaitForCard and SmartPortEntry::WaitForCard into those jumps, clears the SmartPort signature's $03
-;; and the rest of the page, and blinks the LED, a long flash and a short one, for ever.
+;; Monitor (<ResetToMonitor>), releases Boot::WaitForCard and SmartPortEntry::WaitForCard into those jumps, clears the
+;; SmartPort signature's $03 and the rest of the page, and blinks the LED, a long flash and a short one, for ever.
 .proc StartUpFailed
 
     ; JMP ResetToMonitor at $Cn00, $Cn0D and $Cn23.

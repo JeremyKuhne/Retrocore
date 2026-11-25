@@ -1,5 +1,5 @@
 ; retrocore: style=strict
-;; THE CARD'S FIRMWARE: THE 3.5 DRIVES AND THE SWIM
+;; The card's firmware: the 3.5 drives and the SWIM
 ;;
 ;; Finding the drives on the card's own port and the format of their disks, moving the head, reading a drive's
 ;; sense lines and giving it commands (<Drives>), and switching the SWIM between its IWM and ISM modes and between
@@ -181,10 +181,10 @@ MEDIA_1440K = $0A
 
 ; Other values.
 
-;; MediaMode's MFM bits, 5 and 6.
+;; <MediaMode>'s MFM bits, 5 and 6.
 MEDIA_MODE_MFM = $60
 
-;; DiskSides' bit 7: the disk has two sides.
+;; <DiskSides>' bit 7: the disk has two sides.
 DISK_TWO_SIDES = $80
 
 ;; The interleave in an address field's format byte.
@@ -205,7 +205,7 @@ MODE_SETTLE_TIME = 11
 
 ;; Finds the 3.5 drives on the card's own port: drive 1, then drive 2 if drive 1 is there. Each is identified and
 ;; its disk, if any, read for its format; a drive whose disk cannot be read has it ejected.
-;; Out: UnitCount = the drives found (0-2), DeviceKinds set for each
+;; Out: UnitCount = the drives found (0-2), <DeviceKinds> set for each
 .proc Find
     jsr Swim::UseGcr
     ldx #$00
@@ -251,7 +251,7 @@ Done:
 ;; Checks that a 3.5 drive answers on a drive line: its step direction must follow the commands. Leaves the direction
 ;; outward.
 ;; In: X = the drive (0 or 1)
-;; Out: carry = set if there is no drive; else A = 0 for an Apple 3.5 Drive, <DEVICE_FDHD> for an FDHD (SuperDrive)
+;; Out: carry = set if there is no drive; else A = 0 for an Apple 3.5 <Drive>, <DEVICE_FDHD> for an FDHD (SuperDrive)
 ;; Keeps: X, Y
 .proc Detect
     jsr Swim::SelectDrivePort
@@ -293,7 +293,7 @@ Found:
 ;; Finds a double-density disk's format: GCR 400K or 800K from an address field's format byte and the disk's sides,
 ;; and on an FDHD drive MFM 720K if no GCR field reads.
 ;; In: X = the drive
-;; Out: carry = set if no format was found; else MediaKind, BlockCount, BlockCountHigh and MediaMode set
+;; Out: carry = set if no format was found; else <MediaKind>, <BlockCount>, <BlockCountHigh> and <MediaMode> set
 .proc IdentifyDoubleDensity
     stx SavedDrive
     lda #ADDRESS_TRIES
@@ -421,7 +421,7 @@ MfmFound:
     rts
 .endproc
 
-;; The MediaMode for each MediaKind, at its even index; the odd bytes are not read.
+;; The <MediaMode> for each <MediaKind>, at its even index; the odd bytes are not read.
 MediaModes:
     .byte $00, $00, $11, $88, $11, $88, $11, $88, $32, $09, $52, $12, $52, $12
 
@@ -429,7 +429,7 @@ MediaModes:
 ;; <IdentifyDoubleDensity>. The flags the caller had are put back on success, so callers clear carry first.
 ;; In: X = the drive, carry = clear
 ;; Out: carry = set with A = <ERROR_OFFLINE> (no disk) or <ERROR_IO> (unreadable); else clear, with A as it came,
-;;      and MediaKind, BlockCount and BlockCountHigh set
+;;      and <MediaKind>, <BlockCount> and <BlockCountHigh> set
 .proc IdentifyMedia
     php
     pha
@@ -523,7 +523,7 @@ Fail:
     ; Falls into ForgetMedia.
 .endproc
 
-;; Forgets a drive's format: no blocks, an unknown track, the MFM bits of its MediaMode cleared, and its cached
+;; Forgets a drive's format: no blocks, an unknown track, the MFM bits of its <MediaMode> cleared, and its cached
 ;; sectors dropped.
 ;; In: X = the drive
 ;; Keeps: X, Y
@@ -545,7 +545,7 @@ Fail:
 .endproc
 
 ;; Turns <Drive>'s motor on, if it is off, and waits for it to come up to speed: 500 ms the first time after the
-;; drive had no disk (<DISK_SPUN_UP> clear in its Sense), else 100 ms.
+;; drive had no disk (<DISK_SPUN_UP> clear in its <Sense>), else 100 ms.
 ;; In: Drive = the drive, selected
 .proc MotorOn
     lda #SENSE_MOTOR_OFF
@@ -575,7 +575,7 @@ MOTOR_START_TIME = 200
 ;; The wait for a motor to come up to speed, in ms.
 MOTOR_SPEED_TIME = 100
 
-;; On an FDHD drive, sets the drive's MFM or GCR mode to suit its disk's MediaMode, if it is not in it already.
+;; On an FDHD drive, sets the drive's MFM or GCR mode to suit its disk's <MediaMode>, if it is not in it already.
 ;; In: Drive = the drive, selected
 .proc SetMode
     ldx Drive
@@ -669,7 +669,7 @@ Done:
 
 ;; Steps <Drive>'s head out until the drive senses track 0: up to five rounds of 16 steps, each checked 16 times
 ;; 7 ms apart.
-;; Out: carry = set if track 0 was not found (DiskErrors bit 1 set); A = CurrentTrack = 0, or $FF; X = Drive
+;; Out: carry = set if track 0 was not found (<DiskErrors> bit 1 set); A = CurrentTrack = 0, or $FF; X = <Drive>
 .proc Recalibrate
     stz DiskErrors
     lda #DRIVE_STEP_OUTWARD
@@ -1035,7 +1035,7 @@ Done:
 
 ;; Readies the SWIM for GCR, at $D80B: clears <SWIM_STATE_MFM>, and, if the setup copy has it, <SWIM_MFM> in the mode
 ;; and setup registers, writing 0 to the ISM's CRC register; then sets the IWM's mode to <IWM_MODE>.
-;; Out: Y = IWM_MODE
+;; Out: Y = <IWM_MODE>
 ;; Keeps: X
 .proc UseGcr
 .assert * = $D80B, "The self-test names the card's return to GCR as $D80B."
@@ -1271,11 +1271,11 @@ Switched:
 
 ;; Answers whether a drive's disk is write-protected.
 ;; In: X = the drive
-;; Out: carry = clear, A = <ERROR_WRITE_PROTECTED> if protected, else 0; negative and overflow = the drive's Sense
+;; Out: carry = clear, A = <ERROR_WRITE_PROTECTED> if protected, else 0; negative and overflow = the drive's <Sense>
 ;;      bits 7 and 6
 ;; Keeps: X, Y
 ;; Entry:
-;;   Finish = sets negative and overflow from the drive's Sense and returns; <CheckDisk> comes here
+;;   Finish = sets negative and overflow from the drive's <Sense> and returns; <CheckDisk> comes here
 .proc CheckWriteProtect
     lda #DISK_PROTECTED
     and Sense,x
@@ -1308,9 +1308,9 @@ Done:
     rts
 .endproc
 
-;; Enables a drive and its motor line and reads its sense lines into its Sense byte.
+;; Enables a drive and its motor line and reads its sense lines into its <Sense> byte.
 ;; In: X = the drive
-;; Out: PreviousSense = the byte before; Sense,X bit 7 = switched, 6 = no disk, 5 = write-protected, bits 0-4 kept;
+;; Out: PreviousSense = the byte before; <Sense>,X bit 7 = switched, 6 = no disk, 5 = write-protected, bits 0-4 kept;
 ;;      negative and overflow = bits 7 and 6, zero = set if the disk can be written; Y = 0
 ;; Keeps: X
 .proc ReadStatus
@@ -1320,8 +1320,8 @@ Done:
 .endproc
 
 ;; <ReadStatus> without enabling the drive.
+;; It returns what <ReadStatus> returns.
 ;; In: X = the drive
-;; Out: as ReadStatus's
 ;; Keeps: X
 .proc ReadStatusLines
     lda Sense,x
@@ -1349,7 +1349,7 @@ Next:
 StatusLines:
     .byte SENSE_WRITE_ENABLED, SENSE_NO_DISK, SENSE_SWITCHED
 
-;; ...and the Sense bit each one flips when it is set.
+;; ...and the <Sense> bit each one flips when it is set.
 StatusBits:
     .byte DISK_PROTECTED, DISK_ABSENT, DISK_SWITCHED
 

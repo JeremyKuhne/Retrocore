@@ -2,10 +2,10 @@
 ;; THE BUILT-IN DIAGNOSTICS: THE HOST'S SIDE ($8800-$8DFF) AND THE CARD'S PAGE ZERO FOR THEM ($8E00-$8EFF)
 ;;
 ;; The diagnostics start when the host sends the card command <COMMAND_DIAGNOSTICS>: Cn0DG from the Monitor, or three
-;; Control-Ds while the card boots. The card then runs <SelfTest::CardDiagnostics> ($8F00), which copies $8A00-$8DFF over the
-;; host's usual code at its $7C00-$7FFF, zeroes the slot page's <WaitForDiagnostics> branch, and so sends the host to $CC00
-;; (<Diagnostics::Start>). Later it copies $8800-$89FF to its $0200-$03FF, which the host sees at $CA00-$CBFF with
-;; bank 0 latched: the unit report, its texts and the mailbox the two sides end the session with.
+;; Control-Ds while the card boots. The card then runs <SelfTest::CardDiagnostics> ($8F00), which copies $8A00-$8DFF
+;; over the host's usual code at its $7C00-$7FFF, zeroes the slot page's <WaitForDiagnostics> branch, and so sends the
+;; host to $CC00 (<Diagnostics::Start>). Later it copies $8800-$89FF to its $0200-$03FF, which the host sees at
+;; $CA00-$CBFF with bank 0 latched: the unit report, its texts and the mailbox the two sides end the session with.
 ;;
 ;; It is 6502 code: it runs on the II Plus, the IIe, the IIc and the IIgs alike. Lowercase letters show as capitals
 ;; on a II Plus, whose <ModelId> byte is not 6.
@@ -182,7 +182,7 @@ SIGNAL_READ_WRITE_FAILED = $4E
 
 ; CardDeviceKinds.
 
-;; An Apple 3.5 Drive, 800K.
+;; An Apple 3.5 <Drive>, 800K.
 KIND_APPLE_35 = $01
 
 ;; An Apple FDHD (SuperDrive).
@@ -458,8 +458,9 @@ Signal:
 ; Card $7C00-$7FFF, from $8A00-$8DFF: the host's $CC00-$CFFF.
 .assert * = DiagnosticsCode, "The diagnostics' start must be where the slot page jumps."
 
-;; The diagnostics' start, where the slot page's <WaitForDiagnostics> jumps once the card has put this code here. Sets up the
-;; screen and reports each of the card's tests as it finishes them, then tests the card's RAM through the windows.
+;; The diagnostics' start, where the slot page's <WaitForDiagnostics> jumps once the card has put this code here. Sets
+;; up the screen and reports each of the card's tests as it finishes them, then tests the card's RAM through the
+;; windows.
 ;; In: ExpansionRomSlot = $Cn, the card's slot page; bank 0 latched
 .proc Start
     sei
@@ -532,10 +533,10 @@ Title:
     ; Falls into CheckSharedData.
 .endproc
 
-;; Sums the card's RAM that the host can see, as the card's <SelfTest::SumSharedRam> did: card $0006-$07FF and $0C00-$3FFF
-;; through the window, $7C00-$7FFE, $0B00-$0BFF, the slot page ($7B00) and $0800-$09FF. The card left the complement
-;; of its own sum in $09FF, so the sum is $FF when both saw the same bytes. Goes on to <TestHostRam> when it is,
-;; and falls into <Failed> when it is not.
+;; Sums the card's RAM that the host can see, as the card's <SelfTest::SumSharedRam> did: card $0006-$07FF and
+;; $0C00-$3FFF through the window, $7C00-$7FFE, $0B00-$0BFF, the slot page ($7B00) and $0800-$09FF. The card left the
+;; complement of its own sum in $09FF, so the sum is $FF when both saw the same bytes. Goes on to <TestHostRam> when it
+;; is, and falls into <Failed> when it is not.
 ;; In: BankSwitch = $C080 plus the slot times 16, ExpansionRomSlot = $Cn
 .proc CheckSharedData
     lda #0
@@ -1058,8 +1059,8 @@ Spinner:
 .assert * = $D000, "The diagnostics' host code must end at $CFFF."
 .logicalorg
 
-; The card's page zero for the diagnostics, which SelfTest::CardDiagnostics copies in and checks: a pattern in $00-$01 and
-; zeros. SelfTest::TestRam soon writes over $00-$05.
+; The card's page zero for the diagnostics, which SelfTest::CardDiagnostics copies in and checks: a pattern in $00-$01
+; and zeros. SelfTest::TestRam soon writes over $00-$05.
 .logicalorg $0000
     .byte $55, $0F
     .res 254

@@ -1,5 +1,5 @@
 ; retrocore: style=strict
-;; THE CARD'S FIRMWARE: GCR ADDRESS AND DATA FIELDS
+;; The card's firmware: GCR address and data fields
 ;;
 ;; How the card finds, reads and writes a sector on an Apple 3.5 disk, which is written in GCR (group code
 ;; recording): each sector is an address field (D5 AA 96, five 6-and-2 nibbles, DE AA) and a data field (D5 AA AD,
@@ -34,8 +34,8 @@ DATA_MARK_SEARCH = $19
 ;; The tag bytes of a GCR sector, which come before its 512 data bytes.
 TAG_BYTE_COUNT = 12
 
-;; The last index of the three nibble lanes (<NibbleLane1>, <NibbleLane2> and <NibbleLane3>): a sector is 175 groups of three
-;; bytes, stored from this index down to 1 (the third lane has one byte fewer, from one less).
+;; The last index of the three nibble lanes (<NibbleLane1>, <NibbleLane2> and <NibbleLane3>): a sector is 175 groups of
+;; three bytes, stored from this index down to 1 (the third lane has one byte fewer, from one less).
 LAST_GROUP = $AF
 
 ;; The groups the 12 tag bytes take, at the lanes' top.
@@ -57,9 +57,9 @@ PROGRESS_SECOND_HALF = $C1
 FIRST_HALF_DELAY = $C8
 
 ;; Finds the next sector's address field, by GCR or by MFM as the disk is.
-;; Out: carry = set if no good field for the wanted track and side was read, with DiskErrors saying why
+;; Out: carry = set if no good field for the wanted track and side was read, with <DiskErrors> saying why
 ;;      (<DISK_ERROR_NO_FIELD>, <DISK_ERROR_WRONG_TRACK>, <DISK_ERROR_BAD_FIELD> or <DISK_ERROR_WRONG_SIDE>);
-;;      AddressTrack, AddressSector, AddressSide and AddressFormat = the field read
+;;      <AddressTrack>, <AddressSector>, <AddressSide> and AddressFormat = the field read
 .proc ReadAddressField
     bit SwimState
     bpl Gcr
@@ -72,11 +72,11 @@ Gcr:
 ;; format and checksum, DE AA), looking through about 2048 disk bytes for its mark.
 ;;
 ;; The side field's bit 0 is the track's bit 6 (tracks 64-79), and its bit 5 the side. The format byte's bit 5 says
-;; the disk has two sides, which goes to DiskSides for the drive, as the format byte goes to LastFormatByte, even
+;; the disk has two sides, which goes to <DiskSides> for the drive, as the format byte goes to <LastFormatByte>, even
 ;; when the field is for another track or side.
-;; Out: carry = set if no good field for Track and Side was read, with DiskErrors = <DISK_ERROR_NO_FIELD>,
-;;      <DISK_ERROR_WRONG_TRACK> (the drive's CurrentTrack then holds the track found), <DISK_ERROR_BAD_FIELD>
-;;      or <DISK_ERROR_WRONG_SIDE>; AddressChecksum to AddressTrack = the field read
+;; Out: carry = set if no good field for <Track> and <Side> was read, with DiskErrors = <DISK_ERROR_NO_FIELD>,
+;;      <DISK_ERROR_WRONG_TRACK> (the drive's <CurrentTrack> then holds the track found), <DISK_ERROR_BAD_FIELD>
+;;      or <DISK_ERROR_WRONG_SIDE>; <AddressChecksum> to AddressTrack = the field read
 .proc ReadGcrAddressField
     jsr SelectReadHead
     stz DiskErrors
@@ -176,7 +176,7 @@ Fail:
 
 ;; The 6-and-2 GCR decode table: the six-bit value of each disk byte from $96 to $FF, read as
 ;; `GcrDecode - FIRST_DISK_BYTE,x` with the disk byte in X. A byte that is not a valid nibble holds a value of $80
-;; or more. The table starts $96 bytes after a page boundary (<READADDRESS_PAD> puts <ReadAddressField> there), so
+;; or more. The table starts $96 bytes after a page boundary (the `.assert` below checks it), so
 ;; the indexed reads never cross a page, which would cost the read loops a cycle.
 GcrDecode:
     .byte $00, $01, $98, $99, $02, $03, $9C, $04, $05, $06, $A0, $A1, $A2, $A3, $A4, $A5
@@ -188,7 +188,7 @@ GcrDecode:
     .byte $37, $38, $F8, $39, $3A, $3B, $3C, $3D, $3E, $3F
 .assert <(GcrDecode - FIRST_DISK_BYTE) = 0, "GcrDecode's reads must not cross a page."
 
-;; Selects the drive's read-data register for Side's head and puts the IWM in read mode.
+;; Selects the drive's read-data register for <Side>'s head and puts the IWM in read mode.
 ;; Keeps: X, Y
 .proc SelectReadHead
     lda #REGISTER_READ_DATA
@@ -199,9 +199,9 @@ GcrDecode:
     rts
 .endproc
 
-;; Reads the data field after an address field, by GCR or by MFM as the disk is, into the pages at BufferPointer and
-;; SecondBufferPointer.
-;; Out: carry = set if it failed, with DiskErrors saying why (<DISK_ERROR_NO_FIELD>, <DISK_ERROR_BAD_EPILOGUE> or
+;; Reads the data field after an address field, by GCR or by MFM as the disk is, into the pages at <BufferPointer> and
+;; <SecondBufferPointer>.
+;; Out: carry = set if it failed, with <DiskErrors> saying why (<DISK_ERROR_NO_FIELD>, <DISK_ERROR_BAD_EPILOGUE> or
 ;;      <DISK_ERROR_BAD_CHECKSUM>; nothing for an MFM data mark not found)
 .proc ReadDataField
     bit SwimState
@@ -212,11 +212,11 @@ Gcr:
 .endproc
 
 ;; The routine <ReadDataVector> normally goes to: reads a GCR data field (D5 AA AD, the sector number, 12 tag bytes
-;; to <TagBytes> and 512 data bytes, three checksum bytes, DE AA) into the pages at BufferPointer and
-;; SecondBufferPointer, whose low bytes must be 0: it fills each page until its low byte comes round to 0 again.
+;; to <TagBytes> and 512 data bytes, three checksum bytes, DE AA) into the pages at <BufferPointer> and
+;; <SecondBufferPointer>, whose low bytes must be 0: it fills each page until its low byte comes round to 0 again.
 ;;
 ;; Each group of four nibbles is the three bytes' high bits, then their low six bits. The three checksums
-;; (Checksum0-Checksum2) are rotated and added as the bytes come, each byte being stored XORed with one of them;
+;; (<Checksum0>-Checksum2) are rotated and added as the bytes come, each byte being stored XORed with one of them;
 ;; the field's own checksum bytes then XOR them to 0.
 ;; In: AddressSector = the sector of the address field just read
 ;; Out: carry = set if it failed, with DiskErrors = <DISK_ERROR_NO_FIELD> (no mark, or another sector's field),
@@ -448,16 +448,17 @@ Fail:
 .endproc
 
 ;; Nibblizes the sector at BufferPointer's two pages for <WriteDataField>, with zero tag bytes: splits it into the
-;; three lanes (<NibbleLane1>, <NibbleLane2> and <NibbleLane3>), each byte XORed with a running checksum, and works out the
-;; three checksums. For an MFM disk, which needs no nibbles, it only points SecondBufferPointer at the second page.
+;; three lanes (<NibbleLane1>, <NibbleLane2> and <NibbleLane3>), each byte XORed with a running checksum, and works out
+;; the three checksums. For an MFM disk, which needs no nibbles, it only points <SecondBufferPointer> at the second
+;; page.
 ;;
-;; On a IIgs host, which writes the block into the card while the card nibblizes it, it waits for WriteProgress to
+;; On a IIgs host, which writes the block into the card while the card nibblizes it, it waits for <WriteProgress> to
 ;; say the host has started, and each time it finishes a page of the block before the host has finished
 ;; (<PROGRESS_DONE>) it starts again from the beginning: at once if the host is on the second half, else once the
-;; host has finished.
+;; host has finished. It fills the three nibble lanes, and leaves the last group in <Nibble0>,
+;; <Nibble1> and <Nibble2>, with its high bits in <NibbleHighBits>, for <WriteGcrDataField> to start with.
 ;; In: BufferPointer = the block
-;; Out: the lanes, Checksum0-Checksum2 and ChecksumHighBits; Nibble0-Nibble2 and NibbleHighBits = the last group,
-;;      for <WriteGcrDataField> to start with
+;; Out: Checksum0, Checksum1 and Checksum2 = the checksums, ChecksumHighBits = their high bits
 ;; Entry:
 ;;   FromGroup = with X = the last group to fill (tags kept above it), from <NibblizeSectorWithTags>
 .proc NibblizeSector
@@ -627,7 +628,7 @@ Gcr:
 ;; The routine <WriteDataVector> normally goes to: writes a GCR data field from what <NibblizeSector> left: a
 ;; self-sync group, D5 AA AD, the sector number, the nibbles of the three lanes with their high bits, the checksums
 ;; and DE AA, then waits for the IWM to finish and goes back to reading.
-;; In: AddressSector = the sector; the lanes, checksums, Nibble0-Nibble2 and NibbleHighBits from <NibblizeSector>
+;; In: AddressSector = the sector; the lanes, checksums, <Nibble0>-Nibble2 and <NibbleHighBits> from <NibblizeSector>
 ;; Out: carry = set if the IWM underran, with DiskErrors = <DISK_ERROR_UNDERRUN>
 .proc WriteGcrDataField
     bit Iwm::LoadLatch

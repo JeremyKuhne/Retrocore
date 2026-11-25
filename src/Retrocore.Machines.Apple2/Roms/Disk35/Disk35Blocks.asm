@@ -1,5 +1,5 @@
 ; retrocore: style=strict
-;; THE CARD'S FIRMWARE: READING AND WRITING BLOCKS
+;; The card's firmware: reading and writing blocks
 ;;
 ;; The handlers of the commands that move blocks: READBLOCK, WRITEBLOCK, SmartPort's tagged READ and WRITE, the
 ;; slot ROM's boot read, and the card's own READAHEAD and READSPAN. A read fills the cache with the rest of the
@@ -25,10 +25,10 @@ SECTOR_DONE = $40
 ;; A track's sector in <SectorFlags>: not one of the track's.
 SECTOR_NOT_WANTED = $C0
 
-;; ReadState's bit 7: read the block asked for and no more of its track.
+;; <ReadState>'s bit 7: read the block asked for and no more of its track.
 READ_STATE_BLOCK_ONLY = $80
 
-;; ReadState's bit 6: the block has been handed to the host, and the card goes on filling the cache.
+;; <ReadState>'s bit 6: the block has been handed to the host, and the card goes on filling the cache.
 READ_STATE_HANDED_OVER = $40
 
 ;; The buffer code of <InterleaveMap>, where READSPAN lists what it read.
@@ -37,8 +37,8 @@ SPAN_LIST_CODE = InterleaveMap >> 9
 ;; READSPAN's buffer code for a sector it could not read.
 SPAN_FAILED = $A7
 
-;; Counts a retry: ResultA and ResultX tally the errors, and Retries counts down.
-;; Out: carry = set with ErrorCode = <ERROR_IO> when the retries are used up; otherwise A = DiskErrors, which is
+;; Counts a retry: <ResultA> and <ResultX> tally the errors, and <Retries> counts down.
+;; Out: carry = set with ErrorCode = <ERROR_IO> when the retries are used up; otherwise A = <DiskErrors>, which is
 ;;   cleared
 ;; Keeps: X, Y
 .proc CountRetry
@@ -62,7 +62,7 @@ Again:
 ;; SmartPort READ ($08) and WRITE ($09): a 524-byte block with its 12 tag bytes, on a 400K or 800K GCR disk. The
 ;; byte count must be <TAGGED_BLOCK_SIZE>, and the address parameter is the block number.
 ;;
-;; The read is taken only when CardState is 1, READBLOCK's command, which never reaches this handler: READ
+;; The read is taken only when <CardState> is 1, READBLOCK's command, which never reaches this handler: READ
 ;; arrives as $08, so as the code stands both READ and WRITE go to <WriteBlock>, and a READ writes the buffer's
 ;; bytes to the block. The read's copy also takes the data from $0E00-$0FFF, past the buffer <ReadTaggedBlock>
 ;; reads into ($0C00-$0DFF).
@@ -141,7 +141,7 @@ Done:
     rts
 .endproc
 
-;; Reads the block in <ParameterLow> and <ParameterMiddle>, with its tags (to <TagBytes>), into BufferCode's buffer,
+;; Reads the block in <ParameterLow> and <ParameterMiddle>, with its tags (to <TagBytes>), into <BufferCode>'s buffer,
 ;; without the cache.
 ;; Out: carry = set if it failed, with ErrorCode = the error and CardData = 0
 .proc ReadTaggedBlock
@@ -209,7 +209,7 @@ Done:
 ;; cache, handing the host the block's buffer as soon as it is read and going on with the rest of the track until
 ;; the host sends its next command.
 ;;
-;; A tagged call (<ReadWriteTagged>) on an MFM disk sets TagError to <ERROR_BAD_CONTROL> and returns without an
+;; A tagged call (<ReadWriteTagged>) on an MFM disk sets <TagError> to <ERROR_BAD_CONTROL> and returns without an
 ;; answer.
 ;; Out: CardData = the buffer code the host copies from, or 0 with ErrorCode = the error; carry = set when the block
 ;;   was handed over and the card went on reading (the main loop then runs the host's next command at once)
@@ -468,10 +468,10 @@ Continued:
     rts
 .endproc
 
-;; SmartPort WRITEBLOCK ($02), and ProDOS's write: asks the host for the block in BufferCode's buffer and writes it;
-;; on a IIgs the card starts nibblizing while the host is still copying (WriteProgress).
+;; SmartPort WRITEBLOCK ($02), and ProDOS's write: asks the host for the block in <BufferCode>'s buffer and writes it;
+;; on a IIgs the card starts nibblizing while the host is still copying (<WriteProgress>).
 ;;
-;; A tagged call on an MFM disk sets TagError to <ERROR_BAD_CONTROL> and returns without an answer.
+;; A tagged call on an MFM disk sets <TagError> to <ERROR_BAD_CONTROL> and returns without an answer.
 ;; Out: ErrorCode = the error, or unchanged; carry = clear
 .proc WriteBlock
     lda #ERROR_BAD_UNIT
@@ -691,10 +691,11 @@ GcrHighBits3:
     .byte ((I >> 0) & 3) << 6
 .endrepeat
 
-;; Command <COMMAND_READ_AHEAD>: checks a run of blocks (Parameter4 and Parameter5 more after the first) and works out
-;; how many of them lie in the first block's track, for the host in Count, then waits briefly for the next command.
+;; Command <COMMAND_READ_AHEAD>: checks a run of blocks (<Parameter4> and <Parameter5> more after the first) and works
+;; out how many of them lie in the first block's track, for the host in <Count>, then waits briefly for the next
+;; command.
 ;;
-;; Two bugs: the run's last block's high byte is stored in ParameterLow, not ParameterMiddle, so the check is of
+;; Two bugs: the run's last block's high byte is stored in <ParameterLow>, not <ParameterMiddle>, so the check is of
 ;; another block; and when that check fails, the two bytes of the block number pushed meanwhile stay on the stack,
 ;; and <SetError>'s RTS returns through them.
 ;; Out: carry = set (the host's next command is run at once); Count = the blocks, CardData = 0
@@ -777,8 +778,8 @@ Done:
     rts
 .endproc
 
-;; Command <COMMAND_READ_SPAN>: reads the sectors of a run of blocks (Parameter4 and Parameter5 more after the first)
-;; that share a cylinder, and lists them in <InterleaveMap> for the host: at $0600 how many were read, at $0601 1
+;; Command <COMMAND_READ_SPAN>: reads the sectors of a run of blocks (<Parameter4> and <Parameter5> more after the
+;; first) that share a cylinder, and lists them in <InterleaveMap> for the host: at $0600 how many were read, at $0601 1
 ;; if one failed, and from $0602 each one's buffer code (<SPAN_FAILED> for one that failed). The sectors' cache slots
 ;; stay claimed (filling) until the cache is next flushed.
 ;; Out: carry = set when all were read (the host's next command is run at once); otherwise ErrorCode = the error

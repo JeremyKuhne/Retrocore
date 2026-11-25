@@ -46,7 +46,7 @@ ExpansionRomOff = $CFFF
 ;; Also: BASIC (A2RM78, A2RM79, IIEROM82, IIETRM85)
 BasicColdStart = $E000
 
-;; Inherit: <Monitor:Startup::NextSlot>
+;; Inherit: <Monitor:Startup::PowerUp::NextSlot>
 ;; At $FABA: the Monitor's boot scan, which goes on to the next slot down.
 ;; Also: SLOOP (A2RM79, IIEROM82, IIETRM85)
 NextSlot = $FABA
@@ -69,8 +69,8 @@ MODEL_ID_ENHANCED = $E0
 ;; Also: ZIDBYTE (UNKN)
 SecondModelId = $FBC0
 
-;; A routine that tells a IIgs: on a IIe it is an RTS (the end of the Monitor's <Monitor:Commands::SetMode>, which leaves the
-;; carry as it came); on the IIgs it returns carry clear.
+;; A routine that tells a IIgs: on a IIe it is an RTS (the end of the Monitor's <Monitor:Commands::SetMode>, which
+;; leaves the carry as it came); on the IIgs it returns carry clear.
 ;; Also: IDROUTINE (UNKN)
 IdentifyIIgs = $FE1F
 
@@ -556,8 +556,7 @@ Signature:
 
 ;; Tells the card whether the host is a IIgs: one whose <StateRegister> holds what is written to it, whose Monitor
 ;; is the IIe's family's (<ModelId> = <MODEL_ID_IIE>, <SecondModelId> = <MODEL_ID_ENHANCED>), and whose
-;; <IdentifyIIgs> returns carry clear. Waits for the card to take the answer.
-;; In: bank 0 latched
+;; <IdentifyIIgs> returns carry clear. Waits for the card to take the answer. The card's bank 0 must be latched.
 ;; Keeps: Y, interrupt
 .proc Identify
     php
@@ -855,8 +854,7 @@ Done:
 
 ;; Checks a command's parameter count and goes to its handler, with bank 0 latched once the card is waiting.
 ;; In: A = the command: $00-$0B, or $0C-$0F for ProDOS's
-;; Entry:
-;;   Return = an RTS: <Call> calls it to find its slot
+;; Its last instruction, the RTS at Return, is what <Call> calls to find its slot.
 .proc Dispatch
     ldy ExpansionRomSlot
     ldx SlotTimes16Table - $C1,y

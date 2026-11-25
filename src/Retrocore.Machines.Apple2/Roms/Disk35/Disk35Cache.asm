@@ -1,5 +1,5 @@
 ; retrocore: style=strict
-;; THE CARD'S FIRMWARE: THE SECTOR CACHE, AND HOW A BLOCK MAPS TO A TRACK AND SECTOR
+;; The card's firmware: the sector cache, and how a block maps to a track and sector
 ;;
 ;; The cache keeps the sectors of the track last read: 18 slots, one for each sector a track can have, each a
 ;; 512-byte buffer at card $1000-$33FF (buffer codes $08-$19) with the slot's owner, cylinder and sector in
@@ -22,7 +22,7 @@ CACHE_DRIVE_END = $20
 ;; The error <BlockMap::Locate> gives for a disk of unknown format: not one of SmartPort's documented codes.
 ERROR_UNKNOWN_FORMAT = $3D
 
-;; The Side byte for the second side.
+;; The <Side> byte for the second side.
 SIDE_SECOND = $20
 
 ;; The sectors in each track of a 1440K MFM disk.
@@ -54,7 +54,7 @@ Next:
 ;; Never called: claims a cache slot without pointing the buffer pointers at it, marking it empty unless it is kept
 ;; for a write.
 ;; In: Y = the slot
-;; Out: A = the slot's buffer code, also in BufferCode; CacheSlot = Y
+;; Out: A = the slot's buffer code, also in <BufferCode>; CacheSlot = Y
 ;; Keeps: X, Y
 .proc ClaimUnused
     lda CacheOwners-1,Y
@@ -233,11 +233,11 @@ Done:
 ;;
 ;; A GCR disk has five zones of 16 tracks, with 12, 11, 10, 9 and 8 sectors a track, and its blocks are counted
 ;; in groups (16 blocks on a 400K disk, 32 on an 800K one) whose first cylinder and sector are in a table; the group
-;; offsets in <GroupOffsets> place each block of a group. An MFM disk has the same number of sectors on every track,
-;; and its blocks go through each cylinder's sides in turn.
+;; offsets in <BlockMap::GroupOffsets> place each block of a group. An MFM disk has the same number of sectors on every
+;; track, and its blocks go through each cylinder's sides in turn.
 .scope BlockMap
 
-;; Finds where the block in <ParameterLow> and <ParameterMiddle> is on <Drive>'s disk, by its MediaKind.
+;; Finds where the block in <ParameterLow> and <ParameterMiddle> is on <Drive>'s disk, by its <MediaKind>.
 ;; Out: carry = set for an unknown format, with A = <ERROR_UNKNOWN_FORMAT>; otherwise A = the sectors in the track,
 ;;   and <Track>, <Side>, <Sector> and <Cylinder> set
 .proc Locate
@@ -247,7 +247,7 @@ Done:
     jmp (Maps,X)
 .endproc
 
-;; <Locate>'s routine for each MediaKind.
+;; <Locate>'s routine for each <MediaKind>.
 Maps:
     .word Unknown, Gcr400, Gcr800, Gcr800, Mfm720, Mfm1440, Mfm1440
 .assert MEDIA_400K = 2 && MEDIA_800K = 4 && MEDIA_800K_2_TO_1 = 6, "The GCR kinds index Maps."
@@ -357,7 +357,7 @@ Group800Starts:
     .byte $80, $80
 
 ;; <Locate> for a 1440K MFM disk: 18 sectors a side, a cylinder's sides in turn.
-;; Out: as <Locate>, carry = clear; Work0 and Work1 = the block's offset in its run of 10 cylinders
+;; Out: as <Locate>, carry = clear; <Work0> and Work1 = the block's offset in its run of 10 cylinders
 .proc Mfm1440
 
     ; The run of 10 cylinders (180 blocks) the block is in: the last whose start is not past it.
@@ -436,7 +436,7 @@ Cylinders1440:
     .word $FFFF
 
 ;; <Locate> for a 720K MFM disk: 9 sectors a side, a cylinder's sides in turn.
-;; Out: as <Locate>, carry = clear; Work0 and Work1 = the block's offset in its run of 10 cylinders
+;; Out: as <Locate>, carry = clear; <Work0> and Work1 = the block's offset in its run of 10 cylinders
 .proc Mfm720
 
     ; The run of 10 cylinders (90 blocks) the block is in: the last whose start is not past it.

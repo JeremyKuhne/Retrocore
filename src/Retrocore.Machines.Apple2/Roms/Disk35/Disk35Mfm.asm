@@ -1,12 +1,12 @@
 ; retrocore: style=strict
-;; THE CARD'S FIRMWARE: MFM ADDRESS AND DATA FIELDS
+;; The card's firmware: MFM address and data fields
 ;;
 ;; How the card reads and writes a sector on an MFM disk (720K or 1440K, on an FDHD drive), through the SWIM's ISM,
 ;; which finds the marks, decodes the bits and checks the CRC itself. An MFM sector is an ID field (A1 A1 A1 FE, the
 ;; track, side, sector from 1 and size code, a two-byte CRC) and a data field (A1 A1 A1 FB, 512 bytes, a CRC), and a
 ;; track starts with an index mark (C2 C2 C2 FC). Each A1 and C2 is a mark: a byte written with a clock bit missing,
 ;; which the ISM reads through <Ism::ReadMark>. <ReadAddressField>, <ReadDataField> and <WriteDataField> come here
-;; when SwimState says the disk is MFM.
+;; when <SwimState> says the disk is MFM.
 
 ; The ISM's mode bits (<Ism::SetMode>, <Ism::ClearMode>, <Ism::ReadMode>) these routines use.
 
@@ -38,7 +38,7 @@ MFM_GAP = $4E
 ;; The zero bytes written before a data field's marks, as its sync.
 MFM_SYNC_LENGTH = 12
 
-;; The ID field's format byte, as AddressFormat holds it: the size code with bit 5, as a GCR format byte has for a
+;; The ID field's format byte, as <AddressFormat> holds it: the size code with bit 5, as a GCR format byte has for a
 ;; two-sided disk.
 MFM_FORMAT_TWO_SIDES = $20
 
@@ -50,10 +50,10 @@ WRITE_SETTLE_LOOPS = $78
 ;;
 ;; A good field for another track or side fails as <ReadGcrAddressField>'s does. A field read for the wanted track
 ;; and side leaves the SWIM in ISM mode, for <ReadMfmDataField>; every failure leaves it in IWM mode.
-;; Out: carry = set if no good field for Track and Side was read, with DiskErrors = <DISK_ERROR_NO_FIELD>,
-;;      <DISK_ERROR_WRONG_TRACK> (the drive's CurrentTrack then holds the track found), <DISK_ERROR_BAD_FIELD> (a
-;;      CRC error) or <DISK_ERROR_WRONG_SIDE>; AddressTrack, AddressSide (0 or $20), AddressSector (from 0) and
-;;      AddressFormat = the field read; HeaderChecksum and Checksum0 = its CRC bytes, Checksum1 = the error register
+;; Out: carry = set if no good field for <Track> and <Side> was read, with DiskErrors = <DISK_ERROR_NO_FIELD>,
+;;      <DISK_ERROR_WRONG_TRACK> (the drive's <CurrentTrack> then holds the track found), <DISK_ERROR_BAD_FIELD> (a
+;;      CRC error) or <DISK_ERROR_WRONG_SIDE>; <AddressTrack>, <AddressSide> (0 or $20), <AddressSector> (from 0) and
+;;      AddressFormat = the field read; <HeaderChecksum> and Checksum0 = its CRC bytes, Checksum1 = the error register
 ;;      and Checksum2 = the handshake after them
 .proc ReadMfmAddressField
     jsr SelectReadHead
@@ -224,11 +224,11 @@ MfmDataMark:
     .byte MFM_MARK, MFM_DATA_ID, MFM_MARK, MFM_MARK, MFM_MARK
 .assert MfmDataMark = MfmIdMark + 2, "The ID mark's last byte is the data mark table's first."
 
-;; Reads an MFM data field through the ISM (A1 A1 A1 FB, 512 bytes, the CRC) into the pages at BufferPointer and
-;; SecondBufferPointer, whose low bytes must be 0: it fills each page until its low byte comes round to 0 again.
+;; Reads an MFM data field through the ISM (A1 A1 A1 FB, 512 bytes, the CRC) into the pages at <BufferPointer> and
+;; <SecondBufferPointer>, whose low bytes must be 0: it fills each page until its low byte comes round to 0 again.
 ;; It starts where <ReadMfmAddressField> left the ISM, and leaves the SWIM in IWM mode.
 ;; Out: carry = set if it failed: DiskErrors = <DISK_ERROR_BAD_CHECKSUM> with the error bit added for a CRC error,
-;;      and unchanged when the data mark was not found; else DiskErrors = 0. HeaderChecksum and Checksum0 = the CRC
+;;      and unchanged when the data mark was not found; else DiskErrors = 0. <HeaderChecksum> and Checksum0 = the CRC
 ;;      bytes, Checksum1 = the error register and Checksum2 = the handshake after them
 .proc ReadMfmDataField
     bit Ism::ReadError
@@ -332,8 +332,8 @@ BadCrc:
     rts
 .endproc
 
-;; Writes an MFM data field through the ISM from the pages at BufferPointer and SecondBufferPointer: 12 zero bytes, A1
-;; A1 A1 FB, the 512 bytes, the CRC the ISM works out, and four gap bytes; then waits for the FIFO to empty, stops,
+;; Writes an MFM data field through the ISM from the pages at <BufferPointer> and <SecondBufferPointer>: 12 zero bytes,
+;; A1 A1 A1 FB, the 512 bytes, the CRC the ISM works out, and four gap bytes; then waits for the FIFO to empty, stops,
 ;; waits about 0.6 ms more, and leaves the SWIM in IWM mode.
 ;;
 ;; It never reports a failure: when the handshake shows an error, it only keeps the error register in Checksum1,

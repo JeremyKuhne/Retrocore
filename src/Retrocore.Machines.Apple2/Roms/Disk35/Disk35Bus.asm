@@ -1,9 +1,9 @@
 ; retrocore: style=strict
-;; THE CARD'S FIRMWARE: THE SMARTPORT BUS, AND THE DELAYS
+;; The card's firmware: the SmartPort bus, and the delays
 ;;
 ;; The card's second port is a SmartPort bus, which devices such as the UniDisk 3.5 share. Its lines are the IWM's:
 ;; phases 1 and 3 high together enable the bus, phase 0 is the host's request (REQ), phases 0 and 2 high together
-;; reset it, and the drive's sense line is the device's acknowledgement (ACK). A packet is sent and received through
+;; reset it, and the drive's sense line is the device's acknowledgement. A packet is sent and received through
 ;; the IWM in its slow mode ($17), as bytes with the high bit set: sync bytes and a start byte ($C3), a header
 ;; (destination, source, type, aux type, status, the odd-byte count and the 7-byte group count), the odd bytes
 ;; after a byte of their high bits, each group of seven after a byte of theirs, a checksum in two bytes, and an end
@@ -92,7 +92,7 @@ LAST_UNIT = $04
 ;; The most bus devices <Bus::Initialize> counts.
 MOST_DEVICES = $02
 
-; Unused bytes, up to <Bus::DivideBySeven> at $F500.
+    ; Unused bytes, up to <Bus::DivideBySeven> at $F500.
     .res $F500 - *
 
 ;; Divides a 16-bit count by 7: the 7-byte groups of a packet and the bytes left over.
@@ -117,9 +117,9 @@ Shift:
     rts
 .endproc
 
-;; Receives a packet from the bus into the buffer at BufferPointer: waits for the device's ACK, raises REQ, reads
-;; the header into PacketHeader's last seven bytes (so the status lands in BusResult, and the counts in Groups and
-;; OddBytes), then the data, and lowers REQ once ACK falls.
+;; Receives a packet from the bus into the buffer at <BufferPointer>: waits for the device's acknowledgement, raises
+;; REQ, reads the header into <PacketHeader>'s last seven bytes (so the status lands in <BusResult>, and the counts in
+;; <Groups> and <OddBytes>), then the data, and lowers REQ once the acknowledgement falls.
 ;; Out: carry = clear, DiskErrors = 0; or carry = set with DiskErrors = <Bus::NO_PACKET>, <Bus::NO_END> or
 ;;      <Bus::BAD_CHECKSUM>
 .proc Receive
@@ -140,7 +140,7 @@ ClearStack:
     cpx #$E1
     bcs ClearStack
 
-    ; Waits for ACK, about 256 * 100 * 205 polls; X counts from 0, as HeaderChecksum is.
+    ; Waits for the acknowledgement, about 256 * 100 * 205 polls; X counts from 0, as HeaderChecksum is.
     bit Iwm::LoadLatch
     ldx HeaderChecksum
 Wait:
@@ -229,7 +229,7 @@ SecondSum:
     eor HeaderChecksum
     bne BadChecksum
 
-    ; The end byte; then REQ falls once ACK has.
+    ; The end byte; then REQ falls once the acknowledgement has.
 End:
     lda Iwm::DataLatch
     bpl End
@@ -260,9 +260,9 @@ Failed:
     rts
 .endproc
 
-;; Sends a packet to the bus from the buffer at BufferPointer, BusCount bytes long, to unit <Drive>, of
-;; <PacketType>: enables the bus, waits for the device's ACK, raises REQ, writes the packet, and waits for ACK to
-;; fall once it is out.
+;; Sends a packet to the bus from the buffer at <BufferPointer>, <BusCount> bytes long, to unit <Drive>, of
+;; <PacketType>: enables the bus, waits for the device's acknowledgement, raises REQ, writes the packet, and waits for
+;; the acknowledgement to fall once it is out.
 ;; Out: carry = clear, DiskErrors = 0; or carry = set with DiskErrors = <Bus::NOT_READY> or <Bus::NOT_TAKEN>
 .proc Send
     bit Iwm::ReadMode
@@ -270,7 +270,7 @@ Failed:
     jsr Bus::PrepareHighBits
     jsr Bus::Enable
 
-    ; Up to 250 polls for ACK.
+    ; Up to 250 polls for the acknowledgement.
     lda Iwm::SelectDrive1
     lda Iwm::MotorOn
     bit Iwm::LoadLatch
@@ -365,7 +365,7 @@ Checksum:
     lda #PACKET_END
     jsr Bus::SendByte
 
-    ; Until the IWM has written the last byte, then up to 250 polls for ACK to fall.
+    ; Until the IWM has written the last byte, then up to 250 polls for the acknowledgement to fall.
 WaitEmpty:
     bit Iwm::DataLatch
     bvs WaitEmpty
@@ -395,7 +395,7 @@ Done:
 ;; The bytes of <Bus::PacketStart>.
 PACKET_START_LENGTH = 6
 
-;; Turns Groups and OddBytes back into a byte count: 7 * Groups + OddBytes.
+;; Turns <Groups> and <OddBytes> back into a byte count: 7 * <Groups> + <OddBytes>.
 ;; Out: A = the count's low byte, Y = its high byte
 ;; Keeps: X
 .proc ByteCount
@@ -451,9 +451,9 @@ Wait:
     rts
 .endproc
 
-;; Works out a packet's groups and odd bytes from BusCount, and the high bits <Bus::Send> sends first: those of the
-;; first seven bytes in PacketHighBits (the odd bytes use the first of them) and those of the first group in
-;; GroupHighBits. WorkPointer points seven bytes past BufferPointer, for the later groups' high bits.
+;; Works out a packet's groups and odd bytes from <BusCount>, and the high bits <Bus::Send> sends first: those of the
+;; first seven bytes in <PacketHighBits> (the odd bytes use the first of them) and those of the first group in
+;; <GroupHighBits>. <WorkPointer> points seven bytes past <BufferPointer>, for the later groups' high bits.
 .proc PrepareHighBits
     lda BusCount
     sta WorkPointer
@@ -476,7 +476,7 @@ Wait:
     rts
 .endproc
 
-;; Collects the high bits of seven bytes from BufferPointer + Y into GroupHighBits: bit 7 set, then the first
+;; Collects the high bits of seven bytes from <BufferPointer> + Y into <GroupHighBits>: bit 7 set, then the first
 ;; byte's bit in bit 6, through the seventh's in bit 0.
 ;; In: Y = the first byte's offset
 ;; Out: Y = past the seventh, X = 0
@@ -576,7 +576,7 @@ PacketStart:
 .assert * - PacketStart = PACKET_START_LENGTH, "Bus::Send sends PACKET_START_LENGTH bytes of PacketStart."
 
 ;; Builds the command packet for the host's command: the command, the parameter count from <Bus::CommandTable>, two
-;; zeros, and the host's ParameterLow through Parameter5; then falls into <Bus::PointAtCommandPacket>.
+;; zeros, and the host's <ParameterLow> through <Parameter5>; then falls into <Bus::PointAtCommandPacket>.
 .proc MakeCommandPacket
     lda #TYPE_COMMAND
     sta PacketType
@@ -598,7 +598,7 @@ Parameter:
     ; Falls into PointAtCommandPacket.
 .endproc
 
-;; Points BufferPointer at the command packet, and BusCount at its 9 bytes.
+;; Points <BufferPointer> at the command packet, and <BusCount> at its 9 bytes.
 .proc PointAtCommandPacket
     lda #COMMAND_PACKET_LENGTH
     sta BusCount
@@ -685,7 +685,7 @@ Done:
 .endproc
 
 ;; Receives a packet with up to 5 tries, 60 for FORMAT, a millisecond apart.
-;; Out: carry = set if it failed, with A = DiskErrors
+;; Out: carry = set if it failed, with A = <DiskErrors>
 .proc ReceiveWithRetries
     lda #5
     sta Retries
@@ -723,7 +723,7 @@ Move:
 .endproc
 
 ;; Passes the host's command for a bus unit to its device: the command packet, the host's data if the command has
-;; any, then the device's reply, whose data goes to the host in buffer 6 (TransferBuffer).
+;; any, then the device's reply, whose data goes to the host in buffer 6 (<TransferBuffer>).
 ;; Commands $0A-$0C, which the bus does not know, read <Bus::CommandTable> past its end, and end with ErrorCode = A
 ;; as it is then: the reply's length's low byte, or the failure's code.
 ;; Out: carry = clear; ErrorCode = the device's status, <Bus::ERROR_BUS> if it did not answer, <ERROR_IO> for a bad
@@ -827,7 +827,7 @@ Failed:
     bra Finish
 .endproc
 
-;; How each command's packets go, by the command at CardState, STATUS ($00) to WRITE ($09). Commands $0A-$0C read on
+;; How each command's packets go, by the command at <CardState>, STATUS ($00) to WRITE ($09). Commands $0A-$0C read on
 ;; into <Bus::Initialize>'s first bytes ($85, $50, $DA), which <Bus::PassCommand> takes as their entries.
 CommandTable:
     BusCommand 0, 1, 3              ; STATUS
@@ -844,7 +844,7 @@ CommandTable:
 
 ;; Resets the bus and gives its devices unit numbers from X up, with an INIT command to each in turn until one
 ;; answers that it is the last. Units X to 3 are first marked as no device; each device found below unit 5 is
-;; marked a bus device in DeviceKinds, with MediaMode 0. The drive lines are released first and the motor turned
+;; marked a bus device in <DeviceKinds>, with <MediaMode> 0. The drive lines are released first and the motor turned
 ;; off at the end.
 ;; In: A = the command packet's byte 4 ($80 from <Bus::Reinitialize>), X = the first unit
 ;; Out: A = the devices found, at most 2; Drive = the unit after the last device found

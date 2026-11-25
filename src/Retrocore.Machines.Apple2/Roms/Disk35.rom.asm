@@ -1,4 +1,4 @@
-; retrocore: style=strict
+; retrocore: style=strict ignore=unlinked-name:TO -- UNABLE TO BOOT, the message on the screen
 ; Copyright (c) 2025 Jeremy W Kuhne
 ; SPDX-License-Identifier: MIT
 ; See LICENSE file in the project root for full license information
@@ -60,7 +60,7 @@ LanguageCardRomOnly = $C082
 ;; Also: BASIC (A2RM78, A2RM79, IIEROM82, IIETRM85)
 BasicColdStart = $E000
 
-;; Inherit: <Monitor:Startup::NextSlot>
+;; Inherit: <Monitor:Startup::PowerUp::NextSlot>
 ;; Also: SLOOP (A2RM79, IIEROM82, IIETRM85)
 NextSlot = $FABA
 

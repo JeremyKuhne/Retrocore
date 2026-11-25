@@ -1,5 +1,5 @@
 ; retrocore: style=strict
-;; THE CARD'S FIRMWARE: CONTROL AND STATUS
+;; The card's firmware: control and status
 ;;
 ;; The command handlers that answer SmartPort CONTROL and STATUS, the 3.5 controller's FORMATOPTIONS and SETFORMAT,
 ;; and the eject they share with the rest of the firmware. A handler's lists move through the transfer buffer,
@@ -9,7 +9,8 @@
 ;; The buffer code of <TransferBuffer>: its card address divided by $200.
 TRANSFER_BUFFER_CODE = TransferBuffer / $200
 
-; The 3.5 drive's registers this file reads and the commands it gives (see <Drives::SenseLine> and <Drives::SendCommand>).
+; The 3.5 drive's registers this file reads and the commands it gives (see <Drives::SenseLine> and
+; <Drives::SendCommand>).
 
 ; The card's own errors.
 
@@ -29,7 +30,7 @@ LIST_LIMIT_HIGH = $04
 ;; The interleaves control $0A and SETFORMAT take are below this.
 INTERLEAVE_LIMIT = 13
 
-;; Runs the control call in ParameterLow: asks the host for the control list (Count and CountHigh bytes) in
+;; Runs the control call in <ParameterLow>: asks the host for the control list (<Count> and CountHigh bytes) in
 ;; <TransferBuffer>, waits for it, and jumps to the code's handler, which ends the command.
 ;; Out: carry = clear; ErrorCode = <ERROR_BAD_CONTROL> for a code past $13 or one the unit does not take,
 ;;      <ERROR_BAD_CONTROL_PARAMETER> for a list of $400 bytes or more, else the handler's
@@ -87,7 +88,7 @@ Handlers:
     .word SetCache, SetAddress, Download, Execute, Peek                         ; $0F-$13
 .assert * - Handlers = CODE_COUNT * 2, "A handler for each control code."
 
-;; Control $0D: puts the GCR marks and sync bytes (Marks to the end of AddressMark) back from the ROM.
+;; Control $0D: puts the GCR marks and sync bytes (<Marks> to the end of <AddressMark>) back from the ROM.
 ;; Out: carry = clear, ErrorCode = 0
 .proc RestoreMarks
     ldx #MARKS_LENGTH
@@ -99,7 +100,7 @@ Loop:
     bra SetSides::Succeed
 .endproc
 
-;; The length of the marks <RestoreMarks> puts back: Marks, DataMark, SyncBytes, Epilogue and AddressMark.
+;; The length of the marks <RestoreMarks> puts back: <Marks>, <DataMark>, <SyncBytes>, <Epilogue> and <AddressMark>.
 MARKS_LENGTH = $16
 .assert MARKS_LENGTH = AddressMark + 4 - Marks, "The marks end with AddressMark's four bytes."
 
@@ -115,7 +116,7 @@ Loop:
     bra SetSides::Succeed
 .endproc
 
-;; Control $0F: one byte, whose bit 7 goes to CacheOption; the cache is flushed. The list's length is checked but
+;; Control $0F: one byte, whose bit 7 goes to <CacheOption>; the cache is flushed. The list's length is checked but
 ;; not acted on, so a list of any length is taken.
 ;; Out: carry = clear, ErrorCode = 0
 .proc SetCache
@@ -191,8 +192,8 @@ Done:
 .endproc
 
 ;; Control $12: calls code in the card at the address in the list's bytes 4 and 5, with A, X, Y and the status from
-;; its first four (<CallUser>), and keeps what the code returns in ResultA, ResultX, ResultY and ResultStatus, for
-;; status code 5.
+;; its first four (<CallUser>), and keeps what the code returns in <ResultA>, <ResultX>, <ResultY> and <ResultStatus>,
+;; for status code 5.
 ;; Out: carry = clear
 .proc Execute
     jsr CallUser
@@ -206,7 +207,7 @@ Done:
     rts
 .endproc
 
-;; Control $13: two bytes, an address in the card, whose byte goes to Retries for status code 5. A list of the wrong
+;; Control $13: two bytes, an address in the card, whose byte goes to <Retries> for status code 5. A list of the wrong
 ;; length ends the call with <ERROR_BAD_CONTROL_PARAMETER> but still reads the byte at the address set before.
 ;; Out: carry = clear
 .proc Peek
@@ -237,9 +238,9 @@ Done:
     ; Falls into TakeAddress.
 .endproc
 
-;; Takes UserPointer from the list's first two bytes, if the list has the length expected.
+;; Takes <UserPointer> from the list's first two bytes, if the list has the length expected.
 ;; In: A = the length
-;; Out: carry = clear; ErrorCode = <ERROR_BAD_CONTROL_PARAMETER> (and UserPointer unchanged) if not
+;; Out: carry = clear; ErrorCode = <ERROR_BAD_CONTROL_PARAMETER> (and <UserPointer> unchanged) if not
 ;; Entry:
 ;;   ToBadParameter = ends with <ERROR_BAD_CONTROL_PARAMETER>
 .proc TakeAddress
@@ -255,9 +256,9 @@ ToBadParameter:
     jmp Run::BadParameter
 .endproc
 
-;; Control $11: copies the control list to the card's RAM at UserPointer, leaving the pointer where it was. It copies
-;; Count bytes and 256 more for each in CountHigh, with a Count of 0 counting 256, so a list a multiple of 256 bytes
-;; long copies 256 bytes too many.
+;; Control $11: copies the control list to the card's RAM at <UserPointer>, leaving the pointer where it was. It copies
+;; <Count> bytes and 256 more for each in <CountHigh>, with a <Count> of 0 counting 256, so a list a multiple of 256
+;; bytes long copies 256 bytes too many.
 ;; Out: carry = clear; Count and CountHigh used up
 .proc Download
     ldx UserPointer + 1
@@ -315,7 +316,7 @@ Done:
 
 ;; Ejects a drive's disk, if it has one: turns the motor off and waits 200 ms if it is on, gives the eject command,
 ;; then waits up to about 2 s, polling every 10 ms, for the disk to leave, and forgets the disk once it has. Sets
-;; Retries to 3, and EjectDrive to the drive while it works (a reset meanwhile finishes the eject).
+;; <Retries> to 3, and <EjectDrive> to the drive while it works (a reset meanwhile finishes the eject).
 ;; In: X = the drive, enabled
 ;; Out: carry = clear; ErrorCode = <ERROR_IO> if the disk did not leave
 ;; Keeps: X
@@ -380,10 +381,10 @@ ControllerName:
     .byte "APPLE UNIVERSAL 3.5 CONTROLLER"
 .assert * - ControllerName = CONTROLLER_NAME_LENGTH, "The name's length."
 
-;; Builds the status list for the status code in ParameterLow. Unit 0 takes code 0, the controller's eight bytes,
+;; Builds the status list for the status code in <ParameterLow>. Unit 0 takes code 0, the controller's eight bytes,
 ;; and code 1, its name. A drive takes code 0, its general status (the status byte and the block count, four bytes,
 ;; or five for an extended call); code 3, its DIB, which starts with the same bytes; and code 5, the last command's
-;; result (ErrorCode and the seven bytes after it). Other codes answer <ERROR_BAD_CONTROL>; code 6 is tested apart
+;; result (<ErrorCode> and the seven bytes after it). Other codes answer <ERROR_BAD_CONTROL>; code 6 is tested apart
 ;; but answers it too.
 ;; Out: carry = clear; Count, CountHigh = the list's length and CardData = <TRANSFER_BUFFER_CODE>, or ErrorCode =
 ;;      the error
@@ -539,7 +540,7 @@ CopyDib:
     jmp Done
 .endproc
 
-;; An Apple 3.5 Drive's DIB, after the status byte and block count: the name's length and the name, padded to 16;
+;; An Apple 3.5 <Drive>'s DIB, after the status byte and block count: the name's length and the name, padded to 16;
 ;; the type, subtype and version; then <DIB_END>.
 Apple35Information:
     .byte 8, "DISK 3.5        "
@@ -559,7 +560,7 @@ FdhdInformation:
     OPTIONS .word ;; How many formats follow.
     SHOWN .word ;; How many to show: the same count here.
     DEFAULT .word ;; The format FORMAT writes by default.
-    CURRENT .word ;; The disk's kind, from MediaKind.
+    CURRENT .word ;; The disk's kind, from <MediaKind>.
 .endstruct
 
 ;; One format in a <FormatOptionList>.
@@ -574,18 +575,18 @@ FdhdInformation:
 .endstruct
 
 ;; The 3.5 controller's FORMATOPTIONS ($0B) and SETFORMAT ($0A): the formats a drive can write, and the one the next
-;; FORMAT writes. A format kind is MediaKind's number: 2 400K, 4 800K, 6 800K (with interleave 2), 8 720K, $0A 1440K,
+;; FORMAT writes. A format kind is <MediaKind>'s number: 2 400K, 4 800K, 6 800K (with interleave 2), 8 720K, $0A 1440K,
 ;; and $0C, 1440K with interleave 1, which FORMATOPTIONS lists after $0A.
 .scope FormatOptions
 
 ;; The kinds are even numbers below this.
 KIND_LIMIT = $0D
 
-;; Lists the formats a drive can write, after an eight-byte header: 400K and 800K on an Apple 3.5 Drive, and on an
-;; FDHD drive 1440K (twice), 800K, 400K and 720K. The default is 1440K when MediaMode says the disk is high density,
+;; Lists the formats a drive can write, after an eight-byte header: 400K and 800K on an Apple 3.5 <Drive>, and on an
+;; FDHD drive 1440K (twice), 800K, 400K and 720K. The default is 1440K when <MediaMode> says the disk is high density,
 ;; else 800K.
 ;; Out: carry = clear; Count, CountHigh = the list's length and CardData = <TRANSFER_BUFFER_CODE>, or ErrorCode =
-;;      <ERROR_BAD_UNIT> for unit 0, or the error <FailBadParameter> gives when ParameterLow and ParameterMiddle ask
+;;      <ERROR_BAD_UNIT> for unit 0, or the error <FailBadParameter> gives when <ParameterLow> and <ParameterMiddle> ask
 ;;      for fewer bytes than the list has
 .proc List
     ldx Drive
@@ -728,7 +729,7 @@ Done:
     rts
 .endproc
 
-;; One format kind's entry in <Kinds>.
+;; One format kind's entry in <FormatOptions::Kinds>.
 ;; Parameters:
 ;;   interleave = its interleave
 ;;   type = its type, which FORMATOPTIONS gives

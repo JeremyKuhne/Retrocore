@@ -1,5 +1,5 @@
 ; retrocore: style=strict
-;; THE CARD'S FIRMWARE: FORMATTING
+;; The card's firmware: formatting
 ;;
 ;; SmartPort FORMAT for the 3.5 drives: <FormatDisk> writes every track of the disk, 80 cylinders of one or two sides,
 ;; and reads each back before going on. A GCR track (400K and 800K) is written through the IWM byte by byte: sync
@@ -64,8 +64,9 @@ TRIES = $03
 ;; for a high-density disk), reading each track back, then finds the new disk's format. A disk that fails is ejected.
 ;; Only Apple 3.5 drives call <FormatHook>, whose carry set refuses the format.
 ;; Out: carry = clear, ErrorCode = 0, or <ERROR_BAD_COMMAND> for the controller, <ERROR_OFFLINE>,
-;;      <ERROR_DISK_SWITCHED> or <ERROR_WRITE_PROTECTED> from Drives::CheckDisk, <ERROR_BAD_CONTROL> for a kind the drive or
-;;      disk cannot take, <ERROR_IO> for a track that fails, or Drives::IdentifyMedia's error for the formatted disk
+;;      <ERROR_DISK_SWITCHED> or <ERROR_WRITE_PROTECTED> from <Drives::CheckDisk>, <ERROR_BAD_CONTROL> for a kind the
+;; drive or
+;;      disk cannot take, <ERROR_IO> for a track that fails, or <Drives::IdentifyMedia>'s error for the formatted disk
 .proc FormatDisk
     .using Format
 
@@ -298,7 +299,7 @@ Gcr:
 ;; field and an empty data field (703 encoded zeros: the 12 tag bytes, the 512 data bytes and the checksum), in
 ;; the order <Format::MakeInterleave> builds. The first track of each zone waits first for the drive to reach the
 ;; zone's speed.
-;; Out: carry = set if the IWM ran out of bytes to write (DiskErrors bit 6)
+;; Out: carry = set if the IWM ran out of bytes to write (<DiskErrors> bit 6)
 .proc WriteGcrTrack
 ;; The sync groups before the first sector.
 FIRST_SYNC_GROUPS = $C8
@@ -584,7 +585,7 @@ OneSide:
     rts
 .endproc
 
-;; Builds InterleaveMap: the track's sectors in the order they are written, read from the map's end. Each next sector
+;; Builds <InterleaveMap>: the track's sectors in the order they are written, read from the map's end. Each next sector
 ;; is <Interleave> places before the last, wrapping, on the next free place. An interleave of 0 becomes 1, and one
 ;; past the sectors less 2 is cut to that.
 ;; Out: carry = clear

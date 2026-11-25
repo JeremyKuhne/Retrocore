@@ -2,7 +2,7 @@
 ;; THE APPLE II 3.5 DISK CONTROLLER CARD'S OWN FIRMWARE ($D000-$FFFF)
 ;;
 ;; What the card's 65C02 runs: it waits for the host's commands in its page zero, and answers ProDOS and
-;; SmartPort calls for up to two 3.5 drives on its own port (the Apple 3.5 Drive, GCR 400K and 800K, and the
+;; SmartPort calls for up to two 3.5 drives on its own port (the Apple 3.5 <Drive>, GCR 400K and 800K, and the
 ;; Apple FDHD, which adds MFM 720K and 1440K) and for SmartPort bus devices such as the UniDisk 3.5 on its
 ;; second port, which it passes their calls to. Assembles byte-identically as part of Disk35Controller.asm; this
 ;; file holds the start-up, the command loop and the ROM's last page, and includes the subject files between.
@@ -58,10 +58,10 @@ OPCODE_RTS = $60
 
 ; The card's RAM.
 
-;; A GCR sector's nibbles for <WRITEDATAGCR>: the first of three 175-byte lanes.
+;; A GCR sector's nibbles for <WriteGcrDataField>: the first of three 175-byte lanes.
 NibbleLane1 = $0100
 
-;; A sector's 12 tag bytes, as <READDATAGCR> reads them.
+;; A sector's 12 tag bytes, as <ReadGcrDataField> reads them.
 TagBytes = $01B2
 
 ;; The host's $C800 code, which the host runs at $CA00-$CBFF with bank 0 latched.
@@ -312,7 +312,7 @@ Ran:
 ;; extended STATUS with code 0 may name a unit with bit 7 set, which is taken without the bit and noted in
 ;; <UnitWithHighBit>.
 ;; Out: carry = clear when the card is ready for another command, set when the handler left it waiting;
-;;      ErrorCode ($56) = the error, CardData = 0 when the result is final
+;;      <ErrorCode> ($56) = the error, CardData = 0 when the result is final
 ;; Entry:
 ;;   CallHandler = runs the handler for <CardState> on the 3.5 drives' port; <BootRead> comes here
 ;;   PassToBus = passes the command to the bus device in <CardUnit>; <BootRead> comes here
@@ -415,12 +415,13 @@ Done:
 CommandHandlers:
     .word Status::Run, ReadBlock, WriteBlock, Format::Command ; $00-$03: STATUS, READBLOCK, WRITEBLOCK, FORMAT
     .word Control::Run, InitializeCard, FailBadCommand, FailBadCommand ; $04-$07: CONTROL, INIT, OPEN, CLOSE
-    .word ReadWriteTagged, ReadWriteTagged, FormatOptions::Set, FormatOptions::List ; $08-$0B: READ, WRITE, SETFORMAT, FORMATOPTIONS
+    ; $08-$0B: READ, WRITE, SETFORMAT, FORMATOPTIONS.
+    .word ReadWriteTagged, ReadWriteTagged, FormatOptions::Set, FormatOptions::List
     .word BootRead, ReadAhead, ReadSpan ; $0C-$0E: the boot read, READAHEAD, READSPAN
 .assert * - CommandHandlers = (COMMAND_READ_SPAN + 1) * 2, "A handler for each command, $00-$0E."
 
 ;; Ends a command with <ERROR_BAD_COMMAND> and no data.
-;; Out: carry = clear, A = ErrorCode = ERROR_BAD_COMMAND, CardData = 0
+;; Out: carry = clear, A = ErrorCode = <ERROR_BAD_COMMAND>, CardData = 0
 ;; Keeps: X, Y
 .proc FailBadCommand
     lda #ERROR_BAD_COMMAND
@@ -439,7 +440,7 @@ CommandHandlers:
 .endproc
 
 ;; Ends a command with <ERROR_BAD_CONTROL_PARAMETER>, a bad parameter (a wrong byte count).
-;; Out: carry = clear, A = ErrorCode = ERROR_BAD_CONTROL_PARAMETER, CardData = 0
+;; Out: carry = clear, A = ErrorCode = <ERROR_BAD_CONTROL_PARAMETER>, CardData = 0
 ;; Keeps: X, Y
 .proc FailBadParameter
     lda #ERROR_BAD_CONTROL_PARAMETER

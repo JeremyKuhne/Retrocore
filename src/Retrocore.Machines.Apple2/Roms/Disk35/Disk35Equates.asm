@@ -9,10 +9,10 @@
 ;;   Host $CC00-$CFFF  card $7C00-$7FFF   always
 ;;
 ;; The SWIM (Sander-Wozniak Integrated Machine) answers at $0A00-$0A0F. At reset it is an IWM (Integrated Woz
-;; Machine), whose sixteen addresses are switches like the Disk II controller's ([DiskII.md](../../../../docs/DiskII.md));
-;; written with the right sequence it becomes the ISM, whose registers are written at $0A00-$0A07 and read at
-;; $0A08-$0A0F. The ISM's registers keep the names Apple's Macintosh sources give them (SonyEqu.a), which no
-;; document in the bibliography gives, so they cite UNKN.
+;; Machine), whose sixteen addresses are switches like the Disk II controller's
+;; ([DiskII.md](../../../../docs/DiskII.md)); written with the right sequence it becomes the ISM, whose registers are
+;; written at $0A00-$0A07 and read at $0A08-$0A0F. The ISM's registers keep the names Apple's Macintosh sources give
+;; them (SonyEqu.a), which no document in the bibliography gives, so they cite UNKN.
 
 ;; The SWIM as an IWM: each address is a switch, set by any access. Q6 and Q7 together choose what a read gives
 ;; and what a write does: with both off a read gives the data, with Q6 on and Q7 off the status, with Q6 off and Q7

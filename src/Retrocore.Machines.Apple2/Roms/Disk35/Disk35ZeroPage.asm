@@ -173,7 +173,7 @@ CacheSlot:
 Drive:
     .byte $00
 
-;; Drives::WaitReady's counter.
+;; <Drives::WaitReady>'s counter.
 WaitCount:
     .byte $00, $00
 
@@ -201,7 +201,7 @@ SpanCylinder:
 MediaMode:
     .byte $00, $00, $00, $00, $00
 
-;; The sense lines before the last Drives::ReadStatus.
+;; The sense lines before the last <Drives::ReadStatus>.
 PreviousSense:
     .byte $00
 
@@ -241,23 +241,23 @@ ErrorCode:
 DiskErrors:
     .byte $00
 
-;; Retries left; Control::Peek's byte.
+;; Retries left; <Control::Peek>'s byte.
 Retries:
     .byte $00
 
-;; Control::Execute's A; also counts errors.
+;; <Control::Execute>'s A; also counts errors.
 ResultA:
     .byte $00
 
-;; Control::Execute's X; also counts errors.
+;; <Control::Execute>'s X; also counts errors.
 ResultX:
     .byte $00
 
-;; Control::Execute's Y; also a retry count.
+;; <Control::Execute>'s Y; also a retry count.
 ResultY:
     .byte $00
 
-;; Control::Execute's P; also a seek count.
+;; <Control::Execute>'s P; also a seek count.
 ResultStatus:
     .byte $00
 
@@ -277,7 +277,7 @@ CacheOption:
 ReadState:
     .byte $00
 
-;; Negative during ReadWriteTagged.
+;; Negative during <ReadWriteTagged>.
 TagCall:
     .byte $00
 
@@ -319,7 +319,7 @@ Reading:
 BusCount:
     .byte $00, $00
 
-;; Where NibblizeSector starts.
+;; Where <NibblizeSector> starts.
 NibbleStart:
     .byte $00
 
@@ -327,7 +327,7 @@ NibbleStart:
 EjectDrive:
     .byte $80
 
-;; The vectors' length, for Control::RestoreVectors.
+;; The vectors' length, for <Control::RestoreVectors>.
 VectorLength:
     .byte $1B, $00
 

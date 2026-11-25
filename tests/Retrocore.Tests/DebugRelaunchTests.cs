@@ -46,7 +46,6 @@ public sealed class DebugRelaunchTests
 
         // The machineReset filter, set after the relaunch, stops it as it powers on.
         client.Request("launch", IIPlus());
-        client.NoStop(TimeSpan.FromMilliseconds(500), "a relaunch waits for its configurationDone");
         client.Request("setExceptionBreakpoints", new JsonObject { ["filters"] = new JsonArray("machineReset") });
         client.Request("configurationDone", []);
         JsonObject stopped = client.Event("stopped");

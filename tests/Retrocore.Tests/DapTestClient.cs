@@ -40,20 +40,7 @@ internal sealed class DapTestClient : DisposableBase
         _hostOutput = new(PipeDirection.Out, _fromHost.ClientSafePipeHandle);
         DapTransport transport = new(_hostInput, _hostOutput);
         _session.Register(transport, transport.Stop);
-        _host = new(() =>
-        {
-            try
-            {
-                transport.Run();
-            }
-            finally
-            {
-                _hostOutput.Dispose();
-            }
-        })
-        {
-            IsBackground = true
-        };
+        _host = new(transport.Run) { IsBackground = true };
 
         _reader = new(Read) { IsBackground = true };
         _host.Start();
@@ -134,9 +121,9 @@ internal sealed class DapTestClient : DisposableBase
                 (message.String("type") == "response" ? _responses : _events).Add(message);
             }
         }
-        catch (IOException)
+        catch (Exception exception) when (exception is IOException or ObjectDisposedException)
         {
-            // The host has gone.
+            // The host has gone, or the client is closing.
         }
     }
 
@@ -160,7 +147,8 @@ internal sealed class DapTestClient : DisposableBase
     }
 
     /// <summary>
-    ///  Closes the session's input, which ends its transport, then ends the session and closes the pipes.
+    ///  Closes the session's input, which ends its transport, then ends the session, which stops a running machine,
+    ///  before closing its output, so nothing writes an event to a closed pipe.
     /// </summary>
     /// <param name="disposing">Whether it is disposing rather than finalizing.</param>
     protected override void Dispose(bool disposing)
@@ -169,6 +157,7 @@ internal sealed class DapTestClient : DisposableBase
         _toHost.Dispose();
         _host.Join(s_timeout);
         _session.End();
+        _hostOutput.Dispose();
         _reader.Join(s_timeout);
         _hostInput.Dispose();
         _fromHost.Dispose();

@@ -1,7 +1,10 @@
+; retrocore: style=strict
 ;; COMMODORE PET BASIC 4
 ;;
 ;; The BASIC 4 interpreter and its monitor and disk-command extension occupy $B000-$DFFF.
 ;; Set <REVISD> to 0 for the original $B000 ROM chip or 1 for the revised chip.
+;;
+;; It assembles byte-identically to Commodore's chips: `PetRomSourceTests` checks every build against their digests.
 
 .cpu Mos6502
 
@@ -23,27 +26,45 @@
 .assert .not .defined(ZERO_AT_FHALF), "Predefine ZERO_IN_HALF_CONSTANT, not ZERO_AT_FHALF."
 
 .ifndef REVISD
-REVISD = 1                          ;; 1 selects the revised $B000 BASIC 4 chip
+;; 1 selects the revised $B000 BASIC 4 chip.
+REVISD = 1
 .endif
 .assert REVISD = 0 || REVISD = 1, "REVISD is 0 or 1."
 
 .ifndef DISK_STATUS_STRING
-DISK_STATUS_STRING = 1              ;; reserve the disk-status string descriptor
+;; Reserve the disk-status string descriptor.
+DISK_STATUS_STRING = 1
 .endif
 .ifndef LINE_WIDTH_STORAGE
-LINE_WIDTH_STORAGE = 0              ;; omit the later interpreter's line-width storage
+;; Omit the later interpreter's line-width storage.
+LINE_WIDTH_STORAGE = 0
 .endif
 .ifndef EXTENDED_DISK_VECTORS
-EXTENDED_DISK_VECTORS = 1           ;; include the disk-command vectors
+;; Include the disk-command vectors.
+EXTENDED_DISK_VECTORS = 1
 .endif
 
-ROMLOC = $B000                      ;; start of the BASIC 4 ROM
-SHORT_MULTIPLY_ZERO = 0             ;; use the later multiply-by-zero branch
-EARLY_INPUT_EXPONENT_LIMIT = 0      ;; use the later decimal exponent limit
-PRECISE_OUTPUT_LIMIT = 0            ;; use the later decimal-output threshold
-ZERO_IN_HALF_CONSTANT = 1           ;; define <ZeroValue> within the half constant
-WAIT_EASTER_EGG = 0                 ;; omit BASIC 2's hidden WAIT message
-BASIC4_OUTPUT_PADDING = 1           ;; include BASIC 4's output patch space
+;; Start of the BASIC 4 ROM.
+;; Also: ROMLOC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+ROM_ORIGIN = $B000
+
+;; Use the later multiply-by-zero branch.
+SHORT_MULTIPLY_ZERO = 0
+
+;; Use the later decimal exponent limit.
+EARLY_INPUT_EXPONENT_LIMIT = 0
+
+;; Use the later decimal-output threshold.
+PRECISE_OUTPUT_LIMIT = 0
+
+;; Define <ZeroValue> within the half constant.
+ZERO_IN_HALF_CONSTANT = 1
+
+;; Omit BASIC 2's hidden WAIT message.
+WAIT_EASTER_EGG = 0
+
+;; Include BASIC 4's output patch space.
+BASIC4_OUTPUT_PADDING = 1
 
 ; Define the shared interpreter, linked-string collector and BASIC 4 extension.
 .include "Commodore.InterpreterMacros.asm"
@@ -66,36 +87,36 @@ BASIC4_OUTPUT_PADDING = 1           ;; include BASIC 4's output patch space
     CommodoreTokenize 1, 0
 .include "../../Microsoft6502Basic/MsBasic.LineSearch.asm"
 
-; Program control, statement dispatch and assignment.
+    ; Program control, statement dispatch and assignment.
     ProgramReset 0, 0, 1, 1
-    ClearStatement STKRTS
+    ClearStatement ResetStack::Done
     ClearStorage 1, 1
     ExecutionReset 0, 0, $FA
-    ListRange 0, FLNRTS
-    ListLines 1, 1, 0, LINPRT, 0, READY
+    ListRange 0, FindLine::Done
+    ListLines 1, 1, 0, Float::PrintDecimalAX, 0, ReadyForCommand
     ListTokens 1, 1, 1, 0
 .include "../../Microsoft6502Basic/MsBasic.For.asm"
 .if REVISD
-    CommodoreStatementFetch INPUT_BUFFER_PAGE, 0, 0, 0, GONEGT
+    CommodoreStatementFetch 0, 0, 0, FetchStatementCharacter
 .else
-    CommodoreStatementFetch INPUT_BUFFER_PAGE, 0, 0, 0, CHRGET
+    CommodoreStatementFetch 0, 0, 0, GetNextCharacter
 .endif
     CommodoreStatementDispatch 0, 1
     RestoreStatement
     StopAndContinue 1, 0
     RunStatement
-    GosubAndGoto NEWSTT
+    GosubAndGoto NextStatement
     ReturnStatement 0, 0
     StatementScan 0, 0
     ConditionalStatements
     OnStatement
 .include "../../Microsoft6502Basic/MsBasic.LineNumber.asm"
     AssignmentStart
-    TIME_STRING_ASSIGNMENT 0
+    TimeStringAssignment 0
     StringAssignment 1, 1
-    STRING_LINK_ADJUST REVISD
+    StringLinkAdjust REVISD
 
-; Terminal and channel output, then READ and input.
+    ; Terminal and channel output, then READ and input.
     CommodorePrintChannels
     PrintItems PrintTabOrSpace, 1, 0, 1
     CommodoreLineEnd INPUT_BUFFER_PAGE, 0, 1, 0
@@ -108,11 +129,11 @@ BASIC4_OUTPUT_PADDING = 1           ;; include BASIC 4's output patch space
     VariableInput INPUT_BUFFER_PAGE, 0, 0, 0, 1, 0
     VariableInputMessages 0, 0
 
-; Expressions, variables, arrays and linked strings.
-    NextEntries 0, NEWSTT
+    ; Expressions, variables, arrays and linked strings.
+    NextEntries 0, NextStatement
     ExpressionCore 1
-    OperandEvaluation 1, 1, ISFUN
-    COMMODORE_BASIC4_OPERAND_SPLIT REVISD
+    OperandEvaluation 1, 1, CallFunction
+    CommodoreBasic4OperandSplit REVISD
     CommodoreVariableValue 1, 0, 1
     FunctionDispatch
     LogicalOperators 1
@@ -122,7 +143,7 @@ BASIC4_OUTPUT_PADDING = 1           ;; include BASIC 4's output patch space
     LetterTest
     SimpleVariableLookup 0, 0, 0, 1, 1, 1, 1, 0
     IntegerConversionBoundary
-    IntegerConversion FRMEVL, 1
+    IntegerConversion EvaluateExpression, 1
     ArrayLookup 0, 1, 1
 .include "../../Microsoft6502Basic/MsBasic.ArrayMultiplication.asm"
     SimpleFunctions 0
@@ -130,22 +151,26 @@ BASIC4_OUTPUT_PADDING = 1           ;; include BASIC 4's output patch space
     StringFromNumber
     StringStorage INPUT_BUFFER_PAGE, 1
     StringAllocation 1
-    LINKED_STRING_GARBAGE_COLLECTION
+    LinkedStringGarbageCollection
     StringConcatenation 1
     StringFunctions 0, 0, 0, 1
 
-; Memory access, floating point, startup and the BASIC 4 extension.
+    ; Memory access, floating point, startup and the BASIC 4 extension.
     AddressConversion 1
     PeekFunction 1, 1, 0, 0
     PokeStatement
-    WaitStatement STORDO
+    WaitStatement Statements::Wait::StoreMask
 .include "Commodore.FloatingPoint.asm"
 .include "Commodore.HistoricalNames.asm"
     CharacterReader $58
-    CommodoreInitialize 0, 0, 0, 0, INPUT_BUFFER_PAGE, 1, 0
+    CommodoreInitialize 0, 0, 0, 1, 0
     CommodoreMemoryProbe 0, 0, 1, 1, 0, $55
-    CommodoreStartProgram 0, 0, 0, 0, SIGNON
+    CommodoreStartProgram 0, 0, 0, 0, Basic4SignOnMessage
     CommodoreStartMessages 0
-LASTWR:
-    COMMODORE_BASIC4_EXTENSION REVISD
+
+;; The address after the interpreter's last byte, where the monitor and disk-command extension begin. BASIC 4's `PEEK`
+;; has no ROM guard, so nothing refers to it; the extension's `.assert` checks the same address.
+;; Also: LASTWR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, K4S79, HVK4)
+InterpreterEnd:
+    CommodoreBasic4Extension REVISD
 .assert * = $E000, "BASIC 4 must end at $DFFF."

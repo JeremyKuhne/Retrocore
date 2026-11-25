@@ -95,7 +95,13 @@ public sealed class BasicInterpreterConversionTests
         AssemblyResult legacy = PetLegacyBasic.Assemble(PetFolder, model, original);
         BasicWorkspaceConversionTests.CheckAgainstOverlay(
             native, legacy, CommodoreFiles, minimum: MinimumOverlayNames,
-            model == PetModel.Pet2001 ? [.. s_commodoreSdkNames, .. s_basic1SdkNames] : s_commodoreSdkNames,
+            model switch
+            {
+                PetModel.Pet2001 =>
+                    [.. s_commodoreSdkNames, .. s_basic1SdkNames, .. BasicWorkspaceConversionTests.Basic4OverlayNames],
+                PetModel.Pet2001Basic2 => [.. s_commodoreSdkNames, .. BasicWorkspaceConversionTests.Basic4OverlayNames],
+                _ => s_commodoreSdkNames
+            },
             scoped: true);
     }
 

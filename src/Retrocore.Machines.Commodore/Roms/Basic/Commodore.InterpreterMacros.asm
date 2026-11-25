@@ -1,7 +1,8 @@
-; COMMODORE BASIC: SHARED INTERPRETER MACROS
-;
-; Define the platform and interpreter macros without emitting bytes. Each BASIC root selects their
-; independent options and emits them in that ROM's order.
+; retrocore: style=strict
+;; COMMODORE BASIC: THE INTERPRETER'S MACROS
+;;
+;; Defines Commodore's platform macros (Commodore.Platform.asm) and the shared Microsoft modules' macros, without
+;; emitting bytes. Each PET root then invokes them with its own options, in its ROM's order.
 
 .include "Commodore.Platform.asm"
 .include "../../Microsoft6502Basic/MsBasic.Next.asm"

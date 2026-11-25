@@ -172,7 +172,7 @@ Done:
     jsr ReleaseTemporary
     .if linkedRelease
         bne ReadDescriptor
-        jsr STRADJ
+        jsr FindStringLink
         bcc ReadDescriptor
         dey
         lda #$FF

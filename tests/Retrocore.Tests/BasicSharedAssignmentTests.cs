@@ -361,7 +361,7 @@ public sealed class BasicSharedAssignmentTests
         string clockBlock = longLengthError is { } longError
             ? $"""
                 .include "Commodore.TimeAssignment.asm"
-                    TIME_STRING_ASSIGNMENT {(longError ? 1 : 0)}
+                    TimeStringAssignment {(longError ? 1 : 0)}
                 ASSIGNMENT_TIME_END:
                 """
             : "";
@@ -376,7 +376,7 @@ public sealed class BasicSharedAssignmentTests
                 .include "Commodore.StringAssignment.asm"
                 .org ${legacy.Symbol("GETSPT"):X4}
                     StringAssignment 1, 1
-                    STRING_LINK_ADJUST {(patchedStatus ? 1 : 0)}
+                    StringLinkAdjust {(patchedStatus ? 1 : 0)}
                 ASSIGNMENT_STRING_END:
                 """;
 

@@ -659,9 +659,10 @@ public sealed class BasicSharedGarbageCollectionTests
         string folder = Path.Join(Inputs, "Pet", "Basic");
         string source = $"""
             .cpu Mos6502
+            .include "../../Microsoft6502Basic/MsBasic.Layouts.asm"
             .include "Commodore.StringGarbageCollection.asm"
             .org ${legacy.Symbol("GARBA2"):X4}
-                LINKED_STRING_GARBAGE_COLLECTION
+                LinkedStringGarbageCollection
             COLLECTOR_END:
             """;
 
@@ -694,7 +695,7 @@ public sealed class BasicSharedGarbageCollectionTests
         string options = PetWorkspaceOptions(early, linked);
         string linkedSource = linked ? ".include \"Commodore.StringGarbageCollection.asm\"" : "";
         string collector = linked
-            ? "LINKED_STRING_GARBAGE_COLLECTION"
+            ? "LinkedStringGarbageCollection"
             : $"StringGarbageCollection {(early ? 0 : 1)}, {(early ? 1 : 0)}, {(early ? 1 : 0)}";
 
         string source = $"""
@@ -762,7 +763,7 @@ public sealed class BasicSharedGarbageCollectionTests
             {workspace}
             .include "Commodore.StringGarbageCollection.asm"
             .org ${legacy.Symbol("GARBA2"):X4}
-                LINKED_STRING_GARBAGE_COLLECTION
+                LinkedStringGarbageCollection
             COLLECTOR_END:
             """;
 

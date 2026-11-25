@@ -81,7 +81,8 @@ AssignString:
 .endmacro
 
 ;; Emits the common string-assignment code, with optional platform hooks.
-;; Parameters: statusCheck = 1 to invoke `STRING_STATUS_CHECK`, linkedCollector = 1 to invoke `LINKED_STRING_STORE`
+;; Parameters: statusCheck = 1 to invoke `StringStatusCheck`, linkedCollector = 1 to invoke `LinkedStringRelease` and
+;;   `LinkedStringStore`
 .macro StringAssignment statusCheck, linkedCollector
     .assert statusCheck = 0 || statusCheck = 1, "statusCheck must be 0 or 1."
     .assert linkedCollector = 0 || linkedCollector = 1, "linkedCollector must be 0 or 1."
@@ -99,7 +100,7 @@ AssignString:
     ldy #$02
     lda (FacMantissa3),y
     .if statusCheck
-        STRING_STATUS_CHECK
+        StringStatusCheck
     .endif
     cmp StringsBottom+1
     bcc KeepCharacters
@@ -139,9 +140,10 @@ CopyCharacters:
     sty StringPointer+1
     jsr Strings::CopyString
     .if linkedCollector
-        ; Falls into BASIC 4's linked store, which ends at its own StoreDescriptor.
+        LinkedStringRelease
+        ; Falls into StoreDescriptor, BASIC 4's linked copy.
         .endproc
-        LINKED_STRING_STORE
+        LinkedStringStore
     .else
         lda #<NewDescriptor
         ldy #$00

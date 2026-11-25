@@ -145,10 +145,10 @@ public sealed class PetBasic4RevisionTests
             .include "Commodore.StringAssignment.asm"
             .include "Commodore.Basic4Patches.asm"
             .org ${legacy.Symbol("STRADJ"):X4}
-                STRING_LINK_ADJUST {(original ? 0 : 1)}
+                StringLinkAdjust {(original ? 0 : 1)}
             ADJUSTMENT_END:
             .org ${legacy.Symbol("ISVAR") - 1:X4}
-                COMMODORE_BASIC4_OPERAND_SPLIT {(original ? 0 : 1)}
+                CommodoreBasic4OperandSplit {(original ? 0 : 1)}
             PATCH_END:
             """;
 
@@ -166,7 +166,7 @@ public sealed class PetBasic4RevisionTests
                 CommodoreInputStatement 0, 3, {(original ? 0 : 1)}, 0, 1
             INPUT_END:
             .org ${legacy.Symbol("ISVAR") - 1:X4}
-                COMMODORE_BASIC4_OPERAND_SPLIT {(original ? 0 : 1)}
+                CommodoreBasic4OperandSplit {(original ? 0 : 1)}
             PATCH_END:
             """;
 

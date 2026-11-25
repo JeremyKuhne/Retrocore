@@ -418,6 +418,19 @@ internal static partial class BasicNames
         string.Join('\n', CurrentNames(name).Where(current => !IsScoped(current)).Prepend(name).Select(label => $"{label}:"));
 
     /// <summary>
+    ///  Gets the source that defines a label a test's own source gives one of Microsoft's names, as
+    ///  <see cref="Label(string)"/> does, but under the names one build defines it by: for a name such as ON, which
+    ///  the builds give to different definitions.
+    /// </summary>
+    /// <param name="name">The label, as Microsoft's source has it.</param>
+    /// <param name="build">
+    ///  The build's key, from <see cref="Build(Apple2Model)"/> or <see cref="Build(PetModel, bool)"/>.
+    /// </param>
+    /// <returns>The label definitions, one per line.</returns>
+    internal static string Label(string name, string build) =>
+        string.Join('\n', CurrentNames(name, Tables(), build).Where(current => !IsScoped(current)).Prepend(name).Select(label => $"{label}:"));
+
+    /// <summary>
     ///  Gets the source that defines a label a test's own source gives one of Microsoft's names, under the unscoped
     ///  names the native BASIC builds now define it by, or under the old name where they define none. Unlike
     ///  <see cref="Label(string)"/>, it never defines an old name that an <c>;; Also:</c> in the build's sources gives,
@@ -589,9 +602,7 @@ internal static partial class BasicNames
 
     private static readonly Dictionary<string, string> s_overlayOnlyLabels = new(StringComparer.Ordinal)
     {
-        ["LENFLT"] = "Functions::Len::ToFloat",
-        ["NOTDS"] = "StoreString::NOTDS",
-        ["NOTDS1"] = "StoreString::NOTDS1"
+        ["LENFLT"] = "Functions::Len::ToFloat"
     };
 
     /// <summary>

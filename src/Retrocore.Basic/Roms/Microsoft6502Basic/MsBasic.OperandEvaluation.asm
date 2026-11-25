@@ -32,12 +32,12 @@ NextCharacter:
 ;; Also: EVAL1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 ToParseNumber:
     jmp Float::ReadNumber
-;; Not a digit: a letter goes to the vendor's variable operand, <ISVAR>, and where `piToken` is 1 the `PI` token
-;; loads pi.
+;; Not a digit: a letter goes to the vendor's variable operand, <EvaluateVariable>, and where `piToken` is 1 the `PI`
+;; token loads pi.
 ;; Also: EVAL2 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 NotDigit:
     jsr IsLetter
-    bcs ISVAR
+    bcs EvaluateVariable
     .if piToken
         cmp #<TOKEN_PI
         bne CheckPoint

@@ -173,11 +173,11 @@ RAM_ORIGIN = $0400
 UserVector = $00
 .if TERMINAL_FIRST
 ;; Current logical channel number.
-;; Also: CHANNL (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: CHANNL (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R), CHANL (K4S79, HVK4)
 CurrentChannel = UserVector + 3
 .else
 ;; Current logical channel number, after the flags.
-;; Also: CHANNL (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: CHANNL (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R), CHANL (K4S79, HVK4)
 CurrentChannel = TangentSign + 2 + 2 * DISK_STATUS_STRING
 .endif
 .if NULL_COMMAND
@@ -696,15 +696,13 @@ JiffyClock = $8D
 .if STATUS_IN_PAGE2
 ;; I/O status byte in the early kernal's page-two workspace.
 ;;
-;; BASIC 4's kernal listings (K4S79, HVK4) call it `SATUS` at its page-zero location, which BASIC 4's system equates
-;; define.
-;; Also: CQSTAT (M6502), CSTAT (CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; BASIC 4's kernal listings call it `SATUS` at its page-zero location.
+;; Also: CQSTAT (M6502), CSTAT (CBM4S79, HV1, HV1R, HV2, HV4, HV4R), SATUS (K4S79, HVK4)
 IoStatus = $020C
 .else
 ;; I/O status byte in page zero.
 ;;
-;; The kernal listings (K4S79, HVK4) call it `SATUS`, which BASIC 4's system equates define.
-;; Also: CQSTAT (M6502), CSTAT (CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: CQSTAT (M6502), CSTAT (CBM4S79, HV1, HV1R, HV2, HV4, HV4R), SATUS (K4S79, HVK4)
 IoStatus = $96
 .endif
 .if RND_TIMER_9044
@@ -798,6 +796,11 @@ GetCharacter = CheckStop + 3
 CloseAllFiles = GetCharacter + 3
 
 .if EXTENDED_DISK_VECTORS
+; BASIC 4's jump table (CBM4S79, HV4, HV4R) names these entries CONCAT, DOPEN, DCLOSE, RECORD, FORMAT, COLECT, BACKUP,
+; DCOPY, APPEND, DSAVE, DLOAD, DCAT, RENAME, SCRATC and READDS. DCAT, SCRATC and READDS are cited on their entries;
+; the overlay and the kernal listings give the other twelve to BASIC's handlers, so they are named only in prose,
+; here and, for DCOPY, on <KernalCopy>.
+
 ;; Concatenate two files.
 ;; Also: CQCONC (UNKN)
 KernalConcat = KernalOpen - 45
@@ -826,7 +829,8 @@ KernalCollect = KernalHeader + 3
 ;; Also: CQBACK (UNKN)
 KernalBackup = KernalCollect + 3
 
-;; Copy a file.
+;; Copy a file. BASIC 4's jump table (CBM4S79, HV4, HV4R) calls this entry DCOPY, a name the overlay gives
+;; `Statements::Copy`, so it is named here only in prose.
 ;; Also: CQCOPY (UNKN)
 KernalCopy = KernalBackup + 3
 

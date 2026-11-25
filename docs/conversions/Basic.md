@@ -1298,6 +1298,161 @@ Monitor's), and its files use the current names. The bytes are unchanged in all 
     debugger's position check. AppleSoft.Equates may cite Apple's Monitor manuals.
   - The E-Q5 names give no overlay name of their own; `HighRes::ByteAddress` gives ASTIL's HBAS.
 
+### F. Commodore's own files (X8 step 7)
+
+X8 step 7, part F. Converted, with `; retrocore: style=strict`:
+
+- the PET roots, `Basic1.asm`, `Basic2.asm` and `Basic4.asm`;
+- BASIC 4's extension: `Commodore.Basic4Extension.asm`, `Basic4SystemEquates`, `Basic4Monitor`, `Basic4Record`,
+  `Basic4DiskCommands`, `Basic4DiskParser` and `Basic4RomEnd`;
+- the patches, BASIC 1's `Commodore.Basic1Patches.asm` and BASIC 4's `Commodore.Basic4Patches.asm`;
+- `Commodore.StringAssignment.asm`, `Commodore.StringGarbageCollection.asm` and `Commodore.TimeAssignment.asm`;
+- the platform's composition files, `Commodore.Platform.asm` and `Commodore.InterpreterMacros.asm`.
+
+Part C's leftovers (I9) are converted too. The bytes are unchanged in all eight builds.
+
+Decisions and how the table was applied:
+
+- F1. Scopes:
+  - the monitor is `.scope Monitor`, opened and closed in its macro, with flat routine names (F-Q7);
+  - the disk helpers are `Disk` (F-Q2), which `Commodore.Basic4Extension.asm` declares empty, as
+    `MsBasic.Families.asm` declares the shared families, so that Record, DiskCommands, DiskParser and RomEnd each
+    continue it;
+  - the disk statements are in `Statements`, named for their keywords (X13: `Statements::DOpen` ...), and
+    `ForgetDiskStatus` (OLDCLR) is top level, since Kernal4's channel selectors call it before `TALK` and
+    `LISTEN`;
+  - BASIC 4's collector is `Strings::CollectGarbage`, as E6 left it, now a `.proc` with nested routines.
+- F2. Owner questions, as the log recommends:
+  - F-Q3: DCOPY, DSCRTC, GTVLCN and MGO, which no document but the overlay gives these routines, cite UNKN, since the overlay
+    comparisons need every overlay label to resolve. (The question's premise is not quite right: BASIC 4's jump table
+    gives DCOPY to the kernal's entry `KernalCopy`, which names it in prose, since the overlay's DCOPY is in the same
+    build.) Checked against mist64/cbmsrc at the bibliography's commit, Commodore's
+    kernal listing and its reconstruction (K4S79, HVK4) call them COPY, SCRTCH, CONT and GO, each a name BASIC 4
+    already gives another definition (`StoreString::CopyCharacters`, `EraseProgram`, `Statements::Cont`,
+    `Statements::Go`), so they are in prose, as the recommendation said.
+  - F-Q4: the table's choices, with three changes. ERRS1 is `Monitor::ToShowError`, named for the
+    `Monitor::ShowError` it jumps to. ERRL is the scope-level `Monitor::LoadOrSaveFail`, since its code comes before
+    LD's, which the command tables need as LoadOrSave's start. SNER3 is the entry
+    `Disk::ParseParameters::RejectParameter` (X2), since the parser's `Done` follows it.
+  - F-Q5: the templates' offsets and lengths are `TEMPLATE_*` constants, each position and length asserted.
+  - F-Q6: the parser's bits are `PARSED_*` constants, and every check's mask is an OR of them.
+  - F-Q8: the collector's bytes take scoped aliases: `GapOpen` (HIGHDS's byte, a flag here), `Source` (GRBPNT's)
+    and `Destination` (GRBTOP's).
+  - F-Q9: `FindStringLink` is one routine with two entries, `CompareStatusLow` and `AddLength`, and the revised
+    chip's `TestStatusString` is its own routine.
+  - F-Q10 and F-Q11: K5's and K6's names. The clock code is `.proc AssignClockString`, not locals of
+    `AssignString`, which is a bare label at the end of the shared `AssignmentStart`; INPCOM stays on that label.
+  - F-Q12: InterpreterEnd (K3); D-Q10: `CatalogOutputFile` and `CatalogOutputDevice`.
+  - The table's RWRT reason is the other way round: with no record length the code leaves `S` in RecordLength and
+    returns `W`. The code's comments say what it does.
+- F3. One definition for a name another file already defines:
+  - SATUS joins `IoStatus`'s `Also:` in `Commodore.Equates.asm`, on both branches (lineage), so the extension's
+    assertion reads `IoStatus = $96`;
+  - CR joins `CARRIAGE_RETURN` in `Commodore.ChannelPrint.asm`;
+  - ONTK is `TOKEN_ON`, now defined with the token table in `Commodore.DispatchTables.asm`; only BASIC 4's overlay
+    gives it, so the workspace and interpreter tests exempt it in BASIC 1 and 2 (`Basic4OverlayNames`);
+  - BAD is `MonitorHexByte = NumberBuffer`, asserted $0100; FNADR2, RECPOS and DIDCHK are aliases of the bytes they
+    share; MS1 and MSG1, CLRCH and CLRCHN, CLOS5 and FCLOSE are one definition each.
+
+  The extension's test supplies the two constants the platform defines (`CR`, `ONTK`) as it supplies its other BASIC
+  entries, and the extension's header lists them.
+- F4. Citations:
+  - Labels whose rows say "none found" cite UNKN, as W2 has it, so every overlay label still resolves. That now
+    includes BASIC 4's NOTDS and NOTDS1 (with HV4's and HV4R's DSKX2 and DSKX1), which E5 left without `Also:` because their
+    labels were reached only through a Commodore alias; they are in Commodore's own macro now, so
+    `BasicNames.OverlayOnlyLabels` drops them.
+  - The reconstructions' address-generated names the table's notes suggested (HV1's LE1AA ..., HV4R's LBA70, HV4's
+    LBA74) are dropped, as X7 settled.
+  - The lineage rule: BASIC 1's and BASIC 4's `StopEmptyInput` both cite INPSTP (UNKN), PATCH1 (HV1, HV1R) and
+    BUFFU1 (HV4R); every PET `EvaluateVariable`, BASIC 4's trampoline and the other builds' routine, cites ISVAR (M6502,
+    CBM4S79, HV1, HV1R, HV2, HV4, HV4R), and so do both collectors' GARBA2; `FindStringLink::CheckStatus` cites
+    ADJ (CBM4S79, HV4, HV4R); every build's `InterpreterEnd` cites LASTWR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R,
+    K4S79, HVK4) and `ROM_ORIGIN` ROMLOC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R). A question for the owner: the
+    overlay gives ISVAR to BASIC 4's trampoline, where the comparisons need it, but BASIC 4's own documents (CBM4S79,
+    HV4, HV4R) give it to the code the trampoline jumps to, `EvaluateVariableBody` (ISVAR1, UNKN), which is also
+    Microsoft's ISVAR. The name stays on the trampoline, with the mismatch in its prose. A second: CBM4S79's ROMLOC
+    is its RAM build's $3000, a value no PET build has; the lineage rule is read to cover it, as it covers BUFLEN's
+    80 and 81.
+  - The table's other names go on the definitions: PATCH1 to PATCH7 (HV1, HV1R) on BASIC 1's patches; PATCHG, PATH0,
+    PATH1, PATCHH and PATCHI (HV4R) on the revised chip's; T1, T2, RCNT, FSBLK, STAL, ZZZ1, TAPE2, TKSA and CKOUT,
+    which the table gives as HVK4's but K4S79 gives at the same places too, so both are cited; PATCH5 (HVK4) on
+    `Disk::StoreStatusLink`. The table's CHANL is not `STATUS_LOAD_ERROR`'s: the kernal listings define it as
+    $0010 under "CONSTANTS FROM BASIC" and clear it to 0 when STOP stops the tape, so it is on every PET
+    `CurrentChannel`.
+    The kernal listings' POS, PARCHK and COUNT for disk-workspace bytes, and BASIC 4's jump-table names (CONCAT ...),
+    clash with other definitions, so they are in prose.
+- F5. Part C's leftovers (I9): BASIC 4's ISVAR trampoline is `EvaluateVariable`, and the shared evaluator branches to
+  `EvaluateVariable` in every build. BASIC 1's GETDTL, INPSTP, TISTR, TINUM and INCTRM are `GetDataLine`,
+  `StopEmptyInput`, `CheckClockString`, `RouteNumericVariable` and `AdvanceTerminalPosition`; the revised BASIC 4's
+  INPNUL is `HandleBlankInput`; BASIC 1's GETSTR, GETST1 and ARYINC are `BeginGetString`, `ResumeGetString` and
+  `ArrayHeaderSize`. Their callers in part C's files and the shared modules use the new names. A shared Commodore
+  file's comment names a routine only some builds have in backticks, not as a link, since the documentation of the
+  other builds does not have it. The roots pass `PrintTabOrSpace` (TABER), `SignOnMessage` (FREMES),
+  `Basic4SignOnMessage` (SIGNON) and every other macro argument by its new name.
+- F6. The two over-length lines in `Basic1.asm` (and a third, the statement fetch's, once its argument had its new
+  name): a line exclusion quiets the editor, but the SDK's documentation tests do not honor it, so the lines are
+  shortened instead. `CommodoreInitialize` and `CommodoreStatementFetch`, part C's macros, take the workspace's
+  `LOCAL_TERMINAL_POSITION` and `INPUT_BUFFER_PAGE` from the workspace rather than as parameters; every caller
+  passed those switches or the values they have in its workspace (the table's rows for those parameters, in part C's
+  sections, are not edited), and BASIC 1's `PROBE_LOAD_INDEX_ZERO` is `PROBE_ZERO_INDEX`.
+- F7. BASIC 1's switches the table renames (`SUBSCRIPT_CHECKS_NUMERIC`, `POSITIVE_INTEGER_CHECKS_TYPE`,
+  `STRING_CLEARS_FAC_EXTENSION`, `COLLECTOR_FULL_POINTER`, `COLLECTOR_PATCH_ARRAY_STEP`, `COLLECTOR_SUBTRACT_OFFSET`,
+  `STRING_PREAMBLE_INDIRECT_RETURN`), and `PROBE_ZERO_INDEX`, are renamed in the root, the shared folder's README
+  and the test that predefines one; the root rejects each old name predefined, as W7 has it.
+- F8. Structure:
+  - BASIC 4's string assignment: the end of `StoreString`'s copy for the linked collector, which was left after
+    `StoreString` closed, is the new macro `LinkedStringRelease`, expanded inside it; `LinkedStringStore` emits
+    `.proc StoreLinkedDescriptor` (E6's name, with `StoreDescriptor` its equate), whose locals are its own
+    (`StoreLinkedDescriptor::ReleaseOld`, not the table's `StoreString::`).
+  - The clock assignment is `AssignClockString` with its nested `AddClockDigit`, whose `ToIllegalQuantity` the
+    length check branches into.
+  - `PATCH_FILL`, the $AA both BASIC 4 chips fill their patch space with, is defined in
+    `Commodore.Basic4Patches.asm` and `Commodore.Basic4RomEnd.asm` under `.ifndef`, since the extension's tests
+    include one without the other.
+  - The $B000 chip's checksum byte is `InterpreterChecksum`, with HV4's and HV4R's CKSUMB, as the plan note on the
+    unlabelled byte suggested; the overlay leaves it unlabelled, so the overlay comparison exempts it.
+- F9. Shared modules touched, minimally: `MsBasic.Assignment.asm` (the two Commodore macros it invokes),
+  `MsBasic.OperandEvaluation.asm` (`EvaluateVariable`), `MsBasic.VariableInput.asm` (`BeginGetString`),
+  `MsBasic.StringGarbageCollection.asm` (`ArrayHeaderSize`), `MsBasic.StringConcatenation.asm` (`FindStringLink`)
+  and the shared folder's README (the renamed macros and switches). `MsBasic.MemoryAccess.asm` still names `ROMLOC`
+  and `LASTWR`, which reach every build's new names through `Also:`.
+- F10. Tests and their helpers:
+  - The rename gate's second rename is `AssignString`, as E-7 records.
+  - `BasicCommodoreConversionTests` is new: in each PET build, every old name the part's files give that the overlay
+    defines reaches its value, every definition reaches the overlay by a name apart from the SDK's own switches,
+    constants and scoped aliases, and every citation is Commodore's, Microsoft's or UNKN, in the bibliography; the
+    leftover names are old names only.
+  - `BasicCommodoreRoutineTests`, `BasicMonitorRoutineTests` and `BasicDiskRoutineTests` are new (below).
+  - `BasicWorkspaceConversionTests.VendorOldNamesResolveOnlyInTheirVendorsBuilds` reads the PET roots, which give
+    ROMLOC as AppleSoft's Equates does.
+  - The test sources that assemble the part's files alone follow the macros' new names and include
+    `MsBasic.Layouts.asm` where the files now use its layouts; `PetBasic4ExtensionTests` exempts the disk commands'
+    new constants and scoped aliases from its overlay check.
+
+Found in the code (documented, not fixed):
+
+- BASIC 4's string links: the original chip recognizes `DS$`'s characters by their address alone (F-Q9); the test of
+  `FindStringLink`'s address against `ROM_ORIGIN` never branches, since the bit-15 test before it catches the ROM.
+- The clock string: `ClassifyCharacter` is the reader's entry after its colon test, so `TI$`'s string takes every
+  byte from `0` up as a digit, counted from `0` (`TI$="1A0000"` sets 27 hours), and rejects only those below `0`; a
+  space is skipped by reading the byte after `TextPointer` instead, which moves `TextPointer` on, and that byte gets
+  the reader's full test (a byte from `:` up is rejected, another space skipped); the time is not
+  checked against 24 hours. `BasicCommodoreRoutineTests` pins the first.
+- BASIC 4's error-channel read: only a carriage return ends it; a zero is stored like any other byte, so nothing
+  stops a long reply.
+- The monitor: `EnterByCall` reaches `SaveState`'s subtraction without setting the carry; the overlay's "after a
+  CALL" is the kernal's reset with the diagnostic line low; `L` and `S` take at most 15 filename characters;
+  `ReadCharacter` at a return drops only its own return address, so a line that ends inside a nested read leaves its
+  callers' on the stack; `ReadByte` takes a space and one digit as that digit and does not check its digits.
+- The disk commands: the error channel's read has no length bound (a reply of 40 characters or more runs over the
+  buffer's link); `HEADER` closes the unit's files before asking; `Confirm` drains a rejected answer by the zero flag
+  the kernal's input leaves, not the character, though the screen editor always leaves it clear; every template with
+  both names puts the second before the first; `R` is accepted and skipped; a name takes 16 characters, or 17 with `@`,
+  and a second `@` name is a syntax error; `DiskIdSeen` shares `RecordLength`'s byte;
+  `Statements::Catalog::DropAndClose` is unreachable.
+- The revised chip's `FetchStatementCharacter` keeps the `PI` token from reaching `DispatchStatement`, which on the
+  original chip takes it past the disk statements to an entry beyond `StatementTable`.
+
 ## Other dependents
 
 - **DOS** left BASIC's names unchanged until this conversion: X7 in the DOS conversion's log, `docs/conversions/Dos.md`,
@@ -2197,8 +2352,8 @@ so the owner may prefer `LAST_ZONE_COLUMN` for the constant.
 ### D: The workspace and build switches
 Part D covers AppleSoft.Equates, Commodore.Equates, Commodore.Basic4SystemEquates and the build switches in the
 roots AppleSoft.asm, Basic1.asm, Basic2.asm and Basic4.asm. The table has 605 rows for this part. I checked names against the code by grepping every use in the MsBasic, AppleSoft and Commodore sources and
-reading the routines that use them. K4S79 and HVK4 document most of Basic4SystemEquates. HVK4's other spellings (T1, RCNT, FSBLK, STAL, ZZZ1, TAPE2, CHANL,
-LBERR) are in the notes for the `Also:` lists.
+reading the routines that use them. K4S79 and HVK4 document most of Basic4SystemEquates. HVK4's other spellings (T1, RCNT, FSBLK, STAL, ZZZ1,
+TAPE2) are in the notes for the `Also:` lists.
 
 #### Cross-cutting
 
@@ -2650,7 +2805,8 @@ LASTWR. Alternative: `BasicEnd`, or `RomCodeEnd` per DOS X5's `<Range>End`.
   - LoadOrSave's L2 through L14 are branch relays. I named each for the test at the relay rather than `To...`,
     because each relay also tests something.
 - **Basic4Patches / RomEnd.** The unlabeled first byte of the $B000 patch area is that chip's checksum byte. It
-  could take a name, `InterpreterChecksum`, beside `ExtensionChecksum` (CKSUMD), but it is not a row here.
+  could take a name, `InterpreterChecksum`, beside `ExtensionChecksum` (CKSUMD), but it is not a row here. (Part F
+  gave it that name, with HV4's and HV4R's CKSUMB: F8.)
   SIGNON becomes `SignOnMessage`, which should match whatever parts C and D call BASIC 1/2's banner (FREMES etc.).
 - **Switches and parameters.** DISK_STATUS_STRING, LINE_WIDTH_STORAGE and EXTENDED_DISK_VECTORS are KEEP. They are
   the SDK's names, and their `.ifndef` defaults here duplicate Basic4.asm's. `revised`, `patchedStatus` and

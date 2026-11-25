@@ -34,6 +34,12 @@ public sealed class BasicWorkspaceConversionTests
         "Commodore.CommandInput.asm", "Commodore.StatementDispatch.asm", "Commodore.ChannelPrint.asm",
         "Commodore.ChannelInput.asm", "Commodore.VariableEvaluation.asm", "Commodore.Initialization.asm"
     ];
+
+    // The PET roots (part F), which give the build constants' old names (ROMLOC) as AppleSoft's Equates does.
+    private static readonly string[] s_commodoreRoots = ["Basic1.asm", "Basic2.asm", "Basic4.asm"];
+
+    // AppleSoft's file that gives the interpreter's end its old name (LASTWR), as the PET roots do.
+    private static readonly string[] s_appleEndFiles = ["AppleSoft.PlatformHelpers.asm"];
     private const string LayoutsFile = "MsBasic.Layouts.asm";
 
     private static string AppleFolder => Path.Join(BasicNames.Inputs, "AppleSoft");
@@ -58,6 +64,12 @@ public sealed class BasicWorkspaceConversionTests
         "DISK_STATUS_STRING", "VARIABLE_LIST_IN_LINE_NUMBER", "CLOCK_IN_PAGE2", "STATUS_IN_PAGE2", "RND_TIMER_9044",
         "ERROR_PADDING5", "EXTENDED_DISK_VECTORS", "FLOAT_SIZE", "DEFAULT_BOUND"
     ];
+
+    /// <summary>
+    ///  Gets the definitions every PET build has whose old names only BASIC 4's overlay defines, in its kernal
+    ///  equates: the <c>ON</c> token, which the disk commands read (ONTK).
+    /// </summary>
+    internal static readonly string[] Basic4OverlayNames = ["TOKEN_ON"];
 
     private static readonly Apple2Model[] s_appleModels =
         [Apple2Model.IIPlus, Apple2Model.IIe, Apple2Model.IIeEnhanced];
@@ -99,7 +111,9 @@ public sealed class BasicWorkspaceConversionTests
     {
         AssemblyResult native = PetSdkModules.AssembleBasic(PetFolder, model, original);
         AssemblyResult legacy = PetLegacyBasic.Assemble(PetFolder, model, original);
-        CheckAgainstOverlay(native, legacy, [.. Converted(CommodoreFolder, s_commodoreFiles), Layouts], minimum: 150, s_sdkNames);
+        CheckAgainstOverlay(
+            native, legacy, [.. Converted(CommodoreFolder, s_commodoreFiles), Layouts], minimum: 150,
+            model == PetModel.Pet4032 ? s_sdkNames : [.. s_sdkNames, .. Basic4OverlayNames]);
     }
 
     /// <summary>
@@ -114,8 +128,9 @@ public sealed class BasicWorkspaceConversionTests
         AssemblyResult[] pet =
             [.. s_pets.Select(build => PetSdkModules.AssembleBasic(PetFolder, build.Model, build.Original))];
 
-        HashSet<string> appleNames = OldNames(apple, Converted(AppleFolder, [.. s_appleFiles, .. s_appleInterpreterFiles]));
-        HashSet<string> petNames = OldNames(pet, Converted(CommodoreFolder, [.. s_commodoreFiles, .. s_commodoreInterpreterFiles]));
+        HashSet<string> appleNames = OldNames(apple, Converted(AppleFolder, [.. s_appleFiles, .. s_appleInterpreterFiles, .. s_appleEndFiles]));
+        string[] petFiles = [.. s_commodoreFiles, .. s_commodoreInterpreterFiles, .. s_commodoreRoots];
+        HashSet<string> petNames = OldNames(pet, Converted(CommodoreFolder, petFiles));
         appleNames.Should().Contain(["TXTTAB", "CHRGET", "ERRSN", "ENDTK", "TEXTAB"]);
         petNames.Should().Contain(["TXTTAB", "CHRGET", "ERRSN", "ENDTK", "COPEN", "CQOPEN"]);
 

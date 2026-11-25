@@ -25,8 +25,8 @@ namespace Retrocore.Machines.Altair;
 ///   The disk turns all the time, a sector every <see cref="AltairDiskTiming.SectorCycles"/>, so the controller
 ///   works out where the disk is from the cycle count. A sector's 137 bytes come one each
 ///   <see cref="AltairDiskTiming.ByteCycles"/>, each holding the data port until the next replaces it, which MITS's
-///   two-bytes-a-pass read loops rely on; NRDA is asserted as each arrives and cleared by reading the port, and the
-///   port keeps the last byte until another comes. An image holds a sector's 137 bytes and nothing of the gap after
+///   two-bytes-a-pass read loops rely on; NRDA is asserted as each arrives and cleared by reading the port or by the
+///   sector's end, and the port keeps the last byte until another comes. An image holds a sector's 137 bytes and nothing of the gap after
 ///   them, so nothing more comes until the next sector. A write takes the data port's value each byte time from a
 ///   handshake that ENWD asserts, and keeps it as the sector's next byte, whether or not the 8080 has sent a new
 ///   one; the first 137 are the sector. After a write, head movement stays held off until the drive's trim erase
@@ -160,7 +160,7 @@ public sealed class AltairDiskController
     }
 
     /// <summary>
-    ///  Reads a port without changing what the machine sees: NRDA, ENWD and the data register stay as they were.
+    ///  Reads a port as a read would, without taking a byte: NRDA stays as it was, and the data register too.
     /// </summary>
     /// <param name="port">The port, $08-$0A.</param>
     /// <returns>The value a read would return.</returns>
@@ -387,6 +387,7 @@ public sealed class AltairDiskController
         _selected?.Unload();
         _selected = null;
         _readSector = -1;
+        _previousSector = -1;
     }
 
     private void Command(byte value)
@@ -394,6 +395,9 @@ public sealed class AltairDiskController
         if (_selected is not { } drive) { return; }
         if ((value & 0x0F) != 0)
         {
+            // An unload holds the byte the head had, before any step in the same command moves it.
+            if ((value & 0x0C) == 0x08) { Latch(); }
+
             if ((value & 0x02) != 0)
             {
                 drive.Step(_cycle, inward: false);
@@ -410,7 +414,6 @@ public sealed class AltairDiskController
             else if ((value & 0x08) != 0)
             {
                 // During a write the status shows the head unloaded at once; the write still ends with its sector.
-                Latch();
                 drive.Unload();
             }
         }
@@ -468,6 +471,7 @@ public sealed class AltairDiskController
         _writeSector = -1;
         _writeReady = false;
         _readSector = -1;
+        _previousSector = -1;
         if (drive?.Disk is { IsWriteProtected: false } disk && _writeSlots > AltairDisk.SectorBytes)
         {
             disk.WriteSector(drive.Track, sector, _written);

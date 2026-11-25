@@ -299,6 +299,30 @@ public sealed class AltairDiskTests
     }
 
     /// <summary>
+    ///  A disk put in mid-sector gives its own bytes, not the last disk's.
+    /// </summary>
+    [TestMethod]
+    public void ANewDiskGivesItsOwnBytes()
+    {
+        AltairMachine machine = LoadedOnTrack0();
+        ulong start = NextSector(machine.Processor.CycleCount);
+        int sector = (int)(start / AltairDiskTiming.SectorCycles % AltairDisk.SectorsPerTrack);
+        int before = (sector + AltairDisk.SectorsPerTrack - 1) % AltairDisk.SectorsPerTrack;
+        RunTo(machine, start + 100);
+        machine.Bus.PeekPort((byte)Data).Should().Be(SectorBytes(0, before)[136]);
+
+        AltairDisk other = Disk();
+        byte[] marked = new byte[AltairDisk.SectorBytes];
+        Array.Fill(marked, (byte)0x99);
+        other.WriteSector(0, before, marked);
+        AltairDiskDrive drive = Drives(machine)[0];
+        drive.Insert(other, "other.dsk", AltairDiskCodec.Name);
+        machine.Bus.Out(Status, 0);
+        machine.Bus.Out(Control, 0x04);
+        machine.Bus.PeekPort((byte)Data).Should().Be(0x99, "the new disk's sector before this one");
+    }
+
+    /// <summary>
     ///  A blank sector has no one bit to assemble bytes from, so it never gives one.
     /// </summary>
     [TestMethod]

@@ -491,7 +491,7 @@
       },
       "patterns": [
         {
-          "begin": "(?:^\\s*(\\d+)\\s*|^\\s*|(?<=[\\[:])\\s*)(?:(\\.)\\s*(@%|[A-Za-z_`][A-Za-z0-9_`]*[$%]?)\\s*)?((?i:LDX|LDY|STX|STY)(?![A-Za-z0-9_`]))",
+          "begin": "(?:^\\s*(\\d+)\\s*|^\\s*|(?<=[\\[:])\\s*)(?:(\\.)\\s*(@%|[A-Za-z_`][A-Za-z0-9_`]*[$%]?)\\s*)?((?i:LDX|LDY|STX|STY))",
           "beginCaptures": {
             "1": {
               "name": "entity.name.label.line-number.retrocore-bbcbasic"
@@ -525,7 +525,7 @@
           ]
         },
         {
-          "match": "(?:^\\s*(\\d+)\\s*|^\\s*|(?<=[\\[:])\\s*)(?:(\\.)\\s*(@%|[A-Za-z_`][A-Za-z0-9_`]*[$%]?)\\s*)?((?i:BRK|CLC|CLD|CLI|CLV|DEX|DEY|INX|INY|NOP|PHA|PHP|PLA|PLP|RTI|RTS|SEC|SED|SEI|TAX|TAY|TSX|TXA|TXS|TYA)(?![A-Za-z0-9_`]))([^:]*)",
+          "match": "(?:^\\s*(\\d+)\\s*|^\\s*|(?<=[\\[:])\\s*)(?:(\\.)\\s*(@%|[A-Za-z_`][A-Za-z0-9_`]*[$%]?)\\s*)?((?i:BRK|CLC|CLD|CLI|CLV|DEX|DEY|INX|INY|NOP|PHA|PHP|PLA|PLP|RTI|RTS|SEC|SED|SEI|TAX|TAY|TSX|TXA|TXS|TYA))([^:]*)",
           "captures": {
             "1": {
               "name": "entity.name.label.line-number.retrocore-bbcbasic"
@@ -545,7 +545,7 @@
           }
         },
         {
-          "match": "(?:^\\s*(\\d+)\\s*|^\\s*|(?<=[\\[:])\\s*)(?:(\\.)\\s*(@%|[A-Za-z_`][A-Za-z0-9_`]*[$%]?)\\s*)?(?:(?i:(ASL|LSR|ROL|ROR))\\s*(?!AND|A\\.|AN\\.|ABS|AB\\.|ACS|AC\\.|ADVAL|AD\\.|ADV\\.|ADVA\\.|ASC|AS\\.|ASN|ATN|AT\\.|AUTO|AU\\.|AUT\\.)(A)([^:]*)|((?:(?i:EQU)[BWDS]|(?i:BRK|CLC|CLD|CLI|CLV|DEX|DEY|INX|INY|NOP|PHA|PHP|PLA|PLP|RTI|RTS|SEC|SED|SEI|TAX|TAY|TSX|TXA|TXS|TYA|BCC|BCS|BEQ|BMI|BNE|BPL|BVC|BVS|AND|EOR|ORA|ADC|CMP|LDA|SBC|ASL|LSR|ROL|ROR|DEC|INC|CPX|CPY|BIT|JMP|JSR|LDX|LDY|STA|STX|STY|OPT))(?![A-Za-z0-9_`])))",
+          "match": "(?:^\\s*(\\d+)\\s*|^\\s*|(?<=[\\[:])\\s*)(?:(\\.)\\s*(@%|[A-Za-z_`][A-Za-z0-9_`]*[$%]?)\\s*)?(?:(?i:(ASL|LSR|ROL|ROR))\\s*(?!AND|A\\.|AN\\.|ABS|AB\\.|ACS|AC\\.|ADVAL|AD\\.|ADV\\.|ADVA\\.|ASC|AS\\.|ASN|ATN|AT\\.|AUTO|AU\\.|AUT\\.)(A)([^:]*)|((?:(?i:EQU)[BWDS]|(?i:BRK|CLC|CLD|CLI|CLV|DEX|DEY|INX|INY|NOP|PHA|PHP|PLA|PLP|RTI|RTS|SEC|SED|SEI|TAX|TAY|TSX|TXA|TXS|TYA|BCC|BCS|BEQ|BMI|BNE|BPL|BVC|BVS|AND|EOR|ORA|ADC|CMP|LDA|SBC|ASL|LSR|ROL|ROR|DEC|INC|CPX|CPY|BIT|JMP|JSR|LDX|LDY|STA|STX|STY|OPT))))",
           "captures": {
             "1": {
               "name": "entity.name.label.line-number.retrocore-bbcbasic"

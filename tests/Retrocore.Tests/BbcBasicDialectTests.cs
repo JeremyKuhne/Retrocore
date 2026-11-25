@@ -353,6 +353,59 @@ public sealed class BbcBasicDialectTests
     }
 
     /// <summary>
+    ///  The assembler's mnemonics are the table in Assembler.asm, in either case, and anything else where an
+    ///  instruction starts is warned of, as BASIC II stops on it with Syntax error: an unknown mnemonic, too few letters,
+    ///  EQU without a capital B, W, D or S, OR without A, or another keyword's token. The first three letters are the
+    ///  mnemonic whatever follows them, so LDAdest is LDA dest.
+    /// </summary>
+    [TestMethod]
+    public void AssemblerWarnsOfUnknownMnemonics()
+    {
+        // The table's entries are lines such as: MNEMONIC part, "BRK", $00
+        const string Entry = "MNEMONIC part, \"";
+        string[] mnemonics =
+        [
+            .. File.ReadLines(Path.Join(AppContext.BaseDirectory, "Inputs", "Acorn", "Basic", "Assembler.asm"))
+                .Select(line => line.Trim())
+                .Where(line => line.StartsWith(Entry, StringComparison.Ordinal))
+                .Select(line => line.Substring(Entry.Length, 3))
+        ];
+
+        mnemonics.Should().HaveCount(58);
+        BasicLineScanner.BbcMnemonics.Should().Equal(mnemonics);
+
+        string[] valid =
+        [
+            .. mnemonics.Where(mnemonic => mnemonic != "EQU").Select(mnemonic => $"{mnemonic} &70"),
+            .. mnemonics.Where(mnemonic => mnemonic != "EQU").Select(mnemonic => $"{mnemonic.ToLowerInvariant()} &70"),
+            "EQUB &70", "EQUW &70", "EQUD &70", "EQUS \"A\"", "AND #1", "EOR #1", "ORA #1", "LDAdest", "RTSx", ".loop NOP"
+        ];
+
+        (string Statement, string Word)[] invalid =
+        [
+            ("LDZ #1", "LDZ"), ("sat &70", "sat"), ("LD", "LD"), ("EQUX 1", "EQUX"), ("EQUb 1", "EQUb"), ("EQU 1", "EQU"),
+            ("PRINT", "PRINT"), ("OR #1", "OR")
+        ];
+
+        string[] lines = ["10 [OPT 0", .. valid.Concat(invalid.Select(entry => entry.Statement)).Select((statement, index) => $"{index + 2}0 {statement}"), "9990 ]"];
+        BasicSource source = BasicSource.Analyze(string.Join("\n", lines) + "\n", BasicDialect.BbcBasic);
+        source.Diagnostics.Where(diagnostic => diagnostic.Severity == BasicSeverity.Warning).Select(diagnostic => $"{diagnostic.Line}: {diagnostic.Message}")
+            .Should().Equal(invalid.Select((entry, index) =>
+                $"{valid.Length + index + 1}: BBC BASIC's assembler has no {entry.Word}: it stops with Syntax error."));
+
+        // BASIC II stops on each with Syntax error, and assembles the forms that look odd but are valid.
+        BbcMachine machine = Boot();
+        BbcMachineTests.Type(machine, "dest=&70:x=0\r");
+        BbcMachineTests.RunToPrompt(machine);
+        foreach (string statement in invalid.Select(entry => entry.Statement).Append("LDAdest:RTSx:lda #1:EQUB 1"))
+        {
+            BbcMachineTests.Type(machine, $"CLS:P%=&3000:[OPT 2:{statement}\r");
+            string screen = string.Join("\n", BbcMachineTests.RunToPrompt(machine));
+            screen.Contains("Syntax error", StringComparison.Ordinal).Should().Be(!statement.StartsWith("LDAdest", StringComparison.Ordinal), statement);
+        }
+    }
+
+    /// <summary>
     ///  An array's bracket must follow its name straight away: FIND_VARIABLE reads the next character, so A (1) is the
     ///  variable A and then (1), and only A(1) is the array.
     /// </summary>

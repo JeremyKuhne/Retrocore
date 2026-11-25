@@ -89,7 +89,7 @@ public sealed partial class AltairDiskDrive : IDiskDrive, IMediumSlot
     public IMedium? Unmount() => Eject();
 
     /// <summary>
-    ///  Takes the disk out. The controller lets go of the drive, losing a write in progress.
+    ///  Takes the disk out. The controller lets go of the drive; a write in progress keeps the bytes it has written.
     /// </summary>
     /// <returns>The disk, or null when the drive was empty.</returns>
     public AltairDisk? Eject()

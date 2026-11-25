@@ -57,15 +57,17 @@ tracks of 32 sectors of 137 bytes. Its timing is the one Mike Douglas's FDC+ boa
 - **Reading.** A sector's bytes come one every 32 µs from 452 µs into it, each setting NRDA and holding the data port
   until the next replaces it, which MITS's loops that read two bytes a pass rely on. Reading the port clears NRDA.
   The controller assembles bytes from the sector's first one bit, so a sector that does not start with bit 7 set
-  reads shifted.
-- **Writing.** A write enable in a sector's first 212 µs writes it, and a later one waits for the next sector. ENWD
-  asks for each byte from 388 µs, a byte time apart, and the controller takes the data port's value at each, new or
-  not; the first 137 become the sector. A write-protected disk keeps its sectors, as the drive would refuse to write.
+  reads shifted, its bytes that many 4 µs bit times later, and a blank sector gives no bytes at all.
+- **Writing.** A write enable in a sector's first 212 µs writes it, one after the sector's end (5.008 ms) writes the
+  next, and one in between is forgotten. ENWD asks for each byte from 388 µs, a byte time apart, and the controller
+  takes the data port's value at each, new or not; the first 137 become the sector. Head movement stays held off
+  until the drive's trim erase ends, 452 µs into the next sector. A write-protected disk keeps its sectors, as the
+  drive would refuse to write, and a disk taken out during a write keeps the bytes written so far.
 - **The head.** A step holds off further steps for 10.5 ms, when track 0 follows it, allows one for 1 ms, then holds
   them off while the head settles, until 43.5 ms. A head loaded, or stepped, is settled 50 ms later, and the sector
   position shows only from the first sector to begin with it settled.
 - **Selecting** a drive with no disk leaves the controller disabled, its status and position reading `$FF`.
-  Selecting a drive unloads its head. Status bit 5 shows the 8080's INTE, as the controller reads it from the bus.
+  Selecting a drive unloads its head and disables the controller's interrupts. Status bit 5 shows the 8080's INTE, as the controller reads it from the bus.
 
 The controller's sector interrupts are not modeled: none of the software here uses them.
 
@@ -74,9 +76,9 @@ sectors in order, track by track, 337,568 bytes. Many archive images have 96 mor
 saves back byte for byte.
 
 **Boot PROMs.** [`Dbl.asm`](../src/Retrocore.Machines.Altair/Roms/Dbl.asm) is MITS's disk boot loader 4.1: it
-copies itself to `$2C00`, waits for drive 0, steps to reads the disk from track 0 into memory from `$0000`,
-as many bytes as its sectors say, and runs it. [`Mbl.asm`](../src/Retrocore.Machines.Altair/Roms/Mbl.asm) is the multi-boot loader, which
-loads a MITS tape from the device that sense switches A11-A8 name, skipping its leader and checksum loader. Both are
+copies itself to `$2C00`, waits for drive 0, steps out to track 0, reads the disk from there into memory
+from `$0000`, as many bytes as its sectors say, and runs it.
+[`Mbl.asm`](../src/Retrocore.Machines.Altair/Roms/Mbl.asm) is the multi-boot loader, which loads a MITS tape from the device that sense switches A11-A8 name, skipping its leader and checksum loader. Both are
 documented sources that assemble byte-identically to the PROMs.
 
 **Interrupts.** The serial boards' interrupt requests drive the 8080's INT line: on the 88-2SIO, a full receiver
@@ -222,7 +224,7 @@ These 8-inch images, from deramp.com's Altair software archive, boot this way:
 | Disk | What it does |
 | --- | --- |
 | Mike Douglas's CP/M 2.2b, 56K | Boots to `A>` with its console on the 88-2SIO. |
-| Burcon's CP/M 2.2, 56K | Boots to its sign-on and `A>`. |
+| Burcon's CP/M 2.2, 56K | Boots to its sign-on. |
 | MITS Disk BASIC 5.0 | Asks `MEMORY SIZE?`. |
 | Altair DOS | Asks `MEMORY SIZE?`. |
 
@@ -231,8 +233,8 @@ can be saved to its image, saved as another, reverted or undone, as for the othe
 CP/M.
 
 A launch with `diskController` and no disks has the drives empty; DBL waits for a disk in drive 0, so inserting one
-boots it. `proms` chooses the PROMs: `["dbl"]` by default with the controller, `["dbl", "mbl"]` to add MBL, which loads
-a tape when started at `$FE00`.
+boots it. `proms` chooses the PROMs: `["dbl"]` by default with the controller, `["dbl", "mbl"]` to add MBL. The launch still starts at
+DBL; to load a tape with MBL, set the program counter to `$FE00` in the debugger and continue.
 
 ## Debugging
 
@@ -246,7 +248,7 @@ and `proms` (`dbl` and `mbl`).
 
 A `source` or `program` loads at `$0100` by default and starts there. With neither, the machine starts at DBL's
 `$FF00` when DBL is fitted, and otherwise at `$0000` in empty RAM, which executes `NOP`s. MBL's source, and DBL's copy
-loop, map to source lines; DBL's loader runs in RAM at `$2C00` once copied, which its source does not cover.
+loop, map to source lines; DBL's loader runs in RAM at `$2C00` once copied, which has no source map, so stepping it shows disassembly.
 
 ```asm
 .cpu I8080
@@ -295,8 +297,8 @@ Screen**.
   mounts, and that DBL's and MBL's sources assemble to the PROMs' digests. With the PROM dumps and disk images in the
   external test data's `altair-disk` folder (or `RETROCORE_ALTAIR_DISK`), the sources match the dumps byte for byte,
   and CP/M 2.2b, Burcon CP/M, Disk BASIC 5.0 and Altair DOS boot through DBL; CP/M lists its disk, saves a file,
-  which writes and verifies sectors, and erases it. The same disks boot and list the same way on SIMH's
-  `altairz80`, with its own boot ROM.
+  which writes its sectors, lists it with STAT and erases it. The same disks also boot on SIMH's `altairz80`, with
+  its own boot ROM, which was checked by hand rather than by a test.
 - [`RecoveryJournalTests`](../tests/Retrocore.Tests/RecoveryJournalTests.cs) keep a changed Altair disk, bring it
   back into a new machine's drive with its codec, and save it with the change and its trailer.
 - The same programs, a greeting, an echo and a table of squares in decimal, print identically on SIMH's

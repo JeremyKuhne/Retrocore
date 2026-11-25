@@ -108,8 +108,9 @@ Every download (SIMH, software images, ROM dumps) is approved first, as before.
 - **Scope.** The 88-DCDD and 8-inch drives, the boot PROMs as SDK sources, and CP/M 2.2 booting and running.
   CP/M's own sources wait.
 - **Timing.** The disk turns in real time, with the sector, byte, step and settle times Mike Douglas's FDC+
-  firmware (1.8, `altair-8in.s`) gives the 88-DCDD, checked against MITS's 88-DCDD manual, the "New Controller
-  Timing (1978)" notes and the Disk IO Timing paper. Software that polls the controller sees what it would on the
+  firmware (1.8, `altair-8in.s`) gives the 88-DCDD. The Disk IO Timing paper agrees on the byte timing that MITS's
+  read loops rely on; the 88-DCDD manual and the "New Controller Timing (1978)" notes are scans, and were not
+  checked line by line. Software that polls the controller sees what it would on the
   board, such as DBL's two-bytes-a-pass loop.
 - **PROMs.** DBL 4.1 follows Martin Eberhard's disassembly and MBL Geoff Harrison's; both assemble to the dumps
   deramp.com has as HEX files. HDBL, MDBL and DBL 3.3, which the user also approved downloading, are not built.
@@ -125,6 +126,8 @@ Every download (SIMH, software images, ROM dumps) is approved first, as before.
 - **Sector interrupts.** The controller's interrupt at each sector's start is not modeled, as nothing here uses it.
 - **DBL's loader** runs from RAM at `$2C00`, which the PROM's source map does not cover, so stepping it shows
   disassembly.
+- **Index sync.** The FDC+ waits for the index pulse after a drive is selected before it shows sectors; here the
+  sector position shows once the head is settled. Whether MITS's board waits too needs the manual.
 - **A drive picture.** Retro Devices shows the drives as text; there is no 8-inch drive image.
 
 - **The 1975 source listing** on gatesnotes.com, which the user named: its host is allowed now, but its CDN answers

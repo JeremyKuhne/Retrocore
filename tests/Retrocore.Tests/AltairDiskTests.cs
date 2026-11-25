@@ -69,20 +69,26 @@ public sealed class AltairDiskTests
 
     /// <summary>
     ///  With no drive selected, or a drive with no disk, the status and sector position read $FF; selecting a drive
-    ///  with a disk shows it enabled, on track 0, with its head unloaded and free to step.
+    ///  with a disk shows it enabled, on track 0, with its head unloaded and free to step, and deselecting it disables
+    ///  the controller's interrupts.
     /// </summary>
     [TestMethod]
     public void SelectingADriveEnablesTheController()
     {
         AltairMachine machine = Machine();
         machine.Bus.In(Status).Should().Be(0xFF);
+        machine.Bus.In(Sector).Should().Be(0xFF);
         machine.Bus.Out(Status, 1);
         machine.Bus.In(Status).Should().Be(0xFF, "drive 1 is empty, so it is not ready");
+        machine.Bus.In(Sector).Should().Be(0xFF);
         machine.Bus.Out(Status, 0);
         machine.Bus.In(Status).Should().Be(0xA5, "NRDA, INTE and head status off; track 0 and move-head on; bits 3 and 4 zero");
         machine.Bus.In(Sector).Should().Be(0xFF, "the head is not loaded");
+        machine.Bus.Out(Control, 0x10);
+        machine.Bus.Disk?.InterruptEnabled.Should().BeTrue();
         machine.Bus.Out(Status, 0x80);
         machine.Bus.In(Status).Should().Be(0xFF, "bit 7 deselects");
+        machine.Bus.Disk?.InterruptEnabled.Should().BeFalse("deselecting disables the controller's interrupts");
     }
 
     /// <summary>
@@ -126,7 +132,7 @@ public sealed class AltairDiskTests
 
     /// <summary>
     ///  A step holds off head movement for 10.5 ms, when track 0 also follows it, allows another step for 1 ms, then
-    ///  holds off movement while the head settles, until 50 ms after the step.
+    ///  holds off movement again, until 43.5 ms after the step.
     /// </summary>
     [TestMethod]
     public void SteppingFollowsTheDrivesTiming()
@@ -209,15 +215,35 @@ public sealed class AltairDiskTests
 
         AltairMachine machine = LoadedOnTrack0(disk);
         ulong start = NextSector(machine.Processor.CycleCount);
-        RunTo(machine, start + AltairDiskTiming.FirstByteCycles);
+        ulong first = start + AltairDiskTiming.FirstByteCycles + (7 * AltairDiskTiming.BitCycles);
+        RunTo(machine, first - 1);
+        (machine.Bus.In(Status) & 0x80).Should().Be(0x80, "the bytes come seven bit times late");
+        RunTo(machine, first);
+        (machine.Bus.In(Status) & 0x80).Should().Be(0);
         machine.Bus.In(Data).Should().Be(0x91, "$01 $23 from bit 7 of the first byte is 1001 0001 ...");
-        RunTo(machine, start + AltairDiskTiming.FirstByteCycles + AltairDiskTiming.ByteCycles);
+        RunTo(machine, first + AltairDiskTiming.ByteCycles);
         machine.Bus.In(Data).Should().Be(0x80);
     }
 
     /// <summary>
+    ///  A blank sector has no one bit to assemble bytes from, so it never gives one.
+    /// </summary>
+    [TestMethod]
+    public void ABlankSectorGivesNoBytes()
+    {
+        AltairMachine machine = LoadedOnTrack0(AltairDisk.Blank());
+        ulong start = NextSector(machine.Processor.CycleCount);
+        for (ulong offset = 0; offset < AltairDiskTiming.SectorCycles; offset += AltairDiskTiming.ByteCycles / 2)
+        {
+            RunTo(machine, start + offset);
+            (machine.Bus.In(Status) & 0x80).Should().Be(0x80, "no byte at {0} cycles", offset);
+        }
+    }
+
+    /// <summary>
     ///  A write enable in a sector's first 212 µs writes it: ENWD asks for each byte a byte time apart from 388 µs, and
-    ///  the 137 bytes taken become the sector, the disk changed. One given later waits for the next sector.
+    ///  the 137 bytes taken become the sector, the disk changed, and head movement waits for the trim erase to end in
+    ///  the next sector. One given later in the sector is forgotten, and one after the sector's end writes the next.
     /// </summary>
     [TestMethod]
     public void WritingTakesAByteEachHandshake()
@@ -243,23 +269,66 @@ public sealed class AltairDiskTests
             (machine.Bus.In(Status) & 0x01).Should().Be(0x01, "writing the port clears ENWD");
         }
 
-        RunTo(machine, start + AltairDisk.SectorBytes + AltairDiskTiming.EndOfSectorCycles);
+        RunTo(machine, start + AltairDiskTiming.EndOfSectorCycles + AltairDiskTiming.ByteCycles);
         byte[] read = new byte[AltairDisk.SectorBytes];
         disk.ReadSector(0, sector, read);
         read.Should().Equal(written);
         disk.IsDirty.Should().BeTrue();
         disk.Version.Should().BeGreaterThan(version);
+        (machine.Bus.In(Status) & 0x02).Should().Be(0x02, "the trim erase holds off a step");
+        ulong trimmed = start + AltairDiskTiming.SectorCycles + AltairDiskTiming.TrimEraseCycles;
+        RunTo(machine, trimmed - 1);
+        (machine.Bus.In(Status) & 0x02).Should().Be(0x02, "until 452 µs into the next sector");
+        RunTo(machine, trimmed);
+        (machine.Bus.In(Status) & 0x02).Should().Be(0);
 
-        // Later than 212 µs into the next sector, a write enable writes the one after instead.
+        // Later than 212 µs into a sector, a write enable is forgotten when the sector ends.
         ulong late = NextSector(machine.Processor.CycleCount) + 600;
+        int lateSector = (int)(late / AltairDiskTiming.SectorCycles % AltairDisk.SectorsPerTrack);
         RunTo(machine, late);
         machine.Bus.Out(Control, 0x80);
         machine.Bus.Out(Data, 0x81);
-        RunTo(machine, late + AltairDiskTiming.SectorCycles + AltairDiskTiming.EndOfSectorCycles);
-        disk.ReadSector(0, (sector + 1) % AltairDisk.SectorsPerTrack, read);
-        read.Should().Equal(SectorBytes(0, (sector + 1) % AltairDisk.SectorsPerTrack), "the late sector is untouched");
-        disk.ReadSector(0, (sector + 2) % AltairDisk.SectorsPerTrack, read);
+        RunTo(machine, late + (2 * AltairDiskTiming.SectorCycles));
+        for (int next = 0; next < 3; next++)
+        {
+            int unwritten = (lateSector + next) % AltairDisk.SectorsPerTrack;
+            disk.ReadSector(0, unwritten, read);
+            read.Should().Equal(SectorBytes(0, unwritten), "sector {0} is untouched", unwritten);
+        }
+
+        // After the sector's end, a write enable writes the next sector.
+        ulong after = NextSector(machine.Processor.CycleCount) + AltairDiskTiming.EndOfSectorCycles + 50;
+        int afterSector = (int)((after / AltairDiskTiming.SectorCycles) + 1) % AltairDisk.SectorsPerTrack;
+        RunTo(machine, after);
+        machine.Bus.Out(Control, 0x80);
+        machine.Bus.Out(Data, 0x81);
+        RunTo(machine, after + AltairDiskTiming.SectorCycles + AltairDiskTiming.ByteCycles);
+        disk.ReadSector(0, afterSector, read);
         read.Should().AllBeEquivalentTo((byte)0x81, "the next sector took the port's byte at every handshake");
+    }
+
+    /// <summary>
+    ///  Unloading the head during a write shows in the status at once, and the write still ends with its sector.
+    /// </summary>
+    [TestMethod]
+    public void UnloadingDuringAWriteShowsAtOnce()
+    {
+        AltairMachine machine = LoadedOnTrack0();
+        AltairDisk disk = Drives(machine)[0].Disk ?? throw new InvalidOperationException("The disk is missing.");
+        ulong start = NextSector(machine.Processor.CycleCount);
+        int sector = (int)(start / AltairDiskTiming.SectorCycles % AltairDisk.SectorsPerTrack);
+        RunTo(machine, start + 100);
+        machine.Bus.Out(Control, 0x80);
+        machine.Bus.Out(Data, 0x42);
+        RunTo(machine, start + 1_000);
+        machine.Bus.Out(Control, 0x08);
+        (machine.Bus.In(Status) & 0x04).Should().Be(0x04, "the head is not loaded");
+        machine.Bus.In(Sector).Should().Be(0xFF);
+        Drives(machine)[0].HeadLoaded.Should().BeFalse();
+        RunTo(machine, start + AltairDiskTiming.EndOfSectorCycles + AltairDiskTiming.ByteCycles);
+        byte[] read = new byte[AltairDisk.SectorBytes];
+        disk.ReadSector(0, sector, read);
+        read.Should().AllBeEquivalentTo((byte)0x42, "the write went on to the sector's end");
     }
 
     /// <summary>
@@ -305,7 +374,8 @@ public sealed class AltairDiskTests
     }
 
     /// <summary>
-    ///  A drive takes a new mount generation for each disk in and out, and keeps its label and format until ejected.
+    ///  A drive takes a new mount generation for each disk in and out, and a save takes the label and format it was
+    ///  saved under.
     /// </summary>
     [TestMethod]
     public void DrivesHoldDisks()
@@ -321,6 +391,7 @@ public sealed class AltairDiskTests
         int mounted = drive.MountGeneration;
         drive.Saved("/disks/b.dsk", "DSK", whole: true);
         drive.MountGeneration.Should().Be(mounted, "a save is not a new mount");
+        drive.Media.Should().Be(new MediaState("/disks/b.dsk", "DSK", WriteProtected: false, Changed: false));
         drive.Eject().Should().NotBeNull();
         drive.MountGeneration.Should().NotBe(mounted);
         drive.Media.Should().BeNull();

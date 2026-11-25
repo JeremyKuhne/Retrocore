@@ -14,9 +14,9 @@ namespace Retrocore.Machines.Altair;
 ///  <para>
 ///   A step moves the head at once, but the status shows the move as the drive does: head movement is held off for
 ///   <see cref="AltairDiskTiming.StepCycles"/>, when track 0 also changes, then allowed for
-///   <see cref="AltairDiskTiming.StepWindowCycles"/> so a seek can step again, then held off while the head settles,
-///   until <see cref="AltairDiskTiming.HeadLoadCycles"/> after the step. Loading the head takes the same 50 ms to
-///   settle. Selecting a drive unloads its head, as the controller drops every drive signal first.
+///   <see cref="AltairDiskTiming.StepWindowCycles"/> so a seek can step again, then held off for
+///   <see cref="AltairDiskTiming.SettleStepCycles"/>, until 43.5 ms after the step. The head is settled for reading
+///   <see cref="AltairDiskTiming.HeadLoadCycles"/>, 50 ms, after a step or a head load. Selecting a drive unloads its head, as the controller drops every drive signal first.
 ///  </para>
 /// </remarks>
 public sealed partial class AltairDiskDrive

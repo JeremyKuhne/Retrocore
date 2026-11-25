@@ -9,7 +9,7 @@
 ;; Each sector is 137 bytes: a track byte with bit 7 set, the 16-bit count of bytes to load, 128 bytes of data, a stop
 ;; byte of $FF and a checksum of the data. The loader reads the first 134 of them into a buffer after itself, then
 ;; moves the 128 data bytes to their place, checking each write to memory, adding up the checksum and checking the
-;; stop byte and the checksum after. A bad sector is read again, up to 16 times. The disk's sectors are interleaved
+;; stop byte and the checksum after. A bad sector is read up to 16 times in all. The disk's sectors are interleaved
 ;; 2:1, so a track's even sectors are read first and then its odd ones.
 ;;
 ;; On an error the loader stores a code at $0000, 'C' for a sector that could not be read or 'M' for memory that did
@@ -82,7 +82,8 @@ LOADER_IMAGE:
 ;; it.
 LOADER: di                          ; INTE off: no error yet
 
-        ; The 88-4PIO's port B as input, with its ready bit on the E pulse.
+        ; The 88-4PIO's port B as outputs, for the error code, strobing CB2 on each write. The listing says input, but
+        ; the MC6820's direction bits are 1 for an output.
         xra a
         out PIO4_CONTROL_B0
         cma

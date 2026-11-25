@@ -54,7 +54,7 @@ OP_RET = $C9                        ;; RET
 ;; loads the tape and runs it.
 MBL:    di
 
-        ; The 88-4PIO's ports, the 88-2SIO's first port and the ACR's controls, whichever are there.
+        ; The 88-4PIO's ports ($20-$27) and the 88-2SIO's first port, whichever are there.
         xra a
         out $20
         out $21

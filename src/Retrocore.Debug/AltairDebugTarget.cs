@@ -85,7 +85,7 @@ internal sealed class AltairDebugTarget : DisposableBase, IDebugTarget, IRecordi
             UpperCase = args.Bool("upperCase") ?? false
         };
 
-        // The 88-DCDD comes with disks unless the launch leaves it out, with four drives.
+        // The 88-DCDD, with four drives, is fitted when the launch gives disks or asks for it.
         string?[] disks = args.ImagePaths("disks", "cpm.dsk");
         bool controller = args.Bool("diskController") ?? disks.Length > 0;
         if (!controller && disks.Length > 0)
@@ -351,8 +351,8 @@ internal sealed class AltairDebugTarget : DisposableBase, IDebugTarget, IRecordi
 
     /// <inheritdoc/>
     /// <remarks>
-    ///  DBL's loader runs in RAM at $2C00 once it has copied itself there, which its source does not cover; its copy
-    ///  loop and all of MBL do.
+    ///  DBL's loader runs in RAM at $2C00 once it has copied itself there, which has no source map; the PROM's copy
+    ///  loop and all of MBL map to their sources.
     /// </remarks>
     public void AddSdkModules(DebugInfo debug, string? directory)
     {
@@ -539,7 +539,6 @@ internal sealed class AltairDebugTarget : DisposableBase, IDebugTarget, IRecordi
         ]
         : [];
 
-    // retro/media: inserts, records and ejects cassettes.
     // retro/media: the 88-ACR's cassette (device cassette), and the 88-DCDD's disks, by device disk0-disk3 or by
     // device disk with drive 0-3.
     private JsonObject Media(JsonObject args)
@@ -571,9 +570,14 @@ internal sealed class AltairDebugTarget : DisposableBase, IDebugTarget, IRecordi
     // romDirectory of them.
     private static AltairRoms Proms(JsonObject args, bool controller, string? directory)
     {
-        string[] proms = args["proms"] is JsonArray list
-            ? [.. list.Select(entry => entry?.GetValue<string>() ?? throw new ArgumentException("proms lists dbl and mbl."))]
-            : controller ? ["dbl"] : [];
+        string[] proms = args["proms"] switch
+        {
+            null => controller ? ["dbl"] : [],
+            JsonArray list => [.. list.Select(entry => entry is JsonValue value && value.TryGetValue(out string? name)
+                ? name
+                : throw new ArgumentException("proms lists dbl and mbl."))],
+            _ => throw new ArgumentException("proms lists dbl and mbl.")
+        };
 
         if (proms.Any(prom => prom is not ("dbl" or "mbl")))
         {
@@ -581,12 +585,7 @@ internal sealed class AltairDebugTarget : DisposableBase, IDebugTarget, IRecordi
         }
 
         if (proms.Length == 0) { return new(); }
-        AltairRoms built = AltairSdkModules.Build(directory);
-        return new()
-        {
-            Dbl = proms.Contains("dbl") ? built.Dbl : null,
-            Mbl = proms.Contains("mbl") ? built.Mbl : null
-        };
+        return AltairSdkModules.Build(directory, dbl: proms.Contains("dbl"), mbl: proms.Contains("mbl"));
     }
 
     private string PromsValue()

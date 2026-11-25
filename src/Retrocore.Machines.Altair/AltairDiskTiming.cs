@@ -36,7 +36,8 @@ public static class AltairDiskTiming
 
     /// <summary>
     ///  How far into a sector a write enable still starts writing that sector: the controller ignores read data for
-    ///  the first 212 µs, and a write it is told of in that time begins at once; later, it waits for the next sector.
+    ///  the first 212 µs, and a write it is told of in that time begins at once. One told of later is forgotten at
+    ///  <see cref="EndOfSectorCycles"/>, so only one after that writes the next sector.
     /// </summary>
     public const int ReadClearCycles = 424;
 
@@ -59,9 +60,20 @@ public static class AltairDiskTiming
     public const int ByteCycles = 64;
 
     /// <summary>
-    ///  When the controller ends a sector's reading or writing: about 200 µs past its data, 5.006 ms into it.
+    ///  The cycles a bit takes: 4 µs.
     /// </summary>
-    public const int EndOfSectorCycles = 10_012;
+    public const int BitCycles = ByteCycles / 8;
+
+    /// <summary>
+    ///  When the controller ends a sector's reading or writing: about 200 µs past its data, 5.008 ms into it, as the
+    ///  FDC+ counts it in 4 µs ticks.
+    /// </summary>
+    public const int EndOfSectorCycles = 10_016;
+
+    /// <summary>
+    ///  When, in the sector after a write, the drive's trim erase ends and head movement is allowed again: 452 µs.
+    /// </summary>
+    public const int TrimEraseCycles = 904;
 
     /// <summary>
     ///  How long after a step the controller holds off head movement: 10.5 ms.

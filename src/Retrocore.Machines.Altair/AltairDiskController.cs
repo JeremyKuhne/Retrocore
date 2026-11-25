@@ -27,7 +27,9 @@ namespace Retrocore.Machines.Altair;
 ///   <see cref="AltairDiskTiming.ByteCycles"/>, each holding the data port until the next replaces it, which MITS's
 ///   two-bytes-a-pass read loops rely on; NRDA is asserted as each arrives and cleared by reading the port. A write
 ///   takes the data port's value each byte time from a handshake that ENWD asserts, and keeps it as the sector's next
-///   byte, whether or not the 8080 has sent a new one; the first 137 are the sector.
+///   byte, whether or not the 8080 has sent a new one; the first 137 are the sector. After a write, head movement
+///   stays held off until the drive's trim erase ends, <see cref="AltairDiskTiming.TrimEraseCycles"/> into the next
+///   sector.
 ///  </para>
 ///  <para>
 ///   The controller's sector interrupts are not modeled: its interrupt enable is kept, but nothing is requested,
@@ -65,6 +67,10 @@ public sealed class AltairDiskController
     private long _readSector = -1;
     private int _readTaken = -1;
 
+    // How many cycles after the first byte's time the sector's bytes come, as the controller assembles them from the
+    // sector's first one bit, or -1 for a sector with none, which never gives a byte.
+    private int _readDelay;
+
     // A write: the sector it writes (or -1), whether one is waiting for the next sector, the byte to write, the
     // handshakes done, and whether ENWD is asserted.
     private long _writeSector = -1;
@@ -72,6 +78,9 @@ public sealed class AltairDiskController
     private byte _writeData;
     private int _writeSlots;
     private bool _writeReady;
+
+    // When the trim erase after a write ends, and head movement is allowed again.
+    private ulong _trimEndsAt;
 
     /// <summary>
     ///  Builds the controller with its drives.
@@ -98,7 +107,8 @@ public sealed class AltairDiskController
     public AltairDiskDrive? Selected => _selected;
 
     /// <summary>
-    ///  Gets whether the controller's interrupts are enabled; they request nothing, as they are not modeled.
+    ///  Gets whether the controller's interrupts are enabled; they request nothing, as they are not modeled. Selecting
+    ///  or deselecting a drive disables them.
     /// </summary>
     public bool InterruptEnabled { get; private set; }
 
@@ -190,8 +200,8 @@ public sealed class AltairDiskController
     internal void Reset() => Deselect();
 
     /// <summary>
-    ///  Takes a disk out of a drive the controller is using: a write in progress is lost, and the drive is no longer
-    ///  ready, so the controller lets go of it.
+    ///  Takes a disk out of a drive the controller is using: the drive is no longer ready, so the controller lets go
+    ///  of it. A write in progress keeps the bytes it has written over the start of its sector.
     /// </summary>
     /// <param name="drive">The drive.</param>
     internal void Removed(AltairDiskDrive drive)
@@ -212,11 +222,12 @@ public sealed class AltairDiskController
         AdvanceWrite();
         byte status = 0xFF & ~0x18;
         if (_writeReady) { status &= unchecked((byte)~EnterNewWriteData); }
-        if (!Writing && drive.MayStep(_cycle)) { status &= unchecked((byte)~MoveHead); }
+        if (!Writing && _cycle >= _trimEndsAt && drive.MayStep(_cycle)) { status &= unchecked((byte)~MoveHead); }
         if (drive.Settled(_cycle)) { status &= unchecked((byte)~HeadStatus); }
         if (_interruptEnable()) { status &= unchecked((byte)~InterruptsEnabled); }
         if (drive.AtTrackZero(_cycle)) { status &= unchecked((byte)~TrackZero); }
-        if (!Writing && Data(out int index) >= 0 && index >= 0 && index != _readTaken)
+        _ = Data(out int index);
+        if (!Writing && index >= 0 && index != _readTaken)
         {
             status &= unchecked((byte)~NewReadData);
         }
@@ -253,22 +264,31 @@ public sealed class AltairDiskController
         if (sector != _readSector)
         {
             disk.ReadSector(drive.Track, Sector, _sector);
-            Align(_sector);
+            int bit = Align(_sector);
+            _readDelay = bit < 0 ? -1 : bit * AltairDiskTiming.BitCycles;
             _readSector = sector;
             _readTaken = -1;
         }
 
-        index = Math.Min((offset - AltairDiskTiming.FirstByteCycles) / AltairDiskTiming.ByteCycles, AltairDisk.SectorBytes - 1);
+        if (_readDelay < 0 || offset < AltairDiskTiming.FirstByteCycles + _readDelay)
+        {
+            return _sector[0];
+        }
+
+        int arrived = (offset - AltairDiskTiming.FirstByteCycles - _readDelay) / AltairDiskTiming.ByteCycles;
+        index = Math.Min(arrived, AltairDisk.SectorBytes - 1);
         return _sector[index];
     }
 
-    // The controller assembles bytes from the first one bit it sees, so a sector whose first byte lacks bit 7, as a
-    // blank one does, reads shifted from that bit, or not at all.
-    private static void Align(Span<byte> sector)
+    // The controller assembles bytes from the first one bit it sees, so a sector whose first byte lacks bit 7 reads
+    // shifted from that bit, each byte coming that many bit times later; a blank sector, with no one bit, gives none.
+    // Returns the bits skipped, or -1 for a sector with no one bit.
+    private static int Align(Span<byte> sector)
     {
         int bit = 0;
         while (bit < sector.Length * 8 && (sector[bit / 8] & (0x80 >> (bit % 8))) == 0) { bit++; }
-        if (bit == 0) { return; }
+        if (bit == sector.Length * 8) { return -1; }
+        if (bit == 0) { return 0; }
         Span<byte> aligned = stackalloc byte[AltairDisk.SectorBytes];
         for (int index = 0; index < aligned.Length; index++)
         {
@@ -284,6 +304,7 @@ public sealed class AltairDiskController
         }
 
         aligned.CopyTo(sector);
+        return bit;
     }
 
     private void Select(byte value)
@@ -308,6 +329,8 @@ public sealed class AltairDiskController
         if (Writing) { FinishWrite(); }
         _writePending = false;
         _writeReady = false;
+        _trimEndsAt = 0;
+        InterruptEnabled = false;
         _selected?.Unload();
         _selected = null;
         _readSector = -1;
@@ -331,8 +354,9 @@ public sealed class AltairDiskController
             {
                 drive.Load(_cycle);
             }
-            else if ((value & 0x08) != 0 && !Writing)
+            else if ((value & 0x08) != 0)
             {
+                // During a write the status shows the head unloaded at once; the write still ends with its sector.
                 drive.Unload();
             }
 
@@ -340,9 +364,10 @@ public sealed class AltairDiskController
         }
         else if ((value & 0x80) != 0 && !Writing)
         {
-            // A write enable in the read-clear time writes this sector; later, it waits for the next.
-            _writePending = true;
+            // A write enable in the read-clear time writes this sector, and one after the end of the sector writes the
+            // next; one in between is forgotten when the sector ends.
             if (CurrentOffset < AltairDiskTiming.ReadClearCycles) { StartWrite(); }
+            else if (CurrentOffset >= AltairDiskTiming.EndOfSectorCycles) { _writePending = true; }
         }
 
         if ((value & 0x20) != 0)
@@ -386,6 +411,7 @@ public sealed class AltairDiskController
         AdvanceWrite();
         AltairDiskDrive? drive = _selected;
         int sector = (int)(_writeSector % AltairDisk.SectorsPerTrack);
+        _trimEndsAt = (ulong)(_writeSector + 1) * AltairDiskTiming.SectorCycles + AltairDiskTiming.TrimEraseCycles;
         _writeSector = -1;
         _writeReady = false;
         _readSector = -1;

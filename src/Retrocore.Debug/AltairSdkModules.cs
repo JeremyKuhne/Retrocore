@@ -43,17 +43,19 @@ internal static class AltairSdkModules
     internal static AssemblyResult AssembleMbl(string path) => Assemble(path, AltairBus.MblAddress);
 
     /// <summary>
-    ///  Builds both PROMs from a folder of their sources.
+    ///  Builds PROMs from a folder of their sources.
     /// </summary>
     /// <param name="directory">The folder, or null for the SDK's.</param>
-    /// <returns>The PROMs.</returns>
-    internal static AltairRoms Build(string? directory = null)
+    /// <param name="dbl">Whether to build DBL.</param>
+    /// <param name="mbl">Whether to build MBL.</param>
+    /// <returns>The PROMs asked for.</returns>
+    internal static AltairRoms Build(string? directory = null, bool dbl = true, bool mbl = true)
     {
         string folder = directory ?? RomDirectory;
         return new AltairRoms
         {
-            Dbl = AssembleDbl(Path.Join(folder, DblSource)).Sections[0].Bytes.ToArray(),
-            Mbl = AssembleMbl(Path.Join(folder, MblSource)).Sections[0].Bytes.ToArray()
+            Dbl = dbl ? AssembleDbl(Path.Join(folder, DblSource)).Sections[0].Bytes.ToArray() : null,
+            Mbl = mbl ? AssembleMbl(Path.Join(folder, MblSource)).Sections[0].Bytes.ToArray() : null
         };
     }
 

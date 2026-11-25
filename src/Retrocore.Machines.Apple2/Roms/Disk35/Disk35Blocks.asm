@@ -320,8 +320,8 @@ NextField:
     dec SectorTries
     beq IoError
 
-    ; A bad field: after a track's worth of them, recalibrate; otherwise read on, or seek again while bit 3 of half
-    ; the tries left is set.
+    ; A bad field: recalibrate once half the tries counted (bits 0-5) equal the track's sectors; otherwise read on,
+    ; or seek again while bit 3 of half the tries left is set.
     lda SectorTries
     and #$3F
     lsr a
@@ -574,8 +574,8 @@ NextField:
     dec SectorTries
     beq IoError
 
-    ; A bad field: after a track's worth of them, recalibrate; otherwise read on, or seek again while bit 3 of half
-    ; the tries left is set.
+    ; A bad field: recalibrate once half the tries counted (bits 0-5) equal the track's sectors; otherwise read on,
+    ; or seek again while bit 3 of half the tries left is set.
     lda SectorTries
     and #$3F
     lsr a
@@ -836,7 +836,7 @@ LastBlock:
     lda #ERROR_BAD_BLOCK
     jmp SetError
 
-    ; The list empty (all but its first buffer code), the sectors of the span wanted, four tries each.
+    ; The list empty, the sectors of the span wanted, four tries each.
 ClearList:
     stz InterleaveMap
     stz InterleaveMap+1
@@ -913,8 +913,8 @@ NextField:
 ToIoError:
     bra IoError
 
-    ; A bad field: after a track's worth of them, recalibrate; otherwise read on, or seek again while bit 3 of the
-    ; tries left is set.
+    ; A bad field: recalibrate once the tries left (which good fields also count down) equal the track's sectors;
+    ; otherwise read on, or seek again while bit 3 of the tries left is set.
 BadField:
     dec SectorTries
     beq IoError

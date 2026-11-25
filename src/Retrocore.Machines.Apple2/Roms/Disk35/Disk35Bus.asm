@@ -158,7 +158,7 @@ Poll:
     bne Wait
     bra Check                       ; zero: no packet
 
-    ; REQ, then up to 256 reads for the start byte.
+    ; REQ, then up to 255 reads for the start byte.
 Acknowledged:
     lda Iwm::Phase0On
     ldy #0
@@ -365,7 +365,7 @@ Checksum:
     lda #PACKET_END
     jsr Bus::SendByte
 
-    ; Until the IWM has written the last byte, then up to 250 polls for the acknowledgement to fall.
+    ; Until the IWM has written the last byte, then up to 249 polls for the acknowledgement to fall.
 WaitEmpty:
     bit Iwm::DataLatch
     bvs WaitEmpty
@@ -727,8 +727,9 @@ Move:
 ;; Commands $0A-$0C, which the bus does not know, read <Bus::CommandTable> past its end, and end with ErrorCode = A
 ;; as it is then: the reply's length's low byte, or the failure's code.
 ;; Out: carry = clear; ErrorCode = the device's status, <Bus::ERROR_BUS> if it did not answer, <ERROR_IO> for a bad
-;;      reply, or <ERROR_BAD_CONTROL_PARAMETER> for host data of 5 pages or more; CardData = 6 when the reply has
-;;      data, 0 after the bad parameter; Count and CountHigh = the reply's length, when one came
+;;      reply, or <ERROR_BAD_CONTROL_PARAMETER> for host data of 5 pages or more; CardData = 6 for a command whose
+;;      reply has data (STATUS, READBLOCK, READ), whether or not a reply came, 0 after the bad parameter; Count and
+;;      CountHigh = the reply's length, when one came
 .proc PassCommand
     lda #IWM_MODE_SLOW
     jsr Swim::SetIwmMode
@@ -840,14 +841,15 @@ CommandTable:
     BusCommand 0, 0, 1              ; CLOSE
     BusCommand 0, 1, 4              ; READ
     BusCommand 1, 0, 4              ; WRITE
-.assert * - CommandTable = COMMAND_WRITE + 1, "Bus::CommandTable has an entry for each command to Host::Write."
+.assert * - CommandTable = COMMAND_WRITE + 1, "Bus::CommandTable has an entry for each command up to WRITE."
 
 ;; Resets the bus and gives its devices unit numbers from X up, with an INIT command to each in turn until one
 ;; answers that it is the last. Units X to 3 are first marked as no device; each device found below unit 5 is
 ;; marked a bus device in <DeviceKinds>, with <MediaMode> 0. The drive lines are released first and the motor turned
 ;; off at the end.
 ;; In: A = the command packet's byte 4 ($80 from <Bus::Reinitialize>), X = the first unit
-;; Out: A = the devices found, at most 2; Drive = the unit after the last device found
+;; Out: A = the devices found, capped at 2 once a device says it is the last; Drive = the unit after the last device
+;;      found
 .proc Initialize
 .assert * = CommandTable + COMMAND_WRITE + 1, "PassCommand reads CommandTable on into Initialize's first bytes."
     sta CommandPacket + 4

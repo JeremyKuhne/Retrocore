@@ -105,7 +105,7 @@ StackPage = $0100
 BankLatch = $C080
 
 ;; The window on the card's RAM: $C800-$CBFF shows the bank last latched at <BankLatch>; $CC00-$CFFF always shows
-;; the card's $7C00-$7FFF, where the code from <Host::Dispatch> on runs.
+;; the card's $7C00-$7FFF, where the code from the end of <Host::Dispatch> on runs.
 CardWindow = $C800
 
 ;; Where a boot block is read, as ProDOS's own boot does.
@@ -247,7 +247,8 @@ PROGRESS_DONE = $D0
 
 ; The card's RAM at $0A00, at $CA00 with bank 2 latched.
 
-;; Bit 7 set while a call runs, on a host that is not a IIgs.
+;; Bit 7 set while a call runs. <Host::MarkCallRunning> sets it on every host once the card has named the host, since
+;; the card's IIgs answer leaves <Host::Identity>'s bit 7 clear.
 CallBusy = $CA00
 
 ;; <CallBusy>'s bit for a call that runs.
@@ -558,8 +559,9 @@ Signature:
 
 ;; Tells the card whether the host is a IIgs: one whose <StateRegister> holds what is written to it, whose Monitor
 ;; is the IIe's family's (<ModelId> = <MODEL_ID_IIE>, <SecondModelId> = <MODEL_ID_ENHANCED>), and whose
-;; <IdentifyIIgs> returns carry clear. Waits for the card to take the answer. The card's bank 0 must be latched.
-;; Keeps: Y, interrupt
+;; <IdentifyIIgs> returns carry clear. Waits for the card to take the answer. The card's bank 0 must be latched. Y is
+;; kept on a host that is not a IIgs; a IIgs's <IdentifyIIgs> returns its ROM version in it.
+;; Keeps: interrupt
 .proc Identify
     php
     sei
@@ -960,7 +962,7 @@ Done:
 
 ;; Copies from the window to the buffer.
 ;; In: carry = set to copy X pages, clear to copy X bytes; ParameterList = the window, CallBuffer = the buffer
-;; Out: ParameterList, CallBuffer = past what was copied
+;; Out: ParameterList, CallBuffer = past what was copied, for pages; for bytes, Y = X and the pointers unchanged
 .proc CopyToBuffer
     ldy #0
 Loop:
@@ -1054,7 +1056,7 @@ Failed:
 
 ;; Copies from the buffer to the window.
 ;; In: carry = set to copy X pages, clear to copy X bytes; CallBuffer = the buffer, ParameterList = the window
-;; Out: ParameterList, CallBuffer = past what was copied
+;; Out: ParameterList, CallBuffer = past what was copied, for pages; for bytes, Y = X and the pointers unchanged
 .proc CopyFromBuffer
     ldy #0
 Loop:
@@ -1145,7 +1147,7 @@ Got:
 .endproc
 
 ;; Takes a block from the card into the buffer.
-;; Out: A = the card's error when there is no block
+;; Out: A = what <Host::Finish> returns: the error, mapped for a ProDOS call
 .proc ReceiveBlock
     lda MailboxData
     bmi ReceiveBlock

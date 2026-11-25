@@ -50,8 +50,8 @@ DEFAULT_INTERLEAVE = $04
 ;; The cylinders of a 3.5 disk.
 CYLINDERS = 80
 
-;; The tries for each side of a track.
-TRIES = $03
+;; The retries for each side of a track, after its first try: <CountRetry> retries while its count stays 0 or more.
+RETRIES = $03
 
 ;; SmartPort FORMAT ($03) and ProDOS's format: goes through <FormatVector>, normally to <FormatDisk>.
 .proc Command
@@ -103,7 +103,7 @@ AskHook:
     bcs BadKind
     bra Start
 
-    ; Calls FormatHook, which ColdStart points at an RTS.
+    ; Calls FormatHook, which ColdStart points at RunCommand::Done, a CLC and RTS, so the format goes on.
 CallHook:
     jmp (FormatHook)
 
@@ -162,12 +162,12 @@ Start:
     bne FirstTrack
     stz TwoSided
 
-    ; Each side of each track, written and read back, with up to three tries.
+    ; Each side of each track, written and read back, with up to four tries.
 FirstTrack:
     stz Side
     stz Track
 NextSide:
-    lda #TRIES
+    lda #RETRIES
     sta Retries
 Try:
     jsr Format::WriteTrack

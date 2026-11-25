@@ -108,7 +108,7 @@ The card caches a track (18 slots at $1000-$33FF) and reads ahead after a miss.
 **Timing the firmware waits on:**
 - `DelayMillisecond` ($F73C) is about 2,030 cycles;
 - the motor waits 500 ms the first time after a disk is found, 100 ms after that;
-- the ready wait gives up after about 1.2 s, and an eject waits up to about 2 s;
+- the ready wait gives up after about 0.75 s, and an eject waits up to about 2 s;
 - `Drives::Poll` runs about every 1.4 s when idle;
 - the self-test takes about 0.25 s, almost all of it the EPROM checksum.
 

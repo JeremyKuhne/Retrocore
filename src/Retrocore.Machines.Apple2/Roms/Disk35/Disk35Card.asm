@@ -70,7 +70,7 @@ HostCode = $0200
 ;; FORMAT's sector order; READSPAN's count and buffer codes.
 InterleaveMap = $0600
 
-;; A track's sectors: $40 done, 0 wanted, $C0 not wanted.
+;; A track's sectors: $40 done (or not wanted by READSPAN), 0 wanted, $C0 not one of the track's.
 SectorFlags = $0620
 
 ;; The second lane of a GCR sector's nibbles.

@@ -29,8 +29,6 @@ ADDRESS_SEARCH_PAGES = $08
 ;; One more than the disk bytes <ReadGcrDataField> looks at for the data mark: it counts down before each byte.
 DATA_MARK_SEARCH = $19
 
-;; The tag bytes of a GCR sector, which come before its 512 data bytes.
-TAG_BYTE_COUNT = 12
 
 ;; The last index of the three nibble lanes (<NibbleLane1>, <NibbleLane2> and <NibbleLane3>): a sector is 175 groups of
 ;; three bytes, stored from this index down to 1 (the third lane has one byte fewer, from one less).
@@ -238,7 +236,7 @@ WaitMark:
     bpl NextMarkByte
 
     ; The sector number, which must be the address field's.
-    ldy #TAG_BYTE_COUNT
+    ldy #TAG_SIZE
 WaitSector:
     ldx Iwm::DataLatch
     bpl WaitSector
@@ -434,8 +432,8 @@ Fail:
 .endproc
 .assert Work0 = ChecksumHighBits + 1 && Work1 = ChecksumHighBits + 2, "Work0 and Work1 follow ChecksumHighBits."
 
-;; Nibblizes a sector for <WriteDataField>, keeping the tag bytes that <ReadWriteTagged> has put in the three lanes' top
-;; groups.
+;; Nibblizes a 524-byte tagged sector for <WriteDataField>: the buffer's first 12 bytes are the tags, which fill the
+;; groups from the top like the data after them.
 ;; Falls into the middle of <NibblizeSector>.
 .proc NibblizeSectorWithTags
     ldx #LAST_GROUP
@@ -455,7 +453,7 @@ Fail:
 ;; In: BufferPointer = the block
 ;; Out: Checksum0, Checksum1 and Checksum2 = the checksums, ChecksumHighBits = their high bits
 ;; Entry:
-;;   FromGroup = with X = the last group to fill (tags kept above it), from <NibblizeSectorWithTags>
+;;   FromGroup = with X = the top group to fill, from <NibblizeSectorWithTags>
 .proc NibblizeSector
     ldx #TAG_GROUPS
 ClearTag:
@@ -631,7 +629,7 @@ Gcr:
     sta Iwm::WriteMode
     stz DiskErrors
 
-    ; The sync group (3F CF F3 FC FF, from SyncBytes) and D5 AA AD, from the end of SyncBytes down through DataMark.
+    ; The sync group (3F CF F3 FC FF, from SyncBytes) and D5 AA AD, from SyncBytes + 3 down through DataMark.
     ldx #$07
 NextMarkByte:
     lda DataMark,x
@@ -650,7 +648,8 @@ WaitSector:
     bpl WaitSector
     sta Iwm::LoadLatch
 
-    ; Each group: its high bits, then lanes 1, 2 and 3, the first group without lane 3.
+    ; Each group: its high bits, then lanes 1, 2 and 3, each pass writing the group before's lane 3 first, so the
+    ; last group has none.
     ldx #LAST_GROUP - 1
     bra HighBits
 Lane3:

@@ -209,13 +209,13 @@ WrongSide:
 .endproc
 
 ; The marks after the first byte, each read from the end of its table down. The ID mark's table is two bytes:
-; its third byte read, the last A1, is the data mark table's first byte.
+; the first byte read, its second A1, is the data mark table's first byte.
 
 ;; The index mark after its first C2: C2 C2 FC, from the end.
 MfmIndexMark:
     .byte $FC, MFM_INDEX_MARK, MFM_INDEX_MARK
 
-;; The ID mark after its first A1: A1 A1 FE, from the end, the last byte read being <MfmDataMark>'s first.
+;; The ID mark after its first A1: A1 A1 FE, from the end, the first byte read being <MfmDataMark>'s first.
 MfmIdMark:
     .byte $FE, MFM_MARK
 
@@ -260,7 +260,7 @@ WaitMark:
     cmp #MFM_MARK
     bne NextPoll
 
-    ; A1 A1 FB, each within 20 polls.
+    ; A1 A1 FB, all three within about 21 polls.
     ldx #$03
     ldy #$14
 WaitRestOfMark:

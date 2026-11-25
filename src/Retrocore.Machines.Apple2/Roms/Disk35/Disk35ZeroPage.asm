@@ -59,7 +59,7 @@ Count:
 CountHigh:
     .byte $00
 
-;; Each drive's head position ($FF unknown; bit 6 = the second side's track, from a header).
+;; Each drive's head position, the track ($FF unknown), as the last address field gave it.
 CurrentTrack:
     .byte $FF, $FF
 

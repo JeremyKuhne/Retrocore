@@ -58,17 +58,16 @@ IIEROM82, IIETRM85) through `Inherit:` or the shared IIeEquates.asm and MonitorE
   buffer it read into. Its media check reads `MediaKind` at a leftover Y (0, or a media kind after a fresh
   identification), so it checks drive 1's kind whatever the drive.
 - READAHEAD stores the run's high byte in `ParameterLow`, and on a failed check leaves two bytes on the stack that
-  `SetError`'s RTS returns through. READSPAN's skip pause tests a byte it has just cleared, and its list clear misses
-  `InterleaveMap + 2`.
+  `SetError`'s RTS returns through. READSPAN's skip pause tests a byte it has just cleared.
 - `WriteMfmDataField` always returns carry clear; control $0C stores the list's fifth byte, not its third; $0C and $13
   keep the old address after a wrong-length list; $0F takes any length; $11 copies 256 bytes too many for a list a
-  multiple of 256 bytes; SETFORMAT stores the kind before refusing a bad interleave; an MFM data-mark failure sets no
+  multiple of 256 bytes; `FormatOptions::Set` (SETFORMAT) stores the kind before refusing a bad interleave; an MFM data-mark failure sets no
   `DiskErrors` bit.
 - The bus's receive error $8A can never happen; commands $0A-$0C read `Bus::CommandTable` past its end (asserted);
   `Bus::Initialize` marks units X to 3 empty, not 4; a failed FORMAT ejects the disk.
 - Comments fixed against the code: `ClearCache`'s slot values, `WaitReady`'s time (0.74 s), `SelectHead` reads `Side`
-  itself, `IdentifyMedia`'s carry and A, `Release` turns the motor line on, MAP400K's groups are 16 blocks, DELAY2
-  does not keep A, BUSREQUEST's phases, the 2-byte write lengths' count.
+  itself, `IdentifyMedia`'s carry and A, `Release` turns the motor line on, `BlockMap::Gcr400`'s groups are 16 blocks,
+  `DelayMillisecondPairs` does not keep A, `Bus::Enable`'s phases, the 2-byte write lengths' count.
 
 ## Open questions for the owner
 

@@ -425,8 +425,8 @@ BadCode:
     lda #ERROR_BAD_CONTROL
     jmp SetError
 
-    ; The list is X bytes long: gives it to the host, and lets the drive's motor go unless the call came as
-    ; unit 0's.
+    ; The list is X bytes long: gives it to the host, and lets the drive's motor go unless the call named
+    ; the unit with bit 7 set (UnitWithHighBit).
 Done:
     stx Count
     lda #TRANSFER_BUFFER_CODE
@@ -474,7 +474,7 @@ CopyResult:
 
     ; Codes 0 and 3: the status byte. Bits 7, 6, 5 and 3: a block device that can be written, read and formatted;
     ; bit 4, a disk is in; bit 2, it is write protected; bit 0, for an extended call, the disk was switched (or
-    ; taken out since the last look).
+    ; put in since the last look).
 DriveStatus:
     ldx Drive
     jsr Drives::ReadStatus

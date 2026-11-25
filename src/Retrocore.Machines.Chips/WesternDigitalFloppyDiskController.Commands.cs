@@ -10,7 +10,8 @@ public sealed partial class WesternDigitalFloppyDiskController
 {
     private const int MaximumCylinder = 79;
 
-    // Step rates in milliseconds, by the command's low two bits.
+    // Step rates in milliseconds, by the command's low two bits: the FD1771's at 2 MHz (FD1771 manual, Table 1),
+    // doubled for one at 1 MHz.
     private static readonly int[] s_stepRates1771 = [6, 6, 10, 20];
     private static readonly int[] s_stepRates1791 = [6, 12, 20, 30];
 
@@ -26,6 +27,8 @@ public sealed partial class WesternDigitalFloppyDiskController
         {
             if (IsBusy)
             {
+                // A write track cut short leaves what it wrote; the 810 ends each track this way after its last sector.
+                if (_phase == Phase.WritingTrack) { CommitTrack(); }
                 _phase = Phase.Idle;
                 _status &= unchecked((byte)~Busy);
             }
@@ -66,9 +69,11 @@ public sealed partial class WesternDigitalFloppyDiskController
             return;
         }
 
-        // The E bit adds the 15 ms head-load delay.
-        _wait = (value & 0x04) != 0 ? _settleCycles : 1;
+        // The E bit adds the head-load delay (SettleCycles). Write track asks for its first byte at once, delay or
+        // not; writing starts at the index pulse once it's there.
+        _wait = (value & 0x04) != 0 ? SettleCycles : 1;
         _phase = Phase.Delaying;
+        if ((value & 0xF0) == 0xF0) { _request = true; }
     }
 
     private void StartStep()
@@ -77,10 +82,10 @@ public sealed partial class WesternDigitalFloppyDiskController
         switch (_command >> 4)
         {
             case 0:
-                // Restore steps out to track 0.
+                // Restore steps out to track 0; with no track 0 sensor it gives up after 255 steps.
                 _direction = -1;
-                _steps = cylinder;
-                Track = 0;
+                _steps = _sensorsWired ? cylinder : 255;
+                if (_sensorsWired) { Track = 0; }
                 break;
             case 1:
                 _direction = Data > Track ? 1 : -1;
@@ -103,8 +108,8 @@ public sealed partial class WesternDigitalFloppyDiskController
 
     private int StepCycles()
     {
-        int[] rates = Is179x ? s_stepRates1791 : s_stepRates1771;
-        return rates[_command & 3] * _cyclesPerMillisecond / (_eightInch ? 2 : 1);
+        int rate = Is179x ? s_stepRates1791[_command & 3] : s_stepRates1771[_command & 3] * (_fd1771At1Megahertz ? 2 : 1);
+        return rate * _cyclesPerMillisecond / (_eightInch ? 2 : 1);
     }
 
     private void Run()
@@ -115,7 +120,7 @@ public sealed partial class WesternDigitalFloppyDiskController
             case Phase.Stepping:
                 if (_steps > 0)
                 {
-                    if (_selected >= 0)
+                    if (_selected >= 0 && _sensorsWired)
                     {
                         _cylinders[_selected] = Math.Clamp(_cylinders[_selected] + _direction, 0, MaximumCylinder);
                     }
@@ -127,11 +132,19 @@ public sealed partial class WesternDigitalFloppyDiskController
                     }
                 }
 
+                // A Restore that never found track 0 ends with Seek Error, unverified.
+                if ((_command >> 4) == 0 && !_sensorsWired)
+                {
+                    _status |= SeekError;
+                    Finish();
+                    return;
+                }
+
                 // The V bit verifies the track; h and V load the head.
                 if ((_command & 0x0C) != 0) { _status |= HeadLoaded; }
                 if ((_command & 0x04) != 0)
                 {
-                    _wait = _settleCycles;
+                    _wait = SettleCycles;
                     _phase = Phase.Verifying;
                     return;
                 }
@@ -178,7 +191,7 @@ public sealed partial class WesternDigitalFloppyDiskController
     // Waits for the next ID field: any for read address, else the one the track and sector registers name.
     private void Search()
     {
-        if (!Ready || _selected < 0 || Current is not { } disk)
+        if (!Ready || _selected < 0)
         {
             _status |= NotReady;
             Finish();
@@ -191,6 +204,9 @@ public sealed partial class WesternDigitalFloppyDiskController
             Finish();
             return;
         }
+
+        // Only a controller with READY tied true gets here with no disk; it searches until it times out.
+        if (Current is not { } disk) { return; }
 
         IReadOnlyList<FloppySector> sectors = disk.Track(_cylinders[_selected], Side);
         if (sectors.Count == 0) { return; }
@@ -322,9 +338,16 @@ public sealed partial class WesternDigitalFloppyDiskController
             return;
         }
 
+        // A first byte not loaded by the index pulse ends the command with lost data.
+        if (_request)
+        {
+            _status |= TrackZeroOrLost;
+            Finish();
+            return;
+        }
+
         _trackBytes = [];
         _indexPulses = 0;
-        _request = true;
         _wait = ByteCycles;
         _phase = Phase.WritingTrack;
     }
@@ -332,10 +355,9 @@ public sealed partial class WesternDigitalFloppyDiskController
     private void WriteTrackByte()
     {
         if (_trackBytes is null) { return; }
-        if (_indexPulses > 0 && _selected >= 0 && Current is { } disk)
+        if (_indexPulses > 0)
         {
-            disk.Format(_cylinders[_selected], Side, ParseTrack(_trackBytes, _doubleDensity));
-            _trackBytes = null;
+            CommitTrack();
             Finish();
             return;
         }
@@ -344,6 +366,17 @@ public sealed partial class WesternDigitalFloppyDiskController
         _trackBytes.Add(_request ? (byte)0 : Data);
         _request = true;
         _wait = ByteCycles;
+    }
+
+    // The track takes the sectors written to it.
+    private void CommitTrack()
+    {
+        if (_trackBytes is not null && _selected >= 0 && Current is { } disk)
+        {
+            disk.Format(_cylinders[_selected], Side, ParseTrack(_trackBytes, _doubleDensity));
+        }
+
+        _trackBytes = null;
     }
 
     private void Finish()

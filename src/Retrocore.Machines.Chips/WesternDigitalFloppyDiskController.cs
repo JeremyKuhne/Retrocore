@@ -50,7 +50,9 @@ public sealed partial class WesternDigitalFloppyDiskController
     private readonly int _cyclesPerMillisecond;
     private readonly int _rotationCycles;
     private readonly int _indexPulseCycles;
-    private readonly int _settleCycles;
+    private readonly bool _sensorsWired;
+    private readonly bool _fd1771At1Megahertz;
+    private bool _externalIndex;
     private bool _motorHeld;
     private int _selected = -1;
     private int _motorCycles;
@@ -88,15 +90,34 @@ public sealed partial class WesternDigitalFloppyDiskController
     ///  Whether the drives are 8-inch, as the TRS-80 Model II's are: 360 rpm, twice the data rate, and the controller
     ///  clocked at 2 MHz, which halves its step rates.
     /// </param>
-    internal WesternDigitalFloppyDiskController(int clockHertz, bool wd179x = false, bool eightInch = false)
+    /// <param name="rotationsPerMinute">The disks' speed, or 0 for the drives' usual 300 (360 for 8-inch).</param>
+    /// <param name="sensorsWired">
+    ///  Whether the chip's drive lines are wired as the data sheet has them. The Atari 810 wires none: its index pulse
+    ///  comes from <see cref="IndexPulse"/>, its stepper is driven from outside (<see cref="SetCylinder"/>), READY is
+    ///  always true, and there is no track 0 sensor.
+    /// </param>
+    /// <param name="fd1771At1Megahertz">
+    ///  Whether an FD1771's step rates and head-load delay are its data sheet's 1 MHz figures (12-40 ms and 20 ms), as
+    ///  the Atari 810's are, rather than the 2 MHz step rates (6-20 ms) and the 15 ms delay the controller otherwise
+    ///  uses.
+    /// </param>
+    internal WesternDigitalFloppyDiskController(
+        int clockHertz,
+        bool wd179x = false,
+        bool eightInch = false,
+        int rotationsPerMinute = 0,
+        bool sensorsWired = true,
+        bool fd1771At1Megahertz = false)
     {
         _clockHertz = clockHertz;
         _wd179x = wd179x;
         _eightInch = eightInch;
+        _sensorsWired = sensorsWired;
+        _fd1771At1Megahertz = fd1771At1Megahertz;
         _cyclesPerMillisecond = clockHertz / 1000;
-        _rotationCycles = eightInch ? clockHertz / 6 : 200 * _cyclesPerMillisecond;
+        int usual = eightInch ? clockHertz / 6 : 200 * _cyclesPerMillisecond;
+        _rotationCycles = rotationsPerMinute == 0 ? usual : (int)((long)clockHertz * 60 / rotationsPerMinute);
         _indexPulseCycles = 4 * _cyclesPerMillisecond;
-        _settleCycles = 15 * _cyclesPerMillisecond;
     }
 
     /// <summary>
@@ -237,6 +258,23 @@ public sealed partial class WesternDigitalFloppyDiskController
     }
 
     /// <summary>
+    ///  Gets or sets the index pulse input, for a controller whose sensors are not wired; the chip counts its rising
+    ///  edges as revolutions.
+    /// </summary>
+    internal bool IndexPulse
+    {
+        get => _externalIndex;
+        set => _externalIndex = value;
+    }
+
+    /// <summary>
+    ///  Moves a drive's head, for a controller whose stepper is driven from outside it.
+    /// </summary>
+    /// <param name="drive">The drive, 0-3.</param>
+    /// <param name="cylinder">The cylinder.</param>
+    internal void SetCylinder(int drive, int cylinder) => _cylinders[drive] = cylinder;
+
+    /// <summary>
     ///  Gets whether the data register waits for the program (DRQ).
     /// </summary>
     public bool DataRequest => _request;
@@ -308,7 +346,7 @@ public sealed partial class WesternDigitalFloppyDiskController
     {
         if (_motorCycles > 0 && !_motorHeld) { _motorCycles--; }
         if (_motorCycles > 0) { _rotation = (_rotation + 1) % _rotationCycles; }
-        bool index = Ready && _rotation < _indexPulseCycles;
+        bool index = Index;
         if (index && !_wasIndex) { _indexPulses++; }
         _wasIndex = index;
         if (_phase != Phase.Idle) { Run(); }
@@ -316,13 +354,20 @@ public sealed partial class WesternDigitalFloppyDiskController
 
     private FloppyDisk? Current => _selected >= 0 ? _disks[_selected] : null;
 
-    private bool Ready => Current is not null && _motorCycles > 0;
+    // The 810 ties READY true, so its controller searches an empty drive until the index pulses time it out.
+    private bool Ready => !_sensorsWired || (Current is not null && _motorCycles > 0);
+
+    private bool Index => _sensorsWired ? Ready && _rotation < _indexPulseCycles : _externalIndex;
 
     private int ByteCycles => (_doubleDensity ? _clockHertz / 31250 : _clockHertz / 15625) / (_eightInch ? 2 : 1);
 
     // Whether the chip reading now behaves as a WD179x: always for an FD179x or WD179x, and with a doubler's WD1791
     // selected beside an FD1771.
     private bool Is179x => _wd179x || _doubleDensity;
+
+    // The head-load delay: 15 ms, or for an FD1771 at 1 MHz its 10 ms at 2 MHz doubled (FD1771 manual; Altirra 10.8,
+    // Table 58).
+    private int SettleCycles => (_fd1771At1Megahertz && !Is179x ? 20 : 15) * _cyclesPerMillisecond;
 
     private byte Status()
     {
@@ -334,8 +379,8 @@ public sealed partial class WesternDigitalFloppyDiskController
 
         // Type I status shows the index hole, track 0, write protect and ready as they are now.
         byte status = (byte)(_status & (Busy | CrcError | SeekError | HeadLoaded));
-        if (Ready && _rotation < _indexPulseCycles) { status |= IndexOrRequest; }
-        if (_selected >= 0 && _cylinders[_selected] == 0) { status |= TrackZeroOrLost; }
+        if (Index) { status |= IndexOrRequest; }
+        if (_sensorsWired && _selected >= 0 && _cylinders[_selected] == 0) { status |= TrackZeroOrLost; }
         if (Current?.IsWriteProtected == true) { status |= WriteProtect; }
         if (!Ready) { status |= NotReady; }
         return status;

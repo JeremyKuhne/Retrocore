@@ -19,7 +19,7 @@ public sealed partial class ConvertedSourceTests
     private static readonly string s_inputs = Path.Join(AppContext.BaseDirectory, "Inputs");
 
     // The Apple II sources' modules, as the editor indexes them.
-    private static readonly string[] s_folders = ["DiskII", "Dos", "IntegerBasic", "Mouse", "ProgrammersAid", "System"];
+    private static readonly string[] s_folders = ["Disk35", "DiskII", "Dos", "IntegerBasic", "Mouse", "ProgrammersAid", "System"];
 
     // Names that mean different routines in the two IIe firmwares, each kept on its own model's definition
     // (docs/conversions/Firmware.md, F1), or that sit on different code in the two.

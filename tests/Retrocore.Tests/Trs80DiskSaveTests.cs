@@ -73,8 +73,8 @@ public sealed class Trs80DiskSaveTests
 
     /// <summary>
     ///  A written sector changes only its record, compressed where the image compressed it and its bytes are all one
-    ///  value; a track formatted anew keeps its track's data rate in the density it now has; and a new image's rate
-    ///  follows its tracks' size.
+    ///  value; a track formatted with other sectors keeps its track's data rate in the density it now has; and a new
+    ///  image's rate follows its tracks' size.
     /// </summary>
     [TestMethod]
     public void ImdKeepsItsLayoutThroughChanges()
@@ -143,7 +143,7 @@ public sealed class Trs80DiskSaveTests
     }
 
     /// <summary>
-    ///  A sector written with <c>$F9</c> or <c>$FA</c>, as the FD1771 writes them, on a track the layout keeps is
+    ///  A sector written with <c>$F9</c> or <c>$FA</c>, marks the FD1771 can write, on a track the layout keeps is
     ///  listed, as IMD holds only normal and deleted data.
     /// </summary>
     [TestMethod]
@@ -196,7 +196,7 @@ public sealed class Trs80DiskSaveTests
     /// <summary>
     ///  An unchanged DMK disk writes back the image it was read from, byte for byte: its gaps, an ID field with no
     ///  data, which no sector holds, and a CRC error's CRC. A written sector changes only its data field, where it was;
-    ///  a track formatted anew is laid out again, and the others stay as they were.
+    ///  a track formatted with other sectors is laid out again, and the others stay as they were.
     /// </summary>
     [TestMethod]
     public void DmkKeepsItsLayout()
@@ -350,8 +350,8 @@ public sealed class Trs80DiskSaveTests
     }
 
     /// <summary>
-    ///  Each DOS image saves back byte for byte when nothing changed it, as DMK and IMD, and to the same sectors as
-    ///  JV3. The images are in <c>trs80-disks</c> under <see cref="ExternalTestData.Root"/>; the test is inconclusive
+    ///  Each DOS image saves back when nothing changed it: a DMK or IMD image byte for byte, and a JV3 image to the
+    ///  same sectors. The images are in <c>trs80-disks</c> under <see cref="ExternalTestData.Root"/>; the test is inconclusive
     ///  without one.
     /// </summary>
     /// <param name="image">The image's file name.</param>

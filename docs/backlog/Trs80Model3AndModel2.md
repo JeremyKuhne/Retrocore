@@ -33,6 +33,7 @@ function keys, TRSDOS-II on the Model II and its oracle, which need an image, an
 6. **Writing disk images back**, for every TRS-80, in their own formats. Done, with
    [saving media back to images](MediaPersistence.md): the Model I's and the Model III family's floppies save as
    JV3, DMK, IMD, DSK or JV1, and the Model II's as IMD, DMK or JV3. A DMK or IMD image keeps its layout, so the
-   DOS images save back byte for byte unchanged (`Trs80DiskSaveTests`), and LDOS 5.1.3, TRSDOS 6.0 and 6.2 and
+   DMK and IMD DOS images save back byte for byte unchanged, and the JV3 ones to the same sectors
+   (`Trs80DiskSaveTests`), and LDOS 5.1.3, TRSDOS 6.0 and 6.2 and
    LS-DOS 6.3 write a file that the saved image boots with and lists (`Trs80Model3RomTests.DosSavesAFile`). Still
    open: TRSDOS 1.3's `DUMP` stops with `ERROR 11` after reading its directory, before it writes a sector.

@@ -106,10 +106,11 @@ public static class ImdFormat
     ///  <para>
     ///   A track whose sectors are still the layout's, by ID, size and density, keeps its mode, its maps, its sector
     ///   numbers, the sectors that had no data and which sectors were compressed, and only its records change; a
-    ///   track the disk formatted anew keeps the layout's data rate. An image that lists a track twice keeps both
-    ///   listings, each taking its sectors in turn, and a track the layout lacks goes in cylinder and side order. An
-    ///   unchanged disk writes the image it was read from. On a new track, a sector whose bytes are all one value is
-    ///   written compressed, as ImageDisk writes it.
+    ///   track whose sectors differ from the layout's keeps the layout's data rate; one formatted again with the
+    ///   same sectors is written as the layout has it. An image that lists a track twice keeps both listings, each
+    ///   taking its sectors in turn, and a track the layout lacks goes in cylinder and side order. An unchanged disk
+    ///   writes the image it was read from. On a new track, a sector whose bytes are all one value is written
+    ///   compressed, as ImageDisk writes it.
     ///  </para>
     ///  <para>
     ///   A track has one mode and one sector size, so a sector whose density or size is not its track's first
@@ -324,7 +325,7 @@ public static class ImdFormat
             offset += 5;
             if (sizeCode > 6)
             {
-                throw new InvalidDataException("IMD sectors larger than 8192 bytes, or of more than one size, are not supported.");
+                throw new InvalidDataException("IMD sectors larger than 8192 bytes are not supported.");
             }
 
             int size = 128 << sizeCode;

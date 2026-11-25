@@ -17,9 +17,11 @@ namespace Retrocore.Media.Floppy;
 ///   A sector whose data field's stored CRC does not match its bytes reads with a CRC error, as on the disk.
 ///  </para>
 ///  <para>
-///   DMK holds everything a <see cref="FloppyDisk"/> does, so it is the floppies' snapshot. The writer lays each
-///   track out as a controller formats it, with IBM gaps, or with no gaps for a track too full for them, and makes
-///   every track as long as the longest, at least <c>$1900</c> bytes, a 5¼-inch double-density track's.
+///   DMK holds everything a <see cref="FloppyDisk"/> does, so it is the floppies' snapshot. <see cref="Write"/> lays
+///   each track out as a controller formats it, with IBM gaps, or with no gaps for a track too full for them, and
+///   makes every track as long as the longest, at least <c>$1900</c> bytes, a 5¼-inch double-density track's. A disk
+///   read from DMK is written back in its image's layout instead
+///   (<see cref="Encode(FloppyDisk, ReadOnlySpan{byte})"/>).
 ///  </para>
 /// </remarks>
 public static class DmkFormat
@@ -162,10 +164,12 @@ public static class DmkFormat
     ///  <para>
     ///   A track whose sectors are still the layout's, by ID, size and density, keeps its bytes, and only its sectors'
     ///   data marks, data and CRCs are written, where they were; a sector that reads with a CRC error keeps the CRC
-    ///   it had when that still does not match. A track the disk formatted anew is laid out as <see cref="Write"/>
-    ///   lays it out, as is one whose sectors no longer read back as the disk has them once written in place, as when
-    ///   one sector's data runs over another's ID. Bytes after the tracks stay. The header keeps its options and track length, growing for a longer track, and its cylinders
-    ///   and sides, growing for more. An unchanged disk writes the image it was read from.
+    ///   it had when that still does not match. A track whose sectors differ from the layout's is laid out as
+    ///   <see cref="Write"/> lays it out, as is one whose sectors no longer read back as the disk has them once
+    ///   written in place, as when one sector's data runs over another's ID. A track formatted again with the same
+    ///   sectors is written in place, so its gaps and any ID fields with no data stay. Bytes after the tracks stay.
+    ///   The header keeps its options and track length, growing for a longer track, and its cylinders and sides,
+    ///   growing for more. An unchanged disk writes the image it was read from.
     ///  </para>
     ///  <para>
     ///   A single-density-only image holds no double-density sector, so a disk given one is written as

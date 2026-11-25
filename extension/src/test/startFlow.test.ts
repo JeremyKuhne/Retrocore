@@ -7,7 +7,10 @@ import { readFileSync } from "node:fs";
 import * as path from "node:path";
 import { test } from "node:test";
 import { machineById, machines } from "../machines";
-import { crowdsCartridge, describeSetup, isUsable, optionValue, removesDrives, runChoices, setupConfiguration, withOption, type Setup } from "../startFlow";
+import {
+    crowdsCartridge, describeSetup, isUsable, optionDefault, optionValue, refusal, removesDrives, runChoices, setupConfiguration, setupFromConfiguration, withOption,
+    type Setup
+} from "../startFlow";
 
 interface OptionSchema { type?: string; enum?: unknown[]; anyOf?: OptionSchema[] }
 
@@ -152,4 +155,50 @@ test("a cartridge keeps BASIC out of its slot", () => {
     assert.ok(crowdsCartridge(setupConfiguration(cartridge), "basicCartridge", "c"));
     assert.ok(!crowdsCartridge(setupConfiguration(cartridge), "basicCartridge", "none"));
     assert.ok(!crowdsCartridge(setupConfiguration({ ...cartridge, kind: "machine" }), "basicCartridge", "c"));
+});
+
+test("a setup's ROM moves it between the Levels' machines, keeping what still fits", () => {
+    const level2 = machine("trs80-model1-level2");
+    const tape: Setup = { machineId: level2.id, kind: "tape", path: "C:\\eliza.cas", options: {} };
+    const level1 = withOption(level2, tape, "rom", "level1");
+    assert.deepEqual(level1, { machineId: "trs80-model1-level1", kind: "tape", path: "C:\\eliza.cas", options: {} });
+    assert.equal(setupConfiguration(level1).cassette, "C:\\eliza.cas", "the tape stays in");
+    assert.equal(optionValue(machine("trs80-model1-level1"), level1, "ramKilobytes"), 4);
+    assert.equal(optionValue(machine("trs80-model1-level1"), level1, "rom"), "level1");
+
+    const old = withOption(level2, tape, "rom", "level2-1.2");
+    assert.deepEqual(old.options, { revision: "1.2" });
+    assert.equal(setupConfiguration(old).revision, "1.2");
+    assert.equal(describeSetup(old), "TRS-80 Model I (Level II) · eliza.cas · ROM: Level II BASIC 1.2");
+    assert.equal(optionDefault(level2, old, "ramKilobytes"), 48);
+
+    const sixteen = withOption(machine("trs80-model1-level1"), level1, "ramKilobytes", 16);
+    assert.deepEqual(sixteen.options, { ramKilobytes: 16 }, "16 KB is chosen on Level I");
+    assert.deepEqual(withOption(machine("trs80-model1-level1"), sixteen, "rom", "level2").options, { ramKilobytes: 16 },
+        "and stays when it moves to Level II");
+    const big = withOption(machine("trs80-model1-level1"), level1, "ramKilobytes", 32);
+    assert.deepEqual(big.options, { ramKilobytes: 32, expansionInterface: true }, "32 KB brings the Expansion Interface");
+    assert.deepEqual(withOption(machine("trs80-model1-level1"), big, "expansionInterface", false).options, { ramKilobytes: 16 });
+
+    const model3 = withOption(machine("trs80-model3"), { machineId: "trs80-model3", kind: "machine", options: { ramKilobytes: 32 } }, "rom", "level1");
+    assert.deepEqual(model3, { machineId: "trs80-model3-level1", kind: "machine", options: { ramKilobytes: 32 } });
+});
+
+test("Level I refuses a setup it cannot run: a disk, or a BASIC file", () => {
+    const level2 = machine("trs80-model1-level2");
+    assert.match(refusal(level2, { machineId: level2.id, kind: "disk", path: "C:\\ldos.dsk", options: {} }, "rom", "level1") ?? "", /Level I cannot read/);
+    assert.match(refusal(level2, { machineId: level2.id, kind: "basic", path: "C:\\a.bas", options: {} }, "rom", "level1") ?? "", /Level I cannot load/);
+    assert.equal(refusal(level2, { machineId: level2.id, kind: "basic", path: "C:\\a.bas", options: {} }, "rom", "level2-1.2"), undefined);
+    assert.equal(refusal(level2, { machineId: level2.id, kind: "tape", path: "C:\\a.cas", options: {} }, "rom", "level1"), undefined);
+    assert.match(refusal(level2, { machineId: level2.id, kind: "disk", path: "C:\\ldos.dsk", options: {} }, "expansionInterface", false) ?? "",
+        /keeps its expansion interface/);
+});
+
+test("a Model I launch configuration's memory and ROM become its setup's options", () => {
+    assert.deepEqual(setupFromConfiguration({ machine: "trs80-model1", rom: "level1", ramKilobytes: 16, cassette: "C:\\a.cas" }),
+        { machineId: "trs80-model1-level1", kind: "tape", path: "C:\\a.cas", options: { ramKilobytes: 16 } });
+    assert.deepEqual(setupFromConfiguration({ machine: "trs80-model1", revision: "1.2", expansionInterface: false })?.options,
+        { revision: "1.2", expansionInterface: false }, "16 KB is what no interface gives, so it is left out");
+    assert.deepEqual(setupFromConfiguration({ machine: "trs80-model1", ramKilobytes: 48, expansionInterface: true })?.options, {},
+        "Level II's defaults are left out");
 });

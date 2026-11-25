@@ -79,6 +79,10 @@ internal sealed partial class DebugSession
     // The last retro/devices event sent, to send another only when a device changes.
     private string? _devices;
 
+    // The media warning the console last gave for each device, such as a tape for the other Level's ROM, so each
+    // insertion's is said once.
+    private readonly Dictionary<string, string> _mediaWarnings = [];
+
     // Whether running keeps to the machine's real speed, rather than running as fast as it can.
     // The speed running keeps to, as a multiple of the machine's clock; 0 runs as fast as the host can.
     private double _speed = 1;
@@ -2266,7 +2270,26 @@ internal sealed partial class DebugSession
         string text = devices.ToJsonString();
         if (text == _devices) { return; }
         _devices = text;
+        SayMediaWarnings();
         Notify("retro/devices", devices);
+    }
+
+    // Says in the console why the machine cannot read media just put in, once for each insertion.
+    private void SayMediaWarnings()
+    {
+        foreach (IDevice device in Target.Devices)
+        {
+            if (device.Media is not { Warning: { } warning } media)
+            {
+                _mediaWarnings.Remove(device.Id);
+                continue;
+            }
+
+            string said = $"{media.Label}|{warning}";
+            if (_mediaWarnings.TryGetValue(device.Id, out string? last) && last == said) { continue; }
+            _mediaWarnings[device.Id] = said;
+            Say($"{device.Info.Name}: {Path.GetFileName(media.Label)}: {warning}");
+        }
     }
 
     // Adds the cycles run since the last time to the current line's count, starting it over if the line was entered.

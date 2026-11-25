@@ -49,6 +49,15 @@ which recreates the pause after the file name that CLOAD needs. The machine's ti
 but the debugger runs as fast as it can while the cassette motor runs (`fastCassette`, on by default), so a
 tape loads or saves in a fraction of its playing time.
 
+Neither Level reads the other's tapes: a Level I tape in Level II plays to its end with nothing loaded. The CAS image
+does not say its speed, but its first recording says which BASIC wrote it. After the leader of zero bytes and the
+`$A5` sync byte, Level II's `CSAVE` writes three `$D3` bytes (`ST_CSAVE` in `Level2.asm`), a `SYSTEM` tape has the
+`$55` that begins its name, and Level I writes its block's start and end addresses, high bytes first
+(`TAPE_WRITE_BLOCK` in `Level1.asm`). A tape put in a machine whose ROM cannot read it still goes in, and the debug
+console and the cassette's row in the Drives view say so, for example: *This tape was recorded by Level I BASIC
+(250 baud); Level II can't read it. Switch the ROM to Level I.* The row also says what a tape holds: a Level I tape,
+a Level II BASIC program or a Level II SYSTEM tape. A tape that is none of these gets no warning.
+
 **Disks.** The FD1771 runs Types I-IV commands with their step rates, verify, rotational sector search,
 byte-timed DRQ, lost data, record-not-found and record types. Read address, read and write track, force
 interrupt and the 3-second motor timeout are emulated too. Four drives take JV1, JV3, DMK or IMD images, and a disk
@@ -128,6 +137,19 @@ The sources are maintained by hand, and assemble byte for byte to the ROMs.
 Level II and Level I are in the Run and Debug dropdown, and **Retrocore: Start Machine…** starts either with a
 program or a tape, and Level II with a BASIC file or a disk too, all without a launch.json; the extension README's
 [Starting a machine](../extension/README.md#starting-a-machine) explains both.
+
+The ROM and the memory are settings of the machine, in Start Machine's options and the Machine view's **Settings**:
+
+- **ROM**: Level II BASIC 1.3 (the default), Level II BASIC 1.2 or Level I BASIC, the `rom` and `revision` options.
+  Changed while the machine is off, the tape stays in; Level I, which has no disks, takes out the disks and the disk
+  controller; and the memory becomes the new ROM's unless a size was chosen. While it runs, the Machine view's ROM row
+  (or the ROM setting) offers to change it: after asking, since what is only in the machine's memory is lost, it
+  stops the session, sets the ROM as it would off, and starts the machine again with its tape.
+- **Memory**: 4, 16, 32 or 48 KB, `ramKilobytes`. 32 and 48 KB bring the Expansion Interface, and taking the
+  interface out brings the memory down to 16 KB. Left out, it is 48 KB with the interface, else 16 KB, or 4 KB for
+  Level I; Level I Model Is were sold with 4 KB or 16 KB, and Level I finds its memory's top by probing, so
+  `PRINT MEM` gives 3583 bytes free in 4 KB and 15871 in 16 KB.
+- **Expansion Interface**: on by default with Level II, off with Level I.
 
 Launch configurations take `"machine": "trs80-model1"`. To boot Level II with its source:
 
@@ -224,9 +246,10 @@ Z80 level against `Level1.asm`.
 | --- | --- |
 | `Trs80MachineTests`, `Trs80DiskTests`, `Trs80CassetteTests` | The machine, with test ROMs assembled in the tests. |
 | `Trs80RomTests` | Level II and Level I boot. CSAVE and CLOAD round-trip, 1.3 takes typed lines, and NEWDOS/80 boots from JV1 and JV3. |
+| `Trs80TapeContentsTests` | Which BASIC a tape is for, from Level II's and Level I's own recordings, the cassette's warning for the other Level's tapes, and Level I's `PRINT MEM` in 4K and 16K. |
 | `Trs80OracleTests` (Conformance) | The same keystrokes on our machine and on MAME, through [`tools/Trs80Oracle.lua`](../tools/Trs80Oracle.lua). The screens must match, and so must the BASIC program bytes. |
 | `Trs80RomSourceTests` | The ROM sources, by digest and against the dumps. |
-| [`tools/Test-Trs80Dap.mjs`](../tools/Test-Trs80Dap.mjs) | The debugger end to end: boot, a ROM-source breakpoint with the call stack, a cassette round trip, stepping from a program into the ROM source, and a NEWDOS/80 boot. |
+| [`tools/Test-Trs80Dap.mjs`](../tools/Test-Trs80Dap.mjs) | The debugger end to end: boot, a ROM-source breakpoint with the call stack, a cassette round trip, stepping from a program into the ROM source, a NEWDOS/80 boot, and the warning for a tape of the other Level, in a launch and from a saved machine. |
 
 Tests that need dumps, MAME or a DOS image are inconclusive without them. The DAP script needs none, since its
 ROMs come from the SDK sources.

@@ -702,6 +702,11 @@
           "group": "inline@1"
         },
         {
+          "command": "retrocore.machine.changeRom",
+          "when": "view == retrocore.machine && viewItem =~ /\\bchangeRom\\b/",
+          "group": "inline@1"
+        },
+        {
           "command": "retrocore.hardware.removeCard",
           "when": "view == retrocore.machine && viewItem =~ /\\bremoveCard\\b/",
           "group": "inline@1"
@@ -1015,6 +1020,10 @@
         },
         {
           "command": "retrocore.machine.setting",
+          "when": "false"
+        },
+        {
+          "command": "retrocore.machine.changeRom",
           "when": "false"
         },
         {
@@ -1342,6 +1351,11 @@
       {
         "command": "retrocore.machine.setting",
         "title": "Change Setting..."
+      },
+      {
+        "command": "retrocore.machine.changeRom",
+        "title": "Change ROM...",
+        "icon": "$(chip)"
       },
       {
         "command": "retrocore.resetSavedMachine",

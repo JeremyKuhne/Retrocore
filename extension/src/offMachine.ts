@@ -8,12 +8,12 @@
 
 import * as vscode from "vscode";
 import { keepResolved, resolveVariables } from "./favorite";
-import { changesFrom } from "./hardware";
+import { changesFrom, fitting } from "./hardware";
 import type { Device } from "./drives";
 import { languageRequest } from "./languageClient";
 import { catalogMachine, launchConfiguration, machineById, machines, startsWithDisks, withSetting, type Machine, type MachineChoice } from "./machines";
 import type { SavedMachines } from "./savedMachine";
-import { crowdsCartridge, describeSetup, driveOptions, isUsable, setupConfiguration, setupFromConfiguration, startOrigin, withOption, type Setup } from "./startFlow";
+import { crowdsCartridge, describeSetup, driveOptions, isUsable, refusal, setupConfiguration, setupFromConfiguration, startOrigin, withOption, type Setup } from "./startFlow";
 
 /** Where an off machine came from, which decides how it boots. */
 export type OffSource =
@@ -323,6 +323,8 @@ export class OffMachine {
 
         let next: OffTarget;
         if (target.source.kind === "setup") {
+            const refused = refusal(machine, target.source.setup, option, value);
+            if (refused !== undefined) throw new Error(refused);
             const setup = withOption(machine, target.source.setup, option, value);
             next = { configuration: setupConfiguration(setup), source: { kind: "setup", setup } };
             await this.state.update(lastSetupKey, setup);
@@ -331,10 +333,12 @@ export class OffMachine {
             next = { configuration: withSetting(target.configuration, choice, value), source: target.source };
         }
 
+        // What the new machine has no drive for, such as the disks Level I has none for, is left out.
         const saved = this.saved.get(target.configuration);
         if (saved !== undefined) {
             const base = await languageRequest<OffBody>("retrocore/machine/describe", { configuration: target.configuration });
-            await this.saved.set(next.configuration, changesFrom(saved, base.configuration));
+            const fresh = await languageRequest<OffBody>("retrocore/machine/describe", { configuration: next.configuration });
+            await this.saved.set(next.configuration, fitting(changesFrom(saved, base.configuration), fresh.configuration));
         }
 
         await this.selectNow(next);

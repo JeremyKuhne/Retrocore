@@ -177,7 +177,7 @@ public sealed partial class LanguageAnalysisTests
         Task<DocumentationSet>[] readers = [.. Enumerable.Range(0, Readers).Select(_ => Task.Factory.StartNew(
             () =>
             {
-                start.SignalAndWait(TimeSpan.FromMinutes(1)).Should().BeTrue();
+                start.SignalAndWait(TimeSpan.FromMinutes(1)).Should().BeTrue("every reader starts together");
                 return analysis.Documentation;
             },
             CancellationToken.None,

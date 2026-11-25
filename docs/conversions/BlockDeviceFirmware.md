@@ -84,3 +84,6 @@ none. `Apple2ProFileTests.FirmwareBytesAreUnchanged` (added before the conversio
   active: slot 7's, when a disk is mounted there, even with a ProFile card installed (before, slot 7's was
   `DriverEntry`). Clashes between modules are allowed (ConvertingSources.md); a distinct name such as
   `ProFileDriver` would avoid it.
+- Q3. The 3.5 controller's firmware, converted alongside, names its ProDOS entry `ProDosEntry` and the Monitor's SLOOP
+  a top-level `NextSlot`, where these name them `Driver` and `Startup::PowerUp::NextSlot` (the Monitor's own path). One
+  spelling for every card ROM would follow "same job, same name"; which is the owner's choice.

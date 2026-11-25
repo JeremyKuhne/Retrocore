@@ -19,8 +19,9 @@ namespace Retrocore.Basic;
 ///   like a sign, takes the operand after it (NOT A=B is (NOT A)=B), and only one of them, though a sign right before
 ///   a number is the constant's (- -1 is 1, and - - 1 is refused); AND is above OR. A comparison is 1 or 0. AND, as
 ///   OPERATOR_AND, ANDs the exponent bytes, so 1 AND 0.5 is 0. A name that starts with NOT, AND or OR where that
-///   operator can go is the operator and a name, as MATCH_OPERATOR reads it: NOTE1 is NOT E1. A string that no DIM
-///   has given room is error 9.
+///   operator can go is the operator and a name, as MATCH_OPERATOR reads it: NOTE1 is NOT E1, though NOTE$ alone is
+///   the string, as the grammar falls back to it when NOT's operand fails. A string that no DIM has given room is
+///   error 9, and its substring error 5, its length being 0.
 ///   <c>A(i)</c> and <c>A(i,j)</c> are array elements, counting from 0, <c>A(i)</c> being <c>A(i,0)</c>;
 ///   <c>A$(i)</c> is the string from character i and <c>A$(i,j)</c> characters i to j, counting from 1, never empty.
 ///   Subscripts, indexes and the arguments of PEEK and CHR$ round to an integer from 0 to 65535, or are error 3; a
@@ -177,7 +178,26 @@ internal sealed class AtariBasicExpression
     {
         if (Take("-")) { return Rounded(-Number(Operand())); }
         if (Take("+")) { return Rounded(Number(Operand())); }
-        if (TakeWord("NOT")) { return Truth(Number(Operand()) == 0); }
+        int at = _at;
+        string? whole = Peek();
+        if (TakeWord("NOT"))
+        {
+            // NOT and a string name, as NOTE$, isn't NOT's operand: the grammar takes the whole name instead.
+            if (whole is null || whole == "NOT" || !_tokens[at].EndsWith('$')) { return Truth(Number(Operand()) == 0); }
+            try
+            {
+                BasicValue operand = Operand();
+                if (!operand.IsString) { return Truth(Number(operand) == 0); }
+            }
+            catch (FormatException)
+            {
+                // E$ alone, or E$ never DIMensioned: the whole name is the operand.
+            }
+
+            _at = at;
+            _tokens[at] = whole;
+        }
+
         return Operand();
     }
 
@@ -305,9 +325,10 @@ internal sealed class AtariBasicExpression
         Expect(")");
         if (text)
         {
+            // OPERATOR_STRING_PAREN reads no DIM: a string without one has length 0, so any range is error 5.
             byte[] value = _variables.Find(name) is { } variable && Dimensioned(variable)
                 ? _variables.Read(variable.Kind, variable.ValueAddress).Text ?? []
-                : throw NotDimensioned(name);
+                : [];
 
             // OPERATOR_STRING_PAREN: error 5 for an index of 0, a last beyond the length, or nothing between them.
             int last = second ?? value.Length;
@@ -421,12 +442,13 @@ internal sealed class AtariBasicExpression
     private static bool Matches(string text, int at, string candidate) =>
         at + candidate.Length <= text.Length && text.AsSpan(at, candidate.Length).SequenceEqual(candidate);
 
-    // A string, or an array, that no DIM has given room: error 9, as POP_ABSOLUTE_VALUE gives it.
+    // A string that DIM has given room; one without is error 9 where POP_ABSOLUTE_VALUE reads it.
     private bool Dimensioned(BasicVariable variable) => (_memory.Read((variable.ValueAddress - 2) & 0xFFFF) & 0x01) != 0;
 
     private static FormatException NotDimensioned(string name) => new($"ERROR- 9: {name} is not DIMensioned.");
 
-    // A number's six bytes, or error 11 for one of 1E98 up, which only bytes written into a variable can hold.
+    // A number's six bytes, or error 11 for one of 1E98 up: a limit of carrying the numbers as doubles, as bytes
+    // written into a variable can hold one that AtariNumbers.Format would print.
     private static byte[] Atari(double value)
     {
         try
@@ -449,7 +471,19 @@ internal sealed class AtariBasicExpression
             return false;
         }
 
-        _tokens[_at] = token[word.Length..];
+        // AFP reads the number after the word whole: AND1.5 is AND and 1.5, where the scan split it at the point.
+        string rest = token[word.Length..];
+        int next = _at + 1;
+        if (rest.All(char.IsAsciiDigit) && next < _tokens.Count && _tokens[next][0] == '.' && !_spaced.Contains(next))
+        {
+            rest += _tokens[next];
+            _tokens.RemoveAt(next);
+            int[] later = [.. _spaced.Where(index => index > next)];
+            foreach (int index in later) { _spaced.Remove(index); }
+            foreach (int index in later) { _spaced.Add(index - 1); }
+        }
+
+        _tokens[_at] = rest;
         return true;
     }
 
@@ -505,13 +539,16 @@ internal sealed class AtariBasicExpression
     private static int Unsigned(BasicValue value)
     {
         double number = Number(value);
-        try
+        if (!double.IsNaN(number))
         {
-            if (AtariNumbers.ToInteger(AtariNumbers.FromDouble(number)) is { } integer) { return integer; }
-        }
-        catch (OverflowException)
-        {
-            // A number of 1E98 up, which only bytes written into a variable can hold.
+            try
+            {
+                if (AtariNumbers.ToInteger(AtariNumbers.FromDouble(number)) is { } integer) { return integer; }
+            }
+            catch (OverflowException)
+            {
+                // A number of 1E98 up, as bytes written into a variable can hold.
+            }
         }
 
         throw new FormatException("ERROR- 3: the value is not an integer from 0 to 65535.");

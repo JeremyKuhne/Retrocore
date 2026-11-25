@@ -250,6 +250,9 @@ public sealed class AtariBasicDialectTests
     [DataRow("B(2) ANDB(1,1)")]
     [DataRow("1 ORB(2)")]
     [DataRow("NOTE1")]
+    [DataRow("NOTA$")]
+    [DataRow("NOTA$=\"X\"")]
+    [DataRow("1 AND1.5")]
     [DataRow("2*-.5")]
     [DataRow("1E50*1E40")]
     [DataRow("(-2)^3")]
@@ -284,6 +287,9 @@ public sealed class AtariBasicDialectTests
     [DataRow("B(40000)", 9)]
     [DataRow("LEN(C$)", 9)]
     [DataRow("C$=\"X\"", 9)]
+    [DataRow("LEN(D$)", 9)]
+    [DataRow("C$(1)", 5)]
+    [DataRow("D$(1)", 5)]
     [DataRow("0^-1", 3)]
     [DataRow("(-8)^.5", 3)]
     [DataRow("1E50*1E50", 11)]
@@ -313,15 +319,18 @@ public sealed class AtariBasicDialectTests
     {
         AtariMachine machine = EvaluationMachine();
         Action evaluate = () => new BasicEvaluator(BasicDialect.AtariBasic, new AtariBasicMemory(machine)).Evaluate(expression);
-        evaluate.Should().Throw<FormatException>();
-        Printed(machine, expression).Should().StartWith("ERROR-", $"BASIC refuses PRINT {expression}");
+        evaluate.Should().Throw<FormatException>().Which.Message.Should().StartWith("ERROR- :", "it is a syntax error");
+
+        // A syntax error lists the line after ERROR-, where a run-time error gives a number.
+        Printed(machine, expression).Should().MatchRegex(@"^ERROR-\s+PRINT ", $"BASIC's grammar refuses PRINT {expression}");
     }
 
-    // An 800 with strings, arrays and DEG set, for the expression tests.
+    // An 800 with strings, arrays and DEG set, for the expression tests; D$ is in the variable table, with no DIM.
     private static AtariMachine EvaluationMachine()
     {
         AtariMachine machine = Machine();
-        AtariMachineTests.Type(machine, "DIM A$(9),B(3,2):A$=\"HELLO\":B(2,0)=7:B(1,1)=1.5:DEG\r");
+        AtariMachineTests.Type(machine, "DIM A$(9),B(3,2),NOTA$(5):A$=\"HELLO\":B(2,0)=7:B(1,1)=1.5:NOTA$=\"N\":DEG\r");
+        AtariMachineTests.Type(machine, "10 D$=\"\"\r");
         return machine;
     }
 

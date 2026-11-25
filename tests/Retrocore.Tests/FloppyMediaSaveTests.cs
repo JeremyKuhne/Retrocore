@@ -352,8 +352,8 @@ public sealed class FloppyMediaSaveTests
 
     /// <summary>
     ///  A drive's disk saves through the host as other drives' do: a changed disk holds back an eject, saves to its own
-    ///  format, and saves as another, after which it comes from that image; a disk whose image has no writer saves only
-    ///  as another.
+    ///  format, and saves as another, after which it comes from that image; a disk whose image this drive cannot write
+    ///  saves only as another.
     /// </summary>
     [TestMethod]
     public void DriveSavesThroughTheHost()
@@ -393,7 +393,7 @@ public sealed class FloppyMediaSaveTests
         losses.String("outcome").Should().Be("losses");
         losses.String("format").Should().Be("JVC");
 
-        // A disk whose image has no writer saves only as another format.
+        // A disk whose image this drive cannot write saves only as another format.
         string imd = Path.ChangeExtension(path, ".imd");
         byte[] bytes = [.. "IMD"u8];
         File.WriteAllBytes(imd, bytes);

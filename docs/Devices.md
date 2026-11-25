@@ -151,7 +151,9 @@ save the same way: their blocks to bare `.po`, `.hdv` or `.img` images, which ke
 the header, comment and creator data of the 2MG the disk was read from (a save to bare blocks says it drops them) and
 writes the lock as its locked flag. The TRS-80's and the Color Computer's floppies save to JV1, JV3, JVC, DMK or IMD:
 DMK holds everything, every ID, mark, density, CRC error and sector order, and a disk read from DMK saves back in its
-image's layout, its gaps, ID offsets and fields it could not read kept, each sector written where it was; IMD holds a
+image's layout: a track whose sectors are still the image's keeps its gaps, ID offsets and fields it could not read,
+each sector written where it was, and any other track is laid out afresh (all of them, for a single-density-only
+image given a double-density sector); IMD holds a
 track of one density and sector size, writes `$F9` and `$FA` as deleted, and a disk read from IMD keeps its comment,
 each track's mode and maps, which sectors were compressed and the sectors with no data, so an unchanged disk saves
 byte for byte; JV1 holds single-density tracks of

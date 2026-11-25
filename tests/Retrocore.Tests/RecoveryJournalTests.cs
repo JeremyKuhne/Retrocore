@@ -509,7 +509,7 @@ public sealed class RecoveryJournalTests
 
     /// <summary>
     ///  A TRS-80 disk read from IMD and from DMK is kept and comes back with its image's layout, so a disk written
-    ///  while it was kept saves to its image in its own format, with the comment, modes and ID offsets it had.
+    ///  while it was kept saves to its image in its own format, with the sector it wrote.
     /// </summary>
     /// <param name="extension">The image's extension.</param>
     [TestMethod]

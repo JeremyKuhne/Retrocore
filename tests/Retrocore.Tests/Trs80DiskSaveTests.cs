@@ -259,6 +259,32 @@ public sealed class Trs80DiskSaveTests
     }
 
     /// <summary>
+    ///  A field the end of a track cuts short stays out of the disk when a longer track grows the image: the kept track,
+    ///  padded to the new length, would complete it, so it is laid out again.
+    /// </summary>
+    [TestMethod]
+    public void DmkKeepsAFieldCutShortWhenTheImageGrows()
+    {
+        byte[] image = Dmk(out int length);
+        int track = 16;
+        int id = length - 20;
+        image.AsSpan(track + id, 20).Fill(0x4E);
+        ((byte[])[0xFE, 0, 0, 9, 1, 0, 0]).CopyTo(image, track + id);
+        image[track + id + 11] = 0xFB;
+        image[track + 6] = (byte)(id | 0x00);
+        image[track + 7] = (byte)((id >> 8) | 0x80);
+        FloppyDisk disk = DmkFormat.Read(image);
+        disk.Track(0, 0).Should().HaveCount(3, "sector 9's data runs past the end of the track");
+        byte[] layout = DmkFormat.Layout(image);
+        DmkFormat.Encode(disk, layout).Bytes.Should().Equal(image);
+
+        disk.Format(2, 0, [.. Enumerable.Range(1, 12).Select(number => Sector(2, 0, number, 512, doubleDensity: true))]);
+        byte[] grown = DmkFormat.Encode(disk, layout).Bytes;
+        (grown[2] | (grown[3] << 8)).Should().BeGreaterThan(length, "the new track is longer");
+        Describe(DmkFormat.Read(grown)).Should().Equal(Describe(disk));
+    }
+
+    /// <summary>
     ///  Bytes after a DMK image's tracks, which some tools leave, are kept.
     /// </summary>
     [TestMethod]

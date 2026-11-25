@@ -188,28 +188,54 @@ public static class DmkFormat
         (int oldCylinders, int oldSides, int oldLength, bool singleOnly) = Geometry(layout);
         int cylinders = Math.Max(oldCylinders, disk.Cylinders);
         int sides = Math.Max(oldSides, disk.Sides);
-        List<(byte[] Bytes, byte Gap)> tracks = [];
+        List<(byte[] Bytes, byte Gap, bool Kept)> tracks = [];
+        List<IReadOnlyList<FloppySector>> sectorsOf = [];
         for (int cylinder = 0; cylinder < cylinders; cylinder++)
         {
             for (int side = 0; side < sides; side++)
             {
                 IReadOnlyList<FloppySector> sectors = disk.Track(cylinder, side);
+                sectorsOf.Add(sectors);
                 if (cylinder < oldCylinders && side < oldSides)
                 {
                     ReadOnlySpan<byte> old = layout.Slice(HeaderSize + (((cylinder * oldSides) + side) * oldLength), oldLength);
                     if (Patched(old, sectors, singleOnly) is { } patched)
                     {
-                        tracks.Add((patched, old[^1]));
+                        tracks.Add((patched, old[^1], true));
                         continue;
                     }
                 }
 
                 if (singleOnly && sectors.Any(sector => sector.DoubleDensity)) { return Encode(disk); }
-                tracks.Add(Track(sectors, singleOnly));
+                (byte[] bytes, byte gap) = Track(sectors, singleOnly);
+                tracks.Add((bytes, gap, false));
             }
         }
 
-        int length = Math.Max(oldLength, tracks.Max(track => track.Bytes.Length));
+        // A kept track grows with the image, padded with its last byte, which can complete a field the old length cut
+        // short; one that then no longer reads as the disk has it is laid out again, which can grow the image again.
+        int length;
+        bool again;
+        do
+        {
+            length = Math.Max(oldLength, tracks.Max(track => track.Bytes.Length));
+            again = false;
+            for (int index = 0; index < tracks.Count; index++)
+            {
+                (byte[] bytes, byte gap, bool kept) = tracks[index];
+                if (!kept || bytes.Length == length) { continue; }
+                byte[] padded = new byte[length];
+                bytes.CopyTo(padded, 0);
+                padded.AsSpan(bytes.Length).Fill(gap);
+                if (ReadsAs(padded, sectorsOf[index], singleOnly)) { continue; }
+                if (singleOnly && sectorsOf[index].Any(sector => sector.DoubleDensity)) { return Encode(disk); }
+                (byte[] laid, byte laidGap) = Track(sectorsOf[index], singleOnly);
+                tracks[index] = (laid, laidGap, false);
+                again |= laid.Length > length;
+            }
+        }
+        while (again);
+
         ReadOnlySpan<byte> after = layout[ImageLength(layout)..];
         byte[] image = new byte[HeaderSize + (length * tracks.Count) + after.Length];
         after.CopyTo(image.AsSpan(image.Length - after.Length));
@@ -221,7 +247,7 @@ public static class DmkFormat
         image[4] = (byte)((image[4] & ~0x10) | (sides == 1 ? 0x10 : 0));
         for (int index = 0; index < tracks.Count; index++)
         {
-            (byte[] bytes, byte gap) = tracks[index];
+            (byte[] bytes, byte gap, _) = tracks[index];
             Span<byte> track = image.AsSpan(HeaderSize + (index * length), length);
             bytes.CopyTo(track);
             track[bytes.Length..].Fill(gap);
@@ -273,13 +299,20 @@ public static class DmkFormat
 
         // A field that runs over another's, as on some protected disks, can leave a sector that no longer reads as the
         // disk has it; such a track is laid out again.
-        List<DmkField> written = Locate(track, singleOnly, exactSizes: false);
+        return ReadsAs(track, sectors, singleOnly) ? track : null;
+    }
+
+    // Whether a track reads as exactly these sectors.
+    private static bool ReadsAs(ReadOnlySpan<byte> track, IReadOnlyList<FloppySector> sectors, bool singleOnly)
+    {
+        List<DmkField> read = Locate(track, singleOnly, exactSizes: false);
+        if (read.Count != sectors.Count) { return false; }
         for (int index = 0; index < sectors.Count; index++)
         {
-            if (index >= written.Count || !Same(written[index].Sector, sectors[index])) { return null; }
+            if (!Same(read[index].Sector, sectors[index])) { return false; }
         }
 
-        return written.Count == sectors.Count ? track : null;
+        return true;
     }
 
     private static bool Same(FloppySector read, FloppySector sector)

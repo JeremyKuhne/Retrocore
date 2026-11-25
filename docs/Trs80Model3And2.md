@@ -220,7 +220,12 @@ What the comparison has to allow for:
 - **Images.** MAME 0.264 does not read the TRSDOS 1.3 and 6.0 DMK images, so those tests use their IMD copies.
 - **Keys.** MAME types an uppercase letter with shift, and `Trs80Keyboard.Type` without it. The test swaps the case
   on this side, so both press the same keys; TRSDOS 6.0 starts with caps lock off, where the two differ.
-- **The cursor.** A DOS blinks its cursor, so one cell may differ, where one side shows a space.
+- **The cursor.** A DOS blinks its cursor, so one cell may differ, where one side shows a space, and only where the
+  cursor waits, after everything else on the screen.
+- **The Model 4's screen.** Its 2K of video RAM holds the 80 by 24 screen, which is compared in either mode, so the
+  comparison does not depend on this side's 64 or 80 column switch. Past it, a DOS's leftovers differ.
+- **MAME's settings.** MAME runs with `-noreadconfig`, so no `mame.ini` or machine's `.ini`, such as one choosing
+  another BIOS, changes the run.
 - **The Model II's boot ROM** is chosen by MAME's BIOS name: `c8ff`, `2bff`, `2119` and `9733` for versions 1, 2, 3
   and 5.
 

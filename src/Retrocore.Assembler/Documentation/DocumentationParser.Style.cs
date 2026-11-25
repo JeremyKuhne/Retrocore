@@ -73,7 +73,7 @@ public static partial class DocumentationParser
                 Warn(DocumentationRules.LineLength, $"Line is over {StyleLineLength} columns.", index);
             }
 
-            if (line.Any(character => character > '\x7F'))
+            if (!IsAscii(line))
             {
                 Warn(
                     DocumentationRules.Ascii,
@@ -81,12 +81,13 @@ public static partial class DocumentationParser
                     index);
             }
 
-            (string code, string? comment) = Split(line);
-            string trimmed = code.Trim();
-            int indent = code.Length - code.TrimStart().Length;
-            if (trimmed.Length == 0)
+            // Read in place: only a line with code is copied, trimmed, once.
+            int codeLength = CodeLength(line);
+            bool hasComment = codeLength < line.Length;
+            int indent = LeadingWhiteSpace(line, codeLength);
+            if (indent == codeLength)
             {
-                if (comment is not null && CommentIndent(lines, index, indent, inMacro) is { } misplaced)
+                if (hasComment && CommentIndent(lines, index, indent, inMacro) is { } misplaced)
                 {
                     Warn(DocumentationRules.CommentIndent, misplaced, index);
                 }
@@ -94,12 +95,14 @@ public static partial class DocumentationParser
                 continue;
             }
 
+            string trimmed = TrimmedCode(line, codeLength, indent);
+
             // A member of a type may have a trailing ;; comment instead of a block above it; a type's own lines may not.
             // A member that opens a nested type ("NEST .struct Named") is a member line too; a directive such as .org
             // is not a member.
             (string? typeMember, string typeDirective, _) = TypeLine(trimmed);
             bool memberLine = typeDepth != 0 && (typeMember is not null || typeDirective.Length == 0 && !trimmed.StartsWith('.'));
-            if (comment is not null && comment.StartsWith(Marker, StringComparison.Ordinal) && !memberLine)
+            if (codeLength + 1 < line.Length && line[codeLength + 1] == ';' && !memberLine)
             {
                 Warn(DocumentationRules.TrailingDoc, "Put ;; documentation above the definition, not after it.", index);
             }
@@ -185,44 +188,54 @@ public static partial class DocumentationParser
     private static string? CommentIndent(string[] lines, int index, int indent, bool inMacro)
     {
         int next = index + 1;
-        while (next < lines.Length && Split(lines[next]).Code.Trim().Length == 0)
+        while (next < lines.Length && IsBlankCode(lines[next]))
         {
             // A blank line ends what the comment describes.
-            if (lines[next].Trim().Length == 0) { return null; }
+            if (IsBlank(lines[next])) { return null; }
             next++;
         }
 
         if (next >= lines.Length) { return null; }
-        HashSet<int> allowed = [Indentation(lines[next])];
-        string code = Split(lines[next]).Code.Trim();
+
+        // The columns the comment may be at, each once: at most the four below.
+        Span<int> allowed = stackalloc int[4];
+        int count = 0;
+        void Allow(Span<int> columns, int column)
+        {
+            if (columns[..count].IndexOf(column) < 0) { columns[count++] = column; }
+        }
+
+        Allow(allowed, Indentation(lines[next]));
+        string code = TrimmedCode(lines[next]);
 
         // Before a conditional directive, the comment may also describe the code the condition chooses: the first line
         // after the directives that is not one.
         if (IsConditionalDirective(code) && CodeAfterConditionals(lines, next) is int chosen)
         {
-            allowed.Add(Indentation(lines[chosen]));
+            Allow(allowed, Indentation(lines[chosen]));
         }
 
-        if (IsLabelOnly(code) && next + 1 < lines.Length && Split(lines[next + 1]).Code.Trim().Length != 0)
+        if (IsLabelOnly(code) && next + 1 < lines.Length && !IsBlankCode(lines[next + 1]))
         {
-            allowed.Add(Indentation(lines[next + 1]));
+            Allow(allowed, Indentation(lines[next + 1]));
         }
 
         if (s_blockEnds.Contains(Directive(code)))
         {
             for (int previous = index - 1; previous >= 0; previous--)
             {
-                if (Split(lines[previous]).Code.Trim().Length == 0) { continue; }
-                allowed.Add(Indentation(lines[previous]));
+                if (IsBlankCode(lines[previous])) { continue; }
+                Allow(allowed, Indentation(lines[previous]));
                 break;
             }
         }
 
-        if (inMacro && allowed.Count == 0) { return null; }
-        if (!allowed.Contains(indent))
+        if (inMacro && count == 0) { return null; }
+        if (allowed[..count].IndexOf(indent) < 0)
         {
-            string columns = string.Join(" or ", allowed.OrderBy(column => column));
-            return $"Indent this comment like the code it describes ({columns} columns).";
+            int[] columns = allowed[..count].ToArray();
+            Array.Sort(columns);
+            return $"Indent this comment like the code it describes ({string.Join(" or ", columns)} columns).";
         }
 
         return null;
@@ -242,11 +255,14 @@ public static partial class DocumentationParser
 
         int end = IdentifierLength(code, 0);
         if (end == 0) { return null; }
-        string after = code[end..].TrimStart();
-        bool equals = after.StartsWith('=') && !after.StartsWith("==", StringComparison.Ordinal);
-        bool constant = equals || after.StartsWith(":=", StringComparison.Ordinal);
-        bool variable = after.StartsWith(".set", StringComparison.OrdinalIgnoreCase);
-        bool colonDefinition = ColonDefinition(code[end..]).Length != 0;
+        // Read in place: every line of code with a name or mnemonic first comes here.
+        ReadOnlySpan<char> after = code.AsSpan(end).TrimStart();
+        bool equals = after.StartsWith("=".AsSpan(), StringComparison.Ordinal) && !after.StartsWith("==".AsSpan(), StringComparison.Ordinal);
+        bool constant = equals || after.StartsWith(":=".AsSpan(), StringComparison.Ordinal);
+        bool variable = after.StartsWith(".set".AsSpan(), StringComparison.OrdinalIgnoreCase);
+
+        // ColonDefinition finds nothing unless the name is followed by a colon.
+        bool colonDefinition = end < code.Length && code[end] == ':' && ColonDefinition(code[end..]).Length != 0;
         return constant || variable || colonDefinition || IsLabelOnly(code) ? code[..end] : null;
     }
 
@@ -322,18 +338,57 @@ public static partial class DocumentationParser
     {
         for (int index = start; index < lines.Length; index++)
         {
-            string code = Split(lines[index]).Code.Trim();
-            if (code.Length == 0) { return null; }
-            if (!IsConditionalDirective(code)) { return index; }
+            if (IsBlankCode(lines[index])) { return null; }
+            if (!IsConditionalDirective(TrimmedCode(lines[index]))) { return index; }
         }
 
         return null;
     }
 
-    private static int Indentation(string line)
+    // The whitespace before a line's code, as long as its code is when it has nothing else.
+    private static int Indentation(string line) => LeadingWhiteSpace(line, CodeLength(line));
+
+    // How many whitespace characters, as Trim reads them, start the text before the end.
+    private static int LeadingWhiteSpace(string text, int end)
     {
-        string code = Split(line).Code;
-        return code.Length - code.TrimStart().Length;
+        int start = 0;
+        while (start < end && char.IsWhiteSpace(text[start])) { start++; }
+        return start;
+    }
+
+    // Whether a line is only whitespace, as line.Trim().Length == 0 tells.
+    private static bool IsBlank(string line) => LeadingWhiteSpace(line, line.Length) == line.Length;
+
+    // Whether a line has no code before its comment, as Split(line).Code.Trim().Length == 0 tells.
+    private static bool IsBlankCode(string line)
+    {
+        int codeLength = CodeLength(line);
+        return LeadingWhiteSpace(line, codeLength) == codeLength;
+    }
+
+    // A line's code without its comment, trimmed, as Split(line).Code.Trim() gives it, copied once.
+    private static string TrimmedCode(string line)
+    {
+        int codeLength = CodeLength(line);
+        return TrimmedCode(line, codeLength, LeadingWhiteSpace(line, codeLength));
+    }
+
+    private static string TrimmedCode(string line, int codeLength, int start)
+    {
+        int end = codeLength;
+        while (end > start && char.IsWhiteSpace(line[end - 1])) { end--; }
+        return line[start..end];
+    }
+
+    // Whether every character is ASCII.
+    private static bool IsAscii(string line)
+    {
+        foreach (char character in line)
+        {
+            if (character > '\x7F') { return false; }
+        }
+
+        return true;
     }
 
     // The directive a line starts with, in lower case, or empty.

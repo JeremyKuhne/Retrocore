@@ -6,8 +6,8 @@
 // firmware all built from the SDK's sources. An Atari BASIC file launched on the BASIC thread stops on its first
 // statement, steps through its statements, stops at a breakpoint in a GOSUB with the GOSUB's frame below it, and shows
 // its variables and FOR loop from BASIC's own tables; the program in memory reads and writes as text, and an error
-// stops at its statement. A breakpoint in BASIC's cartridge, AtariBasic.asm, and one in the OS, Os.asm, stop as BASIC
-// runs a typed line. Then the machine starts from a binary load file (.xex) and from a disk, booted by the 810, and the
+// stops at its statement. A breakpoint in BASIC's cartridge (AtariBasic/Execution.asm) and one in the OS (Os/Editor.asm)
+// stop as BASIC runs a typed line. Then the machine starts from a binary load file (.xex) and from a disk, booted by the 810, and the
 // 6502 sample runs.
 
 import { startDap } from "./DapClient.mjs";
@@ -86,6 +86,10 @@ writeFileSync(xex, Buffer.from([
     0xFF, 0xFF, 0x00, 0x20, (0x2000 + program.length - 1) & 0xFF, (0x2000 + program.length - 1) >> 8, ...program,
     0xE0, 0x02, 0xE1, 0x02, 0x00, 0x20
 ]));
+
+// A raw 8 KB ROM for the 800's right slot, which maps it at $8000.
+const right = join(folder, `right-${process.pid}.rom`);
+writeFileSync(right, Buffer.alloc(0x2000, 0xEA));
 
 // A disk whose boot sector, loaded at $0700, runs the same program from $0706.
 const atr = join(folder, `hi-${process.pid}.atr`);
@@ -180,10 +184,18 @@ try {
     assert.equal((await frames(1))[0].source.path.toLowerCase(), osSource.toLowerCase());
     await request("setBreakpoints", { source: { path: osSource }, breakpoints: [] });
 
-    // An .xex boots from drive 1 and runs.
-    await request("launch", { machine: "atari800", sdkRoms, executable: xex, basicCartridge: "none", stopOnEntry: false, speed: "max" });
+    // An .xex boots from drive 1 and runs, with a raw ROM in the right slot and a tape that can be locked.
+    await request("launch", {
+        machine: "atari800", sdkRoms, executable: xex, basicCartridge: "none", rightCartridge: right, cassette: xex,
+        stopOnEntry: false, speed: "max"
+    });
     await request("configurationDone");
     await screen(text => text.startsWith("HI"), "the .xex's HI");
+    const regions = (await request("retro/memory/map", { memoryReference: "0x0000" })).regions;
+    assert.equal(regions.find(region => region.start === 0x8000)?.name, "Right cartridge", JSON.stringify(regions));
+    await request("retro/device", { id: "cassette", action: "writeProtect", writeProtected: true });
+    const cassette = (await request("retro/devices")).devices.find(candidate => candidate.id === "cassette");
+    assert.equal(cassette.media.writeProtected, true, JSON.stringify(cassette));
 
     // A disk boots through the 810 and runs its boot sector.
     await request("launch", { machine: "atari800", sdkRoms, disks: [atr], basicCartridge: "none", stopOnEntry: false, speed: "max" });
@@ -195,13 +207,13 @@ try {
     await request("configurationDone");
     await screen(text => text.includes("HELLO FROM THE 6502"), "the sample's line");
 
-    console.log("Atari DAP passed: an Atari BASIC file stops on entry, steps, stops in a GOSUB with its caller below, shows its variables and FOR loop, reads and writes its program and stops on an error; breakpoints in AtariBasic.asm and Os.asm stop; and the machine runs an .xex, boots a disk through the 810 and runs the 6502 sample, all from the SDK's sources.");
+    console.log("Atari DAP passed: an Atari BASIC file stops on entry, steps, stops in a GOSUB with its caller below, shows its variables and FOR loop, reads and writes its program and stops on an error; breakpoints in AtariBasic.asm and Os.asm stop; and the machine runs an .xex with a raw ROM in the right slot and a locked tape, boots a disk through the 810 and runs the 6502 sample, all from the SDK's sources.");
 } catch (error) {
     fail(error);
 } finally {
     clearTimeout(timeout);
     close();
-    for (const path of [file, xex, atr]) unlinkSync(path);
+    for (const path of [file, xex, right, atr]) unlinkSync(path);
 }
 
 if (failure()) {

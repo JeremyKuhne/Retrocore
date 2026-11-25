@@ -1179,12 +1179,12 @@ default, or `atari400`), with the same source debugging, call stack, cycle count
 - `ramKilobytes`: 8 to 48 in steps of 8, 48 on the 800 and 16 on the 400 by default;
 - `basicCartridge`: Atari BASIC's revision in the left slot, `c`, `b`, `a` or `none`;
 - `cartridge`, a left cartridge (`.rom` or `.car`), which then holds no BASIC, and
-  `rightCartridge`, the 800's right slot;
+  `rightCartridge`, the 800's right slot (an 8 KB `.rom` or a right-slot `.car`);
 - `diskDrives` (0 to 4), `diskDrive` (`atari810`, the 810 at the hardware level, or
   `sio`, at the command level) and `disks` (ATR or XFD images for D1:-D4:);
 - `executable`, an `.xex` that boots from drive 1 on a disk built for it;
-- `cassette`, a `.cas` tape or an `.xex` on a boot tape; `fastCassette` and `sound`
-  (`speaker` or `off`).
+- `cassette`, a `.cas` tape or an `.xex` on a boot tape; `fastCassette` (on by
+  default) and `sound` (`speaker` or `off`).
 
 The OS, the floating point package, Atari BASIC and the 810's firmware are built from the
 SDK's sources, so both models need nothing else, and debugging steps into the sources.

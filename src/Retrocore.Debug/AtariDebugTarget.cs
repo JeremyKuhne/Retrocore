@@ -194,11 +194,11 @@ internal sealed partial class AtariDebugTarget : IDebugTarget
     [
         new("Zero page", 0x0000, 0x100, "ram"),
         new("Stack", 0x0100, 0x100, "ram"),
-        new("OS and DOS RAM, the cassette buffer and BASIC's buffers", 0x0200, 0x0500, "ram"),
+        new("OS RAM, the cassette buffer, BASIC's buffers and page 6", 0x0200, 0x0500, "ram"),
         .. Ram(),
-        Window("Right cartridge", 0x8000, 0x2000),
-        Window("Left cartridge", 0xA000, 0x2000),
-        Window("Nothing", 0xC000, 0x1000),
+        Window(0x8000, 0x2000),
+        Window(0xA000, 0x2000),
+        Window(0xC000, 0x1000),
         new("GTIA, POKEY, the PIA and ANTIC", 0xD000, 0x0800, "io"),
         new("Floating point ROM", 0xD800, 0x0800, "rom"),
         new("Character set, in the OS ROM", 0xE000, 0x0400, "rom"),
@@ -304,7 +304,7 @@ internal sealed partial class AtariDebugTarget : IDebugTarget
     /// <remarks>
     ///  <para>
     ///   The OS debugs against <c>Os.asm</c> and the floating point package against <c>FloatingPoint.asm</c>, each when
-    ///   the ROM is a build of its source; Atari BASIC in either cartridge slot debugs against <c>AtariBasic.asm</c>,
+    ///   the ROM is a build of its source; Atari BASIC in the left cartridge slot debugs against <c>AtariBasic.asm</c>,
     ///   built for its revision, and only while that slot is mapped.
     ///  </para>
     /// </remarks>
@@ -553,10 +553,11 @@ internal sealed partial class AtariDebugTarget : IDebugTarget
     }
 
     // A cartridge window, named by what the bus maps there now.
-    private DebugRegion Window(string cartridge, ushort start, int length) => _machine.Bus.Area(start) switch
+    private DebugRegion Window(ushort start, int length) => _machine.Bus.Area(start) switch
     {
         AtariMemoryArea.Ram => new("RAM", start, length, "ram"),
-        AtariMemoryArea.LeftCartridge or AtariMemoryArea.RightCartridge => new(cartridge, start, length, "rom"),
+        AtariMemoryArea.LeftCartridge => new("Left cartridge", start, length, "rom"),
+        AtariMemoryArea.RightCartridge => new("Right cartridge", start, length, "rom"),
         _ => new("Nothing mapped here", start, length, "none")
     };
 

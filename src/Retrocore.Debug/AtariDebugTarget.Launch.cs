@@ -145,7 +145,11 @@ internal sealed partial class AtariDebugTarget
         if (args.String("rightCartridge") is { } rightCartridge)
         {
             if (model == AtariModel.Atari400) { throw new ArgumentException("The 400 has one cartridge slot."); }
-            right = AtariCartridge.Load(Path.GetFullPath(rightCartridge));
+            // A raw 8 KB image given for the right slot is a right-slot cartridge; a .car says its own type.
+            byte[] bytes = File.ReadAllBytes(Path.GetFullPath(rightCartridge));
+            right = bytes.AsSpan().StartsWith("CART"u8)
+                ? AtariCartridge.Load(bytes)
+                : new AtariCartridge(bytes, AtariCartridgeType.Right8);
         }
 
         AtariMachine machine = new(
@@ -204,6 +208,10 @@ internal sealed partial class AtariDebugTarget
             case (Atari410 cassette, "eject"):
                 cassette.Eject();
                 break;
+            case (Atari410 cassette, "writeProtect"):
+                if (cassette.Tape is not { } tape) { throw new ArgumentException($"{cassette.Info.Name} is empty."); }
+                tape.IsWriteProtected = args.Bool("writeProtected") ?? throw new ArgumentException("writeProtected is required.");
+                break;
             case (AtariDiskDrive drive, "insert"):
                 InsertDisk(drive.Number - 1, path ?? throw new ArgumentException("path is required."));
                 break;
@@ -229,7 +237,7 @@ internal sealed partial class AtariDebugTarget
             try
             {
                 AtariRoms roms = AtariRoms.LoadFromDirectory(candidate, os == AtariSdkModules.OsRevisionA ? 'A' : 'B');
-                if (AtariSdkModules.OsVersionOf(roms.Image[0x0800..]) is { } found && found != os && found != AtariSdkModules.OsPal)
+                if (AtariSdkModules.OsVersionOf(roms.Image[0x0800..]) is { } found && found != os)
                 {
                     continue;
                 }

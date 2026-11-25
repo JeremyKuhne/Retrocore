@@ -68,12 +68,13 @@ Launch with `"machine": "atari800"`. The options:
 | `chip` | `gtia` (the default) or `ctia`. |
 | `ramKilobytes` | 8 to 48 in 8 KB steps. |
 | `basicCartridge` | `c` (the default), `b`, `a` or `none`: Atari BASIC's revision in the left slot. |
-| `cartridge`, `rightCartridge` | A cartridge image for the left slot, which then holds no BASIC, or the 800's right slot. |
-| `diskDrives`, `diskDrive` | 0 to 4 drives, by default as many as `disks` names; `atari810` (the default) or `sio`. |
+| `cartridge`, `rightCartridge` | A cartridge image for the left slot, which then holds no BASIC, or the 800's right slot (an 8 KB `.rom`, or a `.car` of the right-slot type). |
+| `diskDrives`, `diskDrive` | 0 to 4 drives, by default as many as `disks` names, or 1 for an `executable`; `atari810` (the default) or `sio`. |
 | `disks` | `.atr` and `.xfd` images, or an `.xex`, for D1: to D4:. |
 | `executable` | An `.xex`, which boots from drive 1. |
 | `cassette` | A `.cas` tape, or an `.xex` on a tape that boots it. |
-| `sound`, `fastCassette` | `speaker` (the default) or `off`; whether the machine runs flat out while the tape moves. |
+| `sound` | `speaker` (the default) or `off`. |
+| `fastCassette` | Whether the machine runs flat out while the tape moves; on by default. |
 
 A 6502 `source` or `program` loads once the OS and BASIC have run for two seconds, so CIO and the screen are set up:
 [`sample/atari/hello.asm`](../sample/atari/hello.asm) prints through CIO.
@@ -103,5 +104,5 @@ and run the machine on the SDK's builds alone. `AtariBasicDialectTests` checks t
 the machine. `AtariOracleTests` compares traces with MAME's when `RETROCORE_MAME` names it.
 
 [`tools/Test-AtariDap.mjs`](../tools/Test-AtariDap.mjs) runs the debugger on the SDK's sources with nothing external:
-an Atari BASIC file on the BASIC thread, breakpoints in `AtariBasic.asm` and `Os.asm`, an `.xex`, a disk booted
+an Atari BASIC file on the BASIC thread, breakpoints in `AtariBasic.asm`'s and `Os.asm`'s modules, an `.xex`, a disk booted
 through the 810, and the 6502 sample.

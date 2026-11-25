@@ -5,6 +5,7 @@
 using Retrocore.Assembler;
 using Retrocore.Documentation;
 using Retrocore.Isa;
+using System.Globalization;
 
 namespace Retrocore.Debug.Language;
 
@@ -249,7 +250,12 @@ internal sealed class HoverHandler
         string target = absolute ? name[2..] : name;
         string path = context?.Path ?? from.Path;
         string[] components = target.Split("::");
-        bool names = components.All(part => part.Length != 0 && part.All(character => char.IsAsciiLetterOrDigit(character) || character == '_'));
+        bool names = components.All(part => part.Length != 0
+            && part.All(character => char.IsAsciiLetterOrDigit(character) || character is '_' or '$' or '%' or '.'));
+
+        bool directive = target.StartsWith('.') && DirectiveDocs.Describe(target) is not null;
+        bool address = target.StartsWith('$') && long.TryParse(target.AsSpan(1), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out _);
+        if (directive || address) { names = false; }
         if (names && analysis.UsesMacro10(path))
         {
             string last = components[^1];

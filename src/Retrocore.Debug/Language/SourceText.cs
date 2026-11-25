@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
+using Retrocore.Documentation;
+
 namespace Retrocore.Debug.Language;
 
 /// <summary>
@@ -164,18 +166,7 @@ internal static class SourceText
     /// </summary>
     /// <param name="line">The line.</param>
     /// <returns>The semicolon's index.</returns>
-    internal static int CommentStart(string line)
-    {
-        bool quoted = false;
-        for (int index = 0; index < line.Length; index++)
-        {
-            char character = line[index];
-            if (character is '"' or '\'') { quoted = !quoted; }
-            if (character == ';' && !quoted) { return index; }
-        }
-
-        return -1;
-    }
+    internal static int CommentStart(string line) => DocumentationParser.CommentStart(line);
 
     /// <summary>
     ///  Finds a local label's definition: the nearest line in a file that defines the name.

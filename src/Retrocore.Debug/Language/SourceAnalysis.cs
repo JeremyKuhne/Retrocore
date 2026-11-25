@@ -19,6 +19,7 @@ internal sealed partial class SourceAnalysis
 
     private readonly Dictionary<string, List<SymbolSite>> _definitions = [with(StringComparer.OrdinalIgnoreCase)];
     private readonly List<(AssemblyLocation? Location, InstructionSet Cpu)> _cpuDirectives = [];
+    private readonly List<(int Line, InstructionSet Cpu)> _rootCpus = [];
     private readonly Dictionary<string, Dictionary<AssemblyLocation, List<(int Line, InstructionSet Cpu)>>> _includeCpus =
         [with(StringComparer.OrdinalIgnoreCase)];
     private readonly Dictionary<string, AssemblyDialect> _dialects = [with(StringComparer.OrdinalIgnoreCase)];
@@ -60,6 +61,7 @@ internal sealed partial class SourceAnalysis
 
         // Each include occurrence can enter under a different CPU; its nested switches take effect after the include line.
         InstructionSet? current = _cpuDirectives.FirstOrDefault().Cpu;
+        if (current is not null) { _rootCpus.Add((0, current)); }
         HashSet<string> entered = [with(StringComparer.OrdinalIgnoreCase)];
         foreach (AssemblyStatement statement in project.Statements)
         {
@@ -88,6 +90,13 @@ internal sealed partial class SourceAnalysis
                 current = cpu;
                 for (AssemblyLocation? location = statement.Location; location is not null; location = location.ExpandedFrom)
                 {
+                    if (location is { Path.Length: > 0, ExpandedFrom: null }
+                        && string.Equals(Path.GetFullPath(location.Path), root, StringComparison.OrdinalIgnoreCase))
+                    {
+                        int line = ReferenceEquals(location, statement.Location) ? location.Line : location.Line + 1;
+                        _rootCpus.Add((line, cpu));
+                    }
+
                     if (location is { Path.Length: > 0, ExpandedFrom: { } from, IsMacroExpansion: false }
                         && _includeCpus.TryGetValue(Path.GetFullPath(location.Path), out var contexts)
                         && contexts.TryGetValue(from, out var runs))
@@ -197,9 +206,15 @@ internal sealed partial class SourceAnalysis
         foreach (AssemblySymbol symbol in result.SymbolDefinitions)
         {
             if (symbol.Location is not { } location || location.Path.Length == 0) { continue; }
-            string name = spelling.TryGetValue(symbol.Name, out string? source) ? source : symbol.Name;
-            SymbolSiteKind kind = symbol.IsConstant ? SymbolSiteKind.Constant : SymbolSiteKind.Label;
             string path = Path.GetFullPath(location.Path);
+            int scopeEnd = symbol.Name.LastIndexOf("::", StringComparison.Ordinal);
+            int qualifier = scopeEnd < 0 ? 0 : scopeEnd + 2;
+            string suffix = symbol.Name[qualifier..];
+            bool translated = qualifier == 0
+                || (_dialects.TryGetValue(path, out AssemblyDialect dialect) && dialect is AssemblyDialect.Macro10 or AssemblyDialect.Merlin);
+
+            string name = translated && spelling.TryGetValue(suffix, out string? source) ? symbol.Name[..qualifier] + source : symbol.Name;
+            SymbolSiteKind kind = symbol.IsConstant ? SymbolSiteKind.Constant : SymbolSiteKind.Label;
             int column = location.Column;
             int? sourceLength = null;
             int scope = name.LastIndexOf("::", StringComparison.Ordinal);
@@ -375,6 +390,11 @@ internal sealed partial class SourceAnalysis
     private InstructionSet? InstructionSetAt(string path, int line, int depth, out bool ambiguous)
     {
         ambiguous = false;
+        if (string.Equals(path, Root, StringComparison.OrdinalIgnoreCase) && _rootCpus.Count != 0)
+        {
+            return CpuAt(_rootCpus, line);
+        }
+
         if (!_includeCpus.TryGetValue(path, out var contexts))
         {
             if (_includedFrom.TryGetValue(path, out List<(string Path, int Line)>? sites))
@@ -407,12 +427,7 @@ internal sealed partial class SourceAnalysis
         InstructionSet? result = null;
         foreach (List<(int Line, InstructionSet Cpu)> runs in contexts.Values)
         {
-            InstructionSet cpu = runs[0].Cpu;
-            foreach ((int at, InstructionSet set) in runs)
-            {
-                if (at <= line) { cpu = set; }
-            }
-
+            InstructionSet cpu = CpuAt(runs, line);
             if (result is not null && result != cpu)
             {
                 ambiguous = true;
@@ -423,6 +438,17 @@ internal sealed partial class SourceAnalysis
         }
 
         return result;
+    }
+
+    private static InstructionSet CpuAt(List<(int Line, InstructionSet Cpu)> runs, int line)
+    {
+        InstructionSet cpu = runs[0].Cpu;
+        foreach ((int at, InstructionSet set) in runs)
+        {
+            if (at <= line) { cpu = set; }
+        }
+
+        return cpu;
     }
 
     /// <summary>

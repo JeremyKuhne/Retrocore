@@ -469,6 +469,159 @@ public sealed partial class LanguageAnalysisTests
     }
 
     /// <summary>
+    ///  MACRO-10 special-character names use the same case and significant-character rules in links.
+    /// </summary>
+    /// <returns>The test.</returns>
+    [TestMethod]
+    public async Task CommentLinkHoverUsesSpecialMacro10Names()
+    {
+        string directory = Directory.CreateTempSubdirectory("retrocore-hover").FullName;
+        try
+        {
+            string path = Path.Join(directory, "root.asm");
+            string include = Path.Join(directory, "include.mac");
+            string root = ".org $6000\n.scope Native\n__m10_0 = $42\n.endscope\n"
+                + ".scope Outer\n.include \"include.mac\" dialect=macro10\n.endscope\n";
+
+            string text = "LONG$NAME=3\nLONG%NAME=4\nLONG.NAME=5\n.CPU=7\n"
+                + "; Uses <LONG$N>, <long$name>, <outer::long$name>, <long%name>, <long.name> and <.cpu>.\n";
+
+            File.WriteAllText(path, root);
+            File.WriteAllText(include, text);
+            RecordingLanguageClient client = new();
+            LanguageWorkspace workspace = new(client);
+            workspace.Update(path, root);
+            SourceAnalysis analysis = await workspace.AnalysisOfAsync(path, CancellationToken.None)
+                ?? throw new InvalidOperationException("The assembly was not analyzed.");
+
+            analysis.Definitions.Should().Contain(site => site.Name == "Native::__m10_0" && site.Value == 0x42);
+            workspace.Update(include, text);
+            await workspace.IdleAsync(path, CancellationToken.None);
+            HoverHandler handler = new(workspace, new BasicDocuments(client));
+            DocumentUri uri = DocumentUri.FromFileSystemPath(include);
+            foreach ((string link, string value) in ((string, string)[])
+                [("<LONG$N>", "$03"), ("<long$name>", "$03"), ("<outer::long$name>", "$03"), ("<long%name>", "$04"), ("<long.name>", "$05")])
+            {
+                int column = text.Split('\n')[4].IndexOf(link, StringComparison.Ordinal) + 1;
+                Hover? hover = await handler.Handle(Request(uri, 4, column));
+                hover.Should().NotBeNull(link);
+                hover?.Contents.Value.Should().Contain(value);
+            }
+
+            int directiveColumn = text.Split('\n')[4].IndexOf("<.cpu>", StringComparison.Ordinal) + 1;
+            Hover? directive = await handler.Handle(Request(uri, 4, directiveColumn));
+            directive.Should().NotBeNull();
+            directive?.Contents.Value.Should().Contain("Selects the CPU");
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
+    ///  A quoted semicolon does not turn a later code reference into a comment.
+    /// </summary>
+    /// <returns>The test.</returns>
+    [TestMethod]
+    public async Task CodeHoverIgnoresSemicolonsInsideStrings()
+    {
+        string directory = Directory.CreateTempSubdirectory("retrocore-hover").FullName;
+        try
+        {
+            string path = Path.Join(directory, "test.asm");
+            string text = ".org $6000\nTarget = 42\n.byte \"DON'T; \", Target\n";
+            File.WriteAllText(path, text);
+            RecordingLanguageClient client = new();
+            LanguageWorkspace workspace = new(client);
+            workspace.Update(path, text);
+            (await workspace.AnalysisOfAsync(path, CancellationToken.None)).Should().NotBeNull();
+            HoverHandler handler = new(workspace, new BasicDocuments(client));
+            int column = text.Split('\n')[2].IndexOf("Target", StringComparison.Ordinal);
+            Hover? hover = await handler.Handle(Request(DocumentUri.FromFileSystemPath(path), 2, column));
+            hover.Should().NotBeNull();
+            hover?.Contents.Value.Should().Contain("Target");
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
+    ///  The first declared CPU also applies to statements preceding its directive.
+    /// </summary>
+    /// <returns>The test.</returns>
+    [TestMethod]
+    public async Task CommentLinkHoverUsesFirstDeclaredCpuBeforeDirective()
+    {
+        string directory = Directory.CreateTempSubdirectory("retrocore-hover").FullName;
+        try
+        {
+            string path = Path.Join(directory, "root.asm");
+            string include = Path.Join(directory, "include.asm");
+            string root = ".org $6000\n.include \"include.asm\"\n.cpu Z80\n";
+            string text = ";; Uses <LDIR>.\nnop\n";
+            File.WriteAllText(path, root);
+            File.WriteAllText(include, text);
+            RecordingLanguageClient client = new();
+            LanguageWorkspace workspace = new(client);
+            workspace.Update(path, root);
+            SourceAnalysis analysis = await workspace.AnalysisOfAsync(path, CancellationToken.None)
+                ?? throw new InvalidOperationException("The assembly was not analyzed.");
+
+            analysis.Result.Success.Should().BeTrue();
+            var emitted = analysis.Result.SourceMap.Single(entry => entry.Location?.Path == include && entry.Size > 0);
+            emitted.InstructionSet?.Name.Should().Be("Z80");
+
+            workspace.Update(include, text);
+            await workspace.IdleAsync(path, CancellationToken.None);
+            HoverHandler handler = new(workspace, new BasicDocuments(client));
+            Hover? hover = await handler.Handle(Request(DocumentUri.FromFileSystemPath(include), 0, ";; Uses <".Length));
+            hover.Should().NotBeNull();
+            hover?.Contents.Value.Should().Contain("Repeats LDI until BC is zero.");
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
+    ///  A CPU switch in an include applies after the including line's comment.
+    /// </summary>
+    /// <returns>The test.</returns>
+    [TestMethod]
+    public async Task CommentLinkHoverUsesCpuBeforeIncludeSwitch()
+    {
+        string directory = Directory.CreateTempSubdirectory("retrocore-hover").FullName;
+        try
+        {
+            string path = Path.Join(directory, "root.asm");
+            string include = Path.Join(directory, "include.asm");
+            string root = ".cpu Z80\n.org $6000\n.include \"include.asm\" ; Uses <LDIR>.\n;; After <LDIR>.\nnop\n";
+            File.WriteAllText(path, root);
+            File.WriteAllText(include, ".cpu Mos6502\nrts\n");
+            RecordingLanguageClient client = new();
+            LanguageWorkspace workspace = new(client);
+            workspace.Update(path, root);
+            (await workspace.AnalysisOfAsync(path, CancellationToken.None)).Should().NotBeNull();
+            HoverHandler handler = new(workspace, new BasicDocuments(client));
+            int column = root.Split('\n')[2].IndexOf("<LDIR>", StringComparison.Ordinal) + 1;
+            Hover? hover = await handler.Handle(Request(DocumentUri.FromFileSystemPath(path), 2, column));
+            hover.Should().NotBeNull();
+            hover?.Contents.Value.Should().Contain("Repeats LDI until BC is zero.");
+            int afterColumn = root.Split('\n')[3].IndexOf("<LDIR>", StringComparison.Ordinal) + 1;
+            Hover? after = await handler.Handle(Request(DocumentUri.FromFileSystemPath(path), 3, afterColumn));
+            after.Should().BeNull();
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
     ///  A comment at the top of an include sees the CPU inherited from its include site.
     /// </summary>
     /// <returns>The test.</returns>

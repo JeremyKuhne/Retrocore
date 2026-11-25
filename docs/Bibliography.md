@@ -33,6 +33,7 @@ workspace adds documents of its own, or replaces a key, with the same columns.
 | IIGSFR87 | Apple IIGS Firmware Reference | 1987 | Addison-Wesley | <https://archive.org/details/Apple_IIGS_Firmware_Reference_1987_Adn-Wesley_Publishing> |
 | MOUSETN | Apple II Technical Notes: Mouse #1-#7 (Developer Technical Support, revised 1985-1990) | 1990 | Apple Computer | <https://mirrors.apple2.org.za/Apple%20II%20Documentation%20Project/Interface%20Cards/Digitizers/Apple%20Mouse%20Interface%20Card/Documentation/Apple%20II%20Mouse%20Technical%20Notes.pdf> |
 | IICTRM89 | Apple IIc Technical Reference Manual, Second Edition | 1989 | Addison-Wesley | <https://archive.org/details/AppleIIcTechnicalReference2ndEd> |
+| BB13 | Apple /// Business BASIC 1.3 Source Code Listing: Apple's source files, reformatted and merged into one listing by David Craig (1997) | | Apple Computer | <https://www.apple3.org/Documents/SourceCode/Apple3_Business_BASIC_1.3.pdf> |
 | UNKN | Unclear where this originated: a name no listed document gives | | | |
 
 ## How the BASIC documents were checked

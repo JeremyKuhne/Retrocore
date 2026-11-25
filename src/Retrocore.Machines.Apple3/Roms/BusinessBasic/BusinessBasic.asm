@@ -29,6 +29,21 @@ RUNTIME = 0
     .byte .strat(text, .strlen(text) - 1) | $80
 .endmacro
 
+; CONVERSION SHIM (removed at integration): opens the scopes several files continue, so each file can write
+; `.scope X continued`.
+.scope Statements
+.endscope
+.scope Functions
+.endscope
+.scope Operators
+.endscope
+.scope Float
+.endscope
+.scope Strings
+.endscope
+.scope Variables
+.endscope
+
     .include "B3Invok.asm"                  ; SOS call numbers and errors, file types, file control blocks
     .include "ZpgEqus.asm"                  ; Zero page, X-bytes, page $1E, the header, buffers, dispatch tables
     .include "B3Resvb.asm"                  ; Keywords and tokens, operators, error messages

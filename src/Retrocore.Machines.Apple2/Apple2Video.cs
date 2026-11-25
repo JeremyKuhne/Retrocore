@@ -244,9 +244,12 @@ public sealed class Apple2Video : IVideoSource, ICharacterSet
         {
             0x00 => (char)(low + 0x40),
 
-            // $60-$7F and $E0-$FF are lowercase where the character generator has it, and otherwise repeat
-            // uppercase.
-            0x60 => (char)(SameGlyph(glyph, glyph - 0x20) ? low - 0x20 : low),
+            // $60-$7F and $E0-$FF are lowercase where the character generator has it. Otherwise they repeat
+            // uppercase, or on the II and II Plus, whose generator holds its 64 glyphs four times, the symbols and
+            // digits of $A0-$BF.
+            0x60 => SameGlyph(glyph, glyph - 0x20)
+                ? (char)(low - 0x20)
+                : SameGlyph(glyph, glyph - 0x40) ? (char)(low - 0x40) : (char)low,
             _ => (char)low
         };
     }

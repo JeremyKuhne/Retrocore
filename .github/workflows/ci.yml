@@ -73,6 +73,7 @@ jobs:
           node tools/Test-Breakpoints.mjs
           node tools/Test-Memory.mjs
           node tools/Test-IIeDap.mjs
+          node tools/Test-IIPlusDap.mjs
           node tools/Test-Apple3Dap.mjs
           node tools/Test-BlockMediaDap.mjs
           node tools/Test-SoftCardDap.mjs

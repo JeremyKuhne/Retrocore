@@ -1312,8 +1312,13 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
             char[] chars = new char[columns];
             for (int column = 0; column < columns; column++)
             {
-                int value = _machine.Bus.TextByte(row, column) & 127;
-                chars[column] = (char)(value < 32 ? value + 64 : value);
+                // Each byte reads as the character the screen shows for it, so flashing text, such as the II Plus's
+                // cursor ($60, a flashing space), reads as itself rather than as its code's ASCII. A code with no
+                // character, such as the enhanced IIe's MouseText, keeps its seven-bit code.
+                byte code = _machine.Bus.TextByte(row, column);
+                char character = _machine.Bus.Video.Character(code);
+                int value = code & 127;
+                chars[column] = character != '\0' ? character : (char)(value < 32 ? value + 64 : value);
             }
 
             rows[row] = new(chars);

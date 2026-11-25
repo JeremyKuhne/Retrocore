@@ -157,7 +157,7 @@ public class Trs80Model3RomTests
     }
 
     /// <summary>
-    ///  The Model III with Level I BASIC boots to READY, runs a statement, saves and loads a program on tape at 250
+    ///  The Model III with Level I BASIC boots to READY, runs a statement, typed in either case, saves and loads a program on tape at 250
     ///  baud, the leader zeros and the sync byte $A5, and the reset button stops a running program every time.
     /// </summary>
     [TestMethod]
@@ -177,6 +177,10 @@ public class Trs80Model3RomTests
         Screen(machine).Should().Contain("READY");
         Type(machine, "PRINT 6*7\r");
         Screen(machine).Should().Contain("42");
+
+        // Level I reads shift and a letter as its control code, so lowercase is typed unshifted, in uppercase.
+        Type(machine, "print 7*8\r");
+        Screen(machine).Should().Contain("PRINT 7*8").And.Contain("56");
         Type(machine, "10 PRINT \"HI\";6*7\r");
 
         CassetteImage tape = new();

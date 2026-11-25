@@ -12,6 +12,15 @@ namespace Retrocore.Machines.Trs80;
 ///  <para>
 ///   Typed characters queue as key presses held long enough for BASIC's scan and debounce, then released.
 ///  </para>
+///  <para>
+///   Letters are typed as the ROM's keyboard driver reads them (<see cref="Trs80TypedLetters"/>). Level II on the
+///   Model I reads a letter alone as uppercase and with shift as lowercase. The Model III's and Model 4's Level II
+///   ROM and their DOSes read shift and a letter as uppercase whatever the state of caps lock (shift lock), and the
+///   letter alone as lowercase only while caps lock is off, so there an uppercase letter is its key with shift and a
+///   lowercase letter its key alone, as MAME types them; with caps lock on, a lowercase letter comes out in
+///   uppercase, as no key then gives lowercase. Level I reads shift and a letter as its control code, so there every
+///   letter is its key alone.
+///  </para>
 /// </remarks>
 public sealed class Trs80Keyboard
 {
@@ -20,7 +29,7 @@ public sealed class Trs80Keyboard
     // release of a doubled letter.
     private readonly int _holdCycles;
     private readonly int _releaseCycles;
-    private readonly bool _shiftForUppercase;
+    private readonly Trs80TypedLetters _letters;
 
     private readonly byte[] _rows = new byte[8];
     private readonly Queue<(Trs80Key Key, bool Shift)> _typed = new();
@@ -31,15 +40,14 @@ public sealed class Trs80Keyboard
     ///  Creates the keyboard.
     /// </summary>
     /// <param name="clockHertz">The rate <see cref="Tick"/> is called at: the Model I's Z80 clock by default.</param>
-    /// <param name="shiftForUppercase">
-    ///  Whether an uppercase letter is typed with shift and a lowercase one without, and ` as shift and @, as the
-    ///  Model III's Level II keyboard table has them; otherwise the Model I's way, a lowercase letter with shift.
-    /// </param>
-    internal Trs80Keyboard(int clockHertz = Trs80Timing.ClockHertz, bool shiftForUppercase = false)
+    /// <param name="letters">How a letter's key is pressed: Level II on the Model I's way by default.</param>
+    internal Trs80Keyboard(
+        int clockHertz = Trs80Timing.ClockHertz,
+        Trs80TypedLetters letters = Trs80TypedLetters.ShiftForLowercase)
     {
         _holdCycles = 40 * (clockHertz / 1000);
         _releaseCycles = 60 * (clockHertz / 1000);
-        _shiftForUppercase = shiftForUppercase;
+        _letters = letters;
     }
 
     /// <summary>
@@ -69,7 +77,7 @@ public sealed class Trs80Keyboard
     /// <returns>Whether the keyboard has a key for it.</returns>
     public bool Type(byte code)
     {
-        if (Map(code, _shiftForUppercase) is not { } key) { return false; }
+        if (Map(code, _letters) is not { } key) { return false; }
         _typed.Enqueue(key);
         return true;
     }
@@ -118,12 +126,12 @@ public sealed class Trs80Keyboard
     }
 
     // Shifted digits and punctuation follow the Model I keycaps, which the Model III's keep.
-    private static (Trs80Key Key, bool Shift)? Map(byte code, bool shiftForUppercase) => (char)code switch
+    private static (Trs80Key Key, bool Shift)? Map(byte code, Trs80TypedLetters letters) => (char)code switch
     {
-        >= 'A' and <= 'Z' => ((Trs80Key)(code - 'A' + (int)Trs80Key.A), shiftForUppercase),
-        >= 'a' and <= 'z' => ((Trs80Key)(code - 'a' + (int)Trs80Key.A), !shiftForUppercase),
+        >= 'A' and <= 'Z' => ((Trs80Key)(code - 'A' + (int)Trs80Key.A), letters == Trs80TypedLetters.ShiftForUppercase),
+        >= 'a' and <= 'z' => ((Trs80Key)(code - 'a' + (int)Trs80Key.A), letters == Trs80TypedLetters.ShiftForLowercase),
         '@' => (Trs80Key.At, false),
-        '`' when shiftForUppercase => (Trs80Key.At, true),
+        '`' when letters != Trs80TypedLetters.Unshifted => (Trs80Key.At, true),
         >= '0' and <= '9' => ((Trs80Key)(code - '0' + (int)Trs80Key.D0), false),
         >= '!' and <= ')' and not '"' => ((Trs80Key)(code - '!' + (int)Trs80Key.D1), true),
         '"' => (Trs80Key.D2, true),

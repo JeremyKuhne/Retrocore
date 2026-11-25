@@ -116,11 +116,11 @@ public class Trs80Model3Tests
     }
 
     /// <summary>
-    ///  Level I reads shift and a letter as its control code, so on a Model III running Level I letters are typed as
-    ///  on the Model I: an uppercase letter alone.
+    ///  Level I reads shift and a letter as its control code, so on a Model III running Level I every letter is typed
+    ///  as its key alone.
     /// </summary>
     [TestMethod]
-    public void TypingLettersOnLevelIFollowsTheModelI()
+    public void TypingLettersOnLevelIIsUnshifted()
     {
         Trs80Model3Bus bus = new(
             new Trs80Model3Configuration { Rom = Trs80Rom.Level1 },
@@ -129,7 +129,7 @@ public class Trs80Model3Tests
         Trs80Keyboard keyboard = bus.Keyboard;
 
         Trs80MachineTests.TypedKeys(keyboard, 'A').Should().Be((true, false));
-        Trs80MachineTests.TypedKeys(keyboard, 'z').Should().Be((true, true));
+        Trs80MachineTests.TypedKeys(keyboard, 'z').Should().Be((true, false));
         keyboard.Type((byte)'`').Should().BeFalse();
     }
 

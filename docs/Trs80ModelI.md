@@ -37,9 +37,10 @@ draws a character puts the CPU's byte on that bus, so that character's scanline 
 **Keyboard.** A typed character presses its key, holds it 40 ms and releases it for 60 ms. Level II 1.3 rereads
 a new key after 19 ms to debounce it, then pauses about 50 ms before it scans again, so shorter timing would lose
 doubled letters. BASIC also does not scan the keyboard while it carries out a command, so a script that types
-should wait for `READY` before typing the next command. A letter is typed as its key alone, and a lowercase letter
-with shift, which Level II reads as the lowercase code; the Model III family types uppercase with shift instead
-([Typed and pasted text](Trs80Model3And2.md#typed-and-pasted-text)).
+should wait for `READY` before typing the next command. An uppercase letter is typed as its key alone, and a
+lowercase letter, or `, with shift, which Level II reads as the lowercase code. Level I reads shift and a letter as
+its control code, so on Level I every letter is typed as its key alone. The Model III family types uppercase with
+shift instead ([Typed and pasted text](Trs80Model3And2.md#typed-and-pasted-text)).
 
 **Cassette.** Level II records 500 baud and Level I 250 baud pulse cells, to and from CAS images. A CAS image
 drops the silences between blocks. Playback therefore holds a pulse while the ROM still has an unread one,

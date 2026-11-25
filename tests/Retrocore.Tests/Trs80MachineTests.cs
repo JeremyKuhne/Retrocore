@@ -222,16 +222,33 @@ public class Trs80MachineTests
     }
 
     /// <summary>
-    ///  The Model I has no lowercase: an uppercase letter is typed as its key alone, and a lowercase one with SHIFT,
-    ///  which Level II reads as the lowercase code.
+    ///  Level II on the Model I reads a letter alone as uppercase and with SHIFT as lowercase, so an uppercase letter
+    ///  is typed as its key alone, a lowercase one with SHIFT, and ` as SHIFT and @.
     /// </summary>
     [TestMethod]
-    public void TypingLettersFollowsTheModelI()
+    public void TypingLettersFollowsLevelII()
     {
         Trs80Keyboard keyboard = Create(new()).Bus.Keyboard;
         TypedKeys(keyboard, 'A').Should().Be((true, false));
         TypedKeys(keyboard, 'z').Should().Be((true, true));
-        keyboard.Type((byte)'`').Should().BeFalse("the Model I has no key for it");
+        TypedKeys(keyboard, '`').Should().Be((true, true));
+        TypedKeys(keyboard, '@').Should().Be((true, false));
+    }
+
+    /// <summary>
+    ///  Level I reads SHIFT and a letter as its control code, so every letter is typed as its key alone, and ` has no
+    ///  key.
+    /// </summary>
+    [TestMethod]
+    public void TypingLettersOnLevelIIsUnshifted()
+    {
+        Trs80Keyboard keyboard = new Trs80Bus(
+            new Trs80Configuration { Rom = Trs80Rom.Level1 },
+            new Trs80Roms(new byte[0x1000], new byte[Trs80Roms.CharacterGeneratorSize])).Keyboard;
+
+        TypedKeys(keyboard, 'A').Should().Be((true, false));
+        TypedKeys(keyboard, 'z').Should().Be((true, false));
+        keyboard.Type((byte)'`').Should().BeFalse();
     }
 
     /// <summary>

@@ -5,6 +5,7 @@
 using Retrocore.Debug;
 using Retrocore.Machines.Apple2;
 using Retrocore.Media;
+using System.Security.Cryptography;
 
 namespace Retrocore.Tests;
 
@@ -20,6 +21,18 @@ public sealed class Apple2ProFileTests
     private const uint Blocks = 1600;
 
     private static readonly string s_inputs = Path.Join(AppContext.BaseDirectory, "Inputs");
+
+    /// <summary>
+    ///  The firmware assembles to the same 256 bytes, so a change to its source's names, structure or comments can't move
+    ///  a byte.
+    /// </summary>
+    [TestMethod]
+    public void FirmwareBytesAreUnchanged()
+    {
+        Convert.ToHexString(SHA256.HashData(ProFileRom.Bytes)).Should().Be("E792470211E4C1F33A0078A18E3CF78C8ABB39CCF1EB2436C0C5C9672A4CAD0B");
+        ProFileRom.Driver.Should().Be(0xC500 | ProFileRom.Bytes[0xFF]);
+        ProFileRom.DeviceInfo.Should().Be(0xC5FE);
+    }
 
     /// <summary>
     ///  The card's page carries ProDOS's identification bytes and points ProDOS at its driver, in whatever slot.

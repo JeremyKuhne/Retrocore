@@ -1,1001 +1,1356 @@
-;; THE CARD'S FIRMWARE: THE 3.5 DRIVES: FINDING THEM, THEIR DISKS, THE HEAD, THE SWIM'S MODES AND THE DRIVE LINES
+; retrocore: style=strict
+;; THE CARD'S FIRMWARE: THE 3.5 DRIVES AND THE SWIM
+;;
+;; Finding the drives on the card's own port and the format of their disks, moving the head, reading a drive's
+;; sense lines and giving it commands (<Drives>), and switching the SWIM between its IWM and ISM modes and between
+;; GCR and MFM (<Swim>).
+;;
+;; A 3.5 drive is run through sixteen registers, chosen by the phase lines CA0-CA2 and the head line (SEL, the
+;; card's <SelectSide0> and <SelectSide1>): a command is a register strobed with LSTRB (phase 3), and a sense line is
+;; a register read back as bit 7 of the IWM's status. The Disk II's IWM switches are explained in
+;; [DiskII.md](../../../../docs/DiskII.md).
 
-;; Finds the 3.5 drives on the card's own port: drive 1, then drive 2 if drive 1 is there. Each is
-;; identified and its disk, if any, read for its format; a drive whose disk cannot be read has it ejected.
-;; Out:   UnitCount = the drives found (0-2), DeviceKinds set for each
-FINDDRIVES:
-    jsr MFMOFF
+; The IWM's mode and status.
+
+;; The IWM mode the firmware uses: latched data, an asynchronous handshake, no motor-off timer, fast (2 us) cells
+;; and the 8 MHz clock.
+IWM_MODE = $1F
+
+;; The mode's bits, in the status register.
+IWM_MODE_MASK = $1F
+
+;; The status register's bit 5: the drive enable (motor line) is on.
+IWM_STATUS_ENABLED = $20
+
+;; The IWM mode bit that, written 1, 0, 1, 1, switches the SWIM to the ISM.
+IWM_ISM_SWITCH = $40
+
+; The ISM's mode register.
+
+;; Enables drive 1.
+ISM_MODE_DRIVE1 = $02
+
+;; Enables drive 2.
+ISM_MODE_DRIVE2 = $04
+
+;; Both drive enables.
+ISM_MODE_DRIVES = ISM_MODE_DRIVE1 | ISM_MODE_DRIVE2
+
+;; Starts reading or writing.
+ISM_MODE_ACTION = $08
+
+;; Writes rather than reads.
+ISM_MODE_WRITE = $10
+
+;; Back to the IWM, when cleared.
+ISM_MODE_ISM = $40
+
+;; The motor line.
+ISM_MODE_MOTOR = $80
+
+; The ISM's setup register, of which this firmware keeps a copy in SetupCopy.
+
+;; Setup bit 1, which this card uses to select its 3.5 drives' port rather than the SmartPort bus's.
+SETUP_DRIVE_PORT = $02
+
+;; Bit 5 of the ISM's setup and mode registers, which this firmware sets for MFM and clears for GCR.
+SWIM_MFM = $20
+
+;; The ISM's phase register's high nibble: the four phase lines are outputs.
+PHASE_OUTPUTS = $F0
+
+; SwimState.
+
+;; The disk is MFM.
+SWIM_STATE_MFM = $80
+
+;; The SWIM is in ISM mode.
+SWIM_STATE_ISM = $40
+
+; A 3.5 drive's commands: the register <Drives::SendCommand> strobes.
+
+;; Sets the step direction inward, toward the higher tracks.
+DRIVE_STEP_INWARD = $00
+
+;; Sets the step direction outward, toward track 0.
+DRIVE_STEP_OUTWARD = $01
+
+;; Clears the disk-switched latch.
+DRIVE_CLEAR_SWITCHED = $03
+
+;; Steps the head one track.
+DRIVE_STEP = $04
+
+;; An FDHD drive reads and writes MFM.
+DRIVE_MFM_MODE = $06
+
+;; An FDHD drive reads and writes GCR.
+DRIVE_GCR_MODE = $07
+
+;; Turns the motor on.
+DRIVE_MOTOR_ON = $08
+
+;; Turns the motor off.
+DRIVE_MOTOR_OFF = $09
+
+;; Ejects the disk.
+DRIVE_EJECT = $0D
+
+; A 3.5 drive's sense lines: the register <Drives::SenseLine> reads, and what a 1 there means.
+
+;; The step direction: 1 outward.
+SENSE_STEP_DIRECTION = $00
+
+;; No disk is in the drive.
+SENSE_NO_DISK = $02
+
+;; The step is done.
+SENSE_STEP_DONE = $04
+
+;; The drive is an FDHD.
+SENSE_FDHD = $05
+
+;; The disk can be written.
+SENSE_WRITE_ENABLED = $06
+
+;; An FDHD drive is in MFM mode.
+SENSE_MFM_MODE = $07
+
+;; The motor is off.
+SENSE_MOTOR_OFF = $08
+
+;; The head is not at track 0.
+SENSE_NOT_AT_TRACK_0 = $0A
+
+;; The drive is not ready.
+SENSE_NOT_READY = $0B
+
+;; The disk was switched (ejected or inserted) since the latch was cleared.
+SENSE_SWITCHED = $0C
+
+;; The disk is not a high-density one.
+SENSE_NOT_HIGH_DENSITY = $0F
+
+; Each drive's Sense byte.
+
+;; The disk was switched.
+DISK_SWITCHED = $80
+
+;; There is no disk.
+DISK_ABSENT = $40
+
+;; The disk is write-protected.
+DISK_PROTECTED = $20
+
+;; The disk has one side only.
+DISK_ONE_SIDED = $10
+
+;; The motor has had its full start since the drive last had no disk.
+DISK_SPUN_UP = $01
+
+; DeviceKinds.
+
+;; A 3.5 drive.
+DEVICE_DRIVE = $01
+
+;; The 3.5 drive is an FDHD.
+DEVICE_FDHD = $02
+
+;; A SmartPort bus device.
+DEVICE_BUS = $80
+
+; MediaKind: the disk's format, which also indexes <MediaModes> and <FormatOptions::BlockCounts>.
+
+;; Not known.
+MEDIA_UNKNOWN = $00
+
+;; GCR 400K, one side.
+MEDIA_400K = $02
+
+;; GCR 800K.
+MEDIA_800K = $04
+
+;; GCR 800K with a 2:1 interleave.
+MEDIA_800K_2_TO_1 = $06
+
+;; MFM 720K.
+MEDIA_720K = $08
+
+;; MFM 1440K.
+MEDIA_1440K = $0A
+
+; Other values.
+
+;; MediaMode's MFM bits, 5 and 6.
+MEDIA_MODE_MFM = $60
+
+;; DiskSides' bit 7: the disk has two sides.
+DISK_TWO_SIDES = $80
+
+;; The interleave in an address field's format byte.
+FORMAT_INTERLEAVE_MASK = $1F
+
+;; A format byte's 2:1 interleave.
+INTERLEAVE_2_TO_1 = 2
+
+;; The address fields the format search reads before it gives up on an encoding.
+ADDRESS_TRIES = 4
+
+;; How long an FDHD drive takes to change between GCR and MFM, in 2 ms units: 22 ms.
+MODE_SETTLE_TIME = 11
+
+;; The routines that find the 3.5 drives and their disks, move the head, and read a drive's sense lines and give it
+;; commands. Most take the drive in X or in <Drive>: 0 or 1.
+.scope Drives
+
+;; Finds the 3.5 drives on the card's own port: drive 1, then drive 2 if drive 1 is there. Each is identified and
+;; its disk, if any, read for its format; a drive whose disk cannot be read has it ejected.
+;; Out: UnitCount = the drives found (0-2), DeviceKinds set for each
+.proc Find
+    jsr Swim::UseGcr
     ldx #$00
-FINDDRIVES_1:
+NextDrive:
     stx SavedDrive
     stx Drive
-    jsr DETECTDRIVE
-    bcs FINDDRIVES_4
-    ora #$01
-    sta DeviceKinds,X
-    lda #$03
-    jsr DRIVECOMMAND
-    jsr SENSELINES
-    bvc FINDDRIVES_2
-    jsr FORGETDISK
-    bra FINDDRIVES_3
-FINDDRIVES_2:
+    jsr Detect
+    bcs Counted
+    ora #DEVICE_DRIVE
+    sta DeviceKinds,x
+
+    ; Its disk, if it has one.
+    lda #DRIVE_CLEAR_SWITCHED
+    jsr SendCommand
+    jsr ReadStatusLines
+    bvc HasDisk
+    jsr ForgetDisk
+    bra DriveDone
+HasDisk:
     clc
-    jsr IDENTIFYMEDIA
-    bcc FINDDRIVES_3
+    jsr IdentifyMedia
+    bcc DriveDone
     ldx SavedDrive
-    jsr EJECT
-FINDDRIVES_3:
-    jsr MFMOFF
+    jsr EjectDisk
+DriveDone:
+    jsr Swim::UseGcr
     ldx SavedDrive
     inx
     cpx #$02
-    bcc FINDDRIVES_1
-FINDDRIVES_4:
+    bcc NextDrive
+
+    ; The last drive found is left as the SWIM's.
+Counted:
     stx UnitCount
     txa
-    beq FINDDRIVES_5
+    beq Done
     dex
-    jsr RELEASEDRIVE
-FINDDRIVES_5:
+    jsr Release
+Done:
     rts
+.endproc
 
-;; Checks that a 3.5 drive answers on a drive line: its step direction must follow the commands.
-;; In:    X = the drive (0 or 1)
-;; Out:   carry = set if there is no drive; else A = 0 for an Apple 3.5 Drive, 2 for an FDHD (SuperDrive)
-DETECTDRIVE:
-    jsr PORTON
-    lda Iwm::SelectDrive1,X
+;; Checks that a 3.5 drive answers on a drive line: its step direction must follow the commands. Leaves the direction
+;; outward.
+;; In: X = the drive (0 or 1)
+;; Out: carry = set if there is no drive; else A = 0 for an Apple 3.5 Drive, <DEVICE_FDHD> for an FDHD (SuperDrive)
+;; Keeps: X, Y
+.proc Detect
+    jsr Swim::SelectDrivePort
+    lda Iwm::SelectDrive1,x
     bit Iwm::DataLatch
     bit Iwm::ReadMode
     bit Iwm::MotorOn
-    lda #$01
-    jsr DRIVECOMMAND
-    lda #$00
-    jsr DRIVESENSE
-    bcc DETECTDRIVE_1
-    lda #$00
-    jsr DRIVECOMMAND
-    lda #$00
-    jsr DRIVESENSE
-    bcs DETECTDRIVE_1
-    lda #$01
-    jsr DRIVECOMMAND
-    lda #$00
-    jsr DRIVESENSE
-    bcc DETECTDRIVE_1
-    lda #$05
-    jsr DRIVESENSE
-    bcc DETECTDRIVE_2
-    lda #$02
+
+    ; The direction line must read back outward, inward, then outward.
+    lda #DRIVE_STEP_OUTWARD
+    jsr SendCommand
+    lda #SENSE_STEP_DIRECTION
+    jsr SenseLine
+    bcc None
+    lda #DRIVE_STEP_INWARD
+    jsr SendCommand
+    lda #SENSE_STEP_DIRECTION
+    jsr SenseLine
+    bcs None
+    lda #DRIVE_STEP_OUTWARD
+    jsr SendCommand
+    lda #SENSE_STEP_DIRECTION
+    jsr SenseLine
+    bcc None
+
+    ; Which kind.
+    lda #SENSE_FDHD
+    jsr SenseLine
+    bcc Found
+    lda #DEVICE_FDHD
     clc
     rts
-DETECTDRIVE_1:
+None:
     sec
-DETECTDRIVE_2:
+Found:
     rts
+.endproc
 
-;; Finds a double-density disk's format: GCR 400K or 800K from an address field's format byte, and
-;; on an FDHD drive MFM 720K if no GCR field reads.
-;; In:    X = the drive
-;; Out:   carry = set if no format was found; else MediaKind, BlockCount/HI and MediaMode set
-IDENTIFYDD:
+;; Finds a double-density disk's format: GCR 400K or 800K from an address field's format byte and the disk's sides,
+;; and on an FDHD drive MFM 720K if no GCR field reads.
+;; In: X = the drive
+;; Out: carry = set if no format was found; else MediaKind, BlockCount, BlockCountHigh and MediaMode set
+.proc IdentifyDoubleDensity
     stx SavedDrive
-    lda #$04
+    lda #ADDRESS_TRIES
     sta Retries
-    jsr WAITREADYEVER
-IDENTIFYDD_1:
+    jsr WaitReadyForever
+
+    ; Read GCR address fields, following the head to the track a field names.
+ReadGcr:
     stz Side
-    jsr READADDRESS
-    bcc IDENTIFYDD_4
+    jsr ReadAddressField
+    bcc GcrFound
     lda DiskErrors
-    bit #$20
-    bne IDENTIFYDD_2
-    bit #$04
-    beq IDENTIFYDD_3
+    bit #DISK_ERROR_BAD_FIELD
+    bne RetryGcr
+    bit #DISK_ERROR_WRONG_TRACK
+    beq NotWrongTrack
     lda AddressTrack
     sta Track
-IDENTIFYDD_2:
+RetryGcr:
     dec Retries
-    bne IDENTIFYDD_1
-    bra IDENTIFYDD_MFM
-IDENTIFYDD_3:
-    bit #$01
-    bne IDENTIFYDD_MFM
+    bne ReadGcr
+    bra TryMfm
+NotWrongTrack:
+    bit #DISK_ERROR_NO_FIELD
+    bne TryMfm
     sec
     rts
-IDENTIFYDD_4:
+
+    ; GCR: 800K, with the interleave the format byte gives, or 400K on a disk with one side.
+GcrFound:
     ldx SavedDrive
-    jsr READSENSE
-    ldy #$04
-    lda LastFormatByte,X
-    and #$1F
-    cmp #$02
-    bne IDENTIFYDD_5
-    ldy #$06
-IDENTIFYDD_5:
-    bit DiskSides,X
-    bmi IDENTIFYDD_6
-    lda Sense,X
-    ora #$10
-    sta Sense,X
-    ldy #$02
-IDENTIFYDD_6:
-    lda MEDIABLOCKS,Y
-    sta BlockCount,X
-    lda MEDIABLOCKS+1,Y
-    sta BlockCountHigh,X
-    lda Sense,X
-    and #$BF
-    sta Sense,X
-    lda MediaMode,X
-    and #$94
-    ora MODEFLAGS,Y
-    sta MediaMode,X
-    sty MediaKind,X
-    clc
-    rts
-IDENTIFYDD_MFM:
-    ldx SavedDrive
-    lda #$02
-    bit DeviceKinds,X
-    beq IDENTIFYDD_9
-    lda #$06
-    jsr DRIVECOMMAND
-    lda #$0B
-    jsr DELAY2
-    jsr MFMON
-    lda #$07
-    jsr DRIVESENSE
-    bcc IDENTIFYDD_MFM
-    jsr WAITREADYEVER
-    stz Track
-    lda #$04
-    sta Retries
-IDENTIFYDD_7:
-    stz Side
-    jsr READADDRESS
-    bcc IDENTIFYDD_10
-    lda DiskErrors
-    bit #$20
-    bne IDENTIFYDD_8
-    bit #$04
-    beq IDENTIFYDD_8
-    lda AddressTrack
-    sta Track
-IDENTIFYDD_8:
-    dec Retries
-    bne IDENTIFYDD_7
-    lda #$07
-    jsr DRIVECOMMAND
-    lda #$0B
-    jsr DELAY2
-IDENTIFYDD_9:
-    jsr MFMOFF
-    ldx SavedDrive
-    lda MediaMode,X
-    and #$9F
-    sta MediaMode,X
-    sec
-    rts
-IDENTIFYDD_10:
-    jsr LEAVEISM
-    ldx SavedDrive
-    jsr READSENSE
-    ldy #$08
-    lda MEDIABLOCKS,Y
-    sta BlockCount,X
-    lda MEDIABLOCKS+1,Y
-    sta BlockCountHigh,X
-    lda Sense,X
-    and #$BF
-    sta Sense,X
-    lda MODEFLAGS,Y
-    sta MediaMode,X
-    sty MediaKind,X
+    jsr ReadStatus
+    ldy #MEDIA_800K
+    lda LastFormatByte,x
+    and #FORMAT_INTERLEAVE_MASK
+    cmp #INTERLEAVE_2_TO_1
+    bne CheckSides
+    ldy #MEDIA_800K_2_TO_1
+CheckSides:
+    bit DiskSides,x
+    bmi SetKind
+    lda Sense,x
+    ora #DISK_ONE_SIDED
+    sta Sense,x
+    ldy #MEDIA_400K
+SetKind:
+    lda FormatOptions::BlockCounts,y
+    sta BlockCount,x
+    lda FormatOptions::BlockCounts + 1,y
+    sta BlockCountHigh,x
+    lda Sense,x
+    and #<(~DISK_ABSENT)
+    sta Sense,x
+    lda MediaMode,x
+    and #$94                        ; keeps bits 7, 4 and 2
+    ora MediaModes,y
+    sta MediaMode,x
+    sty MediaKind,x
     clc
     rts
 
-;; MediaMode for each MediaKind (even indexes; the odd bytes are not read).
-MODEFLAGS:
+    ; MFM 720K, on an FDHD drive put in MFM mode.
+TryMfm:
+    ldx SavedDrive
+    lda #DEVICE_FDHD
+    bit DeviceKinds,x
+    beq NotMfm
+    lda #DRIVE_MFM_MODE
+    jsr SendCommand
+    lda #MODE_SETTLE_TIME
+    jsr DelayMillisecondPairs
+    jsr Swim::UseMfm
+    lda #SENSE_MFM_MODE
+    jsr SenseLine
+    bcc TryMfm
+    jsr WaitReadyForever
+    stz Track
+    lda #ADDRESS_TRIES
+    sta Retries
+ReadMfm:
+    stz Side
+    jsr ReadAddressField
+    bcc MfmFound
+    lda DiskErrors
+    bit #DISK_ERROR_BAD_FIELD
+    bne RetryMfm
+    bit #DISK_ERROR_WRONG_TRACK
+    beq RetryMfm
+    lda AddressTrack
+    sta Track
+RetryMfm:
+    dec Retries
+    bne ReadMfm
+
+    ; Neither: the drive back in GCR mode.
+    lda #DRIVE_GCR_MODE
+    jsr SendCommand
+    lda #MODE_SETTLE_TIME
+    jsr DelayMillisecondPairs
+NotMfm:
+    jsr Swim::UseGcr
+    ldx SavedDrive
+    lda MediaMode,x
+    and #<(~MEDIA_MODE_MFM)
+    sta MediaMode,x
+    sec
+    rts
+
+MfmFound:
+    jsr Swim::LeaveIsm
+    ldx SavedDrive
+    jsr ReadStatus
+    ldy #MEDIA_720K
+    lda FormatOptions::BlockCounts,y
+    sta BlockCount,x
+    lda FormatOptions::BlockCounts + 1,y
+    sta BlockCountHigh,x
+    lda Sense,x
+    and #<(~DISK_ABSENT)
+    sta Sense,x
+    lda MediaModes,y
+    sta MediaMode,x
+    sty MediaKind,x
+    clc
+    rts
+.endproc
+
+;; The MediaMode for each MediaKind, at its even index; the odd bytes are not read.
+MediaModes:
     .byte $00, $00, $11, $88, $11, $88, $11, $88, $32, $09, $52, $12, $52, $12
 
-;; Finds the format of the disk in a drive: on an FDHD drive with a high-density disk, MFM 1440K;
-;; else IDENTIFYDD.
-;; In:    X = the drive
-;; Out:   carry = set with A = $2F (no disk) or $27 (unreadable); else clear
-;; Keeps: A (when carry is clear)
-IDENTIFYMEDIA:
+;; Finds the format of the disk in a drive: on an FDHD drive with a high-density disk, MFM 1440K; else
+;; <IdentifyDoubleDensity>. The flags the caller had are put back on success, so callers clear carry first.
+;; In: X = the drive, carry = clear
+;; Out: carry = set with A = <ERROR_OFFLINE> (no disk) or <ERROR_IO> (unreadable); else clear, with A as it came,
+;;      and MediaKind, BlockCount and BlockCountHigh set
+.proc IdentifyMedia
     php
     pha
     stx SavedDrive
-    jsr FORGETMEDIA
-    lda #$02
-    jsr DRIVESENSE
-    bcc IDENTIFYMEDIA_1
+    jsr ForgetMedia
+    lda #SENSE_NO_DISK
+    jsr SenseLine
+    bcc HasDisk
     pla
-    lda #$2F
-    bra IDENTIFYMEDIA_8
-IDENTIFYMEDIA_1:
-    lda #$02
-    bit DeviceKinds,X
-    beq IDENTIFYMEDIA_6
-    lda #$0F
-    jsr DRIVESENSE
-    bcs IDENTIFYMEDIA_6
-    lda #$80
-    sta DiskSides,X
-    lda #$54
-    ora MediaMode,X
-    sta MediaMode,X
-    lda Sense,X
-    and #$BF
-    sta Sense,X
-    jsr RECALIBRATE
-    jsr MFMON
-    jsr MOTORON
+    lda #ERROR_OFFLINE
+    bra Fail
+
+    ; A high-density disk in an FDHD drive: two sides, MFM.
+HasDisk:
+    lda #DEVICE_FDHD
+    bit DeviceKinds,x
+    beq DoubleDensity
+    lda #SENSE_NOT_HIGH_DENSITY
+    jsr SenseLine
+    bcs DoubleDensity
+    lda #DISK_TWO_SIDES
+    sta DiskSides,x
+    lda #$54                        ; MFM, and bits 4 and 2
+    ora MediaMode,x
+    sta MediaMode,x
+    lda Sense,x
+    and #<(~DISK_ABSENT)
+    sta Sense,x
+    jsr Recalibrate
+    jsr Swim::UseMfm
+    jsr MotorOn
     stz Side
     stz Track
-    jsr WAITREADYEVER
-    lda #$04
+    jsr WaitReadyForever
+    lda #ADDRESS_TRIES
     sta Retries
-IDENTIFYMEDIA_2:
+ReadHighDensity:
     stz Side
-    jsr READADDRESS
-    bcc IDENTIFYMEDIA_4
+    jsr ReadAddressField
+    bcc HighDensityFound
     lda DiskErrors
-    bit #$20
-    bne IDENTIFYMEDIA_3
-    bit #$04
-    beq IDENTIFYMEDIA_3
+    bit #DISK_ERROR_BAD_FIELD
+    bne Retry
+    bit #DISK_ERROR_WRONG_TRACK
+    beq Retry
     lda AddressTrack
     sta Track
-IDENTIFYMEDIA_3:
+Retry:
     dec Retries
-    bne IDENTIFYMEDIA_2
-    bra IDENTIFYMEDIA_7
-IDENTIFYMEDIA_4:
-    jsr LEAVEISM
+    bne ReadHighDensity
+    bra Unreadable
+HighDensityFound:
+    jsr Swim::LeaveIsm
     ldx SavedDrive
-    jsr READSENSE
-    ldy #$0A
-    lda MEDIABLOCKS,Y
-    sta BlockCount,X
-    lda MEDIABLOCKS+1,Y
-    sta BlockCountHigh,X
-    sty MediaKind,X
+    jsr ReadStatus
+    ldy #MEDIA_1440K
+    lda FormatOptions::BlockCounts,y
+    sta BlockCount,x
+    lda FormatOptions::BlockCounts + 1,y
+    sta BlockCountHigh,x
+    sty MediaKind,x
     clc
-IDENTIFYMEDIA_5:
+Return:
     pla
     plp
     rts
-IDENTIFYMEDIA_6:
-    jsr RECALIBRATE
-    jsr MOTORON
+
+    ; Otherwise a double-density disk.
+DoubleDensity:
+    jsr Recalibrate
+    jsr MotorOn
     stz Side
     ldx SavedDrive
-    jsr IDENTIFYDD
-    bcc IDENTIFYMEDIA_5
-IDENTIFYMEDIA_7:
+    jsr IdentifyDoubleDensity
+    bcc Return
+Unreadable:
     pla
-    lda #$27
-IDENTIFYMEDIA_8:
+    lda #ERROR_IO
+Fail:
     plp
     sec
     rts
+.endproc
 
 ;; Records that a drive has no disk, and forgets its format and its cached sectors.
-;; In:    X = the drive
-FORGETDISK:
-    lda #$40
-    sta Sense,X
-
-;; Forgets a drive's format: no blocks, an unknown track, and its cached sectors dropped.
-;; In:    X = the drive
+;; In: X = the drive
 ;; Keeps: X, Y
-FORGETMEDIA:
-    stz BlockCount,X
-    stz BlockCountHigh,X
-    lda MediaMode,X
+.proc ForgetDisk
+    lda #DISK_ABSENT
+    sta Sense,x
+    ; Falls into ForgetMedia.
+.endproc
+
+;; Forgets a drive's format: no blocks, an unknown track, the MFM bits of its MediaMode cleared, and its cached
+;; sectors dropped.
+;; In: X = the drive
+;; Keeps: X, Y
+.proc ForgetMedia
+    stz BlockCount,x
+    stz BlockCountHigh,x
+    lda MediaMode,x
     and #$80
-    sta MediaMode,X
+    sta MediaMode,x
     lda #$FF
-    sta CurrentTrack,X
-    stz MediaKind,X
+    sta CurrentTrack,x
+    stz MediaKind,x
     phx
     phy
-    jsr FORGETCACHE
+    jsr Cache::Forget
     ply
     plx
     rts
+.endproc
 
-;; Turns Drive's motor on, if it is off, and waits for it to come up to speed: 500 ms the first time
-;; since its disk was found (Sense bit 0), else 100 ms.
-MOTORON:
-    lda #$08
-    jsr DRIVESENSE
-    bcc MOTORON_2
-    jsr SETDRIVEMODE
-    lda #$08
-    jsr DRIVECOMMAND
+;; Turns <Drive>'s motor on, if it is off, and waits for it to come up to speed: 500 ms the first time after the
+;; drive had no disk (<DISK_SPUN_UP> clear in its Sense), else 100 ms.
+;; In: Drive = the drive, selected
+.proc MotorOn
+    lda #SENSE_MOTOR_OFF
+    jsr SenseLine
+    bcc Done
+    jsr SetMode
+    lda #DRIVE_MOTOR_ON
+    jsr SendCommand
     ldx Drive
-    lda #$01
-    bit Sense,X
-    bne MOTORON_1
-    ora Sense,X
-    sta Sense,X
-    lda #$C8
-    jsr DELAY2
-MOTORON_1:
-    lda #$64
-    jsr DELAYMS
-MOTORON_2:
+    lda #DISK_SPUN_UP
+    bit Sense,x
+    bne Started
+    ora Sense,x
+    sta Sense,x
+    lda #MOTOR_START_TIME
+    jsr DelayMillisecondPairs
+Started:
+    lda #MOTOR_SPEED_TIME
+    jsr DelayMilliseconds
+Done:
     rts
+.endproc
 
-;; On an FDHD drive, sets the drive's MFM or GCR mode to suit its disk's MediaMode.
-SETDRIVEMODE:
+;; The extra wait for a motor's first start, in 2 ms units: 400 ms.
+MOTOR_START_TIME = 200
+
+;; The wait for a motor to come up to speed, in ms.
+MOTOR_SPEED_TIME = 100
+
+;; On an FDHD drive, sets the drive's MFM or GCR mode to suit its disk's MediaMode, if it is not in it already.
+;; In: Drive = the drive, selected
+.proc SetMode
     ldx Drive
-    lda #$02
-    bit DeviceKinds,X
-    beq SETDRIVEMODE_4
-    ldy #$06
-    lda #$60
-    bit MediaMode,X
-    bne SETDRIVEMODE_1
+    lda #DEVICE_FDHD
+    bit DeviceKinds,x
+    beq Done
+    ldy #DRIVE_MFM_MODE
+    lda #MEDIA_MODE_MFM
+    bit MediaMode,x
+    bne CheckMode
     iny
-SETDRIVEMODE_1:
-    lda #$07
-    jsr DRIVESENSE
-    bcs SETDRIVEMODE_2
-    cpy #$07
-    beq SETDRIVEMODE_4
-    bra SETDRIVEMODE_3
-SETDRIVEMODE_2:
-    cpy #$06
-    beq SETDRIVEMODE_4
-SETDRIVEMODE_3:
+CheckMode:
+    lda #SENSE_MFM_MODE
+    jsr SenseLine
+    bcs InMfm
+    cpy #DRIVE_GCR_MODE
+    beq Done
+    bra Switch
+InMfm:
+    cpy #DRIVE_MFM_MODE
+    beq Done
+Switch:
     tya
-    jsr DRIVECOMMAND
-    lda #$07
-SETDRIVEMODE_4:
+    jsr SendCommand
+    lda #$07                        ; nothing uses it
+Done:
     rts
+.endproc
 
 ;; Steps the head a number of tracks, in the direction already set, and lets it settle.
-;; In:    X = the tracks
-STEPTRACKS:
-    lda #$04
-    jsr DRIVECOMMAND
-    lda #$04
-    jsr WAITSENSE
+;; In: X = the tracks, 1 or more
+;; Out: X = 0
+;; Keeps: Y
+.proc StepTracks
+    lda #DRIVE_STEP
+    jsr SendCommand
+    lda #SENSE_STEP_DONE
+    jsr WaitSense
     dex
-    bne STEPTRACKS
-    ldx #$3E
-STEPTRACKS_1:
+    bne StepTracks
+    ldx #STEP_SETTLE_TIME
+Settle:
     dex
-    bne STEPTRACKS_1
+    bne Settle
     rts
+.endproc
 
-;; Moves Drive's head to Track, through the SeekVector vector.
-;; Out:   carry = set if the head could not find track 0
-SEEK:
+;; The passes of a short loop that let the head settle after it steps.
+STEP_SETTLE_TIME = $3E
+
+;; Moves <Drive>'s head to <Track>, through the <SeekVector>.
+;; Out: carry = set if the head could not find track 0
+.proc Seek
     jmp SeekVector
+.endproc
 
-;; SEEK's routine: recalibrates if the track is unknown, then steps to Track.
-;; Out:   carry = set if track 0 was not found; else A = 0 if the head was already there, 1 if it moved
-SeekTrack:
+;; The <SeekVector>'s routine: recalibrates if the track is unknown, then steps to <Track>.
+;; In: Drive = the drive, Track = the track
+;; Out: carry = set if track 0 was not found; else A = 0 if the head was already there, 1 if it moved
+.proc SeekTrack
     ldx Drive
-    lda CurrentTrack,X
-    bpl SEEKTRACK_1
-    jsr RECALIBRATE
-    bcs SEEKTRACK_4
-SEEKTRACK_1:
+    lda CurrentTrack,x
+    bpl Known
+    jsr Recalibrate
+    bcs Done
+Known:
     ldx Drive
-    lda CurrentTrack,X
+    lda CurrentTrack,x
     sec
     sbc Track
-    beq SEEKTRACK_3
-    ldy #$01
-    bcs SEEKTRACK_2
-    ldy #$00
+    beq There
+    ldy #DRIVE_STEP_OUTWARD
+    bcs Step
+    ldy #DRIVE_STEP_INWARD
     eor #$FF
-    adc #$01
-SEEKTRACK_2:
+    adc #1
+Step:
     tax
     tya
-    jsr DRIVECOMMAND
-    jsr STEPTRACKS
+    jsr SendCommand
+    jsr StepTracks
     ldx Drive
     lda Track
-    sta CurrentTrack,X
-    lda #$01
-SEEKTRACK_3:
+    sta CurrentTrack,x
+    lda #1
+There:
     clc
-SEEKTRACK_4:
+Done:
     rts
+.endproc
 
-;; Steps Drive's head out until the drive senses track 0: up to 80 steps.
-;; Out:   carry = set if track 0 was not found (DiskErrors bit 1 set); CurrentTrack = 0, or $FF
-RECALIBRATE:
+;; Steps <Drive>'s head out until the drive senses track 0: up to five rounds of 16 steps, each checked 16 times
+;; 7 ms apart.
+;; Out: carry = set if track 0 was not found (DiskErrors bit 1 set); A = CurrentTrack = 0, or $FF; X = Drive
+.proc Recalibrate
     stz DiskErrors
-    lda #$01
-    jsr DRIVECOMMAND
-    lda #$0A
-    jsr DRIVESENSE
-    bcc RECALIBRATE_3
-    ldy #$05
-RECALIBRATE_1:
-    ldx #$10
-    jsr STEPTRACKS
-    ldx #$10
-RECALIBRATE_2:
-    lda #$07
-    jsr DELAYMS
-    lda #$0A
-    jsr DRIVESENSE
-    bcc RECALIBRATE_3
+    lda #DRIVE_STEP_OUTWARD
+    jsr SendCommand
+    lda #SENSE_NOT_AT_TRACK_0
+    jsr SenseLine
+    bcc AtTrack0
+    ldy #RECALIBRATE_ROUNDS
+Round:
+    ldx #RECALIBRATE_STEPS
+    jsr StepTracks
+    ldx #RECALIBRATE_STEPS
+Check:
+    lda #RECALIBRATE_CHECK_TIME
+    jsr DelayMilliseconds
+    lda #SENSE_NOT_AT_TRACK_0
+    jsr SenseLine
+    bcc AtTrack0
     dex
-    bne RECALIBRATE_2
+    bne Check
     dey
-    bne RECALIBRATE_1
-    lda #$02
+    bne Round
+    lda #DISK_ERROR_NO_TRACK_0
     tsb DiskErrors
     lda #$FF
     sec
-    bra RECALIBRATE_4
-RECALIBRATE_3:
-    lda #$00
+    bra Store
+AtTrack0:
+    lda #0
     clc
-RECALIBRATE_4:
+Store:
     ldx Drive
-    sta CurrentTrack,X
+    sta CurrentTrack,x
     rts
+.endproc
 
-;; Selects the head for Side through the card's head latch.
-;; In:    A = Side
-SELECTHEAD:
+;; The rounds of steps <Drives::Recalibrate> takes.
+RECALIBRATE_ROUNDS = 5
+
+;; The steps in each round, and the checks after it.
+RECALIBRATE_STEPS = 16
+
+;; The ms between <Drives::Recalibrate>'s checks.
+RECALIBRATE_CHECK_TIME = 7
+
+;; Selects the head for <Side> through the card's head latch.
+;; In: Side = 0, or not 0 for the second side
+;; Out: A = Side
+;; Keeps: X, Y
+.proc SelectHead
     lda Side
-    beq SELECTHEAD_1
+    beq Lower
     sta SelectSide1
     rts
-SELECTHEAD_1:
+Lower:
     sta SelectSide0
     rts
+.endproc
 
-;; Writes the IWM's mode register until it reads back.
-;; In:    A = the mode (bits 0-4)
-SETIWMMODE:
+.endscope
+
+;; The routines that switch the SWIM between its IWM and ISM modes, between the 3.5 drives' port and the SmartPort
+;; bus's, and between GCR and MFM. <SwimState> says which mode it is in, and <SetupCopy> holds its setup register.
+.scope Swim
+
+;; Writes the IWM's mode register until it reads back, after waiting for the drive enable to go off.
+;; In: A = the mode (bits 0-4)
+;; Out: Y = the mode
+;; Keeps: X
+.proc SetIwmMode
     bit Iwm::ReadMode
     tay
     bit Iwm::MotorOff
     bit Iwm::LoadLatch
-SETIWMMODE_1:
+WaitDisabled:
     lda Iwm::ReadMode
-    and #$20
-    bne SETIWMMODE_1
-    bra SETIWMMODE_3
-SETIWMMODE_2:
+    and #IWM_STATUS_ENABLED
+    bne WaitDisabled
+    bra Check
+Write:
     sty Iwm::WriteMode
-SETIWMMODE_3:
+Check:
     tya
     eor Iwm::ReadMode
-    and #$1F
-    bne SETIWMMODE_2
-    lda #$40
+    and #IWM_MODE_MASK
+    bne Write
+    lda #SWIM_STATE_ISM
     trb SwimState
     lda Iwm::DataLatch
     rts
+.endproc
 
-;; Loads the ISM's sixteen timing parameters for Track's zone, until they read back (five tries).
-;; Out:   carry = set if they never matched
-SETISMPARAMS:
+;; Loads the ISM's sixteen timing parameters for <Track>'s zone, unless they already read back: up to five tries.
+;; Out: carry = set if they never matched
+.proc LoadParameters
     lda Track
-    cmp #$50
-    bcc SETISMPARAMS_1
-    lda #$00
-SETISMPARAMS_1:
+    cmp #TRACKS
+    bcc FindZone
+    lda #0
+FindZone:
     ldx #$FE
-SETISMPARAMS_2:
+NextZone:
     inx
     inx
-    cmp ISMZONES,X
-    bcs SETISMPARAMS_2
-    lda ISMZONES+1,X
+    cmp IsmZones,x
+    bcs NextZone
+    lda IsmZones + 1,x
     tax
-    ldy #$05
-SETISMPARAMS_3:
-    lda #$18
+    ldy #PARAMETER_TRIES
+
+    ; Compare the parameters, backwards from the zone's end.
+Try:
+    lda #ISM_MODE_ACTION | ISM_MODE_WRITE
     sta Ism::ClearMode
     phx
-SETISMPARAMS_4:
+Compare:
     dex
-    lda ISMPARAMS,X
-    beq SETISMPARAMS_5
+    lda IsmParameters,x
+    beq Matched
     cmp Ism::ReadParameter
-    bne SETISMPARAMS_6
-    bra SETISMPARAMS_4
-SETISMPARAMS_5:
+    bne Load
+    bra Compare
+Matched:
     plx
     clc
     rts
-SETISMPARAMS_6:
-    lda #$18
+
+    ; Write them, and try again.
+Load:
+    lda #ISM_MODE_ACTION | ISM_MODE_WRITE
     sta Ism::ClearMode
     plx
     phx
-SETISMPARAMS_7:
+Write:
     pha
     pla
     dex
-    lda ISMPARAMS,X
-    beq SETISMPARAMS_8
+    lda IsmParameters,x
+    beq Written
     sta Ism::WriteParameter
-    bra SETISMPARAMS_7
-SETISMPARAMS_8:
+    bra Write
+Written:
     plx
     dey
-    bne SETISMPARAMS_3
+    bne Try
     sec
     rts
+.endproc
 
-;; SETISMPARAMS' zones: the first track past each zone, and where its parameters end in ISMPARAMS.
-ISMZONES:
-    .byte $28
-    .byte $11, $50, $22, $50, $00, $50, $00
+;; The tracks of a 3.5 disk; a track past them is taken as track 0.
+TRACKS = 80
 
-;; The ISM's timing parameters, read backwards from a zone's end.
-ISMPARAMS:
+;; The tries <Swim::LoadParameters> makes.
+PARAMETER_TRIES = 5
+
+;; <Swim::LoadParameters>' zones: the first track past each zone, and the index in <IsmParameters> just past its
+;; parameters. Tracks 0-39 take the first set and 40-79 the second; the pairs after them are never reached.
+IsmZones:
+    .byte 40, $11
+    .byte TRACKS, $22
+    .byte TRACKS, $00
+    .byte TRACKS, $00
+
+;; The ISM's timing parameters, two sets of sixteen, each read backwards from its end to the 0 before it. The two are
+;; the same.
+IsmParameters:
     .byte $00, $3B, $57, $1B, $97, $19, $19, $2F, $2F, $1B, $1B, $18, $18, $2E, $2E, $41
     .byte $18, $00, $3B, $57, $1B, $97, $19, $19, $2F, $2F, $1B, $1B, $18, $18, $2E, $2E
     .byte $41, $18
 
-;; Puts the SWIM into ISM mode and sets it up: the setup register, the phases as outputs, the
-;; parameters; then back to IWM mode.
-INITSWIM:
+;; Puts the SWIM into ISM mode and sets it up: the setup register 0, the mode's action, write and MFM bits off, the
+;; phase lines as outputs, and the parameters; then back to IWM mode.
+.proc Initialize
     stz SwimState
     stz SetupCopy
-    jsr ENTERISM
+    jsr EnterIsm
     lda #$00
     sta Ism::WriteSetup
     sta SetupCopy
     lda Ism::ReadSetup
-    lda #$38
+    lda #ISM_MODE_ACTION | ISM_MODE_WRITE | SWIM_MFM
     sta Ism::ClearMode
     lda #$00
     sta Ism::WriteCrc
     lda Ism::ReadMode
     lda Ism::ReadPhase
-    ora #$F0
+    ora #PHASE_OUTPUTS
     sta Ism::WritePhase
-    jsr SETISMPARAMS
-    jmp LEAVEISM
+    jsr LoadParameters
+    jmp LeaveIsm
+.endproc
 
-;; Switches the SWIM from IWM to ISM mode, if it is not there already, and enables Drive.
-;; Keeps: X
-ENTERISM:
+;; Switches the SWIM from IWM to ISM mode, if it is not there already. If the IWM had a drive enabled, or the SWIM
+;; was in ISM mode already, then enables <Drive> (a 3.5 drive, 0 or 1) and its motor line in the ISM.
+;; In: Drive = the drive
+;; Out: A = the ISM's mode register
+;; Keeps: X, Y
+.proc EnterIsm
     phx
     bit SwimState
-    bvs ENTERISM_1
+    bvs InIsm
+
+    ; Write the mode with its ISM bit 1, 0, 1, 1.
     bit Iwm::ReadMode
     bit Iwm::LoadLatch
     lda Iwm::ReadMode
     pha
     bit Iwm::MotorOff
-    and #$1F
-    ora #$40
+    and #IWM_MODE_MASK
+    ora #IWM_ISM_SWITCH
     sta Iwm::WriteMode
-    eor #$40
+    eor #IWM_ISM_SWITCH
     sta Iwm::WriteMode
-    eor #$40
+    eor #IWM_ISM_SWITCH
     sta Iwm::WriteMode
     sta Iwm::WriteMode
-    lda #$40
+    lda #SWIM_STATE_ISM
     tsb SwimState
     pla
-    bit #$20
-    beq ENTERISM_3
-ENTERISM_1:
+    bit #IWM_STATUS_ENABLED
+    beq Done
+
+    ; Enable the drive.
+InIsm:
     lda Ism::ReadMode
-    and #$06
-    cmp #$06
-    bne ENTERISM_2
-    lda #$06
+    and #ISM_MODE_DRIVES
+    cmp #ISM_MODE_DRIVES
+    bne Enable
+    lda #ISM_MODE_DRIVES
     sta Ism::ClearMode
-ENTERISM_2:
+Enable:
     ldx Drive
     cpx #$02
-    bcs ENTERISM_3
-    lda #$06
+    bcs Done
+    lda #ISM_MODE_DRIVES
     sta Ism::ClearMode
-    lda DRIVEBITS,X
+    lda DriveEnableBits,x
     sta Ism::SetMode
-    lda #$80
+    lda #ISM_MODE_MOTOR
     sta Ism::SetMode
-ENTERISM_3:
+Done:
     plx
     lda Ism::ReadMode
     rts
+.endproc
 
 ;; The ISM mode register's drive-enable bit for drives 1 and 2.
-DRIVEBITS:
-    .byte $02, $04
+DriveEnableBits:
+    .byte ISM_MODE_DRIVE1, ISM_MODE_DRIVE2
 
-;; Switches the SWIM back to IWM mode, keeping the drive enabled and the motor as they were.
-;; Keeps: X
-LEAVEISM:
+;; Switches the SWIM back to IWM mode. If the ISM had the motor line on, the IWM gets the same drive and its motor
+;; line on; else it just selects <Drive>, if that is a 3.5 drive.
+;; Keeps: X, Y
+.proc LeaveIsm
     lda Ism::ReadMode
     pha
-    lda #$9E
+    lda #ISM_MODE_MOTOR | ISM_MODE_WRITE | ISM_MODE_ACTION | ISM_MODE_DRIVES
     sta Ism::ClearMode
-    lda #$40
+    lda #ISM_MODE_ISM
     sta Ism::ClearMode
     pha
     pla
     bit Iwm::ReadMode
     bit Iwm::DataLatch
-    lda #$40
+    lda #SWIM_STATE_ISM
     trb SwimState
     pla
-    bmi LEAVEISM_2
+    bmi MotorWasOn
+
+    ; Select the drive.
     phx
     ldx Drive
     cpx #$02
-    bcs LEAVEISM_1
-    bit Iwm::SelectDrive1,X
-LEAVEISM_1:
+    bcs Restore
+    bit Iwm::SelectDrive1,x
+Restore:
     plx
     rts
-LEAVEISM_2:
+
+    ; The drive the ISM had, with its motor line.
+MotorWasOn:
     phx
     ldx #$00
-    bit #$04
-    beq LEAVEISM_3
+    bit #ISM_MODE_DRIVE2
+    beq Select
     ldx #$01
-LEAVEISM_3:
-    bit Iwm::SelectDrive1,X
+Select:
+    bit Iwm::SelectDrive1,x
     plx
     bit Iwm::MotorOn
     rts
+.endproc
 
 ;; Switches back to IWM mode if the SWIM is in ISM mode.
-LEAVEISMIF:
+;; Keeps: X, Y
+.proc EnsureIwm
     bit SwimState
-    bvc LEAVEISMIF_1
-    jsr LEAVEISM
-LEAVEISMIF_1:
+    bvc Done
+    jsr LeaveIsm
+Done:
     rts
+.endproc
 
-;; Sets setup bit 1 (SetupCopy bit 1), which this card uses to select its 3.5 drive port.
-;; Keeps: A
-PORTON:
+;; Selects the 3.5 drives' port: sets <SETUP_DRIVE_PORT> in the setup register, if it is not set already.
+;; Keeps: A, X, Y
+.proc SelectDrivePort
     pha
-    lda #$02
+    lda #SETUP_DRIVE_PORT
     bit SetupCopy
-    bne PORTON_1
-    jsr ENTERISM
-    lda #$02
+    bne Done
+    jsr EnterIsm
+    lda #SETUP_DRIVE_PORT
     ora Ism::ReadSetup
     sta Ism::WriteSetup
     sta SetupCopy
-    cmp Ism::ReadSetup
-    jsr LEAVEISM
-PORTON_1:
+    cmp Ism::ReadSetup              ; the result is not used
+    jsr LeaveIsm
+Done:
     pla
     rts
+.endproc
 
-;; Clears setup bit 1, which this card uses to select the SmartPort bus port.
-;; Keeps: A
-PORTOFF:
+;; Selects the SmartPort bus's port: clears <SETUP_DRIVE_PORT> in the setup register, if it is not clear already.
+;; Keeps: A, X, Y
+.proc SelectBusPort
     pha
-    lda #$02
+    lda #SETUP_DRIVE_PORT
     bit SetupCopy
-    beq PORTOFF_1
-    jsr ENTERISM
-    lda #$FD
+    beq Done
+    jsr EnterIsm
+    lda #<(~SETUP_DRIVE_PORT)
     and Ism::ReadSetup
     sta Ism::WriteSetup
     sta SetupCopy
-    cmp Ism::ReadSetup
-    jsr LEAVEISM
-PORTOFF_1:
+    cmp Ism::ReadSetup              ; the result is not used
+    jsr LeaveIsm
+Done:
     pla
     rts
+.endproc
 
-;; Readies the SWIM for MFM: SwimState bit 7 and the setup's MFM bits.
-MFMON:
-    lda #$80
+;; Readies the SWIM for MFM: <SWIM_STATE_MFM> in <SwimState>, and, if the setup copy lacks it, <SWIM_MFM> in the mode
+;; and setup registers and $40 written to the ISM's CRC register.
+;; Keeps: X, Y
+.proc UseMfm
+    lda #SWIM_STATE_MFM
     tsb SwimState
-    lda #$20
+    lda #SWIM_MFM
     bit SetupCopy
-    bne MFMON_1
-    jsr ENTERISM
-    lda #$20
+    bne Done
+    jsr EnterIsm
+    lda #SWIM_MFM
     sta Ism::SetMode
     ora Ism::ReadSetup
     sta Ism::WriteSetup
     sta SetupCopy
     lda #$40
     sta Ism::WriteCrc
-    jsr LEAVEISM
-MFMON_1:
+    jsr LeaveIsm
+Done:
     rts
+.endproc
 
-;; Readies the SWIM for GCR: clears MFM mode, and sets the IWM's mode to $1F.
-MFMOFF:
-    lda #$80
+;; Readies the SWIM for GCR, at $D80B: clears <SWIM_STATE_MFM>, and, if the setup copy has it, <SWIM_MFM> in the mode
+;; and setup registers, writing 0 to the ISM's CRC register; then sets the IWM's mode to <IWM_MODE>.
+;; Out: Y = IWM_MODE
+;; Keeps: X
+.proc UseGcr
+.assert * = $D80B, "The self-test names the card's return to GCR as $D80B."
+    lda #SWIM_STATE_MFM
     trb SwimState
-    lda #$20
+    lda #SWIM_MFM
     bit SetupCopy
-    beq MFMOFF_1
-    jsr ENTERISM
-    lda #$20
+    beq SetMode
+    jsr EnterIsm
+    lda #SWIM_MFM
     sta Ism::ClearMode
     lda Ism::ReadSetup
-    and #$DF
+    and #<(~SWIM_MFM)
     sta Ism::WriteSetup
     sta SetupCopy
     lda #$00
     sta Ism::WriteCrc
-    jsr LEAVEISM
-MFMOFF_1:
-    lda #$1F
-    jsr SETIWMMODE
+    jsr LeaveIsm
+SetMode:
+    lda #IWM_MODE
+    jsr SetIwmMode
     rts
+.endproc
 
-;; Leaves a 3.5 drive's motor to the SWIM's motor-off timer and the port deselected.
-;; In:    X = the drive
-RELEASEDRIVE:
+.endscope
+
+; Drives: the drive lines.
+.scope Drives continued
+
+;; Hands a 3.5 drive back with its motor line on: enables it and its motor line in the ISM, deselects the drives'
+;; port (<SETUP_DRIVE_PORT>), and returns to IWM mode, which keeps the drive and its motor line on.
+;; In: X = the drive; one past the 3.5 drives does nothing
+;; Keeps: X, Y
+.proc Release
     cpx #$02
-    bcs RELEASEDRIVE_3
+    bcs Done
     stx Drive
-    jsr ENTERISM
-    lda DRIVEBITS,X
-    ora #$80
+    jsr Swim::EnterIsm
+    lda Swim::DriveEnableBits,x
+    ora #ISM_MODE_MOTOR
     sta Ism::SetMode
     lda #$32
-RELEASEDRIVE_1:
-    dec A
-    bne RELEASEDRIVE_1
+Pause:
+    dec a
+    bne Pause
     lda Ism::ReadSetup
-    and #$FD
+    and #<(~SETUP_DRIVE_PORT)
     sta Ism::WriteSetup
     sta SetupCopy
     lda #$19
-RELEASEDRIVE_2:
-    dec A
-    bpl RELEASEDRIVE_2
-    jsr LEAVEISM
-RELEASEDRIVE_3:
+PauseAgain:
+    dec a
+    bpl PauseAgain
+    jsr Swim::LeaveIsm
+Done:
     rts
+.endproc
 
-;; Selects one of a 3.5 drive's sixteen registers: CA2, the head line, CA0 and CA1 from A's bits 0-3
-;; (with LSTRB low).
-;; In:    A = the register
-SETDRIVEREG:
+;; Selects one of a 3.5 drive's sixteen registers: CA2, the head line, CA0 and CA1 from A's bits 0-3, with LSTRB
+;; (phase 3) low.
+;; In: A = the register
+;; Out: A = 0
+;; Keeps: X, Y
+.proc SelectRegister
     bit Iwm::Phase0Off
     bit Iwm::Phase1On
     bit Iwm::Phase3Off
     bit Iwm::Phase2Off
-    lsr A
-    bcc SETDRIVEREG_1
+    lsr a
+    bcc Ca2Low
     bit Iwm::Phase2On
-SETDRIVEREG_1:
-    lsr A
-    bcc SETDRIVEREG_2
+Ca2Low:
+    lsr a
+    bcc Side0
     bit SelectSide1
-    bra SETDRIVEREG_3
-SETDRIVEREG_2:
+    bra Ca0
+Side0:
     bit SelectSide0
-SETDRIVEREG_3:
-    lsr A
-    bcc SETDRIVEREG_4
+Ca0:
+    lsr a
+    bcc Ca0Low
     bit Iwm::Phase0On
-SETDRIVEREG_4:
-    lsr A
-    bcs SETDRIVEREG_5
+Ca0Low:
+    lsr a
+    bcs Done
     bit Iwm::Phase1Off
-SETDRIVEREG_5:
+Done:
     rts
+.endproc
 
 ;; Gives a 3.5 drive a command: selects the register, then pulses LSTRB.
-;; In:    A = the command: 0/1 step in/out, 3 clear the disk-switched latch, 4 step, 6/7 MFM/GCR mode,
-;;        8/9 motor on/off, $0D eject
-DRIVECOMMAND:
-    jsr SETDRIVEREG
+;; In: A = the command, one of the DRIVE_ values (<DRIVE_STEP>, <DRIVE_EJECT> ...)
+;; Out: A = 0
+;; Keeps: X, Y
+.proc SendCommand
+    jsr SelectRegister
     bit Iwm::Phase3On
     bit Iwm::Phase3Off
     rts
+.endproc
 
 ;; Reads one of a 3.5 drive's sense lines.
-;; In:    A = the sense: 0 step direction, 2 no disk, 4 step done, 5 FDHD drive, 6 write enabled, 7 MFM mode,
-;;        8 motor off, $0A not at track 0, $0B not ready, $0C disk switched, $0F not high density
-;; Out:   carry = the line, A = 0
-DRIVESENSE:
-    jsr SETDRIVEREG
+;; In: A = the sense line, one of the SENSE_ values (<SENSE_NO_DISK>, <SENSE_NOT_READY> ...)
+;; Out: carry = the line, A = 0
+;; Keeps: X, Y
+.proc SenseLine
+    jsr SelectRegister
     bit Iwm::LoadLatch
     lda Iwm::ReadMode
     and #$80
-    asl A
+    asl a
     rts
+.endproc
 
-;; Waits up to about 1.2 s for the drive to report ready.
-;; Out:   carry = set if it never did
-WAITREADY:
-    lda #$0B
-    jsr DRIVESENSE
-    bcc WAITREADY_4
+;; Waits up to about three quarters of a second for the drive to report ready.
+;; Out: carry = set if it never did
+.proc WaitReady
+    lda #SENSE_NOT_READY
+    jsr SenseLine
+    bcc Done
     ldx #$03
     ldy #$E8
-WAITREADY_1:
+Outer:
     lda #$92
     sta WaitCount
-WAITREADY_2:
+Inner:
     bit Iwm::ReadMode
-    bpl WAITREADY_3
+    bpl Ready
     dec WaitCount
-    bne WAITREADY_2
+    bne Inner
     dey
-    bne WAITREADY_1
+    bne Outer
     dex
-    bne WAITREADY_1
+    bne Outer
     sec
     rts
-WAITREADY_3:
+Ready:
     clc
-WAITREADY_4:
+Done:
     rts
+.endproc
 
 ;; Waits, without a limit, for the drive to report ready.
-;; Out:   carry = clear
-WAITREADYEVER:
-    lda #$0B
-    jsr DRIVESENSE
-    bcc WAITREADYEVER_2
-WAITREADYEVER_1:
+;; Out: carry = clear, A = 0
+;; Keeps: X, Y
+.proc WaitReadyForever
+    lda #SENSE_NOT_READY
+    jsr SenseLine
+    bcc Done
+Wait:
     lda Iwm::ReadMode
     and #$80
-    bmi WAITREADYEVER_1
-    asl A
-WAITREADYEVER_2:
+    bmi Wait
+    asl a
+Done:
     rts
+.endproc
 
 ;; Waits until a sense line is set.
-;; In:    A = the sense
-;; Out:   carry = set
-WAITSENSE:
-    jsr DRIVESENSE
-WAITSENSE_1:
+;; In: A = the sense line
+;; Out: carry = set, A = 0
+;; Keeps: X, Y
+.proc WaitSense
+    jsr SenseLine
+Wait:
     lda Iwm::ReadMode
     and #$80
-    bpl WAITSENSE_1
-    asl A
+    bpl Wait
+    asl a
     rts
+.endproc
 
-;; Checks the 3.5 drives for a removed disk while the card waits, forgetting the disk of a drive
-;; that has none.
-POLLDRIVES:
+;; Checks the 3.5 drives for a removed disk while the card waits, forgetting the disk of a drive that has none.
+.proc Poll
     ldx #$00
-    lda DeviceKinds,X
-    bmi POLLDRIVES_5
-    beq POLLDRIVES_5
-    jsr PORTON
-POLLDRIVES_1:
+    lda DeviceKinds,x
+    bmi Done
+    beq Done
+    jsr Swim::SelectDrivePort
+NextDrive:
     ldy #$0A
-POLLDRIVES_2:
+Pause:
     dey
-    bne POLLDRIVES_2
-    jsr READSENSE
-    bvc POLLDRIVES_3
-    jsr FORGETDISK
-POLLDRIVES_3:
+    bne Pause
+    jsr ReadStatus
+    bvc HasDisk
+    jsr ForgetDisk
+HasDisk:
     inx
     cpx #$01
-    bne POLLDRIVES_4
-    lda DeviceKinds,X
-    bmi POLLDRIVES_4
-    bne POLLDRIVES_1
-POLLDRIVES_4:
+    bne Last
+    lda DeviceKinds,x
+    bmi Last
+    bne NextDrive
+Last:
     dex
-    jsr RELEASEDRIVE
-POLLDRIVES_5:
+    jsr Release
+Done:
     rts
+.endproc
 
 ;; Reads a drive's sense lines and answers whether it can be used.
-;; In:    X = the drive
-;; Out:   carry = set with A = $2F (no disk) or $2E (switched, extended calls only); else A = 0, or $2B
-;;        if the disk is write protected; negative = the disk was switched (its format must be found again)
-CHECKDISK:
-    jsr READSENSE
-    bvc CHECKDISK_2
+;; In: X = the drive
+;; Out: carry = set with A = <ERROR_OFFLINE> (no disk) or <ERROR_DISK_SWITCHED> (switched, extended calls only);
+;;      else A = 0, or <ERROR_WRITE_PROTECTED> if the disk is write-protected; negative = the disk was switched or
+;;      its format is not known, so it must be found again
+.proc CheckDisk
+    jsr ReadStatus
+    bvc HasDisk
     php
-    jsr FORGETDISK
+    jsr ForgetDisk
     plp
-    bpl CHECKDISK_1
-    jsr CLEARSWITCHED
-    bcs CHECKWRITE_2
-CHECKDISK_1:
-    lda #$2F
+    bpl Absent
+    jsr ClearSwitched
+    bcs CheckWriteProtect::Finish
+Absent:
+    lda #ERROR_OFFLINE
     sec
-    bra CHECKWRITE_2
-CHECKDISK_2:
-    bmi CHECKDISK_3
-    lda MediaKind,X
-    bne CHECKWRITE
-    jsr CHECKWRITE
-    bit BITNEGATIVE
+    bra CheckWriteProtect::Finish
+HasDisk:
+    bmi Switched
+    lda MediaKind,x
+    bne CheckWriteProtect
+    jsr CheckWriteProtect
+    bit NegativeByte
     rts
-CHECKDISK_3:
-    jsr FORGETMEDIA
-    jsr CLEARSWITCHED
-    bcs CHECKWRITE_2
+Switched:
+    jsr ForgetMedia
+    jsr ClearSwitched
+    bcs CheckWriteProtect::Finish
+    ; Falls into CheckWriteProtect.
+.endproc
 
-;; Answers whether a drive's disk is write protected.
-;; In:    X = the drive
-;; Out:   carry = clear, A = $2B if protected, else 0
-CHECKWRITE:
-    lda #$20
-    and Sense,X
-    beq CHECKWRITE_1
-    lda #$2B
-CHECKWRITE_1:
+;; Answers whether a drive's disk is write-protected.
+;; In: X = the drive
+;; Out: carry = clear, A = <ERROR_WRITE_PROTECTED> if protected, else 0; negative and overflow = the drive's Sense
+;;      bits 7 and 6
+;; Keeps: X, Y
+;; Entry:
+;;   Finish = sets negative and overflow from the drive's Sense and returns; <CheckDisk> comes here
+.proc CheckWriteProtect
+    lda #DISK_PROTECTED
+    and Sense,x
+    beq Writable
+    lda #ERROR_WRITE_PROTECTED
+Writable:
     clc
-CHECKWRITE_2:
-    bit Sense,X
+Finish:
+    bit Sense,x
     rts
+.endproc
 
 ;; A $A0 for BIT: sets negative, clears overflow.
-BITNEGATIVE:
+NegativeByte:
     .byte $A0
 
 ;; Clears the drive's disk-switched latch.
-;; Out:   carry = set with A = $2E for an extended call, else clear with A = 0
-CLEARSWITCHED:
-    lda #$03
-    jsr DRIVECOMMAND
-    lda #$2E
+;; Out: carry = set with A = <ERROR_DISK_SWITCHED> for an extended call, else clear with A = 0
+;; Keeps: X, Y
+.proc ClearSwitched
+    lda #DRIVE_CLEAR_SWITCHED
+    jsr SendCommand
+    lda #ERROR_DISK_SWITCHED
     sec
     bit CardCommand
-    bvs CLEARSWITCHED_1
+    bvs Done
     lda #$00
     clc
-CLEARSWITCHED_1:
+Done:
     rts
+.endproc
 
-;; Enables a drive and its motor line and reads its sense lines into Sense,X.
-;; In:    X = the drive
-;; Out:   PreviousSense = the last lines; Sense,X bit 7 = switched, 6 = no disk, 5 = write protected;
-;;        negative and overflow from bits 7 and 6, zero = clear if write protected
-READSENSE:
-    lda Iwm::SelectDrive1,X
+;; Enables a drive and its motor line and reads its sense lines into its Sense byte.
+;; In: X = the drive
+;; Out: PreviousSense = the byte before; Sense,X bit 7 = switched, 6 = no disk, 5 = write-protected, bits 0-4 kept;
+;;      negative and overflow = bits 7 and 6, zero = set if the disk can be written; Y = 0
+;; Keeps: X
+.proc ReadStatus
+    lda Iwm::SelectDrive1,x
     bit Iwm::MotorOn
+    ; Falls into ReadStatusLines.
+.endproc
 
-;; READSENSE without enabling the drive.
-;; In:    X = the drive
-SENSELINES:
-    lda Sense,X
+;; <ReadStatus> without enabling the drive.
+;; In: X = the drive
+;; Out: as ReadStatus's
+;; Keeps: X
+.proc ReadStatusLines
+    lda Sense,x
     sta PreviousSense
-    and #$1F
-    ora #$20
-    sta Sense,X
+    and #DISK_ONE_SIDED | $0F
+    ora #DISK_PROTECTED
+    sta Sense,x
     ldy #$03
-SENSELINES_1:
-    lda SENSEREGISTERS-1,Y
-    jsr DRIVESENSE
-    bcc SENSELINES_2
-    lda SENSEMASKS-1,Y
-    eor Sense,X
-    sta Sense,X
-SENSELINES_2:
+Loop:
+    lda StatusLines - 1,y
+    jsr SenseLine
+    bcc Next
+    lda StatusBits - 1,y
+    eor Sense,x
+    sta Sense,x
+Next:
     dey
-    bne SENSELINES_1
-    lda #$20
-    bit Sense,X
+    bne Loop
+    lda #DISK_PROTECTED
+    bit Sense,x
     rts
+.endproc
 
-;; The sense lines READSENSE reads: write enabled, no disk, switched...
-SENSEREGISTERS:
-    .byte $06, $02
-    .byte $0C
+;; The sense lines <ReadStatusLines> reads...
+StatusLines:
+    .byte SENSE_WRITE_ENABLED, SENSE_NO_DISK, SENSE_SWITCHED
 
-;; ...and the Sense bits each one flips.
-SENSEMASKS:
-    .byte $20, $40, $80
+;; ...and the Sense bit each one flips when it is set.
+StatusBits:
+    .byte DISK_PROTECTED, DISK_ABSENT, DISK_SWITCHED
+
+.endscope

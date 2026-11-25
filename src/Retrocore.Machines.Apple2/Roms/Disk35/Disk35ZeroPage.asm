@@ -1,8 +1,10 @@
+; retrocore: style=strict
 ;; THE CARD'S PAGE ZERO, AS THE ROM SETS IT UP
 ;;
-;; STARTUP copies $8001-$80BB to the card's page zero, and $80BC-$80BF (the signature) once the rest is
-;; ready. Its first bytes are the mailbox the host reads and writes at $C800 with bank 0 latched. The vectors
-;; at $72-$8C are JMP instructions that the control calls can repoint and put back.
+;; The image of the card's page zero, at $8000-$80FF in the EPROM. A cold start (<CopyZeroPage>) copies $8001-$80BB to
+;; the card's page zero, and <CopySignature> copies $80BC-$80BF (<WarmSignature>) once the rest is ready. Its first
+;; bytes are the mailbox the host reads and writes at $C800 with bank 0 latched (Disk35Host.asm). The vectors at
+;; $72-$8C (<Vectors>) are JMP instructions that the control calls can repoint and put back.
 
 .logicalorg $0000
 
@@ -127,35 +129,35 @@ Checksum2:
 ChecksumHighBits:
     .byte $00
 
-;; Scratch.
+;; Scratch, for several routines.
 Work0:
     .byte $00
 
-;; Scratch.
+;; Scratch, for several routines, with the two bytes after it.
 Work1:
     .byte $00, $00, $00
 
-;; The address field read: checksum.
+;; The address field last read: its checksum, as on the disk.
 AddressChecksum:
     .byte $00
 
-;; Format byte.
+;; The address field last read: its format byte.
 AddressFormat:
     .byte $00
 
-;; Side bits.
+;; The address field last read: its side bits.
 AddressSide:
     .byte $00
 
-;; Sector.
+;; The address field last read: its sector.
 AddressSector:
     .byte $00
 
-;; Track.
+;; The address field last read: its track.
 AddressTrack:
     .byte $00
 
-;; Scratch.
+;; Scratch, for several routines.
 Scratch:
     .byte $00
 
@@ -171,7 +173,7 @@ CacheSlot:
 Drive:
     .byte $00
 
-;; WAITREADY's counter.
+;; Drives::WaitReady's counter.
 WaitCount:
     .byte $00, $00
 
@@ -199,7 +201,7 @@ SpanCylinder:
 MediaMode:
     .byte $00, $00, $00, $00, $00
 
-;; The sense lines before the last READSENSE.
+;; The sense lines before the last Drives::ReadStatus.
 PreviousSense:
     .byte $00
 
@@ -239,23 +241,23 @@ ErrorCode:
 DiskErrors:
     .byte $00
 
-;; Retries left; CTLPEEK's byte.
+;; Retries left; Control::Peek's byte.
 Retries:
     .byte $00
 
-;; CTLEXECUTE's A; also counts errors.
+;; Control::Execute's A; also counts errors.
 ResultA:
     .byte $00
 
-;; CTLEXECUTE's X; also counts errors.
+;; Control::Execute's X; also counts errors.
 ResultX:
     .byte $00
 
-;; CTLEXECUTE's Y; also a retry count.
+;; Control::Execute's Y; also a retry count.
 ResultY:
     .byte $00
 
-;; CTLEXECUTE's P; also a seek count.
+;; Control::Execute's P; also a seek count.
 ResultStatus:
     .byte $00
 
@@ -275,7 +277,7 @@ CacheOption:
 ReadState:
     .byte $00
 
-;; Negative during READWRITE.
+;; Negative during ReadWriteTagged.
 TagCall:
     .byte $00
 
@@ -317,7 +319,7 @@ Reading:
 BusCount:
     .byte $00, $00
 
-;; Where PREPAREDATA starts.
+;; Where NibblizeSector starts.
 NibbleStart:
     .byte $00
 
@@ -325,35 +327,47 @@ NibbleStart:
 EjectDrive:
     .byte $80
 
-;; The vectors' length, for CTLRESETVECTORS.
+;; The vectors' length, for Control::RestoreVectors.
 VectorLength:
     .byte $1B, $00
-;; the vectors, JMP instructions the control calls can change
+
+;; The vectors: JMP instructions the control calls can repoint (<Control::RestoreVectors> puts them back). The card
+;; reaches each of these routines through its vector.
 Vectors:
+
+;; Reads the next address field: <ReadGcrAddressField>.
 ReadAddressVector:
     jmp ReadGcrAddressField
 
+;; Reads a data field: <ReadGcrDataField>.
 ReadDataVector:
     jmp ReadGcrDataField
 
+;; Writes a data field: <WriteGcrDataField>.
 WriteDataVector:
     jmp WriteGcrDataField
 
+;; Moves the head to a track: <Drives::SeekTrack>.
 SeekVector:
-    jmp SeekTrack
+    jmp Drives::SeekTrack
 
+;; Formats a disk: <FormatDisk>.
 FormatVector:
     jmp FormatDisk
 
+;; Writes a GCR track while formatting: <WriteGcrTrack>.
 WriteTrackVector:
     jmp WriteGcrTrack
 
+;; Verifies a GCR track after formatting: <VerifyGcrTrack>.
 VerifyVector:
     jmp VerifyGcrTrack
 
+;; Runs the host's command: <RunCommand>.
 CommandVector:
     jmp RunCommand
 
+;; SmartPort INIT: <InitializeCard>.
 InitializeVector:
     jmp InitializeCard
 
@@ -385,7 +399,7 @@ PacketHeader:
 Groups:
     .byte $00
 
-;; And its other bytes.
+;; A bus packet's bytes past its 7-byte groups.
 OddBytes:
     .byte $00
 
@@ -405,11 +419,11 @@ WorkPointer:
 SecondBufferPointer:
     .byte $00, $00
 
-;; The sectors wanted: first.
+;; The first sector wanted.
 SpanStart:
     .byte $00
 
-;; And past the last.
+;; The sector past the last one wanted.
 SpanEnd:
     .byte $00, $00
 
@@ -435,12 +449,18 @@ FormatHook:
 
 ;; The warm-start signature.
 WarmSignature:
-    .byte $4A, $CF, $41, $55, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
-    .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
-    .byte $00, $00, $00, $00
+    .byte $4A, $CF, $41, $55
 
-;; The last command: CardState, CardCommand, CardUnit, ParameterLow, ParameterMiddle.
-LastCommand:
+    ; The rest of the image, which no copy reaches.
     .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+    .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+
+;; The last command <MainLoop> took, for a debugger: its <CardState>, <CardCommand>, <CardUnit>, <ParameterLow> and
+;; <ParameterMiddle>.
+LastCommand:
+    .byte $00, $00, $00, $00, $00
+
+    ; The rest of the image, which no copy reaches.
+    .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
     .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
 .logicalorg

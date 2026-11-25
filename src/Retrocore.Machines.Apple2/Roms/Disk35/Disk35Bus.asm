@@ -1,665 +1,920 @@
-;; THE CARD'S FIRMWARE: THE SMARTPORT BUS
+; retrocore: style=strict
+;; THE CARD'S FIRMWARE: THE SMARTPORT BUS, AND THE DELAYS
+;;
+;; The card's second port is a SmartPort bus, which devices such as the UniDisk 3.5 share. Its lines are the IWM's:
+;; phases 1 and 3 high together enable the bus, phase 0 is the host's request (REQ), phases 0 and 2 high together
+;; reset it, and the drive's sense line is the device's acknowledgement (ACK). A packet is sent and received through
+;; the IWM in its slow mode ($17), as bytes with the high bit set: sync bytes and a start byte ($C3), a header
+;; (destination, source, type, aux type, status, the odd-byte count and the 7-byte group count), the odd bytes
+;; after a byte of their high bits, each group of seven after a byte of theirs, a checksum in two bytes, and an end
+;; byte ($C8). <Bus::PassCommand> passes a host's command for a bus unit to its device, and <Bus::Initialize> gives
+;; the devices their unit numbers. The millisecond delays every part of the firmware uses are here too.
 
-;; Receives a SmartPort bus packet into BufferPointer.
-;; Out:   carry = set with DiskErrors = $80 (none), $81, $83 or $8A for a bad packet
-BUSRECEIVE:
-    ldx #$07
-BUSRECEIVE_1:
-    stz PacketHeader,X
+;; One entry of <Bus::CommandTable>: how a command's packets go.
+;; Parameters:
+;;   sends = 1 when the host's data goes to the device after the command
+;;   returns = 1 when the device's reply has data for the host
+;;   parameters = the command packet's parameter count
+.macro BusCommand sends, returns, parameters
+    .byte sends << 7 | returns << 6 | parameters
+.endmacro
+
+;; The SmartPort bus's packets and the commands passed through it.
+.scope Bus
+
+; The packets.
+
+;; The IWM's mode for the bus: latched, asynchronous, no motor timer, slow (4-microsecond) bits.
+IWM_MODE_SLOW = $17
+
+;; A packet's type: a command.
+TYPE_COMMAND = $80
+
+;; A packet's type: data.
+TYPE_DATA = $82
+
+;; The byte that starts a packet, after the sync bytes (PBEGIN).
+PACKET_BEGIN = $C3
+
+;; The byte that ends a packet (PEND).
+PACKET_END = $C8
+
+;; The bits a checksum byte always has set: each of its two bytes carries four of the checksum's bits.
+CHECKSUM_FILL = $AA
+
+;; The bytes of a packet's header after the start byte.
+HEADER_LENGTH = 7
+
+;; The command packet's bytes: the command, the parameter count and seven parameters.
+COMMAND_PACKET_LENGTH = 9
+
+;; The command packet's bits in <Bus::CommandTable>: host data goes to the device.
+SENDS_DATA = $80
+
+;; The command packet's bits in <Bus::CommandTable>: the reply has data for the host.
+RETURNS_DATA = $40
+
+;; The command packet's bits in <Bus::CommandTable>: the parameter count.
+PARAMETER_COUNT = $0F
+
+; <DiskErrors> after a packet.
+
+;; No packet came.
+NO_PACKET = $80
+
+;; The packet did not end with <Bus::PACKET_END>.
+NO_END = $81
+
+;; The device did not take the packet's end.
+NOT_TAKEN = $82
+
+;; The packet's checksum was wrong.
+BAD_CHECKSUM = $83
+
+;; The device did not answer the request to send.
+NOT_READY = $84
+
+;; The packet's group count had its high bit set, which cannot happen: the count is stored without it.
+BAD_GROUPS = $8A
+
+; SmartPort's error for a bus that failed.
+
+;; The bus did not work: the device did not answer.
+;; Also: BUSERR (UNKN)
+ERROR_BUS = $06
+
+;; The most host data a command other than WRITEBLOCK may send, in pages.
+MOST_DATA_PAGES = $05
+
+;; The highest unit number.
+LAST_UNIT = $04
+
+;; The most bus devices <Bus::Initialize> counts.
+MOST_DEVICES = $02
+
+; Unused bytes, up to <Bus::DivideBySeven> at $F500.
+    .res $F500 - *
+
+;; Divides a 16-bit count by 7: the 7-byte groups of a packet and the bytes left over.
+;; In: WorkPointer = the count, below 7 * 256
+;; Out: Groups = the quotient, OddBytes = the remainder, X = 0; WorkPointer's low byte is shifted out
+;; Keeps: Y
+.proc DivideBySeven
+    stz Groups
+    ldx #8
+    lda WorkPointer + 1
+Bit:
+    asl WorkPointer
+    rol a
+    cmp #7
+    bcc Shift
+    sbc #7
+Shift:
+    rol Groups
     dex
-    bne BUSRECEIVE_1
+    bne Bit
+    sta OddBytes
+    rts
+.endproc
+
+;; Receives a packet from the bus into the buffer at BufferPointer: waits for the device's ACK, raises REQ, reads
+;; the header into PacketHeader's last seven bytes (so the status lands in BusResult, and the counts in Groups and
+;; OddBytes), then the data, and lowers REQ once ACK falls.
+;; Out: carry = clear, DiskErrors = 0; or carry = set with DiskErrors = <Bus::NO_PACKET>, <Bus::NO_END> or
+;;      <Bus::BAD_CHECKSUM>
+.proc Receive
+    ldx #HEADER_LENGTH
+ClearHeader:
+    stz PacketHeader,x
+    dex
+    bne ClearHeader
     stz HeaderChecksum
     stz DiskErrors
-    jsr BUSREQUEST
+    jsr Bus::Enable
+
+    ; Clears the stack page's free bytes, from the stack pointer down to $01E1.
     tsx
-BUSRECEIVE_2:
-    stz NIBBLES1,X
+ClearStack:
+    stz StackPage,x
     dex
     cpx #$E1
-    bcs BUSRECEIVE_2
+    bcs ClearStack
+
+    ; Waits for ACK, about 256 * 100 * 205 polls; X counts from 0, as HeaderChecksum is.
     bit Iwm::LoadLatch
     ldx HeaderChecksum
-BUSRECEIVE_3:
+Wait:
     lda #$64
-BUSRECEIVE_4:
+WaitMore:
     ldy #$CD
-BUSRECEIVE_5:
+Poll:
     bit Iwm::ReadMode
-    bmi BUSRECEIVE_6
+    bmi Acknowledged
     dey
-    bne BUSRECEIVE_5
-    dec A
-    bne BUSRECEIVE_4
+    bne Poll
+    dec a
+    bne WaitMore
     dex
-    bne BUSRECEIVE_3
-    bra BUSRECEIVE_8
-BUSRECEIVE_6:
+    bne Wait
+    bra Check                       ; zero: no packet
+
+    ; REQ, then up to 256 reads for the start byte.
+Acknowledged:
     lda Iwm::Phase0On
-    ldy #$00
-BUSRECEIVE_7:
+    ldy #0
+FindStart:
     lda Iwm::DataLatch
     dey
-BUSRECEIVE_8:
-    beq BUSRECEIVE_20
-    cmp #$C3
-    bne BUSRECEIVE_7
-    ldy #$07
-BUSRECEIVE_9:
+Check:
+    beq NoPacket
+    cmp #PACKET_BEGIN
+    bne FindStart
+
+    ; The header, last byte first, without the high bits, into the checksum as sent.
+    ldy #HEADER_LENGTH
+HeaderByte:
     lda Iwm::DataLatch
-    bpl BUSRECEIVE_9
+    bpl HeaderByte
     and #$7F
-    sta PacketHeader,Y
+    sta PacketHeader,y
     ora #$80
     eor HeaderChecksum
     sta HeaderChecksum
     dey
-    bne BUSRECEIVE_9
+    bne HeaderByte
     lda Groups
-    bmi BUSRECEIVE_19
+    bmi BadGroups
     sta GroupHighBits
+
+    ; The odd bytes, after their high bits, then each group of seven after its own; GroupHighBits counts the groups.
     ldx OddBytes
-    beq BUSRECEIVE_14
-BUSRECEIVE_10:
+    beq NextGroup
+HighBits:
     lda Iwm::DataLatch
-    bpl BUSRECEIVE_10
-    asl A
+    bpl HighBits
+    asl a
     sta PacketHighBits
-BUSRECEIVE_11:
+DataByte:
     lda Iwm::DataLatch
-    bpl BUSRECEIVE_11
+    bpl DataByte
     asl PacketHighBits
-    bcs BUSRECEIVE_12
+    bcs Store
     and #$7F
-BUSRECEIVE_12:
-    sta (BufferPointer),Y
+Store:
+    sta (BufferPointer),y
     eor HeaderChecksum
     sta HeaderChecksum
     iny
-    bne BUSRECEIVE_13
-    inc BufferPointer+1
-BUSRECEIVE_13:
+    bne Counted
+    inc BufferPointer + 1
+Counted:
     dex
-    bne BUSRECEIVE_11
-BUSRECEIVE_14:
-    ldx #$07
+    bne DataByte
+NextGroup:
+    ldx #7
     dec GroupHighBits
-    bpl BUSRECEIVE_10
-BUSRECEIVE_15:
+    bpl HighBits
+
+    ; The checksum, its even bits in the first byte and its odd bits in the second.
+FirstSum:
     lda Iwm::DataLatch
-    bpl BUSRECEIVE_15
+    bpl FirstSum
     sta Scratch
-BUSRECEIVE_16:
+SecondSum:
     lda Iwm::DataLatch
-    bpl BUSRECEIVE_16
+    bpl SecondSum
     sec
-    rol A
+    rol a
     and Scratch
     eor HeaderChecksum
-    bne BUSRECEIVE_22
-BUSRECEIVE_17:
+    bne BadChecksum
+
+    ; The end byte; then REQ falls once ACK has.
+End:
     lda Iwm::DataLatch
-    bpl BUSRECEIVE_17
-    cmp #$C8
-    bne BUSRECEIVE_21
+    bpl End
+    cmp #PACKET_END
+    bne NoEnd
     lda Iwm::LoadLatch
-BUSRECEIVE_18:
+WaitRelease:
     lda Iwm::ReadMode
-    bmi BUSRECEIVE_18
+    bmi WaitRelease
     lda Iwm::Phase0Off
     clc
     rts
-BUSRECEIVE_19:
-    lda #$8A
-    bra BUSRECEIVE_23
-BUSRECEIVE_20:
-    lda #$80
-    bra BUSRECEIVE_23
-BUSRECEIVE_21:
-    lda #$81
-    bra BUSRECEIVE_23
-BUSRECEIVE_22:
-    lda #$83
-BUSRECEIVE_23:
+
+BadGroups:
+    lda #BAD_GROUPS
+    bra Failed
+NoPacket:
+    lda #NO_PACKET
+    bra Failed
+NoEnd:
+    lda #NO_END
+    bra Failed
+BadChecksum:
+    lda #BAD_CHECKSUM
+Failed:
     sta DiskErrors
     sec
     rts
+.endproc
 
-;; Sends a SmartPort bus packet from BufferPointer (BusCount bytes).
-;; Out:   carry = set with DiskErrors = $84 or $82 if the device did not answer
-BUSSEND:
+;; Sends a packet to the bus from the buffer at BufferPointer, BusCount bytes long, to unit <Drive>, of
+;; <PacketType>: enables the bus, waits for the device's ACK, raises REQ, writes the packet, and waits for ACK to
+;; fall once it is out.
+;; Out: carry = clear, DiskErrors = 0; or carry = set with DiskErrors = <Bus::NOT_READY> or <Bus::NOT_TAKEN>
+.proc Send
     bit Iwm::ReadMode
     bit Iwm::DataLatch
-    jsr PACKHIGHBITS
-    jsr BUSREQUEST
+    jsr Bus::PrepareHighBits
+    jsr Bus::Enable
+
+    ; Up to 250 polls for ACK.
     lda Iwm::SelectDrive1
     lda Iwm::MotorOn
     bit Iwm::LoadLatch
     ldy #$FA
-BUSSEND_1:
+WaitReady:
     lda Iwm::ReadMode
-    bmi BUSSEND_2
+    bmi Ready
     dey
-    bne BUSSEND_1
-    lda #$84
-    jmp BUSSEND_DONE
-BUSSEND_2:
+    bne WaitReady
+    lda #NOT_READY
+    jmp Fail
+
+    ; REQ, then the sync bytes and the start byte.
+Ready:
     lda Iwm::Phase0On
-    ldy #$05
+    ldy #PACKET_START_LENGTH - 1
     lda #$FF
     sta Iwm::WriteMode
-BUSSEND_3:
-    lda BUSSYNC,Y
-BUSSEND_4:
+StartByte:
+    lda Bus::PacketStart,y
+WaitStart:
     bit Iwm::DataLatch
-    bpl BUSSEND_4
+    bpl WaitStart
     sta Iwm::LoadLatch
     dey
-    bpl BUSSEND_3
-    lda #$00
+    bpl StartByte
+
+    ; The header: the unit, the host (0), the type, aux type and status (0), and the counts.
+    lda #0
     sta HeaderChecksum
     lda Drive
     ora #$80
-    jsr SENDCHECKED
-    jsr SENDZERO
+    jsr Bus::SendChecked
+    jsr Bus::SendZero
     lda PacketType
-    jsr SENDCHECKED
-    jsr SENDZERO
-    jsr SENDZERO
+    jsr Bus::SendChecked
+    jsr Bus::SendZero
+    jsr Bus::SendZero
     lda OddBytes
     ora #$80
-    jsr SENDCHECKED
+    jsr Bus::SendChecked
     lda Groups
     ora #$80
-    jsr SENDCHECKED
-    ldy #$00
+    jsr Bus::SendChecked
+
+    ; The odd bytes, after their high bits.
+    ldy #0
     ldx OddBytes
-    beq BUSSEND_6
+    beq NextGroup
     lda PacketHighBits
-    jsr SENDBYTE
-BUSSEND_5:
-    lda (BufferPointer),Y
-    jsr SENDCHECKED
+    jsr Bus::SendByte
+OddByte:
+    lda (BufferPointer),y
+    jsr Bus::SendChecked
     iny
     dex
-    bne BUSSEND_5
-BUSSEND_6:
+    bne OddByte
+
+    ; Each group after its high bits, collecting the next group's (seven bytes on, through WorkPointer) as it goes.
+NextGroup:
     dec Groups
-    bmi BUSSEND_9
+    bmi Checksum
     lda GroupHighBits
-    jsr SENDBYTE
-    lda #$01
+    jsr Bus::SendByte
+    lda #1
     sta GroupHighBits
-    ldx #$07
-BUSSEND_7:
-    lda (BufferPointer),Y
-    jsr SENDCHECKED
-    lda (WorkPointer),Y
-    asl A
+    ldx #7
+GroupByte:
+    lda (BufferPointer),y
+    jsr Bus::SendChecked
+    lda (WorkPointer),y
+    asl a
     rol GroupHighBits
     iny
-    bne BUSSEND_8
-    inc BufferPointer+1
-    inc WorkPointer+1
-BUSSEND_8:
+    bne Counted
+    inc BufferPointer + 1
+    inc WorkPointer + 1
+Counted:
     dex
-    bne BUSSEND_7
-    beq BUSSEND_6
-BUSSEND_9:
+    bne GroupByte
+    beq NextGroup                   ; always
+
+    ; The checksum's even bits, its odd bits, and the end byte.
+Checksum:
     lda HeaderChecksum
-    ora #$AA
-    jsr SENDBYTE
+    ora #CHECKSUM_FILL
+    jsr Bus::SendByte
     lda HeaderChecksum
-    lsr A
-    ora #$AA
-    jsr SENDBYTE
-    lda #$C8
-    jsr SENDBYTE
-BUSSEND_10:
+    lsr a
+    ora #CHECKSUM_FILL
+    jsr Bus::SendByte
+    lda #PACKET_END
+    jsr Bus::SendByte
+
+    ; Until the IWM has written the last byte, then up to 250 polls for ACK to fall.
+WaitEmpty:
     bit Iwm::DataLatch
-    bvs BUSSEND_10
+    bvs WaitEmpty
     sta Iwm::LoadLatch
     ldy #$FA
-BUSSEND_11:
+WaitTaken:
     dey
-    bne BUSSEND_12
-    lda #$82
-BUSSEND_DONE:
+    bne Poll
+    lda #NOT_TAKEN
+Fail:
     sec
-    bra BUSSEND_13
-BUSSEND_12:
+    bra Done
+Poll:
     lda Iwm::ReadMode
-    bmi BUSSEND_11
-    lda #$00
+    bmi WaitTaken
+    lda #0
     clc
-BUSSEND_13:
+
+    ; REQ falls, and the IWM goes back to reading.
+Done:
     bit Iwm::Phase0Off
     bit Iwm::DataLatch
     sta DiskErrors
     rts
+.endproc
 
-;; Turns Groups and OddBytes back into a byte count.
-;; Out:   A = the low byte, Y = the high
-GROUPCOUNT:
+;; The bytes of <Bus::PacketStart>.
+PACKET_START_LENGTH = 6
+
+;; Turns Groups and OddBytes back into a byte count: 7 * Groups + OddBytes.
+;; Out: A = the count's low byte, Y = its high byte
+;; Keeps: X
+.proc ByteCount
     stz Scratch
     lda Groups
-    asl A
+    asl a
     rol Scratch
-    asl A
+    asl a
     rol Scratch
-    asl A
+    asl a
     rol Scratch
     sec
     sbc Groups
-    bcs GROUPCOUNT_1
+    bcs Odd
     dec Scratch
-GROUPCOUNT_1:
+Odd:
     clc
     adc OddBytes
-    bcc GROUPCOUNT_2
+    bcc Done
     inc Scratch
-GROUPCOUNT_2:
+Done:
     ldy Scratch
     rts
+.endproc
 
-;; Sends a $80 (a zero with the high bit) and adds it to the checksum.
-SENDZERO:
+;; Sends a 0, as $80, and adds it to the packet's checksum.
+;; Keeps: X, Y
+.proc SendZero
     lda #$80
+    ; Falls into SendChecked.
+.endproc
 
-;; Sends a byte with its high bit set and adds it to the packet's checksum.
-;; In:    A = the byte
-SENDCHECKED:
+;; Sends a byte with its high bit set, and adds the byte as given to the packet's checksum.
+;; In: A = the byte
+;; Keeps: X, Y
+.proc SendChecked
     pha
     eor HeaderChecksum
     sta HeaderChecksum
     pla
     ora #$80
+    ; Falls into SendByte.
+.endproc
 
 ;; Sends a byte to the bus once the IWM can take it.
-;; In:    A = the byte
-SENDBYTE:
+;; In: A = the byte
+;; Keeps: A, X, Y
+.proc SendByte
+Wait:
     bit Iwm::DataLatch
-    bpl SENDBYTE
+    bpl Wait
     sta Iwm::LoadLatch
     rts
+.endproc
 
-;; Collects the high bits of a packet's odd bytes and its first group for BUSSEND.
-PACKHIGHBITS:
+;; Works out a packet's groups and odd bytes from BusCount, and the high bits <Bus::Send> sends first: those of the
+;; first seven bytes in PacketHighBits (the odd bytes use the first of them) and those of the first group in
+;; GroupHighBits. WorkPointer points seven bytes past BufferPointer, for the later groups' high bits.
+.proc PrepareHighBits
     lda BusCount
     sta WorkPointer
-    lda BusCount+1
-    sta WorkPointer+1
-    jsr DIVIDE7
+    lda BusCount + 1
+    sta WorkPointer + 1
+    jsr Bus::DivideBySeven
     lda BufferPointer
     clc
-    adc #$07
+    adc #7
     sta WorkPointer
-    lda BufferPointer+1
-    adc #$00
-    sta WorkPointer+1
-    ldy #$00
-    jsr HIGHBITS7
+    lda BufferPointer + 1
+    adc #0
+    sta WorkPointer + 1
+    ldy #0
+    jsr Bus::CollectHighBits
     lda GroupHighBits
     sta PacketHighBits
     ldy OddBytes
-    jsr HIGHBITS7
+    jsr Bus::CollectHighBits
     rts
+.endproc
 
-;; Collects the high bits of seven bytes into PacketHighBits's low bits, with bit 7 set.
-;; In:    Y = the first
-HIGHBITS7:
-    ldx #$07
-    lda #$01
+;; Collects the high bits of seven bytes from BufferPointer + Y into GroupHighBits: bit 7 set, then the first
+;; byte's bit in bit 6, through the seventh's in bit 0.
+;; In: Y = the first byte's offset
+;; Out: Y = past the seventh, X = 0
+.proc CollectHighBits
+    ldx #7
+    lda #1
     sta GroupHighBits
-HIGHBITS7_1:
-    lda (BufferPointer),Y
-    asl A
+Next:
+    lda (BufferPointer),y
+    asl a
     rol GroupHighBits
     iny
     dex
-    bne HIGHBITS7_1
+    bne Next
     rts
+.endproc
 
-;; Raises the bus's REQ line (phases 1 and 3).
-BUSREQUEST:
-    jsr BUSIDLE
+;; Enables the bus: phases 1 and 3 high, the others low.
+;; Keeps: X, Y
+.proc Enable
+    jsr Bus::Idle
     lda Iwm::Phase1On
     lda Iwm::Phase3On
     rts
+.endproc
 
-;; Resets the SmartPort bus: phases 0 and 2 for 80 ms, then 10 ms idle.
-BUSRESET:
-    jsr BUSIDLE
+;; Resets the bus's devices: phases 0 and 2 high for 80 ms, then all low for 10 ms.
+;; Out: A = 0
+;; Keeps: X, Y
+.proc ResetDevices
+    jsr Bus::Idle
     lda Iwm::Phase0On
     lda Iwm::Phase2On
-    lda #$50
-    jsr DELAYMS
-    jsr BUSIDLE
-    lda #$05
+    lda #80
+    jsr DelayMilliseconds
+    jsr Bus::Idle
+    lda #5
+    ; Falls into DelayMillisecondPairs.
+.endproc
 
-;; Waits 2 x A milliseconds.
-;; Keeps: A
-DELAY2:
+.endscope
+
+;; Waits twice A milliseconds (512 for A = 0).
+;; In: A = the pairs of milliseconds
+;; Out: A = 0
+;; Keeps: X, Y
+.proc DelayMillisecondPairs
     pha
-    jsr DELAYMS
+    jsr DelayMilliseconds
     pla
+    ; Falls into DelayMilliseconds.
+.endproc
 
-;; Waits A milliseconds.
-;; Out:   A = 0
-DELAYMS:
-    jsr DELAY1MS
-    dec A
-    bne DELAYMS
+;; Waits A milliseconds (256 for A = 0).
+;; In: A = the milliseconds
+;; Out: A = 0
+;; Keeps: X, Y
+.proc DelayMilliseconds
+Next:
+    jsr DelayMillisecond
+    dec a
+    bne Next
     rts
+.endproc
 
-;; Waits about a millisecond (2030 cycles).
+;; Waits about a millisecond: 203 turns of 10 cycles, at the card's 2 MHz.
 ;; Keeps: A, X, Y
-DELAY1MS:
+.proc DelayMillisecond
     pha
     lda #$CB
-DELAY1MS_1:
-    dec A
-    bne DELAY1MS_2
-DELAY1MS_2:
+Turn:
+    dec a
+    bne Pad
+Pad:
     nop
-    bne DELAY1MS_1
+    bne Turn
     pla
     rts
+.endproc
 
-;; Lowers all four phase lines.
-BUSIDLE:
+; The bus, continued: its idle state, packets, retries and the commands passed to it.
+.scope Bus continued
+
+;; Lowers all four phase lines: the bus idle, REQ low.
+;; Keeps: A, X, Y
+.proc Idle
     bit Iwm::Phase0Off
     bit Iwm::Phase1Off
     bit Iwm::Phase2Off
     bit Iwm::Phase3Off
     rts
+.endproc
 
-;; A bus packet's sync bytes and PBEGIN ($C3), sent last first.
-BUSSYNC:
-    .byte $C3, $FF, $FC, $F3, $CF, $3F
+;; A packet's sync bytes and start byte, sent from the last.
+PacketStart:
+    .byte PACKET_BEGIN, $FF, $FC, $F3, $CF, $3F
+.assert * - PacketStart = PACKET_START_LENGTH, "Bus::Send sends PACKET_START_LENGTH bytes of PacketStart."
 
-;; Builds the bus command packet from the host's command and parameters.
-MAKEPACKET:
-    lda #$80
+;; Builds the command packet for the host's command: the command, the parameter count from <Bus::CommandTable>, two
+;; zeros, and the host's ParameterLow through Parameter5; then falls into <Bus::PointAtCommandPacket>.
+.proc MakeCommandPacket
+    lda #TYPE_COMMAND
     sta PacketType
     lda CardCommand
     and #$0F
     sta CommandPacket
     ldy CardState
-    lda BUSCOMMANDS,Y
-    and #$0F
-    sta CommandPacket+1
-    stz CommandPacket+2
-    stz CommandPacket+3
-    ldx #$06
-MAKEPACKET_1:
-    lda WriteProgress,X
-    sta CommandPacket+3,X
+    lda Bus::CommandTable,y
+    and #PARAMETER_COUNT
+    sta CommandPacket + 1
+    stz CommandPacket + 2
+    stz CommandPacket + 3
+    ldx #6
+Parameter:
+    lda ParameterLow - 1,x
+    sta CommandPacket + 3,x
     dex
-    bne MAKEPACKET_1
+    bne Parameter
+    ; Falls into PointAtCommandPacket.
+.endproc
 
-;; Points BufferPointer at the 9-byte command packet.
-COMMANDPOINTER:
-    lda #$09
+;; Points BufferPointer at the command packet, and BusCount at its 9 bytes.
+.proc PointAtCommandPacket
+    lda #COMMAND_PACKET_LENGTH
     sta BusCount
-    stz BusCount+1
-    lda #$4C
+    stz BusCount + 1
+    lda #<CommandPacket
     sta BufferPointer
-    stz BufferPointer+1
+    stz BufferPointer + 1
     rts
+.endproc
 
-;; Sends a data packet, re-initialising the bus if the device does not take it.
-SENDDATA:
-    jsr SENDTRIES32
-    bcs BUSREINIT
+;; Sends a data packet; if the device does not take it, initializes the bus's devices again.
+;; Out: carry = set if it failed
+.proc SendData
+    jsr Bus::SendWithRetries
+    bcs Bus::Reinitialize
     rts
+.endproc
 
-;; Re-initialises the bus devices and keeps Drive.
-;; Out:   carry = set
-BUSREINIT:
+;; Initializes the bus's devices again from the first bus unit, keeping <Drive>.
+;; Out: carry = set
+.proc Reinitialize
     lda Drive
     pha
     ldx FirstBusUnit
     lda #$80
-    jsr BUSINIT
+    jsr Bus::Initialize
     pla
     sta Drive
     sec
     rts
+.endproc
 
-;; Sends the command packet, re-initialising the bus between tries.
-SENDCOMMAND35:
-    lda #$01
-    jsr SENDTRIES
-    bcc SENDCOMMAND35_1
-    jsr BUSREINIT
-    jsr MAKEPACKET
-    lda #$64
-    jsr SENDTRIES
-    bcc SENDCOMMAND35_1
-    jsr BUSREINIT
-    jsr MAKEPACKET
-    lda #$64
-    jsr SENDTRIES
-SENDCOMMAND35_1:
+;; Sends the command packet: one try, then twice more up to 100 tries, with the devices initialized again and the
+;; packet built again before each.
+;; Out: carry = set if it failed
+.proc SendCommand
+    lda #1
+    jsr Bus::SendWithTries
+    bcc Done
+    jsr Bus::Reinitialize
+    jsr Bus::MakeCommandPacket
+    lda #100
+    jsr Bus::SendWithTries
+    bcc Done
+    jsr Bus::Reinitialize
+    jsr Bus::MakeCommandPacket
+    lda #100
+    jsr Bus::SendWithTries
+Done:
     rts
+.endproc
 
-;; BUSSEND with up to 32 tries (fewer for long packets).
-SENDTRIES32:
-    lda #$20
+;; Sends a packet with up to 32 tries, fewer for a long one.
+;; Out: carry = set if it failed
+.proc SendWithRetries
+    lda #32
+    ; Falls into SendWithTries.
+.endproc
 
-;; BUSSEND with up to A tries, halved for each 256 bytes of the packet.
-SENDTRIES:
-    ldx BusCount+1
-    beq SENDTRIES_2
-SENDTRIES_1:
-    lsr A
+;; Sends a packet with up to A tries, halved for each 256 bytes of it, waiting 5 ms between tries of a short one.
+;; In: A = the tries
+;; Out: carry = set if it failed
+.proc SendWithTries
+    ldx BusCount + 1
+    beq SetTries
+Halve:
+    lsr a
     dex
-    bne SENDTRIES_1
-SENDTRIES_2:
+    bne Halve
+SetTries:
     sta Retries
-SENDTRIES_3:
-    jsr BUSSEND
-    bcc SENDTRIES_4
+Try:
+    jsr Bus::Send
+    bcc Done
     dec Retries
-    beq SENDTRIES_4
-    ldx BusCount+1
-    bne SENDTRIES_3
-    lda #$05
-    jsr DELAYMS
-    bra SENDTRIES_3
-SENDTRIES_4:
+    beq Done
+    ldx BusCount + 1
+    bne Try
+    lda #5
+    jsr DelayMilliseconds
+    bra Try
+Done:
     rts
+.endproc
 
-;; BUSRECEIVE with up to 5 tries, 60 for FORMAT.
-RECEIVETRIES:
-    lda #$05
+;; Receives a packet with up to 5 tries, 60 for FORMAT, a millisecond apart.
+;; Out: carry = set if it failed, with A = DiskErrors
+.proc ReceiveWithRetries
+    lda #5
     sta Retries
     lda CardState
-    cmp #$03
-    bne RECEIVETRIES_1
-    lda #$3C
+    cmp #COMMAND_FORMAT
+    bne Try
+    lda #60
     sta Retries
-RECEIVETRIES_1:
-    jsr BUSRECEIVE
-    bcc RECEIVETRIES_2
-    jsr DELAY1MS
+Try:
+    jsr Bus::Receive
+    bcc Done
+    jsr DelayMillisecond
     sec
     bit Iwm::Phase0Off
     bit Iwm::DataLatch
     dec Retries
-    bne RECEIVETRIES_1
-RECEIVETRIES_2:
+    bne Try
+Done:
     rts
+.endproc
 
-;; Widens a bus device's status to the extended form: a 4-byte block count.
-EXTENDSTATUS:
+;; Widens a bus device's STATUS reply to the extended form, whose block count has four bytes: moves the reply's
+;; bytes 4 to $18 up one, puts a 0 in byte 4, and counts the byte.
+.proc ExtendStatus
     ldy #$19
-EXTENDSTATUS_1:
-    lda XFERBUFFER-1,Y
-    sta XFERBUFFER,Y
+Move:
+    lda TransferBuffer - 1,y
+    sta TransferBuffer,y
     dey
-    cpy #$04
-    bne EXTENDSTATUS_1
-    stz XFERBUFFER+4
+    cpy #4
+    bne Move
+    stz TransferBuffer + 4
     inc Count
     rts
+.endproc
 
-;; Passes a command for a SmartPort bus device (a UniDisk 3.5) to it: the command packet, the host's
-;; data if any, and the device's reply.
-;; Out:   ErrorCode = the device's result, $27 or $06; CardData = 6 with data
-BUSCALL:
-    lda #$17
-    jsr SETIWMMODE
+;; Passes the host's command for a bus unit to its device: the command packet, the host's data if the command has
+;; any, then the device's reply, whose data goes to the host in buffer 6 (TransferBuffer).
+;; Commands $0A-$0C, which the bus does not know, read <Bus::CommandTable> past its end, and end with ErrorCode = A
+;; as it is then: the reply's length's low byte, or the failure's code.
+;; Out: carry = clear; ErrorCode = the device's status, <Bus::ERROR_BUS> if it did not answer, <ERROR_IO> for a bad
+;;      reply, or <ERROR_BAD_CONTROL_PARAMETER> for host data of 5 pages or more; CardData = 6 when the reply has
+;;      data, 0 after the bad parameter; Count and CountHigh = the reply's length, when one came
+.proc PassCommand
+    lda #IWM_MODE_SLOW
+    jsr Swim::SetIwmMode
     stz BusResult
-    jsr MAKEPACKET
-    jsr BUSIDLE
-    jsr SENDCOMMAND35
-    bcs BUSCALL_4
+    jsr Bus::MakeCommandPacket
+    jsr Bus::Idle
+    jsr Bus::SendCommand
+    bcs SendFailed
+
+    ; The host's data, if the command sends some: WRITEBLOCK's 512 bytes, or Count bytes up to 5 pages.
     ldx CardState
-    bit BUSCOMMANDS,X
-    bpl BUSCALL_5
-    cpx #$02
-    beq BUSCALL_1
+    bit Bus::CommandTable,x
+    bpl Reply
+    cpx #COMMAND_WRITE_BLOCK
+    beq GetData
     lda CountHigh
-    cmp #$05
-    bcc BUSCALL_1
-    bit BUSCOMMANDS
-    ldy #$00
-    lda #$22
-    bra BUSCALL_9
-BUSCALL_1:
-    lda #$06
+    cmp #MOST_DATA_PAGES
+    bcc GetData
+    bit Bus::CommandTable           ; overflow set: CardData gets Y, 0
+    ldy #0
+    lda #ERROR_BAD_CONTROL_PARAMETER
+    bra Result
+GetData:
+    lda #TransferBuffer / $200
     sta CardData
-BUSCALL_2:
+WaitData:
     lda CardData
-    bpl BUSCALL_2
+    bpl WaitData
     ldx Count
     ldy CountHigh
     lda CardState
-    cmp #$02
-    bne BUSCALL_3
-    ldy #$02
-    ldx #$00
-BUSCALL_3:
-    sty BusCount+1
+    cmp #COMMAND_WRITE_BLOCK
+    bne Length
+    ldy #>512
+    ldx #<512
+Length:
+    sty BusCount + 1
     stx BusCount
-    lda #$82
+    lda #TYPE_DATA
     sta PacketType
-    jsr BUSIDLE
+    jsr Bus::Idle
     stz BufferPointer
-    lda #$0C
-    sta BufferPointer+1
-    jsr SENDDATA
-BUSCALL_4:
-    bcs BUSCALL_12
-BUSCALL_5:
+    lda #>TransferBuffer
+    sta BufferPointer + 1
+    jsr Bus::SendData
+SendFailed:
+    bcs NoAnswer
+
+    ; The reply, into the transfer buffer.
+Reply:
     stz BufferPointer
-    lda #$0C
-    sta BufferPointer+1
-    jsr RECEIVETRIES
-    bcs BUSCALL_11
-    jsr GROUPCOUNT
+    lda #>TransferBuffer
+    sta BufferPointer + 1
+    jsr Bus::ReceiveWithRetries
+    bcs ReceiveFailed
+    jsr Bus::ByteCount
     sta Count
     sty CountHigh
-BUSCALL_6:
-    ldy #$00
+
+    ; An extended STATUS widens the block count; the result, and the buffer when the reply has data.
+Finish:
+    ldy #0
     ldx CardState
-    bne BUSCALL_7
+    bne Known
     bit CardCommand
-    bvc BUSCALL_7
-    jsr EXTENDSTATUS
-BUSCALL_7:
-    cpx #$0A
+    bvc Known
+    jsr Bus::ExtendStatus
+Known:
+    cpx #COMMAND_SET_FORMAT
     clv
-    bcs BUSCALL_9
-    bit BUSCOMMANDS,X
-    bvc BUSCALL_8
-    ldy #$06
-BUSCALL_8:
+    bcs Result
+    bit Bus::CommandTable,x
+    bvc GetStatus
+    ldy #TransferBuffer / $200
+GetStatus:
     lda BusResult
-BUSCALL_9:
+Result:
     sta ErrorCode
-    bvc BUSCALL_10
+    bvc Idle
     sty CardData
-BUSCALL_10:
-    jsr BUSIDLE
+Idle:
+    jsr Bus::Idle
     clc
     rts
-BUSCALL_11:
-    cmp #$80
-    beq BUSCALL_12
-    lda #$27
-    bra BUSCALL_13
-BUSCALL_12:
-    lda #$06
-BUSCALL_13:
+
+    ; No packet is the bus's error; any other failure an I/O error.
+ReceiveFailed:
+    cmp #NO_PACKET
+    beq NoAnswer
+    lda #ERROR_IO
+    bra Failed
+NoAnswer:
+    lda #ERROR_BUS
+Failed:
     sta BusResult
-    bra BUSCALL_6
+    bra Finish
+.endproc
 
-;; Each bus command's packet: bit 7 data to the device, bit 6 data back, bits 0-3 the parameters.
-BUSCOMMANDS:
-    .byte $43, $43, $83, $01, $83, $01, $01, $01, $44, $84
+;; How each command's packets go, by the command at CardState, STATUS ($00) to WRITE ($09). Commands $0A-$0C read on
+;; into <Bus::Initialize>'s first bytes ($85, $50, $DA), which <Bus::PassCommand> takes as their entries.
+CommandTable:
+    BusCommand 0, 1, 3              ; STATUS
+    BusCommand 0, 1, 3              ; READBLOCK
+    BusCommand 1, 0, 3              ; WRITEBLOCK
+    BusCommand 0, 0, 1              ; FORMAT
+    BusCommand 1, 0, 3              ; CONTROL
+    BusCommand 0, 0, 1              ; INIT
+    BusCommand 0, 0, 1              ; OPEN
+    BusCommand 0, 0, 1              ; CLOSE
+    BusCommand 0, 1, 4              ; READ
+    BusCommand 1, 0, 4              ; WRITE
+.assert * - CommandTable = COMMAND_WRITE + 1, "Bus::CommandTable has an entry for each command to Host::Write."
 
-;; Resets the SmartPort bus and assigns unit numbers to its devices with INIT commands.
-;; In:    A = $00 (cold) or $80, X = the first unit for the bus
-;; Out:   A = the devices found (DeviceKinds = $80 for each)
-BUSINIT:
-    sta CommandPacket+4
+;; Resets the bus and gives its devices unit numbers from X up, with an INIT command to each in turn until one
+;; answers that it is the last. Units X to 3 are first marked as no device; each device found below unit 5 is
+;; marked a bus device in DeviceKinds, with MediaMode 0. The drive lines are released first and the motor turned
+;; off at the end.
+;; In: A = the command packet's byte 4 ($80 from <Bus::Reinitialize>), X = the first unit
+;; Out: A = the devices found, at most 2; Drive = the unit after the last device found
+.proc Initialize
+.assert * = CommandTable + COMMAND_WRITE + 1, "PassCommand reads CommandTable on into Initialize's first bytes."
+    sta CommandPacket + 4
     phx
-    lda #$00
-BUSINIT_1:
-    sta UnitCount,X
+    lda #0
+Clear:
+    sta DeviceKinds - 1,x
     inx
-    cpx #$04
-    bcc BUSINIT_1
+    cpx #LAST_UNIT
+    bcc Clear
+
+    ; The 3.5 drives' lines released, and the IWM in the bus's mode.
     bit Iwm::MotorOff
     lda #$FF
     sta Drive
-    jsr PORTOFF
-    jsr MFMOFF
-    lda #$17
-    jsr SETIWMMODE
+    jsr Swim::SelectBusPort
+    jsr Swim::UseGcr
+    lda #IWM_MODE_SLOW
+    jsr Swim::SetIwmMode
     plx
     stx Drive
-    jsr BUSRESET
-    jsr BUSIDLE
+    jsr Bus::ResetDevices
+    jsr Bus::Idle
     stz SavedDrive
-BUSINIT_2:
-    lda #$80
+
+    ; INIT to unit Drive, until a device says it is the last.
+Next:
+    lda #TYPE_COMMAND
     sta PacketType
-    lda #$05
+    lda #COMMAND_INIT
     sta CommandPacket
-    lda #$02
-    sta CommandPacket+1
-    stz CommandPacket+3
-    stz CommandPacket+5
-    jsr COMMANDPOINTER
-    jsr BUSSEND
-    bcs BUSINIT_4
+    lda #2
+    sta CommandPacket + 1
+    stz CommandPacket + 3
+    stz CommandPacket + 5
+    jsr Bus::PointAtCommandPacket
+    jsr Bus::Send
+    bcs Done
     stz BufferPointer
-    lda #$0C
-    sta BufferPointer+1
-    jsr BUSRECEIVE
-    bcs BUSINIT_4
+    lda #>TransferBuffer
+    sta BufferPointer + 1
+    jsr Bus::Receive
+    bcs Done
     ldy Drive
-    cpy #$05
-    bcs BUSINIT_3
+    cpy #LAST_UNIT + 1
+    bcs Counted
     lda #$80
-    sta UnitCount,Y
-    lda #$00
-    sta SpanCylinder,Y
-BUSINIT_3:
+    sta DeviceKinds - 1,y
+    lda #0
+    sta MediaMode - 1,y
+Counted:
     inc SavedDrive
     inc Drive
     lda BusResult
-    beq BUSINIT_2
+    beq Next
     lda SavedDrive
-    cmp #$03
-    bcc BUSINIT_4
-    lda #$02
+    cmp #MOST_DEVICES + 1
+    bcc Done
+    lda #MOST_DEVICES
     sta SavedDrive
-BUSINIT_4:
-    jsr BUSIDLE
+
+    ; The bus idle and the motor off.
+Done:
+    jsr Bus::Idle
     bit Iwm::MotorOff
     lda SavedDrive
     rts
+.endproc
+
+.endscope

@@ -220,11 +220,11 @@ COMMAND_IIGS = $7F
 ; SmartPort's error codes, as Apple's Apple IIgs Firmware Reference names them.
 
 ;; The command is not one the device knows.
-;; Also: ERROR_BAD_COMMAND (UNKN)
+;; Also: BADCMD (UNKN)
 ERROR_BAD_COMMAND = $01
 
 ;; The parameter list's count is wrong for the command.
-;; Also: ERROR_BAD_PARAMETER_COUNT (UNKN)
+;; Also: BADPCNT (UNKN)
 ERROR_BAD_PARAMETER_COUNT = $04
 
 ;; The unit is not one there is.
@@ -240,15 +240,15 @@ ERROR_BAD_CONTROL = $21
 ERROR_BAD_CONTROL_PARAMETER = $22
 
 ;; The disk could not be read or written.
-;; Also: ERROR_IO (UNKN)
+;; Also: IOERROR (UNKN)
 ERROR_IO = $27
 
 ;; There is no drive.
-;; Also: ERROR_NO_DRIVE (UNKN)
+;; Also: NODRIVE (UNKN)
 ERROR_NO_DRIVE = $28
 
 ;; The disk is write-protected.
-;; Also: ERROR_WRITE_PROTECTED (UNKN)
+;; Also: NOWRITE (UNKN)
 ERROR_WRITE_PROTECTED = $2B
 
 ;; The block number is past the disk's end.
@@ -260,5 +260,31 @@ ERROR_BAD_BLOCK = $2D
 ERROR_DISK_SWITCHED = $2E
 
 ;; There is no disk in the drive.
-;; Also: ERROR_OFFLINE (UNKN)
+;; Also: OFFLINE (UNKN)
 ERROR_OFFLINE = $2F
+
+; The bits of DiskErrors: what went wrong on the disk.
+
+;; No address mark or data mark was found, or the data field's sector number was not the address field's.
+DISK_ERROR_NO_FIELD = $01
+
+;; The head did not find track 0.
+DISK_ERROR_NO_TRACK_0 = $02
+
+;; The address field was on the wrong track.
+DISK_ERROR_WRONG_TRACK = $04
+
+;; A data field's epilogue was wrong.
+DISK_ERROR_BAD_EPILOGUE = $08
+
+;; A data field's checksum was wrong.
+DISK_ERROR_BAD_CHECKSUM = $10
+
+;; The address field's checksum, CRC or epilogue did not match.
+DISK_ERROR_BAD_FIELD = $20
+
+;; The IWM ran out of bytes to write (an underrun).
+DISK_ERROR_UNDERRUN = $40
+
+;; The address field was for the other side.
+DISK_ERROR_WRONG_SIDE = DISK_ERROR_BAD_FIELD | DISK_ERROR_BAD_EPILOGUE

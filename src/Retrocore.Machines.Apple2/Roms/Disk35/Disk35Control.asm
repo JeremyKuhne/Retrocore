@@ -1,136 +1,201 @@
+; retrocore: style=strict
 ;; THE CARD'S FIRMWARE: CONTROL AND STATUS
+;;
+;; The command handlers that answer SmartPort CONTROL and STATUS, the 3.5 controller's FORMATOPTIONS and SETFORMAT,
+;; and the eject they share with the rest of the firmware. A handler's lists move through the transfer buffer,
+;; <TransferBuffer>: CONTROL asks the host for its list there, and the status and format lists are built there for the
+;; host to take.
 
-;; SmartPort CONTROL ($04): asks the host for the control list in buffer code 6 ($0C00) and runs the
-;; control code in ParameterLow. Codes $14 and up, and the ones a unit does not take, answer $21; a list of
-;; $400 bytes or more answers $22.
-DOCONTROL:
+;; The buffer code of <TransferBuffer>: its card address divided by $200.
+TRANSFER_BUFFER_CODE = TransferBuffer / $200
+
+; The 3.5 drive's registers this file reads and the commands it gives (see <Drives::SenseLine> and <Drives::SendCommand>).
+
+; The card's own errors.
+
+;; Control $0A's interleave is 13 or more.
+ERROR_BAD_INTERLEAVE = $32
+
+;; SmartPort CONTROL ($04) and the control calls the card takes, $00-$13. A drive takes every code that has a handler;
+;; unit 0, the controller, takes only the ones that reach the card's RAM ($0C and $0E-$13).
+.scope Control
+
+;; How many control codes there are.
+CODE_COUNT = $14
+
+;; The largest control list, plus one: a list must be shorter than $400 bytes.
+LIST_LIMIT_HIGH = $04
+
+;; The interleaves control $0A and SETFORMAT take are below this.
+INTERLEAVE_LIMIT = 13
+
+;; Runs the control call in ParameterLow: asks the host for the control list (Count and CountHigh bytes) in
+;; <TransferBuffer>, waits for it, and jumps to the code's handler, which ends the command.
+;; Out: carry = clear; ErrorCode = <ERROR_BAD_CONTROL> for a code past $13 or one the unit does not take,
+;;      <ERROR_BAD_CONTROL_PARAMETER> for a list of $400 bytes or more, else the handler's
+;; Entry:
+;;   BadCode = ends with <ERROR_BAD_CONTROL>
+;;   BadParameter = ends with <ERROR_BAD_CONTROL_PARAMETER>
+;;   Finish = ends with the error in A, through <SetError>
+.proc Run
     ldx ParameterLow
-    cpx #$14
-    bcs ERRBADCONTROL
+    cpx #CODE_COUNT
+    bcs BadCode
     lda Drive
-    bpl DOCONTROL_1
-    bit CONTROLUNIT0,X
-    bmi ERRBADCONTROL
-    bvc DOCONTROL_1
-    bra ERRBADCONTROL
-DOCONTROL_1:
-    ldx CountHigh
-    cpx #$04
-    bcs ERRBADCTLPARAM
-    lda #$06
-    sta CardData
-DOCONTROL_2:
-    lda CardData
-    bpl DOCONTROL_2
-    lda ParameterLow
-    asl A
-    tax
-    jmp (CONTROLHANDLERS,X)
-ERRBADCONTROL:
-    lda #$21
-    bra CONTROLDONE
-ERRBADCTLPARAM:
-    lda #$22
-CONTROLDONE:
-    jmp SETERROR
+    bpl TakeList
 
-;; The control codes unit 0 takes: bit 7 = not taken.
-CONTROLUNIT0:
+    ; Unit 0 takes a code whose UnitZeroCodes byte has bits 7 and 6 clear.
+    bit UnitZeroCodes,x
+    bmi BadCode
+    bvc TakeList
+    bra BadCode
+
+    ; The list, from the host.
+TakeList:
+    ldx CountHigh
+    cpx #LIST_LIMIT_HIGH
+    bcs BadParameter
+    lda #TRANSFER_BUFFER_CODE
+    sta CardData
+WaitList:
+    lda CardData
+    bpl WaitList
+    lda ParameterLow
+    asl a
+    tax
+    jmp (Handlers,x)
+BadCode:
+    lda #ERROR_BAD_CONTROL
+    bra Finish
+BadParameter:
+    lda #ERROR_BAD_CONTROL_PARAMETER
+Finish:
+    jmp SetError
+.endproc
+
+;; The control codes unit 0 refuses: bit 7 set for a code it does not take.
+UnitZeroCodes:
     .byte $80, $80, $80, $80, $80, $80, $80, $80, $80, $80, $80, $80, $00, $80, $00, $00
     .byte $00, $00, $00, $00
+.assert * - UnitZeroCodes = CODE_COUNT, "A byte for each control code."
 
-;; Each control code's handler ($00-$13).
-CONTROLHANDLERS:
-    .word CTLRESET, ERRBADCONTROL, ERRBADCONTROL, ERRBADCONTROL, CTLEJECT ; $00-$04
-    .word ERRBADCONTROL, ERRBADCONTROL, ERRBADCONTROL, ERRBADCONTROL, CTLSETSIDES ; $05-$09
-    .word CTLSETSKEW, ERRBADCONTROL, CTLPOKE, CTLRESETMARKS, CTLRESETVECTORS ; $0A-$0E
-    .word CTLSETCACHE, CTLSETADDRESS, CTLDOWNLOAD, CTLEXECUTE, CTLPEEK ; $0F-$13
+;; Each control code's handler, $00-$13.
+Handlers:
+    .word Reset, Run::BadCode, Run::BadCode, Run::BadCode, Eject                ; $00-$04
+    .word Run::BadCode, Run::BadCode, Run::BadCode, Run::BadCode, SetSides      ; $05-$09
+    .word SetInterleave, Run::BadCode, Poke, RestoreMarks, RestoreVectors       ; $0A-$0E
+    .word SetCache, SetAddress, Download, Execute, Peek                         ; $0F-$13
+.assert * - Handlers = CODE_COUNT * 2, "A handler for each control code."
 
-;; Control $0D: puts the GCR marks and sync bytes ($8D-$A2) back from the ROM.
-CTLRESETMARKS:
-    ldx #$16
-CTLRESETMARKS_1:
-    lda ZeroPageImage+Marks-1,X
-    sta Marks-1,X
+;; Control $0D: puts the GCR marks and sync bytes (Marks to the end of AddressMark) back from the ROM.
+;; Out: carry = clear, ErrorCode = 0
+.proc RestoreMarks
+    ldx #MARKS_LENGTH
+Loop:
+    lda ZeroPageImage + Marks - 1,x
+    sta Marks - 1,x
     dex
-    bne CTLRESETMARKS_1
-    bra CTLSETSIDES_1
+    bne Loop
+    bra SetSides::Succeed
+.endproc
 
-;; Control $0E: puts the vectors ($72-$8C) back from the ROM.
-CTLRESETVECTORS:
-    ldx ZeroPageImage+VectorLength
-CTLRESETVECTORS_1:
-    lda ZeroPageImage+Vectors-1,X
-    sta Vectors-1,X
+;; The length of the marks <RestoreMarks> puts back: Marks, DataMark, SyncBytes, Epilogue and AddressMark.
+MARKS_LENGTH = $16
+.assert MARKS_LENGTH = AddressMark + 4 - Marks, "The marks end with AddressMark's four bytes."
+
+;; Control $0E: puts the page-zero vectors (<Vectors>, as long as <VectorLength> says) back from the ROM.
+;; Out: carry = clear, ErrorCode = 0
+.proc RestoreVectors
+    ldx ZeroPageImage + VectorLength
+Loop:
+    lda ZeroPageImage + Vectors - 1,x
+    sta Vectors - 1,x
     dex
-    bne CTLRESETVECTORS_1
-    bra CTLSETSIDES_1
+    bne Loop
+    bra SetSides::Succeed
+.endproc
 
-;; Control $0F: one byte, whose bit 7 goes to CacheOption; the cache is flushed.
-CTLSETCACHE:
+;; Control $0F: one byte, whose bit 7 goes to CacheOption; the cache is flushed. The list's length is checked but
+;; not acted on, so a list of any length is taken.
+;; Out: carry = clear, ErrorCode = 0
+.proc SetCache
     lda #$01
-    jsr CHECKCOUNT
-    lda XFERBUFFER
+    jsr CheckLength
+    lda TransferBuffer
     and #$80
     sta CacheOption
-    jsr FLUSHCACHE
-    bra CTLSETSIDES_1
+    jsr Cache::Flush
+    bra SetSides::Succeed
+.endproc
 
-;; Control $0A: one byte, the interleave for FORMAT (below 13), or $32.
-CTLSETSKEW:
+;; Control $0A: one byte, the interleave for FORMAT, below 13, for the drive and as the next FORMAT's.
+;; Out: carry = clear; ErrorCode = <ERROR_BAD_CONTROL_PARAMETER> for a list not one byte long,
+;;      <ERROR_BAD_INTERLEAVE> for 13 or more, else 0
+.proc SetInterleave
     lda #$01
-    jsr CHECKCOUNT
-    bne ERRBADCTLPARAM
-    lda #$32
-    ldy XFERBUFFER
-    cpy #$0D
-    bcs CONTROLDONE
+    jsr CheckLength
+    bne Run::BadParameter
+    lda #ERROR_BAD_INTERLEAVE
+    ldy TransferBuffer
+    cpy #INTERLEAVE_LIMIT
+    bcs Run::Finish
     sty Interleave
     ldx Drive
-    sty FormatInterleave,X
-    bra CTLSETSIDES_1
+    sty FormatInterleave,x
+    bra SetSides::Succeed
+.endproc
 
 ;; Control $09: one byte, whose bit 7 set has FORMAT write both sides.
-CTLSETSIDES:
+;; Out: carry = clear; ErrorCode = <ERROR_BAD_CONTROL_PARAMETER> for a list not one byte long, else 0
+;; Entry:
+;;   Succeed = ends the control call with no error
+.proc SetSides
     lda #$01
-    jsr CHECKCOUNT
-    bne SETADDRESSCOUNT_1
-    lda XFERBUFFER
+    jsr CheckLength
+    bne TakeAddress::ToBadParameter
+    lda TransferBuffer
     and #$80
     sta TwoSided
-CTLSETSIDES_1:
+Succeed:
     lda #$00
-    jmp CONTROLDONE
+    jmp Run::Finish
+.endproc
 
-;; Control $00, reset: forgets the disk and reads it again.
-;; Out:   carry = set if the drive has no usable disk
-CTLRESET:
+;; Control $00, reset: forgets the drive's disk and finds its format again.
+;; Out: carry = clear; ErrorCode = the error (through <SetError>) when the drive has no disk it can use; after a
+;;      success nothing is set
+.proc Reset
     ldx Drive
-    jsr FORGETDISK
-    jsr CHECKDISK
-    bpl CTLRESET_1
-    jsr IDENTIFYMEDIA
-CTLRESET_1:
-    bcc CTLRESET_2
-    jmp SETERROR
-CTLRESET_2:
+    jsr Drives::ForgetDisk
+    jsr Drives::CheckDisk
+    bpl Checked
+    jsr Drives::IdentifyMedia
+Checked:
+    bcc Done
+    jmp SetError
+Done:
     rts
+.endproc
 
-;; Control $04, eject: ejects Drive's disk and forgets its sectors.
-;; Out:   carry = clear
-CTLEJECT:
+;; Control $04, eject: ejects the drive's disk and drops its sectors from the cache. The card's fixed entry points
+;; (<CardVectors>) reach it too.
+;; Out: carry = clear; ErrorCode = <ERROR_IO> if the disk did not leave
+.proc Eject
     ldx Drive
-    jsr READSENSE
-    jsr EJECT
+    jsr Drives::ReadStatus
+    jsr EjectDisk
     ldx Drive
-    jsr FORGETCACHE
+    jsr Cache::Forget
     clc
     rts
+.endproc
 
-;; Control $12: calls code in the card at an address set in the list (CALLUSER), and keeps A, X, Y
-;; and P in ResultA-ResultStatus for status code 5.
-CTLEXECUTE:
-    jsr CALLUSER
+;; Control $12: calls code in the card at the address in the list's bytes 4 and 5, with A, X, Y and the status from
+;; its first four (<CallUser>), and keeps what the code returns in ResultA, ResultX, ResultY and ResultStatus, for
+;; status code 5.
+;; Out: carry = clear
+.proc Execute
+    jsr CallUser
     sta ResultA
     stx ResultX
     sty ResultY
@@ -139,454 +204,598 @@ CTLEXECUTE:
     sta ResultStatus
     clc
     rts
+.endproc
 
-;; Control $13: two bytes, an address; its byte goes to Retries ($58) for status code 5.
-CTLPEEK:
-    jsr CTLSETADDRESS
+;; Control $13: two bytes, an address in the card, whose byte goes to Retries for status code 5. A list of the wrong
+;; length ends the call with <ERROR_BAD_CONTROL_PARAMETER> but still reads the byte at the address set before.
+;; Out: carry = clear
+.proc Peek
+    jsr SetAddress
     lda (UserPointer)
     sta Retries
     clc
     rts
+.endproc
 
-;; Control $0C: three bytes, an address and (read from $0C04) a byte to store there.
-CTLPOKE:
+;; Control $0C: three bytes, an address in the card and a byte to store there, which is read from the list's fifth
+;; byte, not its third. A list of the wrong length ends the call with <ERROR_BAD_CONTROL_PARAMETER> but still stores
+;; the byte, at the address set before.
+;; Out: carry = clear
+.proc Poke
     lda #$03
-    jsr SETADDRESSCOUNT
-    lda XFERBUFFER+4
+    jsr TakeAddress
+    lda TransferBuffer + 4
     sta (UserPointer)
     clc
     rts
+.endproc
 
-;; Control $10: two bytes, an address in card RAM for CTLDOWNLOAD.
-CTLSETADDRESS:
+;; Control $10: two bytes, an address in the card, for <Download>, <Peek> and <Poke>.
+;; Out: carry = clear; ErrorCode = <ERROR_BAD_CONTROL_PARAMETER> for a list not two bytes long
+.proc SetAddress
     lda #$02
+    ; Falls into TakeAddress.
+.endproc
 
-;; Takes UserPointer from the list's first two bytes, if the list has the expected length.
-;; In:    A = the length
-;; Out:   carry = clear; or an error $22 through CONTROLDONE
-SETADDRESSCOUNT:
-    jsr CHECKCOUNT
-    bne SETADDRESSCOUNT_1
-    lda XFERBUFFER
+;; Takes UserPointer from the list's first two bytes, if the list has the length expected.
+;; In: A = the length
+;; Out: carry = clear; ErrorCode = <ERROR_BAD_CONTROL_PARAMETER> (and UserPointer unchanged) if not
+;; Entry:
+;;   ToBadParameter = ends with <ERROR_BAD_CONTROL_PARAMETER>
+.proc TakeAddress
+    jsr CheckLength
+    bne ToBadParameter
+    lda TransferBuffer
     sta UserPointer
-    lda XFERBUFFER+1
-    sta UserPointer+1
+    lda TransferBuffer + 1
+    sta UserPointer + 1
     clc
     rts
-SETADDRESSCOUNT_1:
-    jmp ERRBADCTLPARAM
+ToBadParameter:
+    jmp Run::BadParameter
+.endproc
 
-;; Control $11: copies the control list to UserPointer, leaving the pointer where it was.
-CTLDOWNLOAD:
-    ldx UserPointer+1
+;; Control $11: copies the control list to the card's RAM at UserPointer, leaving the pointer where it was. It copies
+;; Count bytes and 256 more for each in CountHigh, with a Count of 0 counting 256, so a list a multiple of 256 bytes
+;; long copies 256 bytes too many.
+;; Out: carry = clear; Count and CountHigh used up
+.proc Download
+    ldx UserPointer + 1
     ldy #$00
-    lda #$00
+    lda #<TransferBuffer
     sta WorkPointer
-    lda #$0C
-    sta WorkPointer+1
-CTLDOWNLOAD_1:
-    lda (WorkPointer),Y
-    sta (UserPointer),Y
+    lda #>TransferBuffer
+    sta WorkPointer + 1
+Loop:
+    lda (WorkPointer),y
+    sta (UserPointer),y
     iny
-    bne CTLDOWNLOAD_2
-    inc WorkPointer+1
-    inc UserPointer+1
-CTLDOWNLOAD_2:
+    bne Counted
+    inc WorkPointer + 1
+    inc UserPointer + 1
+Counted:
     dec Count
-    bne CTLDOWNLOAD_1
+    bne Loop
     dec CountHigh
-    bpl CTLDOWNLOAD_1
-    stx UserPointer+1
+    bpl Loop
+    stx UserPointer + 1
     clc
     rts
+.endproc
 
-;; Loads A, X, Y and P from the list's first four bytes and jumps to the address in its next two.
-CALLUSER:
-    lda XFERBUFFER+4
+;; Loads A, X, Y and the status from the list's first four bytes and jumps to the address in its next two; the code
+;; there returns to the caller.
+.proc CallUser
+    lda TransferBuffer + 4
     sta WorkPointer
-    lda XFERBUFFER+5
-    sta WorkPointer+1
-    lda XFERBUFFER+3
+    lda TransferBuffer + 5
+    sta WorkPointer + 1
+    lda TransferBuffer + 3
     pha
-    ldx XFERBUFFER+1
-    ldy XFERBUFFER+2
-    lda XFERBUFFER
+    ldx TransferBuffer + 1
+    ldy TransferBuffer + 2
+    lda TransferBuffer
     plp
     jmp (WorkPointer)
+.endproc
 
 ;; Compares the control list's length with A.
-;; Out:   zero = it matches
-CHECKCOUNT:
+;; In: A = the length expected, below 256
+;; Out: zero = set when the list is that long, Y = CountHigh
+;; Keeps: A, X
+.proc CheckLength
     ldy CountHigh
-    bne CHECKCOUNT_1
+    bne Done
     cmp Count
-CHECKCOUNT_1:
+Done:
     rts
+.endproc
 
-;; Ejects a drive's disk: the motor off (200 ms), the eject command, then up to about 2 s for the disk to leave.
-;; In:    X = the drive
-;; Out:   carry = clear; ErrorCode = $27 if the disk did not leave
-EJECT:
+.endscope
+
+;; Ejects a drive's disk, if it has one: turns the motor off and waits 200 ms if it is on, gives the eject command,
+;; then waits up to about 2 s, polling every 10 ms, for the disk to leave, and forgets the disk once it has. Sets
+;; Retries to 3, and EjectDrive to the drive while it works (a reset meanwhile finishes the eject).
+;; In: X = the drive, enabled
+;; Out: carry = clear; ErrorCode = <ERROR_IO> if the disk did not leave
+;; Keeps: X
+.proc EjectDisk
     stx EjectDrive
-    lda #$02
-    jsr DRIVESENSE
-    bcs EJECT_4
-    lda #$08
-    jsr DRIVESENSE
-    bcs EJECT_1
-    lda #$09
-    jsr DRIVECOMMAND
-    lda #$C8
-    jsr DELAYMS
-EJECT_1:
+    lda #SENSE_NO_DISK
+    jsr Drives::SenseLine
+    bcs Done
+    lda #SENSE_MOTOR_OFF
+    jsr Drives::SenseLine
+    bcs Eject
+    lda #DRIVE_MOTOR_OFF
+    jsr Drives::SendCommand
+    lda #MOTOR_STOP_DELAY
+    jsr DelayMilliseconds
+Eject:
     lda #$03
     sta Retries
-    lda #$0D
-    jsr DRIVECOMMAND
-    ldy #$C3
-EJECT_2:
-    lda #$0A
-    jsr DELAYMS
-    lda #$02
-    jsr DRIVESENSE
-    bcs EJECT_3
+    lda #DRIVE_EJECT
+    jsr Drives::SendCommand
+    ldy #EJECT_POLLS
+Wait:
+    lda #EJECT_POLL_DELAY
+    jsr DelayMilliseconds
+    lda #SENSE_NO_DISK
+    jsr Drives::SenseLine
+    bcs Gone
     dey
-    bne EJECT_2
-    lda #$27
+    bne Wait
+    lda #ERROR_IO
     sta ErrorCode
-    bra EJECT_4
-EJECT_3:
-    jsr FORGETDISK
-EJECT_4:
+    bra Done
+Gone:
+    jsr Drives::ForgetDisk
+Done:
     lda #$80
     sta EjectDrive
     clc
     rts
+.endproc
+
+;; How long <EjectDisk> lets the motor stop, in milliseconds.
+MOTOR_STOP_DELAY = 200
+
+;; How many times <EjectDisk> looks for the disk to have left.
+EJECT_POLLS = $C3
+
+;; How long <EjectDisk> waits between looks, in milliseconds.
+EJECT_POLL_DELAY = 10
+
+;; SmartPort STATUS ($00), and ProDOS's status call: the status lists, built in <TransferBuffer> for the host.
+.scope Status
+
+;; The length of <ControllerName>.
+CONTROLLER_NAME_LENGTH = 30
+
+;; The byte that ends a DIB in <Apple35Information> and <FdhdInformation>.
+DIB_END = $FF
 
 ;; Unit 0's name, for status code 1.
-CONTROLLERNAME:
+ControllerName:
     .byte "APPLE UNIVERSAL 3.5 CONTROLLER"
+.assert * - ControllerName = CONTROLLER_NAME_LENGTH, "The name's length."
 
-;; SmartPort STATUS ($00), and ProDOS STATUS: builds the status list at $0C00 for the host.
-;; Unit 0: code 0, the controller's 8 bytes; code 1, its name. A 3.5 drive: code 0, the general status;
-;; code 3, the DIB; code 5, the last result. Others answer $21.
-;; Out:   Count, CountHigh = the list's length, CardData = 6
-DOSTATUS:
+;; Builds the status list for the status code in ParameterLow. Unit 0 takes code 0, the controller's eight bytes,
+;; and code 1, its name. A drive takes code 0, its general status (the status byte and the block count, four bytes,
+;; or five for an extended call); code 3, its DIB, which starts with the same bytes; and code 5, the last command's
+;; result (ErrorCode and the seven bytes after it). Other codes answer <ERROR_BAD_CONTROL>; code 6 is tested apart
+;; but answers it too.
+;; Out: carry = clear; Count, CountHigh = the list's length and CardData = <TRANSFER_BUFFER_CODE>, or ErrorCode =
+;;      the error
+.proc Run
     stz Count
     stz CountHigh
     ldx Drive
-    bpl DOSTATUS_2
+    bpl ForDrive
+
+    ; Unit 0.
     lda ParameterLow
-    beq DOSTATUS_6
+    beq Controller
     cmp #$01
-    bne DOSTATUS_4
-    ldx #$1E
-    stx XFERBUFFER
-DOSTATUS_1:
-    lda CONTROLLERNAME-1,X
-    sta XFERBUFFER,X
+    bne BadCode
+
+    ; Code 1: the controller's name, after its length.
+    ldx #CONTROLLER_NAME_LENGTH
+    stx TransferBuffer
+CopyName:
+    lda ControllerName - 1,x
+    sta TransferBuffer,x
     dex
-    bne DOSTATUS_1
-    ldx #$1E
+    bne CopyName
+    ldx #CONTROLLER_NAME_LENGTH
     inx
-    bra STATUSDONE
-DOSTATUS_2:
+    bra Done
+
+    ; A drive: codes 0, 3 and 5.
+ForDrive:
     ldx ParameterLow
-    beq STATUSDRIVE
+    beq DriveStatus
     cpx #$03
-    beq STATUSDRIVE
+    beq DriveStatus
     cpx #$05
-    bne DOSTATUS_3
-    jmp STATUSRESULT
-DOSTATUS_3:
+    bne NotLastResult
+    jmp LastResult
+NotLastResult:
     cpx #$06
-    bne DOSTATUS_4
-DOSTATUS_4:
-    lda #$21
-    jmp SETERROR
-STATUSDONE:
+    bne BadCode
+BadCode:
+    lda #ERROR_BAD_CONTROL
+    jmp SetError
+
+    ; The list is X bytes long: gives it to the host, and lets the drive's motor go unless the call came as
+    ; unit 0's.
+Done:
     stx Count
-    lda #$06
+    lda #TRANSFER_BUFFER_CODE
     sta CardData
     ldx Drive
     bit UnitWithHighBit
-    bmi DOSTATUS_5
-    jsr RELEASEDRIVE
+    bmi KeepDrive
+    jsr Drives::Release
     clc
     rts
-DOSTATUS_5:
+KeepDrive:
     clc
     rts
-DOSTATUS_6:
+
+    ; Code 0 for unit 0: the number of units, then 0, $01 in byte 2 and $0100 in bytes 4 and 5.
+Controller:
     lda UnitCount
-    sta XFERBUFFER
+    sta TransferBuffer
     ldx #$01
     lda #$00
-DOSTATUS_7:
-    sta XFERBUFFER,X
+ClearController:
+    sta TransferBuffer,x
     inx
     cpx #$08
-    bne DOSTATUS_7
+    bne ClearController
     lda #$01
-    sta XFERBUFFER+2
+    sta TransferBuffer + 2
     lda #$00
-    sta XFERBUFFER+4
+    sta TransferBuffer + 4
     lda #$01
-    sta XFERBUFFER+5
-DOSTATUS_8:
-    bra STATUSDONE
-STATUSRESULT:
+    sta TransferBuffer + 5
+ToDone:
+    bra Done
+
+    ; Code 5: the last command's result.
+LastResult:
     ldx #$00
-DOSTATUS_9:
-    lda ErrorCode,X
-    sta XFERBUFFER,X
+CopyResult:
+    lda ErrorCode,x
+    sta TransferBuffer,x
     inx
     cpx #$08
-    bcc DOSTATUS_9
-    bra STATUSDONE
-STATUSDRIVE:
+    bcc CopyResult
+    bra Done
+
+    ; Codes 0 and 3: the status byte. Bits 7, 6, 5 and 3: a block device that can be written, read and formatted;
+    ; bit 4, a disk is in; bit 2, it is write protected; bit 0, for an extended call, the disk was switched (or
+    ; taken out since the last look).
+DriveStatus:
     ldx Drive
-    jsr READSENSE
+    jsr Drives::ReadStatus
     php
-    and Sense,X
-    lsr A
-    lsr A
-    lsr A
+    and Sense,x
+    lsr a
+    lsr a
+    lsr a
     ora #$E8
-    bvs DOSTATUS_10
+    bvs NoDisk
     ora #$10
-DOSTATUS_10:
+NoDisk:
     plp
-    bmi DOSTATUS_11
-    bvs DOSTATUS_12
+    bmi Switched
+    bvs StatusByte
     bit PreviousSense
-    bvc DOSTATUS_12
-DOSTATUS_11:
+    bvc StatusByte
+Switched:
     bit CardCommand
-    bvc DOSTATUS_12
+    bvc StatusByte
     ora #$01
-DOSTATUS_12:
-    sta XFERBUFFER
-    jsr CHECKDISK
-    bpl DOSTATUS_13
-    jsr IDENTIFYMEDIA
-DOSTATUS_13:
+StatusByte:
+    sta TransferBuffer
+
+    ; The block count, three bytes, or four for an extended call.
+    jsr Drives::CheckDisk
+    bpl Blocks
+    jsr Drives::IdentifyMedia
+Blocks:
     ldx #$04
     ldy Drive
-    lda BlockCount,Y
-    sta XFERBUFFER+1
-    lda BlockCountHigh,Y
-    sta XFERBUFFER+2
-    stz XFERBUFFER+3
+    lda BlockCount,y
+    sta TransferBuffer + 1
+    lda BlockCountHigh,y
+    sta TransferBuffer + 2
+    stz TransferBuffer + 3
     bit CardCommand
-    bvc DOSTATUS_14
-    stz XFERBUFFER+4
+    bvc General
+    stz TransferBuffer + 4
     inx
-DOSTATUS_14:
+General:
     lda ParameterLow
-    beq DOSTATUS_8
+    beq ToDone
+
+    ; Code 3: the rest of the DIB, by the drive's kind, up to its end byte.
     ldy Drive
-    lda DeviceKinds,Y
+    lda DeviceKinds,y
     ldy #$00
     bit #$02
-    beq DOSTATUS_15
-    ldy #$16
-DOSTATUS_15:
-    lda DIB35,Y
-    sta XFERBUFFER,X
+    beq CopyDib
+    ldy #FdhdInformation - Apple35Information
+CopyDib:
+    lda Apple35Information,y
+    sta TransferBuffer,x
     inx
     iny
-    cmp #$FF
-    bne DOSTATUS_15
+    cmp #DIB_END
+    bne CopyDib
     dex
-    jmp STATUSDONE
+    jmp Done
+.endproc
 
-;; An Apple 3.5 Drive's DIB, after the status bytes, ended by $FF.
-DIB35:
-    .byte 8, "DISK 3.5        " ; the name's length and the name, padded to 16
-    .byte $01, $C0, $10, $10        ; type, subtype, version
-    .byte $FF                       ; the end
+;; An Apple 3.5 Drive's DIB, after the status byte and block count: the name's length and the name, padded to 16;
+;; the type, subtype and version; then <DIB_END>.
+Apple35Information:
+    .byte 8, "DISK 3.5        "
+    .byte $01, $C0, $10, $10
+    .byte DIB_END
 
-;; An FDHD drive's DIB.
-DIBFDHD:
-    .byte 8, "DISK 3.5HD      " ; the length leaves out "HD"
+;; An FDHD drive's DIB, as <Apple35Information>'s. The name's length leaves out "HD".
+FdhdInformation:
+    .byte 8, "DISK 3.5HD      "
     .byte $01, $C1, $10, $10
-    .byte $FF
+    .byte DIB_END
 
-;; Command $0B: lists the formats a drive can write, 16 bytes each, after an 8-byte header.
-;; Out:   Count, CountHigh = the length, CardData = 6, ErrorCode = $22 if ParameterLow and ParameterMiddle ask for less
-FORMATOPTIONS:
+.endscope
+
+;; The list FORMATOPTIONS gives: this header, then a <FormatOption> for each format.
+.struct FormatOptionList
+    OPTIONS .word ;; How many formats follow.
+    SHOWN .word ;; How many to show: the same count here.
+    DEFAULT .word ;; The format FORMAT writes by default.
+    CURRENT .word ;; The disk's kind, from MediaKind.
+.endstruct
+
+;; One format in a <FormatOptionList>.
+.struct FormatOption
+    KIND .word ;; The format's kind, the number SETFORMAT takes.
+    LINK .word ;; Left 0.
+    TYPE .word ;; Its type, from <FormatOptions::Kinds>.
+    BLOCKS .dword ;; Its blocks.
+    BLOCK_SIZE .word ;; 512.
+    INTERLEAVE .word ;; Its interleave.
+    SIZE .word ;; Its size in KB.
+.endstruct
+
+;; The 3.5 controller's FORMATOPTIONS ($0B) and SETFORMAT ($0A): the formats a drive can write, and the one the next
+;; FORMAT writes. A format kind is MediaKind's number: 2 400K, 4 800K, 6 800K (with interleave 2), 8 720K, $0A 1440K,
+;; and $0C, 1440K with interleave 1, which FORMATOPTIONS lists after $0A.
+.scope FormatOptions
+
+;; The kinds are even numbers below this.
+KIND_LIMIT = $0D
+
+;; Lists the formats a drive can write, after an eight-byte header: 400K and 800K on an Apple 3.5 Drive, and on an
+;; FDHD drive 1440K (twice), 800K, 400K and 720K. The default is 1440K when MediaMode says the disk is high density,
+;; else 800K.
+;; Out: carry = clear; Count, CountHigh = the list's length and CardData = <TRANSFER_BUFFER_CODE>, or ErrorCode =
+;;      <ERROR_BAD_UNIT> for unit 0, or the error <FailBadParameter> gives when ParameterLow and ParameterMiddle ask
+;;      for fewer bytes than the list has
+.proc List
     ldx Drive
-    bpl FORMATOPTIONS_1
-    lda #$11
-    jmp SETERROR
-FORMATOPTIONS_1:
-    jsr CHECKDISK
-    bpl FORMATOPTIONS_2
-    jsr IDENTIFYMEDIA
-FORMATOPTIONS_2:
+    bpl Find
+    lda #ERROR_BAD_UNIT
+    jmp SetError
+Find:
+    jsr Drives::CheckDisk
+    bpl Clear
+    jsr Drives::IdentifyMedia
+
+    ; Clears the buffer (but for the second page's first byte), then the header.
+Clear:
     ldx #$FF
-FORMATOPTIONS_3:
-    stz XFERBUFFER,X
-    stz XFERBUFFER+$100,X
+ClearByte:
+    stz TransferBuffer,x
+    stz TransferBuffer + $100,x
     dex
-    bne FORMATOPTIONS_3
-    lda #$08
+    bne ClearByte
+    lda #<(TransferBuffer + .sizeof(FormatOptionList))
     sta SecondBufferPointer
-    lda #$0C
-    sta SecondBufferPointer+1
-    stz XFERBUFFER
-    stz XFERBUFFER+2
+    lda #>(TransferBuffer + .sizeof(FormatOptionList))
+    sta SecondBufferPointer + 1
+    stz TransferBuffer + FormatOptionList::OPTIONS
+    stz TransferBuffer + FormatOptionList::SHOWN
     ldx Drive
-    lda MediaKind,X
-    sta XFERBUFFER+6
+    lda MediaKind,x
+    sta TransferBuffer + FormatOptionList::CURRENT
     lda #$02
-    bit DeviceKinds,X
-    beq FORMATOPTIONS_5
+    bit DeviceKinds,x
+    beq Apple35
+
+    ; An FDHD drive.
     lda #$0A
-    sta XFERBUFFER+4
-    lda MediaMode,X
+    sta TransferBuffer + FormatOptionList::DEFAULT
+    lda MediaMode,x
     bit #$40
-    bne FORMATOPTIONS_4
+    bne Fdhd
     lda #$06
-    sta XFERBUFFER+4
-FORMATOPTIONS_4:
+    sta TransferBuffer + FormatOptionList::DEFAULT
+Fdhd:
     lda #$0A
-    jsr ADDFORMATOPTION
+    jsr Add
     lda #$06
-    jsr ADDFORMATOPTION
+    jsr Add
     lda #$08
-    jsr ADDFORMATOPTION
-    bra FORMATOPTIONS_6
-FORMATOPTIONS_5:
+    jsr Add
+    bra Length
+
+    ; An Apple 3.5 Drive.
+Apple35:
     lda #$06
-    sta XFERBUFFER+4
+    sta TransferBuffer + FormatOptionList::DEFAULT
     lda #$06
-    jsr ADDFORMATOPTION
-FORMATOPTIONS_6:
+    jsr Add
+
+    ; The length, 16 bytes a format and the header, must fit what the host asked for.
+Length:
     ldy #$00
-    lda XFERBUFFER
-    asl A
-    asl A
-    asl A
-    asl A
-    bcc FORMATOPTIONS_7
+    lda TransferBuffer + FormatOptionList::OPTIONS
+    asl a
+    asl a
+    asl a
+    asl a
+    bcc AddHeader
     iny
-FORMATOPTIONS_7:
+AddHeader:
     clc
-    adc #$08
+    adc #.sizeof(FormatOptionList)
     cpy ParameterMiddle
-    bcc FORMATOPTIONS_10
-    beq FORMATOPTIONS_9
-FORMATOPTIONS_8:
-    jmp ERRBADPARAMETER
-FORMATOPTIONS_9:
+    bcc Fits
+    beq CheckLow
+TooShort:
+    jmp FailBadParameter
+CheckLow:
     cmp ParameterLow
-    beq FORMATOPTIONS_10
-    bcs FORMATOPTIONS_8
-FORMATOPTIONS_10:
+    beq Fits
+    bcs TooShort
+Fits:
     sta Count
     sty CountHigh
-    lda #$06
+    lda #TRANSFER_BUFFER_CODE
     sta CardData
     clc
     rts
+.endproc
 
-;; Adds a format to FORMATOPTIONS' list.
-;; In:    A = the format kind; SecondBufferPointer = where
-ADDFORMATOPTION:
-    inc XFERBUFFER
-    inc XFERBUFFER+2
-    ldy #$00
+;; Adds a format to the list, and the formats linked after it in <Kinds>.
+;; In: A = the format kind, SecondBufferPointer = where its entry goes
+;; Out: SecondBufferPointer = past the last entry added
+.proc Add
+    inc TransferBuffer + FormatOptionList::OPTIONS
+    inc TransferBuffer + FormatOptionList::SHOWN
+    ldy #FormatOption::KIND
     sta (SecondBufferPointer)
     tax
-    lda FORMATINFO,X
+    lda Kinds,x
     and #$0F
-    ldy #$04
-    sta (SecondBufferPointer),Y
-    lda FORMATINFO,X
-    lsr A
-    lsr A
-    lsr A
-    lsr A
-    ldy #$0C
-    sta (SecondBufferPointer),Y
-    lda MEDIABLOCKS,X
-    ldy #$06
-    sta (SecondBufferPointer),Y
+    ldy #FormatOption::TYPE
+    sta (SecondBufferPointer),y
+    lda Kinds,x
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    ldy #FormatOption::INTERLEAVE
+    sta (SecondBufferPointer),y
+    lda BlockCounts,x
+    ldy #FormatOption::BLOCKS
+    sta (SecondBufferPointer),y
     iny
-    lda MEDIABLOCKS+1,X
-    sta (SecondBufferPointer),Y
-    ldy #$0B
-    lda #$02
-    sta (SecondBufferPointer),Y
-    lda MEDIABLOCKS+1,X
-    lsr A
-    ldy #$0F
-    sta (SecondBufferPointer),Y
-    lda MEDIABLOCKS,X
-    ror A
+    lda BlockCounts + 1,x
+    sta (SecondBufferPointer),y
+    ldy #FormatOption::BLOCK_SIZE + 1
+    lda #>512
+    sta (SecondBufferPointer),y
+
+    ; The size in KB, half the blocks.
+    lda BlockCounts + 1,x
+    lsr a
+    ldy #FormatOption::SIZE + 1
+    sta (SecondBufferPointer),y
+    lda BlockCounts,x
+    ror a
     dey
-    sta (SecondBufferPointer),Y
+    sta (SecondBufferPointer),y
+
+    ; The next entry, and the next kind.
     lda SecondBufferPointer
     clc
-    adc #$10
+    adc #.sizeof(FormatOption)
     sta SecondBufferPointer
-    bcc ADDFORMATOPTION_1
-    inc SecondBufferPointer+1
-ADDFORMATOPTION_1:
-    lda FORMATINFO+1,X
-    beq ADDFORMATOPTION_2
-    bpl ADDFORMATOPTION
-ADDFORMATOPTION_2:
+    bcc Next
+    inc SecondBufferPointer + 1
+Next:
+    lda Kinds + 1,x
+    beq Done
+    bpl Add
+Done:
     rts
+.endproc
 
-;; Each format kind: interleave (bits 4-7) and a type (bits 0-3); then the next kind FORMATOPTIONS lists, or 0.
-FORMATINFO:
-    .byte $00
-    .byte $00, $25, $00, $45, $00, $25, $04, $16, $00, $24, $0C, $14, $00
+;; One format kind's entry in <Kinds>.
+;; Parameters:
+;;   interleave = its interleave
+;;   type = its type, which FORMATOPTIONS gives
+;;   next = the kind listed after it, or 0
+.macro FormatKind interleave, type, next
+    .byte (interleave << 4) | type, next
+.endmacro
 
-;; Each MediaKind's block count.
-MEDIABLOCKS:
-    .byte $00
-    .byte $00, $20, $03, $40, $06, $40, $06, $A0, $05, $40, $0B, $40, $0B, $00, $00
+;; Each format kind's interleave and type, and the kind listed after it, indexed by the kind: 0 (none), 2, 4, 6, 8,
+;; $0A and $0C.
+Kinds:
+    FormatKind 0, 0, 0
+    FormatKind 2, 5, 0
+    FormatKind 4, 5, 0
+    FormatKind 2, 5, $04
+    FormatKind 1, 6, 0
+    FormatKind 2, 4, $0C
+    FormatKind 1, 4, 0
+.assert * - Kinds = KIND_LIMIT + 1, "An entry for each kind."
 
-;; Command $0A: chooses the format the next FORMAT writes.
-;; In:    ParameterLow = the format kind (0, or an even number below $0D), ParameterHigh = the interleave, or 0
-;; Out:   ErrorCode = $21 for a bad kind
-SETFORMAT:
+;; Each format kind's block count, indexed by the kind (0 and $0E: none).
+BlockCounts:
+    .word 0, 800, 1600, 1600, 1440, 2880, 2880, 0
+
+;; Chooses the format the next FORMAT writes, and its interleave. Kind 0 puts back the defaults, through
+;; <Format::ForgetChoice>, which acts only on a drive with a kind chosen, so kind 2 is stored first. A bad interleave is
+;; refused after the kind is stored.
+;; In: ParameterLow = the format kind (0, or an even number below $0D), ParameterMiddle = 0, ParameterHigh = the
+;;     interleave (below 13), or 0 for the kind's own
+;; Out: carry = clear; ErrorCode = <ERROR_BAD_CONTROL> for a bad kind or interleave; CardData = 0
+.proc Set
     lda ParameterMiddle
-    beq SETFORMAT_2
-SETFORMAT_1:
-    jmp ERRBADCONTROL
-SETFORMAT_2:
+    beq CheckKind
+Bad:
+    jmp Control::Run::BadCode
+CheckKind:
     lda ParameterLow
-    cmp #$0D
-    bcs SETFORMAT_1
+    cmp #KIND_LIMIT
+    bcs Bad
     and #$01
-    bne SETFORMAT_1
+    bne Bad
     ldx Drive
     lda ParameterLow
-    bne SETFORMAT_3
+    bne Kind
     lda #$02
-    sta FormatKind,X
-    jsr CLEARFORMAT
-    bra SETFORMAT_4
-SETFORMAT_3:
-    sta FormatKind,X
+    sta FormatKind,x
+    jsr Format::ForgetChoice
+    bra Done
+Kind:
+    sta FormatKind,x
     tay
-    lda FORMATINFO,Y
-    lsr A
-    lsr A
-    lsr A
-    lsr A
-    sta FormatInterleave,X
+    lda Kinds,y
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    sta FormatInterleave,x
     lda ParameterHigh
-    beq SETFORMAT_4
-    cmp #$0D
-    bcs SETFORMAT_1
-    sta FormatInterleave,X
-SETFORMAT_4:
+    beq Done
+    cmp #Control::INTERLEAVE_LIMIT
+    bcs Bad
+    sta FormatInterleave,x
+Done:
     stz CardData
     clc
     rts
+.endproc
+
+.endscope
+

@@ -1,56 +1,106 @@
+; retrocore: style=strict
 ;; THE CARD'S FIRMWARE: READING AND WRITING BLOCKS
+;;
+;; The handlers of the commands that move blocks: READBLOCK, WRITEBLOCK, SmartPort's tagged READ and WRITE, the
+;; slot ROM's boot read, and the card's own READAHEAD and READSPAN. A read fills the cache with the rest of the
+;; block's track (<Cache>), handing the host its block as soon as it is read; <BlockMap::Locate> finds where a block
+;; is.
 
-;; Counts a retry: ResultA/ResultX tally the errors, Retries counts down.
-;; Out:   carry = set with ErrorCode = $27 when the retries are used up; else A = DiskErrors, which is cleared
-COUNTRETRY:
+; What went wrong in the last disk access, the bits of DiskErrors.
+
+; Other values.
+
+;; The tag bytes before a block's data in SmartPort's READ and WRITE.
+TAG_SIZE = 12
+
+;; The bytes of a tagged block: its tags, then its 512 bytes of data.
+TAGGED_BLOCK_SIZE = TAG_SIZE + 512
+
+;; The retries a block's read or write gets.
+BLOCK_RETRIES = 6
+
+;; A track's sector in <SectorFlags>: read, or not wanted by READSPAN.
+SECTOR_DONE = $40
+
+;; A track's sector in <SectorFlags>: not one of the track's.
+SECTOR_NOT_WANTED = $C0
+
+;; ReadState's bit 7: read the block asked for and no more of its track.
+READ_STATE_BLOCK_ONLY = $80
+
+;; ReadState's bit 6: the block has been handed to the host, and the card goes on filling the cache.
+READ_STATE_HANDED_OVER = $40
+
+;; The buffer code of <InterleaveMap>, where READSPAN lists what it read.
+SPAN_LIST_CODE = InterleaveMap >> 9
+
+;; READSPAN's buffer code for a sector it could not read.
+SPAN_FAILED = $A7
+
+;; Counts a retry: ResultA and ResultX tally the errors, and Retries counts down.
+;; Out: carry = set with ErrorCode = <ERROR_IO> when the retries are used up; otherwise A = DiskErrors, which is
+;;   cleared
+;; Keeps: X, Y
+.proc CountRetry
     inc ResultA
-    bne COUNTRETRY_1
+    bne CountDown
     inc ResultX
-COUNTRETRY_1:
+CountDown:
     dec Retries
-    bpl COUNTRETRY_2
-    lda #$27
+    bpl Again
+    lda #ERROR_IO
     sta ErrorCode
     sec
     rts
-COUNTRETRY_2:
+Again:
     lda DiskErrors
     stz DiskErrors
     clc
     rts
+.endproc
 
-;; SmartPort READ ($08) and WRITE ($09): a 524-byte block with its 12 tag bytes, on a GCR 400K or 800K
-;; disk. The byte count must be $020C, and the address parameter is the block number.
-;; Out:   READ: the tags and data at $0C00-$0E0B, CardData = 6
-READWRITE:
-    lda #$11
+;; SmartPort READ ($08) and WRITE ($09): a 524-byte block with its 12 tag bytes, on a 400K or 800K GCR disk. The
+;; byte count must be <TAGGED_BLOCK_SIZE>, and the address parameter is the block number.
+;;
+;; The read is taken only when CardState is 1, READBLOCK's command, which never reaches this handler: READ
+;; arrives as $08, so as the code stands both READ and WRITE go to <WriteBlock>, and a READ writes the buffer's
+;; bytes to the block. The read's copy also takes the data from $0E00-$0FFF, past the buffer <ReadTaggedBlock>
+;; reads into ($0C00-$0DFF).
+;; Out: on the read, the tags and data at $0C00-$0E0B and CardData = 6; on an error, ErrorCode = the error and
+;;   CardData = 0
+.proc ReadWriteTagged
+    lda #ERROR_BAD_UNIT
     ldx Drive
-    bpl READWRITE_2
-READWRITE_1:
-    jmp SETERROR
-READWRITE_2:
-    jsr CHECKDISK
-    bpl READWRITE_3
-    jsr IDENTIFYMEDIA
-READWRITE_3:
-    bcs READWRITE_1
+    bpl CheckDisk
+Fail:
+    jmp SetError
+
+    ; A 400K or 800K disk, its format found again if it was switched. Y is the drive, as Drives::CheckDisk leaves it.
+CheckDisk:
+    jsr Drives::CheckDisk
+    bpl Known
+    jsr Drives::IdentifyMedia
+Known:
+    bcs Fail
     lda MediaKind,Y
-    cmp #$04
-    beq READWRITE_4
-    cmp #$02
-    beq READWRITE_4
-    lda #$27
-    jmp SETERROR
-READWRITE_4:
+    cmp #MEDIA_800K
+    beq CheckCount
+    cmp #MEDIA_400K
+    beq CheckCount
+    lda #ERROR_IO
+    jmp SetError
+CheckCount:
     lda CountHigh
-    cmp #$02
-    beq READWRITE_6
-READWRITE_5:
-    jmp ERRBADPARAMETER
-READWRITE_6:
+    cmp #>TAGGED_BLOCK_SIZE
+    beq CheckCountLow
+BadCount:
+    jmp FailBadParameter
+CheckCountLow:
     lda Count
-    cmp #$0C
-    bne READWRITE_5
+    cmp #<TAGGED_BLOCK_SIZE
+    bne BadCount
+
+    ; The block number is the address parameter.
     lda ParameterHigh
     sta ParameterLow
     lda Parameter3
@@ -58,470 +108,539 @@ READWRITE_6:
     stz ParameterHigh
     stz Parameter3
     dec TagCall
-    lda #$06
+    lda #TransferBuffer >> 9
     sta BufferCode
     lda CardState
-    cmp #$01
-    beq READWRITE_7
-    jmp DOWRITEBLOCK
-READWRITE_7:
-    jsr READTAGGED
-    bcs READWRITE_10
-    ldy #$0B
-READWRITE_8:
-    lda TAGBYTES,Y
-    sta XFERBUFFER,Y
+    cmp #COMMAND_READ_BLOCK
+    beq Read
+    jmp WriteBlock
+
+    ; The tags, then the data after them.
+Read:
+    jsr ReadTaggedBlock
+    bcs Done
+    ldy #TAG_SIZE - 1
+CopyTags:
+    lda TagBytes,Y
+    sta TransferBuffer,Y
     dey
-    bpl READWRITE_8
-    ldy #$00
-READWRITE_9:
-    lda XFERBUFFER+$200,Y
-    sta XFERBUFFER+$0C,Y
-    lda XFERBUFFER+$300,Y
-    sta XFERBUFFER+$10C,Y
+    bpl CopyTags
+    ldy #0
+CopyData:
+    lda TransferBuffer+$200,Y
+    sta TransferBuffer+TAG_SIZE,Y
+    lda TransferBuffer+$300,Y
+    sta TransferBuffer+TAG_SIZE+$100,Y
     iny
-    bne READWRITE_9
+    bne CopyData
     lda BufferCode
     stz ErrorCode
     sta CardData
-READWRITE_10:
+Done:
     clc
     rts
+.endproc
 
-;; Reads the block in ParameterLow/ParameterMiddle and its tags into buffer code 6's two halves.
-;; Out:   carry = set with ErrorCode set if it failed
-READTAGGED:
-    jsr CHECKBLOCK
-    bcs READTAGGED_7
-    lda #$06
+;; Reads the block in <ParameterLow> and <ParameterMiddle>, with its tags (to <TagBytes>), into BufferCode's buffer,
+;; without the cache.
+;; Out: carry = set if it failed, with ErrorCode = the error and CardData = 0
+.proc ReadTaggedBlock
+    jsr CheckBlock
+    bcs Fail
+    lda #BLOCK_RETRIES
     sta Retries
     stz SwimState
-    jsr MOTORON
-    jsr BLOCKTOSECTOR
-    bcs READTAGGED_7
-    asl A
-    asl A
-    asl A
+    jsr Drives::MotorOn
+    jsr BlockMap::Locate
+    bcs Fail
+
+    ; Up to eight address fields for each sector in the track.
+    asl a
+    asl a
+    asl a
     sta SectorCount
-READTAGGED_1:
-    jsr SEEK
-    bcs READTAGGED_6
-READTAGGED_2:
+Seek:
+    jsr Drives::Seek
+    bcs IoError
+ReadAgain:
     lda BufferCode
-    jsr SETBUFFER
-    jsr WAITREADYEVER
-READTAGGED_3:
-    jsr READADDRESS
-    bcc READTAGGED_8
-    jsr COUNTRETRY
-    bcs READTAGGED_6
-    bit #$04
-    bne READTAGGED_1
-    bit #$01
-    beq READTAGGED_4
-    jsr RECALIBRATE
-    bcc READTAGGED_1
-READTAGGED_4:
-    bit #$20
-    beq READTAGGED_6
-READTAGGED_5:
+    jsr Cache::PointAtBuffer
+    jsr Drives::WaitReadyForever
+NextField:
+    jsr ReadAddressField
+    bcc Found
+    jsr CountRetry
+    bcs IoError
+    bit #DISK_ERROR_WRONG_TRACK
+    bne Seek
+    bit #DISK_ERROR_NO_FIELD
+    beq BadField
+    jsr Drives::Recalibrate
+    bcc Seek
+BadField:
+    bit #DISK_ERROR_BAD_FIELD
+    beq IoError
+NotThisOne:
     dec SectorCount
-    bne READTAGGED_3
-READTAGGED_6:
-    lda #$27
-READTAGGED_7:
-    jsr SETERROR
+    bne NextField
+IoError:
+    lda #ERROR_IO
+Fail:
+    jsr SetError
     sec
     rts
-READTAGGED_8:
+
+    ; The sector wanted: its data field.
+Found:
     lda AddressSector
     cmp Sector
-    bne READTAGGED_5
-    jsr READDATA
-    bcc READTAGGED_9
-    jsr COUNTRETRY
-    bcc READTAGGED_2
-    bra READTAGGED_6
-READTAGGED_9:
+    bne NotThisOne
+    jsr ReadDataField
+    bcc Done
+    jsr CountRetry
+    bcc ReadAgain
+    bra IoError
+Done:
     clc
     rts
+.endproc
 
-;; SmartPort READBLOCK ($01), and ProDOS READ: reads the block from the cache, or reads its whole
-;; track into the cache and hands the host the block's buffer as soon as it is read.
-;; Out:   CardData = the buffer code the host copies from, or 0 with ErrorCode set
-DOREADBLOCK:
-    lda #$11
+;; SmartPort READBLOCK ($01), and ProDOS's read: hands over the block from the cache, or reads its track into the
+;; cache, handing the host the block's buffer as soon as it is read and going on with the rest of the track until
+;; the host sends its next command.
+;;
+;; A tagged call (<ReadWriteTagged>) on an MFM disk sets TagError to <ERROR_BAD_CONTROL> and returns without an
+;; answer.
+;; Out: CardData = the buffer code the host copies from, or 0 with ErrorCode = the error; carry = set when the block
+;;   was handed over and the card went on reading (the main loop then runs the host's next command at once)
+.proc ReadBlock
+    lda #ERROR_BAD_UNIT
     ldx Drive
-    bpl DOREADBLOCK_2
-DOREADBLOCK_1:
-    jmp SETERROR
-DOREADBLOCK_2:
-    jsr CHECKDISK
-    bpl DOREADBLOCK_3
-    jsr IDENTIFYMEDIA
-DOREADBLOCK_3:
-    bcs DOREADBLOCK_1
-    jsr CHECKBLOCK
-    bcs DOREADBLOCK_1
+    bpl CheckDisk
+Fail:
+    jmp SetError
+
+    ; A disk, its format found again if it was switched, with the block on it.
+CheckDisk:
+    jsr Drives::CheckDisk
+    bpl Known
+    jsr Drives::IdentifyMedia
+Known:
+    bcs Fail
+    jsr CheckBlock
+    bcs Fail
     lda #$80
     sta Reading
+
+    ; An MFM disk: no tags.
     ldx Drive
-    lda #$60
+    lda #MEDIA_MODE_MFM
     bit MediaMode,X
-    beq DOREADBLOCK_5
+    beq Locate
     bit TagCall
-    bpl DOREADBLOCK_4
-    lda #$21
+    bpl Mfm
+    lda #ERROR_BAD_CONTROL
     sta TagError
     rts
-DOREADBLOCK_4:
-    jsr MFMON
-DOREADBLOCK_5:
-    jsr BLOCKTOSECTOR
-    bcs DOREADBLOCK_1
+Mfm:
+    jsr Swim::UseMfm
+
+    ; Where the block is; the address fields to look at, $60 on a GCR disk and $80 on an 18-sector MFM one.
+Locate:
+    jsr BlockMap::Locate
+    bcs Fail
     sta SectorsPerTrack
     and #$10
-    asl A
+    asl a
     adc #$60
     sta SectorTries
-    jsr FINDCACHED
-    bcc DOREADBLOCK_6
+    jsr Cache::Find
+    bcc ReadTrack
     sta CardData
     clc
     rts
-DOREADBLOCK_6:
-    lda #$06
+
+    ; Not in the cache: read the track. ResultStatus counts the seeks and ResultY the sectors besides the block
+    ; that may fail.
+ReadTrack:
+    lda #BLOCK_RETRIES
     sta Retries
-    lda #$04
+    lda #4
     sta ResultStatus
-    lda #$14
+    lda #20
     sta ResultY
-    jsr MOTORON
-    lda #$00
+    jsr Drives::MotorOn
+
+    ; Every sector of the track is wanted.
+    lda #0
     sta SpanStart
     lda SectorsPerTrack
     sta SpanEnd
-    dec A
+    dec a
     sta SectorCount
-    lda #$C0
+    lda #SECTOR_NOT_WANTED
     ldx SectorsPerTrack
-DOREADBLOCK_7:
-    sta SECTORFLAGS,X
+MarkSectors:
+    sta SectorFlags,X
     cpx SpanStart
-    bcc DOREADBLOCK_8
+    bcc NextMark
     cpx SpanEnd
-    bcs DOREADBLOCK_8
-    stz SECTORFLAGS,X
-DOREADBLOCK_8:
+    bcs NextMark
+    stz SectorFlags,X
+NextMark:
     dex
-    bpl DOREADBLOCK_7
+    bpl MarkSectors
     lda CacheOption
     sta ReadState
-    bra DOREADBLOCK_10
-DOREADBLOCK_9:
-    jsr RECALIBRATE
-    bcs DOREADBLOCK_FAIL
-DOREADBLOCK_10:
+    bra Seek
+Recalibrate:
+    jsr Drives::Recalibrate
+    bcs IoError
+Seek:
     dec ResultStatus
-    bmi DOREADBLOCK_FAIL
-    jsr SEEK
-    bcs DOREADBLOCK_FAIL
-    jsr WAITREADY
-    bcc DOREADBLOCK_READ
-DOREADBLOCK_11:
-    lda #$2F
-    bra DOREADBLOCK_15
-DOREADBLOCK_READ:
+    bmi IoError
+    jsr Drives::Seek
+    bcs IoError
+    jsr Drives::WaitReady
+    bcc NextField
+Offline:
+    lda #ERROR_OFFLINE
+    bra Error
+
+    ; The next address field.
+NextField:
     stz DiskErrors
-    jsr READADDRESS
-    bcc DOREADBLOCK_16
+    jsr ReadAddressField
+    bcc Found
     lda DiskErrors
-    bit #$04
-    bne DOREADBLOCK_10
-    bit #$20
-    beq DOREADBLOCK_14
+    bit #DISK_ERROR_WRONG_TRACK
+    bne Seek
+    bit #DISK_ERROR_BAD_FIELD
+    beq NoField
     dec SectorTries
-    beq DOREADBLOCK_FAIL
+    beq IoError
+
+    ; A bad field: after a track's worth of them, recalibrate; otherwise read on, or seek again while bit 3 of half
+    ; the tries left is set.
     lda SectorTries
     and #$3F
-    lsr A
+    lsr a
     cmp SectorsPerTrack
-    beq DOREADBLOCK_12
+    beq TrackOfBadFields
     bit #$08
-    beq DOREADBLOCK_READ
-    bra DOREADBLOCK_10
-DOREADBLOCK_12:
+    beq NextField
+    bra Seek
+TrackOfBadFields:
     bit ReadState
-    bvc DOREADBLOCK_9
-DOREADBLOCK_13:
-    jsr LEAVEISMIF
+    bvc Recalibrate
+HandedOver:
+    jsr Swim::EnsureIwm
     sec
     rts
-DOREADBLOCK_14:
-    bit #$01
-    beq DOREADBLOCK_FAIL
+
+    ; No field: the disk may be gone, or the head lost.
+NoField:
+    bit #DISK_ERROR_NO_FIELD
+    beq IoError
     bit ReadState
-    bvs DOREADBLOCK_13
-    lda #$02
-    jsr DRIVESENSE
-    bcs DOREADBLOCK_11
+    bvs HandedOver
+    lda #SENSE_NO_DISK
+    jsr Drives::SenseLine
+    bcs Offline
     dec ResultStatus
-    bmi DOREADBLOCK_FAIL
-    jsr RECALIBRATE
+    bmi IoError
+    jsr Drives::Recalibrate
     stz DiskErrors
-    jsr READADDRESS
-    bcc DOREADBLOCK_10
+    jsr ReadAddressField
+    bcc Seek
     ldx Drive
-    jsr FORGETDISK
-DOREADBLOCK_FAIL:
-    lda #$27
-DOREADBLOCK_15:
+    jsr Drives::ForgetDisk
+IoError:
+    lda #ERROR_IO
+Error:
     bit ReadState
-    bvs DOREADBLOCK_13
-    jmp SETERROR
-DOREADBLOCK_16:
+    bvs HandedOver
+    jmp SetError
+
+    ; A field read: the block's sector is handed over as soon as its data is read.
+Found:
     ldx AddressSector
     cpx Sector
-    bne DOREADBLOCK_18
+    bne OtherSector
     bit ReadState
-    bvs DOREADBLOCK_13
-    jsr FILLSLOT
+    bvs HandedOver
+    jsr Cache::ClaimSlot
     stz Reading
-    jsr READDATA
-    bcc DOREADBLOCK_17
-    jsr COUNTRETRY
-    bcs DOREADBLOCK_FAIL
-    bra DOREADBLOCK_26
-DOREADBLOCK_17:
+    jsr ReadDataField
+    bcc HandOver
+    jsr CountRetry
+    bcs IoError
+    bra TryNext
+HandOver:
     lda BufferCode
     sta CardData
     lda SectorCount
     ora #$80
     sta CardState
-    lda #$40
+    lda #READ_STATE_HANDED_OVER
     tsb ReadState
-    bra DOREADBLOCK_23
-DOREADBLOCK_18:
+    bra Cached
+
+    ; Another sector of the track: into the cache, unless it is there already.
+OtherSector:
     bit ReadState
-    bmi DOREADBLOCK_26
-    bit SECTORFLAGS,X
-    bvs DOREADBLOCK_19
-    ldy SECTORSLOTS,X
-    lda CACHEOWNER-1,Y
-    bmi DOREADBLOCK_22
+    bmi TryNext
+    bit SectorFlags,X
+    bvs AlreadyDone
+    ldy Cache::SectorSlots,X
+    lda CacheOwners-1,Y
+    bmi ReadOther
     cmp Drive
-    bne DOREADBLOCK_22
-    lda CACHECYLINDER-1,Y
+    bne ReadOther
+    lda CacheCylinders-1,Y
     cmp Cylinder
-    bne DOREADBLOCK_22
-    lda CACHESECTORS-1,Y
+    bne ReadOther
+    lda CacheSectors-1,Y
     cmp AddressSector
-    bne DOREADBLOCK_22
-    lda #$40
-    sta SECTORFLAGS,X
-    bra DOREADBLOCK_25
-DOREADBLOCK_19:
+    bne ReadOther
+    lda #SECTOR_DONE
+    sta SectorFlags,X
+    bra CheckDone
+
+    ; A sector read already: once the block is handed over, wait a little for the host's next command.
+AlreadyDone:
     bit ReadState
-    bvc DOREADBLOCK_26
-    ldx #$08
-DOREADBLOCK_20:
+    bvc TryNext
+    ldx #8
+Wait:
     lda #$CC
-DOREADBLOCK_21:
+WaitInner:
     bit CardState
-    bpl DOREADBLOCK_27
-    dec A
-    bne DOREADBLOCK_21
+    bpl Finish
+    dec a
+    bne WaitInner
     dex
-    bne DOREADBLOCK_20
-    bra DOREADBLOCK_26
-DOREADBLOCK_22:
-    jsr FILLSLOT
-    jsr READDATA
-    bcc DOREADBLOCK_23
+    bne Wait
+    bra TryNext
+
+    ; Too many sectors besides the block that fail stop the filling.
+ReadOther:
+    jsr Cache::ClaimSlot
+    jsr ReadDataField
+    bcc Cached
     dec ResultY
-    bpl DOREADBLOCK_25
-    lda #$80
+    bpl CheckDone
+    lda #READ_STATE_BLOCK_ONLY
     tsb ReadState
-    bra DOREADBLOCK_25
-DOREADBLOCK_23:
+    bra CheckDone
+Cached:
     ldx AddressSector
-    lda #$40
-    sta SECTORFLAGS,X
+    lda #SECTOR_DONE
+    sta SectorFlags,X
     lda AddressSector
-    jsr CACHESECTOR
-    bcc DOREADBLOCK_25
-DOREADBLOCK_24:
-    jmp DOREADBLOCK_FAIL
-DOREADBLOCK_25:
+    jsr Cache::Record
+    bcc CheckDone
+ToIoError:
+    jmp IoError
+
+    ; Done once the block is handed over and the track is read, or the host has sent a command.
+CheckDone:
     bit ReadState
-    bvc DOREADBLOCK_26
-    bmi DOREADBLOCK_27
+    bvc TryNext
+    bmi Finish
     dec SectorCount
-    beq DOREADBLOCK_27
+    beq Finish
     lda CardState
-    bpl DOREADBLOCK_27
-DOREADBLOCK_26:
-    jsr LEAVEISMIF
+    bpl Finish
+TryNext:
+    jsr Swim::EnsureIwm
     dec SectorTries
-    beq DOREADBLOCK_24
-    jmp DOREADBLOCK_READ
-DOREADBLOCK_27:
-    jsr LEAVEISMIF
+    beq ToIoError
+    jmp NextField
+Finish:
+    jsr Swim::EnsureIwm
     bit ReadState
-    bvs DOREADBLOCK_28
+    bvs Continued
     clc
     rts
-DOREADBLOCK_28:
+Continued:
     sec
     rts
+.endproc
 
-;; SmartPort WRITEBLOCK ($02), and ProDOS WRITE: asks the host for the block in buffer code 6 and
-;; writes it; on a IIgs it starts writing while the host is still copying.
-;; Out:   ErrorCode = the error
-DOWRITEBLOCK:
-    lda #$11
+;; SmartPort WRITEBLOCK ($02), and ProDOS's write: asks the host for the block in BufferCode's buffer and writes it;
+;; on a IIgs the card starts nibblizing while the host is still copying (WriteProgress).
+;;
+;; A tagged call on an MFM disk sets TagError to <ERROR_BAD_CONTROL> and returns without an answer.
+;; Out: ErrorCode = the error, or unchanged; carry = clear
+.proc WriteBlock
+    lda #ERROR_BAD_UNIT
     ldx Drive
-    bmi DOWRITEBLOCK_2
-    jsr CHECKDISK
-    bpl DOWRITEBLOCK_1
-    jsr IDENTIFYMEDIA
-DOWRITEBLOCK_1:
-    bcc DOWRITEBLOCK_3
-DOWRITEBLOCK_2:
-    jmp SETERROR
-DOWRITEBLOCK_3:
-    bne DOWRITEBLOCK_2
-    jsr CHECKBLOCK
-    bcs DOWRITEBLOCK_2
+    bmi Fail
+    jsr Drives::CheckDisk
+    bpl Known
+    jsr Drives::IdentifyMedia
+Known:
+    bcc Writable
+Fail:
+    jmp SetError
+
+    ; A disk that is not write-protected, with the block on it.
+Writable:
+    bne Fail
+    jsr CheckBlock
+    bcs Fail
+
+    ; An MFM disk: no tags.
     ldx Drive
-    lda #$60
+    lda #MEDIA_MODE_MFM
     bit MediaMode,X
-    beq DOWRITEBLOCK_5
+    beq Locate
     bit TagCall
-    bpl DOWRITEBLOCK_4
-    lda #$21
+    bpl Mfm
+    lda #ERROR_BAD_CONTROL
     sta TagError
     rts
-DOWRITEBLOCK_4:
-    jsr MFMON
-DOWRITEBLOCK_5:
-    lda #$06
+Mfm:
+    jsr Swim::UseMfm
+
+    ; Where the block is: ResultStatus counts the seeks; the address fields to look at are $70 on a GCR disk
+    ; with 8 to 12 sectors and $80 on an 18-sector MFM one.
+Locate:
+    lda #BLOCK_RETRIES
     sta Retries
-    lda #$03
+    lda #3
     sta ResultStatus
-    jsr BLOCKTOSECTOR
-    bcs DOWRITEBLOCK_2
+    jsr BlockMap::Locate
+    bcs Fail
     sta SectorsPerTrack
     and #$18
-    asl A
+    asl a
     adc #$60
     sta SectorTries
     ldx Sector
-    jsr FILLSLOT
+    jsr Cache::ClaimSlot
+
+    ; A IIgs's host code paces the card through WriteProgress, unless this is the self-test's call, a tagged one or
+    ; one on an MFM disk.
     stz WriteProgress
     bit TestCall
-    bmi DOWRITEBLOCK_6
-    bit SharedExpansion+HOSTTYPEOFFSET
-    bvc DOWRITEBLOCK_6
+    bmi AskHost
+    bit SharedExpansion+HOST_TYPE_OFFSET
+    bvc AskHost
     bit TagCall
-    bmi DOWRITEBLOCK_6
+    bmi AskHost
     bit SwimState
-    bmi DOWRITEBLOCK_6
+    bmi AskHost
     dec WriteProgress
-DOWRITEBLOCK_6:
+
+    ; Asks the host for the data while the head moves.
+AskHost:
     lda BufferCode
     sta CardData
-    jsr MOTORON
-    jsr SEEK
-    bcs DOWRITEBLOCK_19
+    jsr Drives::MotorOn
+    jsr Drives::Seek
+    bcs IoError
     bit TestCall
-    bmi DOWRITEBLOCK_9
+    bmi Prepare
     bit WriteProgress
-    bmi DOWRITEBLOCK_8
-DOWRITEBLOCK_7:
+    bmi PrepareData
+WaitForHost:
     lda CardData
-    bpl DOWRITEBLOCK_7
-DOWRITEBLOCK_8:
+    bpl WaitForHost
+PrepareData:
     bit TagCall
-    bpl DOWRITEBLOCK_9
-    jsr PREPAREDATATAGS
-    bra DOWRITEBLOCK_10
-DOWRITEBLOCK_9:
-    jsr PREPAREDATA
-DOWRITEBLOCK_10:
-    jsr WAITREADY
-    bcc DOWRITEBLOCK_12
-DOWRITEBLOCK_11:
-    lda #$2F
-    bra DOWRITEBLOCK_20
-DOWRITEBLOCK_12:
-    jsr READADDRESS
-    bcc DOWRITEBLOCK_16
+    bpl Prepare
+    jsr NibblizeSectorWithTags
+    bra WaitReady
+Prepare:
+    jsr NibblizeSector
+WaitReady:
+    jsr Drives::WaitReady
+    bcc NextField
+Offline:
+    lda #ERROR_OFFLINE
+    bra Error
+
+    ; The next address field.
+NextField:
+    jsr ReadAddressField
+    bcc Found
     lda DiskErrors
-    bit #$04
-    bne DOWRITEBLOCK_14
-    bit #$20
-    beq DOWRITEBLOCK_15
+    bit #DISK_ERROR_WRONG_TRACK
+    bne Seek
+    bit #DISK_ERROR_BAD_FIELD
+    beq NoField
     dec SectorTries
-    beq DOWRITEBLOCK_19
+    beq IoError
+
+    ; A bad field: after a track's worth of them, recalibrate; otherwise read on, or seek again while bit 3 of half
+    ; the tries left is set.
     lda SectorTries
     and #$3F
-    lsr A
+    lsr a
     cmp SectorsPerTrack
-    beq DOWRITEBLOCK_13
+    beq Recalibrate
     bit #$08
-    beq DOWRITEBLOCK_12
-    bra DOWRITEBLOCK_14
-DOWRITEBLOCK_13:
-    jsr RECALIBRATE
-    bcs DOWRITEBLOCK_19
-DOWRITEBLOCK_14:
+    beq NextField
+    bra Seek
+Recalibrate:
+    jsr Drives::Recalibrate
+    bcs IoError
+Seek:
     dec ResultStatus
-    bmi DOWRITEBLOCK_19
-    jsr SEEK
-    bcc DOWRITEBLOCK_10
-    bra DOWRITEBLOCK_19
-DOWRITEBLOCK_15:
-    bit #$01
-    beq DOWRITEBLOCK_19
-    lda #$02
-    jsr DRIVESENSE
-    bcs DOWRITEBLOCK_11
-    bra DOWRITEBLOCK_13
-DOWRITEBLOCK_16:
+    bmi IoError
+    jsr Drives::Seek
+    bcc WaitReady
+    bra IoError
+
+    ; No field: the disk may be gone, or the head lost.
+NoField:
+    bit #DISK_ERROR_NO_FIELD
+    beq IoError
+    lda #SENSE_NO_DISK
+    jsr Drives::SenseLine
+    bcs Offline
+    bra Recalibrate
+
+    ; The block's sector: write its data field, and keep the sector in the cache.
+Found:
     lda AddressSector
     cmp Sector
-    beq DOWRITEBLOCK_17
+    beq Write
     dec SectorTries
-    beq DOWRITEBLOCK_19
-    jsr LEAVEISMIF
-    bra DOWRITEBLOCK_12
-DOWRITEBLOCK_17:
-    jsr WRITEDATA
-    bcs DOWRITEBLOCK_19
+    beq IoError
+    jsr Swim::EnsureIwm
+    bra NextField
+Write:
+    jsr WriteDataField
+    bcs IoError
     bit TestCall
-    bmi DOWRITEBLOCK_18
+    bmi Done
     lda Sector
-    jsr CACHESECTOR
-DOWRITEBLOCK_18:
+    jsr Cache::Record
+Done:
     clc
     rts
-DOWRITEBLOCK_19:
-    lda #$27
-DOWRITEBLOCK_20:
+IoError:
+    lda #ERROR_IO
+Error:
     sta ErrorCode
     clc
     rts
+.endproc
 
-;; The boot command ($0C): READBLOCK of block 0 of unit 1 as a ProDOS call, or $28 if there is no
-;; drive 1. A SmartPort bus device as unit 1 is read through the bus.
-BOOTREAD:
+;; The boot command (<COMMAND_BOOT>): READBLOCK of block 0 of unit 1, as a ProDOS call, or <ERROR_NO_DRIVE> when there
+;; is no unit 1. A SmartPort bus device as unit 1 is read through the bus.
+.proc BootRead
     stz ErrorCode
     stz Side
     stz Track
     stz Cylinder
-    jsr FLUSHCACHE
-    lda #$01
+    jsr Cache::Flush
+
+    ; A ProDOS READBLOCK of block 0, unit 1.
+    lda #COMMAND_READ_BLOCK
     sta CardState
     ora #$80
     sta CardCommand
@@ -529,69 +648,80 @@ BOOTREAD:
     stz ParameterMiddle
     stz ParameterHigh
     stz Drive
-    lda #$01
+    lda #1
     sta CardUnit
     stz SavedDrive
     ldx SavedDrive
     lda DeviceKinds,X
-    beq BOOTREAD_2
-    bmi BOOTREAD_1
-    jsr FORGETDISK
-    jmp CALLHANDLER
-BOOTREAD_1:
+    beq NoDrive
+    bmi BusDevice
+    jsr Drives::ForgetDisk
+    jmp RunCommand::CallHandler
+BusDevice:
     lda #$FF
-    jsr DELAY2
-    jmp PASSTOBUS
-BOOTREAD_2:
-    lda #$28
+    jsr DelayMillisecondPairs
+    jmp RunCommand::PassToBus
+NoDrive:
+    lda #ERROR_NO_DRIVE
     sta ErrorCode
     stz CardData
     clc
     rts
+.endproc
 
-;; Unused, to put the tables below on a page.
-GCRHIGH_PAD:
+    ; Unused, to put the tables below on a page.
     .res $E200-*
 
-;; The high two bits of a 6-and-2 auxiliary nibble's three fields, for ReadGcrDataField.
-GCRHIGH1:
+;; The high two bits of the first of the three bytes a 6-and-2 auxiliary nibble completes, by the nibble's six bits,
+;; in bits 6 and 7, for <ReadGcrDataField>.
+GcrHighBits1:
 .repeat 64, I
     .byte ((I >> 4) & 3) << 6
 .endrepeat
-GCRHIGH2:
+
+;; The same for the second byte.
+GcrHighBits2:
 .repeat 64, I
     .byte ((I >> 2) & 3) << 6
 .endrepeat
-GCRHIGH3:
+
+;; The same for the third byte.
+GcrHighBits3:
 .repeat 64, I
     .byte ((I >> 0) & 3) << 6
 .endrepeat
 
-;; Command $0D: checks a run of blocks (Parameter4/Parameter5 more after the first) and works out how many
-;; lie in the first block's track, for the host, then waits briefly for the next command.
-;; Out:   carry = set (the host's next command is run at once)
-READAHEAD:
-    lda #$11
+;; Command <COMMAND_READ_AHEAD>: checks a run of blocks (Parameter4 and Parameter5 more after the first) and works out
+;; how many of them lie in the first block's track, for the host in Count, then waits briefly for the next command.
+;;
+;; Two bugs: the run's last block's high byte is stored in ParameterLow, not ParameterMiddle, so the check is of
+;; another block; and when that check fails, the two bytes of the block number pushed meanwhile stay on the stack,
+;; and <SetError>'s RTS returns through them.
+;; Out: carry = set (the host's next command is run at once); Count = the blocks, CardData = 0
+.proc ReadAhead
+    lda #ERROR_BAD_UNIT
     ldx Drive
-    bpl READAHEAD_2
-READAHEAD_1:
-    jmp SETERROR
-READAHEAD_2:
-    jsr CHECKDISK
-    bpl READAHEAD_3
-    jsr IDENTIFYMEDIA
-READAHEAD_3:
-    bcs READAHEAD_1
-    jsr CHECKBLOCK
-    bcs READAHEAD_1
+    bpl CheckDisk
+Fail:
+    jmp SetError
+CheckDisk:
+    jsr Drives::CheckDisk
+    bpl Known
+    jsr Drives::IdentifyMedia
+Known:
+    bcs Fail
+    jsr CheckBlock
+    bcs Fail
     lda #$80
     sta Reading
     ldx Drive
-    lda #$60
+    lda #MEDIA_MODE_MFM
     bit MediaMode,X
-    beq READAHEAD_4
-    jsr MFMON
-READAHEAD_4:
+    beq CheckEnd
+    jsr Swim::UseMfm
+
+    ; The run's end must be on the disk.
+CheckEnd:
     lda ParameterMiddle
     pha
     lda ParameterLow
@@ -602,14 +732,16 @@ READAHEAD_4:
     lda ParameterMiddle
     adc Parameter5
     sta ParameterLow
-    jsr CHECKBLOCK
-    bcs READAHEAD_1
+    jsr CheckBlock
+    bcs Fail
     pla
     sta ParameterLow
     pla
     sta ParameterMiddle
-    jsr BLOCKTOSECTOR
-    bcs READAHEAD_1
+
+    ; The blocks left in the first block's track, but no more than the run.
+    jsr BlockMap::Locate
+    bcs Fail
     sta SectorsPerTrack
     stz CountHigh
     lda SectorsPerTrack
@@ -617,58 +749,65 @@ READAHEAD_4:
     sbc Sector
     sta SectorCount
     ldy Parameter5
-    bne READAHEAD_5
+    bne SetCount
     cmp Parameter4
-    beq READAHEAD_5
-    bcc READAHEAD_5
+    beq SetCount
+    bcc SetCount
     lda Parameter4
-READAHEAD_5:
+SetCount:
     sta Count
     stz CardData
+
+    ; Ready for the next command, which runs at once if it comes within about 1,500 passes.
     lda #$FF
     sta CardState
-    lda #$05
+    lda #5
     sta WorkPointer+1
     stz WorkPointer
-READAHEAD_6:
+Wait:
     dec WorkPointer
-    bne READAHEAD_7
+    bne Check
     dec WorkPointer+1
-    bmi READAHEAD_8
-READAHEAD_7:
+    bmi Done
+Check:
     lda CardState
-    bmi READAHEAD_6
-READAHEAD_8:
+    bmi Wait
+Done:
     sec
     rts
+.endproc
 
-;; Command $0E: reads the sectors of a run of blocks that share a track into the cache, and lists in
-;; $0600 how many were read and, from $0602, each one's buffer code ($A7 for one that failed).
-;; Out:   carry = set when all were read (the host's next command is run at once)
-READSPAN:
-    lda #$11
+;; Command <COMMAND_READ_SPAN>: reads the sectors of a run of blocks (Parameter4 and Parameter5 more after the first)
+;; that share a cylinder, and lists them in <InterleaveMap> for the host: at $0600 how many were read, at $0601 1
+;; if one failed, and from $0602 each one's buffer code (<SPAN_FAILED> for one that failed). The sectors' cache slots
+;; stay claimed (filling) until the cache is next flushed.
+;; Out: carry = set when all were read (the host's next command is run at once); otherwise ErrorCode = the error
+.proc ReadSpan
+    lda #ERROR_BAD_UNIT
     ldx Drive
-    bpl READSPAN_2
-READSPAN_1:
-    jmp SETERROR
-READSPAN_2:
-    jsr CHECKDISK
-    bpl READSPAN_3
-    jsr IDENTIFYMEDIA
-READSPAN_3:
-    bcs READSPAN_1
-    jsr CHECKBLOCK
-    bcs READSPAN_1
+    bpl CheckDisk
+Fail:
+    jmp SetError
+CheckDisk:
+    jsr Drives::CheckDisk
+    bpl Known
+    jsr Drives::IdentifyMedia
+Known:
+    bcs Fail
+    jsr CheckBlock
+    bcs Fail
     lda #$80
     sta Reading
     ldx Drive
-    lda #$60
+    lda #MEDIA_MODE_MFM
     bit MediaMode,X
-    beq READSPAN_4
-    jsr MFMON
-READSPAN_4:
-    jsr BLOCKTOSECTOR
-    bcs READSPAN_1
+    beq Locate
+    jsr Swim::UseMfm
+
+    ; The first block's place, then the last block's, which must be on the same cylinder.
+Locate:
+    jsr BlockMap::Locate
+    bcs Fail
     sta SectorsPerTrack
     lda Sector
     sta SpanFirst
@@ -682,173 +821,190 @@ READSPAN_4:
     adc ParameterMiddle
     sta ParameterMiddle
     lda ParameterLow
-    bne READSPAN_5
+    bne LastBlock
     dec ParameterMiddle
-READSPAN_5:
+LastBlock:
     dec ParameterLow
-    jsr CHECKBLOCK
-    bcs READSPAN_1
-    jsr BLOCKTOSECTOR
-    bcs READSPAN_1
+    jsr CheckBlock
+    bcs Fail
+    jsr BlockMap::Locate
+    bcs Fail
     lda Cylinder
     cmp SpanCylinder
-    beq READSPAN_6
-    lda #$2D
-    jmp SETERROR
-READSPAN_6:
-    stz INTERLEAVEMAP
-    stz INTERLEAVEMAP+1
+    beq ClearList
+    lda #ERROR_BAD_BLOCK
+    jmp SetError
+
+    ; The list empty (all but its first buffer code), the sectors of the span wanted, four tries each.
+ClearList:
+    stz InterleaveMap
+    stz InterleaveMap+1
     ldx SectorsPerTrack
-READSPAN_7:
+Clear:
     dex
-    stz INTERLEAVEMAP+2,X
-    bne READSPAN_7
+    stz InterleaveMap+2,X
+    bne Clear
     lda SpanFirst
     sta SpanStart
     lda Sector
-    inc A
+    inc a
     sta SpanEnd
     sec
     sbc SpanFirst
     sta SectorCount
-    asl A
-    asl A
+    asl a
+    asl a
     sta Retries
-    lda #$40
+    lda #SECTOR_DONE
     ldx SectorsPerTrack
     stx AddressSector
-READSPAN_8:
-    sta SECTORFLAGS,X
+MarkSectors:
+    sta SectorFlags,X
     cpx SpanStart
-    bcc READSPAN_9
+    bcc NextMark
     cpx SpanEnd
-    bcs READSPAN_9
-    stz SECTORFLAGS,X
-READSPAN_9:
+    bcs NextMark
+    stz SectorFlags,X
+NextMark:
     dex
-    bpl READSPAN_8
-    lda #$03
+    bpl MarkSectors
+    lda #SPAN_LIST_CODE
     sta CardData
+
+    ; Four address fields for each sector in the track, and two seeks.
     lda SectorsPerTrack
-    asl A
-    asl A
-    inc A
+    asl a
+    asl a
+    inc a
     sta SectorTries
-    lda #$02
+    lda #2
     sta ResultStatus
-    jsr MOTORON
-    bra READSPAN_11
-READSPAN_10:
-    jsr RECALIBRATE
-    bcs READSPAN_15
-READSPAN_11:
+    jsr Drives::MotorOn
+    bra Seek
+Recalibrate:
+    jsr Drives::Recalibrate
+    bcs ToIoError
+Seek:
     dec ResultStatus
-    bmi READSPAN_15
-    jsr SEEK
-    bcs READSPAN_15
-    jsr WAITREADY
-    bcc READSPAN_14
-READSPAN_12:
-    lda #$2F
-    bra READSPAN_26
-READSPAN_13:
-    jsr LEAVEISMIF
-READSPAN_14:
+    bmi ToIoError
+    jsr Drives::Seek
+    bcs ToIoError
+    jsr Drives::WaitReady
+    bcc NextField
+Offline:
+    lda #ERROR_OFFLINE
+    bra Error
+LeaveIsm:
+    jsr Swim::EnsureIwm
+
+    ; The next address field.
+NextField:
     stz DiskErrors
-    jsr READADDRESS
-    bcc READSPAN_18
+    jsr ReadAddressField
+    bcc Found
     lda DiskErrors
-    bit #$04
-    bne READSPAN_11
-    bit #$20
-    bne READSPAN_16
-    bit #$01
-    bne READSPAN_12
-READSPAN_15:
-    bra READSPAN_25
-READSPAN_16:
+    bit #DISK_ERROR_WRONG_TRACK
+    bne Seek
+    bit #DISK_ERROR_BAD_FIELD
+    bne BadField
+    bit #DISK_ERROR_NO_FIELD
+    bne Offline
+ToIoError:
+    bra IoError
+
+    ; A bad field: after a track's worth of them, recalibrate; otherwise read on, or seek again while bit 3 of the
+    ; tries left is set.
+BadField:
     dec SectorTries
-    beq READSPAN_25
+    beq IoError
     lda SectorTries
     cmp SectorsPerTrack
-    bne READSPAN_17
-    bra READSPAN_10
-READSPAN_17:
+    bne SeekOrNext
+    bra Recalibrate
+SeekOrNext:
     bit #$08
-    beq READSPAN_14
-    bra READSPAN_11
-READSPAN_18:
+    beq NextField
+    bra Seek
+
+    ; A sector of the span: read it and list its buffer.
+Found:
     ldx AddressSector
-    bit SECTORFLAGS,X
-    bvs READSPAN_19
-    jsr FILLSLOT
-    jsr READDATA
-    bcs READSPAN_24
+    bit SectorFlags,X
+    bvs Skip
+    jsr Cache::ClaimSlot
+    jsr ReadDataField
+    bcs DataFailed
     ldx AddressSector
-    lda #$40
-    sta SECTORFLAGS,X
+    lda #SECTOR_DONE
+    sta SectorFlags,X
     txa
     sec
     sbc SpanFirst
     tax
     lda BufferCode
-    sta INTERLEAVEMAP+2,X
-    inc INTERLEAVEMAP
+    sta InterleaveMap+2,X
+    inc InterleaveMap
     dec SectorCount
-    beq READSPAN_27
-    bra READSPAN_23
-READSPAN_19:
+    beq Read
+    bra Next
+
+    ; Another sector: a pause whose test of Scratch, just cleared, changes nothing.
+Skip:
     stz Scratch
-    ldx #$08
-READSPAN_20:
+    ldx #8
+Pause:
     lda #$CC
-READSPAN_21:
+PauseInner:
     bit Scratch
-    bpl READSPAN_22
-READSPAN_22:
-    dec A
-    bne READSPAN_21
+    bpl PauseNext
+PauseNext:
+    dec a
+    bne PauseInner
     dex
-    bne READSPAN_20
-READSPAN_23:
+    bne Pause
+Next:
     dec SectorTries
-    bne READSPAN_13
-    bra READSPAN_25
-READSPAN_24:
+    bne LeaveIsm
+    bra IoError
+
+    ; A data field that failed: retried until the tries are used up, then listed as failed.
+DataFailed:
     dec Retries
-    bpl READSPAN_13
+    bpl LeaveIsm
     lda AddressSector
     sec
     sbc SpanFirst
     tax
-    lda #$A7
-    sta INTERLEAVEMAP+2,X
-READSPAN_25:
-    lda #$27
-READSPAN_26:
+    lda #SPAN_FAILED
+    sta InterleaveMap+2,X
+IoError:
+    lda #ERROR_IO
+Error:
     sta ErrorCode
-    lda #$01
-    sta INTERLEAVEMAP+1
+    lda #1
+    sta InterleaveMap+1
     clc
     rts
-READSPAN_27:
+
+    ; All read: ready for the next command, which runs at once if it comes within about 1,500 passes.
+Read:
     lda #$FF
     sta CardState
-    lda #$05
+    lda #5
     sta WorkPointer+1
     stz WorkPointer
-READSPAN_28:
+Wait:
     dec WorkPointer
-    bne READSPAN_29
+    bne Check
     dec WorkPointer+1
-    bmi READSPAN_30
-READSPAN_29:
+    bmi Done
+Check:
     lda CardState
-    bmi READSPAN_28
-READSPAN_30:
+    bmi Wait
+Done:
     sec
     rts
+.endproc
 
-;; Unused, to put READADDRESS on a page: GCRDECODE is indexed from it.
-READADDRESS_PAD:
+    ; Unused, to put ReadAddressField on a page: GcrDecode is indexed from it.
     .res $E500-*

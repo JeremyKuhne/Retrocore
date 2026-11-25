@@ -52,8 +52,8 @@ Prompt:
 ;; Reads a line and tokenizes it, then runs it or stores it.
 ;;
 ;; The tokenizer starts at the top of the syntax table, $EDFF, with <TextIndex> before the line's first character and
-;; <TokenIndex> at the end of its text, where the tokens will go. When it returns, <TokenPointer> is set to the first
-;; token.
+;; <TokenIndex> at the end of its text, where the tokens will go. When it returns, the code after the call points
+;; <TokenPointer> at the first token.
 ;; Also: CMDLINE (UNKN)
 ReadCommand:
     ldx #$FF                        ; a fresh 6502 stack

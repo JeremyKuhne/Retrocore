@@ -17,9 +17,9 @@
 ;; are:
 ;;
 ;; - $80-$FF, a character: the line's next character, after skipping blanks, must be this one. The low 6 bits are the
-;;   character less $A0 ($A0-$DF can be matched). Two values are classes instead: $x0 matches any letter and $x1 any
-;;   digit, and copy the character into the tokens. Consecutive characters form a keyword; when a keyword is matched,
-;;   its token is written (<Tokenizer::GotKeyword>).
+;;   character less $A0 ($A0-$DF can be matched). Two values are classes instead: $80 or $C0 (<Syntax::ITEM_LETTER>)
+;;   matches any letter and $81 or $C1 (<Syntax::ITEM_DIGIT>) any digit, and copy the character into the tokens.
+;;   Consecutive characters form a keyword; when a keyword is matched, its token is written (<Tokenizer::GotKeyword>).
 ;; - $00: a SYNTAX error. It ends the lists where nothing else could be right.
 ;; - $01: copies one character of a string, unless it is a double quote or the end of the line; the item after it
 ;;   repeats it. $02 does the same up to the end of the line, for REM.
@@ -134,18 +134,18 @@ SkipBlank:
     cmp InputBuffer,x
     bcs SkipBlank
 
-    ; A character, or a class: $x0 a letter, $x1 a digit.
+    ; A character, or a class: $80 or $C0 a letter, $81 or $C1 a digit.
     lda (SyntaxPage),y
     and #SYNTAX_CHARACTER_BITS
     lsr a
     bne MatchCharacter              ; a character, not a class
     lda InputBuffer,x
-    bcs IsDigit                     ; $x1: a digit
-    adc #$100 - 'A'                 ; $x0: is it a letter? (carry is clear)
+    bcs IsDigit                     ; $81 or $C1: a digit
+    adc #$100 - 'A'                 ; $80 or $C0: is it a letter? (carry is clear)
     cmp #'Z' - 'A' + 1
     bcc CopyCharacter
 
-;; Tests for a digit: for $x1 the carry is set and A holds the character, so adding $4F leaves 0-9 for $B0-$B9.
+;; Tests for a digit: for $81 or $C1 the carry is set and A holds the character, so adding $4F leaves 0-9 for $B0-$B9.
 ;;
 ;; After a failed letter test, A holds the character plus $3F and carry is set, and the sum is never below 10 for a
 ;; character with bit 7 set.

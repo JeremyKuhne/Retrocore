@@ -396,7 +396,7 @@ RULE_NAME_CHARACTER = $1D
 RULE_OPERATOR = $1E
 
 ;; Rule 31: a whole line: a numbered line of statements, a statement of <RULE_IMMEDIATE_STATEMENT>, or a command.
-;; > number statement { : ($03) statement }
+;; > number [statement { : ($03) statement }]
 ;; > immediate_statement
 ;; > LOAD ($04) | SAVE ($05) | CON ($06)
 ;; > RUN ($07) number

@@ -473,10 +473,12 @@ ContinueAt:
 ;; The FOR stack is searched from the innermost loop for the variable; the loops inside it are dropped
 ;; (<Statements::DropInnerLoop>). The loop goes on while the variable equals the limit or the sign of variable -
 ;; limit is not the step's sign. That difference is a subtraction (<Operators::Subtract>), so by the code a variable
-;; and limit more than 32767 apart (`FOR I = -20000 TO 20000`) stop the loop with the >32767 error.
+;; and limit more than 32767 apart (`FOR I = -20000 TO 20000`) stop the loop with the >32767 error, and so does a
+;; limit of -32768, which the subtraction negates.
 ;; In: X = the noun stack, its top entry the variable
 ;; Out: X = the noun stack, one entry higher, when the loop is done
-;; Errors: BAD NEXT if no FOR loop has the variable, >32767 if the variable passes 32767 or is too far from the limit
+;; Errors: BAD NEXT if no FOR loop has the variable, >32767 if the variable passes 32767 or -32768,
+;;   is more than 32767 from the limit, or the limit is -32768
 ;; See: <Statements::For>, <ForVariableLow>
 ;; Entry:
 ;;   ErrorIfZero = reports the error whose message is at offset Y when zero is set

@@ -584,8 +584,9 @@ SavedX = $D8
 
 ;; The run flag: bit 7 is set while a program runs, clear for an immediate statement.
 ;;
-;; <Lines::RunFromToken> sets it for each statement; errors (<ReportError>) and `END` check it.
-;; See: <Lines::RunFromToken>, <ReportError>
+;; <Lines::RunFromToken> sets it for each line of a running program; the run loop (<Lines::RunLoop>), errors
+;; (<ReportError>) and the display of `DSP` variables check it.
+;; See: <Lines::RunFromToken>, <Lines::RunLoop>, <ReportError>
 ;; Also: RUNFLAG (IBSM)
 Running = $D9
 
@@ -628,7 +629,8 @@ Pointer3 = $E6
 
 ;; The tokenizer's index of the last token it has written in <InputBuffer>.
 ;;
-;; The tokens go into <InputBuffer> after the line's text: <Editor::ReadLine> sets it to the length of the line, and
+;; The tokens go into <InputBuffer> after the line's text: the callers of <Editor::ReadLine> set it to the length of the
+;; line it returns, and
 ;; <Tokenizer::PutToken> adds each token after it. A line that fills the buffer is TOO LONG.
 ;; See: <TextIndex>, <Tokenizer::PutToken>, <TokenIndexStack>
 ;; Also: TOKNDX (IBSM)

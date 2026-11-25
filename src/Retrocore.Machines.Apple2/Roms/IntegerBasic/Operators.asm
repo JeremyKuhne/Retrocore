@@ -3,7 +3,7 @@
 ;;
 ;; <RuleStarts>, the tokenizer's index of where each syntax rule starts; the display of a variable marked with DSP
 ;; when a program assigns it; the comparisons less than, greater than, at most and at least, AND and OR; STEP, which
-;; finishes a FOR; DSP and NODSP; CON, ASC(, PDL, ^, PR# and IN#; the line input of INPUT; and a few small routines
+;; sets a FOR's step; DSP and NODSP; CON, ASC(, PDL, ^, PR# and IN#; the line input of INPUT; and a few small routines
 ;; the other modules share. It follows Memory.asm, at $F197.
 ;;
 ;; Part of IntegerBasic.asm.
@@ -292,7 +292,8 @@ Done:
 ;; Errors: >32767 if the difference overflows
 ;; Entry:
 ;;   Sign = turns the difference on the noun stack into the result; <LessOrEqual> branches here
-;;   ToNot = replaces the top number with NOT of it (<Operators::Not>); the other comparisons, AND and OR branch here
+;;   ToNot = replaces the top number with NOT of it (<Operators::Not>); the other comparisons branch here, and AND
+;;   and OR reach it through <Operators::Or::Store>
 ;; Also: GREATEQ (UNKN)
 .proc GreaterOrEqual
     jsr Operators::Subtract
@@ -302,7 +303,8 @@ Sign:
     jsr Functions::Sgn
     lsr NounStackLow,x
 
-;; Replaces the top number with NOT of it (<Operators::Not>); the other comparisons, AND and OR branch here.
+;; Replaces the top number with NOT of it (<Operators::Not>); the other comparisons branch here, and AND and
+;; OR reach it through <Operators::Or::Store>.
 ;; Also: JmpNOT (IBSM)
 ToNot:
     jmp Operators::Not

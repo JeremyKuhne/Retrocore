@@ -211,7 +211,7 @@ Done:
 ;; Out: Exponent1/Mantissa1 = the difference
 ;; Errors: jumps to <Float::OverflowJump> on overflow
 ;; Entry:
-;;   Align = aligns the operands, then adds: <Float::Add> enters here until the exponents agree
+;;   Align = aligns the operands, then adds: <Float::Add> enters here while the exponents differ
 ;; See: <Float::Add>, <Float::Negate>
 ;; Also: FSUB (A2RM78)
 .proc Subtract

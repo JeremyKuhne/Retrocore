@@ -1,4 +1,4 @@
-; retrocore: style=strict ignore=unlinked-name:PR -- the PR# command
+; retrocore: style=strict
 ;; DOS 3.3 and 3.2 command interpreter: the file buffers' layout, building their chain, and connecting DOS's hooks
 ;;
 ;; <FileBuffers::Build> sets up the file buffers, as many as MAXFILES asks for (3 at boot), in a chain going down in

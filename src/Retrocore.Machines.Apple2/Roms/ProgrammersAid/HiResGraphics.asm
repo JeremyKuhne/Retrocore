@@ -54,7 +54,7 @@ A2L = $3E
 ;; Inherit: <Monitor:A2H>
 A2H = $3F
 
-;; Inherit: <IntegerBasic:LOMEM>
+;; Inherit: <IntegerBasic:LowMemory>
 LOMEML = $4A
 
 ;; The high byte of <LOMEML>.
@@ -81,19 +81,19 @@ EL = $54
 ;; The high byte of <EL>.
 EH = $55
 
-;; Inherit: <IntegerBasic:PP>
+;; Inherit: <IntegerBasic:ProgramStart>
 PPL = $CA
 
 ;; The high byte of <PPL>.
 PPH = $CB
 
-;; Inherit: <IntegerBasic:PV>
+;; Inherit: <IntegerBasic:VariablesEnd>
 PVL = $CC
 
 ;; The high byte of <PVL>.
 PVH = $CD
 
-;; Inherit: <IntegerBasic:ACC>
+;; Inherit: <IntegerBasic:Accumulator>
 ACL = $CE
 
 ;; The high byte of <ACL>.
@@ -141,7 +141,7 @@ MIXSET = $C053
 ;; Inherit: <Monitor:TXTCLR>
 TXTCLR = $C050
 
-;; Inherit: <IntegerBasic:MEMFULL>
+;; Inherit: <IntegerBasic:MemoryFullError>
 MEMFUL = $E36B
 
 ;; Integer BASIC's RANGE ERR, which a BASIC parameter out of range jumps to.

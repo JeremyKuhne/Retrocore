@@ -1,4 +1,4 @@
-; retrocore: style=strict ignore=unlinked-name:PR -- the PR# command
+; retrocore: style=strict
 ;; DOS 3.3 and 3.2 command interpreter: the scanner's helpers and the handlers that open and close files
 ;;
 ;; The first of the three command handler modules, $A193-$A330 where DOS runs (in both versions). It starts with the

@@ -1,250 +1,366 @@
-;; INTEGER BASIC: THE NOUN STACK AND ARITHMETIC ($E6FF-$E7C0)
+; retrocore: style=strict
+;; Integer BASIC: the noun stack and arithmetic ($E6FF-$E7C0)
 ;;
 ;; The routines that step through a line's tokens and move values on and off the noun stack, and the routines of
-;; the comparison, sign and addition tokens; then TAB and the tab stops of PRINT's comma.
+;; the comparison, sign and addition tokens; then `TAB` and the tab stops of `PRINT`'s comma.
 ;;
-;; Numbers are 16-bit two's complement. A result outside -32767 to 32767 is the >32767 error: addition checks the
-;; 6502's overflow flag. Comparisons give 1 for true and 0 for false.
+;; Numbers are 16-bit two's complement. A result that does not fit is the >32767 error: addition checks the 6502's
+;; overflow flag, so it allows -32768, which only negating or printing it turns into the error. Comparisons give 1
+;; for true and 0 for false.
 ;;
 ;; Part of IntegerBasic.asm; it follows Interpreter.asm, at $E6FF.
 
-;; Steps <PX> to the next byte of the line and reads it.
-;; In: Y = 0
-;; Out: A = the byte, N and Z set by it
-;; Keeps: X, Y, carry
-GETVERB:
-    inc PX                          ; $E6FF
-    bne @NoInc                      ; $E701
-    inc PX+1                        ; $E703
-@NoInc:
-    lda (PX),y                      ; $E705
-    rts                             ; $E707
+; Interpreter: reading the next byte of a line.
+.scope Interpreter continued
+
+;; Steps <TokenPointer> to the next byte of the line and reads it.
+;; In: Y = the index to read at, normally 0
+;; Out: A = the byte at <TokenPointer> + Y, negative and zero = set by it
+;; Keeps: X, Y, carry, overflow
+;; Also: GETVERB (IBSM)
+.proc ReadNextByte
+    inc TokenPointer
+    bne Read
+    inc TokenPointer+1
+Read:
+    lda (TokenPointer),y
+    rts
+.endproc
+
+.endscope
 
 ;; Pushes a noun: A as its low byte and Y as its address high byte (0 for a number).
 ;;
-;; The caller stores the high byte of a number in <NOUNSTKC>,X afterwards.
+;; The caller stores the high byte of a number in <NounStackNumberHigh>,X afterwards.
 ;; In: A = the low byte, Y = the high byte of an address, or 0, X = the noun stack
 ;; Out: X = the noun stack, one entry lower
 ;; Errors: PPED AT (the STOPPED AT message from its fourth character) when the stack is full
-;; Keeps: A, Y
-;; Entry: PUSHNOUNLO = leaves the address high byte as it was
-PUSHNOUN:
-    sty NOUNSTKH-1,x                ; $E708
+;; Keeps: A, Y, carry, overflow
+;; Entry:
+;;   LowOnly = pushes A, leaving the entry's address high byte as it was
+;;   ToReportError = reports the error whose message is at offset Y
+;; Also: PUSHNOUN (UNKN)
+.proc PushNoun
+    sty NounStackHigh-1,x
 
-PUSHNOUNLO:
-    dex                             ; $E70A
-    bmi PUSHNOUN_1                  ; $E70B
-    sta NOUNSTKL,x                  ; $E70D
-    rts                             ; $E70F
+;; Pushes A as an entry's low byte, leaving its address high byte as it was.
+;; Also: PUSHNOUNLO (UNKN)
+LowOnly:
+    dex
+    bmi Full
+    sta NounStackLow,x
+    rts
 
-;; The error for a full noun stack: its message starts three characters into STOPPED AT.
-PUSHNOUN_1:
-    ldy #<(ErrMsg12+3)              ; $E710
+    ; The stack is full: its error's message starts three characters into STOPPED AT.
+Full:
+    ldy #<(Messages::StoppedAt+3)
 
-GOERRMESS:
-    jmp ERRMESS                     ; $E712
+;; Reports the error whose message is at offset Y (<ReportError>).
+;; Also: GOERRMESS (UNKN)
+ToReportError:
+    jmp ReportError
+.endproc
 
-;; Pops a noun and returns its 16-bit value in ACC.
+;; Pops a noun and returns its 16-bit value in <Accumulator>.
 ;;
 ;; An entry whose address high byte is not 0 is a variable, and the value is read from its address; otherwise the
 ;; entry holds the value.
 ;; In: X = the noun stack
-;; Out: ACC = the value, X = the noun stack, one entry higher, Y = 0
+;; Out: Accumulator = the value, X = the noun stack, one entry higher, Y = 0
 ;; Uses: A
-;; See: <PUSHNOUN>, <GETBYTE>
-GET16BIT:
-    ldy #$00                        ; $E715
-    lda NOUNSTKL,x                  ; $E717
-    sta ACC                         ; $E719
-    lda NOUNSTKC,x                  ; $E71B
-    sta ACC+1                       ; $E71D
-    lda NOUNSTKH,x                  ; $E71F
-    beq GET16BIT_1                  ; $E721 a number: the entry holds it
-    sta ACC+1                       ; $E723
-    lda (ACC),y                     ; $E725 a variable: read its value
-    pha                             ; $E727
-    iny                             ; $E728
-    lda (ACC),y                     ; $E729
-    sta ACC+1                       ; $E72B
-    pla                             ; $E72D
-    sta ACC                         ; $E72E
-    dey                             ; $E730
+;; Keeps: carry, overflow
+;; See: <PushNoun>, <GetByte>
+;; Also: GET16BIT (IBSM)
+.proc GetNumber
+    ldy #0
+    lda NounStackLow,x
+    sta Accumulator
+    lda NounStackNumberHigh,x
+    sta Accumulator+1
+    lda NounStackHigh,x
+    beq Pop
 
-GET16BIT_1:
-    inx                             ; $E731
-    rts                             ; $E732
+    ; A variable: reads its value through its address.
+    sta Accumulator+1
+    lda (Accumulator),y
+    pha
+    iny
+    lda (Accumulator),y
+    sta Accumulator+1
+    pla
+    sta Accumulator
+    dey
+Pop:
+    inx
+    rts
+.endproc
 
-;; Numeric = (token $16): replaces two numbers with 1 if they are equal, 0 if not.
+; Operators: = and NOT, then # and <>, which fall into ABS.
+.scope Operators continued
+
+;; Numeric `=` (token $16): replaces two numbers with 1 if they are equal, 0 if not.
 ;;
-;; <NOTEQUAL_NUM> gives 1 if they differ, and <NOT> turns that around.
-;; See: <NOTEQUAL_NUM>, <NOT>
-EQUAL_NUM:
-    jsr NOTEQUAL_NUM                ; $E733
-
-;; NOT (token $37): replaces a number with 1 if it is 0, 0 otherwise.
-;; In: X = the noun stack
-;; Out: X = the noun stack, its top entry the result
-;; Uses: A, Y, ACC
-NOT:
-    jsr GET16BIT                    ; $E736
-    tya                             ; $E739 A = 0
-    jsr PUSHNOUN                    ; $E73A
-    sta NOUNSTKC,x                  ; $E73D the high byte, 0
-    cmp ACC                         ; $E73F
-    bne @Return                     ; $E741
-    cmp ACC+1                       ; $E743
-    bne @Return                     ; $E745
-    inc NOUNSTKL,x                  ; $E747 the low byte becomes 1
-@Return:
-    rts                             ; $E749
-
-;; Numeric # and <> (tokens $17 and $1B): replaces two numbers with 1 if they differ, 0 if they are equal.
-;;
-;; The difference's sign (<SGN>) is -1, 0 or 1, and its absolute value (<ABS>, into which this falls) is the answer.
-;; See: <SUBTRACT>, <SGN>, <ABS>
-NOTEQUAL_NUM:
-    jsr SUBTRACT                    ; $E74A
-    jsr SGN                         ; $E74D
-
-;; ABS (token $31): replaces a number with its absolute value.
-;;
-;; A number that is not negative stays as it is: the entry is pushed back (<REPUSHNOUN>) unchanged.
-;; In: X = the noun stack
-;; Out: X = the noun stack, its top entry the result
-;; Errors: >32767 for -32768
-;; Uses: A, Y, ACC
-ABS:
-    jsr GET16BIT                    ; $E750
-    bit ACC+1                       ; $E753
-    bmi NEGATEACC                   ; $E755
-
-;; Pushes the entry <GET16BIT> just popped back on the noun stack, as it was.
-REPUSHNOUN:
-    dex                             ; $E757
-
-REPUSHNOUN_1:
-    rts                             ; $E758
-
-;; SGN (token $30): replaces a number with its sign: -1, 0 or 1.
-;;
-;; It pushes -1 and returns for a negative number, and negates it to 1 (falling into <NEGATE>) for a positive one.
-;; In: X = the noun stack
-;; Out: X = the noun stack, its top entry the result
-;; Uses: A, Y, ACC
-SGN:
-    jsr GET16BIT                    ; $E759
-    lda ACC+1                       ; $E75C
-    bne SGN_1                       ; $E75E
-    lda ACC                         ; $E760
-    beq REPUSHNOUN                  ; $E762 0 stays 0
-
-;; Pushes -1, then negates it unless the number was negative.
-SGN_1:
-    lda #$FF                        ; $E764
-    jsr PUSHNOUN                    ; $E766
-    sta NOUNSTKC,x                  ; $E769
-    bit ACC+1                       ; $E76B
-    bmi REPUSHNOUN_1                ; $E76D
-
-;; Unary - (token $36): replaces a number with its negative.
-;; In: X = the noun stack
-;; Out: X = the noun stack, its top entry the result
-;; Errors: >32767 for -32768, which has no positive counterpart
-;; Uses: A, Y, ACC
-;; Entry: NEGATEACC = negates the value already in ACC, pushing the result
-NEGATE:
-    jsr GET16BIT                    ; $E76F
-
-NEGATEACC:
-    tya                             ; $E772 A = 0
-    sec                             ; $E773
-    sbc ACC                         ; $E774
-    jsr PUSHNOUN                    ; $E776
-    tya                             ; $E779
-    sbc ACC+1                       ; $E77A
-    bvc SETNOUNHI                   ; $E77C no overflow: store the high byte
-
-;; The >32767 error.
-Err32767:
-    ldy #<ErrMsg00                  ; $E77E
-    bpl GOERRMESS                   ; $E780
-
-;; Subtraction (token $13): negates the top number, then adds (<PLUS>).
+;; <Operators::NotEqual> gives 1 if they differ, and `NOT` (<Operators::Not>, into which this falls) turns that
+;; around.
 ;; In: X = the noun stack: two numbers
-;; Out: X = the noun stack, its top entry the difference
-;; Errors: >32767
-SUBTRACT:
-    jsr NEGATE                      ; $E782
+;; Out: X = the noun stack, one entry higher, its top entry the result
+;; Errors: >32767 for numbers too far apart, as <Operators::NotEqual>
+;; Uses: A, Y, Accumulator, Auxiliary
+;; Also: EQUAL_NUM (UNKN)
+.proc Equal
+    jsr NotEqual
+    ; Falls into Not.
+.endproc
+
+;; `NOT` (token $37): replaces a number with 1 if it is 0, 0 otherwise.
+;; In: X = the noun stack
+;; Out: X = the noun stack, its top entry the result, A = 0, Y = 0, zero = clear
+;; Uses: Accumulator
+;; Keeps: X
+;; Also: NOT (IBSM)
+.proc Not
+    jsr GetNumber
+    tya                             ; A = 0
+    jsr PushNoun
+    sta NounStackNumberHigh,x
+    cmp Accumulator
+    bne Done
+    cmp Accumulator+1
+    bne Done
+    inc NounStackLow,x              ; the low byte becomes 1
+Done:
+    rts
+.endproc
+
+;; Numeric `#` and `<>` (tokens $17 and $1B): replaces two numbers with 1 if they differ, 0 if they are equal.
+;;
+;; The difference's sign (<Functions::Sgn>) is -1, 0 or 1, and its absolute value (<Functions::Abs>, into which this
+;; falls) is the answer. The difference is taken as <Operators::Subtract> takes it, so two numbers whose difference
+;; does not fit in 16 bits, such as 20000 and -20000, are the >32767 error instead of a comparison.
+;; In: X = the noun stack: two numbers
+;; Out: X = the noun stack, one entry higher, its top entry the result, Y = 0
+;; Errors: >32767 if the difference does not fit, or the top number is -32768
+;; Uses: A, Accumulator, Auxiliary
+;; Also: NOTEQUAL_NUM (UNKN)
+.proc NotEqual
+    jsr Subtract
+    jsr Functions::Sgn
+    ; Falls into Functions::Abs.
+.endproc
+
+.endscope
+
+; Functions: ABS and SGN.
+.scope Functions continued
+
+;; `ABS` (token $31): replaces a number with its absolute value.
+;;
+;; A number that is not negative stays as it is: the entry is pushed back (<Functions::Abs::Repush>) unchanged.
+;; In: X = the noun stack
+;; Out: X = the noun stack, its top entry the result, Y = 0
+;; Errors: >32767 for -32768
+;; Uses: A, Accumulator
+;; Keeps: X
+;; Entry:
+;;   Repush = pushes back the entry <GetNumber> has just popped
+;;   Done = returns
+;; Also: ABS (IBSM)
+.proc Abs
+    jsr GetNumber
+    bit Accumulator+1
+    bmi Operators::Negate::FromAccumulator
+
+;; Pushes back the entry <GetNumber> has just popped, as it was.
+;; Also: REPUSHNOUN (UNKN)
+Repush:
+    dex
+Done:
+    rts
+.endproc
+
+;; `SGN` (token $30): replaces a number with its sign: -1, 0 or 1.
+;;
+;; 0 stays as it is. Otherwise it pushes -1, and returns for a negative number; for a positive one it falls into
+;; <Operators::Negate>, which turns the -1 into 1.
+;; In: X = the noun stack
+;; Out: X = the noun stack, its top entry the result, Y = 0
+;; Uses: A, Accumulator
+;; Keeps: X
+;; Also: SGN (IBSM)
+.proc Sgn
+    jsr GetNumber
+    lda Accumulator+1
+    bne NotZero
+    lda Accumulator
+    beq Abs::Repush
+
+    ; -1, which stays for a negative number.
+NotZero:
+    lda #$FF
+    jsr PushNoun
+    sta NounStackNumberHigh,x
+    bit Accumulator+1
+    bmi Abs::Done
+    ; Falls into Operators::Negate.
+.endproc
+
+.endscope
+
+; Operators: unary -, then subtraction and addition, which end in unary +.
+.scope Operators continued
+
+;; Unary `-` (token $36): replaces a number with its negative.
+;; In: X = the noun stack
+;; Out: X = the noun stack, its top entry the result, Y = 0
+;; Errors: >32767 for -32768, which has no positive counterpart
+;; Uses: A, Accumulator
+;; Keeps: X
+;; Entry:
+;;   FromAccumulator = negates the value in <Accumulator> and pushes the result
+;;   OverflowError = the >32767 error
+;; Also: NEGATE (IBSM)
+.proc Negate
+    jsr GetNumber
+
+;; Negates the value in <Accumulator> and pushes the result.
+;; In: Accumulator = the value, Y = 0, X = the noun stack
+;; Out: X = the noun stack, one entry lower, its top entry the result
+;; Errors: >32767 for -32768
+;; Also: NEGATEACC (UNKN)
+FromAccumulator:
+    tya                             ; A = 0
+    sec
+    sbc Accumulator
+    jsr PushNoun
+    tya
+    sbc Accumulator+1
+    bvc Add::StoreHigh
+
+;; The >32767 error: a result that does not fit in 16 bits, or the negative of -32768.
+;; Also: Err32767 (IBSM)
+OverflowError:
+    ldy #<Messages::GreaterThan32767
+    bpl PushNoun::ToReportError     ; always: the message's offset is 0
+.endproc
+
+;; Subtraction (token $13): negates the top number, then adds (falls into <Operators::Add>).
+;; In: X = the noun stack: two numbers
+;; Out: X = the noun stack, one entry higher, its top entry the difference, Y = 0
+;; Errors: >32767 if the difference does not fit, or the top number is -32768
+;; Uses: A, Accumulator, Auxiliary
+;; Also: SUBTRACT (IBSM)
+.proc Subtract
+    jsr Negate
+    ; Falls into Add.
+.endproc
 
 ;; Addition (token $12): replaces two numbers with their sum.
 ;; In: X = the noun stack: two numbers
-;; Out: X = the noun stack, its top entry the sum
+;; Out: X = the noun stack, one entry higher, its top entry the sum, Y = 0
 ;; Errors: >32767 if the sum overflows
-;; Uses: A, Y, ACC, AUX
-;; Entry: ADDAUX = adds AUX to ACC and pushes the sum
-PLUS:
-    jsr GET16BIT                    ; $E785
-    lda ACC                         ; $E788
-    sta AUX                         ; $E78A
-    lda ACC+1                       ; $E78C
-    sta AUX+1                       ; $E78E
-    jsr GET16BIT                    ; $E790
+;; Uses: A, Accumulator, Auxiliary
+;; Entry:
+;;   AddAuxiliary = adds <Auxiliary> to <Accumulator> and pushes the sum
+;;   StoreHigh = stores A as the high byte of the number just pushed
+;; Also: PLUS (UNKN)
+.proc Add
+    jsr GetNumber
+    lda Accumulator
+    sta Auxiliary
+    lda Accumulator+1
+    sta Auxiliary+1
+    jsr GetNumber
 
-ADDAUX:
-    clc                             ; $E793
-    lda ACC                         ; $E794
-    adc AUX                         ; $E796
-    jsr PUSHNOUN                    ; $E798
-    lda ACC+1                       ; $E79B
-    adc AUX+1                       ; $E79D
-    bvs Err32767                    ; $E79F
+;; Adds <Auxiliary> to <Accumulator> and pushes the sum.
+;; In: Accumulator, Auxiliary = the numbers, Y = 0, X = the noun stack
+;; Out: X = the noun stack, one entry lower, its top entry the sum
+;; Errors: >32767 if the sum overflows
+;; Also: ADDAUX (UNKN)
+AddAuxiliary:
+    clc
+    lda Accumulator
+    adc Auxiliary
+    jsr PushNoun
+    lda Accumulator+1
+    adc Auxiliary+1
+    bvs Negate::OverflowError
 
-;; Stores the result's high byte; the end of addition and negation.
-SETNOUNHI:
-    sta NOUNSTKC,x                  ; $E7A1
+;; Stores A as the high byte of the number just pushed: the end of addition and negation.
+;; Also: SETNOUNHI (UNKN)
+StoreHigh:
+    sta NounStackNumberHigh,x
+    ; Falls into Plus.
+.endproc
 
-;; Unary + (token $35): nothing to do.
-POSITIVE:
-    rts                             ; $E7A3
+;; Unary `+` (token $35): nothing to do.
+;; Keeps: A, X, Y
+;; Also: POSITIVE (IBSM)
+.proc Plus
+    rts
+.endproc
 
-;; TAB (token $50): moves the cursor to column n (1 is the first) of the window, wrapping past its width onto the
+.endscope
+
+; Statements: TAB.
+.scope Statements continued
+
+;; `TAB` (token $50): moves the cursor to column n (1 is the first) of the window, wrapping past its width onto the
 ;; lines below.
 ;;
-;; TAB 0 is a RANGE error. It goes through <BcsRANGERR>, whose branch is always taken here: the carry is still set
-;; from the interpreter's priority comparison.
+;; `TAB 0` is the RANGE error. It goes through <Statements::VLinAt::RangeErrorIfCarry>, whose branch is always taken
+;; here: carry is still set from the interpreter's priority comparison, and <GetByte> keeps it.
 ;; In: X = the noun stack, its top entry the column
-;; See: <SETCURCOL>
-TAB:
-    jsr GETBYTE                     ; $E7A4
-    tay                             ; $E7A7
-    bne TAB_1                       ; $E7A8
-    jmp BcsRANGERR                  ; $E7AA
+;; Out: X = the noun stack, one entry higher
+;; Errors: >255 for a column above 255, RANGE for 0
+;; Uses: A, Y, Accumulator
+;; See: <TabToColumn>
+;; Entry:
+;;   ToSetColumn = sets the cursor's column to Y
+;; Also: TAB (IBSM)
+.proc Tab
+    jsr GetByte
+    tay
+    bne CountFromZero
+    jmp Statements::VLinAt::RangeErrorIfCarry
 
-;; Counts the column from 0, then sets it (<SETCURCOL>).
-TAB_1:
-    dey                             ; $E7AD
+    ; Counts the column from 0, then sets it.
+CountFromZero:
+    dey
 
-TOCOLUMN:
-    jmp SETCURCOL                   ; $E7AE
+;; Sets the cursor's column to Y, from 0 (<TabToColumn>).
+;; Also: TOCOLUMN (UNKN)
+ToSetColumn:
+    jmp TabToColumn
+.endproc
 
-;; PRINT's comma: moves the cursor to the next tab stop, a multiple of 8 columns.
+.endscope
+
+;; Moves the cursor to the next tab stop, a multiple of 8 columns, for `PRINT`'s comma.
 ;;
-;; <SETCURCOL> wraps the column onto the next line when it is past the window's width.
+;; <TabToColumn> wraps the column onto the next line when it is past the window's width. A cursor column of $F8 or
+;; more, which a window of 40 columns never gives, would loop here forever: the next stop wraps to 0, and the second
+;; try reads the same column again.
 ;; Uses: A, Y
 ;; Keeps: X
-NEXTTAB:
-    lda CH                          ; $E7B1
-    ora #$07                        ; $E7B3
-    tay                             ; $E7B5
-    iny                             ; $E7B6 CH = $F8-$FF would wrap to 0
+;; Also: NEXTTAB (UNKN)
+.proc NextTabStop
 
-NEXTTAB_1:
-    bne TOCOLUMN                    ; $E7B7
-    iny                             ; $E7B9 Y = 1
-    bne NEXTTAB                     ; $E7BA
+;; The columns between tab stops.
+TAB_WIDTH = 8
 
-;; Unused code; nothing in the ROM reaches it.
-UNUSED_BCSTAB:
-    bcs NEXTTAB_1                   ; $E7BC
-    rts                             ; $E7BE
-    .byte $00, $00                  ; $E7BF unused bytes
+    lda CursorColumn
+    ora #TAB_WIDTH - 1
+    tay
+    iny
+SetUnlessZero:
+    bne Statements::Tab::ToSetColumn
+    iny
+    bne NextTabStop
+
+;; Unused code, a branch back and a return; nothing in the ROM reaches it.
+;; Also: UNUSED_BCSTAB (UNKN)
+Unused:
+    bcs SetUnlessZero
+    rts
+    .byte $00, $00                  ; unused bytes
+.endproc

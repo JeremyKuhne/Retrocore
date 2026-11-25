@@ -58,47 +58,47 @@ internal sealed class IntegerBasicDialect : BasicDialect
     internal const byte Remark = 0x5D;
 
     /// <summary>
-    ///  LOMEM, the start of the variables (2 bytes).
+    ///  LowMemory (LOMEM), the start of the variables (2 bytes).
     /// </summary>
     internal const int LoMem = 0x4A;
 
     /// <summary>
-    ///  HIMEM, just above the program (2 bytes).
+    ///  HighMemory (HIMEM), just above the program (2 bytes).
     /// </summary>
     internal const int HiMem = 0x4C;
 
     /// <summary>
-    ///  PP, the program's first line (2 bytes).
+    ///  ProgramStart (PP), the program's first line (2 bytes).
     /// </summary>
     internal const int Pp = 0xCA;
 
     /// <summary>
-    ///  PV, just past the variables (2 bytes).
+    ///  VariablesEnd (PV), just past the variables (2 bytes).
     /// </summary>
     internal const int Pv = 0xCC;
 
     /// <summary>
-    ///  RUNFLAG: bit 7 set while a program runs.
+    ///  Running (RUNFLAG): bit 7 set while a program runs.
     /// </summary>
     internal const int RunFlag = 0xD9;
 
     /// <summary>
-    ///  PR, the address of the line running (2 bytes).
+    ///  CurrentLine (PR), the address of the line running (2 bytes).
     /// </summary>
     internal const int Pr = 0xDC;
 
     /// <summary>
-    ///  PX, the address of the token running (2 bytes).
+    ///  TokenPointer (PX), the address of the token running (2 bytes).
     /// </summary>
     internal const int Px = 0xE0;
 
     /// <summary>
-    ///  FORNDX, the count of active FOR loops.
+    ///  ForIndex (FORNDX), the count of active FOR loops.
     /// </summary>
     internal const int ForIndex = 0xFB;
 
     /// <summary>
-    ///  GOSUBNDX, the count of active GOSUBs.
+    ///  GoSubIndex (GOSUBNDX), the count of active GOSUBs.
     /// </summary>
     internal const int GosubIndex = 0xFC;
 

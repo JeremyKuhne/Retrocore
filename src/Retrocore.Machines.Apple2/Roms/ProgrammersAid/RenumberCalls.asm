@@ -11,7 +11,7 @@
 
 .scope RenumberCalls
 
-;; Inherit: <IntegerBasic:LOMEM>
+;; Inherit: <IntegerBasic:LowMemory>
 LOMEM = $4A
 
 ; Where each variable's value is, from LOMEM: its name, the byte after it and the 2-byte link come first.

@@ -1,909 +1,1193 @@
-;; PROGRAMMER'S AID #1: HIGH-RESOLUTION GRAPHICS ($D000-$D3FF)
+; retrocore: style=strict
+;; Programmer's Aid #1: high-resolution graphics ($D000-$D3FF)
 ;;
-;; Steve Wozniak's hi-res graphics routines (1977), which Integer BASIC programs CALL: INIT clears a page and shows
-;; it with four lines of text below, and then PLOT, LINE, DRAW (a shape from a shape table, scaled and rotated) and
-;; FIND (where the last point plotted is) draw on it. The screen is 280 dots across (X0, 0 to 279) by 192 down (Y0,
-;; 0 to 191).
+;; Steve Wozniak's hi-res graphics routines (1977), which Integer BASIC programs CALL: INIT clears page 1 and shows
+;; hi-res graphics with four lines of text below, and then PLOT, LINE, DRAW (a shape from a shape table, scaled and
+;; rotated) and FIND (where the last point plotted is) draw on it. The screen is 280 dots across (`X0`, 0 to 279) by 192
+;; down (`Y0`, 0 to 191).
 ;;
-;; The routines BASIC calls, from $D2F9 on (POSN, PLOT, LINE, DRAW and the others), take their parameters from
-;; BASIC's first variables, in the order a program must define them: X0, Y0, COLR, SHAPE, ROT and SCALE. They read
-;; each variable's value at a fixed offset from LOMEM, so a program starts with a line such as
+;; The routines BASIC calls, from $D2F9 on (POSN, PLOT, LINE, DRAW and the others), take their parameters from BASIC's
+;; first variables, in the order a program must define them: `X0`, `Y0`, `COLR`, `SHAPE`, `ROT` and `SCALE`. They read
+;; each variable's value at a fixed offset from <LowMemory>, so a program starts with a line such as
 ;; `0 X0 = Y0 = COLR = SHAPE = ROT = SCALE`. The routines under them take theirs in the 6502's registers, for
-;; machine-language programs: <HiResGraphics::HPOSN>, <HiResGraphics::HPLOT>, <HiResGraphics::HLIN>,
-;; <HiResGraphics::DRAW> and <HiResGraphics::XDRAW>.
+;; machine-language programs: <HiResGraphics::Position>, <HiResGraphics::Plot>, <HiResGraphics::Line>,
+;; <HiResGraphics::Draw> and <HiResGraphics::DrawInverted>.
 ;;
 ;; Colors are a byte of dots: 0 black, 42 green, 85 violet, 127 white, 128 black with the high bit, 170 orange, 213
-;; blue and 255 white. <HiResGraphics::HPAG> picks the page drawn on: $20 for $2000-$3FFF, the default, or $40 for
-;; $4000-$5FFF.
+;; blue and 255 white. Each screen byte shows 7 dots, bit 0 leftmost, and its bit 7 shifts them half a dot, which
+;; picks between the two pairs of colors. <HiResGraphics::Page> picks the page drawn on: $20 for $2000-$3FFF, the
+;; default, or $40 for $4000-$5FFF.
 ;;
-;; Names follow Apple's listing in the Programmer's Aid #1 manual (1978,
-;; https://archive.org/details/programmers-aid-1). Part of ProgrammersAid.asm, which includes it first.
+;; The listing's names are those of Apple's listing in the Programmer's Aid #1 manual (1978,
+;; https://archive.org/details/programmers-aid-1); its UP, DOWN and RTS1 are given in prose, as here they would clash
+;; with the Monitor's UP and with Music's and the RAM test's names. Part of ProgrammersAid.asm, which includes it
+;; first.
 
 .scope HiResGraphics
 
-;; The shape table address the drawing routines walk (2 bytes): the shape being drawn.
-SHAPEL = $1A
+; Page zero: SWEET16's R13 and R14, which the graphics borrow.
 
-;; The high byte of <SHAPEL>.
-SHAPEH = $1B
+;; The shape table address the drawing routines walk (2 bytes): the shape being drawn, or the page being filled.
+;; Also: SHAPEL (PA1)
+ShapePointer = Sweet16Registers + 13 * SWEET16_REGISTER_SIZE
 
-;; The color byte being plotted: <HCOLOR>, shifted each byte so the color's dots fall on the right columns.
-HCOLOR1 = $1C
+;; The high byte of <ShapePointer>.
+;; Also: SHAPEH (PA1)
+ShapePointerHigh = ShapePointer + 1
 
-;; The count of dots <HLIN> has left to draw, with <DXL> as its low byte.
-COUNTH = $1D
+;; The color byte being plotted: <Color>, its alternating dots flipped for odd bytes so the color's dots fall on the
+;; right columns.
+;; Also: HCOLOR1 (PA1)
+ShiftedColor = Sweet16Registers + 14 * SWEET16_REGISTER_SIZE
 
-;; The address of the screen line being drawn on (2 bytes), which <HPOSN> sets.
-HBASL = $26
+;; The count of dots <Line> has left to draw (2 bytes, counting up to 0), with X as its low byte.
+;; Also: COUNTH (PA1)
+CountHigh = ShiftedColor + 1
 
-;; The high byte of <HBASL>.
-HBASH = $27
+; Page zero: the Monitor's bytes, under the names the graphics give them.
 
-;; The bit of the screen byte the next dot is in.
-HMASK = $30
+;; The address of the screen line being drawn on (2 bytes), which <Position> sets: <LowResBase>'s bytes.
+;; Also: HBASL (PA1)
+LineBase = LowResBase
 
-;; Inherit: <Monitor:A1L>
-A1L = $3C
+;; The high byte of <LineBase>.
+;; Also: HBASH (PA1)
+LineBaseHigh = LowResBaseHigh
 
-;; Inherit: <Monitor:A1H>
-A1H = $3D
+;; The bit of the screen byte the next dot is in, with bit 7 set, so that a plot keeps the color's bit 7:
+;; <PlotColor>'s byte.
+;; Also: HMASK (PA1)
+DotMask = PlotColor
 
-;; Inherit: <Monitor:A2L>
-A2L = $3E
+; Page zero: the start of Integer BASIC's noun stack, which the graphics borrow.
 
-;; Inherit: <Monitor:A2H>
-A2H = $3F
+;; The line's horizontal distance (2 bytes) for <Line>, and the step along the shape's direction for <Draw>.
+;; Also: DXL (PA1)
+DistanceX = NounStackLow
 
-;; Inherit: <IntegerBasic:LowMemory>
-LOMEML = $4A
+;; The high byte of <DistanceX>.
+;; Also: DXH (PA1)
+DistanceXHigh = NounStackLow + 1
 
-;; The high byte of <LOMEML>.
-LOMEMH = $4B
+;; The bits of the shape byte <Draw> has left to draw, three at a time: the same byte as <DistanceXHigh>.
+;; Also: SHAPEX (PA1)
+ShapeBits = NounStackLow + 1
 
-;; The line's horizontal distance (2 bytes) for <HLIN>, and the X step for <DRAW>.
-DXL = $50
-
-;; The high byte of <DXL>.
-DXH = $51
-
-;; The bits of the shape byte <DRAW> has left to draw, three at a time (the same byte as <DXH>).
-SHAPEX = $51
-
-;; The line's vertical distance for <HLIN>, and the Y step for <DRAW>.
-DY = $52
+;; The line's vertical distance for <Line>, and the step at right angles to the shape's direction for <Draw>.
+;; Also: DY (PA1)
+DistanceY = NounStackLow + 2
 
 ;; The direction: the quadrant of a shape's rotation, or which way a line goes.
-QDRNT = $53
+;; Also: QDRNT (PA1)
+Direction = NounStackLow + 3
 
-;; The error term (2 bytes) <HLIN> steps the line by.
-EL = $54
+;; The error term (2 bytes) <Line> and <Draw> step by.
+;; Also: EL (PA1)
+ErrorTerm = NounStackLow + 4
 
-;; The high byte of <EL>.
-EH = $55
+;; The high byte of <ErrorTerm>.
+;; Also: EH (PA1)
+ErrorTermHigh = NounStackLow + 5
 
-;; Inherit: <IntegerBasic:ProgramStart>
-PPL = $CA
-
-;; The high byte of <PPL>.
-PPH = $CB
-
-;; Inherit: <IntegerBasic:VariablesEnd>
-PVL = $CC
-
-;; The high byte of <PVL>.
-PVH = $CD
-
-;; Inherit: <IntegerBasic:Accumulator>
-ACL = $CE
-
-;; The high byte of <ACL>.
-ACH = $CF
+; The graphics' own variables, in page 3.
 
 ;; The X coordinate (2 bytes) of the last point plotted or the end of the last line, where the next line starts.
-X0L = $0320
+;; Also: X0L (PA1)
+LastX = $0320
 
-;; The high byte of <X0L>.
-X0H = $0321
+;; The high byte of <LastX>.
+;; Also: X0H (PA1)
+LastXHigh = $0321
 
 ;; The Y coordinate of the last point plotted or the end of the last line.
-Y0 = $0322
+;; Also: Y0 (PA1)
+LastY = $0322
 
 ;; Where the routines BASIC calls keep X, which BASIC needs back.
-BXSAV = $0323
+;; Also: BXSAV (PA1)
+KeptX = $0323
 
-;; The color, as a byte of dots, that <HPLOT> and <HLIN> draw with.
-HCOLOR = $0324
+;; The color, as a byte of dots, that <Position> sets <ShiftedColor> from for <Plot>, <Line> and <Draw> to draw with.
+;; Also: HCOLOR (PA1)
+Color = $0324
 
 ;; The byte of the screen line the next dot is in, 0 to 39.
-HNDX = $0325
+;; Also: HNDX (PA1)
+ByteIndex = $0325
 
 ;; The page drawn on: $20 for $2000-$3FFF (the default) or $40 for $4000-$5FFF.
-HPAG = $0326
+;; Also: HPAG (PA1)
+Page = $0326
 
-;; How many times <DRAW> repeats each step of a shape: its scale.
-SCALE = $0327
+;; How many times <Draw> repeats each step of a shape: its scale.
+;; Also: SCALE (PA1)
+Scale = $0327
 
-;; The shape table's address (2 bytes), which <SHLOAD> sets.
-SHAPXL = $0328
+;; The shape table's address (2 bytes), which <LoadShapes> sets.
+;; Also: SHAPXL (PA1)
+ShapeTable = $0328
 
-;; The high byte of <SHAPXL>.
-SHAPXH = $0329
+;; The high byte of <ShapeTable>.
+;; Also: SHAPXH (PA1)
+ShapeTableHigh = $0329
 
-;; How many dots <DRAW> and <XDRAW> found already lit: their collision count.
-COLLSN = $032A
+;; The collision count of <Draw> and <DrawInverted>: the dots <Draw> found already its color, and those
+;; <DrawInverted> found dark on its steps along the direction and already the color on its steps at right angles.
+;; Also: COLLSN (PA1)
+Collisions = $032A
 
-;; Inherit: <Monitor:HIRES>
-HIRES = $C057
+; The screen.
 
-;; Inherit: <Monitor:MIXSET>
-MIXSET = $C053
+;; <Page>'s value for page 1, $2000-$3FFF.
+PAGE_1 = $20
 
-;; Inherit: <Monitor:TXTCLR>
-TXTCLR = $C050
+;; The bytes in a screen line.
+BYTES_PER_LINE = 40
 
-;; Inherit: <IntegerBasic:MemoryFullError>
-MEMFUL = $E36B
+;; The dots in a screen byte.
+DOTS_PER_BYTE = 7
 
-;; Integer BASIC's RANGE ERR, which a BASIC parameter out of range jumps to.
-RNGERR = $EE68
+;; The screen's height, in lines.
+SCREEN_HEIGHT = 192
 
-;; Integer BASIC's tape setup, which reads a 2-byte length and points <Monitor:A1L> and <Monitor:A2L> at it.
-ACADR = $F11E
+;; The screen's width, in dots: 280, $0118.
+SCREEN_WIDTH = BYTES_PER_LINE * DOTS_PER_BYTE
 
-;; The Monitor's tape routine that waits for two edges of the signal.
-RD2BIT = $FCFA
+; Where each BASIC variable's value is, from LowMemory: its name, the byte after it and the 2-byte link come first.
 
-;; Inherit: <Monitor:READ>
-READ = $FEFD
+;; `X0`'s value, the first variable's: its low byte.
+X0_VALUE = $05
 
-;; The Monitor's tape read after its header: <Monitor:READ> less the wait for the header tone.
-READX1 = $FF02
+;; `Y0`'s value, the second variable's: its high byte, which must be 0.
+Y0_VALUE_HIGH = $0D
 
-;; INIT (CALL -12288): shows hi-res page 1 with four lines of text below, and clears the page drawn on to black.
+;; `COLR`'s value, the third variable's: its high byte.
+COLR_VALUE_HIGH = $16
+
+;; `SHAPE`'s value, the fourth variable's: its high byte.
+SHAPE_VALUE_HIGH = $20
+
+;; `ROT`'s value, the fifth variable's: its high byte.
+ROT_VALUE_HIGH = $28
+
+;; `SCALE`'s value, the sixth variable's: its high byte.
+SCALE_VALUE_HIGH = $32
+
+;; INIT (CALL -12288): shows hi-res graphics with four lines of text below, on whichever page the display shows (page
+;; 1 unless a program has switched it), and clears page 1 to black.
+;; Out: Page = page 1
 ;; Uses: A, Y
-SETHRL:
-    lda #$20                        ; $D000
-    sta HPAG                        ; $D002
-    lda HIRES                       ; $D005
-    lda MIXSET                      ; $D008
-    lda TXTCLR                      ; $D00B
+;; Keeps: X
+;; Also: SETHRL (PA1)
+.proc ShowAndClear
+.assert * = $D000, "HiResGraphics::ShowAndClear must stay at $D000, CALL -12288."
+    lda #PAGE_1
+    sta Page
+    lda HiResOn
+    lda MixedOn
+    lda TextOff
+    ; Falls into Clear.
+.endproc
 
 ;; CLEAR (CALL -12274): clears the page drawn on to black.
-HCLR:
-    lda #$00                        ; $D00E
+;; Keeps: X
+;; Also: HCLR (PA1)
+.proc Clear
+.assert * = $D00E, "HiResGraphics::Clear must stay at $D00E, CALL -12274."
+    lda #0
+    ; Falls into Fill.
+.endproc
 
-;; Fills the page drawn on with the color in A.
-BKGND0:
-    sta HCOLOR1                     ; $D010
+;; Fills the page drawn on with the color in A, its alternating dots flipped in every other byte, as a line of the
+;; color shows them.
+;; In: A = the color
+;; Keeps: X
+;; Also: BKGND0 (PA1)
+.proc Fill
+    sta ShiftedColor
 
-BKGND:
-    lda HPAG                        ; $D012
-    sta SHAPEH                      ; $D015
-    ldy #$00                        ; $D017
-    sty SHAPEL                      ; $D019
+;; Also: BKGND (PA1)
+FillPage:
+    lda Page
+    sta ShapePointerHigh
+    ldy #0
+    sty ShapePointer
 
-BKGND1:
-    lda HCOLOR1                     ; $D01B
-    sta (SHAPEL),y                  ; $D01D
-    jsr CSHFT2                      ; $D01F
-    iny                             ; $D022
-    bne BKGND1                      ; $D023
-    inc SHAPEH                      ; $D025
-    lda SHAPEH                      ; $D027
-    and #$1F                        ; $D029
-    bne BKGND1                      ; $D02B
-    rts                             ; $D02D
+;; Also: BKGND1 (PA1)
+NextFillByte:
+    lda ShiftedColor
+    sta (ShapePointer),y
+    jsr StepHorizontal::AlternateColor
+    iny
+    bne NextFillByte
+    inc ShapePointerHigh
 
-;; Moves to a point without plotting: sets <HBASL>/<HBASH>, <HNDX> and <HMASK> for it, and keeps it in <X0L>,
-;; <X0H> and <Y0>.
+    ; Up to the page's end, the next multiple of $2000.
+    lda ShapePointerHigh
+    and #$1F
+    bne NextFillByte
+    rts
+.endproc
+
+;; Moves to a point without plotting: sets <LineBase>, <ByteIndex> and <DotMask> for it, and keeps it in <LastX> and
+;; <LastY>.
+;;
+;; The line's address interleaves Y's bits as the screen does: Y's bits 6 and 7 pick a third of the page (40 bytes
+;; apart in each $80), bits 3 to 5 the $80 block in each $400, and bits 0 to 2 the $400 block.
 ;; In: A = Y, X = X's low byte, Y = X's high byte
-;; Out: HCOLOR1 = the color shifted for the point's byte
-HPOSN:
-    sta Y0                          ; $D02E
-    stx X0L                         ; $D031
-    sty X0H                         ; $D034
-    pha                             ; $D037
-    and #$C0                        ; $D038
-    sta HBASL                       ; $D03A
-    lsr                             ; $D03C
-    lsr                             ; $D03D
-    ora HBASL                       ; $D03E
-    sta HBASL                       ; $D040
-    pla                             ; $D042
-    sta HBASH                       ; $D043
-    asl                             ; $D045
-    asl                             ; $D046
-    asl                             ; $D047
-    rol HBASH                       ; $D048
-    asl                             ; $D04A
-    rol HBASH                       ; $D04B
-    asl                             ; $D04D
-    ror HBASL                       ; $D04E
-    lda HBASH                       ; $D050
-    and #$1F                        ; $D052
-    ora HPAG                        ; $D054
-    sta HBASH                       ; $D057
-    txa                             ; $D059
-    cpy #$00                        ; $D05A
-    beq HPOSN2                      ; $D05C
-    ldy #$23                        ; $D05E
-    adc #$04                        ; $D060
+;; Out: ShiftedColor = <Color>, flipped for an odd byte, Y = the byte index
+;; Entry:
+;;   SetColor = sets <ShiftedColor> to A, flipped when carry is set, for an odd byte
+;; Also: HPOSN (PA1)
+.proc Position
+    sta LastY
+    stx LastX
+    sty LastXHigh
 
-HPOSN1:
-    iny                             ; $D062
+    ; LineBase = the line's address from Y = ABCDEFGH: low byte EABAB000, high byte page + FGHCD.
+    pha
+    and #$C0
+    sta LineBase
+    lsr
+    lsr
+    ora LineBase
+    sta LineBase
+    pla
+    sta LineBaseHigh
+    asl
+    asl
+    asl
+    rol LineBaseHigh
+    asl
+    rol LineBaseHigh
+    asl
+    ror LineBase
+    lda LineBaseHigh
+    and #$1F
+    ora Page
+    sta LineBaseHigh
 
-HPOSN2:
-    sbc #$07                        ; $D063
-    bcs HPOSN1                      ; $D065
-    sty HNDX                        ; $D067
-    tax                             ; $D06A
-    lda MSKTBL-249,x                ; $D06B
-    sta HMASK                       ; $D06E
-    tya                             ; $D070
-    lsr                             ; $D071
-    lda HCOLOR                      ; $D072
+    ; X divided by 7: Y = the byte, A = the remainder - 7, 249 to 255. Past 255, start from 256 = 36 x 7 + 4.
+    txa
+    cpy #0
+    beq Divide
+    ldy #36 - 1
+    adc #4
 
-HPOSN3:
-    sta HCOLOR1                     ; $D075
-    bcs CSHFT2                      ; $D077
-    rts                             ; $D079
+;; Also: HPOSN1 (PA1)
+NextByte:
+    iny
 
-;; Plots a point in <HCOLOR>.
+;; Also: HPOSN2 (PA1)
+Divide:
+    sbc #DOTS_PER_BYTE
+    bcs NextByte
+    sty ByteIndex
+    tax
+    lda PixelMasks - (256 - DOTS_PER_BYTE),x
+    sta DotMask
+
+    ; An odd byte's colors are flipped.
+    tya
+    lsr
+    lda Color
+
+;; Sets <ShiftedColor> to A, flipped when carry is set.
+;; Also: HPOSN3 (PA1)
+SetColor:
+    sta ShiftedColor
+    bcs StepHorizontal::AlternateColor
+    rts
+.endproc
+
+;; Plots a point in <Color>.
 ;; In: A = Y, X = X's low byte, Y = X's high byte
-HPLOT:
-    jsr HPOSN                       ; $D07A
-
-HPLOT1:
-    lda HCOLOR1                     ; $D07D
-    eor (HBASL),y                   ; $D07F
-    and HMASK                       ; $D081
-    eor (HBASL),y                   ; $D083
-    sta (HBASL),y                   ; $D085
-    rts                             ; $D087
-
-LFTRT:
-    bpl RIGHT                       ; $D088
-
-LEFT:
-    lda HMASK                       ; $D08A
-    lsr                             ; $D08C
-    bcs LEFT1                       ; $D08D
-    eor #$C0                        ; $D08F
-
-LR1:
-    sta HMASK                       ; $D091
-    rts                             ; $D093
-
-LEFT1:
-    dey                             ; $D094
-    bpl LEFT2                       ; $D095
-    ldy #$27                        ; $D097
-
-LEFT2:
-    lda #$C0                        ; $D099
-
-NEWNDX:
-    sta HMASK                       ; $D09B
-    sty HNDX                        ; $D09D
-
-CSHIFT:
-    lda HCOLOR1                     ; $D0A0
-
-CSHFT2:
-    asl                             ; $D0A2
-    cmp #$C0                        ; $D0A3
-    bpl RTS1                        ; $D0A5
-    lda HCOLOR1                     ; $D0A7
-    eor #$7F                        ; $D0A9
-    sta HCOLOR1                     ; $D0AB
-
-RTS1:
-    rts                             ; $D0AD
-
-RIGHT:
-    lda HMASK                       ; $D0AE
-    asl                             ; $D0B0
-    eor #$80                        ; $D0B1
-    bmi LR1                         ; $D0B3
-    lda #$81                        ; $D0B5
-    iny                             ; $D0B7
-    cpy #$28                        ; $D0B8
-    bcc NEWNDX                      ; $D0BA
-    ldy #$00                        ; $D0BC
-    bcs NEWNDX                      ; $D0BE
-
-LRUDX1:
-    clc                             ; $D0C0
-
-LRUDX2:
-    lda SHAPEX                      ; $D0C1
-    and #$04                        ; $D0C3
-    beq LRUD4                       ; $D0C5
-    lda #$7F                        ; $D0C7
-    and HMASK                       ; $D0C9
-    and (HBASL),y                   ; $D0CB
-    bne LRUD3                       ; $D0CD
-    inc COLLSN                      ; $D0CF
-    lda #$7F                        ; $D0D2
-    and HMASK                       ; $D0D4
-    bpl LRUD3                       ; $D0D6
-
-LRUD1:
-    clc                             ; $D0D8
-
-LRUD2:
-    lda SHAPEX                      ; $D0D9
-    and #$04                        ; $D0DB
-    beq LRUD4                       ; $D0DD
-    lda (HBASL),y                   ; $D0DF
-    eor HCOLOR1                     ; $D0E1
-    and HMASK                       ; $D0E3
-    bne LRUD3                       ; $D0E5
-    inc COLLSN                      ; $D0E7
-
-LRUD3:
-    eor (HBASL),y                   ; $D0EA
-    sta (HBASL),y                   ; $D0EC
-
-LRUD4:
-    lda SHAPEX                      ; $D0EE
-    adc QDRNT                       ; $D0F0
-    and #$03                        ; $D0F2
-EQ3 = * - 1                         ;; the AND #$03 operand byte, which BIT tests
-    cmp #$02                        ; $D0F4
-    ror                             ; $D0F6
-
-LRUD:
-    bcs LFTRT                       ; $D0F7
-
-UPDWN:
-    bmi DOWN4                       ; $D0F9
-
-UP:
-    clc                             ; $D0FB
-    lda HBASH                       ; $D0FC
-    bit EQ1C                        ; $D0FE
-    bne UP4                         ; $D101
-    asl HBASL                       ; $D103
-    bcs UP2                         ; $D105
-    bit EQ3                         ; $D107
-    beq UP1                         ; $D10A
-    adc #$1F                        ; $D10C
-    sec                             ; $D10E
-    bcs UP3                         ; $D10F
-
-UP1:
-    adc #$23                        ; $D111
-    pha                             ; $D113
-    lda HBASL                       ; $D114
-    adc #$B0                        ; $D116
-    bcs UP5                         ; $D118
-    adc #$F0                        ; $D11A
-
-UP5:
-    sta HBASL                       ; $D11C
-    pla                             ; $D11E
-    bcs UP3                         ; $D11F
-
-UP2:
-    adc #$1F                        ; $D121
-
-UP3:
-    ror HBASL                       ; $D123
-
-UP4:
-    adc #$FC                        ; $D125
-
-UPDWN1:
-    sta HBASH                       ; $D127
-    rts                             ; $D129
-
-DOWN:
-    clc                             ; $D12A
-
-DOWN4:
-    lda HBASH                       ; $D12B
-    adc #$04                        ; $D12D
-EQ4 = * - 1                         ;; the ADC #$04 operand byte, which BIT tests
-    bit EQ1C                        ; $D12F
-    bne UPDWN1                      ; $D132
-    asl HBASL                       ; $D134
-    bcc DOWN1                       ; $D136
-    adc #$E0                        ; $D138
-    clc                             ; $D13A
-    bit EQ4                         ; $D13B
-    beq DOWN2                       ; $D13E
-    lda HBASL                       ; $D140
-    adc #$50                        ; $D142
-    eor #$F0                        ; $D144
-    beq DOWN3                       ; $D146
-    eor #$F0                        ; $D148
-
-DOWN3:
-    sta HBASL                       ; $D14A
-    lda HPAG                        ; $D14C
-    bcc DOWN2                       ; $D14F
-
-DOWN1:
-    adc #$E0                        ; $D151
-
-DOWN2:
-    ror HBASL                       ; $D153
-    bcc UPDWN1                      ; $D155
-
-;; Draws a line from (0,0) to a point: <HLIN> after clearing the last point.
-HLINRL:
-    pha                             ; $D157
-    lda #$00                        ; $D158
-    sta X0L                         ; $D15A
-    sta X0H                         ; $D15D
-    sta Y0                          ; $D160
-    pla                             ; $D163
-
-;; Draws a line in <HCOLOR> from the last point plotted (<X0L>, <X0H>, <Y0>) to a point, which becomes the last.
-;; In: A = the X's low byte, X = its high byte, Y = the Y
-HLIN:
-    pha                             ; $D164
-    sec                             ; $D165
-    sbc X0L                         ; $D166
-    pha                             ; $D169
-    txa                             ; $D16A
-    sbc X0H                         ; $D16B
-    sta QDRNT                       ; $D16E
-    bcs HLIN2                       ; $D170
-    pla                             ; $D172
-    eor #$FF                        ; $D173
-    adc #$01                        ; $D175
-    pha                             ; $D177
-    lda #$00                        ; $D178
-    sbc QDRNT                       ; $D17A
-
-HLIN2:
-    sta DXH                         ; $D17C
-    sta EH                          ; $D17E
-    pla                             ; $D180
-    sta DXL                         ; $D181
-    sta EL                          ; $D183
-    pla                             ; $D185
-    sta X0L                         ; $D186
-    stx X0H                         ; $D189
-    tya                             ; $D18C
-    clc                             ; $D18D
-    sbc Y0                          ; $D18E
-    bcc HLIN3                       ; $D191
-    eor #$FF                        ; $D193
-    adc #$FE                        ; $D195
-
-HLIN3:
-    sta DY                          ; $D197
-    sty Y0                          ; $D199
-    ror QDRNT                       ; $D19C
-    sec                             ; $D19E
-    sbc DXL                         ; $D19F
-    tax                             ; $D1A1
-    lda #$FF                        ; $D1A2
-    sbc DXH                         ; $D1A4
-    sta COUNTH                      ; $D1A6
-    ldy HNDX                        ; $D1A8
-    bcs MOVEX2                      ; $D1AB
-
-MOVEX:
-    asl                             ; $D1AD
-    jsr LFTRT                       ; $D1AE
-    sec                             ; $D1B1
-
-MOVEX2:
-    lda EL                          ; $D1B2
-    adc DY                          ; $D1B4
-    sta EL                          ; $D1B6
-    lda EH                          ; $D1B8
-    sbc #$00                        ; $D1BA
-
-HCOUNT:
-    sta EH                          ; $D1BC
-    lda (HBASL),y                   ; $D1BE
-    eor HCOLOR1                     ; $D1C0
-    and HMASK                       ; $D1C2
-    eor (HBASL),y                   ; $D1C4
-    sta (HBASL),y                   ; $D1C6
-    inx                             ; $D1C8
-    bne HLIN4                       ; $D1C9
-    inc COUNTH                      ; $D1CB
-    beq RTS2                        ; $D1CD
-
-HLIN4:
-    lda QDRNT                       ; $D1CF
-    bcs MOVEX                       ; $D1D1
-    jsr UPDWN                       ; $D1D3
-    clc                             ; $D1D6
-    lda EL                          ; $D1D7
-    adc DXL                         ; $D1D9
-    sta EL                          ; $D1DB
-    lda EH                          ; $D1DD
-    adc DXH                         ; $D1DF
-    bvc HCOUNT                      ; $D1E1
-
-MSKTBL:
-    .byte $81                       ; $D1E3
-    .byte $82, $84, $88             ; $D1E4
-    .byte $90, $A0                  ; $D1E7
-    .byte $C0                       ; $D1E9
-
-EQ1C:
-    .byte $1C                       ; $D1EA
-
-COS:
-    .byte $FF, $FE, $FA, $F4, $EC, $E1, $D4, $C5, $B4; $D1EB
-    .byte $A1, $8D, $78, $61, $49, $31, $18, $FF; $D1F4
-
-;; FIND (CALL -11780): works out the last point drawn from the screen position, and puts it in <X0L>, <X0H>
-;; and <Y0>, where BASIC's X0 and Y0 can read it.
-;; Out: X0L/X0H = X, Y0 = Y
-HFIND:
-    lda HBASL                       ; $D1FC
-    asl                             ; $D1FE
-    lda HBASH                       ; $D1FF
-    and #$03                        ; $D201
-    rol                             ; $D203
-    ora HBASL                       ; $D204
-    asl                             ; $D206
-    asl                             ; $D207
-    asl                             ; $D208
-    sta Y0                          ; $D209
-    lda HBASH                       ; $D20C
-    lsr                             ; $D20E
-    lsr                             ; $D20F
-    and #$07                        ; $D210
-    ora Y0                          ; $D212
-    sta Y0                          ; $D215
-    lda HNDX                        ; $D218
-    asl                             ; $D21B
-    adc HNDX                        ; $D21C
-    asl                             ; $D21F
-    tax                             ; $D220
-    dex                             ; $D221
-    lda HMASK                       ; $D222
-    and #$7F                        ; $D224
-
-HFIND1:
-    inx                             ; $D226
-    lsr                             ; $D227
-    bne HFIND1                      ; $D228
-    sta X0H                         ; $D22A
-    txa                             ; $D22D
-    clc                             ; $D22E
-    adc HNDX                        ; $D22F
-    bcc HFIND2                      ; $D232
-    inc X0H                         ; $D234
-
-HFIND2:
-    sta X0L                         ; $D237
-
-RTS2:
-    rts                             ; $D23A
-
-;; Draws a shape from <SHAPEL>/<SHAPEH> in <HCOLOR>, rotated and scaled, at the last point.
-;; In: X = the shape's address, low byte; Y = its high byte; A = the rotation, 0 to 63 (16 is a quarter turn)
-DRAW:
-    stx SHAPEL                      ; $D23B
-    sty SHAPEH                      ; $D23D
-
-DRAW1:
-    tax                             ; $D23F
-    lsr                             ; $D240
-    lsr                             ; $D241
-    lsr                             ; $D242
-    lsr                             ; $D243
-    sta QDRNT                       ; $D244
-    txa                             ; $D246
-    and #$0F                        ; $D247
-    tax                             ; $D249
-    ldy COS,x                       ; $D24A
-    sty DXL                         ; $D24D
-    eor #$0F                        ; $D24F
-    tax                             ; $D251
-    ldy COS+1,x                     ; $D252
-    iny                             ; $D255
-    sty DY                          ; $D256
-
-DRAW2:
-    ldy HNDX                        ; $D258
-    ldx #$00                        ; $D25B
-    stx COLLSN                      ; $D25D
-    lda (SHAPEL,x)                  ; $D260
-
-DRAW3:
-    sta SHAPEX                      ; $D262
-    ldx #$80                        ; $D264
-    stx EL                          ; $D266
-    stx EH                          ; $D268
-    ldx SCALE                       ; $D26A
-
-DRAW4:
-    lda EL                          ; $D26D
-    sec                             ; $D26F
-    adc DXL                         ; $D270
-    sta EL                          ; $D272
-    bcc DRAW5                       ; $D274
-    jsr LRUD1                       ; $D276
-    clc                             ; $D279
-
-DRAW5:
-    lda EH                          ; $D27A
-    adc DY                          ; $D27C
-    sta EH                          ; $D27E
-    bcc DRAW6                       ; $D280
-    jsr LRUD2                       ; $D282
-
-DRAW6:
-    dex                             ; $D285
-    bne DRAW4                       ; $D286
-    lda SHAPEX                      ; $D288
-    lsr                             ; $D28A
-    lsr                             ; $D28B
-    lsr                             ; $D28C
-    bne DRAW3                       ; $D28D
-    inc SHAPEL                      ; $D28F
-    bne DRAW7                       ; $D291
-    inc SHAPEH                      ; $D293
-
-DRAW7:
-    lda (SHAPEL,x)                  ; $D295
-    bne DRAW3                       ; $D297
-    rts                             ; $D299
-
-;; Draws a shape as <DRAW> does, but inverts each dot instead of setting it, so drawing it again erases it.
-;; In: X = the shape's address, low byte; Y = its high byte; A = the rotation, 0 to 3 quarter turns
-XDRAW:
-    stx SHAPEL                      ; $D29A
-    sty SHAPEH                      ; $D29C
-
-XDRAW1:
-    tax                             ; $D29E
-    lsr                             ; $D29F
-    lsr                             ; $D2A0
-    lsr                             ; $D2A1
-    lsr                             ; $D2A2
-    sta QDRNT                       ; $D2A3
-    txa                             ; $D2A5
-    and #$0F                        ; $D2A6
-    tax                             ; $D2A8
-    ldy COS,x                       ; $D2A9
-    sty DXL                         ; $D2AC
-    eor #$0F                        ; $D2AE
-    tax                             ; $D2B0
-    ldy COS+1,x                     ; $D2B1
-    iny                             ; $D2B4
-    sty DY                          ; $D2B5
-
-XDRAW2:
-    ldy HNDX                        ; $D2B7
-    ldx #$00                        ; $D2BA
-    stx COLLSN                      ; $D2BC
-    lda (SHAPEL,x)                  ; $D2BF
-
-XDRAW3:
-    sta SHAPEX                      ; $D2C1
-    ldx #$80                        ; $D2C3
-    stx EL                          ; $D2C5
-    stx EH                          ; $D2C7
-    ldx SCALE                       ; $D2C9
-
-XDRAW4:
-    lda EL                          ; $D2CC
-    sec                             ; $D2CE
-    adc DXL                         ; $D2CF
-    sta EL                          ; $D2D1
-    bcc XDRAW5                      ; $D2D3
-    jsr LRUDX1                      ; $D2D5
-    clc                             ; $D2D8
-
-XDRAW5:
-    lda EH                          ; $D2D9
-    adc DY                          ; $D2DB
-    sta EH                          ; $D2DD
-    bcc XDRAW6                      ; $D2DF
-    jsr LRUD2                       ; $D2E1
-
-XDRAW6:
-    dex                             ; $D2E4
-    bne XDRAW4                      ; $D2E5
-    lda SHAPEX                      ; $D2E7
-    lsr                             ; $D2E9
-    lsr                             ; $D2EA
-    lsr                             ; $D2EB
-    bne XDRAW3                      ; $D2EC
-    inc SHAPEL                      ; $D2EE
-    bne XDRAW7                      ; $D2F0
-    inc SHAPEH                      ; $D2F2
-
-XDRAW7:
-    lda (SHAPEL,x)                  ; $D2F4
-    bne XDRAW3                      ; $D2F6
-    rts                             ; $D2F8
-
-;; POSN (CALL -11527): moves to (X0, Y0) in the color COLR without plotting.
-BPOSN:
-    jsr PCOLR                       ; $D2F9
-    sta HCOLOR                      ; $D2FC
-    jsr GETY0                       ; $D2FF
-    pha                             ; $D302
-    jsr GETX0                       ; $D303
-    pla                             ; $D306
-    jsr HPOSN                       ; $D307
-    ldx BXSAV                       ; $D30A
-    rts                             ; $D30D
-
-;; PLOT (CALL -11506): plots (X0, Y0) in the color COLR.
-BPLOT:
-    jsr BPOSN                       ; $D30E
-    jmp HPLOT1                      ; $D311
-
-;; LINE (CALL -11500): draws a line in the color COLR from the last point to (X0, Y0).
-BLIN1:
-    lda HNDX                        ; $D314
-    lsr                             ; $D317
-    jsr PCOLR                       ; $D318
-    jsr HPOSN3                      ; $D31B
-
-BLINE:
-    jsr GETX0                       ; $D31E
-    txa                             ; $D321
-    pha                             ; $D322
-    tya                             ; $D323
-    tax                             ; $D324
-    jsr GETY0                       ; $D325
-    tay                             ; $D328
-    pla                             ; $D329
-    jsr HLIN                        ; $D32A
-    ldx BXSAV                       ; $D32D
-    rts                             ; $D330
-
-;; BKGND (CALL -11471): fills the page drawn on with the color COLR.
-BGND:
-    jsr PCOLR                       ; $D331
-    jmp BKGND0                      ; $D334
-
-;; DRAW (CALL -11465): moves to (X0, Y0), then draws shape number SHAPE as <BDRAW> does.
-BDRAW1:
-    jsr BPOSN                       ; $D337
-
-;; DRAW1 (CALL -11462): draws shape number SHAPE at the last point, rotated by ROT and scaled by SCALE.
-BDRAW:
-    jsr BDRAWX                      ; $D33A
-    jsr DRAW                        ; $D33D
-    ldx BXSAV                       ; $D340
-    rts                             ; $D343
-
-;; Moves to (X0, Y0), then draws shape number SHAPE as <BXDRAW> does.
-BXDRW1:
-    jsr BPOSN                       ; $D344
-
-;; Draws shape number SHAPE at the last point as <XDRAW> does, inverting each dot.
-BXDRAW:
-    jsr BDRAWX                      ; $D347
-    jsr XDRAW                       ; $D34A
-    ldx BXSAV                       ; $D34D
-    rts                             ; $D350
-
-BDRAWX:
-    stx BXSAV                       ; $D351
-    ldy #$32                        ; $D354
-    jsr PBYTE                       ; $D356
-    sta SCALE                       ; $D359
-    ldy #$28                        ; $D35C
-    jsr PBYTE                       ; $D35E
-    pha                             ; $D361
-    lda SHAPXL                      ; $D362
-    sta SHAPEL                      ; $D365
-    lda SHAPXH                      ; $D367
-    sta SHAPEH                      ; $D36A
-    ldy #$20                        ; $D36C
-    jsr PBYTE                       ; $D36E
-    beq RERR1                       ; $D371
-    ldx #$00                        ; $D373
-    cmp (SHAPEL,x)                  ; $D375
-    beq BDRWX1                      ; $D377
-    bcs RERR1                       ; $D379
-
-BDRWX1:
-    asl                             ; $D37B
-    bcc BDRWX2                      ; $D37C
-    inc SHAPEH                      ; $D37E
-    clc                             ; $D380
-
-BDRWX2:
-    tay                             ; $D381
-    lda (SHAPEL),y                  ; $D382
-    adc SHAPEL                      ; $D384
-    tax                             ; $D386
-    iny                             ; $D387
-    lda (SHAPEL),y                  ; $D388
-    adc SHAPXH                      ; $D38A
-    tay                             ; $D38D
-    pla                             ; $D38E
-    rts                             ; $D38F
-
-;; Reads COLR, BASIC's third variable, as a byte; RANGE ERR if it is over 255.
-PCOLR:
-    ldy #$16                        ; $D390
-
-PBYTE:
-    lda (LOMEML),y                  ; $D392
-    bne RERR1                       ; $D394
-    dey                             ; $D396
-    lda (LOMEML),y                  ; $D397
-
-RTSB:
-    rts                             ; $D399
-
-;; Reads X0, BASIC's first variable; RANGE ERR if it is over 279.
+;; Entry:
+;;   AtPosition = plots at the point <Position> set, with Y = its byte index
+;; Also: HPLOT (PA1)
+.proc Plot
+    jsr Position
+
+;; Sets the dot's bit in the screen byte to <ShiftedColor>'s.
+;; Also: HPLOT1 (PA1)
+AtPosition:
+    lda ShiftedColor
+    eor (LineBase),y
+    and DotMask
+    eor (LineBase),y
+    sta (LineBase),y
+    rts
+.endproc
+
+;; Moves the point one dot left or right, into the next byte at an edge of one, wrapping around the line.
+;;
+;; Apple's listing calls the return at <HiResGraphics::StepHorizontal::Done> RTS1.
+;; In: negative = set for left, clear for right, Y = the byte index
+;; Out: Y = the byte index, DotMask = the new dot's mask, ByteIndex = its byte, ShiftedColor = the color for that byte
+;; Keeps: X
+;; Entry:
+;;   AlternateColor = flips the color in A, <ShiftedColor>, into <ShiftedColor> for the next byte when its dots
+;;     alternate (green, violet, orange, blue); black and white stay
+;; Also: LFTRT (PA1)
+.proc StepHorizontal
+    bpl Right
+
+;; Also: LEFT (PA1)
+Left:
+    lda DotMask
+    lsr
+    bcs PreviousByte
+    eor #$C0
+
+;; Also: LR1 (PA1)
+StoreMask:
+    sta DotMask
+    rts
+
+;; Also: LEFT1 (PA1)
+PreviousByte:
+    dey
+    bpl LastDot
+    ldy #BYTES_PER_LINE - 1
+
+;; The byte's last dot, bit 6, with bit 7 set.
+;; Also: LEFT2 (PA1)
+LastDot:
+    lda #$C0
+
+;; Also: NEWNDX (PA1)
+NewByte:
+    sta DotMask
+    sty ByteIndex
+
+;; Also: CSHIFT (PA1)
+ShiftColor:
+    lda ShiftedColor
+
+;; Flips <ShiftedColor> for the next byte when the color's dots alternate: then A shifted left is $40 to $BF.
+;; Also: CSHFT2 (PA1)
+AlternateColor:
+    asl
+    cmp #$C0
+    bpl Done
+    lda ShiftedColor
+    eor #$7F
+    sta ShiftedColor
+
+Done:
+    rts
+
+;; Also: RIGHT (PA1)
+Right:
+    lda DotMask
+    asl
+    eor #$80
+    bmi StoreMask
+
+    ; The byte's first dot, bit 0, with bit 7 set.
+    lda #$81
+    iny
+    cpy #BYTES_PER_LINE
+    bcc NewByte
+    ldy #0
+    bcs NewByte
+.endproc
+
+;; Takes one step of a shape for <DrawInverted>: inverts the dot first when the vector plots, counting it in
+;; <Collisions> when it was dark; then moves the point one dot in the vector's direction.
+;;
+;; A shape's vectors are 3 bits each: bit 2 says to plot, and bits 0 and 1 are the direction, 0 up, 1 right, 2 down
+;; and 3 left, to which <Direction>'s quadrant and the carry add. The carry is clear for the step along the
+;; direction, and set for the step at right angles to it. Apple's listing calls the move up UP, and the move down DOWN;
+;; nothing in Programmer's Aid enters DOWN.
+;; In: ShapeBits = the vector in bits 0 to 2, Y = the byte index
+;; Out: Y = the byte index
+;; Keeps: X
+;; Entry:
+;;   Draw = the same for <Draw>: plots the dot in <ShiftedColor> when the vector plots, counting it in <Collisions>
+;;     when it was already that color, then moves along the direction
+;;   DrawTurned = <Draw>'s, with the carry set, which moves at right angles; <DrawInverted> uses it too, so its
+;;     turned steps plot in the color instead of inverting
+;;   UpOrDown = moves one line up, or down when negative is set and the carry clear, as <Line> steps
+;; Also: LRUDX1 (PA1)
+.proc Step
+    clc
+
+;; Also: LRUDX2 (PA1)
+Invert:
+    lda ShapeBits
+    and #4
+    beq Move
+    lda #$7F
+    and DotMask
+    and (LineBase),y
+    bne StoreDot
+    inc Collisions
+    lda #$7F
+    and DotMask
+    bpl StoreDot
+
+;; Clears the carry for <Draw>'s step along the direction.
+;; Also: LRUD1 (PA1)
+Draw:
+    clc
+
+;; Plots the dot in <ShiftedColor> when the vector plots.
+;; Also: LRUD2 (PA1)
+DrawTurned:
+    lda ShapeBits
+    and #4
+    beq Move
+    lda (LineBase),y
+    eor ShiftedColor
+    and DotMask
+    bne StoreDot
+    inc Collisions
+
+;; Also: LRUD3 (PA1)
+StoreDot:
+    eor (LineBase),y
+    sta (LineBase),y
+
+;; Moves the point in the vector's direction plus the quadrant and the carry: bit 0 picks left and right or up and
+;; down, bit 1 which way.
+;; Also: LRUD4 (PA1)
+Move:
+    lda ShapeBits
+    adc Direction
+    and #3
+
+;; The byte 3, the operand above, which BIT tests for bits 0 and 1 of a line's high byte, its $100 block.
+;; Also: EQ3 (PA1)
+MaskBits0And1 = * - 1
+    cmp #2
+    ror
+
+;; Also: LRUD (PA1)
+MoveLeftOrRight:
+    bcs StepHorizontal
+
+;; Moves up, or down when negative is set.
+;; Also: UPDWN (PA1)
+UpOrDown:
+    bmi DownFromA
+
+;; Moves up a line. Apple's listing calls it UP.
+Up:
+    clc
+    lda LineBaseHigh
+    bit MaskBits2To4
+    bne UpPlain
+    asl LineBase
+    bcs UpWrap
+    bit MaskBits0And1
+    beq UpInGroup
+    adc #$1F
+    sec
+    bcs UpRotate
+
+;; Also: UP1 (PA1)
+UpInGroup:
+    adc #$23
+    pha
+    lda LineBase
+    adc #$B0
+    bcs StoreUpLow
+    adc #$F0
+
+;; Also: UP5 (PA1)
+StoreUpLow:
+    sta LineBase
+    pla
+    bcs UpRotate
+
+;; Also: UP2 (PA1)
+UpWrap:
+    adc #$1F
+
+;; Also: UP3 (PA1)
+UpRotate:
+    ror LineBase
+
+;; Also: UP4 (PA1)
+UpPlain:
+    adc #$FC
+
+;; Also: UPDWN1 (PA1)
+StoreHigh:
+    sta LineBaseHigh
+    rts
+
+;; Moves down a line. Apple's listing calls it DOWN.
+Down:
+    clc
+
+;; Moves down a line, with the carry clear.
+;; Also: DOWN4 (PA1)
+DownFromA:
+    lda LineBaseHigh
+    adc #4
+
+;; The byte 4, the operand above, which BIT tests for bit 2.
+;; Also: EQ4 (PA1)
+MaskBit2 = * - 1
+    bit MaskBits2To4
+    bne StoreHigh
+    asl LineBase
+    bcc DownWrap
+    adc #$E0
+    clc
+    bit MaskBit2
+    beq DownRotate
+    lda LineBase
+    adc #$50
+    eor #$F0
+    beq StoreDownLow
+    eor #$F0
+
+;; Also: DOWN3 (PA1)
+StoreDownLow:
+    sta LineBase
+    lda Page
+    bcc DownRotate
+
+;; Also: DOWN1 (PA1)
+DownWrap:
+    adc #$E0
+
+;; Also: DOWN2 (PA1)
+DownRotate:
+    ror LineBase
+    ; Always taken: the ASL above left bit 0 clear, and nothing since sets it.
+    bcc StoreHigh
+.endproc
+
+;; Draws a line from the point <Position> or the last line left, as if it were (0,0), to the point that many dots from
+;; it: <Line> with <LastX> and <LastY> cleared, which then hold the offset, not where the line ends.
+;; In: A = the X offset's low byte, X = its high byte, Y = the Y offset
+;; Also: HLINRL (PA1)
+.proc LineFromOrigin
+    pha
+    lda #0
+    sta LastX
+    sta LastXHigh
+    sta LastY
+    pla
+    ; Falls into Line.
+.endproc
+
+;; Draws a line in <ShiftedColor> from the last point plotted (<LastX>, <LastY>) to a point, which becomes the last.
+;;
+;; It plots the dot it is at, then moves one dot, along X or up or down as the error term says, until it has plotted
+;; |dx| + |dy| + 1 dots, both ends included; it ends through <FindCoordinates::Return>.
+;; In: A = the X's low byte, X = its high byte, Y = the Y, ByteIndex = the last point's byte, LineBase = its line,
+;;   DotMask = its mask, ShiftedColor = the color for its byte, as <Position> or the last line left them
+;; Also: HLIN (PA1)
+.proc Line
+    pha
+    sec
+    sbc LastX
+    pha
+    txa
+    sbc LastXHigh
+    sta Direction
+    bcs StoreDistanceX
+
+    ; Leftward: the distance's magnitude.
+    pla
+    eor #$FF
+    adc #1
+    pha
+    lda #0
+    sbc Direction
+
+;; Also: HLIN2 (PA1)
+StoreDistanceX:
+    sta DistanceXHigh
+    sta ErrorTermHigh
+    pla
+    sta DistanceX
+    sta ErrorTerm
+    pla
+    sta LastX
+    stx LastXHigh
+    tya
+    clc
+    sbc LastY
+    bcc StoreDistanceY
+    eor #$FF
+    adc #$FE
+
+;; DistanceY = -|the change in Y| - 1.
+;; Also: HLIN3 (PA1)
+StoreDistanceY:
+    sta DistanceY
+    sty LastY
+    ror Direction
+    sec
+    sbc DistanceX
+    tax
+    lda #$FF
+    sbc DistanceXHigh
+    sta CountHigh
+    ldy ByteIndex
+    bcs StepY
+
+;; Also: MOVEX (PA1)
+MoveX:
+    asl
+    jsr StepHorizontal
+    sec
+
+;; Also: MOVEX2 (PA1)
+StepY:
+    lda ErrorTerm
+    adc DistanceY
+    sta ErrorTerm
+    lda ErrorTermHigh
+    sbc #0
+
+;; Also: HCOUNT (PA1)
+PlotDot:
+    sta ErrorTermHigh
+    lda (LineBase),y
+    eor ShiftedColor
+    and DotMask
+    eor (LineBase),y
+    sta (LineBase),y
+    inx
+    bne NextDot
+    inc CountHigh
+    beq FindCoordinates::Return
+
+;; Also: HLIN4 (PA1)
+NextDot:
+    lda Direction
+    bcs MoveX
+    jsr Step::UpOrDown
+    clc
+    lda ErrorTerm
+    adc DistanceX
+    sta ErrorTerm
+    lda ErrorTermHigh
+    adc DistanceXHigh
+    ; Always taken.
+    bvc PlotDot
+.endproc
+
+;; Each dot's bit in a screen byte, from bit 0, the leftmost, to bit 6, with bit 7 set.
+;; Also: MSKTBL (PA1)
+PixelMasks:
+    .byte $81, $82, $84, $88, $90, $A0, $C0
+.assert * - PixelMasks = DOTS_PER_BYTE, "A mask for each of a byte's 7 dots."
+
+;; The byte $1C, which BIT tests for bits 2 to 4 of a line's high byte, its $400 block.
+;; Also: EQ1C (PA1)
+MaskBits2To4:
+    .byte $1C
+
+;; The cosines of each 16th of a quarter turn, times 256: $FF for 0 down to $18, then $FF again. For a rotation n
+;; 16ths into its quadrant, <Draw> takes the step along the direction from entry n, and the step at right angles from
+;; entry 16 - n, plus 1, which makes it 0 for n = 0.
+;; Also: COS (PA1)
+Cosines:
+    .byte $FF, $FE, $FA, $F4, $EC, $E1, $D4, $C5, $B4
+    .byte $A1, $8D, $78, $61, $49, $31, $18, $FF
+.assert * - Cosines = 17, "Sixteen steps of a quarter turn, and one more."
+
+;; FIND (CALL -11780): works out the last point drawn from the screen position, and puts it in <LastX> and <LastY>,
+;; where BASIC can read it.
+;; Out: LastX/LastXHigh = X, LastY = Y
+;; Keeps: Y
+;; Also: HFIND (PA1)
+.proc FindCoordinates
+.assert * = $D1FC, "HiResGraphics::FindCoordinates must stay at $D1FC, CALL -11780."
+
+    ; Y from the line's address, undoing <Position>'s interleave.
+    lda LineBase
+    asl
+    lda LineBaseHigh
+    and #3
+    rol
+    ora LineBase
+    asl
+    asl
+    asl
+    sta LastY
+    lda LineBaseHigh
+    lsr
+    lsr
+    and #7
+    ora LastY
+    sta LastY
+
+    ; X = the byte index x 7, plus the dot's bit number.
+    lda ByteIndex
+    asl
+    adc ByteIndex
+    asl
+    tax
+    dex
+    lda DotMask
+    and #$7F
+
+;; Also: HFIND1 (PA1)
+CountBit:
+    inx
+    lsr
+    bne CountBit
+    sta LastXHigh
+    txa
+    clc
+    adc ByteIndex
+    bcc StoreX
+    inc LastXHigh
+
+;; Also: HFIND2 (PA1)
+StoreX:
+    sta LastX
+
+;; Also: RTS2 (PA1)
+Return:
+    rts
+.endproc
+
+;; Draws a shape in <ShiftedColor>, rotated and scaled by <Scale>, at the point <Position> set, counting in
+;; <Collisions> the dots already that color.
+;;
+;; Each byte of the shape holds up to three vectors, from bits 0 to 2 up; a byte of 0 ends it.
+;; In: X = the shape's address, low byte, Y = its high byte, A = the rotation, 0 to 63 (16 is a quarter turn)
+;; Also: DRAW (PA1)
+.proc Draw
+    stx ShapePointer
+    sty ShapePointerHigh
+
+;; Splits the rotation into its quadrant and the steps for its 16th of a quarter turn.
+;; Also: DRAW1 (PA1)
+Rotate:
+    tax
+    lsr
+    lsr
+    lsr
+    lsr
+    sta Direction
+    txa
+    and #$0F
+    tax
+    ldy Cosines,x
+    sty DistanceX
+    eor #$0F
+    tax
+    ldy Cosines + 1,x
+    iny
+    sty DistanceY
+
+;; Also: DRAW2 (PA1)
+Start:
+    ldy ByteIndex
+    ldx #0
+    stx Collisions
+    lda (ShapePointer,x)
+
+;; Also: DRAW3 (PA1)
+NextVector:
+    sta ShapeBits
+    ldx #$80
+    stx ErrorTerm
+    stx ErrorTermHigh
+    ldx Scale
+
+;; Takes the vector's steps, <Scale> times: along the direction when <ErrorTerm> carries, and at right angles when its
+;; high byte does.
+;; Also: DRAW4 (PA1)
+Repeat:
+    lda ErrorTerm
+    sec
+    adc DistanceX
+    sta ErrorTerm
+    bcc TurnedStep
+    jsr Step::Draw
+    clc
+
+;; Also: DRAW5 (PA1)
+TurnedStep:
+    lda ErrorTermHigh
+    adc DistanceY
+    sta ErrorTermHigh
+    bcc NextRepeat
+    jsr Step::DrawTurned
+
+;; Also: DRAW6 (PA1)
+NextRepeat:
+    dex
+    bne Repeat
+    lda ShapeBits
+    lsr
+    lsr
+    lsr
+    bne NextVector
+    inc ShapePointer
+    bne NextShapeByte
+    inc ShapePointerHigh
+
+;; Also: DRAW7 (PA1)
+NextShapeByte:
+    lda (ShapePointer,x)
+    bne NextVector
+    rts
+.endproc
+
+;; Draws a shape as <Draw> does, but inverts the dots of its steps along the direction instead of setting them, so
+;; drawing it again erases those; its steps at right angles go through <Step::DrawTurned>, which sets them.
+;; In: X = the shape's address, low byte, Y = its high byte, A = the rotation, 0 to 63 (16 is a quarter turn)
+;; Also: XDRAW (PA1)
+.proc DrawInverted
+    stx ShapePointer
+    sty ShapePointerHigh
+
+;; Also: XDRAW1 (PA1)
+Rotate:
+    tax
+    lsr
+    lsr
+    lsr
+    lsr
+    sta Direction
+    txa
+    and #$0F
+    tax
+    ldy Cosines,x
+    sty DistanceX
+    eor #$0F
+    tax
+    ldy Cosines + 1,x
+    iny
+    sty DistanceY
+
+;; Also: XDRAW2 (PA1)
+Start:
+    ldy ByteIndex
+    ldx #0
+    stx Collisions
+    lda (ShapePointer,x)
+
+;; Also: XDRAW3 (PA1)
+NextVector:
+    sta ShapeBits
+    ldx #$80
+    stx ErrorTerm
+    stx ErrorTermHigh
+    ldx Scale
+
+;; Also: XDRAW4 (PA1)
+Repeat:
+    lda ErrorTerm
+    sec
+    adc DistanceX
+    sta ErrorTerm
+    bcc TurnedStep
+    jsr Step
+    clc
+
+;; Also: XDRAW5 (PA1)
+TurnedStep:
+    lda ErrorTermHigh
+    adc DistanceY
+    sta ErrorTermHigh
+    bcc NextRepeat
+    jsr Step::DrawTurned
+
+;; Also: XDRAW6 (PA1)
+NextRepeat:
+    dex
+    bne Repeat
+    lda ShapeBits
+    lsr
+    lsr
+    lsr
+    bne NextVector
+    inc ShapePointer
+    bne NextShapeByte
+    inc ShapePointerHigh
+
+;; Also: XDRAW7 (PA1)
+NextShapeByte:
+    lda (ShapePointer,x)
+    bne NextVector
+    rts
+.endproc
+
+;; POSN (CALL -11527): moves to (`X0`, `Y0`) in the color `COLR` without plotting.
+;; Out: Y = the byte index
+;; Keeps: X
+;; Also: BPOSN (PA1)
+.proc BasicPosition
+.assert * = $D2F9, "HiResGraphics::BasicPosition must stay at $D2F9, CALL -11527."
+    jsr ReadColor
+    sta Color
+    jsr ReadY
+    pha
+    jsr ReadX
+    pla
+    jsr Position
+    ldx KeptX
+    rts
+.endproc
+
+;; PLOT (CALL -11506): plots (`X0`, `Y0`) in the color `COLR`.
+;; Keeps: X
+;; Also: BPLOT (PA1)
+.proc BasicPlot
+.assert * = $D30E, "HiResGraphics::BasicPlot must stay at $D30E, CALL -11506."
+    jsr BasicPosition
+    jmp Plot::AtPosition
+.endproc
+
+;; LINE (CALL -11500): draws a line in the color `COLR` from the last point to (`X0`, `Y0`).
+;; Keeps: X
+;; Also: BLIN1 (PA1)
+.proc BasicLine
+.assert * = $D314, "HiResGraphics::BasicLine must stay at $D314, CALL -11500."
+
+    ; The color, flipped for the last point's byte when it is odd.
+    lda ByteIndex
+    lsr
+    jsr ReadColor
+    jsr Position::SetColor
+
+;; Also: BLINE (PA1)
+ToPoint:
+    jsr ReadX
+    txa
+    pha
+    tya
+    tax
+    jsr ReadY
+    tay
+    pla
+    jsr Line
+    ldx KeptX
+    rts
+.endproc
+
+;; BKGND (CALL -11471): fills the page drawn on with the color `COLR`.
+;; Keeps: X
+;; Also: BGND (PA1)
+.proc BasicFill
+.assert * = $D331, "HiResGraphics::BasicFill must stay at $D331, CALL -11471."
+    jsr ReadColor
+    jmp Fill
+.endproc
+
+;; DRAW (CALL -11465): moves to (`X0`, `Y0`), then draws shape number `SHAPE` as <BasicDraw> does.
+;; Keeps: X
+;; Also: BDRAW1 (PA1)
+.proc BasicMoveAndDraw
+.assert * = $D337, "HiResGraphics::BasicMoveAndDraw must stay at $D337, CALL -11465."
+    jsr BasicPosition
+    ; Falls into BasicDraw.
+.endproc
+
+;; DRAW1 (CALL -11462): draws shape number `SHAPE` at the last point, rotated by `ROT` and scaled by `SCALE`.
+;; Keeps: X
+;; Also: BDRAW (PA1)
+.proc BasicDraw
+.assert * = $D33A, "HiResGraphics::BasicDraw must stay at $D33A, CALL -11462."
+    jsr ShapeParameters
+    jsr Draw
+    ldx KeptX
+    rts
+.endproc
+
+;; Moves to (`X0`, `Y0`), then draws shape number `SHAPE` as <BasicDrawInverted> does.
+;; Keeps: X
+;; Also: BXDRW1 (PA1)
+.proc BasicMoveAndDrawInverted
+    jsr BasicPosition
+    ; Falls into BasicDrawInverted.
+.endproc
+
+;; Draws shape number `SHAPE` at the last point as <DrawInverted> does.
+;; Keeps: X
+;; Also: BXDRAW (PA1)
+.proc BasicDrawInverted
+    jsr ShapeParameters
+    jsr DrawInverted
+    ldx KeptX
+    rts
+.endproc
+
+;; Reads the shape's parameters from BASIC's variables: sets <Scale> from `SCALE`, and finds shape number `SHAPE` in the
+;; table at <ShapeTable>; RANGE ERR if a value is over 255, or the shape is 0 or past the table's count.
+;; In: X = BASIC's X, which it keeps in <KeptX>
+;; Out: A = the rotation, `ROT`, X = the shape's address, low byte, Y = its high byte
+;; Also: BDRAWX (PA1)
+.proc ShapeParameters
+    stx KeptX
+    ldy #SCALE_VALUE_HIGH
+    jsr ReadByteVariable
+    sta Scale
+    ldy #ROT_VALUE_HIGH
+    jsr ReadByteVariable
+    pha
+    lda ShapeTable
+    sta ShapePointer
+    lda ShapeTableHigh
+    sta ShapePointerHigh
+    ldy #SHAPE_VALUE_HIGH
+    jsr ReadByteVariable
+    beq ReadX::OutOfRange
+
+    ; The table's first byte is its count of shapes.
+    ldx #0
+    cmp (ShapePointer,x)
+    beq FindShape
+    bcs ReadX::OutOfRange
+
+;; The shape's offset is the table's word at 2 x its number.
+;; Also: BDRWX1 (PA1)
+FindShape:
+    asl
+    bcc ShapeAddress
+    inc ShapePointerHigh
+    clc
+
+;; Also: BDRWX2 (PA1)
+ShapeAddress:
+    tay
+    lda (ShapePointer),y
+    adc ShapePointer
+    tax
+    iny
+    lda (ShapePointer),y
+    adc ShapeTableHigh
+    tay
+    pla
+    rts
+.endproc
+
+;; Reads `COLR`, BASIC's third variable, as a byte; RANGE ERR if it is over 255.
+;; Out: A = the color
+;; Keeps: X
+;; Also: PCOLR (PA1)
+.proc ReadColor
+    ldy #COLR_VALUE_HIGH
+    ; Falls into ReadByteVariable.
+.endproc
+
+;; Reads a BASIC variable as a byte; RANGE ERR if it is over 255.
+;; In: Y = the offset of its value's high byte from <LowMemory>
+;; Out: A = the value, zero = set when it is 0
+;; Keeps: X
+;; Also: PBYTE (PA1)
+.proc ReadByteVariable
+    lda (LowMemory),y
+    bne ReadX::OutOfRange
+    dey
+    lda (LowMemory),y
+
+;; Also: RTSB (PA1)
+Return:
+    rts
+.endproc
+
+;; Reads `X0`, BASIC's first variable; RANGE ERR if it is over 279.
+;; In: X = BASIC's X, which it keeps in <KeptX>
 ;; Out: X = its low byte, Y = its high byte
-GETX0:
-    stx BXSAV                       ; $D39A
-    ldy #$05                        ; $D39D
-    lda (LOMEML),y                  ; $D39F
-    tax                             ; $D3A1
-    iny                             ; $D3A2
-    lda (LOMEML),y                  ; $D3A3
-    tay                             ; $D3A5
-    cpx #$18                        ; $D3A6
-    sbc #$01                        ; $D3A8
-    bcc RTSB                        ; $D3AA
+;; Entry:
+;;   OutOfRange = Integer BASIC's RANGE ERR, for a BASIC variable out of range
+;; Also: GETX0 (PA1)
+.proc ReadX
+    stx KeptX
+    ldy #X0_VALUE
+    lda (LowMemory),y
+    tax
+    iny
+    lda (LowMemory),y
+    tay
 
-RERR1:
-    jmp RNGERR                      ; $D3AC
+    ; Below 280: the compare's borrow with the high byte's.
+    cpx #<SCREEN_WIDTH
+    sbc #>SCREEN_WIDTH
+    bcc ReadByteVariable::Return
 
-;; Reads Y0, BASIC's second variable; RANGE ERR if it is over 191.
-;; Out: A = Y0
-GETY0:
-    ldy #$0D                        ; $D3AF
-    jsr PBYTE                       ; $D3B1
-    cmp #$C0                        ; $D3B4
-    bcs RERR1                       ; $D3B6
-    rts                             ; $D3B8
+;; Also: RERR1 (PA1)
+OutOfRange:
+    jmp RangeError
+.endproc
 
-;; SHLOAD (CALL -11335): loads a shape table from tape to $0800, after a 2-byte length, and moves LOMEM above it;
-;; MEM FULL if it reaches the program.
-;; Out: SHAPXL/SHAPXH = $0800
-SHLOAD:
-    stx BXSAV                       ; $D3B9
-    jsr ACADR                       ; $D3BC
-    jsr READ                        ; $D3BF
-    lda #$00                        ; $D3C2
-    sta A1L                         ; $D3C4
-    sta SHAPXL                      ; $D3C6
-    clc                             ; $D3C9
-    adc ACL                         ; $D3CA
-    tay                             ; $D3CC
-    lda #$08                        ; $D3CD
-    sta A1H                         ; $D3CF
-    sta SHAPXH                      ; $D3D1
-    adc ACH                         ; $D3D4
-    bcs MFULL1                      ; $D3D6
-    cpy PPL                         ; $D3D8
-    pha                             ; $D3DA
-    sbc PPH                         ; $D3DB
-    pla                             ; $D3DD
-    bcs MFULL1                      ; $D3DE
-    sty A2L                         ; $D3E0
-    sta A2H                         ; $D3E2
-    iny                             ; $D3E4
-    bne SHLOD1                      ; $D3E5
-    adc #$01                        ; $D3E7
+;; Reads `Y0`, BASIC's second variable; RANGE ERR if it is over 191.
+;; Out: A = `Y0`
+;; Keeps: X
+;; Also: GETY0 (PA1)
+.proc ReadY
+    ldy #Y0_VALUE_HIGH
+    jsr ReadByteVariable
+    cmp #SCREEN_HEIGHT
+    bcs ReadX::OutOfRange
+    rts
+.endproc
 
-SHLOD1:
-    sty LOMEML                      ; $D3E9
-    sta LOMEMH                      ; $D3EB
-    sty PVL                         ; $D3ED
-    sta PVH                         ; $D3EF
-    jsr RD2BIT                      ; $D3F1
-    lda #$03                        ; $D3F4
-    jsr READX1                      ; $D3F6
-    ldx BXSAV                       ; $D3F9
-    rts                             ; $D3FC
+;; SHLOAD (CALL -11335): loads a shape table from tape to $0800, after a 2-byte length, and moves <LowMemory> above it;
+;; MEM FULL if it would reach the program.
+;; Out: ShapeTable/ShapeTableHigh = $0800
+;; Keeps: X
+;; Also: SHLOAD (PA1)
+.proc LoadShapes
+.assert * = $D3B9, "HiResGraphics::LoadShapes must stay at $D3B9, CALL -11335."
 
-MFULL1:
-    jmp MEMFUL                      ; $D3FD
+;; The page the shape table loads at.
+SHAPE_TABLE_PAGE = $08
+
+;; The header wait for the table, which follows the length on the tape: 3, where <ReadCassette> waits $16.
+SHAPE_HEADER_DELAY = $03
+
+    stx KeptX
+
+    ; The length, as Integer BASIC's LOAD reads it.
+    jsr Cassette::PointAtLength
+    jsr ReadCassette
+
+    ; A1 = $0800, A2 = $0800 + the length, which must stay below ProgramStart.
+    lda #0
+    sta Address1
+    sta ShapeTable
+    clc
+    adc Accumulator
+    tay
+    lda #SHAPE_TABLE_PAGE
+    sta Address1High
+    sta ShapeTableHigh
+    adc AccumulatorHigh
+    bcs MemoryFull
+    cpy ProgramStart
+    pha
+    sbc ProgramStartHigh
+    pla
+    bcs MemoryFull
+    sty Address2
+    sta Address2High
+
+    ; LowMemory and VariablesEnd = the byte after the table.
+    iny
+    bne SetLomem
+    adc #1
+
+;; Also: SHLOD1 (PA1)
+SetLomem:
+    sty LowMemory
+    sta LowMemoryHigh
+    sty VariablesEnd
+    sta VariablesEndHigh
+    jsr Cassette::ReadBit
+    lda #SHAPE_HEADER_DELAY
+    jsr ReadCassetteFromHeader
+    ldx KeptX
+    rts
+
+;; Also: MFULL1 (PA1)
+MemoryFull:
+    jmp MemoryFullError
+.endproc
 
 .endscope

@@ -1,122 +1,156 @@
-;; PROGRAMMER'S AID #1: RELOCATE ($D4D5-$D52D)
+; retrocore: style=strict
+;; Programmer's Aid #1: Relocate ($D4D5-$D52D)
 ;;
 ;; Steve Wozniak's relocation of 6502 code (1977): it copies a program to another address and adjusts the absolute
 ;; addresses in its instructions that point into the program, so the copy runs where it lands. It works through the
-;; Monitor's Ctrl-Y command, after D4D5G sets Ctrl-Y up (<Relocate::RELSETUP>):
+;; Monitor's Control-Y command, after D4D5G sets Control-Y up (<Relocate::SetUp>):
 ;;
-;; 1. `dest<begin.end` Ctrl-Y defines the blocks: the program's source block and where its copy will run.
-;; 2. `dest<begin.end` Ctrl-Y relocates a segment of code; `dest<begin.end` M (the Monitor's Move) copies a segment
+;; 1. `dest<begin.end` Control-Y, with a `*` after it, defines the blocks: the program's source block and where its
+;;    copy will run.
+;; 2. `dest<begin.end` Control-Y relocates a segment of code; `dest<begin.end` M (the Monitor's Move) copies a segment
 ;;    of data unchanged.
-;; 3. `.end` Ctrl-Y or `.end` M continues with the next segment.
+;; 3. `.end` Control-Y or `.end` M continues with the next segment.
 ;;
 ;; An instruction's address is adjusted when it falls in the source block: it moves by the same distance as the
-;; block. Names follow Apple's listing in the Programmer's Aid #1 manual (1978,
+;; block. The work is shared with SWEET16 (Sweet16.mac), whose 16-bit compare and add adjust the address. The listing's
+;; names are those of Apple's listing in the Programmer's Aid #1 manual (1978,
 ;; https://archive.org/details/programmers-aid-1). Part of ProgrammersAid.asm.
 
 .scope Relocate
 
-;; SWEET16's R1, low byte: the start of the source block once the blocks are defined.
-R1L = $02
+; SWEET16's registers, which hold the blocks once they are defined.
 
-;; Where the instruction being relocated is copied (3 bytes), for SWEET16 to adjust its address.
-INST = $0B
+;; R1: the source block's start, the Monitor's A1 when the blocks were defined.
+;; Also: FRMBEG (PA1)
+SOURCE_START = 1
 
-;; Inherit: <Monitor:LENGTH>
-LENGTH = $2F
+;; R2: the source block's end, A2.
+;; Also: FRMEND (PA1)
+SOURCE_END = 2
 
-;; Inherit: <Monitor:YSAV>
-YSAV = $34
+;; R4: the destination block's start, A4.
+;; Also: TOBEG (PA1)
+TARGET_START = 4
 
-;; Inherit: <Monitor:A1L>
-A1L = $3C
+;; R6: the address part of the instruction being relocated, from <Instruction> + 1.
+;; Also: ADR (PA1)
+OPERAND = 6
 
-;; Inherit: <Monitor:A4L>
-A4L = $42
+;; Where <Command> copies the Monitor's A1 to A4 to define the blocks: SWEET16's R1 to R4.
+;; Also: R1L (PA1)
+Blocks = Sweet16Registers + SOURCE_START * SWEET16_REGISTER_SIZE
 
-;; Inherit: <Monitor:IN>
-IN = $0200
+;; Where the instruction being relocated is copied (3 bytes), for SWEET16 to adjust its address: R5's high byte, then
+;; R6, <OPERAND>.
+;; Also: INST (PA1)
+Instruction = Sweet16Registers + OPERAND * SWEET16_REGISTER_SIZE - 1
 
-;; Inherit: <IntegerBasic:Sweet16::Run>
-SW16 = $F689
+;; D4D5G: points the Monitor's Control-Y command at <Command>.
+;; Keeps: X
+;; Also: RELSETUP (UNKN)
+.proc SetUp
+.assert * = $D4D5, "Relocate::SetUp must stay at $D4D5, where the manual's D4D5G enters it."
+    lda #<Command
+    ldy #>Command
+    jmp SetControlY
+.endproc
 
-;; Inherit: <Monitor:INSDS2>
-INSDS2 = $F88E
+;; The Control-Y command: defines the blocks when the command line goes on with `*`, else relocates the segment from
+;; A1 to A2 to the one at A4.
+;;
+;; Each instruction is copied to <Instruction> and its length found with the Monitor's <DecodeOpcode>; a 3-byte
+;; instruction's address, or a zero-page one's, read as $00xx, is moved with the block when it lies in the source block.
+;; An immediate operand and a branch's offset are copied unchanged.
+;; In: CommandPosition = the index after Control-Y in <InputBuffer>, Address1 = the segment's start, Address2 = its
+;;   end, Address4 = where it goes
+;; Out: CommandPosition = after the `*`, when it defines the blocks; otherwise <Address1> and <Address4> are past the
+;;   segment and its copy
+;; Also: RELOC (PA1)
+.proc Command
 
-;; Inherit: <Monitor:NXTA4>
-NXTA4 = $FCB4
+;; An opcode's bits that are all clear for the 2-byte instructions with an immediate operand in X or Y or a branch
+;; offset (LDY, LDX, CPY, CPX immediate and the branches).
+IMMEDIATE_XY_OR_BRANCH_MASK = $0D
 
-FRMBEG = $01                        ;; SWEET16's R1: the source block's start
-FRMEND = $02                        ;; R2: the source block's end
-TOBEG = $04                         ;; R4: the destination block's start
-ADR = $06                           ;; R6: the address part of the instruction, from INST+1
+;; The opcode bit that is set for the other immediate instructions; a 2-byte instruction with neither is a zero-page
+;; one.
+IMMEDIATE_MASK = $08
 
-;; D4D5G: points the Monitor's Ctrl-Y command at <RELOC>.
-RELSETUP:
-    lda #<RELOC                     ; $D4D5
-    ldy #>RELOC                     ; $D4D7
-    jmp SETCTLY                     ; $D4D9
+    ldy CommandPosition
+    lda InputBuffer,y
+    cmp #'*'
+    bne NextInstruction
+    inc CommandPosition
+    ldx #4 * SWEET16_REGISTER_SIZE - 1
 
-;; The Ctrl-Y command: defines the blocks when the command line ends `*`, else relocates the segment from A1 to A2
-;; into A4.
-RELOC:
-    ldy YSAV                        ; $D4DC
-    lda IN,y                        ; $D4DE
-    cmp #$AA                        ; $D4E1 "*"
-    bne RELOC2                      ; $D4E3
-    inc YSAV                        ; $D4E5
-    ldx #$07                        ; $D4E7
+;; Copies A1, A2, A3 and A4 to SWEET16's R1 to R4. Apple's listing calls it INIT, which here would clash with the
+;; Monitor's INIT, <InitDisplay>.
+DefineBlocks:
+    lda Address1,x
+    sta Blocks,x
+    dex
+    bpl DefineBlocks
+    rts
 
-INIT:
-    lda A1L,x                       ; $D4E9 copy A1, A2 and A4 to SWEET16's R1 to R4
-    sta R1L,x                       ; $D4EB
-    dex                             ; $D4ED
-    bpl INIT                        ; $D4EE
-    rts                             ; $D4F0
+;; Also: RELOC2 (PA1)
+NextInstruction:
+    ldy #2
 
-RELOC2:
-    ldy #$02                        ; $D4F1
+;; Copies the instruction at A1 to <Instruction>, all 3 bytes whatever its length.
+;; Also: GETINS (PA1)
+CopyInstruction:
+    lda (Address1),y
+    sta Instruction,y
+    dey
+    bpl CopyInstruction
+    jsr DecodeOpcode
+    ldx OperandLength
+    dex
+    ; A 2-byte operand is an address. An instruction with none goes the same way: only its opcode is stored.
+    bne Translate
+    lda Instruction
+    and #IMMEDIATE_XY_OR_BRANCH_MASK
+    beq StoreInstruction
+    and #IMMEDIATE_MASK
+    bne StoreInstruction
 
-GETINS:
-    lda (A1L),y                     ; $D4F3 the next instruction, to INST
-    sta INST,y                      ; $D4F5
-    dey                             ; $D4F8
-    bpl GETINS                      ; $D4F9
-    jsr INSDS2                      ; $D4FB its length
-    ldx LENGTH                      ; $D4FE
-    dex                             ; $D500
-    bne XLATE                       ; $D501 3 bytes
-    lda INST                        ; $D503
-    and #$0D                        ; $D505
-    beq STINST                      ; $D507 an immediate operand
-    and #$08                        ; $D509
-    bne STINST                      ; $D50B
-    sta INST+2                      ; $D50D a zero-page address: treat it as $00xx
+    ; A zero-page address: treat it as $00xx.
+    sta Instruction + 2
 
-XLATE:
-    jsr SW16                        ; $D50F
-    LD FRMEND                       ; $D512
-    CPR ADR                         ; $D513
-    BNC SW16RT                      ; $D514 past the source block
-    LD ADR                          ; $D516
-    SUB FRMBEG                      ; $D517
-    BNC SW16RT                      ; $D518 before it
-    ADD TOBEG                       ; $D51A move it with the block
-    ST ADR                          ; $D51B
+;; Moves the operand with the block when it lies in the source block.
+;; Also: XLATE (PA1)
+Translate:
+    jsr Sweet16::Run
+    LD SOURCE_END
+    CPR OPERAND
+    ; Past the source block.
+    BNC Translated
+    LD OPERAND
+    SUB SOURCE_START
+    ; Before it.
+    BNC Translated
+    ADD TARGET_START
+    ST OPERAND
 
-SW16RT:
-    RTN                             ; $D51C
+;; Also: SW16RT (PA1)
+Translated:
+    RTN
 
-STINST:
-    ldx #$00                        ; $D51D
+;; Also: STINST (PA1)
+StoreInstruction:
+    ldx #0
 
-STINS2:
-    lda INST,x                      ; $D51F copy the instruction to A4
-    sta (A4L),y                     ; $D521
-    inx                             ; $D523
-    jsr NXTA4                       ; $D524
-    dec LENGTH                      ; $D527
-    bpl STINS2                      ; $D529
-    bcc RELOC2                      ; $D52B until past A2
-    rts                             ; $D52D
+;; Copies the instruction to A4, stepping A1 and A4, until past A2.
+;; Also: STINS2 (PA1)
+StoreByte:
+    lda Instruction,x
+    sta (Address4),y
+    inx
+    jsr NextInRangeAndTarget
+    dec OperandLength
+    bpl StoreByte
+    bcc NextInstruction
+    rts
+.endproc
 
 .endscope

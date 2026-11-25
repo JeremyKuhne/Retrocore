@@ -282,7 +282,7 @@ ProgramCounterHigh = $3B
 ;; command, and <Monitor:NextInRange> steps it through the range up to <Address2>. Examine, <Monitor:MoveMemory>,
 ;; <Monitor:VerifyMemory>, the cassette routines and the firmware's <Firmware:AUXMOVE@Enhanced> all start there.
 ;; See: <Address1High>, <Address2>, <Monitor:NextInRange>, <Monitor:Commands::ExamineLine::Range>
-;; Also: A1L (A2RM78, A2RM79, IIEROM82, IIETRM85)
+;; Also: A1L (A2RM78, A2RM79, IIEROM82, IIETRM85), A1 (PA1)
 Address1 = $3C
 
 ;; The high byte of the Monitor's first address at <Address1>.
@@ -788,7 +788,7 @@ CassetteOut = $C020
 ;; <Monitor:RingBell> toggles it every 0.5 ms or so for about 0.1 seconds to ring the bell. Repeated toggles at a
 ;; steady rate make a tone.
 ;; See: <Monitor:RingBell>, <Monitor:Beep>
-;; Also: SPKR (A2RM78, A2RM79, IIEROM82, IIETRM85)
+;; Also: SPKR (A2RM78, A2RM79, IIEROM82, IIETRM85), SPEAKER (PA1)
 Speaker = $C030
 
 ;; Reading or writing it turns `TEXT` off: the display shows graphics instead of text.

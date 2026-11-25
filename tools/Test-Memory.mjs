@@ -435,7 +435,7 @@ try {
     assert.equal(named.get(0x25), "ROW");
     assert.equal(named.get(0x28), "TextBase");
     assert.equal(named.get(0xC000), "Keyboard");
-    // $0D is the firmware's RamTest::R6H, which it stores to, but never CR, which is only compared with.
+    // $0D is Programmer's Aid's RamTest::GallopMaskHigh, which it stores to, but never CR, which is only compared with.
     assert.notEqual(named.get(0x0D), "CR");
 
     // The listing starts at the statement around the address asked for, lists the program's lines with their
@@ -712,8 +712,8 @@ try {
     assert.deepEqual((await assemble("JSR COUT")).bytes, [0x20, 0xED, 0xFD]);
     assert.deepEqual((await assemble("LDA BANK2,X")).bytes, [0xBD, 0x00, 0x03]);
     assert.deepEqual((await assemble("BNE *+4")).bytes, [0xD0, 0x02]);
-    // A scoped name stands in the line as an alias, as a constant cannot be called RamTest::R6H.
-    assert.deepEqual((await assemble("STA RamTest::R6H")).bytes, [0x85, 0x0D]);
+    // A scoped name stands in the line as an alias, as a constant cannot be called RamTest::GallopMaskHigh.
+    assert.deepEqual((await assemble("STA RamTest::GallopMaskHigh")).bytes, [0x85, 0x0D]);
     // A name with a combining mark, as a decomposed é is, assembles as the assembler reads it.
     await mark({ address: 0x6600, name: "CAFÉ" });
     assert.deepEqual((await assemble("LDA CAFÉ")).bytes, [0xAD, 0x00, 0x66]);
@@ -724,10 +724,10 @@ try {
     assert.deepEqual([(await assemble("JSR ::COUT")).bytes, (await assemble("LDA #(CH.mod 16)")).bytes], [[0x20, 0xED, 0xFD], [0xA9, 0x04]]);
     // An alias is never a name the line already has.
     await mark({ address: 0x6600, name: "__RETROCORE0" });
-    assert.deepEqual((await assemble(".word RamTest::R6H,__RETROCORE0")).bytes, [0x0D, 0x00, 0x00, 0x66]);
+    assert.deepEqual((await assemble(".word RamTest::GallopMaskHigh,__RETROCORE0")).bytes, [0x0D, 0x00, 0x00, 0x66]);
     await mark({ address: 0x6600, name: "" });
     // Quoted text stays as typed; a width prefix's name is still the session's.
-    assert.deepEqual((await assemble('.byte "RamTest::R6H"')).bytes, Array.from(Buffer.from("RamTest::R6H", "ascii")));
+    assert.deepEqual((await assemble('.byte "RamTest::KeptY"')).bytes, Array.from(Buffer.from("RamTest::KeptY", "ascii")));
     assert.deepEqual([(await assemble("STA z:CH")).bytes, (await assemble("LDA a:CH")).bytes], [[0x85, 0x24], [0xAD, 0x24, 0x00]]);
     // A label spelled as a register or condition is still the label where the register would not assemble.
     await mark({ address: 0x6600, name: "Z" });

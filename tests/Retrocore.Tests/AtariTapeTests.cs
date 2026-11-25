@@ -77,13 +77,23 @@ public class AtariTapeTests
     }
 
     /// <summary>
-    ///  A gap longer than a <c>.cas</c> chunk's 16-bit field is saved as the longest it holds, not wrapped.
+    ///  A gap longer than a <c>.cas</c> chunk's 16-bit field is saved as the longest it holds, not wrapped, and a
+    ///  record longer than its length field goes as two chunks, the second with no gap.
     /// </summary>
     [TestMethod]
-    public void LongGapIsCutToTheField()
+    public void LongGapsAndRecordsFitTheFields()
     {
         AtariTape tape = new([new(Gap: 70_000, Baud: AtariTape.StandardBaud, Data: [0x55, 0x55, 0xFC], Durations: null)]);
         AtariTape.Load(tape.ToCas()).Blocks[0].Gap.Should().Be(ushort.MaxValue);
+
+        byte[] data = new byte[70_000];
+        data.AsSpan().Fill(0x5A);
+        tape = new([new(Gap: 100, Baud: AtariTape.StandardBaud, Data: data, Durations: null)]);
+        IReadOnlyList<AtariTapeBlock> blocks = AtariTape.Load(tape.ToCas()).Blocks;
+        blocks.Should().HaveCount(2);
+        blocks[0].Gap.Should().Be(100);
+        blocks[1].Gap.Should().Be(0);
+        blocks.Sum(block => block.Data.Length).Should().Be(70_000);
     }
 
     /// <summary>
@@ -163,8 +173,8 @@ public class AtariTapeTests
 
     /// <summary>
     ///  Serpentine, a commercial boot tape from MAME's <c>a800_cass</c> list, loads its game (82 of its 140 blocks; the
-    ///  rest are another side's levels) through the OS's boot and its own loader, which shares the OS's timing of
-    ///  the leaders.
+    ///  rest are another side's levels) through the OS's boot and its own loader, which times each record's
+    ///  <c>$55</c> bytes for the baud rate as the OS does.
     /// </summary>
     [TestMethod]
     public void SerpentineBootsFromTape()

@@ -182,6 +182,32 @@ public class AtariDiskTests
     }
 
     /// <summary>
+    ///  A disk changed between a command and its execution fails the command with Error rather than throwing: one
+    ///  too small for the sector, or one whose sector is larger than the data frame the command took.
+    /// </summary>
+    [TestMethod]
+    public void DiskChangedMidCommandFailsIt()
+    {
+        AtariMachine machine = new(new AtariRoms(new byte[AtariRoms.Size]), diskDrives: 1, driveKind: AtariDiskDriveKind.CommandLevel);
+        AtariSioDiskDrive drive = (AtariSioDiskDrive)machine.Drives[0];
+        IAtariSioDevice device = drive;
+
+        drive.Insert(AtariDisk.Create());
+        device.Accept(0x57, 700).Should().Be(128);
+        drive.Insert(AtariDisk.Create(sectorCount: 3));
+        device.Execute(0x57, 700, new byte[128], cycle: 0).Success.Should().BeFalse("the new disk has no sector 700");
+        device.Execute(0x52, 700, [], cycle: 0).Success.Should().BeFalse("the new disk has no sector 700");
+
+        drive.Insert(AtariDisk.Create());
+        device.Accept(0x50, 4).Should().Be(128);
+        drive.Insert(AtariDisk.Create(sectorSize: 256));
+        device.Execute(0x50, 4, new byte[128], cycle: 0).Success.Should().BeFalse("the frame is short for the new sector");
+
+        drive.Eject();
+        device.Execute(0x52, 1, [], cycle: 0).Success.Should().BeFalse("the drive is empty");
+    }
+
+    /// <summary>
     ///  The SIO checksum adds with the carry wrapped around.
     /// </summary>
     [TestMethod]

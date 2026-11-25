@@ -16,14 +16,15 @@ namespace Retrocore.Machines.Atari;
 ///  <para>
 ///   The 410 turns the tape's two tones into a level on the bus's DATA IN line, mark (5,327 Hz) high and space
 ///   (3,995 Hz) low (Altirra Hardware Reference Manual, 9.17). The deck here works at that level: playing, it puts
-///   each block's gap and bits on <c>Pokey.SerialInputLevel</c>, where the OS's <c>C:</c> handler times the leader
-///   to find the baud rate and then reads the bytes in asynchronous mode. The motor runs while CA2 is low and PLAY or
+///   each block's gap and bits on <c>Pokey.SerialInputLevel</c>, where the OS's <c>C:</c> handler times each
+///   record's two <c>$55</c> bytes to find the baud rate and then reads the bytes in asynchronous mode. The motor runs while CA2 is low and PLAY or
 ///   RECORD is down.
 ///  </para>
 ///  <para>
 ///   Recording, it keeps the bytes the computer sends while the motor runs (the OS sends them in two-tone mode, the
-///   FSK the tape takes) as records: a pause of more than four byte times starts a new one, whose gap is the time
-///   since the last ended. The rate is taken from the bytes' spacing. Recording replaces the tape from where it is.
+///   FSK the tape takes) as records: a pause of more than four byte times (20 ms after a record's first byte) starts
+///   a new one, whose gap is the time since the last ended. The rate is taken from the bytes' spacing. Recording
+///   replaces the tape from where it is.
 ///  </para>
 /// </remarks>
 public sealed class Atari410 : ITapeDrive, IMediumSlot

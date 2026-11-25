@@ -38,7 +38,8 @@ public sealed class AtariDiskCodec : IImageCodec
         AtariDisk disk = AtariDisk.Load(snapshot.Image.Span);
         if (disk.SectorSize != 128)
         {
-            throw new InvalidOperationException("An XFD image holds only single- and enhanced-density disks; save it as an ATR.");
+            throw new ArgumentException(
+                "An XFD image holds only single- and enhanced-density disks; save it as an ATR.", nameof(snapshot));
         }
 
         return new(disk.ToXfd(), []);

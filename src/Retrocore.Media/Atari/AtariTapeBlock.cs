@@ -22,8 +22,8 @@ public sealed record AtariTapeBlock(int Gap, int Baud, byte[] Data, ushort[]? Du
     /// <summary>
     ///  Gets the block's length in seconds, gap included.
     /// </summary>
-    public double Duration => (Gap / 1000.0) + (Durations is { } durations
-        ? durations.Sum(duration => duration) / 10_000.0
+    public double Duration => (Gap / 1000.0) + (Durations is not null
+        ? (Ends() is [.., long last] ? last : 0) / 10_000.0
         : Data.Length * 10.0 / Baud);
 
     /// <summary>
@@ -35,18 +35,20 @@ public sealed record AtariTapeBlock(int Gap, int Baud, byte[] Data, ushort[]? Du
     {
         double time = seconds - (Gap / 1000.0);
         if (time < 0) { return true; }
-        if (Durations is { } durations)
+        if (Durations is not null)
         {
+            // The run each time falls in, found among the runs' ends; even runs are space, odd mark.
+            long[] ends = Ends();
             double tenths = time * 10_000;
-            bool level = false;
-            foreach (ushort duration in durations)
+            int low = 0;
+            int high = ends.Length;
+            while (low < high)
             {
-                if (tenths < duration) { return level; }
-                tenths -= duration;
-                level = !level;
+                int middle = (low + high) / 2;
+                if (tenths < ends[middle]) { high = middle; } else { low = middle + 1; }
             }
 
-            return true;
+            return low >= ends.Length || (low & 1) != 0;
         }
 
         long bit = (long)(time * Baud);
@@ -59,4 +61,24 @@ public sealed record AtariTapeBlock(int Gap, int Baud, byte[] Data, ushort[]? Du
             long position => ((Data[index] >> (int)(position - 1)) & 1) != 0
         };
     }
+
+    // Where each raw-tone run ends, in tenths of a millisecond from the block's data, worked out once per array:
+    // the recorder asks every machine cycle.
+    private long[] Ends()
+    {
+        if (_ends is { } cached && ReferenceEquals(cached.Source, Durations)) { return cached.Ends; }
+        ushort[] durations = Durations ?? [];
+        long[] ends = new long[durations.Length];
+        long total = 0;
+        for (int i = 0; i < durations.Length; i++)
+        {
+            total += durations[i];
+            ends[i] = total;
+        }
+
+        _ends = (durations, ends);
+        return ends;
+    }
+
+    private (ushort[] Source, long[] Ends)? _ends;
 }

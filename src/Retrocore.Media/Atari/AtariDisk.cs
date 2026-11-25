@@ -104,7 +104,11 @@ public sealed class AtariDisk : IMedium
             body = body[..bytes];
             if (sectorSize == 128)
             {
-                if (body.Length % 128 != 0) { throw new InvalidDataException("The ATR's sectors aren't whole."); }
+                if (body.Length < 384 || body.Length % 128 != 0)
+                {
+                    throw new InvalidDataException("The ATR's sectors aren't whole.");
+                }
+
                 return new(128, body.Length / 128, body.ToArray(), writeProtected);
             }
 

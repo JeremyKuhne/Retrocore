@@ -91,6 +91,12 @@ public sealed class AtariSioDiskDrive : AtariDiskDrive, IAtariSioDevice
         {
             case 0x53:
                 return (true, [Status(), Controller(), 0xE0, 0x00], StatusCycles);
+            case 0x52 or 0x50 or 0x57
+                when Disk is not { } current || !ValidSector(aux) || (command != 0x52 && data.Length < current.SizeOf(aux)):
+                // The disk was taken out or changed since the command was accepted.
+                _driveStatus |= 0x01;
+                _controllerStatus = Disk is null ? (byte)0x7F : (byte)0xEF;
+                return (false, [], SectorCycles);
             case 0x52 when Disk is { } disk:
             {
                 _lastSector = aux;

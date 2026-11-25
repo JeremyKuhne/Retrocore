@@ -143,7 +143,7 @@ public sealed class AtariTape : IMedium
     {
         using MemoryStream stream = new();
         byte[] description = Encoding.Latin1.GetBytes(Description);
-        Chunk(stream, "FUJI"u8, 0, description);
+        Chunk(stream, "FUJI"u8, 0, description.AsSpan(0, Math.Min(description.Length, ushort.MaxValue)));
         int baud = 0;
         foreach (AtariTapeBlock block in _blocks)
         {
@@ -211,14 +211,23 @@ public sealed class AtariTape : IMedium
     /// </summary>
     public void MarkChanged() => IsDirty = true;
 
+    // A chunk longer than its 16-bit length holds goes as several, the rest with no gap: the same signal, unbroken.
+    // A gap longer than the aux field holds, 65.5 seconds, is cut to the longest it can.
     private static void Chunk(Stream stream, ReadOnlySpan<byte> type, int aux, ReadOnlySpan<byte> data)
     {
         Span<byte> header = stackalloc byte[8];
         type.CopyTo(header);
-        BinaryPrimitives.WriteUInt16LittleEndian(header[4..], (ushort)data.Length);
-        // A gap longer than the field holds, 65.5 seconds, is cut to the longest it can.
-        BinaryPrimitives.WriteUInt16LittleEndian(header[6..], (ushort)Math.Clamp(aux, 0, ushort.MaxValue));
-        stream.Write(header);
-        stream.Write(data);
+        do
+        {
+            // 65,534, so an fsk chunk's two-byte durations stay whole.
+            int length = Math.Min(data.Length, ushort.MaxValue - 1);
+            BinaryPrimitives.WriteUInt16LittleEndian(header[4..], (ushort)length);
+            BinaryPrimitives.WriteUInt16LittleEndian(header[6..], (ushort)Math.Clamp(aux, 0, ushort.MaxValue));
+            stream.Write(header);
+            stream.Write(data[..length]);
+            data = data[length..];
+            aux = 0;
+        }
+        while (!data.IsEmpty);
     }
 }

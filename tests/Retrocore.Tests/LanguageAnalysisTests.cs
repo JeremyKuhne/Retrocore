@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
+using Retrocore.Assembler;
 using Retrocore.Documentation;
 using Retrocore.Debug.Language;
 
@@ -854,6 +855,189 @@ public sealed partial class LanguageAnalysisTests
 
             // The macro invocation's line produced the macro's bytes.
             analysis.Emitted(main, 4).Should().ContainSingle().Which.Address.Should().Be(0x6003);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
+    ///  ROM analysis uses its declared image bounds while retaining original source lines.
+    /// </summary>
+    /// <param name="lineEnding">The physical line terminator.</param>
+    [TestMethod]
+    [DataRow("\n")]
+    [DataRow("\r\n")]
+    [DataRow("\r")]
+    public void RomMetadataSetsImageBounds(string lineEnding)
+    {
+        string directory = Directory.CreateTempSubdirectory("retrocore-rom-analysis").FullName;
+        try
+        {
+            string main = Path.Join(directory, "firmware.rom.asm");
+            File.WriteAllText(main, "");
+            string valid = """
+                .ROM Test.Firmware, ($C3C5 + ';'), ($80 * 2) ; image bounds
+                .cpu Mos6502
+                .assert * == $C400
+                Start: .byte 1
+                .res $FE
+                .assert * == $C4FF
+                .byte 2
+                """.ReplaceLineEndings(lineEnding);
+
+            SourceAnalysis analysis = SourceAnalysis.Assemble(main, path => path == main ? valid : null);
+
+            analysis.Result.Success.Should().BeTrue(because: string.Join(Environment.NewLine, analysis.Result.Diagnostics));
+            analysis.Find("Start").Single().Value.Should().Be(0xC400);
+            analysis.Find("Start").Single().Line.Should().Be(3);
+
+            string oversized = """
+                .rom Test.Firmware, ($C000 + $400), ($80 * 2)
+                .cpu Mos6502
+                .res $100
+                .byte 1
+                """.ReplaceLineEndings(lineEnding);
+
+            SourceAnalysis oversizedAnalysis = SourceAnalysis.Assemble(main, path => path == main ? oversized : null);
+            oversizedAnalysis.Result.Success.Should().BeFalse("the declared image ends at $C500");
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
+    ///  The shipped card firmware assembles at its declared addresses in the editor.
+    /// </summary>
+    /// <param name="file">The ROM source.</param>
+    /// <param name="symbol">An entry with a known address.</param>
+    /// <param name="address">The entry's expected address.</param>
+    [TestMethod]
+    [DataRow("Mouse.rom.asm", "BasicInput", 0xC405)]
+    [DataRow("Disk35.rom.asm", "ProDosEntry", 0xC51C)]
+    [DataRow("ProFile.rom.asm", "Boot", 0xC500)]
+    [DataRow("Slot7.rom.asm", "Boot", 0xC700)]
+    public void CardRomMetadataSetsEditorAddresses(string file, string symbol, int address)
+    {
+        string path = Path.GetFullPath(Path.Join(AppContext.BaseDirectory, "Inputs", file));
+        File.Exists(path).Should().BeTrue("the test must use the shipped ROM source");
+
+        SourceAnalysis analysis = SourceAnalysis.Assemble(path, _ => null);
+
+        analysis.Result.Diagnostics.Select(diagnostic => diagnostic.Message).Should().BeEmpty();
+        analysis.Find(symbol).Single().Value.Should().Be(address);
+    }
+
+    /// <summary>
+    ///  ROM origins work at zero, outside the Apple II slot pages, and at the end of the address space.
+    /// </summary>
+    /// <param name="origin">The declared origin.</param>
+    /// <param name="size">The declared size.</param>
+    /// <param name="address">The expected entry address.</param>
+    [TestMethod]
+    [DataRow("$0000", "$10000", 0x0000)]
+    [DataRow("$0700", "$180", 0x0700)]
+    [DataRow("$FFFE", "2", 0xFFFE)]
+    public void RomMetadataSupportsAddressSpaceBoundaries(string origin, string size, int address)
+    {
+        string path = Path.GetFullPath("boundary.rom.asm");
+        string text = $".rom Test.Firmware, {origin}, {size}\n.cpu Mos6502\nEntry: nop\n.assert * == {origin} + 1\n";
+
+        SourceAnalysis analysis = SourceAnalysis.Assemble(path, candidate => candidate == path ? text : null);
+
+        analysis.Result.Diagnostics.Select(diagnostic => diagnostic.Message).Should().BeEmpty();
+        analysis.Find("Entry").Single().Value.Should().Be(address);
+    }
+
+    /// <summary>
+    ///  Invalid metadata is reported on its own line rather than silently assembling at zero.
+    /// </summary>
+    /// <param name="declaration">The bad metadata.</param>
+    /// <param name="message">The expected diagnostic.</param>
+    /// <param name="line">The zero-based diagnostic line.</param>
+    [TestMethod]
+    [DataRow(".rom Test.Firmware, $10000, 1", "fit the 16-bit address space", 1)]
+    [DataRow(".rom Test.Firmware, Missing, $100", "Unresolved expression", 1)]
+    [DataRow(".rom Test.Firmware, $C400, 0", "fit the 16-bit address space", 1)]
+    [DataRow(".rom Test.Firmware, $C400,", "Empty or unbalanced", 1)]
+    [DataRow(".rom Test.Firmware, $C400, $100\n.rom Test.Other, $C500, $100", "Expected one", 2)]
+    public void RomMetadataErrorsAreReported(string declaration, string message, int line)
+    {
+        string path = Path.GetFullPath("invalid.rom.asm");
+        string text = $"; before\n{declaration}\n.cpu Mos6502\nnop\n";
+
+        SourceAnalysis analysis = SourceAnalysis.Assemble(path, candidate => candidate == path ? text : null);
+
+        AssemblyDiagnostic diagnostic = analysis.Result.Diagnostics.Should().ContainSingle().Which;
+        diagnostic.Message.Should().Contain(message);
+        AssemblyLocation location = diagnostic.Location ?? throw new AssertFailedException("The metadata diagnostic needs a location.");
+        location.Path.Should().Be(path);
+        location.Line.Should().Be(line);
+    }
+
+    /// <summary>
+    ///  A ca65 ROM uses its bounded image unless a companion linker configuration supplies one.
+    /// </summary>
+    /// <param name="withConfiguration">Whether the root has a companion configuration.</param>
+    /// <param name="address">The address the editor must use.</param>
+    [TestMethod]
+    [DataRow(false, 0xC400)]
+    [DataRow(true, 0x8000)]
+    public void Ca65RomUsesImageOrCompanionConfiguration(bool withConfiguration, int address)
+    {
+        string path = Path.GetFullPath("configured.rom.asm");
+        string configuration = Path.ChangeExtension(path, ".cfg");
+        string text = """
+            ; retrocore: dialect=ca65
+            .rom Test.Firmware, $C400, $100
+            .cpu Mos6502
+            Entry: nop
+            """;
+
+        string config = """
+            MEMORY { ROM: start=$8000, size=$100, file=%O; }
+            SEGMENTS { CODE: load=ROM, type=ro; }
+            """;
+
+        SourceAnalysis analysis = SourceAnalysis.Assemble(
+            path,
+            candidate => candidate == path ? text : withConfiguration && candidate == configuration ? config : null);
+
+        analysis.Result.Diagnostics.Select(diagnostic => diagnostic.Message).Should().BeEmpty();
+        analysis.Find("Entry").Single().Value.Should().Be(address);
+    }
+
+    /// <summary>
+    ///  Metadata errors reach the client and disappear when the open document is corrected.
+    /// </summary>
+    /// <returns>The test.</returns>
+    [TestMethod]
+    public async Task RomMetadataDiagnosticsArePublishedAndCleared()
+    {
+        string directory = Directory.CreateTempSubdirectory("retrocore-rom-diagnostics").FullName;
+        try
+        {
+            string path = Path.Join(directory, "firmware.rom.asm");
+            string invalid = "; header\n.rom Test.Firmware, $10000, 1\n.cpu Mos6502\nnop\n";
+            string valid = "; header\n.rom Test.Firmware, $C400, $100\n.cpu Mos6502\n.assert * == $C400\nnop\n";
+            RecordingLanguageClient client = new();
+            LanguageWorkspace workspace = new(client);
+            DocumentUri uri = DocumentUri.FromFileSystemPath(path);
+
+            workspace.Update(path, invalid);
+            await workspace.IdleAsync(path, CancellationToken.None);
+            List<Diagnostic> errors = await client.Wait(uri, _ => true);
+            Diagnostic error = errors.Should().ContainSingle(diagnostic => diagnostic.Code == "RETROCOREASM001").Which;
+            error.Message.Should().Contain("fit the 16-bit address space");
+            error.Range.Start.Line.Should().Be(1);
+
+            workspace.Update(path, valid);
+            await workspace.IdleAsync(path, CancellationToken.None);
+            List<Diagnostic> corrected = await client.Wait(uri, _ => true);
+            corrected.Should().NotContain(diagnostic => diagnostic.Code == "RETROCOREASM001");
         }
         finally
         {

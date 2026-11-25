@@ -224,6 +224,8 @@ are found from the machine ROM roots across projects, as they are from the SDK's
 sibling folders. If the root has a same-named `.cfg` beside it, the server
 uses that linker configuration when assembling and reanalyzes on open-document
 edits and watched workspace file changes (subject to `files.watcherExclude`).
+Without a companion configuration, a `.rom` declaration supplies the image's
+origin and size, as it does for the source generator.
 This is an editor-only convenience: CLI builds and debug launches require an
 explicit `--config` or `linkerConfiguration` respectively. Files the extension does
 not recognize as `retrocore-asm` (such

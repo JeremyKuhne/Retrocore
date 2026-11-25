@@ -47,3 +47,5 @@ c1,fff4bbeb,Lines split without replacing CRLF,Index,All,819.15,16.600,24.332,12
 c1,fff4bbeb,Lines split without replacing CRLF,Assemble,All,543.66,10.437,9.763,13000.0000,12000.0000,4000.0000,510.72,Default,artifacts/sdk-index-benchmarks/c1/results/Retrocore.Perf.SdkIndexBenchmarks-report.csv
 c1,fff4bbeb,Lines split without replacing CRLF,Index,AppleSoft,27.47,0.266,0.236,656.2500,625.0000,250.0000,27.12,Default,artifacts/sdk-index-benchmarks/c1/results/Retrocore.Perf.SdkIndexBenchmarks-report.csv
 c1,fff4bbeb,Lines split without replacing CRLF,Assemble,AppleSoft,17.30,0.122,0.114,437.5000,406.2500,218.7500,19.89,Default,artifacts/sdk-index-benchmarks/c1/results/Retrocore.Perf.SdkIndexBenchmarks-report.csv
+r1,ab9c208a,Assembled lines passed over before matching,Index,All,812.62,16.189,25.677,12000.0000,11000.0000,0.0000,641.2,Default,artifacts/sdk-index-benchmarks/r1/results/Retrocore.Perf.SdkIndexBenchmarks-report.csv
+r1,ab9c208a,Assembled lines passed over before matching,Index,AppleSoft,27.45,0.422,0.394,687.5000,625.0000,218.7500,26.51,Default,artifacts/sdk-index-benchmarks/r1/results/Retrocore.Perf.SdkIndexBenchmarks-report.csv

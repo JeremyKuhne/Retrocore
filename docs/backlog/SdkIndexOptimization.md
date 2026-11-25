@@ -43,8 +43,9 @@ Indexing every SDK root:
 | 9 (`m1`) | baf631e6 | Macro names looked up by their text | 819 ms | 705 MB | −30% | −49% |
 | 10 (`u1`) | c578ae00 | Each path upper-cased once | 798 ms | 682 MB | −31% | −51% |
 | 11 (`c1`) | fff4bbeb | Lines split without replacing CRLF first | 819 ms | 665 MB | −30% | −52% |
+| 12 (`r1`) | ab9c208a | Assembled lines passed over before matching | 813 ms | 641 MB | −30% | −54% |
 
-AppleSoft's root alone: 50.1 ms and 67.7 MB at the baseline, 27.5 ms and 27.1 MB after step 11.
+AppleSoft's root alone: 50.1 ms and 67.7 MB at the baseline, 27.5 ms and 26.5 MB after step 12.
 
 ### 1. Each source path made full once
 
@@ -140,6 +141,21 @@ lone CRs, CR CR LF, empty lines and terminators at the end. On Linux, where the 
 CI's numbers would not show this. Allocations fell by 17 MB. The time, 21 ms more, is within the run's noise (24 ms
 standard deviation); `Assemble` in the same run was 16 ms faster than at step 10.
 
+### 12. Assembled lines passed over before matching
+
+The analysis matched every line with a name in column 0 against `TextDefinition` (a generated regex), built the
+match and read its groups, and only then passed over the line when the assembler had defined a name on it, as it had
+on nearly every one: about 2% of the allocations, in `Match` and `GroupCollection`. It now passes over those lines
+first, which the old order also did whatever the match found, so only lines in a branch the assembly did not take, or
+in a source that does not assemble, are matched. The lines are kept by file, so passing over one is one integer
+lookup: keyed by the path, as at first, every line hashed a long path and the run was slower.
+
+Two runs after the change were noisy, at 879 and 851 ms, so the time was settled by alternating runs in this
+worktree, each after a rebuild: 824 and 815 ms without the change, 813 and 812 ms with it. A first try at that from a
+copy of the branch under the temporary folder was void, as reading the sources from there was far slower
+(AppleSoft's root took 41 ms). The row is the first run with the change, which measured `Index` alone. Allocations
+fell by 24 MB.
+
 ## Where the time and memory go now
 
 From the ETW trace before steps 3 and 4, and the allocation trace after step 5:
@@ -162,9 +178,7 @@ From the ETW trace before steps 3 and 4, and the allocation trace after step 5:
   line are kept.
 - **The documentation parsed twice.** The assembler's `Also:` pass parses without style checks and without the
   assembly's knowledge; the editor's with both. Sharing more than the lines needs care.
-- **Regular expressions in the analysis** (next): `TextDefinition` and `MacroDefinition` match every line and read groups,
-  about 1.8%; a quick test before matching would skip most lines.
-- **Growing lists and dictionaries**: statement lists and name maps grow by resizing.
+- **Growing lists and dictionaries** (next): statement lists and name maps grow by resizing.
 - **The ca65 path's copies** (M2): `PrepareCa65` copies a line it expands, its operation and an upper-cased
   copy of that; `ExpandCa65Functions` copies every `.`-token.
 - **The rest of macro expansion**: each invocation's argument list, parameter dictionary and a location for every

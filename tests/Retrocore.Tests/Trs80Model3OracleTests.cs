@@ -8,6 +8,7 @@ using Retrocore.Media.Floppy;
 using Retrocore.Media.Trs80;
 using System.Diagnostics;
 using System.Globalization;
+using System.Text;
 
 namespace Retrocore.Tests;
 
@@ -156,21 +157,29 @@ public class Trs80Model3OracleTests
         Trs80Model3Machine machine = Create(variant, disk);
         Run(machine, script, finish);
 
-        // What the screen shows, 64x16 or 80x24: the Model 4's video RAM holds 2K, past the 80x24 screen.
+        // The Model III's screen, 64x16, fills its 1K of video RAM. The Model 4's first 1,920 bytes, its 80x24 screen
+        // while the 6845 starts at 0 as the DOSes here leave it, are compared in either mode, so that a mode this side
+        // failed to switch to cannot hide the cells past 64x16; past them a DOS's leftovers differ. The screens are
+        // shown as this side's mode lays them out.
+        int cells = variant == Trs80Model3Variant.Model4 ? 80 * 24 : 64 * 16;
         int columns = machine.Bus.Video.Eighty ? 80 : 64;
-        int cells = columns * machine.Bus.Video.Rows;
+        int shown = columns * machine.Bus.Video.Rows;
         byte[] oracle = dump[0x10000..(0x10000 + cells)];
         byte[] ours = [.. Enumerable.Range(0, cells).Select(machine.Bus.Video.Read)];
-        string expected = Screen(oracle, columns);
-        Console.WriteLine(expected);
-        expected.Should().Contain(landmark, "MAME got through the script");
+        Console.WriteLine(Screen(oracle, columns));
+
+        // A line's text runs on in video RAM however the rows wrap, so the landmark is found in either mode.
+        Encoding.Latin1.GetString(oracle).Should().Contain(landmark, "MAME got through the script");
 
         // A DOS blinks its cursor, so the two may catch it in different phases: one cell may differ, where one side
-        // shows a space.
+        // shows a space, and only where the cursor waits, after everything else on the screen.
         int[] differing = [.. Enumerable.Range(0, oracle.Length).Where(index => oracle[index] != ours[index])];
-        if (differing.Length == 1 && (oracle[differing[0]] == ' ' || ours[differing[0]] == ' '))
+        if (differing is [int cursor]
+            && cursor < shown
+            && (oracle[cursor] == ' ' || ours[cursor] == ' ')
+            && oracle.AsSpan(cursor + 1, shown - cursor - 1).IndexOfAnyExcept((byte)' ') < 0)
         {
-            ours[differing[0]] = oracle[differing[0]];
+            ours[cursor] = oracle[cursor];
         }
 
         Match(oracle, ours, columns);
@@ -182,7 +191,7 @@ public class Trs80Model3OracleTests
         int first = Enumerable.Range(0, oracle.Length).FirstOrDefault(index => oracle[index] != ours[index], -1);
         if (first < 0) { return; }
         Console.WriteLine($"Ours:\n{Screen(ours, columns)}");
-        Assert.Fail($"Video RAM differs at row {first / columns}, column {first % columns}: "
+        Assert.Fail($"Video RAM differs at cell {first}, row {first / columns}, column {first % columns}: "
             + $"${ours[first]:X2} here, ${oracle[first]:X2} in MAME.");
     }
 
@@ -255,10 +264,12 @@ public class Trs80Model3OracleTests
         string work = Directory.CreateTempSubdirectory("retrocore-mame").FullName;
         try
         {
+            // No .ini file is read, so neither the user's settings nor a machine's own, such as a trs80m3.ini choosing
+            // another BIOS, change the run.
             List<string> arguments =
             [
                 driver, "-rompath", sets, "-cfg_directory", Path.Join(work, "cfg"), "-nvram_directory", work,
-                "-video", "none", "-sound", "none", "-nothrottle", "-skip_gameinfo",
+                "-noreadconfig", "-video", "none", "-sound", "none", "-nothrottle", "-skip_gameinfo",
                 "-seconds_to_run", ((int)finish + 5).ToString(CultureInfo.InvariantCulture),
                 "-autoboot_script", FindTool("Trs80Model3Oracle.lua")
             ];

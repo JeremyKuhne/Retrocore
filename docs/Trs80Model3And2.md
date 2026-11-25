@@ -248,7 +248,14 @@ What the comparison has to allow for:
   Level II on the Model III and 4 and the DOSes ([Typed and pasted text](#typed-and-pasted-text)), so both press
   the same keys. Where they differed, TRSDOS 6.0, which starts with caps lock off, echoed `dir` here and `DIR` in
   MAME.
-- **The cursor.** A DOS blinks its cursor, so one cell may differ, where one side shows a space.
+- **The cursor.** A DOS blinks its cursor, so one cell may differ, where one side shows a space, and only where the
+  cursor waits, after everything else on the screen.
+- **The Model 4's screen.** The first 1,920 bytes of its 2K of video RAM, the 80 by 24 screen while the 6845 starts
+  at 0 as these DOSes leave it, are compared in either mode, so the cells compared, and the search for the text that
+  shows MAME got through the script, do not depend on this side's 64 or 80 column switch. Past them, a DOS's
+  leftovers differ.
+- **MAME's settings.** MAME runs with `-noreadconfig`, so no `mame.ini` or machine's `.ini`, such as one choosing
+  another BIOS, changes the run.
 - **The Model II's boot ROM** is chosen by MAME's BIOS name: `c8ff`, `2bff`, `2119` and `9733` for versions 1, 2, 3
   and 5.
 

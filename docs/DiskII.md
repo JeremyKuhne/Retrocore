@@ -54,7 +54,7 @@ A disk has 35 tracks, rings from the outside (track 0) in. The head moves betwee
 of four magnets, the phases. Turning on the phase next to the current one pulls the head half a track
 toward it, so stepping through the phases in order moves it in (0, 1, 2, 3, 0, ...) or out (0, 3, 2, 1,
 0, ...), and a whole track is two steps. Nothing tells the card where the head is. The boot ROMs find track 0
-by stepping out 80 times, more than enough from anywhere; at track 0 the head hits a stop and stays.
+by stepping out 81 times, more than enough from anywhere; at track 0 the head hits a stop and stays.
 
 The disk turns at 300 revolutions a minute, a fifth of a second a turn. The head writes and reads flux
 transitions, changes in the magnetic field. The card divides the track into bit cells of 4 microseconds, four

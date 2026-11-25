@@ -23,8 +23,9 @@
 ;; and its three low bits in another nibble's five, shared with other bytes. That ROM decodes only part of the
 ;; sector: it completes the first 153 bytes and sets aside the bits of the rest for the boot sector's own code to
 ;; finish. When the sector does not start with the byte that says so, the ROM prints ERR instead. Reading the
-;; sector ends in an RTS: the code pushed its own page and the address of the post-nibble routine less one before
-;; it started, so the RTS goes on to that routine, where the bits are put back together.
+;; sector ends in an RTS: on the boot's own read, the code pushed its own page and the address of the post-nibble
+;; routine less one before it started, so the RTS goes on to that routine, where the bits are put back together.
+;; DOS 3.2's boot sector calls the reader at $Cn5D as a subroutine, and the RTS returns to it.
 ;;
 ;; The names here are the SDK's, in full words; the names an earlier version of this source used, whose origin is
 ;; unclear, are in each definition's `Also:`. docs/conversions/DiskII.md records the decisions.
@@ -63,8 +64,8 @@ PassCount = ScrollBase
 
 ;; The slot times 16, $n0 for slot n: added to the switches' addresses ($C080-$C08F) to reach the card's.
 ;;
-;; <Boot> works it out from its own address, $Cn00, and passes it to the boot sector in X. DOS's boot sector reads it
-;; here as <Dos33:Boot::SlotTimes16>.
+;; <Boot> works it out from its own address, $Cn00, and keeps it here for the boot sector; the 16-sector ROM also
+;; passes it in X. DOS's boot sector reads it here as <Dos33:Boot::SlotTimes16>.
 ;; See: <Boot>, <ReadSector>, <Dos33:Boot::SlotTimes16>
 ;; Also: SLOTX16 (UNKN)
 SlotTimes16 = ScrollBaseHigh

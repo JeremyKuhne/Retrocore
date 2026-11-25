@@ -14,7 +14,7 @@ Master HELLO's POKEd test. Documents cited: DOS33 and DOS31 (on the switches onl
   commands as CLR, NOP, SL0, SL1, SR and LD, and says they are his own, "in the absence of any labels and formats
   published by Apple". They are named in prose (D6), so the bibliography has no key for it.
 - The macros `ENTRY`, `READING`, `WRITING` and `SEQUENCER`, the generated `SEQ_xx`, and the language card finder's
-  `Status`, `Finder` and its locals are the SDK's own: renamed (but `Status`) with no `Also:`.
+  `Status`, `Finder` and its locals are the SDK's own and get no `Also:`; all but `Status` are renamed.
 
 ## Decisions
 

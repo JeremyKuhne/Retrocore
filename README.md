@@ -385,7 +385,7 @@ Design notes for upcoming work live in [`docs/backlog`](docs/backlog):
 - [more assembler dialects (Zilog, EDTASM, zmac, 6809)](docs/backlog/Dialects.md);
 - [the Motorola 6809 and the TRS-80 Color Computer](docs/backlog/M6809-CoCo.md), and
   [its ROM sources](docs/backlog/CocoRomSources.md);
-- [the Apple III](docs/backlog/Apple3.md);
+- [the Apple III's unchecked frames and the Apple III Plus](docs/backlog/Apple3.md);
 - [the Intel 8080 and 8085](docs/backlog/I8080.md), and [the Altair 8800](docs/backlog/Altair8800.md): its disks and front panel view;
 - [the 3.5 disk controller at the hardware level](docs/backlog/Disk35Hardware.md), running Apple's EPROM on an emulated 65C02 and SWIM;
 - [SOS sources: the Apple III's kernel and drivers](docs/backlog/SosSources.md);

@@ -1,4 +1,4 @@
-; retrocore: style=strict ignore=unlinked-name:BASIC
+; retrocore: style=strict
 ;; Integer BASIC: constants, page zero and the Monitor addresses it uses
 ;;
 ;; The names Integer BASIC gives its constants, its page-zero locations and the parts of page 1 it borrows, and the
@@ -29,6 +29,107 @@ BLANK = $20
 ;; A double quote.
 ;; Also: DQT (IBSM)
 DOUBLE_QUOTE = $22
+
+; Tokens: the values the tokenizer stores, which the code tests or writes. Each token's routine is in the verb tables
+; (VerbTables.asm), which list them all.
+
+;; The token that ends every line, stored or typed, and runs every token still waiting.
+TOKEN_END_OF_LINE = $01
+
+;; The colon between statements.
+TOKEN_COLON = $03
+
+;; `THEN` before a statement, which does nothing: <Statements::If> makes the arriving `THEN` this one when the
+;; condition is false, so that `THEN` followed by a line number does not jump.
+TOKEN_THEN_STATEMENT = $25
+
+;; The quote that opens a string constant; the string's characters follow, with bit 7 set, then the closing quote's
+;; token, $29.
+TOKEN_OPEN_QUOTE = $28
+
+;; The $ that ends a string variable's name: the name's characters have bit 7 set, and this byte does not.
+TOKEN_DOLLAR = $40
+
+;; `REM`; the remark's characters follow it to the end of the line.
+TOKEN_REM = $5D
+
+;; The token the `INPUT` rule (<Syntax::InputLineStart>) writes at the end of a line of numbers, and which `INPUT`
+;; puts at the start of <InputBuffer> (<MarkInputLineUsed>) to mark the line used up, so the next variable asks for
+;; a new one.
+TOKEN_INPUT_END = $80
+
+;; A comma between `INPUT`'s numbers.
+TOKEN_INPUT_COMMA = $81
+
+;; A plus sign before one of `INPUT`'s numbers.
+TOKEN_INPUT_PLUS = $82
+
+;; A minus sign before one of `INPUT`'s numbers, which <Statements::InputNumberComma> negates.
+TOKEN_INPUT_MINUS = $83
+
+; The stacks' sizes.
+
+;; X when the noun stack is empty; it counts down as entries are pushed.
+NOUN_STACK_EMPTY = $20
+
+;; X when the tokenizer's syntax stack is empty, where it starts a line: the frames are pushed from here down. It is
+;; the noun stack's start too, as the two stacks share their bytes.
+SYNTAX_STACK_EMPTY = $20
+
+;; The number of `GOSUB`s that can be active, the entries of the `GOSUB` stack (<GoSubTokenLow>).
+GOSUB_STACK_DEPTH = 16
+
+;; The number of `FOR` loops that can be active, the entries of the `FOR` stack (<ForVariableLow>).
+FOR_STACK_DEPTH = 16
+
+; The syntax table's characters (SyntaxTable.asm) and the typed line's end.
+
+;; The character that marks the end of a typed line in <InputBuffer>: the underline, which takes the place of the
+;; Return, and which the syntax table's last rule matches.
+LINE_END_MARK = '_'
+
+;; The bits of a character byte in the syntax table that hold the character, less <SYNTAX_CHARACTER_BASE>.
+SYNTAX_CHARACTER_BITS = $3F
+
+;; What a syntax table character's low 6 bits are added to: the blank, with bit 7 set, so the table can hold $A0
+;; to $DF.
+SYNTAX_CHARACTER_BASE = BLANK | $80
+
+;; The least syntax table byte that is a keyword's last character: bit 7, a character, and bit 6, its alternative's
+;; last item.
+SYNTAX_LAST_CHARACTER = $80 | Syntax::ITEM_LAST
+
+;; The bit of a syntax table character that is set for the letters ($C0-$DF) and clear for punctuation and digits.
+SYNTAX_LETTER_BIT = $20
+
+; The screens.
+
+;; The lo-res screen's rows: `PLOT`, `HLIN` and `SCRN(` take a row from 0 to 47.
+LOW_RES_ROWS = 48
+
+;; The lo-res screen's columns: `PLOT` and `VLIN` take a column from 0 to 39.
+LOW_RES_COLUMNS = 40
+
+;; The text screen's lines: `VTAB` takes a line from 1 to 24.
+TEXT_ROWS = 24
+
+; The layouts of the program's lines and the variables.
+
+;; A line of the program, as it is stored from <ProgramStart> up; its tokens end with <TOKEN_END_OF_LINE>.
+.struct ProgramLine
+    LENGTH .byte                    ;; The line's length in bytes, counting this byte.
+    NUMBER .word                    ;; The line number, low byte first.
+    TOKENS .byte                    ;; The first of the line's tokens.
+.endstruct
+
+;; The fields that follow a variable's name, a display flag, the link to the next variable and the value.
+;;
+;; A new variable's value is 2 bytes, 0: a number, or room that `DIM` can enlarge for an array or a string.
+.struct VariableFields
+    DISPLAY_FLAG .byte              ;; 1 after `DSP`, otherwise 0: the byte that ends the name.
+    NEXT .word                      ;; The address of the next variable's name; <VariablesEnd> for the last.
+    VALUE .word                     ;; The value, or the first 2 bytes of an array's or a string's.
+.endstruct
 
 ; The Monitor's page-zero locations, the input buffer and the keyboard, under the Monitor's current names. Each
 ; inherits the Monitor's documentation and repeats its historical names, so code written with Apple's names assembles.
@@ -306,288 +407,295 @@ ReadHexNumber = $FFA7
 
 
 ; Integer BASIC's own locations.
-;; The lowest address of the variables, `LOMEM` (2 bytes): they grow upward from here to <PV>.
+;; The lowest address of the variables, `LOMEM` (2 bytes): they grow upward from here to <VariablesEnd>.
 ;;
-;; The cold start (<COLD>) sets it to $0800, the first page above the text screen, and LOMEM: (<VLOMEM>) changes it.
-;; <CLR> discards the variables by setting <PV> back to it.
-;; See: <HIMEM>, <PV>, <CLR>, <VLOMEM>
+;; The cold start (<ColdStart>) sets it to $0800, the first page above the text screen, and LOMEM: (<Statements::LoMem>)
+;; changes it. <Statements::Clr> discards the variables by setting <VariablesEnd> back to it.
+;; See: <HighMemory>, <VariablesEnd>, <Statements::Clr>, <Statements::LoMem>
 ;; Also: LOMEM (IBSM)
 LowMemory = $4A
 
-;; The address just above the program, `HIMEM` (2 bytes): the program grows downward from here to <PP>.
+;; The address just above the program, `HIMEM` (2 bytes): the program grows downward from here to <ProgramStart>.
 ;;
-;; The cold start (<COLD>) sets it to the top of RAM, and HIMEM: (<VHIMEM>) moves it, taking the program with it.
-;; <NEW> discards the program by setting <PP> to it.
-;; See: <LOMEM>, <PP>, <NEW>, <VHIMEM>
+;; The cold start (<ColdStart>) sets it to the top of RAM, and HIMEM: (<Statements::HiMem>) moves it, taking the program
+;; with it. <Statements::New> discards the program by setting <ProgramStart> to it.
+;; See: <LowMemory>, <ProgramStart>, <Statements::New>, <Statements::HiMem>
 ;; Also: HIMEM (IBSM)
 HighMemory = $4C
 
 ;; The noun stack's low bytes: one per entry, indexed by X, which starts at $20 and counts down as entries are
 ;; pushed.
 ;;
-;; While a statement runs, each operand (a "noun") takes one entry in three arrays: <NOUNSTKL>, <NOUNSTKH> and
-;; <NOUNSTKC>. A number is its low byte here and its high byte in <NOUNSTKC>, with 0 in <NOUNSTKH>. A variable is its
-;; address, low byte here and high byte in <NOUNSTKH>, which is never 0, so <GET16BIT> can tell the two apart. A
-;; string takes two entries: its address, and above it the range of characters, the first index here and the end
-;; index in <NOUNSTKH>. A push below X = 0 (<PUSHNOUNLO>) is an error, whose message is PPED `AT` (<PUSHNOUN_1>).
+;; While a statement runs, each operand (a "noun") takes one entry in three arrays: <NounStackLow>, <NounStackHigh> and
+;; <NounStackNumberHigh>. A number is its low byte here and its high byte in <NounStackNumberHigh>, with 0 in
+;; <NounStackHigh>. A variable is its address, low byte here and high byte in <NounStackHigh>, which is never 0, so
+;; <GetNumber> can tell the two apart. A string takes two entries: its address, and above it the range of characters,
+;; the first index here and the end index in <NounStackHigh>. A push below X = 0 (<PushNoun::LowOnly>) is an error,
+;; whose message is PPED `AT` (<PushNoun::Full>).
 ;;
-;; These bytes overlap the tokenizer's <SYNSTKH>, and <CHKBREAK> saves the place to continue here when Control-C stops
-;; a program, for `CON`.
-;; See: <NOUNSTKH>, <NOUNSTKC>, <GET16BIT>, <PUSHNOUN>, <SYNSTKH>
+;; These bytes overlap the tokenizer's <SyntaxStackHigh>, and <Break::Check> saves the place to continue here when
+;; Control-C stops a program, for `CON`.
+;; See: <NounStackHigh>, <NounStackNumberHigh>, <GetNumber>, <PushNoun>, <SyntaxStackHigh>
 ;; Also: NOUNSTKL (IBSM)
 NounStackLow = $50
 
 ;; The tokenizer's syntax stack: the high byte of the syntax table address to return to, one per rule being
 ;; matched.
 ;;
-;; The tokenizer pushes a frame when one syntax rule calls another (<CALLRULE>): the place in the caller here and in
-;; <SYNSTKL>, and where the input and output stood in <TXTNDXSTK> and <TOKNDXSTK>, so a rule that fails can restore
-;; them and let the caller try its next alternative. X indexes the frames, from $20 down. These bytes are the noun
-;; stack's (<NOUNSTKL>) while a statement runs.
-;; See: <SYNSTKL>, <TXTNDXSTK>, <TOKNDXSTK>, <SYNSTKDX>, <SYNTABL>
+;; The tokenizer pushes a frame when one syntax rule calls another (<Tokenizer::CallRule>): the place in the caller here
+;; and in <SyntaxStackLow>, and where the input and output stood in <TextIndexStack> and <TokenIndexStack>, so a rule
+;; that fails can restore them and let the caller try its next alternative. X indexes the frames, from $20 down. These
+;; bytes are the noun stack's (<NounStackLow>) while a statement runs.
+;; See: <SyntaxStackLow>, <TextIndexStack>, <TokenIndexStack>, <SyntaxStackIndex>, <Syntax::Table>
 ;; Also: SYNSTKH (IBSM)
 SyntaxStackHigh = $58
 
 ;; The noun stack's high bytes of addresses: the high byte of a variable's address, or 0 for a number.
 ;;
-;; For a string's second entry it is the index just past the string's last character. <CHKBREAK> saves the current
+;; For a string's second entry it is the index just past the string's last character. <Break::Check> saves the current
 ;; line's address in its first two bytes when Control-C stops a program.
-;; See: <NOUNSTKL>, <NOUNSTKC>
+;; See: <NounStackLow>, <NounStackNumberHigh>
 ;; Also: NOUNSTKH (IBSM)
 NounStackHigh = $78
 
 ;; The tokenizer's syntax stack: the low byte of the syntax table address to return to.
-;; See: <SYNSTKH>
+;; See: <SyntaxStackHigh>
 ;; Also: SYNSTKL (IBSM)
 SyntaxStackLow = $80
 
 ;; The noun stack's high bytes of numbers.
 ;;
-;; Its first byte, $A0, is also the `TRACE` flag: <TRACE> sets bit 7, <NOTRACE> clears it, and the run loop prints each
-;; line's number while it is set (<TRACELINE>).
-;; See: <NOUNSTKL>, <NOUNSTKH>, <TRACE>
+;; Its first byte, $A0, is also the `TRACE` flag: <Statements::Trace> sets bit 7, <Statements::NoTrace> clears it, and
+;; the run loop prints each line's number while it is set (<Display::TraceLine>).
+;; See: <NounStackLow>, <NounStackHigh>, <Statements::Trace>
 ;; Also: NOUNSTKC (IBSM)
 NounStackNumberHigh = $A0
 
-;; The tokenizer's syntax stack: <TXTNDX> as it was when each rule began, to back up to if the rule fails.
-;; See: <SYNSTKH>, <TXTNDX>
+;; The tokenizer's syntax stack: <TextIndex> as it was when each rule began, to back up to if the rule fails.
+;; See: <SyntaxStackHigh>, <TextIndex>
 ;; Also: TXTNDXSTK (IBSM)
 TextIndexStack = $A8
 
-;; The tokenizer's index of the last character it has matched in <IN>.
+;; The tokenizer's index of the last character it has matched in <InputBuffer>.
 ;;
-;; It starts at $FF, before the line. When a rule fails, the tokenizer sets it back from <TXTNDXSTK>. Statements
+;; It starts at $FF, before the line. When a rule fails, the tokenizer sets it back from <TextIndexStack>. Statements
 ;; reuse it as a scratch byte once the line is tokenized: `POKE`, `PLOT`, `HLIN` and `VLIN` keep their first value here
-;; (<GETVAL255>), and `INPUT` keeps its place in the typed line.
-;; See: <TOKNDX>, <TXTNDXSTK>, <GETVAL255>, <COMMA_INPUT>
+;; (<Statements::FirstValue>), and `INPUT` keeps its place in the typed line.
+;; See: <TokenIndex>, <TextIndexStack>, <Statements::FirstValue>, <Statements::InputNumberComma>
 ;; Also: TXTNDX (IBSM)
 TextIndex = $C8
 
-;; A count of digits: <PRDEC> counts down the places of a number it prints and keeps the first digit that is not
-;; 0 here; the tokenizer keeps the place in <IN> where a constant's digits start (<RULEMATCHED>).
-;; See: <PRDEC>, <LEADZR>
+;; A count of digits: <PrintDecimal> counts down the places of a number it prints and keeps the first digit that is not
+;; 0 here; the tokenizer keeps the place in <InputBuffer> where a constant's digits start (<Tokenizer::RuleMatched>).
+;; See: <PrintDecimal>, <LeadingZero>
 ;; Also: LEADBL (IBSM)
 DigitPlace = $C9
 
-;; The start of the program, PP (2 bytes): its lowest address. The program's lines lie from here up to <HIMEM>.
+;; The start of the program, PP (2 bytes): its lowest address. The program's lines lie from here up to <HighMemory>.
 ;;
 ;; Each line is a length byte (counting itself), the line number (low byte first), the line's tokens and $01, the
 ;; end-of-line token. Lines are kept in increasing order of their numbers. Entering a line moves the lines below it
-;; down to make room, so <PP> moves down; <NEW> sets it to <HIMEM>.
-;; See: <HIMEM>, <PV>, <FINDLINE>, <WARM>
+;; down to make room, so <ProgramStart> moves down; <Statements::New> sets it to <HighMemory>.
+;; See: <HighMemory>, <VariablesEnd>, <FindLine>, <WarmStart>
 ;; Also: PP (IBSM)
 ProgramStart = $CA
 
-;; The end of the variables, PV (2 bytes): the address just past the last one. They lie from <LOMEM> up to here.
+;; The end of the variables, PV (2 bytes): the address just past the last one. They lie from <LowMemory> up to here.
 ;;
 ;; Each variable is its name (characters with bit 7 set; a string variable's name ends in $40, the $ token), a
 ;; display flag (1 after `DSP`, otherwise 0), the address of the next variable (2 bytes, the next one's name, which
-;; is <PV> for the last), and its value: 2 bytes for a number, 2 for each element of an array, and its dimension
-;; plus 1 for a string, whose characters end in a byte with bit 7 clear. A memory full error comes when <PV> would
-;; pass <PP>.
-;; See: <LOMEM>, <PP>, <CLR>, <CMPVARNAME>
+;; is <VariablesEnd> for the last), and its value: 2 bytes for a number, 2 for each element of an array, and its
+;; dimension plus 1 for a string, whose characters end in a byte with bit 7 clear. A memory full error comes when
+;; <VariablesEnd> would pass <ProgramStart>.
+;; See: <LowMemory>, <ProgramStart>, <Statements::Clr>, <Variables::CompareName>
 ;; Also: PV (IBSM)
 VariablesEnd = $CC
 
 ;; The main 16-bit accumulator (2 bytes, low byte first).
 ;;
-;; <GET16BIT> leaves a noun's value here, and the arithmetic, the statements and the cassette routines work on it.
-;; <DOTOKEN_2> also jumps through it to run each token's routine.
-;; See: <GET16BIT>, <AUX>
+;; <GetNumber> leaves a noun's value here, and the arithmetic, the statements and the cassette routines work on it.
+;; <Interpreter::RunLine::RunWaiting> also jumps through it to run each token's routine.
+;; See: <GetNumber>, <Auxiliary>
 ;; Also: ACC (IBSM)
 Accumulator = $CE
 
-;; A pointer that walks the variables (2 bytes) when <CMPVARNAME> looks a name up.
+;; A pointer that walks the variables (2 bytes) when <Variables::CompareName> looks a name up.
 ;;
-;; <EXP> counts its multiplications in it instead.
-;; See: <CMPVARNAME>, <PRVARNAME>, <EXP>
+;; <Operators::Power> counts its multiplications in it instead.
+;; See: <Variables::CompareName>, <Display::PrintVariableName>, <Operators::Power>
 ;; Also: SRCH (IBSM)
 SearchPointer = $D0
 
-;; The tokenizer's syntax stack: <TOKNDX> as it was when each rule began, to back up to if the rule fails.
+;; The tokenizer's syntax stack: <TokenIndex> as it was when each rule began, to back up to if the rule fails.
 ;;
-;; Its first byte is also the high byte of <SRCH>.
-;; See: <SYNSTKH>, <TOKNDX>
+;; Its first byte is also the high byte of <SearchPointer>.
+;; See: <SyntaxStackHigh>, <TokenIndex>
 ;; Also: TOKNDXSTK (IBSM)
 TokenIndexStack = $D1
 
-;; A second 16-bit work location (2 bytes): <EXP> keeps the number it multiplies by here.
-;; See: <EXP>
+;; A second 16-bit work location (2 bytes): <Operators::Power> keeps the number it multiplies by here.
+;; See: <Operators::Power>
 ;; Also: SRCH2 (IBSM)
 SearchPointer2 = $D2
 
 ;; The `IF` flag: bit 7 is set while the statement after a false `IF`'s `THEN` is being skipped.
 ;;
-;; <IF> sets it when the condition is 0. The interpreter (<EXECLINE_10>) then passes over tokens until the next colon or
-;; the end of the line, and clears it there, so the statements after a colon run whatever the condition was.
-;; See: <IF>, <EXECLINE>, <EXECLINE_10>
+;; <Statements::If> sets it when the condition is 0. The interpreter (<Interpreter::RunLine::CheckSkipping>) then passes
+;; over tokens until the next colon or the end of the line, and clears it there, so the statements after a colon run
+;; whatever the condition was.
+;; See: <Statements::If>, <Interpreter::RunLine>, <Interpreter::RunLine::CheckSkipping>
 ;; Also: IFFLAG (IBSM)
 SkippingStatement = $D4
 
 ;; The carriage return flag: bit 7 is set when `PRINT` has printed something and still owes the line a return.
 ;;
-;; Printing a number or a string sets it (<PRINTNUM_1>, <SETCRFLAG>); a semicolon or comma at the end of `PRINT` clears it
-;; (<SEMI_END>, <COMMA_PREND>), and <COLON> prints the return at the end of the statement while it is set.
-;; See: <COLON>, <PRINTNUM>, <PRINTSTR>
+;; Printing a number or a string sets it (<Statements::PrintNumber::NotNegative>,
+;; <Statements::PrintString::SetReturnPending>); a semicolon or comma at the end of `PRINT` clears it
+;; (<Statements::PrintSemicolonEnd>, <Statements::PrintCommaEnd>), and <Statements::Colon> prints the return at the end
+;; of the statement while it is set.
+;; See: <Statements::Colon>, <Statements::PrintNumber>, <Statements::PrintString>
 ;; Also: CRFLAG (IBSM)
 ReturnPending = $D5
 
-;; The token the interpreter is about to run (<DOTOKEN>), the operator whose priority decides what runs first.
+;; The token the interpreter is about to run (<Interpreter::RunLine::Arrive>), the operator whose priority decides what
+;; runs first.
 ;;
 ;; `IF` stores the `THEN` token in it so a false condition skips the rest of the statement.
-;; See: <DOTOKEN>, <IF>
+;; See: <Interpreter::RunLine::Arrive>, <Statements::If>
 ;; Also: VERBNOW (IBSM)
 CurrentVerb = $D6
 
-;; The priority of the token waiting to run, which <DOTOKEN> compares with the operators on the stack.
+;; The priority of the token waiting to run, which <Interpreter::RunLine::Arrive> compares with the operators on the
+;; stack.
 ;;
-;; A left parenthesis and SCRN( set it to $FF (<LEFT_PAREN>), above any operator's, so nothing waiting before the
-;; parenthesis runs until the right parenthesis comes.
-;; See: <DOTOKEN>, <LEFT_PAREN>, <TABLE1>
+;; A left parenthesis and SCRN( set it to $FF (<Operators::LeftParenthesis>), above any operator's, so nothing waiting
+;; before the parenthesis runs until the right parenthesis comes.
+;; See: <Interpreter::RunLine::Arrive>, <Operators::LeftParenthesis>, <Verbs::Priorities>
 ;; Also: PRFLAG (IBSM)
 VerbPriority = $D7
 
 ;; A place to keep X while a routine uses it: the noun stack index, around calls to the Monitor and while a routine
 ;; walks memory.
 ;;
-;; <CMPVARNAME> also keeps whether a variable name ends in $ in bit 6 here.
+;; <Variables::CompareName> also keeps whether a variable name ends in $ in bit 6 here.
 ;; Also: XSAVE (IBSM)
 SavedX = $D8
 
 ;; The run flag: bit 7 is set while a program runs, clear for an immediate statement.
 ;;
-;; <GETNEXT> sets it for each statement; errors (<ERRMESS>) and `END` check it.
-;; See: <GETNEXT>, <ERRMESS>
+;; <Lines::RunFromToken> sets it for each statement; errors (<ReportError>) and `END` check it.
+;; See: <Lines::RunFromToken>, <ReportError>
 ;; Also: RUNFLAG (IBSM)
 Running = $D9
 
 ;; A second 16-bit accumulator (2 bytes), the other operand of the arithmetic and a pointer for string work.
-;; See: <ACC>, <MULT>, <DIVMOD>
+;; See: <Accumulator>, <Operators::Multiply>, <DivideWithRemainder>
 ;; Also: AUX (IBSM)
 Auxiliary = $DA
 
 ;; The address of the line running (2 bytes): its length byte, from which the run loop steps to the next line.
 ;;
 ;; `GOSUB` and `FOR` save it, and errors and `TRACE` read the line number through it.
-;; See: <GOLINE>, <PX>, <GOSUB>, <FOR>
+;; See: <Lines::RunFrom>, <TokenPointer>, <Statements::GoSub>, <Statements::For>
 ;; Also: PR (IBSM)
 CurrentLine = $DC
 
 ;; The address of the token being run (2 bytes).
 ;;
-;; <GETVERB> steps it through the line. `GOSUB` and `FOR` save it to come back to.
-;; See: <GETVERB>, <PR>, <GETNEXT>
+;; <Interpreter::ReadNextByte> steps it through the line. `GOSUB` and `FOR` save it to come back to.
+;; See: <Interpreter::ReadNextByte>, <CurrentLine>, <Lines::RunFromToken>
 ;; Also: PX (IBSM)
 TokenPointer = $E0
 
-;; A work pointer (2 bytes): the next byte to list (<NextByte>), and the place to delete from when a line is
+;; A work pointer (2 bytes): the next byte to list (<Lister::FetchByte>), and the place to delete from when a line is
 ;; replaced.
-;; See: <NextByte>, <DELLINE>
+;; See: <Lister::FetchByte>, <Editor::DeleteLine>
 ;; Also: P1 (IBSM)
 Pointer1 = $E2
 
-;; A work pointer (2 bytes): the line found by <FINDLINE>, the new start of the program while lines move, and the
+;; A work pointer (2 bytes): the line found by <FindLine>, the new start of the program while lines move, and the
 ;; listed token's flags.
-;; See: <FINDLINE>, <CLOSEGAP>
+;; See: <FindLine>, <Editor::CloseGap>
 ;; Also: P2 (IBSM)
 Pointer2 = $E4
 
-;; A work pointer (2 bytes): where <FINDLINE> searches from, the end of a range to list or delete, and a remainder in
+;; A work pointer (2 bytes): where <FindLine> searches from, the end of a range to list or delete, and a remainder in
 ;; division.
-;; See: <FINDLINE>, <COMMA_LIST>, <DIVMOD>
+;; See: <FindLine>, <Statements::ListComma>, <DivideWithRemainder>
 ;; Also: P3 (IBSM)
 Pointer3 = $E6
 
-;; The tokenizer's index of the last token it has written in <IN>.
+;; The tokenizer's index of the last token it has written in <InputBuffer>.
 ;;
-;; The tokens go into <IN> after the line's text: GETCMD sets it to the length of the line, and <PUTTOKEN> adds each
-;; token after it. A line that fills the buffer is TOO LONG.
-;; See: <TXTNDX>, <PUTTOKEN>, <TOKNDXSTK>
+;; The tokens go into <InputBuffer> after the line's text: GETCMD sets it to the length of the line, and
+;; <Tokenizer::PutToken> adds each token after it. A line that fills the buffer is TOO LONG.
+;; See: <TextIndex>, <Tokenizer::PutToken>, <TokenIndexStack>
 ;; Also: TOKNDX (IBSM)
 TokenIndex = $F1
 
-;; A 16-bit number (2 bytes) being built from a constant's digits by the tokenizer (<RULEMATCHED>), or printed in decimal
-;; by <PRDEC>.
-;; See: <PRDEC>, <RULEMATCHED>
+;; A 16-bit number (2 bytes) being built from a constant's digits by the tokenizer (<Tokenizer::RuleMatched>), or
+;; printed in decimal by <PrintDecimal>.
+;; See: <PrintDecimal>, <Tokenizer::RuleMatched>
 ;; Also: PCON (IBSM)
 DecimalNumber = $F2
 
 ;; The step between line numbers in `AUTO` mode (2 bytes), 10 unless `AUTO` gives one.
-;; See: <AUTO>, <COMMA_AUTO>, <AUTOLN>
+;; See: <Statements::Auto>, <Statements::AutoComma>, <AutoLine>
 ;; Also: AUTOINC (IBSM)
 AutoIncrement = $F4
 
 ;; The next line number `AUTO` offers (2 bytes).
-;; See: <AUTO>, <AUTOINC>, <WARM>
+;; See: <Statements::Auto>, <AutoIncrement>, <WarmStart>
 ;; Also: AUTOLN (IBSM)
 AutoLine = $F6
 
 ;; The `AUTO` flag: bit 7 is set in `AUTO` mode, when the prompt offers the next line number.
 ;;
-;; <AUTO> sets it; `MAN` (<MAN>) and <NEW> clear it.
-;; See: <AUTO>, <MAN>
+;; <Statements::Auto> sets it; `MAN` (<Statements::Man>) and <Statements::New> clear it.
+;; See: <Statements::Auto>, <Statements::Man>
 ;; Also: AUTOFLAG (IBSM)
 AutoNumbering = $F8
 
-;; A character, or a count: the digit <PRDEC> is about to print, or the loop count of the tokenizer's multiply by 10.
-;; See: <PRDEC>, <RULEMATCHED>
+;; A character, or a count: the digit <PrintDecimal> is about to print, or the loop count of the tokenizer's multiply by
+;; 10.
+;; See: <PrintDecimal>, <Tokenizer::RuleMatched>
 ;; Also: CHAR (IBSM)
 DigitCharacter = $F9
 
-;; What <PRDEC> prints for a leading zero: 0 prints nothing, $A0 a blank.
+;; What <PrintDecimal> prints for a leading zero: 0 prints nothing, $A0 a blank.
 ;;
 ;; The lister sets it to a blank so that line numbers line up; the prompt sets it to 0.
-;; See: <PRDEC>, <UNPACK>
+;; See: <PrintDecimal>, <Lister::PrintLine>
 ;; Also: LEADZR (IBSM)
 LeadingZero = $FA
 
 ;; The number of `FOR` loops active, 0 to 16: an index into the `FOR` stack in page 1.
-;; See: <FOR>, <NEXT>, <STK_40>
+;; See: <Statements::For>, <Statements::Next>, <ForVariableLow>
 ;; Also: FORNDX (IBSM)
 ForIndex = $FB
 
 ;; The number of GOSUBs active, 0 to 16: an index into the `GOSUB` stack in page 1.
-;; See: <GOSUB>, <RETURN>, <STK_00>
+;; See: <Statements::GoSub>, <Statements::Return>, <GoSubTokenLow>
 ;; Also: GOSUBNDX (IBSM)
 GoSubIndex = $FC
 
 ;; The tokenizer's syntax stack index: the frame of the rule being matched, from $20 down.
-;; See: <SYNSTKH>, <MATCHITEM>
+;; See: <SyntaxStackHigh>, <Tokenizer::MatchItem>
 ;; Also: SYNSTKDX (IBSM)
 SyntaxStackIndex = $FD
 
-;; A pointer into the syntax table (2 bytes): its low byte is always 0 (<CLR> clears it), and its high byte selects
-;; the page, $EC or $ED. Y is the place in that page.
-;; See: <SYNTABL>, <STARTRULE>
+;; A pointer into the syntax table (2 bytes): its low byte is always 0 (<Statements::Clr> clears it), and its high byte
+;; selects the page, $EC or $ED. Y is the place in that page.
+;; See: <Syntax::Table>, <Tokenizer::StartRule>
 ;; Also: SYNPAG (IBSM)
 SyntaxPage = $FE
 
 ; Page 1 below the 6502's stack, where `GOSUB` and `FOR` keep their state: 16 entries in each 16-byte column, indexed by
 ; GOSUBNDX or FORNDX. Integer BASIC starts the 6502's stack at $01FF, and it does not grow down this far.
-;; The `GOSUB` stack's return token addresses, low bytes: <PX> at each `GOSUB`.
+;; The `GOSUB` stack's return token addresses, low bytes: <TokenPointer> at each `GOSUB`.
 ;;
-;; <STK_10> holds the high bytes, and <STK_20> and <STK_30> the line (<PR>) to return to.
-;; See: <GOSUB>, <RETURN>, <GOSUBNDX>
+;; <GoSubTokenHigh> holds the high bytes, and <GoSubLineLow> and <GoSubLineHigh> the line (<CurrentLine>) to return to.
+;; See: <Statements::GoSub>, <Statements::Return>, <GoSubIndex>
 ;; Also: STK_00 (IBSM)
 GoSubTokenLow = $0100
 
@@ -605,10 +713,10 @@ GoSubLineHigh = $0130
 
 ;; The `FOR` stack's loop variable addresses, low bytes.
 ;;
-;; Each `FOR` keeps one entry across the columns from here: its variable's address (<STK_40>, <STK_50>), its step
-;; (<STK_60>, <STK_70>), the line and token after the `FOR` to loop back to (<STK_80> to <STK_B0>) and its limit
-;; (<STK_C0>, <STK_D0>).
-;; See: <FOR>, <TO>, <STEP>, <NEXT>, <FORNDX>
+;; Each `FOR` keeps one entry across the columns from here: its variable's address (<ForVariableLow>,
+;; <ForVariableHigh>), its step (<ForStepLow>, <ForStepHigh>), the line and token after the `FOR` to loop back to
+;; (<ForLineLow> to <ForTokenHigh>) and its limit (<ForLimitLow>, <ForLimitHigh>).
+;; See: <Statements::For>, <Statements::To>, <Statements::Step>, <Statements::Next>, <ForIndex>
 ;; Also: STK_40 (IBSM)
 ForVariableLow = $0140
 

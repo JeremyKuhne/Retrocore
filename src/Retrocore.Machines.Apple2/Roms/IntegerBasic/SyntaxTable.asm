@@ -1,9 +1,9 @@
-; retrocore: style=strict ignore=unlinked-name:BASIC -- the name of the language
+; retrocore: style=strict
 ;; Integer BASIC: the syntax table
 ;;
 ;; Integer BASIC's grammar, which the tokenizer (Tokenizer.asm) matches each typed line against, and from which the
 ;; keywords get their tokens. It fills the two pages at $EC00-$EDFF, and each rule is a list of alternatives, each a
-;; list of items; the items are the ITEM_ codes below, and <SYNTABLNDX> (Operators.asm) gives the address where each
+;; list of items; the items are the ITEM_ codes below, and <RuleStarts> (Operators.asm) gives the address where each
 ;; of the 32 rules starts.
 ;;
 ;; The tokenizer reads a rule downward, from the higher address to the lower. This source lists the table in
@@ -164,7 +164,7 @@ ITEM_CALL_ENDING_ALTERNATIVE = ITEM_LAST | ITEM_CALL_THEN_OPTIONAL
 ;; Rule 0: a numeric constant, one or more digits.
 ;;
 ;; When it returns, the tokenizer turns the digits it copied into the constant's form: the first digit, then the
-;; value (<RULEMATCHED>).
+;; value (<Tokenizer::RuleMatched>).
 ;; > digit { digit }
 ;; Also: SNUMBER (UNKN)
 RULE_NUMBER = $00
@@ -174,7 +174,6 @@ RULE_NUMBER = $00
 ;; Also: SUNUSED1 (UNKN)
 RULE_NUMBER_THEN_ARRAY = $01
 
-; retrocore: ignore=unlinked-name:END|FOR|GOSUB|NEXT|RETURN|STEP|TO -- BASIC keywords
 ;; Rule 2: a statement in a numbered line: the statements only a program can use, then those of
 ;; <RULE_IMMEDIATE_STATEMENT>, whose bytes it shares.
 ;; > END ($51)
@@ -194,7 +193,6 @@ RULE_STATEMENT = $02
 ;; Also: SDIMSTR (UNKN)
 RULE_DIM_STRING = $03
 
-; retrocore: ignore=unlinked-name:IF -- BASIC keywords
 ;; Rule 4: what follows IF's condition: THEN and a line number, or THEN and a statement.
 ;; > THEN ($24) number
 ;; > THEN ($25) statement
@@ -233,7 +231,6 @@ RULE_STRING_VARIABLE = $09
 ;; Also: SSTRDEST (UNKN)
 RULE_STRING_DESTINATION = $0A
 
-; retrocore: ignore=unlinked-name:TAB -- BASIC keywords
 ;; Rule 11: TEXT, GR, CALL, DIM and TAB.
 ;; > TEXT ($4B)
 ;; > GR ($4C)
@@ -292,7 +289,6 @@ RULE_INPUT_NUMBERS = $12
 ;; Also: SSIGNED (UNKN)
 RULE_SIGNED_NUMBER = $13
 
-; retrocore: ignore=unlinked-name:ABS|PDL|PEEK|RND|SGN -- BASIC keywords
 ;; Rule 20: the names of the functions that take a number in parentheses.
 ;;
 ;; RNDX has a token, $33, but no routine; RND, before it, matches its first three letters first.
@@ -304,7 +300,6 @@ RULE_SIGNED_NUMBER = $13
 ;; Also: SFUNC (UNKN)
 RULE_FUNCTION_NAME = $14
 
-; retrocore: ignore=unlinked-name:NOT -- BASIC keywords
 ;; Rule 21: an operand of a numeric expression.
 ;; > + ($35) operand
 ;; > - ($36) operand
@@ -321,7 +316,6 @@ RULE_FUNCTION_NAME = $14
 ;; Also: SOPERAND (UNKN)
 RULE_OPERAND = $15
 
-; retrocore: ignore=unlinked-name:NOT -- BASIC keywords
 ;; Rule 22: <RULE_OPERAND> without the signs and NOT; no rule or routine calls it.
 ;; Also: SUNUSED2 (UNKN)
 RULE_UNSIGNED_OPERAND = $16
@@ -331,7 +325,6 @@ RULE_UNSIGNED_OPERAND = $16
 ;; Also: SNUMVAR (UNKN)
 RULE_NUMBER_VARIABLE = $17
 
-; retrocore: ignore=unlinked-name:LET -- BASIC keywords
 ;; Rule 24: an assignment, with or without LET.
 ;; > string_destination = ($70) string
 ;; > number_variable = ($71) expression
@@ -343,7 +336,6 @@ RULE_ASSIGNMENT = $18
 ;; Also: SNAME (UNKN)
 RULE_NAME = $19
 
-; retrocore: ignore=unlinked-name:GOTO|IF|LET|POKE -- BASIC keywords
 ;; Rule 26: a statement allowed in a line without a number, and the rest of the statements of <RULE_STATEMENT>.
 ;; > REM ($5D) { REMARK_CHARACTER }
 ;; > statements_text_to_tab
@@ -364,7 +356,6 @@ RULE_NAME = $19
 ;; Also: SIMMED (UNKN)
 RULE_IMMEDIATE_STATEMENT = $1A
 
-; retrocore: ignore=unlinked-name:LIST|NOTRACE|TRACE -- BASIC keywords
 ;; Rule 27: LIST, POP, NODSP, NOTRACE, DSP, TRACE, PR# and IN#.
 ;; > LIST ($74) number [, ($75) number]
 ;; > LIST ($76)
@@ -388,17 +379,15 @@ RULE_STATEMENTS_LIST_TO_IN = $1B
 ;; Also: SNAMEEND (UNKN)
 RULE_NAME_REST = $1C
 
-; retrocore: ignore=unlinked-name:MOD|STEP|TO -- BASIC keywords
 ;; Rule 29: a character of a name after the first: a letter or a digit, unless a reserved word starts there.
 ;;
-;; A reserved word matches with a token of $85 or above, which the tokenizer treats as a failure (<KEYMATCHED>).
+;; A reserved word matches with a token of $85 or above, which the tokenizer treats as a failure (<WriteKeywordToken>).
 ;; > THEN ($85) | TO ($86) | STEP ($87) | AND ($88) | OR ($89) | MOD ($8A) | AT ($8B), which fail
 ;; > LETTER
 ;; > digit
 ;; Also: SNAMECH (UNKN)
 RULE_NAME_CHARACTER = $1D
 
-; retrocore: ignore=unlinked-name:MOD -- BASIC keywords
 ;; Rule 30: an operator between two operands.
 ;; > + ($12) | - ($13) | * ($14) | / ($15)
 ;; > = ($16) | # ($17) | >= ($18) | > ($19) | <= ($1A) | <> ($1B) | < ($1C)
@@ -406,7 +395,6 @@ RULE_NAME_CHARACTER = $1D
 ;; Also: SOPER (UNKN)
 RULE_OPERATOR = $1E
 
-; retrocore: ignore=unlinked-name:AUTO|CON|DEL|LOAD|MAN|NEW|RUN -- BASIC keywords
 ;; Rule 31: a whole line: a numbered line of statements, a statement of <RULE_IMMEDIATE_STATEMENT>, or a command.
 ;; > number statement { : ($03) statement }
 ;; > immediate_statement
@@ -424,7 +412,6 @@ RULE_LINE = $1F
 
 ; The two pages' first bytes, which the tokens of their keywords count from.
 
-; retrocore: ignore=unlinked-name:END -- BASIC keywords
 ;; The first byte of the first page: its keywords have the tokens $51 (END, at the top) to $8B.
 ;;
 ;; Rule 1, which starts at the next byte, reads it as its second item: a call of <RULE_DIM_ARRAY> ending the rule.
@@ -438,8 +425,8 @@ SECOND_PAGE_TOKEN_BASE = $00
 ;;
 ;; Its first byte is <FIRST_PAGE_TOKEN_BASE>. <LineStart> and <InputLineStart> are where the tokenizer starts, and
 ;; the labels ending in Rule where each rule starts. The tokenizer finds the page as <Table>'s high byte halved
-;; (<STARTRULE>), so the table starts an even page.
-;; See: <SecondPage>, <SYNTABLNDX>, <STARTRULE>
+;; (<Tokenizer::StartRule>), so the table starts an even page.
+;; See: <SecondPage>, <RuleStarts>, <Tokenizer::StartRule>
 ;; Also: SYNTABL (IBSM)
 Table:
     .assert <Table = 0 && (>Table & 1) = 0, "The syntax table starts an even page."
@@ -890,7 +877,7 @@ LineRule:
     .byte ITEM_LINE_MATCHED
     Keyword "_"                             ; token $01
 
-;; Where the tokenizer starts on a typed line (<CMDLINE>): a call of <RULE_LINE>, the top of the table.
+;; Where the tokenizer starts on a typed line (<WarmStart::ReadCommand>): a call of <RULE_LINE>, the top of the table.
 ;; Also: SYNLINE (UNKN)
 LineStart:
     CallRule RULE_LINE

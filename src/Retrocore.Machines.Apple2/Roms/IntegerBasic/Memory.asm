@@ -29,11 +29,11 @@ Tracing = NounStackNumberHigh
 .endscope
 
 ;; The cold start: turns TRACE off, sets LOMEM to $0800, finds the top of RAM for HIMEM, and erases the program
-;; (<NEW>).
+;; (<Statements::New>).
 ;;
 ;; It tests each page from $0900 up by inverting its first byte and inverting it back; the first page where a byte
 ;; does not read back as written is past the end of RAM.
-;; See: <BASIC>
+;; See: <ColdEntry>
 ;; Also: COLD (IBSM)
 .proc ColdStart
     ldy #0
@@ -58,7 +58,7 @@ NextPage:
     beq NextPage
 
 ToNew:
-    jmp NEW
+    jmp Statements::New
 .endproc
 
 ;; Control-C, which stops a running program before its next line, and the place CON continues from.
@@ -84,20 +84,20 @@ StoppedLineHigh = NounStackHigh + 1
     jmp Display::TraceLine
 .endproc
 
-;; Checks for Control-C with the place to stop in X (low) and A (high), then runs from that token (<GETNEXTXA>);
-;; nothing in the ROM reaches it.
+;; Checks for Control-C with the place to stop in X (low) and A (high), then runs from that token
+;; (<Statements::Return::ContinueAt>); nothing in the ROM reaches it.
 ;; In: X = the token address, low byte, A = its high byte
 ;; Also: CHKBRKRUN (UNKN)
 .proc CheckThenRun
     jsr Check::FromToken
-    jmp GETNEXTXA
+    jmp Statements::Return::ContinueAt
 .endproc
 
 ;; Before each line: stops the program if Control-C was typed, otherwise prints the line number in TRACE mode
 ;; (<Display::TraceLine>).
 ;;
 ;; Stopping takes the key, saves the token address in <StoppedToken> and the line's (<CurrentLine>) in
-;; <StoppedLine>, for CON (<Statements::Con>), and prints STOPPED AT and the line's number (<STOPPED_AT>).
+;; <StoppedLine>, for CON (<Statements::Con>), and prints STOPPED AT and the line's number (<Lines::Stop>).
 ;; Entry:
 ;;   FromToken = with the token address in X (low) and A (high) instead of <TokenPointer>
 ;; Also: CHKBREAK (UNKN)
@@ -120,7 +120,7 @@ FromToken:
     sta StoppedLine
     lda CurrentLine+1
     sta StoppedLineHigh
-    jmp STOPPED_AT
+    jmp Lines::Stop
 .endproc
 
     ; Unused bytes.
@@ -150,7 +150,7 @@ FromToken:
 .proc HiMem
     ; Pointer2 = the new HIMEM, and Auxiliary = the old HIMEM less the new one. X = $FE, then $FF: the low bytes,
     ; then the high.
-    jsr GET16BIT
+    jsr GetNumber
     stx SavedX
     ldx #$FE
     sec
@@ -185,7 +185,7 @@ NewStart:
 ;; The MEM FULL error.
 ;; Also: JmpMEMFULL (IBSM)
 ToMemoryFullError:
-    jmp MEMFULL
+    jmp MemoryFullError
 
     ; Move the program down: copy from Pointer3, the old start, to Pointer2, the new one.
 CopyDown:
@@ -252,7 +252,7 @@ StepHighMemory:
     bcs SetEnds                     ; always
 .endproc
 
-;; LOMEM: (token $11): moves the bottom of the variables, and discards them (<CLR>).
+;; LOMEM: (token $11): moves the bottom of the variables, and discards them (<Statements::Clr>).
 ;;
 ;; The new LOMEM must be below the program. The low byte is compared with $CA, the address of <ProgramStart>, rather
 ;; than with its low byte, so only the high bytes count reliably. Nothing keeps the new LOMEM out of page zero or
@@ -263,7 +263,7 @@ StepHighMemory:
 ;;   MemoryFullIfCarry = the MEM FULL error if the carry is set; <Load> branches here
 ;; Also: VLOMEM (IBSM)
 .proc LoMem
-    jsr GET16BIT
+    jsr GetNumber
     ldy Accumulator
     cpy #ProgramStart               ; the constant $CA, not the contents of ProgramStart
     lda Accumulator+1
@@ -276,7 +276,7 @@ MemoryFullIfCarry:
     sty LowMemory
     lda Accumulator+1
     sta LowMemory+1
-    jmp CLR
+    jmp Statements::Clr
 .endproc
 
 ;; LOAD (token $04): reads a program from the cassette into the top of memory, below HIMEM.
@@ -423,10 +423,10 @@ Length:
 .endscope
 
 ;; Prints the message at offset Y, then sounds the bell.
-;; In: Y = the message's offset from <ErrMsg00>
+;; In: Y = the message's offset from <Messages::GreaterThan32767>
 ;; Also: PRTERR (IBSM)
 .proc PrintMessageThenBeep
-    jsr ERRORMESS
+    jsr PrintMessage
     jmp Beep
 .endproc
 
@@ -437,12 +437,12 @@ Length:
 ;;
 ;; With no GOSUB active it goes to RETURN, for the BAD RETURN error.
 ;; Errors: BAD RETURN
-;; See: <GOSUB>, <RETURN>
+;; See: <Statements::GoSub>, <Statements::Return>
 ;; Also: POP (IBSM)
 .proc Pop
     lda GoSubIndex
     bne Drop
-    jmp RETURN
+    jmp Statements::Return
 
 Drop:
     dec GoSubIndex
@@ -491,7 +491,7 @@ PrintLineNumber:
     tax
     iny
     lda (CurrentLine),y
-    jsr PRDEC
+    jsr PrintDecimal
     lda #BLANK | $80
     jmp CharacterOut
 .endproc

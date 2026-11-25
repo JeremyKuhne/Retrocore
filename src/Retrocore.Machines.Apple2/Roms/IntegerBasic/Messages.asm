@@ -1,7 +1,7 @@
-; retrocore: style=strict ignore=unlinked-name:BASIC -- BASIC and its keywords in prose
+; retrocore: style=strict
 ;; Integer BASIC: the error messages and INPUT of numbers
 ;;
-;; The error messages, which <ERRORMESS> prints by their offset in the page at $EB00, and the routines of INPUT for
+;; The error messages, which <PrintMessage> prints by their offset in the page at $EB00, and the routines of INPUT for
 ;; numbers, which also handle an error in the line typed.
 ;;
 ;; INPUT reads a line and runs the tokenizer on it with a rule of its own, <Syntax::InputLineStart>: a list of
@@ -11,7 +11,7 @@
 ;;
 ;; Part of IntegerBasic.asm; it follows VerbTables.asm, at $EB00.
 
-;; Places a message: its characters with bit 7 set, except the last one's, which ends the message for <ERRORMESS>.
+;; Places a message: its characters with bit 7 set, except the last one's, which ends the message for <PrintMessage>.
 ;;
 ;; Earlier versions of this source called it MSG.
 ;; Parameters:
@@ -27,11 +27,11 @@
 ;;
 ;; Each message is its characters with bit 7 set on all but the last. The routines that report an error load Y with
 ;; the low byte of a message's address, its offset in this page (`ldy #<Messages::TooLong`). An error prints
-;; <Messages::ErrorStart>, the message and <Messages::ErrorEnd> (<PRINTERR>): `*** >32767 ERR` for the first.
+;; <Messages::ErrorStart>, the message and <Messages::ErrorEnd> (<PrintErrorMessage>): `*** >32767 ERR` for the first.
 .scope Messages
 
 ;; `>32767`: a number that does not fit in 15 bits, or a result past 32767.
-;; See: <ERRMESS>, <ERRORMESS>, <PRINTERR>
+;; See: <ReportError>, <PrintMessage>, <PrintErrorMessage>
 ;; Also: ErrMsg00 (IBSM)
 GreaterThan32767:
     Message ">32767"
@@ -94,9 +94,9 @@ SixteenFors:
 BadNext:
     Message "BAD NEXT"
 
-;; `STOPPED AT`, which <STOPPED_AT> prints before the line number.
+;; `STOPPED AT`, which <Lines::Stop> prints before the line number.
 ;;
-;; A full noun stack's error (<PUSHNOUN>) prints it from its fourth character: `PPED AT`.
+;; A full noun stack's error (<PushNoun>) prints it from its fourth character: `PPED AT`.
 ;; Also: ErrMsg12 (IBSM)
 StoppedAt:
     Message "STOPPED AT "
@@ -149,16 +149,16 @@ QuestionMark:
 ;; An error in a running program: stops it at the line, or, while INPUT tokenizes a typed line, asks for the line
 ;; again.
 ;;
-;; <ERRMESS> comes here once it has printed the error, when bit 7 of <Running> is set. <Running> is $FF while a
+;; <ReportError> comes here once it has printed the error, when bit 7 of <Running> is set. <Running> is $FF while a
 ;; program runs and $FE while INPUT tokenizes (<Statements::InputNumber>), so bit 0 tells the two apart. Either way it
 ;; leaves <Running> with bit 7 clear, and <Statements::InputNumber::ReadLine> sets it again.
 ;; In: Running = $FF or $FE, Accumulator = INPUT's noun stack index, then its 6502 stack pointer, while it tokenizes
-;; See: <ERRMESS>, <Statements::InputNumber>
+;; See: <ReportError>, <Statements::InputNumber>
 ;; Also: RUNERROR (UNKN)
 .proc StopOrRetype
     lsr Running
     bcc Retype
-    jmp STOPPED_AT
+    jmp Lines::Stop
 
 Retype:
     ; Put back the noun stack and the 6502's stack INPUT had, print RETYPE LINE and ?, and read the line again.
@@ -179,13 +179,13 @@ Retype:
 ;;
 ;; <InputNumberComma> comes back here, for a new line, when the variables outnumber the numbers typed. A line that
 ;; is not a list of numbers prints its error and RETYPE LINE (<Messages::StopOrRetype>), and is read again from
-;; <InputNumber::ReadLine>; Control-C in the line goes back to BASIC's prompt (<INPUTNUMLN>).
+;; <InputNumber::ReadLine>; Control-C in the line goes back to BASIC's prompt (<ReadNumberLine>).
 ;;
 ;; The tokenizing leaves <Running> at $FF, as a running program has it, whatever it was before.
 ;; In: X = the noun stack, its top entry the first variable's address
 ;; Out: X = the noun stack, the variable popped
 ;; Uses: A, Y, Accumulator, Auxiliary, TextIndex, TokenIndex
-;; See: <InputNumberComma>, <INPUTNUMLN>
+;; See: <InputNumberComma>, <ReadNumberLine>
 ;; Entry:
 ;;   ReadLine = prints the message at offset Y in <Messages> instead of ?
 ;; Also: INPUTNUM (UNKN)
@@ -194,7 +194,7 @@ Retype:
 
 ;; Also: READNUMLINE (UNKN)
 ReadLine:
-    jsr ERRORMESS
+    jsr PrintMessage
 
     ; Keep the noun stack and the 6502's stack, for RETYPE LINE.
     stx Accumulator
@@ -202,7 +202,7 @@ ReadLine:
     stx Accumulator+1
 
     ; Read the line; Y = the index of the underline that ends it, where the tokens start.
-    jsr INPUTNUMLN
+    jsr ReadNumberLine
     sty TokenIndex
     lda #$FF                        ; before the line's first character
     sta TextIndex
@@ -212,7 +212,7 @@ ReadLine:
     ; Tokenize it from the INPUT rule; <TextIndex> is left at the underline, before the tokens.
     ldx #SYNTAX_STACK_EMPTY
     lda #(Syntax::InputLineStart - Syntax::Table - 1) / 2
-    jsr STARTRULE
+    jsr Tokenizer::StartRule
     inc Running                     ; $FF
     ldx Accumulator
     ; Falls into InputNumberComma.
@@ -231,7 +231,7 @@ ReadLine:
 ;; In: X = the noun stack, its top entry the variable's address, TextIndex = the last token used
 ;; Out: X = the noun stack, the variable popped
 ;; Uses: A, Y, Accumulator, Auxiliary, TextIndex
-;; See: <ASSIGN_NUM>
+;; See: <Statements::AssignNumber>
 ;; Also: COMMA_INPUT (UNKN)
 .proc InputNumberComma
     ldy TextIndex
@@ -256,7 +256,7 @@ SkipToNumber:
     pha
     lda InputBuffer-1,y
     ldy #0                          ; a number, not an address
-    jsr PUSHNOUN
+    jsr PushNoun
     pla
     sta NounStackNumberHigh,x
 
@@ -264,10 +264,10 @@ SkipToNumber:
     lda Accumulator
     cmp #TOKEN_INPUT_MINUS ^ '0'
     bne Assign
-    jsr NEGATE
+    jsr Operators::Negate
 
 Assign:
-    jmp ASSIGN_NUM
+    jmp Statements::AssignNumber
 .endproc
 
 .endscope

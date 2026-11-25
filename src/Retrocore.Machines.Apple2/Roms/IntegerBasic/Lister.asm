@@ -13,55 +13,21 @@
 ;;
 ;; Part of IntegerBasic.asm.
 
-; Shared constants: to move to Equates.asm at integration.
-
-;; The token that ends every line, stored or typed.
-TOKEN_END_OF_LINE = $01
-
-;; The token of the quote that opens a string constant; the string's characters follow it, then the closing quote's
-;; token, $29.
-TOKEN_OPEN_QUOTE = $28
-
-;; The token of REM; the remark's characters follow it to the end of the line.
-TOKEN_REM = $5D
-
-;; The index X holds when the tokenizer's syntax stack is empty: each frame pushed counts it down. The noun stack
-;; starts at the same index.
-SYNTAX_STACK_EMPTY = $20
-
-;; The character that marks the end of a typed line in <InputBuffer>: the underline, which takes the place of the
-;; Return, and which the syntax table's last rule matches.
-LINE_END_MARK = '_'
-
-;; The bits of a character byte in the syntax table that hold the character, less <SYNTAX_CHARACTER_BASE>.
-SYNTAX_CHARACTER_BITS = $3F
-
-;; What a syntax table character's low 6 bits are added to: the blank, with bit 7 set, so the table can hold $A0
-;; to $DF.
-SYNTAX_CHARACTER_BASE = BLANK | $80
-
-;; The least syntax table byte that is a keyword's last character: bit 7, a character, and bit 6, its alternative's
-;; last item.
-SYNTAX_LAST_CHARACTER = $80 | LAST
-
-;; The bit of a syntax table character that is set for the letters ($C0-$DF) and clear for punctuation and digits.
-SYNTAX_LETTER_BIT = $20
-
 ;; Starts Integer BASIC from scratch, the cold start, which the Monitor's Control-B command runs.
 ;;
-;; At $E000. <COLD> sets <LowMemory> and <HighMemory> and erases any program, then returns here to fall into the warm
-;; start.
+;; At $E000. <ColdStart> sets <LowMemory> and <HighMemory> and erases any program, then returns here to fall into the
+;; warm start.
 ;; Also: BASIC (IBSM)
 .proc ColdEntry
 .assert * = $E000, "ColdEntry must stay at $E000."
-    jsr COLD
+    jsr ColdStart
     ; Falls into WarmEntry.
 .endproc
 
 ;; Enters Integer BASIC keeping its program and variables, the warm start, which the Monitor's Control-C command
 ;; runs.
 ;;
-;; At $E003. Typing Control-C in a line that INPUT reads also comes here (<CHKCTRLC>).
+;; At $E003. Typing Control-C in a line that INPUT reads also comes here (<Break::CheckLine>).
 ;; Also: BASIC2 (IBSM)
 .proc WarmEntry
 .assert * = $E003, "WarmEntry must stay at $E003."
@@ -171,21 +137,27 @@ Done:
 
 .endscope
 
-; Statements: LIST's comma.
-.scope Statements continued
+;; The routines of the statement tokens: each token the verb tables (<Verbs::RoutinesLow>) give a routine runs it
+;; when the interpreter (<Interpreter::RunLine>) reaches it, taking its operands off the noun stack.
+;;
+;; Integer BASIC gives each use of a keyword its own token, so a statement has a routine for each of its parts: its
+;; keyword, its commas and `AT`s, and its string and number forms, named for the keyword and the part
+;; (<Statements::HLinComma>, <Statements::PrintString>). The scope is in pieces through the ROM, in address order;
+;; this first piece is `LIST`'s comma.
+.scope Statements
 
 ;; The comma of LIST with two numbers (token $75): lists from where <Statements::ListLine> stopped up to the second
 ;; line number.
 ;;
-;; <FINDFROMP3> searches on from <Pointer3>, where the search of <Statements::ListLine> stopped, for the first line
-;; numbered at or above the number, and leaves <Pointer3> after that line when the number exists, so that line is
-;; listed too.
+;; <FindLine::FromPointer3> searches on from <Pointer3>, where the search of <Statements::ListLine> stopped, for the
+;; first line numbered at or above the number, and leaves <Pointer3> after that line when the number exists, so that
+;; line is listed too.
 ;; In: X = the noun stack, its top entry the last line number to list, Pointer1 = the next line to list
 ;; Out: X = the noun stack, one entry higher
 ;; Also: COMMA_LIST (IBSM)
 .proc ListComma
-    jsr GET16BIT
-    jsr FINDFROMP3
+    jsr GetNumber
+    jsr FindLine::FromPointer3
     ; Falls into Lister::ListLines.
 .endproc
 
@@ -232,12 +204,12 @@ Done:
 ;;
 ;; When the line is missing, <Pointer1> is left at the next line above the number, so LIST 5,30 lists from there.
 ;; In: X = the noun stack, its top entry the line number
-;; Out: X = the noun stack, two entries higher: <FINDLINE> takes one more, Pointer1 = the line after the one listed,
+;; Out: X = the noun stack, two entries higher: <FindLine> takes one more, Pointer1 = the line after the one listed,
 ;;   or the line above the number
 ;; Also: LISTNUM (IBSM)
 .proc ListLine
-    jsr GET16BIT
-    jsr FINDLINE
+    jsr GetNumber
+    jsr FindLine
     lda Pointer2
     sta Pointer1
     lda Pointer2+1
@@ -256,7 +228,7 @@ Done:
 ;; <Pointer2> remembers what was printed last: 0 after the line number, a constant's marker shifted left, the token
 ;; that ended a name or text, a keyword's last character less $A0, or $A0 after a blank. Only a name right after the
 ;; line number, where <Pointer2> is 0, gets a blank before it; a keyword that starts with a letter gets one unless a
-;; blank came last, the only value with bit 7 set (<KEYBLANK>). X is saved in <SavedX> and restored before the
+;; blank came last, the only value with bit 7 set (<BlankBeforeKeyword>). X is saved in <SavedX> and restored before the
 ;; Return.
 ;; In: Pointer1 = the line's length byte
 ;; Out: Pointer1 = the next line
@@ -278,7 +250,7 @@ PrintConstant:
     jsr FetchByte
     tax
     jsr FetchByte
-    jsr PRDEC                       ; the value, or the line number the first time through
+    jsr PrintDecimal                       ; the value, or the line number the first time through
 
 ;; The loop over the line's bytes: fetches the next one and decides what it starts.
 NextItem:
@@ -313,10 +285,11 @@ CopyText:
 ;; Lists a token: ends the line at the end-of-line token; otherwise finds the token's text in the syntax table and
 ;; prints it.
 ;;
-;; Tokens below $51 are counted in the page at <SYNTABL2> ($ED00), the rest in the page at <SYNTABL> ($EC00), whose
-;; count starts at $50. Each keyword is stored with its last character lowest, and the count goes down from the top
-;; of the page: a keyword's first character is a character byte whose neighbor above is either not a character or
-;; the last character of another keyword (bit 6 set). The X-th such character from the top starts token X's text.
+;; Tokens below $51 are counted in the page at <Syntax::SecondPage> ($ED00), the rest in the page at <Syntax::Table>
+;; ($EC00), whose count starts at $50. Each keyword is stored with its last character lowest, and the count goes down
+;; from the top of the page: a keyword's first character is a character byte whose neighbor above is either not a
+;; character or the last character of another keyword (bit 6 set). The X-th such character from the top starts token X's
+;; text.
 PrintToken:
     cmp #TOKEN_END_OF_LINE
     bne FindKeyword
@@ -327,7 +300,7 @@ PrintToken:
 FindKeyword:
     pha
     sty Accumulator
-    ldx #>SYNTABL2
+    ldx #>Syntax::SecondPage
     stx Accumulator+1
     cmp #FIRST_PAGE_BASE + 1
     bcc CountKeywords               ; tokens up to $50 are in the second page
@@ -356,7 +329,7 @@ KeywordStart:
     bne CountKeywords               ; not this keyword yet
     bit Pointer2
     bmi PrintKeyword                ; a blank came last: no other before the keyword
-    jsr KEYBLANK                    ; a blank before a keyword starting with a letter
+    jsr BlankBeforeKeyword                    ; a blank before a keyword starting with a letter
 
     ; Print the keyword's characters, down the page, through the one with bit 6 set.
 PrintKeyword:

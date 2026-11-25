@@ -1,4 +1,4 @@
-; retrocore: style=strict ignore=unlinked-name:BASIC -- the language's name in prose
+; retrocore: style=strict
 ;; Integer BASIC: decimal output, finding lines, `NEW` and `CLR` ($E51B-$E5CB)
 ;;
 ;; <PrintDecimal>, which prints line numbers and values in decimal; the search for a line by its number
@@ -6,49 +6,6 @@
 ;; program and the variables.
 ;;
 ;; Part of IntegerBasic.asm; it follows Tokenizer.asm, at $E51B.
-
-; Shared constants: to move to Equates.asm at integration.
-
-;; The end-of-line token, which ends every line and runs every token still waiting.
-TOKEN_END_OF_LINE = $01
-
-;; The colon between statements.
-TOKEN_COLON = $03
-
-;; THEN before a statement, which does nothing: <Statements::If> makes the arriving THEN this one when the condition
-;; is false, so that THEN followed by a line number does not jump.
-TOKEN_THEN_STATEMENT = $25
-
-;; The opening quote of a string constant; its characters follow with bit 7 set, then the closing quote token.
-TOKEN_OPEN_QUOTE = $28
-
-;; The $ token, which follows the characters of a string variable's name.
-TOKEN_DOLLAR = $40
-
-;; The number of `GOSUB`s that can be active, the entries of the `GOSUB` stack (<GoSubTokenLow>).
-GOSUB_STACK_DEPTH = 16
-
-;; The number of `FOR` loops that can be active, the entries of the `FOR` stack (<ForVariableLow>).
-FOR_STACK_DEPTH = 16
-
-;; X when the noun stack is empty; it counts down as entries are pushed.
-NOUN_STACK_EMPTY = $20
-
-;; A line of the program, as it is stored from <ProgramStart> up; its tokens end with <TOKEN_END_OF_LINE>.
-.struct ProgramLine
-    LENGTH .byte                    ;; The line's length in bytes, counting this byte.
-    NUMBER .word                    ;; The line number, low byte first.
-    TOKENS .byte                    ;; The first of the line's tokens.
-.endstruct
-
-;; The fields that follow a variable's name, a display flag, the link to the next variable and the value.
-;;
-;; A new variable's value is 2 bytes, 0: a number, or room that `DIM` can enlarge for an array or a string.
-.struct VariableFields
-    DISPLAY_FLAG .byte              ;; 1 after `DSP`, otherwise 0: the byte that ends the name.
-    NEXT .word                      ;; The address of the next variable's name; <VariablesEnd> for the last.
-    VALUE .word                     ;; The value, or the first 2 bytes of an array's or a string's.
-.endstruct
 
 ;; Prints a 16-bit number in decimal, as five places with the leading zeros printed as <LeadingZero> says.
 ;;
@@ -59,7 +16,7 @@ NOUN_STACK_EMPTY = $20
 ;;   ($A0, a blank), Y = where in <InputBuffer> the characters go, in `AUTO` mode
 ;; Out: X = $FF, Y = past the characters stored, in `AUTO` mode
 ;; Uses: A, DecimalNumber, DigitCharacter, DigitPlace
-;; See: <LeadingZero>, <WARM>
+;; See: <LeadingZero>, <WarmStart>
 ;; Also: PRDEC (IBSM)
 .proc PrintDecimal
 .assert * = $E51B, "PrintDecimal must stay at $E51B, where Programmer's Aid calls it."
@@ -230,7 +187,7 @@ Done:
 ;; It also clears <SyntaxPage>, whose low byte must be 0, and $1D (<Clr::Cleared>).
 ;; Uses: A
 ;; Keeps: X, Y
-;; See: <Statements::New>, <RUN>
+;; See: <Statements::New>, <Statements::Run>
 ;; Also: CLR (IBSM)
 .proc Clr
 

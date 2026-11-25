@@ -1,4 +1,4 @@
-; retrocore: style=strict ignore=unlinked-name:BASIC -- the language's name in prose
+; retrocore: style=strict
 ;; Integer BASIC: the noun stack and arithmetic ($E6FF-$E7C0)
 ;;
 ;; The routines that step through a line's tokens and move values on and off the noun stack, and the routines of
@@ -53,12 +53,12 @@ LowOnly:
 
     ; The stack is full: its error's message starts three characters into STOPPED AT.
 Full:
-    ldy #<(ErrMsg12+3)
+    ldy #<(Messages::StoppedAt+3)
 
-;; Reports the error whose message is at offset Y (<ERRMESS>).
+;; Reports the error whose message is at offset Y (<ReportError>).
 ;; Also: GOERRMESS (UNKN)
 ToReportError:
-    jmp ERRMESS
+    jmp ReportError
 .endproc
 
 ;; Pops a noun and returns its 16-bit value in <Accumulator>.
@@ -69,7 +69,7 @@ ToReportError:
 ;; Out: Accumulator = the value, X = the noun stack, one entry higher, Y = 0
 ;; Uses: A
 ;; Keeps: carry, overflow
-;; See: <PushNoun>, <GETBYTE>
+;; See: <PushNoun>, <GetByte>
 ;; Also: GET16BIT (IBSM)
 .proc GetNumber
     ldy #0
@@ -239,7 +239,7 @@ FromAccumulator:
 ;; The >32767 error: a result that does not fit in 16 bits, or the negative of -32768.
 ;; Also: Err32767 (IBSM)
 OverflowError:
-    ldy #<ErrMsg00
+    ldy #<Messages::GreaterThan32767
     bpl PushNoun::ToReportError     ; always: the message's offset is 0
 .endproc
 
@@ -307,37 +307,37 @@ StoreHigh:
 ;; `TAB` (token $50): moves the cursor to column n (1 is the first) of the window, wrapping past its width onto the
 ;; lines below.
 ;;
-;; `TAB 0` is the RANGE error. It goes through <BcsRANGERR>, whose branch is always taken here: carry is still set
-;; from the interpreter's priority comparison, and <GETBYTE> keeps it.
+;; `TAB 0` is the RANGE error. It goes through <Statements::VLinAt::RangeErrorIfCarry>, whose branch is always taken
+;; here: carry is still set from the interpreter's priority comparison, and <GetByte> keeps it.
 ;; In: X = the noun stack, its top entry the column
 ;; Out: X = the noun stack, one entry higher
 ;; Errors: >255 for a column above 255, RANGE for 0
 ;; Uses: A, Y, Accumulator
-;; See: <SETCURCOL>
+;; See: <TabToColumn>
 ;; Entry:
 ;;   ToSetColumn = sets the cursor's column to Y
 ;; Also: TAB (IBSM)
 .proc Tab
-    jsr GETBYTE
+    jsr GetByte
     tay
     bne CountFromZero
-    jmp BcsRANGERR
+    jmp Statements::VLinAt::RangeErrorIfCarry
 
     ; Counts the column from 0, then sets it.
 CountFromZero:
     dey
 
-;; Sets the cursor's column to Y, from 0 (<SETCURCOL>).
+;; Sets the cursor's column to Y, from 0 (<TabToColumn>).
 ;; Also: TOCOLUMN (UNKN)
 ToSetColumn:
-    jmp SETCURCOL
+    jmp TabToColumn
 .endproc
 
 .endscope
 
 ;; Moves the cursor to the next tab stop, a multiple of 8 columns, for `PRINT`'s comma.
 ;;
-;; <SETCURCOL> wraps the column onto the next line when it is past the window's width. A cursor column of $F8 or
+;; <TabToColumn> wraps the column onto the next line when it is past the window's width. A cursor column of $F8 or
 ;; more, which a window of 40 columns never gives, would loop here forever: the next stop wraps to 0, and the second
 ;; try reads the same column again.
 ;; Uses: A, Y

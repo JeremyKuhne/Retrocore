@@ -1,4 +1,4 @@
-; retrocore: style=strict ignore=unlinked-name:BASIC -- BASIC and its keywords in prose
+; retrocore: style=strict
 ;; Integer BASIC: the token priorities and the verb tables
 ;;
 ;; Three tables of 128 entries, one per token, at $E980-$EAFF: the priorities by which the interpreter
@@ -12,30 +12,9 @@
 ;; line before their routine would run, quotes and the $ after a string name are taken as part of their operand, and
 ;; a few tokens are not used.
 ;;
-;; The routines are named by their current names where this file defines them and by their old names elsewhere
-;; until the parts are integrated.
-;;
 ;; Part of IntegerBasic.asm; it follows ControlFlow.asm, at $E980.
 
-; Shared constants: to move to Equates.asm at integration.
-
-;; The index of an empty syntax stack, where the tokenizer starts a line: the frames are pushed from here down.
-SYNTAX_STACK_EMPTY = $20
-
-;; The token the INPUT rule (<Syntax::InputLineStart>) writes at the end of a line of numbers, and INPUT puts at the
-;; start of the input buffer to mark the line used up.
-TOKEN_INPUT_END = $80
-
-;; The token of a comma between INPUT's numbers.
-TOKEN_INPUT_COMMA = $81
-
-;; The token of a plus sign before one of INPUT's numbers.
-TOKEN_INPUT_PLUS = $82
-
-;; The token of a minus sign before one of INPUT's numbers, which <Statements::InputNumberComma> negates.
-TOKEN_INPUT_MINUS = $83
-
-;; The token priorities and the verb tables, which the interpreter (<DOTOKEN>) reads by token.
+;; The token priorities and the verb tables, which the interpreter (<Interpreter::RunLine::Arrive>) reads by token.
 .scope Verbs
 
 ;; The value of a token's entry in both <RoutinesLow> and <RoutinesHigh> when it has no routine: each holds $FF.
@@ -79,15 +58,16 @@ NO_ROUTINE = $FFFF
 ;; priority while it waits.
 ;;
 ;; A waiting token runs when a token arrives whose arriving priority is no higher than its own waiting priority
-;; (<DOTOKEN>). So * (8) runs before a + (7) that comes after it, operators run left to right among equals, a left
-;; parenthesis (15 arriving, 0 waiting) holds everything until the right parenthesis comes, and a statement's
-;; keyword (1 and 1) runs at the end of its statement. The end of the line and REM, at 0, make everything run.
+;; (<Interpreter::RunLine::Arrive>). So * (8) runs before a + (7) that comes after it, operators run left to right among
+;; equals, a left parenthesis (15 arriving, 0 waiting) holds everything until the right parenthesis comes, and a
+;; statement's keyword (1 and 1) runs at the end of its statement. The end of the line and REM, at 0, make everything
+;; run.
 ;;
 ;; Most second parts of a statement arrive at 1 and so make the keyword before them run first: PLOT's keyword
-;; takes the column (<GETVAL255>) before PLOT's comma runs. `POKE`'s comma arrives at 3 and waits above `POKE`
-;; instead, so the comma takes the second value, the byte, and `POKE` runs last with the address. A unary sign or
+;; takes the column (<Statements::FirstValue>) before PLOT's comma runs. `POKE`'s comma arrives at 3 and waits above
+;; `POKE` instead, so the comma takes the second value, the byte, and `POKE` runs last with the address. A unary sign or
 ;; `NOT` (10 arriving, 9 waiting) runs before a ^ that follows it, so -2^2 is 4.
-;; See: <DOTOKEN>, <RoutinesLow>
+;; See: <Interpreter::RunLine::Arrive>, <RoutinesLow>
 ;; Also: TABLE1 (IBSM)
 Priorities:
     Priority $00, 0, 0                  ; (begins the line)
@@ -220,273 +200,273 @@ Priorities:
     Priority $7F, 1, 1                  ; IN#
 
 ;; The low bytes of each token's routine, which the interpreter puts in <Accumulator> and calls through it
-;; (<DOTOKEN_2>).
+;; (<Interpreter::RunLine::RunWaiting>).
 ;;
 ;; TEXT and GR are the Monitor's own routines, <SetText> and <SetGraphics>. Several tokens share a routine: every
-;; left parenthesis but a substring's, an array's and a string store's is <LEFT_PAREN>, and # and <> are both
-;; <NOTEQUAL_NUM>.
+;; left parenthesis but a substring's, an array's and a string store's is <Operators::LeftParenthesis>, and # and <> are
+;; both <Operators::NotEqual>.
 ;; See: <RoutinesHigh>, <Priorities>
 ;; Also: VERBADRL (IBSM)
 RoutinesLow:
-    RoutineLow $00, BEGIN_LINE                      ; (begins the line)
+    RoutineLow $00, Statements::BeginLine                      ; (begins the line)
     RoutineLow $01, NO_ROUTINE                      ; _ (end of line)
     RoutineLow $02, NO_ROUTINE                      ; _ (empty line)
-    RoutineLow $03, COLON                           ; :
-    RoutineLow $04, LOAD                            ; LOAD
-    RoutineLow $05, VSAVE                           ; SAVE
-    RoutineLow $06, CON                             ; CON
-    RoutineLow $07, RUNNUM                          ; RUN n
-    RoutineLow $08, RUN                             ; RUN
-    RoutineLow $09, DEL                             ; DEL
-    RoutineLow $0A, COMMA_DEL                       ; DEL's ,
-    RoutineLow $0B, NEW                             ; NEW
-    RoutineLow $0C, CLR                             ; CLR
-    RoutineLow $0D, AUTO                            ; AUTO
-    RoutineLow $0E, COMMA_AUTO                      ; AUTO's ,
-    RoutineLow $0F, MAN                             ; MAN
-    RoutineLow $10, VHIMEM                          ; HIMEM:
-    RoutineLow $11, VLOMEM                          ; LOMEM:
-    RoutineLow $12, PLUS                            ; +
-    RoutineLow $13, SUBTRACT                        ; -
-    RoutineLow $14, MULT                            ; *
-    RoutineLow $15, DIVIDE                          ; /
-    RoutineLow $16, EQUAL_NUM                       ; =
-    RoutineLow $17, NOTEQUAL_NUM                    ; #
-    RoutineLow $18, GREATEQ                         ; >=
-    RoutineLow $19, GREATER                         ; >
-    RoutineLow $1A, LESSEQ                          ; <=
-    RoutineLow $1B, NOTEQUAL_NUM                    ; <>
-    RoutineLow $1C, LESS                            ; <
-    RoutineLow $1D, VAND                            ; AND
-    RoutineLow $1E, VOR                             ; OR
-    RoutineLow $1F, MOD                             ; MOD
-    RoutineLow $20, EXP                             ; ^
+    RoutineLow $03, Statements::Colon                           ; :
+    RoutineLow $04, Statements::Load                            ; LOAD
+    RoutineLow $05, Statements::Save                           ; SAVE
+    RoutineLow $06, Statements::Con                             ; CON
+    RoutineLow $07, Statements::RunLine                          ; RUN n
+    RoutineLow $08, Statements::Run                             ; RUN
+    RoutineLow $09, Statements::Del                             ; DEL
+    RoutineLow $0A, Statements::DelComma                       ; DEL's ,
+    RoutineLow $0B, Statements::New                             ; NEW
+    RoutineLow $0C, Statements::Clr                             ; CLR
+    RoutineLow $0D, Statements::Auto                            ; AUTO
+    RoutineLow $0E, Statements::AutoComma                      ; AUTO's ,
+    RoutineLow $0F, Statements::Man                             ; MAN
+    RoutineLow $10, Statements::HiMem                          ; HIMEM:
+    RoutineLow $11, Statements::LoMem                          ; LOMEM:
+    RoutineLow $12, Operators::Add                            ; +
+    RoutineLow $13, Operators::Subtract                        ; -
+    RoutineLow $14, Operators::Multiply                            ; *
+    RoutineLow $15, Operators::Divide                          ; /
+    RoutineLow $16, Operators::Equal                       ; =
+    RoutineLow $17, Operators::NotEqual                    ; #
+    RoutineLow $18, Operators::GreaterOrEqual                         ; >=
+    RoutineLow $19, Operators::Greater                         ; >
+    RoutineLow $1A, Operators::LessOrEqual                          ; <=
+    RoutineLow $1B, Operators::NotEqual                    ; <>
+    RoutineLow $1C, Operators::Less                            ; <
+    RoutineLow $1D, Operators::And                            ; AND
+    RoutineLow $1E, Operators::Or                             ; OR
+    RoutineLow $1F, Operators::Mod                             ; MOD
+    RoutineLow $20, Operators::Power                             ; ^
     RoutineLow $21, NO_ROUTINE                      ; +
-    RoutineLow $22, LEFT_PAREN                      ; ( (DIM string)
-    RoutineLow $23, COMMA_SUBSTR                    ; , (substring)
-    RoutineLow $24, GOTO                            ; THEN (line number)
-    RoutineLow $25, LET                             ; THEN (statement)
-    RoutineLow $26, INPUT_STRVAR                    ; , (INPUT string)
+    RoutineLow $22, Operators::LeftParenthesis                      ; ( (DIM string)
+    RoutineLow $23, Operators::SubstringComma                    ; , (substring)
+    RoutineLow $24, Statements::GoTo                            ; THEN (line number)
+    RoutineLow $25, Statements::Let                             ; THEN (statement)
+    RoutineLow $26, Statements::InputString                    ; , (INPUT string)
     RoutineLow $27, Statements::InputNumberComma    ; , (INPUT number)
     RoutineLow $28, NO_ROUTINE                      ; " (open)
     RoutineLow $29, NO_ROUTINE                      ; " (close)
-    RoutineLow $2A, PAREN_SUBSTR                    ; ( (substring)
+    RoutineLow $2A, Operators::Substring                    ; ( (substring)
     RoutineLow $2B, NO_ROUTINE                      ; !
     RoutineLow $2C, NO_ROUTINE                      ; !
-    RoutineLow $2D, PAREN_ARRAY                     ; ( (array)
-    RoutineLow $2E, PEEK                            ; PEEK
-    RoutineLow $2F, RND                             ; RND
-    RoutineLow $30, SGN                             ; SGN
-    RoutineLow $31, ABS                             ; ABS
-    RoutineLow $32, PDL                             ; PDL
+    RoutineLow $2D, Operators::ArrayElement                     ; ( (array)
+    RoutineLow $2E, Functions::Peek                            ; PEEK
+    RoutineLow $2F, Functions::Rnd                             ; RND
+    RoutineLow $30, Functions::Sgn                             ; SGN
+    RoutineLow $31, Functions::Abs                             ; ABS
+    RoutineLow $32, Functions::Pdl                             ; PDL
     RoutineLow $33, NO_ROUTINE                      ; RNDX
-    RoutineLow $34, LEFT_PAREN                      ; ( (DIM number)
-    RoutineLow $35, POSITIVE                        ; + (unary)
-    RoutineLow $36, NEGATE                          ; - (unary)
-    RoutineLow $37, NOT                             ; NOT
-    RoutineLow $38, LEFT_PAREN                      ; ( (expression)
-    RoutineLow $39, EQ_STR                          ; = (strings)
-    RoutineLow $3A, NE_STR                          ; # (strings)
-    RoutineLow $3B, LEN                             ; LEN(
-    RoutineLow $3C, ASC                             ; ASC(
-    RoutineLow $3D, SCRN                            ; SCRN(
-    RoutineLow $3E, COMMA_SCRN                      ; , (SCRN)
-    RoutineLow $3F, LEFT_PAREN                      ; ( (function)
+    RoutineLow $34, Operators::LeftParenthesis                      ; ( (DIM number)
+    RoutineLow $35, Operators::Plus                        ; + (unary)
+    RoutineLow $36, Operators::Negate                          ; - (unary)
+    RoutineLow $37, Operators::Not                             ; NOT
+    RoutineLow $38, Operators::LeftParenthesis                      ; ( (expression)
+    RoutineLow $39, Operators::StringEqual                          ; = (strings)
+    RoutineLow $3A, Operators::StringNotEqual                          ; # (strings)
+    RoutineLow $3B, Functions::Len                             ; LEN(
+    RoutineLow $3C, Functions::Asc                             ; ASC(
+    RoutineLow $3D, Functions::Scrn                            ; SCRN(
+    RoutineLow $3E, Functions::ScrnComma                      ; , (SCRN)
+    RoutineLow $3F, Operators::LeftParenthesis                      ; ( (function)
     RoutineLow $40, NO_ROUTINE                      ; $ (string name)
     RoutineLow $41, NO_ROUTINE                      ; $
-    RoutineLow $42, PAREN_STRDEST                   ; ( (string store)
-    RoutineLow $43, DIMSTR                          ; , (DIM string)
-    RoutineLow $44, DIMNUM                          ; , (DIM number)
-    RoutineLow $45, PRINTSTR                        ; ; (string)
-    RoutineLow $46, PRINTNUM                        ; ; (number)
-    RoutineLow $47, SEMI_END                        ; ; (end)
-    RoutineLow $48, COMMA_PRSTR                     ; , (string)
-    RoutineLow $49, COMMA_PRNUM                     ; , (number)
-    RoutineLow $4A, COMMA_PREND                     ; , (end)
+    RoutineLow $42, Operators::StringDestination                   ; ( (string store)
+    RoutineLow $43, Statements::DimString                          ; , (DIM string)
+    RoutineLow $44, Statements::DimNumber                          ; , (DIM number)
+    RoutineLow $45, Statements::PrintString                        ; ; (string)
+    RoutineLow $46, Statements::PrintNumber                        ; ; (number)
+    RoutineLow $47, Statements::PrintSemicolonEnd                        ; ; (end)
+    RoutineLow $48, Statements::PrintStringComma                     ; , (string)
+    RoutineLow $49, Statements::PrintNumberComma                     ; , (number)
+    RoutineLow $4A, Statements::PrintCommaEnd                     ; , (end)
     RoutineLow $4B, SetText                         ; TEXT
     RoutineLow $4C, SetGraphics                     ; GR
-    RoutineLow $4D, CALL                            ; CALL
-    RoutineLow $4E, DIMSTR                          ; DIM (string)
-    RoutineLow $4F, DIMNUM                          ; DIM (number)
-    RoutineLow $50, TAB                             ; TAB
-    RoutineLow $51, END                             ; END
-    RoutineLow $52, INPUT_STRVAR                    ; INPUT (string)
-    RoutineLow $53, INPUT_PROMPT                    ; INPUT (prompt)
+    RoutineLow $4D, Statements::Call                            ; CALL
+    RoutineLow $4E, Statements::DimString                          ; DIM (string)
+    RoutineLow $4F, Statements::DimNumber                          ; DIM (number)
+    RoutineLow $50, Statements::Tab                             ; TAB
+    RoutineLow $51, Statements::End                             ; END
+    RoutineLow $52, Statements::InputString                    ; INPUT (string)
+    RoutineLow $53, Statements::InputPrompt                    ; INPUT (prompt)
     RoutineLow $54, Statements::InputNumber         ; INPUT (number)
-    RoutineLow $55, FOR                             ; FOR
-    RoutineLow $56, ASSIGN_NUM                      ; = (FOR)
-    RoutineLow $57, TO                              ; TO
-    RoutineLow $58, STEP                            ; STEP
+    RoutineLow $55, Statements::For                             ; FOR
+    RoutineLow $56, Statements::AssignNumber                      ; = (FOR)
+    RoutineLow $57, Statements::To                              ; TO
+    RoutineLow $58, Statements::Step                            ; STEP
     RoutineLow $59, NEXT                            ; NEXT
     RoutineLow $5A, NEXT                            ; NEXT's ,
-    RoutineLow $5B, RETURN                          ; RETURN
-    RoutineLow $5C, GOSUB                           ; GOSUB
+    RoutineLow $5B, Statements::Return                          ; RETURN
+    RoutineLow $5C, Statements::GoSub                           ; GOSUB
     RoutineLow $5D, NO_ROUTINE                      ; REM
-    RoutineLow $5E, LET                             ; LET
-    RoutineLow $5F, GOTO                            ; GOTO
-    RoutineLow $60, IF                              ; IF
-    RoutineLow $61, PRINTSTR                        ; PRINT (string)
-    RoutineLow $62, PRINTNUM                        ; PRINT (number)
-    RoutineLow $63, PRINT_CR                        ; PRINT
-    RoutineLow $64, POKE                            ; POKE
-    RoutineLow $65, GETVAL255                       ; POKE's ,
-    RoutineLow $66, COLOR_EQ                        ; COLOR=
-    RoutineLow $67, GETVAL255                       ; PLOT
-    RoutineLow $68, COMMA_PLOT                      ; PLOT's ,
-    RoutineLow $69, GETVAL255                       ; HLIN
-    RoutineLow $6A, COMMA_HLIN                      ; HLIN's ,
-    RoutineLow $6B, AT_HLIN                         ; AT (HLIN)
-    RoutineLow $6C, GETVAL255                       ; VLIN
-    RoutineLow $6D, COMMA_VLIN                      ; VLIN's ,
-    RoutineLow $6E, AT_VLIN                         ; AT (VLIN)
-    RoutineLow $6F, IVTAB                           ; VTAB
-    RoutineLow $70, LET_STR                         ; = (string)
-    RoutineLow $71, ASSIGN_NUM                      ; = (number)
-    RoutineLow $72, RIGHT_PAREN                     ; )
+    RoutineLow $5E, Statements::Let                             ; LET
+    RoutineLow $5F, Statements::GoTo                            ; GOTO
+    RoutineLow $60, Statements::If                              ; IF
+    RoutineLow $61, Statements::PrintString                        ; PRINT (string)
+    RoutineLow $62, Statements::PrintNumber                        ; PRINT (number)
+    RoutineLow $63, Statements::Print                        ; PRINT
+    RoutineLow $64, Statements::Poke                            ; POKE
+    RoutineLow $65, Statements::FirstValue                       ; POKE's ,
+    RoutineLow $66, Statements::Color                        ; COLOR=
+    RoutineLow $67, Statements::FirstValue                       ; PLOT
+    RoutineLow $68, Statements::PlotComma                      ; PLOT's ,
+    RoutineLow $69, Statements::FirstValue                       ; HLIN
+    RoutineLow $6A, Statements::HLinComma                      ; HLIN's ,
+    RoutineLow $6B, Statements::HLinAt                         ; AT (HLIN)
+    RoutineLow $6C, Statements::FirstValue                       ; VLIN
+    RoutineLow $6D, Statements::VLinComma                      ; VLIN's ,
+    RoutineLow $6E, Statements::VLinAt                         ; AT (VLIN)
+    RoutineLow $6F, Statements::VTab                           ; VTAB
+    RoutineLow $70, Statements::LetString                         ; = (string)
+    RoutineLow $71, Statements::AssignNumber                      ; = (number)
+    RoutineLow $72, Operators::RightParenthesis                     ; )
     RoutineLow $73, NO_ROUTINE                      ; )
-    RoutineLow $74, LISTNUM                         ; LIST n
-    RoutineLow $75, COMMA_LIST                      ; LIST's ,
-    RoutineLow $76, LIST                            ; LIST
-    RoutineLow $77, POP                             ; POP
-    RoutineLow $78, NODSP_STR                       ; NODSP (string)
-    RoutineLow $79, NODSP_NUM                       ; NODSP (number)
-    RoutineLow $7A, NOTRACE                         ; NOTRACE
-    RoutineLow $7B, DSP_STR                         ; DSP (string)
-    RoutineLow $7C, DSP_NUM                         ; DSP (number)
-    RoutineLow $7D, TRACE                           ; TRACE
-    RoutineLow $7E, PRSLOT                          ; PR#
-    RoutineLow $7F, INSLOT                          ; IN#
+    RoutineLow $74, Statements::ListLine                         ; LIST n
+    RoutineLow $75, Statements::ListComma                      ; LIST's ,
+    RoutineLow $76, Statements::List                            ; LIST
+    RoutineLow $77, Statements::Pop                             ; POP
+    RoutineLow $78, Statements::NoDspString                       ; NODSP (string)
+    RoutineLow $79, Statements::NoDspNumber                       ; NODSP (number)
+    RoutineLow $7A, Statements::NoTrace                         ; NOTRACE
+    RoutineLow $7B, Statements::DspString                         ; DSP (string)
+    RoutineLow $7C, Statements::DspNumber                         ; DSP (number)
+    RoutineLow $7D, Statements::Trace                           ; TRACE
+    RoutineLow $7E, Statements::PrNumber                          ; PR#
+    RoutineLow $7F, Statements::InNumber                          ; IN#
 
 ;; The high bytes of each token's routine, as <RoutinesLow>.
 ;; Also: VERBADRH (IBSM)
 RoutinesHigh:
-    RoutineHigh $00, BEGIN_LINE                     ; (begins the line)
+    RoutineHigh $00, Statements::BeginLine                     ; (begins the line)
     RoutineHigh $01, NO_ROUTINE                     ; _ (end of line)
     RoutineHigh $02, NO_ROUTINE                     ; _ (empty line)
-    RoutineHigh $03, COLON                          ; :
-    RoutineHigh $04, LOAD                           ; LOAD
-    RoutineHigh $05, VSAVE                          ; SAVE
-    RoutineHigh $06, CON                            ; CON
-    RoutineHigh $07, RUNNUM                         ; RUN n
-    RoutineHigh $08, RUN                            ; RUN
-    RoutineHigh $09, DEL                            ; DEL
-    RoutineHigh $0A, COMMA_DEL                      ; DEL's ,
-    RoutineHigh $0B, NEW                            ; NEW
-    RoutineHigh $0C, CLR                            ; CLR
-    RoutineHigh $0D, AUTO                           ; AUTO
-    RoutineHigh $0E, COMMA_AUTO                     ; AUTO's ,
-    RoutineHigh $0F, MAN                            ; MAN
-    RoutineHigh $10, VHIMEM                         ; HIMEM:
-    RoutineHigh $11, VLOMEM                         ; LOMEM:
-    RoutineHigh $12, PLUS                           ; +
-    RoutineHigh $13, SUBTRACT                       ; -
-    RoutineHigh $14, MULT                           ; *
-    RoutineHigh $15, DIVIDE                         ; /
-    RoutineHigh $16, EQUAL_NUM                      ; =
-    RoutineHigh $17, NOTEQUAL_NUM                   ; #
-    RoutineHigh $18, GREATEQ                        ; >=
-    RoutineHigh $19, GREATER                        ; >
-    RoutineHigh $1A, LESSEQ                         ; <=
-    RoutineHigh $1B, NOTEQUAL_NUM                   ; <>
-    RoutineHigh $1C, LESS                           ; <
-    RoutineHigh $1D, VAND                           ; AND
-    RoutineHigh $1E, VOR                            ; OR
-    RoutineHigh $1F, MOD                            ; MOD
-    RoutineHigh $20, EXP                            ; ^
+    RoutineHigh $03, Statements::Colon                          ; :
+    RoutineHigh $04, Statements::Load                           ; LOAD
+    RoutineHigh $05, Statements::Save                          ; SAVE
+    RoutineHigh $06, Statements::Con                            ; CON
+    RoutineHigh $07, Statements::RunLine                         ; RUN n
+    RoutineHigh $08, Statements::Run                            ; RUN
+    RoutineHigh $09, Statements::Del                            ; DEL
+    RoutineHigh $0A, Statements::DelComma                      ; DEL's ,
+    RoutineHigh $0B, Statements::New                            ; NEW
+    RoutineHigh $0C, Statements::Clr                            ; CLR
+    RoutineHigh $0D, Statements::Auto                           ; AUTO
+    RoutineHigh $0E, Statements::AutoComma                     ; AUTO's ,
+    RoutineHigh $0F, Statements::Man                            ; MAN
+    RoutineHigh $10, Statements::HiMem                         ; HIMEM:
+    RoutineHigh $11, Statements::LoMem                         ; LOMEM:
+    RoutineHigh $12, Operators::Add                           ; +
+    RoutineHigh $13, Operators::Subtract                       ; -
+    RoutineHigh $14, Operators::Multiply                           ; *
+    RoutineHigh $15, Operators::Divide                         ; /
+    RoutineHigh $16, Operators::Equal                      ; =
+    RoutineHigh $17, Operators::NotEqual                   ; #
+    RoutineHigh $18, Operators::GreaterOrEqual                        ; >=
+    RoutineHigh $19, Operators::Greater                        ; >
+    RoutineHigh $1A, Operators::LessOrEqual                         ; <=
+    RoutineHigh $1B, Operators::NotEqual                   ; <>
+    RoutineHigh $1C, Operators::Less                           ; <
+    RoutineHigh $1D, Operators::And                           ; AND
+    RoutineHigh $1E, Operators::Or                            ; OR
+    RoutineHigh $1F, Operators::Mod                            ; MOD
+    RoutineHigh $20, Operators::Power                            ; ^
     RoutineHigh $21, NO_ROUTINE                     ; +
-    RoutineHigh $22, LEFT_PAREN                     ; ( (DIM string)
-    RoutineHigh $23, COMMA_SUBSTR                   ; , (substring)
-    RoutineHigh $24, GOTO                           ; THEN (line number)
-    RoutineHigh $25, LET                            ; THEN (statement)
-    RoutineHigh $26, INPUT_STRVAR                   ; , (INPUT string)
+    RoutineHigh $22, Operators::LeftParenthesis                     ; ( (DIM string)
+    RoutineHigh $23, Operators::SubstringComma                   ; , (substring)
+    RoutineHigh $24, Statements::GoTo                           ; THEN (line number)
+    RoutineHigh $25, Statements::Let                            ; THEN (statement)
+    RoutineHigh $26, Statements::InputString                   ; , (INPUT string)
     RoutineHigh $27, Statements::InputNumberComma   ; , (INPUT number)
     RoutineHigh $28, NO_ROUTINE                     ; " (open)
     RoutineHigh $29, NO_ROUTINE                     ; " (close)
-    RoutineHigh $2A, PAREN_SUBSTR                   ; ( (substring)
+    RoutineHigh $2A, Operators::Substring                   ; ( (substring)
     RoutineHigh $2B, NO_ROUTINE                     ; !
     RoutineHigh $2C, NO_ROUTINE                     ; !
-    RoutineHigh $2D, PAREN_ARRAY                    ; ( (array)
-    RoutineHigh $2E, PEEK                           ; PEEK
-    RoutineHigh $2F, RND                            ; RND
-    RoutineHigh $30, SGN                            ; SGN
-    RoutineHigh $31, ABS                            ; ABS
-    RoutineHigh $32, PDL                            ; PDL
+    RoutineHigh $2D, Operators::ArrayElement                    ; ( (array)
+    RoutineHigh $2E, Functions::Peek                           ; PEEK
+    RoutineHigh $2F, Functions::Rnd                            ; RND
+    RoutineHigh $30, Functions::Sgn                            ; SGN
+    RoutineHigh $31, Functions::Abs                            ; ABS
+    RoutineHigh $32, Functions::Pdl                            ; PDL
     RoutineHigh $33, NO_ROUTINE                     ; RNDX
-    RoutineHigh $34, LEFT_PAREN                     ; ( (DIM number)
-    RoutineHigh $35, POSITIVE                       ; + (unary)
-    RoutineHigh $36, NEGATE                         ; - (unary)
-    RoutineHigh $37, NOT                            ; NOT
-    RoutineHigh $38, LEFT_PAREN                     ; ( (expression)
-    RoutineHigh $39, EQ_STR                         ; = (strings)
-    RoutineHigh $3A, NE_STR                         ; # (strings)
-    RoutineHigh $3B, LEN                            ; LEN(
-    RoutineHigh $3C, ASC                            ; ASC(
-    RoutineHigh $3D, SCRN                           ; SCRN(
-    RoutineHigh $3E, COMMA_SCRN                     ; , (SCRN)
-    RoutineHigh $3F, LEFT_PAREN                     ; ( (function)
+    RoutineHigh $34, Operators::LeftParenthesis                     ; ( (DIM number)
+    RoutineHigh $35, Operators::Plus                       ; + (unary)
+    RoutineHigh $36, Operators::Negate                         ; - (unary)
+    RoutineHigh $37, Operators::Not                            ; NOT
+    RoutineHigh $38, Operators::LeftParenthesis                     ; ( (expression)
+    RoutineHigh $39, Operators::StringEqual                         ; = (strings)
+    RoutineHigh $3A, Operators::StringNotEqual                         ; # (strings)
+    RoutineHigh $3B, Functions::Len                            ; LEN(
+    RoutineHigh $3C, Functions::Asc                            ; ASC(
+    RoutineHigh $3D, Functions::Scrn                           ; SCRN(
+    RoutineHigh $3E, Functions::ScrnComma                     ; , (SCRN)
+    RoutineHigh $3F, Operators::LeftParenthesis                     ; ( (function)
     RoutineHigh $40, NO_ROUTINE                     ; $ (string name)
     RoutineHigh $41, NO_ROUTINE                     ; $
-    RoutineHigh $42, PAREN_STRDEST                  ; ( (string store)
-    RoutineHigh $43, DIMSTR                         ; , (DIM string)
-    RoutineHigh $44, DIMNUM                         ; , (DIM number)
-    RoutineHigh $45, PRINTSTR                       ; ; (string)
-    RoutineHigh $46, PRINTNUM                       ; ; (number)
-    RoutineHigh $47, SEMI_END                       ; ; (end)
-    RoutineHigh $48, COMMA_PRSTR                    ; , (string)
-    RoutineHigh $49, COMMA_PRNUM                    ; , (number)
-    RoutineHigh $4A, COMMA_PREND                    ; , (end)
+    RoutineHigh $42, Operators::StringDestination                  ; ( (string store)
+    RoutineHigh $43, Statements::DimString                         ; , (DIM string)
+    RoutineHigh $44, Statements::DimNumber                         ; , (DIM number)
+    RoutineHigh $45, Statements::PrintString                       ; ; (string)
+    RoutineHigh $46, Statements::PrintNumber                       ; ; (number)
+    RoutineHigh $47, Statements::PrintSemicolonEnd                       ; ; (end)
+    RoutineHigh $48, Statements::PrintStringComma                    ; , (string)
+    RoutineHigh $49, Statements::PrintNumberComma                    ; , (number)
+    RoutineHigh $4A, Statements::PrintCommaEnd                    ; , (end)
     RoutineHigh $4B, SetText                        ; TEXT
     RoutineHigh $4C, SetGraphics                    ; GR
-    RoutineHigh $4D, CALL                           ; CALL
-    RoutineHigh $4E, DIMSTR                         ; DIM (string)
-    RoutineHigh $4F, DIMNUM                         ; DIM (number)
-    RoutineHigh $50, TAB                            ; TAB
-    RoutineHigh $51, END                            ; END
-    RoutineHigh $52, INPUT_STRVAR                   ; INPUT (string)
-    RoutineHigh $53, INPUT_PROMPT                   ; INPUT (prompt)
+    RoutineHigh $4D, Statements::Call                           ; CALL
+    RoutineHigh $4E, Statements::DimString                         ; DIM (string)
+    RoutineHigh $4F, Statements::DimNumber                         ; DIM (number)
+    RoutineHigh $50, Statements::Tab                            ; TAB
+    RoutineHigh $51, Statements::End                            ; END
+    RoutineHigh $52, Statements::InputString                   ; INPUT (string)
+    RoutineHigh $53, Statements::InputPrompt                   ; INPUT (prompt)
     RoutineHigh $54, Statements::InputNumber        ; INPUT (number)
-    RoutineHigh $55, FOR                            ; FOR
-    RoutineHigh $56, ASSIGN_NUM                     ; = (FOR)
-    RoutineHigh $57, TO                             ; TO
-    RoutineHigh $58, STEP                           ; STEP
+    RoutineHigh $55, Statements::For                            ; FOR
+    RoutineHigh $56, Statements::AssignNumber                     ; = (FOR)
+    RoutineHigh $57, Statements::To                             ; TO
+    RoutineHigh $58, Statements::Step                           ; STEP
     RoutineHigh $59, NEXT                           ; NEXT
     RoutineHigh $5A, NEXT                           ; NEXT's ,
-    RoutineHigh $5B, RETURN                         ; RETURN
-    RoutineHigh $5C, GOSUB                          ; GOSUB
+    RoutineHigh $5B, Statements::Return                         ; RETURN
+    RoutineHigh $5C, Statements::GoSub                          ; GOSUB
     RoutineHigh $5D, NO_ROUTINE                     ; REM
-    RoutineHigh $5E, LET                            ; LET
-    RoutineHigh $5F, GOTO                           ; GOTO
-    RoutineHigh $60, IF                             ; IF
-    RoutineHigh $61, PRINTSTR                       ; PRINT (string)
-    RoutineHigh $62, PRINTNUM                       ; PRINT (number)
-    RoutineHigh $63, PRINT_CR                       ; PRINT
-    RoutineHigh $64, POKE                           ; POKE
-    RoutineHigh $65, GETVAL255                      ; POKE's ,
-    RoutineHigh $66, COLOR_EQ                       ; COLOR=
-    RoutineHigh $67, GETVAL255                      ; PLOT
-    RoutineHigh $68, COMMA_PLOT                     ; PLOT's ,
-    RoutineHigh $69, GETVAL255                      ; HLIN
-    RoutineHigh $6A, COMMA_HLIN                     ; HLIN's ,
-    RoutineHigh $6B, AT_HLIN                        ; AT (HLIN)
-    RoutineHigh $6C, GETVAL255                      ; VLIN
-    RoutineHigh $6D, COMMA_VLIN                     ; VLIN's ,
-    RoutineHigh $6E, AT_VLIN                        ; AT (VLIN)
-    RoutineHigh $6F, IVTAB                          ; VTAB
-    RoutineHigh $70, LET_STR                        ; = (string)
-    RoutineHigh $71, ASSIGN_NUM                     ; = (number)
-    RoutineHigh $72, RIGHT_PAREN                    ; )
+    RoutineHigh $5E, Statements::Let                            ; LET
+    RoutineHigh $5F, Statements::GoTo                           ; GOTO
+    RoutineHigh $60, Statements::If                             ; IF
+    RoutineHigh $61, Statements::PrintString                       ; PRINT (string)
+    RoutineHigh $62, Statements::PrintNumber                       ; PRINT (number)
+    RoutineHigh $63, Statements::Print                       ; PRINT
+    RoutineHigh $64, Statements::Poke                           ; POKE
+    RoutineHigh $65, Statements::FirstValue                      ; POKE's ,
+    RoutineHigh $66, Statements::Color                       ; COLOR=
+    RoutineHigh $67, Statements::FirstValue                      ; PLOT
+    RoutineHigh $68, Statements::PlotComma                     ; PLOT's ,
+    RoutineHigh $69, Statements::FirstValue                      ; HLIN
+    RoutineHigh $6A, Statements::HLinComma                     ; HLIN's ,
+    RoutineHigh $6B, Statements::HLinAt                        ; AT (HLIN)
+    RoutineHigh $6C, Statements::FirstValue                      ; VLIN
+    RoutineHigh $6D, Statements::VLinComma                     ; VLIN's ,
+    RoutineHigh $6E, Statements::VLinAt                        ; AT (VLIN)
+    RoutineHigh $6F, Statements::VTab                          ; VTAB
+    RoutineHigh $70, Statements::LetString                        ; = (string)
+    RoutineHigh $71, Statements::AssignNumber                     ; = (number)
+    RoutineHigh $72, Operators::RightParenthesis                    ; )
     RoutineHigh $73, NO_ROUTINE                     ; )
-    RoutineHigh $74, LISTNUM                        ; LIST n
-    RoutineHigh $75, COMMA_LIST                     ; LIST's ,
-    RoutineHigh $76, LIST                           ; LIST
-    RoutineHigh $77, POP                            ; POP
-    RoutineHigh $78, NODSP_STR                      ; NODSP (string)
-    RoutineHigh $79, NODSP_NUM                      ; NODSP (number)
-    RoutineHigh $7A, NOTRACE                        ; NOTRACE
-    RoutineHigh $7B, DSP_STR                        ; DSP (string)
-    RoutineHigh $7C, DSP_NUM                        ; DSP (number)
-    RoutineHigh $7D, TRACE                          ; TRACE
-    RoutineHigh $7E, PRSLOT                         ; PR#
-    RoutineHigh $7F, INSLOT                         ; IN#
+    RoutineHigh $74, Statements::ListLine                        ; LIST n
+    RoutineHigh $75, Statements::ListComma                     ; LIST's ,
+    RoutineHigh $76, Statements::List                           ; LIST
+    RoutineHigh $77, Statements::Pop                            ; POP
+    RoutineHigh $78, Statements::NoDspString                      ; NODSP (string)
+    RoutineHigh $79, Statements::NoDspNumber                      ; NODSP (number)
+    RoutineHigh $7A, Statements::NoTrace                        ; NOTRACE
+    RoutineHigh $7B, Statements::DspString                        ; DSP (string)
+    RoutineHigh $7C, Statements::DspNumber                        ; DSP (number)
+    RoutineHigh $7D, Statements::Trace                          ; TRACE
+    RoutineHigh $7E, Statements::PrNumber                         ; PR#
+    RoutineHigh $7F, Statements::InNumber                         ; IN#
 
 .endscope

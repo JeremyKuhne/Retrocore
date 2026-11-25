@@ -1,4 +1,4 @@
-; retrocore: style=strict ignore=unlinked-name:BASIC -- the language's name in prose
+; retrocore: style=strict
 ;; Integer BASIC: variables and the statement interpreter ($E5CC-$E6FE)
 ;;
 ;; The interpreter that runs a line's tokens (<Interpreter::RunLine>), and the variable lookup it calls for each name
@@ -6,9 +6,9 @@
 ;;
 ;; The interpreter evaluates by operator priority. Operands are pushed on the noun stack as they come: a constant's
 ;; value, a variable's address, a string's address and range. Every token is an operator, a statement keyword as
-;; much as a plus sign, with two priorities in <TABLE1> (VerbTables.asm): one for when it arrives, one for while it
-;; waits. Tokens wait on the 6502's stack. When a token arrives, each waiting token whose waiting priority is at
-;; least the new one's arriving priority runs first, taking its operands off the noun stack and pushing its result;
+;; much as a plus sign, with two priorities in <Verbs::Priorities> (VerbTables.asm): one for when it arrives, one for
+;; while it waits. Tokens wait on the 6502's stack. When a token arrives, each waiting token whose waiting priority is
+;; at least the new one's arriving priority runs first, taking its operands off the noun stack and pushing its result;
 ;; then the new token waits in turn. So in `A=2+3*4` the `*` runs before the `+`, and the `=` (an assignment) runs
 ;; last. The stack starts with token 0, whose routine (<Statements::BeginLine>) ends the line, so
 ;; <TOKEN_END_OF_LINE> at the end of the line, which every waiting token yields to, finishes the line.
@@ -37,7 +37,7 @@
 ;; The MEM FULL error, for a new variable that would reach the program.
 ;; Also: ErrMemFull (IBSM)
 .proc ToMemoryFull
-    jmp MEMFULL
+    jmp MemoryFullError
 .endproc
 
 ;; Compares the name at <TokenPointer> with the variable at <SearchPointer>, and goes on to the next variable if it
@@ -226,10 +226,10 @@ CountString:
 ;; Running a line's tokens: the interpreter's loop and the routines that step through a line.
 .scope Interpreter
 
-;; The bits of a <TABLE1> byte that hold a token's priority when it arrives.
+;; The bits of a <Verbs::Priorities> byte that hold a token's priority when it arrives.
 ARRIVING_PRIORITY = %01010101
 
-;; The bits of a <TABLE1> byte that hold a token's priority while it waits.
+;; The bits of a <Verbs::Priorities> byte that hold a token's priority while it waits.
 WAITING_PRIORITY = %10101010
 
 ;; An arriving priority above every waiting one's, which a left parenthesis sets so nothing waiting before it runs.
@@ -247,7 +247,7 @@ HOLD_PRIORITY = $FF
 ;; are the noun stack's error (<PushNoun>).
 ;; In: TokenPointer = the first token
 ;; Uses: all
-;; See: <TABLE1>, <VERBADRL>
+;; See: <Verbs::Priorities>, <Verbs::RoutinesLow>
 ;; Entry:
 ;;   NextItem = after an operand, with Y not 0
 ;;   ReadItem = after an operand, with Y = 0
@@ -329,15 +329,15 @@ CheckSkipping:
 
 ;; A token arrives: lets the waiting tokens that come first run, then makes it wait.
 ;;
-;; Each <TABLE1> byte holds two priorities with their bits interleaved: the even bits (<ARRIVING_PRIORITY>) are the
-;; priority on arrival, the odd bits (<WAITING_PRIORITY>) the priority while waiting. Shifting the arriving
+;; Each <Verbs::Priorities> byte holds two priorities with their bits interleaved: the even bits (<ARRIVING_PRIORITY>)
+;; are the priority on arrival, the odd bits (<WAITING_PRIORITY>) the priority while waiting. Shifting the arriving
 ;; priority left puts it in the odd bits, so the two compare as plain bytes.
 ;; In: A = the token
 ;; Also: DOTOKEN (UNKN)
 Arrive:
     tay
     sta CurrentVerb
-    lda TABLE1,y
+    lda Verbs::Priorities,y
     and #ARRIVING_PRIORITY
     asl a
     sta VerbPriority
@@ -347,7 +347,7 @@ Arrive:
 NextWaiting:
     pla
     tay
-    lda TABLE1,y
+    lda Verbs::Priorities,y
     and #WAITING_PRIORITY
     cmp VerbPriority
     bcs RunWaiting
@@ -361,15 +361,15 @@ NextWaiting:
 ;; See: <Lines::RunLoop>, <Statements::Colon>
 ;; Also: WAITTOKEN (UNKN)
 Wait:
-    jsr GETVERB0
+    jsr ReadNextLineByte
     lda CurrentVerb
     bcc PushToken                   ; always: the compare cleared carry
 
     ; Runs a waiting token through the verb tables, then looks at the next one.
 RunWaiting:
-    lda VERBADRL,y
+    lda Verbs::RoutinesLow,y
     sta Accumulator
-    lda VERBADRH,y
+    lda Verbs::RoutinesHigh,y
     sta Accumulator+1
     jsr CallVerb
     jmp NextWaiting

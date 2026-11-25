@@ -12,8 +12,12 @@
 ;;
 ;; Part of IntegerBasic.asm.
 
-; Operators: a substring's opening parenthesis and its comma.
-.scope Operators continued
+;; The routines of the operator tokens: arithmetic, comparisons and `AND`, `OR` and `NOT`, for numbers and strings,
+;; and the parentheses, which mark where a substring, an array element or a string being stored to starts.
+;;
+;; Each takes its operands off the noun stack and pushes its result. The scope is in pieces through the ROM, in
+;; address order; this first piece is a substring's parenthesis and comma.
+.scope Operators
 
 ;; The opening parenthesis of a substring in an expression (token $2A): A$(n) starts the string at character n.
 ;;
@@ -42,10 +46,10 @@ CheckRange:
 ;; The STRING error.
 ;; Also: PrintErr05 (IBSM)
 StringError:
-    ldy #<ErrMsg05
+    ldy #<Messages::String
 
 ;; Reports the error whose message's offset is in Y, for the branches nearby.
-;; In: Y = the message's offset from <ErrMsg00>
+;; In: Y = the message's offset from <Messages::GreaterThan32767>
 ;; Also: STRERRMESS (UNKN)
 ToReportError:
     jmp ReportError
@@ -61,16 +65,17 @@ ToReportError:
 ;;   Finish = ends the token as a left parenthesis does
 ;; Also: COMMA_SUBSTR (IBSM)
 .proc SubstringComma
-    jsr GETBYTE
+    jsr GetByte
     cmp NounStackLow,x
     bcc Substring::StringError
-    jsr CHKSTREND
+    jsr CheckSubstringEnd
     sta NounStackHigh,x
 
-;; Ends a substring token the way a left parenthesis ends, so the operators before it wait (<LEFT_PAREN>).
+;; Ends a substring token the way a left parenthesis ends, so the operators before it wait
+;; (<Operators::LeftParenthesis>).
 ;; Also: SUBSTRDONE (UNKN)
 Finish:
-    jmp LEFT_PAREN
+    jmp Operators::LeftParenthesis
 .endproc
 
 .endscope
@@ -84,7 +89,7 @@ Finish:
 ;; Errors: STRING for 0, >255 for a position above 255
 ;; Also: GETSTRNDX (UNKN)
 .proc GetPosition
-    jsr GETBYTE
+    jsr GetByte
     beq Operators::Substring::StringError
     sec
     sbc #1
@@ -120,7 +125,7 @@ Finish:
 ;; Reports the MEM FULL error, for <SetVariableSize>.
 ;; Also: PrintErr03 (IBSM)
 .proc MemoryFull
-    ldy #<ErrMsg03
+    ldy #<Messages::MemoryFull
     bne Operators::Substring::ToReportError ; always
 .endproc
 
@@ -131,9 +136,9 @@ Finish:
 
 ;; DIM of a string (token $4E, and $43 after a comma): reserves room for a string of n characters.
 ;;
-;; A new variable gets 2 bytes for its value (<CMPVARNAME>), so DIM can only size the variable created last, the one
-;; whose next-variable address is still <VariablesEnd>; DIM of any other is a DIM error. It moves <VariablesEnd>, and
-;; that address, past n + 1 bytes: the characters and the byte that ends them.
+;; A new variable gets 2 bytes for its value (<Variables::CompareName>), so DIM can only size the variable created last,
+;; the one whose next-variable address is still <VariablesEnd>; DIM of any other is a DIM error. It moves
+;; <VariablesEnd>, and that address, past n + 1 bytes: the characters and the byte that ends them.
 ;; In: X = the noun stack: the length, above the variable's range and address
 ;; Out: X = the noun stack, all three entries taken off
 ;; Errors: STRING for a length of 0, >255 for one above 255, MEM FULL, DIM
@@ -207,7 +212,7 @@ StoreEnd:
 ;; The DIM error.
 ;; Also: DimErr (IBSM)
 DimError:
-    ldy #<ErrMsg17
+    ldy #<Messages::Dim
 
 ;; Reports the error whose message's offset is in Y, for the branches nearby.
 ToReportError:
@@ -220,7 +225,7 @@ ToReportError:
 ;; Reads a line with the ? prompt, then assigns it to the string variable as <Statements::LetString> does.
 ;;
 ;; It pushes the typed line as a string: address $0200 (<InputBuffer>) and the range 0 to the line's length. A
-;; Control-C in the line goes to the warm start (<RDKEY>).
+;; Control-C in the line goes to the warm start (<ReadInputLine>).
 ;; In: X = the noun stack: the variable's range and address
 ;; Out: X = the noun stack, the variable's two entries taken off
 ;; Errors: `STR OVFL`
@@ -228,16 +233,16 @@ ToReportError:
 .proc ReadLineInto
     ; The line's address: $0200.
     lda #0
-    jsr PUSHNOUNLO
+    jsr PushNoun::LowOnly
     ldy #>InputBuffer
     sty NounStackHigh,x
 
     ; The range, from 0; its end comes from the line.
-    jsr PUSHNOUNLO
+    jsr PushNoun::LowOnly
     stx SavedX
     tax                             ; the line starts at index 0
     inc PromptCharacter             ; > becomes ?
-    jsr RDKEY
+    jsr ReadInputLine
     dec PromptCharacter
     txa
     ldx SavedX
@@ -279,7 +284,7 @@ CopyCharacter:
     ldy NounStackLow,x
     cpy Pointer2                    ; past the room the variable has?
     bcc StoreCharacter
-    ldy #<ErrMsg18
+    ldy #<Messages::StringOverflow
     bne SetVariableSize::ToReportError ; always
 
 StoreCharacter:
@@ -287,12 +292,13 @@ StoreCharacter:
     inc NounStackLow,x
     bcc CopyCharacter               ; always: the CPY above cleared carry
 
-;; Ends the string with X, which is below $80, then pops the variable and shows it if DSP is on (<LETSTREND>).
+;; Ends the string with X, which is below $80, then pops the variable and shows it if DSP is on
+;; (<Display::FinishStringAssignment>).
 EndString:
     ldy NounStackLow,x
     txa
     sta (Auxiliary),y
-    jmp LETSTREND
+    jmp Display::FinishStringAssignment
 .endproc
 
 .endscope
@@ -399,7 +405,7 @@ CompareCharacters:
 ;; Also: NE_STR (UNKN)
 .proc StringNotEqual
     jsr StringEqual
-    jmp NOT
+    jmp Operators::Not
 .endproc
 
 ;; Multiplication (token $14): replaces the top two numbers with their product.
@@ -437,7 +443,7 @@ NextStep:
     asl Pointer3
     rol Pointer3+1
     bpl NextBit                     ; the product must stay below $8000
-    jmp Err32767
+    jmp Operators::Negate::OverflowError
 
 ;; Pushes <Pointer3> as the result, negated when the sign kept in the high byte of <Pointer2> says so.
 ;;
@@ -448,12 +454,12 @@ NextStep:
 ;; Also: MultEnd (IBSM)
 PushResult:
     lda Pointer3
-    jsr PUSHNOUN
+    jsr PushNoun
     lda Pointer3+1                  ; Y = 0: a number
     sta NounStackNumberHigh,x
     asl Pointer2+1
     bcc TakeMagnitudes::Done
-    jmp NEGATE
+    jmp Operators::Negate
 .endproc
 
 ;; Takes two numbers off the noun stack as positive values for multiplication or division.
@@ -485,7 +491,7 @@ TakeOne:
     sta Auxiliary
     lda Accumulator+1
     sta Auxiliary+1
-    jsr GET16BIT
+    jsr GetNumber
     sty Pointer3
     sty Pointer3+1
     lda Accumulator+1
@@ -494,8 +500,8 @@ TakeOne:
     ; Negative: push it back, negate it on the stack and take it again.
     dex
     asl Pointer2+1                  ; one more negative operand
-    jsr NEGATE
-    jsr GET16BIT
+    jsr Operators::Negate
+    jsr GetNumber
 
 Positive:
     ldy #BITS
@@ -505,15 +511,15 @@ Done:
 
 ;; MOD (token $1F): replaces two numbers with the remainder of dividing the lower by the top.
 ;;
-;; <DIVMOD> divides, leaving the remainder in <Pointer3> and Y = 0, so the branch always goes to
+;; <DivideWithRemainder> divides, leaving the remainder in <Pointer3> and Y = 0, so the branch always goes to
 ;; <Operators::Multiply::PushResult>. The remainder takes the sign a quotient would have: 7 MOD -2 is -1.
 ;; In: X = the noun stack: two numbers
 ;; Out: X = the noun stack, one entry higher, its top entry the remainder
 ;; Errors: >32767 for a division by 0, or for an operand of -32768
-;; See: <DIVMOD>, <DIVIDE>
+;; See: <DivideWithRemainder>, <Operators::Divide>
 ;; Also: MOD (IBSM)
 .proc Mod
-    jsr DIVMOD
+    jsr DivideWithRemainder
     beq Multiply::PushResult        ; always
 
     ; An unused byte.
@@ -530,7 +536,7 @@ Done:
 ;; INPUT has printed the ? already; the prompt character becomes ? so a line cancelled with Control-X is prompted
 ;; again with it.
 ;; Out: Y = the index of the underline that ends the line, X = $FF
-;; See: <INPUTNUMLN>
+;; See: <ReadNumberLine>
 ;; Also: GETQLINE (UNKN)
 .proc ReadInputLine
     inc PromptCharacter             ; > becomes ?
@@ -542,8 +548,11 @@ Done:
 
 .endscope
 
-; Functions: SCRN( and its comma.
-.scope Functions continued
+;; The routines of the function tokens: `ABS`, `SGN`, `PEEK`, `RND`, `PDL`, `LEN(`, `ASC(` and `SCRN(`.
+;;
+;; Each takes its argument off the noun stack and pushes its value. The scope is in pieces through the ROM, in
+;; address order.
+.scope Functions
 
 ;; SCRN( (token $3D): replaces a column and a row with the color of that lo-res block, 0 to 15.
 ;;
@@ -557,11 +566,11 @@ Done:
 ;; The low nibble of a screen byte: one block's color.
 COLOR_BITS = $0F
 
-    jsr GETBYTE
+    jsr GetByte
     lsr a
     php                             ; carry = the row's lowest bit
     jsr LowRes::RowAddress
-    jsr GETBYTE
+    jsr GetByte
     tay
     lda (LowResBase),y
     plp
@@ -576,7 +585,7 @@ COLOR_BITS = $0F
 EvenRow:
     and #COLOR_BITS
     ldy #0
-    jsr PUSHNOUN
+    jsr PushNoun
     sty NounStackNumberHigh,x
     dey                             ; VerbPriority = $FF, as a left parenthesis sets it
     sty VerbPriority

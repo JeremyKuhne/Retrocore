@@ -13,17 +13,17 @@
 ;; Part of IntegerBasic.asm.
 
 ;; Sets up memory for a 4K machine, then falls into the warm start; nothing in the ROM calls it.
-;; See: <SETMEM4K>
+;; See: <Memory::SetFor4K>
 ;; Also: COLD4K (UNKN)
 .proc ColdStart4K
-    jsr SETMEM4K
+    jsr Memory::SetFor4K
     ; Falls into WarmStart.
 .endproc
 
 ;; The warm start: prints a Return, then reads and handles lines typed at the > prompt, forever.
 ;;
 ;; In `AUTO` mode the prompt is followed by the next line number, which the line typed starts with as if it had been
-;; typed: <PRDEC> also puts the digits in <InputBuffer>.
+;; typed: <PrintDecimal> also puts the digits in <InputBuffer>.
 ;; Entry:
 ;;   Prompt = without the Return; the end of each line, and errors, come back here
 ;; Also: WARM (IBSM)
@@ -45,7 +45,7 @@ Prompt:
     bpl ReadCommand                 ; not AUTO
     ldx AutoLine
     lda AutoLine+1
-    jsr PRDEC
+    jsr PrintDecimal
     lda #BLANK | $80
     jsr CharacterOut
 
@@ -79,7 +79,7 @@ ReadCommand:
     and #HIGH_NIBBLE
     cmp #'0'
     beq Editor::StoreLine
-    jmp RUNLOOP
+    jmp Lines::RunLoop
 .endproc
 
 ; The editor, continued: storing a line.
@@ -105,7 +105,7 @@ CopyNumber:
     dey
     bne CopyNumber
 
-    ; Delete the old line. X becomes 1, as <FINDLINE> takes an entry off the noun stack; carry is set.
+    ; Delete the old line. X becomes 1, as <FindLine> takes an entry off the noun stack; carry is set.
     jsr DeleteLine
 
     ; The line's length: its tokens, from the marker to the end.
@@ -191,7 +191,7 @@ Done:
 ;; Also: MEMFULL (IBSM)
 .proc MemoryFullError
 .assert * = $E36B, "MemoryFullError must stay at $E36B, where Programmer's Aid jumps."
-    ldy #<ErrMsg03
+    ldy #<Messages::MemoryFull
     bne ReportError                 ; always
 .endproc
 
@@ -202,16 +202,16 @@ Done:
 ;;
 ;; <Statements::Del> has removed line m, if it existed, and left the address of the line after it in <Pointer1>.
 ;; In: X = the noun stack, its top entry the last line number, Pointer1 = the first line to delete
-;; Out: X = the noun stack, two entries higher: <FINDP3POP> takes one more
-;; See: <FINDP3POP>
+;; Out: X = the noun stack, two entries higher: <FindLine::PopFromPointer3> takes one more
+;; See: <FindLine::PopFromPointer3>
 ;; Also: COMMA_DEL (IBSM)
 .proc DelComma
-    jsr GET16BIT
+    jsr GetNumber
     lda Pointer1
     sta Pointer3
     lda Pointer1+1
     sta Pointer3+1
-    jsr FINDP3POP                   ; find line n, from Pointer3; Pointer3 = the line after it
+    jsr FindLine::PopFromPointer3                   ; find line n, from Pointer3; Pointer3 = the line after it
 
     ; Remove what lies from Pointer1 to Pointer3.
     lda Pointer1
@@ -223,11 +223,11 @@ Done:
 
 ;; DEL (token $09): deletes the line with the number on the noun stack, if there is one.
 ;; In: X = the noun stack, its top entry the line number
-;; Out: X = the noun stack, two entries higher: <FINDLINE> takes one more, Pointer1 = the line after it
+;; Out: X = the noun stack, two entries higher: <FindLine> takes one more, Pointer1 = the line after it
 ;; See: <Statements::DelComma>
 ;; Also: DEL (IBSM)
 .proc Del
-    jsr GET16BIT
+    jsr GetNumber
     ; Falls into Editor::DeleteLine.
 .endproc
 
@@ -239,14 +239,14 @@ Done:
 ;; Deletes the line numbered <Accumulator> if it exists, leaving <Pointer1> at the line after it: where a line
 ;; numbered <Accumulator> goes.
 ;;
-;; <FINDLINE> leaves <Pointer3> after the line when it exists, and equal to <Pointer2> when it does not; then
+;; <FindLine> leaves <Pointer3> after the line when it exists, and equal to <Pointer2> when it does not; then
 ;; <Editor::CloseGap> only copies each byte onto itself.
 ;; In: Accumulator = the line number, X = the noun stack
-;; Out: Pointer1 = the line after it, ProgramStart = the new start of the program, X = one higher (<FINDLINE> takes
+;; Out: Pointer1 = the line after it, ProgramStart = the new start of the program, X = one higher (<FindLine> takes
 ;;   an entry off the noun stack), Y = 0, carry = set
 ;; Also: DELLINE (UNKN)
 .proc DeleteLine
-    jsr FINDLINE
+    jsr FindLine
     lda Pointer3
     sta Pointer1
     lda Pointer3+1
@@ -297,7 +297,7 @@ Moved:
 
 ;; The loop of <PrintMessage>, four bytes before its entry: prints a character of a message, then goes on with the
 ;; next.
-;; In: A = the character, Y = its offset from <ErrMsg00>
+;; In: A = the character, Y = its offset from <Messages::GreaterThan32767>
 PrintMessageCharacter:
     jsr CharacterOut
     iny
@@ -305,14 +305,14 @@ PrintMessageCharacter:
 
 ;; Prints the message at offset Y in the message table.
 ;;
-;; The messages (<ErrMsg00>) have bit 7 set on every character but the last.
-;; In: Y = the message's offset from <ErrMsg00>
+;; The messages (<Messages::GreaterThan32767>) have bit 7 set on every character but the last.
+;; In: Y = the message's offset from <Messages::GreaterThan32767>
 ;; Out: Y = the offset of its last character
 ;; Keeps: X
-;; See: <PRINTERR>
+;; See: <PrintErrorMessage>
 ;; Also: ERRORMESS (IBSM)
 .proc PrintMessage
-    lda ErrMsg00,y
+    lda Messages::GreaterThan32767,y
     bmi PrintMessageCharacter
     ora #$80
     jmp CharacterOut
@@ -349,24 +349,24 @@ PrintMessageCharacter:
 ;; Reports the TOO LONG error.
 ;; Also: ErrTooLong (IBSM)
 .proc TooLongError
-    ldy #<ErrMsg01
+    ldy #<Messages::TooLong
     ; Falls into ReportError.
 .endproc
 
 ;; Reports an error: prints *** and the message at offset Y, then `ERR` and a bell, and leaves the statement.
 ;;
-;; Typed lines go back to the prompt. In a running program <RUNERROR> decides: the error stops the program with the
-;; line's number, unless INPUT is reading numbers, which asks for the line again.
-;; In: Y = the message's offset from <ErrMsg00>
+;; Typed lines go back to the prompt. In a running program <Messages::StopOrRetype> decides: the error stops the program
+;; with the line's number, unless INPUT is reading numbers, which asks for the line again.
+;; In: Y = the message's offset from <Messages::GreaterThan32767>
 ;; Entry:
-;;   LeaveLine = leaves for the prompt, or for <RUNERROR> while a program runs
-;; See: <PRINTERR>
+;;   LeaveLine = leaves for the prompt, or for <Messages::StopOrRetype> while a program runs
+;; See: <PrintErrorMessage>
 ;; Also: ERRMESS (IBSM)
 .proc ReportError
-    jsr PRINTERR
+    jsr PrintErrorMessage
     bit Running
 
-;; Leaves for the prompt, or for <RUNERROR> while a program runs.
+;; Leaves for the prompt, or for <Messages::StopOrRetype> while a program runs.
 ;; In: negative = set while a program runs
 ;; Also: LEAVELINE (UNKN)
 LeaveLine:
@@ -374,5 +374,5 @@ LeaveLine:
     jmp WarmStart::Prompt
 
 ToRunError:
-    jmp RUNERROR
+    jmp Messages::StopOrRetype
 .endproc

@@ -24,7 +24,7 @@
 ;; - $01: copies one character of a string, unless it is a double quote or the end of the line; the item after it
 ;;   repeats it. $02 does the same up to the end of the line, for REM.
 ;; - $03: the line is matched: the tokenizer returns.
-;; - $04-$7D: calls rule n, the low 5 bits, through <SYNTABLNDX>. Rule 0 is a numeric constant, whose digits are turned
+;; - $04-$7D: calls rule n, the low 5 bits, through <RuleStarts>. Rule 0 is a numeric constant, whose digits are turned
 ;;   into a 16-bit value when it returns (<Tokenizer::RuleMatched>).
 ;; - $7F repeats the item before it, and $7E the two items before it, as long as they match: lists such as PRINT's.
 ;;
@@ -35,7 +35,8 @@
 ;; call without it ($40-$5F) none does, and the rule fails, which fails the item in the rule that called it.
 .scope Tokenizer
 
-;; The bits 7-5 of an item, which tell an optional call ($20-$3F, <USEOPT>) from the other items.
+;; The bits 7-5 of an item, which tell an optional call ($20-$3F, <Syntax::ITEM_CALL_THEN_OPTIONAL>) from the other
+;; items.
 CALL_KIND = $E0
 
 ;; The bits of a call that hold the rule's number.
@@ -62,7 +63,7 @@ RULE_NUMBER = $1F
     ; Falls into GotKeyword.
 .endproc
 
-;; A keyword matched: works out its token and hands it to <KEYMATCHED>.
+;; A keyword matched: works out its token and hands it to <WriteKeywordToken>.
 ;;
 ;; The token is the number of keywords from this one to the top of the page, plus the page's first byte: $50 for the
 ;; page at $EC00, 0 for the page at $ED00. A walks up the page with the next byte's bits: after LSR and EOR, bit 6 is
@@ -82,7 +83,7 @@ RULE_NUMBER = $1F
     ; Count the keywords' last characters up to the top of the page.
 CountKeyword:
     lsr a
-    eor #LAST
+    eor #Syntax::ITEM_LAST
     ora (SyntaxPage),y
     cmp #SYNTAX_LAST_CHARACTER
     bcc NextPlace
@@ -93,7 +94,7 @@ NextPlace:
     pla
     tay
     txa
-    jmp KEYMATCHED
+    jmp WriteKeywordToken
 .endproc
 
 ;; Writes A as the next token in <InputBuffer>, after the line's text.
@@ -167,7 +168,7 @@ TryOptional:
     iny
     lda (SyntaxPage),y
     and #CALL_KIND
-    cmp #USEOPT
+    cmp #Syntax::ITEM_CALL_THEN_OPTIONAL
     beq RuleMatched
 
     ; Back to where the rule started.
@@ -203,11 +204,11 @@ SkipAlternative:
 ;; Also: RULEITEM (UNKN)
 .proc RuleItem
     beq PutToken::Done              ; $03: the line is matched
-    cmp #AGAIN2
+    cmp #Syntax::ITEM_REPEAT_TWO
     bcs RepeatItem
     dex                             ; a new frame
     bpl CallRule
-    ldy #<ErrMsg01                  ; the syntax stack is full: the TOO LONG error
+    ldy #<Messages::TooLong                  ; the syntax stack is full: the TOO LONG error
     bpl MatchItem::ToReportError    ; always
 .endproc
 
@@ -225,7 +226,7 @@ SkipAlternative:
     sty TokenIndexStack,x
     and #RULE_NUMBER
     tay
-    lda SYNTABLNDX,y
+    lda RuleStarts,y
     ; Falls into StartRule.
 .endproc
 
@@ -239,12 +240,12 @@ SkipAlternative:
 ;;   TextIndex = the index in <InputBuffer> before the text, TokenIndex = the index before the first token
 ;; Out: TextIndex = the last character matched, TokenIndex = the last token written, carry = set
 ;; Errors: SYNTAX, TOO LONG, >32767 for a constant above 32767
-;; See: <SYNTABLNDX>, <WarmStart>, <INPUTNUM>
+;; See: <RuleStarts>, <WarmStart>, <Statements::InputNumber>
 ;; Also: STARTRULE (UNKN)
 .proc StartRule
     asl a
     tay
-    lda #(>SYNTABL) >> 1
+    lda #(>Syntax::Table) >> 1
     rol a
     sta SyntaxPage+1
     ; Falls into RepeatItem, whose BNE the page's nonzero high byte takes.
@@ -273,17 +274,17 @@ UpOne:
     lda (SyntaxPage),y
     bmi CharacterItem
     bne NotError
-    ldy #<ErrMsg02                  ; $00: the SYNTAX error
+    ldy #<Messages::SyntaxError                  ; $00: the SYNTAX error
 
 ;; Reports the error whose message's offset is in Y, for the branches nearby.
-;; In: Y = the message's offset from <ErrMsg00>
+;; In: Y = the message's offset from <Messages::GreaterThan32767>
 ;; Also: TOKERROR (UNKN)
 ToReportError:
     jmp ReportError
 
     ; An item from $01 to $7F: $01 and $02 copy text; the rest go to RuleItem.
 NotError:
-    cmp #ENDLINE
+    cmp #Syntax::ITEM_LINE_MATCHED
     bcs RuleItem
     lsr a                           ; carry set for $01: stop at a quote too
     ldx TextIndex
@@ -405,7 +406,7 @@ AddValue:
 
 ;; The >32767 error.
 TooBig:
-    ldy #<ErrMsg00
+    ldy #<Messages::GreaterThan32767
     bpl MatchItem::ToReportError    ; always
 .endproc
 

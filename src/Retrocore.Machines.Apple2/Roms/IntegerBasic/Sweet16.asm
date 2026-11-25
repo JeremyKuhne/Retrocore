@@ -1,4 +1,4 @@
-; retrocore: style=strict ignore=unlinked-name:BASIC -- BASIC is the language, not its entry point
+; retrocore: style=strict
 ;; Integer BASIC: SWEET16 ($F689-$F7FC), after two register routines ($F669-$F688)
 ;;
 ;; Steve Wozniak's SWEET16 (<Sweet16>), which shares the Integer BASIC chips; Integer BASIC does not use it, but the

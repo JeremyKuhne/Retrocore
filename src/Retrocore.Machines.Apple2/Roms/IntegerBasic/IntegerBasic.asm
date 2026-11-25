@@ -43,7 +43,7 @@
 ;;
 ;; One predefined symbol chooses the build. FORFIX 0, the default, builds the ROMs. FORFIX 1 builds the Integer
 ;; BASIC in INTBASIC on the 1983 DOS 3.3 System Master (680-0210-A), which fixes FOR's removal of an older loop
-;; for the same variable (<FORDROPOLD>): two bytes differ.
+;; for the same variable (<DropOlderForLoop>): two bytes differ.
 ;;
 ;; Maintained by hand; it assembles byte-identically to the three ROMs at origin $E000.
 
@@ -61,13 +61,6 @@ FORFIX = 0
 .include "Equates.asm"
 .include "../System/MonitorEntries.asm"
 
-; Temporary: opens the token routines' scopes, which the modules continue (removed at integration).
-.scope Statements
-.endscope
-.scope Functions
-.endscope
-.scope Operators
-.endscope
 
 .org $E000
 

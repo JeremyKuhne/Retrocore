@@ -1,4 +1,4 @@
-; retrocore: style=strict ignore=unlinked-name:BASIC -- the language's name in prose
+; retrocore: style=strict
 ;; Integer BASIC: printing numbers, assignment and running a program ($E7C1-$E97F)
 ;;
 ;; `PRINT` of a number, `AUTO`, numeric assignment and the statement separators; then the run loop (<Lines>), which
@@ -66,7 +66,7 @@ NotNegative:
 ;; In: X = the noun stack, its top entry the first line number
 ;; Out: X = the noun stack, one entry higher
 ;; Uses: A, Y, Accumulator
-;; See: <Statements::AutoComma>, <WARM>, <AutoNumbering>
+;; See: <Statements::AutoComma>, <WarmStart>, <AutoNumbering>
 ;; Entry:
 ;;   SetStep = sets the step between line numbers to A (low) and Y (high)
 ;; Also: AUTO (IBSM)
@@ -110,10 +110,11 @@ SetStep:
 
 ;; Numeric assignment (token $71, and $56, the = of `FOR`): stores the number on top in the variable below it.
 ;;
-;; If the variable was marked with `DSP`, a running program then shows its name and new value (<LETNUMEND>).
+;; If the variable was marked with `DSP`, a running program then shows its name and new value
+;; (<Display::FinishNumberAssignment>).
 ;; In: X = the noun stack: the value above the variable's address
 ;; Out: X = the noun stack, both popped
-;; See: <DSP_NUM>
+;; See: <Statements::DspNumber>
 ;; Also: ASSIGN_NUM (UNKN)
 .proc AssignNumber
     jsr GetNumber
@@ -125,7 +126,7 @@ SetStep:
     sta (Auxiliary),y
     iny
     lda Accumulator+1
-    jmp LETNUMEND
+    jmp Display::FinishNumberAssignment
 .endproc
 
 ;; `LET` (token $5E), and `THEN` before a statement (token $25): nothing to do.
@@ -186,7 +187,7 @@ Done:
 ;;
 ;; A left parenthesis runs when the right parenthesis arrives, after the operators inside it. Raising the arriving
 ;; priority then stops the waiting tokens outside the parentheses from running yet. The routines of other tokens that
-;; open a parenthesis end here too, such as SCRN('s (<HIBYTEPAREN>).
+;; open a parenthesis end here too, such as SCRN('s (<StoreHighByteAndClose>).
 ;; Uses: Y
 ;; Keeps: A, X
 ;; See: <Operators::RightParenthesis>, <Interpreter::RunLine>
@@ -220,7 +221,7 @@ Done:
 ;; See: <Interpreter::RunLine>, <Statements::GoTo>
 ;; Also: IF (IBSM)
 .proc If
-    jsr NOTTOP
+    jsr InvertBoth::TopOnly
     beq Pop                         ; true: nothing to skip
     lda #TOKEN_THEN_STATEMENT
     sta CurrentVerb
@@ -245,7 +246,7 @@ Pop:
 ;; Runs the program from its first line, keeping the variables.
 ;;
 ;; At $E836, where DOS's `CHAIN` jumps (DOS's equates call it `IBCHN`). `RUN` comes here after `CLR`.
-;; See: <RUN>
+;; See: <Statements::Run>
 ;; Also: RUNWARM (IBSM)
 .proc RunFromStart
 .assert * = $E836, "Lines::RunFromStart must stay at $E836, where DOS's CHAIN jumps."
@@ -265,10 +266,10 @@ Pop:
 ;; The saved <TokenPointer> is at the token after the line number, where <Statements::Return> picks up.
 ;; In: X = the noun stack, its top entry the line number
 ;; Errors: 16 GOSUBS if 16 are already active, BAD BRANCH if there is no such line
-;; See: <POP>
+;; See: <Statements::Pop>
 ;; Also: GOSUB (IBSM)
 .proc GoSub
-    ldy #<ErrMsg08
+    ldy #<Messages::SixteenGoSubs
     lda GoSubIndex
     cmp #GOSUB_STACK_DEPTH
     bcs Lines::RunLoop::ToReportError
@@ -295,7 +296,7 @@ Pop:
     jsr GetNumber
     jsr FindLine
     bcc Found
-    ldy #<ErrMsg07
+    ldy #<Messages::BadBranch
     bne Lines::RunLoop::ToReportError   ; always
 
     ; Runs the program from the line found.
@@ -328,9 +329,9 @@ Found:
 ;; <Lines::RunLoop>).
 ;;
 ;; It marks the program as running (<Running>), and checks for Control-C and prints the line number in `TRACE` mode
-;; (<CHKBREAK>). Each line of a running program starts here.
+;; (<Break::Check>). Each line of a running program starts here.
 ;; In: A/Y = the token, CurrentLine = its line
-;; See: <Statements::Return>, <Statements::Next>, <CON>
+;; See: <Statements::Return>, <Statements::Next>, <Statements::Con>
 ;; Also: GETNEXT (IBSM)
 .proc RunFromToken
     ; $FF is both the top of the 6502's stack and a run flag with bit 7 set.
@@ -339,7 +340,7 @@ Found:
     txs
     sta TokenPointer
     sty TokenPointer+1
-    jsr CHKBREAK
+    jsr Break::Check
     ldy #0
     ; Falls into RunLoop.
 .endproc
@@ -380,17 +381,17 @@ TryLine:
     bne RunFrom
     cpy HighMemory+1
     bne RunFrom
-    ldy #<ErrMsg06
+    ldy #<Messages::NoEnd
 
 ;; The program has run past its last line: no longer running, it reports NO END.
 ;; Also: TRYLINE_END (UNKN)
 RanOff:
     lsr Running
 
-;; Reports the error whose message is at offset Y (<ERRMESS>).
+;; Reports the error whose message is at offset Y (<ReportError>).
 ;; Also: JmpERRMESS1 (IBSM)
 ToReportError:
-    jmp ERRMESS
+    jmp ReportError
 .endproc
 
 .endscope
@@ -400,12 +401,12 @@ ToReportError:
 
 ;; `RETURN` (token $5B): goes back to the token after the last `GOSUB`.
 ;; Errors: BAD RETURN if no GOSUB is active
-;; See: <Statements::GoSub>, <POP>
+;; See: <Statements::GoSub>, <Statements::Pop>
 ;; Entry:
 ;;   ContinueAt = runs from the token at X (low) and A (high), in the line at <CurrentLine>
 ;; Also: RETURN (IBSM)
 .proc Return
-    ldy #<ErrMsg09
+    ldy #<Messages::BadReturn
     lda GoSubIndex
     beq Lines::RunLoop::ToReportError
     dec GoSubIndex
@@ -434,11 +435,11 @@ ContinueAt:
 ;; <Statements::End>).
 ;;
 ;; Control-C and errors in a running program come here.
-;; See: <CHKBREAK>, <RUNERROR>
+;; See: <Break::Check>, <Messages::StopOrRetype>
 ;; Also: STOPPED_AT (IBSM)
 .proc Stop
-    ldy #<ErrMsg12
-    jsr ERRORMESS
+    ldy #<Messages::StoppedAt
+    jsr PrintMessage
     ldy #ProgramLine::NUMBER
     lda (CurrentLine),y
     tax
@@ -456,7 +457,7 @@ ContinueAt:
 ;; `END` (token $51): stops the program and returns to the prompt.
 ;; Also: END (IBSM)
 .proc End
-    jmp WARM
+    jmp WarmStart
 .endproc
 
 ;; Drops the innermost `FOR` loop, whose variable is not `NEXT`'s, then looks again (falls into
@@ -481,7 +482,7 @@ ContinueAt:
 ;;   ErrorIfZero = reports the error whose message is at offset Y when zero is set
 ;; Also: NEXT (IBSM)
 .proc Next
-    ldy #<ErrMsg11
+    ldy #<Messages::BadNext
     lda ForIndex
 
 ;; Reports the error whose message is at offset Y when zero is set: no loops left (BAD NEXT), or
@@ -547,14 +548,14 @@ Done:
 ;; `FOR` (token $55): starts a FOR loop for the variable, which `=` then assigns.
 ;;
 ;; The variable stays on the noun stack for the `=` (<Statements::AssignNumber>). `TO` and `STEP` fill in the rest of
-;; the entry. A FOR loop already active for the same variable is removed (<FORDROPOLD>); the ROMs' removal moves the
-;; loops above it down with one column wrong, which the FORFIX build corrects.
+;; the entry. A FOR loop already active for the same variable is removed (<DropOlderForLoop>); the ROMs' removal moves
+;; the loops above it down with one column wrong, which the FORFIX build corrects.
 ;; In: X = the noun stack, its top entry the variable
 ;; Errors: 16 FORS if 16 loops are active
-;; See: <Statements::To>, <STEP>, <Statements::Next>
+;; See: <Statements::To>, <Statements::Step>, <Statements::Next>
 ;; Also: FOR (IBSM)
 .proc For
-    ldy #<ErrMsg10
+    ldy #<Messages::SixteenFors
     lda ForIndex
     cmp #FOR_STACK_DEPTH
     beq Next::ErrorIfZero
@@ -563,7 +564,7 @@ Done:
     lda NounStackLow,x
     sta ForVariableLow,y
     lda NounStackHigh,x
-    jmp FORDROPOLD
+    jmp DropOlderForLoop
     .byte $60                       ; an unused byte (an RTS)
 .endproc
 
@@ -574,7 +575,7 @@ Done:
 ;; In: X = the noun stack, its top entry the limit
 ;; Out: X = the noun stack, one entry higher
 ;; Uses: A, Y, Accumulator
-;; See: <Statements::For>, <STEP>
+;; See: <Statements::For>, <Statements::Step>
 ;; Entry:
 ;;   SetPlace = stores A as the step's high byte, then the place to loop back to
 ;; Also: TO (IBSM)

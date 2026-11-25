@@ -1,4 +1,4 @@
-; retrocore: style=strict ignore=unlinked-name:BASIC -- BASIC is the language, not its entry point
+; retrocore: style=strict
 ;; Integer BASIC: Wozniak and Rankin's floating point ($F425-$F4FF)
 ;;
 ;; Steve Wozniak and Roy Rankin's floating-point arithmetic, which shares the Integer BASIC chips; Integer BASIC

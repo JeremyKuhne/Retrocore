@@ -1,4 +1,4 @@
-; retrocore: style=strict ignore=unlinked-name:BASIC -- BASIC is the language, not its entry point
+; retrocore: style=strict
 ;; Integer BASIC: the Mini-Assembler, and the end of the floating point ($F500-$F668)
 ;;
 ;; Steve Wozniak and Allen Baum's one-line assembler, which shares the Integer BASIC chips (<MiniAssembler>), and

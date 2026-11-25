@@ -18,53 +18,54 @@ FIRST_RESERVED_TOKEN = $85
 ;; The bits of PDL's number that pick the paddle, 0 to 3.
 PADDLE_MASK = $03
 
-;; One entry of <RuleStarts>: where a syntax rule starts, as <STARTRULE> takes it.
+;; One entry of <RuleStarts>: where a syntax rule starts, as <Tokenizer::StartRule> takes it.
 ;; Parameters:
 ;;   number = the rule's number, which is its entry's place in the table
 ;;   start = the rule's address in the syntax table
 .macro RuleStart number, start
     .assert * - RuleStarts = number, "The rule starts are in the order of the rules' numbers."
-    .byte (start - SYNTABL - 1) / 2
+    .byte (start - Syntax::Table - 1) / 2
 .endmacro
 
-;; Where each of the 32 syntax rules starts, as the tokenizer's <STARTRULE> takes it: the address less $EC01, halved.
+;; Where each of the 32 syntax rules starts, as the tokenizer's <Tokenizer::StartRule> takes it: the address less $EC01,
+;; halved.
 ;;
 ;; A rule therefore starts at an odd offset in its page; bit 7 selects the page at $ED00.
-;; See: <SYNTABL>, <CALLRULE>
+;; See: <Syntax::Table>, <Tokenizer::CallRule>
 ;; Also: SYNTABLNDX (IBSM)
 RuleStarts:
-    RuleStart SNUMBER, RULE00
-    RuleStart SUNUSED1, RULE01
-    RuleStart SSTMT, RULE02
-    RuleStart SDIMSTR, RULE03
-    RuleStart STHEN, RULE04
-    RuleStart SINVARS, RULE05
-    RuleStart SSUBSTR, RULE06
-    RuleStart SEXPR, RULE07
-    RuleStart SSTRING, RULE08
-    RuleStart SSTRVAR, RULE09
-    RuleStart SSTRDEST, RULE0A
-    RuleStart SSTMT2, RULE0B
-    RuleStart SSTRCHR, RULE0C
-    RuleStart SDIMLIST, RULE0D
-    RuleStart SPRLIST, RULE0E
-    RuleStart SDIGIT, RULE0F
-    RuleStart SDIMNUM, RULE10
-    RuleStart SRPAREN, RULE11
-    RuleStart SINNUMS, RULE12
-    RuleStart SSIGNED, RULE13
-    RuleStart SFUNC, RULE14
-    RuleStart SOPERAND, RULE15
-    RuleStart SUNUSED2, RULE16
-    RuleStart SNUMVAR, RULE17
-    RuleStart SASSIGN, RULE18
-    RuleStart SNAME, RULE19
-    RuleStart SIMMED, RULE1A
-    RuleStart SSTMT3, RULE1B
-    RuleStart SNAMEEND, RULE1C
-    RuleStart SNAMECH, RULE1D
-    RuleStart SOPER, RULE1E
-    RuleStart SLINE, RULE1F
+    RuleStart Syntax::RULE_NUMBER, Syntax::NumberRule
+    RuleStart Syntax::RULE_NUMBER_THEN_ARRAY, Syntax::NumberThenArrayRule
+    RuleStart Syntax::RULE_STATEMENT, Syntax::StatementRule
+    RuleStart Syntax::RULE_DIM_STRING, Syntax::DimStringRule
+    RuleStart Syntax::RULE_THEN, Syntax::ThenRule
+    RuleStart Syntax::RULE_INPUT_NEXT, Syntax::InputNextRule
+    RuleStart Syntax::RULE_SUBSTRING, Syntax::SubstringRule
+    RuleStart Syntax::RULE_EXPRESSION, Syntax::ExpressionRule
+    RuleStart Syntax::RULE_STRING, Syntax::StringRule
+    RuleStart Syntax::RULE_STRING_VARIABLE, Syntax::StringVariableRule
+    RuleStart Syntax::RULE_STRING_DESTINATION, Syntax::StringDestinationRule
+    RuleStart Syntax::RULE_STATEMENTS_TEXT_TO_TAB, Syntax::StatementsTextToTabRule
+    RuleStart Syntax::RULE_STRING_CHARACTERS, Syntax::StringCharactersRule
+    RuleStart Syntax::RULE_DIM_NEXT, Syntax::DimNextRule
+    RuleStart Syntax::RULE_PRINT_NEXT, Syntax::PrintNextRule
+    RuleStart Syntax::RULE_DIGIT, Syntax::DigitRule
+    RuleStart Syntax::RULE_DIM_ARRAY, Syntax::DimArrayRule
+    RuleStart Syntax::RULE_RIGHT_PARENTHESIS, Syntax::RightParenthesisRule
+    RuleStart Syntax::RULE_INPUT_NUMBERS, Syntax::InputNumbersRule
+    RuleStart Syntax::RULE_SIGNED_NUMBER, Syntax::SignedNumberRule
+    RuleStart Syntax::RULE_FUNCTION_NAME, Syntax::FunctionNameRule
+    RuleStart Syntax::RULE_OPERAND, Syntax::OperandRule
+    RuleStart Syntax::RULE_UNSIGNED_OPERAND, Syntax::UnsignedOperandRule
+    RuleStart Syntax::RULE_NUMBER_VARIABLE, Syntax::NumberVariableRule
+    RuleStart Syntax::RULE_ASSIGNMENT, Syntax::AssignmentRule
+    RuleStart Syntax::RULE_NAME, Syntax::NameRule
+    RuleStart Syntax::RULE_IMMEDIATE_STATEMENT, Syntax::ImmediateStatementRule
+    RuleStart Syntax::RULE_STATEMENTS_LIST_TO_IN, Syntax::StatementsListToInRule
+    RuleStart Syntax::RULE_NAME_REST, Syntax::NameRestRule
+    RuleStart Syntax::RULE_NAME_CHARACTER, Syntax::NameCharacterRule
+    RuleStart Syntax::RULE_OPERATOR, Syntax::OperatorRule
+    RuleStart Syntax::RULE_LINE, Syntax::LineRule
 .assert * - RuleStarts = 32, "One start for each of the 32 rules."
 
 ; Showing a variable that DSP marks.
@@ -72,11 +73,11 @@ RuleStarts:
 
 ;; Prints the number in <Accumulator> and a blank: the value of a variable DSP shows.
 ;; In: Accumulator = the number
-;; See: <PRINTACC>
+;; See: <Statements::PrintNumber::FromAccumulator>
 ;; Also: PRNUMBLANK (UNKN)
 .proc PrintNumberAndBlank
     ldy #0
-    jsr PRINTACC
+    jsr Statements::PrintNumber::FromAccumulator
     lda #BLANK | $80
     jmp CharacterOut
 .endproc
@@ -151,7 +152,7 @@ PrintEquals:
 ;; In: A = the value's high byte, Auxiliary = the variable's value, Y = 1, X = the noun stack, its top entry the
 ;;   variable, whose display flag the lookup left in its high byte of numbers
 ;; Out: X = the noun stack, one entry higher
-;; See: <ASSIGN_NUM>, <TryShowNumber>
+;; See: <Statements::AssignNumber>, <TryShowNumber>
 ;; Also: LETNUMEND (UNKN)
 .proc FinishNumberAssignment
     sta (Auxiliary),y
@@ -188,7 +189,7 @@ PrintName:
 ;; Pops a string assignment's variable, and shows it if it is marked with DSP.
 ;; In: X = the noun stack, its top entries the variable's range and address
 ;; Out: X = the noun stack, both popped
-;; See: <LET_STR>, <TryShowString>
+;; See: <Statements::LetString>, <TryShowString>
 ;; Also: LETSTREND (UNKN)
 .proc FinishStringAssignment
     inx
@@ -230,12 +231,12 @@ Return:
 ;; Out: Accumulator = the number + 1, A = 0 for a number entry or the value's low byte for a variable's, X = the noun
 ;;   stack, one entry higher, Y = 0
 ;; Keeps: carry
-;; See: <GET16BIT>
+;; See: <GetNumber>
 ;; Entry:
 ;;   Done = returns; <Display::FinishStringAssignment> branches here for a variable DSP does not mark
 ;; Also: GET16INC (UNKN)
 .proc GetNumberPlusOne
-    jsr GET16BIT
+    jsr GetNumber
     inc Accumulator
     bne Done
     inc Accumulator+1
@@ -249,7 +250,7 @@ Done:
 
 ;; < (token $1C): replaces two numbers with 1 if the lower is less than the top one, 0 if not: NOT >=.
 ;;
-;; <NOT> always ends with zero clear, so the branch is always taken.
+;; <Operators::Not> always ends with zero clear, so the branch is always taken.
 ;; In: X = the noun stack: two numbers
 ;; Out: X = the noun stack, its top entry the result
 ;; Errors: >32767 if the difference overflows
@@ -277,34 +278,34 @@ Done:
 ;; Errors: >32767 if the difference overflows
 ;; Also: LESSEQ (UNKN)
 .proc LessOrEqual
-    jsr SUBTRACT
-    jsr NEGATE
+    jsr Operators::Subtract
+    jsr Operators::Negate
     bvc GreaterOrEqual::Sign        ; always: an overflow is an error
 .endproc
 
 ;; >= (token $18): 1 if the lower number is at least the top one: the difference is not negative.
 ;;
-;; The difference's sign (<SGN>) halved is 0 for 0 and 1, and $FF7F for -1; <NOT> turns that into 1, 1 and 0. As the
-;; difference must fit in 16 bits, comparing numbers more than 32767 apart is the >32767 error.
+;; The difference's sign (<Functions::Sgn>) halved is 0 for 0 and 1, and $FF7F for -1; <Operators::Not> turns that into
+;; 1, 1 and 0. As the difference must fit in 16 bits, comparing numbers more than 32767 apart is the >32767 error.
 ;; In: X = the noun stack: two numbers
 ;; Out: X = the noun stack, its top entry the result
 ;; Errors: >32767 if the difference overflows
 ;; Entry:
 ;;   Sign = turns the difference on the noun stack into the result; <LessOrEqual> branches here
-;;   ToNot = replaces the top number with NOT of it (<NOT>); the other comparisons, AND and OR branch here
+;;   ToNot = replaces the top number with NOT of it (<Operators::Not>); the other comparisons, AND and OR branch here
 ;; Also: GREATEQ (UNKN)
 .proc GreaterOrEqual
-    jsr SUBTRACT
+    jsr Operators::Subtract
 
 ;; Turns the difference on the noun stack into the result; <LessOrEqual> branches here.
 Sign:
-    jsr SGN
+    jsr Functions::Sgn
     lsr NounStackLow,x
 
-;; Replaces the top number with NOT of it (<NOT>); the other comparisons, AND and OR branch here.
+;; Replaces the top number with NOT of it (<Operators::Not>); the other comparisons, AND and OR branch here.
 ;; Also: JmpNOT (IBSM)
 ToNot:
-    jmp NOT
+    jmp Operators::Not
 .endproc
 
 ;; AND (token $1D): 1 if both numbers are not 0, else 0.
@@ -345,15 +346,15 @@ Store:
 
 ;; STEP (token $58): sets the step of the FOR loop being set up, and the place to loop back to again, after STEP.
 ;; In: X = the noun stack, its top entry the step
-;; See: <TO>, <FOR>, <SETFORPLACE>
+;; See: <Statements::To>, <Statements::For>, <Statements::To::SetPlace>
 ;; Also: STEP (IBSM)
 .proc Step
-    jsr GET16BIT
+    jsr GetNumber
     ldy ForIndex
     lda Accumulator
     sta ForStepLow-1,y
     lda Accumulator+1
-    jmp SETFORPLACE
+    jmp Statements::To::SetPlace
 .endproc
 
 .endscope
@@ -367,7 +368,7 @@ Store:
 ;; which FORFIX builds.
 ;; In: A = the variable's address, high byte, Y = the new loop's index, X = the noun stack, its top entry the variable
 ;; Keeps: X
-;; See: <FOR>
+;; See: <Statements::For>
 ;; Also: FORDROPOLD (UNKN)
 .proc DropOlderForLoop
     sta ForVariableHigh,y
@@ -471,20 +472,21 @@ Done:
 
 .endscope
 
-;; A keyword matched (<GOTKEYWORD>): writes its token and goes on (<PUTTOKNEXT>), or fails if it is a reserved word,
-;; a token of $85 and up.
+;; A keyword matched (<Tokenizer::GotKeyword>): writes its token and goes on (<Tokenizer::PutTokenAndNext>), or fails if
+;; it is a reserved word, a token of $85 and up.
 ;;
-;; Failing with Y = 2, at the bottom of the first page, makes the name rule (<SNAMECH>) try a digit and end the name.
+;; Failing with Y = 2, at the bottom of the first page, makes the name rule (<Syntax::RULE_NAME_CHARACTER>) try a digit
+;; and end the name.
 ;; In: A = the token, Y = the item
 ;; Also: KEYMATCHED (UNKN)
 .proc WriteKeywordToken
     cmp #FIRST_RESERVED_TOKEN
     bcs Reserved
-    jmp PUTTOKNEXT
+    jmp Tokenizer::PutTokenAndNext
 
 Reserved:
     ldy #2
-    jmp ITEMFAILED
+    jmp Tokenizer::ItemFailed
 .endproc
 
 ; DSP and CON.
@@ -515,7 +517,7 @@ Reserved:
 ;; CON (token $06): continues a program stopped by Control-C, from the token where it stopped.
 ;;
 ;; <Break::Check> saved the place in the noun stack's first entries.
-;; See: <GETNEXT>
+;; See: <Lines::RunFromToken>
 ;; Also: CON (IBSM)
 .proc Con
     lda Break::StoppedLine
@@ -524,7 +526,7 @@ Reserved:
     sta CurrentLine+1
     lda Break::StoppedToken
     ldy Break::StoppedTokenHigh
-    jmp GETNEXT
+    jmp Lines::RunFromToken
 .endproc
 
 .endscope
@@ -548,7 +550,8 @@ Reserved:
 ;; ASC( (token $3C): replaces a string with its first character's code, bit 7 set as the Apple II keeps text: 193
 ;; for A.
 ;;
-;; The routine then ends as a left parenthesis does (<LEFT_PAREN>), as the token opens ASC's parenthesis.
+;; The routine then ends as a left parenthesis does (<Operators::LeftParenthesis>), as the token opens ASC's
+;; parenthesis.
 ;; In: X = the noun stack, its top entries the string's range and address
 ;; Out: X = the noun stack, its top entry the code
 ;; Errors: RANGE for an empty string
@@ -570,7 +573,7 @@ ReadCharacter:
     ldy #0
     inx
     inx
-    jsr PUSHNOUN
+    jsr PushNoun
     jmp StoreHighByteAndClose
 .endproc
 
@@ -591,7 +594,7 @@ ReadCharacter:
     ldx SavedX
     tya
     ldy #0
-    jsr PUSHNOUN
+    jsr PushNoun
     sty NounStackNumberHigh,x
     rts
 .endproc
@@ -604,7 +607,7 @@ ReadCharacter:
 ;; INPUT of a string reads with it.
 ;; In: X = where the line starts in <InputBuffer>
 ;; Out: X = the index of the return that ends it
-;; See: <GetLine::NextCharacter>, <INPUTSTR>
+;; See: <GetLine::NextCharacter>, <Strings::ReadLineInto>
 ;; Also: RDKEY (IBSM)
 .proc ReadInputLine
     jsr GetLine::NextCharacter
@@ -613,7 +616,7 @@ ReadCharacter:
 
 .scope Break continued
 
-;; Goes to the warm start (<BASIC2>) if the line in <InputBuffer> holds a Control-C, from index X down to 0.
+;; Goes to the warm start (<WarmEntry>) if the line in <InputBuffer> holds a Control-C, from index X down to 0.
 ;;
 ;; The index counts down only while it is below $80, so when X is $81 or more only the character at X is checked.
 ;; In: X = the last index to check
@@ -628,7 +631,7 @@ NextCharacter:
     lda InputBuffer,x
     cmp #CONTROL_C | $80
     bne NotControlC
-    jmp BASIC2
+    jmp WarmEntry
 
 NotControlC:
     dex
@@ -642,10 +645,10 @@ NotControlC:
 
 ;; Reads a line for INPUT of numbers, with the ? prompt, and checks it for Control-C (<Break::CheckLine>).
 ;; Out: Y = the index of the underline that ends it, X = the same
-;; See: <GETQLINE>, <INPUTNUM>
+;; See: <Editor::ReadInputLine>, <Statements::InputNumber>
 ;; Also: INPUTNUMLN (UNKN)
 .proc ReadNumberLine
-    jsr GETQLINE
+    jsr Editor::ReadInputLine
     tya
     tax
     jsr Break::CheckLine
@@ -659,22 +662,22 @@ NotControlC:
 
 ;; ^ (token $20): replaces two numbers with the lower one raised to the power of the top one.
 ;;
-;; The power is repeated multiplication (<MULT>), starting from 1: <SearchPointer> counts, <SearchPointer2> holds the
-;; base. A negative exponent gives 0, but pushes it above the exponent instead of replacing both operands, so they stay
-;; on the noun stack below it.
+;; The power is repeated multiplication (<Operators::Multiply>), starting from 1: <SearchPointer> counts,
+;; <SearchPointer2> holds the base. A negative exponent gives 0, but pushes it above the exponent instead of replacing
+;; both operands, so they stay on the noun stack below it.
 ;; In: X = the noun stack: the base, then the exponent on top
 ;; Out: X = the noun stack, its top entry the power
 ;; Errors: >32767
 ;; Also: EXP (IBSM)
 .proc Power
-    jsr GET16BIT
+    jsr GetNumber
     lda Accumulator+1
     bpl Positive
 
     ; A negative exponent: push 0.
     tya
     dex
-    jsr PUSHNOUN
+    jsr PushNoun
     sty NounStackNumberHigh,x
 
 Done:
@@ -685,13 +688,13 @@ Positive:
     sta SearchPointer+1
     lda Accumulator
     sta SearchPointer
-    jsr GET16BIT
+    jsr GetNumber
     lda Accumulator
     sta SearchPointer2
     lda Accumulator+1
     sta SearchPointer2+1
     lda #1
-    jsr PUSHNOUN
+    jsr PushNoun
     sty NounStackNumberHigh,x
 
     ; Count the exponent down, multiplying by the base each time.
@@ -704,10 +707,10 @@ CountDown:
     dec SearchPointer
     lda SearchPointer2
     ldy #0
-    jsr PUSHNOUN
+    jsr PushNoun
     lda SearchPointer2+1
     sta NounStackNumberHigh,x
-    jsr MULT
+    jsr Operators::Multiply
     jmp Multiply
 .endproc
 
@@ -734,10 +737,10 @@ Return:
 
 ;; PRINT's comma at the end of the statement (token $4A): moves to the next tab stop, and the line owes no return.
 ;; Out: ReturnPending = bit 7 clear
-;; See: <NEXTTAB>
+;; See: <NextTabStop>
 ;; Also: COMMA_PREND (UNKN)
 .proc PrintCommaEnd
-    jsr NEXTTAB
+    jsr NextTabStop
     lsr ReturnPending
     rts
 .endproc
@@ -747,13 +750,13 @@ Return:
 ;; Runs a line's tokens with the run flag and the stack pointer set from X, checking for Control-C first; nothing in
 ;; the ROM reaches it.
 ;; In: X = the run flag and the stack pointer
-;; See: <Break::Check>, <RUNLOOP>
+;; See: <Break::Check>, <Lines::RunLoop>
 ;; Also: RUNTOKENS (UNKN)
 .proc RunWithStack
     stx Running
     txs
     jsr Break::Check
-    jmp RUNLOOP
+    jmp Lines::RunLoop
 .endproc
 
 ; PR#.
@@ -808,13 +811,13 @@ Return:
 
 .endscope
 
-;; Reads the next byte of the line (<GETVERB>), with Y = 0.
+;; Reads the next byte of the line (<Interpreter::ReadNextByte>), with Y = 0.
 ;; Out: A = the byte, Y = 0
 ;; Keeps: X, carry
 ;; Also: GETVERB0 (UNKN)
 .proc ReadNextLineByte
     ldy #0
-    jmp GETVERB
+    jmp Interpreter::ReadNextByte
 .endproc
 
 ;; Moves down a line for <TabToColumn>, and takes the column less the window's width as the column on that line.
@@ -828,7 +831,7 @@ Return:
 ;; Sets the cursor's column to Y, moving down a line for each window's width it passes.
 ;; In: Y = the column, from 0
 ;; Out: CursorColumn = the column on its line
-;; See: <TAB>, <NEXTTAB>
+;; See: <Statements::Tab>, <NextTabStop>
 ;; Also: SETCURCOL (UNKN)
 .proc TabToColumn
     tya
@@ -842,12 +845,13 @@ Return:
     ; Unused bytes.
     .byte $00, $00, $00, $FF, $FF, $FF, $FF
 
-;; Stores Y as the high byte of the number just pushed, then ends as a left parenthesis does (<LEFT_PAREN>).
+;; Stores Y as the high byte of the number just pushed, then ends as a left parenthesis does
+;; (<Operators::LeftParenthesis>).
 ;; In: Y = the high byte, X = the noun stack
 ;; Also: HIBYTEPAREN (UNKN)
 .proc StoreHighByteAndClose
     sty NounStackNumberHigh,x
-    jmp LEFT_PAREN
+    jmp Operators::LeftParenthesis
 .endproc
 
 .scope Display continued

@@ -13,24 +13,6 @@
 ;;
 ;; Part of IntegerBasic.asm.
 
-; Shared constants: to move to Equates.asm at integration.
-
-;; The lo-res screen's rows: PLOT, HLIN and SCRN( take a row from 0 to 47.
-LOW_RES_ROWS = 48
-
-;; The lo-res screen's columns: PLOT and VLIN take a column from 0 to 39.
-LOW_RES_COLUMNS = 40
-
-;; The text screen's lines: VTAB takes a line from 1 to 24.
-TEXT_ROWS = 24
-
-;; The token that ends a string variable's name, $: the name's characters have bit 7 set, and this byte does not.
-TOKEN_DOLLAR = $40
-
-;; What <MarkInputLineUsed> puts at the start of <InputBuffer>, which INPUT of numbers (<COMMA_INPUT>) takes as the end
-;; of the line, so the next variable asks for a new one.
-INPUT_LINE_END = $80
-
 ; This file's constants.
 
 ;; The first page of the variables after a cold start, which <Memory::SetFor4K> also uses: $0800, the first page above
@@ -58,10 +40,10 @@ RANDOM_TAP = $40
 ;; PRINT's comma before a string (token $48): moves to the next tab stop, then prints the string.
 ;; In: X = the noun stack, its top entries the string's range and address
 ;; Out: X = the noun stack, both popped, ReturnPending = $FF
-;; See: <NEXTTAB>
+;; See: <NextTabStop>
 ;; Also: COMMA_PRSTR (UNKN)
 .proc PrintStringComma
-    jsr NEXTTAB
+    jsr NextTabStop
     ; Falls into PrintString.
 .endproc
 
@@ -109,8 +91,8 @@ SetReturnPending:
 
 ;; LEN( (token $3B): replaces a string with its length, the size of its range.
 ;;
-;; The length replaces the address entry, and the routine then ends as a left parenthesis does (<LEFT_PAREN>), as
-;; the token opens LEN's parenthesis.
+;; The length replaces the address entry, and the routine then ends as a left parenthesis does
+;; (<Operators::LeftParenthesis>), as the token opens LEN's parenthesis.
 ;; In: X = the noun stack, its top entries the string's range and address
 ;; Out: X = the noun stack, its top entry the length
 ;; Also: LEN (IBSM)
@@ -123,7 +105,7 @@ SetReturnPending:
     sec
     sbc NounStackLow-1,x
     sta NounStackLow,x
-    jmp LEFT_PAREN
+    jmp Operators::LeftParenthesis
 .endproc
 
 .endscope
@@ -136,10 +118,10 @@ SetReturnPending:
 ;; Out: A = the number, Accumulator = the number, X = the noun stack, one entry higher, Y = 0, zero = set for 0
 ;; Errors: >255 if the number is above 255 or negative
 ;; Keeps: carry
-;; See: <GET16BIT>
+;; See: <GetNumber>
 ;; Also: GETBYTE (IBSM)
 .proc GetByte
-    jsr GET16BIT
+    jsr GetNumber
     lda Accumulator+1
     bne ValueOver255Error
     lda Accumulator
@@ -179,7 +161,7 @@ FirstValueByte = TextIndex
 
 ;; MAN (token $0F): leaves AUTO mode.
 ;; Out: AutoNumbering = bit 7 clear
-;; See: <AUTO>
+;; See: <Statements::Auto>
 ;; Also: MAN (UNKN)
 .proc Man
     lsr AutoNumbering
@@ -203,41 +185,41 @@ FirstValueByte = TextIndex
 
 ;; Reports the >255 error: a value that must fit in a byte does not.
 ;; Entry:
-;;   ToReportError = reports the error whose message offset is in Y (<ERRMESS>); <RangeError> branches here
+;;   ToReportError = reports the error whose message offset is in Y (<ReportError>); <RangeError> branches here
 ;; Also: HI255ERR (IBSM)
 .proc ValueOver255Error
-    ldy #<ErrMsg15
+    ldy #<Messages::GreaterThan255
 
-;; Reports the error whose message offset is in Y (<ERRMESS>); <RangeError> branches here.
+;; Reports the error whose message offset is in Y (<ReportError>); <RangeError> branches here.
 ;; Also: JmpERRMESS3 (IBSM)
 ToReportError:
-    jmp ERRMESS
+    jmp ReportError
 .endproc
 
 ;; Reports the RANGE error: a value outside what a statement allows, such as a screen position.
 ;; Also: RANGERR (IBSM)
 .proc RangeError
-    ldy #<ErrMsg16
+    ldy #<Messages::Range
     bne ValueOver255Error::ToReportError
 .endproc
 
 ;; Divides two numbers from the noun stack, the lower by the top one, as magnitudes, keeping the quotient's sign.
 ;;
-;; <MDARGS> takes both as positive values and keeps the sign. Each of the 16 steps shifts the next bit of the dividend
-;; into the remainder and subtracts the divisor where it fits, setting the quotient's bit. <Operators::Divide> and MOD
-;; (<MOD>) end with <MultEnd>, which applies the sign.
+;; <Operators::TakeMagnitudes> takes both as positive values and keeps the sign. Each of the 16 steps shifts the next
+;; bit of the dividend into the remainder and subtracts the divisor where it fits, setting the quotient's bit.
+;; <Operators::Divide> and MOD (<Operators::Mod>) end with <Operators::Multiply::PushResult>, which applies the sign.
 ;; In: X = the noun stack: the dividend, then the divisor on top
 ;; Out: Accumulator = the quotient's magnitude, Pointer3 = the remainder's magnitude, Pointer2+1 = bit 7 set for a
 ;;   negative result, Auxiliary = the divisor's magnitude, X = both popped, Y = 0, zero = set
 ;; Errors: >32767 for a division by 0
 ;; Also: DIVMOD (UNKN)
 .proc DivideWithRemainder
-    jsr MDARGS
+    jsr Operators::TakeMagnitudes
     lda Auxiliary
     bne NextBit
     lda Auxiliary+1
     bne NextBit
-    jmp Err32767
+    jmp Operators::Negate::OverflowError
 
     ; One step: the dividend and the remainder shift left together.
 NextBit:
@@ -277,7 +259,7 @@ CountBit:
 ;; In: X = the noun stack, its top entry the address
 ;; Also: CALL (IBSM)
 .proc Call
-    jsr GET16BIT
+    jsr GetNumber
     jmp (Accumulator)
 .endproc
 
@@ -348,19 +330,19 @@ RangeErrorIfCarry:
 .endscope
 
 ;; Prints an error: ***, the message at offset Y and ERR, then sounds the bell.
-;; In: Y = the message's offset from <ErrMsg00>
+;; In: Y = the message's offset from <Messages::GreaterThan32767>
 ;; Uses: A, X, Y
-;; See: <ERRMESS>
+;; See: <ReportError>
 ;; Also: PRINTERR (IBSM)
 .proc PrintErrorMessage
     tya
     tax
-    ldy #<ErrMsg13
-    jsr ERRORMESS
+    ldy #<Messages::ErrorStart
+    jsr PrintMessage
     txa
     tay
-    jsr ERRORMESS
-    ldy #<ErrMsg14
+    jsr PrintMessage
+    ldy #<Messages::ErrorEnd
     jmp PrintMessageThenBeep
 .endproc
 
@@ -399,10 +381,10 @@ Done:
 ;; Out: X = the noun stack, its top entry the byte
 ;; Also: PEEK (IBSM)
 .proc Peek
-    jsr GET16BIT
+    jsr GetNumber
     lda (Accumulator),y
     sty NounStackNumberHigh-1,x
-    jmp PUSHNOUN
+    jmp PushNoun
 .endproc
 
 .endscope
@@ -431,7 +413,7 @@ Done:
 ;; See: <FirstValue>
 ;; Also: POKE (IBSM)
 .proc Poke
-    jsr GET16BIT
+    jsr GetNumber
     lda FirstValueByte
     sta (Accumulator),y
     rts
@@ -446,7 +428,7 @@ Done:
 ;; In: X = the noun stack: the dividend, then the divisor on top
 ;; Out: X = the noun stack, its top entry the quotient
 ;; Errors: >32767 for a division by 0
-;; See: <DivideWithRemainder>, <MOD>
+;; See: <DivideWithRemainder>, <Operators::Mod>
 ;; Also: DIVIDE (IBSM)
 .proc Divide
     jsr DivideWithRemainder
@@ -454,7 +436,7 @@ Done:
     sta Pointer3
     lda Accumulator+1
     sta Pointer3+1
-    jmp MultEnd
+    jmp Operators::Multiply::PushResult
 .endproc
 
 .endscope
@@ -466,11 +448,11 @@ Done:
 ;; elements 0 to n.
 ;; In: X = the noun stack: the size n above the variable's address
 ;; Errors: RANGE for a size of $8000 bytes or more, or an n of -1, MEM FULL, DIM for a variable that is not the newest
-;; See: <SETVARSIZE>, <DIMSTR>
+;; See: <SetVariableSize>, <Statements::DimString>
 ;; Also: DIMNUM (IBSM)
 .proc DimNumber
     jsr ArraySize
-    jmp SETVARSIZE
+    jmp SetVariableSize
 .endproc
 
 .endscope
@@ -482,7 +464,7 @@ Done:
 ;;
 ;; The element must lie below the address of the next variable, the end of the array: indexes run from 0 to the
 ;; size DIM gave. An array that was never DIMed has room for element 0 only. The routine then ends as a left
-;; parenthesis does (<LEFT_PAREN>), as the token opens the index's parenthesis.
+;; parenthesis does (<Operators::LeftParenthesis>), as the token opens the index's parenthesis.
 ;; In: X = the noun stack: the index above the array's address
 ;; Out: X = the noun stack, its top entry the element's address
 ;; Errors: RANGE for an index past the end, or below 0
@@ -517,7 +499,7 @@ AddSize:
     lda NounStackHigh,x
     sbc (Auxiliary),y
     bcs Statements::VLinAt::RangeErrorIfCarry
-    jmp LEFT_PAREN
+    jmp Operators::LeftParenthesis
 .endproc
 
 .endscope
@@ -528,17 +510,17 @@ AddSize:
 ;; RND (token $2F): replaces n with a random number from 0 to n - 1 (from 0 to -(n - 1) for a negative n).
 ;;
 ;; The random state is <RandomSeed>/<RandomSeedHigh>, which the Monitor's keyboard routine counts up while it waits
-;; for a key. RND takes the state, cleared of bit 15 and never 0, modulo n (<MOD>), and advances it 17 times as a
-;; shift register whose new low bit is bits 14 and 13 exclusive-ORed.
+;; for a key. RND takes the state, cleared of bit 15 and never 0, modulo n (<Operators::Mod>), and advances it 17 times
+;; as a shift register whose new low bit is bits 14 and 13 exclusive-ORed.
 ;; In: X = the noun stack, its top entry n
 ;; Out: X = the noun stack, its top entry the random number
 ;; Errors: >32767 for an n of 0
 ;; Also: RND (IBSM)
 .proc Rnd
     ; Push the state: its low byte now, its high byte once cleared of bit 15.
-    jsr GET16BIT
+    jsr GetNumber
     lda RandomSeed
-    jsr PUSHNOUN
+    jsr PushNoun
     lda RandomSeedHigh
     bne ClearTopBit
     cmp RandomSeed
@@ -564,10 +546,10 @@ Advance:
 
     ; Push n, and take the state modulo n.
     lda Accumulator
-    jsr PUSHNOUN
+    jsr PushNoun
     lda Accumulator+1
     sta NounStackNumberHigh,x
-    jmp MOD
+    jmp Operators::Mod
 .endproc
 
 .endscope
@@ -585,10 +567,10 @@ Advance:
 ;; <Statements::VLinAt::RangeErrorIfCarry> with the carry clear, which goes on to draw a vertical line instead.
 ;; In: X = the noun stack, its top entry the new HIMEM
 ;; Entry:
-;;   ToNew = erases the program (<NEW>)
+;;   ToNew = erases the program (<Statements::New>)
 ;; Also: SETHIMEM (UNKN)
 .proc SetHighMemory
-    jsr GET16BIT
+    jsr GetNumber
     ldy Accumulator
     cpy LowMemory
     lda Accumulator+1
@@ -598,10 +580,10 @@ Advance:
     lda Accumulator+1
     sta HighMemory+1
 
-;; Erases the program (<NEW>).
+;; Erases the program (<Statements::New>).
 ;; Also: JMPNEW (UNKN)
 ToNew:
-    jmp NEW
+    jmp Statements::New
 .endproc
 
 ;; Sets LOMEM to the number on the noun stack, if it is below HIMEM, and erases the program; nothing in the ROM
@@ -612,7 +594,7 @@ ToNew:
 ;;   ToRangeErrorIfCarry = a RANGE error if the carry is set
 ;; Also: SETLOMEM (UNKN)
 .proc SetLowMemory
-    jsr GET16BIT
+    jsr GetNumber
     ldy Accumulator
     cpy HighMemory
     lda Accumulator+1
@@ -639,16 +621,16 @@ ToRangeErrorIfCarry:
 
 ;; INPUT of a string (token $52, and $26 after a comma): reads a line into the string variable.
 ;; In: X = the noun stack, its top entries the variable's range and address
-;; See: <INPUTSTR>
+;; See: <Strings::ReadLineInto>
 ;; Also: INPUT_STRVAR (UNKN)
 .proc InputString
-    jsr INPUTSTR
+    jsr Strings::ReadLineInto
     jmp MarkInputLineUsed
 .endproc
 
 ;; INPUT with a prompt (token $53): prints the prompt string; the variables follow.
 ;;
-;; It marks the input line as used up, so the first numeric variable asks for a line (<COMMA_INPUT>).
+;; It marks the input line as used up, so the first numeric variable asks for a line (<Statements::InputNumberComma>).
 ;; In: X = the noun stack, its top entries the prompt's range and address
 ;; Out: X = the noun stack, both popped
 ;; Also: INPUT_PROMPT (IBSM)
@@ -659,14 +641,14 @@ ToRangeErrorIfCarry:
 
 .endscope
 
-;; Marks the input line as used up: <TextIndex> before the buffer, and <INPUT_LINE_END> at its start.
-;; Out: TextIndex = $FF, A = <INPUT_LINE_END>
+;; Marks the input line as used up: <TextIndex> before the buffer, and <TOKEN_INPUT_END> at its start.
+;; Out: TextIndex = $FF, A = <TOKEN_INPUT_END>
 ;; Keeps: X, Y
 ;; Also: INLINEDONE (UNKN)
 .proc MarkInputLineUsed
     lda #$FF
     sta TextIndex
-    lda #INPUT_LINE_END
+    lda #TOKEN_INPUT_END
     sta InputBuffer
     rts
 .endproc
@@ -683,21 +665,21 @@ ToRangeErrorIfCarry:
 ;;   TopOnly = NOT of the top number only, with A = the result and zero = set for 0, without moving X; IF uses it
 ;; Also: NOTBOTH (UNKN)
 .proc InvertBoth
-    jsr NOT
+    jsr Operators::Not
     inx
 
 ;; NOT of the top number only, with A = the result and zero = set for 0, without moving X; IF uses it.
 ;; Also: NOTTOP (UNKN)
 TopOnly:
-    jsr NOT
+    jsr Operators::Not
     lda NounStackLow,x
     rts
 .endproc
 
 .scope Memory continued
 
-;; Sets up memory for a 4K machine: LOMEM at $0800 and HIMEM at $1000, then erases the program (<NEW>).
-;; See: <COLD4K>, <ColdStart>
+;; Sets up memory for a 4K machine: LOMEM at $0800 and HIMEM at $1000, then erases the program (<Statements::New>).
+;; See: <ColdStart4K>, <ColdStart>
 ;; Also: SETMEM4K (UNKN)
 .proc SetFor4K
     lda #0
@@ -707,16 +689,17 @@ TopOnly:
     sta LowMemory+1
     lda #END_OF_4K_PAGE
     sta HighMemory+1
-    jmp NEW
+    jmp Statements::New
 .endproc
 
 .endscope
 
-;; The end of a substring's checks: carry clear if A is at most the string's end, for <CHKSTRRNG>.
+;; The end of a substring's checks: carry clear if A is at most the string's end, for
+;; <Operators::Substring::CheckRange>.
 ;; In: A = the substring's end, X = the noun stack, NounStackHigh,X = the string's end
-;; Out: Y = $FF, VerbPriority = $FF (<CHKSTRRNG> returns through <LEFT_PAREN>)
+;; Out: Y = $FF, VerbPriority = $FF (<Operators::Substring::CheckRange> returns through <Operators::LeftParenthesis>)
 ;; Errors: STRING if A is past the string's end
-;; See: <COMMA_SUBSTR>
+;; See: <Operators::SubstringComma>
 ;; Also: CHKSTREND (UNKN)
 .proc CheckSubstringEnd
     cmp NounStackHigh,x
@@ -724,39 +707,39 @@ TopOnly:
     clc
 
 ToCheckRange:
-    jmp CHKSTRRNG
+    jmp Operators::Substring::CheckRange
 .endproc
 
 ; RUN.
 .scope Statements continued
 
 ;; RUN alone (token $08): clears the variables and runs the program from its first line.
-;; See: <CLR>, <RUNWARM>
+;; See: <Statements::Clr>, <Lines::RunFromStart>
 ;; Also: RUN (IBSM)
 .proc Run
-    jsr CLR
-    jmp RUNWARM
+    jsr Statements::Clr
+    jmp Lines::RunFromStart
 .endproc
 
 ;; RUN with a line number (token $07): clears the variables and runs the program from that line.
 ;; In: X = the noun stack, its top entry the line number
 ;; Errors: BAD BRANCH if there is no such line
-;; See: <CLR>, <GOTO>
+;; See: <Statements::Clr>, <Statements::GoTo>
 ;; Also: RUNNUM (IBSM)
 .proc RunLine
-    jsr CLR
-    jmp GOTO
+    jsr Statements::Clr
+    jmp Statements::GoTo
 .endproc
 
 .endscope
 
 ;; For the lister: before a keyword, skips the blank its text starts with, if any, then prints a blank if the keyword
-;; starts with a letter (<BLANKIFLET>).
+;; starts with a letter (<Lister::BlankAfterLetter>).
 ;; In: X = the keyword's first table byte, Y = its index in the syntax table's page
 ;; Out: Y = the index of the first character to print
 ;; Uses: A, Pointer2
 ;; Keeps: X
-;; See: <LISTTOKEN>
+;; See: <Lister::PrintLine::PrintToken>
 ;; Also: KEYBLANK (UNKN)
 .proc BlankBeforeKeyword
     cpx #KEYWORD_BLANK
@@ -764,5 +747,5 @@ ToCheckRange:
     dey
 
 ToBlankIfLetter:
-    jmp BLANKIFLET
+    jmp Lister::BlankAfterLetter
 .endproc

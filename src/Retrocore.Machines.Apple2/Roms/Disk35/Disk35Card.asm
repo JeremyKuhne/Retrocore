@@ -2,7 +2,7 @@
 ;; THE APPLE II 3.5 DISK CONTROLLER CARD'S OWN FIRMWARE ($D000-$FFFF)
 ;;
 ;; What the card's 65C02 runs: it waits for the host's commands in its page zero, and answers ProDOS and
-;; SmartPort calls for up to two 3.5 drives on its own port (the Apple 3.5 <Drive>, GCR 400K and 800K, and the
+;; SmartPort calls for up to two 3.5 drives on its own port (the Apple 3.5 drive, GCR 400K and 800K, and the
 ;; Apple FDHD, which adds MFM 720K and 1440K) and for SmartPort bus devices such as the UniDisk 3.5 on its
 ;; second port, which it passes their calls to. Assembles byte-identically as part of Disk35Controller.asm; this
 ;; file holds the start-up, the command loop and the ROM's last page, and includes the subject files between.
@@ -313,7 +313,7 @@ Ran:
 ;; extended STATUS with code 0 may name a unit with bit 7 set, which is taken without the bit and noted in
 ;; <UnitWithHighBit>.
 ;; Out: carry = clear when the card is ready for another command, set when the handler left it waiting;
-;;      <ErrorCode> ($56) = the error, CardData = 0 when the result is final
+;;      <ErrorCode> ($56) = the error, CardData = 0 when the result is final (but for $7E and $7F, which leave it)
 ;; Entry:
 ;;   CallHandler = runs the handler for <CardState> on the 3.5 drives' port; <BootRead> comes here
 ;;   PassToBus = passes the command to the bus device in <CardUnit>; <BootRead> comes here

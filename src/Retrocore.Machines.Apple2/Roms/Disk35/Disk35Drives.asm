@@ -251,7 +251,7 @@ Done:
 ;; Checks that a 3.5 drive answers on a drive line: its step direction must follow the commands. Leaves the direction
 ;; outward.
 ;; In: X = the drive (0 or 1)
-;; Out: carry = set if there is no drive; else A = 0 for an Apple 3.5 <Drive>, <DEVICE_FDHD> for an FDHD (SuperDrive)
+;; Out: carry = set if there is no drive; else A = 0 for an Apple 3.5 drive, <DEVICE_FDHD> for an FDHD (SuperDrive)
 ;; Keeps: X, Y
 .proc Detect
     jsr Swim::SelectDrivePort
@@ -421,7 +421,8 @@ MfmFound:
     rts
 .endproc
 
-;; The <MediaMode> for each <MediaKind>, at its even index; the odd bytes are not read.
+;; The <MediaMode> for each double-density <MediaKind> (2 to 8), at its even index; the odd bytes, and the $52s at $0A
+;; and $0C, are not read.
 MediaModes:
     .byte $00, $00, $11, $88, $11, $88, $11, $88, $32, $09, $52, $12, $52, $12
 

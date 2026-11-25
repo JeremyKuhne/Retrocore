@@ -26,7 +26,7 @@
 ;;   Host/Card shared data-PASS          the host's own tests of the card's RAM through its windows
 ;;   Host RAM-PASS
 ;;
-;; Then, only with Apple's factory fixture in slot 1, the units and their read/write tests; and always:
+;; Then the units, and, only with Apple's factory fixture in slot 1, their read/write tests; and always:
 ;;
 ;;   Press E to Exit
 ;;
@@ -114,14 +114,11 @@ ErrorMark = $0606
 
 ; The card's RAM as the host sees it.
 
-;; The window on one 1 KB bank of the card's $0000-$3FFF, chosen through <BankSwitch>.
-BankWindow = $C800
-
 ;; The card's $7C00-$7FFF, always there.
 ExpansionWindow = $CC00
 
 ;; The card's page zero, at $C800-$C8FF with bank 0 latched.
-CardPageZero = BankWindow
+CardPageZero = CardWindow
 
 ;; Bank 2's card $0A00-$0AFF: RAM that the card's I/O page hides from its 65C02.
 RamUnderIo = $CA00
@@ -144,7 +141,7 @@ CardDeviceKinds = CardPageZero + DeviceKinds
 ;; The card's <MediaKind>, a byte for each unit from 1: what kind of disk (the MEDIA_ values).
 CardMediaKinds = CardPageZero + MediaKind
 
-;; The card's <Sense>, a byte for each unit from 1: <SENSE_LOCKED> is set when the disk is locked.
+;; The card's <Sense>, a byte for each unit from 1: <DISK_PROTECTED> is set when the disk is locked.
 CardSense = CardPageZero + Sense
 
 ; The card's banks, in the window.
@@ -180,21 +177,6 @@ SIGNAL_EXIT = $55
 ;; Card to host: a unit's read/write test failed.
 SIGNAL_READ_WRITE_FAILED = $4E
 
-; CardDeviceKinds.
-
-;; An Apple 3.5 <Drive>, 800K.
-KIND_APPLE_35 = $01
-
-;; An Apple FDHD (SuperDrive).
-KIND_FDHD = $03
-
-;; A UniDisk 3.5, an intelligent drive on the SmartPort bus.
-KIND_UNIDISK = $80
-
-; CardSense's bits.
-
-;; In <CardSense>: the disk is write-protected.
-SENSE_LOCKED = $20
 
 ; Card $0200-$03FF, from $8800-$89FF: seen at $CA00-$CBFF with bank 0 latched.
 .logicalorg $CA00
@@ -228,19 +210,19 @@ Unit:
     tay
     jsr PrintHexDigit
     lda CardDeviceKinds - 1,y
-    cmp #KIND_APPLE_35
+    cmp #DEVICE_DRIVE
     bne NotApple35
     lda #<TextApple35
     jsr Print
     jmp Media
 NotApple35:
-    cmp #KIND_FDHD
+    cmp #DEVICE_DRIVE | DEVICE_FDHD
     bne NotFdhd
     lda #<TextFdhd
     jsr Print
     jmp Media
 NotFdhd:
-    cmp #KIND_UNIDISK
+    cmp #DEVICE_BUS
     bne Media                       ; any other kind: no name
     lda #<TextUniDisk
     jsr Print
@@ -273,7 +255,7 @@ Not720K:
     jsr Print800K
     jmp Locked
 Not800K:
-    cmp #MEDIA_800K + 2
+    cmp #MEDIA_800K_2_TO_1
     bne NotOther800K
     jsr Print800K
     jmp Locked
@@ -299,7 +281,7 @@ Locked:
     bcs Next
     tay
     lda CardSense - 1,y
-    and #SENSE_LOCKED
+    and #DISK_PROTECTED
     beq Writable
     lda #<TextYes
     jsr Print
@@ -506,9 +488,9 @@ Title:
     asl a
     asl a
     asl a
-    ora #<LanguageCardBank2ReadOnly
+    ora #<BankLatch
     sta BankSwitch
-    lda #>LanguageCardBank2ReadOnly
+    lda #>BankLatch
     sta BankSwitchHigh
     jsr CarriageReturn
 
@@ -551,7 +533,7 @@ NextBank:
     ldy Bank
     sta (BankSwitch),y
     ldy SavedY
-    ldx #>BankWindow
+    ldx #>CardWindow
     stx PointerHigh
     ldx #>ExpansionWindow
 AddBank:
@@ -596,7 +578,7 @@ AddLast:
     ldy #BANK_IO
     sta (BankSwitch),y
     ldy #0
-    ldx #>BankWindow + 3
+    ldx #>CardWindow + 3
     stx PointerHigh
 AddPageB:
     clc
@@ -614,7 +596,7 @@ AddSlot:
     bne AddSlot
 
     ; Card $0800-$09FF, in the same bank.
-    ldx #>BankWindow
+    ldx #>CardWindow
     stx PointerHigh
     ldx #>RamUnderIo
 AddLow:
@@ -654,7 +636,7 @@ Fill:
     ldy Bank
     sta (BankSwitch),y
     ldy #0
-    ldx #>BankWindow
+    ldx #>CardWindow
     stx PointerHigh
     ldx #>ExpansionWindow
 FillByte:
@@ -685,7 +667,7 @@ CheckBank:
     ldy Bank
     sta (BankSwitch),y
     ldy #0
-    ldx #>BankWindow
+    ldx #>CardWindow
     stx PointerHigh
     ldx #>ExpansionWindow
 CheckByte:
@@ -761,7 +743,7 @@ NextBank:
     ldy Bank
     sta (BankSwitch),y
     ldy #0
-    ldx #>BankWindow
+    ldx #>CardWindow
     stx PointerHigh
     ldx #>ExpansionWindow
 ReadBank:
@@ -1060,7 +1042,7 @@ Spinner:
 .logicalorg
 
 ; The card's page zero for the diagnostics, which SelfTest::CardDiagnostics copies in and checks: a pattern in $00-$01
-; and zeros. SelfTest::TestRam soon writes over $00-$05.
+; and zeros. SelfTest::TestRam soon writes over $00-$01 and $04-$05.
 .logicalorg $0000
     .byte $55, $0F
     .res 254

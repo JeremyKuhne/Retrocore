@@ -537,7 +537,7 @@ CopyDib:
     jmp Done
 .endproc
 
-;; An Apple 3.5 <Drive>'s DIB, after the status byte and block count: the name's length and the name, padded to 16;
+;; An Apple 3.5 drive's DIB, after the status byte and block count: the name's length and the name, padded to 16;
 ;; the type, subtype and version; then <DIB_END>.
 Apple35Information:
     .byte 8, "DISK 3.5        "
@@ -580,7 +580,7 @@ FdhdInformation:
 KIND_LIMIT = $0D
 
 ;; Lists the formats a drive can write, after an eight-byte header, following each kind's link in <Kinds>: 800K at
-;; 2:1 and 4:1 interleave (kinds 6 and 4) on an Apple 3.5 <Drive>, and on an FDHD drive 1440K twice (kinds $0A and $0C),
+;; 2:1 and 4:1 interleave (kinds 6 and 4) on an Apple 3.5 drive, and on an FDHD drive 1440K twice (kinds $0A and $0C),
 ;; 800K twice and 720K (kind 8). 400K (kind 2) is never listed. The default is 1440K when <MediaMode> says the
 ;; disk is high density, else 800K.
 ;; Out: carry = clear; Count, CountHigh = the list's length and CardData = <TRANSFER_BUFFER_CODE>, or ErrorCode =

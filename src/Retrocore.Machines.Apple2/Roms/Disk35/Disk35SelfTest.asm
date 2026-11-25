@@ -18,8 +18,9 @@
 ;; reports to it, through $0002, each of: the slot page ("Card pseudoROM"), the EPROM's CRCs, its checksum, the SWIM and
 ;; the RAM. Then it leaves a sum of its RAM for the host to check ("Host/Card shared data"), finds its units, and, only
 ;; with Apple's factory fixture in slot 1, writes and reads back a block on units 1 and 2. It then reads memory
-;; until the host says to restart. A failure before the RAM's sum is reported to the host and blinks the LED until
-;; the host says to restart.
+;; until the host says to restart. A failure of a test after page zero's is reported to the host, and blinks the LED
+;; until the host says to restart; a failure of page zero's comes before the host listens, and the EPROM's checksum
+;; goes to the start-up failure, which never reports and blinks for ever.
 ;;
 ;; At the card's 2 MHz the start-up test takes about a quarter of a second, nearly all of it the checksum.
 
@@ -727,7 +728,7 @@ Copy:
     lda #COMMAND_READ_BLOCK
     sta CardCommand
 
-    ; The block, as WriteBlock chose it.
+    ; The block, as WriteTestBlock chose it.
     lda RandomBlock
     lsr a
     lda RandomBlock

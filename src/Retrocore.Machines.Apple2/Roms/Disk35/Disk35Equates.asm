@@ -5,7 +5,7 @@
 ;; (over RAM), and the 32 KB EPROM at $8000-$FFFF. The host Apple II sees parts of the same RAM:
 ;;
 ;;   Host $Cn00-$CnFF  card $7B00-$7BFF   read only; the card writes the slot page there
-;;   Host $C800-$CBFF  card $0000-$3FFF   a 1 KB window, bank n = card $n*$400, chosen by any access to $C080+$n0+n
+;;   Host $C800-$CBFF  card $0000-$3FFF   a 1 KB window, bank b = card b * $400, chosen by any access to $C080 + $n0 + b
 ;;   Host $CC00-$CFFF  card $7C00-$7FFF   always
 ;;
 ;; The SWIM (Sander-Wozniak Integrated Machine) answers at $0A00-$0A0F. At reset it is an IWM (Integrated Woz

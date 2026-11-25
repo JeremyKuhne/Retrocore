@@ -197,7 +197,8 @@ SpanFirst:
 SpanCylinder:
     .byte $00
 
-;; Each drive's disk: $11 GCR, $32 MFM 720K, $52 MFM 1440K; bits 5-6 = MFM.
+;; Each drive's disk: $11 GCR, $32 MFM 720K, $54 or $D4 MFM 1440K as <Drives::IdentifyMedia> finds it (the formatter
+;; leaves $40); bits 5-6 = MFM.
 MediaMode:
     .byte $00, $00, $00, $00, $00
 

@@ -52,8 +52,8 @@ Next:
     rts
 .endproc
 
-;; Never called: claims a cache slot without pointing the buffer pointers at it, marking it empty unless it is kept
-;; for a write.
+;; Never called: claims a cache slot without pointing the buffer pointers at it, marking it empty unless its owner byte
+;; has <CACHE_KEPT>, which no slot's has.
 ;; In: Y = the slot
 ;; Out: A = the slot's buffer code, also in <BufferCode>; CacheSlot = Y
 ;; Keeps: X, Y

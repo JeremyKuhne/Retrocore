@@ -235,11 +235,11 @@ DATA_TAKEN = $F0
 ;; <MailboxData>'s bank and half.
 DATA_WHERE = $1F
 
-;; The command's bits that go to <MailboxState>: <CallCommand> less its top three bits, the ProDOS and extended bits
+;; The command's bits that go to <MailboxState>: <CallCommand> less bits 7 and 6 (the ProDOS and extended bits)
 ;; and bit 5, which no command has.
 COMMAND_BITS = $1F
 
-;; <MailboxProgress> when the IIgs starts a write with interrupts off.
+;; <MailboxProgress> when the IIgs starts a write with interrupts off, and while it copies the block's first half.
 PROGRESS_STARTED = $C0
 
 ;; <MailboxProgress> when the IIgs's write is all in the window.

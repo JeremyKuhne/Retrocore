@@ -2,10 +2,10 @@
 ;; APPLE II 3.5 DISK CONTROLLER CARD FIRMWARE (341-0438-A)
 ;;
 ;; Assembles byte-identically to the 341-0438-A EPROM (32768 bytes, SHA-1 440c3f84176c7b9f542da0b6ddf4fb13ec326c46),
-;; which Apple2Disk35Tests.SourceMatchesTheChip checks by its SHA-256. The EPROM is the card's own 65C02's: it holds
-;; images of what the card copies into its RAM at start-up (its page zero, the host's code and the diagnostics), the
-;; card's self-tests, and the firmware the card runs from $D000. Its names are the SDK's own, given as the EPROM was
-;; decoded; the few that Apple's documents or sources give are kept in `Also:`.
+;; which Apple2Disk35Tests.SourceMatchesTheChip pins by its SHA-256 (084587835C1D...). The EPROM is the card's own
+;; 65C02's: it holds images of what the card copies into its RAM at start-up (its page zero, the host's code and the
+;; diagnostics), the card's self-tests, and the firmware the card runs from $D000. Its names are the SDK's own, given as
+;; the EPROM was decoded; the few that Apple's documents or sources give are kept in `Also:`.
 
 .cpu Wdc65C02
 

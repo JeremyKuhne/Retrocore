@@ -8,12 +8,14 @@ CI the same way every time.
 The first project built this way is an assembly-language interpreter for Scott Adams adventures, with Pirate Adventure
 as its game. It builds for the Apple-1, the Apple II, the Apple III, the Commodore PET and the BBC Micro.
 
-**Status:** proposed 2026-11-16 and revised the same day after walking through its open questions; nothing here is
-built. The [decisions](#decisions-agreed-2026-11-16) were agreed that day.
+**Status:** proposed 2026-11-16 and revised the same day after walking through its open questions. Revised again
+2026-11-25 against main, once the PET and BBC Micro had landed. Nothing here is built. The
+[decisions](#decisions-agreed-2026-11-16) were agreed on 2026-11-16, with [corrections](#revised-2026-11-25) on
+2026-11-25.
 
-**Before this begins:** the Commodore PET and the BBC Micro are added as Retrocore machines, in plans of their own.
-This plan assumes both exist, can be launched and debugged as the other machines are, and have a disk drive with an
-image format the [media layer](MediaPersistence.md) reads and writes.
+**What it builds on:** the [Commodore PET](../Pet.md) and the [BBC Micro](../BbcMicro.md) are Retrocore machines now,
+and every ROM they run is an SDK source, except the PET's 4040 and 2040 disk drives, whose ROMs must be dumps. Phases
+1 to 3 can start on main as it is. The starting environments need the [media writers](#media-writers) first.
 
 - [What there is](#what-there-is)
 - [Setting up a repository](#setting-up-a-repository)
@@ -40,19 +42,34 @@ image format the [media layer](MediaPersistence.md) reads and writes.
 | [Predefined symbols](../NativeAssembly.md#symbols) | A host sets constants before the source runs; the SDK's ROM sources already pick variants with `.ifndef ENHANCED`. |
 | [`AssemblyProject`](../../src/Retrocore.Assembler/Assembler/AssemblyProject.cs) and ld65-style linker configurations | Several sources, sections placed by memory region, BSS. |
 | A launch's `source`, `dialect`, `linkerConfiguration`, `loadAddress` | Assembles one source in the debug host for one `machine` and debugs it from its source map. |
-| [`AssembleCommand`](../../src/Retrocore.Debug/AssembleCommand.cs) | `Retrocore.Debug --assemble` writes a binary and a cc65 `.dbg` outside a debug session. |
-| The SDK's ROM sources | The Monitor, AppleSoft, Integer BASIC, DOS 3.3 and 3.2, the IIe firmware, the Woz Monitor and the ACI, the Apple III's boot ROM, SOS 1.3's kernel, loader and drivers, Level I and Level II, the Model III and 4 ROMs, and Color, Extended and Disk BASIC, all with labels and `;;` contracts. |
+| [`AssembleCommand`](../../src/Retrocore.Debug/AssembleCommand.cs) | `Retrocore.Debug --assemble` writes a binary and a cc65 `.dbg` outside a debug session, with `--dialect`, `--cpu`, `--origin`, `--config` and `--define NAME=value`. It knows no machine or target. |
+| `.cpu` and ca65's `.setcpu` | A 65C02-only opcode under `.cpu Mos6502` is an error. A source's own `.cpu` replaces the launch's CPU without a check. |
+| The linker | ld65's `MEMORY`, `SEGMENTS`, `SYMBOLS` and `FEATURES`, with `define` and `fill`. A segment that overflows its region and sections that overlap are errors. Nothing knows a machine's reserved areas. |
+| `.incbin` | Inserts a file's bytes, from a resolver that reads binary files. |
+| The SDK's ROM sources | Every ROM of every machine except the PET's disk drives: the Apple-1's, the Apple II's and IIe's, the Apple III's boot ROM and SOS 1.3, the PET's BASIC, editor and Kernal, the BBC Micro's MOS, BASIC II and DNFS, the TRS-80s', the Color Computer's, the Atari's, all with labels and `;;` contracts in the [maintained style](../AssemblyStyle.md). |
+| Entries and equates files | Already most of a header: [`MonitorEntries.asm`](../../src/Retrocore.Machines.Apple2/Roms/System/MonitorEntries.asm), [`IIeEquates.asm`](../../src/Retrocore.Machines.Apple2/Roms/System/IIeEquates.asm), [`FirmwareEquates.asm`](../../src/Retrocore.Machines.Apple2/Roms/System/FirmwareEquates.asm), [`Apple3Equates.asm`](../../src/Retrocore.Machines.Apple3/Roms/Apple3Equates.asm), [`BfmEquates.asm`](../../src/Retrocore.Machines.Apple3/Roms/Sos/Kernel/BfmEquates.asm), [`Commodore.Equates.asm`](../../src/Retrocore.Machines.Commodore/Roms/Basic/Commodore.Equates.asm), [`MosEntries.asm`](../../src/Retrocore.Machines.Acorn/Roms/MosEntries.asm) and [`MosEquates.asm`](../../src/Retrocore.Machines.Acorn/Roms/MosEquates.asm). An entries file's names inherit the ROM's documentation and repeat its `Also:` names ([ConvertingSources.md](../ConvertingSources.md)). They ship in the host's `Sdk/` folder. |
+| Historical and deprecated names | `;; Also:` lets an old name assemble as an alias of the new one, and a `Deprecated:` section makes the editor warn at each use. The command-line build prints no deprecation warnings. |
 | [`SdkModules`](../../src/Retrocore.Debug/SdkModules.cs) and the other SDK module classes | Assemble those sources in the debug host and map them onto whatever ROM is running. |
+| [`SdkIndex`](../../src/Retrocore.Debug/Language/SdkIndex.cs) | The language server's analysis of every SDK source, behind hover, completion and go to definition. It is global: one `Sdk/` root, with no per-target view. |
+| A launch's `dos: "3.3"` | On the Apple II, builds DOS 3.3 from its SDK source and puts the program on a fresh disk as a B file with a `HELLO` that BRUNs it ([`Apple2DebugTarget.cs`](../../src/Retrocore.Debug/Apple2DebugTarget.cs)). |
+| Media writers | [`DosDisk.Create`](../../src/Retrocore.Media/Apple/DosDisk.cs) with any list of files; [`SosVolumeBuilder`](../../src/Retrocore.Media/Apple/SosVolumeBuilder.cs) for SOS volumes and their files; [`Apple1Tape`](../../src/Retrocore.Machines.Apple1/Apple1Tape.cs) to ACI WAV; [`CommodoreTapeBuilder`](../../src/Retrocore.Media/Commodore/CommodoreTapeBuilder.cs) and `TapFormat` for PET tapes; a blank formatted `.ssd` from [`AcornDiskImage`](../../src/Retrocore.Media/Acorn/AcornDiskImage.cs); [`AcornTapeBuilder`](../../src/Retrocore.Media/Acorn/AcornTapeBuilder.cs) for UEF tape files, though its `UefWriter` is internal. |
 
 What is missing:
 
-- a project that names its targets;
-- headers that describe each target to the program;
-- a way to choose the target in VS Code;
-- a build that runs outside the editor;
+- a project that names its targets, and a build of it that runs outside the editor;
+- `retrocore` as a .NET tool: the debug host is `IsPackable=false`;
+- per-target SDK roots: every host searches the one `Sdk/` folder;
+- headers that describe each target to the program, and `RC_` defines;
+- user-set symbols outside `--assemble`: the debug launch and the language server pass none;
+- a check that a source's `.cpu` stays within its target's CPU, and a language server that knows the target's CPU
+  (it starts every file at the 6502);
+- memory maps of each machine's reserved areas;
+- a way to choose the target in VS Code: there is no status-bar item, F5 with no launch.json opens VS Code's own
+  debugger picker, and the language server has no channel for a target's settings;
+- the [media writers](#media-writers) four of the five starting targets need;
 - a documented way to start a repository.
 
-Each launch configuration is written by hand today, one machine at a time.
+Each launch configuration is written by hand today, one machine at a time, or saved from Start Machine.
 
 ## Setting up a repository
 
@@ -127,8 +144,8 @@ and validation in VS Code.
                        "defines": { "GAME_LINKED": 1 } },
     "apple2-dos":    { "machine": "apple2-iiplus", "environment": "dos33" },
     "apple3-sos":    { "machine": "apple3", "environment": "sos" },
-    "pet-basic":     { "machine": "pet", "environment": "basic" },
-    "bbc-dfs":       { "machine": "bbc-b", "environment": "dfs" }
+    "pet-basic":     { "machine": "pet4032", "environment": "basic", "defines": { "GAME_LINKED": 1 } },
+    "bbc-dfs":       { "machine": "bbcb", "environment": "dfs" }
   }
 }
 ```
@@ -144,7 +161,9 @@ and validation in VS Code.
 | `targets` | Named targets: `machine` (as Start Machine lists it), `environment`, and optionally `cpu`, `options` (the machine's launch options), `cards`, `defines`, `sources` added for this target only, `linkerConfiguration`, `memoryMap` overrides, `files` (data files put beside the program on its disk), `bootImage`, `image`, and `machineFile` once [machine files](MachineFiles.md) exist. |
 | `entry` | The entry point's label; defaults to the first section, as a `source` launch does today. |
 
-The machine names `pet` and `bbc-b` are placeholders until those machines' plans name their models.
+A target's `machine` is a machine as the extension's catalog names it ([`machines.ts`](../../extension/src/machines.ts)),
+the same names Start Machine and favorites use: `apple1`, `apple2-iiplus`, `apple3`, `pet2001-basic2`, `pet4032`,
+`bbcb` and the rest. The build maps it to the launch's `machine` and `model`, as `startFlow.ts` does today.
 
 **Sources for each target.** Besides `sources`, every target gets its family's folder `src/platform/<family>/`,
 then its model's folder `src/platform/<model>/`. A model's file replaces its family's file of the same name, so
@@ -167,7 +186,7 @@ make.
 | `dos33` | the Apple II, II Plus and IIe | DOS 3.3's file manager and RWTS, and the Monitor | a B file on a DOS 3.3 disk whose `HELLO` BRUNs it |
 | `prodos` | the Apple II Plus with 64K, and the IIe | the ProDOS MLI | a SYS file at `$2000`, or a BIN file with its aux type |
 | `sos` | the Apple III | SOS calls (`BRK`, a call number, its parameters) | a `SOS.INTERP` on a boot disk with the SDK's SOS 1.3 kernel and drivers |
-| `basic` | the PET | the Kernal and BASIC | a PRG with a BASIC `SYS` line, on a tape and a disk |
+| `basic` | the PET | the Kernal and BASIC | a PRG with a BASIC `SYS` line, on a TAP tape; also on a 4040 disk when the drive's ROM dumps are found |
 | `dfs` | the BBC Micro | the MOS (`OSWRCH`, `OSRDCH`, `OSFILE`, …) | a `*RUN` file on a DFS disk (`.ssd`) whose `!BOOT` runs it; a UEF tape as an option |
 | `cpm` | the Apple II and IIe with a SoftCard, the Model 4, the Altair | the BDOS at `$0005` | a `.COM` file at `$0100` |
 | `level2` | the Model I and III | Level II's routines | a SYSTEM tape (CAS) |
@@ -178,19 +197,22 @@ The first five starting targets use `wozmon`, `dos33`, `sos`, `basic` and `dfs`.
 
 **CPU compatibility** follows supersets. A `6502` project can target 65C02 machines, and an `8080` project can target
 Z80 machines (the Altair, and the Model 4 or a SoftCard under CP/M). A `z80` or `65c02` project cannot target a machine
-whose CPU lacks its instructions. The assembler checks each target's CPU, so a 65C02 opcode in an `apple2-dos` build for
-a II Plus is an error naming the target.
+whose CPU lacks its instructions. Each build starts at the target's CPU, as a launch does today. The assembler already
+rejects a 65C02 opcode under `.cpu Mos6502`. What is new is that a `.cpu` in the source naming a CPU the target lacks is
+an error naming the target, where today it silently replaces the launch's CPU.
 
-**Boot media.** An environment whose system is an SDK source boots with nothing external: DOS 3.3, SOS, and the ROM
-environments. The SDK lists the known images of every other environment (title, version, SHA-256), such as ProDOS,
-CP/M, TRSDOS, and the PET's and BBC's DOS ROMs if those machines run from dumps. The build and F5 look for them by hash
+**Boot media.** An environment whose system is an SDK source boots with nothing external: DOS 3.3, SOS, DFS, and
+the ROM environments. The SDK lists the known images of every other environment (title, version, SHA-256), such as
+ProDOS, CP/M and TRSDOS, and the dumps a device needs, such as the PET's 4040 ROMs. A PET target therefore builds
+its tape by default, which runs from SDK sources alone, and adds a disk only when the 4040's dumps are found. The build and F5 look for them by hash
 in the user's [libraries](MachineFiles.md#libraries) and `RETROCORE_CACHE`. A target can name one with `bootImage`.
 When none is found, the error names the image, says where to put it, and offers a Fetch command where a legal source
 exists, as `Fetch-M1Dependencies.ps1` does for ProDOS 2.4.3.
 
 ## Headers and defines
 
-Each build sets the SDK paths for its target, so the same includes resolve to that target's files:
+Each build adds its target's folder of headers to the SDK paths, before the shared `Sdk/` root the hosts search today,
+so the same includes resolve to that target's files:
 
 ```asm
 .include <cpu.inc>          ; the CPU family's macros
@@ -203,15 +225,24 @@ thing on every machine that has it.
 
 **What comes from where.**
 
-- **ROM entry points are generated** from the SDK's ROM sources: the exported or documented labels, with their `;;`
-  comments carried over, so hover in a project shows the Monitor's own documentation of `COUT`. They cannot drift from
-  the ROMs, because they are built from the same sources.
-- **Machines without SDK sources have hand-written entry points** until they get them. The PET and BBC Micro may
-  start this way, depending on how their plans supply ROMs: `CHROUT` at `$FFD2`, `OSWRCH` at `$FFEE`.
-- **Hardware equates are written by hand**, such as the IIe's soft switches and the PET's VIA. Tests check them
+- **ROM entry points come from the entries files the SDK already has.** At first a machine's header includes them:
+  `MonitorEntries.asm` and `IIeEquates.asm` on the Apple II, `MosEntries.asm` and `MosEquates.asm` on the BBC Micro,
+  `Commodore.Equates.asm` on the PET, `Apple3Equates.asm` on the Apple III. Their names inherit the ROMs'
+  documentation, so hover in a project shows the Monitor's own documentation of `COUT`, and their `Also:` names
+  keep the period names working.
+- **Generated headers come later**, where a machine has no entries file or its file covers too little. They reuse
+  the source generator's walk of a ROM's exports and their documentation
+  ([`RomAssemblyGenerator`](../../src/Retrocore.Generators/RomAssemblyGenerator.cs), `ExportDocumentation`) to emit
+  native `.inc` text instead of C#. Either way the names cannot drift from the ROMs, because they come from the same
+  sources.
+- **A header includes only what a program may use.** An entries file can name workspace a ROM keeps to itself. The
+  header leaves that out, or marks it, rather than including the ROM's whole equates.
+- **Hardware equates are written by hand** where no equates file has them, such as the PET's VIA. Tests check them
   against the emulator's device maps.
-- **Environment headers are written by hand**: the SOS call macro and its parameter lists, the MLI call macro, the
-  BDOS function numbers, the DOS 3.3 vectors at `$03D0`.
+- **Environment headers are written by hand**: the SOS call macro and its parameter lists (from `BfmEquates.asm` and
+  the SOS sources), the MLI call macro, the BDOS function numbers, the DOS 3.3 vectors at `$03D0`.
+- **The headers follow the [style guide](../AssemblyStyle.md)** and its strict lint, as every SDK source does, and
+  `SdkDocumentationTests` covers them as it covers the rest.
 
 **Defines.** Every build predefines these, so `.if` and `.ifdef` can choose code by target:
 
@@ -226,7 +257,16 @@ thing on every machine that has it.
 | `RC_SCREEN_COLUMNS`, `RC_SCREEN_ROWS` | `RC_SCREEN_COLUMNS = 40` | the text screen the environment starts in |
 | `RC_TARGET` | `.define RC_TARGET "apple2-dos"` | the target's name, as a textual definition |
 
-Names a program defines itself may not start with `RC_`; the assembler reports any that do. The `rc_` namespace is
+Names a program defines itself may not start with `RC_`; the assembler reports any that do.
+
+The `RC_` defines are build switches, so they follow
+[Builds and their switches](../ConvertingSources.md#builds-and-their-switches): a header that depends on one asserts
+the values it accepts, so a build for a target it does not support fails at once. `Also:` does not reach `.ifdef` and
+`.ifndef`, so a renamed define keeps an `.assert .not .defined(...)` that names its new name.
+
+Every host gets the same symbols. The build passes them as `PredefinedSymbols`, which today only `--assemble`'s
+`--define` and the SDK's own ROM builds set. The `project` launch builds through the same code, and the language
+server gets the active target's symbols with its SDK paths and CPU. The `rc_` namespace is
 also kept for the portable macros that come [later](#phases). The adventure's console layer is where they will be
 proven first.
 
@@ -259,15 +299,25 @@ program may use, and the reserved areas with the reason for each.
 - **At run time**, a later phase lets the debugger warn on writes into reserved areas, as the `;; Keeps:` contracts
   warn today.
 
-**The Apple-1's expansion RAM.** Retrocore's Apple-1 has 4K or 8K at `$0000` and the 4K bank at `$E000`. This plan adds
-larger `ramKilobytes` values (16 and 32) for the expansion RAM period owners added and modern replicas ship with, and
-the memory map grows to match. The adventure's Apple-1 target asks for 32K.
+**The Apple-1's expansion RAM.** Retrocore's Apple-1 has 4K or 8K at `$0000` and the 4K bank at `$E000`, and
+`Apple1Configuration.Validate` rejects any other size. This plan adds larger `ramKilobytes` values (16 and 32) for the
+expansion RAM period owners added and modern replicas ship with, and the memory map grows to match. That needs the
+validation, the bus's RAM, the launch's hardware row and [Apple1.md](../Apple1.md) to change. The adventure's Apple-1
+target asks for 32K.
+
+The linker already reports a segment that overflows its region and sections that overlap. A memory map adds what
+the linker cannot know, the machine's reserved areas, and turns those errors into messages that name the target.
 
 ## Building
 
 `retrocore build [--target <name>|--all]` reads `retrocore.json`, runs its steps, assembles each target, and writes
-its output. It is the .NET tool's command, built from the same code as the debug host's `--assemble`, and the
-debugger builds through it too, so CI and F5 always produce the same bytes.
+its output. It is the .NET tool's command, grown from the debug host's `--assemble`, which already takes a dialect, a
+CPU, an origin, a linker configuration and defines. The debugger builds through the same code, so CI and F5 always
+produce the same bytes. The command also prints the deprecation warnings that only the editor shows today.
+
+Packaging the debug host as a tool is new: it is `IsPackable=false` today. Its `Sdk/` folder goes in the package, as it
+goes beside the host now. The host is already AOT-compatible, but a tool runs on the .NET runtime the C# steps need
+anyway.
 
 **Steps.** A step runs a host-side tool before assembly, with declared inputs and outputs. The build skips it when the
 hashes of its inputs and its tool are unchanged. A tool is a C# file-based app (`dotnet run tools/packer.cs`) or a
@@ -287,6 +337,20 @@ artifacts/apple2-dos/
 **Images.** Disk and tape targets build their image by default, through the [media layer](MediaPersistence.md). A target
 can set `"image": false`, or give a template disk to start from.
 
+### Media writers
+
+What each starting environment's image needs, and what is there:
+
+| Environment | Image | There | To add |
+| --- | --- | --- | --- |
+| `wozmon` | ACI tape (WAV) and hex text | `Apple1Tape.FromData` and `ToWave` | the Woz Monitor hex writer (`0300: A9 C1 …` lines, then `0300R`) |
+| `dos33` | DOS 3.3 disk | `DosDisk.Create` takes any files, and the launch's `dos: "3.3"` builds the disk with `HELLO` and a B file | more files than `HELLO` and the program, such as `PIRATE.DAT`. The launch's disk is documented for the IIe, so a test should show it boots a II Plus. |
+| `sos` | SOS boot disk | `SosVolumeBuilder` writes the volume and its files. `Apple3SdkModules` assembles the kernel and the boot blocks, though only inside the debug host | writing assembled boot blocks (`BootFrom` copies only from another volume); a `SOS.DRIVER` writer with its relocation, comment records and device chain (`SosDriverFile` only reads); the SOS assemblies moved where the build can use them; and the `SOS.INTERP` header |
+| `basic` | PET TAP tape, and a 4040 disk with dumps | `CommodoreTapeBuilder.FromPrg`, `TapFormat.Write`; a `.prg` already loads and RUNs from a launch | the BASIC `SYS` stub; a host-side CBM DOS writer (BAM, directory, files) for the disk, which today only the emulated 4040 can format and write |
+| `dfs` | DFS `.ssd` | `AcornDiskImage.Blank` and `Encode` give a formatted empty disk; `AcornTapeBuilder` | a DFS catalogue writer: files with load and exec addresses, `!BOOT`, and the `*OPT 4` boot option. `UefWriter` made public for the tape. |
+
+Each writer reads back through the existing readers in its tests, and boots under emulation.
+
 **How F5 loads the program:**
 
 - `bare`: loads the binary into RAM and starts it at its entry point, as today.
@@ -297,11 +361,17 @@ can set `"image": false`, or give a template disk to start from.
 
 ## Debugging in VS Code
 
-- **The active target** shows in the status bar (`adventure · apple2-dos ▾`) and in the Retrocore view. Clicking it
-  lists the project's targets, grouped by project when a repository has several. The choice is kept in workspace
-  state, and `retrocore.activeTarget` returns it for launch configurations.
-- **F5 with no launch.json** in a folder with a `retrocore.json` builds the active target and starts its machine,
-  through a debug configuration provider.
+- **The active target** shows in the status bar (`adventure · apple2-dos ▾`) and in the Retrocore view. It is the
+  extension's first status-bar item. Clicking it lists the project's targets, grouped by project when a repository
+  has several, with the same quick picks Start Machine uses. The choice is kept in workspace state, and
+  `retrocore.activeTarget` returns it for launch configurations.
+- **F5 with no launch.json** in a folder with a `retrocore.json` builds the active target and starts its machine.
+  Today the extension's providers fill the Run and Debug list and resolve breakpoints and saved machines, but none
+  handles the empty configuration F5 sends without a launch.json, so VS Code shows its own debugger picker. A
+  `resolveDebugConfiguration` takes that case, and a `workspaceContains:retrocore.json` activation event starts the
+  extension for it. A target maps to a launch configuration through the catalog and `startFlow.setupConfiguration`,
+  so it gets the same saved machine and recovery as any other launch.
+- **The project file has a schema**, contributed through `jsonValidation`, and the extension watches it.
 - **One launch configuration** covers every target when you want one:
 
   ```jsonc
@@ -317,9 +387,12 @@ can set `"image": false`, or give a template disk to start from.
   `project` replaces `source`, `program` and `debugFile`. The target supplies `machine`, its options and its cards.
   Breakpoints, `stopOnEntry` and `checkContracts` stay launch options.
 - **Stopping on entry** stops at the program's entry point, not at the boot, even when F5 boots a disk.
-- **The language server follows the active target.** It uses that target's SDK paths, defines and platform folders for
-  completion, hover and diagnostics, and it dims `.if` blocks that are inactive for the target. Changing the target
-  re-checks the open files.
+- **The language server follows the active target.** It uses that target's SDK paths, defines, CPU and platform
+  folders for completion, hover and diagnostics. Changing the target re-checks the open files. Today the server's only
+  inputs are `--sdk-roms`, `.cfg` files and the lint words. The target's settings go to it in a notification like the
+  existing `retrocore/unlinkedNameWords`.
+- **Inactive `.if` blocks are dimmed** with the `Unnecessary` diagnostic tag the server already uses for an unused
+  `.using`.
 - **A build error** fails the launch, and its diagnostics name the target.
 
 ## The first sample: a Scott Adams interpreter
@@ -341,7 +414,7 @@ sample/adventure/
     apple1/            console.s: the Woz Monitor's ECHO and the keyboard PIA
     apple2/            console.s: COUT and GETLN; load.s: DOS 3.3's file manager
     apple3/            console.s and load.s: SOS's console driver and file calls
-    pet/               console.s and load.s: the Kernal's CHROUT, GETIN and LOAD
+    pet/               console.s: the Kernal's CHROUT and GETIN; load.s: LOAD, for a disk
     bbc/               console.s and load.s: OSWRCH, OSRDCH and OSFILE
   tools/packer.cs      .dat → packed binary
   games/pirate.dat     Pirate Adventure
@@ -355,12 +428,16 @@ The packer also holds a C# reference engine for the same format, which the [test
 
 **Linked or loaded.**
 
-- **The Apple-1** links the packed game into the program (`GAME_LINKED`, `.incbin "${obj}/pirate.bin"`), in its 32K.
+- **The tape targets** link the packed game into the program (`GAME_LINKED`, `.incbin "${obj}/pirate.bin"`): the
+  Apple-1 in its 32K, and the PET 4032 in its 32K, since its tape is the image that needs no dumps.
 - **The disk targets** put `PIRATE.DAT` beside the interpreter (the target's `files`) and load it at start, so another
   game runs without rebuilding.
 
-**Wrapping** follows `RC_SCREEN_COLUMNS`: 40 on the Apple-1, the Apple II, the PET and the BBC Micro's MODE 7, and 80
-on the Apple III's SOS console.
+**Wrapping** follows `RC_SCREEN_COLUMNS`: 40 on the Apple-1, the Apple II, the PET 4032 and the BBC Micro's MODE 7,
+and 80 on the Apple III's SOS console.
+
+**Style.** The sample is a repository source like any other, so it follows the [style guide](../AssemblyStyle.md)
+(`style=strict`), and its folder goes in `SdkDocumentationTests`' list of samples and their machines.
 
 **Pirate Adventure** is checked in as `games/pirate.dat`. `games/README.md` names the site where Scott Adams' classic
 adventures are normally hosted and the terms given there. Recording the exact page and terms is part of adding the
@@ -400,9 +477,11 @@ Apple Pascal comes after BASIC, with its own [plan](ApplePascal.md).
   debug host. The tool's own version is pinned in `.config/dotnet-tools.json`.
 - **Within a major version the SDK only adds**: new names, new targets, more free memory in a map only when it is
   shown to be safe.
-- **A removal or rename waits for the next major.** That major keeps the old name as a deprecated alias, which the
-  assembler warns about, so moving up is a warning rather than a broken build. The assembler needs a way to mark a
-  name deprecated (`.deprecated Name, "message"` or a `;; Deprecated:` section).
+- **A removal or rename waits for the next major.** That major keeps the old name with the mechanisms the SDK's
+  sources already use: `;; Also:` makes the old name assemble as an alias, and a `Deprecated:` section makes each use
+  a warning. Moving up is therefore a warning rather than a broken build. The editor warns today, and
+  `retrocore build` must warn too. A renamed `RC_` define is the exception: `Also:` does not reach `.ifdef`, so it
+  gets the build switches' `.assert`.
 - **The tool and the extension ship the current and previous majors.** A project on the previous one builds, with a
   warning that names the next.
 - A bug fix that changes a header's value, such as a wrong soft-switch address, goes into the current major and is
@@ -420,7 +499,9 @@ Apple Pascal comes after BASIC, with its own [plan](ApplePascal.md).
 | Hardware equates | Each one matches the emulator's device map for its machine. |
 | CPU checks | A 65C02 opcode fails the 6502 targets and builds for the enhanced IIe; a Z80 opcode fails an 8080 project. |
 | Memory maps | A section in a reserved area fails with the target's name; a `memoryMap` override frees it; the generated linker configuration places a sample in free RAM on every target. |
-| Boot media | A missing image fails with its name and hash; a library image with the right hash is found. |
+| Boot media | A missing image fails with its name and hash; a library image with the right hash is found; a PET target without the 4040's dumps builds its tape and no disk. |
+| Media writers | Each writer's image reads back through the existing readers (`DosDisk`, `SosVolume`, the D64 and DFS readers, `TapFormat`, `UefFormat`) and boots under emulation: the DOS 3.3 disk on a II Plus as well as a IIe, the SOS disk with SOS 1.3 built from source, the DFS disk with `!BOOT`. |
+| The Apple-1's RAM | 16K and 32K boot the Woz Monitor and run a program above `$1FFF`; other sizes are still rejected. |
 | Dialects | ca65 and Merlin samples include the native headers and build byte-identically to their native twin. |
 | The adventure | It builds for all five targets. A scripted walkthrough of the test adventure, and an opening of Pirate Adventure, run on each target under the debug adapter, in the style of the `tools/Test-*Dap.mjs` scripts, and each transcript must match the packer's reference engine. |
 | VS Code | The active target picker, F5 without a launch.json, the `project` launch, and the language server switching targets. |
@@ -428,28 +509,33 @@ Apple Pascal comes after BASIC, with its own [plan](ApplePascal.md).
 
 ## Phases
 
-Each phase ends with the adventure doing more.
+Each phase ends with the adventure doing more. Phases 1 to 3 need nothing main lacks beyond what they build. Phase 4's
+media writers can go alongside them, each in its own change.
 
 1. **The project, the build and the active target.** `retrocore.json` (with root files listing projects) and its
-   schema, platform folders, `retrocore build` as a .NET tool (run locally until it has a preview build), the
-   `project` launch, the status-bar target, the language server's defines, and `sdk/1/`. Done when the adventure's
-   engine plays the test adventure on a `bare` Apple II target from the picker.
-2. **Headers, defines and CPU checks.** Generated entry points and hand-written equates for the Apple-1, the Apple II
-   family and the Apple III, plus the PET's and BBC's headers, generated or hand-written depending on how those
-   machines supply ROMs. Also the `RC_` defines and the CPU check per target. Done when the engine's core builds
-   unchanged for all five machines as `bare` targets with a platform folder each.
+   schema, platform folders, `retrocore build` grown from `--assemble` and packed as a .NET tool (run locally until
+   it has a preview build), the `project` launch, the status-bar target, F5 without a launch.json, the language
+   server's target notification, and `sdk/1/`. Done when the adventure's engine plays the test adventure on a `bare`
+   Apple II target from the picker.
+2. **Headers, defines and CPU checks.** `<machine.inc>` for the Apple-1, the Apple II family, the Apple III, the PET
+   and the BBC Micro over their entries and equates files, with hand-written equates where those lack them. Also the
+   `RC_` defines and their asserts, symbols in every host, the target CPU check, and dimming inactive blocks. Done
+   when the engine's core builds unchanged for all five machines as `bare` targets with a platform folder each.
 3. **Steps and memory maps.** C# tool steps with caching, the packer, memory maps for the five starting environments,
-   the generated linker configuration, the overlap and fit errors, and the Apple-1's expansion RAM. Done when Pirate
-   Adventure, linked in, plays on the Apple-1 with 32K.
-4. **The starting environments.** `wozmon`, `dos33`, `sos`, `basic` and `dfs`, each with its header, its file format,
-   its image and how F5 loads it. Boot media lookup by hash is part of this. Done when Pirate Adventure plays on all five
-   targets from their disks and tapes, loading `PIRATE.DAT` where there is a disk.
+   the generated linker configuration, the reserved-area errors, and the Apple-1's expansion RAM. Done when Pirate
+   Adventure, linked in, plays on the Apple-1 with 32K and on a bare PET 4032.
+4. **The media writers and the starting environments.** First the [media writers](#media-writers): Woz Monitor hex,
+   more files on the DOS 3.3 disk, the PET's `SYS` stub, the DFS catalogue with `!BOOT`, and the SOS boot disk
+   (boot blocks, `SOS.DRIVER`, the `SOS.INTERP` header), the largest of them. The CBM DOS writer is needed only for the
+   PET's optional disk and can follow. Then `wozmon`, `dos33`, `sos`, `basic` and `dfs`, each with its header, its
+   file format, its image and how F5 loads it, and boot media lookup by hash. Done when Pirate Adventure plays on all
+   five targets from their disks and tapes, loading `PIRATE.DAT` where there is a disk.
 5. **The repository workflow.** `retrocore new` and `retrocore init` with their templates, *Retrocore: New Project*,
    the generated CI workflow, and preview builds of the tool and the extension. Then the sample moves to its own
    repository. Done when a fresh clone builds every target with `dotnet tool restore` and `dotnet retrocore build --all`
    on Windows, macOS and Linux.
-6. **Deprecation.** The assembler's deprecated names and the previous-major support, needed before the SDK's first
-   breaking change.
+6. **Deprecation.** Deprecation warnings from `retrocore build`, and the previous-major support, needed before the
+   SDK's first breaking change.
 7. **More environments.** `prodos`, `cpm`, `level2`, `trsdos`, `colorbasic` and `diskbasic`, and SOS interpreters that
    relocate.
 8. **Portable macros.** A small `rc_` set (`rc_putchar`, `rc_getkey`, `rc_getline`, `rc_cls`, `rc_exit`) for every
@@ -489,7 +575,7 @@ From walking through the open questions:
   family's.
 - **The Apple III starts with SOS**: a `SOS.INTERP` at a fixed address on a boot disk built from the SDK's SOS 1.3
   sources, with relocation later.
-- **The PET and BBC Micro are added before this plan begins**, in plans of their own.
+- **The PET and BBC Micro are added before this plan begins**, in plans of their own. (Both have since landed.)
 - **The starting targets use each machine's usual way**: `wozmon` hex and tape on the Apple-1, a DOS 3.3 disk on the
   Apple II, a SOS disk on the Apple III, a PRG with a `SYS` line on the PET, and a DFS disk with `!BOOT` on the BBC
   Micro.
@@ -503,10 +589,26 @@ From walking through the open questions:
 - **`retrocore` is a .NET tool pinned in each repository's `.config/dotnet-tools.json`.** The extension uses the
   pinned tool when there is one.
 
+### Revised 2026-11-25
+
+Checked against main once the PET and BBC Micro had landed:
+
+- **Targets name machines by the extension's catalog**: `pet4032` and `bbcb` for the adventure, not placeholders.
+- **The first headers include the SDK's entries and equates files**, including the PET's and BBC's, which are SDK
+  sources. Generating headers comes later, from the source generator's export walk.
+- **Deprecated names use `Also:` and `Deprecated:`**, which exist, not a new directive. `retrocore build` prints
+  their warnings.
+- **The `RC_` defines are build switches** and follow the style guide's asserts.
+- **A PET target builds a tape by default**, which needs no dumps. A 4040 disk is added when the drive's dumps are
+  found. The PET links the game in, like the Apple-1.
+- **The media writers are their own work** ahead of the starting environments: Woz Monitor hex, more DOS 3.3 files,
+  the PET's `SYS` stub, the DFS catalogue, the SOS boot disk, and later CBM DOS.
+- **The Apple II target reuses the launch's `dos: "3.3"` disk**, extended to more files.
+
 ## Open questions
 
-- **The PET's and BBC Micro's models**, such as a PET 2001, 4032 or 8032, and a BBC Model B with DFS. These come from
-  their own plans, and decide the targets' machine names, screen widths and disk formats.
+- **The SOS boot disk's scope.** Should the first `SOS.DRIVER` writer carry only the drivers the SDK builds (console,
+  disk), or every driver `SosDriverFile` can read? And should it relocate them, or place them at fixed addresses?
 - **The packed format's budget.** How small Pirate Adventure packs, and so whether the Apple-1 could fit in 16K. This
   is measured in phase 3.
 - **Saving the game.** A save to disk on the disk targets, and to tape or nothing on the Apple-1. Is this in the first

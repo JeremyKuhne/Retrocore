@@ -93,6 +93,26 @@ public sealed class DebugRelaunchTests
     }
 
     /// <summary>
+    ///  A configurationDone sent before a launch that fails is used up by it: the next launch waits for its own.
+    /// </summary>
+    [TestMethod]
+    public void ConfigurationDoneBeforeFailedLaunchIsUsedUp()
+    {
+        using DapTestClient client = new();
+        client.Request("initialize", []);
+        client.Request("setExceptionBreakpoints", new JsonObject { ["filters"] = new JsonArray("machineReset") });
+        client.Request("configurationDone", []);
+        JsonObject failing = IIPlus();
+        failing["model"] = "no-such-model";
+        client.Fails("launch", failing).Should().NotBeEmpty();
+
+        client.Request("launch", IIPlus());
+        client.NoStop(TimeSpan.FromMilliseconds(500), "the launch waits for its own configurationDone");
+        client.Request("configurationDone", []);
+        client.Event("stopped").String("description").Should().Be(PowerOn);
+    }
+
+    /// <summary>
     ///  A configurationDone after a launch that failed configures nothing, whether the launch failed before building
     ///  its machine or after: the next launch waits for its own.
     /// </summary>

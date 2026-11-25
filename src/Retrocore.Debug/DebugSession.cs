@@ -193,7 +193,7 @@ internal sealed partial class DebugSession
         transport.On("configurationDone", args => Reply(() =>
         {
             // It starts the launch it configures. Before the first launch it waits for that launch; after a launch that
-            // failed there is no machine to start, and once the launch has started, nothing is left to configure.
+            // failed there is no launched machine to start, and once the launch has started, nothing is left to configure.
             if (!_launchAttempted) { _configured = true; }
             else if (_launchReady) { Start(); }
             return [];
@@ -854,6 +854,9 @@ internal sealed partial class DebugSession
 
     private JsonObject Launch(JsonObject args)
     {
+        // The launch takes a configurationDone that came before it, even if it fails.
+        bool configured = _configured;
+        _configured = false;
         _launchAttempted = true;
         _launchReady = false;
         _run?.Cancel();
@@ -1077,12 +1080,11 @@ internal sealed partial class DebugSession
 
         _launchReady = true;
 
-        // A configurationDone that came before the launch starts the machine once this response is on its way. The
-        // launch takes it: a launch after this one waits for a configurationDone of its own, and a launch that
-        // replaces the machine before the start runs, or the session ending, cancels that start.
-        if (_configured)
+        // A configurationDone that came before the launch starts the machine once the launch has returned. A launch
+        // after this one waits for a configurationDone of its own, and a launch that replaces the machine before the
+        // start runs, or the session ending, cancels that start.
+        if (configured)
         {
-            _configured = false;
             IDebugTarget launched = Target;
             _ = Task.Run(() =>
             {

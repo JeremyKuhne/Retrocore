@@ -1,4 +1,4 @@
-; retrocore: style=strict ignore=unlinked-name:PR|MULT -- a command, the disk layer, X7 prose
+; retrocore: style=strict
 ;; DOS 3.3 and 3.2: the Apple II addresses DOS uses, and the macros its modules share
 ;;
 ;; The Monitor routines, zero-page locations, BASIC entry points and BASIC variables that DOS uses but does not own:
@@ -127,43 +127,45 @@ ParsedNumber = Address5
 
 ; Integer BASIC.
 
-;; Integer BASIC's <RUNWARM>: runs the program from its first line, keeping the variables. DOS's CHAIN uses it.
+;; Integer BASIC's <IntegerBasic:Lines::RunFromStart>: runs the program from its first line, keeping the variables.
+;; DOS's CHAIN uses it.
 IBCHN = $E836
 
 ;; Integer BASIC's LOMEM, the bottom of its variables (2 bytes).
 ;;
 ;; <Commands::IntegerRun> sets the end of the variables, <IBSOV>, back to it to clear them, and loading a program
 ;; (<Commands::Load>) checks that the program stays above it.
-;; See: <IBSOV>, <IBHMEM>, <IBSOP>, <Commands::IntegerRun>
+;; See: <IntegerBasic:LowMemory>, <IBSOV>, <IBHMEM>, <IBSOP>, <Commands::IntegerRun>
 IBLMEM = $4A
 
 ;; Integer BASIC's HIMEM, the top of the memory it may use (2 bytes).
 ;;
 ;; <FileBuffers::Build> sets it, and <IBSOP>, just below DOS's file buffers. SAVE (<Commands::Save>) writes the program
 ;; from <IBSOP> up to it, and loading a program places it to end there.
-;; See: <IBSOP>, <IBLMEM>, <FileBuffers::Build>
+;; See: <IntegerBasic:HighMemory>, <IBSOP>, <IBLMEM>, <FileBuffers::Build>
 IBHMEM = $4C
 
 ;; The start of Integer BASIC's program (2 bytes), which grows down from HIMEM, <IBHMEM>.
 ;;
 ;; <FileBuffers::Build> sets it to HIMEM, an empty program, and loading a program sets it to HIMEM less the program's
 ;; length.
-;; See: <IBHMEM>, <IBLMEM>, <Commands::Save>, <Commands::Load>
+;; See: <IntegerBasic:ProgramStart>, <IBHMEM>, <IBLMEM>, <Commands::Save>, <Commands::Load>
 IBSOP = $CA
 
-;; Integer BASIC's error entry, just after its message is printed, where DOS goes to report a failed command.
+;; Integer BASIC's error entry, just after its message is printed, where DOS goes to report a failed command: the
+;; instruction after <IntegerBasic:ReportError>'s call that prints the message.
 IBBRK = $E3E3
 
-;; Integer BASIC's cold start, which clears the program.
+;; Integer BASIC's cold start, which clears the program: <IntegerBasic:ColdEntry>.
 IBGO = $E000
 
-;; Integer BASIC's warm start, which keeps the program.
+;; Integer BASIC's warm start, which keeps the program: <IntegerBasic:WarmEntry>.
 IBCONT = $E003
 
 ;; The end of Integer BASIC's variables (2 bytes), which grow up from LOMEM, <IBLMEM>.
 ;;
 ;; <Commands::IntegerRun> sets it to LOMEM, clearing the variables, before it starts a program.
-;; See: <IBLMEM>, <Commands::IntegerRun>
+;; See: <IntegerBasic:VariablesEnd>, <IBLMEM>, <Commands::IntegerRun>
 IBSOV = $CC
 
 ; Applesoft.

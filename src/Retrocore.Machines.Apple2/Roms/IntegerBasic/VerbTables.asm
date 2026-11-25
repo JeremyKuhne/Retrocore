@@ -297,8 +297,8 @@ RoutinesLow:
     RoutineLow $56, Statements::AssignNumber                      ; = (FOR)
     RoutineLow $57, Statements::To                              ; TO
     RoutineLow $58, Statements::Step                            ; STEP
-    RoutineLow $59, NEXT                            ; NEXT
-    RoutineLow $5A, NEXT                            ; NEXT's ,
+    RoutineLow $59, Statements::Next                            ; NEXT
+    RoutineLow $5A, Statements::Next                            ; NEXT's ,
     RoutineLow $5B, Statements::Return                          ; RETURN
     RoutineLow $5C, Statements::GoSub                           ; GOSUB
     RoutineLow $5D, NO_ROUTINE                      ; REM
@@ -429,8 +429,8 @@ RoutinesHigh:
     RoutineHigh $56, Statements::AssignNumber                     ; = (FOR)
     RoutineHigh $57, Statements::To                             ; TO
     RoutineHigh $58, Statements::Step                           ; STEP
-    RoutineHigh $59, NEXT                           ; NEXT
-    RoutineHigh $5A, NEXT                           ; NEXT's ,
+    RoutineHigh $59, Statements::Next                           ; NEXT
+    RoutineHigh $5A, Statements::Next                           ; NEXT's ,
     RoutineHigh $5B, Statements::Return                         ; RETURN
     RoutineHigh $5C, Statements::GoSub                          ; GOSUB
     RoutineHigh $5D, NO_ROUTINE                     ; REM

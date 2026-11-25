@@ -1,6 +1,6 @@
 ;; SWEET16 INSTRUCTIONS AS MACROS
 ;;
-;; Steve Wozniak's SWEET16 is a 16-bit interpreter in the Integer BASIC ROM (<IntegerBasic:SW16>): a 6502 program
+;; Steve Wozniak's SWEET16 is a 16-bit interpreter in the Integer BASIC ROM (<IntegerBasic:Sweet16::Run>): a 6502 program
 ;; does JSR SW16, and the bytes after it are SWEET16 instructions, up to an RTN, after which the 6502 carries on.
 ;; Renumber and Relocate are partly written in it. These macros assemble its instructions with Apple's mnemonics.
 ;;

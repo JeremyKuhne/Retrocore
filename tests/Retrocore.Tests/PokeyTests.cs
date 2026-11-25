@@ -720,6 +720,53 @@ public class PokeyTests
     }
 
     /// <summary>
+    ///  Verifies the two-tone resync, two cycles after timer 1 fires on a mark, lengthens a 1.79 MHz timer 1's period
+    ///  by two cycles after the first: with AUDF1 = 0 it fires 8, 14 and 20 cycles after STIMER, not 8, 12 and 16.
+    /// </summary>
+    [TestMethod]
+    public void TwoToneResyncLengthensFastTimer()
+    {
+        Pokey pokey = Started();
+        pokey.Write(Audctl, 0x40);
+        pokey.Write(Audf2, 0xFF);
+        pokey.Write(Skctl, 0x0B);
+        pokey.Write(Irqen, Pokey.Timer1Interrupt);
+        pokey.Write(Stimer, 0);
+        TicksUntilInterrupt(pokey, Pokey.Timer1Interrupt).Should().Be(8);
+        TicksUntilInterrupt(pokey, Pokey.Timer1Interrupt, acknowledgeFirst: true).Should().Be(6);
+        TicksUntilInterrupt(pokey, Pokey.Timer1Interrupt, acknowledgeFirst: true).Should().Be(6);
+    }
+
+    /// <summary>
+    ///  Verifies a high-pass flip-flop is held at 1 while its filter is off, so turning the filter on leaves channel 1
+    ///  sounding as before until channel 3 first fires.
+    /// </summary>
+    [TestMethod]
+    public void HighPassHeldAtOneWhileOff()
+    {
+        // Channel 1 a 1.79 MHz pure tone; channel 3 on the 15 kHz clock, too slow to fire in this window.
+        Pokey unfiltered = Started();
+        Pokey filtered = Started();
+        foreach (Pokey pokey in (Pokey[])[unfiltered, filtered])
+        {
+            pokey.Write(Audctl, 0x41);
+            pokey.Write(Audf1, 10);
+            pokey.Write(Audc1, 0xAF);
+            pokey.Write(Audf3, 0xFF);
+            pokey.Write(Stimer, 0);
+            Advance(pokey, 100);
+        }
+
+        filtered.Write(Audctl, 0x45);
+        for (int cycle = 0; cycle < 1_000; cycle++)
+        {
+            unfiltered.Tick();
+            filtered.Tick();
+            filtered.Output.Should().Be(unfiltered.Output, $"cycle {cycle}");
+        }
+    }
+
+    /// <summary>
     ///  Verifies unassigned registers read $FF and reads have no side effects.
     /// </summary>
     [TestMethod]

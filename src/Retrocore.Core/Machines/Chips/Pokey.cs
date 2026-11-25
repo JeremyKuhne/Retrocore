@@ -43,16 +43,17 @@ namespace Retrocore.Machines.Chips;
 ///   never shift. Reception is bit level from <see cref="SerialInputLevel"/>, clocked by channel 4 (modes 010 and
 ///   110) or, in asynchronous mode (SKCTL bit 4), by channels 3+4 held in reset until a start bit's leading edge.
 ///   In either a frame starts on that edge (the input reading low on the cycle after it read high), so a line held
-///   low starts no frame. The start bit is sampled on the first timer 4 period after its edge (in asynchronous mode
-///   one full period, mid-bit), and each bit after it two periods on; SKSTAT bit 1 shows busy
-///   from the start bit's sample to the stop bit's, and a stop bit sampled low is a framing error (SKSTAT bit 7).
+///   low starts no frame. The start bit is sampled on the first timer 4 pulse at or after its edge (in asynchronous
+///   mode one full period after, mid-bit), and each bit after it two periods on; SKSTAT bit 1 shows busy from the
+///   start bit's sample to the stop bit's, and a stop bit sampled low is a framing error (SKSTAT bit 7).
 ///   <see cref="ReceiveByte"/> also delivers a whole byte at once, for devices that work a byte at a time.
 ///  </para>
 ///  <para>
 ///   Not modeled: the transitional AND values of a live pot counter (5.9), the gradual refill of RANDOM with ones
 ///   when initialization mode is entered (it reads $FF at once), the 1.5 cycle high-pass delay, the DAC's
 ///   mismatched bit weights and saturation (<see cref="Output"/> is a linear sum), the capacitor dump transistors
-///   and truncated pot scans, and the stereo modification.
+///   and truncated pot scans, the stereo modification, and in synchronous receive the phase of the divide-by-two
+///   clock the input shares with the output (5.6, shift timing): bits are counted from the start bit's edge instead.
 ///  </para>
 /// </remarks>
 public sealed class Pokey
@@ -128,8 +129,9 @@ public sealed class Pokey
     private byte _serin;
     private byte _serout;
 
-    private bool _highPass1;
-    private bool _highPass2;
+    // The high-pass flip-flops, which AUDCTL's power-on zero (filters off) holds at 1.
+    private bool _highPass1 = true;
+    private bool _highPass2 = true;
     private int _resync;
     private bool _twoToneLevel;
 
@@ -452,6 +454,8 @@ public sealed class Pokey
                 break;
             case 8:
                 _audctl = value;
+                _highPass1 |= (value & 0x04) == 0;
+                _highPass2 |= (value & 0x02) == 0;
                 break;
             case 9:
                 WriteStimer();
@@ -576,17 +580,19 @@ public sealed class Pokey
             ClockAudio(1);
         }
 
+        // A high-pass flip-flop latches its channel's output when the high channel fires, and is held at 1 while its
+        // filter is off (5.3, high-pass filter).
         if (fire3)
         {
             ClockAudio(2);
-            _highPass1 = _output[0];
+            if ((_audctl & 0x04) != 0) { _highPass1 = _output[0]; }
         }
 
         if (fire4)
         {
             Raise(Timer4Interrupt);
             ClockAudio(3);
-            _highPass2 = _output[1];
+            if ((_audctl & 0x02) != 0) { _highPass2 = _output[1]; }
         }
 
         StepTwoTone(fire1, fire2);
@@ -611,8 +617,8 @@ public sealed class Pokey
         bool level = _output[channel];
         return channel switch
         {
-            0 => level ^ ((_audctl & 0x04) == 0 || _highPass1),
-            1 => level ^ ((_audctl & 0x02) == 0 || _highPass2),
+            0 => level ^ _highPass1,
+            1 => level ^ _highPass2,
             _ => level,
         };
     }
@@ -711,10 +717,14 @@ public sealed class Pokey
 
     private void StepTwoTone(bool fire1, bool fire2)
     {
+        // The resync reload two cycles after the triggering timer's also cancels an underflow already under way, so a
+        // 1.79 MHz timer 1 that drives it runs two cycles longer each period (5.6, two-tone resync timing).
         if ((_resync & 1) != 0)
         {
             Reload(0);
             Reload(1);
+            _borrow[0] = 0;
+            _borrow[1] = 0;
         }
 
         _resync >>= 1;

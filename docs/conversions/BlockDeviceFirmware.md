@@ -17,9 +17,9 @@ the old source) and `Slot7RomTests` pin their bytes.
   `Startup::PowerUp::NextSlot` (SLOOP), the last two in scopes shaped like the Monitor's. The firmware doesn't include
   MonitorEntries.asm or IIeEquates.asm: it runs on the II Plus too, and its debug module is relocated into every slot,
   so it carries only the names it uses.
-- B3. The same job has the same name in both firmwares: the entry ProDOS calls is `Driver` in both (slot 7's
-  `DriverEntry` was renamed, with its C# export `Slot7Rom.Driver`), and the mailbox, commands and capability bits are
-  spelled alike. B10 since gives each card's driver its own name.
+- B3. The same job has the same name in both firmwares: the entry ProDOS calls was `Driver` in both (slot 7's
+  `DriverEntry` was renamed), until B10 gave each card's driver its own name; the mailbox, commands and capability
+  bits are spelled alike.
 - B4. The ProDOS mailbox ($42-$47) is locations: `Command`, `UnitNumber`, and the two-byte `Buffer`/`BufferHigh` and
   `Block`/`BlockHigh` (the Name/NameHigh rule). It stays equates in each file, not a struct: the code addresses its
   bytes directly, and there is no copy of the layout to tie to one.

@@ -44,8 +44,12 @@ Indexing every SDK root:
 | 10 (`u1`) | c578ae00 | Each path upper-cased once | 798 ms | 682 MB | −31% | −51% |
 | 11 (`c1`) | fff4bbeb | Lines split without replacing CRLF first | 819 ms | 665 MB | −30% | −52% |
 | 12 (`r1`) | ab9c208a | Assembled lines passed over before matching | 813 ms | 641 MB | −30% | −54% |
+| 13 (`k1`) | 05910d6d | Less kept after the index is built | 815 ms | 641 MB | −30% | −54% |
 
-AppleSoft's root alone: 50.1 ms and 67.7 MB at the baseline, 27.5 ms and 26.5 MB after step 12.
+AppleSoft's root alone: 50.1 ms and 67.7 MB at the baseline, 27.2 ms and 26.5 MB after step 13.
+
+What the index keeps alive once built, from a heap walk (see [What the index keeps](#what-the-index-keeps)): 184 MB
+after step 12, 171 MB after step 13.
 
 ### 1. Each source path made full once
 
@@ -156,6 +160,41 @@ copy of the branch under the temporary folder was void, as reading the sources f
 (AppleSoft's root took 41 ms). The row is the first run with the change, which measured `Index` alone. Allocations
 fell by 24 MB.
 
+### 13. Less kept after the index is built
+
+The GC's time follows what survives (see below), so this step cuts what the index keeps, not what it allocates.
+
+- **The CPU map.** `DocumentationSet.ReadCpus` kept a (line, CPU) pair for every statement and for every line that
+  expanded it: 689 arrays, 12.7 MB. It now keeps the first of each run of one CPU. `CpuAt`'s answer, the CPU of the
+  last entry at or before a line, is the CPU of that entry's run, so it is the same.
+- **The text function's closure.** C# gives the lambdas of one method one closure, so an analysis's text function
+  shared the one that captures the build's `SourceFileCache`, and every analysis kept the whole cache. It now has
+  its own. The heap walk shows this freed almost nothing yet: the same texts are also reached from the analysis's
+  `Result`, whose share grew by what the function's lost.
+
+Allocations and time did not change: ten alternating runs in this worktree, five each way, measured 809–852 ms
+without the change and 805–995 ms with it, the first two with it noisy (standard deviation 73 and 112 ms) and the
+last three 805, 844 and 815 ms. The row is the last of those.
+
+## What the index keeps
+
+A heap walk with ClrMD (`Microsoft.Diagnostics.Runtime`) after building the index as `SdkIndex` does and forcing full
+collections. Each field's bytes count each object once, for the first field that reaches it.
+
+| | After step 12 | After step 13 |
+| --- | --- | --- |
+| Live | 184 MB, 2.27 M objects | 171 MB, 2.27 M objects |
+| On the large object heap | 15.8 MB | 8.4 MB |
+| `Result` (the assembly's result) | 76 MB | 90 MB |
+| `_documentation` | 53 MB | 40 MB |
+| `_lines` | 23 MB | 23 MB |
+| `_text` | 17 MB | 0 MB |
+| `_definitions` | 11 MB | 11 MB |
+
+By type after step 13: strings 68 MB; the source map's entries 26 MB, their operands 12 MB and locations 15 MB
+(264,000 entries); documentation comments, topics, sections and entries about 16 MB; symbol sites about 8 MB.
+Dropping the build's file cache frees nothing, as everything in it is also reached from the analyses.
+
 ## Where the time and memory go now
 
 ETW traces of `Index` over every root, through filtrace's `Capture-BenchmarkTrace.ps1 -Profiler ETW` and
@@ -187,6 +226,9 @@ are not profiled. Allocations are BenchmarkDotNet's, exact either way.
 
 ## Candidates
 
+- **What the analyses keep.** The source map is most of `Result`, about 55 MB, and the index's analyses read it
+  for little after the build: hover's assembled bytes, the symbols and diagnostics. Trimming it needs a decision on
+  what an SDK analysis must still answer. Strings, at 68 MB, may repeat across roots and could be shared.
 - **Reading definitions** (B3, next): `Define` and `LabelKind`, for each documented definition.
 - **A lighter `Also:` pass.** Now one parse per file per build, it still builds every comment whole (summary,
   remarks, every section and its entries, label kinds, usings) though it reads only six things and the `Also:`

@@ -7,7 +7,7 @@
 ;; note in parentheses says which use the token is for.
 ;;
 ;; The tokenizer's syntax table (SyntaxTable.asm) fixes which token a word gets, so each token has exactly one
-;; meaning and its own routine: PRINT before a string ($61) and PRINT before a number ($62) go to different routines,
+;; meaning and its own entry: PRINT before a string ($61) and PRINT before a number ($62) go to different routines,
 ;; and so do the dozen commas. A token that is never run has <Verbs::NO_ROUTINE>: the end of the line and REM end a
 ;; line before their routine would run, quotes and the $ after a string name are taken as part of their operand, and
 ;; a few tokens are not used.
@@ -23,7 +23,7 @@ NO_ROUTINE = $FFFF
 ;; One entry of <Verbs::Priorities>: a token's two priorities, 0 to 15, with their bits interleaved.
 ;;
 ;; The arriving priority goes in bits 0, 2, 4 and 6 and the waiting one in bits 1, 3, 5 and 7, each in the same
-;; order, so masking with $55 or $AA and comparing compares the priorities.
+;; order, so masking with $55 or $AA, and shifting one into line with the other, compares the priorities.
 ;; Parameters:
 ;;   token = the token, which is the entry's index
 ;;   arriving = the priority the token has when it arrives

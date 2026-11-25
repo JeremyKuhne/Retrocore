@@ -187,7 +187,7 @@ Done:
 ;;
 ;; A left parenthesis runs when the right parenthesis arrives, after the operators inside it. Raising the arriving
 ;; priority then stops the waiting tokens outside the parentheses from running yet. The routines of other tokens that
-;; open a parenthesis end here too, such as SCRN('s (<StoreHighByteAndClose>).
+;; open a parenthesis end here too: `ASC(`'s through <StoreHighByteAndClose>, and `SCRN(`'s raises the priority itself.
 ;; Uses: Y
 ;; Keeps: A, X
 ;; See: <Operators::RightParenthesis>, <Interpreter::RunLine>

@@ -48,7 +48,7 @@
 ;; In: SearchPointer = the variable to compare, TokenPointer = the name
 ;; Entry:
 ;;   Begin = with Y already $FF
-;;   SkipNameByte = skips the variable's name from the byte in A, at Y - 1
+;;   SkipNameByte = skips the variable's name from the byte in A, at Y
 ;; Also: CMPVARNAME (UNKN)
 .proc CompareName
     ldy #$FF
@@ -166,7 +166,8 @@ CopyName:
 ;; <NounStackNumberHigh> byte of the address entry, where the assignment routines look for it. TokenPointer ends on
 ;; the token after the name. The interpreter branches here, and this branches back into <Interpreter::RunLine>.
 ;; In: TokenPointer = the name's first character, X = the noun stack
-;; Out: X = the noun stack with the variable pushed, Y = 0, then the interpreter goes on at the token after the name
+;; Out: X = the noun stack with the variable pushed, Y = 0 for a number, then the interpreter goes on at the token
+;;   after the name
 ;; Errors: MEM FULL if a new variable would reach the program
 ;; Entry:
 ;;   NameEnded = the name at <TokenPointer> has ended at Y: the variable at <SearchPointer> matches if its name

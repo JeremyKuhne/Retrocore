@@ -403,9 +403,14 @@ internal sealed partial class SourceAnalysis
             result,
             parsed.Project,
             resolver.Resolved,
-            path => openText(path) ?? (File.Exists(path) ? File.ReadAllText(path) : null),
+            TextOf(openText),
             path => openText(path) is { } open ? SourceText.Lines(open) : files.ReadLinesIfExists(path));
     }
+
+    // The analysis keeps this function, so it is made apart from Assemble's lambdas: those share one closure, and
+    // the analysis would keep the build's whole file cache through it.
+    private static Func<string, string?> TextOf(Func<string, string?> openText) =>
+        path => openText(path) ?? (File.Exists(path) ? File.ReadAllText(path) : null);
 
     /// <summary>
     ///  Gets a member file's lines.

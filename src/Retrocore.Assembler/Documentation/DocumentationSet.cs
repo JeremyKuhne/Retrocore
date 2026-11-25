@@ -181,9 +181,19 @@ public sealed class DocumentationSet
             Record(cpu, location);
         }
 
+        // Each run of entries with one CPU keeps only its first: At's answer, the CPU of the last entry at or before a
+        // line, is the CPU of the run that entry is in.
         foreach (List<(int Line, InstructionSet Cpu)> runs in set._cpus.Values)
         {
             runs.Sort((left, right) => left.Line.CompareTo(right.Line));
+            int kept = 1;
+            for (int index = 1; index < runs.Count; index++)
+            {
+                if (runs[index].Cpu != runs[kept - 1].Cpu) { runs[kept++] = runs[index]; }
+            }
+
+            runs.RemoveRange(kept, runs.Count - kept);
+            runs.TrimExcess();
         }
     }
 

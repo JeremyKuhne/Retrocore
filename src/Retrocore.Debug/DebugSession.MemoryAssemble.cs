@@ -73,7 +73,7 @@ internal sealed partial class DebugSession
     }
 
     // Assembles one line at an address, its names given by the session as constants, so LDA KBD reads $C000. A
-    // scoped name such as RamTest::R6H, which a constant cannot be called, stands in the line as an alias. A name
+    // scoped name such as RamTest::GallopMaskHigh, which a constant cannot be called, stands in the line as an alias. A name
     // spelled as one of the CPU's registers or conditions, such as X or Z, is taken for the register first, and for
     // the session's name only where the line does not assemble without it.
     private byte[] AssembleLine(InstructionSet set, int address, string line, IDebugMemory memory, string space)
@@ -104,7 +104,7 @@ internal sealed partial class DebugSession
                 return alias;
             }
 
-            // Names outside quoted text only, so .byte "RamTest::R6H" stays those characters.
+            // Names outside quoted text only, so .byte "RamTest::GallopMaskHigh" stays those characters.
             string written = line[operands..];
             StringBuilder operand = new();
             foreach ((int start, int end, bool quoted) in Pieces(written))
@@ -234,7 +234,7 @@ internal sealed partial class DebugSession
         return new Assembler.Assembler().Assemble(new AssemblySource("    " + text + "\n", "line"), options);
     }
 
-    // A name in an operand, such as KBD, COUT+1's COUT, RamTest::R6H, Main::@again, ::COUT or z:CH's CH; not a number
+    // A name in an operand, such as KBD, COUT+1's COUT, RamTest::GallopMaskHigh, Main::@again, ::COUT or z:CH's CH; not a number
     // such as $C0 or 1E, a width prefix such as z: or a:, nor an operator such as .mod, as a dot is never in a name.
     // A name's characters after its first are AssemblySyntax.IsWord's: letters, marks, digits and connectors, which
     // are \w's.

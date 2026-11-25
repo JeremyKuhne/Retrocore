@@ -251,7 +251,7 @@ common ancestor follows these rules (the alignment plan's D1 and D3).
 - **A name that exists in only some builds can't be named in a comment the other builds assemble too**: not as a
   link, an `Entry:` item or an `Inherit:` target. Write it in backticks or describe it ("BASIC 4's error-channel
   read"), or move the comment under the `.if` with its code. A shared comment that names a build describes it with
-  its root's default switches, and says "by default" where a switch could change it.
+  its root's default switches, and should say "by default" where a switch could change it.
 
 ## Builds and their switches
 
@@ -306,7 +306,7 @@ int reached = machine.CallUntil("Variables::MultiplyUnsigned", [error], a: multi
 ```
 
 The test then expects the error exit for a product past 16 bits, and otherwise the product in X, A and Y and
-`LinearIndex` zero, as the `Out:` says.
+`LinearIndex` zero, as its documentation says.
 
 - **`Keeps:`**: pass distinctive values in (`$5A` in X, `$A5` in Y) and check them after, as
   [BasicStatementRoutineTests](../tests/Retrocore.Tests/BasicStatementRoutineTests.cs) does for `IsLetter`.
@@ -347,8 +347,8 @@ A test that looks a label up by its old name breaks when the conversion renames 
 definition or as a historical name. The BASIC tests go through [BasicNames](../tests/Retrocore.Tests/BasicNames.cs)
 (`result.Symbol("FNDLIN")` reaches `FindLine` through its `Also:`), and the debug hosts through
 `AssemblyResult.SymbolsWithHistoricalNames`. [BasicRenameGateTests](../tests/Retrocore.Tests/BasicRenameGateTests.cs)
-proves it: it renames labels in a copy of the sources, each keeping its old name in `Also:`, and runs every BASIC
-test class against the copy, which must keep every ROM's bytes and pass unchanged. A new test class that assembles
+proves it: it renames labels in a copy of the sources, each keeping its old name in `Also:`, and runs the BASIC
+test classes it lists against the copy, which must keep every ROM's bytes and pass unchanged. A new test class that assembles
 BASIC joins its list, or the list of those it leaves out, with a reason. Before converting a source whose tests look
 names up, move them to such a lookup first (the alignment plan's B4).
 

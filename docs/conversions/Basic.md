@@ -1319,7 +1319,8 @@ Decisions and how the table was applied:
     `MsBasic.Families.asm` declares the shared families, so that Record, DiskCommands, DiskParser and RomEnd each
     continue it;
   - the disk statements are in `Statements`, named for their keywords (X13: `Statements::DOpen` ...), and
-    `ForgetDiskStatus` (OLDCLR) is top level, since Kernal4's `TALK` and `LISTEN` call it;
+    `ForgetDiskStatus` (OLDCLR) is top level, since Kernal4's channel selectors call it before `TALK` and
+    `LISTEN`;
   - BASIC 4's collector is `Strings::CollectGarbage`, as E6 left it, now a `.proc` with nested routines.
 - F2. Owner questions, as the log recommends:
   - F-Q3: DCOPY, DSCRTC, GTVLCN and MGO, which no document but the overlay gives these routines, cite UNKN, since the overlay
@@ -1357,7 +1358,7 @@ Decisions and how the table was applied:
   entries, and the extension's header lists them.
 - F4. Citations:
   - Labels whose rows say "none found" cite UNKN, as W2 has it, so every overlay label still resolves. That now
-    includes BASIC 4's NOTDS and NOTDS1 (with HV4's DSKX2 and DSKX1), which E5 left without `Also:` because their
+    includes BASIC 4's NOTDS and NOTDS1 (with HV4's and HV4R's DSKX2 and DSKX1), which E5 left without `Also:` because their
     labels were reached only through a Commodore alias; they are in Commodore's own macro now, so
     `BasicNames.OverlayOnlyLabels` drops them.
   - The reconstructions' address-generated names the table's notes suggested (HV1's LE1AA ..., HV4R's LBA70, HV4's
@@ -1365,7 +1366,7 @@ Decisions and how the table was applied:
   - The lineage rule: BASIC 1's and BASIC 4's `StopEmptyInput` both cite INPSTP (UNKN), PATCH1 (HV1, HV1R) and
     BUFFU1 (HV4R); every PET `EvaluateVariable`, BASIC 4's trampoline and the other builds' routine, cites ISVAR (M6502,
     CBM4S79, HV1, HV1R, HV2, HV4, HV4R), and so do both collectors' GARBA2; `FindStringLink::CheckStatus` cites
-    ADJ (CBM4S79, HV4, HV4R); every root's `InterpreterEnd` cites LASTWR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R,
+    ADJ (CBM4S79, HV4, HV4R); every build's `InterpreterEnd` cites LASTWR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R,
     K4S79, HVK4) and `ROM_ORIGIN` ROMLOC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R). A question for the owner: the
     overlay gives ISVAR to BASIC 4's trampoline, where the comparisons need it, but BASIC 4's own documents (CBM4S79,
     HV4, HV4R) give it to the code the trampoline jumps to, `EvaluateVariableBody` (ISVAR1, UNKN), which is also
@@ -1405,8 +1406,11 @@ Decisions and how the table was applied:
     (`StoreLinkedDescriptor::ReleaseOld`, not the table's `StoreString::`).
   - The clock assignment is `AssignClockString` with its nested `AddClockDigit`, whose `ToIllegalQuantity` the
     length check branches into.
-  - `PATCH_FILL`, the $AA both BASIC 4 chips fill their patch space with, is defined in both patch files under
-    `.ifndef`, since the extension's tests include one without the other.
+  - `PATCH_FILL`, the $AA both BASIC 4 chips fill their patch space with, is defined in
+    `Commodore.Basic4Patches.asm` and `Commodore.Basic4RomEnd.asm` under `.ifndef`, since the extension's tests
+    include one without the other.
+  - The $B000 chip's checksum byte is `InterpreterChecksum`, with HV4's and HV4R's CKSUMB, as the plan note on the
+    unlabelled byte suggested; the overlay leaves it unlabelled, so the overlay comparison exempts it.
 - F9. Shared modules touched, minimally: `MsBasic.Assignment.asm` (the two Commodore macros it invokes),
   `MsBasic.OperandEvaluation.asm` (`EvaluateVariable`), `MsBasic.VariableInput.asm` (`BeginGetString`),
   `MsBasic.StringGarbageCollection.asm` (`ArrayHeaderSize`), `MsBasic.StringConcatenation.asm` (`FindStringLink`)

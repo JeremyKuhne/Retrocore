@@ -36,8 +36,8 @@ EXTENDED_DISK_VECTORS = 1
 
 ;; The helpers of the BASIC 4 disk statements: their parameter parser and checks, the command builder that sends a
 ;; disk command, the status reader behind `DS` and `DS$`, the confirmation prompt, and the helpers that close a
-;; unit's files. Only the disk statements and the kernal's bus routines use them. Declared here, empty, so that
-;; each of the extension's files continues it.
+;; unit's files. Only the disk statements and, through the kernal's READDS entry, BASIC's `DS` and `DS$` use them.
+;; Declared here, empty, so that each of the extension's files continues it.
 .scope Disk
 .endscope
 

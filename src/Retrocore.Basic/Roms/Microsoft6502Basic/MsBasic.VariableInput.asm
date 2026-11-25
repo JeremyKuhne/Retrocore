@@ -13,7 +13,7 @@
 ; PET BASIC 2:         VariableInput 2, 0, 0, 0, 1, 0; VariableInputMessages 0, 1
 ; PET BASIC 4:         VariableInput 2, 0, 0, 0, 1, 0; VariableInputMessages 0, 0
 ;
-; The early `BeginGetString` (GETSTR) helper is external: it stores the character, advances the cursor, removes its
+; The early `BeginGetString` (GETSTR) helper is external: it stores the delimiter (0), advances the cursor, removes its
 ; JSR return address, and jumps back to AssignVariableList::StringAtCursor with A = 0. BASIC 1 supplies it in the
 ; editor-ROM patches.
 

@@ -239,6 +239,9 @@ public sealed partial class BasicCommodoreConversionTests
         // INPCOM is AssignString's, at the same address.
         "AssignClockString", "AssignClockString::Convert",
 
+        // The $B000 chip's checksum byte, which the overlay leaves unlabelled; HV4 and HV4R call it CKSUMB.
+        "InterpreterChecksum",
+
         // BASIC 4's descriptor copy by the shared modules' name, an equate of StoreLinkedDescriptor, which gives COPYZC.
         "StoreDescriptor"
     ];

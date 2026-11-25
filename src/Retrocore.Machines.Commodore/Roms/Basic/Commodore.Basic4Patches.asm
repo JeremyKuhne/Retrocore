@@ -21,7 +21,9 @@ PATCH_FILL = $AA
 .macro CommodoreBasic4OperandSplit revised
     .assert revised = 0 || revised = 1, "revised is 0 or 1."
 
-    ; The chip's checksum-adjustment byte, which makes the chip's bytes add up as the kernal's test expects.
+    ;; The byte that adjusts the $B000 chip's checksum; nothing reads it.
+    ;; Also: CKSUMB (HV4, HV4R)
+InterpreterChecksum:
     .if revised
         .byte $B8
     .else
@@ -32,7 +34,8 @@ PATCH_FILL = $AA
     ;; here, as it does to the other builds' own <EvaluateVariable>, so the patches can grow without moving its target.
     ;;
     ;; ISVAR is here because the overlay puts it here, and it cites, by the lineage rule, every bibliography document
-    ;; naming Microsoft's ISVAR; BASIC 4's own documents (CBM4S79, HV4, HV4R) put the label on the code it jumps to.
+    ;; naming Microsoft's ISVAR; BASIC 4's own documents (CBM4S79, HV4, HV4R) put the label on the lookup itself,
+    ;; which in HV4 and HV4R is the code the trampoline jumps to.
     ;; Also: ISVAR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc EvaluateVariable
     jmp EvaluateVariableBody

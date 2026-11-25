@@ -1108,7 +1108,8 @@ Return:
     ;; <IoStatus>.
     ;;
     ;; It marks the status buffer as garbage for the linked-string collector: the back-link becomes the buffer's
-    ;; length and $FF. The kernal's talk and listen routines call it.
+    ;; length and $FF. The kernal's input and output channel selectors (CHKIN and CHKOUT) call it before
+    ;; addressing a unit on the bus.
     ;; Out: DiskStatusDescriptor = 0 (its length byte only), IoStatus = 0, A = Y
     ;; Keeps: X, Y
     ;; Also: OLDCLR (K4S79, HVK4)

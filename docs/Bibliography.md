@@ -98,7 +98,7 @@ where the check found that the document gives that name for that thing:
   Appendix D says the same calls drive the AppleMouse card in an Apple IIe. Its MouX1 and MouY1 are the IIc's soft
   switches, not screen holes. The first edition (1985) gives the same routine names for the IIc's own firmware only,
   so the mouse card's sources don't cite it ([`docs/conversions/Mouse.md`](conversions/Mouse.md), M1).
-- **IIGSFR87** for the mouse: Chapter 10 says programs use its firmware calls to be compatible with the mouse in
-  every Apple II, and Table 10-4 (Mouse firmware calls) gives SETMOUSE ... INITMOUSE at $C412-$C419, BINITENTRY,
+- **IIGSFR87** for the mouse: Chapter 10 says applications must use its firmware calls only if they wish to be
+  compatible with the mouse in every Apple II, and Table 10-4 (Mouse firmware calls) gives SETMOUSE ... INITMOUSE at $C412-$C419, BINITENTRY,
   BASICINPUT and BASICOUTPUT at $C400, $C405 and $C407, and, as "entry points compatible with AppleMouse card",
   DIAGMOUSE, COPYRIGHT, TIMEDATA, SETVBLCNTS, OPTMOUSE and STARTTIMER at $C41A-$C41F.

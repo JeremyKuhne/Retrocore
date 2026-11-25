@@ -252,6 +252,8 @@ public sealed class AtariBasicDialectTests
     [DataRow("NOTE1")]
     [DataRow("NOTA$")]
     [DataRow("NOTA$=\"X\"")]
+    [DataRow("NOTA$(1 AND1)")]
+    [DataRow("NOTA$(1,1)")]
     [DataRow("1 AND1.5")]
     [DataRow("2*-.5")]
     [DataRow("1E50*1E40")]
@@ -290,6 +292,7 @@ public sealed class AtariBasicDialectTests
     [DataRow("LEN(D$)", 9)]
     [DataRow("C$(1)", 5)]
     [DataRow("D$(1)", 5)]
+    [DataRow("NOTD$=\"X\"", 9)]
     [DataRow("0^-1", 3)]
     [DataRow("(-8)^.5", 3)]
     [DataRow("1E50*1E50", 11)]
@@ -315,6 +318,7 @@ public sealed class AtariBasicDialectTests
     [DataRow("- - 1")]
     [DataRow("NOT - 1")]
     [DataRow("NOT NOT 1")]
+    [DataRow("NOT$")]
     public void RefusedExpressionsAreTheRoms(string expression)
     {
         AtariMachine machine = EvaluationMachine();
@@ -329,7 +333,7 @@ public sealed class AtariBasicDialectTests
     private static AtariMachine EvaluationMachine()
     {
         AtariMachine machine = Machine();
-        AtariMachineTests.Type(machine, "DIM A$(9),B(3,2),NOTA$(5):A$=\"HELLO\":B(2,0)=7:B(1,1)=1.5:NOTA$=\"N\":DEG\r");
+        AtariMachineTests.Type(machine, "DIM A$(9),B(3,2),NOTA$(5),NOTD$(5):A$=\"HELLO\":B(2,0)=7:B(1,1)=1.5:NOTA$=\"N\":NOTD$=\"N\":DEG\r");
         AtariMachineTests.Type(machine, "10 D$=\"\"\r");
         return machine;
     }

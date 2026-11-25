@@ -19,9 +19,9 @@ namespace Retrocore.Basic;
 ///   like a sign, takes the operand after it (NOT A=B is (NOT A)=B), and only one of them, though a sign right before
 ///   a number is the constant's (- -1 is 1, and - - 1 is refused); AND is above OR. A comparison is 1 or 0. AND, as
 ///   OPERATOR_AND, ANDs the exponent bytes, so 1 AND 0.5 is 0. A name that starts with NOT, AND or OR where that
-///   operator can go is the operator and a name, as MATCH_OPERATOR reads it: NOTE1 is NOT E1, though NOTE$ alone is
-///   the string, as the grammar falls back to it when NOT's operand fails. A string that no DIM has given room is
-///   error 9, and its substring error 5, its length being 0.
+///   operator can go is the operator and a name, as MATCH_OPERATOR reads it: NOTE1 is NOT E1, and NOTA$="X" is
+///   NOT (A$="X"), though NOTA$ alone is the string, as the grammar falls back to it when NOT's operand fails. A
+///   string that no DIM has given room is error 9, and its substring error 5, its length being 0.
 ///   <c>A(i)</c> and <c>A(i,j)</c> are array elements, counting from 0, <c>A(i)</c> being <c>A(i,0)</c>;
 ///   <c>A$(i)</c> is the string from character i and <c>A$(i,j)</c> characters i to j, counting from 1, never empty.
 ///   Subscripts, indexes and the arguments of PEEK and CHR$ round to an integer from 0 to 65535, or are error 3; a
@@ -180,25 +180,36 @@ internal sealed class AtariBasicExpression
         if (Take("+")) { return Rounded(Number(Operand())); }
         int at = _at;
         string? whole = Peek();
+        bool stringName = whole is { Length: > 3 } && whole.EndsWith('$');
         if (TakeWord("NOT"))
         {
-            // NOT and a string name, as NOTE$, isn't NOT's operand: the grammar takes the whole name instead.
-            if (whole is null || whole == "NOT" || !_tokens[at].EndsWith('$')) { return Truth(Number(Operand()) == 0); }
-            try
-            {
-                BasicValue operand = Operand();
-                if (!operand.IsString) { return Truth(Number(operand) == 0); }
-            }
-            catch (FormatException)
-            {
-                // E$ alone, or E$ never DIMensioned: the whole name is the operand.
-            }
+            // NOT$ is no name, as SYNTAX_VARIABLE refuses an operator's name with a character below '0' after it.
+            if (whole == "NOT$") { throw Syntax("NOT$ is not a name"); }
 
-            _at = at;
+            // NOT and a string name, as NOTA$, is NOT's operand only in a comparison; otherwise RULE_EXPRESSION's
+            // NOT fails, and the grammar takes the whole name as a string. It decides by the grammar, not the values.
+            if (!stringName || whole is null || ComparisonFollows(at)) { return Truth(Number(Operand()) == 0); }
             _tokens[at] = whole;
         }
 
         return Operand();
+    }
+
+    // Whether a relation follows the name at an index and the bracketed indexes after it.
+    private bool ComparisonFollows(int name)
+    {
+        int at = name + 1;
+        if (at < _tokens.Count && _tokens[at] == "(")
+        {
+            int depth = 0;
+            for (; at < _tokens.Count; at++)
+            {
+                if (_tokens[at] == "(") { depth++; }
+                else if (_tokens[at] == ")" && --depth == 0) { at++; break; }
+            }
+        }
+
+        return at < _tokens.Count && _tokens[at] is "=" or "<>" or "<" or ">" or "<=" or ">=";
     }
 
     // An operand, and the string comparisons, which bind above every other operator.
@@ -447,8 +458,8 @@ internal sealed class AtariBasicExpression
 
     private static FormatException NotDimensioned(string name) => new($"ERROR- 9: {name} is not DIMensioned.");
 
-    // A number's six bytes, or error 11 for one of 1E98 up: a limit of carrying the numbers as doubles, as bytes
-    // written into a variable can hold one that AtariNumbers.Format would print.
+    // A number's six bytes, or error 11 for one of 1E98 up, beyond FromDouble's exponents, which only bytes written
+    // into a variable can hold (AtariNumbers.Format would print them).
     private static byte[] Atari(double value)
     {
         try
@@ -547,7 +558,7 @@ internal sealed class AtariBasicExpression
             }
             catch (OverflowException)
             {
-                // A number of 1E98 up, as bytes written into a variable can hold.
+                // A number of 1E98 up, which only bytes written into a variable can hold.
             }
         }
 

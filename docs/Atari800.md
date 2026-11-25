@@ -13,14 +13,15 @@ nothing external. This guide covers what it emulates, its ROMs, and how to debug
 | Right cartridge | `$8000-$9FFF` | The 800's second slot, 8 KB. |
 | Left cartridge | `$A000-$BFFF` | 8 KB, or 16 KB from `$8000`; Atari BASIC by default. |
 | GTIA | `$D000-$D01F` | Players and missiles, colors and priorities, collisions, the console keys and the triggers. |
-| POKEY | `$D200-$D20F` | Four sound channels, the timers, the keyboard, the serial port and the paddles. |
+| POKEY | `$D200-$D20F` | Four sound channels, the timers, the keyboard and the serial port. |
 | PIA | `$D300-$D303` | The joystick ports, and the serial bus's command and motor lines. |
-| ANTIC | `$D400-$D40F` | The display list, DMA, WSYNC, VCOUNT, the light pen and the NMIs. |
+| ANTIC | `$D400-$D40F` | The display list, DMA, WSYNC, VCOUNT and the NMIs. |
 | Floating point ROM | `$D800-$DFFF` | The floating point package. |
 | OS ROM | `$E000-$FFFF` | The character set and the OS, rev. A, rev. B or the PAL OS. |
 
-**CPU.** The NMOS 6502 runs at 1.79 MHz (NTSC) or 1.77 MHz (PAL). ANTIC takes whole cycles for its display and
-memory refresh DMA, and holds the CPU's RDY line from a write to `WSYNC` to the next line's end.
+**CPU.** The NMOS 6502 runs at 1.79 MHz (NTSC) or 1.77 MHz (PAL). ANTIC takes whole cycles for its display and memory
+refresh DMA, and holds the CPU's RDY line from a write to `WSYNC` until cycle 105, of that line or, for a write on cycle
+104 or later, the next.
 
 **Video.** ANTIC runs its display list line by line, with every character and map mode, fine scrolling and display
 list interrupts; GTIA (or the earlier CTIA) draws the playfield, players and missiles as the beam reaches them. The
@@ -53,8 +54,9 @@ The ROMs are SDK sources, each assembling byte-identically to its chip, with `;;
 
 Without dumps, the debugger and the tests build the ROMs from these sources. With `romDirectory` (or
 `RETROCORE_ATARI_ROMS`), they load MAME's `a800` or `a800pal` chips instead (`co12399b.rom`, `co12499b.rom`,
-`co14599b.rom`, ...); the 810's firmware from an `atari810` folder beside them; and Atari BASIC as `basic-revc.rom`
-(or `-reva`, `-revb`) in the directory or its `basic` folder. A ROM the directory lacks is built from its source.
+`co14599b.rom`, ...); the 810's firmware from an `atari810` folder beside them; and Atari BASIC as `basic-revc.rom` (or
+`-reva`, `-revb`) in the directory or its `basic` folder. The directory may be the set's own or the one holding `a800`
+and `a800pal`, which finds the chips for either video standard. A ROM the directory lacks is built from its source.
 
 ## Debugging
 
@@ -79,9 +81,9 @@ Launch with `"machine": "atari800"`. The options:
 A 6502 `source` or `program` loads once the OS and BASIC have run for two seconds, so CIO and the screen are set up:
 [`sample/atari/hello.asm`](../sample/atari/hello.asm) prints through CIO.
 
-The OS, the floating point package and the cartridges are memory areas of their own, so `Os.asm`'s, `FloatingPoint.asm`'s
-and `AtariBasic.asm`'s breakpoints stop only where their ROM is, and a cartridge's only while it is in its slot. A
-dump that isn't one of the sources' builds debugs without them.
+The OS, the floating point package and the cartridges are memory areas of their own, so `Os.asm`'s,
+`FloatingPoint.asm`'s and `AtariBasic.asm`'s breakpoints stop only where their ROM is, and a cartridge's only while it
+is in its slot. A dump that isn't one of the sources' builds debugs without them.
 
 **Atari BASIC.** A `basic` file (`.atari.bas`, or a `.bas` whose first line is `REM retrocore atari`) loads into BASIC's
 tables and RUNs, on the BASIC thread, as for the other BASICs: breakpoints on lines, stepping by statement, GOSUBs in
@@ -100,9 +102,9 @@ powers the machine off and on.
 `AtariMachineTests`, `PokeyTests`, `AtariTimingTests`, `AtariDiskTests`, `Atari810Tests`, `AtariTapeTests` and
 `AtariCartridgeTests` cover the machine. `AtariOsSourceTests`, `AtariFloatingPointSourceTests`, `AtariBasicSourceTests`
 and `Atari810SourceTests` pin each source's builds by digest, compare them with dumps when they are there, lint them,
-and run the machine on the SDK's builds alone. `AtariBasicDialectTests` checks the dialect against the ROM running on
-the machine. `AtariOracleTests` compares traces with MAME's when `RETROCORE_MAME` names it.
+and run the machine on their builds. `AtariBasicDialectTests` checks the dialect against the ROM running on the machine.
+`AtariOracleTests` compares traces with MAME's when it finds MAME (`RETROCORE_MAME`, or `<cache>\mame\mame.exe`).
 
-[`tools/Test-AtariDap.mjs`](../tools/Test-AtariDap.mjs) runs the debugger on the SDK's sources with nothing external:
-an Atari BASIC file on the BASIC thread, breakpoints in the modules of `AtariBasic.asm` and `Os.asm`, an `.xex`, a disk booted
-through the 810, and the 6502 sample.
+[`tools/Test-AtariDap.mjs`](../tools/Test-AtariDap.mjs) runs the debugger on the SDK's sources with nothing external: an
+Atari BASIC file on the BASIC thread, breakpoints in `AtariBasic/Execution.asm` and `Os/Editor.asm`, an `.xex`, a disk
+booted through the 810, and the 6502 sample.

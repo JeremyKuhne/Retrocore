@@ -7,7 +7,7 @@ import { readFileSync } from "node:fs";
 import * as path from "node:path";
 import { test } from "node:test";
 import { machineById, machines } from "../machines";
-import { describeSetup, isUsable, optionValue, removesDrives, runChoices, setupConfiguration, withOption, type Setup } from "../startFlow";
+import { crowdsCartridge, describeSetup, isUsable, optionValue, removesDrives, runChoices, setupConfiguration, withOption, type Setup } from "../startFlow";
 
 interface OptionSchema { type?: string; enum?: unknown[]; anyOf?: OptionSchema[] }
 
@@ -143,4 +143,13 @@ test("a setup that starts from a disk keeps the drives it needs", () => {
     assert.ok(removesDrives(disk, "diskInterface", false));
     assert.ok(!removesDrives(disk, "diskInterface", true));
     assert.ok(!removesDrives({ ...disk, kind: "machine" }, "diskInterface", false));
+});
+
+test("a cartridge keeps BASIC out of its slot", () => {
+    const atari = machine("atari800");
+    const cartridge: Setup = { machineId: "atari800", kind: "cartridge", path: "star.rom", options: {} };
+    assert.equal(optionValue(atari, cartridge, "basicCartridge"), "none");
+    assert.ok(crowdsCartridge(setupConfiguration(cartridge), "basicCartridge", "c"));
+    assert.ok(!crowdsCartridge(setupConfiguration(cartridge), "basicCartridge", "none"));
+    assert.ok(!crowdsCartridge(setupConfiguration({ ...cartridge, kind: "machine" }), "basicCartridge", "c"));
 });

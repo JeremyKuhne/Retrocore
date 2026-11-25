@@ -254,8 +254,10 @@ function grammar(dialect, name, words, { names = "[A-Za-z][0-9]*[$%!#]?", ignore
 // the letters and digits after it, so the words inside it (TO in TOTAL, NOT in NOTE1) are not found. A name that
 // starts with an operator's or a function's word is that word when no letter or digit follows it, as in NOT A or
 // PEEK(; right after a number, a closing parenthesis or a string BASIC wants an operator and takes the word whatever
-// follows, as in 1TO10. One case is left out: after a name and a space BASIC also wants an operator, so A AND1 is A
-// AND 1, which the highlighting shows as A and the name AND1. REM and DATA keep the rest of the line as typed.
+// follows, as in 1TO10. Two cases are left out: after a name and a space BASIC also wants an operator, so A AND1 is A
+// AND 1, which the highlighting shows as A and the name AND1; and BASIC takes the word only when the character after
+// it is below 0, so LEN=5 assigns the variable LEN, which the highlighting shows as the function. REM and DATA keep
+// the rest of the line as typed.
 function atariGrammar(words) {
     const scope = "retrocore-atari";
     const statements = words.slice(0, words.indexOf("TO"));

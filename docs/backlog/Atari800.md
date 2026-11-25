@@ -75,7 +75,7 @@ These are the plan's choices. Each needs your yes before phase 0.
 5. **The sources.** No Atari 8-bit ROM has had an official open-source release. Atari published the OS source listing
    (1982), and COMPUTE! published *The Atari BASIC Source Book* (1983), but both are copyrighted print listings, not
    licensed releases, so as with the BBC's DNFS they are not imported or followed. Every ROM is our own native source,
-   written from the dumps with the SDK's tools: the OS (rev. B, with rev. A and PAL as `VERSION` builds), the floating
+   which assembles byte-identically to the dumps: the OS (rev. B, with rev. A and PAL as `VERSION` builds), the floating
    point package, the character set, Atari BASIC and the 810's firmware. Names follow Atari's published
    documentation: the OS User's Manual and the Hardware Manual name the vectors, the database variables (`SAVMSC`,
    `DOSVEC`, `SDMCTL`, `ICCOM` and the rest), the shadow registers and the hardware registers. Labels with no
@@ -297,8 +297,8 @@ Hardware Manual instead.
     to `RUNAD`, or to the first segment's start if no segment set it.
 - **Tests:**
   - `AtariDiskTests`:
-    - DOS 2.0S boots to DUP's menu and lists its directory (`DOS SYS 039`, `DUP SYS 042`, `AUTORUN SYS 001`, 625
-      free sectors);
+    - DOS 2.0S boots to DUP's menu and lists its directory (`DOS SYS 039`, `DUP SYS 042` and the free
+      sectors);
     - BASIC `SAVE "D:TEST.BAS"`, `NEW`, `LOAD` and `RUN`;
     - error 144 on a protected disk;
     - ATR and XFD round trips;
@@ -634,8 +634,8 @@ the debug target, then the extension, the Desktop and the docs. Two items are le
   - Launch options cover the model, video, OS, chip, RAM, BASIC's revision, cartridges, drives (the 810 or SIO),
     disks, an `.xex` and a tape. Without dumps every ROM is built from the SDK's sources.
   - WSYNC's RDY hold is the target's `IsHeld`, so the debugger's instruction budget waits it out.
-  - Keys above 127 hold START, SELECT, OPTION, BREAK and SYSTEM RESET; `retro/key` now takes 0-255, as the BBC's
-    branch has it.
+  - Keys above 127 hold START, SELECT, OPTION, BREAK and SYSTEM RESET; `retro/key` now takes codes up to the target's
+    highest key, $F4 on the Atari.
   - `tools/Test-AtariDap.mjs` (in CI) shows what was required: breakpoints in `Os.asm`, in `AtariBasic.asm` and on a
     BASIC line all stop, and the machine runs a BASIC file, an `.xex`, a disk booted through the 810 and the 6502
     sample, `sample/atari/hello.asm`. The native AOT smoke test runs an Atari too.
@@ -647,7 +647,7 @@ the debug target, then the extension, the Desktop and the docs. Two items are le
   starts, and operator and function words only where the tokenizer would. The display panel's Sound button now sends
   `retro/sound`, which the host forwards to the machine; this also fixes the Color Computer's button, which sent
   `apple2/sound`.
-- **Docs:** `docs/Atari800.md` is the machine's guide, and the README lists the machine, its sources and its tests.
+- **Docs:** `docs/Atari800.md` is the machine's guide, and the README lists the machine, its dumps and its DAP test.
 - **Left for later:**
   - The 810 as a second CPU in the debugger. The coprocessor model, as the SoftCard has it, hands the bus from one CPU
     to the other, while the 810's 6507 runs beside the computer's 6502 all the time. It needs a second thread.

@@ -11,7 +11,7 @@ import * as vscode from "vscode";
 import { favoriteChoices } from "./favorites";
 import { machines, type Machine } from "./machines";
 import {
-    describeSetup, isUsable, optionValue, removesDrives, runChoices, setupConfiguration, startOrigin, withOption, type RunChoice, type Setup
+    crowdsCartridge, describeSetup, isUsable, optionValue, removesDrives, runChoices, setupConfiguration, startOrigin, withOption, type RunChoice, type Setup
 } from "./startFlow";
 
 const lastKey = "retrocore.lastSetup";
@@ -172,6 +172,11 @@ async function pickOptions(machine: Machine, setup: Setup): Promise<Setup> {
         if (removesDrives(current, picked.choice.option, value.value)) {
             // The disk it starts from needs a drive.
             void vscode.window.showWarningMessage(`${machine.label} starts from a disk, so it keeps its ${picked.choice.label.toLowerCase()}.`);
+            continue;
+        }
+        if (crowdsCartridge(setupConfiguration(current), picked.choice.option, value.value)) {
+            // The cartridge holds the left slot.
+            void vscode.window.showWarningMessage(`${machine.label} starts with a cartridge in BASIC's slot, so BASIC stays out.`);
             continue;
         }
 

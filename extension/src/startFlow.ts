@@ -187,6 +187,11 @@ export function removesDrives(setup: Setup, option: string, value: string | numb
     return setup.kind === "disk" && driveOptions.has(option) && value === false;
 }
 
+/** Whether a change would put Atari BASIC in the left slot, which the configuration's cartridge holds. */
+export function crowdsCartridge(configuration: Record<string, unknown>, option: string, value: string | number | boolean): boolean {
+    return option === "basicCartridge" && value !== "none" && typeof configuration.cartridge === "string";
+}
+
 /** The setup's options with one changed, dropping it when it is back to the machine's default. */
 export function withOption(machine: Machine, setup: Setup, option: string, value: string | number | boolean): Setup {
     const choice = machine.choices.find(candidate => candidate.option === option);
@@ -197,8 +202,10 @@ export function withOption(machine: Machine, setup: Setup, option: string, value
     return { ...setup, options };
 }
 
-/** The value a setup gives one of the machine's choices: its own, or the default. */
+/** The value a setup gives one of the machine's choices: its own, or the default (a cartridge's BASIC is none). */
 export function optionValue(machine: Machine, setup: Setup, option: string): string | number | boolean | undefined {
+    // A cartridge's launch takes BASIC out, whatever the options say.
+    if (setup.kind === "cartridge" && option === "basicCartridge") return "none";
     return setup.options[option] ?? machine.choices.find(choice => choice.option === option)?.default;
 }
 

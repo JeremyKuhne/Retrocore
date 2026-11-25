@@ -8,9 +8,11 @@
 
 CIOV = $E456                        ;; CIO's entry: X = the IOCB's number times 16
 ICCOM = $0342                       ;; IOCB 0's command
-ICBAL = $0344                       ;; IOCB 0's buffer address (2 bytes)
-ICBLL = $0348                       ;; IOCB 0's buffer length (2 bytes)
-PUT_CHARACTERS = $0B                ;; CIO's command that writes a buffer's characters
+ICBAL = $0344                       ;; IOCB 0's buffer address, low byte
+ICBAH = $0345                       ;; IOCB 0's buffer address, high byte
+ICBLL = $0348                       ;; IOCB 0's buffer length, low byte
+ICBLH = $0349                       ;; IOCB 0's buffer length, high byte
+CPBINR = $0B                        ;; CIO's put bytes command, which writes a buffer's characters
 EOL = $9B                           ;; ATASCII's end of line
 
 .org $2000
@@ -25,16 +27,16 @@ DONE:
 ;; Uses: A, X
 PRINT:
     ldx #$00
-    lda #PUT_CHARACTERS
+    lda #CPBINR
     sta ICCOM
     lda #<MESSAGE
     sta ICBAL
     lda #>MESSAGE
-    sta ICBAL+1
+    sta ICBAH
     lda #MESSAGE_LENGTH
     sta ICBLL
     lda #$00
-    sta ICBLL+1
+    sta ICBLH
     jmp CIOV
 
 MESSAGE:

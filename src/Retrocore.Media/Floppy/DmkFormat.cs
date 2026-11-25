@@ -128,11 +128,24 @@ public static class DmkFormat
         for (int index = 0; index < cylinders * sides; index++)
         {
             Span<byte> track = layout.AsSpan(HeaderSize + (index * length), length);
-            foreach (DmkField field in Locate(track, singleOnly, exactSizes: false))
+            // A data field can run over another sector's ID or data mark, as on some protected disks: those, and each
+            // field's CRC, stay, so the layout still finds every sector.
+            List<DmkField> fields = Locate(track, singleOnly, exactSizes: false);
+            HashSet<int> kept = [];
+            foreach (DmkField field in fields)
             {
-                for (int position = 0; position < field.Sector.Data.Length; position++)
+                int crc = field.Data + ((field.Sector.Data.Length + 1) * field.Step);
+                foreach ((int from, int count) in (ReadOnlySpan<(int, int)>)[(field.Id, 7), (field.Data, 1), (crc, 2)])
                 {
-                    Put(track, field.Data + ((position + 1) * field.Step), 0, field.Step);
+                    for (int offset = from; offset < from + (count * field.Step); offset++) { kept.Add(offset); }
+                }
+            }
+
+            foreach (DmkField field in fields)
+            {
+                for (int offset = field.Data + field.Step; offset < field.Data + ((field.Sector.Data.Length + 1) * field.Step); offset++)
+                {
+                    if (offset < track.Length && !kept.Contains(offset)) { track[offset] = 0; }
                 }
             }
         }
@@ -230,7 +243,7 @@ public static class DmkFormat
         byte[] track = old.ToArray();
         for (int index = 0; index < fields.Count; index++)
         {
-            (_, int data, int step) = fields[index];
+            (_, _, int data, int step) = fields[index];
             FloppySector sector = sectors[index];
             Put(track, data, sector.DataAddressMark, step);
             for (int position = 0; position < sector.Data.Length; position++)
@@ -474,7 +487,7 @@ public static class DmkFormat
                 CrcError = crcError
             };
 
-            fields.Add(new(sector, data, step));
+            fields.Add(new(sector, offset, data, step));
         }
 
         return fields;

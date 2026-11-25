@@ -114,6 +114,64 @@ public sealed class Trs80DiskSaveTests
     }
 
     /// <summary>
+    ///  An image that lists a track twice, as some do for a track of two sector sizes, writes back as it was, each
+    ///  listing taking its sectors in turn; and a track the layout lacks goes in cylinder and side order.
+    /// </summary>
+    [TestMethod]
+    public void ImdKeepsRepeatedTracksAndTheirOrder()
+    {
+        List<byte> image = [.. s_comment];
+        image.AddRange([2, 0, 0, 2, 1, 1, 2]);
+        image.Add(1);
+        image.AddRange(Sector(0, 0, 1, 256, doubleDensity: false).Data.ToArray());
+        image.Add(1);
+        image.AddRange(Sector(0, 0, 2, 256, doubleDensity: false).Data.ToArray());
+        image.AddRange([2, 0, 0, 1, 2, 3]);
+        image.Add(1);
+        image.AddRange(Sector(0, 0, 3, 512, doubleDensity: false).Data.ToArray());
+        image.AddRange([2, 1, 0, 1, 1, 1, 2, 0x55]);
+        byte[] bytes = [.. image];
+
+        FloppyDisk disk = ImdFormat.Read(bytes);
+        disk.Track(0, 0).Should().HaveCount(3);
+        EncodedImage back = ImdFormat.Encode(disk, ImdFormat.Layout(bytes));
+        back.IsLossless.Should().BeTrue();
+        back.Bytes.Should().Equal(bytes);
+
+        disk.Format(0, 1, [Sector(0, 1, 1, 256, doubleDensity: false)]);
+        Modes(ImdFormat.Encode(disk, ImdFormat.Layout(bytes)).Bytes).Should().Equal([(0, 0, 2), (0, 0, 2), (0, 1, 2), (1, 0, 2)]);
+    }
+
+    /// <summary>
+    ///  A sector written with <c>$F9</c> or <c>$FA</c>, as the FD1771 writes them, on a track the layout keeps is
+    ///  listed, as IMD holds only normal and deleted data.
+    /// </summary>
+    [TestMethod]
+    public void ImdListsAUserMarkOnAKeptTrack()
+    {
+        byte[] image = Imd();
+        FloppyDisk disk = ImdFormat.Read(image);
+        disk.Write(disk.Track(0, 0)[0], disk.Track(0, 0)[0].Data, 0xFA);
+        ImdFormat.Encode(disk, ImdFormat.Layout(image)).Losses
+            .Should().Equal("Data address marks $F9 and $FA, which IMD writes as deleted ($F8), on track 0.");
+    }
+
+    /// <summary>
+    ///  A new image of a Kaypro's tracks, ten 512-byte sectors in double density, is a 5¼-inch disk's: mode 5.
+    /// </summary>
+    [TestMethod]
+    public void ImdWritesAKayproTrackAt250Kbps()
+    {
+        FloppyDisk disk = new();
+        foreach (int number in Enumerable.Range(0, 10))
+        {
+            disk.Add(0, 0, Sector(0, 0, number, 512, doubleDensity: true));
+        }
+
+        Modes(ImdFormat.Encode(disk).Bytes).Should().Equal([(0, 0, 5)]);
+    }
+
+    /// <summary>
     ///  A track has one mode and size, so IMD lists a sector of another size or density than its track's first, and
     ///  writes the user-defined marks <c>$F9</c> and <c>$FA</c> as deleted.
     /// </summary>
@@ -127,8 +185,8 @@ public sealed class Trs80DiskSaveTests
         disk.Add(1, 0, Sector(1, 0, 2, 256, doubleDensity: true));
         EncodedImage encoded = ImdFormat.Encode(disk);
         encoded.Losses.Should().Equal(
-            "Data address marks $F9 and $FA, which IMD writes as deleted ($F8), on track 0.",
-            "Sectors of another size or density than their track's first, on tracks 0-1.");
+            "Sectors of another size or density than their track's first, on tracks 0-1.",
+            "Data address marks $F9 and $FA, which IMD writes as deleted ($F8), on track 0.");
 
         FloppyDisk read = ImdFormat.Read(encoded.Bytes);
         read.Track(0, 0).Should().ContainSingle().Which.DataAddressMark.Should().Be(0xF8);
@@ -165,6 +223,29 @@ public sealed class Trs80DiskSaveTests
         formatted[1].Should().Be(4, "the image grows to four cylinders");
         formatted.AsSpan(16, length).SequenceEqual(written.AsSpan(16, length)).Should().BeTrue();
         Describe(DmkFormat.Read(formatted)).Should().Equal(Describe(disk));
+    }
+
+    /// <summary>
+    ///  A sector whose ID says it is larger than the space before the next, so that its data runs over the next
+    ///  sectors' IDs, as on some protected disks, still writes back byte for byte: the layout keeps those IDs.
+    /// </summary>
+    [TestMethod]
+    public void DmkKeepsIdsADataFieldRunsOver()
+    {
+        FloppyDisk disk = new();
+        foreach (int number in Enumerable.Range(1, 4))
+        {
+            disk.Add(0, 0, Sector(0, 0, number, 256, doubleDensity: true));
+        }
+
+        byte[] image = DmkFormat.Write(disk);
+        int id = (image[16] | (image[17] << 8)) & 0x3FFF;
+        image[16 + id + 4] = 3;
+
+        FloppyDisk read = DmkFormat.Read(image);
+        read.Track(0, 0).Should().HaveCount(4);
+        read.Track(0, 0)[0].Data.Length.Should().Be(1024);
+        DmkFormat.Encode(read, DmkFormat.Layout(image)).Bytes.Should().Equal(image);
     }
 
     /// <summary>

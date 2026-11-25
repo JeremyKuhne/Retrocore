@@ -142,51 +142,79 @@ public static class ImdFormat
         // The data rate of a track the layout lacks: the layout's first track's, or for a new image 500 kbps, an 8-inch
         // drive's, when a track holds more than a 5¼-inch drive's 250 kbps does, and 250 kbps otherwise.
         int rate = tracks.Count != 0 ? tracks[0].Mode % 3 : disk.Tracks().Any(EightInch) ? 0 : 2;
-        HashSet<(int Cylinder, int Side)> written = [];
-        foreach (ImdTrack track in tracks)
+
+        // Each track the layout has, in its order, takes its sectors from the disk's track in turn, as a track an
+        // image lists twice is read; a track whose sectors are no longer the layout's is written anew, once.
+        List<((int Cylinder, int Side) Key, byte[] Bytes)> segments = [];
+        Dictionary<(int Cylinder, int Side), int> taken = [];
+        HashSet<(int Cylinder, int Side)> rewritten = [];
+        Dictionary<(int Cylinder, int Side), int> last = [];
+        for (int index = 0; index < tracks.Count; index++)
         {
-            if (!written.Add((track.Cylinder, track.Side))) { continue; }
+            last[(tracks[index].Cylinder, tracks[index].Side)] = index;
+        }
+
+        for (int index = 0; index < tracks.Count; index++)
+        {
+            ImdTrack track = tracks[index];
+            (int, int) key = (track.Cylinder, track.Side);
+            if (rewritten.Contains(key)) { continue; }
             IReadOnlyList<FloppySector> sectors = disk.Track(track.Cylinder, track.Side);
-            if (Matches(track, sectors))
+            int start = taken.GetValueOrDefault(key);
+            using MemoryStream segment = new();
+            if (Matches(track, sectors, start, all: last[key] == index) is int count)
             {
-                WriteHeader(output, track);
-                int next = 0;
+                WriteHeader(segment, track);
+                int next = start;
                 foreach (byte record in track.Records)
                 {
-                    if (record == 0) { output.WriteByte(0); }
-                    else { WriteRecord(output, sectors[next++], compress: record % 2 == 0); }
+                    if (record == 0) { segment.WriteByte(0); }
+                    else { WriteRecord(segment, sectors[next++], record % 2 == 0, track.Cylinder, losses); }
                 }
+
+                taken[key] = start + count;
             }
             else
             {
-                WriteTrack(output, track.Cylinder, track.Side, sectors, track.Mode % 3, losses);
+                WriteTrack(segment, track.Cylinder, track.Side, [.. sectors.Skip(start)], track.Mode % 3, losses);
+                rewritten.Add(key);
             }
+
+            segments.Add((key, segment.ToArray()));
         }
 
+        // The disk's tracks the layout lacks go in cylinder and side order.
         foreach ((int cylinder, int side, IReadOnlyList<FloppySector> sectors) in disk.Tracks())
         {
-            if (!written.Contains((cylinder, side))) { WriteTrack(output, cylinder, side, sectors, rate, losses); }
+            (int, int) key = (cylinder, side);
+            if (last.ContainsKey(key)) { continue; }
+            using MemoryStream segment = new();
+            WriteTrack(segment, cylinder, side, sectors, rate, losses);
+            int at = segments.FindIndex(other => other.Key.CompareTo(key) > 0);
+            segments.Insert(at < 0 ? segments.Count : at, (key, segment.ToArray()));
         }
 
+        foreach ((_, byte[] bytes) in segments) { output.Write(bytes); }
         return new(output.ToArray(), losses.ToList());
     }
 
-    // Whether a track holds more than a 5¼-inch track at 250 kbps: ten 256-byte sectors in single density, eighteen
-    // in double, as the Model II's 8-inch disks' 26 sectors do.
+    // Whether a track holds more than a 5¼-inch track at 250 kbps: ten 256-byte sectors in single density, or ten
+    // 512-byte sectors in double, as the Kaypro's are; the Model II's 8-inch disks hold 26 sectors.
     private static bool EightInch((int Cylinder, int Side, IReadOnlyList<FloppySector> Sectors) track) =>
-        Bytes(track.Sectors, doubleDensity: false) > 10 * 256 || Bytes(track.Sectors, doubleDensity: true) > 18 * 256;
+        Bytes(track.Sectors, doubleDensity: false) > 10 * 256 || Bytes(track.Sectors, doubleDensity: true) > 10 * 512;
 
     private static int Bytes(IReadOnlyList<FloppySector> sectors, bool doubleDensity) =>
         sectors.Where(sector => sector.DoubleDensity == doubleDensity).Sum(sector => sector.Data.Length);
 
-    // Whether a track's sectors are still the layout's: those with data, in order, by ID, size and density.
-    private static bool Matches(ImdTrack track, IReadOnlyList<FloppySector> sectors)
+    // How many of a disk track's sectors, from start, are still a layout track's: those with data, in order, by ID,
+    // size and density, and, for the last time the image lists the track, all the rest. Null when they are not.
+    private static int? Matches(ImdTrack track, IReadOnlyList<FloppySector> sectors, int start, bool all)
     {
-        int next = 0;
+        int next = start;
         for (int index = 0; index < track.Records.Length; index++)
         {
             if (track.Records[index] == 0) { continue; }
-            if (next == sectors.Count) { return false; }
+            if (next == sectors.Count) { return null; }
             FloppySector sector = sectors[next++];
             byte cylinder = track.Cylinders.Length == 0 ? track.Cylinder : track.Cylinders[index];
             byte head = track.Heads.Length == 0 ? (byte)track.Side : track.Heads[index];
@@ -196,11 +224,11 @@ public static class ImdFormat
                 || sector.Data.Length != 128 << track.SizeCode
                 || sector.DoubleDensity != track.Mode >= 3)
             {
-                return false;
+                return null;
             }
         }
 
-        return next == sectors.Count;
+        return all && next != sectors.Count ? null : next - start;
     }
 
     // A track the layout does not have as it is: its first sector's density and size, at the data rate given.
@@ -227,11 +255,6 @@ public static class ImdFormat
                 continue;
             }
 
-            if (sector.DataAddressMark is 0xF9 or 0xFA)
-            {
-                losses.Add("Data address marks $F9 and $FA, which IMD writes as deleted ($F8)", cylinder);
-            }
-
             kept.Add(sector);
         }
 
@@ -251,7 +274,7 @@ public static class ImdFormat
             []);
 
         WriteHeader(output, track);
-        foreach (FloppySector sector in kept) { WriteRecord(output, sector, compress: true); }
+        foreach (FloppySector sector in kept) { WriteRecord(output, sector, compress: true, cylinder, losses); }
     }
 
     private static void WriteHeader(MemoryStream output, ImdTrack track)
@@ -263,9 +286,14 @@ public static class ImdFormat
     }
 
     // A sector's record: 1 for data, 3 deleted, 5 with a CRC error, 7 both, and one more for a sector of one byte,
-    // which is compressed when it may be.
-    private static void WriteRecord(MemoryStream output, FloppySector sector, bool compress)
+    // which is compressed when it may be. $F9 and $FA are written as deleted, which is a loss.
+    private static void WriteRecord(MemoryStream output, FloppySector sector, bool compress, int cylinder, FloppyLosses losses)
     {
+        if (sector.DataAddressMark is 0xF9 or 0xFA)
+        {
+            losses.Add("Data address marks $F9 and $FA, which IMD writes as deleted ($F8)", cylinder);
+        }
+
         ReadOnlySpan<byte> data = sector.Data;
         int record = 1 + (sector.DataAddressMark != 0xFB ? 2 : 0) + (sector.CrcError ? 4 : 0);
         bool filled = compress && !data.ContainsAnyExcept(data[0]);

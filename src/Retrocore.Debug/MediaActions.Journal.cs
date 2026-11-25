@@ -6,6 +6,7 @@ using Retrocore.Machines.Devices;
 using Retrocore.Media;
 using Retrocore.Media.Acorn;
 using Retrocore.Media.Altair;
+using Retrocore.Media.Atari;
 using Retrocore.Media.Commodore;
 using Retrocore.Media.Floppy;
 using Retrocore.Media.Trs80;
@@ -263,6 +264,8 @@ internal static partial class MediaActions
             (nameof(CommodoreDisk), CommodoreDisk.SnapshotKind) => G64Format.Read(image),
             (nameof(CommodoreTape), CommodoreTape.SnapshotKind) => CommodoreTape.FromSnapshot(image),
             (nameof(AltairDisk), AltairDisk.SnapshotKind) => AltairDisk.Load(image),
+            (nameof(AtariDisk), AtariDisk.SnapshotKind) => AtariDisk.Load(image),
+            (nameof(AtariTape), AtariTape.SnapshotKind) => AtariTape.Load(image),
             _ => throw new InvalidDataException($"A {type} kept as {kind} cannot be read back."),
         };
 
@@ -299,6 +302,8 @@ internal static partial class MediaActions
         CommodoreDiskCodec disk => new() { ["kind"] = "commodoreDisk", ["format"] = disk.Format },
         CommodoreTapeCodec tape => new() { ["kind"] = "commodoreTape", ["format"] = tape.Format },
         AltairDiskCodec => new() { ["kind"] = "altairDisk" },
+        AtariDiskCodec atari => new() { ["kind"] = "atariDisk", ["format"] = atari.Format },
+        AtariTapeCodec => new() { ["kind"] = "atariTape" },
         _ => null,
     };
 
@@ -318,6 +323,8 @@ internal static partial class MediaActions
             "commodoreDisk" => new CommodoreDiskCodec(format),
             "commodoreTape" => new CommodoreTapeCodec(format),
             "altairDisk" => new AltairDiskCodec(),
+            "atariDisk" => AtariDiskCodec.For(format),
+            "atariTape" => new AtariTapeCodec(),
             _ => null,
         };
     }

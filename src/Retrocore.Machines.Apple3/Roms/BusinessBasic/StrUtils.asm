@@ -1,621 +1,743 @@
-; STRUTILS: string space. GETSPA to make room for a string, the garbage collector that packs the strings together,
-; CONCAT, and the routines that free a temporary string and find a string from its descriptor.
-;
-; Strings live between FRETOP and HIMEM, growing down from HIMEM. Each string has three information bytes just above
-; its characters: a type (0 for free space, TEMPTYP for a temporary, SIMTYP for a simple variable's, ARYTYP for an
-; array element's), then for a string in use where its descriptor is, relative to VARTAB or ARYTAB; free space holds
-; 0 and its length instead. A descriptor is three bytes: the string's length, then the string's distance below
-; HIMEM, low byte first, so that strings can move without their descriptors pointing into another bank.
-;
-; Names follow Apple's Business BASIC 1.3 listing.
+; retrocore: style=strict
+;; String space: <Strings::ReserveSpace> to make room for a string, the garbage collector that packs the strings
+;; together (<Strings::CollectGarbage>), concatenation, and the routines that free a temporary string and find a string
+;; from its descriptor.
+;;
+;; Strings live between <StringsBottom> and <MemoryTop>, growing down from <MemoryTop>. Each string has three
+;; information bytes just above its characters (<STRING_INFORMATION_SIZE>): a type (0 for free space,
+;; <STRING_TYPE_TEMPORARY> for a temporary, <STRING_TYPE_SIMPLE_VARIABLE> for a simple variable's,
+;; <STRING_TYPE_ARRAY_ELEMENT> for an array element's), then for a string in use where its descriptor is, relative to
+;; <VariablesStart> or <ArraysStart>; free space holds 0 and its length instead. A descriptor is three bytes
+;; (<DESCRIPTOR_SIZE>): the string's length, then the string's distance below <MemoryTop>, low byte first, so that
+;; strings can move without their descriptors pointing into another bank.
 
 ; ---------------------------------------------------------------------------------------------------------------------
 ; Getting space
 ; ---------------------------------------------------------------------------------------------------------------------
 
+;; String space: making room for strings, temporaries, freeing and collecting garbage, and the helpers of the string
+;; functions; the scope is in pieces through the files.
+.scope Strings
+
 ;; Takes room for a string of A characters, and its information bytes, from the bottom of string space.
 ;;
-;; When the room would reach <STREND>, or the strings would take more than 64K below <HIMEM>, the garbage collector
-;; packs them and <GETSPA> tries again; when that is not enough, it asks SOS for more memory with <EXPAND> before
-;; collecting again, until <EXPAND> ends the statement with OUT OF MEMORY. An empty string takes no room, and returns at
-;; once.
+;; When the room would reach <VariablesEnd>, or the strings would take more than 64K below <MemoryTop>, the garbage
+;; collector packs them and this tries again; when that is not enough, it asks SOS for more memory with <Segments::Grow>
+;; before collecting again, until <Segments::Grow> ends the statement with `OUT OF MEMORY`. An empty string takes no
+;; room, and returns at once.
 ;; In: A = the length
-;; Out: X, Y = the room's address, FRESPC, FRESPC+1, FRESPCB = the room, HIGHDS = its information bytes,
+;; Out: X, Y = the room's address, <NewString>, <NewString>+1, NewStringXByte = the room, DestinationEnd = its
+;;   information bytes,
 ;;   A = the length
-;; See: <GARBA2>, <STRINI>
-GETSPA:
-    lsr GARBFL                              ; not collected yet
+;; See: <Strings::CollectGarbage>, <AllocateForFac>
+;; Also: GETSPA (BB13)
+.proc ReserveSpace
+;; The pages asked of <Segments::Grow> when collecting garbage was not enough.
+EXPAND_PAGES = 4
+
+    lsr CollectionState                     ; not collected yet
     and #$FF
-    beq STRRT2                              ; nothing to take for an empty string
+    beq Done                                ; nothing to take for an empty string
     pha
 
 ;; Tries again to take the room for the length on the stack.
-TRYAG0:
-    lda FRETOP
-    ldy FRETOP+1
-    ldx FRETOPB
+;; Also: TRYAG0 (BB13)
+Try:
+    lda StringsBottom
+    ldy StringsBottom+1
+    ldx StringsBottomXByte
     sec
-    sbc #INFOSIZ
-    bcs TRYAG1
-    jsr FIXXY
+    sbc #STRING_INFORMATION_SIZE
+    bcs KeepInformation
+    jsr Memory::PreviousPage
 
 ;; Keeps the information bytes' address and takes the characters' room below them.
-TRYAG1:
-    sty HIGHDS+1
-    stx HIGHDSB
-    sta HIGHDS
+;; Also: TRYAG1 (BB13)
+KeepInformation:
+    sty DestinationEnd+1
+    stx DestinationEndXByte
+    sta DestinationEnd
     pla
     pha
-    eor #255                                ; HIGHDS less the length
+    eor #$FF                                ; DestinationEnd less the length
     sec
-    adc HIGHDS
-    bcs TRYAG4
-    jsr FIXXY
+    adc DestinationEnd
+    bcs CheckRoom
+    jsr Memory::PreviousPage
 
-;; Collects garbage when the room would reach STREND.
-TRYAG4:
-    cpx STRENDB
-    bcc GARBAG
-    bne TRYAG5
-    cpy STREND+1
-    bcc GARBAG
-    bne TRYAG5
-    cmp STREND
-    bcc GARBAG
+;; Collects garbage when the room would reach <VariablesEnd>.
+;; Also: TRYAG4 (BB13)
+CheckRoom:
+    cpx VariablesEndXByte
+    bcc Collect
+    bne CheckDistance
+    cpy VariablesEnd+1
+    bcc Collect
+    bne CheckDistance
+    cmp VariablesEnd
+    bcc Collect
 
-;; Takes the room, unless string space would grow past 64K below <HIMEM>, two banks.
-TRYAG5:
-    sta FRESPC
-    sty FRESPC+1
-    stx FRESPCB
+;; Takes the room, unless string space would grow past 64K below <MemoryTop>: two X-byte steps of 32K.
+;; Also: TRYAG5 (BB13)
+CheckDistance:
+    sta NewString
+    sty NewString+1
+    stx NewStringXByte
     pha
     clc
-    sbc HIMEM
+    sbc MemoryTop
     tya
-    sbc HIMEM+1
+    sbc MemoryTop+1
     txa
-    sbc HIMEMB
+    sbc MemoryTopXByte
     clc
     adc #2
     pla
-    bcc GARBAG
-    stx FRETOPB
-    sta FRETOP
-    sty FRETOP+1
-    ldx FRESPC
-    ldy FRESPC+1
+    bcc Collect
+    stx StringsBottomXByte
+    sta StringsBottom
+    sty StringsBottom+1
+    ldx NewString
+    ldy NewString+1
     pla
 
-;; An RTS for <GETSPA>.
-STRRT2:
+;; Returns.
+;; Also: STRRT2 (BB13)
+Done:
     rts
 
 ;; Packs the strings and tries again; the second time round, first asks SOS for more memory.
 ;;
-;; The LDX of OUT OF MEMORY is never used: <EXPAND> reports the error itself.
-GARBAG:
-    ldx #ERROM
-    bit GARBFL                              ; collected already?
-    bpl GARBA1
-    lda #4
-    jsr EXPAND
+;; The LDX of `OUT OF MEMORY` is never used: <Segments::Grow> reports the error itself.
+;; Also: GARBAG (BB13)
+Collect:
+    ldx #ERROR_OUT_OF_MEMORY
+    bit CollectionState                     ; collected already?
+    bpl CollectAndRetry
+    lda #EXPAND_PAGES
+    jsr Segments::Grow
 
-;; Packs the strings, then tries <GETSPA> again.
-GARBA1:
-    jsr GARBA2
+;; Packs the strings, then tries again.
+;; Also: GARBA1 (BB13)
+CollectAndRetry:
+    jsr CollectGarbage
     lda #$80
-    sta GARBFL
-    bne TRYAG0                              ; always
+    sta CollectionState
+    bne Try                                 ; always
+.endproc
 
 ; ---------------------------------------------------------------------------------------------------------------------
 ; The garbage collector
 ; ---------------------------------------------------------------------------------------------------------------------
 
-;; Packs the strings in use up against <HIMEM>, so that the free space is all below them, and sets <FRETOP> to the
-;; lowest string.
+;; Packs the strings in use up against <MemoryTop>, so that the free space is all below them, and sets <StringsBottom>
+;; to the lowest string.
 ;;
-;; It walks string space down from HIMEM, a string at a time by its information bytes. Each run of strings in use
-;; moves up with <BLTUC> over the free space found above it; <GRBPNT> counts the free bytes so far, and each string's
-;; descriptor has its distance below HIMEM reduced by that count.
-;; Uses: A, X, Y, TEMP, CNTDIGS, INPFLG, GRBPNT, HEADER, DECCNT, ANYNUM, HIGHDS, HIGHTR, LOWTR
-;; See: <GETSPA>, <GFINDTEMP>
-GARBA2:
+;; It walks string space down from <MemoryTop>, a string at a time by its information bytes. Each run of strings in use
+;; moves up with <MoveRangeUp::Unchecked> over the free space found above it; <CollectorDistance> counts the free bytes
+;; so far, and each string's descriptor has its distance below <MemoryTop> reduced by that count. It borrows the
+;; number reader's and `INPUT`'s bytes for its own state, under the names <CollectGarbage::ScanPointer>,
+;; <CollectGarbage::FreeLength>, <CollectGarbage::FreeRunEnds> and <CollectGarbage::LastInUse>.
+;; Uses: A, X, Y, Temporary, DigitsLeft, InputMode, CollectorDistance, StringInformationPointer, DigitCount,
+;;   DigitsSeen, DestinationEnd, SourceEnd, SourceStart
+;; Errors: <ERROR_VARIABLE> = a temporary string that no temporary descriptor points to
+;; See: <Strings::ReserveSpace>
+;; Also: GARBA2 (BB13)
+.proc CollectGarbage
+
+; The number reader's and INPUT's bytes, which the collector borrows while it runs.
+
+;; The string being looked at: a pointer to its information bytes, walking down string space.
+ScanPointer = DigitCount
+
+;; <ScanPointer>'s X-byte.
+ScanPointerXByte = DigitCountXByte
+
+;; The string's length, read with its information bytes or from its descriptor.
+FreeLength = DigitsSeen
+
+;; Set when a run of free space ends at the string just taken.
+FreeRunEnds = DigitsLeft
+
+;; Whether the last string taken was in use.
+LastInUse = InputMode
+
     lda #0
-    sta TEMP
-    sta CNTDIGS
-    sta INPFLG                              ; whether the last string was in use
-    sta GRBPNT                              ; the free bytes found so far
-    sta GRBPNT+1
-    lda HIMEM
-    ldx HIMEMB
-    ldy HIMEM+1
-    sta HIGHDS                              ; where the next string in use goes
-    stx HIGHDSB
-    sty HIGHDS+1
-    jmp GSUBIN3                             ; always
+    sta Temporary
+    sta FreeRunEnds
+    sta LastInUse                           ; whether the last string was in use
+    sta CollectorDistance                   ; the free bytes found so far
+    sta CollectorDistance+1
+    lda MemoryTop
+    ldx MemoryTopXByte
+    ldy MemoryTop+1
+    sta DestinationEnd                      ; where the next string in use goes
+    stx DestinationEndXByte
+    sty DestinationEnd+1
+    jmp CheckBottom                         ; always
 
-;; Takes the string whose information bytes <DECCNT> points to: one in use has its descriptor adjusted, a free one adds
-;; its length to GRBPNT.
-GMOVPTR:
+;; Takes the string whose information bytes <ScanPointer> points to: one in use has its descriptor adjusted, a free one
+;; adds its length to <CollectorDistance>.
+;; Also: GMOVPTR (BB13)
+TakeString:
     ldy #0
-    lda (DECCNT),Y                          ; the type
-    sta TEMP
+    lda (ScanPointer),Y                     ; the type
+    sta Temporary
     iny
-    lda (DECCNT),Y
-    sta HEADER                              ; where the descriptor is
+    lda (ScanPointer),Y
+    sta StringInformationPointer            ; where the descriptor is
     iny
-    lda (DECCNT),Y
-    sta HEADER+1
-    sta ANYNUM                              ; the length, for free space
-    lda TEMP
-    beq SUBYSAV                             ; free
-    eor INPFLG
-    and #01
-    sta CNTDIGS                             ; set when free space ends here
+    lda (ScanPointer),Y
+    sta StringInformationPointer+1
+    sta FreeLength                          ; the length, for free space
+    lda Temporary
+    beq AddFree                             ; free
+    eor LastInUse
+    and #1
+    sta FreeRunEnds                         ; set when free space ends here
     lda #1
-    sta INPFLG
-    lda TEMP
-    cmp #TEMPTYP
-    bne *+5
-    jmp GFINDTEMP                           ; a temporary
-    cmp #ARYTYP
-    bcc GRELSIM                             ; a simple variable's
-    lda ARYTAB+1                            ; an array element's
+    sta LastInUse
+    lda Temporary
+    cmp #STRING_TYPE_TEMPORARY
+    bne NotTemporary
+    jmp FindTemporary                       ; a temporary
+NotTemporary:
+    cmp #STRING_TYPE_ARRAY_ELEMENT
+    bcc SimpleVariable                      ; a simple variable's
+    lda ArraysStart+1                       ; an array element's
     pha
-    lda ARYTABB
+    lda ArraysStartXByte
     pha
-    lda ARYTAB
-    bcs GARBREL                             ; always
+    lda ArraysStart
+    bcs FindDescriptor                      ; always
 
-;; Finds a simple variable's descriptor from VARTAB.
-GRELSIM:
-    lda VARTAB+1
+;; Finds a simple variable's descriptor from <VariablesStart>.
+;; Also: GRELSIM (BB13)
+SimpleVariable:
+    lda VariablesStart+1
     pha
-    lda VARTABB
+    lda VariablesStartXByte
     pha
-    lda VARTAB
+    lda VariablesStart
 
-;; Works out the descriptor's address from the base, <VARTAB> or <ARYTAB>, and the relative address in HEADER.
-GARBREL:
+;; Works out the descriptor's address from the base, <VariablesStart> or <ArraysStart>, and the offset in
+;; <StringInformationPointer>.
+;;
+;; The offset is the base less the descriptor's address, packed to 16 bits by <Memory::PackPages>; its high byte, $FF
+;; for every descriptor, is left out of the information bytes, so the bank comes out two X-byte steps low and gets
+;; them back at the end.
+;; Also: GARBREL (BB13)
+FindDescriptor:
     sec
-    sbc HEADER
-    sta HEADER
+    sbc StringInformationPointer
+    sta StringInformationPointer
     pla
     tay
     pla
-    ldx HEADER+1
-    jsr FIXYAX
-    sta HEADER+1
+    ldx StringInformationPointer+1
+    jsr Memory::SubtractPageCount
+    sta StringInformationPointer+1
     tya
-    sbc #$FE
-    sta HEADERB
+    sbc #$FE                                ; the carry is set: plus 2
+    sta StringInformationPointerXByte
     ldy #0
-    lda (HEADER),Y                          ; the string's length
-    sta ANYNUM
+    lda (StringInformationPointer),Y        ; the string's length
+    sta FreeLength
 
-;; Moves the string's descriptor up by <GRBPNT> bytes, closer to HIMEM.
-GRBCMP2:
+;; Reduces the distance below <MemoryTop> in the string's descriptor by <CollectorDistance>, as the string moves up.
+;; Also: GRBCMP2 (BB13)
+MoveDescriptor:
     ldy #1
     sec
-    lda (HEADER),Y
-    sbc GRBPNT
-    sta (HEADER),Y
+    lda (StringInformationPointer),Y
+    sbc CollectorDistance
+    sta (StringInformationPointer),Y
     iny
-    lda (HEADER),Y
-    sbc GRBPNT+1
-    sta (HEADER),Y
-    bcs SUBYS2                              ; always
+    lda (StringInformationPointer),Y
+    sbc CollectorDistance+1
+    sta (StringInformationPointer),Y
+    bcs StepPastText                        ; always
 
-;; Adds a free string and its information bytes to GRBPNT.
-SUBYSAV:
-    lda GRBPNT
-    ldy GRBPNT+1
+;; Adds a free string and its information bytes to <CollectorDistance>.
+;; Also: SUBYSAV (BB13)
+AddFree:
+    lda CollectorDistance
+    ldy CollectorDistance+1
     clc
-    adc ANYNUM
-    bcc *+3
+    adc FreeLength
+    bcc AddInformation
     iny
+AddInformation:
     clc
-    adc #INFOSIZ
-    bcc *+3
+    adc #STRING_INFORMATION_SIZE
+    bcc KeepCount
     iny
-    sta GRBPNT
-    sty GRBPNT+1
-    lda INPFLG
-    ora TEMP
-    sta CNTDIGS                             ; set when strings in use end here
+KeepCount:
+    sta CollectorDistance
+    sty CollectorDistance+1
+    lda LastInUse
+    ora Temporary
+    sta FreeRunEnds                         ; set when strings in use end here
     lda #0
-    sta INPFLG
+    sta LastInUse
 
-;; Steps <DECCNT> down past the string's characters.
-SUBYS2:
-    lda DECCNT
-    ldy DECCNT+1
-    ldx DECCNTB
+;; Steps <ScanPointer> down past the string's characters.
+;; Also: SUBYS2 (BB13)
+StepPastText:
+    lda ScanPointer
+    ldy ScanPointer+1
+    ldx ScanPointerXByte
     sec
-    sbc ANYNUM
-    bcs GSUBINF
-    jsr FIXXY
-    stx DECCNTB
-    sty DECCNT+1
+    sbc FreeLength
+    bcs CheckBoundary
+    jsr Memory::PreviousPage
+    stx ScanPointerXByte
+    sty ScanPointer+1
 
 ;; Where free space and strings in use meet, marks the top of the run of strings to move, or moves the run.
-GSUBINF:
+;; Also: GSUBINF (BB13)
+CheckBoundary:
     pha
-    lda CNTDIGS
-    beq GSUBIN2                             ; no change here
-    lda TEMP
-    beq GSUBIN1                             ; free space starts here
-    lda FRESPC                              ; strings in use start here: the run's top
-    sta HIGHTR
-    lda FRESPCB
-    sta HIGHTRB
-    lda FRESPC+1
-    sta HIGHTR+1
-    jmp GSUBIN2                             ; always
+    lda FreeRunEnds
+    beq NextString                          ; no change here
+    lda Temporary
+    beq MoveRun                             ; free space starts here
+    lda NewString                           ; strings in use start here: the run's top
+    sta SourceEnd
+    lda NewStringXByte
+    sta SourceEndXByte
+    lda NewString+1
+    sta SourceEnd+1
+    jmp NextString                          ; always
 
-;; Moves the run of strings in use, from <LOWTR> up to <HIGHTR>, to just under HIGHDS.
-GSUBIN1:
-    lda FRESPC
-    sta LOWTR
-    lda FRESPCB
-    sta LOWTRB
-    lda FRESPC+1
-    sta LOWTR+1
+;; Moves the run of strings in use, from <SourceStart> up to <SourceEnd>, to just under <DestinationEnd>.
+;; Also: GSUBIN1 (BB13)
+MoveRun:
+    lda NewString
+    sta SourceStart
+    lda NewStringXByte
+    sta SourceStartXByte
+    lda NewString+1
+    sta SourceStart+1
     txa
     pha
     tya
     pha
-    jsr BLTUC
+    jsr MoveRangeUp::Unchecked
     pla
     tay
     pla
     tax
 
 ;; Goes on to the next string down.
-GSUBIN2:
+;; Also: GSUBIN2 (BB13)
+NextString:
     pla
 
-;; Goes on to the string below A, Y and bank X, or ends at <FRETOP>, moving the last run of strings in use.
-GSUBIN3:
-    sta FRESPC
-    sty FRESPC+1
-    stx FRESPCB
-    cpx FRETOPB
-    bne GMOVCHK
-    cpy FRETOP+1
-    bne GMOVCHK
-    cmp FRETOP
-    bne GMOVCHK
-    lda TEMP                                ; free space at the bottom?
-    beq GRBDON
-    lda FRETOP
-    sta LOWTR
-    stx LOWTRB
-    sty LOWTR+1
-    jmp GRBLTUC
+;; Goes on to the string below A, Y and bank X, or ends at <StringsBottom>, moving the last run of strings in use.
+;; Also: GSUBIN3 (BB13)
+CheckBottom:
+    sta NewString
+    sty NewString+1
+    stx NewStringXByte
+    cpx StringsBottomXByte
+    bne PointAtInformation
+    cpy StringsBottom+1
+    bne PointAtInformation
+    cmp StringsBottom
+    bne PointAtInformation
+    lda Temporary                           ; free space at the bottom?
+    beq Finish
+    lda StringsBottom
+    sta SourceStart
+    stx SourceStartXByte
+    sty SourceStart+1
+    jmp MoveLastRun
 
-;; Points <DECCNT> at the next string's information bytes.
-GMOVCHK:
+;; Points <ScanPointer> at the next string's information bytes.
+;; Also: GMOVCHK (BB13)
+PointAtInformation:
     sec
-    sbc #INFOSIZ
-    bcs GSUBIN4
-    jsr FIXXY
+    sbc #STRING_INFORMATION_SIZE
+    bcs SetPointer
+    jsr Memory::PreviousPage
 
-;; Sets <DECCNT> and takes the next string.
-GSUBIN4:
-    stx DECCNTB
-    sty DECCNT+1
-    sta DECCNT
-    jmp GMOVPTR
+;; Sets <ScanPointer> and takes the next string.
+;; Also: GSUBIN4 (BB13)
+SetPointer:
+    stx ScanPointerXByte
+    sty ScanPointer+1
+    sta ScanPointer
+    jmp TakeString
 
 ;; Moves the last run of strings in use up.
-GRBLTUC:
-    jsr BLTUC
+;; Also: GRBLTUC (BB13)
+MoveLastRun:
+    jsr MoveRangeUp::Unchecked
 
-;; Sets <FRETOP> to the lowest string, and ends the collection.
-GRBDON:
-    lda HIGHDS
-    sta FRETOP
-    lda HIGHDS+1
-    sta FRETOP+1
-    lda HIGHDSB
-    sta FRETOPB
+;; Sets <StringsBottom> to the lowest string, and ends the collection.
+;; Also: GRBDON (BB13)
+Finish:
+    lda DestinationEnd
+    sta StringsBottom
+    lda DestinationEnd+1
+    sta StringsBottom+1
+    lda DestinationEndXByte
+    sta StringsBottomXByte
     rts
 
-;; Finds the temporary descriptor in <TEMPST> that points to this string, and adjusts it; a temporary string that none
-;; points to ends the statement with a VARIABLE error.
-GFINDTEMP:
+;; Finds the temporary descriptor in <TemporaryDescriptors> that points to this string, and adjusts it; a temporary
+;; string that none points to ends the statement with a VARIABLE error.
+;; Also: GFINDTEMP (BB13)
+FindTemporary:
     lda #0
-    sta HEADERB
-    lda #<(TEMPST)
-    ldx #>(TEMPST)
-    sta HEADER
-    stx HEADER+1
+    sta StringInformationPointerXByte
+    lda #<(TemporaryDescriptors)
+    ldx #>(TemporaryDescriptors)
+    sta StringInformationPointer
+    stx StringInformationPointer+1
 
-;; Tries the temporary descriptor at <HEADER>: is its string's end this string's information bytes?
-GARBTEMP:
-    cmp TEMPPT                              ; past the last temporary?
-    beq NOTEMP
+;; Tries the temporary descriptor at <StringInformationPointer>: is its string's end this string's information bytes?
+;; Also: GARBTEMP (BB13)
+CheckTemporary:
+    cmp NextTemporary                       ; past the last temporary?
+    beq NoTemporary
     ldy #0
-    lda (HEADER),Y                          ; the length
-    beq DVARTS                              ; empty
-    sta ANYNUM
+    lda (StringInformationPointer),Y        ; the length
+    beq NextTemporaryDescriptor             ; empty
+    sta FreeLength
     iny
     iny
-    lda (HEADER),Y                          ; the distance below HIMEM: the high byte
+    lda (StringInformationPointer),Y        ; the distance below MemoryTop: the high byte
     tax
     dey
-    lda HIMEM
+    lda MemoryTop
     sec
-    sbc (HEADER),Y                          ; and the low
-    sta LOWTR
-    lda HIMEM+1
-    ldy HIMEMB
-    jsr FIXYAX
-    sta LOWTR+1
-    sty LOWTRB
-    lda LOWTR
+    sbc (StringInformationPointer),Y        ; and the low
+    sta SourceStart
+    lda MemoryTop+1
+    ldy MemoryTopXByte
+    jsr Memory::SubtractPageCount
+    sta SourceStart+1
+    sty SourceStartXByte
+    lda SourceStart
     clc
-    adc ANYNUM                              ; the string's end
-    sta LOWTR
-    ldy LOWTR+1
-    ldx LOWTRB
-    bcc *+6
+    adc FreeLength                          ; the string's end
+    sta SourceStart
+    ldy SourceStart+1
+    ldx SourceStartXByte
+    bcc CompareEnd
     iny
-    jsr FIXYX
-    cpx DECCNTB
-    bne DVARTS
-    cpy DECCNT+1
-    bne DVARTS
-    cmp DECCNT
-    bne DVARTS
-    jmp GRBCMP2                             ; this one
+    jsr Memory::WrapPage
+CompareEnd:
+    cpx ScanPointerXByte
+    bne NextTemporaryDescriptor
+    cpy ScanPointer+1
+    bne NextTemporaryDescriptor
+    cmp ScanPointer
+    bne NextTemporaryDescriptor
+    jmp MoveDescriptor                      ; this one
 
 ;; Steps to the next temporary descriptor.
-DVARTS:
-    lda #STRSIZ
+;; Also: DVARTS (BB13)
+NextTemporaryDescriptor:
+    lda #DESCRIPTOR_SIZE
     clc
-    adc HEADER
-    sta HEADER
-    jmp GARBTEMP
+    adc StringInformationPointer
+    sta StringInformationPointer
+    jmp CheckTemporary
 
 ;; Ends the statement with a VARIABLE error: a temporary string that no temporary descriptor points to.
-NOTEMP:
-    ldx #ERRVA
-    jmp ERROR
+;; Also: NOTEMP (BB13)
+NoTemporary:
+    ldx #ERROR_VARIABLE
+    jmp ReportError
+.endproc
 
 ; ---------------------------------------------------------------------------------------------------------------------
 ; Concatenation
 ; ---------------------------------------------------------------------------------------------------------------------
 
 ;; Concatenates two strings into a new temporary string, freeing their temporaries.
-;; In: ARGMO, ARGMO+1, ARGMOB = the left string's descriptor, FACMO, FACMO+1, FACMOB = the right string's
-;; Out: FACMO, FACMO+1 = the new temporary descriptor
-;; See: <STRINI>, <MOVINS>, <PUTNEW>
-CONCAT:
+;; In: ArgMantissa3, ArgMantissa3+1, ArgMantissa3XByte = the left string's descriptor, <FacMantissa3>, <FacMantissa3>+1,
+;;   FacMantissa3XByte = the right string's
+;; Out: FacMantissa3, FacMantissa3+1 = the new temporary descriptor
+;; Errors: <ERROR_STRING_TOO_LONG> = the two together are longer than 255 characters
+;; See: <AllocateForFac>, <Strings::CopyString>, <PushTemporary>
+;; Also: CONCAT (BB13)
+.proc Concatenate
     ldy #0
-    lda (FACMO),Y
+    lda (FacMantissa3),Y
     clc
-    adc (ARGMO),Y                           ; the two lengths
-    bcc SIZEOK
-    jsr CAT11
-    ldx #ERRLS
-    jmp ERROR
+    adc (ArgMantissa3),Y                    ; the two lengths
+    bcc LengthOk
+    jsr ReleaseOperands
+    ldx #ERROR_STRING_TOO_LONG
+    jmp ReportError
 
 ;; Takes room for the joined string, and copies the left string into it.
-SIZEOK:
-    jsr STRINI
-    ldx ARGMO
-    ldy ARGMO+1
-    stx STRNG1
-    sty STRNG1+1
-    ldx ARGMOB
-    stx STRNG1B
-    jsr MOVINS
+;; Also: SIZEOK (BB13)
+LengthOk:
+    jsr AllocateForFac
+    ldx ArgMantissa3
+    ldy ArgMantissa3+1
+    stx StringPointer
+    sty StringPointer+1
+    ldx ArgMantissa3XByte
+    stx StringPointerXByte
+    jsr CopyString
     clc
-    adc FRESPC                              ; past the left string
-    sta FRESPC
-    bcc CAT10
-    inc FRESPC+1
-    lda FRESPC+1
-    cmp #MAXPG
-    bcc CAT10
-    sbc #MAXPG-MINPG
-    inc FRESPCB
-    sta FRESPC+1
+    adc NewString                           ; past the left string
+    sta NewString
+    bcc CopyRight
+    inc NewString+1
+    lda NewString+1
+    cmp #POINTER_PAGE_LIMIT
+    bcc CopyRight
+    sbc #POINTER_PAGE_LIMIT-POINTER_PAGE_FIRST
+    inc NewStringXByte
+    sta NewString+1
 
 ;; Copies the right string after it, frees both temporaries and makes the result's.
-CAT10:
-    ldx FACMO
-    ldy FACMO+1
-    stx STRNG1
-    sty STRNG1+1
-    ldx FACMOB
-    stx STRNG1B
-    jsr MOVINS
-    jsr CAT11
-    jmp PUTNEW
+;; Also: CAT10 (BB13)
+CopyRight:
+    ldx FacMantissa3
+    ldy FacMantissa3+1
+    stx StringPointer
+    sty StringPointer+1
+    ldx FacMantissa3XByte
+    stx StringPointerXByte
+    jsr CopyString
+    jsr ReleaseOperands
+    jmp PushTemporary
+.endproc
 
-;; Frees the <FAC>'s and <ARG>'s strings, if they are the last temporaries.
-;; See: <FRECNOW>, <FRETNOW>
-CAT11:
-    jsr FRECNOW
-    lda ARGMO
-    ldy ARGMO+1
-    ldx ARGMOB
-    jmp FRETNOW
+;; Frees the <Fac>'s and <Arg>'s strings, if they are the last temporaries.
+;; See: <FreeFacTemporary>, <FreeTemporary>
+;; Also: CAT11 (BB13)
+.proc ReleaseOperands
+    jsr FreeFacTemporary
+    lda ArgMantissa3
+    ldy ArgMantissa3+1
+    ldx ArgMantissa3XByte
+    jmp FreeTemporary
+.endproc
 
 ; ---------------------------------------------------------------------------------------------------------------------
 ; Finding and freeing strings
 ; ---------------------------------------------------------------------------------------------------------------------
 
-;; Turns <INDEX> from a distance below <HIMEM> into an address, or back: it is HIMEM less INDEX either way.
-;; In: INDEX, INDEX+1, INDEXB = the address or the distance
-;; Out: INDEX, INDEX+1, INDEXB = the other
-;; Uses: YSAVE
+;; Turns <Pointer1> from a distance below <MemoryTop> into an address, or back: it is <MemoryTop> less <Pointer1> either
+;; way.
+;; In: Pointer1, Pointer1+1, Pointer1XByte = the address or the distance
+;; Out: Pointer1, Pointer1+1, Pointer1XByte = the other
+;; Uses: SavedY
 ;; Keeps: A, X, Y
-MAKREL:
+;; Also: MAKREL (BB13)
+.proc SubtractFromHighMemory
     pha
-    lda HIMEM
+    lda MemoryTop
     sec
-    sbc INDEX
-    sta INDEX
-    lda HIMEM+1
-    sty YSAVE
-    ldy HIMEMB
-    sbc INDEX+1
-    jsr FIXSBC
-    sta INDEX+1
+    sbc Pointer1
+    sta Pointer1
+    lda MemoryTop+1
+    sty SavedY
+    ldy MemoryTopXByte
+    sbc Pointer1+1
+    jsr Memory::NormalizeAfterSubtract
+    sta Pointer1+1
     tya
-    sbc INDEXB
-    sta INDEXB
-    ldy YSAVE
+    sbc Pointer1XByte
+    sta Pointer1XByte
+    ldy SavedY
     pla
     rts
+.endproc
 
-;; Copies the string whose descriptor <STRNG1> points to into the room at FRESPC.
-;; In: STRNG1, STRNG1+1, STRNG1B = the descriptor's address
+;; Copies the string whose descriptor <StringPointer> points to into the room at <NewString>.
+;; In: StringPointer, StringPointer+1, StringPointerXByte = the descriptor's address
 ;; Out: A = the length
-;; See: <MOVDO>
-MOVINS:
+;; See: <Strings::CopyBytes>
+;; Also: MOVINS (BB13)
+.proc CopyString
     ldy #0
-    lda (STRNG1),Y                          ; the length
+    lda (StringPointer),Y                   ; the length
     pha
     iny
-    lda (STRNG1),Y
+    lda (StringPointer),Y
     tax
     iny
-    lda (STRNG1),Y
+    lda (StringPointer),Y
     ldy #0
-    jsr FIXYA
-    sty INDEXB
-    stx INDEX
-    sta INDEX+1
-    jsr MAKREL                              ; the string's address
+    jsr Memory::UnpackPages
+    sty Pointer1XByte
+    stx Pointer1
+    sta Pointer1+1
+    jsr SubtractFromHighMemory              ; the string's address
     pla
+    ; Falls into CopyBytes.
+.endproc
 
-;; Copies A bytes from <INDEX> to <FRESPC>, last byte first.
-;; In: A = the count, INDEX = the source
+;; Copies A bytes from <Pointer1> to <NewString>, last byte first.
+;; In: A = the count, Pointer1 = the source
 ;; Out: A = the count, Y = 0
-MOVDO:
+;; Keeps: X
+;; Also: MOVDO (BB13)
+.proc CopyBytes
     tay
-    beq MVSTRT
+    beq Done
     pha
 
-;; Copies one byte, for <MOVDO>.
-MOVLP:
+;; Copies one byte.
+;; Also: MOVLP (BB13)
+Loop:
     dey
-    lda (INDEX),Y
-    sta (FRESPC),Y
+    lda (Pointer1),Y
+    sta (NewString),Y
     tya
-    bne MOVLP
+    bne Loop
     pla
 
-;; An RTS for <MOVDO>.
-MVSTRT:
+;; Returns.
+;; Also: MVSTRT (BB13)
+Done:
     rts
+.endproc
 
-;; Frees the temporary descriptor of the <FAC>'s string, if it is the last temporary, and finds the string, returning
-;; as <FRETMP> does.
-;; See: <FRETMP>
-FREFAC:
-    lda FACMO
-    ldx FACMOB
-    ldy FACMO+1
+;; Frees the temporary descriptor of the <Fac>'s string, if it is the last temporary, and finds the string, returning
+;; as <Strings::ReleaseDescriptor> does.
+;; Also: FREFAC (BB13)
+.proc ReleaseFac
+    lda FacMantissa3
+    ldx FacMantissa3XByte
+    ldy FacMantissa3+1
+    ; Falls into ReleaseDescriptor.
+.endproc
 
 ;; Frees a temporary descriptor, if it is the last one made, and finds its string.
 ;;
-;; The string's own space is freed only by <FRENOW>, when the zero flag says the descriptor was freed.
+;; The string's own space is freed only by <Strings::FreeSpaceIfReleased>, when the zero flag says the descriptor was
+;; freed.
 ;; In: A, Y = the descriptor's address, X = its bank
-;; Out: A = the length, X, Y = the string's address, INDEX, INDEX+1, INDEXB = the string,
+;; Out: A = the length, X, Y = the string's address, <Pointer1>, <Pointer1>+1, Pointer1XByte = the string,
 ;;   zero = set when the descriptor was the last temporary and is now free
-;; See: <FRETMS>, <NOTNOW>
-FRETMP:
-    sta INDEX
-    stx INDEXB
-    sty INDEX+1
-    jsr FRETMS
+;; See: <Strings::ReleaseTemporary>, <Strings::FindFromDescriptor>
+;; Also: FRETMP (BB13)
+.proc ReleaseDescriptor
+    sta Pointer1
+    stx Pointer1XByte
+    sty Pointer1+1
+    jsr ReleaseTemporary
+    ; Falls into FindFromDescriptor.
+.endproc
 
-;; Finds the string whose descriptor <INDEX> points to.
-;; In: INDEX, INDEX+1, INDEXB = the descriptor's address
-;; Out: A = the length, X, Y = the string's address, INDEX, INDEX+1, INDEXB = the string
-NOTNOW:
-    php                                     ; FRETMS's zero flag, for the caller
+;; Finds the string whose descriptor <Pointer1> points to.
+;; In: Pointer1, Pointer1+1, Pointer1XByte = the descriptor's address
+;; Out: A = the length, X, Y = the string's address, <Pointer1>, <Pointer1>+1, Pointer1XByte = the string, the flags as
+;;   they came in
+;; Also: NOTNOW (BB13)
+.proc FindFromDescriptor
+    php                                     ; ReleaseTemporary's zero flag, for the caller
     ldy #0
-    lda (INDEX),Y                           ; the length
+    lda (Pointer1),Y                        ; the length
     pha
     iny
-    lda (INDEX),Y
+    lda (Pointer1),Y
     tax
     iny
-    lda (INDEX),Y
+    lda (Pointer1),Y
     ldy #0
-    jsr FIXYA
-    sty INDEXB
-    sta INDEX+1
-    stx INDEX
-    jsr MAKREL
-    ldx INDEX
-    ldy INDEX+1
+    jsr Memory::UnpackPages
+    sty Pointer1XByte
+    sta Pointer1+1
+    stx Pointer1
+    jsr SubtractFromHighMemory
+    ldx Pointer1
+    ldy Pointer1+1
     pla
     plp
     rts
+.endproc
 
-;; Finds the <FAC>'s string again and frees its space when the zero flag says to.
+;; Finds the <Fac>'s string again and frees its space when the zero flag says to.
 ;; In: zero = set to free it
-;; See: <FRENOW>
-FREFC1:
+;; See: <Strings::FreeSpaceIfReleased>
+;; Also: FREFC1 (BB13)
+.proc FreeFacIfReleased
     php
-    jsr FREFAC
+    jsr ReleaseFac
     plp
+    ; Falls into FreeSpaceIfReleased.
+.endproc
 
 ;; Frees a string's space, when the zero flag says its temporary descriptor was freed.
-;; In: zero = set to free it, A = the length, INDEX = the string
-;; See: <FRESPA>
-FRENOW:
-    bne FRERTS
+;; In: zero = set to free it, A = the length, Pointer1 = the string
+;; See: <Strings::FreeSpace>
+;; Also: FRENOW (BB13)
+.proc FreeSpaceIfReleased
+    bne ReleaseTemporary::Done
+    ; Falls into FreeSpace.
+.endproc
 
 ;; Marks a string's space free, unless the string is empty.
-;; In: A = the length, INDEX = the string
-;; See: <TSTFRE>
-FRESPA:
+;; In: A = the length, Pointer1 = the string
+;; See: <Strings::MarkFree>
+;; Also: FRESPA (BB13)
+.proc FreeSpace
     cmp #0
-    beq FRERTS
-    jmp TSTFRE
+    beq ReleaseTemporary::Done
+    jmp MarkFree
+.endproc
 
 ;; Frees the temporary descriptor at A, Y, if it is the last one made.
 ;; In: A, Y = the descriptor's address
 ;; Out: zero = set when it was freed
-FRETMS:
+;; Keeps: X
+;; Entry:
+;;   Done = returns; <Strings::FreeSpaceIfReleased> and <Strings::FreeSpace> branch here
+;; Also: FRETMS (BB13)
+.proc ReleaseTemporary
     pha
-    lda #<(TEMPST)
-    cmp TEMPPT                              ; any temporaries?
+    lda #<(TemporaryDescriptors)
+    cmp NextTemporary                       ; any temporaries?
     pla
-    bcc *+5
+    bcc Some
     lda #$FF                                ; none: zero clear
     rts
-    cpy LASTPT+1                            ; the last one?
-    bne FRERTS
-    cmp LASTPT
-    bne FRERTS
-    sta TEMPPT
-    sbc #STRSIZ
-    sta LASTPT
+Some:
+    cpy LastTemporary+1                     ; the last one?
+    bne Done
+    cmp LastTemporary
+    bne Done
+    sta NextTemporary
+    sbc #DESCRIPTOR_SIZE
+    sta LastTemporary
     ldy #0                                  ; zero set: freed
 
-;; An RTS for the routines that free strings.
-FRERTS:
+;; Returns.
+;; Also: FRERTS (BB13)
+Done:
     rts
+.endproc
 
-;; Finds the <FAC>'s string from its descriptor, without freeing anything, returning as <NOTNOW> does.
-NOTFAC:
-    lda FACMO
-    ldy FACMO+1
-    ldx FACMOB
+;; Finds the <Fac>'s string from its descriptor, without freeing anything, returning as
+;; <Strings::FindFromDescriptor> does.
+;; Also: NOTFAC (BB13)
+.proc FindFacString
+    lda FacMantissa3
+    ldy FacMantissa3+1
+    ldx FacMantissa3XByte
+    ; Falls into FindFromDescriptorAt.
+.endproc
 
-;; Finds the string whose descriptor is at A, Y and bank X, without freeing anything, returning as <NOTNOW> does.
-NOTNW2:
-    sta INDEX
-    sty INDEX+1
-    stx INDEXB
-    jmp NOTNOW
+;; Finds the string whose descriptor is at A, Y and bank X, without freeing anything, returning as
+;; <Strings::FindFromDescriptor> does.
+;; Also: NOTNW2 (BB13)
+.proc FindFromDescriptorAt
+    sta Pointer1
+    sty Pointer1+1
+    stx Pointer1XByte
+    jmp FindFromDescriptor
+.endproc
+
+.endscope

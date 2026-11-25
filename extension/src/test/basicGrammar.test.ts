@@ -23,7 +23,8 @@ before(async () => {
         "source.retrocore-colorbasic": "colorbasic.tmLanguage.json",
         "source.retrocore-mbasic": "mbasic.tmLanguage.json",
         "source.retrocore-petbasic": "petbasic.tmLanguage.json",
-        "source.retrocore-bbcbasic": "bbcbasic.tmLanguage.json"
+        "source.retrocore-bbcbasic": "bbcbasic.tmLanguage.json",
+        "source.retrocore-atari": "atari.tmLanguage.json"
     };
     registry = new Registry({
         onigLib: Promise.resolve({
@@ -246,6 +247,37 @@ test("PET BASIC highlights its own words, BASIC 4's disk commands too, but not i
     assert.ok(has(scopes("petbasic", "50 DATA DOPEN, 2: END", "DOPEN"), "string.unquoted.data"));
     assert.ok(has(scopes("petbasic", "50 DATA DOPEN, 2: END", "END"), "keyword.control"), "a colon ends DATA");
     assert.ok(has(scopes("petbasic", "60 REM DIRECTORY", "DIRECTORY"), "comment.line"));
+});
+
+test("Atari BASIC finds statement names where statements start, and operator and function words outside names", () => {
+    const line = "10 IF X=1 THEN PRINT TOTAL:NOTE 1,A,B";
+    assert.ok(has(scopes("atari", line, "10"), "entity.name.label.line-number"));
+    assert.ok(has(scopes("atari", line, "IF"), "keyword.control"));
+    assert.ok(has(scopes("atari", line, "THEN"), "keyword.control"));
+    assert.ok(has(scopes("atari", line, "PRINT"), "keyword.other"), "a statement after THEN");
+    assert.ok(has(scopes("atari", line, "TOTAL"), "variable.other"), "TO inside TOTAL");
+    assert.ok(has(scopes("atari", line, "NOTE"), "keyword.other"), "a statement after a colon");
+    assert.ok(has(scopes("atari", "20 X=NOTE1+1", "NOTE1"), "variable.other"), "NOT inside NOTE1, and NOTE is no statement here");
+    assert.ok(has(scopes("atari", "30 PRINTER=1", "PRINT"), "keyword.other"), "PRINTER=1 is PRINT ER=1");
+    assert.ok(has(scopes("atari", "30 PRINTER=1", "ER"), "variable.other"));
+    assert.ok(has(scopes("atari", "40 PR.\"HI\":G.10", "PR."), "keyword.other"), "an abbreviated statement");
+    assert.ok(has(scopes("atari", "40 PR.\"HI\":G.10", "G."), "keyword.control"), "G. is GOTO");
+    assert.ok(has(scopes("atari", "50 FOR I=1 TO 10 STEP 2", "FOR"), "keyword.control"));
+    assert.ok(has(scopes("atari", "50 FOR I=1 TO 10 STEP 2", "TO"), "keyword.control"));
+    assert.ok(has(scopes("atari", "50 FOR I=1 TO 10 STEP 2", "STEP"), "keyword.control"));
+    assert.ok(has(scopes("atari", "60 FOR I=1TO10", "TO"), "keyword.control"), "after a number BASIC wants an operator");
+    assert.ok(has(scopes("atari", "70 X=PEEK(712) AND NOT Y", "PEEK"), "support.function"));
+    assert.ok(has(scopes("atari", "70 X=PEEK(712) AND NOT Y", "AND"), "keyword.operator"));
+    assert.ok(has(scopes("atari", "70 X=PEEK(712) AND NOT Y", "NOT"), "keyword.operator"));
+    assert.ok(has(scopes("atari", "80 A$=STR$(5)", "STR$"), "support.function"));
+    assert.ok(has(scopes("atari", "90 ON X GOTO 100,200", "GOTO"), "keyword.control"), "GOTO in ON");
+    assert.ok(has(scopes("atari", "100 GO TO 10", "GO TO"), "keyword.control"));
+    assert.ok(has(scopes("atari", "110 ? \"HI\"", "?"), "keyword.other"), "? is PRINT");
+    assert.ok(has(scopes("atari", "120 X=1:REM A:PRINT", "PRINT"), "comment.line"), "REM runs to the end of the line");
+    assert.ok(has(scopes("atari", "130 . A NOTE", "NOTE"), "comment.line"), "a dot alone is REM");
+    assert.ok(has(scopes("atari", "140 DATA 1,2:PRINT", "PRINT"), "string.unquoted.data"), "DATA runs to the end of the line");
+    assert.ok(has(scopes("atari", "150 COLOR 1:PLOT 5,5:DRAWTO 10,10", "DRAWTO"), "keyword.other"));
+    assert.ok(has(scopes("atari", "    PRINT \"NO NUMBER\"", "PRINT"), "keyword.other"), "a line with no number");
 });
 
 test("BASIC labels have label scopes", () => {

@@ -242,6 +242,7 @@ internal static class OffMachine
             DebugMachines.Pet => PetDebugTarget.Launch(args),
             DebugMachines.Altair => AltairDebugTarget.Launch(args),
             DebugMachines.Bbc => BbcDebugTarget.Launch(args),
+            DebugMachines.Atari => AtariDebugTarget.Launch(args),
             DebugMachines.Kaypro2 => KayproDebugTarget.Launch(args),
             _ => throw new ArgumentException($"A machine that is off cannot yet be a {machine}.")
         };

@@ -87,7 +87,8 @@ const screens: Record<string, string> = {
     "trs80-model3": "trs80-model1", "trs80-model4": "trs80-model1", altair: "trs80-model1", "trs80-model2": "apple2",
     pet: "trs80-model1",
     kaypro2: "apple2",
-    bbc: "coco"
+    bbc: "coco",
+    atari800: "coco"
 };
 
 /** What a device holds, as its questions name it: a tape or a disk (block storage's volumes are disks too). */

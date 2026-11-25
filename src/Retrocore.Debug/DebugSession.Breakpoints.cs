@@ -141,6 +141,9 @@ internal sealed partial class DebugSession
 
             // BASIC and the MOS raise their errors with BRK.
             DebugMachines.Bbc => [reset, bbcBrk, .. checks, .. BasicFilters],
+
+            // The Atari has no beam position to stop at yet.
+            DebugMachines.Atari => [reset, brk, .. checks, .. BasicFilters],
             _ => [reset, brk, scanline, .. checks, .. BasicFilters]
         };
     }

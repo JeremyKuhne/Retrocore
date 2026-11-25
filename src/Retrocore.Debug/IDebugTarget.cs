@@ -531,7 +531,7 @@ internal interface IDebugTarget : IDebugMemory
     /// </summary>
     /// <param name="code">
     ///  The ASCII code, 0-127, or above it a machine's own code for a key that types no character, as the BBC Micro's
-    ///  cursor, COPY and function keys.
+    ///  cursor, COPY and function keys, or the Atari's console keys.
     /// </param>
     /// <returns>Whether the keyboard has a key for it; a character it has none for is left out.</returns>
     bool Key(int code);

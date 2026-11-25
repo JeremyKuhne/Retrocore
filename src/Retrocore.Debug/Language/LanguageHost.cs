@@ -74,6 +74,11 @@ internal static partial class LanguageHost
     internal const string PetBasicId = "retrocore-petbasic";
 
     /// <summary>
+    ///  The VS Code language of Atari BASIC documents.
+    /// </summary>
+    internal const string AtariBasicId = "retrocore-atari";
+
+    /// <summary>
     ///  The VS Code language of a BASIC document whose pragma or file name gives its dialect.
     /// </summary>
     internal const string BasicId = "retrocore-basic";
@@ -96,6 +101,7 @@ internal static partial class LanguageHost
         or BbcBasicId
         or MbasicId
         or PetBasicId
+        or AtariBasicId
         or BasicId;
 
     // Serves the requests about a machine that is off (LanguageHost.Machine.cs).

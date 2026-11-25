@@ -44,6 +44,10 @@ export interface Machine {
     basicDialects: string[];
     /** The disk a basic launch boots for its BASIC, as the open dialog asks for it; none when BASIC is in ROM. */
     basicDisk?: string;
+    /** The executables it boots from a disk built for them (executable), such as the Atari's .xex; none by default. */
+    executableFormats?: string[];
+    /** The cartridge images it plugs in (cartridge), in place of its BASIC; none by default. */
+    cartridgeFormats?: string[];
     /** Whether a launch can put a program on a fresh DOS disk (dos). */
     dos: boolean;
     /** What the Start Machine command can set up, with its defaults. */
@@ -186,6 +190,48 @@ const petSnow: MachineChoice = {
 
 // The 2001 with BASIC 2 launches without snow unless snow is asked for, so its choice starts off.
 const petSnowOff: MachineChoice = { ...petSnow, default: false };
+// The Atari 400's and 800's choices: Atari BASIC's revision in the left slot, the video standard (PAL brings the
+// PAL OS), how the disk drives are emulated, and sound.
+const atariChoices: MachineChoice[] = [
+    {
+        option: "basicCartridge",
+        label: "BASIC",
+        values: [
+            { label: "Atari BASIC rev. C", value: "c" },
+            { label: "Atari BASIC rev. B", value: "b" },
+            { label: "Atari BASIC rev. A", detail: "The first, as the 400 and 800 shipped with", value: "a" },
+            { label: "None", detail: "The left slot is empty, and the OS starts in the memo pad or boots a disk", value: "none" }
+        ],
+        default: "c"
+    },
+    {
+        option: "video",
+        label: "Video",
+        values: [
+            { label: "NTSC", detail: "60 Hz, with OS rev. B", value: "ntsc" },
+            { label: "PAL", detail: "50 Hz, with the PAL OS", value: "pal" }
+        ],
+        default: "ntsc"
+    },
+    {
+        option: "diskDrive",
+        label: "Disk drives",
+        values: [
+            { label: "Atari 810", detail: "The 810's own 6507 and firmware, at the hardware level", value: "atari810" },
+            { label: "SIO", detail: "Drives that answer the serial bus's commands, without the 810's firmware", value: "sio" }
+        ],
+        default: "atari810"
+    },
+    {
+        option: "sound",
+        label: "Sound",
+        values: [
+            { label: "On", detail: "POKEY's four channels through the TV", value: "speaker" },
+            { label: "Off", value: "off" }
+        ],
+        default: "speaker"
+    }
+];
 
 /** The machines, in the order the dropdown and Start Machine list them. */
 export const machines: readonly Machine[] = [
@@ -621,6 +667,34 @@ export const machines: readonly Machine[] = [
         dos: false,
         choices: [bbcSound]
     },
+    // Without dumps, the Atari 400 and 800 build their ROMs from the SDK's sources: the OS, the floating point package,
+    // Atari BASIC and the 810's firmware.
+    {
+        id: "atari800",
+        label: "Atari 800",
+        detail: "6502 at 1.79 MHz, OS rev. B, Atari BASIC rev. C and 48 KB",
+        configuration: { machine: "atari800", model: "atari800" },
+        diskFormats: ["atr", "xfd"],
+        tapeFormats: ["cas"],
+        basicDialects: ["atari"],
+        executableFormats: ["xex"],
+        cartridgeFormats: ["rom", "car"],
+        dos: false,
+        choices: atariChoices
+    },
+    {
+        id: "atari400",
+        label: "Atari 400",
+        detail: "6502 at 1.79 MHz, OS rev. B, Atari BASIC rev. C and 16 KB",
+        configuration: { machine: "atari800", model: "atari400" },
+        diskFormats: ["atr", "xfd"],
+        tapeFormats: ["cas"],
+        basicDialects: ["atari"],
+        executableFormats: ["xex"],
+        cartridgeFormats: ["rom", "car"],
+        dos: false,
+        choices: atariChoices
+    },
     // The Altair has no ROM: it starts in empty RAM, and a launched source or program runs on its terminal.
     {
         id: "altair",
@@ -712,6 +786,7 @@ const models: Record<string, Record<string, string>> = {
     coco: { "": "coco2" },
     pet: { "": "pet2001-basic2" },
     bbc: { "": "bbcb" },
+    atari800: { "": "atari800" },
     "trs80-model3": { "": "3", III: "3", model3: "3", model4: "4", "4P": "4p", model4p: "4p" },
     "trs80-model2": { "": "2", II: "2", model2: "2", model12: "12", "16b": "16", "6000": "16", model16: "16" }
 };
@@ -746,10 +821,12 @@ export function startsWithDisks(configuration: Record<string, unknown>): boolean
 
 /**
  * What a choice is when the configuration leaves it out, as the debug host decides: the choice's default, except that
- * disks given bring their disk controller.
+ * disks given bring their disk controller, and an Atari cartridge takes BASIC's place in the left slot.
  */
 export function impliedValue(choice: MachineChoice, configuration: Record<string, unknown>): string | number | boolean {
-    return choice.option === "diskController" && startsWithDisks(configuration) ? true : choice.default;
+    if (choice.option === "diskController" && startsWithDisks(configuration)) return true;
+    if (choice.option === "basicCartridge" && typeof configuration.cartridge === "string") return "none";
+    return choice.default;
 }
 
 /** The value a launch configuration gives one of its machine's choices: its own, or what it is left out. */

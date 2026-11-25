@@ -69,6 +69,7 @@ const machines = [
     { name: "TRS-80 Model II", configuration: { machine: "trs80-model2" } },
     { name: "Color Computer 2", configuration: { machine: "coco", model: "coco2" } },
     { name: "Altair 8800", configuration: { machine: "altair" } },
+    { name: "Atari 800", configuration: { machine: "atari800" } },
     { name: "Kaypro II", configuration: { machine: "kaypro2" } }
 ];
 

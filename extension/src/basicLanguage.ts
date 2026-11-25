@@ -16,7 +16,8 @@ const dialects: Record<string, string> = {
     colorbasic: "retrocore-colorbasic",
     mbasic: "retrocore-mbasic",
     petbasic: "retrocore-petbasic",
-    bbcbasic: "retrocore-bbcbasic"
+    bbcbasic: "retrocore-bbcbasic",
+    atari: "retrocore-atari"
 };
 
 interface Diagnostic { line: number; severity: "error" | "warning"; message: string; start: number; end: number; }
@@ -49,6 +50,7 @@ function sessionDialect(): string | undefined {
     // One dialect for both PETs: the machine picks BASIC 1 (the 2001) or BASIC 2 (the upgrade ROMs, the default).
     if (session.configuration.machine === "pet") return "petbasic";
     if (session.configuration.machine === "bbc") return "bbcbasic";
+    if (session.configuration.machine === "atari800") return "atari";
     return undefined;
 }
 

@@ -485,7 +485,10 @@ public sealed class Trs80DiskSaveTests
     }
 
     private static FloppySector Copy(FloppySector sector) =>
-        new(sector.Track, sector.Side, sector.Sector, sector.Data, sector.DoubleDensity, sector.DataAddressMark);
+        new(sector.Track, sector.Side, sector.Sector, sector.Data, sector.DoubleDensity, sector.DataAddressMark)
+        {
+            CrcError = sector.CrcError
+        };
 
     private static byte[] Filled(int size, byte value)
     {

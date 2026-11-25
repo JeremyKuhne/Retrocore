@@ -108,9 +108,9 @@ public static class ImdFormat
     ///   numbers, the sectors that had no data and which sectors were compressed, and only its records change; a
     ///   track whose sectors differ from the layout's keeps the layout's data rate; one formatted again with the
     ///   same sectors in the same order is written as the layout has it. An image that lists a track twice keeps both
-    ///   listings while their sectors are still the layout's, each taking its sectors in turn, and is written once
-    ///   otherwise; a track the layout lacks goes in cylinder and side order. An unchanged disk
-    ///   writes the image it was read from. On a new track, a sector whose bytes are all one value is written
+    ///   listings while their sectors are still the layout's, each taking its sectors in turn; from the first listing
+    ///   that no longer matches, the track's remaining sectors are written as one listing. A track the layout lacks
+    ///   goes in cylinder and side order. An unchanged disk writes the image it was read from. On a new track, a sector whose bytes are all one value is written
     ///   compressed, as ImageDisk writes it.
     ///  </para>
     ///  <para>

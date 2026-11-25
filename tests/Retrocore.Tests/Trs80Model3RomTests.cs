@@ -253,8 +253,8 @@ public class Trs80Model3RomTests
 
     /// <summary>
     ///  Each DOS writes a new file, <c>SAVED/CMD</c>: TRSDOS 6 and LS-DOS dump memory to it, and SMAL-LDOS, which has
-    ///  no <c>DUMP</c>, copies a file to it. The host saves the disk to its image in its own format, and the image boots
-    ///  in a new machine and lists the file. The images are in <c>trs80-disks</c> under
+    ///  no <c>DUMP</c>, copies a file to it. The host saves the disk to its image in its own format, and the image
+    ///  boots in a new machine and lists the file. The images are in <c>trs80-disks</c> under
     ///  <see cref="ExternalTestData.Root"/>, copied before they change; the test is inconclusive without one.
     /// </summary>
     /// <remarks>

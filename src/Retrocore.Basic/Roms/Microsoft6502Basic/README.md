@@ -100,7 +100,7 @@ uses `0, 0`, and BASIC 2/4 use `2, 1`. Follow it with `StringAllocation 1` for B
 or `0` for the other variants.
 
 After the matching collector, `StringConcatenation 0` emits `CAT` through `FRETMS` for AppleSoft and PET
-BASIC 1/2; BASIC 4 uses `StringConcatenation 1` and supplies its `STRADJ` link helper. Follow either with
+BASIC 1/2; BASIC 4 uses `StringConcatenation 1` and supplies its `FindStringLink` (STRADJ) link helper. Follow either with
 the variant's `StringFunctions` invocation. The linked-release switch is independent of allocator and
 collector selection, but those choices must agree on the representation used by the running interpreter.
 The macro requires the workspace (`MsBasic.Layouts.asm`'s `DESCRIPTOR_SIZE` and the vendor's equates) and the
@@ -155,7 +155,7 @@ and `PROBE_TEST_BYTE` are bytes; `NULL_INCREMENT_LIMIT` is 2 through 255.
 | `NULL_INCREMENT_LIMIT` | 10 | `NullStatement` `incrementedLimit`: first rejected incremented NULL count. |
 | `RETURN_LOW_FOR_POINTER` | 1 | `ReturnStatement` `searchLow`: set the low instead of high FOR-pointer byte. |
 | `QUOTE_BRANCH_FIRST` | 1 | `StatementScan` `quoteFirst`: branch on a quote before a non-quote. |
-| `TIME_LONG_ERROR` | 1 | `TIME_STRING_ASSIGNMENT` `longLengthError`: use the long invalid-length jump. |
+| `TIME_LONG_ERROR` | 1 | `TimeStringAssignment` `longLengthError`: use the long invalid-length jump. |
 | `PRINT_CLEAR_SPC_CARRY` | 0 | `PrintItems` `clearSpaceCarry`: clear carry before SPC dispatch. |
 | `PRINT_NULL_PADDING` | 1 | `CommodoreLineEnd` `nullPadding`: print the configured NULLs after a newline. |
 | `PRINT_TOKEN_SPACING` | 1 | `CommodorePrintSpacing` `tokenDispatch`: select TAB/SPC by token and use the early space loop. |
@@ -166,16 +166,16 @@ and `PROBE_TEST_BYTE` are bytes; `NULL_INCREMENT_LIMIT` is 2 through 255.
 | `GET_STRING_EDITOR_PATCH` | 1 | `VariableInput` `patchedGetString`: use the editor's GET string helper. |
 | `NEXT_COUNTED_STACK` | 1 | `NextEntries` `countedStack`: count through the FOR frame rather than compute offsets. |
 | `CLOCK_EDITOR_PATCH` | 1 | `CommodoreVariableValue` `clockPatch`: use the editor's TI and TI$ checks. |
-| `INTIDX_USE_FRMNUM` | 1 | `IntegerConversion` `evaluateEntry`: use FRMNUM, or FRMEVL when 0. |
-| `POSINT_CHECK_TYPE` | 0 | `IntegerConversion` `checkType`: check the numeric type at POSINT. |
+| `SUBSCRIPT_CHECKS_NUMERIC` | 1 | `IntegerConversion` `evaluateEntry`: use FRMNUM, or FRMEVL when 0. |
+| `POSITIVE_INTEGER_CHECKS_TYPE` | 0 | `IntegerConversion` `checkType`: check the numeric type at POSINT. |
 | `ARRAY_SAVE_OFFSET_HIGH` | 0 | `ArrayLookup` `saveOffsetHigh`: retain the corrected high offset byte. |
 | `USER_FN_LOW_CHECK` | 1 | `UserFunctions` `earlyCheck`: check the argument pointer's low instead of high byte. |
-| `STRING_CLEAR_FACOV` | 0 | `StringStorage` `clearFacOverflow`: clear FACOV when making a temporary. |
-| `GC_FULL_POINTER` | 0 | `StringGarbageCollection` `fullDescriptorPointer`: test both descriptor-pointer bytes. |
-| `GC_PATCH_ARRAY_STEP` | 1 | `StringGarbageCollection` `patchedArrayStep`: call the editor's array-step helper. |
-| `GC_SUBTRACT_OFFSET` | 1 | `StringGarbageCollection` `subtractDescriptorOffset`: subtract three instead of masking. |
+| `STRING_CLEARS_FAC_EXTENSION` | 0 | `StringStorage` `clearFacOverflow`: clear FACOV when making a temporary. |
+| `COLLECTOR_FULL_POINTER` | 0 | `StringGarbageCollection` `fullDescriptorPointer`: test both descriptor-pointer bytes. |
+| `COLLECTOR_PATCH_ARRAY_STEP` | 1 | `StringGarbageCollection` `patchedArrayStep`: call the editor's array-step helper. |
+| `COLLECTOR_SUBTRACT_OFFSET` | 1 | `StringGarbageCollection` `subtractDescriptorOffset`: subtract three instead of masking. |
 | `REJECT_ZERO_SLICES` | 1 | `StringFunctions` `rejectZeroSlices`: reject zero LEFT$/RIGHT$ counts. |
-| `PREAM_INDIRECT_RETURN` | 1 | `StringFunctions` `indirectReturn`: return through the writable jump. |
+| `STRING_PREAMBLE_INDIRECT_RETURN` | 1 | `StringFunctions` `indirectReturn`: return through the writable jump. |
 | `ASC_SHARED_LEN_JUMP` | 1 | `StringFunctions` `sharedLenJump`: share LEN's conversion jump. |
 | `PEEK_PRESERVE_ADDRESS` | 0 | `PeekFunction` `preserveAddress`: restore the prior POKE/WAIT address. |
 | `PEEK_GUARD_ROM` | 1 | `PeekFunction` `guardRom`: return zero for protected ROM pages. |
@@ -191,7 +191,7 @@ and `PROBE_TEST_BYTE` are bytes; `NULL_INCREMENT_LIMIT` is 2 through 255.
 | `INIT_DELAY_SIZE` | 1 | `CommodoreInitialize` `delayedSize`: set descriptor size after clearing flags. |
 | `INIT_EARLY_BUFFER_SETUP` | 1 | `CommodoreInitialize` `earlyBuffer`: restore the comma and print a newline. |
 | `PROBE_LOAD_ZERO` | 1 | `CommodoreMemoryProbe` `explicitZero`: load zero before setting the RAM address. |
-| `PROBE_LOAD_INDEX_ZERO` | 1 | `CommodoreMemoryProbe` `explicitIndex`: load Y with zero rather than copy A. |
+| `PROBE_ZERO_INDEX` | 1 | `CommodoreMemoryProbe` `explicitIndex`: load Y with zero rather than copy A. |
 | `PROBE_SAVE_START` | 0 | `CommodoreMemoryProbe` `saveProgramStart`: save TXTTAB before probing. |
 | `PROBE_STOP_AT_SCREEN` | 1 | `CommodoreMemoryProbe` `screenStop`: compare against the early screen boundary. |
 | `PROBE_TEST_BYTE` | `$92` | `CommodoreMemoryProbe` `probeByte`: first value written when testing RAM. |
@@ -203,7 +203,7 @@ still asserts its exact editor-spill and patch addresses; a length-changing sele
 and compensating lengths do not make an altered image stock. Relinking before insertion requires `LINK_RETURNS`.
 The early separator and dispatch choices must agree in this composition, and the later dispatch also needs the
 GO token. The fixed editor-patch block supplies helpers referenced by several choices: for example, disabling
-`INPUT_ERROR_EDITOR_PATCH` duplicates its GETDTL definition, while disabling `CLOCK_EDITOR_PATCH` removes
+`INPUT_ERROR_EDITOR_PATCH` duplicates its `GetDataLine` (GETDTL) definition, while disabling `CLOCK_EDITOR_PATCH` removes
 entries the fixed patch needs. A new variant may instead compose the macros with its own matching helpers and
 layout. Changing workspace or string-representation choices likewise requires compatible consumers.
 

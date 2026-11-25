@@ -6,16 +6,16 @@
 ; MICROSOFT 6502 BASIC: UNLINKED STRING GARBAGE COLLECTION
 ;
 ; Emit StringGarbageCollection immediately after the unlinked allocator. When selected, the
-; `ARYINC` array-step patch is an external routine in the editor ROM.
+; `ArrayHeaderSize` (ARYINC) array-step patch is an external routine in the editor ROM.
 
 ;; Emits the repeated-scan collector for unlinked string storage.
 ;;
 ;; The three choices are independent: the full pointer test recognizes page-zero descriptors;
-;; the array step may be performed by an out-of-line `ARYINC` patch; and the descriptor offset
+;; the array step may be performed by an out-of-line `ArrayHeaderSize` patch; and the descriptor offset
 ;; may be calculated by subtraction instead of masking. AppleSoft uses 0,0,0, PET BASIC 1
 ;; 0,1,1 by default, and PET BASIC 2 1,0,0.
 ;; Parameters: fullDescriptorPointer = 1 to test both bytes of the selected descriptor pointer,
-;;   patchedArrayStep = 1 to call `ARYINC`, subtractDescriptorOffset = 1 to subtract 3
+;;   patchedArrayStep = 1 to call `ArrayHeaderSize`, subtractDescriptorOffset = 1 to subtract 3
 .macro StringGarbageCollection fullDescriptorPointer, patchedArrayStep, subtractDescriptorOffset
     .assert fullDescriptorPointer = 0 || fullDescriptorPointer = 1, "fullDescriptorPointer must be 0 or 1."
     .assert patchedArrayStep = 0 || patchedArrayStep = 1, "patchedArrayStep must be 0 or 1."
@@ -42,7 +42,7 @@
     ;;   leaves it (the temporaries' scan reads it before the pass sets it), decimal = clear
     ;; Out: StringsBottom = lower boundary after collection
     ;; See: <Strings::CollectGarbage::ConsiderDescriptor>, <Strings::CollectGarbage::MoveBest>, <MoveRangeUp::Unchecked>
-    ;; Also: GARBA2 (M6502, HV1, HV1R, HV2)
+    ;; Also: GARBA2 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc CollectGarbage
     ldx MemoryTop
     lda MemoryTop+1
@@ -145,7 +145,7 @@ ReadArray:
     iny
     lda (Pointer1),y
     .if patchedArrayStep
-        jsr ARYINC
+        jsr ArrayHeaderSize
     .else
         ldy #$00
         asl a

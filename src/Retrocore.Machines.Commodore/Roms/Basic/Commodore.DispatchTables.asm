@@ -166,6 +166,9 @@ ReservedWords:
     TOKEN_REM = $8F
     .byte "STO", 'P' | $80
     .byte 'O', 'N' | $80
+    ;; The token of `ON`, which the BASIC 4 disk commands also read as the keyword before a unit number.
+    ;; Also: ONTK (K4S79, HVK4)
+    TOKEN_ON = $91
     .byte "WAI", 'T' | $80
     .byte "LOA", 'D' | $80
     .byte "SAV", 'E' | $80

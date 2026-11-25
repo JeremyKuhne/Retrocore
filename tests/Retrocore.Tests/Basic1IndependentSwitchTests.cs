@@ -184,10 +184,10 @@ public sealed class Basic1IndependentSwitchTests
     [TestMethod]
     public void InvalidEvaluatorChoiceIsRejected()
     {
-        AssemblyResult image = Assemble(new() { ["INTIDX_USE_FRMNUM"] = 2 });
+        AssemblyResult image = Assemble(new() { ["SUBSCRIPT_CHECKS_NUMERIC"] = 2 });
         image.Success.Should().BeFalse();
         image.Diagnostics.Select(diagnostic => diagnostic.Message)
-            .Should().Contain(message => message.Contains("INTIDX_USE_FRMNUM"));
+            .Should().Contain(message => message.Contains("SUBSCRIPT_CHECKS_NUMERIC"));
     }
 
     private static AssemblyResult Assemble(Dictionary<string, long> symbols) =>

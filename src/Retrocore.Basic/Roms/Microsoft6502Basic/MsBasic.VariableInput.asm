@@ -13,9 +13,9 @@
 ; PET BASIC 2:         VariableInput 2, 0, 0, 0, 1, 0; VariableInputMessages 0, 1
 ; PET BASIC 4:         VariableInput 2, 0, 0, 0, 1, 0; VariableInputMessages 0, 0
 ;
-; The early GETSTR helper is external: it stores the character, advances the cursor, removes its JSR return
-; address, and jumps back to AssignVariableList::StringAtCursor with A = 0. BASIC 1 supplies it in the editor-ROM
-; patches.
+; The early `BeginGetString` (GETSTR) helper is external: it stores the character, advances the cursor, removes its
+; JSR return address, and jumps back to AssignVariableList::StringAtCursor with A = 0. BASIC 1 supplies it in the
+; editor-ROM patches.
 
 ; The values of <InputMode>, which says where AssignVariableList takes its values from.
 ;; <InputMode> for `INPUT`: the values come from the line the user types.
@@ -31,7 +31,7 @@ INPUT_MODE_READ = $98
 ;; Emits `READ` and the common `GET`, `INPUT` and `READ` variable-processing loop.
 ;; Parameters: bufferPage = the page containing <InputBuffer>, maskGetBit7 = 1 to clear bit 7 of a `GET` character,
 ;;   getPointerYFirst = 1 to load the `GET` buffer pointer's high byte before its low byte,
-;;   patchedGetString = 1 to use the early `GETSTR` patch, channelInput = 1 to honor input channels,
+;;   patchedGetString = 1 to use the early `BeginGetString` patch, channelInput = 1 to honor input channels,
 ;;   blankNumericRetry = 1 to retry an empty terminal `INPUT` numeric value
 .macro VariableInput bufferPage, maskGetBit7, getPointerYFirst, patchedGetString, channelInput, blankNumericRetry
     .assert bufferPage >= 0 && bufferPage <= 255, "bufferPage must fit in a byte."
@@ -41,7 +41,7 @@ INPUT_MODE_READ = $98
     .assert patchedGetString = 0 || patchedGetString = 1, "patchedGetString must be 0 or 1."
     .assert channelInput = 0 || channelInput = 1, "channelInput must be 0 or 1."
     .assert blankNumericRetry = 0 || blankNumericRetry = 1, "blankNumericRetry must be 0 or 1."
-    .assert patchedGetString = 0 || bufferPage = 0, "The early GETSTR patch requires a page-zero buffer."
+    .assert patchedGetString = 0 || bufferPage = 0, "The early BeginGetString patch requires a page-zero buffer."
     .if getPointerYFirst
         .assert <(InputBuffer-1) != 0, "The GET buffer pointer's low byte must make its branch unconditional."
     .elseif bufferPage
@@ -87,15 +87,16 @@ INPUT_MODE_READ = $98
     ;;
     ;; <InputPointer> tracks the input cursor while <VariableListPointer> saves the variable-list position. `GET`
     ;; obtains one character when its sentinel is reached; `READ` searches subsequent `DATA` statements. A comma in the
-    ;; variable list continues the loop. BASIC 1 uses its `GETSTR` patch; AppleSoft masks `GET` characters and retries
-    ;; an empty terminal numeric `INPUT`. On the PET, a selected file channel suppresses terminal prompts and warnings.
+    ;; variable list continues the loop. BASIC 1 uses its `BeginGetString` patch; AppleSoft masks `GET` characters and
+    ;; retries an empty terminal numeric `INPUT`. On the PET, a selected file channel suppresses terminal prompts and
+    ;; warnings.
     ;; In: A = <INPUT_MODE_GET>, <INPUT_MODE_INPUT> or <INPUT_MODE_READ>, X = cursor low byte, Y = cursor high byte,
     ;;   decimal = clear
     ;; Errors: OUT OF DATA when `READ` finds no more `DATA`, and the vendor's handling of a malformed value
     ;;   (<HandleBadInput>)
     ;; Entry:
-    ;;   StringAtCursor = clears carry so the string starts at the current character; BASIC 1's `GETSTR` patch jumps
-    ;;     back here
+    ;;   StringAtCursor = clears carry so the string starts at the current character; BASIC 1's `ResumeGetString`
+    ;;     patch jumps back here
     ;; See: <FindVariable>, <AssignString>, <StoreNumber>, <AssignVariableList::SearchData>
     ;; Also: INPCO1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc AssignVariableList
@@ -173,7 +174,7 @@ NextValue:
     bvc SetDelimiters
     .if patchedGetString
         lda #$00
-        jsr GETSTR
+        jsr BeginGetString
         nop
     .else
         inx

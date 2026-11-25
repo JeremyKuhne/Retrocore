@@ -63,7 +63,9 @@ public sealed partial class BasicRenameGateTests
         typeof(BasicSharedStatementFlowTests), typeof(BasicSharedStringConcatenationTests),
         typeof(BasicSharedStringFunctionTests), typeof(BasicSharedStringStorageTests), typeof(BasicSharedUserFunctionsTests),
         typeof(BasicSharedVariableInputTests), typeof(BasicSharedVariableLookupTests), typeof(BasicTokenizerTests),
-        typeof(BasicVariableTests), typeof(BasicWorkspaceConversionTests), typeof(PetBasic4ExtensionTests),
+        typeof(BasicVariableTests), typeof(BasicWorkspaceConversionTests), typeof(BasicMonitorRoutineTests),
+        typeof(BasicDiskRoutineTests), typeof(BasicCommodoreConversionTests), typeof(BasicCommodoreRoutineTests),
+        typeof(PetBasic4ExtensionTests),
         typeof(PetBasic4RevisionTests), typeof(PetBasicConformanceTests), typeof(PetNativeEquatesTests),
         typeof(PetRomSourceTests), typeof(PetSharedFloatAssemblyTests), typeof(BasicNamesBuildTests)
     ];
@@ -89,7 +91,8 @@ public sealed partial class BasicRenameGateTests
     };
 
     // Helpers the renamed classes use, whose lookups are checked with theirs.
-    private static readonly string[] s_helpers = ["BasicAttribution.cs", "BasicMachines.cs", "BasicMathMachine.cs", "PetLegacyBasic.cs"];
+    private static readonly string[] s_helpers =
+        ["BasicAttribution.cs", "BasicMachines.cs", "BasicMathMachine.cs", "PetLegacyBasic.cs", "PetRoutineMachine.cs"];
 
     /// <summary>
     ///  Renaming <c>ReservedWords</c> to <c>ReservedNames</c>, and <c>AssignString</c> in a macro's body to <c>AssignStringResult</c>, in a copy

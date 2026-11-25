@@ -866,6 +866,7 @@ public sealed class StyleLintTests
         resolver.Lint([], DocumentationRules.EditorRules).Should().ContainSingle()
             .Which.Message.Should().Be("Nothing here breaks historical-name:COUT; remove the exclusion.");
 
+        // In LF, so the replacements below find their lines in a checkout with CRLF endings.
         string text = Pragma + """
             .cpu Mos6502
             .org $0300
@@ -881,7 +882,7 @@ public sealed class StyleLintTests
             Other:
                 rts
             .endif
-            """;
+            """.ReplaceLineEndings("\n");
 
         Lint(text).Should().BeEmpty();
 

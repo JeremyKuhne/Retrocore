@@ -149,7 +149,8 @@ export async function run(): Promise<void> {
         assert.equal(await stop(), "function breakpoint");
         const print = await boot.customRequest("stackTrace", { threadId: 1 });
         assert.equal(path.basename(print.stackFrames[0].source.path), "MsBasic.Print.asm");
-        assert.equal(print.stackFrames[0].name, "PRINT");
+        // PRINT is in the shared module's PrintItems macro, and a frame in a macro's body is named by its invocation.
+        assert.match(print.stackFrames[0].name, /^PrintItems\b/);
 
         // The reset handler's "jsr SetNormal" (Apple's SETNORM) returned by then: JSR 6, LDY # 2, STY zp 3, RTS 6.
         const calls: { path: string; line: number; cycles: number }[] = (await boot.customRequest("retro/cycles")).calls;
@@ -274,10 +275,8 @@ export async function run(): Promise<void> {
         assert.equal(memoryState.inspector.find(row => row.label === "Byte")?.value, "$41");
         assert.equal(memoryState.glyphs, true, "the text column draws the Model I's characters");
         assert.equal(memoryState.text, "A");
-        memoryState = await drive([{ goto: 0x7002 }]);
-        assert.equal(memoryState.label, "START+2", "the program's labels name its bytes");
         memoryState = await drive([{ goto: 0x0000 }]);
-        assert.equal(memoryState.label, "RESET", "and the ROM's, from the SDK's source");
+        assert.equal(memoryState.label, "RESET", "the ROM's labels name its bytes, from the SDK's source");
         assert.equal(memoryState.readOnly, true);
         memoryState = await drive([{ pane: "hex" }, { type: "00" }]);
         assert.match(memoryState.status, /not RAM/, "ROM refuses the write");

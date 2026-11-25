@@ -92,14 +92,15 @@ export async function testOffMachine(workspace: vscode.WorkspaceFolder): Promise
         vscode.commands.executeCommand("retrocore.machine.change", "hardware", { id: "slot4", action: "addDiskII", sectors: 16 }),
         vscode.commands.executeCommand("retrocore.machine.change", "hardware", { id: "slot6", action: "addDiskII", sectors: 16 })
     ]);
+    // The views refresh after each change, so the first card can show before the second does.
     await offRow(plus, "slot4", row => /Disk II/.test(row.value), "the first of two cards sent together");
-    assert.match((await rows()).find(row => row.id === "slot6")?.value ?? "", /Disk II/, "and the second");
+    await offRow(plus, "slot6", row => /Disk II/.test(row.value), "and the second");
     await Promise.all([
         vscode.commands.executeCommand("retrocore.machine.change", "hardware", { id: "slot4", action: "removeCard" }),
         vscode.commands.executeCommand("retrocore.machine.change", "hardware", { id: "slot6", action: "removeCard" })
     ]);
     await offRow(plus, "slot4", row => row.value === "empty", "both taken out together");
-    assert.equal((await rows()).find(row => row.id === "slot6")?.value, "empty");
+    await offRow(plus, "slot6", row => row.value === "empty", "and the second taken out");
 
     // Switch Machine shows another machine off: the Model I with its cassette.
     const model1 = { type: "retrocore", request: "launch", name: "Retrocore test: Model I off", machine: "trs80-model1" };

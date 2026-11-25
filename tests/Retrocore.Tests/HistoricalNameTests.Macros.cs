@@ -1389,7 +1389,8 @@ public sealed partial class HistoricalNameTests
         Set(Macro + "\n" + Outside).FindAlso("OLD", thisBuild: true).Select(topic => topic.Name).Should().Equal(without);
 
         // With no branch the build takes, the definition gives nothing, as without the macro: no clash with BAR.
-        string skipped = Outside.Replace(".else\n;; Inherit:\nFOO = 2\n", "", StringComparison.Ordinal);
+        // In LF, so the replacement finds its lines in a checkout with CRLF endings.
+        string skipped = Outside.ReplaceLineEndings("\n").Replace(".else\n;; Inherit:\nFOO = 2\n", "", StringComparison.Ordinal);
         skipped.Should().NotContain("Inherit:");
         Set(Macro + "\n" + skipped).FindAlso("OLD", thisBuild: true).Select(topic => topic.Name).Should().Equal("BAR");
         Check(Macro + "\n" + skipped).Should().BeEmpty();
@@ -1595,7 +1596,8 @@ public sealed partial class HistoricalNameTests
         // branch outside the macro in the build, none are, as without the macro the topic isn't this build's.
         string skipped = "X = 2" + Built["X = 1".Length..];
         skipped.Should().Contain(".if X = 1");
-        string plainMacro = Macro.Replace(";; Uses: two words\n", "", StringComparison.Ordinal);
+        // In LF, so the replacement finds its line in a checkout with CRLF endings.
+        string plainMacro = Macro.ReplaceLineEndings("\n").Replace(";; Uses: two words\n", "", StringComparison.Ordinal);
         plainMacro.Should().NotContain("Uses");
         string[] alone = [.. Check(skipped).Select(diagnostic => diagnostic.Message)];
         alone.Should().ContainSingle();

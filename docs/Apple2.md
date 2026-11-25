@@ -127,7 +127,7 @@ the tests pin every build by digest.
 Each of the emulated cards' firmware debugs at its source: a breakpoint in it stops there, and the call stack shows its
 lines. The mouse, ProFile and 3.5 controller cards' firmware reaches nothing inside itself by an absolute address, so
 the same bytes work in any slot, and the debugger maps the source to whichever slot holds the card, its labels (such
-as `SETMOUSE`, `Driver` or `SMARTPORT`) resolving to that slot's page. Apple's 3.5 controller EPROM is a reference;
+as `SetMouse`, `Driver` or `SMARTPORT`, and a historical name such as `SETMOUSE`) resolving to that slot's page. Apple's 3.5 controller EPROM is a reference;
 the emulator doesn't run it.
 
 Names follow Apple's listings where Apple published them: the Apple II Reference Manual of 1978
@@ -148,8 +148,8 @@ Each model is in the Run and Debug dropdown, and **Retrocore: Start Machine…**
 file, a disk or a source on a fresh DOS disk, all without a launch.json; the extension README's
 **The mouse card** goes in any free slot (`mouse`, or Add Card), one per machine. Its 256-byte firmware (`Mouse.rom.asm`)
 is the SDK's own, not Apple's: it has the AppleMouse II's identification bytes ($38 at $Cn05, $18 at $Cn07, $01 and
-$20 at $Cn0B-$Cn0C, $D6 at $CnFB) and its routines at the offsets in $Cn12-$Cn19 (SETMOUSE, SERVEMOUSE, READMOUSE,
-CLEARMOUSE, POSMOUSE, CLAMPMOUSE, HOMEMOUSE and INITMOUSE), which use the slot's screen holes as Apple documents. Each
+$20 at $Cn0B-$Cn0C, $D6 at $CnFB) and its routines at the offsets in $Cn12-$Cn19 (`SetMouse`, `ServeMouse`, `ReadMouse`,
+`ClearMouse`, `PositionMouse`, `ClampMouse`, `HomeMouse` and `InitializeMouse`: Apple's SETMOUSE ... INITMOUSE), which use the slot's screen holes as Apple documents. Each
 routine hands the call to the card through its ports at $C080 plus 16 times the slot, as slot 7's block storage does,
 so it runs in any slot. Position starts clamped to 0-1023. Interrupts come as vertical blanking starts: every frame
 with mode bit 3, and when the mouse moved or its button changed with bits 1 and 2. After `IN#n`, BASIC's `INPUT X,Y,B`
@@ -193,15 +193,15 @@ reference the emulator's firmware follows:
 
 | | Apple's card | The emulator's |
 | --- | --- | --- |
-| Finding the slot | The mouse routines use X = $Cn and Y = $n0 as given; SERVEMOUSE writes an RTS at $06 and calls it, so it works with the language card's RAM over the Monitor; BASIC's entries call the Monitor's IORTS | The same |
+| Finding the slot | The mouse routines use X = $Cn and Y = $n0 as given; `ServeMouse` writes an RTS at $06 and calls it, so it works with the language card's RAM over the Monitor; BASIC's entries call the Monitor's `SaveRegisters::Return` (IORTS) | The same |
 | BASIC input | Writes `+XXXXX,+YYYYY,+BB` into $0200 and returns a RETURN with X = $11, so nothing is echoed; with the mouse off, 0, 0 and B 1 | The same |
 | BASIC output | A RETURN does nothing; any other character's low bit turns the mouse on or off, and mode bit 7 marks BASIC | The same |
-| BASIC's registers | Keeps A, X and Y for output; input returns Y = $11; MSLOT is left at $Cn | Keeps Y for input too |
-| READMOUSE with the mouse off | Changes nothing | The same |
+| BASIC's registers | Keeps A, X and Y for output; input returns Y = $11; `ExpansionRomSlot` (MSLOT) is left at $Cn | Keeps Y for input too |
+| `ReadMouse` with the mouse off | Changes nothing | The same |
 | Pascal entries, $Cn1A-$Cn1F | Error 3; the factory's own commands (and the copyright message at $Cn1B) | Error 3; nothing, with carry set |
-| Mouse routines' registers | X and Y as given; A not kept; SERVEMOUSE returns X = $Cn, Y = $n0 | A, X and Y kept |
-| INITMOUSE | Waits for vertical blanking; on the II and II Plus clears hi-res page 1 and leaves the display in text, lo-res, page 1 | Returns at once and leaves memory and the display alone |
-| Screen holes $0678+n and $06F8+n, and MOUMODE's bits 4-6 | Its own scratch space | Not used |
+| Mouse routines' registers | X and Y as given; A not kept; `ServeMouse` returns X = $Cn, Y = $n0 | A, X and Y kept |
+| `InitializeMouse` | Waits for vertical blanking; on the II and II Plus clears hi-res page 1 and leaves the display in text, lo-res, page 1 | Returns at once and leaves memory and the display alone |
+| Screen holes $0678+n and $06F8+n, and `MouseMode`'s bits 4-6 | Its own scratch space | Not used |
 | Timing | Calls take hundreds of cycles, passing bytes to the microcontroller | About a hundred |
 
 **The 3.5 disk controller** goes in any free slot (`disk35`, or Add Card), one per machine, and answers as Apple's Apple

@@ -33,7 +33,7 @@ public sealed class Apple2MouseTests
         machine.Bus.Peek((ushort)(page + 0x0B)).Should().Be(0x01);
         machine.Bus.Peek((ushort)(page + 0x0C)).Should().Be(0x20);
         machine.Bus.Peek((ushort)(page + 0xFB)).Should().Be(0xD6);
-        machine.Bus.Peek((ushort)(page + 0x14)).Should().Be((byte)(MouseRom.READMOUSE & 255));
+        machine.Bus.Peek((ushort)(page + 0x14)).Should().Be((byte)(MouseRom.ReadMouse & 255));
         machine.Bus.ReadArea(page).Should().Be(Apple2MemoryArea.Slot1Rom + (slot - 1));
         machine.Bus.PeekArea(Apple2MemoryArea.Slot1Rom + (slot - 1), (ushort)(page + 0xFB), out byte value).Should().BeTrue();
         value.Should().Be(0xD6);
@@ -61,17 +61,17 @@ public sealed class Apple2MouseTests
     {
         Apple2Machine machine = Machine(model, slot: 4);
         Apple2MouseCard mouse = machine.Bus.Mouse;
-        Call(machine, MouseRom.INITMOUSE);
+        Call(machine, MouseRom.InitializeMouse);
         mouse.Move(10, 10);
         mouse.X.Should().Be(0, "the mouse is off");
 
-        ProcessorRegisters set = Call(machine, MouseRom.SETMOUSE, a: 1);
+        ProcessorRegisters set = Call(machine, MouseRom.SetMouse, a: 1);
         set.Status.HasFlag(StatusRegister.Carry).Should().BeFalse();
         machine.Bus.Peek(0x07FC).Should().Be(1, "the mode hole");
         mouse.Move(300, 20);
         mouse.Button = true;
 
-        ProcessorRegisters read = Call(machine, MouseRom.READMOUSE, y: 0x40);
+        ProcessorRegisters read = Call(machine, MouseRom.ReadMouse, y: 0x40);
         read.Y.Should().Be(0x40);
         read.Status.HasFlag(StatusRegister.Carry).Should().BeFalse();
         read.Status.HasFlag(StatusRegister.IRQBDisable).Should().BeFalse();
@@ -79,7 +79,7 @@ public sealed class Apple2MouseTests
         Hole(machine, 0x04F8, 4).Should().Be(20);
         machine.Bus.Peek(0x077C).Should().Be(0xA0, "the button is down and the mouse moved");
 
-        Call(machine, MouseRom.READMOUSE);
+        Call(machine, MouseRom.ReadMouse);
         machine.Bus.Peek(0x077C).Should().Be(0xC0, "the button was down at the last read too, and it has not moved");
     }
 
@@ -90,7 +90,7 @@ public sealed class Apple2MouseTests
     public void SetMouseRejectsAnInvalidMode()
     {
         Apple2Machine machine = Machine(Apple2Model.IIe, slot: 4);
-        Call(machine, MouseRom.SETMOUSE, a: 0x10).Status.HasFlag(StatusRegister.Carry).Should().BeTrue();
+        Call(machine, MouseRom.SetMouse, a: 0x10).Status.HasFlag(StatusRegister.Carry).Should().BeTrue();
         machine.Bus.Mouse.Mode.Should().Be(0);
     }
 
@@ -103,30 +103,30 @@ public sealed class Apple2MouseTests
     {
         Apple2Machine machine = Machine(Apple2Model.IIeEnhanced, slot: 2);
         Apple2MouseCard mouse = machine.Bus.Mouse;
-        Call(machine, MouseRom.SETMOUSE, a: 1);
+        Call(machine, MouseRom.SetMouse, a: 1);
         mouse.Move(500, 500);
 
         SetHole(machine, 0x0478, 0, 20);
         SetHole(machine, 0x04F8, 0, 279);
-        Call(machine, MouseRom.CLAMPMOUSE, a: 0);
+        Call(machine, MouseRom.ClampMouse, a: 0);
         SetHole(machine, 0x0478, 0, 10);
         SetHole(machine, 0x04F8, 0, 191);
-        Call(machine, MouseRom.CLAMPMOUSE, a: 1);
+        Call(machine, MouseRom.ClampMouse, a: 1);
         (mouse.X, mouse.Y).Should().Be((279, 191));
 
         mouse.Move(-1000, -1000);
         (mouse.X, mouse.Y).Should().Be((20, 10));
         mouse.Move(5, 5);
-        Call(machine, MouseRom.HOMEMOUSE);
+        Call(machine, MouseRom.HomeMouse);
         (mouse.X, mouse.Y).Should().Be((20, 10));
 
-        Call(machine, MouseRom.CLEARMOUSE);
+        Call(machine, MouseRom.ClearMouse);
         (mouse.X, mouse.Y).Should().Be((0, 0));
         Hole(machine, 0x0478, 2).Should().Be(0);
 
         SetHole(machine, 0x0478, 2, 123);
         SetHole(machine, 0x04F8, 2, 45);
-        Call(machine, MouseRom.POSMOUSE);
+        Call(machine, MouseRom.PositionMouse);
         (mouse.X, mouse.Y).Should().Be((123, 45));
     }
 
@@ -142,13 +142,13 @@ public sealed class Apple2MouseTests
         mouse.Place(0.5, 0.5);
         (mouse.X, mouse.Y).Should().Be((0, 0), "the mouse is off");
 
-        Call(machine, MouseRom.SETMOUSE, a: 1);
+        Call(machine, MouseRom.SetMouse, a: 1);
         SetHole(machine, 0x0478, 0, 0);
         SetHole(machine, 0x04F8, 0, 559);
-        Call(machine, MouseRom.CLAMPMOUSE, a: 0);
+        Call(machine, MouseRom.ClampMouse, a: 0);
         SetHole(machine, 0x0478, 0, 0);
         SetHole(machine, 0x04F8, 0, 191);
-        Call(machine, MouseRom.CLAMPMOUSE, a: 1);
+        Call(machine, MouseRom.ClampMouse, a: 1);
 
         mouse.Place(1, 1);
         (mouse.X, mouse.Y).Should().Be((559, 191));
@@ -167,16 +167,16 @@ public sealed class Apple2MouseTests
     {
         Apple2Machine machine = Machine(Apple2Model.IIe, slot: 4);
         Apple2MouseCard mouse = machine.Bus.Mouse;
-        Call(machine, MouseRom.SETMOUSE, a: 0x09);
+        Call(machine, MouseRom.SetMouse, a: 0x09);
         mouse.InterruptRequested.Should().BeFalse();
         for (int i = 0; i < 65 * 262 && !mouse.InterruptRequested; i++) { machine.Bus.Tick(); }
         mouse.InterruptRequested.Should().BeTrue();
         machine.Bus.Scanline.Should().Be(192);
 
-        Call(machine, MouseRom.SERVEMOUSE).Status.HasFlag(StatusRegister.Carry).Should().BeFalse();
+        Call(machine, MouseRom.ServeMouse).Status.HasFlag(StatusRegister.Carry).Should().BeFalse();
         (machine.Bus.Peek(0x077C) & 0x0E).Should().Be(0x08);
         mouse.InterruptRequested.Should().BeFalse();
-        Call(machine, MouseRom.SERVEMOUSE).Status.HasFlag(StatusRegister.Carry).Should().BeTrue();
+        Call(machine, MouseRom.ServeMouse).Status.HasFlag(StatusRegister.Carry).Should().BeTrue();
         (machine.Bus.Peek(0x077C) & 0x0E).Should().Be(0, "the cause bits always take the answer, as on Apple's card");
     }
 
@@ -188,7 +188,7 @@ public sealed class Apple2MouseTests
     {
         Apple2Machine machine = Machine(Apple2Model.IIe, slot: 4);
         Apple2MouseCard mouse = machine.Bus.Mouse;
-        Call(machine, MouseRom.SETMOUSE, a: 0x07);
+        Call(machine, MouseRom.SetMouse, a: 0x07);
         Frame(machine);
         mouse.InterruptRequested.Should().BeFalse("nothing happened");
 
@@ -196,12 +196,12 @@ public sealed class Apple2MouseTests
         mouse.InterruptRequested.Should().BeFalse("the card waits for vertical blanking");
         Frame(machine);
         mouse.InterruptRequested.Should().BeTrue();
-        Call(machine, MouseRom.SERVEMOUSE);
+        Call(machine, MouseRom.ServeMouse);
         (machine.Bus.Peek(0x077C) & 0x0E).Should().Be(0x02);
 
         mouse.Button = true;
         Frame(machine);
-        Call(machine, MouseRom.SERVEMOUSE).Status.HasFlag(StatusRegister.Carry).Should().BeFalse();
+        Call(machine, MouseRom.ServeMouse).Status.HasFlag(StatusRegister.Carry).Should().BeFalse();
         (machine.Bus.Peek(0x077C) & 0x0E).Should().Be(0x04);
     }
 
@@ -212,7 +212,7 @@ public sealed class Apple2MouseTests
     public void InterruptReachesTheProcessor()
     {
         Apple2Machine machine = Machine(Apple2Model.IIe, slot: 4);
-        Call(machine, MouseRom.SETMOUSE, a: 0x09);
+        Call(machine, MouseRom.SetMouse, a: 0x09);
 
         // A loop at $3000 with interrupts enabled, and an IRQ vector of $FA40 in the test's ROM.
         machine.Bus.SetRam(auxiliary: false, 0x3000, 0x4C);
@@ -247,7 +247,7 @@ public sealed class Apple2MouseTests
         machine.Bus.SetRam(auxiliary: false, 0x37, 0xFD);
         machine.Bus.SetRam(auxiliary: false, 0x38, 0x00);
         machine.Bus.SetRam(auxiliary: false, 0x39, 0xC4);
-        Call(machine, MouseRom.SETMOUSE, a: 1);
+        Call(machine, MouseRom.SetMouse, a: 1);
         mouse.Move(12, 345);
 
         ProcessorRegisters registers = Call(machine, 0xC400, a: 0xA0, x: 0x05, y: 0x22);
@@ -259,7 +259,7 @@ public sealed class Apple2MouseTests
 
         mouse.Button = true;
         SetHole(machine, 0x0478, 4, -8);
-        Call(machine, MouseRom.POSMOUSE);
+        Call(machine, MouseRom.PositionMouse);
         machine.Bus.QueueKey((byte)'A');
         Call(machine, 0xC405, a: 0xA0);
         InputLine(machine).Should().Be("-00008,+00345,-02\r", "the button went down, and a key is waiting");
@@ -316,16 +316,16 @@ public sealed class Apple2MouseTests
     {
         Apple2Machine machine = Machine(Apple2Model.IIe, slot: 4);
         machine.Bus.SetRam(auxiliary: false, 0x06, 0x5A);
-        Call(machine, MouseRom.SETMOUSE, a: 0x09);
+        Call(machine, MouseRom.SetMouse, a: 0x09);
         Frame(machine);
 
         // Reading $C080 twice reads language-card RAM, all zeros, at $D000-$FFFF.
         machine.Bus.Read(0xC080);
         machine.Bus.Peek(0xFF58).Should().Be(0);
         machine.Bus.Mouse.Move(0, 0);
-        Call(machine, MouseRom.SERVEMOUSE).Status.HasFlag(StatusRegister.Carry).Should().BeFalse();
+        Call(machine, MouseRom.ServeMouse).Status.HasFlag(StatusRegister.Carry).Should().BeFalse();
         machine.Bus.Peek(0x06).Should().Be(0x5A, "SERVEMOUSE puts $06 back");
-        Call(machine, MouseRom.READMOUSE).Status.HasFlag(StatusRegister.Carry).Should().BeFalse();
+        Call(machine, MouseRom.ReadMouse).Status.HasFlag(StatusRegister.Carry).Should().BeFalse();
     }
 
     /// <summary>
@@ -336,7 +336,7 @@ public sealed class Apple2MouseTests
     {
         Apple2Machine machine = Machine(Apple2Model.IIe, slot: 4);
         machine.Bus.SetRam(auxiliary: false, 0x0478 + 4, 77);
-        Call(machine, MouseRom.READMOUSE);
+        Call(machine, MouseRom.ReadMouse);
         machine.Bus.Peek(0x0478 + 4).Should().Be(77);
     }
 
@@ -375,7 +375,7 @@ public sealed class Apple2MouseTests
         Action second = () => machine.Bus.InstallMouse(2);
         second.Should().Throw<InvalidOperationException>();
 
-        Call(machine, MouseRom.SETMOUSE, a: 0x09);
+        Call(machine, MouseRom.SetMouse, a: 0x09);
         Frame(machine);
         machine.Bus.Mouse.InterruptRequested.Should().BeTrue();
         machine.Bus.RemoveMouse();
@@ -430,7 +430,7 @@ public sealed class Apple2MouseTests
         throw new InvalidOperationException($"${routine:X4} did not return.");
     }
 
-    private static ushort MouseServe(int slot) => (ushort)((MouseRom.SERVEMOUSE & 0xFF) | ((0xC0 | slot) << 8));
+    private static ushort MouseServe(int slot) => (ushort)((MouseRom.ServeMouse & 0xFF) | ((0xC0 | slot) << 8));
 
     private static string InputLine(Apple2Machine machine)
     {

@@ -1,10 +1,10 @@
 ; retrocore: style=strict
 ;; Programmer's Aid #1: high-resolution graphics ($D000-$D3FF)
 ;;
-;; Steve Wozniak's hi-res graphics routines (1977), which Integer BASIC programs CALL: INIT clears a page and shows
-;; it with four lines of text below, and then PLOT, LINE, DRAW (a shape from a shape table, scaled and rotated) and
-;; FIND (where the last point plotted is) draw on it. The screen is 280 dots across (`X0`, 0 to 279) by 192 down (`Y0`,
-;; 0 to 191).
+;; Steve Wozniak's hi-res graphics routines (1977), which Integer BASIC programs CALL: INIT clears page 1 and shows
+;; hi-res graphics with four lines of text below, and then PLOT, LINE, DRAW (a shape from a shape table, scaled and
+;; rotated) and FIND (where the last point plotted is) draw on it. The screen is 280 dots across (`X0`, 0 to 279) by 192
+;; down (`Y0`, 0 to 191).
 ;;
 ;; The routines BASIC calls, from $D2F9 on (POSN, PLOT, LINE, DRAW and the others), take their parameters from BASIC's
 ;; first variables, in the order a program must define them: `X0`, `Y0`, `COLR`, `SHAPE`, `ROT` and `SCALE`. They read
@@ -107,7 +107,7 @@ LastY = $0322
 ;; Also: BXSAV (PA1)
 KeptX = $0323
 
-;; The color, as a byte of dots, that <Plot> and <Line> draw with.
+;; The color, as a byte of dots, that <Position> sets <ShiftedColor> from for <Plot> and <Line> to draw with.
 ;; Also: HCOLOR (PA1)
 Color = $0324
 
@@ -173,7 +173,8 @@ ROT_VALUE_HIGH = $28
 ;; `SCALE`'s value, the sixth variable's: its high byte.
 SCALE_VALUE_HIGH = $32
 
-;; INIT (CALL -12288): shows hi-res page 1 with four lines of text below, and clears page 1 to black.
+;; INIT (CALL -12288): shows hi-res graphics with four lines of text below, on whichever page the display shows (page
+;; 1 unless a program has switched it), and clears page 1 to black.
 ;; Out: Page = page 1
 ;; Uses: A, Y
 ;; Keeps: X
@@ -575,7 +576,7 @@ DownRotate:
     ; Falls into Line.
 .endproc
 
-;; Draws a line in <Color> from the last point plotted (<LastX>, <LastY>) to a point, which becomes the last.
+;; Draws a line in <ShiftedColor> from the last point plotted (<LastX>, <LastY>) to a point, which becomes the last.
 ;;
 ;; It plots the dot it is at, then moves one dot, along X or up or down as the error term says, until it has plotted
 ;; |dx| + |dy| + 1 dots, both ends included; it ends through <FindCoordinates::Return>.

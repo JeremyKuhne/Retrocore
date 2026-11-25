@@ -14,21 +14,21 @@
 ; Business BASIC's added statements.
 .scope Statements continued
 
-;; The `OUTREC = n` statement: sets <OUTREC>, `LIST`'s right margin.
+;; The `OUTREC = n` statement: sets <OutputRecordLength>, `LIST`'s right margin.
 ;; See: <Statements::GetEqualsByte>
 ;; Also: SOUTREC (BB13)
 .proc OutRec
     jsr GetEqualsByte
-    stx OUTREC
+    stx OutputRecordLength
     rts
 .endproc
 
-;; The `INDENT = n` statement: sets <INDENT>, the spaces `LIST` indents each `FOR` loop by.
+;; The `INDENT = n` statement: sets <ListIndent>, the spaces `LIST` indents each `FOR` loop by.
 ;; See: <Statements::GetEqualsByte>
 ;; Also: SINDENT (BB13)
 .proc Indent
     jsr GetEqualsByte
-    stx INDENT
+    stx ListIndent
     rts
 .endproc
 
@@ -37,23 +37,23 @@
 ;; Errors: SYNTAX without the `=`, ILLEGAL QUANTITY for a number out of range
 ;; Also: CHKBYT (BB13)
 .proc GetEqualsByte
-    jsr CHKEQL
-    jmp GETBYT
+    jsr CheckEquals
+    jmp EvaluateByte
 .endproc
 
-;; The `HPOS = n` statement: moves the cursor to column n, counting from 1, and records it in <TRMPOS>.
+;; The `HPOS = n` statement: moves the cursor to column n, counting from 1, and records it in <TerminalPosition>.
 ;; See: <Statements::MoveToColumn>
 ;; Also: HTAB (BB13)
 .proc HPos
     jsr MoveToColumn
-    sta TRMPOS                              ; The column, from 0
+    sta TerminalPosition                              ; The column, from 0
     rts
 .endproc
 
 ;; Ends with ILLEGAL QUANTITY, for `TAB(0)`.
 ;; Also: TOOBIG (BB13)
 .proc ToIllegalQuantity
-    jmp FCERR
+    jmp IllegalQuantityError
 .endproc
 
 ;; Moves the cursor to the column after `=`, for <Statements::HPos>.
@@ -72,8 +72,8 @@
 .proc VPos
     lda #Console::SET_LINE
     pha
-    jsr CHKEQL
-    jsr GETBYT
+    jsr CheckEquals
+    jsr EvaluateByte
     pla
     ; Falls into Console::SendCodeAndPosition.
 .endproc
@@ -86,12 +86,12 @@
 ;; Sends a console code and its argument, counting from 1, which the console counts from 0.
 ;; In: A = the code, X = the argument
 ;; Out: A = the argument as sent
-;; See: <DOITOUT>
+;; See: <SendCoordinate>
 ;; Also: VWINDER (BB13)
 .proc SendCodeAndPosition
-    jsr PRNACHAR
+    jsr WriteConsoleCharacter
     txa
-    jmp DOITOUT
+    jmp SendCoordinate
 .endproc
 
 .endscope
@@ -111,10 +111,10 @@
 ;; Also: INVERSE (BB13)
 .proc Inverse
     lda #Console::INVERSE_VIDEO
-    jmp PRNACHAR
+    jmp WriteConsoleCharacter
 .endproc
 
-;; The `TRACE` statement: sets bit 7 of <TRFLAG>, so the statement fetcher prints each line's number as it runs.
+;; The `TRACE` statement: sets bit 7 of <TraceMode>, so the statement fetcher prints each line's number as it runs.
 ;;
 ;; With anything after `TRACE` it changes nothing, and the statement fetcher reports SYNTAX. Apple's comment had this
 ;; the wrong way round.
@@ -126,7 +126,7 @@
     ; Falls into Statements::NoTrace.
 .endproc
 
-;; The `NOTRACE` statement: clears bit 7 of <TRFLAG>.
+;; The `NOTRACE` statement: clears bit 7 of <TraceMode>.
 ;; In: zero = set at the end of the statement
 ;; See: <Statements::Trace>
 ;; Entry: Done = returns
@@ -134,7 +134,7 @@
 .proc NoTrace
     clc
     bne Done                                ; Something follows: leave it for SYNTAX
-    ror TRFLAG
+    ror TraceMode
 
 ;; Returns.
 ;; Also: RTSBCK (BB13)
@@ -149,85 +149,85 @@ Done:
 ;; The `ON ERR statements` statement: makes the statements after `ERR`, to the end of the line, the program's error
 ;; handler, then skips them.
 ;;
-;; It keeps where they start in <ERRTO> (the address of the `ERR` token, with its X-byte in <ERRTOB>) and the line's
-;; number in <ERRTO>+3 and +4, and sets bit 7 of <ERRFLG>. `OFF ERR` clears the bit; `RUN`, `NEW`, `LOAD` and editing
-;; the program clear <ERRFLG>.
+;; It keeps where they start in <OnErrorText> (the address of the `ERR` token, with its X-byte in <OnErrorTextXByte>) and the line's
+;; number in <OnErrorText>+3 and +4, and sets bit 7 of <OnErrorActive>. `OFF ERR` clears the bit; `RUN`, `NEW`, `LOAD` and editing
+;; the program clear <OnErrorActive>.
 ;; Errors: ILLEGAL DIRECT outside a program
 ;; See: <TrapError>, <ReportError>, <Statements::Off>
 ;; Also: ONERR (BB13)
 .proc OnErr
-    jsr ERRDIR
-    lda TXTPTR
-    sta ERRTO
-    lda TXTPTR+1
-    sta ERRTO+1
-    lda TXTPTRB
-    sta ERRTOB
-    lda ERRFLG
+    jsr RejectDirectMode
+    lda TextPointer
+    sta OnErrorText
+    lda TextPointer+1
+    sta OnErrorText+1
+    lda TextPointerXByte
+    sta OnErrorTextXByte
+    lda OnErrorActive
     ora #$80
-    sta ERRFLG
-    lda CURLIN                              ; The line, for the handler to run in
-    sta ERRTO+3
-    lda CURLIN+1
-    sta ERRTO+4
-    jsr REMN                                ; Skip the handler for now
-    jmp ADDON
+    sta OnErrorActive
+    lda CurrentLine                              ; The line, for the handler to run in
+    sta OnErrorText+3
+    lda CurrentLine+1
+    sta OnErrorText+4
+    jsr FindLineEnd                                ; Skip the handler for now
+    jmp AdvanceTextPointer
 .endproc
 
 .endscope
 
-;; Runs the `ON ERR` handler: <ReportError> comes here when bit 7 of <ERRFLG> is set.
+;; Runs the `ON ERR` handler: <ReportError> comes here when bit 7 of <OnErrorActive> is set.
 ;;
-;; It puts the stack pointer back to <REMSTK>, where the failing statement started, so `FOR` and `GOSUB` entries
-;; stay; keeps <OLDTXT>, the failing statement's start, in <ERRPOS> and <ERRPOSB> for `RESUME`; then sets <TXTPTR>
-;; and <CURLIN> from <ERRTO> and goes on at the statement after `ON ERR`, through <DIRCON>. <ReportError> has
-;; already set <ERRNUM> and <ERRLIN>. The handler stays in force.
+;; It puts the stack pointer back to <StatementStack>, where the failing statement started, so `FOR` and `GOSUB` entries
+;; stay; keeps <StoppedText>, the failing statement's start, in <ErrorText> and <ErrorTextXByte> for `RESUME`; then sets <TextPointer>
+;; and <CurrentLine> from <OnErrorText> and goes on at the statement after `ON ERR`, through <NextStatement::CheckEvents>. <ReportError> has
+;; already set <ErrorCode> and <ErrorLine>. The handler stays in force.
 ;; See: <Statements::OnErr>, <Statements::Resume>
 ;; Also: HNDLERR (BB13)
 .proc TrapError
-    ldx REMSTK
+    ldx StatementStack
     txs
-    lda OLDTXT
-    sta ERRPOS
-    lda OLDTXT+1
-    sta ERRPOS+1
-    lda OLDTXTB
-    sta ERRPOSB
-    lda ERRTO
-    sta TXTPTR
-    lda ERRTO+1
-    sta TXTPTR+1
-    lda ERRTOB
-    sta TXTPTRB
-    lda ERRTO+3
-    sta CURLIN
-    lda ERRTO+4
-    sta CURLIN+1
-    jmp DIRCON
+    lda StoppedText
+    sta ErrorText
+    lda StoppedText+1
+    sta ErrorText+1
+    lda StoppedTextXByte
+    sta ErrorTextXByte
+    lda OnErrorText
+    sta TextPointer
+    lda OnErrorText+1
+    sta TextPointer+1
+    lda OnErrorTextXByte
+    sta TextPointerXByte
+    lda OnErrorText+3
+    sta CurrentLine
+    lda OnErrorText+4
+    sta CurrentLine+1
+    jmp NextStatement::CheckEvents
 .endproc
 
 ; RESUME.
 .scope Statements continued
 
-;; The `RESUME` statement: runs the statement that failed again, from <ERRPOS> in line <ERRLIN>.
+;; The `RESUME` statement: runs the statement that failed again, from <ErrorText> in line <ErrorLine>.
 ;;
-;; When no error has been handled (<ERRPOSB> zero) it does nothing.
+;; When no error has been handled (<ErrorTextXByte> zero) it does nothing.
 ;; Errors: ILLEGAL DIRECT outside a program
 ;; See: <TrapError>
 ;; Also: RESUME (BB13)
 .proc Resume
-    jsr ERRDIR
-    lda ERRPOSB
+    jsr RejectDirectMode
+    lda ErrorTextXByte
     beq Done
-    sta TXTPTRB
-    lda ERRLIN
-    sta CURLIN
-    lda ERRLIN+1
-    sta CURLIN+1
-    lda ERRPOS
-    sta TXTPTR
-    lda ERRPOS+1
-    sta TXTPTR+1
+    sta TextPointerXByte
+    lda ErrorLine
+    sta CurrentLine
+    lda ErrorLine+1
+    sta CurrentLine+1
+    lda ErrorText
+    sta TextPointer
+    lda ErrorText+1
+    sta TextPointer+1
 
 ;; Returns, to the statement fetcher.
 ;; Also: RSM2 (BB13)
@@ -241,31 +241,31 @@ Done:
 ; Two-byte tokens
 ; ---------------------------------------------------------------------------------------------------------------------
 
-;; Tests whether the program has a two-byte token, <TWO_BYTE_TOKEN> and A, at <TXTPTR>, and steps over the first
+;; Tests whether the program has a two-byte token, <TWO_BYTE_TOKEN> and A, at <TextPointer>, and steps over the first
 ;; byte if so.
 ;; In: A = the token's second byte
-;; Out: zero = set when found, with <TXTPTR> at the second byte, A = the character at <TXTPTR>
+;; Out: zero = set when found, with <TextPointer> at the second byte, A = the character at <TextPointer>
 ;; Keeps: X, Y
 ;; See: <RequireTwoByteToken>
 ;; Also: TRYESC (BB13)
 .proc MatchTwoByteToken
-    sty YSAVE
+    sty SavedY
     ldy #1
-    cmp (TXTPTR),Y
+    cmp (TextPointer),Y
     bne Reread
     dey
-    lda (TXTPTR),Y
+    lda (TextPointer),Y
     cmp #TWO_BYTE_TOKEN
     bne Reread
-    jsr CHRGET                              ; Step over the TWO_BYTE_TOKEN
+    jsr GetNextCharacter                              ; Step over the TWO_BYTE_TOKEN
     lda #$00                                ; Found
 
-;; Reads the character at <TXTPTR> again, keeping the flags.
+;; Reads the character at <TextPointer> again, keeping the flags.
 ;; Also: TRY2 (BB13)
 Reread:
     php
-    jsr CHRGOT
-    ldy YSAVE
+    jsr GetCurrentCharacter
+    ldy SavedY
     plp
     rts
 .endproc
@@ -273,21 +273,21 @@ Reread:
 ;; Requires the two-byte token <TWO_BYTE_TOKEN> and A next, and steps past it.
 ;; In: A = the token's second byte
 ;; Errors: SYNTAX when it is not there
-;; See: <MatchTwoByteToken>, <SYNCHR>
+;; See: <MatchTwoByteToken>, <CheckCharacter>
 ;; Also: MSTESC (BB13)
 .proc RequireTwoByteToken
     pha
     lda #TWO_BYTE_TOKEN
-    jsr SYNCHR
+    jsr CheckCharacter
     pla
-    jmp SYNCHR
+    jmp CheckCharacter
 .endproc
 
 ; ---------------------------------------------------------------------------------------------------------------------
 ; ON KBD, ON EOF# and OFF
 ; ---------------------------------------------------------------------------------------------------------------------
 
-;; The `ON KBD` and `ON EOF#` handlers, kept in <EOFPTRS> and <EOFLINS>, and going to them.
+;; The `ON KBD` and `ON EOF#` handlers, kept in <EndOfFileHandlers> and <EndOfFileHandlerLines>, and going to them.
 .scope Handlers
 
 ;; The handler number of `ON KBD`; `ON EOF#`'s are the file numbers, 1 to 10.
@@ -301,16 +301,16 @@ KEYBOARD = 11
 ;; The `ON KBD statements` statement: makes the statements after `KBD` the handler for a key pressed while the
 ;; program runs, and turns the console's any-key event on.
 ;;
-;; The handler is number <Handlers::KEYBOARD> in <EOFPTRS>; <Handlers::KeyPressed> calls it as a `GOSUB`.
+;; The handler is number <Handlers::KEYBOARD> in <EndOfFileHandlers>; <Handlers::KeyPressed> calls it as a `GOSUB`.
 ;; Errors: ILLEGAL DIRECT outside a program
 ;; See: <Statements::OnEof::SetHandler>, <Handlers::KeyPressed>, <Statements::OffKbd>
 ;; Also: ONKBD (BB13)
 .proc OnKbd
-    jsr ERRDIR
+    jsr RejectDirectMode
     lda #1
     sta a:Console::AnyKeyEvent+SosCalls::EventList::PRIORITY
     brk                                     ; D_CONTROL: the any-key event on
-    .byte SDCNT
+    .byte SOS_DEVICE_CONTROL
     .word Console::AnyKeyParameters
     ldx #Handlers::KEYBOARD
     bne OnEof::SetHandler
@@ -321,39 +321,39 @@ KEYBOARD = 11
 ;;
 ;; <Handlers::EndOfFile> goes to it as a `GOTO`.
 ;; Errors: ILLEGAL DIRECT outside a program
-;; Entry: SetHandler = records handler X, 1 to 11, at the statements after <TXTPTR>
+;; Entry: SetHandler = records handler X, 1 to 11, at the statements after <TextPointer>
 ;; See: <Handlers::EndOfFile>, <Statements::OffEof>
 ;; Also: ONEOF (BB13)
 .proc OnEof
-    jsr CHRGET
-    jsr ERRDIR
-    jsr GTFLNO
+    jsr GetNextCharacter
+    jsr RejectDirectMode
+    jsr Files::TakeFileNumber
     inx                                     ; The file's number, from 1
-    jsr DECTPT                              ; Back to the character before the statements
+    jsr BackUpTextPointer                              ; Back to the character before the statements
 
-;; Records handler X: where the statements start, relative to <TXTTAB>, in <EOFPTRS>, and the line in <EOFLINS>;
+;; Records handler X: where the statements start, relative to <ProgramStart>, in <EndOfFileHandlers>, and the line in <EndOfFileHandlerLines>;
 ;; then skips the statements.
 ;; Also: ONEOF2 (BB13)
 SetHandler:
     txa
-    sta YSAVE
+    sta SavedY
     asl                                     ; Three bytes each
-    adc YSAVE
+    adc SavedY
     tax
     jsr Handlers::ToggleOffset
-    lda TXTPTR
-    sta EOFPTRS-2,X
-    lda TXTPTR+1
-    sta EOFPTRS-1,X
-    lda TXTPTRB
-    sta EOFPTRS-3,X
+    lda TextPointer
+    sta EndOfFileHandlers-2,X
+    lda TextPointer+1
+    sta EndOfFileHandlers-1,X
+    lda TextPointerXByte
+    sta EndOfFileHandlers-3,X
     jsr Handlers::ToggleOffset              ; Back to an address
-    lda CURLIN
-    sta EOFLINS-3,X
-    lda CURLIN+1
-    sta EOFLINS-2,X
-    jsr REMN                                ; Skip the handler for now
-    jmp ADDON
+    lda CurrentLine
+    sta EndOfFileHandlerLines-3,X
+    lda CurrentLine+1
+    sta EndOfFileHandlerLines-2,X
+    jsr FindLineEnd                                ; Skip the handler for now
+    jmp AdvanceTextPointer
 .endproc
 
 .endscope
@@ -361,24 +361,24 @@ SetHandler:
 ; The handlers, continued.
 .scope Handlers continued
 
-;; Turns <TXTPTR> into an offset from <TXTTAB>, or such an offset back into an address.
+;; Turns <TextPointer> into an offset from <ProgramStart>, or such an offset back into an address.
 ;;
-;; It replaces <TXTPTR> with <TXTTAB> less <TXTPTR>, which undoes itself when done twice.
+;; It replaces <TextPointer> with <ProgramStart> less <TextPointer>, which undoes itself when done twice.
 ;; Keeps: X
 ;; Also: RELTXT (BB13)
 .proc ToggleOffset
     sec
-    lda TXTTAB
-    sbc TXTPTR
-    sta TXTPTR
-    lda TXTTAB+1
-    sbc TXTPTR+1
-    ldy TXTTABB
-    jsr FIXSBC
-    sta TXTPTR+1
+    lda ProgramStart
+    sbc TextPointer
+    sta TextPointer
+    lda ProgramStart+1
+    sbc TextPointer+1
+    ldy ProgramStartXByte
+    jsr Memory::NormalizeAfterSubtract
+    sta TextPointer+1
     tya
-    sbc TXTPTRB
-    sta TXTPTRB
+    sbc TextPointerXByte
+    sta TextPointerXByte
     rts
 .endproc
 
@@ -395,17 +395,17 @@ SetHandler:
 ;; Also: OFF (BB13)
 .proc Off
     pha
-    jsr CHRGET
+    jsr GetNextCharacter
     pla
-    cmp #KBDTK
+    cmp #TOKEN_KBD
     beq OffKbd
-    cmp #EOFTK
+    cmp #TOKEN_EOF
     beq OffEof
-    cmp #ERRTK
+    cmp #TOKEN_ERR
     bne Done
-    lda ERRFLG                              ; OFF ERR
+    lda OnErrorActive                              ; OFF ERR
     and #$7F
-    sta ERRFLG
+    sta OnErrorActive
 
 ;; Returns.
 ;; Also: RTS999 (BB13)
@@ -420,7 +420,7 @@ Done:
     lda #0
     sta a:Console::AnyKeyEvent+SosCalls::EventList::PRIORITY
     brk                                     ; D_CONTROL: the any-key event off
-    .byte SDCNT
+    .byte SOS_DEVICE_CONTROL
     .word Console::AnyKeyParameters
     ldx #Handlers::KEYBOARD
     bne OffEof::ClearHandler
@@ -431,21 +431,21 @@ Done:
 ;; See: <Statements::OnEof>
 ;; Also: OFFEOF (BB13)
 .proc OffEof
-    jsr GTFLNO
+    jsr Files::TakeFileNumber
     inx
 
-;; Clears handler X in <EOFPTRS>.
+;; Clears handler X in <EndOfFileHandlers>.
 ;; Also: OFFEOF2 (BB13)
 ClearHandler:
     txa
-    sta YSAVE
+    sta SavedY
     asl
-    adc YSAVE
+    adc SavedY
     tax
     lda #0
-    sta EOFPTRS-2,X
-    sta EOFPTRS-1,X
-    sta EOFPTRS-3,X
+    sta EndOfFileHandlers-2,X
+    sta EndOfFileHandlers-1,X
+    sta EndOfFileHandlers-3,X
     rts
 .endproc
 
@@ -454,68 +454,68 @@ ClearHandler:
 ; Going to a handler.
 .scope Handlers continued
 
-;; Goes to the `ON EOF#` handler of the file in <SVFLNO>, which reached its end, or ends with OUT OF DATA when it has
+;; Goes to the `ON EOF#` handler of the file in <CurrentFileNumber>, which reached its end, or ends with OUT OF DATA when it has
 ;; none.
 ;;
-;; It keeps the file's number, from 1, in <EOFSV> for the `EOF` function, puts the stack pointer back to <REMSTK>,
-;; sends output back to the `OUTPUT#` device, and goes on at the handler's statements in its line, through <GONE>.
+;; It keeps the file's number, from 1, in <EndOfFileNumber> for the `EOF` function, puts the stack pointer back to <StatementStack>,
+;; sends output back to the `OUTPUT#` device, and goes on at the handler's statements in its line, through <ExecuteStatement>.
 ;; In: SVFLNO = the file's number, from 0
 ;; Entry: GoToHandler = goes to handler X/3, without setting EOF or the stack
-;; See: <Statements::OnEof>, <DSKEOF>
+;; See: <Statements::OnEof>, <Files::ReadTextLine::ReadFailed>
 ;; Also: CHKEOF (BB13)
 .proc EndOfFile
-    inc SVFLNO
-    lda SVFLNO
-    sta EOFSV
+    inc CurrentFileNumber
+    lda CurrentFileNumber
+    sta EndOfFileNumber
     asl
-    adc SVFLNO
-    ldx REMSTK                              ; The stack as the statement started
+    adc CurrentFileNumber
+    ldx StatementStack                              ; The stack as the statement started
     txs
     tax
 
-;; Goes to handler X/3 in <EOFPTRS>, or ends with OUT OF DATA when there is none.
+;; Goes to handler X/3 in <EndOfFileHandlers>, or ends with OUT OF DATA when there is none.
 ;; Also: CKEOF2 (BB13)
 GoToHandler:
-    lda FILNO+1
-    sta FILNO
-    lda EOFPTRS-3,X
+    lda OutputFileNumber+1
+    sta OutputFileNumber
+    lda EndOfFileHandlers-3,X
     beq NoHandler                           ; No handler
-    sta TXTPTRB
-    lda EOFPTRS-2,X
-    sta TXTPTR
-    lda EOFPTRS-1,X
-    sta TXTPTR+1
-    lda EOFLINS-3,X
-    sta CURLIN
-    lda EOFLINS-2,X
-    sta CURLIN+1
+    sta TextPointerXByte
+    lda EndOfFileHandlers-2,X
+    sta TextPointer
+    lda EndOfFileHandlers-1,X
+    sta TextPointer+1
+    lda EndOfFileHandlerLines-3,X
+    sta CurrentLine
+    lda EndOfFileHandlerLines-2,X
+    sta CurrentLine+1
     jsr ToggleOffset                        ; Back to an address
-    jmp GONE
+    jmp ExecuteStatement
 
 ;; Ends with OUT OF DATA.
 ;; Also: GIVOD (BB13)
 NoHandler:
-    ldx #ERROD
+    ldx #ERROR_OUT_OF_DATA
     jmp ReportError
 .endproc
 
-;; Calls the `ON KBD` handler as a `GOSUB`: the statement fetcher comes here when bit 7 of <KEYSTROK> says the
+;; Calls the `ON KBD` handler as a `GOSUB`: the statement fetcher comes here when bit 7 of <PendingEvents> says the
 ;; any-key event saw a key.
 ;;
 ;; It clears the bit and pushes a `GOSUB` entry, so `RETURN` goes back to the statement that was next.
-;; See: <Statements::OnKbd>, <Console::AnyKeyHandler>, <DIRCON>
+;; See: <Statements::OnKbd>, <Console::AnyKeyHandler>, <NextStatement::CheckEvents>
 ;; Also: KEYHIT (BB13)
 .proc KeyPressed
-    lda KEYSTROK
+    lda PendingEvents
     and #$7F
-    sta KEYSTROK
-    jsr PSHTXT4
-    ldx #EOFSIZ                             ; Handler 11, times 3
+    sta PendingEvents
+    jsr PushGoSubEntryHereChecked
+    ldx #END_OF_FILE_HANDLERS_SIZE                             ; Handler 11, times 3
     bne EndOfFile::GoToHandler              ; Always
 .endproc
 
 .endscope
-.assert EOFSIZ = 3 * Handlers::KEYBOARD, "The keyboard's handler must be the last in EOFPTRS."
+.assert END_OF_FILE_HANDLERS_SIZE = 3 * Handlers::KEYBOARD, "The keyboard's handler must be the last in EOFPTRS."
 
 ; ---------------------------------------------------------------------------------------------------------------------
 ; DEL
@@ -527,7 +527,7 @@ NoHandler:
 ;; Ends with SYNTAX, for <Statements::Del>.
 ;; Also: BLOWDEL (BB13)
 .proc ToSyntaxError
-    jmp SNERR
+    jmp SyntaxError
 .endproc
 
 ;; The `DEL first[,last]` statement: deletes a line, or the lines from first to last, from the program.
@@ -543,79 +543,79 @@ NoHandler:
 ;; Also: DELETE (BB13)
 .proc Del
     bcs ToSyntaxError                       ; Not a digit
-    jsr LINGET
+    jsr ReadLineNumber
     jsr FindLine                            ; The first line to delete
-    ldx CURLIN+1
+    ldx CurrentLine+1
     inx
     beq RangeChecked                        ; Direct: any line
-    lda CURLIN
-    cmp LINNUM
-    lda CURLIN+1
-    sbc LINNUM+1
+    lda CurrentLine
+    cmp LineNumber
+    lda CurrentLine+1
+    sbc LineNumber+1
     bcc RangeChecked
 
 ;; Ends with RANGE.
 ;; Also: RNGERR (BB13)
 ReportRange:
-    ldx #ERRNG
+    ldx #ERROR_RANGE
     jmp ReportError
 
 ;; Reads the range's end and deletes the lines.
 ;; Also: RNGOK (BB13)
 RangeChecked:
-    lda LOWTR
+    lda SourceStart
     pha
-    lda LOWTR+1
+    lda SourceStart+1
     pha
-    lda LOWTRB
+    lda SourceStartXByte
     pha
-    jsr CHRGOT
+    jsr GetCurrentCharacter
     beq FindEnd                             ; One line
     cmp #','
     beq ReadLast
     cmp #'-'
     beq ReadLast
-    lda #TOTK
+    lda #TOKEN_TO
     jsr MatchTwoByteToken
     bne ToSyntaxError
 
 ;; Reads the last line's number.
 ;; Also: DELOK (BB13)
 ReadLast:
-    jsr CHRGET
+    jsr GetNextCharacter
     bcs ToSyntaxError                       ; Not a digit
-    jsr LINGET
+    jsr ReadLineNumber
 
 ;; Finds the first line after the range, and moves what follows it down to the range's start.
 ;; Also: JSONEL (BB13)
 FindEnd:
-    inc LINNUM
+    inc LineNumber
     bne FindNext
-    inc LINNUM+1
+    inc LineNumber+1
 
 ;; Finds the line after the range.
 FindNext:
     jsr FindLine
-    lda LOWTR
-    sta INDEX1                              ; Move from here
-    lda LOWTR+1
-    sta INDEX1+1
-    lda LOWTRB
-    sta INDEX1B
+    lda SourceStart
+    sta Pointer1                              ; Move from here
+    lda SourceStart+1
+    sta Pointer1+1
+    lda SourceStartXByte
+    sta Pointer1XByte
     pla
-    sta LOWTRB
+    sta SourceStartXByte
     pla
-    sta LOWTR+1
+    sta SourceStart+1
     pla
     sec                                     ; DELTA = the range's start less its end
-    sta LOWTR
-    sbc INDEX1
-    sta DELTA
-    lda LOWTR+1
-    sbc INDEX1+1
-    ldy LOWTRB
-    jsr FIXSBC
-    sta DELTA+1
+    sta SourceStart
+    sbc Pointer1
+    sta MoveDistance
+    lda SourceStart+1
+    sbc Pointer1+1
+    ldy SourceStartXByte
+    jsr Memory::NormalizeAfterSubtract
+    sta MoveDistance+1
     tax
     bpl NotEmpty                            ; $80 or more: the range holds nothing
     rts
@@ -623,8 +623,8 @@ FindNext:
 ;; Closes the gap the lines leave.
 NotEmpty:
     tya
-    sbc INDEX1B
-    sta DELTAB
+    sbc Pointer1XByte
+    sta MoveDistanceXByte
     jsr CloseGap
     jmp ClearVariables::RestoreData
 .endproc
@@ -649,7 +649,7 @@ NotEmpty:
 NextCode:
     lda a:TextCodes,X
     beq Done
-    jsr PRNACHAR
+    jsr WriteConsoleCharacter
     inx
     bne NextCode
 
@@ -667,7 +667,7 @@ Done:
 .proc Home
     bne Text::Done
     lda #Console::CLEAR_VIEWPORT
-    jmp PRNACHAR
+    jmp WriteConsoleCharacter
 .endproc
 
 ;; The console codes `TEXT` writes, ending in a zero: 80-column text mode with the cursor off, the text options,

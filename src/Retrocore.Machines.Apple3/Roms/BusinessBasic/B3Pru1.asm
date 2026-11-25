@@ -11,8 +11,8 @@
 ;;   commas); ** for asterisk fill; $ or a floating $$; a sign, + or -, before or after the digits, or a floating ++
 ;;   or --; a decimal point; and EEE or EEEE for an exponent.
 ;;
-;; A count before a character repeats it, so 5# is #####. The scanner keeps its state in the bytes of <FAC>, which are
-;; free while it runs; the expression's value is kept as decimal digits in <BCDSTR> for the editor,
+;; A count before a character repeats it, so 5# is #####. The scanner keeps its state in the bytes of <Fac>, which are
+;; free while it runs; the expression's value is kept as decimal digits in <UsingDigits> for the editor,
 ;; <PrintUsing::FormatNumber>, in B3Pru2.asm.
 
 ;; `PRINT USING` and the `IMAGE` format it prints through: reading the image, checking each spec and building a number
@@ -29,77 +29,77 @@
 ;; The spec character <ReadFormatCharacter> found, as the image gives it (upper or lower case); `9` while it reads a
 ;; count.
 ;; Also: DELIM (BB13)
-SpecCharacter = FAC+1
+SpecCharacter = Fac+1
 
 ;; The spec character's count: the repeat count before it, or the run of the same character.
 ;; Also: REP (BB13)
-RepeatCount = FAC+2
+RepeatCount = Fac+2
 
 ;; The count of digit positions before the decimal point.
 ;; Also: DIGB4DPT (BB13)
-DigitsBeforePoint = FAC+24
+DigitsBeforePoint = Fac+24
 
 ;; The count of digit positions after the decimal point.
 ;; Also: DIGAFDPT (BB13)
-DigitsAfterPoint = FAC+25
+DigitsAfterPoint = Fac+25
 
 ;; The length of a literal, or of the string to print.
 ;; Also: SAVLEN (BB13)
-TextLength = FAC+6
+TextLength = Fac+6
 
 ;; The spec's type: <SPEC_NUMBER>, <FIELD_STRING>, <FIELD_LITERAL>, or <SPEC_END> when none was found.
 ;; Also: SPECTYP (BB13)
-SpecType = FAC+7
+SpecType = Fac+7
 
 ;; While a spec is scanned, the digit positions counted but not yet put in the mask; while a number is edited, the
 ;; count of digits <NextDigit> has taken.
 ;; Also: DIGCTR (BB13)
-DigitCounter = FAC+8
+DigitCounter = Fac+8
 
 ;; The power of ten of the digit the editor wants.
 ;; Also: DIGEXP (BB13)
-DigitPower = FAC+9
+DigitPower = Fac+9
 
 ;; The string's length, kept while its spec is found.
 ;; Also: USVSTRL (BB13)
-StringLength = FAC+9
+StringLength = Fac+9
 
 ;; The decimal point's index in the mask, <NO_INDEX> for none.
 ;; Also: DPTNDX (BB13)
-PointIndex = FAC+10
+PointIndex = Fac+10
 
 ;; The digit class so far: <FIELD_ZERO_FILLED>, <FIELD_SPACE_FILLED> or <FIELD_COMMAS>, 0 for none.
 ;; Also: NMASK (BB13)
-DigitClass = FAC+11
+DigitClass = Fac+11
 
 ;; The editor's adjustment to the exponent, for engineering notation.
 ;; Also: EXPADJ (BB13)
-ExponentAdjustment = FAC+11
+ExponentAdjustment = Fac+11
 
 ;; The spec's parts: <PARTS_DIGITS>, and the codes of the editing characters it has (<FIELD_SIGN>, with <PARTS_PLUS>
 ;; for +, <FIELD_DOLLAR>, <FIELD_EXPONENT> and <FIELD_POINT>).
 ;; Also: EMASK (BB13)
-SpecParts = FAC+12
+SpecParts = Fac+12
 
 ;; The floating symbols: <FLOAT_ASTERISKS>, <FLOAT_DOLLAR>, <FLOAT_SIGN> and <FLOAT_DOLLAR_AFTER_SIGN>.
 ;; Also: FLTMSK (BB13)
-FloatingSymbols = FAC+13
+FloatingSymbols = Fac+13
 
 ;; The text X or / prints: a space, or a return and a line feed.
 ;; Also: LITRLCH (BB13)
-LiteralText = FAC+14
+LiteralText = Fac+14
 
 ;; In engineering notation, the mask index of the first digit.
 ;; Also: SPCB4DIG (BB13)
-FirstDigitPlace = FAC+14
+FirstDigitPlace = Fac+14
 
-;; The edit mask, <MASK_SIZE> bytes of string space from <GETSPA>, with its X-byte at <FRESPCB>.
+;; The edit mask, <MASK_SIZE> bytes of string space from <Strings::ReserveSpace>, with its X-byte at <NewStringXByte>.
 ;; Also: MASKPT (BB13)
-MaskPointer = FRESPC
+MaskPointer = NewString
 
 ;; $FF once a spec has taken a value, so the image may start over.
 ;; Also: VSPEC (BB13)
-ValueSpecSeen = FAC+29
+ValueSpecSeen = Fac+29
 
 ;; How the statement ends: 0 with a new line, a semicolon without one.
 ;; Also: ENDFLG (BB13)
@@ -107,43 +107,43 @@ EndingSeparator = ValueSpecSeen
 
 ;; The index of the mask's last byte, <NO_INDEX> while it is empty; the editor makes it the mask's length.
 ;; Also: MSKNDX (BB13)
-MaskIndex = FAC+16
+MaskIndex = Fac+16
 
 ;; The image's address, with its X-byte at <ImagePointerXByte>.
 ;; Also: SPCPTR (BB13)
-ImagePointer = FAC+17
+ImagePointer = Fac+17
 
 ;; The image's address's high byte.
 ;; Also: SPCPTRH (BB13)
-ImagePointerHigh = FAC+17+1
+ImagePointerHigh = Fac+17+1
 
 ;; The index of the image's character last read.
 ;; Also: SPCNDX (BB13)
-ImageIndex = FAC+19
+ImageIndex = Fac+19
 
 ;; The image's length, 1 to 255.
 ;; Also: SPCLEN (BB13)
-ImageLength = FAC+20
+ImageLength = Fac+20
 
 ;; The mask index of the units digit, <NO_INDEX> for none.
 ;; Also: TENZNDX (BB13)
-UnitsIndex = FAC+21
+UnitsIndex = Fac+21
 
 ;; The editor's count of digits since a comma.
 ;; Also: CMACTR (BB13)
-CommaCounter = FAC+22
+CommaCounter = Fac+22
 
 ;; Which half of a decimal byte <UnpackDecimal> takes next: bit 7 set for the high digit.
 ;; Also: HALF (BB13)
-NextHalf = FAC+22
+NextHalf = Fac+22
 
 ;; The character for leading zeros, with <FILL_COMMAS> set to put in commas.
 ;; Also: CMAFILL (BB13)
-FillCharacter = FAC+23
+FillCharacter = Fac+23
 
 ;; The image's X-byte: its bank.
 ;; Also: SPCPTRB (BB13)
-ImagePointerXByte = ImagePointer+SYSPAG
+ImagePointerXByte = ImagePointer+X_BYTE_OFFSET
 
 ; ---------------------------------------------------------------------------------------------------------------------
 ; Values
@@ -260,13 +260,13 @@ LINE_HEADER_SIZE = 3
 
 ; The number's digits in BCDSTR, one a byte.
 
-;; The index in <BCDSTR> of the first digit.
+;; The index in <UsingDigits> of the first digit.
 DIGITS_START = 2
 
 ;; The digits <UnpackDecimal> unpacks.
 DIGIT_COUNT = 20
 
-;; The index in <BCDSTR> just past the digits, where <UnpackDecimal> writes a 0.
+;; The index in <UsingDigits> just past the digits, where <UnpackDecimal> writes a 0.
 DIGITS_END = DIGITS_START + DIGIT_COUNT
 
 ;; The lowest digit that rounds up.
@@ -288,24 +288,24 @@ ROUND_UP_DIGIT = 5
 ;; See: <ScanSpec>, <FormatNumber>
 ;; Also: PRUSING (BB13)
 .proc Statement
-    jsr CHRGET
+    jsr GetNextCharacter
     bcc TakeImageStatement                  ; a line number
     cmp #'"'
     beq TakeLiteral
-    jsr ISLETC                              ; a variable?
+    jsr IsLetter                              ; a variable?
     bcc ToSyntaxError
-    jsr PTRGET
+    jsr FindVariable
     cpx #VALUE_TYPE_STRING
     bne ToSyntaxError
-    sta INDEX
-    sty INDEX+1
-    lda VARPNTB
-    sta INDEXB
-    jsr NOTNOW                              ; the string itself
+    sta Pointer1
+    sty Pointer1+1
+    lda VariablePointerXByte
+    sta Pointer1XByte
+    jsr Strings::FindFromDescriptor                              ; the string itself
     sta ImageLength
     stx ImagePointer
     sty ImagePointerHigh
-    lda INDEXB
+    lda Pointer1XByte
     sta ImagePointerXByte
     jmp StartList
 
@@ -317,15 +317,15 @@ TakeLiteral:
 ;; Takes the literal's next character.
 ;; Also: ULITS (BB13)
 LiteralLoop:
-    jsr CHRGET
+    jsr GetNextCharacter
     beq ToSyntaxError                       ; no closing quote
     cpy #0
     bne CheckQuote
-    ldx TXTPTR                              ; the first character: the image starts here
+    ldx TextPointer                              ; the first character: the image starts here
     stx ImagePointer
-    ldx TXTPTR+1
+    ldx TextPointer+1
     stx ImagePointer+1
-    ldx TXTPTRB
+    ldx TextPointerXByte
     stx ImagePointerXByte
 
 ;; Ends the literal at its closing quote.
@@ -342,7 +342,7 @@ LiteralEnd:
     sty ImageLength
     tya
     beq ToSyntaxError                       ; empty
-    jsr CHRGET
+    jsr GetNextCharacter
     bne StartList
     ; Falls into ToSyntaxError.
 .endproc
@@ -350,50 +350,50 @@ LiteralEnd:
 ;; Ends the statement with a syntax error.
 ;; Also: USNERR (BB13)
 .proc ToSyntaxError
-    jmp SNERR
+    jmp SyntaxError
 .endproc
 
 ;; Ends the statement with an undefined-statement error: the line is not an `IMAGE` statement, or the image is empty.
 ;; Also: UIMERR (BB13)
 .proc NoImageError
-    ldx #ERRUS
-    jmp ERROR
+    ldx #ERROR_UNDEFINED_STATEMENT
+    jmp ReportError
 .endproc
 
 ;; Takes the image from the `IMAGE` statement at the line number in the program text, the rest of its line.
 ;; Errors: UNDEF'D STATEMENT for no such line, or a line that is not an `IMAGE`, or an empty one
 ;; Also: UIMAGE (BB13)
 .proc TakeImageStatement
-    jsr LINGET
-    lda TXTPTR
+    jsr ReadLineNumber
+    lda TextPointer
     pha
-    lda TXTPTR+1
+    lda TextPointer+1
     pha
-    lda TXTPTRB
+    lda TextPointerXByte
     pha
-    jsr GOTOB                               ; find the line
+    jsr Statements::GoTo::ToLineNumber                               ; find the line
     ldy #LINE_HEADER_SIZE
-    jsr ADDON                               ; past its link and number
-    jsr CHRGET
+    jsr AdvanceTextPointer                               ; past its link and number
+    jsr GetNextCharacter
     tax
-    cpx #IMAGETK
+    cpx #TOKEN_IMAGE
     bne NoImageError
-    jsr CHRGET
+    jsr GetNextCharacter
     beq NoImageError
-    lda TXTPTR
+    lda TextPointer
     sta ImagePointer
-    lda TXTPTR+1
+    lda TextPointer+1
     sta ImagePointer+1
-    lda TXTPTRB
+    lda TextPointerXByte
     sta ImagePointerXByte
-    jsr REMN                                ; the length to the line's end
+    jsr FindLineEnd                                ; the length to the line's end
     sty ImageLength
     pla
-    sta TXTPTRB
+    sta TextPointerXByte
     pla
-    sta TXTPTR+1
+    sta TextPointer+1
     pla
-    sta TXTPTR
+    sta TextPointer
     ; Falls into StartList.
 .endproc
 
@@ -403,7 +403,7 @@ LiteralEnd:
 ;;   SkipSeparator = skips a comma or semicolon between the expressions, then takes the next
 ;; Also: UGOTSPT (BB13)
 .proc StartList
-    jsr CHRGOT
+    jsr GetCurrentCharacter
     cmp #';'
     bne ToSyntaxError
     ldx #NO_INDEX
@@ -417,17 +417,17 @@ LiteralEnd:
 ;; Skips a comma or semicolon between the expressions.
 ;; Also: USKPNXT (BB13)
 SkipSeparator:
-    jsr CHRGET
+    jsr GetNextCharacter
     bne NextExpression::CheckEnd            ; past NextExpression's CHRGOT
     ; Falls into NextExpression.
 .endproc
 
 ;; Takes the next expression; at the statement's end, or a semicolon, prints the image's last literals.
 ;; Entry:
-;;   CheckEnd = takes the character in A, flags as <CHRGOT> sets them
+;;   CheckEnd = takes the character in A, flags as <GetCurrentCharacter> sets them
 ;; Also: UNXTEXP (BB13)
 .proc NextExpression
-    jsr CHRGOT
+    jsr GetCurrentCharacter
 
 ;; Takes the character in A.
 CheckEnd:
@@ -453,13 +453,13 @@ CheckSeparator:
     sta EndingSeparator
     tax
     beq CheckFollowing
-    jsr CHRGET                              ; nothing may follow the semicolon
+    jsr GetNextCharacter                              ; nothing may follow the semicolon
 CheckFollowing:
     beq PrintTail
     jmp ToSyntaxError
 PrintTail:
     lda #MASK_SIZE
-    jsr GETSPA                              ; the mask, for the scan
+    jsr Strings::ReserveSpace                              ; the mask, for the scan
     jsr PrintLiterals
     jsr FreeMask
     .assert SPEC_END = 1, "Finish takes SPEC_END to zero with a DEC."
@@ -469,7 +469,7 @@ PrintTail:
 EndLine:
     lda EndingSeparator
     bne Done
-    jmp CRDO
+    jmp PrintNewline
 Done:
     rts
 .endproc
@@ -479,10 +479,10 @@ Done:
 ; ---------------------------------------------------------------------------------------------------------------------
 
 ;; Evaluates the next expression, or `SCALE(n, expression)`, and makes it ready to print: a number as decimal digits
-;; in <BCDSTR>, a string as its pointer and length.
+;; in <UsingDigits>, a string as its pointer and length.
 ;;
-;; The image's place is kept on the stack meanwhile, as the evaluator uses the bytes of <FAC>. `SCALE`'s n, a signed
-;; byte, goes to the editor in <ISARA>; it is 0 otherwise.
+;; The image's place is kept on the stack meanwhile, as the evaluator uses the bytes of <Fac>. `SCALE`'s n, a signed
+;; byte, goes to the editor in <ArrayElementFound>; it is 0 otherwise.
 ;; Also: UEVAL (BB13)
 .proc Evaluate
     lda ImageIndex
@@ -497,75 +497,75 @@ Done:
     pha
     lda #0                                  ; no scale
     pha
-    jsr CHRGOT
-    cmp #SCALETK
+    jsr GetCurrentCharacter
+    cmp #TOKEN_SCALE
     bne NoScale
-    jsr CHRGET
-    jsr GETABYT
+    jsr GetNextCharacter
+    jsr EvaluateSignedByte
     pla                                     ; the scale in place of the 0
     txa
     pha
-    jsr CHKCOM
+    jsr CheckComma
     lda #VALUE_TYPE_ANY
-    sta VALTYP                              ; GETABYT set it
-    jsr FRMEVL
-    jsr CHKCLS
+    sta ValueType                              ; GETABYT set it
+    jsr EvaluateExpression
+    jsr CheckCloseParenthesis
     beq Prepare                             ; then the end, a comma or a semicolon
     cmp #','
     beq Prepare
     cmp #';'
     beq Prepare
-    jmp SNERR
+    jmp SyntaxError
 
 ;; Evaluates an expression of any type.
 ;; Also: UNOSCALE (BB13)
 NoScale:
     lda #VALUE_TYPE_ANY
-    sta VALTYP
-    jsr FRMEVL
+    sta ValueType
+    jsr EvaluateExpression
 
-;; Makes the value ready by its type: a string's pointer to <INDEX> and its length to <StringLength>, a long
-;; integer's digits by <LUNPACK>, or a real's from <FOUT>'s text.
+;; Makes the value ready by its type: a string's pointer to <Pointer1> and its length to <StringLength>, a long
+;; integer's digits by <LongInteger::FacToDigits>, or a real's from <Float::FormatFac>'s text.
 ;; Also: UGOTNUM (BB13)
 Prepare:
-    bit VALTYP
+    bit ValueType
     bpl UnpackReal
-    jsr NOTFAC                              ; a string
+    jsr Strings::FindFacString                              ; a string
     sta StringLength
     jmp RestorePlace
 
-;; Unpacks a long integer's digits into <BCDSTR>, its exponent to <FACEXP>.
+;; Unpacks a long integer's digits into <UsingDigits>, its exponent to <FacExponent>.
 ;; Also: UDTYPE (BB13)
 UnpackLong:
-    jsr LUNPACK
-    lda ISARA
-    sta FACEXP
+    jsr LongInteger::FacToDigits
+    lda ArrayElementFound
+    sta FacExponent
     jmp RestorePlace
 
-;; Turns a real into decimal digits in <BCDSTR>, from <DIGITS_START>, through <FOUT>'s text; its exponent less 1,
-;; times 2, plus 1 when negative, goes to <FACEXP>.
+;; Turns a real into decimal digits in <UsingDigits>, from <DIGITS_START>, through <Float::FormatFac>'s text; its exponent less 1,
+;; times 2, plus 1 when negative, goes to <FacExponent>.
 ;; Also: UNTYPE (BB13)
 UnpackReal:
     bvs UnpackLong                          ; a long integer
-    lda FACSGN
+    lda FacSign
     pha
-    jsr FOUT
+    jsr Float::FormatFac
     pla
     cmp #$80                                ; carry = the sign
     php
-    lda ISARA                               ; FOUT's exponent
+    lda ArrayElementFound                               ; FOUT's exponent
     sec
     sbc #1
     plp
     rol
-    sta FACEXP
+    sta FacExponent
     ldy #DIGITS_START
     ldx #0
 
-;; Copies <FOUT>'s digits, skipping the point, a minus and leading zeros, up to the first other character.
+;; Copies <Float::FormatFac>'s digits, skipping the point, a minus and leading zeros, up to the first other character.
 ;; Also: STRBCD0 (BB13)
 CopyDigit:
-    lda FBUFFR,X
+    lda NumberBuffer,X
     cmp #'.'
     beq SkipCharacter
     cmp #'-'
@@ -578,10 +578,10 @@ CopyDigit:
     cpy #DIGITS_START                       ; a zero before any other digit
     beq SkipCharacter
 StoreDigit:
-    sta BCDSTR,Y
+    sta UsingDigits,Y
     iny
 
-;; Goes on to <FOUT>'s next character.
+;; Goes on to <Float::FormatFac>'s next character.
 ;; Also: STRBCD1 (BB13)
 SkipCharacter:
     inx
@@ -595,7 +595,7 @@ DigitsDone:
 ;; Writes the next zero.
 ;; Also: STRBCD3 (BB13)
 ZeroLoop:
-    sta BCDSTR,Y
+    sta UsingDigits,Y
     iny
     cpy #DIGITS_END
     bne ZeroLoop
@@ -604,7 +604,7 @@ ZeroLoop:
 ;; Also: USTKSAV (BB13)
 RestorePlace:
     pla
-    sta ISARA
+    sta ArrayElementFound
     pla
     sta ValueSpecSeen
     pla
@@ -616,7 +616,7 @@ RestorePlace:
     pla
     sta ImageIndex
     lda #MASK_SIZE
-    jsr GETSPA
+    jsr Strings::ReserveSpace
     ; Falls into FindValueSpec.
 .endproc
 
@@ -641,7 +641,7 @@ CheckType:
     lda #$FF
     sta ValueSpecSeen
     sec
-    lda VALTYP
+    lda ValueType
     tax
     sbc SpecType
     lsr                                     ; carry = set when only one is a string
@@ -655,7 +655,7 @@ FreeMaskThenTypeMismatch:
 ;; Ends the statement with a type mismatch.
 ;; Also: UTMERR (BB13)
 ToTypeMismatchError:
-    jmp TMERR
+    jmp TypeMismatchError
 
 ;; Prints a string or a number.
 TypesMatch:
@@ -695,7 +695,7 @@ Done:
 PrintLiteral:
     bvs Done                                ; a string
 
-;; Prints the literal at <LOWTR>, <TextLength> bytes, <RepeatCount> times, then goes on to the next spec.
+;; Prints the literal at <SourceStart>, <TextLength> bytes, <RepeatCount> times, then goes on to the next spec.
 ;;
 ;; An empty literal, "", has a length of 0, and prints 256 bytes (a bug of the original).
 ;; Also: UREPEAT (BB13)
@@ -706,8 +706,8 @@ Repeat:
 ;; Prints the literal's next byte.
 ;; Also: UOUTLP (BB13)
 OutputLoop:
-    lda (LOWTR),Y
-    jsr OUTDO
+    lda (SourceStart),Y
+    jsr PrintCharacter
     iny
     dex
     bne OutputLoop
@@ -762,7 +762,7 @@ PadBefore:
 PadBeforeLoop:
     dex
     beq CopyText
-    jsr OUTSPC
+    jsr PrintSpace
     dec RepeatCount
     bne PadBeforeLoop
 
@@ -776,8 +776,8 @@ CopyText:
 ;; Prints the string's next character.
 ;; Also: UEXACT2 (BB13)
 TextLoop:
-    lda (INDEX),Y
-    jsr OUTDO
+    lda (Pointer1),Y
+    jsr PrintCharacter
     iny
     dec RepeatCount
     dex
@@ -792,7 +792,7 @@ PadAfter:
 ;; Also: UFILL3 (BB13)
 PadAfterLoop:
     beq FreeStringThenNext
-    jsr OUTSPC
+    jsr PrintSpace
     dex
     jmp PadAfterLoop
 .endproc
@@ -815,7 +815,7 @@ PadAfterLoop:
 ;; Frees the string, if it was a temporary one, and the mask, then takes the next expression.
 ;; Also: UFRESTR (BB13)
 .proc FreeStringThenNext
-    jsr FRECNOW
+    jsr Strings::FreeFacTemporary
     jmp FreeMaskThenNext
 .endproc
 
@@ -824,17 +824,17 @@ PadAfterLoop:
 ; ---------------------------------------------------------------------------------------------------------------------
 
 ;; Frees the mask's <MASK_SIZE> bytes of string space.
-;; See: <FRESPA>
+;; See: <Strings::FreeSpace>
 ;; Also: UFRESPC (BB13)
 .proc FreeMask
     lda #MASK_SIZE
-    ldy FRESPC+1
-    ldx FRESPC
-    stx INDEX
-    sty INDEX+1
-    ldx FRESPCB
-    stx INDEXB
-    jmp FRESPA
+    ldy NewString+1
+    ldx NewString
+    stx Pointer1
+    sty Pointer1+1
+    ldx NewStringXByte
+    stx Pointer1XByte
+    jmp Strings::FreeSpace
 .endproc
 
 ;; Drops <ReadNonSpace>'s saved status and reads on past a space.
@@ -1020,7 +1020,7 @@ Done:
 ; ---------------------------------------------------------------------------------------------------------------------
 
 ;; Scans the image's next spec, checking its syntax, and builds a number spec's edit mask at <MaskPointer>, or points
-;; <LOWTR> and <TextLength> at a literal's text.
+;; <SourceStart> and <TextLength> at a literal's text.
 ;;
 ;; A number spec's parts may come in this order: **, $ or a sign (a fixed $ or sign goes into the mask, a floating
 ;; one only reserves its place), $ again, the digits and decimal point, a trailing sign, then the exponent's E's. A
@@ -1064,11 +1064,11 @@ Done:
     ldx ImagePointerXByte
     bcc Store
     iny
-    jsr FIXYX
+    jsr Memory::WrapPage
 Store:
-    sta LOWTR
-    sty LOWTR+1
-    stx LOWTRB
+    sta SourceStart
+    sty SourceStart+1
+    stx SourceStartXByte
     ldx #<(0-1)
 
 ;; Counts the literal's characters up to its closing quote; with none, it is a syntax error.
@@ -1120,9 +1120,9 @@ Store:
     sta LiteralText
     ldx #>(LiteralText)
     lda #LiteralText
-    sta LOWTR
-    stx LOWTR+1
-    sty LOWTRB                              ; 1 or 2: no bank, as for the zero page
+    sta SourceStart
+    stx SourceStart+1
+    sty SourceStartXByte                              ; 1 or 2: no bank, as for the zero page
     sty TextLength
     bne CheckSpecEnd
 .endproc

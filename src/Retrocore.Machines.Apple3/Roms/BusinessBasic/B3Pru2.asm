@@ -56,11 +56,11 @@ AddDigit:
     bcc TimesTen
 
 ;; Frees the mask and ends the statement with an illegal quantity error.
-;; See: <FreeMask>, <FCERR>
+;; See: <FreeMask>, <IllegalQuantityError>
 ;; Also: UIQERR (BB13)
 FreeMaskThenIllegalQuantity:
     jsr FreeMask
-    jmp FCERR
+    jmp IllegalQuantityError
 
 ;; Multiplies the count by 10 and adds the digit.
 TimesTen:
@@ -211,16 +211,16 @@ CommaFlags:
 ; Numeric fields
 ; ---------------------------------------------------------------------------------------------------------------------
 
-;; Unpacks the decimal mantissa in <FACT> into <BCDSTR>, one digit a byte from <DIGITS_START>: <DIGIT_COUNT> digits,
+;; Unpacks the decimal mantissa in <FacDecimalDigits> into <UsingDigits>, one digit a byte from <DIGITS_START>: <DIGIT_COUNT> digits,
 ;; then a 0.
 ;;
-;; Leading zeros are dropped, each lowering the exponent in <ISARA> by one; ISARA holds the exponent doubled, with the
+;; Leading zeros are dropped, each lowering the exponent in <ArrayElementFound> by one; ISARA holds the exponent doubled, with the
 ;; sign in bit 0. For a positive zero, the 20th zero brings ISARA to 0, and the loop goes on storing the digits it
-;; reads past the mantissa; <LUNPACK>'s copy in <ARG> holds the same zeros.
+;; reads past the mantissa; <LongInteger::FacToDigits>'s copy in <ArgExponent> holds the same zeros.
 ;; In: FACT = <DIGIT_COUNT> digits, two a byte, the first in the high half, ISARA = the exponent doubled, with the sign
 ;; Out: A = 0, zero = set, Y = <DIGITS_END>
 ;; Uses: X, NextHalf
-;; See: <LUNPACK>
+;; See: <LongInteger::FacToDigits>
 ;; Also: UUNPACK (BB13)
 .proc UnpackDecimal
     ldy #DIGITS_START
@@ -231,7 +231,7 @@ CommaFlags:
 ;; Takes the next digit.
 ;; Also: UHLOOP (BB13)
 Loop:
-    lda FACT,X
+    lda FacDecimalDigits,X
     bit NextHalf
     bpl LowDigit
     inc NextHalf                            ; the low digit next
@@ -255,26 +255,26 @@ Digit:
     bcs Store                               ; past the first digit, zeros count
     cmp #0
     bne Store
-    dec ISARA                               ; a leading zero: the exponent goes down one
-    dec ISARA
+    dec ArrayElementFound                               ; a leading zero: the exponent goes down one
+    dec ArrayElementFound
     bne Loop                                ; always, but for a positive zero's 20th
 
 ;; Stores the digit.
 ;; Also: UGTABYT (BB13)
 Store:
-    sta BCDSTR,Y
+    sta UsingDigits,Y
     iny
     cpy #DIGITS_END
     bne Loop
     lda #0
-    sta BCDSTR,Y
+    sta UsingDigits,Y
     rts
 .endproc
 
 ;; Writes a number into its field of the mask, as the image asks, and prints it.
 ;;
-;; The number is in <BCDSTR>, one digit a byte, with its exponent doubled in <FACEXP> and its sign in bit 0. This
-;; routine makes <FACEXP> the power of ten of the first digit and adds the `SCALE` factor in <ISARA>; the result must
+;; The number is in <UsingDigits>, one digit a byte, with its exponent doubled in <FacExponent> and its sign in bit 0. This
+;; routine makes <FacExponent> the power of ten of the first digit and adds the `SCALE` factor in <ArrayElementFound>; the result must
 ;; lie between -99 and 99. The number is rounded at the last place shown, and one too big for its field prints as a
 ;; field of `!`. A field with an exponent goes on to <FormatScientific>.
 ;; In: MaskPointer = the mask, MaskIndex = the index of its last byte, and the field as <ScanSpec> left it:
@@ -287,23 +287,23 @@ Store:
 ;; Also: UNUMEDIT (BB13)
 .proc FormatNumber
     inc MaskIndex                           ; now the field's length
-    lda FACEXP
+    lda FacExponent
     cmp #$80                                ; carry = the exponent's sign
     ror
     ror                                     ; the mantissa's sign to bit 7
-    sta FACSGN
+    sta FacSign
     rol                                     ; the exponent, signed
     sec
     sbc #1                                  ; the power of the first digit
     clc
-    adc ISARA                               ; plus the SCALE factor
-    sta FACEXP
+    adc ArrayElementFound                               ; plus the SCALE factor
+    sta FacExponent
     cmp #EXPONENT_MIN
     bcs InRange
     cmp #EXPONENT_MAX+1
     bcc InRange
     jsr FreeMask
-    jmp FCERR
+    jmp IllegalQuantityError
 
 ;; Fills in a fixed sign, then edits the field: with an exponent at <FormatScientific>, otherwise here.
 ;;
@@ -349,8 +349,8 @@ RoundFixed:
     tax
     jsr RoundAtPower
     jsr RaiseExponent
-    lda TENEXP
-    bit FACEXP
+    lda DecimalExponent
+    bit FacExponent
     bmi WriteWhole                          ; below 1: it fits
     cmp DigitsBeforePoint
     bcc WriteWhole
@@ -432,7 +432,7 @@ MinusSign:
     lda #FIELD_SIGN
     bit SpecParts
     bne FloatingSigns                       ; the image has a sign
-    bit FACSGN
+    bit FacSign
     bpl FloatingSigns
     tya
     bmi TooBig
@@ -467,7 +467,7 @@ CheckSign:
     lda SpecParts
     lsr                                     ; carry = set for +
     lda #'-'
-    bit FACSGN
+    bit FacSign
     bmi StoreSign
     bcc SignDone                            ; positive, and no + asked for
     lda #'+'
@@ -571,13 +571,13 @@ FindE:
     sta (MaskPointer),Y
     iny
     lda #'+'
-    bit FACEXP
+    bit FacExponent
     bpl StoreExponentSign
     lda #'-'
 StoreExponentSign:
     sta (MaskPointer),Y
     iny
-    lda TENEXP
+    lda DecimalExponent
     ldx #0
     sec
 
@@ -618,19 +618,19 @@ UnitsDigit:
     sta (MaskPointer),Y
 
 ;; Prints the field: the mask, <MaskIndex> characters, as a string.
-;; See: <STRPR3>
+;; See: <Output::WriteString>
 ;; Also: USENDIT (BB13)
 PrintField:
     lda #0
-    sta VALTYP
+    sta ValueType
     lda MaskPointer
-    sta INDEX
+    sta Pointer1
     lda MaskPointer+1
-    sta INDEX+1
-    lda FRESPCB                             ; the mask's bank
-    sta INDEXB
+    sta Pointer1+1
+    lda NewStringXByte                             ; the mask's bank
+    sta Pointer1XByte
     ldx MaskIndex
-    jmp STRPR3
+    jmp Output::WriteString
 .endproc
 
 ;; The smallest exponent a field takes, -99.
@@ -696,7 +696,7 @@ ToWriteFraction:
 ;; its zero byte too for a positive number without `+`, as the fill starts left of it.
 ;; Also: UENGNOT (BB13)
 Engineering:
-    lda FACEXP
+    lda FacExponent
 
 ;; Adds 3 to a negative exponent until it is not.
 ;; Also: UMOD3LP (BB13)
@@ -717,13 +717,13 @@ CheckMod:
 ;; Lowers the exponent by the remainder, which is the count of digits before the point less one.
 ;; Also: UGOTMOD (BB13)
 GotMod:
-    bit FACEXP                              ; the flags aren't used
+    bit FacExponent                              ; the flags aren't used
     sta DigitsBeforePoint
     sta ExponentAdjustment
-    lda FACEXP
+    lda FacExponent
     sec
     sbc ExponentAdjustment
-    sta FACEXP
+    sta FacExponent
     jsr RaiseExponent::Magnitude
     lda #ENGINEERING_STEP-1
     sec
@@ -737,7 +737,7 @@ GotMod:
     lda SpecParts
     lsr                                     ; carry = set for +
     lda #'-'
-    bit FACSGN
+    bit FacSign
     bmi StoreSign
     bcc Fill
     lda #'+'
@@ -779,8 +779,8 @@ Digits:
 ;; Returns the number's digit for a power of ten, in ASCII.
 ;;
 ;; Indexes up to 21 are read, two past the 20 digits from <DIGITS_START>, as the index from the first digit is
-;; compared with <DIGITS_END>, an index from the start of <BCDSTR>. So the furthest places come from <BCDSTR>+22, where
-;; <UnpackDecimal> writes its end mark (a real leaves it as it was), and <BCDSTR>+23, which nothing writes.
+;; compared with <DIGITS_END>, an index from the start of <UsingDigits>. So the furthest places come from <UsingDigits>+22, where
+;; <UnpackDecimal> writes its end mark (a real leaves it as it was), and <UsingDigits>+23, which nothing writes.
 ;; In: X = the power of ten
 ;; Out: A = the digit, `0` past the digits, negative = set (and A no digit) when the power is above the first digit
 ;; Uses: DigitPower
@@ -809,7 +809,7 @@ Done:
 ;; Also: UUSEIT (BB13)
 Read:
     tax
-    lda BCDSTR+DIGITS_START,X
+    lda UsingDigits+DIGITS_START,X
     ora #'0'
     ldx DigitPower
     and #$7F                                ; negative = clear
@@ -865,7 +865,7 @@ Minus:
 ;; Stores the sign, `-` for a negative number.
 ;; Also: USTASIN (BB13)
 Store:
-    bit FACSGN
+    bit FacSign
     bpl StoreIt
     lda #'-'
 StoreIt:
@@ -877,7 +877,7 @@ Done:
     rts
 .endproc
 
-;; Adds one to the exponent in <FACEXP> when carry is set, then puts its size in <TENEXP>.
+;; Adds one to the exponent in <FacExponent> when carry is set, then puts its size in <DecimalExponent>.
 ;; In: carry = set to add one
 ;; Out: TENEXP = the exponent without its sign
 ;; Uses: A, RepeatCount
@@ -889,15 +889,15 @@ Done:
     lda #1
     bcc Magnitude
     sta RepeatCount
-    lda FACEXP
+    lda FacExponent
     clc
     adc RepeatCount
-    sta FACEXP
+    sta FacExponent
 
-;; Puts the exponent's size in <TENEXP>.
+;; Puts the exponent's size in <DecimalExponent>.
 ;; Also: UABSEXP (BB13)
 Magnitude:
-    lda FACEXP
+    lda FacExponent
     bpl Store
     eor #$FF
     clc
@@ -906,18 +906,18 @@ Magnitude:
 ;; Stores the size.
 ;; Also: USTATEN (BB13)
 Store:
-    sta TENEXP
+    sta DecimalExponent
     rts
 .endproc
 
-;; Turns a power of ten into its digit's index in <BCDSTR>, counting from <DIGITS_START>.
+;; Turns a power of ten into its digit's index in <UsingDigits>, counting from <DIGITS_START>.
 ;; In: X = the power of ten
 ;; Out: A = the index, negative = set when the power is above the first digit, DigitPower = X
 ;; Keeps: X, Y
 ;; Also: UCVTX (BB13)
 .proc PowerToIndex
     stx DigitPower
-    lda FACEXP
+    lda FacExponent
     sec
     sbc DigitPower
     rts
@@ -944,7 +944,7 @@ Store:
 ;; Rounds at the place with index X.
 ;; Also: UROUNDA (BB13)
 AtIndex:
-    lda BCDSTR+DIGITS_START,X
+    lda UsingDigits+DIGITS_START,X
     cmp #ROUND_UP_DIGIT
     bcc NoCarryOut+1                        ; below 5: carry clear, to the RTS
     lda #9                                  ; 9 plus the carry makes this place 0
@@ -955,7 +955,7 @@ AtIndex:
 CarryLoop:
     dex
     bmi CarryOut                            ; carried out of the first digit
-    lda BCDSTR+DIGITS_START,X
+    lda UsingDigits+DIGITS_START,X
 
 ;; Adds the carry to the place, in decimal.
 ;; Also: UROUNDB (BB13)
@@ -965,7 +965,7 @@ AddCarry:
     cld
     cmp #$10                                ; carry = set for a carry on
     and #$0F
-    sta BCDSTR+DIGITS_START,X
+    sta UsingDigits+DIGITS_START,X
     bcs CarryLoop
 
 ;; Returns with carry clear: the exponent stands.
@@ -978,7 +978,7 @@ NoCarryOut:
 ;; Also: UROUNDO (BB13)
 CarryOut:
     lda #1
-    sta BCDSTR+DIGITS_START
+    sta UsingDigits+DIGITS_START
     rts
 .endproc
 

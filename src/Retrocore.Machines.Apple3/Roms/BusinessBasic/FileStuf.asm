@@ -23,10 +23,10 @@
 NO_TYPE = $FF
 
     jsr Files::TakeName
-    jsr CHKCOM
+    jsr CheckComma
     ldy #Files::STORAGE_FILE
     ldx #NO_TYPE
-    cmp #CATATK
+    cmp #TOKEN_CATALOG
     bne NotCatalog
     ldx #Files::FILE_TYPE_DIRECTORY
     ldy #Files::STORAGE_SUBDIRECTORY
@@ -34,38 +34,38 @@ NO_TYPE = $FF
 ;; Takes `TEXT`.
 ;; Also: CR1 (BB13)
 NotCatalog:
-    cmp #TEXTTK
+    cmp #TOKEN_TEXT
     bne NotText
-    ldx #TXTTYP
+    ldx #FILE_TYPE_TEXT
 
 ;; Takes `DATA`.
 ;; Also: CR2 (BB13)
 NotText:
-    cmp #DATATK
+    cmp #TOKEN_DATA
     bne CheckWord
-    ldx #BINTIP
+    ldx #FILE_TYPE_BASIC_DATA
 
 ;; Ends the statement with a syntax error unless a word gave a type, then takes the size and makes the file.
 ;; Also: CR3 (BB13)
 CheckWord:
     txa
     bmi ToSyntaxError                       ; none of the three
-    sty INSTRTYP
-    sta INFLID
-    jsr CHRGET
+    sty SosCalls::NewFileStorageType
+    sta SosCalls::NewFileType
+    jsr GetNextCharacter
     jsr Files::TakeRecordLength
-    lda INSTRTYP                            ; a subdirectory: the size is its end of file
+    lda SosCalls::NewFileStorageType                            ; a subdirectory: the size is its end of file
     beq Files::CreateFile
-    lda INAUXID
-    sta INEOF
-    lda INAUXID+1
-    sta INEOF+1
+    lda SosCalls::NewFileAuxType
+    sta SosCalls::NewFileEnd
+    lda SosCalls::NewFileAuxType+1
+    sta SosCalls::NewFileEnd+1
     jmp Files::CreateWithOptions
 
 ;; Ends the statement with a syntax error.
 ;; Also: CRSNR (BB13)
 ToSyntaxError:
-    jmp SNERR
+    jmp SyntaxError
 .endproc
 
 .endscope
@@ -73,38 +73,38 @@ ToSyntaxError:
 ; Files: making a file.
 .scope Files continued
 
-;; Makes the file named at <PTHPTR> as an ordinary file of no size, of the type in <INFLID>.
+;; Makes the file named at <SosCalls::Pathname> as an ordinary file of no size, of the type in <SosCalls::NewFileType>.
 ;;
-;; <OpenNamed> calls it to make a missing file for `SAVE` and `OPEN`; the auxiliary type is whatever <INAUXID> holds.
+;; <OpenNamed> calls it to make a missing file for `SAVE` and `OPEN`; the auxiliary type is whatever <SosCalls::NewFileAuxType> holds.
 ;; See: <CreateWithOptions>
 ;; Also: CRTDO (BB13)
 .proc CreateFile
     lda #0
-    sta INSTRTYP
-    sta INEOF
-    sta INEOF+1
+    sta SosCalls::NewFileStorageType
+    sta SosCalls::NewFileEnd
+    sta SosCalls::NewFileEnd+1
     ; Falls into CreateWithOptions.
 .endproc
 
-;; Makes the file named at <PTHPTR> from <CRTTBL>: its type, auxiliary type, storage type and first end of file;
+;; Makes the file named at <SosCalls::Pathname> from <SosCalls::NewFileOptions>: its type, auxiliary type, storage type and first end of file;
 ;; an error ends the statement.
-;; See: <SETGO>
+;; See: <SosCalls::MakeFileCall>
 ;; Also: CRTDO2 (BB13)
 .proc CreateWithOptions
 ;; The length of `CREATE`'s option list.
 CREATE_OPTIONS = 8
 
-    lda #<(CRTTBL)
-    sta CRTLST
-    lda #>(CRTTBL)
-    sta CRTLST+1
+    lda #<(SosCalls::NewFileOptions)
+    sta SosCalls::CreateOptions
+    lda #>(SosCalls::NewFileOptions)
+    sta SosCalls::CreateOptions+1
     lda #CREATE_OPTIONS
-    sta INLNGTH
-    ldy #CRT
-    sty INEOF+2                             ; CRT is 0, which clears the size's top bytes
-    sty INEOF+3
-    jmp SETGO
-.assert CRT = 0, "CreateWithOptions clears the end of file's top bytes with CREATE's index."
+    sta SosCalls::CreateOptionsLength
+    ldy #SosCalls::CALL_CREATE
+    sty SosCalls::NewFileEnd+2                             ; CRT is 0, which clears the size's top bytes
+    sty SosCalls::NewFileEnd+3
+    jmp SosCalls::MakeFileCall
+.assert SosCalls::CALL_CREATE = 0, "CreateWithOptions clears the end of file's top bytes with CREATE's index."
 .endproc
 
 ; ---------------------------------------------------------------------------------------------------------------------
@@ -116,19 +116,19 @@ CREATE_OPTIONS = 8
 
 ;; The two bytes before the program in its file, which `SAVE` writes as zeros (<ProgramLength> clears them) and
 ;; `LOAD` reads and ignores.
-ProgramHeader = BCDSTR
+ProgramHeader = UsingDigits
 
 ;; The size of <ProgramHeader>.
 PROGRAM_HEADER_SIZE = 2
 
 ;; Whether <TransferProgram> reads or writes: <TRANSFER_READ> for `LOAD`, 0 for `SAVE`.
-TransferDirection = BCDSTR
+TransferDirection = UsingDigits
 
 ;; <TransferDirection>'s value to read.
 TRANSFER_READ = 1
 
 ;; The four-byte count of the program's bytes still to move, low byte first; its top byte is always 0.
-LengthLeft = BCDSTR+2
+LengthLeft = UsingDigits+2
 
 ;; The base `SET_MARK` and `SET_EOF` count the displacement forward from the mark with (SOS's ADJMARK).
 BASE_FORWARD_FROM_MARK = 2
@@ -147,7 +147,7 @@ ProgramPartSize:
 
 ;; `SAVE`: writes the program to a BASIC program file (type $09), making it if need be; `SAVE name`.
 ;;
-;; The file gets two zero bytes, then the program's bytes from <TXTTAB> up to <ARYTAB>, and its end of file is set
+;; The file gets two zero bytes, then the program's bytes from <ProgramStart> up to <ArraysStart>, and its end of file is set
 ;; at the end of them. The two bytes are where earlier versions of BASIC kept the program's length; this one skips
 ;; them and takes the length from the end of file, so it loads those files too, but they cannot load its. In 1.3 the
 ;; program's prefix is used for the name (`SETPROG`), and BASIC's own put back after (`SETSOS`).
@@ -156,29 +156,29 @@ ProgramPartSize:
 .proc Save
     .using Files
     lda #0
-    sta CMDFLG
+    sta ProgramLoading
 .if VERSION >= 130
-    jsr SETPROG                             ; 1.3: use the program's prefix
+    jsr ProgramPrefix::UseProgram                             ; 1.3: use the program's prefix
 .endif
     lda #OPEN_WRITE                         ; to write: OpenNamed makes the file if it is missing
-    ldx #PRGTY
+    ldx #FILE_TYPE_BASIC_PROGRAM
     jsr OpenOfType
     jsr ProgramLength
     lda #PROGRAM_HEADER_SIZE                ; write the header's two zero bytes
-    sta INBYTES
+    sta SosCalls::Request
     lda #0
-    sta INBYTES+1
+    sta SosCalls::Request+1
     lda #<(ProgramHeader)
-    sta SBFPTR
+    sta SosCalls::Buffer
     lda #>(ProgramHeader)
-    sta SBFPTR+1
+    sta SosCalls::Buffer+1
     jsr WriteBlock
-    lda TXTTAB                              ; then the program, from TXTTAB
-    sta INDEX
-    lda TXTTAB+1
-    sta INDEX+1
-    lda TXTTABB
-    sta INDEXB
+    lda ProgramStart                              ; then the program, from TXTTAB
+    sta Pointer1
+    lda ProgramStart+1
+    sta Pointer1+1
+    lda ProgramStartXByte
+    sta Pointer1XByte
     jsr TransferProgram
     ldy #POSITION_SIZE-1                    ; set the end of file at the mark: 0 forward from it
     lda #0
@@ -186,16 +186,16 @@ ProgramPartSize:
 ;; Clears the displacement's next byte.
 ;; Also: DSP0LUP (BB13)
 ClearDisplacement:
-    sta DSPLMNT,Y
+    sta SosCalls::Displacement,Y
     dey
     bpl ClearDisplacement
     lda #BASE_FORWARD_FROM_MARK
-    sta DSPLMNT-1
-    ldy #STE
-    jsr SETGO
+    sta SosCalls::Displacement-1
+    ldy #SosCalls::CALL_SET_EOF
+    jsr SosCalls::MakeFileCall
     jsr CloseSosFile
 .if VERSION >= 130
-    jsr SETSOS                              ; 1.3: back to BASIC's own prefix
+    jsr ProgramPrefix::UseSos                              ; 1.3: back to BASIC's own prefix
 .endif
     rts
 .endproc
@@ -212,10 +212,10 @@ ClearDisplacement:
 ;; See: <WrongTypeError>
 ;; Also: OPENIT (BB13)
 .proc OpenOfType
-    stx TEMPFOR
+    stx ForVariableType
     jsr OpenNamed
-    ldx TEMPFOR
-    cpx FID
+    ldx ForVariableType
+    cpx SosCalls::FileType
     beq Done
     jmp WrongTypeError
 Done:
@@ -227,36 +227,36 @@ Done:
 ;; Also: DOLOAD (BB13)
 .proc OpenAndLoadProgram
     lda #OPEN_READ
-    ldx #PRGTY
+    ldx #FILE_TYPE_BASIC_PROGRAM
     jsr OpenOfType
     ; Falls into LoadProgram.
 .endproc
 
-;; Loads the program from the open file in <RWRFNM> into memory at <TXTTAB>, setting <ARYTAB> to its end, and closes
+;; Loads the program from the open file in <SosCalls::Reference> into memory at <ProgramStart>, setting <ArraysStart> to its end, and closes
 ;; the file.
 ;;
 ;; The two bytes at the start are read and ignored, which saves a `SET_MARK`; the length is the end of file, from the
-;; file's information, less 2. A program that would reach <MEMSIZ> in the top bank is an out-of-memory error before
+;; file's information, less 2. A program that would reach <MemoryTop> in the top bank is an out-of-memory error before
 ;; anything more is read, and the file is left open.
 ;;
 ;; <ProgramLengthFromEnd> takes the 2 from the end of file's low byte only, without the borrow, so an end of file
-;; whose low byte is 0 or 1 gives a length 256 too long. The read stops at the end of file, but <ARYTAB> lands 256 bytes
+;; whose low byte is 0 or 1 gives a length 256 too long. The read stops at the end of file, but <ArraysStart> lands 256 bytes
 ;; past the program, and those bytes are saved with it next time, which repeats the fault on the next load.
 ;; See: <TransferProgram>, <Statements::Chain>
 ;; Also: DOLD2 (BB13)
 .proc LoadProgram
-    jsr CLEARONS
+    jsr ClearHandlers
     lda #<(ProgramHeader)                   ; read the two bytes at the start
-    sta SBFPTR
+    sta SosCalls::Buffer
     lda #>(ProgramHeader)
-    sta SBFPTR+1
+    sta SosCalls::Buffer+1
     lda #0
-    sta INBYTES+1
+    sta SosCalls::Request+1
     lda #PROGRAM_HEADER_SIZE
-    sta INBYTES
+    sta SosCalls::Request
     jsr ReadBlock
     jsr ProgramLengthFromEnd                ; the length, into LengthLeft
-    ldy TXTTABB                             ; work out the program's end, ARYTAB
+    ldy ProgramStartXByte                             ; work out the program's end, ARYTAB
 
 ;; Takes 64K at a time off the length, as a bank and a bank's pages.
 ;; Also: SVLP1 (BB13)
@@ -266,7 +266,7 @@ TakeBanks:
     dec LengthLeft+2                        ; take 64K off: 32K onto the page byte,
     clc
     lda LengthLeft+1
-    adc #MAXPG-MINPG
+    adc #POINTER_PAGE_LIMIT-POINTER_PAGE_FIRST
     sta LengthLeft+1
     iny                                     ; and 32K as a bank
     bcc TakeBanks
@@ -274,38 +274,38 @@ TakeBanks:
     iny
     bcs TakeBanks
 
-;; Adds the rest to <TXTTAB> and checks the end is below <MEMSIZ>.
+;; Adds the rest to <ProgramStart> and checks the end is below <MemoryTop>.
 ;; Also: SVLP2 (BB13)
 AddRest:
     clc                                     ; add what is left to TXTTAB
     lda LengthLeft
-    adc TXTTAB
+    adc ProgramStart
     tax
     lda LengthLeft+1
-    adc TXTTAB+1
-    jsr FIXADC                              ; keep the page between MINPG and MAXPG
-    cpy HIMEMB                              ; below the top bank: it fits
+    adc ProgramStart+1
+    jsr Memory::NormalizeAfterAdd                              ; keep the page between MINPG and MAXPG
+    cpy MemoryTopXByte                              ; below the top bank: it fits
     bcc Fits
     bne ToOutOfMemoryError
-    cpx MEMSIZ                              ; in the top bank: below MEMSIZ?
+    cpx MemoryTop                              ; in the top bank: below MEMSIZ?
     pha
-    sbc MEMSIZ+1
+    sbc MemoryTop+1
     pla
     bcs ToOutOfMemoryError
 
-;; Sets <ARYTAB> to the program's end and reads the program.
+;; Sets <ArraysStart> to the program's end and reads the program.
 ;; Also: SVLDPP (BB13)
 Fits:
-    stx ARYTAB
-    sta ARYTAB+1
-    sty ARYTABB
+    stx ArraysStart
+    sta ArraysStart+1
+    sty ArraysStartXByte
     jsr ProgramLengthFromEnd                ; the length again, for the read
-    lda TXTTAB
-    sta INDEX
-    lda TXTTAB+1
-    sta INDEX+1
-    lda TXTTABB
-    sta INDEXB
+    lda ProgramStart
+    sta Pointer1
+    lda ProgramStart+1
+    sta Pointer1+1
+    lda ProgramStartXByte
+    sta Pointer1XByte
     lda #TRANSFER_READ                      ; read, for ReadOrWriteBlock
     sta TransferDirection
     jsr TransferProgram
@@ -329,7 +329,7 @@ Fits:
 ;; Ends the statement with an out-of-memory error.
 ;; Also: OUTOFM (BB13)
 .proc ToOutOfMemoryError
-    jmp OMERR
+    jmp ReportOutOfMemory
 .endproc
 
 .endscope
@@ -339,23 +339,23 @@ Fits:
 
 ;; `LOAD`: loads a BASIC program and returns to the prompt; `LOAD name`.
 ;;
-;; The variables are cleared, but open files stay open (<CLEARL>, not <CLEARC>), and `TRACE` goes off. In 1.3 the
+;; The variables are cleared, but open files stay open (<ClearVariables::KeepFiles>, not <ClearVariables>), and `TRACE` goes off. In 1.3 the
 ;; program's prefix is used for the name (`SETPROG`), and BASIC's own put back after (`SETSOS`).
 ;; See: <Files::OpenAndLoadProgram>, <Save>
 ;; Also: LOAD (BB13)
 .proc Load
     lda #0
-    sta CMDFLG
+    sta ProgramLoading
 .if VERSION >= 130
-    jsr SETPROG                             ; 1.3: use the program's prefix
+    jsr ProgramPrefix::UseProgram                             ; 1.3: use the program's prefix
 .endif
     jsr Files::OpenAndLoadProgram
-    jsr CLEARL
-    lsr TRFLAG                              ; TRACE off
+    jsr ClearVariables::KeepFiles
+    lsr TraceMode                              ; TRACE off
 .if VERSION >= 130
-    jsr SETSOS                              ; 1.3: back to BASIC's own prefix
+    jsr ProgramPrefix::UseSos                              ; 1.3: back to BASIC's own prefix
 .endif
-    jmp MAIN
+    jmp CommandLoop
 .endproc
 
 .endscope
@@ -372,30 +372,30 @@ Fits:
     ; Falls into WriteBlock.
 .endproc
 
-;; Writes from the parameters in <SOSTBL>; an error closes the file and ends the statement.
+;; Writes from the parameters in <SosCalls::Parameters>; an error closes the file and ends the statement.
 ;; Also: SVWRT (BB13)
 .proc WriteBlock
-    ldy #WRT
+    ldy #SosCalls::CALL_WRITE
     .byte $2C                               ; BIT absolute skips ReadBlock's LDY
     ; Falls into ReadBlock.
 .endproc
 
-;; Reads from the parameters in <SOSTBL>, or writes from them when entered from <WriteBlock>; an error closes the
+;; Reads from the parameters in <SosCalls::Parameters>, or writes from them when entered from <WriteBlock>; an error closes the
 ;; file and ends the statement.
 ;; In: Y = `WRITE`'s index, from <WriteBlock>
 ;; Also: LDRED (BB13)
 .proc ReadBlock
-    ldy #RED
-    jsr SETUP
-    jsr GOSOS
+    ldy #SosCalls::CALL_READ
+    jsr SosCalls::SetUp
+    jsr SosCalls::Call
     beq TransferDone
     jmp CloseWithError
 .endproc
 
-;; Reads or writes the program's bytes from <INDEX> on, in parts of at most <ProgramPartSize> bytes, until the length
+;; Reads or writes the program's bytes from <Pointer1> on, in parts of at most <ProgramPartSize> bytes, until the length
 ;; in <LengthLeft> is done.
 ;;
-;; The buffer address SOS gets is <INDEX>'s own: a zero-page pointer with its bank in <INDEXB>, which SOS follows as an
+;; The buffer address SOS gets is <Pointer1>'s own: a zero-page pointer with its bank in <Pointer1XByte>, which SOS follows as an
 ;; extended address.
 ;; In: INDEX/INDEXB = the program's start, TransferDirection = <TRANSFER_READ> to read or 0 to write,
 ;;   LengthLeft = the length
@@ -409,24 +409,24 @@ Fits:
 ;; Also: LOOPAGIN (BB13)
 FullPart:
     lda ProgramPartSize
-    sta INBYTES
+    sta SosCalls::Request
     lda ProgramPartSize+1
-    sta INBYTES+1
-    lda #<(INDEX)
-    sta SBFPTR
-    lda #>(INDEX)
-    sta SBFPTR+1
+    sta SosCalls::Request+1
+    lda #<(Pointer1)
+    sta SosCalls::Buffer
+    lda #>(Pointer1)
+    sta SosCalls::Buffer+1
     jsr ReadOrWriteBlock
-    lda INDEX                               ; move INDEX past it
+    lda Pointer1                               ; move INDEX past it
     clc
     adc ProgramPartSize
-    sta INDEX
-    lda INDEX+1
+    sta Pointer1
+    lda Pointer1+1
     adc ProgramPartSize+1
-    ldy INDEXB
-    jsr FIXADC
-    sty INDEXB
-    sta INDEX+1
+    ldy Pointer1XByte
+    jsr Memory::NormalizeAfterAdd
+    sty Pointer1XByte
+    sta Pointer1+1
     jsr SubtractPart
     jmp TransferProgram
 
@@ -437,18 +437,18 @@ LastParts:
     cmp LengthLeft+1                        ; more than a part left?
     bcc FullPart
     lda LengthLeft+1                        ; no: the rest
-    sta INBYTES+1
+    sta SosCalls::Request+1
     lda LengthLeft
-    sta INBYTES
-    lda #<(INDEX)
-    sta SBFPTR
-    lda #>(INDEX)
-    sta SBFPTR+1
+    sta SosCalls::Request
+    lda #<(Pointer1)
+    sta SosCalls::Buffer
+    lda #>(Pointer1)
+    sta SosCalls::Buffer+1
     jsr ReadOrWriteBlock
     rts
 .endproc
 
-;; Sets the program's length in <LengthLeft> from the end of file in <FEOF>, less the two bytes before the program.
+;; Sets the program's length in <LengthLeft> from the end of file in <SosCalls::FileEnd>, less the two bytes before the program.
 ;;
 ;; Only the low byte takes the 2 off, without the borrow; <LoadProgram> says what that does.
 ;; Uses: A, Y
@@ -460,11 +460,11 @@ LastParts:
 ;; Copies the end of file's next byte.
 ;; Also: LOOP1A (BB13)
 CopyByte:
-    lda FEOF,Y
+    lda SosCalls::FileEnd,Y
     sta LengthLeft,Y
     dey
     bne CopyByte
-    lda FEOF,Y                              ; the low byte less 2
+    lda SosCalls::FileEnd,Y                              ; the low byte less 2
     sec
     sbc #PROGRAM_HEADER_SIZE
     sta LengthLeft,Y
@@ -480,27 +480,27 @@ CopyByte:
 ; Statements: `RENAME`, `UNLOCK`, `LOCK` and `DELETE`.
 .scope Statements continued
 
-;; `RENAME`: renames a file; `RENAME old, new`. Both names go in <NAMBUF>, the new one after the old.
+;; `RENAME`: renames a file; `RENAME old, new`. Both names go in <NameBuffer>, the new one after the old.
 ;; Also: RENAME (BB13)
 .proc Rename
     jsr Files::TakeName
-    lda PTHPTR                              ; keep the old name's address
+    lda SosCalls::Pathname                              ; keep the old name's address
     pha
-    lda PTHPTR+1
+    lda SosCalls::Pathname+1
     pha
-    jsr CHKCOM
+    jsr CheckComma
     inx                                     ; the new name goes after it
     jsr Files::TakeName::AtIndex
-    lda PTHPTR
-    sta NWPTHNM
-    lda PTHPTR+1
-    sta NWPTHNM+1
+    lda SosCalls::Pathname
+    sta SosCalls::NewPathname
+    lda SosCalls::Pathname+1
+    sta SosCalls::NewPathname+1
     pla
-    sta PTHPTR+1
+    sta SosCalls::Pathname+1
     pla
-    sta PTHPTR
-    ldy #RNM
-    jmp SETGO
+    sta SosCalls::Pathname
+    ldy #SosCalls::CALL_RENAME
+    jmp SosCalls::MakeFileCall
 .endproc
 
 ;; `UNLOCK`: lets a file be read, written, renamed and destroyed (<Files::FILE_ACCESS_UNLOCKED>); `UNLOCK name`.
@@ -523,24 +523,24 @@ CopyByte:
 ACCESS_ONLY = 1
 
     lda #Files::FILE_ACCESS_LOCKED
-    sta FATRB
+    sta SosCalls::FileAccess
     jsr Files::TakeName
-    lda #<(FATRB)
-    sta FLSTPTR
-    lda #>(FATRB)
-    sta FLSTPTR+1
+    lda #<(SosCalls::FileAccess)
+    sta SosCalls::InformationAddress
+    lda #>(SosCalls::FileAccess)
+    sta SosCalls::InformationAddress+1
     lda #ACCESS_ONLY                        ; the list's one byte
-    sta INLNGTH
-    ldy #SFI
-    jmp SETGO
+    sta SosCalls::CreateOptionsLength
+    ldy #SosCalls::CALL_SET_FILE_INFO
+    jmp SosCalls::MakeFileCall
 .endproc
 
 ;; `DELETE`: destroys a file; `DELETE name`.
 ;; Also: DDELETE (BB13)
 .proc Delete
     jsr Files::TakeName
-    ldy #DST
-    jmp SETGO
+    ldy #SosCalls::CALL_DESTROY
+    jmp SosCalls::MakeFileCall
 .endproc
 
 .endscope
@@ -552,9 +552,9 @@ ACCESS_ONLY = 1
 ; Files: the program's length, a record length, and records.
 .scope Files continued
 
-;; Works out the program's length, <ARYTAB> less <TXTTAB>, as a 32-bit number in <LengthLeft>.
+;; Works out the program's length, <ArraysStart> less <ProgramStart>, as a 32-bit number in <LengthLeft>.
 ;;
-;; Each bank the program crosses adds $80 pages (32K), as a pointer's page runs from <MINPG> to <MAXPG> in each bank.
+;; Each bank the program crosses adds $80 pages (32K), as a pointer's page runs from <POINTER_PAGE_FIRST> to <POINTER_PAGE_LIMIT> in each bank.
 ;; Out: ProgramHeader = two zeros, TransferDirection = 0 (to write), LengthLeft = the length
 ;; Uses: A, Y
 ;; Keeps: X
@@ -567,20 +567,20 @@ ACCESS_ONLY = 1
 ;; Clears the next byte.
 ;; Also: PGMLEN1 (BB13)
 Clear:
-    sta BCDSTR,Y
+    sta UsingDigits,Y
     dey
     bpl Clear
-    lda ARYTAB
+    lda ArraysStart
     sec
-    sbc TXTTAB
+    sbc ProgramStart
     sta LengthLeft
-    lda ARYTAB+1
-    sbc TXTTAB+1
-    ldy ARYTABB
-    cpy TXTTABB                             ; in another bank?
+    lda ArraysStart+1
+    sbc ProgramStart+1
+    ldy ArraysStartXByte
+    cpy ProgramStartXByte                             ; in another bank?
     beq StorePages
     clc
-    adc #MAXPG-MINPG                        ; yes: one bank's pages
+    adc #POINTER_PAGE_LIMIT-POINTER_PAGE_FIRST                        ; yes: one bank's pages
     dey
 
 ;; Stores the pages' count.
@@ -591,11 +591,11 @@ StorePages:
 ;; Adds a bank's pages for each bank more.
 ;; Also: PGMLEN3 (BB13)
 NextBank:
-    cpy TXTTABB
+    cpy ProgramStartXByte
     beq Done
     lda LengthLeft+1
     clc
-    adc #MAXPG-MINPG
+    adc #POINTER_PAGE_LIMIT-POINTER_PAGE_FIRST
     sta LengthLeft+1
     lda LengthLeft+2
     adc #$0
@@ -636,22 +636,22 @@ NextByte:
     rts
 .endproc
 
-;; Reads an optional record length after a comma into <INAUXID>, <DEFAULT_RECORD_LENGTH> when there is none.
+;; Reads an optional record length after a comma into <SosCalls::NewFileAuxType>, <DEFAULT_RECORD_LENGTH> when there is none.
 ;; Errors: an illegal quantity below <MINIMUM_RECORD_LENGTH> or above 32767
 ;; See: <Statements::Create>
 ;; Also: GRECLN (BB13)
 .proc TakeRecordLength
     lda #<DEFAULT_RECORD_LENGTH
-    sta INAUXID
+    sta SosCalls::NewFileAuxType
     lda #>DEFAULT_RECORD_LENGTH
-    sta INAUXID+1
-    jsr CHRGOT
+    sta SosCalls::NewFileAuxType+1
+    jsr GetCurrentCharacter
     beq Done
-    jsr CHKCOM
-    jsr FRMNUM
-    jsr POSINT
-    ldx FACLO
-    lda FACMO
+    jsr CheckComma
+    jsr EvaluateNumber
+    jsr FacToNonnegativeInteger
+    ldx FacMantissa4
+    lda FacMantissa3
     bmi BadLength
     bne Store
     cpx #MINIMUM_RECORD_LENGTH
@@ -660,13 +660,13 @@ NextByte:
 ;; Ends the statement with an illegal quantity error.
 ;; Also: BUMSIZ (BB13)
 BadLength:
-    jmp FCERR
+    jmp IllegalQuantityError
 
 ;; Keeps the record length.
 ;; Also: GRC2 (BB13)
 Store:
-    sta INAUXID+1
-    stx INAUXID
+    sta SosCalls::NewFileAuxType+1
+    stx SosCalls::NewFileAuxType
 
 ;; Returns.
 ;; Also: GRCRTS (BB13)
@@ -702,19 +702,19 @@ Failed:
 ;;
 ;; The write goes to the record's start (<SeekRecord>) and covers the buffer up to its offset, plus the 0 after. With
 ;; nothing in the buffer the positioning is skipped, and the `WRITE` goes out with a count of 0, or 1 from the carry it
-;; came in with, and whatever else <SOSTBL> holds.
+;; came in with, and whatever else <SosCalls::Parameters> holds.
 ;; Out: A = the SOS error code, zero = set for none
 ;; See: <WriteRecordOrFail>, <MarkChanged>, <SetRecordTransfer>
 ;; Also: WRTRCD (BB13)
 .proc WriteRecord
-    ldy FCBNDX
-    lda FCB+XFLGS,Y
+    ldy FileControlBlockIndex
+    lda FileControlBlocks+FileControlBlock::FLAGS,Y
     bpl WriteRecordOrFail::NoError          ; unchanged
-    lda FCB+XBUFOFS+1,Y
+    lda FileControlBlocks+FileControlBlock::BUFFER_OFFSET+1,Y
     pha
-    lda FCB+XBUFOFS,Y
+    lda FileControlBlocks+FileControlBlock::BUFFER_OFFSET,Y
     pha
-    ora FCB+XBUFOFS+1,Y
+    ora FileControlBlocks+FileControlBlock::BUFFER_OFFSET+1,Y
     beq SetCount                            ; nothing in it
     jsr EndMarkFits                         ; carry = set when the end mark is there
     php
@@ -727,13 +727,13 @@ Failed:
 SetCount:
     pla
     adc #0                                  ; one more for the end mark
-    sta INBYTES
+    sta SosCalls::Request
     pla
     adc #0
-    sta INBYTES+1
-    ldy #WRT
-    jsr SETUP
-    jmp GOSOS
+    sta SosCalls::Request+1
+    ldy #SosCalls::CALL_WRITE
+    jsr SosCalls::SetUp
+    jmp SosCalls::Call
 .endproc
 
 ;; Moves to the file's next record: writes the current one back if it changed, then positions to the next and reads
@@ -742,10 +742,10 @@ SetCount:
 ;; Also: NXRCD (BB13)
 .proc NextRecord
     jsr WriteRecordOrFail
-    ldx FCBNDX
-    inc FCB+XRNUM,X
+    ldx FileControlBlockIndex
+    inc FileControlBlocks+FileControlBlock::RECORD_NUMBER,X
     bne Load
-    inc FCB+XRNUM+1,X
+    inc FileControlBlocks+FileControlBlock::RECORD_NUMBER+1,X
 
 ;; Moves to the record and reads it.
 ;; Also: NXR2 (BB13)
@@ -753,30 +753,30 @@ Load:
     jmp LoadRecord
 .endproc
 
-;; Sets <SOSTBL> up to read or write the file's whole record through its buffer, with the buffer's offset at 0.
+;; Sets <SosCalls::Parameters> up to read or write the file's whole record through its buffer, with the buffer's offset at 0.
 ;;
-;; The buffer address SOS gets is <NDXPTR>'s own, a zero-page pointer with its bank in <NDXPTRB>.
-;; In: FCBNDX = the file's index in <FCB>
+;; The buffer address SOS gets is <DataBufferPointer>'s own, a zero-page pointer with its bank in <DataBufferPointerXByte>.
+;; In: FCBNDX = the file's index in <FileControlBlocks>
 ;; Out: Y = FCBNDX, INBYTES = the record length, RWRFNM = the file's reference number
 ;; See: <PointAtItem>
 ;; Also: SETPARMS (BB13)
 .proc SetRecordTransfer
     lda #0
-    ldy FCBNDX
-    sta FCB+XBUFOFS,Y
-    sta FCB+XBUFOFS+1,Y
+    ldy FileControlBlockIndex
+    sta FileControlBlocks+FileControlBlock::BUFFER_OFFSET,Y
+    sta FileControlBlocks+FileControlBlock::BUFFER_OFFSET+1,Y
     jsr PointAtItem
-    lda #<(NDXPTR)
-    sta SBFPTR
-    lda #>(NDXPTR)
-    sta SBFPTR+1
-    ldy FCBNDX
-    lda FCB+XRECL,Y
-    sta INBYTES
-    lda FCB+XRECL+1,Y
-    sta INBYTES+1
-    lda FCB+XRFNM,Y
-    sta RWRFNM
+    lda #<(DataBufferPointer)
+    sta SosCalls::Buffer
+    lda #>(DataBufferPointer)
+    sta SosCalls::Buffer+1
+    ldy FileControlBlockIndex
+    lda FileControlBlocks+FileControlBlock::RECORD_LENGTH,Y
+    sta SosCalls::Request
+    lda FileControlBlocks+FileControlBlock::RECORD_LENGTH+1,Y
+    sta SosCalls::Request+1
+    lda FileControlBlocks+FileControlBlock::REFERENCE_NUMBER,Y
+    sta SosCalls::Reference
     rts
 .endproc
 
@@ -786,12 +786,12 @@ Load:
 ; Errors and positions
 ; ---------------------------------------------------------------------------------------------------------------------
 
-;; Ends the statement with BASIC's error for the SOS error in A, from <ERRTBL>.
+;; Ends the statement with BASIC's error for the SOS error in A, from <SosErrors>.
 ;;
 ;; The search stops at the first entry above the code, so the table must be in ascending order. A code it lacks gives
-;; BASIC's SOS error, <SSSSSS>, with the code kept in <SOSLOC>.
+;; BASIC's SOS error, <ERROR_SOS_CALL>, with the code kept in <SosError>.
 ;; In: A = the SOS error code
-;; See: <ERROR>
+;; See: <ReportError>
 ;; Also: SERROR (BB13)
 .proc ReportSosError
     ldx #0
@@ -799,49 +799,49 @@ Load:
 ;; Compares the code with the table's next entry.
 ;; Also: FNDAER1 (BB13)
 Search:
-    cmp ERRTBL,X
+    cmp SosErrors,X
     beq Found
     inx
     inx
     bcs Search                              ; the code is above this entry
-    ldx #SSSSSS
-    sta SOSLOC
-    jmp ERROR
+    ldx #ERROR_SOS_CALL
+    sta SosError
+    jmp ReportError
 
 ;; Gives BASIC's error for the entry found.
 ;; Also: FOUNAR1 (BB13)
 Found:
     inx
-    lda ERRTBL,X
+    lda SosErrors,X
     tax
-    jmp ERROR
+    jmp ReportError
 .endproc
 
 ; Files: the file information call, and records' positions.
 .scope Files continued
 
-;; Sets <SOSTBL> up for `GET_FILE_INFO` into <FATRB>, all 11 bytes of it; the caller makes the call.
-;; Out: Y = the call's index, <GFI>
+;; Sets <SosCalls::Parameters> up for `GET_FILE_INFO` into <SosCalls::FileAccess>, all 11 bytes of it; the caller makes the call.
+;; Out: Y = the call's index, <SosCalls::CALL_GET_FILE_INFO>
 ;; Keeps: X
-;; See: <GETFI>, <SETUP>
+;; See: <SosCalls::GetFileInfo>, <SosCalls::SetUp>
 ;; Also: GETFISET (BB13)
 .proc PrepareGetFileInfo
 ;; The length of `GET_FILE_INFO`'s list.
 FILE_INFO_LENGTH = $B
 
-    lda #<(FATRB)
-    sta FLSTPTR
-    lda #>(FATRB)
-    sta FLSTPTR+1
+    lda #<(SosCalls::FileAccess)
+    sta SosCalls::InformationAddress
+    lda #>(SosCalls::FileAccess)
+    sta SosCalls::InformationAddress+1
     lda #FILE_INFO_LENGTH
-    sta INLNGTH
-    ldy #GFI
+    sta SosCalls::CreateOptionsLength
+    ldy #SosCalls::CALL_GET_FILE_INFO
     rts
 .endproc
 
 ;; Works out the start of the file's current record, the record number times the record length, as the displacement
 ;; from the start of the file for `SET_MARK` or `SET_EOF`, and sets the buffer's offset to 0.
-;; In: FCBNDX = the file's index in <FCB>
+;; In: FCBNDX = the file's index in <FileControlBlocks>
 ;; Out: DSPLMNT..DSPLMNT+3 = the position, BASE = 0, Y = 0
 ;; Uses: A, X
 ;; Entry:
@@ -849,29 +849,29 @@ FILE_INFO_LENGTH = $B
 ;; See: <Multiply>, <SeekRecord>
 ;; Also: SETDSP (BB13)
 .proc RecordPosition
-    ldy FCBNDX
+    ldy FileControlBlockIndex
     lda #0
-    sta FCB+XBUFOFS,Y
-    sta FCB+XBUFOFS+1,Y
-    lda FCB+XRNUM,Y
-    sta MLTPLR
-    lda FCB+XRNUM+1,Y
-    sta MLTPLR+1
-    lda FCB+XRECL,Y
-    sta MLTPLR2
-    lda FCB+XRECL+1,Y
-    sta MLTPLR2+1
+    sta FileControlBlocks+FileControlBlock::BUFFER_OFFSET,Y
+    sta FileControlBlocks+FileControlBlock::BUFFER_OFFSET+1,Y
+    lda FileControlBlocks+FileControlBlock::RECORD_NUMBER,Y
+    sta Multiplier
+    lda FileControlBlocks+FileControlBlock::RECORD_NUMBER+1,Y
+    sta Multiplier+1
+    lda FileControlBlocks+FileControlBlock::RECORD_LENGTH,Y
+    sta Multiplicand
+    lda FileControlBlocks+FileControlBlock::RECORD_LENGTH+1,Y
+    sta Multiplicand+1
     jsr Multiply
     ldy #POSITION_SIZE
 
 ;; Copies the product's next byte.
 ;; Also: QTIP (BB13)
 CopyPosition:
-    lda RSLT-1,Y
-    sta DSPLMNT-1,Y
+    lda Product-1,Y
+    sta SosCalls::Displacement-1,Y
     dey
     bne CopyPosition
-    sty BASE                                ; base 0: from the start of the file
+    sty SosCalls::MarkBase                                ; base 0: from the start of the file
 
 ;; Returns; <SeekRecord> branches here.
 ;; Also: PPRTS (BB13)
@@ -882,39 +882,39 @@ Return:
 ;; Moves the file's mark to the start of its current record.
 ;;
 ;; A character device, which has no mark, is let be. Past the end of file, reading ends the data: a 0 goes at the
-;; buffer's start and <CHKEOF> takes over. Writing moves the end of file to the end of that record, then sets the mark
+;; buffer's start and <Handlers::EndOfFile> takes over. Writing moves the end of file to the end of that record, then sets the mark
 ;; again.
 ;; See: <RecordPosition>, <LoadRecord>
 ;; Also: POSREC (BB13)
 .proc SeekRecord
     jsr RecordPosition
-    ldy #STM
-    jsr SETUP
-    jsr GOSOS
+    ldy #SosCalls::CALL_SET_MARK
+    jsr SosCalls::SetUp
+    jsr SosCalls::Call
     beq RecordPosition::Return
-    cmp #SENBK                              ; not a block device
+    cmp #SOS_ERROR_NOT_BLOCK_DEVICE                              ; not a block device
     beq RecordPosition::Return
     cmp #SOS_ERROR_POSITION                 ; a position past the end of file
     beq PastEnd
     jmp ReportSosError
 PastEnd:
-    bit IOFLG
+    bit FileAccessMode
     bmi EndOfData                           ; reading
     jsr CheckWriteAccess
-    ldx FCBNDX                              ; the end of file at the next record's start
-    inc FCB+XRNUM,X
+    ldx FileControlBlockIndex                              ; the end of file at the next record's start
+    inc FileControlBlocks+FileControlBlock::RECORD_NUMBER,X
     bne SetEnd
-    inc FCB+XRNUM+1,X
+    inc FileControlBlocks+FileControlBlock::RECORD_NUMBER+1,X
 SetEnd:
     jsr RecordPosition
-    ldy #STE
-    jsr SETGO
-    ldx FCBNDX                              ; and the record number back
-    lda FCB+XRNUM,X
+    ldy #SosCalls::CALL_SET_EOF
+    jsr SosCalls::MakeFileCall
+    ldx FileControlBlockIndex                              ; and the record number back
+    lda FileControlBlocks+FileControlBlock::RECORD_NUMBER,X
     bne Back
-    dec FCB+XRNUM+1,X
+    dec FileControlBlocks+FileControlBlock::RECORD_NUMBER+1,X
 Back:
-    dec FCB+XRNUM,X
+    dec FileControlBlocks+FileControlBlock::RECORD_NUMBER,X
     jmp SeekRecord
 
 ;; Leaves an empty record and goes to the end-of-file handling.
@@ -922,8 +922,8 @@ Back:
 EndOfData:
     jsr PointAtItem
     tya                                     ; A = 0, an empty record
-    sta (NDXPTR),Y
-    jmp CHKEOF
+    sta (DataBufferPointer),Y
+    jmp Handlers::EndOfFile
 .endproc
 
 .endscope

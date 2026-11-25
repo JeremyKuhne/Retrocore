@@ -4,7 +4,7 @@
 ;;
 ;; BASIC's program, variables and strings live in the Apple III's banked memory, reached through enhanced indirect
 ;; addressing: a pointer has an X-byte, which picks a bank pair, as well as its two address bytes. BASIC keeps a
-;; pointer's page between <MINPG> and <MAXPG>-1 ($02-$81); a page past that is the same memory as the page $80 lower
+;; pointer's page between <POINTER_PAGE_FIRST> and <POINTER_PAGE_LIMIT>-1 ($02-$81); a page past that is the same memory as the page $80 lower
 ;; through the next X-byte. Each step of the X-byte is therefore $80 pages, 32K, and these routines carry and borrow
 ;; between page and X-byte to keep pointers in range.
 
@@ -16,37 +16,37 @@
 
 ;; Marks a string's space free, for the garbage collector to reclaim.
 ;;
-;; The three information bytes after a string's text normally hold its owner's type (<SIMTYP> a simple variable,
-;; <ARYTYP> an array element) and where its descriptor is. A free block has a type of 0, a zero byte, and its length.
-;; In: A = the string's length, <INDEX>, INDEXB = its text
-;; Out: GRBTOP, GRBTOPB = the text, <HEADER>, HEADERB = its information bytes
+;; The three information bytes after a string's text normally hold its owner's type (<STRING_TYPE_SIMPLE_VARIABLE> a simple variable,
+;; <STRING_TYPE_ARRAY_ELEMENT> an array element) and where its descriptor is. A free block has a type of 0, a zero byte, and its length.
+;; In: A = the string's length, <Pointer1>, INDEXB = its text
+;; Out: GRBTOP, GRBTOPB = the text, <StringInformationPointer>, HEADERB = its information bytes
 ;; Uses: A, X, Y, TEMP
 ;; See: <Strings::FreeSpace>
 ;; Also: TSTFRE (BB13)
 .proc MarkFree
-    ldx INDEX
-    ldy INDEX+1
-    stx GRBTOP
-    sty GRBTOP+1
-    ldx INDEXB
-    stx GRBTOPB
-    sta TEMP
+    ldx Pointer1
+    ldy Pointer1+1
+    stx CollectorTop
+    sty CollectorTop+1
+    ldx Pointer1XByte
+    stx CollectorTopXByte
+    sta Temporary
     clc
-    adc GRBTOP
-    sta HEADER
+    adc CollectorTop
+    sta StringInformationPointer
     lda #0
-    adc GRBTOP+1
-    ldy GRBTOPB
+    adc CollectorTop+1
+    ldy CollectorTopXByte
     jsr Memory::NormalizeAfterAdd
-    sta HEADER+1
-    sty HEADERB
-    lda TEMP                                ; the length goes last
+    sta StringInformationPointer+1
+    sty StringInformationPointerXByte
+    lda Temporary                                ; the length goes last
     ldy #2
 
-;; Writes the length, then two zeros, into the information bytes at (<HEADER>).
+;; Writes the length, then two zeros, into the information bytes at (<StringInformationPointer>).
 ;; Also: FREIT1 (BB13)
 Loop:
-    sta (HEADER),Y
+    sta (StringInformationPointer),Y
     lda #0
     dey
     bpl Loop
@@ -59,7 +59,7 @@ Loop:
 ; Pointer arithmetic
 ; ---------------------------------------------------------------------------------------------------------------------
 
-;; The arithmetic that keeps a banked pointer's page between <MINPG> and <MAXPG>-1, carrying into and borrowing from its
+;; The arithmetic that keeps a banked pointer's page between <POINTER_PAGE_FIRST> and <POINTER_PAGE_LIMIT>-1, carrying into and borrowing from its
 ;; X-byte, and that packs a page and X-byte into one count of pages and back.
 .scope Memory
 
@@ -67,7 +67,7 @@ Loop:
 ;;
 ;; A borrow out of the page (carry clear) takes $100 pages, two X-byte steps, from the X-byte.
 ;; In: A = the page, Y = the X-byte, carry = clear for a borrow out of the page
-;; Out: A = the page, between <MINPG> and <MAXPG>-1, Y = the X-byte, carry = set
+;; Out: A = the page, between <POINTER_PAGE_FIRST> and <POINTER_PAGE_LIMIT>-1, Y = the X-byte, carry = set
 ;; Keeps: X
 ;; See: <Memory::NormalizeAfterAdd>, <Memory::NormalizePage>
 ;; Also: FIXSBC (BB13)
@@ -80,18 +80,18 @@ Loop:
 
 ;; Brings a page back into range, one X-byte step's $80 pages up or down, without looking at the carry.
 ;; In: A = the page, Y = the X-byte
-;; Out: A = the page, between <MINPG> and <MAXPG>-1, Y = the X-byte, carry = set
+;; Out: A = the page, between <POINTER_PAGE_FIRST> and <POINTER_PAGE_LIMIT>-1, Y = the X-byte, carry = set
 ;; Keeps: X
 ;; Also: FIXSB2 (BB13)
 .proc NormalizePage
-    cmp #MINPG
+    cmp #POINTER_PAGE_FIRST
     bcs NotBelow
-    adc #MAXPG-MINPG                        ; below MINPG: up an X-byte step's worth of pages
+    adc #POINTER_PAGE_LIMIT-POINTER_PAGE_FIRST                        ; below MINPG: up an X-byte step's worth of pages
     dey                                     ; from the X-byte below
 NotBelow:
-    cmp #MAXPG
+    cmp #POINTER_PAGE_LIMIT
     bcc InRange
-    sbc #MAXPG-MINPG                        ; MAXPG or above: down into the next X-byte
+    sbc #POINTER_PAGE_LIMIT-POINTER_PAGE_FIRST                        ; MAXPG or above: down into the next X-byte
     iny
 InRange:
     sec
@@ -102,7 +102,7 @@ InRange:
 ;;
 ;; A carry out of the page (carry set) adds $100 pages, two X-byte steps, to the X-byte.
 ;; In: A = the page, Y = the X-byte, carry = set for a carry out of the page
-;; Out: A = the page, between <MINPG> and <MAXPG>-1, Y = the X-byte, carry = clear
+;; Out: A = the page, between <POINTER_PAGE_FIRST> and <POINTER_PAGE_LIMIT>-1, Y = the X-byte, carry = clear
 ;; Keeps: X
 ;; See: <Memory::NormalizeAfterSubtract>
 ;; Also: FIXADC (BB13)
@@ -121,7 +121,7 @@ NoCarry:
 ;;
 ;; Bit 7 of X stands for an X-byte step's $80 pages; its other bits are pages.
 ;; In: A = the page, Y = the X-byte, X = the pages to subtract, carry = clear for a borrow from the low bytes
-;; Out: A = the page, between <MINPG> and <MAXPG>-1, Y = the X-byte, carry = set
+;; Out: A = the page, between <POINTER_PAGE_FIRST> and <POINTER_PAGE_LIMIT>-1, Y = the X-byte, carry = set
 ;; Uses: CHARAC
 ;; Keeps: X
 ;; See: <Memory::PackPages>, <Memory::NormalizeAfterSubtract>
@@ -135,10 +135,10 @@ NoCarry:
     dey                                     ; bit 7: one X-byte step less
 NoStep:
     lsr
-    sta CHARAC
+    sta Delimiter
     pla
     plp
-    sbc CHARAC                              ; the borrow from the caller's low bytes
+    sbc Delimiter                              ; the borrow from the caller's low bytes
     jmp NormalizeAfterSubtract
 .endproc
 
@@ -146,31 +146,31 @@ NoStep:
 ;;
 ;; Apple's comment says it increments; it decrements.
 ;; In: X = the X-byte, Y = the page
-;; Out: X = the X-byte, Y = the page, between <MINPG> and <MAXPG>-1
+;; Out: X = the X-byte, Y = the page, between <POINTER_PAGE_FIRST> and <POINTER_PAGE_LIMIT>-1
 ;; Keeps: A
 ;; Also: FIXXY (BB13)
 .proc PreviousPage
     dey
-    cpy #MINPG
+    cpy #POINTER_PAGE_FIRST
     bcs WrapPage::Done
-    ldy #MAXPG-1
+    ldy #POINTER_PAGE_LIMIT-1
     dex
     rts
 .endproc
 
 ;; Brings a page past the X-byte's window down through the next X-byte.
-;; In: X = the X-byte, Y = the page, below <MAXPG> + $80
-;; Out: X = the X-byte, Y = the page, below <MAXPG>
+;; In: X = the X-byte, Y = the page, below <POINTER_PAGE_LIMIT> + $80
+;; Out: X = the X-byte, Y = the page, below <POINTER_PAGE_LIMIT>
 ;; Keeps: A
 ;; Entry:
 ;;   Done = returns; <Memory::PreviousPage> branches here
 ;; Also: FIXYX (BB13)
 .proc WrapPage
-    cpy #MAXPG
+    cpy #POINTER_PAGE_LIMIT
     bcc Done
     pha
     tya
-    sbc #MAXPG-MINPG
+    sbc #POINTER_PAGE_LIMIT-POINTER_PAGE_FIRST
     tay
     pla
     inx
@@ -192,8 +192,8 @@ Done:
     jsr NormalizeAfterSubtract
     pha
     tya
-    stx CHARAC
-    sbc CHARAC                              ; the difference of the X-bytes
+    stx Delimiter
+    sbc Delimiter                              ; the difference of the X-bytes
     tay
     pla
     ; Falls into PackPages.
@@ -210,7 +210,7 @@ Done:
 ;; Also: FIXAY (BB13)
 .proc PackPages
     sec
-    sbc #MINPG
+    sbc #POINTER_PAGE_FIRST
     asl
     pha
     tya
@@ -219,7 +219,7 @@ Done:
     tay
     pla
     ror                                     ; the X-byte's low bit into bit 7
-    adc #MINPG
+    adc #POINTER_PAGE_FIRST
     bcc Done
     iny
 Done:
@@ -231,7 +231,7 @@ Done:
 ;; Bit 7 of A adds one to the X-byte in Y and the page is brought into range, keeping X-byte * $80 + page the same.
 ;; With Y = 0, as callers pass it, this undoes <Memory::PackPages> for a count below $100.
 ;; In: A = the packed page, Y = the X-byte
-;; Out: A = the page, between <MINPG> and <MAXPG>-1, Y = the X-byte
+;; Out: A = the page, between <POINTER_PAGE_FIRST> and <POINTER_PAGE_LIMIT>-1, Y = the X-byte
 ;; Keeps: X, carry
 ;; See: <Memory::PackPages>, <Strings::FindFromDescriptor>
 ;; Also: FIXYA (BB13)
@@ -244,9 +244,9 @@ Done:
     tay
     pla
     lsr
-    cmp #MINPG
+    cmp #POINTER_PAGE_FIRST
     bcs Done
-    adc #MAXPG-MINPG
+    adc #POINTER_PAGE_LIMIT-POINTER_PAGE_FIRST
     dey
 Done:
     plp
@@ -269,40 +269,40 @@ Done:
 ;; `IF`s it passes so that a nested `IF`'s `ELSE` is skipped; with no `ELSE`, the next line runs. A line number after
 ;; `ELSE` is a `GOTO`.
 ;; In: TXTPTR = past the `IF` token
-;; Errors: ERRTM = a string condition, ERRSN = neither `THEN` nor <GOTO>
+;; Errors: ERRTM = a string condition, ERRSN = neither `THEN` nor <GoTo>
 ;; See: <Statements::IfTrue>
 ;; Also: IF (BB13)
 .proc If
     lda #1
-    sta LVLCNT                              ; one `IF` to match
+    sta IfDepth                              ; one `IF` to match
     lda #VALUE_TYPE_ANY
-    sta VALTYP                              ; any numeric type
-    jsr FRMEVL
-    bit VALTYP
+    sta ValueType                              ; any numeric type
+    jsr EvaluateExpression
+    bit ValueType
     bpl Numeric
-    jmp MISERR
+    jmp Swap::ToTypeMismatch
 Numeric:
-    jsr CHRGOT
-    cmp #GOTOTK
+    jsr GetCurrentCharacter
+    cmp #TOKEN_GOTO
     beq Test
-    lda #THENTK                             ; `THEN`, an escape token
-    jsr MSTESC
+    lda #TOKEN_THEN                             ; `THEN`, an escape token
+    jsr RequireTwoByteToken
 
 ;; Tests the condition: a long integer by all its bytes, a real by its exponent.
 ;; Also: OKGOTO (BB13)
 Test:
-    bit VALTYP
+    bit ValueType
     bvc TestReal                            ; not a long integer
     ldx #0
-    lda #<(FAC)
-    ldy #>(FAC)
-    jsr LORALL                              ; zero when all of FAC is
+    lda #<(Fac)
+    ldy #>(Fac)
+    jsr LongInteger::IsZero                              ; zero when all of FAC is
     bvs Branch                              ; always: LORALL leaves the overflow flag from the BIT
 
 ;; Tests a real condition: an exponent of 0 is a zero.
 ;; Also: EXPBYTC (BB13)
 TestReal:
-    lda FACEXP
+    lda FacExponent
 
 ;; Runs `THEN`'s part when the condition is true, or else looks for the `ELSE`.
 ;; In: zero = set for false
@@ -316,56 +316,56 @@ Branch:
 ;; Also: ELSE1 (BB13)
 FindElse:
     iny
-    lda (TXTPTR),Y
+    lda (TextPointer),Y
     bne CheckToken
-    jmp ADDON                               ; the line's end: on to the next line
+    jmp AdvanceTextPointer                               ; the line's end: on to the next line
 
 ;; Counts an `IF` or `ELSE` in the scan; at the matching `ELSE`, goes on after it.
 ;; Also: NOTEOL (BB13)
 CheckToken:
-    cmp #IFTOKN
+    cmp #TOKEN_IF
     beq NestedIf
-    cmp #ELSETK
+    cmp #TOKEN_ELSE
     bne FindElse
-    dec LVLCNT
+    dec IfDepth
     bne FindElse                            ; a nested `IF`'s `ELSE`
-    jsr ADDON                               ; TXTPTR to the `ELSE`
-    jsr CHRGET
+    jsr AdvanceTextPointer                               ; TXTPTR to the `ELSE`
+    jsr GetNextCharacter
     bcc IfTrue::ToGoTo                      ; a line number: `GOTO` it
     bcs IfTrue::ToExecuteStatement
 
 ;; Counts a nested `IF`, whose `ELSE` must be passed over.
 ;; Also: PLSONE (BB13)
 NestedIf:
-    inc LVLCNT
+    inc IfDepth
     bcs FindElse                            ; always
 .endproc
 
 ;; Runs what follows `THEN` or `GOTO`: a line number goes to that line; anything else runs as statements.
-;; In: TXTPTR = the `THEN` or <GOTO> token
+;; In: TXTPTR = the `THEN` or <GoTo> token
 ;; Entry:
 ;;   ToGoTo = goes to the line number at TXTPTR; <Statements::If> goes here for a line number after `ELSE`
 ;;   ToExecuteStatement = runs the statement at TXTPTR; <Statements::If> goes here for statements after `ELSE`
 ;; Also: DOCOND (BB13)
 .proc IfTrue
     lda #0
-    sta LVLCNT
-    jsr CHRGOT
+    sta IfDepth
+    jsr GetCurrentCharacter
     bcs ToExecuteStatement
 
-;; Goes to the line number at <TXTPTR>.
+;; Goes to the line number at <TextPointer>.
 ;; Also: DOCOND1 (BB13)
 ToGoTo:
-    jmp GOTO
+    jmp GoTo
 
-;; Runs the statement at <TXTPTR>, dropping <NEWSTT>'s return address and backing <TXTPTR> up so <NWSTT> reads it
+;; Runs the statement at <TextPointer>, dropping <NextStatement>'s return address and backing <TextPointer> up so <NextStatement::SavePlace> reads it
 ;; afresh.
 ;; Also: DOCO (BB13)
 ToExecuteStatement:
     pla
     pla
     jsr BackUpTextPointer
-    jmp NWSTT
+    jmp NextStatement::SavePlace
 .endproc
 
 ; ---------------------------------------------------------------------------------------------------------------------
@@ -376,12 +376,12 @@ ToExecuteStatement:
 ;;
 ;; The corners may come in either order; columns and lines count from 1. The viewport is set with the console's
 ;; control codes: one to release it to the full screen, one to move the cursor to a column and line, and two to make
-;; the cursor's position the viewport's bottom right and top left corners. Last, <VWINDER> moves the cursor to the
+;; the cursor's position the viewport's bottom right and top left corners. Last, <Console::SendCodeAndPosition> moves the cursor to the
 ;; bottom line.
 ;; In: TXTPTR = past the `WINDOW` token
-;; Out: SLEFT, STOPS = the left column and top line, <SWIDTH>, SBOTTOM = the right column and bottom line
+;; Out: SLEFT, STOPS = the left column and top line, <WindowRight>, SBOTTOM = the right column and bottom line
 ;; Errors: ERRFC = a number out of a byte's range, ERRSN = a missing comma or TO
-;; See: <SendCoordinate>, <VWINDER>
+;; See: <SendCoordinate>, <Console::SendCodeAndPosition>
 ;; Also: WINDOW (BB13)
 .proc Window
 ;; The console's code that releases the viewport to the full screen.
@@ -395,64 +395,64 @@ SET_TOP_LEFT = 2
 ;; The console's code that moves the cursor to the line in the byte after it.
 MOVE_TO_LINE = 25
 
-    jsr GETBYT
-    stx SLEFT
+    jsr EvaluateByte
+    stx WindowLeft
     jsr CheckComma
-    jsr GETBYT
-    stx SBOTTOM
-    lda #TOTK                               ; TO, an escape token
-    jsr MSTESC
-    jsr GETBYT
-    stx SWIDTH                              ; the right column, despite the name
-    cpx SLEFT
+    jsr EvaluateByte
+    stx WindowBottom
+    lda #TOKEN_TO                               ; TO, an escape token
+    jsr RequireTwoByteToken
+    jsr EvaluateByte
+    stx WindowRight                              ; the right column, despite the name
+    cpx WindowLeft
     bcs SortLines
-    lda SLEFT                               ; the larger column on the right
-    stx SLEFT
-    sta SWIDTH
+    lda WindowLeft                               ; the larger column on the right
+    stx WindowLeft
+    sta WindowRight
 
 ;; Takes the second line and puts the larger line at the bottom.
 ;; Also: NOTIN (BB13)
 SortLines:
     jsr CheckComma
-    jsr GETBYT
-    stx STOPS
-    cpx SBOTTOM
+    jsr EvaluateByte
+    stx WindowTop
+    cpx WindowBottom
     bcc SetViewport
-    lda SBOTTOM
-    stx SBOTTOM
-    sta STOPS
+    lda WindowBottom
+    stx WindowBottom
+    sta WindowTop
 
 ;; Sends the console the codes that set the viewport, then moves the cursor to the bottom line.
 ;; Also: WINDER (BB13)
 SetViewport:
     lda #RESET_VIEWPORT
-    jsr PRNACHAR
+    jsr WriteConsoleCharacter
     lda #MOVE_CURSOR                        ; the cursor to the bottom right
-    jsr PRNACHAR
-    lda SWIDTH
+    jsr WriteConsoleCharacter
+    lda WindowRight
     jsr SendCoordinate
-    lda SBOTTOM
+    lda WindowBottom
     jsr SendCoordinate
     lda #SET_BOTTOM_RIGHT
-    jsr PRNACHAR
+    jsr WriteConsoleCharacter
     lda #MOVE_CURSOR                        ; the cursor to the top left
-    jsr PRNACHAR
-    lda SLEFT
+    jsr WriteConsoleCharacter
+    lda WindowLeft
     jsr SendCoordinate
-    lda STOPS
+    lda WindowTop
     jsr SendCoordinate
     lda #SET_TOP_LEFT
-    jsr PRNACHAR
-    ldx SBOTTOM
+    jsr WriteConsoleCharacter
+    ldx WindowBottom
     lda #MOVE_TO_LINE
-    jmp VWINDER
+    jmp Console::SendCodeAndPosition
 .endproc
 
 .endscope
 
 ;; Sends a column or line counted from 1 to the console as one counted from 0; 0 stays 0.
 ;; In: A = the column or line
-;; See: <PRNACHAR>
+;; See: <WriteConsoleCharacter>
 ;; Also: DOITOUT (BB13)
 .proc SendCoordinate
     sec
@@ -460,5 +460,5 @@ SetViewport:
     bcs Send
     lda #0
 Send:
-    jmp PRNACHAR
+    jmp WriteConsoleCharacter
 .endproc

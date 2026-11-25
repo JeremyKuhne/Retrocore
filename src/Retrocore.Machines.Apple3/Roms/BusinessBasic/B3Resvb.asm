@@ -14,7 +14,7 @@
 ;; Also: TMERR (BB13)
 .proc TypeMismatchError
     ldx #ERROR_TYPE_MISMATCH
-    jmp ERROR
+    jmp ReportError
 .endproc
 
 ; ---------------------------------------------------------------------------------------------------------------------
@@ -145,7 +145,7 @@ TOKEN_GOSUB = $BE
 ;; Also: REMTK (BB13)
 TOKEN_REM = $C0
 
-;; The token of `LOAD`, the first of the file commands, whose file names <CRUNCH> leaves as typed.
+;; The token of `LOAD`, the first of the file commands, whose file names <Tokenize> leaves as typed.
 ;; Also: LDTKN (BB13)
 TOKEN_LOAD = $C4
 
@@ -193,8 +193,8 @@ TOKEN_NEW = $E0
 ;;
 ;; The statements' routines are in <StatementTable>, in the same order. `FRE` to `EOF` and the words to `EXFN%.` give
 ;; a value with no parentheses, through <ValueWordTable>; some of them are statements as well. From `LOAD` on are the
-;; file commands, whose file names <CRUNCH> leaves as typed.
-;; See: <ExtendedReservedWords>, <StatementTable>, <CRUNCH>
+;; file commands, whose file names <Tokenize> leaves as typed.
+;; See: <ExtendedReservedWords>, <StatementTable>, <Tokenize>
 ;; Also: RESLST (BB13)
 ReservedWords:
     Keyword "END", TOKEN_END                ; $80
@@ -522,7 +522,7 @@ OPERATOR_NUMBER_OFFSET = 4
 ;; `AND`, `OR`, `MOD` and `DIV` are their tokens in <ExtendedReservedWords>; the others are characters. An operator's
 ;; number is its place here plus <OPERATOR_NUMBER_OFFSET>, except that the relational ones combine into 1-7 (1 for >,
 ;; 2 for =, 4 for <).
-;; See: <PrecedenceTable>, <OperatorRoutineTable>, <FRMEVL>
+;; See: <PrecedenceTable>, <OperatorRoutineTable>, <EvaluateExpression>
 ;; Also: OPTAB (BB13)
 OperatorSymbols:
     .byte '>', '=', '<'
@@ -712,7 +712,7 @@ ERROR_DUPLICATE_VOLUME = 40
 ;; The error messages, each with the last character's bit 7 set, in the order of their numbers from 1.
 ;;
 ;; The message is followed by <ErrorSuffix>, then <LineNumberPrefix> and the line number when a program was running.
-;; See: <ERROR>, <ErrorCode>
+;; See: <ReportError>, <ErrorCode>
 ;; Also: ERRTAB (BB13)
 ErrorMessages:
     ErrorMessage ERROR_NEXT_WITHOUT_FOR, "NEXT WITHOUT FOR"
@@ -786,11 +786,11 @@ BreakMessage:
 ; SOS errors
 ; ---------------------------------------------------------------------------------------------------------------------
 
-;; Pairs of a SOS error code and the BASIC error <SERROR> gives for it, in rising order of the code, ending with $FF.
+;; Pairs of a SOS error code and the BASIC error <ReportSosError> gives for it, in rising order of the code, ending with $FF.
 ;;
 ;; The search stops at the first code higher than the one it has. A code not here gives `SOS CALL`
 ;; (<ERROR_SOS_CALL>), with the code in <SosError>. SOS's not a block device gives a `TYPE MISMATCH`.
-;; See: <SERROR>
+;; See: <ReportSosError>
 ;; Also: ERRTBL (BB13)
 SosErrors:
     SosErrorEntry SOS_ERROR_NO_DEVICE, ERROR_FILE_NOT_FOUND
@@ -836,19 +836,19 @@ RESERVED_WORDS_X_BYTE = ERROR_MESSAGES_X_BYTE
 ;; Also: NUMSTRB (BB13)
 LONG_TEXT_X_BYTE = 0
 
-;; The X-byte for <CON1M>, -1.
+;; The X-byte for <Functions::MinusOne>, -1.
 ;; Also: CON1MB (BB13)
 MINUS_ONE_X_BYTE = 0
 
-;; The X-byte for <FHALF>, one half.
+;; The X-byte for <Float::Half>, one half.
 ;; Also: FHALFB (BB13)
 HALF_X_BYTE = 0
 
-;; The X-byte for <SQR0_5> and `LOG`'s other constants.
+;; The X-byte for <Float::SquareRootOfHalf> and `LOG`'s other constants.
 ;; Also: SQR0B (BB13)
 LOG_CONSTANTS_X_BYTE = 0
 
-;; The X-byte for <TEN_C>, ten, and for <FDIVF>'s divisor.
+;; The X-byte for <Float::Ten>, ten, and for <Float::DivideArgByPacked>'s divisor.
 ;; Also: TEN_CB (BB13)
 TEN_X_BYTE = 0
 
@@ -856,7 +856,7 @@ TEN_X_BYTE = 0
 ;; Also: INTXTB (BB13)
 LINE_NUMBER_PREFIX_X_BYTE = 0
 
-;; The X-byte for <N_0999> and <N_9999>, the limits <FOUT> scales a number between.
+;; The X-byte for <Float::LowerOutputLimit> and <Float::UpperOutputLimit>, the limits <Float::FormatFac> scales a number between.
 ;; Also: N_MILB (BB13)
 NUMBER_LIMITS_X_BYTE = 0
 

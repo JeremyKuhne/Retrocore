@@ -31,32 +31,32 @@
 ;; Also: INVOKE (BB13)
 .proc Invoke
     lda #0                                  ; not RUN or CHAIN
-    sta CMDFLG
+    sta ProgramLoading
 .if VERSION >= 130
-    jsr SETPROG                             ; 1.3: use the program's prefix
+    jsr ProgramPrefix::UseProgram                             ; 1.3: use the program's prefix
 .endif
     lda #0
     jsr Segments::Shrink                    ; all the free memory back to SOS
     lda a:Segments::ModulesSegment
     beq CheckNames                          ; nothing invoked yet
     brk
-    .byte MRLS
+    .byte SOS_RELEASE_SEGMENT
     .word Segments::ReleaseModulesList
 
 ;; Loads the modules named, or with no name releases them all.
 ;; Also: INVOK1 (BB13)
 CheckNames:
-    jsr CHRGOT
+    jsr GetCurrentCharacter
     bne AddSizes
     jmp ReleaseAll
 
-;; Adds up the files' sizes, in pages, in <BANKPNT> (pages) and <BANKPNT>+1 (bytes).
+;; Adds up the files' sizes, in pages, in <ReferencePointers> (pages) and <ReferencePointers>+1 (bytes).
 ;; Also: INVOK3 (BB13)
 AddSizes:
     lda #0
-    sta BANKPNT
-    sta BANKPNT+1
-    jsr SVTXT                               ; to read the names again
+    sta ReferencePointers
+    sta ReferencePointers+1
+    jsr SaveTextPointer                               ; to read the names again
 
 ;; Opens the next file, adds its size less the first block, and closes it again.
 ;;
@@ -64,33 +64,33 @@ AddSizes:
 ;; Also: INVOK4 (BB13)
 AddSize:
     lda #1                                  ; to read
-    ldx #PCODTYP                            ; a code file
-    jsr OPENIT
-    lda FEOF                                ; the file's size, from OPENIT
+    ldx #FILE_TYPE_PASCAL_CODE                            ; a code file
+    jsr Files::OpenOfType
+    lda SosCalls::FileEnd                                ; the file's size, from OPENIT
     clc
-    adc BANKPNT+1
-    sta BANKPNT+1
-    lda FEOF+1
-    adc BANKPNT
+    adc ReferencePointers+1
+    sta ReferencePointers+1
+    lda SosCalls::FileEnd+1
+    adc ReferencePointers
     bcs Modules::ToOutOfMemoryErrorForInvoke
     sec
     sbc #Modules::BLOCK_PAGES               ; less the first block
     bcc Modules::ToOutOfMemoryErrorForInvoke
-    sta BANKPNT
-    jsr CLSEND
-    jsr CHRGOT
+    sta ReferencePointers
+    jsr Files::CloseSosFile
+    jsr GetCurrentCharacter
     beq *+8                                 ; the last name
-    jsr CHKCOM
+    jsr CheckComma
     jmp AddSize
-    ldx BANKPNT                             ; one more page, for the bytes past the last
+    ldx ReferencePointers                             ; one more page, for the bytes past the last
     inx
     beq Modules::ToOutOfMemoryErrorForInvoke
     stx a:Segments::ModulesPages
     ldx #0
     stx a:Segments::ModulesPages+1
-    jsr RSTTXT
+    jsr RestoreTextPointer
     brk
-    .byte MFND                              ; a segment in one bank
+    .byte SOS_FIND_SEGMENT                              ; a segment in one bank
     .word Segments::FindModulesList
     bne Modules::ToOutOfMemoryErrorForInvoke
     lda a:Segments::FoundModulesSegment
@@ -98,48 +98,48 @@ AddSize:
     sta a:Segments::ShrinkModulesSegment
     lda a:Segments::ModulesBase
     ora #Segments::X_BYTE_ON                ; the bank as an X-byte
-    sta INVBNK
+    sta ModulesXByte
     tay
     lda a:Segments::ModulesBase+1           ; SOS's page, $20-$9F, less $20
     sec
     sbc #Segments::WINDOW_PAGE
-    jsr FIXSBC
-    sta INVTAB+1
-    sty INVTABB
-    sty PROCTABB
+    jsr Memory::NormalizeAfterSubtract
+    sta ModulesStart+1
+    sty ModulesStartXByte
+    sty ModulesEndXByte
     lda a:Segments::ModulesLimit
     ora #Segments::X_BYTE_ON
     tay
     lda a:Segments::ModulesLimit+1
     sec
     sbc #Segments::WINDOW_PAGE
-    jsr FIXSBC
-    cpy INVTABB
+    jsr Memory::NormalizeAfterSubtract
+    cpy ModulesStartXByte
     beq *+5
     clc
-    adc #MAXPG-MINPG                        ; in the next bank: count it from the base's
-    sta PROCTAB+1
+    adc #POINTER_PAGE_LIMIT-POINTER_PAGE_FIRST                        ; in the next bank: count it from the base's
+    sta ModulesEnd+1
     lda #0
-    sta PROCTAB
-    sta INVTAB
+    sta ModulesEnd
+    sta ModulesStart
     jsr Modules::Load
-    lda INVPNT                              ; the whole pages left below the records
-    cmp INVTAB
-    lda INVPNT+1
-    sbc INVTAB+1
+    lda ModuleLoadPointer                              ; the whole pages left below the records
+    cmp ModulesStart
+    lda ModuleLoadPointer+1
+    sbc ModulesStart+1
     and #Segments::PAGES_PER_BANK-1
     beq Reclaim
     sta a:Segments::ShrinkModulesPages      ; give them back from the segment's base
-    lda INVTAB+1
+    lda ModulesStart+1
     clc
     adc a:Segments::ShrinkModulesPages
-    sta INVTAB+1
+    sta ModulesStart+1
     lda #0
     sta a:Segments::ShrinkModulesPages+1
-    lda INVPNT
-    sta INVTAB
+    lda ModuleLoadPointer
+    sta ModulesStart
     brk
-    .byte MCHG
+    .byte SOS_CHANGE_SEGMENT
     .word Segments::ShrinkModulesList
 
 ;; Takes back all the memory SOS gives, and ends the statement.
@@ -176,44 +176,44 @@ PAGES_PER_BANK = $80
 ;; The bit of an X-byte that turns extended addressing on, set over the bank's number.
 X_BYTE_ON = $80
 
-;; Finds the largest free segment for BASIC's program and data, anywhere in memory, and sets <RAMLOC> and <MEMSIZ>
+;; Finds the largest free segment for BASIC's program and data, anywhere in memory, and sets <SegmentStart> and <MemoryTop>
 ;; from it.
 ;;
 ;; The first FIND_SEG asks for $FFFF pages, which fails, and SOS leaves the most it can give in the count; the second
 ;; asks for that. The call is made until it works.
 ;; Out: RAMLOC = the segment's start plus 1, MEMSIZ = the page after its end
-;; See: <Segments::FindBasicList>, <INIT>
+;; See: <Segments::FindBasicList>, <ColdStart>
 ;; Also: TRYSEG (BB13)
 .proc FindForBasic
     brk
-    .byte MFND
+    .byte SOS_FIND_SEGMENT
     .word FindBasicList
     bne FindForBasic
     lda a:FoundBasicSegment
     sta a:ShrinkBasicSegment
     sta a:GrowBasicSegment                  ; for Shrink and Grow
     ldy #0
-    sty MEMSIZ
+    sty MemoryTop
     iny
-    sty RAMLOC
+    sty SegmentStart
     lda a:BasicBase
     ora #X_BYTE_ON
     tay
     lda a:BasicBase+1
     sec
     sbc #WINDOW_PAGE
-    jsr FIXSB2                              ; into BASIC's range, $02-$81
-    sta RAMLOC+1
-    sty RAMLOCB
+    jsr Memory::NormalizePage                              ; into BASIC's range, $02-$81
+    sta SegmentStart+1
+    sty SegmentStartXByte
     lda a:BasicLimit
     ora #X_BYTE_ON
     tay
     lda a:BasicLimit+1
     sec
     sbc #WINDOW_PAGE-1                      ; the page after the limit
-    jsr FIXSB2
-    sta MEMSIZ+1
-    sty MEMSIZB
+    jsr Memory::NormalizePage
+    sta MemoryTop+1
+    sty MemoryTopXByte
     rts
 .endproc
 
@@ -348,7 +348,7 @@ ShrinkModulesPages:
 
 ;; REQUEST_SEG's parameter list that reserves bank 0's $2000-$21FF, which BASIC's bank-switched pointers can't
 ;; reach.
-;; See: <INIT>
+;; See: <ColdStart>
 ;; Also: SEGTAB4 (BB13)
 ReserveList:
     .byte REQUEST_COUNT
@@ -456,20 +456,20 @@ FoundBasicSegment:
     TIME .addr                              ;; where SOS puts the date and time, 18 characters
 .endstruct
 
-;; GET_PREFIX's parameter list, into <CATBUF>+1, for `PREFIX$` and 1.3's prefix handling.
+;; GET_PREFIX's parameter list, into <CatalogBuffer>+1, for `PREFIX$` and 1.3's prefix handling.
 ;; See: <Functions::Prefix>
 ;; Also: PREFTAB (BB13)
 PrefixList:
     .byte 2
-    .word CATBUF+1
-    .byte <(BUF-CATBUF-4)
+    .word CatalogBuffer+1
+    .byte <(InputBuffer-CatalogBuffer-4)
 
-;; GET_TIME's parameter list, into <CATBUF>+2, for `DATE$` and `TIME$`.
+;; GET_TIME's parameter list, into <CatalogBuffer>+2, for `DATE$` and `TIME$`.
 ;; See: <Functions::Date>, <Functions::Time>
 ;; Also: DATETAB (BB13)
 TimeList:
     .byte 1
-    .word CATBUF+2
+    .word CatalogBuffer+2
 
 .assert TimeList - PrefixList = .sizeof(GetPrefixParameters), "PrefixList is GET_PREFIX's list."
 
@@ -484,19 +484,19 @@ TimeList:
     PATHNAME .addr                          ;; the new prefix: its length, then its characters
 .endstruct
 
-;; SET_PREFIX's parameter list, from the pathname in <NAMBUF>, for `PREFIX$ =`.
+;; SET_PREFIX's parameter list, from the pathname in <NameBuffer>, for `PREFIX$ =`.
 ;; See: <Statements::Prefix>
 ;; Also: PREFTB2 (BB13)
 SetPrefixList:
     .byte 1
-    .word NAMBUF
+    .word NameBuffer
 
-;; GET_PREFIX's parameter list, into <NAMBUF>, up to 128 bytes, for `CATALOG`.
-;; See: <CATALOG>
+;; GET_PREFIX's parameter list, into <NameBuffer>, up to 128 bytes, for `CATALOG`.
+;; See: <Catalog>
 ;; Also: PREFTB3 (BB13)
 CatalogPrefixList:
     .byte 2
-    .word NAMBUF
+    .word NameBuffer
     .byte 128
 
 .assert CatalogPrefixList - SetPrefixList = .sizeof(SetPrefixParameters), "SetPrefixList is SET_PREFIX's list."
@@ -510,10 +510,10 @@ CatalogPrefixList:
 ; Segments: shrinking and growing BASIC's segment.
 .scope Segments continued
 
-;; Gives free memory back to SOS: moves the strings and buffers, from <FRETOP> to <HIMEM>, down by A pages, or by all
+;; Gives free memory back to SOS: moves the strings and buffers, from <StringsBottom> to <MemoryTop>, down by A pages, or by all
 ;; the free space when A is 0, and shrinks BASIC's segment by as much.
 ;;
-;; The strings' garbage is collected first, so the free space runs from <STREND> to <FRETOP>. <DELTA> is zero, so the
+;; The strings' garbage is collected first, so the free space runs from <VariablesEnd> to <StringsBottom>. <MoveDistance> is zero, so the
 ;; move adjusts no pointers. With no free page it is an out-of-memory error, and a CHANGE_SEG that fails ends the
 ;; statement with SOS's error.
 ;; In: A = the pages, 0 for all the free space; more than there are gives all of it
@@ -522,111 +522,111 @@ CatalogPrefixList:
 ;; Also: SCRUNCH (BB13)
 .proc Shrink
     pha
-    jsr GARBA2
+    jsr Strings::CollectGarbage
     pla
     tax
-    lda FRETOP                              ; the free space, in pages and banks
-    cmp STREND
-    lda FRETOP+1
-    sbc STREND+1
-    sta INDEX2
-    lda FRETOPB
-    sbc STRENDB
-    sta INDEX2+1
-    asl INDEX2                              ; banks are 128 pages: make it a count of pages
-    lsr INDEX2+1
-    ror INDEX2
+    lda StringsBottom                              ; the free space, in pages and banks
+    cmp VariablesEnd
+    lda StringsBottom+1
+    sbc VariablesEnd+1
+    sta Pointer2
+    lda StringsBottomXByte
+    sbc VariablesEndXByte
+    sta Pointer2+1
+    asl Pointer2                              ; banks are 128 pages: make it a count of pages
+    lsr Pointer2+1
+    ror Pointer2
     txa
     beq Move                                ; all of it
-    ldx INDEX2+1
+    ldx Pointer2+1
     bne Fewer                               ; 256 pages or more: A is fewer
-    cmp INDEX2
+    cmp Pointer2
     bcs Move                                ; A is more: all of it
 
 ;; Takes A pages.
 ;; Also: SCRUN0 (BB13)
 Fewer:
-    sta INDEX2
+    sta Pointer2
     lda #0
-    sta INDEX2+1
+    sta Pointer2+1
 
-;; Moves the strings and buffers down by <INDEX2> pages and gives the pages to SOS.
+;; Moves the strings and buffers down by <Pointer2> pages and gives the pages to SOS.
 ;; Also: SCRUN1 (BB13)
 Move:
-    lda INDEX2
-    ora INDEX2+1
+    lda Pointer2
+    ora Pointer2+1
     bne *+5
-    jmp OMERR                               ; no free page
-    lda INDEX2
+    jmp ReportOutOfMemory                               ; no free page
+    lda Pointer2
     asl                                     ; HEADER = the count as pages and banks
     tax
-    lda INDEX2+1
+    lda Pointer2+1
     rol
-    sta HEADER+1
+    sta StringInformationPointer+1
     txa
     lsr
-    sta HEADER
-    lda FRETOP
-    sta INDEX1
-    sta LOWTR
-    lda FRETOP+1
-    sta INDEX1+1
-    ldy FRETOPB
-    sty INDEX1B
+    sta StringInformationPointer
+    lda StringsBottom
+    sta Pointer1
+    sta SourceStart
+    lda StringsBottom+1
+    sta Pointer1+1
+    ldy StringsBottomXByte
+    sty Pointer1XByte
     sec
-    sbc HEADER
-    jsr FIXSBC
-    sta LOWTR+1                             ; LOWTR = where the strings go
+    sbc StringInformationPointer
+    jsr Memory::NormalizeAfterSubtract
+    sta SourceStart+1                             ; LOWTR = where the strings go
     tya
-    sbc HEADER+1
-    sta LOWTRB
-    lda STREND
+    sbc StringInformationPointer+1
+    sta SourceStartXByte
+    lda VariablesEnd
     pha
-    lda STREND+1
+    lda VariablesEnd+1
     pha
-    lda STRENDB
+    lda VariablesEndXByte
     pha
-    lda HIMEM                               ; MVDWN moves up to STREND: here, HIMEM
-    sta STREND
-    lda HIMEM+1
-    sta STREND+1
-    lda HIMEMB
-    sta STRENDB
+    lda MemoryTop                               ; MVDWN moves up to STREND: here, HIMEM
+    sta VariablesEnd
+    lda MemoryTop+1
+    sta VariablesEnd+1
+    lda MemoryTopXByte
+    sta VariablesEndXByte
     lda #0
-    sta DELTA
-    sta DELTA+1
-    sta DELTAB
-    jsr MVDWN
+    sta MoveDistance
+    sta MoveDistance+1
+    sta MoveDistanceXByte
+    jsr CloseGap
     pla
-    sta STRENDB
+    sta VariablesEndXByte
     pla
-    sta STREND+1
+    sta VariablesEnd+1
     pla
-    sta STREND
-    lda LOWTR
-    sta FRETOP
-    lda LOWTR+1
-    sta FRETOP+1
-    lda LOWTRB
-    sta FRETOPB
-    lda HIMEM+1
-    ldy HIMEMB
+    sta VariablesEnd
+    lda SourceStart
+    sta StringsBottom
+    lda SourceStart+1
+    sta StringsBottom+1
+    lda SourceStartXByte
+    sta StringsBottomXByte
+    lda MemoryTop+1
+    ldy MemoryTopXByte
     sec
-    sbc HEADER
-    jsr FIXSBC
-    sta HIMEM+1
+    sbc StringInformationPointer
+    jsr Memory::NormalizeAfterSubtract
+    sta MemoryTop+1
     tya
-    sbc HEADER+1
-    sta HIMEMB
-    lda INDEX2
+    sbc StringInformationPointer+1
+    sta MemoryTopXByte
+    lda Pointer2
     sta ShrinkBasicPages
-    lda INDEX2+1
+    lda Pointer2+1
     sta ShrinkBasicPages+1
     brk
-    .byte MCHG
+    .byte SOS_CHANGE_SEGMENT
     .word ShrinkBasicList
     beq *+5
-    jmp SERROR
+    jmp ReportSosError
     rts
 .endproc
 
@@ -657,7 +657,7 @@ SetCount:
 ;; Also: EXPAN1 (BB13)
 Ask:
     brk
-    .byte MCHG
+    .byte SOS_CHANGE_SEGMENT
     .word GrowBasicList
     bne Ask
     lda GrowBasicPages
@@ -665,42 +665,42 @@ Ask:
     bne MoveUp
     tya                                     ; none: Y is nonzero when A was 0
     bne *+5
-    jmp OMERR
+    jmp ReportOutOfMemory
     rts
 
-;; Moves the strings and buffers up by the pages SOS gave, to the new <HIMEM>.
+;; Moves the strings and buffers up by the pages SOS gave, to the new <MemoryTop>.
 ;; Also: EXPAN2 (BB13)
 MoveUp:
-    lda HIMEM
-    sta HIGHTR
-    sta HIGHDS
+    lda MemoryTop
+    sta SourceEnd
+    sta DestinationEnd
     clc
-    lda HIMEM+1
-    sta HIGHTR+1
-    ldy HIMEMB
-    sty HIGHTRB
+    lda MemoryTop+1
+    sta SourceEnd+1
+    ldy MemoryTopXByte
+    sty SourceEndXByte
     adc GrowBasicPages
-    jsr FIXADC
-    sta HIMEM+1
-    sta HIGHDS+1
+    jsr Memory::NormalizeAfterAdd
+    sta MemoryTop+1
+    sta DestinationEnd+1
     tya
     adc GrowBasicPages+1
     adc GrowBasicPages+1                    ; twice: each 256 pages is two banks
-    sta HIMEMB
-    sta HIGHDSB
-    lda FRETOP
-    sta LOWTR
-    lda FRETOP+1
-    sta LOWTR+1
-    lda FRETOPB
-    sta LOWTRB
-    jsr BLTUC
-    lda HIGHDS
-    sta FRETOP
-    lda HIGHDS+1
-    sta FRETOP+1
-    lda HIGHDSB
-    sta FRETOPB
+    sta MemoryTopXByte
+    sta DestinationEndXByte
+    lda StringsBottom
+    sta SourceStart
+    lda StringsBottom+1
+    sta SourceStart+1
+    lda StringsBottomXByte
+    sta SourceStartXByte
+    jsr MoveRangeUp::Unchecked
+    lda DestinationEnd
+    sta StringsBottom
+    lda DestinationEnd+1
+    sta StringsBottom+1
+    lda DestinationEndXByte
+    sta StringsBottomXByte
     rts
 .endproc
 

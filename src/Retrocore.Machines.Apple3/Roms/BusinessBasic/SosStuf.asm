@@ -273,10 +273,10 @@ NEWLINE_ON = $FF
 ;; The echo flag that echoes keys to the screen.
 ECHO_ON = $80
 
-;; The bit of <KEYSTROK> the any-key event sets.
+;; The bit of <PendingEvents> the any-key event sets.
 KEY_SEEN = $80
 
-;; The bit of <KEYSTROK> the attention event sets, for CONTROL-C.
+;; The bit of <PendingEvents> the attention event sets, for CONTROL-C.
 CONTROL_C_SEEN = $40
 
 ;; OPEN's parameter list for .CONSOLE: the name <Console::Name>, the reference number back in <Console::Reference>,
@@ -327,7 +327,7 @@ NewlineParameters:
     .byte 0                                 ; the reference number
     .byte NEWLINE_ON, RETURN
 
-;; READ's parameter list for one key, into <KEYSAVE>: the console's or, while `EXEC` runs, the `EXEC` file's reference
+;; READ's parameter list for one key, into <LastKey>: the console's or, while `EXEC` runs, the `EXEC` file's reference
 ;; number goes in <Console::KeyReference>.
 ;;
 ;; Its request, one byte, is also <Console::FlushAllParameters>.
@@ -340,7 +340,7 @@ KeyParameters:
 ;; Also: GETREF (BB13)
 KeyReference:
     .byte 0
-    .word KEYSAVE
+    .word LastKey
 
 ;; FLUSH's parameter list: one parameter, reference number 0, which flushes every open file. Its two bytes are also
 ;; the request of <Console::KeyParameters>, one byte. Nothing sets it, so <ReadyForCommand>'s FLUSH is always of
@@ -370,13 +370,13 @@ CharacterParameters:
 Character:
     .byte 0
 
-;; READ's parameter list for a line from the console into <BUF>, up to <INALLWD> characters.
+;; READ's parameter list for a line from the console into <InputBuffer>, up to <READ_LINE_LIMIT> characters.
 ;; Also: SLINTB (BB13)
 LineParameters:
     .byte SosCalls::READ_COUNT
     .byte 0                                 ; the reference number
-    .word BUF
-    .word INALLWD
+    .word InputBuffer
+    .word READ_LINE_LIMIT
 
 ;; The count of characters <Console::LineParameters>'s READ returned.
 ;; Also: SNOCHRS (BB13)
@@ -549,14 +549,14 @@ CursorLine:
 ;; Also: CTCON (BB13)
 .proc AttentionOn
     brk
-    .byte SDCNT
+    .byte SOS_DEVICE_CONTROL
     .word AttentionParameters
     lda #EVENT_PRIORITY
     sta AttentionEvent+SosCalls::AttentionList::PRIORITY
     rts
 .endproc
 
-;; The any-key event's handler: sets <Console::KEY_SEEN> in <KEYSTROK> and reads the key.
+;; The any-key event's handler: sets <Console::KEY_SEEN> in <PendingEvents> and reads the key.
 ;;
 ;; The statement fetcher sees the bit before the next statement.
 ;; See: <Console::AttentionHandler>, <Console::ReadKey>
@@ -567,43 +567,43 @@ CursorLine:
     ; Falls into Console::AttentionHandler.
 .endproc
 
-;; The attention event's handler: sets <Console::CONTROL_C_SEEN> in <KEYSTROK> for CONTROL-C and reads the key from
+;; The attention event's handler: sets <Console::CONTROL_C_SEEN> in <PendingEvents> for CONTROL-C and reads the key from
 ;; the console.
 ;; See: <Console::AnyKeyHandler>, <Console::ReadKey>
 ;; Also: CTCEVNT (BB13)
 .proc AttentionHandler
     lda #CONTROL_C_SEEN
-    ora KEYSTROK
-    sta KEYSTROK
+    ora PendingEvents
+    sta PendingEvents
     lda Reference
     sta KeyReference
     ; Falls into Console::ReadKey.
 .endproc
 
-;; Reads one key into <KEYSAVE> with echo and CONTROL-C off, from <Console::KeyReference>'s file.
+;; Reads one key into <LastKey> with echo and CONTROL-C off, from <Console::KeyReference>'s file.
 ;;
 ;; When the read fails while `EXEC` is reading, the `EXEC` file is closed and the key is read from the console instead;
-;; when it fails in `GET#`, the error goes to the end-of-file handling in <DSKEOF>.
+;; when it fails in `GET#`, the error goes to the end-of-file handling in <Files::ReadTextLine::ReadFailed>.
 ;; Out: zero = set for a key read
 ;; Also: DOAGET (BB13)
 .proc ReadKey
     jsr EchoOff
     jsr AttentionOff
     brk
-    .byte SRED
+    .byte SOS_READ
     .word KeyParameters
     pha                                     ; the error code
     jsr EchoOn
     pla
     beq SosCalls::Call::Done
     ldx KeyReference                        ; EXEC's file, or GET#'s?
-    cpx INFLNO
+    cpx ExecFile
     beq ExecFailed
-    jmp DSKEOF                              ; GET#'s: ON EOF# may take it
+    jmp Files::ReadTextLine::ReadFailed                              ; GET#'s: ON EOF# may take it
 
 ;; Closes the `EXEC` file, and reads the key from the console.
 ExecFailed:
-    jsr EXCCLS
+    jsr Files::CloseExecFile
     ldx LineParameters+SosCalls::ReadList::REFERENCE
     stx KeyReference
     bne ReadKey                             ; always
@@ -625,7 +625,7 @@ ExecFailed:
     lda #0
     sta EchoFlags
     brk
-    .byte SDCNT
+    .byte SOS_DEVICE_CONTROL
     .word EchoParameters
     jmp AttentionOn
 .endproc
@@ -878,11 +878,11 @@ HelloName:
     .byte "HELLO"
     .byte 0
 
-;; Gets a file's information into <SosCalls::FileAccess>, after <GETFISET> sets the call up.
-;; See: <GETFISET>, <SosCalls::MakeFileCall>
+;; Gets a file's information into <SosCalls::FileAccess>, after <Files::PrepareGetFileInfo> sets the call up.
+;; See: <Files::PrepareGetFileInfo>, <SosCalls::MakeFileCall>
 ;; Also: GETFI (BB13)
 .proc GetFileInfo
-    jsr GETFISET
+    jsr Files::PrepareGetFileInfo
     ; Falls into SosCalls::MakeFileCall.
 .endproc
 
@@ -894,7 +894,7 @@ HelloName:
     jsr SetUp
     jsr Call
     beq SetUp::Done
-    jmp SERROR
+    jmp ReportSosError
 .endproc
 
 ;; Sets <SosCalls::Call> up for a file call: its number, and its parameter count in <SosCalls::Parameters>.
@@ -1006,21 +1006,21 @@ CALL_JOYSTICK = CALL_SET_EOF+1
 ;; See: <SosCalls::ParameterCounts>, <SosCalls::SetUp>
 ;; Also: SCNUMT (BB13)
 CallNumbers:
-    SosCallNumber CALL_CREATE, SCRT
-    SosCallNumber CALL_DESTROY, SDST
-    SosCallNumber CALL_RENAME, SRNM
-    SosCallNumber CALL_SET_FILE_INFO, SSFI
-    SosCallNumber CALL_GET_FILE_INFO, SGFI
-    SosCallNumber CALL_OPEN, SOPN
-    SosCallNumber CALL_NEWLINE, SNWL
-    SosCallNumber CALL_READ, SRED
-    SosCallNumber CALL_WRITE, SWRT
-    SosCallNumber CALL_CLOSE, SCLS
-    SosCallNumber CALL_SET_MARK, SSTM
-    SosCallNumber CALL_GET_MARK, SGTM
-    SosCallNumber CALL_RELEASE_SEG, MRLS
-    SosCallNumber CALL_FIND_SEG, MFND
-    SosCallNumber CALL_SET_EOF, SSTE
+    SosCallNumber CALL_CREATE, SOS_CREATE
+    SosCallNumber CALL_DESTROY, SOS_DESTROY
+    SosCallNumber CALL_RENAME, SOS_RENAME
+    SosCallNumber CALL_SET_FILE_INFO, SOS_SET_FILE_INFO
+    SosCallNumber CALL_GET_FILE_INFO, SOS_GET_FILE_INFO
+    SosCallNumber CALL_OPEN, SOS_OPEN
+    SosCallNumber CALL_NEWLINE, SOS_NEWLINE
+    SosCallNumber CALL_READ, SOS_READ
+    SosCallNumber CALL_WRITE, SOS_WRITE
+    SosCallNumber CALL_CLOSE, SOS_CLOSE
+    SosCallNumber CALL_SET_MARK, SOS_SET_MARK
+    SosCallNumber CALL_GET_MARK, SOS_GET_MARK
+    SosCallNumber CALL_RELEASE_SEG, SOS_RELEASE_SEGMENT
+    SosCallNumber CALL_FIND_SEG, SOS_FIND_SEGMENT
+    SosCallNumber CALL_SET_EOF, SOS_SET_EOF
     SosCallNumber CALL_JOYSTICK, SOS_JOYSTICK
 
 ;; The parameter count of each file call, in <SosCalls::CallNumbers>'s order.
@@ -1053,18 +1053,18 @@ ParameterCounts:
 ; BASIC keeps both, in SOSPATH and PROGPATH, and sets the one each command needs.
 ; ---------------------------------------------------------------------------------------------------------------------
 
-;; 1.3's two prefixes, SOS's own in <SOSPATH> and the program's in <PROGPATH>, and setting SOS's prefix to either.
+;; 1.3's two prefixes, SOS's own in <SosPrefix> and the program's in <ProgramPath>, and setting SOS's prefix to either.
 .scope ProgramPrefix
 
 ;; GET_PREFIX's buffer length.
 PATHNAME_LIMIT = 80
 
-;; Strips the file name from <PROGPATH>, leaving the prefix up to its last slash.
+;; Strips the file name from <ProgramPath>, leaving the prefix up to its last slash.
 ;; Keeps: X
 ;; Entry: Done = returns, for the prefix routines' branches
 ;; Also: SPROGPFX (BB13)
 .proc StripFileName
-    ldy PROGPATH
+    ldy ProgramPath
     beq Done
     iny
 
@@ -1072,10 +1072,10 @@ PATHNAME_LIMIT = 80
 ;; Also: PRGLP (BB13)
 FindSlash:
     dey
-    lda PROGPATH,Y
+    lda ProgramPath,Y
     cmp #'/'
     bne FindSlash
-    sty PROGPATH
+    sty ProgramPath
 
 ;; Returns.
 ;; Also: PRGRTS (BB13)
@@ -1083,30 +1083,30 @@ Done:
     rts
 .endproc
 
-;; Sets SOS's prefix back to BASIC's, from <SOSPATH>.
+;; Sets SOS's prefix back to BASIC's, from <SosPrefix>.
 ;; See: <ProgramPrefix::UseProgram>
 ;; Also: SETSOS (BB13)
 .proc UseSos
-    lda #<(SOSPATH)
+    lda #<(SosPrefix)
     sta a:Pathname
-    lda #>(SOSPATH)
+    lda #>(SosPrefix)
     sta a:Pathname+1
     jmp Set
 .endproc
 
-;; Sets SOS's prefix to the program's, from <PROGPATH>; after `RUN` or `CHAIN`, it takes the new program's first.
+;; Sets SOS's prefix to the program's, from <ProgramPath>; after `RUN` or `CHAIN`, it takes the new program's first.
 ;; See: <ProgramPrefix::UseSos>, <ProgramPrefix::TakeFromName>
 ;; Also: SETPROG (BB13)
 .proc UseProgram
-    lda CMDFLG
+    lda ProgramLoading
     beq SetProgramPrefix                    ; no RUN or CHAIN: PROGPATH stands
     jsr TakeFromName
 
-;; Points the call at <PROGPATH>.
+;; Points the call at <ProgramPath>.
 SetProgramPrefix:
-    lda #<(PROGPATH)
+    lda #<(ProgramPath)
     sta a:Pathname
-    lda #>(PROGPATH)
+    lda #>(ProgramPath)
     sta a:Pathname+1
     ; Falls into ProgramPrefix::Set.
 .endproc
@@ -1116,95 +1116,95 @@ SetProgramPrefix:
 ;; Also: SETPFX (BB13)
 .proc Set
     brk
-    .byte SETPREF
+    .byte SOS_SET_PREFIX
     .word Parameters
     beq StripFileName::Done
 
 ;; Ends the statement with the prefix call's error.
 ;; Also: MPERR (BB13)
 Failed:
-    jmp SERROR
+    jmp ReportSosError
 .endproc
 
-;; Copies SOS's prefix into <SOSPATH>, through <CATBUF>.
+;; Copies SOS's prefix into <SosPrefix>, through <CatalogBuffer>.
 ;; Also: FILSOS (BB13)
 .proc SaveSos
     brk
-    .byte GETPREF
-    .word PREFTAB
+    .byte SOS_GET_PREFIX
+    .word Functions::PrefixList
     bne Set::Failed
-    ldy CATBUF+1                            ; the prefix's length
+    ldy CatalogBuffer+1                            ; the prefix's length
 
 ;; Copies the prefix, with its length, last byte first.
 CopyPrefix:
-    lda CATBUF+1,Y
-    sta SOSPATH,Y
+    lda CatalogBuffer+1,Y
+    sta SosPrefix,Y
     dey
     bpl CopyPrefix
     rts
 .endproc
 
-;; Takes the program's prefix from the name in <NAMBUF> when it is a full pathname (starting with `.` or `/`), then
+;; Takes the program's prefix from the name in <NameBuffer> when it is a full pathname (starting with `.` or `/`), then
 ;; marks `RUN`'s or `CHAIN`'s prefix as taken.
 ;; Also: FILPROG (BB13)
 .proc TakeFromName
-    lda NAMBUF+1
+    lda NameBuffer+1
     cmp #'.'                                ; a device name
     beq CopyPathname
     cmp #'/'                                ; a volume name
     bne Taken
 
-;; Copies the full pathname in <NAMBUF> into <PROGPATH> and strips its file name.
+;; Copies the full pathname in <NameBuffer> into <ProgramPath> and strips its file name.
 ;; Also: FILPROG2 (BB13)
 CopyPathname:
-    ldy NAMBUF
+    ldy NameBuffer
 
 ;; Copies a byte of the pathname, last first.
 CopyByte:
-    lda NAMBUF,Y
-    sta PROGPATH,Y
+    lda NameBuffer,Y
+    sta ProgramPath,Y
     dey
     bpl CopyByte
     jsr StripFileName
 
-;; Clears <CMDFLG>: the prefix is taken.
+;; Clears <ProgramLoading>: the prefix is taken.
 ;; Also: FILPROG1 (BB13)
 Taken:
     lda #0
-    sta CMDFLG
+    sta ProgramLoading
     rts
 .endproc
 
-;; Copies SOS's prefix from <SOSPATH> to <PROGPATH>, for a program run without the selector.
+;; Copies SOS's prefix from <SosPrefix> to <ProgramPath>, for a program run without the selector.
 ;; Keeps: X
 ;; Also: COPYSOS (BB13)
 .proc CopySosToProgram
-    ldy SOSPATH
+    ldy SosPrefix
 
 ;; Copies a byte, last first.
 CopyByte:
-    lda SOSPATH,Y
-    sta PROGPATH,Y
+    lda SosPrefix,Y
+    sta ProgramPath,Y
     dey
     bpl CopyByte
     rts
 .endproc
 
-;; Makes <PROGPATH> name the volume rather than the device: sets it as SOS's prefix and reads the prefix back, which
+;; Makes <ProgramPath> name the volume rather than the device: sets it as SOS's prefix and reads the prefix back, which
 ;; SOS gives by volume name.
 ;; Also: CNVTPFX1 (BB13)
 .proc ToVolumeName
-    lda #<(PROGPATH)
+    lda #<(ProgramPath)
     sta a:Pathname
-    lda #>(PROGPATH)
+    lda #>(ProgramPath)
     sta a:Pathname+1
     brk
-    .byte SETPREF
+    .byte SOS_SET_PREFIX
     .word Parameters
     lda #SosCalls::GET_PREFIX_COUNT
     sta a:Parameters
     brk
-    .byte GETPREF
+    .byte SOS_GET_PREFIX
     .word Parameters
     dec a:Parameters                        ; and SET_PREFIX's count again
     rts

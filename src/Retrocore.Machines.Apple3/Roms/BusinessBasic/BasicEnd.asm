@@ -12,10 +12,10 @@
 ;; The Apple III's bank register: which bank of memory shows at $2000-$9FFF.
 BankRegister = $FFEF
 
-;; Calls one of BASIC's routines for an invokable module, by its number in <PASSAREG>, with BASIC's bank switched in,
+;; Calls one of BASIC's routines for an invokable module, by its number in <ModuleRoutineNumber>, with BASIC's bank switched in,
 ;; then switches the modules' bank back.
 ;;
-;; A module reaches it with a JSR to <DISPATCH>. The routine's address is the number's entry in <JMPRTAB>, which ends
+;; A module reaches it with a JSR to <ModuleCallJump>. The routine's address is the number's entry in <ModuleRoutines>, which ends
 ;; just before this routine. A number past the table's end ends the statement with an ILLEGAL QUANTITY error, with
 ;; BASIC's bank already switched in. The number is doubled in a byte, so its bit 7 is lost: a number from 128 up
 ;; calls the routine 128 below it.
@@ -25,29 +25,29 @@ BankRegister = $FFEF
 ;; Errors: ERRFC = a number past the table's end
 ;; Entry:
 ;;   ToIllegalQuantityError = ends the statement with ILLEGAL QUANTITY
-;; See: <JMPRTAB>, <Modules::CallModule>
+;; See: <ModuleRoutines>, <Modules::CallModule>
 ;; Also: SWCHGO (BB13)
 .proc CallBasic
     pha
     txa
     pha
-    lda PASSAREG
+    lda ModuleRoutineNumber
     asl
     tax
-    lda JMPRTAB,X
-    sta JMPER+1
-    lda JMPRTAB+1,X
-    sta JMPER+2
-    lda BASICBNK
+    lda ModuleRoutines,X
+    sta FunctionJump+1
+    lda ModuleRoutines+1,X
+    sta FunctionJump+2
+    lda BasicBank
     sta BankRegister                        ; BASIC's bank
-    cpx #<(Modules::CallBasic-JMPRTAB)
+    cpx #<(Modules::CallBasic-ModuleRoutines)
     bcs ToIllegalQuantityError              ; past the table's end
     pla
     tax
     pla
-    jsr JMPER
+    jsr FunctionJump
     pha
-    lda INVBNK
+    lda ModulesXByte
     sta BankRegister                        ; the modules' bank again
     pla
     rts
@@ -55,40 +55,40 @@ BankRegister = $FFEF
 ;; Ends the statement with ILLEGAL QUANTITY.
 ;; Also: BCALERR (BB13)
 ToIllegalQuantityError:
-    jmp FCERR
+    jmp IllegalQuantityError
 .endproc
 
-;; Calls the module routine whose address `PERFORM` or `EXFN.` put in <JMPER>, with the modules' bank switched in,
+;; Calls the module routine whose address `PERFORM` or `EXFN.` put in <FunctionJump>, with the modules' bank switched in,
 ;; then returns to the statement that called `PERFORM` or `EXFN.`.
 ;;
 ;; The address is a pointer through the modules' bank pair; clearing bit 7 of its high byte and adding $20 makes it
-;; the address in the switched bank. The return address was kept in <SAFE> before the call, and the bank that was
-;; switched in is kept in <SAFE>+2 and switched back after.
+;; the address in the switched bank. The return address was kept in <PerformSavedReturn> before the call, and the bank that was
+;; switched in is kept in <PerformSavedReturn>+2 and switched back after.
 ;; Out: A = what the routine left in A
 ;; Uses: TEMP, YSAVE, JMPER
 ;; See: <Modules::CallByName>, <Modules::CallBasic>
 ;; Also: JUMPDO (BB13)
 .proc CallModule
-    lda INVBNK
-    sta TEMP
+    lda ModulesXByte
+    sta Temporary
     lda BankRegister                        ; the bank switched in now
-    sta SAFE+2
-    lda TEMP
+    sta PerformSavedReturn+2
+    lda Temporary
     sta BankRegister                        ; the modules' bank
-    lda JMPER+2
+    lda FunctionJump+2
     and #Segments::PAGES_PER_BANK-1
     clc
     adc #Segments::WINDOW_PAGE              ; from the bank pair's address to the bank's
-    sta JMPER+2
-    jsr JMPER
-    sta YSAVE
-    lda SAFE+2                              ; back to the bank that was in
+    sta FunctionJump+2
+    jsr FunctionJump
+    sta SavedY
+    lda PerformSavedReturn+2                              ; back to the bank that was in
     sta BankRegister
-    lda SAFE+1                              ; return to the caller of `PERFORM` or `EXFN.`
+    lda PerformSavedReturn+1                              ; return to the caller of `PERFORM` or `EXFN.`
     pha
-    lda SAFE
+    lda PerformSavedReturn
     pha
-    lda YSAVE
+    lda SavedY
     rts
 .endproc
 

@@ -22,13 +22,13 @@
 ;;
 ;; A directory is a file of 512-byte blocks: each starts with two link words, to the blocks before and after it, then
 ;; 13 entries of 39 bytes; the first block's first entry is the directory's header. The catalog's control block
-;; counts the stage it has reached in <XFLGS> and the lines in <XRNUM>, and, for a volume, keeps the volume's blocks
-;; in <XRECL> and those used in <XBLKS>.
+;; counts the stage it has reached in <FileControlBlock::FLAGS> and the lines in <FileControlBlock::RECORD_NUMBER>, and, for a volume, keeps the volume's blocks
+;; in <FileControlBlock::RECORD_LENGTH> and those used in <FileControlBlock::BLOCKS_USED>.
 .scope Directory
 
 ;; Where each read of the directory goes, in the name buffer.
 ;; Also: CTPL (BB13)
-EntryBuffer = NAMBUF
+EntryBuffer = NameBuffer
 
 ;; The column <WriteTwoDigits> writes from, kept in <EntryBuffer>'s third byte while the line is made.
 DigitColumn = EntryBuffer+2
@@ -54,8 +54,8 @@ TYPE_NAME_LENGTH = 6
 ;; The count of names in <TypeNames>: the SOS file types 0 to 21.
 TYPE_NAME_COUNT = 22
 
-;; The catalog's control block's index from <FCB>: <CATFCB>, after the ten files'.
-CATALOG_INDEX = FCBLEN*FILE_COUNT
+;; The catalog's control block's index from <FileControlBlocks>: <CatalogControlBlock>, after the ten files'.
+CATALOG_INDEX = FILE_CONTROL_BLOCK_SIZE*FILE_COUNT
 
 ;; The stage that makes the directory's name line.
 STAGE_NAME = 0
@@ -131,7 +131,7 @@ STAGE_DONE = 6
 
 ;; `CATALOG`: lists a directory, or the prefix's when no name is given; `CATALOG [name]`.
 ;;
-;; The directory opens for reading in <CATFCB>, the control block after the ten files', and <Directory::NextLine>
+;; The directory opens for reading in <CatalogControlBlock>, the control block after the ten files', and <Directory::NextLine>
 ;; makes its lines one at a time. A file that is not a directory is a bad path error.
 ;; In: zero = set when no name follows
 ;; See: <Directory::Prepare>, <Directory::NextLine>
@@ -139,11 +139,11 @@ STAGE_DONE = 6
 .proc Catalog
     bne Named
     brk                                     ; SOS's GET_PREFIX, into NAMBUF
-    .byte GETPREF
-    .word PREFTB3
-    ldx NAMBUF
+    .byte SOS_GET_PREFIX
+    .word CatalogPrefixList
+    ldx NameBuffer
     lda #Files::OPEN_READ
-    sta INREQ                               ; read only, for OpenNamed::WithName
+    sta SosCalls::OpenAccess                               ; read only, for OpenNamed::WithName
     ldy #0
     txa
     jsr Files::SetNameLength::AtY           ; PTHPTR at NAMBUF
@@ -159,8 +159,8 @@ Named:
 ;; Checks the file is a directory.
 ;; Also: CG0 (BB13)
 Opened:
-    ldy #FCBLEN
-    lda FSTYP
+    ldy #FILE_CONTROL_BLOCK_SIZE
+    lda SosCalls::FileStorageType
     cmp #Files::STORAGE_SUBDIRECTORY
     beq ClearBlock
     cmp #Files::STORAGE_VOLUME
@@ -170,45 +170,45 @@ Opened:
 ;; Also: CG1 (BB13)
 ClearBlock:
     lda #0
-    sta CATFCB-1,Y
+    sta CatalogControlBlock-1,Y
     dey
     bne ClearBlock
     ldy #Directory::CATALOG_INDEX
-    sty FCBNDX
+    sty FileControlBlockIndex
     jsr Directory::Prepare
-    lda RWRFNM
-    sta FCB+XRFNM,Y
+    lda SosCalls::Reference
+    sta FileControlBlocks+FileControlBlock::REFERENCE_NUMBER,Y
 
 ;; Prints the next line, until the catalog is done.
 ;; Also: CG2 (BB13)
 NextLine:
-    jsr CRDO
+    jsr PrintNewline
     ldy #Directory::CATALOG_INDEX
-    sty FCBNDX
-    lda FCB+XRFNM,Y
-    sta RWRFNM
+    sty FileControlBlockIndex
+    lda FileControlBlocks+FileControlBlock::REFERENCE_NUMBER,Y
+    sta SosCalls::Reference
     jsr Directory::NextLine
     bcs Done
-    lda #<(CATBUF)
-    ldy #>(CATBUF)
+    lda #<(CatalogBuffer)
+    ldy #>(CatalogBuffer)
     ldx #0                                  ; in BASIC's own bank
-    jsr STROUT
+    jsr PrintText
     jmp NextLine
 
-;; Closes the file and ends the statement with SOS's bad path error, <SEBDP>.
+;; Closes the file and ends the statement with SOS's bad path error, <SOS_ERROR_BAD_PATH>.
 ;; Also: CATERR (BB13)
 NotDirectory:
-    lda #SEBDP
+    lda #SOS_ERROR_BAD_PATH
     jmp Files::CloseWithError
 
 ;; Prints a blank line and closes the directory.
 ;; Also: CATDON (BB13)
 Done:
-    jsr CRDO                                ; a blank line at the end
+    jsr PrintNewline                                ; a blank line at the end
     ldy #Directory::CATALOG_INDEX
     jmp Files::CloseControlBlock
 .endproc
-.assert FCB + Directory::CATALOG_INDEX = CATFCB, "The catalog's control block follows the ten files'."
+.assert FileControlBlocks + Directory::CATALOG_INDEX = CatalogControlBlock, "The catalog's control block follows the ten files'."
 
 .endscope
 
@@ -218,7 +218,7 @@ Done:
 ;; Sets a control block up to read a directory as catalog lines: a read-only text file, at stage 0, with no buffer
 ;; segment.
 ;;
-;; For a volume directory, the record length holds the volume's total blocks and <XBLKS> the blocks used, from the
+;; For a volume directory, the record length holds the volume's total blocks and <FileControlBlock::BLOCKS_USED> the blocks used, from the
 ;; directory's file information, for the summary line; for a subdirectory they are left as they are.
 ;; In: FCBNDX = the control block's index, FSTYP/FAUX/FBLKS = the directory's information
 ;; Out: Y = FCBNDX
@@ -226,23 +226,23 @@ Done:
 ;; See: <SummaryLine>
 ;; Also: SETCAT (BB13)
 .proc Prepare
-    ldy FCBNDX
-    lda #TXTTYP | Files::ACCESS_READ        ; text, read only
-    sta FCB+XUID,Y
+    ldy FileControlBlockIndex
+    lda #FILE_TYPE_TEXT | Files::ACCESS_READ        ; text, read only
+    sta FileControlBlocks+FileControlBlock::TYPE_AND_ACCESS,Y
     lda #0
-    sta FCB+XFLGS,Y
-    sta FCB+XSEGNM,Y
-    ldx FSTYP
+    sta FileControlBlocks+FileControlBlock::FLAGS,Y
+    sta FileControlBlocks+FileControlBlock::SEGMENT,Y
+    ldx SosCalls::FileStorageType
     cpx #Files::STORAGE_VOLUME
     bne Done                                ; not a volume directory
-    lda FAUX                                ; a volume's auxiliary type is its total blocks
-    sta FCB+XRECL,Y
-    lda FAUX+1
-    sta FCB+XRECL+1,Y
-    lda FBLKS
-    sta FCB+XBLKS,Y
-    lda FBLKS+1
-    sta FCB+XBLKS+1,Y
+    lda SosCalls::FileAuxType                                ; a volume's auxiliary type is its total blocks
+    sta FileControlBlocks+FileControlBlock::RECORD_LENGTH,Y
+    lda SosCalls::FileAuxType+1
+    sta FileControlBlocks+FileControlBlock::RECORD_LENGTH+1,Y
+    lda SosCalls::FileBlocks
+    sta FileControlBlocks+FileControlBlock::BLOCKS_USED,Y
+    lda SosCalls::FileBlocks+1
+    sta FileControlBlocks+FileControlBlock::BLOCKS_USED+1,Y
 
 ;; Returns.
 ;; Also: NTROOT (BB13)
@@ -250,7 +250,7 @@ Done:
     rts
 .endproc
 
-;; Makes the catalog's next line in <CATBUF>, by the stage in the control block's flags.
+;; Makes the catalog's next line in <CatalogBuffer>, by the stage in the control block's flags.
 ;;
 ;; The line starts as <LINE_LENGTH> spaces and a 0, and the control block's record number counts the lines. The
 ;; stages give the directory's name line, a blank line, the headings, a line for each file, a volume's summary line,
@@ -266,19 +266,19 @@ Done:
 ;; Fills the line with spaces.
 ;; Also: NCL1 (BB13)
 Blank:
-    sta CATBUF-1,Y
+    sta CatalogBuffer-1,Y
     dey
     bne Blank
-    sty CATBUF+LINE_LENGTH
-    ldx FCBNDX
-    inc FCB+XRNUM,X
+    sty CatalogBuffer+LINE_LENGTH
+    ldx FileControlBlockIndex
+    inc FileControlBlocks+FileControlBlock::RECORD_NUMBER,X
     bne Dispatch
-    inc FCB+XRNUM+1,X
+    inc FileControlBlocks+FileControlBlock::RECORD_NUMBER+1,X
 
 ;; Goes to the stage's routine, through an RTS.
 ;; Also: NCL2 (BB13)
 Dispatch:
-    lda FCB+XFLGS,X
+    lda FileControlBlocks+FileControlBlock::FLAGS,X
     asl                                     ; the stage's routine, through an RTS
     tay
     lda a:Stages+1,Y
@@ -306,7 +306,7 @@ Stages:
 ;; version.
 ;;
 ;; The first read takes the block's two link words and the header entry, <FirstRead>.
-;; In: X = the catalog's control block index, from <FCBNDX>
+;; In: X = the catalog's control block index, from <FileControlBlockIndex>
 ;; Out: carry = clear
 ;; Also: CATL1 (BB13)
 .proc NameLine
@@ -319,7 +319,7 @@ DATE_COLUMN = 18
 ;; The column of the version's V.
 VERSION_COLUMN = 28
 
-    inc FCB+XFLGS,X
+    inc FileControlBlocks+FileControlBlock::FLAGS,X
     lda #.sizeof(FirstRead)
     jsr ReadBytes
     lda Header+HeaderEntry::STORAGE_AND_NAME_LENGTH
@@ -330,31 +330,31 @@ VERSION_COLUMN = 28
 ;; Also: CL12 (BB13)
 CopyName:
     lda Header+HeaderEntry::NAME-1,Y
-    sta CATBUF,Y
+    sta CatalogBuffer,Y
     dey
     bne CopyName
     lda #'('
-    sta CATBUF+DATE_COLUMN-1
+    sta CatalogBuffer+DATE_COLUMN-1
     lda #')'
-    sta CATBUF+DATE_COLUMN+DATE_LENGTH
+    sta CatalogBuffer+DATE_COLUMN+DATE_LENGTH
     lda Header+HeaderEntry::CREATED_DATE+1  ; the creation date
     ldx Header+HeaderEntry::CREATED_DATE
     ldy #DATE_COLUMN
     jsr WriteDate
     lda #'V'
-    sta CATBUF+VERSION_COLUMN
+    sta CatalogBuffer+VERSION_COLUMN
     ldy Header+HeaderEntry::VERSION         ; the version
-    jsr SNGFLT
-    jsr FOUT
+    jsr ReturnByte
+    jsr Float::FormatFac
     ldy #$FF
 
 ;; Copies the version's digits, then finishes through <CheckDone>.
 ;; Also: TPL (BB13)
 CopyVersion:
     iny
-    lda FBUFFR,Y
+    lda NumberBuffer,Y
     beq CheckDone
-    sta CATBUF+VERSION_COLUMN+1,Y
+    sta CatalogBuffer+VERSION_COLUMN+1,Y
     bne CopyVersion
     ; Never falls through: the loop ends at the branch to CheckDone. BlankLine follows.
 .endproc
@@ -363,8 +363,8 @@ CopyVersion:
 ;; Out: carry = set when the catalog is done
 ;; Also: CBL (BB13)
 .proc BlankLine
-    ldx FCBNDX
-    inc FCB+XFLGS,X
+    ldx FileControlBlockIndex
+    inc FileControlBlocks+FileControlBlock::FLAGS,X
     ; Falls into CheckDone.
 .endproc
 
@@ -372,8 +372,8 @@ CopyVersion:
 ;; Out: carry = set when it is done
 ;; Also: TPRTS (BB13)
 .proc CheckDone
-    ldy FCBNDX
-    lda FCB+XFLGS,Y
+    ldy FileControlBlockIndex
+    lda FileControlBlocks+FileControlBlock::FLAGS,Y
     cmp #STAGE_DONE
     rts
 .endproc
@@ -388,7 +388,7 @@ CopyVersion:
 ;; Also: CHD2 (BB13)
 Copy:
     lda a:Headings-1,Y
-    sta CATBUF,Y
+    sta CatalogBuffer,Y
     dey
     bne Copy
     beq BlankLine                           ; always
@@ -470,7 +470,7 @@ NotLocked:
 ;; Stores the access's mark.
 ;; Also: STUFACS (BB13)
 StoreAccess:
-    sta CATBUF+ACCESS_COLUMN
+    sta CatalogBuffer+ACCESS_COLUMN
 
 ;; Copies the name, then the type's name.
 ;; Also: ALLOK (BB13)
@@ -483,7 +483,7 @@ CopyName:
 ;; Also: CMP1 (BB13)
 NameCharacter:
     lda EntryBuffer+FileEntry::NAME-1,Y
-    sta CATBUF+NAME_COLUMN-1,Y
+    sta CatalogBuffer+NAME_COLUMN-1,Y
     dey
     bne NameCharacter
     lda EntryBuffer+FileEntry::FILE_TYPE
@@ -499,9 +499,9 @@ NameCharacter:
 ;; Also: CMP2 (BB13)
 TypeName:
     lda a:TypeNames,X
-    sta CATBUF+TYPE_COLUMN,Y
+    sta CatalogBuffer+TYPE_COLUMN,Y
     lda #0                                  ; and clear the FAC for the end of file
-    sta FAC,Y
+    sta Fac,Y
     inx
     iny
     cpy #TYPE_NAME_LENGTH
@@ -550,30 +550,30 @@ CopyOtherType:
 ;; Stores the text's next character.
 ;; Also: ISPRO (BB13)
 StoreTypeCharacter:
-    sta CATBUF+TYPE_COLUMN,Y
+    sta CatalogBuffer+TYPE_COLUMN,Y
     lda #0                                  ; and clear the FAC for the end of file
-    sta FAC,Y
+    sta Fac,Y
     iny
     cpy #TYPE_NAME_LENGTH
     bcc CopyOtherType
 
-;; Writes the end of file, as a long integer through <LOUT>.
+;; Writes the end of file, as a long integer through <LongInteger::FormatFac>.
 ;; Also: NOWEOF (BB13)
 EndOfFile:
     lda EntryBuffer+FileEntry::END_OF_FILE  ; the end of file, as a long integer
-    sta FAC+7
+    sta Fac+7
     lda EntryBuffer+FileEntry::END_OF_FILE+1
-    sta FAC+6
+    sta Fac+6
     lda EntryBuffer+FileEntry::END_OF_FILE+2
-    sta FAC+5
-    jsr LOUT
+    sta Fac+5
+    jsr LongInteger::FormatFac
     ldy #0
 
 ;; Copies the end of file's next digit, and its 0.
 ;; Also: OEOF (BB13)
 CopyEndOfFile:
-    lda NUMSTR,Y
-    sta CATBUF+END_OF_FILE_COLUMN,Y
+    lda LongText,Y
+    sta CatalogBuffer+END_OF_FILE_COLUMN,Y
     beq Blocks
     iny
     bne CopyEndOfFile
@@ -583,23 +583,23 @@ CopyEndOfFile:
 Blocks:
     ldy EntryBuffer+FileEntry::BLOCKS_USED  ; the blocks used
     lda EntryBuffer+FileEntry::BLOCKS_USED+1
-    jsr GIVAYF
-    jsr FOUT
+    jsr ReturnSignedWord
+    jsr Float::FormatFac
     ldy #$FF
 
 ;; Finds the last digit.
 ;; Also: CNTLN (BB13)
 FindLastDigit:
     iny
-    lda FBUFFR+1,Y
+    lda NumberBuffer+1,Y
     bne FindLastDigit
     ldx #BLOCKS_DIGITS
 
 ;; Copies the digits, from the last.
 ;; Also: MVBCNT (BB13)
 CopyBlocks:
-    lda FBUFFR,Y
-    sta CATBUF+BLOCKS_COLUMN-1,X
+    lda NumberBuffer,Y
+    sta CatalogBuffer+BLOCKS_COLUMN-1,X
     dex
     dey
     bpl CopyBlocks
@@ -610,7 +610,7 @@ CopyBlocks:
 PadZeros:
     dex
     bmi Dates
-    sta CATBUF+BLOCKS_COLUMN,X
+    sta CatalogBuffer+BLOCKS_COLUMN,X
     bpl PadZeros
 
 ;; Writes the dates and times.
@@ -640,7 +640,7 @@ Dates:
 ;;
 ;; A subdirectory, with no total in its control block, has no summary: the stage moves on twice and the catalog is
 ;; done.
-;; In: X = the catalog's control block index, from <FCBNDX>
+;; In: X = the catalog's control block index, from <FileControlBlockIndex>
 ;; Out: carry = clear for the summary, set for none
 ;; See: <Prepare>, <WriteNumber>
 ;; Also: CEND (BB13)
@@ -654,8 +654,8 @@ USED_COLUMN = 33
 ;; The column of the total.
 TOTAL_COLUMN = 53
 
-    lda FCB+XRECL,X                         ; a total, for a volume directory?
-    ora FCB+XRECL+1,X
+    lda FileControlBlocks+FileControlBlock::RECORD_LENGTH,X                         ; a total, for a volume directory?
+    ora FileControlBlocks+FileControlBlock::RECORD_LENGTH+1,X
     beq NoSummary
     ldy #SUMMARY_LENGTH
 
@@ -663,36 +663,36 @@ TOTAL_COLUMN = 53
 ;; Also: CEN2 (BB13)
 CopyWords:
     lda a:Summary-1,Y
-    sta CATBUF,Y
+    sta CatalogBuffer,Y
     dey
     bne CopyWords
-    lda FCB+XRECL,X                         ; the total
+    lda FileControlBlocks+FileControlBlock::RECORD_LENGTH,X                         ; the total
     tay
-    lda FCB+XRECL+1,X
+    lda FileControlBlocks+FileControlBlock::RECORD_LENGTH+1,X
     ldx #TOTAL_COLUMN
     jsr WriteNumber
-    ldx FCBNDX
-    lda FCB+XBLKS,X                         ; the blocks used
+    ldx FileControlBlockIndex
+    lda FileControlBlocks+FileControlBlock::BLOCKS_USED,X                         ; the blocks used
     tay
-    lda FCB+XBLKS+1,X
+    lda FileControlBlocks+FileControlBlock::BLOCKS_USED+1,X
     ldx #USED_COLUMN
     jsr WriteNumber
-    ldx FCBNDX
-    lda FCB+XRECL,X                         ; the blocks free: the total less those used
+    ldx FileControlBlockIndex
+    lda FileControlBlocks+FileControlBlock::RECORD_LENGTH,X                         ; the blocks free: the total less those used
     sec
-    sbc FCB+XBLKS,X
+    sbc FileControlBlocks+FileControlBlock::BLOCKS_USED,X
     tay
-    lda FCB+XRECL+1,X
-    sbc FCB+XBLKS+1,X
+    lda FileControlBlocks+FileControlBlock::RECORD_LENGTH+1,X
+    sbc FileControlBlocks+FileControlBlock::BLOCKS_USED+1,X
     ldx #FREE_COLUMN
     jsr WriteNumber
-    ldx FCBNDX
-    dec FCB+XFLGS,X                         ; cancels the next INC: one stage on, not two
+    ldx FileControlBlockIndex
+    dec FileControlBlocks+FileControlBlock::FLAGS,X                         ; cancels the next INC: one stage on, not two
 
 ;; Moves the stage on, twice without a summary.
 ;; Also: CEND2 (BB13)
 NoSummary:
-    inc FCB+XFLGS,X
+    inc FileControlBlocks+FileControlBlock::FLAGS,X
     jmp BlankLine
 .endproc
 
@@ -748,10 +748,10 @@ TypeNames:
 ;; See: <ReadBytes>
 ;; Also: RDCAT (BB13)
 .proc ReadEntry
-    ldy FCBNDX
-    lda FCB+XRFNM,Y
-    sta RWRFNM
-    lda FCB+XBUFOFS,Y
+    ldy FileControlBlockIndex
+    lda FileControlBlocks+FileControlBlock::REFERENCE_NUMBER,Y
+    sta SosCalls::Reference
+    lda FileControlBlocks+FileControlBlock::BUFFER_OFFSET,Y
     cmp #BLOCK_LAST_BYTE                    ; the end of a block?
     bne ReadFull
     lda #1+BLOCK_LINKS                      ; its last byte and the next block's links
@@ -774,19 +774,19 @@ ReadFull:
 ;; See: <Files::AdvanceOffset>
 ;; Also: RDCAT2 (BB13)
 .proc ReadBytes
-    sta INBYTES
-    sta LENSAV
+    sta SosCalls::Request
+    sta DataItemLength
     lda #0
-    sta INBYTES+1
+    sta SosCalls::Request+1
     lda #<(EntryBuffer)
-    sta SBFPTR
+    sta SosCalls::Buffer
     lda #>(EntryBuffer)
-    sta SBFPTR+1
-    ldy #RED
-    jsr SETUP
-    jsr GOSOS
+    sta SosCalls::Buffer+1
+    ldy #SosCalls::CALL_READ
+    jsr SosCalls::SetUp
+    jsr SosCalls::Call
     beq Read
-    cmp #SEEOF
+    cmp #SOS_ERROR_END_OF_FILE
     bne ToCloseWithError
 
 ;; Returns with carry set: the end of the directory.
@@ -810,7 +810,7 @@ ToCloseWithError:
 ; Dates, times and numbers
 ; ---------------------------------------------------------------------------------------------------------------------
 
-;; Writes a SOS date into <CATBUF> as MM/DD/YY, from column Y.
+;; Writes a SOS date into <CatalogBuffer> as MM/DD/YY, from column Y.
 ;;
 ;; The date's 16 bits are, from the top, 7 of year, 4 of month and 5 of day. The first three bytes of <EntryBuffer>
 ;; serve as scratch.
@@ -860,12 +860,12 @@ YEAR_OFFSET = 6
     lda #MONTH_OFFSET
     jsr WriteTwoDigits
     lda #'/'
-    sta CATBUF+DAY_OFFSET-1,Y               ; WriteTwoDigits left Y at the column
-    sta CATBUF+YEAR_OFFSET-1,Y
+    sta CatalogBuffer+DAY_OFFSET-1,Y               ; WriteTwoDigits left Y at the column
+    sta CatalogBuffer+YEAR_OFFSET-1,Y
     rts
 .endproc
 
-;; Writes a number from 0 to 99 as two digits into <CATBUF>, A columns after the column in <DigitColumn>.
+;; Writes a number from 0 to 99 as two digits into <CatalogBuffer>, A columns after the column in <DigitColumn>.
 ;;
 ;; A one-digit number gets a leading 0.
 ;; In: A = the offset, Y = the number
@@ -874,29 +874,29 @@ YEAR_OFFSET = 6
 ;; Also: G2DIGS (BB13)
 .proc WriteTwoDigits
     pha
-    jsr SNGFLT
-    jsr FOUT
+    jsr ReturnByte
+    jsr Float::FormatFac
     pla
     clc
     adc DigitColumn
     tay
-    lda FBUFFR                              ; the first digit in both places
-    sta CATBUF,Y
-    sta CATBUF+1,Y
-    lda FBUFFR+1
+    lda NumberBuffer                              ; the first digit in both places
+    sta CatalogBuffer,Y
+    sta CatalogBuffer+1,Y
+    lda NumberBuffer+1
     beq LeadingZero                         ; one digit: a 0 before it
-    sta CATBUF+1,Y
+    sta CatalogBuffer+1,Y
     rts
 
 ;; Puts a 0 before a one-digit number.
 ;; Also: AZERH (BB13)
 LeadingZero:
     lda #'0'
-    sta CATBUF,Y
+    sta CatalogBuffer,Y
     rts
 .endproc
 
-;; Writes a SOS time into <CATBUF> as HH:MM, from column Y.
+;; Writes a SOS time into <CatalogBuffer> as HH:MM, from column Y.
 ;; In: A = the hour, X = the minute, Y = the column
 ;; Uses: A, X, Y
 ;; See: <WriteTwoDigits>
@@ -917,30 +917,30 @@ MINUTE_OFFSET = 3
     lda #HOUR_OFFSET
     jsr WriteTwoDigits
     lda #':'
-    sta CATBUF+MINUTE_OFFSET-1,Y
+    sta CatalogBuffer+MINUTE_OFFSET-1,Y
     ldy Minute
     lda #MINUTE_OFFSET
     jmp WriteTwoDigits
 .endproc
 
-;; Writes a 16-bit number into <CATBUF>, from column X.
+;; Writes a 16-bit number into <CatalogBuffer>, from column X.
 ;; In: A = the high byte, Y = the low byte, X = the column
 ;; Out: X = the column after it
 ;; Uses: A, Y
 ;; Also: DONUM (BB13)
 .proc WriteNumber
-    stx XSAV
-    jsr GIVAYF
-    jsr FOUT
+    stx SavedX
+    jsr ReturnSignedWord
+    jsr Float::FormatFac
     ldy #0
-    ldx XSAV
+    ldx SavedX
 
 ;; Copies the next digit.
 ;; Also: DONUM2 (BB13)
 CopyDigit:
-    lda FBUFFR,Y
+    lda NumberBuffer,Y
     beq Done
-    sta CATBUF,X
+    sta CatalogBuffer,X
     iny
     inx
     bne CopyDigit                           ; always
@@ -979,58 +979,58 @@ BANK_PAIR_OFFSET = $2000
     .word address
 .endmacro
 
-;; The routines BASIC lends invokable modules and `PERFORM`, by number: <SWCHGO> calls entry n for routine n.
+;; The routines BASIC lends invokable modules and `PERFORM`, by number: <Modules::CallBasic> calls entry n for routine n.
 ;;
 ;; Modules use the numbers, so no entry may move. Three entries are data rather than routines, the two keyword
-;; lists, <RESLST> and <RESL2>, and <FBUFFR>, given <BANK_PAIR_OFFSET> lower than BASIC's own addresses. The last entry
-;; is the table's own address. The table must end where <SWCHGO> starts, as <SWCHGO> takes that for the
+;; lists, <ReservedWords> and <ExtendedReservedWords>, and <NumberBuffer>, given <BANK_PAIR_OFFSET> lower than BASIC's own addresses. The last entry
+;; is the table's own address. The table must end where <Modules::CallBasic> starts, as <Modules::CallBasic> takes that for the
 ;; table's end and refuses a number past it.
 ;; Also: JMPRTAB (BB13)
 ModuleRoutines:
-    ModuleRoutine 0, DOPAR
-    ModuleRoutine 1, PTRGET
-    ModuleRoutine 2, MVUP
-    ModuleRoutine 3, MVDWN
-    ModuleRoutine 4, BLTUC
-    ModuleRoutine 5, ERRDIR
-    ModuleRoutine 6, LINGET
-    ModuleRoutine 7, GOTOB
-    ModuleRoutine 8, GETADR
-    ModuleRoutine 9, FNDLNC0
-    ModuleRoutine 10, FNDLIN
-    ModuleRoutine 11, INITCNS
-    ModuleRoutine 12, RESLST-BANK_PAIR_OFFSET
-    ModuleRoutine 13, NOTNOW
-    ModuleRoutine 14, ERROR
+    ModuleRoutine 0, EvaluateSubexpression
+    ModuleRoutine 1, FindVariable
+    ModuleRoutine 2, OpenGap
+    ModuleRoutine 3, CloseGap
+    ModuleRoutine 4, MoveRangeUp::Unchecked
+    ModuleRoutine 5, RejectDirectMode
+    ModuleRoutine 6, ReadLineNumber
+    ModuleRoutine 7, Statements::GoTo::ToLineNumber
+    ModuleRoutine 8, ConvertToAddress
+    ModuleRoutine 9, FindLine::FromLine
+    ModuleRoutine 10, FindLine
+    ModuleRoutine 11, Console::Initialize
+    ModuleRoutine 12, ReservedWords-BANK_PAIR_OFFSET
+    ModuleRoutine 13, Strings::FindFromDescriptor
+    ModuleRoutine 14, ReportError
     ModuleRoutine 15, ReportSosError
-    ModuleRoutine 16, SCRUNCH
-    ModuleRoutine 17, EXPAND
-    ModuleRoutine 18, FREFAC
-    ModuleRoutine 19, FRENOW
-    ModuleRoutine 20, FRECNOW
-    ModuleRoutine 21, FRESPA
+    ModuleRoutine 16, Segments::Shrink
+    ModuleRoutine 17, Segments::Grow
+    ModuleRoutine 18, Strings::ReleaseFac
+    ModuleRoutine 19, Strings::FreeSpaceIfReleased
+    ModuleRoutine 20, Strings::FreeFacTemporary
+    ModuleRoutine 21, Strings::FreeSpace
     ModuleRoutine 22, Files::OpenOfType
-    ModuleRoutine 23, GOSOS
+    ModuleRoutine 23, SosCalls::Call
     ModuleRoutine 24, Files::CloseAll
-    ModuleRoutine 25, GIVAYF
-    ModuleRoutine 26, POSINT
-    ModuleRoutine 27, FIN
-    ModuleRoutine 28, NWSTT
-    ModuleRoutine 29, PTRGT3
-    ModuleRoutine 30, PNTREL
-    ModuleRoutine 31, RELPTR2
-    ModuleRoutine 32, DATAN
-    ModuleRoutine 33, STRCP
-    ModuleRoutine 34, INPCOM
-    ModuleRoutine 35, LETP2
-    ModuleRoutine 36, FOUT
-    ModuleRoutine 37, NEWRET
-    ModuleRoutine 38, JUMPDO
-    ModuleRoutine 39, INT
-    ModuleRoutine 40, FBUFFR-BANK_PAIR_OFFSET
-    ModuleRoutine 41, RESL2-BANK_PAIR_OFFSET
-    ModuleRoutine 42, SETUP
-    ModuleRoutine 43, SETGO
-    ModuleRoutine 44, CONV2STR
+    ModuleRoutine 25, ReturnSignedWord
+    ModuleRoutine 26, FacToNonnegativeInteger
+    ModuleRoutine 27, Float::ReadNumber
+    ModuleRoutine 28, NextStatement::SavePlace
+    ModuleRoutine 29, FindVariable::ValidFirst
+    ModuleRoutine 30, Variables::SimpleVariableOffset
+    ModuleRoutine 31, Variables::VariableOffset::ArrayElement
+    ModuleRoutine 32, FindStatementEnd
+    ModuleRoutine 33, Strings::CopyText
+    ModuleRoutine 34, AssignString
+    ModuleRoutine 35, AssignFac
+    ModuleRoutine 36, Float::FormatFac
+    ModuleRoutine 37, ExecuteStatement::StatementReturn
+    ModuleRoutine 38, Modules::CallModule
+    ModuleRoutine 39, Functions::Int
+    ModuleRoutine 40, NumberBuffer-BANK_PAIR_OFFSET
+    ModuleRoutine 41, ExtendedReservedWords-BANK_PAIR_OFFSET
+    ModuleRoutine 42, SosCalls::SetUp
+    ModuleRoutine 43, SosCalls::MakeFileCall
+    ModuleRoutine 44, Functions::ConvString
     ModuleRoutine 45, ModuleRoutines
-.assert * = SWCHGO, "ModuleRoutines must end where SWCHGO starts: SWCHGO takes that as the table's end."
+.assert * = Modules::CallBasic, "ModuleRoutines must end where SWCHGO starts: SWCHGO takes that as the table's end."

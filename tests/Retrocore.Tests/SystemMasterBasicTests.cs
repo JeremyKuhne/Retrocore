@@ -79,6 +79,50 @@ public class SystemMasterBasicTests
     }
 
     /// <summary>
+    ///  The language card finder keeps its documented contract on a II Plus: with a language card, <c>Status</c> is
+    ///  <c>STATUS_FOUND</c> and the ROM is left selected; without one, <c>STATUS_NOT_FOUND</c>. X and Y are kept
+    ///  either way.
+    /// </summary>
+    /// <param name="card">Whether the II Plus has a language card.</param>
+    [TestMethod]
+    [DataRow(data: true)]
+    [DataRow(data: false)]
+    public void LanguageCardFinderKeepsItsContract(bool card)
+    {
+        string path = Path.Join(s_inputs, "Software", "LanguageCardFinder.asm");
+        AssemblyOptions options = new("Mos6502", origin: 0x0300, imageSize: 0x41)
+        {
+            SourceResolver = new FileAssemblySourceResolver()
+        };
+
+        AssemblyResult result = new NativeAssembler().Assemble(new AssemblySource(File.ReadAllText(path), path), options);
+        Apple2Machine machine = new(Apple2Model.IIPlus, SdkModules.BuildRoms(Apple2Model.IIPlus, s_inputs));
+        if (card) { machine.Bus.InstallLanguageCard(); }
+
+        byte[] bytes = result.Sections[0].Bytes.ToArray();
+        for (int i = 0; i < bytes.Length; i++) { machine.Bus.Write((ushort)(0x0300 + i), bytes[i]); }
+
+        // HELLO's CALL: JSR to the routine, then wait in a loop.
+        ushort call = 0x0280;
+        byte[] caller = [0x20, (byte)result.Symbol("TestLanguageCard"), (byte)(result.Symbol("TestLanguageCard") >> 8), 0x4C, 0x83, 0x02];
+        for (int i = 0; i < caller.Length; i++) { machine.Bus.Write((ushort)(call + i), caller[i]); }
+
+        byte romByte = machine.Bus.Peek(0xE000);
+        while (!machine.Processor.IsInstructionBoundary) { machine.StepCycle(); }
+        machine.Processor.Registers = machine.Processor.Registers with { ProgramCounter = call, X = 0x5A, Y = 0xA5 };
+        for (int step = 0; step < 200 && machine.Processor.Registers.ProgramCounter != call + 3; step++)
+        {
+            machine.StepInstruction();
+        }
+
+        machine.Processor.Registers.ProgramCounter.Should().Be((ushort)(call + 3), "the routine returned");
+        machine.Processor.Registers.X.Should().Be(0x5A);
+        machine.Processor.Registers.Y.Should().Be(0xA5);
+        machine.Bus.Peek(0x0300).Should().Be((byte)(card ? 1 : 0));
+        machine.Bus.Peek(0xE000).Should().Be(romByte, "the ROM is selected for reading at the end");
+    }
+
+    /// <summary>
     ///  The 1980 masters' FPBASIC is the II Plus's AppleSoft and Autostart Monitor.
     /// </summary>
     /// <param name="master">The System Master's file.</param>

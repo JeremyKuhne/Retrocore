@@ -163,14 +163,14 @@ public static class DmkFormat
     /// <remarks>
     ///  <para>
     ///   A track whose sectors are still the layout's, by ID, size and density, keeps its bytes, and only its sectors'
-    ///   data marks, data and CRCs are written, where they were; a sector that reads with a CRC error keeps the CRC
-    ///   it had when that still does not match. A track whose sectors differ from the layout's is laid out as
-    ///   <see cref="Write"/> lays it out, except that in a single-density-only image its single-density bytes are not
-    ///   doubled; so is one whose sectors no longer read back as the disk has them once written in place, as when one sector's
-    ///   data runs over another's ID. A track formatted again with the same sectors in the same order is written in
-    ///   place, so its gaps and any ID fields with no data stay. Bytes after the tracks stay.
-    ///   The header keeps its options and track length, growing for a longer track, and its cylinders and sides,
-    ///   growing for more. An unchanged disk writes the image it was read from.
+    ///   data marks, data and CRCs are written, where they were; a sector that reads with a CRC error keeps the CRC it
+    ///   had when that still does not match. A track whose sectors differ from the layout's is laid out as <see
+    ///   cref="Write"/> lays it out, except that in a single-density-only image its single-density bytes are not
+    ///   doubled; so is one whose sectors no longer read back as the disk has them once written in place, as when one
+    ///   sector's data runs over another's ID. A track formatted again with the same sectors in the same order is
+    ///   written in place, so its gaps and any ID fields with no data stay. Bytes after the tracks stay. The header
+    ///   keeps its options and track length, growing for a longer track, and its cylinders and sides, growing for more.
+    ///   An unchanged disk writes the image it was read from.
     ///  </para>
     ///  <para>
     ///   A single-density-only image holds no double-density sector, so a disk given one is written as

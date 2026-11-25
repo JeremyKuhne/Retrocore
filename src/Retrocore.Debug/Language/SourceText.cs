@@ -52,11 +52,11 @@ internal static class SourceText
     /// </summary>
     /// <remarks>
     ///  <para>
-    ///   The editor's documentation parse has always read a file's lines that way, so only a file's last line can
-    ///   end in a carriage return there. Lines without one are returned as they are.
+    ///   The editor's documentation parse has always read a file's lines that way: of the lines it parses, only a
+    ///   file's last can end in a carriage return. Lines without one are returned as they are.
     ///  </para>
     /// </remarks>
-    /// <param name="lines">The lines, which are not written to.</param>
+    /// <param name="lines">The lines as <see cref="Lines(string)"/> splits them, never empty; not written to.</param>
     /// <returns>The lines, or a copy with those carriage returns taken off.</returns>
     internal static string[] Rejoined(string[] lines)
     {

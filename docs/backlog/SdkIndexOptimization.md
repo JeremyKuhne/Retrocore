@@ -1,8 +1,9 @@
 # Backlog: language server SDK index speed
 
-Status: **steps 1–13 done (2026-11-24 and 25) and going to review; the candidates below are left.** The language server indexes every SDK ROM source when it starts,
-for links to other modules and workspace search (`SdkIndex`, 69 roots). This page tracks where that time and memory
-go, every change measured, and the candidates left, so a later round starts from evidence.
+Status: **steps 1–13 done (2026-11-24 and 25) and going to review; the candidates below are left.** The language
+server indexes every SDK ROM source when it starts, for links to other modules and workspace search (`SdkIndex`, 69
+roots). This page tracks where that time and memory go, every change measured, and the candidates left, so a later
+round starts from evidence.
 
 ## How it is measured
 
@@ -21,7 +22,7 @@ go, every change measured, and the candidates left, so a later round starts from
 - **Equivalence gate:** every change must leave the editor exactly as it was. A dump of all 181 ROM roots (repository
   and SDK) is compared with `main`'s: each root's assembled bytes' SHA-256, the editor's documentation diagnostics,
   the lint, every historical name's definition, every definition with its position and value, the CPU at every
-  line, and scoped name lookups (133,007 lines). It has matched exactly after every step.
+  line, and scoped name lookups (133,007 lines; 148,971 after the rebase). It has matched exactly after every step.
 - Release, Ryzen 9 9950X3D, pinned to two physical cores (`--affinity 80`), BenchmarkDotNet's default job. These are
   steady-state numbers; a fresh process also pays JIT and first use, about 3.5 s in total before this round.
 
@@ -31,7 +32,7 @@ Indexing every SDK root:
 
 | Step | Commit | Change | Time | Allocated | Time vs baseline | Allocated vs baseline |
 | --- | --- | --- | --- | --- | --- | --- |
-| Baseline | 9cc05eb0 | `main` after #141 | 1,162 ms | 1,389 MB | | |
+| Baseline | 9cc05eb0 | `main` after #141, with the benchmark | 1,162 ms | 1,389 MB | | |
 | 1 | 324a543e | Each source path made full once | 1,054 ms | 1,388 MB | −9% | 0% |
 | 2 | b4d421a9 | Each file read once per build | 1,017 ms | 1,313 MB | −12% | −5% |
 | 3 | c2c3bb00 | One prefiltered pass for macros | 949 ms | 1,081 MB | −18% | −22% |
@@ -50,6 +51,18 @@ AppleSoft's root alone: 50.1 ms and 67.7 MB at the baseline, 27.2 ms and 26.5 MB
 
 What the index keeps alive once built, from a heap walk (see [What the index keeps](#what-the-index-keeps)): 184 MB
 after step 12, 171 MB after step 13.
+
+The steps were measured on `main` after #141. The branch was then rebased onto `main` after #158, which converted
+more sources and tracks CPU directives; the commits above are the rebased ones. The editor's answers still match
+that `main`'s exactly (the dump is 148,971 lines there), and the rebased baseline and branch, run alternately
+three times each:
+
+| Indexing | Rebased baseline (9cc05eb0) | Rebased branch | Change |
+| --- | --- | --- | --- |
+| Every SDK root | 1,356, 1,385, 1,415 ms; 1,548 MB | 987, 953, 969 ms; 708 MB | −30%, −54% |
+| AppleSoft's root | 66, 67, 63 ms; 82.7 MB | 38, 32, 46 ms; 32.1 MB | about −40%, −61% |
+
+The CSV's `rebased-baseline` and `rebased` rows are the middle run of each.
 
 ### 1. Each source path made full once
 

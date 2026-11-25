@@ -34,8 +34,8 @@
 ;; INPUT takes three numbers and nothing is echoed. It turns the mouse on or off after `PR#n` as the low bit of each
 ;; character printed says, as CHR$(1) and CHR$(0) do. As on Apple's card, the Pascal 1.1 entries at $Cn0D-$Cn10
 ;; answer error 3. Apple's card has six more entries at $Cn1A-$Cn1F, among them reading a clamping bound's byte
-;; ($Cn1A) and setting the interrupt rate ($Cn1C); this card has none of them, and every one returns carry set
-;; (<UnsupportedEntry>).
+;; ($Cn1A) and setting the interrupt rate ($Cn1C); this card has none of them, and every one returns carry clear, as
+;; Apple's do, doing nothing else (<UnsupportedEntry>).
 ;;
 ;; HOW A CALL CROSSES INTO C#
 ;;
@@ -311,19 +311,21 @@ BasicOutput = BasicInput + 2
 ;; Out:   X = 3, carry = set
 .proc PascalEntry
     ldx #PASCAL_ERROR
-    ; Falls into UnsupportedEntry.
+    sec
+    rts
 .endproc
 
 ;; The entries at $Cn1A-$Cn1F, which this card does not have.
 ;;
 ;; Apple's card has six here, which the IIGS Firmware Reference names DIAGMOUSE, COPYRIGHT, TIMEDATA, SETVBLCNTS,
 ;; OPTMOUSE and STARTTIMER (MouseInterface.asm's `ReadClampByte` ... `StartTimer`). Every one of them returns carry
-;; clear there: TimeData, as Mouse Technical Note #2 documents, and the others, as the card's EPROM does. On this card
-;; all six return carry set.
-;; Out:   carry = set
-;; Keeps: X, Y
+;; clear there: TimeData, as Mouse Technical Note #2 documents, and the others, as the card's EPROM does. Here all
+;; six return carry clear too, so a program that checks the carry sees no error, but they do nothing else: no clamp
+;; byte comes back in $0578, and the interrupts keep following the display's vertical blanking.
+;; Out:   carry = clear
+;; Keeps: A, X, Y
 .proc UnsupportedEntry
-    sec
+    clc
     rts
 .endproc
 

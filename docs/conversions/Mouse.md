@@ -73,6 +73,6 @@ Firmware Reference), IIEROM82 and the Monitor's own keys (through the equates bo
 - Apple's BASIC input returns the line's length in X and Y; the old `Keeps: X, Y` on its BASIC entry was false for
   input. Its comment now says output keeps A, X and Y.
 - Each bank's last byte ($C2, $C1, $C3, $C8, $CD, $C1, $CE) is never read by the firmware; its purpose is not known.
-- The emulator's card answers $Cn1A-$Cn1F with carry set, where Apple's returns carry clear from all six (TimeData's as
-  Mouse Technical Note #2 documents, the others by their code); `UnsupportedEntry`'s comment says so. Changing that is a
-  behavior change, outside a conversion.
+- Apple's card returns carry clear from all six of $Cn1A-$Cn1F (TimeData's as Mouse Technical Note #2 documents, the
+  others by their code). The emulator's card answered them with carry set; a later change (not part of the conversion)
+  made its `UnsupportedEntry` return carry clear too, keeping A, X and Y, and `PascalEntry` its own carry set.

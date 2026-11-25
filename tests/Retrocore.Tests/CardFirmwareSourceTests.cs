@@ -41,11 +41,11 @@ public sealed class CardFirmwareSourceTests
         (setMouse & 0xFF).Should().Be(MouseRom.SetMouse & 0xFF);
         AtLabel(debug, memory, setMouse, "Mouse.rom.asm", ".proc SetMouse");
 
-        ushort driver = (ushort)debug.Resolve("Driver", memory);
+        ushort driver = (ushort)debug.Resolve("ProFileDriver", memory);
         (driver >> 8).Should().Be(0xC0 | proFileSlot);
-        (driver & 0xFF).Should().Be(ProFileRom.Driver & 0xFF);
-        AtLabel(debug, memory, driver, "ProFile.rom.asm", ".proc Driver");
-        debug.Label(memory, (ushort)(driver + 2)).Should().Be("Driver");
+        (driver & 0xFF).Should().Be(ProFileRom.ProFileDriver & 0xFF);
+        AtLabel(debug, memory, driver, "ProFile.rom.asm", ".proc ProFileDriver");
+        debug.Label(memory, (ushort)(driver + 2)).Should().Be("ProFileDriver");
 
         machine.Bus.RemoveMouse();
         machine.Bus.RemoveProFile(proFileSlot);
@@ -105,9 +105,9 @@ public sealed class CardFirmwareSourceTests
         SdkModules.AddTo(debug, Apple2Model.IIeEnhanced, s_inputs);
         string source = Path.GetFullPath(Path.Join(s_inputs, "ProFile.rom.asm"));
         string[] lines = File.ReadAllLines(source);
-        int line = Array.FindIndex(lines, Array.IndexOf(lines, ".proc Driver") + 1, IsCode) + 1;
+        int line = Array.FindIndex(lines, Array.IndexOf(lines, ".proc ProFileDriver") + 1, IsCode) + 1;
         List<ushort> entries = [.. debug.Modules.SelectMany(module => module.Entries(source, line))];
-        entries.Order().Should().Equal(Enumerable.Range(1, 7).Select(slot => (ushort)((0xC0 | slot) << 8 | (ProFileRom.Driver & 0xFF))));
+        entries.Order().Should().Equal(Enumerable.Range(1, 7).Select(slot => (ushort)((0xC0 | slot) << 8 | (ProFileRom.ProFileDriver & 0xFF))));
     }
 
     private static bool MouseInSlotTwo(SourceMapModule module) =>

@@ -78,8 +78,8 @@ Return = $FF58
 ;; Where <ServeMouse> puts an RTS for a moment, as Apple's firmware does.
 ZeroPageRts = $06
 
-;; The 6502's stack page: <CallCard> finds the bytes it pushed at `Stack+1,x` and up after a TSX.
-Stack = $0100
+;; The 6502's stack page: <CallCard> finds the bytes it pushed at `StackPage+1,x` and up after a TSX.
+StackPage = $0100
 
 ; The card's ports, indexed by Y = $n0.
 
@@ -344,11 +344,11 @@ BasicOutput = BasicInput + 2
 
     ; The slot's page, $Cn, as the command's upper bits say: from the caller's X, ...
     tsx
-    lda Stack + 3,x
+    lda StackPage + 3,x
     bmi FromZeroPage
     asl a
     bmi FromMonitor
-    lda Stack + 2,x                 ; the caller's X, $Cn
+    lda StackPage + 2,x             ; the caller's X, $Cn
     bne HaveSlot                    ; always: X = $Cn is never 0
 
     ; ... from an RTS at ZeroPageRts, whose JSR leaves its return address's high byte just below the stack, ...
@@ -359,14 +359,14 @@ FromZeroPage:
     jsr ZeroPageRts
     sty ZeroPageRts
     tsx
-    lda Stack,x
+    lda StackPage,x
     bne HaveSlot                    ; always
 
     ; ... or the same, through the Monitor.
 FromMonitor:
     jsr SaveRegisters::Return
     tsx
-    lda Stack,x
+    lda StackPage,x
 
     ; The ports, at $C080 + $n0.
 HaveSlot:
@@ -375,22 +375,22 @@ HaveSlot:
     asl a
     asl a
     tay
-    lda Stack + 5,x
+    lda StackPage + 5,x
     sta ValuePort,y                 ; the caller's A
-    lda Stack + 2,x
+    lda StackPage + 2,x
     sta XPort,y                     ; the caller's X
-    lda Stack + 3,x
+    lda StackPage + 3,x
     sta CommandPort,y               ; runs the command
 
     ; What the command returns, in place of what the caller gave.
     lda ValuePort,y
-    sta Stack + 5,x                 ; the A to return
+    sta StackPage + 5,x             ; the A to return
     lda XPort,y
-    sta Stack + 2,x                 ; the X to return
-    lda Stack + 4,x
+    sta StackPage + 2,x             ; the X to return
+    lda StackPage + 4,x
     and #<~CARRY
     ora CommandPort,y
-    sta Stack + 4,x                 ; the carry to return, with the caller's other flags
+    sta StackPage + 4,x             ; the carry to return, with the caller's other flags
     pla
     tay
     pla

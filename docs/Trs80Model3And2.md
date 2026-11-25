@@ -29,7 +29,7 @@ The ports are:
 
 | Port | Read | Write |
 | --- | --- | --- |
-| `$E0`-`$E3` | Interrupt status, active low: bit 0 the tape's signal rose, 1 it fell, 2 the 30 Hz clock | Interrupt mask |
+| `$E0`-`$E3` | Interrupt status, active low: bit 0 the tape's signal rose, 1 it fell, 2 the clock | Interrupt mask |
 | `$E4`-`$E7` | NMI status, active low: bit 7 the controller's INTRQ, 6 the motor timeout, 5 the reset button | NMI mask: bit 7 INTRQ, bit 6 the motor timeout |
 | `$E8`-`$EB` | `$FF`: no RS-232 board, which the ROM's set-up takes as none fitted | |
 | `$EC`-`$EF` | Acknowledges the clock | Bit 1 cassette motor, 2 wide characters, 3 alternate characters, 6 the Model 4's 4 MHz |
@@ -42,9 +42,18 @@ The ports are:
 | `$90`-`$93` | | Model 4: the speaker |
 | `$9C`-`$9F` | | Model 4P: the boot ROM |
 
-**Interrupts.** The real-time clock interrupts 30 times a second where `$E0` enables it, and reading `$EC` acknowledges
-it. The disk controller's INTRQ and the drives' motor timeout raise an NMI where `$E4` enables them. The reset button
-raises the NMI whatever the mask, with `$E4` bit 5 showing why.
+**Interrupts.** The real-time clock divides the 60 Hz vertical sync by two, interrupting 30 times a second; a Model 4
+or 4P at 4 MHz takes every vertical sync, 60 times a second, as their technical references say ("Real Time Clock":
+FAST stops the divider). The interrupt latches only while `$E0` bit 2 enables it, as the 4P's reference describes, and
+holds until a read of `$EC`-`$EF`; reading `$E0` leaves it. The Model 4 ROM, written for the Model III, counts 30 to
+a second, so at 4 MHz its `TIME$` counts two seconds for each real second. The disk controller's INTRQ and the
+drives' motor timeout raise an NMI where `$E4` enables them. The reset button raises the NMI whatever the mask, with
+`$E4` bit 5 showing why.
+
+**The Model 4's function keys.** Its ROM returns the codes at `FKEY1`, `FKEY2` and `FKEY3` (`$41EB`, `$41EC` and
+`$41F3`) for F1, F2 and F3, which it sets to `$60` (`` ` ``), `$1B` (escape) and `$08` (backspace); shift changes
+none of them. `$60` is also shift-@'s code, so F1 pauses a running BASIC program, as shift-@ does, until the next key,
+which `INKEY$` then gets.
 
 **Disks.** The FD1793 is the Model I's controller in WD179x mode: both densities, 179x step rates and record types. A
 drive select with bit 6 set holds the Z80 in WAIT until the controller asks for data or finishes, as Model III DOSes
@@ -101,8 +110,10 @@ The new machines, and now the Model I too, read four formats, by extension or, f
 | DMK | Raw tracks with their ID marks' offsets, single and double density. |
 | IMD | ImageDisk, the usual format for Model II disks: FM and MFM, compressed, deleted and bad sectors. |
 
-A changed disk saves to its image, or as JV3 or DMK, and on the Model III and 4 as JV1 (`.dsk`, `.jv1`) where it
-fits ([Devices.md](Devices.md#the-debug-protocol)). A disk read from IMD saves as another format.
+A changed disk saves to its image in its own format, or as JV3, DMK or IMD, and on the Model III and 4 as JV1 (`.dsk`,
+`.jv1`) where it fits ([Devices.md](Devices.md#the-debug-protocol)). A DMK or IMD image keeps its layout: its tracks,
+gaps and ID offsets, or its comment, modes and compression, so an unchanged disk saves byte for byte. A new IMD image
+is at 250 kbps, or at 500 kbps, an 8-inch drive's, when a track holds more than a 5¼-inch track does.
 
 ## DOSes
 
@@ -221,11 +232,11 @@ at Level II's addresses, so they have the BASIC thread as the Model I has.
 
 | Test | Checks |
 | --- | --- |
-| `Trs80Model3Tests` | The Model III's map, clock interrupt, keyboard and NMI; typed letters' keys, with shift for uppercase, and on Level I without shift; the Model 4's maps, paging, speed and 80x24; the 4P's boot ROM; the FD1793 with wait and NMI, INTRQ ending the wait; the cassette motor. |
+| `Trs80Model3Tests` | The Model III's map, clock interrupt and its mask, keyboard and NMI; the clock's 30 and 60 Hz; typed letters' keys, with shift for uppercase, and on Level I without shift; the Model 4's maps, paging, speed and 80x24; the 4P's boot ROM; the FD1793 with wait and NMI, INTRQ ending the wait; the cassette motor. |
 | `Trs80RomSourceTests` | Each source builds to its ROM's SHA-256, and with the dumps, byte for byte. |
-| `Trs80Model3RomTests` | The real ROMs, built from source: the Model III and Model 4 boot through `Cass?` and `Memory Size?` to BASIC and run a statement; the 4P, with no disk, says the drive is not ready; each Model II boot ROM asks for a diskette; `CSAVE` and `CLOAD` at 1500 and 500 baud, a hand-written 1500 baud CAS image loading; Level I booting to `READY`, taking a statement typed in lowercase, and saving and loading at 250 baud; and, with the [DOS images](#doses), each DOS booting to its prompt and listing its directory, and the Model 4's DOSes showing typed text in the case it was typed. |
+| `Trs80Model3RomTests` | The real ROMs, built from source: the Model III and Model 4 boot through `Cass?` and `Memory Size?` to BASIC and run a statement; the 4P, with no disk, says the drive is not ready; each Model II boot ROM asks for a diskette; the Model 4 ROM's clock counting the interrupts at 2 and 4 MHz; the Model 4's function keys' codes, with and without shift; `CSAVE` and `CLOAD` at 1500 and 500 baud, a hand-written 1500 baud CAS image loading; Level I booting to `READY`, taking a statement typed in lowercase, and saving and loading at 250 baud; and, with the [DOS images](#doses), each DOS booting to its prompt and listing its directory, and the Model 4's DOSes showing typed text in the case it was typed. |
 | `Trs80Model2Tests` | Banked RAM; the CTC's mode 2 keyboard interrupt with `RETI`, and an NMI's ignored fetch reading as `RETI`; the clock NMI; the 6845; the DMA reading a sector; IMD and DMK images. |
-| `Trs80Model3OracleTests` | Against MAME 0.264, video RAM cell for cell after the same keystrokes on the same ROMs: Model III and Model 4 BASIC running a program; with the [DOS images](#doses), TRSDOS 1.3, LDOS 5.1.3, TRSDOS 6.0 and 6.2 and LS-DOS 6.3 booting, taking the date and listing their directories; and the Model II's boot ROMs, versions 1, 2, 3 and 5, asking for a diskette. See [Comparing with MAME](#comparing-with-mame). |
+| `Trs80Model3OracleTests` | Against MAME 0.264, video RAM cell for cell after the same keystrokes on the same ROMs: Model III and Model 4 BASIC running a program; the Model 4's function keys and its clock's count at 2 MHz; with the [DOS images](#doses), TRSDOS 1.3, LDOS 5.1.3, TRSDOS 6.0 and 6.2 and LS-DOS 6.3 booting, taking the date and listing their directories; and the Model II's boot ROMs, versions 1, 2, 3 and 5, asking for a diskette. See [Comparing with MAME](#comparing-with-mame). |
 | [`tools/Test-Trs80Model3Dap.mjs`](../tools/Test-Trs80Model3Dap.mjs) | Each machine launching from stand-in dumps it writes, and the Model III and II from the SDK's sources, with source in the stack trace; the missing-dump error, threads, hardware rows, and the Model II's reset stop. |
 
 ## Comparing with MAME
@@ -235,8 +246,9 @@ types the same keystrokes at the same emulated seconds and dumps the screen's vi
 `:video_ram` share. The machine here runs the SDK's builds of the same ROMs over the same devices' time, counting 2 MHz
 T-states while the Model 4 runs at 4 MHz. The screens must then match, cell for cell. MAME comes from
 `RETROCORE_MAME`, `mame/mame` or `mame/mame.exe` in the external data folder, or a Linux package's (`apt install
-mame` puts it in `/usr/games`). Its ROM sets, `trs80m3` and `trs80m2`, are in `trs80-roms/mame`. Without them the
-tests are inconclusive.
+mame` puts it in `/usr/games`). Its ROM sets, `trs80m3`, `trs80m4` and `trs80m2`, are in `trs80-roms/mame`. Without
+its set the Model 4's tests build MAME's `trs80m4` set from the SDK's sources, after checking that the builds have the SHA-1s
+MAME lists for it (`mame -listroms trs80m4`), and the others are inconclusive.
 
 What the comparison has to allow for:
 
@@ -248,6 +260,13 @@ What the comparison has to allow for:
   Level II on the Model III and 4 and the DOSes ([Typed and pasted text](#typed-and-pasted-text)), so both press
   the same keys. Where they differed, TRSDOS 6.0, which starts with caps lock off, echoed `dir` here and `DIR` in
   MAME.
+- **Keys MAME cannot type.** A script entry `@port,field,state` presses (1) or releases (0) a key by MAME's port and
+  field names, such as `@:LINE7,F1,1`, for the function and shift keys.
+- **Time.** The script schedules by `machine.time:as_double()`; `machine.time.seconds` is only the whole seconds.
+- **The Model 4's clock at 4 MHz.** MAME 0.264 keeps it at 30 Hz, where the technical references give 60 Hz, so the
+  clock's count is compared at 2 MHz only. The Model 4 DOSes run at 4 MHz, so their comparisons run with the two
+  clocks at different rates; their screens after `DIR` show no time, but the cursor's blink, which the clock drives,
+  may be in a different phase.
 - **The cursor.** A DOS blinks its cursor, so one cell may differ, where one side shows a space, and only where the
   cursor waits, after everything else on the screen.
 - **The Model 4's screen.** The first 1,920 bytes of its 2K of video RAM, the 80 by 24 screen while the 6845 starts
@@ -265,4 +284,5 @@ What the comparison has to allow for:
 - **The RS-232 ports**, the Model 4's sound beyond the speaker bit, its hi-res graphics board and hard disks, and the
   Model II's hard disks and serial devices.
 - **The Model 16's 68000.**
-- **Writing disk images back**, as on the Model I.
+- **TRSDOS 1.3 writing**: its `DUMP` stops with `ERROR 11` after reading its directory, before it writes a sector,
+  and its `COPY` does not finish.

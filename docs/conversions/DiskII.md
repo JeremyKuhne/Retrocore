@@ -25,9 +25,9 @@ Only published sources are cited: books, manuals and actual listings.
   (X9), the marks `PROLOGUE_FIRST`, `PROLOGUE_SECOND`, `ADDRESS_MARK` and `DATA_MARK`, the table `ReadTranslate`
   (DNIBL), `LowBits`, `LOW_BITS_SIZE` and `GROUP_COUNT`, and the reader's locals (`WaitD5`, `CheckD5`, `WaitAA`,
   `WaitOdd`, `WaitEven`).
-- D2. The boot ROM defines its six switches itself rather than including Dos/RwtsEquates.asm, which brings RWTS's
-  variables and DOS's `DOS32` switch. Each switch's `Also:` cites DOS's name for the same switch with DOS's
-  documents (PHASEOFF, Q6L ...).
+- D2. The boot ROM defined its six switches itself rather than including Dos/RwtsEquates.asm, which brings RWTS's
+  variables and DOS's `DOS32` switch, each citing DOS's name for it with DOS's documents (PHASEOFF, Q6L ...). Since
+  D10 it includes the shared switches file instead, and still not RwtsEquates.asm.
 - D3. Page-zero bytes are aliases of IIeEquates' names (`BufferPointer = LowResBase`), as in DOS (P14). BITS, which
   holds a nibble, a half byte or a count by turns, is `Scratch`.
 - D4. Three routines, each one definition for both ROMs with `.if SECTORS` where they differ (the owner's D5):
@@ -51,8 +51,13 @@ Only published sources are cited: books, manuals and actual listings.
 
 - `ReadSector` searches for ever for a sector that is not on the track: nothing counts the tries.
 
-## Open questions for the owner
+## The open questions, settled by the owner
 
-- Q1. If a published listing of the boot ROM turns up, its names would go in `Also:` with a bibliography key.
-- Q2. `Hold` for Sather's NOP reads as "leave the latch alone"; `NoChange` or `Idle` would also fit.
-- Q3. A shared file of the Disk II's sixteen switches, included by DOS and the boot ROMs, would replace D2's copy.
+- D8 (was Q1). No published listing of the boot ROM is known, so nothing changes now; if one turns up, its names go in
+  `Also:` with a bibliography key.
+- D9 (was Q2). Sather's NOP stays `Hold` (D6).
+- D10 (was Q3). The Disk II's sixteen switches, `Phase0Off` to `WriteMode`, with DOS's names and citations where DOS
+  names them (it has none for phases 1 to 3), are one file,
+  [DiskII/Switches.asm](../../src/Retrocore.Machines.Apple2/Roms/DiskII/Switches.asm), which the boot ROMs, DOS's
+  RwtsEquates.asm and Software/Boot13.1983.asm include; it replaces D2's copy and the program's. Its comments describe
+  the controller, linking the routines in DOS and the boot ROM that step the head.

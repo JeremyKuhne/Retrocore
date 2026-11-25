@@ -25,6 +25,7 @@
     <ProjectReference Include="..\..\src\Retrocore.Generators\Retrocore.Generators.csproj"
                       Aliases="Generator" PrivateAssets="all" />
     <None Include="..\..\src\Retrocore.Machines.Apple2\Roms\Slot7.rom.asm" Link="Inputs\Slot7.rom.asm" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\src\Retrocore.Machines.Apple2\Roms\ProDosBlockDevice.asm" Link="Inputs\ProDosBlockDevice.asm" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

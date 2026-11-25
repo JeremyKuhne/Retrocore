@@ -49,6 +49,7 @@
     <None Include="..\..\src\Retrocore.Cpu.M6502\OpcodeTables.txt" Link="Inputs\OpcodeTables.txt" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\src\Retrocore.Pascal\Pcode.asm" Link="Inputs\Pcode.asm" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\src\Retrocore.Machines.Apple2\Roms\*.rom.asm" Link="Inputs\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\src\Retrocore.Machines.Apple2\Roms\ProDosBlockDevice.asm" Link="Inputs\ProDosBlockDevice.asm" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\src\Retrocore.Machines.Apple2\Roms\AppleSoft\*" Link="Inputs\AppleSoft\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\src\Retrocore.Basic\Roms\Microsoft6502Basic\*" Link="Inputs\Microsoft6502Basic\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\src\Retrocore.Machines.Apple2\Roms\System\*.asm" Link="Inputs\System\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
@@ -66,6 +67,7 @@
     <None Include="..\..\src\Retrocore.Machines.Apple2\Software\Boot13.*.asm" Link="Inputs\Software\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\src\Retrocore.Machines.Apple2\Roms\Dos\RwtsEquates.asm;..\..\src\Retrocore.Machines.Apple2\Roms\Dos\PreNibble.asm;..\..\src\Retrocore.Machines.Apple2\Roms\Dos\WriteSector.asm;..\..\src\Retrocore.Machines.Apple2\Roms\Dos\ReadData.asm;..\..\src\Retrocore.Machines.Apple2\Roms\Dos\ReadAddress.asm;..\..\src\Retrocore.Machines.Apple2\Roms\Dos\PostNibble.asm" Link="Inputs\Roms\Dos\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\src\Retrocore.Machines.Apple2\Roms\Dos\Equates.asm" Link="Inputs\Roms\Dos\Equates.asm" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\src\Retrocore.Machines.Apple2\Roms\DiskII\Switches.asm" Link="Inputs\Roms\DiskII\Switches.asm" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\src\Retrocore.Machines.Apple2\Roms\System\IIeEquates.asm" Link="Inputs\Roms\System\IIeEquates.asm" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\src\Retrocore.Machines.Apple2\Roms\System\MonitorEntries.asm" Link="Inputs\Roms\System\MonitorEntries.asm" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\src\Retrocore.Machines.Apple2\Roms\System\FirmwareEquates.asm" Link="Inputs\Roms\System\FirmwareEquates.asm" CopyToOutputDirectory="PreserveNewest" />

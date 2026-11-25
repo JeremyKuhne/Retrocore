@@ -29,22 +29,8 @@
 ;; Also: GETLN (A2RM78, A2RM79, IIEROM82, IIETRM85)
 GetLine = $FD6A
 
-; The Disk II controller's switches, at the address plus slot * 16, as RWTS names them (RwtsEquates.asm).
-
-;; Turns stepper phase 0 off; plus phase * 2 for phase n.
-Phase0Off = $C080
-
-;; Turns stepper phase 0 on; plus phase * 2 for phase n.
-Phase0On = $C081
-
-;; Turns on the motor of the card's selected drive.
-MotorOn = $C089
-
-;; Selects drive 1 of the card.
-SelectDrive1 = $C08A
-
-;; The data latch, read for each nibble in read mode.
-DataLatch = $C08C
+; The Disk II controller's switches, at the address plus slot * 16.
+.include "../Roms/DiskII/Switches.asm"
 
 ;; The half-track the head is on, the track between reads (slot 0's screen hole, as RWTS keeps it).
 CurrentTrack = $0478

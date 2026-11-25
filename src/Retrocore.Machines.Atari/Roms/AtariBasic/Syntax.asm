@@ -624,10 +624,10 @@ STOPPED_MESSAGE:
 ; the one matched; adjacent means without spaces before it; a routine's name is its call; and nothing is an
 ; alternative that matches nothing. A rule without a RETURN of its own continues into the rule after it.
 
-.if VERSION = VERSION_A
 ; Rev. A's expression rule takes a unary operator before any expression, so NOT NOT A and - -A pass; the later
 ; revisions take one only before an operand or a parenthesis, with an unsigned-expression rule. (- -1 passes in
 ; every revision, the later ones reading -1 as a signed constant.)
+.if VERSION = VERSION_A
 
 ;; The syntax tables' first rule, an expression's, which the other rules call by the code SYNTAX_EXPRESSION, as rev.
 ;; A has it.
@@ -1342,7 +1342,7 @@ RULE_MORE_USR_ARGUMENTS:
 ;; Each name's last character has bit 7 set, and a zero byte ends the table. <MATCH_OPERATOR> searches it for the
 ;; token a rule wants, and the lister prints a token's name from it. The search finds the first of two equal names,
 ;; so the tokens from OP_ASSIGN_NUMBER on, which <REPLACE> writes, are found only by their tokens, for the lister.
-;; The tokens $10, OP_SENTINEL, OP_ARRAY_PAREN and OP_DIM_ARRAY_PAREN are never wanted by a rule or listed.
+;; The tokens $10, OP_SENTINEL, OP_ARRAY_PAREN and OP_DIM_ARRAY_PAREN are never wanted by a rule, and list as nothing.
 ;; See: <OPERATOR_ROUTINES>, <SEARCH_NAMES>
 OPERATOR_NAMES:
     OPERATOR_CHARACTER $10, $02     ; a token no line holds: its name appears to be a placeholder

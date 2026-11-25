@@ -938,7 +938,7 @@ STATEMENT_PUT:
 ;; Entry: STATEMENT_GET_BYTE = with the IOCB set and its offset in X, for LOCATE
 STATEMENT_GET:
 .if VERSION >= VERSION_B
-    jsr FP_SET_INBUFF_LBUFF         ; rev. A reads the byte to wherever INBUFF was left, such as VAL's string
+    jsr FP_SET_INBUFF_LBUFF         ; rev. A reads to wherever INBUFF was left; a VAL in the # still moves it
 .endif
     jsr IOCB_FROM_HASH
 STATEMENT_GET_BYTE:

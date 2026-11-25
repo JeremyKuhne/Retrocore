@@ -309,7 +309,7 @@ READ_CONTROLLER_ERROR:
 
 ;; STR$(aexp): a number as the string PRINT would show.
 ;;
-;; The FP package's FASC writes the number into LBUFF (from LBPR2 or LBPR1, just before it, below 1), its last
+;; The FP package's FASC writes the number into LBUFF (or from LBPR2 or LBPR1, just before it), its last
 ;; character with bit 7 set; the function clears that bit, counts the length and returns the string where it is. It
 ;; isn't copied, so the next conversion that uses LBUFF overwrites it: of two STR$ in one expression, both have the
 ;; second's text.

@@ -68,7 +68,7 @@ ToReportError:
     jsr GetByte
     cmp NounStackLow,x
     bcc Substring::StringError
-    jsr CheckSubstringEnd
+    jsr Strings::CheckSubstringEnd
     sta NounStackHigh,x
 
 ;; Ends a substring token the way a left parenthesis ends, so the operators before it wait

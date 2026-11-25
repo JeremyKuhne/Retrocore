@@ -99,7 +99,8 @@ Documented in the code, not changed (the bytes stay):
   `SetHighMemory` draws a `VLIN` for a value below LOMEM instead of the RANGE error; `HLIN`'s and `VLIN`'s ends are not
   checked against the screen; Control-C's check covers one character when X is $81 or more.
 - After `INPUT` of numbers, `Running` is $FF whatever it was; in immediate mode (`IF ... THEN INPUT A`) the run loop
-  may take the typed line for a program line. Not run on a machine (an open question, below).
+  takes the typed line for a program line, and BASIC stops answering the keyboard until a reset. Confirmed on the
+  emulated II with the SDK's ROMs, and pinned by `IntegerBasicQuirkTests` (I16).
 - `NextTabStop` loops forever for a cursor column of $F8 or more, which a normal window never gives.
 - The floating point's FIX rounds a negative number toward 0 only when the fraction's top 8 bits are nonzero; a Return
   alone at the Mini-Assembler's `!` prompt is an error.
@@ -108,17 +109,23 @@ Comments found wrong and fixed include `GETQLINE`'s outputs, which string `EQ_ST
 for blanks before keywords, the verb priorities' example (* runs before a + that follows it), FORDROPOLD's account of
 which loop's byte a moved loop keeps, R14H's account in SWEET16, and where the Mini-Assembler's error caret lands.
 
-## Open questions for the owner
+## The open questions, settled by the owner
 
-- Q1. Rule names the grammar does not settle: `RULE_STATEMENTS_TEXT_TO_TAB` and `RULE_STATEMENTS_LIST_TO_IN` (SSTMT2
-  and SSTMT3) and `RULE_NUMBER_THEN_ARRAY` (SUNUSED1, which no rule calls).
-- Q2. `StashRegisters`, `RecoverRegisters` and `StashedA` ... (the two register routines at $F669 that nothing in the
-  ROM calls) are top level; they belong to no family.
-- Q3. Several helpers are top level only because each serves another file's subject (`CheckSubstringEnd`,
-  `BlankBeforeKeyword`, `WriteKeywordToken`, `ReadNextLineByte`, `PrintErrorMessage`); they could move into
-  `Strings`, `Lister`, `Tokenizer` and `Interpreter`.
-- Q4. Some `Keeps: X` contracts (SetPrompt, PrintMessage, PRINT's routines) rely on the output hook keeping X, as
-  Integer BASIC itself does (PrintDecimal counts in X across `CharacterOut`), though the Monitor's documentation
-  promises only Y, and a hook a program installs may not keep X.
-- Q5. The `Running` flag after `INPUT` in immediate mode, above.
-- Q6. The Red Book's Mini-Assembler listing calls $FC1A CURSUP; MonitorEntries' `CursorUp` does not give that name.
+The conversion left six questions; the owner settled each as recommended.
+
+- I12 (was Q1). The syntax rules keep the names that say what they match, by their first and last keywords:
+  `RULE_STATEMENTS_TEXT_TO_TAB` (rule 11, the statements whose tokens, $4B to $50, put them in the second page),
+  `RULE_STATEMENTS_LIST_TO_IN` (rule 27) and `RULE_NUMBER_THEN_ARRAY` (rule 1, which nothing calls).
+- I13 (was Q2). The two register routines at $F669, which nothing in the ROM calls, are the scope `Registers`
+  (`Registers::Stash`, `Registers::Recover`, `Registers::StashedA` ...): top level is for what everything reaches.
+- I14 (was Q3). The helpers that were top level only because their subject's scope was another converter's are in it:
+  `Strings::CheckSubstringEnd`, `Lister::BlankBeforeKeyword`, `Tokenizer::WriteKeywordToken`,
+  `Interpreter::ReadNextLineByte`, and the error printers `Messages::PrintError` and `Messages::PrintThenBeep`.
+- I15 (was Q4). The `Keeps: X` contracts that pass through the output routine stay: they hold with the Monitor's own
+  output, which Integer BASIC itself relies on (`PrintDecimal` counts in X across `CharacterOut`), and the debugger's
+  run found them kept. Whether the Monitor's `ScreenOut` keeps X in every build, to document it there, is a separate
+  task.
+- I16 (was Q5). `INPUT` in immediate mode leaving BASIC in the run loop is a bug of the ROM, documented on
+  `Statements::InputNumber` and pinned by a test, so the bytes are never "fixed".
+- I17 (was Q6). CURSUP, the Red Book's Mini-Assembler listing's name for $FC1A, joins the Monitor's `CursorUp`
+  (`Also: CURSUP (A2RM78)`, in Monitor/Screen.asm and MonitorEntries.asm), as DOS's INSDS2 joined the Monitor's entry.

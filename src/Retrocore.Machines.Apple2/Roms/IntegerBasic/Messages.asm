@@ -27,11 +27,12 @@
 ;;
 ;; Each message is its characters with bit 7 set on all but the last. The routines that report an error load Y with
 ;; the low byte of a message's address, its offset in this page (`ldy #<Messages::TooLong`). An error prints
-;; <Messages::ErrorStart>, the message and <Messages::ErrorEnd> (<PrintErrorMessage>): `*** >32767 ERR` for the first.
+;; <Messages::ErrorStart>, the message and <Messages::ErrorEnd> (<Messages::PrintError>): `*** >32767 ERR` for the
+;; first.
 .scope Messages
 
 ;; `>32767`: a number that does not fit in 15 bits, or a result past 32767.
-;; See: <ReportError>, <PrintMessage>, <PrintErrorMessage>
+;; See: <ReportError>, <PrintMessage>, <Messages::PrintError>
 ;; Also: ErrMsg00 (IBSM)
 GreaterThan32767:
     Message ">32767"
@@ -181,7 +182,9 @@ Retype:
 ;; is not a list of numbers prints its error and RETYPE LINE (<Messages::StopOrRetype>), and is read again from
 ;; <InputNumber::ReadLine>; Control-C in the line goes back to BASIC's prompt (<ReadNumberLine>).
 ;;
-;; The tokenizing leaves <Running> at $FF, as a running program has it, whatever it was before.
+;; The tokenizing leaves <Running> at $FF, as a running program has it, whatever it was before. A bug: in a line typed
+;; without a number, which reaches `INPUT` through `IF ... THEN`, the run loop (<Lines::RunLoop>) then takes the typed
+;; line for a program line, and BASIC stops answering the keyboard until a reset (IntegerBasicQuirkTests pins this).
 ;; In: X = the noun stack, its top entry the first variable's address
 ;; Out: X = the noun stack, the variable popped
 ;; Uses: A, Y, Accumulator, Auxiliary, TextIndex, TokenIndex

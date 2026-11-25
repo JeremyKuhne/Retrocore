@@ -228,8 +228,8 @@ Done:
 ;; <Pointer2> remembers what was printed last: 0 after the line number, a constant's marker shifted left, the token
 ;; that ended a name or text, a keyword's last character less $A0, or $A0 after a blank. Only a name right after the
 ;; line number, where <Pointer2> is 0, gets a blank before it; a keyword that starts with a letter gets one unless a
-;; blank came last, the only value with bit 7 set (<BlankBeforeKeyword>). X is saved in <SavedX> and restored before the
-;; Return.
+;; blank came last, the only value with bit 7 set (<Lister::BlankBeforeKeyword>). X is saved in <SavedX> and restored
+;; before the Return.
 ;; In: Pointer1 = the line's length byte
 ;; Out: Pointer1 = the next line
 ;; Uses: A, Y, Pointer2, LeadingZero, Accumulator, DecimalNumber, DigitPlace, DigitCharacter
@@ -333,7 +333,7 @@ KeywordStart:
     bne CountKeywords               ; not this keyword yet
     bit Pointer2
     bmi PrintKeyword                ; a blank came last: no other before the keyword
-    jsr BlankBeforeKeyword                    ; a blank before a keyword starting with a letter
+    jsr Lister::BlankBeforeKeyword                    ; a blank before a keyword starting with a letter
 
     ; Print the keyword's characters, down the page, through the one with bit 6 set.
 PrintKeyword:

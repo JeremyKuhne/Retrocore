@@ -474,6 +474,9 @@ Done:
 
 .endscope
 
+; Tokenizer: writing a matched keyword's token.
+.scope Tokenizer continued
+
 ;; A keyword matched (<Tokenizer::GotKeyword>): writes its token and goes on (<Tokenizer::PutTokenAndNext>), or fails if
 ;; it is a reserved word, a token of $85 and up.
 ;;
@@ -490,6 +493,8 @@ Reserved:
     ldy #2
     jmp Tokenizer::ItemFailed
 .endproc
+
+.endscope
 
 ; DSP and CON.
 .scope Statements continued
@@ -813,6 +818,9 @@ Return:
 
 .endscope
 
+; Interpreter: reading the next byte of a line.
+.scope Interpreter continued
+
 ;; Reads the next byte of the line (<Interpreter::ReadNextByte>), with Y = 0.
 ;; Out: A = the byte, Y = 0
 ;; Keeps: X, carry
@@ -821,6 +829,8 @@ Return:
     ldy #0
     jmp Interpreter::ReadNextByte
 .endproc
+
+.endscope
 
 ;; Moves down a line for <TabToColumn>, and takes the column less the window's width as the column on that line.
 ;; In: A = the column less the window's width

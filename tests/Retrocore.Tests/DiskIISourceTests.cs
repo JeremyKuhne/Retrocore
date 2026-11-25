@@ -146,7 +146,6 @@ public sealed class DiskIISourceTests
 
         string boot = SdkModules.DiskIIPath("Boot.asm", s_inputs);
         debug.Resolve("ReadSector").Should().Be(0xC65C);
-        debug.Resolve("READ").Should().Be(0xC65C, "the old name reaches the definition");
         DebugPosition? position = debug.Position(new Apple2TestMemory(machine.Bus), 0xC65C);
         SourceLine line = position?.Chain[0] ?? throw new AssertFailedException("No source for ReadSector.");
         line.Path.Should().Be(Path.GetFullPath(boot));

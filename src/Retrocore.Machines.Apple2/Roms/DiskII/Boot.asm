@@ -27,8 +27,8 @@
 ;; routine less one before it started, so the RTS goes on to that routine, where the bits are put back together.
 ;; DOS 3.2's boot sector calls the reader at $Cn5D as a subroutine, and the RTS returns to it.
 ;;
-;; The names here are the SDK's, in full words; the names an earlier version of this source used, whose origin is
-;; unclear, are in each definition's `Also:`. docs/conversions/DiskII.md records the decisions.
+;; The names here are the SDK's: no published listing of this ROM is known. The switches also carry DOS's names for
+;; them. docs/conversions/DiskII.md records the decisions.
 ;;
 ;; It includes the IIe's equates (../System/IIeEquates.asm), for the page-zero bytes it borrows, and the Monitor's
 ;; entry points (../System/MonitorEntries.asm), for the Monitor routines it calls.
@@ -49,7 +49,6 @@
 ;; sector that calls <ReadSector> again sets the page in its high byte, $27. DOS's boot sector names it
 ;; <Dos33:Boot::BufferPointer>.
 ;; See: <Sector>, <ReadSector>, <BootSector>
-;; Also: BUFFER (UNKN)
 BufferPointer = LowResBase
 
 .if SECTORS = 13
@@ -58,7 +57,6 @@ BufferPointer = LowResBase
 ;; <ReadSector> sets it to 3 as it starts on the address field, and <PostNibble> counts it down, rebuilding
 ;; <GROUP_COUNT> bytes in each pass.
 ;; See: <ReadSector>, <PostNibble>, <GROUP_COUNT>
-;; Also: COUNT (UNKN)
 PassCount = ScrollBase
 .endif
 
@@ -67,7 +65,6 @@ PassCount = ScrollBase
 ;; <Boot> works it out from its own address, $Cn00, and keeps it here for the boot sector; the 16-sector ROM also
 ;; passes it in X. DOS's boot sector reads it here as <Dos33:Boot::SlotTimes16>.
 ;; See: <Boot>, <ReadSector>, <Dos33:Boot::SlotTimes16>
-;; Also: SLOTX16 (UNKN)
 SlotTimes16 = ScrollBaseHigh
 
 ;; The ROM's scratch byte: the nibble or bits being tested, the odd-bits half of a 4-and-4 pair, or a count.
@@ -76,7 +73,6 @@ SlotTimes16 = ScrollBaseHigh
 ;; nibble of each address field byte here, rotated left, and its data field loops keep their count here while Y holds
 ;; the nibble.
 ;; See: <ReadSector>, <ReadTranslate>
-;; Also: BITS (UNKN)
 Scratch = Address1
 
 ;; The sector <ReadSector> looks for, the number in its address field.
@@ -85,7 +81,6 @@ Scratch = Address1
 ;; boot sector's first byte, and a boot sector that calls <ReadSector> again sets it first. DOS's boot sector names it
 ;; <Dos33:Boot::Sector>.
 ;; See: <BufferPointer>, <ReadSector>
-;; Also: SECTOR (UNKN)
 Sector = Address1High
 .if SECTORS = 16
 
@@ -94,65 +89,53 @@ Sector = Address1High
 ;; <ReadSector> saves each byte of the field here as it reads the next; after the sector, the track is left, and it
 ;; compares it with <Track>.
 ;; See: <Track>, <ReadSector>
-;; Also: FOUNDTRACK (UNKN)
 FoundTrack = Address3
 
 ;; The track the 16-sector ROM expects, always 0.
 ;;
 ;; <ReadSector> skips a sector whose address field shows another track. The 13-sector ROM checks only the sector.
 ;; See: <FoundTrack>, <Sector>, <ReadSector>
-;; Also: TRACK (UNKN)
 Track = Address3High
 .endif
 
 ; Pages 1, 3 and 8.
 
 ;; The 6502's stack, page 1.
-;; Also: STACK (UNKN)
 Stack = $0100
 .if SECTORS = 13
 
 ;; The 154 five-bit values that carry the bytes' low bits, $0800-$0899.
-;; Also: LOWBITS (UNKN)
 LowBits = $0800
 
 ;; The five-bit value of each nibble, indexed by the nibble: only $AB-$FF are used, $08AB-$08FF.
-;; Also: DNIBL (UNKN)
 ReadTranslate = $0800
 
 ;; Where bit 1 of each <LowBits> value is set aside for the boot sector, collected in 51 bytes.
 ;;
 ;; DOS 3.2's boot sector, which finishes the sector, names it <Dos32:Boot::Stage1::RomUpper>.
-;; Also: UPPER (UNKN)
 SpareBit1 = $0399
 
 ;; Where bit 0 of each <LowBits> value is set aside for the boot sector, collected in 51 bytes.
 ;;
 ;; DOS 3.2's boot sector names it <Dos32:Boot::Stage1::RomLower>.
-;; Also: LOWER (UNKN)
 SpareBit0 = $03CC
 
 ;; Where the boot sector goes; its first byte must be $99.
-;; Also: BOOT1 (UNKN)
 BootSector = $0300
 .else
 
 ;; 86 values, each the low bit pairs of three bytes, $0300-$0355; DOS 3.3 keeps them in <Dos33:DiskII::LowBits>.
-;; Also: LOWBITS (UNKN)
 LowBits = $0300
 
 ;; The six-bit value of each nibble from $96, stored from here and indexed by the nibble less $80.
 ;;
 ;; <ReadTranslate> is the same table, indexed by the nibble itself.
-;; Also: DECODE (UNKN)
 NibbleValues = $0356
 
 ;; <NibbleValues> indexed by the nibble itself, as DOS 3.3 indexes its <Dos33:DiskII::ReadTranslate>.
-;; Also: DNIBL (UNKN)
 ReadTranslate = NibbleValues - $80
 
 ;; Where the boot sector goes; its first byte is the number of sectors to read.
-;; Also: BOOT1 (UNKN)
 BootSector = $0800
 .endif
 
@@ -165,14 +148,14 @@ BootSector = $0800
 ;; <Boot> turns the phase the head is on off and the next one down on, half a track at a time, enough times to drive
 ;; the head out to track 0 from anywhere.
 ;; See: <Phase0On>, <Boot>, <Dos33:Phase0Off>
-;; Also: PHASE0OFF (UNKN), PHASEOFF (DOS33, DOS31)
+;; Also: PHASEOFF (DOS33, DOS31)
 Phase0Off = $C080
 
 ;; Reading it turns stepper phase 0 on; Phase0On + n * 2, plus <SlotTimes16>, turns phase n on (n = 0-3).
 ;;
 ;; <Boot> turns on the phase for the next half-track out, then waits for the head to move.
 ;; See: <Phase0Off>, <Boot>, <Dos33:Phase0On>
-;; Also: PHASE0ON (UNKN), PHASEON (DOS33, DOS31)
+;; Also: PHASEON (DOS33, DOS31)
 Phase0On = $C081
 
 ;; Reading it, plus <SlotTimes16>, turns on the motor of the card's selected drive.
@@ -186,67 +169,58 @@ MotorOn = $C089
 ;;
 ;; The boot ROM always boots from drive 1.
 ;; See: <MotorOn>, <Dos33:SelectDrive1>
-;; Also: DRIVE1 (UNKN), DRV1EN (DOS33)
+;; Also: DRV1EN (DOS33)
 SelectDrive1 = $C08A
 
 ;; Reading it, plus <SlotTimes16>, turns Q6 off and returns the data latch: in read mode, the nibble being read.
 ;;
 ;; A nibble is complete when bit 7 is set, so each of <ReadSector>'s loops reads it until bit 7 is 1.
 ;; See: <ReadMode>, <ReadSector>, <Dos33:DataLatch>
-;; Also: DATALATCH (UNKN), Q6L (DOS33, DOS31)
+;; Also: Q6L (DOS33, DOS31)
 DataLatch = $C08C
 
 ;; Reading it, plus <SlotTimes16>, turns Q7 off: the controller reads from the disk rather than writing.
 ;;
 ;; <Boot> reads it, then <DataLatch> to turn Q6 off too, before it starts the motor.
 ;; See: <DataLatch>, <Dos33:ReadMode>
-;; Also: READMODE (UNKN), Q7L (DOS33, DOS31)
+;; Also: Q7L (DOS33, DOS31)
 ReadMode = $C08E
 
 ; The nibbles that mark the fields of a sector on the disk. Both kinds of field start D5 AA, a pair that never occurs
 ; inside one; the third nibble says which kind it is.
 
 ;; The first nibble of every field's prologue, D5, which no data nibble is.
-;; Also: MARK1 (UNKN)
 PROLOGUE_FIRST = $D5
 
 ;; The second nibble of every field's prologue, AA, which no data nibble is either.
-;; Also: MARK2 (UNKN)
 PROLOGUE_SECOND = $AA
 .if SECTORS = 13
 
 ;; The third nibble of an address field's prologue on a 13-sector disk, B5.
-;; Also: ADDRMARK (UNKN)
 ADDRESS_MARK = $B5
 .else
 
 ;; The third nibble of an address field's prologue on a 16-sector disk, 96.
-;; Also: ADDRMARK (UNKN)
 ADDRESS_MARK = $96
 .endif
 
 ;; The third nibble of a data field's prologue, AD.
-;; Also: DATAMARK (UNKN)
 DATA_MARK = $AD
 .if SECTORS = 13
 
 ;; The bytes <PostNibble> rebuilds in each of its three passes, 51.
-;; Also: PASSLENGTH (UNKN)
 GROUP_COUNT = 51
 
 ;; The nibbles of low bits in a data field: 256 * 3 bits, five to a nibble, in three runs of <GROUP_COUNT> and the
 ;; last byte's.
-;; Also: LOWCOUNT (UNKN)
 LOW_BITS_SIZE = 3 * GROUP_COUNT + 1
 .else
 
 ;; The nibbles of low bits in a data field, 86: 256 pairs, three to a nibble.
-;; Also: LOWCOUNT (UNKN)
 LOW_BITS_SIZE = 86
 .endif
 
 ;; The delay between steps of the head, about 20 milliseconds: <Delay> with A = $56 takes 19,664 cycles.
-;; Also: STEPDELAY (UNKN)
 STEP_DELAY = $56
 
 ;; The count <Boot> starts its half-track steps from, 80: it counts down to 0, so it takes 81 steps toward track 0,
@@ -269,14 +243,12 @@ STEP_COUNT = 80
 ;; `NibbleValues`. For 13 sectors it tries each byte downward from $FF and gives the next number, downward from $1F,
 ;; to each that is a valid 5-and-3 nibble: one with no two adjacent 0 bits that is not the D5 that starts a field.
 ;; The 32nd is $AB.
-;; Also: BOOT0 (UNKN)
 .proc Boot
     ldx #$20
 .if SECTORS = 13
     ldy #$00                        ; Y is the nibble tried; DEY makes the first $FF
 
 ;; Tries the next nibble down.
-;; Also: NEWNIB (UNKN)
 NextNibble:
     lda #$03
     sta Scratch                     ; the pair of bits to test, from bits 0 and 1 up to bits 6 and 7
@@ -285,7 +257,6 @@ NextNibble:
     tya
 
 ;; Tests the next pair of bits.
-;; Also: NEXTBIT (UNKN)
 NextPair:
     bit Scratch
     beq NextNibble                  ; two adjacent 0 bits
@@ -302,7 +273,6 @@ NextPair:
     ldx #$83 - $80                  ; X is the nibble less $80
 
 ;; Tries the next nibble up.
-;; Also: NEXTNIB (UNKN)
 NextNibble:
     stx Scratch
     txa
@@ -314,7 +284,6 @@ NextNibble:
     and #$7E                        ; a 1 now marks each pair of adjacent 0 bits
 
 ;; Shifts out the marks of adjacent 0 bits, rejecting the nibble at a second one.
-;; Also: NOPAIR (UNKN)
 CountPairs:
     bcs NotValid                    ; a second pair of adjacent 0 bits
     lsr a
@@ -324,7 +293,6 @@ CountPairs:
     iny
 
 ;; Goes on to the next nibble.
-;; Also: NOTVALID (UNKN)
 NotValid:
     inx
     bpl NextNibble
@@ -362,7 +330,6 @@ NotValid:
     ldy #STEP_COUNT
 
 ;; Takes one half-track step out.
-;; Also: SEEK (UNKN)
 Seek:
     lda Phase0Off,x
     tya
@@ -410,7 +377,6 @@ Seek:
 ;; For 16 sectors, at the end, <BufferPointer> and <Sector> have moved on a page and a sector, and X is
 ;; <SlotTimes16>. While the sector count in <BootSector>'s first byte is not reached, it reads the next sector itself.
 ;; In: X = <SlotTimes16>
-;; Also: READ (UNKN)
 .proc ReadSector
 .if SECTORS = 16
 .assert * = $C65C, "DOS 3.3 and ProDOS call the 16-sector ROM's sector reader at $Cn5C."
@@ -418,26 +384,22 @@ Seek:
     clc
 
 ;; Saves the carry, which says which field is wanted.
-;; Also: READ2 (UNKN)
 NextField:
     php
 
     ; A nibble is complete once its top bit is 1: the loops on DataLatch wait for each one.
 
 ;; Waits for a D5.
-;; Also: PROLOG1 (UNKN)
 WaitD5:
     lda DataLatch,x
     bpl WaitD5
 
 ;; Checks for the D5 that starts a prologue.
-;; Also: ISD5 (UNKN)
 CheckD5:
     eor #PROLOGUE_FIRST
     bne WaitD5
 
 ;; Waits for the AA after it.
-;; Also: PROLOG2 (UNKN)
 WaitAA:
     lda DataLatch,x
     bpl WaitAA
@@ -446,7 +408,6 @@ WaitAA:
     nop                             ; timing: the next nibble is not ready yet
 
 ;; Waits for the mark that says which field this is.
-;; Also: PROLOG3 (UNKN)
 WaitMark:
     lda DataLatch,x
     bpl WaitMark
@@ -462,7 +423,6 @@ WaitMark:
 ;; first holds the byte's odd bits, the second its even bits, each with the other bits set. The ROM reads the
 ;; first three and checks the sector, left in A, and for 16 sectors the track, left in `FoundTrack`; the
 ;; 13-sector ROM checks only the sector.
-;; Also: ADDRESS (UNKN)
 AddressField:
     ldy #$03
 .if SECTORS = 13
@@ -470,13 +430,11 @@ AddressField:
 .else
 
 ;; Keeps the byte just read, so that the track is left in <FoundTrack>.
-;; Also: FIELD (UNKN)
 NextFieldByte:
     sta FoundTrack
 .endif
 
 ;; Waits for a byte's first nibble, its odd bits.
-;; Also: ODDBITS (UNKN)
 WaitOdd:
     lda DataLatch,x
     bpl WaitOdd
@@ -484,7 +442,6 @@ WaitOdd:
     sta Scratch
 
 ;; Waits for its second nibble, its even bits, and combines them.
-;; Also: EVENBITS (UNKN)
 WaitEven:
     lda DataLatch,x
     bpl WaitEven
@@ -509,17 +466,14 @@ WaitEven:
 ;; (six for 16 sectors, five for 13) into the buffer, then a checksum nibble. Each nibble on the disk is its value
 ;; exclusive-ored with the value before, so A, exclusive-ored with each decoded nibble in turn, runs as the values
 ;; themselves.
-;; Also: DATA (UNKN)
 DataField:
     ldy #LOW_BITS_SIZE
 
 ;; Keeps the count of low-bits values left.
-;; Also: READLOWS (UNKN)
 LowBitsLoop:
     sty Scratch
 
 ;; Waits for the next low-bits nibble.
-;; Also: LOWSNIB (UNKN)
 WaitLow:
     ldy DataLatch,x
     bpl WaitLow
@@ -530,12 +484,10 @@ WaitLow:
     bne LowBitsLoop
 
 ;; Keeps the index of the next byte.
-;; Also: READHIGHS (UNKN)
 HighBitsLoop:
     sty Scratch
 
 ;; Waits for the next high-bits nibble.
-;; Also: HIGHSNIB (UNKN)
 WaitHigh:
     ldy DataLatch,x
     bpl WaitHigh
@@ -546,7 +498,6 @@ WaitHigh:
     bne HighBitsLoop
 
 ;; The checksum nibble brings the running value to zero; any other value reads the sector again.
-;; Also: CHECKSUM (UNKN)
 WaitChecksum:
     ldy DataLatch,x
     bpl WaitChecksum
@@ -557,7 +508,6 @@ WaitChecksum:
 .else
 
 ;; Reads the sector again after a bad checksum, or reads the next one.
-;; Also: MORE (UNKN)
 ReadNext:
     bne ReadSector
 
@@ -566,12 +516,10 @@ ReadNext:
     ldy #$00
 
 ;; Starts again at the last of the low-bits values.
-;; Also: NEWTWOS (UNKN)
 RestartLowBits:
     ldx #LOW_BITS_SIZE
 
 ;; Puts the next byte's two low bits back.
-;; Also: NEXTTWOS (UNKN)
 NextLowBits:
     dex
     bmi RestartLowBits
@@ -608,17 +556,14 @@ NextLowBits:
 ;; prints ERR. <ReadSector>'s RTS comes here on the boot's own read, with the ROM's page and this routine's address less
 ;; one pushed by <Boot>.
 ;; In: A = 0, PassCount = 3
-;; Also: DENIB (UNKN)
 .proc PostNibble
     tay
 
 ;; Starts a pass.
-;; Also: DENIBPASS (UNKN)
 NextPass:
     ldx #$00
 
 ;; Rebuilds the next byte.
-;; Also: DENIBNEXT (UNKN)
 NextByte:
     lda LowBits,y
     lsr a
@@ -645,7 +590,6 @@ NextByte:
     jmp BootSector + 1
 
 ;; Prints ERR: the sector was not written for this ROM.
-;; Also: FAILED (UNKN)
 Failed:
     jmp PrintError
 

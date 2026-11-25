@@ -144,7 +144,8 @@ try {
             machine: "apple2", romDirectory: roms, model: "iie-enhanced", stopOnEntry: true,
             program: join(root, "artifacts", "iie-sample", "main.bin"), loadAddress: 0x6000, machineState: saved
         });
-        assert.equal((await event("stopped")).reason, "entry", "the session's configuration is done, so it starts at once");
+        await request("configurationDone");
+        assert.equal((await event("stopped")).reason, "entry", "the relaunch starts on its own configurationDone");
         const restored = await request("retro/devices");
         assert.equal(slotRow(restored, "slot4").value, "Mockingboard");
         assert.equal(slotRow(restored, "slot5").value, "Disk II controller, 16-sector");

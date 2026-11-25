@@ -70,9 +70,9 @@ async function type(line) {
 async function launch(args, filters) {
     events.length = 0;
     phase("launching");
-    // A launch after the first starts at once, as configuration is done, so the filters are set before it.
-    await request("setExceptionBreakpoints", { filters: filters ?? [] });
+    // Each launch waits for its own configurationDone, so its filters are set after it, as a client configures it.
     await request("launch", { machine: "apple1", sdkRoms, stopOnEntry: false, speed: "max", ...args });
+    await request("setExceptionBreakpoints", { filters: filters ?? [] });
     await request("configurationDone");
 }
 

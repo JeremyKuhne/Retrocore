@@ -91,8 +91,10 @@ internal sealed partial class DebugSession
     private ulong _measureCycles;
     private double _measured = double.NaN;
 
-    // VS Code sends breakpoints and configurationDone in answer to the initialized event, which the server sends
-    // right after initialize, so they can arrive before launch has loaded the modules they bind to.
+    // Each launch sends the initialized event and waits for its own configurationDone, so the breakpoints and
+    // exception filters sent in answer to it are in place before the machine starts. A configurationDone that came
+    // before any launch is kept here for the next launch; a launch takes it, so a later launch on the same connection
+    // waits for its own.
     private bool _configured;
     private bool _started;
 
@@ -185,8 +187,10 @@ internal sealed partial class DebugSession
         transport.On("retro/memory/variable", args => Reply(() => MemoryVariable(args)));
         transport.On("configurationDone", args => Reply(() =>
         {
-            _configured = true;
-            if (_target is not null) { Start(); }
+            // It starts the launch it configures. With no launch it waits for the next one; once the launch has
+            // started, there is nothing left to configure.
+            if (_target is null) { _configured = true; }
+            else { Start(); }
             return [];
         }));
 
@@ -1064,9 +1068,11 @@ internal sealed partial class DebugSession
 
         Notify("initialized", []);
 
-        // A configurationDone that came first starts the machine once this response is on its way.
+        // A configurationDone that came before the launch starts the machine once this response is on its way. The
+        // launch takes it: a launch after this one waits for a configurationDone of its own.
         if (_configured)
         {
+            _configured = false;
             _ = Task.Run(() =>
             {
                 lock (_gate) { Start(); }

@@ -5,7 +5,7 @@
 ;; (the `CONV` functions).
 ;;
 ;; A long integer is eight bytes of two's complement, most significant byte first, from -(2^63) to 2^63-1; a long
-;; variable's value is those eight bytes as they are, and <VALTYP> is <LongInteger::VALUE_TYPE> while one is in the
+;; variable's value is those eight bytes as they are, and <VALTYP> is <VALUE_TYPE_LONG_INTEGER> while one is in the
 ;; <FAC>. The arithmetic works on three eight-byte numbers in BASIC's zero page: <FAC> (over the real one's bytes),
 ;; <ARG> and <RES>, with the byte below RES (RES-1) catching a product's or quotient's overflow. Most routines reach
 ;; their operands through <PTR1>, <PTR2> and <PTR3>, which <LongInteger::PointAtOperands> points at <FAC>, <ARG> and
@@ -24,9 +24,6 @@ SIZE = 8
 
 ;; The bits of a long integer.
 BITS = 8 * SIZE
-
-;; <VALTYP> for a long integer: bit 6 set, which a BIT <VALTYP> copies into the overflow flag.
-VALUE_TYPE = $40
 
 ;; The bytes of the binary-coded decimal number <LongInteger::FacToDigits> builds in <ARG> and the two bytes after it.
 DECIMAL_SIZE = SIZE + 2
@@ -55,13 +52,13 @@ RELATION_GREATER = 1
 ;; to the even one. There is no exponent. -(2^63) itself can't be read: its digits are an overflow before the sign is
 ;; applied.
 ;; In: TXTPTR = the number's first character
-;; Out: FAC = the number, VALTYP = <LongInteger::VALUE_TYPE>, TXTPTR = the first character after it
+;; Out: FAC = the number, VALTYP = <VALUE_TYPE_LONG_INTEGER>, TXTPTR = the first character after it
 ;; Errors: ERROV = the number is out of range
 ;; Uses: ARG, KIMY, YSAVE, PTR1, PTR2, PTR3
 ;; See: <FIN>, <LongInteger::FormatFac>
 ;; Also: LINP (BB13)
 .proc ReadNumber
-    lda #VALUE_TYPE
+    lda #VALUE_TYPE_LONG_INTEGER
     sta VALTYP
     lda #0
     sta KIMY                                ; bit 7 set for a minus sign
@@ -1245,7 +1242,7 @@ Done:
 ;; 2^56: from 2^56 on, the eight bytes are read from that page instead of from <ARG>, and the result is wrong. For a
 ;; zero, which skips the loop, Y is what <INT> left.
 ;; In: FAC = the value, VALTYP = its type
-;; Out: FAC = the long integer, VALTYP = <LongInteger::VALUE_TYPE>
+;; Out: FAC = the long integer, VALTYP = <VALUE_TYPE_LONG_INTEGER>
 ;; Errors: ERROV = a real of 2^63 or more in size
 ;; Uses: ARG, YSAVE
 ;; See: <LongInteger::ReadNumber>, <LongInteger::ToReal>
@@ -1279,7 +1276,7 @@ MoveBit:
 ;; Moves the magnitude in <ARG> to <FAC> and gives it the real's sign.
 ;; Also: GTFACNA (BB13)
 Finish:
-    lda #LongInteger::VALUE_TYPE
+    lda #VALUE_TYPE_LONG_INTEGER
     sta VALTYP
     lda #<(ARG)
     ldx #0

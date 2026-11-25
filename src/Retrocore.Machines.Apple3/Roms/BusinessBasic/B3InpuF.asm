@@ -785,12 +785,6 @@ EndLoop:
 ; Type checks
 ; ---------------------------------------------------------------------------------------------------------------------
 
-;; <VALTYP> for a real, which a formula of numbers asks for and which marks a value as nothing to free.
-VALUE_TYPE_REAL = $00
-
-;; <VALTYP> before a formula, asking for any type.
-VALUE_TYPE_ANY = $20
-
 ;; Evaluates a numeric formula.
 ;; In: TXTPTR = the formula's first character
 ;; Out: FAC = the value

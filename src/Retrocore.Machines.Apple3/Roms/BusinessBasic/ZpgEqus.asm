@@ -61,6 +61,21 @@ STACK_LEVELS = 19
 
 ; The type byte after each string in string space, which says what holds the string.
 
+;; <VALTYP> for a real, or for an integer, which <INTFLG> tells apart; a formula of numbers asks for it, and it marks a
+;; value as nothing to free.
+VALUE_TYPE_REAL = 0
+
+;; <VALTYP> before a formula that may give any type: a type the evaluator is never left with.
+VALUE_TYPE_ANY = $20
+
+;; <VALTYP> for a long integer: bit 6, which `BIT` of <VALTYP> copies into the overflow flag.
+VALUE_TYPE_LONG_INTEGER = $40
+
+;; <VALTYP> for a string: bit 7, which `BIT` of <VALTYP> copies into the negative flag; <PTRGET>'s type for a string
+;; variable too.
+;; Also: STRTYP (BB13)
+VALUE_TYPE_STRING = $FF
+
 ;; A string's type byte: a temporary.
 ;; Also: TEMPTYP (BB13)
 STRING_TYPE_TEMPORARY = 1

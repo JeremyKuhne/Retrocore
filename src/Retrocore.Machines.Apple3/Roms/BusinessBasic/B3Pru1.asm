@@ -149,13 +149,6 @@ ImagePointerXByte = ImagePointer+SYSPAG
 ; Values
 ; ---------------------------------------------------------------------------------------------------------------------
 
-;; <PTRGET>'s type for a string variable, and <VALTYP>'s for a string.
-;; Also: STRTYP (BB13)
-TYPE_STRING = $FF
-
-;; The type <FRMEVL> is asked for when any type will do.
-TYPE_ANY = $20
-
 ;; Z's digit class: leading zeros printed. The lowest class, and the class of every digit after the point.
 ;; Also: ZTYP (BB13)
 FIELD_ZERO_FILLED = $41
@@ -302,7 +295,7 @@ ROUND_UP_DIGIT = 5
     jsr ISLETC                              ; a variable?
     bcc ToSyntaxError
     jsr PTRGET
-    cpx #TYPE_STRING
+    cpx #VALUE_TYPE_STRING
     bne ToSyntaxError
     sta INDEX
     sty INDEX+1
@@ -513,7 +506,7 @@ Done:
     txa
     pha
     jsr CHKCOM
-    lda #TYPE_ANY
+    lda #VALUE_TYPE_ANY
     sta VALTYP                              ; GETABYT set it
     jsr FRMEVL
     jsr CHKCLS
@@ -527,7 +520,7 @@ Done:
 ;; Evaluates an expression of any type.
 ;; Also: UNOSCALE (BB13)
 NoScale:
-    lda #TYPE_ANY
+    lda #VALUE_TYPE_ANY
     sta VALTYP
     jsr FRMEVL
 

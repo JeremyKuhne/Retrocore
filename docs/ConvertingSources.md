@@ -369,7 +369,7 @@ Run these by script after every change, rather than by eye:
   (`FirmwareLineagesCiteBothListings` and `DosLineagesCiteBothVersions` in
   [ConvertedSourceTests](../tests/Retrocore.Tests/ConvertedSourceTests.cs), and the conversion tests above).
 - **Old names left behind**: code in a converted file uses the current names (`ConvertedSourcesUseCurrentNames`, for
-  the Apple II's sources), and nothing else still uses an old one: other sources, `Software/`, C#, docs and the
+  the Apple II's sources and Business BASIC), and nothing else still uses an old one: other sources, `Software/`, C#, docs and the
   rename table.
 
 ## For agents

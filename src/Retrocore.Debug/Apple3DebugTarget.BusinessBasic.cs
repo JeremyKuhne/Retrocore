@@ -9,7 +9,7 @@ namespace Retrocore.Debug;
 
 internal sealed partial class Apple3DebugTarget
 {
-    // How many of GONE's bytes say Business BASIC is in memory.
+    // How many of ExecuteStatement's (Apple's GONE's) bytes say Business BASIC is in memory.
     private const int BusinessGoneLength = 8;
 
     // Business BASIC's zero page, at $1A00 while it runs, and its stack, in the page after.
@@ -39,13 +39,13 @@ internal sealed partial class Apple3DebugTarget
     // The end of the switchable banks' window.
     private const int SwitchableEnd = 0xA000;
 
-    // Business BASIC 1.23, from the SDK's source: its hooks, the bytes at GONE that say it is in memory, and its error
-    // messages' table.
+    // Business BASIC 1.23, from the SDK's source: its hooks, the bytes at ExecuteStatement that say it is in memory,
+    // and its error messages' table.
     private BasicRom? _businessRom;
     private byte[] _businessGone = [];
     private int _businessErrors;
 
-    // Where BASIC keeps the bank register value it runs with, BASICBNK.
+    // Where BASIC keeps the bank register value it runs with, BasicBank (Apple's BASICBNK).
     private int _businessBank;
 
     /// <inheritdoc/>
@@ -117,9 +117,9 @@ internal sealed partial class Apple3DebugTarget
     /// <inheritdoc/>
     /// <remarks>
     ///  <para>
-    ///   Each statement starts at GONE, with TXTPTR before its first byte. GONE also runs for an empty statement, a
-    ///   colon followed by another or by the line's end, and goes straight back to NEWSTT without running anything;
-    ///   that is no statement.
+    ///   Each statement starts at ExecuteStatement (Apple's GONE), with TextPointer before its first byte.
+    ///   ExecuteStatement also runs for an empty statement, a colon followed by another or by the line's end, and goes
+    ///   straight back to NextStatement without running anything; that is no statement.
     ///  </para>
     /// </remarks>
     public (int Line, int Address)? BasicStatementStart(ushort pc)
@@ -146,9 +146,9 @@ internal sealed partial class Apple3DebugTarget
     /// <inheritdoc/>
     /// <remarks>
     ///  <para>
-    ///   Each GOSUB entry holds the line it was in and its text pointer as an offset from TXTTAB: a bank, which may
-    ///   be negative, and a 16-bit offset. The pointer is at the colon or zero after the GOSUB, where RETURN goes on
-    ///   from; the address given is the byte before it, in the GOSUB statement.
+    ///   Each GOSUB entry holds the line it was in and its text pointer as an offset from ProgramStart: a bank, which
+    ///   may be negative, and a 16-bit offset. The pointer is at the colon or zero after the GOSUB, where RETURN goes
+    ///   on from; the address given is the byte before it, in the GOSUB statement.
     ///  </para>
     /// </remarks>
     public IReadOnlyList<(int Line, int TextPointer)>? BasicGosubs
@@ -182,8 +182,9 @@ internal sealed partial class Apple3DebugTarget
         }
     }
 
-    // BASIC's most recent stack entry. At GONE, before it saves the stack pointer in REMSTK, the stack pointer itself:
-    // RETURN goes on at NWSTT, past NEWSTT's save, so REMSTK still holds the subroutine's depth there.
+    // BASIC's most recent stack entry. At ExecuteStatement, before it saves the stack pointer in StatementStack, the
+    // stack pointer itself: RETURN goes on at NextStatement::SavePlace, past NextStatement's save, so StatementStack
+    // still holds the subroutine's depth there.
     private int StackTop => BasicRom is { } rom && _machine.Processor.Registers.ProgramCounter == rom.Gone
         ? BasicLiveStack
         : BasicStack;
@@ -191,7 +192,7 @@ internal sealed partial class Apple3DebugTarget
     /// <inheritdoc/>
     /// <remarks>
     ///  <para>
-    ///   At ERROR, X is the error's place in ERRTAB, from 1; the message is read from there.
+    ///   At ReportError, X is the error's place in ErrorMessages, from 1; the message is read from there.
     ///  </para>
     /// </remarks>
     public (int Code, string Message, bool Handled) BasicError()
@@ -212,9 +213,9 @@ internal sealed partial class Apple3DebugTarget
         Poke(TextPointerAddress - BusinessBasicDialect.XByteOffset, xByte);
     }
 
-    // Whether Business BASIC's interpreter is in memory: GONE's bytes are where its source puts them, in the bank
-    // BASIC recorded at its start. That bank is not always the one the window shows: SOS shows its drivers' banks
-    // while they run, as the console's does while BASIC waits for a key.
+    // Whether Business BASIC's interpreter is in memory: ExecuteStatement's bytes are where its source puts them, in
+    // the bank BASIC recorded at its start. That bank is not always the one the window shows: SOS shows its drivers'
+    // banks while they run, as the console's does while BASIC waits for a key.
     private bool BusinessBasicActive
     {
         get
@@ -230,7 +231,7 @@ internal sealed partial class Apple3DebugTarget
         }
     }
 
-    // Whether the bank in the $2000-$9FFF window now is BASIC's: GONE's bytes are there.
+    // Whether the bank in the $2000-$9FFF window now is BASIC's: ExecuteStatement's bytes are there.
     private bool BusinessBasicInWindow
     {
         get
@@ -246,7 +247,7 @@ internal sealed partial class Apple3DebugTarget
     }
 
     // Takes the interpreter's hooks from its assembled source. STOP, END (which runs into STOP) and CONTROL-C all stop
-    // at STOP2, then run into ENDCON, as running off the program's end does.
+    // at Statements::StopOrEnd (STOP2), then run into its Finish (ENDCON), as running off the program's end does.
     private void AddBusinessBasic(Assembler.AssemblyResult business)
     {
         _businessRom = BasicRom.From(
@@ -270,7 +271,7 @@ internal sealed partial class Apple3DebugTarget
         return BusinessBasicDialect.Flat(xByte, Peek((ushort)pointer) | (Peek((ushort)(pointer + 1)) << 8));
     }
 
-    // The message of an error, the code'th of ERRTAB's words, each ending with bit 7 set; null past its end.
+    // The message of an error, the code'th of ErrorMessages' words, each ending with bit 7 set; null past its end.
     private string? ErrorMessage(int code)
     {
         if (code < 1 || _businessErrors == 0) { return null; }

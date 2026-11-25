@@ -9,8 +9,12 @@ variables live in the switchable banks, which it reaches through extended addres
 
 ## The source
 
-The files follow Apple's Business BASIC 1.3 source, with Apple's file names and labels; the comments are our own.
-`BusinessBasic.asm` includes them in Apple's order:
+The files follow Apple's Business BASIC 1.3 source, in Apple's order and with Apple's file names; the names, the
+structure and the comments are the SDK's. Each routine is a `.proc`, families are scopes (`Statements`, `Functions`,
+`Float`, `Files`, `PrintUsing` ...), and each definition keeps the name Apple's listing gives it in its `Also:`
+section, so Apple's names still assemble, link and resolve in the debugger: a breakpoint or watch on `GONE` finds
+`ExecuteStatement`. [The conversion log](conversions/BusinessBasic.md) has the decisions and the rename table.
+`BusinessBasic.asm` includes the files in Apple's order:
 
 | Files | What they hold |
 | --- | --- |
@@ -28,21 +32,21 @@ The files follow Apple's Business BASIC 1.3 source, with Apple's file names and 
 | `BasicEnd.asm` | The end of the interpreter. |
 
 The file starts with SOS's interpreter header ("SOS NTRP", the load address and the length), loads at `$5200`
-and starts at `INIT`.
+and starts at `ColdStart` (Apple's `INIT`).
 
 ## Versions
 
 `VERSION` picks the release:
 
-- `123`, the default, builds 1.23. It lacks 1.3's program selector support: the `SELECTOR`, `PROGPATH` and
-  `SOSPATH` buffers, the routines that keep the program's prefix apart from SOS's, the `PROGPREFIX$` keyword and
-  the calls to them. Storage the source reserves holds whatever was in memory when Apple built the file, spelled
-  out as bytes, and the file runs 21 bytes past the length its header gives.
+- `123`, the default, builds 1.23. It lacks 1.3's program selector support: the `StartedBySelector`, `ProgramPath` and
+  `SosPrefix` buffers (Apple's `SELECTOR`, `PROGPATH` and `SOSPATH`), the routines that keep the program's prefix apart
+  from SOS's, the `PROGPREFIX$` keyword and the calls to them. Storage the source reserves holds whatever was in memory
+  when Apple built the file, spelled out as bytes, and the file runs 21 bytes past the length its header gives.
 - `130` builds the 1.3 source as Apple printed it, loading at `$5000`. No 1.3 binary is known, so this build is
   unchecked.
 
-`RUNTIME = 1` and `DEBUG = 1` select Apple's run-time and debugger variants. They assemble, but nothing exists to
-check them against.
+With `VERSION = 130`, `RUNTIME = 1` and `DEBUG = 1` select Apple's run-time and debugger variants. They assemble,
+but nothing exists to check them against; digests pin them, and the root rejects any other combination.
 
 Where the PDF's reformatting stretched the spaces in four error messages and in the sign-on, the source follows the
 bytes. Its comments note what Apple's code does as found, among others: engineering-notation PRINT USING fills one
@@ -56,17 +60,17 @@ Microsoft's, and "MICROSOFT!" sits hidden after the sine constants.
 
 The BASIC library (`Retrocore.Basic`) reads Business BASIC programs as the `business` dialect:
 
-- **In memory.** A program runs from TXTTAB up to ARYTAB: Business BASIC keeps its arrays before its simple
-  variables. Each line is a length byte (to the next line's), the line number, the tokens and a zero; a zero length
-  ends the program. BASIC's pointers are two bytes in its zero page (`$1A00`) with an X-byte in `$1600` beside each
-  high byte, and their pages stay from `$02` to `$81`, so the program runs on from one bank pair into the next. The
-  library reads them as flat addresses, through the X-bytes.
+- **In memory.** A program runs from `ProgramStart` up to `ArraysStart` (Apple's TXTTAB and ARYTAB): Business BASIC
+  keeps its arrays before its simple variables. Each line is a length byte (to the next line's), the line number, the
+  tokens and a zero; a zero length ends the program. BASIC's pointers are two bytes in its zero page (`$1A00`) with an
+  X-byte in `$1600` beside each high byte, and their pages stay from `$02` to `$81`, so the program runs on from one
+  bank pair into the next. The library reads them as flat addresses, through the X-bytes.
 - **In files.** A program file (SOS type `$09`) is two bytes BASIC ignores, which older versions set to the length
   and 1.23's SAVE leaves zero, then the program as it lies in memory.
-- **As text.** Reserved words are one-byte tokens, or `$FF` and a token from a second list for the functions and
-  words such as `THEN` and `TO`. The tokenizer is BASIC's `CRUNCH`: a word is reserved only with a separator (not a
-  letter, digit or period) before and after it, so names may hold reserved words, as `PRINTER` does; `?` is PRINT
-  and `!` is REM. A listing spaces words as BASIC's LIST does, and tokenizes back to the same bytes.
+- **As text.** Reserved words are one-byte tokens, or `$FF` and a token from a second list for the functions and words
+  such as `THEN` and `TO`. The tokenizer is BASIC's `Tokenize` (Apple's `CRUNCH`): a word is reserved only with a
+  separator (not a letter, digit or period) before and after it, so names may hold reserved words, as `PRINTER` does;
+  `?` is PRINT and `!` is REM. A listing spaces words as BASIC's LIST does, and tokenizes back to the same bytes.
 
 `--basic list file --dialect business` lists a program file, and `--basic tokenize file.business.bas out` writes
 one.
@@ -89,7 +93,8 @@ gets a warning: BASIC needs a separator before the word, so it reads the variabl
 
 The interpreter maps where SOS loaded it, at `$5200` in the bank the `$2000-$9FFF` window shows while BASIC runs,
 whenever memory there holds 1.23's bytes. A breakpoint can be set in its source before the disk boots, and stops
-once the code is there: one on `GONE` in `B3ListD.asm` stops before every statement BASIC runs.
+once the code is there: one on `ExecuteStatement` (Apple's `GONE`) in `B3ListD.asm` stops before every
+statement BASIC runs.
 
 Once Business BASIC is in memory, the debugger shows a **BASIC** thread, as it does for AppleSoft:
 
@@ -115,9 +120,10 @@ on, the console takes every key, CONTROL-C too, for it; RUN turns it off.
 
 ## Testing
 
-`BusinessBasicDialectTests` checks the reserved words against the source's tables, the tokenizer, and that every
-program on the 1.23 disk lists and tokenizes back. `BusinessBasicSourceTests` pins both builds by digest, so no disk is needed. With Apple's Business BASIC 1.23
-disk (in `RETROCORE_APPLE3_DISKS` or `%USERPROFILE%\Retrocore\apple3-disks`), it also compares the 1.23 build
-byte for byte with the disk's `SOS.INTERP` and names the first difference. The documentation lint runs over the
-sources as the editor does. With the disk, `tools/Test-Apple3Dap.mjs` boots it and stops at `GONE` as `HELLO`
-runs, and `tools/Test-BusinessBasicDap.mjs` types a program at the prompt and debugs it on the BASIC thread.
+`BusinessBasicDialectTests` checks the reserved words against the source's tables, the tokenizer, and that every program
+on the 1.23 disk lists and tokenizes back. `BusinessBasicSourceTests` pins the four builds by digest, so no disk is
+needed. With Apple's Business BASIC 1.23 disk (in `RETROCORE_APPLE3_DISKS` or `%USERPROFILE%\Retrocore\apple3-disks`),
+it also compares the 1.23 build byte for byte with the disk's `SOS.INTERP` and names the first difference. The
+documentation lint runs over the sources as the editor does. With the disk, `tools/Test-Apple3Dap.mjs` boots it and
+stops at `ExecuteStatement` as `HELLO` runs, and `tools/Test-BusinessBasicDap.mjs` types a program at the prompt and
+debugs it on the BASIC thread.

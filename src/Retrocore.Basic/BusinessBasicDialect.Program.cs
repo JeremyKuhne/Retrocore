@@ -12,7 +12,7 @@ internal sealed partial class BusinessBasicDialect
     /// <inheritdoc/>
     /// <remarks>
     ///  <para>
-    ///   From TXTTAB up to ARYTAB, as flat addresses.
+    ///   From ProgramStart up to ArraysStart (Apple's TXTTAB and ARYTAB), as flat addresses.
     ///  </para>
     /// </remarks>
     internal override (int Start, int End) ProgramBounds(IBasicMemory memory) =>
@@ -30,8 +30,9 @@ internal sealed partial class BusinessBasicDialect
     internal override byte[] MemoryImage(BasicProgram program, int start) => Image(program)[2..];
 
     /// <summary>
-    ///  Writes a program into memory from TXTTAB and clears as BASIC does when a line is typed: the variables, arrays
-    ///  and strings (CLEARL), DATA (RESTORE), ON ERR, ON EOF and RESUME (CLEARONS), and CONT.
+    ///  Writes a program into memory from ProgramStart and clears as BASIC does when a line is typed: the variables,
+    ///  arrays and strings (ClearVariables::KeepFiles), DATA (RESTORE), ON ERR, ON EOF and RESUME (ClearHandlers), and
+    ///  CONT.
     /// </summary>
     /// <remarks>
     ///  <para>
@@ -89,7 +90,7 @@ internal sealed partial class BusinessBasicDialect
     }
 
     /// <summary>
-    ///  Reads the program in memory, from TXTTAB up to ARYTAB, through BASIC's banked pointers.
+    ///  Reads the program in memory, from ProgramStart up to ArraysStart, through BASIC's banked pointers.
     /// </summary>
     /// <param name="memory">The memory.</param>
     /// <returns>The program.</returns>

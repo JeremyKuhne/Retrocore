@@ -86,7 +86,9 @@ CodeStart = Pointer1
 ;; Also: POINT1B (BB13)
 CodeStartXByte = CodeStart+X_BYTE_OFFSET
 
-;; A second pointer: into the procedure dictionary, to a record, or a value.
+;; A second pointer, which each routine that uses it names for its job: <RelocateProcedure::DictionaryEntry>,
+;; <ResolveProcedures::Dictionary>, <LinkReferences::ReferenceRecord>, <CompactRecords::KeptRecordsEnd> and
+;; <FindRecord::SoughtName>.
 ;; Also: POINT2 (BB13)
 OtherPointer = Pointer2
 
@@ -259,29 +261,36 @@ RoundUpToBlock:
 ;; See: <Modules::FollowPointer>, <Modules::ApplyRelocations>, <Modules::CheckNoRelocations>
 ;; Also: DOAPROC (BB13)
 .proc RelocateProcedure
+
+;; The procedure's dictionary entry, which gets its entry point's address.
+DictionaryEntry = OtherPointer
+
+;; <DictionaryEntry>'s X-byte.
+DictionaryEntryXByte = OtherPointerXByte
+
     jsr FollowPointer                       ; the attribute table
     lda WalkPointer
-    sta OtherPointer                        ; the dictionary entry
+    sta DictionaryEntry                     ; the dictionary entry
     lda Target
     sta WalkPointer
     lda WalkPointer+1
-    sta OtherPointer+1
+    sta DictionaryEntry+1
     lda Target+1
     sta WalkPointer+1
     lda WalkPointerXByte
-    sta OtherPointerXByte
+    sta DictionaryEntryXByte
     jsr FollowPointer                       ; the entry point
     ldy #0
     lda Target
     sta SourceEnd                           ; the base for procedure-relative relocation
-    sta (OtherPointer),Y                    ; and the dictionary entry's new value
+    sta (DictionaryEntry),Y                 ; and the dictionary entry's new value
     iny
     lda Target+1
     cmp #POINTER_PAGE_LIMIT                 ; keep the page in BASIC's range, $02-$81
     bcc *+4
     sbc #POINTER_PAGE_LIMIT-POINTER_PAGE_FIRST
     sta SourceEnd+1
-    sta (OtherPointer),Y
+    sta (DictionaryEntry),Y
     jsr CheckNoRelocations                  ; no base-relative relocations
     lda #<(CodeStart)                       ; segment-relative: add the code's start
     sta AddendPointer
@@ -296,9 +305,9 @@ RoundUpToBlock:
     jsr CheckNoRelocations                  ; no interpreter-relative relocations
     dec KeptY
     beq ResolveProcedures
-    lda OtherPointer
+    lda DictionaryEntry
     sta WalkPointer
-    lda OtherPointer+1
+    lda DictionaryEntry+1
     sta WalkPointer+1
     jmp RelocateProcedure
 .endproc
@@ -320,11 +329,15 @@ RoundUpToBlock:
 ;; See: <Modules::LinkReferences>
 ;; Also: DOLIB (BB13)
 .proc ResolveProcedures
+
+;; The procedure dictionary, a page below its top, so that Y from 256 down reaches its entries.
+Dictionary = OtherPointer
+
     pla
-    sta OtherPointer+1
-    dec OtherPointer+1                      ; a page lower, so (OtherPointer),Y reaches down from Y = 256
+    sta Dictionary+1
+    dec Dictionary+1                        ; a page lower, so (Dictionary),Y reaches down from Y = 256
     pla
-    sta OtherPointer
+    sta Dictionary
     lda ModuleLoadPointer
     sta WalkPointer
     lda ModuleLoadPointer+1
@@ -385,10 +398,10 @@ ResolveNumber:
     sbc (WalkPointer),Y
     asl                                     ; the number times -2: the entry's offset below the dictionary's top
     tay
-    lda (OtherPointer),Y
+    lda (Dictionary),Y
     tax
     iny
-    lda (OtherPointer),Y
+    lda (Dictionary),Y
     ldy #LinkerRecord::VALUE+1
     sta (WalkPointer),Y
     txa
@@ -411,6 +424,10 @@ Advance:
 ;; Errors: <ERROR_INVOKE> = a name with no .DEF
 ;; Also: DOPAS2 (BB13)
 .proc LinkReferences
+
+;; The .REF record being linked; for a while, the label's offset.
+ReferenceRecord = OtherPointer
+
     lda ModuleLoadPointer
     sta WalkPointer
     lda ModuleLoadPointer+1
@@ -430,9 +447,9 @@ CheckType:
     cmp #RECORD_REF
     bne Skip                                ; only .REF records matter here
     lda WalkPointer
-    sta OtherPointer
+    sta ReferenceRecord
     lda WalkPointer+1
-    sta OtherPointer+1
+    sta ReferenceRecord+1
     lda #RECORD_DEF
     sta ProcedureKind                       ; look for a .DEF of this name
     jsr FindRecord
@@ -445,10 +462,10 @@ Skip:
     jsr NextRecord
     jmp CheckType
 
-;; Adds the .DEF's offset in the code to each word the .REF record at OtherPointer lists, then moves past the list.
+;; Adds the .DEF's offset in the code to each word the .REF record at ReferenceRecord lists, then moves past the list.
 ;;
 ;; With exactly 248 references, the step past the list's padding also adds a page to WalkPointer.
-;; In: WalkPointer = the .DEF record, OtherPointer = the .REF record
+;; In: WalkPointer = the .DEF record, ReferenceRecord = the .REF record
 ;; Also: DOPA25 (BB13)
 AddOffset:
     ldy #LinkerRecord::VALUE
@@ -468,11 +485,11 @@ AddOffset:
     tax
     pla
     sbc CodeStart+1
-    ldy OtherPointer+1
-    sta OtherPointer+1
+    ldy ReferenceRecord+1
+    sta ReferenceRecord+1
     sty WalkPointer+1
-    lda OtherPointer                        ; WalkPointer back to the .REF, and OtherPointer the label's offset
-    stx OtherPointer
+    lda ReferenceRecord                     ; WalkPointer back to the .REF, and ReferenceRecord the label's offset
+    stx ReferenceRecord
     sta WalkPointer
     ldy #LinkerRecord::COUNT
     lda (WalkPointer),Y                     ; the count of references
@@ -495,11 +512,11 @@ AddToWord:
     sta Target+1
     clc
     dey
-    lda OtherPointer
+    lda ReferenceRecord
     adc (Target),Y
     sta (Target),Y
     iny
-    lda OtherPointer+1
+    lda ReferenceRecord+1
     adc (Target),Y
     sta (Target),Y
     lda #2
@@ -524,12 +541,16 @@ AddToWord:
 ;; the code's start as the top of the free memory.
 ;; Also: DOPAS3 (BB13)
 .proc CompactRecords
+
+;; Where the next record kept goes: the end of the records kept so far.
+KeptRecordsEnd = OtherPointer
+
     lda ModuleLoadPointer
     sta WalkPointer
-    sta OtherPointer
+    sta KeptRecordsEnd
     lda ModuleLoadPointer+1
     sta WalkPointer+1
-    sta OtherPointer+1
+    sta KeptRecordsEnd+1
     ldy #LinkerRecord::TYPE
     lda (WalkPointer),Y
 
@@ -550,9 +571,9 @@ CheckRecord:
 Skip:
     jsr NextRecord
     bne CheckRecord
-    lda OtherPointer                        ; the records kept end here
+    lda KeptRecordsEnd                      ; the records kept end here
     sta ModuleLoadPointer
-    lda OtherPointer+1
+    lda KeptRecordsEnd+1
     sta ModuleLoadPointer+1
     lda CodeStart                           ; and the free memory below the code
     sta WalkPointer
@@ -560,7 +581,7 @@ Skip:
     sta WalkPointer+1
     jmp LoadFile
 
-;; Copies the 16-byte record at <WalkPointer> down to <OtherPointer>, and moves <OtherPointer> past it.
+;; Copies the 16-byte record at <WalkPointer> down to <KeptRecordsEnd>, and moves <KeptRecordsEnd> past it.
 ;; Also: DOPA37 (BB13)
 KeepRecord:
     ldy #.sizeof(LinkerRecord)-1
@@ -569,15 +590,15 @@ KeepRecord:
 ;; Also: DOPA38 (BB13)
 CopyByte:
     lda (WalkPointer),Y
-    sta (OtherPointer),Y
+    sta (KeptRecordsEnd),Y
     dey
     bpl CopyByte
     lda #.sizeof(LinkerRecord)
     clc
-    adc OtherPointer
-    sta OtherPointer
+    adc KeptRecordsEnd
+    sta KeptRecordsEnd
     bcc Skip
-    inc OtherPointer+1
+    inc KeptRecordsEnd+1
     bne Skip                                ; always
 .endproc
 
@@ -1004,12 +1025,12 @@ Find:
     lda #<(NameBuffer)
     clc
     adc ExfnNameOffset
-    sta OtherPointer
+    sta FindRecord::SoughtName
     lda #>(NameBuffer)
     adc #0
-    sta OtherPointer+1
+    sta FindRecord::SoughtName+1
     lda #0
-    sta OtherPointerXByte
+    sta FindRecord::SoughtNameXByte
     jsr FindRecord
     beq ToUndefinedFunctionError
     ldy #LinkerRecord::COUNT
@@ -1139,13 +1160,20 @@ LONG_SIZE = 8
     jmp RejectDirectMode::UndefinedFunction
 .endproc
 
-;; Finds the linker record of type <ProcedureKind> whose 8-character name matches the one at <Modules::OtherPointer>,
+;; Finds the linker record of type <ProcedureKind> whose 8-character name matches the one at <FindRecord::SoughtName>,
 ;; searching from <ModulesStart>.
 ;; Out: zero = clear when found (set when not, or when nothing is invoked), WalkPointer = the record found
 ;; Uses: A, Y, Temporary
 ;; Keeps: X
 ;; Also: PERFIND (BB13)
 .proc FindRecord
+
+;; The 8-character name to find.
+SoughtName = OtherPointer
+
+;; <SoughtName>'s X-byte.
+SoughtNameXByte = OtherPointerXByte
+
     lda a:Segments::ModulesSegment
     beq Done                                ; nothing invoked
     lda ModulesStart
@@ -1177,7 +1205,7 @@ CheckType:
 CompareName:
     dey
     bmi Done                                ; all 8 matched
-    lda (OtherPointer),Y
+    lda (SoughtName),Y
     cmp (WalkPointer),Y
     beq CompareName
 

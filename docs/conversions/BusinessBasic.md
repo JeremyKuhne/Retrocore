@@ -23,12 +23,12 @@ Microsoft modules' take the same current names, and what could later be shared i
 
 ## Sources and citations
 
-- **BB13**: Apple /// Business BASIC 1.3 Source Code Listing, Apple's source files as David Craig reformatted and
-  merged them into one listing (1997), from apple3.org. The SDK's source was typed from it, so its names were Apple's.
-  Checked by script against the PDF's text: of the 2,313 names the source defined, every one but the SDK's `VERSION`
-  is defined at column 0 of the listing (a label, with or without a colon, or an `EQU`), and in the same file. Every
-  renamed definition cites BB13 for its old name: 2,312 citations. 23 of them are 1.3-only names (the program
-  selector's), which the 1.23 build doesn't assemble; they cite BB13 where they are defined.
+- **BB13**: Apple /// Business BASIC 1.3 Source Code Listing, Apple's source files as David Craig reformatted and merged
+  them into one listing (1997), from apple3.org. The SDK's source was typed from it, so its names were Apple's. Checked
+  by script against the PDF's text: of the 2,313 names the source defined, every one but the SDK's `VERSION` is defined
+  at column 0 of the listing (a label, with or without a colon, or an `EQU`), and in the same file. Every renamed
+  definition cites BB13 for its old name, all but SIZE, which nothing uses and is named in prose (BD14). 23 of them are
+  1.3-only names (the program selector's), which the 1.23 build doesn't assemble; they cite BB13 where they are defined.
 - The listing's text stays out of the repository (ConvertingSources.md, step 2); only names and facts came from it.
 - No Microsoft or AppleSoft document is cited: Business BASIC's code reached Apple through AppleSoft, but the names
   were checked only against Apple's own listing. Where a routine has a Microsoft lineage, the same current name is the
@@ -48,49 +48,50 @@ scope in its first file (removing the shim), and rewrapped the comments.
 ## Decisions
 
 The cross-cutting ones were set in the brief, following the precedents (Monitor.md, Basic.md, IntegerBasic.md); the
-rest were settled at integration. Each follows a rule already in ConvertingSources.md unless it says otherwise.
+rest were settled at integration. Each follows a rule already in ConvertingSources.md unless it says otherwise. The
+IDs are BD, so none reads as the listing's key, BB13.
 
-- BB1. Every name is renamed to the style, with Apple's name in `Also:` (BB13). No name is dropped: Apple's numbered
+- BD1. Every name is renamed to the style, with Apple's name in `Also:` (BB13). No name is dropped: Apple's numbered
   labels (`FADD5`, `NORM3`) are documented names, so each is a well-named local with its `Also:`. Two old names on one
   byte stay two definitions where they do different jobs (scoped aliases), and one where they are the same thing
   (`INDEX` and `INDEX1` are `Pointer1`).
-- BB2. Same job, same name: a routine or location that does what a converted AppleSoft or Microsoft definition does
+- BD2. Same job, same name: a routine or location that does what a converted AppleSoft or Microsoft definition does
   takes its current name and scope (FADDH `Float::AddHalf`, PTRGET `FindVariable`, NEWSTT `NextStatement`, GONE
   `ExecuteStatement`, CHRGET `GetNextCharacter`, TXTTAB `ProgramStart`, FAC `Fac`). Where Business BASIC changed the
   job (banks, long integers, five-byte constants), it has its own name. The table's "AppleSoft name" column marks the
   669 rows that share a name.
-- BB3. Scopes. Shared, in pieces through the files in Apple's order, each opened in its first file with its `;;`
+- BD3. Scopes. Shared, in pieces through the files in Apple's order, each opened in its first file with its `;;`
   block: `Statements`, `Functions`, `Operators`, `Float`, `Strings`, `Variables`. Subject scopes: `Tokenizer`,
   `Console`, `Handlers` (ON ERR, ON KBD, ON EOF#), `SosCalls` (the parameter lists), `ProgramPrefix` (1.3 only),
   `Lister`, `Output`, `Memory` (banked-pointer arithmetic), `Random` (RND's generator), `LongInteger`, `Hexadecimal`,
   `Modules` (invokable modules), `Segments` (SOS memory segments), `PrintUsing`, `Files`, `Directory` (CATALOG). Top
   level: the shared page zero and tables, the error entries, and the widely called entries AppleSoft has at top level
   (`GetNextCharacter`, `EvaluateExpression`, `FindVariable`, `ReportError`, `CommandLoop`, `ColdStart` ...).
-- BB4. Statements, functions and operators are named for their keywords split at words, as AppleSoft's are
+- BD4. Statements, functions and operators are named for their keywords split at words, as AppleSoft's are
   (`Statements::GoSub`, `Statements::OnErr`, `Functions::Conv`). Where the keyword's name would hide a scope or
   another statement it has a word more: `READ#` is `Statements::ReadFile` (`READ` is `Statements::Read`), `OUTPUT#`
   `Statements::OutputFile` (inside `Statements`, `Output` would hide the `Output` scope), and `PRINT USING` is
   `PrintUsing::Statement`. `DEL` (token $DA, deleting program lines) is `Statements::Del`, and `DELETE` (token $C6,
   deleting a file) is `Statements::Delete`.
-- BB5. Locations PascalCase, values UPPER_SNAKE. A pointer `Name`'s X-byte is `NameXByte` (TXTTABB is
+- BD5. Locations PascalCase, values UPPER_SNAKE. A pointer `Name`'s X-byte is `NameXByte` (TXTTABB is
   `ProgramStartXByte`), and the X-byte offset is `X_BYTE_OFFSET` (SYSPAG). `Arg` and `ArgExponent` are two labels, as
   `Fac` and `FacExponent` are, so prose about the second accumulator reads right.
-- BB6. Shared values are prefixed constants, in the equates' files (B3Invok.asm, ZpgEqus.asm, B3Resvb.asm): `SOS_*`
+- BD6. Shared values are prefixed constants, in the equates' files (B3Invok.asm, ZpgEqus.asm, B3Resvb.asm): `SOS_*`
   (call numbers), `SOS_ERROR_*`, `FILE_TYPE_*`, `TOKEN_*` (one prefix for both keyword tables, so `TOKEN_TAB` and
   `TOKEN_END` are both $80, in different tables), `ERROR_*` (BASIC's error numbers), `VALUE_TYPE_*` (`ValueType`'s
   values, one set where four groups had each defined some), `STRING_TYPE_*`, `CHARACTER_*`. Constants one subject uses
   are in its scope.
-- BB7. Layouts are structs (37), among them `FileControlBlock`, `InterpreterHeader`, the SOS calls' parameter lists in
+- BD7. Layouts are structs (37), among them `FileControlBlock`, `InterpreterHeader`, the SOS calls' parameter lists in
   `SosCalls`, the FOR entry and the linker's records; the bytes that hold one are tied to it by `.assert`s.
-- BB8. Fall-throughs into another file are asserted: `TakeOperator` into `Operators::Apply` (B3InpuF.asm into
+- BD8. Fall-throughs into another file are asserted: `TakeOperator` into `Operators::Apply` (B3InpuF.asm into
   B3EvalG.asm), `Variables::CreateArray` into `Variables::InitializeArray` (B3DimnH.asm into B3UdefI.asm). QINT is one
   `.proc`, `Float::ToLongInteger`, across B3MathL.asm and B3FinpM.asm, as DOS's RWTS spans its two files.
-- BB9. A scoped name that hid a top-level one was renamed at integration (ConvertingSources.md's shadowing rule), for
+- BD9. A scoped name that hid a top-level one was renamed at integration (ConvertingSources.md's shadowing rule), for
   example `PrintUsing::FormatString` (not `PrintString`), `Hexadecimal::ReportIllegalQuantity`, `SavedFileType`
   (TYPSAV, beside `SosCalls::FileType`), `OutputFileNumber` (FILNO); and a constant defined twice became one.
-- BB10. EDASM's `DCI` directive is the macro `TextEndingHigh`, in the root; a macro carries no `Also:`, so its
+- BD10. EDASM's `DCI` directive is the macro `TextEndingHigh`, in the root; a macro carries no `Also:`, so its
   comment names DCI.
-- BB11. The debug host looks Business BASIC's addresses up through `SymbolsWithHistoricalNames`, by Apple's names
+- BD11. The debug host looks Business BASIC's addresses up through `SymbolsWithHistoricalNames`, by Apple's names
   (MAIN, NEWSTT, GONE, ERROR, RUN, CONT, STOP2, ENDCON, ERRTAB, BASICBNK), and the dialect tests the tables and tokens
   (RESLST, RESL2, OPTAB, REMTK ...), so each stays in its definition's `Also:`; `BASICEND`, which the digest tests use,
   too. `tools/Test-Apple3Dap.mjs` sets its breakpoint on `.proc ExecuteStatement`. C# comments and the docs name the
@@ -170,26 +171,38 @@ Microsoft's correct ones, as the shared modules give them).
   and `tools/Test-Apple3Dap.mjs` (a breakpoint on `ExecuteStatement` as `HELLO` runs) and
   `tools/Test-BusinessBasicDap.mjs` pass. The tests that also need MAME's Apple III ROM set were skipped.
 
-## Open questions
+## The open questions, settled
 
-For the owner; each is as recommended unless the owner decides otherwise.
+The conversion left seven questions (BBQ1-BBQ7), each settled by the rule or precedent that already covers it.
 
-- BBQ1. `ON ERR` is `Statements::OnErr`, by the keyword's words, as AppleSoft's is; `OnError` reads better.
-- BBQ2. `PROGPREFIX$`'s routines are `ProgPrefix`, by the keyword; `ProgramPrefix` (the scope's name) reads better.
-- BBQ3. OLDOV and SIZE take AppleSoft's names, `FunctionJumpHigh` and `CollectorOffset`, though nothing here uses SIZE;
-  the float code names its own use of OLDOV's byte, the unshifted operand's rounding byte, `Float::UnshiftedExtension`,
-  as the shared modules do.
-- BBQ4. `STKEND` is `STACK_END`, though it is a stack pointer's value, not an address.
-- BBQ5. `CHARACTER_SCREEN_ON` (15) comes from the source's comments, not checked against SOS's console documentation.
-- BBQ6. `Modules::OtherPointer` (POINT2) serves as a dictionary entry, a record and a value; a better name is welcome.
-- BBQ7. The long-integer operators are `LongInteger::Add` ... `LongInteger::Compare`, called after the type check,
-  rather than in `Operators`.
+- BD12 (was BBQ1). `ON ERR` stays `Statements::OnErr`: the keyword split at its words, and AppleSoft's name for its
+  `ONERR` (AppleSoft.AppleCommands.asm), so one statement has one name in both BASICs.
+- BD13 (was BBQ2). `PROGPREFIX$`'s routines stay `Statements::ProgPrefix` and `Functions::ProgPrefix`, by the keyword,
+  as AppleSoft's `HIMEM:` and `LOMEM:` are `HiMem` and `LoMem`; the scope of 1.3's prefix routines is `ProgramPrefix`.
+- BD14 (was BBQ3). OLDOV keeps AppleSoft's `FunctionJumpHigh`, the last of `FunctionJump`'s address bytes (a location's
+  second byte is `NameHigh`), and the float code names its own use of the byte `Float::UnshiftedExtension`, as the
+  shared modules do. Apple's SIZE, `CollectorOffset` in AppleSoft, is used nowhere in Business BASIC, so it is left out
+  and named in prose on `FunctionJump`, as DOS's unused MULT is (ConvertingSources.md). Two constants this conversion
+  had named `SIZE` and `BITS`, Apple's names for other things, are now `LongInteger::BYTE_COUNT`,
+  `LongInteger::BIT_COUNT` and `Variables::MultiplyUnsigned::BIT_COUNT`, so no current name is another definition's
+  old one.
+- BD15 (was BBQ4). `STKEND` stays `STACK_END`, AppleSoft's name for the same job: the value BASIC resets the stack
+  pointer to.
+- BD16 (was BBQ5). `CHARACTER_SCREEN_ON` (15) is checked: the SOS console driver's source
+  (Sos/Drivers/Console/ConsFctn.asm) gives control code $0F as turning the video on.
+- BD17 (was BBQ6). `Modules::OtherPointer` (POINT2) keeps its general name, and each routine that uses it names it for
+  its job with a scoped alias (ConvertingSources.md, shared bytes): `RelocateProcedure::DictionaryEntry`,
+  `ResolveProcedures::Dictionary`, `LinkReferences::ReferenceRecord`, `CompactRecords::KeptRecordsEnd` and
+  `FindRecord::SoughtName`, which `CallByName` sets.
+- BD18 (was BBQ7). The long-integer arithmetic stays in `LongInteger` (`LongInteger::Add` ... `LongInteger::Compare`),
+  as the real arithmetic is in `Float` (`Float::AddArg`, `Float::MultiplyArg`), not `Operators`; `Operators` holds the
+  routines the operator dispatch shares across types.
 
 ## Rename table
 
 One row per old name, by file group in Apple's order, in source order within each: 2,312 rows. **Old** is Apple's
 name (BB13), **New** the definition's full path, **Kind** what it is, **Builds** the builds that define it ("1.3" is the
-three 1.3 builds), **AppleSoft name** the converted AppleSoft or Microsoft name where the job is the same (BB2), and
+three 1.3 builds), **AppleSoft name** the converted AppleSoft or Microsoft name where the job is the same (BD2), and
 **Reason** one line from the code.
 
 ### B3Invok.asm, ZpgEqus.asm, B3Resvb.asm
@@ -333,7 +346,7 @@ three 1.3 builds), **AppleSoft name** the converted AppleSoft or Microsoft name 
 | TYPSAV | SavedFileType | alias | all |  | The file's type, in the file commands. |
 | DSCPNT | DescriptorPointer | location | all | DescriptorPointer | A pointer to a string descriptor, with its X-byte at <DescriptorPointerXByte>. |
 | FOUR6 | CollectorStep | location | all | CollectorStep | The size of a string descriptor, <DESCRIPTOR_SIZE>, kept here for the garbage collector; other routines use it |
-| SIZE | CollectorOffset | alias | all | CollectorOffset | A size, in <FunctionJump>'s address bytes. |
+| SIZE | (left out) | alias | all | CollectorOffset | Unused in Business BASIC: left out and named in prose on FunctionJump (BD14). |
 | OLDOV | FunctionJumpHigh | alias | all | FunctionJumpHigh | The last of FunctionJump's address bytes, which the float code borrows as a rounding byte (in addition, Float::UnshiftedExtension; in EXP). |
 | TEMPF3 | FloatTemporary3 | alias | all | FloatTemporary3 | A third temporary for a packed real, five bytes, which run over <FunctionPointer> and the `WINDOW` bytes from |
 | TEMPF1 | FloatTemporary1 | location | all | FloatTemporary1 | A temporary for a packed real, five bytes: this one, then <DestinationEnd>'s and <DataBufferPointer>'s. |
@@ -1906,7 +1919,7 @@ three 1.3 builds), **AppleSoft name** the converted AppleSoft or Microsoft name 
 | TEMPTR | Modules::RelocationsLeft | alias | all |  | <Modules::ApplyRelocations>'s count of words left to relocate. |
 | POINT1 | Modules::CodeStart | alias | all |  | The start of the module's code. |
 | POINT1B | Modules::CodeStartXByte | alias | all |  | <Modules::CodeStart>'s X-byte. |
-| POINT2 | Modules::OtherPointer | alias | all |  | A second pointer: into the procedure dictionary, to a record, or a value. |
+| POINT2 | Modules::OtherPointer | alias | all |  | A second pointer, which each routine using it names for its job with a scoped alias (BD17). |
 | POINT2B | Modules::OtherPointerXByte | alias | all |  | <Modules::OtherPointer>'s X-byte. |
 | PROCPNTB | Modules::WalkPointerXByte | alias | all |  | <Modules::WalkPointer>'s X-byte. |
 | OFFSSTB | Modules::TargetXByte | alias | all |  | <Modules::Target>'s X-byte. |

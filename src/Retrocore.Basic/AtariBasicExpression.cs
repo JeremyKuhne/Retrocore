@@ -12,12 +12,19 @@ namespace Retrocore.Basic;
 /// </summary>
 /// <remarks>
 ///  <para>
-///   Numbers are Atari BASIC's: ten significant digits, results rounded to them. Rev. C's precedence holds: NOT, like
-///   a sign, takes the operand after it (NOT A=B is (NOT A)=B), and AND is above OR. A comparison is 1 or 0.
-///   <c>A(i)</c> and <c>A(i,j)</c> are array elements, counting from 0; <c>A$(i)</c> is the string from character i
-///   and <c>A$(i,j)</c> characters i to j, counting from 1. Functions that read the machine's devices or change its
-///   state, <c>RND</c>, <c>USR</c>, <c>FRE</c>, <c>PADDLE</c>, <c>STICK</c>, <c>PTRIG</c> and <c>STRIG</c>, are
-///   refused.
+///   Numbers are Atari BASIC's: ten significant digits, results rounded to them. Rev. C's precedence holds: a string
+///   comparison binds above everything (NOT A$=B$ is NOT (A$=B$)); NOT, like a sign, takes the operand after it
+///   (NOT A=B is (NOT A)=B), and only one of them; AND is above OR. A comparison is 1 or 0. <c>A(i)</c> and
+///   <c>A(i,j)</c> are array elements, counting from 0, <c>A(i)</c> being <c>A(i,0)</c>; <c>A$(i)</c> is the string
+///   from character i and <c>A$(i,j)</c> characters i to j, counting from 1, never empty. Subscripts, indexes and
+///   the arguments of PEEK and CHR$ round to an integer from 0 to 65535, or are error 3. SIN, COS and ATN work in
+///   degrees after DEG, as DEGFLG says. The functions are .NET's, rounded to ten digits, so their last digit can
+///   differ from the FP package's: ATN(1) in degrees is 45 here and 45.0000003 on the machine. ASC of an empty
+///   string is refused, where the ROM returns the byte the first character would be.
+///  </para>
+///  <para>
+///   Functions that read the machine's devices, its memory's layout or change its state, <c>RND</c>, <c>USR</c>,
+///   <c>FRE</c>, <c>ADR</c>, <c>PADDLE</c>, <c>STICK</c>, <c>PTRIG</c> and <c>STRIG</c>, are refused.
 ///  </para>
 /// </remarks>
 internal sealed class AtariBasicExpression
@@ -25,7 +32,10 @@ internal sealed class AtariBasicExpression
     private const int MaximumDepth = 32;
 
     private static readonly string[] s_operators = ["<>", ">=", "<=", "=", "<", ">", "+", "-", "*", "/", "^", "(", ")", ","];
-    private static readonly HashSet<string> s_refused = ["RND", "USR", "FRE", "PADDLE", "STICK", "PTRIG", "STRIG"];
+    private static readonly HashSet<string> s_refused = ["RND", "USR", "FRE", "ADR", "PADDLE", "STICK", "PTRIG", "STRIG"];
+
+    // DEGFLG, the OS's flag that DEG sets for SIN, COS and ATN: 0 for radians.
+    private const int DegreesFlag = 0xFB;
 
     private readonly BasicVariables _variables;
     private readonly IBasicMemory _memory;
@@ -102,15 +112,7 @@ internal sealed class AtariBasicExpression
                 ? string.CompareOrdinal(Text(left), Text(right))
                 : Number(left).CompareTo(Number(right));
 
-            left = Truth(relation switch
-            {
-                "=" => order == 0,
-                "<>" => order != 0,
-                "<" => order < 0,
-                ">" => order > 0,
-                "<=" => order <= 0,
-                _ => order >= 0
-            });
+            left = Truth(Compare(relation, order));
         }
 
         return left;
@@ -150,13 +152,39 @@ internal sealed class AtariBasicExpression
         return left;
     }
 
+    // From rev. B the grammar takes one sign or NOT before an operand, not two.
     private BasicValue Unary()
     {
-        if (Take("-")) { return Rounded(-Number(Unary())); }
-        if (Take("+")) { return Rounded(Number(Unary())); }
-        if (Take("NOT")) { return Truth(Number(Unary()) == 0); }
-        return Primary();
+        if (Take("-")) { return Rounded(-Number(Operand())); }
+        if (Take("+")) { return Rounded(Number(Operand())); }
+        if (Take("NOT")) { return Truth(Number(Operand()) == 0); }
+        return Operand();
     }
+
+    // An operand, and the string comparisons, which bind above every other operator.
+    private BasicValue Operand()
+    {
+        BasicValue left = Primary();
+        while (left.IsString && Peek() is "=" or "<>" or "<" or ">" or "<=" or ">=")
+        {
+            string relation = _tokens[_at++];
+            BasicValue right = Primary();
+            if (!right.IsString) { throw new FormatException("ERROR- 8: a string compares only with a string."); }
+            left = Truth(Compare(relation, string.CompareOrdinal(Text(left), Text(right))));
+        }
+
+        return left;
+    }
+
+    private static bool Compare(string relation, int order) => relation switch
+    {
+        "=" => order == 0,
+        "<>" => order != 0,
+        "<" => order < 0,
+        ">" => order > 0,
+        "<=" => order <= 0,
+        _ => order >= 0
+    };
 
     private BasicValue Primary()
     {
@@ -189,19 +217,19 @@ internal sealed class AtariBasicExpression
                 "ABS" => Rounded(Math.Abs(Number(Argument()))),
                 "INT" => Rounded(Math.Floor(Number(Argument()))),
                 "SGN" => new(Math.Sign(Number(Argument()))),
-                "SQR" => Rounded(Math.Sqrt(Number(Argument()))),
-                "EXP" => Rounded(Math.Exp(Number(Argument()))),
-                "LOG" => Rounded(Math.Log(Number(Argument()))),
-                "CLOG" => Rounded(Math.Log10(Number(Argument()))),
-                "SIN" => Rounded(Math.Sin(Number(Argument()))),
-                "COS" => Rounded(Math.Cos(Number(Argument()))),
-                "ATN" => Rounded(Math.Atan(Number(Argument()))),
-                "PEEK" => new(_memory.Read((int)Number(Argument()) & 0xFFFF)),
+                "SQR" => Function(Math.Sqrt(Number(Argument()))),
+                "EXP" => Function(Math.Exp(Number(Argument()))),
+                "LOG" => Function(Math.Log(Number(Argument()))),
+                "CLOG" => Function(Math.Log10(Number(Argument()))),
+                "SIN" => Function(Math.Sin(Number(Argument()) * Radians)),
+                "COS" => Function(Math.Cos(Number(Argument()) * Radians)),
+                "ATN" => Function(Math.Atan(Number(Argument())) / Radians),
+                "PEEK" => new(_memory.Read(Unsigned(Argument()))),
                 "LEN" => new(Text(StringArgument()).Length),
                 "ASC" => Ascii(StringArgument()),
                 "VAL" => Value(StringArgument()),
                 "STR$" => BasicValue.Of([.. Format(new(Number(Argument()))).Select(character => (byte)character)]),
-                "CHR$" => BasicValue.Of([(byte)Number(Argument())]),
+                "CHR$" => BasicValue.Of([(byte)Unsigned(Argument())]),
                 _ => Variable(token)
             };
         }
@@ -236,8 +264,8 @@ internal sealed class AtariBasicExpression
             return _variables.Read(variable.Kind, variable.ValueAddress);
         }
 
-        int first = (int)Number(Or());
-        int? second = Take(",") ? (int)Number(Or()) : null;
+        int first = Unsigned(Or());
+        int? second = Take(",") ? Unsigned(Or()) : null;
         Expect(")");
         if (text)
         {
@@ -245,8 +273,9 @@ internal sealed class AtariBasicExpression
                 ? _variables.Read(variable.Kind, variable.ValueAddress).Text ?? []
                 : [];
 
+            // OPERATOR_STRING_PAREN: error 5 for an index of 0, a last beyond the length, or nothing between them.
             int last = second ?? value.Length;
-            if (first < 1 || last > value.Length || first > last + 1)
+            if (first < 1 || last > value.Length || first > last)
             {
                 throw new FormatException("ERROR- 5: the range is outside the string.");
             }
@@ -259,7 +288,15 @@ internal sealed class AtariBasicExpression
             throw new FormatException($"ERROR- 9: {name} is not DIMensioned.");
         }
 
-        int[] subscripts = second is { } column ? [first, column] : [first];
+        // Every array has two sizes, a single one's second being 1 (the variables list it as one), and a missing
+        // second subscript is 0: A(I) is A(I,0) whichever way the array was DIMensioned.
+        int column = second ?? 0;
+        if (array.Dimensions.Count == 1 && column != 0)
+        {
+            throw new FormatException($"ERROR- 9: {name}({first},{column}) is outside the array.");
+        }
+
+        int[] subscripts = array.Dimensions.Count == 2 ? [first, column] : [first];
         try
         {
             return _variables.Read(array.Kind, array.ElementAddress(subscripts));
@@ -372,6 +409,25 @@ internal sealed class AtariBasicExpression
 
         return new(AtariNumbers.ToDouble(AtariNumbers.FromDouble(value)));
     }
+
+    // A function's result: the FP package's failure, as for SQR(-1), LOG(0) or EXP(300), is error 3.
+    private static BasicValue Function(double value)
+    {
+        if (double.IsNaN(value) || double.IsInfinity(value) || Math.Abs(value) >= 1E98)
+        {
+            throw new FormatException("ERROR- 3: the function's argument is out of its range.");
+        }
+
+        return Rounded(value);
+    }
+
+    // SIN, COS and ATN's unit: a degree after DEG, else a radian.
+    private double Radians => _memory.Read(DegreesFlag) == 0 ? 1 : Math.PI / 180;
+
+    // POP_UNSIGNED: a number rounded to an integer from 0 to 65535 as FPI rounds it, or error 3.
+    private static int Unsigned(BasicValue value) =>
+        AtariNumbers.ToInteger(AtariNumbers.FromDouble(Number(value)))
+            ?? throw new FormatException("ERROR- 3: the value is not an integer from 0 to 65535.");
 
     private static double Number(BasicValue value) =>
         value.IsString ? throw new FormatException("ERROR- 8: a number is needed, not a string.") : value.Number;

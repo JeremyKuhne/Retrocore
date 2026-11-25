@@ -150,7 +150,8 @@ internal static class AtariNumbers
     }
 
     /// <summary>
-    ///  Gets the number nearest a value, its digits rounded to ten.
+    ///  Gets the number for a value: its digits rounded to ten, then, when the first byte holds one digit (an even
+    ///  power of ten), cut to nine: the tenth digit is dropped, not rounded.
     /// </summary>
     /// <param name="value">The value.</param>
     /// <returns>The number.</returns>
@@ -239,9 +240,8 @@ internal static class AtariNumbers
             buffer[lbuff + y++] = (byte)('0' + (number[x + 1] & 0x0F));
         }
 
-        // With the point after the last byte, nothing is written at index 10; FASC reads what LBUFF held there. A
-        // point stands in for it, so the integer's digits all print.
-        if (y == 10) { buffer[lbuff + 10] = (byte)'.'; }
+        // The loop falls into FP_WRITE_POINT, which writes the point after the last byte when its time has come.
+        if (countdown == 0) { buffer[lbuff + y] = (byte)'.'; }
     }
 
     // FP_FIND_LAST_DIGIT: the last character that isn't a trailing zero or a bare point.

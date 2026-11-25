@@ -487,9 +487,10 @@ internal sealed class AtariBasicSyntax
 
     private void Write(byte token, int source)
     {
-        if (_tokenIndex >= BufferSize) { throw TooLong(); }
+        // WRITE_TOKEN stores the token, then refuses the line when TOKEN_INDEX wraps to 0: the last byte is never kept.
         _sources[_tokenIndex] = source;
         _tokens[_tokenIndex++] = token;
+        if (_tokenIndex >= BufferSize) { throw TooLong(); }
     }
 
     private static bool IsLetter(byte value) => value is >= (byte)'A' and <= (byte)'Z';

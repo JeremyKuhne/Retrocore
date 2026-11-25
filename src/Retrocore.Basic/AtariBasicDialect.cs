@@ -177,7 +177,7 @@ internal sealed class AtariBasicDialect : BasicDialect
     ];
 
     /// <summary>
-    ///  Gets the statements' names, by token, as the ROM's statement name table spells them.
+    ///  Gets the statements' names, by token, as the ROM's statement name table spells them, without trailing spaces.
     /// </summary>
     internal static IReadOnlyList<string> StatementNames => s_statementNames;
 
@@ -681,7 +681,8 @@ internal sealed class AtariBasicDialect : BasicDialect
         byte statement = line[token];
         if (statement != AtariBasicSyntax.ImpliedLet)
         {
-            text.Append(StatementName(statement)).Append(' ');
+            // ERROR- lists with the two spaces its name in the table ends with, and LIST_NAME_SPACE's.
+            text.Append(StatementName(statement)).Append(statement == AtariBasicSyntax.ErrorToken ? "   " : " ");
             if (statement is RemStatement or DataStatement or AtariBasicSyntax.ErrorToken)
             {
                 for (int at = token + 1; at < next && line[at] != AtariNumbers.EndOfLine; at++)

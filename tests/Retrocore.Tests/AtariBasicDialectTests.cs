@@ -130,7 +130,8 @@ public sealed class AtariBasicDialectTests
         [
             "10 FOR I=1 TO 10 STEP 2:PRINT I;\",\";A$(1,1):NEXT I",
             "20 IF X>=2 AND NOT Y<>3 OR Z THEN 10",
-            "30 X=1.5E-05:Y=0.05:Z=1E+10:? CHR$(65)"
+            "30 X=1.5E-05:Y=0.05:Z=1E+10:? CHR$(65)",
+            "40 PRINT (1"
         ];
 
         AtariMachine machine = Machine();
@@ -142,7 +143,8 @@ public sealed class AtariBasicDialectTests
         BasicProgram typed = BasicProgram.Read(BasicDialect.AtariBasic, new AtariBasicMemory(machine));
         foreach (string listed in typed.ToText().Split('\n', StringSplitOptions.RemoveEmptyEntries))
         {
-            text.Should().Contain(listed, "LIST prints it");
+            // The screen shows the inverse space that marks an ERROR- line's error as a space.
+            text.Should().Contain(listed.Replace("{$A0}", " ", StringComparison.Ordinal), "LIST prints it");
         }
     }
 
@@ -179,6 +181,116 @@ public sealed class AtariBasicDialectTests
         read.ToText().Should().Be(program.ToText());
         ((AtariBasicDialect)read.Dialect).Names.Should().Equal(((AtariBasicDialect)program.Dialect).Names);
     }
+
+    /// <summary>
+    ///  The debugger's expressions give what PRINT gives on the machine: the string comparisons above NOT and the
+    ///  arithmetic, an array's missing second subscript, subscripts and arguments rounded, and DEG's degrees.
+    /// </summary>
+    /// <param name="expression">The expression.</param>
+    [TestMethod]
+    [DataRow("NOT A$=\"HI\"")]
+    [DataRow("1+A$=\"HELLO\"")]
+    [DataRow("-A$<\"Z\"")]
+    [DataRow("A$(2,3)")]
+    [DataRow("A$(5)")]
+    [DataRow("B(2)")]
+    [DataRow("B(0.6,1.4)")]
+    [DataRow("PEEK(1.6)")]
+    [DataRow("CHR$(321)")]
+    [DataRow("SIN(90)")]
+    [DataRow("ATN(-1)/ATN(-1)")]
+    [DataRow("5/3")]
+    public void ExpressionsAreTheRoms(string expression)
+    {
+        AtariMachine machine = EvaluationMachine();
+        BasicValue value = new BasicEvaluator(BasicDialect.AtariBasic, new AtariBasicMemory(machine))
+            .Evaluate(expression).Value;
+
+        string printed = Printed(machine, expression);
+        string expected = value.Text is { } text
+            ? new string([.. text.Select(character => (char)character)])
+            : AtariBasicExpression.Format(value);
+
+        expected.Should().Be(printed, $"PRINT {expression} prints it");
+    }
+
+    /// <summary>
+    ///  The debugger's expressions refuse what BASIC refuses, with BASIC's error number.
+    /// </summary>
+    /// <param name="expression">The expression.</param>
+    /// <param name="error">BASIC's error number.</param>
+    [TestMethod]
+    [DataRow("A$(3,2)", 5)]
+    [DataRow("A$(6)", 5)]
+    [DataRow("A$(0)", 5)]
+    [DataRow("PEEK(-1)", 3)]
+    [DataRow("CHR$(65536)", 3)]
+    [DataRow("SQR(-1)", 3)]
+    [DataRow("LOG(0)", 3)]
+    [DataRow("B(4)", 9)]
+    public void ExpressionErrorsAreTheRoms(string expression, int error)
+    {
+        AtariMachine machine = EvaluationMachine();
+        Action evaluate = () => new BasicEvaluator(BasicDialect.AtariBasic, new AtariBasicMemory(machine)).Evaluate(expression);
+
+        evaluate.Should().Throw<FormatException>().Which.Message.Should().StartWith($"ERROR- {error}:");
+        Printed(machine, expression).Should().MatchRegex($@"^ERROR-\s+{error}\b", $"PRINT {expression} is error {error}");
+    }
+
+    /// <summary>
+    ///  Expressions with two unary operators are refused, as rev. C's grammar refuses them.
+    /// </summary>
+    /// <param name="expression">The expression.</param>
+    [TestMethod]
+    [DataRow("--1")]
+    [DataRow("NOT NOT 1")]
+    public void SecondUnaryIsRefused(string expression)
+    {
+        AtariMachine machine = EvaluationMachine();
+        Action evaluate = () => new BasicEvaluator(BasicDialect.AtariBasic, new AtariBasicMemory(machine)).Evaluate(expression);
+        evaluate.Should().Throw<FormatException>();
+    }
+
+    // An 800 with strings, arrays and DEG set, for the expression tests.
+    private static AtariMachine EvaluationMachine()
+    {
+        AtariMachine machine = Machine();
+        AtariMachineTests.Type(machine, "DIM A$(9),B(3,2):A$=\"HELLO\":B(2,0)=7:B(1,1)=1.5:DEG\r");
+        return machine;
+    }
+
+    // The first row PRINT writes for an expression typed on the machine; an error has an empty row before it.
+    private static string Printed(AtariMachine machine, string expression)
+    {
+        AtariMachineTests.Type(machine, $"PRINT {expression}\r");
+        string[] screen = machine.ReadTextScreen();
+        int prompt = Array.FindLastIndex(screen, row => row.Trim() == $"PRINT {expression}");
+        prompt.Should().BeGreaterThanOrEqualTo(0, "the statement is on the screen");
+        return screen.Skip(prompt + 1).Select(row => row.Trim()).FirstOrDefault(row => row.Length > 0) ?? "";
+    }
+
+    /// <summary>
+    ///  A line whose tokens would fill the 256-byte token buffer is refused, as WRITE_TOKEN refuses it, where one a
+    ///  byte shorter is taken.
+    /// </summary>
+    [TestMethod]
+    public void TokenBufferHoldsTwoHundredFiftyFiveBytes()
+    {
+        // Line header (3), statement header (2), then each ",1" adds a comma and a 7-byte constant; PRINT 1 starts it.
+        static string Line(int ones) => "10 PRINT 1" + string.Concat(Enumerable.Repeat(",1", ones));
+
+        int taken = Enumerable.Range(1, 40).Last(ones => Tokenizes(Line(ones)));
+        Tokenizes(Line(taken + 1)).Should().BeFalse();
+
+        AtariMachine machine = Machine();
+        AtariMachineTests.Type(machine, Line(taken) + "\r");
+        AtariMachineTests.Type(machine, Line(taken + 1).Replace("10 ", "20 ", StringComparison.Ordinal) + "\r");
+        BasicProgram typed = BasicProgram.Read(BasicDialect.AtariBasic, new AtariBasicMemory(machine));
+        typed.ToText().Should().Contain(Line(taken), "the ROM takes the longest line the dialect takes");
+        typed.ToText().Should().NotContain("20 PRINT", "the ROM refuses the line the dialect refuses");
+    }
+
+    private static bool Tokenizes(string line) => BasicProgram.Parse(line, BasicDialect.AtariBasic).Program is not null;
 
     /// <summary>
     ///  Numbers read and print as the floating point package's AFP and FASC read and write them on the machine.

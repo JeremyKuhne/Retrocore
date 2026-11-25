@@ -142,8 +142,8 @@ public sealed partial class BasicProgram
         return dialect is IntegerBasicDialect or AtariBasicDialect ? Defined(references, labels) : references;
     }
 
-    // Integer BASIC's, BBC BASIC's and Atari BASIC's GOTO and GOSUB take any expression, such as GOSUB T, so a name is a label only
-    // when one of that name is defined.
+    // Integer BASIC's, BBC BASIC's and Atari BASIC's GOTO and GOSUB take any expression, such as GOSUB T, so a name
+    // is a label only when one of that name is defined.
     private static List<(int, int, string, bool, string)> Defined(
         List<(int, int, string, bool, string)> references,
         IReadOnlyDictionary<string, BasicLabel> labels)

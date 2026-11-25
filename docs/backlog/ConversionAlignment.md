@@ -241,56 +241,7 @@ Each item lands with the PR it documents.
 A box is ticked in the PR that lands its item on main; an item in flight has a status line naming its branch.
 
 The owner settles the decisions. Work is done by sessions, one per item, each following this plan and
-`ConvertingSources.md`, and a coordinating session that starts them, tracks the items and reports to the owner.
-For this effort the owner replaces the copilot-review-loop skill, its stacking rule and Copilot rounds included, and
-the steward skill that leads into it, with the following; `pre-pr-self-review` still applies to behavioral changes.
-Each session takes its branches to main this way:
-
-- **Self-review**, by the owner's cycle
-  ([An effective self-review cycle](https://claude.ai/artifact/VvBGDajXJzLwBxP6VvEfxs)).
-  Reviewers are given the diff, the files it touches and the brief below, not the author's conclusions, and they
-  only read: the session runs the checks and hands them the results.
-  1. *Scripted checks*, before any reviewer and after every fix: the build, the tests and the lint; CI's later steps
-     (every `node tools/Test-*.mjs`, the extension's `check:grammar`, `compile` and `test:grammar`); and the
-     mechanical checks (citations, lineage, old names left behind). A kind of check made by hand twice becomes a
-     test. Between fixes the targeted tests run; the full suite and CI's steps run before the closing pass and
-     before pushing.
-  2. *First pass*, once: Haiku, Sonnet and Opus in parallel on the whole diff, each starting from its own area.
-  3. *Delta review*, after each fix: Haiku alone on the fix's diff, with the findings it addresses. It checks that
-     the fix is right and broke nothing nearby; what it finds goes back to the fix.
-  4. *Closing pass*: Opus alone on the whole diff. A finding goes back to step 3, not step 2. (Sonnet was in the
-     closing pass at first; across the first seven closing passes it found one should-fix, Opus about sixteen and a
-     must-fix, so the closing pass is Opus's, and Sonnet stays in the first pass, where it finds real issues.)
-  For a diff over about 3,000 lines, the closing pass is split by area, as one whole-diff pass reads a different
-  corner each time and does not converge (DOS's five took 1-3 should-fixes each): the diff is cut into areas that
-  together cover it (none over about 4,000 lines), one Opus reviewer reads each area whole, in parallel, told the
-  finding classes the cycle keeps meeting (for DOS, text true of only one build, and stack and register contracts)
-  and asked to check every comment against each build that assembles it. Each fix gets its delta review; then a
-  final Opus pass reads only the lines changed since the split pass, and the PR opens when it is clean.
-  A fix for nits alone gets no model review: after a clean closing pass its nits are applied, the lint and the
-  targeted tests run, and it is pushed. Only a fix for a must-fix or should-fix finding goes to a delta review.
-
-  **The brief.** What counts: a wrong value, address or contract; a comment false for the code in a build it is in;
-  a lost or mis-keyed historical name; a broken build or test. What does not: a comment that leaves out a use,
-  names or switches that could also be defined, and what the scripted checks cover. Each finding gives its
-  evidence (file and line, and the code, listing line or output that proves it; a document lacking a name means
-  the whole text was searched) and a severity: must-fix (wrong behaviour or value, a broken build or test),
-  should-fix (a false comment, a lost name) or nit (wording). A round is clean with no must-fix or should-fix;
-  nits are fixed in passing and never cause another round. Each finding is verified before it is fixed, and the
-  false ones counted. Each step reports, per stage and model, the findings by severity and the false ones, the
-  tokens and minutes, the closing passes to clean, and anything found later.
-- **The PR.** Against main, following the repository's PR template if there is one. Its body gives the change, the
-  evidence (commands and results, naming skipped tests) and the review rounds. No Copilot review is requested.
-- **CI.** The session waits for CI, subscribed to the PR's activity rather than polling, and squash-merges as soon as
-  it is green, with the PR's title as the commit's.
-- **A failure.** If CI fails for any reason, a flaky test or the infrastructure included, the session neither
-  reruns it, merges, nor pushes a fix. It reports the job, the step and the log to the coordinating session,
-  which takes it to the owner.
-- **Stacks.** One PR at a time from each stack of branches. Once a branch merges, the next is rebased onto main
-  (`git rebase --onto origin/main <old base> <branch>`), built, tested and reviewed again on what changed, then
-  pushed and opened.
-- **Main moving.** If main moves under an open PR and it conflicts, the session rebases, reruns the tests and a
-  review round on the resolution, and pushes.
+`ConvertingSources.md`. Each PR is squash-merged once CI is green.
 
 1. **Now, in parallel:**
    - A1 and A2 land, one PR at a time;

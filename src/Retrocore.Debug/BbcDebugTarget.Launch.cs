@@ -134,7 +134,8 @@ internal sealed partial class BbcDebugTarget
                 RecordTape(path);
                 break;
             case (BbcCassette cassette, "record"):
-                // RECORD over the tape in it at the head, or a blank one put in for it, saved later with Save As.
+                // RECORD over the tape in it at the head, or a blank one put in for it, saved later with Save As. A
+                // tape put in to play is write-protected (InsertTape), so RECORD will not go down on it.
                 if (cassette.Tape is null) { cassette.Insert(new AcornTape(), "Blank tape", changed: true); }
                 cassette.Record();
                 break;
@@ -186,7 +187,7 @@ internal sealed partial class BbcDebugTarget
         }
         else
         {
-            throw new ArgumentException("device must be cassette or disk, with action insert or eject, or record for a cassette.");
+            throw new ArgumentException("device must be cassette or disk.");
         }
 
         // A changed tape or disk is held back, as from retro/device, so an older client cannot lose it. One let go of is

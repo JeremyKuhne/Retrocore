@@ -444,7 +444,7 @@ public sealed class AltairDiskTests
     }
 
     /// <summary>
-    ///  CP/M 2.2b lists its disk, saves a file, which writes its sectors, and STAT and ERA see the file.
+    ///  CP/M 2.2b lists its disk, saves a file, which changes the disk, and STAT and ERA see the file.
     /// </summary>
     [TestMethod]
     public void CpmWritesAndReadsFiles()

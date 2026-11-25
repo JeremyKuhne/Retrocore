@@ -297,7 +297,7 @@ Screen**.
   mounts, and that DBL's and MBL's sources assemble to the PROMs' digests. With the PROM dumps and disk images in the
   external test data's `altair-disk` folder (or `RETROCORE_ALTAIR_DISK`), the sources match the dumps byte for byte,
   and CP/M 2.2b, Burcon CP/M, Disk BASIC 5.0 and Altair DOS boot through DBL; CP/M lists its disk, saves a file,
-  which writes its sectors, lists it with STAT and erases it. The same disks also boot on SIMH's `altairz80`, with
+  which changes the disk, lists it with STAT and erases it. The same disks also boot on SIMH's `altairz80`, with
   its own boot ROM, which was checked by hand rather than by a test.
 - [`RecoveryJournalTests`](../tests/Retrocore.Tests/RecoveryJournalTests.cs) keep a changed Altair disk, bring it
   back into a new machine's drive with its codec, and save it with the change and its trailer.

@@ -45,9 +45,16 @@ public class Trs80OracleTests
     }
 
     /// <summary>
-    ///  Level II on a schedule of fractional seconds: MAME's script must type each entry at its fraction, not at the
-    ///  next whole second.
+    ///  Level II on a schedule and an end time in fractional seconds.
     /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   The entries are far enough apart that the screen, cursor and program should come out the same whether MAME
+    ///   types each one at its fraction, early or at the next whole second. So this checks that a fractional schedule
+    ///   runs end to end, not when each entry fires; <see cref="ScriptEntryKeepsFractionalSeconds"/> checks the text
+    ///   sent to MAME.
+    ///  </para>
+    /// </remarks>
     [TestMethod]
     [TestCategory("Conformance")]
     public void LevelTwoBasicAtFractionalTimesMatchesMame()
@@ -224,6 +231,12 @@ public class Trs80OracleTests
         return machine;
     }
 
+    /// <summary>
+    ///  Formats a schedule entry for the Lua script's <c>RETRO_SCRIPT</c>: the time in seconds with a decimal point,
+    ///  fraction and all, whatever the culture; <c>=</c>; then the text, with <c>\r</c> for ENTER.
+    /// </summary>
+    /// <param name="entry">The emulated second to type at, and the text to type.</param>
+    /// <returns>The entry as <c>seconds=text</c>.</returns>
     internal static string ScriptEntry((double At, string Text) entry)
     {
         string at = entry.At.ToString(System.Globalization.CultureInfo.InvariantCulture);

@@ -627,7 +627,7 @@ Pointer3 = $E6
 
 ;; The tokenizer's index of the last token it has written in <InputBuffer>.
 ;;
-;; The tokens go into <InputBuffer> after the line's text: GETCMD sets it to the length of the line, and
+;; The tokens go into <InputBuffer> after the line's text: <Editor::ReadLine> sets it to the length of the line, and
 ;; <Tokenizer::PutToken> adds each token after it. A line that fills the buffer is TOO LONG.
 ;; See: <TextIndex>, <Tokenizer::PutToken>, <TokenIndexStack>
 ;; Also: TOKNDX (IBSM)
@@ -691,7 +691,7 @@ SyntaxStackIndex = $FD
 SyntaxPage = $FE
 
 ; Page 1 below the 6502's stack, where `GOSUB` and `FOR` keep their state: 16 entries in each 16-byte column, indexed by
-; GOSUBNDX or FORNDX. Integer BASIC starts the 6502's stack at $01FF, and it does not grow down this far.
+; GoSubIndex or ForIndex. Integer BASIC starts the 6502's stack at $01FF, and it does not grow down this far.
 ;; The `GOSUB` stack's return token addresses, low bytes: <TokenPointer> at each `GOSUB`.
 ;;
 ;; <GoSubTokenHigh> holds the high bytes, and <GoSubLineLow> and <GoSubLineHigh> the line (<CurrentLine>) to return to.

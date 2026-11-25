@@ -629,9 +629,9 @@ Pointer3 = $E6
 
 ;; The tokenizer's index of the last token it has written in <InputBuffer>.
 ;;
-;; The tokens go into <InputBuffer> after the line's text: the callers of <Editor::ReadLine> set it to the length of the
-;; line it returns, and
-;; <Tokenizer::PutToken> adds each token after it. A line that fills the buffer is TOO LONG.
+;; The tokens go into <InputBuffer> after the line's text: the callers of <Editor::ReadLine> that tokenize the line set
+;; it to the line's length, and <Tokenizer::PutToken> adds each token after it. A line that fills the buffer is
+;; TOO LONG.
 ;; See: <TextIndex>, <Tokenizer::PutToken>, <TokenIndexStack>
 ;; Also: TOKNDX (IBSM)
 TokenIndex = $F1

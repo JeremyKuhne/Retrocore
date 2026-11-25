@@ -478,7 +478,7 @@ ContinueAt:
 ;; In: X = the noun stack, its top entry the variable
 ;; Out: X = the noun stack, one entry higher, when the loop is done
 ;; Errors: BAD NEXT if no FOR loop has the variable, >32767 if the variable passes 32767 or -32768,
-;;   is more than 32767 from the limit, or the limit is -32768
+;;   the variable less the limit is outside -32768 to 32767, or the limit is -32768
 ;; See: <Statements::For>, <ForVariableLow>
 ;; Entry:
 ;;   ErrorIfZero = reports the error whose message is at offset Y when zero is set

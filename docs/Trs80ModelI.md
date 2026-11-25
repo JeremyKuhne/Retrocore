@@ -39,8 +39,9 @@ a new key after 19 ms to debounce it, then pauses about 50 ms before it scans ag
 doubled letters. BASIC also does not scan the keyboard while it carries out a command, so a script that types
 should wait for `READY` before typing the next command. An uppercase letter is typed as its key alone, and a
 lowercase letter with shift, which Level II reads as the lowercase code; ` is shift and @. Level I reads shift and a
-letter as its control code, so on Level I every letter is typed as its key alone, and ` has no key. The Model III family types uppercase with
-shift instead ([Typed and pasted text](Trs80Model3And2.md#typed-and-pasted-text)).
+letter as its control code, so on Level I every letter is typed as its key alone, and ` has no key. Level II on the
+Model III and 4, and their DOSes, type uppercase with shift instead
+([Typed and pasted text](Trs80Model3And2.md#typed-and-pasted-text)).
 
 **Cassette.** Level II records 500 baud and Level I 250 baud pulse cells, to and from CAS images. A CAS image
 drops the silences between blocks. Playback therefore holds a pulse while the ROM still has an unread one,

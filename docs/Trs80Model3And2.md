@@ -127,9 +127,10 @@ TRSDOS-II and the Model I's NEWDOS/80 are not there.
 ## Typed and pasted text
 
 Text typed or pasted through the debugger (the display panel's paste and the debug protocol's key requests, which
-call `Trs80Keyboard.Type`) comes out as written. On the Model III, 4 and 4P an uppercase letter is typed as its key
-with shift and a lowercase letter as its key alone, as MAME types them; ` is shift and @. That is how their Level II
-ROM and their DOSes read the keys:
+call `Trs80Keyboard.Type`) is pressed as the running ROM reads the keys, so it comes out as written, except that a
+lowercase letter comes out in uppercase while caps lock is on. On the Model III, 4 and 4P an uppercase letter is typed
+as its key with shift and a lowercase letter as its key alone, as MAME types them; ` is shift and @. That is how their
+Level II ROM and their DOSes read the keys:
 
 | Running | Caps lock at start | Letter alone | Shift and letter |
 | --- | --- | --- | --- |

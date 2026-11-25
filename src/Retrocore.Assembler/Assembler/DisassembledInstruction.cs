@@ -77,6 +77,12 @@ public readonly struct DisassembledInstruction
     public IsaEncoding Encoding => InstructionSet.GetEncoding(_encoding);
 
     /// <summary>
+    ///  Gets the registers and flags the instruction reads and writes, and what it does to the stack, where its
+    ///  description gives them (<see cref="InstructionSet.HasEffects"/>).
+    /// </summary>
+    public InstructionEffects Effects => InstructionSet.Effects(_encoding);
+
+    /// <summary>
     ///  Gets the operand form.
     /// </summary>
     public OperandForm Form

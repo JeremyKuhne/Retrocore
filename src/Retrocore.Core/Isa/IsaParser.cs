@@ -158,7 +158,8 @@ public static partial class IsaParser
                 excluded: null,
                 message: null,
                 postbytes?.Invoke(name),
-                EntryPointsOf(name, sets[name].Base));
+                EntryPointsOf(name, sets[name].Base),
+                ScopesOf(name, sets[name].Base));
         }
 
         foreach ((string name, string baseName, HashSet<string> excluded, string message) in subsets)
@@ -176,11 +177,26 @@ public static partial class IsaParser
                 excluded,
                 message,
                 postbytes?.Invoke(name),
-                EntryPointsOf(name, baseName));
+                EntryPointsOf(name, baseName),
+                ScopesOf(name, baseName));
         }
 
         description.InstructionSets = result;
+        CheckEffects(rules, result);
         return description;
+
+        // The set, the sets it is built on, then the description: where its effects lines are looked for.
+        List<string> ScopesOf(string name, string? baseName)
+        {
+            List<string> scopes = [name];
+            for (string? current = baseName; current is not null; current = sets.TryGetValue(current, out var set) ? set.Base : null)
+            {
+                scopes.Add(current);
+            }
+
+            scopes.Add("");
+            return scopes;
+        }
 
         // The description's entry points, then the set's own and those of the sets it is built on.
         List<ushort> EntryPointsOf(string name, string? baseName)
@@ -327,6 +343,9 @@ public static partial class IsaParser
                 if (access == MemoryAccess.Read) { throw Error(number, "Expected 'access kind Instruction ...'."); }
                 for (int index = 2; index < tokens.Count; index++) { rules.Access[tokens[index]] = access; }
                 break;
+            case "effects":
+                Effects(tokens, number, registers, flags, rules);
+                break;
             case "literal-forms":
                 rules.LiteralForms = tokens.Count == 1 ? true : throw Error(number, "Expected 'literal-forms'.");
                 break;
@@ -387,6 +406,187 @@ public static partial class IsaParser
                 break;
             default:
                 throw Error(number, $"Unknown setting '{tokens[0]}'.");
+        }
+    }
+
+    // effects [in Set] Instruction|Instruction:Form|:Form ... [reads names] [writes names] [push n] [pull n] | none
+    private static void Effects(List<string> tokens, int number, List<IsaRegister> registers, List<IsaFlag> flags, IsaRules rules)
+    {
+        const string Expected =
+            "Expected 'effects [in Set] Instruction ... [reads ...] [writes ...] [push n] [pull n]', or '... none'.";
+
+        int index = 1;
+        string scope = "";
+        if (tokens.Count > 2 && tokens[1] == "in")
+        {
+            scope = tokens[2];
+            index = 3;
+        }
+
+        int first = index;
+        while (index < tokens.Count && !IsEffectKeyword(tokens[index])) { index++; }
+        if (index == first || index == tokens.Count) { throw Error(number, Expected); }
+        int keys = index;
+        if (registers.Count > 32) { throw Error(number, "Effects describe at most 32 registers."); }
+
+        // Flags are bits of one flags register, which naming as a whole reads or writes every flag.
+        int flagRegister = -1;
+        byte allFlags = 0;
+        foreach (IsaFlag flag in flags)
+        {
+            int register = registers.FindIndex(known => known.Name == flag.Register);
+            if (flag.Bit is < 0 or > 7 || register < 0 || (flagRegister >= 0 && register != flagRegister))
+            {
+                throw Error(number, "Effects need the flags line before them, naming one 8-bit register of the registers line.");
+            }
+
+            flagRegister = register;
+            allFlags |= (byte)(1 << flag.Bit);
+        }
+
+        uint registersRead = 0, registersWritten = 0, operandBits = 0;
+        byte flagsRead = 0, flagsWritten = 0, set = 0, cleared = 0, fromOperand = 0, pushed = 0, pulled = 0;
+        HashSet<string> seen = [];
+        while (index < tokens.Count)
+        {
+            string keyword = tokens[index++];
+            if (!seen.Add(keyword) || (keyword == "none" && (seen.Count > 1 || index != tokens.Count)))
+            {
+                throw Error(number, Expected);
+            }
+
+            if (keyword is "push" or "pull")
+            {
+                byte count = index < tokens.Count
+                    && byte.TryParse(tokens[index], NumberStyles.None, CultureInfo.InvariantCulture, out byte parsed)
+                    && parsed != 0
+                        ? parsed
+                        : throw Error(number, $"Expected '{keyword} n', a byte count.");
+
+                index++;
+                if (keyword == "push") { pushed = count; } else { pulled = count; }
+                continue;
+            }
+
+            bool writes = keyword == "writes";
+            for (; index < tokens.Count && !IsEffectKeyword(tokens[index]); index++)
+            {
+                string token = tokens[index];
+                int equals = token.IndexOf('=');
+                string name = equals < 0 ? token : token[..equals];
+                int register = registers.FindIndex(known => known.Name == name);
+                if (register >= 0 && equals < 0)
+                {
+                    if (writes) { registersWritten |= 1u << register; } else { registersRead |= 1u << register; }
+                    if (register == flagRegister)
+                    {
+                        if (writes) { flagsWritten |= allFlags; } else { flagsRead |= allFlags; }
+                    }
+
+                    continue;
+                }
+
+                // Flags go by the words documentation names them by; one without words, by its name.
+                int found = flags.FindIndex(flag => HasWord(flag, name) || (flag.Words.Count == 0 && flag.Name == name));
+                if (found < 0)
+                {
+                    throw Error(number, $"'{name}' is not a register, or a flag by its word, in effects.");
+                }
+
+                byte bit = (byte)(1 << flags[found].Bit);
+                if (!writes)
+                {
+                    if (equals >= 0) { throw Error(number, $"Only written flags take a value, not '{token}'."); }
+                    flagsRead |= bit;
+                    continue;
+                }
+
+                flagsWritten |= bit;
+                string value = equals < 0 ? "" : token[(equals + 1)..];
+                if (value == "0") { cleared |= bit; }
+                else if (value == "1") { set |= bit; }
+                else if (value.Length == 4 && value.StartsWith("bit", StringComparison.Ordinal) && value[3] is >= '0' and <= '7')
+                {
+                    fromOperand |= bit;
+                    operandBits |= (uint)(value[3] - '0' + 1) << (flags[found].Bit * 4);
+                }
+                else if (equals >= 0)
+                {
+                    throw Error(number, $"Expected flag=0, flag=1 or flag=bitN, not '{token}'.");
+                }
+            }
+        }
+
+        InstructionEffects effects = new()
+        {
+            IsKnown = true,
+            RegistersRead = registersRead,
+            RegistersWritten = registersWritten,
+            FlagsRead = flagsRead,
+            FlagsWritten = flagsWritten,
+            FlagsSet = set,
+            FlagsCleared = cleared,
+            FlagsFromOperand = fromOperand,
+            OperandBits = operandBits,
+            Pushed = pushed,
+            Pulled = pulled
+        };
+
+        if (!rules.Effects.TryGetValue(scope, out Dictionary<string, (InstructionEffects, int)>? scoped))
+        {
+            scoped = [with(StringComparer.OrdinalIgnoreCase)];
+            rules.Effects[scope] = scoped;
+        }
+
+        for (int key = first; key < keys; key++)
+        {
+            string name = tokens[key];
+            int colon = name.IndexOf(':');
+            if (colon == name.Length - 1 || name.IndexOf(':', colon + 1) >= 0 || scoped.ContainsKey(name))
+            {
+                throw Error(number, $"Effects for '{name}' are malformed or already given.");
+            }
+
+            scoped[name] = (effects, number);
+        }
+    }
+
+    private static bool HasWord(IsaFlag flag, string word)
+    {
+        foreach (string known in flag.Words)
+        {
+            if (known == word) { return true; }
+        }
+
+        return false;
+    }
+
+    private static bool IsEffectKeyword(string token) => token is "reads" or "writes" or "push" or "pull" or "none";
+
+    // Each effects line names a known set and instructions and forms some set has, so a misspelling fails.
+    private static void CheckEffects(IsaRules rules, Dictionary<string, InstructionSet> sets)
+    {
+        foreach (KeyValuePair<string, Dictionary<string, (InstructionEffects Effects, int Line)>> scope in rules.Effects)
+        {
+            if (scope.Key.Length != 0 && !sets.ContainsKey(scope.Key))
+            {
+                throw Error(0, $"Effects name an unknown instruction set '{scope.Key}'.");
+            }
+
+            foreach (KeyValuePair<string, (InstructionEffects Effects, int Line)> entry in scope.Value)
+            {
+                int colon = entry.Key.IndexOf(':');
+                string instruction = colon < 0 ? entry.Key : entry.Key[..colon];
+                string? form = colon < 0 ? null : entry.Key[(colon + 1)..];
+                bool found = false;
+                foreach (InstructionSet set in sets.Values)
+                {
+                    if (scope.Key.Length != 0 && !ReferenceEquals(set, sets[scope.Key])) { continue; }
+                    found |= set.HasInstruction(instruction, form);
+                }
+
+                if (!found) { throw Error(entry.Value.Line, $"Effects for '{entry.Key}' match no instruction."); }
+            }
         }
     }
 

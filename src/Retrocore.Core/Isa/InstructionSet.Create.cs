@@ -35,6 +35,9 @@ public sealed partial class InstructionSet
     /// <param name="message">The subset's diagnostic, with <c>{0}</c> for the operation, or null.</param>
     /// <param name="postbytes">The codec for the set's postbyte fields, or null.</param>
     /// <param name="entryPoints">The fixed entry points of the set: the description's and its own.</param>
+    /// <param name="scopes">
+    ///  Where effects lines are looked for, nearest first: the set, the sets it is built on, and the description.
+    /// </param>
     /// <returns>The set.</returns>
     internal static InstructionSet Create(
         string name,
@@ -44,13 +47,15 @@ public sealed partial class InstructionSet
         HashSet<string>? excluded,
         string? message,
         PostbyteCodec? postbytes,
-        IReadOnlyList<ushort> entryPoints)
+        IReadOnlyList<ushort> entryPoints,
+        IReadOnlyList<string> scopes)
     {
         InstructionSet set = new(name, description)
         {
             IndirectPageWrap = rules.IndirectPageWrap.Contains(name),
             Postbytes = postbytes,
-            EntryPoints = entryPoints
+            EntryPoints = entryPoints,
+            HasEffects = rules.Effects.Count != 0
         };
 
         foreach (IsaEntry entry in entries.Values)
@@ -72,6 +77,11 @@ public sealed partial class InstructionSet
                 ? specificTarget
                 : rules.Targets.TryGetValue(entry.Instruction, out ushort generalTarget) ? generalTarget : null;
 
+            InstructionEffects effects = set.HasEffects
+                ? EffectsOf(rules, scopes, entry.Instruction, form.Name)
+                    ?? throw new FormatException($"Instruction set '{name}': no effects line gives {entry.Instruction} {form.Name}.")
+                : default;
+
             set.Add(
                 mnemonic,
                 entry,
@@ -81,7 +91,8 @@ public sealed partial class InstructionSet
                 rules.Access.TryGetValue($"{entry.Instruction}:{form.Name}", out MemoryAccess specific) ? specific : access,
                 rules.Preferred.Contains(entry.Opcode),
                 target,
-                rules.Conditional.Contains(entry.Instruction) || rules.Conditional.Contains($"{entry.Instruction}:{form.Name}"));
+                rules.Conditional.Contains(entry.Instruction) || rules.Conditional.Contains($"{entry.Instruction}:{form.Name}"),
+                effects);
         }
 
         foreach (KeyValuePair<string, string> alias in rules.Aliases)
@@ -99,5 +110,52 @@ public sealed partial class InstructionSet
 
         set.Freeze();
         return set;
+    }
+
+    // The nearest scope's Instruction:Form or Instruction line, which a form's own line in its nearest scope
+    // adds to; null when no line gives the instruction.
+    private static InstructionEffects? EffectsOf(IsaRules rules, IReadOnlyList<string> scopes, string instruction, string form)
+    {
+        InstructionEffects? effects = null;
+        foreach (string scope in scopes)
+        {
+            if (!rules.Effects.TryGetValue(scope, out Dictionary<string, (InstructionEffects Effects, int Line)>? lines))
+            {
+                continue;
+            }
+
+            if (lines.TryGetValue($"{instruction}:{form}", out var specific) || lines.TryGetValue(instruction, out specific))
+            {
+                effects = specific.Effects;
+                break;
+            }
+        }
+
+        if (effects is not { } own) { return null; }
+        foreach (string scope in scopes)
+        {
+            if (!rules.Effects.TryGetValue(scope, out Dictionary<string, (InstructionEffects Effects, int Line)>? lines)
+                || !lines.TryGetValue($":{form}", out var added))
+            {
+                continue;
+            }
+
+            InstructionEffects other = added.Effects;
+            return own with
+            {
+                RegistersRead = own.RegistersRead | other.RegistersRead,
+                RegistersWritten = own.RegistersWritten | other.RegistersWritten,
+                FlagsRead = (byte)(own.FlagsRead | other.FlagsRead),
+                FlagsWritten = (byte)(own.FlagsWritten | other.FlagsWritten),
+                FlagsSet = (byte)(own.FlagsSet | other.FlagsSet),
+                FlagsCleared = (byte)(own.FlagsCleared | other.FlagsCleared),
+                FlagsFromOperand = (byte)(own.FlagsFromOperand | other.FlagsFromOperand),
+                OperandBits = own.OperandBits | other.OperandBits,
+                Pushed = (byte)(own.Pushed + other.Pushed),
+                Pulled = (byte)(own.Pulled + other.Pulled)
+            };
+        }
+
+        return own;
     }
 }

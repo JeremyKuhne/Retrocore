@@ -46,6 +46,39 @@ public sealed class InstructionFlagsTests
     }
 
     /// <summary>
+    ///  The inspector's flags for each documented 6502 family encoding, written by hand, are the flags the
+    ///  description's effects say it writes; B, which exists only in the byte BRK and PHP push, is not one.
+    /// </summary>
+    /// <param name="variant">The CPU variant.</param>
+    [TestMethod]
+    [DataRow(ProcessorVariant.Mos6502)]
+    [DataRow(ProcessorVariant.Wdc65C02)]
+    [DataRow(ProcessorVariant.Rockwell65C02)]
+    public void M6502AgreesWithTheEffects(ProcessorVariant variant)
+    {
+        InstructionSet set = M6502Isa.Get(variant);
+        byte all = 0;
+        foreach (IsaFlag flag in set.Description.Flags) { all |= (byte)(1 << flag.Bit); }
+        for (int opcode = 0; opcode < 256; opcode++)
+        {
+            Disassembler.TryDecode([(byte)opcode, 0x00, 0x10], 0x1000, set, out DisassembledInstruction instruction).Should().BeTrue();
+            if (instruction.IsUndocumented || InstructionDocs.FlagsOf(instruction) is not { } text) { continue; }
+            byte flags = 0;
+            foreach (string letter in text.Split(' '))
+            {
+                flags |= letter switch
+                {
+                    "none" or "B" => 0,
+                    "all" => all,
+                    _ => (byte)(1 << set.Description.Flags.Single(flag => flag.Name == letter).Bit)
+                };
+            }
+
+            flags.Should().Be(instruction.Effects.FlagsWritten, $"{variant} ${opcode:X2} {instruction}: \"{text}\"");
+        }
+    }
+
+    /// <summary>
     ///  The 6809's transfers and pulls change CC only when they name it.
     /// </summary>
     [TestMethod]

@@ -190,7 +190,7 @@ FADD_NEGATE_LOOP:
 ;; In: FR0, FR1 = the numbers to multiply
 ;; Out: FR0 = FR0 * FR1, carry = clear when the result is in range
 ;; Errors: carry = set when the result is out of range
-;; Uses: A, X, Y, FR1 (its sign cleared), FR2, FRE, FRX, EEXP, NSIGN, ZTEMP1, ZTEMP4
+;; Uses: A, X, Y, FR1 (its exponent byte cleared), FR2, FRE, FRX, EEXP, NSIGN, ZTEMP1, ZTEMP4
 ;; See: <FDIV>
 FMUL:
     lda FR0
@@ -253,7 +253,7 @@ FMUL_ERROR:
 ;; In: FR0 = the dividend, FR1 = the divisor
 ;; Out: FR0 = FR0 / FR1, carry = clear when the result is in range
 ;; Errors: carry = set when FR1 is zero or the result is out of range
-;; Uses: A, X, Y, FR1 (its sign cleared), FR2, FRE, FRX, EEXP, NSIGN, ZTEMP1, ZTEMP4
+;; Uses: A, X, Y, FR1 (its exponent byte cleared), FR2, FRE, FRX, EEXP, NSIGN, ZTEMP1, ZTEMP4
 ;; See: <FMUL>
 FDIV:
     lda FR1

@@ -47,7 +47,7 @@ MODE_ANTIC_CODES:
     .byte $02, $06, $07, $08, $09, $0A, $0B, $0D, $0F, $0F, $0F, $0F   ; GRAPHICS 0-11
     .assert * - MODE_ANTIC_CODES = MODE_COUNT, "Each display mode has an ANTIC mode."
 
-;; Nonzero for the display modes whose display list starts at the end of a fresh page, below the screen's, so that
+;; Nonzero for the display modes whose display list ends at the top of a fresh page, below the screen's, so that
 ;; the longer list doesn't cross a 1K boundary, which ANTIC can't follow.
 MODE_LIST_PAGES:
     .byte 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1                    ; GRAPHICS 0-11

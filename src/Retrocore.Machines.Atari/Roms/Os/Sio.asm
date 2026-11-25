@@ -76,7 +76,7 @@ SIO_READ_LEADER = 120               ;; the tape skipped before reading a record 
 SIO_READ_SHORT_LEADER = 10          ;; the tape skipped before reading a record with short gaps
 SIO_LINE_PAIRS = 131                ;; the line pairs in a frame, as VCOUNT counts them (NTSC)
 .endif
-SIO_LEADER_BYTE = $55               ;; each of a record's first two bytes, alternate bits for the baud measurement
+SIO_SPEED_BYTE = $55               ;; each of a record's first two bytes, alternate bits for the baud measurement
 SIO_BAUD_EDGES = 10                 ;; the input's changes timed for the baud rate: ten bits
 SIO_VBLANK_LINE = $7C               ;; the VCOUNT at which the vertical blank counts RTCLOK up
 SIO_DIVIDER_STEP = 11               ;; the divider's change for each line pair the ten bits take
@@ -366,7 +366,7 @@ SIO_OUTPUT_FINISHED_RETURN:
 ;; Receives a frame into BUFRLO/BUFRHI to BFENLO/BFENHI, and its checksum unless NOCKSM is set, and releases the
 ;; command line.
 ;;
-;; <SIO_INPUT_READY> takes the bytes and sets RECVDN. For the cassette, the checksum goes on from the leader bytes
+;; <SIO_INPUT_READY> takes the bytes and sets RECVDN. For the cassette, the checksum goes on from the speed bytes
 ;; <SIO_MEASURE_BAUD> stored.
 ;; In: BUFRLO/BUFRHI = the buffer, BFENLO/BFENHI = its end, CDTMV1 = the time allowed, running
 ;; Out: STATUS = the status
@@ -699,7 +699,7 @@ SIO_AWAIT_RESPONSE:
     tya
     rts
 
-;; Turns the leader's timing into POKEY's divider for the tape's baud rate.
+;; Turns the speed bytes' timing into POKEY's divider for the tape's baud rate.
 ;;
 ;; TIMER1 and TIMER2 hold VCOUNT and RTCLOK's low byte at the start and the end of <SIO_BAUD_EDGES> changes of the
 ;; input. Their difference in line pairs, from 88 up, indexes <SIO_BAUD_TABLE> in steps of eight, and the remainder
@@ -779,11 +779,11 @@ SIO_ADJUST_LINE_BEFORE:
     rts
 
 ;; Measures the cassette's baud rate from the start of a record, sets POKEY to it, and starts the record's buffer
-;; and checksum with the two leader bytes it has used.
+;; and checksum with the two speed bytes it has used.
 ;;
 ;; With interrupts disabled, it waits for the input to go to 0 (the first $55's start bit), times
 ;; <SIO_BAUD_EDGES> changes of the input with VCOUNT and RTCLOK, computes CBAUDL/CBAUDH through
-;; <SIO_COMPUTE_BAUD>, and then lets nine more changes pass, to the end of the second $55. It stores $55 twice in
+;; <SIO_COMPUTE_BAUD>, and then lets nine more changes pass, to the second $55's stop bit. It stores $55 twice in
 ;; the buffer and $AA in CHKSUM, and resets the serial port for the record's third byte.
 ;; In: BUFRLO/BUFRHI = the record's buffer, CDTMV1 = the time allowed, running
 ;; Out: CBAUDL/CBAUDH = the divider, BUFRLO/BUFRHI = 2 bytes on, CHKSUM = $AA, STATUS = TIMOUT on a timeout
@@ -844,11 +844,11 @@ SIO_MEASURE_BAUD_DONE:
     sta SKCTL                       ; resets the serial port
     lda SSKCTL
     sta SKCTL
-    lda #SIO_LEADER_BYTE            ; Y = 0
+    lda #SIO_SPEED_BYTE            ; Y = 0
     sta (BUFRLO),y
     iny
     sta (BUFRLO),y
-    lda #2 * SIO_LEADER_BYTE
+    lda #2 * SIO_SPEED_BYTE
     sta CHKSUM
     clc
     lda BUFRLO

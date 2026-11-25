@@ -28,11 +28,12 @@ SCREEN_SPECIAL_FILL:
 ;; accumulator starts at half of ENDPT, so its steps fall midway.
 ;;
 ;; When filling, each point is followed by a run to the right in FILDAT's colour, up to the first point that isn't
-;; colour 0, wrapping from the right edge to the left edge of the same row.
+;; colour 0, wrapping from the right edge to the left edge of the same row. In GRAPHICS 9-11 the cursor doesn't wrap,
+;; so a run that reaches the right edge ends the FILL with CRSROR.
 ;;
 ;; It ends with the cursor at the line's end. The next DRAWTO starts from OLDROW and OLDCOL, the last point drawn,
 ;; which after a FILL can be the end of the last run rather than the line's end. A point out of range for the mode
-;; ends it with CRSROR (<SCREEN_CHECK_CURSOR>).
+;; ends it with CRSROR, and BREAK with BRKABT (<SCREEN_CHECK_CURSOR>).
 ;; In: X = 1 to fill, 0 not to, ATACHR = the line's colour, FILDAT = the fill's colour
 ;; Out: Y = the status, A = ATACHR
 ;; Uses: X, FILFLG, NEWROW, NEWCOL, ROWAC, COLAC, ENDPT, DELTAR, DELTAC, ROWINC, COLINC, COUNTR, OLDROW, OLDCOL,

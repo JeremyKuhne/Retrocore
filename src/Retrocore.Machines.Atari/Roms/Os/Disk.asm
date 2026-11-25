@@ -30,14 +30,14 @@ DISK_INIT:
 ;; Runs a disk command, through DSKINV: completes the device control block for the drive and calls SIO.
 ;;
 ;; The caller sets DUNIT, DCOMND, the buffer (DBUFLO/DBUFHI) and the sector (DAUX1/DAUX2). Every command but a write
-;; with verify ('W') receives 128 bytes, so a plain write ('P') isn't supported. A status ('S') reads 4 bytes into
-;; DVSTAT, whatever the buffer, and keeps the drive's format timeout from it in DSKTIM. A format ('!') waits DSKTIM
-;; seconds, and afterwards DBYTLO/DBYTHI count the bytes of the list of bad sectors at the start of the buffer, the
-;; words before the $FFFF that ends it. Every other command waits 7 seconds.
+;; with verify ('W') and a status ('S') receives 128 bytes, so a plain write ('P') isn't supported. A status reads
+;; 4 bytes into DVSTAT, whatever the buffer, and keeps the drive's format timeout from it in DSKTIM. A format ('!')
+;; waits DSKTIM seconds, and afterwards DBYTLO/DBYTHI count the bytes of the list of bad sectors at the start of the
+;; buffer, the words before the $FFFF that ends it. Every other command waits 7 seconds.
 ;; In: DUNIT = the drive (1-4), DCOMND = the command, DBUFLO/DBUFHI = the buffer, DAUX1/DAUX2 = the sector
 ;; Out: Y = the status, also in DSTATS, negative = set on an error
 ;; Uses: A, X, DDEVIC, DTIMLO, DBYTLO/DBYTHI, BUFADR, DVSTAT (status)
-;; Errors: Y = SIO's status: BRKABT, or TIMOUT to DERROR
+;; Errors: Y = SIO's status: TIMOUT, DNACK, DERROR, FRMERR, OVRRUN, CHKERR or BRKABT
 ;; See: <DISK_INIT>, <DSKINV>, <SIOV>
 DISK_HANDLER:
     lda #DISK_ID

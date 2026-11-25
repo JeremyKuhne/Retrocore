@@ -124,7 +124,7 @@ public sealed partial class AtariOsSourceTests
     /// </summary>
     /// <param name="path">The entry file.</param>
     /// <param name="symbols">The assembly's symbols.</param>
-    /// <returns>A line for each mismatch or missing symbol; empty when the file has no equates.</returns>
+    /// <returns>A line for each mismatch or missing symbol, or one saying the file has no equates.</returns>
     internal static List<string> EntryMismatches(string path, IReadOnlyDictionary<string, long> symbols)
     {
         List<string> mismatches = [];

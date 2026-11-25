@@ -160,7 +160,7 @@ BLKBDV:
 WARMSV:
     jmp WARM_START
 
-;; The cold start, as power-up does; the 6502's reset vector points here.
+;; The cold start, as power-up does; rev. A's and PAL's reset vector points here, rev. B's at COLD_START.
 ;; See: <COLD_START>
 COLDSV:
     jmp COLD_START

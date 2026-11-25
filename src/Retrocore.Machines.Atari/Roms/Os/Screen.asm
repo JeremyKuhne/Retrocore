@@ -207,8 +207,8 @@ SCREEN_ADVANCE_1:
 ;; nonzero. A wrap into a line that starts the next logical line inserts a blank line, to extend this logical line,
 ;; when INSDAT is nonzero. Wrapping off the bottom scrolls when INSDAT is nonzero (see <SCREEN_NEW_LINE>).
 ;;
-;; In GRAPHICS 9-11 the cursor never wraps: their columns pass the test for GRAPHICS 8's two-byte columns, and stop
-;; at 80, past the edge.
+;; In GRAPHICS 9-11 the cursor never wraps: their columns pass the test for GRAPHICS 8's two-byte columns, and go on
+;; counting from 80, past the edge.
 ;; In: INSDAT = 0 to move only, or the character being written
 ;; Out: LOGCOL = the cursor's column in its logical line
 ;; Uses: A, X, Y, HOLD1, HOLD3, BITMSK, ADRESS, SAVADR, TOADR, SCRFLG, BUFSTR

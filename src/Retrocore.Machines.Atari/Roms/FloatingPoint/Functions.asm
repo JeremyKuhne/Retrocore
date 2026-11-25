@@ -183,8 +183,9 @@ EXP:
 ;;
 ;; A result too large for the format, from X about 98 up, is reported as an overflow, and so is X from about -128
 ;; down, whose power of 100 overflows. A result too small, from X about -99 to -127, comes back as 0 without an
-;; error, since the reciprocal is taken last. FPI's failure isn't checked: from 65536 up, a negative X can come back
-;; as a wrong, tiny number without an error (-65536 and -100000 do).
+;; error, since the reciprocal is taken last; but from about -126 to -126.5 and -127 to -127.5, where 10^F * 10^I
+;; overflows unchecked, it comes back as a wrong number below 1 (-126.2 gives 0.631). FPI's failure isn't checked
+;; either: from 65536 up, a negative X can come back as a wrong, tiny number without an error (-65536 and -100000 do).
 ;; In: FR0 = the power, X
 ;; Out: FR0 = 10^X, carry = set on overflow
 ;; Uses: A, X, Y, FR1, DIGRT, FCHRFLG, ESIGN, FPTR2, FLPTR, PLYARG, FPSCR

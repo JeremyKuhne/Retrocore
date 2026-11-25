@@ -33,7 +33,7 @@ DISPLAY_WINDOW_LINES = 4            ;; the text lines of a split screen's window
 DISPLAY_BOUNDARY_PAD = 16           ;; unused bytes above modes 8-11's screen, so a line starts on the 4K boundary
 DISPLAY_UPPER_LINES = 93            ;; modes 8-11's lines between the first LMS line and the one at the 4K boundary
 DISPLAY_WAIT_VCOUNT = $7A           ;; VCOUNT at scan line 244, below the screen, where the open waits
-DISPLAY_TAB_STOPS = $01             ;; each TABMAP byte at power-up: a stop at the last of its eight columns
+DISPLAY_TAB_STOPS = $01             ;; each TABMAP byte after an open: a stop at the last of its eight columns
 DISPLAY_CHACTL = $02                ;; CHACTL's setting: characters with bit 7 shown in inverse video
 DISPLAY_DMA_NORMAL = $02            ;; DMACTL's normal playfield width, 40 characters
 DISPLAY_DMA_LIST = $20              ;; DMACTL's display list DMA
@@ -77,8 +77,8 @@ EDITOR_INIT:
 ;; starts at SAVMSC. MEMTOP ends just below the display list. Unless ICAX1 says not to, the screen is cleared and
 ;; the window's cursor homed. On an error the screen editor is opened again in mode 0.
 ;; In: ICAX1Z = the open mode (OSPLIT for a text window, OCLEAR not to clear), ICAX2Z = the display mode
-;; Out: Y = the status, A = ATACHR, DSTAT = SUCCES
-;; Errors: Y = BADMOD for a mode beyond 11, SCRMEM when the screen would go below APPMHI
+;; Out: Y = the status, A = ATACHR (Y again on an error), DSTAT = SUCCES
+;; Errors: Y = BADMOD for a mode beyond 11, SCRMEM when the screen would reach APPMHI
 ;; Uses: X, DINDEX, CHBAS, CHACT, SDMCTL, POKMSK, IRQEN, TINDEX, SWPFLG, CRSINH, TABMAP, COLOR0..COLOR4, TXTMSC,
 ;;   GPRIOR, SAVMSC, BOTSCR, SDLSTL, SDLSTH, MEMTOP, TXTROW, TXTCOL, HOLD1, ADRESS, SAVADR, TOADR
 ;; See: <EDITOR_OPEN>, <DISPLAY_SHOW_CURSOR>
@@ -92,7 +92,7 @@ DISPLAY_OPEN:
 ;; <SCREEN_EDITOR_CHECK> calls it to put mode 0 back when the editor is used on a full graphics screen.
 ;; It changes what <DISPLAY_OPEN> lists.
 ;; In: ICAX1Z = the open mode
-;; Out: Y = the status, A = ATACHR, DSTAT = SUCCES
+;; Out: Y = the status, A = ATACHR (Y again on an error), DSTAT = SUCCES
 ;; See: <DISPLAY_OPEN>
 EDITOR_OPEN:
     lda ICAX1Z
@@ -301,7 +301,7 @@ EDITOR_OPEN_ENABLE:
 ;;
 ;; <EDITOR_GET> reads a logical line's characters from the screen with it.
 ;; Out: A = the ATASCII character or the pixel's colour, Y = the status, DSTAT = SUCCES
-;; Errors: Y = CRSROR when the cursor is outside the screen
+;; Errors: Y = CRSROR when the cursor is outside the screen, BRKABT for BREAK
 ;; Uses: X, ATACHR, CHAR, COLCRS, ROWCRS, LOGCOL
 DISPLAY_GET:
     jsr SCREEN_CHECK_CURSOR
@@ -331,8 +331,8 @@ DISPLAY_READ_DONE:
 ;;
 ;; Of the control codes, only clear screen and EOL are obeyed; the rest are shown.
 ;; In: A = the ATASCII character, or the colour
-;; Out: Y = the status, A = ATACHR, DSTAT = SUCCES
-;; Errors: Y = CRSROR when the cursor is outside the screen
+;; Out: Y = the status, A = ATACHR (Y again on an error), DSTAT = SUCCES
+;; Errors: Y = CRSROR when the cursor is outside the screen, BRKABT for BREAK
 ;; Uses: X, ATACHR, CHAR, COLCRS, ROWCRS, LOGCOL, OLDROW, OLDCOL
 DISPLAY_PUT:
     sta ATACHR
@@ -347,7 +347,7 @@ DISPLAY_PUT:
 ;;
 ;; <EDITOR_PUT_CHARACTER> joins here for a character it doesn't obey.
 ;; In: ATACHR = the character
-;; Out: Y = the status, A = ATACHR, DSTAT = SUCCES
+;; Out: Y = the status, A = ATACHR (Y again on an error), DSTAT = SUCCES
 ;; Uses: X, CHAR, COLCRS, ROWCRS, LOGCOL, OLDROW, OLDCOL
 DISPLAY_SHOW:
     lda ATACHR
@@ -413,7 +413,7 @@ DISPLAY_WRITE_MERGE:
 
 ;; Keeps the data under the cursor in OLDCHR and, in mode 0 unless CRSINH hides it, shows the cursor by inverting
 ;; it; then returns the status.
-;; Out: Y = the status, A = ATACHR, DSTAT = SUCCES
+;; Out: Y = the status, A = ATACHR (Y again on an error), DSTAT = SUCCES
 ;; Uses: X, OLDCHR, CHAR
 DISPLAY_SHOW_CURSOR:
     jsr DISPLAY_READ
@@ -426,7 +426,7 @@ DISPLAY_SHOW_CURSOR:
     jsr DISPLAY_WRITE
 
 ;; Returns the display handler's status and resets it: the end of each handler call, and the close of E:, S: and K:.
-;; Out: Y = the status, A = ATACHR, DSTAT = SUCCES
+;; Out: Y = the status, A = ATACHR (Y again on an error), DSTAT = SUCCES
 ;; Entry: DISPLAY_IGNORE = only returns: the SPECIAL of E: and K:, and K:'s PUT BYTE
 ;; Keeps: X
 DISPLAY_RETURN:
@@ -505,8 +505,8 @@ EDITOR_CALL_ADRESS:
 
 ;; The screen editor's (E:) put: obeys a control code, or shows any other character, in the text window.
 ;; In: A = the ATASCII character
-;; Out: Y = the status, A = ATACHR, DSTAT = SUCCES
-;; Errors: Y = CRSROR when the cursor is outside the screen
+;; Out: Y = the status, A = ATACHR (Y again on an error), DSTAT = SUCCES
+;; Errors: Y = CRSROR when the cursor is outside the screen, BRKABT for BREAK
 ;; Uses: X, ATACHR, ESCFLG, ROWCRS, COLCRS, LOGCOL, OLDCHR, SWPFLG
 ;; See: <EDITOR_PUT_CHARACTER>
 EDITOR_PUT:
@@ -520,7 +520,7 @@ EDITOR_PUT:
 ;; A control code is shown instead when DSPFLG is set or it follows ESC; either way ESCFLG is cleared. Its routine
 ;; comes from the control code table, <CONTROL_CODES>.
 ;; In: ATACHR = the character
-;; Out: Y = the status, A = ATACHR, DSTAT = SUCCES
+;; Out: Y = the status, A = ATACHR (Y again on an error), DSTAT = SUCCES
 ;; Uses: X, ESCFLG, ADRESS, ROWCRS, COLCRS, LOGCOL, OLDCHR, SWPFLG
 EDITOR_PUT_CHARACTER:
     jsr SCREEN_ERASE_CURSOR                      ; the cursor off

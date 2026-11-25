@@ -188,8 +188,9 @@ EDIT_CLEAR_TAB:
 ;; Insert character ($FF): moves the characters from the cursor to the end of its logical line right one place, and
 ;; blanks the cursor's place.
 ;;
-;; A character moved past the end of a row moves to the next; when that row starts another logical line, a row is
-;; inserted for it (<SCREEN_ADVANCE_KEEP>), so the logical line grows. The last character of a full logical line is
+;; A character moved past the end of a row moves to the next; when that row starts another logical line and the
+;; character isn't a blank, a row is inserted for it (<SCREEN_ADVANCE_KEEP>), so the logical line grows. A blank
+;; carried there is dropped. The last character of a full logical line is
 ;; lost. The cursor stays where it was, less any rows the screen scrolled up to make room (counted in SCRFLG).
 ;; Uses: A, X, Y, INSDAT, SCRFLG, TMPROW, TMPCOL
 EDIT_INSERT_CHARACTER:

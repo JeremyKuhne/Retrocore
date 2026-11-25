@@ -78,7 +78,7 @@ CASSETTE_OPEN:
 ;; In: FTYPE = the gaps' type
 ;; Out: Y = the status; the flags don't follow it
 ;; Uses: A, X, WMODE, FEOF, BPTR, BLIM, FREQ, CDTMV3, CDTMF3, PACTL
-;; Errors: Y = the keyboard's status: BRKABT for BREAK
+;; Errors: Y = the keyboard's status: BRKABT for BREAK, EOFERR for CTRL+3
 ;; Entry: CASSETTE_OPEN_BREAK = ends an open for BREAK, with Y = BRKABT and BRKKEY set again,
 ;;   CASSETTE_OPEN_FAILED = ends an open that failed, with Y = the status
 ;; See: <CSOPIV>, <CASSETTE_BEEP>
@@ -274,7 +274,7 @@ CASSETTE_CLOSE_CLEAR:
 ;; In: A = the number of beeps
 ;; Out: Y = the keyboard's status, A = Y, negative = set on an error
 ;; Uses: X, FREQ, CONSOL
-;; Errors: Y = BRKABT for BREAK
+;; Errors: Y = BRKABT for BREAK, EOFERR for CTRL+3
 ;; See: <CASSETTE_WAIT_KEY>
 CASSETTE_BEEP:
     sta FREQ
@@ -314,7 +314,7 @@ CASSETTE_BEEP_KEY:
     rts
 
 ;; Waits for a key through the keyboard handler's GET, whose address less 1 it pushes from KEYBDV and returns to.
-;; Out: A = the key, Y = the status: BRKABT for BREAK
+;; Out: A = the key, Y = the status: BRKABT for BREAK, EOFERR for CTRL+3
 ;; See: <KEYBDV>
 CASSETTE_WAIT_KEY:
     lda KEYBDV+HANDLER_GET+1            ; the GET vector, less 1
@@ -365,7 +365,7 @@ CASSETTE_SIO_DIRECTION:
 ;; See: <CASSETTE_SIO>
 CASSETTE_WRITE_RECORD:
     sta CASSETTE_CONTROL
-    lda #SIO_LEADER_BYTE
+    lda #SIO_SPEED_BYTE
     sta CASBUF
     sta CASBUF+1
     lda #CASSETTE_WRITE

@@ -21,7 +21,7 @@ FASC_END_BIT = $80                  ;; the bit FASC sets in its text's last char
 ;; though the number is right.
 ;; In: INBUFF = the text, CIX = the index in it of the number's first character, or of spaces before it
 ;; Out: FR0 = the number, CIX = the index of the first character after the number, carry = clear
-;; Errors: carry = set if the first character after the spaces can't start a number, or the number is too large
+;; Errors: carry = set if the text after the spaces doesn't start a number, or the number is too large
 ;; Uses: A, X, Y, FRE, FRX, EEXP, NSIGN, ESIGN, FCHRFLG, DIGRT
 ;; See: <FASC>, <IFP>
 AFP:
@@ -171,8 +171,9 @@ AFP_DONE:
 ;;
 ;; Numbers from 0.01 up to below 10^10 are written plainly (123.45, 0.05); others in E notation with a sign and two
 ;; exponent digits (1.5E+12, 2.5E-05). Trailing zeros after the point, and the point when nothing follows it, are
-;; left out, except that E notation writes a one-digit number with its point and a zero (1.0E-05). A negative
-;; number starts with a minus sign, and zero is a single 0. The text can start just before LBUFF, at LBPR1 or LBPR2.
+;; left out, except that E notation keeps a point and a zero after a single digit that was the first byte's tens
+;; digit, at an odd power of ten (2.0E-05, but 1E-06). A negative number starts with a minus sign, and zero is a
+;; single 0. The text can start just before LBUFF, at LBPR1 or LBPR2.
 ;; In: FR0 = the number
 ;; Out: INBUFF = the text's first character, its last character having bit 7 set (no end of line follows)
 ;; Uses: A, X, Y, CIX, EEXP, ZTEMP4, LBPR1, LBPR2, LBUFF
@@ -321,8 +322,8 @@ IFP_DOUBLE:
 ;; Rounds a number to an unsigned 16-bit integer, the OS User's Manual's floating point to integer conversion.
 ;;
 ;; The digits before the point are gathered one by one into ZTEMP4, high byte first, and the first digit after them
-;; rounds. Two cases differ from the manual: 65535.5 up to 65536 gives 0 without an error, since the rounding's carry
-;; is lost; and a number below 0.01 rounds by its first digit, so 0.005 gives 1.
+;; rounds. Two cases differ from the manual: 65535.5 up to below 65536 gives 0 without an error, since the
+;; rounding's carry is lost; and a number below 0.01 rounds by its first digit, so 0.005 gives 1.
 ;; In: FR0 = the number
 ;; Out: FR0/FR0+1 = the integer, carry = clear
 ;; Errors: carry = set if the number is negative or 65536 or more

@@ -451,7 +451,7 @@ DISK_BOOT_START:
 ;; called, and BOOTQ gets bit 0.
 ;;
 ;; On a disk, a failed read is tried again and a failed initialization restarts the boot. On the cassette, a
-;; failure prints "BOOT ERROR" and returns (twice, when a block after the first fails).
+;; failure prints "BOOT ERROR" and returns (printing it twice when a block after the first fails).
 ;; Out: BOOTQ = incremented on success
 ;; Uses: A, X, Y, RAMLO
 ;; See: <DISK_BOOT>, <CASSETTE_BOOT>, <DFLAGS>, <DBSECT>, <BOOTAD>, <DOSINI>

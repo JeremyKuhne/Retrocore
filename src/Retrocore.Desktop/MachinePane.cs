@@ -769,9 +769,9 @@ internal sealed class MachinePane : ScrollViewer
     // writes.
     private static IReadOnlyList<string> InsertFormats(DeviceState device)
     {
-        // A Datasette is a tape deck that saves TAP images.
-        bool datasette = device.Kind == DeviceKind.TapeDrive && device.Can(MediaOperations.Save);
-        datasette &= device.Info.Formats.Contains("tap") && !device.Info.Formats.Contains("prg");
+        // A Datasette is a tape deck that saves, and takes TAP images.
+        bool deck = device.Kind == DeviceKind.TapeDrive && device.Can(MediaOperations.Save);
+        bool datasette = deck && device.Info.Formats.Contains("tap") && !device.Info.Formats.Contains("prg");
         return datasette ? [.. device.Info.Formats, "prg"] : device.Info.Formats;
     }
 

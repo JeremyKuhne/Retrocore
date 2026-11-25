@@ -435,7 +435,7 @@ internal sealed partial class DebugSession
     // and strings, to the ":" or the line's end. REM and DATA keep text, and an ERROR- line its text as typed.
     private static bool AtariCallsMachine(IBasicMemory text, int address)
     {
-        if (text.Read(address + 1) is AtariBasicDialect.RemStatement or AtariBasicDialect.DataStatement or 0x37)
+        if (text.Read(address + 1) is AtariBasicDialect.RemStatement or AtariBasicDialect.DataStatement or AtariBasicSyntax.ErrorToken)
         {
             return false;
         }

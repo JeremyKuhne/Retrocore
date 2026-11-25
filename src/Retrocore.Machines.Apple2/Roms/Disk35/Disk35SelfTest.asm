@@ -10,7 +10,7 @@
 ;;      parameters; and as the IWM again;
 ;;   4. the RAM: the stack page with a rising and a falling count, and eight bytes from $0403 to $4003, for the
 ;;      address lines.
-;; Then it turns the LED off and goes on to the main firmware's start-up at $D129 (<Startup>). On a failure it makes
+;; Then it turns the LED off and goes on to the main firmware's start-up at $D129 (<CardStartup>). On a failure it makes
 ;; every entry of the slot page jump to the Monitor, clears the SmartPort signature and blinks the LED for ever.
 ;;
 ;; <SelfTest::CardDiagnostics> ($8F00) runs when the host sends <COMMAND_DIAGNOSTICS>. It tests page zero, puts the
@@ -207,7 +207,7 @@ CallWait = SharedSlotPage + <SmartPortEntry::Wait + 1
 SlotDiagnostics = SharedSlotPage + <DiagnosticsEntry
 
 ;; $Cn23, where a released SmartPortEntry::Wait goes.
-SlotCall = SharedSlotPage + <Call
+SlotCall = SharedSlotPage + <CallCard
 
 ; Values.
 
@@ -1324,7 +1324,7 @@ OnWait:
 
 ;; The start-up test, which the main firmware's reset (<CardReset>) jumps to. Puts the slot page's start in place,
 ;; and checks the EPROM's checksum, the SWIM and some of the RAM; then turns the LED off and goes on with the main
-;; firmware's start-up, <Startup>. A failure goes to <StartUpFailed>.
+;; firmware's start-up, <CardStartup>. A failure goes to <StartUpFailed>.
 .proc StartUp
 
     ; The slot page's start, through SmartPortEntry::Wait's offset.
@@ -1649,7 +1649,7 @@ Recheck4000:
 
     ; Passed.
     sta LedOff
-    jmp Startup
+    jmp CardStartup
 .endproc
 
 ;; A failure of the start-up test: makes the slot page's start, its diagnostics entry and its call jump to the host's
@@ -1675,7 +1675,7 @@ Recheck4000:
     ; The waits released, and the rest of the page cleared.
     stz BootWait
     stz CallWait
-    ldx #<Call + 3
+    ldx #<CallCard + 3
 Clear:
     stz SharedSlotPage,x
     inx

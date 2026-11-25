@@ -12,6 +12,8 @@
     <InternalsVisibleTo Include="Retrocore.Machines.Apple3" />
     <AdditionalFiles Include="..\Retrocore.Cpu.M6502\OpcodeTables.txt" />
     <AdditionalFiles Include="Roms\*.rom.asm" />
+    <!-- Included by the card ROMs that are ProDOS block devices; the generator resolves includes only from AdditionalFiles. -->
+    <AdditionalFiles Include="Roms\ProDosBlockDevice.asm" />
     <ProjectReference Include="..\Retrocore.Core\Retrocore.Core.csproj" />
     <ProjectReference Include="..\Retrocore.Cpu.M6502\Retrocore.Cpu.M6502.csproj" />
     <ProjectReference Include="..\Retrocore.Cpu.Z80\Retrocore.Cpu.Z80.csproj" />

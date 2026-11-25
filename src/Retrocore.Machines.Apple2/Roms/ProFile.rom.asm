@@ -64,53 +64,15 @@
 
 .rom Retrocore.Machines.Apple2.ProFileRom, $C500, $100
 .cpu Mos6502
-.export Driver, DeviceInfo
+.export ProFileDriver, DeviceInfo
 
-; The ProDOS block-device mailbox in page zero, which the caller fills before calling <Driver>.
-
-;; The ProDOS command: <COMMAND_STATUS>, <COMMAND_READ>, <COMMAND_WRITE> or <COMMAND_FORMAT>.
-Command = $42
-
-;; The ProDOS unit number: the drive in bit 7 (clear for drive 1) and the slot in bits 6-4.
-UnitNumber = $43
-
-;; The address of the caller's 512-byte buffer, low byte; <BufferHigh> is the high byte.
-Buffer = $44
-
-;; The high byte of <Buffer>.
-BufferHigh = $45
-
-;; The block number, low byte; <BlockHigh> is the high byte.
-Block = $46
-
-;; The high byte of <Block>.
-BlockHigh = $47
-
-; The ProDOS commands.
-
-;; Returns the device's size in blocks.
-COMMAND_STATUS = 0
-
-;; Reads a block into the buffer.
-COMMAND_READ = 1
-
-;; Writes the buffer to a block.
-COMMAND_WRITE = 2
-
-;; Formats the device; commands above it don't exist, and the driver takes them as this one.
-COMMAND_FORMAT = 3
-
-; The ProDOS errors the driver returns.
-
-;; An I/O error: the ProFile failed the operation or answered with a response the card didn't expect.
-ERROR_IO = $27
-
-;; No device connected: no ProFile answers.
-ERROR_NO_DEVICE = $28
+.include "ProDosBlockDevice.asm"
+.using ProDos
 
 ; The Monitor's locations and entries this firmware uses.
 
 ;; Inherit: <Monitor:SlotPointer>
+;; Also: LOC0 (A2RM78, A2RM79, IIEROM82, IIETRM85)
 SlotPointer = $00
 
 ;; Inherit: <Monitor:LOC1>
@@ -122,6 +84,7 @@ LOC1 = $01
 ;; An RTS at $FF58 in every Apple II Monitor, which the firmware calls to find its slot from the stack.
 ;;
 ;; Inherit: <Monitor:SaveRegisters::Return>
+;; Also: IORTS (IIEROM82)
 Return = $FF58
 
 .endscope
@@ -137,6 +100,7 @@ Return = $FF58
 ;;
 ;; The Apple II's original Monitor has no scan: it has a JSR at $FABA, not this LDY #.
 ;; Inherit: <Monitor:Startup::PowerUp::NextSlot>
+;; Also: SLOOP (A2RM79, IIEROM82, IIETRM85)
 NextSlot = $FABA
 
 .endscope
@@ -202,23 +166,6 @@ ANSWER_GO_ON = $55
 ;; The card's answer to refuse.
 ANSWER_REFUSE = $AA
 
-; The ProDOS device-capability bits at $CnFE.
-
-;; Bits 5-4: the number of volumes less one.
-ONE_VOLUME = %00000000
-
-;; Formats.
-CAPABILITY_FORMAT = %00001000
-
-;; Writes.
-CAPABILITY_WRITE = %00000100
-
-;; Reads.
-CAPABILITY_READ = %00000010
-
-;; Returns its status.
-CAPABILITY_STATUS = %00000001
-
 ; The four signature bytes the Monitor and ProDOS look for in a disk controller's page, which Boot's first
 ; instructions carry as their operands.
 
@@ -234,7 +181,7 @@ SIGNATURE_05 = $03
 ;; At $Cn07: $3C, not $00: a ProDOS block device that is not a SmartPort.
 SIGNATURE_07 = $3C
 
-;; Boots the ProFile: reads block 0 to $0800 through <Driver>, which returns to <FinishBoot>.
+;; Boots the ProFile: reads block 0 to $0800 through <ProFileDriver>, which returns to <FinishBoot>.
 ;;
 ;; It finds its slot by calling an RTS in the Monitor: the high byte of the return address that call pushed, this
 ;; page's, stays at the stack pointer after it returns. It pushes <FinishBoot> in this slot's page as the driver's
@@ -271,11 +218,11 @@ SIGNATURE_07 = $3C
     sta BlockHigh
     lda #COMMAND_READ
     sta Command
-    bne Driver
+    bne ProFileDriver
 .endproc
 
 ;; Returns no device.
-;; Out:   A = <ERROR_NO_DEVICE>, carry = set
+;; Out:   A = <ProDos::ERROR_NO_DEVICE>, carry = set
 .proc FailNoDevice
     lda #ERROR_NO_DEVICE
     sec
@@ -294,15 +241,16 @@ SIGNATURE_07 = $3C
 ;;
 ;; Its address's low byte is at $CnFF, where ProDOS finds it. With a ProFile, a format, which a ProFile needs none of,
 ;; and the commands above it, which don't exist, succeed without doing anything; with none, every command returns
-;; <ERROR_NO_DEVICE> with X = the slot times 16.
-;; In:    Command = <COMMAND_STATUS>, <COMMAND_READ>, <COMMAND_WRITE> or <COMMAND_FORMAT>; UnitNumber = the slot,
-;;          Buffer/BufferHigh = the buffer, Block/BlockHigh = the block number
+;; <ProDos::ERROR_NO_DEVICE> with X = the slot times 16.
+;; In:    ProDos::Command = <ProDos::COMMAND_STATUS>, <ProDos::COMMAND_READ>, <ProDos::COMMAND_WRITE> or
+;;          <ProDos::COMMAND_FORMAT>; ProDos::UnitNumber = the slot, ProDos::Buffer/ProDos::BufferHigh = the buffer,
+;;          ProDos::Block/ProDos::BlockHigh = the block number
 ;; Out:   A = 0 or a ProDOS error code, carry = clear on success, set on error,
 ;;          X = the block count's low byte for status with a ProFile; otherwise the slot times 16,
 ;;          Y = the block count's high byte for status with a ProFile
 ;; Uses:  Y (for a read or write)
-;; Keeps: Command, UnitNumber, Buffer, BufferHigh, Block, BlockHigh
-.proc Driver
+;; Keeps: ProDos::Command, ProDos::UnitNumber, ProDos::Buffer, ProDos::BufferHigh, ProDos::Block, ProDos::BlockHigh
+.proc ProFileDriver
     ; The card's ports, through X; with no ProFile, no device.
     lda UnitNumber
     and #$70
@@ -441,16 +389,16 @@ Done:
 .endproc
 
 ;; Returns an I/O error.
-;; Out:   A = <ERROR_IO>, carry = set
+;; Out:   A = <ProDos::ERROR_IO>, carry = set
 .proc Fail
     lda #ERROR_IO
     sec
     rts
 .endproc
 
-;; Where <Driver> returns at boot: runs block 0 at $0801 when it was read, with X = the slot times 16. Otherwise, as
-;; when the scan finds no disk in a slot, it goes on with the Monitor's startup scan from the next lower slot, or
-;; stops here with the II's original Monitor, which has no scan to go back to.
+;; Where <ProFileDriver> returns at boot: runs block 0 at $0801 when it was read, with X = the slot times 16.
+;; Otherwise, as when the scan finds no disk in a slot, it goes on with the Monitor's startup scan from the next lower
+;; slot, or stops here with the II's original Monitor, which has no scan to go back to.
 ;; In:    carry = set when the read failed, X = the slot times 16
 .proc FinishBoot
     bcs Failed
@@ -466,12 +414,12 @@ Stop:
 .assert * <= $C5FC
 .org $C5FC
     ; The ProDOS identification trailer: the block count at $CnFC (0, so ProDOS asks STATUS), the capability byte
-    ; at $CnFE and the low byte of Driver at $CnFF.
+    ; at $CnFE and the low byte of ProFileDriver at $CnFF.
     .word 0
 
-;; The ProDOS device-capability byte at $CnFE, followed by the low byte of <Driver> at $CnFF: one volume that
+;; The ProDOS device-capability byte at $CnFE, followed by the low byte of <ProFileDriver> at $CnFF: one volume that
 ;; reads, writes, formats and returns its status.
 DeviceInfo:
     .byte ONE_VOLUME | CAPABILITY_FORMAT | CAPABILITY_WRITE | CAPABILITY_READ | CAPABILITY_STATUS
-    .byte <Driver
+    .byte <ProFileDriver
 .assert * == $C600

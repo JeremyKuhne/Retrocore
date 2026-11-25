@@ -46,10 +46,20 @@ ExpansionRomOff = $CFFF
 ;; Also: BASIC (A2RM78, A2RM79, IIEROM82, IIETRM85)
 BasicColdStart = $E000
 
+;; The Autostart and IIe Monitors' power-up, whose scan for a disk controller the boot goes back to when it fails.
+.scope Startup
+
+;; The power-up routine that holds the scan.
+.scope PowerUp
+
 ;; Inherit: <Monitor:Startup::PowerUp::NextSlot>
 ;; At $FABA: the Monitor's boot scan, which goes on to the next slot down.
 ;; Also: SLOOP (A2RM79, IIEROM82, IIETRM85)
 NextSlot = $FABA
+
+.endscope
+
+.endscope
 
 ;; Inherit: <Monitor:SetText>
 ;; At $FB39.
@@ -112,24 +122,13 @@ CardWindow = $C800
 BootBuffer = $0800
 
 ;; Where a boot block runs, after its first byte.
-BootCode = $0801
+BootEntry = $0801
 
 ;; Where the host says why it did not boot: the text screen's second line (row 1), column 8.
 MessageAt = $0488
 
-; ProDOS's block-device call, in page zero.
-
-;; The command: 0 status, 1 read, 2 write, 3 format.
-ProDosCommand = $42
-
-;; The unit: bit 7 the drive, bits 4-6 the slot.
-ProDosUnit = $43
-
-;; The buffer, low byte first.
-ProDosBuffer = $44
-
-;; The block, low byte first.
-ProDosBlock = $46
+; ProDOS's block-device call: the mailbox in page zero, <ProDos::Command> to <ProDos::BlockHigh>.
+.include "../ProDosBlockDevice.asm"
 
 ;; A boot block's first byte: the number of blocks it is, which must be 1.
 BOOT_BLOCK_COUNT = $01
@@ -347,7 +346,7 @@ STATUS_INDEX_8 = $10
 ;; Boots the card's first drive. The four loads are the SmartPort identification at $Cn01-$Cn07. Overflow, set by
 ;; the addition, makes the call that follows a boot; until the card is ready the branch waits on itself.
 ;; Entry:
-;;   WaitForCard = the branch the card rewrites, to <Call>, once it is ready
+;;   WaitForCard = the branch the card rewrites, to <CallCard>, once it is ready
 .proc Boot
     ldx #$20
     ldx #$00
@@ -356,7 +355,7 @@ STATUS_INDEX_8 = $10
     sec
     adc #$7F
 WaitForCard:
-    bvs WaitForCard                 ; the card makes it BVS Call
+    bvs WaitForCard                 ; the card makes it BVS CallCard
 .endproc
 .assert * = $C50D, "The diagnostics' entry must stay at $Cn0D."
 
@@ -383,10 +382,11 @@ Wait:
 .assert * = $C51C, "The ProDOS entry must stay at $Cn1C."
 
 ;; The ProDOS block-device entry.
-;; In: ProDosCommand = the command (0 status, 1 read, 2 write, 3 format), ProDosUnit = the unit, ProDosBuffer = the
-;;   buffer, ProDosBlock = the block
+;; In: ProDos::Command = the command (<ProDos::COMMAND_STATUS> to <ProDos::COMMAND_FORMAT>),
+;;   ProDos::UnitNumber = the unit, ProDos::Buffer/ProDos::BufferHigh = the buffer, ProDos::Block/ProDos::BlockHigh =
+;;   the block
 ;; Out: A = 0 or the error, carry = set on an error; X and Y = the block count after status
-.proc ProDosEntry
+.proc Disk35Driver
     clc
     bcc SmartPortEntry::WaitForCard ; always
 .endproc
@@ -396,7 +396,7 @@ Wait:
 ;; command), which the call steps over.
 ;; Out: A = 0 or the error, carry = set on an error, X and Y = the bytes moved
 ;; Entry:
-;;   WaitForCard = <ProDosEntry> comes here with carry clear
+;;   WaitForCard = <Disk35Driver> comes here with carry clear
 ;;   Wait = the branch the card rewrites to fall through, once it is ready
 .proc SmartPortEntry
     sec
@@ -404,13 +404,13 @@ WaitForCard:
     clv
 Wait:
     bvc Wait                        ; the card makes it fall through
-    ; Falls into Call.
+    ; Falls into CallCard.
 .endproc
 
 ;; The common entry: finds the slot, saves page zero and runs a boot, a ProDOS call or a SmartPort call.
 ;; In: carry = set for SmartPort, overflow = set to boot
 ;; Out: A = 0 or the error, carry = set on an error, X and Y = the bytes moved; a boot that works does not return
-.proc Call
+.proc CallCard
     php
     sei
     lda ExpansionRomOff
@@ -440,7 +440,7 @@ NotBoot:
     jsr Host::Identify
     ldy ExpansionRomSlot
 Identified:
-    bcc ProDos
+    bcc ProDosCall
 
     ; SmartPort: the command and the list follow the JSR.
     pla
@@ -488,8 +488,8 @@ BadCommand:
     lda #ERROR_BAD_UNIT             ; no code reaches this
     bne ReturnResult
 
-ProDos:
-    lda ProDosCommand
+ProDosCall:
+    lda ProDos::Command
     cmp #PRODOS_CALLS
     bcs BadCommand
     jsr Host::ProDosToSmartPort
@@ -548,8 +548,9 @@ Loop:
 Signature:
     .byte $C0                       ; $CnFB: extended SmartPort calls
     .word 0                         ; $CnFC: ask STATUS for the block count
-    .byte $BF                       ; $CnFE: removable, not interruptible, four volumes, format, write, read, status
-    .byte <ProDosEntry              ; $CnFF: the ProDOS entry
+    ; $CnFE: removable, not interruptible, four volumes, format, write, read and status ($BF).
+    .byte ProDos::CAPABILITY_REMOVABLE | ProDos::FOUR_VOLUMES | ProDos::CAPABILITY_EVERY_COMMAND
+    .byte <Disk35Driver             ; $CnFF: the ProDOS entry
 .assert * = $C600, "The slot page must end at $CnFF."
 
 .logicalorg $CA00
@@ -779,25 +780,25 @@ Read:
 
     ; ProDOS's page zero, as for a read of block 0.
     lda #COMMAND_READ_BLOCK
-    sta ProDosCommand
-    stx ProDosUnit
+    sta ProDos::Command
+    stx ProDos::UnitNumber
     lda #>BootBuffer
-    sta ProDosBuffer + 1
+    sta ProDos::BufferHigh
     lda #<BootBuffer
-    sta ProDosBuffer
-    sta ProDosBlock
-    sta ProDosBlock + 1
+    sta ProDos::Buffer
+    sta ProDos::Block
+    sta ProDos::BlockHigh
     lda BootBuffer
     cmp #BOOT_BLOCK_COUNT
     bne Fail
-    lda BootCode
+    lda BootEntry
     beq Fail
     lda #0
     bit Identity
     bvc Run
     sta Shadow
 Run:
-    jmp BootCode
+    jmp BootEntry
 Fail:
     stx SlotTimes16
     jmp NoBoot
@@ -858,7 +859,7 @@ Done:
 
 ;; Checks a command's parameter count and goes to its handler, with bank 0 latched once the card is waiting.
 ;; In: A = the command: $00-$0B, or $0C-$0F for ProDOS's
-;; Its last instruction, the RTS at Return, is what <Call> calls to find its slot.
+;; Its last instruction, the RTS at Return, is what <CallCard> calls to find its slot.
 .proc Dispatch
     ldy ExpansionRomSlot
     ldx SlotTimes16Table - $C1,y
@@ -1432,15 +1433,15 @@ SlotTimes16Table:
 ;; Turns a ProDOS call into SmartPort's: the command with bit 7 set, the buffer in $40-$42, a three-byte block, and
 ;; the unit. A unit in this slot is SmartPort unit 1 or 2 by its drive bit; one ProDOS mapped to slot 2 is unit 3 or
 ;; 4, and one mapped to any other slot 5 or 6. Unit 0 for slot 0.
-;; In: A = the ProDOS command, ProDosUnit = the ProDOS unit, Y = $Cn
+;; In: A = the ProDOS command, ProDos::UnitNumber = the ProDOS unit, Y = $Cn
 ;; Keeps: Y
 .proc ProDosToSmartPort
     ora #CALL_PRODOS
-    ldx ProDosUnit
+    ldx ProDos::UnitNumber
     sta CallCommand
-    lda ProDosBuffer
+    lda ProDos::Buffer
     sta CallBuffer
-    lda ProDosBuffer + 1
+    lda ProDos::BufferHigh
     sta CallBuffer + 1
     lda #0
     sta CallBuffer + 2
@@ -1498,7 +1499,7 @@ Wait:
     lda LOC1
     cmp ExpansionRomSlot
     bne Say
-    jmp NextSlot
+    jmp Startup::PowerUp::NextSlot
 Say:
     jsr SetScreen
     jsr SetKeyboard

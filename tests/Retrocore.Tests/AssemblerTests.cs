@@ -264,18 +264,23 @@ public class AssemblerTests
     [TestMethod]
     public void RuntimeEngineMatchesTheSelfHostedSlotSevenImage()
     {
-        string original = File.ReadAllText(Path.Join(AppContext.BaseDirectory, "Inputs", "Slot7.rom.asm"));
+        string path = Path.Join(AppContext.BaseDirectory, "Inputs", "Slot7.rom.asm");
+        string original = File.ReadAllText(path);
         string body = string.Join("\n", original.Split('\n').Select(line =>
             line.TrimStart().StartsWith(".rom ", StringComparison.Ordinal) ? "" : line));
 
+        // The firmware includes ProDosBlockDevice.asm, beside it.
         NativeAssembler assembler = new();
         AssemblyResult result = assembler.Assemble(
-            new AssemblySource(body, "Slot7.rom.asm"),
-            new(ProcessorVariant.Mos6502, origin: 0xC700, imageSize: 256));
+            new AssemblySource(body, path),
+            new(ProcessorVariant.Mos6502, origin: 0xC700, imageSize: 256)
+            {
+                SourceResolver = new FileAssemblySourceResolver()
+            });
 
         result.Success.Should().BeTrue();
         result.Sections[0].Bytes.ToArray().Should().Equal(Retrocore.Machines.Apple2.Slot7Rom.Bytes.ToArray());
-        result.Exports["Driver"].Should().Be(Retrocore.Machines.Apple2.Slot7Rom.Driver);
+        result.Exports["Slot7Driver"].Should().Be(Retrocore.Machines.Apple2.Slot7Rom.Slot7Driver);
         result.Exports["DeviceInfo"].Should().Be(Retrocore.Machines.Apple2.Slot7Rom.DeviceInfo);
     }
 }

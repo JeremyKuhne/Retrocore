@@ -739,7 +739,7 @@ try {
         events.length = 0;
         await request("launch", { machine: "apple2", romDirectory: roms, sdkRoms, model: "iie-enhanced", stopOnEntry: false,
             speed: "max", sound: "off", mouse: 4, proFiles: [{ slot: 7, image: bootImage }] });
-        const driver = firstLine(profileRom, "Driver");
+        const driver = firstLine(profileRom, "ProFileDriver");
         const set = await request("setBreakpoints", { source: { path: profileRom }, breakpoints: [{ line: driver }] });
         assert.equal(set.breakpoints[0].verified, true, "the ProFile firmware's source maps");
         const mouse = await request("setBreakpoints", { source: { path: mouseRom }, breakpoints: [{ line: firstLine(mouseRom, "SetMouse") }] });

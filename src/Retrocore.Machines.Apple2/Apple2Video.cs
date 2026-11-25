@@ -237,8 +237,13 @@ public sealed class Apple2Video : IVideoSource, ICharacterSet
     {
         int glyph = Glyph(code, flashed: true);
 
-        // MouseText, in the alternate set's $40-$5F.
-        if (glyph is >= 0x40 and < 0x60) { return '\0'; }
+        // The alternate set's $40-$5F: the original IIe's draw inverse uppercase again, as $00-$1F do, and read as
+        // uppercase; the Enhanced IIe's are MouseText, which has no character.
+        if (glyph is >= 0x40 and < 0x60)
+        {
+            return SameGlyph(glyph, glyph - 0x40) ? (char)glyph : '\0';
+        }
+
         int low = glyph & 0x7F;
         return (low & 0x60) switch
         {

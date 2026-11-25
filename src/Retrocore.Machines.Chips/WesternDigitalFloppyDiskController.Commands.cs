@@ -26,6 +26,8 @@ public sealed partial class WesternDigitalFloppyDiskController
         {
             if (IsBusy)
             {
+                // A write track cut short leaves what it wrote; the 810 ends each track this way after its last sector.
+                if (_phase == Phase.WritingTrack) { CommitTrack(); }
                 _phase = Phase.Idle;
                 _status &= unchecked((byte)~Busy);
             }
@@ -115,7 +117,7 @@ public sealed partial class WesternDigitalFloppyDiskController
             case Phase.Stepping:
                 if (_steps > 0)
                 {
-                    if (_selected >= 0)
+                    if (_selected >= 0 && _sensorsWired)
                     {
                         _cylinders[_selected] = Math.Clamp(_cylinders[_selected] + _direction, 0, MaximumCylinder);
                     }
@@ -145,6 +147,9 @@ public sealed partial class WesternDigitalFloppyDiskController
             case Phase.Delaying:
                 _indexPulses = 0;
                 _phase = (_command & 0xF0) is 0xE0 or 0xF0 ? Phase.AwaitingIndex : Phase.Searching;
+
+                // Write track asks for its first byte at once; writing starts at the index pulse once it's there.
+                if ((_command & 0xF0) == 0xF0) { _request = true; }
                 return;
             case Phase.Searching:
                 Search();
@@ -178,7 +183,7 @@ public sealed partial class WesternDigitalFloppyDiskController
     // Waits for the next ID field: any for read address, else the one the track and sector registers name.
     private void Search()
     {
-        if (!Ready || _selected < 0 || Current is not { } disk)
+        if (!Ready || _selected < 0)
         {
             _status |= NotReady;
             Finish();
@@ -191,6 +196,9 @@ public sealed partial class WesternDigitalFloppyDiskController
             Finish();
             return;
         }
+
+        // Only a controller with READY tied true gets here with no disk; it searches until it times out.
+        if (Current is not { } disk) { return; }
 
         IReadOnlyList<FloppySector> sectors = disk.Track(_cylinders[_selected], Side);
         if (sectors.Count == 0) { return; }
@@ -322,9 +330,16 @@ public sealed partial class WesternDigitalFloppyDiskController
             return;
         }
 
+        // A first byte not loaded by the index pulse ends the command with lost data.
+        if (_request)
+        {
+            _status |= TrackZeroOrLost;
+            Finish();
+            return;
+        }
+
         _trackBytes = [];
         _indexPulses = 0;
-        _request = true;
         _wait = ByteCycles;
         _phase = Phase.WritingTrack;
     }
@@ -332,10 +347,9 @@ public sealed partial class WesternDigitalFloppyDiskController
     private void WriteTrackByte()
     {
         if (_trackBytes is null) { return; }
-        if (_indexPulses > 0 && _selected >= 0 && Current is { } disk)
+        if (_indexPulses > 0)
         {
-            disk.Format(_cylinders[_selected], Side, ParseTrack(_trackBytes, _doubleDensity));
-            _trackBytes = null;
+            CommitTrack();
             Finish();
             return;
         }
@@ -344,6 +358,17 @@ public sealed partial class WesternDigitalFloppyDiskController
         _trackBytes.Add(_request ? (byte)0 : Data);
         _request = true;
         _wait = ByteCycles;
+    }
+
+    // The track takes the sectors written to it.
+    private void CommitTrack()
+    {
+        if (_trackBytes is not null && _selected >= 0 && Current is { } disk)
+        {
+            disk.Format(_cylinders[_selected], Side, ParseTrack(_trackBytes, _doubleDensity));
+        }
+
+        _trackBytes = null;
     }
 
     private void Finish()

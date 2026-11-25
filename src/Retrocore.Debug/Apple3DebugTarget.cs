@@ -221,7 +221,7 @@ internal sealed partial class Apple3DebugTarget : IZ80CardHost
             if (_machine.Bus.SoftCard is not { } card) { return null; }
             if (_softCard?.Card != card)
             {
-                _softCard = new(this, card, "SoftCard /// Z80", "The SoftCard ///'s Z80's memory");
+                _softCard = new(this, card, "SoftCard /// Z80", "The memory the SoftCard ///'s Z80 sees");
             }
 
             return _softCard;
@@ -670,7 +670,11 @@ internal sealed partial class Apple3DebugTarget : IZ80CardHost
         {
             return HardwareRow.Empty(
                 slot,
-                "Add Card puts a ProFile interface card or the SoftCard /// here; so do the launch's proFiles and softCard3.",
+                _machine.Bus.SoftCard is null
+                    ? "Add Card puts a ProFile interface card or the SoftCard /// here; so do the launch's proFiles and "
+                        + "softCard3."
+                    : "Add Card puts a ProFile interface card here; so does the launch's proFiles. The SoftCard /// is in "
+                        + "another slot.",
                 free: true);
         }
 
@@ -979,7 +983,12 @@ internal sealed partial class Apple3DebugTarget : IZ80CardHost
 
         if (args.Int("softCard3") is { } softCard)
         {
-            if (softCard is < 1 or > 4 || machine.Bus.Card(softCard) is not null)
+            if (softCard is < 1 or > 4)
+            {
+                throw new ArgumentException($"softCard3: the Apple III's slots are 1-4, not {softCard}.");
+            }
+
+            if (machine.Bus.Card(softCard) is not null)
             {
                 throw new ArgumentException($"softCard3: slot {softCard} is not free for the SoftCard ///.");
             }

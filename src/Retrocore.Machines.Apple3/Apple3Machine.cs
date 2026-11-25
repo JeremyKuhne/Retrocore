@@ -55,7 +55,7 @@ public sealed class Apple3Machine : IMachine
     private bool _held;
 
     // The cycle under way: its length, its speed, and whether the 6502 stepped in it with an NMI pending, so took it.
-    // While it has Z80 T-states left, the card that runs them and the address the held 6502 is at.
+    // While it has Z80 T-states left, the card that runs them and the address the 6502 is at.
     private int _cycleUnits;
     private bool _cycleSlow;
     private bool _nmiTaken;

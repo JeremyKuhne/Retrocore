@@ -130,7 +130,8 @@ public sealed class SoftCard3Tests
 
     /// <summary>
     ///  An NMI raised while stopped mid-cycle, after the 6502 has run its part of the cycle beside the Z80 finishing
-    ///  its last instruction, stays pending for the 6502's next cycle rather than being cleared with this one.
+    ///  its last instruction, is still raised when the cycle finishes, for the 6502's next cycle, rather than being
+    ///  cleared with this one.
     /// </summary>
     [TestMethod]
     public void NmiRaisedMidCycleWaitsForTheNextCycle()

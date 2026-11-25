@@ -61,7 +61,7 @@ try {
     await request("initialize", { adapterID: "retrocore", linesStartAt1: true, columnsStartAt1: true });
     await assert.rejects(
         request("launch", { machine: "apple3", sdkRoms, softCard3: 5, stopOnEntry: true }),
-        /slot 5 is not free/);
+        /slots are 1-4, not 5/);
     await assert.rejects(
         request("launch", { machine: "apple3", sdkRoms, proFiles: [{ slot: 4 }], softCard3: 4, stopOnEntry: true }),
         /slot 4 is not free/);

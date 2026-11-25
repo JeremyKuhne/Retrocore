@@ -109,8 +109,7 @@ export const hardwareOptions = [
     "lowercase", "characterGenerator", "doubler", "cassette", "disks", "diskImage", "dos", "dosYear", "diskSectors",
     "diskBootRom", "diskSequencerRom", "sequencerLayout", "mockingboard", "mouse", "proFiles", "disk35", "disk35Images",
     "sound", "slot0", "monitor", "boardRevision", "firmwareCardRoms", "programmersAid", "softCard", "softCard3",
-    "cassetteInterface",
-    "console", "basicRevision", "cassette1", "cassette2", "diskUnits", "diskModel", "driveRomDirectory"
+    "cassetteInterface", "console", "basicRevision", "cassette1", "cassette2", "diskUnits", "diskModel", "driveRomDirectory"
 ] as const;
 
 /** A saved machine: the configuration from the debug host, and the hardware options it was saved under. */
